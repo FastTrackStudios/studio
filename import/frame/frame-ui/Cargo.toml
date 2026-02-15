@@ -1,0 +1,23 @@
+[package]
+name = "frame-ui"
+description = "Frame UI — Dioxus components for Figma-compatible design rendering"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+frame-proto = { path = "../frame-proto" }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tokio = { workspace = true, features = ["time"] }
+
+# UI framework (conditional on feature)
+dioxus = { workspace = true, optional = true, features = ["desktop"] }
+dioxus-native = { workspace = true, optional = true }
+
+[features]
+default = ["web"]
+web = ["dep:dioxus"]
+native = ["dep:dioxus-native"]
+
+[lints]
+workspace = true

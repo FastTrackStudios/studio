@@ -62,4 +62,49 @@ mod tests {
         assert_eq!(doc.pages.len(), 1);
         assert!(doc.node_count() >= 2);
     }
+
+    #[test]
+    fn imports_from_json_bytes() {
+        let json = r#"{
+            "name": "Bytes Test",
+            "role": "viewer",
+            "lastModified": "2024-01-01T00:00:00Z",
+            "editorType": "figma",
+            "version": "1",
+            "document": {
+                "id": "0:0",
+                "name": "Document",
+                "type": "DOCUMENT",
+                "scrollBehavior": "SCROLLS",
+                "children": [
+                    {
+                        "id": "0:1",
+                        "name": "Page 1",
+                        "type": "CANVAS",
+                        "scrollBehavior": "SCROLLS",
+                        "children": [],
+                        "backgroundColor": { "r": 1.0, "g": 1.0, "b": 1.0, "a": 1.0 },
+                        "prototypeStartNodeID": null,
+                        "flowStartingPoints": [],
+                        "prototypeDevice": { "type": "NONE", "rotation": "NONE" }
+                    }
+                ]
+            },
+            "components": {},
+            "componentSets": {},
+            "schemaVersion": 0,
+            "styles": {}
+        }"#;
+
+        let doc = import_figma_bytes(json.as_bytes()).expect("import from bytes should succeed");
+        assert_eq!(doc.name, "Bytes Test");
+        assert_eq!(doc.pages.len(), 1);
+    }
+
+    #[test]
+    fn rejects_non_json_binary_fig_bytes_for_now() {
+        let err = import_figma_bytes(&[0x89, b'F', b'I', b'G']).expect_err("should fail");
+        let message = err.to_string();
+        assert!(message.contains("binary .fig parsing is not implemented yet"));
+    }
 }
