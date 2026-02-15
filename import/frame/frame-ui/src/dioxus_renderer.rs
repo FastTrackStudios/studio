@@ -177,7 +177,10 @@ fn first_solid_rgba(raw: &serde_json::Value, key: &str) -> Option<String> {
         if fill_type != Some("SOLID") {
             continue;
         }
-        let visible = fill.get("visible").and_then(|v| v.as_bool()).unwrap_or(true);
+        let visible = fill
+            .get("visible")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(true);
         if !visible {
             continue;
         }
@@ -193,7 +196,11 @@ fn rgba_from_color_value(v: &serde_json::Value) -> Option<String> {
     let r = (v.get("r")?.as_f64()?.clamp(0.0, 1.0) * 255.0).round();
     let g = (v.get("g")?.as_f64()?.clamp(0.0, 1.0) * 255.0).round();
     let b = (v.get("b")?.as_f64()?.clamp(0.0, 1.0) * 255.0).round();
-    let a = v.get("a").and_then(|x| x.as_f64()).unwrap_or(1.0).clamp(0.0, 1.0);
+    let a = v
+        .get("a")
+        .and_then(|x| x.as_f64())
+        .unwrap_or(1.0)
+        .clamp(0.0, 1.0);
     Some(format!("rgba({r},{g},{b},{a})"))
 }
 

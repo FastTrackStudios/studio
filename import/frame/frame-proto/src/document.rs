@@ -44,12 +44,7 @@ impl FrameDocument {
         root_node.parent = None;
 
         for canvas in &file.document.children {
-            let page_id = flatten_canvas(
-                canvas,
-                root_id,
-                &mut nodes,
-                &mut figma_index,
-            )?;
+            let page_id = flatten_canvas(canvas, root_id, &mut nodes, &mut figma_index)?;
             pages.push(page_id);
             root_node.children.push(page_id);
         }
@@ -196,7 +191,12 @@ impl FrameDocument {
             meta: FigmaDocumentMeta {
                 file_key: export.source.file_key,
                 role: None,
-                editor_type: Some(export.source.editor_type.unwrap_or_else(|| "figma".to_string())),
+                editor_type: Some(
+                    export
+                        .source
+                        .editor_type
+                        .unwrap_or_else(|| "figma".to_string()),
+                ),
                 version: None,
                 schema_version: None,
                 last_modified: export.generated_at,
@@ -317,8 +317,8 @@ impl FrameDocument {
             .map_err(|e| FrameDocumentError::FigZip(e.to_string()))?;
 
         let meta_json = read_zip_entry(&mut archive, "meta.json").ok();
-        let canvas_fig =
-            read_zip_entry(&mut archive, "canvas.fig").map_err(|_| FrameDocumentError::UnsupportedBinaryFig)?;
+        let canvas_fig = read_zip_entry(&mut archive, "canvas.fig")
+            .map_err(|_| FrameDocumentError::UnsupportedBinaryFig)?;
 
         let meta_value = meta_json
             .as_deref()
@@ -450,13 +450,7 @@ fn flatten_synthetic_subtree(
     node.parent = Some(parent_id);
 
     for child in child_values {
-        let child_id = flatten_synthetic_subtree(
-            child,
-            id,
-            synthetic_counter,
-            nodes,
-            figma_index,
-        );
+        let child_id = flatten_synthetic_subtree(child, id, synthetic_counter, nodes, figma_index);
         node.children.push(child_id);
     }
 

@@ -19,6 +19,7 @@ kurbo = { workspace = true, optional = true }
 peniko = { workspace = true, optional = true }
 skrifa = { version = "0.26", optional = true }
 base64 = { version = "0.22", optional = true }
+taffy = { workspace = true }
 
 [features]
 default = ["web"]

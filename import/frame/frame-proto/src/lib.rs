@@ -27,7 +27,10 @@ pub use geometry::{CornerRadii, Point, Size, Transform};
 pub use history::DocumentHistory;
 pub use id::*;
 pub use layout::*;
-pub use node::{ArcData, ExportConstraintType, ExportFormat, ExportSetting, FrameNode, NodeKind, OverrideProperty, PropertyOverride};
+pub use node::{
+    ArcData, ExportConstraintType, ExportFormat, ExportSetting, FrameNode, NodeKind,
+    OverrideProperty, PropertyOverride,
+};
 pub use paint::*;
 pub use projection::{project_node, RenderNodeClass, RenderNodeProjection, RenderTextProjection};
 pub use typography::*;

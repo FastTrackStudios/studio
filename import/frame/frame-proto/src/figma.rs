@@ -4,10 +4,7 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum FigmaPayload {
     ApiGetFile(Box<models::GetFile>),
-    FigBinary {
-        bytes: Vec<u8>,
-        note: String,
-    },
+    FigBinary { bytes: Vec<u8>, note: String },
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

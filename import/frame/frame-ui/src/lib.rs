@@ -8,7 +8,9 @@ pub mod anyrender_renderer;
 pub mod dioxus_renderer;
 pub mod model;
 
-pub use anyrender_renderer::{build_paint_primitives, PaintPrimitive, Rgba};
+pub use anyrender_renderer::{
+    build_layout_boxes, build_paint_primitives, LayoutBox, PaintPrimitive, Rgba,
+};
 #[cfg(feature = "anyrender")]
 pub use anyrender_renderer::{
     paint_into_scene, paint_into_scene_with, paint_into_scene_with_font,
