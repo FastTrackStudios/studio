@@ -37,6 +37,12 @@ fn NodeBox(projection: RenderNodeProjection, depth: usize) -> Element {
             class: "frame-node",
             style: "{style}",
             "{label}"
+            if let Some(image_url) = projection.image_data_url.clone() {
+                img {
+                    src: "{image_url}",
+                    style: "display:block; max-width: 100%; height: auto; margin-top: 8px; border: 1px solid rgba(255,255,255,0.1);"
+                }
+            }
         }
     }
 }

@@ -1,16 +1,20 @@
 use crate::figma::{FigmaDocumentMeta, FigmaPayload};
 use crate::id::{DocumentId, NodeId};
 use crate::node::FrameNode;
+use base64::Engine;
 use figma_api::models;
 use serde::{Deserialize, Serialize};
+use std::io::Read;
 use thiserror::Error;
 
 #[derive(Debug, Error)]
 pub enum FrameDocumentError {
     #[error("failed to parse Figma API JSON: {0}")]
     Json(#[from] serde_json::Error),
-    #[error("input bytes are not JSON Figma API payload; binary .fig parsing is not implemented yet")]
+    #[error("input bytes are not a supported .fig ZIP container")]
     UnsupportedBinaryFig,
+    #[error("failed to read .fig ZIP container: {0}")]
+    FigZip(String),
     #[error("root document node was not created")]
     MissingRoot,
 }
@@ -82,7 +86,7 @@ impl FrameDocument {
                 return Ok(doc);
             }
         }
-        Err(FrameDocumentError::UnsupportedBinaryFig)
+        Self::from_fig_zip_bytes(bytes)
     }
 
     pub fn get_node(&self, id: NodeId) -> Option<&FrameNode> {
@@ -116,6 +120,133 @@ impl FrameDocument {
             }
         }
     }
+}
+
+impl FrameDocument {
+    fn from_fig_zip_bytes(bytes: &[u8]) -> Result<Self, FrameDocumentError> {
+        if !bytes.starts_with(b"PK\x03\x04") {
+            return Err(FrameDocumentError::UnsupportedBinaryFig);
+        }
+
+        let mut archive = zip::ZipArchive::new(std::io::Cursor::new(bytes))
+            .map_err(|e| FrameDocumentError::FigZip(e.to_string()))?;
+
+        let meta_json = read_zip_entry(&mut archive, "meta.json").ok();
+        let thumbnail_png = read_zip_entry(&mut archive, "thumbnail.png").ok();
+
+        let meta_value = meta_json
+            .as_deref()
+            .and_then(|raw| serde_json::from_slice::<serde_json::Value>(raw).ok())
+            .unwrap_or_else(|| serde_json::json!({}));
+
+        let file_name = meta_value
+            .get("file_name")
+            .and_then(|v| v.as_str())
+            .unwrap_or("Imported .fig")
+            .to_string();
+
+        let mut root = FrameNode::new_synthetic(serde_json::json!({
+            "id": "fig-document:0",
+            "name": file_name,
+            "type": "DOCUMENT",
+            "visible": true,
+            "locked": false
+        }));
+        let root_id = root.id;
+
+        let mut page = FrameNode::new_synthetic(serde_json::json!({
+            "id": "fig-canvas:0",
+            "name": "Canvas",
+            "type": "CANVAS",
+            "visible": true,
+            "locked": false
+        }));
+        let page_id = page.id;
+        page.parent = Some(root_id);
+        root.children.push(page_id);
+
+        let mut nodes = std::collections::HashMap::new();
+        let mut figma_index = std::collections::HashMap::new();
+
+        if !root.figma_id.is_empty() {
+            figma_index.insert(root.figma_id.clone(), root_id);
+        }
+        if !page.figma_id.is_empty() {
+            figma_index.insert(page.figma_id.clone(), page_id);
+        }
+
+        if let Some(png) = thumbnail_png {
+            let thumb_size = meta_value
+                .get("client_meta")
+                .and_then(|v| v.get("thumbnail_size"))
+                .cloned()
+                .unwrap_or_else(|| serde_json::json!({}));
+            let data_url = format!(
+                "data:image/png;base64,{}",
+                base64::engine::general_purpose::STANDARD.encode(png)
+            );
+            let mut thumb = FrameNode::new_synthetic(serde_json::json!({
+                "id": "fig-thumb:0",
+                "name": "Thumbnail",
+                "type": "FIG_THUMBNAIL",
+                "visible": true,
+                "locked": true,
+                "size": {
+                    "x": thumb_size.get("width").and_then(|v| v.as_f64()).unwrap_or(0.0),
+                    "y": thumb_size.get("height").and_then(|v| v.as_f64()).unwrap_or(0.0)
+                },
+                "imageDataUrl": data_url
+            }));
+            let thumb_id = thumb.id;
+            thumb.parent = Some(page_id);
+            page.children.push(thumb_id);
+            if !thumb.figma_id.is_empty() {
+                figma_index.insert(thumb.figma_id.clone(), thumb_id);
+            }
+            nodes.insert(thumb_id, thumb);
+        }
+
+        nodes.insert(page_id, page);
+        nodes.insert(root_id, root);
+
+        Ok(Self {
+            id: DocumentId::new(),
+            name: file_name,
+            meta: FigmaDocumentMeta {
+                file_key: None,
+                role: None,
+                editor_type: Some("fig".to_string()),
+                version: None,
+                schema_version: None,
+                last_modified: None,
+                thumbnail_url: None,
+            },
+            payload: FigmaPayload::FigBinary {
+                bytes: bytes.to_vec(),
+                note: "Parsed .fig ZIP container (thumbnail fallback renderer)".to_string(),
+            },
+            root: root_id,
+            pages: vec![page_id],
+            nodes,
+            figma_index,
+            components: std::collections::HashMap::new(),
+            component_sets: std::collections::HashMap::new(),
+            styles: std::collections::HashMap::new(),
+        })
+    }
+}
+
+fn read_zip_entry<R: std::io::Read + std::io::Seek>(
+    archive: &mut zip::ZipArchive<R>,
+    name: &str,
+) -> Result<Vec<u8>, FrameDocumentError> {
+    let mut file = archive
+        .by_name(name)
+        .map_err(|e| FrameDocumentError::FigZip(e.to_string()))?;
+    let mut bytes = Vec::new();
+    file.read_to_end(&mut bytes)
+        .map_err(|e| FrameDocumentError::FigZip(e.to_string()))?;
+    Ok(bytes)
 }
 
 fn flatten_canvas(

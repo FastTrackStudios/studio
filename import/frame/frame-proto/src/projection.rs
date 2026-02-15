@@ -33,6 +33,7 @@ pub struct RenderNodeProjection {
     pub fill_geometry: Vec<models::Path>,
     pub stroke_geometry: Vec<models::Path>,
     pub text: Option<RenderTextProjection>,
+    pub image_data_url: Option<String>,
     pub children: Vec<NodeId>,
 }
 
@@ -85,6 +86,10 @@ pub fn project_node(node: &FrameNode) -> RenderNodeProjection {
         fill_geometry: get_typed_array(raw, "fillGeometry"),
         stroke_geometry: get_typed_array(raw, "strokeGeometry"),
         text: get_text_projection(raw),
+        image_data_url: raw
+            .get("imageDataUrl")
+            .and_then(|v| v.as_str())
+            .map(ToString::to_string),
         children: node.children.clone(),
     }
 }

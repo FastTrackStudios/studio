@@ -105,6 +105,6 @@ mod tests {
     fn rejects_non_json_binary_fig_bytes_for_now() {
         let err = import_figma_bytes(&[0x89, b'F', b'I', b'G']).expect_err("should fail");
         let message = err.to_string();
-        assert!(message.contains("binary .fig parsing is not implemented yet"));
+        assert!(message.contains("not a supported .fig ZIP container"));
     }
 }

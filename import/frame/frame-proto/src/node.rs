@@ -15,6 +15,7 @@ pub enum NodePayload {
     Document(Box<models::DocumentNode>),
     Canvas(Box<models::CanvasNode>),
     Subcanvas(Box<models::SubcanvasNode>),
+    Synthetic(serde_json::Value),
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -47,14 +48,8 @@ impl FrameNode {
             payload: NodePayload::Document(Box::new(node)),
             parent: None,
             children: Vec::new(),
-            visible: raw
-                .get("visible")
-                .and_then(|v| v.as_bool())
-                .unwrap_or(true),
-            locked: raw
-                .get("locked")
-                .and_then(|v| v.as_bool())
-                .unwrap_or(false),
+            visible: raw.get("visible").and_then(|v| v.as_bool()).unwrap_or(true),
+            locked: raw.get("locked").and_then(|v| v.as_bool()).unwrap_or(false),
             plugin_data,
             figma_data,
             raw,
@@ -73,14 +68,8 @@ impl FrameNode {
             payload: NodePayload::Canvas(Box::new(node)),
             parent: None,
             children: Vec::new(),
-            visible: raw
-                .get("visible")
-                .and_then(|v| v.as_bool())
-                .unwrap_or(true),
-            locked: raw
-                .get("locked")
-                .and_then(|v| v.as_bool())
-                .unwrap_or(false),
+            visible: raw.get("visible").and_then(|v| v.as_bool()).unwrap_or(true),
+            locked: raw.get("locked").and_then(|v| v.as_bool()).unwrap_or(false),
             plugin_data,
             figma_data,
             raw,
@@ -115,14 +104,8 @@ impl FrameNode {
             payload: NodePayload::Subcanvas(Box::new(node)),
             parent: None,
             children: Vec::new(),
-            visible: raw
-                .get("visible")
-                .and_then(|v| v.as_bool())
-                .unwrap_or(true),
-            locked: raw
-                .get("locked")
-                .and_then(|v| v.as_bool())
-                .unwrap_or(false),
+            visible: raw.get("visible").and_then(|v| v.as_bool()).unwrap_or(true),
+            locked: raw.get("locked").and_then(|v| v.as_bool()).unwrap_or(false),
             plugin_data,
             figma_data,
             raw,
@@ -131,6 +114,47 @@ impl FrameNode {
 
     pub fn node_type(&self) -> &str {
         &self.figma_type
+    }
+
+    pub fn new_synthetic(raw: serde_json::Value) -> Self {
+        let figma_type = raw
+            .get("type")
+            .and_then(|v| v.as_str())
+            .unwrap_or("SYNTHETIC")
+            .to_string();
+        let figma_id = raw
+            .get("id")
+            .and_then(|v| v.as_str())
+            .unwrap_or_default()
+            .to_string();
+        let name = raw
+            .get("name")
+            .and_then(|v| v.as_str())
+            .unwrap_or("Unnamed")
+            .to_string();
+        let (plugin_data, figma_data) = extract_figma_extras(&raw);
+
+        let kind = match figma_type.as_str() {
+            "DOCUMENT" => NodeKind::Document,
+            "CANVAS" => NodeKind::Canvas,
+            _ => NodeKind::Subcanvas,
+        };
+
+        Self {
+            id: NodeId::new(),
+            figma_id,
+            name,
+            figma_type,
+            kind,
+            payload: NodePayload::Synthetic(raw.clone()),
+            parent: None,
+            children: Vec::new(),
+            visible: raw.get("visible").and_then(|v| v.as_bool()).unwrap_or(true),
+            locked: raw.get("locked").and_then(|v| v.as_bool()).unwrap_or(false),
+            plugin_data,
+            figma_data,
+            raw,
+        }
     }
 }
 
