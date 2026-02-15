@@ -1,0 +1,16 @@
+[package]
+name = "frame-proto"
+description = "Frame protocol — Figma-compatible vector design document model"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+facet = { workspace = true, features = ["uuid"] }
+figma-api = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+uuid = { workspace = true }
+
+[lints]
+workspace = true

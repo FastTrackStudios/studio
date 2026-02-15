@@ -1,0 +1,15 @@
+[package]
+name = "frame-import"
+description = "Figma REST API JSON importer for frame-proto"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+frame-proto = { path = "../frame-proto" }
+figma-api = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+
+[lints]
+workspace = true
