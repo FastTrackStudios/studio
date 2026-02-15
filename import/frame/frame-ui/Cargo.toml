@@ -13,11 +13,18 @@ tokio = { workspace = true, features = ["time"] }
 # UI framework (conditional on feature)
 dioxus = { workspace = true, optional = true, features = ["desktop"] }
 dioxus-native = { workspace = true, optional = true }
+anyrender = { workspace = true, optional = true }
+anyrender_svg = { workspace = true, optional = true }
+kurbo = { workspace = true, optional = true }
+peniko = { workspace = true, optional = true }
+skrifa = { version = "0.26", optional = true }
+base64 = { version = "0.22", optional = true }
 
 [features]
 default = ["web"]
 web = ["dep:dioxus"]
 native = ["dep:dioxus-native"]
+anyrender = ["dep:anyrender", "dep:anyrender_svg", "dep:kurbo", "dep:peniko", "dep:skrifa", "dep:base64"]
 
 [lints]
 workspace = true

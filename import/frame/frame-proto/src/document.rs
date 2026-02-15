@@ -1,7 +1,6 @@
 use crate::figma::{FigmaDocumentMeta, FigmaPayload};
 use crate::id::{DocumentId, NodeId};
 use crate::node::FrameNode;
-use base64::Engine;
 use figma_api::models;
 use serde::{Deserialize, Serialize};
 use std::io::Read;
@@ -85,6 +84,12 @@ impl FrameDocument {
             if let Ok(doc) = Self::from_figma_api_json(text) {
                 return Ok(doc);
             }
+            if let Ok(doc) = Self::from_fts_export_json(text) {
+                return Ok(doc);
+            }
+            if let Ok(doc) = Self::from_grida_bridge_json(text) {
+                return Ok(doc);
+            }
         }
         Self::from_fig_zip_bytes(bytes)
     }
@@ -123,6 +128,186 @@ impl FrameDocument {
 }
 
 impl FrameDocument {
+    fn from_fts_export_json(json: &str) -> Result<Self, FrameDocumentError> {
+        let export: FtsExportDocument = serde_json::from_str(json)?;
+        if export.schema != "fts.figma.export/v1" {
+            return Err(FrameDocumentError::UnsupportedBinaryFig);
+        }
+
+        let mut nodes = std::collections::HashMap::new();
+        let mut figma_index = std::collections::HashMap::new();
+        let mut synthetic_counter = 0_u64;
+
+        let page_name = export
+            .source
+            .page
+            .as_ref()
+            .map(|p| p.name.clone())
+            .unwrap_or_else(|| "Canvas".to_string());
+
+        let mut root = FrameNode::new_synthetic(serde_json::json!({
+            "id": "fts-document:0",
+            "name": export.source.page.as_ref().map(|p| p.name.clone()).unwrap_or_else(|| "FTS Export".to_string()),
+            "type": "DOCUMENT",
+            "visible": true,
+            "locked": false
+        }));
+        let root_id = root.id;
+
+        let mut page = FrameNode::new_synthetic(serde_json::json!({
+            "id": export.source.page.as_ref().map(|p| p.id.clone()).unwrap_or_else(|| "fts-canvas:0".to_string()),
+            "name": page_name,
+            "type": "CANVAS",
+            "visible": true,
+            "locked": false
+        }));
+        let page_id = page.id;
+        page.parent = Some(root_id);
+        root.children.push(page_id);
+
+        for child in export.nodes {
+            let child_id = flatten_synthetic_subtree(
+                child,
+                page_id,
+                &mut synthetic_counter,
+                &mut nodes,
+                &mut figma_index,
+            );
+            page.children.push(child_id);
+        }
+
+        if !page.figma_id.is_empty() {
+            figma_index.insert(page.figma_id.clone(), page_id);
+        }
+        if !root.figma_id.is_empty() {
+            figma_index.insert(root.figma_id.clone(), root_id);
+        }
+        nodes.insert(page_id, page);
+        nodes.insert(root_id, root);
+
+        Ok(Self {
+            id: DocumentId::new(),
+            name: export
+                .source
+                .page
+                .as_ref()
+                .map(|p| p.name.clone())
+                .unwrap_or_else(|| "FTS Export".to_string()),
+            meta: FigmaDocumentMeta {
+                file_key: export.source.file_key,
+                role: None,
+                editor_type: Some(export.source.editor_type.unwrap_or_else(|| "figma".to_string())),
+                version: None,
+                schema_version: None,
+                last_modified: export.generated_at,
+                thumbnail_url: None,
+            },
+            payload: FigmaPayload::FigBinary {
+                bytes: Vec::new(),
+                note: "Parsed via FTS Figma export JSON".to_string(),
+            },
+            root: root_id,
+            pages: vec![page_id],
+            nodes,
+            figma_index,
+            components: std::collections::HashMap::new(),
+            component_sets: std::collections::HashMap::new(),
+            styles: std::collections::HashMap::new(),
+        })
+    }
+
+    fn from_grida_bridge_json(json: &str) -> Result<Self, FrameDocumentError> {
+        let bridge: GridaBridgeDocument = serde_json::from_str(json)?;
+        let file_name = bridge.source.clone();
+
+        let mut nodes = std::collections::HashMap::new();
+        let mut figma_index = std::collections::HashMap::new();
+        let mut pages = Vec::new();
+        let mut synthetic_counter = 0_u64;
+
+        let mut root = FrameNode::new_synthetic(serde_json::json!({
+            "id": "grida-document:0",
+            "name": file_name,
+            "type": "DOCUMENT",
+            "visible": true,
+            "locked": false
+        }));
+        let root_id = root.id;
+
+        for (page_idx, page) in bridge.pages.into_iter().enumerate() {
+            let mut page_raw = page.canvas;
+            ensure_object_field(
+                &mut page_raw,
+                "id",
+                serde_json::Value::String(format!("grida-canvas:{page_idx}")),
+            );
+            ensure_object_field(
+                &mut page_raw,
+                "name",
+                serde_json::Value::String(page.name.clone()),
+            );
+            ensure_object_field(
+                &mut page_raw,
+                "type",
+                serde_json::Value::String("CANVAS".to_string()),
+            );
+            ensure_object_field(&mut page_raw, "visible", serde_json::Value::Bool(true));
+            ensure_object_field(&mut page_raw, "locked", serde_json::Value::Bool(false));
+
+            let mut page_node = FrameNode::new_synthetic(page_raw);
+            let page_id = page_node.id;
+            page_node.parent = Some(root_id);
+
+            for child in page.root_nodes {
+                let child_id = flatten_synthetic_subtree(
+                    child,
+                    page_id,
+                    &mut synthetic_counter,
+                    &mut nodes,
+                    &mut figma_index,
+                );
+                page_node.children.push(child_id);
+            }
+
+            if !page_node.figma_id.is_empty() {
+                figma_index.insert(page_node.figma_id.clone(), page_id);
+            }
+            nodes.insert(page_id, page_node);
+            pages.push(page_id);
+            root.children.push(page_id);
+        }
+
+        if !root.figma_id.is_empty() {
+            figma_index.insert(root.figma_id.clone(), root_id);
+        }
+        nodes.insert(root_id, root);
+
+        Ok(Self {
+            id: DocumentId::new(),
+            name: file_name,
+            meta: FigmaDocumentMeta {
+                file_key: None,
+                role: None,
+                editor_type: Some("fig".to_string()),
+                version: bridge.metadata.version.map(|v| v.to_string()),
+                schema_version: None,
+                last_modified: None,
+                thumbnail_url: None,
+            },
+            payload: FigmaPayload::FigBinary {
+                bytes: Vec::new(),
+                note: "Parsed via Grida .fig bridge JSON".to_string(),
+            },
+            root: root_id,
+            pages,
+            nodes,
+            figma_index,
+            components: std::collections::HashMap::new(),
+            component_sets: std::collections::HashMap::new(),
+            styles: std::collections::HashMap::new(),
+        })
+    }
+
     fn from_fig_zip_bytes(bytes: &[u8]) -> Result<Self, FrameDocumentError> {
         if !bytes.starts_with(b"PK\x03\x04") {
             return Err(FrameDocumentError::UnsupportedBinaryFig);
@@ -132,7 +317,8 @@ impl FrameDocument {
             .map_err(|e| FrameDocumentError::FigZip(e.to_string()))?;
 
         let meta_json = read_zip_entry(&mut archive, "meta.json").ok();
-        let thumbnail_png = read_zip_entry(&mut archive, "thumbnail.png").ok();
+        let canvas_fig =
+            read_zip_entry(&mut archive, "canvas.fig").map_err(|_| FrameDocumentError::UnsupportedBinaryFig)?;
 
         let meta_value = meta_json
             .as_deref()
@@ -175,36 +361,24 @@ impl FrameDocument {
             figma_index.insert(page.figma_id.clone(), page_id);
         }
 
-        if let Some(png) = thumbnail_png {
-            let thumb_size = meta_value
-                .get("client_meta")
-                .and_then(|v| v.get("thumbnail_size"))
-                .cloned()
-                .unwrap_or_else(|| serde_json::json!({}));
-            let data_url = format!(
-                "data:image/png;base64,{}",
-                base64::engine::general_purpose::STANDARD.encode(png)
-            );
-            let mut thumb = FrameNode::new_synthetic(serde_json::json!({
-                "id": "fig-thumb:0",
-                "name": "Thumbnail",
-                "type": "FIG_THUMBNAIL",
-                "visible": true,
-                "locked": true,
-                "size": {
-                    "x": thumb_size.get("width").and_then(|v| v.as_f64()).unwrap_or(0.0),
-                    "y": thumb_size.get("height").and_then(|v| v.as_f64()).unwrap_or(0.0)
-                },
-                "imageDataUrl": data_url
-            }));
-            let thumb_id = thumb.id;
-            thumb.parent = Some(page_id);
-            page.children.push(thumb_id);
-            if !thumb.figma_id.is_empty() {
-                figma_index.insert(thumb.figma_id.clone(), thumb_id);
-            }
-            nodes.insert(thumb_id, thumb);
+        // Intentionally no thumbnail fallback render node here. We expose only
+        // a binary canvas placeholder so renderer development targets actual
+        // canvas decoding paths instead of image fallback.
+        let mut canvas_binary = FrameNode::new_synthetic(serde_json::json!({
+            "id": "fig-canvas-binary:0",
+            "name": "canvas.fig (binary)",
+            "type": "FIG_CANVAS_BINARY",
+            "visible": true,
+            "locked": true,
+            "canvasFigBytes": canvas_fig.len()
+        }));
+        let canvas_binary_id = canvas_binary.id;
+        canvas_binary.parent = Some(page_id);
+        page.children.push(canvas_binary_id);
+        if !canvas_binary.figma_id.is_empty() {
+            figma_index.insert(canvas_binary.figma_id.clone(), canvas_binary_id);
         }
+        nodes.insert(canvas_binary_id, canvas_binary);
 
         nodes.insert(page_id, page);
         nodes.insert(root_id, root);
@@ -234,6 +408,119 @@ impl FrameDocument {
             styles: std::collections::HashMap::new(),
         })
     }
+}
+
+fn flatten_synthetic_subtree(
+    mut raw: serde_json::Value,
+    parent_id: NodeId,
+    synthetic_counter: &mut u64,
+    nodes: &mut std::collections::HashMap<NodeId, FrameNode>,
+    figma_index: &mut std::collections::HashMap<String, NodeId>,
+) -> NodeId {
+    ensure_object_field(
+        &mut raw,
+        "id",
+        serde_json::Value::String({
+            let next = *synthetic_counter;
+            *synthetic_counter += 1;
+            format!("grida-node:{next}")
+        }),
+    );
+    ensure_object_field(
+        &mut raw,
+        "name",
+        serde_json::Value::String("Unnamed".to_string()),
+    );
+    ensure_object_field(
+        &mut raw,
+        "type",
+        serde_json::Value::String("UNKNOWN".to_string()),
+    );
+    ensure_object_field(&mut raw, "visible", serde_json::Value::Bool(true));
+    ensure_object_field(&mut raw, "locked", serde_json::Value::Bool(false));
+
+    let child_values = raw
+        .get("children")
+        .and_then(|v| v.as_array())
+        .cloned()
+        .unwrap_or_default();
+
+    let mut node = FrameNode::new_synthetic(raw);
+    let id = node.id;
+    node.parent = Some(parent_id);
+
+    for child in child_values {
+        let child_id = flatten_synthetic_subtree(
+            child,
+            id,
+            synthetic_counter,
+            nodes,
+            figma_index,
+        );
+        node.children.push(child_id);
+    }
+
+    if !node.figma_id.is_empty() {
+        figma_index.insert(node.figma_id.clone(), id);
+    }
+    nodes.insert(id, node);
+    id
+}
+
+fn ensure_object_field(target: &mut serde_json::Value, key: &str, default: serde_json::Value) {
+    if let Some(obj) = target.as_object_mut() {
+        if obj.get(key).is_none() {
+            obj.insert(key.to_string(), default);
+        }
+    }
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct GridaBridgeDocument {
+    source: String,
+    #[serde(default)]
+    metadata: GridaBridgeMetadata,
+    #[serde(default)]
+    pages: Vec<GridaBridgePage>,
+}
+
+#[derive(Debug, Clone, Deserialize, Default)]
+struct GridaBridgeMetadata {
+    version: Option<u64>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct GridaBridgePage {
+    name: String,
+    canvas: serde_json::Value,
+    #[serde(rename = "rootNodes")]
+    #[serde(default)]
+    root_nodes: Vec<serde_json::Value>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct FtsExportDocument {
+    schema: String,
+    #[serde(rename = "generatedAt")]
+    generated_at: Option<String>,
+    source: FtsExportSource,
+    #[serde(default)]
+    nodes: Vec<serde_json::Value>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct FtsExportSource {
+    #[serde(rename = "editorType")]
+    editor_type: Option<String>,
+    #[serde(rename = "fileKey")]
+    file_key: Option<String>,
+    page: Option<FtsExportPage>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct FtsExportPage {
+    id: String,
+    name: String,
 }
 
 fn read_zip_entry<R: std::io::Read + std::io::Seek>(

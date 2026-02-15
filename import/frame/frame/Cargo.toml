@@ -1,0 +1,11 @@
+[package]
+name = "frame"
+description = "Frame — Figma-compatible design system (facade crate)"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+frame-proto = { path = "../frame-proto" }
+
+[lints]
+workspace = true
