@@ -96,7 +96,7 @@ fn inherited_opacity_applies_to_child_fills() {
         if let PaintPrimitive::Rect { fills, .. } = &p {
             // One rect is the frame background (may be missing fill); we only care
             // that at least one solid fill carries inherited alpha 0.5.
-            for fill in fills {
+            for (fill, _blend) in fills {
                 if let FillPaint::Solid(c) = fill {
                     if (c.a - 0.5).abs() < 1e-9 {
                         found = true;
@@ -148,6 +148,111 @@ fn emits_layer_primitives_for_non_normal_blend_nodes() {
     }
     assert!(start >= 1, "expected at least one layer start");
     assert_eq!(start, end, "layer boundaries should be balanced");
+}
+
+#[test]
+fn extracts_rotation_from_relative_transform() {
+    let json = serde_json::json!({
+        "schema": "fts.figma.export/v1",
+        "generatedAt": "2026-02-16T00:00:00.000Z",
+        "source": { "editorType": "figma", "page": { "id": "0:1", "name": "Canvas" } },
+        "selection": { "ids": [], "names": [], "totalRoots": 0, "totalNodes": 0 },
+        "options": { "includeSvg": false, "includePng": false, "maxDepth": 4 },
+        "nodes": [{
+            "id": "3:1",
+            "name": "RotatedParent",
+            "type": "FRAME",
+            "visible": true,
+            "relativeTransform": [[1.0,0.0,0.0],[0.0,1.0,0.0]],
+            "size": { "x": 100.0, "y": 100.0 },
+            "absoluteBoundingBox": { "x": 0.0, "y": 0.0, "width": 100.0, "height": 100.0 },
+            "children": [{
+                "id": "3:2",
+                "name": "RotatedRect",
+                "type": "RECTANGLE",
+                "visible": true,
+                "relativeTransform": [[0.934,-0.358,4.584],[0.358,0.934,22.253]],
+                "size": { "x": 15.0, "y": 1.0 },
+                "absoluteBoundingBox": { "x": 4.584, "y": 22.253, "width": 15.0, "height": 1.0 },
+                "fills": [{
+                    "type": "SOLID",
+                    "visible": true,
+                    "opacity": 1.0,
+                    "color": { "r": 1.0, "g": 1.0, "b": 1.0, "a": 1.0 }
+                }],
+                "children": []
+            }]
+        }]
+    });
+    let bytes = serde_json::to_vec(&json).expect("json bytes");
+    let doc = FrameDocument::from_source_bytes(&bytes).expect("import");
+    let root = doc.pages[0];
+    let primitives = build_paint_primitives(&doc, root);
+
+    let mut found_rotation = false;
+    for p in primitives {
+        if let PaintPrimitive::Rect { rotation, .. } = &p {
+            // atan2(0.358, 0.934) ≈ 0.3649 radians ≈ 20.9°
+            if rotation.abs() > 0.3 && rotation.abs() < 0.4 {
+                found_rotation = true;
+                break;
+            }
+        }
+    }
+    assert!(found_rotation, "expected rotated rect with ~0.365 radian rotation");
+}
+
+#[test]
+fn per_fill_blend_mode_is_extracted() {
+    let json = serde_json::json!({
+        "schema": "fts.figma.export/v1",
+        "generatedAt": "2026-02-16T00:00:00.000Z",
+        "source": { "editorType": "figma", "page": { "id": "0:1", "name": "Canvas" } },
+        "selection": { "ids": [], "names": [], "totalRoots": 0, "totalNodes": 0 },
+        "options": { "includeSvg": false, "includePng": false, "maxDepth": 4 },
+        "nodes": [{
+            "id": "4:1",
+            "name": "MultiBlendRect",
+            "type": "RECTANGLE",
+            "visible": true,
+            "relativeTransform": [[1.0,0.0,0.0],[0.0,1.0,0.0]],
+            "size": { "x": 100.0, "y": 100.0 },
+            "absoluteBoundingBox": { "x": 0.0, "y": 0.0, "width": 100.0, "height": 100.0 },
+            "fills": [
+                {
+                    "type": "SOLID",
+                    "visible": true,
+                    "opacity": 1.0,
+                    "color": { "r": 1.0, "g": 0.0, "b": 0.0, "a": 1.0 }
+                },
+                {
+                    "type": "SOLID",
+                    "visible": true,
+                    "opacity": 0.5,
+                    "blendMode": "SOFT_LIGHT",
+                    "color": { "r": 0.0, "g": 0.0, "b": 1.0, "a": 1.0 }
+                }
+            ],
+            "children": []
+        }]
+    });
+    let bytes = serde_json::to_vec(&json).expect("json bytes");
+    let doc = FrameDocument::from_source_bytes(&bytes).expect("import");
+    let root = doc.pages[0];
+    let primitives = build_paint_primitives(&doc, root);
+
+    let mut found_soft_light = false;
+    for p in primitives {
+        if let PaintPrimitive::Rect { fills, .. } = &p {
+            for (_fill, blend) in fills {
+                if *blend == BlendMix::SoftLight {
+                    found_soft_light = true;
+                    break;
+                }
+            }
+        }
+    }
+    assert!(found_soft_light, "expected at least one fill with SoftLight blend mode");
 }
 
 #[test]

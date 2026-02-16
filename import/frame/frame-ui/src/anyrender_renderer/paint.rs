@@ -139,25 +139,37 @@ pub fn paint_primitives_into_scene_with(
                 corner_radii,
                 effects,
                 blend: _,
+                rotation,
                 ..
             } => {
-                let rect = Rect::new(x, y, x + width, y + height);
+                // For rotated nodes, compose rotation into the transform and use
+                // local coordinates (0,0)→(w,h). For non-rotated nodes, keep the
+                // existing absolute-coordinate approach for backward compatibility.
+                let (node_transform, lx, ly) = if rotation.abs() > 1e-6 {
+                    let t = scene_transform
+                        * kurbo::Affine::translate((x, y))
+                        * kurbo::Affine::rotate(rotation);
+                    (t, 0.0, 0.0)
+                } else {
+                    (scene_transform, x, y)
+                };
+                let rect = Rect::new(lx, ly, lx + width, ly + height);
                 let uniform_corner = corner_radii.top_left;
                 let blur_color_hint = fills
                     .first()
-                    .and_then(first_color_from_fill)
+                    .and_then(|(f, _)| first_color_from_fill(f))
                     .or_else(|| stroke.as_ref().map(|s| s.color.clone()));
                 for effect in &effects {
                     if matches!(effect.kind, EffectKind::LayerBlur) {
                         paint_blurred_rect_content(
                             scene,
-                            scene_transform,
-                            x,
-                            y,
+                            node_transform,
+                            lx,
+                            ly,
                             width,
                             height,
                             uniform_corner,
-                            fills.first(),
+                            fills.first().map(|(f, _)| f),
                             stroke.as_ref(),
                             effect,
                         );
@@ -167,7 +179,7 @@ pub fn paint_primitives_into_scene_with(
                     if matches!(effect.kind, EffectKind::DropShadow) {
                         paint_effect(
                             scene,
-                            scene_transform,
+                            node_transform,
                             &rect,
                             uniform_corner,
                             effect,
@@ -186,8 +198,23 @@ pub fn paint_primitives_into_scene_with(
                     let stroke_radius =
                         stroke_aligned_corner_radius(uniform_corner, stroke.as_ref());
                     let rr = RoundedRect::from_rect(rect, radii);
-                    for fill in &fills {
-                        fill_shape(scene, scene_transform, &rr, x, y, width, height, fill);
+                    for (fill, fill_blend) in &fills {
+                        let need_blend_layer = *fill_blend != BlendMix::Normal;
+                        if need_blend_layer {
+                            scene.push_layer(
+                                peniko::BlendMode {
+                                    mix: to_peniko_mix(fill_blend),
+                                    compose: peniko::Compose::SrcOver,
+                                },
+                                1.0,
+                                node_transform,
+                                &rect,
+                            );
+                        }
+                        fill_shape(scene, node_transform, &rr, lx, ly, width, height, fill);
+                        if need_blend_layer {
+                            scene.pop_layer();
+                        }
                     }
                     if let Some(stroke) = stroke {
                         if stroke.width > 0.0 {
@@ -195,7 +222,7 @@ pub fn paint_primitives_into_scene_with(
                             let stroke_rr = RoundedRect::from_rect(stroke_rect, stroke_radius);
                             scene.stroke(
                                 &stroke_style,
-                                scene_transform,
+                                node_transform,
                                 to_peniko(stroke.color),
                                 None,
                                 &stroke_rr,
@@ -203,8 +230,23 @@ pub fn paint_primitives_into_scene_with(
                         }
                     }
                 } else {
-                    for fill in &fills {
-                        fill_shape(scene, scene_transform, &rect, x, y, width, height, fill);
+                    for (fill, fill_blend) in &fills {
+                        let need_blend_layer = *fill_blend != BlendMix::Normal;
+                        if need_blend_layer {
+                            scene.push_layer(
+                                peniko::BlendMode {
+                                    mix: to_peniko_mix(fill_blend),
+                                    compose: peniko::Compose::SrcOver,
+                                },
+                                1.0,
+                                node_transform,
+                                &rect,
+                            );
+                        }
+                        fill_shape(scene, node_transform, &rect, lx, ly, width, height, fill);
+                        if need_blend_layer {
+                            scene.pop_layer();
+                        }
                     }
                     if let Some(stroke) = stroke {
                         if stroke.width > 0.0 {
@@ -212,7 +254,7 @@ pub fn paint_primitives_into_scene_with(
                             let stroke_rect = stroke_aligned_rect(rect, Some(&stroke));
                             scene.stroke(
                                 &stroke_style,
-                                scene_transform,
+                                node_transform,
                                 to_peniko(stroke.color),
                                 None,
                                 &stroke_rect,
@@ -227,7 +269,7 @@ pub fn paint_primitives_into_scene_with(
                     ) {
                         paint_effect(
                             scene,
-                            scene_transform,
+                            node_transform,
                             &rect,
                             uniform_corner,
                             effect,
@@ -248,21 +290,31 @@ pub fn paint_primitives_into_scene_with(
                 stroke,
                 effects,
                 blend: _,
+                rotation,
                 ..
             } => {
+                // Rotation support: compose rotation into base transform
+                let (base_transform, lx, ly) = if rotation.abs() > 1e-6 {
+                    let t = scene_transform
+                        * kurbo::Affine::translate((path_x, path_y))
+                        * kurbo::Affine::rotate(rotation);
+                    (t, 0.0, 0.0)
+                } else {
+                    (scene_transform, path_x, path_y)
+                };
                 let mut had_any_path = false;
-                let bounds_rect = Rect::new(path_x, path_y, path_x + width, path_y + height);
+                let bounds_rect = Rect::new(lx, ly, lx + width, ly + height);
                 let blur_color_hint = fills
                     .first()
-                    .and_then(first_color_from_fill)
+                    .and_then(|(f, _)| first_color_from_fill(f))
                     .or_else(|| stroke.as_ref().map(|s| s.color.clone()));
                 let path_origin_transform =
-                    scene_transform * kurbo::Affine::translate((path_x, path_y));
+                    base_transform * kurbo::Affine::translate((lx, ly));
                 let path_fit = compute_path_fit_transform(
                     &fill_paths,
                     &stroke_paths,
-                    path_x,
-                    path_y,
+                    lx,
+                    ly,
                     width,
                     height,
                 );
@@ -281,10 +333,10 @@ pub fn paint_primitives_into_scene_with(
                 ) {
                     paint_blurred_svg_content(
                         scene,
-                        scene_transform,
+                        base_transform,
                         svg_text,
-                        path_x,
-                        path_y,
+                        lx,
+                        ly,
                         width,
                         height,
                         layer_blur,
@@ -297,11 +349,11 @@ pub fn paint_primitives_into_scene_with(
                             path_transform,
                             &fill_paths,
                             &stroke_paths,
-                            fills.first(),
+                            fills.first().map(|(f, _)| f),
                             stroke.as_ref(),
                             stroke_scale,
-                            path_x,
-                            path_y,
+                            lx,
+                            ly,
                             width,
                             height,
                             effect,
@@ -312,7 +364,7 @@ pub fn paint_primitives_into_scene_with(
                     if matches!(effect.kind, EffectKind::DropShadow) {
                         paint_effect(
                             scene,
-                            scene_transform,
+                            base_transform,
                             &bounds_rect,
                             0.0,
                             effect,
@@ -329,21 +381,36 @@ pub fn paint_primitives_into_scene_with(
                 }
 
                 if !had_any_path {
-                    for fill_paint in &fills {
+                    for (fill_paint, fill_blend) in &fills {
+                        let need_blend_layer = *fill_blend != BlendMix::Normal;
+                        if need_blend_layer {
+                            scene.push_layer(
+                                peniko::BlendMode {
+                                    mix: to_peniko_mix(fill_blend),
+                                    compose: peniko::Compose::SrcOver,
+                                },
+                                1.0,
+                                base_transform,
+                                &bounds_rect,
+                            );
+                        }
                         for path_data in &fill_paths {
                             if let Some(path) = cached_bez_path(path_data) {
                                 fill_path_shape(
                                     scene,
                                     path_transform,
                                     &path,
-                                    path_x,
-                                    path_y,
+                                    lx,
+                                    ly,
                                     width,
                                     height,
                                     fill_paint,
                                 );
                                 had_any_path = true;
                             }
+                        }
+                        if need_blend_layer {
+                            scene.pop_layer();
                         }
                     }
 
@@ -368,25 +435,40 @@ pub fn paint_primitives_into_scene_with(
 
                 if !had_any_path {
                     // fallback bounds draw when path payload is missing/unparseable
-                    let rect = Rect::new(path_x, path_y, path_x + width, path_y + height);
-                    for fill in &fills {
+                    let rect = Rect::new(lx, ly, lx + width, ly + height);
+                    for (fill, fill_blend) in &fills {
+                        let need_blend_layer = *fill_blend != BlendMix::Normal;
+                        if need_blend_layer {
+                            scene.push_layer(
+                                peniko::BlendMode {
+                                    mix: to_peniko_mix(fill_blend),
+                                    compose: peniko::Compose::SrcOver,
+                                },
+                                1.0,
+                                base_transform,
+                                &rect,
+                            );
+                        }
                         fill_shape(
                             scene,
-                            scene_transform,
+                            base_transform,
                             &rect,
-                            path_x,
-                            path_y,
+                            lx,
+                            ly,
                             width,
                             height,
                             fill,
                         );
+                        if need_blend_layer {
+                            scene.pop_layer();
+                        }
                     }
                     if let Some(stroke) = stroke.as_ref() {
                         if stroke.width > 0.0 {
                             let stroke_style = to_kurbo_stroke(stroke, 1.0);
                             scene.stroke(
                                 &stroke_style,
-                                scene_transform,
+                                base_transform,
                                 to_peniko(stroke.color.clone()),
                                 None,
                                 &rect,
@@ -401,7 +483,7 @@ pub fn paint_primitives_into_scene_with(
                     ) {
                         paint_effect(
                             scene,
-                            scene_transform,
+                            base_transform,
                             &bounds_rect,
                             0.0,
                             effect,

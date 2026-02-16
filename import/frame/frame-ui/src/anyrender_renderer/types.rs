@@ -206,11 +206,12 @@ pub enum PaintPrimitive {
         y: f64,
         width: f64,
         height: f64,
-        fills: Vec<FillPaint>,
+        fills: Vec<(FillPaint, BlendMix)>,
         stroke: Option<StrokeStyle>,
         corner_radii: frame_proto::CornerRadii,
         effects: Vec<NodeEffect>,
         blend: BlendMix,
+        rotation: f64,
     },
     Text {
         node_id: NodeId,
@@ -233,10 +234,11 @@ pub enum PaintPrimitive {
         fill_paths: Vec<String>,
         stroke_paths: Vec<String>,
         svg_base64: Option<String>,
-        fills: Vec<FillPaint>,
+        fills: Vec<(FillPaint, BlendMix)>,
         stroke: Option<StrokeStyle>,
         effects: Vec<NodeEffect>,
         blend: BlendMix,
+        rotation: f64,
     },
 }
 

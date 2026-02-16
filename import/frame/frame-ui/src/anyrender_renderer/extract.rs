@@ -1,11 +1,16 @@
 use super::types::*;
 
-pub(super) fn extract_local_rect(raw: &serde_json::Value) -> (f64, f64, f64, f64) {
+/// Returns (x, y, width, height, rotation_radians).
+///
+/// Rotation is extracted from the relativeTransform matrix columns.
+/// For a pure rotation: `[[cos θ, -sin θ, tx], [sin θ, cos θ, ty]]`.
+pub(super) fn extract_local_rect(raw: &serde_json::Value) -> (f64, f64, f64, f64, f64) {
     // Prefer local node coordinates so rendering is stable regardless of how
     // upstream exporters populate absoluteBoundingBox (which may be global,
     // page-relative, or component-library-relative).
     let mut x = 0.0;
     let mut y = 0.0;
+    let mut rotation = 0.0;
     if let Some(t) = raw.get("relativeTransform").and_then(|v| v.as_array()) {
         if t.len() >= 2 {
             x = t[0]
@@ -18,6 +23,18 @@ pub(super) fn extract_local_rect(raw: &serde_json::Value) -> (f64, f64, f64, f64
                 .and_then(|row| row.get(2))
                 .and_then(|v| v.as_f64())
                 .unwrap_or(0.0);
+            // Extract rotation from matrix columns: atan2(c, a)
+            let a = t[0]
+                .as_array()
+                .and_then(|row| row.get(0))
+                .and_then(|v| v.as_f64())
+                .unwrap_or(1.0);
+            let c = t[1]
+                .as_array()
+                .and_then(|row| row.get(0))
+                .and_then(|v| v.as_f64())
+                .unwrap_or(0.0);
+            rotation = c.atan2(a);
         }
     }
 
@@ -32,7 +49,7 @@ pub(super) fn extract_local_rect(raw: &serde_json::Value) -> (f64, f64, f64, f64
         .and_then(|v| v.as_f64())
         .unwrap_or(0.0);
 
-    (x, y, w, h)
+    (x, y, w, h, rotation)
 }
 
 pub(super) fn first_solid_rgba(raw: &serde_json::Value, key: &str) -> Option<Rgba> {
@@ -76,7 +93,7 @@ pub(super) fn first_solid_rgba(raw: &serde_json::Value, key: &str) -> Option<Rgb
     None
 }
 
-pub(super) fn all_fill_paints(raw: &serde_json::Value, key: &str) -> Vec<FillPaint> {
+pub(super) fn all_fill_paints(raw: &serde_json::Value, key: &str) -> Vec<(FillPaint, BlendMix)> {
     let Some(arr) = raw.get(key).and_then(|v| v.as_array()) else {
         return Vec::new();
     };
@@ -90,11 +107,12 @@ pub(super) fn all_fill_paints(raw: &serde_json::Value, key: &str) -> Vec<FillPai
                 return None;
             }
 
+            let blend = parse_blend_mode(paint);
             let paint_type = paint
                 .get("type")
                 .and_then(|v| v.as_str())
                 .unwrap_or_default();
-            match paint_type {
+            let fill = match paint_type {
                 "SOLID" => solid_rgba_from_paint(paint).map(FillPaint::Solid),
                 "GRADIENT_LINEAR" => gradient_stops_from_paint(paint).map(|stops| {
                     FillPaint::GradientLinear {
@@ -122,7 +140,8 @@ pub(super) fn all_fill_paints(raw: &serde_json::Value, key: &str) -> Vec<FillPai
                     image_transform: img.image_transform,
                 }),
                 _ => None,
-            }
+            };
+            fill.map(|f| (f, blend))
         })
         .collect()
 }

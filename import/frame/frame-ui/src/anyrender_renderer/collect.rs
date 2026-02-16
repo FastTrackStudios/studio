@@ -98,22 +98,25 @@ fn collect_primitives_recursive(
         .clamp(0.0, 1.0);
     let effective_opacity = (inherited_opacity * local_opacity).clamp(0.0, 1.0);
 
+    // Always extract rotation from relativeTransform, even when position/size
+    // comes from layout boxes. Layout boxes flatten position but don't encode rotation.
+    let (_lx, _ly, _lw, _lh, rotation) = extract_local_rect(&node.raw);
     let (x, y, width, height) = if !force_local_positioning {
         layout_boxes
             .get(&node_id)
             .map(|b| (b.x, b.y, b.width, b.height))
             .unwrap_or_else(|| {
-                let (local_x, local_y, width, height) = extract_local_rect(&node.raw);
+                let (local_x, local_y, width, height, _rot) = extract_local_rect(&node.raw);
                 (parent_x + local_x, parent_y + local_y, width, height)
             })
     } else {
-        let (local_x, local_y, width, height) = extract_local_rect(&node.raw);
+        let (local_x, local_y, width, height, _rot) = extract_local_rect(&node.raw);
         (parent_x + local_x, parent_y + local_y, width, height)
     };
 
-    let fills: Vec<FillPaint> = all_fill_paints(&node.raw, "fills")
+    let fills: Vec<(FillPaint, BlendMix)> = all_fill_paints(&node.raw, "fills")
         .into_iter()
-        .map(|f| f.with_opacity(effective_opacity))
+        .map(|(f, b)| (f.with_opacity(effective_opacity), b))
         .collect();
     let stroke = parse_stroke_style(&node.raw, effective_opacity);
     let corner_radii = {
@@ -212,6 +215,7 @@ fn collect_primitives_recursive(
                 stroke,
                 effects: merged_effects.clone(),
                 blend,
+                rotation,
             });
         }
         RenderNodeClass::Text => {
@@ -224,7 +228,7 @@ fn collect_primitives_recursive(
             if !text.is_empty() {
                 let color = fills
                     .first()
-                    .and_then(first_color_from_fill)
+                    .and_then(|(f, _)| first_color_from_fill(f))
                     .unwrap_or(Rgba {
                         r: 1.0,
                         g: 1.0,
@@ -319,6 +323,7 @@ fn collect_primitives_recursive(
                 stroke,
                 effects: merged_effects.clone(),
                 blend,
+                rotation,
             });
         }
         _ if is_boolean_operation && svg_base64.is_some() => {
@@ -338,6 +343,7 @@ fn collect_primitives_recursive(
                 stroke,
                 effects: merged_effects.clone(),
                 blend,
+                rotation,
             });
         }
         RenderNodeClass::Vector | RenderNodeClass::Shape if has_vector_geometry => {
@@ -354,6 +360,7 @@ fn collect_primitives_recursive(
                 stroke,
                 effects: merged_effects.clone(),
                 blend,
+                rotation,
             });
         }
         _ => {
@@ -369,6 +376,7 @@ fn collect_primitives_recursive(
                     corner_radii,
                     effects: merged_effects.clone(),
                     blend,
+                    rotation,
                 });
             }
         }
@@ -428,7 +436,7 @@ fn collect_primitives_recursive(
                 .get(child_id)
                 .map(|b| (b.x, b.y, b.width, b.height))
                 .unwrap_or_else(|| {
-                    let (local_x, local_y, width, height) = extract_local_rect(&child.raw);
+                    let (local_x, local_y, width, height, _rot) = extract_local_rect(&child.raw);
                     (x + local_x, y + local_y, width, height)
                 });
             let mcorner_radii = {

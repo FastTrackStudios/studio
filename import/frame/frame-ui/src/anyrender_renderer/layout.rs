@@ -116,7 +116,10 @@ fn compute_layout_boxes_recursive(
 
 fn extract_node_rect(doc: &FrameDocument, node_id: NodeId) -> (f64, f64, f64, f64) {
     doc.get_node(node_id)
-        .map(|n| extract_local_rect(&n.raw))
+        .map(|n| {
+            let (x, y, w, h, _rotation) = extract_local_rect(&n.raw);
+            (x, y, w, h)
+        })
         .unwrap_or((0.0, 0.0, 0.0, 0.0))
 }
 
@@ -189,7 +192,7 @@ fn child_taffy_style(doc: &FrameDocument, node_id: NodeId) -> Style {
         return Style::default();
     };
     let auto_layout = frame_proto::get_auto_layout_projection(&node.raw);
-    let (x, y, width, height) = extract_local_rect(&node.raw);
+    let (x, y, width, height, _rotation) = extract_local_rect(&node.raw);
     let mut style = Style {
         size: Size {
             width: Dimension::Length(width as f32),
