@@ -151,6 +151,15 @@ fn collect_primitives_recursive(
             )
         }
     };
+    // ELLIPSE nodes in Figma are inherently circular/elliptical — they don't
+    // carry a cornerRadius.  When rendered as a Rect, set corner_radii to
+    // half the smaller axis so the RoundedRect is a circle/pill shape.
+    let corner_radii = if node.figma_type == "ELLIPSE" && corner_radii.is_zero() {
+        let r = width.min(height) * 0.5;
+        frame_proto::CornerRadii::uniform(r)
+    } else {
+        corner_radii
+    };
     let effects = parse_effects(&node.raw, effective_opacity);
     let mut merged_effects = inherited_layer_blurs.to_vec();
     merged_effects.extend(effects.clone());

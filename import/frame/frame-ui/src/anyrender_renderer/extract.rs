@@ -272,8 +272,7 @@ pub(super) fn parse_effects(raw: &serde_json::Value, opacity: f64) -> Vec<NodeEf
             let spread = effect
                 .get("spread")
                 .and_then(|v| v.as_f64())
-                .unwrap_or(0.0)
-                .max(0.0);
+                .unwrap_or(0.0);
 
             Some(NodeEffect {
                 kind,
@@ -388,6 +387,12 @@ pub(super) fn solid_rgba_from_paint(paint: &serde_json::Value) -> Option<Rgba> {
 
 fn gradient_stops_from_paint(paint: &serde_json::Value) -> Option<Vec<GradientStop>> {
     let stops = paint.get("gradientStops")?.as_array()?;
+    // Paint-level opacity applies to every stop in the gradient
+    let paint_opacity = paint
+        .get("opacity")
+        .and_then(|v| v.as_f64())
+        .unwrap_or(1.0)
+        .clamp(0.0, 1.0);
     let mut out = Vec::new();
     for stop in stops {
         let color_value = stop.get("color")?;
@@ -396,7 +401,10 @@ fn gradient_stops_from_paint(paint: &serde_json::Value) -> Option<Vec<GradientSt
             .and_then(|v| v.as_f64())
             .unwrap_or(0.0)
             .clamp(0.0, 1.0);
-        let color = solid_rgba_from_paint(&serde_json::json!({ "color": color_value }))?;
+        // Pass the paint opacity so it multiplies into the stop's alpha
+        let color = solid_rgba_from_paint(
+            &serde_json::json!({ "color": color_value, "opacity": paint_opacity }),
+        )?;
         out.push(GradientStop {
             offset: position,
             color,
@@ -450,6 +458,7 @@ pub(super) fn path_strings(raw: &serde_json::Value, key: &str) -> Vec<String> {
                 .and_then(|v| v.as_str())
                 .or_else(|| entry.get("data").and_then(|v| v.as_str()))
         })
+        .filter(|s| !s.trim().is_empty())
         .map(ToString::to_string)
         .collect()
 }
@@ -459,4 +468,11 @@ pub(super) fn exported_svg_base64(raw: &serde_json::Value) -> Option<String> {
         .and_then(|v| v.get("svgBase64"))
         .and_then(|v| v.as_str())
         .map(ToString::to_string)
+}
+
+#[cfg(test)]
+pub(super) fn gradient_stops_from_paint_test(
+    paint: &serde_json::Value,
+) -> Option<Vec<GradientStop>> {
+    gradient_stops_from_paint(paint)
 }

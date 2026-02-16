@@ -256,6 +256,87 @@ fn per_fill_blend_mode_is_extracted() {
 }
 
 #[test]
+fn ellipse_with_empty_fill_geometry_emits_rect_not_path() {
+    // Figma ELLIPSE nodes may export fillGeometry with empty path strings.
+    // These should fall through to Rect rendering (with circular corner radii)
+    // instead of being routed to the Path branch where nothing renders.
+    let json = serde_json::json!({
+        "schema": "fts.figma.export/v1",
+        "generatedAt": "2026-02-16T00:00:00.000Z",
+        "source": { "editorType": "figma", "page": { "id": "0:1", "name": "Canvas" } },
+        "selection": { "ids": [], "names": [], "totalRoots": 0, "totalNodes": 0 },
+        "options": { "includeSvg": false, "includePng": false, "maxDepth": 4 },
+        "nodes": [{
+            "id": "5:1",
+            "name": "Parent",
+            "type": "FRAME",
+            "visible": true,
+            "relativeTransform": [[1.0,0.0,0.0],[0.0,1.0,0.0]],
+            "size": { "x": 200.0, "y": 200.0 },
+            "absoluteBoundingBox": { "x": 0.0, "y": 0.0, "width": 200.0, "height": 200.0 },
+            "children": [{
+                "id": "5:2",
+                "name": "MetalKnob",
+                "type": "ELLIPSE",
+                "visible": true,
+                "relativeTransform": [[1.0,0.0,10.0],[0.0,1.0,10.0]],
+                "size": { "x": 40.0, "y": 40.0 },
+                "absoluteBoundingBox": { "x": 10.0, "y": 10.0, "width": 40.0, "height": 40.0 },
+                "fillGeometry": [{ "path": "" }],
+                "fills": [{
+                    "type": "SOLID",
+                    "visible": true,
+                    "opacity": 1.0,
+                    "color": { "r": 0.5, "g": 0.5, "b": 0.5, "a": 1.0 }
+                }],
+                "children": []
+            }]
+        }]
+    });
+    let bytes = serde_json::to_vec(&json).expect("json bytes");
+    let doc = FrameDocument::from_source_bytes(&bytes).expect("import");
+    let root = doc.pages[0];
+    let primitives = build_paint_primitives(&doc, root);
+
+    let mut found_rect = false;
+    for p in primitives {
+        if let PaintPrimitive::Rect { width, height, corner_radii, .. } = &p {
+            // ELLIPSE 40×40 should produce a Rect with corner radii = 20 (half width)
+            if (*width - 40.0).abs() < 1e-6 && (*height - 40.0).abs() < 1e-6 {
+                assert!(
+                    (corner_radii.top_left - 20.0).abs() < 1e-6,
+                    "expected circular corner radius 20.0, got {}",
+                    corner_radii.top_left
+                );
+                found_rect = true;
+                break;
+            }
+        }
+    }
+    assert!(found_rect, "ELLIPSE with empty fillGeometry should emit a Rect, not a Path");
+}
+
+#[test]
+fn gradient_paint_opacity_applied_to_stops() {
+    use super::extract::gradient_stops_from_paint_test;
+
+    let paint = serde_json::json!({
+        "type": "GRADIENT_LINEAR",
+        "opacity": 0.5,
+        "gradientStops": [
+            { "position": 0.0, "color": { "r": 1.0, "g": 0.0, "b": 0.0, "a": 1.0 } },
+            { "position": 1.0, "color": { "r": 0.0, "g": 0.0, "b": 1.0, "a": 1.0 } }
+        ]
+    });
+
+    let stops = gradient_stops_from_paint_test(&paint).expect("expected stops");
+    assert_eq!(stops.len(), 2);
+    // Paint-level opacity 0.5 should multiply into each stop's alpha
+    assert!((stops[0].color.a - 0.5).abs() < 1e-9, "first stop alpha: {}", stops[0].color.a);
+    assert!((stops[1].color.a - 0.5).abs() < 1e-9, "second stop alpha: {}", stops[1].color.a);
+}
+
+#[test]
 #[cfg(feature = "anyrender")]
 fn path_fit_preserves_local_geometry_without_forced_scaling() {
     use super::geometry::compute_path_fit_transform;

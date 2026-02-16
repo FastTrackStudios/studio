@@ -662,39 +662,55 @@ pub fn paint_primitives_into_scene_with(
                 );
                 // Corner radius grows additively with spread
                 let shadow_corner = (corner_radius + effect.spread).max(0.0);
+                // Figma radius is CSS blur radius (≈ 2×sigma); draw_box_shadow expects sigma
                 scene.draw_box_shadow(
                     scene_transform,
                     shadow_rect,
                     to_peniko(effect.color.clone()),
                     shadow_corner,
-                    effect.radius.max(0.0),
+                    (effect.radius * 0.5).max(0.0),
                 );
             }
             EffectKind::InnerShadow => {
-                // Approximate inner shadow by clipping to the node bounds and
-                // drawing a shifted box shadow pass.
-                if corner_radius > 0.0 {
-                    let rr = RoundedRect::from_rect(*base_rect, corner_radius);
-                    scene.push_clip_layer(scene_transform, &rr);
-                } else {
-                    scene.push_clip_layer(scene_transform, base_rect);
-                }
-                let shadow_rect = Rect::new(
-                    base_rect.x0 - effect.offset_x,
-                    base_rect.y0 - effect.offset_y,
-                    base_rect.x1 - effect.offset_x,
-                    base_rect.y1 - effect.offset_y,
+                // Inner shadow: fill element with shadow color, then punch a
+                // blurred hole at the offset position using DestOut compositing.
+                // (Pattern from Blitz reference implementation.)
+                let rr = RoundedRect::from_rect(*base_rect, corner_radius);
+
+                // Layer 1: isolate inner shadow compositing group
+                scene.push_layer(peniko::Mix::Normal, 1.0, scene_transform, &rr);
+
+                // Fill entire clipped area with shadow color
+                scene.fill(
+                    peniko::Fill::NonZero,
+                    scene_transform,
+                    to_peniko(effect.color.clone()),
+                    None,
+                    &rr,
                 );
-                // Corner radius grows additively with spread for inner shadow too
-                let inner_corner = (corner_radius + effect.spread).max(0.0);
+
+                // Layer 2: DestOut — punch a blurred hole at offset position
+                scene.push_layer(peniko::Compose::DestOut, 1.0, scene_transform, &rr);
+
+                // Spread shrinks the hole (opposite of drop shadow)
+                let hole_rect = Rect::new(
+                    base_rect.x0 + effect.offset_x + effect.spread,
+                    base_rect.y0 + effect.offset_y + effect.spread,
+                    base_rect.x1 + effect.offset_x - effect.spread,
+                    base_rect.y1 + effect.offset_y - effect.spread,
+                );
+                let hole_corner = (corner_radius - effect.spread).max(0.0);
+                // Figma radius is CSS blur radius (≈ 2×sigma)
                 scene.draw_box_shadow(
                     scene_transform,
-                    shadow_rect,
-                    to_peniko(effect.color.clone()),
-                    inner_corner,
-                    effect.radius.max(0.0),
+                    hole_rect,
+                    to_peniko(Rgba { r: 1.0, g: 1.0, b: 1.0, a: 1.0 }),
+                    hole_corner,
+                    (effect.radius * 0.5).max(0.0),
                 );
-                scene.pop_layer();
+
+                scene.pop_layer(); // DestOut
+                scene.pop_layer(); // isolation
             }
             EffectKind::LayerBlur => {
                 // Multi-pass blur emulation around bounds, using node color hint when available.
