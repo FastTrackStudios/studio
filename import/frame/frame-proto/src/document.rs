@@ -74,19 +74,40 @@ impl FrameDocument {
         Self::from_figma_api(file)
     }
 
+    pub fn from_figma_api_value(value: serde_json::Value) -> Result<Self, FrameDocumentError> {
+        let file: models::GetFile = serde_json::from_value(value)?;
+        Self::from_figma_api(file)
+    }
+
     pub fn from_source_bytes(bytes: &[u8]) -> Result<Self, FrameDocumentError> {
         if let Ok(text) = std::str::from_utf8(bytes) {
-            if let Ok(doc) = Self::from_figma_api_json(text) {
-                return Ok(doc);
-            }
-            if let Ok(doc) = Self::from_fts_export_json(text) {
-                return Ok(doc);
-            }
-            if let Ok(doc) = Self::from_grida_bridge_json(text) {
-                return Ok(doc);
+            if let Ok(value) = serde_json::from_str::<serde_json::Value>(text) {
+                return Self::from_source_value(value);
             }
         }
         Self::from_fig_zip_bytes(bytes)
+    }
+
+    /// Route an already-parsed JSON Value to the correct format builder.
+    /// Detects format by inspecting top-level keys (zero re-parsing).
+    pub fn from_source_value(value: serde_json::Value) -> Result<Self, FrameDocumentError> {
+        if let Some(obj) = value.as_object() {
+            // FTS export: "schema" starting with "fts.figma.export"
+            if let Some(schema) = obj.get("schema").and_then(|v| v.as_str()) {
+                if schema.starts_with("fts.figma.export") {
+                    return Self::from_fts_export_value(value);
+                }
+            }
+            // Grida bridge: "pages" array + "source" as string
+            if obj.contains_key("pages") && obj.get("source").and_then(|v| v.as_str()).is_some() {
+                return Self::from_grida_bridge_value(value);
+            }
+            // Figma REST API: "document" object
+            if obj.get("document").and_then(|v| v.as_object()).is_some() {
+                return Self::from_figma_api_value(value);
+            }
+        }
+        Err(FrameDocumentError::UnsupportedBinaryFig)
     }
 
     pub fn get_node(&self, id: NodeId) -> Option<&FrameNode> {
@@ -125,9 +146,20 @@ impl FrameDocument {
 impl FrameDocument {
     fn from_fts_export_json(json: &str) -> Result<Self, FrameDocumentError> {
         let export: FtsExportDocument = serde_json::from_str(json)?;
-        if export.schema != "fts.figma.export/v1" {
+        Self::build_from_fts_export(export)
+    }
+
+    fn from_fts_export_value(value: serde_json::Value) -> Result<Self, FrameDocumentError> {
+        let export: FtsExportDocument = serde_json::from_value(value)?;
+        Self::build_from_fts_export(export)
+    }
+
+    fn build_from_fts_export(mut export: FtsExportDocument) -> Result<Self, FrameDocumentError> {
+        if export.schema != "fts.figma.export/v1" && export.schema != "fts.figma.export/v2" {
             return Err(FrameDocumentError::UnsupportedBinaryFig);
         }
+
+        hydrate_fts_v2_assets(&mut export);
 
         let mut nodes = std::collections::HashMap::new();
         let mut figma_index = std::collections::HashMap::new();
@@ -218,6 +250,15 @@ impl FrameDocument {
 
     fn from_grida_bridge_json(json: &str) -> Result<Self, FrameDocumentError> {
         let bridge: GridaBridgeDocument = serde_json::from_str(json)?;
+        Self::build_from_grida_bridge(bridge)
+    }
+
+    fn from_grida_bridge_value(value: serde_json::Value) -> Result<Self, FrameDocumentError> {
+        let bridge: GridaBridgeDocument = serde_json::from_value(value)?;
+        Self::build_from_grida_bridge(bridge)
+    }
+
+    fn build_from_grida_bridge(bridge: GridaBridgeDocument) -> Result<Self, FrameDocumentError> {
         let file_name = bridge.source.clone();
 
         let mut nodes = std::collections::HashMap::new();
@@ -499,7 +540,25 @@ struct FtsExportDocument {
     generated_at: Option<String>,
     source: FtsExportSource,
     #[serde(default)]
+    assets: Vec<FtsExportAsset>,
+    #[serde(default)]
     nodes: Vec<serde_json::Value>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct FtsExportAsset {
+    id: String,
+    #[serde(default)]
+    kind: String,
+    #[serde(default)]
+    mime: String,
+    #[serde(default)]
+    encoding: String,
+    #[serde(default)]
+    data: String,
+    #[serde(rename = "byteLength")]
+    #[serde(default)]
+    byte_length: usize,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -515,6 +574,111 @@ struct FtsExportSource {
 struct FtsExportPage {
     id: String,
     name: String,
+}
+
+fn hydrate_fts_v2_assets(export: &mut FtsExportDocument) {
+    if export.assets.is_empty() || export.schema != "fts.figma.export/v2" {
+        return;
+    }
+    let asset_map: std::collections::HashMap<String, FtsExportAsset> = export
+        .assets
+        .iter()
+        .cloned()
+        .map(|asset| (asset.id.clone(), asset))
+        .collect();
+    for node in &mut export.nodes {
+        hydrate_node_assets_recursive(node, &asset_map);
+    }
+}
+
+fn hydrate_node_assets_recursive(
+    node: &mut serde_json::Value,
+    assets: &std::collections::HashMap<String, FtsExportAsset>,
+) {
+    let Some(obj) = node.as_object_mut() else {
+        return;
+    };
+
+    if let Some(asset_refs) = obj.get("assetRefs").and_then(|v| v.as_object()) {
+        let svg_asset_id = asset_refs.get("svg").and_then(|v| v.as_str());
+        let png_asset_id = asset_refs.get("png").and_then(|v| v.as_str());
+
+        let mut exports_obj = obj
+            .get("exports")
+            .and_then(|v| v.as_object())
+            .cloned()
+            .unwrap_or_default();
+
+        if exports_obj.get("svgBase64").is_none() {
+            if let Some(asset_id) = svg_asset_id {
+                if let Some(asset) = assets.get(asset_id) {
+                    if asset.encoding == "base64" && !asset.data.is_empty() {
+                        exports_obj.insert(
+                            "svgBase64".to_string(),
+                            serde_json::Value::String(asset.data.clone()),
+                        );
+                    }
+                }
+            }
+        }
+
+        if exports_obj.get("pngBase64").is_none() {
+            if let Some(asset_id) = png_asset_id {
+                if let Some(asset) = assets.get(asset_id) {
+                    if asset.encoding == "base64" && !asset.data.is_empty() {
+                        exports_obj.insert(
+                            "pngBase64".to_string(),
+                            serde_json::Value::String(asset.data.clone()),
+                        );
+                    }
+                }
+            }
+        }
+
+        if !exports_obj.is_empty() {
+            obj.insert(
+                "exports".to_string(),
+                serde_json::Value::Object(exports_obj),
+            );
+        }
+    }
+
+    if let Some(image_fill_refs) = obj.get("imageFillAssetRefs").and_then(|v| v.as_object()) {
+        let mut lookup = serde_json::Map::new();
+        for (image_hash, asset_id_value) in image_fill_refs {
+            let Some(asset_id) = asset_id_value.as_str() else {
+                continue;
+            };
+            let Some(asset) = assets.get(asset_id) else {
+                continue;
+            };
+            if asset.encoding != "base64" || asset.data.is_empty() {
+                continue;
+            }
+            lookup.insert(
+                image_hash.clone(),
+                serde_json::json!({
+                    "assetId": asset.id,
+                    "kind": asset.kind,
+                    "mime": asset.mime,
+                    "byteLength": asset.byte_length,
+                    "base64": asset.data,
+                }),
+            );
+        }
+        if !lookup.is_empty() {
+            obj.insert(
+                "imageFillAssets".to_string(),
+                serde_json::Value::Object(lookup),
+            );
+        }
+    }
+
+    if let Some(children) = obj.get_mut("children").and_then(|v| v.as_array_mut()) {
+        for child in children {
+            hydrate_node_assets_recursive(child, assets);
+        }
+    }
 }
 
 fn read_zip_entry<R: std::io::Read + std::io::Seek>(

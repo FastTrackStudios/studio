@@ -6,5 +6,8 @@
 pub mod converter;
 pub mod error;
 
-pub use converter::{import_figma_bytes, import_figma_file, import_get_file};
+pub use converter::{
+    import_figma_bytes, import_figma_bytes_with_diagnostics, import_figma_file, import_get_file,
+    ImportDiagnostics,
+};
 pub use error::ImportError;

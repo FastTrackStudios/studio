@@ -9,7 +9,8 @@ pub mod dioxus_renderer;
 pub mod model;
 
 pub use anyrender_renderer::{
-    build_layout_boxes, build_paint_primitives, LayoutBox, PaintPrimitive, Rgba,
+    build_layout_boxes, build_paint_primitives, collect_render_diagnostics, LayoutBox,
+    PaintPrimitive, RenderDiagnostics, Rgba,
 };
 #[cfg(feature = "anyrender")]
 pub use anyrender_renderer::{

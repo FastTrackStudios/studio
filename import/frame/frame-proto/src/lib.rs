@@ -32,6 +32,9 @@ pub use node::{
     OverrideProperty, PropertyOverride,
 };
 pub use paint::*;
-pub use projection::{project_node, RenderNodeClass, RenderNodeProjection, RenderTextProjection};
+pub use projection::{
+    classify_node_type, get_auto_layout_projection, project_node, RenderNodeClass,
+    RenderNodeProjection, RenderTextProjection,
+};
 pub use typography::*;
 pub use vector::*;
