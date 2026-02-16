@@ -231,30 +231,53 @@ fn collect_primitives_recursive(
                         b: 1.0,
                         a: effective_opacity,
                     });
+                // v2 plugin format: fontSize at top level
+                // v1 REST API format: style.fontSize
                 let font_size = node
                     .raw
-                    .get("style")
-                    .and_then(|v| v.get("fontSize"))
+                    .get("fontSize")
                     .and_then(|v| v.as_f64())
+                    .or_else(|| {
+                        node.raw
+                            .get("style")
+                            .and_then(|v| v.get("fontSize"))
+                            .and_then(|v| v.as_f64())
+                    })
                     .unwrap_or(14.0)
                     .max(1.0);
                 let line_height = node
                     .raw
-                    .get("style")
-                    .and_then(|v| v.get("lineHeightPx"))
+                    .get("lineHeightPx")
                     .and_then(|v| v.as_f64())
+                    .or_else(|| {
+                        node.raw
+                            .get("style")
+                            .and_then(|v| v.get("lineHeightPx"))
+                            .and_then(|v| v.as_f64())
+                    })
                     .filter(|v| *v > 0.0);
                 let letter_spacing = node
                     .raw
-                    .get("style")
-                    .and_then(|v| v.get("letterSpacing"))
+                    .get("letterSpacingPx")
                     .and_then(|v| v.as_f64())
+                    .or_else(|| {
+                        node.raw
+                            .get("style")
+                            .and_then(|v| v.get("letterSpacing"))
+                            .and_then(|v| v.as_f64())
+                    })
                     .unwrap_or(0.0);
+                // v2: textCase at top level; v1: style.textCase
                 let text_case = match node
                     .raw
-                    .get("style")
-                    .and_then(|v| v.get("textCase"))
+                    .get("textCase")
                     .and_then(|v| v.as_str())
+                    .or_else(|| {
+                        node.raw
+                            .get("style")
+                            .and_then(|v| v.get("textCase"))
+                            .and_then(|v| v.as_str())
+                    })
                 {
                     Some("UPPER") => TextCase::Upper,
                     Some("LOWER") => TextCase::Lower,
