@@ -139,10 +139,13 @@ pub(super) fn image_fill_from_paint(
         .map(ToString::to_string);
 
     let image_fill_assets = raw.get("imageFillAssets").and_then(|v| v.as_object())?;
-    let data_base64 = image_hash
+    let asset_value = image_hash
         .as_ref()
-        .and_then(|hash| image_fill_assets.get(hash))
-        .and_then(|v| v.as_str())?
+        .and_then(|hash| image_fill_assets.get(hash))?;
+    // Support both v1 flat string and v2 nested object with "base64" field
+    let data_base64 = asset_value
+        .as_str()
+        .or_else(|| asset_value.get("base64").and_then(|v| v.as_str()))?
         .to_string();
 
     let alpha = paint
