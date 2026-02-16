@@ -45,7 +45,19 @@ pub enum FillPaint {
         image_hash: Option<String>,
         data_base64: String,
         alpha: f64,
+        scale_mode: ImageScaleMode,
+        image_transform: Option<[[f64; 3]; 2]>,
     },
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum ImageScaleMode {
+    #[default]
+    Fill,
+    Fit,
+    Crop,
+    Tile,
+    Stretch,
 }
 
 impl FillPaint {
@@ -86,10 +98,14 @@ impl FillPaint {
                 image_hash,
                 data_base64,
                 alpha,
+                scale_mode,
+                image_transform,
             } => FillPaint::Image {
                 image_hash,
                 data_base64,
                 alpha: (alpha * opacity).clamp(0.0, 1.0),
+                scale_mode,
+                image_transform,
             },
         }
     }

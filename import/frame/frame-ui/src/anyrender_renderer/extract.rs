@@ -114,15 +114,13 @@ pub(super) fn all_fill_paints(raw: &serde_json::Value, key: &str) -> Vec<FillPai
                         stops,
                     }
                 }),
-                "IMAGE" => {
-                    image_fill_from_paint(raw, paint).map(|(image_hash, data_base64, alpha)| {
-                        FillPaint::Image {
-                            image_hash,
-                            data_base64,
-                            alpha,
-                        }
-                    })
-                }
+                "IMAGE" => image_fill_from_paint(raw, paint).map(|img| FillPaint::Image {
+                    image_hash: img.image_hash,
+                    data_base64: img.data_base64,
+                    alpha: img.alpha,
+                    scale_mode: img.scale_mode,
+                    image_transform: img.image_transform,
+                }),
                 _ => None,
             }
         })
@@ -132,7 +130,7 @@ pub(super) fn all_fill_paints(raw: &serde_json::Value, key: &str) -> Vec<FillPai
 pub(super) fn image_fill_from_paint(
     raw: &serde_json::Value,
     paint: &serde_json::Value,
-) -> Option<(Option<String>, String, f64)> {
+) -> Option<ImageFillData> {
     let image_hash = paint
         .get("imageHash")
         .and_then(|v| v.as_str())
@@ -154,7 +152,56 @@ pub(super) fn image_fill_from_paint(
         .unwrap_or(1.0)
         .clamp(0.0, 1.0);
 
-    Some((image_hash, data_base64, alpha))
+    let scale_mode = match paint.get("scaleMode").and_then(|v| v.as_str()) {
+        Some("FILL") => ImageScaleMode::Fill,
+        Some("FIT") => ImageScaleMode::Fit,
+        Some("CROP") => ImageScaleMode::Crop,
+        Some("TILE") => ImageScaleMode::Tile,
+        Some("STRETCH") => ImageScaleMode::Stretch,
+        _ => ImageScaleMode::Fill, // Figma default
+    };
+
+    let image_transform = parse_image_transform(paint);
+
+    Some(ImageFillData {
+        image_hash,
+        data_base64,
+        alpha,
+        scale_mode,
+        image_transform,
+    })
+}
+
+pub(super) struct ImageFillData {
+    pub image_hash: Option<String>,
+    pub data_base64: String,
+    pub alpha: f64,
+    pub scale_mode: ImageScaleMode,
+    pub image_transform: Option<[[f64; 3]; 2]>,
+}
+
+fn parse_image_transform(paint: &serde_json::Value) -> Option<[[f64; 3]; 2]> {
+    let t = paint.get("imageTransform")?.as_array()?;
+    if t.len() < 2 {
+        return None;
+    }
+    let r0 = t[0].as_array()?;
+    let r1 = t[1].as_array()?;
+    if r0.len() < 3 || r1.len() < 3 {
+        return None;
+    }
+    Some([
+        [
+            r0[0].as_f64().unwrap_or(1.0),
+            r0[1].as_f64().unwrap_or(0.0),
+            r0[2].as_f64().unwrap_or(0.0),
+        ],
+        [
+            r1[0].as_f64().unwrap_or(0.0),
+            r1[1].as_f64().unwrap_or(1.0),
+            r1[2].as_f64().unwrap_or(0.0),
+        ],
+    ])
 }
 
 pub(super) fn parse_effects(raw: &serde_json::Value, opacity: f64) -> Vec<NodeEffect> {

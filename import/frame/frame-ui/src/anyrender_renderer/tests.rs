@@ -45,9 +45,10 @@ fn parses_image_fill_from_hydrated_assets() {
     });
 
     let parsed = image_fill_from_paint(&raw, &paint).expect("expected image fill");
-    assert_eq!(parsed.0.as_deref(), Some("abc123"));
-    assert_eq!(parsed.1, "Zm9vYmFy");
-    assert!((parsed.2 - 0.5).abs() < 1e-9);
+    assert_eq!(parsed.image_hash.as_deref(), Some("abc123"));
+    assert_eq!(parsed.data_base64, "Zm9vYmFy");
+    assert!((parsed.alpha - 0.5).abs() < 1e-9);
+    assert_eq!(parsed.scale_mode, ImageScaleMode::Fill); // default when no scaleMode
 }
 
 #[test]

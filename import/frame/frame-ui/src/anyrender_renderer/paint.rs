@@ -539,15 +539,15 @@ pub fn paint_primitives_into_scene_with(
                 image_hash: _,
                 data_base64,
                 alpha,
+                scale_mode,
+                image_transform,
             } => {
                 if let Some(image_brush) = decode_image_brush(data_base64, *alpha) {
                     let iw = image_brush.image.width as f64;
                     let ih = image_brush.image.height as f64;
                     if iw > 0.0 && ih > 0.0 {
-                        let sx = if width > 0.0 { width / iw } else { 1.0 };
-                        let sy = if height > 0.0 { height / ih } else { 1.0 };
                         let brush_transform =
-                            kurbo::Affine::translate((x, y)).then_scale_non_uniform(sx, sy);
+                            image_brush_transform(*scale_mode, image_transform, x, y, width, height, iw, ih);
                         scene.fill(
                             Fill::NonZero,
                             scene_transform,
@@ -853,15 +853,15 @@ pub fn paint_primitives_into_scene_with(
                 image_hash: _,
                 data_base64,
                 alpha,
+                scale_mode,
+                image_transform,
             } => {
                 if let Some(image_brush) = decode_image_brush(data_base64, *alpha) {
                     let iw = image_brush.image.width as f64;
                     let ih = image_brush.image.height as f64;
                     if iw > 0.0 && ih > 0.0 {
-                        let sx = if width > 0.0 { width / iw } else { 1.0 };
-                        let sy = if height > 0.0 { height / ih } else { 1.0 };
                         let brush_transform =
-                            kurbo::Affine::translate((x, y)).then_scale_non_uniform(sx, sy);
+                            image_brush_transform(*scale_mode, image_transform, x, y, width, height, iw, ih);
                         scene.fill(
                             Fill::NonZero,
                             path_transform,
@@ -871,6 +871,72 @@ pub fn paint_primitives_into_scene_with(
                         );
                     }
                 }
+            }
+        }
+    }
+
+    fn image_brush_transform(
+        scale_mode: ImageScaleMode,
+        image_transform: &Option<[[f64; 3]; 2]>,
+        x: f64,
+        y: f64,
+        width: f64,
+        height: f64,
+        iw: f64,
+        ih: f64,
+    ) -> kurbo::Affine {
+        match scale_mode {
+            ImageScaleMode::Fill => {
+                // Scale uniformly to cover the entire node, center the image
+                let scale = if width > 0.0 && height > 0.0 {
+                    (width / iw).max(height / ih)
+                } else {
+                    1.0
+                };
+                let offset_x = x + (width - iw * scale) * 0.5;
+                let offset_y = y + (height - ih * scale) * 0.5;
+                kurbo::Affine::translate((offset_x, offset_y)) * kurbo::Affine::scale(scale)
+            }
+            ImageScaleMode::Fit => {
+                // Scale uniformly to fit inside the node, center the image
+                let scale = if width > 0.0 && height > 0.0 {
+                    (width / iw).min(height / ih)
+                } else {
+                    1.0
+                };
+                let offset_x = x + (width - iw * scale) * 0.5;
+                let offset_y = y + (height - ih * scale) * 0.5;
+                kurbo::Affine::translate((offset_x, offset_y)) * kurbo::Affine::scale(scale)
+            }
+            ImageScaleMode::Crop => {
+                // Figma imageTransform maps image-normalized [0,1]×[0,1] to
+                // node-normalized [0,1]×[0,1]. The brush transform maps image
+                // pixels → scene pixels, so the chain is:
+                //   translate(node_origin) * scale(node_size) * T * scale(1/img_size)
+                if let Some(t) = image_transform {
+                    kurbo::Affine::translate((x, y))
+                        * kurbo::Affine::scale_non_uniform(width, height)
+                        * kurbo::Affine::new([
+                            t[0][0], t[1][0], t[0][1], t[1][1], t[0][2], t[1][2],
+                        ])
+                        * kurbo::Affine::scale_non_uniform(1.0 / iw, 1.0 / ih)
+                } else {
+                    // No transform — fall back to Fill
+                    let scale = (width / iw).max(height / ih);
+                    let ox = x + (width - iw * scale) * 0.5;
+                    let oy = y + (height - ih * scale) * 0.5;
+                    kurbo::Affine::translate((ox, oy)) * kurbo::Affine::scale(scale)
+                }
+            }
+            ImageScaleMode::Tile => {
+                // Simple 1:1 tiling from the node origin (Vello Pad extend handles the rest)
+                kurbo::Affine::translate((x, y))
+            }
+            ImageScaleMode::Stretch => {
+                // Non-uniform stretch to fill node exactly
+                let sx = if width > 0.0 { width / iw } else { 1.0 };
+                let sy = if height > 0.0 { height / ih } else { 1.0 };
+                kurbo::Affine::translate((x, y)) * kurbo::Affine::scale_non_uniform(sx, sy)
             }
         }
     }
