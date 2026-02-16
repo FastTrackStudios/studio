@@ -909,16 +909,38 @@ pub fn paint_primitives_into_scene_with(
                 kurbo::Affine::translate((offset_x, offset_y)) * kurbo::Affine::scale(scale)
             }
             ImageScaleMode::Crop => {
-                // Figma imageTransform maps image-normalized [0,1]×[0,1] to
-                // node-normalized [0,1]×[0,1]. The brush transform maps image
-                // pixels → scene pixels, so the chain is:
-                //   translate(node_origin) * scale(node_size) * T * scale(1/img_size)
+                // Figma imageTransform maps node-normalized [0,1]×[0,1] to
+                // image-normalized [0,1]×[0,1]. The brush transform maps image
+                // pixels → scene pixels, so we need the INVERSE of imageTransform:
+                //   translate(node_origin) * scale(node_size) * inv(T) * scale(1/img_size)
                 if let Some(t) = image_transform {
+                    let a = t[0][0];
+                    let b = t[0][1];
+                    let tx = t[0][2];
+                    let c = t[1][0];
+                    let d = t[1][1];
+                    let ty = t[1][2];
+                    let det = a * d - b * c;
+                    if det.abs() < 1e-12 {
+                        let scale = (width / iw).max(height / ih);
+                        let ox = x + (width - iw * scale) * 0.5;
+                        let oy = y + (height - ih * scale) * 0.5;
+                        return kurbo::Affine::translate((ox, oy))
+                            * kurbo::Affine::scale(scale);
+                    }
+                    // Invert the 2x3 affine: node-norm → image-norm becomes
+                    // image-norm → node-norm
+                    let inv = kurbo::Affine::new([
+                        d / det,
+                        -c / det,
+                        -b / det,
+                        a / det,
+                        (b * ty - d * tx) / det,
+                        (c * tx - a * ty) / det,
+                    ]);
                     kurbo::Affine::translate((x, y))
                         * kurbo::Affine::scale_non_uniform(width, height)
-                        * kurbo::Affine::new([
-                            t[0][0], t[1][0], t[0][1], t[1][1], t[0][2], t[1][2],
-                        ])
+                        * inv
                         * kurbo::Affine::scale_non_uniform(1.0 / iw, 1.0 / ih)
                 } else {
                     // No transform — fall back to Fill
