@@ -171,8 +171,10 @@ fn collect_primitives_recursive(
             .cloned(),
     );
     let blend = parse_blend_mode(&node.raw);
-    let needs_layer =
-        (blend != BlendMix::Normal || effective_opacity < 0.9999) && width > 0.0 && height > 0.0;
+    // Only push a compositor layer for non-Normal blend modes.
+    // Opacity is already baked into fills via `with_opacity(effective_opacity)` above,
+    // so an opacity-only layer would double-apply it AND add an expensive GPU resolve pass.
+    let needs_layer = blend != BlendMix::Normal && width > 0.0 && height > 0.0;
     if needs_layer {
         out.push(PaintPrimitive::LayerStart {
             node_id,

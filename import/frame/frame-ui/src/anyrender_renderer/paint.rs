@@ -1,4 +1,4 @@
-use super::cache::{cached_bez_path, cached_svg_decode, cached_svg_fit_transform};
+use super::cache::{cached_bez_path, cached_svg_decode, cached_svg_fit_transform, cached_svg_tree};
 use super::collect::build_paint_primitives;
 use super::extract::first_color_from_fill;
 use super::geometry::{compute_path_fit_transform, extract_scale, to_peniko};
@@ -77,7 +77,7 @@ pub fn paint_primitives_into_scene_with(
         }
     });
 
-    for primitive in primitives.iter().cloned() {
+    for primitive in primitives {
         match primitive {
             PaintPrimitive::LayerStart {
                 x,
@@ -88,6 +88,7 @@ pub fn paint_primitives_into_scene_with(
                 opacity,
                 ..
             } => {
+                let (x, y, width, height, opacity) = (*x, *y, *width, *height, *opacity);
                 let clip_rect = Rect::new(x, y, x + width, y + height);
                 scene.push_layer(
                     peniko::BlendMode {
@@ -110,6 +111,7 @@ pub fn paint_primitives_into_scene_with(
                 corner_radii,
                 ..
             } => {
+                let (x, y, width, height) = (*x, *y, *width, *height);
                 let rect = Rect::new(x, y, x + width, y + height);
                 if !corner_radii.is_zero() {
                     let rr = RoundedRect::from_rect(
@@ -142,9 +144,8 @@ pub fn paint_primitives_into_scene_with(
                 rotation,
                 ..
             } => {
-                // For rotated nodes, compose rotation into the transform and use
-                // local coordinates (0,0)→(w,h). For non-rotated nodes, keep the
-                // existing absolute-coordinate approach for backward compatibility.
+                let (x, y, width, height, rotation) = (*x, *y, *width, *height, *rotation);
+                let corner_radii = *corner_radii;
                 let (node_transform, lx, ly) = if rotation.abs() > 1e-6 {
                     let t = scene_transform
                         * kurbo::Affine::translate((x, y))
@@ -159,7 +160,7 @@ pub fn paint_primitives_into_scene_with(
                     .first()
                     .and_then(|(f, _)| first_color_from_fill(f))
                     .or_else(|| stroke.as_ref().map(|s| s.color.clone()));
-                for effect in &effects {
+                for effect in effects {
                     if matches!(effect.kind, EffectKind::LayerBlur) {
                         paint_blurred_rect_content(
                             scene,
@@ -175,7 +176,7 @@ pub fn paint_primitives_into_scene_with(
                         );
                     }
                 }
-                for effect in &effects {
+                for effect in effects {
                     if matches!(effect.kind, EffectKind::DropShadow) {
                         paint_effect(
                             scene,
@@ -198,7 +199,7 @@ pub fn paint_primitives_into_scene_with(
                     let stroke_radius =
                         stroke_aligned_corner_radius(uniform_corner, stroke.as_ref());
                     let rr = RoundedRect::from_rect(rect, radii);
-                    for (fill, fill_blend) in &fills {
+                    for (fill, fill_blend) in fills {
                         let need_blend_layer = *fill_blend != BlendMix::Normal;
                         if need_blend_layer {
                             scene.push_layer(
@@ -216,21 +217,21 @@ pub fn paint_primitives_into_scene_with(
                             scene.pop_layer();
                         }
                     }
-                    if let Some(stroke) = stroke {
+                    if let Some(stroke) = stroke.as_ref() {
                         if stroke.width > 0.0 {
-                            let stroke_style = to_kurbo_stroke(&stroke, 1.0);
+                            let stroke_style = to_kurbo_stroke(stroke, 1.0);
                             let stroke_rr = RoundedRect::from_rect(stroke_rect, stroke_radius);
                             scene.stroke(
                                 &stroke_style,
                                 node_transform,
-                                to_peniko(stroke.color),
+                                to_peniko(stroke.color.clone()),
                                 None,
                                 &stroke_rr,
                             );
                         }
                     }
                 } else {
-                    for (fill, fill_blend) in &fills {
+                    for (fill, fill_blend) in fills {
                         let need_blend_layer = *fill_blend != BlendMix::Normal;
                         if need_blend_layer {
                             scene.push_layer(
@@ -248,21 +249,21 @@ pub fn paint_primitives_into_scene_with(
                             scene.pop_layer();
                         }
                     }
-                    if let Some(stroke) = stroke {
+                    if let Some(stroke) = stroke.as_ref() {
                         if stroke.width > 0.0 {
-                            let stroke_style = to_kurbo_stroke(&stroke, 1.0);
-                            let stroke_rect = stroke_aligned_rect(rect, Some(&stroke));
+                            let stroke_style = to_kurbo_stroke(stroke, 1.0);
+                            let stroke_rect = stroke_aligned_rect(rect, Some(stroke));
                             scene.stroke(
                                 &stroke_style,
                                 node_transform,
-                                to_peniko(stroke.color),
+                                to_peniko(stroke.color.clone()),
                                 None,
                                 &stroke_rect,
                             );
                         }
                     }
                 }
-                for effect in &effects {
+                for effect in effects {
                     if matches!(
                         effect.kind,
                         EffectKind::InnerShadow | EffectKind::BackgroundBlur
@@ -293,7 +294,8 @@ pub fn paint_primitives_into_scene_with(
                 rotation,
                 ..
             } => {
-                // Rotation support: compose rotation into base transform
+                let (path_x, path_y, width, height, rotation) =
+                    (*path_x, *path_y, *width, *height, *rotation);
                 let (base_transform, lx, ly) = if rotation.abs() > 1e-6 {
                     let t = scene_transform
                         * kurbo::Affine::translate((path_x, path_y))
@@ -311,8 +313,8 @@ pub fn paint_primitives_into_scene_with(
                 let path_origin_transform =
                     base_transform * kurbo::Affine::translate((lx, ly));
                 let path_fit = compute_path_fit_transform(
-                    &fill_paths,
-                    &stroke_paths,
+                    fill_paths,
+                    stroke_paths,
                     lx,
                     ly,
                     width,
@@ -321,7 +323,7 @@ pub fn paint_primitives_into_scene_with(
                 let path_transform = path_origin_transform * path_fit;
                 let (sx, sy) = extract_scale(path_fit);
                 let stroke_scale = ((sx.abs() + sy.abs()) * 0.5).max(0.01);
-                let decoded_svg_text: Option<String> = svg_base64
+                let decoded_svg_text: Option<std::sync::Arc<String>> = svg_base64
                     .as_ref()
                     .and_then(|b64| cached_svg_decode(b64));
 
@@ -342,13 +344,13 @@ pub fn paint_primitives_into_scene_with(
                         layer_blur,
                     );
                 }
-                for effect in &effects {
+                for effect in effects {
                     if matches!(effect.kind, EffectKind::LayerBlur) {
                         paint_blurred_path_content(
                             scene,
                             path_transform,
-                            &fill_paths,
-                            &stroke_paths,
+                            fill_paths,
+                            stroke_paths,
                             fills.first().map(|(f, _)| f),
                             stroke.as_ref(),
                             stroke_scale,
@@ -360,7 +362,7 @@ pub fn paint_primitives_into_scene_with(
                         );
                     }
                 }
-                for effect in &effects {
+                for effect in effects {
                     if matches!(effect.kind, EffectKind::DropShadow) {
                         paint_effect(
                             scene,
@@ -375,13 +377,14 @@ pub fn paint_primitives_into_scene_with(
                 if let Some(svg_text) = decoded_svg_text.as_deref() {
                     let svg_fit = cached_svg_fit_transform(svg_text, width, height);
                     let svg_transform = path_origin_transform * svg_fit;
-                    if anyrender_svg::render_svg_str(scene, svg_text, svg_transform).is_ok() {
+                    if let Some(tree) = cached_svg_tree(svg_text) {
+                        anyrender_svg::render_svg_tree(scene, &tree, svg_transform);
                         had_any_path = true;
                     }
                 }
 
                 if !had_any_path {
-                    for (fill_paint, fill_blend) in &fills {
+                    for (fill_paint, fill_blend) in fills {
                         let need_blend_layer = *fill_blend != BlendMix::Normal;
                         if need_blend_layer {
                             scene.push_layer(
@@ -394,12 +397,12 @@ pub fn paint_primitives_into_scene_with(
                                 &bounds_rect,
                             );
                         }
-                        for path_data in &fill_paths {
+                        for path_data in fill_paths {
                             if let Some(path) = cached_bez_path(path_data) {
                                 fill_path_shape(
                                     scene,
                                     path_transform,
-                                    &path,
+                                    &*path,
                                     lx,
                                     ly,
                                     width,
@@ -416,7 +419,7 @@ pub fn paint_primitives_into_scene_with(
 
                     if let Some(stroke) = stroke.as_ref() {
                         if stroke.width > 0.0 {
-                            for path_data in &stroke_paths {
+                            for path_data in stroke_paths {
                                 if let Some(path) = cached_bez_path(path_data) {
                                     let stroke_style = to_kurbo_stroke(stroke, stroke_scale);
                                     scene.stroke(
@@ -424,7 +427,7 @@ pub fn paint_primitives_into_scene_with(
                                         path_transform,
                                         to_peniko(stroke.color.clone()),
                                         None,
-                                        &path,
+                                        &*path,
                                     );
                                     had_any_path = true;
                                 }
@@ -434,9 +437,8 @@ pub fn paint_primitives_into_scene_with(
                 }
 
                 if !had_any_path {
-                    // fallback bounds draw when path payload is missing/unparseable
                     let rect = Rect::new(lx, ly, lx + width, ly + height);
-                    for (fill, fill_blend) in &fills {
+                    for (fill, fill_blend) in fills {
                         let need_blend_layer = *fill_blend != BlendMix::Normal;
                         if need_blend_layer {
                             scene.push_layer(
@@ -476,7 +478,7 @@ pub fn paint_primitives_into_scene_with(
                         }
                     }
                 }
-                for effect in &effects {
+                for effect in effects {
                     if matches!(
                         effect.kind,
                         EffectKind::InnerShadow | EffectKind::BackgroundBlur
@@ -504,7 +506,8 @@ pub fn paint_primitives_into_scene_with(
                 blend: _,
                 ..
             } => {
-                let text = apply_text_case(&text, &text_case);
+                let (x, y, font_size, letter_spacing) = (*x, *y, *font_size, *letter_spacing);
+                let text = apply_text_case(text, text_case);
                 let line_height = line_height.unwrap_or(font_size * 1.2).max(1.0);
                 let max_line_chars = text.lines().map(|l| l.chars().count()).max().unwrap_or(0);
                 let approx_width =
@@ -624,7 +627,7 @@ pub fn paint_primitives_into_scene_with(
                 scale_mode,
                 image_transform,
             } => {
-                if let Some(image_brush) = decode_image_brush(data_base64, *alpha) {
+                if let Some(image_brush) = decode_image_brush(data_base64, *alpha, width, height) {
                     let iw = image_brush.image.width as f64;
                     let ih = image_brush.image.height as f64;
                     if iw > 0.0 && ih > 0.0 {
@@ -849,7 +852,7 @@ pub fn paint_primitives_into_scene_with(
             if let Some(fill_paint) = fill.cloned().map(|f| f.with_opacity(weight)) {
                 for path_data in fill_paths {
                     if let Some(path) = cached_bez_path(path_data) {
-                        fill_path_shape(scene, shifted, &path, x, y, width, height, &fill_paint);
+                        fill_path_shape(scene, shifted, &*path, x, y, width, height, &fill_paint);
                     }
                 }
             }
@@ -865,7 +868,7 @@ pub fn paint_primitives_into_scene_with(
                                 shifted,
                                 to_peniko(stroke_blur.color.clone()),
                                 None,
-                                &path,
+                                &*path,
                             );
                         }
                     }
@@ -887,6 +890,11 @@ pub fn paint_primitives_into_scene_with(
         let radius = effect.radius.max(0.5);
         let clip_rect = Rect::new(x, y, x + width, y + height);
         let svg_fit = cached_svg_fit_transform(svg_text, width, height);
+        // Cache the parsed SVG tree once — blur kernel loops would otherwise
+        // re-parse the XML 6-20 times per blurred element per frame.
+        let Some(tree) = cached_svg_tree(svg_text) else {
+            return;
+        };
         for (dx, dy, weight) in layer_blur_kernel(radius) {
             let svg_transform =
                 scene_transform * kurbo::Affine::translate((x + dx, y + dy)) * svg_fit;
@@ -899,7 +907,7 @@ pub fn paint_primitives_into_scene_with(
                 scene_transform,
                 &clip_rect,
             );
-            let _ = anyrender_svg::render_svg_str(scene, svg_text, svg_transform);
+            anyrender_svg::render_svg_tree(scene, &tree, svg_transform);
             scene.pop_layer();
         }
     }
@@ -954,7 +962,7 @@ pub fn paint_primitives_into_scene_with(
                 scale_mode,
                 image_transform,
             } => {
-                if let Some(image_brush) = decode_image_brush(data_base64, *alpha) {
+                if let Some(image_brush) = decode_image_brush(data_base64, *alpha, width, height) {
                     let iw = image_brush.image.width as f64;
                     let ih = image_brush.image.height as f64;
                     if iw > 0.0 && ih > 0.0 {
@@ -1292,7 +1300,7 @@ pub fn paint_primitives_into_scene_with(
         }
     }
 
-    fn decode_image_brush(data_base64: &str, alpha: f64) -> Option<ImageBrush> {
+    fn decode_image_brush(data_base64: &str, alpha: f64, display_w: f64, display_h: f64) -> Option<ImageBrush> {
         use std::collections::HashMap;
         use std::hash::{Hash, Hasher};
         use std::sync::{LazyLock, Mutex};
@@ -1300,9 +1308,16 @@ pub fn paint_primitives_into_scene_with(
         static CACHE: LazyLock<Mutex<HashMap<u64, ImageBrush>>> =
             LazyLock::new(|| Mutex::new(HashMap::new()));
 
+        // Include display dimensions in cache key (rounded to nearest 64px to avoid
+        // excessive cache entries from sub-pixel differences)
+        let bucket_w = ((display_w / 64.0).ceil() as u32).max(1) * 64;
+        let bucket_h = ((display_h / 64.0).ceil() as u32).max(1) * 64;
+
         let mut hasher = std::collections::hash_map::DefaultHasher::new();
         data_base64.hash(&mut hasher);
         alpha.to_bits().hash(&mut hasher);
+        bucket_w.hash(&mut hasher);
+        bucket_h.hash(&mut hasher);
         let cache_key = hasher.finish();
 
         if let Ok(cache) = CACHE.lock() {
@@ -1315,12 +1330,32 @@ pub fn paint_primitives_into_scene_with(
             .decode(data_base64)
             .ok()?;
         let decoded = image::load_from_memory(&bytes).ok()?.into_rgba8();
-        let width = decoded.width();
-        let height = decoded.height();
+        let (orig_w, orig_h) = (decoded.width(), decoded.height());
+
+        // Downscale to 2x display size (for retina quality) if the source image
+        // is significantly larger than the display area. This avoids uploading
+        // multi-megabyte textures to the GPU when only a fraction of pixels are visible.
+        let max_w = (display_w * 2.0).ceil() as u32;
+        let max_h = (display_h * 2.0).ceil() as u32;
+        let (final_img, width, height) = if orig_w > max_w.max(64) || orig_h > max_h.max(64) {
+            let scale = (max_w as f64 / orig_w as f64).min(max_h as f64 / orig_h as f64);
+            let new_w = ((orig_w as f64 * scale).round() as u32).max(1);
+            let new_h = ((orig_h as f64 * scale).round() as u32).max(1);
+            let resized = image::imageops::resize(
+                &decoded,
+                new_w,
+                new_h,
+                image::imageops::FilterType::Triangle,
+            );
+            let (w, h) = (resized.width(), resized.height());
+            (resized.into_vec(), w, h)
+        } else {
+            (decoded.into_vec(), orig_w, orig_h)
+        };
 
         let brush = ImageBrush {
             image: ImageData {
-                data: Blob::new(Arc::new(decoded.into_vec())),
+                data: Blob::new(Arc::new(final_img)),
                 format: peniko::ImageFormat::Rgba8,
                 alpha_type: peniko::ImageAlphaType::Alpha,
                 width,
