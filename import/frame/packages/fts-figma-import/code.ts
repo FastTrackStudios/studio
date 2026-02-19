@@ -322,6 +322,12 @@ figma.ui.onmessage = async (msg: unknown) => {
     return;
   }
 
+  if (message.type === 'export-all-parity-to-bridge') {
+    const options = normalizeOptions(message.options);
+    await exportAllParityToBridge(options, message.bridgeUrl, message.parityRootDir);
+    return;
+  }
+
   if (message.type === 'generate-core10-scenarios') {
     await generateCore10Scenarios();
     figma.ui.postMessage({
@@ -994,7 +1000,84 @@ async function exportCore10ToBridge(
       scenarios,
     });
 
-    await sendParityPackToBridge(json, totalNodes, bridgeUrl, scenarios.length, missing);
+    await sendParityPackToBridge(json, totalNodes, bridgeUrl, scenarios.length, missing, 'Core parity pack');
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    figma.ui.postMessage({
+      type: 'bridge-error',
+      message,
+    });
+  }
+}
+
+async function exportAllParityToBridge(
+  options: ExportOptions,
+  bridgeUrl?: string,
+  parityRootDir?: string,
+): Promise<void> {
+  try {
+    const frames = figma.currentPage.findAll((n) => n.type === 'FRAME') as FrameNode[];
+    const parityFrames = frames
+      .filter((frame) => frame.name.trim().startsWith('parity/'))
+      .sort((a, b) => a.name.localeCompare(b.name));
+
+    if (parityFrames.length === 0) {
+      figma.ui.postMessage({
+        type: 'bridge-error',
+        message: 'No parity frames found on this page. Expected frame names starting with parity/.',
+      });
+      return;
+    }
+
+    const scenarios: Array<{
+      id: string;
+      frameName: string;
+      exportJson: ExportPayload;
+      expectedPngBase64: string;
+    }> = [];
+
+    for (const frame of parityFrames) {
+      const frameName = frame.name.trim();
+      const result = await buildExportPayloadForRoots([frame], options);
+      if (!result) {
+        continue;
+      }
+
+      const pngBytes = await frame.exportAsync({
+        format: 'PNG',
+        constraint: { type: 'SCALE', value: 1 },
+      });
+      scenarios.push({
+        id: frameName.replace(/^parity\//, '').replace(/\//g, '.'),
+        frameName,
+        exportJson: result.payload,
+        expectedPngBase64: bytesToBase64(pngBytes),
+      });
+    }
+
+    const totalNodes = scenarios.reduce(
+      (sum, scenario) => sum + scenario.exportJson.selection.totalNodes,
+      0,
+    );
+
+    const json = JSON.stringify({
+      schema: 'fts.figma.parity-pack/v1',
+      generatedAt: new Date().toISOString(),
+      source: {
+        plugin: 'fts-figma-import',
+        pluginVersion: '0.1.0',
+        editorType: figma.editorType,
+        fileKey: figma.fileKey ?? undefined,
+        page: {
+          id: figma.currentPage.id,
+          name: figma.currentPage.name,
+        },
+      },
+      parityRootDir: parityRootDir?.trim() || undefined,
+      scenarios,
+    });
+
+    await sendParityPackToBridge(json, totalNodes, bridgeUrl, scenarios.length, [], 'All parity frames');
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     figma.ui.postMessage({
@@ -1051,6 +1134,7 @@ async function sendParityPackToBridge(
   bridgeUrl?: string,
   totalScenarios?: number,
   missingCoreFrames?: readonly string[],
+  packLabel = 'Core parity pack',
 ): Promise<void> {
   const base = bridgeUrl?.trim() || 'http://localhost:43123/figma-export';
   const url = base.endsWith('/figma-export') ? `${base.slice(0, -'/figma-export'.length)}/figma-parity-pack` : `${base.replace(/\/+$/, '')}/figma-parity-pack`;
@@ -1086,7 +1170,7 @@ async function sendParityPackToBridge(
   });
   const missingCount = missingCoreFrames?.length ?? 0;
   figma.notify(
-    `Exported Core parity pack (${responseBody.writtenScenarios ?? totalScenarios ?? 0} scenarios${missingCount > 0 ? `, missing ${missingCount}` : ''}).`,
+    `Exported ${packLabel} (${responseBody.writtenScenarios ?? totalScenarios ?? 0} scenarios${missingCount > 0 ? `, missing ${missingCount}` : ''}).`,
   );
 }
 

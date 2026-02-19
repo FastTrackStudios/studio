@@ -62,6 +62,7 @@ Use the plugin buttons:
 
 - `Validate Core 10 Frames`
 - `Export Core 10 to Bridge`
+- `Export All Parity to Bridge` (exports every frame named `parity/...`)
 
 Required frame names on the page:
 

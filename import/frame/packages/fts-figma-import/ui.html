@@ -157,6 +157,7 @@
           <button id="validateCore10" class="secondary">Validate Core 10 Frames</button>
           <button id="generateCore10" class="secondary">Generate Core 10 Scenarios</button>
           <button id="exportCore10" class="secondary">Export Core 10 to Bridge</button>
+          <button id="exportAllParity" class="secondary">Export All Parity to Bridge</button>
         </div>
         <div id="status" class="status muted" style="margin-top: 8px">Ready.</div>
       </div>
@@ -313,6 +314,21 @@
           '*',
         );
         setStatus('Exporting Core 10 parity pack to bridge...', 'muted');
+      };
+
+      document.getElementById('exportAllParity').onclick = () => {
+        parent.postMessage(
+          {
+            pluginMessage: {
+              type: 'export-all-parity-to-bridge',
+              options: readOptions(),
+              bridgeUrl: bridgeUrl.value,
+              parityRootDir: parityRootDir.value,
+            },
+          },
+          '*',
+        );
+        setStatus('Exporting all parity frames to bridge...', 'muted');
       };
 
       function renderFramePicker() {
