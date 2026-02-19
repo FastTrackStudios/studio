@@ -1,6 +1,6 @@
 {
   "schema": "fts.figma.export/v2",
-  "generatedAt": "2026-02-19T10:46:29.273Z",
+  "generatedAt": "2026-02-19T16:23:06.829Z",
   "source": {
     "plugin": "fts-figma-parity-plugin",
     "pluginVersion": "v2.1",
@@ -108,7 +108,7 @@
       "strokeGeometry": [],
       "children": [
         {
-          "id": "8:878",
+          "id": "15:1360",
           "name": "parity/layout/auto-layout-hug-fill",
           "type": "TEXT",
           "visible": true,
@@ -187,10 +187,48 @@
           "paragraphIndent": 0,
           "textCase": "ORIGINAL",
           "textDecoration": "NONE",
-          "textStyleId": ""
+          "textStyleId": "",
+          "styledTextSegments": [
+            {
+              "characters": "parity/layout/auto-layout-hug-fill",
+              "start": 0,
+              "end": 34,
+              "fontName": {
+                "family": "Inter",
+                "style": "Regular"
+              },
+              "fontStyle": "Regular",
+              "fontSize": 20,
+              "fontWeight": 400,
+              "fills": [
+                {
+                  "type": "SOLID",
+                  "visible": true,
+                  "opacity": 1,
+                  "blendMode": "NORMAL",
+                  "color": {
+                    "r": 0,
+                    "g": 0,
+                    "b": 0
+                  },
+                  "boundVariables": {}
+                }
+              ],
+              "textCase": "ORIGINAL",
+              "textDecoration": "NONE",
+              "letterSpacing": {
+                "unit": "PERCENT",
+                "value": 0
+              },
+              "letterSpacingPx": 0,
+              "lineHeight": {
+                "unit": "AUTO"
+              }
+            }
+          ]
         },
         {
-          "id": "8:879",
+          "id": "15:1361",
           "name": "Row A: baseline",
           "type": "TEXT",
           "visible": true,
@@ -269,10 +307,48 @@
           "paragraphIndent": 0,
           "textCase": "ORIGINAL",
           "textDecoration": "NONE",
-          "textStyleId": ""
+          "textStyleId": "",
+          "styledTextSegments": [
+            {
+              "characters": "Row A: baseline",
+              "start": 0,
+              "end": 15,
+              "fontName": {
+                "family": "Inter",
+                "style": "Regular"
+              },
+              "fontStyle": "Regular",
+              "fontSize": 12,
+              "fontWeight": 400,
+              "fills": [
+                {
+                  "type": "SOLID",
+                  "visible": true,
+                  "opacity": 1,
+                  "blendMode": "NORMAL",
+                  "color": {
+                    "r": 0,
+                    "g": 0,
+                    "b": 0
+                  },
+                  "boundVariables": {}
+                }
+              ],
+              "textCase": "ORIGINAL",
+              "textDecoration": "NONE",
+              "letterSpacing": {
+                "unit": "PERCENT",
+                "value": 0
+              },
+              "letterSpacingPx": 0,
+              "lineHeight": {
+                "unit": "AUTO"
+              }
+            }
+          ]
         },
         {
-          "id": "8:882",
+          "id": "15:1364",
           "name": "__auto-layout-container",
           "type": "FRAME",
           "visible": true,
@@ -352,7 +428,7 @@
           "strokeGeometry": [],
           "children": [
             {
-              "id": "8:883",
+              "id": "15:1365",
               "name": "__auto-layout-row",
               "type": "FRAME",
               "visible": true,
@@ -419,7 +495,7 @@
               "strokeGeometry": [],
               "children": [
                 {
-                  "id": "8:884",
+                  "id": "15:1366",
                   "name": "Rectangle",
                   "type": "RECTANGLE",
                   "visible": true,
@@ -487,7 +563,7 @@
                   "strokeGeometry": []
                 },
                 {
-                  "id": "8:885",
+                  "id": "15:1367",
                   "name": "Rectangle",
                   "type": "RECTANGLE",
                   "visible": true,
@@ -557,7 +633,7 @@
               ]
             },
             {
-              "id": "8:886",
+              "id": "15:1368",
               "name": "__auto-layout-fill-child",
               "type": "FRAME",
               "visible": true,

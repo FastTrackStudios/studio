@@ -1,6 +1,6 @@
 {
   "schema": "fts.figma.export/v2",
-  "generatedAt": "2026-02-19T10:46:29.127Z",
+  "generatedAt": "2026-02-19T16:23:06.648Z",
   "source": {
     "plugin": "fts-figma-parity-plugin",
     "pluginVersion": "v2.1",
@@ -108,7 +108,7 @@
       "strokeGeometry": [],
       "children": [
         {
-          "id": "8:869",
+          "id": "15:1352",
           "name": "parity/text/mixed-style-runs",
           "type": "TEXT",
           "visible": true,
@@ -187,10 +187,48 @@
           "paragraphIndent": 0,
           "textCase": "ORIGINAL",
           "textDecoration": "NONE",
-          "textStyleId": ""
+          "textStyleId": "",
+          "styledTextSegments": [
+            {
+              "characters": "parity/text/mixed-style-runs",
+              "start": 0,
+              "end": 28,
+              "fontName": {
+                "family": "Inter",
+                "style": "Regular"
+              },
+              "fontStyle": "Regular",
+              "fontSize": 20,
+              "fontWeight": 400,
+              "fills": [
+                {
+                  "type": "SOLID",
+                  "visible": true,
+                  "opacity": 1,
+                  "blendMode": "NORMAL",
+                  "color": {
+                    "r": 0,
+                    "g": 0,
+                    "b": 0
+                  },
+                  "boundVariables": {}
+                }
+              ],
+              "textCase": "ORIGINAL",
+              "textDecoration": "NONE",
+              "letterSpacing": {
+                "unit": "PERCENT",
+                "value": 0
+              },
+              "letterSpacingPx": 0,
+              "lineHeight": {
+                "unit": "AUTO"
+              }
+            }
+          ]
         },
         {
-          "id": "8:870",
+          "id": "15:1353",
           "name": "Row A: baseline",
           "type": "TEXT",
           "visible": true,
@@ -269,10 +307,48 @@
           "paragraphIndent": 0,
           "textCase": "ORIGINAL",
           "textDecoration": "NONE",
-          "textStyleId": ""
+          "textStyleId": "",
+          "styledTextSegments": [
+            {
+              "characters": "Row A: baseline",
+              "start": 0,
+              "end": 15,
+              "fontName": {
+                "family": "Inter",
+                "style": "Regular"
+              },
+              "fontStyle": "Regular",
+              "fontSize": 12,
+              "fontWeight": 400,
+              "fills": [
+                {
+                  "type": "SOLID",
+                  "visible": true,
+                  "opacity": 1,
+                  "blendMode": "NORMAL",
+                  "color": {
+                    "r": 0,
+                    "g": 0,
+                    "b": 0
+                  },
+                  "boundVariables": {}
+                }
+              ],
+              "textCase": "ORIGINAL",
+              "textDecoration": "NONE",
+              "letterSpacing": {
+                "unit": "PERCENT",
+                "value": 0
+              },
+              "letterSpacingPx": 0,
+              "lineHeight": {
+                "unit": "AUTO"
+              }
+            }
+          ]
         },
         {
-          "id": "8:871",
+          "id": "15:1354",
           "name": "Row B: edge",
           "type": "TEXT",
           "visible": true,
@@ -351,10 +427,48 @@
           "paragraphIndent": 0,
           "textCase": "ORIGINAL",
           "textDecoration": "NONE",
-          "textStyleId": ""
+          "textStyleId": "",
+          "styledTextSegments": [
+            {
+              "characters": "Row B: edge",
+              "start": 0,
+              "end": 11,
+              "fontName": {
+                "family": "Inter",
+                "style": "Regular"
+              },
+              "fontStyle": "Regular",
+              "fontSize": 12,
+              "fontWeight": 400,
+              "fills": [
+                {
+                  "type": "SOLID",
+                  "visible": true,
+                  "opacity": 1,
+                  "blendMode": "NORMAL",
+                  "color": {
+                    "r": 0,
+                    "g": 0,
+                    "b": 0
+                  },
+                  "boundVariables": {}
+                }
+              ],
+              "textCase": "ORIGINAL",
+              "textDecoration": "NONE",
+              "letterSpacing": {
+                "unit": "PERCENT",
+                "value": 0
+              },
+              "letterSpacingPx": 0,
+              "lineHeight": {
+                "unit": "AUTO"
+              }
+            }
+          ]
         },
         {
-          "id": "8:872",
+          "id": "15:1355",
           "name": "Row C: stress",
           "type": "TEXT",
           "visible": true,
@@ -433,10 +547,48 @@
           "paragraphIndent": 0,
           "textCase": "ORIGINAL",
           "textDecoration": "NONE",
-          "textStyleId": ""
+          "textStyleId": "",
+          "styledTextSegments": [
+            {
+              "characters": "Row C: stress",
+              "start": 0,
+              "end": 13,
+              "fontName": {
+                "family": "Inter",
+                "style": "Regular"
+              },
+              "fontStyle": "Regular",
+              "fontSize": 12,
+              "fontWeight": 400,
+              "fills": [
+                {
+                  "type": "SOLID",
+                  "visible": true,
+                  "opacity": 1,
+                  "blendMode": "NORMAL",
+                  "color": {
+                    "r": 0,
+                    "g": 0,
+                    "b": 0
+                  },
+                  "boundVariables": {}
+                }
+              ],
+              "textCase": "ORIGINAL",
+              "textDecoration": "NONE",
+              "letterSpacing": {
+                "unit": "PERCENT",
+                "value": 0
+              },
+              "letterSpacingPx": 0,
+              "lineHeight": {
+                "unit": "AUTO"
+              }
+            }
+          ]
         },
         {
-          "id": "8:874",
+          "id": "15:1357",
           "name": "Regular Bold Italic BoldItalic Color Spacing",
           "type": "TEXT",
           "visible": true,
@@ -506,10 +658,408 @@
           "paragraphIndent": 0,
           "textCase": "ORIGINAL",
           "textDecoration": "NONE",
-          "textStyleId": ""
+          "textStyleId": "",
+          "styledTextSegments": [
+            {
+              "characters": "Regular",
+              "start": 0,
+              "end": 7,
+              "fontName": {
+                "family": "Inter",
+                "style": "Regular"
+              },
+              "fontStyle": "Regular",
+              "fontSize": 28,
+              "fontWeight": 400,
+              "fills": [
+                {
+                  "type": "SOLID",
+                  "visible": true,
+                  "opacity": 1,
+                  "blendMode": "NORMAL",
+                  "color": {
+                    "r": 0.10980392247438431,
+                    "g": 0.10980392247438431,
+                    "b": 0.10980392247438431
+                  },
+                  "boundVariables": {}
+                }
+              ],
+              "textCase": "ORIGINAL",
+              "textDecoration": "NONE",
+              "letterSpacing": {
+                "unit": "PERCENT",
+                "value": 0
+              },
+              "letterSpacingPx": 0,
+              "lineHeight": {
+                "unit": "AUTO"
+              }
+            },
+            {
+              "characters": " ",
+              "start": 7,
+              "end": 8,
+              "fontName": {
+                "family": "Inter",
+                "style": "Regular"
+              },
+              "fontStyle": "Regular",
+              "fontSize": 28,
+              "fontWeight": 400,
+              "fills": [
+                {
+                  "type": "SOLID",
+                  "visible": true,
+                  "opacity": 1,
+                  "blendMode": "NORMAL",
+                  "color": {
+                    "r": 0,
+                    "g": 0,
+                    "b": 0
+                  },
+                  "boundVariables": {}
+                }
+              ],
+              "textCase": "ORIGINAL",
+              "textDecoration": "NONE",
+              "letterSpacing": {
+                "unit": "PERCENT",
+                "value": 0
+              },
+              "letterSpacingPx": 0,
+              "lineHeight": {
+                "unit": "AUTO"
+              }
+            },
+            {
+              "characters": "Bold",
+              "start": 8,
+              "end": 12,
+              "fontName": {
+                "family": "Inter",
+                "style": "Bold"
+              },
+              "fontStyle": "Bold",
+              "fontSize": 28,
+              "fontWeight": 700,
+              "fills": [
+                {
+                  "type": "SOLID",
+                  "visible": true,
+                  "opacity": 1,
+                  "blendMode": "NORMAL",
+                  "color": {
+                    "r": 0,
+                    "g": 0,
+                    "b": 0
+                  },
+                  "boundVariables": {}
+                }
+              ],
+              "textCase": "ORIGINAL",
+              "textDecoration": "NONE",
+              "letterSpacing": {
+                "unit": "PERCENT",
+                "value": 0
+              },
+              "letterSpacingPx": 0,
+              "lineHeight": {
+                "unit": "AUTO"
+              }
+            },
+            {
+              "characters": " ",
+              "start": 12,
+              "end": 13,
+              "fontName": {
+                "family": "Inter",
+                "style": "Regular"
+              },
+              "fontStyle": "Regular",
+              "fontSize": 28,
+              "fontWeight": 400,
+              "fills": [
+                {
+                  "type": "SOLID",
+                  "visible": true,
+                  "opacity": 1,
+                  "blendMode": "NORMAL",
+                  "color": {
+                    "r": 0,
+                    "g": 0,
+                    "b": 0
+                  },
+                  "boundVariables": {}
+                }
+              ],
+              "textCase": "ORIGINAL",
+              "textDecoration": "NONE",
+              "letterSpacing": {
+                "unit": "PERCENT",
+                "value": 0
+              },
+              "letterSpacingPx": 0,
+              "lineHeight": {
+                "unit": "AUTO"
+              }
+            },
+            {
+              "characters": "Italic",
+              "start": 13,
+              "end": 19,
+              "fontName": {
+                "family": "Inter",
+                "style": "Italic"
+              },
+              "fontStyle": "Italic",
+              "fontSize": 28,
+              "fontWeight": 400,
+              "fills": [
+                {
+                  "type": "SOLID",
+                  "visible": true,
+                  "opacity": 1,
+                  "blendMode": "NORMAL",
+                  "color": {
+                    "r": 0,
+                    "g": 0,
+                    "b": 0
+                  },
+                  "boundVariables": {}
+                }
+              ],
+              "textCase": "ORIGINAL",
+              "textDecoration": "NONE",
+              "letterSpacing": {
+                "unit": "PERCENT",
+                "value": 0
+              },
+              "letterSpacingPx": 0,
+              "lineHeight": {
+                "unit": "AUTO"
+              }
+            },
+            {
+              "characters": " ",
+              "start": 19,
+              "end": 20,
+              "fontName": {
+                "family": "Inter",
+                "style": "Regular"
+              },
+              "fontStyle": "Regular",
+              "fontSize": 28,
+              "fontWeight": 400,
+              "fills": [
+                {
+                  "type": "SOLID",
+                  "visible": true,
+                  "opacity": 1,
+                  "blendMode": "NORMAL",
+                  "color": {
+                    "r": 0,
+                    "g": 0,
+                    "b": 0
+                  },
+                  "boundVariables": {}
+                }
+              ],
+              "textCase": "ORIGINAL",
+              "textDecoration": "NONE",
+              "letterSpacing": {
+                "unit": "PERCENT",
+                "value": 0
+              },
+              "letterSpacingPx": 0,
+              "lineHeight": {
+                "unit": "AUTO"
+              }
+            },
+            {
+              "characters": "BoldItalic",
+              "start": 20,
+              "end": 30,
+              "fontName": {
+                "family": "Inter",
+                "style": "Bold Italic"
+              },
+              "fontStyle": "Bold Italic",
+              "fontSize": 28,
+              "fontWeight": 700,
+              "fills": [
+                {
+                  "type": "SOLID",
+                  "visible": true,
+                  "opacity": 1,
+                  "blendMode": "NORMAL",
+                  "color": {
+                    "r": 0,
+                    "g": 0,
+                    "b": 0
+                  },
+                  "boundVariables": {}
+                }
+              ],
+              "textCase": "ORIGINAL",
+              "textDecoration": "NONE",
+              "letterSpacing": {
+                "unit": "PERCENT",
+                "value": 0
+              },
+              "letterSpacingPx": 0,
+              "lineHeight": {
+                "unit": "AUTO"
+              }
+            },
+            {
+              "characters": " ",
+              "start": 30,
+              "end": 31,
+              "fontName": {
+                "family": "Inter",
+                "style": "Regular"
+              },
+              "fontStyle": "Regular",
+              "fontSize": 28,
+              "fontWeight": 400,
+              "fills": [
+                {
+                  "type": "SOLID",
+                  "visible": true,
+                  "opacity": 1,
+                  "blendMode": "NORMAL",
+                  "color": {
+                    "r": 0,
+                    "g": 0,
+                    "b": 0
+                  },
+                  "boundVariables": {}
+                }
+              ],
+              "textCase": "ORIGINAL",
+              "textDecoration": "NONE",
+              "letterSpacing": {
+                "unit": "PERCENT",
+                "value": 0
+              },
+              "letterSpacingPx": 0,
+              "lineHeight": {
+                "unit": "AUTO"
+              }
+            },
+            {
+              "characters": "Color",
+              "start": 31,
+              "end": 36,
+              "fontName": {
+                "family": "Inter",
+                "style": "Regular"
+              },
+              "fontStyle": "Regular",
+              "fontSize": 28,
+              "fontWeight": 400,
+              "fills": [
+                {
+                  "type": "SOLID",
+                  "visible": true,
+                  "opacity": 1,
+                  "blendMode": "NORMAL",
+                  "color": {
+                    "r": 0.9607843160629272,
+                    "g": 0.3137255012989044,
+                    "b": 0.3137255012989044
+                  },
+                  "boundVariables": {}
+                }
+              ],
+              "textCase": "ORIGINAL",
+              "textDecoration": "NONE",
+              "letterSpacing": {
+                "unit": "PERCENT",
+                "value": 0
+              },
+              "letterSpacingPx": 0,
+              "lineHeight": {
+                "unit": "AUTO"
+              }
+            },
+            {
+              "characters": " ",
+              "start": 36,
+              "end": 37,
+              "fontName": {
+                "family": "Inter",
+                "style": "Regular"
+              },
+              "fontStyle": "Regular",
+              "fontSize": 28,
+              "fontWeight": 400,
+              "fills": [
+                {
+                  "type": "SOLID",
+                  "visible": true,
+                  "opacity": 1,
+                  "blendMode": "NORMAL",
+                  "color": {
+                    "r": 0,
+                    "g": 0,
+                    "b": 0
+                  },
+                  "boundVariables": {}
+                }
+              ],
+              "textCase": "ORIGINAL",
+              "textDecoration": "NONE",
+              "letterSpacing": {
+                "unit": "PERCENT",
+                "value": 0
+              },
+              "letterSpacingPx": 0,
+              "lineHeight": {
+                "unit": "AUTO"
+              }
+            },
+            {
+              "characters": "Spacing",
+              "start": 37,
+              "end": 44,
+              "fontName": {
+                "family": "Inter",
+                "style": "Regular"
+              },
+              "fontStyle": "Regular",
+              "fontSize": 28,
+              "fontWeight": 400,
+              "fills": [
+                {
+                  "type": "SOLID",
+                  "visible": true,
+                  "opacity": 1,
+                  "blendMode": "NORMAL",
+                  "color": {
+                    "r": 0.23529411852359772,
+                    "g": 0.45098039507865906,
+                    "b": 0.9607843160629272
+                  },
+                  "boundVariables": {}
+                }
+              ],
+              "textCase": "ORIGINAL",
+              "textDecoration": "NONE",
+              "letterSpacing": {
+                "unit": "PIXELS",
+                "value": 2
+              },
+              "letterSpacingPx": 2,
+              "lineHeight": {
+                "unit": "AUTO"
+              }
+            }
+          ]
         },
         {
-          "id": "8:875",
+          "id": "15:1358",
           "name": "Row B mixed styles with wrap: Bold segment, italic segment, and colored segment in one paragraph to test run boundaries.",
           "type": "TEXT",
           "visible": true,
@@ -571,10 +1121,300 @@
           "paragraphIndent": 0,
           "textCase": "ORIGINAL",
           "textDecoration": "NONE",
-          "textStyleId": ""
+          "textStyleId": "",
+          "styledTextSegments": [
+            {
+              "characters": "Row B mixed styles with wrap: Bo",
+              "start": 0,
+              "end": 32,
+              "fontName": {
+                "family": "Inter",
+                "style": "Regular"
+              },
+              "fontStyle": "Regular",
+              "fontSize": 24,
+              "fontWeight": 400,
+              "fills": [
+                {
+                  "type": "SOLID",
+                  "visible": true,
+                  "opacity": 1,
+                  "blendMode": "NORMAL",
+                  "color": {
+                    "r": 0,
+                    "g": 0,
+                    "b": 0
+                  },
+                  "boundVariables": {}
+                }
+              ],
+              "textCase": "ORIGINAL",
+              "textDecoration": "NONE",
+              "letterSpacing": {
+                "unit": "PERCENT",
+                "value": 0
+              },
+              "letterSpacingPx": 0,
+              "lineHeight": {
+                "unit": "AUTO"
+              }
+            },
+            {
+              "characters": "ld segment, ",
+              "start": 32,
+              "end": 44,
+              "fontName": {
+                "family": "Inter",
+                "style": "Bold"
+              },
+              "fontStyle": "Bold",
+              "fontSize": 24,
+              "fontWeight": 700,
+              "fills": [
+                {
+                  "type": "SOLID",
+                  "visible": true,
+                  "opacity": 1,
+                  "blendMode": "NORMAL",
+                  "color": {
+                    "r": 0,
+                    "g": 0,
+                    "b": 0
+                  },
+                  "boundVariables": {}
+                }
+              ],
+              "textCase": "ORIGINAL",
+              "textDecoration": "NONE",
+              "letterSpacing": {
+                "unit": "PERCENT",
+                "value": 0
+              },
+              "letterSpacingPx": 0,
+              "lineHeight": {
+                "unit": "AUTO"
+              }
+            },
+            {
+              "characters": "it",
+              "start": 44,
+              "end": 46,
+              "fontName": {
+                "family": "Inter",
+                "style": "Regular"
+              },
+              "fontStyle": "Regular",
+              "fontSize": 24,
+              "fontWeight": 400,
+              "fills": [
+                {
+                  "type": "SOLID",
+                  "visible": true,
+                  "opacity": 1,
+                  "blendMode": "NORMAL",
+                  "color": {
+                    "r": 0,
+                    "g": 0,
+                    "b": 0
+                  },
+                  "boundVariables": {}
+                }
+              ],
+              "textCase": "ORIGINAL",
+              "textDecoration": "NONE",
+              "letterSpacing": {
+                "unit": "PERCENT",
+                "value": 0
+              },
+              "letterSpacingPx": 0,
+              "lineHeight": {
+                "unit": "AUTO"
+              }
+            },
+            {
+              "characters": "alic segment, ",
+              "start": 46,
+              "end": 60,
+              "fontName": {
+                "family": "Inter",
+                "style": "Italic"
+              },
+              "fontStyle": "Italic",
+              "fontSize": 24,
+              "fontWeight": 400,
+              "fills": [
+                {
+                  "type": "SOLID",
+                  "visible": true,
+                  "opacity": 1,
+                  "blendMode": "NORMAL",
+                  "color": {
+                    "r": 0,
+                    "g": 0,
+                    "b": 0
+                  },
+                  "boundVariables": {}
+                }
+              ],
+              "textCase": "ORIGINAL",
+              "textDecoration": "NONE",
+              "letterSpacing": {
+                "unit": "PERCENT",
+                "value": 0
+              },
+              "letterSpacingPx": 0,
+              "lineHeight": {
+                "unit": "AUTO"
+              }
+            },
+            {
+              "characters": "and co",
+              "start": 60,
+              "end": 66,
+              "fontName": {
+                "family": "Inter",
+                "style": "Regular"
+              },
+              "fontStyle": "Regular",
+              "fontSize": 24,
+              "fontWeight": 400,
+              "fills": [
+                {
+                  "type": "SOLID",
+                  "visible": true,
+                  "opacity": 1,
+                  "blendMode": "NORMAL",
+                  "color": {
+                    "r": 0,
+                    "g": 0,
+                    "b": 0
+                  },
+                  "boundVariables": {}
+                }
+              ],
+              "textCase": "ORIGINAL",
+              "textDecoration": "NONE",
+              "letterSpacing": {
+                "unit": "PERCENT",
+                "value": 0
+              },
+              "letterSpacingPx": 0,
+              "lineHeight": {
+                "unit": "AUTO"
+              }
+            },
+            {
+              "characters": "lored segment ",
+              "start": 66,
+              "end": 80,
+              "fontName": {
+                "family": "Inter",
+                "style": "Regular"
+              },
+              "fontStyle": "Regular",
+              "fontSize": 24,
+              "fontWeight": 400,
+              "fills": [
+                {
+                  "type": "SOLID",
+                  "visible": true,
+                  "opacity": 1,
+                  "blendMode": "NORMAL",
+                  "color": {
+                    "r": 0.27450981736183167,
+                    "g": 0.5686274766921997,
+                    "b": 0.9607843160629272
+                  },
+                  "boundVariables": {}
+                }
+              ],
+              "textCase": "ORIGINAL",
+              "textDecoration": "NONE",
+              "letterSpacing": {
+                "unit": "PERCENT",
+                "value": 0
+              },
+              "letterSpacingPx": 0,
+              "lineHeight": {
+                "unit": "AUTO"
+              }
+            },
+            {
+              "characters": "i",
+              "start": 80,
+              "end": 81,
+              "fontName": {
+                "family": "Inter",
+                "style": "Regular"
+              },
+              "fontStyle": "Regular",
+              "fontSize": 24,
+              "fontWeight": 400,
+              "fills": [
+                {
+                  "type": "SOLID",
+                  "visible": true,
+                  "opacity": 1,
+                  "blendMode": "NORMAL",
+                  "color": {
+                    "r": 0,
+                    "g": 0,
+                    "b": 0
+                  },
+                  "boundVariables": {}
+                }
+              ],
+              "textCase": "ORIGINAL",
+              "textDecoration": "NONE",
+              "letterSpacing": {
+                "unit": "PERCENT",
+                "value": 0
+              },
+              "letterSpacingPx": 0,
+              "lineHeight": {
+                "unit": "AUTO"
+              }
+            },
+            {
+              "characters": "n one paragraph to test run boundaries.",
+              "start": 81,
+              "end": 120,
+              "fontName": {
+                "family": "Inter",
+                "style": "Regular"
+              },
+              "fontStyle": "Regular",
+              "fontSize": 24,
+              "fontWeight": 400,
+              "fills": [
+                {
+                  "type": "SOLID",
+                  "visible": true,
+                  "opacity": 1,
+                  "blendMode": "NORMAL",
+                  "color": {
+                    "r": 0,
+                    "g": 0,
+                    "b": 0
+                  },
+                  "boundVariables": {}
+                }
+              ],
+              "textCase": "ORIGINAL",
+              "textDecoration": "NONE",
+              "letterSpacing": {
+                "unit": "PIXELS",
+                "value": 0.800000011920929
+              },
+              "letterSpacingPx": 0.800000011920929,
+              "lineHeight": {
+                "unit": "AUTO"
+              }
+            }
+          ]
         },
         {
-          "id": "8:876",
+          "id": "15:1359",
           "name": "Row C stress: multi-line Bold + Italic + BoldItalic with spacing and color shifts",
           "type": "TEXT",
           "visible": true,
@@ -636,7 +1476,297 @@
           "paragraphIndent": 0,
           "textCase": "ORIGINAL",
           "textDecoration": "NONE",
-          "textStyleId": ""
+          "textStyleId": "",
+          "styledTextSegments": [
+            {
+              "characters": "Row C stress: multi-line\n",
+              "start": 0,
+              "end": 25,
+              "fontName": {
+                "family": "Inter",
+                "style": "Regular"
+              },
+              "fontStyle": "Regular",
+              "fontSize": 22,
+              "fontWeight": 400,
+              "fills": [
+                {
+                  "type": "SOLID",
+                  "visible": true,
+                  "opacity": 1,
+                  "blendMode": "NORMAL",
+                  "color": {
+                    "r": 0,
+                    "g": 0,
+                    "b": 0
+                  },
+                  "boundVariables": {}
+                }
+              ],
+              "textCase": "ORIGINAL",
+              "textDecoration": "NONE",
+              "letterSpacing": {
+                "unit": "PERCENT",
+                "value": 0
+              },
+              "letterSpacingPx": 0,
+              "lineHeight": {
+                "unit": "AUTO"
+              }
+            },
+            {
+              "characters": "Bold",
+              "start": 25,
+              "end": 29,
+              "fontName": {
+                "family": "Inter",
+                "style": "Bold"
+              },
+              "fontStyle": "Bold",
+              "fontSize": 22,
+              "fontWeight": 700,
+              "fills": [
+                {
+                  "type": "SOLID",
+                  "visible": true,
+                  "opacity": 1,
+                  "blendMode": "NORMAL",
+                  "color": {
+                    "r": 0,
+                    "g": 0,
+                    "b": 0
+                  },
+                  "boundVariables": {}
+                }
+              ],
+              "textCase": "ORIGINAL",
+              "textDecoration": "NONE",
+              "letterSpacing": {
+                "unit": "PERCENT",
+                "value": 0
+              },
+              "letterSpacingPx": 0,
+              "lineHeight": {
+                "unit": "AUTO"
+              }
+            },
+            {
+              "characters": " + ",
+              "start": 29,
+              "end": 32,
+              "fontName": {
+                "family": "Inter",
+                "style": "Regular"
+              },
+              "fontStyle": "Regular",
+              "fontSize": 22,
+              "fontWeight": 400,
+              "fills": [
+                {
+                  "type": "SOLID",
+                  "visible": true,
+                  "opacity": 1,
+                  "blendMode": "NORMAL",
+                  "color": {
+                    "r": 0,
+                    "g": 0,
+                    "b": 0
+                  },
+                  "boundVariables": {}
+                }
+              ],
+              "textCase": "ORIGINAL",
+              "textDecoration": "NONE",
+              "letterSpacing": {
+                "unit": "PERCENT",
+                "value": 0
+              },
+              "letterSpacingPx": 0,
+              "lineHeight": {
+                "unit": "AUTO"
+              }
+            },
+            {
+              "characters": "Italic",
+              "start": 32,
+              "end": 38,
+              "fontName": {
+                "family": "Inter",
+                "style": "Italic"
+              },
+              "fontStyle": "Italic",
+              "fontSize": 22,
+              "fontWeight": 400,
+              "fills": [
+                {
+                  "type": "SOLID",
+                  "visible": true,
+                  "opacity": 1,
+                  "blendMode": "NORMAL",
+                  "color": {
+                    "r": 0,
+                    "g": 0,
+                    "b": 0
+                  },
+                  "boundVariables": {}
+                }
+              ],
+              "textCase": "ORIGINAL",
+              "textDecoration": "NONE",
+              "letterSpacing": {
+                "unit": "PERCENT",
+                "value": 0
+              },
+              "letterSpacingPx": 0,
+              "lineHeight": {
+                "unit": "AUTO"
+              }
+            },
+            {
+              "characters": " + ",
+              "start": 38,
+              "end": 41,
+              "fontName": {
+                "family": "Inter",
+                "style": "Regular"
+              },
+              "fontStyle": "Regular",
+              "fontSize": 22,
+              "fontWeight": 400,
+              "fills": [
+                {
+                  "type": "SOLID",
+                  "visible": true,
+                  "opacity": 1,
+                  "blendMode": "NORMAL",
+                  "color": {
+                    "r": 0,
+                    "g": 0,
+                    "b": 0
+                  },
+                  "boundVariables": {}
+                }
+              ],
+              "textCase": "ORIGINAL",
+              "textDecoration": "NONE",
+              "letterSpacing": {
+                "unit": "PERCENT",
+                "value": 0
+              },
+              "letterSpacingPx": 0,
+              "lineHeight": {
+                "unit": "AUTO"
+              }
+            },
+            {
+              "characters": "BoldItalic\n",
+              "start": 41,
+              "end": 52,
+              "fontName": {
+                "family": "Inter",
+                "style": "Bold Italic"
+              },
+              "fontStyle": "Bold Italic",
+              "fontSize": 22,
+              "fontWeight": 700,
+              "fills": [
+                {
+                  "type": "SOLID",
+                  "visible": true,
+                  "opacity": 1,
+                  "blendMode": "NORMAL",
+                  "color": {
+                    "r": 0,
+                    "g": 0,
+                    "b": 0
+                  },
+                  "boundVariables": {}
+                }
+              ],
+              "textCase": "ORIGINAL",
+              "textDecoration": "NONE",
+              "letterSpacing": {
+                "unit": "PERCENT",
+                "value": 0
+              },
+              "letterSpacingPx": 0,
+              "lineHeight": {
+                "unit": "AUTO"
+              }
+            },
+            {
+              "characters": "with ",
+              "start": 52,
+              "end": 57,
+              "fontName": {
+                "family": "Inter",
+                "style": "Regular"
+              },
+              "fontStyle": "Regular",
+              "fontSize": 22,
+              "fontWeight": 400,
+              "fills": [
+                {
+                  "type": "SOLID",
+                  "visible": true,
+                  "opacity": 1,
+                  "blendMode": "NORMAL",
+                  "color": {
+                    "r": 0,
+                    "g": 0,
+                    "b": 0
+                  },
+                  "boundVariables": {}
+                }
+              ],
+              "textCase": "ORIGINAL",
+              "textDecoration": "NONE",
+              "letterSpacing": {
+                "unit": "PERCENT",
+                "value": 0
+              },
+              "letterSpacingPx": 0,
+              "lineHeight": {
+                "unit": "AUTO"
+              }
+            },
+            {
+              "characters": "spacing and color shifts",
+              "start": 57,
+              "end": 81,
+              "fontName": {
+                "family": "Inter",
+                "style": "Regular"
+              },
+              "fontStyle": "Regular",
+              "fontSize": 22,
+              "fontWeight": 400,
+              "fills": [
+                {
+                  "type": "SOLID",
+                  "visible": true,
+                  "opacity": 1,
+                  "blendMode": "NORMAL",
+                  "color": {
+                    "r": 0.9607843160629272,
+                    "g": 0.47058823704719543,
+                    "b": 0.3137255012989044
+                  },
+                  "boundVariables": {}
+                }
+              ],
+              "textCase": "ORIGINAL",
+              "textDecoration": "NONE",
+              "letterSpacing": {
+                "unit": "PIXELS",
+                "value": 1.399999976158142
+              },
+              "letterSpacingPx": 1.399999976158142,
+              "lineHeight": {
+                "unit": "AUTO"
+              }
+            }
+          ]
         }
       ]
     }

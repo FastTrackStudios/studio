@@ -1,0 +1,7 @@
+{
+  "scenarioId": "text.mixed-style-runs",
+  "status": "skipped",
+  "reason": "missing_svg",
+  "expectedSvg": "tests/frame/parity/scenarios/text.mixed-style-runs/expected.svg",
+  "actualSvg": "tests/frame/parity/scenarios/text.mixed-style-runs/actual.svg"
+}

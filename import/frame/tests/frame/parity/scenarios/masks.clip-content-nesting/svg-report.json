@@ -1,0 +1,7 @@
+{
+  "scenarioId": "masks.clip-content-nesting",
+  "status": "skipped",
+  "reason": "missing_svg",
+  "expectedSvg": "tests/frame/parity/scenarios/masks.clip-content-nesting/expected.svg",
+  "actualSvg": "tests/frame/parity/scenarios/masks.clip-content-nesting/actual.svg"
+}

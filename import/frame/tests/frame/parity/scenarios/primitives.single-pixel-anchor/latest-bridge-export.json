@@ -1,6 +1,6 @@
 {
   "schema": "fts.figma.export/v2",
-  "generatedAt": "2026-02-19T10:46:29.597Z",
+  "generatedAt": "2026-02-19T16:23:07.219Z",
   "source": {
     "plugin": "fts-figma-parity-plugin",
     "pluginVersion": "v2.1",
@@ -108,7 +108,7 @@
       "strokeGeometry": [],
       "children": [
         {
-          "id": "8:917",
+          "id": "15:1397",
           "name": "Rectangle",
           "type": "RECTANGLE",
           "visible": true,

@@ -1,0 +1,7 @@
+{
+  "scenarioId": "regression.kitchen-sink",
+  "status": "skipped",
+  "reason": "missing_svg",
+  "expectedSvg": "tests/frame/parity/scenarios/regression.kitchen-sink/expected.svg",
+  "actualSvg": "tests/frame/parity/scenarios/regression.kitchen-sink/actual.svg"
+}

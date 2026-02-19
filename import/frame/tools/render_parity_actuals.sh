@@ -69,13 +69,14 @@ for scenario_dir in "${SCENARIO_DIRS[@]}"; do
     export_json="$scenario_dir/export/latest-bridge-export.json"
   fi
   actual_png="$scenario_dir/actual.png"
+  actual_svg="$scenario_dir/actual.svg"
 
   if [[ ! -f "$export_json" ]]; then
     echo "[$scenario_id] skip: missing $export_json"
     continue
   fi
 
-  echo "[$scenario_id] rendering actual.png"
+  echo "[$scenario_id] rendering actual.png + actual.svg"
   width="$(jq -r '.nodes[0].absoluteBoundingBox.width // 0' "$export_json" 2>/dev/null || echo 0)"
   height="$(jq -r '.nodes[0].absoluteBoundingBox.height // 0' "$export_json" 2>/dev/null || echo 0)"
 
@@ -93,6 +94,19 @@ for scenario_dir in "${SCENARIO_DIRS[@]}"; do
   fi
 
   cargo run -q -p frame-ui --features anyrender --bin render_png -- "${render_args[@]}"
+
+  svg_render_args=(
+    "$export_json"
+    --out "$actual_svg"
+  )
+  if [[ "$width" != "0" && "$height" != "0" ]]; then
+    width_int="$(printf '%.0f' "$width")"
+    height_int="$(printf '%.0f' "$height")"
+    if [[ "$width_int" -gt 0 && "$height_int" -gt 0 ]]; then
+      svg_render_args+=(--width "$width_int" --height "$height_int")
+    fi
+  fi
+  cargo run -q -p frame-ui --features anyrender --bin render_svg -- "${svg_render_args[@]}"
 done
 
-echo "done rendering parity actual PNGs"
+echo "done rendering parity actual PNGs/SVGs"

@@ -1,6 +1,6 @@
 {
   "schema": "fts.figma.export/v2",
-  "generatedAt": "2026-02-19T10:46:30.488Z",
+  "generatedAt": "2026-02-19T16:23:08.141Z",
   "source": {
     "plugin": "fts-figma-parity-plugin",
     "pluginVersion": "v2.1",
@@ -108,7 +108,7 @@
       "strokeGeometry": [],
       "children": [
         {
-          "id": "8:962",
+          "id": "15:1436",
           "name": "parity/effects/effect-ordering",
           "type": "TEXT",
           "visible": true,
@@ -187,10 +187,48 @@
           "paragraphIndent": 0,
           "textCase": "ORIGINAL",
           "textDecoration": "NONE",
-          "textStyleId": ""
+          "textStyleId": "",
+          "styledTextSegments": [
+            {
+              "characters": "parity/effects/effect-ordering",
+              "start": 0,
+              "end": 30,
+              "fontName": {
+                "family": "Inter",
+                "style": "Regular"
+              },
+              "fontStyle": "Regular",
+              "fontSize": 20,
+              "fontWeight": 400,
+              "fills": [
+                {
+                  "type": "SOLID",
+                  "visible": true,
+                  "opacity": 1,
+                  "blendMode": "NORMAL",
+                  "color": {
+                    "r": 0,
+                    "g": 0,
+                    "b": 0
+                  },
+                  "boundVariables": {}
+                }
+              ],
+              "textCase": "ORIGINAL",
+              "textDecoration": "NONE",
+              "letterSpacing": {
+                "unit": "PERCENT",
+                "value": 0
+              },
+              "letterSpacingPx": 0,
+              "lineHeight": {
+                "unit": "AUTO"
+              }
+            }
+          ]
         },
         {
-          "id": "8:963",
+          "id": "15:1437",
           "name": "Row A: baseline",
           "type": "TEXT",
           "visible": true,
@@ -269,10 +307,48 @@
           "paragraphIndent": 0,
           "textCase": "ORIGINAL",
           "textDecoration": "NONE",
-          "textStyleId": ""
+          "textStyleId": "",
+          "styledTextSegments": [
+            {
+              "characters": "Row A: baseline",
+              "start": 0,
+              "end": 15,
+              "fontName": {
+                "family": "Inter",
+                "style": "Regular"
+              },
+              "fontStyle": "Regular",
+              "fontSize": 12,
+              "fontWeight": 400,
+              "fills": [
+                {
+                  "type": "SOLID",
+                  "visible": true,
+                  "opacity": 1,
+                  "blendMode": "NORMAL",
+                  "color": {
+                    "r": 0,
+                    "g": 0,
+                    "b": 0
+                  },
+                  "boundVariables": {}
+                }
+              ],
+              "textCase": "ORIGINAL",
+              "textDecoration": "NONE",
+              "letterSpacing": {
+                "unit": "PERCENT",
+                "value": 0
+              },
+              "letterSpacingPx": 0,
+              "lineHeight": {
+                "unit": "AUTO"
+              }
+            }
+          ]
         },
         {
-          "id": "8:966",
+          "id": "15:1440",
           "name": "Rectangle",
           "type": "RECTANGLE",
           "visible": true,
@@ -378,7 +454,7 @@
           ]
         },
         {
-          "id": "8:967",
+          "id": "15:1441",
           "name": "Rectangle",
           "type": "RECTANGLE",
           "visible": true,

@@ -107,6 +107,7 @@ async function exportAllPngsToBridge(byName: Map<string, FrameNode>): Promise<{ 
 		frameName: string;
 		exportJson: unknown;
 		expectedPngBase64: string;
+		expectedSvgBase64: string;
 	}> = [];
 	const exportErrors: string[] = [];
 	for (const frameName of FRAME_NAMES) {
@@ -117,11 +118,13 @@ async function exportAllPngsToBridge(byName: Map<string, FrameNode>): Promise<{ 
 		}
 		try {
 			const pngBytes = await exportNodeAsPng(frame);
+			const svgBytes = await exportNodeAsSvg(frame);
 			scenarios.push({
 				id: frameName.replace(/^parity\//, '').replace(/\//g, '.'),
 				frameName,
 				exportJson: buildExportPayloadForFrame(frame),
 				expectedPngBase64: bytesToBase64(pngBytes),
+				expectedSvgBase64: bytesToBase64(svgBytes),
 			});
 		} catch (error) {
 			const message = error instanceof Error ? error.message : String(error);
@@ -248,6 +251,7 @@ type ExportNode = {
 	textCase?: string;
 	textDecoration?: string;
 	textStyleId?: string;
+	styledTextSegments?: unknown[];
 	children?: ExportNode[];
 };
 
@@ -366,6 +370,7 @@ function serializeNodeLite(node: SceneNode, depth: number, maxDepth: number): Ex
 		base.textDecoration =
 			typeof node.textDecoration === 'symbol' ? 'MIXED' : String(node.textDecoration);
 		base.textStyleId = node.textStyleId;
+		base.styledTextSegments = sanitize(extractStyledTextSegments(node));
 	}
 
 	if ('children' in node && depth < maxDepth) {
@@ -375,6 +380,44 @@ function serializeNodeLite(node: SceneNode, depth: number, maxDepth: number): Ex
 	}
 
 	return pruneUndefined(base);
+}
+
+function extractStyledTextSegments(node: TextNode): unknown[] | undefined {
+	try {
+		const segments = node.getStyledTextSegments([
+			'fontName',
+			'fontSize',
+			'fontWeight',
+			'fills',
+			'textCase',
+			'textDecoration',
+			'letterSpacing',
+			'lineHeight',
+		]);
+		return segments.map((segment) => ({
+			characters: segment.characters,
+			start: segment.start,
+			end: segment.end,
+			fontName: sanitize(segment.fontName),
+			fontStyle:
+				typeof segment.fontName === 'object' && segment.fontName ? (segment.fontName as FontName).style : undefined,
+			fontSize: typeof segment.fontSize === 'number' ? segment.fontSize : undefined,
+			fontWeight: typeof segment.fontWeight === 'number' ? segment.fontWeight : undefined,
+			fills: sanitize(segment.fills),
+			textCase: sanitize(segment.textCase),
+			textDecoration: sanitize(segment.textDecoration),
+			letterSpacing: sanitize(segment.letterSpacing),
+			letterSpacingPx:
+				typeof segment.letterSpacing === 'object' &&
+				segment.letterSpacing &&
+				'value' in segment.letterSpacing
+					? Number((segment.letterSpacing as { value: number }).value)
+					: undefined,
+			lineHeight: sanitize(segment.lineHeight),
+		}));
+	} catch {
+		return undefined;
+	}
 }
 
 function sanitize<T>(value: T): T {
@@ -477,6 +520,79 @@ async function exportNodeAsPng(node: SceneNode): Promise<Uint8Array> {
 	const settingsCount = Array.isArray(nodeApi.exportSettings) ? nodeApi.exportSettings.length : 0;
 	throw new Error(
 		`No compatible export API available (node.exportAsync=${nodeExportType}, figma.exportAsync=${figmaExportType}, exportSettings=${settingsCount}).`,
+	);
+}
+
+async function exportNodeAsSvg(node: SceneNode): Promise<Uint8Array> {
+	const withContents: ExportSettingsSVG = {
+		format: 'SVG',
+		svgOutlineText: true,
+		svgIdAttribute: false,
+		svgSimplifyStroke: false,
+		contentsOnly: true,
+	};
+	const plain: ExportSettingsSVG = {
+		format: 'SVG',
+		svgOutlineText: true,
+		svgIdAttribute: false,
+		svgSimplifyStroke: false,
+	};
+
+	const nodeApi = node as unknown as {
+		exportAsync?: (s: ExportSettingsSVG) => Promise<Uint8Array>;
+		exportSettings?: ReadonlyArray<ExportSettings>;
+	};
+	const figmaApi = figma as unknown as {
+		exportAsync?: (n: SceneNode, s: ExportSettingsSVG) => Promise<Uint8Array>;
+	};
+
+	const withNodeMethod = async (settings: ExportSettingsSVG): Promise<Uint8Array | null> => {
+		if (typeof nodeApi.exportAsync !== 'function') {
+			return null;
+		}
+		return nodeApi.exportAsync.call(node, settings);
+	};
+
+	const withFigmaMethod = async (settings: ExportSettingsSVG): Promise<Uint8Array | null> => {
+		if (typeof figmaApi.exportAsync !== 'function') {
+			return null;
+		}
+		return figmaApi.exportAsync.call(figma, node, settings);
+	};
+
+	try {
+		const bytes = await withNodeMethod(withContents);
+		if (bytes) {
+			return bytes;
+		}
+	} catch {
+		// Fallback to plain settings.
+	}
+	try {
+		const bytes = await withNodeMethod(plain);
+		if (bytes) {
+			return bytes;
+		}
+	} catch {
+		// Fallback to figma-level export.
+	}
+	try {
+		const bytes = await withFigmaMethod(withContents);
+		if (bytes) {
+			return bytes;
+		}
+	} catch {
+		// Fallback to plain settings.
+	}
+	const bytes = await withFigmaMethod(plain);
+	if (bytes) {
+		return bytes;
+	}
+	const nodeExportType = typeof nodeApi.exportAsync;
+	const figmaExportType = typeof figmaApi.exportAsync;
+	const settingsCount = Array.isArray(nodeApi.exportSettings) ? nodeApi.exportSettings.length : 0;
+	throw new Error(
+		`No compatible SVG export API available (node.exportAsync=${nodeExportType}, figma.exportAsync=${figmaExportType}, exportSettings=${settingsCount}).`,
 	);
 }
 

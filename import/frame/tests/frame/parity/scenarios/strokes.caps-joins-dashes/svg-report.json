@@ -1,0 +1,7 @@
+{
+  "scenarioId": "strokes.caps-joins-dashes",
+  "status": "skipped",
+  "reason": "missing_svg",
+  "expectedSvg": "tests/frame/parity/scenarios/strokes.caps-joins-dashes/expected.svg",
+  "actualSvg": "tests/frame/parity/scenarios/strokes.caps-joins-dashes/actual.svg"
+}

@@ -208,8 +208,17 @@ fn collect_primitives_recursive(
     let mut rendered_as_atomic_svg = false;
 
     let node_class = frame_proto::classify_node_type(&node.figma_type);
+    let styled_segment_count = node
+        .raw
+        .get("styledTextSegments")
+        .and_then(|v| v.as_array())
+        .map(|arr| arr.len())
+        .unwrap_or(0);
+    let prefer_text_outlines =
+        (styled_segment_count > 1 || fill_paths.len() > 1) && !fills.is_empty();
+
     match node_class {
-        RenderNodeClass::Text if has_vector_geometry => {
+        RenderNodeClass::Text if has_vector_geometry && prefer_text_outlines => {
             // Text with pre-rendered glyph outlines in fillGeometry — render as vector paths.
             // Bridge exports don't include font metadata so glyph-by-glyph layout fails;
             // the fillGeometry paths are the authoritative visual representation.
@@ -219,6 +228,8 @@ fn collect_primitives_recursive(
                 y,
                 width,
                 height,
+                normalize_to_origin: true,
+                text_outline: true,
                 fill_paths,
                 stroke_paths,
                 svg_base64,
@@ -312,6 +323,7 @@ fn collect_primitives_recursive(
                     line_height,
                     letter_spacing,
                     text_case,
+                    style_runs: parse_text_style_runs(&node.raw, effective_opacity),
                     blend,
                 });
             }
@@ -327,6 +339,8 @@ fn collect_primitives_recursive(
                 y,
                 width,
                 height,
+                normalize_to_origin: false,
+                text_outline: false,
                 fill_paths,
                 stroke_paths,
                 svg_base64,
@@ -347,6 +361,8 @@ fn collect_primitives_recursive(
                 y,
                 width,
                 height,
+                normalize_to_origin: false,
+                text_outline: false,
                 fill_paths,
                 stroke_paths,
                 svg_base64,
@@ -364,6 +380,8 @@ fn collect_primitives_recursive(
                 y,
                 width,
                 height,
+                normalize_to_origin: false,
+                text_outline: false,
                 fill_paths,
                 stroke_paths,
                 svg_base64,
@@ -549,4 +567,66 @@ fn collect_primitives_recursive(
     if needs_layer {
         out.push(PaintPrimitive::LayerEnd { node_id });
     }
+}
+
+fn parse_text_style_runs(raw: &serde_json::Value, opacity: f64) -> Vec<TextStyleRun> {
+    let Some(segments) = raw.get("styledTextSegments").and_then(|v| v.as_array()) else {
+        return Vec::new();
+    };
+
+    let mut out = Vec::new();
+    for segment in segments {
+        let text = segment
+            .get("characters")
+            .and_then(|v| v.as_str())
+            .unwrap_or_default()
+            .to_string();
+        if text.is_empty() {
+            continue;
+        }
+
+        let color = segment
+            .get("fills")
+            .and_then(|v| v.as_array())
+            .and_then(|fills| {
+                fills
+                    .iter()
+                    .find(|fill| fill.get("type").and_then(|v| v.as_str()) == Some("SOLID"))
+                    .and_then(solid_rgba_from_paint)
+            })
+            .map(|c| c.with_opacity(opacity));
+
+        let letter_spacing = segment
+            .get("letterSpacingPx")
+            .and_then(|v| v.as_f64())
+            .or_else(|| {
+                segment
+                    .get("letterSpacing")
+                    .and_then(|v| v.get("value"))
+                    .and_then(|v| v.as_f64())
+            });
+
+        let font_style = segment
+            .get("fontStyle")
+            .and_then(|v| v.as_str())
+            .map(ToString::to_string)
+            .or_else(|| {
+                segment
+                    .get("fontName")
+                    .and_then(|v| v.get("style"))
+                    .and_then(|v| v.as_str())
+                    .map(ToString::to_string)
+            });
+
+        out.push(TextStyleRun {
+            text,
+            color,
+            font_size: segment.get("fontSize").and_then(|v| v.as_f64()),
+            letter_spacing,
+            font_style,
+            font_weight: segment.get("fontWeight").and_then(|v| v.as_f64()),
+        });
+    }
+
+    out
 }

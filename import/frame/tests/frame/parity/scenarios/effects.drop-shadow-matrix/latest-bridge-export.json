@@ -1,6 +1,6 @@
 {
   "schema": "fts.figma.export/v2",
-  "generatedAt": "2026-02-19T10:46:30.193Z",
+  "generatedAt": "2026-02-19T16:23:07.829Z",
   "source": {
     "plugin": "fts-figma-parity-plugin",
     "pluginVersion": "v2.1",
@@ -108,7 +108,7 @@
       "strokeGeometry": [],
       "children": [
         {
-          "id": "8:945",
+          "id": "15:1421",
           "name": "parity/effects/drop-shadow-matrix",
           "type": "TEXT",
           "visible": true,
@@ -187,10 +187,48 @@
           "paragraphIndent": 0,
           "textCase": "ORIGINAL",
           "textDecoration": "NONE",
-          "textStyleId": ""
+          "textStyleId": "",
+          "styledTextSegments": [
+            {
+              "characters": "parity/effects/drop-shadow-matrix",
+              "start": 0,
+              "end": 33,
+              "fontName": {
+                "family": "Inter",
+                "style": "Regular"
+              },
+              "fontStyle": "Regular",
+              "fontSize": 20,
+              "fontWeight": 400,
+              "fills": [
+                {
+                  "type": "SOLID",
+                  "visible": true,
+                  "opacity": 1,
+                  "blendMode": "NORMAL",
+                  "color": {
+                    "r": 0,
+                    "g": 0,
+                    "b": 0
+                  },
+                  "boundVariables": {}
+                }
+              ],
+              "textCase": "ORIGINAL",
+              "textDecoration": "NONE",
+              "letterSpacing": {
+                "unit": "PERCENT",
+                "value": 0
+              },
+              "letterSpacingPx": 0,
+              "lineHeight": {
+                "unit": "AUTO"
+              }
+            }
+          ]
         },
         {
-          "id": "8:946",
+          "id": "15:1422",
           "name": "Row A: baseline",
           "type": "TEXT",
           "visible": true,
@@ -269,10 +307,48 @@
           "paragraphIndent": 0,
           "textCase": "ORIGINAL",
           "textDecoration": "NONE",
-          "textStyleId": ""
+          "textStyleId": "",
+          "styledTextSegments": [
+            {
+              "characters": "Row A: baseline",
+              "start": 0,
+              "end": 15,
+              "fontName": {
+                "family": "Inter",
+                "style": "Regular"
+              },
+              "fontStyle": "Regular",
+              "fontSize": 12,
+              "fontWeight": 400,
+              "fills": [
+                {
+                  "type": "SOLID",
+                  "visible": true,
+                  "opacity": 1,
+                  "blendMode": "NORMAL",
+                  "color": {
+                    "r": 0,
+                    "g": 0,
+                    "b": 0
+                  },
+                  "boundVariables": {}
+                }
+              ],
+              "textCase": "ORIGINAL",
+              "textDecoration": "NONE",
+              "letterSpacing": {
+                "unit": "PERCENT",
+                "value": 0
+              },
+              "letterSpacingPx": 0,
+              "lineHeight": {
+                "unit": "AUTO"
+              }
+            }
+          ]
         },
         {
-          "id": "8:947",
+          "id": "15:1423",
           "name": "Row B: edge",
           "type": "TEXT",
           "visible": true,
@@ -351,10 +427,48 @@
           "paragraphIndent": 0,
           "textCase": "ORIGINAL",
           "textDecoration": "NONE",
-          "textStyleId": ""
+          "textStyleId": "",
+          "styledTextSegments": [
+            {
+              "characters": "Row B: edge",
+              "start": 0,
+              "end": 11,
+              "fontName": {
+                "family": "Inter",
+                "style": "Regular"
+              },
+              "fontStyle": "Regular",
+              "fontSize": 12,
+              "fontWeight": 400,
+              "fills": [
+                {
+                  "type": "SOLID",
+                  "visible": true,
+                  "opacity": 1,
+                  "blendMode": "NORMAL",
+                  "color": {
+                    "r": 0,
+                    "g": 0,
+                    "b": 0
+                  },
+                  "boundVariables": {}
+                }
+              ],
+              "textCase": "ORIGINAL",
+              "textDecoration": "NONE",
+              "letterSpacing": {
+                "unit": "PERCENT",
+                "value": 0
+              },
+              "letterSpacingPx": 0,
+              "lineHeight": {
+                "unit": "AUTO"
+              }
+            }
+          ]
         },
         {
-          "id": "8:949",
+          "id": "15:1425",
           "name": "Rectangle",
           "type": "RECTANGLE",
           "visible": true,
@@ -442,7 +556,7 @@
           "strokeGeometry": []
         },
         {
-          "id": "8:950",
+          "id": "15:1426",
           "name": "Rectangle",
           "type": "RECTANGLE",
           "visible": true,
@@ -530,7 +644,7 @@
           "strokeGeometry": []
         },
         {
-          "id": "8:951",
+          "id": "15:1427",
           "name": "Rectangle",
           "type": "RECTANGLE",
           "visible": true,
@@ -618,7 +732,7 @@
           "strokeGeometry": []
         },
         {
-          "id": "8:952",
+          "id": "15:1428",
           "name": "Rectangle",
           "type": "RECTANGLE",
           "visible": true,

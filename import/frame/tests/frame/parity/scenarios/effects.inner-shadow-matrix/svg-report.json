@@ -1,0 +1,7 @@
+{
+  "scenarioId": "effects.inner-shadow-matrix",
+  "status": "skipped",
+  "reason": "missing_svg",
+  "expectedSvg": "tests/frame/parity/scenarios/effects.inner-shadow-matrix/expected.svg",
+  "actualSvg": "tests/frame/parity/scenarios/effects.inner-shadow-matrix/actual.svg"
+}

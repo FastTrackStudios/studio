@@ -1,0 +1,7 @@
+{
+  "scenarioId": "layout.auto-layout-hug-fill",
+  "status": "skipped",
+  "reason": "missing_svg",
+  "expectedSvg": "tests/frame/parity/scenarios/layout.auto-layout-hug-fill/expected.svg",
+  "actualSvg": "tests/frame/parity/scenarios/layout.auto-layout-hug-fill/actual.svg"
+}

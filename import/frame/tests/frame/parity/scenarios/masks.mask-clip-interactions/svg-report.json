@@ -1,0 +1,7 @@
+{
+  "scenarioId": "masks.mask-clip-interactions",
+  "status": "skipped",
+  "reason": "missing_svg",
+  "expectedSvg": "tests/frame/parity/scenarios/masks.mask-clip-interactions/expected.svg",
+  "actualSvg": "tests/frame/parity/scenarios/masks.mask-clip-interactions/actual.svg"
+}

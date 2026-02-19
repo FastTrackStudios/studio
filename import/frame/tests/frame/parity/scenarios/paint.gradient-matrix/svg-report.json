@@ -1,0 +1,7 @@
+{
+  "scenarioId": "paint.gradient-matrix",
+  "status": "skipped",
+  "reason": "missing_svg",
+  "expectedSvg": "tests/frame/parity/scenarios/paint.gradient-matrix/expected.svg",
+  "actualSvg": "tests/frame/parity/scenarios/paint.gradient-matrix/actual.svg"
+}

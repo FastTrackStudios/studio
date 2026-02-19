@@ -176,6 +176,16 @@ pub enum TextCase {
 }
 
 #[derive(Debug, Clone, PartialEq)]
+pub struct TextStyleRun {
+    pub text: String,
+    pub color: Option<Rgba>,
+    pub font_size: Option<f64>,
+    pub letter_spacing: Option<f64>,
+    pub font_style: Option<String>,
+    pub font_weight: Option<f64>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
 pub enum PaintPrimitive {
     LayerStart {
         node_id: NodeId,
@@ -223,6 +233,7 @@ pub enum PaintPrimitive {
         line_height: Option<f64>,
         letter_spacing: f64,
         text_case: TextCase,
+        style_runs: Vec<TextStyleRun>,
         blend: BlendMix,
     },
     Path {
@@ -231,6 +242,8 @@ pub enum PaintPrimitive {
         y: f64,
         width: f64,
         height: f64,
+        normalize_to_origin: bool,
+        text_outline: bool,
         fill_paths: Vec<String>,
         stroke_paths: Vec<String>,
         svg_base64: Option<String>,

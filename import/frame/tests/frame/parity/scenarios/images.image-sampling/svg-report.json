@@ -1,0 +1,7 @@
+{
+  "scenarioId": "images.image-sampling",
+  "status": "skipped",
+  "reason": "missing_svg",
+  "expectedSvg": "tests/frame/parity/scenarios/images.image-sampling/expected.svg",
+  "actualSvg": "tests/frame/parity/scenarios/images.image-sampling/actual.svg"
+}

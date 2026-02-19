@@ -1,0 +1,7 @@
+{
+  "scenarioId": "paint.blend-mode-stack",
+  "status": "skipped",
+  "reason": "missing_svg",
+  "expectedSvg": "tests/frame/parity/scenarios/paint.blend-mode-stack/expected.svg",
+  "actualSvg": "tests/frame/parity/scenarios/paint.blend-mode-stack/actual.svg"
+}

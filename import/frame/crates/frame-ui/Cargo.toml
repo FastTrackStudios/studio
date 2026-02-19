@@ -25,11 +25,12 @@ image = { version = "0.25", default-features = false, features = ["png", "jpeg",
 taffy = { workspace = true }
 winit = { workspace = true, optional = true }
 pollster = { workspace = true, optional = true }
+svg = { version = "0.18", optional = true }
 
 [features]
 default = ["web"]
 web = ["dep:dioxus"]
-anyrender = ["dep:anyrender", "dep:anyrender_svg", "dep:anyrender_vello", "dep:vello", "dep:kurbo", "dep:peniko", "dep:skrifa", "dep:base64", "dep:image", "dep:winit", "dep:pollster"]
+anyrender = ["dep:anyrender", "dep:anyrender_svg", "dep:anyrender_vello", "dep:vello", "dep:kurbo", "dep:peniko", "dep:skrifa", "dep:base64", "dep:image", "dep:winit", "dep:pollster", "dep:svg"]
 
 [lints]
 workspace = true

@@ -1,6 +1,6 @@
 {
   "schema": "fts.figma.export/v2",
-  "generatedAt": "2026-02-19T10:46:30.639Z",
+  "generatedAt": "2026-02-19T16:23:08.314Z",
   "source": {
     "plugin": "fts-figma-parity-plugin",
     "pluginVersion": "v2.1",
@@ -108,7 +108,7 @@
       "strokeGeometry": [],
       "children": [
         {
-          "id": "8:969",
+          "id": "15:1442",
           "name": "parity/effects/background-blur-stress",
           "type": "TEXT",
           "visible": true,
@@ -187,10 +187,48 @@
           "paragraphIndent": 0,
           "textCase": "ORIGINAL",
           "textDecoration": "NONE",
-          "textStyleId": ""
+          "textStyleId": "",
+          "styledTextSegments": [
+            {
+              "characters": "parity/effects/background-blur-stress",
+              "start": 0,
+              "end": 37,
+              "fontName": {
+                "family": "Inter",
+                "style": "Regular"
+              },
+              "fontStyle": "Regular",
+              "fontSize": 20,
+              "fontWeight": 400,
+              "fills": [
+                {
+                  "type": "SOLID",
+                  "visible": true,
+                  "opacity": 1,
+                  "blendMode": "NORMAL",
+                  "color": {
+                    "r": 0,
+                    "g": 0,
+                    "b": 0
+                  },
+                  "boundVariables": {}
+                }
+              ],
+              "textCase": "ORIGINAL",
+              "textDecoration": "NONE",
+              "letterSpacing": {
+                "unit": "PERCENT",
+                "value": 0
+              },
+              "letterSpacingPx": 0,
+              "lineHeight": {
+                "unit": "AUTO"
+              }
+            }
+          ]
         },
         {
-          "id": "8:970",
+          "id": "15:1443",
           "name": "Row A: baseline",
           "type": "TEXT",
           "visible": true,
@@ -269,10 +307,48 @@
           "paragraphIndent": 0,
           "textCase": "ORIGINAL",
           "textDecoration": "NONE",
-          "textStyleId": ""
+          "textStyleId": "",
+          "styledTextSegments": [
+            {
+              "characters": "Row A: baseline",
+              "start": 0,
+              "end": 15,
+              "fontName": {
+                "family": "Inter",
+                "style": "Regular"
+              },
+              "fontStyle": "Regular",
+              "fontSize": 12,
+              "fontWeight": 400,
+              "fills": [
+                {
+                  "type": "SOLID",
+                  "visible": true,
+                  "opacity": 1,
+                  "blendMode": "NORMAL",
+                  "color": {
+                    "r": 0,
+                    "g": 0,
+                    "b": 0
+                  },
+                  "boundVariables": {}
+                }
+              ],
+              "textCase": "ORIGINAL",
+              "textDecoration": "NONE",
+              "letterSpacing": {
+                "unit": "PERCENT",
+                "value": 0
+              },
+              "letterSpacingPx": 0,
+              "lineHeight": {
+                "unit": "AUTO"
+              }
+            }
+          ]
         },
         {
-          "id": "8:971",
+          "id": "15:1444",
           "name": "Row B: edge",
           "type": "TEXT",
           "visible": true,
@@ -351,10 +427,48 @@
           "paragraphIndent": 0,
           "textCase": "ORIGINAL",
           "textDecoration": "NONE",
-          "textStyleId": ""
+          "textStyleId": "",
+          "styledTextSegments": [
+            {
+              "characters": "Row B: edge",
+              "start": 0,
+              "end": 11,
+              "fontName": {
+                "family": "Inter",
+                "style": "Regular"
+              },
+              "fontStyle": "Regular",
+              "fontSize": 12,
+              "fontWeight": 400,
+              "fills": [
+                {
+                  "type": "SOLID",
+                  "visible": true,
+                  "opacity": 1,
+                  "blendMode": "NORMAL",
+                  "color": {
+                    "r": 0,
+                    "g": 0,
+                    "b": 0
+                  },
+                  "boundVariables": {}
+                }
+              ],
+              "textCase": "ORIGINAL",
+              "textDecoration": "NONE",
+              "letterSpacing": {
+                "unit": "PERCENT",
+                "value": 0
+              },
+              "letterSpacingPx": 0,
+              "lineHeight": {
+                "unit": "AUTO"
+              }
+            }
+          ]
         },
         {
-          "id": "8:973",
+          "id": "15:1446",
           "name": "Rectangle",
           "type": "RECTANGLE",
           "visible": true,
@@ -422,7 +536,7 @@
           "strokeGeometry": []
         },
         {
-          "id": "8:974",
+          "id": "15:1447",
           "name": "Rectangle",
           "type": "RECTANGLE",
           "visible": true,
@@ -490,7 +604,7 @@
           "strokeGeometry": []
         },
         {
-          "id": "8:975",
+          "id": "15:1448",
           "name": "Rectangle",
           "type": "RECTANGLE",
           "visible": true,
@@ -558,7 +672,7 @@
           "strokeGeometry": []
         },
         {
-          "id": "8:976",
+          "id": "15:1449",
           "name": "Rectangle",
           "type": "RECTANGLE",
           "visible": true,
@@ -626,7 +740,7 @@
           "strokeGeometry": []
         },
         {
-          "id": "8:977",
+          "id": "15:1450",
           "name": "Rectangle",
           "type": "RECTANGLE",
           "visible": true,
@@ -694,7 +808,7 @@
           "strokeGeometry": []
         },
         {
-          "id": "8:978",
+          "id": "15:1451",
           "name": "Rectangle",
           "type": "RECTANGLE",
           "visible": true,
@@ -762,7 +876,7 @@
           "strokeGeometry": []
         },
         {
-          "id": "8:979",
+          "id": "15:1452",
           "name": "Rectangle",
           "type": "RECTANGLE",
           "visible": true,
@@ -830,7 +944,7 @@
           "strokeGeometry": []
         },
         {
-          "id": "8:980",
+          "id": "15:1453",
           "name": "Rectangle",
           "type": "RECTANGLE",
           "visible": true,
@@ -898,7 +1012,7 @@
           "strokeGeometry": []
         },
         {
-          "id": "8:981",
+          "id": "15:1454",
           "name": "Rectangle",
           "type": "RECTANGLE",
           "visible": true,
@@ -966,7 +1080,7 @@
           "strokeGeometry": []
         },
         {
-          "id": "8:982",
+          "id": "15:1455",
           "name": "Rectangle",
           "type": "RECTANGLE",
           "visible": true,
@@ -1034,7 +1148,7 @@
           "strokeGeometry": []
         },
         {
-          "id": "8:983",
+          "id": "15:1456",
           "name": "Rectangle",
           "type": "RECTANGLE",
           "visible": true,
@@ -1102,7 +1216,7 @@
           "strokeGeometry": []
         },
         {
-          "id": "8:984",
+          "id": "15:1457",
           "name": "Rectangle",
           "type": "RECTANGLE",
           "visible": true,
@@ -1170,7 +1284,7 @@
           "strokeGeometry": []
         },
         {
-          "id": "8:985",
+          "id": "15:1458",
           "name": "Rectangle",
           "type": "RECTANGLE",
           "visible": true,
@@ -1238,7 +1352,7 @@
           "strokeGeometry": []
         },
         {
-          "id": "8:986",
+          "id": "15:1459",
           "name": "Rectangle",
           "type": "RECTANGLE",
           "visible": true,
@@ -1306,7 +1420,7 @@
           "strokeGeometry": []
         },
         {
-          "id": "8:987",
+          "id": "15:1460",
           "name": "Rectangle",
           "type": "RECTANGLE",
           "visible": true,
@@ -1382,7 +1496,7 @@
           "strokeGeometry": []
         },
         {
-          "id": "8:988",
+          "id": "15:1461",
           "name": "Rectangle",
           "type": "RECTANGLE",
           "visible": true,

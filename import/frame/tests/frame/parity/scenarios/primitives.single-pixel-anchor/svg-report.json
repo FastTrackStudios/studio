@@ -1,0 +1,12 @@
+{
+  "scenarioId": "primitives.single-pixel-anchor",
+  "strictEqual": true,
+  "canonicalEqual": true,
+  "canonicalNote": "ok",
+  "expectedSvg": "tests/frame/parity/scenarios/primitives.single-pixel-anchor/expected.svg",
+  "actualSvg": "tests/frame/parity/scenarios/primitives.single-pixel-anchor/actual.svg",
+  "expectedSha256": "5ffa24fe69b9cb2a17b58f827a4656b6de0f4404287941c71693592acfa86599",
+  "actualSha256": "5ffa24fe69b9cb2a17b58f827a4656b6de0f4404287941c71693592acfa86599",
+  "expectedBytes": 219,
+  "actualBytes": 219
+}

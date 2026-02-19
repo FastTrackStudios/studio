@@ -1,0 +1,20 @@
+{
+  "generatedAt": "2026-02-19T16:50:55Z",
+  "root": "tests/frame/parity",
+  "mode": "single",
+  "hasXmllint": true,
+  "total": 1,
+  "strictPass": 0,
+  "strictFail": 1,
+  "canonicalPass": 0,
+  "canonicalFail": 1,
+  "skipped": 0,
+  "scenarios": [
+    {
+      "scenarioId": "text.text-advanced",
+      "strictEqual": false,
+      "canonicalEqual": false,
+      "report": "tests/frame/parity/scenarios/text.text-advanced/svg-report.json"
+    }
+  ]
+}

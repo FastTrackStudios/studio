@@ -1,0 +1,7 @@
+{
+  "scenarioId": "primitives.fractional-geometry",
+  "status": "skipped",
+  "reason": "missing_svg",
+  "expectedSvg": "tests/frame/parity/scenarios/primitives.fractional-geometry/expected.svg",
+  "actualSvg": "tests/frame/parity/scenarios/primitives.fractional-geometry/actual.svg"
+}

@@ -89,12 +89,16 @@ const server = createServer(async (req, res) => {
       const expectedPngBase64 = typeof scenario.expectedPngBase64 === 'string'
         ? scenario.expectedPngBase64
         : '';
+      const expectedSvgBase64 = typeof scenario.expectedSvgBase64 === 'string'
+        ? scenario.expectedSvgBase64
+        : '';
       if (!id || !expectedPngBase64) {
         continue;
       }
       const scenarioDir = join(root, id);
       const exportPath = join(scenarioDir, 'latest-bridge-export.json');
       const expectedPngPath = join(scenarioDir, 'expected.png');
+      const expectedSvgPath = join(scenarioDir, 'expected.svg');
       await mkdir(dirname(exportPath), { recursive: true });
       if (exportJson) {
         await writeFile(exportPath, `${JSON.stringify(exportJson, null, 2)}\n`, 'utf8');
@@ -115,6 +119,9 @@ const server = createServer(async (req, res) => {
         jsonFallbackWritten += 1;
       }
       await writeFile(expectedPngPath, Buffer.from(expectedPngBase64, 'base64'));
+      if (expectedSvgBase64) {
+        await writeFile(expectedSvgPath, Buffer.from(expectedSvgBase64, 'base64'));
+      }
       written += 1;
     }
 

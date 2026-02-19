@@ -2,13 +2,14 @@
 set -euo pipefail
 
 # Usage:
-#   tools/run_parity_render_and_diff.sh [--root tests/frame/parity] [--all] [--core10] [--scenario <id>] [--threshold <percent>] [--require-pass]
+#   tools/run_parity_render_and_diff.sh [--root tests/frame/parity] [--all] [--core10] [--scenario <id>] [--threshold <percent>] [--require-pass] [--require-svg-pass]
 
 ROOT="tests/frame/parity"
 SCENARIO_FILTER=""
 RUN_ALL="false"
 THRESHOLD="0.0"
 REQUIRE_PASS="false"
+REQUIRE_SVG_PASS="false"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -36,6 +37,10 @@ while [[ $# -gt 0 ]]; do
       REQUIRE_PASS="true"
       shift 1
       ;;
+    --require-svg-pass)
+      REQUIRE_SVG_PASS="true"
+      shift 1
+      ;;
     *)
       echo "unknown arg: $1" >&2
       exit 2
@@ -61,3 +66,8 @@ fi
 
 tools/render_parity_actuals.sh "${RENDER_ARGS[@]}"
 tools/run_parity_scenarios.sh "${SUMMARY_ARGS[@]}"
+if [[ "$REQUIRE_SVG_PASS" == "true" ]]; then
+  tools/run_svg_parity_scenarios.sh "${RENDER_ARGS[@]}" --require-pass
+else
+  tools/run_svg_parity_scenarios.sh "${RENDER_ARGS[@]}"
+fi

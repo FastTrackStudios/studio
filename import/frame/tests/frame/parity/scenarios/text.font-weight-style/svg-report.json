@@ -1,0 +1,7 @@
+{
+  "scenarioId": "text.font-weight-style",
+  "status": "skipped",
+  "reason": "missing_svg",
+  "expectedSvg": "tests/frame/parity/scenarios/text.font-weight-style/expected.svg",
+  "actualSvg": "tests/frame/parity/scenarios/text.font-weight-style/actual.svg"
+}

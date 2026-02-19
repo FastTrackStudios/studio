@@ -1,0 +1,7 @@
+{
+  "scenarioId": "paint.blend-mode-combos",
+  "status": "skipped",
+  "reason": "missing_svg",
+  "expectedSvg": "tests/frame/parity/scenarios/paint.blend-mode-combos/expected.svg",
+  "actualSvg": "tests/frame/parity/scenarios/paint.blend-mode-combos/actual.svg"
+}

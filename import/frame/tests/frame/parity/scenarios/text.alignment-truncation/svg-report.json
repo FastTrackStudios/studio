@@ -1,0 +1,7 @@
+{
+  "scenarioId": "text.alignment-truncation",
+  "status": "skipped",
+  "reason": "missing_svg",
+  "expectedSvg": "tests/frame/parity/scenarios/text.alignment-truncation/expected.svg",
+  "actualSvg": "tests/frame/parity/scenarios/text.alignment-truncation/actual.svg"
+}

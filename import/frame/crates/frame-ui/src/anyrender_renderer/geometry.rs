@@ -18,6 +18,7 @@ pub(super) fn compute_path_fit_transform(
     target_y: f64,
     target_width: f64,
     target_height: f64,
+    normalize_to_origin: bool,
 ) -> kurbo::Affine {
     let mut min_x = f64::INFINITY;
     let mut min_y = f64::INFINITY;
@@ -42,6 +43,10 @@ pub(super) fn compute_path_fit_transform(
 
     if !found {
         return kurbo::Affine::IDENTITY;
+    }
+
+    if normalize_to_origin {
+        return kurbo::Affine::translate((-min_x, -min_y));
     }
 
     // Some bridge payloads already encode absolute scene-space path coordinates.

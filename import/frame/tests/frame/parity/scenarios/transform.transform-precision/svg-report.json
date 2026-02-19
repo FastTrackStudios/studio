@@ -1,0 +1,7 @@
+{
+  "scenarioId": "transform.transform-precision",
+  "status": "skipped",
+  "reason": "missing_svg",
+  "expectedSvg": "tests/frame/parity/scenarios/transform.transform-precision/expected.svg",
+  "actualSvg": "tests/frame/parity/scenarios/transform.transform-precision/actual.svg"
+}

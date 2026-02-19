@@ -1,0 +1,7 @@
+{
+  "scenarioId": "masks.vector-text-image-mask",
+  "status": "skipped",
+  "reason": "missing_svg",
+  "expectedSvg": "tests/frame/parity/scenarios/masks.vector-text-image-mask/expected.svg",
+  "actualSvg": "tests/frame/parity/scenarios/masks.vector-text-image-mask/actual.svg"
+}

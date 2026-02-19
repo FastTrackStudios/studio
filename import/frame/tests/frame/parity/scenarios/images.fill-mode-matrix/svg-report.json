@@ -1,0 +1,7 @@
+{
+  "scenarioId": "images.fill-mode-matrix",
+  "status": "skipped",
+  "reason": "missing_svg",
+  "expectedSvg": "tests/frame/parity/scenarios/images.fill-mode-matrix/expected.svg",
+  "actualSvg": "tests/frame/parity/scenarios/images.fill-mode-matrix/actual.svg"
+}

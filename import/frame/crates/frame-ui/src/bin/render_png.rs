@@ -281,6 +281,11 @@ fn run() -> Result<(), String> {
 
 #[cfg(feature = "anyrender")]
 fn load_default_text_font_bytes() -> Option<Vec<u8>> {
+    // Prefer vendored Inter for parity with Figma defaults.
+    if let Some(bytes) = load_vendored_inter() {
+        return Some(bytes);
+    }
+
     let candidates = [
         "/System/Library/Fonts/SFNS.ttf",
         "/System/Library/Fonts/Supplemental/Arial.ttf",
@@ -292,6 +297,16 @@ fn load_default_text_font_bytes() -> Option<Vec<u8>> {
         }
     }
     None
+}
+
+#[cfg(feature = "anyrender")]
+fn load_vendored_inter() -> Option<Vec<u8>> {
+    let bytes = include_bytes!("../../assets/inter/Inter-Variable.ttf");
+    if bytes.is_empty() {
+        None
+    } else {
+        Some(bytes.to_vec())
+    }
 }
 
 #[cfg(feature = "anyrender")]

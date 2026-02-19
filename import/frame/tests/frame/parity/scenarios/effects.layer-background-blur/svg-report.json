@@ -1,0 +1,7 @@
+{
+  "scenarioId": "effects.layer-background-blur",
+  "status": "skipped",
+  "reason": "missing_svg",
+  "expectedSvg": "tests/frame/parity/scenarios/effects.layer-background-blur/expected.svg",
+  "actualSvg": "tests/frame/parity/scenarios/effects.layer-background-blur/actual.svg"
+}

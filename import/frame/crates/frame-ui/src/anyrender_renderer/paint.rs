@@ -5,6 +5,9 @@ use super::geometry::{compute_path_fit_transform, extract_scale, to_peniko};
 use super::types::*;
 use frame_proto::{FrameDocument, NodeId};
 
+const TEXT_ANCHOR_SHIFT_X: f64 = 1.0;
+const TEXT_ANCHOR_SHIFT_Y: f64 = 1.0;
+
 pub fn paint_into_scene(scene: &mut impl anyrender::PaintScene, doc: &FrameDocument, root: NodeId) {
     paint_into_scene_with(scene, doc, root, kurbo::Affine::IDENTITY, None);
 }
@@ -40,7 +43,6 @@ pub fn paint_primitives_into_scene_with(
     use kurbo::{BezPath, Rect, RoundedRect, Stroke};
     use peniko::{Blob, Fill, FontData, ImageBrush, ImageData, ImageSampler};
     use skrifa::instance::Size;
-    use skrifa::prelude::LocationRef;
     use skrifa::raw::{FileRef, FontRef};
     use skrifa::MetadataProvider;
     use std::sync::Arc;
@@ -284,6 +286,8 @@ pub fn paint_primitives_into_scene_with(
                 y: path_y,
                 width,
                 height,
+                normalize_to_origin,
+                text_outline,
                 fill_paths,
                 stroke_paths,
                 svg_base64,
@@ -294,8 +298,13 @@ pub fn paint_primitives_into_scene_with(
                 rotation,
                 ..
             } => {
-                let (path_x, path_y, width, height, rotation) =
-                    (*path_x, *path_y, *width, *height, *rotation);
+                let mut path_x = *path_x;
+                let mut path_y = *path_y;
+                let (width, height, rotation) = (*width, *height, *rotation);
+                if *text_outline {
+                    path_x += TEXT_ANCHOR_SHIFT_X;
+                    path_y += TEXT_ANCHOR_SHIFT_Y;
+                }
                 let (base_transform, lx, ly) = if rotation.abs() > 1e-6 {
                     let t = scene_transform
                         * kurbo::Affine::translate((path_x, path_y))
@@ -312,7 +321,15 @@ pub fn paint_primitives_into_scene_with(
                     .or_else(|| stroke.as_ref().map(|s| s.color.clone()));
                 let path_origin_transform = base_transform * kurbo::Affine::translate((lx, ly));
                 let path_fit =
-                    compute_path_fit_transform(fill_paths, stroke_paths, lx, ly, width, height);
+                    compute_path_fit_transform(
+                        fill_paths,
+                        stroke_paths,
+                        lx,
+                        ly,
+                        width,
+                        height,
+                        *normalize_to_origin,
+                    );
                 let path_transform = path_origin_transform * path_fit;
                 let (sx, sy) = extract_scale(path_fit);
                 let stroke_scale = ((sx.abs() + sy.abs()) * 0.5).max(0.01);
@@ -416,7 +433,7 @@ pub fn paint_primitives_into_scene_with(
                                     // Figma strokeGeometry is already the outlined stroke shape.
                                     // Fill it directly to avoid double-stroking artifacts.
                                     scene.fill(
-                                        peniko::Fill::EvenOdd,
+                                        peniko::Fill::NonZero,
                                         path_transform,
                                         to_peniko(stroke.color.clone()),
                                         None,
@@ -487,10 +504,16 @@ pub fn paint_primitives_into_scene_with(
                 line_height,
                 letter_spacing,
                 text_case,
+                style_runs,
                 blend: _,
                 ..
             } => {
-                let (x, y, font_size, letter_spacing) = (*x, *y, *font_size, *letter_spacing);
+                let (x, y, font_size, letter_spacing) = (
+                    *x + TEXT_ANCHOR_SHIFT_X,
+                    *y + TEXT_ANCHOR_SHIFT_Y,
+                    *font_size,
+                    *letter_spacing,
+                );
                 let text = apply_text_case(text, text_case);
                 let line_height = line_height.unwrap_or(font_size * 1.2).max(1.0);
                 let max_line_chars = text.lines().map(|l| l.chars().count()).max().unwrap_or(0);
@@ -499,41 +522,106 @@ pub fn paint_primitives_into_scene_with(
                 let line_count = text.lines().count().max(1) as f64;
                 let _bounds_rect = Rect::new(x, y, x + approx_width, y + line_count * line_height);
                 if let (Some(font_data), Some(font_ref)) = (&font_data, font_ref.as_ref()) {
-                    let size = Size::new(font_size as f32);
+                    let runs = if style_runs.is_empty() {
+                        vec![TextStyleRun {
+                            text: text.clone(),
+                            color: Some(color.clone()),
+                            font_size: Some(font_size),
+                            letter_spacing: Some(letter_spacing),
+                            font_style: None,
+                            font_weight: None,
+                        }]
+                    } else {
+                        style_runs
+                            .iter()
+                            .cloned()
+                            .map(|mut run| {
+                                run.text = apply_text_case(&run.text, text_case);
+                                run
+                            })
+                            .collect::<Vec<_>>()
+                    };
+
+                    let mut line_idx: usize = 0;
+                    let mut pen_x: f64 = 0.0;
                     let charmap = font_ref.charmap();
-                    let glyph_metrics = font_ref.glyph_metrics(size, LocationRef::default());
-                    let letter_spacing_f32 = letter_spacing as f32;
+                    for run in runs {
+                        let run_size = run.font_size.unwrap_or(font_size).max(1.0);
+                        let run_letter_spacing = run.letter_spacing.unwrap_or(letter_spacing) as f32;
+                        let run_color = run.color.clone().unwrap_or_else(|| color.clone());
+                        let style_str = run
+                            .font_style
+                            .as_deref()
+                            .map(|s| s.to_ascii_lowercase())
+                            .unwrap_or_default();
+                        let is_bold = run.font_weight.unwrap_or(400.0) >= 600.0
+                            || style_str.contains("bold");
+                        let is_italic = style_str.contains("italic");
 
-                    for (line_idx, line) in text.lines().enumerate() {
-                        let mut glyphs = Vec::new();
-                        let mut pen_x = 0.0_f32;
-                        for ch in line.chars() {
+                        let size = Size::new(run_size as f32);
+                        let axes = font_ref.axes();
+                        let var_loc = axes.location(std::iter::empty::<(&str, f32)>());
+                        let metrics = font_ref.metrics(size, &var_loc);
+                        let glyph_metrics = font_ref.glyph_metrics(size, &var_loc);
+                        let ascent = f64::from(metrics.ascent);
+
+                        for ch in run.text.chars() {
+                            if ch == '\n' {
+                                line_idx += 1;
+                                pen_x = 0.0;
+                                continue;
+                            }
                             let gid = charmap.map(ch).unwrap_or_default();
-                            let advance = glyph_metrics.advance_width(gid).unwrap_or_default();
-                            glyphs.push(Glyph {
-                                id: gid.to_u32(),
-                                x: pen_x,
-                                y: 0.0,
-                            });
-                            pen_x += advance + letter_spacing_f32;
-                        }
-
-                        scene.draw_glyphs(
-                            font_data,
-                            font_size as f32,
-                            false,
-                            &[],
-                            Fill::NonZero,
-                            to_peniko(color.clone()),
-                            1.0,
-                            scene_transform
+                            let advance = f64::from(glyph_metrics.advance_width(gid).unwrap_or_default());
+                            let base_transform = scene_transform
                                 * kurbo::Affine::translate((
-                                    x - 0.5,
-                                    y + font_size + (line_idx as f64 * line_height) as f64 - 0.5,
-                                )),
-                            None,
-                            glyphs.into_iter(),
-                        );
+                                    x + pen_x,
+                                    y + ascent + (line_idx as f64 * line_height),
+                                ));
+                            let text_transform = if is_italic {
+                                base_transform * kurbo::Affine::new([1.0, 0.0, 0.22, 1.0, 0.0, 0.0])
+                            } else {
+                                base_transform
+                            };
+
+                            scene.draw_glyphs(
+                                font_data,
+                                run_size as f32,
+                                true,
+                                &[],
+                                Fill::NonZero,
+                                to_peniko(run_color.clone()),
+                                1.0,
+                                text_transform,
+                                None,
+                                std::iter::once(Glyph {
+                                    id: gid.to_u32(),
+                                    x: 0.0,
+                                    y: 0.0,
+                                }),
+                            );
+
+                            if is_bold {
+                                scene.draw_glyphs(
+                                    font_data,
+                                    run_size as f32,
+                                    true,
+                                    &[],
+                                    Fill::NonZero,
+                                    to_peniko(run_color.clone()),
+                                    1.0,
+                                    text_transform * kurbo::Affine::translate((0.45, 0.0)),
+                                    None,
+                                    std::iter::once(Glyph {
+                                        id: gid.to_u32(),
+                                        x: 0.0,
+                                        y: 0.0,
+                                    }),
+                                );
+                            }
+
+                            pen_x += advance + f64::from(run_letter_spacing);
+                        }
                     }
                 } else {
                     // fallback to a baseline block when no text font is configured

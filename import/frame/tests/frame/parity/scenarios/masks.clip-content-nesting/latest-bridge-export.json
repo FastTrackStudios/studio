@@ -1,6 +1,6 @@
 {
   "schema": "fts.figma.export/v2",
-  "generatedAt": "2026-02-19T10:46:31.449Z",
+  "generatedAt": "2026-02-19T16:23:09.213Z",
   "source": {
     "plugin": "fts-figma-parity-plugin",
     "pluginVersion": "v2.1",
@@ -108,7 +108,7 @@
       "strokeGeometry": [],
       "children": [
         {
-          "id": "8:1042",
+          "id": "15:1509",
           "name": "parity/masks/clip-content-nesting",
           "type": "TEXT",
           "visible": true,
@@ -187,10 +187,48 @@
           "paragraphIndent": 0,
           "textCase": "ORIGINAL",
           "textDecoration": "NONE",
-          "textStyleId": ""
+          "textStyleId": "",
+          "styledTextSegments": [
+            {
+              "characters": "parity/masks/clip-content-nesting",
+              "start": 0,
+              "end": 33,
+              "fontName": {
+                "family": "Inter",
+                "style": "Regular"
+              },
+              "fontStyle": "Regular",
+              "fontSize": 20,
+              "fontWeight": 400,
+              "fills": [
+                {
+                  "type": "SOLID",
+                  "visible": true,
+                  "opacity": 1,
+                  "blendMode": "NORMAL",
+                  "color": {
+                    "r": 0,
+                    "g": 0,
+                    "b": 0
+                  },
+                  "boundVariables": {}
+                }
+              ],
+              "textCase": "ORIGINAL",
+              "textDecoration": "NONE",
+              "letterSpacing": {
+                "unit": "PERCENT",
+                "value": 0
+              },
+              "letterSpacingPx": 0,
+              "lineHeight": {
+                "unit": "AUTO"
+              }
+            }
+          ]
         },
         {
-          "id": "8:1046",
+          "id": "15:1513",
           "name": "__clip-outer",
           "type": "FRAME",
           "visible": true,
@@ -270,7 +308,7 @@
           "strokeGeometry": [],
           "children": [
             {
-              "id": "8:1047",
+              "id": "15:1514",
               "name": "__clip-inner",
               "type": "FRAME",
               "visible": true,
@@ -350,7 +388,7 @@
               "strokeGeometry": [],
               "children": [
                 {
-                  "id": "8:1048",
+                  "id": "15:1515",
                   "name": "Rectangle",
                   "type": "RECTANGLE",
                   "visible": true,
@@ -418,7 +456,7 @@
                   "strokeGeometry": []
                 },
                 {
-                  "id": "8:1049",
+                  "id": "15:1516",
                   "name": "Rectangle",
                   "type": "RECTANGLE",
                   "visible": true,

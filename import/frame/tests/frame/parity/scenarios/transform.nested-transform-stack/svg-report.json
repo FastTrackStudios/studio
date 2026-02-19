@@ -1,0 +1,7 @@
+{
+  "scenarioId": "transform.nested-transform-stack",
+  "status": "skipped",
+  "reason": "missing_svg",
+  "expectedSvg": "tests/frame/parity/scenarios/transform.nested-transform-stack/expected.svg",
+  "actualSvg": "tests/frame/parity/scenarios/transform.nested-transform-stack/actual.svg"
+}
