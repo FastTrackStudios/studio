@@ -12,6 +12,7 @@ const CORE10_FRAME_NAMES = [
 ] as const;
 
 const EXTRA_ISOLATED_FRAME_NAMES = [
+	'parity/primitives/single-pixel-anchor',
 	'parity/text/font-weight-style',
 	'parity/text/alignment-truncation',
 	'parity/effects/shadow-matrix',
@@ -507,6 +508,7 @@ async function populateScenario(
 	const rowA = await addLabel(frame, 'Row A: baseline', 24, 72);
 	const rowB = await addLabel(frame, 'Row B: edge', 24, 384);
 	const rowC = await addLabel(frame, 'Row C: stress', 24, 696);
+	let skipTrim = false;
 
 	switch (frameName) {
 		case 'parity/primitives/fractional-geometry':
@@ -581,11 +583,21 @@ async function populateScenario(
 		case 'parity/transform/nested-transform-stack':
 			buildNestedTransform(frame);
 			break;
+		case 'parity/primitives/single-pixel-anchor':
+			buildSinglePixelAnchor(frame);
+			title.remove();
+			rowA.remove();
+			rowB.remove();
+			rowC.remove();
+			skipTrim = true;
+			break;
 		default:
 			break;
 	}
 
-	trimUnusedRowLabels(frame, title, rowA, rowB, rowC);
+	if (!skipTrim) {
+		trimUnusedRowLabels(frame, title, rowA, rowB, rowC);
+	}
 }
 
 function rgb(r: number, g: number, b: number): RGB {
@@ -742,6 +754,11 @@ function buildFractionalGeometry(frame: FrameNode): void {
 	makeRect(frame, 180.5, 430.25, 120.25, 120.25, rgb(43, 186, 140));
 	makeRect(frame, 315.75, 430.75, 120.25, 120.25, rgb(237, 201, 69));
 	makeRect(frame, 451.5, 431.1, 120.25, 120.25, rgb(232, 79, 79));
+}
+
+function buildSinglePixelAnchor(frame: FrameNode): void {
+	const pixel = makeRect(frame, 137, 211, 1, 1, rgb(0, 0, 0));
+	pixel.strokes = [];
 }
 
 function buildGradientMatrix(frame: FrameNode): void {
