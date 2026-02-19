@@ -21,7 +21,14 @@ Run the full parity pack (or a single scenario) via:
 
 ```bash
 tools/run_parity_scenarios.sh --threshold 0.0
-tools/run_parity_scenarios.sh --scenario paint.alpha-steps --threshold 0.0
+tools/run_parity_scenarios.sh --scenario paint.gradient-matrix --threshold 0.0
+```
+
+Headless render + diff flow:
+
+```bash
+tools/render_parity_actuals.sh --all
+tools/run_parity_render_and_diff.sh --all --threshold 0.0
 ```
 
 Manual split flow is still available via:

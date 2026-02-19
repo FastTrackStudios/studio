@@ -55,6 +55,12 @@ Add more scenarios later only after the Core 10 set is stable.
 
 ## Running
 
+Render renderer `actual/frame.png` outputs first:
+
+```bash
+tools/render_parity_actuals.sh --all
+```
+
 Core 10 only (default):
 
 ```bash
@@ -71,6 +77,15 @@ Single scenario:
 
 ```bash
 tools/run_parity_scenarios.sh --scenario paint.gradient-matrix --threshold 0.0
+```
+
+One command for render + diff/report:
+
+```bash
+tools/run_parity_render_and_diff.sh --all --threshold 0.0
+tools/run_parity_render_and_diff.sh --scenario paint.gradient-matrix --threshold 0.0
+cargo xtask parity_test --all --threshold 0.0
+cargo xtask parity_test --scenario paint.gradient-matrix --threshold 0.0
 ```
 
 Reports are written under:
