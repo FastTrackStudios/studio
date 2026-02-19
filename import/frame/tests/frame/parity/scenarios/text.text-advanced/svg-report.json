@@ -6,7 +6,7 @@
   "expectedSvg": "tests/frame/parity/scenarios/text.text-advanced/expected.svg",
   "actualSvg": "tests/frame/parity/scenarios/text.text-advanced/actual.svg",
   "expectedSha256": "059a6d84f510070f11909a794738f49b8ae3a5bdd055ffe962d9dc22db0101e2",
-  "actualSha256": "532187268405dcacd6299fe4944e86e07f2c3029a047d632222733aff4084a2f",
+  "actualSha256": "f4f30a3f09f9c350c962a2a5a6953ec95695f091a52243d6da38419f97521ed9",
   "expectedBytes": 68081,
-  "actualBytes": 40380
+  "actualBytes": 73227
 }

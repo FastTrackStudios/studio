@@ -138,8 +138,6 @@ fn run() -> Result<(), String> {
     let ty = -min_y;
     let mut group_stack: Vec<Group> = Vec::new();
     let mut clip_count: u64 = 0;
-    const TEXT_SHIFT_X: f64 = 1.0;
-    const TEXT_SHIFT_Y: f64 = 1.0;
 
     for primitive in primitives {
         match primitive {
@@ -224,11 +222,11 @@ fn run() -> Result<(), String> {
                 stroke_paths,
                 fills,
                 stroke,
-                text_outline,
+                text_outline: _text_outline,
                 ..
             } => {
-                let px = x + tx + if text_outline { TEXT_SHIFT_X } else { 0.0 };
-                let py = y + ty + if text_outline { TEXT_SHIFT_Y } else { 0.0 };
+                let px = x + tx;
+                let py = y + ty;
                 let transform = format!("translate({},{})", fmt_f64(px), fmt_f64(py));
 
                 for (fill, _) in fills {
@@ -423,6 +421,10 @@ fn normalize_svg_for_figma_parity(svg: &str, width: u32, height: u32) -> String 
             out.push(norm);
             continue;
         }
+        if let Some(norm) = normalize_translated_path_line(t) {
+            out.push(norm);
+            continue;
+        }
         // Figma often emits keyword black for solid text/shape paths.
         out.push(t.replace("fill=\"#000000\"", "fill=\"black\""));
     }
@@ -580,6 +582,267 @@ fn trim_decimal(v: &str) -> String {
         return s.trim_end_matches('0').trim_end_matches('.').to_string();
     }
     v.to_string()
+}
+
+#[cfg(feature = "anyrender")]
+fn normalize_translated_path_line(line: &str) -> Option<String> {
+    if !line.starts_with("<path ") {
+        return None;
+    }
+    let d = extract_xml_attr(line, "d")?;
+    let transform = extract_xml_attr(line, "transform")?;
+    let (tx, ty) = parse_translate(&transform)?;
+    let translated = translate_and_compact_path_data(&d, tx, ty)?;
+
+    let mut attrs = vec![format!(r#"d="{translated}""#)];
+
+    if let Some(fill) = extract_xml_attr(line, "fill") {
+        let fill = if fill == "#000000" {
+            "black".to_string()
+        } else {
+            fill
+        };
+        attrs.push(format!(r#"fill="{fill}""#));
+    }
+    if let Some(fill_opacity) = extract_xml_attr(line, "fill-opacity") {
+        attrs.push(format!(r#"fill-opacity="{}""#, trim_decimal(&fill_opacity)));
+    }
+    if let Some(stroke) = extract_xml_attr(line, "stroke") {
+        attrs.push(format!(r#"stroke="{stroke}""#));
+    }
+    if let Some(stroke_opacity) = extract_xml_attr(line, "stroke-opacity") {
+        attrs.push(format!(r#"stroke-opacity="{}""#, trim_decimal(&stroke_opacity)));
+    }
+    if let Some(stroke_width) = extract_xml_attr(line, "stroke-width") {
+        attrs.push(format!(r#"stroke-width="{}""#, trim_decimal(&stroke_width)));
+    }
+    if let Some(linecap) = extract_xml_attr(line, "stroke-linecap") {
+        attrs.push(format!(r#"stroke-linecap="{linecap}""#));
+    }
+    if let Some(linejoin) = extract_xml_attr(line, "stroke-linejoin") {
+        attrs.push(format!(r#"stroke-linejoin="{linejoin}""#));
+    }
+    if let Some(clip_path) = extract_xml_attr(line, "clip-path") {
+        attrs.push(format!(r#"clip-path="{clip_path}""#));
+    }
+
+    Some(format!("<path {}/>", attrs.join(" ")))
+}
+
+#[cfg(feature = "anyrender")]
+fn translate_and_compact_path_data(d: &str, tx: f64, ty: f64) -> Option<String> {
+    let mut tokens = Vec::<String>::new();
+    let chars: Vec<char> = d.chars().collect();
+    let mut i = 0usize;
+    while i < chars.len() {
+        let c = chars[i];
+        if c.is_ascii_alphabetic() {
+            tokens.push(c.to_string());
+            i += 1;
+            continue;
+        }
+        if c.is_ascii_whitespace() || c == ',' {
+            i += 1;
+            continue;
+        }
+        let start = i;
+        i += 1;
+        while i < chars.len() {
+            let ch = chars[i];
+            if ch.is_ascii_alphabetic() || ch.is_ascii_whitespace() || ch == ',' {
+                break;
+            }
+            i += 1;
+        }
+        tokens.push(chars[start..i].iter().collect::<String>());
+    }
+
+    let mut out = String::new();
+    let mut idx = 0usize;
+    let mut cur = (0.0f64, 0.0f64);
+    let mut sub_start = (0.0f64, 0.0f64);
+    let mut first = true;
+
+    while idx < tokens.len() {
+        let cmd = tokens.get(idx)?.chars().next()?;
+        if !cmd.is_ascii_alphabetic() {
+            return None;
+        }
+        idx += 1;
+        let next_is_cmd = |pos: usize| -> bool {
+            tokens
+                .get(pos)
+                .and_then(|t| t.chars().next())
+                .map(|c| c.is_ascii_alphabetic())
+                .unwrap_or(false)
+        };
+        let mut nums = Vec::<f64>::new();
+        while idx < tokens.len() && !next_is_cmd(idx) {
+            nums.push(tokens[idx].parse::<f64>().ok()?);
+            idx += 1;
+        }
+
+        let emit = |ch: char, values: &[f64], out: &mut String, first: &mut bool| {
+            if *first {
+                *first = false;
+            }
+            out.push(ch);
+            for (i, value) in values.iter().enumerate() {
+                if i > 0 {
+                    out.push(' ');
+                }
+                out.push_str(&fmt_path_num(*value));
+            }
+        };
+
+        match cmd {
+            'M' => {
+                if nums.len() < 2 || nums.len() % 2 != 0 {
+                    return None;
+                }
+                let mut first_pair = true;
+                for pair in nums.chunks_exact(2) {
+                    let x = pair[0] + tx;
+                    let y = pair[1] + ty;
+                    if first_pair {
+                        emit('M', &[x, y], &mut out, &mut first);
+                        sub_start = (x, y);
+                        first_pair = false;
+                    } else if (x - cur.0).abs() < 1e-6 {
+                        emit('V', &[y], &mut out, &mut first);
+                    } else if (y - cur.1).abs() < 1e-6 {
+                        emit('H', &[x], &mut out, &mut first);
+                    } else {
+                        emit('L', &[x, y], &mut out, &mut first);
+                    }
+                    cur = (x, y);
+                }
+            }
+            'L' => {
+                if nums.len() % 2 != 0 {
+                    return None;
+                }
+                for pair in nums.chunks_exact(2) {
+                    let x = pair[0] + tx;
+                    let y = pair[1] + ty;
+                    if (x - cur.0).abs() < 1e-6 {
+                        emit('V', &[y], &mut out, &mut first);
+                    } else if (y - cur.1).abs() < 1e-6 {
+                        emit('H', &[x], &mut out, &mut first);
+                    } else {
+                        emit('L', &[x, y], &mut out, &mut first);
+                    }
+                    cur = (x, y);
+                }
+            }
+            'C' => {
+                if nums.len() % 6 != 0 {
+                    return None;
+                }
+                for seg in nums.chunks_exact(6) {
+                    let vals = [
+                        seg[0] + tx,
+                        seg[1] + ty,
+                        seg[2] + tx,
+                        seg[3] + ty,
+                        seg[4] + tx,
+                        seg[5] + ty,
+                    ];
+                    emit('C', &vals, &mut out, &mut first);
+                    cur = (vals[4], vals[5]);
+                }
+            }
+            'Q' | 'S' => {
+                if nums.len() % 4 != 0 {
+                    return None;
+                }
+                for seg in nums.chunks_exact(4) {
+                    let vals = [seg[0] + tx, seg[1] + ty, seg[2] + tx, seg[3] + ty];
+                    emit(cmd, &vals, &mut out, &mut first);
+                    cur = (vals[2], vals[3]);
+                }
+            }
+            'T' => {
+                if nums.len() % 2 != 0 {
+                    return None;
+                }
+                for seg in nums.chunks_exact(2) {
+                    let vals = [seg[0] + tx, seg[1] + ty];
+                    emit('T', &vals, &mut out, &mut first);
+                    cur = (vals[0], vals[1]);
+                }
+            }
+            'A' => {
+                if nums.len() % 7 != 0 {
+                    return None;
+                }
+                for seg in nums.chunks_exact(7) {
+                    let vals = [
+                        seg[0],
+                        seg[1],
+                        seg[2],
+                        seg[3],
+                        seg[4],
+                        seg[5] + tx,
+                        seg[6] + ty,
+                    ];
+                    emit('A', &vals, &mut out, &mut first);
+                    cur = (vals[5], vals[6]);
+                }
+            }
+            'H' => {
+                for x in nums {
+                    let x = x + tx;
+                    emit('H', &[x], &mut out, &mut first);
+                    cur.0 = x;
+                }
+            }
+            'V' => {
+                for y in nums {
+                    let y = y + ty;
+                    emit('V', &[y], &mut out, &mut first);
+                    cur.1 = y;
+                }
+            }
+            'Z' | 'z' => {
+                out.push('Z');
+                cur = sub_start;
+            }
+            _ => return None,
+        }
+    }
+
+    Some(out)
+}
+
+#[cfg(feature = "anyrender")]
+fn fmt_path_num(v: f64) -> String {
+    let scaled_f = v * 10_000.0;
+    let sign = if scaled_f < 0.0 { -1i64 } else { 1i64 };
+    let abs = scaled_f.abs();
+    let base = abs.floor();
+    let frac = abs - base;
+    let rounded_abs = if frac > 0.5 + 1e-10 {
+        base + 1.0
+    } else if frac < 0.5 - 1e-10 {
+        base
+    } else if (base as i64) % 2 == 0 {
+        base
+    } else {
+        base + 1.0
+    };
+    let scaled = sign * (rounded_abs as i64);
+    if scaled % 10_000 == 0 {
+        return format!("{}", scaled / 10_000);
+    }
+    let abs = scaled.abs();
+    let whole = abs / 10_000;
+    let frac = abs % 10_000;
+    let sign = if scaled < 0 { "-" } else { "" };
+    format!("{sign}{whole}.{frac:04}")
+        .trim_end_matches('0')
+        .trim_end_matches('.')
+        .to_string()
 }
 
 #[cfg(feature = "anyrender")]

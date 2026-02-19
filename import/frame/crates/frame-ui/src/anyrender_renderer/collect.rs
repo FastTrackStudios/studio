@@ -208,14 +208,10 @@ fn collect_primitives_recursive(
     let mut rendered_as_atomic_svg = false;
 
     let node_class = frame_proto::classify_node_type(&node.figma_type);
-    let styled_segment_count = node
-        .raw
-        .get("styledTextSegments")
-        .and_then(|v| v.as_array())
-        .map(|arr| arr.len())
-        .unwrap_or(0);
-    let prefer_text_outlines =
-        (styled_segment_count > 1 || fill_paths.len() > 1) && !fills.is_empty();
+    // For parity exports, Figma includes authoritative text outline geometry.
+    // Prefer outline paths whenever available so SVG and raster paths align with
+    // Figma's own serializer/layout instead of host-side text shaping.
+    let prefer_text_outlines = has_vector_geometry && !fills.is_empty();
 
     match node_class {
         RenderNodeClass::Text if has_vector_geometry && prefer_text_outlines => {

@@ -1,6 +1,6 @@
 # SVG Parity Summary
 
-- Generated: `2026-02-19T16:50:55Z`
+- Generated: `2026-02-19T16:59:16Z`
 - Root: `tests/frame/parity`
 - Mode: `single`
 - xmllint available: `true`
