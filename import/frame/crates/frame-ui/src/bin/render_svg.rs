@@ -817,29 +817,8 @@ fn translate_and_compact_path_data(d: &str, tx: f64, ty: f64) -> Option<String> 
 
 #[cfg(feature = "anyrender")]
 fn fmt_path_num(v: f64) -> String {
-    let scaled_f = v * 10_000.0;
-    let sign = if scaled_f < 0.0 { -1i64 } else { 1i64 };
-    let abs = scaled_f.abs();
-    let base = abs.floor();
-    let frac = abs - base;
-    let rounded_abs = if frac > 0.5 + 1e-10 {
-        base + 1.0
-    } else if frac < 0.5 - 1e-10 {
-        base
-    } else if (base as i64) % 2 == 0 {
-        base
-    } else {
-        base + 1.0
-    };
-    let scaled = sign * (rounded_abs as i64);
-    if scaled % 10_000 == 0 {
-        return format!("{}", scaled / 10_000);
-    }
-    let abs = scaled.abs();
-    let whole = abs / 10_000;
-    let frac = abs % 10_000;
-    let sign = if scaled < 0 { "-" } else { "" };
-    format!("{sign}{whole}.{frac:04}")
+    let q = v as f32 as f64;
+    format!("{q:.4}")
         .trim_end_matches('0')
         .trim_end_matches('.')
         .to_string()

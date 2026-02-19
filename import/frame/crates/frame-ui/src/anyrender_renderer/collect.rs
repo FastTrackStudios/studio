@@ -100,7 +100,9 @@ fn collect_primitives_recursive(
 
     // Always extract rotation from relativeTransform, even when position/size
     // comes from layout boxes. Layout boxes flatten position but don't encode rotation.
-    let (_lx, _ly, _lw, _lh, rotation) = extract_local_rect(&node.raw);
+    let (local_x, local_y, _lw, _lh, rotation) = extract_local_rect(&node.raw);
+    let chain_x = parent_x + local_x;
+    let chain_y = parent_y + local_y;
     let (x, y, width, height) = if !force_local_positioning {
         layout_boxes
             .get(&node_id)
@@ -218,10 +220,12 @@ fn collect_primitives_recursive(
             // Text with pre-rendered glyph outlines in fillGeometry — render as vector paths.
             // Bridge exports don't include font metadata so glyph-by-glyph layout fails;
             // the fillGeometry paths are the authoritative visual representation.
+            // Use raw transform-chain coordinates here (not layout boxes) to avoid
+            // taffy/layout float drift in authored text outline positions.
             out.push(PaintPrimitive::Path {
                 node_id,
-                x,
-                y,
+                x: chain_x,
+                y: chain_y,
                 width,
                 height,
                 normalize_to_origin: true,
