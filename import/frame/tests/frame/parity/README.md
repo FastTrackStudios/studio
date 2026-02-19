@@ -1,109 +1,59 @@
-# Parity Scenario Pack
+# Parity Scenario Tracker
 
-This directory is the canonical input for render-parity testing.
+This file tracks render parity status across all 24 scenarios.
 
-## Scenario Layout
+## Report Locations
 
-Each scenario lives in:
+Per-scenario report is generated inside each scenario folder:
 
-`tests/frame/parity/scenarios/<scenario-id>/`
+- `tests/frame/parity/scenarios/<scenario-id>/report.json`
 
-Required files:
+Aggregate run summary is written to:
 
-- `export/latest-bridge-export.json`: frame export JSON for this case
-- `expected/*.png`: direct Figma PNG exports (reference truth)
-- `actual/*.png`: renderer/plugin PNG outputs to compare
-
-Example:
-
-- `tests/frame/parity/scenarios/paint.alpha-steps/export/latest-bridge-export.json`
-- `tests/frame/parity/scenarios/paint.alpha-steps/expected/frame.png`
-- `tests/frame/parity/scenarios/paint.alpha-steps/actual/frame.png`
-
-`expected` and `actual` are compared by relative PNG path.
-
-## Naming Convention
-
-- Scenario id: `<category>.<case>`
-- Figma frame name: `parity/<category>/<case>`
-- Export JSON filename: always `latest-bridge-export.json`
-
-## Figma Export Rules (for deterministic pixel diffs)
-
-- PNG scale: `1x`
-- Keep frame bounds fixed between exports
-- Freeze fonts/assets before export
-- Do not rename PNG files between `expected` and `actual`
-- Final threshold target: `0.0` diff percent
-
-## Core 10 Matrix
-
-Start with these 10 scenarios only:
-
-- `primitives.fractional-geometry`
-- `paint.gradient-matrix`
-- `paint.blend-mode-stack`
-- `effects.layer-background-blur`
-- `strokes.caps-joins-dashes`
-- `masks.vector-text-image-mask`
-- `images.fill-mode-matrix`
-- `text.mixed-style-runs`
-- `layout.auto-layout-hug-fill`
-- `regression.kitchen-sink`
-
-Add more scenarios later only after the Core 10 set is stable.
-
-## Running
-
-Render renderer `actual/frame.png` outputs first:
-
-```bash
-tools/render_parity_actuals.sh --all
-```
-
-Core 10 only (default):
-
-```bash
-tools/run_parity_scenarios.sh --threshold 0.0
-```
-
-All scenarios:
-
-```bash
-tools/run_parity_scenarios.sh --all --threshold 0.0
-```
-
-Single scenario:
-
-```bash
-tools/run_parity_scenarios.sh --scenario paint.gradient-matrix --threshold 0.0
-```
-
-One command for render + diff/report:
-
-```bash
-tools/run_parity_render_and_diff.sh --all --threshold 0.0
-tools/run_parity_render_and_diff.sh --scenario paint.gradient-matrix --threshold 0.0
-cargo xtask parity_test --all --threshold 0.0
-cargo xtask parity_test --scenario paint.gradient-matrix --threshold 0.0
-```
-
-Reports are written under:
-
-- `tests/frame/parity/reports/<scenario-id>/`
 - `tests/frame/parity/reports/summary.json`
 - `tests/frame/parity/reports/summary.md`
 
-## Manifest Template
+## Scenario Status
 
-Use and customize:
+Fill `Status` after running reports (`pass`, `fail`, `blocked`, etc.).
 
-- `tests/frame/parity/scenarios/manifest.template.json`
+| Scenario ID | Status | Notes |
+| --- | --- | --- |
+| `effects.background-blur-stress` |  |  |
+| `effects.drop-shadow-matrix` |  |  |
+| `effects.effect-ordering` |  |  |
+| `effects.inner-shadow-matrix` |  |  |
+| `effects.layer-background-blur` |  |  |
+| `effects.shadow-matrix` |  |  |
+| `images.fill-mode-matrix` |  |  |
+| `images.image-sampling` |  |  |
+| `layout.auto-layout-hug-fill` |  |  |
+| `masks.clip-content-nesting` |  |  |
+| `masks.mask-clip-interactions` |  |  |
+| `masks.vector-text-image-mask` |  |  |
+| `paint.blend-mode-combos` |  |  |
+| `paint.blend-mode-stack` |  |  |
+| `paint.gradient-matrix` |  |  |
+| `primitives.fractional-geometry` |  |  |
+| `regression.kitchen-sink` |  |  |
+| `strokes.caps-joins-dashes` |  |  |
+| `text.alignment-truncation` |  |  |
+| `text.font-weight-style` |  |  |
+| `text.mixed-style-runs` |  |  |
+| `text.text-advanced` |  |  |
+| `transform.nested-transform-stack` |  |  |
+| `transform.transform-precision` |  |  |
 
-You can copy it to `manifest.json` for team tracking.
+## Commands
 
-## Detailed Build Spec
+Run all scenarios:
 
-Use the exact per-scenario layer contents from:
+```bash
+cargo xtask parity_test --all --threshold 0.0
+```
 
-- `docs/parity-scenario-contents-spec.md`
+Run one scenario:
+
+```bash
+cargo xtask parity_test --scenario primitives.fractional-geometry --threshold 0.0
+```

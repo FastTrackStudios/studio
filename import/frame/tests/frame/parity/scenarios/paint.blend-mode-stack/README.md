@@ -9,7 +9,7 @@ Blend mode behavior across common and non-default modes.
 - Row A: normal, multiply, screen, overlay over colored backdrops.
 - Row B: darken, lighten, color-burn, soft-light examples.
 - Row C: 3-layer blend stack with mixed modes.
-3. Export bridge JSON to `export/latest-bridge-export.json`.
+3. Export bridge JSON to `latest-bridge-export.json`.
 4. Export direct Figma PNG(s) to `expected/`.
 5. Render your engine/plugin PNG(s) to `actual/` with matching filenames.
 
@@ -18,6 +18,6 @@ Blend compositing differences can be subtle but produce large pixel-diff failure
 
 ## Artifacts
 
-- Expected image: [expected/frame.png](./expected/frame.png)
-- Actual image: [actual/frame.png](./actual/frame.png)
-- Export JSON: [export/latest-bridge-export.json](./export/latest-bridge-export.json)
+- Expected image: [expected.png](./expected.png)
+- Actual image: [actual.png](./actual.png)
+- Export JSON: [latest-bridge-export.json](./latest-bridge-export.json)

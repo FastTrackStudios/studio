@@ -3,6 +3,6 @@
 
 ## Artifacts
 
-- Expected image: [expected/frame.png](./expected/frame.png)
-- Actual image: [actual/frame.png](./actual/frame.png)
-- Export JSON: [export/latest-bridge-export.json](./export/latest-bridge-export.json)
+- Expected image: [expected.png](./expected.png)
+- Actual image: [actual.png](./actual.png)
+- Export JSON: [latest-bridge-export.json](./latest-bridge-export.json)

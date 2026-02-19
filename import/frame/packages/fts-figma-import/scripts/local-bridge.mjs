@@ -93,10 +93,9 @@ const server = createServer(async (req, res) => {
         continue;
       }
       const scenarioDir = join(root, id);
-      const exportPath = join(scenarioDir, 'export', 'latest-bridge-export.json');
-      const expectedPngPath = join(scenarioDir, 'expected', 'frame.png');
+      const exportPath = join(scenarioDir, 'latest-bridge-export.json');
+      const expectedPngPath = join(scenarioDir, 'expected.png');
       await mkdir(dirname(exportPath), { recursive: true });
-      await mkdir(dirname(expectedPngPath), { recursive: true });
       if (exportJson) {
         await writeFile(exportPath, `${JSON.stringify(exportJson, null, 2)}\n`, 'utf8');
         jsonWritten += 1;

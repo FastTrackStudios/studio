@@ -57,13 +57,14 @@ fi
 
 mkdir -p "$OUT_DIR"
 
-RENDER_DIAG_JSON="$OUT_DIR/render-diagnostics.json"
-IMPORT_DIAG_JSON="$OUT_DIR/import-diagnostics.json"
-PERF_JSON="$OUT_DIR/load-profile.json"
-VISUAL_JSON="$OUT_DIR/visual-acceptance.json"
-VISUAL_MD="$OUT_DIR/visual-acceptance.md"
-PARITY_JSON="$OUT_DIR/parity-report.json"
-PARITY_MD="$OUT_DIR/parity-report.md"
+PARITY_JSON="$OUT_DIR/report.json"
+PARITY_MD="$OUT_DIR/report.md"
+TMP_DIR="$(mktemp -d)"
+trap 'rm -rf "$TMP_DIR"' EXIT
+RENDER_DIAG_JSON="$TMP_DIR/render-diagnostics.json"
+IMPORT_DIAG_JSON="$TMP_DIR/import-diagnostics.json"
+PERF_JSON="$TMP_DIR/load-profile.json"
+VISUAL_JSON="$TMP_DIR/visual-acceptance.json"
 
 "$SCRIPT_DIR/capture_render_diagnostics.sh" "$EXPORT_JSON" "$RENDER_DIAG_JSON"
 "$SCRIPT_DIR/capture_import_diagnostics.sh" "$EXPORT_JSON" "$IMPORT_DIAG_JSON"
@@ -75,7 +76,7 @@ if [[ -n "$ACTUAL_PNG_DIR" || -n "$EXPECTED_PNG_DIR" ]]; then
     echo "both --actual-png-dir and --expected-png-dir are required together" >&2
     exit 2
   fi
-  if "$SCRIPT_DIR/run_visual_acceptance.sh" "$ACTUAL_PNG_DIR" "$EXPECTED_PNG_DIR" "$THRESHOLD" --out-json "$VISUAL_JSON" --out-md "$VISUAL_MD"; then
+  if "$SCRIPT_DIR/run_visual_acceptance.sh" "$ACTUAL_PNG_DIR" "$EXPECTED_PNG_DIR" "$THRESHOLD" --out-json "$VISUAL_JSON"; then
     :
   else
     # Keep pipeline running so parity report still gets generated.
@@ -94,11 +95,6 @@ fi
   --out-md "$PARITY_MD"
 
 echo "wrote:"
-  echo "  $RENDER_DIAG_JSON"
-echo "  $IMPORT_DIAG_JSON"
-echo "  $PERF_JSON"
-[[ -f "$VISUAL_JSON" ]] && echo "  $VISUAL_JSON"
-[[ -f "$VISUAL_MD" ]] && echo "  $VISUAL_MD"
 echo "  $PARITY_JSON"
 echo "  $PARITY_MD"
 

@@ -1,0 +1,17 @@
+{
+  "generatedAt": "2026-02-19T09:25:46Z",
+  "root": "tests/frame/parity",
+  "mode": "single",
+  "thresholdPercent": 0.0,
+  "total": 1,
+  "passed": 1,
+  "failed": 0,
+  "skipped": 0,
+  "scenarios": [
+    {
+      "scenarioId": "primitives.fractional-geometry",
+      "status": "pass",
+      "report": "tests/frame/parity/scenarios/primitives.fractional-geometry/report.json"
+    }
+  ]
+}

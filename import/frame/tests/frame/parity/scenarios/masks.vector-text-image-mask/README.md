@@ -9,7 +9,7 @@ Mask semantics across vector, text, and image mask sources.
 - Row A: vector mask over color blocks.
 - Row B: text mask over gradient and image.
 - Row C: image mask with transparent regions.
-3. Export bridge JSON to `export/latest-bridge-export.json`.
+3. Export bridge JSON to `latest-bridge-export.json`.
 4. Export direct Figma PNG(s) to `expected/`.
 5. Render your engine/plugin PNG(s) to `actual/` with matching filenames.
 
@@ -18,6 +18,6 @@ Different mask sources stress different sampling and alpha paths.
 
 ## Artifacts
 
-- Expected image: [expected/frame.png](./expected/frame.png)
-- Actual image: [actual/frame.png](./actual/frame.png)
-- Export JSON: [export/latest-bridge-export.json](./export/latest-bridge-export.json)
+- Expected image: [expected.png](./expected.png)
+- Actual image: [actual.png](./actual.png)
+- Export JSON: [latest-bridge-export.json](./latest-bridge-export.json)

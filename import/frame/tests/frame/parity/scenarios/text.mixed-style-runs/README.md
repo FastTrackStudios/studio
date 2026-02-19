@@ -9,7 +9,7 @@ Mixed style runs inside a single text node.
 - Row A: one line with multiple weights/colors.
 - Row B: style run changes with letter spacing deltas.
 - Row C: mixed runs across wrapped lines.
-3. Export bridge JSON to `export/latest-bridge-export.json`.
+3. Export bridge JSON to `latest-bridge-export.json`.
 4. Export direct Figma PNG(s) to `expected/`.
 5. Render your engine/plugin PNG(s) to `actual/` with matching filenames.
 
@@ -18,6 +18,6 @@ Style-run support catches gaps between text model and render implementation.
 
 ## Artifacts
 
-- Expected image: [expected/frame.png](./expected/frame.png)
-- Actual image: [actual/frame.png](./actual/frame.png)
-- Export JSON: [export/latest-bridge-export.json](./export/latest-bridge-export.json)
+- Expected image: [expected.png](./expected.png)
+- Actual image: [actual.png](./actual.png)
+- Export JSON: [latest-bridge-export.json](./latest-bridge-export.json)

@@ -99,10 +99,19 @@ SKIPPED=0
 
 for scenario_dir in "${SCENARIO_DIRS[@]}"; do
   scenario_id="$(basename "$scenario_dir")"
-  export_json="$scenario_dir/export/latest-bridge-export.json"
-  actual_dir="$scenario_dir/actual"
-  expected_dir="$scenario_dir/expected"
-  out_dir="$REPORTS_DIR/$scenario_id"
+  export_json="$scenario_dir/latest-bridge-export.json"
+  if [[ ! -f "$export_json" ]]; then
+    export_json="$scenario_dir/export/latest-bridge-export.json"
+  fi
+  actual_png="$scenario_dir/actual.png"
+  expected_png="$scenario_dir/expected.png"
+  if [[ ! -f "$actual_png" && -f "$scenario_dir/actual/frame.png" ]]; then
+    actual_png="$scenario_dir/actual/frame.png"
+  fi
+  if [[ ! -f "$expected_png" && -f "$scenario_dir/expected/frame.png" ]]; then
+    expected_png="$scenario_dir/expected/frame.png"
+  fi
+  out_dir="$scenario_dir"
 
   TOTAL=$((TOTAL + 1))
 
@@ -119,14 +128,14 @@ for scenario_dir in "${SCENARIO_DIRS[@]}"; do
   echo "[$scenario_id] running parity pipeline"
 
   pipeline_args=("$export_json" "--out-dir" "$out_dir" "--threshold" "$THRESHOLD")
-  if [[ -d "$actual_dir" && -d "$expected_dir" ]]; then
-    pipeline_args+=("--actual-png-dir" "$actual_dir" "--expected-png-dir" "$expected_dir")
+  if [[ -f "$actual_png" && -f "$expected_png" ]]; then
+    pipeline_args+=("--actual-png-dir" "$actual_png" "--expected-png-dir" "$expected_png")
   else
-    echo "[$scenario_id] note: missing actual/expected dir pair, running non-visual diagnostics only"
+    echo "[$scenario_id] note: missing actual.png/expected.png pair, running non-visual diagnostics only"
   fi
 
   if "$SCRIPT_DIR/run_parity_pipeline.sh" "${pipeline_args[@]}"; then
-    if jq -e '.gates.parityPass == true' "$out_dir/parity-report.json" >/dev/null 2>&1; then
+    if jq -e '.gates.parityPass == true' "$out_dir/report.json" >/dev/null 2>&1; then
       PASSED=$((PASSED + 1))
       status="pass"
     else
@@ -140,8 +149,8 @@ for scenario_dir in "${SCENARIO_DIRS[@]}"; do
 
   jq --arg id "$scenario_id" \
     --arg status "$status" \
-    --arg report "$out_dir/parity-report.json" \
-    '. += [{scenarioId:$id, status:$status, parityReport:$report}]' "$SUMMARY_TMP" > "$SUMMARY_TMP.tmp"
+    --arg report "$out_dir/report.json" \
+    '. += [{scenarioId:$id, status:$status, report:$report}]' "$SUMMARY_TMP" > "$SUMMARY_TMP.tmp"
   mv "$SUMMARY_TMP.tmp" "$SUMMARY_TMP"
 done
 

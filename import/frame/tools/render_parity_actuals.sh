@@ -64,16 +64,18 @@ fi
 
 for scenario_dir in "${SCENARIO_DIRS[@]}"; do
   scenario_id="$(basename "$scenario_dir")"
-  export_json="$scenario_dir/export/latest-bridge-export.json"
-  actual_png="$scenario_dir/actual/frame.png"
+  export_json="$scenario_dir/latest-bridge-export.json"
+  if [[ ! -f "$export_json" ]]; then
+    export_json="$scenario_dir/export/latest-bridge-export.json"
+  fi
+  actual_png="$scenario_dir/actual.png"
 
   if [[ ! -f "$export_json" ]]; then
     echo "[$scenario_id] skip: missing $export_json"
     continue
   fi
 
-  mkdir -p "$(dirname "$actual_png")"
-  echo "[$scenario_id] rendering actual/frame.png"
+  echo "[$scenario_id] rendering actual.png"
   width="$(jq -r '.nodes[0].absoluteBoundingBox.width // 0' "$export_json" 2>/dev/null || echo 0)"
   height="$(jq -r '.nodes[0].absoluteBoundingBox.height // 0' "$export_json" 2>/dev/null || echo 0)"
 
