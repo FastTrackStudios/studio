@@ -1,5 +1,5 @@
 [workspace]
-members = ["frame-proto", "frame-import", "frame-ui", "frame"]
+members = ["crates/*"]
 resolver = "2"
 
 [workspace.package]
