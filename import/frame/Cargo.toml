@@ -1,0 +1,35 @@
+[workspace]
+members = ["frame-proto", "frame-import", "frame-ui", "frame"]
+resolver = "2"
+
+[workspace.package]
+edition = "2021"
+version = "0.1.0"
+license = "MIT OR Apache-2.0"
+
+[workspace.lints.rust]
+
+[workspace.lints.clippy]
+
+[workspace.dependencies]
+# Figma API types
+figma-api = { git = "https://github.com/gridaco/figma-api-rust.git" }
+
+# Common
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+thiserror = "2.0"
+uuid = { version = "1", features = ["v4", "v5", "v7", "serde"] }
+tokio = { version = "1.48", features = ["full"] }
+
+# Facet (used by frame-proto)
+facet = { git = "https://github.com/facet-rs/facet", branch = "main" }
+
+# UI/rendering (optional, behind features in frame-ui)
+dioxus = "0.7.2"
+anyrender = { git = "https://github.com/DioxusLabs/anyrender.git", branch = "main" }
+anyrender_svg = { git = "https://github.com/DioxusLabs/anyrender.git", branch = "main" }
+kurbo = "0.13"
+peniko = "0.6"
+taffy = { version = "0.7", default-features = false, features = ["std", "flexbox", "taffy_tree"] }
+image = "0.25"
