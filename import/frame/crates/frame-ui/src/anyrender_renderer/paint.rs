@@ -413,9 +413,10 @@ pub fn paint_primitives_into_scene_with(
                         if stroke.width > 0.0 {
                             for path_data in stroke_paths {
                                 if let Some(path) = cached_bez_path(path_data) {
-                                    let stroke_style = to_kurbo_stroke(stroke, stroke_scale);
-                                    scene.stroke(
-                                        &stroke_style,
+                                    // Figma strokeGeometry is already the outlined stroke shape.
+                                    // Fill it directly to avoid double-stroking artifacts.
+                                    scene.fill(
+                                        peniko::Fill::EvenOdd,
                                         path_transform,
                                         to_peniko(stroke.color.clone()),
                                         None,
@@ -527,8 +528,8 @@ pub fn paint_primitives_into_scene_with(
                             1.0,
                             scene_transform
                                 * kurbo::Affine::translate((
-                                    x,
-                                    y + font_size + (line_idx as f64 * line_height) as f64,
+                                    x - 0.5,
+                                    y + font_size + (line_idx as f64 * line_height) as f64 - 0.5,
                                 )),
                             None,
                             glyphs.into_iter(),
@@ -1275,6 +1276,7 @@ pub fn paint_primitives_into_scene_with(
             return base;
         };
         let half = (style.width * 0.5).max(0.0);
+        let snap_half = |v: f64| ((v * 2.0).round()) * 0.5;
         match style.align {
             StrokeAlign::Inside => Rect::new(
                 base.x0 + half,
@@ -1288,7 +1290,12 @@ pub fn paint_primitives_into_scene_with(
                 base.x1 + half,
                 base.y1 + half,
             ),
-            StrokeAlign::Center => base,
+            StrokeAlign::Center => Rect::new(
+                snap_half(base.x0),
+                snap_half(base.y0),
+                snap_half(base.x1),
+                snap_half(base.y1),
+            ),
         }
     }
 

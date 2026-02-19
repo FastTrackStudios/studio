@@ -1,6 +1,6 @@
 {
   "schema": "fts.figma.export/v2",
-  "generatedAt": "2026-02-19T08:56:08.280Z",
+  "generatedAt": "2026-02-19T10:46:29.749Z",
   "source": {
     "plugin": "fts-figma-parity-plugin",
     "pluginVersion": "v2.1",
@@ -12,7 +12,7 @@
   },
   "selection": {
     "ids": [
-      "1:1249"
+      "8:918"
     ],
     "names": [
       "parity/text/font-weight-style"
@@ -28,12 +28,12 @@
   "assets": [],
   "nodes": [
     {
-      "id": "1:1249",
+      "id": "8:918",
       "name": "parity/text/font-weight-style",
       "type": "FRAME",
       "visible": true,
       "absoluteBoundingBox": {
-        "x": 0,
+        "x": 1980,
         "y": 5700,
         "width": 1920,
         "height": 1080
@@ -42,7 +42,7 @@
         [
           1,
           0,
-          0
+          1980
         ],
         [
           0,
@@ -108,12 +108,12 @@
       "strokeGeometry": [],
       "children": [
         {
-          "id": "2:7811",
+          "id": "8:919",
           "name": "parity/text/font-weight-style",
           "type": "TEXT",
           "visible": true,
           "absoluteBoundingBox": {
-            "x": 24,
+            "x": 2004,
             "y": 5724,
             "width": 268,
             "height": 24
@@ -190,12 +190,12 @@
           "textStyleId": ""
         },
         {
-          "id": "2:7812",
+          "id": "8:920",
           "name": "Row A: baseline",
           "type": "TEXT",
           "visible": true,
           "absoluteBoundingBox": {
-            "x": 24,
+            "x": 2004,
             "y": 5772,
             "width": 90,
             "height": 15
@@ -272,12 +272,12 @@
           "textStyleId": ""
         },
         {
-          "id": "2:7816",
+          "id": "8:924",
           "name": "Regular Bold Italic BoldItalic",
           "type": "TEXT",
           "visible": true,
           "absoluteBoundingBox": {
-            "x": 180,
+            "x": 2160,
             "y": 5850,
             "width": 598,
             "height": 51

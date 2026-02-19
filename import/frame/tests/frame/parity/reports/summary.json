@@ -1,11 +1,11 @@
 {
-  "generatedAt": "2026-02-19T09:35:09Z",
+  "generatedAt": "2026-02-19T11:08:36Z",
   "root": "tests/frame/parity",
   "mode": "all",
   "thresholdPercent": 0.0,
-  "total": 24,
+  "total": 25,
   "passed": 22,
-  "failed": 2,
+  "failed": 3,
   "skipped": 0,
   "scenarios": [
     {
@@ -87,6 +87,11 @@
       "scenarioId": "primitives.fractional-geometry",
       "status": "pass",
       "report": "tests/frame/parity/scenarios/primitives.fractional-geometry/report.json"
+    },
+    {
+      "scenarioId": "primitives.single-pixel-anchor",
+      "status": "fail",
+      "report": "tests/frame/parity/scenarios/primitives.single-pixel-anchor/report.json"
     },
     {
       "scenarioId": "regression.kitchen-sink",

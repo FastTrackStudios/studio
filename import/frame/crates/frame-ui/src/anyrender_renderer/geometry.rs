@@ -48,29 +48,29 @@ pub(super) fn compute_path_fit_transform(
     // In that case we should cancel the node origin translation only, not refit.
     let src_w_raw = max_x - min_x;
     let src_h_raw = max_y - min_y;
-    let approx_abs = (min_x - target_x).abs() <= 1.0
-        && (min_y - target_y).abs() <= 1.0
-        && (src_w_raw - target_width).abs() <= 1.0
-        && (src_h_raw - target_height).abs() <= 1.0;
+    let approx_abs = (min_x - target_x).abs() <= 2.0
+        && (min_y - target_y).abs() <= 2.0
+        && (src_w_raw - target_width).abs() <= 2.0
+        && (src_h_raw - target_height).abs() <= 2.0;
     if approx_abs {
         return kurbo::Affine::translate((-target_x, -target_y));
     }
 
     // If geometry is already local to the node bounds, preserve its authored
     // placement/size instead of force-scaling it to fill the full node box.
-    let approx_local = min_x >= -1.0
-        && min_y >= -1.0
-        && max_x <= target_width + 1.0
-        && max_y <= target_height + 1.0;
+    let approx_local = min_x >= -2.0
+        && min_y >= -2.0
+        && max_x <= target_width + 2.0
+        && max_y <= target_height + 2.0;
     if approx_local {
         return kurbo::Affine::IDENTITY;
     }
 
     // Some exports encode node-local geometry translated by node origin.
-    let approx_local_offset = (min_x - target_x) >= -1.0
-        && (min_y - target_y) >= -1.0
-        && max_x <= target_x + target_width + 1.0
-        && max_y <= target_y + target_height + 1.0;
+    let approx_local_offset = (min_x - target_x) >= -2.0
+        && (min_y - target_y) >= -2.0
+        && max_x <= target_x + target_width + 2.0
+        && max_y <= target_y + target_height + 2.0;
     if approx_local_offset {
         return kurbo::Affine::translate((-target_x, -target_y));
     }

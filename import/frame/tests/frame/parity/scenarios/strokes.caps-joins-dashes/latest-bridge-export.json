@@ -1,6 +1,6 @@
 {
   "schema": "fts.figma.export/v2",
-  "generatedAt": "2026-02-19T08:56:07.441Z",
+  "generatedAt": "2026-02-19T10:46:28.683Z",
   "source": {
     "plugin": "fts-figma-parity-plugin",
     "pluginVersion": "v2.1",
@@ -12,7 +12,7 @@
   },
   "selection": {
     "ids": [
-      "1:1177"
+      "8:840"
     ],
     "names": [
       "parity/strokes/caps-joins-dashes"
@@ -28,7 +28,7 @@
   "assets": [],
   "nodes": [
     {
-      "id": "1:1177",
+      "id": "8:840",
       "name": "parity/strokes/caps-joins-dashes",
       "type": "FRAME",
       "visible": true,
@@ -108,7 +108,7 @@
       "strokeGeometry": [],
       "children": [
         {
-          "id": "2:7745",
+          "id": "8:841",
           "name": "parity/strokes/caps-joins-dashes",
           "type": "TEXT",
           "visible": true,
@@ -190,7 +190,7 @@
           "textStyleId": ""
         },
         {
-          "id": "2:7746",
+          "id": "8:842",
           "name": "Row A: baseline",
           "type": "TEXT",
           "visible": true,
@@ -272,7 +272,7 @@
           "textStyleId": ""
         },
         {
-          "id": "2:7747",
+          "id": "8:843",
           "name": "Row B: edge",
           "type": "TEXT",
           "visible": true,
@@ -354,7 +354,7 @@
           "textStyleId": ""
         },
         {
-          "id": "2:7748",
+          "id": "8:844",
           "name": "Row C: stress",
           "type": "TEXT",
           "visible": true,
@@ -436,7 +436,7 @@
           "textStyleId": ""
         },
         {
-          "id": "2:7749",
+          "id": "8:845",
           "name": "Vector",
           "type": "VECTOR",
           "visible": true,
@@ -505,7 +505,7 @@
           ]
         },
         {
-          "id": "2:7750",
+          "id": "8:846",
           "name": "Vector",
           "type": "VECTOR",
           "visible": true,
@@ -574,7 +574,7 @@
           ]
         },
         {
-          "id": "2:7751",
+          "id": "8:847",
           "name": "Vector",
           "type": "VECTOR",
           "visible": true,
@@ -643,7 +643,7 @@
           ]
         },
         {
-          "id": "2:7752",
+          "id": "8:848",
           "name": "Line",
           "type": "LINE",
           "visible": true,
@@ -708,7 +708,7 @@
           ]
         },
         {
-          "id": "2:7753",
+          "id": "8:849",
           "name": "Line",
           "type": "LINE",
           "visible": true,

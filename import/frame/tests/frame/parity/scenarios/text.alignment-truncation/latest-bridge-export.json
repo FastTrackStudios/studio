@@ -1,6 +1,6 @@
 {
   "schema": "fts.figma.export/v2",
-  "generatedAt": "2026-02-19T08:56:08.413Z",
+  "generatedAt": "2026-02-19T10:46:29.902Z",
   "source": {
     "plugin": "fts-figma-parity-plugin",
     "pluginVersion": "v2.1",
@@ -12,7 +12,7 @@
   },
   "selection": {
     "ids": [
-      "1:1256"
+      "8:925"
     ],
     "names": [
       "parity/text/alignment-truncation"
@@ -28,13 +28,13 @@
   "assets": [],
   "nodes": [
     {
-      "id": "1:1256",
+      "id": "8:925",
       "name": "parity/text/alignment-truncation",
       "type": "FRAME",
       "visible": true,
       "absoluteBoundingBox": {
-        "x": 1980,
-        "y": 5700,
+        "x": 0,
+        "y": 6840,
         "width": 1920,
         "height": 1080
       },
@@ -42,12 +42,12 @@
         [
           1,
           0,
-          1980
+          0
         ],
         [
           0,
           1,
-          5700
+          6840
         ]
       ],
       "rotation": 0,
@@ -108,13 +108,13 @@
       "strokeGeometry": [],
       "children": [
         {
-          "id": "2:7817",
+          "id": "8:926",
           "name": "parity/text/alignment-truncation",
           "type": "TEXT",
           "visible": true,
           "absoluteBoundingBox": {
-            "x": 2004,
-            "y": 5724,
+            "x": 24,
+            "y": 6864,
             "width": 302,
             "height": 24
           },
@@ -190,13 +190,13 @@
           "textStyleId": ""
         },
         {
-          "id": "2:7818",
+          "id": "8:927",
           "name": "Row A: baseline",
           "type": "TEXT",
           "visible": true,
           "absoluteBoundingBox": {
-            "x": 2004,
-            "y": 5772,
+            "x": 24,
+            "y": 6912,
             "width": 90,
             "height": 15
           },
@@ -272,13 +272,13 @@
           "textStyleId": ""
         },
         {
-          "id": "2:7822",
+          "id": "8:931",
           "name": "Rectangle",
           "type": "RECTANGLE",
           "visible": true,
           "absoluteBoundingBox": {
-            "x": 2160,
-            "y": 5850,
+            "x": 180,
+            "y": 6990,
             "width": 280,
             "height": 180
           },
@@ -358,13 +358,13 @@
           ]
         },
         {
-          "id": "2:7823",
+          "id": "8:932",
           "name": "Alignment sample text that wraps.",
           "type": "TEXT",
           "visible": true,
           "absoluteBoundingBox": {
-            "x": 2170,
-            "y": 5860,
+            "x": 190,
+            "y": 7000,
             "width": 260,
             "height": 160
           },
@@ -440,13 +440,13 @@
           "textStyleId": ""
         },
         {
-          "id": "2:7824",
+          "id": "8:933",
           "name": "Rectangle",
           "type": "RECTANGLE",
           "visible": true,
           "absoluteBoundingBox": {
-            "x": 2480,
-            "y": 5850,
+            "x": 500,
+            "y": 6990,
             "width": 280,
             "height": 180
           },
@@ -526,13 +526,13 @@
           ]
         },
         {
-          "id": "2:7825",
+          "id": "8:934",
           "name": "Alignment sample text that wraps.",
           "type": "TEXT",
           "visible": true,
           "absoluteBoundingBox": {
-            "x": 2490,
-            "y": 5860,
+            "x": 510,
+            "y": 7000,
             "width": 260,
             "height": 160
           },
@@ -608,13 +608,13 @@
           "textStyleId": ""
         },
         {
-          "id": "2:7826",
+          "id": "8:935",
           "name": "Rectangle",
           "type": "RECTANGLE",
           "visible": true,
           "absoluteBoundingBox": {
-            "x": 2800,
-            "y": 5850,
+            "x": 820,
+            "y": 6990,
             "width": 280,
             "height": 180
           },
@@ -694,13 +694,13 @@
           ]
         },
         {
-          "id": "2:7827",
+          "id": "8:936",
           "name": "Alignment sample text that wraps.",
           "type": "TEXT",
           "visible": true,
           "absoluteBoundingBox": {
-            "x": 2810,
-            "y": 5860,
+            "x": 830,
+            "y": 7000,
             "width": 260,
             "height": 160
           },

@@ -1,6 +1,6 @@
 {
   "schema": "fts.figma.export/v2",
-  "generatedAt": "2026-02-19T08:56:07.306Z",
+  "generatedAt": "2026-02-19T10:46:28.503Z",
   "source": {
     "plugin": "fts-figma-parity-plugin",
     "pluginVersion": "v2.1",
@@ -12,7 +12,7 @@
   },
   "selection": {
     "ids": [
-      "1:1167"
+      "8:830"
     ],
     "names": [
       "parity/effects/layer-background-blur"
@@ -28,7 +28,7 @@
   "assets": [],
   "nodes": [
     {
-      "id": "1:1167",
+      "id": "8:830",
       "name": "parity/effects/layer-background-blur",
       "type": "FRAME",
       "visible": true,
@@ -108,7 +108,7 @@
       "strokeGeometry": [],
       "children": [
         {
-          "id": "2:7736",
+          "id": "8:831",
           "name": "parity/effects/layer-background-blur",
           "type": "TEXT",
           "visible": true,
@@ -190,7 +190,7 @@
           "textStyleId": ""
         },
         {
-          "id": "2:7737",
+          "id": "8:832",
           "name": "Row A: baseline",
           "type": "TEXT",
           "visible": true,
@@ -272,7 +272,7 @@
           "textStyleId": ""
         },
         {
-          "id": "2:7738",
+          "id": "8:833",
           "name": "Row B: edge",
           "type": "TEXT",
           "visible": true,
@@ -354,7 +354,7 @@
           "textStyleId": ""
         },
         {
-          "id": "2:7740",
+          "id": "8:835",
           "name": "Rectangle",
           "type": "RECTANGLE",
           "visible": true,
@@ -422,7 +422,7 @@
           "strokeGeometry": []
         },
         {
-          "id": "2:7741",
+          "id": "8:836",
           "name": "Rectangle",
           "type": "RECTANGLE",
           "visible": true,
@@ -498,7 +498,7 @@
           "strokeGeometry": []
         },
         {
-          "id": "2:7742",
+          "id": "8:837",
           "name": "Rectangle",
           "type": "RECTANGLE",
           "visible": true,
@@ -574,7 +574,7 @@
           "strokeGeometry": []
         },
         {
-          "id": "2:7743",
+          "id": "8:838",
           "name": "Rectangle",
           "type": "RECTANGLE",
           "visible": true,
@@ -650,7 +650,7 @@
           "strokeGeometry": []
         },
         {
-          "id": "2:7744",
+          "id": "8:839",
           "name": "Rectangle",
           "type": "RECTANGLE",
           "visible": true,

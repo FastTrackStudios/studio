@@ -1,6 +1,6 @@
 {
   "schema": "fts.figma.export/v2",
-  "generatedAt": "2026-02-19T08:56:07.011Z",
+  "generatedAt": "2026-02-19T10:46:28.151Z",
   "source": {
     "plugin": "fts-figma-parity-plugin",
     "pluginVersion": "v2.1",
@@ -12,7 +12,7 @@
   },
   "selection": {
     "ids": [
-      "1:1150"
+      "8:813"
     ],
     "names": [
       "parity/paint/gradient-matrix"
@@ -28,7 +28,7 @@
   "assets": [],
   "nodes": [
     {
-      "id": "1:1150",
+      "id": "8:813",
       "name": "parity/paint/gradient-matrix",
       "type": "FRAME",
       "visible": true,
@@ -108,7 +108,7 @@
       "strokeGeometry": [],
       "children": [
         {
-          "id": "2:7721",
+          "id": "8:814",
           "name": "parity/paint/gradient-matrix",
           "type": "TEXT",
           "visible": true,
@@ -190,7 +190,7 @@
           "textStyleId": ""
         },
         {
-          "id": "2:7722",
+          "id": "8:815",
           "name": "Row A: baseline",
           "type": "TEXT",
           "visible": true,
@@ -272,7 +272,7 @@
           "textStyleId": ""
         },
         {
-          "id": "2:7725",
+          "id": "8:818",
           "name": "Rectangle",
           "type": "RECTANGLE",
           "visible": true,
@@ -368,7 +368,7 @@
           "strokeGeometry": []
         },
         {
-          "id": "2:7726",
+          "id": "8:819",
           "name": "Rectangle",
           "type": "RECTANGLE",
           "visible": true,
@@ -464,7 +464,7 @@
           "strokeGeometry": []
         },
         {
-          "id": "2:7727",
+          "id": "8:820",
           "name": "Rectangle",
           "type": "RECTANGLE",
           "visible": true,

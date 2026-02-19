@@ -1,6 +1,6 @@
 {
   "schema": "fts.figma.export/v2",
-  "generatedAt": "2026-02-19T08:56:09.996Z",
+  "generatedAt": "2026-02-19T10:46:31.574Z",
   "source": {
     "plugin": "fts-figma-parity-plugin",
     "pluginVersion": "v2.1",
@@ -12,7 +12,7 @@
   },
   "selection": {
     "ids": [
-      "1:1564"
+      "8:1050"
     ],
     "names": [
       "parity/transform/nested-transform-stack"
@@ -28,13 +28,13 @@
   "assets": [],
   "nodes": [
     {
-      "id": "1:1564",
+      "id": "8:1050",
       "name": "parity/transform/nested-transform-stack",
       "type": "FRAME",
       "visible": true,
       "absoluteBoundingBox": {
-        "x": 1980,
-        "y": 12540,
+        "x": 0,
+        "y": 13680,
         "width": 1920,
         "height": 1080
       },
@@ -42,12 +42,12 @@
         [
           1,
           0,
-          1980
+          0
         ],
         [
           0,
           1,
-          12540
+          13680
         ]
       ],
       "rotation": 0,
@@ -108,13 +108,13 @@
       "strokeGeometry": [],
       "children": [
         {
-          "id": "2:7930",
+          "id": "8:1051",
           "name": "parity/transform/nested-transform-stack",
           "type": "TEXT",
           "visible": true,
           "absoluteBoundingBox": {
-            "x": 2004,
-            "y": 12564,
+            "x": 24,
+            "y": 13704,
             "width": 385,
             "height": 24
           },
@@ -190,13 +190,13 @@
           "textStyleId": ""
         },
         {
-          "id": "2:7934",
+          "id": "8:1055",
           "name": "__nested-transform-base",
           "type": "FRAME",
           "visible": true,
           "absoluteBoundingBox": {
-            "x": 2200,
-            "y": 12700,
+            "x": 220,
+            "y": 13840,
             "width": 560,
             "height": 420
           },
@@ -270,13 +270,13 @@
           "strokeGeometry": [],
           "children": [
             {
-              "id": "2:7935",
+              "id": "8:1056",
               "name": "Rectangle",
               "type": "RECTANGLE",
               "visible": true,
               "absoluteBoundingBox": {
-                "x": 2320,
-                "y": 12725.942961871624,
+                "x": 340,
+                "y": 13865.942961871624,
                 "width": 291.7424860596657,
                 "height": 230.12361079454422
               },
@@ -338,13 +338,13 @@
               "strokeGeometry": []
             },
             {
-              "id": "2:7936",
+              "id": "8:1057",
               "name": "Rectangle",
               "type": "RECTANGLE",
               "visible": true,
               "absoluteBoundingBox": {
-                "x": 2339.8277896642685,
-                "y": 12820,
+                "x": 359.8277896642685,
+                "y": 13960,
                 "width": 249.40464913845062,
                 "height": 191.62109076976776
               },
@@ -406,13 +406,13 @@
               "strokeGeometry": []
             },
             {
-              "id": "2:7937",
+              "id": "8:1058",
               "name": "Rectangle",
               "type": "RECTANGLE",
               "visible": true,
               "absoluteBoundingBox": {
-                "x": 2440,
-                "y": 12807.555078864098,
+                "x": 460,
+                "y": 13947.555078864098,
                 "width": 163.52033346891403,
                 "height": 135.8914691209793
               },

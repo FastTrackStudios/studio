@@ -1,6 +1,6 @@
 {
   "schema": "fts.figma.export/v2",
-  "generatedAt": "2026-02-19T08:56:09.471Z",
+  "generatedAt": "2026-02-19T10:46:31.056Z",
   "source": {
     "plugin": "fts-figma-parity-plugin",
     "pluginVersion": "v2.1",
@@ -12,7 +12,7 @@
   },
   "selection": {
     "ids": [
-      "1:1531"
+      "8:1017"
     ],
     "names": [
       "parity/text/text-advanced"
@@ -28,13 +28,13 @@
   "assets": [],
   "nodes": [
     {
-      "id": "1:1531",
+      "id": "8:1017",
       "name": "parity/text/text-advanced",
       "type": "FRAME",
       "visible": true,
       "absoluteBoundingBox": {
-        "x": 1980,
-        "y": 10260,
+        "x": 0,
+        "y": 11400,
         "width": 1920,
         "height": 1080
       },
@@ -42,12 +42,12 @@
         [
           1,
           0,
-          1980
+          0
         ],
         [
           0,
           1,
-          10260
+          11400
         ]
       ],
       "rotation": 0,
@@ -108,13 +108,13 @@
       "strokeGeometry": [],
       "children": [
         {
-          "id": "2:7901",
+          "id": "8:1018",
           "name": "parity/text/text-advanced",
           "type": "TEXT",
           "visible": true,
           "absoluteBoundingBox": {
-            "x": 2004,
-            "y": 10284,
+            "x": 24,
+            "y": 11424,
             "width": 242,
             "height": 24
           },
@@ -190,13 +190,13 @@
           "textStyleId": ""
         },
         {
-          "id": "2:7902",
+          "id": "8:1019",
           "name": "Row A: baseline",
           "type": "TEXT",
           "visible": true,
           "absoluteBoundingBox": {
-            "x": 2004,
-            "y": 10332,
+            "x": 24,
+            "y": 11472,
             "width": 90,
             "height": 15
           },
@@ -272,13 +272,13 @@
           "textStyleId": ""
         },
         {
-          "id": "2:7906",
+          "id": "8:1023",
           "name": "Regular Bold Italic BoldItalic LineHeight Tight -> Loose",
           "type": "TEXT",
           "visible": true,
           "absoluteBoundingBox": {
-            "x": 2160,
-            "y": 10400,
+            "x": 180,
+            "y": 11540,
             "width": 494,
             "height": 100
           },

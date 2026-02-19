@@ -1,6 +1,6 @@
 {
   "schema": "fts.figma.export/v2",
-  "generatedAt": "2026-02-19T08:56:08.938Z",
+  "generatedAt": "2026-02-19T10:46:30.488Z",
   "source": {
     "plugin": "fts-figma-parity-plugin",
     "pluginVersion": "v2.1",
@@ -12,7 +12,7 @@
   },
   "selection": {
     "ids": [
-      "1:1292"
+      "8:961"
     ],
     "names": [
       "parity/effects/effect-ordering"
@@ -28,13 +28,13 @@
   "assets": [],
   "nodes": [
     {
-      "id": "1:1292",
+      "id": "8:961",
       "name": "parity/effects/effect-ordering",
       "type": "FRAME",
       "visible": true,
       "absoluteBoundingBox": {
-        "x": 1980,
-        "y": 7980,
+        "x": 0,
+        "y": 9120,
         "width": 1920,
         "height": 1080
       },
@@ -42,12 +42,12 @@
         [
           1,
           0,
-          1980
+          0
         ],
         [
           0,
           1,
-          7980
+          9120
         ]
       ],
       "rotation": 0,
@@ -108,13 +108,13 @@
       "strokeGeometry": [],
       "children": [
         {
-          "id": "2:7849",
+          "id": "8:962",
           "name": "parity/effects/effect-ordering",
           "type": "TEXT",
           "visible": true,
           "absoluteBoundingBox": {
-            "x": 2004,
-            "y": 8004,
+            "x": 24,
+            "y": 9144,
             "width": 277,
             "height": 24
           },
@@ -190,13 +190,13 @@
           "textStyleId": ""
         },
         {
-          "id": "2:7850",
+          "id": "8:963",
           "name": "Row A: baseline",
           "type": "TEXT",
           "visible": true,
           "absoluteBoundingBox": {
-            "x": 2004,
-            "y": 8052,
+            "x": 24,
+            "y": 9192,
             "width": 90,
             "height": 15
           },
@@ -272,13 +272,13 @@
           "textStyleId": ""
         },
         {
-          "id": "2:7853",
+          "id": "8:966",
           "name": "Rectangle",
           "type": "RECTANGLE",
           "visible": true,
           "absoluteBoundingBox": {
-            "x": 2200,
-            "y": 8130,
+            "x": 220,
+            "y": 9270,
             "width": 260,
             "height": 180
           },
@@ -378,13 +378,13 @@
           ]
         },
         {
-          "id": "2:7854",
+          "id": "8:967",
           "name": "Rectangle",
           "type": "RECTANGLE",
           "visible": true,
           "absoluteBoundingBox": {
-            "x": 2540,
-            "y": 8130,
+            "x": 560,
+            "y": 9270,
             "width": 260,
             "height": 180
           },

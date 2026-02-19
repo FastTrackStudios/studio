@@ -1,6 +1,6 @@
 {
   "schema": "fts.figma.export/v2",
-  "generatedAt": "2026-02-19T08:56:07.696Z",
+  "generatedAt": "2026-02-19T10:46:28.960Z",
   "source": {
     "plugin": "fts-figma-parity-plugin",
     "pluginVersion": "v2.1",
@@ -12,7 +12,7 @@
   },
   "selection": {
     "ids": [
-      "1:1197"
+      "8:860"
     ],
     "names": [
       "parity/images/fill-mode-matrix"
@@ -28,7 +28,7 @@
   "assets": [],
   "nodes": [
     {
-      "id": "1:1197",
+      "id": "8:860",
       "name": "parity/images/fill-mode-matrix",
       "type": "FRAME",
       "visible": true,
@@ -108,7 +108,7 @@
       "strokeGeometry": [],
       "children": [
         {
-          "id": "2:7763",
+          "id": "8:861",
           "name": "parity/images/fill-mode-matrix",
           "type": "TEXT",
           "visible": true,
@@ -190,7 +190,7 @@
           "textStyleId": ""
         },
         {
-          "id": "2:7764",
+          "id": "8:862",
           "name": "Row A: baseline",
           "type": "TEXT",
           "visible": true,
@@ -272,7 +272,7 @@
           "textStyleId": ""
         },
         {
-          "id": "2:7767",
+          "id": "8:865",
           "name": "Rectangle",
           "type": "RECTANGLE",
           "visible": true,
@@ -359,7 +359,7 @@
           "strokeGeometry": []
         },
         {
-          "id": "2:7768",
+          "id": "8:866",
           "name": "Rectangle",
           "type": "RECTANGLE",
           "visible": true,
@@ -446,7 +446,7 @@
           "strokeGeometry": []
         },
         {
-          "id": "2:7769",
+          "id": "8:867",
           "name": "Rectangle",
           "type": "RECTANGLE",
           "visible": true,

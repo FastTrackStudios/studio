@@ -1,6 +1,6 @@
 {
   "schema": "fts.figma.export/v2",
-  "generatedAt": "2026-02-19T08:56:09.601Z",
+  "generatedAt": "2026-02-19T10:46:31.189Z",
   "source": {
     "plugin": "fts-figma-parity-plugin",
     "pluginVersion": "v2.1",
@@ -12,7 +12,7 @@
   },
   "selection": {
     "ids": [
-      "1:1538"
+      "8:1024"
     ],
     "names": [
       "parity/images/image-sampling"
@@ -28,12 +28,12 @@
   "assets": [],
   "nodes": [
     {
-      "id": "1:1538",
+      "id": "8:1024",
       "name": "parity/images/image-sampling",
       "type": "FRAME",
       "visible": true,
       "absoluteBoundingBox": {
-        "x": 0,
+        "x": 1980,
         "y": 11400,
         "width": 1920,
         "height": 1080
@@ -42,7 +42,7 @@
         [
           1,
           0,
-          0
+          1980
         ],
         [
           0,
@@ -108,12 +108,12 @@
       "strokeGeometry": [],
       "children": [
         {
-          "id": "2:7907",
+          "id": "8:1025",
           "name": "parity/images/image-sampling",
           "type": "TEXT",
           "visible": true,
           "absoluteBoundingBox": {
-            "x": 24,
+            "x": 2004,
             "y": 11424,
             "width": 286,
             "height": 24
@@ -190,12 +190,12 @@
           "textStyleId": ""
         },
         {
-          "id": "2:7908",
+          "id": "8:1026",
           "name": "Row A: baseline",
           "type": "TEXT",
           "visible": true,
           "absoluteBoundingBox": {
-            "x": 24,
+            "x": 2004,
             "y": 11472,
             "width": 90,
             "height": 15
@@ -272,12 +272,12 @@
           "textStyleId": ""
         },
         {
-          "id": "2:7911",
+          "id": "8:1029",
           "name": "Rectangle",
           "type": "RECTANGLE",
           "visible": true,
           "absoluteBoundingBox": {
-            "x": 180,
+            "x": 2160,
             "y": 11540,
             "width": 220,
             "height": 220
@@ -359,12 +359,12 @@
           "strokeGeometry": []
         },
         {
-          "id": "2:7912",
+          "id": "8:1030",
           "name": "Rectangle",
           "type": "RECTANGLE",
           "visible": true,
           "absoluteBoundingBox": {
-            "x": 450,
+            "x": 2430,
             "y": 11540,
             "width": 500,
             "height": 120
@@ -446,12 +446,12 @@
           "strokeGeometry": []
         },
         {
-          "id": "2:7913",
+          "id": "8:1031",
           "name": "Rectangle",
           "type": "RECTANGLE",
           "visible": true,
           "absoluteBoundingBox": {
-            "x": 1000,
+            "x": 2980,
             "y": 11540,
             "width": 180,
             "height": 260

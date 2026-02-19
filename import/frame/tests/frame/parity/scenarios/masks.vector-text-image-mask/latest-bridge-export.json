@@ -1,6 +1,6 @@
 {
   "schema": "fts.figma.export/v2",
-  "generatedAt": "2026-02-19T08:56:07.574Z",
+  "generatedAt": "2026-02-19T10:46:28.821Z",
   "source": {
     "plugin": "fts-figma-parity-plugin",
     "pluginVersion": "v2.1",
@@ -12,7 +12,7 @@
   },
   "selection": {
     "ids": [
-      "1:1187"
+      "8:850"
     ],
     "names": [
       "parity/masks/vector-text-image-mask"
@@ -28,7 +28,7 @@
   "assets": [],
   "nodes": [
     {
-      "id": "1:1187",
+      "id": "8:850",
       "name": "parity/masks/vector-text-image-mask",
       "type": "FRAME",
       "visible": true,
@@ -108,7 +108,7 @@
       "strokeGeometry": [],
       "children": [
         {
-          "id": "2:7754",
+          "id": "8:851",
           "name": "parity/masks/vector-text-image-mask",
           "type": "TEXT",
           "visible": true,
@@ -190,7 +190,7 @@
           "textStyleId": ""
         },
         {
-          "id": "2:7755",
+          "id": "8:852",
           "name": "Row A: baseline",
           "type": "TEXT",
           "visible": true,
@@ -272,7 +272,7 @@
           "textStyleId": ""
         },
         {
-          "id": "2:7758",
+          "id": "8:855",
           "name": "Rectangle",
           "type": "RECTANGLE",
           "visible": true,
@@ -340,7 +340,7 @@
           "strokeGeometry": []
         },
         {
-          "id": "2:7759",
+          "id": "8:856",
           "name": "Ellipse",
           "type": "ELLIPSE",
           "visible": true,
@@ -404,7 +404,7 @@
           "strokeGeometry": []
         },
         {
-          "id": "2:7760",
+          "id": "8:857",
           "name": "Rectangle",
           "type": "RECTANGLE",
           "visible": true,
@@ -472,7 +472,7 @@
           "strokeGeometry": []
         },
         {
-          "id": "2:7761",
+          "id": "8:858",
           "name": "MASK",
           "type": "TEXT",
           "visible": true,
@@ -554,7 +554,7 @@
           "textStyleId": ""
         },
         {
-          "id": "2:7762",
+          "id": "8:859",
           "name": "Rectangle",
           "type": "RECTANGLE",
           "visible": true,

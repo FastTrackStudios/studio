@@ -1,6 +1,6 @@
 {
   "schema": "fts.figma.export/v2",
-  "generatedAt": "2026-02-19T08:56:07.856Z",
+  "generatedAt": "2026-02-19T10:46:29.127Z",
   "source": {
     "plugin": "fts-figma-parity-plugin",
     "pluginVersion": "v2.1",
@@ -12,7 +12,7 @@
   },
   "selection": {
     "ids": [
-      "1:1205"
+      "8:868"
     ],
     "names": [
       "parity/text/mixed-style-runs"
@@ -28,7 +28,7 @@
   "assets": [],
   "nodes": [
     {
-      "id": "1:1205",
+      "id": "8:868",
       "name": "parity/text/mixed-style-runs",
       "type": "FRAME",
       "visible": true,
@@ -108,7 +108,7 @@
       "strokeGeometry": [],
       "children": [
         {
-          "id": "2:7770",
+          "id": "8:869",
           "name": "parity/text/mixed-style-runs",
           "type": "TEXT",
           "visible": true,
@@ -190,7 +190,7 @@
           "textStyleId": ""
         },
         {
-          "id": "2:7771",
+          "id": "8:870",
           "name": "Row A: baseline",
           "type": "TEXT",
           "visible": true,
@@ -272,7 +272,7 @@
           "textStyleId": ""
         },
         {
-          "id": "2:7772",
+          "id": "8:871",
           "name": "Row B: edge",
           "type": "TEXT",
           "visible": true,
@@ -354,7 +354,7 @@
           "textStyleId": ""
         },
         {
-          "id": "2:7773",
+          "id": "8:872",
           "name": "Row C: stress",
           "type": "TEXT",
           "visible": true,
@@ -436,7 +436,7 @@
           "textStyleId": ""
         },
         {
-          "id": "2:7775",
+          "id": "8:874",
           "name": "Regular Bold Italic BoldItalic Color Spacing",
           "type": "TEXT",
           "visible": true,
@@ -509,7 +509,7 @@
           "textStyleId": ""
         },
         {
-          "id": "2:7776",
+          "id": "8:875",
           "name": "Row B mixed styles with wrap: Bold segment, italic segment, and colored segment in one paragraph to test run boundaries.",
           "type": "TEXT",
           "visible": true,
@@ -574,7 +574,7 @@
           "textStyleId": ""
         },
         {
-          "id": "2:7777",
+          "id": "8:876",
           "name": "Row C stress: multi-line Bold + Italic + BoldItalic with spacing and color shifts",
           "type": "TEXT",
           "visible": true,

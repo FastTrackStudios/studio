@@ -16,7 +16,7 @@ fn main() {
 fn run() -> Result<(), String> {
     use anyrender_vello::VelloScenePainter;
     use frame_proto::FrameDocument;
-    use frame_ui::build_layout_boxes;
+    use frame_ui::{build_layout_boxes, TextFontRef};
     use image::RgbaImage;
     use kurbo::Affine;
     use peniko::Color;
@@ -60,6 +60,7 @@ fn run() -> Result<(), String> {
     let out_path = out_path.ok_or_else(|| "--out <output_png> is required".to_string())?;
     let bytes = std::fs::read(&input).map_err(|e| format!("failed reading {input}: {e}"))?;
     let export_bbox = extract_export_bbox(&bytes, root_figma_id.as_deref())?;
+    let base_color = extract_export_base_color(&bytes, root_figma_id.as_deref())?.unwrap_or(Color::WHITE);
     let doc = FrameDocument::from_source_bytes(&bytes)
         .map_err(|e| format!("failed importing source document from {input}: {e}"))?;
     let root = match root_figma_id {
@@ -122,9 +123,13 @@ fn run() -> Result<(), String> {
 
     let mut scene = Scene::new();
     let scene_transform = Affine::translate((-min_x, -min_y));
+    let text_font_bytes = load_default_text_font_bytes();
+    let text_font_ref = text_font_bytes
+        .as_ref()
+        .map(|bytes| TextFontRef { bytes, index: 0 });
     {
         let mut painter = VelloScenePainter::new(&mut scene);
-        frame_ui::paint_into_scene_with(&mut painter, &doc, root, scene_transform, None);
+        frame_ui::paint_into_scene_with(&mut painter, &doc, root, scene_transform, text_font_ref);
     }
 
     let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor::default());
@@ -145,7 +150,7 @@ fn run() -> Result<(), String> {
         &device,
         RendererOptions {
             use_cpu: false,
-            antialiasing_support: [AaConfig::Area].into_iter().collect(),
+            antialiasing_support: [AaConfig::Area, AaConfig::Msaa8].into_iter().collect(),
             num_init_threads: None,
             pipeline_cache: None,
         },
@@ -178,10 +183,10 @@ fn run() -> Result<(), String> {
             &scene,
             &target_view,
             &RenderParams {
-                base_color: Color::WHITE,
+                base_color,
                 width,
                 height,
-                antialiasing_method: AaConfig::Area,
+                antialiasing_method: AaConfig::Msaa8,
             },
         )
         .map_err(|e| format!("render_to_texture failed: {e}"))?;
@@ -275,6 +280,21 @@ fn run() -> Result<(), String> {
 }
 
 #[cfg(feature = "anyrender")]
+fn load_default_text_font_bytes() -> Option<Vec<u8>> {
+    let candidates = [
+        "/System/Library/Fonts/SFNS.ttf",
+        "/System/Library/Fonts/Supplemental/Arial.ttf",
+        "/Library/Fonts/Arial Unicode.ttf",
+    ];
+    for path in candidates {
+        if let Ok(bytes) = std::fs::read(path) {
+            return Some(bytes);
+        }
+    }
+    None
+}
+
+#[cfg(feature = "anyrender")]
 fn extract_export_bbox(
     bytes: &[u8],
     root_figma_id: Option<&str>,
@@ -318,4 +338,51 @@ fn extract_export_bbox(
         return Ok(None);
     }
     Ok(Some((x, y, w, h)))
+}
+
+#[cfg(feature = "anyrender")]
+fn extract_export_base_color(
+    bytes: &[u8],
+    root_figma_id: Option<&str>,
+) -> Result<Option<peniko::Color>, String> {
+    let json: serde_json::Value = match serde_json::from_slice(bytes) {
+        Ok(v) => v,
+        Err(_) => return Ok(None),
+    };
+    let nodes = match json.get("nodes").and_then(|n| n.as_array()) {
+        Some(nodes) if !nodes.is_empty() => nodes,
+        _ => return Ok(None),
+    };
+
+    let target = if let Some(root_id) = root_figma_id {
+        nodes.iter().find(|node| node.get("id").and_then(|v| v.as_str()) == Some(root_id))
+    } else {
+        nodes.first()
+    }
+    .unwrap_or(&nodes[0]);
+
+    let fills = match target.get("fills").and_then(|v| v.as_array()) {
+        Some(fills) => fills,
+        None => return Ok(None),
+    };
+    let solid = match fills.iter().find(|fill| fill.get("type").and_then(|v| v.as_str()) == Some("SOLID")) {
+        Some(fill) => fill,
+        None => return Ok(None),
+    };
+    let color = match solid.get("color").and_then(|v| v.as_object()) {
+        Some(color) => color,
+        None => return Ok(None),
+    };
+    let r = color.get("r").and_then(|v| v.as_f64()).unwrap_or(1.0);
+    let g = color.get("g").and_then(|v| v.as_f64()).unwrap_or(1.0);
+    let b = color.get("b").and_then(|v| v.as_f64()).unwrap_or(1.0);
+    let a = solid.get("opacity").and_then(|v| v.as_f64()).unwrap_or(1.0);
+
+    let to_u8 = |v: f64| (v * 255.0).round().clamp(0.0, 255.0) as u8;
+    Ok(Some(peniko::Color::from_rgba8(
+        to_u8(r),
+        to_u8(g),
+        to_u8(b),
+        to_u8(a),
+    )))
 }

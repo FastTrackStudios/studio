@@ -1,6 +1,6 @@
 {
   "schema": "fts.figma.export/v2",
-  "generatedAt": "2026-02-19T08:56:07.986Z",
+  "generatedAt": "2026-02-19T10:46:29.273Z",
   "source": {
     "plugin": "fts-figma-parity-plugin",
     "pluginVersion": "v2.1",
@@ -12,7 +12,7 @@
   },
   "selection": {
     "ids": [
-      "1:1214"
+      "8:877"
     ],
     "names": [
       "parity/layout/auto-layout-hug-fill"
@@ -28,7 +28,7 @@
   "assets": [],
   "nodes": [
     {
-      "id": "1:1214",
+      "id": "8:877",
       "name": "parity/layout/auto-layout-hug-fill",
       "type": "FRAME",
       "visible": true,
@@ -108,7 +108,7 @@
       "strokeGeometry": [],
       "children": [
         {
-          "id": "2:7778",
+          "id": "8:878",
           "name": "parity/layout/auto-layout-hug-fill",
           "type": "TEXT",
           "visible": true,
@@ -190,7 +190,7 @@
           "textStyleId": ""
         },
         {
-          "id": "2:7779",
+          "id": "8:879",
           "name": "Row A: baseline",
           "type": "TEXT",
           "visible": true,
@@ -272,7 +272,7 @@
           "textStyleId": ""
         },
         {
-          "id": "2:7782",
+          "id": "8:882",
           "name": "__auto-layout-container",
           "type": "FRAME",
           "visible": true,
@@ -352,7 +352,7 @@
           "strokeGeometry": [],
           "children": [
             {
-              "id": "2:7783",
+              "id": "8:883",
               "name": "__auto-layout-row",
               "type": "FRAME",
               "visible": true,
@@ -419,7 +419,7 @@
               "strokeGeometry": [],
               "children": [
                 {
-                  "id": "2:7784",
+                  "id": "8:884",
                   "name": "Rectangle",
                   "type": "RECTANGLE",
                   "visible": true,
@@ -487,7 +487,7 @@
                   "strokeGeometry": []
                 },
                 {
-                  "id": "2:7785",
+                  "id": "8:885",
                   "name": "Rectangle",
                   "type": "RECTANGLE",
                   "visible": true,
@@ -557,7 +557,7 @@
               ]
             },
             {
-              "id": "2:7786",
+              "id": "8:886",
               "name": "__auto-layout-fill-child",
               "type": "FRAME",
               "visible": true,

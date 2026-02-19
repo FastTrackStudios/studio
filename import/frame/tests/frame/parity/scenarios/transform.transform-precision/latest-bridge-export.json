@@ -1,6 +1,6 @@
 {
   "schema": "fts.figma.export/v2",
-  "generatedAt": "2026-02-19T08:56:09.746Z",
+  "generatedAt": "2026-02-19T10:46:31.324Z",
   "source": {
     "plugin": "fts-figma-parity-plugin",
     "pluginVersion": "v2.1",
@@ -12,7 +12,7 @@
   },
   "selection": {
     "ids": [
-      "1:1546"
+      "8:1032"
     ],
     "names": [
       "parity/transform/transform-precision"
@@ -28,13 +28,13 @@
   "assets": [],
   "nodes": [
     {
-      "id": "1:1546",
+      "id": "8:1032",
       "name": "parity/transform/transform-precision",
       "type": "FRAME",
       "visible": true,
       "absoluteBoundingBox": {
-        "x": 1980,
-        "y": 11400,
+        "x": 0,
+        "y": 12540,
         "width": 1920,
         "height": 1080
       },
@@ -42,12 +42,12 @@
         [
           1,
           0,
-          1980
+          0
         ],
         [
           0,
           1,
-          11400
+          12540
         ]
       ],
       "rotation": 0,
@@ -108,13 +108,13 @@
       "strokeGeometry": [],
       "children": [
         {
-          "id": "2:7914",
+          "id": "8:1033",
           "name": "parity/transform/transform-precision",
           "type": "TEXT",
           "visible": true,
           "absoluteBoundingBox": {
-            "x": 2004,
-            "y": 11424,
+            "x": 24,
+            "y": 12564,
             "width": 346,
             "height": 24
           },
@@ -190,13 +190,13 @@
           "textStyleId": ""
         },
         {
-          "id": "2:7918",
+          "id": "8:1037",
           "name": "__transform-precision-root",
           "type": "FRAME",
           "visible": true,
           "absoluteBoundingBox": {
-            "x": 2160.5,
-            "y": 11540.5,
+            "x": 180.5,
+            "y": 12680.5,
             "width": 780,
             "height": 500
           },
@@ -270,13 +270,13 @@
           "strokeGeometry": [],
           "children": [
             {
-              "id": "2:7919",
+              "id": "8:1038",
               "name": "Rectangle",
               "type": "RECTANGLE",
               "visible": true,
               "absoluteBoundingBox": {
-                "x": 2280.75,
-                "y": 11567.102575093508,
+                "x": 300.75,
+                "y": 12707.102575093508,
                 "width": 357.9766484349966,
                 "height": 279.7258354127407
               },
@@ -338,13 +338,13 @@
               "strokeGeometry": []
             },
             {
-              "id": "2:7920",
+              "id": "8:1039",
               "name": "Rectangle",
               "type": "RECTANGLE",
               "visible": true,
               "absoluteBoundingBox": {
-                "x": 2293.580942362547,
-                "y": 11680.75,
+                "x": 313.5809423625469,
+                "y": 12820.75,
                 "width": 277.11260083317757,
                 "height": 224.76356968283653
               },
@@ -406,13 +406,13 @@
               "strokeGeometry": []
             },
             {
-              "id": "2:7921",
+              "id": "8:1040",
               "name": "Rectangle",
               "type": "RECTANGLE",
               "visible": true,
               "absoluteBoundingBox": {
-                "x": 2380.60009765625,
-                "y": 11660.998474314809,
+                "x": 400.6000061035156,
+                "y": 12800.998474314809,
                 "width": 209.1888388544321,
                 "height": 171.70453841984272
               },
