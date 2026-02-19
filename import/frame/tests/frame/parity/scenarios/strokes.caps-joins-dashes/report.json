@@ -1,0 +1,136 @@
+{
+  "generatedAt": "2026-02-19T09:34:32Z",
+  "exportPath": "tests/frame/parity/scenarios/strokes.caps-joins-dashes/latest-bridge-export.json",
+  "featureCoverage": {
+    "schema": "fts.figma.export/v2",
+    "nodeCount": 10,
+    "nodeTypeCounts": {
+      "FRAME": 1,
+      "LINE": 2,
+      "TEXT": 4,
+      "VECTOR": 3
+    },
+    "features": {
+      "hasMask": 0,
+      "alphaMask": 0,
+      "luminanceMask": 0,
+      "hasClip": 1,
+      "nonNormalBlend": 0,
+      "gradientFill": 0,
+      "imageFill": 0,
+      "dropShadow": 0,
+      "innerShadow": 0,
+      "layerBlur": 0,
+      "backgroundBlur": 0,
+      "svgExported": 0
+    }
+  },
+  "visualAcceptance": {
+    "actualDir": "tests/frame/parity/scenarios/strokes.caps-joins-dashes/actual.png",
+    "expectedDir": "tests/frame/parity/scenarios/strokes.caps-joins-dashes/expected.png",
+    "thresholdPercent": 0.0,
+    "total": 1,
+    "passed": 0,
+    "failed": 1,
+    "missingActual": 0,
+    "results": [
+      {
+        "path": "expected.png",
+        "status": "fail",
+        "error": "warning: associated functions `from_fts_export_json` and `from_grida_bridge_json` are never used\n   --> crates/frame-proto/src/document.rs:147:8\n    |\n146 | impl FrameDocument {\n    | ------------------ associated functions in this implementation\n147 |     fn from_fts_export_json(json: &str) -> Result<Self, FrameDocumentError> {\n    |        ^^^^^^^^^^^^^^^^^^^^\n...\n251 |     fn from_grida_bridge_json(json: &str) -> Result<Self, FrameDocumentError> {\n    |        ^^^^^^^^^^^^^^^^^^^^^^\n    |\n    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default\n\n{\"actual\":\"tests/frame/parity/scenarios/strokes.caps-joins-dashes/actual.png\",\"expected\":\"tests/frame/parity/scenarios/strokes.caps-joins-dashes/expected.png\",\"width\":1920,\"height\":1080,\"diffPixels\":2055013,\"diffPercent\":99.103636,\"meanAbsDeltaPerChannel\":10.952460,\"maxChannelDelta\":255,\"thresholdPercent\":0.000000,\"passed\":false}\nvisual_diff error: diff_percent 99.1036% exceeded threshold 0.0000%"
+      }
+    ]
+  },
+  "performance": {
+    "avg": {
+      "importMs": 2.113180666666667,
+      "layoutMs": 0.124125,
+      "nodeCount": 11,
+      "passCounts": {
+        "clipEnd": 0,
+        "clipStart": 0,
+        "layerEnd": 0,
+        "layerStart": 0,
+        "path": 9,
+        "rect": 0,
+        "text": 0
+      },
+      "primitiveCount": 9,
+      "primitiveMs": 0.233653,
+      "sceneMs": 2.128611,
+      "totalMs": 4.618305666666667
+    },
+    "bytes": 90549,
+    "input": "tests/frame/parity/scenarios/strokes.caps-joins-dashes/latest-bridge-export.json",
+    "iterations": 3,
+    "readMs": 0.25549999999999995,
+    "root": "0:1",
+    "samples": [
+      {
+        "importMs": 3.078209,
+        "layoutMs": 0.278167,
+        "nodeCount": 11,
+        "primitiveCount": 9,
+        "primitiveMs": 0.33849999999999997,
+        "sceneMs": 4.127833,
+        "totalMs": 7.859458
+      },
+      {
+        "importMs": 1.5845,
+        "layoutMs": 0.046666,
+        "nodeCount": 11,
+        "primitiveCount": 9,
+        "primitiveMs": 0.17995899999999998,
+        "sceneMs": 1.163625,
+        "totalMs": 2.983959
+      },
+      {
+        "importMs": 1.676833,
+        "layoutMs": 0.047542,
+        "nodeCount": 11,
+        "primitiveCount": 9,
+        "primitiveMs": 0.1825,
+        "sceneMs": 1.094375,
+        "totalMs": 3.0115
+      }
+    ]
+  },
+  "renderDiagnostics": {
+    "input": "tests/frame/parity/scenarios/strokes.caps-joins-dashes/latest-bridge-export.json",
+    "root": "0:1",
+    "summary": "Render diag: nodes 11 | blend 0 | grad 0 | image 0 | drop 0 | inner 0 | blur 0 (approx 0) | bg-blur 0 (approx 0) | alpha-mask 0 | luminance-mask 0*",
+    "diagnostics": {
+      "totalNodes": 11,
+      "nonNormalBlendNodes": 0,
+      "gradientFillNodes": 0,
+      "imageFillNodes": 0,
+      "dropShadowNodes": 0,
+      "innerShadowNodes": 0,
+      "layerBlurNodes": 0,
+      "layerBlurApproxNodes": 0,
+      "backgroundBlurNodes": 0,
+      "backgroundBlurApproxNodes": 0,
+      "alphaMaskNodes": 0,
+      "luminanceMaskNodes": 0
+    }
+  },
+  "importDiagnostics": {
+    "input": "tests/frame/parity/scenarios/strokes.caps-joins-dashes/latest-bridge-export.json",
+    "sourceSchema": "fts.figma.export/v2",
+    "normalizedAliases": 0,
+    "unsupportedNodeKeyCount": 0,
+    "topUnsupportedKeys": []
+  },
+  "gates": {
+    "visualPass": false,
+    "hasLuminanceMasks": false,
+    "hasLayerBlur": false,
+    "hasBackgroundBlur": false,
+    "renderHasLayerBlurApprox": false,
+    "renderHasBackgroundBlurApprox": false,
+    "renderHasLuminanceMaskApprox": false,
+    "importHasUnsupportedKeys": false,
+    "parityPass": true,
+    "blockers": []
+  }
+}

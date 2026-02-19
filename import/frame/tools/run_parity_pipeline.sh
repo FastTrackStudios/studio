@@ -58,7 +58,6 @@ fi
 mkdir -p "$OUT_DIR"
 
 PARITY_JSON="$OUT_DIR/report.json"
-PARITY_MD="$OUT_DIR/report.md"
 TMP_DIR="$(mktemp -d)"
 trap 'rm -rf "$TMP_DIR"' EXIT
 RENDER_DIAG_JSON="$TMP_DIR/render-diagnostics.json"
@@ -91,12 +90,10 @@ fi
   --render-diag-json "$RENDER_DIAG_JSON" \
   --import-diag-json "$IMPORT_DIAG_JSON" \
   "${VISUAL_ARGS[@]}" \
-  --out-json "$PARITY_JSON" \
-  --out-md "$PARITY_MD"
+  --out-json "$PARITY_JSON"
 
 echo "wrote:"
 echo "  $PARITY_JSON"
-echo "  $PARITY_MD"
 
 if [[ "$REQUIRE_PASS" == "true" ]]; then
   if jq -e '.gates.parityPass == true' "$PARITY_JSON" >/dev/null; then
