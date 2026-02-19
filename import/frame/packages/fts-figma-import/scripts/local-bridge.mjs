@@ -78,6 +78,8 @@ const server = createServer(async (req, res) => {
       ? parsed.parityRootDir.trim()
       : PARITY_ROOT;
     let written = 0;
+    let jsonWritten = 0;
+    let jsonFallbackWritten = 0;
     for (const scenario of scenarios) {
       if (!scenario || typeof scenario !== 'object') {
         continue;
@@ -93,10 +95,25 @@ const server = createServer(async (req, res) => {
       const scenarioDir = join(root, id);
       const exportPath = join(scenarioDir, 'export', 'latest-bridge-export.json');
       const expectedPngPath = join(scenarioDir, 'expected', 'frame.png');
+      await mkdir(dirname(exportPath), { recursive: true });
       await mkdir(dirname(expectedPngPath), { recursive: true });
       if (exportJson) {
-        await mkdir(dirname(exportPath), { recursive: true });
         await writeFile(exportPath, `${JSON.stringify(exportJson, null, 2)}\n`, 'utf8');
+        jsonWritten += 1;
+      } else {
+        // Keep parity pipeline file layout deterministic even when source plugin
+        // does not provide renderer-ready export JSON.
+        const fallback = {
+          schema: 'fts.figma.parity-pack/fallback-v1',
+          generatedAt: new Date().toISOString(),
+          warning: 'Scenario did not include exportJson; this file is metadata-only.',
+          scenario: {
+            id,
+            frameName: typeof scenario.frameName === 'string' ? scenario.frameName : undefined,
+          },
+        };
+        await writeFile(exportPath, `${JSON.stringify(fallback, null, 2)}\n`, 'utf8');
+        jsonFallbackWritten += 1;
       }
       await writeFile(expectedPngPath, Buffer.from(expectedPngBase64, 'base64'));
       written += 1;
@@ -107,8 +124,12 @@ const server = createServer(async (req, res) => {
       path: root,
       bytes: body.length,
       writtenScenarios: written,
+      jsonWritten,
+      jsonFallbackWritten,
     });
-    console.log(`[fts-figma-bridge] wrote parity pack: ${written} scenario(s) -> ${root}`);
+    console.log(
+      `[fts-figma-bridge] wrote parity pack: ${written} scenario(s), json=${jsonWritten}, fallback-json=${jsonFallbackWritten} -> ${root}`,
+    );
   } catch (error) {
     console.error('[fts-figma-bridge] request failed:', error instanceof Error ? error.message : String(error));
     sendJson(res, 500, {

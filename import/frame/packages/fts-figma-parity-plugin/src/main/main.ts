@@ -101,7 +101,12 @@ async function preflightBridge(): Promise<'ok' | string> {
 }
 
 async function exportAllPngsToBridge(byName: Map<string, FrameNode>): Promise<{ written: number; error?: string }> {
-	const scenarios: Array<{ id: string; frameName: string; expectedPngBase64: string }> = [];
+	const scenarios: Array<{
+		id: string;
+		frameName: string;
+		exportJson: unknown;
+		expectedPngBase64: string;
+	}> = [];
 	const exportErrors: string[] = [];
 	for (const frameName of FRAME_NAMES) {
 		const frame = byName.get(frameName);
@@ -114,6 +119,7 @@ async function exportAllPngsToBridge(byName: Map<string, FrameNode>): Promise<{ 
 			scenarios.push({
 				id: frameName.replace(/^parity\//, '').replace(/\//g, '.'),
 				frameName,
+				exportJson: buildExportPayloadForFrame(frame),
 				expectedPngBase64: bytesToBase64(pngBytes),
 			});
 		} catch (error) {
@@ -176,6 +182,232 @@ async function exportAllPngsToBridge(byName: Map<string, FrameNode>): Promise<{ 
 		figma.notify(`Parity export failed: ${message}`);
 		return { written: 0, error: message };
 	}
+}
+
+type ExportNode = {
+	id: string;
+	name: string;
+	type: string;
+	visible: boolean;
+	absoluteBoundingBox?: { x: number; y: number; width: number; height: number };
+	relativeTransform?: number[][];
+	size?: { x: number; y: number };
+	rotation?: number;
+	opacity?: number;
+	blendMode?: string;
+	clipsContent?: boolean;
+	layoutMode?: string;
+	layoutWrap?: string;
+	layoutSizingHorizontal?: string;
+	layoutSizingVertical?: string;
+	layoutAlign?: string;
+	layoutGrow?: number;
+	primaryAxisSizingMode?: string;
+	primaryAxisAlignItems?: string;
+	counterAxisSizingMode?: string;
+	counterAxisAlignItems?: string;
+	paddingTop?: number;
+	paddingRight?: number;
+	paddingBottom?: number;
+	paddingLeft?: number;
+	itemSpacing?: number;
+	effects?: unknown[];
+	fills?: unknown[];
+	strokes?: unknown[];
+	strokeWeight?: number;
+	strokeMiterLimit?: number;
+	strokeAlign?: string;
+	strokeJoin?: string;
+	strokeCap?: string;
+	dashPattern?: number[];
+	isMask?: boolean;
+	maskType?: string;
+	cornerSmoothing?: number;
+	cornerRadius?: number;
+	topLeftRadius?: number;
+	topRightRadius?: number;
+	bottomLeftRadius?: number;
+	bottomRightRadius?: number;
+	rectangleCornerRadii?: number[];
+	fillGeometry?: unknown;
+	strokeGeometry?: unknown;
+	characters?: string;
+	fontSize?: number;
+	fontFamily?: string;
+	fontWeight?: number;
+	lineHeightPx?: number;
+	letterSpacingPx?: number;
+	textAlignHorizontal?: string;
+	textAlignVertical?: string;
+	textAutoResize?: string;
+	lineHeight?: unknown;
+	letterSpacing?: unknown;
+	paragraphSpacing?: number;
+	paragraphIndent?: number;
+	textCase?: string;
+	textDecoration?: string;
+	textStyleId?: string;
+	children?: ExportNode[];
+};
+
+function buildExportPayloadForFrame(frame: FrameNode): unknown {
+	const root = serializeNodeLite(frame, 0, 16);
+	return {
+		schema: 'fts.figma.export/v2',
+		generatedAt: new Date().toISOString(),
+		source: {
+			plugin: 'fts-figma-parity-plugin',
+			pluginVersion: GENERATOR_VERSION,
+			editorType: figma.editorType,
+			fileKey: figma.fileKey ?? undefined,
+			page: { id: figma.currentPage.id, name: figma.currentPage.name },
+		},
+		selection: {
+			ids: [frame.id],
+			names: [frame.name],
+			totalRoots: 1,
+			totalNodes: countNodes(root),
+		},
+		options: {
+			includeSvg: false,
+			includePng: false,
+			maxDepth: 16,
+		},
+		assets: [],
+		nodes: [root],
+	};
+}
+
+function serializeNodeLite(node: SceneNode, depth: number, maxDepth: number): ExportNode {
+	const read = <T>(key: string): T | undefined => {
+		try {
+			return (node as unknown as Record<string, T>)[key];
+		} catch {
+			return undefined;
+		}
+	};
+
+	const absoluteBoundingBox = read<{ x: number; y: number; width: number; height: number }>(
+		'absoluteBoundingBox',
+	);
+	const relativeTransform = read<number[][]>('relativeTransform');
+	const base: ExportNode = {
+		id: node.id,
+		name: node.name,
+		type: node.type,
+		visible: node.visible,
+		absoluteBoundingBox: sanitize(absoluteBoundingBox),
+		relativeTransform: sanitize(relativeTransform),
+		size: sanitize(read<{ x: number; y: number }>('size')),
+		rotation: read<number>('rotation'),
+		opacity: read<number>('opacity'),
+		blendMode: read<string>('blendMode'),
+		clipsContent: read<boolean>('clipsContent'),
+		layoutMode: read<string>('layoutMode'),
+		layoutWrap: read<string>('layoutWrap'),
+		layoutSizingHorizontal: read<string>('layoutSizingHorizontal'),
+		layoutSizingVertical: read<string>('layoutSizingVertical'),
+		layoutAlign: read<string>('layoutAlign'),
+		layoutGrow: read<number>('layoutGrow'),
+		primaryAxisSizingMode: read<string>('primaryAxisSizingMode'),
+		primaryAxisAlignItems: read<string>('primaryAxisAlignItems'),
+		counterAxisSizingMode: read<string>('counterAxisSizingMode'),
+		counterAxisAlignItems: read<string>('counterAxisAlignItems'),
+		paddingTop: read<number>('paddingTop'),
+		paddingRight: read<number>('paddingRight'),
+		paddingBottom: read<number>('paddingBottom'),
+		paddingLeft: read<number>('paddingLeft'),
+		itemSpacing: read<number>('itemSpacing'),
+		effects: sanitize(read<unknown[]>('effects')),
+		fills: sanitize(read<unknown[]>('fills')),
+		strokes: sanitize(read<unknown[]>('strokes')),
+		strokeWeight: read<number>('strokeWeight'),
+		strokeMiterLimit: read<number>('strokeMiterLimit'),
+		strokeAlign: read<string>('strokeAlign'),
+		strokeJoin: read<string>('strokeJoin'),
+		strokeCap: read<string>('strokeCap'),
+		dashPattern: sanitize(read<number[]>('dashPattern')),
+		isMask: read<boolean>('isMask'),
+		maskType: read<string>('maskType'),
+		cornerSmoothing: read<number>('cornerSmoothing'),
+		cornerRadius: read<number>('cornerRadius'),
+		topLeftRadius: read<number>('topLeftRadius'),
+		topRightRadius: read<number>('topRightRadius'),
+		bottomLeftRadius: read<number>('bottomLeftRadius'),
+		bottomRightRadius: read<number>('bottomRightRadius'),
+		rectangleCornerRadii: sanitize(read<number[]>('rectangleCornerRadii')),
+		fillGeometry: sanitize(read<unknown>('fillGeometry')),
+		strokeGeometry: sanitize(read<unknown>('strokeGeometry')),
+	};
+
+	if (node.type === 'TEXT') {
+		base.characters = node.characters;
+		base.fontSize = typeof node.fontSize === 'number' ? node.fontSize : undefined;
+		base.fontFamily =
+			typeof node.fontName === 'object' && node.fontName ? (node.fontName as FontName).family : undefined;
+		base.fontWeight =
+			typeof node.fontWeight === 'number' ? node.fontWeight : undefined;
+		base.lineHeightPx = typeof node.lineHeight === 'object' && node.lineHeight && 'value' in node.lineHeight
+			? Number((node.lineHeight as { value: number }).value)
+			: undefined;
+		base.letterSpacingPx =
+			typeof node.letterSpacing === 'object' && node.letterSpacing && 'value' in node.letterSpacing
+				? Number((node.letterSpacing as { value: number }).value)
+				: undefined;
+		base.textAlignHorizontal = node.textAlignHorizontal;
+		base.textAlignVertical = node.textAlignVertical;
+		base.textAutoResize = node.textAutoResize;
+		base.lineHeight = sanitize(node.lineHeight);
+		base.letterSpacing = sanitize(node.letterSpacing);
+		base.paragraphSpacing = node.paragraphSpacing;
+		base.paragraphIndent = node.paragraphIndent;
+		base.textCase = typeof node.textCase === 'symbol' ? 'MIXED' : String(node.textCase);
+		base.textDecoration =
+			typeof node.textDecoration === 'symbol' ? 'MIXED' : String(node.textDecoration);
+		base.textStyleId = node.textStyleId;
+	}
+
+	if ('children' in node && depth < maxDepth) {
+		base.children = node.children
+			.map((child) => serializeNodeLite(child, depth + 1, maxDepth))
+			.filter(Boolean);
+	}
+
+	return pruneUndefined(base);
+}
+
+function sanitize<T>(value: T): T {
+	if (value === null || value === undefined) {
+		return value;
+	}
+	try {
+		return JSON.parse(JSON.stringify(value)) as T;
+	} catch {
+		return value;
+	}
+}
+
+function pruneUndefined<T>(value: T): T {
+	if (Array.isArray(value)) {
+		return value.map((item) => pruneUndefined(item)) as T;
+	}
+	if (!value || typeof value !== 'object') {
+		return value;
+	}
+	const input = value as Record<string, unknown>;
+	const out: Record<string, unknown> = {};
+	for (const [key, v] of Object.entries(input)) {
+		if (v === undefined) {
+			continue;
+		}
+		out[key] = pruneUndefined(v);
+	}
+	return out as T;
+}
+
+function countNodes(node: ExportNode): number {
+	const children = node.children ?? [];
+	return 1 + children.reduce((sum, child) => sum + countNodes(child), 0);
 }
 
 async function exportNodeAsPng(node: SceneNode): Promise<Uint8Array> {
