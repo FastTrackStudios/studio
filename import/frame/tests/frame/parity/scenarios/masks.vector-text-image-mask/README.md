@@ -15,3 +15,9 @@ Mask semantics across vector, text, and image mask sources.
 
 ## Why this is tested
 Different mask sources stress different sampling and alpha paths.
+
+## Artifacts
+
+- Expected image: [expected/frame.png](./expected/frame.png)
+- Actual image: [actual/frame.png](./actual/frame.png)
+- Export JSON: [export/latest-bridge-export.json](./export/latest-bridge-export.json)

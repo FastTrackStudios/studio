@@ -15,3 +15,9 @@ Mixed style runs inside a single text node.
 
 ## Why this is tested
 Style-run support catches gaps between text model and render implementation.
+
+## Artifacts
+
+- Expected image: [expected/frame.png](./expected/frame.png)
+- Actual image: [actual/frame.png](./actual/frame.png)
+- Export JSON: [export/latest-bridge-export.json](./export/latest-bridge-export.json)

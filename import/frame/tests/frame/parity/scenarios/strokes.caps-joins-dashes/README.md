@@ -15,3 +15,9 @@ Stroke cap/join/dash semantics for vector outlines.
 
 ## Why this is tested
 Stroke parameter support is commonly incomplete and drives noticeable geometry differences.
+
+## Artifacts
+
+- Expected image: [expected/frame.png](./expected/frame.png)
+- Actual image: [actual/frame.png](./actual/frame.png)
+- Export JSON: [export/latest-bridge-export.json](./export/latest-bridge-export.json)

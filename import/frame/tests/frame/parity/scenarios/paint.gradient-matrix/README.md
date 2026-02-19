@@ -15,3 +15,9 @@ Gradient fidelity for linear, radial, and angular paint types.
 
 ## Why this is tested
 Gradient interpolation and transform mapping are frequent parity breakpoints.
+
+## Artifacts
+
+- Expected image: [expected/frame.png](./expected/frame.png)
+- Actual image: [actual/frame.png](./actual/frame.png)
+- Export JSON: [export/latest-bridge-export.json](./export/latest-bridge-export.json)

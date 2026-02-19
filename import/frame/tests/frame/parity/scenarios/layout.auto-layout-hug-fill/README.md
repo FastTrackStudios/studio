@@ -15,3 +15,9 @@ Auto-layout behavior for hug, fill, and fixed sizing.
 
 ## Why this is tested
 Layout policy mismatches produce large downstream visual drift.
+
+## Artifacts
+
+- Expected image: [expected/frame.png](./expected/frame.png)
+- Actual image: [actual/frame.png](./actual/frame.png)
+- Export JSON: [export/latest-bridge-export.json](./export/latest-bridge-export.json)

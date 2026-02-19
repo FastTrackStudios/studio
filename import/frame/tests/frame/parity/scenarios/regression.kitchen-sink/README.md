@@ -15,3 +15,9 @@ A combined broad-spectrum regression gate across all major features.
 
 ## Why this is tested
 This serves as the final comprehensive parity barrier before sign-off.
+
+## Artifacts
+
+- Expected image: [expected/frame.png](./expected/frame.png)
+- Actual image: [actual/frame.png](./actual/frame.png)
+- Export JSON: [export/latest-bridge-export.json](./export/latest-bridge-export.json)

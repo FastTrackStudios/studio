@@ -15,3 +15,9 @@ Subpixel positioning and sizing behavior for primitive rasterization.
 
 ## Why this is tested
 Subpixel handling is a common source of parity drift and aliasing mismatches.
+
+## Artifacts
+
+- Expected image: [expected/frame.png](./expected/frame.png)
+- Actual image: [actual/frame.png](./actual/frame.png)
+- Export JSON: [export/latest-bridge-export.json](./export/latest-bridge-export.json)

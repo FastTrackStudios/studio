@@ -15,3 +15,9 @@ Layer blur and background blur behavior and clipping interaction.
 
 ## Why this is tested
 Blur support is a known parity risk and often implemented as approximation.
+
+## Artifacts
+
+- Expected image: [expected/frame.png](./expected/frame.png)
+- Actual image: [actual/frame.png](./actual/frame.png)
+- Export JSON: [export/latest-bridge-export.json](./export/latest-bridge-export.json)

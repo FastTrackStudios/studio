@@ -15,3 +15,9 @@ Blend mode behavior across common and non-default modes.
 
 ## Why this is tested
 Blend compositing differences can be subtle but produce large pixel-diff failures in real designs.
+
+## Artifacts
+
+- Expected image: [expected/frame.png](./expected/frame.png)
+- Actual image: [actual/frame.png](./actual/frame.png)
+- Export JSON: [export/latest-bridge-export.json](./export/latest-bridge-export.json)
