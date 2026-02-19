@@ -59,6 +59,7 @@ fn run() -> Result<(), String> {
 
     let out_path = out_path.ok_or_else(|| "--out <output_png> is required".to_string())?;
     let bytes = std::fs::read(&input).map_err(|e| format!("failed reading {input}: {e}"))?;
+    let export_bbox = extract_export_bbox(&bytes, root_figma_id.as_deref())?;
     let doc = FrameDocument::from_source_bytes(&bytes)
         .map_err(|e| format!("failed importing source document from {input}: {e}"))?;
     let root = match root_figma_id {
@@ -88,16 +89,36 @@ fn run() -> Result<(), String> {
         }
     }
     if !min_x.is_finite() || !min_y.is_finite() || !max_x.is_finite() || !max_y.is_finite() {
-        min_x = 0.0;
-        min_y = 0.0;
-        max_x = 1.0;
-        max_y = 1.0;
+        if let Some((x, y, w, h)) = export_bbox {
+            min_x = x;
+            min_y = y;
+            max_x = x + w;
+            max_y = y + h;
+        } else {
+            min_x = 0.0;
+            min_y = 0.0;
+            max_x = 1.0;
+            max_y = 1.0;
+        }
     }
 
+    let (bbox_width, bbox_height) = export_bbox
+        .map(|(_, _, w, h)| (w.ceil().max(1.0) as u32, h.ceil().max(1.0) as u32))
+        .unwrap_or((1, 1));
     let natural_width = (max_x - min_x).ceil().max(1.0) as u32;
     let natural_height = (max_y - min_y).ceil().max(1.0) as u32;
     let width = width_override.unwrap_or(natural_width).clamp(1, 8192);
     let height = height_override.unwrap_or(natural_height).clamp(1, 8192);
+    let width = if width_override.is_some() {
+        width
+    } else {
+        width.max(bbox_width)
+    };
+    let height = if height_override.is_some() {
+        height
+    } else {
+        height.max(bbox_height)
+    };
 
     let mut scene = Scene::new();
     let scene_transform = Affine::translate((-min_x, -min_y));
@@ -251,4 +272,50 @@ fn run() -> Result<(), String> {
         input, out_path, width, height
     );
     Ok(())
+}
+
+#[cfg(feature = "anyrender")]
+fn extract_export_bbox(
+    bytes: &[u8],
+    root_figma_id: Option<&str>,
+) -> Result<Option<(f64, f64, f64, f64)>, String> {
+    let json: serde_json::Value = match serde_json::from_slice(bytes) {
+        Ok(v) => v,
+        Err(_) => return Ok(None),
+    };
+    let nodes = match json.get("nodes").and_then(|n| n.as_array()) {
+        Some(nodes) if !nodes.is_empty() => nodes,
+        _ => return Ok(None),
+    };
+
+    let target = if let Some(root_id) = root_figma_id {
+        nodes.iter().find(|node| node.get("id").and_then(|v| v.as_str()) == Some(root_id))
+    } else {
+        nodes.first()
+    }
+    .unwrap_or(&nodes[0]);
+
+    let bbox = target
+        .get("absoluteBoundingBox")
+        .ok_or_else(|| "export node missing absoluteBoundingBox".to_string())?;
+    let x = bbox
+        .get("x")
+        .and_then(|v| v.as_f64())
+        .ok_or_else(|| "invalid absoluteBoundingBox.x".to_string())?;
+    let y = bbox
+        .get("y")
+        .and_then(|v| v.as_f64())
+        .ok_or_else(|| "invalid absoluteBoundingBox.y".to_string())?;
+    let w = bbox
+        .get("width")
+        .and_then(|v| v.as_f64())
+        .ok_or_else(|| "invalid absoluteBoundingBox.width".to_string())?;
+    let h = bbox
+        .get("height")
+        .and_then(|v| v.as_f64())
+        .ok_or_else(|| "invalid absoluteBoundingBox.height".to_string())?;
+    if w <= 0.0 || h <= 0.0 {
+        return Ok(None);
+    }
+    Ok(Some((x, y, w, h)))
 }

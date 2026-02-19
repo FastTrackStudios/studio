@@ -74,9 +74,23 @@ for scenario_dir in "${SCENARIO_DIRS[@]}"; do
 
   mkdir -p "$(dirname "$actual_png")"
   echo "[$scenario_id] rendering actual/frame.png"
-  cargo run -q -p frame-ui --features anyrender --bin render_png -- \
-    "$export_json" \
+  width="$(jq -r '.nodes[0].absoluteBoundingBox.width // 0' "$export_json" 2>/dev/null || echo 0)"
+  height="$(jq -r '.nodes[0].absoluteBoundingBox.height // 0' "$export_json" 2>/dev/null || echo 0)"
+
+  render_args=(
+    "$export_json"
     --out "$actual_png"
+  )
+
+  if [[ "$width" != "0" && "$height" != "0" ]]; then
+    width_int="$(printf '%.0f' "$width")"
+    height_int="$(printf '%.0f' "$height")"
+    if [[ "$width_int" -gt 0 && "$height_int" -gt 0 ]]; then
+      render_args+=(--width "$width_int" --height "$height_int")
+    fi
+  fi
+
+  cargo run -q -p frame-ui --features anyrender --bin render_png -- "${render_args[@]}"
 done
 
 echo "done rendering parity actual PNGs"
