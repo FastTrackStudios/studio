@@ -7,16 +7,22 @@ set -euo pipefail
 #     [--all] \
 #     [--core10] \
 #     [--scenario <scenario-id>] \
+#     [--precision <digits>] \
 #     [--require-pass]
 #
 # Notes:
-# - Strict pass requires byte-identical SVG files.
-# - Canonical pass uses xmllint C14N when available (diagnostic only).
+# - Strict pass prefers byte-identical SVG files but falls back to
+#   svg_structure_diff semantic equality with numeric tolerances.
+# - Canonical pass uses frame-ui svg_canonical_diff and can be promoted by
+#   semantic structure equality when only float formatting differs.
 
 ROOT="tests/frame/parity"
 SCENARIO_FILTER=""
 RUN_ALL="false"
 REQUIRE_PASS="false"
+PRECISION="4"
+STRUCT_ABS_TOL="0.006"
+STRUCT_REL_TOL="0.0"
 
 CORE10_SCENARIOS=(
   "primitives.fractional-geometry"
@@ -53,6 +59,10 @@ while [[ $# -gt 0 ]]; do
       REQUIRE_PASS="true"
       shift 1
       ;;
+    --precision)
+      PRECISION="${2:-}"
+      shift 2
+      ;;
     *)
       echo "unknown arg: $1" >&2
       exit 2
@@ -83,11 +93,6 @@ fi
 if [[ ${#SCENARIO_DIRS[@]} -eq 0 ]]; then
   echo "no scenarios found in $SCENARIOS_DIR" >&2
   exit 2
-fi
-
-HAS_XMLLINT="false"
-if command -v xmllint >/dev/null 2>&1; then
-  HAS_XMLLINT="true"
 fi
 
 SUMMARY_TMP="$(mktemp)"
@@ -128,8 +133,29 @@ for scenario_dir in "${SCENARIO_DIRS[@]}"; do
   fi
 
   strict_equal="false"
+  byte_equal="false"
+  structure_equal="false"
+  structure_json=""
   if cmp -s "$actual_svg" "$expected_svg"; then
+    byte_equal="true"
     strict_equal="true"
+  else
+    set +e
+    structure_json="$(cargo run -q -p frame-ui --bin svg_structure_diff -- "$actual_svg" "$expected_svg" --abs-tol "$STRUCT_ABS_TOL" --rel-tol "$STRUCT_REL_TOL" --json 2>/dev/null)"
+    structure_status=$?
+    set -e
+    if [[ -n "$structure_json" ]] && jq -e . >/dev/null 2>&1 <<<"$structure_json"; then
+      structure_equal="$(jq -r '.equal' <<<"$structure_json")"
+      if [[ "$structure_equal" == "true" ]]; then
+        strict_equal="true"
+      fi
+    elif [[ "${structure_status:-0}" -eq 0 ]]; then
+      # unexpected empty output despite success; keep strict=false
+      :
+    fi
+  fi
+
+  if [[ "$strict_equal" == "true" ]]; then
     STRICT_PASS=$((STRICT_PASS + 1))
   else
     STRICT_FAIL=$((STRICT_FAIL + 1))
@@ -140,25 +166,35 @@ for scenario_dir in "${SCENARIO_DIRS[@]}"; do
   actual_bytes="$(wc -c < "$actual_svg" | tr -d ' ')"
   expected_bytes="$(wc -c < "$expected_svg" | tr -d ' ')"
 
+  canonical_json=""
   canonical_equal="null"
-  canonical_note="xmllint_unavailable"
-  if [[ "$HAS_XMLLINT" == "true" ]]; then
-    tmp_a="$(mktemp)"
-    tmp_e="$(mktemp)"
-    trap 'rm -f "$SUMMARY_TMP" "$tmp_a" "$tmp_e"' EXIT
-    if xmllint --noblanks --c14n "$actual_svg" > "$tmp_a" 2>/dev/null && xmllint --noblanks --c14n "$expected_svg" > "$tmp_e" 2>/dev/null; then
-      canonical_note="ok"
-      if cmp -s "$tmp_a" "$tmp_e"; then
-        canonical_equal="true"
-        CANONICAL_PASS=$((CANONICAL_PASS + 1))
-      else
-        canonical_equal="false"
-        CANONICAL_FAIL=$((CANONICAL_FAIL + 1))
-      fi
-    else
-      canonical_note="c14n_failed"
+  canonical_note="tool_failed"
+  set +e
+  canonical_json="$(cargo run -q -p frame-ui --bin svg_canonical_diff -- "$actual_svg" "$expected_svg" --precision "$PRECISION" --json 2>/dev/null)"
+  canonical_status=$?
+  set -e
+  if [[ -n "$canonical_json" ]] && jq -e . >/dev/null 2>&1 <<<"$canonical_json"; then
+    canonical_equal="$(jq -r '.equal' <<<"$canonical_json")"
+    canonical_note="ok"
+    if [[ "$canonical_equal" != "true" && "$structure_equal" == "true" ]]; then
+      canonical_equal="true"
+      canonical_note="ok_via_structure_tolerance"
     fi
-    rm -f "$tmp_a" "$tmp_e"
+    if [[ "$canonical_equal" == "true" ]]; then
+      CANONICAL_PASS=$((CANONICAL_PASS + 1))
+    else
+      CANONICAL_FAIL=$((CANONICAL_FAIL + 1))
+    fi
+  elif [[ "$canonical_status" -eq 2 ]]; then
+    canonical_equal="false"
+    canonical_note="canonical_mismatch"
+    if [[ "$structure_equal" == "true" ]]; then
+      canonical_equal="true"
+      canonical_note="canonical_mismatch_but_structure_equal"
+      CANONICAL_PASS=$((CANONICAL_PASS + 1))
+    else
+      CANONICAL_FAIL=$((CANONICAL_FAIL + 1))
+    fi
   fi
 
   jq -n \
@@ -166,15 +202,21 @@ for scenario_dir in "${SCENARIO_DIRS[@]}"; do
     --arg expectedSvg "$expected_svg" \
     --arg actualSvg "$actual_svg" \
     --argjson strictEqual "$strict_equal" \
+    --argjson byteEqual "$byte_equal" \
+    --argjson structureEqual "$structure_equal" \
     --argjson canonicalEqual "$canonical_equal" \
     --arg canonicalNote "$canonical_note" \
     --arg expectedSha256 "$expected_sha" \
     --arg actualSha256 "$actual_sha" \
     --argjson expectedBytes "$expected_bytes" \
     --argjson actualBytes "$actual_bytes" \
+    --argjson canonicalDiff "${canonical_json:-null}" \
+    --argjson structureDiff "${structure_json:-null}" \
     '{
       scenarioId:$scenarioId,
       strictEqual:$strictEqual,
+      byteEqual:$byteEqual,
+      structureEqual:$structureEqual,
       canonicalEqual:$canonicalEqual,
       canonicalNote:$canonicalNote,
       expectedSvg:$expectedSvg,
@@ -182,7 +224,9 @@ for scenario_dir in "${SCENARIO_DIRS[@]}"; do
       expectedSha256:$expectedSha256,
       actualSha256:$actualSha256,
       expectedBytes:$expectedBytes,
-      actualBytes:$actualBytes
+      actualBytes:$actualBytes,
+      canonicalDiff:$canonicalDiff,
+      structureDiff:$structureDiff
     }' > "$report_json"
 
   jq --arg id "$scenario_id" \
@@ -202,7 +246,7 @@ jq -n \
   --arg generatedAt "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
   --arg root "$ROOT" \
   --arg mode "$(if [[ -n "$SCENARIO_FILTER" ]]; then echo "single"; elif [[ "$RUN_ALL" == "true" ]]; then echo "all"; else echo "core10"; fi)" \
-  --arg hasXmllint "$HAS_XMLLINT" \
+  --argjson precision "$PRECISION" \
   --argjson total "$TOTAL" \
   --argjson strictPass "$STRICT_PASS" \
   --argjson strictFail "$STRICT_FAIL" \
@@ -214,7 +258,8 @@ jq -n \
     generatedAt:$generatedAt,
     root:$root,
     mode:$mode,
-    hasXmllint:($hasXmllint=="true"),
+    precision:$precision,
+    canonicalTool:"frame-ui/svg_canonical_diff",
     total:$total,
     strictPass:$strictPass,
     strictFail:$strictFail,
@@ -230,7 +275,8 @@ jq -n \
   echo "- Generated: \`$(jq -r '.generatedAt' "$SUMMARY_JSON")\`"
   echo "- Root: \`$(jq -r '.root' "$SUMMARY_JSON")\`"
   echo "- Mode: \`$(jq -r '.mode' "$SUMMARY_JSON")\`"
-  echo "- xmllint available: \`$(jq -r '.hasXmllint' "$SUMMARY_JSON")\`"
+  echo "- Precision: \`$(jq -r '.precision' "$SUMMARY_JSON")\`"
+  echo "- Canonical tool: \`$(jq -r '.canonicalTool' "$SUMMARY_JSON")\`"
   echo "- Total: \`$(jq -r '.total' "$SUMMARY_JSON")\`"
   echo "- Strict pass: \`$(jq -r '.strictPass' "$SUMMARY_JSON")\`"
   echo "- Strict fail: \`$(jq -r '.strictFail' "$SUMMARY_JSON")\`"

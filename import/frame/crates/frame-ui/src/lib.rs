@@ -7,6 +7,8 @@
 pub mod anyrender_renderer;
 pub mod dioxus_renderer;
 pub mod model;
+#[cfg(feature = "svg_export")]
+pub mod svg;
 
 pub use anyrender_renderer::{
     build_layout_boxes, build_paint_primitives, collect_render_diagnostics, LayoutBox,

@@ -213,7 +213,7 @@ fn collect_primitives_recursive(
     // For parity exports, Figma includes authoritative text outline geometry.
     // Prefer outline paths whenever available so SVG and raster paths align with
     // Figma's own serializer/layout instead of host-side text shaping.
-    let prefer_text_outlines = has_vector_geometry && !fills.is_empty();
+    let prefer_text_outlines = has_vector_geometry;
 
     match node_class {
         RenderNodeClass::Text if has_vector_geometry && prefer_text_outlines => {
@@ -222,23 +222,52 @@ fn collect_primitives_recursive(
             // the fillGeometry paths are the authoritative visual representation.
             // Use raw transform-chain coordinates here (not layout boxes) to avoid
             // taffy/layout float drift in authored text outline positions.
-            out.push(PaintPrimitive::Path {
-                node_id,
-                x: chain_x,
-                y: chain_y,
-                width,
-                height,
-                normalize_to_origin: true,
-                text_outline: true,
-                fill_paths,
-                stroke_paths,
-                svg_base64,
-                fills,
-                stroke,
-                effects: merged_effects.clone(),
-                blend,
-                rotation,
-            });
+            let mut outline_fills = fills;
+            if outline_fills.is_empty() {
+                outline_fills = styled_text_fill_runs(&node.raw, effective_opacity);
+            }
+            if stroke_paths.is_empty()
+                && !fill_paths.is_empty()
+                && outline_fills.len() == fill_paths.len()
+            {
+                for (d, fill) in fill_paths.into_iter().zip(outline_fills.into_iter()) {
+                    out.push(PaintPrimitive::Path {
+                        node_id,
+                        x: chain_x,
+                        y: chain_y,
+                        width,
+                        height,
+                        normalize_to_origin: true,
+                        text_outline: true,
+                        fill_paths: vec![d],
+                        stroke_paths: Vec::new(),
+                        svg_base64: None,
+                        fills: vec![fill],
+                        stroke: stroke.clone(),
+                        effects: merged_effects.clone(),
+                        blend: blend.clone(),
+                        rotation,
+                    });
+                }
+            } else {
+                out.push(PaintPrimitive::Path {
+                    node_id,
+                    x: chain_x,
+                    y: chain_y,
+                    width,
+                    height,
+                    normalize_to_origin: true,
+                    text_outline: true,
+                    fill_paths,
+                    stroke_paths,
+                    svg_base64,
+                    fills: outline_fills,
+                    stroke,
+                    effects: merged_effects.clone(),
+                    blend,
+                    rotation,
+                });
+            }
         }
         RenderNodeClass::Text => {
             let text = node
@@ -567,6 +596,37 @@ fn collect_primitives_recursive(
     if needs_layer {
         out.push(PaintPrimitive::LayerEnd { node_id });
     }
+}
+
+fn styled_text_fill_runs(raw: &serde_json::Value, opacity: f64) -> Vec<(FillPaint, BlendMix)> {
+    let mut runs: Vec<(FillPaint, BlendMix)> = Vec::new();
+    if let Some(segments) = raw.get("styledTextSegments").and_then(|v| v.as_array()) {
+        for segment in segments {
+            if segment
+                .get("characters")
+                .and_then(|v| v.as_str())
+                .map(|s| s.trim().is_empty())
+                .unwrap_or(false)
+            {
+                continue;
+            }
+            let Some((fill, blend)) = all_fill_paints(segment, "fills")
+                .into_iter()
+                .map(|(f, b)| (f.with_opacity(opacity), b))
+                .next()
+            else {
+                continue;
+            };
+            let is_same_as_last = runs
+                .last()
+                .map(|(last_fill, last_blend)| *last_blend == blend && *last_fill == fill)
+                .unwrap_or(false);
+            if !is_same_as_last {
+                runs.push((fill, blend));
+            }
+        }
+    }
+    runs
 }
 
 fn parse_text_style_runs(raw: &serde_json::Value, opacity: f64) -> Vec<TextStyleRun> {

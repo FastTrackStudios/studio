@@ -106,7 +106,7 @@ for scenario_dir in "${SCENARIO_DIRS[@]}"; do
       svg_render_args+=(--width "$width_int" --height "$height_int")
     fi
   fi
-  cargo run -q -p frame-ui --features anyrender --bin render_svg -- "${svg_render_args[@]}"
+  cargo run -q -p frame-ui --features svg_export --bin render_svg -- "${svg_render_args[@]}"
 done
 
 echo "done rendering parity actual PNGs/SVGs"
