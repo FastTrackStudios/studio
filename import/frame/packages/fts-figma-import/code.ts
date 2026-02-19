@@ -7,6 +7,19 @@ type ExportOptions = {
   maxDepth: number;
 };
 
+const CORE10_FRAME_NAMES = [
+  'parity/primitives/fractional-geometry',
+  'parity/paint/gradient-matrix',
+  'parity/paint/blend-mode-stack',
+  'parity/effects/layer-background-blur',
+  'parity/strokes/caps-joins-dashes',
+  'parity/masks/vector-text-image-mask',
+  'parity/images/fill-mode-matrix',
+  'parity/text/mixed-style-runs',
+  'parity/layout/auto-layout-hug-fill',
+  'parity/regression/kitchen-sink',
+] as const;
+
 type ExportNode = {
   id: string;
   name: string;
@@ -126,6 +139,13 @@ type ExportPayload = {
   nodes: ExportNode[];
 };
 
+type Core10FrameStatus = {
+  required: string[];
+  found: string[];
+  missing: string[];
+  extraParityFrames: string[];
+};
+
 type ExportAssetKind = 'svg' | 'png' | 'image-fill';
 
 type ExportAsset = {
@@ -186,6 +206,7 @@ figma.ui.onmessage = async (msg: unknown) => {
     bridgeUrl?: string;
     bridgeEnabled?: boolean;
     nodeId?: string;
+    parityRootDir?: string;
   };
 
   if (message.type === 'close') {
@@ -283,8 +304,377 @@ figma.ui.onmessage = async (msg: unknown) => {
     maybeAutoPinMainFrame();
     postFrameCatalog();
     postPinnedRootsSummary();
+    return;
+  }
+
+  if (message.type === 'validate-core10') {
+    const status = getCore10FrameStatus();
+    figma.ui.postMessage({
+      type: 'core10-validation-result',
+      ...status,
+    });
+    return;
+  }
+
+  if (message.type === 'export-core10-to-bridge') {
+    const options = normalizeOptions(message.options);
+    await exportCore10ToBridge(options, message.bridgeUrl, message.parityRootDir);
+    return;
+  }
+
+  if (message.type === 'generate-core10-scenarios') {
+    await generateCore10Scenarios();
+    figma.ui.postMessage({
+      type: 'core10-generated',
+      count: CORE10_FRAME_NAMES.length,
+    });
+    postFrameCatalog();
+    postPinnedRootsSummary();
+    postSelectionSummary();
+    return;
   }
 };
+
+async function generateCore10Scenarios(): Promise<void> {
+  const page = figma.currentPage;
+  const existingFrames = page.findAll((n) => n.type === 'FRAME') as FrameNode[];
+  const byName = new Map(existingFrames.map((frame) => [frame.name.trim(), frame]));
+  const generated: FrameNode[] = [];
+
+  for (let i = 0; i < CORE10_FRAME_NAMES.length; i += 1) {
+    const name = CORE10_FRAME_NAMES[i];
+    const frame = byName.get(name) ?? figma.createFrame();
+    if (!frame.parent) {
+      page.appendChild(frame);
+    }
+    frame.name = name;
+    frame.resizeWithoutConstraints(1920, 1080);
+    frame.fills = [{ type: 'SOLID', color: { r: 0.96, g: 0.96, b: 0.96 } }];
+    frame.x = (i % 2) * 1980;
+    frame.y = Math.floor(i / 2) * 1120;
+    for (const child of [...frame.children]) {
+      child.remove();
+    }
+
+    await addScenarioSkeleton(frame, name);
+    generated.push(frame);
+  }
+
+  figma.currentPage.selection = generated;
+  figma.viewport.scrollAndZoomIntoView(generated);
+  figma.notify(`Generated ${generated.length} Core scenario frame(s).`);
+}
+
+async function addScenarioSkeleton(frame: FrameNode, frameName: string): Promise<void> {
+  await addLabel(frame, frameName, 24, 24, 20);
+  await addLabel(frame, 'Row A: baseline', 24, 72);
+  await addLabel(frame, 'Row B: edge', 24, 384);
+  await addLabel(frame, 'Row C: stress', 24, 696);
+
+  switch (frameName) {
+    case 'parity/primitives/fractional-geometry':
+      buildFractionalGeometry(frame);
+      return;
+    case 'parity/paint/gradient-matrix':
+      buildGradientMatrix(frame);
+      return;
+    case 'parity/paint/blend-mode-stack':
+      buildBlendModeStack(frame);
+      return;
+    case 'parity/effects/layer-background-blur':
+      buildBlurMatrix(frame);
+      return;
+    case 'parity/strokes/caps-joins-dashes':
+      buildStrokeMatrix(frame);
+      return;
+    case 'parity/masks/vector-text-image-mask':
+      await buildMaskMatrix(frame);
+      return;
+    case 'parity/images/fill-mode-matrix':
+      buildImageFillMatrix(frame);
+      return;
+    case 'parity/text/mixed-style-runs':
+      await buildMixedTextRuns(frame);
+      return;
+    case 'parity/layout/auto-layout-hug-fill':
+      await buildAutoLayoutMatrix(frame);
+      return;
+    case 'parity/regression/kitchen-sink':
+      await buildKitchenSink(frame);
+      return;
+    default:
+      return;
+  }
+}
+
+async function addLabel(
+  parent: ChildrenMixin,
+  text: string,
+  x: number,
+  y: number,
+  size = 12,
+): Promise<TextNode> {
+  const node = figma.createText();
+  await figma.loadFontAsync(node.fontName as FontName);
+  node.characters = text;
+  node.fontSize = size;
+  node.x = x;
+  node.y = y;
+  parent.appendChild(node);
+  return node;
+}
+
+function makeRect(
+  parent: ChildrenMixin,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  color: RGB = { r: 0.8, g: 0.8, b: 0.8 },
+): RectangleNode {
+  const rect = figma.createRectangle();
+  rect.resizeWithoutConstraints(w, h);
+  rect.x = x;
+  rect.y = y;
+  rect.fills = [{ type: 'SOLID', color }];
+  parent.appendChild(rect);
+  return rect;
+}
+
+function buildFractionalGeometry(frame: FrameNode): void {
+  const a = makeRect(frame, 180.5, 120.5, 160.5, 80.5, { r: 0.22, g: 0.47, b: 0.96 });
+  a.strokes = [{ type: 'SOLID', color: { r: 0.08, g: 0.16, b: 0.32 } }];
+  a.strokeWeight = 1;
+
+  const b = figma.createEllipse();
+  b.resizeWithoutConstraints(120.5, 120.5);
+  b.x = 390.5;
+  b.y = 110.5;
+  b.fills = [{ type: 'SOLID', color: { r: 0.96, g: 0.45, b: 0.22 } }];
+  frame.appendChild(b);
+
+  const c = figma.createLine();
+  c.resizeWithoutConstraints(220.5, 0);
+  c.x = 560.5;
+  c.y = 165.5;
+  c.strokes = [{ type: 'SOLID', color: { r: 0.11, g: 0.11, b: 0.11 } }];
+  c.strokeWeight = 1;
+  frame.appendChild(c);
+
+  makeRect(frame, 180.5, 430.25, 120.25, 120.25, { r: 0.17, g: 0.73, b: 0.55 });
+  makeRect(frame, 315.75, 430.75, 120.25, 120.25, { r: 0.93, g: 0.79, b: 0.27 });
+  makeRect(frame, 451.5, 431.1, 120.25, 120.25, { r: 0.91, g: 0.31, b: 0.31 });
+
+  makeRect(frame, 180.5, 744.5, 220.5, 130.5, { r: 0.5, g: 0.4, b: 0.9 }).rotation = 7;
+  makeRect(frame, 330.25, 770.25, 220.5, 130.5, { r: 0.2, g: 0.8, b: 0.8 }).rotation = -5;
+}
+
+function buildGradientMatrix(frame: FrameNode): void {
+  const linear = makeRect(frame, 180, 110, 280, 180);
+  linear.fills = [
+    {
+      type: 'GRADIENT_LINEAR',
+      gradientStops: [
+        { position: 0, color: { r: 1, g: 0.2, b: 0.2, a: 1 } },
+        { position: 1, color: { r: 0.2, g: 0.2, b: 1, a: 1 } },
+      ],
+      gradientTransform: [[1, 0, 0], [0, 1, 0]],
+    },
+  ];
+
+  const radial = makeRect(frame, 500, 110, 280, 180);
+  radial.fills = [
+    {
+      type: 'GRADIENT_RADIAL',
+      gradientStops: [
+        { position: 0, color: { r: 0.95, g: 0.95, b: 0.2, a: 1 } },
+        { position: 1, color: { r: 0.2, g: 0.2, b: 0.2, a: 1 } },
+      ],
+      gradientTransform: [[1, 0, 0], [0, 1, 0]],
+    },
+  ];
+
+  const angular = makeRect(frame, 820, 110, 280, 180);
+  angular.fills = [
+    {
+      type: 'GRADIENT_ANGULAR',
+      gradientStops: [
+        { position: 0, color: { r: 0.3, g: 0.8, b: 0.5, a: 1 } },
+        { position: 0.5, color: { r: 0.9, g: 0.4, b: 0.8, a: 1 } },
+        { position: 1, color: { r: 0.3, g: 0.8, b: 0.5, a: 1 } },
+      ],
+      gradientTransform: [[1, 0, 0], [0, 1, 0]],
+    },
+  ];
+
+  makeRect(frame, 180, 430, 920, 180, { r: 0.1, g: 0.1, b: 0.1 }).opacity = 0.06;
+  makeRect(frame, 210, 460, 240, 120, { r: 0.95, g: 0.3, b: 0.3 });
+  makeRect(frame, 330, 500, 240, 120, { r: 0.3, g: 0.3, b: 0.95 });
+
+  const stress = makeRect(frame, 180, 744, 920, 180);
+  stress.fills = linear.fills;
+  stress.strokes = [{ type: 'SOLID', color: { r: 0.05, g: 0.05, b: 0.2 } }];
+  stress.strokeWeight = 8;
+}
+
+function buildBlendModeStack(frame: FrameNode): void {
+  const bg = makeRect(frame, 180, 110, 920, 800, { r: 0.95, g: 0.95, b: 0.98 });
+  bg.cornerRadius = 20;
+  const r1 = makeRect(frame, 280, 180, 300, 220, { r: 1, g: 0.2, b: 0.2 });
+  r1.opacity = 0.75;
+  const r2 = makeRect(frame, 420, 250, 300, 220, { r: 0.2, g: 0.6, b: 1 });
+  r2.opacity = 0.75;
+  r2.blendMode = 'MULTIPLY';
+  const r3 = makeRect(frame, 560, 320, 300, 220, { r: 0.3, g: 1, b: 0.4 });
+  r3.opacity = 0.75;
+  r3.blendMode = 'SCREEN';
+}
+
+function buildBlurMatrix(frame: FrameNode): void {
+  makeRect(frame, 180, 110, 920, 800, { r: 0.88, g: 0.9, b: 0.93 });
+  const a = makeRect(frame, 240, 160, 220, 140, { r: 0.2, g: 0.45, b: 0.9 });
+  a.effects = [{ type: 'LAYER_BLUR', blurType: 'NORMAL', radius: 2, visible: true }];
+  const b = makeRect(frame, 510, 160, 220, 140, { r: 0.2, g: 0.45, b: 0.9 });
+  b.effects = [{ type: 'LAYER_BLUR', blurType: 'NORMAL', radius: 8, visible: true }];
+  const c = makeRect(frame, 780, 160, 220, 140, { r: 0.2, g: 0.45, b: 0.9 });
+  c.effects = [{ type: 'LAYER_BLUR', blurType: 'NORMAL', radius: 24, visible: true }];
+
+  const glass = makeRect(frame, 320, 430, 640, 360, { r: 1, g: 1, b: 1 });
+  glass.opacity = 0.2;
+  glass.cornerRadius = 24;
+  glass.effects = [{ type: 'BACKGROUND_BLUR', blurType: 'NORMAL', radius: 18, visible: true }];
+}
+
+function makeOpenVPath(parent: ChildrenMixin, x: number, y: number): VectorNode {
+  const v = figma.createVector();
+  v.vectorPaths = [{ windingRule: 'NONZERO', data: 'M 0 120 L 80 0 L 160 120' }];
+  v.x = x;
+  v.y = y;
+  v.fills = [];
+  v.strokes = [{ type: 'SOLID', color: { r: 0.08, g: 0.08, b: 0.08 } }];
+  v.strokeWeight = 20;
+  parent.appendChild(v);
+  return v;
+}
+
+function buildStrokeMatrix(frame: FrameNode): void {
+  const miter = makeOpenVPath(frame, 200, 150);
+  miter.strokeJoin = 'MITER';
+  const round = makeOpenVPath(frame, 480, 150);
+  round.strokeJoin = 'ROUND';
+  const bevel = makeOpenVPath(frame, 760, 150);
+  bevel.strokeJoin = 'BEVEL';
+
+  const dash1 = figma.createLine();
+  dash1.resizeWithoutConstraints(780, 0);
+  dash1.x = 220;
+  dash1.y = 490;
+  dash1.strokeWeight = 14;
+  dash1.strokes = [{ type: 'SOLID', color: { r: 0.14, g: 0.38, b: 0.96 } }];
+  dash1.dashPattern = [12, 8];
+  frame.appendChild(dash1);
+
+  const dash2 = figma.createLine();
+  dash2.resizeWithoutConstraints(780, 0);
+  dash2.x = 220;
+  dash2.y = 800;
+  dash2.strokeWeight = 14;
+  dash2.strokes = [{ type: 'SOLID', color: { r: 0.96, g: 0.45, b: 0.14 } }];
+  dash2.dashPattern = [20, 6, 4, 6];
+  frame.appendChild(dash2);
+}
+
+async function buildMaskMatrix(frame: FrameNode): Promise<void> {
+  const base = makeRect(frame, 180, 110, 920, 800, { r: 0.95, g: 0.95, b: 0.95 });
+  base.cornerRadius = 16;
+
+  const vectorMask = figma.createEllipse();
+  vectorMask.resizeWithoutConstraints(280, 280);
+  vectorMask.x = 220;
+  vectorMask.y = 180;
+  vectorMask.fills = [{ type: 'SOLID', color: { r: 1, g: 1, b: 1 } }];
+  vectorMask.isMask = true;
+  frame.appendChild(vectorMask);
+  makeRect(frame, 180, 140, 420, 360, { r: 0.25, g: 0.6, b: 0.95 });
+
+  const textMask = await addLabel(frame, 'MASK', 650, 240, 96);
+  textMask.isMask = true;
+  makeRect(frame, 620, 180, 400, 220, { r: 0.96, g: 0.4, b: 0.4 });
+}
+
+function buildImageFillMatrix(frame: FrameNode): void {
+  const pngBytes = new Uint8Array([
+    137, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 13, 73, 72, 68, 82, 0, 0, 0, 1, 0, 0, 0, 1,
+    8, 6, 0, 0, 0, 31, 21, 196, 137, 0, 0, 0, 13, 73, 68, 65, 84, 120, 156, 99, 248, 207, 192,
+    240, 31, 0, 5, 0, 1, 255, 137, 153, 61, 29, 0, 0, 0, 0, 73, 69, 78, 68, 174, 66, 96, 130,
+  ]);
+  const image = figma.createImage(pngBytes);
+  const fillBase: ImagePaint = {
+    type: 'IMAGE',
+    imageHash: image.hash,
+    scaleMode: 'FILL',
+  };
+
+  const fill = makeRect(frame, 180, 110, 280, 220);
+  fill.fills = [fillBase];
+  const fit = makeRect(frame, 500, 110, 280, 220);
+  fit.fills = [{ ...fillBase, scaleMode: 'FIT' }];
+  const crop = makeRect(frame, 820, 110, 280, 220);
+  crop.fills = [{ ...fillBase, scaleMode: 'CROP', imageTransform: [[1, 0, 0], [0, 1, 0]] }];
+}
+
+async function buildMixedTextRuns(frame: FrameNode): Promise<void> {
+  const text = await addLabel(frame, 'Mixed style runs baseline', 200, 180, 28);
+  text.characters = 'Regular Bold Italic Color Spacing';
+  const baseFont = text.fontName as FontName;
+  await figma.loadFontAsync(baseFont);
+  text.setRangeFills(0, 7, [{ type: 'SOLID', color: { r: 0.1, g: 0.1, b: 0.1 } }]);
+  text.setRangeFills(8, 12, [{ type: 'SOLID', color: { r: 0.95, g: 0.3, b: 0.3 } }]);
+  text.setRangeFills(13, 19, [{ type: 'SOLID', color: { r: 0.2, g: 0.45, b: 0.95 } }]);
+  text.setRangeLetterSpacing(20, text.characters.length, { unit: 'PIXELS', value: 2 });
+}
+
+async function buildAutoLayoutMatrix(frame: FrameNode): Promise<void> {
+  const container = figma.createFrame();
+  container.x = 180;
+  container.y = 120;
+  container.resizeWithoutConstraints(980, 760);
+  container.layoutMode = 'VERTICAL';
+  container.primaryAxisSizingMode = 'AUTO';
+  container.counterAxisSizingMode = 'AUTO';
+  container.itemSpacing = 24;
+  container.paddingTop = 24;
+  container.paddingBottom = 24;
+  container.paddingLeft = 24;
+  container.paddingRight = 24;
+  container.fills = [{ type: 'SOLID', color: { r: 1, g: 1, b: 1 } }];
+  frame.appendChild(container);
+
+  const row = figma.createFrame();
+  row.layoutMode = 'HORIZONTAL';
+  row.primaryAxisSizingMode = 'AUTO';
+  row.counterAxisSizingMode = 'AUTO';
+  row.itemSpacing = 12;
+  row.fills = [];
+  container.appendChild(row);
+  makeRect(row, 0, 0, 140, 64, { r: 0.2, g: 0.45, b: 0.95 });
+  makeRect(row, 0, 0, 220, 64, { r: 0.95, g: 0.45, b: 0.2 });
+
+  const fillChild = figma.createFrame();
+  fillChild.layoutMode = 'HORIZONTAL';
+  fillChild.layoutSizingHorizontal = 'FILL';
+  fillChild.primaryAxisSizingMode = 'FIXED';
+  fillChild.resizeWithoutConstraints(640, 120);
+  fillChild.fills = [{ type: 'SOLID', color: { r: 0.93, g: 0.96, b: 1 } }];
+  container.appendChild(fillChild);
+}
+
+async function buildKitchenSink(frame: FrameNode): Promise<void> {
+  buildGradientMatrix(frame);
+  buildBlendModeStack(frame);
+  buildImageFillMatrix(frame);
+  await buildMixedTextRuns(frame);
+}
 
 function postSelectionSummary(): void {
   const selection = figma.currentPage.selection;
@@ -400,7 +790,13 @@ function normalizeOptions(input?: Partial<ExportOptions>): ExportOptions {
 async function buildExportPayload(
   options: ExportOptions,
 ): Promise<{ payload: ExportPayload; totalNodes: number } | null> {
-  const roots = resolveExportRoots();
+  return buildExportPayloadForRoots(resolveExportRoots(), options);
+}
+
+async function buildExportPayloadForRoots(
+  roots: ExportRoot[],
+  options: ExportOptions,
+): Promise<{ payload: ExportPayload; totalNodes: number } | null> {
   if (roots.length === 0) {
     return null;
   }
@@ -436,6 +832,25 @@ async function buildExportPayload(
   };
 
   return { payload, totalNodes };
+}
+
+function getCore10FrameStatus(): Core10FrameStatus {
+  const frames = figma.currentPage.findAll((n) => n.type === 'FRAME') as FrameNode[];
+  const frameNameSet = new Set(frames.map((frame) => frame.name.trim()));
+  const required = [...CORE10_FRAME_NAMES];
+  const found = required.filter((name) => frameNameSet.has(name));
+  const missing = required.filter((name) => !frameNameSet.has(name));
+  const extraParityFrames = frames
+    .map((frame) => frame.name.trim())
+    .filter((name) => name.startsWith('parity/') && !required.includes(name as typeof CORE10_FRAME_NAMES[number]))
+    .sort((a, b) => a.localeCompare(b));
+
+  return {
+    required,
+    found,
+    missing,
+    extraParityFrames,
+  };
 }
 
 async function exportSelection(options: ExportOptions, reason: 'manual' | 'live'): Promise<void> {
@@ -506,6 +921,89 @@ async function exportToBridge(
   }
 }
 
+async function exportCore10ToBridge(
+  options: ExportOptions,
+  bridgeUrl?: string,
+  parityRootDir?: string,
+): Promise<void> {
+  try {
+    const frames = figma.currentPage.findAll((n) => n.type === 'FRAME') as FrameNode[];
+    const byName = new Map<string, FrameNode>();
+    for (const frame of frames) {
+      byName.set(frame.name.trim(), frame);
+    }
+
+    const missing = CORE10_FRAME_NAMES.filter((name) => !byName.has(name));
+    const available = CORE10_FRAME_NAMES.filter((name) => byName.has(name));
+    if (available.length === 0) {
+      figma.ui.postMessage({
+        type: 'bridge-error',
+        message: 'No Core frames found on this page. Create at least one Core frame before exporting.',
+      });
+      return;
+    }
+
+    const scenarios: Array<{
+      id: string;
+      frameName: string;
+      exportJson: ExportPayload;
+      expectedPngBase64: string;
+    }> = [];
+
+    for (const frameName of available) {
+      const frame = byName.get(frameName);
+      if (!frame) {
+        continue;
+      }
+      const result = await buildExportPayloadForRoots([frame], options);
+      if (!result) {
+        continue;
+      }
+
+      const pngBytes = await frame.exportAsync({
+        format: 'PNG',
+        constraint: { type: 'SCALE', value: 1 },
+      });
+      scenarios.push({
+        id: frameName.replace(/^parity\//, '').replace(/\//g, '.'),
+        frameName,
+        exportJson: result.payload,
+        expectedPngBase64: bytesToBase64(pngBytes),
+      });
+    }
+
+    const totalNodes = scenarios.reduce(
+      (sum, scenario) => sum + scenario.exportJson.selection.totalNodes,
+      0,
+    );
+
+    const json = JSON.stringify({
+      schema: 'fts.figma.parity-pack/v1',
+      generatedAt: new Date().toISOString(),
+      source: {
+        plugin: 'fts-figma-import',
+        pluginVersion: '0.1.0',
+        editorType: figma.editorType,
+        fileKey: figma.fileKey ?? undefined,
+        page: {
+          id: figma.currentPage.id,
+          name: figma.currentPage.name,
+        },
+      },
+      parityRootDir: parityRootDir?.trim() || undefined,
+      scenarios,
+    });
+
+    await sendParityPackToBridge(json, totalNodes, bridgeUrl, scenarios.length, missing);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    figma.ui.postMessage({
+      type: 'bridge-error',
+      message,
+    });
+  }
+}
+
 async function sendToBridge(
   json: string,
   totalNodes: number,
@@ -545,6 +1043,51 @@ async function sendToBridge(
       `Sent ${totalNodes} nodes to bridge (${responseBody.path ?? '/tmp/fts-figma-export.json'}).`,
     );
   }
+}
+
+async function sendParityPackToBridge(
+  json: string,
+  totalNodes: number,
+  bridgeUrl?: string,
+  totalScenarios?: number,
+  missingCoreFrames?: readonly string[],
+): Promise<void> {
+  const base = bridgeUrl?.trim() || 'http://localhost:43123/figma-export';
+  const url = base.endsWith('/figma-export') ? `${base.slice(0, -'/figma-export'.length)}/figma-parity-pack` : `${base.replace(/\/+$/, '')}/figma-parity-pack`;
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: json,
+  });
+
+  if (!res.ok) {
+    throw new Error(`Bridge responded ${res.status} ${res.statusText}`);
+  }
+
+  const responseBody = (await res.json()) as {
+    ok?: boolean;
+    path?: string;
+    bytes?: number;
+    error?: string;
+    writtenScenarios?: number;
+  };
+
+  if (!responseBody.ok) {
+    throw new Error(responseBody.error ?? 'Bridge failed to write parity pack.');
+  }
+
+  figma.ui.postMessage({
+    type: 'bridge-result',
+    path: responseBody.path,
+    bytes: responseBody.bytes,
+    totalNodes,
+    totalScenarios: responseBody.writtenScenarios ?? totalScenarios,
+    missingCoreFrames: missingCoreFrames ?? [],
+  });
+  const missingCount = missingCoreFrames?.length ?? 0;
+  figma.notify(
+    `Exported Core parity pack (${responseBody.writtenScenarios ?? totalScenarios ?? 0} scenarios${missingCount > 0 ? `, missing ${missingCount}` : ''}).`,
+  );
 }
 
 async function serializeNode(

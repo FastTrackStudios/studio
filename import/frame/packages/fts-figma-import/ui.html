@@ -149,6 +149,15 @@
           <label>Bridge URL</label>
           <input id="bridgeUrl" type="text" value="http://localhost:43123/figma-export" />
         </div>
+        <div style="margin-top: 8px">
+          <label>Parity root dir (bridge host path)</label>
+          <input id="parityRootDir" type="text" value="/Users/codywright/Documents/Development/FastTrackStudio/frame/tests/frame/parity/scenarios" />
+        </div>
+        <div class="row wrap" style="margin-top: 10px">
+          <button id="validateCore10" class="secondary">Validate Core 10 Frames</button>
+          <button id="generateCore10" class="secondary">Generate Core 10 Scenarios</button>
+          <button id="exportCore10" class="secondary">Export Core 10 to Bridge</button>
+        </div>
         <div id="status" class="status muted" style="margin-top: 8px">Ready.</div>
       </div>
 
@@ -170,6 +179,7 @@
       const toggleLive = document.getElementById('toggleLive');
       const bridgeUrl = document.getElementById('bridgeUrl');
       const liveBridge = document.getElementById('liveBridge');
+      const parityRootDir = document.getElementById('parityRootDir');
 
       let latestJson = '';
       let liveEnabled = false;
@@ -280,6 +290,31 @@
         parent.postMessage({ pluginMessage: { type: 'refresh-frames' } }, '*');
       };
 
+      document.getElementById('validateCore10').onclick = () => {
+        parent.postMessage({ pluginMessage: { type: 'validate-core10' } }, '*');
+        setStatus('Validating Core 10 frame coverage...', 'muted');
+      };
+
+      document.getElementById('generateCore10').onclick = () => {
+        parent.postMessage({ pluginMessage: { type: 'generate-core10-scenarios' } }, '*');
+        setStatus('Generating Core 10 scenario frames...', 'muted');
+      };
+
+      document.getElementById('exportCore10').onclick = () => {
+        parent.postMessage(
+          {
+            pluginMessage: {
+              type: 'export-core10-to-bridge',
+              options: readOptions(),
+              bridgeUrl: bridgeUrl.value,
+              parityRootDir: parityRootDir.value,
+            },
+          },
+          '*',
+        );
+        setStatus('Exporting Core 10 parity pack to bridge...', 'muted');
+      };
+
       function renderFramePicker() {
         const current = framePicker.value;
         framePicker.innerHTML = '';
@@ -348,15 +383,39 @@
         }
 
         if (msg.type === 'bridge-result') {
+          const scenarioNote =
+            typeof msg.totalScenarios === 'number'
+              ? ` (${msg.totalScenarios} scenarios)`
+              : '';
+          const missing = Array.isArray(msg.missingCoreFrames) ? msg.missingCoreFrames : [];
+          const missingNote =
+            missing.length > 0
+              ? ` Missing Core frames: ${missing.join(', ')}.`
+              : '';
           setStatus(
-            `Bridge wrote ${msg.bytes?.toLocaleString?.() ?? 'payload'} bytes (${msg.totalNodes} nodes) to ${msg.path}.`,
-            'ok',
+            `Bridge wrote ${msg.bytes?.toLocaleString?.() ?? 'payload'} bytes (${msg.totalNodes} nodes)${scenarioNote} to ${msg.path}.${missingNote}`,
+            missing.length > 0 ? 'muted' : 'ok',
           );
           return;
         }
 
         if (msg.type === 'bridge-error') {
           setStatus(msg.message, 'error');
+          return;
+        }
+
+        if (msg.type === 'core10-validation-result') {
+          const missing = Array.isArray(msg.missing) ? msg.missing : [];
+          const found = Array.isArray(msg.found) ? msg.found : [];
+          const extras = Array.isArray(msg.extraParityFrames) ? msg.extraParityFrames : [];
+          if (missing.length === 0) {
+            setStatus(
+              `Core 10 validated: found ${found.length}/10${extras.length > 0 ? `, extra parity frames: ${extras.length}` : ''}.`,
+              'ok',
+            );
+          } else {
+            setStatus(`Missing Core 10 frames: ${missing.join(', ')}`, 'error');
+          }
         }
       };
     </script>

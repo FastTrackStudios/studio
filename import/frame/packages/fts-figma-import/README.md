@@ -1,6 +1,6 @@
 # FTS Figma Export Plugin
 
-Exports selected Figma layers/frames as a high-fidelity JSON payload intended for Frame/AnyRender ingestion.
+Exports selected Figma layers/frames as high-fidelity JSON payloads for Frame/AnyRender ingestion.
 
 ## What it exports
 
@@ -17,7 +17,7 @@ Schema tags:
 ## Setup (pnpm)
 
 ```bash
-cd /Users/codywright/Documents/Development/Rust/roam-test/packages/fts-figma-import
+cd /Users/codywright/Documents/Development/FastTrackStudio/frame/packages/fts-figma-import
 pnpm install
 pnpm build
 ```
@@ -31,30 +31,59 @@ pnpm watch
 ## Use in Figma
 
 1. In Figma desktop: `Plugins -> Development -> Import plugin from manifest...`
-2. Select `/Users/codywright/Documents/Development/Rust/roam-test/packages/fts-figma-import/manifest.json`
+2. Select `/Users/codywright/Documents/Development/FastTrackStudio/frame/packages/fts-figma-import/manifest.json`
 3. Select one or more frame/layer roots.
 4. Click `Export Now`.
 5. Use `Copy JSON` to paste directly into your app/import UI, or `Download JSON` for file-based import.
 
-## Write directly to `/tmp` (bridge mode)
+## Bridge mode
 
 Figma plugins cannot write local files directly. Use the local bridge process:
 
 ```bash
-cd /Users/codywright/Documents/Development/Rust/roam-test/packages/fts-figma-import
+cd /Users/codywright/Documents/Development/FastTrackStudio/frame/packages/fts-figma-import
 pnpm bridge
+# or auto-restart on script edits:
+pnpm bridge:watch
 ```
 
-Then in the plugin:
+### Single export to bridge
 
 1. Keep `Bridge URL` as `http://localhost:43123/figma-export`
 2. Click `Send to /tmp Bridge`
 
-This writes to:
+This writes:
 
-`/tmp/fts-figma-export.json`
+- `/tmp/fts-figma-export.json`
 
-You can point the playground importer at that path and re-send anytime without re-pasting.
+### Core 10 parity pack export
+
+Use the plugin buttons:
+
+- `Validate Core 10 Frames`
+- `Export Core 10 to Bridge`
+
+Required frame names on the page:
+
+- `parity/primitives/fractional-geometry`
+- `parity/paint/gradient-matrix`
+- `parity/paint/blend-mode-stack`
+- `parity/effects/layer-background-blur`
+- `parity/strokes/caps-joins-dashes`
+- `parity/masks/vector-text-image-mask`
+- `parity/images/fill-mode-matrix`
+- `parity/text/mixed-style-runs`
+- `parity/layout/auto-layout-hug-fill`
+- `parity/regression/kitchen-sink`
+
+Bridge writes per scenario:
+
+- `export/latest-bridge-export.json`
+- `expected/frame.png` (direct Figma PNG)
+
+Default parity root on bridge host:
+
+- `/Users/codywright/Documents/Development/FastTrackStudio/frame/tests/frame/parity/scenarios`
 
 ## Live sync mode
 
