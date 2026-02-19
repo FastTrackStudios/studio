@@ -1,6 +1,17 @@
 # images.fill-mode-matrix
 
-- Figma frame name: `parity/images/fill-mode-matrix`
-- Put export JSON here: `export/latest-bridge-export.json`
-- Put direct Figma PNG(s) here: `expected/`
-- Put renderer/plugin PNG(s) here: `actual/`
+## What it tests
+Image fill mode behavior for fill/fit/crop/tile-style mappings.
+
+## Setup
+1. Create a Figma frame named `parity/images/fill-mode-matrix`.
+2. Add these contents:
+- Row A: identical image in each fill mode.
+- Row B: different frame aspect ratios per mode.
+- Row C: image fill plus stroke and corner radius.
+3. Export bridge JSON to `export/latest-bridge-export.json`.
+4. Export direct Figma PNG(s) to `expected/`.
+5. Render your engine/plugin PNG(s) to `actual/` with matching filenames.
+
+## Why this is tested
+Image sampling and placement are core parity requirements for UI assets.

@@ -106,3 +106,9 @@ Use and customize:
 - `tests/frame/parity/scenarios/manifest.template.json`
 
 You can copy it to `manifest.json` for team tracking.
+
+## Detailed Build Spec
+
+Use the exact per-scenario layer contents from:
+
+- `docs/parity-scenario-contents-spec.md`
