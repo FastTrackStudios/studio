@@ -36,6 +36,7 @@ const COL_GAP = 60;
 const ROW_GAP = 60;
 const COLUMNS = 2;
 const GENERATOR_VERSION = 'v2.1';
+const RUNTIME_LABEL = `FTS parity generator ${GENERATOR_VERSION}`;
 const DEFAULT_BRIDGE_EXPORT_URL = 'http://localhost:43123/figma-parity-pack';
 const DEFAULT_BRIDGE_HEALTH_URL = 'http://localhost:43123/health?source=fts-figma-parity-plugin';
 const DEFAULT_PARITY_ROOT_DIR =
@@ -43,6 +44,7 @@ const DEFAULT_PARITY_ROOT_DIR =
 
 export default async function () {
 	const page = figma.currentPage;
+	figma.notify(`${RUNTIME_LABEL} starting...`);
 	const bridgePreflight = await preflightBridge();
 	const availableFonts = await figma.listAvailableFontsAsync();
 	const existingFrames = page.findAll((n) => n.type === 'FRAME') as FrameNode[];
@@ -73,7 +75,7 @@ export default async function () {
 
 	const marker = figma.createText();
 	await figma.loadFontAsync(marker.fontName as FontName);
-	marker.characters = `FTS parity generator ${GENERATOR_VERSION} | frames: ${FRAME_NAMES.length}`;
+	marker.characters = `${RUNTIME_LABEL} | frames: ${FRAME_NAMES.length}`;
 	marker.fontSize = 20;
 	marker.x = 24;
 	marker.y = Math.ceil(FRAME_NAMES.length / COLUMNS) * (FRAME_HEIGHT + ROW_GAP) + 24;
