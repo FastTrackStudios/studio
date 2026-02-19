@@ -400,7 +400,9 @@ fn get_asset_refs_projection(raw: &serde_json::Value) -> Option<AssetRefsProject
             obj.iter()
                 .filter_map(|(k, v)| {
                     // Support both v1 flat string and v2 nested object with "base64" field
-                    let s = v.as_str().or_else(|| v.get("base64").and_then(|b| b.as_str()))?;
+                    let s = v
+                        .as_str()
+                        .or_else(|| v.get("base64").and_then(|b| b.as_str()))?;
                     Some((k.clone(), s.to_string()))
                 })
                 .collect::<std::collections::HashMap<_, _>>()

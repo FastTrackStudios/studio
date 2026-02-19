@@ -67,9 +67,7 @@ pub(super) fn cached_svg_decode(svg_base64: &str) -> Option<Arc<String>> {
 /// Cache for parsed usvg::Tree objects. Avoids XML parsing on every frame.
 /// This is the highest-impact cache — each render_svg_str call was parsing
 /// the full SVG XML, and blurred SVGs parsed 6-20x per element per frame.
-pub(super) fn cached_svg_tree(
-    svg_text: &str,
-) -> Option<Arc<anyrender_svg::usvg::Tree>> {
+pub(super) fn cached_svg_tree(svg_text: &str) -> Option<Arc<anyrender_svg::usvg::Tree>> {
     use std::collections::HashMap;
     use std::hash::{Hash, Hasher};
     use std::sync::{LazyLock, Mutex};

@@ -59,9 +59,9 @@ fn main() {
 
 fn run() -> Result<(), String> {
     let mut args = std::env::args().skip(1);
-    let input = args
-        .next()
-        .ok_or_else(|| "usage: load_profile <fts_export_or_figma_json> [--iterations N]".to_string())?;
+    let input = args.next().ok_or_else(|| {
+        "usage: load_profile <fts_export_or_figma_json> [--iterations N]".to_string()
+    })?;
     let mut iterations = 3usize;
     while let Some(arg) = args.next() {
         match arg.as_str() {
@@ -185,4 +185,3 @@ fn run() -> Result<(), String> {
     );
     Ok(())
 }
-

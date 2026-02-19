@@ -283,24 +283,24 @@ fn collect_primitives_recursive(
                     })
                     .unwrap_or(0.0);
                 // v2: textCase at top level; v1: style.textCase
-                let text_case = match node
-                    .raw
-                    .get("textCase")
-                    .and_then(|v| v.as_str())
-                    .or_else(|| {
-                        node.raw
-                            .get("style")
-                            .and_then(|v| v.get("textCase"))
-                            .and_then(|v| v.as_str())
-                    })
-                {
-                    Some("UPPER") => TextCase::Upper,
-                    Some("LOWER") => TextCase::Lower,
-                    Some("TITLE") => TextCase::Title,
-                    Some("SMALL_CAPS") => TextCase::SmallCaps,
-                    Some("SMALL_CAPS_FORCED") => TextCase::SmallCapsForced,
-                    _ => TextCase::Original,
-                };
+                let text_case =
+                    match node
+                        .raw
+                        .get("textCase")
+                        .and_then(|v| v.as_str())
+                        .or_else(|| {
+                            node.raw
+                                .get("style")
+                                .and_then(|v| v.get("textCase"))
+                                .and_then(|v| v.as_str())
+                        }) {
+                        Some("UPPER") => TextCase::Upper,
+                        Some("LOWER") => TextCase::Lower,
+                        Some("TITLE") => TextCase::Title,
+                        Some("SMALL_CAPS") => TextCase::SmallCaps,
+                        Some("SMALL_CAPS_FORCED") => TextCase::SmallCapsForced,
+                        _ => TextCase::Original,
+                    };
 
                 out.push(PaintPrimitive::Text {
                     node_id,
@@ -465,12 +465,22 @@ fn collect_primitives_recursive(
                         }
                     } else {
                         frame_proto::CornerRadii::uniform(
-                            child.raw.get("cornerRadius").and_then(|v| v.as_f64()).unwrap_or(0.0).max(0.0),
+                            child
+                                .raw
+                                .get("cornerRadius")
+                                .and_then(|v| v.as_f64())
+                                .unwrap_or(0.0)
+                                .max(0.0),
                         )
                     }
                 } else {
                     frame_proto::CornerRadii::uniform(
-                        child.raw.get("cornerRadius").and_then(|v| v.as_f64()).unwrap_or(0.0).max(0.0),
+                        child
+                            .raw
+                            .get("cornerRadius")
+                            .and_then(|v| v.as_f64())
+                            .unwrap_or(0.0)
+                            .max(0.0),
                     )
                 }
             };

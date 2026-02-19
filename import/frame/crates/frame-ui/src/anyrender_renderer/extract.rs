@@ -114,24 +114,24 @@ pub(super) fn all_fill_paints(raw: &serde_json::Value, key: &str) -> Vec<(FillPa
                 .unwrap_or_default();
             let fill = match paint_type {
                 "SOLID" => solid_rgba_from_paint(paint).map(FillPaint::Solid),
-                "GRADIENT_LINEAR" => gradient_stops_from_paint(paint).map(|stops| {
-                    FillPaint::GradientLinear {
+                "GRADIENT_LINEAR" => {
+                    gradient_stops_from_paint(paint).map(|stops| FillPaint::GradientLinear {
                         transform: gradient_transform_from_paint(paint),
                         stops,
-                    }
-                }),
-                "GRADIENT_RADIAL" => gradient_stops_from_paint(paint).map(|stops| {
-                    FillPaint::GradientRadial {
+                    })
+                }
+                "GRADIENT_RADIAL" => {
+                    gradient_stops_from_paint(paint).map(|stops| FillPaint::GradientRadial {
                         transform: gradient_transform_from_paint(paint),
                         stops,
-                    }
-                }),
-                "GRADIENT_ANGULAR" => gradient_stops_from_paint(paint).map(|stops| {
-                    FillPaint::GradientAngular {
+                    })
+                }
+                "GRADIENT_ANGULAR" => {
+                    gradient_stops_from_paint(paint).map(|stops| FillPaint::GradientAngular {
                         transform: gradient_transform_from_paint(paint),
                         stops,
-                    }
-                }),
+                    })
+                }
                 "IMAGE" => image_fill_from_paint(raw, paint).map(|img| FillPaint::Image {
                     image_hash: img.image_hash,
                     data_base64: img.data_base64,
@@ -269,10 +269,7 @@ pub(super) fn parse_effects(raw: &serde_json::Value, opacity: f64) -> Vec<NodeEf
                 .and_then(|v| v.as_f64())
                 .unwrap_or(0.0)
                 .max(0.0);
-            let spread = effect
-                .get("spread")
-                .and_then(|v| v.as_f64())
-                .unwrap_or(0.0);
+            let spread = effect.get("spread").and_then(|v| v.as_f64()).unwrap_or(0.0);
 
             Some(NodeEffect {
                 kind,
@@ -410,7 +407,11 @@ fn gradient_stops_from_paint(paint: &serde_json::Value) -> Option<Vec<GradientSt
             color,
         });
     }
-    if out.is_empty() { None } else { Some(out) }
+    if out.is_empty() {
+        None
+    } else {
+        Some(out)
+    }
 }
 
 fn gradient_transform_from_paint(paint: &serde_json::Value) -> Option<[[f64; 3]; 2]> {

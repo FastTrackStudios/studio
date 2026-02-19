@@ -199,7 +199,10 @@ fn extracts_rotation_from_relative_transform() {
             }
         }
     }
-    assert!(found_rotation, "expected rotated rect with ~0.365 radian rotation");
+    assert!(
+        found_rotation,
+        "expected rotated rect with ~0.365 radian rotation"
+    );
 }
 
 #[test]
@@ -252,7 +255,10 @@ fn per_fill_blend_mode_is_extracted() {
             }
         }
     }
-    assert!(found_soft_light, "expected at least one fill with SoftLight blend mode");
+    assert!(
+        found_soft_light,
+        "expected at least one fill with SoftLight blend mode"
+    );
 }
 
 #[test]
@@ -300,7 +306,13 @@ fn ellipse_with_empty_fill_geometry_emits_rect_not_path() {
 
     let mut found_rect = false;
     for p in primitives {
-        if let PaintPrimitive::Rect { width, height, corner_radii, .. } = &p {
+        if let PaintPrimitive::Rect {
+            width,
+            height,
+            corner_radii,
+            ..
+        } = &p
+        {
             // ELLIPSE 40×40 should produce a Rect with corner radii = 20 (half width)
             if (*width - 40.0).abs() < 1e-6 && (*height - 40.0).abs() < 1e-6 {
                 assert!(
@@ -313,7 +325,10 @@ fn ellipse_with_empty_fill_geometry_emits_rect_not_path() {
             }
         }
     }
-    assert!(found_rect, "ELLIPSE with empty fillGeometry should emit a Rect, not a Path");
+    assert!(
+        found_rect,
+        "ELLIPSE with empty fillGeometry should emit a Rect, not a Path"
+    );
 }
 
 #[test]
@@ -332,8 +347,16 @@ fn gradient_paint_opacity_applied_to_stops() {
     let stops = gradient_stops_from_paint_test(&paint).expect("expected stops");
     assert_eq!(stops.len(), 2);
     // Paint-level opacity 0.5 should multiply into each stop's alpha
-    assert!((stops[0].color.a - 0.5).abs() < 1e-9, "first stop alpha: {}", stops[0].color.a);
-    assert!((stops[1].color.a - 0.5).abs() < 1e-9, "second stop alpha: {}", stops[1].color.a);
+    assert!(
+        (stops[0].color.a - 0.5).abs() < 1e-9,
+        "first stop alpha: {}",
+        stops[0].color.a
+    );
+    assert!(
+        (stops[1].color.a - 0.5).abs() < 1e-9,
+        "second stop alpha: {}",
+        stops[1].color.a
+    );
 }
 
 #[test]

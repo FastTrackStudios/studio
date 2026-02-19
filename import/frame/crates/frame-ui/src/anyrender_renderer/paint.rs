@@ -39,10 +39,10 @@ pub fn paint_primitives_into_scene_with(
     use base64::Engine;
     use kurbo::{BezPath, Rect, RoundedRect, Stroke};
     use peniko::{Blob, Fill, FontData, ImageBrush, ImageData, ImageSampler};
-    use skrifa::MetadataProvider;
     use skrifa::instance::Size;
     use skrifa::prelude::LocationRef;
     use skrifa::raw::{FileRef, FontRef};
+    use skrifa::MetadataProvider;
     use std::sync::Arc;
 
     let font_data: Option<FontData> = text_font.map(|font| {
@@ -310,22 +310,14 @@ pub fn paint_primitives_into_scene_with(
                     .first()
                     .and_then(|(f, _)| first_color_from_fill(f))
                     .or_else(|| stroke.as_ref().map(|s| s.color.clone()));
-                let path_origin_transform =
-                    base_transform * kurbo::Affine::translate((lx, ly));
-                let path_fit = compute_path_fit_transform(
-                    fill_paths,
-                    stroke_paths,
-                    lx,
-                    ly,
-                    width,
-                    height,
-                );
+                let path_origin_transform = base_transform * kurbo::Affine::translate((lx, ly));
+                let path_fit =
+                    compute_path_fit_transform(fill_paths, stroke_paths, lx, ly, width, height);
                 let path_transform = path_origin_transform * path_fit;
                 let (sx, sy) = extract_scale(path_fit);
                 let stroke_scale = ((sx.abs() + sy.abs()) * 0.5).max(0.01);
-                let decoded_svg_text: Option<std::sync::Arc<String>> = svg_base64
-                    .as_ref()
-                    .and_then(|b64| cached_svg_decode(b64));
+                let decoded_svg_text: Option<std::sync::Arc<String>> =
+                    svg_base64.as_ref().and_then(|b64| cached_svg_decode(b64));
 
                 if let (Some(svg_text), Some(layer_blur)) = (
                     decoded_svg_text.as_deref(),
@@ -451,16 +443,7 @@ pub fn paint_primitives_into_scene_with(
                                 &rect,
                             );
                         }
-                        fill_shape(
-                            scene,
-                            base_transform,
-                            &rect,
-                            lx,
-                            ly,
-                            width,
-                            height,
-                            fill,
-                        );
+                        fill_shape(scene, base_transform, &rect, lx, ly, width, height, fill);
                         if need_blend_layer {
                             scene.pop_layer();
                         }
@@ -610,7 +593,13 @@ pub fn paint_primitives_into_scene_with(
                 if let Some((gradient, brush_xform)) =
                     build_radial_gradient(x, y, width, height, transform.as_ref(), stops)
                 {
-                    scene.fill(Fill::NonZero, scene_transform, &gradient, brush_xform, shape);
+                    scene.fill(
+                        Fill::NonZero,
+                        scene_transform,
+                        &gradient,
+                        brush_xform,
+                        shape,
+                    );
                 }
             }
             FillPaint::GradientAngular { transform, stops } => {
@@ -631,8 +620,16 @@ pub fn paint_primitives_into_scene_with(
                     let iw = image_brush.image.width as f64;
                     let ih = image_brush.image.height as f64;
                     if iw > 0.0 && ih > 0.0 {
-                        let brush_transform =
-                            image_brush_transform(*scale_mode, image_transform, x, y, width, height, iw, ih);
+                        let brush_transform = image_brush_transform(
+                            *scale_mode,
+                            image_transform,
+                            x,
+                            y,
+                            width,
+                            height,
+                            iw,
+                            ih,
+                        );
                         scene.fill(
                             Fill::NonZero,
                             scene_transform,
@@ -707,7 +704,12 @@ pub fn paint_primitives_into_scene_with(
                 scene.draw_box_shadow(
                     scene_transform,
                     hole_rect,
-                    to_peniko(Rgba { r: 1.0, g: 1.0, b: 1.0, a: 1.0 }),
+                    to_peniko(Rgba {
+                        r: 1.0,
+                        g: 1.0,
+                        b: 1.0,
+                        a: 1.0,
+                    }),
                     hole_corner,
                     (effect.radius * 0.5).max(0.0),
                 );
@@ -966,8 +968,16 @@ pub fn paint_primitives_into_scene_with(
                     let iw = image_brush.image.width as f64;
                     let ih = image_brush.image.height as f64;
                     if iw > 0.0 && ih > 0.0 {
-                        let brush_transform =
-                            image_brush_transform(*scale_mode, image_transform, x, y, width, height, iw, ih);
+                        let brush_transform = image_brush_transform(
+                            *scale_mode,
+                            image_transform,
+                            x,
+                            y,
+                            width,
+                            height,
+                            iw,
+                            ih,
+                        );
                         scene.fill(
                             Fill::NonZero,
                             path_transform,
@@ -1031,8 +1041,7 @@ pub fn paint_primitives_into_scene_with(
                         let scale = (width / iw).max(height / ih);
                         let ox = x + (width - iw * scale) * 0.5;
                         let oy = y + (height - ih * scale) * 0.5;
-                        return kurbo::Affine::translate((ox, oy))
-                            * kurbo::Affine::scale(scale);
+                        return kurbo::Affine::translate((ox, oy)) * kurbo::Affine::scale(scale);
                     }
                     // Invert the 2x3 affine: node-norm → image-norm becomes
                     // image-norm → node-norm
@@ -1133,13 +1142,9 @@ pub fn paint_primitives_into_scene_with(
             let angle = ax.1.atan2(ax.0);
 
             // Unit circle gradient at origin; brush_transform maps to ellipse
-            let gradient = peniko::Gradient::new_two_point_radial(
-                Point::ZERO,
-                0.0,
-                Point::ZERO,
-                1.0,
-            )
-            .with_stops(peniko_stops.as_slice());
+            let gradient =
+                peniko::Gradient::new_two_point_radial(Point::ZERO, 0.0, Point::ZERO, 1.0)
+                    .with_stops(peniko_stops.as_slice());
 
             let brush_xform = kurbo::Affine::translate(center.to_vec2())
                 * kurbo::Affine::rotate(angle)
@@ -1148,9 +1153,8 @@ pub fn paint_primitives_into_scene_with(
             Some((gradient, Some(brush_xform)))
         } else {
             let radius = (width.min(height) * 0.5).max(0.5) as f32;
-            let gradient =
-                peniko::Gradient::new_two_point_radial(center, 0.0, center, radius)
-                    .with_stops(peniko_stops.as_slice());
+            let gradient = peniko::Gradient::new_two_point_radial(center, 0.0, center, radius)
+                .with_stops(peniko_stops.as_slice());
             Some((gradient, None))
         }
     }
@@ -1300,7 +1304,12 @@ pub fn paint_primitives_into_scene_with(
         }
     }
 
-    fn decode_image_brush(data_base64: &str, alpha: f64, display_w: f64, display_h: f64) -> Option<ImageBrush> {
+    fn decode_image_brush(
+        data_base64: &str,
+        alpha: f64,
+        display_w: f64,
+        display_h: f64,
+    ) -> Option<ImageBrush> {
         use std::collections::HashMap;
         use std::hash::{Hash, Hasher};
         use std::sync::{LazyLock, Mutex};
