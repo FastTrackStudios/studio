@@ -43,6 +43,7 @@ const DEFAULT_PARITY_ROOT_DIR =
 
 export default async function () {
 	const page = figma.currentPage;
+	const bridgePreflight = await preflightBridge();
 	const availableFonts = await figma.listAvailableFontsAsync();
 	const existingFrames = page.findAll((n) => n.type === 'FRAME') as FrameNode[];
 	const byName = new Map(existingFrames.map((frame) => [frame.name.trim(), frame]));
@@ -68,7 +69,7 @@ export default async function () {
 		created.push(frame);
 	}
 
-	const exportResult = await exportCore10PngsToBridge(byName);
+	const exportResult = await exportAllPngsToBridge(byName);
 
 	const marker = figma.createText();
 	await figma.loadFontAsync(marker.fontName as FontName);
@@ -81,29 +82,49 @@ export default async function () {
 	figma.currentPage.selection = created;
 	figma.viewport.scrollAndZoomIntoView(created);
 	figma.closePlugin(
-		`Generated ${created.length}/${FRAME_NAMES.length} frames (${GENERATOR_VERSION}). Exported ${exportResult.written}/${CORE10_FRAME_NAMES.length} Core PNGs to bridge${exportResult.error ? ` (${exportResult.error})` : ''}.`,
+		`Generated ${created.length}/${FRAME_NAMES.length} frames (${GENERATOR_VERSION}). Bridge preflight: ${bridgePreflight}. Exported ${exportResult.written}/${FRAME_NAMES.length} PNGs${exportResult.error ? ` (${exportResult.error})` : ''}.`,
 	);
 }
 
-async function exportCore10PngsToBridge(byName: Map<string, FrameNode>): Promise<{ written: number; error?: string }> {
+async function preflightBridge(): Promise<'ok' | string> {
+	try {
+		const res = await fetch(DEFAULT_BRIDGE_HEALTH_URL, { method: 'GET' });
+		if (!res.ok) {
+			return `health ${res.status}`;
+		}
+		return 'ok';
+	} catch (error) {
+		return error instanceof Error ? error.message : String(error);
+	}
+}
+
+async function exportAllPngsToBridge(byName: Map<string, FrameNode>): Promise<{ written: number; error?: string }> {
 	const scenarios: Array<{ id: string; frameName: string; expectedPngBase64: string }> = [];
-	for (const frameName of CORE10_FRAME_NAMES) {
+	const exportErrors: string[] = [];
+	for (const frameName of FRAME_NAMES) {
 		const frame = byName.get(frameName);
 		if (!frame) {
+			exportErrors.push(`missing frame: ${frameName}`);
 			continue;
 		}
-		const pngBytes = await frame.exportAsync({
-			format: 'PNG',
-			constraint: { type: 'SCALE', value: 1 },
-		});
-		scenarios.push({
-			id: frameName.replace(/^parity\//, '').replace(/\//g, '.'),
-			frameName,
-			expectedPngBase64: bytesToBase64(pngBytes),
-		});
+		try {
+			const pngBytes = await exportNodeAsPng(frame);
+			scenarios.push({
+				id: frameName.replace(/^parity\//, '').replace(/\//g, '.'),
+				frameName,
+				expectedPngBase64: bytesToBase64(pngBytes),
+			});
+		} catch (error) {
+			const message = error instanceof Error ? error.message : String(error);
+			exportErrors.push(`${frameName}: ${message}`);
+		}
+	}
+	figma.notify(`Parity export: prepared ${scenarios.length}/${FRAME_NAMES.length} PNG payload(s).`);
+	if (exportErrors.length > 0) {
+		figma.notify(`Parity export frame errors: ${exportErrors.slice(0, 2).join(' | ')}`);
 	}
 	if (scenarios.length === 0) {
-		return { written: 0 };
+		return { written: 0, error: exportErrors[0] ?? 'No exportable Core frames.' };
 	}
 	const payload = JSON.stringify({
 		schema: 'fts.figma.parity-pack/v1',
@@ -155,12 +176,92 @@ async function exportCore10PngsToBridge(byName: Map<string, FrameNode>): Promise
 	}
 }
 
-function bytesToBase64(bytes: Uint8Array): string {
-	let binary = '';
-	for (let i = 0; i < bytes.length; i += 1) {
-		binary += String.fromCharCode(bytes[i]);
+async function exportNodeAsPng(node: SceneNode): Promise<Uint8Array> {
+	const withContents: ExportSettingsImage = {
+		format: 'PNG',
+		constraint: { type: 'SCALE', value: 1 },
+		contentsOnly: true,
+	};
+	const plain: ExportSettingsImage = {
+		format: 'PNG',
+		constraint: { type: 'SCALE', value: 1 },
+	};
+
+	const nodeApi = node as unknown as {
+		exportAsync?: (s: ExportSettingsImage) => Promise<Uint8Array>;
+		exportSettings?: ReadonlyArray<ExportSettings>;
+	};
+	const figmaApi = figma as unknown as {
+		exportAsync?: (n: SceneNode, s: ExportSettingsImage) => Promise<Uint8Array>;
+	};
+
+	const withNodeMethod = async (settings: ExportSettingsImage): Promise<Uint8Array | null> => {
+		if (typeof nodeApi.exportAsync !== 'function') {
+			return null;
+		}
+		return nodeApi.exportAsync.call(node, settings);
+	};
+
+	const withFigmaMethod = async (settings: ExportSettingsImage): Promise<Uint8Array | null> => {
+		if (typeof figmaApi.exportAsync !== 'function') {
+			return null;
+		}
+		return figmaApi.exportAsync.call(figma, node, settings);
+	};
+
+	try {
+		const bytes = await withNodeMethod(withContents);
+		if (bytes) {
+			return bytes;
+		}
+	} catch {
+		// Fallback to plain settings.
 	}
-	return btoa(binary);
+	try {
+		const bytes = await withNodeMethod(plain);
+		if (bytes) {
+			return bytes;
+		}
+	} catch {
+		// Fallback to figma-level export.
+	}
+	try {
+		const bytes = await withFigmaMethod(withContents);
+		if (bytes) {
+			return bytes;
+		}
+	} catch {
+		// Fallback to plain settings.
+	}
+	const bytes = await withFigmaMethod(plain);
+	if (bytes) {
+		return bytes;
+	}
+	const nodeExportType = typeof nodeApi.exportAsync;
+	const figmaExportType = typeof figmaApi.exportAsync;
+	const settingsCount = Array.isArray(nodeApi.exportSettings) ? nodeApi.exportSettings.length : 0;
+	throw new Error(
+		`No compatible export API available (node.exportAsync=${nodeExportType}, figma.exportAsync=${figmaExportType}, exportSettings=${settingsCount}).`,
+	);
+}
+
+function bytesToBase64(bytes: Uint8Array): string {
+	const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
+	const chunks: string[] = [];
+	const len = bytes.length;
+	for (let i = 0; i < len; i += 3) {
+		const a = bytes[i];
+		const b = i + 1 < len ? bytes[i + 1] : 0;
+		const c = i + 2 < len ? bytes[i + 2] : 0;
+		const triple = (a << 16) | (b << 8) | c;
+		chunks.push(
+			alphabet[(triple >> 18) & 63],
+			alphabet[(triple >> 12) & 63],
+			i + 1 < len ? alphabet[(triple >> 6) & 63] : '=',
+			i + 2 < len ? alphabet[triple & 63] : '=',
+		);
+	}
+	return chunks.join('');
 }
 
 async function populateScenario(

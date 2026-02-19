@@ -26,12 +26,12 @@ pub(super) fn extract_local_rect(raw: &serde_json::Value) -> (f64, f64, f64, f64
             // Extract rotation from matrix columns: atan2(c, a)
             let a = t[0]
                 .as_array()
-                .and_then(|row| row.get(0))
+                .and_then(|row| row.first())
                 .and_then(|v| v.as_f64())
                 .unwrap_or(1.0);
             let c = t[1]
                 .as_array()
-                .and_then(|row| row.get(0))
+                .and_then(|row| row.first())
                 .and_then(|v| v.as_f64())
                 .unwrap_or(0.0);
             rotation = c.atan2(a);

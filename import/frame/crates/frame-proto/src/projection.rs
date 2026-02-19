@@ -203,11 +203,10 @@ fn get_render_feature_flags(raw: &serde_json::Value) -> RenderFeatureFlags {
     let mut has_background_blur = false;
     if let Some(effects) = raw.get("effects").and_then(|v| v.as_array()) {
         for effect in effects {
-            if effect
+            if !effect
                 .get("visible")
                 .and_then(|v| v.as_bool())
                 .unwrap_or(true)
-                == false
             {
                 continue;
             }
@@ -225,11 +224,10 @@ fn get_render_feature_flags(raw: &serde_json::Value) -> RenderFeatureFlags {
     let mut has_gradient_fill = false;
     if let Some(fills) = raw.get("fills").and_then(|v| v.as_array()) {
         for fill in fills {
-            if fill
+            if !fill
                 .get("visible")
                 .and_then(|v| v.as_bool())
                 .unwrap_or(true)
-                == false
             {
                 continue;
             }
