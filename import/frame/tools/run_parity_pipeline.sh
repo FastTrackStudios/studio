@@ -2,10 +2,12 @@
 set -euo pipefail
 
 # Usage:
-#   tools/frame/run_parity_pipeline.sh <export_json> \
+#   tools/run_parity_pipeline.sh <export_json> \
 #     --out-dir <dir> \
 #     [--actual-png-dir <dir> --expected-png-dir <dir> --threshold <percent>] \
 #     [--require-pass]
+
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 
 EXPORT_JSON="${1:-}"
 OUT_DIR=""
@@ -63,9 +65,9 @@ VISUAL_MD="$OUT_DIR/visual-acceptance.md"
 PARITY_JSON="$OUT_DIR/parity-report.json"
 PARITY_MD="$OUT_DIR/parity-report.md"
 
-tools/frame/capture_render_diagnostics.sh "$EXPORT_JSON" "$RENDER_DIAG_JSON"
-tools/frame/capture_import_diagnostics.sh "$EXPORT_JSON" "$IMPORT_DIAG_JSON"
-tools/frame/capture_load_profile.sh "$EXPORT_JSON" "$PERF_JSON" 3
+"$SCRIPT_DIR/capture_render_diagnostics.sh" "$EXPORT_JSON" "$RENDER_DIAG_JSON"
+"$SCRIPT_DIR/capture_import_diagnostics.sh" "$EXPORT_JSON" "$IMPORT_DIAG_JSON"
+"$SCRIPT_DIR/capture_load_profile.sh" "$EXPORT_JSON" "$PERF_JSON" 3
 
 VISUAL_ARGS=()
 if [[ -n "$ACTUAL_PNG_DIR" || -n "$EXPECTED_PNG_DIR" ]]; then
@@ -73,7 +75,7 @@ if [[ -n "$ACTUAL_PNG_DIR" || -n "$EXPECTED_PNG_DIR" ]]; then
     echo "both --actual-png-dir and --expected-png-dir are required together" >&2
     exit 2
   fi
-  if tools/frame/run_visual_acceptance.sh "$ACTUAL_PNG_DIR" "$EXPECTED_PNG_DIR" "$THRESHOLD" --out-json "$VISUAL_JSON" --out-md "$VISUAL_MD"; then
+  if "$SCRIPT_DIR/run_visual_acceptance.sh" "$ACTUAL_PNG_DIR" "$EXPECTED_PNG_DIR" "$THRESHOLD" --out-json "$VISUAL_JSON" --out-md "$VISUAL_MD"; then
     :
   else
     # Keep pipeline running so parity report still gets generated.
@@ -82,7 +84,7 @@ if [[ -n "$ACTUAL_PNG_DIR" || -n "$EXPECTED_PNG_DIR" ]]; then
   VISUAL_ARGS=(--visual-json "$VISUAL_JSON")
 fi
 
-tools/frame/generate_parity_report.sh \
+"$SCRIPT_DIR/generate_parity_report.sh" \
   "$EXPORT_JSON" \
   --perf-json "$PERF_JSON" \
   --render-diag-json "$RENDER_DIAG_JSON" \

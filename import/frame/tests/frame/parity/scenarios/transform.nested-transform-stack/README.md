@@ -1,0 +1,6 @@
+# transform.nested-transform-stack
+
+- Figma frame name: `parity/transform/nested-transform-stack`
+- Put export JSON here: `export/latest-bridge-export.json`
+- Put direct Figma PNG(s) here: `expected/`
+- Put renderer/plugin PNG(s) here: `actual/`

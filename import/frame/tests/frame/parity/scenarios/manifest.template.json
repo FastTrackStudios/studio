@@ -1,0 +1,63 @@
+{
+  "version": 1,
+  "description": "Parity scenario manifest template. Copy to manifest.json and fill in Figma links/owners/status.",
+  "naming": {
+    "idPattern": "<category>.<case>",
+    "example": "paint.alpha-steps",
+    "frameNamePattern": "parity/<category>/<case>",
+    "exportJsonFile": "export/latest-bridge-export.json",
+    "expectedPngDir": "expected",
+    "actualPngDir": "actual"
+  },
+  "global": {
+    "pngScale": "1x",
+    "diffThresholdPercent": 0.0,
+    "target": "100% pixel parity"
+  },
+  "scenarios": [
+    {
+      "id": "primitives.basic-shapes",
+      "category": "primitives",
+      "case": "basic-shapes",
+      "title": "Solid rect/circle/line/polygon at integer coords",
+      "frameName": "parity/primitives/basic-shapes",
+      "figmaNodeUrl": "",
+      "owner": "",
+      "status": "todo",
+      "notes": ""
+    },
+    {
+      "id": "paint.alpha-steps",
+      "category": "paint",
+      "case": "alpha-steps",
+      "title": "Solid fills with alpha 1.0/0.5/0.01",
+      "frameName": "parity/paint/alpha-steps",
+      "figmaNodeUrl": "",
+      "owner": "",
+      "status": "todo",
+      "notes": ""
+    },
+    {
+      "id": "effects.shadow-matrix",
+      "category": "effects",
+      "case": "shadow-matrix",
+      "title": "Drop/inner shadow variations",
+      "frameName": "parity/effects/shadow-matrix",
+      "figmaNodeUrl": "",
+      "owner": "",
+      "status": "todo",
+      "notes": ""
+    },
+    {
+      "id": "text.multiline-spacing",
+      "category": "text",
+      "case": "multiline-spacing",
+      "title": "Multi-line text with letter spacing and line height",
+      "frameName": "parity/text/multiline-spacing",
+      "figmaNodeUrl": "",
+      "owner": "",
+      "status": "todo",
+      "notes": ""
+    }
+  ]
+}

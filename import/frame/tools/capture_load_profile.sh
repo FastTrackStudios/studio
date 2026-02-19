@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # Usage:
-#   tools/frame/capture_load_profile.sh <fts_export_or_figma_json> <out_json> [iterations]
+#   tools/capture_load_profile.sh <fts_export_or_figma_json> <out_json> [iterations]
 
 INPUT="${1:-}"
 OUT="${2:-}"
@@ -20,4 +20,3 @@ fi
 mkdir -p "$(dirname "$OUT")"
 cargo run -q -p frame-ui --features anyrender --bin load_profile -- "$INPUT" --iterations "$ITERATIONS" > "$OUT"
 echo "wrote $OUT"
-

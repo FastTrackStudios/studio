@@ -9,9 +9,9 @@ Primary corpus source: `/tmp/fts-figma-export.json`
 Quick coverage summary command:
 
 ```bash
-tools/frame/feature_coverage_report.sh \
-  tests/frame/fixtures/latest-bridge-export.json \
-  --out-json tests/frame/fixtures/feature-coverage.json
+tools/feature_coverage_report.sh \
+  tests/frame/parity/scenarios/paint.alpha-steps/export/latest-bridge-export.json \
+  --out-json tests/frame/parity/reports/feature-coverage.json
 ```
 
 Observed baseline (captured with `cells/frame/tools/analyze_fts_export.sh`):

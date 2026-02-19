@@ -2,13 +2,15 @@
 set -euo pipefail
 
 # Usage:
-#   tools/frame/generate_parity_report.sh <fts_export_json> \
+#   tools/generate_parity_report.sh <fts_export_json> \
 #     [--visual-json path] \
 #     [--perf-json path] \
 #     [--render-diag-json path] \
 #     [--import-diag-json path] \
 #     [--out-json path] \
 #     [--out-md path]
+
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 
 EXPORT_JSON="${1:-}"
 VISUAL_JSON=""
@@ -61,7 +63,7 @@ if [[ ! -f "$EXPORT_JSON" ]]; then
   exit 2
 fi
 
-FEATURE_JSON="$(tools/frame/feature_coverage_report.sh "$EXPORT_JSON")"
+FEATURE_JSON="$("$SCRIPT_DIR/feature_coverage_report.sh" "$EXPORT_JSON")"
 
 if [[ -n "$VISUAL_JSON" && ! -f "$VISUAL_JSON" ]]; then
   echo "missing visual json: $VISUAL_JSON" >&2

@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # Usage:
-#   tools/frame/run_visual_acceptance.sh <actual_dir> <expected_dir> [threshold_percent] [--out-json path] [--out-md path]
+#   tools/run_visual_acceptance.sh <actual_dir> <expected_dir> [threshold_percent] [--out-json path] [--out-md path]
 #
 # Compares PNG files with matching relative paths in expected_dir against actual_dir
 # using frame-ui visual_diff binary.

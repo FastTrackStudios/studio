@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # Usage:
-#   tools/frame/feature_coverage_report.sh <fts_export_json> [--out-json path]
+#   tools/feature_coverage_report.sh <fts_export_json> [--out-json path]
 #
 # Produces aggregate feature counts used by parity tracking.
 

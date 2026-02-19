@@ -5,12 +5,12 @@ Use this to run parity diffs for a directory of rendered PNG captures.
 ## Command
 
 ```bash
-tools/frame/run_visual_acceptance.sh \
+tools/run_visual_acceptance.sh \
   /path/to/actual-pngs \
   /path/to/expected-pngs \
-  2.0 \
-  --out-json docs/frame/reports/visual-acceptance.json \
-  --out-md docs/frame/reports/visual-acceptance.md
+  0.0 \
+  --out-json tests/frame/parity/reports/visual-acceptance.json \
+  --out-md tests/frame/parity/reports/visual-acceptance.md
 ```
 
 - The script matches `*.png` files by relative path under `expected`.

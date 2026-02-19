@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # Usage:
-#   tools/frame/capture_import_diagnostics.sh <fts_export_or_figma_json> <out_json>
+#   tools/capture_import_diagnostics.sh <fts_export_or_figma_json> <out_json>
 
 INPUT="${1:-}"
 OUT="${2:-}"
@@ -19,4 +19,3 @@ fi
 mkdir -p "$(dirname "$OUT")"
 cargo run -q -p frame-import --bin import_diagnostics -- "$INPUT" > "$OUT"
 echo "wrote $OUT"
-
