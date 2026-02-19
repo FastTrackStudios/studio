@@ -36,61 +36,41 @@ Example:
 - Do not rename PNG files between `expected` and `actual`
 - Final threshold target: `0.0` diff percent
 
-## Core Scenario Matrix
+## Core 10 Matrix
 
-Create at least one frame for each id:
+Start with these 10 scenarios only:
 
-- `primitives.basic-shapes`
 - `primitives.fractional-geometry`
-- `primitives.corner-radius-extremes`
-- `paint.alpha-steps`
 - `paint.gradient-matrix`
 - `paint.blend-mode-stack`
-- `paint.nested-opacity-stack`
-- `effects.shadow-matrix`
 - `effects.layer-background-blur`
-- `effects.effect-order-stack`
 - `strokes.caps-joins-dashes`
-- `strokes.open-closed-paths`
-- `strokes.boolean-ops`
-- `masks.clip-content-nesting`
 - `masks.vector-text-image-mask`
-- `masks.mask-effects-transforms`
 - `images.fill-mode-matrix`
-- `images.scale-extremes`
-- `images.alpha-over-gradient`
-- `images.crop-rotate-clip`
-- `text.single-multiline-wrap`
-- `text.alignment-truncation`
 - `text.mixed-style-runs`
 - `layout.auto-layout-hug-fill`
-- `layout.constraints-min-max`
-- `layout.absolute-in-auto-layout`
-- `transform.translate-scale-rotate`
-- `transform.nested-transform-stack`
-- `stress.deep-hierarchy`
-- `stress.many-siblings`
-- `stress.large-canvas`
-- `edge.zero-size-nodes`
-- `edge.subpixel-tiny-geometry`
-- `edge.negative-offcanvas`
-- `edge.transparent-overlap-blend`
-- `regression.real-screen-1`
-- `regression.real-screen-2`
 - `regression.kitchen-sink`
+
+Add more scenarios later only after the Core 10 set is stable.
 
 ## Running
 
-All scenarios:
+Core 10 only (default):
 
 ```bash
 tools/run_parity_scenarios.sh --threshold 0.0
 ```
 
+All scenarios:
+
+```bash
+tools/run_parity_scenarios.sh --all --threshold 0.0
+```
+
 Single scenario:
 
 ```bash
-tools/run_parity_scenarios.sh --scenario paint.alpha-steps --threshold 0.0
+tools/run_parity_scenarios.sh --scenario paint.gradient-matrix --threshold 0.0
 ```
 
 Reports are written under:
