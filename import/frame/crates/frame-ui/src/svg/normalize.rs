@@ -63,6 +63,7 @@ fn normalize_rect_line(line: &str) -> Option<String> {
     let linecap = extract_xml_attr(line, "stroke-linecap");
     let linejoin = extract_xml_attr(line, "stroke-linejoin");
     let figma_gradient_fill = extract_xml_attr(line, "data-figma-gradient-fill");
+    let figma_bg_blur_radius = extract_xml_attr(line, "data-figma-bg-blur-radius");
 
     let mut attrs: Vec<String> = Vec::new();
     if let Some(opacity) = opacity {
@@ -123,6 +124,9 @@ fn normalize_rect_line(line: &str) -> Option<String> {
     }
     if let Some(payload) = figma_gradient_fill {
         attrs.push(format!(r#"data-figma-gradient-fill="{payload}""#));
+    }
+    if let Some(radius) = figma_bg_blur_radius {
+        attrs.push(format!(r#"data-figma-bg-blur-radius="{}""#, trim_decimal(&radius)));
     }
     Some(format!("<rect {}/>", attrs.join(" ")))
 }

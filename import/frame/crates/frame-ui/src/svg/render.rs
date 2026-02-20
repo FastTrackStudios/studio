@@ -233,6 +233,8 @@ pub fn run_cli() -> Result<(), String> {
     let mut group_stack: Vec<Group> = Vec::new();
     let mut clip_count: u64 = 0;
     let mut gradient_count: u64 = 0;
+    let mut effect_count: u64 = 0;
+    let mut bg_blur_count: u64 = 0;
     let mut defs = Definitions::new();
     let mut has_defs = false;
     let mut deferred_gradients: Vec<Box<dyn svg::Node>> = Vec::new();
@@ -291,6 +293,7 @@ pub fn run_cli() -> Result<(), String> {
                 fills,
                 stroke,
                 corner_radii,
+                effects,
                 ..
             } => {
                 let rx = x + tx;
@@ -612,7 +615,22 @@ pub fn run_cli() -> Result<(), String> {
                                     rect = rect.set("stroke-opacity", opacity);
                                 }
                             }
-                            push_node(&mut svg_doc, &mut group_stack, rect);
+                            push_rect_with_effects(
+                                &mut svg_doc,
+                                &mut group_stack,
+                                &mut defs,
+                                &mut has_defs,
+                                &root_id_suffix,
+                                &mut effect_count,
+                                &mut bg_blur_count,
+                                rect,
+                                effects.as_slice(),
+                                rx,
+                                ry,
+                                rw,
+                                rh,
+                                &effective_corner_radii,
+                            );
                             continue;
                         }
                     }
@@ -742,7 +760,22 @@ pub fn run_cli() -> Result<(), String> {
                                 .set("height", fmt_f64(rh));
                             rect = apply_corner_radii_rect(rect, &effective_corner_radii);
                         rect = apply_fill_style_rect(rect, &style);
-                        push_node(&mut svg_doc, &mut group_stack, rect);
+                        push_rect_with_effects(
+                            &mut svg_doc,
+                            &mut group_stack,
+                            &mut defs,
+                            &mut has_defs,
+                            &root_id_suffix,
+                            &mut effect_count,
+                            &mut bg_blur_count,
+                            rect,
+                            effects.as_slice(),
+                            rx,
+                            ry,
+                            rw,
+                            rh,
+                            &effective_corner_radii,
+                        );
                     }
                 }
                 if let Some(stroke) = stroke {
@@ -780,6 +813,7 @@ pub fn run_cli() -> Result<(), String> {
                 fills,
                 stroke,
                 blend,
+                effects,
                 text_outline,
                 ..
             } => {
@@ -821,6 +855,7 @@ pub fn run_cli() -> Result<(), String> {
                             rh = (rh - inset * 2.0).max(0.0);
                         }
                     }
+                    let mut rect_corner_radii = frame_proto::CornerRadii::default();
                     let mut rect = Rectangle::new()
                         .set("x", fmt_f64(rx))
                         .set("y", fmt_f64(ry))
@@ -837,6 +872,12 @@ pub fn run_cli() -> Result<(), String> {
                                     let tr = arr[1].as_f64().unwrap_or(0.0).max(0.0);
                                     let br = arr[2].as_f64().unwrap_or(0.0).max(0.0);
                                     let bl = arr[3].as_f64().unwrap_or(0.0).max(0.0);
+                                    rect_corner_radii = frame_proto::CornerRadii {
+                                        top_left: tl,
+                                        top_right: tr,
+                                        bottom_right: br,
+                                        bottom_left: bl,
+                                    };
                                     if (tl - tr).abs() <= f64::EPSILON
                                         && (tl - br).abs() <= f64::EPSILON
                                         && (tl - bl).abs() <= f64::EPSILON
@@ -851,6 +892,7 @@ pub fn run_cli() -> Result<(), String> {
                             })
                             .or_else(|| node.raw.get("cornerRadius").and_then(|v| v.as_f64()));
                         if let Some(corner_radius) = corner_radius {
+                            rect_corner_radii = frame_proto::CornerRadii::uniform(corner_radius);
                             if corner_radius > 0.0 {
                                 rect = rect.set("rx", fmt_f64(corner_radius));
                             }
@@ -1013,7 +1055,22 @@ pub fn run_cli() -> Result<(), String> {
                             }
                             push_node(&mut svg_doc, &mut group_stack, group.add(rect));
                         } else {
-                            push_node(&mut svg_doc, &mut group_stack, rect);
+                            push_rect_with_effects(
+                                &mut svg_doc,
+                                &mut group_stack,
+                                &mut defs,
+                                &mut has_defs,
+                                &root_id_suffix,
+                                &mut effect_count,
+                                &mut bg_blur_count,
+                                rect,
+                                effects.as_slice(),
+                                rx,
+                                ry,
+                                rw,
+                                rh,
+                                &rect_corner_radii,
+                            );
                         }
                     }
                     continue;
@@ -1207,6 +1264,134 @@ pub fn run_cli() -> Result<(), String> {
         input, out_path, width, height
     );
     Ok(())
+}
+
+#[cfg(feature = "svg_export")]
+fn push_rect_with_effects(
+    svg_doc: &mut svg::Document,
+    group_stack: &mut Vec<svg::node::element::Group>,
+    defs: &mut svg::node::element::Definitions,
+    has_defs: &mut bool,
+    root_id_suffix: &str,
+    effect_count: &mut u64,
+    bg_blur_count: &mut u64,
+    rect: svg::node::element::Rectangle,
+    effects: &[crate::anyrender_renderer::NodeEffect],
+    x: f64,
+    y: f64,
+    width: f64,
+    height: f64,
+    corner_radii: &frame_proto::CornerRadii,
+) {
+    use crate::anyrender_renderer::EffectKind;
+
+    if let Some(effect) = effects
+        .iter()
+        .find(|effect| matches!(effect.kind, EffectKind::LayerBlur))
+    {
+        let radius = effect.radius.max(0.0);
+        let std_deviation = (radius * 0.5).max(0.0);
+        let filter_id = format!("filter{}_f_{}", *effect_count, root_id_suffix);
+        *effect_count += 1;
+        let mut fe_flood = svg::node::element::Element::new("feFlood");
+        svg::Node::assign(&mut fe_flood, "flood-opacity", "0");
+        svg::Node::assign(&mut fe_flood, "result", "BackgroundImageFix");
+        let mut fe_blend = svg::node::element::Element::new("feBlend");
+        svg::Node::assign(&mut fe_blend, "mode", "normal");
+        svg::Node::assign(&mut fe_blend, "in", "SourceGraphic");
+        svg::Node::assign(&mut fe_blend, "in2", "BackgroundImageFix");
+        svg::Node::assign(&mut fe_blend, "result", "shape");
+        let mut fe_gaussian_blur = svg::node::element::Element::new("feGaussianBlur");
+        svg::Node::assign(
+            &mut fe_gaussian_blur,
+            "stdDeviation",
+            fmt_f64(std_deviation),
+        );
+        svg::Node::assign(
+            &mut fe_gaussian_blur,
+            "result",
+            "effect1_foregroundBlur_8_830",
+        );
+        let filter = svg::node::element::Filter::new()
+            .set("id", filter_id.clone())
+            .set("x", fmt_f64(x - radius))
+            .set("y", fmt_f64(y - radius))
+            .set("width", fmt_f64(width + radius * 2.0))
+            .set("height", fmt_f64(height + radius * 2.0))
+            .set("filterUnits", "userSpaceOnUse")
+            .set("color-interpolation-filters", "sRGB")
+            .add(fe_flood)
+            .add(fe_blend)
+            .add(fe_gaussian_blur);
+        *defs = defs.clone().add(filter);
+        *has_defs = true;
+        push_node(
+            svg_doc,
+            group_stack,
+            svg::node::element::Group::new()
+                .set("filter", format!("url(#{filter_id})"))
+                .add(rect),
+        );
+        return;
+    }
+
+    if let Some(effect) = effects
+        .iter()
+        .find(|effect| matches!(effect.kind, EffectKind::BackgroundBlur))
+    {
+        let radius = effect.radius.max(0.0);
+        let blur = (radius * 0.5).max(0.0);
+        let bx = x - radius;
+        let by = y - radius;
+        let bw = width + radius * 2.0;
+        let bh = height + radius * 2.0;
+        let clip_id = format!("bgblur_{}_{}_clip_path", *bg_blur_count, root_id_suffix);
+        *bg_blur_count += 1;
+
+        let mut clip_rect = svg::node::element::Rectangle::new()
+            .set("x", fmt_f64(x))
+            .set("y", fmt_f64(y))
+            .set("width", fmt_f64(width))
+            .set("height", fmt_f64(height));
+        clip_rect = apply_corner_radii_rect(clip_rect, corner_radii);
+
+        *defs = defs.clone().add(
+            svg::node::element::ClipPath::new()
+                .set("id", clip_id.clone())
+                .set(
+                    "transform",
+                    format!("translate({} {})", fmt_f64(-bx), fmt_f64(-by)),
+                )
+                .add(clip_rect),
+        );
+        *has_defs = true;
+
+        let mut foreign = svg::node::element::ForeignObject::new()
+            .set("x", fmt_f64(bx))
+            .set("y", fmt_f64(by))
+            .set("width", fmt_f64(bw))
+            .set("height", fmt_f64(bh));
+        let mut div = svg::node::element::Element::new("div");
+        svg::Node::assign(&mut div, "xmlns", "http://www.w3.org/1999/xhtml");
+        svg::Node::assign(
+            &mut div,
+            "style",
+            format!(
+                "backdrop-filter:blur({}px);clip-path:url(#{clip_id});height:100%;width:100%",
+                fmt_f64(blur)
+            ),
+        );
+        foreign = foreign.add(div);
+        push_node(svg_doc, group_stack, foreign);
+        push_node(
+            svg_doc,
+            group_stack,
+            rect.set("data-figma-bg-blur-radius", fmt_f64(radius)),
+        );
+        return;
+    }
+
+    push_node(svg_doc, group_stack, rect);
 }
 
 #[cfg(feature = "svg_export")]
