@@ -1157,27 +1157,6 @@ pub fn run_cli() -> Result<(), String> {
                         }
                     }
                     if rotation.abs() > 1e-6 {
-                        if let Some(node) = node {
-                            if let Some(matrix) =
-                                node.raw.get("relativeTransform").and_then(|v| v.as_array())
-                            {
-                                let tx_raw = matrix
-                                    .first()
-                                    .and_then(|row| row.as_array())
-                                    .and_then(|row| row.get(2))
-                                    .and_then(|v| v.as_f64());
-                                let ty_raw = matrix
-                                    .get(1)
-                                    .and_then(|row| row.as_array())
-                                    .and_then(|row| row.get(2))
-                                    .and_then(|v| v.as_f64());
-                                if let (Some(tx_raw), Some(ty_raw)) = (tx_raw, ty_raw) {
-                                    // Figma relativeTransform translation is already local to the frame.
-                                    rx = tx_raw;
-                                    ry = ty_raw;
-                                }
-                            }
-                        }
                         if let Some((width_local, height_local)) =
                             fill_paths.first().and_then(|d| svg_local_rect_size_from_path(d))
                         {

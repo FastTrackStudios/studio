@@ -1,6 +1,6 @@
 # SVG Parity Summary
 
-- Generated: `2026-02-20T02:05:24Z`
+- Generated: `2026-02-20T02:21:10Z`
 - Root: `tests/frame/parity`
 - Mode: `single`
 - Precision: `4`
@@ -13,4 +13,4 @@
 - Skipped: `0`
 
 ## Scenarios
-- `effects.drop-shadow-matrix`: strict=true, canonical=true
+- `transform.transform-precision`: strict=true, canonical=true

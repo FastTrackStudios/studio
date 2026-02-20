@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-02-20T02:05:24Z",
+  "generatedAt": "2026-02-20T02:21:10Z",
   "root": "tests/frame/parity",
   "mode": "single",
   "precision": 4,
@@ -12,10 +12,10 @@
   "skipped": 0,
   "scenarios": [
     {
-      "scenarioId": "effects.drop-shadow-matrix",
+      "scenarioId": "transform.transform-precision",
       "strictEqual": true,
       "canonicalEqual": true,
-      "report": "tests/frame/parity/scenarios/effects.drop-shadow-matrix/svg-report.json"
+      "report": "tests/frame/parity/scenarios/transform.transform-precision/svg-report.json"
     }
   ]
 }
