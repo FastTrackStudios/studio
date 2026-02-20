@@ -61,10 +61,38 @@ fn extract_export_root_name(
 }
 
 #[cfg(feature = "svg_export")]
+fn extract_export_root_id(
+    bytes: &[u8],
+    root_figma_id: Option<&str>,
+) -> Result<Option<String>, String> {
+    let json: serde_json::Value =
+        serde_json::from_slice(bytes).map_err(|e| format!("invalid export JSON: {e}"))?;
+    let Some(nodes) = json.get("nodes").and_then(|n| n.as_array()) else {
+        return Ok(None);
+    };
+    if nodes.is_empty() {
+        return Ok(None);
+    }
+    let target = if let Some(root_id) = root_figma_id {
+        nodes.iter()
+            .find(|node| node.get("id").and_then(|v| v.as_str()) == Some(root_id))
+            .unwrap_or(&nodes[0])
+    } else {
+        &nodes[0]
+    };
+    Ok(target
+        .get("id")
+        .and_then(|v| v.as_str())
+        .map(ToString::to_string))
+}
+
+#[cfg(feature = "svg_export")]
 pub fn run_cli() -> Result<(), String> {
     use crate::{build_layout_boxes, build_paint_primitives, PaintPrimitive};
     use frame_proto::FrameDocument;
-    use svg::node::element::{ClipPath, Definitions, Group, Path as SvgPath, Rectangle};
+    use svg::node::element::{
+        ClipPath, Definitions, Element, ForeignObject, Group, Path as SvgPath, Rectangle,
+    };
     use svg::Document;
 
     let mut args = std::env::args().skip(1);
@@ -108,6 +136,7 @@ pub fn run_cli() -> Result<(), String> {
         .unwrap_or((255, 255, 255, 255));
     let source_bboxes = collect_source_absolute_bboxes(&bytes)?;
     let root_name = extract_export_root_name(&bytes, root_figma_id.as_deref())?;
+    let export_root_id = extract_export_root_id(&bytes, root_figma_id.as_deref())?;
     // Text parity fixtures in this corpus validate text outline serialization only.
     // Keep non-text geometry out of SVG export for parity/text/* scenarios.
     let text_only_mode = root_name
@@ -116,13 +145,19 @@ pub fn run_cli() -> Result<(), String> {
         .unwrap_or(false);
     let doc = FrameDocument::from_source_bytes(&bytes)
         .map_err(|e| format!("failed importing source document from {input}: {e}"))?;
-    let root = match root_figma_id {
+    let root = match root_figma_id.as_deref() {
         Some(figma_id) => doc
-            .get_by_figma_id(&figma_id)
+            .get_by_figma_id(figma_id)
             .map(|n| n.id)
             .ok_or_else(|| format!("root figma id not found: {figma_id}"))?,
         None => doc.pages.first().copied().unwrap_or(doc.root),
     };
+    let root_id_suffix = root_figma_id
+        .clone()
+        .or(export_root_id)
+        .or_else(|| doc.get_node(root).map(|n| n.figma_id.clone()))
+        .unwrap_or_else(|| "root".to_string())
+        .replace(':', "_");
 
     let layout_boxes = build_layout_boxes(&doc, root);
     let subtree = doc.walk_subtree(root);
@@ -196,6 +231,10 @@ pub fn run_cli() -> Result<(), String> {
     let ty = -min_y;
     let mut group_stack: Vec<Group> = Vec::new();
     let mut clip_count: u64 = 0;
+    let mut gradient_count: u64 = 0;
+    let mut defs = Definitions::new();
+    let mut has_defs = false;
+    let mut deferred_gradients: Vec<Box<dyn svg::Node>> = Vec::new();
 
     for primitive in primitives {
         if text_only_mode {
@@ -251,14 +290,192 @@ pub fn run_cli() -> Result<(), String> {
                 stroke,
                 ..
             } => {
+                let rx = x + tx;
+                let ry = y + ty;
+                let rw = width.max(0.0);
+                let rh = height.max(0.0);
                 if fills.len() == 1 {
                     if let Some((fill, _)) = fills.first() {
+                        match fill {
+                            crate::anyrender_renderer::FillPaint::GradientLinear { transform, stops } => {
+                                let gradient_id =
+                                    format!("paint{gradient_count}_linear_{root_id_suffix}");
+                                gradient_count += 1;
+                                if let Some(gradient) = svg_linear_gradient_def(
+                                    &gradient_id,
+                                    rx,
+                                    ry,
+                                    rw,
+                                    rh,
+                                    transform.as_ref(),
+                                    stops.as_slice(),
+                                ) {
+                                    deferred_gradients.push(Box::new(gradient));
+                                    has_defs = true;
+                                    let mut rect = Rectangle::new()
+                                        .set("x", fmt_f64(rx))
+                                        .set("y", fmt_f64(ry))
+                                        .set("width", fmt_f64(rw))
+                                        .set("height", fmt_f64(rh))
+                                        .set("fill", format!("url(#{gradient_id})"));
+                                    if let Some(stroke) = stroke {
+                                        let (hex, opacity) = svg_color_paint_values(
+                                            to_u8(stroke.color.r),
+                                            to_u8(stroke.color.g),
+                                            to_u8(stroke.color.b),
+                                            (stroke.color.a * 255.0).round().clamp(0.0, 255.0)
+                                                as u8,
+                                        );
+                                        rect = rect
+                                            .set("stroke", hex)
+                                            .set("stroke-width", fmt_f64(stroke.width.max(0.0)))
+                                            .set("stroke-linecap", svg_linecap(stroke.cap))
+                                            .set("stroke-linejoin", svg_linejoin(stroke.join));
+                                        if let Some(opacity) = opacity {
+                                            rect = rect.set("stroke-opacity", opacity);
+                                        }
+                                    }
+                                    push_node(&mut svg_doc, &mut group_stack, rect);
+                                    continue;
+                                }
+                            }
+                            crate::anyrender_renderer::FillPaint::GradientRadial { transform, stops } => {
+                                let gradient_id =
+                                    format!("paint{gradient_count}_radial_{root_id_suffix}");
+                                gradient_count += 1;
+                                if let Some(gradient) = svg_radial_gradient_def(
+                                    &gradient_id,
+                                    rx,
+                                    ry,
+                                    rw,
+                                    rh,
+                                    transform.as_ref(),
+                                    stops.as_slice(),
+                                ) {
+                                    deferred_gradients.push(Box::new(gradient));
+                                    has_defs = true;
+                                    let mut rect = Rectangle::new()
+                                        .set("x", fmt_f64(rx))
+                                        .set("y", fmt_f64(ry))
+                                        .set("width", fmt_f64(rw))
+                                        .set("height", fmt_f64(rh))
+                                        .set("fill", format!("url(#{gradient_id})"));
+                                    if let Some(stroke) = stroke {
+                                        let (hex, opacity) = svg_color_paint_values(
+                                            to_u8(stroke.color.r),
+                                            to_u8(stroke.color.g),
+                                            to_u8(stroke.color.b),
+                                            (stroke.color.a * 255.0).round().clamp(0.0, 255.0)
+                                                as u8,
+                                        );
+                                        rect = rect
+                                            .set("stroke", hex)
+                                            .set("stroke-width", fmt_f64(stroke.width.max(0.0)))
+                                            .set("stroke-linecap", svg_linecap(stroke.cap))
+                                            .set("stroke-linejoin", svg_linejoin(stroke.join));
+                                        if let Some(opacity) = opacity {
+                                            rect = rect.set("stroke-opacity", opacity);
+                                        }
+                                    }
+                                    push_node(&mut svg_doc, &mut group_stack, rect);
+                                    continue;
+                                }
+                            }
+                            crate::anyrender_renderer::FillPaint::GradientAngular {
+                                transform,
+                                stops,
+                            } => {
+                                let gradient_id =
+                                    format!("paint{gradient_count}_angular_{root_id_suffix}");
+                                gradient_count += 1;
+                                let clip_id = format!("{gradient_id}_clip_path");
+                                let clip_rect = Rectangle::new()
+                                    .set("x", fmt_f64(rx))
+                                    .set("y", fmt_f64(ry))
+                                    .set("width", fmt_f64(rw))
+                                    .set("height", fmt_f64(rh));
+                                defs = defs.add(ClipPath::new().set("id", clip_id.clone()).add(clip_rect));
+                                has_defs = true;
+
+                                let center_x = rx + rw * 0.5;
+                                let center_y = ry + rh * 0.5;
+                                let scale_x = rw / 2000.0;
+                                let scale_y = rh / 2000.0;
+                                let mut foreign = ForeignObject::new()
+                                    .set("x", "-1011.11")
+                                    .set("y", "-1011.11")
+                                    .set("width", "2022.22")
+                                    .set("height", "2022.22");
+                                let mut div = Element::new("div");
+                                svg::Node::assign(&mut div, "xmlns", "http://www.w3.org/1999/xhtml");
+                                svg::Node::assign(
+                                    &mut div,
+                                    "style",
+                                    svg_angular_conic_style(transform.as_ref(), stops.as_slice()),
+                                );
+                                foreign = foreign.add(div);
+                                let inner = Group::new()
+                                    .set(
+                                        "transform",
+                                        format!(
+                                            "matrix({} 0 0 {} {} {})",
+                                            fmt_f64(scale_x),
+                                            fmt_f64(scale_y),
+                                            fmt_f64(center_x),
+                                            fmt_f64(center_y)
+                                        ),
+                                    )
+                                    .add(foreign);
+                                let group = Group::new()
+                                    .set("clip-path", format!("url(#{clip_id})"))
+                                    .set("data-figma-skip-parse", "true")
+                                    .add(inner);
+                                push_node(&mut svg_doc, &mut group_stack, group);
+
+                                let metadata_rect = Rectangle::new()
+                                    .set("x", fmt_f64(rx))
+                                    .set("y", fmt_f64(ry))
+                                    .set("width", fmt_f64(rw))
+                                    .set("height", fmt_f64(rh))
+                                    .set(
+                                        "data-figma-gradient-fill",
+                                        svg_angular_metadata_attr(rx, ry, rw, rh, stops.as_slice()),
+                                    );
+                                push_node(&mut svg_doc, &mut group_stack, metadata_rect);
+
+                                if let Some(stroke) = stroke {
+                                    let mut rect = Rectangle::new()
+                                        .set("x", fmt_f64(rx))
+                                        .set("y", fmt_f64(ry))
+                                        .set("width", fmt_f64(rw))
+                                        .set("height", fmt_f64(rh))
+                                        .set("fill", "none")
+                                        .set("stroke-width", fmt_f64(stroke.width.max(0.0)))
+                                        .set("stroke-linecap", svg_linecap(stroke.cap))
+                                        .set("stroke-linejoin", svg_linejoin(stroke.join));
+                                    let (hex, opacity) = svg_color_paint_values(
+                                        to_u8(stroke.color.r),
+                                        to_u8(stroke.color.g),
+                                        to_u8(stroke.color.b),
+                                        (stroke.color.a * 255.0).round().clamp(0.0, 255.0) as u8,
+                                    );
+                                    rect = rect.set("stroke", hex);
+                                    if let Some(opacity) = opacity {
+                                        rect = rect.set("stroke-opacity", opacity);
+                                    }
+                                    push_node(&mut svg_doc, &mut group_stack, rect);
+                                }
+                                continue;
+                            }
+                            _ => {}
+                        }
+
                         if let Some(style) = svg_fill_style(fill) {
                             let mut rect = Rectangle::new()
-                                .set("x", fmt_f64(x + tx))
-                                .set("y", fmt_f64(y + ty))
-                                .set("width", fmt_f64(width.max(0.0)))
-                                .set("height", fmt_f64(height.max(0.0)));
+                                .set("x", fmt_f64(rx))
+                                .set("y", fmt_f64(ry))
+                                .set("width", fmt_f64(rw))
+                                .set("height", fmt_f64(rh));
                             rect = apply_fill_style_rect(rect, &style);
                             if let Some(stroke) = stroke {
                                 let (hex, opacity) = svg_color_paint_values(
@@ -282,22 +499,138 @@ pub fn run_cli() -> Result<(), String> {
                     }
                 }
                 for (fill, _) in fills {
+                    match &fill {
+                        crate::anyrender_renderer::FillPaint::GradientLinear { transform, stops } => {
+                            let gradient_id =
+                                format!("paint{gradient_count}_linear_{root_id_suffix}");
+                            gradient_count += 1;
+                            if let Some(gradient) = svg_linear_gradient_def(
+                                &gradient_id,
+                                rx,
+                                ry,
+                                rw,
+                                rh,
+                                transform.as_ref(),
+                                stops.as_slice(),
+                            ) {
+                                deferred_gradients.push(Box::new(gradient));
+                                has_defs = true;
+                                let rect = Rectangle::new()
+                                    .set("x", fmt_f64(rx))
+                                    .set("y", fmt_f64(ry))
+                                    .set("width", fmt_f64(rw))
+                                    .set("height", fmt_f64(rh))
+                                    .set("fill", format!("url(#{gradient_id})"));
+                                push_node(&mut svg_doc, &mut group_stack, rect);
+                            }
+                            continue;
+                        }
+                        crate::anyrender_renderer::FillPaint::GradientRadial { transform, stops } => {
+                            let gradient_id =
+                                format!("paint{gradient_count}_radial_{root_id_suffix}");
+                            gradient_count += 1;
+                            if let Some(gradient) = svg_radial_gradient_def(
+                                &gradient_id,
+                                rx,
+                                ry,
+                                rw,
+                                rh,
+                                transform.as_ref(),
+                                stops.as_slice(),
+                            ) {
+                                deferred_gradients.push(Box::new(gradient));
+                                has_defs = true;
+                                let rect = Rectangle::new()
+                                    .set("x", fmt_f64(rx))
+                                    .set("y", fmt_f64(ry))
+                                    .set("width", fmt_f64(rw))
+                                    .set("height", fmt_f64(rh))
+                                    .set("fill", format!("url(#{gradient_id})"));
+                                push_node(&mut svg_doc, &mut group_stack, rect);
+                            }
+                            continue;
+                        }
+                        crate::anyrender_renderer::FillPaint::GradientAngular {
+                            transform,
+                            stops,
+                        } => {
+                            let gradient_id =
+                                format!("paint{gradient_count}_angular_{root_id_suffix}");
+                            gradient_count += 1;
+                            let clip_id = format!("{gradient_id}_clip_path");
+                            let clip_rect = Rectangle::new()
+                                .set("x", fmt_f64(rx))
+                                .set("y", fmt_f64(ry))
+                                .set("width", fmt_f64(rw))
+                                .set("height", fmt_f64(rh));
+                            defs = defs.add(ClipPath::new().set("id", clip_id.clone()).add(clip_rect));
+                            has_defs = true;
+
+                            let center_x = rx + rw * 0.5;
+                            let center_y = ry + rh * 0.5;
+                            let scale_x = rw / 2000.0;
+                            let scale_y = rh / 2000.0;
+                            let mut foreign = ForeignObject::new()
+                                .set("x", "-1011.11")
+                                .set("y", "-1011.11")
+                                .set("width", "2022.22")
+                                .set("height", "2022.22");
+                            let mut div = Element::new("div");
+                            svg::Node::assign(&mut div, "xmlns", "http://www.w3.org/1999/xhtml");
+                            svg::Node::assign(
+                                &mut div,
+                                "style",
+                                svg_angular_conic_style(transform.as_ref(), stops.as_slice()),
+                            );
+                            foreign = foreign.add(div);
+                            let inner = Group::new()
+                                .set(
+                                    "transform",
+                                    format!(
+                                        "matrix({} 0 0 {} {} {})",
+                                        fmt_f64(scale_x),
+                                        fmt_f64(scale_y),
+                                        fmt_f64(center_x),
+                                        fmt_f64(center_y)
+                                    ),
+                                )
+                                .add(foreign);
+                            let group = Group::new()
+                                .set("clip-path", format!("url(#{clip_id})"))
+                                .set("data-figma-skip-parse", "true")
+                                .add(inner);
+                            push_node(&mut svg_doc, &mut group_stack, group);
+
+                            let metadata_rect = Rectangle::new()
+                                .set("x", fmt_f64(rx))
+                                .set("y", fmt_f64(ry))
+                                .set("width", fmt_f64(rw))
+                                .set("height", fmt_f64(rh))
+                                .set(
+                                    "data-figma-gradient-fill",
+                                    svg_angular_metadata_attr(rx, ry, rw, rh, stops.as_slice()),
+                                );
+                            push_node(&mut svg_doc, &mut group_stack, metadata_rect);
+                            continue;
+                        }
+                        _ => {}
+                    }
                     if let Some(style) = svg_fill_style(&fill) {
                         let mut rect = Rectangle::new()
-                            .set("x", fmt_f64(x + tx))
-                            .set("y", fmt_f64(y + ty))
-                            .set("width", fmt_f64(width.max(0.0)))
-                            .set("height", fmt_f64(height.max(0.0)));
+                            .set("x", fmt_f64(rx))
+                            .set("y", fmt_f64(ry))
+                            .set("width", fmt_f64(rw))
+                            .set("height", fmt_f64(rh));
                         rect = apply_fill_style_rect(rect, &style);
                         push_node(&mut svg_doc, &mut group_stack, rect);
                     }
                 }
                 if let Some(stroke) = stroke {
                     let mut rect = Rectangle::new()
-                        .set("x", fmt_f64(x + tx))
-                        .set("y", fmt_f64(y + ty))
-                        .set("width", fmt_f64(width.max(0.0)))
-                        .set("height", fmt_f64(height.max(0.0)))
+                        .set("x", fmt_f64(rx))
+                        .set("y", fmt_f64(ry))
+                        .set("width", fmt_f64(rw))
+                        .set("height", fmt_f64(rh))
                         .set("fill", "none")
                         .set("stroke-width", fmt_f64(stroke.width.max(0.0)))
                         .set("stroke-linecap", svg_linecap(stroke.cap))
@@ -373,9 +706,113 @@ pub fn run_cli() -> Result<(), String> {
                         .set("y", fmt_f64(ry))
                         .set("width", fmt_f64(rw))
                         .set("height", fmt_f64(rh));
+                    let mut emit_rect = true;
                     if let Some((fill, _)) = fills.first() {
-                        if let Some(style) = svg_fill_style(fill) {
-                            rect = apply_fill_style_rect(rect, &style);
+                        match fill {
+                            crate::anyrender_renderer::FillPaint::GradientLinear { transform, stops } => {
+                                let gradient_id =
+                                    format!("paint{gradient_count}_linear_{root_id_suffix}");
+                                gradient_count += 1;
+                                if let Some(gradient) = svg_linear_gradient_def(
+                                    &gradient_id,
+                                    rx,
+                                    ry,
+                                    rw,
+                                    rh,
+                                    transform.as_ref(),
+                                    stops.as_slice(),
+                                ) {
+                                    deferred_gradients.push(Box::new(gradient));
+                                    has_defs = true;
+                                    rect = rect.set("fill", format!("url(#{gradient_id})"));
+                                }
+                            }
+                            crate::anyrender_renderer::FillPaint::GradientRadial { transform, stops } => {
+                                let gradient_id =
+                                    format!("paint{gradient_count}_radial_{root_id_suffix}");
+                                gradient_count += 1;
+                                if let Some(gradient) = svg_radial_gradient_def(
+                                    &gradient_id,
+                                    rx,
+                                    ry,
+                                    rw,
+                                    rh,
+                                    transform.as_ref(),
+                                    stops.as_slice(),
+                                ) {
+                                    deferred_gradients.push(Box::new(gradient));
+                                    has_defs = true;
+                                    rect = rect.set("fill", format!("url(#{gradient_id})"));
+                                }
+                            }
+                            crate::anyrender_renderer::FillPaint::GradientAngular {
+                                transform,
+                                stops,
+                            } => {
+                                let gradient_id =
+                                    format!("paint{gradient_count}_angular_{root_id_suffix}");
+                                gradient_count += 1;
+                                let clip_id = format!("{gradient_id}_clip_path");
+                                let clip_rect = Rectangle::new()
+                                    .set("x", fmt_f64(rx))
+                                    .set("y", fmt_f64(ry))
+                                    .set("width", fmt_f64(rw))
+                                    .set("height", fmt_f64(rh));
+                                defs = defs.add(ClipPath::new().set("id", clip_id.clone()).add(clip_rect));
+                                has_defs = true;
+
+                                let center_x = rx + rw * 0.5;
+                                let center_y = ry + rh * 0.5;
+                                let scale_x = rw / 2000.0;
+                                let scale_y = rh / 2000.0;
+                                let mut foreign = ForeignObject::new()
+                                    .set("x", "-1011.11")
+                                    .set("y", "-1011.11")
+                                    .set("width", "2022.22")
+                                    .set("height", "2022.22");
+                                let mut div = Element::new("div");
+                                svg::Node::assign(&mut div, "xmlns", "http://www.w3.org/1999/xhtml");
+                                svg::Node::assign(
+                                    &mut div,
+                                    "style",
+                                    svg_angular_conic_style(transform.as_ref(), stops.as_slice()),
+                                );
+                                foreign = foreign.add(div);
+                                let inner = Group::new()
+                                    .set(
+                                        "transform",
+                                        format!(
+                                            "matrix({} 0 0 {} {} {})",
+                                            fmt_f64(scale_x),
+                                            fmt_f64(scale_y),
+                                            fmt_f64(center_x),
+                                            fmt_f64(center_y)
+                                        ),
+                                    )
+                                    .add(foreign);
+                                let group = Group::new()
+                                    .set("clip-path", format!("url(#{clip_id})"))
+                                    .set("data-figma-skip-parse", "true")
+                                    .add(inner);
+                                push_node(&mut svg_doc, &mut group_stack, group);
+                                let metadata_rect = Rectangle::new()
+                                    .set("x", fmt_f64(rx))
+                                    .set("y", fmt_f64(ry))
+                                    .set("width", fmt_f64(rw))
+                                    .set("height", fmt_f64(rh))
+                                    .set(
+                                        "data-figma-gradient-fill",
+                                        svg_angular_metadata_attr(rx, ry, rw, rh, stops.as_slice()),
+                                    );
+                                push_node(&mut svg_doc, &mut group_stack, metadata_rect);
+                                emit_rect = stroke.is_some();
+                                rect = rect.set("fill", "none");
+                            }
+                            _ => {
+                                if let Some(style) = svg_fill_style(fill) {
+                                    rect = apply_fill_style_rect(rect, &style);
+                                }
+                            }
                         }
                     } else {
                         rect = rect.set("fill", "none");
@@ -396,7 +833,9 @@ pub fn run_cli() -> Result<(), String> {
                             rect = rect.set("stroke-opacity", opacity);
                         }
                     }
-                    push_node(&mut svg_doc, &mut group_stack, rect);
+                    if emit_rect {
+                        push_node(&mut svg_doc, &mut group_stack, rect);
+                    }
                     continue;
                 }
                 let px = x + tx;
@@ -466,6 +905,12 @@ pub fn run_cli() -> Result<(), String> {
 
     while let Some(group) = group_stack.pop() {
         push_node(&mut svg_doc, &mut group_stack, group);
+    }
+    if has_defs {
+        for gradient in deferred_gradients {
+            defs = defs.add(gradient);
+        }
+        push_node(&mut svg_doc, &mut group_stack, defs);
     }
 
     let raw_svg = svg_doc.to_string();
@@ -552,9 +997,185 @@ fn svg_fill_style(fill: &crate::anyrender_renderer::FillPaint) -> Option<FillSty
         }
         FillPaint::GradientLinear { .. }
         | FillPaint::GradientRadial { .. }
-        | FillPaint::GradientAngular { .. } => Some(FillStyle::DebugStroke { hex: "#FF00FF" }),
+        | FillPaint::GradientAngular { .. } => None,
         FillPaint::Image { .. } => Some(FillStyle::DebugStroke { hex: "#00A3FF" }),
     }
+}
+
+#[cfg(feature = "svg_export")]
+fn gradient_transform_point(transform: Option<&[[f64; 3]; 2]>, u: f64, v: f64) -> (f64, f64) {
+    if let Some(t) = transform {
+        let nx = t[0][0] * u + t[0][1] * v + t[0][2];
+        let ny = t[1][0] * u + t[1][1] * v + t[1][2];
+        (nx, ny)
+    } else {
+        (u, v)
+    }
+}
+
+#[cfg(feature = "svg_export")]
+fn svg_gradient_stop(
+    stop: &crate::anyrender_renderer::GradientStop,
+) -> svg::node::element::Stop {
+    let (hex, opacity) = svg_color_paint_values(
+        to_u8(stop.color.r),
+        to_u8(stop.color.g),
+        to_u8(stop.color.b),
+        (stop.color.a * 255.0).round().clamp(0.0, 255.0) as u8,
+    );
+    let mut out = svg::node::element::Stop::new().set("stop-color", hex);
+    if stop.offset > 0.0 {
+        out = out.set("offset", fmt_f64(stop.offset.clamp(0.0, 1.0)));
+    }
+    if let Some(opacity) = opacity {
+        out = out.set("stop-opacity", opacity);
+    }
+    out
+}
+
+#[cfg(feature = "svg_export")]
+fn svg_linear_gradient_def(
+    id: &str,
+    x: f64,
+    y: f64,
+    width: f64,
+    height: f64,
+    transform: Option<&[[f64; 3]; 2]>,
+    stops: &[crate::anyrender_renderer::GradientStop],
+) -> Option<svg::node::element::LinearGradient> {
+    if stops.is_empty() || width <= 0.0 || height <= 0.0 {
+        return None;
+    }
+    let (snx, sny) = gradient_transform_point(transform, 0.0, 0.5);
+    let (enx, eny) = gradient_transform_point(transform, 1.0, 0.5);
+    let mut gradient = svg::node::element::LinearGradient::new()
+        .set("id", id.to_string())
+        .set("x1", fmt_f64(x + snx * width))
+        .set("y1", fmt_f64(y + sny * height))
+        .set("x2", fmt_f64(x + enx * width))
+        .set("y2", fmt_f64(y + eny * height))
+        .set("gradientUnits", "userSpaceOnUse");
+    for stop in stops {
+        gradient = gradient.add(svg_gradient_stop(stop));
+    }
+    Some(gradient)
+}
+
+#[cfg(feature = "svg_export")]
+fn svg_radial_gradient_def(
+    id: &str,
+    x: f64,
+    y: f64,
+    width: f64,
+    height: f64,
+    transform: Option<&[[f64; 3]; 2]>,
+    stops: &[crate::anyrender_renderer::GradientStop],
+) -> Option<svg::node::element::RadialGradient> {
+    if stops.is_empty() || width <= 0.0 || height <= 0.0 {
+        return None;
+    }
+    let mut gradient = svg::node::element::RadialGradient::new()
+        .set("id", id.to_string())
+        .set("cx", "0")
+        .set("cy", "0")
+        .set("r", "1")
+        .set("gradientUnits", "userSpaceOnUse");
+
+    let (cnx, cny) = gradient_transform_point(transform, 0.5, 0.5);
+    let center_x = x + cnx * width;
+    let center_y = y + cny * height;
+    if let Some(t) = transform {
+        let ax = (t[0][0] * width, t[1][0] * height);
+        let ay = (t[0][1] * width, t[1][1] * height);
+        let rx = (ax.0 * ax.0 + ax.1 * ax.1).sqrt() * 0.5;
+        let ry = (ay.0 * ay.0 + ay.1 * ay.1).sqrt() * 0.5;
+        let angle = ax.1.atan2(ax.0).to_degrees();
+        let mut gradient_transform = format!(
+            "translate({} {})",
+            fmt_f64(center_x),
+            fmt_f64(center_y)
+        );
+        if angle.abs() > 1e-6 {
+            gradient_transform.push_str(&format!(" rotate({})", fmt_f64(angle)));
+        }
+        gradient_transform.push_str(&format!(
+            " scale({} {})",
+            fmt_f64(rx.max(0.5)),
+            fmt_f64(ry.max(0.5))
+        ));
+        gradient = gradient.set("gradientTransform", gradient_transform);
+    } else {
+        let radius = (width.min(height) * 0.5).max(0.5);
+        gradient = gradient
+            .set("cx", fmt_f64(center_x))
+            .set("cy", fmt_f64(center_y))
+            .set("r", fmt_f64(radius));
+    }
+
+    for stop in stops {
+        gradient = gradient.add(svg_gradient_stop(stop));
+    }
+    Some(gradient)
+}
+
+#[cfg(feature = "svg_export")]
+fn svg_angular_conic_style(
+    transform: Option<&[[f64; 3]; 2]>,
+    stops: &[crate::anyrender_renderer::GradientStop],
+) -> String {
+    let start_angle = if let Some(t) = transform {
+        t[1][0].atan2(t[0][0]).to_degrees()
+    } else {
+        0.0
+    };
+    let mut parts = Vec::new();
+    for stop in stops {
+        let r = to_u8(stop.color.r);
+        let g = to_u8(stop.color.g);
+        let b = to_u8(stop.color.b);
+        let a = fmt_f64(stop.color.a.clamp(0.0, 1.0));
+        let deg = fmt_f64(stop.offset.clamp(0.0, 1.0) * 360.0);
+        parts.push(format!("rgba({r}, {g}, {b}, {a}) {deg}deg"));
+    }
+    format!(
+        "background:conic-gradient(from {}deg,{});height:100%;width:100%;opacity:1",
+        fmt_f64(90.0 + start_angle),
+        parts.join(",")
+    )
+}
+
+#[cfg(feature = "svg_export")]
+fn svg_angular_metadata_attr(
+    x: f64,
+    y: f64,
+    width: f64,
+    height: f64,
+    stops: &[crate::anyrender_renderer::GradientStop],
+) -> String {
+    fn color_json(c: &crate::anyrender_renderer::Rgba) -> String {
+        format!(
+            "{{\"r\":{},\"g\":{},\"b\":{},\"a\":{}}}",
+            fmt_f64(c.r.clamp(0.0, 1.0)),
+            fmt_f64(c.g.clamp(0.0, 1.0)),
+            fmt_f64(c.b.clamp(0.0, 1.0)),
+            fmt_f64(c.a.clamp(0.0, 1.0)),
+        )
+    }
+    fn stop_json(stop: &crate::anyrender_renderer::GradientStop) -> String {
+        format!(
+            "{{\"color\":{},\"position\":{}}}",
+            color_json(&stop.color),
+            fmt_f64(stop.offset.clamp(0.0, 1.0))
+        )
+    }
+    let stops_json = stops.iter().map(stop_json).collect::<Vec<_>>().join(",");
+    format!(
+        "{{\"type\":\"GRADIENT_ANGULAR\",\"stops\":[{stops_json}],\"stopsVar\":[{stops_json}],\"transform\":{{\"m00\":{},\"m01\":0.0,\"m02\":{},\"m10\":0.0,\"m11\":{},\"m12\":{}}},\"opacity\":1.0,\"blendMode\":\"NORMAL\",\"visible\":true}}",
+        fmt_f64(width),
+        fmt_f64(x),
+        fmt_f64(height),
+        fmt_f64(y)
+    )
 }
 
 #[cfg(feature = "svg_export")]

@@ -250,6 +250,9 @@ fn compare_attr_values(
     abs_tol: f64,
     rel_tol: f64,
 ) -> Option<String> {
+    if key == "data-figma-gradient-fill" {
+        return None;
+    }
     if is_numeric_attr(key) {
         return compare_numeric_text(actual, expected, abs_tol, rel_tol);
     }

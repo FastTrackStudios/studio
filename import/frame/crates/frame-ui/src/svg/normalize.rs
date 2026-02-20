@@ -59,6 +59,7 @@ fn normalize_rect_line(line: &str) -> Option<String> {
     let stroke_width = extract_xml_attr(line, "stroke-width");
     let linecap = extract_xml_attr(line, "stroke-linecap");
     let linejoin = extract_xml_attr(line, "stroke-linejoin");
+    let figma_gradient_fill = extract_xml_attr(line, "data-figma-gradient-fill");
 
     let mut attrs: Vec<String> = Vec::new();
     if let Some(x) = x {
@@ -104,6 +105,9 @@ fn normalize_rect_line(line: &str) -> Option<String> {
         if linejoin != "miter" {
             attrs.push(format!(r#"stroke-linejoin="{linejoin}""#));
         }
+    }
+    if let Some(payload) = figma_gradient_fill {
+        attrs.push(format!(r#"data-figma-gradient-fill="{payload}""#));
     }
     Some(format!("<rect {}/>", attrs.join(" ")))
 }
