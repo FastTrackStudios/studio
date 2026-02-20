@@ -52,6 +52,9 @@ fn normalize_rect_line(line: &str) -> Option<String> {
     let y = extract_xml_attr(line, "y");
     let w = extract_xml_attr(line, "width")?;
     let h = extract_xml_attr(line, "height")?;
+    let opacity = extract_xml_attr(line, "opacity");
+    let rx = extract_xml_attr(line, "rx");
+    let ry = extract_xml_attr(line, "ry");
     let fill = extract_xml_attr(line, "fill");
     let fill_opacity = extract_xml_attr(line, "fill-opacity");
     let stroke = extract_xml_attr(line, "stroke");
@@ -62,6 +65,12 @@ fn normalize_rect_line(line: &str) -> Option<String> {
     let figma_gradient_fill = extract_xml_attr(line, "data-figma-gradient-fill");
 
     let mut attrs: Vec<String> = Vec::new();
+    if let Some(opacity) = opacity {
+        let val = trim_decimal(&opacity);
+        if should_emit_opacity(&val) {
+            attrs.push(format!(r#"opacity="{val}""#));
+        }
+    }
     if let Some(x) = x {
         attrs.push(format!(r#"x="{}""#, trim_decimal(&x)));
     }
@@ -70,6 +79,12 @@ fn normalize_rect_line(line: &str) -> Option<String> {
     }
     attrs.push(format!(r#"width="{}""#, trim_decimal(&w)));
     attrs.push(format!(r#"height="{}""#, trim_decimal(&h)));
+    if let Some(rx) = rx {
+        attrs.push(format!(r#"rx="{}""#, trim_decimal(&rx)));
+    }
+    if let Some(ry) = ry {
+        attrs.push(format!(r#"ry="{}""#, trim_decimal(&ry)));
+    }
     if let Some(mut fill) = fill {
         fill = normalize_svg_color_keyword(fill);
         attrs.push(format!(r#"fill="{fill}""#));

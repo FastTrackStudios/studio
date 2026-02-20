@@ -283,20 +283,98 @@ pub fn run_cli() -> Result<(), String> {
                 }
             }
             PaintPrimitive::Rect {
+                node_id,
                 x,
                 y,
                 width,
                 height,
                 fills,
                 stroke,
+                corner_radii,
                 ..
             } => {
                 let rx = x + tx;
                 let ry = y + ty;
                 let rw = width.max(0.0);
                 let rh = height.max(0.0);
+                let node = doc.get_node(node_id);
+                let node_opacity = node
+                    .and_then(|n| n.raw.get("opacity").and_then(|v| v.as_f64()))
+                    .map(|v| v.clamp(0.0, 1.0))
+                    .filter(|v| *v < 1.0)
+                    .map(fmt_f64);
+                let effective_corner_radii = if !corner_radii.is_zero() {
+                    corner_radii
+                } else {
+                    node.and_then(|n| {
+                        n.raw
+                            .get("rectangleCornerRadii")
+                            .and_then(|v| v.as_array())
+                            .and_then(|arr| {
+                                if arr.len() >= 4 {
+                                    Some(frame_proto::CornerRadii {
+                                        top_left: arr[0].as_f64().unwrap_or(0.0).max(0.0),
+                                        top_right: arr[1].as_f64().unwrap_or(0.0).max(0.0),
+                                        bottom_right: arr[2].as_f64().unwrap_or(0.0).max(0.0),
+                                        bottom_left: arr[3].as_f64().unwrap_or(0.0).max(0.0),
+                                    })
+                                } else {
+                                    None
+                                }
+                            })
+                            .or_else(|| {
+                                let uniform = n
+                                    .raw
+                                    .get("cornerRadius")
+                                    .and_then(|v| v.as_f64())
+                                    .unwrap_or(0.0)
+                                    .max(0.0);
+                                if uniform > 0.0 {
+                                    Some(frame_proto::CornerRadii::uniform(uniform))
+                                } else {
+                                    None
+                                }
+                            })
+                            .or_else(|| {
+                                let tl = n
+                                    .raw
+                                    .get("topLeftRadius")
+                                    .and_then(|v| v.as_f64())
+                                    .unwrap_or(0.0)
+                                    .max(0.0);
+                                let tr = n
+                                    .raw
+                                    .get("topRightRadius")
+                                    .and_then(|v| v.as_f64())
+                                    .unwrap_or(0.0)
+                                    .max(0.0);
+                                let br = n
+                                    .raw
+                                    .get("bottomRightRadius")
+                                    .and_then(|v| v.as_f64())
+                                    .unwrap_or(0.0)
+                                    .max(0.0);
+                                let bl = n
+                                    .raw
+                                    .get("bottomLeftRadius")
+                                    .and_then(|v| v.as_f64())
+                                    .unwrap_or(0.0)
+                                    .max(0.0);
+                                if tl > 0.0 || tr > 0.0 || br > 0.0 || bl > 0.0 {
+                                    Some(frame_proto::CornerRadii {
+                                        top_left: tl,
+                                        top_right: tr,
+                                        bottom_right: br,
+                                        bottom_left: bl,
+                                    })
+                                } else {
+                                    None
+                                }
+                            })
+                    }).unwrap_or(corner_radii)
+                };
                 if fills.len() == 1 {
-                    if let Some((fill, _)) = fills.first() {
+                    if let Some((fill, blend_mode)) = fills.first() {
                         match fill {
                             crate::anyrender_renderer::FillPaint::GradientLinear { transform, stops } => {
                                 let gradient_id =
@@ -319,6 +397,7 @@ pub fn run_cli() -> Result<(), String> {
                                         .set("width", fmt_f64(rw))
                                         .set("height", fmt_f64(rh))
                                         .set("fill", format!("url(#{gradient_id})"));
+                                    rect = apply_corner_radii_rect(rect, &effective_corner_radii);
                                     if let Some(stroke) = stroke {
                                         let (hex, opacity) = svg_color_paint_values(
                                             to_u8(stroke.color.r),
@@ -361,6 +440,7 @@ pub fn run_cli() -> Result<(), String> {
                                         .set("width", fmt_f64(rw))
                                         .set("height", fmt_f64(rh))
                                         .set("fill", format!("url(#{gradient_id})"));
+                                    rect = apply_corner_radii_rect(rect, &effective_corner_radii);
                                     if let Some(stroke) = stroke {
                                         let (hex, opacity) = svg_color_paint_values(
                                             to_u8(stroke.color.r),
@@ -477,7 +557,45 @@ pub fn run_cli() -> Result<(), String> {
                                 .set("y", fmt_f64(ry))
                                 .set("width", fmt_f64(rw))
                                 .set("height", fmt_f64(rh));
-                            rect = apply_fill_style_rect(rect, &style);
+                            rect = apply_corner_radii_rect(rect, &effective_corner_radii);
+                            if let crate::anyrender_renderer::FillPaint::Solid(color) = fill {
+                                let (hex, fill_opacity) = svg_color_paint_values(
+                                    to_u8(color.r),
+                                    to_u8(color.g),
+                                    to_u8(color.b),
+                                    (color.a * 255.0).round().clamp(0.0, 255.0) as u8,
+                                );
+                                rect = rect.set("fill", hex);
+                                let opacity = node_opacity.clone().or(fill_opacity);
+                                if let Some(mode) = svg_mix_blend_mode(blend_mode) {
+                                    let mut group = Group::new().set("style", format!("mix-blend-mode:{mode}"));
+                                    if let Some(opacity) = opacity {
+                                        group = group.set("opacity", opacity);
+                                    }
+                                    if let Some(stroke) = stroke {
+                                        let (hex, opacity) = svg_color_paint_values(
+                                            to_u8(stroke.color.r),
+                                            to_u8(stroke.color.g),
+                                            to_u8(stroke.color.b),
+                                            (stroke.color.a * 255.0).round().clamp(0.0, 255.0) as u8,
+                                        );
+                                        rect = rect
+                                            .set("stroke", hex)
+                                            .set("stroke-width", fmt_f64(stroke.width.max(0.0)))
+                                            .set("stroke-linecap", svg_linecap(stroke.cap))
+                                            .set("stroke-linejoin", svg_linejoin(stroke.join));
+                                        if let Some(opacity) = opacity {
+                                            rect = rect.set("stroke-opacity", opacity);
+                                        }
+                                    }
+                                    push_node(&mut svg_doc, &mut group_stack, group.add(rect));
+                                    continue;
+                                } else if let Some(opacity) = opacity {
+                                    rect = rect.set("opacity", opacity);
+                                }
+                            } else {
+                                rect = apply_fill_style_rect(rect, &style);
+                            }
                             if let Some(stroke) = stroke {
                                 let (hex, opacity) = svg_color_paint_values(
                                     to_u8(stroke.color.r),
@@ -618,10 +736,11 @@ pub fn run_cli() -> Result<(), String> {
                     }
                     if let Some(style) = svg_fill_style(&fill) {
                         let mut rect = Rectangle::new()
-                            .set("x", fmt_f64(rx))
-                            .set("y", fmt_f64(ry))
-                            .set("width", fmt_f64(rw))
-                            .set("height", fmt_f64(rh));
+                                .set("x", fmt_f64(rx))
+                                .set("y", fmt_f64(ry))
+                                .set("width", fmt_f64(rw))
+                                .set("height", fmt_f64(rh));
+                            rect = apply_corner_radii_rect(rect, &effective_corner_radii);
                         rect = apply_fill_style_rect(rect, &style);
                         push_node(&mut svg_doc, &mut group_stack, rect);
                     }
@@ -660,6 +779,7 @@ pub fn run_cli() -> Result<(), String> {
                 svg_base64,
                 fills,
                 stroke,
+                blend,
                 text_outline,
                 ..
             } => {
@@ -706,6 +826,43 @@ pub fn run_cli() -> Result<(), String> {
                         .set("y", fmt_f64(ry))
                         .set("width", fmt_f64(rw))
                         .set("height", fmt_f64(rh));
+                    if let Some(node) = node {
+                        let corner_radius = node
+                            .raw
+                            .get("rectangleCornerRadii")
+                            .and_then(|v| v.as_array())
+                            .and_then(|arr| {
+                                if arr.len() >= 4 {
+                                    let tl = arr[0].as_f64().unwrap_or(0.0).max(0.0);
+                                    let tr = arr[1].as_f64().unwrap_or(0.0).max(0.0);
+                                    let br = arr[2].as_f64().unwrap_or(0.0).max(0.0);
+                                    let bl = arr[3].as_f64().unwrap_or(0.0).max(0.0);
+                                    if (tl - tr).abs() <= f64::EPSILON
+                                        && (tl - br).abs() <= f64::EPSILON
+                                        && (tl - bl).abs() <= f64::EPSILON
+                                    {
+                                        Some(tl)
+                                    } else {
+                                        None
+                                    }
+                                } else {
+                                    None
+                                }
+                            })
+                            .or_else(|| node.raw.get("cornerRadius").and_then(|v| v.as_f64()));
+                        if let Some(corner_radius) = corner_radius {
+                            if corner_radius > 0.0 {
+                                rect = rect.set("rx", fmt_f64(corner_radius));
+                            }
+                        }
+                    }
+                    let blend_mode = svg_mix_blend_mode(&blend);
+                    let mut blend_group_opacity: Option<String> = None;
+                    let node_opacity = node
+                        .and_then(|n| n.raw.get("opacity").and_then(|v| v.as_f64()))
+                        .map(|v| v.clamp(0.0, 1.0))
+                        .filter(|v| *v < 1.0)
+                        .map(fmt_f64);
                     let mut emit_rect = true;
                     if let Some((fill, _)) = fills.first() {
                         match fill {
@@ -809,7 +966,21 @@ pub fn run_cli() -> Result<(), String> {
                                 rect = rect.set("fill", "none");
                             }
                             _ => {
-                                if let Some(style) = svg_fill_style(fill) {
+                                if let crate::anyrender_renderer::FillPaint::Solid(color) = fill {
+                                    let (hex, fill_opacity) = svg_color_paint_values(
+                                        to_u8(color.r),
+                                        to_u8(color.g),
+                                        to_u8(color.b),
+                                        (color.a * 255.0).round().clamp(0.0, 255.0) as u8,
+                                    );
+                                    rect = rect.set("fill", hex);
+                                    let opacity = node_opacity.clone().or(fill_opacity);
+                                    if blend_mode.is_some() {
+                                        blend_group_opacity = opacity;
+                                    } else if let Some(opacity) = opacity {
+                                        rect = rect.set("opacity", opacity);
+                                    }
+                                } else if let Some(style) = svg_fill_style(fill) {
                                     rect = apply_fill_style_rect(rect, &style);
                                 }
                             }
@@ -834,7 +1005,16 @@ pub fn run_cli() -> Result<(), String> {
                         }
                     }
                     if emit_rect {
-                        push_node(&mut svg_doc, &mut group_stack, rect);
+                        if let Some(mode) = blend_mode {
+                            let mut group =
+                                Group::new().set("style", format!("mix-blend-mode:{mode}"));
+                            if let Some(opacity) = blend_group_opacity {
+                                group = group.set("opacity", opacity);
+                            }
+                            push_node(&mut svg_doc, &mut group_stack, group.add(rect));
+                        } else {
+                            push_node(&mut svg_doc, &mut group_stack, rect);
+                        }
                     }
                     continue;
                 }
@@ -1058,6 +1238,48 @@ fn apply_fill_style_rect(
             .set("fill", "none")
             .set("stroke", *hex)
             .set("stroke-width", 1),
+    }
+}
+
+#[cfg(feature = "svg_export")]
+fn apply_corner_radii_rect(
+    mut rect: svg::node::element::Rectangle,
+    corner_radii: &frame_proto::CornerRadii,
+) -> svg::node::element::Rectangle {
+    let tl = corner_radii.top_left.max(0.0);
+    let tr = corner_radii.top_right.max(0.0);
+    let br = corner_radii.bottom_right.max(0.0);
+    let bl = corner_radii.bottom_left.max(0.0);
+    if tl > 0.0
+        && (tl - tr).abs() <= f64::EPSILON
+        && (tl - br).abs() <= f64::EPSILON
+        && (tl - bl).abs() <= f64::EPSILON
+    {
+        rect = rect.set("rx", fmt_f64(tl));
+    }
+    rect
+}
+
+#[cfg(feature = "svg_export")]
+fn svg_mix_blend_mode(mode: &crate::anyrender_renderer::BlendMix) -> Option<&'static str> {
+    use crate::anyrender_renderer::BlendMix;
+    match mode {
+        BlendMix::Multiply => Some("multiply"),
+        BlendMix::Screen => Some("screen"),
+        BlendMix::Overlay => Some("overlay"),
+        BlendMix::Darken => Some("darken"),
+        BlendMix::Lighten => Some("lighten"),
+        BlendMix::ColorDodge => Some("color-dodge"),
+        BlendMix::ColorBurn => Some("color-burn"),
+        BlendMix::HardLight => Some("hard-light"),
+        BlendMix::SoftLight => Some("soft-light"),
+        BlendMix::Difference => Some("difference"),
+        BlendMix::Exclusion => Some("exclusion"),
+        BlendMix::Hue => Some("hue"),
+        BlendMix::Saturation => Some("saturation"),
+        BlendMix::Color => Some("color"),
+        BlendMix::Luminosity => Some("luminosity"),
+        BlendMix::Normal => None,
     }
 }
 
