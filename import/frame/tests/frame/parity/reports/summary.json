@@ -1,17 +1,17 @@
 {
-  "generatedAt": "2026-02-19T16:47:06Z",
+  "generatedAt": "2026-02-19T17:48:18Z",
   "root": "tests/frame/parity",
   "mode": "single",
   "thresholdPercent": 0.0,
   "total": 1,
-  "passed": 0,
-  "failed": 1,
+  "passed": 1,
+  "failed": 0,
   "skipped": 0,
   "scenarios": [
     {
-      "scenarioId": "primitives.single-pixel-anchor",
-      "status": "fail",
-      "report": "tests/frame/parity/scenarios/primitives.single-pixel-anchor/report.json"
+      "scenarioId": "text.mixed-style-runs",
+      "status": "pass",
+      "report": "tests/frame/parity/scenarios/text.mixed-style-runs/report.json"
     }
   ]
 }
