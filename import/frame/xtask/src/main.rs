@@ -38,6 +38,21 @@ fn run() -> Result<(), String> {
             workspace_root.join("tools/run_parity_scenarios.sh"),
             &passthrough,
         ),
+        "parity_svg" => run_script(
+            &workspace_root,
+            workspace_root.join("tools/run_svg_parity_scenarios.sh"),
+            &passthrough,
+        ),
+        "parity_svg_analyze" => run_script(
+            &workspace_root,
+            workspace_root.join("tools/analyze_svg_canonical_precision.sh"),
+            &passthrough,
+        ),
+        "parity_svg_hash" => run_script(
+            &workspace_root,
+            workspace_root.join("tools/check_svg_hash_baselines.sh"),
+            &passthrough,
+        ),
         "help" | "--help" | "-h" => {
             print_usage();
             Ok(())
@@ -86,11 +101,17 @@ commands:
   partiy_test   typo alias for parity_test
   parity_render render actual PNGs only
   parity_diff   run parity diff/report only
+  parity_svg    run SVG strict/canonical parity summary
+  parity_svg_analyze analyze canonical diff sensitivity by precision
+  parity_svg_hash verify approved SVG SHA-256 baselines
 
 examples:
   cargo xtask parity_test --all --threshold 0.0
   cargo xtask parity_test --scenario paint.gradient-matrix --threshold 0.0
   cargo xtask parity_render --all
-  cargo xtask parity_diff --all --threshold 0.0"
+  cargo xtask parity_diff --all --threshold 0.0
+  cargo xtask parity_svg --all
+  cargo xtask parity_svg_analyze --scenario text.mixed-style-runs
+  cargo xtask parity_svg_hash"
     );
 }

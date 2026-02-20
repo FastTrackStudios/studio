@@ -120,6 +120,7 @@ fn collect_primitives_recursive(
         .into_iter()
         .map(|(f, b)| (f.with_opacity(effective_opacity), b))
         .collect();
+    let fills_is_empty = fills.is_empty();
     let stroke = parse_stroke_style(&node.raw, effective_opacity);
     let corner_radii = {
         if let Some(arr) = node
@@ -196,18 +197,49 @@ fn collect_primitives_recursive(
         !fill_paths.is_empty() || !stroke_paths.is_empty() || svg_base64.is_some();
     let is_instance = node.figma_type == "INSTANCE";
     let is_boolean_operation = node.figma_type == "BOOLEAN_OPERATION";
-    let is_mask = node
+    let clips_content = node
         .raw
-        .get("isMask")
+        .get("clipsContent")
         .and_then(|v| v.as_bool())
         .unwrap_or(false);
-    let mask_type = node
-        .raw
-        .get("maskType")
-        .and_then(|v| v.as_str())
-        .unwrap_or("ALPHA");
+    let child_overflows_bounds = if clips_content && width > 0.0 && height > 0.0 {
+        let right = x + width;
+        let bottom = y + height;
+        const EPS: f64 = 1e-3;
+        node.children.iter().any(|child_id| {
+            let (cx, cy, cw, ch) = layout_boxes
+                .get(child_id)
+                .map(|b| (b.x, b.y, b.width, b.height))
+                .unwrap_or_else(|| {
+                    let Some(child_node) = doc.get_node(*child_id) else {
+                        return (x, y, 0.0, 0.0);
+                    };
+                    let (local_x, local_y, child_w, child_h, _rot) =
+                        extract_local_rect(&child_node.raw);
+                    (x + local_x, y + local_y, child_w, child_h)
+                });
+            cx < x - EPS
+                || cy < y - EPS
+                || (cx + cw) > right + EPS
+                || (cy + ch) > bottom + EPS
+        })
+    } else {
+        false
+    };
+    let clip_subtree =
+        clips_content && !node.children.is_empty() && (fills_is_empty || child_overflows_bounds);
 
     let mut rendered_as_atomic_svg = false;
+    if clip_subtree && width > 0.0 && height > 0.0 {
+        out.push(PaintPrimitive::ClipStart {
+            node_id,
+            x,
+            y,
+            width,
+            height,
+            corner_radii,
+        });
+    }
 
     let node_class = frame_proto::classify_node_type(&node.figma_type);
     // For parity exports, Figma includes authoritative text outline geometry.
@@ -441,27 +473,13 @@ fn collect_primitives_recursive(
     }
 
     if rendered_as_atomic_svg {
+        if clip_subtree && width > 0.0 && height > 0.0 {
+            out.push(PaintPrimitive::ClipEnd { node_id });
+        }
         if needs_layer {
             out.push(PaintPrimitive::LayerEnd { node_id });
         }
         return;
-    }
-
-    let clips_content = node
-        .raw
-        .get("clipsContent")
-        .and_then(|v| v.as_bool())
-        .unwrap_or(false);
-    let clip_subtree = clips_content || (is_mask && !mask_type.eq_ignore_ascii_case("LUMINANCE"));
-    if clip_subtree && width > 0.0 && height > 0.0 {
-        out.push(PaintPrimitive::ClipStart {
-            node_id,
-            x,
-            y,
-            width,
-            height,
-            corner_radii,
-        });
     }
 
     // Figma masks affect subsequent siblings within the same parent scope.
@@ -485,7 +503,7 @@ fn collect_primitives_recursive(
 
         if child_is_mask && child_mask_supported {
             if let Some(mask_node_id) = active_sibling_mask.take() {
-                out.push(PaintPrimitive::ClipEnd {
+                out.push(PaintPrimitive::MaskApplyEnd {
                     node_id: mask_node_id,
                 });
             }
@@ -497,53 +515,37 @@ fn collect_primitives_recursive(
                     let (local_x, local_y, width, height, _rot) = extract_local_rect(&child.raw);
                     (x + local_x, y + local_y, width, height)
                 });
-            let mcorner_radii = {
-                if let Some(arr) = child
-                    .raw
-                    .get("rectangleCornerRadii")
-                    .and_then(|v| v.as_array())
-                {
-                    if arr.len() >= 4 {
-                        frame_proto::CornerRadii {
-                            top_left: arr[0].as_f64().unwrap_or(0.0).max(0.0),
-                            top_right: arr[1].as_f64().unwrap_or(0.0).max(0.0),
-                            bottom_right: arr[2].as_f64().unwrap_or(0.0).max(0.0),
-                            bottom_left: arr[3].as_f64().unwrap_or(0.0).max(0.0),
-                        }
-                    } else {
-                        frame_proto::CornerRadii::uniform(
-                            child
-                                .raw
-                                .get("cornerRadius")
-                                .and_then(|v| v.as_f64())
-                                .unwrap_or(0.0)
-                                .max(0.0),
-                        )
-                    }
-                } else {
-                    frame_proto::CornerRadii::uniform(
-                        child
-                            .raw
-                            .get("cornerRadius")
-                            .and_then(|v| v.as_f64())
-                            .unwrap_or(0.0)
-                            .max(0.0),
-                    )
-                }
-            };
             if mw > 0.0 && mh > 0.0 {
-                out.push(PaintPrimitive::ClipStart {
+                out.push(PaintPrimitive::MaskDefStart {
                     node_id: *child_id,
                     x: mx,
                     y: my,
                     width: mw,
                     height: mh,
-                    corner_radii: mcorner_radii,
+                    luminance: child_mask_type.eq_ignore_ascii_case("LUMINANCE"),
+                });
+                collect_primitives_recursive(
+                    doc,
+                    *child_id,
+                    x,
+                    y,
+                    false,
+                    effective_opacity,
+                    &child_layer_blurs,
+                    layout_boxes,
+                    out,
+                );
+                out.push(PaintPrimitive::MaskDefEnd { node_id: *child_id });
+                out.push(PaintPrimitive::MaskApplyStart {
+                    node_id: *child_id,
+                    x: mx,
+                    y: my,
+                    width: mw,
+                    height: mh,
                 });
                 active_sibling_mask = Some(*child_id);
             }
 
-            // Do not render mask geometry itself by default.
             continue;
         }
 
@@ -561,7 +563,7 @@ fn collect_primitives_recursive(
     }
 
     if let Some(mask_node_id) = active_sibling_mask.take() {
-        out.push(PaintPrimitive::ClipEnd {
+        out.push(PaintPrimitive::MaskApplyEnd {
             node_id: mask_node_id,
         });
     }

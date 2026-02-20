@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-02-19T15:50:09Z",
+  "generatedAt": "2026-02-20T00:53:45Z",
   "exportPath": "tests/frame/parity/scenarios/regression.kitchen-sink/latest-bridge-export.json",
   "featureCoverage": {
     "schema": "fts.figma.export/v2",
@@ -36,61 +36,61 @@
       {
         "path": "expected.png",
         "status": "fail",
-        "error": "warning: associated functions `from_fts_export_json` and `from_grida_bridge_json` are never used\n   --> crates/frame-proto/src/document.rs:147:8\n    |\n146 | impl FrameDocument {\n    | ------------------ associated functions in this implementation\n147 |     fn from_fts_export_json(json: &str) -> Result<Self, FrameDocumentError> {\n    |        ^^^^^^^^^^^^^^^^^^^^\n...\n251 |     fn from_grida_bridge_json(json: &str) -> Result<Self, FrameDocumentError> {\n    |        ^^^^^^^^^^^^^^^^^^^^^^\n    |\n    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default\n\n{\"actual\":\"tests/frame/parity/scenarios/regression.kitchen-sink/actual.png\",\"expected\":\"tests/frame/parity/scenarios/regression.kitchen-sink/expected.png\",\"width\":1920,\"height\":1080,\"diffPixels\":247049,\"diffPercent\":11.914014,\"meanAbsDeltaPerChannel\":8.382752,\"maxChannelDelta\":252,\"thresholdPercent\":0.000000,\"passed\":false}\nvisual_diff error: diff_percent 11.9140% exceeded threshold 0.0000%"
+        "error": "warning: associated functions `from_fts_export_json` and `from_grida_bridge_json` are never used\n   --> crates/frame-proto/src/document.rs:147:8\n    |\n146 | impl FrameDocument {\n    | ------------------ associated functions in this implementation\n147 |     fn from_fts_export_json(json: &str) -> Result<Self, FrameDocumentError> {\n    |        ^^^^^^^^^^^^^^^^^^^^\n...\n251 |     fn from_grida_bridge_json(json: &str) -> Result<Self, FrameDocumentError> {\n    |        ^^^^^^^^^^^^^^^^^^^^^^\n    |\n    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default\n\n{\"actual\":\"tests/frame/parity/scenarios/regression.kitchen-sink/actual.png\",\"expected\":\"tests/frame/parity/scenarios/regression.kitchen-sink/expected.png\",\"width\":1920,\"height\":1080,\"diffPixels\":250218,\"diffPercent\":12.066840,\"meanAbsDeltaPerChannel\":8.914726,\"maxChannelDelta\":255,\"thresholdPercent\":0.000000,\"passed\":false}\nvisual_diff error: diff_percent 12.0668% exceeded threshold 0.0000%"
       }
     ]
   },
   "performance": {
     "avg": {
-      "importMs": 7.495653000000001,
-      "layoutMs": 0.16155566666666665,
+      "importMs": 8.938680666666665,
+      "layoutMs": 0.21504166666666666,
       "nodeCount": 25,
       "passCounts": {
         "clipEnd": 0,
         "clipStart": 0,
         "layerEnd": 0,
         "layerStart": 0,
-        "path": 22,
+        "path": 26,
         "rect": 0,
         "text": 0
       },
-      "primitiveCount": 22,
-      "primitiveMs": 0.6378333333333334,
-      "sceneMs": 7.076444333333334,
-      "totalMs": 15.395193999999998
+      "primitiveCount": 26,
+      "primitiveMs": 0.6833473333333333,
+      "sceneMs": 9.201583666666666,
+      "totalMs": 19.081208333333333
     },
     "bytes": 334957,
     "input": "tests/frame/parity/scenarios/regression.kitchen-sink/latest-bridge-export.json",
     "iterations": 3,
-    "readMs": 0.09816699999999999,
+    "readMs": 0.255042,
     "root": "0:1",
     "samples": [
       {
-        "importMs": 9.275459,
-        "layoutMs": 0.29016699999999995,
+        "importMs": 13.458084,
+        "layoutMs": 0.446875,
         "nodeCount": 25,
-        "primitiveCount": 22,
-        "primitiveMs": 0.9864170000000001,
-        "sceneMs": 14.6815,
-        "totalMs": 25.272040999999998
+        "primitiveCount": 26,
+        "primitiveMs": 1.0365000000000002,
+        "sceneMs": 17.305542,
+        "totalMs": 32.335166
       },
       {
-        "importMs": 7.565375,
-        "layoutMs": 0.101875,
+        "importMs": 7.004,
+        "layoutMs": 0.09895799999999999,
         "nodeCount": 25,
-        "primitiveCount": 22,
-        "primitiveMs": 0.51525,
-        "sceneMs": 3.321708,
-        "totalMs": 11.522416
+        "primitiveCount": 26,
+        "primitiveMs": 0.503875,
+        "sceneMs": 5.326292,
+        "totalMs": 12.952167000000001
       },
       {
-        "importMs": 5.6461250000000005,
-        "layoutMs": 0.092625,
+        "importMs": 6.3539579999999996,
+        "layoutMs": 0.09929199999999999,
         "nodeCount": 25,
-        "primitiveCount": 22,
-        "primitiveMs": 0.411833,
-        "sceneMs": 3.2261249999999997,
-        "totalMs": 9.391125
+        "primitiveCount": 26,
+        "primitiveMs": 0.509667,
+        "sceneMs": 4.972917000000001,
+        "totalMs": 11.956292
       }
     ]
   },

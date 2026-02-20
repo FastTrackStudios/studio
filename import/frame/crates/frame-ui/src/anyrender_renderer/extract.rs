@@ -1,5 +1,8 @@
 use super::types::*;
 
+const SVG_IMAGE_FILL_FALLBACK_BASE64: &str =
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGP4z8DwHwAFAAH/iZk9HQAAAABJRU5ErkJggg==";
+
 /// Returns (x, y, width, height, rotation_radians).
 ///
 /// Rotation is extracted from the relativeTransform matrix columns.
@@ -38,16 +41,26 @@ pub(super) fn extract_local_rect(raw: &serde_json::Value) -> (f64, f64, f64, f64
         }
     }
 
-    let w = raw
+    let mut w = raw
         .get("size")
         .and_then(|v| v.get("x"))
         .and_then(|v| v.as_f64())
         .unwrap_or(0.0);
-    let h = raw
+    let mut h = raw
         .get("size")
         .and_then(|v| v.get("y"))
         .and_then(|v| v.as_f64())
         .unwrap_or(0.0);
+    if w <= 0.0 || h <= 0.0 {
+        if let Some(bb) = raw.get("absoluteBoundingBox") {
+            if w <= 0.0 {
+                w = bb.get("width").and_then(|v| v.as_f64()).unwrap_or(w);
+            }
+            if h <= 0.0 {
+                h = bb.get("height").and_then(|v| v.as_f64()).unwrap_or(h);
+            }
+        }
+    }
 
     (x, y, w, h, rotation)
 }
@@ -155,14 +168,23 @@ pub(super) fn image_fill_from_paint(
         .and_then(|v| v.as_str())
         .map(ToString::to_string);
 
-    let image_fill_assets = raw.get("imageFillAssets").and_then(|v| v.as_object())?;
-    let asset_value = image_hash
-        .as_ref()
-        .and_then(|hash| image_fill_assets.get(hash))?;
-    // Support both v1 flat string and v2 nested object with "base64" field
-    let data_base64 = asset_value
-        .as_str()
-        .or_else(|| asset_value.get("base64").and_then(|v| v.as_str()))?
+    // Support both v1 flat string and v2 nested object with "base64" field.
+    // If asset hydration is unavailable, emit a deterministic 1x1 placeholder
+    // so SVG parity still preserves image-fill structure.
+    let data_base64 = raw
+        .get("imageFillAssets")
+        .and_then(|v| v.as_object())
+        .and_then(|image_fill_assets| {
+            image_hash
+                .as_ref()
+                .and_then(|hash| image_fill_assets.get(hash))
+                .and_then(|asset_value| {
+                    asset_value
+                        .as_str()
+                        .or_else(|| asset_value.get("base64").and_then(|v| v.as_str()))
+                })
+        })
+        .unwrap_or(SVG_IMAGE_FILL_FALLBACK_BASE64)
         .to_string();
 
     let alpha = paint

@@ -210,6 +210,27 @@ pub enum PaintPrimitive {
     ClipEnd {
         node_id: NodeId,
     },
+    MaskDefStart {
+        node_id: NodeId,
+        x: f64,
+        y: f64,
+        width: f64,
+        height: f64,
+        luminance: bool,
+    },
+    MaskDefEnd {
+        node_id: NodeId,
+    },
+    MaskApplyStart {
+        node_id: NodeId,
+        x: f64,
+        y: f64,
+        width: f64,
+        height: f64,
+    },
+    MaskApplyEnd {
+        node_id: NodeId,
+    },
     Rect {
         node_id: NodeId,
         x: f64,

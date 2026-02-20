@@ -133,6 +133,20 @@ pub fn paint_primitives_into_scene_with(
             PaintPrimitive::ClipEnd { .. } => {
                 scene.pop_layer();
             }
+            PaintPrimitive::MaskDefStart { .. } | PaintPrimitive::MaskDefEnd { .. } => {}
+            PaintPrimitive::MaskApplyStart {
+                x,
+                y,
+                width,
+                height,
+                ..
+            } => {
+                let rect = Rect::new(*x, *y, *x + *width, *y + *height);
+                scene.push_clip_layer(scene_transform, &rect);
+            }
+            PaintPrimitive::MaskApplyEnd { .. } => {
+                scene.pop_layer();
+            }
             PaintPrimitive::Rect {
                 x,
                 y,

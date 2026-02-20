@@ -52,6 +52,24 @@ fn parses_image_fill_from_hydrated_assets() {
 }
 
 #[test]
+fn parses_image_fill_without_hydrated_assets_uses_placeholder() {
+    use super::extract::image_fill_from_paint;
+
+    let raw = serde_json::json!({});
+    let paint = serde_json::json!({
+        "type": "IMAGE",
+        "imageHash": "abc123",
+        "opacity": 1.0
+    });
+
+    let parsed = image_fill_from_paint(&raw, &paint).expect("expected image fill");
+    assert_eq!(
+        parsed.data_base64,
+        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGP4z8DwHwAFAAH/iZk9HQAAAABJRU5ErkJggg=="
+    );
+}
+
+#[test]
 fn inherited_opacity_applies_to_child_fills() {
     let json = serde_json::json!({
         "schema": "fts.figma.export/v1",

@@ -1,8 +1,14 @@
 pub(crate) fn normalize_svg_for_figma_parity(svg: &str, width: u32, height: u32) -> String {
     let mut out = Vec::new();
-    let root = format!(
-        r#"<svg width="{width}" height="{height}" viewBox="0 0 {width} {height}" fill="none" xmlns="http://www.w3.org/2000/svg">"#
-    );
+    let root = if svg.contains("xlink:") {
+        format!(
+            r#"<svg width="{width}" height="{height}" viewBox="0 0 {width} {height}" fill="none" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">"#
+        )
+    } else {
+        format!(
+            r#"<svg width="{width}" height="{height}" viewBox="0 0 {width} {height}" fill="none" xmlns="http://www.w3.org/2000/svg">"#
+        )
+    };
     out.push(root);
 
     let mut saw_root = false;
@@ -19,6 +25,14 @@ pub(crate) fn normalize_svg_for_figma_parity(svg: &str, width: u32, height: u32)
             continue;
         }
         if let Some(norm) = normalize_rect_line(t) {
+            out.push(norm);
+            continue;
+        }
+        if let Some(norm) = normalize_mask_line(t) {
+            out.push(norm);
+            continue;
+        }
+        if let Some(norm) = normalize_circle_line(t) {
             out.push(norm);
             continue;
         }
@@ -53,6 +67,7 @@ fn normalize_rect_line(line: &str) -> Option<String> {
     let w = extract_xml_attr(line, "width")?;
     let h = extract_xml_attr(line, "height")?;
     let opacity = extract_xml_attr(line, "opacity");
+    let transform = extract_xml_attr(line, "transform");
     let rx = extract_xml_attr(line, "rx");
     let ry = extract_xml_attr(line, "ry");
     let fill = extract_xml_attr(line, "fill");
@@ -80,6 +95,9 @@ fn normalize_rect_line(line: &str) -> Option<String> {
     }
     attrs.push(format!(r#"width="{}""#, trim_decimal(&w)));
     attrs.push(format!(r#"height="{}""#, trim_decimal(&h)));
+    if let Some(transform) = transform {
+        attrs.push(format!(r#"transform="{transform}""#));
+    }
     if let Some(rx) = rx {
         attrs.push(format!(r#"rx="{}""#, trim_decimal(&rx)));
     }
@@ -129,6 +147,61 @@ fn normalize_rect_line(line: &str) -> Option<String> {
         attrs.push(format!(r#"data-figma-bg-blur-radius="{}""#, trim_decimal(&radius)));
     }
     Some(format!("<rect {}/>", attrs.join(" ")))
+}
+
+#[cfg(feature = "svg_export")]
+fn normalize_mask_line(line: &str) -> Option<String> {
+    if !line.starts_with("<mask ") {
+        return None;
+    }
+    let id = extract_xml_attr(line, "id")?;
+    let style = extract_xml_attr(line, "style");
+    let units = extract_xml_attr(line, "maskUnits");
+    let x = extract_xml_attr(line, "x");
+    let y = extract_xml_attr(line, "y");
+    let width = extract_xml_attr(line, "width");
+    let height = extract_xml_attr(line, "height");
+    let mut attrs: Vec<String> = vec![format!(r#"id="{id}""#)];
+    if let Some(style) = style {
+        attrs.push(format!(r#"style="{style}""#));
+    }
+    if let Some(units) = units {
+        attrs.push(format!(r#"maskUnits="{units}""#));
+    }
+    if let Some(x) = x {
+        attrs.push(format!(r#"x="{}""#, trim_decimal(&x)));
+    }
+    if let Some(y) = y {
+        attrs.push(format!(r#"y="{}""#, trim_decimal(&y)));
+    }
+    if let Some(width) = width {
+        attrs.push(format!(r#"width="{}""#, trim_decimal(&width)));
+    }
+    if let Some(height) = height {
+        attrs.push(format!(r#"height="{}""#, trim_decimal(&height)));
+    }
+    Some(format!("<mask {}>", attrs.join(" ")))
+}
+
+#[cfg(feature = "svg_export")]
+fn normalize_circle_line(line: &str) -> Option<String> {
+    if !line.starts_with("<circle ") {
+        return None;
+    }
+    let cx = extract_xml_attr(line, "cx")?;
+    let cy = extract_xml_attr(line, "cy")?;
+    let r = extract_xml_attr(line, "r")?;
+    let fill = extract_xml_attr(line, "fill");
+    let mut attrs: Vec<String> = vec![
+        format!(r#"cx="{}""#, trim_decimal(&cx)),
+        format!(r#"cy="{}""#, trim_decimal(&cy)),
+        format!(r#"r="{}""#, trim_decimal(&r)),
+    ];
+    if let Some(fill) = fill {
+        let fill = normalize_svg_color_keyword(fill);
+        attrs.push(format!(r#"fill="{fill}""#));
+    }
+    Some(format!("<circle {}/>", attrs.join(" ")))
 }
 
 #[cfg(feature = "svg_export")]
