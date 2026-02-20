@@ -91,7 +91,8 @@ pub fn run_cli() -> Result<(), String> {
     use crate::{build_layout_boxes, build_paint_primitives, PaintPrimitive};
     use frame_proto::FrameDocument;
     use svg::node::element::{
-        ClipPath, Definitions, Element, ForeignObject, Group, Path as SvgPath, Rectangle,
+        Circle, ClipPath, Definitions, Element, ForeignObject, Group, Line, Path as SvgPath,
+        Rectangle,
     };
     use svg::Document;
 
@@ -662,10 +663,9 @@ pub fn run_cli() -> Result<(), String> {
                 text_outline,
                 ..
             } => {
-                let is_rectangle_node = doc
-                    .get_node(node_id)
-                    .map(|n| n.figma_type == "RECTANGLE")
-                    .unwrap_or(false);
+                let node = doc.get_node(node_id);
+                let figma_type = node.map(|n| n.figma_type.as_str()).unwrap_or("");
+                let is_rectangle_node = figma_type == "RECTANGLE";
                 if !text_outline && is_rectangle_node && svg_base64.is_none() {
                     let mut rx = x + tx;
                     let mut ry = y + ty;
@@ -838,6 +838,105 @@ pub fn run_cli() -> Result<(), String> {
                     }
                     continue;
                 }
+                if !text_outline && figma_type == "ELLIPSE" {
+                    let mut ex = x;
+                    let mut ey = y;
+                    let mut ew = width.max(0.0);
+                    let mut eh = height.max(0.0);
+                    if let Some(node) = node {
+                        if let Some((bx, by, bw, bh)) = source_bboxes.get(&node.figma_id) {
+                            ex = *bx;
+                            ey = *by;
+                            ew = *bw;
+                            eh = *bh;
+                        } else if let Some(b) = layout_boxes.get(&node_id).copied() {
+                            ex = b.x;
+                            ey = b.y;
+                            ew = b.width.max(0.0);
+                            eh = b.height.max(0.0);
+                        }
+                    }
+                    let cx = ex + tx + (ew * 0.5);
+                    let cy = ey + ty + (eh * 0.5);
+                    let r = (ew.min(eh) * 0.5).max(0.0);
+                    let mut circle = Circle::new()
+                        .set("cx", fmt_f64(cx))
+                        .set("cy", fmt_f64(cy))
+                        .set("r", fmt_f64(r));
+                    if let Some((fill, _)) = fills.first() {
+                        if let Some(style) = svg_fill_style(fill) {
+                            circle = apply_fill_style_circle(circle, &style);
+                        } else {
+                            circle = circle.set("fill", "none");
+                        }
+                    } else {
+                        circle = circle.set("fill", "none");
+                    }
+                    if let Some(stroke) = stroke {
+                        let (hex, opacity) = svg_color_paint_values(
+                            to_u8(stroke.color.r),
+                            to_u8(stroke.color.g),
+                            to_u8(stroke.color.b),
+                            (stroke.color.a * 255.0).round().clamp(0.0, 255.0) as u8,
+                        );
+                        circle = circle
+                            .set("stroke", hex)
+                            .set("stroke-width", fmt_f64(stroke.width.max(0.0)))
+                            .set("stroke-linecap", svg_linecap(stroke.cap))
+                            .set("stroke-linejoin", svg_linejoin(stroke.join));
+                        if let Some(opacity) = opacity {
+                            circle = circle.set("stroke-opacity", opacity);
+                        }
+                    }
+                    push_node(&mut svg_doc, &mut group_stack, circle);
+                    continue;
+                }
+                if !text_outline && figma_type == "LINE" {
+                    let mut lx = x;
+                    let mut lw = width;
+                    if let Some(node) = node {
+                        if let Some((bx, _by, bw, _bh)) = source_bboxes.get(&node.figma_id) {
+                            lx = *bx;
+                            lw = *bw;
+                        } else if let Some(b) = layout_boxes.get(&node_id).copied() {
+                            lx = b.x;
+                            lw = b.width;
+                        }
+                    }
+                    let x1 = lx + tx;
+                    let x2 = lx + tx + lw;
+                    let y_mid = (y + ty).floor();
+                    let mut line = Line::new()
+                        .set("x1", fmt_f64(x1))
+                        .set("y1", fmt_f64(y_mid))
+                        .set("x2", fmt_f64(x2))
+                        .set("y2", fmt_f64(y_mid));
+                    if let Some(stroke) = stroke {
+                        let (hex, opacity) = svg_color_paint_values(
+                            to_u8(stroke.color.r),
+                            to_u8(stroke.color.g),
+                            to_u8(stroke.color.b),
+                            (stroke.color.a * 255.0).round().clamp(0.0, 255.0) as u8,
+                        );
+                        line = line.set("stroke", hex);
+                        if let Some(opacity) = opacity {
+                            line = line.set("stroke-opacity", opacity);
+                        }
+                    } else if let Some((fill, _)) = fills.first() {
+                        if let Some(FillStyle::Solid { hex, opacity }) = svg_fill_style(fill) {
+                            line = line.set("stroke", hex);
+                            if let Some(opacity) = opacity {
+                                line = line.set("stroke-opacity", opacity);
+                            }
+                        } else {
+                            line = line.set("stroke", "none");
+                        }
+                    } else {
+                        line = line.set("stroke", "none");
+                    }
+                    push_node(&mut svg_doc, &mut group_stack, line);
+                    continue;
+                }
                 let px = x + tx;
                 let py = y + ty;
                 let transform = format!(
@@ -956,6 +1055,26 @@ fn apply_fill_style_rect(
             rect
         }
         FillStyle::DebugStroke { hex } => rect
+            .set("fill", "none")
+            .set("stroke", *hex)
+            .set("stroke-width", 1),
+    }
+}
+
+#[cfg(feature = "svg_export")]
+fn apply_fill_style_circle(
+    mut circle: svg::node::element::Circle,
+    style: &FillStyle,
+) -> svg::node::element::Circle {
+    match style {
+        FillStyle::Solid { hex, opacity } => {
+            circle = circle.set("fill", hex.clone());
+            if let Some(opacity) = opacity {
+                circle = circle.set("fill-opacity", opacity.clone());
+            }
+            circle
+        }
+        FillStyle::DebugStroke { hex } => circle
             .set("fill", "none")
             .set("stroke", *hex)
             .set("stroke-width", 1),
