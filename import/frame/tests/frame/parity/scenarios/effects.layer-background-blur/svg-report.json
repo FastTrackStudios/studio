@@ -1,14 +1,14 @@
 {
   "scenarioId": "effects.layer-background-blur",
-  "strictEqual": false,
+  "strictEqual": true,
   "byteEqual": false,
-  "structureEqual": false,
-  "canonicalEqual": false,
-  "canonicalNote": "ok",
+  "structureEqual": true,
+  "canonicalEqual": true,
+  "canonicalNote": "ok_via_structure_tolerance",
   "expectedSvg": "tests/frame/parity/scenarios/effects.layer-background-blur/expected.svg",
   "actualSvg": "tests/frame/parity/scenarios/effects.layer-background-blur/actual.svg",
   "expectedSha256": "f1cf51464c2e08eaa62756a2fa18e2b893327ee6f0480f3f8ca8bc12e7ed70ff",
-  "actualSha256": "48771c3863506081b6b91c8d92527152e2139318d1a602236bbec7dcba8df4ac",
+  "actualSha256": "4337c7fd1ea890bbade88620470679ab5750ab215fc4f51ed646bedd7fb2f01c",
   "expectedBytes": 51020,
   "actualBytes": 51884,
   "canonicalDiff": {
@@ -27,15 +27,11 @@
     "first_diff_expected": "5 35.4716C32.9015 34.8513 32.5488 34.3613 32.0753 34.0014C31.6065 33.6368 31.017 33.4545 30.3068 33.4545C29.625 33.4545 29.0521 33.6274 28.5881 33.973C28.1241 3"
   },
   "structureDiff": {
-    "equal": false,
+    "equal": true,
     "actual_path": "tests/frame/parity/scenarios/effects.layer-background-blur/actual.svg",
     "expected_path": "tests/frame/parity/scenarios/effects.layer-background-blur/expected.svg",
     "abs_tol": 0.006,
     "rel_tol": 0.0,
-    "first_mismatch": {
-      "node_path": "/svg/defs[10]/filter[0]/feGaussianBlur[2]",
-      "field": "attr:result",
-      "detail": "value mismatch actual=\"effect2_foregroundBlur_8_830\" expected=\"effect1_foregroundBlur_8_830\""
-    }
+    "first_mismatch": null
   }
 }

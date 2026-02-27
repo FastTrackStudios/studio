@@ -8,7 +8,7 @@
   "expectedSvg": "tests/frame/parity/scenarios/regression.tough-1176-blue-face/expected.svg",
   "actualSvg": "tests/frame/parity/scenarios/regression.tough-1176-blue-face/actual.svg",
   "expectedSha256": "bcfbc8abd5077f5c5ee24b9b1e30827a359fc5644b62d0de5bb7446732b20562",
-  "actualSha256": "fa757d89bfa8fea01b2480ab37d869048f294104b56579341cb5693bb09789d5",
+  "actualSha256": "920436cac2db6e230d44371c72bb10e105d33cb33d67a19db9340a466f383bdd",
   "expectedBytes": 12827755,
   "actualBytes": 9259653,
   "canonicalDiff": {

@@ -1,16 +1,16 @@
 {
   "scenarioId": "primitives.fractional-geometry",
-  "strictEqual": false,
+  "strictEqual": true,
   "byteEqual": false,
-  "structureEqual": false,
-  "canonicalEqual": false,
-  "canonicalNote": "ok",
+  "structureEqual": true,
+  "canonicalEqual": true,
+  "canonicalNote": "ok_via_structure_tolerance",
   "expectedSvg": "tests/frame/parity/scenarios/primitives.fractional-geometry/expected.svg",
   "actualSvg": "tests/frame/parity/scenarios/primitives.fractional-geometry/actual.svg",
   "expectedSha256": "6ede7f860feb7146958f877ca8af7feb4246a286362b52e4e69dfd80e7fccc7f",
-  "actualSha256": "4dcc4d2465eaf8c52c357cf7aab49588819c7c8eb61238a25d23b45179944e55",
+  "actualSha256": "299a490c732de4ffcd9c8bdebd48ffdc95c295f0b65849f111dad0c0279fbcdf",
   "expectedBytes": 49965,
-  "actualBytes": 50808,
+  "actualBytes": 50791,
   "canonicalDiff": {
     "equal": false,
     "actual_path": "tests/frame/parity/scenarios/primitives.fractional-geometry/actual.svg",
@@ -20,22 +20,18 @@
     "expected_elements": 11,
     "actual_paths": 3,
     "expected_paths": 3,
-    "actual_canonical_len": 53062,
+    "actual_canonical_len": 53047,
     "expected_canonical_len": 52172,
     "first_diff_offset": 1236,
     "first_diff_actual": "5 35.4716C32.9015 34.8513 32.5488 34.3613 32.0753 34.0014C31.6065 33.6368 31.0171 33.4546 30.3068 33.4546C29.625 33.4546 29.0521 33.6274 28.5881 33.973C28.1241 ",
     "first_diff_expected": "5 35.4716C32.9015 34.8513 32.5488 34.3613 32.0753 34.0014C31.6065 33.6368 31.017 33.4545 30.3068 33.4545C29.625 33.4545 29.0521 33.6274 28.5881 33.973C28.1241 3"
   },
   "structureDiff": {
-    "equal": false,
+    "equal": true,
     "actual_path": "tests/frame/parity/scenarios/primitives.fractional-geometry/actual.svg",
     "expected_path": "tests/frame/parity/scenarios/primitives.fractional-geometry/expected.svg",
     "abs_tol": 0.006,
     "rel_tol": 0.0,
-    "first_mismatch": {
-      "node_path": "/svg/line[6]",
-      "field": "attributes",
-      "detail": "attribute count mismatch actual=6 expected=5"
-    }
+    "first_mismatch": null
   }
 }

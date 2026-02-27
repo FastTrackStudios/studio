@@ -8,7 +8,7 @@
   "expectedSvg": "tests/frame/parity/scenarios/strokes.caps-joins-dashes/expected.svg",
   "actualSvg": "tests/frame/parity/scenarios/strokes.caps-joins-dashes/actual.svg",
   "expectedSha256": "c270e0ebc03020bfff3fc94b0b66342d10a22749ca780852552ac6dc2e1036b9",
-  "actualSha256": "3170fa16ac71ed9a334a0c234870c97ddac430bd7803a752559cca0cbec06c11",
+  "actualSha256": "ac2efebf8400d1e641f43e91028d7c6f9634e2606a53fe392ecd5e88326128c5",
   "expectedBytes": 61032,
   "actualBytes": 62558,
   "canonicalDiff": {

@@ -37,6 +37,10 @@ pub(crate) fn normalize_svg_for_figma_parity(svg: &str, width: u32, height: u32)
             body.push(norm);
             continue;
         }
+        if let Some(norm) = normalize_line_element(t) {
+            body.push(norm);
+            continue;
+        }
         if let Some(norm) = normalize_translated_path_line(t) {
             body.push(norm);
             continue;
@@ -336,6 +340,55 @@ fn normalize_circle_or_ellipse_line(line: &str) -> Option<String> {
         attrs.push(format!(r#"data-figma-gradient-fill="{payload}""#));
     }
     Some(format!("<{tag} {}/>", attrs.join(" ")))
+}
+
+/// Normalize `<line>` elements: reorder attributes, trim decimals, omit default stroke-width.
+#[cfg(feature = "svg_export")]
+fn normalize_line_element(line: &str) -> Option<String> {
+    if !line.starts_with("<line ") {
+        return None;
+    }
+    let x1 = extract_xml_attr(line, "x1")?;
+    let y1 = extract_xml_attr(line, "y1")?;
+    let x2 = extract_xml_attr(line, "x2")?;
+    let y2 = extract_xml_attr(line, "y2")?;
+
+    let mut attrs: Vec<String> = vec![
+        format!(r#"x1="{}""#, trim_decimal(&x1)),
+        format!(r#"y1="{}""#, trim_decimal(&y1)),
+        format!(r#"x2="{}""#, trim_decimal(&x2)),
+        format!(r#"y2="{}""#, trim_decimal(&y2)),
+    ];
+    if let Some(stroke) = extract_xml_attr(line, "stroke") {
+        let stroke = normalize_svg_color_keyword(stroke);
+        attrs.push(format!(r#"stroke="{stroke}""#));
+    }
+    if let Some(stroke_opacity) = extract_xml_attr(line, "stroke-opacity") {
+        let val = trim_decimal(&stroke_opacity);
+        if should_emit_opacity(&val) {
+            attrs.push(format!(r#"stroke-opacity="{val}""#));
+        }
+    }
+    // Omit stroke-width="1" (SVG default).
+    if let Some(stroke_width) = extract_xml_attr(line, "stroke-width") {
+        let val = trim_decimal(&stroke_width);
+        if val != "1" {
+            attrs.push(format!(r#"stroke-width="{val}""#));
+        }
+    }
+    if let Some(stroke_linecap) = extract_xml_attr(line, "stroke-linecap") {
+        attrs.push(format!(r#"stroke-linecap="{stroke_linecap}""#));
+    }
+    if let Some(stroke_linejoin) = extract_xml_attr(line, "stroke-linejoin") {
+        attrs.push(format!(r#"stroke-linejoin="{stroke_linejoin}""#));
+    }
+    if let Some(stroke_dasharray) = extract_xml_attr(line, "stroke-dasharray") {
+        attrs.push(format!(r#"stroke-dasharray="{stroke_dasharray}""#));
+    }
+    if let Some(stroke_dashoffset) = extract_xml_attr(line, "stroke-dashoffset") {
+        attrs.push(format!(r#"stroke-dashoffset="{}""#, trim_decimal(&stroke_dashoffset)));
+    }
+    Some(format!("<line {}/>", attrs.join(" ")))
 }
 
 /// Reorder attributes on `<g>` opening tags to match Figma convention:

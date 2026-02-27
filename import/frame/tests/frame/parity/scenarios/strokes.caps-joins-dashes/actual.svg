@@ -7,6 +7,6 @@
 <path d="M200 270L280 150L360 270" stroke="#151515" stroke-width="20"/>
 <path d="M480 270L560 150L640 270" stroke="#151515" stroke-width="20" stroke-linejoin="round"/>
 <path d="M760 270L840 150L920 270" stroke="#151515" stroke-width="20" stroke-linejoin="bevel"/>
-<line stroke="#2461F5" stroke-dasharray="12 8" stroke-width="14" x1="220" x2="1000" y1="483" y2="483"/>
-<line stroke="#F57324" stroke-dasharray="20 6 4 6" stroke-width="14" x1="220" x2="1000" y1="793" y2="793"/>
+<line x1="220" y1="483" x2="1000" y2="483" stroke="#2461F5" stroke-width="14" stroke-dasharray="12 8"/>
+<line x1="220" y1="793" x2="1000" y2="793" stroke="#F57324" stroke-width="14" stroke-dasharray="20 6 4 6"/>
 </svg>

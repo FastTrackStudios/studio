@@ -21,17 +21,17 @@
 <filter color-interpolation-filters="sRGB" filterUnits="userSpaceOnUse" height="144" id="filter0_f_8_830" width="224" x="238" y="158">
 <feFlood flood-opacity="0" result="BackgroundImageFix"/>
 <feBlend in="SourceGraphic" in2="BackgroundImageFix" mode="normal" result="shape"/>
-<feGaussianBlur result="effect2_foregroundBlur_8_830" stdDeviation="1"/>
+<feGaussianBlur result="effect1_foregroundBlur_8_830" stdDeviation="1"/>
 </filter>
 <filter color-interpolation-filters="sRGB" filterUnits="userSpaceOnUse" height="156" id="filter1_f_8_830" width="236" x="502" y="152">
 <feFlood flood-opacity="0" result="BackgroundImageFix"/>
 <feBlend in="SourceGraphic" in2="BackgroundImageFix" mode="normal" result="shape"/>
-<feGaussianBlur result="effect2_foregroundBlur_8_830" stdDeviation="4"/>
+<feGaussianBlur result="effect1_foregroundBlur_8_830" stdDeviation="4"/>
 </filter>
 <filter color-interpolation-filters="sRGB" filterUnits="userSpaceOnUse" height="188" id="filter2_f_8_830" width="268" x="756" y="136">
 <feFlood flood-opacity="0" result="BackgroundImageFix"/>
 <feBlend in="SourceGraphic" in2="BackgroundImageFix" mode="normal" result="shape"/>
-<feGaussianBlur result="effect2_foregroundBlur_8_830" stdDeviation="12"/>
+<feGaussianBlur result="effect1_foregroundBlur_8_830" stdDeviation="12"/>
 </filter>
 <clipPath id="bgblur_0_8_830_clip_path" transform="translate(-302 -412)">
 <rect x="320" y="430" width="640" height="360" rx="24"/>

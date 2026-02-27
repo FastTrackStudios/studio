@@ -314,7 +314,10 @@ fn build_effect_filter(
         svg::Node::assign(
             &mut fe_gaussian_blur,
             "result",
-            format!("effect2_foregroundBlur_{root_id_suffix}"),
+            format!(
+                "effect{}_foregroundBlur_{root_id_suffix}",
+                drop_shadows.len() + inner_shadows.len() + 1
+            ),
         );
         filter = filter.add(fe_gaussian_blur);
     }
