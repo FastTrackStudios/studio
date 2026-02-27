@@ -9,6 +9,28 @@ use super::source_bridge::{
 #[cfg(feature = "svg_export")]
 use kurbo::Shape;
 
+/// Extension trait to add a fluent `.set()` method to `svg::node::element::Element`,
+/// mirroring the API of the typed wrapper structs (Circle, Rectangle, etc.).
+#[cfg(feature = "svg_export")]
+trait ElementExt {
+    fn set<T, U>(self, name: T, value: U) -> Self
+    where
+        T: Into<String>,
+        U: Into<svg::node::Value>;
+}
+
+#[cfg(feature = "svg_export")]
+impl ElementExt for svg::node::element::Element {
+    fn set<T, U>(mut self, name: T, value: U) -> Self
+    where
+        T: Into<String>,
+        U: Into<svg::node::Value>,
+    {
+        svg::Node::assign(&mut self, name, value);
+        self
+    }
+}
+
 #[cfg(feature = "svg_export")]
 pub fn run_cli() -> Result<(), String> {
     use crate::{build_layout_boxes, build_paint_primitives, PaintPrimitive};
@@ -2019,7 +2041,9 @@ pub fn run_cli() -> Result<(), String> {
                     }
                     let cx = cx_box_x + tx + (cx_box_w * 0.5);
                     let cy = cy_box_y + ty + (cy_box_h * 0.5);
-                    let r = (ew.min(eh) * 0.5).max(0.0);
+                    let rx = (ew * 0.5).max(0.0);
+                    let ry = (eh * 0.5).max(0.0);
+                    let r = rx.min(ry);
                     let mut circle_cx = cx;
                     let mut circle_cy = cy;
                     let mut circle_transform: Option<String> = None;
@@ -2095,10 +2119,7 @@ pub fn run_cli() -> Result<(), String> {
                     );
                     let mut group = Group::new();
                     if fills.is_empty() {
-                        let mut base = Circle::new()
-                            .set("cx", fmt_f64(circle_cx))
-                            .set("cy", fmt_f64(circle_cy))
-                            .set("r", fmt_f64(r))
+                        let mut base = new_circle_or_ellipse(circle_cx, circle_cy, rx, ry)
                             .set("fill", "none");
                         if let Some(transform) = &circle_transform {
                             base = base.set("transform", transform.clone());
@@ -2106,10 +2127,7 @@ pub fn run_cli() -> Result<(), String> {
                         group = group.add(base);
                     } else {
                         for (fill, fill_blend) in &fills {
-                            let mut fill_circle = Circle::new()
-                                .set("cx", fmt_f64(circle_cx))
-                                .set("cy", fmt_f64(circle_cy))
-                                .set("r", fmt_f64(r));
+                            let mut fill_circle = new_circle_or_ellipse(circle_cx, circle_cy, rx, ry);
                             if let Some(transform) = &circle_transform {
                                 fill_circle = fill_circle.set("transform", transform.clone());
                             }
@@ -2170,10 +2188,7 @@ pub fn run_cli() -> Result<(), String> {
                                         format!("paint{gradient_count}_angular_{root_id_suffix}");
                                     gradient_count += 1;
                                     let clip_id = format!("{gradient_id}_clip_path");
-                                    let mut clip_circle = Circle::new()
-                                        .set("cx", fmt_f64(circle_cx))
-                                        .set("cy", fmt_f64(circle_cy))
-                                        .set("r", fmt_f64(r));
+                                    let mut clip_circle = new_circle_or_ellipse(circle_cx, circle_cy, rx, ry);
                                     if let Some(transform) = &circle_transform {
                                         clip_circle = clip_circle.set("transform", transform.clone());
                                     }
@@ -2246,10 +2261,7 @@ pub fn run_cli() -> Result<(), String> {
                                                 transform.as_ref().map(|t| (t, cx, cy)),
                                                 stops.as_slice(),
                                             );
-                                            let mut circle = Circle::new()
-                                                .set("cx", fmt_f64(circle_cx))
-                                                .set("cy", fmt_f64(circle_cy))
-                                                .set("r", fmt_f64(r))
+                                            let mut circle = new_circle_or_ellipse(circle_cx, circle_cy, rx, ry)
                                                 .set("data-figma-gradient-fill", metadata_val);
                                             if let Some(transform) = &circle_transform {
                                                 circle = circle.set("transform", transform.clone());
@@ -2346,10 +2358,7 @@ pub fn run_cli() -> Result<(), String> {
                             to_u8(stroke.color.b),
                             stroke.color.a,
                         );
-                        let mut stroke_circle = Circle::new()
-                            .set("cx", fmt_f64(circle_cx))
-                            .set("cy", fmt_f64(circle_cy))
-                            .set("r", fmt_f64(r))
+                        let mut stroke_circle = new_circle_or_ellipse(circle_cx, circle_cy, rx, ry)
                             .set("fill", "none")
                             .set("stroke", hex)
                             .set("stroke-width", fmt_f64(stroke.width.max(0.0)))
@@ -2519,36 +2528,42 @@ pub fn run_cli() -> Result<(), String> {
                     && rotation.abs() > 1e-6
                     && has_native_geometry
                 {
-                    if let Some(node) = node {
-                        if let Some((bx, by, bw, bh)) = source_bboxes.get(&node.figma_id) {
-                            let cos_r = rotation.cos();
-                            let sin_r = rotation.sin();
-                            let abs_cx = *bx + tx + *bw / 2.0;
-                            let abs_cy = *by + ty + *bh / 2.0;
-                            // chain_sx/chain_sy: translate such that rotated local center → abs center
-                            let chain_sx =
-                                abs_cx - cos_r * (width / 2.0) + sin_r * (height / 2.0);
-                            let chain_sy =
-                                abs_cy - sin_r * (width / 2.0) - cos_r * (height / 2.0);
-                            // kurbo Affine::new([a,b,c,d,e,f]) is column-major: |a c e| / |b d f|
-                            // Figma 2×2: x'=cos_r*lx - sin_r*ly, y'=sin_r*lx + cos_r*ly
-                            let rot =
-                                kurbo::Affine::new([cos_r, sin_r, -sin_r, cos_r, 0.0, 0.0]);
-                            let apply = |paths: Vec<String>| -> Vec<String> {
-                                paths
-                                    .into_iter()
-                                    .filter_map(|d| {
-                                        let bp = kurbo::BezPath::from_svg(&d).ok()?;
-                                        Some((rot * bp).to_svg())
-                                    })
-                                    .collect()
-                            };
-                            px = chain_sx;
-                            py = chain_sy;
-                            (apply(fill_paths), apply(stroke_paths))
-                        } else {
-                            (fill_paths, stroke_paths)
-                        }
+                    // Resolve the absolute bounding box center for rotation.
+                    // Prefer source_bboxes (Figma absoluteBoundingBox) when available,
+                    // fall back to the layout box center.
+                    let bbox_center = node
+                        .and_then(|n| {
+                            source_bboxes
+                                .get(&n.figma_id)
+                                .map(|(bx, by, bw, bh)| (*bx + tx + *bw / 2.0, *by + ty + *bh / 2.0))
+                        })
+                        .or_else(|| {
+                            Some((x + tx + width / 2.0, y + ty + height / 2.0))
+                        });
+                    if let Some((abs_cx, abs_cy)) = bbox_center {
+                        let cos_r = rotation.cos();
+                        let sin_r = rotation.sin();
+                        // chain_sx/chain_sy: translate such that rotated local center → abs center
+                        let chain_sx =
+                            abs_cx - cos_r * (width / 2.0) + sin_r * (height / 2.0);
+                        let chain_sy =
+                            abs_cy - sin_r * (width / 2.0) - cos_r * (height / 2.0);
+                        // kurbo Affine::new([a,b,c,d,e,f]) is column-major: |a c e| / |b d f|
+                        // Figma 2×2: x'=cos_r*lx - sin_r*ly, y'=sin_r*lx + cos_r*ly
+                        let rot =
+                            kurbo::Affine::new([cos_r, sin_r, -sin_r, cos_r, 0.0, 0.0]);
+                        let apply = |paths: Vec<String>| -> Vec<String> {
+                            paths
+                                .into_iter()
+                                .filter_map(|d| {
+                                    let bp = kurbo::BezPath::from_svg(&d).ok()?;
+                                    Some((rot * bp).to_svg())
+                                })
+                                .collect()
+                        };
+                        px = chain_sx;
+                        py = chain_sy;
+                        (apply(fill_paths), apply(stroke_paths))
                     } else {
                         (fill_paths, stroke_paths)
                     }
@@ -3436,21 +3451,39 @@ pub(super) fn svg_mix_blend_mode(mode: &crate::anyrender_renderer::BlendMix) -> 
 
 #[cfg(feature = "svg_export")]
 fn apply_fill_style_circle(
-    mut circle: svg::node::element::Circle,
+    circle: svg::node::element::Element,
     style: &FillStyle,
-) -> svg::node::element::Circle {
+) -> svg::node::element::Element {
     match style {
         FillStyle::Solid { hex, opacity } => {
-            circle = circle.set("fill", hex.clone());
+            let circle = circle.set("fill", hex.clone());
             if let Some(opacity) = opacity {
-                circle = circle.set("fill-opacity", opacity.clone());
+                circle.set("fill-opacity", opacity.clone())
+            } else {
+                circle
             }
-            circle
         }
         FillStyle::DebugStroke { hex } => circle
             .set("fill", "none")
             .set("stroke", *hex)
             .set("stroke-width", 1),
+    }
+}
+
+/// Create a `<circle>` or `<ellipse>` element based on whether rx and ry differ.
+#[cfg(feature = "svg_export")]
+fn new_circle_or_ellipse(cx: f64, cy: f64, rx: f64, ry: f64) -> svg::node::element::Element {
+    if (rx - ry).abs() > 1e-6 {
+        svg::node::element::Element::new("ellipse")
+            .set("cx", fmt_f64(cx))
+            .set("cy", fmt_f64(cy))
+            .set("rx", fmt_f64(rx))
+            .set("ry", fmt_f64(ry))
+    } else {
+        svg::node::element::Element::new("circle")
+            .set("cx", fmt_f64(cx))
+            .set("cy", fmt_f64(cy))
+            .set("r", fmt_f64(rx))
     }
 }
 

@@ -37,7 +37,15 @@ pub(crate) fn normalize_svg_for_figma_parity(svg: &str, width: u32, height: u32)
             body.push(norm);
             continue;
         }
+        if let Some(norm) = normalize_ellipse_line(t) {
+            body.push(norm);
+            continue;
+        }
         if let Some(norm) = normalize_translated_path_line(t) {
+            body.push(norm);
+            continue;
+        }
+        if let Some(norm) = normalize_group_line(t) {
             body.push(norm);
             continue;
         }
@@ -325,6 +333,98 @@ fn normalize_circle_line(line: &str) -> Option<String> {
         attrs.push(format!(r#"data-figma-gradient-fill="{payload}""#));
     }
     Some(format!("<circle {}/>", attrs.join(" ")))
+}
+
+/// Reorder attributes on `<g>` opening tags to match Figma convention:
+/// opacity, filter, style (mix-blend-mode).
+#[cfg(feature = "svg_export")]
+fn normalize_group_line(line: &str) -> Option<String> {
+    if !line.starts_with("<g ") || line.ends_with("/>") {
+        return None;
+    }
+    let opacity = extract_xml_attr(line, "opacity");
+    let filter = extract_xml_attr(line, "filter");
+    // Only normalize groups that have both opacity and filter (attribute ordering matters there).
+    if opacity.is_none() || filter.is_none() {
+        return None;
+    }
+    let style = extract_xml_attr(line, "style");
+    let clip_path = extract_xml_attr(line, "clip-path");
+    let mut attrs: Vec<String> = Vec::new();
+    if let Some(opacity) = opacity {
+        let val = trim_decimal(&opacity);
+        if should_emit_opacity(&val) {
+            attrs.push(format!(r#"opacity="{val}""#));
+        }
+    }
+    if let Some(filter) = filter {
+        attrs.push(format!(r#"filter="{filter}""#));
+    }
+    if let Some(clip_path) = clip_path {
+        attrs.push(format!(r#"clip-path="{clip_path}""#));
+    }
+    if let Some(style) = style {
+        attrs.push(format!(r#"style="{style}""#));
+    }
+    Some(format!("<g {}>", attrs.join(" ")))
+}
+
+#[cfg(feature = "svg_export")]
+fn normalize_ellipse_line(line: &str) -> Option<String> {
+    if !line.starts_with("<ellipse ") {
+        return None;
+    }
+    let cx = extract_xml_attr(line, "cx")?;
+    let cy = extract_xml_attr(line, "cy")?;
+    let rx_val = extract_xml_attr(line, "rx")?;
+    let ry_val = extract_xml_attr(line, "ry")?;
+    let transform = extract_xml_attr(line, "transform");
+    let fill = extract_xml_attr(line, "fill");
+    let fill_opacity = extract_xml_attr(line, "fill-opacity");
+    let style = extract_xml_attr(line, "style");
+    let stroke = extract_xml_attr(line, "stroke");
+    let stroke_opacity = extract_xml_attr(line, "stroke-opacity");
+    let stroke_width = extract_xml_attr(line, "stroke-width");
+    let figma_gradient_fill = extract_xml_attr(line, "data-figma-gradient-fill");
+    let mut attrs: Vec<String> = vec![
+        format!(r#"cx="{}""#, trim_decimal(&cx)),
+        format!(r#"cy="{}""#, trim_decimal(&cy)),
+        format!(r#"rx="{}""#, trim_decimal(&rx_val)),
+        format!(r#"ry="{}""#, trim_decimal(&ry_val)),
+    ];
+    if let Some(transform) = transform {
+        attrs.push(format!(r#"transform="{transform}""#));
+    }
+    if let Some(fill) = fill {
+        let fill = normalize_svg_color_keyword(fill);
+        attrs.push(format!(r#"fill="{fill}""#));
+    }
+    if let Some(fill_opacity) = fill_opacity {
+        let val = trim_decimal(&fill_opacity);
+        if should_emit_opacity(&val) {
+            attrs.push(format!(r#"fill-opacity="{val}""#));
+        }
+    }
+    if let Some(style) = style {
+        attrs.push(format!(r#"style="{style}""#));
+    }
+    if let Some(stroke) = stroke {
+        let stroke = normalize_svg_color_keyword(stroke);
+        attrs.push(format!(r#"stroke="{stroke}""#));
+    }
+    if let Some(stroke_opacity) = stroke_opacity {
+        let val = trim_decimal(&stroke_opacity);
+        if should_emit_opacity(&val) {
+            attrs.push(format!(r#"stroke-opacity="{val}""#));
+        }
+    }
+    if let Some(stroke_width) = stroke_width {
+        attrs.push(format!(r#"stroke-width="{}""#, trim_decimal(&stroke_width)));
+    }
+    if let Some(payload) = figma_gradient_fill {
+        attrs.push(format!(r#"data-figma-gradient-fill="{payload}""#));
+    }
+    Some(format!("<ellipse {}/>", attrs.join(" ")))
 }
 
 #[cfg(feature = "svg_export")]
