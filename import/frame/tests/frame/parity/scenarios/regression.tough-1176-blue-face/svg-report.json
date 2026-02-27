@@ -8,19 +8,19 @@
   "expectedSvg": "tests/frame/parity/scenarios/regression.tough-1176-blue-face/expected.svg",
   "actualSvg": "tests/frame/parity/scenarios/regression.tough-1176-blue-face/actual.svg",
   "expectedSha256": "bcfbc8abd5077f5c5ee24b9b1e30827a359fc5644b62d0de5bb7446732b20562",
-  "actualSha256": "80405f92d4cb5aed9d0a39bd821a031bc46cbcfc683c30e538db90700e255ea7",
+  "actualSha256": "0f928f9197257c8998d61637735192ec26d0996abfa128d9df3b938f6fee30c5",
   "expectedBytes": 12827755,
-  "actualBytes": 9255857,
+  "actualBytes": 9256669,
   "canonicalDiff": {
     "equal": false,
     "actual_path": "tests/frame/parity/scenarios/regression.tough-1176-blue-face/actual.svg",
     "expected_path": "tests/frame/parity/scenarios/regression.tough-1176-blue-face/expected.svg",
     "precision": 4,
-    "actual_elements": 1305,
+    "actual_elements": 1314,
     "expected_elements": 1359,
     "actual_paths": 150,
     "expected_paths": 152,
-    "actual_canonical_len": 9267191,
+    "actual_canonical_len": 9267952,
     "expected_canonical_len": 12835869,
     "first_diff_offset": 1169,
     "first_diff_actual": "acity=0.8><path|d=M62.0083 34.7917C61.0573 33.8407 59.8457 33.193 58.5266 32.9307C57.2075 32.6683 55.8403 32.8029 54.5977 33.3176C53.3552 33.8323 52.2932 34.703",
@@ -35,7 +35,7 @@
     "first_mismatch": {
       "node_path": "/svg/g[0]",
       "field": "children",
-      "detail": "child count mismatch actual=201 expected=205"
+      "detail": "child count mismatch actual=204 expected=205"
     }
   }
 }

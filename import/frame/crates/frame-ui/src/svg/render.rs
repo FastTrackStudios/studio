@@ -614,6 +614,32 @@ pub fn run_cli() -> Result<(), String> {
                     );
                     continue;
                 }
+                // Compute frame stroke overlay data before the single-fill shortcut so
+                // FRAME nodes with gradient strokes emit their stroke overlay rects even
+                // when there is only one gradient fill.
+                let raw_frame_strokes_early = node
+                    .and_then(|n| source_stroke_data.get(&n.figma_id).map(|(p, _)| p.clone()))
+                    .filter(|p| !p.is_empty())
+                    .or_else(|| node.map(|n| raw_stroke_paints(&n.raw)))
+                    .unwrap_or_default();
+                let has_complex_frame_strokes_early = raw_frame_strokes_early.len() > 1
+                    || raw_frame_strokes_early.iter().any(|paint| {
+                        !matches!(paint, crate::anyrender_renderer::FillPaint::Solid(_))
+                    });
+                let frame_stroke_width_early = stroke
+                    .as_ref()
+                    .map(|s| s.width.max(0.0))
+                    .or_else(|| {
+                        node.and_then(|n| source_stroke_data.get(&n.figma_id))
+                            .and_then(|(_, w)| *w)
+                            .map(|w| w.max(0.0))
+                    })
+                    .or_else(|| {
+                        node.and_then(|n| n.raw.get("strokeWeight").and_then(|v| v.as_f64()))
+                            .map(|w| w.max(0.0))
+                    })
+                    .unwrap_or(0.0);
+
                 if fills.len() == 1 {
                     if let Some((fill, blend_mode)) = fills.first() {
                         match fill {
@@ -639,28 +665,58 @@ pub fn run_cli() -> Result<(), String> {
                                         .set("height", fmt_f64(rh))
                                         .set("fill", format!("url(#{gradient_id})"));
                                     rect = apply_corner_radii_rect(rect, &effective_corner_radii);
-                                    if let Some(stroke) = stroke.as_ref() {
-                                        let (hex, opacity) = svg_color_paint_values(
-                                            to_u8(stroke.color.r),
-                                            to_u8(stroke.color.g),
-                                            to_u8(stroke.color.b),
-                                            stroke.color.a,
+                                    if frame_rect_uses_transform
+                                        && has_complex_frame_strokes_early
+                                        && frame_stroke_width_early > 0.0
+                                    {
+                                        // FRAME node with complex strokes: emit fill-only rect
+                                        // then push all stroke overlays (solid + gradient) separately.
+                                        push_node_with_optional_blend(
+                                            &mut svg_doc,
+                                            &mut group_stack,
+                                            rect,
+                                            Some(blend_mode),
                                         );
-                                        rect = rect
-                                            .set("stroke", hex)
-                                            .set("stroke-width", fmt_f64(stroke.width.max(0.0)))
-                                            .set("stroke-linecap", svg_linecap(stroke.cap))
-                                            .set("stroke-linejoin", svg_linejoin(stroke.join));
-                                        if let Some(opacity) = opacity {
-                                            rect = rect.set("stroke-opacity", opacity);
+                                        push_complex_frame_stroke_overlays(
+                                            &mut svg_doc,
+                                            &mut group_stack,
+                                            &mut gradient_count,
+                                            &mut deferred_gradients,
+                                            &mut has_defs,
+                                            &root_id_suffix,
+                                            rx,
+                                            ry,
+                                            rw,
+                                            rh,
+                                            &effective_corner_radii,
+                                            frame_stroke_width_early,
+                                            &raw_frame_strokes_early,
+                                            blend_mode,
+                                        );
+                                    } else {
+                                        if let Some(stroke) = stroke.as_ref() {
+                                            let (hex, opacity) = svg_color_paint_values(
+                                                to_u8(stroke.color.r),
+                                                to_u8(stroke.color.g),
+                                                to_u8(stroke.color.b),
+                                                stroke.color.a,
+                                            );
+                                            rect = rect
+                                                .set("stroke", hex)
+                                                .set("stroke-width", fmt_f64(stroke.width.max(0.0)))
+                                                .set("stroke-linecap", svg_linecap(stroke.cap))
+                                                .set("stroke-linejoin", svg_linejoin(stroke.join));
+                                            if let Some(opacity) = opacity {
+                                                rect = rect.set("stroke-opacity", opacity);
+                                            }
                                         }
+                                        push_node_with_optional_blend(
+                                            &mut svg_doc,
+                                            &mut group_stack,
+                                            rect,
+                                            Some(blend_mode),
+                                        );
                                     }
-                                    push_node_with_optional_blend(
-                                        &mut svg_doc,
-                                        &mut group_stack,
-                                        rect,
-                                        Some(blend_mode),
-                                    );
                                     continue;
                                 }
                             }
@@ -686,28 +742,56 @@ pub fn run_cli() -> Result<(), String> {
                                         .set("height", fmt_f64(rh))
                                         .set("fill", format!("url(#{gradient_id})"));
                                     rect = apply_corner_radii_rect(rect, &effective_corner_radii);
-                                    if let Some(stroke) = stroke.as_ref() {
-                                        let (hex, opacity) = svg_color_paint_values(
-                                            to_u8(stroke.color.r),
-                                            to_u8(stroke.color.g),
-                                            to_u8(stroke.color.b),
-                                            stroke.color.a,
+                                    if frame_rect_uses_transform
+                                        && has_complex_frame_strokes_early
+                                        && frame_stroke_width_early > 0.0
+                                    {
+                                        push_node_with_optional_blend(
+                                            &mut svg_doc,
+                                            &mut group_stack,
+                                            rect,
+                                            Some(blend_mode),
                                         );
-                                        rect = rect
-                                            .set("stroke", hex)
-                                            .set("stroke-width", fmt_f64(stroke.width.max(0.0)))
-                                            .set("stroke-linecap", svg_linecap(stroke.cap))
-                                            .set("stroke-linejoin", svg_linejoin(stroke.join));
-                                        if let Some(opacity) = opacity {
-                                            rect = rect.set("stroke-opacity", opacity);
+                                        push_complex_frame_stroke_overlays(
+                                            &mut svg_doc,
+                                            &mut group_stack,
+                                            &mut gradient_count,
+                                            &mut deferred_gradients,
+                                            &mut has_defs,
+                                            &root_id_suffix,
+                                            rx,
+                                            ry,
+                                            rw,
+                                            rh,
+                                            &effective_corner_radii,
+                                            frame_stroke_width_early,
+                                            &raw_frame_strokes_early,
+                                            blend_mode,
+                                        );
+                                    } else {
+                                        if let Some(stroke) = stroke.as_ref() {
+                                            let (hex, opacity) = svg_color_paint_values(
+                                                to_u8(stroke.color.r),
+                                                to_u8(stroke.color.g),
+                                                to_u8(stroke.color.b),
+                                                stroke.color.a,
+                                            );
+                                            rect = rect
+                                                .set("stroke", hex)
+                                                .set("stroke-width", fmt_f64(stroke.width.max(0.0)))
+                                                .set("stroke-linecap", svg_linecap(stroke.cap))
+                                                .set("stroke-linejoin", svg_linejoin(stroke.join));
+                                            if let Some(opacity) = opacity {
+                                                rect = rect.set("stroke-opacity", opacity);
+                                            }
                                         }
+                                        push_node_with_optional_blend(
+                                            &mut svg_doc,
+                                            &mut group_stack,
+                                            rect,
+                                            Some(blend_mode),
+                                        );
                                     }
-                                    push_node_with_optional_blend(
-                                        &mut svg_doc,
-                                        &mut group_stack,
-                                        rect,
-                                        Some(blend_mode),
-                                    );
                                     continue;
                                 }
                             }
@@ -1030,28 +1114,9 @@ pub fn run_cli() -> Result<(), String> {
                         }
                     }
                 }
-                let raw_frame_strokes = node
-                    .and_then(|n| source_stroke_data.get(&n.figma_id).map(|(p, _)| p.clone()))
-                    .filter(|p| !p.is_empty())
-                    .or_else(|| node.map(|n| raw_stroke_paints(&n.raw)))
-                    .unwrap_or_default();
-                let has_complex_frame_strokes = raw_frame_strokes.len() > 1
-                    || raw_frame_strokes.iter().any(|paint| {
-                        !matches!(paint, crate::anyrender_renderer::FillPaint::Solid(_))
-                    });
-                let frame_stroke_width = stroke
-                    .as_ref()
-                    .map(|s| s.width.max(0.0))
-                    .or_else(|| {
-                        node.and_then(|n| source_stroke_data.get(&n.figma_id))
-                            .and_then(|(_, w)| *w)
-                            .map(|w| w.max(0.0))
-                    })
-                    .or_else(|| {
-                        node.and_then(|n| n.raw.get("strokeWeight").and_then(|v| v.as_f64()))
-                            .map(|w| w.max(0.0))
-                    })
-                    .unwrap_or(0.0);
+                let raw_frame_strokes = raw_frame_strokes_early;
+                let has_complex_frame_strokes = has_complex_frame_strokes_early;
+                let frame_stroke_width = frame_stroke_width_early;
                 for (fill, fill_blend) in fills {
                     match &fill {
                         crate::anyrender_renderer::FillPaint::GradientLinear { transform, stops } => {

@@ -111,3 +111,15 @@ after each iteration and it's included in prompts for context.
 
 ---
 
+## 2026-02-27 - bd-der.7
+- **What was implemented**: Fixed gradient type swaps (paint36-39) and missing paint42/43 defs
+- **Files changed**:
+  - `crates/frame-ui/src/svg/render.rs` — hoisted `raw_frame_strokes_early`/`has_complex_frame_strokes_early`/`frame_stroke_width_early` computation before the `fills.len()==1` shortcut block; in `GradientLinear` and `GradientRadial` single-fill arms, added check `frame_rect_uses_transform && has_complex_frame_strokes_early && frame_stroke_width_early > 0.0` to emit fill-only rect + call `push_complex_frame_stroke_overlays`; removed duplicate computation at original site (replaced with aliases)
+- **Learnings:**
+  - **Early-exit bug pattern**: The `fills.len()==1` shortcut hits `continue` before reaching the `raw_frame_strokes` computation at the original site. Any FRAME node with 1 gradient fill + gradient stroke skipped complex stroke overlay logic entirely — causing all subsequent paint IDs to shift by the count of missing stroke gradients
+  - **FRAME stroke convention**: Figma SVG emits separate rects for each stroke (solid + gradient) as stroke-only rects (`fill="none"`), not combined with the fill rect. `push_complex_frame_stroke_overlays` handles both solid and gradient strokes in one loop
+  - **Gradient ID numbering ripple**: The "swapped types" (paint36 radial vs linear) were actually a numbering offset caused by 2 missing linear gradient defs (MN frame's gradient stroke + Frame 2's gradient stroke). Once those were emitted, downstream IDs 36-43 shifted into correct positions with correct types
+  - `push_complex_frame_stroke_overlays` only needed for FRAME nodes (`frame_rect_uses_transform = true`); non-FRAME nodes (circles, etc.) use the old combined fill+stroke rect approach
+
+---
+
