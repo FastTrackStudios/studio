@@ -76,7 +76,7 @@ pub(super) fn push_rect_with_effects(
         };
         for shadow in &drop_shadows {
             let radius = shadow.radius.max(0.0);
-            let spread = shadow.spread.max(0.0);
+            let spread = shadow.spread.abs();
             let sx = x + shadow.offset_x - radius - spread;
             let sy = y + shadow.offset_y - radius - spread;
             let sw = width + (radius + spread) * 2.0;
@@ -126,7 +126,7 @@ pub(super) fn push_rect_with_effects(
             for (idx, shadow) in drop_shadows.iter().enumerate() {
                 let step = idx + 1;
                 let radius = shadow.radius.max(0.0);
-                let spread = shadow.spread.max(0.0);
+                let spread = shadow.spread;
                 let std_deviation = (radius * 0.5).max(0.0);
                 let prev_result = if step == 1 {
                     "BackgroundImageFix".to_string()
@@ -146,10 +146,14 @@ pub(super) fn push_rect_with_effects(
                 svg::Node::assign(&mut fe_color_alpha, "result", "hardAlpha");
                 filter = filter.add(fe_color_alpha);
 
-                if spread > 0.0 {
+                if spread.abs() > 1e-6 {
                     let mut fe_morphology = svg::node::element::Element::new("feMorphology");
-                    svg::Node::assign(&mut fe_morphology, "radius", fmt_f64(spread));
-                    svg::Node::assign(&mut fe_morphology, "operator", "dilate");
+                    svg::Node::assign(&mut fe_morphology, "radius", fmt_f64(spread.abs()));
+                    svg::Node::assign(
+                        &mut fe_morphology,
+                        "operator",
+                        if spread > 0.0 { "dilate" } else { "erode" },
+                    );
                     svg::Node::assign(&mut fe_morphology, "in", "SourceAlpha");
                     svg::Node::assign(&mut fe_morphology, "result", this_result.clone());
                     filter = filter.add(fe_morphology);
@@ -164,9 +168,21 @@ pub(super) fn push_rect_with_effects(
                 }
                 filter = filter.add(fe_offset);
 
-                let mut fe_blur = svg::node::element::Element::new("feGaussianBlur");
-                svg::Node::assign(&mut fe_blur, "stdDeviation", fmt_f64(std_deviation));
-                filter = filter.add(fe_blur);
+                if std_deviation > 1e-10 {
+                    let mut fe_blur = svg::node::element::Element::new("feGaussianBlur");
+                    svg::Node::assign(&mut fe_blur, "stdDeviation", fmt_f64(std_deviation));
+                    filter = filter.add(fe_blur);
+                }
+
+                // Figma adds feComposite "out" (mask shadow within original shape alpha) when
+                // blur doesn't exceed spread: std_deviation <= spread.abs(). This includes the
+                // case where both are 0 (sharp offset-only shadow needs shape masking too).
+                if std_deviation <= spread.abs() {
+                    let mut fe_composite = svg::node::element::Element::new("feComposite");
+                    svg::Node::assign(&mut fe_composite, "in2", "hardAlpha");
+                    svg::Node::assign(&mut fe_composite, "operator", "out");
+                    filter = filter.add(fe_composite);
+                }
 
                 let mut fe_color = svg::node::element::Element::new("feColorMatrix");
                 svg::Node::assign(&mut fe_color, "type", "matrix");
@@ -227,6 +243,21 @@ pub(super) fn push_rect_with_effects(
                 svg::Node::assign(&mut fe_color_alpha, "result", "hardAlpha");
                 filter = filter.add(fe_color_alpha);
 
+                if shadow.spread.abs() > 1e-6 {
+                    let mut fe_morphology = svg::node::element::Element::new("feMorphology");
+                    svg::Node::assign(&mut fe_morphology, "radius", fmt_f64(shadow.spread.abs()));
+                    // Inner shadow: positive spread erodes (contracts shadow inward),
+                    // negative spread dilates (expands shadow) — opposite of drop shadows.
+                    svg::Node::assign(
+                        &mut fe_morphology,
+                        "operator",
+                        if shadow.spread > 0.0 { "erode" } else { "dilate" },
+                    );
+                    svg::Node::assign(&mut fe_morphology, "in", "SourceAlpha");
+                    svg::Node::assign(&mut fe_morphology, "result", this_result.clone());
+                    filter = filter.add(fe_morphology);
+                }
+
                 let mut fe_offset = svg::node::element::Element::new("feOffset");
                 if shadow.offset_x.abs() > f64::EPSILON {
                     svg::Node::assign(&mut fe_offset, "dx", fmt_f64(shadow.offset_x));
@@ -236,9 +267,11 @@ pub(super) fn push_rect_with_effects(
                 }
                 filter = filter.add(fe_offset);
 
-                let mut fe_blur = svg::node::element::Element::new("feGaussianBlur");
-                svg::Node::assign(&mut fe_blur, "stdDeviation", fmt_f64(std_deviation));
-                filter = filter.add(fe_blur);
+                if std_deviation > 1e-10 {
+                    let mut fe_blur = svg::node::element::Element::new("feGaussianBlur");
+                    svg::Node::assign(&mut fe_blur, "stdDeviation", fmt_f64(std_deviation));
+                    filter = filter.add(fe_blur);
+                }
 
                 let mut fe_comp = svg::node::element::Element::new("feComposite");
                 svg::Node::assign(&mut fe_comp, "in2", "hardAlpha");
@@ -508,7 +541,7 @@ pub(super) fn push_group_with_blend_and_effects(
     };
     for shadow in &drop_shadows {
         let radius = shadow.radius.max(0.0);
-        let spread = shadow.spread.max(0.0);
+        let spread = shadow.spread.abs();
         let sx = x + shadow.offset_x - radius - spread;
         let sy = y + shadow.offset_y - radius - spread;
         let sw = width + (radius + spread) * 2.0;
@@ -558,7 +591,7 @@ pub(super) fn push_group_with_blend_and_effects(
         for (idx, shadow) in drop_shadows.iter().enumerate() {
             let step = idx + 1;
             let radius = shadow.radius.max(0.0);
-            let spread = shadow.spread.max(0.0);
+            let spread = shadow.spread;
             let std_deviation = (radius * 0.5).max(0.0);
             let prev_result = if step == 1 {
                 "BackgroundImageFix".to_string()
@@ -578,10 +611,14 @@ pub(super) fn push_group_with_blend_and_effects(
             svg::Node::assign(&mut fe_color_alpha, "result", "hardAlpha");
             filter = filter.add(fe_color_alpha);
 
-            if spread > 0.0 {
+            if spread.abs() > 1e-6 {
                 let mut fe_morphology = svg::node::element::Element::new("feMorphology");
-                svg::Node::assign(&mut fe_morphology, "radius", fmt_f64(spread));
-                svg::Node::assign(&mut fe_morphology, "operator", "dilate");
+                svg::Node::assign(&mut fe_morphology, "radius", fmt_f64(spread.abs()));
+                svg::Node::assign(
+                    &mut fe_morphology,
+                    "operator",
+                    if spread > 0.0 { "dilate" } else { "erode" },
+                );
                 svg::Node::assign(&mut fe_morphology, "in", "SourceAlpha");
                 svg::Node::assign(&mut fe_morphology, "result", this_result.clone());
                 filter = filter.add(fe_morphology);
@@ -596,9 +633,21 @@ pub(super) fn push_group_with_blend_and_effects(
             }
             filter = filter.add(fe_offset);
 
-            let mut fe_blur = svg::node::element::Element::new("feGaussianBlur");
-            svg::Node::assign(&mut fe_blur, "stdDeviation", fmt_f64(std_deviation));
-            filter = filter.add(fe_blur);
+            if std_deviation > 1e-10 {
+                let mut fe_blur = svg::node::element::Element::new("feGaussianBlur");
+                svg::Node::assign(&mut fe_blur, "stdDeviation", fmt_f64(std_deviation));
+                filter = filter.add(fe_blur);
+            }
+
+            // Figma adds feComposite "out" (mask shadow within original shape alpha) when
+            // blur doesn't exceed spread: std_deviation <= spread.abs(). This includes the
+            // case where both are 0 (sharp offset-only shadow needs shape masking too).
+            if std_deviation <= spread.abs() {
+                let mut fe_composite = svg::node::element::Element::new("feComposite");
+                svg::Node::assign(&mut fe_composite, "in2", "hardAlpha");
+                svg::Node::assign(&mut fe_composite, "operator", "out");
+                filter = filter.add(fe_composite);
+            }
 
             let mut fe_color = svg::node::element::Element::new("feColorMatrix");
             svg::Node::assign(&mut fe_color, "type", "matrix");
@@ -659,6 +708,21 @@ pub(super) fn push_group_with_blend_and_effects(
             svg::Node::assign(&mut fe_color_alpha, "result", "hardAlpha");
             filter = filter.add(fe_color_alpha);
 
+            if shadow.spread.abs() > 1e-6 {
+                let mut fe_morphology = svg::node::element::Element::new("feMorphology");
+                svg::Node::assign(&mut fe_morphology, "radius", fmt_f64(shadow.spread.abs()));
+                // Inner shadow: positive spread erodes (contracts shadow inward),
+                // negative spread dilates (expands shadow) — opposite of drop shadows.
+                svg::Node::assign(
+                    &mut fe_morphology,
+                    "operator",
+                    if shadow.spread > 0.0 { "erode" } else { "dilate" },
+                );
+                svg::Node::assign(&mut fe_morphology, "in", "SourceAlpha");
+                svg::Node::assign(&mut fe_morphology, "result", this_result.clone());
+                filter = filter.add(fe_morphology);
+            }
+
             let mut fe_offset = svg::node::element::Element::new("feOffset");
             if shadow.offset_x.abs() > f64::EPSILON {
                 svg::Node::assign(&mut fe_offset, "dx", fmt_f64(shadow.offset_x));
@@ -668,9 +732,11 @@ pub(super) fn push_group_with_blend_and_effects(
             }
             filter = filter.add(fe_offset);
 
-            let mut fe_blur = svg::node::element::Element::new("feGaussianBlur");
-            svg::Node::assign(&mut fe_blur, "stdDeviation", fmt_f64(std_deviation));
-            filter = filter.add(fe_blur);
+            if std_deviation > 1e-10 {
+                let mut fe_blur = svg::node::element::Element::new("feGaussianBlur");
+                svg::Node::assign(&mut fe_blur, "stdDeviation", fmt_f64(std_deviation));
+                filter = filter.add(fe_blur);
+            }
 
             let mut fe_comp = svg::node::element::Element::new("feComposite");
             svg::Node::assign(&mut fe_comp, "in2", "hardAlpha");
