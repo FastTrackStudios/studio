@@ -8,23 +8,23 @@
   "expectedSvg": "tests/frame/parity/scenarios/regression.tough-1176-blue-face/expected.svg",
   "actualSvg": "tests/frame/parity/scenarios/regression.tough-1176-blue-face/actual.svg",
   "expectedSha256": "bcfbc8abd5077f5c5ee24b9b1e30827a359fc5644b62d0de5bb7446732b20562",
-  "actualSha256": "3c3b13313bb49e50765db4a2924a26416bd30b5191604766f8fb7043d3e0379f",
+  "actualSha256": "7a5e1f5e806761e027e05e894c1bde8d8a8a1fe0592abfa27bc1e3883f56bdaf",
   "expectedBytes": 12827755,
-  "actualBytes": 9247523,
+  "actualBytes": 9247142,
   "canonicalDiff": {
     "equal": false,
     "actual_path": "tests/frame/parity/scenarios/regression.tough-1176-blue-face/actual.svg",
     "expected_path": "tests/frame/parity/scenarios/regression.tough-1176-blue-face/expected.svg",
     "precision": 4,
-    "actual_elements": 1312,
+    "actual_elements": 1311,
     "expected_elements": 1359,
     "actual_paths": 150,
     "expected_paths": 152,
-    "actual_canonical_len": 9262180,
+    "actual_canonical_len": 9261894,
     "expected_canonical_len": 12835869,
-    "first_diff_offset": 57,
-    "first_diff_actual": "<svg|fill=none|height=156|viewBox=0 0 842 156|width=842><rect|fill=#101218|fill-opacity=0.5|height=156|width=842></rect><g|filter=url(#fi",
-    "first_diff_expected": "<svg|fill=none|height=156|viewBox=0 0 842 156|width=842><g|filter=url(#filter0_ii_1_228)><rect|fill=url(#paint0_radial_1_228)|height=156|"
+    "first_diff_offset": 1169,
+    "first_diff_actual": "acity=0.8><path|d=M62.0083 34.7917C61.0573 33.8407 59.8457 33.193 58.5266 32.9307C57.2075 32.6683 55.8403 32.8029 54.5977 33.3176C53.3552 33.8323 52.2932 34.703",
+    "first_diff_expected": "acity=0.8><path|d=M62.0083 34.7917C61.0573 33.8407 59.8457 33.193 58.5266 32.9306C57.2075 32.6683 55.8403 32.8029 54.5977 33.3176C53.3552 33.8323 52.2932 34.703"
   },
   "structureDiff": {
     "equal": false,
@@ -33,9 +33,9 @@
     "abs_tol": 0.006,
     "rel_tol": 0.0,
     "first_mismatch": {
-      "node_path": "/svg",
+      "node_path": "/svg/g[0]",
       "field": "children",
-      "detail": "child count mismatch actual=201 expected=2"
+      "detail": "child count mismatch actual=201 expected=205"
     }
   }
 }

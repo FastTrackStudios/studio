@@ -1,0 +1,102 @@
+{
+  "version": 1,
+  "sessionId": "4af3aed8-d8ed-43f3-afa5-91f2935a2a7a",
+  "status": "running",
+  "startedAt": "2026-02-27T07:45:17.771Z",
+  "updatedAt": "2026-02-27T08:04:23.153Z",
+  "currentIteration": 0,
+  "maxIterations": 10,
+  "tasksCompleted": 0,
+  "isPaused": false,
+  "agentPlugin": "claude",
+  "trackerState": {
+    "plugin": "beads-bv",
+    "epicId": "bd-der",
+    "totalTasks": 13,
+    "tasks": [
+      {
+        "id": "bd-der.1",
+        "title": "Eliminate 8-bit opacity quantization — preserve original float values",
+        "status": "open",
+        "completedInSession": false
+      },
+      {
+        "id": "bd-der.2",
+        "title": "Fix matrix transform composition for nested parent chains",
+        "status": "open",
+        "completedInSession": false
+      },
+      {
+        "id": "bd-der.3",
+        "title": "Place opacity on group wrapper, not on individual children",
+        "status": "open",
+        "completedInSession": false
+      },
+      {
+        "id": "bd-der.4",
+        "title": "Apply rotation transform to star and vector shape paths",
+        "status": "open",
+        "completedInSession": false
+      },
+      {
+        "id": "bd-der.5",
+        "title": "Emit fill-opacity on pattern overlay elements",
+        "status": "open",
+        "completedInSession": false
+      },
+      {
+        "id": "bd-der.6",
+        "title": "Fix angular gradient foreignObject sizing, angle, and transform",
+        "status": "open",
+        "completedInSession": false
+      },
+      {
+        "id": "bd-der.7",
+        "title": "Fix gradient type swaps (linear↔radial) and add missing gradient defs",
+        "status": "open",
+        "completedInSession": false
+      },
+      {
+        "id": "bd-der.8",
+        "title": "Emit separate elements for fill and stroke layers (Figma style)",
+        "status": "open",
+        "completedInSession": false
+      },
+      {
+        "id": "bd-der.9",
+        "title": "Inline mix-blend-mode on elements instead of wrapping in <g>",
+        "status": "open",
+        "completedInSession": false
+      },
+      {
+        "id": "bd-der.10",
+        "title": "Introduce AffineTransform2D type with proper matrix algebra",
+        "status": "open",
+        "completedInSession": false
+      },
+      {
+        "id": "bd-der.11",
+        "title": "Emit <ellipse> for non-equal radii instead of always using <circle>",
+        "status": "open",
+        "completedInSession": false
+      },
+      {
+        "id": "bd-der.12",
+        "title": "Format opacity with minimal precision (trim trailing zeros)",
+        "status": "open",
+        "completedInSession": false
+      },
+      {
+        "id": "bd-der.13",
+        "title": "Integration pass: run full parity suite, fix regressions, verify 1176 passes",
+        "status": "open",
+        "completedInSession": false
+      }
+    ]
+  },
+  "iterations": [],
+  "skippedTaskIds": [],
+  "cwd": "/Users/codywright/Documents/Development/FastTrackStudio/frame",
+  "activeTaskIds": [],
+  "subagentPanelVisible": true
+}

@@ -1,14 +1,14 @@
 {
   "scenarioId": "effects.effect-ordering",
-  "strictEqual": true,
+  "strictEqual": false,
   "byteEqual": false,
-  "structureEqual": true,
-  "canonicalEqual": true,
-  "canonicalNote": "ok_via_structure_tolerance",
+  "structureEqual": false,
+  "canonicalEqual": false,
+  "canonicalNote": "ok",
   "expectedSvg": "tests/frame/parity/scenarios/effects.effect-ordering/expected.svg",
   "actualSvg": "tests/frame/parity/scenarios/effects.effect-ordering/actual.svg",
   "expectedSha256": "a2724a5ce41212093b84476d23ad535de29e6833e9822c8e14f8f6062feec4f6",
-  "actualSha256": "03f272674e81e1088863c6273670c4240015b1e48c25e6eb31a2eeae24ae62f9",
+  "actualSha256": "61061009f4024aa1e1b0992d3903d6a1d914e6cbe9a38b125f5427619215f57b",
   "expectedBytes": 37219,
   "actualBytes": 37496,
   "canonicalDiff": {
@@ -27,11 +27,15 @@
     "first_diff_expected": "5 35.4716C32.9015 34.8513 32.5488 34.3613 32.0753 34.0014C31.6065 33.6368 31.017 33.4545 30.3068 33.4545C29.625 33.4545 29.0521 33.6274 28.5881 33.973C28.1241 3"
   },
   "structureDiff": {
-    "equal": true,
+    "equal": false,
     "actual_path": "tests/frame/parity/scenarios/effects.effect-ordering/actual.svg",
     "expected_path": "tests/frame/parity/scenarios/effects.effect-ordering/expected.svg",
     "abs_tol": 0.006,
     "rel_tol": 0.0,
-    "first_mismatch": null
+    "first_mismatch": {
+      "node_path": "/svg/g[3]/rect[0]",
+      "field": "attr:height",
+      "detail": "numeric token mismatch at 0: actual=168 expected=180 (abs diff=12)"
+    }
   }
 }

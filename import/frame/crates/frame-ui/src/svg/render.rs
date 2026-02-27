@@ -148,13 +148,14 @@ pub fn run_cli() -> Result<(), String> {
     let canvas_w = width as f64;
     let canvas_h = height as f64;
     let (bg_hex, bg_opacity) =
-        svg_color_paint_values(base_color.0, base_color.1, base_color.2, base_color.3);
-    let mut bg = Rectangle::new().set("width", width).set("height", height);
-    bg = bg.set("fill", bg_hex.clone());
-    if let Some(opacity) = bg_opacity.clone() {
-        bg = bg.set("fill-opacity", opacity);
+        svg_color_paint_values(base_color.0, base_color.1, base_color.2, f64::from(base_color.3) / 255.0);
+    // Export parity corpus expects an explicit root background only when the
+    // source background is fully opaque.
+    if bg_opacity.is_none() {
+        let mut bg = Rectangle::new().set("width", width).set("height", height);
+        bg = bg.set("fill", bg_hex.clone());
+        push_node(&mut svg_doc, &mut Vec::new(), bg);
     }
-    push_node(&mut svg_doc, &mut Vec::new(), bg);
 
     let RenderCtx {
         mut group_stack,
@@ -328,7 +329,7 @@ pub fn run_cli() -> Result<(), String> {
                             to_u8(color.r),
                             to_u8(color.g),
                             to_u8(color.b),
-                            (color.a * 255.0).round().clamp(0.0, 255.0) as u8,
+                            color.a,
                         );
                         if hex == bg_hex && opacity.is_none() {
                             continue;
@@ -576,7 +577,7 @@ pub fn run_cli() -> Result<(), String> {
                             to_u8(stroke.color.r),
                             to_u8(stroke.color.g),
                             to_u8(stroke.color.b),
-                            (stroke.color.a * 255.0).round().clamp(0.0, 255.0) as u8,
+                            stroke.color.a,
                         );
                         let mut stroke_rect = Rectangle::new()
                             .set("x", fmt_f64(rx))
@@ -640,8 +641,7 @@ pub fn run_cli() -> Result<(), String> {
                                             to_u8(stroke.color.r),
                                             to_u8(stroke.color.g),
                                             to_u8(stroke.color.b),
-                                            (stroke.color.a * 255.0).round().clamp(0.0, 255.0)
-                                                as u8,
+                                            stroke.color.a,
                                         );
                                         rect = rect
                                             .set("stroke", hex)
@@ -688,8 +688,7 @@ pub fn run_cli() -> Result<(), String> {
                                             to_u8(stroke.color.r),
                                             to_u8(stroke.color.g),
                                             to_u8(stroke.color.b),
-                                            (stroke.color.a * 255.0).round().clamp(0.0, 255.0)
-                                                as u8,
+                                            stroke.color.a,
                                         );
                                         rect = rect
                                             .set("stroke", hex)
@@ -789,7 +788,7 @@ pub fn run_cli() -> Result<(), String> {
                                         to_u8(stroke.color.r),
                                         to_u8(stroke.color.g),
                                         to_u8(stroke.color.b),
-                                        (stroke.color.a * 255.0).round().clamp(0.0, 255.0) as u8,
+                                        stroke.color.a,
                                     );
                                     rect = rect.set("stroke", hex);
                                     if let Some(opacity) = opacity {
@@ -880,7 +879,7 @@ pub fn run_cli() -> Result<(), String> {
                                         to_u8(stroke.color.r),
                                         to_u8(stroke.color.g),
                                         to_u8(stroke.color.b),
-                                        (stroke.color.a * 255.0).round().clamp(0.0, 255.0) as u8,
+                                        stroke.color.a,
                                     );
                                     rect = rect
                                         .set("stroke", hex)
@@ -954,7 +953,7 @@ pub fn run_cli() -> Result<(), String> {
                                     to_u8(color.r),
                                     to_u8(color.g),
                                     to_u8(color.b),
-                                    (color.a * 255.0).round().clamp(0.0, 255.0) as u8,
+                                    color.a,
                                 );
                                 rect = rect.set("fill", hex);
                                 let opacity = fill_opacity;
@@ -968,7 +967,7 @@ pub fn run_cli() -> Result<(), String> {
                                             to_u8(stroke.color.r),
                                             to_u8(stroke.color.g),
                                             to_u8(stroke.color.b),
-                                            (stroke.color.a * 255.0).round().clamp(0.0, 255.0) as u8,
+                                            stroke.color.a,
                                         );
                                         rect = rect
                                             .set("stroke", hex)
@@ -992,7 +991,7 @@ pub fn run_cli() -> Result<(), String> {
                                     to_u8(stroke.color.r),
                                     to_u8(stroke.color.g),
                                     to_u8(stroke.color.b),
-                                    (stroke.color.a * 255.0).round().clamp(0.0, 255.0) as u8,
+                                    stroke.color.a,
                                 );
                                 rect = rect
                                     .set("stroke", hex)
@@ -1401,7 +1400,7 @@ pub fn run_cli() -> Result<(), String> {
                         to_u8(stroke.color.r),
                         to_u8(stroke.color.g),
                         to_u8(stroke.color.b),
-                        (stroke.color.a * 255.0).round().clamp(0.0, 255.0) as u8,
+                        stroke.color.a,
                     );
                     rect = rect.set("stroke", hex);
                     if let Some(opacity) = opacity {
@@ -1738,7 +1737,7 @@ pub fn run_cli() -> Result<(), String> {
                                         to_u8(color.r),
                                         to_u8(color.g),
                                         to_u8(color.b),
-                                        (color.a * 255.0).round().clamp(0.0, 255.0) as u8,
+                                        color.a,
                                     );
                                     rect = rect.set("fill", hex);
                                     let opacity = fill_opacity;
@@ -1798,7 +1797,7 @@ pub fn run_cli() -> Result<(), String> {
                                         to_u8(color.r),
                                         to_u8(color.g),
                                         to_u8(color.b),
-                                        (color.a * 255.0).round().clamp(0.0, 255.0) as u8,
+                                        color.a,
                                     );
                                     stroke_rect = stroke_rect.set("stroke", hex);
                                     if let Some(opacity) = opacity {
@@ -1862,7 +1861,7 @@ pub fn run_cli() -> Result<(), String> {
                             to_u8(stroke.color.r),
                             to_u8(stroke.color.g),
                             to_u8(stroke.color.b),
-                            (stroke.color.a * 255.0).round().clamp(0.0, 255.0) as u8,
+                            stroke.color.a,
                         );
                         rect = rect
                             .set("stroke", hex)
@@ -2262,7 +2261,7 @@ pub fn run_cli() -> Result<(), String> {
                             to_u8(stroke.color.r),
                             to_u8(stroke.color.g),
                             to_u8(stroke.color.b),
-                            (stroke.color.a * 255.0).round().clamp(0.0, 255.0) as u8,
+                            stroke.color.a,
                         );
                         let mut stroke_circle = Circle::new()
                             .set("cx", fmt_f64(circle_cx))
@@ -2329,7 +2328,7 @@ pub fn run_cli() -> Result<(), String> {
                             to_u8(stroke.color.r),
                             to_u8(stroke.color.g),
                             to_u8(stroke.color.b),
-                            (stroke.color.a * 255.0).round().clamp(0.0, 255.0) as u8,
+                            stroke.color.a,
                         );
                         line = line
                             .set("stroke", hex)
@@ -2493,7 +2492,7 @@ pub fn run_cli() -> Result<(), String> {
                                     to_u8(color.r),
                                     to_u8(color.g),
                                     to_u8(color.b),
-                                    (color.a * 255.0).round().clamp(0.0, 255.0) as u8,
+                                    color.a,
                                 );
                                 fill_ref = Some(hex);
                                 if fills.len() > 1 {
@@ -2640,7 +2639,7 @@ pub fn run_cli() -> Result<(), String> {
                                         to_u8(color.r),
                                         to_u8(color.g),
                                         to_u8(color.b),
-                                        (color.a * 255.0).round().clamp(0.0, 255.0) as u8,
+                                        color.a,
                                     );
                                     fill_ref = Some(hex);
                                     if fills.len() > 1 && fill_idx == 0 {
@@ -2795,7 +2794,7 @@ pub fn run_cli() -> Result<(), String> {
                                         to_u8(color.r),
                                         to_u8(color.g),
                                         to_u8(color.b),
-                                        (color.a * 255.0).round().clamp(0.0, 255.0) as u8,
+                                        color.a,
                                     );
                                     fill_ref = Some(hex);
                                     if effects.is_empty() {
@@ -2942,7 +2941,7 @@ pub fn run_cli() -> Result<(), String> {
                         to_u8(stroke.color.r),
                         to_u8(stroke.color.g),
                         to_u8(stroke.color.b),
-                        (stroke.color.a * 255.0).round().clamp(0.0, 255.0) as u8,
+                        stroke.color.a,
                     );
                     let stroke_source_paths = if fill_paths.is_empty() {
                         &stroke_paths
@@ -3104,7 +3103,7 @@ fn push_complex_frame_stroke_overlays(
                     to_u8(color.r),
                     to_u8(color.g),
                     to_u8(color.b),
-                    (color.a * 255.0).round().clamp(0.0, 255.0) as u8,
+                    color.a,
                 );
                 stroke_rect = stroke_rect.set("stroke", hex);
                 if let Some(opacity) = opacity {
@@ -3204,13 +3203,14 @@ fn resolve_rect_geometry(
     fill_paths: &[String],
     stroke: Option<&crate::anyrender_renderer::StrokeStyle>,
 ) -> ResolvedRectGeometry {
+    let node = doc.get_node(node_id);
     let mut rx = x + tx;
     let mut ry = y + ty;
     let mut rw = width.max(0.0);
     let mut rh = height.max(0.0);
     let mut used_bbox_fallback = false;
     if rw <= 1.0 || rh <= 1.0 {
-        if let Some(node) = doc.get_node(node_id) {
+        if let Some(node) = node {
             if let Some((bx, by, bw, bh)) = source_bboxes.get(&node.figma_id) {
                 rx = *bx + tx;
                 ry = *by + ty;
@@ -3254,8 +3254,12 @@ fn resolve_rect_geometry(
             }
         }
     }
-    if used_bbox_fallback {
-        if let Some(stroke) = stroke {
+    if let Some(stroke) = stroke {
+        let stroke_align_inside = node
+            .and_then(|n| n.raw.get("strokeAlign").and_then(|v| v.as_str()))
+            .map(|v| v.eq_ignore_ascii_case("INSIDE"))
+            .unwrap_or(false);
+        if used_bbox_fallback || stroke_align_inside {
             let inset = stroke.width.max(0.0) * 0.5;
             rx += inset;
             ry += inset;
@@ -3382,7 +3386,7 @@ fn svg_fill_style(fill: &crate::anyrender_renderer::FillPaint) -> Option<FillSty
                 to_u8(c.r),
                 to_u8(c.g),
                 to_u8(c.b),
-                (c.a * 255.0).round().clamp(0.0, 255.0) as u8,
+                c.a,
             );
             Some(FillStyle::Solid { hex, opacity })
         }
@@ -3412,7 +3416,7 @@ fn svg_gradient_stop(
         to_u8(stop.color.r),
         to_u8(stop.color.g),
         to_u8(stop.color.b),
-        (stop.color.a * 255.0).round().clamp(0.0, 255.0) as u8,
+        stop.color.a,
     );
     let mut out = svg::node::element::Stop::new().set("stop-color", hex);
     if stop.offset > 0.0 {
@@ -3841,12 +3845,12 @@ pub(super) fn to_u8(v: f64) -> u8 {
 }
 
 #[cfg(feature = "svg_export")]
-pub(super) fn svg_color_paint_values(r: u8, g: u8, b: u8, a: u8) -> (String, Option<String>) {
+pub(super) fn svg_color_paint_values(r: u8, g: u8, b: u8, a: f64) -> (String, Option<String>) {
     let hex = format!("#{r:02X}{g:02X}{b:02X}");
-    if a >= 255 {
+    if a >= 1.0 {
         (hex, None)
     } else {
-        (hex, Some(format!("{:.6}", f64::from(a) / 255.0)))
+        (hex, Some(fmt_f64(a)))
     }
 }
 

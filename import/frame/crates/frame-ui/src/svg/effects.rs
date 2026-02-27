@@ -328,7 +328,7 @@ pub(super) fn push_rect_with_effects(
                             to_u8(stroke.color.r),
                             to_u8(stroke.color.g),
                             to_u8(stroke.color.b),
-                            (stroke.color.a * 255.0).round().clamp(0.0, 255.0) as u8,
+                            stroke.color.a,
                         );
                         hex
                     })
@@ -339,7 +339,7 @@ pub(super) fn push_rect_with_effects(
                     to_u8(stroke.color.r),
                     to_u8(stroke.color.g),
                     to_u8(stroke.color.b),
-                    (stroke.color.a * 255.0).round().clamp(0.0, 255.0) as u8,
+                    stroke.color.a,
                 );
                 if let Some(opacity) = stroke_opacity {
                     stroke_rect = stroke_rect.set("stroke-opacity", opacity);
