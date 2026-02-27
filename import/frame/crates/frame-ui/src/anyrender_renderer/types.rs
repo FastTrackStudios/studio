@@ -1,6 +1,8 @@
 use figma_api::models;
 use frame_proto::NodeId;
 
+pub use super::transform::AffineTransform2D;
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct Rgba {
     pub r: f64,
@@ -30,15 +32,15 @@ pub struct GradientStop {
 pub enum FillPaint {
     Solid(Rgba),
     GradientLinear {
-        transform: Option<[[f64; 3]; 2]>,
+        transform: Option<AffineTransform2D>,
         stops: Vec<GradientStop>,
     },
     GradientRadial {
-        transform: Option<[[f64; 3]; 2]>,
+        transform: Option<AffineTransform2D>,
         stops: Vec<GradientStop>,
     },
     GradientAngular {
-        transform: Option<[[f64; 3]; 2]>,
+        transform: Option<AffineTransform2D>,
         stops: Vec<GradientStop>,
     },
     Image {
@@ -46,7 +48,7 @@ pub enum FillPaint {
         data_base64: String,
         alpha: f64,
         scale_mode: ImageScaleMode,
-        image_transform: Option<[[f64; 3]; 2]>,
+        image_transform: Option<AffineTransform2D>,
     },
 }
 

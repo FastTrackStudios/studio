@@ -1100,7 +1100,7 @@ pub fn paint_primitives_into_scene_with(
 
     fn image_brush_transform(
         scale_mode: ImageScaleMode,
-        image_transform: &Option<[[f64; 3]; 2]>,
+        image_transform: &Option<AffineTransform2D>,
         x: f64,
         y: f64,
         width: f64,
@@ -1137,13 +1137,7 @@ pub fn paint_primitives_into_scene_with(
                 // pixels → scene pixels, so we need the INVERSE of imageTransform:
                 //   translate(node_origin) * scale(node_size) * inv(T) * scale(1/img_size)
                 if let Some(t) = image_transform {
-                    let a = t[0][0];
-                    let b = t[0][1];
-                    let tx = t[0][2];
-                    let c = t[1][0];
-                    let d = t[1][1];
-                    let ty = t[1][2];
-                    let det = a * d - b * c;
+                    let det = t.determinant();
                     if det.abs() < 1e-12 {
                         let scale = (width / iw).max(height / ih);
                         let ox = x + (width - iw * scale) * 0.5;
@@ -1153,12 +1147,12 @@ pub fn paint_primitives_into_scene_with(
                     // Invert the 2x3 affine: node-norm → image-norm becomes
                     // image-norm → node-norm
                     let inv = kurbo::Affine::new([
-                        d / det,
-                        -c / det,
-                        -b / det,
-                        a / det,
-                        (b * ty - d * tx) / det,
-                        (c * tx - a * ty) / det,
+                        t.d / det,
+                        -t.c / det,
+                        -t.b / det,
+                        t.a / det,
+                        (t.b * t.ty - t.d * t.tx) / det,
+                        (t.c * t.tx - t.a * t.ty) / det,
                     ]);
                     kurbo::Affine::translate((x, y))
                         * kurbo::Affine::scale_non_uniform(width, height)
@@ -1206,7 +1200,7 @@ pub fn paint_primitives_into_scene_with(
         y: f64,
         width: f64,
         height: f64,
-        transform: Option<&[[f64; 3]; 2]>,
+        transform: Option<&AffineTransform2D>,
         stops: &[GradientStop],
     ) -> Option<peniko::Gradient> {
         use kurbo::Point;
@@ -1227,7 +1221,7 @@ pub fn paint_primitives_into_scene_with(
         y: f64,
         width: f64,
         height: f64,
-        transform: Option<&[[f64; 3]; 2]>,
+        transform: Option<&AffineTransform2D>,
         stops: &[GradientStop],
     ) -> Option<(peniko::Gradient, Option<kurbo::Affine>)> {
         use kurbo::Point;
@@ -1242,8 +1236,8 @@ pub fn paint_primitives_into_scene_with(
 
         if let Some(t) = transform {
             // Ellipse axes from transform column vectors scaled to pixel space
-            let ax = (t[0][0] * width, t[1][0] * height);
-            let ay = (t[0][1] * width, t[1][1] * height);
+            let ax = (t.a * width, t.c * height);
+            let ay = (t.b * width, t.d * height);
             let rx = (ax.0 * ax.0 + ax.1 * ax.1).sqrt() * 0.5;
             let ry = (ay.0 * ay.0 + ay.1 * ay.1).sqrt() * 0.5;
             let angle = ax.1.atan2(ax.0);
@@ -1271,7 +1265,7 @@ pub fn paint_primitives_into_scene_with(
         y: f64,
         width: f64,
         height: f64,
-        transform: Option<&[[f64; 3]; 2]>,
+        transform: Option<&AffineTransform2D>,
         stops: &[GradientStop],
     ) -> Option<peniko::Gradient> {
         use kurbo::Point;
@@ -1284,7 +1278,7 @@ pub fn paint_primitives_into_scene_with(
         let center = Point::new(x + cnx * width, y + cny * height);
         // Extract rotation angle from transform's first column
         let start_angle = if let Some(t) = transform {
-            (t[1][0] * height).atan2(t[0][0] * width) as f32
+            (t.c * height).atan2(t.a * width) as f32
         } else {
             0.0
         };
@@ -1295,11 +1289,9 @@ pub fn paint_primitives_into_scene_with(
         )
     }
 
-    fn gradient_transform_point(transform: Option<&[[f64; 3]; 2]>, u: f64, v: f64) -> (f64, f64) {
+    fn gradient_transform_point(transform: Option<&AffineTransform2D>, u: f64, v: f64) -> (f64, f64) {
         if let Some(t) = transform {
-            let nx = t[0][0] * u + t[0][1] * v + t[0][2];
-            let ny = t[1][0] * u + t[1][1] * v + t[1][2];
-            (nx, ny)
+            t.transform_point(u, v)
         } else {
             (u, v)
         }

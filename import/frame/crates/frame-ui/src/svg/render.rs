@@ -2180,10 +2180,10 @@ pub fn run_cli() -> Result<(), String> {
                                     let (a, b, c, d) = if let Some(t) = transform.as_ref() {
                                         let rw = 2.0 * r;
                                         (
-                                            t[0][0] * rw / 2000.0,
-                                            -t[1][0] * rw / 2000.0,
-                                            -t[0][1] * rw / 2000.0,
-                                            t[1][1] * rw / 2000.0,
+                                            t.a * rw / 2000.0,
+                                            -t.c * rw / 2000.0,
+                                            -t.b * rw / 2000.0,
+                                            t.d * rw / 2000.0,
                                         )
                                     } else {
                                         let s = r / 1000.0;
@@ -3488,11 +3488,13 @@ fn svg_fill_style(fill: &crate::anyrender_renderer::FillPaint) -> Option<FillSty
 }
 
 #[cfg(feature = "svg_export")]
-fn gradient_transform_point(transform: Option<&[[f64; 3]; 2]>, u: f64, v: f64) -> (f64, f64) {
+fn gradient_transform_point(
+    transform: Option<&crate::anyrender_renderer::AffineTransform2D>,
+    u: f64,
+    v: f64,
+) -> (f64, f64) {
     if let Some(t) = transform {
-        let nx = t[0][0] * u + t[0][1] * v + t[0][2];
-        let ny = t[1][0] * u + t[1][1] * v + t[1][2];
-        (nx, ny)
+        t.transform_point(u, v)
     } else {
         (u, v)
     }
@@ -3655,7 +3657,7 @@ fn svg_linear_gradient_def(
     y: f64,
     width: f64,
     height: f64,
-    transform: Option<&[[f64; 3]; 2]>,
+    transform: Option<&crate::anyrender_renderer::AffineTransform2D>,
     stops: &[crate::anyrender_renderer::GradientStop],
 ) -> Option<svg::node::element::LinearGradient> {
     if stops.is_empty() || width <= 0.0 || height <= 0.0 {
@@ -3683,7 +3685,7 @@ fn svg_radial_gradient_def(
     y: f64,
     width: f64,
     height: f64,
-    transform: Option<&[[f64; 3]; 2]>,
+    transform: Option<&crate::anyrender_renderer::AffineTransform2D>,
     stops: &[crate::anyrender_renderer::GradientStop],
 ) -> Option<svg::node::element::RadialGradient> {
     if stops.is_empty() || width <= 0.0 || height <= 0.0 {
@@ -3700,8 +3702,8 @@ fn svg_radial_gradient_def(
     let center_x = x + cnx * width;
     let center_y = y + cny * height;
     if let Some(t) = transform {
-        let ax = (t[0][0] * width, t[1][0] * height);
-        let ay = (t[0][1] * width, t[1][1] * height);
+        let ax = (t.a * width, t.c * height);
+        let ay = (t.b * width, t.d * height);
         let rx = (ax.0 * ax.0 + ax.1 * ax.1).sqrt() * 0.5;
         let ry = (ay.0 * ay.0 + ay.1 * ay.1).sqrt() * 0.5;
         let angle = ax.1.atan2(ax.0).to_degrees();
@@ -3735,7 +3737,7 @@ fn svg_radial_gradient_def(
 
 #[cfg(feature = "svg_export")]
 fn svg_angular_conic_style(
-    _transform: Option<&[[f64; 3]; 2]>,
+    _transform: Option<&crate::anyrender_renderer::AffineTransform2D>,
     stops: &[crate::anyrender_renderer::GradientStop],
 ) -> String {
     let mut parts = Vec::new();
@@ -3779,7 +3781,7 @@ fn svg_angular_metadata_attr(
     y: f64,
     width: f64,
     height: f64,
-    gradient_transform: Option<(&[[f64; 3]; 2], f64, f64)>,
+    gradient_transform: Option<(&crate::anyrender_renderer::AffineTransform2D, f64, f64)>,
     stops: &[crate::anyrender_renderer::GradientStop],
 ) -> String {
     fn raw_f(v: f64) -> String {
@@ -3807,14 +3809,14 @@ fn svg_angular_metadata_attr(
     let stops_json = stops.iter().map(stop_json).collect::<Vec<_>>().join(",");
     // Compute the 2×3 metadata transform.  For circle nodes the metadata stores
     // the actual Figma gradientTransform (mRC = col R, row C convention):
-    //   m00 = t[0][0]*rw,  m01 = t[1][0]*rw,  m02 = cx - t[0][0]*rw
-    //   m10 = t[0][1]*rw,  m11 = t[1][1]*rw,  m12 = cy
+    //   m00 = t.a*rw,  m01 = t.c*rw,  m02 = cx - t.a*rw
+    //   m10 = t.b*rw,  m11 = t.d*rw,  m12 = cy
     // For rect nodes (gradient_transform = None) the transform is axis-aligned.
     let (m00, m01, m02, m10, m11, m12) = if let Some((t, cx, cy)) = gradient_transform {
         let rw = width;
         let rh = height;
-        let m00 = t[0][0] * rw;
-        (m00, t[1][0] * rw, cx - m00, t[0][1] * rh, t[1][1] * rh, cy)
+        let m00 = t.a * rw;
+        (m00, t.c * rw, cx - m00, t.b * rh, t.d * rh, cy)
     } else {
         (width, 0.0, x, 0.0, height, y)
     };
@@ -4100,20 +4102,14 @@ fn svg_dasharray(pattern: &[f64]) -> String {
 #[cfg(feature = "svg_export")]
 fn svg_image_fill_transform(
     scale_mode: crate::anyrender_renderer::ImageScaleMode,
-    image_transform: Option<&[[f64; 3]; 2]>,
+    image_transform: Option<&crate::anyrender_renderer::AffineTransform2D>,
     width: f64,
     height: f64,
 ) -> Option<(f64, f64, f64, f64, f64, f64)> {
     if let Some(t) = image_transform {
-        let coeffs = (t[0][0], t[1][0], t[0][1], t[1][1], t[0][2], t[1][2]);
-        let is_identity = (coeffs.0 - 1.0).abs() <= f64::EPSILON
-            && coeffs.1.abs() <= f64::EPSILON
-            && coeffs.2.abs() <= f64::EPSILON
-            && (coeffs.3 - 1.0).abs() <= f64::EPSILON
-            && coeffs.4.abs() <= f64::EPSILON
-            && coeffs.5.abs() <= f64::EPSILON;
-        if !is_identity {
-            return Some(coeffs);
+        if !t.is_identity() {
+            // Return SVG column-major coeffs: (a, c, b, d, tx, ty)
+            return Some(t.to_svg_matrix_coeffs());
         }
     }
 

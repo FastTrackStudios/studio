@@ -1,6 +1,7 @@
 mod collect;
 mod extract;
 mod layout;
+pub mod transform;
 mod types;
 
 #[cfg(feature = "anyrender")]
@@ -15,6 +16,7 @@ mod tests;
 
 pub use collect::{build_paint_primitives, collect_render_diagnostics};
 pub use layout::build_layout_boxes;
+pub use transform::AffineTransform2D;
 pub use types::{
     BlendMix, EffectKind, FillPaint, GradientStop, ImageScaleMode, LayoutBox, NodeEffect,
     PaintPrimitive, RenderDiagnostics, Rgba, StrokeAlign, StrokeCap, StrokeJoin, StrokeStyle,

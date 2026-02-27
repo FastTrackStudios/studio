@@ -152,3 +152,21 @@ after each iteration and it's included in prompts for context.
   - **Semantic equivalence**: For multi-path fills, setting blend mode on each individual path is correct since Figma inlines per-path
   - 22/26 parity tests still pass; same 4 pre-existing failures unchanged
 ---
+
+## 2026-02-27 - bd-der.10
+- **What was implemented**: Introduced `AffineTransform2D` type replacing all raw `[[f64; 3]; 2]` arrays in the render pipeline
+- **Files changed**:
+  - `crates/frame-ui/src/anyrender_renderer/transform.rs` (new) — `AffineTransform2D` struct with fields `a, b, tx, c, d, ty`; `impl Mul` for composition; `impl Display` for SVG `matrix()` string; `impl From<[[f64;3];2]>`; methods: `identity()`, `rotation()`, `translation()`, `scale()`, `transform_point()`, `determinant()`, `is_identity()`, `decompose_rotation()`, `inverse()`, `to_svg_matrix_coeffs()`; 17 unit tests
+  - `crates/frame-ui/src/anyrender_renderer/mod.rs` — added `pub mod transform` and re-export of `AffineTransform2D`
+  - `crates/frame-ui/src/anyrender_renderer/types.rs` — `FillPaint` gradient/image variants now use `Option<AffineTransform2D>`
+  - `crates/frame-ui/src/anyrender_renderer/extract.rs` — `gradient_transform_from_paint` and `parse_image_transform` return `Option<AffineTransform2D>`; `ImageFillData.image_transform` field updated
+  - `crates/frame-ui/src/anyrender_renderer/paint.rs` — all gradient/image function signatures updated; field access replaces array indexing
+  - `crates/frame-ui/src/svg/render.rs` — all gradient/image function signatures updated; field access replaces array indexing; also found a second raw-array usage in angular gradient CIRCLE branch
+  - `crates/frame-ui/src/svg/source_bridge.rs` — `raw_gradient_transform_from_paint` returns `AffineTransform2D`
+- **Learnings:**
+  - **Figma row-major vs SVG column-major**: Figma `t[row][col]` → our fields `a=t[0][0], b=t[0][1], tx=t[0][2], c=t[1][0], d=t[1][1], ty=t[1][2]`. SVG `matrix(a,b,c,d,e,f)` is column-major — output order is `(a, c, b, d, tx, ty)` via `to_svg_matrix_coeffs()`
+  - **Axis vectors for radial/angular gradients**: column vectors of the 2×2 linear part scaled to pixel space: `ax = (t.a * width, t.c * height)`, `ay = (t.b * width, t.d * height)` — NOT `t[0][*]` / `t[1][*]` per row
+  - **`From<[[f64;3];2]>` as bridge**: lets parsing code construct `AffineTransform2D` from Figma JSON arrays without touching the rest of the call chain
+  - **Near-zero determinant test**: `1e-7 * 1e-7 = 1e-14 < 1e-12` threshold — IS singular. The test comment "above threshold" was wrong; fixed test to match actual behavior
+  - 30/30 unit tests pass; all pre-existing parity results unchanged
+---

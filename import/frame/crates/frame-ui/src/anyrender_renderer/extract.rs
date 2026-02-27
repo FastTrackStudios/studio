@@ -228,10 +228,10 @@ pub(super) struct ImageFillData {
     pub data_base64: String,
     pub alpha: f64,
     pub scale_mode: ImageScaleMode,
-    pub image_transform: Option<[[f64; 3]; 2]>,
+    pub image_transform: Option<AffineTransform2D>,
 }
 
-fn parse_image_transform(paint: &serde_json::Value) -> Option<[[f64; 3]; 2]> {
+fn parse_image_transform(paint: &serde_json::Value) -> Option<AffineTransform2D> {
     let t = paint.get("imageTransform")?.as_array()?;
     if t.len() < 2 {
         return None;
@@ -241,7 +241,7 @@ fn parse_image_transform(paint: &serde_json::Value) -> Option<[[f64; 3]; 2]> {
     if r0.len() < 3 || r1.len() < 3 {
         return None;
     }
-    Some([
+    Some(AffineTransform2D::from([
         [
             r0[0].as_f64().unwrap_or(1.0),
             r0[1].as_f64().unwrap_or(0.0),
@@ -252,7 +252,7 @@ fn parse_image_transform(paint: &serde_json::Value) -> Option<[[f64; 3]; 2]> {
             r1[1].as_f64().unwrap_or(1.0),
             r1[2].as_f64().unwrap_or(0.0),
         ],
-    ])
+    ]))
 }
 
 pub(super) fn parse_effects(raw: &serde_json::Value, opacity: f64) -> Vec<NodeEffect> {
@@ -446,7 +446,7 @@ fn gradient_stops_from_paint(paint: &serde_json::Value) -> Option<Vec<GradientSt
     }
 }
 
-fn gradient_transform_from_paint(paint: &serde_json::Value) -> Option<[[f64; 3]; 2]> {
+fn gradient_transform_from_paint(paint: &serde_json::Value) -> Option<AffineTransform2D> {
     let t = paint.get("gradientTransform")?.as_array()?;
     if t.len() < 2 {
         return None;
@@ -456,7 +456,7 @@ fn gradient_transform_from_paint(paint: &serde_json::Value) -> Option<[[f64; 3];
     if r0.len() < 3 || r1.len() < 3 {
         return None;
     }
-    Some([
+    Some(AffineTransform2D::from([
         [
             r0[0].as_f64().unwrap_or(1.0),
             r0[1].as_f64().unwrap_or(0.0),
@@ -467,7 +467,7 @@ fn gradient_transform_from_paint(paint: &serde_json::Value) -> Option<[[f64; 3];
             r1[1].as_f64().unwrap_or(1.0),
             r1[2].as_f64().unwrap_or(0.0),
         ],
-    ])
+    ]))
 }
 
 pub(super) fn first_color_from_fill(fill: &FillPaint) -> Option<Rgba> {

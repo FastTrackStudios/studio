@@ -159,7 +159,9 @@ fn raw_gradient_stops_from_paint(
 }
 
 #[cfg(feature = "svg_export")]
-fn raw_gradient_transform_from_paint(paint: &serde_json::Value) -> Option<[[f64; 3]; 2]> {
+fn raw_gradient_transform_from_paint(
+    paint: &serde_json::Value,
+) -> Option<crate::anyrender_renderer::AffineTransform2D> {
     let t = paint.get("gradientTransform")?.as_array()?;
     if t.len() < 2 {
         return None;
@@ -169,7 +171,7 @@ fn raw_gradient_transform_from_paint(paint: &serde_json::Value) -> Option<[[f64;
     if r0.len() < 3 || r1.len() < 3 {
         return None;
     }
-    Some([
+    Some(crate::anyrender_renderer::AffineTransform2D::from([
         [
             r0[0].as_f64().unwrap_or(1.0),
             r0[1].as_f64().unwrap_or(0.0),
@@ -180,7 +182,7 @@ fn raw_gradient_transform_from_paint(paint: &serde_json::Value) -> Option<[[f64;
             r1[1].as_f64().unwrap_or(1.0),
             r1[2].as_f64().unwrap_or(0.0),
         ],
-    ])
+    ]))
 }
 
 #[cfg(feature = "svg_export")]
