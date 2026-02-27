@@ -137,3 +137,18 @@ after each iteration and it's included in prompts for context.
 
 ---
 
+## 2026-02-27 - bd-der.9
+- **What was implemented**: Inlined mix-blend-mode on elements instead of wrapping in `<g>`
+- **Files changed**:
+  - `crates/frame-ui/src/svg/render.rs` — 4 fixes:
+    1. `push_node_with_optional_blend`: replaced `Group::new().set("style",...).add(node)` with `svg::Node::assign(&mut node, "style", ...)` to set style directly on the node
+    2. Text-outline path fill loop: changed group-wrap to `path = path.set("style",...)` then `path_group.add(path)`
+    3. Nonfull-ellipse path fill loop: collapsed blend/no-blend branches into unified loop that sets `style` directly on each path
+    4. Main path fill loop (non-special case): same inline fix as #2
+- **Learnings:**
+  - **Most fixes already done**: bd-der.5 had already inlined blend mode for image pattern fills (circle/rect); `try_merge_layer_into_filter_child` already handled filter+opacity+blend merging. Only the path fill loops and `push_node_with_optional_blend` remained.
+  - **`svg::Node::assign(&mut node, key, val)`** works for any `N: svg::Node` including groups — used to mutate the node before passing to `push_node`, eliminating the wrapper `<g>` entirely
+  - **Angular group callers** are also correct: `push_node_with_optional_blend` now sets `style` on the existing group object (no extra nesting)
+  - **Semantic equivalence**: For multi-path fills, setting blend mode on each individual path is correct since Figma inlines per-path
+  - 22/26 parity tests still pass; same 4 pre-existing failures unchanged
+---

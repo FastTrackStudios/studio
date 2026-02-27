@@ -2735,14 +2735,9 @@ pub fn run_cli() -> Result<(), String> {
                             path = path.set("fill-opacity", opacity);
                         }
                         if let Some(mode) = svg_mix_blend_mode(fill_blend) {
-                            path_group = path_group.add(
-                                Group::new()
-                                    .set("style", format!("mix-blend-mode:{mode}"))
-                                    .add(path),
-                            );
-                        } else {
-                            path_group = path_group.add(path);
+                            path = path.set("style", format!("mix-blend-mode:{mode}"));
                         }
+                        path_group = path_group.add(path);
                     }
                     if let Some(opacity) = text_outline_group_opacity {
                         path_group = path_group.set("opacity", opacity);
@@ -2874,31 +2869,18 @@ pub fn run_cli() -> Result<(), String> {
                                 continue;
                             };
 
-                            if let Some(mode) = svg_mix_blend_mode(fill_blend) {
-                                let mut fill_layer =
-                                    Group::new().set("style", format!("mix-blend-mode:{mode}"));
-                                for d in &fill_paths {
-                                    let mut path = SvgPath::new()
-                                        .set("d", d.as_str())
-                                        .set("transform", transform.clone())
-                                        .set("fill", fill_ref.clone());
-                                    if let Some(opacity) = &fill_path_opacity {
-                                        path = path.set("fill-opacity", opacity.clone());
-                                    }
-                                    fill_layer = fill_layer.add(path);
+                            for d in &fill_paths {
+                                let mut path = SvgPath::new()
+                                    .set("d", d.as_str())
+                                    .set("transform", transform.clone())
+                                    .set("fill", fill_ref.clone());
+                                if let Some(opacity) = &fill_path_opacity {
+                                    path = path.set("fill-opacity", opacity.clone());
                                 }
-                                path_group = path_group.add(fill_layer);
-                            } else {
-                                for d in &fill_paths {
-                                    let mut path = SvgPath::new()
-                                        .set("d", d.as_str())
-                                        .set("transform", transform.clone())
-                                        .set("fill", fill_ref.clone());
-                                    if let Some(opacity) = &fill_path_opacity {
-                                        path = path.set("fill-opacity", opacity.clone());
-                                    }
-                                    path_group = path_group.add(path);
+                                if let Some(mode) = svg_mix_blend_mode(fill_blend) {
+                                    path = path.set("style", format!("mix-blend-mode:{mode}"));
                                 }
+                                path_group = path_group.add(path);
                             }
                         }
                         if let Some(opacity) = fill_stack_opacity {
@@ -3040,14 +3022,9 @@ pub fn run_cli() -> Result<(), String> {
                                     path = path.set("fill-opacity", opacity.clone());
                                 }
                                 if let Some(mode) = svg_mix_blend_mode(fill_blend) {
-                                    path_group = path_group.add(
-                                        Group::new()
-                                            .set("style", format!("mix-blend-mode:{mode}"))
-                                            .add(path),
-                                    );
-                                } else {
-                                    path_group = path_group.add(path);
+                                    path = path.set("style", format!("mix-blend-mode:{mode}"));
                                 }
+                                path_group = path_group.add(path);
                             }
                         }
                     }
@@ -3154,20 +3131,13 @@ pub fn run_cli() -> Result<(), String> {
 fn push_node_with_optional_blend<N: svg::Node>(
     svg_doc: &mut svg::Document,
     group_stack: &mut Vec<svg::node::element::Group>,
-    node: N,
+    mut node: N,
     blend: Option<&crate::anyrender_renderer::BlendMix>,
 ) {
     if let Some(mode) = blend.and_then(svg_mix_blend_mode) {
-        push_node(
-            svg_doc,
-            group_stack,
-            svg::node::element::Group::new()
-                .set("style", format!("mix-blend-mode:{mode}"))
-                .add(node),
-        );
-    } else {
-        push_node(svg_doc, group_stack, node);
+        svg::Node::assign(&mut node, "style", format!("mix-blend-mode:{mode}"));
     }
+    push_node(svg_doc, group_stack, node);
 }
 
 #[cfg(feature = "svg_export")]
