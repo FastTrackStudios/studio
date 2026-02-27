@@ -506,9 +506,6 @@ pub fn run_cli() -> Result<(), String> {
                                             "xlink:href",
                                             format!("data:image/png;base64,{data_base64}"),
                                         );
-                                    if *alpha < 1.0 {
-                                        image = image.set("opacity", fmt_f64(*alpha));
-                                    }
                                     deferred_images.push(image);
                                     new_id
                                 };
@@ -549,6 +546,9 @@ pub fn run_cli() -> Result<(), String> {
                                     .set("height", fmt_f64(rh))
                                     .set("fill", format!("url(#{pattern_id})"));
                                 rect = apply_corner_radii_rect(rect, &effective_corner_radii);
+                                if *alpha < 1.0 {
+                                    rect = rect.set("fill-opacity", fmt_f64(*alpha));
+                                }
                                 if let Some(mode) = svg_mix_blend_mode(fill_blend) {
                                     aggregate_group = aggregate_group
                                         .add(rect.set("style", format!("mix-blend-mode:{mode}")));
@@ -833,9 +833,6 @@ pub fn run_cli() -> Result<(), String> {
                                             "xlink:href",
                                             format!("data:image/png;base64,{data_base64}"),
                                         );
-                                    if *alpha < 1.0 {
-                                        image = image.set("opacity", fmt_f64(*alpha));
-                                    }
                                     deferred_images.push(image);
                                     new_id
                                 };
@@ -877,6 +874,9 @@ pub fn run_cli() -> Result<(), String> {
                                     .set("height", fmt_f64(rh))
                                     .set("fill", format!("url(#{pattern_id})"));
                                 rect = apply_corner_radii_rect(rect, &effective_corner_radii);
+                                if *alpha < 1.0 {
+                                    rect = rect.set("fill-opacity", fmt_f64(*alpha));
+                                }
                                 if let Some(stroke) = stroke.as_ref() {
                                     let (hex, opacity) = svg_color_paint_values(
                                         to_u8(stroke.color.r),
@@ -893,42 +893,27 @@ pub fn run_cli() -> Result<(), String> {
                                         rect = rect.set("stroke-opacity", opacity);
                                     }
                                 }
-                                if svg_mix_blend_mode(blend_mode).is_some() {
-                                    super::effects::push_group_with_blend_and_effects(
-                                        &mut svg_doc,
-                                        &mut group_stack,
-                                        &mut defs,
-                                        &mut has_defs,
-                                        &root_id_suffix,
-                                        &mut effect_count,
-                                        Group::new().add(rect),
-                                        blend_mode,
-                                        effects.as_slice(),
-                                        rx,
-                                        ry,
-                                        rw,
-                                        rh,
-                                    );
-                                } else {
-                                    super::effects::push_rect_with_effects(
-                                        &mut svg_doc,
-                                        &mut group_stack,
-                                        &mut defs,
-                                        &mut has_defs,
-                                        &root_id_suffix,
-                                        &mut effect_count,
-                                        &mut bg_blur_count,
-                                        rect,
-                                        stroke.as_ref(),
-                                        effects.as_slice(),
-                                        rx,
-                                        ry,
-                                        rw,
-                                        rh,
-                                        &effective_corner_radii,
-                                        &[],
-                                    );
+                                if let Some(mode) = svg_mix_blend_mode(blend_mode) {
+                                    rect = rect.set("style", format!("mix-blend-mode:{mode}"));
                                 }
+                                super::effects::push_rect_with_effects(
+                                    &mut svg_doc,
+                                    &mut group_stack,
+                                    &mut defs,
+                                    &mut has_defs,
+                                    &root_id_suffix,
+                                    &mut effect_count,
+                                    &mut bg_blur_count,
+                                    rect,
+                                    None,
+                                    effects.as_slice(),
+                                    rx,
+                                    ry,
+                                    rw,
+                                    rh,
+                                    &effective_corner_radii,
+                                    &[],
+                                );
                                 continue;
                             }
                             _ => {}
@@ -1259,9 +1244,6 @@ pub fn run_cli() -> Result<(), String> {
                                             "xlink:href",
                                             format!("data:image/png;base64,{data_base64}"),
                                         );
-                                    if *alpha < 1.0 {
-                                        image = image.set("opacity", fmt_f64(*alpha));
-                                    }
                                     deferred_images.push(image);
                                     new_id
                                 };
@@ -1303,42 +1285,30 @@ pub fn run_cli() -> Result<(), String> {
                                 .set("height", fmt_f64(rh))
                                 .set("fill", format!("url(#{pattern_id})"));
                             rect = apply_corner_radii_rect(rect, &effective_corner_radii);
-                            if svg_mix_blend_mode(&fill_blend).is_some() {
-                                super::effects::push_group_with_blend_and_effects(
-                                    &mut svg_doc,
-                                    &mut group_stack,
-                                    &mut defs,
-                                    &mut has_defs,
-                                    &root_id_suffix,
-                                    &mut effect_count,
-                                    Group::new().add(rect),
-                                    &fill_blend,
-                                    effects.as_slice(),
-                                    rx,
-                                    ry,
-                                    rw,
-                                    rh,
-                                );
-                            } else {
-                                super::effects::push_rect_with_effects(
-                                    &mut svg_doc,
-                                    &mut group_stack,
-                                    &mut defs,
-                                    &mut has_defs,
-                                    &root_id_suffix,
-                                    &mut effect_count,
-                                    &mut bg_blur_count,
-                                    rect,
-                                    stroke.as_ref(),
-                                    effects.as_slice(),
-                                    rx,
-                                    ry,
-                                    rw,
-                                    rh,
-                                    &effective_corner_radii,
-                                    &[],
-                                );
+                            if *alpha < 1.0 {
+                                rect = rect.set("fill-opacity", fmt_f64(*alpha));
                             }
+                            if let Some(mode) = svg_mix_blend_mode(&fill_blend) {
+                                rect = rect.set("style", format!("mix-blend-mode:{mode}"));
+                            }
+                            super::effects::push_rect_with_effects(
+                                &mut svg_doc,
+                                &mut group_stack,
+                                &mut defs,
+                                &mut has_defs,
+                                &root_id_suffix,
+                                &mut effect_count,
+                                &mut bg_blur_count,
+                                rect,
+                                None,
+                                effects.as_slice(),
+                                rx,
+                                ry,
+                                rw,
+                                rh,
+                                &effective_corner_radii,
+                                &[],
+                            );
                             continue;
                         }
                         _ => {}
@@ -1570,6 +1540,7 @@ pub fn run_cli() -> Result<(), String> {
                             !matches!(paint, crate::anyrender_renderer::FillPaint::Solid(_))
                         });
                     let mut emit_rect = true;
+                    let mut fill_is_image = false;
                     if let Some((fill, _)) = fills.first() {
                         match fill {
                             crate::anyrender_renderer::FillPaint::GradientLinear { transform, stops } => {
@@ -1699,9 +1670,6 @@ pub fn run_cli() -> Result<(), String> {
                                             "xlink:href",
                                             format!("data:image/png;base64,{data_base64}"),
                                         );
-                                    if *alpha < 1.0 {
-                                        image = image.set("opacity", fmt_f64(*alpha));
-                                    }
                                     deferred_images.push(image);
                                     new_id
                                 };
@@ -1733,6 +1701,10 @@ pub fn run_cli() -> Result<(), String> {
                                 has_defs = true;
                                 has_xlink_namespace = true;
                                 rect = rect.set("fill", format!("url(#{pattern_id})"));
+                                if *alpha < 1.0 {
+                                    rect = rect.set("fill-opacity", fmt_f64(*alpha));
+                                }
+                                fill_is_image = true;
                             }
                             _ => {
                                 if let crate::anyrender_renderer::FillPaint::Solid(color) = fill {
@@ -1877,16 +1849,21 @@ pub fn run_cli() -> Result<(), String> {
                     }
                     if emit_rect {
                         if let Some(mode) = blend_mode {
-                            let mut group =
-                                Group::new().set("style", format!("mix-blend-mode:{mode}"));
-                            if let Some(opacity) = blend_group_opacity {
-                                group = group.set("opacity", opacity);
+                            if fill_is_image && stroke_overlays.is_empty() && blend_group_opacity.is_none() {
+                                rect = rect.set("style", format!("mix-blend-mode:{mode}"));
+                                push_node(&mut svg_doc, &mut group_stack, rect);
+                            } else {
+                                let mut group =
+                                    Group::new().set("style", format!("mix-blend-mode:{mode}"));
+                                if let Some(opacity) = blend_group_opacity {
+                                    group = group.set("opacity", opacity);
+                                }
+                                let mut grouped = group.add(rect);
+                                for stroke_rect in stroke_overlays {
+                                    grouped = grouped.add(stroke_rect);
+                                }
+                                push_node(&mut svg_doc, &mut group_stack, grouped);
                             }
-                            let mut grouped = group.add(rect);
-                            for stroke_rect in stroke_overlays {
-                                grouped = grouped.add(stroke_rect);
-                            }
-                            push_node(&mut svg_doc, &mut group_stack, grouped);
                         } else {
                             super::effects::push_rect_with_effects(
                                 &mut svg_doc,
@@ -2201,9 +2178,6 @@ pub fn run_cli() -> Result<(), String> {
                                                 "xlink:href",
                                                 format!("data:image/png;base64,{data_base64}"),
                                             );
-                                        if *alpha < 1.0 {
-                                            image = image.set("opacity", fmt_f64(*alpha));
-                                        }
                                         deferred_images.push(image);
                                         new_id
                                     };
@@ -2239,6 +2213,9 @@ pub fn run_cli() -> Result<(), String> {
                                     has_defs = true;
                                     has_xlink_namespace = true;
                                     fill_circle = fill_circle.set("fill", format!("url(#{pattern_id})"));
+                                    if *alpha < 1.0 {
+                                        fill_circle = fill_circle.set("fill-opacity", fmt_f64(*alpha));
+                                    }
                                 }
                                 _ => {
                                     if let Some(style) = svg_fill_style(fill) {
@@ -2249,14 +2226,9 @@ pub fn run_cli() -> Result<(), String> {
                                 }
                             }
                             if let Some(mode) = svg_mix_blend_mode(fill_blend) {
-                                group = group.add(
-                                    Group::new()
-                                        .set("style", format!("mix-blend-mode:{mode}"))
-                                        .add(fill_circle),
-                                );
-                            } else {
-                                group = group.add(fill_circle);
+                                fill_circle = fill_circle.set("style", format!("mix-blend-mode:{mode}"));
                             }
+                            group = group.add(fill_circle);
                         }
                     }
                     if let Some(stroke) = stroke.as_ref() {
@@ -2612,9 +2584,6 @@ pub fn run_cli() -> Result<(), String> {
                                             "xlink:href",
                                             format!("data:image/png;base64,{data_base64}"),
                                         );
-                                    if *alpha < 1.0 {
-                                        image = image.set("opacity", fmt_f64(*alpha));
-                                    }
                                     deferred_images.push(image);
                                     new_id
                                 };
@@ -2649,6 +2618,9 @@ pub fn run_cli() -> Result<(), String> {
                                 has_defs = true;
                                 has_xlink_namespace = true;
                                 fill_ref = Some(format!("url(#{pattern_id})"));
+                                if *alpha < 1.0 {
+                                    fill_path_opacity = Some(fmt_f64(*alpha));
+                                }
                             }
                         }
                         let Some(fill_ref) = fill_ref else {
@@ -2759,9 +2731,6 @@ pub fn run_cli() -> Result<(), String> {
                                                 "xlink:href",
                                                 format!("data:image/png;base64,{data_base64}"),
                                             );
-                                        if *alpha < 1.0 {
-                                            image = image.set("opacity", fmt_f64(*alpha));
-                                        }
                                         deferred_images.push(image);
                                         new_id
                                     };
@@ -2795,6 +2764,9 @@ pub fn run_cli() -> Result<(), String> {
                                     has_defs = true;
                                     has_xlink_namespace = true;
                                     fill_ref = Some(format!("url(#{pattern_id})"));
+                                    if *alpha < 1.0 {
+                                        fill_path_opacity = Some(fmt_f64(*alpha));
+                                    }
                                 }
                             }
                             let Some(fill_ref) = fill_ref else {
@@ -2916,9 +2888,6 @@ pub fn run_cli() -> Result<(), String> {
                                                 "xlink:href",
                                                 format!("data:image/png;base64,{data_base64}"),
                                             );
-                                        if *alpha < 1.0 {
-                                            image = image.set("opacity", fmt_f64(*alpha));
-                                        }
                                         deferred_images.push(image);
                                         new_id
                                     };
@@ -2952,6 +2921,9 @@ pub fn run_cli() -> Result<(), String> {
                                     has_defs = true;
                                     has_xlink_namespace = true;
                                     fill_ref = Some(format!("url(#{pattern_id})"));
+                                    if *alpha < 1.0 {
+                                        fill_path_opacity = Some(fmt_f64(*alpha));
+                                    }
                                 }
                             }
 

@@ -71,3 +71,20 @@ after each iteration and it's included in prompts for context.
 
 ---
 
+## 2026-02-27 - bd-der.5
+- **What was implemented**: Emitted fill-opacity on pattern overlay elements; inlined blend mode on shape instead of wrapper `<g>`
+- **Files changed**:
+  - `crates/frame-ui/src/svg/render.rs` — 8 image fill code paths fixed:
+    1. Removed `opacity` from `<image>` elements inside pattern defs (moved to consumer shape)
+    2. Added `fill-opacity` to rect/circle when `*alpha < 1.0`
+    3. Inlined `style="mix-blend-mode:..."` directly on shape (circle/rect) instead of wrapping in `<g>`
+    4. Fixed paths: aggregate-group rect, single-fill rect, FRAME multi-fill for-loop, main RECTANGLE path, circle path, 3x path fills
+- **Learnings:**
+  - **4 distinct rendering paths** for image pattern fills in render.rs, each needed a separate fix: (1) `fills.len() > 1 && !effects.is_empty()` aggregate, (2) `fills.len() == 1` single-fill branch, (3) FRAME fills `for (fill, fill_blend) in fills` loop, (4) `is_rectangle_node` main rect path
+  - **Image caching bug**: The original code put `opacity` on the `<image>` element, but `image_defs` caches by hash — subsequent shapes sharing the same image couldn't override its opacity. Moving to `fill-opacity` on the shape fixes this caching issue
+  - **VU meter FRAME has 2 fills**: GRADIENT_LINEAR (normal blend) + IMAGE (multiply blend). `fills.len() > 1 && !effects.is_empty()` → false (no effects), so falls through to the FRAME for-loop path (not the single-fill path or RECTANGLE path)
+  - **PASS_THROUGH → BlendMix::Normal**: `parse_blend_mode` maps `PASS_THROUGH` to `Normal` (no case for it), so PASS_THROUGH nodes don't trigger `needs_layer`. The blend mode wrapper for VU meter was coming from the fill-level blend in the FRAME for-loop, not a `LayerStart`
+  - 22/26 parity tests still pass; same 4 pre-existing failures unchanged
+
+---
+
