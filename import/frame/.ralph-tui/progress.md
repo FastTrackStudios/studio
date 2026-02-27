@@ -123,3 +123,17 @@ after each iteration and it's included in prompts for context.
 
 ---
 
+## 2026-02-27 - bd-der.8
+- **What was implemented**: FRAME stroke rect deferred outside clip group (Figma places stroke after clip boundary, not inside it)
+- **Files changed**:
+  - `crates/frame-ui/src/svg/render.rs` — added `clip_depth: usize` counter + `pending_post_clip_stroke: Vec<(usize, Rectangle)>` queue; `ClipStart` increments depth, `ClipEnd` decrements depth and drains matching pending strokes after closing the group; in multi-fill loop stroke emission (line ~1446), when `frame_rect_uses_transform && clip_depth > 0`, push to pending queue instead of calling `push_node` directly
+- **Learnings:**
+  - **ClipStart/ClipEnd wraps Rect**: primitive order for FRAME with `clip_children=true` is `ClipStart → Rect (fills+stroke) → [children] → ClipEnd`. The stroke rect was landing inside the clip group.
+  - **Figma convention**: FRAME stroke is a sibling of the clip group (after it), not a child inside it. Fills are correctly inside the clip (they get clipped to the boundary). The stroke is outside so it renders over the full boundary.
+  - **Depth-tagged deferred queue**: `Vec<(usize, Rectangle)>` where the usize is `clip_depth` at deferral time. `ClipEnd` only drains items whose depth == `old_depth` (the depth before decrement), handling nested clip groups correctly.
+  - **Affects only multi-fill loop path**: single-fill shortcut `fills.len() == 1` with complex frame strokes uses `push_complex_frame_stroke_overlays` which emits before the FRAME's own `ClipStart` (so already outside the clip group). The multi-fill path emits after `ClipStart` → was landing inside.
+  - **Child count result**: `/svg/g[0]` child count mismatch `actual=204 expected=205` is now resolved. Remaining 1176 failure is a path coordinate precision issue (pre-existing).
+  - 22/26 parity tests still pass; same 4 pre-existing failures unchanged
+
+---
+

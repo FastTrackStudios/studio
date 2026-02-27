@@ -1,6 +1,6 @@
 # SVG Parity Summary
 
-- Generated: `2026-02-27T11:46:16Z`
+- Generated: `2026-02-27T11:59:22Z`
 - Root: `tests/frame/parity`
 - Mode: `all`
 - Precision: `4`

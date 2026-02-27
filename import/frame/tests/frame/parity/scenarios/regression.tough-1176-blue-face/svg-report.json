@@ -8,7 +8,7 @@
   "expectedSvg": "tests/frame/parity/scenarios/regression.tough-1176-blue-face/expected.svg",
   "actualSvg": "tests/frame/parity/scenarios/regression.tough-1176-blue-face/actual.svg",
   "expectedSha256": "bcfbc8abd5077f5c5ee24b9b1e30827a359fc5644b62d0de5bb7446732b20562",
-  "actualSha256": "0f928f9197257c8998d61637735192ec26d0996abfa128d9df3b938f6fee30c5",
+  "actualSha256": "238a01b9f40bb0821d15415e092052936d1d842a7adb8263f50ade8bd4c4b975",
   "expectedBytes": 12827755,
   "actualBytes": 9256669,
   "canonicalDiff": {
@@ -33,9 +33,9 @@
     "abs_tol": 0.006,
     "rel_tol": 0.0,
     "first_mismatch": {
-      "node_path": "/svg/g[0]",
-      "field": "children",
-      "detail": "child count mismatch actual=204 expected=205"
+      "node_path": "/svg/g[0]/g[12]/path[0]",
+      "field": "attr:d",
+      "detail": "token length mismatch actual=59 expected=61"
     }
   }
 }

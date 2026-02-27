@@ -176,6 +176,11 @@ pub fn run_cli() -> Result<(), String> {
     } = RenderCtx::default();
     let mut mask_defs = std::collections::HashMap::new();
     let mut active_mask_bounds: Option<(f64, f64, f64, f64)> = None;
+    // Tracks how many ClipStart groups are currently open so that stroke rects for
+    // FRAME nodes can be emitted AFTER the clip group closes (Figma convention).
+    let mut clip_depth: usize = 0;
+    // (depth_at_deferral, stroke_rect) — drained when the matching ClipEnd fires.
+    let mut pending_post_clip_stroke: Vec<(usize, Rectangle)> = Vec::new();
 
     for primitive in primitives {
         if text_only_mode {
@@ -229,10 +234,24 @@ pub fn run_cli() -> Result<(), String> {
                 deferred_clip_paths.push(ClipPath::new().set("id", id.clone()).add(clip_rect));
                 has_defs = true;
                 group_stack.push(Group::new().set("clip-path", format!("url(#{id})")));
+                clip_depth += 1;
             }
             PaintPrimitive::ClipEnd { .. } => {
+                let old_depth = clip_depth;
+                clip_depth = clip_depth.saturating_sub(1);
                 if let Some(group) = group_stack.pop() {
                     push_node(&mut svg_doc, &mut group_stack, group);
+                }
+                // Emit any stroke rects that were deferred while inside this clip group.
+                // Figma places the FRAME stroke outside its own clip boundary.
+                let mut i = 0;
+                while i < pending_post_clip_stroke.len() {
+                    if pending_post_clip_stroke[i].0 == old_depth {
+                        let (_, rect) = pending_post_clip_stroke.remove(i);
+                        push_node(&mut svg_doc, &mut group_stack, rect);
+                    } else {
+                        i += 1;
+                    }
                 }
             }
             PaintPrimitive::MaskDefStart {
@@ -1444,7 +1463,13 @@ pub fn run_cli() -> Result<(), String> {
                     if let Some(opacity) = opacity {
                         rect = rect.set("stroke-opacity", opacity);
                     }
-                    push_node(&mut svg_doc, &mut group_stack, rect);
+                    // Figma emits the FRAME stroke rect OUTSIDE its own clip boundary
+                    // (so the stroke is not clipped by the frame's own content clip).
+                    if frame_rect_uses_transform && clip_depth > 0 {
+                        pending_post_clip_stroke.push((clip_depth, rect));
+                    } else {
+                        push_node(&mut svg_doc, &mut group_stack, rect);
+                    }
                 }
             }
             PaintPrimitive::Path {

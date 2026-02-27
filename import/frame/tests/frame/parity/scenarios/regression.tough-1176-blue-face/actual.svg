@@ -388,7 +388,6 @@
 <g clip-path="url(#clip0_1_228)">
 <rect x="568.8" y="33.2" width="126.8" height="55.2" fill="url(#paint36_linear_1_228)"/>
 <rect x="568.8" y="33.2" width="126.8" height="55.2" fill="#A32A00" fill-opacity="0.4"/>
-<rect x="568.8" y="33.2" width="126.8" height="55.2" fill="none" stroke="#201E1E" stroke-width="0.4"/>
 <g filter="url(#filter75_f_1_228)">
 <circle cx="658.42" cy="58" r="25" fill="#E4C34E"/>
 </g>
@@ -457,6 +456,7 @@
 <path d="M574 88.8H569.2V33.6H695.8V88.8H691.6V38.4H574V88.8Z" fill="#B4250A"/>
 </g>
 </g>
+<rect x="568.8" y="33.2" width="126.8" height="55.2" fill="none" stroke="#201E1E" stroke-width="0.4"/>
 <g filter="url(#filter82_ddii_1_228)">
 <circle cx="632.85" cy="94.6" r="4.6" fill="#202020"/>
 </g>
