@@ -36,3 +36,19 @@ after each iteration and it's included in prompts for context.
 
 ---
 
+## 2026-02-27 - bd-der.3
+- **What was implemented**: Placed opacity on `<g filter="...">` wrapper instead of baking it into fill/effect colors
+- **Files changed**:
+  - `crates/frame-ui/src/anyrender_renderer/collect.rs` — added `has_filter_effects` early check; `needs_layer` now also true when `has_filter_effects && effective_opacity < 1.0`, so opacity is NOT baked into fills/effects for those nodes
+  - `crates/frame-ui/src/svg/render.rs` — modified `LayerEnd` to merge outer opacity group into inner filter group child; added `try_merge_layer_into_filter_child()` and `push_node_dyn()` helpers
+- **Learnings**:
+  - Figma's SVG convention: when a node has both opacity AND filter effects, opacity goes on the SAME `<g filter="...">` element, NOT baked into fill/stroke/effect colors
+  - The `svg` crate's `Node` trait provides `get_attributes_mut()` and `get_children_mut()` for DOM inspection — `Box<dyn Node>` is usable via trait object dispatch
+  - `Box<dyn Node>: Into<Box<dyn Node>>` via std identity impl, so `group.add(child_box)` compiles
+  - Pre-existing `needs_layer` in collect.rs was only for non-Normal blend modes; adding filter-effects case required peeking at raw JSON before full effect parsing
+  - The merge check: require outer group has opacity, exactly 1 child, child is `<g>` with `filter` but no `opacity`; copy all outer attrs to child using `entry().or_insert()`
+  - SVG attribute order differs (actual: `filter opacity`, expected: `opacity filter`) but is semantically equivalent — canonical diff still succeeds
+  - 22/26 parity tests still pass; same 4 pre-existing failures remain unchanged
+
+---
+

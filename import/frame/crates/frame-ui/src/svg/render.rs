@@ -203,7 +203,10 @@ pub fn run_cli() -> Result<(), String> {
             }
             PaintPrimitive::LayerEnd { .. } => {
                 if let Some(group) = group_stack.pop() {
-                    push_node(&mut svg_doc, &mut group_stack, group);
+                    match try_merge_layer_into_filter_child(group) {
+                        Ok(child) => push_node_dyn(&mut svg_doc, &mut group_stack, child),
+                        Err(group) => push_node(&mut svg_doc, &mut group_stack, group),
+                    }
                 }
             }
             PaintPrimitive::ClipStart {
@@ -3735,6 +3738,101 @@ fn end_mask_capture() -> Option<svg::node::element::Mask> {
         }
         Some(state.mask)
     })
+}
+
+/// Attempts to collapse a LayerStart opacity-wrapper group into its single
+/// `<g filter="...">` child. When a node has both filter effects and opacity,
+/// Figma emits a single `<g opacity="X" filter="url(...)">` rather than two
+/// nested groups. This function detects that pattern and merges the outer
+/// group's attributes (opacity, mix-blend-mode style) onto the inner child,
+/// returning the child directly for emission.
+///
+/// Returns `Ok(child)` on success, or `Err(group)` if the group should be
+/// emitted unchanged.
+#[cfg(feature = "svg_export")]
+fn try_merge_layer_into_filter_child(
+    mut group: svg::node::element::Group,
+) -> Result<Box<dyn svg::node::Node>, svg::node::element::Group> {
+    use svg::Node;
+
+    // Must have an opacity attribute (otherwise nothing to merge).
+    if group
+        .get_attributes()
+        .map_or(true, |a| !a.contains_key("opacity"))
+    {
+        return Err(group);
+    }
+
+    // Must have exactly one child.
+    if group.get_children().map_or(0, |c| c.len()) != 1 {
+        return Err(group);
+    }
+
+    // Child must be a <g> with a filter attribute and no pre-existing opacity.
+    {
+        let children = group.get_children().unwrap();
+        let child = &children[0];
+        let attrs = child.get_attributes();
+        if child.get_name() != "g"
+            || attrs.and_then(|a| a.get("filter")).is_none()
+            || attrs.and_then(|a| a.get("opacity")).is_some()
+        {
+            return Err(group);
+        }
+    }
+
+    // Collect the outer attributes before mutably borrowing children.
+    let outer_attrs: Vec<(String, svg::node::Value)> = group
+        .get_attributes()
+        .map(|a| a.iter().map(|(k, v)| (k.clone(), v.clone())).collect())
+        .unwrap_or_default();
+
+    // Extract the single child.
+    let mut child = group.get_children_mut().unwrap().remove(0);
+
+    // Copy outer attributes onto the child (without overwriting the filter).
+    if let Some(inner_attrs) = child.get_attributes_mut() {
+        for (key, val) in outer_attrs {
+            inner_attrs.entry(key).or_insert(val);
+        }
+    }
+
+    Ok(child)
+}
+
+/// Like `push_node` but accepts an already-boxed `Box<dyn Node>`, which is
+/// needed when we extract a child from an element's children list.
+#[cfg(feature = "svg_export")]
+fn push_node_dyn(
+    doc: &mut svg::Document,
+    groups: &mut Vec<svg::node::element::Group>,
+    node: Box<dyn svg::node::Node>,
+) {
+    let mut maybe_node = Some(node);
+    let captured = MASK_CAPTURE_STATE.with(|slot| {
+        let mut slot = slot.borrow_mut();
+        let Some(state) = slot.as_mut() else {
+            return false;
+        };
+        let node = maybe_node.take().expect("node present");
+        if let Some(group) = state.groups.pop() {
+            state.groups.push(group.add(node));
+        } else {
+            let current = std::mem::replace(&mut state.mask, svg::node::element::Mask::new());
+            state.mask = current.add(node);
+        }
+        true
+    });
+    if captured {
+        return;
+    }
+    let node = maybe_node.expect("node present when not captured");
+    if let Some(group) = groups.pop() {
+        groups.push(group.add(node));
+    } else {
+        let current = std::mem::replace(doc, svg::Document::new());
+        *doc = current.add(node);
+    }
 }
 
 #[cfg(feature = "svg_export")]

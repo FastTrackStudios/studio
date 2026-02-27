@@ -158,9 +158,34 @@ fn collect_primitives_recursive(
         corner_radii
     };
     let blend = parse_blend_mode(&node.raw);
+    // Check whether this node has any visible filter effects (drop shadow,
+    // inner shadow, layer blur). When such effects AND opacity < 1 coexist,
+    // we must surface the opacity on the filter-group wrapper rather than
+    // baking it into fill/effect colors — otherwise the group opacity won't
+    // be present on the <g filter="..."> element as Figma expects.
+    let has_filter_effects = node
+        .raw
+        .get("effects")
+        .and_then(|v| v.as_array())
+        .map_or(false, |arr| {
+            arr.iter().any(|e| {
+                e.get("visible")
+                    .and_then(|v| v.as_bool())
+                    .unwrap_or(true)
+                    && matches!(
+                        e.get("type").and_then(|v| v.as_str()).unwrap_or(""),
+                        "DROP_SHADOW" | "INNER_SHADOW" | "LAYER_BLUR"
+                    )
+            })
+        });
     // Non-normal blends are composited through an explicit layer; keep that
     // layer's opacity there instead of baking it into paints/effects/children.
-    let needs_layer = blend != BlendMix::Normal && width > 0.0 && height > 0.0;
+    // Nodes with filter effects and sub-unit opacity also need an explicit layer
+    // so the opacity appears on the <g filter="..."> wrapper (not baked into colors).
+    let needs_layer = (blend != BlendMix::Normal
+        || (has_filter_effects && effective_opacity < 1.0))
+        && width > 0.0
+        && height > 0.0;
     let content_opacity = if needs_layer { 1.0 } else { effective_opacity };
     let primitive_blend = if needs_layer {
         BlendMix::Normal
