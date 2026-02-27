@@ -170,10 +170,14 @@ fn build_effect_filter(
                 filter = filter.add(fe_blur);
             }
 
-            // Figma adds feComposite "out" (mask shadow within original shape alpha) when
-            // blur doesn't exceed spread: std_deviation <= spread.abs(). This includes the
-            // case where both are 0 (sharp offset-only shadow needs shape masking too).
-            if std_deviation <= spread.abs() {
+            // Figma clips each drop shadow against the original shape alpha
+            // (feComposite "out") in two cases:
+            // 1. When spread >= blur — the spread-dilated shadow overlaps the shape.
+            // 2. When blur is very small (< 1px) — the shadow barely extends past
+            //    the shape edge and would be visible under the shape without clipping.
+            // For large blurs (>= 2px typically) with no spread, the shadow is
+            // diffuse enough that the portion under the shape is negligible.
+            if std_deviation <= spread.abs() || std_deviation < 1.0 {
                 let mut fe_composite = svg::node::element::Element::new("feComposite");
                 svg::Node::assign(&mut fe_composite, "in2", "hardAlpha");
                 svg::Node::assign(&mut fe_composite, "operator", "out");

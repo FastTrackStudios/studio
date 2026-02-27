@@ -841,6 +841,7 @@
 <feColorMatrix in="SourceAlpha" result="hardAlpha" type="matrix" values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 127 0"/>
 <feOffset dy="0.4"/>
 <feGaussianBlur stdDeviation="0.2"/>
+<feComposite in2="hardAlpha" operator="out"/>
 <feColorMatrix type="matrix" values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0.6 0"/>
 <feBlend in2="BackgroundImageFix" mode="normal" result="effect1_dropShadow_1_228"/>
 <feBlend in="SourceGraphic" in2="effect1_dropShadow_1_228" mode="normal" result="shape"/>
@@ -894,6 +895,7 @@
 <feColorMatrix in="SourceAlpha" result="hardAlpha" type="matrix" values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 127 0"/>
 <feOffset dy="0.4"/>
 <feGaussianBlur stdDeviation="0.2"/>
+<feComposite in2="hardAlpha" operator="out"/>
 <feColorMatrix type="matrix" values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0.6 0"/>
 <feBlend in2="BackgroundImageFix" mode="normal" result="effect1_dropShadow_1_228"/>
 <feBlend in="SourceGraphic" in2="effect1_dropShadow_1_228" mode="normal" result="shape"/>
@@ -1045,6 +1047,7 @@
 <feColorMatrix in="SourceAlpha" result="hardAlpha" type="matrix" values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 127 0"/>
 <feOffset dx="0.4" dy="0.4"/>
 <feGaussianBlur stdDeviation="0.2"/>
+<feComposite in2="hardAlpha" operator="out"/>
 <feColorMatrix type="matrix" values="0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 0.5 0"/>
 <feBlend in2="BackgroundImageFix" mode="normal" result="effect1_dropShadow_1_228"/>
 <feBlend in="SourceGraphic" in2="effect1_dropShadow_1_228" mode="normal" result="shape"/>
@@ -1322,6 +1325,7 @@
 <feColorMatrix in="SourceAlpha" result="hardAlpha" type="matrix" values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 127 0"/>
 <feOffset dx="0.8" dy="0.8"/>
 <feGaussianBlur stdDeviation="0.2"/>
+<feComposite in2="hardAlpha" operator="out"/>
 <feColorMatrix type="matrix" values="0 0 0 0 0.7875 0 0 0 0 0.7875 0 0 0 0 0.7875 0 0 0 0.25 0"/>
 <feBlend in2="BackgroundImageFix" mode="normal" result="effect1_dropShadow_1_228"/>
 <feColorMatrix in="SourceAlpha" result="hardAlpha" type="matrix" values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 127 0"/>
