@@ -200,8 +200,8 @@ fn collect_primitives_recursive(
     let fill_paths = path_strings(&node.raw, "fillGeometry");
     let stroke_paths = path_strings(&node.raw, "strokeGeometry");
     let svg_base64 = exported_svg_base64(&node.raw);
-    let has_vector_geometry =
-        !fill_paths.is_empty() || !stroke_paths.is_empty() || svg_base64.is_some();
+    let has_native_geometry = !fill_paths.is_empty() || !stroke_paths.is_empty();
+    let has_vector_geometry = has_native_geometry || svg_base64.is_some();
     let is_instance = node.figma_type == "INSTANCE";
     let is_boolean_operation = node.figma_type == "BOOLEAN_OPERATION";
     let clips_content = node
@@ -252,7 +252,7 @@ fn collect_primitives_recursive(
     // For parity exports, Figma includes authoritative text outline geometry.
     // Prefer outline paths whenever available so SVG and raster paths align with
     // Figma's own serializer/layout instead of host-side text shaping.
-    let prefer_text_outlines = has_vector_geometry;
+    let prefer_text_outlines = has_native_geometry;
 
     match node_class {
         RenderNodeClass::Text if has_vector_geometry && prefer_text_outlines => {
@@ -396,7 +396,17 @@ fn collect_primitives_recursive(
                 });
             }
         }
-        _ if is_instance && svg_base64.is_some() => {
+        _ if is_instance
+            && svg_base64.is_some()
+            && !has_native_geometry
+            && node.children.is_empty()
+            && node
+                .raw
+                .get("componentId")
+                .and_then(|v| v.as_str())
+                .and_then(|component_id| doc.get_by_figma_id(component_id))
+                .is_none() =>
+        {
             // Prefer exported instance SVG over component-master fallback. This
             // preserves variant/override visuals from Figma and avoids drawing
             // stale master internals at incorrect offsets.
@@ -419,7 +429,11 @@ fn collect_primitives_recursive(
                 rotation,
             });
         }
-        _ if is_boolean_operation && svg_base64.is_some() => {
+        _ if is_boolean_operation
+            && svg_base64.is_some()
+            && !has_native_geometry
+            && node.children.is_empty() =>
+        {
             // Boolean operation fidelity is most accurate from Figma-exported SVG.
             // Rendering children directly can duplicate paths and lose operation semantics.
             rendered_as_atomic_svg = true;
@@ -441,6 +455,7 @@ fn collect_primitives_recursive(
                 rotation,
             });
         }
+        _ if is_instance => {}
         RenderNodeClass::Vector | RenderNodeClass::Shape if has_vector_geometry => {
             out.push(PaintPrimitive::Path {
                 node_id,
@@ -578,8 +593,7 @@ fn collect_primitives_recursive(
     // Bridge JSON often encodes INSTANCEs without child trees. Resolve from
     // component master definitions so we still render the actual visuals.
     let has_children = !node.children.is_empty();
-    let has_svg_export = exported_svg_base64(&node.raw).is_some();
-    if is_instance && !has_children && !has_svg_export {
+    if is_instance && !has_children {
         if let Some(component_id) = node.raw.get("componentId").and_then(|v| v.as_str()) {
             if let Some(component_node) = doc.get_by_figma_id(component_id) {
                 for child_id in &component_node.children {

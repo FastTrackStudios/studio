@@ -77,20 +77,16 @@ for scenario_dir in "${SCENARIO_DIRS[@]}"; do
   fi
 
   echo "[$scenario_id] rendering actual.png + actual.svg"
-  width="$(jq -r '.nodes[0].absoluteBoundingBox.width // 0' "$export_json" 2>/dev/null || echo 0)"
-  height="$(jq -r '.nodes[0].absoluteBoundingBox.height // 0' "$export_json" 2>/dev/null || echo 0)"
+  width_int="$(jq -r '(.nodes[0].absoluteBoundingBox.width // 0) | ceil' "$export_json" 2>/dev/null || echo 0)"
+  height_int="$(jq -r '(.nodes[0].absoluteBoundingBox.height // 0) | ceil' "$export_json" 2>/dev/null || echo 0)"
 
   render_args=(
     "$export_json"
     --out "$actual_png"
   )
 
-  if [[ "$width" != "0" && "$height" != "0" ]]; then
-    width_int="$(printf '%.0f' "$width")"
-    height_int="$(printf '%.0f' "$height")"
-    if [[ "$width_int" -gt 0 && "$height_int" -gt 0 ]]; then
-      render_args+=(--width "$width_int" --height "$height_int")
-    fi
+  if [[ "$width_int" -gt 0 && "$height_int" -gt 0 ]]; then
+    render_args+=(--width "$width_int" --height "$height_int")
   fi
 
   cargo run -q -p frame-ui --features anyrender --bin render_png -- "${render_args[@]}"
@@ -99,12 +95,8 @@ for scenario_dir in "${SCENARIO_DIRS[@]}"; do
     "$export_json"
     --out "$actual_svg"
   )
-  if [[ "$width" != "0" && "$height" != "0" ]]; then
-    width_int="$(printf '%.0f' "$width")"
-    height_int="$(printf '%.0f' "$height")"
-    if [[ "$width_int" -gt 0 && "$height_int" -gt 0 ]]; then
-      svg_render_args+=(--width "$width_int" --height "$height_int")
-    fi
+  if [[ "$width_int" -gt 0 && "$height_int" -gt 0 ]]; then
+    svg_render_args+=(--width "$width_int" --height "$height_int")
   fi
   cargo run -q -p frame-ui --features svg_export --bin render_svg -- "${svg_render_args[@]}"
 done

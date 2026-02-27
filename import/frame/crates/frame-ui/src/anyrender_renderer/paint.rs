@@ -328,6 +328,7 @@ pub fn paint_primitives_into_scene_with(
                     (scene_transform, path_x, path_y)
                 };
                 let mut had_any_path = false;
+                let has_native_geometry = !fill_paths.is_empty() || !stroke_paths.is_empty();
                 let bounds_rect = Rect::new(lx, ly, lx + width, ly + height);
                 let blur_color_hint = fills
                     .first()
@@ -347,8 +348,11 @@ pub fn paint_primitives_into_scene_with(
                 let path_transform = path_origin_transform * path_fit;
                 let (sx, sy) = extract_scale(path_fit);
                 let stroke_scale = ((sx.abs() + sy.abs()) * 0.5).max(0.01);
-                let decoded_svg_text: Option<std::sync::Arc<String>> =
-                    svg_base64.as_ref().and_then(|b64| cached_svg_decode(b64));
+                let decoded_svg_text: Option<std::sync::Arc<String>> = if has_native_geometry {
+                    None
+                } else {
+                    svg_base64.as_ref().and_then(|b64| cached_svg_decode(b64))
+                };
 
                 if let (Some(svg_text), Some(layer_blur)) = (
                     decoded_svg_text.as_deref(),

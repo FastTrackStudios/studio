@@ -122,7 +122,7 @@ async function exportAllPngsToBridge(byName: Map<string, FrameNode>): Promise<{ 
 			scenarios.push({
 				id: frameName.replace(/^parity\//, '').replace(/\//g, '.'),
 				frameName,
-				exportJson: buildExportPayloadForFrame(frame),
+				exportJson: await buildExportPayloadForFrame(frame),
 				expectedPngBase64: bytesToBase64(pngBytes),
 				expectedSvgBase64: bytesToBase64(svgBytes),
 			});
@@ -193,12 +193,14 @@ type ExportNode = {
 	name: string;
 	type: string;
 	visible: boolean;
+	locked?: boolean;
 	absoluteBoundingBox?: { x: number; y: number; width: number; height: number };
 	relativeTransform?: number[][];
 	size?: { x: number; y: number };
 	rotation?: number;
 	opacity?: number;
 	blendMode?: string;
+	constraints?: unknown;
 	clipsContent?: boolean;
 	layoutMode?: string;
 	layoutWrap?: string;
@@ -251,12 +253,90 @@ type ExportNode = {
 	textCase?: string;
 	textDecoration?: string;
 	textStyleId?: string;
-	styledTextSegments?: unknown[];
+	componentProperties?: unknown;
+	componentPropertyReferences?: unknown;
+	explicitVariableModes?: unknown;
+	boundVariables?: unknown;
+	pluginData?: unknown;
+	sharedPluginData?: unknown;
+	componentId?: string;
+	componentSetId?: string;
+	variantProperties?: Record<string, string>;
+	exports?: {
+		svgBase64?: string;
+		pngBase64?: string;
+	};
+	assetRefs?: {
+		svg?: string;
+		png?: string;
+	};
+	imageFillAssetRefs?: Record<string, string>;
 	children?: ExportNode[];
 };
 
-function buildExportPayloadForFrame(frame: FrameNode): unknown {
-	const root = serializeNodeLite(frame, 0, 16);
+type RectLike = {
+	x: number;
+	y: number;
+	width: number;
+	height: number;
+};
+
+type SizeLike = {
+	x: number;
+	y: number;
+};
+
+type ExportOptions = {
+	includeSvg: boolean;
+	includePng: boolean;
+	maxDepth: number;
+};
+
+type ExportPayload = {
+	schema: 'fts.figma.export/v1' | 'fts.figma.export/v2';
+	generatedAt: string;
+	source: {
+		plugin: string;
+		pluginVersion: string;
+		editorType: string;
+		fileKey?: string;
+		page: { id: string; name: string };
+	};
+	selection: {
+		ids: string[];
+		names: string[];
+		totalRoots: number;
+		totalNodes: number;
+	};
+	options: ExportOptions;
+	assets?: ExportAsset[];
+	nodes: ExportNode[];
+};
+
+type ExportAssetKind = 'svg' | 'png' | 'image-fill';
+
+type ExportAsset = {
+	id: string;
+	kind: ExportAssetKind;
+	mime: string;
+	encoding: 'base64';
+	data: string;
+	byteLength: number;
+};
+
+type AssetAccumulator = {
+	assets: ExportAsset[];
+	byHash: Map<string, string>;
+};
+
+async function buildExportPayloadForFrame(frame: FrameNode): Promise<ExportPayload> {
+	const options: ExportOptions = {
+		includeSvg: true,
+		includePng: false,
+		maxDepth: 16,
+	};
+	const assetAccumulator = createAssetAccumulator();
+	const root = await serializeNode(frame, 0, options, assetAccumulator);
 	return {
 		schema: 'fts.figma.export/v2',
 		generatedAt: new Date().toISOString(),
@@ -273,92 +353,98 @@ function buildExportPayloadForFrame(frame: FrameNode): unknown {
 			totalRoots: 1,
 			totalNodes: countNodes(root),
 		},
-		options: {
-			includeSvg: false,
-			includePng: false,
-			maxDepth: 16,
-		},
-		assets: [],
+		options,
+		assets: assetAccumulator.assets,
 		nodes: [root],
 	};
 }
 
-function serializeNodeLite(node: SceneNode, depth: number, maxDepth: number): ExportNode {
-	const read = <T>(key: string): T | undefined => {
-		try {
-			return (node as unknown as Record<string, T>)[key];
-		} catch {
-			return undefined;
-		}
-	};
+async function serializeNode(
+	node: SceneNode,
+	depth: number,
+	options: ExportOptions,
+	assets: AssetAccumulator,
+	parentBounds?: RectLike,
+): Promise<ExportNode> {
+	if (!node.visible) {
+		return pruneUndefined({
+			id: node.id,
+			name: node.name,
+			type: node.type,
+			visible: false,
+		} as ExportNode);
+	}
 
-	const absoluteBoundingBox = read<{ x: number; y: number; width: number; height: number }>(
-		'absoluteBoundingBox',
+	const absoluteBoundingBox = readAbsoluteBoundingBox(node);
+	const relativeTransform = normalizeRelativeTransform(
+		sanitize(readProp(node, 'relativeTransform')),
+		absoluteBoundingBox,
+		parentBounds,
 	);
-	const relativeTransform = read<number[][]>('relativeTransform');
+
 	const base: ExportNode = {
 		id: node.id,
 		name: node.name,
 		type: node.type,
 		visible: node.visible,
-		absoluteBoundingBox: sanitize(absoluteBoundingBox),
-		relativeTransform: sanitize(relativeTransform),
-		size: sanitize(read<{ x: number; y: number }>('size')),
-		rotation: read<number>('rotation'),
-		opacity: read<number>('opacity'),
-		blendMode: read<string>('blendMode'),
-		clipsContent: read<boolean>('clipsContent'),
-		layoutMode: read<string>('layoutMode'),
-		layoutWrap: read<string>('layoutWrap'),
-		layoutSizingHorizontal: read<string>('layoutSizingHorizontal'),
-		layoutSizingVertical: read<string>('layoutSizingVertical'),
-		layoutAlign: read<string>('layoutAlign'),
-		layoutGrow: read<number>('layoutGrow'),
-		primaryAxisSizingMode: read<string>('primaryAxisSizingMode'),
-		primaryAxisAlignItems: read<string>('primaryAxisAlignItems'),
-		counterAxisSizingMode: read<string>('counterAxisSizingMode'),
-		counterAxisAlignItems: read<string>('counterAxisAlignItems'),
-		paddingTop: read<number>('paddingTop'),
-		paddingRight: read<number>('paddingRight'),
-		paddingBottom: read<number>('paddingBottom'),
-		paddingLeft: read<number>('paddingLeft'),
-		itemSpacing: read<number>('itemSpacing'),
-		effects: sanitize(read<unknown[]>('effects')),
-		fills: sanitize(read<unknown[]>('fills')),
-		strokes: sanitize(read<unknown[]>('strokes')),
-		strokeWeight: read<number>('strokeWeight'),
-		strokeMiterLimit: read<number>('strokeMiterLimit'),
-		strokeAlign: read<string>('strokeAlign'),
-		strokeJoin: read<string>('strokeJoin'),
-		strokeCap: read<string>('strokeCap'),
-		dashPattern: sanitize(read<number[]>('dashPattern')),
-		isMask: read<boolean>('isMask'),
-		maskType: read<string>('maskType'),
-		cornerSmoothing: read<number>('cornerSmoothing'),
-		cornerRadius: read<number>('cornerRadius'),
-		topLeftRadius: read<number>('topLeftRadius'),
-		topRightRadius: read<number>('topRightRadius'),
-		bottomLeftRadius: read<number>('bottomLeftRadius'),
-		bottomRightRadius: read<number>('bottomRightRadius'),
-		rectangleCornerRadii: sanitize(read<number[]>('rectangleCornerRadii')),
-		fillGeometry: sanitize(read<unknown>('fillGeometry')),
-		strokeGeometry: sanitize(read<unknown>('strokeGeometry')),
+		locked: readProp(node, 'locked'),
+		opacity: readProp(node, 'opacity'),
+		blendMode: readProp(node, 'blendMode'),
+		absoluteBoundingBox,
+		relativeTransform,
+		size: readSize(node),
+		rotation: readProp(node, 'rotation'),
+		constraints: sanitize(readProp(node, 'constraints')),
+		clipsContent: readProp(node, 'clipsContent'),
+		layoutMode: readProp(node, 'layoutMode'),
+		layoutWrap: readProp(node, 'layoutWrap'),
+		layoutSizingHorizontal: readProp(node, 'layoutSizingHorizontal'),
+		layoutSizingVertical: readProp(node, 'layoutSizingVertical'),
+		layoutAlign: readProp(node, 'layoutAlign'),
+		layoutGrow: readProp(node, 'layoutGrow'),
+		primaryAxisSizingMode: readProp(node, 'primaryAxisSizingMode'),
+		primaryAxisAlignItems: readProp(node, 'primaryAxisAlignItems'),
+		counterAxisSizingMode: readProp(node, 'counterAxisSizingMode'),
+		counterAxisAlignItems: readProp(node, 'counterAxisAlignItems'),
+		paddingTop: readProp(node, 'paddingTop'),
+		paddingRight: readProp(node, 'paddingRight'),
+		paddingBottom: readProp(node, 'paddingBottom'),
+		paddingLeft: readProp(node, 'paddingLeft'),
+		itemSpacing: readProp(node, 'itemSpacing'),
+		effects: sanitize(readProp(node, 'effects')),
+		fills: sanitize(readProp(node, 'fills')),
+		strokes: sanitize(readProp(node, 'strokes')),
+		strokeWeight: readProp(node, 'strokeWeight'),
+		strokeMiterLimit: readProp(node, 'strokeMiterLimit'),
+		strokeAlign: readProp(node, 'strokeAlign'),
+		strokeJoin: readProp(node, 'strokeJoin'),
+		strokeCap: readProp(node, 'strokeCap'),
+		dashPattern: sanitize(readProp(node, 'dashPattern')),
+		isMask: readProp(node, 'isMask'),
+		maskType: readProp(node, 'maskType'),
+		cornerSmoothing: readProp(node, 'cornerSmoothing'),
+		cornerRadius: readProp(node, 'cornerRadius'),
+		topLeftRadius: readProp(node, 'topLeftRadius'),
+		topRightRadius: readProp(node, 'topRightRadius'),
+		bottomLeftRadius: readProp(node, 'bottomLeftRadius'),
+		bottomRightRadius: readProp(node, 'bottomRightRadius'),
+		rectangleCornerRadii: sanitize(readProp(node, 'rectangleCornerRadii')),
+		fillGeometry: sanitize(readProp(node, 'fillGeometry')),
+		strokeGeometry: sanitize(readProp(node, 'strokeGeometry')),
+		componentProperties: sanitize(readProp(node, 'componentProperties')),
+		componentPropertyReferences: sanitize(readProp(node, 'componentPropertyReferences')),
+		explicitVariableModes: sanitize(readProp(node, 'explicitVariableModes')),
+		boundVariables: sanitize(readProp(node, 'boundVariables')),
+		pluginData: sanitize(readProp(node, 'pluginData')),
+		sharedPluginData: sanitize(readProp(node, 'sharedPluginData')),
+		componentId: readProp(node, 'componentId'),
+		componentSetId: readProp(node, 'componentSetId'),
+		variantProperties: sanitize(readProp(node, 'variantProperties')),
+		textStyleId: readProp(node, 'textStyleId'),
 	};
 
 	if (node.type === 'TEXT') {
 		base.characters = node.characters;
-		base.fontSize = typeof node.fontSize === 'number' ? node.fontSize : undefined;
-		base.fontFamily =
-			typeof node.fontName === 'object' && node.fontName ? (node.fontName as FontName).family : undefined;
-		base.fontWeight =
-			typeof node.fontWeight === 'number' ? node.fontWeight : undefined;
-		base.lineHeightPx = typeof node.lineHeight === 'object' && node.lineHeight && 'value' in node.lineHeight
-			? Number((node.lineHeight as { value: number }).value)
-			: undefined;
-		base.letterSpacingPx =
-			typeof node.letterSpacing === 'object' && node.letterSpacing && 'value' in node.letterSpacing
-				? Number((node.letterSpacing as { value: number }).value)
-				: undefined;
 		base.textAlignHorizontal = node.textAlignHorizontal;
 		base.textAlignVertical = node.textAlignVertical;
 		base.textAutoResize = node.textAutoResize;
@@ -366,92 +452,352 @@ function serializeNodeLite(node: SceneNode, depth: number, maxDepth: number): Ex
 		base.letterSpacing = sanitize(node.letterSpacing);
 		base.paragraphSpacing = node.paragraphSpacing;
 		base.paragraphIndent = node.paragraphIndent;
-		base.textCase = typeof node.textCase === 'symbol' ? 'MIXED' : String(node.textCase);
-		base.textDecoration =
-			typeof node.textDecoration === 'symbol' ? 'MIXED' : String(node.textDecoration);
-		base.textStyleId = node.textStyleId;
-		base.styledTextSegments = sanitize(extractStyledTextSegments(node));
+
+		base.textCase = sanitize(node.textCase) as string;
+		base.textDecoration = sanitize(node.textDecoration) as string;
+
+		const fs = node.fontSize;
+		if (typeof fs === 'number') {
+			base.fontSize = fs;
+		} else if (fs === figma.mixed && node.characters.length > 0) {
+			base.fontSize = node.getRangeFontSize(0, 1) as number;
+		}
+
+		const fn_ = node.fontName;
+		if (fn_ && fn_ !== figma.mixed) {
+			base.fontFamily = (fn_ as FontName).family;
+			base.fontWeight = node.fontWeight as number;
+		} else if (fn_ === figma.mixed && node.characters.length > 0) {
+			const rangeFn = node.getRangeFontName(0, 1) as FontName;
+			base.fontFamily = rangeFn.family;
+			base.fontWeight = node.getRangeFontWeight(0, 1) as number;
+		}
+
+		const lh = node.lineHeight;
+		if (lh && lh !== figma.mixed) {
+			const lhObj = lh as LineHeight;
+			if (lhObj.unit === 'PIXELS') {
+				base.lineHeightPx = lhObj.value;
+			} else if (lhObj.unit === 'PERCENT' && base.fontSize) {
+				base.lineHeightPx = (base.fontSize * lhObj.value) / 100;
+			}
+		}
+
+		const ls = node.letterSpacing;
+		if (ls && ls !== figma.mixed) {
+			const lsObj = ls as LetterSpacing;
+			if (lsObj.unit === 'PIXELS') {
+				base.letterSpacingPx = lsObj.value;
+			} else if (lsObj.unit === 'PERCENT' && base.fontSize) {
+				base.letterSpacingPx = (base.fontSize * lsObj.value) / 100;
+			}
+		}
 	}
 
-	if ('children' in node && depth < maxDepth) {
-		base.children = node.children
-			.map((child) => serializeNodeLite(child, depth + 1, maxDepth))
-			.filter(Boolean);
+	if (options.includeSvg || options.includePng) {
+		if (needsAssetExport(node)) {
+			base.assetRefs = await exportNodeAssets(node, options, assets);
+		}
+	}
+
+	const imageFillAssetRefs = await exportImageFillAssets(node, assets);
+	if (Object.keys(imageFillAssetRefs).length > 0) {
+		base.imageFillAssetRefs = imageFillAssetRefs;
+	}
+
+	if ('children' in node && depth < options.maxDepth) {
+		const sceneChildren = node.children.filter(isSceneNode);
+		base.children = await Promise.all(
+			sceneChildren.map((child) =>
+				serializeNode(child, depth + 1, options, assets, absoluteBoundingBox),
+			),
+		);
 	}
 
 	return pruneUndefined(base);
 }
 
-function extractStyledTextSegments(node: TextNode): unknown[] | undefined {
-	try {
-		const segments = node.getStyledTextSegments([
-			'fontName',
-			'fontSize',
-			'fontWeight',
-			'fills',
-			'textCase',
-			'textDecoration',
-			'letterSpacing',
-			'lineHeight',
-		]);
-		return segments.map((segment) => ({
-			characters: segment.characters,
-			start: segment.start,
-			end: segment.end,
-			fontName: sanitize(segment.fontName),
-			fontStyle:
-				typeof segment.fontName === 'object' && segment.fontName ? (segment.fontName as FontName).style : undefined,
-			fontSize: typeof segment.fontSize === 'number' ? segment.fontSize : undefined,
-			fontWeight: typeof segment.fontWeight === 'number' ? segment.fontWeight : undefined,
-			fills: sanitize(segment.fills),
-			textCase: sanitize(segment.textCase),
-			textDecoration: sanitize(segment.textDecoration),
-			letterSpacing: sanitize(segment.letterSpacing),
-			letterSpacingPx:
-				typeof segment.letterSpacing === 'object' &&
-				segment.letterSpacing &&
-				'value' in segment.letterSpacing
-					? Number((segment.letterSpacing as { value: number }).value)
-					: undefined,
-			lineHeight: sanitize(segment.lineHeight),
-		}));
-	} catch {
+function normalizeRelativeTransform(
+	transform: unknown,
+	nodeBounds?: RectLike,
+	parentBounds?: RectLike,
+): number[][] | undefined {
+	if (!transform || !Array.isArray(transform)) {
 		return undefined;
 	}
+	if (!nodeBounds || !parentBounds) {
+		return sanitize(transform) as number[][] | undefined;
+	}
+	if (transform.length < 2) {
+		return sanitize(transform) as number[][] | undefined;
+	}
+	const row0 = transform[0];
+	const row1 = transform[1];
+	if (!Array.isArray(row0) || !Array.isArray(row1) || row0.length < 3 || row1.length < 3) {
+		return sanitize(transform) as number[][] | undefined;
+	}
+
+	const localX = nodeBounds.x - parentBounds.x;
+	const localY = nodeBounds.y - parentBounds.y;
+	const next0 = [...row0];
+	const next1 = [...row1];
+	next0[2] = localX;
+	next1[2] = localY;
+	return [next0 as number[], next1 as number[]];
+}
+
+async function exportNodeAssets(
+	node: SceneNode,
+	options: ExportOptions,
+	assets: AssetAccumulator,
+): Promise<{ svg?: string; png?: string }> {
+	const refs: { svg?: string; png?: string } = {};
+
+	if (options.includeSvg && supportsVectorExport(node)) {
+		try {
+			const svgBytes = await node.exportAsync({ format: 'SVG' });
+			const svgBase64 = bytesToBase64(svgBytes);
+			refs.svg = recordAsset(assets, 'svg', 'image/svg+xml', svgBase64, svgBytes.length);
+		} catch {
+			// Ignore unsupported SVG exports for individual nodes.
+		}
+	}
+
+	if (options.includePng && supportsRasterExport(node)) {
+		try {
+			const pngBytes = await node.exportAsync({
+				format: 'PNG',
+				constraint: { type: 'SCALE', value: 1 },
+			});
+			const pngBase64 = bytesToBase64(pngBytes);
+			refs.png = recordAsset(assets, 'png', 'image/png', pngBase64, pngBytes.length);
+		} catch {
+			// Ignore unsupported PNG exports for individual nodes.
+		}
+	}
+
+	return refs;
+}
+
+async function exportImageFillAssets(
+	node: SceneNode,
+	assets: AssetAccumulator,
+): Promise<Record<string, string>> {
+	const refs: Record<string, string> = {};
+	const fills = readProp<unknown[]>(node, 'fills');
+	if (!Array.isArray(fills)) {
+		return refs;
+	}
+
+	for (const fill of fills) {
+		if (!fill || typeof fill !== 'object') {
+			continue;
+		}
+		const paint = fill as { type?: unknown; imageHash?: unknown };
+		if (paint.type !== 'IMAGE' || typeof paint.imageHash !== 'string' || !paint.imageHash) {
+			continue;
+		}
+
+		const dedupKey = `image-fill:${paint.imageHash}`;
+		const existingId = assets.byHash.get(dedupKey);
+		if (existingId) {
+			refs[paint.imageHash] = existingId;
+			continue;
+		}
+
+		const image = figma.getImageByHash(paint.imageHash);
+		if (!image) {
+			continue;
+		}
+		try {
+			const bytes = await image.getBytesAsync();
+			const base64 = bytesToBase64(bytes);
+			const id = `image-fill:${paint.imageHash}`;
+			assets.assets.push({
+				id,
+				kind: 'image-fill',
+				mime: 'application/octet-stream',
+				encoding: 'base64',
+				data: base64,
+				byteLength: bytes.length,
+			});
+			assets.byHash.set(dedupKey, id);
+			refs[paint.imageHash] = id;
+		} catch {
+			// Ignore image decode/export failures for individual fills.
+		}
+	}
+
+	return refs;
+}
+
+function needsAssetExport(node: SceneNode): boolean {
+	switch (node.type) {
+		case 'FRAME':
+		case 'GROUP':
+		case 'RECTANGLE':
+		case 'TEXT':
+		case 'SECTION':
+		case 'SLICE':
+			return false;
+		default:
+			return true;
+	}
+}
+
+function supportsVectorExport(node: SceneNode): boolean {
+	return node.type !== 'SLICE';
+}
+
+function supportsRasterExport(node: SceneNode): boolean {
+	return node.type !== 'SLICE';
+}
+
+function isSceneNode(node: BaseNode): node is SceneNode {
+	return (
+		node.type !== 'PAGE' &&
+		node.type !== 'DOCUMENT' &&
+		node.type !== 'SECTION' &&
+		node.type !== 'STICKY' &&
+		node.type !== 'SHAPE_WITH_TEXT' &&
+		node.type !== 'CONNECTOR' &&
+		node.type !== 'WASHI_TAPE' &&
+		node.type !== 'HIGHLIGHT'
+	);
+}
+
+function readAbsoluteBoundingBox(node: SceneNode): RectLike | undefined {
+	const bounds = readProp<RectLike>(node, 'absoluteRenderBounds') ?? readProp<RectLike>(node, 'absoluteBoundingBox');
+	if (!bounds) {
+		return undefined;
+	}
+	return {
+		x: bounds.x,
+		y: bounds.y,
+		width: bounds.width,
+		height: bounds.height,
+	};
+}
+
+function readSize(node: SceneNode): SizeLike | undefined {
+	const width = readProp<number>(node, 'width');
+	const height = readProp<number>(node, 'height');
+	if (typeof width !== 'number' || typeof height !== 'number') {
+		return undefined;
+	}
+	return { x: width, y: height };
+}
+
+function readProp<T>(node: unknown, key: string): T | undefined {
+	const value = (node as Record<string, unknown>)[key];
+	return value as T | undefined;
 }
 
 function sanitize<T>(value: T): T {
-	if (value === null || value === undefined) {
+	if (value === undefined || value === null) {
 		return value;
 	}
-	try {
-		return JSON.parse(JSON.stringify(value)) as T;
-	} catch {
+
+	if (value === figma.mixed) {
+		return '__MIXED__' as T;
+	}
+
+	if (typeof value !== 'object') {
 		return value;
 	}
+
+	if (Array.isArray(value) && value.length > 0) {
+		const first = value[0];
+		if (typeof first === 'number' || typeof first === 'string') {
+			return value as T;
+		}
+		if (Array.isArray(first) && first.length > 0 && typeof first[0] === 'number') {
+			return value as T;
+		}
+	}
+
+	const json = JSON.stringify(value, (_k, v) => {
+		if (typeof v === 'bigint') {
+			return v.toString();
+		}
+		if (typeof v === 'symbol') {
+			return String(v);
+		}
+		if (v === figma.mixed) {
+			return '__MIXED__';
+		}
+		return v;
+	});
+
+	if (json === undefined) {
+		return value;
+	}
+
+	return JSON.parse(json) as T;
 }
 
-function pruneUndefined<T>(value: T): T {
-	if (Array.isArray(value)) {
-		return value.map((item) => pruneUndefined(item)) as T;
-	}
-	if (!value || typeof value !== 'object') {
-		return value;
-	}
-	const input = value as Record<string, unknown>;
-	const out: Record<string, unknown> = {};
-	for (const [key, v] of Object.entries(input)) {
-		if (v === undefined) {
+function pruneUndefined<T extends Record<string, unknown>>(input: T): T {
+	const output: Record<string, unknown> = {};
+	for (const key of Object.keys(input)) {
+		const value = input[key];
+		if (value === undefined) {
 			continue;
 		}
-		out[key] = pruneUndefined(v);
+		if (Array.isArray(value) && value.length === 0) {
+			continue;
+		}
+		output[key] = value;
 	}
-	return out as T;
+	return output as T;
 }
 
 function countNodes(node: ExportNode): number {
-	const children = node.children ?? [];
-	return 1 + children.reduce((sum, child) => sum + countNodes(child), 0);
+	let count = 1;
+	for (const child of node.children ?? []) {
+		count += countNodes(child);
+	}
+	return count;
+}
+
+function createAssetAccumulator(): AssetAccumulator {
+	return {
+		assets: [],
+		byHash: new Map<string, string>(),
+	};
+}
+
+function recordAsset(
+	assets: AssetAccumulator,
+	kind: ExportAssetKind,
+	mime: string,
+	data: string,
+	byteLength: number,
+): string {
+	const hash = hashString(`${kind}|${mime}|${data}`);
+	const existing = assets.byHash.get(hash);
+	if (existing) {
+		return existing;
+	}
+	const id = `${kind}:${hash}`;
+	assets.assets.push({
+		id,
+		kind,
+		mime,
+		encoding: 'base64',
+		data,
+		byteLength,
+	});
+	assets.byHash.set(hash, id);
+	return id;
+}
+
+function hashString(input: string): string {
+	let hash = 0x811c9dc5;
+	for (let i = 0; i < input.length; i += 1) {
+		hash ^= input.charCodeAt(i);
+		hash = Math.imul(hash, 0x01000193) >>> 0;
+	}
+	return hash.toString(16).padStart(8, '0');
 }
 
 async function exportNodeAsPng(node: SceneNode): Promise<Uint8Array> {

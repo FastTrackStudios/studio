@@ -1,0 +1,41 @@
+{
+  "scenarioId": "regression.tough-1176-blue-face",
+  "strictEqual": false,
+  "byteEqual": false,
+  "structureEqual": false,
+  "canonicalEqual": false,
+  "canonicalNote": "ok",
+  "expectedSvg": "tests/frame/parity/scenarios/regression.tough-1176-blue-face/expected.svg",
+  "actualSvg": "tests/frame/parity/scenarios/regression.tough-1176-blue-face/actual.svg",
+  "expectedSha256": "bcfbc8abd5077f5c5ee24b9b1e30827a359fc5644b62d0de5bb7446732b20562",
+  "actualSha256": "3c3b13313bb49e50765db4a2924a26416bd30b5191604766f8fb7043d3e0379f",
+  "expectedBytes": 12827755,
+  "actualBytes": 9247523,
+  "canonicalDiff": {
+    "equal": false,
+    "actual_path": "tests/frame/parity/scenarios/regression.tough-1176-blue-face/actual.svg",
+    "expected_path": "tests/frame/parity/scenarios/regression.tough-1176-blue-face/expected.svg",
+    "precision": 4,
+    "actual_elements": 1312,
+    "expected_elements": 1359,
+    "actual_paths": 150,
+    "expected_paths": 152,
+    "actual_canonical_len": 9262180,
+    "expected_canonical_len": 12835869,
+    "first_diff_offset": 57,
+    "first_diff_actual": "<svg|fill=none|height=156|viewBox=0 0 842 156|width=842><rect|fill=#101218|fill-opacity=0.5|height=156|width=842></rect><g|filter=url(#fi",
+    "first_diff_expected": "<svg|fill=none|height=156|viewBox=0 0 842 156|width=842><g|filter=url(#filter0_ii_1_228)><rect|fill=url(#paint0_radial_1_228)|height=156|"
+  },
+  "structureDiff": {
+    "equal": false,
+    "actual_path": "tests/frame/parity/scenarios/regression.tough-1176-blue-face/actual.svg",
+    "expected_path": "tests/frame/parity/scenarios/regression.tough-1176-blue-face/expected.svg",
+    "abs_tol": 0.006,
+    "rel_tol": 0.0,
+    "first_mismatch": {
+      "node_path": "/svg",
+      "field": "children",
+      "detail": "child count mismatch actual=201 expected=2"
+    }
+  }
+}

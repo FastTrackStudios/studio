@@ -1,5 +1,6 @@
 pub(crate) fn normalize_svg_for_figma_parity(svg: &str, width: u32, height: u32) -> String {
     let mut out = Vec::new();
+    let mut body = Vec::new();
     let root = if svg.contains("xlink:") {
         format!(
             r#"<svg width="{width}" height="{height}" viewBox="0 0 {width} {height}" fill="none" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">"#
@@ -25,33 +26,110 @@ pub(crate) fn normalize_svg_for_figma_parity(svg: &str, width: u32, height: u32)
             continue;
         }
         if let Some(norm) = normalize_rect_line(t) {
-            out.push(norm);
+            body.push(norm);
             continue;
         }
         if let Some(norm) = normalize_mask_line(t) {
-            out.push(norm);
+            body.push(norm);
             continue;
         }
         if let Some(norm) = normalize_circle_line(t) {
-            out.push(norm);
+            body.push(norm);
             continue;
         }
         if let Some(norm) = normalize_translated_path_line(t) {
-            out.push(norm);
+            body.push(norm);
             continue;
         }
         // Figma often emits keyword black for solid text/shape paths.
-        out.push(
+        body.push(
             t.replace("fill=\"#000000\"", "fill=\"black\"")
                 .replace("stroke=\"#000000\"", "stroke=\"black\""),
         );
     }
+    let body = wrap_top_level_after_first_filtered_group(body);
+    let body = flatten_plain_groups(body);
+    out.extend(body);
     if !saw_root {
         // fallback: maintain well-formed output even if parser changes
         out.push(format!(r##"<rect width="{width}" height="{height}" fill="#FFFFFF"/>"##));
     }
     out.push("</svg>".to_string());
     out.join("\n") + "\n"
+}
+
+#[cfg(feature = "svg_export")]
+fn wrap_top_level_after_first_filtered_group(lines: Vec<String>) -> Vec<String> {
+    if lines.is_empty() || !lines[0].starts_with("<g filter=") {
+        return lines;
+    }
+    let mut depth: i32 = 0;
+    let mut close_idx: Option<usize> = None;
+    for (i, line) in lines.iter().enumerate() {
+        let t = line.trim();
+        if t.starts_with("<g ") && !t.ends_with("/>") {
+            depth += 1;
+        }
+        if t == "</g>" {
+            depth -= 1;
+            if depth == 0 {
+                close_idx = Some(i);
+                break;
+            }
+        }
+    }
+    let Some(close_idx) = close_idx else {
+        return lines;
+    };
+    if close_idx + 1 >= lines.len() {
+        return lines;
+    }
+    let mut defs_start = lines.len();
+    for (i, line) in lines.iter().enumerate().skip(close_idx + 1) {
+        if line.trim_start().starts_with("<defs") {
+            defs_start = i;
+            break;
+        }
+    }
+    if close_idx + 1 >= defs_start {
+        return lines;
+    }
+
+    let mut out = Vec::with_capacity(lines.len());
+    out.extend_from_slice(&lines[0..close_idx]);
+    out.extend_from_slice(&lines[close_idx + 1..defs_start]);
+    out.push(lines[close_idx].clone());
+    out.extend_from_slice(&lines[defs_start..]);
+    out
+}
+
+#[cfg(feature = "svg_export")]
+fn flatten_plain_groups(lines: Vec<String>) -> Vec<String> {
+    let mut out = Vec::with_capacity(lines.len());
+    let mut plain_group_stack: Vec<bool> = Vec::new();
+
+    for line in lines {
+        let t = line.trim();
+        if t == "<g>" {
+            plain_group_stack.push(true);
+            continue;
+        }
+        if t.starts_with("<g ") && !t.ends_with("/>") {
+            plain_group_stack.push(false);
+            out.push(line);
+            continue;
+        }
+        if t == "</g>" {
+            let is_plain = plain_group_stack.pop().unwrap_or(false);
+            if !is_plain {
+                out.push(line);
+            }
+            continue;
+        }
+        out.push(line);
+    }
+
+    out
 }
 
 #[cfg(feature = "svg_export")]
@@ -67,6 +145,7 @@ fn normalize_rect_line(line: &str) -> Option<String> {
     let w = extract_xml_attr(line, "width")?;
     let h = extract_xml_attr(line, "height")?;
     let opacity = extract_xml_attr(line, "opacity");
+    let style = extract_xml_attr(line, "style");
     let transform = extract_xml_attr(line, "transform");
     let rx = extract_xml_attr(line, "rx");
     let ry = extract_xml_attr(line, "ry");
@@ -88,10 +167,16 @@ fn normalize_rect_line(line: &str) -> Option<String> {
         }
     }
     if let Some(x) = x {
-        attrs.push(format!(r#"x="{}""#, trim_decimal(&x)));
+        let val = trim_decimal(&x);
+        if val != "0" {
+            attrs.push(format!(r#"x="{val}""#));
+        }
     }
     if let Some(y) = y {
-        attrs.push(format!(r#"y="{}""#, trim_decimal(&y)));
+        let val = trim_decimal(&y);
+        if val != "0" {
+            attrs.push(format!(r#"y="{val}""#));
+        }
     }
     attrs.push(format!(r#"width="{}""#, trim_decimal(&w)));
     attrs.push(format!(r#"height="{}""#, trim_decimal(&h)));
@@ -107,6 +192,9 @@ fn normalize_rect_line(line: &str) -> Option<String> {
     if let Some(mut fill) = fill {
         fill = normalize_svg_color_keyword(fill);
         attrs.push(format!(r#"fill="{fill}""#));
+    }
+    if let Some(style) = style {
+        attrs.push(format!(r#"style="{style}""#));
     }
     if let Some(opacity) = fill_opacity {
         let val = trim_decimal(&opacity);
@@ -191,15 +279,46 @@ fn normalize_circle_line(line: &str) -> Option<String> {
     let cx = extract_xml_attr(line, "cx")?;
     let cy = extract_xml_attr(line, "cy")?;
     let r = extract_xml_attr(line, "r")?;
+    let transform = extract_xml_attr(line, "transform");
     let fill = extract_xml_attr(line, "fill");
+    let fill_opacity = extract_xml_attr(line, "fill-opacity");
+    let style = extract_xml_attr(line, "style");
+    let stroke = extract_xml_attr(line, "stroke");
+    let stroke_opacity = extract_xml_attr(line, "stroke-opacity");
+    let stroke_width = extract_xml_attr(line, "stroke-width");
     let mut attrs: Vec<String> = vec![
         format!(r#"cx="{}""#, trim_decimal(&cx)),
         format!(r#"cy="{}""#, trim_decimal(&cy)),
         format!(r#"r="{}""#, trim_decimal(&r)),
     ];
+    if let Some(transform) = transform {
+        attrs.push(format!(r#"transform="{transform}""#));
+    }
     if let Some(fill) = fill {
         let fill = normalize_svg_color_keyword(fill);
         attrs.push(format!(r#"fill="{fill}""#));
+    }
+    if let Some(fill_opacity) = fill_opacity {
+        let val = trim_decimal(&fill_opacity);
+        if should_emit_opacity(&val) {
+            attrs.push(format!(r#"fill-opacity="{val}""#));
+        }
+    }
+    if let Some(style) = style {
+        attrs.push(format!(r#"style="{style}""#));
+    }
+    if let Some(stroke) = stroke {
+        let stroke = normalize_svg_color_keyword(stroke);
+        attrs.push(format!(r#"stroke="{stroke}""#));
+    }
+    if let Some(stroke_opacity) = stroke_opacity {
+        let val = trim_decimal(&stroke_opacity);
+        if should_emit_opacity(&val) {
+            attrs.push(format!(r#"stroke-opacity="{val}""#));
+        }
+    }
+    if let Some(stroke_width) = stroke_width {
+        attrs.push(format!(r#"stroke-width="{}""#, trim_decimal(&stroke_width)));
     }
     Some(format!("<circle {}/>", attrs.join(" ")))
 }
@@ -215,9 +334,16 @@ fn parse_translate_decimal(transform: &str) -> Option<(rust_decimal::Decimal, ru
 
 #[cfg(feature = "svg_export")]
 fn parse_decimal(v: &str) -> Option<rust_decimal::Decimal> {
-    rust_decimal::Decimal::from_str_exact(v)
-        .or_else(|_| v.parse::<rust_decimal::Decimal>())
-        .ok()
+    if let Ok(d) = rust_decimal::Decimal::from_str_exact(v) {
+        return Some(d);
+    }
+    if let Ok(d) = v.parse::<rust_decimal::Decimal>() {
+        return Some(d);
+    }
+    if let Ok(f) = v.parse::<f64>() {
+        return rust_decimal::Decimal::from_f64_retain(f);
+    }
+    None
 }
 
 #[cfg(feature = "svg_export")]
@@ -245,7 +371,12 @@ fn extract_xml_attr(line: &str, key: &str) -> Option<String> {
 #[cfg(feature = "svg_export")]
 fn trim_decimal(v: &str) -> String {
     parse_decimal(v)
-        .map(format_decimal)
+        .map(|mut d| {
+            if d.scale() > 2 {
+                d = d.round_dp(2);
+            }
+            format_decimal(d)
+        })
         .unwrap_or_else(|| v.to_string())
 }
 
@@ -286,6 +417,9 @@ fn normalize_translated_path_line(line: &str) -> Option<String> {
     if let Some(fill) = extract_xml_attr(line, "fill") {
         let fill = normalize_svg_color_keyword(fill);
         attrs.push(format!(r#"fill="{fill}""#));
+    }
+    if let Some(style) = extract_xml_attr(line, "style") {
+        attrs.push(format!(r#"style="{style}""#));
     }
     if let Some(fill_opacity) = extract_xml_attr(line, "fill-opacity") {
         let val = trim_decimal(&fill_opacity);
@@ -345,7 +479,16 @@ fn translate_and_compact_path_data(
         i += 1;
         while i < chars.len() {
             let ch = chars[i];
-            if ch.is_ascii_alphabetic() || ch.is_ascii_whitespace() || ch == ',' {
+            if ch.is_ascii_whitespace() || ch == ',' {
+                break;
+            }
+            if ch.is_ascii_alphabetic() {
+                // Keep scientific notation exponents (e.g. 1.2e-7) inside numeric tokens.
+                if !(ch == 'e' || ch == 'E') {
+                    break;
+                }
+            }
+            if (ch == '+' || ch == '-') && chars[i - 1] != 'e' && chars[i - 1] != 'E' {
                 break;
             }
             i += 1;

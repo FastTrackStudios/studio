@@ -1,99 +1,20 @@
 use super::normalize::{
     extract_export_base_color, extract_export_bbox, normalize_svg_for_figma_parity,
 };
+use super::context::RenderCtx;
+use super::source_bridge::{
+    collect_source_absolute_bboxes, collect_source_stroke_data, extract_export_root_id,
+    extract_export_root_name, raw_stroke_paints,
+};
 #[cfg(feature = "svg_export")]
 use kurbo::Shape;
-
-#[cfg(feature = "svg_export")]
-fn collect_source_absolute_bboxes(bytes: &[u8]) -> Result<std::collections::HashMap<String, (f64, f64, f64, f64)>, String> {
-    fn walk(node: &serde_json::Value, out: &mut std::collections::HashMap<String, (f64, f64, f64, f64)>) {
-        let id = node.get("id").and_then(|v| v.as_str());
-        let bb = node.get("absoluteBoundingBox");
-        if let (Some(id), Some(bb)) = (id, bb) {
-            let x = bb.get("x").and_then(|v| v.as_f64());
-            let y = bb.get("y").and_then(|v| v.as_f64());
-            let w = bb.get("width").and_then(|v| v.as_f64());
-            let h = bb.get("height").and_then(|v| v.as_f64());
-            if let (Some(x), Some(y), Some(w), Some(h)) = (x, y, w, h) {
-                out.insert(id.to_string(), (x, y, w.max(0.0), h.max(0.0)));
-            }
-        }
-        if let Some(children) = node.get("children").and_then(|v| v.as_array()) {
-            for child in children {
-                walk(child, out);
-            }
-        }
-    }
-
-    let json: serde_json::Value =
-        serde_json::from_slice(bytes).map_err(|e| format!("invalid export JSON: {e}"))?;
-    let mut out = std::collections::HashMap::new();
-    if let Some(nodes) = json.get("nodes").and_then(|v| v.as_array()) {
-        for node in nodes {
-            walk(node, &mut out);
-        }
-    }
-    Ok(out)
-}
-
-#[cfg(feature = "svg_export")]
-fn extract_export_root_name(
-    bytes: &[u8],
-    root_figma_id: Option<&str>,
-) -> Result<Option<String>, String> {
-    let json: serde_json::Value =
-        serde_json::from_slice(bytes).map_err(|e| format!("invalid export JSON: {e}"))?;
-    let Some(nodes) = json.get("nodes").and_then(|n| n.as_array()) else {
-        return Ok(None);
-    };
-    if nodes.is_empty() {
-        return Ok(None);
-    }
-    let target = if let Some(root_id) = root_figma_id {
-        nodes.iter()
-            .find(|node| node.get("id").and_then(|v| v.as_str()) == Some(root_id))
-            .unwrap_or(&nodes[0])
-    } else {
-        &nodes[0]
-    };
-    Ok(target
-        .get("name")
-        .and_then(|v| v.as_str())
-        .map(ToString::to_string))
-}
-
-#[cfg(feature = "svg_export")]
-fn extract_export_root_id(
-    bytes: &[u8],
-    root_figma_id: Option<&str>,
-) -> Result<Option<String>, String> {
-    let json: serde_json::Value =
-        serde_json::from_slice(bytes).map_err(|e| format!("invalid export JSON: {e}"))?;
-    let Some(nodes) = json.get("nodes").and_then(|n| n.as_array()) else {
-        return Ok(None);
-    };
-    if nodes.is_empty() {
-        return Ok(None);
-    }
-    let target = if let Some(root_id) = root_figma_id {
-        nodes.iter()
-            .find(|node| node.get("id").and_then(|v| v.as_str()) == Some(root_id))
-            .unwrap_or(&nodes[0])
-    } else {
-        &nodes[0]
-    };
-    Ok(target
-        .get("id")
-        .and_then(|v| v.as_str())
-        .map(ToString::to_string))
-}
 
 #[cfg(feature = "svg_export")]
 pub fn run_cli() -> Result<(), String> {
     use crate::{build_layout_boxes, build_paint_primitives, PaintPrimitive};
     use frame_proto::FrameDocument;
     use svg::node::element::{
-        Circle, ClipPath, Definitions, Element, ForeignObject, Group, Image, Line, Mask,
+        Circle, ClipPath, Element, ForeignObject, Group, Image, Line, Mask,
         Path as SvgPath, Pattern, Rectangle, Use,
     };
     use svg::Document;
@@ -138,6 +59,7 @@ pub fn run_cli() -> Result<(), String> {
     let base_color = extract_export_base_color(&bytes, root_figma_id.as_deref())?
         .unwrap_or((255, 255, 255, 255));
     let source_bboxes = collect_source_absolute_bboxes(&bytes)?;
+    let source_stroke_data = collect_source_stroke_data(&bytes)?;
     let root_name = extract_export_root_name(&bytes, root_figma_id.as_deref())?;
     let export_root_id = extract_export_root_id(&bytes, root_figma_id.as_deref())?;
     // Text parity fixtures in this corpus validate text outline serialization only.
@@ -221,36 +143,38 @@ pub fn run_cli() -> Result<(), String> {
         .set("viewBox", format!("0 0 {width} {height}"))
         .set("fill", "none");
 
-    let mut bg = Rectangle::new().set("width", width).set("height", height);
-    let (bg_hex, bg_opacity) =
-        svg_color_paint_values(base_color.0, base_color.1, base_color.2, base_color.3);
-    bg = bg.set("fill", bg_hex.clone());
-    if let Some(opacity) = bg_opacity {
-        bg = bg.set("fill-opacity", opacity);
-    }
-    push_node(&mut svg_doc, &mut Vec::new(), bg);
-
     let tx = -min_x;
     let ty = -min_y;
     let canvas_w = width as f64;
     let canvas_h = height as f64;
-    let mut group_stack: Vec<Group> = Vec::new();
-    let mut clip_count: u64 = 0;
-    let mut gradient_count: u64 = 0;
-    let mut pattern_count: u64 = 0;
-    let mut effect_count: u64 = 0;
-    let mut bg_blur_count: u64 = 0;
-    let mut mask_count: u64 = 0;
-    let mut defs = Definitions::new();
-    let mut has_defs = false;
-    let mut deferred_gradients: Vec<Box<dyn svg::Node>> = Vec::new();
-    let mut deferred_images: Vec<Image> = Vec::new();
-    let mut deferred_clip_paths: Vec<ClipPath> = Vec::new();
-    let mut image_defs = std::collections::HashMap::<String, String>::new();
+    let (bg_hex, bg_opacity) =
+        svg_color_paint_values(base_color.0, base_color.1, base_color.2, base_color.3);
+    let mut bg = Rectangle::new().set("width", width).set("height", height);
+    bg = bg.set("fill", bg_hex.clone());
+    if let Some(opacity) = bg_opacity.clone() {
+        bg = bg.set("fill-opacity", opacity);
+    }
+    push_node(&mut svg_doc, &mut Vec::new(), bg);
+
+    let RenderCtx {
+        mut group_stack,
+        mut clip_count,
+        mut gradient_count,
+        mut pattern_count,
+        mut effect_count,
+        mut bg_blur_count,
+        mut mask_count,
+        mut image_count,
+        mut has_defs,
+        mut has_xlink_namespace,
+        mut defs,
+        mut deferred_gradients,
+        mut deferred_images,
+        mut deferred_clip_paths,
+        mut image_defs,
+    } = RenderCtx::default();
     let mut mask_defs = std::collections::HashMap::new();
     let mut active_mask_bounds: Option<(f64, f64, f64, f64)> = None;
-    let mut image_count: u64 = 0;
-    let mut has_xlink_namespace = false;
 
     for primitive in primitives {
         if text_only_mode {
@@ -373,6 +297,7 @@ pub fn run_cli() -> Result<(), String> {
                 stroke,
                 corner_radii,
                 effects,
+                blend,
                 ..
             } => {
                 let rx = x + tx;
@@ -480,6 +405,211 @@ pub fn run_cli() -> Result<(), String> {
                             })
                     }).unwrap_or(corner_radii)
                 };
+                if fills.len() > 1 && !effects.is_empty() {
+                    let mut aggregate_group = Group::new();
+                    for (fill, fill_blend) in &fills {
+                        match fill {
+                            crate::anyrender_renderer::FillPaint::GradientLinear {
+                                transform,
+                                stops,
+                            } => {
+                                let gradient_id =
+                                    format!("paint{gradient_count}_linear_{root_id_suffix}");
+                                gradient_count += 1;
+                                if let Some(gradient) = svg_linear_gradient_def(
+                                    &gradient_id,
+                                    rx,
+                                    ry,
+                                    rw,
+                                    rh,
+                                    transform.as_ref(),
+                                    stops.as_slice(),
+                                ) {
+                                    deferred_gradients.push(Box::new(gradient));
+                                    has_defs = true;
+                                    let mut rect = Rectangle::new()
+                                        .set("x", fmt_f64(rx))
+                                        .set("y", fmt_f64(ry))
+                                        .set("width", fmt_f64(rw))
+                                        .set("height", fmt_f64(rh))
+                                        .set("fill", format!("url(#{gradient_id})"));
+                                    rect = apply_corner_radii_rect(rect, &effective_corner_radii);
+                                    if let Some(mode) = svg_mix_blend_mode(fill_blend) {
+                                        aggregate_group = aggregate_group
+                                            .add(rect.set("style", format!("mix-blend-mode:{mode}")));
+                                    } else {
+                                        aggregate_group = aggregate_group.add(rect);
+                                    }
+                                }
+                            }
+                            crate::anyrender_renderer::FillPaint::GradientRadial {
+                                transform,
+                                stops,
+                            } => {
+                                let gradient_id =
+                                    format!("paint{gradient_count}_radial_{root_id_suffix}");
+                                gradient_count += 1;
+                                if let Some(gradient) = svg_radial_gradient_def(
+                                    &gradient_id,
+                                    rx,
+                                    ry,
+                                    rw,
+                                    rh,
+                                    transform.as_ref(),
+                                    stops.as_slice(),
+                                ) {
+                                    deferred_gradients.push(Box::new(gradient));
+                                    has_defs = true;
+                                    let mut rect = Rectangle::new()
+                                        .set("x", fmt_f64(rx))
+                                        .set("y", fmt_f64(ry))
+                                        .set("width", fmt_f64(rw))
+                                        .set("height", fmt_f64(rh))
+                                        .set("fill", format!("url(#{gradient_id})"));
+                                    rect = apply_corner_radii_rect(rect, &effective_corner_radii);
+                                    if let Some(mode) = svg_mix_blend_mode(fill_blend) {
+                                        aggregate_group = aggregate_group
+                                            .add(rect.set("style", format!("mix-blend-mode:{mode}")));
+                                    } else {
+                                        aggregate_group = aggregate_group.add(rect);
+                                    }
+                                }
+                            }
+                            crate::anyrender_renderer::FillPaint::Image {
+                                image_hash,
+                                data_base64,
+                                alpha,
+                                scale_mode,
+                                image_transform,
+                            } => {
+                                let pattern_id = format!("pattern{pattern_count}_{root_id_suffix}");
+                                pattern_count += 1;
+                                let image_key = image_hash
+                                    .clone()
+                                    .unwrap_or_else(|| format!("inline:{data_base64}"));
+                                let image_id = if let Some(existing) = image_defs.get(&image_key) {
+                                    existing.clone()
+                                } else {
+                                    let new_id = format!("image{image_count}_{root_id_suffix}");
+                                    image_count += 1;
+                                    image_defs.insert(image_key, new_id.clone());
+                                    let mut image = Image::new()
+                                        .set("id", new_id.clone())
+                                        .set("width", "1")
+                                        .set("height", "1")
+                                        .set("preserveAspectRatio", "none")
+                                        .set(
+                                            "xlink:href",
+                                            format!("data:image/png;base64,{data_base64}"),
+                                        );
+                                    if *alpha < 1.0 {
+                                        image = image.set("opacity", fmt_f64(*alpha));
+                                    }
+                                    deferred_images.push(image);
+                                    new_id
+                                };
+                                let mut pattern = Pattern::new()
+                                    .set("id", pattern_id.clone())
+                                    .set("patternContentUnits", "objectBoundingBox")
+                                    .set("width", "1")
+                                    .set("height", "1");
+                                let mut image_use = Use::new().set("xlink:href", format!("#{image_id}"));
+                                if let Some((a, b, c, d, e, f)) = svg_image_fill_transform(
+                                    *scale_mode,
+                                    image_transform.as_ref(),
+                                    rw,
+                                    rh,
+                                ) {
+                                    image_use = image_use.set(
+                                        "transform",
+                                        format!(
+                                            "matrix({} {} {} {} {} {})",
+                                            fmt_f64(a),
+                                            fmt_f64(b),
+                                            fmt_f64(c),
+                                            fmt_f64(d),
+                                            fmt_f64(e),
+                                            fmt_f64(f)
+                                        ),
+                                    );
+                                }
+                                pattern = pattern.add(image_use);
+                                defs = defs.add(pattern);
+                                has_defs = true;
+                                has_xlink_namespace = true;
+
+                                let mut rect = Rectangle::new()
+                                    .set("x", fmt_f64(rx))
+                                    .set("y", fmt_f64(ry))
+                                    .set("width", fmt_f64(rw))
+                                    .set("height", fmt_f64(rh))
+                                    .set("fill", format!("url(#{pattern_id})"));
+                                rect = apply_corner_radii_rect(rect, &effective_corner_radii);
+                                if let Some(mode) = svg_mix_blend_mode(fill_blend) {
+                                    aggregate_group = aggregate_group
+                                        .add(rect.set("style", format!("mix-blend-mode:{mode}")));
+                                } else {
+                                    aggregate_group = aggregate_group.add(rect);
+                                }
+                            }
+                            _ => {
+                                if let Some(style) = svg_fill_style(fill) {
+                                    let mut rect = Rectangle::new()
+                                        .set("x", fmt_f64(rx))
+                                        .set("y", fmt_f64(ry))
+                                        .set("width", fmt_f64(rw))
+                                        .set("height", fmt_f64(rh));
+                                    rect = apply_corner_radii_rect(rect, &effective_corner_radii);
+                                    rect = apply_fill_style_rect(rect, &style);
+                                    if let Some(mode) = svg_mix_blend_mode(fill_blend) {
+                                        aggregate_group = aggregate_group
+                                            .add(rect.set("style", format!("mix-blend-mode:{mode}")));
+                                    } else {
+                                        aggregate_group = aggregate_group.add(rect);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    if let Some(stroke) = stroke.as_ref() {
+                        let (hex, opacity) = svg_color_paint_values(
+                            to_u8(stroke.color.r),
+                            to_u8(stroke.color.g),
+                            to_u8(stroke.color.b),
+                            (stroke.color.a * 255.0).round().clamp(0.0, 255.0) as u8,
+                        );
+                        let mut stroke_rect = Rectangle::new()
+                            .set("x", fmt_f64(rx))
+                            .set("y", fmt_f64(ry))
+                            .set("width", fmt_f64(rw))
+                            .set("height", fmt_f64(rh))
+                            .set("fill", "none")
+                            .set("stroke", hex)
+                            .set("stroke-width", fmt_f64(stroke.width.max(0.0)))
+                            .set("stroke-linecap", svg_linecap(stroke.cap))
+                            .set("stroke-linejoin", svg_linejoin(stroke.join));
+                        if let Some(opacity) = opacity {
+                            stroke_rect = stroke_rect.set("stroke-opacity", opacity);
+                        }
+                        aggregate_group = aggregate_group.add(stroke_rect);
+                    }
+                    super::effects::push_group_with_blend_and_effects(
+                        &mut svg_doc,
+                        &mut group_stack,
+                        &mut defs,
+                        &mut has_defs,
+                        &root_id_suffix,
+                        &mut effect_count,
+                        aggregate_group,
+                        &blend,
+                        effects.as_slice(),
+                        rx,
+                        ry,
+                        rw,
+                        rh,
+                    );
+                    continue;
+                }
                 if fills.len() == 1 {
                     if let Some((fill, blend_mode)) = fills.first() {
                         match fill {
@@ -522,7 +652,12 @@ pub fn run_cli() -> Result<(), String> {
                                             rect = rect.set("stroke-opacity", opacity);
                                         }
                                     }
-                                    push_node(&mut svg_doc, &mut group_stack, rect);
+                                    push_node_with_optional_blend(
+                                        &mut svg_doc,
+                                        &mut group_stack,
+                                        rect,
+                                        Some(blend_mode),
+                                    );
                                     continue;
                                 }
                             }
@@ -565,7 +700,12 @@ pub fn run_cli() -> Result<(), String> {
                                             rect = rect.set("stroke-opacity", opacity);
                                         }
                                     }
-                                    push_node(&mut svg_doc, &mut group_stack, rect);
+                                    push_node_with_optional_blend(
+                                        &mut svg_doc,
+                                        &mut group_stack,
+                                        rect,
+                                        Some(blend_mode),
+                                    );
                                     continue;
                                 }
                             }
@@ -618,8 +758,6 @@ pub fn run_cli() -> Result<(), String> {
                                     .set("clip-path", format!("url(#{clip_id})"))
                                     .set("data-figma-skip-parse", "true")
                                     .add(inner);
-                                push_node(&mut svg_doc, &mut group_stack, group);
-
                                 let metadata_rect = Rectangle::new()
                                     .set("x", fmt_f64(rx))
                                     .set("y", fmt_f64(ry))
@@ -629,7 +767,13 @@ pub fn run_cli() -> Result<(), String> {
                                         "data-figma-gradient-fill",
                                         svg_angular_metadata_attr(rx, ry, rw, rh, stops.as_slice()),
                                     );
-                                push_node(&mut svg_doc, &mut group_stack, metadata_rect);
+                                let angular_group = Group::new().add(group).add(metadata_rect);
+                                push_node_with_optional_blend(
+                                    &mut svg_doc,
+                                    &mut group_stack,
+                                    angular_group,
+                                    Some(blend_mode),
+                                );
 
                                 if let Some(stroke) = stroke.as_ref() {
                                     let mut rect = Rectangle::new()
@@ -651,7 +795,12 @@ pub fn run_cli() -> Result<(), String> {
                                     if let Some(opacity) = opacity {
                                         rect = rect.set("stroke-opacity", opacity);
                                     }
-                                    push_node(&mut svg_doc, &mut group_stack, rect);
+                                    push_node_with_optional_blend(
+                                        &mut svg_doc,
+                                        &mut group_stack,
+                                        rect,
+                                        Some(blend_mode),
+                                    );
                                 }
                                 continue;
                             }
@@ -742,23 +891,42 @@ pub fn run_cli() -> Result<(), String> {
                                         rect = rect.set("stroke-opacity", opacity);
                                     }
                                 }
-                                push_rect_with_effects(
-                                    &mut svg_doc,
-                                    &mut group_stack,
-                                    &mut defs,
-                                    &mut has_defs,
-                                    &root_id_suffix,
-                                    &mut effect_count,
-                                    &mut bg_blur_count,
-                                    rect,
-                                    stroke.as_ref(),
-                                    effects.as_slice(),
-                                    rx,
-                                    ry,
-                                    rw,
-                                    rh,
-                                    &effective_corner_radii,
-                                );
+                                if svg_mix_blend_mode(blend_mode).is_some() {
+                                    super::effects::push_group_with_blend_and_effects(
+                                        &mut svg_doc,
+                                        &mut group_stack,
+                                        &mut defs,
+                                        &mut has_defs,
+                                        &root_id_suffix,
+                                        &mut effect_count,
+                                        Group::new().add(rect),
+                                        blend_mode,
+                                        effects.as_slice(),
+                                        rx,
+                                        ry,
+                                        rw,
+                                        rh,
+                                    );
+                                } else {
+                                    super::effects::push_rect_with_effects(
+                                        &mut svg_doc,
+                                        &mut group_stack,
+                                        &mut defs,
+                                        &mut has_defs,
+                                        &root_id_suffix,
+                                        &mut effect_count,
+                                        &mut bg_blur_count,
+                                        rect,
+                                        stroke.as_ref(),
+                                        effects.as_slice(),
+                                        rx,
+                                        ry,
+                                        rw,
+                                        rh,
+                                        &effective_corner_radii,
+                                        &[],
+                                    );
+                                }
                                 continue;
                             }
                             _ => {}
@@ -835,28 +1003,69 @@ pub fn run_cli() -> Result<(), String> {
                                     rect = rect.set("stroke-opacity", opacity);
                                 }
                             }
-                            push_rect_with_effects(
-                                &mut svg_doc,
-                                &mut group_stack,
-                                &mut defs,
-                                &mut has_defs,
-                                &root_id_suffix,
-                                &mut effect_count,
-                                &mut bg_blur_count,
-                                rect,
-                                stroke.as_ref(),
-                                effects.as_slice(),
-                                rx,
-                                ry,
-                                rw,
-                                rh,
-                                &effective_corner_radii,
-                            );
+                            if svg_mix_blend_mode(blend_mode).is_some() {
+                                super::effects::push_group_with_blend_and_effects(
+                                    &mut svg_doc,
+                                    &mut group_stack,
+                                    &mut defs,
+                                    &mut has_defs,
+                                    &root_id_suffix,
+                                    &mut effect_count,
+                                    Group::new().add(rect),
+                                    blend_mode,
+                                    effects.as_slice(),
+                                    rx,
+                                    ry,
+                                    rw,
+                                    rh,
+                                );
+                            } else {
+                                super::effects::push_rect_with_effects(
+                                    &mut svg_doc,
+                                    &mut group_stack,
+                                    &mut defs,
+                                    &mut has_defs,
+                                    &root_id_suffix,
+                                    &mut effect_count,
+                                    &mut bg_blur_count,
+                                    rect,
+                                    stroke.as_ref(),
+                                    effects.as_slice(),
+                                    rx,
+                                    ry,
+                                    rw,
+                                    rh,
+                                    &effective_corner_radii,
+                                    &[],
+                                );
+                            }
                             continue;
                         }
                     }
                 }
-                for (fill, _) in fills {
+                let raw_frame_strokes = node
+                    .and_then(|n| source_stroke_data.get(&n.figma_id).map(|(p, _)| p.clone()))
+                    .filter(|p| !p.is_empty())
+                    .or_else(|| node.map(|n| raw_stroke_paints(&n.raw)))
+                    .unwrap_or_default();
+                let has_complex_frame_strokes = raw_frame_strokes.len() > 1
+                    || raw_frame_strokes.iter().any(|paint| {
+                        !matches!(paint, crate::anyrender_renderer::FillPaint::Solid(_))
+                    });
+                let frame_stroke_width = stroke
+                    .as_ref()
+                    .map(|s| s.width.max(0.0))
+                    .or_else(|| {
+                        node.and_then(|n| source_stroke_data.get(&n.figma_id))
+                            .and_then(|(_, w)| *w)
+                            .map(|w| w.max(0.0))
+                    })
+                    .or_else(|| {
+                        node.and_then(|n| n.raw.get("strokeWeight").and_then(|v| v.as_f64()))
+                            .map(|w| w.max(0.0))
+                    })
+                    .unwrap_or(0.0);
+                for (fill, fill_blend) in fills {
                     match &fill {
                         crate::anyrender_renderer::FillPaint::GradientLinear { transform, stops } => {
                             let gradient_id =
@@ -879,7 +1088,30 @@ pub fn run_cli() -> Result<(), String> {
                                     .set("width", fmt_f64(rw))
                                     .set("height", fmt_f64(rh))
                                     .set("fill", format!("url(#{gradient_id})"));
-                                push_node(&mut svg_doc, &mut group_stack, rect);
+                                push_node_with_optional_blend(
+                                    &mut svg_doc,
+                                    &mut group_stack,
+                                    rect,
+                                    Some(&fill_blend),
+                                );
+                                if has_complex_frame_strokes && frame_stroke_width > 0.0 {
+                                    push_complex_frame_stroke_overlays(
+                                        &mut svg_doc,
+                                        &mut group_stack,
+                                        &mut gradient_count,
+                                        &mut deferred_gradients,
+                                        &mut has_defs,
+                                        &root_id_suffix,
+                                        rx,
+                                        ry,
+                                        rw,
+                                        rh,
+                                        &effective_corner_radii,
+                                        frame_stroke_width,
+                                        &raw_frame_strokes,
+                                        &fill_blend,
+                                    );
+                                }
                             }
                             continue;
                         }
@@ -904,7 +1136,30 @@ pub fn run_cli() -> Result<(), String> {
                                     .set("width", fmt_f64(rw))
                                     .set("height", fmt_f64(rh))
                                     .set("fill", format!("url(#{gradient_id})"));
-                                push_node(&mut svg_doc, &mut group_stack, rect);
+                                push_node_with_optional_blend(
+                                    &mut svg_doc,
+                                    &mut group_stack,
+                                    rect,
+                                    Some(&fill_blend),
+                                );
+                                if has_complex_frame_strokes && frame_stroke_width > 0.0 {
+                                    push_complex_frame_stroke_overlays(
+                                        &mut svg_doc,
+                                        &mut group_stack,
+                                        &mut gradient_count,
+                                        &mut deferred_gradients,
+                                        &mut has_defs,
+                                        &root_id_suffix,
+                                        rx,
+                                        ry,
+                                        rw,
+                                        rh,
+                                        &effective_corner_radii,
+                                        frame_stroke_width,
+                                        &raw_frame_strokes,
+                                        &fill_blend,
+                                    );
+                                }
                             }
                             continue;
                         }
@@ -957,8 +1212,6 @@ pub fn run_cli() -> Result<(), String> {
                                 .set("clip-path", format!("url(#{clip_id})"))
                                 .set("data-figma-skip-parse", "true")
                                 .add(inner);
-                            push_node(&mut svg_doc, &mut group_stack, group);
-
                             let metadata_rect = Rectangle::new()
                                 .set("x", fmt_f64(rx))
                                 .set("y", fmt_f64(ry))
@@ -968,7 +1221,13 @@ pub fn run_cli() -> Result<(), String> {
                                     "data-figma-gradient-fill",
                                     svg_angular_metadata_attr(rx, ry, rw, rh, stops.as_slice()),
                                 );
-                            push_node(&mut svg_doc, &mut group_stack, metadata_rect);
+                            let angular_group = Group::new().add(group).add(metadata_rect);
+                            push_node_with_optional_blend(
+                                &mut svg_doc,
+                                &mut group_stack,
+                                angular_group,
+                                Some(&fill_blend),
+                            );
                             continue;
                         }
                         crate::anyrender_renderer::FillPaint::Image {
@@ -983,27 +1242,27 @@ pub fn run_cli() -> Result<(), String> {
                             let image_key = image_hash
                                 .clone()
                                 .unwrap_or_else(|| format!("inline:{data_base64}"));
-                            let image_id = if let Some(existing) = image_defs.get(&image_key) {
-                                existing.clone()
-                            } else {
-                                let new_id = format!("image{image_count}_{root_id_suffix}");
-                                image_count += 1;
-                                image_defs.insert(image_key, new_id.clone());
-                                let mut image = Image::new()
-                                    .set("id", new_id.clone())
-                                    .set("width", "1")
-                                    .set("height", "1")
-                                    .set("preserveAspectRatio", "none")
-                                    .set(
-                                        "xlink:href",
-                                        format!("data:image/png;base64,{data_base64}"),
-                                    );
-                                if *alpha < 1.0 {
-                                    image = image.set("opacity", fmt_f64(*alpha));
-                                }
-                                deferred_images.push(image);
-                                new_id
-                            };
+                                let image_id = if let Some(existing) = image_defs.get(&image_key) {
+                                    existing.clone()
+                                } else {
+                                    let new_id = format!("image{image_count}_{root_id_suffix}");
+                                    image_count += 1;
+                                    image_defs.insert(image_key, new_id.clone());
+                                    let mut image = Image::new()
+                                        .set("id", new_id.clone())
+                                        .set("width", "1")
+                                        .set("height", "1")
+                                        .set("preserveAspectRatio", "none")
+                                        .set(
+                                            "xlink:href",
+                                            format!("data:image/png;base64,{data_base64}"),
+                                        );
+                                    if *alpha < 1.0 {
+                                        image = image.set("opacity", fmt_f64(*alpha));
+                                    }
+                                    deferred_images.push(image);
+                                    new_id
+                                };
 
                             let mut pattern = Pattern::new()
                                 .set("id", pattern_id.clone())
@@ -1042,7 +1301,72 @@ pub fn run_cli() -> Result<(), String> {
                                 .set("height", fmt_f64(rh))
                                 .set("fill", format!("url(#{pattern_id})"));
                             rect = apply_corner_radii_rect(rect, &effective_corner_radii);
-                            push_rect_with_effects(
+                            if svg_mix_blend_mode(&fill_blend).is_some() {
+                                super::effects::push_group_with_blend_and_effects(
+                                    &mut svg_doc,
+                                    &mut group_stack,
+                                    &mut defs,
+                                    &mut has_defs,
+                                    &root_id_suffix,
+                                    &mut effect_count,
+                                    Group::new().add(rect),
+                                    &fill_blend,
+                                    effects.as_slice(),
+                                    rx,
+                                    ry,
+                                    rw,
+                                    rh,
+                                );
+                            } else {
+                                super::effects::push_rect_with_effects(
+                                    &mut svg_doc,
+                                    &mut group_stack,
+                                    &mut defs,
+                                    &mut has_defs,
+                                    &root_id_suffix,
+                                    &mut effect_count,
+                                    &mut bg_blur_count,
+                                    rect,
+                                    stroke.as_ref(),
+                                    effects.as_slice(),
+                                    rx,
+                                    ry,
+                                    rw,
+                                    rh,
+                                    &effective_corner_radii,
+                                    &[],
+                                );
+                            }
+                            continue;
+                        }
+                        _ => {}
+                    }
+                    if let Some(style) = svg_fill_style(&fill) {
+                        let mut rect = Rectangle::new()
+                                .set("x", fmt_f64(rx))
+                                .set("y", fmt_f64(ry))
+                                .set("width", fmt_f64(rw))
+                                .set("height", fmt_f64(rh));
+                            rect = apply_corner_radii_rect(rect, &effective_corner_radii);
+                        rect = apply_fill_style_rect(rect, &style);
+                        if svg_mix_blend_mode(&fill_blend).is_some() {
+                            super::effects::push_group_with_blend_and_effects(
+                                &mut svg_doc,
+                                &mut group_stack,
+                                &mut defs,
+                                &mut has_defs,
+                                &root_id_suffix,
+                                &mut effect_count,
+                                Group::new().add(rect),
+                                &fill_blend,
+                                effects.as_slice(),
+                                rx,
+                                ry,
+                                rw,
+                                rh,
+                            );
+                        } else {
+                            super::effects::push_rect_with_effects(
                                 &mut svg_doc,
                                 &mut group_stack,
                                 &mut defs,
@@ -1058,36 +1382,9 @@ pub fn run_cli() -> Result<(), String> {
                                 rw,
                                 rh,
                                 &effective_corner_radii,
+                                &[],
                             );
-                            continue;
                         }
-                        _ => {}
-                    }
-                    if let Some(style) = svg_fill_style(&fill) {
-                        let mut rect = Rectangle::new()
-                                .set("x", fmt_f64(rx))
-                                .set("y", fmt_f64(ry))
-                                .set("width", fmt_f64(rw))
-                                .set("height", fmt_f64(rh));
-                            rect = apply_corner_radii_rect(rect, &effective_corner_radii);
-                        rect = apply_fill_style_rect(rect, &style);
-                        push_rect_with_effects(
-                            &mut svg_doc,
-                            &mut group_stack,
-                            &mut defs,
-                            &mut has_defs,
-                            &root_id_suffix,
-                            &mut effect_count,
-                            &mut bg_blur_count,
-                            rect,
-                            stroke.as_ref(),
-                            effects.as_slice(),
-                            rx,
-                            ry,
-                            rw,
-                            rh,
-                            &effective_corner_radii,
-                        );
                     }
                 }
                 if let Some(stroke) = stroke.as_ref() {
@@ -1130,71 +1427,77 @@ pub fn run_cli() -> Result<(), String> {
                 text_outline,
                 ..
             } => {
+                let has_native_geometry = !fill_paths.is_empty() || !stroke_paths.is_empty();
+                if !text_outline && !has_native_geometry {
+                    if let Some(svg_base64) = svg_base64.as_ref() {
+                        let mut image = Image::new()
+                            .set("x", fmt_f64(x + tx))
+                            .set("y", fmt_f64(y + ty))
+                            .set("width", fmt_f64(width.max(0.0)))
+                            .set("height", fmt_f64(height.max(0.0)))
+                            .set("preserveAspectRatio", "none")
+                            .set(
+                                "xlink:href",
+                                format!("data:image/svg+xml;base64,{svg_base64}"),
+                            );
+                        if rotation.abs() > 1e-6 {
+                            let angle = rotation.to_degrees();
+                            image = image.set(
+                                "transform",
+                                format!(
+                                    "rotate({} {} {})",
+                                    fmt_f64(angle),
+                                    fmt_f64(x + tx),
+                                    fmt_f64(y + ty)
+                                ),
+                            );
+                        }
+                        has_xlink_namespace = true;
+                        let group = Group::new().add(image);
+                        super::effects::push_group_with_blend_and_effects(
+                            &mut svg_doc,
+                            &mut group_stack,
+                            &mut defs,
+                            &mut has_defs,
+                            &root_id_suffix,
+                            &mut effect_count,
+                            group,
+                            &blend,
+                            effects.as_slice(),
+                            x + tx,
+                            y + ty,
+                            width.max(0.0),
+                            height.max(0.0),
+                        );
+                        continue;
+                    }
+                }
                 let node = doc.get_node(node_id);
                 let figma_type = node.map(|n| n.figma_type.as_str()).unwrap_or("");
                 let is_rectangle_node = figma_type == "RECTANGLE";
                 if !text_outline && is_rectangle_node && svg_base64.is_none() {
                     let rotation_degrees = rotation.to_degrees();
-                    let mut rx = x + tx;
-                    let mut ry = y + ty;
-                    let mut rw = width.max(0.0);
-                    let mut rh = height.max(0.0);
-                    let mut used_bbox_fallback = false;
-                    if rw <= 1.0 || rh <= 1.0 {
-                        if let Some(node) = doc.get_node(node_id) {
-                            if let Some((bx, by, bw, bh)) = source_bboxes.get(&node.figma_id) {
-                                rx = *bx + tx;
-                                ry = *by + ty;
-                                rw = *bw;
-                                rh = *bh;
-                                used_bbox_fallback = true;
-                            }
-                        }
-                        if !used_bbox_fallback {
-                            if let Some(b) = layout_boxes.get(&node_id).copied() {
-                                rx = b.x + tx;
-                                ry = b.y + ty;
-                                rw = b.width.max(0.0);
-                                rh = b.height.max(0.0);
-                                used_bbox_fallback = true;
-                            }
-                        }
-                    }
-                    if rotation.abs() > 1e-6 {
-                        if let Some((width_local, height_local)) =
-                            fill_paths.first().and_then(|d| svg_local_rect_size_from_path(d))
-                        {
-                            rw = width_local;
-                            rh = height_local;
-                        } else {
-                            // Recover local width/height from rotated bbox dimensions.
-                            let angle = rotation.abs();
-                            let c = angle.cos().abs();
-                            let s = angle.sin().abs();
-                            let det = c * c - s * s;
-                            if det.abs() > 1e-6 {
-                                let width_local = (rw * c - rh * s) / det;
-                                let height_local = (rh * c - rw * s) / det;
-                                if width_local.is_finite()
-                                    && height_local.is_finite()
-                                    && width_local > 0.0
-                                    && height_local > 0.0
-                                {
-                                    rw = width_local;
-                                    rh = height_local;
-                                }
-                            }
-                        }
-                    }
-                    if used_bbox_fallback {
-                        if let Some(stroke) = &stroke {
-                            let inset = stroke.width.max(0.0) * 0.5;
-                            rx += inset;
-                            ry += inset;
-                            rw = (rw - inset * 2.0).max(0.0);
-                            rh = (rh - inset * 2.0).max(0.0);
-                        }
-                    }
+                    let ResolvedRectGeometry {
+                        rx,
+                        ry,
+                        rw,
+                        rh,
+                        ..
+                    } = resolve_rect_geometry(
+                        &doc,
+                        node_id,
+                        &layout_boxes,
+                        &source_bboxes,
+                        x,
+                        y,
+                        width,
+                        height,
+                        tx,
+                        ty,
+                        rotation,
+                        &fill_paths,
+                        stroke.as_ref(),
+                    );
                     let mut rect_corner_radii = frame_proto::CornerRadii::default();
                     let mut rect = Rectangle::new()
                         .set("x", fmt_f64(rx))
@@ -1249,8 +1552,21 @@ pub fn run_cli() -> Result<(), String> {
                             }
                         }
                     }
-                    let blend_mode = svg_mix_blend_mode(&blend);
+                    let node_blend_mode = svg_mix_blend_mode(&blend);
+                    let fill_blend_mode = fills.first().and_then(|(_, fill_blend)| {
+                        svg_mix_blend_mode(fill_blend)
+                    });
+                    let blend_mode = fill_blend_mode.or(node_blend_mode);
                     let mut blend_group_opacity: Option<String> = None;
+                    let raw_strokes = node
+                        .and_then(|n| source_stroke_data.get(&n.figma_id).map(|(p, _)| p.clone()))
+                        .filter(|p| !p.is_empty())
+                        .or_else(|| node.map(|n| raw_stroke_paints(&n.raw)))
+                        .unwrap_or_default();
+                    let has_complex_raw_strokes = raw_strokes.len() > 1
+                        || raw_strokes.iter().any(|paint| {
+                            !matches!(paint, crate::anyrender_renderer::FillPaint::Solid(_))
+                        });
                     let mut emit_rect = true;
                     if let Some((fill, _)) = fills.first() {
                         match fill {
@@ -1439,7 +1755,109 @@ pub fn run_cli() -> Result<(), String> {
                     } else {
                         rect = rect.set("fill", "none");
                     }
-                    if let Some(stroke) = stroke.as_ref() {
+                    let stroke_width = stroke
+                        .as_ref()
+                        .map(|s| s.width.max(0.0))
+                        .or_else(|| {
+                            node.and_then(|n| source_stroke_data.get(&n.figma_id))
+                                .and_then(|(_, w)| *w)
+                                .map(|w| w.max(0.0))
+                        })
+                        .or_else(|| {
+                            node.and_then(|n| n.raw.get("strokeWeight").and_then(|v| v.as_f64()))
+                                .map(|w| w.max(0.0))
+                        })
+                        .unwrap_or(0.0);
+                    let mut stroke_overlays: Vec<Rectangle> = Vec::new();
+                    if has_complex_raw_strokes && stroke_width > 0.0 {
+                        for paint in &raw_strokes {
+                            let mut stroke_rect = Rectangle::new()
+                                .set("x", fmt_f64(rx))
+                                .set("y", fmt_f64(ry))
+                                .set("width", fmt_f64(rw))
+                                .set("height", fmt_f64(rh))
+                                .set("fill", "none")
+                                .set("stroke-width", fmt_f64(stroke_width));
+                            if rotation_degrees.abs() > 0.0001 {
+                                stroke_rect = stroke_rect.set(
+                                    "transform",
+                                    format!(
+                                        "rotate({} {} {})",
+                                        fmt_f64(rotation_degrees),
+                                        fmt_f64(rx),
+                                        fmt_f64(ry)
+                                    ),
+                                );
+                            }
+                            if !rect_corner_radii.is_zero() {
+                                stroke_rect = apply_corner_radii_rect(stroke_rect, &rect_corner_radii);
+                            }
+                            match paint {
+                                crate::anyrender_renderer::FillPaint::Solid(color) => {
+                                    let (hex, opacity) = svg_color_paint_values(
+                                        to_u8(color.r),
+                                        to_u8(color.g),
+                                        to_u8(color.b),
+                                        (color.a * 255.0).round().clamp(0.0, 255.0) as u8,
+                                    );
+                                    stroke_rect = stroke_rect.set("stroke", hex);
+                                    if let Some(opacity) = opacity {
+                                        stroke_rect = stroke_rect.set("stroke-opacity", opacity);
+                                    }
+                                }
+                                crate::anyrender_renderer::FillPaint::GradientLinear {
+                                    transform,
+                                    stops,
+                                } => {
+                                    let gradient_id =
+                                        format!("paint{gradient_count}_linear_{root_id_suffix}");
+                                    gradient_count += 1;
+                                    if let Some(gradient) = svg_linear_gradient_def(
+                                        &gradient_id,
+                                        rx,
+                                        ry,
+                                        rw,
+                                        rh,
+                                        transform.as_ref(),
+                                        stops.as_slice(),
+                                    ) {
+                                        deferred_gradients.push(Box::new(gradient));
+                                        has_defs = true;
+                                        stroke_rect =
+                                            stroke_rect.set("stroke", format!("url(#{gradient_id})"));
+                                    } else {
+                                        continue;
+                                    }
+                                }
+                                crate::anyrender_renderer::FillPaint::GradientRadial {
+                                    transform,
+                                    stops,
+                                } => {
+                                    let gradient_id =
+                                        format!("paint{gradient_count}_radial_{root_id_suffix}");
+                                    gradient_count += 1;
+                                    if let Some(gradient) = svg_radial_gradient_def(
+                                        &gradient_id,
+                                        rx,
+                                        ry,
+                                        rw,
+                                        rh,
+                                        transform.as_ref(),
+                                        stops.as_slice(),
+                                    ) {
+                                        deferred_gradients.push(Box::new(gradient));
+                                        has_defs = true;
+                                        stroke_rect =
+                                            stroke_rect.set("stroke", format!("url(#{gradient_id})"));
+                                    } else {
+                                        continue;
+                                    }
+                                }
+                                _ => continue,
+                            }
+                            stroke_overlays.push(stroke_rect);
+                        }
+                    } else if let Some(stroke) = stroke.as_ref() {
                         let (hex, opacity) = svg_color_paint_values(
                             to_u8(stroke.color.r),
                             to_u8(stroke.color.g),
@@ -1462,9 +1880,13 @@ pub fn run_cli() -> Result<(), String> {
                             if let Some(opacity) = blend_group_opacity {
                                 group = group.set("opacity", opacity);
                             }
-                            push_node(&mut svg_doc, &mut group_stack, group.add(rect));
+                            let mut grouped = group.add(rect);
+                            for stroke_rect in stroke_overlays {
+                                grouped = grouped.add(stroke_rect);
+                            }
+                            push_node(&mut svg_doc, &mut group_stack, grouped);
                         } else {
-                            push_rect_with_effects(
+                            super::effects::push_rect_with_effects(
                                 &mut svg_doc,
                                 &mut group_stack,
                                 &mut defs,
@@ -1480,32 +1902,114 @@ pub fn run_cli() -> Result<(), String> {
                                 rw,
                                 rh,
                                 &rect_corner_radii,
+                                &stroke_overlays,
                             );
                         }
                     }
                     continue;
                 }
-                if !text_outline && figma_type == "ELLIPSE" {
-                    let mut ex = x;
-                    let mut ey = y;
-                    let mut ew = width.max(0.0);
-                    let mut eh = height.max(0.0);
+                // Use circle primitives only for full ellipses. Arc/slice ellipses are
+                // exported as paths and must remain paths.
+                if !text_outline
+                    && figma_type == "ELLIPSE"
+                    && fill_paths
+                        .iter()
+                        .all(|d| svg_path_is_full_ellipse_like(d))
+                    && stroke_paths
+                        .iter()
+                        .all(|d| svg_path_is_full_ellipse_like(d))
+                {
+                    let mut cx_box_x = x;
+                    let mut cy_box_y = y;
+                    let mut cx_box_w = width.max(0.0);
+                    let mut cy_box_h = height.max(0.0);
                     if let Some(node) = node {
                         if let Some((bx, by, bw, bh)) = source_bboxes.get(&node.figma_id) {
-                            ex = *bx;
-                            ey = *by;
-                            ew = *bw;
-                            eh = *bh;
+                            cx_box_x = *bx;
+                            cy_box_y = *by;
+                            cx_box_w = (*bw).max(0.0);
+                            cy_box_h = (*bh).max(0.0);
                         } else if let Some(b) = layout_boxes.get(&node_id).copied() {
-                            ex = b.x;
-                            ey = b.y;
-                            ew = b.width.max(0.0);
-                            eh = b.height.max(0.0);
+                            cx_box_x = b.x;
+                            cy_box_y = b.y;
+                            cx_box_w = b.width.max(0.0);
+                            cy_box_h = b.height.max(0.0);
                         }
                     }
-                    let cx = ex + tx + (ew * 0.5);
-                    let cy = ey + ty + (eh * 0.5);
+                    let mut ew = width.max(0.0);
+                    let mut eh = height.max(0.0);
+                    if let Some(d) = fill_paths.first() {
+                        if let Some((min_x, min_y, max_x, max_y)) = svg_path_bounds(d, 0.0, 0.0) {
+                            let pw = (max_x - min_x).max(0.0);
+                            let ph = (max_y - min_y).max(0.0);
+                            if pw > 0.0 && ph > 0.0 {
+                                ew = pw;
+                                eh = ph;
+                            }
+                        }
+                    }
+                    let cx = cx_box_x + tx + (cx_box_w * 0.5);
+                    let cy = cy_box_y + ty + (cy_box_h * 0.5);
                     let r = (ew.min(eh) * 0.5).max(0.0);
+                    let mut circle_cx = cx;
+                    let mut circle_cy = cy;
+                    let mut circle_transform: Option<String> = None;
+                    if let Some(node) = node {
+                        if let Some(rt) = node.raw.get("relativeTransform").and_then(|v| v.as_array()) {
+                            if rt.len() >= 2 {
+                                let row0 = rt[0].as_array();
+                                let row1 = rt[1].as_array();
+                                if let (Some(row0), Some(row1)) = (row0, row1) {
+                                    if row0.len() >= 3 && row1.len() >= 3 {
+                                        let a = row0[0].as_f64().unwrap_or(1.0);
+                                        let c = row0[1].as_f64().unwrap_or(0.0);
+                                        let e = row0[2].as_f64().unwrap_or(0.0) + tx;
+                                        let b = row1[0].as_f64().unwrap_or(0.0);
+                                        let d = row1[1].as_f64().unwrap_or(1.0);
+                                        let f = row1[2].as_f64().unwrap_or(0.0) + ty;
+                                        let det = a * d - b * c;
+                                        let is_rotation = det > 0.0
+                                            && (a - d).abs() <= 1e-4
+                                            && (c + b).abs() <= 1e-4;
+                                        if det < -1e-6 {
+                                            circle_cx = r;
+                                            circle_cy = r;
+                                            circle_transform = Some(format!(
+                                                "matrix({} {} {} {} {} {})",
+                                                fmt_f64(a),
+                                                fmt_f64(b),
+                                                fmt_f64(c),
+                                                fmt_f64(d),
+                                                fmt_f64(e),
+                                                fmt_f64(f)
+                                            ));
+                                        } else if is_rotation {
+                                            let angle = b.atan2(a).to_degrees();
+                                            if angle.abs() > 0.0001 {
+                                                circle_transform = Some(format!(
+                                                    "rotate({} {} {})",
+                                                    fmt_f64(angle),
+                                                    fmt_f64(cx),
+                                                    fmt_f64(cy)
+                                                ));
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    if circle_transform.is_none() {
+                        let rotation_degrees = rotation.to_degrees();
+                        if rotation_degrees.abs() > 0.0001 {
+                            circle_transform = Some(format!(
+                                "rotate({} {} {})",
+                                fmt_f64(rotation_degrees),
+                                fmt_f64(cx),
+                                fmt_f64(cy)
+                            ));
+                        }
+                    }
                     accumulate_bounds_if_active(
                         &mut active_mask_bounds,
                         cx - r,
@@ -1513,18 +2017,245 @@ pub fn run_cli() -> Result<(), String> {
                         cx + r,
                         cy + r,
                     );
-                    let mut circle = Circle::new()
-                        .set("cx", fmt_f64(cx))
-                        .set("cy", fmt_f64(cy))
-                        .set("r", fmt_f64(r));
-                    if let Some((fill, _)) = fills.first() {
-                        if let Some(style) = svg_fill_style(fill) {
-                            circle = apply_fill_style_circle(circle, &style);
-                        } else {
-                            circle = circle.set("fill", "none");
+                    let mut group = Group::new();
+                    if fills.is_empty() {
+                        let mut base = Circle::new()
+                            .set("cx", fmt_f64(circle_cx))
+                            .set("cy", fmt_f64(circle_cy))
+                            .set("r", fmt_f64(r))
+                            .set("fill", "none");
+                        if let Some(transform) = &circle_transform {
+                            base = base.set("transform", transform.clone());
                         }
+                        group = group.add(base);
                     } else {
-                        circle = circle.set("fill", "none");
+                        for (fill, fill_blend) in &fills {
+                            let mut fill_circle = Circle::new()
+                                .set("cx", fmt_f64(circle_cx))
+                                .set("cy", fmt_f64(circle_cy))
+                                .set("r", fmt_f64(r));
+                            if let Some(transform) = &circle_transform {
+                                fill_circle = fill_circle.set("transform", transform.clone());
+                            }
+                            match fill {
+                                crate::anyrender_renderer::FillPaint::GradientLinear {
+                                    transform,
+                                    stops,
+                                } => {
+                                    let gradient_id =
+                                        format!("paint{gradient_count}_linear_{root_id_suffix}");
+                                    gradient_count += 1;
+                                    if let Some(gradient) = svg_linear_gradient_def(
+                                        &gradient_id,
+                                        cx - r,
+                                        cy - r,
+                                        r * 2.0,
+                                        r * 2.0,
+                                        transform.as_ref(),
+                                        stops.as_slice(),
+                                    ) {
+                                        deferred_gradients.push(Box::new(gradient));
+                                        has_defs = true;
+                                        fill_circle =
+                                            fill_circle.set("fill", format!("url(#{gradient_id})"));
+                                    } else {
+                                        fill_circle = fill_circle.set("fill", "none");
+                                    }
+                                }
+                                crate::anyrender_renderer::FillPaint::GradientRadial {
+                                    transform,
+                                    stops,
+                                } => {
+                                    let gradient_id =
+                                        format!("paint{gradient_count}_radial_{root_id_suffix}");
+                                    gradient_count += 1;
+                                    if let Some(gradient) = svg_radial_gradient_def(
+                                        &gradient_id,
+                                        cx - r,
+                                        cy - r,
+                                        r * 2.0,
+                                        r * 2.0,
+                                        transform.as_ref(),
+                                        stops.as_slice(),
+                                    ) {
+                                        deferred_gradients.push(Box::new(gradient));
+                                        has_defs = true;
+                                        fill_circle =
+                                            fill_circle.set("fill", format!("url(#{gradient_id})"));
+                                    } else {
+                                        fill_circle = fill_circle.set("fill", "none");
+                                    }
+                                }
+                                crate::anyrender_renderer::FillPaint::GradientAngular {
+                                    transform,
+                                    stops,
+                                } => {
+                                    let gradient_id =
+                                        format!("paint{gradient_count}_angular_{root_id_suffix}");
+                                    gradient_count += 1;
+                                    let clip_id = format!("{gradient_id}_clip_path");
+                                    let mut clip_circle = Circle::new()
+                                        .set("cx", fmt_f64(circle_cx))
+                                        .set("cy", fmt_f64(circle_cy))
+                                        .set("r", fmt_f64(r));
+                                    if let Some(transform) = &circle_transform {
+                                        clip_circle = clip_circle.set("transform", transform.clone());
+                                    }
+                                    defs = defs.add(ClipPath::new().set("id", clip_id.clone()).add(clip_circle));
+                                    has_defs = true;
+
+                                    let (a, b, c, d) = if let Some(t) = transform.as_ref() {
+                                        (
+                                            t[0][0] / 2000.0,
+                                            t[1][0] / 2000.0,
+                                            t[0][1] / 2000.0,
+                                            t[1][1] / 2000.0,
+                                        )
+                                    } else {
+                                        let s = r / 1000.0;
+                                        (s, 0.0, 0.0, s)
+                                    };
+                                    let mut foreign = ForeignObject::new()
+                                        .set("x", "-1011.11")
+                                        .set("y", "-1011.11")
+                                        .set("width", "2022.22")
+                                        .set("height", "2022.22");
+                                    let mut div = Element::new("div");
+                                    svg::Node::assign(&mut div, "xmlns", "http://www.w3.org/1999/xhtml");
+                                    svg::Node::assign(
+                                        &mut div,
+                                        "style",
+                                        svg_angular_conic_style(transform.as_ref(), stops.as_slice()),
+                                    );
+                                    foreign = foreign.add(div);
+                                    let inner = Group::new()
+                                        .set(
+                                            "transform",
+                                            format!(
+                                                "matrix({} {} {} {} {} {})",
+                                                fmt_f64(a),
+                                                fmt_f64(b),
+                                                fmt_f64(c),
+                                                fmt_f64(d),
+                                                fmt_f64(cx),
+                                                fmt_f64(cy)
+                                            ),
+                                        )
+                                        .add(foreign);
+                                    group = group.add(
+                                        Group::new()
+                                            .set("clip-path", format!("url(#{clip_id})"))
+                                            .set("data-figma-skip-parse", "true")
+                                            .add(inner),
+                                    );
+                                    group = group.add(
+                                        {
+                                            let mut circle = Circle::new()
+                                                .set("cx", fmt_f64(circle_cx))
+                                                .set("cy", fmt_f64(circle_cy))
+                                                .set("r", fmt_f64(r))
+                                                .set(
+                                                "data-figma-gradient-fill",
+                                                svg_angular_metadata_attr(
+                                                    cx - r,
+                                                    cy - r,
+                                                    r * 2.0,
+                                                    r * 2.0,
+                                                    stops.as_slice(),
+                                                ),
+                                            );
+                                            if let Some(transform) = &circle_transform {
+                                                circle = circle.set("transform", transform.clone());
+                                            }
+                                            circle
+                                        },
+                                    );
+                                    continue;
+                                }
+                                crate::anyrender_renderer::FillPaint::Image {
+                                    image_hash,
+                                    data_base64,
+                                    alpha,
+                                    scale_mode,
+                                    image_transform,
+                                } => {
+                                    let pattern_id = format!("pattern{pattern_count}_{root_id_suffix}");
+                                    pattern_count += 1;
+                                    let image_key = image_hash
+                                        .clone()
+                                        .unwrap_or_else(|| format!("inline:{data_base64}"));
+                                    let image_id = if let Some(existing) = image_defs.get(&image_key) {
+                                        existing.clone()
+                                    } else {
+                                        let new_id = format!("image{image_count}_{root_id_suffix}");
+                                        image_count += 1;
+                                        image_defs.insert(image_key, new_id.clone());
+                                        let mut image = Image::new()
+                                            .set("id", new_id.clone())
+                                            .set("width", "1")
+                                            .set("height", "1")
+                                            .set("preserveAspectRatio", "none")
+                                            .set(
+                                                "xlink:href",
+                                                format!("data:image/png;base64,{data_base64}"),
+                                            );
+                                        if *alpha < 1.0 {
+                                            image = image.set("opacity", fmt_f64(*alpha));
+                                        }
+                                        deferred_images.push(image);
+                                        new_id
+                                    };
+
+                                    let mut pattern = Pattern::new()
+                                        .set("id", pattern_id.clone())
+                                        .set("patternContentUnits", "objectBoundingBox")
+                                        .set("width", "1")
+                                        .set("height", "1");
+                                    let mut image_use =
+                                        Use::new().set("xlink:href", format!("#{image_id}"));
+                                    if let Some((a, b, c, d, e, f)) = svg_image_fill_transform(
+                                        *scale_mode,
+                                        image_transform.as_ref(),
+                                        r * 2.0,
+                                        r * 2.0,
+                                    ) {
+                                        image_use = image_use.set(
+                                            "transform",
+                                            format!(
+                                                "matrix({} {} {} {} {} {})",
+                                                fmt_f64(a),
+                                                fmt_f64(b),
+                                                fmt_f64(c),
+                                                fmt_f64(d),
+                                                fmt_f64(e),
+                                                fmt_f64(f)
+                                            ),
+                                        );
+                                    }
+                                    pattern = pattern.add(image_use);
+                                    defs = defs.add(pattern);
+                                    has_defs = true;
+                                    has_xlink_namespace = true;
+                                    fill_circle = fill_circle.set("fill", format!("url(#{pattern_id})"));
+                                }
+                                _ => {
+                                    if let Some(style) = svg_fill_style(fill) {
+                                        fill_circle = apply_fill_style_circle(fill_circle, &style);
+                                    } else {
+                                        fill_circle = fill_circle.set("fill", "none");
+                                    }
+                                }
+                            }
+                            if let Some(mode) = svg_mix_blend_mode(fill_blend) {
+                                group = group.add(
+                                    Group::new()
+                                        .set("style", format!("mix-blend-mode:{mode}"))
+                                        .add(fill_circle),
+                                );
+                            } else {
+                                group = group.add(fill_circle);
+                            }
+                        }
                     }
                     if let Some(stroke) = stroke.as_ref() {
                         let (hex, opacity) = svg_color_paint_values(
@@ -1533,16 +2264,38 @@ pub fn run_cli() -> Result<(), String> {
                             to_u8(stroke.color.b),
                             (stroke.color.a * 255.0).round().clamp(0.0, 255.0) as u8,
                         );
-                        circle = circle
+                        let mut stroke_circle = Circle::new()
+                            .set("cx", fmt_f64(circle_cx))
+                            .set("cy", fmt_f64(circle_cy))
+                            .set("r", fmt_f64(r))
+                            .set("fill", "none")
                             .set("stroke", hex)
                             .set("stroke-width", fmt_f64(stroke.width.max(0.0)))
                             .set("stroke-linecap", svg_linecap(stroke.cap))
                             .set("stroke-linejoin", svg_linejoin(stroke.join));
                         if let Some(opacity) = opacity {
-                            circle = circle.set("stroke-opacity", opacity);
+                            stroke_circle = stroke_circle.set("stroke-opacity", opacity);
                         }
+                        if let Some(transform) = &circle_transform {
+                            stroke_circle = stroke_circle.set("transform", transform.clone());
+                        }
+                        group = group.add(stroke_circle);
                     }
-                    push_node(&mut svg_doc, &mut group_stack, circle);
+                    super::effects::push_group_with_blend_and_effects(
+                        &mut svg_doc,
+                        &mut group_stack,
+                        &mut defs,
+                        &mut has_defs,
+                        &root_id_suffix,
+                        &mut effect_count,
+                        group,
+                        &blend,
+                        effects.as_slice(),
+                        cx - r,
+                        cy - r,
+                        r * 2.0,
+                        r * 2.0,
+                    );
                     continue;
                 }
                 if !text_outline && figma_type == "LINE" {
@@ -1602,11 +2355,80 @@ pub fn run_cli() -> Result<(), String> {
                     } else {
                         line = line.set("stroke", "none");
                     }
-                    push_node(&mut svg_doc, &mut group_stack, line);
+                    let x_min = x1.min(x2);
+                    let x_max = x1.max(x2);
+                    let mut stroke_w = stroke.as_ref().map(|s| s.width.max(0.0)).unwrap_or(1.0);
+                    if stroke_w <= 0.0 {
+                        stroke_w = 1.0;
+                    }
+                    let y_min = y_mid - stroke_w * 0.5;
+                    let group = Group::new().add(line);
+                    super::effects::push_group_with_blend_and_effects(
+                        &mut svg_doc,
+                        &mut group_stack,
+                        &mut defs,
+                        &mut has_defs,
+                        &root_id_suffix,
+                        &mut effect_count,
+                        group,
+                        &blend,
+                        effects.as_slice(),
+                        x_min,
+                        y_min,
+                        (x_max - x_min).max(0.0),
+                        stroke_w,
+                    );
                     continue;
                 }
-                let px = x + tx;
-                let py = y + ty;
+                let mut px = x + tx;
+                let mut py = y + ty;
+                let is_nonfull_ellipse = !text_outline
+                    && figma_type == "ELLIPSE"
+                    && (!fill_paths.iter().all(|d| svg_path_is_full_ellipse_like(d))
+                        || !stroke_paths.iter().all(|d| svg_path_is_full_ellipse_like(d)));
+                if is_nonfull_ellipse {
+                    let ellipse_inset = 0.4;
+                    px += ellipse_inset;
+                    py += ellipse_inset;
+                    if let Some(node) = node {
+                        if let Some((bx, by, _bw, _bh)) = source_bboxes.get(&node.figma_id) {
+                            px = *bx + tx + ellipse_inset;
+                            py = *by + ty + ellipse_inset;
+                        } else if let Some(b) = layout_boxes.get(&node_id).copied() {
+                            px = b.x + tx + ellipse_inset;
+                            py = b.y + ty + ellipse_inset;
+                        }
+                    }
+                } else if !text_outline {
+                    if let Some(node) = node {
+                    if let Some((bx, by, bw, bh)) = source_bboxes.get(&node.figma_id) {
+                        let target = (*bx + tx, *by + ty, (*bw).max(0.0), (*bh).max(0.0));
+                        let source_paths = if fill_paths.is_empty() {
+                            &stroke_paths
+                        } else {
+                            &fill_paths
+                        };
+                        if let Some((raw_min_x, raw_min_y, _, _)) = union_path_bounds(source_paths, 0.0, 0.0)
+                        {
+                            // Some parity exports emit absolute path data; infer translation
+                            // from the source bbox so we don't double-translate.
+                            let candidate_px = target.0 - raw_min_x;
+                            let candidate_py = target.1 - raw_min_y;
+                            if let (Some(default_bounds), Some(candidate_bounds)) = (
+                                union_path_bounds(source_paths, px, py),
+                                union_path_bounds(source_paths, candidate_px, candidate_py),
+                            ) {
+                                let default_err = bbox_alignment_error(default_bounds, target);
+                                let candidate_err = bbox_alignment_error(candidate_bounds, target);
+                                if candidate_err + 1e-4 < default_err {
+                                    px = candidate_px;
+                                    py = candidate_py;
+                                }
+                            }
+                        }
+                    }
+                    }
+                }
                 for d in &fill_paths {
                     if let Some((min_x, min_y, max_x, max_y)) = svg_path_bounds(d, px, py) {
                         accumulate_bounds_if_active(
@@ -1636,34 +2458,483 @@ pub fn run_cli() -> Result<(), String> {
                     fmt_translate_component(px),
                     fmt_translate_component(py)
                 );
+                let mut path_group = Group::new();
+                let mut effect_group_opacity: Option<String> = None;
+                let mut fill_bounds = None::<(f64, f64, f64, f64)>;
+                for d in &fill_paths {
+                    if let Some((min_x, min_y, max_x, max_y)) = svg_path_bounds(d, px, py) {
+                        fill_bounds = match fill_bounds {
+                            Some((bx0, by0, bx1, by1)) => {
+                                Some((bx0.min(min_x), by0.min(min_y), bx1.max(max_x), by1.max(max_y)))
+                            }
+                            None => Some((min_x, min_y, max_x, max_y)),
+                        };
+                    }
+                }
+                let (fill_x, fill_y, fill_w, fill_h) =
+                    if let Some((min_x, min_y, max_x, max_y)) = fill_bounds {
+                        (min_x, min_y, (max_x - min_x).max(0.0), (max_y - min_y).max(0.0))
+                    } else {
+                        (px, py, width.max(0.0), height.max(0.0))
+                    };
 
                 if text_outline && fills.len() > 1 {
+                    let mut text_outline_group_opacity: Option<String> = None;
                     for (idx, d) in fill_paths.iter().enumerate() {
-                        let fill = fills.get(idx).or_else(|| fills.last()).map(|(f, _)| f);
-                        let Some(fill) = fill else {
+                        let fill_and_blend = fills.get(idx).or_else(|| fills.last());
+                        let Some((fill, fill_blend)) = fill_and_blend else {
                             continue;
                         };
-                        let Some(style) = svg_fill_style(fill) else {
+                        let mut fill_ref: Option<String> = None;
+                        let mut fill_path_opacity: Option<String> = None;
+                        match fill {
+                            crate::anyrender_renderer::FillPaint::Solid(color) => {
+                                let (hex, opacity) = svg_color_paint_values(
+                                    to_u8(color.r),
+                                    to_u8(color.g),
+                                    to_u8(color.b),
+                                    (color.a * 255.0).round().clamp(0.0, 255.0) as u8,
+                                );
+                                fill_ref = Some(hex);
+                                if fills.len() > 1 {
+                                    text_outline_group_opacity = opacity;
+                                } else {
+                                    fill_path_opacity = opacity;
+                                }
+                            }
+                            crate::anyrender_renderer::FillPaint::GradientLinear { transform, stops } => {
+                                let gradient_id =
+                                    format!("paint{gradient_count}_linear_{root_id_suffix}");
+                                gradient_count += 1;
+                                if let Some(gradient) = svg_linear_gradient_def(
+                                    &gradient_id,
+                                    fill_x,
+                                    fill_y,
+                                    fill_w,
+                                    fill_h,
+                                    transform.as_ref(),
+                                    stops.as_slice(),
+                                ) {
+                                    deferred_gradients.push(Box::new(gradient));
+                                    has_defs = true;
+                                    fill_ref = Some(format!("url(#{gradient_id})"));
+                                }
+                            }
+                            crate::anyrender_renderer::FillPaint::GradientRadial { transform, stops } => {
+                                let gradient_id =
+                                    format!("paint{gradient_count}_radial_{root_id_suffix}");
+                                gradient_count += 1;
+                                if let Some(gradient) = svg_radial_gradient_def(
+                                    &gradient_id,
+                                    fill_x,
+                                    fill_y,
+                                    fill_w,
+                                    fill_h,
+                                    transform.as_ref(),
+                                    stops.as_slice(),
+                                ) {
+                                    deferred_gradients.push(Box::new(gradient));
+                                    has_defs = true;
+                                    fill_ref = Some(format!("url(#{gradient_id})"));
+                                }
+                            }
+                            crate::anyrender_renderer::FillPaint::GradientAngular { .. } => {}
+                            crate::anyrender_renderer::FillPaint::Image {
+                                image_hash,
+                                data_base64,
+                                alpha,
+                                scale_mode,
+                                image_transform,
+                            } => {
+                                let pattern_id = format!("pattern{pattern_count}_{root_id_suffix}");
+                                pattern_count += 1;
+                                let image_key = image_hash
+                                    .clone()
+                                    .unwrap_or_else(|| format!("inline:{data_base64}"));
+                                let image_id = if let Some(existing) = image_defs.get(&image_key) {
+                                    existing.clone()
+                                } else {
+                                    let new_id = format!("image{image_count}_{root_id_suffix}");
+                                    image_count += 1;
+                                    image_defs.insert(image_key, new_id.clone());
+                                    let mut image = Image::new()
+                                        .set("id", new_id.clone())
+                                        .set("width", "1")
+                                        .set("height", "1")
+                                        .set("preserveAspectRatio", "none")
+                                        .set(
+                                            "xlink:href",
+                                            format!("data:image/png;base64,{data_base64}"),
+                                        );
+                                    if *alpha < 1.0 {
+                                        image = image.set("opacity", fmt_f64(*alpha));
+                                    }
+                                    deferred_images.push(image);
+                                    new_id
+                                };
+
+                                let mut pattern = Pattern::new()
+                                    .set("id", pattern_id.clone())
+                                    .set("patternContentUnits", "objectBoundingBox")
+                                    .set("width", "1")
+                                    .set("height", "1");
+                                let mut image_use = Use::new().set("xlink:href", format!("#{image_id}"));
+                                if let Some((a, b, c, d, e, f)) = svg_image_fill_transform(
+                                    *scale_mode,
+                                    image_transform.as_ref(),
+                                    fill_w,
+                                    fill_h,
+                                ) {
+                                    image_use = image_use.set(
+                                        "transform",
+                                        format!(
+                                            "matrix({} {} {} {} {} {})",
+                                            fmt_f64(a),
+                                            fmt_f64(b),
+                                            fmt_f64(c),
+                                            fmt_f64(d),
+                                            fmt_f64(e),
+                                            fmt_f64(f)
+                                        ),
+                                    );
+                                }
+                                pattern = pattern.add(image_use);
+                                defs = defs.add(pattern);
+                                has_defs = true;
+                                has_xlink_namespace = true;
+                                fill_ref = Some(format!("url(#{pattern_id})"));
+                            }
+                        }
+                        let Some(fill_ref) = fill_ref else {
                             continue;
                         };
                         let mut path = SvgPath::new()
                             .set("d", d.as_str())
-                            .set("transform", transform.clone());
-                        path = apply_fill_style_path(path, &style);
-                        push_node(&mut svg_doc, &mut group_stack, path);
+                            .set("transform", transform.clone())
+                            .set("fill", fill_ref);
+                        if let Some(opacity) = fill_path_opacity {
+                            path = path.set("fill-opacity", opacity);
+                        }
+                        if let Some(mode) = svg_mix_blend_mode(fill_blend) {
+                            path_group = path_group.add(
+                                Group::new()
+                                    .set("style", format!("mix-blend-mode:{mode}"))
+                                    .add(path),
+                            );
+                        } else {
+                            path_group = path_group.add(path);
+                        }
+                    }
+                    if let Some(opacity) = text_outline_group_opacity {
+                        path_group = path_group.set("opacity", opacity);
                     }
                 } else {
-                    for (fill, _) in fills {
-                        if let Some(style) = svg_fill_style(&fill) {
+                    if is_nonfull_ellipse {
+                        let mut fill_stack_opacity: Option<String> = None;
+                        for (fill_idx, (fill, fill_blend)) in fills.iter().enumerate() {
+                            let mut fill_ref: Option<String> = None;
+                            let mut fill_path_opacity: Option<String> = None;
+                            match fill {
+                                crate::anyrender_renderer::FillPaint::Solid(color) => {
+                                    let (hex, opacity) = svg_color_paint_values(
+                                        to_u8(color.r),
+                                        to_u8(color.g),
+                                        to_u8(color.b),
+                                        (color.a * 255.0).round().clamp(0.0, 255.0) as u8,
+                                    );
+                                    fill_ref = Some(hex);
+                                    if fills.len() > 1 && fill_idx == 0 {
+                                        fill_stack_opacity = opacity;
+                                    } else {
+                                        fill_path_opacity = opacity;
+                                    }
+                                }
+                                crate::anyrender_renderer::FillPaint::GradientLinear { transform, stops } => {
+                                    let gradient_id =
+                                        format!("paint{gradient_count}_linear_{root_id_suffix}");
+                                    gradient_count += 1;
+                                    if let Some(gradient) = svg_linear_gradient_def(
+                                        &gradient_id,
+                                        fill_x,
+                                        fill_y,
+                                        fill_w,
+                                        fill_h,
+                                        transform.as_ref(),
+                                        stops.as_slice(),
+                                    ) {
+                                        deferred_gradients.push(Box::new(gradient));
+                                        has_defs = true;
+                                        fill_ref = Some(format!("url(#{gradient_id})"));
+                                    }
+                                }
+                                crate::anyrender_renderer::FillPaint::GradientRadial { transform, stops } => {
+                                    let gradient_id =
+                                        format!("paint{gradient_count}_radial_{root_id_suffix}");
+                                    gradient_count += 1;
+                                    if let Some(gradient) = svg_radial_gradient_def(
+                                        &gradient_id,
+                                        fill_x,
+                                        fill_y,
+                                        fill_w,
+                                        fill_h,
+                                        transform.as_ref(),
+                                        stops.as_slice(),
+                                    ) {
+                                        deferred_gradients.push(Box::new(gradient));
+                                        has_defs = true;
+                                        fill_ref = Some(format!("url(#{gradient_id})"));
+                                    }
+                                }
+                                crate::anyrender_renderer::FillPaint::GradientAngular { .. } => {}
+                                crate::anyrender_renderer::FillPaint::Image {
+                                    image_hash,
+                                    data_base64,
+                                    alpha,
+                                    scale_mode,
+                                    image_transform,
+                                } => {
+                                    let pattern_id = format!("pattern{pattern_count}_{root_id_suffix}");
+                                    pattern_count += 1;
+                                    let image_key = image_hash
+                                        .clone()
+                                        .unwrap_or_else(|| format!("inline:{data_base64}"));
+                                    let image_id = if let Some(existing) = image_defs.get(&image_key) {
+                                        existing.clone()
+                                    } else {
+                                        let new_id = format!("image{image_count}_{root_id_suffix}");
+                                        image_count += 1;
+                                        image_defs.insert(image_key, new_id.clone());
+                                        let mut image = Image::new()
+                                            .set("id", new_id.clone())
+                                            .set("width", "1")
+                                            .set("height", "1")
+                                            .set("preserveAspectRatio", "none")
+                                            .set(
+                                                "xlink:href",
+                                                format!("data:image/png;base64,{data_base64}"),
+                                            );
+                                        if *alpha < 1.0 {
+                                            image = image.set("opacity", fmt_f64(*alpha));
+                                        }
+                                        deferred_images.push(image);
+                                        new_id
+                                    };
+                                    let mut pattern = Pattern::new()
+                                        .set("id", pattern_id.clone())
+                                        .set("patternContentUnits", "objectBoundingBox")
+                                        .set("width", "1")
+                                        .set("height", "1");
+                                    let mut image_use = Use::new().set("xlink:href", format!("#{image_id}"));
+                                    if let Some((a, b, c, d, e, f)) = svg_image_fill_transform(
+                                        *scale_mode,
+                                        image_transform.as_ref(),
+                                        fill_w,
+                                        fill_h,
+                                    ) {
+                                        image_use = image_use.set(
+                                            "transform",
+                                            format!(
+                                                "matrix({} {} {} {} {} {})",
+                                                fmt_f64(a),
+                                                fmt_f64(b),
+                                                fmt_f64(c),
+                                                fmt_f64(d),
+                                                fmt_f64(e),
+                                                fmt_f64(f)
+                                            ),
+                                        );
+                                    }
+                                    pattern = pattern.add(image_use);
+                                    defs = defs.add(pattern);
+                                    has_defs = true;
+                                    has_xlink_namespace = true;
+                                    fill_ref = Some(format!("url(#{pattern_id})"));
+                                }
+                            }
+                            let Some(fill_ref) = fill_ref else {
+                                continue;
+                            };
+
+                            if let Some(mode) = svg_mix_blend_mode(fill_blend) {
+                                let mut fill_layer =
+                                    Group::new().set("style", format!("mix-blend-mode:{mode}"));
+                                for d in &fill_paths {
+                                    let mut path = SvgPath::new()
+                                        .set("d", d.as_str())
+                                        .set("transform", transform.clone())
+                                        .set("fill", fill_ref.clone());
+                                    if let Some(opacity) = &fill_path_opacity {
+                                        path = path.set("fill-opacity", opacity.clone());
+                                    }
+                                    fill_layer = fill_layer.add(path);
+                                }
+                                path_group = path_group.add(fill_layer);
+                            } else {
+                                for d in &fill_paths {
+                                    let mut path = SvgPath::new()
+                                        .set("d", d.as_str())
+                                        .set("transform", transform.clone())
+                                        .set("fill", fill_ref.clone());
+                                    if let Some(opacity) = &fill_path_opacity {
+                                        path = path.set("fill-opacity", opacity.clone());
+                                    }
+                                    path_group = path_group.add(path);
+                                }
+                            }
+                        }
+                        if let Some(opacity) = fill_stack_opacity {
+                            path_group = path_group.set("opacity", opacity);
+                        }
+                    } else {
+                        for (fill, fill_blend) in fills.iter() {
+                            let mut fill_ref: Option<String> = None;
+                            let mut fill_path_opacity: Option<String> = None;
+                            match fill {
+                                crate::anyrender_renderer::FillPaint::Solid(color) => {
+                                    let (hex, opacity) = svg_color_paint_values(
+                                        to_u8(color.r),
+                                        to_u8(color.g),
+                                        to_u8(color.b),
+                                        (color.a * 255.0).round().clamp(0.0, 255.0) as u8,
+                                    );
+                                    fill_ref = Some(hex);
+                                    if effects.is_empty() {
+                                        fill_path_opacity = opacity;
+                                    } else if fills.len() == 1 {
+                                        effect_group_opacity = opacity;
+                                    } else {
+                                        fill_path_opacity = opacity;
+                                    }
+                                }
+                                crate::anyrender_renderer::FillPaint::GradientLinear { transform, stops } => {
+                                    let gradient_id =
+                                        format!("paint{gradient_count}_linear_{root_id_suffix}");
+                                    gradient_count += 1;
+                                    if let Some(gradient) = svg_linear_gradient_def(
+                                        &gradient_id,
+                                        fill_x,
+                                        fill_y,
+                                        fill_w,
+                                        fill_h,
+                                        transform.as_ref(),
+                                        stops.as_slice(),
+                                    ) {
+                                        deferred_gradients.push(Box::new(gradient));
+                                        has_defs = true;
+                                        fill_ref = Some(format!("url(#{gradient_id})"));
+                                    }
+                                }
+                                crate::anyrender_renderer::FillPaint::GradientRadial { transform, stops } => {
+                                    let gradient_id =
+                                        format!("paint{gradient_count}_radial_{root_id_suffix}");
+                                    gradient_count += 1;
+                                    if let Some(gradient) = svg_radial_gradient_def(
+                                        &gradient_id,
+                                        fill_x,
+                                        fill_y,
+                                        fill_w,
+                                        fill_h,
+                                        transform.as_ref(),
+                                        stops.as_slice(),
+                                    ) {
+                                        deferred_gradients.push(Box::new(gradient));
+                                        has_defs = true;
+                                        fill_ref = Some(format!("url(#{gradient_id})"));
+                                    }
+                                }
+                                crate::anyrender_renderer::FillPaint::GradientAngular { .. } => {}
+                                crate::anyrender_renderer::FillPaint::Image {
+                                    image_hash,
+                                    data_base64,
+                                    alpha,
+                                    scale_mode,
+                                    image_transform,
+                                } => {
+                                    let pattern_id = format!("pattern{pattern_count}_{root_id_suffix}");
+                                    pattern_count += 1;
+                                    let image_key = image_hash
+                                        .clone()
+                                        .unwrap_or_else(|| format!("inline:{data_base64}"));
+                                    let image_id = if let Some(existing) = image_defs.get(&image_key) {
+                                        existing.clone()
+                                    } else {
+                                        let new_id = format!("image{image_count}_{root_id_suffix}");
+                                        image_count += 1;
+                                        image_defs.insert(image_key, new_id.clone());
+                                        let mut image = Image::new()
+                                            .set("id", new_id.clone())
+                                            .set("width", "1")
+                                            .set("height", "1")
+                                            .set("preserveAspectRatio", "none")
+                                            .set(
+                                                "xlink:href",
+                                                format!("data:image/png;base64,{data_base64}"),
+                                            );
+                                        if *alpha < 1.0 {
+                                            image = image.set("opacity", fmt_f64(*alpha));
+                                        }
+                                        deferred_images.push(image);
+                                        new_id
+                                    };
+                                    let mut pattern = Pattern::new()
+                                        .set("id", pattern_id.clone())
+                                        .set("patternContentUnits", "objectBoundingBox")
+                                        .set("width", "1")
+                                        .set("height", "1");
+                                    let mut image_use = Use::new().set("xlink:href", format!("#{image_id}"));
+                                    if let Some((a, b, c, d, e, f)) = svg_image_fill_transform(
+                                        *scale_mode,
+                                        image_transform.as_ref(),
+                                        fill_w,
+                                        fill_h,
+                                    ) {
+                                        image_use = image_use.set(
+                                            "transform",
+                                            format!(
+                                                "matrix({} {} {} {} {} {})",
+                                                fmt_f64(a),
+                                                fmt_f64(b),
+                                                fmt_f64(c),
+                                                fmt_f64(d),
+                                                fmt_f64(e),
+                                                fmt_f64(f)
+                                            ),
+                                        );
+                                    }
+                                    pattern = pattern.add(image_use);
+                                    defs = defs.add(pattern);
+                                    has_defs = true;
+                                    has_xlink_namespace = true;
+                                    fill_ref = Some(format!("url(#{pattern_id})"));
+                                }
+                            }
+
+                            let Some(fill_ref) = fill_ref else {
+                                continue;
+                            };
                             for d in &fill_paths {
                                 let mut path = SvgPath::new()
                                     .set("d", d.as_str())
-                                    .set("transform", transform.clone());
-                                path = apply_fill_style_path(path, &style);
-                                push_node(&mut svg_doc, &mut group_stack, path);
+                                    .set("transform", transform.clone())
+                                    .set("fill", fill_ref.clone());
+                                if let Some(opacity) = &fill_path_opacity {
+                                    path = path.set("fill-opacity", opacity.clone());
+                                }
+                                if let Some(mode) = svg_mix_blend_mode(fill_blend) {
+                                    path_group = path_group.add(
+                                        Group::new()
+                                            .set("style", format!("mix-blend-mode:{mode}"))
+                                            .add(path),
+                                    );
+                                } else {
+                                    path_group = path_group.add(path);
+                                }
                             }
                         }
                     }
+                }
+                if let Some(opacity) = effect_group_opacity {
+                    path_group = path_group.set("opacity", opacity);
                 }
 
                 if let Some(stroke) = stroke.as_ref() {
@@ -1700,9 +2971,24 @@ pub fn run_cli() -> Result<(), String> {
                         if let Some(opacity) = &opacity {
                             path = path.set("stroke-opacity", opacity.clone());
                         }
-                        push_node(&mut svg_doc, &mut group_stack, path);
+                        path_group = path_group.add(path);
                     }
                 }
+                super::effects::push_group_with_blend_and_effects(
+                    &mut svg_doc,
+                    &mut group_stack,
+                    &mut defs,
+                    &mut has_defs,
+                    &root_id_suffix,
+                    &mut effect_count,
+                    path_group,
+                    &blend,
+                    effects.as_slice(),
+                    px,
+                    py,
+                    width.max(0.0),
+                    height.max(0.0),
+                );
             }
             // Figma parity SVG exports are path-based for text.
             PaintPrimitive::Text { .. } => {}
@@ -1746,417 +3032,26 @@ pub fn run_cli() -> Result<(), String> {
 }
 
 #[cfg(feature = "svg_export")]
-fn push_rect_with_effects(
+fn push_node_with_optional_blend<N: svg::Node>(
     svg_doc: &mut svg::Document,
     group_stack: &mut Vec<svg::node::element::Group>,
-    defs: &mut svg::node::element::Definitions,
-    has_defs: &mut bool,
-    root_id_suffix: &str,
-    effect_count: &mut u64,
-    bg_blur_count: &mut u64,
-    rect: svg::node::element::Rectangle,
-    stroke: Option<&crate::anyrender_renderer::StrokeStyle>,
-    effects: &[crate::anyrender_renderer::NodeEffect],
-    x: f64,
-    y: f64,
-    width: f64,
-    height: f64,
-    corner_radii: &frame_proto::CornerRadii,
+    node: N,
+    blend: Option<&crate::anyrender_renderer::BlendMix>,
 ) {
-    use crate::anyrender_renderer::EffectKind;
-
-    let fmt_shadow_component = |v: f64| -> String {
-        let precision = if v.abs() >= 0.1 { 6 } else { 7 };
-        let s = format!("{:.*}", precision, v.clamp(0.0, 1.0));
-        let s = s.trim_end_matches('0').trim_end_matches('.');
-        if s.is_empty() {
-            "0".to_string()
-        } else {
-            s.to_string()
-        }
-    };
-
-    let drop_shadows: Vec<&crate::anyrender_renderer::NodeEffect> = effects
-        .iter()
-        .filter(|effect| matches!(effect.kind, EffectKind::DropShadow))
-        .collect();
-    let inner_shadows: Vec<&crate::anyrender_renderer::NodeEffect> = effects
-        .iter()
-        .filter(|effect| matches!(effect.kind, EffectKind::InnerShadow))
-        .collect();
-    let layer_blur = effects
-        .iter()
-        .find(|effect| matches!(effect.kind, EffectKind::LayerBlur));
-
-    if !drop_shadows.is_empty() || !inner_shadows.is_empty() || layer_blur.is_some() {
-        let effect_suffix = if !drop_shadows.is_empty() && layer_blur.is_some() {
-            "df"
-        } else if !drop_shadows.is_empty() && drop_shadows.len() > 1 {
-            "dd"
-        } else if !drop_shadows.is_empty() {
-            "d"
-        } else if !inner_shadows.is_empty() {
-            "i"
-        } else {
-            "f"
-        };
-        let filter_id = format!("filter{}_{}_{}", *effect_count, effect_suffix, root_id_suffix);
-        *effect_count += 1;
-
-        let (mut min_x, mut min_y, mut max_x, mut max_y) = if drop_shadows.is_empty() {
-            (x, y, x + width, y + height)
-        } else {
-            (f64::INFINITY, f64::INFINITY, f64::NEG_INFINITY, f64::NEG_INFINITY)
-        };
-        for shadow in &drop_shadows {
-            let radius = shadow.radius.max(0.0);
-            let spread = shadow.spread.max(0.0);
-            let sx = x + shadow.offset_x - radius - spread;
-            let sy = y + shadow.offset_y - radius - spread;
-            let sw = width + (radius + spread) * 2.0;
-            let sh = height + (radius + spread) * 2.0;
-            min_x = min_x.min(sx);
-            min_y = min_y.min(sy);
-            max_x = max_x.max(sx + sw);
-            max_y = max_y.max(sy + sh);
-        }
-        for shadow in &inner_shadows {
-            let sx = x.min(x + shadow.offset_x);
-            let sy = y.min(y + shadow.offset_y);
-            let sw = width + shadow.offset_x.abs();
-            let sh = height + shadow.offset_y.abs();
-            min_x = min_x.min(sx);
-            min_y = min_y.min(sy);
-            max_x = max_x.max(sx + sw);
-            max_y = max_y.max(sy + sh);
-        }
-        if let Some(blur) = layer_blur {
-            let radius = blur.radius.max(0.0);
-            min_x = min_x.min(x - radius);
-            min_y = min_y.min(y - radius);
-            max_x = max_x.max(x + width + radius);
-            max_y = max_y.max(y + height + radius);
-        }
-        let filter_x = min_x.floor();
-        let filter_y = min_y.floor();
-        let filter_w = (max_x.ceil() - filter_x).max(0.0);
-        let filter_h = (max_y.ceil() - filter_y).max(0.0);
-
-        let mut fe_flood = svg::node::element::Element::new("feFlood");
-        svg::Node::assign(&mut fe_flood, "flood-opacity", "0");
-        svg::Node::assign(&mut fe_flood, "result", "BackgroundImageFix");
-
-        let mut filter = svg::node::element::Filter::new()
-            .set("id", filter_id.clone())
-            .set("x", fmt_f64(filter_x))
-            .set("y", fmt_f64(filter_y))
-            .set("width", fmt_f64(filter_w))
-            .set("height", fmt_f64(filter_h))
-            .set("filterUnits", "userSpaceOnUse")
-            .set("color-interpolation-filters", "sRGB")
-            .add(fe_flood);
-
-        if !drop_shadows.is_empty() {
-            for (idx, shadow) in drop_shadows.iter().enumerate() {
-                let step = idx + 1;
-                let radius = shadow.radius.max(0.0);
-                let spread = shadow.spread.max(0.0);
-                let std_deviation = (radius * 0.5).max(0.0);
-                let prev_result = if step == 1 {
-                    "BackgroundImageFix".to_string()
-                } else {
-                    format!("effect{}_dropShadow_{}", step - 1, root_id_suffix)
-                };
-                let this_result = format!("effect{}_dropShadow_{}", step, root_id_suffix);
-
-                let mut fe_color_alpha = svg::node::element::Element::new("feColorMatrix");
-                svg::Node::assign(&mut fe_color_alpha, "in", "SourceAlpha");
-                svg::Node::assign(&mut fe_color_alpha, "type", "matrix");
-                svg::Node::assign(
-                    &mut fe_color_alpha,
-                    "values",
-                    "0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 127 0",
-                );
-                svg::Node::assign(&mut fe_color_alpha, "result", "hardAlpha");
-                filter = filter.add(fe_color_alpha);
-
-                if spread > 0.0 {
-                    let mut fe_morphology = svg::node::element::Element::new("feMorphology");
-                    svg::Node::assign(&mut fe_morphology, "radius", fmt_f64(spread));
-                    svg::Node::assign(&mut fe_morphology, "operator", "dilate");
-                    svg::Node::assign(&mut fe_morphology, "in", "SourceAlpha");
-                    svg::Node::assign(&mut fe_morphology, "result", this_result.clone());
-                    filter = filter.add(fe_morphology);
-                }
-
-                let mut fe_offset = svg::node::element::Element::new("feOffset");
-                if shadow.offset_x.abs() > f64::EPSILON {
-                    svg::Node::assign(&mut fe_offset, "dx", fmt_f64(shadow.offset_x));
-                }
-                if shadow.offset_y.abs() > f64::EPSILON {
-                    svg::Node::assign(&mut fe_offset, "dy", fmt_f64(shadow.offset_y));
-                }
-                filter = filter.add(fe_offset);
-
-                let mut fe_blur = svg::node::element::Element::new("feGaussianBlur");
-                svg::Node::assign(&mut fe_blur, "stdDeviation", fmt_f64(std_deviation));
-                filter = filter.add(fe_blur);
-
-                let mut fe_color = svg::node::element::Element::new("feColorMatrix");
-                svg::Node::assign(&mut fe_color, "type", "matrix");
-                svg::Node::assign(
-                    &mut fe_color,
-                    "values",
-                    format!(
-                        "0 0 0 0 {} 0 0 0 0 {} 0 0 0 0 {} 0 0 0 {} 0",
-                        fmt_shadow_component(shadow.color.r),
-                        fmt_shadow_component(shadow.color.g),
-                        fmt_shadow_component(shadow.color.b),
-                        fmt_shadow_component(shadow.color.a)
-                    ),
-                );
-                filter = filter.add(fe_color);
-
-                let mut fe_blend_shadow = svg::node::element::Element::new("feBlend");
-                svg::Node::assign(&mut fe_blend_shadow, "mode", "normal");
-                svg::Node::assign(&mut fe_blend_shadow, "in2", prev_result);
-                svg::Node::assign(&mut fe_blend_shadow, "result", this_result);
-                filter = filter.add(fe_blend_shadow);
-            }
-
-            let mut fe_blend_shape = svg::node::element::Element::new("feBlend");
-            svg::Node::assign(&mut fe_blend_shape, "mode", "normal");
-            svg::Node::assign(&mut fe_blend_shape, "in", "SourceGraphic");
-            svg::Node::assign(
-                &mut fe_blend_shape,
-                "in2",
-                format!("effect{}_dropShadow_{}", drop_shadows.len(), root_id_suffix),
-            );
-            svg::Node::assign(&mut fe_blend_shape, "result", "shape");
-            filter = filter.add(fe_blend_shape);
-        } else {
-            let mut fe_blend = svg::node::element::Element::new("feBlend");
-            svg::Node::assign(&mut fe_blend, "mode", "normal");
-            svg::Node::assign(&mut fe_blend, "in", "SourceGraphic");
-            svg::Node::assign(&mut fe_blend, "in2", "BackgroundImageFix");
-            svg::Node::assign(&mut fe_blend, "result", "shape");
-            filter = filter.add(fe_blend);
-        }
-
-        if !inner_shadows.is_empty() {
-            let mut inner_base = "shape".to_string();
-            for (idx, shadow) in inner_shadows.iter().enumerate() {
-                let step = idx + 1;
-                let std_deviation = (shadow.radius * 0.5).max(0.0);
-                let this_result = format!("effect{}_innerShadow_{}", step, root_id_suffix);
-
-                let mut fe_color_alpha = svg::node::element::Element::new("feColorMatrix");
-                svg::Node::assign(&mut fe_color_alpha, "in", "SourceAlpha");
-                svg::Node::assign(&mut fe_color_alpha, "type", "matrix");
-                svg::Node::assign(
-                    &mut fe_color_alpha,
-                    "values",
-                    "0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 127 0",
-                );
-                svg::Node::assign(&mut fe_color_alpha, "result", "hardAlpha");
-                filter = filter.add(fe_color_alpha);
-
-                let mut fe_offset = svg::node::element::Element::new("feOffset");
-                if shadow.offset_x.abs() > f64::EPSILON {
-                    svg::Node::assign(&mut fe_offset, "dx", fmt_f64(shadow.offset_x));
-                }
-                if shadow.offset_y.abs() > f64::EPSILON {
-                    svg::Node::assign(&mut fe_offset, "dy", fmt_f64(shadow.offset_y));
-                }
-                filter = filter.add(fe_offset);
-
-                let mut fe_blur = svg::node::element::Element::new("feGaussianBlur");
-                svg::Node::assign(&mut fe_blur, "stdDeviation", fmt_f64(std_deviation));
-                filter = filter.add(fe_blur);
-
-                let mut fe_comp = svg::node::element::Element::new("feComposite");
-                svg::Node::assign(&mut fe_comp, "in2", "hardAlpha");
-                svg::Node::assign(&mut fe_comp, "operator", "arithmetic");
-                svg::Node::assign(&mut fe_comp, "k2", "-1");
-                svg::Node::assign(&mut fe_comp, "k3", "1");
-                filter = filter.add(fe_comp);
-
-                let mut fe_color = svg::node::element::Element::new("feColorMatrix");
-                svg::Node::assign(&mut fe_color, "type", "matrix");
-                svg::Node::assign(
-                    &mut fe_color,
-                    "values",
-                    format!(
-                        "0 0 0 0 {} 0 0 0 0 {} 0 0 0 0 {} 0 0 0 {} 0",
-                        fmt_shadow_component(shadow.color.r),
-                        fmt_shadow_component(shadow.color.g),
-                        fmt_shadow_component(shadow.color.b),
-                        fmt_shadow_component(shadow.color.a)
-                    ),
-                );
-                filter = filter.add(fe_color);
-
-                let mut fe_blend = svg::node::element::Element::new("feBlend");
-                svg::Node::assign(&mut fe_blend, "mode", "normal");
-                svg::Node::assign(&mut fe_blend, "in2", inner_base.clone());
-                svg::Node::assign(&mut fe_blend, "result", this_result.clone());
-                filter = filter.add(fe_blend);
-                inner_base = this_result;
-            }
-        }
-
-        if let Some(effect) = layer_blur {
-            let radius = effect.radius.max(0.0);
-            let std_deviation = (radius * 0.5).max(0.0);
-            let mut fe_gaussian_blur = svg::node::element::Element::new("feGaussianBlur");
-            svg::Node::assign(
-                &mut fe_gaussian_blur,
-                "stdDeviation",
-                fmt_f64(std_deviation),
-            );
-            svg::Node::assign(
-                &mut fe_gaussian_blur,
-                "result",
-                format!("effect2_foregroundBlur_{root_id_suffix}"),
-            );
-            filter = filter.add(fe_gaussian_blur);
-        }
-
-        *defs = defs.clone().add(filter);
-        *has_defs = true;
-
-        let mut filtered = svg::node::element::Group::new().set("filter", format!("url(#{filter_id})"));
-        if !drop_shadows.is_empty() {
-            if let Some(stroke) = stroke.as_ref() {
-                let rect_attrs = rect.to_string();
-                let parse_attr = |name: &str| -> Option<String> {
-                    let needle = format!("{name}=\"");
-                    let start = rect_attrs.find(&needle)? + needle.len();
-                    let tail = &rect_attrs[start..];
-                    let end = tail.find('"')?;
-                    Some(tail[..end].to_string())
-                };
-                let mut fill_rect = svg::node::element::Rectangle::new()
-                    .set("x", fmt_f64(x))
-                    .set("y", fmt_f64(y))
-                    .set("width", fmt_f64(width))
-                    .set("height", fmt_f64(height));
-                fill_rect = apply_corner_radii_rect(fill_rect, corner_radii);
-                if let Some(fill) = parse_attr("fill") {
-                    fill_rect = fill_rect.set("fill", fill);
-                }
-                if let Some(fill_opacity) = parse_attr("fill-opacity") {
-                    fill_rect = fill_rect.set("fill-opacity", fill_opacity);
-                }
-                if let Some(opacity) = parse_attr("opacity") {
-                    fill_rect = fill_rect.set("opacity", opacity);
-                }
-                let inset = (stroke.width * 0.5).max(0.0);
-                let mut stroke_rect = svg::node::element::Rectangle::new()
-                    .set("x", fmt_f64(x + inset))
-                    .set("y", fmt_f64(y + inset))
-                    .set("width", fmt_f64((width - stroke.width).max(0.0)))
-                    .set("height", fmt_f64((height - stroke.width).max(0.0)))
-                    .set("stroke", {
-                        let (hex, _) = svg_color_paint_values(
-                            to_u8(stroke.color.r),
-                            to_u8(stroke.color.g),
-                            to_u8(stroke.color.b),
-                            (stroke.color.a * 255.0).round().clamp(0.0, 255.0) as u8,
-                        );
-                        hex
-                    })
-                    .set("stroke-width", fmt_f64(stroke.width.max(0.0)))
-                    .set("stroke-linecap", svg_linecap(stroke.cap))
-                    .set("stroke-linejoin", svg_linejoin(stroke.join));
-                let (_, stroke_opacity) = svg_color_paint_values(
-                    to_u8(stroke.color.r),
-                    to_u8(stroke.color.g),
-                    to_u8(stroke.color.b),
-                    (stroke.color.a * 255.0).round().clamp(0.0, 255.0) as u8,
-                );
-                if let Some(opacity) = stroke_opacity {
-                    stroke_rect = stroke_rect.set("stroke-opacity", opacity);
-                }
-                let inset_radii = frame_proto::CornerRadii {
-                    top_left: (corner_radii.top_left - inset).max(0.0),
-                    top_right: (corner_radii.top_right - inset).max(0.0),
-                    bottom_right: (corner_radii.bottom_right - inset).max(0.0),
-                    bottom_left: (corner_radii.bottom_left - inset).max(0.0),
-                };
-                stroke_rect = apply_corner_radii_rect(stroke_rect, &inset_radii);
-                filtered = filtered.add(fill_rect).add(stroke_rect);
-            } else {
-                filtered = filtered.add(rect);
-            }
-        } else {
-            filtered = filtered.add(rect);
-        }
-        push_node(svg_doc, group_stack, filtered);
-        return;
-    }
-
-    if let Some(effect) = effects
-        .iter()
-        .find(|effect| matches!(effect.kind, EffectKind::BackgroundBlur))
-    {
-        let radius = effect.radius.max(0.0);
-        let blur = (radius * 0.5).max(0.0);
-        let bx = x - radius;
-        let by = y - radius;
-        let bw = width + radius * 2.0;
-        let bh = height + radius * 2.0;
-        let clip_id = format!("bgblur_{}_{}_clip_path", *bg_blur_count, root_id_suffix);
-        *bg_blur_count += 1;
-
-        let mut clip_rect = svg::node::element::Rectangle::new()
-            .set("x", fmt_f64(x))
-            .set("y", fmt_f64(y))
-            .set("width", fmt_f64(width))
-            .set("height", fmt_f64(height));
-        clip_rect = apply_corner_radii_rect(clip_rect, corner_radii);
-
-        *defs = defs.clone().add(
-            svg::node::element::ClipPath::new()
-                .set("id", clip_id.clone())
-                .set(
-                    "transform",
-                    format!("translate({} {})", fmt_f64(-bx), fmt_f64(-by)),
-                )
-                .add(clip_rect),
-        );
-        *has_defs = true;
-
-        let mut foreign = svg::node::element::ForeignObject::new()
-            .set("x", fmt_f64(bx))
-            .set("y", fmt_f64(by))
-            .set("width", fmt_f64(bw))
-            .set("height", fmt_f64(bh));
-        let mut div = svg::node::element::Element::new("div");
-        svg::Node::assign(&mut div, "xmlns", "http://www.w3.org/1999/xhtml");
-        svg::Node::assign(
-            &mut div,
-            "style",
-            format!(
-                "backdrop-filter:blur({}px);clip-path:url(#{clip_id});height:100%;width:100%",
-                fmt_f64(blur)
-            ),
-        );
-        foreign = foreign.add(div);
-        push_node(svg_doc, group_stack, foreign);
+    if let Some(mode) = blend.and_then(svg_mix_blend_mode) {
         push_node(
             svg_doc,
             group_stack,
-            rect.set("data-figma-bg-blur-radius", fmt_f64(radius)),
+            svg::node::element::Group::new()
+                .set("style", format!("mix-blend-mode:{mode}"))
+                .add(node),
         );
-        return;
+    } else {
+        push_node(svg_doc, group_stack, node);
     }
-
-    push_node(svg_doc, group_stack, rect);
 }
 
 #[cfg(feature = "svg_export")]
-#[derive(Clone)]
 enum FillStyle {
     Solid {
         hex: String,
@@ -2165,6 +3060,215 @@ enum FillStyle {
     DebugStroke {
         hex: &'static str,
     },
+}
+
+#[cfg(feature = "svg_export")]
+#[derive(Clone, Copy)]
+struct ResolvedRectGeometry {
+    rx: f64,
+    ry: f64,
+    rw: f64,
+    rh: f64,
+}
+
+#[cfg(feature = "svg_export")]
+fn push_complex_frame_stroke_overlays(
+    svg_doc: &mut svg::Document,
+    group_stack: &mut Vec<svg::node::element::Group>,
+    gradient_count: &mut u64,
+    deferred_gradients: &mut Vec<Box<dyn svg::Node>>,
+    has_defs: &mut bool,
+    root_id_suffix: &str,
+    rx: f64,
+    ry: f64,
+    rw: f64,
+    rh: f64,
+    corner_radii: &frame_proto::CornerRadii,
+    frame_stroke_width: f64,
+    raw_frame_strokes: &[crate::anyrender_renderer::FillPaint],
+    fill_blend: &crate::anyrender_renderer::BlendMix,
+) {
+    for stroke_paint in raw_frame_strokes {
+        let mut stroke_rect = svg::node::element::Rectangle::new()
+            .set("x", fmt_f64(rx))
+            .set("y", fmt_f64(ry))
+            .set("width", fmt_f64(rw))
+            .set("height", fmt_f64(rh))
+            .set("fill", "none")
+            .set("stroke-width", fmt_f64(frame_stroke_width));
+        stroke_rect = apply_corner_radii_rect(stroke_rect, corner_radii);
+
+        match stroke_paint {
+            crate::anyrender_renderer::FillPaint::Solid(color) => {
+                let (hex, opacity) = svg_color_paint_values(
+                    to_u8(color.r),
+                    to_u8(color.g),
+                    to_u8(color.b),
+                    (color.a * 255.0).round().clamp(0.0, 255.0) as u8,
+                );
+                stroke_rect = stroke_rect.set("stroke", hex);
+                if let Some(opacity) = opacity {
+                    stroke_rect = stroke_rect.set("stroke-opacity", opacity);
+                }
+            }
+            crate::anyrender_renderer::FillPaint::GradientLinear { transform, stops } => {
+                let stroke_gradient_id = format!("paint{gradient_count}_linear_{root_id_suffix}");
+                *gradient_count += 1;
+                if let Some(gradient) = svg_linear_gradient_def(
+                    &stroke_gradient_id,
+                    rx,
+                    ry,
+                    rw,
+                    rh,
+                    transform.as_ref(),
+                    stops.as_slice(),
+                ) {
+                    deferred_gradients.push(Box::new(gradient));
+                    *has_defs = true;
+                    stroke_rect = stroke_rect.set("stroke", format!("url(#{stroke_gradient_id})"));
+                } else {
+                    continue;
+                }
+            }
+            crate::anyrender_renderer::FillPaint::GradientRadial { transform, stops } => {
+                let stroke_gradient_id = format!("paint{gradient_count}_radial_{root_id_suffix}");
+                *gradient_count += 1;
+                if let Some(gradient) = svg_radial_gradient_def(
+                    &stroke_gradient_id,
+                    rx,
+                    ry,
+                    rw,
+                    rh,
+                    transform.as_ref(),
+                    stops.as_slice(),
+                ) {
+                    deferred_gradients.push(Box::new(gradient));
+                    *has_defs = true;
+                    stroke_rect = stroke_rect.set("stroke", format!("url(#{stroke_gradient_id})"));
+                } else {
+                    continue;
+                }
+            }
+            _ => continue,
+        }
+
+        push_node_with_optional_blend(svg_doc, group_stack, stroke_rect, Some(fill_blend));
+    }
+}
+
+#[cfg(feature = "svg_export")]
+fn union_path_bounds(paths: &[String], tx: f64, ty: f64) -> Option<(f64, f64, f64, f64)> {
+    let mut out = None::<(f64, f64, f64, f64)>;
+    for d in paths {
+        let Some((min_x, min_y, max_x, max_y)) = svg_path_bounds(d, tx, ty) else {
+            continue;
+        };
+        out = Some(match out {
+            Some((bx0, by0, bx1, by1)) => (
+                bx0.min(min_x),
+                by0.min(min_y),
+                bx1.max(max_x),
+                by1.max(max_y),
+            ),
+            None => (min_x, min_y, max_x, max_y),
+        });
+    }
+    out
+}
+
+#[cfg(feature = "svg_export")]
+fn bbox_alignment_error(
+    bounds: (f64, f64, f64, f64),
+    target: (f64, f64, f64, f64),
+) -> f64 {
+    let (b0x, b0y, b1x, b1y) = bounds;
+    let (tx, ty, tw, th) = target;
+    let bw = (b1x - b0x).max(0.0);
+    let bh = (b1y - b0y).max(0.0);
+    (b0x - tx).abs() + (b0y - ty).abs() + (bw - tw).abs() + (bh - th).abs()
+}
+
+#[cfg(feature = "svg_export")]
+fn resolve_rect_geometry(
+    doc: &frame_proto::FrameDocument,
+    node_id: frame_proto::NodeId,
+    layout_boxes: &std::collections::HashMap<frame_proto::NodeId, crate::anyrender_renderer::LayoutBox>,
+    source_bboxes: &std::collections::HashMap<String, (f64, f64, f64, f64)>,
+    x: f64,
+    y: f64,
+    width: f64,
+    height: f64,
+    tx: f64,
+    ty: f64,
+    rotation: f64,
+    fill_paths: &[String],
+    stroke: Option<&crate::anyrender_renderer::StrokeStyle>,
+) -> ResolvedRectGeometry {
+    let mut rx = x + tx;
+    let mut ry = y + ty;
+    let mut rw = width.max(0.0);
+    let mut rh = height.max(0.0);
+    let mut used_bbox_fallback = false;
+    if rw <= 1.0 || rh <= 1.0 {
+        if let Some(node) = doc.get_node(node_id) {
+            if let Some((bx, by, bw, bh)) = source_bboxes.get(&node.figma_id) {
+                rx = *bx + tx;
+                ry = *by + ty;
+                rw = *bw;
+                rh = *bh;
+                used_bbox_fallback = true;
+            }
+        }
+        if !used_bbox_fallback {
+            if let Some(b) = layout_boxes.get(&node_id).copied() {
+                rx = b.x + tx;
+                ry = b.y + ty;
+                rw = b.width.max(0.0);
+                rh = b.height.max(0.0);
+                used_bbox_fallback = true;
+            }
+        }
+    }
+    if rotation.abs() > 1e-6 {
+        if let Some((width_local, height_local)) =
+            fill_paths.first().and_then(|d| svg_local_rect_size_from_path(d))
+        {
+            rw = width_local;
+            rh = height_local;
+        } else {
+            let angle = rotation.abs();
+            let c = angle.cos().abs();
+            let s = angle.sin().abs();
+            let det = c * c - s * s;
+            if det.abs() > 1e-6 {
+                let width_local = (rw * c - rh * s) / det;
+                let height_local = (rh * c - rw * s) / det;
+                if width_local.is_finite()
+                    && height_local.is_finite()
+                    && width_local > 0.0
+                    && height_local > 0.0
+                {
+                    rw = width_local;
+                    rh = height_local;
+                }
+            }
+        }
+    }
+    if used_bbox_fallback {
+        if let Some(stroke) = stroke {
+            let inset = stroke.width.max(0.0) * 0.5;
+            rx += inset;
+            ry += inset;
+            rw = (rw - inset * 2.0).max(0.0);
+            rh = (rh - inset * 2.0).max(0.0);
+        }
+    }
+    ResolvedRectGeometry {
+        rx,
+        ry,
+        rw,
+        rh,
+    }
 }
 
 #[cfg(feature = "svg_export")]
@@ -2188,7 +3292,7 @@ fn apply_fill_style_rect(
 }
 
 #[cfg(feature = "svg_export")]
-fn apply_corner_radii_rect(
+pub(super) fn apply_corner_radii_rect(
     mut rect: svg::node::element::Rectangle,
     corner_radii: &frame_proto::CornerRadii,
 ) -> svg::node::element::Rectangle {
@@ -2207,7 +3311,7 @@ fn apply_corner_radii_rect(
 }
 
 #[cfg(feature = "svg_export")]
-fn svg_mix_blend_mode(mode: &crate::anyrender_renderer::BlendMix) -> Option<&'static str> {
+pub(super) fn svg_mix_blend_mode(mode: &crate::anyrender_renderer::BlendMix) -> Option<&'static str> {
     use crate::anyrender_renderer::BlendMix;
     match mode {
         BlendMix::Multiply => Some("multiply"),
@@ -2630,7 +3734,7 @@ fn end_mask_capture() -> Option<svg::node::element::Mask> {
 }
 
 #[cfg(feature = "svg_export")]
-fn push_node<N: svg::Node>(
+pub(super) fn push_node<N: svg::Node>(
     doc: &mut svg::Document,
     groups: &mut Vec<svg::node::element::Group>,
     node: N,
@@ -2696,6 +3800,27 @@ fn accumulate_bounds_if_active(
 }
 
 #[cfg(feature = "svg_export")]
+fn svg_path_is_full_ellipse_like(d: &str) -> bool {
+    if d.trim().is_empty() {
+        return true;
+    }
+    let trimmed = d.trim_end();
+    if !trimmed.ends_with('Z') && !trimmed.ends_with('z') {
+        return false;
+    }
+    let mut has_curve = false;
+    for ch in d.chars().filter(|c| c.is_ascii_alphabetic()) {
+        match ch {
+            // Ellipse slices/sectors introduce line segments.
+            'L' | 'l' | 'H' | 'h' | 'V' | 'v' => return false,
+            // Curved contours are valid for full ellipse approximations.
+            'C' | 'c' | 'S' | 's' | 'Q' | 'q' | 'T' | 't' | 'A' | 'a' => has_curve = true,
+            _ => {}
+        }
+    }
+    has_curve
+}
+
 fn svg_path_bounds(d: &str, tx: f64, ty: f64) -> Option<(f64, f64, f64, f64)> {
     let path = kurbo::BezPath::from_svg(d).ok()?;
     let bb = path.bounding_box();
@@ -2711,12 +3836,12 @@ fn svg_path_bounds(d: &str, tx: f64, ty: f64) -> Option<(f64, f64, f64, f64)> {
 }
 
 #[cfg(feature = "svg_export")]
-fn to_u8(v: f64) -> u8 {
+pub(super) fn to_u8(v: f64) -> u8 {
     (v * 255.0).round().clamp(0.0, 255.0) as u8
 }
 
 #[cfg(feature = "svg_export")]
-fn svg_color_paint_values(r: u8, g: u8, b: u8, a: u8) -> (String, Option<String>) {
+pub(super) fn svg_color_paint_values(r: u8, g: u8, b: u8, a: u8) -> (String, Option<String>) {
     let hex = format!("#{r:02X}{g:02X}{b:02X}");
     if a >= 255 {
         (hex, None)
@@ -2726,7 +3851,7 @@ fn svg_color_paint_values(r: u8, g: u8, b: u8, a: u8) -> (String, Option<String>
 }
 
 #[cfg(feature = "svg_export")]
-fn svg_linecap(cap: crate::anyrender_renderer::StrokeCap) -> &'static str {
+pub(super) fn svg_linecap(cap: crate::anyrender_renderer::StrokeCap) -> &'static str {
     match cap {
         crate::anyrender_renderer::StrokeCap::Round => "round",
         crate::anyrender_renderer::StrokeCap::Square => "square",
@@ -2735,7 +3860,7 @@ fn svg_linecap(cap: crate::anyrender_renderer::StrokeCap) -> &'static str {
 }
 
 #[cfg(feature = "svg_export")]
-fn svg_linejoin(join: crate::anyrender_renderer::StrokeJoin) -> &'static str {
+pub(super) fn svg_linejoin(join: crate::anyrender_renderer::StrokeJoin) -> &'static str {
     match join {
         crate::anyrender_renderer::StrokeJoin::Round => "round",
         crate::anyrender_renderer::StrokeJoin::Bevel => "bevel",
@@ -2802,7 +3927,7 @@ fn svg_image_fill_transform(
 }
 
 #[cfg(feature = "svg_export")]
-fn fmt_f64(v: f64) -> String {
+pub(super) fn fmt_f64(v: f64) -> String {
     if v.abs() < 1e-12 {
         return "0".to_string();
     }

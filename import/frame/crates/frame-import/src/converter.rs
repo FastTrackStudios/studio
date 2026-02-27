@@ -256,6 +256,7 @@ fn is_supported_projection_key(key: &str) -> bool {
             | "componentProperties"
             | "componentPropertyReferences"
             | "assetRefs"
+            | "imageFillAssetRefs"
             | "imageFillAssets"
             | "explicitVariableModes"
             | "boundVariables"
