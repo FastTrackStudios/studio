@@ -59,13 +59,13 @@
 </g>
 <g filter="url(#filter15_diii_1_228)">
 <g clip-path="url(#paint12_angular_1_228_clip_path)" data-figma-skip-parse="true">
-<g transform="matrix(-0.000354 -0.000354 0.000354 -0.000354 120.261497 70.399986)">
-<foreignObject height="2022.22" width="2022.22" x="-1011.11" y="-1011.11">
-<div style="background:conic-gradient(from -45deg,rgba(96, 96, 94, 1) 5.019844deg,rgba(243, 243, 243, 1) 60.575486deg,rgba(243, 243, 243, 1) 125.738901deg,rgba(92, 92, 90, 1) 177.313714deg,rgba(92, 92, 90, 1) 186.673164deg,rgba(243, 243, 243, 1) 236.248713deg,rgba(243, 243, 243, 1) 303.594453deg,rgba(96, 96, 94, 1) 353.832657deg);height:100%;width:100%;opacity:1" xmlns="http://www.w3.org/1999/xhtml"/>
+<g transform="matrix(-0.013011 0.013011 -0.013011 -0.013011 120.261497 70.399986)">
+<foreignObject height="2889.914721" width="2889.914721" x="-1444.957361" y="-1444.957361">
+<div style="background:conic-gradient(from 90deg,rgba(96, 96, 94, 1) 0deg,rgba(96, 96, 94, 1) 5.019844deg,rgba(243, 243, 243, 1) 60.575486deg,rgba(243, 243, 243, 1) 125.738901deg,rgba(92, 92, 90, 1) 177.313714deg,rgba(92, 92, 90, 1) 186.673164deg,rgba(243, 243, 243, 1) 236.248713deg,rgba(243, 243, 243, 1) 303.594453deg,rgba(96, 96, 94, 1) 353.832657deg,rgba(96, 96, 94, 1) 360deg);height:100%;width:100%;opacity:1" xmlns="http://www.w3.org/1999/xhtml"/>
 </foreignObject>
 </g>
 </g>
-<circle cx="120.26" cy="70.4" r="18.4"/>
+<circle cx="120.26" cy="70.4" r="18.4" data-figma-gradient-fill="{&quot;type&quot;:&quot;GRADIENT_ANGULAR&quot;,&quot;stops&quot;:[{&quot;color&quot;:{&quot;r&quot;:0.3764705955982208,&quot;g&quot;:0.3764705955982208,&quot;b&quot;:0.3686274588108063,&quot;a&quot;:1.0},&quot;position&quot;:0.01394401118159294},{&quot;color&quot;:{&quot;r&quot;:0.9529411792755128,&quot;g&quot;:0.9529411792755128,&quot;b&quot;:0.9529411792755128,&quot;a&quot;:1.0},&quot;position&quot;:0.168265238404274},{&quot;color&quot;:{&quot;r&quot;:0.9529411792755128,&quot;g&quot;:0.9529411792755128,&quot;b&quot;:0.9529411792755128,&quot;a&quot;:1.0},&quot;position&quot;:0.34927472472190857},{&quot;color&quot;:{&quot;r&quot;:0.3607843220233917,&quot;g&quot;:0.3607843220233917,&quot;b&quot;:0.3529411852359772,&quot;a&quot;:1.0},&quot;position&quot;:0.4925380945205689},{&quot;color&quot;:{&quot;r&quot;:0.3607843220233917,&quot;g&quot;:0.3607843220233917,&quot;b&quot;:0.3529411852359772,&quot;a&quot;:1.0},&quot;position&quot;:0.5185365676879883},{&quot;color&quot;:{&quot;r&quot;:0.9529411792755128,&quot;g&quot;:0.9529411792755128,&quot;b&quot;:0.9529411792755128,&quot;a&quot;:1.0},&quot;position&quot;:0.6562464237213135},{&quot;color&quot;:{&quot;r&quot;:0.9529411792755128,&quot;g&quot;:0.9529411792755128,&quot;b&quot;:0.9529411792755128,&quot;a&quot;:1.0},&quot;position&quot;:0.8433179259300232},{&quot;color&quot;:{&quot;r&quot;:0.3764705955982208,&quot;g&quot;:0.3764705955982208,&quot;b&quot;:0.3686274588108063,&quot;a&quot;:1.0},&quot;position&quot;:0.982868492603302}],&quot;stopsVar&quot;:[],&quot;transform&quot;:{&quot;m00&quot;:-26.021529102325438,&quot;m01&quot;:-26.021529102325438,&quot;m02&quot;:146.28302659988404,&quot;m10&quot;:26.021529102325438,&quot;m11&quot;:-26.021529102325438,&quot;m12&quot;:70.39998626708984},&quot;opacity&quot;:1.0,&quot;blendMode&quot;:&quot;NORMAL&quot;,&quot;visible&quot;:true}"/>
 <circle cx="120.26" cy="70.4" r="18.4" fill="url(#pattern1_1_228)" fill-opacity="0.3" style="mix-blend-mode:darken"/>
 </g>
 <circle cx="120.24" cy="31.7" r="1.2" transform="rotate(-46.173359 120.244949 31.696693)" fill="#DEDEDE"/>
@@ -115,13 +115,13 @@
 </g>
 <g filter="url(#filter22_diii_1_228)">
 <g clip-path="url(#paint16_angular_1_228_clip_path)" data-figma-skip-parse="true">
-<g transform="matrix(-0.000354 -0.000354 0.000354 -0.000354 296.261505 70.399986)">
-<foreignObject height="2022.22" width="2022.22" x="-1011.11" y="-1011.11">
-<div style="background:conic-gradient(from -45deg,rgba(96, 96, 94, 1) 5.019844deg,rgba(243, 243, 243, 1) 60.575486deg,rgba(243, 243, 243, 1) 125.738901deg,rgba(92, 92, 90, 1) 177.313714deg,rgba(92, 92, 90, 1) 186.673164deg,rgba(243, 243, 243, 1) 236.248713deg,rgba(243, 243, 243, 1) 303.594453deg,rgba(96, 96, 94, 1) 353.832657deg);height:100%;width:100%;opacity:1" xmlns="http://www.w3.org/1999/xhtml"/>
+<g transform="matrix(-0.013011 0.013011 -0.013011 -0.013011 296.261505 70.399986)">
+<foreignObject height="2889.914721" width="2889.914721" x="-1444.957361" y="-1444.957361">
+<div style="background:conic-gradient(from 90deg,rgba(96, 96, 94, 1) 0deg,rgba(96, 96, 94, 1) 5.019844deg,rgba(243, 243, 243, 1) 60.575486deg,rgba(243, 243, 243, 1) 125.738901deg,rgba(92, 92, 90, 1) 177.313714deg,rgba(92, 92, 90, 1) 186.673164deg,rgba(243, 243, 243, 1) 236.248713deg,rgba(243, 243, 243, 1) 303.594453deg,rgba(96, 96, 94, 1) 353.832657deg,rgba(96, 96, 94, 1) 360deg);height:100%;width:100%;opacity:1" xmlns="http://www.w3.org/1999/xhtml"/>
 </foreignObject>
 </g>
 </g>
-<circle cx="296.26" cy="70.4" r="18.4"/>
+<circle cx="296.26" cy="70.4" r="18.4" data-figma-gradient-fill="{&quot;type&quot;:&quot;GRADIENT_ANGULAR&quot;,&quot;stops&quot;:[{&quot;color&quot;:{&quot;r&quot;:0.3764705955982208,&quot;g&quot;:0.3764705955982208,&quot;b&quot;:0.3686274588108063,&quot;a&quot;:1.0},&quot;position&quot;:0.01394401118159294},{&quot;color&quot;:{&quot;r&quot;:0.9529411792755128,&quot;g&quot;:0.9529411792755128,&quot;b&quot;:0.9529411792755128,&quot;a&quot;:1.0},&quot;position&quot;:0.168265238404274},{&quot;color&quot;:{&quot;r&quot;:0.9529411792755128,&quot;g&quot;:0.9529411792755128,&quot;b&quot;:0.9529411792755128,&quot;a&quot;:1.0},&quot;position&quot;:0.34927472472190857},{&quot;color&quot;:{&quot;r&quot;:0.3607843220233917,&quot;g&quot;:0.3607843220233917,&quot;b&quot;:0.3529411852359772,&quot;a&quot;:1.0},&quot;position&quot;:0.4925380945205689},{&quot;color&quot;:{&quot;r&quot;:0.3607843220233917,&quot;g&quot;:0.3607843220233917,&quot;b&quot;:0.3529411852359772,&quot;a&quot;:1.0},&quot;position&quot;:0.5185365676879883},{&quot;color&quot;:{&quot;r&quot;:0.9529411792755128,&quot;g&quot;:0.9529411792755128,&quot;b&quot;:0.9529411792755128,&quot;a&quot;:1.0},&quot;position&quot;:0.6562464237213135},{&quot;color&quot;:{&quot;r&quot;:0.9529411792755128,&quot;g&quot;:0.9529411792755128,&quot;b&quot;:0.9529411792755128,&quot;a&quot;:1.0},&quot;position&quot;:0.8433179259300232},{&quot;color&quot;:{&quot;r&quot;:0.3764705955982208,&quot;g&quot;:0.3764705955982208,&quot;b&quot;:0.3686274588108063,&quot;a&quot;:1.0},&quot;position&quot;:0.982868492603302}],&quot;stopsVar&quot;:[],&quot;transform&quot;:{&quot;m00&quot;:-26.021529102325438,&quot;m01&quot;:-26.021529102325438,&quot;m02&quot;:322.28303422927854,&quot;m10&quot;:26.021529102325438,&quot;m11&quot;:-26.021529102325438,&quot;m12&quot;:70.39998626708984},&quot;opacity&quot;:1.0,&quot;blendMode&quot;:&quot;NORMAL&quot;,&quot;visible&quot;:true}"/>
 <circle cx="296.26" cy="70.4" r="18.4" fill="url(#pattern2_1_228)" fill-opacity="0.3" style="mix-blend-mode:darken"/>
 </g>
 <circle cx="296.24" cy="31.7" r="1.2" transform="rotate(-46.173359 296.244949 31.696693)" fill="#DEDEDE"/>
@@ -209,13 +209,13 @@
 </g>
 <g filter="url(#filter34_diii_1_228)">
 <g clip-path="url(#paint20_angular_1_228_clip_path)" data-figma-skip-parse="true">
-<g transform="matrix(-0.000354 -0.000354 0.000354 -0.000354 421.599976 42.799995)">
-<foreignObject height="2022.22" width="2022.22" x="-1011.11" y="-1011.11">
-<div style="background:conic-gradient(from -45deg,rgba(96, 96, 94, 1) 5.019844deg,rgba(243, 243, 243, 1) 60.575486deg,rgba(243, 243, 243, 1) 125.738901deg,rgba(92, 92, 90, 1) 177.313714deg,rgba(92, 92, 90, 1) 186.673164deg,rgba(243, 243, 243, 1) 236.248713deg,rgba(243, 243, 243, 1) 303.594453deg,rgba(96, 96, 94, 1) 353.832657deg);height:100%;width:100%;opacity:1" xmlns="http://www.w3.org/1999/xhtml"/>
+<g transform="matrix(-0.009617 0.009617 -0.009617 -0.009617 421.599976 42.799995)">
+<foreignObject height="2911.616209" width="2911.616209" x="-1455.808104" y="-1455.808104">
+<div style="background:conic-gradient(from 90deg,rgba(96, 96, 94, 1) 0deg,rgba(96, 96, 94, 1) 5.019844deg,rgba(243, 243, 243, 1) 60.575486deg,rgba(243, 243, 243, 1) 125.738901deg,rgba(92, 92, 90, 1) 177.313714deg,rgba(92, 92, 90, 1) 186.673164deg,rgba(243, 243, 243, 1) 236.248713deg,rgba(243, 243, 243, 1) 303.594453deg,rgba(96, 96, 94, 1) 353.832657deg,rgba(96, 96, 94, 1) 360deg);height:100%;width:100%;opacity:1" xmlns="http://www.w3.org/1999/xhtml"/>
 </foreignObject>
 </g>
 </g>
-<circle cx="421.6" cy="42.8" r="13.6"/>
+<circle cx="421.6" cy="42.8" r="13.6" data-figma-gradient-fill="{&quot;type&quot;:&quot;GRADIENT_ANGULAR&quot;,&quot;stops&quot;:[{&quot;color&quot;:{&quot;r&quot;:0.3764705955982208,&quot;g&quot;:0.3764705955982208,&quot;b&quot;:0.3686274588108063,&quot;a&quot;:1.0},&quot;position&quot;:0.01394401118159294},{&quot;color&quot;:{&quot;r&quot;:0.9529411792755128,&quot;g&quot;:0.9529411792755128,&quot;b&quot;:0.9529411792755128,&quot;a&quot;:1.0},&quot;position&quot;:0.168265238404274},{&quot;color&quot;:{&quot;r&quot;:0.9529411792755128,&quot;g&quot;:0.9529411792755128,&quot;b&quot;:0.9529411792755128,&quot;a&quot;:1.0},&quot;position&quot;:0.34927472472190857},{&quot;color&quot;:{&quot;r&quot;:0.3607843220233917,&quot;g&quot;:0.3607843220233917,&quot;b&quot;:0.3529411852359772,&quot;a&quot;:1.0},&quot;position&quot;:0.4925380945205689},{&quot;color&quot;:{&quot;r&quot;:0.3607843220233917,&quot;g&quot;:0.3607843220233917,&quot;b&quot;:0.3529411852359772,&quot;a&quot;:1.0},&quot;position&quot;:0.5185365676879883},{&quot;color&quot;:{&quot;r&quot;:0.9529411792755128,&quot;g&quot;:0.9529411792755128,&quot;b&quot;:0.9529411792755128,&quot;a&quot;:1.0},&quot;position&quot;:0.6562464237213135},{&quot;color&quot;:{&quot;r&quot;:0.9529411792755128,&quot;g&quot;:0.9529411792755128,&quot;b&quot;:0.9529411792755128,&quot;a&quot;:1.0},&quot;position&quot;:0.8433179259300232},{&quot;color&quot;:{&quot;r&quot;:0.3764705955982208,&quot;g&quot;:0.3764705955982208,&quot;b&quot;:0.3686274588108063,&quot;a&quot;:1.0},&quot;position&quot;:0.982868492603302}],&quot;stopsVar&quot;:[],&quot;transform&quot;:{&quot;m00&quot;:-19.233304119110105,&quot;m01&quot;:-19.233304119110105,&quot;m02&quot;:440.83327970504763,&quot;m10&quot;:19.233304119110105,&quot;m11&quot;:-19.233304119110105,&quot;m12&quot;:42.79999542236328},&quot;opacity&quot;:1.0,&quot;blendMode&quot;:&quot;NORMAL&quot;,&quot;visible&quot;:true}"/>
 <circle cx="421.6" cy="42.8" r="13.6" fill="url(#pattern3_1_228)" fill-opacity="0.3" style="mix-blend-mode:darken"/>
 </g>
 <g filter="url(#filter35_i_1_228)">
@@ -246,13 +246,13 @@
 </g>
 <g filter="url(#filter39_diii_1_228)">
 <g clip-path="url(#paint22_angular_1_228_clip_path)" data-figma-skip-parse="true">
-<g transform="matrix(-0.000354 -0.000354 0.000354 -0.000354 421.599976 111.599998)">
-<foreignObject height="2022.22" width="2022.22" x="-1011.11" y="-1011.11">
-<div style="background:conic-gradient(from -45deg,rgba(96, 96, 94, 1) 5.019844deg,rgba(243, 243, 243, 1) 60.575486deg,rgba(243, 243, 243, 1) 125.738901deg,rgba(92, 92, 90, 1) 177.313714deg,rgba(92, 92, 90, 1) 186.673164deg,rgba(243, 243, 243, 1) 236.248713deg,rgba(243, 243, 243, 1) 303.594453deg,rgba(96, 96, 94, 1) 353.832657deg);height:100%;width:100%;opacity:1" xmlns="http://www.w3.org/1999/xhtml"/>
+<g transform="matrix(-0.009617 0.009617 -0.009617 -0.009617 421.599976 111.599998)">
+<foreignObject height="2911.616209" width="2911.616209" x="-1455.808104" y="-1455.808104">
+<div style="background:conic-gradient(from 90deg,rgba(96, 96, 94, 1) 0deg,rgba(96, 96, 94, 1) 5.019844deg,rgba(243, 243, 243, 1) 60.575486deg,rgba(243, 243, 243, 1) 125.738901deg,rgba(92, 92, 90, 1) 177.313714deg,rgba(92, 92, 90, 1) 186.673164deg,rgba(243, 243, 243, 1) 236.248713deg,rgba(243, 243, 243, 1) 303.594453deg,rgba(96, 96, 94, 1) 353.832657deg,rgba(96, 96, 94, 1) 360deg);height:100%;width:100%;opacity:1" xmlns="http://www.w3.org/1999/xhtml"/>
 </foreignObject>
 </g>
 </g>
-<circle cx="421.6" cy="111.6" r="13.6"/>
+<circle cx="421.6" cy="111.6" r="13.6" data-figma-gradient-fill="{&quot;type&quot;:&quot;GRADIENT_ANGULAR&quot;,&quot;stops&quot;:[{&quot;color&quot;:{&quot;r&quot;:0.3764705955982208,&quot;g&quot;:0.3764705955982208,&quot;b&quot;:0.3686274588108063,&quot;a&quot;:1.0},&quot;position&quot;:0.01394401118159294},{&quot;color&quot;:{&quot;r&quot;:0.9529411792755128,&quot;g&quot;:0.9529411792755128,&quot;b&quot;:0.9529411792755128,&quot;a&quot;:1.0},&quot;position&quot;:0.168265238404274},{&quot;color&quot;:{&quot;r&quot;:0.9529411792755128,&quot;g&quot;:0.9529411792755128,&quot;b&quot;:0.9529411792755128,&quot;a&quot;:1.0},&quot;position&quot;:0.34927472472190857},{&quot;color&quot;:{&quot;r&quot;:0.3607843220233917,&quot;g&quot;:0.3607843220233917,&quot;b&quot;:0.3529411852359772,&quot;a&quot;:1.0},&quot;position&quot;:0.4925380945205689},{&quot;color&quot;:{&quot;r&quot;:0.3607843220233917,&quot;g&quot;:0.3607843220233917,&quot;b&quot;:0.3529411852359772,&quot;a&quot;:1.0},&quot;position&quot;:0.5185365676879883},{&quot;color&quot;:{&quot;r&quot;:0.9529411792755128,&quot;g&quot;:0.9529411792755128,&quot;b&quot;:0.9529411792755128,&quot;a&quot;:1.0},&quot;position&quot;:0.6562464237213135},{&quot;color&quot;:{&quot;r&quot;:0.9529411792755128,&quot;g&quot;:0.9529411792755128,&quot;b&quot;:0.9529411792755128,&quot;a&quot;:1.0},&quot;position&quot;:0.8433179259300232},{&quot;color&quot;:{&quot;r&quot;:0.3764705955982208,&quot;g&quot;:0.3764705955982208,&quot;b&quot;:0.3686274588108063,&quot;a&quot;:1.0},&quot;position&quot;:0.982868492603302}],&quot;stopsVar&quot;:[],&quot;transform&quot;:{&quot;m00&quot;:-19.233304119110105,&quot;m01&quot;:-19.233304119110105,&quot;m02&quot;:440.83327970504763,&quot;m10&quot;:19.233304119110105,&quot;m11&quot;:-19.233304119110105,&quot;m12&quot;:111.5999984741211},&quot;opacity&quot;:1.0,&quot;blendMode&quot;:&quot;NORMAL&quot;,&quot;visible&quot;:true}"/>
 <circle cx="421.6" cy="111.6" r="13.6" fill="url(#pattern4_1_228)" fill-opacity="0.3" style="mix-blend-mode:darken"/>
 </g>
 <g filter="url(#filter40_di_1_228)">

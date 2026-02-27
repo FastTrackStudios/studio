@@ -767,7 +767,7 @@ pub fn run_cli() -> Result<(), String> {
                                     .set("height", fmt_f64(rh))
                                     .set(
                                         "data-figma-gradient-fill",
-                                        svg_angular_metadata_attr(rx, ry, rw, rh, stops.as_slice()),
+                                        svg_angular_metadata_attr(rx, ry, rw, rh, None, stops.as_slice()),
                                     );
                                 let angular_group = Group::new().add(group).add(metadata_rect);
                                 push_node_with_optional_blend(
@@ -1206,7 +1206,7 @@ pub fn run_cli() -> Result<(), String> {
                                 .set("height", fmt_f64(rh))
                                 .set(
                                     "data-figma-gradient-fill",
-                                    svg_angular_metadata_attr(rx, ry, rw, rh, stops.as_slice()),
+                                    svg_angular_metadata_attr(rx, ry, rw, rh, None, stops.as_slice()),
                                 );
                             let angular_group = Group::new().add(group).add(metadata_rect);
                             push_node_with_optional_blend(
@@ -1636,7 +1636,7 @@ pub fn run_cli() -> Result<(), String> {
                                     .set("height", fmt_f64(rh))
                                     .set(
                                         "data-figma-gradient-fill",
-                                        svg_angular_metadata_attr(rx, ry, rw, rh, stops.as_slice()),
+                                        svg_angular_metadata_attr(rx, ry, rw, rh, None, stops.as_slice()),
                                     );
                                 push_node(&mut svg_doc, &mut group_stack, metadata_rect);
                                 emit_rect = stroke.is_some();
@@ -2083,22 +2083,34 @@ pub fn run_cli() -> Result<(), String> {
                                     defs = defs.add(ClipPath::new().set("id", clip_id.clone()).add(clip_circle));
                                     has_defs = true;
 
+                                    let stroke_weight = node
+                                        .and_then(|n| n.raw.get("strokeWeight"))
+                                        .and_then(|v| v.as_f64())
+                                        .unwrap_or(0.0);
                                     let (a, b, c, d) = if let Some(t) = transform.as_ref() {
+                                        let rw = 2.0 * r;
                                         (
-                                            t[0][0] / 2000.0,
-                                            t[1][0] / 2000.0,
-                                            t[0][1] / 2000.0,
-                                            t[1][1] / 2000.0,
+                                            t[0][0] * rw / 2000.0,
+                                            -t[1][0] * rw / 2000.0,
+                                            -t[0][1] * rw / 2000.0,
+                                            t[1][1] * rw / 2000.0,
                                         )
                                     } else {
                                         let s = r / 1000.0;
                                         (s, 0.0, 0.0, s)
                                     };
+                                    let fo_half = if transform.is_some() {
+                                        (r + stroke_weight) / a.abs().max(1e-12)
+                                    } else {
+                                        1011.11
+                                    };
+                                    let fo_neg = fmt_f64(-fo_half);
+                                    let fo_size = fmt_f64(fo_half * 2.0);
                                     let mut foreign = ForeignObject::new()
-                                        .set("x", "-1011.11")
-                                        .set("y", "-1011.11")
-                                        .set("width", "2022.22")
-                                        .set("height", "2022.22");
+                                        .set("x", fo_neg.clone())
+                                        .set("y", fo_neg)
+                                        .set("width", fo_size.clone())
+                                        .set("height", fo_size);
                                     let mut div = Element::new("div");
                                     svg::Node::assign(&mut div, "xmlns", "http://www.w3.org/1999/xhtml");
                                     svg::Node::assign(
@@ -2129,20 +2141,19 @@ pub fn run_cli() -> Result<(), String> {
                                     );
                                     group = group.add(
                                         {
+                                            let metadata_val = svg_angular_metadata_attr(
+                                                cx - r,
+                                                cy - r,
+                                                r * 2.0,
+                                                r * 2.0,
+                                                transform.as_ref().map(|t| (t, cx, cy)),
+                                                stops.as_slice(),
+                                            );
                                             let mut circle = Circle::new()
                                                 .set("cx", fmt_f64(circle_cx))
                                                 .set("cy", fmt_f64(circle_cy))
                                                 .set("r", fmt_f64(r))
-                                                .set(
-                                                "data-figma-gradient-fill",
-                                                svg_angular_metadata_attr(
-                                                    cx - r,
-                                                    cy - r,
-                                                    r * 2.0,
-                                                    r * 2.0,
-                                                    stops.as_slice(),
-                                                ),
-                                            );
+                                                .set("data-figma-gradient-fill", metadata_val);
                                             if let Some(transform) = &circle_transform {
                                                 circle = circle.set("transform", transform.clone());
                                             }
@@ -3664,15 +3675,20 @@ fn svg_radial_gradient_def(
 
 #[cfg(feature = "svg_export")]
 fn svg_angular_conic_style(
-    transform: Option<&[[f64; 3]; 2]>,
+    _transform: Option<&[[f64; 3]; 2]>,
     stops: &[crate::anyrender_renderer::GradientStop],
 ) -> String {
-    let start_angle = if let Some(t) = transform {
-        t[1][0].atan2(t[0][0]).to_degrees()
-    } else {
-        0.0
-    };
     let mut parts = Vec::new();
+    // Seamless wrap: prepend first stop color at 0deg if gradient doesn't start there
+    if let Some(first) = stops.first() {
+        if first.offset.clamp(0.0, 1.0) * 360.0 > 1e-6 {
+            let r = to_u8(first.color.r);
+            let g = to_u8(first.color.g);
+            let b = to_u8(first.color.b);
+            let a = fmt_f64(first.color.a.clamp(0.0, 1.0));
+            parts.push(format!("rgba({r}, {g}, {b}, {a}) 0deg"));
+        }
+    }
     for stop in stops {
         let r = to_u8(stop.color.r);
         let g = to_u8(stop.color.g);
@@ -3681,9 +3697,18 @@ fn svg_angular_conic_style(
         let deg = fmt_f64(stop.offset.clamp(0.0, 1.0) * 360.0);
         parts.push(format!("rgba({r}, {g}, {b}, {a}) {deg}deg"));
     }
+    // Seamless wrap: append last stop color at 360deg if gradient doesn't end there
+    if let Some(last) = stops.last() {
+        if last.offset.clamp(0.0, 1.0) * 360.0 < 360.0 - 1e-6 {
+            let r = to_u8(last.color.r);
+            let g = to_u8(last.color.g);
+            let b = to_u8(last.color.b);
+            let a = fmt_f64(last.color.a.clamp(0.0, 1.0));
+            parts.push(format!("rgba({r}, {g}, {b}, {a}) 360deg"));
+        }
+    }
     format!(
-        "background:conic-gradient(from {}deg,{});height:100%;width:100%;opacity:1",
-        fmt_f64(90.0 + start_angle),
+        "background:conic-gradient(from 90deg,{});height:100%;width:100%;opacity:1",
         parts.join(",")
     )
 }
@@ -3694,31 +3719,48 @@ fn svg_angular_metadata_attr(
     y: f64,
     width: f64,
     height: f64,
+    gradient_transform: Option<(&[[f64; 3]; 2], f64, f64)>,
     stops: &[crate::anyrender_renderer::GradientStop],
 ) -> String {
+    fn raw_f(v: f64) -> String {
+        // Debug format always includes a decimal point for whole numbers (e.g. 1.0),
+        // and uses shortest-unique representation for fractional values — preserving
+        // the f32→f64 precision that Figma embeds in its JSON.
+        format!("{v:?}")
+    }
     fn color_json(c: &crate::anyrender_renderer::Rgba) -> String {
         format!(
             "{{\"r\":{},\"g\":{},\"b\":{},\"a\":{}}}",
-            fmt_f64(c.r.clamp(0.0, 1.0)),
-            fmt_f64(c.g.clamp(0.0, 1.0)),
-            fmt_f64(c.b.clamp(0.0, 1.0)),
-            fmt_f64(c.a.clamp(0.0, 1.0)),
+            raw_f(c.r.clamp(0.0, 1.0)),
+            raw_f(c.g.clamp(0.0, 1.0)),
+            raw_f(c.b.clamp(0.0, 1.0)),
+            raw_f(c.a.clamp(0.0, 1.0)),
         )
     }
     fn stop_json(stop: &crate::anyrender_renderer::GradientStop) -> String {
         format!(
             "{{\"color\":{},\"position\":{}}}",
             color_json(&stop.color),
-            fmt_f64(stop.offset.clamp(0.0, 1.0))
+            raw_f(stop.offset.clamp(0.0, 1.0))
         )
     }
     let stops_json = stops.iter().map(stop_json).collect::<Vec<_>>().join(",");
+    // Compute the 2×3 metadata transform.  For circle nodes the metadata stores
+    // the actual Figma gradientTransform (mRC = col R, row C convention):
+    //   m00 = t[0][0]*rw,  m01 = t[1][0]*rw,  m02 = cx - t[0][0]*rw
+    //   m10 = t[0][1]*rw,  m11 = t[1][1]*rw,  m12 = cy
+    // For rect nodes (gradient_transform = None) the transform is axis-aligned.
+    let (m00, m01, m02, m10, m11, m12) = if let Some((t, cx, cy)) = gradient_transform {
+        let rw = width;
+        let rh = height;
+        let m00 = t[0][0] * rw;
+        (m00, t[1][0] * rw, cx - m00, t[0][1] * rh, t[1][1] * rh, cy)
+    } else {
+        (width, 0.0, x, 0.0, height, y)
+    };
     format!(
-        "{{\"type\":\"GRADIENT_ANGULAR\",\"stops\":[{stops_json}],\"stopsVar\":[{stops_json}],\"transform\":{{\"m00\":{},\"m01\":0.0,\"m02\":{},\"m10\":0.0,\"m11\":{},\"m12\":{}}},\"opacity\":1.0,\"blendMode\":\"NORMAL\",\"visible\":true}}",
-        fmt_f64(width),
-        fmt_f64(x),
-        fmt_f64(height),
-        fmt_f64(y)
+        "{{\"type\":\"GRADIENT_ANGULAR\",\"stops\":[{stops_json}],\"stopsVar\":[],\"transform\":{{\"m00\":{},\"m01\":{},\"m02\":{},\"m10\":{},\"m11\":{},\"m12\":{}}},\"opacity\":1.0,\"blendMode\":\"NORMAL\",\"visible\":true}}",
+        raw_f(m00), raw_f(m01), raw_f(m02), raw_f(m10), raw_f(m11), raw_f(m12)
     )
 }
 

@@ -286,6 +286,7 @@ fn normalize_circle_line(line: &str) -> Option<String> {
     let stroke = extract_xml_attr(line, "stroke");
     let stroke_opacity = extract_xml_attr(line, "stroke-opacity");
     let stroke_width = extract_xml_attr(line, "stroke-width");
+    let figma_gradient_fill = extract_xml_attr(line, "data-figma-gradient-fill");
     let mut attrs: Vec<String> = vec![
         format!(r#"cx="{}""#, trim_decimal(&cx)),
         format!(r#"cy="{}""#, trim_decimal(&cy)),
@@ -319,6 +320,9 @@ fn normalize_circle_line(line: &str) -> Option<String> {
     }
     if let Some(stroke_width) = stroke_width {
         attrs.push(format!(r#"stroke-width="{}""#, trim_decimal(&stroke_width)));
+    }
+    if let Some(payload) = figma_gradient_fill {
+        attrs.push(format!(r#"data-figma-gradient-fill="{payload}""#));
     }
     Some(format!("<circle {}/>", attrs.join(" ")))
 }

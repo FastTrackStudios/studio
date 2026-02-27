@@ -88,3 +88,26 @@ after each iteration and it's included in prompts for context.
 
 ---
 
+## 2026-02-27 - bd-der.6
+- **What was implemented**: Fixed angular gradient foreignObject sizing, conic-gradient angle, SVG transform matrix, seamless stop wrap, and metadata circle emission
+- **Files changed**:
+  - `crates/frame-ui/src/svg/render.rs` — 5 fixes in GradientAngular CIRCLE arm + `svg_angular_metadata_attr` function overhaul
+  - `crates/frame-ui/src/svg/normalize.rs` — `normalize_circle_line` now preserves `data-figma-gradient-fill` attribute
+- **Key changes in render.rs**:
+  1. from-angle: was 90°-θ_grad (gave -45deg), now correctly `90deg` (conic-gradient starts at 12 o'clock, which maps to Figma's gradient angle 0 → SVG 90deg)
+  2. FO size: was 2022.22 (based on `1/(s*s)` formula), now `(r + strokeWeight) / |a|` where a = t[0][0]*rw/2000 — correct scaling
+  3. SVG transform matrix: was missing full rotation, now `matrix(a b c d cx cy)` with a=t[0][0]*rw/2000, b=-t[1][0]*rw/2000, c=-t[0][1]*rw/2000, d=t[1][1]*rw/2000
+  4. Seamless stop wrap: added first stop at 0deg and last stop at 360deg to prevent gap
+  5. `svg_angular_metadata_attr` reworked: stopsVar→[], full f64 precision via `{:?}` format, actual gradientTransform matrix passed for CIRCLE (None for rects)
+- **Metadata transform formula** (column-major naming mRC where R=col, C=row):
+  - m00 = t[0][0]*rw,  m01 = t[1][0]*rw,  m02 = cx - t[0][0]*rw
+  - m10 = t[0][1]*rh,  m11 = t[1][1]*rh,  m12 = cy
+- **normalize.rs root cause**: `normalize_circle_line` only re-emits known attrs — `data-figma-gradient-fill` was silently stripped. Fixed by adding `extract_xml_attr` call + conditional emit (same pattern as `normalize_rect_line`)
+- **Learnings**:
+  - `normalize_svg_for_figma_parity` is a post-processor that parses SVG line-by-line and only keeps known attributes per element type — any new attribute must be explicitly added to the normalizer function for its element type
+  - SVG `{:?}` format for f64 preserves decimal point for whole numbers (1.0 not 1) and uses Ryu shortest-unique for fractionals; matches f32→f64 precision from Figma JSON better than `fmt_f64` (which rounds to 6dp)
+  - The metadata circle IS generated correctly (confirmed via group-children trace) — the issue was the normalizer stripping it, not the renderer failing to emit it
+  - 22/26 parity tests still pass; same 4 pre-existing failures; regression.tough-1176-blue-face remains a pre-existing failure (child count 201 vs 205 and path coord precision are unrelated to angular gradient work)
+
+---
+
