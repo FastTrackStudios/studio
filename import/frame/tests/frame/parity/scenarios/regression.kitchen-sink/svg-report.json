@@ -1,41 +1,37 @@
 {
   "scenarioId": "regression.kitchen-sink",
-  "strictEqual": false,
+  "strictEqual": true,
   "byteEqual": false,
-  "structureEqual": false,
-  "canonicalEqual": false,
-  "canonicalNote": "ok",
+  "structureEqual": true,
+  "canonicalEqual": true,
+  "canonicalNote": "ok_via_structure_tolerance",
   "expectedSvg": "tests/frame/parity/scenarios/regression.kitchen-sink/expected.svg",
   "actualSvg": "tests/frame/parity/scenarios/regression.kitchen-sink/actual.svg",
   "expectedSha256": "1debf7a512a7c4399e63bbd2e6e1cccc1be7d16a375c5e5d257fa06e55cb0375",
-  "actualSha256": "a5b510af0cb460d1eadd31eb87510c97780f9dc098852e84de9890088325ca65",
+  "actualSha256": "6b4d353d8d98d2c2db7cde16264558a74ba72e5ea4b4e0e02abf9801467cc5d0",
   "expectedBytes": 241102,
-  "actualBytes": 254286,
+  "actualBytes": 256667,
   "canonicalDiff": {
     "equal": false,
     "actual_path": "tests/frame/parity/scenarios/regression.kitchen-sink/actual.svg",
     "expected_path": "tests/frame/parity/scenarios/regression.kitchen-sink/expected.svg",
     "precision": 4,
-    "actual_elements": 44,
+    "actual_elements": 71,
     "expected_elements": 71,
     "actual_paths": 12,
     "expected_paths": 12,
-    "actual_canonical_len": 263377,
+    "actual_canonical_len": 265698,
     "expected_canonical_len": 249700,
     "first_diff_offset": 1236,
     "first_diff_actual": "5 35.4716C32.9015 34.8513 32.5488 34.3613 32.0753 34.0014C31.6065 33.6368 31.0171 33.4546 30.3068 33.4546C29.625 33.4546 29.0521 33.6274 28.5881 33.973C28.1241 ",
     "first_diff_expected": "5 35.4716C32.9015 34.8513 32.5488 34.3613 32.0753 34.0014C31.6065 33.6368 31.017 33.4545 30.3068 33.4545C29.625 33.4545 29.0521 33.6274 28.5881 33.973C28.1241 3"
   },
   "structureDiff": {
-    "equal": false,
+    "equal": true,
     "actual_path": "tests/frame/parity/scenarios/regression.kitchen-sink/actual.svg",
     "expected_path": "tests/frame/parity/scenarios/regression.kitchen-sink/expected.svg",
     "abs_tol": 0.006,
     "rel_tol": 0.0,
-    "first_mismatch": {
-      "node_path": "/svg",
-      "field": "children",
-      "detail": "child count mismatch actual=30 expected=31"
-    }
+    "first_mismatch": null
   }
 }

@@ -116,12 +116,6 @@ fn collect_primitives_recursive(
         (parent_x + local_x, parent_y + local_y, width, height)
     };
 
-    let fills: Vec<(FillPaint, BlendMix)> = all_fill_paints(&node.raw, "fills")
-        .into_iter()
-        .map(|(f, b)| (f.with_opacity(effective_opacity), b))
-        .collect();
-    let fills_is_empty = fills.is_empty();
-    let stroke = parse_stroke_style(&node.raw, effective_opacity);
     let corner_radii = {
         if let Some(arr) = node
             .raw
@@ -163,7 +157,24 @@ fn collect_primitives_recursive(
     } else {
         corner_radii
     };
-    let effects = parse_effects(&node.raw, effective_opacity);
+    let blend = parse_blend_mode(&node.raw);
+    // Non-normal blends are composited through an explicit layer; keep that
+    // layer's opacity there instead of baking it into paints/effects/children.
+    let needs_layer = blend != BlendMix::Normal && width > 0.0 && height > 0.0;
+    let content_opacity = if needs_layer { 1.0 } else { effective_opacity };
+    let primitive_blend = if needs_layer {
+        BlendMix::Normal
+    } else {
+        blend.clone()
+    };
+
+    let fills: Vec<(FillPaint, BlendMix)> = all_fill_paints(&node.raw, "fills")
+        .into_iter()
+        .map(|(f, b)| (f.with_opacity(content_opacity), b))
+        .collect();
+    let fills_is_empty = fills.is_empty();
+    let stroke = parse_stroke_style(&node.raw, content_opacity);
+    let effects = parse_effects(&node.raw, content_opacity);
     let mut merged_effects = inherited_layer_blurs.to_vec();
     merged_effects.extend(effects.clone());
     let mut child_layer_blurs = inherited_layer_blurs.to_vec();
@@ -173,11 +184,7 @@ fn collect_primitives_recursive(
             .filter(|e| matches!(e.kind, EffectKind::LayerBlur))
             .cloned(),
     );
-    let blend = parse_blend_mode(&node.raw);
     // Only push a compositor layer for non-Normal blend modes.
-    // Opacity is already baked into fills via `with_opacity(effective_opacity)` above,
-    // so an opacity-only layer would double-apply it AND add an expensive GPU resolve pass.
-    let needs_layer = blend != BlendMix::Normal && width > 0.0 && height > 0.0;
     if needs_layer {
         out.push(PaintPrimitive::LayerStart {
             node_id,
@@ -256,7 +263,7 @@ fn collect_primitives_recursive(
             // taffy/layout float drift in authored text outline positions.
             let mut outline_fills = fills;
             if outline_fills.is_empty() {
-                outline_fills = styled_text_fill_runs(&node.raw, effective_opacity);
+                outline_fills = styled_text_fill_runs(&node.raw, content_opacity);
             }
             if stroke_paths.is_empty()
                 && !fill_paths.is_empty()
@@ -277,7 +284,7 @@ fn collect_primitives_recursive(
                         fills: vec![fill],
                         stroke: stroke.clone(),
                         effects: merged_effects.clone(),
-                        blend: blend.clone(),
+                        blend: primitive_blend.clone(),
                         rotation,
                     });
                 }
@@ -296,7 +303,7 @@ fn collect_primitives_recursive(
                     fills: outline_fills,
                     stroke,
                     effects: merged_effects.clone(),
-                    blend,
+                    blend: primitive_blend.clone(),
                     rotation,
                 });
             }
@@ -316,7 +323,7 @@ fn collect_primitives_recursive(
                         r: 1.0,
                         g: 1.0,
                         b: 1.0,
-                        a: effective_opacity,
+                        a: content_opacity,
                     });
                 // v2 plugin format: fontSize at top level
                 // v1 REST API format: style.fontSize
@@ -384,8 +391,8 @@ fn collect_primitives_recursive(
                     line_height,
                     letter_spacing,
                     text_case,
-                    style_runs: parse_text_style_runs(&node.raw, effective_opacity),
-                    blend,
+                    style_runs: parse_text_style_runs(&node.raw, content_opacity),
+                    blend: primitive_blend.clone(),
                 });
             }
         }
@@ -408,7 +415,7 @@ fn collect_primitives_recursive(
                 fills,
                 stroke,
                 effects: merged_effects.clone(),
-                blend,
+                blend: primitive_blend.clone(),
                 rotation,
             });
         }
@@ -430,7 +437,7 @@ fn collect_primitives_recursive(
                 fills,
                 stroke,
                 effects: merged_effects.clone(),
-                blend,
+                blend: primitive_blend.clone(),
                 rotation,
             });
         }
@@ -449,7 +456,7 @@ fn collect_primitives_recursive(
                 fills,
                 stroke,
                 effects: merged_effects.clone(),
-                blend,
+                blend: primitive_blend.clone(),
                 rotation,
             });
         }
@@ -465,7 +472,7 @@ fn collect_primitives_recursive(
                     stroke,
                     corner_radii,
                     effects: merged_effects.clone(),
-                    blend,
+                    blend: primitive_blend,
                     rotation,
                 });
             }
@@ -530,7 +537,7 @@ fn collect_primitives_recursive(
                     x,
                     y,
                     false,
-                    effective_opacity,
+                    content_opacity,
                     &child_layer_blurs,
                     layout_boxes,
                     out,
@@ -555,7 +562,7 @@ fn collect_primitives_recursive(
             x,
             y,
             false,
-            effective_opacity,
+            content_opacity,
             &child_layer_blurs,
             layout_boxes,
             out,
@@ -582,7 +589,7 @@ fn collect_primitives_recursive(
                         x,
                         y,
                         true,
-                        effective_opacity,
+                        content_opacity,
                         &child_layer_blurs,
                         layout_boxes,
                         out,

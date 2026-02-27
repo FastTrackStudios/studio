@@ -237,6 +237,7 @@ pub fn run_cli() -> Result<(), String> {
     let mut group_stack: Vec<Group> = Vec::new();
     let mut clip_count: u64 = 0;
     let mut gradient_count: u64 = 0;
+    let mut pattern_count: u64 = 0;
     let mut effect_count: u64 = 0;
     let mut bg_blur_count: u64 = 0;
     let mut mask_count: u64 = 0;
@@ -268,8 +269,12 @@ pub fn run_cli() -> Result<(), String> {
             }
         }
         match primitive {
-            PaintPrimitive::LayerStart { opacity, .. } => {
-                group_stack.push(Group::new().set("opacity", fmt_f64(opacity.clamp(0.0, 1.0))));
+            PaintPrimitive::LayerStart { opacity, blend, .. } => {
+                let mut group = Group::new().set("opacity", fmt_f64(opacity.clamp(0.0, 1.0)));
+                if let Some(mode) = svg_mix_blend_mode(&blend) {
+                    group = group.set("style", format!("mix-blend-mode:{mode}"));
+                }
+                group_stack.push(group);
             }
             PaintPrimitive::LayerEnd { .. } => {
                 if let Some(group) = group_stack.pop() {
@@ -379,11 +384,6 @@ pub fn run_cli() -> Result<(), String> {
                 let frame_rect_uses_transform = node
                     .map(|n| n.figma_type == "FRAME")
                     .unwrap_or(false);
-                let node_opacity = node
-                    .and_then(|n| n.raw.get("opacity").and_then(|v| v.as_f64()))
-                    .map(|v| v.clamp(0.0, 1.0))
-                    .filter(|v| *v < 1.0)
-                    .map(fmt_f64);
                 // The document background rectangle is emitted above. Skip an identical
                 // full-canvas top-level rect to avoid duplicate backgrounds.
                 if group_stack.is_empty()
@@ -405,7 +405,7 @@ pub fn run_cli() -> Result<(), String> {
                             to_u8(color.b),
                             (color.a * 255.0).round().clamp(0.0, 255.0) as u8,
                         );
-                        if hex == bg_hex && opacity.is_none() && node_opacity.is_none() {
+                        if hex == bg_hex && opacity.is_none() {
                             continue;
                         }
                     }
@@ -505,7 +505,7 @@ pub fn run_cli() -> Result<(), String> {
                                         .set("height", fmt_f64(rh))
                                         .set("fill", format!("url(#{gradient_id})"));
                                     rect = apply_corner_radii_rect(rect, &effective_corner_radii);
-                                    if let Some(stroke) = stroke {
+                                    if let Some(stroke) = stroke.as_ref() {
                                         let (hex, opacity) = svg_color_paint_values(
                                             to_u8(stroke.color.r),
                                             to_u8(stroke.color.g),
@@ -548,7 +548,7 @@ pub fn run_cli() -> Result<(), String> {
                                         .set("height", fmt_f64(rh))
                                         .set("fill", format!("url(#{gradient_id})"));
                                     rect = apply_corner_radii_rect(rect, &effective_corner_radii);
-                                    if let Some(stroke) = stroke {
+                                    if let Some(stroke) = stroke.as_ref() {
                                         let (hex, opacity) = svg_color_paint_values(
                                             to_u8(stroke.color.r),
                                             to_u8(stroke.color.g),
@@ -631,7 +631,7 @@ pub fn run_cli() -> Result<(), String> {
                                     );
                                 push_node(&mut svg_doc, &mut group_stack, metadata_rect);
 
-                                if let Some(stroke) = stroke {
+                                if let Some(stroke) = stroke.as_ref() {
                                     let mut rect = Rectangle::new()
                                         .set("x", fmt_f64(rx))
                                         .set("y", fmt_f64(ry))
@@ -662,8 +662,8 @@ pub fn run_cli() -> Result<(), String> {
                                 scale_mode,
                                 image_transform,
                             } => {
-                                let pattern_id = format!("pattern{gradient_count}_{root_id_suffix}");
-                                gradient_count += 1;
+                                let pattern_id = format!("pattern{pattern_count}_{root_id_suffix}");
+                                pattern_count += 1;
                                 let image_key = image_hash
                                     .clone()
                                     .unwrap_or_else(|| format!("inline:{data_base64}"));
@@ -726,7 +726,7 @@ pub fn run_cli() -> Result<(), String> {
                                     .set("height", fmt_f64(rh))
                                     .set("fill", format!("url(#{pattern_id})"));
                                 rect = apply_corner_radii_rect(rect, &effective_corner_radii);
-                                if let Some(stroke) = stroke {
+                                if let Some(stroke) = stroke.as_ref() {
                                     let (hex, opacity) = svg_color_paint_values(
                                         to_u8(stroke.color.r),
                                         to_u8(stroke.color.g),
@@ -751,6 +751,7 @@ pub fn run_cli() -> Result<(), String> {
                                     &mut effect_count,
                                     &mut bg_blur_count,
                                     rect,
+                                    stroke.as_ref(),
                                     effects.as_slice(),
                                     rx,
                                     ry,
@@ -788,13 +789,13 @@ pub fn run_cli() -> Result<(), String> {
                                     (color.a * 255.0).round().clamp(0.0, 255.0) as u8,
                                 );
                                 rect = rect.set("fill", hex);
-                                let opacity = node_opacity.clone().or(fill_opacity);
+                                let opacity = fill_opacity;
                                 if let Some(mode) = svg_mix_blend_mode(blend_mode) {
                                     let mut group = Group::new().set("style", format!("mix-blend-mode:{mode}"));
                                     if let Some(opacity) = opacity {
                                         group = group.set("opacity", opacity);
                                     }
-                                    if let Some(stroke) = stroke {
+                                    if let Some(stroke) = stroke.as_ref() {
                                         let (hex, opacity) = svg_color_paint_values(
                                             to_u8(stroke.color.r),
                                             to_u8(stroke.color.g),
@@ -818,7 +819,7 @@ pub fn run_cli() -> Result<(), String> {
                             } else {
                                 rect = apply_fill_style_rect(rect, &style);
                             }
-                            if let Some(stroke) = stroke {
+                            if let Some(stroke) = stroke.as_ref() {
                                 let (hex, opacity) = svg_color_paint_values(
                                     to_u8(stroke.color.r),
                                     to_u8(stroke.color.g),
@@ -843,6 +844,7 @@ pub fn run_cli() -> Result<(), String> {
                                 &mut effect_count,
                                 &mut bg_blur_count,
                                 rect,
+                                stroke.as_ref(),
                                 effects.as_slice(),
                                 rx,
                                 ry,
@@ -976,8 +978,8 @@ pub fn run_cli() -> Result<(), String> {
                             scale_mode,
                             image_transform,
                         } => {
-                            let pattern_id = format!("pattern{gradient_count}_{root_id_suffix}");
-                            gradient_count += 1;
+                            let pattern_id = format!("pattern{pattern_count}_{root_id_suffix}");
+                            pattern_count += 1;
                             let image_key = image_hash
                                 .clone()
                                 .unwrap_or_else(|| format!("inline:{data_base64}"));
@@ -1049,6 +1051,7 @@ pub fn run_cli() -> Result<(), String> {
                                 &mut effect_count,
                                 &mut bg_blur_count,
                                 rect,
+                                stroke.as_ref(),
                                 effects.as_slice(),
                                 rx,
                                 ry,
@@ -1077,6 +1080,7 @@ pub fn run_cli() -> Result<(), String> {
                             &mut effect_count,
                             &mut bg_blur_count,
                             rect,
+                            stroke.as_ref(),
                             effects.as_slice(),
                             rx,
                             ry,
@@ -1086,7 +1090,7 @@ pub fn run_cli() -> Result<(), String> {
                         );
                     }
                 }
-                if let Some(stroke) = stroke {
+                if let Some(stroke) = stroke.as_ref() {
                     let mut rect = Rectangle::new()
                         .set("x", fmt_f64(rx))
                         .set("y", fmt_f64(ry))
@@ -1247,11 +1251,6 @@ pub fn run_cli() -> Result<(), String> {
                     }
                     let blend_mode = svg_mix_blend_mode(&blend);
                     let mut blend_group_opacity: Option<String> = None;
-                    let node_opacity = node
-                        .and_then(|n| n.raw.get("opacity").and_then(|v| v.as_f64()))
-                        .map(|v| v.clamp(0.0, 1.0))
-                        .filter(|v| *v < 1.0)
-                        .map(fmt_f64);
                     let mut emit_rect = true;
                     if let Some((fill, _)) = fills.first() {
                         match fill {
@@ -1362,8 +1361,8 @@ pub fn run_cli() -> Result<(), String> {
                                 image_transform,
                             } => {
                                 let pattern_id =
-                                    format!("pattern{gradient_count}_{root_id_suffix}");
-                                gradient_count += 1;
+                                    format!("pattern{pattern_count}_{root_id_suffix}");
+                                pattern_count += 1;
                                 let image_key = image_hash
                                     .clone()
                                     .unwrap_or_else(|| format!("inline:{data_base64}"));
@@ -1426,7 +1425,7 @@ pub fn run_cli() -> Result<(), String> {
                                         (color.a * 255.0).round().clamp(0.0, 255.0) as u8,
                                     );
                                     rect = rect.set("fill", hex);
-                                    let opacity = node_opacity.clone().or(fill_opacity);
+                                    let opacity = fill_opacity;
                                     if blend_mode.is_some() {
                                         blend_group_opacity = opacity;
                                     } else if let Some(opacity) = opacity {
@@ -1440,7 +1439,7 @@ pub fn run_cli() -> Result<(), String> {
                     } else {
                         rect = rect.set("fill", "none");
                     }
-                    if let Some(stroke) = stroke {
+                    if let Some(stroke) = stroke.as_ref() {
                         let (hex, opacity) = svg_color_paint_values(
                             to_u8(stroke.color.r),
                             to_u8(stroke.color.g),
@@ -1474,6 +1473,7 @@ pub fn run_cli() -> Result<(), String> {
                                 &mut effect_count,
                                 &mut bg_blur_count,
                                 rect,
+                                stroke.as_ref(),
                                 effects.as_slice(),
                                 rx,
                                 ry,
@@ -1526,7 +1526,7 @@ pub fn run_cli() -> Result<(), String> {
                     } else {
                         circle = circle.set("fill", "none");
                     }
-                    if let Some(stroke) = stroke {
+                    if let Some(stroke) = stroke.as_ref() {
                         let (hex, opacity) = svg_color_paint_values(
                             to_u8(stroke.color.r),
                             to_u8(stroke.color.g),
@@ -1571,7 +1571,7 @@ pub fn run_cli() -> Result<(), String> {
                         .set("y1", fmt_f64(y_mid))
                         .set("x2", fmt_f64(x2))
                         .set("y2", fmt_f64(y_mid));
-                    if let Some(stroke) = stroke {
+                    if let Some(stroke) = stroke.as_ref() {
                         let (hex, opacity) = svg_color_paint_values(
                             to_u8(stroke.color.r),
                             to_u8(stroke.color.g),
@@ -1666,7 +1666,7 @@ pub fn run_cli() -> Result<(), String> {
                     }
                 }
 
-                if let Some(stroke) = stroke {
+                if let Some(stroke) = stroke.as_ref() {
                     let (hex, opacity) = svg_color_paint_values(
                         to_u8(stroke.color.r),
                         to_u8(stroke.color.g),
@@ -1755,6 +1755,7 @@ fn push_rect_with_effects(
     effect_count: &mut u64,
     bg_blur_count: &mut u64,
     rect: svg::node::element::Rectangle,
+    stroke: Option<&crate::anyrender_renderer::StrokeStyle>,
     effects: &[crate::anyrender_renderer::NodeEffect],
     x: f64,
     y: f64,
@@ -1764,19 +1765,49 @@ fn push_rect_with_effects(
 ) {
     use crate::anyrender_renderer::EffectKind;
 
+    let fmt_shadow_component = |v: f64| -> String {
+        let precision = if v.abs() >= 0.1 { 6 } else { 7 };
+        let s = format!("{:.*}", precision, v.clamp(0.0, 1.0));
+        let s = s.trim_end_matches('0').trim_end_matches('.');
+        if s.is_empty() {
+            "0".to_string()
+        } else {
+            s.to_string()
+        }
+    };
+
     let drop_shadows: Vec<&crate::anyrender_renderer::NodeEffect> = effects
         .iter()
         .filter(|effect| matches!(effect.kind, EffectKind::DropShadow))
         .collect();
-    if !drop_shadows.is_empty() {
-        let drop_suffix = if drop_shadows.len() > 1 { "dd" } else { "d" };
-        let filter_id = format!("filter{}_{}_{}", *effect_count, drop_suffix, root_id_suffix);
+    let inner_shadows: Vec<&crate::anyrender_renderer::NodeEffect> = effects
+        .iter()
+        .filter(|effect| matches!(effect.kind, EffectKind::InnerShadow))
+        .collect();
+    let layer_blur = effects
+        .iter()
+        .find(|effect| matches!(effect.kind, EffectKind::LayerBlur));
+
+    if !drop_shadows.is_empty() || !inner_shadows.is_empty() || layer_blur.is_some() {
+        let effect_suffix = if !drop_shadows.is_empty() && layer_blur.is_some() {
+            "df"
+        } else if !drop_shadows.is_empty() && drop_shadows.len() > 1 {
+            "dd"
+        } else if !drop_shadows.is_empty() {
+            "d"
+        } else if !inner_shadows.is_empty() {
+            "i"
+        } else {
+            "f"
+        };
+        let filter_id = format!("filter{}_{}_{}", *effect_count, effect_suffix, root_id_suffix);
         *effect_count += 1;
 
-        let mut min_x = f64::INFINITY;
-        let mut min_y = f64::INFINITY;
-        let mut max_x = f64::NEG_INFINITY;
-        let mut max_y = f64::NEG_INFINITY;
+        let (mut min_x, mut min_y, mut max_x, mut max_y) = if drop_shadows.is_empty() {
+            (x, y, x + width, y + height)
+        } else {
+            (f64::INFINITY, f64::INFINITY, f64::NEG_INFINITY, f64::NEG_INFINITY)
+        };
         for shadow in &drop_shadows {
             let radius = shadow.radius.max(0.0);
             let spread = shadow.spread.max(0.0);
@@ -1789,16 +1820,27 @@ fn push_rect_with_effects(
             max_x = max_x.max(sx + sw);
             max_y = max_y.max(sy + sh);
         }
+        for shadow in &inner_shadows {
+            let sx = x.min(x + shadow.offset_x);
+            let sy = y.min(y + shadow.offset_y);
+            let sw = width + shadow.offset_x.abs();
+            let sh = height + shadow.offset_y.abs();
+            min_x = min_x.min(sx);
+            min_y = min_y.min(sy);
+            max_x = max_x.max(sx + sw);
+            max_y = max_y.max(sy + sh);
+        }
+        if let Some(blur) = layer_blur {
+            let radius = blur.radius.max(0.0);
+            min_x = min_x.min(x - radius);
+            min_y = min_y.min(y - radius);
+            max_x = max_x.max(x + width + radius);
+            max_y = max_y.max(y + height + radius);
+        }
         let filter_x = min_x.floor();
         let filter_y = min_y.floor();
         let filter_w = (max_x.ceil() - filter_x).max(0.0);
         let filter_h = (max_y.ceil() - filter_y).max(0.0);
-
-        let fmt_shadow_component = |v: f64| -> String {
-            let s = format!("{:.7}", v.clamp(0.0, 1.0));
-            let s = s.trim_end_matches('0').trim_end_matches('.');
-            if s.is_empty() { "0".to_string() } else { s.to_string() }
-        };
 
         let mut fe_flood = svg::node::element::Element::new("feFlood");
         svg::Node::assign(&mut fe_flood, "flood-opacity", "0");
@@ -1814,144 +1856,243 @@ fn push_rect_with_effects(
             .set("color-interpolation-filters", "sRGB")
             .add(fe_flood);
 
-        for (idx, shadow) in drop_shadows.iter().enumerate() {
-            let step = idx + 1;
-            let radius = shadow.radius.max(0.0);
-            let spread = shadow.spread.max(0.0);
-            let std_deviation = (radius * 0.5).max(0.0);
-            let prev_result = if step == 1 {
-                "BackgroundImageFix".to_string()
-            } else {
-                format!("effect{}_dropShadow_{}", step - 1, root_id_suffix)
-            };
-            let this_result = format!("effect{}_dropShadow_{}", step, root_id_suffix);
+        if !drop_shadows.is_empty() {
+            for (idx, shadow) in drop_shadows.iter().enumerate() {
+                let step = idx + 1;
+                let radius = shadow.radius.max(0.0);
+                let spread = shadow.spread.max(0.0);
+                let std_deviation = (radius * 0.5).max(0.0);
+                let prev_result = if step == 1 {
+                    "BackgroundImageFix".to_string()
+                } else {
+                    format!("effect{}_dropShadow_{}", step - 1, root_id_suffix)
+                };
+                let this_result = format!("effect{}_dropShadow_{}", step, root_id_suffix);
 
-            let mut fe_color_alpha = svg::node::element::Element::new("feColorMatrix");
-            svg::Node::assign(&mut fe_color_alpha, "in", "SourceAlpha");
-            svg::Node::assign(&mut fe_color_alpha, "type", "matrix");
+                let mut fe_color_alpha = svg::node::element::Element::new("feColorMatrix");
+                svg::Node::assign(&mut fe_color_alpha, "in", "SourceAlpha");
+                svg::Node::assign(&mut fe_color_alpha, "type", "matrix");
+                svg::Node::assign(
+                    &mut fe_color_alpha,
+                    "values",
+                    "0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 127 0",
+                );
+                svg::Node::assign(&mut fe_color_alpha, "result", "hardAlpha");
+                filter = filter.add(fe_color_alpha);
+
+                if spread > 0.0 {
+                    let mut fe_morphology = svg::node::element::Element::new("feMorphology");
+                    svg::Node::assign(&mut fe_morphology, "radius", fmt_f64(spread));
+                    svg::Node::assign(&mut fe_morphology, "operator", "dilate");
+                    svg::Node::assign(&mut fe_morphology, "in", "SourceAlpha");
+                    svg::Node::assign(&mut fe_morphology, "result", this_result.clone());
+                    filter = filter.add(fe_morphology);
+                }
+
+                let mut fe_offset = svg::node::element::Element::new("feOffset");
+                if shadow.offset_x.abs() > f64::EPSILON {
+                    svg::Node::assign(&mut fe_offset, "dx", fmt_f64(shadow.offset_x));
+                }
+                if shadow.offset_y.abs() > f64::EPSILON {
+                    svg::Node::assign(&mut fe_offset, "dy", fmt_f64(shadow.offset_y));
+                }
+                filter = filter.add(fe_offset);
+
+                let mut fe_blur = svg::node::element::Element::new("feGaussianBlur");
+                svg::Node::assign(&mut fe_blur, "stdDeviation", fmt_f64(std_deviation));
+                filter = filter.add(fe_blur);
+
+                let mut fe_color = svg::node::element::Element::new("feColorMatrix");
+                svg::Node::assign(&mut fe_color, "type", "matrix");
+                svg::Node::assign(
+                    &mut fe_color,
+                    "values",
+                    format!(
+                        "0 0 0 0 {} 0 0 0 0 {} 0 0 0 0 {} 0 0 0 {} 0",
+                        fmt_shadow_component(shadow.color.r),
+                        fmt_shadow_component(shadow.color.g),
+                        fmt_shadow_component(shadow.color.b),
+                        fmt_shadow_component(shadow.color.a)
+                    ),
+                );
+                filter = filter.add(fe_color);
+
+                let mut fe_blend_shadow = svg::node::element::Element::new("feBlend");
+                svg::Node::assign(&mut fe_blend_shadow, "mode", "normal");
+                svg::Node::assign(&mut fe_blend_shadow, "in2", prev_result);
+                svg::Node::assign(&mut fe_blend_shadow, "result", this_result);
+                filter = filter.add(fe_blend_shadow);
+            }
+
+            let mut fe_blend_shape = svg::node::element::Element::new("feBlend");
+            svg::Node::assign(&mut fe_blend_shape, "mode", "normal");
+            svg::Node::assign(&mut fe_blend_shape, "in", "SourceGraphic");
             svg::Node::assign(
-                &mut fe_color_alpha,
-                "values",
-                "0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 127 0",
+                &mut fe_blend_shape,
+                "in2",
+                format!("effect{}_dropShadow_{}", drop_shadows.len(), root_id_suffix),
             );
-            svg::Node::assign(&mut fe_color_alpha, "result", "hardAlpha");
-            filter = filter.add(fe_color_alpha);
-
-            if spread > 0.0 {
-                let mut fe_morphology = svg::node::element::Element::new("feMorphology");
-                svg::Node::assign(&mut fe_morphology, "radius", fmt_f64(spread));
-                svg::Node::assign(&mut fe_morphology, "operator", "dilate");
-                svg::Node::assign(&mut fe_morphology, "in", "SourceAlpha");
-                svg::Node::assign(&mut fe_morphology, "result", this_result.clone());
-                filter = filter.add(fe_morphology);
-            }
-
-            let mut fe_offset = svg::node::element::Element::new("feOffset");
-            if shadow.offset_x.abs() > f64::EPSILON {
-                svg::Node::assign(&mut fe_offset, "dx", fmt_f64(shadow.offset_x));
-            }
-            if shadow.offset_y.abs() > f64::EPSILON {
-                svg::Node::assign(&mut fe_offset, "dy", fmt_f64(shadow.offset_y));
-            }
-            filter = filter.add(fe_offset);
-
-            let mut fe_blur = svg::node::element::Element::new("feGaussianBlur");
-            svg::Node::assign(&mut fe_blur, "stdDeviation", fmt_f64(std_deviation));
-            filter = filter.add(fe_blur);
-
-            let mut fe_color = svg::node::element::Element::new("feColorMatrix");
-            svg::Node::assign(&mut fe_color, "type", "matrix");
-            svg::Node::assign(
-                &mut fe_color,
-                "values",
-                format!(
-                    "0 0 0 0 {} 0 0 0 0 {} 0 0 0 0 {} 0 0 0 {} 0",
-                    fmt_shadow_component(shadow.color.r),
-                    fmt_shadow_component(shadow.color.g),
-                    fmt_shadow_component(shadow.color.b),
-                    fmt_shadow_component(shadow.color.a)
-                ),
-            );
-            filter = filter.add(fe_color);
-
-            let mut fe_blend_shadow = svg::node::element::Element::new("feBlend");
-            svg::Node::assign(&mut fe_blend_shadow, "mode", "normal");
-            svg::Node::assign(&mut fe_blend_shadow, "in2", prev_result);
-            svg::Node::assign(&mut fe_blend_shadow, "result", this_result);
-            filter = filter.add(fe_blend_shadow);
+            svg::Node::assign(&mut fe_blend_shape, "result", "shape");
+            filter = filter.add(fe_blend_shape);
+        } else {
+            let mut fe_blend = svg::node::element::Element::new("feBlend");
+            svg::Node::assign(&mut fe_blend, "mode", "normal");
+            svg::Node::assign(&mut fe_blend, "in", "SourceGraphic");
+            svg::Node::assign(&mut fe_blend, "in2", "BackgroundImageFix");
+            svg::Node::assign(&mut fe_blend, "result", "shape");
+            filter = filter.add(fe_blend);
         }
 
-        let mut fe_blend_shape = svg::node::element::Element::new("feBlend");
-        svg::Node::assign(&mut fe_blend_shape, "mode", "normal");
-        svg::Node::assign(&mut fe_blend_shape, "in", "SourceGraphic");
-        svg::Node::assign(
-            &mut fe_blend_shape,
-            "in2",
-            format!("effect{}_dropShadow_{}", drop_shadows.len(), root_id_suffix),
-        );
-        svg::Node::assign(&mut fe_blend_shape, "result", "shape");
-        filter = filter.add(fe_blend_shape);
+        if !inner_shadows.is_empty() {
+            let mut inner_base = "shape".to_string();
+            for (idx, shadow) in inner_shadows.iter().enumerate() {
+                let step = idx + 1;
+                let std_deviation = (shadow.radius * 0.5).max(0.0);
+                let this_result = format!("effect{}_innerShadow_{}", step, root_id_suffix);
+
+                let mut fe_color_alpha = svg::node::element::Element::new("feColorMatrix");
+                svg::Node::assign(&mut fe_color_alpha, "in", "SourceAlpha");
+                svg::Node::assign(&mut fe_color_alpha, "type", "matrix");
+                svg::Node::assign(
+                    &mut fe_color_alpha,
+                    "values",
+                    "0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 127 0",
+                );
+                svg::Node::assign(&mut fe_color_alpha, "result", "hardAlpha");
+                filter = filter.add(fe_color_alpha);
+
+                let mut fe_offset = svg::node::element::Element::new("feOffset");
+                if shadow.offset_x.abs() > f64::EPSILON {
+                    svg::Node::assign(&mut fe_offset, "dx", fmt_f64(shadow.offset_x));
+                }
+                if shadow.offset_y.abs() > f64::EPSILON {
+                    svg::Node::assign(&mut fe_offset, "dy", fmt_f64(shadow.offset_y));
+                }
+                filter = filter.add(fe_offset);
+
+                let mut fe_blur = svg::node::element::Element::new("feGaussianBlur");
+                svg::Node::assign(&mut fe_blur, "stdDeviation", fmt_f64(std_deviation));
+                filter = filter.add(fe_blur);
+
+                let mut fe_comp = svg::node::element::Element::new("feComposite");
+                svg::Node::assign(&mut fe_comp, "in2", "hardAlpha");
+                svg::Node::assign(&mut fe_comp, "operator", "arithmetic");
+                svg::Node::assign(&mut fe_comp, "k2", "-1");
+                svg::Node::assign(&mut fe_comp, "k3", "1");
+                filter = filter.add(fe_comp);
+
+                let mut fe_color = svg::node::element::Element::new("feColorMatrix");
+                svg::Node::assign(&mut fe_color, "type", "matrix");
+                svg::Node::assign(
+                    &mut fe_color,
+                    "values",
+                    format!(
+                        "0 0 0 0 {} 0 0 0 0 {} 0 0 0 0 {} 0 0 0 {} 0",
+                        fmt_shadow_component(shadow.color.r),
+                        fmt_shadow_component(shadow.color.g),
+                        fmt_shadow_component(shadow.color.b),
+                        fmt_shadow_component(shadow.color.a)
+                    ),
+                );
+                filter = filter.add(fe_color);
+
+                let mut fe_blend = svg::node::element::Element::new("feBlend");
+                svg::Node::assign(&mut fe_blend, "mode", "normal");
+                svg::Node::assign(&mut fe_blend, "in2", inner_base.clone());
+                svg::Node::assign(&mut fe_blend, "result", this_result.clone());
+                filter = filter.add(fe_blend);
+                inner_base = this_result;
+            }
+        }
+
+        if let Some(effect) = layer_blur {
+            let radius = effect.radius.max(0.0);
+            let std_deviation = (radius * 0.5).max(0.0);
+            let mut fe_gaussian_blur = svg::node::element::Element::new("feGaussianBlur");
+            svg::Node::assign(
+                &mut fe_gaussian_blur,
+                "stdDeviation",
+                fmt_f64(std_deviation),
+            );
+            svg::Node::assign(
+                &mut fe_gaussian_blur,
+                "result",
+                format!("effect2_foregroundBlur_{root_id_suffix}"),
+            );
+            filter = filter.add(fe_gaussian_blur);
+        }
 
         *defs = defs.clone().add(filter);
         *has_defs = true;
 
-        push_node(
-            svg_doc,
-            group_stack,
-            svg::node::element::Group::new()
-                .set("filter", format!("url(#{filter_id})"))
-                .add(rect),
-        );
-        return;
-    }
-
-    if let Some(effect) = effects
-        .iter()
-        .find(|effect| matches!(effect.kind, EffectKind::LayerBlur))
-    {
-        let radius = effect.radius.max(0.0);
-        let std_deviation = (radius * 0.5).max(0.0);
-        let filter_id = format!("filter{}_f_{}", *effect_count, root_id_suffix);
-        *effect_count += 1;
-        let mut fe_flood = svg::node::element::Element::new("feFlood");
-        svg::Node::assign(&mut fe_flood, "flood-opacity", "0");
-        svg::Node::assign(&mut fe_flood, "result", "BackgroundImageFix");
-        let mut fe_blend = svg::node::element::Element::new("feBlend");
-        svg::Node::assign(&mut fe_blend, "mode", "normal");
-        svg::Node::assign(&mut fe_blend, "in", "SourceGraphic");
-        svg::Node::assign(&mut fe_blend, "in2", "BackgroundImageFix");
-        svg::Node::assign(&mut fe_blend, "result", "shape");
-        let mut fe_gaussian_blur = svg::node::element::Element::new("feGaussianBlur");
-        svg::Node::assign(
-            &mut fe_gaussian_blur,
-            "stdDeviation",
-            fmt_f64(std_deviation),
-        );
-        svg::Node::assign(
-            &mut fe_gaussian_blur,
-            "result",
-            "effect1_foregroundBlur_8_830",
-        );
-        let filter = svg::node::element::Filter::new()
-            .set("id", filter_id.clone())
-            .set("x", fmt_f64(x - radius))
-            .set("y", fmt_f64(y - radius))
-            .set("width", fmt_f64(width + radius * 2.0))
-            .set("height", fmt_f64(height + radius * 2.0))
-            .set("filterUnits", "userSpaceOnUse")
-            .set("color-interpolation-filters", "sRGB")
-            .add(fe_flood)
-            .add(fe_blend)
-            .add(fe_gaussian_blur);
-        *defs = defs.clone().add(filter);
-        *has_defs = true;
-        push_node(
-            svg_doc,
-            group_stack,
-            svg::node::element::Group::new()
-                .set("filter", format!("url(#{filter_id})"))
-                .add(rect),
-        );
+        let mut filtered = svg::node::element::Group::new().set("filter", format!("url(#{filter_id})"));
+        if !drop_shadows.is_empty() {
+            if let Some(stroke) = stroke.as_ref() {
+                let rect_attrs = rect.to_string();
+                let parse_attr = |name: &str| -> Option<String> {
+                    let needle = format!("{name}=\"");
+                    let start = rect_attrs.find(&needle)? + needle.len();
+                    let tail = &rect_attrs[start..];
+                    let end = tail.find('"')?;
+                    Some(tail[..end].to_string())
+                };
+                let mut fill_rect = svg::node::element::Rectangle::new()
+                    .set("x", fmt_f64(x))
+                    .set("y", fmt_f64(y))
+                    .set("width", fmt_f64(width))
+                    .set("height", fmt_f64(height));
+                fill_rect = apply_corner_radii_rect(fill_rect, corner_radii);
+                if let Some(fill) = parse_attr("fill") {
+                    fill_rect = fill_rect.set("fill", fill);
+                }
+                if let Some(fill_opacity) = parse_attr("fill-opacity") {
+                    fill_rect = fill_rect.set("fill-opacity", fill_opacity);
+                }
+                if let Some(opacity) = parse_attr("opacity") {
+                    fill_rect = fill_rect.set("opacity", opacity);
+                }
+                let inset = (stroke.width * 0.5).max(0.0);
+                let mut stroke_rect = svg::node::element::Rectangle::new()
+                    .set("x", fmt_f64(x + inset))
+                    .set("y", fmt_f64(y + inset))
+                    .set("width", fmt_f64((width - stroke.width).max(0.0)))
+                    .set("height", fmt_f64((height - stroke.width).max(0.0)))
+                    .set("stroke", {
+                        let (hex, _) = svg_color_paint_values(
+                            to_u8(stroke.color.r),
+                            to_u8(stroke.color.g),
+                            to_u8(stroke.color.b),
+                            (stroke.color.a * 255.0).round().clamp(0.0, 255.0) as u8,
+                        );
+                        hex
+                    })
+                    .set("stroke-width", fmt_f64(stroke.width.max(0.0)))
+                    .set("stroke-linecap", svg_linecap(stroke.cap))
+                    .set("stroke-linejoin", svg_linejoin(stroke.join));
+                let (_, stroke_opacity) = svg_color_paint_values(
+                    to_u8(stroke.color.r),
+                    to_u8(stroke.color.g),
+                    to_u8(stroke.color.b),
+                    (stroke.color.a * 255.0).round().clamp(0.0, 255.0) as u8,
+                );
+                if let Some(opacity) = stroke_opacity {
+                    stroke_rect = stroke_rect.set("stroke-opacity", opacity);
+                }
+                let inset_radii = frame_proto::CornerRadii {
+                    top_left: (corner_radii.top_left - inset).max(0.0),
+                    top_right: (corner_radii.top_right - inset).max(0.0),
+                    bottom_right: (corner_radii.bottom_right - inset).max(0.0),
+                    bottom_left: (corner_radii.bottom_left - inset).max(0.0),
+                };
+                stroke_rect = apply_corner_radii_rect(stroke_rect, &inset_radii);
+                filtered = filtered.add(fill_rect).add(stroke_rect);
+            } else {
+                filtered = filtered.add(rect);
+            }
+        } else {
+            filtered = filtered.add(rect);
+        }
+        push_node(svg_doc, group_stack, filtered);
         return;
     }
 
@@ -2144,7 +2285,7 @@ fn svg_fill_style(fill: &crate::anyrender_renderer::FillPaint) -> Option<FillSty
         FillPaint::GradientLinear { .. }
         | FillPaint::GradientRadial { .. }
         | FillPaint::GradientAngular { .. } => None,
-        FillPaint::Image { .. } => Some(FillStyle::DebugStroke { hex: "#00A3FF" }),
+        FillPaint::Image { .. } => None,
     }
 }
 
@@ -2639,12 +2780,20 @@ fn svg_image_fill_transform(
         crate::anyrender_renderer::ImageScaleMode::Fill => {
             let sy = aspect;
             let ty = (1.0 - sy) * 0.5;
-            Some((1.0, 0.0, 0.0, sy, 0.0, ty))
+            if (sy - 1.0).abs() <= f64::EPSILON && ty.abs() <= f64::EPSILON {
+                None
+            } else {
+                Some((1.0, 0.0, 0.0, sy, 0.0, ty))
+            }
         }
         crate::anyrender_renderer::ImageScaleMode::Fit => {
             let sx = 1.0 / aspect;
             let tx = (1.0 - sx) * 0.5;
-            Some((sx, 0.0, 0.0, 1.0, tx, 0.0))
+            if (sx - 1.0).abs() <= f64::EPSILON && tx.abs() <= f64::EPSILON {
+                None
+            } else {
+                Some((sx, 0.0, 0.0, 1.0, tx, 0.0))
+            }
         }
         crate::anyrender_renderer::ImageScaleMode::Crop
         | crate::anyrender_renderer::ImageScaleMode::Stretch
