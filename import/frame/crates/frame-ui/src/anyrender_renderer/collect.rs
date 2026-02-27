@@ -167,7 +167,7 @@ fn collect_primitives_recursive(
         .raw
         .get("effects")
         .and_then(|v| v.as_array())
-        .map_or(false, |arr| {
+        .is_some_and(|arr| {
             arr.iter().any(|e| {
                 e.get("visible")
                     .and_then(|v| v.as_bool())

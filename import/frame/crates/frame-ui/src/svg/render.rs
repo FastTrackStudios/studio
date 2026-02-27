@@ -36,7 +36,7 @@ pub fn run_cli() -> Result<(), String> {
     use crate::{build_layout_boxes, build_paint_primitives, PaintPrimitive};
     use frame_proto::FrameDocument;
     use svg::node::element::{
-        Circle, ClipPath, Element, ForeignObject, Group, Image, Line, Mask,
+        ClipPath, Element, ForeignObject, Group, Image, Line, Mask,
         Path as SvgPath, Pattern, Rectangle, Use,
     };
     use svg::Document;
@@ -538,7 +538,7 @@ pub fn run_cli() -> Result<(), String> {
                                     let new_id = format!("image{image_count}_{root_id_suffix}");
                                     image_count += 1;
                                     image_defs.insert(image_key, new_id.clone());
-                                    let mut image = Image::new()
+                                    let image = Image::new()
                                         .set("id", new_id.clone())
                                         .set("width", "1")
                                         .set("height", "1")
@@ -949,7 +949,7 @@ pub fn run_cli() -> Result<(), String> {
                                     let new_id = format!("image{image_count}_{root_id_suffix}");
                                     image_count += 1;
                                     image_defs.insert(image_key, new_id.clone());
-                                    let mut image = Image::new()
+                                    let image = Image::new()
                                         .set("id", new_id.clone())
                                         .set("width", "1")
                                         .set("height", "1")
@@ -1341,7 +1341,7 @@ pub fn run_cli() -> Result<(), String> {
                                     let new_id = format!("image{image_count}_{root_id_suffix}");
                                     image_count += 1;
                                     image_defs.insert(image_key, new_id.clone());
-                                    let mut image = Image::new()
+                                    let image = Image::new()
                                         .set("id", new_id.clone())
                                         .set("width", "1")
                                         .set("height", "1")
@@ -1773,7 +1773,7 @@ pub fn run_cli() -> Result<(), String> {
                                     let new_id = format!("image{image_count}_{root_id_suffix}");
                                     image_count += 1;
                                     image_defs.insert(image_key, new_id.clone());
-                                    let mut image = Image::new()
+                                    let image = Image::new()
                                         .set("id", new_id.clone())
                                         .set("width", "1")
                                         .set("height", "1")
@@ -2289,7 +2289,7 @@ pub fn run_cli() -> Result<(), String> {
                                         let new_id = format!("image{image_count}_{root_id_suffix}");
                                         image_count += 1;
                                         image_defs.insert(image_key, new_id.clone());
-                                        let mut image = Image::new()
+                                        let image = Image::new()
                                             .set("id", new_id.clone())
                                             .set("width", "1")
                                             .set("height", "1")
@@ -2339,7 +2339,7 @@ pub fn run_cli() -> Result<(), String> {
                                 }
                                 _ => {
                                     if let Some(style) = svg_fill_style(fill) {
-                                        fill_circle = apply_fill_style_circle(fill_circle, &style);
+                                        fill_circle = apply_fill_style_element(fill_circle, &style);
                                     } else {
                                         fill_circle = fill_circle.set("fill", "none");
                                     }
@@ -2698,7 +2698,7 @@ pub fn run_cli() -> Result<(), String> {
                                     let new_id = format!("image{image_count}_{root_id_suffix}");
                                     image_count += 1;
                                     image_defs.insert(image_key, new_id.clone());
-                                    let mut image = Image::new()
+                                    let image = Image::new()
                                         .set("id", new_id.clone())
                                         .set("width", "1")
                                         .set("height", "1")
@@ -2764,8 +2764,7 @@ pub fn run_cli() -> Result<(), String> {
                     if let Some(opacity) = text_outline_group_opacity {
                         path_group = path_group.set("opacity", opacity);
                     }
-                } else {
-                    if is_nonfull_ellipse {
+                } else if is_nonfull_ellipse {
                         let mut fill_stack_opacity: Option<String> = None;
                         for (fill_idx, (fill, fill_blend)) in fills.iter().enumerate() {
                             let mut fill_ref: Option<String> = None;
@@ -2840,7 +2839,7 @@ pub fn run_cli() -> Result<(), String> {
                                         let new_id = format!("image{image_count}_{root_id_suffix}");
                                         image_count += 1;
                                         image_defs.insert(image_key, new_id.clone());
-                                        let mut image = Image::new()
+                                        let image = Image::new()
                                             .set("id", new_id.clone())
                                             .set("width", "1")
                                             .set("height", "1")
@@ -2984,7 +2983,7 @@ pub fn run_cli() -> Result<(), String> {
                                         let new_id = format!("image{image_count}_{root_id_suffix}");
                                         image_count += 1;
                                         image_defs.insert(image_key, new_id.clone());
-                                        let mut image = Image::new()
+                                        let image = Image::new()
                                             .set("id", new_id.clone())
                                             .set("width", "1")
                                             .set("height", "1")
@@ -3050,7 +3049,6 @@ pub fn run_cli() -> Result<(), String> {
                             }
                         }
                     }
-                }
                 if let Some(opacity) = effect_group_opacity {
                     path_group = path_group.set("opacity", opacity);
                 }
@@ -3167,9 +3165,6 @@ enum FillStyle {
     Solid {
         hex: String,
         opacity: Option<String>,
-    },
-    DebugStroke {
-        hex: &'static str,
     },
 }
 
@@ -3400,10 +3395,6 @@ fn apply_fill_style_rect(
             }
             rect
         }
-        FillStyle::DebugStroke { hex } => rect
-            .set("fill", "none")
-            .set("stroke", *hex)
-            .set("stroke-width", 1),
     }
 }
 
@@ -3450,7 +3441,7 @@ pub(super) fn svg_mix_blend_mode(mode: &crate::anyrender_renderer::BlendMix) -> 
 }
 
 #[cfg(feature = "svg_export")]
-fn apply_fill_style_circle(
+fn apply_fill_style_element(
     circle: svg::node::element::Element,
     style: &FillStyle,
 ) -> svg::node::element::Element {
@@ -3463,10 +3454,6 @@ fn apply_fill_style_circle(
                 circle
             }
         }
-        FillStyle::DebugStroke { hex } => circle
-            .set("fill", "none")
-            .set("stroke", *hex)
-            .set("stroke-width", 1),
     }
 }
 
@@ -3484,26 +3471,6 @@ fn new_circle_or_ellipse(cx: f64, cy: f64, rx: f64, ry: f64) -> svg::node::eleme
             .set("cx", fmt_f64(cx))
             .set("cy", fmt_f64(cy))
             .set("r", fmt_f64(rx))
-    }
-}
-
-#[cfg(feature = "svg_export")]
-fn apply_fill_style_path(
-    mut path: svg::node::element::Path,
-    style: &FillStyle,
-) -> svg::node::element::Path {
-    match style {
-        FillStyle::Solid { hex, opacity } => {
-            path = path.set("fill", hex.clone());
-            if let Some(opacity) = opacity {
-                path = path.set("fill-opacity", opacity.clone());
-            }
-            path
-        }
-        FillStyle::DebugStroke { hex } => path
-            .set("fill", "none")
-            .set("stroke", *hex)
-            .set("stroke-width", 1),
     }
 }
 
@@ -3918,7 +3885,7 @@ fn try_merge_layer_into_filter_child(
     // Must have an opacity attribute (otherwise nothing to merge).
     if group
         .get_attributes()
-        .map_or(true, |a| !a.contains_key("opacity"))
+        .is_none_or(|a| !a.contains_key("opacity"))
     {
         return Err(group);
     }

@@ -1,21 +1,75 @@
 {
-  "generatedAt": "2026-02-27T18:09:53Z",
+  "generatedAt": "2026-02-27T18:31:09Z",
   "root": "tests/frame/parity",
-  "mode": "single",
+  "mode": "core10",
   "precision": 4,
   "canonicalTool": "frame-ui/svg_canonical_diff",
-  "total": 1,
-  "strictPass": 0,
-  "strictFail": 1,
-  "canonicalPass": 0,
-  "canonicalFail": 1,
+  "total": 10,
+  "strictPass": 8,
+  "strictFail": 2,
+  "canonicalPass": 8,
+  "canonicalFail": 2,
   "skipped": 0,
   "scenarios": [
     {
-      "scenarioId": "regression.tough-1176-blue-face",
+      "scenarioId": "primitives.fractional-geometry",
       "strictEqual": false,
       "canonicalEqual": false,
-      "report": "tests/frame/parity/scenarios/regression.tough-1176-blue-face/svg-report.json"
+      "report": "tests/frame/parity/scenarios/primitives.fractional-geometry/svg-report.json"
+    },
+    {
+      "scenarioId": "paint.gradient-matrix",
+      "strictEqual": true,
+      "canonicalEqual": true,
+      "report": "tests/frame/parity/scenarios/paint.gradient-matrix/svg-report.json"
+    },
+    {
+      "scenarioId": "paint.blend-mode-stack",
+      "strictEqual": true,
+      "canonicalEqual": true,
+      "report": "tests/frame/parity/scenarios/paint.blend-mode-stack/svg-report.json"
+    },
+    {
+      "scenarioId": "effects.layer-background-blur",
+      "strictEqual": false,
+      "canonicalEqual": false,
+      "report": "tests/frame/parity/scenarios/effects.layer-background-blur/svg-report.json"
+    },
+    {
+      "scenarioId": "strokes.caps-joins-dashes",
+      "strictEqual": true,
+      "canonicalEqual": true,
+      "report": "tests/frame/parity/scenarios/strokes.caps-joins-dashes/svg-report.json"
+    },
+    {
+      "scenarioId": "masks.vector-text-image-mask",
+      "strictEqual": true,
+      "canonicalEqual": true,
+      "report": "tests/frame/parity/scenarios/masks.vector-text-image-mask/svg-report.json"
+    },
+    {
+      "scenarioId": "images.fill-mode-matrix",
+      "strictEqual": true,
+      "canonicalEqual": true,
+      "report": "tests/frame/parity/scenarios/images.fill-mode-matrix/svg-report.json"
+    },
+    {
+      "scenarioId": "text.mixed-style-runs",
+      "strictEqual": true,
+      "canonicalEqual": true,
+      "report": "tests/frame/parity/scenarios/text.mixed-style-runs/svg-report.json"
+    },
+    {
+      "scenarioId": "layout.auto-layout-hug-fill",
+      "strictEqual": true,
+      "canonicalEqual": true,
+      "report": "tests/frame/parity/scenarios/layout.auto-layout-hug-fill/svg-report.json"
+    },
+    {
+      "scenarioId": "regression.kitchen-sink",
+      "strictEqual": true,
+      "canonicalEqual": true,
+      "report": "tests/frame/parity/scenarios/regression.kitchen-sink/svg-report.json"
     }
   ]
 }

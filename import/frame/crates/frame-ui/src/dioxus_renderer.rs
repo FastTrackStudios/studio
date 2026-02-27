@@ -57,7 +57,7 @@ fn NodeLayer(document: FrameDocument, node_id: NodeId, offset_x: f64, offset_y: 
                     "{text_label}"
                 }
             }
-            if !(is_document || is_canvas) && !is_text && children.is_empty() && projection.name != "Unnamed" {
+            if !(is_document || is_canvas || is_text) && children.is_empty() && projection.name != "Unnamed" {
                 div {
                     style: "position: absolute; left: 4px; top: 2px; color: rgba(255,255,255,0.45); font-size: 10px; white-space: nowrap;",
                     "{projection.name}"
