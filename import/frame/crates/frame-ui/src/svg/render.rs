@@ -4038,8 +4038,16 @@ fn svg_path_is_full_ellipse_like(d: &str) -> bool {
         return false;
     }
     let mut has_curve = false;
+    let mut m_count = 0u32;
     for ch in d.chars().filter(|c| c.is_ascii_alphabetic()) {
         match ch {
+            // Multiple subpaths (compound path, e.g. donut/ring) are not a simple ellipse.
+            'M' | 'm' => {
+                m_count += 1;
+                if m_count > 1 {
+                    return false;
+                }
+            }
             // Ellipse slices/sectors introduce line segments.
             'L' | 'l' | 'H' | 'h' | 'V' | 'v' => return false,
             // Curved contours are valid for full ellipse approximations.
