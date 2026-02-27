@@ -2032,15 +2032,22 @@ pub fn run_cli() -> Result<(), String> {
                                     if row0.len() >= 3 && row1.len() >= 3 {
                                         let a = row0[0].as_f64().unwrap_or(1.0);
                                         let c = row0[1].as_f64().unwrap_or(0.0);
-                                        let e = row0[2].as_f64().unwrap_or(0.0) + tx;
                                         let b = row1[0].as_f64().unwrap_or(0.0);
                                         let d = row1[1].as_f64().unwrap_or(1.0);
-                                        let f = row1[2].as_f64().unwrap_or(0.0) + ty;
                                         let det = a * d - b * c;
                                         let is_rotation = det > 0.0
                                             && (a - d).abs() <= 1e-4
                                             && (c + b).abs() <= 1e-4;
                                         if det < -1e-6 {
+                                            // The circle sits at local origin (r, r); use the
+                                            // absoluteBoundingBox center (cx, cy) to derive the
+                                            // correct world-space translation rather than the
+                                            // local relativeTransform tx/ty, which is relative to
+                                            // the immediate parent and ignores the ancestor chain.
+                                            // SVG matrix(a,b,c,d,e,f): x'=a*x+c*y+e, y'=b*x+d*y+f
+                                            // For circle at (r,r) → (cx,cy): e = cx-(a+c)*r
+                                            let e = cx - (a + c) * r;
+                                            let f = cy - (b + d) * r;
                                             circle_cx = r;
                                             circle_cy = r;
                                             circle_transform = Some(format!(

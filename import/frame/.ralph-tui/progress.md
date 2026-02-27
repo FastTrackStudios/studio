@@ -153,6 +153,20 @@ after each iteration and it's included in prompts for context.
   - 22/26 parity tests still pass; same 4 pre-existing failures unchanged
 ---
 
+## 2026-02-27 - bd-der.2
+- **What was implemented**: Fixed matrix transform circle translations for reflected/flipped circles
+- **Files changed**:
+  - `crates/frame-ui/src/svg/render.rs` — in the `det < -1e-6` circle branch, replaced `e = row0[2] + canvas_tx` / `f = row1[2] + canvas_ty` with `e = cx - (a + c) * r` / `f = cy - (b + d) * r`, back-calculating world-space translation from the absoluteBoundingBox center
+- **Learnings**:
+  - **Root cause**: For reflected circles (det < -1e-6), render.rs read `relativeTransform.tx/ty` (local to parent) and added canvas offset — ignoring the parent rotation chain. For a circle inside a rotated parent, the local tx/ty in parent space ≠ world tx/ty
+  - **Fix without collect.rs changes**: `absoluteBoundingBox` center (already available as `cx, cy` from `source_bboxes`) IS the world-space center. Back-calculate: for SVG `matrix(a,b,c,d,e,f)` mapping local (r,r) → world (cx,cy): `e = cx-(a+c)*r`, `f = cy-(b+d)*r`
+  - **`det < -1e-6` = reflection case**: Pure rotations have det=+1 (handled by `is_rotation` path using `rotate(angle cx cy)`); reflections have det=-1 (requires full `matrix(...)`)
+  - **absoluteBoundingBox center is always correct for round circles**: Rotation/reflection doesn't change a circle's AABB, so the AABB center is always the world center regardless of the transform chain
+  - **Variable naming in circle block is SVG column-major**: `a`=row0[0]=SVG_a, `c`=row0[1]=SVG_c, `b`=row1[0]=SVG_b, `d`=row1[1]=SVG_d — emitted as `matrix(a b c d e f)` = SVG format directly
+  - All 16 reflected circles in 1176 now match expected translations within 0.001 (abs_tol 0.006); 22/26 parity tests still pass; same 4 pre-existing failures
+
+---
+
 ## 2026-02-27 - bd-der.10
 - **What was implemented**: Introduced `AffineTransform2D` type replacing all raw `[[f64; 3]; 2]` arrays in the render pipeline
 - **Files changed**:
