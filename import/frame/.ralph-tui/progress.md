@@ -52,3 +52,22 @@ after each iteration and it's included in prompts for context.
 
 ---
 
+## 2026-02-27 - bd-der.4
+- **What was implemented**: Applied rotation transform to star and vector shape paths
+- **Files changed**:
+  - `crates/frame-ui/src/svg/render.rs` — inserted rotation block after px/py candidate correction (before bounds accumulation). When `rotation.abs() > 1e-6 && has_native_geometry && !text_outline`, applies 2×2 rotation to all fill_paths/stroke_paths via `kurbo::Affine` and recomputes `px/py` as `chain_sx/chain_sy`
+- **Key formulas**:
+  - `cos_r = rotation.cos()`, `sin_r = rotation.sin()` (rotation from extract_local_rect = atan2(c, a))
+  - `abs_cx = bx + tx + bw/2`, `abs_cy = by + ty + bh/2` (absoluteBoundingBox center in screen space)
+  - `chain_sx = abs_cx - cos_r*(w/2) + sin_r*(h/2)` — positions rotated local center at abs center
+  - `chain_sy = abs_cy - sin_r*(w/2) - cos_r*(h/2)`
+  - `kurbo::Affine::new([cos_r, sin_r, -sin_r, cos_r, 0.0, 0.0])` — column-major 2×2 rotation only
+- **Learnings**:
+  - Figma's relativeTransform tx/ty is the AABB top-left, NOT the local origin — the correct translate uses absoluteBoundingBox center
+  - Decompose affine = 2×2 rotation on path coords + translate; normalize bakes the translate into compact path format
+  - kurbo Affine::new([a,b,c,d,e,f]) is column-major: `|a c e| / |b d f|`; Figma row-major [[cos_r, -sin_r],[sin_r, cos_r]] → `new([cos_r, sin_r, -sin_r, cos_r, 0, 0])`
+  - `match primitive` (not `match &primitive`) means fill_paths/stroke_paths are owned Vec<String>; shadow with `let (fill_paths, stroke_paths) = ...;` after candidate correction
+  - 22/26 parity tests still pass; same 4 pre-existing failures; star M56.3732 37.7679 and Union paths now match expected.svg exactly
+
+---
+

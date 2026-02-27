@@ -2431,6 +2431,50 @@ pub fn run_cli() -> Result<(), String> {
                     }
                     }
                 }
+                // Apply 2×2 rotation to path geometry for Vector/Shape nodes with non-trivial rotation.
+                // Figma convention: path data is in local coords; render by applying the 2×2 rotation to
+                // the path coordinates and translating so the rotated local center aligns with the
+                // absoluteBoundingBox center in screen space.
+                let (fill_paths, stroke_paths) = if !text_outline
+                    && rotation.abs() > 1e-6
+                    && has_native_geometry
+                {
+                    if let Some(node) = node {
+                        if let Some((bx, by, bw, bh)) = source_bboxes.get(&node.figma_id) {
+                            let cos_r = rotation.cos();
+                            let sin_r = rotation.sin();
+                            let abs_cx = *bx + tx + *bw / 2.0;
+                            let abs_cy = *by + ty + *bh / 2.0;
+                            // chain_sx/chain_sy: translate such that rotated local center → abs center
+                            let chain_sx =
+                                abs_cx - cos_r * (width / 2.0) + sin_r * (height / 2.0);
+                            let chain_sy =
+                                abs_cy - sin_r * (width / 2.0) - cos_r * (height / 2.0);
+                            // kurbo Affine::new([a,b,c,d,e,f]) is column-major: |a c e| / |b d f|
+                            // Figma 2×2: x'=cos_r*lx - sin_r*ly, y'=sin_r*lx + cos_r*ly
+                            let rot =
+                                kurbo::Affine::new([cos_r, sin_r, -sin_r, cos_r, 0.0, 0.0]);
+                            let apply = |paths: Vec<String>| -> Vec<String> {
+                                paths
+                                    .into_iter()
+                                    .filter_map(|d| {
+                                        let bp = kurbo::BezPath::from_svg(&d).ok()?;
+                                        Some((rot * bp).to_svg())
+                                    })
+                                    .collect()
+                            };
+                            px = chain_sx;
+                            py = chain_sy;
+                            (apply(fill_paths), apply(stroke_paths))
+                        } else {
+                            (fill_paths, stroke_paths)
+                        }
+                    } else {
+                        (fill_paths, stroke_paths)
+                    }
+                } else {
+                    (fill_paths, stroke_paths)
+                };
                 for d in &fill_paths {
                     if let Some((min_x, min_y, max_x, max_y)) = svg_path_bounds(d, px, py) {
                         accumulate_bounds_if_active(
