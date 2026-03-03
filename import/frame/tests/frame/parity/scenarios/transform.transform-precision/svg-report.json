@@ -8,9 +8,9 @@
   "expectedSvg": "tests/frame/parity/scenarios/transform.transform-precision/expected.svg",
   "actualSvg": "tests/frame/parity/scenarios/transform.transform-precision/actual.svg",
   "expectedSha256": "0707c1b6cc07ef6ac6a28ccc277dc34e39c47224f2c19b99913ee1d3003ccc78",
-  "actualSha256": "9dd7678df2d800c600dcb48182918ec4a384e93ab9b6b943bdfab28a071f7f9c",
+  "actualSha256": "d891c4c7ba44a218216060fa85aef3b60fb55528e53614ce9a467799ad3a55a5",
   "expectedBytes": 29520,
-  "actualBytes": 29688,
+  "actualBytes": 29725,
   "canonicalDiff": {
     "equal": false,
     "actual_path": "tests/frame/parity/scenarios/transform.transform-precision/actual.svg",

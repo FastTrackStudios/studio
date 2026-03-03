@@ -8,9 +8,9 @@
   "expectedSvg": "tests/frame/parity/scenarios/transform.nested-transform-stack/expected.svg",
   "actualSvg": "tests/frame/parity/scenarios/transform.nested-transform-stack/actual.svg",
   "expectedSha256": "f7ef255aabe23cf1487cc7af83b40742301fb06e3159e0d88e5185d33f6e83e6",
-  "actualSha256": "50ab4e58ee28e48f55b9b9cc8b1588ebd52941f987c7e78e8ceb2372f963359d",
+  "actualSha256": "a0eb2fafd63036f6763a2b2ca2c905459269664906af71d529651732bd8a7847",
   "expectedBytes": 32740,
-  "actualBytes": 32909,
+  "actualBytes": 32951,
   "canonicalDiff": {
     "equal": false,
     "actual_path": "tests/frame/parity/scenarios/transform.nested-transform-stack/actual.svg",

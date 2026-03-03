@@ -8,9 +8,9 @@
   "expectedSvg": "tests/frame/parity/scenarios/effects.background-blur-stress/expected.svg",
   "actualSvg": "tests/frame/parity/scenarios/effects.background-blur-stress/actual.svg",
   "expectedSha256": "88e32e8b561cc813cd4d8e6e716c970bf18216cabb1af377113a61ff27954c28",
-  "actualSha256": "74a0723512b9e60c90239f4e29dca52ed2f1b98114d3cf833e252dc583ce84e9",
+  "actualSha256": "c152f332487a86a7f686c525cf58458a74aaf835bda1ecc1693e8e2bcc7db09f",
   "expectedBytes": 53687,
-  "actualBytes": 54585,
+  "actualBytes": 54781,
   "canonicalDiff": {
     "equal": false,
     "actual_path": "tests/frame/parity/scenarios/effects.background-blur-stress/actual.svg",

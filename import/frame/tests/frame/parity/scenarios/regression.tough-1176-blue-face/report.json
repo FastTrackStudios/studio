@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-02-27T03:31:25Z",
+  "generatedAt": "2026-03-03T22:44:37Z",
   "exportPath": "tests/frame/parity/scenarios/regression.tough-1176-blue-face/latest-bridge-export.json",
   "featureCoverage": {
     "schema": "fts.figma.export/v2",
@@ -41,65 +41,65 @@
       {
         "path": "expected.png",
         "status": "fail",
-        "error": "warning: associated functions `from_fts_export_json` and `from_grida_bridge_json` are never used\n   --> crates/frame-proto/src/document.rs:147:8\n    |\n146 | impl FrameDocument {\n    | ------------------ associated functions in this implementation\n147 |     fn from_fts_export_json(json: &str) -> Result<Self, FrameDocumentError> {\n    |        ^^^^^^^^^^^^^^^^^^^^\n...\n251 |     fn from_grida_bridge_json(json: &str) -> Result<Self, FrameDocumentError> {\n    |        ^^^^^^^^^^^^^^^^^^^^^^\n    |\n    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default\n\nwarning: variant `DebugStroke` is never constructed\n    --> crates/frame-ui/src/svg/render.rs:2165:5\n     |\n2160 | enum FillStyle {\n     |      --------- variant in this enum\n...\n2165 |     DebugStroke {\n     |     ^^^^^^^^^^^\n     |\n     = note: `FillStyle` has a derived impl for the trait `Clone`, but this is intentionally ignored during dead code analysis\n     = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default\n\nvisual_diff error: dimension mismatch: actual (841, 156), expected (842, 156)"
+        "error": "warning: associated functions `from_fts_export_json` and `from_grida_bridge_json` are never used\n   --> crates/frame-proto/src/document.rs:147:8\n    |\n146 | impl FrameDocument {\n    | ------------------ associated functions in this implementation\n147 |     fn from_fts_export_json(json: &str) -> Result<Self, FrameDocumentError> {\n    |        ^^^^^^^^^^^^^^^^^^^^\n...\n251 |     fn from_grida_bridge_json(json: &str) -> Result<Self, FrameDocumentError> {\n    |        ^^^^^^^^^^^^^^^^^^^^^^\n    |\n    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default\n\n{\"actual\":\"tests/frame/parity/scenarios/regression.tough-1176-blue-face/actual.png\",\"expected\":\"tests/frame/parity/scenarios/regression.tough-1176-blue-face/expected.png\",\"width\":842,\"height\":156,\"diffPixels\":125377,\"diffPercent\":95.451154,\"meanAbsDeltaPerChannel\":10.043871,\"maxChannelDelta\":224,\"thresholdPercent\":0.000000,\"passed\":false}\nvisual_diff error: diff_percent 95.4512% exceeded threshold 0.0000%"
       }
     ]
   },
   "performance": {
     "avg": {
-      "importMs": 168.711958,
-      "layoutMs": 1.3629446666666667,
+      "importMs": 117.35566633333333,
+      "layoutMs": 1.2774863333333333,
       "nodeCount": 292,
       "passCounts": {
-        "clipEnd": 0,
-        "clipStart": 0,
-        "layerEnd": 0,
-        "layerStart": 0,
+        "clipEnd": 1,
+        "clipStart": 1,
+        "layerEnd": 34,
+        "layerStart": 34,
         "maskApplyEnd": 0,
         "maskApplyStart": 0,
         "maskDefEnd": 0,
         "maskDefStart": 0,
-        "path": 47,
-        "rect": 10,
+        "path": 226,
+        "rect": 42,
         "text": 0
       },
-      "primitiveCount": 57,
-      "primitiveMs": 3.068500333333334,
-      "sceneMs": 1654.334166333333,
-      "totalMs": 1827.628874666667
+      "primitiveCount": 338,
+      "primitiveMs": 6.006472,
+      "sceneMs": 1681.2711386666667,
+      "totalMs": 1806.0344860000005
     },
     "bytes": 13192650,
     "input": "tests/frame/parity/scenarios/regression.tough-1176-blue-face/latest-bridge-export.json",
     "iterations": 3,
-    "readMs": 3.1636670000000002,
+    "readMs": 1.865,
     "root": "1:2",
     "samples": [
       {
-        "importMs": 137.569625,
-        "layoutMs": 1.550584,
+        "importMs": 122.30775000000001,
+        "layoutMs": 1.4088749999999999,
         "nodeCount": 292,
-        "primitiveCount": 57,
-        "primitiveMs": 3.20275,
-        "sceneMs": 4822.211458,
-        "totalMs": 4964.730708
+        "primitiveCount": 338,
+        "primitiveMs": 6.249458000000001,
+        "sceneMs": 4865.515416,
+        "totalMs": 4995.657375000001
       },
       {
-        "importMs": 116.834958,
-        "layoutMs": 1.264041,
+        "importMs": 113.50391599999999,
+        "layoutMs": 1.13675,
         "nodeCount": 292,
-        "primitiveCount": 57,
-        "primitiveMs": 2.764917,
-        "sceneMs": 70.06925,
-        "totalMs": 191.061875
+        "primitiveCount": 338,
+        "primitiveMs": 5.8845,
+        "sceneMs": 91.17462499999999,
+        "totalMs": 211.796833
       },
       {
-        "importMs": 251.73129100000003,
-        "layoutMs": 1.2742090000000001,
+        "importMs": 116.25533300000001,
+        "layoutMs": 1.286834,
         "nodeCount": 292,
-        "primitiveCount": 57,
-        "primitiveMs": 3.2378340000000003,
-        "sceneMs": 70.72179100000001,
-        "totalMs": 327.094041
+        "primitiveCount": 338,
+        "primitiveMs": 5.885458,
+        "sceneMs": 87.12337500000001,
+        "totalMs": 210.64925000000002
       }
     ]
   },
@@ -126,13 +126,8 @@
     "input": "tests/frame/parity/scenarios/regression.tough-1176-blue-face/latest-bridge-export.json",
     "sourceSchema": "fts.figma.export/v2",
     "normalizedAliases": 0,
-    "unsupportedNodeKeyCount": 1,
-    "topUnsupportedKeys": [
-      {
-        "key": "imageFillAssetRefs",
-        "count": 2
-      }
-    ]
+    "unsupportedNodeKeyCount": 0,
+    "topUnsupportedKeys": []
   },
   "gates": {
     "visualPass": false,
@@ -142,10 +137,8 @@
     "renderHasLayerBlurApprox": false,
     "renderHasBackgroundBlurApprox": false,
     "renderHasLuminanceMaskApprox": false,
-    "importHasUnsupportedKeys": true,
-    "parityPass": false,
-    "blockers": [
-      "import_unsupported_keys"
-    ]
+    "importHasUnsupportedKeys": false,
+    "parityPass": true,
+    "blockers": []
   }
 }

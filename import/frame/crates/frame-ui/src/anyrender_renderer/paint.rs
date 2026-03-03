@@ -1240,13 +1240,16 @@ pub fn paint_primitives_into_scene_with(
 
     fn layer_blur_kernel(radius: f64) -> Vec<(f64, f64, f64)> {
         let sigma = (radius * 0.5).max(0.5);
-        let extent = (sigma * 2.5).ceil() as i32;
-        let step = sigma.max(1.0);
+        // Cap the integer grid to at most 7x7 = 49 samples to avoid
+        // overwhelming the GPU with draw calls per blurred element.
+        let half_grid: i32 = 3; // grid goes -3..+3 → 7 taps per axis
+        // Step size spreads the grid to cover 2.5σ spatially
+        let step = (sigma * 2.5) / half_grid as f64;
         let mut kernel = Vec::new();
         let mut total_weight = 0.0;
 
-        for iy in -extent..=extent {
-            for ix in -extent..=extent {
+        for iy in -half_grid..=half_grid {
+            for ix in -half_grid..=half_grid {
                 let dx = ix as f64 * step;
                 let dy = iy as f64 * step;
                 let w = (-0.5 * (dx * dx + dy * dy) / (sigma * sigma)).exp();

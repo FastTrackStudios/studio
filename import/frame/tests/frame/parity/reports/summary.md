@@ -1,11 +1,11 @@
 # Parity Scenario Summary
 
-- Generated: `2026-02-20T00:54:24Z`
+- Generated: `2026-03-03T22:45:01Z`
 - Root: `tests/frame/parity`
 - Mode: `all`
 - Threshold: `0.0`%
-- Total: `25`
-- Passed: `22`
+- Total: `26`
+- Passed: `23`
 - Failed: `3`
 - Skipped: `0`
 
@@ -28,6 +28,7 @@
 - `primitives.fractional-geometry`: `pass`
 - `primitives.single-pixel-anchor`: `fail`
 - `regression.kitchen-sink`: `pass`
+- `regression.tough-1176-blue-face`: `pass`
 - `strokes.caps-joins-dashes`: `pass`
 - `text.alignment-truncation`: `pass`
 - `text.font-weight-style`: `pass`

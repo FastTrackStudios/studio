@@ -1,10 +1,10 @@
 {
-  "generatedAt": "2026-02-20T00:54:24Z",
+  "generatedAt": "2026-03-03T22:45:01Z",
   "root": "tests/frame/parity",
   "mode": "all",
   "thresholdPercent": 0.0,
-  "total": 25,
-  "passed": 22,
+  "total": 26,
+  "passed": 23,
   "failed": 3,
   "skipped": 0,
   "scenarios": [
@@ -97,6 +97,11 @@
       "scenarioId": "regression.kitchen-sink",
       "status": "pass",
       "report": "tests/frame/parity/scenarios/regression.kitchen-sink/report.json"
+    },
+    {
+      "scenarioId": "regression.tough-1176-blue-face",
+      "status": "pass",
+      "report": "tests/frame/parity/scenarios/regression.tough-1176-blue-face/report.json"
     },
     {
       "scenarioId": "strokes.caps-joins-dashes",
