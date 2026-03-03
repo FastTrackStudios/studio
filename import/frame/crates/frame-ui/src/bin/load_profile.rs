@@ -122,7 +122,7 @@ fn run() -> Result<(), String> {
         #[cfg(feature = "anyrender")]
         let scene_ms = {
             let t = Instant::now();
-            let mut scene = anyrender::Scene::new();
+            let mut scene = vello::Scene::new();
             frame_ui::paint_primitives_into_scene_with(
                 &mut scene,
                 &primitives,

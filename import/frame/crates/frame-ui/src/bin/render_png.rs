@@ -14,7 +14,6 @@ fn main() {
 
 #[cfg(feature = "anyrender")]
 fn run() -> Result<(), String> {
-    use anyrender_vello::VelloScenePainter;
     use frame_proto::FrameDocument;
     use frame_ui::{build_layout_boxes, TextFontRef};
     use image::RgbaImage;
@@ -127,10 +126,7 @@ fn run() -> Result<(), String> {
     let text_font_ref = text_font_bytes
         .as_ref()
         .map(|bytes| TextFontRef { bytes, index: 0 });
-    {
-        let mut painter = VelloScenePainter::new(&mut scene);
-        frame_ui::paint_into_scene_with(&mut painter, &doc, root, scene_transform, text_font_ref);
-    }
+    frame_ui::paint_into_scene_with(&mut scene, &doc, root, scene_transform, text_font_ref);
 
     let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor::default());
     let adapter = pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions::default()))

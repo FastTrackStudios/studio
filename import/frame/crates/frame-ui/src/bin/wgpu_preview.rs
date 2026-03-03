@@ -1,6 +1,4 @@
 #[cfg(feature = "anyrender")]
-use anyrender_vello::VelloScenePainter;
-#[cfg(feature = "anyrender")]
 use frame_proto::{FrameDocument, NodeId};
 #[cfg(feature = "anyrender")]
 use frame_ui::build_layout_boxes;
@@ -600,16 +598,13 @@ impl ApplicationHandler for App {
 
                 self.scene.reset();
                 let scene_transform = self.transform * self.base_transform;
-                {
-                    let mut painter = VelloScenePainter::new(&mut self.scene);
-                    frame_ui::paint_into_scene_with(
-                        &mut painter,
-                        self.doc.as_ref(),
-                        self.root,
-                        scene_transform,
-                        None,
-                    );
-                }
+                frame_ui::paint_into_scene_with(
+                    &mut self.scene,
+                    self.doc.as_ref(),
+                    self.root,
+                    scene_transform,
+                    None,
+                );
                 if self.stats_shown {
                     draw_overlay(
                         &mut self.scene,
