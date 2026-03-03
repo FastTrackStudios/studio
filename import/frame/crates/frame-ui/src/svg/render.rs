@@ -1,5 +1,6 @@
 use super::normalize::{
     extract_export_base_color, extract_export_bbox, normalize_svg_for_figma_parity,
+    NormalizeOptions,
 };
 use super::context::RenderCtx;
 use super::source_bridge::{
@@ -50,6 +51,7 @@ pub fn run_cli() -> Result<(), String> {
     let mut root_figma_id: Option<String> = None;
     let mut width_override: Option<u32> = None;
     let mut height_override: Option<u32> = None;
+    let mut compact_paths = true;
 
     while let Some(arg) = args.next() {
         match arg.as_str() {
@@ -71,6 +73,7 @@ pub fn run_cli() -> Result<(), String> {
                         .map_err(|e| format!("invalid --height value: {e}"))?,
                 )
             }
+            "--no-compact-paths" => compact_paths = false,
             _ => return Err(format!("unknown arg: {arg}")),
         }
     }
@@ -3131,7 +3134,8 @@ pub fn run_cli() -> Result<(), String> {
     }
 
     let raw_svg = svg_doc.to_string();
-    let out_svg = normalize_svg_for_figma_parity(&raw_svg, width, height);
+    let norm_opts = NormalizeOptions { compact_paths };
+    let out_svg = normalize_svg_for_figma_parity(&raw_svg, width, height, &norm_opts);
 
     if let Some(parent) = std::path::Path::new(&out_path).parent() {
         std::fs::create_dir_all(parent)

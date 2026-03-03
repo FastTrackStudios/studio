@@ -40,9 +40,9 @@
 <rect x="520" y="140" width="240" height="150" fill="white"/>
 </g>
 <rect width="560" height="420" transform="translate(220 160)" fill="white"/>
-<rect x="340" y="240" width="260" height="180" transform="rotate(-11.999999 340 240)" fill="#5082F5"/>
-<rect x="400" y="280" width="220" height="130" transform="rotate(18 400 280)" fill="#F58250"/>
-<rect x="460" y="320" width="140" height="90" transform="rotate(-21.999999 460 320)" fill="#64DC96"/>
+<rect x="340" y="240" width="260.000006" height="180.000004" transform="rotate(-11.999999 340 240)" fill="#5082F5"/>
+<rect x="400" y="280" width="220.000006" height="130.000003" transform="rotate(18 400 280)" fill="#F58250"/>
+<rect x="460" y="320" width="140.000001" height="90.000001" transform="rotate(-21.999999 460 320)" fill="#64DC96"/>
 <defs>
 <clipPath id="paint2_angular_8_887_clip_path">
 <rect x="820" y="110" width="280" height="180"/>

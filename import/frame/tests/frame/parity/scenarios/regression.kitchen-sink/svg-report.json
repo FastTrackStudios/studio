@@ -8,9 +8,9 @@
   "expectedSvg": "tests/frame/parity/scenarios/regression.kitchen-sink/expected.svg",
   "actualSvg": "tests/frame/parity/scenarios/regression.kitchen-sink/actual.svg",
   "expectedSha256": "1debf7a512a7c4399e63bbd2e6e1cccc1be7d16a375c5e5d257fa06e55cb0375",
-  "actualSha256": "7d8a362db28f299957ad777126215c309780ac0f563b5d936e11dfc2ae202d65",
+  "actualSha256": "e2c6ac3d134b3dabef8809817db80821b55542876d1fc2ab801ec026e96a8d55",
   "expectedBytes": 241102,
-  "actualBytes": 256386,
+  "actualBytes": 256428,
   "canonicalDiff": {
     "equal": false,
     "actual_path": "tests/frame/parity/scenarios/regression.kitchen-sink/actual.svg",

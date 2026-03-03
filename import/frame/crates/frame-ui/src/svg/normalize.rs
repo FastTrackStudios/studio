@@ -1,4 +1,16 @@
-pub(crate) fn normalize_svg_for_figma_parity(svg: &str, width: u32, height: u32) -> String {
+#[cfg(feature = "svg_export")]
+pub(crate) struct NormalizeOptions {
+    pub compact_paths: bool,
+}
+
+#[cfg(feature = "svg_export")]
+impl Default for NormalizeOptions {
+    fn default() -> Self {
+        Self { compact_paths: true }
+    }
+}
+
+pub(crate) fn normalize_svg_for_figma_parity(svg: &str, width: u32, height: u32, opts: &NormalizeOptions) -> String {
     let mut out = Vec::new();
     let mut body = Vec::new();
     let root = if svg.contains("xlink:") {
@@ -41,7 +53,7 @@ pub(crate) fn normalize_svg_for_figma_parity(svg: &str, width: u32, height: u32)
             body.push(norm);
             continue;
         }
-        if let Some(norm) = normalize_translated_path_line(t) {
+        if let Some(norm) = normalize_translated_path_line(t, opts.compact_paths) {
             body.push(norm);
             continue;
         }
@@ -473,12 +485,7 @@ fn extract_xml_attr(line: &str, key: &str) -> Option<String> {
 #[cfg(feature = "svg_export")]
 fn trim_decimal(v: &str) -> String {
     parse_decimal(v)
-        .map(|mut d| {
-            if d.scale() > 2 {
-                d = d.round_dp(2);
-            }
-            format_decimal(d)
-        })
+        .map(|d| d.normalize().to_string())
         .unwrap_or_else(|| v.to_string())
 }
 
@@ -501,7 +508,7 @@ fn should_emit_opacity(v: &str) -> bool {
 }
 
 #[cfg(feature = "svg_export")]
-fn normalize_translated_path_line(line: &str) -> Option<String> {
+fn normalize_translated_path_line(line: &str, compact_paths: bool) -> Option<String> {
     if !line.starts_with("<path ") {
         return None;
     }
@@ -511,7 +518,7 @@ fn normalize_translated_path_line(line: &str) -> Option<String> {
     let translated = if tx.is_zero() && ty.is_zero() {
         d
     } else {
-        translate_and_compact_path_data(&d, tx, ty)?
+        translate_and_compact_path_data(&d, tx, ty, compact_paths)?
     };
 
     let mut attrs = vec![format!(r#"d="{translated}""#)];
@@ -560,6 +567,7 @@ fn translate_and_compact_path_data(
     d: &str,
     tx: rust_decimal::Decimal,
     ty: rust_decimal::Decimal,
+    compact_paths: bool,
 ) -> Option<String> {
     use rust_decimal::Decimal;
 
@@ -665,9 +673,9 @@ fn translate_and_compact_path_data(
                 for pair in nums.chunks_exact(2) {
                     let x = pair[0] + tx;
                     let y = pair[1] + ty;
-                    if y == curr_y {
+                    if compact_paths && y == curr_y {
                         emit('H', &[x], &mut out, &mut first);
-                    } else if x == curr_x {
+                    } else if compact_paths && x == curr_x {
                         emit('V', &[y], &mut out, &mut first);
                     } else {
                         emit('L', &[x, y], &mut out, &mut first);
@@ -804,7 +812,7 @@ mod svg_normalize_tests {
     #[test]
     fn zero_translate_preserves_path_data() {
         let line = r##"<path d="M1 2L3 4Z" transform="translate(0,0)" fill="#000000"/>"##;
-        let out = normalize_translated_path_line(line).expect("normalized");
+        let out = normalize_translated_path_line(line, true).expect("normalized");
         assert!(out.contains(r#"d="M1 2L3 4Z""#));
         assert!(out.contains(r#"fill="black""#));
     }
@@ -812,16 +820,25 @@ mod svg_normalize_tests {
     #[test]
     fn translate_uses_decimal_math() {
         let line = r##"<path d="M29.7955 31.9489" transform="translate(0.1,0.2)" fill="#111111"/>"##;
-        let out = normalize_translated_path_line(line).expect("normalized");
+        let out = normalize_translated_path_line(line, true).expect("normalized");
         assert!(out.contains(r#"d="M29.8955 32.1489""#), "{out}");
     }
 
     #[test]
     fn translate_preserves_command_shape() {
         let line = r##"<path d="M0 0 10 0 10 10" transform="translate(5,6)" fill="#111111"/>"##;
-        let out = normalize_translated_path_line(line).expect("normalized");
+        let out = normalize_translated_path_line(line, true).expect("normalized");
         assert!(out.contains(r#"d="M5 6 15 6 15 16""#), "{out}");
         assert!(!out.contains("L"), "{out}");
+    }
+
+    #[test]
+    fn no_compact_keeps_l_commands() {
+        let line = r##"<path d="M0 0L10 0L10 10" transform="translate(5,6)" fill="#111111"/>"##;
+        let out = normalize_translated_path_line(line, false).expect("normalized");
+        assert!(out.contains(r#"d="M5 6L15 6L15 16""#), "{out}");
+        assert!(!out.contains("H"), "{out}");
+        assert!(!out.contains("V"), "{out}");
     }
 }
 
