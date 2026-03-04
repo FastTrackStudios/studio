@@ -1,6 +1,6 @@
 # Parity Scenario Summary
 
-- Generated: `2026-03-03T22:45:01Z`
+- Generated: `2026-03-03T23:25:27Z`
 - Root: `tests/frame/parity`
 - Mode: `all`
 - Threshold: `0.0`%

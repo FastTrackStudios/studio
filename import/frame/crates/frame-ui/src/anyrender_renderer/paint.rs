@@ -223,6 +223,7 @@ pub fn paint_primitives_into_scene_with(
                     .first()
                     .and_then(|(f, _)| first_color_from_fill(f))
                     .or_else(|| stroke.as_ref().map(|s| s.color.clone()));
+                let has_layer_blur = effects.iter().any(|e| matches!(e.kind, EffectKind::LayerBlur));
                 for effect in effects {
                     if matches!(effect.kind, EffectKind::LayerBlur) {
                         paint_blurred_rect_content(
@@ -251,6 +252,9 @@ pub fn paint_primitives_into_scene_with(
                         );
                     }
                 }
+                // When LayerBlur is active, the blurred rect IS the content —
+                // don't draw sharp fills/strokes on top.
+                if !has_layer_blur {
                 if !corner_radii.is_zero() {
                     let radii = kurbo::RoundedRectRadii::new(
                         corner_radii.top_left,
@@ -328,6 +332,7 @@ pub fn paint_primitives_into_scene_with(
                         }
                     }
                 }
+                } // !has_layer_blur
                 for effect in effects {
                     if matches!(
                         effect.kind,
@@ -402,6 +407,7 @@ pub fn paint_primitives_into_scene_with(
                 } else {
                     svg_base64.as_ref().and_then(|b64| cached_svg_decode(b64))
                 };
+                let has_layer_blur = effects.iter().any(|e| matches!(e.kind, EffectKind::LayerBlur));
 
                 if let (Some(svg_text), Some(layer_blur)) = (
                     decoded_svg_text.as_deref(),
@@ -450,6 +456,7 @@ pub fn paint_primitives_into_scene_with(
                         );
                     }
                 }
+                if !has_layer_blur {
                 if let Some(svg_text) = decoded_svg_text.as_deref() {
                     let svg_fit = cached_svg_fit_transform(svg_text, width, height);
                     let svg_transform = path_origin_transform * svg_fit;
@@ -461,8 +468,9 @@ pub fn paint_primitives_into_scene_with(
                         had_any_path = true;
                     }
                 }
+                } // !has_layer_blur for SVG
 
-                if !had_any_path {
+                if !had_any_path && !has_layer_blur {
                     for (fill_paint, fill_blend) in fills {
                         let need_blend_layer = *fill_blend != BlendMix::Normal;
                         if need_blend_layer {
@@ -877,59 +885,39 @@ pub fn paint_primitives_into_scene_with(
                 scene.pop_layer(); // isolation
             }
             EffectKind::LayerBlur => {
-                // Multi-pass blur emulation around bounds, using node color hint when available.
-                let radius = effect.radius.max(0.5);
+                // Single GPU-native Gaussian blur of the bounding rect.
+                let sigma = (effect.radius * 0.5).max(0.5);
                 let hint = blur_color_hint.cloned().unwrap_or(Rgba {
                     r: 0.75,
                     g: 0.78,
                     b: 0.82,
-                    a: 0.35,
+                    a: 1.0,
                 });
-                for (dx, dy, weight) in layer_blur_kernel(radius) {
-                    let shifted = Rect::new(
-                        base_rect.x0 + dx,
-                        base_rect.y0 + dy,
-                        base_rect.x1 + dx,
-                        base_rect.y1 + dy,
-                    );
-                    let mut c = hint.clone();
-                    c.a = (hint.a * weight).clamp(0.0, 1.0);
-                    scene.draw_blurred_rounded_rect(
-                        scene_transform,
-                        shifted,
-                        to_peniko(c),
-                        corner_radius.max(effect.spread),
-                        radius * 0.5,
-                    );
-                }
+                scene.draw_blurred_rounded_rect(
+                    scene_transform,
+                    *base_rect,
+                    to_peniko(hint),
+                    corner_radius.max(effect.spread),
+                    sigma,
+                );
             }
             EffectKind::BackgroundBlur => {
-                // Approximation: subtle backdrop haze in bounds using actual fill color.
-                // True background blur requires backdrop sampling + filtering.
-                let radius = effect.radius.max(0.5);
+                // Single blurred rect approximation for backdrop blur.
+                // True background blur requires backdrop sampling which vello doesn't support.
+                let sigma = (effect.radius * 0.5).max(0.5);
                 let hint_color = blur_color_hint.cloned().unwrap_or(Rgba {
                     r: 1.0,
                     g: 1.0,
                     b: 1.0,
                     a: 0.3,
                 });
-                for (dx, dy, weight) in layer_blur_kernel(radius * 0.8) {
-                    let shifted = Rect::new(
-                        base_rect.x0 + dx,
-                        base_rect.y0 + dy,
-                        base_rect.x1 + dx,
-                        base_rect.y1 + dy,
-                    );
-                    let mut c = hint_color.clone();
-                    c.a = (hint_color.a * weight).clamp(0.0, 0.3);
-                    scene.draw_blurred_rounded_rect(
-                        scene_transform,
-                        shifted,
-                        to_peniko(c),
-                        corner_radius.max(effect.spread),
-                        radius * 0.5,
-                    );
-                }
+                scene.draw_blurred_rounded_rect(
+                    scene_transform,
+                    *base_rect,
+                    to_peniko(hint_color),
+                    corner_radius.max(effect.spread),
+                    sigma,
+                );
             }
         }
     }
@@ -946,52 +934,51 @@ pub fn paint_primitives_into_scene_with(
         stroke: Option<&StrokeStyle>,
         effect: &NodeEffect,
     ) {
-        let radius = effect.radius.max(0.5);
-        for (dx, dy, weight) in layer_blur_kernel(radius) {
-            let shifted_transform = scene_transform * kurbo::Affine::translate((dx, dy));
-            let rect = Rect::new(x, y, x + width, y + height);
-            if corner_radius > 0.0 {
-                let rr = RoundedRect::from_rect(rect, corner_radius);
-                if let Some(fill) = fill.cloned().map(|f| f.with_opacity(weight)) {
-                    fill_shape(scene, shifted_transform, &rr, x, y, width, height, &fill);
+        let sigma = (effect.radius * 0.5).max(0.5);
+        let rect = Rect::new(x, y, x + width, y + height);
+
+        // For solid fills, use vello's GPU-native Gaussian blur on the rectangle.
+        // This produces a proper blur rather than shifted semi-transparent copies.
+        if let Some(fill) = fill {
+            match fill {
+                FillPaint::Solid(color) => {
+                    scene.draw_blurred_rounded_rect(
+                        scene_transform,
+                        rect,
+                        to_peniko(color.clone()),
+                        corner_radius,
+                        sigma,
+                    );
                 }
-                if let Some(stroke) = stroke {
-                    if stroke.width > 0.0 {
-                        let mut stroke_blur = stroke.clone();
-                        stroke_blur.color.a = (stroke_blur.color.a * weight).clamp(0.0, 1.0);
-                        let stroke_style = to_kurbo_stroke(&stroke_blur, 1.0);
-                        let stroke_rect = stroke_aligned_rect(rect, Some(&stroke_blur));
-                        let stroke_radius =
-                            stroke_aligned_corner_radius(corner_radius, Some(&stroke_blur));
-                        let stroke_rr = RoundedRect::from_rect(stroke_rect, stroke_radius);
-                        scene.stroke(
-                            &stroke_style,
-                            shifted_transform,
-                            to_peniko(stroke_blur.color),
-                            None,
-                            &stroke_rr,
-                        );
+                // For gradient/image fills, fall back to shifted copies
+                _ => {
+                    for (dx, dy, weight) in layer_blur_kernel(effect.radius.max(0.5)) {
+                        let shifted_transform =
+                            scene_transform * kurbo::Affine::translate((dx, dy));
+                        if corner_radius > 0.0 {
+                            let rr = RoundedRect::from_rect(rect, corner_radius);
+                            let f = fill.clone().with_opacity(weight);
+                            fill_shape(scene, shifted_transform, &rr, x, y, width, height, &f);
+                        } else {
+                            let f = fill.clone().with_opacity(weight);
+                            fill_shape(scene, shifted_transform, &rect, x, y, width, height, &f);
+                        }
                     }
                 }
-            } else {
-                if let Some(fill) = fill.cloned().map(|f| f.with_opacity(weight)) {
-                    fill_shape(scene, shifted_transform, &rect, x, y, width, height, &fill);
-                }
-                if let Some(stroke) = stroke {
-                    if stroke.width > 0.0 {
-                        let mut stroke_blur = stroke.clone();
-                        stroke_blur.color.a = (stroke_blur.color.a * weight).clamp(0.0, 1.0);
-                        let stroke_style = to_kurbo_stroke(&stroke_blur, 1.0);
-                        let stroke_rect = stroke_aligned_rect(rect, Some(&stroke_blur));
-                        scene.stroke(
-                            &stroke_style,
-                            shifted_transform,
-                            to_peniko(stroke_blur.color),
-                            None,
-                            &stroke_rect,
-                        );
-                    }
-                }
+            }
+        }
+        // Stroke blur: single blurred rect with stroke color
+        if let Some(stroke) = stroke {
+            if stroke.width > 0.0 {
+                let stroke_rect = stroke_aligned_rect(rect, Some(stroke));
+                let stroke_radius = stroke_aligned_corner_radius(corner_radius, Some(stroke));
+                scene.draw_blurred_rounded_rect(
+                    scene_transform,
+                    stroke_rect,
+                    to_peniko(stroke.color.clone()),
+                    stroke_radius,
+                    sigma,
+                );
             }
         }
     }

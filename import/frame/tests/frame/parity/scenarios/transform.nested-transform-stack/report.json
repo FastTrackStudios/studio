@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-03-03T22:44:58Z",
+  "generatedAt": "2026-03-03T23:25:23Z",
   "exportPath": "tests/frame/parity/scenarios/transform.nested-transform-stack/latest-bridge-export.json",
   "featureCoverage": {
     "schema": "fts.figma.export/v2",
@@ -42,8 +42,8 @@
   },
   "performance": {
     "avg": {
-      "importMs": 1.431722,
-      "layoutMs": 0.10877766666666666,
+      "importMs": 1.652986,
+      "layoutMs": 0.15065266666666668,
       "nodeCount": 7,
       "passCounts": {
         "clipEnd": 0,
@@ -59,42 +59,42 @@
         "text": 0
       },
       "primitiveCount": 6,
-      "primitiveMs": 0.15397233333333332,
-      "sceneMs": 1.150139,
-      "totalMs": 2.867611333333333
+      "primitiveMs": 0.19451366666666667,
+      "sceneMs": 1.3101113333333332,
+      "totalMs": 3.3374726666666668
     },
     "bytes": 49345,
     "input": "tests/frame/parity/scenarios/transform.nested-transform-stack/latest-bridge-export.json",
     "iterations": 3,
-    "readMs": 0.06175,
+    "readMs": 0.060292,
     "root": "0:1",
     "samples": [
       {
-        "importMs": 2.231208,
-        "layoutMs": 0.253708,
+        "importMs": 2.881875,
+        "layoutMs": 0.365458,
         "nodeCount": 7,
         "primitiveCount": 6,
-        "primitiveMs": 0.25775,
-        "sceneMs": 2.020083,
-        "totalMs": 4.824542
+        "primitiveMs": 0.340958,
+        "sceneMs": 2.542334,
+        "totalMs": 6.2074169999999995
       },
       {
-        "importMs": 0.9950829999999999,
-        "layoutMs": 0.035625,
+        "importMs": 1.087625,
+        "layoutMs": 0.050667000000000004,
         "nodeCount": 7,
         "primitiveCount": 6,
-        "primitiveMs": 0.101167,
-        "sceneMs": 0.709417,
-        "totalMs": 1.844625
+        "primitiveMs": 0.14550000000000002,
+        "sceneMs": 0.6866669999999999,
+        "totalMs": 1.977959
       },
       {
-        "importMs": 1.068875,
-        "layoutMs": 0.037,
+        "importMs": 0.989458,
+        "layoutMs": 0.035833000000000004,
         "nodeCount": 7,
         "primitiveCount": 6,
-        "primitiveMs": 0.103,
-        "sceneMs": 0.7209169999999999,
-        "totalMs": 1.933667
+        "primitiveMs": 0.097083,
+        "sceneMs": 0.701333,
+        "totalMs": 1.827042
       }
     ]
   },

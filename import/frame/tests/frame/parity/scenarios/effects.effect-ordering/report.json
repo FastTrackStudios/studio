@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-03-03T22:43:31Z",
+  "generatedAt": "2026-03-03T23:23:54Z",
   "exportPath": "tests/frame/parity/scenarios/effects.effect-ordering/latest-bridge-export.json",
   "featureCoverage": {
     "schema": "fts.figma.export/v2",
@@ -42,8 +42,8 @@
   },
   "performance": {
     "avg": {
-      "importMs": 1.4943333333333333,
-      "layoutMs": 0.10904199999999999,
+      "importMs": 2.058472,
+      "layoutMs": 0.10495833333333333,
       "nodeCount": 6,
       "passCounts": {
         "clipEnd": 0,
@@ -59,42 +59,42 @@
         "text": 0
       },
       "primitiveCount": 5,
-      "primitiveMs": 0.16554166666666667,
-      "sceneMs": 1.5271526666666668,
-      "totalMs": 3.320083
+      "primitiveMs": 0.1695836666666667,
+      "sceneMs": 2.073736,
+      "totalMs": 4.431222
     },
     "bytes": 52697,
     "input": "tests/frame/parity/scenarios/effects.effect-ordering/latest-bridge-export.json",
     "iterations": 3,
-    "readMs": 0.140375,
+    "readMs": 0.07162500000000001,
     "root": "0:1",
     "samples": [
       {
-        "importMs": 2.273667,
-        "layoutMs": 0.260084,
+        "importMs": 3.8785410000000002,
+        "layoutMs": 0.2545,
         "nodeCount": 6,
         "primitiveCount": 5,
-        "primitiveMs": 0.27587500000000004,
-        "sceneMs": 2.542625,
-        "totalMs": 5.413582999999999
+        "primitiveMs": 0.255209,
+        "sceneMs": 2.53175,
+        "totalMs": 6.982208
       },
       {
-        "importMs": 1.1016249999999999,
-        "layoutMs": 0.034334,
+        "importMs": 0.969584,
+        "layoutMs": 0.027166,
         "nodeCount": 6,
         "primitiveCount": 5,
-        "primitiveMs": 0.111542,
-        "sceneMs": 1.028,
-        "totalMs": 2.279583
+        "primitiveMs": 0.098125,
+        "sceneMs": 1.951417,
+        "totalMs": 3.050875
       },
       {
-        "importMs": 1.107708,
-        "layoutMs": 0.032708,
+        "importMs": 1.327291,
+        "layoutMs": 0.033209,
         "nodeCount": 6,
         "primitiveCount": 5,
-        "primitiveMs": 0.109208,
-        "sceneMs": 1.010833,
-        "totalMs": 2.267083
+        "primitiveMs": 0.155417,
+        "sceneMs": 1.7380410000000002,
+        "totalMs": 3.260583
       }
     ]
   },
