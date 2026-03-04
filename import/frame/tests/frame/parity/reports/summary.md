@@ -1,9 +1,9 @@
 # Parity Scenario Summary
 
-- Generated: `2026-03-03T23:25:27Z`
+- Generated: `2026-03-04T08:03:20Z`
 - Root: `tests/frame/parity`
 - Mode: `all`
-- Threshold: `0.0`%
+- Threshold: `0`%
 - Total: `26`
 - Passed: `23`
 - Failed: `3`

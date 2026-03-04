@@ -1079,6 +1079,9 @@ pub fn paint_primitives_into_scene_with(
     ) {
         use peniko::Fill;
 
+        // Gradient coordinates must be in the same space as the path shape.
+        // fillGeometry paths are in local coords (0,0 origin); path_transform
+        // maps them to screen space.  Build gradients at (0,0) so they align.
         match fill {
             FillPaint::Solid(color) => {
                 scene.fill(
@@ -1091,21 +1094,21 @@ pub fn paint_primitives_into_scene_with(
             }
             FillPaint::GradientLinear { transform, stops } => {
                 if let Some(gradient) =
-                    build_linear_gradient(x, y, width, height, transform.as_ref(), stops)
+                    build_linear_gradient(0.0, 0.0, width, height, transform.as_ref(), stops)
                 {
                     scene.fill(Fill::NonZero, path_transform, &gradient, None, path);
                 }
             }
             FillPaint::GradientRadial { transform, stops } => {
                 if let Some((gradient, brush_xform)) =
-                    build_radial_gradient(x, y, width, height, transform.as_ref(), stops)
+                    build_radial_gradient(0.0, 0.0, width, height, transform.as_ref(), stops)
                 {
                     scene.fill(Fill::NonZero, path_transform, &gradient, brush_xform, path);
                 }
             }
             FillPaint::GradientAngular { transform, stops } => {
                 if let Some(gradient) =
-                    build_angular_gradient(x, y, width, height, transform.as_ref(), stops)
+                    build_angular_gradient(0.0, 0.0, width, height, transform.as_ref(), stops)
                 {
                     scene.fill(Fill::NonZero, path_transform, &gradient, None, path);
                 }
@@ -1121,11 +1124,12 @@ pub fn paint_primitives_into_scene_with(
                     let iw = image_brush.image.width as f64;
                     let ih = image_brush.image.height as f64;
                     if iw > 0.0 && ih > 0.0 {
+                        // Use local-space origin (0, 0) — same as gradient fix above
                         let brush_transform = image_brush_transform(
                             *scale_mode,
                             image_transform,
-                            x,
-                            y,
+                            0.0,
+                            0.0,
                             width,
                             height,
                             iw,
