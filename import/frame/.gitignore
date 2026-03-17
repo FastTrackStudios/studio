@@ -13,3 +13,7 @@
 .vscode/
 node_modules/
 .pnpm-store/
+
+# Dolt database files (added by bd init)
+.dolt/
+*.db

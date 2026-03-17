@@ -22,8 +22,15 @@ thiserror = "2.0"
 uuid = { version = "1", features = ["v4", "v5", "v7", "serde"] }
 tokio = { version = "1.48", features = ["full"] }
 
-# Facet (used by frame-proto)
-facet = { git = "https://github.com/facet-rs/facet", branch = "main" }
+# Facet (used by frame-proto) - use crates.io 0.43.x to match roam's constraint
+facet = { version = "0.44" }
+facet-core = { version = "0.44" }
+facet-format = { version = "0.44" }
+facet-json = { version = "0.44" }
+facet-postcard = { version = "0.44" }
+facet-pretty = { version = "0.44" }
+facet-value = { version = "0.44" }
+facet-yaml = { version = "0.44" }
 
 # UI/rendering (optional, behind features in frame-ui)
 dioxus = "0.7.2"
