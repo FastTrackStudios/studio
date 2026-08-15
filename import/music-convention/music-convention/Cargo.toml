@@ -1,0 +1,20 @@
+[package]
+name = "music-convention"
+version.workspace = true
+edition = "2021"
+authors.workspace = true
+license.workspace = true
+description = "Music production naming conventions as data — instrument classification, metadata parsing, and name cleanup"
+keywords = ["music", "audio", "naming", "convention", "classification"]
+categories = ["multimedia::audio"]
+
+[dependencies]
+monarchy = { workspace = true }
+color-palette = { workspace = true }
+music-catalog = { workspace = true }
+facet = { workspace = true }
+serde = { workspace = true }
+thiserror = { workspace = true }
+
+[lints]
+workspace = true
