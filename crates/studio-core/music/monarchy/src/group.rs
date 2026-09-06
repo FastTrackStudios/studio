@@ -192,6 +192,14 @@ pub struct Group<M: Metadata> {
     ///
     /// The key is the field name (e.g., "Layers"), and the value is the default value (e.g., "Main").
     pub field_default_values: std::collections::HashMap<String, String>,
+
+    /// If true, a secondary multi-mic capture (a "DI" feed alongside a
+    /// mic'd amp, say) nests as a muted, folder-collapsed child of its
+    /// sibling primary track instead of sitting beside it as an equal.
+    ///
+    /// Off by default; a group opts in with
+    /// [`GroupBuilder::nest_secondary_mics`].
+    pub nest_secondary_mics: bool,
 }
 
 impl<M: Metadata> Group<M> {
@@ -264,6 +272,7 @@ impl<M: Metadata> GroupBuilder<M> {
                 field_value_descriptors: std::collections::HashMap::new(),
                 field_grouping_strategies: std::collections::HashMap::new(),
                 field_default_values: std::collections::HashMap::new(),
+                nest_secondary_mics: false,
             },
         }
     }
@@ -516,6 +525,14 @@ impl<M: Metadata> GroupBuilder<M> {
         self.group
             .field_grouping_strategies
             .insert(field_name, strategy);
+        self
+    }
+
+    /// Turn on [`Group::nest_secondary_mics`] for this group: a secondary
+    /// multi-mic capture nests as a muted, folder-collapsed child of its
+    /// sibling primary track instead of sitting beside it as an equal.
+    pub fn nest_secondary_mics(mut self, value: bool) -> Self {
+        self.group.nest_secondary_mics = value;
         self
     }
 
