@@ -168,41 +168,38 @@ impl Color {
         )
     }
 
-    /// Convert to REAPER's native color format.
+    /// Convert to REAPER's native color format: `0x01BBGGRR`.
     ///
-    /// REAPER uses platform-specific byte ordering:
-    /// - Windows: 0x00BBGGRR (BGR)
-    /// - macOS/Linux: 0x00RRGGBB (RGB)
+    /// A `COLORREF` — **red in the low byte**, not RGB order — with
+    /// `0x01000000` set to mean "a custom colour is set" (REAPER packs flags
+    /// in the top byte; a key it considers unset reads back as a large
+    /// negative number).
     ///
-    /// The high bit (0x01000000) indicates a custom color is set.
-    #[cfg(target_os = "windows")]
+    /// # Not platform-dependent
+    ///
+    /// This used to switch on `#[cfg(target_os)]`, writing BGR on Windows and
+    /// RGB everywhere else. That is wrong: the encoding is a property of the
+    /// *file format*, not of the machine that happens to be writing it, and a
+    /// `.RPP` is portable. Organizing an album on Linux and opening it on
+    /// macOS wrote every track colour byte-swapped — the drum bus, `#ef4444`,
+    /// came out blue — because the writer took the RGB branch and REAPER read
+    /// the low byte as red either way.
+    #[must_use]
     pub const fn to_reaper_native(self) -> i32 {
-        // Windows: BGR format
         let bgr = ((self.b() as u32) << 16) | ((self.g() as u32) << 8) | (self.r() as u32);
         (bgr | 0x01000000) as i32
     }
 
-    #[cfg(not(target_os = "windows"))]
-    pub const fn to_reaper_native(self) -> i32 {
-        // macOS/Linux: RGB format
-        (self.0 | 0x01000000) as i32
-    }
-
-    /// Create from REAPER's native color format.
-    #[cfg(target_os = "windows")]
+    /// Read REAPER's native `0x01BBGGRR` back into a colour. The inverse of
+    /// [`Self::to_reaper_native`], and platform-independent for the same
+    /// reason.
+    #[must_use]
     pub const fn from_reaper_native(value: i32) -> Self {
-        // Windows: BGR format
-        let value = (value as u32) & 0xFFFFFF;
+        let value = (value as u32) & 0xFF_FFFF;
         let r = (value & 0xFF) as u8;
         let g = ((value >> 8) & 0xFF) as u8;
         let b = ((value >> 16) & 0xFF) as u8;
         Self::rgb(r, g, b)
-    }
-
-    #[cfg(not(target_os = "windows"))]
-    pub const fn from_reaper_native(value: i32) -> Self {
-        // macOS/Linux: RGB format
-        Self::hex((value as u32) & 0xFFFFFF)
     }
 
     /// Convert to HSL (Hue, Saturation, Lightness).
@@ -409,6 +406,48 @@ pub enum ColorParseError {
 
     #[error("Invalid hex length: expected 3 or 6, got {0}")]
     InvalidLength(usize),
+}
+
+#[cfg(test)]
+mod reaper_native_tests {
+    use super::*;
+
+    #[test]
+    fn red_stays_red_in_the_low_byte() {
+        // Tailwind red-500, the drum-bus colour. Written RGB it renders blue
+        // in REAPER — which is exactly what shipped when this switched on
+        // target_os and the writer happened to be Linux.
+        let red = Color::hex(0x00ef_4444);
+        assert_eq!(red.to_reaper_native(), 0x0144_44ef_u32 as i32);
+    }
+
+    #[test]
+    fn the_custom_colour_flag_is_set() {
+        // Without 0x01000000 REAPER treats the track as having no custom
+        // colour and ignores the value entirely.
+        assert_eq!(Color::hex(0).to_reaper_native() as u32 & 0xFF00_0000, 0x0100_0000);
+    }
+
+    #[test]
+    fn a_colour_survives_a_round_trip() {
+        for hex in [0x00ef_4444, 0x0000_0000, 0x00ff_ffff, 0x0012_3456, 0x006366_f1 & 0xFF_FFFF] {
+            let c = Color::hex(hex);
+            assert_eq!(
+                Color::from_reaper_native(c.to_reaper_native()).to_hex_string(),
+                c.to_hex_string(),
+                "round trip changed {hex:#08x}"
+            );
+        }
+    }
+
+    #[test]
+    fn channels_land_where_reaper_expects_them() {
+        // 0x00102030 in a .RPP means b=0x10 g=0x20 r=0x30 -> #302010.
+        assert_eq!(
+            Color::from_reaper_native(0x0010_2030).to_hex_string(),
+            "#302010"
+        );
+    }
 }
 
 #[cfg(test)]
