@@ -45,6 +45,10 @@ static COLOR_MAP: LazyLock<HashMap<&'static str, Color>> = LazyLock::new(|| {
     m.insert("reference", groups::REFERENCE);
     m.insert("stem split", groups::STEM_SPLIT);
     m.insert("stem_split", groups::STEM_SPLIT);
+    m.insert("tracks", groups::TRACKS);
+    m.insert("talkback", groups::TALKBACK);
+    m.insert("headphones", groups::HEADPHONES);
+    m.insert("vca", groups::VCA);
 
     // Guitar sub-groups
     m.insert("guitars/electric", guitars::ELECTRIC);
@@ -434,6 +438,59 @@ mod tests {
     use super::*;
     use crate::instruments::{drums, groups, guitars, vocals};
     use crate::sections::colors as sec;
+
+    #[test]
+    fn the_four_utility_folders_resolve() {
+        // These four went uncolored for a long time, and nothing failed loudly
+        // — a folder with no color just renders in REAPER's default grey, so
+        // the gap only showed up in a template audit. Pin them.
+        assert_eq!(color_for_path(&["Tracks"]), Some(groups::TRACKS));
+        assert_eq!(color_for_path(&["Talkback"]), Some(groups::TALKBACK));
+        assert_eq!(color_for_path(&["Headphones"]), Some(groups::HEADPHONES));
+        assert_eq!(color_for_path(&["VCA"]), Some(groups::VCA));
+    }
+
+    #[test]
+    fn no_two_group_colors_are_identical() {
+        // Two folders sharing a tint is indistinguishable from a lookup bug at
+        // a glance in the mixer.
+        let named: [(&str, Color); 21] = [
+            ("DRUMS", groups::DRUMS),
+            ("PERCUSSION", groups::PERCUSSION),
+            ("BASS", groups::BASS),
+            ("GUITARS", groups::GUITARS),
+            ("KEYS", groups::KEYS),
+            ("SYNTHS", groups::SYNTHS),
+            ("HORNS", groups::HORNS),
+            ("HARMONICA", groups::HARMONICA),
+            ("FIDDLE", groups::FIDDLE),
+            ("VOCALS", groups::VOCALS),
+            ("CHOIR", groups::CHOIR),
+            ("ORCHESTRA", groups::ORCHESTRA),
+            ("SFX", groups::SFX),
+            ("GUIDE", groups::GUIDE),
+            ("REFERENCE", groups::REFERENCE),
+            ("STEM_SPLIT", groups::STEM_SPLIT),
+            ("TRACKS", groups::TRACKS),
+            ("TALKBACK", groups::TALKBACK),
+            ("HEADPHONES", groups::HEADPHONES),
+            ("VCA", groups::VCA),
+            ("GUITARS_DUP_GUARD", guitars::ELECTRIC),
+        ];
+        for (i, (an, a)) in named.iter().enumerate() {
+            for (bn, b) in named.iter().skip(i + 1) {
+                // GUITARS deliberately defaults to the electric guitar color.
+                if *an == "GUITARS" && *bn == "GUITARS_DUP_GUARD" {
+                    continue;
+                }
+                assert_ne!(
+                    a.to_hex_string(),
+                    b.to_hex_string(),
+                    "{an} and {bn} share a color"
+                );
+            }
+        }
+    }
 
     #[test]
     fn test_instrument_groups() {

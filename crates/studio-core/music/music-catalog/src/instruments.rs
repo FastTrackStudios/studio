@@ -28,6 +28,22 @@ pub mod groups {
     pub const REFERENCE: Color = palette::slate::S500;
     /// Stem-separation outputs (Demucs, LALAL.ai, …) — a neutral utility color.
     pub const STEM_SPLIT: Color = palette::zinc::S500;
+    /// Pre-produced playback that runs alongside the band — loops, sequences,
+    /// backing tracks. Saturated, unlike the three utility colors below it:
+    /// this is the one of the four that prints to the record. Indigo is
+    /// otherwise unclaimed here, and reads as a sibling of [`SYNTHS`] without
+    /// colliding with it, [`GUITARS`] or [`CHOIR`].
+    pub const TRACKS: Color = palette::indigo::S500;
+    /// Control-room and player comms. Recorded so a take can be reviewed with
+    /// the conversation intact, never summed into the mix — so it stays in the
+    /// neutral band, and warm so it sits visually off the slate monitor ramp.
+    pub const TALKBACK: Color = palette::stone::S400;
+    /// Per-player cue mixes. One step darker than [`REFERENCE`], continuing the
+    /// slate ramp of "you hear it, it is not the record".
+    pub const HEADPHONES: Color = palette::slate::S600;
+    /// A fader that controls other faders. Darkest and most inert of the
+    /// utility colors, because it carries no audio at all.
+    pub const VCA: Color = palette::zinc::S700;
 }
 
 /// Guitar sub-group colors
