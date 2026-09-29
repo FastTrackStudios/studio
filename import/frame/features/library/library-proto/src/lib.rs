@@ -27,7 +27,7 @@ use std::collections::BTreeSet;
 use document_proto::Scene;
 use facet::Facet;
 use serde::{Deserialize, Serialize};
-use surface_proto::{Catalog, Control, Source};
+use surface_proto::{Binding, Catalog, Control, ControlKind, InputSource, Source};
 
 /// A surface's id in a library: its path under the library root without
 /// the extension, `/`-separated (`comp/07-vari-mu`).
@@ -106,7 +106,32 @@ impl Signature {
 }
 
 fn collect(control: &Control, [params, actions, streams, collections]: &mut [BTreeSet<String>; 4]) {
-    for binding in control.binding.iter().chain(&control.y_binding) {
+    // A curve's inputs and a handle's axes bind too (an EQ graph needs
+    // every band's params).
+    let mut extra: Vec<&Binding> = Vec::new();
+    match &control.kind {
+        ControlKind::Curve { inputs, .. } => {
+            for input in inputs {
+                match &input.source {
+                    InputSource::Param { addr } => {
+                        params.insert(addr.0.clone());
+                    }
+                    InputSource::Stream { id, .. } => {
+                        streams.insert(id.0.clone());
+                    }
+                    InputSource::Const { .. } => {}
+                }
+            }
+        }
+        ControlKind::Handle { x, y, wheel, x_map, y_map } => {
+            extra.extend(x.iter().chain(y).chain(wheel));
+            for addr in x_map.after.iter().chain(&y_map.after) {
+                params.insert(addr.0.clone());
+            }
+        }
+        _ => {}
+    }
+    for binding in control.binding.iter().chain(&control.y_binding).chain(extra) {
         // `if let` rather than a `match`: new source kinds (feeds) are
         // additive and needn't break this.
         if let Source::Param { addr } = &binding.source {
@@ -372,5 +397,36 @@ mod tests {
         assert!(!ListQuery { tags: vec!["eq".into()], ..ListQuery::default() }.matches(&meta));
         assert!(ListQuery { fits: Some(sig(&["a", "b"], &[])), ..ListQuery::default() }.matches(&meta));
         assert!(!ListQuery { fits: Some(sig(&["b"], &[])), ..ListQuery::default() }.matches(&meta));
+    }
+}
+
+#[cfg(test)]
+mod fits_tests {
+    use super::*;
+    use surface_proto::{Axis, CurveInput, HandleAxis, ParamAddr, PlotRange, PlotStyle};
+
+    #[test]
+    fn curve_inputs_and_handle_axes_are_part_of_the_signature() {
+        let mut sets: [BTreeSet<String>; 4] = Default::default();
+        let curve = Control::new(ControlKind::Curve {
+            provider: "eq.response".into(),
+            inputs: vec![CurveInput { name: "b1_freq".into(), source: InputSource::Param { addr: ParamAddr::new("eq/b1_freq") } }],
+            series: None,
+            style: PlotStyle::Line,
+            x: Axis::Log { f_min: 20.0, f_max: 20_000.0 },
+            y: PlotRange { min: -18.0, max: 18.0, curve: surface_proto::Curve::Linear },
+        });
+        collect(&curve, &mut sets);
+        let axis = |after: Vec<ParamAddr>| HandleAxis { axis: Axis::Linear { min: 0.0, max: 1.0 }, after, shift: 0.0 };
+        let handle = Control::new(ControlKind::Handle {
+            x: Some(Binding::param("adsr/decay")),
+            y: None,
+            wheel: Some(Binding::param("eq/b1_q")),
+            x_map: axis(vec![ParamAddr::new("adsr/attack")]),
+            y_map: axis(Vec::new()),
+        });
+        collect(&handle, &mut sets);
+        let params: Vec<_> = sets[0].iter().cloned().collect();
+        assert_eq!(params, ["adsr/attack", "adsr/decay", "eq/b1_freq", "eq/b1_q"]);
     }
 }
