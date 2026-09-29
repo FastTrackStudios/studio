@@ -6,6 +6,7 @@ edition.workspace = true
 
 [dependencies]
 figma-model = { path = "../../figma/figma-model" }
+document-proto = { path = "../../document/document-proto", default-features = false }
 figma-api = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
@@ -19,7 +20,7 @@ vello = { workspace = true, optional = true }
 kurbo = { workspace = true, optional = true }
 peniko = { workspace = true, optional = true }
 skrifa = { version = "0.26", optional = true }
-base64 = { version = "0.22", optional = true }
+base64 = "0.22"
 image = { version = "0.25", default-features = false, features = ["png", "jpeg", "gif", "webp"], optional = true }
 taffy = { workspace = true }
 winit = { workspace = true, optional = true }
@@ -31,7 +32,10 @@ fixed = { version = "1.28", optional = true }
 [features]
 default = []
 svg_export = ["dep:svg", "dep:rust_decimal", "dep:fixed", "dep:kurbo"]
-anyrender = ["dep:anyrender", "dep:anyrender_svg", "dep:anyrender_vello", "dep:vello", "dep:kurbo", "dep:peniko", "dep:skrifa", "dep:base64", "dep:image", "dep:winit", "dep:pollster", "svg_export"]
+anyrender = ["dep:anyrender", "dep:anyrender_svg", "dep:anyrender_vello", "dep:vello", "dep:kurbo", "dep:peniko", "dep:skrifa", "dep:image", "dep:winit", "dep:pollster", "svg_export"]
+
+[dev-dependencies]
+figma-import = { path = "../../figma/figma-import" }
 
 [lints]
 workspace = true

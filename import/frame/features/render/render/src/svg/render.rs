@@ -353,7 +353,7 @@ pub fn run_cli() -> Result<(), String> {
                 let rw = width.max(0.0);
                 let rh = height.max(0.0);
                 accumulate_bounds_if_active(&mut active_mask_bounds, rx, ry, rx + rw, ry + rh);
-                let node = doc.get_node(node_id);
+                let node = doc.get_node(figma_model::NodeId(node_id.0));
                 let frame_rect_uses_transform = node
                     .map(|n| n.figma_type == "FRAME")
                     .unwrap_or(false);
@@ -1559,7 +1559,7 @@ pub fn run_cli() -> Result<(), String> {
                         continue;
                     }
                 }
-                let node = doc.get_node(node_id);
+                let node = doc.get_node(figma_model::NodeId(node_id.0));
                 let figma_type = node.map(|n| n.figma_type.as_str()).unwrap_or("");
                 let is_rectangle_node = figma_type == "RECTANGLE";
                 if !text_outline && is_rectangle_node && svg_base64.is_none() {
@@ -1572,7 +1572,7 @@ pub fn run_cli() -> Result<(), String> {
                         ..
                     } = resolve_rect_geometry(
                         &doc,
-                        node_id,
+                        figma_model::NodeId(node_id.0),
                         &layout_boxes,
                         &source_bboxes,
                         x,
@@ -2023,7 +2023,7 @@ pub fn run_cli() -> Result<(), String> {
                             cy_box_y = *by;
                             cx_box_w = (*bw).max(0.0);
                             cy_box_h = (*bh).max(0.0);
-                        } else if let Some(b) = layout_boxes.get(&node_id).copied() {
+                        } else if let Some(b) = layout_boxes.get(&figma_model::NodeId(node_id.0)).copied() {
                             cx_box_x = b.x;
                             cy_box_y = b.y;
                             cx_box_w = b.width.max(0.0);
@@ -2401,7 +2401,7 @@ pub fn run_cli() -> Result<(), String> {
                             lx = *bx;
                             ly = *by;
                             lw = *bw;
-                        } else if let Some(b) = layout_boxes.get(&node_id).copied() {
+                        } else if let Some(b) = layout_boxes.get(&figma_model::NodeId(node_id.0)).copied() {
                             lx = b.x;
                             ly = b.y;
                             lw = b.width;
@@ -2488,7 +2488,7 @@ pub fn run_cli() -> Result<(), String> {
                         if let Some((bx, by, _bw, _bh)) = source_bboxes.get(&node.figma_id) {
                             px = *bx + tx + ellipse_inset;
                             py = *by + ty + ellipse_inset;
-                        } else if let Some(b) = layout_boxes.get(&node_id).copied() {
+                        } else if let Some(b) = layout_boxes.get(&figma_model::NodeId(node_id.0)).copied() {
                             px = b.x + tx + ellipse_inset;
                             py = b.y + ty + ellipse_inset;
                         }

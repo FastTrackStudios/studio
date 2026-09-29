@@ -1,11 +1,21 @@
-//! The `document` contract. Three declarations; everything else — the vox
-//! service, the HTTP routes, both clients, the storage, the migration —
-//! is generated.
+//! The `document` contract: frame's own document model ([`model`]), the
+//! typed edits over it ([`ops`]), and the service that serves documents.
+//!
+//! The entity/service declarations below are architect's: everything else
+//! — the vox service, the HTTP routes, both clients, the storage — is
+//! generated.
+
+pub mod model;
+pub mod ops;
+
+pub use model::*;
+pub use ops::{History, Op, OpError, Prop};
 
 use uuid::Uuid;
 
-/// The entity. `NoteCreate`/`Update`/`List`, the `DocumentRepo` trait,
-/// its clients and its storage all come from this.
+/// A document's index row (what a file browser lists). The content — the
+/// [`Scene`] — lives in the document's own store (a Loro replica / `.frame`
+/// bundle), not in this row.
 #[architect::entity(table_name = "documents", repo, events)]
 pub struct Document {
     #[architect(primary_key, auto_increment = false, on_create = Uuid::new_v4())]

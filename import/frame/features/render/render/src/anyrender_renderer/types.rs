@@ -1,5 +1,5 @@
 use figma_api::models;
-use figma_model::NodeId;
+use document_proto::NodeId;
 
 pub use super::transform::AffineTransform2D;
 

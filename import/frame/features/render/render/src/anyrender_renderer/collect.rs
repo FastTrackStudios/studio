@@ -1,7 +1,13 @@
 use super::extract::*;
 use super::layout::build_layout_boxes;
 use super::types::*;
-use figma_model::{FrameDocument, NodeId, RenderNodeClass};
+use figma_model::{FrameDocument, RenderNodeClass};
+
+type NodeId = figma_model::NodeId;
+
+fn did(id: NodeId) -> document_proto::NodeId {
+    document_proto::NodeId(id.0)
+}
 
 pub fn collect_render_diagnostics(doc: &FrameDocument, root: NodeId) -> RenderDiagnostics {
     let mut out = RenderDiagnostics::default();
@@ -89,6 +95,8 @@ fn collect_primitives_recursive(
     if !node.visible {
         return;
     }
+    let figma_node_id = node_id;
+    let node_id = did(figma_node_id);
 
     let local_opacity = node
         .raw
@@ -105,7 +113,7 @@ fn collect_primitives_recursive(
     let chain_y = parent_y + local_y;
     let (x, y, width, height) = if !force_local_positioning {
         layout_boxes
-            .get(&node_id)
+            .get(&figma_node_id)
             .map(|b| (b.x, b.y, b.width, b.height))
             .unwrap_or_else(|| {
                 let (local_x, local_y, width, height, _rot) = extract_local_rect(&node.raw);
@@ -531,7 +539,7 @@ fn collect_primitives_recursive(
 
     // Figma masks affect subsequent siblings within the same parent scope.
     // We model this with clip layers driven by `isMask` children.
-    let mut active_sibling_mask: Option<NodeId> = None;
+    let mut active_sibling_mask: Option<document_proto::NodeId> = None;
     for child_id in &node.children {
         let Some(child) = doc.get_node(*child_id) else {
             continue;
@@ -564,7 +572,7 @@ fn collect_primitives_recursive(
                 });
             if mw > 0.0 && mh > 0.0 {
                 out.push(PaintPrimitive::MaskDefStart {
-                    node_id: *child_id,
+                    node_id: did(*child_id),
                     x: mx,
                     y: my,
                     width: mw,
@@ -582,15 +590,15 @@ fn collect_primitives_recursive(
                     layout_boxes,
                     out,
                 );
-                out.push(PaintPrimitive::MaskDefEnd { node_id: *child_id });
+                out.push(PaintPrimitive::MaskDefEnd { node_id: did(*child_id) });
                 out.push(PaintPrimitive::MaskApplyStart {
-                    node_id: *child_id,
+                    node_id: did(*child_id),
                     x: mx,
                     y: my,
                     width: mw,
                     height: mh,
                 });
-                active_sibling_mask = Some(*child_id);
+                active_sibling_mask = Some(did(*child_id));
             }
 
             continue;
