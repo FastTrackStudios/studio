@@ -118,6 +118,10 @@ pub enum EffectKind {
     InnerShadow,
     LayerBlur,
     BackgroundBlur,
+    /// Light a node gives off (its `emission`), drawn without the GPU effects
+    /// stage: a blurred halo in the emission colour behind the node, like a
+    /// drop shadow with no offset.
+    Glow,
 }
 
 #[derive(Debug, Clone, PartialEq)]

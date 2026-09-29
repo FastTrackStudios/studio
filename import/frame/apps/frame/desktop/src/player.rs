@@ -12,7 +12,7 @@ use surface_proto::{Catalog, ControlKind, ParamAddr, ParamValue, Source as Bindi
 use surface_runtime::sync::{Engine, EngineError, Incoming};
 use surface_runtime::{Bounds, EngineCall, Input, Key, Modifiers, Runtime, Surface, sync};
 
-use crate::input::{Clicks, View};
+use crate::input::Clicks;
 use crate::remote::{Event, Remote};
 
 const FONT: &[u8] = include_bytes!("../../cli/assets/inter/Inter-Variable.ttf");
@@ -325,10 +325,16 @@ impl Player {
 
     // ── drawing ───────────────────────────────────────────────────────────
 
-    /// Paint the frame at `t` ms through `view`.
-    pub fn paint(&self, into: &mut vello::Scene, view: &View, t: f64) {
-        let frame = self.rt.frame(t);
-        render::paint_scene_into(into, &frame, self.page, view.affine(), Some(font()));
+    /// The document at `t` ms and the page to paint, for the effects stage.
+    #[must_use]
+    pub fn document(&self, t: f64) -> (Scene, NodeId) {
+        (self.rt.frame(t), self.page)
+    }
+
+    /// Every control's position, for effect shaders' `value`.
+    #[must_use]
+    pub fn control_positions(&self) -> std::collections::HashMap<NodeId, f64> {
+        self.rt.surface().controls.iter().map(|(id, c)| (*id, self.rt.position(*id, c))).collect()
     }
 
     /// The first knob in paint order and its box (for scripted input).

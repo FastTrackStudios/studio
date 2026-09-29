@@ -204,6 +204,7 @@ A gradient without a `transform` runs left to right across the node, so this met
   so a control's `Led` slot dimming a lamp dims its light.
 - `shader={{"shader":"glass","params":{"strength":0.6}}}` — a post-effect on the
   node's subtree. Built-ins: `glass`, `crt`, `lighting`, `flicker`;
-  `"asset:<id>"` runs custom WGSL from the document's assets. Optional: a
-  surface must read correctly without it (non-GPU renderers skip shaders).
+  `"asset:<id>"` runs custom WGSL from the document's assets (the contract:
+  `features/render/render/src/fx/CONTRACT.md`). Optional: a surface must read
+  correctly without it (non-GPU renderers skip shaders).
 

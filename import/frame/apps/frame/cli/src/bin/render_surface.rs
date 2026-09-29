@@ -3,6 +3,7 @@
 //! ```text
 //! render_surface --out surface.png [--theme stage-dark|daylight]
 //!                [--markup surface.fm] [--catalog catalog.json] [--set amp/gain=0.8 ...] [--level -12] [--scale 2]
+//!                [--fx gpu|fallback|off] [--time SECONDS]
 //! ```
 //! Builds a surface from the demo engine catalog, applies the given
 //! parameter values (normalized) and a meter level, and renders one frame.
@@ -34,6 +35,8 @@ fn run() -> Result<(), String> {
     let mut scale = 1.0_f64;
     let mut markup: Option<String> = None;
     let mut catalog_path: Option<String> = None;
+    let mut fx = render::fx::Mode::Gpu;
+    let mut time_s = 0.0_f64;
     let mut args = std::env::args().skip(1);
     while let Some(a) = args.next() {
         match a.as_str() {
@@ -52,6 +55,8 @@ fn run() -> Result<(), String> {
                 sets.push(ParamValue { addr: ParamAddr::new(k), value: v.parse::<f64>().map_err(|e| format!("{kv}: {e}"))? });
             }
             "--level" => level = Some(args.next().ok_or("--level needs dB")?.parse::<f64>().map_err(|e| e.to_string())?),
+            "--fx" => fx = args.next().ok_or("--fx needs gpu|fallback|off")?.parse()?,
+            "--time" => time_s = args.next().ok_or("--time needs seconds")?.parse::<f64>().map_err(|e| e.to_string())?,
             "--scale" => scale = args.next().ok_or("--scale needs a factor")?.parse::<f64>().map_err(|e| e.to_string())?,
             other => return Err(format!("unknown arg: {other}")),
         }
@@ -85,15 +90,6 @@ fn run() -> Result<(), String> {
     let size = frame.node(root).map(|n| n.size).ok_or("no root")?;
     let (w, h) = ((size.width * scale).ceil() as u32, (size.height * scale).ceil() as u32);
 
-    let mut scene = vello::Scene::new();
-    let font = include_bytes!("../../assets/inter/Inter-Variable.ttf");
-    render::paint_scene_into(
-        &mut scene,
-        &frame,
-        page,
-        kurbo::Affine::scale(scale),
-        Some(render::TextFontRef { bytes: font, index: 0 }),
-    );
     let bg = frame
         .node(root)
         .and_then(|n| n.fills.iter().find_map(|p| match &p.kind {
@@ -102,11 +98,27 @@ fn run() -> Result<(), String> {
         }))
         .unwrap_or(theme.background);
     let base = peniko::Color::from_rgba8((bg.r * 255.0) as u8, (bg.g * 255.0) as u8, (bg.b * 255.0) as u8, 255);
-    let px = render::offscreen::Offscreen::new()?.render(&scene, w, h, base)?;
+    let font = include_bytes!("../../assets/inter/Inter-Variable.ttf");
+    let values = control_positions(&rt);
+    let px = render::offscreen::Offscreen::new()?.render_with_effects(&render::fx::Frame {
+        transform: kurbo::Affine::scale(scale),
+        base,
+        font: Some(render::TextFontRef { bytes: font, index: 0 }),
+        mode: fx,
+        time_s,
+        values: Some(&values),
+        ..render::fx::Frame::new(&frame, page, w, h)
+    })?;
     image::RgbaImage::from_raw(px.width, px.height, px.rgba)
         .ok_or("bad pixel buffer")?
         .save(&out)
         .map_err(|e| format!("writing {out}: {e}"))?;
     println!("{{\"ok\":true,\"out\":\"{out}\",\"width\":{w},\"height\":{h},\"controls\":{}}}", rt.surface().controls.len());
     Ok(())
+}
+
+/// Every control's position, for effect shaders' `value`.
+#[cfg(feature = "anyrender")]
+fn control_positions(rt: &surface_runtime::Runtime) -> std::collections::HashMap<document_proto::NodeId, f64> {
+    rt.surface().controls.iter().map(|(id, c)| (*id, rt.position(*id, c))).collect()
 }

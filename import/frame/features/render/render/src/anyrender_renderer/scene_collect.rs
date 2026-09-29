@@ -11,8 +11,21 @@ use document_proto::{self as doc, NodeId, NodeKind, Scene};
 use taffy::prelude::*;
 use taffy::TaffyTree;
 
+use super::effects_plan::{EffectsPlan, EmissiveDraw, ShaderRegion};
 use super::transform::AffineTransform2D;
 use super::types::*;
+
+/// The nearest control, `id` or an ancestor, with its default position.
+fn nearest_control(scene: &Scene, id: NodeId) -> Option<(NodeId, Option<f64>)> {
+    let mut at = Some(id);
+    while let Some(n) = at.and_then(|i| scene.node(i)) {
+        if let Some(c) = &n.control {
+            return Some((n.id, c.default));
+        }
+        at = n.parent;
+    }
+    None
+}
 
 // ── value conversion ─────────────────────────────────────────────────────
 
@@ -392,20 +405,150 @@ fn child_style(scene: &Scene, id: NodeId) -> Style {
 
 // ── primitives ───────────────────────────────────────────────────────────
 
+/// How [`build_scene_primitives_with`] treats the optional light/shader
+/// properties.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct CollectOptions {
+    /// Draw each `emission` as a [`EffectKind::Glow`] on the node's own
+    /// primitive (the fallback for paths without the GPU effects stage).
+    pub emission_glow: bool,
+}
+
+impl Default for CollectOptions {
+    fn default() -> Self {
+        Self { emission_glow: true }
+    }
+}
+
 /// The paint primitives for `root`'s subtree, in paint order.
+///
+/// Emitting nodes carry a [`EffectKind::Glow`] (the no-GPU fallback for
+/// light); shaders are skipped. Scenes without `emission` are unaffected.
 #[must_use]
 pub fn build_scene_primitives(scene: &Scene, root: NodeId) -> Vec<PaintPrimitive> {
+    build_scene_primitives_with(scene, root, CollectOptions::default())
+}
+
+/// [`build_scene_primitives`] with explicit [`CollectOptions`].
+#[must_use]
+pub fn build_scene_primitives_with(scene: &Scene, root: NodeId, options: CollectOptions) -> Vec<PaintPrimitive> {
+    collect(scene, root, options, false).0
+}
+
+/// The primitives (without emission glows) and the [`EffectsPlan`] the GPU
+/// effects stage runs over them. The primitives are exactly
+/// `build_scene_primitives_with(.., CollectOptions { emission_glow: false })`.
+#[must_use]
+pub fn build_scene_primitives_and_effects(scene: &Scene, root: NodeId) -> (Vec<PaintPrimitive>, EffectsPlan) {
+    let (out, plan) = collect(scene, root, CollectOptions { emission_glow: false }, true);
+    (out, plan.unwrap_or_default())
+}
+
+fn collect(scene: &Scene, root: NodeId, options: CollectOptions, plan: bool) -> (Vec<PaintPrimitive>, Option<EffectsPlan>) {
     let boxes = build_scene_layout_boxes(scene, root);
     let mut out = Vec::new();
-    let mut cx = Cx { scene, boxes: &boxes, out: &mut out };
+    let mut cx = Cx {
+        scene,
+        boxes: &boxes,
+        out: &mut out,
+        options,
+        plan: plan.then(EffectsPlan::default),
+        groups: Vec::new(),
+        in_shader: false,
+        in_mask_def: 0,
+        flicker: None,
+    };
     cx.node(root, 0.0, 0.0, false, 1.0, &[]);
-    out
+    let plan = cx.plan.take();
+    (out, plan)
 }
 
 struct Cx<'a> {
     scene: &'a Scene,
     boxes: &'a HashMap<NodeId, LayoutBox>,
     out: &'a mut Vec<PaintPrimitive>,
+    options: CollectOptions,
+    /// Collected effects, when the caller runs the GPU stage.
+    plan: Option<EffectsPlan>,
+    /// Open `GroupStart` transforms, each composed with the ones before.
+    groups: Vec<AffineTransform2D>,
+    /// Inside a shader region (nested shaders draw plainly).
+    in_shader: bool,
+    /// Inside a mask definition (no effects there).
+    in_mask_def: usize,
+    /// The params of the nearest enclosing `flicker` shader.
+    flicker: Option<std::collections::BTreeMap<String, f64>>,
+}
+
+/// A copy of a node's own primitive painted in `color`: fills become one
+/// solid fill, strokes take the colour, effects and blends are dropped.
+fn recolor(p: &PaintPrimitive, color: &Rgba) -> Option<PaintPrimitive> {
+    let solid = || vec![(FillPaint::Solid(color.clone()), BlendMix::Normal)];
+    let stroke_of = |s: &Option<StrokeStyle>| s.clone().map(|s| StrokeStyle { color: color.clone(), ..s });
+    match p {
+        PaintPrimitive::Rect { node_id, x, y, width, height, fills, stroke, corner_radii, rotation, .. } => {
+            (!fills.is_empty() || stroke.is_some()).then(|| PaintPrimitive::Rect {
+                node_id: *node_id,
+                x: *x,
+                y: *y,
+                width: *width,
+                height: *height,
+                fills: if fills.is_empty() { Vec::new() } else { solid() },
+                stroke: stroke_of(stroke),
+                corner_radii: *corner_radii,
+                effects: Vec::new(),
+                blend: BlendMix::Normal,
+                rotation: *rotation,
+            })
+        }
+        PaintPrimitive::Path {
+            node_id,
+            x,
+            y,
+            width,
+            height,
+            normalize_to_origin,
+            text_outline,
+            fill_paths,
+            stroke_paths,
+            fills,
+            stroke,
+            rotation,
+            ..
+        } => {
+            // A snapshot-only path can't be recoloured; the caller falls back
+            // to the node's box.
+            (!fill_paths.is_empty() || !stroke_paths.is_empty()).then(|| PaintPrimitive::Path {
+                node_id: *node_id,
+                x: *x,
+                y: *y,
+                width: *width,
+                height: *height,
+                normalize_to_origin: *normalize_to_origin,
+                text_outline: *text_outline,
+                fill_paths: if fills.is_empty() { Vec::new() } else { fill_paths.clone() },
+                stroke_paths: if stroke.is_some() { stroke_paths.clone() } else { Vec::new() },
+                svg_base64: None,
+                fills: if fills.is_empty() { Vec::new() } else { solid() },
+                stroke: stroke_of(stroke),
+                effects: Vec::new(),
+                blend: BlendMix::Normal,
+                rotation: *rotation,
+            })
+        }
+        PaintPrimitive::Text { .. } => {
+            let mut t = p.clone();
+            if let PaintPrimitive::Text { color: c, style_runs, blend, .. } = &mut t {
+                *c = color.clone();
+                *blend = BlendMix::Normal;
+                for r in style_runs {
+                    r.color = Some(color.clone());
+                }
+            }
+            Some(t)
+        }
+        _ => None,
+    }
 }
 
 impl Cx<'_> {
@@ -462,7 +605,21 @@ impl Cx<'_> {
         let fills: Vec<(FillPaint, BlendMix)> =
             fill_paints(&node.fills, scene).into_iter().map(|(f, b)| (f.with_opacity(content_opacity), b)).collect();
         let stroke = stroke_style(&node.stroke, content_opacity);
-        let effects = node_effects(&node.effects, content_opacity);
+        let mut effects = node_effects(&node.effects, content_opacity);
+        if self.options.emission_glow
+            && let Some(em) = &node.emission
+            && em.radius > 0.0
+            && em.intensity > 0.0
+        {
+            effects.push(NodeEffect {
+                kind: EffectKind::Glow,
+                color: rgba(&em.color, 1.0).with_opacity(clamp01(content_opacity * em.intensity * 0.85)),
+                offset_x: 0.0,
+                offset_y: 0.0,
+                radius: em.radius,
+                spread: 0.0,
+            });
+        }
         let mut merged_effects = inherited_blurs.to_vec();
         merged_effects.extend(effects.iter().cloned());
         let mut child_blurs = inherited_blurs.to_vec();
@@ -486,8 +643,25 @@ impl Cx<'_> {
             || matches!(instance_component, Some(Some(main)) if scene.node(main).is_some_and(|m| !m.children.is_empty()));
         let group = (has_descendants && propagates_transform(node)).then(|| group_transform(&node.transform, x, y));
         let rotation = if group.is_some() { 0.0 } else { node.transform.rotation() };
+
+        // Effects bookkeeping (only when a plan is collected).
+        let region_start = self.out.len();
+        let outer_world = self.groups.last().copied().unwrap_or_else(AffineTransform2D::identity);
+        let shader_here = self.plan.is_some()
+            && !self.in_shader
+            && self.in_mask_def == 0
+            && node.shader.as_ref().is_some_and(|s| !s.shader.is_empty());
+        let saved_flicker = self.flicker.clone();
+        if let Some(fx) = node.shader.as_ref().filter(|s| s.shader == "flicker") {
+            self.flicker = Some(fx.params.clone());
+        }
+        if shader_here {
+            self.in_shader = true;
+        }
+
         if let Some(transform) = group {
             self.out.push(PaintPrimitive::GroupStart { node_id, transform });
+            self.groups.push(outer_world * transform);
         }
         if needs_layer {
             self.out.push(PaintPrimitive::LayerStart { node_id, x, y, width, height, blend: blend.clone(), opacity: effective_opacity });
@@ -525,6 +699,7 @@ impl Cx<'_> {
             rotation,
         };
 
+        let own_start = self.out.len();
         match (class(&node.kind), &node.kind) {
             // Text with exported glyph outlines: paint the outlines (the
             // exporter's own shaping), at raw transform-chain coordinates.
@@ -601,6 +776,47 @@ impl Cx<'_> {
             }
         }
 
+        if self.plan.is_some()
+            && self.in_mask_def == 0
+            && let Some(em) = &node.emission
+            && em.intensity > 0.0
+            && effective_opacity > 0.0
+        {
+            let color = Rgba { a: 1.0, ..rgba(&em.color, 1.0) };
+            let mut primitives: Vec<PaintPrimitive> =
+                self.out[own_start..].iter().filter_map(|p| recolor(p, &color)).collect();
+            if primitives.is_empty() && width > 0.0 && height > 0.0 {
+                primitives.push(PaintPrimitive::Rect {
+                    node_id,
+                    x,
+                    y,
+                    width,
+                    height,
+                    fills: vec![(FillPaint::Solid(color.clone()), BlendMix::Normal)],
+                    stroke: None,
+                    corner_radii: radii,
+                    effects: Vec::new(),
+                    blend: BlendMix::Normal,
+                    rotation,
+                });
+            }
+            if !primitives.is_empty() {
+                let world = self.groups.last().copied().unwrap_or_else(AffineTransform2D::identity);
+                let flicker = self.flicker.clone();
+                if let Some(plan) = &mut self.plan {
+                    plan.emissive.push(EmissiveDraw {
+                        node_id,
+                        primitives,
+                        world,
+                        color,
+                        strength: em.intensity * effective_opacity,
+                        radius: em.radius.max(0.0),
+                        flicker,
+                    });
+                }
+            }
+        }
+
         if !atomic_svg {
             self.children(node, x, y, content_opacity, &child_blurs);
             // An instance exported without its subtree: draw the main
@@ -623,6 +839,35 @@ impl Cx<'_> {
         }
         if group.is_some() {
             self.out.push(PaintPrimitive::GroupEnd { node_id });
+            self.groups.pop();
+        }
+
+        self.flicker = saved_flicker;
+        if shader_here {
+            self.in_shader = false;
+            if let (Some(fx), Some(plan)) = (node.shader.as_ref(), self.plan.as_mut())
+                && self.out.len() > region_start
+            {
+                // Node-local box → world: the container's linear part (its
+                // group) or the leaf's own rotation, about its box origin.
+                let local = if group.is_some() {
+                    let t = &node.transform;
+                    AffineTransform2D { a: t.a, b: t.b, tx: x, c: t.c, d: t.d, ty: y }
+                } else {
+                    let (sin, cos) = rotation.sin_cos();
+                    AffineTransform2D { a: cos, b: -sin, tx: x, c: sin, d: cos, ty: y }
+                };
+                plan.shaders.push(ShaderRegion {
+                    node_id,
+                    range: region_start..self.out.len(),
+                    world: outer_world * local,
+                    width,
+                    height,
+                    shader: fx.shader.clone(),
+                    params: fx.params.clone(),
+                    control: nearest_control(scene, node_id),
+                });
+            }
         }
     }
 
@@ -647,7 +892,9 @@ impl Cx<'_> {
                 }
                 if mw > 0.0 && mh > 0.0 {
                     self.out.push(PaintPrimitive::MaskDefStart { node_id: child_id, x: mx, y: my, width: mw, height: mh, luminance: false });
+                    self.in_mask_def += 1;
                     self.node(child_id, x, y, false, opacity, blurs);
+                    self.in_mask_def -= 1;
                     self.out.push(PaintPrimitive::MaskDefEnd { node_id: child_id });
                     self.out.push(PaintPrimitive::MaskApplyStart { node_id: child_id, x: mx, y: my, width: mw, height: mh });
                     active_mask = Some(child_id);

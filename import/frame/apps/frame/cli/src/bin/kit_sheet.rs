@@ -2,6 +2,7 @@
 //!
 //! ```text
 //! kit_sheet --out kit.png [--family knob|meter|button|switch|lever|panel] [--scale 2] [--swatch]
+//!           [--fx gpu|fallback|off]
 //! ```
 //! Every registered component (or one family), in a labelled grid, each
 //! bound to a demo param at a mid value so pointers and meters show a
@@ -36,6 +37,7 @@ fn run() -> Result<(), String> {
     let mut family: Option<String> = None;
     let mut scale = 1.0_f64;
     let mut swatch = false;
+    let mut fx = render::fx::Mode::Gpu;
     let mut args = std::env::args().skip(1);
     while let Some(a) = args.next() {
         match a.as_str() {
@@ -43,6 +45,7 @@ fn run() -> Result<(), String> {
             "--family" => family = args.next(),
             "--scale" => scale = args.next().ok_or("--scale needs a factor")?.parse().map_err(|e| format!("{e}"))?,
             "--swatch" => swatch = true,
+            "--fx" => fx = args.next().ok_or("--fx needs gpu|fallback|off")?.parse()?,
             other => return Err(format!("unknown arg {other}")),
         }
     }
@@ -177,10 +180,17 @@ fn run() -> Result<(), String> {
     let frame = rt.frame(0.0);
     let size = frame.node(frame.node(frame.pages()[0]).and_then(|p| p.children.first().copied()).ok_or("empty")?).ok_or("no root")?.size;
     let (w, h) = ((size.width * scale).ceil() as u32, (size.height * scale).ceil() as u32);
-    let mut vs = vello::Scene::new();
     let font = include_bytes!("../../assets/inter/Inter-Variable.ttf");
-    render::paint_scene_into(&mut vs, &frame, frame.pages()[0], kurbo::Affine::scale(scale), Some(render::TextFontRef { bytes: font, index: 0 }));
-    let px = render::offscreen::Offscreen::new()?.render(&vs, w, h, peniko::Color::from_rgba8(58, 58, 62, 255))?;
+    let values: std::collections::HashMap<_, _> =
+        rt.surface().controls.iter().map(|(id, c)| (*id, rt.position(*id, c))).collect();
+    let px = render::offscreen::Offscreen::new()?.render_with_effects(&render::fx::Frame {
+        transform: kurbo::Affine::scale(scale),
+        base: peniko::Color::from_rgba8(58, 58, 62, 255),
+        font: Some(render::TextFontRef { bytes: font, index: 0 }),
+        mode: fx,
+        values: Some(&values),
+        ..render::fx::Frame::new(&frame, frame.pages()[0], w, h)
+    })?;
     image::RgbaImage::from_raw(px.width, px.height, px.rgba).ok_or("bad pixels")?.save(&out).map_err(|e| format!("{out}: {e}"))?;
     println!("{{\"ok\":true,\"out\":\"{out}\",\"width\":{w},\"height\":{h}}}");
     Ok(())

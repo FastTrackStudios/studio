@@ -5,7 +5,7 @@ use std::time::{Duration, Instant};
 
 use document_proto::{NodeId, Scene};
 use vello::wgpu::{self, PresentMode};
-use vello::{AaConfig, RenderParams, Renderer, RendererOptions};
+use vello::{AaConfig, Renderer, RendererOptions};
 use winit::application::ApplicationHandler;
 use winit::dpi::LogicalSize;
 use winit::event::{ElementState, MouseButton, WindowEvent};
@@ -43,6 +43,8 @@ pub fn run(args: &Args) -> Result<(), String> {
         context: vello::util::RenderContext::new(),
         gpu: None,
         scene: vello::Scene::new(),
+        fx: args.fx,
+        fx_animating: false,
     };
     app.set_error(error);
     let event_loop = EventLoop::new().map_err(|e| format!("event loop: {e}"))?;
@@ -53,6 +55,8 @@ struct Gpu {
     window: Arc<Window>,
     surface: vello::util::RenderSurface<'static>,
     renderer: Renderer,
+    /// Light/shader effects around vello (see `render::fx`).
+    stage: render::fx::Stage,
 }
 
 /// Frame-time accounting for `--stats`, printed every couple of seconds.
@@ -101,7 +105,11 @@ struct App {
     cursor: Option<(f64, f64)>,
     context: vello::util::RenderContext,
     gpu: Option<Gpu>,
+    /// The banner, painted over the frame.
     scene: vello::Scene,
+    fx: render::fx::Mode,
+    /// The last frame had a time-dependent effect (a flicker): keep drawing.
+    fx_animating: bool,
 }
 
 impl App {
@@ -201,7 +209,8 @@ impl App {
             },
         )
         .map_err(|e| format!("renderer: {e}"))?;
-        Ok(Gpu { window, surface, renderer })
+        let stage = render::fx::Stage::new(&self.context.devices[surface.dev_id].device);
+        Ok(Gpu { window, surface, renderer, stage })
     }
 
     /// Cursor in surface coordinates and in logical window px.
@@ -232,30 +241,34 @@ impl App {
         }
 
         self.scene.reset();
-        self.player.paint(&mut self.scene, &view, t);
         if let Some((b, page, _, _)) = &self.banner {
             render::paint_scene_into(&mut self.scene, b, *page, kurbo::Affine::scale(scale), Some(font()));
         }
+        let (doc, page) = self.player.document(t);
+        let values = self.player.control_positions();
 
         let Some(gpu) = &mut self.gpu else { return };
         let device = &self.context.devices[gpu.surface.dev_id];
         let (w, h) = (gpu.surface.config.width, gpu.surface.config.height);
-        let params = RenderParams {
-            base_color: self.player.background(),
-            width: w,
-            height: h,
-            antialiasing_method: AaConfig::Area,
+        let frame = render::fx::Frame {
+            transform: view.affine(),
+            base: self.player.background(),
+            font: Some(font()),
+            mode: self.fx,
+            time_s: t / 1000.0,
+            values: Some(&values),
+            overlay: self.banner.is_some().then_some(&self.scene),
+            antialiasing: AaConfig::Area,
+            ..render::fx::Frame::new(&doc, page, w, h)
         };
-        if let Err(e) = gpu.renderer.render_to_texture(
-            &device.device,
-            &device.queue,
-            &self.scene,
-            &gpu.surface.target_view,
-            &params,
-        ) {
-            eprintln!("frame: render failed: {e}");
-            return;
-        }
+        let rendered = match gpu.stage.render(&device.device, &device.queue, &mut gpu.renderer, &frame) {
+            Ok(t) => t,
+            Err(e) => {
+                eprintln!("frame: render failed: {e}");
+                return;
+            }
+        };
+        self.fx_animating = gpu.stage.time_dependent();
         let (vello::wgpu::CurrentSurfaceTexture::Success(texture) | vello::wgpu::CurrentSurfaceTexture::Suboptimal(texture)) =
             gpu.surface.surface.get_current_texture()
         else {
@@ -267,7 +280,7 @@ impl App {
         gpu.surface.blitter.copy(
             &device.device,
             &mut encoder,
-            &gpu.surface.target_view,
+            &rendered.create_view(&wgpu::TextureViewDescriptor::default()),
             &texture.texture.create_view(&wgpu::TextureViewDescriptor::default()),
         );
         device.queue.submit([encoder.finish()]);
@@ -308,7 +321,7 @@ impl ApplicationHandler for App {
         {
             self.reload();
         }
-        if self.player.animating() {
+        if self.player.animating() || self.fx_animating {
             self.redraw();
         }
         event_loop.set_control_flow(match &self.watch {

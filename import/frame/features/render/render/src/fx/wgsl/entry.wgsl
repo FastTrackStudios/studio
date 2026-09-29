@@ -1,0 +1,28 @@
+
+// ── entry points (appended by the effects stage) ─────────────────────────
+
+struct FxVsOut {
+    @builtin(position) pos: vec4<f32>,
+}
+
+@vertex
+fn fx_vs_main(@builtin(vertex_index) i: u32) -> FxVsOut {
+    let uv = vec2<f32>(f32((i << 1u) & 2u), f32(i & 2u));
+    var o: FxVsOut;
+    o.pos = vec4<f32>(uv * vec2<f32>(2.0, -2.0) + vec2<f32>(-1.0, 1.0), 0.0, 1.0);
+    return o;
+}
+
+@fragment
+fn fx_fs_main(in: FxVsOut) -> @location(0) vec4<f32> {
+    let px = in.pos.xy;
+    let uv = px_to_local(px) / max(fx.node_size, vec2<f32>(1e-6));
+    if (any(uv < vec2<f32>(0.0)) || any(uv > vec2<f32>(1.0))) {
+        // Outside the node's box the subtree draws plainly.
+        return sample_src_px(px);
+    }
+    let c = effect(uv);
+    // Keep the result a valid premultiplied colour.
+    let a = clamp(c.a, 0.0, 1.0);
+    return vec4<f32>(clamp(c.rgb, vec3<f32>(0.0), vec3<f32>(a)), a);
+}

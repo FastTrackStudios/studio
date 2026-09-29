@@ -237,7 +237,7 @@ pub fn paint_primitives_into_scene_with(
                     }
                 }
                 for effect in effects {
-                    if matches!(effect.kind, EffectKind::DropShadow) {
+                    if matches!(effect.kind, EffectKind::DropShadow | EffectKind::Glow) {
                         paint_effect(
                             scene,
                             node_transform,
@@ -441,16 +441,14 @@ pub fn paint_primitives_into_scene_with(
                     }
                 }
                 for effect in effects {
-                    if matches!(effect.kind, EffectKind::DropShadow) {
-                        paint_effect(
-                            scene,
-                            base_transform,
-                            &bounds_rect,
-                            0.0,
-                            effect,
-                            blur_color_hint.as_ref(),
-                        );
-                    }
+                    // A glow can't follow an arbitrary outline here; emitters
+                    // are mostly round (LEDs, jewels), so it's a rounded box.
+                    let corner = match effect.kind {
+                        EffectKind::DropShadow => 0.0,
+                        EffectKind::Glow => width.min(height) * 0.5,
+                        _ => continue,
+                    };
+                    paint_effect(scene, base_transform, &bounds_rect, corner, effect, blur_color_hint.as_ref());
                 }
                 if !has_layer_blur {
                 if let Some(svg_text) = decoded_svg_text.as_deref() {
@@ -843,7 +841,7 @@ pub fn paint_primitives_into_scene_with(
         blur_color_hint: Option<&Rgba>,
     ) {
         match effect.kind {
-            EffectKind::DropShadow => {
+            EffectKind::DropShadow | EffectKind::Glow => {
                 // Spread expands the shadow rect outward in all directions
                 let shadow_rect = Rect::new(
                     base_rect.x0 + effect.offset_x - effect.spread,

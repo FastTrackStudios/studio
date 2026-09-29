@@ -37,7 +37,8 @@ pub fn run(args: &Args) -> Result<(), String> {
     };
 
     let mut offscreen = render::offscreen::Offscreen::new()?;
-    let mut scene = vello::Scene::new();
+    // The banner, painted over the frame.
+    let mut overlay = vello::Scene::new();
     let mut pixels = None;
     let mut spent = 0.0;
     for i in 0..args.frames {
@@ -55,13 +56,24 @@ pub fn run(args: &Args) -> Result<(), String> {
             }
         }
         player.tick(t);
-        scene.reset();
-        player.paint(&mut scene, &view, t);
+        overlay.reset();
         let message = error.as_deref().map(|e| args.source.short_error(e)).or_else(|| player.engine_banner());
         if let Some((b, page)) = message.and_then(|m| banner(&m, f64::from(w))) {
-            render::paint_scene_into(&mut scene, &b, page, kurbo::Affine::IDENTITY, Some(crate::player::font()));
+            render::paint_scene_into(&mut overlay, &b, page, kurbo::Affine::IDENTITY, Some(crate::player::font()));
         }
-        pixels = Some(offscreen.render(&scene, w, h, player.background())?);
+        // Time advances with the simulated clock, so a flicker animates.
+        let (doc, page) = player.document(t);
+        let values = player.control_positions();
+        pixels = Some(offscreen.render_with_effects(&render::fx::Frame {
+            transform: view.affine(),
+            base: player.background(),
+            font: Some(crate::player::font()),
+            mode: args.fx,
+            time_s: t / 1000.0,
+            values: Some(&values),
+            overlay: Some(&overlay),
+            ..render::fx::Frame::new(&doc, page, w, h)
+        })?);
         spent += started.elapsed().as_secs_f64() * 1000.0;
     }
 

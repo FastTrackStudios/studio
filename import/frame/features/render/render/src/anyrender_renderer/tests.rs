@@ -410,3 +410,118 @@ mod pixels {
         }
     }
 }
+
+// ── effects plan ─────────────────────────────────────────────────────────
+
+fn emission(intensity: f64, radius: f64) -> Option<doc::Emission> {
+    Some(doc::Emission { color: doc::Color::rgba(1.0, 0.5, 0.0, 1.0), intensity, radius })
+}
+
+#[test]
+fn scenes_without_effects_have_an_empty_plan_and_unchanged_primitives() {
+    let mut frame = node(NodeKind::Frame, 0.0, 0.0, 100.0, 100.0);
+    frame.transform = rot90(100.0, 100.0);
+    frame.opacity = 0.5;
+    let (scene, root) = scene_of(vec![(None, frame), (Some(0), red_rect(10.0, 0.0, 20.0, 10.0))]);
+    let (prims, plan) = build_scene_primitives_and_effects(&scene, root);
+    assert!(plan.is_empty());
+    assert_eq!(prims, build_scene_primitives(&scene, root));
+    assert_eq!(prims, build_scene_primitives_with(&scene, root, CollectOptions { emission_glow: false }));
+}
+
+#[test]
+fn emissive_draws_carry_world_transform_and_effective_opacity() {
+    let mut frame = node(NodeKind::Frame, 0.0, 0.0, 100.0, 100.0);
+    frame.transform = rot90(100.0, 100.0);
+    frame.opacity = 0.5;
+    let mut lamp = red_rect(10.0, 0.0, 20.0, 10.0);
+    lamp.opacity = 0.5;
+    lamp.emission = emission(2.0, 12.0);
+    let lamp_id = lamp.id;
+    let (scene, root) = scene_of(vec![(None, frame), (Some(0), lamp)]);
+    let (prims, plan) = build_scene_primitives_and_effects(&scene, root);
+    assert_eq!(plan.emissive.len(), 1);
+    let e = &plan.emissive[0];
+    assert_eq!(e.node_id, lamp_id);
+    assert!((e.strength - 2.0 * 0.25).abs() < 1e-9, "intensity × inherited opacity: {}", e.strength);
+    assert_eq!(e.radius, 12.0);
+    // World = the rotated frame's group.
+    assert_eq!(Some(e.world), groups(&prims).first().copied());
+    // The geometry is recoloured to the emission colour.
+    let Some(PaintPrimitive::Rect { fills, x, y, .. }) = e.primitives.first() else { panic!("{:?}", e.primitives) };
+    assert_eq!((*x, *y), (110.0, 100.0));
+    assert!(matches!(&fills[0].0, FillPaint::Solid(c) if c.r == 1.0 && c.g == 0.5 && c.a == 1.0));
+    // No glow in the primitives the GPU stage paints.
+    assert!(prims.iter().all(|p| !matches!(p, PaintPrimitive::Rect { effects, .. } if !effects.is_empty())));
+}
+
+#[test]
+fn fallback_draws_emission_as_a_glow_effect() {
+    let mut lamp = red_rect(10.0, 10.0, 20.0, 20.0);
+    lamp.opacity = 0.5;
+    lamp.emission = emission(1.0, 8.0);
+    let (scene, root) = scene_of(vec![(None, lamp)]);
+    let glow = |options| {
+        build_scene_primitives_with(&scene, root, options).into_iter().find_map(|p| match p {
+            PaintPrimitive::Rect { effects, .. } => effects.into_iter().find(|e| e.kind == EffectKind::Glow),
+            _ => None,
+        })
+    };
+    let g = glow(CollectOptions::default()).expect("a glow");
+    assert_eq!((g.offset_x, g.offset_y, g.radius), (0.0, 0.0, 8.0));
+    assert!((g.color.a - 0.5 * 0.85).abs() < 1e-9, "scales with opacity: {}", g.color.a);
+    assert!(glow(CollectOptions { emission_glow: false }).is_none());
+}
+
+#[test]
+fn shader_regions_cover_the_subtree_in_world_space() {
+    let mut outer = node(NodeKind::Frame, 0.0, 0.0, 100.0, 100.0);
+    outer.transform = rot90(100.0, 100.0);
+    let mut glass = node(NodeKind::Frame, 10.0, 20.0, 40.0, 30.0);
+    glass.fills = vec![solid(0.0, 0.0, 1.0, 1.0)];
+    glass.shader = Some(doc::ShaderFx { shader: "glass".into(), params: [("strength".to_string(), 0.3)].into() });
+    // A nested shader draws plainly inside the outer one.
+    let mut inner = red_rect(5.0, 5.0, 10.0, 10.0);
+    inner.shader = Some(doc::ShaderFx { shader: "crt".into(), params: Default::default() });
+    let glass_id = glass.id;
+    let after = red_rect(0.0, 90.0, 10.0, 10.0);
+    let (scene, root) = scene_of(vec![(None, outer), (Some(0), glass), (Some(1), inner), (Some(0), after)]);
+    let (prims, plan) = build_scene_primitives_and_effects(&scene, root);
+    assert_eq!(plan.shaders.len(), 1);
+    let r = &plan.shaders[0];
+    assert_eq!(r.node_id, glass_id);
+    assert_eq!(r.shader, "glass");
+    assert_eq!(r.params.get("strength"), Some(&0.3));
+    assert_eq!((r.width, r.height), (40.0, 30.0));
+    // The glass frame and its child, and nothing after.
+    let ids: Vec<_> = prims[r.range.clone()]
+        .iter()
+        .filter_map(|p| match p {
+            PaintPrimitive::Rect { node_id, .. } => Some(*node_id),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(ids.len(), 2);
+    assert_eq!(ids[0], glass_id);
+    // Local (0,0) is the box origin, rotated with the outer frame:
+    // flattened (110, 120) → rotated about (100, 100).
+    let g = groups(&prims)[0];
+    assert_eq!(r.world.transform_point(0.0, 0.0), g.transform_point(110.0, 120.0));
+    assert_eq!(r.world.transform_point(40.0, 0.0), g.transform_point(150.0, 120.0));
+    assert!(!plan.time_dependent(|_| None));
+}
+
+#[test]
+fn flicker_is_time_dependent_and_modulates_its_subtrees_light() {
+    let mut tube = node(NodeKind::Frame, 0.0, 0.0, 50.0, 50.0);
+    tube.shader = Some(doc::ShaderFx { shader: "flicker".into(), params: Default::default() });
+    let mut lamp = red_rect(5.0, 5.0, 10.0, 10.0);
+    lamp.emission = emission(1.0, 6.0);
+    let (scene, root) = scene_of(vec![(None, tube), (Some(0), lamp)]);
+    let (_, plan) = build_scene_primitives_and_effects(&scene, root);
+    assert!(plan.time_dependent(|_| None));
+    assert!(plan.emissive[0].flicker.is_some());
+    let levels: Vec<f64> = (0..50).map(|i| flicker_level(f64::from(i) * 0.037, &Default::default())).collect();
+    assert!(levels.iter().all(|l| (0.0..=1.0).contains(l)));
+    assert!(levels.iter().any(|l| (l - levels[0]).abs() > 0.01), "it varies over time");
+}

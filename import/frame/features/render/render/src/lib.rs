@@ -10,11 +10,13 @@ pub mod anyrender_renderer;
 pub mod svg;
 
 pub use anyrender_renderer::{
-    build_scene_layout_boxes, build_scene_primitives, collect_render_diagnostics, LayoutBox, PaintPrimitive,
-    RenderDiagnostics, Rgba,
+    build_scene_layout_boxes, build_scene_primitives, build_scene_primitives_and_effects, build_scene_primitives_with,
+    collect_render_diagnostics, CollectOptions, EffectsPlan, LayoutBox, PaintPrimitive, RenderDiagnostics, Rgba,
 };
 #[cfg(feature = "anyrender")]
 pub use anyrender_renderer::{paint_primitives_into_scene_with, paint_scene_into, TextFontRef};
 
+#[cfg(feature = "anyrender")]
+pub mod fx;
 #[cfg(feature = "anyrender")]
 pub mod offscreen;

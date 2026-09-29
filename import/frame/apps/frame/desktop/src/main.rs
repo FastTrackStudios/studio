@@ -1,7 +1,7 @@
 //! `frame` — the desktop surface player.
 //!
 //! ```text
-//! frame [FILE.fm | FILE.frame] [--theme stage-dark|daylight] [--stats] [--size WxH]
+//! frame [FILE.fm | FILE.frame] [--theme stage-dark|daylight] [--stats] [--size WxH] [--no-fx | --fx gpu|fallback|off]
 //! frame [FILE] --screenshot OUT.png [--frames N] [--script drag-first-knob]
 //! frame [FILE] --engine ws://127.0.0.1:4040/vox [--rig guitar] [...]
 //! frame DIR                        # gallery: ] / Tab next, [ / Shift-Tab previous
@@ -68,6 +68,9 @@ pub struct Args {
     /// Extra catalogs the mock engine serves alongside the demo rig
     /// (`--catalog FILE`, plus any `*.catalog.json` next to the surfaces).
     pub catalogs: Vec<PathBuf>,
+    /// Light/shader effects: the GPU stage by default; `--no-fx` = the
+    /// vector fallback (soft glows, no shaders).
+    pub fx: render::fx::Mode,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -75,7 +78,7 @@ pub enum Script {
     DragFirstKnob,
 }
 
-const USAGE: &str = "usage: frame [FILE.fm|FILE.frame] [--theme stage-dark|daylight] [--stats] [--size WxH]\n       \
+const USAGE: &str = "usage: frame [FILE.fm|FILE.frame] [--theme stage-dark|daylight] [--stats] [--size WxH] [--no-fx|--fx gpu|fallback|off]\n       \
                      frame [FILE] --screenshot OUT.png [--frames N] [--script drag-first-knob]\n       \
                      frame [FILE] --engine ws://HOST:PORT/vox [--rig NAME] [...]\n       \
                      frame DIR   (gallery of every .fm/.frame in DIR; ] / Tab next, [ / Shift-Tab previous)";
@@ -94,6 +97,7 @@ fn parse_args(args: impl IntoIterator<Item = String>) -> Result<Args, String> {
         script: None,
         engine: None,
         catalogs: Vec::new(),
+        fx: render::fx::Mode::Gpu,
     };
     let mut args = args.into_iter();
     while let Some(a) = args.next() {
@@ -107,6 +111,8 @@ fn parse_args(args: impl IntoIterator<Item = String>) -> Result<Args, String> {
                 }
             }
             "--stats" => out.stats = true,
+            "--no-fx" => out.fx = render::fx::Mode::Fallback,
+            "--fx" => out.fx = value()?.parse()?,
             "--size" => {
                 let v = value()?;
                 let (w, h) = v.split_once('x').ok_or("--size wants WxH")?;
@@ -251,6 +257,15 @@ mod tests {
         let a = args("--screenshot o.png --frames 5 --script drag-first-knob x.frame").unwrap();
         assert!(matches!(a.source, Source::Bundle(_)));
         assert_eq!((a.frames, a.script), (5, Some(Script::DragFirstKnob)));
+    }
+
+    #[test]
+    fn effects_default_to_gpu() {
+        use render::fx::Mode;
+        assert_eq!(args("s.fm").unwrap().fx, Mode::Gpu);
+        assert_eq!(args("s.fm --no-fx").unwrap().fx, Mode::Fallback);
+        assert_eq!(args("--fx off s.fm").unwrap().fx, Mode::Off);
+        assert!(args("--fx neon").is_err());
     }
 
     #[test]

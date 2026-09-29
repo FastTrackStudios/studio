@@ -1,4 +1,5 @@
 mod diagnostics;
+pub mod effects_plan;
 mod scene_collect;
 pub mod transform;
 mod types;
@@ -14,7 +15,11 @@ mod paint;
 mod tests;
 
 pub use diagnostics::collect_render_diagnostics;
-pub use scene_collect::{build_scene_layout_boxes, build_scene_primitives};
+pub use effects_plan::{flicker_level, EffectsPlan, EmissiveDraw, ShaderRegion};
+pub use scene_collect::{
+    build_scene_layout_boxes, build_scene_primitives, build_scene_primitives_and_effects, build_scene_primitives_with,
+    CollectOptions,
+};
 #[cfg(feature = "svg_export")]
 pub(crate) use scene_collect::fill_paint;
 pub use transform::AffineTransform2D;

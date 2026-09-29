@@ -31,7 +31,7 @@ fn build_effect_filter(
 
     let drop_shadows: Vec<&crate::anyrender_renderer::NodeEffect> = effects
         .iter()
-        .filter(|effect| matches!(effect.kind, EffectKind::DropShadow))
+        .filter(|effect| matches!(effect.kind, EffectKind::DropShadow | EffectKind::Glow))
         .collect();
     let inner_shadows: Vec<&crate::anyrender_renderer::NodeEffect> = effects
         .iter()
@@ -357,7 +357,7 @@ pub(super) fn push_rect_with_effects(
 
         let drop_shadows: Vec<&crate::anyrender_renderer::NodeEffect> = effects
             .iter()
-            .filter(|effect| matches!(effect.kind, EffectKind::DropShadow))
+            .filter(|effect| matches!(effect.kind, EffectKind::DropShadow | EffectKind::Glow))
             .collect();
 
         let mut filtered =
@@ -539,4 +539,26 @@ pub(super) fn push_group_with_blend_and_effects(
     }
 
     push_node(svg_doc, group_stack, group);
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::anyrender_renderer::{EffectKind, NodeEffect, Rgba};
+
+    #[test]
+    fn emission_glow_exports_as_a_gaussian_blur_filter() {
+        let glow = NodeEffect {
+            kind: EffectKind::Glow,
+            color: Rgba { r: 1.0, g: 0.4, b: 0.1, a: 0.8 },
+            offset_x: 0.0,
+            offset_y: 0.0,
+            radius: 12.0,
+            spread: 0.0,
+        };
+        let mut count = 0;
+        let (filter, _) = super::build_effect_filter("root", &mut count, &[glow], 10.0, 10.0, 20.0, 20.0).expect("a filter");
+        let svg = filter.to_string();
+        assert!(svg.contains("feGaussianBlur") && svg.contains("stdDeviation=\"6\""), "{svg}");
+        assert!(!svg.contains("feOffset dx"), "no offset: {svg}");
+    }
 }

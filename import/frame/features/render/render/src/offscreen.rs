@@ -10,6 +10,8 @@ pub struct Offscreen {
     device: wgpu::Device,
     queue: wgpu::Queue,
     renderer: Renderer,
+    /// The effects stage, created on first use.
+    fx: Option<crate::fx::Stage>,
 }
 
 /// Straight RGBA8 pixels, row-major, no padding.
@@ -46,7 +48,7 @@ impl Offscreen {
             },
         )
         .map_err(|e| format!("failed to create renderer: {e}"))?;
-        Ok(Self { device, queue, renderer })
+        Ok(Self { device, queue, renderer, fx: None })
     }
 
     /// Render `scene` at `width × height` over `base`.
@@ -79,6 +81,24 @@ impl Offscreen {
             )
             .map_err(|e| format!("render_to_texture failed: {e}"))?;
 
+        self.read_back(&texture)
+    }
+
+    /// Render a document through the effects stage ([`crate::fx`]), in
+    /// `frame.mode`. Antialiasing is MSAA 8×, like [`Self::render`].
+    ///
+    /// # Errors
+    /// On GPU failures.
+    pub fn render_with_effects(&mut self, frame: &crate::fx::Frame<'_>) -> Result<Pixels, String> {
+        let frame = crate::fx::Frame { antialiasing: AaConfig::Msaa8, ..*frame };
+        let stage = self.fx.get_or_insert_with(|| crate::fx::Stage::new(&self.device));
+        let texture = stage.render(&self.device, &self.queue, &mut self.renderer, &frame)?;
+        self.read_back(&texture)
+    }
+
+    /// Copy an `Rgba8Unorm` texture back to the CPU.
+    fn read_back(&self, texture: &wgpu::Texture) -> Result<Pixels, String> {
+        let (width, height) = (texture.width(), texture.height());
         let unpadded = width * 4;
         let padded = unpadded.div_ceil(256) * 256;
         let buffer = self.device.create_buffer(&wgpu::BufferDescriptor {
@@ -89,7 +109,7 @@ impl Offscreen {
         });
         let mut encoder = self.device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: Some("frame-offscreen-copy") });
         encoder.copy_texture_to_buffer(
-            wgpu::TexelCopyTextureInfo { texture: &texture, mip_level: 0, origin: wgpu::Origin3d::ZERO, aspect: wgpu::TextureAspect::All },
+            wgpu::TexelCopyTextureInfo { texture, mip_level: 0, origin: wgpu::Origin3d::ZERO, aspect: wgpu::TextureAspect::All },
             wgpu::TexelCopyBufferInfo {
                 buffer: &buffer,
                 layout: wgpu::TexelCopyBufferLayout { offset: 0, bytes_per_row: Some(padded), rows_per_image: Some(height) },
