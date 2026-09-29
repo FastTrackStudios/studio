@@ -20,6 +20,7 @@
 
 pub mod boutique;
 pub mod controls;
+pub mod deluxe;
 pub mod draw;
 pub mod knobs;
 pub mod meters;
