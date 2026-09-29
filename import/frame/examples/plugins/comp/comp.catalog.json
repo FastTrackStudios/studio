@@ -1,0 +1,1193 @@
+{
+  "id": "fts.comp",
+  "version": 1,
+  "params": [
+    {
+      "addr": "1176/input",
+      "name": "Input",
+      "short_name": null,
+      "group": "FET",
+      "kind": "Continuous",
+      "range": {
+        "min": -48.0,
+        "max": 0.0,
+        "scale": "Linear",
+        "unit": "Db",
+        "steps": null
+      },
+      "default": 0.5,
+      "bipolar": false,
+      "featured": true
+    },
+    {
+      "addr": "1176/output",
+      "name": "Output",
+      "short_name": null,
+      "group": "FET",
+      "kind": "Continuous",
+      "range": {
+        "min": -48.0,
+        "max": 0.0,
+        "scale": "Linear",
+        "unit": "Db",
+        "steps": null
+      },
+      "default": 0.625,
+      "bipolar": false,
+      "featured": true
+    },
+    {
+      "addr": "1176/attack",
+      "name": "Attack",
+      "short_name": null,
+      "group": "FET",
+      "kind": "Continuous",
+      "range": {
+        "min": 1.0,
+        "max": 7.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": null
+      },
+      "default": 0.3333333333333333,
+      "bipolar": false,
+      "featured": true
+    },
+    {
+      "addr": "1176/release",
+      "name": "Release",
+      "short_name": null,
+      "group": "FET",
+      "kind": "Continuous",
+      "range": {
+        "min": 1.0,
+        "max": 7.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": null
+      },
+      "default": 0.6666666666666666,
+      "bipolar": false,
+      "featured": true
+    },
+    {
+      "addr": "1176/ratio",
+      "name": "Ratio",
+      "short_name": null,
+      "group": "FET",
+      "kind": {
+        "Choice": {
+          "options": [
+            "4",
+            "8",
+            "12",
+            "20",
+            "All"
+          ]
+        }
+      },
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 5
+      },
+      "default": 0.0,
+      "bipolar": false,
+      "featured": true
+    },
+    {
+      "addr": "1176/meter",
+      "name": "Meter",
+      "short_name": null,
+      "group": "FET",
+      "kind": {
+        "Choice": {
+          "options": [
+            "GR",
+            "+8",
+            "+4",
+            "Off"
+          ]
+        }
+      },
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 4
+      },
+      "default": 0.0,
+      "bipolar": false,
+      "featured": true
+    },
+    {
+      "addr": "1176/on",
+      "name": "Power",
+      "short_name": null,
+      "group": "FET",
+      "kind": "Toggle",
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 2
+      },
+      "default": 1.0,
+      "bipolar": false,
+      "featured": true
+    },
+    {
+      "addr": "la2a/gain",
+      "name": "Gain",
+      "short_name": "Gain",
+      "group": null,
+      "kind": "Continuous",
+      "range": {
+        "min": 0.0,
+        "max": 100.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 101
+      },
+      "default": 0.4,
+      "bipolar": false,
+      "featured": true
+    },
+    {
+      "addr": "la2a/peak_reduction",
+      "name": "Peak Reduction",
+      "short_name": "Peak Red",
+      "group": null,
+      "kind": "Continuous",
+      "range": {
+        "min": 0.0,
+        "max": 100.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 101
+      },
+      "default": 0.45,
+      "bipolar": false,
+      "featured": true
+    },
+    {
+      "addr": "la2a/limit",
+      "name": "Compress / Limit",
+      "short_name": "Limit",
+      "group": null,
+      "kind": "Toggle",
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 2
+      },
+      "default": 0.0,
+      "bipolar": false,
+      "featured": true
+    },
+    {
+      "addr": "la2a/meter",
+      "name": "Meter",
+      "short_name": null,
+      "group": null,
+      "kind": {
+        "Choice": {
+          "options": [
+            "Output +10",
+            "Gain Reduction",
+            "Output +4"
+          ]
+        }
+      },
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 3
+      },
+      "default": 0.5,
+      "bipolar": false,
+      "featured": true
+    },
+    {
+      "addr": "la2a/power",
+      "name": "Power",
+      "short_name": null,
+      "group": null,
+      "kind": "Toggle",
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 2
+      },
+      "default": 1.0,
+      "bipolar": false,
+      "featured": true
+    },
+    {
+      "addr": "cl1b/threshold",
+      "name": "Threshold",
+      "short_name": "Thresh",
+      "group": null,
+      "kind": "Continuous",
+      "range": {
+        "min": -40.0,
+        "max": 0.0,
+        "scale": "Linear",
+        "unit": "Db",
+        "steps": null
+      },
+      "default": 0.5,
+      "bipolar": false,
+      "featured": true
+    },
+    {
+      "addr": "cl1b/ratio",
+      "name": "Ratio",
+      "short_name": null,
+      "group": null,
+      "kind": "Continuous",
+      "range": {
+        "min": 2.0,
+        "max": 10.0,
+        "scale": "Linear",
+        "unit": "Ratio",
+        "steps": null
+      },
+      "default": 0.25,
+      "bipolar": false,
+      "featured": true
+    },
+    {
+      "addr": "cl1b/attack",
+      "name": "Attack",
+      "short_name": null,
+      "group": null,
+      "kind": "Continuous",
+      "range": {
+        "min": 0.5,
+        "max": 300.0,
+        "scale": "Logarithmic",
+        "unit": "Milliseconds",
+        "steps": null
+      },
+      "default": 0.4683078343860212,
+      "bipolar": false,
+      "featured": true
+    },
+    {
+      "addr": "cl1b/release",
+      "name": "Release",
+      "short_name": null,
+      "group": null,
+      "kind": "Continuous",
+      "range": {
+        "min": 0.05,
+        "max": 3.0,
+        "scale": "Logarithmic",
+        "unit": "Seconds",
+        "steps": null
+      },
+      "default": 0.5623818557528477,
+      "bipolar": false,
+      "featured": true
+    },
+    {
+      "addr": "cl1b/timing",
+      "name": "Attack / Release Mode",
+      "short_name": "Timing",
+      "group": null,
+      "kind": {
+        "Choice": {
+          "options": [
+            "Fixed",
+            "Fix-Man",
+            "Manual"
+          ]
+        }
+      },
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 3
+      },
+      "default": 1.0,
+      "bipolar": false,
+      "featured": true
+    },
+    {
+      "addr": "cl1b/gain",
+      "name": "Gain",
+      "short_name": null,
+      "group": null,
+      "kind": "Continuous",
+      "range": {
+        "min": 0.0,
+        "max": 24.0,
+        "scale": "Linear",
+        "unit": "Db",
+        "steps": null
+      },
+      "default": 0.16666666666666666,
+      "bipolar": false,
+      "featured": true
+    },
+    {
+      "addr": "cl1b/power",
+      "name": "Power",
+      "short_name": null,
+      "group": null,
+      "kind": "Toggle",
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 2
+      },
+      "default": 1.0,
+      "bipolar": false,
+      "featured": true
+    },
+    {
+      "addr": "fairchild/input_gain",
+      "name": "Input Gain",
+      "short_name": "Input",
+      "group": null,
+      "kind": "Continuous",
+      "range": {
+        "min": -20.0,
+        "max": 0.0,
+        "scale": "Linear",
+        "unit": "Db",
+        "steps": null
+      },
+      "default": 1.0,
+      "bipolar": false,
+      "featured": true
+    },
+    {
+      "addr": "fairchild/threshold",
+      "name": "Threshold",
+      "short_name": "Thresh",
+      "group": null,
+      "kind": "Continuous",
+      "range": {
+        "min": -40.0,
+        "max": 0.0,
+        "scale": "Linear",
+        "unit": "Db",
+        "steps": null
+      },
+      "default": 0.55,
+      "bipolar": false,
+      "featured": true
+    },
+    {
+      "addr": "fairchild/time_constant",
+      "name": "Time Constant",
+      "short_name": "Time",
+      "group": null,
+      "kind": {
+        "Choice": {
+          "options": [
+            "1",
+            "2",
+            "3",
+            "4",
+            "5 (auto)",
+            "6 (auto)"
+          ]
+        }
+      },
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 6
+      },
+      "default": 0.2,
+      "bipolar": false,
+      "featured": true
+    },
+    {
+      "addr": "fairchild/agc",
+      "name": "AGC",
+      "short_name": null,
+      "group": null,
+      "kind": {
+        "Choice": {
+          "options": [
+            "Left / Right",
+            "Lat / Vert"
+          ]
+        }
+      },
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 2
+      },
+      "default": 0.0,
+      "bipolar": false,
+      "featured": true
+    },
+    {
+      "addr": "fairchild/output",
+      "name": "Output",
+      "short_name": null,
+      "group": null,
+      "kind": "Continuous",
+      "range": {
+        "min": 0.0,
+        "max": 20.0,
+        "scale": "Linear",
+        "unit": "Db",
+        "steps": null
+      },
+      "default": 0.3,
+      "bipolar": false,
+      "featured": true
+    },
+    {
+      "addr": "fairchild/power",
+      "name": "Power",
+      "short_name": null,
+      "group": null,
+      "kind": "Toggle",
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 2
+      },
+      "default": 1.0,
+      "bipolar": false,
+      "featured": true
+    },
+    {
+      "addr": "varimu/input",
+      "name": "Input",
+      "short_name": null,
+      "group": null,
+      "kind": "Continuous",
+      "range": {
+        "min": -8.0,
+        "max": 8.0,
+        "scale": "Linear",
+        "unit": "Db",
+        "steps": 11
+      },
+      "default": 0.5,
+      "bipolar": false,
+      "featured": true
+    },
+    {
+      "addr": "varimu/threshold",
+      "name": "Threshold",
+      "short_name": "Thresh",
+      "group": null,
+      "kind": "Continuous",
+      "range": {
+        "min": -40.0,
+        "max": 0.0,
+        "scale": "Linear",
+        "unit": "Db",
+        "steps": null
+      },
+      "default": 0.5,
+      "bipolar": false,
+      "featured": true
+    },
+    {
+      "addr": "varimu/attack",
+      "name": "Attack",
+      "short_name": null,
+      "group": null,
+      "kind": "Continuous",
+      "range": {
+        "min": 25.0,
+        "max": 70.0,
+        "scale": "Linear",
+        "unit": "Milliseconds",
+        "steps": null
+      },
+      "default": 0.4444444444444444,
+      "bipolar": false,
+      "featured": true
+    },
+    {
+      "addr": "varimu/recovery",
+      "name": "Recovery",
+      "short_name": null,
+      "group": null,
+      "kind": {
+        "Choice": {
+          "options": [
+            "0.2 s",
+            "0.4 s",
+            "0.6 s",
+            "1.2 s",
+            "2.5 s"
+          ]
+        }
+      },
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 5
+      },
+      "default": 0.5,
+      "bipolar": false,
+      "featured": true
+    },
+    {
+      "addr": "varimu/output",
+      "name": "Output",
+      "short_name": null,
+      "group": null,
+      "kind": "Continuous",
+      "range": {
+        "min": -6.0,
+        "max": 18.0,
+        "scale": "Linear",
+        "unit": "Db",
+        "steps": null
+      },
+      "default": 0.25,
+      "bipolar": false,
+      "featured": true
+    },
+    {
+      "addr": "varimu/limit",
+      "name": "Comp / Limit",
+      "short_name": "Limit",
+      "group": null,
+      "kind": "Toggle",
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 2
+      },
+      "default": 0.0,
+      "bipolar": false,
+      "featured": true
+    },
+    {
+      "addr": "varimu/hp_sc",
+      "name": "HP Sidechain 100 Hz",
+      "short_name": "HP SC",
+      "group": null,
+      "kind": "Toggle",
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 2
+      },
+      "default": 1.0,
+      "bipolar": false,
+      "featured": true
+    },
+    {
+      "addr": "varimu/power",
+      "name": "Power",
+      "short_name": null,
+      "group": null,
+      "kind": "Toggle",
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 2
+      },
+      "default": 1.0,
+      "bipolar": false,
+      "featured": true
+    },
+    {
+      "addr": "sslbus/threshold",
+      "name": "Threshold",
+      "short_name": null,
+      "group": null,
+      "kind": "Continuous",
+      "range": {
+        "min": -30.0,
+        "max": 0.0,
+        "scale": "Linear",
+        "unit": "Db",
+        "steps": null
+      },
+      "default": 0.6,
+      "bipolar": false,
+      "featured": true
+    },
+    {
+      "addr": "sslbus/ratio",
+      "name": "Ratio",
+      "short_name": null,
+      "group": null,
+      "kind": {
+        "Choice": {
+          "options": [
+            "2:1",
+            "4:1",
+            "10:1"
+          ]
+        }
+      },
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 3
+      },
+      "default": 0.5,
+      "bipolar": false,
+      "featured": true
+    },
+    {
+      "addr": "sslbus/attack",
+      "name": "Attack",
+      "short_name": null,
+      "group": null,
+      "kind": {
+        "Choice": {
+          "options": [
+            "0.1 ms",
+            "0.3 ms",
+            "1 ms",
+            "3 ms",
+            "10 ms",
+            "30 ms"
+          ]
+        }
+      },
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 6
+      },
+      "default": 0.6,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "sslbus/release",
+      "name": "Release",
+      "short_name": null,
+      "group": null,
+      "kind": {
+        "Choice": {
+          "options": [
+            "0.1 s",
+            "0.3 s",
+            "0.6 s",
+            "1.2 s",
+            "Auto"
+          ]
+        }
+      },
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 5
+      },
+      "default": 1.0,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "sslbus/makeup",
+      "name": "Make-up",
+      "short_name": null,
+      "group": null,
+      "kind": "Continuous",
+      "range": {
+        "min": 0.0,
+        "max": 18.0,
+        "scale": "Linear",
+        "unit": "Db",
+        "steps": null
+      },
+      "default": 0.2222222222222222,
+      "bipolar": false,
+      "featured": true
+    },
+    {
+      "addr": "sslbus/mix",
+      "name": "Mix",
+      "short_name": null,
+      "group": null,
+      "kind": "Continuous",
+      "range": {
+        "min": 0.0,
+        "max": 100.0,
+        "scale": "Linear",
+        "unit": "Percent",
+        "steps": null
+      },
+      "default": 1.0,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "sslbus/in",
+      "name": "In",
+      "short_name": null,
+      "group": null,
+      "kind": "Toggle",
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 2
+      },
+      "default": 1.0,
+      "bipolar": false,
+      "featured": true
+    },
+    {
+      "addr": "dbx160/threshold",
+      "name": "Threshold",
+      "short_name": null,
+      "group": null,
+      "kind": "Continuous",
+      "range": {
+        "min": -40.0,
+        "max": 0.0,
+        "scale": "Linear",
+        "unit": "Db",
+        "steps": null
+      },
+      "default": 0.5,
+      "bipolar": false,
+      "featured": true
+    },
+    {
+      "addr": "dbx160/ratio",
+      "name": "Compression",
+      "short_name": null,
+      "group": null,
+      "kind": "Continuous",
+      "range": {
+        "min": 1.0,
+        "max": 60.0,
+        "scale": {
+          "Curve": {
+            "curve": {
+              "Points": {
+                "points": [
+                  {
+                    "x": 0.0,
+                    "y": 0.0
+                  },
+                  {
+                    "x": 0.125,
+                    "y": 0.00847457627118644
+                  },
+                  {
+                    "x": 0.25,
+                    "y": 0.01694915254237288
+                  },
+                  {
+                    "x": 0.375,
+                    "y": 0.03389830508474576
+                  },
+                  {
+                    "x": 0.5,
+                    "y": 0.05084745762711865
+                  },
+                  {
+                    "x": 0.625,
+                    "y": 0.0847457627118644
+                  },
+                  {
+                    "x": 0.75,
+                    "y": 0.15254237288135594
+                  },
+                  {
+                    "x": 0.875,
+                    "y": 0.3220338983050847
+                  },
+                  {
+                    "x": 1.0,
+                    "y": 1.0
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "unit": "Ratio",
+        "steps": null
+      },
+      "default": 0.4999999999999982,
+      "bipolar": false,
+      "featured": true
+    },
+    {
+      "addr": "dbx160/output",
+      "name": "Output Gain",
+      "short_name": null,
+      "group": null,
+      "kind": "Continuous",
+      "range": {
+        "min": -20.0,
+        "max": 20.0,
+        "scale": "Linear",
+        "unit": "Db",
+        "steps": null
+      },
+      "default": 0.5,
+      "bipolar": true,
+      "featured": true
+    },
+    {
+      "addr": "dbx160/meter",
+      "name": "Meter",
+      "short_name": null,
+      "group": null,
+      "kind": {
+        "Choice": {
+          "options": [
+            "Input",
+            "Output",
+            "Gain Change"
+          ]
+        }
+      },
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 3
+      },
+      "default": 1.0,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "distressor/input",
+      "name": "Input",
+      "short_name": null,
+      "group": null,
+      "kind": "Continuous",
+      "range": {
+        "min": 0.0,
+        "max": 10.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": null
+      },
+      "default": 0.5,
+      "bipolar": false,
+      "featured": true
+    },
+    {
+      "addr": "distressor/attack",
+      "name": "Attack",
+      "short_name": null,
+      "group": null,
+      "kind": "Continuous",
+      "range": {
+        "min": 0.05,
+        "max": 50.0,
+        "scale": "Logarithmic",
+        "unit": "Milliseconds",
+        "steps": null
+      },
+      "default": 0.6666666666666667,
+      "bipolar": false,
+      "featured": true
+    },
+    {
+      "addr": "distressor/release",
+      "name": "Release",
+      "short_name": null,
+      "group": null,
+      "kind": "Continuous",
+      "range": {
+        "min": 50.0,
+        "max": 3500.0,
+        "scale": "Logarithmic",
+        "unit": "Milliseconds",
+        "steps": null
+      },
+      "default": 0.4894536590505323,
+      "bipolar": false,
+      "featured": true
+    },
+    {
+      "addr": "distressor/output",
+      "name": "Output",
+      "short_name": null,
+      "group": null,
+      "kind": "Continuous",
+      "range": {
+        "min": -12.0,
+        "max": 24.0,
+        "scale": "Linear",
+        "unit": "Db",
+        "steps": null
+      },
+      "default": 0.3333333333333333,
+      "bipolar": true,
+      "featured": true
+    },
+    {
+      "addr": "distressor/ratio",
+      "name": "Ratio",
+      "short_name": null,
+      "group": null,
+      "kind": {
+        "Choice": {
+          "options": [
+            "1:1",
+            "2:1",
+            "3:1",
+            "4:1",
+            "6:1",
+            "10:1",
+            "20:1",
+            "Nuke"
+          ]
+        }
+      },
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 8
+      },
+      "default": 0.42857142857142855,
+      "bipolar": false,
+      "featured": true
+    },
+    {
+      "addr": "distressor/detector",
+      "name": "Detector",
+      "short_name": null,
+      "group": null,
+      "kind": {
+        "Choice": {
+          "options": [
+            "Off",
+            "HP",
+            "HP+"
+          ]
+        }
+      },
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 3
+      },
+      "default": 0.0,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "distressor/audio",
+      "name": "Audio",
+      "short_name": null,
+      "group": null,
+      "kind": {
+        "Choice": {
+          "options": [
+            "Clean",
+            "Dist 2",
+            "Dist 3"
+          ]
+        }
+      },
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 3
+      },
+      "default": 0.0,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "distressor/mix",
+      "name": "Mix",
+      "short_name": null,
+      "group": null,
+      "kind": "Continuous",
+      "range": {
+        "min": 0.0,
+        "max": 100.0,
+        "scale": "Linear",
+        "unit": "Percent",
+        "steps": null
+      },
+      "default": 1.0,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "distressor/in",
+      "name": "In",
+      "short_name": null,
+      "group": null,
+      "kind": "Toggle",
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 2
+      },
+      "default": 1.0,
+      "bipolar": false,
+      "featured": false
+    }
+  ],
+  "actions": [],
+  "streams": [
+    {
+      "id": "1176/gr",
+      "name": "Gain Reduction",
+      "kind": "GainReduction",
+      "rate_hz": 30.0
+    },
+    {
+      "id": "1176/out",
+      "name": "Output Level",
+      "kind": {
+        "Level": {
+          "channels": 2
+        }
+      },
+      "rate_hz": 30.0
+    },
+    {
+      "id": "la2a/gr",
+      "name": "LA-2A Gain Reduction",
+      "kind": "GainReduction",
+      "rate_hz": 30.0
+    },
+    {
+      "id": "la2a/out",
+      "name": "LA-2A Output",
+      "kind": {
+        "Level": {
+          "channels": 2
+        }
+      },
+      "rate_hz": 30.0
+    },
+    {
+      "id": "cl1b/gr",
+      "name": "CL 1B Gain Reduction",
+      "kind": "GainReduction",
+      "rate_hz": 30.0
+    },
+    {
+      "id": "cl1b/out",
+      "name": "CL 1B Output",
+      "kind": {
+        "Level": {
+          "channels": 2
+        }
+      },
+      "rate_hz": 30.0
+    },
+    {
+      "id": "fairchild/gr",
+      "name": "670 Gain Reduction",
+      "kind": "GainReduction",
+      "rate_hz": 30.0
+    },
+    {
+      "id": "fairchild/out",
+      "name": "670 Output",
+      "kind": {
+        "Level": {
+          "channels": 2
+        }
+      },
+      "rate_hz": 30.0
+    },
+    {
+      "id": "varimu/gr",
+      "name": "Vari-Mu Gain Reduction",
+      "kind": "GainReduction",
+      "rate_hz": 30.0
+    },
+    {
+      "id": "varimu/out",
+      "name": "Vari-Mu Output",
+      "kind": {
+        "Level": {
+          "channels": 2
+        }
+      },
+      "rate_hz": 30.0
+    },
+    {
+      "id": "sslbus/gr",
+      "name": "Gain Reduction",
+      "kind": "GainReduction",
+      "rate_hz": 30.0
+    },
+    {
+      "id": "dbx160/gr",
+      "name": "Gain Reduction",
+      "kind": "GainReduction",
+      "rate_hz": 30.0
+    },
+    {
+      "id": "dbx160/meter_level",
+      "name": "Meter (METER select)",
+      "kind": {
+        "Level": {
+          "channels": 1
+        }
+      },
+      "rate_hz": 30.0
+    },
+    {
+      "id": "distressor/gr",
+      "name": "Gain Reduction",
+      "kind": "GainReduction",
+      "rate_hz": 30.0
+    }
+  ],
+  "collections": []
+}

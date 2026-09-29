@@ -1,0 +1,1236 @@
+{
+  "id": "fts.eq",
+  "version": 1,
+  "params": [
+    {
+      "addr": "pultec/low_boost",
+      "name": "Low Boost",
+      "short_name": null,
+      "group": null,
+      "kind": "Continuous",
+      "range": {
+        "min": 0.0,
+        "max": 13.0,
+        "scale": "Linear",
+        "unit": "Db",
+        "steps": null
+      },
+      "default": 0.0,
+      "bipolar": false,
+      "featured": true
+    },
+    {
+      "addr": "pultec/low_atten",
+      "name": "Low Atten",
+      "short_name": null,
+      "group": null,
+      "kind": "Continuous",
+      "range": {
+        "min": 0.0,
+        "max": 13.0,
+        "scale": "Linear",
+        "unit": "Db",
+        "steps": null
+      },
+      "default": 0.0,
+      "bipolar": false,
+      "featured": true
+    },
+    {
+      "addr": "pultec/low_freq",
+      "name": "Low Frequency",
+      "short_name": null,
+      "group": null,
+      "kind": {
+        "Choice": {
+          "options": [
+            "20 Hz",
+            "30 Hz",
+            "60 Hz",
+            "100 Hz"
+          ]
+        }
+      },
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 4
+      },
+      "default": 0.3333333333333333,
+      "bipolar": false,
+      "featured": true
+    },
+    {
+      "addr": "pultec/high_boost",
+      "name": "High Boost",
+      "short_name": null,
+      "group": null,
+      "kind": "Continuous",
+      "range": {
+        "min": 0.0,
+        "max": 16.0,
+        "scale": "Linear",
+        "unit": "Db",
+        "steps": null
+      },
+      "default": 0.0,
+      "bipolar": false,
+      "featured": true
+    },
+    {
+      "addr": "pultec/high_boost_freq",
+      "name": "High Frequency",
+      "short_name": null,
+      "group": null,
+      "kind": {
+        "Choice": {
+          "options": [
+            "3 kHz",
+            "4 kHz",
+            "5 kHz",
+            "8 kHz",
+            "10 kHz",
+            "12 kHz",
+            "16 kHz"
+          ]
+        }
+      },
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 7
+      },
+      "default": 0.5,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "pultec/bandwidth",
+      "name": "Bandwidth",
+      "short_name": null,
+      "group": null,
+      "kind": "Continuous",
+      "range": {
+        "min": 0.0,
+        "max": 10.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": null
+      },
+      "default": 0.5,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "pultec/high_atten",
+      "name": "High Atten",
+      "short_name": null,
+      "group": null,
+      "kind": "Continuous",
+      "range": {
+        "min": 0.0,
+        "max": 16.0,
+        "scale": "Linear",
+        "unit": "Db",
+        "steps": null
+      },
+      "default": 0.0,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "pultec/high_atten_freq",
+      "name": "Atten Sel",
+      "short_name": null,
+      "group": null,
+      "kind": {
+        "Choice": {
+          "options": [
+            "5 kHz",
+            "10 kHz",
+            "20 kHz"
+          ]
+        }
+      },
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 3
+      },
+      "default": 0.5,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "pultec/trim",
+      "name": "Output",
+      "short_name": null,
+      "group": null,
+      "kind": "Continuous",
+      "range": {
+        "min": -24.0,
+        "max": 24.0,
+        "scale": "Linear",
+        "unit": "Db",
+        "steps": null
+      },
+      "default": 0.5,
+      "bipolar": true,
+      "featured": false
+    },
+    {
+      "addr": "pultec/eq_in",
+      "name": "EQ In",
+      "short_name": null,
+      "group": null,
+      "kind": "Toggle",
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 2
+      },
+      "default": 1.0,
+      "bipolar": false,
+      "featured": true
+    },
+    {
+      "addr": "sslch/hpf",
+      "name": "HPF",
+      "short_name": null,
+      "group": null,
+      "kind": "Continuous",
+      "range": {
+        "min": 16.0,
+        "max": 350.0,
+        "scale": {
+          "Curve": {
+            "curve": {
+              "Points": {
+                "points": [
+                  {
+                    "x": 0.0,
+                    "y": 0.0
+                  },
+                  {
+                    "x": 0.16666666666666666,
+                    "y": 0.011976047904191617
+                  },
+                  {
+                    "x": 0.3333333333333333,
+                    "y": 0.16167664670658682
+                  },
+                  {
+                    "x": 0.5,
+                    "y": 0.31137724550898205
+                  },
+                  {
+                    "x": 0.6666666666666666,
+                    "y": 0.5508982035928144
+                  },
+                  {
+                    "x": 0.8333333333333334,
+                    "y": 0.8502994011976048
+                  },
+                  {
+                    "x": 1.0,
+                    "y": 1.0
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "unit": "Hz",
+        "steps": null
+      },
+      "default": 0.16666666666666607,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "sslch/lpf",
+      "name": "LPF",
+      "short_name": null,
+      "group": null,
+      "kind": "Continuous",
+      "range": {
+        "min": 3000.0,
+        "max": 22000.0,
+        "scale": {
+          "Curve": {
+            "curve": {
+              "Points": {
+                "points": [
+                  {
+                    "x": 0.0,
+                    "y": 0.0
+                  },
+                  {
+                    "x": 0.16666666666666666,
+                    "y": 0.10526315789473684
+                  },
+                  {
+                    "x": 0.3333333333333333,
+                    "y": 0.2631578947368421
+                  },
+                  {
+                    "x": 0.5,
+                    "y": 0.47368421052631576
+                  },
+                  {
+                    "x": 0.6666666666666666,
+                    "y": 0.6842105263157895
+                  },
+                  {
+                    "x": 0.8333333333333334,
+                    "y": 0.8947368421052632
+                  },
+                  {
+                    "x": 1.0,
+                    "y": 1.0
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "unit": "Hz",
+        "steps": null
+      },
+      "default": 0.9999999999999982,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "sslch/filters_in",
+      "name": "Filters In",
+      "short_name": null,
+      "group": null,
+      "kind": "Toggle",
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 2
+      },
+      "default": 1.0,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "sslch/lf_gain",
+      "name": "LF Gain",
+      "short_name": null,
+      "group": null,
+      "kind": "Continuous",
+      "range": {
+        "min": -15.0,
+        "max": 15.0,
+        "scale": "Linear",
+        "unit": "Db",
+        "steps": null
+      },
+      "default": 0.5,
+      "bipolar": true,
+      "featured": true
+    },
+    {
+      "addr": "sslch/lf_freq",
+      "name": "LF Freq",
+      "short_name": null,
+      "group": null,
+      "kind": "Continuous",
+      "range": {
+        "min": 30.0,
+        "max": 450.0,
+        "scale": {
+          "Curve": {
+            "curve": {
+              "Points": {
+                "points": [
+                  {
+                    "x": 0.0,
+                    "y": 0.0
+                  },
+                  {
+                    "x": 0.2,
+                    "y": 0.047619047619047616
+                  },
+                  {
+                    "x": 0.4,
+                    "y": 0.16666666666666666
+                  },
+                  {
+                    "x": 0.6,
+                    "y": 0.40476190476190477
+                  },
+                  {
+                    "x": 0.8,
+                    "y": 0.6428571428571429
+                  },
+                  {
+                    "x": 1.0,
+                    "y": 1.0
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "unit": "Hz",
+        "steps": null
+      },
+      "default": 0.40000000000000036,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "sslch/lf_bell",
+      "name": "LF Bell",
+      "short_name": null,
+      "group": null,
+      "kind": "Toggle",
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 2
+      },
+      "default": 0.0,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "sslch/lmf_gain",
+      "name": "LMF Gain",
+      "short_name": null,
+      "group": null,
+      "kind": "Continuous",
+      "range": {
+        "min": -15.0,
+        "max": 15.0,
+        "scale": "Linear",
+        "unit": "Db",
+        "steps": null
+      },
+      "default": 0.5,
+      "bipolar": true,
+      "featured": true
+    },
+    {
+      "addr": "sslch/lmf_freq",
+      "name": "LMF Freq",
+      "short_name": null,
+      "group": null,
+      "kind": "Continuous",
+      "range": {
+        "min": 200.0,
+        "max": 2500.0,
+        "scale": {
+          "Curve": {
+            "curve": {
+              "Points": {
+                "points": [
+                  {
+                    "x": 0.0,
+                    "y": 0.0
+                  },
+                  {
+                    "x": 0.16666666666666666,
+                    "y": 0.043478260869565216
+                  },
+                  {
+                    "x": 0.3333333333333333,
+                    "y": 0.2608695652173913
+                  },
+                  {
+                    "x": 0.5,
+                    "y": 0.34782608695652173
+                  },
+                  {
+                    "x": 0.6666666666666666,
+                    "y": 0.5652173913043478
+                  },
+                  {
+                    "x": 0.8333333333333334,
+                    "y": 0.782608695652174
+                  },
+                  {
+                    "x": 1.0,
+                    "y": 1.0
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "unit": "Hz",
+        "steps": null
+      },
+      "default": 0.3333333333333339,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "sslch/lmf_q",
+      "name": "LMF Q",
+      "short_name": null,
+      "group": null,
+      "kind": "Continuous",
+      "range": {
+        "min": 0.5,
+        "max": 3.0,
+        "scale": {
+          "Curve": {
+            "curve": {
+              "Points": {
+                "points": [
+                  {
+                    "x": 0.0,
+                    "y": 0.0
+                  },
+                  {
+                    "x": 0.25,
+                    "y": 0.2
+                  },
+                  {
+                    "x": 0.5,
+                    "y": 0.4
+                  },
+                  {
+                    "x": 0.75,
+                    "y": 0.6
+                  },
+                  {
+                    "x": 1.0,
+                    "y": 1.0
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "unit": "None",
+        "steps": null
+      },
+      "default": 0.24999999999999822,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "sslch/lmf_div3",
+      "name": "LMF ÷3",
+      "short_name": null,
+      "group": null,
+      "kind": "Toggle",
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 2
+      },
+      "default": 0.0,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "sslch/hmf_gain",
+      "name": "HMF Gain",
+      "short_name": null,
+      "group": null,
+      "kind": "Continuous",
+      "range": {
+        "min": -15.0,
+        "max": 15.0,
+        "scale": "Linear",
+        "unit": "Db",
+        "steps": null
+      },
+      "default": 0.5,
+      "bipolar": true,
+      "featured": true
+    },
+    {
+      "addr": "sslch/hmf_freq",
+      "name": "HMF Freq",
+      "short_name": null,
+      "group": null,
+      "kind": "Continuous",
+      "range": {
+        "min": 600.0,
+        "max": 7000.0,
+        "scale": {
+          "Curve": {
+            "curve": {
+              "Points": {
+                "points": [
+                  {
+                    "x": 0.0,
+                    "y": 0.0
+                  },
+                  {
+                    "x": 0.16666666666666666,
+                    "y": 0.03125
+                  },
+                  {
+                    "x": 0.3333333333333333,
+                    "y": 0.140625
+                  },
+                  {
+                    "x": 0.5,
+                    "y": 0.375
+                  },
+                  {
+                    "x": 0.6666666666666666,
+                    "y": 0.609375
+                  },
+                  {
+                    "x": 0.8333333333333334,
+                    "y": 0.84375
+                  },
+                  {
+                    "x": 1.0,
+                    "y": 1.0
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "unit": "Hz",
+        "steps": null
+      },
+      "default": 0.4999999999999982,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "sslch/hmf_q",
+      "name": "HMF Q",
+      "short_name": null,
+      "group": null,
+      "kind": "Continuous",
+      "range": {
+        "min": 0.5,
+        "max": 3.0,
+        "scale": {
+          "Curve": {
+            "curve": {
+              "Points": {
+                "points": [
+                  {
+                    "x": 0.0,
+                    "y": 0.0
+                  },
+                  {
+                    "x": 0.25,
+                    "y": 0.2
+                  },
+                  {
+                    "x": 0.5,
+                    "y": 0.4
+                  },
+                  {
+                    "x": 0.75,
+                    "y": 0.6
+                  },
+                  {
+                    "x": 1.0,
+                    "y": 1.0
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "unit": "None",
+        "steps": null
+      },
+      "default": 0.24999999999999822,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "sslch/hmf_x3",
+      "name": "HMF ×3",
+      "short_name": null,
+      "group": null,
+      "kind": "Toggle",
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 2
+      },
+      "default": 0.0,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "sslch/hf_gain",
+      "name": "HF Gain",
+      "short_name": null,
+      "group": null,
+      "kind": "Continuous",
+      "range": {
+        "min": -15.0,
+        "max": 15.0,
+        "scale": "Linear",
+        "unit": "Db",
+        "steps": null
+      },
+      "default": 0.5,
+      "bipolar": true,
+      "featured": true
+    },
+    {
+      "addr": "sslch/hf_freq",
+      "name": "HF Freq",
+      "short_name": null,
+      "group": null,
+      "kind": "Continuous",
+      "range": {
+        "min": 1500.0,
+        "max": 16000.0,
+        "scale": {
+          "Curve": {
+            "curve": {
+              "Points": {
+                "points": [
+                  {
+                    "x": 0.0,
+                    "y": 0.0
+                  },
+                  {
+                    "x": 0.16666666666666666,
+                    "y": 0.034482758620689655
+                  },
+                  {
+                    "x": 0.3333333333333333,
+                    "y": 0.2413793103448276
+                  },
+                  {
+                    "x": 0.5,
+                    "y": 0.4482758620689655
+                  },
+                  {
+                    "x": 0.6666666666666666,
+                    "y": 0.5862068965517241
+                  },
+                  {
+                    "x": 0.8333333333333334,
+                    "y": 0.8620689655172413
+                  },
+                  {
+                    "x": 1.0,
+                    "y": 1.0
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "unit": "Hz",
+        "steps": null
+      },
+      "default": 0.4999999999999982,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "sslch/hf_bell",
+      "name": "HF Bell",
+      "short_name": null,
+      "group": null,
+      "kind": "Toggle",
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 2
+      },
+      "default": 0.0,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "sslch/eq_in",
+      "name": "EQ In",
+      "short_name": null,
+      "group": null,
+      "kind": "Toggle",
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 2
+      },
+      "default": 1.0,
+      "bipolar": false,
+      "featured": true
+    },
+    {
+      "addr": "sslch/phase",
+      "name": "Phase",
+      "short_name": null,
+      "group": null,
+      "kind": "Toggle",
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 2
+      },
+      "default": 0.0,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "sslch/trim",
+      "name": "Trim",
+      "short_name": null,
+      "group": null,
+      "kind": "Continuous",
+      "range": {
+        "min": -24.0,
+        "max": 24.0,
+        "scale": "Linear",
+        "unit": "Db",
+        "steps": null
+      },
+      "default": 0.5,
+      "bipolar": true,
+      "featured": false
+    },
+    {
+      "addr": "sslch/drive",
+      "name": "Drive",
+      "short_name": null,
+      "group": null,
+      "kind": "Continuous",
+      "range": {
+        "min": 0.0,
+        "max": 100.0,
+        "scale": "Linear",
+        "unit": "Percent",
+        "steps": null
+      },
+      "default": 0.0,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "api550/low_freq",
+      "name": "Low Freq",
+      "short_name": null,
+      "group": null,
+      "kind": {
+        "Choice": {
+          "options": [
+            "50 Hz",
+            "100 Hz",
+            "200 Hz",
+            "400 Hz"
+          ]
+        }
+      },
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 4
+      },
+      "default": 0.3333333333333333,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "api550/low_gain",
+      "name": "Low Gain",
+      "short_name": null,
+      "group": null,
+      "kind": "Continuous",
+      "range": {
+        "min": -12.0,
+        "max": 12.0,
+        "scale": "Linear",
+        "unit": "Db",
+        "steps": 13
+      },
+      "default": 0.5,
+      "bipolar": true,
+      "featured": true
+    },
+    {
+      "addr": "api550/mid_freq",
+      "name": "Mid Freq",
+      "short_name": null,
+      "group": null,
+      "kind": {
+        "Choice": {
+          "options": [
+            "400 Hz",
+            "800 Hz",
+            "1.5 kHz",
+            "3 kHz",
+            "5 kHz"
+          ]
+        }
+      },
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 5
+      },
+      "default": 0.5,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "api550/mid_gain",
+      "name": "Mid Gain",
+      "short_name": null,
+      "group": null,
+      "kind": "Continuous",
+      "range": {
+        "min": -12.0,
+        "max": 12.0,
+        "scale": "Linear",
+        "unit": "Db",
+        "steps": 13
+      },
+      "default": 0.5,
+      "bipolar": true,
+      "featured": true
+    },
+    {
+      "addr": "api550/high_freq",
+      "name": "High Freq",
+      "short_name": null,
+      "group": null,
+      "kind": {
+        "Choice": {
+          "options": [
+            "5 kHz",
+            "7 kHz",
+            "10 kHz",
+            "12.5 kHz",
+            "15 kHz"
+          ]
+        }
+      },
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 5
+      },
+      "default": 0.5,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "api550/high_gain",
+      "name": "High Gain",
+      "short_name": null,
+      "group": null,
+      "kind": "Continuous",
+      "range": {
+        "min": -12.0,
+        "max": 12.0,
+        "scale": "Linear",
+        "unit": "Db",
+        "steps": 13
+      },
+      "default": 0.5,
+      "bipolar": true,
+      "featured": true
+    },
+    {
+      "addr": "api550/eq_in",
+      "name": "EQ In",
+      "short_name": null,
+      "group": null,
+      "kind": "Toggle",
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 2
+      },
+      "default": 1.0,
+      "bipolar": false,
+      "featured": true
+    },
+    {
+      "addr": "api550/drive",
+      "name": "Drive",
+      "short_name": null,
+      "group": null,
+      "kind": "Continuous",
+      "range": {
+        "min": 0.0,
+        "max": 100.0,
+        "scale": "Linear",
+        "unit": "Percent",
+        "steps": null
+      },
+      "default": 0.0,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "api550/trim",
+      "name": "Trim",
+      "short_name": null,
+      "group": null,
+      "kind": "Continuous",
+      "range": {
+        "min": -24.0,
+        "max": 24.0,
+        "scale": "Linear",
+        "unit": "Db",
+        "steps": null
+      },
+      "default": 0.5,
+      "bipolar": true,
+      "featured": false
+    },
+    {
+      "addr": "neve1073/drive",
+      "name": "Drive",
+      "short_name": null,
+      "group": null,
+      "kind": "Continuous",
+      "range": {
+        "min": 0.0,
+        "max": 100.0,
+        "scale": "Linear",
+        "unit": "Percent",
+        "steps": null
+      },
+      "default": 0.0,
+      "bipolar": false,
+      "featured": true
+    },
+    {
+      "addr": "neve1073/high_gain",
+      "name": "High Gain",
+      "short_name": null,
+      "group": null,
+      "kind": "Continuous",
+      "range": {
+        "min": -16.0,
+        "max": 16.0,
+        "scale": "Linear",
+        "unit": "Db",
+        "steps": null
+      },
+      "default": 0.5,
+      "bipolar": true,
+      "featured": true
+    },
+    {
+      "addr": "neve1073/mid_freq",
+      "name": "Mid Freq",
+      "short_name": null,
+      "group": null,
+      "kind": {
+        "Choice": {
+          "options": [
+            "Off",
+            "360 Hz",
+            "700 Hz",
+            "1.6 kHz",
+            "3.2 kHz",
+            "4.8 kHz",
+            "7.2 kHz"
+          ]
+        }
+      },
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 7
+      },
+      "default": 0.0,
+      "bipolar": false,
+      "featured": true
+    },
+    {
+      "addr": "neve1073/mid_gain",
+      "name": "Mid Gain",
+      "short_name": null,
+      "group": null,
+      "kind": "Continuous",
+      "range": {
+        "min": -18.0,
+        "max": 18.0,
+        "scale": "Linear",
+        "unit": "Db",
+        "steps": null
+      },
+      "default": 0.5,
+      "bipolar": true,
+      "featured": true
+    },
+    {
+      "addr": "neve1073/low_freq",
+      "name": "Low Freq",
+      "short_name": null,
+      "group": null,
+      "kind": {
+        "Choice": {
+          "options": [
+            "Off",
+            "35 Hz",
+            "60 Hz",
+            "110 Hz",
+            "220 Hz"
+          ]
+        }
+      },
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 5
+      },
+      "default": 0.0,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "neve1073/low_gain",
+      "name": "Low Gain",
+      "short_name": null,
+      "group": null,
+      "kind": "Continuous",
+      "range": {
+        "min": -16.0,
+        "max": 16.0,
+        "scale": "Linear",
+        "unit": "Db",
+        "steps": null
+      },
+      "default": 0.5,
+      "bipolar": true,
+      "featured": false
+    },
+    {
+      "addr": "neve1073/hpf",
+      "name": "High Pass",
+      "short_name": null,
+      "group": null,
+      "kind": {
+        "Choice": {
+          "options": [
+            "Off",
+            "50 Hz",
+            "80 Hz",
+            "160 Hz",
+            "300 Hz"
+          ]
+        }
+      },
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 5
+      },
+      "default": 0.0,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "neve1073/trim",
+      "name": "Trim",
+      "short_name": null,
+      "group": null,
+      "kind": "Continuous",
+      "range": {
+        "min": -10.0,
+        "max": 10.0,
+        "scale": "Linear",
+        "unit": "Db",
+        "steps": null
+      },
+      "default": 0.5,
+      "bipolar": true,
+      "featured": false
+    },
+    {
+      "addr": "neve1073/phase",
+      "name": "Phase",
+      "short_name": null,
+      "group": null,
+      "kind": "Toggle",
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 2
+      },
+      "default": 0.0,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "neve1073/eq_in",
+      "name": "EQL",
+      "short_name": null,
+      "group": null,
+      "kind": "Toggle",
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 2
+      },
+      "default": 1.0,
+      "bipolar": false,
+      "featured": true
+    }
+  ],
+  "actions": [],
+  "streams": [
+    {
+      "id": "sslch/out",
+      "name": "Output Level",
+      "kind": {
+        "Level": {
+          "channels": 2
+        }
+      },
+      "rate_hz": 30.0
+    }
+  ],
+  "collections": []
+}
