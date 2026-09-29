@@ -285,6 +285,7 @@ pub fn components() -> Vec<ComponentDef> {
     all.extend(crate::controls::defs());
     all.extend(crate::panels::defs());
     all.extend(crate::viz::defs());
+    all.extend(crate::stomp::defs());
     all.sort_by_key(|c| (c.family, c.id));
     all
 }

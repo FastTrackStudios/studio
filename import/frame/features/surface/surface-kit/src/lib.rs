@@ -25,6 +25,7 @@ pub mod meters;
 pub mod motion;
 pub mod panels;
 pub mod registry;
+pub mod stomp;
 pub mod viz;
 
 pub use registry::{

@@ -15,6 +15,8 @@ pub mod face;
 pub mod modulation;
 pub mod reverb;
 pub mod saturate;
+pub mod suite_boutique_clean;
+pub mod suite_funk_rhythm;
 
 pub use face::{Face, canvas, catalogs};
 
@@ -29,5 +31,7 @@ pub fn all() -> Vec<Face> {
     v.extend(reverb::faces());
     v.extend(saturate::faces());
     v.extend(modulation::faces());
+    v.extend(suite_funk_rhythm::faces());
+    v.extend(suite_boutique_clean::faces());
     v
 }
