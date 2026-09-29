@@ -116,3 +116,47 @@ The wasm remote uses SVG export of the same document.
    providers registered from `eq-dsp` / `comp-dsp`.
 3. signal: engine publishes feeds per block, and a frame-surface Blitz widget
    replaces `CompViz`, `EqGraph` and the keys ADSR panels.
+
+## 7. Live reload: agents edit, the running app updates
+
+Nothing requires a relaunch. The document is the unit of change, and every
+host re-renders when it changes:
+- **Today:** the desktop player polls its `.fm` file and reloads it, and
+  `frame-mcp --file` autosaves after every tool call. So an agent editing
+  through MCP updates the open window within about a frame.
+- **Push instead of poll:**
+  - A `SurfaceStore` rpc (below) streams document updates, as Loro deltas,
+    to every host that has the surface open: the desktop player, the frame
+    widget embedded in signal, and a browser.
+  - The runtime swaps scenes in place and keeps control state: values,
+    gestures in flight, meter ballistics, plot rings.
+  - An update that fails to parse or lint is rejected and reported. It never
+    blanks a live stage.
+- **Several editors at once:** agents and people edit the same Loro document
+  (CRDT), so edits merge instead of overwriting.
+- **Scope:** node ids and bindings are stable, so a reload doesn't drop
+  MIDI/param mappings.
+
+## 8. Surface library: browse, share, download
+
+A feature (`features/library`) for storing and finding surfaces:
+- `library-proto`: `SurfaceStore` rpc.
+  - `list(query)`, `get(id, version)`, `publish(bundle)` and
+    `subscribe(id)` (live updates for §7).
+  - Metadata: name, author, description, tags, the plugin or rig it fits (by
+    catalog signature, so a surface only offers itself where its bindings
+    resolve), preview PNG, version, license, and forked-from.
+- Backends:
+  - `library-fs`: a folder of `.frame` bundles. Local, and what the desktop
+    player serves.
+  - `library-server`: a shared community index over HTTP/vox with
+    publish, versions, ratings and downloads.
+- Hosts:
+  - The desktop player gets a browser view: previews, filter by "fits this
+    plugin", one-click install or preview live against the running engine,
+    and fork to edit.
+  - Signal lists the installed surfaces per plugin or rig and switches between
+    them live.
+- Safety: surfaces are data. Custom WGSL (`asset:` shaders) is validated by
+  naga and sandboxed to the effect contract, and anything that fails falls
+  back to plain drawing.
