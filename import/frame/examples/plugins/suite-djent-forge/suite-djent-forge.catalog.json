@@ -1,0 +1,2526 @@
+{
+  "id": "fts.suite-djent-forge",
+  "version": 1,
+  "params": [
+    {
+      "addr": "dfcomp/detail",
+      "name": "Detail",
+      "short_name": null,
+      "group": null,
+      "kind": "Continuous",
+      "range": {
+        "min": 0.0,
+        "max": 100.0,
+        "scale": "Linear",
+        "unit": "Percent",
+        "steps": 101
+      },
+      "default": 0.5,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "dfcomp/mix",
+      "name": "Mix",
+      "short_name": null,
+      "group": null,
+      "kind": "Continuous",
+      "range": {
+        "min": 0.0,
+        "max": 100.0,
+        "scale": "Linear",
+        "unit": "Percent",
+        "steps": 101
+      },
+      "default": 1.0,
+      "bipolar": false,
+      "featured": true
+    },
+    {
+      "addr": "dfcomp/volume",
+      "name": "Volume",
+      "short_name": null,
+      "group": null,
+      "kind": "Continuous",
+      "range": {
+        "min": -12.0,
+        "max": 12.0,
+        "scale": "Linear",
+        "unit": "Db",
+        "steps": null
+      },
+      "default": 0.5,
+      "bipolar": true,
+      "featured": true
+    },
+    {
+      "addr": "dfcomp/comp",
+      "name": "Comp",
+      "short_name": null,
+      "group": null,
+      "kind": "Continuous",
+      "range": {
+        "min": 0.0,
+        "max": 100.0,
+        "scale": "Linear",
+        "unit": "Percent",
+        "steps": 101
+      },
+      "default": 0.5,
+      "bipolar": false,
+      "featured": true
+    },
+    {
+      "addr": "dfcomp/intensity",
+      "name": "Intensity",
+      "short_name": null,
+      "group": null,
+      "kind": "Toggle",
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 2
+      },
+      "default": 0.0,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "dfcomp/on",
+      "name": "Bypass",
+      "short_name": null,
+      "group": null,
+      "kind": "Toggle",
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 2
+      },
+      "default": 1.0,
+      "bipolar": false,
+      "featured": true
+    },
+    {
+      "addr": "dftape/mix",
+      "name": "Mix",
+      "short_name": null,
+      "group": null,
+      "kind": "Continuous",
+      "range": {
+        "min": 0.0,
+        "max": 100.0,
+        "scale": "Linear",
+        "unit": "Percent",
+        "steps": 101
+      },
+      "default": 0.35,
+      "bipolar": false,
+      "featured": true
+    },
+    {
+      "addr": "dftape/feedback",
+      "name": "Feed",
+      "short_name": null,
+      "group": null,
+      "kind": "Continuous",
+      "range": {
+        "min": 0.0,
+        "max": 100.0,
+        "scale": "Linear",
+        "unit": "Percent",
+        "steps": 101
+      },
+      "default": 0.4,
+      "bipolar": false,
+      "featured": true
+    },
+    {
+      "addr": "dftape/time",
+      "name": "Time",
+      "short_name": null,
+      "group": null,
+      "kind": "Continuous",
+      "range": {
+        "min": 40.0,
+        "max": 2000.0,
+        "scale": "Logarithmic",
+        "unit": "Milliseconds",
+        "steps": null
+      },
+      "default": 1.0,
+      "bipolar": false,
+      "featured": true
+    },
+    {
+      "addr": "dftape/mod",
+      "name": "Mod",
+      "short_name": null,
+      "group": null,
+      "kind": "Continuous",
+      "range": {
+        "min": 0.0,
+        "max": 100.0,
+        "scale": "Linear",
+        "unit": "Percent",
+        "steps": 101
+      },
+      "default": 0.25,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "dftape/tone",
+      "name": "Tone",
+      "short_name": null,
+      "group": null,
+      "kind": "Continuous",
+      "range": {
+        "min": 0.0,
+        "max": 100.0,
+        "scale": "Linear",
+        "unit": "Percent",
+        "steps": 101
+      },
+      "default": 0.5,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "dftape/sync",
+      "name": "Note Sync",
+      "short_name": null,
+      "group": null,
+      "kind": "Toggle",
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 2
+      },
+      "default": 0.0,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "dftape/on",
+      "name": "Bypass",
+      "short_name": null,
+      "group": null,
+      "kind": "Toggle",
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 2
+      },
+      "default": 1.0,
+      "bipolar": false,
+      "featured": true
+    },
+    {
+      "addr": "dfoct/sub",
+      "name": "Octave Down",
+      "short_name": null,
+      "group": null,
+      "kind": "Continuous",
+      "range": {
+        "min": 0.0,
+        "max": 100.0,
+        "scale": "Linear",
+        "unit": "Percent",
+        "steps": 101
+      },
+      "default": 0.5,
+      "bipolar": false,
+      "featured": true
+    },
+    {
+      "addr": "dfoct/up",
+      "name": "Octave Up",
+      "short_name": null,
+      "group": null,
+      "kind": "Continuous",
+      "range": {
+        "min": 0.0,
+        "max": 100.0,
+        "scale": "Linear",
+        "unit": "Percent",
+        "steps": 101
+      },
+      "default": 0.5,
+      "bipolar": false,
+      "featured": true
+    },
+    {
+      "addr": "dfoct/direct",
+      "name": "Direct",
+      "short_name": null,
+      "group": null,
+      "kind": "Continuous",
+      "range": {
+        "min": 0.0,
+        "max": 100.0,
+        "scale": "Linear",
+        "unit": "Percent",
+        "steps": 101
+      },
+      "default": 1.0,
+      "bipolar": false,
+      "featured": true
+    },
+    {
+      "addr": "dfoct/on",
+      "name": "Bypass",
+      "short_name": null,
+      "group": null,
+      "kind": "Toggle",
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 2
+      },
+      "default": 1.0,
+      "bipolar": false,
+      "featured": true
+    },
+    {
+      "addr": "dfdrive/volume",
+      "name": "Volume",
+      "short_name": null,
+      "group": null,
+      "kind": "Continuous",
+      "range": {
+        "min": -24.0,
+        "max": 12.0,
+        "scale": "Linear",
+        "unit": "Db",
+        "steps": null
+      },
+      "default": 0.6666666666666666,
+      "bipolar": true,
+      "featured": true
+    },
+    {
+      "addr": "dfdrive/bright",
+      "name": "Bright",
+      "short_name": null,
+      "group": null,
+      "kind": "Continuous",
+      "range": {
+        "min": 0.0,
+        "max": 100.0,
+        "scale": "Linear",
+        "unit": "Percent",
+        "steps": 101
+      },
+      "default": 0.5,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "dfdrive/attack",
+      "name": "Attack",
+      "short_name": null,
+      "group": null,
+      "kind": "Continuous",
+      "range": {
+        "min": 0.0,
+        "max": 100.0,
+        "scale": "Linear",
+        "unit": "Percent",
+        "steps": 101
+      },
+      "default": 0.5,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "dfdrive/drive",
+      "name": "Drive",
+      "short_name": null,
+      "group": null,
+      "kind": "Continuous",
+      "range": {
+        "min": 0.0,
+        "max": 100.0,
+        "scale": "Linear",
+        "unit": "Percent",
+        "steps": 101
+      },
+      "default": 0.4,
+      "bipolar": false,
+      "featured": true
+    },
+    {
+      "addr": "dfdrive/gate",
+      "name": "Gate",
+      "short_name": null,
+      "group": null,
+      "kind": "Continuous",
+      "range": {
+        "min": 0.0,
+        "max": 100.0,
+        "scale": "Linear",
+        "unit": "Percent",
+        "steps": 101
+      },
+      "default": 0.3,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "dfdrive/on",
+      "name": "Bypass",
+      "short_name": null,
+      "group": null,
+      "kind": "Toggle",
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 2
+      },
+      "default": 1.0,
+      "bipolar": false,
+      "featured": true
+    },
+    {
+      "addr": "dfhavoc/mix",
+      "name": "Mix",
+      "short_name": null,
+      "group": null,
+      "kind": "Continuous",
+      "range": {
+        "min": 0.0,
+        "max": 100.0,
+        "scale": "Linear",
+        "unit": "Percent",
+        "steps": 101
+      },
+      "default": 0.5,
+      "bipolar": false,
+      "featured": true
+    },
+    {
+      "addr": "dfhavoc/on",
+      "name": "Bypass",
+      "short_name": null,
+      "group": null,
+      "kind": "Toggle",
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 2
+      },
+      "default": 1.0,
+      "bipolar": false,
+      "featured": true
+    },
+    {
+      "addr": "dfclean/boost",
+      "name": "Boost",
+      "short_name": null,
+      "group": null,
+      "kind": "Toggle",
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 2
+      },
+      "default": 0.0,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "dfclean/voice",
+      "name": "Voice",
+      "short_name": null,
+      "group": null,
+      "kind": "Toggle",
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 2
+      },
+      "default": 0.0,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "dfclean/gain",
+      "name": "Gain",
+      "short_name": null,
+      "group": null,
+      "kind": "Continuous",
+      "range": {
+        "min": 0.0,
+        "max": 10.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 101
+      },
+      "default": 0.5,
+      "bipolar": false,
+      "featured": true
+    },
+    {
+      "addr": "dfclean/bass",
+      "name": "Bass",
+      "short_name": null,
+      "group": null,
+      "kind": "Continuous",
+      "range": {
+        "min": 0.0,
+        "max": 10.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 101
+      },
+      "default": 0.5,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "dfclean/middle",
+      "name": "Middle",
+      "short_name": null,
+      "group": null,
+      "kind": "Continuous",
+      "range": {
+        "min": 0.0,
+        "max": 10.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 101
+      },
+      "default": 0.5,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "dfclean/treble",
+      "name": "Treble",
+      "short_name": null,
+      "group": null,
+      "kind": "Continuous",
+      "range": {
+        "min": 0.0,
+        "max": 10.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 101
+      },
+      "default": 0.5,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "dfclean/presence",
+      "name": "Presence",
+      "short_name": null,
+      "group": null,
+      "kind": "Continuous",
+      "range": {
+        "min": 0.0,
+        "max": 10.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 101
+      },
+      "default": 0.5,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "dfclean/master",
+      "name": "Master",
+      "short_name": null,
+      "group": null,
+      "kind": "Continuous",
+      "range": {
+        "min": 0.0,
+        "max": 10.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 101
+      },
+      "default": 0.5,
+      "bipolar": false,
+      "featured": true
+    },
+    {
+      "addr": "dfclean/output",
+      "name": "Output",
+      "short_name": null,
+      "group": null,
+      "kind": "Continuous",
+      "range": {
+        "min": 0.0,
+        "max": 10.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 101
+      },
+      "default": 0.5,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "dfclean/power",
+      "name": "Power",
+      "short_name": null,
+      "group": null,
+      "kind": "Toggle",
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 2
+      },
+      "default": 1.0,
+      "bipolar": false,
+      "featured": true
+    },
+    {
+      "addr": "dfrhythm/voice",
+      "name": "Voice",
+      "short_name": null,
+      "group": null,
+      "kind": "Toggle",
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 2
+      },
+      "default": 0.0,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "dfrhythm/gain",
+      "name": "Gain",
+      "short_name": null,
+      "group": null,
+      "kind": "Continuous",
+      "range": {
+        "min": 0.0,
+        "max": 10.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 101
+      },
+      "default": 0.5,
+      "bipolar": false,
+      "featured": true
+    },
+    {
+      "addr": "dfrhythm/bass",
+      "name": "Bass",
+      "short_name": null,
+      "group": null,
+      "kind": "Continuous",
+      "range": {
+        "min": 0.0,
+        "max": 10.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 101
+      },
+      "default": 0.5,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "dfrhythm/middle",
+      "name": "Middle",
+      "short_name": null,
+      "group": null,
+      "kind": "Continuous",
+      "range": {
+        "min": 0.0,
+        "max": 10.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 101
+      },
+      "default": 0.5,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "dfrhythm/treble",
+      "name": "Treble",
+      "short_name": null,
+      "group": null,
+      "kind": "Continuous",
+      "range": {
+        "min": 0.0,
+        "max": 10.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 101
+      },
+      "default": 0.5,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "dfrhythm/presence",
+      "name": "Presence",
+      "short_name": null,
+      "group": null,
+      "kind": "Continuous",
+      "range": {
+        "min": 0.0,
+        "max": 10.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 101
+      },
+      "default": 0.5,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "dfrhythm/master",
+      "name": "Master",
+      "short_name": null,
+      "group": null,
+      "kind": "Continuous",
+      "range": {
+        "min": 0.0,
+        "max": 10.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 101
+      },
+      "default": 0.5,
+      "bipolar": false,
+      "featured": true
+    },
+    {
+      "addr": "dfrhythm/output",
+      "name": "Output",
+      "short_name": null,
+      "group": null,
+      "kind": "Continuous",
+      "range": {
+        "min": 0.0,
+        "max": 10.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 101
+      },
+      "default": 0.5,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "dfrhythm/power",
+      "name": "Power",
+      "short_name": null,
+      "group": null,
+      "kind": "Toggle",
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 2
+      },
+      "default": 1.0,
+      "bipolar": false,
+      "featured": true
+    },
+    {
+      "addr": "dflead/voice",
+      "name": "Voice",
+      "short_name": null,
+      "group": null,
+      "kind": "Toggle",
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 2
+      },
+      "default": 0.0,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "dflead/gain",
+      "name": "Gain",
+      "short_name": null,
+      "group": null,
+      "kind": "Continuous",
+      "range": {
+        "min": 0.0,
+        "max": 10.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 101
+      },
+      "default": 0.5,
+      "bipolar": false,
+      "featured": true
+    },
+    {
+      "addr": "dflead/bass",
+      "name": "Bass",
+      "short_name": null,
+      "group": null,
+      "kind": "Continuous",
+      "range": {
+        "min": 0.0,
+        "max": 10.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 101
+      },
+      "default": 0.5,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "dflead/middle",
+      "name": "Middle",
+      "short_name": null,
+      "group": null,
+      "kind": "Continuous",
+      "range": {
+        "min": 0.0,
+        "max": 10.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 101
+      },
+      "default": 0.5,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "dflead/treble",
+      "name": "Treble",
+      "short_name": null,
+      "group": null,
+      "kind": "Continuous",
+      "range": {
+        "min": 0.0,
+        "max": 10.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 101
+      },
+      "default": 0.5,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "dflead/presence",
+      "name": "Presence",
+      "short_name": null,
+      "group": null,
+      "kind": "Continuous",
+      "range": {
+        "min": 0.0,
+        "max": 10.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 101
+      },
+      "default": 0.5,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "dflead/master",
+      "name": "Master",
+      "short_name": null,
+      "group": null,
+      "kind": "Continuous",
+      "range": {
+        "min": 0.0,
+        "max": 10.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 101
+      },
+      "default": 0.5,
+      "bipolar": false,
+      "featured": true
+    },
+    {
+      "addr": "dflead/output",
+      "name": "Output",
+      "short_name": null,
+      "group": null,
+      "kind": "Continuous",
+      "range": {
+        "min": 0.0,
+        "max": 10.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 101
+      },
+      "default": 0.5,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "dflead/power",
+      "name": "Power",
+      "short_name": null,
+      "group": null,
+      "kind": "Toggle",
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 2
+      },
+      "default": 1.0,
+      "bipolar": false,
+      "featured": true
+    },
+    {
+      "addr": "dfcab/a_mic",
+      "name": "Mic A Model",
+      "short_name": null,
+      "group": null,
+      "kind": {
+        "Choice": {
+          "options": [
+            "Dynamic A",
+            "Dyn A Off-Axis",
+            "Dynamic B",
+            "Condenser A",
+            "Condenser B",
+            "Ribbon A",
+            "Ribbon B"
+          ]
+        }
+      },
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 7
+      },
+      "default": 0.16666666666666666,
+      "bipolar": false,
+      "featured": true
+    },
+    {
+      "addr": "dfcab/a_on",
+      "name": "Mic A On",
+      "short_name": null,
+      "group": null,
+      "kind": "Toggle",
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 2
+      },
+      "default": 1.0,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "dfcab/a_position",
+      "name": "Mic A Position",
+      "short_name": null,
+      "group": null,
+      "kind": "Continuous",
+      "range": {
+        "min": 0.0,
+        "max": 100.0,
+        "scale": "Linear",
+        "unit": "Percent",
+        "steps": 101
+      },
+      "default": 0.5,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "dfcab/a_distance",
+      "name": "Mic A Distance",
+      "short_name": null,
+      "group": null,
+      "kind": "Continuous",
+      "range": {
+        "min": 0.0,
+        "max": 100.0,
+        "scale": "Linear",
+        "unit": "Percent",
+        "steps": 101
+      },
+      "default": 0.0,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "dfcab/a_level",
+      "name": "Mic A Level",
+      "short_name": null,
+      "group": null,
+      "kind": "Continuous",
+      "range": {
+        "min": -24.0,
+        "max": 12.0,
+        "scale": "Linear",
+        "unit": "Db",
+        "steps": null
+      },
+      "default": 0.6666666666666666,
+      "bipolar": true,
+      "featured": false
+    },
+    {
+      "addr": "dfcab/a_pan",
+      "name": "Mic A Pan",
+      "short_name": null,
+      "group": null,
+      "kind": "Continuous",
+      "range": {
+        "min": -100.0,
+        "max": 100.0,
+        "scale": "Linear",
+        "unit": "Percent",
+        "steps": 201
+      },
+      "default": 0.5,
+      "bipolar": true,
+      "featured": false
+    },
+    {
+      "addr": "dfcab/a_phase",
+      "name": "Mic A Phase",
+      "short_name": null,
+      "group": null,
+      "kind": "Toggle",
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 2
+      },
+      "default": 0.0,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "dfcab/b_mic",
+      "name": "Mic B Model",
+      "short_name": null,
+      "group": null,
+      "kind": {
+        "Choice": {
+          "options": [
+            "Dynamic A",
+            "Dyn A Off-Axis",
+            "Dynamic B",
+            "Condenser A",
+            "Condenser B",
+            "Ribbon A",
+            "Ribbon B"
+          ]
+        }
+      },
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 7
+      },
+      "default": 1.0,
+      "bipolar": false,
+      "featured": true
+    },
+    {
+      "addr": "dfcab/b_on",
+      "name": "Mic B On",
+      "short_name": null,
+      "group": null,
+      "kind": "Toggle",
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 2
+      },
+      "default": 1.0,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "dfcab/b_position",
+      "name": "Mic B Position",
+      "short_name": null,
+      "group": null,
+      "kind": "Continuous",
+      "range": {
+        "min": 0.0,
+        "max": 100.0,
+        "scale": "Linear",
+        "unit": "Percent",
+        "steps": 101
+      },
+      "default": 0.5,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "dfcab/b_distance",
+      "name": "Mic B Distance",
+      "short_name": null,
+      "group": null,
+      "kind": "Continuous",
+      "range": {
+        "min": 0.0,
+        "max": 100.0,
+        "scale": "Linear",
+        "unit": "Percent",
+        "steps": 101
+      },
+      "default": 0.0,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "dfcab/b_level",
+      "name": "Mic B Level",
+      "short_name": null,
+      "group": null,
+      "kind": "Continuous",
+      "range": {
+        "min": -24.0,
+        "max": 12.0,
+        "scale": "Linear",
+        "unit": "Db",
+        "steps": null
+      },
+      "default": 0.6666666666666666,
+      "bipolar": true,
+      "featured": false
+    },
+    {
+      "addr": "dfcab/b_pan",
+      "name": "Mic B Pan",
+      "short_name": null,
+      "group": null,
+      "kind": "Continuous",
+      "range": {
+        "min": -100.0,
+        "max": 100.0,
+        "scale": "Linear",
+        "unit": "Percent",
+        "steps": 201
+      },
+      "default": 0.5,
+      "bipolar": true,
+      "featured": false
+    },
+    {
+      "addr": "dfcab/b_phase",
+      "name": "Mic B Phase",
+      "short_name": null,
+      "group": null,
+      "kind": "Toggle",
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 2
+      },
+      "default": 0.0,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "dfcab/room",
+      "name": "Room Send",
+      "short_name": null,
+      "group": null,
+      "kind": "Toggle",
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 2
+      },
+      "default": 0.0,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "dfcab/room_level",
+      "name": "Room Level",
+      "short_name": null,
+      "group": null,
+      "kind": "Continuous",
+      "range": {
+        "min": -24.0,
+        "max": 12.0,
+        "scale": "Linear",
+        "unit": "Db",
+        "steps": null
+      },
+      "default": 0.6666666666666666,
+      "bipolar": true,
+      "featured": false
+    },
+    {
+      "addr": "dfeq/hpf",
+      "name": "High Pass",
+      "short_name": null,
+      "group": null,
+      "kind": "Continuous",
+      "range": {
+        "min": 20.0,
+        "max": 400.0,
+        "scale": "Logarithmic",
+        "unit": "Hz",
+        "steps": null
+      },
+      "default": 0.0,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "dfeq/lpf",
+      "name": "Low Pass",
+      "short_name": null,
+      "group": null,
+      "kind": "Continuous",
+      "range": {
+        "min": 2000.0,
+        "max": 20000.0,
+        "scale": "Logarithmic",
+        "unit": "Hz",
+        "steps": null
+      },
+      "default": 1.0,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "dfeq/b65",
+      "name": "65 Hz Gain",
+      "short_name": null,
+      "group": null,
+      "kind": "Continuous",
+      "range": {
+        "min": -12.0,
+        "max": 12.0,
+        "scale": "Linear",
+        "unit": "Db",
+        "steps": null
+      },
+      "default": 0.5,
+      "bipolar": true,
+      "featured": true
+    },
+    {
+      "addr": "dfeq/b125",
+      "name": "125 Hz Gain",
+      "short_name": null,
+      "group": null,
+      "kind": "Continuous",
+      "range": {
+        "min": -12.0,
+        "max": 12.0,
+        "scale": "Linear",
+        "unit": "Db",
+        "steps": null
+      },
+      "default": 0.5,
+      "bipolar": true,
+      "featured": true
+    },
+    {
+      "addr": "dfeq/b250",
+      "name": "250 Hz Gain",
+      "short_name": null,
+      "group": null,
+      "kind": "Continuous",
+      "range": {
+        "min": -12.0,
+        "max": 12.0,
+        "scale": "Linear",
+        "unit": "Db",
+        "steps": null
+      },
+      "default": 0.5,
+      "bipolar": true,
+      "featured": true
+    },
+    {
+      "addr": "dfeq/b500",
+      "name": "500 Hz Gain",
+      "short_name": null,
+      "group": null,
+      "kind": "Continuous",
+      "range": {
+        "min": -12.0,
+        "max": 12.0,
+        "scale": "Linear",
+        "unit": "Db",
+        "steps": null
+      },
+      "default": 0.5,
+      "bipolar": true,
+      "featured": true
+    },
+    {
+      "addr": "dfeq/b1k",
+      "name": "1 kHz Gain",
+      "short_name": null,
+      "group": null,
+      "kind": "Continuous",
+      "range": {
+        "min": -12.0,
+        "max": 12.0,
+        "scale": "Linear",
+        "unit": "Db",
+        "steps": null
+      },
+      "default": 0.5,
+      "bipolar": true,
+      "featured": true
+    },
+    {
+      "addr": "dfeq/b2k",
+      "name": "2 kHz Gain",
+      "short_name": null,
+      "group": null,
+      "kind": "Continuous",
+      "range": {
+        "min": -12.0,
+        "max": 12.0,
+        "scale": "Linear",
+        "unit": "Db",
+        "steps": null
+      },
+      "default": 0.5,
+      "bipolar": true,
+      "featured": true
+    },
+    {
+      "addr": "dfeq/b4k",
+      "name": "4 kHz Gain",
+      "short_name": null,
+      "group": null,
+      "kind": "Continuous",
+      "range": {
+        "min": -12.0,
+        "max": 12.0,
+        "scale": "Linear",
+        "unit": "Db",
+        "steps": null
+      },
+      "default": 0.5,
+      "bipolar": true,
+      "featured": true
+    },
+    {
+      "addr": "dfeq/b8k",
+      "name": "8 kHz Gain",
+      "short_name": null,
+      "group": null,
+      "kind": "Continuous",
+      "range": {
+        "min": -12.0,
+        "max": 12.0,
+        "scale": "Linear",
+        "unit": "Db",
+        "steps": null
+      },
+      "default": 0.5,
+      "bipolar": true,
+      "featured": true
+    },
+    {
+      "addr": "dfeq/b16k",
+      "name": "16 kHz Gain",
+      "short_name": null,
+      "group": null,
+      "kind": "Continuous",
+      "range": {
+        "min": -12.0,
+        "max": 12.0,
+        "scale": "Linear",
+        "unit": "Db",
+        "steps": null
+      },
+      "default": 0.5,
+      "bipolar": true,
+      "featured": true
+    },
+    {
+      "addr": "dfeq/power",
+      "name": "Power",
+      "short_name": null,
+      "group": null,
+      "kind": "Toggle",
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 2
+      },
+      "default": 1.0,
+      "bipolar": false,
+      "featured": true
+    },
+    {
+      "addr": "dfmod/pedal",
+      "name": "Pedal",
+      "short_name": null,
+      "group": null,
+      "kind": "Continuous",
+      "range": {
+        "min": 0.0,
+        "max": 100.0,
+        "scale": "Linear",
+        "unit": "Percent",
+        "steps": null
+      },
+      "default": 0.0,
+      "bipolar": false,
+      "featured": true
+    },
+    {
+      "addr": "dfmod/flanger",
+      "name": "Flanger",
+      "short_name": null,
+      "group": null,
+      "kind": "Toggle",
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 2
+      },
+      "default": 1.0,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "dfmod/mix_heel",
+      "name": "Mix Heel",
+      "short_name": null,
+      "group": null,
+      "kind": "Continuous",
+      "range": {
+        "min": 0.0,
+        "max": 100.0,
+        "scale": "Linear",
+        "unit": "Percent",
+        "steps": 101
+      },
+      "default": 0.3,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "dfmod/mix_toe",
+      "name": "Mix Toe",
+      "short_name": null,
+      "group": null,
+      "kind": "Continuous",
+      "range": {
+        "min": 0.0,
+        "max": 100.0,
+        "scale": "Linear",
+        "unit": "Percent",
+        "steps": 101
+      },
+      "default": 0.8,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "dfmod/depth_heel",
+      "name": "Depth Heel",
+      "short_name": null,
+      "group": null,
+      "kind": "Continuous",
+      "range": {
+        "min": 0.0,
+        "max": 100.0,
+        "scale": "Linear",
+        "unit": "Percent",
+        "steps": 101
+      },
+      "default": 0.3,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "dfmod/depth_toe",
+      "name": "Depth Toe",
+      "short_name": null,
+      "group": null,
+      "kind": "Continuous",
+      "range": {
+        "min": 0.0,
+        "max": 100.0,
+        "scale": "Linear",
+        "unit": "Percent",
+        "steps": 101
+      },
+      "default": 0.8,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "dfmod/rate_heel",
+      "name": "Rate Heel",
+      "short_name": null,
+      "group": null,
+      "kind": "Continuous",
+      "range": {
+        "min": 0.1,
+        "max": 10.0,
+        "scale": "Logarithmic",
+        "unit": "Hz",
+        "steps": null
+      },
+      "default": 0.5880456295278406,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "dfmod/rate_toe",
+      "name": "Rate Toe",
+      "short_name": null,
+      "group": null,
+      "kind": "Continuous",
+      "range": {
+        "min": 0.1,
+        "max": 10.0,
+        "scale": "Logarithmic",
+        "unit": "Hz",
+        "steps": null
+      },
+      "default": 0.8494850021680093,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "dfmod/auto_div",
+      "name": "Auto Speed",
+      "short_name": null,
+      "group": null,
+      "kind": {
+        "Choice": {
+          "options": [
+            "1/1",
+            "1/1D",
+            "1/1T",
+            "1/2",
+            "1/2D",
+            "1/2T",
+            "1/4",
+            "1/4D",
+            "1/4T",
+            "1/8",
+            "1/8D",
+            "1/8T",
+            "1/16",
+            "1/16D",
+            "1/16T",
+            "1/32",
+            "1/32D",
+            "1/32T",
+            "1/64",
+            "1/64D",
+            "1/64T"
+          ]
+        }
+      },
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 21
+      },
+      "default": 0.8,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "dfmod/auto",
+      "name": "Auto",
+      "short_name": null,
+      "group": null,
+      "kind": "Toggle",
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 2
+      },
+      "default": 0.0,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "dfmod/auto_random",
+      "name": "Auto Random",
+      "short_name": null,
+      "group": null,
+      "kind": "Continuous",
+      "range": {
+        "min": 0.0,
+        "max": 100.0,
+        "scale": "Linear",
+        "unit": "Percent",
+        "steps": 101
+      },
+      "default": 0.5,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "dfmod/auto_speed",
+      "name": "Auto Speed Amount",
+      "short_name": null,
+      "group": null,
+      "kind": "Continuous",
+      "range": {
+        "min": 0.0,
+        "max": 100.0,
+        "scale": "Linear",
+        "unit": "Percent",
+        "steps": 101
+      },
+      "default": 0.5,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "dfmod/on",
+      "name": "Engage",
+      "short_name": null,
+      "group": null,
+      "kind": "Toggle",
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 2
+      },
+      "default": 1.0,
+      "bipolar": false,
+      "featured": true
+    },
+    {
+      "addr": "dfecho/mix",
+      "name": "Mix",
+      "short_name": null,
+      "group": null,
+      "kind": "Continuous",
+      "range": {
+        "min": 0.0,
+        "max": 100.0,
+        "scale": "Linear",
+        "unit": "Percent",
+        "steps": 101
+      },
+      "default": 0.35,
+      "bipolar": false,
+      "featured": true
+    },
+    {
+      "addr": "dfecho/feedback",
+      "name": "Feedback",
+      "short_name": null,
+      "group": null,
+      "kind": "Continuous",
+      "range": {
+        "min": 0.0,
+        "max": 110.0,
+        "scale": "Linear",
+        "unit": "Percent",
+        "steps": 111
+      },
+      "default": 0.36363636363636365,
+      "bipolar": false,
+      "featured": true
+    },
+    {
+      "addr": "dfecho/sync",
+      "name": "Sync",
+      "short_name": null,
+      "group": null,
+      "kind": {
+        "Choice": {
+          "options": [
+            "Free",
+            "DAW",
+            "Tap"
+          ]
+        }
+      },
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 3
+      },
+      "default": 0.0,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "dfecho/mode",
+      "name": "Mode",
+      "short_name": null,
+      "group": null,
+      "kind": {
+        "Choice": {
+          "options": [
+            "Stereo",
+            "Phase Inv",
+            "Ping Pong"
+          ]
+        }
+      },
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 3
+      },
+      "default": 0.0,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "dfecho/div",
+      "name": "Division",
+      "short_name": null,
+      "group": null,
+      "kind": {
+        "Choice": {
+          "options": [
+            "1/1",
+            "1/1D",
+            "1/1T",
+            "1/2",
+            "1/2D",
+            "1/2T",
+            "1/4",
+            "1/4D",
+            "1/4T",
+            "1/8",
+            "1/8D",
+            "1/8T",
+            "1/16",
+            "1/16D",
+            "1/16T",
+            "1/32",
+            "1/32D",
+            "1/32T",
+            "1/64",
+            "1/64D",
+            "1/64T"
+          ]
+        }
+      },
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 21
+      },
+      "default": 1.0,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "dfecho/time",
+      "name": "Time",
+      "short_name": null,
+      "group": null,
+      "kind": "Continuous",
+      "range": {
+        "min": 20.0,
+        "max": 2400.0,
+        "scale": "Logarithmic",
+        "unit": "Milliseconds",
+        "steps": null
+      },
+      "default": 0.5190414486948031,
+      "bipolar": false,
+      "featured": true
+    },
+    {
+      "addr": "dfecho/low_cut",
+      "name": "Low Cut",
+      "short_name": null,
+      "group": null,
+      "kind": "Continuous",
+      "range": {
+        "min": 20.0,
+        "max": 1000.0,
+        "scale": "Logarithmic",
+        "unit": "Hz",
+        "steps": null
+      },
+      "default": 0.35436764027111584,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "dfecho/mod",
+      "name": "Mod",
+      "short_name": null,
+      "group": null,
+      "kind": "Continuous",
+      "range": {
+        "min": 0.0,
+        "max": 100.0,
+        "scale": "Linear",
+        "unit": "Percent",
+        "steps": 101
+      },
+      "default": 0.2,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "dfecho/ducker",
+      "name": "Ducker",
+      "short_name": null,
+      "group": null,
+      "kind": "Continuous",
+      "range": {
+        "min": 0.0,
+        "max": 100.0,
+        "scale": "Linear",
+        "unit": "Percent",
+        "steps": 101
+      },
+      "default": 0.0,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "dfecho/high_cut",
+      "name": "High Cut",
+      "short_name": null,
+      "group": null,
+      "kind": "Continuous",
+      "range": {
+        "min": 1000.0,
+        "max": 20000.0,
+        "scale": "Logarithmic",
+        "unit": "Hz",
+        "steps": null
+      },
+      "default": 0.6941346394792774,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "dfecho/on",
+      "name": "Engage",
+      "short_name": null,
+      "group": null,
+      "kind": "Toggle",
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 2
+      },
+      "default": 1.0,
+      "bipolar": false,
+      "featured": true
+    },
+    {
+      "addr": "dfecho/tap",
+      "name": "Tap Tempo",
+      "short_name": null,
+      "group": null,
+      "kind": "Toggle",
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 2
+      },
+      "default": 0.0,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "dfverb/mix",
+      "name": "Mix",
+      "short_name": null,
+      "group": null,
+      "kind": "Continuous",
+      "range": {
+        "min": 0.0,
+        "max": 100.0,
+        "scale": "Linear",
+        "unit": "Percent",
+        "steps": 101
+      },
+      "default": 0.3,
+      "bipolar": false,
+      "featured": true
+    },
+    {
+      "addr": "dfverb/pre_delay",
+      "name": "Pre Delay",
+      "short_name": null,
+      "group": null,
+      "kind": "Continuous",
+      "range": {
+        "min": 1.0,
+        "max": 500.0,
+        "scale": "Logarithmic",
+        "unit": "Milliseconds",
+        "steps": null
+      },
+      "default": 0.48204685253034196,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "dfverb/decay",
+      "name": "Decay",
+      "short_name": null,
+      "group": null,
+      "kind": "Continuous",
+      "range": {
+        "min": 0.2,
+        "max": 20.0,
+        "scale": "Logarithmic",
+        "unit": "Seconds",
+        "steps": null
+      },
+      "default": 0.5484550065040282,
+      "bipolar": false,
+      "featured": true
+    },
+    {
+      "addr": "dfverb/low_cut",
+      "name": "Low Cut",
+      "short_name": null,
+      "group": null,
+      "kind": "Continuous",
+      "range": {
+        "min": 20.0,
+        "max": 1000.0,
+        "scale": "Logarithmic",
+        "unit": "Hz",
+        "steps": null
+      },
+      "default": 0.41140808993222105,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "dfverb/high_cut",
+      "name": "High Cut",
+      "short_name": null,
+      "group": null,
+      "kind": "Continuous",
+      "range": {
+        "min": 1000.0,
+        "max": 20000.0,
+        "scale": "Logarithmic",
+        "unit": "Hz",
+        "steps": null
+      },
+      "default": 0.7334515826841693,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "dfverb/shimmer",
+      "name": "Shimmer",
+      "short_name": null,
+      "group": null,
+      "kind": "Toggle",
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 2
+      },
+      "default": 0.0,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "dfverb/on",
+      "name": "Bypass",
+      "short_name": null,
+      "group": null,
+      "kind": "Toggle",
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 2
+      },
+      "default": 1.0,
+      "bipolar": false,
+      "featured": true
+    },
+    {
+      "addr": "dfbeam/pedal",
+      "name": "Pedal",
+      "short_name": null,
+      "group": null,
+      "kind": "Continuous",
+      "range": {
+        "min": 0.0,
+        "max": 100.0,
+        "scale": "Linear",
+        "unit": "Percent",
+        "steps": null
+      },
+      "default": 0.0,
+      "bipolar": false,
+      "featured": true
+    },
+    {
+      "addr": "dfbeam/patch",
+      "name": "Patch",
+      "short_name": null,
+      "group": null,
+      "kind": {
+        "Choice": {
+          "options": [
+            "Dissonant Dive",
+            "Dual Dive",
+            "Inv 5th Chord",
+            "Inverted Atonal",
+            "Inverted Dive",
+            "Inverted Dive 2",
+            "Lead Octave"
+          ]
+        }
+      },
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 7
+      },
+      "default": 0.0,
+      "bipolar": false,
+      "featured": true
+    },
+    {
+      "addr": "dfbeam/mix",
+      "name": "Mix",
+      "short_name": null,
+      "group": null,
+      "kind": "Continuous",
+      "range": {
+        "min": 0.0,
+        "max": 100.0,
+        "scale": "Linear",
+        "unit": "Percent",
+        "steps": 101
+      },
+      "default": 1.0,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "dfbeam/envelope",
+      "name": "Envelope",
+      "short_name": null,
+      "group": null,
+      "kind": "Toggle",
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 2
+      },
+      "default": 0.0,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "dfbeam/speed",
+      "name": "Speed",
+      "short_name": null,
+      "group": null,
+      "kind": "Continuous",
+      "range": {
+        "min": 0.0,
+        "max": 100.0,
+        "scale": "Linear",
+        "unit": "Percent",
+        "steps": 101
+      },
+      "default": 0.5,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "dfbeam/sensitivity",
+      "name": "Sensitivity",
+      "short_name": null,
+      "group": null,
+      "kind": "Continuous",
+      "range": {
+        "min": 0.0,
+        "max": 100.0,
+        "scale": "Linear",
+        "unit": "Percent",
+        "steps": 101
+      },
+      "default": 0.5,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "dfbeam/trigger",
+      "name": "Trigger",
+      "short_name": null,
+      "group": null,
+      "kind": "Toggle",
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 2
+      },
+      "default": 0.0,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "dfbeam/on",
+      "name": "Engage",
+      "short_name": null,
+      "group": null,
+      "kind": "Toggle",
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 2
+      },
+      "default": 1.0,
+      "bipolar": false,
+      "featured": true
+    },
+    {
+      "addr": "dffrac/loop",
+      "name": "Loop Length",
+      "short_name": null,
+      "group": null,
+      "kind": {
+        "Choice": {
+          "options": [
+            "1/2 Bar",
+            "1 Bar",
+            "2 Bars",
+            "4 Bars"
+          ]
+        }
+      },
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 4
+      },
+      "default": 0.0,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "dffrac/read",
+      "name": "Read Point",
+      "short_name": null,
+      "group": null,
+      "kind": {
+        "Choice": {
+          "options": [
+            "1/1",
+            "1/1D",
+            "1/1T",
+            "1/2",
+            "1/2D",
+            "1/2T",
+            "1/4",
+            "1/4D",
+            "1/4T",
+            "1/8",
+            "1/8D",
+            "1/8T",
+            "1/16",
+            "1/16D",
+            "1/16T",
+            "1/32",
+            "1/32D",
+            "1/32T",
+            "1/64",
+            "1/64D",
+            "1/64T"
+          ]
+        }
+      },
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 21
+      },
+      "default": 0.95,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "dffrac/mode",
+      "name": "Mode",
+      "short_name": null,
+      "group": null,
+      "kind": {
+        "Choice": {
+          "options": [
+            "Sequence",
+            "Pitch Delay",
+            "Interfere",
+            "Texturizer"
+          ]
+        }
+      },
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 4
+      },
+      "default": 0.0,
+      "bipolar": false,
+      "featured": true
+    },
+    {
+      "addr": "dffrac/length",
+      "name": "Grain Length",
+      "short_name": null,
+      "group": null,
+      "kind": {
+        "Choice": {
+          "options": [
+            "1/1",
+            "1/1D",
+            "1/1T",
+            "1/2",
+            "1/2D",
+            "1/2T",
+            "1/4",
+            "1/4D",
+            "1/4T",
+            "1/8",
+            "1/8D",
+            "1/8T",
+            "1/16",
+            "1/16D",
+            "1/16T",
+            "1/32",
+            "1/32D",
+            "1/32T",
+            "1/64",
+            "1/64D",
+            "1/64T"
+          ]
+        }
+      },
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 21
+      },
+      "default": 0.95,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "dffrac/occurrence",
+      "name": "Occurrence",
+      "short_name": null,
+      "group": null,
+      "kind": {
+        "Choice": {
+          "options": [
+            "1/1",
+            "1/1D",
+            "1/1T",
+            "1/2",
+            "1/2D",
+            "1/2T",
+            "1/4",
+            "1/4D",
+            "1/4T",
+            "1/8",
+            "1/8D",
+            "1/8T",
+            "1/16",
+            "1/16D",
+            "1/16T",
+            "1/32",
+            "1/32D",
+            "1/32T",
+            "1/64",
+            "1/64D",
+            "1/64T"
+          ]
+        }
+      },
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 21
+      },
+      "default": 0.95,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "dffrac/pitch",
+      "name": "Pitch Amount",
+      "short_name": null,
+      "group": null,
+      "kind": "Continuous",
+      "range": {
+        "min": 0.0,
+        "max": 100.0,
+        "scale": "Linear",
+        "unit": "Percent",
+        "steps": 101
+      },
+      "default": 0.5,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "dffrac/direction",
+      "name": "Pitch Direction",
+      "short_name": null,
+      "group": null,
+      "kind": {
+        "Choice": {
+          "options": [
+            "Up",
+            "Both",
+            "Down"
+          ]
+        }
+      },
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 3
+      },
+      "default": 0.0,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "dffrac/chaos",
+      "name": "Chaos",
+      "short_name": null,
+      "group": null,
+      "kind": "Continuous",
+      "range": {
+        "min": 0.0,
+        "max": 100.0,
+        "scale": "Linear",
+        "unit": "Percent",
+        "steps": 101
+      },
+      "default": 0.5,
+      "bipolar": false,
+      "featured": true
+    },
+    {
+      "addr": "dffrac/filter",
+      "name": "Filter",
+      "short_name": null,
+      "group": null,
+      "kind": "Continuous",
+      "range": {
+        "min": 0.0,
+        "max": 100.0,
+        "scale": "Linear",
+        "unit": "Percent",
+        "steps": 101
+      },
+      "default": 0.5,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "dffrac/mix",
+      "name": "Mix",
+      "short_name": null,
+      "group": null,
+      "kind": "Continuous",
+      "range": {
+        "min": 0.0,
+        "max": 100.0,
+        "scale": "Linear",
+        "unit": "Percent",
+        "steps": 101
+      },
+      "default": 0.5,
+      "bipolar": false,
+      "featured": true
+    },
+    {
+      "addr": "dffrac/sync",
+      "name": "Sync",
+      "short_name": null,
+      "group": null,
+      "kind": {
+        "Choice": {
+          "options": [
+            "DAW",
+            "Tap"
+          ]
+        }
+      },
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 2
+      },
+      "default": 0.0,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "dffrac/bpm",
+      "name": "Tempo",
+      "short_name": null,
+      "group": null,
+      "kind": "Continuous",
+      "range": {
+        "min": 40.0,
+        "max": 240.0,
+        "scale": "Linear",
+        "unit": "Bpm",
+        "steps": null
+      },
+      "default": 0.4,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "dffrac/on",
+      "name": "Engage",
+      "short_name": null,
+      "group": null,
+      "kind": "Toggle",
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 2
+      },
+      "default": 1.0,
+      "bipolar": false,
+      "featured": true
+    },
+    {
+      "addr": "dffrac/tap",
+      "name": "Tempo Tap",
+      "short_name": null,
+      "group": null,
+      "kind": "Toggle",
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 2
+      },
+      "default": 0.0,
+      "bipolar": false,
+      "featured": false
+    }
+  ],
+  "actions": [],
+  "streams": [
+    {
+      "id": "dfcomp/gr",
+      "name": "Compression",
+      "kind": "GainReduction",
+      "rate_hz": 30.0
+    }
+  ],
+  "collections": []
+}
