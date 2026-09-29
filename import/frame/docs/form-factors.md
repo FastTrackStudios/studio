@@ -1,6 +1,7 @@
 # Form factors: one module, every shape
 
-Status: design, 2026-09-29. Nothing here is built yet.
+Status: design, 2026-09-29. Built so far: the `Embed` form and its host API
+(`crates/frame-embed`, §4.9); the rest is design.
 
 ## The goal
 
@@ -279,6 +280,7 @@ Two layers, kept separate:
 | **Wide** (compact landscape) | screen | 800 × 400 | 2:1 (1.8–2.2) | — | Reflow | 44 pt at 734 × 372 (iPhone landscape): scale 0.92, so hit boxes ≥ 48 px |
 | **Tile** | screen | 120·cols × 120·rows, grid of 1×1 … 4×2 | from grid | `cols, rows` | Letterbox | ≥ 58 pt on stage (signal's stack buttons); 1–4 controls |
 | **Euro** (optional) | physical | 12·HP × 303.5 | from HP | `hp: 2..=104` | Letterbox | as Lunchbox |
+| **Embed** | hosted | the host's box: `Strip` a strip's width (16–600) × the chain's height; `Mcp` 60–200 wide × the strip's FX area; `Tcp` 60–1200 × 22–80 | set by the host | `host: Strip \| Tcp \| Mcp` | Reflow by width tier (never letterbox) | the host's own (a mixer's pointer); 6 px grab zones on lines, ≥ 12 px handles |
 
 Why these extras:
 - **Head** covers amp heads, combos, cabs and tabletop boxes (Gravity Tank, Neural's EQ and
@@ -290,10 +292,18 @@ Why these extras:
 - **Tile** is the stomp/perform tile, a Quad-Cortex pill, a macro cell or a chain chip. It is
   what a perform grid or `ChainStrip` shows per module.
 - **Euro** is included for completeness with synth-module faces (keys rig). Low priority.
+- **Embed** is a module drawn *inside another UI's strip*: a processor in our own mixer's
+  channel strip (session's Tone rack: EQ, gate, compressor, saturator, de-esser, delay,
+  reverb, one per row), an FX slot expanded in place, and REAPER's TCP and MCP inline FX UI.
+  It is the one form whose size the **host** chooses, so it never letterboxes: the width
+  picks a level-of-detail tier and the view reflows into the box (§4.9). Heights are a fact
+  about the unit, not the width, so a unit sits on the same line across a mixer.
 
 Deliberately not form factors:
-- **Mixer channel strip.** A mixer board shows each module's `Lunchbox` view as a column, which
-  is how VMR works, and signal's 124 px `LayerStrip` is within 40% of it.
+- **Mixer channel strip** (as a module form). A mixer board shows each module's `Lunchbox`
+  view as a column, which is how VMR works, and signal's 124 px `LayerStrip` is within 40% of
+  it. What a *DAW* mixer strip carries inside it (a processor's curve under the fader's
+  track) is an `Embed`, not a strip form.
 - **Half-rack.** It is a `Rack` variant.
 - **Tuner, setlist, footswitch map.** These are rig-level, not module-level.
 
@@ -561,6 +571,70 @@ snapshots.
 - **`view-drops-featured`** (info): a derived view drops a priority-0/1 param that was in budget.
 - **`module-complete`** (info): lists the ★ forms still missing.
 
+### 4.9 Embeds: a module in someone else's strip
+
+Built in `crates/frame-embed` (a `crates/` library: it is what a host reaches for, and it
+composes surface-runtime, surface-kit, surface-widgets and the render collector behind one
+API; it has no wire contract or backends of its own).
+
+**Tiers.** An embed sheds detail by width, at session's thresholds (`tone::Rack::at`), so a
+frame panel and the hand-drawn rack it replaces change at the same widths:
+
+| Tier | Width | Shows |
+|---|---|---|
+| `Focus` | ≥ 260 | the plugin's own editing surface: its grid, labels, bigger nodes, times in the header |
+| `Full` | ≥ 96 (`LEGIBLE`) | every panel with its grid, decade labels, handles, the zoom chip |
+| `Curves` | ≥ 80 (`SHAPE`; REAPER's 86 px strip lands here) | the curves alone |
+| `Minimal` | ≥ 16 | a rail: the same rows at the same heights, one live indicator each |
+| `Off` | < 16 | nothing; the host keeps the room |
+
+A selected strip opens to 133 (`WORKING`). Row heights do not change with the tier.
+
+**Views are pages** (§4.2) until `Scene.views` exists: an authored embed lives on a page named
+`embed:strip`, `embed:mcp` or `embed:tcp`, optionally one page per breakpoint
+(`embed:mcp@96` is shown from 96 px up). The widest breakpoint that fits wins, then the host's
+plain page, then `embed:strip`, then the first page; the page is scaled to the host's width.
+Views built in code (`EmbedView`) are rebuilt for every new box instead — that is the reflow
+until a runtime layout solver exists (Phase E).
+
+**Painting, in two passes** (session's mixer model):
+- `record`: everything that depends only on params — the ground, grids, curves (from the
+  curve registry), handles, labels — painted once into the host's own scene and replayed under
+  the strip's transform until `needs_record()`.
+- `live`: everything that moves with the audio or with time — plots bound to feeds, meters,
+  curves reading a feed, motion — painted over the top every frame while `animating()`.
+
+It paints *into the host's scene*: `Canvas` is anyrender's `PaintScene` shape in kurbo 0.13 /
+peniko 0.6. `AnyRender` (feature `anyrender-0-11`) wraps session's anyrender 0.11 `Scene`;
+`Recording` is frame's replayable list; `cpu::Rasterizer` (vello_cpu) rasterises for a
+bitmap host. Text is drawn as glyph outlines so it replays anywhere.
+
+**Values the controls cannot say** (a header's "4 · 5.5dB", a band handle's hue, the band
+between a gate's two lines) are `Derived` properties: functions of the values, applied to the
+frame being painted. Params a layout depends on (an EQ's zoom, which machine a delay is, which
+phases are folded) trigger a rebuild, never mid-gesture.
+
+**Pointer**, strip-local: drag, wheel, double-click (reset) and cmd/ctrl-click (reset) go to
+the runtime; a right click is `passthrough` (the host's context menu).
+
+**REAPER** (`nice_plug::FrameEmbeddedEditor`, feature `nice-plug`): REAPER asks for size hints
+(`GETMINMAXINFO`: min/max px, preferred and minimum aspect as 16.16), then paints on its UI
+timer (about 30 Hz, `PAINT_OPTIONAL` unless forced) into a LICE bitmap of the slot's device
+pixels (BGRA words, a row span, maybe bottom-up; DPI in 24.8 fixed point, retina doubles the
+pixels). Mouse messages are slot-local device px with automatic capture; `INVALIDATE` forces a
+repaint. The editor rasterises on the CPU straight into the bitmap — an MCP-sized frame is
+0.1–2.2 ms in release, cheaper than a GPU readback — and skips optional paints when nothing
+moved.
+
+**session's rack** is `tone::ToneRack` (a strip's whole chain, phase containers included) and
+`tone::TonePanel` (one unit), with the same geometry and inks as `apps/session-daw/src/tone.rs`;
+the curve maths is session's by override — the host registers `eq_ui`'s
+`calculate_combined_response` as `eq.response`, `comp_ui`'s `compress_transfer` as
+`comp.transfer`, `saturate_dsp`'s `transfer_curve` as `sat.transfer`, its rendered reverb tail
+as `room.tail`. `fx_slot::FxProviders` is the framework-free half of daw-ui's
+`EmbeddedFxGuis` seam. Renders: `examples/embed/` (`cargo run -p frame-embed --example strips
+-- --compare <session golden png>` rebuilds them).
+
 ---
 
 ## 5. Types and where they live
@@ -597,11 +671,12 @@ pub enum FormFactor {
     Lunchbox { slots: u8 },     // 1..=3
     Head(HeadForm),
     Euro { hp: u16 },
+    Embed(EmbedForm),           // the host's box; frame-embed::form today
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Facet, Serialize, Deserialize)]
 #[repr(u8)]
-pub enum FormClass { Full, Square, Wide, Strip, Tile, Pedal, Rack, Lunchbox, Head, Euro }
+pub enum FormClass { Full, Square, Wide, Strip, Tile, Pedal, Rack, Lunchbox, Head, Euro, Embed }
 
 #[derive(Debug, Clone, PartialEq, Facet, Serialize, Deserialize)]
 pub struct PedalForm {
@@ -662,6 +737,12 @@ pub enum InputClass { Pointer, Touch, Stage }
 impl InputClass {
     pub fn min_hit(self) -> f64 { match self { Self::Pointer => 24.0, Self::Touch => 44.0, Self::Stage => 58.0 } }
 }
+
+// Built today in `crates/frame-embed/src/form.rs`; moves here unchanged.
+pub struct EmbedForm { pub host: EmbedHost }
+pub enum EmbedHost { Strip, Tcp, Mcp }                 // page names embed:strip / embed:tcp / embed:mcp
+pub enum Tier { Focus, Full, Curves, Minimal, Off }    // Tier::at(width): 260 / 96 / 80 / 16
+pub struct SizeHints { pub preferred_aspect: f64, pub minimum_aspect: f64, pub min: (f64, f64), pub max: (f64, f64) }
 ```
 
 Additions to `param.rs` (coordinate with signal's `ParamCuration`):
@@ -827,6 +908,19 @@ graph); a board only draws them.
 - Stomp board replaces `PerformGrid` (5 × 2, tap/hold, chords).
 - Perform board with Tiles, keys mixer from Lunchbox views, and iPhone Strip views.
 - Signal publishes `priority` / `role` from `ParamCuration`.
+
+**Phase H: embeds.** `crates/frame-embed` (built 2026-09-29, §4.9).
+- Done: the `Embed` form and tiers; `Embed` (reflow per box, record + live passes, pointer
+  routing, `Derived` values, rebuild on layout params); `Canvas` into anyrender 0.11, a
+  `Recording` or vello_cpu; session's Tone rack as `ToneRack` / `TonePanel` (EQ, gate,
+  compressor, saturator, de-esser, delay, reverb; phase containers and folds); a featured-param
+  embed for any catalog; `DocumentView` for authored `embed:*` pages; the nice-plug
+  `EmbeddedEditor` for REAPER's TCP/MCP; a headless harness with REAPER's sizes and timings.
+- Next: session replaces `tone::record`/`draw` with `ToneRack` (its `Tone` store published as
+  `<unit>/<param>` values, its meters as feeds, its plugin maths registered as curve
+  providers); `FormFactor::Embed` moves into `surface-proto::form` with Phase A; a runtime
+  reflow solver (Phase E) lets authored `embed:*` pages reflow instead of scale; derived embed
+  views (`derive_view … Embed`) from a module's Rack view.
 
 Phases A and B are small and unblock everything else. C is the biggest win: every module gets
 four more forms for free. E (reflow) is the riskiest and can come last among the module-level

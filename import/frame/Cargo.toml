@@ -12,6 +12,8 @@ members = [
     "apps/frame/library-server",
     # ── facade ────────────────────────────────────────────────────────
     "crates/frame",
+    # ── embed: frame surfaces in a host's strip (mixer rack, REAPER TCP/MCP)
+    "crates/frame-embed",
     # ── design: AI authoring — lint, tools, MCP ──────────────────────
     "features/design/design-lint",
     "features/design/design-session",
@@ -54,6 +56,7 @@ default-members = [
     "apps/frame/desktop",
     "apps/frame/library-server",
     "crates/frame",
+    "crates/frame-embed",
     "features/design/design-lint",
     "features/design/design-session",
     "features/document/document-proto",
