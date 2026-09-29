@@ -88,33 +88,13 @@ pub(super) fn fill_paints(paints: &[doc::Paint], scene: &Scene) -> Vec<(FillPain
     paints.iter().filter(|p| p.visible).filter_map(|p| fill_paint(p, scene).map(|f| (f, blend_mix(p.blend)))).collect()
 }
 
-fn first_color(fill: &FillPaint) -> Option<Rgba> {
+pub(super) fn first_color(fill: &FillPaint) -> Option<Rgba> {
     match fill {
         FillPaint::Solid(c) => Some(c.clone()),
         FillPaint::GradientLinear { stops, .. }
         | FillPaint::GradientRadial { stops, .. }
         | FillPaint::GradientAngular { stops, .. } => stops.first().map(|s| s.color.clone()),
         FillPaint::Image { .. } => None,
-    }
-}
-
-fn stroke_cap(c: doc::StrokeCap) -> StrokeCap {
-    use doc::StrokeCap as D;
-    match c {
-        D::None => StrokeCap::None,
-        D::Round => StrokeCap::Round,
-        D::Square => StrokeCap::Square,
-        D::LineArrow => StrokeCap::LineArrow,
-        D::TriangleArrow => StrokeCap::TriangleArrow,
-        D::DiamondFilled => StrokeCap::DiamondFilled,
-        D::CircleFilled => StrokeCap::CircleFilled,
-        D::TriangleFilled => StrokeCap::TriangleFilled,
-        D::WashiTape1 => StrokeCap::WashiTape1,
-        D::WashiTape2 => StrokeCap::WashiTape2,
-        D::WashiTape3 => StrokeCap::WashiTape3,
-        D::WashiTape4 => StrokeCap::WashiTape4,
-        D::WashiTape5 => StrokeCap::WashiTape5,
-        D::WashiTape6 => StrokeCap::WashiTape6,
     }
 }
 
@@ -131,17 +111,9 @@ pub(super) fn stroke_style(s: &doc::Stroke, opacity: f64) -> Option<StrokeStyle>
     Some(StrokeStyle {
         color: color.with_opacity(opacity),
         width,
-        cap: stroke_cap(s.cap),
-        join: match s.join {
-            doc::StrokeJoin::Miter => StrokeJoin::Miter,
-            doc::StrokeJoin::Bevel => StrokeJoin::Bevel,
-            doc::StrokeJoin::Round => StrokeJoin::Round,
-        },
-        align: match s.align {
-            doc::StrokeAlign::Inside => StrokeAlign::Inside,
-            doc::StrokeAlign::Outside => StrokeAlign::Outside,
-            doc::StrokeAlign::Center => StrokeAlign::Center,
-        },
+        cap: s.cap,
+        join: s.join,
+        align: s.align,
         miter_limit: s.miter_limit.max(1.0),
         dash_pattern: s.dash_pattern.iter().copied().filter(|v| *v > 0.0).collect(),
         dash_offset: s.dash_offset,

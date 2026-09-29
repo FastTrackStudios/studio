@@ -1,36 +1,10 @@
 use super::cache::{cached_bez_path, cached_svg_decode, cached_svg_fit_transform, cached_svg_tree};
-use super::collect::build_paint_primitives;
-use super::extract::first_color_from_fill;
+use super::scene_collect::first_color;
 use super::geometry::{compute_path_fit_transform, extract_scale, to_peniko};
 use super::types::*;
-use figma_model::{FrameDocument, NodeId};
 
 const TEXT_ANCHOR_SHIFT_X: f64 = 1.0;
 const TEXT_ANCHOR_SHIFT_Y: f64 = 1.0;
-
-pub fn paint_into_scene(scene: &mut vello::Scene, doc: &FrameDocument, root: NodeId) {
-    paint_into_scene_with(scene, doc, root, kurbo::Affine::IDENTITY, None);
-}
-
-pub fn paint_into_scene_with_font(
-    scene: &mut vello::Scene,
-    doc: &FrameDocument,
-    root: NodeId,
-    font: TextFontRef<'_>,
-) {
-    paint_into_scene_with(scene, doc, root, kurbo::Affine::IDENTITY, Some(font));
-}
-
-pub fn paint_into_scene_with(
-    scene: &mut vello::Scene,
-    doc: &FrameDocument,
-    root: NodeId,
-    scene_transform: kurbo::Affine,
-    text_font: Option<TextFontRef<'_>>,
-) {
-    let primitives = build_paint_primitives(doc, root);
-    paint_primitives_into_scene_with(scene, &primitives, scene_transform, text_font);
-}
 
 /// Paint a frame document (`root`'s subtree) into a vello scene.
 pub fn paint_scene_into(
@@ -233,7 +207,7 @@ pub fn paint_primitives_into_scene_with(
                 let uniform_corner = corner_radii.top_left;
                 let blur_color_hint = fills
                     .first()
-                    .and_then(|(f, _)| first_color_from_fill(f))
+                    .and_then(|(f, _)| first_color(f))
                     .or_else(|| stroke.as_ref().map(|s| s.color.clone()));
                 let has_layer_blur = effects.iter().any(|e| matches!(e.kind, EffectKind::LayerBlur));
                 for effect in effects {
@@ -398,7 +372,7 @@ pub fn paint_primitives_into_scene_with(
                 let bounds_rect = Rect::new(lx, ly, lx + width, ly + height);
                 let blur_color_hint = fills
                     .first()
-                    .and_then(|(f, _)| first_color_from_fill(f))
+                    .and_then(|(f, _)| first_color(f))
                     .or_else(|| stroke.as_ref().map(|s| s.color.clone()));
                 let path_origin_transform = base_transform * kurbo::Affine::translate((lx, ly));
                 let path_fit =
@@ -1111,8 +1085,8 @@ pub fn paint_primitives_into_scene_with(
         scene: &mut vello::Scene,
         path_transform: kurbo::Affine,
         path: &BezPath,
-        x: f64,
-        y: f64,
+        _x: f64,
+        _y: f64,
         width: f64,
         height: f64,
         fill: &FillPaint,

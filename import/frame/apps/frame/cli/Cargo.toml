@@ -6,8 +6,8 @@ edition.workspace = true
 publish = false
 
 [dependencies]
-figma-model = { path = "../../../features/figma/figma-model" }
 figma-rest = { path = "../../../features/figma/figma-rest" }
+figma-import = { path = "../../../features/figma/figma-import" }
 render = { path = "../../../features/render/render" }
 document-proto = { path = "../../../features/document/document-proto", default-features = false }
 document-text = { path = "../../../features/document/document-text" }

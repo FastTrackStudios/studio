@@ -1,4 +1,3 @@
-use figma_api::models;
 use document_proto::NodeId;
 
 pub use super::transform::AffineTransform2D;
@@ -131,9 +130,7 @@ pub struct NodeEffect {
     pub spread: f64,
 }
 
-pub type StrokeCap = models::has_geometry_trait::StrokeCap;
-pub type StrokeJoin = models::has_geometry_trait::StrokeJoin;
-pub type StrokeAlign = models::has_geometry_trait::StrokeAlign;
+pub use document_proto::{StrokeAlign, StrokeCap, StrokeJoin};
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct StrokeStyle {

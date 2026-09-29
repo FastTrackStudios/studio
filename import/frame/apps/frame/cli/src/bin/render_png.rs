@@ -14,8 +14,7 @@ fn main() {
 
 #[cfg(feature = "anyrender")]
 fn run() -> Result<(), String> {
-    use figma_model::FrameDocument;
-    use render::{build_layout_boxes, TextFontRef};
+    use render::{build_scene_layout_boxes, TextFontRef};
     use image::RgbaImage;
     use kurbo::Affine;
     use peniko::Color;
@@ -60,18 +59,16 @@ fn run() -> Result<(), String> {
     let bytes = std::fs::read(&input).map_err(|e| format!("failed reading {input}: {e}"))?;
     let export_bbox = extract_export_bbox(&bytes, root_figma_id.as_deref())?;
     let base_color = extract_export_base_color(&bytes, root_figma_id.as_deref())?.unwrap_or(Color::WHITE);
-    let doc = FrameDocument::from_source_bytes(&bytes)
+    let doc = figma_import::import_bytes(&bytes)
         .map_err(|e| format!("failed importing source document from {input}: {e}"))?;
     let root = match root_figma_id {
-        Some(figma_id) => doc
-            .get_by_figma_id(&figma_id)
-            .map(|n| n.id)
+        Some(figma_id) => figma_import::node_for_figma_id(&doc, &figma_id)
             .ok_or_else(|| format!("root figma id not found: {figma_id}"))?,
-        None => doc.pages.first().copied().unwrap_or(doc.root),
+        None => doc.pages().first().copied().unwrap_or(doc.root),
     };
 
-    let layout_boxes = build_layout_boxes(&doc, root);
-    let subtree = doc.walk_subtree(root);
+    let layout_boxes = build_scene_layout_boxes(&doc, root);
+    let subtree = doc.walk(root);
 
     let mut min_x = f64::INFINITY;
     let mut min_y = f64::INFINITY;
@@ -126,7 +123,7 @@ fn run() -> Result<(), String> {
     let text_font_ref = text_font_bytes
         .as_ref()
         .map(|bytes| TextFontRef { bytes, index: 0 });
-    render::paint_into_scene_with(&mut scene, &doc, root, scene_transform, text_font_ref);
+    render::paint_scene_into(&mut scene, &doc, root, scene_transform, text_font_ref);
 
     let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor::default());
     let adapter = pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions::default()))

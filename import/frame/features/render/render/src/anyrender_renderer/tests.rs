@@ -1,25 +1,47 @@
 use super::*;
-use figma_model::FrameDocument;
+use document_proto::{self as doc, Node, NodeKind, Scene};
+
+/// A scene whose first page holds `nodes`; each entry is `(parent index or
+/// None for the page, node)`. Returns the scene and its page id.
+fn scene_of(nodes: Vec<(Option<usize>, Node)>) -> (Scene, doc::NodeId) {
+    let mut scene = Scene::new("Page");
+    let page = scene.pages()[0];
+    let ids: Vec<doc::NodeId> = nodes.iter().map(|(_, n)| n.id).collect();
+    for (parent, mut node) in nodes {
+        let parent_id = parent.map_or(page, |i| ids[i]);
+        node.parent = Some(parent_id);
+        scene.node_mut(parent_id).unwrap().children.push(node.id);
+        scene.nodes.insert(node.id, node);
+    }
+    (scene, page)
+}
+
+fn node(kind: NodeKind, x: f64, y: f64, w: f64, h: f64) -> Node {
+    let mut n = Node::new(kind, "n");
+    n.transform = doc::Transform::translate(x, y);
+    n.size = doc::Size { width: w, height: h };
+    n
+}
+
+fn solid(r: f64, g: f64, b: f64, opacity: f64) -> doc::Paint {
+    doc::Paint { opacity, ..doc::Paint::solid(doc::Color::rgba(r, g, b, 1.0)) }
+}
 
 #[test]
-fn parses_stroke_style_with_dash_and_caps() {
-    use super::extract::parse_stroke_style;
+fn stroke_style_carries_dash_caps_and_opacity() {
+    use super::scene_collect::stroke_style;
 
-    let raw = serde_json::json!({
-        "strokes": [{
-            "type": "SOLID",
-            "color": { "r": 1.0, "g": 0.5, "b": 0.0, "a": 1.0 },
-            "opacity": 1.0
-        }],
-        "strokeWeight": 2.0,
-        "strokeCap": "ROUND",
-        "strokeJoin": "BEVEL",
-        "strokeAlign": "INSIDE",
-        "strokeMiterLimit": 8.0,
-        "dashPattern": [4, 2]
-    });
-
-    let stroke = parse_stroke_style(&raw, 0.75).expect("expected stroke");
+    let stroke = doc::Stroke {
+        paints: vec![solid(1.0, 0.5, 0.0, 1.0)],
+        weight: 2.0,
+        cap: doc::StrokeCap::Round,
+        join: doc::StrokeJoin::Bevel,
+        align: doc::StrokeAlign::Inside,
+        miter_limit: 8.0,
+        dash_pattern: vec![4.0, 2.0],
+        dash_offset: 0.0,
+    };
+    let stroke = stroke_style(&stroke, 0.75).expect("expected stroke");
     assert_eq!(stroke.width, 2.0);
     assert!(matches!(stroke.cap, StrokeCap::Round));
     assert!(matches!(stroke.join, StrokeJoin::Bevel));
@@ -30,351 +52,158 @@ fn parses_stroke_style_with_dash_and_caps() {
 }
 
 #[test]
-fn parses_image_fill_from_hydrated_assets() {
-    use super::extract::image_fill_from_paint;
+fn image_fill_reads_asset_bytes() {
+    use super::scene_collect::fill_paint;
 
-    let raw = serde_json::json!({
-        "imageFillAssets": {
-            "abc123": "Zm9vYmFy"
-        }
-    });
-    let paint = serde_json::json!({
-        "type": "IMAGE",
-        "imageHash": "abc123",
-        "opacity": 0.5
-    });
-
-    let parsed = image_fill_from_paint(&raw, &paint).expect("expected image fill");
-    assert_eq!(parsed.image_hash.as_deref(), Some("abc123"));
-    assert_eq!(parsed.data_base64, "Zm9vYmFy");
-    assert!((parsed.alpha - 0.5).abs() < 1e-9);
-    assert_eq!(parsed.scale_mode, ImageScaleMode::Fill); // default when no scaleMode
+    let mut scene = Scene::new("Page");
+    let asset = scene.add_asset("image/png", b"foobar".to_vec());
+    let paint = doc::Paint {
+        kind: doc::PaintKind::Image {
+            asset,
+            source_ref: Some("abc123".into()),
+            scale_mode: doc::ImageScaleMode::Fill,
+            transform: None,
+        },
+        opacity: 0.5,
+        blend: doc::BlendMode::Normal,
+        visible: true,
+    };
+    let Some(FillPaint::Image { image_hash, data_base64, alpha, scale_mode, .. }) = fill_paint(&paint, &scene) else {
+        panic!("expected image fill");
+    };
+    assert_eq!(image_hash.as_deref(), Some("abc123"));
+    assert_eq!(data_base64, "Zm9vYmFy");
+    assert!((alpha - 0.5).abs() < 1e-9);
+    assert_eq!(scale_mode, ImageScaleMode::Fill);
 }
 
 #[test]
-fn parses_image_fill_without_hydrated_assets_uses_placeholder() {
-    use super::extract::image_fill_from_paint;
+fn gradient_paint_opacity_applied_to_stops() {
+    use super::scene_collect::fill_paint;
 
-    let raw = serde_json::json!({});
-    let paint = serde_json::json!({
-        "type": "IMAGE",
-        "imageHash": "abc123",
-        "opacity": 1.0
-    });
-
-    let parsed = image_fill_from_paint(&raw, &paint).expect("expected image fill");
-    assert_eq!(
-        parsed.data_base64,
-        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGP4z8DwHwAFAAH/iZk9HQAAAABJRU5ErkJggg=="
-    );
+    let scene = Scene::new("Page");
+    let stop = |position, r, b| doc::GradientStop { position, color: doc::Color::rgba(r, 0.0, b, 1.0) };
+    let paint = doc::Paint {
+        kind: doc::PaintKind::LinearGradient { stops: vec![stop(0.0, 1.0, 0.0), stop(1.0, 0.0, 1.0)], transform: None },
+        opacity: 0.5,
+        blend: doc::BlendMode::Normal,
+        visible: true,
+    };
+    let Some(FillPaint::GradientLinear { stops, .. }) = fill_paint(&paint, &scene) else {
+        panic!("expected linear gradient");
+    };
+    assert_eq!(stops.len(), 2);
+    assert!((stops[0].color.a - 0.5).abs() < 1e-9, "first stop alpha: {}", stops[0].color.a);
+    assert!((stops[1].color.a - 0.5).abs() < 1e-9, "second stop alpha: {}", stops[1].color.a);
 }
 
 #[test]
 fn inherited_opacity_applies_to_child_fills() {
-    let json = serde_json::json!({
-        "schema": "fts.figma.export/v1",
-        "generatedAt": "2026-02-16T00:00:00.000Z",
-        "source": { "editorType": "figma", "page": { "id": "0:1", "name": "Canvas" } },
-        "selection": { "ids": [], "names": [], "totalRoots": 0, "totalNodes": 0 },
-        "options": { "includeSvg": false, "includePng": false, "maxDepth": 4 },
-        "nodes": [{
-            "id": "1:1",
-            "name": "RootFrame",
-            "type": "FRAME",
-            "visible": true,
-            "opacity": 0.5,
-            "relativeTransform": [[1.0,0.0,0.0],[0.0,1.0,0.0]],
-            "size": { "x": 100.0, "y": 100.0 },
-            "absoluteBoundingBox": { "x": 0.0, "y": 0.0, "width": 100.0, "height": 100.0 },
-            "children": [{
-                "id": "1:2",
-                "name": "ChildRect",
-                "type": "RECTANGLE",
-                "visible": true,
-                "relativeTransform": [[1.0,0.0,10.0],[0.0,1.0,10.0]],
-                "size": { "x": 20.0, "y": 20.0 },
-                "absoluteBoundingBox": { "x": 10.0, "y": 10.0, "width": 20.0, "height": 20.0 },
-                "fills": [{
-                    "type": "SOLID",
-                    "visible": true,
-                    "opacity": 1.0,
-                    "color": { "r": 1.0, "g": 0.0, "b": 0.0, "a": 1.0 }
-                }],
-                "children": []
-            }]
-        }]
-    });
-    let bytes = serde_json::to_vec(&json).expect("json bytes");
-    let doc = FrameDocument::from_source_bytes(&bytes).expect("import");
-    let root = doc.pages[0];
-    let primitives = build_paint_primitives(&doc, root);
+    let mut frame = node(NodeKind::Frame, 0.0, 0.0, 100.0, 100.0);
+    frame.opacity = 0.5;
+    let mut rect = node(NodeKind::Rectangle, 10.0, 10.0, 20.0, 20.0);
+    rect.fills = vec![solid(1.0, 0.0, 0.0, 1.0)];
+    let (scene, root) = scene_of(vec![(None, frame), (Some(0), rect)]);
 
-    let mut found = false;
-    for p in primitives {
-        if let PaintPrimitive::Rect { fills, .. } = &p {
-            // One rect is the frame background (may be missing fill); we only care
-            // that at least one solid fill carries inherited alpha 0.5.
-            for (fill, _blend) in fills {
-                if let FillPaint::Solid(c) = fill {
-                    if (c.a - 0.5).abs() < 1e-9 {
-                        found = true;
-                        break;
-                    }
-                }
-            }
-            if found {
-                break;
-            }
+    let found = build_scene_primitives(&scene, root).iter().any(|p| match p {
+        PaintPrimitive::Rect { fills, .. } => {
+            fills.iter().any(|(f, _)| matches!(f, FillPaint::Solid(c) if (c.a - 0.5).abs() < 1e-9))
         }
-    }
+        _ => false,
+    });
     assert!(found, "expected child fill alpha to include parent opacity");
 }
 
 #[test]
 fn emits_layer_primitives_for_non_normal_blend_nodes() {
-    let json = serde_json::json!({
-        "schema": "fts.figma.export/v1",
-        "generatedAt": "2026-02-16T00:00:00.000Z",
-        "source": { "editorType": "figma", "page": { "id": "0:1", "name": "Canvas" } },
-        "selection": { "ids": [], "names": [], "totalRoots": 0, "totalNodes": 0 },
-        "options": { "includeSvg": false, "includePng": false, "maxDepth": 4 },
-        "nodes": [{
-            "id": "2:1",
-            "name": "BlendFrame",
-            "type": "FRAME",
-            "visible": true,
-            "blendMode": "MULTIPLY",
-            "relativeTransform": [[1.0,0.0,0.0],[0.0,1.0,0.0]],
-            "size": { "x": 50.0, "y": 50.0 },
-            "absoluteBoundingBox": { "x": 0.0, "y": 0.0, "width": 50.0, "height": 50.0 },
-            "children": []
-        }]
-    });
-    let bytes = serde_json::to_vec(&json).expect("json bytes");
-    let doc = FrameDocument::from_source_bytes(&bytes).expect("import");
-    let root = doc.pages[0];
-    let primitives = build_paint_primitives(&doc, root);
+    let mut frame = node(NodeKind::Frame, 0.0, 0.0, 50.0, 50.0);
+    frame.blend = doc::BlendMode::Multiply;
+    let (scene, root) = scene_of(vec![(None, frame)]);
 
-    let mut start = 0usize;
-    let mut end = 0usize;
-    for p in primitives {
-        match p {
-            PaintPrimitive::LayerStart { .. } => start += 1,
-            PaintPrimitive::LayerEnd { .. } => end += 1,
-            _ => {}
-        }
-    }
+    let primitives = build_scene_primitives(&scene, root);
+    let start = primitives.iter().filter(|p| matches!(p, PaintPrimitive::LayerStart { .. })).count();
+    let end = primitives.iter().filter(|p| matches!(p, PaintPrimitive::LayerEnd { .. })).count();
     assert!(start >= 1, "expected at least one layer start");
     assert_eq!(start, end, "layer boundaries should be balanced");
 }
 
 #[test]
-fn extracts_rotation_from_relative_transform() {
-    let json = serde_json::json!({
-        "schema": "fts.figma.export/v1",
-        "generatedAt": "2026-02-16T00:00:00.000Z",
-        "source": { "editorType": "figma", "page": { "id": "0:1", "name": "Canvas" } },
-        "selection": { "ids": [], "names": [], "totalRoots": 0, "totalNodes": 0 },
-        "options": { "includeSvg": false, "includePng": false, "maxDepth": 4 },
-        "nodes": [{
-            "id": "3:1",
-            "name": "RotatedParent",
-            "type": "FRAME",
-            "visible": true,
-            "relativeTransform": [[1.0,0.0,0.0],[0.0,1.0,0.0]],
-            "size": { "x": 100.0, "y": 100.0 },
-            "absoluteBoundingBox": { "x": 0.0, "y": 0.0, "width": 100.0, "height": 100.0 },
-            "children": [{
-                "id": "3:2",
-                "name": "RotatedRect",
-                "type": "RECTANGLE",
-                "visible": true,
-                "relativeTransform": [[0.934,-0.358,4.584],[0.358,0.934,22.253]],
-                "size": { "x": 15.0, "y": 1.0 },
-                "absoluteBoundingBox": { "x": 4.584, "y": 22.253, "width": 15.0, "height": 1.0 },
-                "fills": [{
-                    "type": "SOLID",
-                    "visible": true,
-                    "opacity": 1.0,
-                    "color": { "r": 1.0, "g": 1.0, "b": 1.0, "a": 1.0 }
-                }],
-                "children": []
-            }]
-        }]
-    });
-    let bytes = serde_json::to_vec(&json).expect("json bytes");
-    let doc = FrameDocument::from_source_bytes(&bytes).expect("import");
-    let root = doc.pages[0];
-    let primitives = build_paint_primitives(&doc, root);
+fn extracts_rotation_from_transform() {
+    let frame = node(NodeKind::Frame, 0.0, 0.0, 100.0, 100.0);
+    let mut rect = node(NodeKind::Rectangle, 0.0, 0.0, 15.0, 1.0);
+    rect.transform = doc::Transform { a: 0.934, b: -0.358, tx: 4.584, c: 0.358, d: 0.934, ty: 22.253 };
+    rect.fills = vec![solid(1.0, 1.0, 1.0, 1.0)];
+    let (scene, root) = scene_of(vec![(None, frame), (Some(0), rect)]);
 
-    let mut found_rotation = false;
-    for p in primitives {
-        if let PaintPrimitive::Rect { rotation, .. } = &p {
-            // atan2(0.358, 0.934) ≈ 0.3649 radians ≈ 20.9°
-            if rotation.abs() > 0.3 && rotation.abs() < 0.4 {
-                found_rotation = true;
-                break;
-            }
-        }
-    }
-    assert!(
-        found_rotation,
-        "expected rotated rect with ~0.365 radian rotation"
-    );
+    // atan2(0.358, 0.934) ≈ 0.3649 radians ≈ 20.9°
+    let found = build_scene_primitives(&scene, root)
+        .iter()
+        .any(|p| matches!(p, PaintPrimitive::Rect { rotation, .. } if rotation.abs() > 0.3 && rotation.abs() < 0.4));
+    assert!(found, "expected rotated rect with ~0.365 radian rotation");
 }
 
 #[test]
-fn per_fill_blend_mode_is_extracted() {
-    let json = serde_json::json!({
-        "schema": "fts.figma.export/v1",
-        "generatedAt": "2026-02-16T00:00:00.000Z",
-        "source": { "editorType": "figma", "page": { "id": "0:1", "name": "Canvas" } },
-        "selection": { "ids": [], "names": [], "totalRoots": 0, "totalNodes": 0 },
-        "options": { "includeSvg": false, "includePng": false, "maxDepth": 4 },
-        "nodes": [{
-            "id": "4:1",
-            "name": "MultiBlendRect",
-            "type": "RECTANGLE",
-            "visible": true,
-            "relativeTransform": [[1.0,0.0,0.0],[0.0,1.0,0.0]],
-            "size": { "x": 100.0, "y": 100.0 },
-            "absoluteBoundingBox": { "x": 0.0, "y": 0.0, "width": 100.0, "height": 100.0 },
-            "fills": [
-                {
-                    "type": "SOLID",
-                    "visible": true,
-                    "opacity": 1.0,
-                    "color": { "r": 1.0, "g": 0.0, "b": 0.0, "a": 1.0 }
-                },
-                {
-                    "type": "SOLID",
-                    "visible": true,
-                    "opacity": 0.5,
-                    "blendMode": "SOFT_LIGHT",
-                    "color": { "r": 0.0, "g": 0.0, "b": 1.0, "a": 1.0 }
-                }
-            ],
-            "children": []
-        }]
-    });
-    let bytes = serde_json::to_vec(&json).expect("json bytes");
-    let doc = FrameDocument::from_source_bytes(&bytes).expect("import");
-    let root = doc.pages[0];
-    let primitives = build_paint_primitives(&doc, root);
+fn per_fill_blend_mode_is_kept() {
+    let mut rect = node(NodeKind::Rectangle, 0.0, 0.0, 100.0, 100.0);
+    rect.fills = vec![
+        solid(1.0, 0.0, 0.0, 1.0),
+        doc::Paint { blend: doc::BlendMode::SoftLight, ..solid(0.0, 0.0, 1.0, 0.5) },
+    ];
+    let (scene, root) = scene_of(vec![(None, rect)]);
 
-    let mut found_soft_light = false;
-    for p in primitives {
-        if let PaintPrimitive::Rect { fills, .. } = &p {
-            for (_fill, blend) in fills {
-                if *blend == BlendMix::SoftLight {
-                    found_soft_light = true;
-                    break;
-                }
-            }
-        }
-    }
-    assert!(
-        found_soft_light,
-        "expected at least one fill with SoftLight blend mode"
-    );
+    let found = build_scene_primitives(&scene, root).iter().any(|p| match p {
+        PaintPrimitive::Rect { fills, .. } => fills.iter().any(|(_, b)| *b == BlendMix::SoftLight),
+        _ => false,
+    });
+    assert!(found, "expected at least one fill with SoftLight blend mode");
 }
 
 #[test]
-fn ellipse_with_empty_fill_geometry_emits_rect_not_path() {
-    // Figma ELLIPSE nodes may export fillGeometry with empty path strings.
-    // These should fall through to Rect rendering (with circular corner radii)
-    // instead of being routed to the Path branch where nothing renders.
-    let json = serde_json::json!({
-        "schema": "fts.figma.export/v1",
-        "generatedAt": "2026-02-16T00:00:00.000Z",
-        "source": { "editorType": "figma", "page": { "id": "0:1", "name": "Canvas" } },
-        "selection": { "ids": [], "names": [], "totalRoots": 0, "totalNodes": 0 },
-        "options": { "includeSvg": false, "includePng": false, "maxDepth": 4 },
-        "nodes": [{
-            "id": "5:1",
-            "name": "Parent",
-            "type": "FRAME",
-            "visible": true,
-            "relativeTransform": [[1.0,0.0,0.0],[0.0,1.0,0.0]],
-            "size": { "x": 200.0, "y": 200.0 },
-            "absoluteBoundingBox": { "x": 0.0, "y": 0.0, "width": 200.0, "height": 200.0 },
-            "children": [{
-                "id": "5:2",
-                "name": "MetalKnob",
-                "type": "ELLIPSE",
-                "visible": true,
-                "relativeTransform": [[1.0,0.0,10.0],[0.0,1.0,10.0]],
-                "size": { "x": 40.0, "y": 40.0 },
-                "absoluteBoundingBox": { "x": 10.0, "y": 10.0, "width": 40.0, "height": 40.0 },
-                "fillGeometry": [{ "path": "" }],
-                "fills": [{
-                    "type": "SOLID",
-                    "visible": true,
-                    "opacity": 1.0,
-                    "color": { "r": 0.5, "g": 0.5, "b": 0.5, "a": 1.0 }
-                }],
-                "children": []
-            }]
-        }]
-    });
-    let bytes = serde_json::to_vec(&json).expect("json bytes");
-    let doc = FrameDocument::from_source_bytes(&bytes).expect("import");
-    let root = doc.pages[0];
-    let primitives = build_paint_primitives(&doc, root);
+fn ellipse_without_geometry_emits_round_rect() {
+    // An ellipse with no exported geometry draws as a rect with circular radii.
+    let frame = node(NodeKind::Frame, 0.0, 0.0, 200.0, 200.0);
+    let mut ellipse = node(NodeKind::Ellipse, 10.0, 10.0, 40.0, 40.0);
+    ellipse.fills = vec![solid(0.5, 0.5, 0.5, 1.0)];
+    let (scene, root) = scene_of(vec![(None, frame), (Some(0), ellipse)]);
 
-    let mut found_rect = false;
-    for p in primitives {
-        if let PaintPrimitive::Rect {
-            width,
-            height,
-            corner_radii,
-            ..
-        } = &p
+    let rect = build_scene_primitives(&scene, root).into_iter().find_map(|p| match p {
+        PaintPrimitive::Rect { width, height, corner_radii, .. }
+            if (width - 40.0).abs() < 1e-6 && (height - 40.0).abs() < 1e-6 =>
         {
-            // ELLIPSE 40×40 should produce a Rect with corner radii = 20 (half width)
-            if (*width - 40.0).abs() < 1e-6 && (*height - 40.0).abs() < 1e-6 {
-                assert!(
-                    (corner_radii.top_left - 20.0).abs() < 1e-6,
-                    "expected circular corner radius 20.0, got {}",
-                    corner_radii.top_left
-                );
-                found_rect = true;
-                break;
-            }
+            Some(corner_radii)
         }
-    }
-    assert!(
-        found_rect,
-        "ELLIPSE with empty fillGeometry should emit a Rect, not a Path"
-    );
+        _ => None,
+    });
+    let radii = rect.expect("ELLIPSE without geometry should emit a Rect, not a Path");
+    assert!((radii.top_left - 20.0).abs() < 1e-6, "expected circular corner radius 20.0, got {}", radii.top_left);
 }
 
 #[test]
-fn gradient_paint_opacity_applied_to_stops() {
-    use super::extract::gradient_stops_from_paint_test;
+fn diagnostics_count_typed_features() {
+    let mut blended = node(NodeKind::Frame, 0.0, 0.0, 10.0, 10.0);
+    blended.blend = doc::BlendMode::Multiply;
+    let mut text = node(NodeKind::Text(doc::TextData::default()), 0.0, 0.0, 10.0, 10.0);
+    text.effects = vec![doc::Effect {
+        kind: doc::EffectKind::LayerBlur,
+        visible: true,
+        color: doc::Color::rgba(0.0, 0.0, 0.0, 0.25),
+        offset_x: 0.0,
+        offset_y: 0.0,
+        radius: 4.0,
+        spread: 0.0,
+    }];
+    let mut masked = node(NodeKind::Rectangle, 0.0, 0.0, 10.0, 10.0);
+    masked.mask = Some(doc::MaskKind::Luminance);
+    let mut hidden_fill = node(NodeKind::Rectangle, 0.0, 0.0, 10.0, 10.0);
+    hidden_fill.fills = vec![doc::Paint { visible: false, ..solid(0.0, 0.0, 0.0, 1.0) }];
+    let (scene, root) = scene_of(vec![(None, blended), (None, text), (None, masked), (None, hidden_fill)]);
 
-    let paint = serde_json::json!({
-        "type": "GRADIENT_LINEAR",
-        "opacity": 0.5,
-        "gradientStops": [
-            { "position": 0.0, "color": { "r": 1.0, "g": 0.0, "b": 0.0, "a": 1.0 } },
-            { "position": 1.0, "color": { "r": 0.0, "g": 0.0, "b": 1.0, "a": 1.0 } }
-        ]
-    });
-
-    let stops = gradient_stops_from_paint_test(&paint).expect("expected stops");
-    assert_eq!(stops.len(), 2);
-    // Paint-level opacity 0.5 should multiply into each stop's alpha
-    assert!(
-        (stops[0].color.a - 0.5).abs() < 1e-9,
-        "first stop alpha: {}",
-        stops[0].color.a
-    );
-    assert!(
-        (stops[1].color.a - 0.5).abs() < 1e-9,
-        "second stop alpha: {}",
-        stops[1].color.a
-    );
+    let d = collect_render_diagnostics(&scene, root);
+    assert_eq!(d.total_nodes, 5);
+    assert_eq!(d.non_normal_blend_nodes, 1);
+    assert_eq!((d.layer_blur_nodes, d.layer_blur_approx_nodes), (1, 1));
+    assert_eq!((d.alpha_mask_nodes, d.luminance_mask_nodes), (0, 1));
+    assert_eq!(d.gradient_fill_nodes + d.image_fill_nodes, 0);
 }
 
 #[test]

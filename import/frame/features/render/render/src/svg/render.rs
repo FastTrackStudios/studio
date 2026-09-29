@@ -28,8 +28,13 @@ impl ElementExt for svg::node::element::Element {
     }
 }
 
+/// The `render_svg` command line: `<input> --out <svg> [--root ID] [--width PX]
+/// [--height PX] [--no-compact-paths]`. `load` turns the input file's bytes
+/// into a scene (the caller owns import).
 #[cfg(feature = "svg_export")]
-pub fn run_cli() -> Result<(), String> {
+pub fn run_cli<E: std::fmt::Display>(
+    load: impl FnOnce(&[u8]) -> Result<document_proto::Scene, E>,
+) -> Result<(), String> {
     use crate::{build_scene_layout_boxes, build_scene_primitives, PaintPrimitive};
     use document_proto::NodeKind;
     use svg::node::element::{
@@ -76,7 +81,7 @@ pub fn run_cli() -> Result<(), String> {
 
     let out_path = out_path.ok_or_else(|| "--out <output_svg> is required".to_string())?;
     let bytes = std::fs::read(&input).map_err(|e| format!("failed reading {input}: {e}"))?;
-    let scene = figma_import::import_bytes(&bytes)
+    let scene = load(&bytes)
         .map_err(|e| format!("failed importing source document from {input}: {e}"))?;
     let export_node = export_root(&scene, root_figma_id.as_deref());
     let export_bbox = export_node.and_then(export_bbox);
@@ -89,7 +94,9 @@ pub fn run_cli() -> Result<(), String> {
         .map(|n| n.name.starts_with("parity/text/") && !n.name.contains("alignment-truncation"))
         .unwrap_or(false);
     let root = match root_figma_id.as_deref() {
-        Some(figma_id) => figma_import::node_for_figma_id(&scene, figma_id)
+        Some(figma_id) => scene
+            .by_source_id(figma_id)
+            .map(|n| n.id)
             .ok_or_else(|| format!("root figma id not found: {figma_id}"))?,
         None => scene.pages().first().copied().unwrap_or(scene.root),
     };

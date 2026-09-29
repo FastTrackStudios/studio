@@ -1,5 +1,4 @@
-use figma_model::FrameDocument;
-use render::{build_layout_boxes, build_paint_primitives};
+use render::{build_scene_layout_boxes, build_scene_primitives};
 use serde_json::json;
 use std::time::Instant;
 
@@ -96,28 +95,28 @@ fn run() -> Result<(), String> {
         let run_start = Instant::now();
 
         let t = Instant::now();
-        let doc = FrameDocument::from_source_bytes(&bytes)
-            .map_err(|e| format!("import failed for {input}: {e}"))?;
+        let doc = figma_import::import_bytes(&bytes).map_err(|e| format!("import failed for {input}: {e}"))?;
         let import_ms = t.elapsed().as_secs_f64() * 1000.0;
 
-        let root = doc.pages.first().copied().unwrap_or(doc.root);
+        let root = doc.pages().first().copied().unwrap_or(doc.root);
         if root_fallback.is_empty() {
             root_fallback = doc
-                .get_node(root)
-                .map(|n| n.figma_id.clone())
+                .node(root)
+                .and_then(|n| n.source.as_ref())
+                .map(|s| s.id.clone())
                 .unwrap_or_default();
         }
 
         let t = Instant::now();
-        let _layout = build_layout_boxes(&doc, root);
+        let _layout = build_scene_layout_boxes(&doc, root);
         let layout_ms = t.elapsed().as_secs_f64() * 1000.0;
 
         let t = Instant::now();
-        let primitives = build_paint_primitives(&doc, root);
+        let primitives = build_scene_primitives(&doc, root);
         let primitive_ms = t.elapsed().as_secs_f64() * 1000.0;
 
         let pass_counts = count_passes(&primitives);
-        let node_count = doc.walk_subtree(root).len();
+        let node_count = doc.walk(root).len();
 
         #[cfg(feature = "anyrender")]
         let scene_ms = {

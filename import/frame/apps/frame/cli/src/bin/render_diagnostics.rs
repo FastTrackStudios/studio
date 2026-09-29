@@ -11,16 +11,16 @@ fn run() -> Result<(), String> {
         .next()
         .ok_or_else(|| "usage: render_diagnostics <figma_export_or_api_json>".to_string())?;
     let bytes = std::fs::read(&input).map_err(|e| format!("failed reading {input}: {e}"))?;
-    let doc = figma_model::FrameDocument::from_source_bytes(&bytes)
-        .map_err(|e| format!("import failed for {input}: {e}"))?;
-    let root = doc.pages.first().copied().unwrap_or(doc.root);
+    let doc = figma_import::import_bytes(&bytes).map_err(|e| format!("import failed for {input}: {e}"))?;
+    let root = doc.pages().first().copied().unwrap_or(doc.root);
     let diag = render::collect_render_diagnostics(&doc, root);
 
     println!(
         "{{\"input\":\"{}\",\"root\":\"{}\",\"summary\":\"{}\",\"diagnostics\":{{\"totalNodes\":{},\"nonNormalBlendNodes\":{},\"gradientFillNodes\":{},\"imageFillNodes\":{},\"dropShadowNodes\":{},\"innerShadowNodes\":{},\"layerBlurNodes\":{},\"layerBlurApproxNodes\":{},\"backgroundBlurNodes\":{},\"backgroundBlurApproxNodes\":{},\"alphaMaskNodes\":{},\"luminanceMaskNodes\":{}}}}}",
         input,
-        doc.get_node(root)
-            .map(|n| n.figma_id.clone())
+        doc.node(root)
+            .and_then(|n| n.source.as_ref())
+            .map(|s| s.id.clone())
             .unwrap_or_default(),
         diag.format_summary().replace('\"', "\\\""),
         diag.total_nodes,

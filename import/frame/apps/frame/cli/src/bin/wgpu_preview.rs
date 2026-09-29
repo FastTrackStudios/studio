@@ -1,7 +1,7 @@
 #[cfg(feature = "anyrender")]
-use figma_model::{FrameDocument, NodeId};
+use document_proto::{NodeId, Scene as Document};
 #[cfg(feature = "anyrender")]
-use render::build_layout_boxes;
+use render::build_scene_layout_boxes;
 #[cfg(feature = "anyrender")]
 use kurbo::{Affine, Point, Rect};
 #[cfg(feature = "anyrender")]
@@ -357,7 +357,7 @@ fn round_up(n: usize, f: usize) -> usize {
 
 #[cfg(feature = "anyrender")]
 struct App {
-    doc: Arc<FrameDocument>,
+    doc: Arc<Document>,
     root: NodeId,
     base_transform: Affine,
     transform: Affine,
@@ -598,7 +598,7 @@ impl ApplicationHandler for App {
 
                 self.scene.reset();
                 let scene_transform = self.transform * self.base_transform;
-                render::paint_into_scene_with(
+                render::paint_scene_into(
                     &mut self.scene,
                     self.doc.as_ref(),
                     self.root,
@@ -719,18 +719,16 @@ fn run() -> Result<(), String> {
     }
 
     let bytes = std::fs::read(&input).map_err(|e| format!("failed reading {input}: {e}"))?;
-    let doc = FrameDocument::from_source_bytes(&bytes)
+    let doc = figma_import::import_bytes(&bytes)
         .map_err(|e| format!("failed importing source document from {input}: {e}"))?;
     let root = match root_figma_id {
-        Some(figma_id) => doc
-            .get_by_figma_id(&figma_id)
-            .map(|n| n.id)
+        Some(figma_id) => figma_import::node_for_figma_id(&doc, &figma_id)
             .ok_or_else(|| format!("root figma id not found: {figma_id}"))?,
-        None => doc.pages.first().copied().unwrap_or(doc.root),
+        None => doc.pages().first().copied().unwrap_or(doc.root),
     };
 
-    let layout_boxes = build_layout_boxes(&doc, root);
-    let subtree = doc.walk_subtree(root);
+    let layout_boxes = build_scene_layout_boxes(&doc, root);
+    let subtree = doc.walk(root);
 
     let mut min_x = f64::INFINITY;
     let mut min_y = f64::INFINITY;
@@ -763,8 +761,9 @@ fn run() -> Result<(), String> {
 
     eprintln!(
         "wgpu_preview: root={} natural={}x{} window={}x{}",
-        doc.get_node(root)
-            .map(|n| n.figma_id.as_str())
+        doc.node(root)
+            .and_then(|n| n.source.as_ref())
+            .map(|s| s.id.as_str())
             .unwrap_or("<unknown>"),
         natural_width,
         natural_height,
