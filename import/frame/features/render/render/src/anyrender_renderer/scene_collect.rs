@@ -238,6 +238,32 @@ fn is_translation(t: &doc::Transform) -> bool {
     (t.a - 1.0).abs() <= EPS && t.b.abs() <= EPS && t.c.abs() <= EPS && (t.d - 1.0).abs() <= EPS
 }
 
+/// Whether `node` is drawn as authored rather than as a Figma import (see
+/// `authored` on [`PaintPrimitive::Path`]).
+fn is_authored(node: &doc::Node) -> bool {
+    node.source.as_ref().is_none_or(|s| s.tool != "figma")
+}
+
+/// Node-local bounds `(x0, y0, x1, y1)` of an authored node's geometry,
+/// stroke included; `None` for Figma imports and nodes without geometry.
+fn authored_geometry_bounds(node: &doc::Node) -> Option<(f64, f64, f64, f64)> {
+    use kurbo::Shape;
+    if !is_authored(node) || (node.fill_geometry.is_empty() && node.stroke_geometry.is_empty()) {
+        return None;
+    }
+    let b = node
+        .fill_geometry
+        .iter()
+        .chain(&node.stroke_geometry)
+        .filter_map(|d| kurbo::BezPath::from_svg(d).ok())
+        .map(|p| p.bounding_box())
+        .filter(|r| r.x0.is_finite() && r.y0.is_finite() && r.x1.is_finite() && r.y1.is_finite())
+        .reduce(|a, b| a.union(b))?;
+    let stroked = node.stroke.paints.iter().any(|p| p.visible) && node.stroke_geometry.is_empty();
+    let pad = if stroked { node.stroke.weight.max(0.0) * node.stroke.miter_limit.max(1.0) * 0.5 } else { 0.0 };
+    Some((b.x0 - pad, b.y0 - pad, b.x1 + pad, b.y1 + pad))
+}
+
 /// Whether a node's transform applies to its children.
 ///
 /// Groups and boolean operations are transparent: like Figma's, their
@@ -489,7 +515,7 @@ fn recolor(p: &PaintPrimitive, color: &Rgba) -> Option<PaintPrimitive> {
     let solid = || vec![(FillPaint::Solid(color.clone()), BlendMix::Normal)];
     let stroke_of = |s: &Option<StrokeStyle>| s.clone().map(|s| StrokeStyle { color: color.clone(), ..s });
     match p {
-        PaintPrimitive::Rect { node_id, x, y, width, height, fills, stroke, corner_radii, rotation, .. } => {
+        PaintPrimitive::Rect { node_id, x, y, width, height, fills, stroke, corner_radii, rotation, authored, .. } => {
             (!fills.is_empty() || stroke.is_some()).then(|| PaintPrimitive::Rect {
                 node_id: *node_id,
                 x: *x,
@@ -502,6 +528,7 @@ fn recolor(p: &PaintPrimitive, color: &Rgba) -> Option<PaintPrimitive> {
                 effects: Vec::new(),
                 blend: BlendMix::Normal,
                 rotation: *rotation,
+                authored: *authored,
             })
         }
         PaintPrimitive::Path {
@@ -517,6 +544,7 @@ fn recolor(p: &PaintPrimitive, color: &Rgba) -> Option<PaintPrimitive> {
             fills,
             stroke,
             rotation,
+            authored,
             ..
         } => {
             // A snapshot-only path can't be recoloured; the caller falls back
@@ -537,13 +565,15 @@ fn recolor(p: &PaintPrimitive, color: &Rgba) -> Option<PaintPrimitive> {
                 effects: Vec::new(),
                 blend: BlendMix::Normal,
                 rotation: *rotation,
+                authored: *authored,
             })
         }
         PaintPrimitive::Text { .. } => {
             let mut t = p.clone();
-            if let PaintPrimitive::Text { color: c, style_runs, blend, .. } = &mut t {
+            if let PaintPrimitive::Text { color: c, style_runs, blend, effects, .. } = &mut t {
                 *c = color.clone();
                 *blend = BlendMix::Normal;
+                effects.clear();
                 for r in style_runs {
                     r.color = Some(color.clone());
                 }
@@ -638,6 +668,9 @@ impl Cx<'_> {
             _ => None,
         };
         let is_boolean = matches!(node.kind, NodeKind::BooleanOperation { .. });
+        // Figma imports keep the exporter-compatible drawing parity is
+        // measured against; everything else is drawn as authored.
+        let authored = is_authored(node);
 
         // A container with a non-translation transform paints itself and its
         // subtree inside a group carrying that transform, so children inherit
@@ -676,17 +709,26 @@ impl Cx<'_> {
             && node.children.iter().any(|c| {
                 const EPS: f64 = 1e-3;
                 let (cx, cy, cw, ch) = self.child_box(*c, x, y);
-                cx < x - EPS || cy < y - EPS || (cx + cw) > x + width + EPS || (cy + ch) > y + height + EPS
+                let outside = |(x0, y0, x1, y1): (f64, f64, f64, f64)| {
+                    x0 < x - EPS || y0 < y - EPS || x1 > x + width + EPS || y1 > y + height + EPS
+                };
+                outside((cx, cy, cx + cw, cy + ch))
+                    // Authored geometry is drawn as written, so it can reach
+                    // past its own box.
+                    || scene.node(*c).is_some_and(|n| {
+                        authored_geometry_bounds(n).is_some_and(|(x0, y0, x1, y1)| {
+                            !is_translation(&n.transform) || outside((cx + x0, cy + y0, cx + x1, cy + y1))
+                        })
+                    })
             });
         let clip_subtree = node.clips_content && !node.children.is_empty() && (fills.is_empty() || child_overflows);
         let ancestor_clips = if self.plan.is_some() && node.emission.is_some() { self.clips.clone() } else { Vec::new() };
-        if clip_subtree && width > 0.0 && height > 0.0 {
-            let clip = PaintPrimitive::ClipStart { node_id, x, y, width, height, corner_radii: radii };
-            if self.plan.is_some() {
-                let world = self.groups.last().copied().unwrap_or_else(AffineTransform2D::identity);
-                self.clips.push((world, clip.clone()));
-            }
-            self.out.push(clip);
+        // Clipping content clips the children. Figma imports open the clip
+        // before the node's own paint (as parity expects); authored nodes
+        // after it, so their own shadows and outside strokes aren't cut.
+        let open_clip = clip_subtree && width > 0.0 && height > 0.0;
+        if open_clip && !authored {
+            self.open_clip(node_id, x, y, width, height, radii);
         }
 
         let mut atomic_svg = false;
@@ -706,6 +748,7 @@ impl Cx<'_> {
             effects: merged_effects.clone(),
             blend: primitive_blend.clone(),
             rotation,
+            authored,
         };
 
         let own_start = self.out.len();
@@ -749,6 +792,15 @@ impl Cx<'_> {
                             doc::TextAlign::Right => TextAlignment::Right,
                             doc::TextAlign::Left | doc::TextAlign::Justified => TextAlignment::Left,
                         },
+                        effects: effects
+                            .iter()
+                            .filter(|e| match e.kind {
+                                EffectKind::Glow => true,
+                                EffectKind::DropShadow | EffectKind::InnerShadow => authored,
+                                EffectKind::LayerBlur | EffectKind::BackgroundBlur => false,
+                            })
+                            .cloned()
+                            .collect(),
                     });
                 }
             }
@@ -780,6 +832,7 @@ impl Cx<'_> {
                         effects: merged_effects.clone(),
                         blend: primitive_blend,
                         rotation,
+                        authored,
                     });
                 }
             }
@@ -807,6 +860,7 @@ impl Cx<'_> {
                     effects: Vec::new(),
                     blend: BlendMix::Normal,
                     rotation,
+                    authored,
                 });
             }
             if !primitives.is_empty() {
@@ -827,6 +881,9 @@ impl Cx<'_> {
             }
         }
 
+        if open_clip && authored {
+            self.open_clip(node_id, x, y, width, height, radii);
+        }
         if !atomic_svg {
             self.children(node, x, y, content_opacity, &child_blurs);
             // An instance exported without its subtree: draw the main
@@ -841,7 +898,7 @@ impl Cx<'_> {
             }
         }
 
-        if clip_subtree && width > 0.0 && height > 0.0 {
+        if open_clip {
             if self.plan.is_some() {
                 self.clips.pop();
             }
@@ -882,6 +939,15 @@ impl Cx<'_> {
                 });
             }
         }
+    }
+
+    fn open_clip(&mut self, node_id: NodeId, x: f64, y: f64, width: f64, height: f64, corner_radii: doc::CornerRadii) {
+        let clip = PaintPrimitive::ClipStart { node_id, x, y, width, height, corner_radii };
+        if self.plan.is_some() {
+            let world = self.groups.last().copied().unwrap_or_else(AffineTransform2D::identity);
+            self.clips.push((world, clip.clone()));
+        }
+        self.out.push(clip);
     }
 
     /// Children in order; a mask child masks the siblings after it.

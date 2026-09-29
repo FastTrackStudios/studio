@@ -1460,6 +1460,7 @@ pub fn run_cli<E: std::fmt::Display>(
                 effects,
                 rotation,
                 text_outline,
+                authored,
                 ..
             } => {
                 let has_native_geometry = !fill_paths.is_empty() || !stroke_paths.is_empty();
@@ -2471,6 +2472,19 @@ pub fn run_cli<E: std::fmt::Display>(
                 } else {
                     (fill_paths, stroke_paths)
                 };
+                // An authored stroke without stroke geometry strokes the whole
+                // fill geometry, but open subpaths are lines: only the closed
+                // ones are filled.
+                let (fill_paths, stroked_fill_paths) = if authored && stroke.is_some() && stroke_paths.is_empty() {
+                    let closed: Vec<String> = fill_paths
+                        .iter()
+                        .filter_map(|d| crate::anyrender_renderer::subpaths::closed_subpaths_svg(d))
+                        .filter(|d| !d.is_empty())
+                        .collect();
+                    (closed, Some(fill_paths))
+                } else {
+                    (fill_paths, None)
+                };
                 for d in &fill_paths {
                     if let Some((min_x, min_y, max_x, max_y)) = svg_path_bounds(d, px, py) {
                         accumulate_bounds_if_active(
@@ -2961,7 +2975,9 @@ pub fn run_cli<E: std::fmt::Display>(
                         to_u8(stroke.color.b),
                         stroke.color.a,
                     );
-                    let stroke_source_paths = if fill_paths.is_empty() {
+                    let stroke_source_paths = if let Some(paths) = &stroked_fill_paths {
+                        paths
+                    } else if fill_paths.is_empty() {
                         &stroke_paths
                     } else {
                         &fill_paths

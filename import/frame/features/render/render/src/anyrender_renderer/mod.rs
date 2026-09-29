@@ -10,9 +10,15 @@ mod cache;
 mod geometry;
 #[cfg(feature = "anyrender")]
 mod paint;
+#[cfg(feature = "anyrender")]
+mod soft;
+#[cfg(feature = "svg_export")]
+pub(crate) mod subpaths;
 
 #[cfg(test)]
 mod tests;
+#[cfg(all(test, feature = "anyrender"))]
+mod tests_authored;
 
 pub use diagnostics::collect_render_diagnostics;
 pub use effects_plan::{flicker_level, EffectsPlan, EmissiveDraw, ShaderRegion};

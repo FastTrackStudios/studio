@@ -1,6 +1,8 @@
 use super::cache::{cached_bez_path, cached_svg_decode, cached_svg_fit_transform, cached_svg_tree};
 use super::scene_collect::first_color;
 use super::geometry::{compute_path_fit_transform, extract_scale, to_peniko};
+use super::subpaths::split_open_closed;
+use super::soft::{self, Soft};
 use super::types::*;
 
 const TEXT_ANCHOR_SHIFT_X: f64 = 1.0;
@@ -201,10 +203,15 @@ pub fn paint_primitives_into_scene_with(
                 effects,
                 blend: _,
                 rotation,
+                authored,
                 ..
             } => {
                 let (x, y, width, height, rotation) = (*x, *y, *width, *height, *rotation);
                 let corner_radii = *corner_radii;
+                // Authored rects with per-corner radii shadow their real
+                // outline (vello blurs uniform rounded rects only).
+                let soft_outline = (*authored && !radii_uniform(&corner_radii))
+                    .then(|| soft::rounded_rect_path(Rect::new(0.0, 0.0, width, height), &corner_radii));
                 let (node_transform, lx, ly) = if rotation.abs() > 1e-6 {
                     let t = scene_transform
                         * kurbo::Affine::translate((x, y))
@@ -238,6 +245,12 @@ pub fn paint_primitives_into_scene_with(
                 }
                 for effect in effects {
                     if matches!(effect.kind, EffectKind::DropShadow | EffectKind::Glow) {
+                        if let Some(outline) = &soft_outline {
+                            let soft = Soft::Outer { dx: effect.offset_x, dy: effect.offset_y, spread: effect.spread };
+                            let at = node_transform * kurbo::Affine::translate((lx, ly));
+                            soft::paint(scene, at, &[outline], &effect.color, effect.radius, soft);
+                            continue;
+                        }
                         paint_effect(
                             scene,
                             node_transform,
@@ -282,7 +295,9 @@ pub fn paint_primitives_into_scene_with(
                         }
                     }
                     if let Some(stroke) = stroke.as_ref() {
-                        if stroke.width > 0.0 {
+                        if stroke.width > 0.0 && *authored && let Some(ring) = aligned_stroke_ring(rect, &corner_radii, stroke) {
+                            scene.fill(Fill::EvenOdd, node_transform, to_peniko(stroke.color.clone()), None, &ring);
+                        } else if stroke.width > 0.0 {
                             let stroke_style = to_kurbo_stroke(stroke, 1.0);
                             let stroke_rr = RoundedRect::from_rect(stroke_rect, stroke_radius);
                             scene.stroke(
@@ -315,7 +330,9 @@ pub fn paint_primitives_into_scene_with(
                         }
                     }
                     if let Some(stroke) = stroke.as_ref() {
-                        if stroke.width > 0.0 {
+                        if stroke.width > 0.0 && *authored && let Some(ring) = aligned_stroke_ring(rect, &corner_radii, stroke) {
+                            scene.fill(Fill::EvenOdd, node_transform, to_peniko(stroke.color.clone()), None, &ring);
+                        } else if stroke.width > 0.0 {
                             let stroke_style = to_kurbo_stroke(stroke, 1.0);
                             let stroke_rect = stroke_aligned_rect(rect, Some(stroke));
                             scene.stroke(
@@ -334,6 +351,12 @@ pub fn paint_primitives_into_scene_with(
                         effect.kind,
                         EffectKind::InnerShadow | EffectKind::BackgroundBlur
                     ) {
+                        if let (Some(outline), EffectKind::InnerShadow) = (&soft_outline, &effect.kind) {
+                            let soft = Soft::Inner { dx: effect.offset_x, dy: effect.offset_y, spread: effect.spread };
+                            let at = node_transform * kurbo::Affine::translate((lx, ly));
+                            soft::paint(scene, at, &[outline], &effect.color, effect.radius, soft);
+                            continue;
+                        }
                         paint_effect(
                             scene,
                             node_transform,
@@ -360,11 +383,21 @@ pub fn paint_primitives_into_scene_with(
                 effects,
                 blend: _,
                 rotation,
+                authored,
                 ..
             } => {
                 let mut path_x = *path_x;
                 let mut path_y = *path_y;
                 let (width, height, rotation) = (*width, *height, *rotation);
+                if *authored && !*text_outline && (!fill_paths.is_empty() || !stroke_paths.is_empty()) {
+                    let base_transform = if rotation.abs() > 1e-6 {
+                        scene_transform * kurbo::Affine::translate((path_x, path_y)) * kurbo::Affine::rotate(rotation)
+                    } else {
+                        scene_transform * kurbo::Affine::translate((path_x, path_y))
+                    };
+                    paint_authored_path(scene, base_transform, width, height, fill_paths, stroke_paths, fills, stroke.as_ref(), effects);
+                    continue;
+                }
                 if *text_outline {
                     path_x += TEXT_ANCHOR_SHIFT_X;
                     path_y += TEXT_ANCHOR_SHIFT_Y;
@@ -441,8 +474,9 @@ pub fn paint_primitives_into_scene_with(
                     }
                 }
                 for effect in effects {
-                    // A glow can't follow an arbitrary outline here; emitters
-                    // are mostly round (LEDs, jewels), so it's a rounded box.
+                    // Figma imports (and snapshot-only vectors) keep box
+                    // shadows, as parity expects; a glow is a rounded box.
+                    // Authored vectors follow their outline (above).
                     let corner = match effect.kind {
                         EffectKind::DropShadow => 0.0,
                         EffectKind::Glow => width.min(height) * 0.5,
@@ -582,6 +616,7 @@ pub fn paint_primitives_into_scene_with(
                 blend: _,
                 width: box_width,
                 align,
+                effects,
                 ..
             } => {
                 let (x, y, font_size, letter_spacing) = (
@@ -647,6 +682,8 @@ pub fn paint_primitives_into_scene_with(
                     };
                     let mut line_idx: usize = 0;
                     let mut pen_x: f64 = line_start(0);
+                    // (glyph, size, colour, transform, glyph → text space, bold)
+                    let mut placed: Vec<(skrifa::GlyphId, f64, Rgba, kurbo::Affine, kurbo::Affine, bool)> = Vec::new();
                     for run in runs {
                         let run_size = run.font_size.unwrap_or(font_size).max(1.0);
                         let run_letter_spacing = run.letter_spacing.unwrap_or(letter_spacing) as f32;
@@ -685,7 +722,22 @@ pub fn paint_primitives_into_scene_with(
                             } else {
                                 base_transform
                             };
-
+                            let local = kurbo::Affine::translate((x + pen_x, y + ascent + (line_idx as f64 * line_height)))
+                                * if is_italic { kurbo::Affine::new([1.0, 0.0, 0.22, 1.0, 0.0, 0.0]) } else { kurbo::Affine::IDENTITY };
+                            placed.push((gid, run_size, run_color.clone(), text_transform, local, is_bold));
+                            pen_x += advance + f64::from(run_letter_spacing);
+                        }
+                    }
+                    // Shadows and glows follow the glyph outlines.
+                    let outline = (!effects.is_empty()).then(|| glyph_outlines(font_ref, &placed));
+                    for effect in effects {
+                        if let (Some(o), EffectKind::DropShadow | EffectKind::Glow) = (&outline, &effect.kind) {
+                            let soft = Soft::Outer { dx: effect.offset_x, dy: effect.offset_y, spread: effect.spread };
+                            soft::paint(scene, scene_transform, &[o], &effect.color, effect.radius, soft);
+                        }
+                    }
+                    for (gid, run_size, run_color, text_transform, _, is_bold) in placed {
+                        {
                             scene
                                 .draw_glyphs(font_data)
                                 .font_size(run_size as f32)
@@ -719,8 +771,12 @@ pub fn paint_primitives_into_scene_with(
                                         }),
                                     );
                             }
-
-                            pen_x += advance + f64::from(run_letter_spacing);
+                        }
+                    }
+                    for effect in effects {
+                        if let (Some(o), EffectKind::InnerShadow) = (&outline, &effect.kind) {
+                            let soft = Soft::Inner { dx: effect.offset_x, dy: effect.offset_y, spread: effect.spread };
+                            soft::paint(scene, scene_transform, &[o], &effect.color, effect.radius, soft);
                         }
                     }
                 } else {
@@ -746,6 +802,242 @@ pub fn paint_primitives_into_scene_with(
                     }
                 }
             }
+        }
+    }
+
+    /// The placed glyphs' outlines in text space (bold glyphs twice, as
+    /// they are drawn).
+    fn glyph_outlines(font: &FontRef<'_>, placed: &[(skrifa::GlyphId, f64, Rgba, kurbo::Affine, kurbo::Affine, bool)]) -> BezPath {
+        use skrifa::outline::{DrawSettings, OutlinePen};
+        struct Pen(BezPath);
+        impl OutlinePen for Pen {
+            fn move_to(&mut self, x: f32, y: f32) {
+                self.0.move_to((f64::from(x), -f64::from(y)));
+            }
+            fn line_to(&mut self, x: f32, y: f32) {
+                self.0.line_to((f64::from(x), -f64::from(y)));
+            }
+            fn quad_to(&mut self, cx0: f32, cy0: f32, x: f32, y: f32) {
+                self.0.quad_to((f64::from(cx0), -f64::from(cy0)), (f64::from(x), -f64::from(y)));
+            }
+            fn curve_to(&mut self, cx0: f32, cy0: f32, cx1: f32, cy1: f32, x: f32, y: f32) {
+                self.0.curve_to(
+                    (f64::from(cx0), -f64::from(cy0)),
+                    (f64::from(cx1), -f64::from(cy1)),
+                    (f64::from(x), -f64::from(y)),
+                );
+            }
+            fn close(&mut self) {
+                self.0.close_path();
+            }
+        }
+        let glyphs = font.outline_glyphs();
+        let location = font.axes().location(std::iter::empty::<(&str, f32)>());
+        let mut out = BezPath::new();
+        for (gid, size, _, _, local, bold) in placed {
+            let Some(glyph) = glyphs.get(*gid) else { continue };
+            let mut pen = Pen(BezPath::new());
+            if glyph.draw(DrawSettings::unhinted(Size::new(*size as f32), &location), &mut pen).is_err() {
+                continue;
+            }
+            out.extend((*local * pen.0.clone()).elements().iter().copied());
+            if *bold {
+                out.extend((*local * kurbo::Affine::translate((0.45, 0.0)) * pen.0).elements().iter().copied());
+            }
+        }
+        out
+    }
+
+    fn radii_uniform(r: &document_proto::CornerRadii) -> bool {
+        r.top_left == r.top_right && r.top_left == r.bottom_right && r.top_left == r.bottom_left
+    }
+
+    /// An inside or outside stroke of a (rounded) rect as the exact ring
+    /// between its two edges, filled even-odd. Stroking the inset/outset
+    /// outline instead lets vello's GPU stroker put an edge a hair above a
+    /// tile row, which fills that whole 16 px row with the stroke colour.
+    /// `None` for centred and dashed strokes (stroked as usual).
+    fn aligned_stroke_ring(rect: Rect, radii: &document_proto::CornerRadii, stroke: &StrokeStyle) -> Option<BezPath> {
+        use kurbo::Shape;
+        if !stroke.dash_pattern.is_empty() {
+            return None;
+        }
+        let w = stroke.width.max(0.0);
+        let rounded = |r: Rect, grow: f64| {
+            // Growing a square corner keeps it square unless the join
+            // rounds it; shrinking a corner stops at square.
+            let corner = |c: f64| {
+                if c <= 0.0 && grow > 0.0 && !matches!(stroke.join, StrokeJoin::Round) { 0.0 } else { (c + grow).max(0.0) }
+            };
+            RoundedRect::from_rect(
+                r,
+                kurbo::RoundedRectRadii::new(
+                    corner(radii.top_left),
+                    corner(radii.top_right),
+                    corner(radii.bottom_right),
+                    corner(radii.bottom_left),
+                ),
+            )
+            .to_path(0.01)
+        };
+        let (mut ring, inner, grow) = match stroke.align {
+            StrokeAlign::Center => return None,
+            StrokeAlign::Inside => (rounded(rect, 0.0), rect.inset(-w), -w),
+            StrokeAlign::Outside => (rounded(rect.inset(w), w), rect, 0.0),
+        };
+        if inner.width() > 0.0 && inner.height() > 0.0 {
+            ring.extend(rounded(inner, grow));
+        }
+        Some(ring)
+    }
+
+    /// A vector authored in frame: geometry drawn as written, in node-local
+    /// coordinates (`transform` maps them to the target); a stroke without
+    /// stroke geometry strokes the fill geometry (open subpaths as lines,
+    /// never filled); effects follow the outline.
+    #[allow(clippy::too_many_arguments)]
+    fn paint_authored_path(
+        scene: &mut vello::Scene,
+        transform: kurbo::Affine,
+        width: f64,
+        height: f64,
+        fill_paths: &[String],
+        stroke_paths: &[String],
+        fills: &[(FillPaint, BlendMix)],
+        stroke: Option<&StrokeStyle>,
+        effects: &[NodeEffect],
+    ) {
+        use kurbo::Shape;
+        let stroke = stroke.filter(|s| s.width > 0.0);
+        let fill_geo: Vec<Arc<BezPath>> = fill_paths.iter().filter_map(|d| cached_bez_path(d)).collect();
+        let stroke_geo: Vec<Arc<BezPath>> = stroke_paths.iter().filter_map(|d| cached_bez_path(d)).collect();
+        // Stroke geometry is the stroke's own filled outline (as Figma
+        // exports it); without it, a stroke strokes the fill geometry.
+        let strokes_fill = stroke.is_some() && stroke_geo.is_empty();
+        let filled: Vec<BezPath> = fill_geo
+            .iter()
+            .map(|p| if strokes_fill { split_open_closed(p).0 } else { (**p).clone() })
+            .filter(|p| !p.elements().is_empty())
+            .collect();
+        let stroke_area: Vec<BezPath> = match stroke {
+            _ if !stroke_geo.is_empty() => stroke_geo.iter().map(|p| (**p).clone()).collect(),
+            Some(s) => {
+                let style = to_kurbo_stroke(s, 1.0);
+                fill_geo
+                    .iter()
+                    .map(|p| kurbo::stroke(p.elements().iter().copied(), &style, &kurbo::StrokeOpts::default(), 0.05))
+                    .collect()
+            }
+            None => Vec::new(),
+        };
+        let fill_refs: Vec<&BezPath> = if fills.is_empty() { Vec::new() } else { filled.iter().collect() };
+        let outline: Vec<&BezPath> = fill_refs.iter().copied().chain(stroke_area.iter()).collect();
+        let bounds = outline
+            .iter()
+            .map(|p| p.bounding_box())
+            .reduce(|a, b| a.union(b))
+            .unwrap_or(Rect::new(0.0, 0.0, width, height))
+            .inflate(1.0, 1.0);
+
+        let layer_blur = effects.iter().find(|e| matches!(e.kind, EffectKind::LayerBlur));
+        if let Some(blur) = layer_blur {
+            let still = Soft::Outer { dx: 0.0, dy: 0.0, spread: 0.0 };
+            for (fill, _) in fills {
+                match fill {
+                    FillPaint::Solid(c) => soft::paint(scene, transform, &fill_refs, c, blur.radius, still),
+                    _ => {
+                        let owned: Vec<String> = filled.iter().map(BezPath::to_svg).collect();
+                        paint_blurred_path_content(scene, transform, &owned, &[], Some(fill), None, 1.0, 0.0, 0.0, width, height, blur);
+                    }
+                }
+            }
+            if let Some(s) = stroke {
+                let refs: Vec<&BezPath> = stroke_area.iter().collect();
+                soft::paint(scene, transform, &refs, &s.color, blur.radius, still);
+            }
+        }
+        for effect in effects {
+            if matches!(effect.kind, EffectKind::DropShadow | EffectKind::Glow) {
+                let soft = Soft::Outer { dx: effect.offset_x, dy: effect.offset_y, spread: effect.spread };
+                soft::paint(scene, transform, &outline, &effect.color, effect.radius, soft);
+            }
+        }
+        if layer_blur.is_none() {
+            for (fill, fill_blend) in fills {
+                let blended = *fill_blend != BlendMix::Normal;
+                if blended {
+                    scene.push_layer(
+                        Fill::NonZero,
+                        peniko::BlendMode { mix: to_peniko_mix(fill_blend), compose: peniko::Compose::SrcOver },
+                        1.0,
+                        transform,
+                        &bounds,
+                    );
+                }
+                for path in &filled {
+                    fill_path_shape(scene, transform, path, 0.0, 0.0, width, height, fill);
+                }
+                if blended {
+                    scene.pop_layer();
+                }
+            }
+            if let Some(s) = stroke {
+                if strokes_fill {
+                    for path in &fill_geo {
+                        stroke_aligned_path(scene, transform, path, s);
+                    }
+                } else {
+                    for path in &stroke_geo {
+                        scene.fill(Fill::NonZero, transform, to_peniko(s.color.clone()), None, &**path);
+                    }
+                }
+            }
+        }
+        for effect in effects {
+            match effect.kind {
+                EffectKind::InnerShadow => {
+                    let inside: Vec<&BezPath> = if fill_refs.is_empty() { stroke_area.iter().collect() } else { fill_refs.clone() };
+                    let soft = Soft::Inner { dx: effect.offset_x, dy: effect.offset_y, spread: effect.spread };
+                    soft::paint(scene, transform, &inside, &effect.color, effect.radius, soft);
+                }
+                EffectKind::BackgroundBlur => {
+                    let hint = fills.first().and_then(|(f, _)| first_color(f)).or_else(|| stroke.map(|s| s.color.clone()));
+                    paint_effect(scene, transform, &Rect::new(0.0, 0.0, width, height), 0.0, effect, hint.as_ref());
+                }
+                _ => {}
+            }
+        }
+    }
+
+    /// Stroke `path` with `s`, honouring its alignment on closed subpaths
+    /// (open ones are always centred).
+    fn stroke_aligned_path(scene: &mut vello::Scene, transform: kurbo::Affine, path: &BezPath, s: &StrokeStyle) {
+        use kurbo::Shape;
+        let colour = to_peniko(s.color.clone());
+        if matches!(s.align, StrokeAlign::Center) {
+            scene.stroke(&to_kurbo_stroke(s, 1.0), transform, colour, None, path);
+            return;
+        }
+        let (closed, open) = split_open_closed(path);
+        if !closed.elements().is_empty() {
+            // Twice the width, centred on the edge, then cut to one side.
+            let double = to_kurbo_stroke(&StrokeStyle { width: s.width * 2.0, ..s.clone() }, 1.0);
+            if matches!(s.align, StrokeAlign::Inside) {
+                scene.push_clip_layer(Fill::NonZero, transform, &closed);
+                scene.stroke(&double, transform, colour, None, &closed);
+                scene.pop_layer();
+            } else {
+                let reach = closed.bounding_box().inflate(s.width * 2.0 + 1.0, s.width * 2.0 + 1.0);
+                scene.push_layer(Fill::NonZero, peniko::Mix::Normal, 1.0, transform, &reach);
+                scene.stroke(&double, transform, colour, None, &closed);
+                scene.push_layer(Fill::NonZero, peniko::Compose::DestOut, 1.0, transform, &closed);
+                scene.fill(Fill::NonZero, transform, peniko::Color::BLACK, None, &closed);
+                scene.pop_layer();
+                scene.pop_layer();
+            }
+        }
+        if !open.elements().is_empty() {
+            scene.stroke(&to_kurbo_stroke(s, 1.0), transform, colour, None, &open);
         }
     }
 
@@ -1629,7 +1921,7 @@ pub fn paint_primitives_into_scene_with(
                 }
                 PaintPrimitive::Path {
                     x: path_x, y: path_y, width, height, fill_paths, fills, rotation,
-                    normalize_to_origin, stroke_paths, ..
+                    normalize_to_origin, stroke_paths, authored, text_outline, ..
                 } => {
                     let (width, height, rotation) = (*width, *height, *rotation);
                     let (base_transform, lx, ly) = if rotation.abs() > 1e-6 {
@@ -1641,9 +1933,12 @@ pub fn paint_primitives_into_scene_with(
                         (scene_transform, *path_x, *path_y)
                     };
                     let path_origin_transform = base_transform * kurbo::Affine::translate((lx, ly));
-                    let path_fit = compute_path_fit_transform(
-                        fill_paths, stroke_paths, lx, ly, width, height, *normalize_to_origin,
-                    );
+                    // Authored geometry is drawn as written (see the main painter).
+                    let path_fit = if *authored && !*text_outline {
+                        kurbo::Affine::IDENTITY
+                    } else {
+                        compute_path_fit_transform(fill_paths, stroke_paths, lx, ly, width, height, *normalize_to_origin)
+                    };
                     let path_transform = path_origin_transform * path_fit;
                     for (fill_paint, _) in fills {
                         for path_data in fill_paths {

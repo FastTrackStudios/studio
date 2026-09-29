@@ -15,7 +15,7 @@ anyrender = { workspace = true, optional = true }
 anyrender_svg = { workspace = true, optional = true }
 anyrender_vello = { workspace = true, optional = true }
 vello = { workspace = true, optional = true }
-kurbo = { workspace = true, optional = true }
+kurbo = { workspace = true }
 peniko = { workspace = true, optional = true }
 skrifa = { version = "0.26", optional = true }
 base64 = "0.22"
@@ -29,8 +29,8 @@ fixed = { version = "1.28", optional = true }
 
 [features]
 default = []
-svg_export = ["dep:svg", "dep:rust_decimal", "dep:fixed", "dep:kurbo"]
-anyrender = ["dep:anyrender", "dep:anyrender_svg", "dep:anyrender_vello", "dep:vello", "dep:kurbo", "dep:peniko", "dep:skrifa", "dep:image", "dep:winit", "dep:pollster", "svg_export"]
+svg_export = ["dep:svg", "dep:rust_decimal", "dep:fixed"]
+anyrender = ["dep:anyrender", "dep:anyrender_svg", "dep:anyrender_vello", "dep:vello", "dep:peniko", "dep:skrifa", "dep:image", "dep:winit", "dep:pollster", "svg_export"]
 
 [dev-dependencies]
 figma-import = { path = "../../figma/figma-import" }

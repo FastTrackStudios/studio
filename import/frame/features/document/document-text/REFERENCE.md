@@ -70,8 +70,8 @@ Every attribute is optional; if you leave one out, it takes the default shown.
 | `stroke-dash` | `"dash gap …"` | solid |
 | `stroke-dash-offset` | number | `0` |
 | `effects` | `{[effect, …]}` (see Effects) | none |
-| `geometry` | SVG path data in node-local px: `"M0 0 L10 0 Z"`, or `{["…","…"]}` for several | none |
-| `stroke-geometry` | same, for pre-outlined strokes | none |
+| `geometry` | SVG path data in node-local px: `"M0 0 L10 0 Z"`, or `{["…","…"]}` for several. Drawn exactly as written (it may reach outside `w`×`h`). A `stroke` strokes it; open subpaths (no `Z`) are stroked as lines and never filled. Shadows and glows follow the outline. | none |
+| `stroke-geometry` | same, for pre-outlined strokes (filled with the stroke paint instead of stroking `geometry`) | none |
 | `svg-snapshot` | asset id of a pre-rendered SVG | none |
 | `source` | `"tool/TYPE/id"` (import provenance). Don't invent it. | none |
 

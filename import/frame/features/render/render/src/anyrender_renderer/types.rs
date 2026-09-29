@@ -275,6 +275,10 @@ pub enum PaintPrimitive {
         effects: Vec<NodeEffect>,
         blend: BlendMix,
         rotation: f64,
+        /// Drawn as authored rather than as a Figma import (see `authored`
+        /// on [`PaintPrimitive::Path`]): aligned strokes are exact and
+        /// shadows follow non-uniform corners.
+        authored: bool,
     },
     Text {
         node_id: NodeId,
@@ -291,6 +295,11 @@ pub enum PaintPrimitive {
         /// The text box width, for alignment.
         width: f64,
         align: TextAlignment,
+        /// Shadows and glows that follow the glyph outlines (drop shadows,
+        /// inner shadows and the emission [`EffectKind::Glow`]). Figma
+        /// imports draw text effects from their exported outlines instead,
+        /// so theirs carry only a glow.
+        effects: Vec<NodeEffect>,
     },
     Path {
         node_id: NodeId,
@@ -308,6 +317,16 @@ pub enum PaintPrimitive {
         effects: Vec<NodeEffect>,
         blend: BlendMix,
         rotation: f64,
+        /// The node was authored in frame (markup, the surface kit, code)
+        /// rather than imported from Figma, so its geometry is taken
+        /// literally: path data is drawn in node-local coordinates as written
+        /// (never fitted into the node's box), a stroke without
+        /// `stroke_paths` strokes the fill geometry (open subpaths are
+        /// stroked, not filled), shadows and blurs follow the outline, and
+        /// aligned strokes are exact. Figma imports (`false`) keep the
+        /// exporter-compatible behaviour the parity corpus is measured
+        /// against.
+        authored: bool,
     },
 }
 
