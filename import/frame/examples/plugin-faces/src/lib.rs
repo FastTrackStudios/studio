@@ -19,6 +19,10 @@ pub mod suite_boutique_clean;
 pub mod suite_funk_rhythm;
 pub mod suite_studio_blues;
 pub mod suite_poly_clean;
+pub mod rigkit;
+pub mod suite_blackout_gain;
+pub mod suite_djent_forge;
+pub mod suite_modern_rhythm;
 
 pub use face::{Face, canvas, catalogs};
 
@@ -37,5 +41,8 @@ pub fn all() -> Vec<Face> {
     v.extend(suite_boutique_clean::faces());
     v.extend(suite_studio_blues::faces());
     v.extend(suite_poly_clean::faces());
+    v.extend(suite_djent_forge::faces());
+    v.extend(suite_modern_rhythm::faces());
+    v.extend(suite_blackout_gain::faces());
     v
 }

@@ -12,6 +12,8 @@
 //! (the rack faces' 900 × 300). `Place::options` may override either and
 //! pick the edges: `["w=900", "h=300", "ends=ears|wood|none"]`.
 
+pub mod pedal;
+
 use document_proto::{NodeId, TextAlign};
 use surface_widgets::Builder;
 

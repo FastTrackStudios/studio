@@ -4477,6 +4477,7 @@ dependencies = [
  "document-text",
  "motion-runtime",
  "serde_json",
+ "skrifa 0.26.6",
  "surface-kit",
  "surface-proto",
  "surface-runtime",

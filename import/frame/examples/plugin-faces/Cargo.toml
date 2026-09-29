@@ -13,6 +13,7 @@ document-proto = { path = "../../features/document/document-proto", default-feat
 document-text = { path = "../../features/document/document-text" }
 motion-runtime = { path = "../../features/motion/motion-runtime" }
 serde_json = { workspace = true }
+skrifa = "0.26"
 
 [dev-dependencies]
 design-lint = { path = "../../features/design/design-lint" }
