@@ -18,6 +18,7 @@
 //! Families live in their own modules and register themselves in
 //! [`registry`]. See `KIT.md` for the conventions every component follows.
 
+pub mod boutique;
 pub mod controls;
 pub mod draw;
 pub mod knobs;
