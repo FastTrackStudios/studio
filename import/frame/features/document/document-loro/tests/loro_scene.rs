@@ -26,6 +26,8 @@ fn sample() -> (Scene, NodeId, NodeId, NodeId, NodeId) {
         wrap: false,
         main_align: Some(MainAxisAlign::Center),
         cross_align: None,
+        hug_main: false,
+        hug_cross: false,
     });
     frame.transform = Transform { a: 0.1 + 0.2, b: 1.0 / 3.0, tx: -0.0, c: 1e-300, d: 1.0, ty: 12_345.678_901_234_5 };
     let frame_id = frame.id;

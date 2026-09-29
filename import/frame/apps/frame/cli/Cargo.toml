@@ -10,6 +10,7 @@ figma-model = { path = "../../../features/figma/figma-model" }
 figma-rest = { path = "../../../features/figma/figma-rest" }
 render = { path = "../../../features/render/render" }
 document-proto = { path = "../../../features/document/document-proto", default-features = false }
+document-text = { path = "../../../features/document/document-text" }
 surface-proto = { path = "../../../features/surface/surface-proto" }
 surface-runtime = { path = "../../../features/surface/surface-runtime" }
 surface-widgets = { path = "../../../features/surface/surface-widgets" }

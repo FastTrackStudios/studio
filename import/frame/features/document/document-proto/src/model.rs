@@ -421,6 +421,16 @@ pub struct AutoLayout {
     pub wrap: bool,
     pub main_align: Option<MainAxisAlign>,
     pub cross_align: Option<CrossAxisAlign>,
+    /// Size to content along the layout direction ("hug contents"). An
+    /// authoring rule: editors recompute the size when children change;
+    /// the renderer uses the stored size.
+    #[serde(default)]
+    #[facet(default)]
+    pub hug_main: bool,
+    /// Size to content across the layout direction.
+    #[serde(default)]
+    #[facet(default)]
+    pub hug_cross: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Facet)]

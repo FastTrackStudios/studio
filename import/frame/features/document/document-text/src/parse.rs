@@ -769,7 +769,23 @@ fn apply_common(at: &Attrs<'_>, n: &mut Node) -> Result<()> {
                 wrap: at.bool("wrap")?.unwrap_or(false),
                 main_align: at.keyword::<MainAxisAlign>("justify")?,
                 cross_align: at.keyword::<CrossAxisAlign>("align")?,
+                hug_main: false,
+                hug_cross: false,
             };
+            let hug = match at.bool("hug") {
+                Ok(Some(true)) => Some("both".to_string()),
+                Ok(Some(false)) => None,
+                _ => at.str("hug")?,
+            };
+            match hug.as_deref() {
+                None => {}
+                Some("both") => (l.hug_main, l.hug_cross) = (true, true),
+                Some("main") => l.hug_main = true,
+                Some("cross") => l.hug_cross = true,
+                Some(other) => {
+                    return at.err(at.map["hug"], format!("unknown value \"{other}\" — expected `hug` (both axes), \"main\" or \"cross\""));
+                }
+            }
             if let Some(p) = at.nums("padding", &[1, 2, 3, 4], "padding=12 or padding=\"top right bottom left\"")? {
                 (l.padding_top, l.padding_right, l.padding_bottom, l.padding_left) = match p.as_slice() {
                     [u] => (*u, *u, *u, *u),

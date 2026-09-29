@@ -480,6 +480,8 @@ fn layout(raw: &Value) -> (Option<AutoLayout>, LayoutChild) {
                 AutoLayoutPrimaryAlign::Max => MainAxisAlign::End,
                 AutoLayoutPrimaryAlign::SpaceBetween => MainAxisAlign::SpaceBetween,
             }),
+            hug_main: matches!(al.primary_axis_sizing_mode, Some(figma_model::AutoLayoutSizingMode::Hug)),
+            hug_cross: matches!(al.counter_axis_sizing_mode, Some(figma_model::AutoLayoutSizingMode::Hug)),
             cross_align: al.counter_axis_align_items.map(|a| match a {
                 AutoLayoutCounterAlign::Min => CrossAxisAlign::Start,
                 AutoLayoutCounterAlign::Center => CrossAxisAlign::Center,

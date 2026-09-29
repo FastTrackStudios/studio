@@ -169,6 +169,12 @@ fn attributes(n: &Node, has_children: bool) -> (Vec<(&'static str, String)>, Opt
         if l.wrap {
             a.push(("wrap", "true".into()));
         }
+        match (l.hug_main, l.hug_cross) {
+            (true, true) => a.push(("hug", "true".into())),
+            (true, false) => a.push(("hug", quote("main"))),
+            (false, true) => a.push(("hug", quote("cross"))),
+            (false, false) => {}
+        }
         if let Some(m) = l.main_align {
             a.push(("justify", quote(&m.keyword())));
         }

@@ -84,6 +84,7 @@ pub(crate) const COMMON_ATTRS: &[&str] = &[
     "gap",
     "padding",
     "wrap",
+    "hug",
     "justify",
     "align",
     "grow",
@@ -107,7 +108,7 @@ pub(crate) const TEXT_ATTRS: &[&str] =
 pub(crate) const KIND_ATTRS: &[(&str, &str)] = &[("component", "Instance"), ("op", "BooleanOperation"), ("tag", "Other")];
 
 /// Attributes that only mean something inside an auto-layout container.
-pub(crate) const LAYOUT_ATTRS: &[&str] = &["gap", "padding", "wrap", "justify", "align"];
+pub(crate) const LAYOUT_ATTRS: &[&str] = &["gap", "padding", "wrap", "justify", "align", "hug"];
 
 pub(crate) fn attrs_for(tag: &str) -> Vec<&'static str> {
     let mut v: Vec<&'static str> = COMMON_ATTRS.to_vec();

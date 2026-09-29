@@ -21,6 +21,8 @@ fn sample() -> (Scene, NodeId, NodeId) {
         wrap: false,
         main_align: Some(MainAxisAlign::Center),
         cross_align: None,
+        hug_main: false,
+        hug_cross: false,
     });
     let frame_id = frame.id;
     scene.apply(Op::Insert { node: frame, parent: page, index: u32::MAX }).unwrap();

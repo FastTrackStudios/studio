@@ -2198,6 +2198,7 @@ name = "frame-cli"
 version = "0.1.0"
 dependencies = [
  "document-proto",
+ "document-text",
  "figma-model",
  "figma-rest",
  "image",

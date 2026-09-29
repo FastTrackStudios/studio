@@ -6,7 +6,7 @@
 use std::collections::BTreeMap;
 
 use document_proto::{
-    AutoLayout, CornerRadii, CrossAxisAlign, LayoutDirection, Node, NodeId, NodeKind, Paint, Scene, Size,
+    AutoLayout, CornerRadii, CrossAxisAlign, LayoutDirection, Node, NodeId, NodeKind, Paint, Scene,
 };
 use surface_proto::{Binding, ButtonMode, Catalog, EntryId, ParamInfo, ParamKind, Source, StreamKind};
 use surface_runtime::Surface;
@@ -29,6 +29,8 @@ impl Builder<'_> {
             wrap: false,
             main_align: None,
             cross_align: Some(CrossAxisAlign::Start),
+            hug_main: true,
+            hug_cross: true,
         });
         self.add(parent, n)
     }
@@ -57,28 +59,10 @@ impl Builder<'_> {
     }
 }
 
-/// Size every auto-layout container under `id` to its content (bottom-up).
+/// Size every hugging container under `id` to its content.
 pub fn hug(scene: &mut Scene, id: NodeId) {
-    let Some(node) = scene.node(id) else { return };
-    let children = node.children.clone();
-    for c in &children {
-        hug(scene, *c);
-    }
-    let Some(node) = scene.node(id) else { return };
-    let Some(al) = node.layout.clone() else { return };
-    let sizes: Vec<Size> = children.iter().filter_map(|c| scene.node(*c)).filter(|n| !n.layout_child.absolute).map(|n| n.size).collect();
-    let gaps = al.gap * sizes.len().saturating_sub(1) as f64;
-    let (main, cross): (f64, f64) = match al.direction {
-        LayoutDirection::Horizontal => (sizes.iter().map(|s| s.width).sum(), sizes.iter().map(|s| s.height).fold(0.0, f64::max)),
-        LayoutDirection::Vertical => (sizes.iter().map(|s| s.height).sum(), sizes.iter().map(|s| s.width).fold(0.0, f64::max)),
-    };
-    let (w, h) = match al.direction {
-        LayoutDirection::Horizontal => (main + gaps, cross),
-        LayoutDirection::Vertical => (cross, main + gaps),
-    };
-    if let Some(n) = scene.node_mut(id) {
-        n.size = Size { width: w + al.padding_left + al.padding_right, height: h + al.padding_top + al.padding_bottom };
-    }
+    let ops = scene.hug_ops(id);
+    scene.transact(ops).expect("hug only resizes existing nodes");
 }
 
 /// Options for [`surface_for_catalog`].

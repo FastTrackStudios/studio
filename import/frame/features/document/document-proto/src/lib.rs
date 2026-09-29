@@ -5,6 +5,7 @@
 //! — the vox service, the HTTP routes, both clients, the storage — is
 //! generated.
 
+mod hug;
 pub mod model;
 pub mod ops;
 

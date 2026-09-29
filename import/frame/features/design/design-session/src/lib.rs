@@ -129,7 +129,12 @@ impl Session {
         }
     }
 
-    fn commit(&mut self, ops: Vec<Op>) -> Result<()> {
+    /// Apply `ops` as one undoable step, re-hugging containers in the
+    /// same transaction.
+    fn commit(&mut self, mut ops: Vec<Op>) -> Result<()> {
+        let mut probe = self.scene.clone();
+        probe.transact(ops.clone())?;
+        ops.extend(probe.hug_ops(probe.root));
         Ok(self.history.commit(&mut self.scene, ops)?)
     }
 

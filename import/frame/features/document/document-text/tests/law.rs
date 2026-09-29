@@ -97,6 +97,8 @@ fn kitchen_sink() -> Scene {
         wrap: true,
         main_align: Some(MainAxisAlign::SpaceBetween),
         cross_align: Some(CrossAxisAlign::Center),
+        hug_main: false,
+        hug_cross: false,
     });
     panel.source = Some(SourceRef { tool: "figma".into(), id: "1:2".into(), node_type: "FRAME".into(), bounds: None });
     let panel = add(&mut s, page, panel);
@@ -113,6 +115,8 @@ fn kitchen_sink() -> Scene {
         wrap: false,
         main_align: None,
         cross_align: Some(CrossAxisAlign::Baseline),
+        hug_main: false,
+        hug_cross: false,
     });
     col.layout_child = LayoutChild {
         grow: Some(1.0),
@@ -495,6 +499,8 @@ mod random {
                 wrap,
                 main_align: if wrap { Some(MainAxisAlign::End) } else { None },
                 cross_align: None,
+                hug_main: false,
+                hug_cross: false,
             }
         }))
         .boxed()
