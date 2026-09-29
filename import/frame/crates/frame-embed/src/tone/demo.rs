@@ -15,6 +15,8 @@ fn norm(catalog: &Catalog, addr: &str, real: f64) -> Option<ParamValue> {
         }
         ParamKind::Toggle => f64::from(u8::from(real >= 0.5)),
         ParamKind::Continuous => p.range.to_normalized(real),
+        // Text params (names) carry no number to set.
+        ParamKind::Text => return None,
     };
     Some(ParamValue {
         addr: p.addr.clone(),
