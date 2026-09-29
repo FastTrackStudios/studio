@@ -277,7 +277,19 @@ impl Session {
                 Source::Collection { id } => self.catalog.collection(id).map(|c| c.name.clone()),
             })
             .unwrap_or_else(|| kind.to_string());
-        let name = name.unwrap_or(&default_name).to_string();
+        // Keep control names (and so labels) unique: "Mix" twice becomes
+        // "Delay Mix" / "Reverb Mix".
+        let group = binding.as_ref().and_then(|b| match &b.source {
+            Source::Param { addr } => self.catalog.param(addr).and_then(|p| p.group.clone()),
+            _ => None,
+        });
+        let taken = |n: &str| self.scene.nodes.values().any(|x| x.name == n && x.control.is_some());
+        let name = match (name, group) {
+            (Some(n), _) => n.to_string(),
+            (None, Some(g)) if taken(&default_name) && !default_name.starts_with(&g) => format!("{g} {default_name}"),
+            (None, _) => default_name.clone(),
+        };
+        let authored_label = (name != default_name).then(|| name.clone());
         let theme = self.theme.clone();
         let (ops, root) = self.build(parent, |b| match kind {
             "knob" => Ok(b.knob(parent, &name, size, binding.clone())),
@@ -289,6 +301,10 @@ impl Session {
             "readout" => Ok(b.readout(parent, &name, size.px() * 1.5, binding.clone())),
             other => err(format!("unknown control kind `{other}`; use knob | fader | button | trigger | footswitch | meter | readout")),
         }, &theme)?;
+        let ops = match authored_label {
+            Some(label) => with_label(ops, root, &label),
+            None => ops,
+        };
         self.commit(ops)?;
         Ok(format!("added {kind} {root} \"{name}\"\n{}", self.lint_summary()))
     }
@@ -382,6 +398,26 @@ impl Session {
         }
         s
     }
+}
+
+/// Write `label` into the control's Label slot node (an authored label wins
+/// over the parameter name at runtime).
+fn with_label(mut ops: Vec<Op>, root: NodeId, label: &str) -> Vec<Op> {
+    let slot = ops.iter().find_map(|o| match o {
+        Op::Insert { node, .. } if node.id == root => node.control.as_ref()?.slots_of(SlotRole::Label).next(),
+        _ => None,
+    });
+    if let Some(slot) = slot {
+        for o in &mut ops {
+            if let Op::Insert { node, .. } = o
+                && node.id.0 == slot
+                && let NodeKind::Text(t) = &mut node.kind
+            {
+                t.characters = label.to_string();
+            }
+        }
+    }
+    ops
 }
 
 fn position(scene: &Scene, parent: NodeId, id: NodeId) -> u32 {
@@ -680,6 +716,18 @@ mod tests {
         assert!(out.contains("0 errors"), "{out}");
         let n = s.scene().nodes.values().find(|n| n.name == "MyKnob").unwrap();
         assert_eq!(n.control.as_ref().unwrap().slots.len(), 1);
+    }
+
+    #[test]
+    fn same_named_params_get_distinct_labels() {
+        let mut s = Session::blank(demo_catalog());
+        let page = s.scene().pages()[0].to_string();
+        call(&mut s, "write", json!({"parent": page, "markup": r##"<Frame name="Fx" layout="row" gap=12 padding=12 fill="#17191e" hug=true />"##}));
+        call(&mut s, "add_control", json!({"parent": "Fx", "kind": "knob", "bind": "param:delay/mix"}));
+        let out = call(&mut s, "add_control", json!({"parent": "Fx", "kind": "knob", "bind": "param:reverb/mix"}));
+        assert!(out.contains("\"Reverb Mix\"") && out.contains("0 warnings"), "{out}");
+        let texts: Vec<_> = s.scene().nodes.values().filter_map(|n| n.text().map(|t| t.characters.clone())).collect();
+        assert!(texts.contains(&"Reverb Mix".to_string()), "the label is authored");
     }
 
     #[test]

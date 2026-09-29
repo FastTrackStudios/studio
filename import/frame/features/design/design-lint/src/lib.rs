@@ -15,6 +15,7 @@
 //! | `touch-target` | warning | an input control smaller than the minimum touch size |
 //! | `size-inconsistent` | warning | same-kind controls in one group with different sizes |
 //! | `contrast` | warning | text too close in luminance to what's behind it |
+//! | `label-duplicate` | warning | two controls in one panel show the same label |
 //! | `param-duplicate` | info | two controls bound to the same parameter |
 //! | `unlabeled` | info | an input control with no label |
 
@@ -85,6 +86,7 @@ pub fn lint(scene: &Scene, catalog: &Catalog, config: &Config) -> Vec<Issue> {
         cx.labeled(node, control);
     }
     cx.duplicates(&controls);
+    cx.labels(&controls);
     cx.overlaps(&controls);
     cx.sizes(&controls);
     cx.contrast();
@@ -231,6 +233,51 @@ impl Cx<'_> {
         for (s, r, n, m, f) in found {
             self.push(s, r, n, m, f);
         }
+    }
+
+    /// Two controls showing the same label on one surface can't be told apart.
+    fn labels(&mut self, controls: &[(&Node, &Control)]) {
+        // Scope: the nearest filled ancestor (a panel) — the same label in
+        // two titled panels is clear from context.
+        let panel = |n: &Node| {
+            let mut cur = n.parent;
+            while let Some(id) = cur {
+                let Some(p) = self.scene.node(id) else { break };
+                if p.fills.iter().any(|f| f.visible) {
+                    return Some(id);
+                }
+                cur = p.parent;
+            }
+            None
+        };
+        let mut seen: BTreeMap<(Option<NodeId>, String), &Node> = BTreeMap::new();
+        let mut found = Vec::new();
+        for (node, c) in controls {
+            let Some(label) = self.label_text(node, c) else { continue };
+            if let Some(first) = seen.insert((panel(node), label.to_lowercase()), node) {
+                found.push((*node, format!("shows the label \"{label}\", like \"{}\"", first.name)));
+            }
+        }
+        for (n, m) in found {
+            self.push(Severity::Warning, "label-duplicate", n, m, "give one a distinct label (e.g. prefix its group: \"Delay Mix\")".into());
+        }
+    }
+
+    /// What the control's label will read: authored text, else the bound
+    /// parameter/action name.
+    fn label_text(&self, node: &Node, c: &Control) -> Option<String> {
+        let authored = c
+            .slots_of(SlotRole::Label)
+            .filter_map(|id| self.scene.node(NodeId(id))?.text().map(|t| t.characters.clone()))
+            .find(|t| !t.is_empty() && !t.starts_with('{'));
+        authored.or_else(|| match c.binding.as_ref().map(|b| &b.source) {
+            Some(Source::Param { addr }) => self.catalog.param(addr).map(|p| p.short_name.clone().unwrap_or_else(|| p.name.clone())),
+            Some(Source::Action { id }) => self.catalog.action(id).map(|a| a.name.clone()),
+            _ => {
+                let _ = node;
+                None
+            }
+        })
     }
 
     fn overlaps(&mut self, controls: &[(&Node, &Control)]) {
