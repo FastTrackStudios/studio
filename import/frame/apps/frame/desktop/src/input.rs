@@ -74,13 +74,22 @@ impl Clicks {
 /// Shift = fine, Cmd/Ctrl = alternate (reset-on-click).
 #[must_use]
 pub fn modifiers(m: ModifiersState) -> Modifiers {
-    Modifiers { fine: m.shift_key(), alt: m.control_key() || m.super_key() }
+    Modifiers { fine: m.shift_key(), alt: m.control_key() || m.super_key(), option: m.alt_key() }
 }
 
 #[must_use]
 pub fn key(k: &WinitKey) -> Option<Key> {
-    let WinitKey::Named(named) = k else {
-        return None;
+    let named = match k {
+        WinitKey::Named(named) => named,
+        // A single character (a shortcut with Cmd/Ctrl, e.g. select all).
+        WinitKey::Character(s) => {
+            let mut chars = s.chars();
+            return match (chars.next(), chars.next()) {
+                (Some(c), None) => Some(Key::Char(c)),
+                _ => None,
+            };
+        }
+        _ => return None,
     };
     Some(match named {
         NamedKey::ArrowUp => Key::Up,
@@ -93,6 +102,10 @@ pub fn key(k: &WinitKey) -> Option<Key> {
         NamedKey::End => Key::End,
         NamedKey::Space => Key::Space,
         NamedKey::Enter => Key::Enter,
+        NamedKey::Escape => Key::Escape,
+        NamedKey::Tab => Key::Tab,
+        NamedKey::Backspace => Key::Backspace,
+        NamedKey::Delete => Key::Delete,
         _ => return None,
     })
 }
@@ -172,9 +185,9 @@ mod tests {
 
     #[test]
     fn modifiers_map_shift_to_fine_and_ctrl_or_cmd_to_alt() {
-        assert_eq!(modifiers(ModifiersState::SHIFT), Modifiers { fine: true, alt: false });
-        assert_eq!(modifiers(ModifiersState::CONTROL), Modifiers { fine: false, alt: true });
-        assert_eq!(modifiers(ModifiersState::SUPER), Modifiers { fine: false, alt: true });
+        assert_eq!(modifiers(ModifiersState::SHIFT), Modifiers { fine: true, ..Modifiers::default() });
+        assert_eq!(modifiers(ModifiersState::CONTROL), Modifiers { alt: true, ..Modifiers::default() });
+        assert_eq!(modifiers(ModifiersState::SUPER), Modifiers { alt: true, ..Modifiers::default() });
         assert_eq!(modifiers(ModifiersState::empty()), Modifiers::default());
     }
 
@@ -183,8 +196,10 @@ mod tests {
         assert_eq!(key(&WinitKey::Named(NamedKey::ArrowUp)), Some(Key::Up));
         assert_eq!(key(&WinitKey::Named(NamedKey::PageDown)), Some(Key::PageDown));
         assert_eq!(key(&WinitKey::Named(NamedKey::Enter)), Some(Key::Enter));
-        assert_eq!(key(&WinitKey::Named(NamedKey::Escape)), None);
-        assert_eq!(key(&WinitKey::Character("a".into())), None);
+        assert_eq!(key(&WinitKey::Named(NamedKey::Escape)), Some(Key::Escape));
+        assert_eq!(key(&WinitKey::Named(NamedKey::Backspace)), Some(Key::Backspace));
+        assert_eq!(key(&WinitKey::Character("a".into())), Some(Key::Char('a')));
+        assert_eq!(key(&WinitKey::Character("ab".into())), None);
     }
 
     #[test]

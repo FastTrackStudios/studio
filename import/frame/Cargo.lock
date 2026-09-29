@@ -5848,6 +5848,8 @@ version = "0.1.0"
 dependencies = [
  "design-lint",
  "document-proto",
+ "document-text",
+ "library-proto",
  "render",
  "serde_json",
  "surface-memory",
@@ -5874,6 +5876,7 @@ dependencies = [
  "facet",
  "feed-proto",
  "serde",
+ "serde_json",
  "uuid",
  "vox",
 ]

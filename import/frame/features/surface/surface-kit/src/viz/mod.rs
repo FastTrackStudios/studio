@@ -24,8 +24,10 @@
 
 pub mod catalog;
 mod comp;
-/// `viz.eq_graph` and `viz.adsr`.
+/// `viz.adsr`.
 mod eq;
+/// `viz.eq_graph`.
+mod eq_graph;
 /// `viz.spectrum`, `viz.gr_history`, `viz.scope`.
 mod simple;
 
@@ -51,6 +53,7 @@ pub const BAND_COLORS: [&str; 8] = ["#ff6b6b", "#ffa94d", "#ffd43b", "#69db7c", 
 pub(crate) fn defs() -> Vec<ComponentDef> {
     let mut all = simple::defs();
     all.extend(comp::defs());
+    all.extend(eq_graph::defs());
     all.extend(eq::defs());
     all
 }

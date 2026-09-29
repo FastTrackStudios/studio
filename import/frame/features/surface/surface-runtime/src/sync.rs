@@ -9,7 +9,7 @@
 use surface_proto::engine::SurfaceEngine;
 #[cfg(feature = "vox")]
 use surface_proto::engine::SurfaceEngineClient;
-use surface_proto::{Catalog, FeedInfo, FeedRequest, ParamValue};
+use surface_proto::{Catalog, FeedInfo, FeedRequest, ParamValue, TextValue};
 
 use crate::runtime::{EngineCall, Runtime, Surface};
 
@@ -37,6 +37,10 @@ pub trait Engine {
         let _ = requests;
         Ok(Vec::new())
     }
+    /// Text params' values (names). An engine without text keeps none.
+    async fn texts(&self) -> Result<Vec<TextValue>, EngineError> {
+        Ok(Vec::new())
+    }
 }
 
 /// An in-process backend.
@@ -56,12 +60,17 @@ impl<E: SurfaceEngine> Engine for Local<'_, E> {
             EngineCall::SetParam { addr, value, phase } => self.0.set_param(addr, value, phase),
             EngineCall::Invoke { action } => self.0.invoke(action),
             EngineCall::Select { collection, index } => self.0.select(collection, index),
+            EngineCall::SetText { addr, text } => self.0.set_text(addr, text),
         };
         r.map_err(|e| EngineError(e.to_string()))
     }
 
     async fn request_feeds(&self, requests: Vec<FeedRequest>) -> Result<Vec<FeedInfo>, EngineError> {
         self.0.request_feeds(requests).map_err(|e| EngineError(e.to_string()))
+    }
+
+    async fn texts(&self) -> Result<Vec<TextValue>, EngineError> {
+        Ok(self.0.texts())
     }
 }
 
@@ -80,12 +89,17 @@ impl Engine for SurfaceEngineClient {
             EngineCall::SetParam { addr, value, phase } => self.set_param(addr, value, phase).await,
             EngineCall::Invoke { action } => self.invoke(action).await,
             EngineCall::Select { collection, index } => self.select(collection, index).await,
+            EngineCall::SetText { addr, text } => self.set_text(addr, text).await,
         };
         r.map_err(|e| EngineError(format!("{e:?}")))
     }
 
     async fn request_feeds(&self, requests: Vec<FeedRequest>) -> Result<Vec<FeedInfo>, EngineError> {
         SurfaceEngineClient::request_feeds(self, requests).await.map_err(|e| EngineError(format!("{e:?}")))
+    }
+
+    async fn texts(&self) -> Result<Vec<TextValue>, EngineError> {
+        SurfaceEngineClient::texts(self).await.map_err(|e| EngineError(format!("{e:?}")))
     }
 }
 
@@ -268,6 +282,10 @@ pub async fn connect(engine: &impl Engine, surface: Surface) -> Result<Runtime, 
     let values = engine.values().await?;
     let mut rt = Runtime::new(surface, catalog);
     rt.apply_values(values);
+    // Best effort: an engine that predates text params has none.
+    if let Ok(texts) = engine.texts().await {
+        rt.apply_texts(texts);
+    }
     // Best effort: an engine that refuses keeps its catalog's shapes, and
     // plots draw whatever arrives.
     let requests = rt.feed_requests();

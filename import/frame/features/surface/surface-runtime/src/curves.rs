@@ -13,7 +13,7 @@
 //!
 //! | provider | inputs | series |
 //! |---|---|---|
-//! | `eq.response` | `b{n}_freq`, `b{n}_gain`, `b{n}_q`, `b{n}_shape`, `b{n}_on`, `b{n}_slope`, `sample_rate` | `sum`, then `b1`, `b2`, … |
+//! | `eq.response` | `b{n}_freq`, `b{n}_gain`, `b{n}_q`, `b{n}_shape`, `b{n}_on`, `b{n}_used`, `b{n}_slope` (dB/oct) or `b{n}_slope_index` (0‥10: 0, 6, 12, 18, 24, 30, 36, 48, 72, 96 dB/oct, brickwall), `b{n}_dyn_range`, `stems`, `sample_rate` | `sum`, then `b1`, `b2`, …; with `stems` on, `b{n}_stem` (the band's node down to 0 dB); with a `b{n}_dyn_range`, `b{n}_dyn` (the curve at gain + range) |
 //! | `comp.transfer` | `threshold`, `ratio`, `knee`, `makeup` | `transfer`, `unity` |
 //! | `adsr.envelope` | `attack`, `decay`, `sustain` (0..1), `release`, `hold`, `curve`; playheads `v{i}_stage`, `v{i}_pos` | `envelope`, `playheads` |
 //! | `filter.response` | `freq`, `q`, `kind`, `gain`, `slope`, `sample_rate` | `response` |
@@ -161,12 +161,25 @@ pub enum Shape {
     HighCut,
     Notch,
     BandPass,
+    /// Tilts about its frequency: half the gain down below, half up above.
+    TiltShelf,
+    /// A gentle whole-spectrum tilt through its frequency.
+    FlatTilt,
+    /// Flat magnitude (phase only).
+    AllPass,
 }
 
 impl Shape {
     /// Option order of a band's shape param: Bell, Low Shelf, High Shelf,
-    /// Low Cut, High Cut, Notch, Band Pass.
-    pub const NAMES: [&'static str; 7] = ["Bell", "Low Shelf", "High Shelf", "Low Cut", "High Cut", "Notch", "Band Pass"];
+    /// Low Cut, High Cut, Notch, Band Pass, Tilt Shelf, Flat Tilt, All Pass.
+    pub const NAMES: [&'static str; 10] =
+        ["Bell", "Low Shelf", "High Shelf", "Low Cut", "High Cut", "Notch", "Band Pass", "Tilt Shelf", "Flat Tilt", "All Pass"];
+
+    /// Whether the shape has a gain (cuts, notch and all-pass don't).
+    #[must_use]
+    pub fn uses_gain(self) -> bool {
+        !matches!(self, Self::LowCut | Self::HighCut | Self::Notch | Self::AllPass)
+    }
 
     #[must_use]
     pub fn from_index(i: f64) -> Self {
@@ -177,6 +190,9 @@ impl Shape {
             4 => Self::HighCut,
             5 => Self::Notch,
             6 => Self::BandPass,
+            7 => Self::TiltShelf,
+            8 => Self::FlatTilt,
+            9 => Self::AllPass,
             _ => Self::Bell,
         }
     }
@@ -222,6 +238,9 @@ impl Biquad {
             }
             Shape::Notch => Self::normalized(1.0, -2.0 * cs, 1.0, 1.0 + alpha, -2.0 * cs, 1.0 - alpha),
             Shape::BandPass => Self::normalized(alpha, 0.0, -alpha, 1.0 + alpha, -2.0 * cs, 1.0 - alpha),
+            Shape::AllPass => Self::normalized(1.0 - alpha, -2.0 * cs, 1.0 + alpha, 1.0 + alpha, -2.0 * cs, 1.0 - alpha),
+            // Tilts are built from shelves in `band_sections`.
+            Shape::TiltShelf | Shape::FlatTilt => Self::rbj(Shape::HighShelf, freq, gain, q, sample_rate),
         }
     }
 
@@ -275,8 +294,26 @@ pub fn band_sections(shape: Shape, freq: f64, gain: f64, q: f64, slope_db: f64, 
             }
             out
         }
+        // Half the gain down below the frequency, half up above.
+        Shape::TiltShelf => vec![
+            Biquad::rbj(Shape::LowShelf, freq, -gain / 2.0, q, sample_rate),
+            Biquad::rbj(Shape::HighShelf, freq, gain / 2.0, q, sample_rate),
+        ],
+        // The same, spread across the spectrum.
+        Shape::FlatTilt => vec![
+            Biquad::rbj(Shape::LowShelf, freq, -gain / 2.0, 0.3, sample_rate),
+            Biquad::rbj(Shape::HighShelf, freq, gain / 2.0, 0.3, sample_rate),
+        ],
         _ => vec![Biquad::rbj(shape, freq, gain, q, sample_rate)],
     }
+}
+
+/// dB/oct of slope index `i` (a cut's slope choice): 0, 6, 12, 18, 24, 30,
+/// 36, 48, 72, 96, and brickwall (drawn as 96 steeper still).
+#[must_use]
+pub fn slope_db(index: f64) -> f64 {
+    const DB: [f64; 11] = [6.0, 6.0, 12.0, 18.0, 24.0, 30.0, 36.0, 48.0, 72.0, 96.0, 96.0];
+    DB[(index.max(0.0).round() as usize).min(10)]
 }
 
 /// The band numbers `b{n}_…` inputs name, ascending.
@@ -299,23 +336,49 @@ pub fn eq_response(inputs: &CurveInputs) -> Vec<Series> {
     let xs = inputs.xs();
     let mut sum = vec![0.0; xs.len()];
     let mut out = vec![Series::default()];
+    let mut extra = Vec::new();
+    let stems = inputs.or("stems", 0.0) >= 0.5;
     for n in bands(inputs) {
         let arg = |k: &str| inputs.get(&format!("b{n}_{k}"));
-        let on = arg("on").is_none_or(|v| v >= 0.5);
+        let on = arg("on").is_none_or(|v| v >= 0.5) && arg("used").is_none_or(|v| v >= 0.5);
         let name = format!("b{n}");
         let Some(freq) = arg("freq").filter(|_| on) else {
-            out.push(Series::new(name, Vec::new()));
+            out.push(Series::new(name.clone(), Vec::new()));
+            if stems {
+                extra.push(Series::new(format!("{name}_stem"), Vec::new()));
+            }
+            if arg("dyn_range").is_some() {
+                extra.push(Series::new(format!("{name}_dyn"), Vec::new()));
+            }
             continue;
         };
         let shape = Shape::from_index(arg("shape").unwrap_or(0.0));
-        let sections = band_sections(shape, freq, arg("gain").unwrap_or(0.0), arg("q").unwrap_or(0.707), arg("slope").unwrap_or(12.0), sr);
-        let pts: Vec<(f64, f64)> = xs.iter().map(|&f| (f, sections.iter().map(|s| s.db_at(f, sr)).sum::<f64>())).collect();
+        let slope = arg("slope_index").map_or_else(|| arg("slope").unwrap_or(12.0), slope_db);
+        let (gain, q) = (arg("gain").unwrap_or(0.0), arg("q").unwrap_or(0.707));
+        let sections = band_sections(shape, freq, gain, q, slope, sr);
+        let db = |f: f64| sections.iter().map(|s| s.db_at(f, sr)).sum::<f64>();
+        let pts: Vec<(f64, f64)> = xs.iter().map(|&f| (f, db(f))).collect();
         for (acc, (_, db)) in sum.iter_mut().zip(&pts) {
             *acc += db;
         }
-        out.push(Series::new(name, pts));
+        out.push(Series::new(name.clone(), pts));
+        if stems {
+            let at = db(freq);
+            let stem = if at.abs() > 0.1 { vec![(freq, 0.0), (freq, at)] } else { Vec::new() };
+            extra.push(Series::new(format!("{name}_stem"), stem));
+        }
+        if let Some(range) = arg("dyn_range") {
+            let pts = if range.abs() >= 0.05 && shape.uses_gain() {
+                let far = band_sections(shape, freq, gain + range, q, slope, sr);
+                xs.iter().map(|&f| (f, far.iter().map(|s| s.db_at(f, sr)).sum::<f64>())).collect()
+            } else {
+                Vec::new()
+            };
+            extra.push(Series::new(format!("{name}_dyn"), pts));
+        }
     }
     out[0] = Series::new("sum", xs.iter().copied().zip(sum).collect());
+    out.extend(extra);
     out
 }
 
@@ -491,6 +554,37 @@ mod tests {
         assert!((at(&s[0], 4000.0) + 6.0).abs() < 0.2);
         assert_eq!(s[0].points.len(), 256);
         assert!((s[0].points[0].0 - 20.0).abs() < 1e-9 && (s[0].points[255].0 - 20_000.0).abs() < 1e-6);
+    }
+
+    #[test]
+    fn unused_bands_stems_slopes_and_dynamics() {
+        let inputs = CurveInputs::new(LOG)
+            .with("stems", 1.0)
+            .with("b1_freq", 1000.0)
+            .with("b1_gain", 6.0)
+            .with("b1_dyn_range", -4.0)
+            .with("b2_freq", 100.0)
+            .with("b2_shape", 3.0)
+            .with("b2_slope_index", 4.0)
+            .with("b3_freq", 5000.0)
+            .with("b3_gain", 9.0)
+            .with("b3_used", 0.0);
+        let s = eq_response(&inputs);
+        let names: Vec<&str> = s.iter().map(|s| s.name.as_str()).collect();
+        assert_eq!(names, ["sum", "b1", "b2", "b3", "b1_stem", "b1_dyn", "b2_stem", "b3_stem"]);
+        assert!(s[3].points.is_empty(), "an unused band draws nothing");
+        assert_eq!(s[4].points, [(1000.0, 0.0), (1000.0, s[4].points[1].1)]);
+        assert!((s[4].points[1].1 - 6.0).abs() < 1e-6, "the stem reaches the node");
+        assert!((at(&s[5], 1000.0) - 2.0).abs() < 0.2, "gain + range = 2 dB");
+        let per_oct = at(&s[2], 25.0) - at(&s[2], 12.5).max(-200.0);
+        assert!(at(&s[2], 50.0) < -6.0 && per_oct.is_finite(), "a 24 dB/oct low cut");
+        assert_eq!(slope_db(4.0), 24.0);
+        assert_eq!(Shape::from_index(9.0), Shape::AllPass);
+        let ap = band_sections(Shape::AllPass, 1000.0, 0.0, 0.7, 12.0, 48_000.0);
+        assert!(ap[0].db_at(300.0, 48_000.0).abs() < 1e-6, "all-pass is flat");
+        let tilt = band_sections(Shape::TiltShelf, 1000.0, 6.0, 0.7, 12.0, 48_000.0);
+        let db = |f: f64| tilt.iter().map(|b| b.db_at(f, 48_000.0)).sum::<f64>();
+        assert!(db(20.0) < -2.5 && db(18_000.0) > 2.5, "tilts down below, up above");
     }
 
     #[test]

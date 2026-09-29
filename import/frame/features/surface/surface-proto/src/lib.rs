@@ -13,12 +13,14 @@
 //!   it — in-process, over a WebSocket, or from an iPad.
 
 pub mod control;
+pub mod interact;
 pub mod param;
 
 pub use feed_proto::curve;
 pub use feed_proto::{FeedFrame, FeedOptions, FeedRequest, Tap, Trigger, VoiceState};
 
 pub use control::*;
+pub use interact::*;
 pub use curve::{Curve, CurvePoint};
 pub use param::*;
 
@@ -27,6 +29,13 @@ pub use param::*;
 pub struct ParamValue {
     pub addr: ParamAddr,
     pub value: f64,
+}
+
+/// One text parameter's current value (a band's name).
+#[derive(Debug, Clone, PartialEq, facet::Facet, serde::Serialize, serde::Deserialize)]
+pub struct TextValue {
+    pub addr: ParamAddr,
+    pub text: String,
 }
 
 /// One sample of a telemetry stream — a [`FeedFrame`] (`values` laid out
@@ -52,6 +61,9 @@ pub enum SurfaceError {
     UnknownCollection(String),
     OutOfRange(u32),
     UnknownFeed(String),
+    /// A text was set on a param that isn't a text param (or the engine
+    /// keeps no text).
+    NotText(String),
 }
 
 impl std::fmt::Display for SurfaceError {
@@ -62,6 +74,7 @@ impl std::fmt::Display for SurfaceError {
             Self::UnknownCollection(c) => write!(f, "no collection `{c}`"),
             Self::OutOfRange(i) => write!(f, "index {i} out of range"),
             Self::UnknownFeed(id) => write!(f, "no feed `{id}`"),
+            Self::NotText(a) => write!(f, "`{a}` is not a text parameter"),
         }
     }
 }
@@ -73,7 +86,7 @@ pub mod engine {
     //! `SurfaceEngineService` / `surface_engine_serve`, plus the stream
     //! sibling (`SurfaceEngineStreamClient`, `SurfaceEngineStreamService`,
     //! the `SurfaceEngineStreamSource` backend contract).
-    use super::{Catalog, EditPhase, EntryId, FeedInfo, FeedRequest, ParamAddr, ParamValue, StreamFrame, SurfaceError};
+    use super::{Catalog, EditPhase, EntryId, FeedInfo, FeedRequest, ParamAddr, ParamValue, StreamFrame, SurfaceError, TextValue};
 
     /// An engine, as a surface sees it. Backends implement it synchronously
     /// (like signal's rig services); remote callers get the async client.
@@ -102,6 +115,17 @@ pub mod engine {
                 .iter()
                 .map(|r| catalog.stream(&r.id).cloned().ok_or_else(|| SurfaceError::UnknownFeed(r.id.0.clone())))
                 .collect()
+        }
+        /// Every text parameter's current value. The default: none (an
+        /// engine written before text params).
+        fn texts(&self) -> Vec<TextValue> {
+            Vec::new()
+        }
+        /// Set a text parameter (a band's name). The default refuses, so
+        /// engines written before text params keep compiling.
+        fn set_text(&self, addr: ParamAddr, text: String) -> Result<(), SurfaceError> {
+            let _ = text;
+            Err(SurfaceError::NotText(addr.0))
         }
         /// Parameter changes from anywhere (other surfaces, MIDI, automation).
         #[subscribe]

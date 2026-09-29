@@ -167,6 +167,36 @@ impl Builder<'_> {
         root
     }
 
+    /// An inline text field for a text param (a name): a well with the
+    /// text, a "Name…" placeholder, a caret and a selection highlight.
+    pub fn text_field(&mut self, parent: NodeId, name: &str, width: f64, binding: Option<Binding>) -> NodeId {
+        let t = self.theme.clone();
+        let h = t.min_touch.clamp(22.0, 28.0);
+        let mut root = Self::frame(name, width, h);
+        root.fills = vec![Paint::solid(t.track)];
+        root.corner_radii = CornerRadii::uniform(4.0);
+        root.stroke = Stroke { paints: vec![Paint::solid(t.body)], weight: 1.0, ..Stroke::default() };
+        let root = self.add(parent, root);
+        let size = t.label_size.max(11.0);
+        let y = ((h - size * 1.35) / 2.0).round();
+        let sel = self.add(root, Self::shape(NodeKind::Rectangle, "selection", 6.0, y, 1.0, size * 1.35, Color { a: 0.35, ..t.accent }));
+        let mut hint = self.text("placeholder", "Name…", size, Color { a: 0.45, ..t.text }, width - 12.0, TextAlign::Left);
+        hint.transform = Transform::translate(6.0, y);
+        let hint = self.add(root, hint);
+        let mut value = self.text("value", "", size, t.text, width - 12.0, TextAlign::Left);
+        value.transform = Transform::translate(6.0, y);
+        let value = self.add(root, value);
+        let caret = self.add(root, Self::shape(NodeKind::Rectangle, "caret", 6.0, y, 1.5, size * 1.35, t.accent));
+        let mut c = Control::new(ControlKind::TextField { click_to_edit: true, max_len: 64 })
+            .slot(SlotRole::Value, value.0)
+            .slot(SlotRole::Placeholder, hint.0)
+            .slot(SlotRole::TextSelection, sel.0)
+            .slot(SlotRole::Caret, caret.0);
+        c.binding = binding;
+        self.register(root, c);
+        root
+    }
+
     /// A vertical level meter with peak-hold; bind to a level stream.
     pub fn meter(&mut self, parent: NodeId, name: &str, height: f64, binding: Option<Binding>) -> NodeId {
         let t = self.theme.clone();

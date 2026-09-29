@@ -112,6 +112,20 @@ pub enum Script {
     /// Library browser: preview the selected surface on frame 1.
     OpenSelected,
     DragFirstHandle,
+    /// Click the third shown handle: its panel comes up.
+    SelectHandle,
+    /// Double-click empty canvas: a band is added there.
+    AddOnCanvas,
+    /// Double-click the third shown handle and type a name (left editing).
+    RenameHandle,
+    /// Drag a marquee across the canvas (held, mid-drag).
+    Marquee,
+    /// Right-click the third shown handle: its context menu.
+    ContextHandle,
+}
+
+impl Script {
+    const NAMES: &str = "drag-first-knob | drag-first-handle | open-selected | select-handle | add-on-canvas | rename-handle | marquee | context-handle";
 }
 
 const USAGE: &str = "usage: frame [FILE.fm|FILE.frame] [--theme stage-dark|daylight] [--stats] [--size WxH] [--no-fx|--fx gpu|fallback|off]\n       \
@@ -165,7 +179,12 @@ fn parse_args(args: impl IntoIterator<Item = String>) -> Result<Args, String> {
                     "drag-first-knob" => Some(Script::DragFirstKnob),
                     "open-selected" => Some(Script::OpenSelected),
                     "drag-first-handle" => Some(Script::DragFirstHandle),
-                    other => return Err(format!("unknown script {other:?} (drag-first-knob | drag-first-handle | open-selected)")),
+                    "select-handle" => Some(Script::SelectHandle),
+                    "add-on-canvas" => Some(Script::AddOnCanvas),
+                    "rename-handle" => Some(Script::RenameHandle),
+                    "marquee" => Some(Script::Marquee),
+                    "context-handle" => Some(Script::ContextHandle),
+                    other => return Err(format!("unknown script {other:?} ({})", Script::NAMES)),
                 }
             }
             "--engine" => out.engine = Some(EngineArg { url: value()?, rig: None }),

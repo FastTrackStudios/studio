@@ -8,7 +8,7 @@ use vello::wgpu::{self, PresentMode};
 use vello::{AaConfig, Renderer, RendererOptions};
 use winit::application::ApplicationHandler;
 use winit::dpi::LogicalSize;
-use winit::event::{ElementState, MouseButton, WindowEvent};
+use winit::event::{ElementState, Ime, MouseButton, WindowEvent};
 use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop};
 use winit::keyboard::{Key as WinitKey, ModifiersState, NamedKey};
 use winit::window::{Window, WindowId};
@@ -476,10 +476,37 @@ impl ApplicationHandler for App {
                     self.player.wheel(notches, mods, t);
                 }
             }
+            WindowEvent::MouseInput { state: ElementState::Pressed, button: MouseButton::Right, .. } => {
+                if let (false, Some((at, _))) = (self.browsing(), self.cursor()) {
+                    self.player.context(at, t);
+                }
+            }
+            WindowEvent::Ime(Ime::Commit(text)) => {
+                self.player.text(&text);
+            }
+            WindowEvent::KeyboardInput { event, .. } if event.state == ElementState::Pressed && self.player.editing() => {
+                // A field being edited takes every key: named ones as keys,
+                // the rest as the text they type.
+                let key = input::key(&event.logical_key).filter(|k| !matches!(k, surface_runtime::Key::Char(_)) || mods.alt);
+                match key {
+                    Some(k) => {
+                        self.player.key(k, mods, t);
+                    }
+                    None => {
+                        if let Some(text) = &event.text {
+                            self.player.text(text);
+                        }
+                    }
+                }
+            }
             WindowEvent::KeyboardInput { event, .. } if event.state == ElementState::Pressed => {
                 let shift = self.modifiers.shift_key();
+                let taken = |k: &WinitKey, p: &mut crate::player::Player| input::key(k).is_some_and(|key| p.key(key, mods, t));
                 if event.logical_key == WinitKey::Named(NamedKey::Escape) {
-                    event_loop.exit();
+                    // Escape closes a menu or clears the selection first.
+                    if !taken(&event.logical_key, &mut self.player) {
+                        event_loop.exit();
+                    }
                 } else if self.library_key(&event.logical_key) {
                 } else if event.logical_key == WinitKey::Named(NamedKey::Tab) {
                     self.show(if shift { -1 } else { 1 });
@@ -489,6 +516,10 @@ impl ApplicationHandler for App {
                     self.show(-1);
                 } else if let Some(key) = input::key(&event.logical_key) {
                     self.player.key(key, mods, t);
+                }
+                // IME follows text editing (a click into a name field).
+                if let Some(g) = &self.gpu {
+                    g.window.set_ime_allowed(self.player.editing());
                 }
             }
             _ => return,

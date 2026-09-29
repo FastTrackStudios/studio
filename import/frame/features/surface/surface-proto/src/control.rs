@@ -11,6 +11,7 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::curve::Curve;
+use crate::interact::{AddRule, ClickAction, Command, Condition, Interact, MenuItem, Placement, Show, Zoom};
 use crate::param::{Catalog, EntryId, ParamAddr, ParamKind, StreamKind, ValueFormat};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, Facet)]
@@ -34,6 +35,9 @@ pub enum ButtonMode {
     /// One of a bank of radio buttons: sets the bound (choice) param to
     /// option `index` of `count`; lit while that option is selected.
     Select { index: u32, count: u32 },
+    /// Each press steps the bound choice param to its next option,
+    /// wrapping (an EQ band's shape, a stereo placement).
+    Cycle,
 }
 
 impl ButtonMode {
@@ -91,6 +95,39 @@ pub enum ControlKind {
     /// (an EQ band's Q). Either axis may be unbound (a threshold chip
     /// only slides sideways).
     Handle { x: Option<Binding>, y: Option<Binding>, wheel: Option<Binding>, x_map: HandleAxis, y_map: HandleAxis },
+    /// A template: the runtime draws this node's subtree once per item
+    /// `first..first + count` of an indexed family, `{n}` in every address,
+    /// name and text inside it resolved to the item's index. An item shows
+    /// while its `used` param is on (all show without one): adding an item
+    /// is setting `used`, removing it clearing it. The template itself is
+    /// never drawn. Instances get stable ids (from the template's and the
+    /// index), so live reloads keep their state.
+    Repeat { first: u32, count: u32, used: Option<ParamAddr> },
+    /// The empty space of a plot area: press-and-drag draws a marquee that
+    /// selects the selectable controls inside it, a click clears the
+    /// selection, a double-click adds an item there (`add`) — its position
+    /// read through `x` / `y` (the area's axes, `y` zoomed by the control's
+    /// [`Zoom`]).
+    Canvas { x: Axis, y: Axis, add: Option<AddRule> },
+    /// A panel that follows its `anchor` node (a handle): placed on its
+    /// preferred side `gap` px away, flipped when that side doesn't fit
+    /// inside the surface, clamped in, drawn above everything and shown per
+    /// `show`. With `context` (a [`Repeat`](Self::Repeat) template node)
+    /// there is one popover for all items: its anchor and every `{n}` inside
+    /// it follow the active item (the dragged, last selected or hovered one).
+    Popover { anchor: Option<Uuid>, placement: Placement, gap: f64, show: Show, context: Option<Uuid> },
+    /// A context menu: rows (`items`, each naming its row node), opened by
+    /// a right-click on a control whose [`Interact::menu`] names it, at the
+    /// pointer (clamped inside the surface). Arrow keys move the highlight,
+    /// Enter runs, Right / Left open and close submenus, Escape closes. With
+    /// `context` its `{n}` resolve to the item it was opened on.
+    Menu { items: Vec<MenuItem>, context: Option<Uuid> },
+    /// Inline text editing of a text param: click (or a
+    /// [`Command::Edit`]) to edit — caret, selection, typing, Backspace /
+    /// Delete, arrows, Home / End, Enter to commit, Escape to cancel. With
+    /// `click_to_edit` off it only edits when told to (a name label on a
+    /// handle, renamed by double-clicking the handle).
+    TextField { click_to_edit: bool, max_len: u32 },
 }
 
 /// How a plot or curve draws its points.
@@ -300,13 +337,24 @@ impl ControlKind {
             Self::Plot { .. } => "plot",
             Self::Curve { .. } => "curve",
             Self::Handle { .. } => "handle",
+            Self::Repeat { .. } => "repeat",
+            Self::Canvas { .. } => "canvas",
+            Self::Popover { .. } => "popover",
+            Self::Menu { .. } => "menu",
+            Self::TextField { .. } => "text-field",
         }
     }
 
     /// Whether the control writes a value (vs. only displaying one).
     #[must_use]
     pub const fn is_input(&self) -> bool {
-        !matches!(self, Self::Meter { .. } | Self::Gauge { .. } | Self::Readout | Self::Plot { .. } | Self::Curve { .. })
+        !matches!(self, Self::Meter { .. } | Self::Gauge { .. } | Self::Readout | Self::Plot { .. } | Self::Curve { .. } | Self::Repeat { .. })
+    }
+
+    /// Kinds that bind nothing themselves (their children and rules do).
+    #[must_use]
+    pub const fn is_container(&self) -> bool {
+        matches!(self, Self::Repeat { .. } | Self::Canvas { .. } | Self::Popover { .. } | Self::Menu { .. })
     }
 }
 
@@ -419,6 +467,28 @@ pub enum SlotRole {
     /// Centred on the curve at its `marker` input (a compressor's input
     /// ball on the transfer curve); hidden without a reading.
     Marker,
+    /// Shown only while the control is selected (a ring round a handle).
+    Selected,
+    /// Shown only while the pointer is over the control (or dragging it).
+    Hovered,
+    /// A text field's insertion point: moved to the caret while editing,
+    /// hidden otherwise.
+    Caret,
+    /// A text field's selection highlight: sized over the selected text.
+    TextSelection,
+    /// Shown only while the value's text is empty (a "Name…" hint).
+    Placeholder,
+    /// A canvas's rubber band: sized to the marquee while one is drawn.
+    Marquee,
+    /// A menu's highlight: moved onto the active row.
+    Highlight,
+    /// Its solid fills (and stroke) take the colour of the control's
+    /// [`Control::tint`] ramp at its position — a handle at its x.
+    Tint,
+    /// Shown only while the control reads on (≥ 0.5).
+    On,
+    /// Shown only while the control reads off.
+    Off,
 }
 
 /// "Node `node` plays `role`." `node` is a design node id (uuid).
@@ -457,6 +527,26 @@ pub struct Control {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[facet(default)]
     pub reference_dbfs: Option<f64>,
+    /// Selection, chord clicks and drags, wheel targets, double-click,
+    /// context menu, removal ([`Interact`]).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[facet(default)]
+    pub interact: Option<Interact>,
+    /// The node is drawn (and hit) only while this holds (an analyser layer
+    /// behind a toggle; a band's grey disc while it is bypassed).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[facet(default)]
+    pub show_if: Option<Condition>,
+    /// Its vertical range follows a choice param (curves, plots, handles'
+    /// y axes, a canvas's y).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[facet(default)]
+    pub zoom: Option<Zoom>,
+    /// A colour ramp (`#rrggbb` stops, evenly spaced) its `Tint` slots take
+    /// at the control's position.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    #[facet(default)]
+    pub tint: Vec<String>,
 }
 
 /// 0 VU = −18 dBFS: the digital operating level every VU meter is
@@ -517,7 +607,115 @@ impl SourceSelect {
 impl Control {
     #[must_use]
     pub fn new(kind: ControlKind) -> Self {
-        Self { kind, binding: None, y_binding: None, midi: None, default: None, slots: Vec::new(), format: None, select: None, reference_dbfs: None }
+        Self {
+            kind,
+            binding: None,
+            y_binding: None,
+            midi: None,
+            default: None,
+            slots: Vec::new(),
+            format: None,
+            select: None,
+            reference_dbfs: None,
+            interact: None,
+            show_if: None,
+            zoom: None,
+            tint: Vec::new(),
+        }
+    }
+
+    #[must_use]
+    pub fn interacting(mut self, interact: Interact) -> Self {
+        self.interact = Some(interact);
+        self
+    }
+
+    #[must_use]
+    pub fn shown_if(mut self, condition: Condition) -> Self {
+        self.show_if = Some(condition);
+        self
+    }
+
+    /// This control with `map` applied to its serialized form (to remap
+    /// node ids) and then every `{n}` resolved to `n`.
+    #[must_use]
+    pub fn instantiate(&self, n: u32, map: impl Fn(String) -> String) -> Self {
+        let Ok(json) = serde_json::to_string(self) else { return self.clone() };
+        let json = map(json).replace(crate::interact::INDEX, &n.to_string());
+        serde_json::from_str(&json).unwrap_or_else(|_| self.clone())
+    }
+
+    /// Whether any address in it is templated (`{n}`).
+    #[must_use]
+    pub fn is_templated(&self) -> bool {
+        serde_json::to_string(self).is_ok_and(|j| j.contains(crate::interact::INDEX))
+    }
+
+    /// Every param this control reads or writes besides its bindings: curve
+    /// inputs, handle axes, a repeat's `used`, add rules, menu commands and
+    /// checks, interaction rules, its `show_if` and zoom.
+    #[must_use]
+    pub fn extra_params(&self) -> Vec<&ParamAddr> {
+        fn cmd<'a>(c: &'a Command, out: &mut Vec<&'a ParamAddr>) {
+            if let Command::Set { addr, .. } | Command::Toggle { addr } | Command::Cycle { addr } | Command::Invert { addr } | Command::Reset { addr } = c {
+                out.push(addr);
+            }
+        }
+        let mut out: Vec<&ParamAddr> = Vec::new();
+        match &self.kind {
+            ControlKind::Curve { inputs, .. } => {
+                for i in inputs {
+                    if let InputSource::Param { addr } = &i.source {
+                        out.push(addr);
+                    }
+                }
+            }
+            ControlKind::Handle { x_map, y_map, .. } => out.extend(x_map.after.iter().chain(&y_map.after)),
+            ControlKind::Repeat { used: Some(u), .. } => out.push(u),
+            ControlKind::Canvas { add: Some(rule), .. } => {
+                out.extend(rule.x.iter().chain(&rule.y));
+                out.extend(rule.set.iter().map(|a| &a.addr));
+                for z in &rule.zones {
+                    out.extend(z.set.iter().map(|a| &a.addr));
+                }
+            }
+            ControlKind::Menu { items, .. } => {
+                for item in items {
+                    for c in &item.commands {
+                        cmd(c, &mut out);
+                    }
+                    if let Some(c) = &item.checked {
+                        out.push(&c.addr);
+                    }
+                }
+            }
+            _ => {}
+        }
+        if let Some(i) = &self.interact {
+            for r in &i.wheel {
+                out.push(&r.target);
+                if let Some(c) = &r.when {
+                    out.push(&c.addr);
+                }
+            }
+            for r in &i.click {
+                if let ClickAction::Run { commands } = &r.action {
+                    for c in commands {
+                        cmd(c, &mut out);
+                    }
+                }
+            }
+            for c in i.double_click.iter().chain(&i.press).chain(i.keys.iter().flat_map(|k| &k.commands)) {
+                cmd(c, &mut out);
+            }
+        }
+        if let Some(c) = &self.show_if {
+            out.push(&c.addr);
+        }
+        if let Some(z) = &self.zoom {
+            out.push(&z.param);
+        }
+        out
     }
 
     #[must_use]
@@ -573,7 +771,52 @@ impl Control {
     /// Check this control's bindings against `catalog`.
     #[must_use]
     pub fn validate(&self, catalog: &Catalog) -> Vec<BindingIssue> {
+        // A template checks as its first item would (`{n}` = 1).
+        if self.is_templated() {
+            return self.instantiate(1, |s| s).validate(catalog);
+        }
+        let mut out: Vec<BindingIssue> = Vec::new();
+        for issue in self.validate_all(catalog) {
+            if !out.contains(&issue) {
+                out.push(issue);
+            }
+        }
+        out
+    }
+
+    fn validate_all(&self, catalog: &Catalog) -> Vec<BindingIssue> {
         let mut issues = Vec::new();
+        // Rules, commands, conditions and zoom name params too.
+        let unknown = |addr: &&ParamAddr| catalog.param(addr).is_none();
+        for addr in self.extra_params().into_iter().filter(unknown) {
+            issues.push(BindingIssue::UnknownParam { addr: addr.clone() });
+        }
+        if let Some(z) = &self.zoom
+            && let Some(p) = catalog.param(&z.param)
+            && !matches!(p.kind, ParamKind::Choice { .. })
+        {
+            issues.push(BindingIssue::Mismatch { detail: format!("zoom follows `{}`, which is not a choice", z.param) });
+        }
+        let has_commands = self.interact.as_ref().is_some_and(|i| !i.press.is_empty());
+        match &self.kind {
+            ControlKind::Repeat { .. } | ControlKind::Canvas { .. } | ControlKind::Popover { .. } | ControlKind::Menu { .. } => return issues,
+            ControlKind::TextField { .. } => {
+                match self.binding.as_ref().map(|b| &b.source) {
+                    Some(Source::Param { addr }) => match catalog.param(addr) {
+                        None => issues.push(BindingIssue::UnknownParam { addr: addr.clone() }),
+                        Some(p) if p.kind != ParamKind::Text => {
+                            issues.push(BindingIssue::Mismatch { detail: format!("text field bound to `{addr}`, which is not a text param") });
+                        }
+                        Some(_) => {}
+                    },
+                    Some(_) => issues.push(BindingIssue::Mismatch { detail: "a text field edits a text param".into() }),
+                    None => issues.push(BindingIssue::Unbound),
+                }
+                return issues;
+            }
+            ControlKind::Button { .. } if self.binding.is_none() && has_commands => return issues,
+            _ => {}
+        }
         // Curves and handles carry their own bindings.
         match &self.kind {
             ControlKind::Curve { inputs, .. } => {

@@ -70,6 +70,10 @@ struct Built {
 
 impl Built {
     fn new(mut rt: Runtime) -> Result<Self, String> {
+        // Carets land where the painted glyphs end.
+        rt.set_text_measure(std::sync::Arc::new(|text: &str, size: f64, spacing: f64| {
+            render::text_advance(font(), text, size, spacing).unwrap_or_else(|| surface_runtime::runtime::text::estimate(text, size, spacing))
+        }));
         let scene = &rt.surface().scene;
         let page = *scene.pages().first().ok_or("surface has no <Page>")?;
         let boxes = render::build_scene_layout_boxes(scene, page);
@@ -151,6 +155,7 @@ impl Player {
             // changed it); only a param mid-drag keeps its optimistic value.
             let values = surface_proto::SurfaceEngine::values(engine);
             rt.apply_values(values.into_iter().filter(|v| dragging.as_ref() != Some(&v.addr)));
+            rt.apply_texts(surface_proto::SurfaceEngine::texts(engine));
         }
         let b = Built::new(rt)?;
         self.install(b);
@@ -316,11 +321,52 @@ impl Player {
         self.dispatch(calls);
     }
 
-    /// Keyboard to the last-clicked control.
-    pub fn key(&mut self, key: Key, mods: Modifiers, t: f64) {
-        let Some(id) = self.focus else { return };
+    /// A key: to the text field being edited, an open menu, the
+    /// selection, else the last-clicked control. False when nothing took
+    /// it (the host may use it: Escape quits).
+    pub fn key(&mut self, key: Key, mods: Modifiers, t: f64) -> bool {
+        if let Some(calls) = self.rt.key(key, mods, t) {
+            self.dispatch(calls);
+            return true;
+        }
+        let Some(id) = self.focus else { return false };
+        if matches!(key, Key::Escape | Key::Tab | Key::Char(_)) {
+            return false;
+        }
         let calls = self.rt.feed(id, Input::Key { key, mods }, t);
         self.dispatch(calls);
+        true
+    }
+
+    /// Typed text (key characters, IME commits) into the field being
+    /// edited; false when none is.
+    pub fn text(&mut self, text: &str) -> bool {
+        match self.rt.type_text(text) {
+            Some(calls) => {
+                self.dispatch(calls);
+                true
+            }
+            None => false,
+        }
+    }
+
+    /// Whether a text field is being edited (keys are text, IME is on).
+    #[must_use]
+    pub fn editing(&self) -> bool {
+        self.rt.editing().is_some()
+    }
+
+    /// A right-click: the context menu of what's there.
+    pub fn context(&mut self, at: (f64, f64), t: f64) {
+        self.cursor = Some(at);
+        let calls = self.rt.context_click(at.0, at.1, t);
+        self.dispatch(calls);
+    }
+
+    /// The runtime (scripted checks: selection, menus, editing).
+    #[must_use]
+    pub fn rt(&self) -> &Runtime {
+        &self.rt
     }
 
     fn dispatch(&mut self, calls: Vec<EngineCall>) {
@@ -385,6 +431,25 @@ impl Player {
             .into_iter()
             .find(|id| s.controls.get(id).is_some_and(|c| matches!(c.kind, ControlKind::Handle { .. })))
             .and_then(|id| self.rt.hit_box(id).map(|b| (id, b)))
+    }
+
+    /// Handles drawn now (in use), in paint order.
+    #[must_use]
+    pub fn shown_handles(&self) -> Vec<NodeId> {
+        let s = self.rt.surface();
+        s.scene
+            .walk(s.scene.root)
+            .into_iter()
+            .filter(|id| s.controls.get(id).is_some_and(|c| matches!(c.kind, ControlKind::Handle { .. })) && self.rt.is_shown(*id))
+            .collect()
+    }
+
+    /// The first canvas's box (a plot area you can add to).
+    #[must_use]
+    pub fn canvas(&self) -> Option<Bounds> {
+        let s = self.rt.surface();
+        let id = s.controls.iter().find(|(_, c)| matches!(c.kind, ControlKind::Canvas { .. }))?.0;
+        self.rt.hit_box(*id)
     }
 
     /// The param a control is bound to (a handle's: its x, else its y).

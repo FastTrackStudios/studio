@@ -87,6 +87,52 @@ impl Shot<'_> {
     }
 }
 
+/// The editing scripts, frame by frame. Events go through the window →
+/// surface mapping like real ones (a press, a double-click 50 ms later, a
+/// right-click, typed text).
+fn edit_script(shot: &mut Shot<'_>, script: Script, i: u32, t: f64) -> Result<(), String> {
+    let view = shot.view();
+    let rt = shot.player.rt();
+    let handles = shot.player.shown_handles();
+    let handle = handles.get(2).or(handles.first()).copied().ok_or("the surface has no handle")?;
+    let canvas = shot.player.canvas().ok_or("the surface has no canvas");
+    let hb = rt.hit_box(handle).ok_or("the handle has no box")?;
+    let hc = (hb.x + hb.width / 2.0, hb.y + hb.height / 2.0);
+    let m = Modifiers::default();
+    // Window px (what the host would see), and back.
+    let press = |shot: &mut Shot<'_>, at: (f64, f64), t: f64| {
+        let (wx, wy) = view.to_window(at.0, at.1);
+        shot.player.pointer_down(view.to_surface(wx, wy), (wx, wy), m, t);
+        shot.player.pointer_up(t + 5.0);
+    };
+    match (script, i) {
+        (Script::SelectHandle, 1) => press(shot, hc, t),
+        (Script::RenameHandle, 1 | 3) => press(shot, hc, t),
+        (Script::RenameHandle, 5) => {
+            shot.player.text("Kick");
+        }
+        (Script::AddOnCanvas, 1 | 3) => {
+            let c = canvas?;
+            press(shot, (c.x + c.width * 0.64, c.y + c.height * 0.3), t);
+        }
+        (Script::ContextHandle, 1) => shot.player.context(hc, t),
+        (Script::Marquee, _) => {
+            let c = canvas?;
+            let from = (c.x + c.width * 0.2, c.y + 6.0);
+            let to = (c.x + c.width * 0.62, c.y + c.height - 8.0);
+            let k = f64::from(i.saturating_sub(1).min(10)) / 10.0;
+            let at = (from.0 + (to.0 - from.0) * k, from.1 + (to.1 - from.1) * k);
+            match i {
+                1 => shot.player.pointer_down(at, view.to_window(at.0, at.1), m, t),
+                2..=11 => shot.player.pointer_move(at, m, t),
+                _ => {}
+            }
+        }
+        _ => {}
+    }
+    Ok(())
+}
+
 fn save(px: render::offscreen::Pixels, out: &Path) -> Result<usize, String> {
     let distinct = {
         let mut seen: Vec<[u8; 4]> = px.rgba.as_chunks::<4>().0.iter().step_by(97).copied().collect();
@@ -124,8 +170,9 @@ pub fn run(args: &Args) -> Result<(), String> {
     let (target, dx) = match args.script {
         Some(Script::DragFirstKnob) => (Some(shot.player.first_knob().ok_or("--script drag-first-knob: the surface has no knob")?), 0.0),
         Some(Script::DragFirstHandle) => (Some(shot.player.first_handle().ok_or("--script drag-first-handle: the surface has no handle")?), 1.0),
-        Some(Script::OpenSelected) | None => (None, 0.0),
+        _ => (None, 0.0),
     };
+    let editing = args.script.filter(|s| !matches!(s, Script::DragFirstKnob | Script::DragFirstHandle | Script::OpenSelected));
     let knob = match target {
         Some((id, b)) => {
             let view = shot.view();
@@ -162,6 +209,9 @@ pub fn run(args: &Args) -> Result<(), String> {
                 _ => {}
             }
         }
+        if let Some(script) = editing {
+            edit_script(&mut shot, script, i, t)?;
+        }
         if let Some(lib) = &mut shot.library {
             lib.tick(&mut shot.player);
         }
@@ -184,6 +234,15 @@ pub fn run(args: &Args) -> Result<(), String> {
     }
     if let Some(e) = &shot.error {
         report += &format!(",\"error\":{}", serde_json::to_string(e).unwrap_or_default());
+    }
+    if editing.is_some() {
+        let rt = shot.player.rt();
+        report += &format!(
+            ",\"selected\":{},\"menus\":{},\"editing\":{}",
+            rt.selection().len(),
+            rt.open_menus().len(),
+            serde_json::to_string(&rt.editing().map(|(_, s)| s.to_string())).unwrap_or_default()
+        );
     }
 
     // `--updates N`: keep following in real time; a shot per update.

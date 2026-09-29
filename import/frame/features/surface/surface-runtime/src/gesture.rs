@@ -11,6 +11,8 @@ pub struct Modifiers {
     pub fine: bool,
     /// Alternate action (Cmd/Ctrl-click resets, like double-click).
     pub alt: bool,
+    /// The Alt / Option key (drag and wheel modes, chord clicks).
+    pub option: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -25,6 +27,12 @@ pub enum Key {
     End,
     Space,
     Enter,
+    Escape,
+    Tab,
+    Backspace,
+    Delete,
+    /// A character key (with Cmd/Ctrl: a shortcut, e.g. select all).
+    Char(char),
 }
 
 /// Input to a control. Coordinates are in surface pixels; `t` is ms.
@@ -131,7 +139,12 @@ impl Gesture {
             | ControlKind::Readout
             | ControlKind::Plot { .. }
             | ControlKind::Curve { .. }
-            | ControlKind::Handle { .. } => Vec::new(),
+            | ControlKind::Handle { .. }
+            | ControlKind::Repeat { .. }
+            | ControlKind::Canvas { .. }
+            | ControlKind::Popover { .. }
+            | ControlKind::Menu { .. }
+            | ControlKind::TextField { .. } => Vec::new(),
         }
     }
 
@@ -190,7 +203,7 @@ impl Gesture {
             Key::PageDown => Self::stepped(position, -PAGE_STEP),
             Key::Home => vec![Output::Set { position: 0.0, phase: EditPhase::End }],
             Key::End => vec![Output::Set { position: 1.0, phase: EditPhase::End }],
-            Key::Space | Key::Enter => Vec::new(),
+            Key::Space | Key::Enter | Key::Escape | Key::Tab | Key::Backspace | Key::Delete | Key::Char(_) => Vec::new(),
         }
     }
 
@@ -271,7 +284,8 @@ impl Gesture {
             x >= bounds.x && y >= bounds.y && x <= bounds.x + bounds.width && y <= bounds.y + bounds.height
         };
         match (mode, input, self.drag) {
-            (ButtonMode::Trigger, Input::Down { .. }, _) => vec![Output::Fire],
+            (ButtonMode::Trigger | ButtonMode::Cycle, Input::Down { .. }, _) => vec![Output::Fire],
+            (ButtonMode::Cycle, Input::Key { key: Key::Space | Key::Enter, .. }, _) => vec![Output::Fire],
             (ButtonMode::Select { index, count }, Input::Down { .. } | Input::Key { key: Key::Space | Key::Enter, .. }, _) => {
                 vec![Output::Set { position: ButtonMode::select_position(index, count), phase: EditPhase::End }]
             }
@@ -428,7 +442,7 @@ mod tests {
     fn knob_fine_scales_down() {
         let mut g = Gesture::new(ControlKind::knob());
         g.handle(down(0.0, 100.0), 0.5, B);
-        let out = g.handle(Input::Move { x: 0.0, y: 0.0, t: 0.0, mods: Modifiers { fine: true, alt: false } }, 0.5, B);
+        let out = g.handle(Input::Move { x: 0.0, y: 0.0, t: 0.0, mods: Modifiers { fine: true, ..Modifiers::default() } }, 0.5, B);
         assert!((last_pos(&out) - 0.55).abs() < 1e-12);
     }
 
@@ -442,7 +456,7 @@ mod tests {
         assert_eq!(last_pos(&g.handle(key(Key::End), 0.2, B)), 1.0);
         assert_eq!(last_pos(&g.handle(key(Key::Home), 0.2, B)), 0.0);
         assert!((last_pos(&g.handle(key(Key::PageUp), 0.2, B)) - 0.3).abs() < 1e-12);
-        let alt = Input::Down { x: 0.0, y: 0.0, t: 0.0, mods: Modifiers { fine: false, alt: true } };
+        let alt = Input::Down { x: 0.0, y: 0.0, t: 0.0, mods: Modifiers { alt: true, ..Modifiers::default() } };
         assert_eq!(g.handle(alt, 0.2, B), vec![Output::Reset]);
     }
 
@@ -509,7 +523,7 @@ mod tests {
         // 50 px right of 200 = +0.25; 20 px up of 100 = +0.2.
         let out = g.point(mv(60.0, -10.0), (0.0, 0.0), area);
         assert_eq!(out, vec![Output::SetXy { x: 0.5, y: 0.7, phase: EditPhase::Change }]);
-        let fine = Input::Move { x: 160.0, y: -10.0, t: 0.0, mods: Modifiers { fine: true, alt: false } };
+        let fine = Input::Move { x: 160.0, y: -10.0, t: 0.0, mods: Modifiers { fine: true, ..Modifiers::default() } };
         let Output::SetXy { x, .. } = g.point(fine, (0.0, 0.0), area)[0] else { panic!() };
         assert!((x - 0.55).abs() < 1e-12, "fine: a tenth");
         assert_eq!(g.point(Input::Up { x: 0.0, y: 0.0, t: 0.0 }, (0.0, 0.0), area), vec![Output::SetXy { x: 0.55, y: 0.7, phase: EditPhase::End }]);

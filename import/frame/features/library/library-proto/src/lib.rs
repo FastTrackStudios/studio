@@ -50,7 +50,15 @@ impl Signature {
     pub fn of_scene(scene: &Scene) -> Self {
         let mut sets: [BTreeSet<String>; 4] = Default::default();
         for node in scene.nodes.values() {
-            if let Some(control) = &node.control {
+            let Some(control) = &node.control else { continue };
+            // A templated control (`{n}`) binds every item of its repeat —
+            // the enclosing template's, else the one its context names.
+            if control.is_templated() {
+                let (first, count) = repeat_of(scene, node.id, control).unwrap_or((1, 1));
+                for n in first..first.saturating_add(count) {
+                    collect(&control.instantiate(n, |s| s), &mut sets);
+                }
+            } else {
                 collect(control, &mut sets);
             }
         }
@@ -105,10 +113,37 @@ impl Signature {
     }
 }
 
+/// The `(first, count)` of the repeat a node's `{n}` refers to: its
+/// enclosing template, or the template its context popover / menu names.
+fn repeat_of(scene: &Scene, id: document_proto::NodeId, control: &Control) -> Option<(u32, u32)> {
+    let range = |c: &Control| match &c.kind {
+        ControlKind::Repeat { first, count, .. } => Some((*first, *count)),
+        _ => None,
+    };
+    let mut cur = Some(id);
+    while let Some(n) = cur.and_then(|c| scene.node(c)) {
+        if let Some(r) = n.control.as_ref().and_then(range) {
+            return Some(r);
+        }
+        if let Some(ControlKind::Popover { context: Some(t), .. } | ControlKind::Menu { context: Some(t), .. }) = n.control.as_ref().map(|c| &c.kind) {
+            return scene.node(document_proto::NodeId(*t)).and_then(|t| t.control.as_ref()).and_then(range);
+        }
+        cur = n.parent;
+    }
+    let _ = control;
+    None
+}
+
 fn collect(control: &Control, [params, actions, streams, collections]: &mut [BTreeSet<String>; 4]) {
     // A curve's inputs and a handle's axes bind too (an EQ graph needs
     // every band's params).
     let mut extra: Vec<&Binding> = Vec::new();
+    // Rules, commands, conditions, zooms name params too.
+    if !matches!(control.kind, ControlKind::Curve { .. } | ControlKind::Handle { .. }) {
+        for addr in control.extra_params() {
+            params.insert(addr.0.clone());
+        }
+    }
     match &control.kind {
         ControlKind::Curve { inputs, .. } => {
             for input in inputs {

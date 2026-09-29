@@ -146,6 +146,16 @@ spring (a lag on its `Glow`), and `flicker` (an `options` flag on `meter.lamp`
 and the VU faces with a lamp) makes a filament's light waver. Keep motion
 optional in the same way as light: a component must read right at rest.
 Anything always moving (flicker, LFOs) keeps hosts drawing, so make it opt-in.
+  a combined curve reads every item's inputs; a per-item curve (in a
+  `Repeat`) reads only its own.
+- **Collections** (`viz.eq_graph`): items are a `Repeat` template over an
+  indexed family (`<ns>/b{n}_*`, shown while `b{n}_used`), not N copies.
+  The plot area is a `Canvas` (double-click adds, marquee, graph menu);
+  per-item editing is one context `Popover` and one context `Menu`
+  following the active item; names are text params edited in a
+  `TextField`. Floating panels don't use `emissive` (light composites over
+  them); the `glow` frame at the bottom of the traces is where a GPU glow
+  layer goes. See `docs/eq-parity.md`.
 
 ## Looking at it
 

@@ -18,7 +18,7 @@ use std::path::PathBuf;
 
 use document_proto::{Node, NodeId, NodeKind, Scene, Size, TextAlign, TextData, Transform};
 use surface_kit::{Place, draw, viz};
-use surface_proto::{Binding, Catalog, Control, ControlKind, SlotRole};
+use surface_proto::{Binding, Catalog, Control};
 use surface_runtime::Surface;
 use surface_widgets::{Builder, Theme};
 
@@ -120,22 +120,6 @@ impl Doc {
         }
     }
 
-    /// A text readout of `addr` at (`x`, `y`), `w` wide, centred.
-    fn readout(&mut self, parent: NodeId, (x, y, w): (f64, f64, f64), addr: &str, size: f64, color: &str) {
-        let mut v = draw::text("value", "", 0.0, 0.0, w, size, color, TextAlign::Center);
-        if let NodeKind::Text(TextData { font_weight, .. }) = &mut v.kind {
-            *font_weight = Some(600.0);
-        }
-        let h = v.size.height;
-        let id = self.add(parent, draw::frame("readout", x, y, w, h));
-        let text = self.add(id, v);
-        let mut c = Control::new(ControlKind::Readout).bound(Binding::param(addr)).slot(SlotRole::Value, text.0);
-        if addr.ends_with("_gain") {
-            c.format = Some(surface_proto::ValueFormat::decimals(1));
-        }
-        self.controls.insert(id, c);
-    }
-
     /// Size the root to what it holds, plus a margin.
     fn finish(mut self, margin: f64) -> Surface {
         let (_, _, _, h) = surface_kit::drawn_bounds(&self.scene, self.root);
@@ -163,55 +147,23 @@ fn comp() -> Example {
 }
 
 fn eq() -> Example {
-    const BANDS: usize = 6;
-    let mut d = Doc::new("EQ", 860.0, "PARAMETRIC EQ", "viz.eq_graph — drag a band for frequency and gain, wheel for Q, double-click to reset");
-    let graph = Place::new("EQ").size(820.0).options(&["ns=eq", "bands=6"]).bind(Binding::stream("eq/spectrum"));
+    const BANDS: usize = 24;
+    let mut d = Doc::new(
+        "EQ",
+        860.0,
+        "PARAMETRIC EQ",
+        "viz.eq_graph — double-click to add a band, drag to move (Alt: freq only, Cmd: Q), drag out to delete, double-click a band to rename, right-click for its menu",
+    );
+    let graph = Place::new("EQ").size(820.0).options(&["ns=eq", "bands=24"]).bind(Binding::stream("eq/spectrum"));
     d.place("viz.eq_graph", (20.0, 54.0), &graph);
-    // A column per band: its number, shape, frequency, gain and Q.
-    let (x0, w) = (20.0, 820.0 / BANDS as f64);
-    let y = 54.0 + (820.0 * 0.42_f64).round() + 14.0;
-    for n in 1..=BANDS {
-        let color = viz_color(n);
-        let x = x0 + w * (n - 1) as f64;
-        let col = d.add(d.root, draw::frame(&format!("band {n}"), x + 4.0, y, w - 8.0, 70.0));
-        if let Some(c) = d.scene.node_mut(col) {
-            c.fills = vec![draw::solid("#12161d")];
-            c.corner_radii = document_proto::CornerRadii::uniform(6.0);
-        }
-        let mut chip = draw::frame("chip", 8.0, 8.0, 16.0, 16.0);
-        chip.fills = vec![draw::solid(color)];
-        chip.corner_radii = document_proto::CornerRadii::uniform(8.0);
-        let chip = d.add(col, chip);
-        let mut num = draw::text("number", &n.to_string(), 0.0, 1.5, 16.0, 9.0, "#0b0d10", TextAlign::Center);
-        if let NodeKind::Text(TextData { font_weight, .. }) = &mut num.kind {
-            *font_weight = Some(700.0);
-        }
-        d.add(chip, num);
-        let cw = w - 8.0;
-        d.readout(col, (28.0, 8.0, cw - 36.0), &format!("eq/b{n}_shape"), 10.0, DIM);
-        d.readout(col, (0.0, 30.0, cw, ), &format!("eq/b{n}_freq"), 13.0, INK);
-        d.readout(col, (0.0, 50.0, cw / 2.0), &format!("eq/b{n}_gain"), 10.0, color);
-        d.readout(col, (cw / 2.0, 50.0, cw / 2.0), &format!("eq/b{n}_q"), 10.0, DIM);
-    }
     let mut params = viz::catalog::eq_params("eq", BANDS);
-    // Q reads bare ("0.71"), gain signed.
-    for p in &mut params {
-        if p.addr.0.ends_with("_q") {
-            p.short_name = Some("Q".into());
-        }
-    }
+    params.extend(viz::catalog::eq_view_params("eq"));
     Example {
         file: "10-eq-graph.fm",
         catalog_file: "eq-graph.catalog.json",
         surface: d.finish(20.0),
-        catalog: catalog("viz.eq", params, vec![viz::catalog::spectrum_stream("eq", 128)]),
+        catalog: catalog("viz.eq", params, viz::catalog::eq_streams("eq", 128)),
     }
-}
-
-/// The kit's band colours (`viz` family), by band number.
-fn viz_color(n: usize) -> &'static str {
-    const C: [&str; 8] = ["#ff6b6b", "#ffa94d", "#ffd43b", "#69db7c", "#3bc9db", "#4dabf7", "#9775fa", "#f783ac"];
-    C[(n - 1) % C.len()]
 }
 
 fn adsr() -> Example {

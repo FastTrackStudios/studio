@@ -47,6 +47,8 @@ pub struct ControlState {
     /// A handle's place in its parent, unit space (`x` right, `y` up);
     /// `None` on an axis it doesn't move along.
     pub handle: Option<(Option<f64>, Option<f64>)>,
+    /// Selection, hover, tint, text editing, marquee, menu highlight.
+    pub ui: crate::visual_ui::Interaction,
 }
 
 impl ControlState {
@@ -144,7 +146,12 @@ pub fn control_ops(scene: &Scene, control_node: NodeId, control: &Control, state
                 ops.push(set(id, Prop::Opacity(opacity)));
             }
             SlotRole::Value => {
-                if let Some(text) = &state.value_text {
+                // A text being edited shows its buffer; an empty text hides.
+                if let Some(e) = &state.ui.edit {
+                    text_ops(&mut ops, node, &e.text);
+                } else if state.ui.empty {
+                    ops.push(set(id, Prop::Visible(false)));
+                } else if let Some(text) = &state.value_text {
                     text_ops(&mut ops, node, text);
                 }
             }
@@ -155,6 +162,16 @@ pub fn control_ops(scene: &Scene, control_node: NodeId, control: &Control, state
                     text_ops(&mut ops, node, text);
                 }
             }
+            SlotRole::Selected
+            | SlotRole::Hovered
+            | SlotRole::Caret
+            | SlotRole::TextSelection
+            | SlotRole::Placeholder
+            | SlotRole::Marquee
+            | SlotRole::Highlight
+            | SlotRole::Tint
+            | SlotRole::On
+            | SlotRole::Off => crate::visual_ui::slot_ops(&mut ops, node, slot.role, state.on(), &state.ui),
             SlotRole::Led => {
                 let on = if ladder && lamps > 0 {
                     let at = (lamp + 1) as f64 / lamps as f64;

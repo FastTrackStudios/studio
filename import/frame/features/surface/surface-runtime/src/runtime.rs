@@ -39,6 +39,14 @@ const CURVE_CACHE_MAX: usize = 512;
 mod swap;
 // Motion: `Node::motion` animations, run on the render copy.
 mod motion;
+// Dynamic collections: repeat templates and context subtrees.
+pub mod repeat;
+// Selection, popovers, menus, removal, adding, keyboard routing.
+pub mod ui;
+// Text params and inline editing.
+pub mod text;
+// Drawing the interaction layer: visibility, floating panels, menus.
+mod draw;
 
 /// A design plus the controls attached to its nodes.
 #[derive(Debug, Clone, PartialEq)]
@@ -73,6 +81,8 @@ pub enum EngineCall {
     SetParam { addr: ParamAddr, value: f64, phase: EditPhase },
     Invoke { action: EntryId },
     Select { collection: EntryId, index: u32 },
+    /// Set a text param (a band's name).
+    SetText { addr: ParamAddr, text: String },
 }
 
 pub struct Runtime {
@@ -101,11 +111,20 @@ pub struct Runtime {
     motion: std::sync::Mutex<motion_runtime::Animator>,
     /// The input control under the pointer (for `hover` motion sources).
     hovered: Option<NodeId>,
+    /// Text params' values (names).
+    texts: BTreeMap<ParamAddr, String>,
+    /// Every node's layout box (popover stages, anchors, menu rows).
+    all_boxes: HashMap<NodeId, Bounds>,
+    /// What repeat templates and context subtrees expanded to.
+    expansion: repeat::Expansion,
+    ui: ui::Ui,
+    text_measure: Option<text::TextMeasure>,
 }
 
 impl Runtime {
     #[must_use]
     pub fn new(surface: Surface, catalog: Catalog) -> Self {
+        let (surface, expansion) = repeat::expand(surface);
         let values = catalog.params.iter().map(|p| (p.addr.clone(), p.default)).collect();
         let gestures = surface.controls.iter().map(|(id, c)| (*id, Gesture::new(c.kind.clone()))).collect();
         let motion = motion::animator(&surface.scene);
@@ -127,6 +146,11 @@ impl Runtime {
             curve_cache: Mutex::new(CurveCache::default()),
             motion,
             hovered: None,
+            texts: BTreeMap::new(),
+            all_boxes: HashMap::new(),
+            expansion,
+            ui: ui::Ui::default(),
+            text_measure: None,
         }
     }
 
@@ -180,6 +204,7 @@ impl Runtime {
     /// of their authored offsets.
     pub fn set_boxes(&mut self, boxes: impl IntoIterator<Item = (NodeId, Bounds)>) {
         let all: HashMap<NodeId, Bounds> = boxes.into_iter().collect();
+        self.all_boxes.clone_from(&all);
         let transformed: Vec<(NodeId, Bounds, Option<Transform>)> = all
             .iter()
             .filter(|(id, _)| self.surface.controls.contains_key(id))
@@ -319,7 +344,7 @@ impl Runtime {
         Some(match &info.kind {
             ParamKind::Choice { options } => (v.clamp(0.0, 1.0) * options.len().saturating_sub(1) as f64).round(),
             ParamKind::Toggle => f64::from(u8::from(v >= 0.5)),
-            ParamKind::Continuous => info.range.to_real(v),
+            ParamKind::Continuous | ParamKind::Text => info.range.to_real(v),
         })
     }
 
@@ -427,6 +452,7 @@ impl Runtime {
         let ControlKind::Curve { provider, inputs, series, style, x, y } = &control.kind else { return None };
         let all = self.curve_series(provider, inputs, x)?;
         let s = pick(&all, series.as_deref())?;
+        let y = &self.zoomed_range(control, y);
         let points: Vec<(f64, f64)> = s.points.iter().map(|(px, py)| (x.to_unit(*px), y.to_unit(*py))).collect();
         let marker = inputs.iter().find(|i| i.name == "marker").and_then(|m| {
             let at = match &m.source {
@@ -457,7 +483,31 @@ impl Runtime {
     /// A handle's unit point in its parent (`None` per unmoving axis).
     fn handle_uv(&self, control: &Control) -> Option<(Option<f64>, Option<f64>)> {
         let ControlKind::Handle { x, y, x_map, y_map, .. } = &control.kind else { return None };
+        let y_map = &HandleAxis { axis: self.zoomed_axis(control, &y_map.axis), ..y_map.clone() };
         Some((self.handle_axis(x.as_ref(), x_map), self.handle_axis(y.as_ref(), y_map)))
+    }
+
+    /// The span a control's zoom picks now.
+    fn zoom_span(&self, control: &Control) -> Option<f64> {
+        let z = control.zoom.as_ref()?;
+        z.span(self.real(&z.param)?)
+    }
+
+    /// A vertical axis under the control's zoom (a linear axis spans
+    /// ±the zoom's span).
+    pub(crate) fn zoomed_axis(&self, control: &Control, axis: &Axis) -> Axis {
+        match (self.zoom_span(control), axis) {
+            (Some(s), Axis::Linear { .. }) => Axis::Linear { min: -s, max: s },
+            _ => axis.clone(),
+        }
+    }
+
+    /// A plot range under the control's zoom.
+    fn zoomed_range(&self, control: &Control, y: &PlotRange) -> PlotRange {
+        match self.zoom_span(control) {
+            Some(s) => PlotRange { min: -s, max: s, ..y.clone() },
+            None => y.clone(),
+        }
     }
 
     /// A handle's parent area in box space: its layout box less its
@@ -492,6 +542,7 @@ impl Runtime {
         let ControlKind::Handle { x, y, wheel, x_map, y_map } = &control.kind else { return };
         match o {
             Output::SetXy { x: u, y: v, phase } => {
+                let y_map = &HandleAxis { axis: self.zoomed_axis(control, &y_map.axis), ..y_map.clone() };
                 for (b, map, unit) in [(x, x_map, u), (y, y_map, v)] {
                     let Some(b @ Binding { source: Source::Param { addr }, .. }) = b else { continue };
                     let after: f64 = map.after.iter().filter_map(|a| self.real(a)).sum();
@@ -577,11 +628,18 @@ impl Runtime {
     /// through any rotation/scale of the control's containers.
     #[must_use]
     pub fn hit(&self, x: f64, y: f64) -> Option<NodeId> {
+        // Open menus and shown popovers float above everything.
+        if let Some(id) = self.hit_floating(x, y) {
+            return Some(id);
+        }
         let order = self.surface.scene.walk(self.surface.scene.root);
         order.into_iter().rev().find(|id| {
             let (x, y) = self.local(*id, x, y);
             self.surface.controls.get(id).is_some_and(|c| {
-                c.kind.is_input() && self.hit_box_of(*id, c).is_some_and(|b| x >= b.x && y >= b.y && x <= b.x + b.width && y <= b.y + b.height)
+                c.kind.is_input()
+                    && self.hit_box_of(*id, c).is_some_and(|b| x >= b.x && y >= b.y && x <= b.x + b.width && y <= b.y + b.height)
+                    && self.floating_root(*id).is_none()
+                    && self.hittable(*id, c)
             })
         })
     }
@@ -589,23 +647,20 @@ impl Runtime {
     /// Feed pointer input at time `t` (ms). A control captures the pointer
     /// from `Down` until `Up`/`Cancel`.
     pub fn pointer(&mut self, input: Input, t: f64) -> Vec<EngineCall> {
+        // Hover drives `hover` motion sources.
         if let Input::Move { x, y, .. } | Input::Down { x, y, .. } = input {
             self.hovered = self.hit(x, y);
         }
-        let target = match input {
-            Input::Down { x, y, .. } => {
-                self.captured = self.hit(x, y);
-                self.captured
-            }
-            Input::Wheel { .. } | Input::DoubleClick | Input::Key { .. } => self.captured,
-            _ => self.captured,
-        };
-        let Some(id) = target else { return Vec::new() };
-        let out = self.feed(id, input, t);
-        if matches!(input, Input::Up { .. } | Input::Cancel { .. }) {
-            self.captured = None;
+        match input {
+            Input::Down { x, y, mods, .. } => self.press(x, y, mods, input, t),
+            Input::Move { x, y, .. } => self.drag(x, y, input, t),
+            Input::Up { .. } | Input::Cancel { .. } => self.release(input, t),
+            Input::DoubleClick => self.double_click(t),
+            _ => match self.captured {
+                Some(id) => self.feed(id, input, t),
+                None => Vec::new(),
+            },
         }
-        out
     }
 
     /// Feed input to one control directly (focused keyboard input, a mapped
@@ -616,17 +671,19 @@ impl Runtime {
         let bounds = self.boxes.get(&id).copied().unwrap_or_default();
         // Gestures work in the control's own (box) space: a fader in a
         // rotated frame slides along its rotated track.
+        // A control on a popover or menu is drawn away from its layout box.
+        let (dx, dy) = self.displacement(id);
         let input = match input {
             Input::Down { x, y, t, mods } => {
-                let (x, y) = self.local(id, x, y);
+                let (x, y) = self.local(id, x - dx, y - dy);
                 Input::Down { x, y, t, mods }
             }
             Input::Move { x, y, t, mods } => {
-                let (x, y) = self.local(id, x, y);
+                let (x, y) = self.local(id, x - dx, y - dy);
                 Input::Move { x, y, t, mods }
             }
             Input::Up { x, y, t } => {
-                let (x, y) = self.local(id, x, y);
+                let (x, y) = self.local(id, x - dx, y - dy);
                 Input::Up { x, y, t }
             }
             other => other,
@@ -635,12 +692,7 @@ impl Runtime {
             let area = self.handle_area(id);
             // An unmoving axis drags nothing; start it mid-way.
             let uv = (u.unwrap_or(0.5), v.unwrap_or(0.5));
-            let outputs = self.gestures.entry(id).or_insert_with(|| Gesture::new(control.kind.clone())).point(input, uv, area);
-            let mut calls = Vec::new();
-            for o in outputs {
-                self.handle_output(&control, o, t, &mut calls);
-            }
-            return calls;
+            return self.feed_handle(id, &control, input, uv, area, t);
         }
         // A stepped param moves a whole detent per wheel notch or arrow key:
         // the gesture's small nudges would snap straight back.
@@ -685,6 +737,11 @@ impl Runtime {
             }
             Output::Fire | Output::Tap => match control.binding.as_ref().map(|b| &b.source) {
                 Some(Source::Action { id: action }) => calls.push(EngineCall::Invoke { action: action.clone() }),
+                // A cycle button steps its choice.
+                Some(Source::Param { addr }) if matches!(control.kind, ControlKind::Button { mode: surface_proto::ButtonMode::Cycle }) => {
+                    let cmd = [surface_proto::Command::Cycle { addr: addr.clone() }];
+                    calls.extend(self.run(&cmd, None, Some(id), t));
+                }
                 // A tapped footswitch bound to a toggle param flips it.
                 Some(Source::Param { .. }) => {
                     let position = if self.position(id, control) >= 0.5 { 0.0 } else { 1.0 };
@@ -789,9 +846,8 @@ impl Runtime {
 
     // ── surface → screen ──────────────────────────────────────────────────
 
-    /// What each control shows right now.
-    #[must_use]
-    pub fn state(&self, id: NodeId, control: &Control, t: f64) -> ControlState {
+    /// What a control shows from its values alone (see [`Self::state`]).
+    fn base_state(&self, id: NodeId, control: &Control, t: f64) -> ControlState {
         match &control.kind {
             ControlKind::Plot { style, x, y } => {
                 let trace = self.plot_trace(id, control, *style, x, y);
@@ -898,6 +954,10 @@ impl Runtime {
     pub fn frame(&self, t: f64) -> Scene {
         let mut scene = self.surface.scene.clone();
         for (id, control) in &self.surface.controls {
+            // Nothing to drive in an unused item or a closed popover.
+            if !self.drawn(*id) {
+                continue;
+            }
             let state = self.state(*id, control, t);
             let ops = control_ops(&self.surface.scene, *id, control, &state);
             // Slot ops only touch existing nodes; a failure means a dangling
@@ -905,6 +965,7 @@ impl Runtime {
             let _ = scene.transact(ops);
         }
         self.animate(&mut scene, t);
+        self.frame_ui(&mut scene);
         scene
     }
 
@@ -912,7 +973,11 @@ impl Runtime {
     /// a gesture in flight) — lets hosts sleep when nothing moves.
     #[must_use]
     pub fn animating(&self) -> bool {
-        self.captured.is_some() || !self.meters.is_empty() || !self.histories.is_empty() || self.motion_animating()
+        self.captured.is_some()
+            || !self.meters.is_empty()
+            || !self.histories.is_empty()
+            || self.motion_animating()
+            || self.ui.edit.is_some()
     }
 
     /// Controls whose parameter is a choice/toggle (for selector hit-mapping).

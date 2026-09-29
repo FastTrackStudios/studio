@@ -37,7 +37,7 @@ fn on_detent(v: f64, n: u32) -> bool {
     ((v * k).round() / k - v).abs() < 1e-9
 }
 
-const M: Modifiers = Modifiers { fine: false, alt: false };
+const M: Modifiers = Modifiers { fine: false, alt: false, option: false };
 
 #[test]
 fn dragging_a_three_way_switch_only_lands_on_its_positions() {

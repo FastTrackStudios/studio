@@ -222,10 +222,19 @@ impl Cx<'_> {
                 &[SlotRole::Needle, SlotRole::Fill, SlotRole::Thumb, SlotRole::Led, SlotRole::Glow],
                 "a Needle (or a Fill, a Thumb, Led lamps, a Glow)",
             )],
-            ControlKind::Readout => &[(&[SlotRole::Value, SlotRole::Glow], "a Value text or a Glow")],
+            ControlKind::Readout => &[(&[SlotRole::Value, SlotRole::Glow, SlotRole::On, SlotRole::Off, SlotRole::Tint], "a Value text, a Glow, On/Off or Tint nodes")],
+            ControlKind::TextField { .. } => &[(&[SlotRole::Value], "a Value text")],
             ControlKind::Plot { .. } => &[(&[SlotRole::Trace, SlotRole::Area], "a Trace (or an Area) vector")],
             ControlKind::Curve { .. } => &[(&[SlotRole::Trace, SlotRole::Area, SlotRole::Marker], "a Trace, an Area or a Marker")],
-            ControlKind::Button { .. } | ControlKind::Footswitch { .. } | ControlKind::XyPad | ControlKind::Selector | ControlKind::Handle { .. } => &[],
+            ControlKind::Button { .. }
+            | ControlKind::Footswitch { .. }
+            | ControlKind::XyPad
+            | ControlKind::Selector
+            | ControlKind::Handle { .. }
+            | ControlKind::Repeat { .. }
+            | ControlKind::Canvas { .. }
+            | ControlKind::Popover { .. }
+            | ControlKind::Menu { .. } => &[],
         };
         for (any_of, what) in needs {
             if !any_of.iter().any(|r| has(*r)) {
@@ -240,8 +249,22 @@ impl Cx<'_> {
         }
     }
 
+    /// Inside a popover or menu: it floats over the surface, drawn where
+    /// its anchor puts it, so its authored box says nothing about overlap.
+    fn floating(&self, node: &Node) -> bool {
+        let mut cur = Some(node.id);
+        while let Some(id) = cur {
+            let Some(n) = self.scene.node(id) else { return false };
+            if n.control.as_ref().is_some_and(|c| matches!(c.kind, ControlKind::Popover { .. } | ControlKind::Menu { .. } | ControlKind::Repeat { .. })) {
+                return true;
+            }
+            cur = n.parent;
+        }
+        false
+    }
+
     fn touch(&mut self, node: &Node, control: &Control) {
-        if !control.kind.is_input() {
+        if !control.kind.is_input() || control.kind.is_container() || matches!(control.kind, ControlKind::TextField { .. }) {
             return;
         }
         let Some(b) = self.boxes.get(&node.id) else { return };
@@ -258,7 +281,7 @@ impl Cx<'_> {
     }
 
     fn labeled(&mut self, node: &Node, control: &Control) {
-        if control.kind.is_input() && !control.slots.iter().any(|s| s.role == SlotRole::Label) {
+        if control.kind.is_input() && !control.kind.is_container() && !control.slots.iter().any(|s| s.role == SlotRole::Label) {
             let has_text_child = self.scene.walk(node.id).iter().any(|id| self.scene.node(*id).is_some_and(|n| n.text().is_some()));
             if !has_text_child {
                 self.push(Severity::Info, "unlabeled", node, "no label".into(), "add a Text child with a Label slot".into());
@@ -369,7 +392,7 @@ impl Cx<'_> {
         // so where their boxes are authored says nothing.
         let inputs: Vec<(&Node, LayoutBox)> = controls
             .iter()
-            .filter(|(_, c)| c.kind.is_input() && !matches!(c.kind, ControlKind::Handle { .. }))
+            .filter(|(n, c)| c.kind.is_input() && !matches!(c.kind, ControlKind::Handle { .. } | ControlKind::Canvas { .. }) && !self.floating(n))
             .filter_map(|(n, _)| self.boxes.get(&n.id).map(|b| (*n, *b)))
             .collect();
         let mut found = Vec::new();

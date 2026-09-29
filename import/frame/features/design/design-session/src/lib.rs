@@ -211,6 +211,7 @@ impl Session {
                         }
                     ),
                     ParamKind::Toggle => "toggle".into(),
+                    ParamKind::Text => "text (bind a text-field)".into(),
                     ParamKind::Choice { options } => format!("choice: {}", options.join(" | ")),
                 };
                 let star = if p.featured { "★ " } else { "  " };

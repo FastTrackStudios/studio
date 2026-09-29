@@ -44,6 +44,14 @@ impl Runtime {
             std::mem::swap(motion, prev);
             motion.swap(&next.surface.scene);
         }
+        next.texts = take(&mut self.texts);
+        next.text_measure = self.text_measure.take();
+        next.curves = std::mem::take(&mut self.curves);
+        // Selection, focus, an edit in progress: kept for what's still there
+        // (instances keep their ids across rebuilds).
+        let mut ui = take(&mut self.ui);
+        ui.retain(|id| kept.contains(id));
+        next.ui = ui;
         *self = next;
     }
 }

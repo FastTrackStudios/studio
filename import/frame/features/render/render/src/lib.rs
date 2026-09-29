@@ -19,4 +19,8 @@ pub use anyrender_renderer::{paint_primitives_into_scene_with, paint_scene_into,
 #[cfg(feature = "anyrender")]
 pub mod fx;
 #[cfg(feature = "anyrender")]
+mod text_measure;
+#[cfg(feature = "anyrender")]
+pub use text_measure::text_advance;
+#[cfg(feature = "anyrender")]
 pub mod offscreen;

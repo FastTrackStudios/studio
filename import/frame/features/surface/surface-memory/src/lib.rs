@@ -22,6 +22,8 @@ fn lock<T>(m: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
 pub struct Memory {
     catalog: Arc<Catalog>,
     values: Arc<Mutex<BTreeMap<ParamAddr, f64>>>,
+    /// Text params' values (names), empty until set.
+    texts: Arc<Mutex<BTreeMap<ParamAddr, String>>>,
     invoked: Arc<Mutex<Vec<EntryId>>>,
     selected: Arc<Mutex<BTreeMap<EntryId, u32>>>,
     /// Feed options by feed, as last requested.
@@ -38,6 +40,7 @@ impl Memory {
         Self {
             catalog: Arc::new(catalog),
             values: Arc::new(Mutex::new(values)),
+            texts: Arc::new(Mutex::new(BTreeMap::new())),
             invoked: Arc::new(Mutex::new(Vec::new())),
             selected: Arc::new(Mutex::new(BTreeMap::new())),
             requested: Arc::new(Mutex::new(BTreeMap::new())),
@@ -55,6 +58,13 @@ impl Memory {
     #[must_use]
     pub fn value(&self, addr: &ParamAddr) -> Option<f64> {
         lock(&self.values).get(addr).copied()
+    }
+
+    /// A text param's value (`None` for an unknown or non-text param).
+    #[must_use]
+    pub fn text(&self, addr: &ParamAddr) -> Option<String> {
+        let info = self.catalog.param(addr)?;
+        (info.kind == ParamKind::Text).then(|| lock(&self.texts).get(addr).cloned().unwrap_or_default())
     }
 
     /// Actions fired so far, oldest first.
@@ -103,6 +113,27 @@ impl SurfaceEngine for Memory {
         lock(&self.values).insert(addr.clone(), value);
         self.changes.publish(ParamValue { addr, value });
         Ok(())
+    }
+
+    fn texts(&self) -> Vec<TextValue> {
+        let texts = lock(&self.texts);
+        self.catalog
+            .params
+            .iter()
+            .filter(|p| p.kind == ParamKind::Text)
+            .map(|p| TextValue { addr: p.addr.clone(), text: texts.get(&p.addr).cloned().unwrap_or_default() })
+            .collect()
+    }
+
+    fn set_text(&self, addr: ParamAddr, text: String) -> Result<(), SurfaceError> {
+        match self.catalog.param(&addr) {
+            None => Err(SurfaceError::UnknownParam(addr.0)),
+            Some(p) if p.kind != ParamKind::Text => Err(SurfaceError::NotText(addr.0)),
+            Some(_) => {
+                lock(&self.texts).insert(addr, text);
+                Ok(())
+            }
+        }
     }
 
     fn invoke(&self, action: EntryId) -> Result<(), SurfaceError> {
@@ -239,6 +270,23 @@ mod tests {
         assert_eq!(engine.value(&ParamAddr::new("delay/mix")), Some(0.5));
         let refused = client.set_param(ParamAddr::new("nope"), 0.5, EditPhase::End).await.unwrap_err();
         assert!(format!("{refused:?}").contains("UnknownParam"), "{refused:?}");
+        scope.close().await;
+    }
+
+    #[tokio::test]
+    async fn text_params_over_vox() {
+        let mut catalog = demo_catalog();
+        catalog.params.push(ParamInfo::new("eq/b1_name", "Band 1 Name", Range::default()).text());
+        let engine = Memory::new(catalog);
+        let scope = Scope::new();
+        let local = LocalServer::serve(engine.clone().into_router(), scope.clone());
+        let client: SurfaceEngineClient = local.establish().await.unwrap();
+        client.set_text(ParamAddr::new("eq/b1_name"), "Kick".into()).await.unwrap();
+        assert_eq!(engine.text(&ParamAddr::new("eq/b1_name")).as_deref(), Some("Kick"));
+        let texts = client.texts().await.unwrap();
+        assert_eq!(texts, vec![TextValue { addr: ParamAddr::new("eq/b1_name"), text: "Kick".into() }]);
+        let refused = client.set_text(ParamAddr::new("amp/gain"), "x".into()).await.unwrap_err();
+        assert!(format!("{refused:?}").contains("NotText"), "{refused:?}");
         scope.close().await;
     }
 

@@ -17,8 +17,11 @@ pub mod plot;
 pub mod runtime;
 pub mod sync;
 pub mod visual;
+pub mod visual_ui;
 
 pub use curves::{CurveInputs, CurveRegistry, Series};
 pub use gesture::{Bounds, Input, Key, Modifiers};
 pub use runtime::{EngineCall, Runtime, Surface};
+pub use runtime::text::{EditView, TextMeasure};
 pub use visual::ControlState;
+pub use visual_ui::Interaction;

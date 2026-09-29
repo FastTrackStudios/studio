@@ -63,6 +63,9 @@ pub enum ParamKind {
     Toggle,
     /// One of named options; the value is the option index spread over 0..1.
     Choice { options: Vec<String> },
+    /// A string (a band's name, a scene title). Its value travels as text
+    /// (`SurfaceEngine::texts` / `set_text`); the normalized value is unused.
+    Text,
 }
 
 /// One parameter an engine exposes.
@@ -141,6 +144,13 @@ impl ParamInfo {
         self
     }
 
+    /// A text param (a name).
+    #[must_use]
+    pub fn text(mut self) -> Self {
+        self.kind = ParamKind::Text;
+        self
+    }
+
     #[must_use]
     pub fn choice(mut self, options: &[&str]) -> Self {
         self.range.steps = u32::try_from(options.len()).ok();
@@ -176,6 +186,7 @@ impl ParamInfo {
                 let i = (normalized.clamp(0.0, 1.0) * last as f64).round() as usize;
                 options[i.min(last)].clone()
             }
+            ParamKind::Text => String::new(),
             _ => self.range.format(self.range.to_real(normalized)),
         }
     }

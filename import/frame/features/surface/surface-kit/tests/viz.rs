@@ -12,9 +12,11 @@ use surface_widgets::{Builder, Theme};
 
 fn catalog() -> Catalog {
     let mut params = viz::catalog::eq_params("eq", 4);
+    params.extend(viz::catalog::eq_view_params("eq"));
     params.extend(viz::catalog::comp_params("comp"));
     params.extend(viz::catalog::adsr_params("env"));
-    let mut streams = vec![viz::catalog::spectrum_stream("eq", 64), viz::catalog::adsr_stream("env", 2)];
+    let mut streams = viz::catalog::eq_streams("eq", 64);
+    streams.push(viz::catalog::adsr_stream("env", 2));
     streams.extend(viz::catalog::comp_streams("comp", 120));
     streams.push(surface_proto::FeedInfo::new("scope", "Scope", surface_proto::FeedKind::Waveform { len: 256 }));
     Catalog { id: "viz.test".into(), version: 1, params, streams, ..Catalog::default() }
@@ -88,7 +90,7 @@ fn every_viz_component_places_and_lints_clean() {
 #[test]
 fn dragging_an_eq_handle_moves_its_band_and_redraws_the_curve() {
     let (mut rt, _) = runtime("viz.eq_graph");
-    let handle = named(&rt, "band 2");
+    let handle = named(&rt, "band 2 handle");
     let response = named(&rt, "response");
     let (f0, g0, q0) = (value(&rt, "eq/b2_freq"), value(&rt, "eq/b2_gain"), value(&rt, "eq/b2_q"));
     let before = rt.curve(response).unwrap();
@@ -116,9 +118,9 @@ fn dragging_an_eq_handle_moves_its_band_and_redraws_the_curve() {
     let drawn = rt.frame(0.0).node(handle).unwrap().transform;
     assert!((drawn.tx - drawn_before.tx - (moved.0 - at.0)).abs() < 1e-6 && (drawn.ty - drawn_before.ty - (moved.1 - at.1)).abs() < 1e-6);
 
-    // Shift is fine; the wheel turns Q; double-click resets.
+    // Shift is fine; the wheel turns Q; double-click renames.
     let fine = centre(rt.hit_box(handle).unwrap());
-    let m = Modifiers { fine: true, alt: false };
+    let m = Modifiers { fine: true, ..Modifiers::default() };
     rt.pointer(Input::Down { x: fine.0, y: fine.1, t: 0.0, mods: m }, 2000.0);
     rt.pointer(Input::Move { x: fine.0 + 100.0, y: fine.1, t: 0.0, mods: m }, 2016.0);
     rt.pointer(Input::Up { x: fine.0 + 100.0, y: fine.1, t: 0.0 }, 2032.0);
@@ -126,10 +128,11 @@ fn dragging_an_eq_handle_moves_its_band_and_redraws_the_curve() {
     assert!(f2 > f1 && f2 < f1 * 1.5, "fine: {f1} → {f2}");
     rt.feed(handle, Input::Wheel { notches: 3.0, mods: Modifiers::default() }, 3000.0);
     assert!(value(&rt, "eq/b2_q") > q0, "wheel raises Q");
-    rt.feed(handle, Input::DoubleClick, 4000.0);
-    for (addr, v) in [("eq/b2_freq", f0), ("eq/b2_gain", g0), ("eq/b2_q", q0)] {
-        assert!((value(&rt, addr) - v).abs() < 1e-6 * v.abs().max(1.0), "{addr} resets");
-    }
+    let at = centre(rt.hit_box(handle).unwrap());
+    rt.pointer(Input::Down { x: at.0, y: at.1, t: 0.0, mods: Modifiers::default() }, 4000.0);
+    rt.pointer(Input::DoubleClick, 4000.0);
+    rt.pointer(Input::Up { x: at.0, y: at.1, t: 0.0 }, 4010.0);
+    assert!(rt.editing().is_some(), "double-click renames the band");
 }
 
 #[test]
@@ -137,7 +140,9 @@ fn curves_evaluate_once_per_change_and_share_across_bands() {
     let (mut rt, _) = runtime("viz.eq_graph");
     let _ = rt.frame(0.0);
     let evals = rt.curve_evaluations();
-    assert_eq!(evals, 1, "the combined curve and four band curves are one evaluation");
+    // The combined curve once; each band's curve (shared with its dynamic
+    // range) and its stem once.
+    assert_eq!(evals, 1 + 2 * 4);
     let _ = rt.frame(16.0);
     assert_eq!(rt.curve_evaluations(), evals, "nothing changed");
     // A spectrum frame moves the plot, not the curves.
@@ -146,7 +151,7 @@ fn curves_evaluate_once_per_change_and_share_across_bands() {
     assert_eq!(rt.curve_evaluations(), evals);
     rt.apply_values([surface_proto::ParamValue { addr: ParamAddr::new("eq/b3_gain"), value: 0.8 }]);
     let _ = rt.frame(48.0);
-    assert_eq!(rt.curve_evaluations(), evals + 1);
+    assert_eq!(rt.curve_evaluations(), evals + 3, "the sum, band 3's curve and its stem");
 }
 
 #[test]

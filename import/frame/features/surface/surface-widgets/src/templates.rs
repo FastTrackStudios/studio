@@ -55,6 +55,7 @@ impl Builder<'_> {
         match &p.kind {
             ParamKind::Toggle => self.button(parent, &p.name, size, ButtonMode::Toggle, binding),
             ParamKind::Continuous | ParamKind::Choice { .. } => self.knob(parent, &p.name, size, binding),
+            ParamKind::Text => self.text_field(parent, &p.name, size.px().max(120.0), binding),
         }
     }
 }

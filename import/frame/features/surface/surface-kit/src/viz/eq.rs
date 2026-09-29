@@ -1,14 +1,13 @@
-//! `viz.eq_graph` and `viz.adsr`: curves of params with a handle per point
-//! you can grab.
+//! `viz.adsr`: an envelope curve of params with a handle per point you can
+//! grab.
 
 use document_proto::{NodeId, NodeKind, TextAlign, TextData};
 use surface_proto::{
-    Axis, Binding, Control, ControlKind, CurveInput, HandleAxis, PlotRange, PlotStyle, SlotRole, Source, ValueFormat,
+    Axis, Binding, Control, ControlKind, CurveInput, HandleAxis, PlotRange, PlotStyle, SlotRole, ValueFormat,
 };
 use surface_widgets::Builder;
 
-use super::simple::freq_grid;
-use super::{Area, BAND_COLORS, LABEL, Look, alpha, area, dot, grid, label, ns, opt_f, panel, trace};
+use super::{Area, LABEL, Look, area, dot, grid, label, ns, opt_f, panel, trace};
 use crate::draw;
 use crate::registry::{ComponentDef, Family, Place};
 
@@ -24,72 +23,6 @@ fn with_slots(mut c: Control, slots: Vec<(SlotRole, NodeId)>) -> Control {
         c = c.slot(role, id.0);
     }
     c
-}
-
-fn eq_graph(b: &mut Builder<'_>, parent: NodeId, p: &Place) -> NodeId {
-    let ns = ns(p);
-    let w = p.size.unwrap_or(640.0).max(240.0);
-    let h = opt_f(p, "h", (w * 0.42).round());
-    let bands = opt_f(p, "bands", 6.0).clamp(1.0, 24.0) as usize;
-    let range = opt_f(p, "range", 18.0);
-    let f = (opt_f(p, "f_min", 20.0), opt_f(p, "f_max", 20_000.0));
-    let root = panel(b, parent, &p.name, w, h);
-    let (ax, ay) = (34.0, 12.0);
-    let a = area(b, root, ax, ay, w - ax - 14.0, h - ay - 26.0);
-    freq_grid(b, root, &a, (ax, ay), f, (-range, range, 6.0), true);
-    let x = Axis::Log { f_min: f.0, f_max: f.1 };
-    let y = PlotRange::linear(-range, range);
-
-    // The analyser behind everything: the binding's stream, or `spectrum=`.
-    let spectrum = match &p.binding {
-        Some(bd @ Binding { source: Source::Stream { .. }, .. }) => Some(bd.clone()),
-        _ => p.opt("spectrum").map(Binding::stream),
-    };
-    if let Some(bd) = spectrum {
-        let look = Look { line: Some(("#a5b4fc59", 1.0)), fill: Some(("#748ffc2e", "#748ffc03")), glow: None, dash: false };
-        let (node, slots) = trace(b, &a, "spectrum", look);
-        let floor = opt_f(p, "floor", -90.0);
-        let c = with_slots(Control::new(ControlKind::Plot { style: PlotStyle::Line, x: x.clone(), y: PlotRange::linear(floor, 6.0) }).bound(bd), slots);
-        b.controls.insert(node, c);
-    }
-
-    // Every curve reads every band, so the combined curve and each band's
-    // own are one evaluation.
-    let slope = opt_f(p, "slope", 12.0);
-    let mut inputs = Vec::new();
-    for n in 1..=bands {
-        for k in ["freq", "gain", "q", "shape", "on"] {
-            inputs.push(CurveInput::param(format!("b{n}_{k}"), format!("{ns}/b{n}_{k}")));
-        }
-        inputs.push(CurveInput::constant(format!("b{n}_slope"), slope));
-    }
-    for n in 1..=bands {
-        let color = BAND_COLORS[(n - 1) % BAND_COLORS.len()];
-        let (top, bottom, line) = (alpha(color, 0.24), alpha(color, 0.10), alpha(color, 0.75));
-        let look = Look { line: Some((&line, 1.0)), fill: Some((&top, &bottom)), glow: None, dash: false };
-        let (node, slots) = trace(b, &a, &format!("band {n} curve"), look);
-        let c = curve_control("eq.response", inputs.clone(), Some(format!("b{n}")), PlotStyle::Area { baseline: 0.0 }, x.clone(), y.clone());
-        b.controls.insert(node, with_slots(c, slots));
-    }
-    let look = Look { line: Some(("#fff4d6", 2.2)), fill: Some(("#ffe8a324", "#ffe8a30a")), glow: Some(("#ffc94d", 0.55, 7.0)), dash: false };
-    let (node, slots) = trace(b, &a, "response", look);
-    let c = curve_control("eq.response", inputs, Some("sum".into()), PlotStyle::Area { baseline: 0.0 }, x.clone(), y.clone());
-    b.controls.insert(node, with_slots(c, slots));
-
-    // A handle per band: frequency across, gain up, the wheel turns Q.
-    for n in 1..=bands {
-        let color = BAND_COLORS[(n - 1) % BAND_COLORS.len()];
-        let node = dot(b, a.area, &format!("band {n}"), HANDLE_BOX, 18.0, color, &n.to_string(), &a);
-        let kind = ControlKind::Handle {
-            x: Some(Binding::param(format!("{ns}/b{n}_freq"))),
-            y: Some(Binding::param(format!("{ns}/b{n}_gain"))),
-            wheel: Some(Binding::param(format!("{ns}/b{n}_q"))),
-            x_map: HandleAxis::new(x.clone()),
-            y_map: HandleAxis::new(Axis::Linear { min: -range, max: range }),
-        };
-        b.controls.insert(node, Control::new(kind));
-    }
-    root
 }
 
 /// A legend over a value, `w` wide, the value a `Readout` of `addr`.
@@ -201,16 +134,6 @@ fn adsr(b: &mut Builder<'_>, parent: NodeId, p: &Place) -> NodeId {
 
 pub(crate) fn defs() -> Vec<ComponentDef> {
     vec![
-        ComponentDef {
-            id: "viz.eq_graph",
-            family: Family::Viz,
-            title: "EQ graph",
-            description: "A parametric EQ display: log-frequency grid, the analyser (the bound spectrum stream, or `spectrum=`), each band's own curve tinted in its colour, the combined response as a bright glowing line, and a numbered handle per band — drag for frequency and gain, wheel for Q, double-click to reset. Binds `<ns>/b{n}_{freq,gain,q,shape,on}` (`ns=`, `bands=`, `range=` dB, `slope=` for cuts, `h=`).",
-            variants: &[],
-            default_size: 640.0,
-            binds: "params by namespace",
-            build: eq_graph,
-        },
         ComponentDef {
             id: "viz.adsr",
             family: Family::Viz,
