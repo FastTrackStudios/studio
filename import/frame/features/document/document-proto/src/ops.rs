@@ -35,6 +35,7 @@ pub enum Prop {
     SvgSnapshot(Option<AssetId>),
     Layout(Option<AutoLayout>),
     LayoutChild(LayoutChild),
+    Control(Option<surface_proto::Control>),
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Facet)]
@@ -212,6 +213,7 @@ fn set_prop(node: &mut Node, prop: Prop) -> Prop {
         Prop::SvgSnapshot(v) => Prop::SvgSnapshot(replace(&mut node.svg_snapshot, v)),
         Prop::Layout(v) => Prop::Layout(replace(&mut node.layout, v)),
         Prop::LayoutChild(v) => Prop::LayoutChild(replace(&mut node.layout_child, v)),
+        Prop::Control(v) => Prop::Control(replace(&mut node.control, v)),
     }
 }
 

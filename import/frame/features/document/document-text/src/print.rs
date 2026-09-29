@@ -232,6 +232,9 @@ fn attributes(n: &Node, has_children: bool) -> (Vec<(&'static str, String)>, Opt
     if let Some(s) = &n.svg_snapshot {
         a.push(("svg-snapshot", quote(&s.0)));
     }
+    if let Some(c) = &n.control {
+        a.push(("control", braced(&to_json(c))));
+    }
     if let Some(s) = &n.source {
         a.push(("source", source(s)));
     }

@@ -541,6 +541,10 @@ pub struct Node {
     pub layout: Option<AutoLayout>,
     pub layout_child: LayoutChild,
 
+    /// Makes this node a control (knob, fader, footswitch…): its binding to
+    /// an engine and the descendant nodes it drives.
+    pub control: Option<surface_proto::Control>,
+
     pub source: Option<SourceRef>,
 }
 
@@ -571,6 +575,7 @@ impl Node {
             svg_snapshot: None,
             layout: None,
             layout_child: LayoutChild::default(),
+            control: None,
             source: None,
         }
     }

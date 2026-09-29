@@ -13,6 +13,7 @@ thiserror.workspace = true
 uuid.workspace = true
 serde.workspace = true
 blake3 = "1"
+surface-proto = { path = "../../surface/surface-proto", default-features = false }
 vox = { workspace = true, optional = true }
 sea-orm = { workspace = true, optional = true }
 

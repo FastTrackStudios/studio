@@ -26,6 +26,26 @@ pub struct Surface {
     pub controls: BTreeMap<NodeId, Control>,
 }
 
+impl Surface {
+    /// Read the controls stored on a scene's nodes.
+    #[must_use]
+    pub fn from_scene(scene: Scene) -> Self {
+        let controls = scene.nodes.values().filter_map(|n| n.control.clone().map(|c| (n.id, c))).collect();
+        Self { scene, controls }
+    }
+
+    /// The scene with every control stored on its node (what gets saved,
+    /// synced, printed as text, and edited by tools).
+    #[must_use]
+    pub fn to_scene(&self) -> Scene {
+        let mut scene = self.scene.clone();
+        for node in scene.nodes.values_mut() {
+            node.control = self.controls.get(&node.id).cloned();
+        }
+        scene
+    }
+}
+
 /// Something to send to the engine.
 #[derive(Debug, Clone, PartialEq)]
 pub enum EngineCall {

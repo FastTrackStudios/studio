@@ -16,7 +16,7 @@
 //!                     per Prop field: visible, locked, transform, size,
 //!                     opacity, blend, corner_radii, clips_content, mask,
 //!                     fills, stroke, effects, fill_geometry, stroke_geometry,
-//!                     svg_snapshot, layout, layout_child, source
+//!                     svg_snapshot, layout, layout_child, control, source
 //! "scene"  LoroMap    "root" → the root node's id
 //! "assets" LoroMap    asset id → { mime, size, bytes? (Binary) }
 //! ```
@@ -461,6 +461,7 @@ fn prop_entry(prop: &Prop) -> (&'static str, Value) {
         Prop::SvgSnapshot(v) => ("svg_snapshot", json(v)),
         Prop::Layout(v) => ("layout", json(v)),
         Prop::LayoutChild(v) => ("layout_child", json(v)),
+        Prop::Control(v) => ("control", json(v)),
     }
 }
 

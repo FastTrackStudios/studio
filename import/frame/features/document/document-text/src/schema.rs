@@ -96,6 +96,7 @@ pub(crate) const COMMON_ATTRS: &[&str] = &[
     "geometry",
     "stroke-geometry",
     "svg-snapshot",
+    "control",
     "source",
 ];
 

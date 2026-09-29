@@ -807,6 +807,7 @@ fn apply_common(at: &Attrs<'_>, n: &mut Node) -> Result<()> {
         n.stroke_geometry = v;
     }
     n.svg_snapshot = at.str("svg-snapshot")?.map(AssetId);
+    n.control = at.convert("control", from_json)?;
     n.source = at.convert("source", source_value)?;
     Ok(())
 }

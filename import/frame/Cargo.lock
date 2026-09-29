@@ -1499,6 +1499,7 @@ dependencies = [
  "sea-orm",
  "serde",
  "serde_json",
+ "surface-proto",
  "thiserror 2.0.18",
  "uuid",
  "vox",
@@ -6587,7 +6588,10 @@ dependencies = [
 name = "surface-widgets"
 version = "0.1.0"
 dependencies = [
+ "document-bundle",
+ "document-loro",
  "document-proto",
+ "document-text",
  "surface-memory",
  "surface-proto",
  "surface-runtime",
