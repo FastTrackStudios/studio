@@ -281,7 +281,8 @@ fn geometry(key: &'static str, paths: &[String], a: &mut Vec<(&'static str, Stri
 }
 
 fn source(s: &SourceRef) -> String {
-    if s.tool.contains('/') || s.node_type.contains('/') {
+    // The compact form can't carry import bounds; fall back to JSON then.
+    if s.tool.contains('/') || s.node_type.contains('/') || s.bounds.is_some() {
         braced(&to_json(s))
     } else {
         quote(&format!("{}/{}/{}", s.tool, s.node_type, s.id))

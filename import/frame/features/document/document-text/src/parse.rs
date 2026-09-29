@@ -834,7 +834,7 @@ fn source_value(v: Value) -> std::result::Result<SourceRef, String> {
             let mut parts = s.splitn(3, '/');
             match (parts.next(), parts.next(), parts.next()) {
                 (Some(tool), Some(node_type), Some(id)) => {
-                    Ok(SourceRef { tool: tool.to_owned(), node_type: node_type.to_owned(), id: id.to_owned() })
+                    Ok(SourceRef { tool: tool.to_owned(), node_type: node_type.to_owned(), id: id.to_owned(), bounds: None })
                 }
                 _ => Err(format!("expected \"tool/TYPE/id\" (e.g. \"figma/FRAME/1:2\"), got \"{s}\"")),
             }

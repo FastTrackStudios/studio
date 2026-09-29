@@ -98,7 +98,7 @@ fn kitchen_sink() -> Scene {
         main_align: Some(MainAxisAlign::SpaceBetween),
         cross_align: Some(CrossAxisAlign::Center),
     });
-    panel.source = Some(SourceRef { tool: "figma".into(), id: "1:2".into(), node_type: "FRAME".into() });
+    panel.source = Some(SourceRef { tool: "figma".into(), id: "1:2".into(), node_type: "FRAME".into(), bounds: None });
     let panel = add(&mut s, page, panel);
 
     // Layout child props, odd paddings, rotation, masks.
@@ -197,7 +197,7 @@ fn kitchen_sink() -> Scene {
     add(&mut s, col, poly);
 
     let mut star = Node::new(NodeKind::Star, "Star \"quoted\" <tag> & {brace}\nnewline");
-    star.source = Some(SourceRef { tool: "we/ird".into(), id: "I1:2;3:4".into(), node_type: "STAR".into() });
+    star.source = Some(SourceRef { tool: "we/ird".into(), id: "I1:2;3:4".into(), node_type: "STAR".into(), bounds: None });
     add(&mut s, col, star);
 
     let mut vector = Node::new(NodeKind::Vector, "Vector");
@@ -544,7 +544,7 @@ mod random {
                     n.stroke.dash_pattern = dash;
                     n.effects = effects;
                     n.fill_geometry = geometry;
-                    n.source = source.map(|(tool, id, node_type)| SourceRef { tool, id, node_type });
+                    n.source = source.map(|(tool, id, node_type)| SourceRef { tool, id, node_type, bounds: None });
                     n.layout = layout;
                     n.layout_child.grow = grow;
                     n
