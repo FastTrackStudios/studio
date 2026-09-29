@@ -170,6 +170,27 @@ Built from the parts above and placed like any kit component:
 
 Each is fully restylable, since each is ordinary frame nodes.
 
+### 5b. Lit visualizers: processor's shaders, fed live — built
+
+processor's visualizers (`comp-ui`, `delay-ui`, `reverb-ui`,
+`modulation-ui`, `eq-ui`'s glow) run in frame as built-in shaders with the
+same WGSL maths and colours, fed live data through the effect contract's
+**inputs** (`render/src/fx/CONTRACT.md`, "Inputs"): a shader node names
+feeds, params and curve series (`ShaderFx::inputs`), the runtime resolves
+them each frame (`Runtime::shader_inputs`, clock via `Runtime::set_clock`),
+and the stage uploads them as one storage buffer (≈ 0.3–1.3 KiB a frame for
+these) behind a slot table. The node's subtree is the vector fallback,
+built from `Plot` / `Curve` controls, so `--fx off` (and SVG) draw
+processor's `paint_*` picture. Components: `viz.comp_scope`,
+`viz.delay_taps`, `viz.reverb_space`, `viz.mod_lfo`, `viz.eq_glow`;
+examples `examples/surfaces/12-lit-*.fm`.
+
+New curve providers (`surface_runtime::viz_curves`) carry what signal and
+processor work out in their UI code, once for both paths: `delay.taps`
+(taps from time/feedback/divisions/tempo, the lane window), `reverb.tail`,
+`mod.lfo` (both animated — `CurveRegistry::register_animated` providers get
+the clock as `time` and are re-evaluated per frame) and `eq.bands`.
+
 ### 6. Embedding in signal
 
 A frame surface paints into the host through the Blitz custom widget

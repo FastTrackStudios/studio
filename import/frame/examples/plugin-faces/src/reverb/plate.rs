@@ -141,7 +141,7 @@ pub fn face() -> Face {
         tank.clips_content = true;
         tank.corner_radii = document_proto::CornerRadii::uniform(5.0);
         tank.effects = vec![draw::inner_shadow("#000000", 0.0, 3.0, 10.0)];
-        tank.shader = Some(document_proto::ShaderFx { shader: "glass".into(), params: std::collections::BTreeMap::from([("strength".to_string(), 0.25)]) });
+        tank.shader = Some(document_proto::ShaderFx { shader: "glass".into(), params: std::collections::BTreeMap::from([("strength".to_string(), 0.25)]), inputs: Vec::new() });
         let tank = b.add(panel, tank);
         plate_art(b, tank, tw, th);
         let sheen = draw::linear(160.0, &[(0.0, "#ffffff14"), (0.3, "#ffffff06"), (0.31, "#ffffff00"), (1.0, "#ffffff00")]);

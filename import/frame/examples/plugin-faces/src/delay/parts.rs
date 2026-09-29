@@ -288,7 +288,7 @@ pub fn led_column(b: &mut Builder<'_>, parent: NodeId, name: &str, stream: &str,
 /// the same without it).
 pub fn shader(b: &mut Builder<'_>, id: NodeId, name: &str, params: &[(&str, f64)]) {
     if let Some(n) = b.scene.node_mut(id) {
-        n.shader = Some(ShaderFx { shader: name.into(), params: params.iter().map(|(k, v)| ((*k).to_string(), *v)).collect::<BTreeMap<_, _>>() });
+        n.shader = Some(ShaderFx { shader: name.into(), params: params.iter().map(|(k, v)| ((*k).to_string(), *v)).collect::<BTreeMap<_, _>>(), inputs: Vec::new() });
     }
 }
 

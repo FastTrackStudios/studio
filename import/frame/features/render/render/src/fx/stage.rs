@@ -31,6 +31,8 @@ pub struct Frame<'a> {
     pub time_s: f64,
     /// Control positions (0..1) by control node, for a shader's `value`.
     pub values: Option<&'a HashMap<NodeId, f64>>,
+    /// Shader nodes' live inputs this frame (see `CONTRACT.md`, "Inputs").
+    pub inputs: Option<&'a super::FxInputs>,
     /// Painted last, over everything (a status banner), in target px.
     pub overlay: Option<&'a vello::Scene>,
     pub antialiasing: AaConfig,
@@ -52,6 +54,7 @@ impl<'a> Frame<'a> {
             mode: Mode::Gpu,
             time_s: 0.0,
             values: None,
+            inputs: None,
             overlay: None,
             antialiasing: AaConfig::Area,
         }
@@ -153,9 +156,15 @@ impl Stage {
                 paint(scene, &sub, frame, None);
                 vello_into(renderer, device, queue, scene, &scratch, clear, aa)?;
                 if let Some(pipeline) = self.passes.cached_effect(&r.shader) {
-                    let uniforms = region_uniforms(r, frame, w, h);
+                    let (mut uniforms, box_px) = region_uniforms(r, frame, w, h);
+                    let data = frame.inputs.and_then(|i| i.get(&r.node_id));
+                    let (table, values) = super::pack_inputs(self.passes.effect_slots(&r.shader), &r.inputs, data);
+                    uniforms.inputs = table;
                     let mut enc = encoder(device);
-                    self.passes.effect_pass(device, &mut enc, pipeline, &uniforms, &scratch_view, &out_view);
+                    // The effect runs over the node's box only; the rest of
+                    // the subtree (children overflowing it) draws plainly.
+                    self.passes.effect_pass(device, &mut enc, pipeline, &uniforms, &values, &scratch_view, &out_view, Some(box_px));
+                    self.passes.blit_over_in(device, &mut enc, &scratch_view, &out_view, &outside(box_px, w, h));
                     queue.submit([enc.finish()]);
                 }
                 cursor = r.range.end;
@@ -345,8 +354,9 @@ fn vello_into(
         .map_err(|e| format!("render_to_texture failed: {e}"))
 }
 
-/// The uniform block for one shader region.
-fn region_uniforms(r: &ShaderRegion, frame: &Frame<'_>, w: u32, h: u32) -> FxUniforms {
+/// The uniform block for one shader region, and the region's box in target
+/// px (`[x, y, w, h]`, clamped to the target) — where its effect runs.
+fn region_uniforms(r: &ShaderRegion, frame: &Frame<'_>, w: u32, h: u32) -> (FxUniforms, [u32; 4]) {
     let to_px = frame.transform * to_kurbo(&r.world);
     let to_local = if to_px.determinant().abs() > 1e-12 { to_px.inverse() } else { kurbo::Affine::IDENTITY };
     let rows = |t: kurbo::Affine| {
@@ -358,7 +368,14 @@ fn region_uniforms(r: &ShaderRegion, frame: &Frame<'_>, w: u32, h: u32) -> FxUni
         .and_then(|(id, default)| frame.values.and_then(|v| v.get(&id)).copied().or(default))
         .unwrap_or(0.0);
     let (params, param_mask) = pack_params(&r.params);
-    FxUniforms {
+    let corners = [(0.0, 0.0), (r.width, 0.0), (0.0, r.height), (r.width, r.height)].map(|p| to_px * kurbo::Point::from(p));
+    let (x0, y0) = corners.iter().fold((f64::INFINITY, f64::INFINITY), |(x, y), p| (x.min(p.x), y.min(p.y)));
+    let (x1, y1) = corners.iter().fold((f64::NEG_INFINITY, f64::NEG_INFINITY), |(x, y), p| (x.max(p.x), y.max(p.y)));
+    let clamp = |v: f64, hi: u32| if v.is_finite() { v.clamp(0.0, f64::from(hi)) as u32 } else { 0 };
+    let (bx0, by0) = (clamp(x0.floor() - 1.0, w), clamp(y0.floor() - 1.0, h));
+    let (bx1, by1) = (clamp(x1.ceil() + 1.0, w), clamp(y1.ceil() + 1.0, h));
+    let box_px = [bx0, by0, bx1.saturating_sub(bx0), by1.saturating_sub(by0)];
+    let uniforms = FxUniforms {
         time_s: frame.time_s as f32,
         value: value as f32,
         px_per_unit: to_px.determinant().abs().sqrt() as f32,
@@ -368,7 +385,15 @@ fn region_uniforms(r: &ShaderRegion, frame: &Frame<'_>, w: u32, h: u32) -> FxUni
         to_local: rows(to_local),
         to_px: rows(to_px),
         params,
-    }
+        inputs: [[0; 4]; 8],
+    };
+    (uniforms, box_px)
+}
+
+/// The target outside `[x, y, w, h]`, as up to four bands.
+fn outside([x, y, bw, bh]: [u32; 4], w: u32, h: u32) -> [[u32; 4]; 4] {
+    let (x1, y1) = ((x + bw).min(w), (y + bh).min(h));
+    [[0, 0, w, y], [0, y1, w, h.saturating_sub(y1)], [0, y, x, y1 - y], [x1, y, w.saturating_sub(x1), y1 - y]]
 }
 
 fn has_draws(prims: &[PaintPrimitive]) -> bool {

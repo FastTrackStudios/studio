@@ -86,6 +86,9 @@ pub type Provider = Arc<dyn Fn(&CurveInputs) -> Vec<Series> + Send + Sync>;
 #[derive(Clone)]
 pub struct CurveRegistry {
     providers: HashMap<String, Provider>,
+    /// Providers that also read the clock (`time`, seconds): re-evaluated
+    /// every frame (a visualizer's playhead, an LFO).
+    animated: std::collections::HashSet<String>,
 }
 
 impl std::fmt::Debug for CurveRegistry {
@@ -106,7 +109,7 @@ impl CurveRegistry {
     /// No providers at all.
     #[must_use]
     pub fn empty() -> Self {
-        Self { providers: HashMap::new() }
+        Self { providers: HashMap::new(), animated: std::collections::HashSet::new() }
     }
 
     /// frame's builtins: `eq.response`, `comp.transfer`, `adsr.envelope`,
@@ -118,12 +121,28 @@ impl CurveRegistry {
         r.register("comp.transfer", comp_transfer);
         r.register("adsr.envelope", adsr_envelope);
         r.register("filter.response", filter_response);
+        crate::viz_curves::register(&mut r);
         r
     }
 
     /// Register (or override) `name`.
     pub fn register(&mut self, name: impl Into<String>, f: impl Fn(&CurveInputs) -> Vec<Series> + Send + Sync + 'static) {
         self.providers.insert(name.into(), Arc::new(f));
+    }
+
+    /// Register (or override) `name` as a provider that reads the clock:
+    /// the runtime passes `time` (seconds, [`crate::Runtime::set_clock`])
+    /// and evaluates it every frame.
+    pub fn register_animated(&mut self, name: impl Into<String>, f: impl Fn(&CurveInputs) -> Vec<Series> + Send + Sync + 'static) {
+        let name = name.into();
+        self.animated.insert(name.clone());
+        self.register(name, f);
+    }
+
+    /// Whether `name` reads the clock.
+    #[must_use]
+    pub fn is_animated(&self, name: &str) -> bool {
+        self.animated.contains(name)
     }
 
     #[must_use]

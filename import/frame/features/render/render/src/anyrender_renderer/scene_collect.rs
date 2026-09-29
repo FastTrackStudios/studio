@@ -942,6 +942,7 @@ impl Cx<'_> {
                     shader: fx.shader.clone(),
                     params: fx.params.clone(),
                     control: nearest_control(scene, node_id),
+                    inputs: fx.inputs.clone(),
                 });
             }
         }

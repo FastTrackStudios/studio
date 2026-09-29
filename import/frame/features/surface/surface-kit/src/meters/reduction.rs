@@ -75,7 +75,7 @@ fn build(b: &mut Builder<'_>, parent: NodeId, p: &Place) -> NodeId {
     let card = draw::with_effects(draw::stroked(card, "#00000080", (0.8 * k).max(0.5)), vec![draw::inner_shadow("#00000059", 0.0, 1.5 * k, 3.5 * k)]);
     let mut card = card;
     if p.flag("glass") {
-        card.shader = Some(document_proto::ShaderFx { shader: "glass".into(), params: std::iter::once(("strength".to_string(), 0.35)).collect() });
+        card.shader = Some(document_proto::ShaderFx { shader: "glass".into(), params: std::iter::once(("strength".to_string(), 0.35)).collect(), inputs: Vec::new() });
     }
     let root = b.add(parent, card);
 

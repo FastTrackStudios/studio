@@ -359,7 +359,7 @@ pub fn ellipse_pts(cx: f64, cy: f64, rx: f64, ry: f64, n: usize) -> Vec<(f64, f6
 
 /// A shader effect with one `strength`.
 fn shader(id: &str, strength: f64) -> Option<ShaderFx> {
-    Some(ShaderFx { shader: id.into(), params: std::collections::BTreeMap::from([("strength".to_string(), strength)]) })
+    Some(ShaderFx { shader: id.into(), params: std::collections::BTreeMap::from([("strength".to_string(), strength)]), inputs: Vec::new() })
 }
 
 /// A recessed glass display window (`x, y, w, h`) lit in `tint`: a bezel, a

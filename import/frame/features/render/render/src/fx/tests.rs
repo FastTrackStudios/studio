@@ -91,7 +91,7 @@ fn emission_scales_with_opacity() {
 /// Vertical stripes 20..80 × 20..80 under a shader node covering 30..70.
 fn shaded(shader: &str) -> (Scene, doc::NodeId) {
     let mut panel = shape(NodeKind::Frame, 30.0, 30.0, 40.0, 40.0, (0.2, 0.5, 0.9));
-    panel.shader = Some(doc::ShaderFx { shader: shader.to_string(), params: BTreeMap::new() });
+    panel.shader = Some(doc::ShaderFx { shader: shader.to_string(), params: BTreeMap::new(), inputs: Vec::new() });
     let mut nodes = vec![(None, shape(NodeKind::Rectangle, 10.0, 10.0, 80.0, 80.0, (0.5, 0.5, 0.5))), (None, panel)];
     for i in 0..8 {
         nodes.push((Some(1), shape(NodeKind::Rectangle, f64::from(i) * 5.0, 0.0, 2.5, 40.0, (1.0, 1.0, 1.0))));
@@ -146,7 +146,7 @@ fn with_asset_shader(source: &[u8]) -> (Scene, doc::NodeId) {
     let asset = scene.add_asset("text/wgsl", source.to_vec());
     let panel = scene.node(root).unwrap().children[1];
     scene.node_mut(panel).unwrap().shader =
-        Some(doc::ShaderFx { shader: format!("asset:{}", asset.0), params: BTreeMap::new() });
+        Some(doc::ShaderFx { shader: format!("asset:{}", asset.0), params: BTreeMap::new(), inputs: Vec::new() });
     (scene, root)
 }
 
@@ -271,4 +271,29 @@ fn a_stroked_line_glows_along_the_line_not_its_box() {
     // The box's far corners are ~42 px from the line: dark.
     assert!(px(&gpu, 24, 24)[0] < 3, "the box glows: {:?}", px(&gpu, 24, 24));
     assert!(px(&gpu, 76, 76)[0] < 3, "the box glows: {:?}", px(&gpu, 76, 76));
+}
+
+#[test]
+fn every_builtin_validates_as_the_stage_composes_it() {
+    use vello::wgpu::naga;
+    for id in super::BUILTINS {
+        let body = super::builtin_source(id).expect("builtin");
+        let source = super::effect_module(body);
+        let module = naga::front::wgsl::parse_str(&source).unwrap_or_else(|e| panic!("{id}: {}", e.emit_to_string(&source)));
+        naga::valid::Validator::new(naga::valid::ValidationFlags::all(), naga::valid::Capabilities::default())
+            .validate(&module)
+            .unwrap_or_else(|e| panic!("{id}: {}", e.emit_to_string(&source)));
+    }
+}
+
+#[test]
+fn inputs_are_the_in_names_an_effect_mentions_in_slot_order() {
+    let body = "fn effect(uv: vec2<f32>) -> vec4<f32> { let a = input_or(IN_THRESHOLD, 0.0) + input_at(IN_GR, uv.x) + input_or(IN_GR, 1.0); let b = MIN_X; return vec4<f32>(a); }";
+    assert_eq!(super::effect_inputs(body), ["IN_GR", "IN_THRESHOLD"]);
+    assert!(super::effect_module(body).contains("const IN_GR: u32 = 0u;\nconst IN_THRESHOLD: u32 = 1u;"));
+    let inputs = [doc::ShaderInput::param("threshold", "c/t"), doc::ShaderInput::stream("gr", "c/gr")];
+    let data = BTreeMap::from([("gr".to_string(), vec![0.1, 0.2]), ("threshold".to_string(), vec![-18.0])]);
+    let (table, values) = super::pack_inputs(&super::effect_inputs(body), &inputs, Some(&data));
+    assert_eq!(table[0], [0, 2, 2, 1]);
+    assert_eq!(values, [0.1, 0.2, -18.0]);
 }

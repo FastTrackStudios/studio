@@ -157,6 +157,31 @@ Anything always moving (flicker, LFOs) keeps hosts drawing, so make it opt-in.
   them); the `glow` frame at the bottom of the traces is where a GPU glow
   layer goes. See `docs/eq-parity.md`.
 
+### Lit visualizers
+
+processor's panel shaders as components — `viz.comp_scope`,
+`viz.delay_taps`, `viz.reverb_space`, `viz.mod_lfo` and the `viz.eq_glow`
+layer (`viz::lit`; params and feeds from `viz::lit_catalog`):
+
+- **Structure**: a root (the rack's `#080808` ground, clipped); a `light`
+  frame carrying the built-in shader (`viz.comp`, `viz.delay`, …) with its
+  `inputs` bound to the component's params and feeds; inside it the vector
+  fallback — processor's `paint_*` rebuilt from `Plot` / `Curve` controls
+  (unit-space series of `delay.taps`, `reverb.tail`, `mod.lfo`); after it,
+  what processor draws as geometry over its shader in both paths (the
+  compressor's threshold rule, a `Handle` you drag; a time lane's beat grid
+  is ruled by the shader itself, since processor's two painters window it
+  differently).
+- **Fallback fidelity**: one style per slot, so per-element alpha and size
+  are bucketed (a tap's bar by loudness, a reflection by age, a shimmer by
+  brightness) and gradients that travel (the delay sweep's trail, the
+  shimmer's band) are drawn in slices.
+- **Colour**: `color=#hex` (the lane colour; processor's defaults
+  otherwise: comp grey, delay `#3b82f6`, reverb `#a78bfa`, modulation
+  `#22d3ee` — `#f472b6` for motion).
+- **Families/engines** are choice params (`family`, `engine`): an engine
+  maps its own style list onto them (processor's `family_of_style`).
+
 ## Looking at it
 
 ```sh

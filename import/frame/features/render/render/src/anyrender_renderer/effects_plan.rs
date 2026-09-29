@@ -56,6 +56,8 @@ pub struct ShaderRegion {
     /// The nearest control (this node or an ancestor) whose position feeds the
     /// shader's `value`, with that control's default position.
     pub control: Option<(NodeId, Option<f64>)>,
+    /// The live data the shader reads (resolved per frame by the host).
+    pub inputs: Vec<document_proto::ShaderInput>,
 }
 
 /// Everything the effects stage runs for one frame.
@@ -71,15 +73,14 @@ impl EffectsPlan {
         self.emissive.is_empty() && self.shaders.is_empty()
     }
 
-    /// Whether frames differ over time (a `flicker`, or a custom shader that
-    /// reads `time_s`): the host must keep redrawing.
+    /// Whether frames differ over time (a `flicker`, or a shader — built-in
+    /// or custom — that reads `time_s`): the host must keep redrawing.
     #[must_use]
-    pub fn time_dependent(&self, custom_source: impl Fn(&str) -> Option<String>) -> bool {
+    pub fn time_dependent(&self, source: impl Fn(&str) -> Option<String>) -> bool {
         self.emissive.iter().any(|e| e.flicker.is_some())
             || self.shaders.iter().any(|s| match s.shader.as_str() {
                 "flicker" => true,
-                id if id.starts_with("asset:") => custom_source(id).is_some_and(|src| src.contains("time_s")),
-                _ => false,
+                id => source(id).is_some_and(|src| src.contains("time_s")),
             })
     }
 }

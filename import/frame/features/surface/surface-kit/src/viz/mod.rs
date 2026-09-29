@@ -30,6 +30,11 @@ mod eq;
 mod eq_graph;
 /// `viz.spectrum`, `viz.gr_history`, `viz.scope`.
 mod simple;
+/// The lit visualizers: processor's panel shaders with their vector
+/// fallbacks (`viz.comp_scope`, `viz.delay_taps`, `viz.reverb_space`,
+/// `viz.mod_lfo`, `viz.eq_glow`).
+pub mod lit;
+pub mod lit_catalog;
 
 use document_proto::{Node, NodeId, NodeKind, Stroke, StrokeAlign, StrokeCap, StrokeJoin, TextAlign, TextData};
 use surface_widgets::Builder;
@@ -55,6 +60,7 @@ pub(crate) fn defs() -> Vec<ComponentDef> {
     all.extend(comp::defs());
     all.extend(eq_graph::defs());
     all.extend(eq::defs());
+    all.extend(lit::defs());
     all
 }
 

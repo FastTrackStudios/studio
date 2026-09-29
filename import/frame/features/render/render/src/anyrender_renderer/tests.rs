@@ -479,10 +479,10 @@ fn shader_regions_cover_the_subtree_in_world_space() {
     outer.transform = rot90(100.0, 100.0);
     let mut glass = node(NodeKind::Frame, 10.0, 20.0, 40.0, 30.0);
     glass.fills = vec![solid(0.0, 0.0, 1.0, 1.0)];
-    glass.shader = Some(doc::ShaderFx { shader: "glass".into(), params: [("strength".to_string(), 0.3)].into() });
+    glass.shader = Some(doc::ShaderFx { shader: "glass".into(), params: [("strength".to_string(), 0.3)].into(), inputs: Vec::new() });
     // A nested shader draws plainly inside the outer one.
     let mut inner = red_rect(5.0, 5.0, 10.0, 10.0);
-    inner.shader = Some(doc::ShaderFx { shader: "crt".into(), params: Default::default() });
+    inner.shader = Some(doc::ShaderFx { shader: "crt".into(), params: Default::default(), inputs: Vec::new() });
     let glass_id = glass.id;
     let after = red_rect(0.0, 90.0, 10.0, 10.0);
     let (scene, root) = scene_of(vec![(None, outer), (Some(0), glass), (Some(1), inner), (Some(0), after)]);
@@ -514,7 +514,7 @@ fn shader_regions_cover_the_subtree_in_world_space() {
 #[test]
 fn flicker_is_time_dependent_and_modulates_its_subtrees_light() {
     let mut tube = node(NodeKind::Frame, 0.0, 0.0, 50.0, 50.0);
-    tube.shader = Some(doc::ShaderFx { shader: "flicker".into(), params: Default::default() });
+    tube.shader = Some(doc::ShaderFx { shader: "flicker".into(), params: Default::default(), inputs: Vec::new() });
     let mut lamp = red_rect(5.0, 5.0, 10.0, 10.0);
     lamp.emission = emission(1.0, 6.0);
     let (scene, root) = scene_of(vec![(None, tube), (Some(0), lamp)]);

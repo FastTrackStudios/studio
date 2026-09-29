@@ -79,7 +79,7 @@ fn build_compression(b: &mut Builder<'_>, parent: NodeId, p: &Place) -> NodeId {
     card.clips_content = true;
     card.effects = vec![inner(css("rgba(0,0,0,0.85)"), 0.0, 2.0 * s, 5.0 * s)];
     if p.flag("glass") {
-        card.shader = Some(document_proto::ShaderFx { shader: "glass".into(), params: std::iter::once(("strength".to_string(), 0.4)).collect() });
+        card.shader = Some(document_proto::ShaderFx { shader: "glass".into(), params: std::iter::once(("strength".to_string(), 0.4)).collect(), inputs: Vec::new() });
     }
     let card = b.add(root, draw::rounded(card, 1.5 * s));
     // The amber lamp behind it, pooled in the upper middle.

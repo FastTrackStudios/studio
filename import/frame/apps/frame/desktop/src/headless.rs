@@ -73,6 +73,7 @@ impl Shot<'_> {
             }
         };
         let values = if browsing { Default::default() } else { self.player.control_positions() };
+        let inputs = if browsing { Default::default() } else { self.player.shader_inputs() };
         // Time advances with the simulated clock, so a flicker animates.
         self.offscreen.render_with_effects(&render::fx::Frame {
             transform: view.affine(),
@@ -81,6 +82,7 @@ impl Shot<'_> {
             mode: self.args.fx,
             time_s: t / 1000.0,
             values: Some(&values),
+            inputs: Some(&inputs),
             overlay: Some(&self.overlay),
             ..render::fx::Frame::new(&doc, page, w, h)
         })

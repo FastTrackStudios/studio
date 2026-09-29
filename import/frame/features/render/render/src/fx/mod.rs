@@ -15,10 +15,18 @@
 mod passes;
 mod stage;
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 
 pub use crate::anyrender_renderer::{flicker_level, EffectsPlan, EmissiveDraw, ShaderRegion};
 pub use stage::{Frame, Stage};
+
+/// Live shader data for one frame: per shader node, each input's values by
+/// input name (see `document_proto::ShaderInput`; hosts resolve them —
+/// `surface_runtime::Runtime::shader_inputs`).
+pub type FxInputs = HashMap<document_proto::NodeId, BTreeMap<String, Vec<f32>>>;
+
+/// The most floats one shader region uploads per frame (16 KiB).
+pub const MAX_DATA: usize = 4096;
 
 /// How a renderer treats `emission`/`shader`.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -66,8 +74,11 @@ pub const PARAM_SLOTS: [&str; 16] = [
     "p3",
 ];
 
-/// The built-in effects, by id.
-pub const BUILTINS: [&str; 4] = ["glass", "crt", "lighting", "flicker"];
+/// The built-in effects, by id: post-effects over a subtree, then the
+/// visualizers (which draw their own picture from live inputs and replace
+/// the subtree, their vector fallback — see `CONTRACT.md`).
+pub const BUILTINS: [&str; 9] =
+    ["glass", "crt", "lighting", "flicker", "viz.comp", "viz.delay", "viz.reverb", "viz.modulation", "eq.glow"];
 
 /// The slot of a param name, if it has one.
 #[must_use]
@@ -98,8 +109,35 @@ pub fn builtin_source(id: &str) -> Option<&'static str> {
         "crt" => include_str!("wgsl/crt.wgsl"),
         "lighting" => include_str!("wgsl/lighting.wgsl"),
         "flicker" => include_str!("wgsl/flicker.wgsl"),
+        "viz.comp" => concat!(include_str!("wgsl/viz/common.wgsl"), include_str!("wgsl/viz/comp.wgsl")),
+        "viz.delay" => concat!(include_str!("wgsl/viz/common.wgsl"), include_str!("wgsl/viz/delay.wgsl")),
+        "viz.reverb" => concat!(include_str!("wgsl/viz/common.wgsl"), include_str!("wgsl/viz/reverb.wgsl")),
+        "viz.modulation" => concat!(include_str!("wgsl/viz/common.wgsl"), include_str!("wgsl/viz/modulation.wgsl")),
+        "eq.glow" => concat!(include_str!("wgsl/viz/common.wgsl"), include_str!("wgsl/viz/eq_glow.wgsl")),
         _ => return None,
     })
+}
+
+/// The inputs an effect body reads: every `IN_<NAME>` it mentions, sorted,
+/// at most 16 — slot `i` of the uniform table is the `i`-th.
+#[must_use]
+pub fn effect_inputs(body: &str) -> Vec<String> {
+    let bytes = body.as_bytes();
+    let ident = |b: u8| b.is_ascii_alphanumeric() || b == b'_';
+    let mut names = std::collections::BTreeSet::new();
+    let mut i = 0;
+    while let Some(at) = body[i..].find("IN_") {
+        let start = i + at;
+        let mut end = start + 3;
+        while end < bytes.len() && ident(bytes[end]) {
+            end += 1;
+        }
+        if (start == 0 || !ident(bytes[start - 1])) && end > start + 3 {
+            names.insert(body[start..end].to_string());
+        }
+        i = end;
+    }
+    names.into_iter().take(16).collect()
 }
 
 /// The effect body for `id` in `doc`: a built-in, or the UTF-8 WGSL of the
@@ -117,7 +155,31 @@ pub fn effect_source(doc: &document_proto::Scene, id: &str) -> Option<String> {
 /// points.
 #[must_use]
 pub fn effect_module(body: &str) -> String {
-    format!("{}\n{body}\n{}", include_str!("wgsl/prelude.wgsl"), include_str!("wgsl/entry.wgsl"))
+    use std::fmt::Write as _;
+    let mut consts = String::new();
+    for (i, name) in effect_inputs(body).iter().enumerate() {
+        let _ = writeln!(consts, "const {name}: u32 = {i}u;");
+    }
+    format!("{}\n{consts}\n{body}\n{}", include_str!("wgsl/prelude.wgsl"), include_str!("wgsl/entry.wgsl"))
+}
+
+/// Pack a region's live inputs: the slot table (`(offset, len)` per slot,
+/// in [`effect_inputs`] order) and the values back to back, at most
+/// [`MAX_DATA`] floats (later inputs are cut short, then empty).
+#[must_use]
+pub fn pack_inputs(slots: &[String], inputs: &[document_proto::ShaderInput], data: Option<&BTreeMap<String, Vec<f32>>>) -> ([[u32; 4]; 8], Vec<f32>) {
+    let mut table = [[0_u32; 4]; 8];
+    let mut values = Vec::new();
+    for (i, slot) in slots.iter().enumerate().take(16) {
+        let Some(input) = inputs.iter().find(|n| n.constant_name() == *slot) else { continue };
+        let Some(v) = data.and_then(|d| d.get(&input.name)) else { continue };
+        let take = v.len().min(MAX_DATA - values.len());
+        let offset = values.len() as u32;
+        values.extend_from_slice(&v[..take]);
+        table[i / 2][(i % 2) * 2] = offset;
+        table[i / 2][(i % 2) * 2 + 1] = take as u32;
+    }
+    (table, values)
 }
 
 /// Whether `doc` under `root` needs continuous redraws with effects on (a

@@ -329,7 +329,7 @@ fn build(face: &Face, b: &mut Builder<'_>, parent: NodeId, p: &Place) -> NodeId 
     // The `glass` option: a glass post-effect over the window (GPU
     // renderers only — the card reads the same without it).
     if p.flag("glass") {
-        card_node.shader = Some(document_proto::ShaderFx { shader: "glass".into(), params: std::iter::once(("strength".to_string(), 0.4)).collect() });
+        card_node.shader = Some(document_proto::ShaderFx { shader: "glass".into(), params: std::iter::once(("strength".to_string(), 0.4)).collect(), inputs: Vec::new() });
     }
     let card_id = b.add(root, draw::rounded(card_node, 3.0 * s));
 

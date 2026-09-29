@@ -339,6 +339,7 @@ impl App {
             }
         };
         let values = if browsing { Default::default() } else { self.player.control_positions() };
+        let inputs = if browsing { Default::default() } else { self.player.shader_inputs() };
         let overlay = self.banner.is_some() || toast.is_some();
 
         let Some(gpu) = &mut self.gpu else { return };
@@ -351,6 +352,7 @@ impl App {
             mode: self.fx,
             time_s: t / 1000.0,
             values: Some(&values),
+            inputs: Some(&inputs),
             overlay: overlay.then_some(&self.scene),
             antialiasing: AaConfig::Area,
             ..render::fx::Frame::new(&doc, page, w, h)

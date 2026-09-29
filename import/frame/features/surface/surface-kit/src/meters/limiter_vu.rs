@@ -125,7 +125,7 @@ fn vu_limiter(b: &mut Builder<'_>, parent: NodeId, p: &Place) -> NodeId {
         card = draw::emissive(card, draw::hex(lk.card[0]), lk.emit, ch * 0.3);
     }
     if p.flag("glass") {
-        card.shader = Some(document_proto::ShaderFx { shader: "glass".into(), params: std::iter::once(("strength".to_string(), 0.4)).collect() });
+        card.shader = Some(document_proto::ShaderFx { shader: "glass".into(), params: std::iter::once(("strength".to_string(), 0.4)).collect(), inputs: Vec::new() });
     }
     let card = b.add(root, card);
     for (i, (x, y, reach, c)) in lk.lamps.iter().enumerate() {

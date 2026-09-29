@@ -74,7 +74,7 @@ fn drag(rt: &mut Runtime, from: (f64, f64), by: (f64, f64)) -> Vec<EngineCall> {
 
 #[test]
 fn every_viz_component_places_and_lints_clean() {
-    let defs: Vec<_> = components().into_iter().filter(|c| c.family == Family::Viz).collect();
+    let defs: Vec<_> = components().into_iter().filter(|c| c.family == Family::Viz && !viz::lit::IDS.contains(&c.id)).collect();
     assert_eq!(defs.len(), 6);
     for def in defs {
         assert!(def.id.starts_with("viz."));

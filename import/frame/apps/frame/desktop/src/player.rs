@@ -243,6 +243,7 @@ impl Player {
     /// Advance to `t` ms: telemetry in (synthetic, or drained from the live
     /// engine), coalesced edits out.
     pub fn tick(&mut self, t: f64) {
+        self.rt.set_clock(t / 1000.0);
         match &mut self.engine {
             Backend::Local(m) => {
                 // Shaped by whatever feeds were requested of the mock.
@@ -401,6 +402,12 @@ impl Player {
     #[must_use]
     pub fn document(&self, t: f64) -> (Scene, NodeId) {
         (self.rt.frame(t), self.page)
+    }
+
+    /// Shader nodes' live inputs this frame (feeds, params, curves).
+    #[must_use]
+    pub fn shader_inputs(&self) -> render::fx::FxInputs {
+        self.rt.shader_inputs()
     }
 
     /// Every control's position, for effect shaders' `value`.

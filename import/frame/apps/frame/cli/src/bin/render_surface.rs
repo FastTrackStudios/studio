@@ -180,6 +180,7 @@ fn run() -> Result<(), String> {
         for f in &held {
             rt.apply_frame(f.clone(), ms);
         }
+        rt.set_clock(t);
         let frame = rt.frame(ms);
 
         let page = frame.pages()[0];
@@ -195,6 +196,7 @@ fn run() -> Result<(), String> {
             .unwrap_or(theme.background);
         let base = peniko::Color::from_rgba8((bg.r * 255.0) as u8, (bg.g * 255.0) as u8, (bg.b * 255.0) as u8, 255);
         let values = control_positions(&rt);
+        let inputs = rt.shader_inputs();
         let px = offscreen.render_with_effects(&render::fx::Frame {
             transform: kurbo::Affine::scale(scale),
             base,
@@ -202,6 +204,7 @@ fn run() -> Result<(), String> {
             mode: fx,
             time_s: t,
             values: Some(&values),
+            inputs: Some(&inputs),
             ..render::fx::Frame::new(&frame, page, w, h)
         })?;
         shots.push(image::RgbaImage::from_raw(px.width, px.height, px.rgba).ok_or("bad pixel buffer")?);

@@ -47,6 +47,8 @@ pub mod ui;
 pub mod text;
 // Drawing the interaction layer: visibility, floating panels, menus.
 mod draw;
+// Shader nodes' live inputs.
+mod shader_inputs;
 
 /// A design plus the controls attached to its nodes.
 #[derive(Debug, Clone, PartialEq)]
@@ -119,6 +121,9 @@ pub struct Runtime {
     expansion: repeat::Expansion,
     ui: ui::Ui,
     text_measure: Option<text::TextMeasure>,
+    /// The host's clock, seconds ([`Self::set_clock`]): animated curves and
+    /// shader inputs read it.
+    clock_s: f64,
 }
 
 impl Runtime {
@@ -151,6 +156,7 @@ impl Runtime {
             expansion,
             ui: ui::Ui::default(),
             text_measure: None,
+            clock_s: 0.0,
         }
     }
 
@@ -416,6 +422,9 @@ impl Runtime {
             if let Some(v) = v {
                 args.values.insert(input.name.clone(), v);
             }
+        }
+        if self.curves.is_animated(provider) {
+            args.values.insert("time".into(), self.clock_s);
         }
         let mut h = std::collections::hash_map::DefaultHasher::new();
         provider.hash(&mut h);
@@ -1001,6 +1010,7 @@ impl Runtime {
             || !self.histories.is_empty()
             || self.motion_animating()
             || self.ui.edit.is_some()
+            || self.reads_clock()
     }
 
     /// Controls whose parameter is a choice/toggle (for selector hit-mapping).

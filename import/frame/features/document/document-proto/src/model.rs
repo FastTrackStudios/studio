@@ -505,7 +505,7 @@ pub struct Emission {
 }
 
 /// A shader post-effect (see [`Node::shader`]).
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Facet)]
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize, Facet)]
 pub struct ShaderFx {
     /// A built-in effect id (`glass`, `crt`, `lighting`, `flicker`, …) or
     /// `asset:<id>` for custom WGSL stored in the document's asset table.
@@ -515,6 +515,11 @@ pub struct ShaderFx {
     #[serde(default)]
     #[facet(default)]
     pub params: BTreeMap<String, f64>,
+    /// Live data the shader reads each frame (feeds, params, curves),
+    /// by name — `IN_<NAME>` in WGSL. See [`ShaderInput`].
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    #[facet(default)]
+    pub inputs: Vec<crate::shader_input::ShaderInput>,
 }
 
 /// Where a node came from, so re-imports can update in place.

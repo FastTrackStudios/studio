@@ -17,11 +17,13 @@ fn fx_vs_main(@builtin(vertex_index) i: u32) -> FxVsOut {
 fn fx_fs_main(in: FxVsOut) -> @location(0) vec4<f32> {
     let px = in.pos.xy;
     let uv = px_to_local(px) / max(fx.node_size, vec2<f32>(1e-6));
+    // Evaluated for every pixel (uniform control flow, so an effect may
+    // use derivatives), then discarded outside the box.
+    let c = effect(clamp(uv, vec2<f32>(0.0), vec2<f32>(1.0)));
     if (any(uv < vec2<f32>(0.0)) || any(uv > vec2<f32>(1.0))) {
         // Outside the node's box the subtree draws plainly.
         return sample_src_px(px);
     }
-    let c = effect(uv);
     // Keep the result a valid premultiplied colour.
     let a = clamp(c.a, 0.0, 1.0);
     return vec4<f32>(clamp(c.rgb, vec3<f32>(0.0), vec3<f32>(a)), a);

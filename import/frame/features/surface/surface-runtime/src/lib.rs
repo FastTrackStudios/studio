@@ -18,6 +18,7 @@ pub mod runtime;
 pub mod sync;
 pub mod visual;
 pub mod visual_ui;
+pub mod viz_curves;
 
 pub use curves::{CurveInputs, CurveRegistry, Series};
 pub use gesture::{Bounds, Input, Key, Modifiers};

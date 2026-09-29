@@ -39,7 +39,7 @@ impl PassUniforms {
     }
 }
 
-/// `FxUniforms` in `prelude.wgsl` (160 bytes).
+/// `FxUniforms` in `prelude.wgsl` (288 bytes).
 #[derive(Clone, Copy, Default)]
 pub(super) struct FxUniforms {
     pub time_s: f32,
@@ -51,6 +51,8 @@ pub(super) struct FxUniforms {
     pub to_local: [[f32; 4]; 2],
     pub to_px: [[f32; 4]; 2],
     pub params: [f32; 16],
+    /// `(offset, len)` into the data buffer per input slot, two per row.
+    pub inputs: [[u32; 4]; 8],
 }
 
 impl FxUniforms {
@@ -62,11 +64,12 @@ impl FxUniforms {
             .chain(&self.node_size)
             .chain(self.to_local.iter().chain(&self.to_px).flatten())
             .chain(&self.params);
-        let mut b = Vec::with_capacity(160);
+        let mut b = Vec::with_capacity(288);
         head.iter().for_each(|v| b.extend_from_slice(&v.to_le_bytes()));
         b.extend_from_slice(&self.param_mask.to_le_bytes());
         tail.for_each(|v| b.extend_from_slice(&v.to_le_bytes()));
-        debug_assert_eq!(b.len(), 160);
+        self.inputs.iter().flatten().for_each(|v| b.extend_from_slice(&v.to_le_bytes()));
+        debug_assert_eq!(b.len(), 288);
         b
     }
 }
@@ -111,8 +114,11 @@ pub(super) struct Passes {
     down: wgpu::RenderPipeline,
     blur: wgpu::RenderPipeline,
     bloom: wgpu::RenderPipeline,
-    /// Compiled effects by shader id; `None` = failed (drawn plainly).
-    effects: HashMap<String, Option<wgpu::RenderPipeline>>,
+    /// Compiled effects by shader id, with the input slots their source
+    /// reads; `None` = failed (drawn plainly).
+    effects: HashMap<String, Option<(wgpu::RenderPipeline, Vec<String>)>>,
+    /// Bound as the data buffer where a pass has no inputs.
+    empty_data: wgpu::Buffer,
     /// Shader ids whose failure was already reported.
     reported: HashSet<String>,
 }
@@ -160,7 +166,23 @@ impl Passes {
                     },
                     count: None,
                 },
+                // Effect inputs (`fx_data`); other passes bind a stub.
+                wgpu::BindGroupLayoutEntry {
+                    binding: 4,
+                    visibility: wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Storage { read_only: true },
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                    count: None,
+                },
             ],
+        });
+        let empty_data = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("frame-fx-no-data"),
+            contents: &[0; 16],
+            usage: wgpu::BufferUsages::STORAGE,
         });
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("frame-fx"),
@@ -191,6 +213,7 @@ impl Passes {
             pipeline_layout,
             sampler,
             effects: HashMap::new(),
+            empty_data,
             reported: HashSet::new(),
         }
     }
@@ -207,7 +230,7 @@ impl Passes {
             // Built-in and asset ids (content hashes) name fixed sources, so
             // the result — pipeline or failure — is cached for good.
             let compiled = compile(device, &self.pipeline_layout, &super::effect_module(&body));
-            let entry = compiled.map_err(|e| self.report(id, &e)).ok();
+            let entry = compiled.map_err(|e| self.report(id, &e)).ok().map(|p| (p, super::effect_inputs(&body)));
             self.effects.insert(id.to_string(), entry);
         }
         self.cached_effect(id)
@@ -215,7 +238,12 @@ impl Passes {
 
     /// The effect for `id` if it's already compiled.
     pub fn cached_effect(&self, id: &str) -> Option<&wgpu::RenderPipeline> {
-        self.effects.get(id).and_then(Option::as_ref)
+        self.effects.get(id).and_then(Option::as_ref).map(|(p, _)| p)
+    }
+
+    /// The input slots (`IN_<NAME>`, in slot order) a compiled effect reads.
+    pub fn effect_slots(&self, id: &str) -> &[String] {
+        self.effects.get(id).and_then(Option::as_ref).map_or(&[], |(_, s)| s.as_slice())
     }
 
     fn report(&mut self, id: &str, error: &str) {
@@ -225,10 +253,17 @@ impl Passes {
     }
 
     fn bind(&self, device: &wgpu::Device, uniforms: &[u8], src: &wgpu::TextureView) -> wgpu::BindGroup {
-        self.bind2(device, uniforms, src, src)
+        self.bind2(device, uniforms, src, src, &self.empty_data)
     }
 
-    fn bind2(&self, device: &wgpu::Device, uniforms: &[u8], src: &wgpu::TextureView, second: &wgpu::TextureView) -> wgpu::BindGroup {
+    fn bind2(
+        &self,
+        device: &wgpu::Device,
+        uniforms: &[u8],
+        src: &wgpu::TextureView,
+        second: &wgpu::TextureView,
+        data: &wgpu::Buffer,
+    ) -> wgpu::BindGroup {
         let buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("frame-fx-uniforms"),
             contents: uniforms,
@@ -242,6 +277,7 @@ impl Passes {
                 wgpu::BindGroupEntry { binding: 1, resource: wgpu::BindingResource::TextureView(src) },
                 wgpu::BindGroupEntry { binding: 2, resource: wgpu::BindingResource::Sampler(&self.sampler) },
                 wgpu::BindGroupEntry { binding: 3, resource: wgpu::BindingResource::TextureView(second) },
+                wgpu::BindGroupEntry { binding: 4, resource: data.as_entire_binding() },
             ],
         })
     }
@@ -252,6 +288,18 @@ impl Passes {
         bind: &wgpu::BindGroup,
         dst: &wgpu::TextureView,
         clear: bool,
+    ) {
+        Self::run_in(encoder, pipeline, bind, dst, clear, None);
+    }
+
+    /// [`Self::run`], only inside `scissor` (`[x, y, w, h]`, target px).
+    fn run_in(
+        encoder: &mut wgpu::CommandEncoder,
+        pipeline: &wgpu::RenderPipeline,
+        bind: &wgpu::BindGroup,
+        dst: &wgpu::TextureView,
+        clear: bool,
+        scissor: Option<[u32; 4]>,
     ) {
         let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some("frame-fx-pass"),
@@ -271,7 +319,26 @@ impl Passes {
         });
         pass.set_pipeline(pipeline);
         pass.set_bind_group(0, bind, &[]);
+        if let Some([x, y, w, h]) = scissor {
+            pass.set_scissor_rect(x, y, w, h);
+        }
         pass.draw(0..3, 0..1);
+    }
+
+    /// Straight-alpha `src` over `dst`, inside each of `rects` (`[x, y, w,
+    /// h]`, target px).
+    pub fn blit_over_in(
+        &self,
+        device: &wgpu::Device,
+        encoder: &mut wgpu::CommandEncoder,
+        src: &wgpu::TextureView,
+        dst: &wgpu::TextureView,
+        rects: &[[u32; 4]],
+    ) {
+        let bind = self.bind(device, &PassUniforms::default().bytes(), src);
+        for r in rects.iter().filter(|r| r[2] > 0 && r[3] > 0) {
+            Self::run_in(encoder, &self.blit, &bind, dst, false, Some(*r));
+        }
     }
 
     /// Straight-alpha `src` over `dst`.
@@ -311,22 +378,37 @@ impl Passes {
         inside: f32,
     ) {
         let u = PassUniforms { gain, inside, ..Default::default() };
-        let bind = self.bind2(device, &u.bytes(), src, mask);
+        let bind = self.bind2(device, &u.bytes(), src, mask, &self.empty_data);
         Self::run(encoder, &self.bloom, &bind, dst, false);
     }
 
-    /// Run the effect `pipeline` over the subtree in `src`, over `dst`.
+    /// Run the effect `pipeline` over the subtree in `src`, over `dst`,
+    /// with its input values `data`, inside `scissor` (the node's box).
+    #[allow(clippy::too_many_arguments)]
     pub fn effect_pass(
         &self,
         device: &wgpu::Device,
         encoder: &mut wgpu::CommandEncoder,
         pipeline: &wgpu::RenderPipeline,
         uniforms: &FxUniforms,
+        data: &[f32],
         src: &wgpu::TextureView,
         dst: &wgpu::TextureView,
+        scissor: Option<[u32; 4]>,
     ) {
-        let bind = self.bind(device, &uniforms.bytes(), src);
-        Self::run(encoder, pipeline, &bind, dst, false);
+        if scissor.is_some_and(|s| s[2] == 0 || s[3] == 0) {
+            return;
+        }
+        let buffer = (!data.is_empty()).then(|| {
+            let bytes: Vec<u8> = data.iter().flat_map(|v| v.to_le_bytes()).collect();
+            device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some("frame-fx-data"),
+                contents: &bytes,
+                usage: wgpu::BufferUsages::STORAGE,
+            })
+        });
+        let bind = self.bind2(device, &uniforms.bytes(), src, src, buffer.as_ref().unwrap_or(&self.empty_data));
+        Self::run_in(encoder, pipeline, &bind, dst, false, scissor);
     }
 }
 
