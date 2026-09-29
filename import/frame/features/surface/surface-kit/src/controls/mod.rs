@@ -2,6 +2,7 @@
 //! Ported from `fts-audio-ui::hardware` (`button`, `button_kit`,
 //! `button_parts`, `switches`, `lever`) — see `KIT.md`.
 
+mod bare_toggle;
 mod buttons;
 mod key_column;
 pub(crate) mod parts;
@@ -18,5 +19,6 @@ pub(crate) fn defs() -> Vec<ComponentDef> {
     all.extend(levers::defs());
     all.extend(key_column::defs());
     all.extend(studio::defs());
+    all.extend(bare_toggle::defs());
     all
 }

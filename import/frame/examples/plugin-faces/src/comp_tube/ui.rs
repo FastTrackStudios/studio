@@ -230,6 +230,156 @@ pub fn plate(b: &mut Builder<'_>, parent: NodeId, name: &str, x: f64, y: f64, w:
     b.add(parent, draw::with_effects(n, vec![draw::inner_shadow("#ffffff26", 0.0, 1.0, 0.0), draw::drop_shadow("#00000040", 0.0, 1.0, 1.5)]))
 }
 
+// ── hardware the faces draw themselves ──────────────────────────────────
+
+/// A cross-head panel screw, head `d` across, in `chrome`.
+pub fn phillips(b: &mut Builder<'_>, parent: NodeId, (cx, cy): (f64, f64), d: f64, chrome: &str) {
+    let head = draw::circle("screw", cx, cy, d / 2.0, draw::radial_at(0.36, 0.30, 0.85, &[(0.0, "#ffffffd9"), (0.35, chrome), (1.0, "#00000099")]));
+    let head = draw::with_effects(draw::stroked(head, "#00000066", 0.6), vec![draw::drop_shadow("#00000059", 0.4, 0.8, 1.2)]);
+    b.add(parent, head);
+    let t = (d * 0.13).max(0.7);
+    let arm = d * 0.62;
+    for deg in [20.0, 110.0] {
+        b.add(parent, draw::rotated(draw::rect("screw slot", cx - arm / 2.0, cy - t / 2.0, arm, t, draw::solid("#0000008c")), deg));
+    }
+}
+
+/// A slotted-oval rack-ear hole (the mounting slot, dark behind).
+pub fn rack_slot(b: &mut Builder<'_>, parent: NodeId, (cx, cy): (f64, f64), w: f64, h: f64) {
+    let n = draw::rounded(draw::rect("rack slot", cx - w / 2.0, cy - h / 2.0, w, h, draw::solid("#0d0d0f")), h / 2.0);
+    b.add(parent, draw::with_effects(n, vec![draw::inner_shadow("#000000cc", 0.0, 1.0, 2.0), draw::drop_shadow("#ffffff26", 0.0, 0.8, 0.0)]));
+}
+
+/// A rack screw through an ear: a dark oval-head bolt with a cross.
+pub fn rack_bolt(b: &mut Builder<'_>, parent: NodeId, (cx, cy): (f64, f64), d: f64) {
+    let head = draw::circle("rack bolt", cx, cy, d / 2.0, draw::radial_at(0.38, 0.32, 0.8, &[(0.0, "#6a6a66"), (0.5, "#262624"), (1.0, "#0b0b0a")]));
+    b.add(parent, draw::with_effects(head, vec![draw::drop_shadow("#00000080", 0.5, 1.2, 2.0)]));
+    let t = (d * 0.12).max(0.7);
+    for deg in [0.0, 90.0] {
+        b.add(parent, draw::rotated(draw::rect("rack bolt slot", cx - d * 0.3, cy - t / 2.0, d * 0.6, t, draw::solid("#000000b3")), deg));
+    }
+}
+
+/// A plain strip down one edge of a panel (a rack ear folded from the
+/// same sheet): its paint, and the seam where it meets the face.
+pub fn ear_strip(b: &mut Builder<'_>, panel: NodeId, x: f64, w: f64, h: f64, fill: Paint, seam_x: f64) {
+    b.add(panel, draw::rect("ear", x, 0.0, w, h, fill));
+    b.add(panel, draw::rect("ear seam", seam_x - 0.5, 0.0, 1.0, h, draw::solid("#00000059")));
+    b.add(panel, draw::rect("ear seam light", seam_x + 0.5, 0.0, 1.0, h, draw::solid("#ffffff26")));
+}
+
+/// Numerals round a shaft at (`cx`, `cy`), each turned to the circle so its
+/// top faces out (the way a vintage panel engraves them), centred on
+/// radius `r` and spread evenly over `sweep` degrees.
+pub fn ring_numerals(b: &mut Builder<'_>, parent: NodeId, (cx, cy): (f64, f64), r: f64, sweep: f64, labels: &[&str], ink: Ink<'_>) {
+    let n = labels.len();
+    for (i, s) in labels.iter().enumerate() {
+        if s.is_empty() {
+            continue;
+        }
+        let t = if n < 2 { 0.5 } else { i as f64 / (n - 1) as f64 };
+        let a = (t - 0.5) * sweep;
+        let (x, y) = draw::polar(cx, cy, r, a);
+        let w = width_for(s, &ink);
+        let mut node = text_node(s, 0.0, 0.0, w, &ink, TextAlign::Center);
+        node.transform = document_proto::Transform::IDENTITY;
+        // A frame turned about the glyphs' middle carries the text round
+        // (a renderer turns a frame's subtree, not a text node's own box).
+        let h = node.size.height;
+        let holder = b.add(parent, draw::rotated(draw::frame("silk turn", x - w / 2.0, y - h / 2.0, w, h), a));
+        b.add(holder, node);
+    }
+}
+
+/// A panel's own marks at the angles it really prints them (degrees from
+/// up, clockwise): a dot `d` across on radius `r` for each, and its label
+/// set outward from `r_label`, upright.
+#[allow(clippy::too_many_arguments)]
+pub fn marks_at(b: &mut Builder<'_>, parent: NodeId, (cx, cy): (f64, f64), r: f64, r_label: f64, marks: &[(f64, &str)], d: f64, ink: Ink<'_>) {
+    for (a, s) in marks {
+        let (x, y) = draw::polar(cx, cy, r, *a);
+        b.add(parent, draw::circle("scale dot", x, y, d / 2.0, draw::solid(ink.color)));
+        if s.is_empty() {
+            continue;
+        }
+        let (lx, ly) = draw::polar(cx, cy, r_label, *a);
+        let (sin, cos) = a.to_radians().sin_cos();
+        let tw = s.chars().count() as f64 * ink.size * (0.6 + ink.track);
+        silk(b, parent, s, lx + sin * tw / 2.0, ly - cos * ink.size * 0.35, ink);
+    }
+}
+
+/// A range whose knob travel lands on a panel's unevenly printed marks:
+/// `marks` are `(angle, value)` from the start of travel to its end over
+/// `sweep` degrees; between them the value runs linearly.
+pub fn printed_range(marks: &[(f64, f64)], sweep: f64, unit: Unit) -> Range {
+    let (lo, hi) = (marks[0].1, marks[marks.len() - 1].1);
+    let points = marks
+        .iter()
+        .map(|(a, v)| surface_proto::CurvePoint { x: (a + sweep / 2.0) / sweep, y: (v - lo) / (hi - lo) })
+        .collect();
+    Range { scale: surface_proto::Scale::Curve { curve: surface_proto::Curve::Points { points } }, ..Range::linear(lo, hi, unit) }
+}
+
+/// A dot at each of `n` evenly spaced positions over `sweep` degrees.
+#[allow(clippy::too_many_arguments)]
+pub fn ring_dots(b: &mut Builder<'_>, parent: NodeId, (cx, cy): (f64, f64), r: f64, sweep: f64, n: usize, d: f64, color: &str) {
+    for i in 0..n {
+        let t = if n < 2 { 0.5 } else { i as f64 / (n - 1) as f64 };
+        let (x, y) = draw::polar(cx, cy, r, (t - 0.5) * sweep);
+        b.add(parent, draw::circle("scale dot", x, y, d / 2.0, draw::solid(color)));
+    }
+}
+
+/// `n` radial ticks from `r0` to `r1` over `sweep` degrees, `w` wide.
+#[allow(clippy::too_many_arguments)]
+pub fn ring_ticks(b: &mut Builder<'_>, parent: NodeId, (cx, cy): (f64, f64), (r0, r1): (f64, f64), sweep: f64, n: usize, w: f64, color: &str) {
+    let mut d = String::new();
+    for i in 0..n {
+        let t = if n < 2 { 0.5 } else { i as f64 / (n - 1) as f64 };
+        let a = (t - 0.5) * sweep;
+        let (x0, y0) = draw::polar(cx, cy, r0, a);
+        let (x1, y1) = draw::polar(cx, cy, r1, a);
+        let (dx, dy) = ((x1 - x0) / (r1 - r0) * w / 2.0, (y1 - y0) / (r1 - r0) * w / 2.0);
+        d.push_str(&draw::polygon(&[(x0 - dy, y0 + dx), (x1 - dy, y1 + dx), (x1 + dy, y1 - dx), (x0 + dy, y0 - dx)]));
+        d.push(' ');
+    }
+    b.add(parent, draw::path("scale ticks", 0.0, 0.0, cx + r1 + 2.0, cy + r1 + 2.0, d, draw::solid(color)));
+}
+
+/// An arc of radius `r`, `w` wide, over `sweep` degrees centred on up.
+pub fn ring_arc(b: &mut Builder<'_>, parent: NodeId, (cx, cy): (f64, f64), r: f64, sweep: f64, w: f64, color: &str) {
+    let d = draw::sector(cx, cy, r - w / 2.0, r + w / 2.0, -sweep / 2.0, sweep / 2.0);
+    b.add(parent, draw::path("scale arc", 0.0, 0.0, cx + r + w, cy + r + w, d, draw::solid(color)));
+}
+
+/// Hide everything a kit component prints round itself (its ring, ticks,
+/// dots and numerals), for a face that engraves its own.
+pub fn hide_ring(b: &mut Builder<'_>, root: NodeId) {
+    for id in b.scene.walk(root) {
+        if let Some(n) = b.scene.node_mut(id)
+            && (n.name.starts_with("scale") || n.name == "numeral" || n.name == "option" || n.name == "detent" || n.name == "tick")
+        {
+            n.visible = false;
+        }
+    }
+}
+
+/// Silkscreen leaning like an italic, starting at `x` and centred on `cy`:
+/// the text in a frame sheared by `k` about its middle.
+pub fn silk_slanted(b: &mut Builder<'_>, parent: NodeId, s: &str, x: f64, cy: f64, ink: Ink<'_>, k: f64) -> NodeId {
+    let w = width_for(s, &ink);
+    let mut t = text_node(s, 0.0, 0.0, w, &ink, TextAlign::Left);
+    t.transform = document_proto::Transform::IDENTITY;
+    let h = t.size.height;
+    let mut holder = draw::frame("silk slant", x, cy - h / 2.0, w, h);
+    holder.transform.b = -k;
+    holder.transform.tx += k * h / 2.0;
+    let holder = b.add(parent, holder);
+    b.add(holder, t);
+    holder
+}
+
 // ── readouts ────────────────────────────────────────────────────────────
 
 /// A small readout window: a dark recessed glass with the bound value

@@ -28,6 +28,7 @@ pub(crate) mod chrome_skirt;
 pub(crate) mod concentric;
 pub(crate) mod knurled_cap;
 pub(crate) mod studio;
+pub(crate) mod valve;
 pub mod spec;
 
 use document_proto::{
