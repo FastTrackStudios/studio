@@ -2,22 +2,25 @@
 //! the 1950s unit (Fairchild 670), with no maker's names on it.
 //!
 //! A black engraved plate set into a light grey cabinet front. Down the
-//! left of the plate, a black bakelite meter per channel (gain reduction
-//! on a cream card); then per channel, in two rows, the METERING selector
+//! left of the plate, a black bakelite meter (gain reduction on a cream
+//! card); then the METERING selector
 //! (BAL / ZERO / BAL, with its ZERO and BAL trim screws under it), the
 //! chunky scalloped INPUT GAIN (20 → 0 dB in 2 dB steps) and THRESHOLD
-//! (0–10) knobs, and the six-position TIME CONSTANT; the shared AGC
-//! switch (LEFT/RIGHT or LAT/VERT — stereo or mid/side) between the two
-//! time constants. On the grey to the left: the ON toggle, the pilot lamp
+//! (0–10) knobs, and the six-position TIME CONSTANT; the AGC
+//! switch (LEFT/RIGHT or LAT/VERT — stereo or mid/side) under the time
+//! constant. On the grey to the left: the ON toggle, the pilot lamp
 //! and the fuse. White engraving, numerals turned round their knobs.
 //!
-//! Channel A is LEFT / LAT, channel B RIGHT / VERT. The metering switch's
-//! BAL positions put the channel's output level on its meter (the unit
-//! uses them to trim the push-pull balance); ZERO reads gain reduction.
+//! Shown as one channel: the unit's top half. The plugin runs both sides
+//! from these controls (linked), so the second row of the real unit isn't
+//! repeated; the AGC switch still picks left/right or lateral/vertical
+//! (mid/side). The metering switch's BAL positions put the output level on
+//! the meter (the unit uses them to trim the push-pull balance); ZERO reads
+//! gain reduction.
 
 use document_proto::NodeId;
 use surface_kit::{Place, draw};
-use surface_proto::{MeterTap, Range, SourceSelect, StreamInfo, StreamKind, Unit};
+use surface_proto::{MeterTap, Range, SourceSelect, Unit};
 use surface_widgets::Builder;
 
 use super::ui::{self, Ink};
@@ -25,11 +28,15 @@ use crate::face::{Face, canvas};
 
 /// The cabinet front, and the black plate in it (at `PX`, `PY`).
 const W: f64 = 1060.0;
-const H: f64 = 590.0;
+const H: f64 = PY + PH + 45.0;
 const PX: f64 = 110.0;
 const PY: f64 = 45.0;
 const PW: f64 = 900.0;
-const PH: f64 = 500.0;
+/// The plate: one channel's row, the top half of the two-channel plate.
+const PH: f64 = 320.0;
+/// Vertical positions are fractions of the full two-channel plate's
+/// height, so the row keeps the real unit's spacing.
+const ROW_SCALE: f64 = 500.0;
 const INK: &str = "#eeece6";
 const CHROME: &str = "#c6c6c0";
 /// Input gain's printed steps, attenuation first.
@@ -37,29 +44,27 @@ const GAIN_STEPS: [&str; 11] = ["20", "18", "16", "14", "12", "10", "8", "6", "4
 
 /// A point on the plate, as fractions of it.
 fn p(u: f64, v: f64) -> (f64, f64) {
-    (PX + u * PW, PY + v * PH)
+    (PX + u * PW, PY + v * ROW_SCALE)
 }
 
 pub fn face() -> Face {
     let scene = canvas("Twin Valve Limiter", build);
-    let mut params = Vec::new();
-    for (ch, name) in [("a", "Left-Lat"), ("b", "Right-Vert")] {
-        params.push(ui::param(&format!("twinvalve/input_gain_{ch}"), &format!("{name} Input Gain"), Range { steps: Some(11), ..Range::linear(-20.0, 0.0, Unit::Db) }, 0.0).short("Input"));
-        params.push(ui::param(&format!("twinvalve/threshold_{ch}"), &format!("{name} Threshold"), Range::linear(0.0, 10.0, Unit::None), 4.0).short("Thresh"));
-        params.push(ui::choice(&format!("twinvalve/time_constant_{ch}"), &format!("{name} Time Constant"), &["1", "2", "3", "4", "5 (auto)", "6 (auto)"], 1).short("Time"));
-        params.push(ui::choice(&format!("twinvalve/metering_{ch}"), &format!("{name} Metering"), &["Bal −", "Zero", "Bal +"], 1).short("Meter"));
-    }
-    params.push(ui::choice("twinvalve/agc", "AGC", &["Left / Right", "Lat / Vert"], 0));
-    params.push(ui::toggle("twinvalve/power", "Power", true));
-    let mut streams = ui::streams("twinvalve", "Twin Valve Limiter");
-    streams.push(StreamInfo { id: surface_proto::EntryId::new("twinvalve/gr_b"), name: "Twin Valve Limiter Gain Reduction (Right-Vert)".into(), kind: StreamKind::GainReduction, rate_hz: 30.0 });
+    let params = vec![
+        ui::param("twinvalve/input_gain", "Input Gain", Range { steps: Some(11), ..Range::linear(-20.0, 0.0, Unit::Db) }, 0.0).short("Input"),
+        ui::param("twinvalve/threshold", "Threshold", Range::linear(0.0, 10.0, Unit::None), 4.0).short("Thresh"),
+        ui::choice("twinvalve/time_constant", "Time Constant", &["1", "2", "3", "4", "5 (auto)", "6 (auto)"], 1).short("Time"),
+        ui::choice("twinvalve/metering", "Metering", &["Bal −", "Zero", "Bal +"], 1).short("Meter"),
+        ui::choice("twinvalve/agc", "AGC", &["Left / Right", "Lat / Vert"], 0),
+        ui::toggle("twinvalve/power", "Power", true),
+    ];
+    let streams = ui::streams("twinvalve", "Twin Valve Limiter");
     Face { file: "06-twin-valve", plugin: "comp", scene, params, streams }
 }
 
 fn build(b: &mut Builder<'_>, root: NodeId) {
     let front = ui::put(b, root, "panel.painted", &Place::new("Cabinet front").variant("grey").options(&[&format!("w={W}"), &format!("h={H}"), "ends=none"]));
     ui::repaint(b, front, &[(0.0, "#d6d6d2"), (0.5, "#cacac6"), (1.0, "#bdbdb9")]);
-    for (x, y) in [(W - 25.0, 70.0), (W - 25.0, H - 70.0), (30.0, H - 22.0), (W - 70.0, H - 22.0)] {
+    for (x, y) in [(W - 25.0, 60.0), (W - 25.0, H - 60.0), (30.0, H - 22.0), (W - 70.0, H - 22.0)] {
         ui::phillips(b, front, (x, y), 11.0, CHROME);
     }
 
@@ -70,16 +75,14 @@ fn build(b: &mut Builder<'_>, root: NodeId) {
     // ── On the grey: ON, the pilot lamp, the fuse ────────────────────
     let lx = PX / 2.0;
     let on = ui::put(b, front, "switch.toggle_bare", &Place::new("Power").size(38.0).legend(" ").options(&["On", ""]).ink(surface_kit::Ink::Color("#2a2a28".into())).bind(ui::bind("twinvalve/power")));
-    super::opto_leveler::place_toggle(b, on, lx, 150.0);
-    ui::centred_at(b, front, "button.jewel", &Place::new("Pilot").size(30.0).variant("white").bind(ui::bind("twinvalve/power")), lx, p(0.0, 0.5).1);
-    fuse(b, front, lx, 470.0);
+    super::opto_leveler::place_toggle(b, on, lx, 110.0);
+    ui::centred_at(b, front, "button.jewel", &Place::new("Pilot").size(30.0).variant("white").bind(ui::bind("twinvalve/power")), lx, 220.0);
+    fuse(b, front, lx, 320.0);
 
     let plate_ink = Ink::new(8.8, INK).weight(800.0).track(0.06);
-    for (ch, v0, side, gr) in [("a", 0.0, ("Left-Lat", "Left Channel"), "twinvalve/gr"), ("b", 0.455, ("Right-Vert", "Right Channel"), "twinvalve/gr_b")] {
-        channel(b, front, ch, v0, side, gr, plate_ink);
-    }
+    channel(b, front, plate_ink);
 
-    // ── AGC, between the time constants ──────────────────────────────
+    // ── AGC, under the time constant ─────────────────────────────────
     let c = p(0.885, 0.53);
     let agc = ui::rotary_at(b, front, "knob.paddle", &Place::new("AGC").size(46.0).legend(" ").options(&["1", "2"]).sweep(60.0).touch(surface_kit::TOUCH_MIN).bind(ui::bind("twinvalve/agc")), c.0, c.1);
     ui::hide_ring(b, agc);
@@ -91,8 +94,8 @@ fn build(b: &mut Builder<'_>, root: NodeId) {
     ui::silk_left(b, front, "Vert", p(0.918, 0.0).0, p(0.0, 0.47).1, small);
     agc_mark(b, front, p(0.885, 0.455));
 
-    // ── The name, bottom middle ──────────────────────────────────────
-    let (nx, ny) = p(0.47, 0.905);
+    // ── The name, under the knobs ────────────────────────────────────
+    let (nx, ny) = p(0.47, 0.56);
     ui::silk_slanted(b, front, "Twin Valve", nx, ny, Ink::new(23.0, INK).weight(500.0).track(0.02).plain(), 0.18);
     let fine = Ink::new(4.8, INK).weight(600.0).track(0.1);
     ui::silk_left(b, front, "Variable-Mu Valve", nx + 142.0, ny - 4.0, fine);
@@ -102,23 +105,23 @@ fn build(b: &mut Builder<'_>, root: NodeId) {
     ui::fit_root(b, root, front);
 }
 
-/// One channel's row: meter, metering switch, input gain, threshold, time
-/// constant. `v0` shifts the row down the plate.
-fn channel(b: &mut Builder<'_>, front: NodeId, ch: &str, v0: f64, (side, gain_name): (&str, &str), gr: &str, ink: Ink<'_>) {
-    let at = |u: f64, v: f64| p(u, v + v0);
-    let addr = |n: &str| format!("twinvalve/{n}_{ch}");
+/// The channel row: meter, metering switch, input gain, threshold, time
+/// constant.
+fn channel(b: &mut Builder<'_>, front: NodeId, ink: Ink<'_>) {
+    let at = p;
+    let addr = |n: &str| format!("twinvalve/{n}");
+    let gr = "twinvalve/gr";
 
     // The meter: gain reduction; the BAL positions show the output.
     let (mx, my) = at(0.165, 0.245);
-    let out = MeterTap::new("twinvalve/out").channel(u8::from(ch == "b"));
+    let out = MeterTap::new("twinvalve/out");
     let select = SourceSelect::new(addr("metering"), vec![Some(out.clone()), Some(MeterTap::new(gr)), Some(out)]);
-    meter(b, front, (mx, my), &Place::new(format!("{side} meter")).bind(ui::stream(gr)).select(select));
+    meter(b, front, (mx, my), &Place::new("Gain Reduction meter").bind(ui::stream(gr)).select(select));
 
     // METERING, with the trims under it.
     let c = at(0.335, 0.27);
-    let m = ui::rotary_at(b, front, "knob.paddle", &Place::new(format!("{side} Metering")).size(80.0).legend(" ").options(&["1", "2", "3"]).sweep(80.0).touch(surface_kit::TOUCH_MIN).bind(ui::bind(&addr("metering"))), c.0, c.1);
+    let m = ui::rotary_at(b, front, "knob.paddle", &Place::new("Metering").size(80.0).legend(" ").options(&["1", "2", "3"]).sweep(80.0).touch(surface_kit::TOUCH_MIN).bind(ui::bind(&addr("metering"))), c.0, c.1);
     ui::hide_ring(b, m);
-    ui::silk(b, front, side, c.0, at(0.0, 0.05).1, ink);
     ui::silk(b, front, "Metering", c.0, at(0.0, 0.08).1, ink);
     ui::ring_numerals(b, front, c, 54.0, 80.0, &["Bal", "Zero", "Bal"], ink.size(10.0).weight(800.0));
     for (u, name) in [(0.30, "Zero"), (0.40, "Bal")] {
@@ -129,9 +132,8 @@ fn channel(b: &mut Builder<'_>, front: NodeId, ch: &str, v0: f64, (side, gain_na
 
     // INPUT GAIN: stepped, numerals and odd-dB rings turned round it.
     let c = at(0.49, 0.29);
-    let k = ui::rotary_at(b, front, "knob.fluted_stack", &Place::new(format!("{side} Input Gain")).size(100.0).legend(" ").scale(&GAIN_STEPS).sweep(290.0).touch(surface_kit::TOUCH_MIN).bind(ui::bind(&addr("input_gain"))), c.0, c.1);
+    let k = ui::rotary_at(b, front, "knob.fluted_stack", &Place::new("Input Gain").size(100.0).legend(" ").scale(&GAIN_STEPS).sweep(290.0).touch(surface_kit::TOUCH_MIN).bind(ui::bind(&addr("input_gain"))), c.0, c.1);
     ui::hide_ring(b, k);
-    ui::silk(b, front, gain_name, c.0, at(0.0, 0.05).1, ink);
     ui::silk(b, front, "Input Gain", c.0, at(0.0, 0.08).1, ink);
     let numerals = ink.size(10.0).weight(600.0).track(0.0);
     ui::ring_numerals(b, front, c, 62.0, 290.0, &interleave(&GAIN_STEPS, ""), numerals);
@@ -139,18 +141,15 @@ fn channel(b: &mut Builder<'_>, front: NodeId, ch: &str, v0: f64, (side, gain_na
 
     // THRESHOLD: 0–10.
     let c = at(0.685, 0.29);
-    let t = ui::rotary_at(b, front, "knob.fluted_stack", &Place::new(format!("{side} Threshold")).size(100.0).legend(" ").sweep(280.0).touch(surface_kit::TOUCH_MIN).bind(ui::bind(&addr("threshold"))), c.0, c.1);
+    let t = ui::rotary_at(b, front, "knob.fluted_stack", &Place::new("Threshold").size(100.0).legend(" ").sweep(280.0).touch(surface_kit::TOUCH_MIN).bind(ui::bind(&addr("threshold"))), c.0, c.1);
     ui::hide_ring(b, t);
-    ui::silk(b, front, side, c.0, at(0.0, 0.05).1, ink);
     ui::silk(b, front, "Threshold", c.0, at(0.0, 0.08).1, ink);
     ui::ring_numerals(b, front, c, 62.0, 280.0, &["0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10"], numerals);
 
     // TIME CONSTANT: six positions over the top.
-    let tv = if ch == "a" { 0.235 } else { 0.385 };
-    let c = at(0.885, tv);
-    let tc = ui::rotary_at(b, front, "knob.paddle", &Place::new(format!("{side} Time Constant")).size(48.0).legend(" ").options(&["1", "2", "3", "4", "5", "6"]).sweep(150.0).touch(surface_kit::TOUCH_MIN).bind(ui::bind(&addr("time_constant"))), c.0, c.1);
+    let c = at(0.885, 0.235);
+    let tc = ui::rotary_at(b, front, "knob.paddle", &Place::new("Time Constant").size(48.0).legend(" ").options(&["1", "2", "3", "4", "5", "6"]).sweep(150.0).touch(surface_kit::TOUCH_MIN).bind(ui::bind(&addr("time_constant"))), c.0, c.1);
     ui::hide_ring(b, tc);
-    ui::silk(b, front, side, c.0, c.1 - 70.0, ink);
     ui::silk(b, front, "Time Constant", c.0, c.1 - 56.0, ink);
     ui::ring_numerals(b, front, c, 38.0, 150.0, &["1", "2", "3", "4", "5", "6"], numerals.size(9.0));
 }

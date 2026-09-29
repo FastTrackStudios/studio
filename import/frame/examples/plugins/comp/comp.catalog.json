@@ -494,8 +494,8 @@
       "featured": true
     },
     {
-      "addr": "twinvalve/input_gain_a",
-      "name": "Left-Lat Input Gain",
+      "addr": "twinvalve/input_gain",
+      "name": "Input Gain",
       "short_name": "Input",
       "group": null,
       "kind": "Continuous",
@@ -511,8 +511,8 @@
       "featured": true
     },
     {
-      "addr": "twinvalve/threshold_a",
-      "name": "Left-Lat Threshold",
+      "addr": "twinvalve/threshold",
+      "name": "Threshold",
       "short_name": "Thresh",
       "group": null,
       "kind": "Continuous",
@@ -528,8 +528,8 @@
       "featured": true
     },
     {
-      "addr": "twinvalve/time_constant_a",
-      "name": "Left-Lat Time Constant",
+      "addr": "twinvalve/time_constant",
+      "name": "Time Constant",
       "short_name": "Time",
       "group": null,
       "kind": {
@@ -556,95 +556,8 @@
       "featured": true
     },
     {
-      "addr": "twinvalve/metering_a",
-      "name": "Left-Lat Metering",
-      "short_name": "Meter",
-      "group": null,
-      "kind": {
-        "Choice": {
-          "options": [
-            "Bal −",
-            "Zero",
-            "Bal +"
-          ]
-        }
-      },
-      "range": {
-        "min": 0.0,
-        "max": 1.0,
-        "scale": "Linear",
-        "unit": "None",
-        "steps": 3
-      },
-      "default": 0.5,
-      "bipolar": false,
-      "featured": true
-    },
-    {
-      "addr": "twinvalve/input_gain_b",
-      "name": "Right-Vert Input Gain",
-      "short_name": "Input",
-      "group": null,
-      "kind": "Continuous",
-      "range": {
-        "min": -20.0,
-        "max": 0.0,
-        "scale": "Linear",
-        "unit": "Db",
-        "steps": 11
-      },
-      "default": 1.0,
-      "bipolar": false,
-      "featured": true
-    },
-    {
-      "addr": "twinvalve/threshold_b",
-      "name": "Right-Vert Threshold",
-      "short_name": "Thresh",
-      "group": null,
-      "kind": "Continuous",
-      "range": {
-        "min": 0.0,
-        "max": 10.0,
-        "scale": "Linear",
-        "unit": "None",
-        "steps": null
-      },
-      "default": 0.4,
-      "bipolar": false,
-      "featured": true
-    },
-    {
-      "addr": "twinvalve/time_constant_b",
-      "name": "Right-Vert Time Constant",
-      "short_name": "Time",
-      "group": null,
-      "kind": {
-        "Choice": {
-          "options": [
-            "1",
-            "2",
-            "3",
-            "4",
-            "5 (auto)",
-            "6 (auto)"
-          ]
-        }
-      },
-      "range": {
-        "min": 0.0,
-        "max": 1.0,
-        "scale": "Linear",
-        "unit": "None",
-        "steps": 6
-      },
-      "default": 0.2,
-      "bipolar": false,
-      "featured": true
-    },
-    {
-      "addr": "twinvalve/metering_b",
-      "name": "Right-Vert Metering",
+      "addr": "twinvalve/metering",
+      "name": "Metering",
       "short_name": "Meter",
       "group": null,
       "kind": {
@@ -1597,12 +1510,6 @@
           "channels": 2
         }
       },
-      "rate_hz": 30.0
-    },
-    {
-      "id": "twinvalve/gr_b",
-      "name": "Twin Valve Limiter Gain Reduction (Right-Vert)",
-      "kind": "GainReduction",
       "rate_hz": 30.0
     },
     {
