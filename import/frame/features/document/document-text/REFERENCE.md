@@ -195,3 +195,15 @@ A gradient without a `transform` runs left to right across the node, so this met
 </Frame>
 <Text name="Readout" w=80 h=16 size=12 fill="#ffffff" runs={[{"text":"-6.0"},{"text":" dB","fills":["#8e8e93"]}]}>-6.0 dB</Text>
 ```
+
+## Light and shader effects (optional)
+
+- `emission={{"color":"#ff5a2a","intensity":1.4,"radius":12}}` — the node gives
+  off light (VU lamps, jewels, lit buttons, LEDs). GPU renderers bloom it onto
+  what's around it; others draw a soft glow. It scales with the node's opacity,
+  so a control's `Led` slot dimming a lamp dims its light.
+- `shader={{"shader":"glass","params":{"strength":0.6}}}` — a post-effect on the
+  node's subtree. Built-ins: `glass`, `crt`, `lighting`, `flicker`;
+  `"asset:<id>"` runs custom WGSL from the document's assets. Optional: a
+  surface must read correctly without it (non-GPU renderers skip shaders).
+

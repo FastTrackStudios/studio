@@ -241,6 +241,12 @@ fn attributes(n: &Node, has_children: bool) -> (Vec<(&'static str, String)>, Opt
     if let Some(c) = &n.control {
         a.push(("control", braced(&to_json(c))));
     }
+    if let Some(e) = &n.emission {
+        a.push(("emission", braced(&to_json(e))));
+    }
+    if let Some(s) = &n.shader {
+        a.push(("shader", braced(&to_json(s))));
+    }
     if let Some(s) = &n.source {
         a.push(("source", source(s)));
     }

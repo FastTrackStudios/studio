@@ -494,6 +494,29 @@ pub enum NodeKind {
     Other { tag: String },
 }
 
+/// Light a node emits (see [`Node::emission`]).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Facet)]
+pub struct Emission {
+    pub color: Color,
+    /// Brightness multiplier of the bloom (1 = the node's own brightness).
+    pub intensity: f64,
+    /// How far the light spreads, px.
+    pub radius: f64,
+}
+
+/// A shader post-effect (see [`Node::shader`]).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Facet)]
+pub struct ShaderFx {
+    /// A built-in effect id (`glass`, `crt`, `lighting`, `flicker`, …) or
+    /// `asset:<id>` for custom WGSL stored in the document's asset table.
+    pub shader: String,
+    /// Named numeric uniforms (`strength`, `tint_r`, …). Unknown names are
+    /// ignored by the effect.
+    #[serde(default)]
+    #[facet(default)]
+    pub params: BTreeMap<String, f64>,
+}
+
 /// Where a node came from, so re-imports can update in place.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Facet)]
 pub struct SourceRef {
@@ -555,6 +578,20 @@ pub struct Node {
     /// an engine and the descendant nodes it drives.
     pub control: Option<surface_proto::Control>,
 
+    /// Light this node gives off (VU lamps, jewels, lit caps, LEDs). The GPU
+    /// effects stage blooms it onto its surroundings; renderers without one
+    /// fall back to a soft blurred glow. Scales with the node's opacity, so
+    /// an LED slot dimming a lamp dims its light too.
+    #[serde(default)]
+    #[facet(default)]
+    pub emission: Option<Emission>,
+    /// A post-effect on this node's subtree, run by the GPU effects stage
+    /// (glass, CRT, lighting, …). Optional by design: renderers without it
+    /// draw the subtree plainly, so a surface must read without it.
+    #[serde(default)]
+    #[facet(default)]
+    pub shader: Option<ShaderFx>,
+
     pub source: Option<SourceRef>,
 }
 
@@ -586,6 +623,8 @@ impl Node {
             layout: None,
             layout_child: LayoutChild::default(),
             control: None,
+            emission: None,
+            shader: None,
             source: None,
         }
     }

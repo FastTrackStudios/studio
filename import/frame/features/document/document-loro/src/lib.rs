@@ -462,6 +462,8 @@ fn prop_entry(prop: &Prop) -> (&'static str, Value) {
         Prop::Layout(v) => ("layout", json(v)),
         Prop::LayoutChild(v) => ("layout_child", json(v)),
         Prop::Control(v) => ("control", json(v)),
+        Prop::Emission(v) => ("emission", json(v)),
+        Prop::Shader(v) => ("shader", json(v)),
     }
 }
 

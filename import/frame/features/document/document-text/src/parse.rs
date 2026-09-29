@@ -824,6 +824,8 @@ fn apply_common(at: &Attrs<'_>, n: &mut Node) -> Result<()> {
     }
     n.svg_snapshot = at.str("svg-snapshot")?.map(AssetId);
     n.control = at.convert("control", from_json)?;
+    n.emission = at.convert("emission", from_json)?;
+    n.shader = at.convert("shader", from_json)?;
     n.source = at.convert("source", source_value)?;
     Ok(())
 }

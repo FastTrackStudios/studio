@@ -36,6 +36,8 @@ pub enum Prop {
     Layout(Option<AutoLayout>),
     LayoutChild(LayoutChild),
     Control(Option<surface_proto::Control>),
+    Emission(Option<crate::model::Emission>),
+    Shader(Option<crate::model::ShaderFx>),
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Facet)]
@@ -214,6 +216,8 @@ fn set_prop(node: &mut Node, prop: Prop) -> Prop {
         Prop::Layout(v) => Prop::Layout(replace(&mut node.layout, v)),
         Prop::LayoutChild(v) => Prop::LayoutChild(replace(&mut node.layout_child, v)),
         Prop::Control(v) => Prop::Control(replace(&mut node.control, v)),
+        Prop::Emission(v) => Prop::Emission(replace(&mut node.emission, v)),
+        Prop::Shader(v) => Prop::Shader(replace(&mut node.shader, v)),
     }
 }
 
