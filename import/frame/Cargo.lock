@@ -1409,6 +1409,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "design-session"
+version = "0.1.0"
+dependencies = [
+ "design-lint",
+ "document-proto",
+ "document-text",
+ "serde_json",
+ "surface-memory",
+ "surface-proto",
+ "surface-widgets",
+ "uuid",
+]
+
+[[package]]
 name = "diff"
 version = "0.1.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"

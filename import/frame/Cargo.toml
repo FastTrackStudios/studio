@@ -11,6 +11,7 @@ members = [
     "crates/frame",
     # ── design: AI authoring — lint, tools, MCP ──────────────────────
     "features/design/design-lint",
+    "features/design/design-session",
     # ── document: the frame file format + model ───────────────────────
     "features/document/document-proto",
     "features/document/document-memory",
@@ -35,6 +36,7 @@ default-members = [
     "apps/frame/cli",
     "crates/frame",
     "features/design/design-lint",
+    "features/design/design-session",
     "features/document/document-proto",
     "features/document/document-memory",
     "features/document/document-loro",
