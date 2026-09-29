@@ -232,7 +232,9 @@ impl App {
             eprintln!("frame: render failed: {e}");
             return;
         }
-        let Ok(texture) = gpu.surface.surface.get_current_texture() else {
+        let (vello::wgpu::CurrentSurfaceTexture::Success(texture) | vello::wgpu::CurrentSurfaceTexture::Suboptimal(texture)) =
+            gpu.surface.surface.get_current_texture()
+        else {
             // Outdated/lost surface (mid-resize): skip; the next frame reconfigures.
             return;
         };

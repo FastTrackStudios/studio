@@ -8,10 +8,16 @@
 use std::collections::BTreeMap;
 use std::sync::{Arc, Mutex};
 
-use architect::PubSub;
+use architect::dispatch::CurrentThreadDispatcher;
+use architect::{HasDispatcher, PubSub};
 use surface_proto::*;
 
-#[derive(Clone)]
+fn lock<T>(m: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
+    m.lock().unwrap_or_else(std::sync::PoisonError::into_inner)
+}
+
+#[derive(Clone, HasDispatcher)]
+#[dispatch(CurrentThreadDispatcher)]
 pub struct Memory {
     catalog: Arc<Catalog>,
     values: Arc<Mutex<BTreeMap<ParamAddr, f64>>>,
@@ -44,13 +50,13 @@ impl Memory {
 
     #[must_use]
     pub fn value(&self, addr: &ParamAddr) -> Option<f64> {
-        architect::lock(&self.values).get(addr).copied()
+        lock(&self.values).get(addr).copied()
     }
 
     /// Actions fired so far, oldest first.
     #[must_use]
     pub fn invoked(&self) -> Vec<EntryId> {
-        architect::lock(&self.invoked).clone()
+        lock(&self.invoked).clone()
     }
 
     /// Publish one synthetic frame per stream, as a function of time `t`
@@ -74,38 +80,38 @@ impl Memory {
 }
 
 impl SurfaceEngine for Memory {
-    async fn catalog(&self) -> Result<Catalog, SurfaceError> {
-        Ok((*self.catalog).clone())
+    fn catalog(&self) -> Catalog {
+        (*self.catalog).clone()
     }
 
-    async fn values(&self) -> Result<Vec<ParamValue>, SurfaceError> {
-        Ok(architect::lock(&self.values).iter().map(|(addr, value)| ParamValue { addr: addr.clone(), value: *value }).collect())
+    fn values(&self) -> Vec<ParamValue> {
+        lock(&self.values).iter().map(|(addr, value)| ParamValue { addr: addr.clone(), value: *value }).collect()
     }
 
-    async fn set_param(&self, addr: ParamAddr, value: f64, _phase: EditPhase) -> Result<(), SurfaceError> {
+    fn set_param(&self, addr: ParamAddr, value: f64, _phase: EditPhase) -> Result<(), SurfaceError> {
         let Some(info) = self.catalog.param(&addr) else {
             return Err(SurfaceError::UnknownParam(addr.0));
         };
         // Store what the engine would actually hold (stepped params snap).
         let value = info.range.to_normalized(info.range.to_real(value));
-        architect::lock(&self.values).insert(addr.clone(), value);
+        lock(&self.values).insert(addr.clone(), value);
         self.changes.publish(ParamValue { addr, value });
         Ok(())
     }
 
-    async fn invoke(&self, action: EntryId) -> Result<(), SurfaceError> {
+    fn invoke(&self, action: EntryId) -> Result<(), SurfaceError> {
         if self.catalog.action(&action).is_none() {
             return Err(SurfaceError::UnknownAction(action.0));
         }
-        architect::lock(&self.invoked).push(action);
+        lock(&self.invoked).push(action);
         Ok(())
     }
 
-    async fn select(&self, collection: EntryId, index: u32) -> Result<(), SurfaceError> {
+    fn select(&self, collection: EntryId, index: u32) -> Result<(), SurfaceError> {
         if self.catalog.collection(&collection).is_none() {
             return Err(SurfaceError::UnknownCollection(collection.0));
         }
-        architect::lock(&self.selected).insert(collection, index);
+        lock(&self.selected).insert(collection, index);
         Ok(())
     }
 }
@@ -122,7 +128,7 @@ impl SurfaceEngineStreamSource for Memory {
 
 impl architect::Services for Memory {
     fn layers() -> impl architect::Layer<Self> {
-        architect::layers![SurfaceEngineService, SurfaceEngineStreamService]
+        architect::layers![surface_proto::engine::Service, surface_proto::engine::StreamService]
     }
 }
 
@@ -184,41 +190,43 @@ mod tests {
     use super::*;
     use architect::{LocalServer, Scope, Services as _};
 
-    async fn scenario(engine: &impl SurfaceEngine) {
-        let catalog = engine.catalog().await.unwrap();
-        assert!(catalog.param(&ParamAddr::new("amp/gain")).is_some());
-        engine.set_param(ParamAddr::new("amp/gain"), 0.8, EditPhase::Change).await.unwrap();
-        let v = engine.values().await.unwrap();
-        assert_eq!(v.iter().find(|p| p.addr.0 == "amp/gain").unwrap().value, 0.8);
+    #[test]
+    fn in_process() {
+        let engine = Memory::demo();
+        assert!(engine.catalog().param(&ParamAddr::new("amp/gain")).is_some());
+        engine.set_param(ParamAddr::new("amp/gain"), 0.8, EditPhase::Change).unwrap();
+        assert_eq!(engine.values().iter().find(|p| p.addr.0 == "amp/gain").unwrap().value, 0.8);
         assert_eq!(
-            engine.set_param(ParamAddr::new("amp/nope"), 0.1, EditPhase::Change).await.unwrap_err(),
+            engine.set_param(ParamAddr::new("amp/nope"), 0.1, EditPhase::Change).unwrap_err(),
             SurfaceError::UnknownParam("amp/nope".into())
         );
-        engine.invoke(EntryId::new("tap_tempo")).await.unwrap();
-        assert!(engine.invoke(EntryId::new("self_destruct")).await.is_err());
-        engine.select(EntryId::new("songs"), 3).await.unwrap();
-    }
-
-    #[tokio::test]
-    async fn in_process() {
-        scenario(&Memory::demo()).await;
+        engine.invoke(EntryId::new("tap_tempo")).unwrap();
+        assert!(engine.invoke(EntryId::new("self_destruct")).is_err());
+        engine.select(EntryId::new("songs"), 3).unwrap();
+        assert_eq!(engine.invoked(), vec![EntryId::new("tap_tempo")]);
     }
 
     #[tokio::test]
     async fn over_vox() {
+        let engine = Memory::demo();
         let scope = Scope::new();
-        let local = LocalServer::serve(Memory::demo().into_router(), scope.clone());
+        let local = LocalServer::serve(engine.clone().into_router(), scope.clone());
         let client: SurfaceEngineClient = local.establish().await.unwrap();
-        scenario(&client).await;
+        let catalog = client.catalog().await.unwrap();
+        assert_eq!(catalog.id, "demo.guitar");
+        client.set_param(ParamAddr::new("delay/mix"), 0.5, EditPhase::End).await.unwrap();
+        assert_eq!(engine.value(&ParamAddr::new("delay/mix")), Some(0.5));
+        let refused = client.set_param(ParamAddr::new("nope"), 0.5, EditPhase::End).await.unwrap_err();
+        assert!(format!("{refused:?}").contains("UnknownParam"), "{refused:?}");
         scope.close().await;
     }
 
     #[tokio::test]
     async fn stepped_params_snap() {
         let m = Memory::demo();
-        m.set_param(ParamAddr::new("amp/channel"), 0.4, EditPhase::Change).await.unwrap();
+        m.set_param(ParamAddr::new("amp/channel"), 0.4, EditPhase::Change).unwrap();
         assert_eq!(m.value(&ParamAddr::new("amp/channel")), Some(0.5));
-        m.set_param(ParamAddr::new("drive/on"), 0.7, EditPhase::Change).await.unwrap();
+        m.set_param(ParamAddr::new("drive/on"), 0.7, EditPhase::Change).unwrap();
         assert_eq!(m.value(&ParamAddr::new("drive/on")), Some(1.0));
     }
 

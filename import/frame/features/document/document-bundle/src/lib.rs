@@ -56,7 +56,7 @@ impl Manifest {
     /// A manifest for a new document, created now.
     #[must_use]
     pub fn new(title: impl Into<String>) -> Self {
-        let now = Utc::now();
+        let now = now_seconds();
         Self {
             format: FORMAT_VERSION,
             doc_id: Uuid::new_v4(),
@@ -69,7 +69,7 @@ impl Manifest {
 
     /// Mark the document as updated now.
     pub fn touch(&mut self) {
-        self.updated = Utc::now();
+        self.updated = now_seconds();
     }
 }
 
@@ -206,4 +206,11 @@ fn read_entry(zip: &mut ZipArchive<Cursor<&[u8]>>, name: &str) -> Result<Vec<u8>
     let mut out = Vec::new();
     entry.read_to_end(&mut out)?;
     Ok(out)
+}
+
+/// Now, at whole-second precision: manifests round-trip through styx, which
+/// stores timestamps to the second.
+fn now_seconds() -> chrono::DateTime<Utc> {
+    use chrono::SubsecRound as _;
+    Utc::now().trunc_subsecs(0)
 }

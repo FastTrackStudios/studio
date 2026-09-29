@@ -110,12 +110,12 @@ async fn drag_a_knob_over_vox() {
 async fn footswitch_tap_toggles_a_param() {
     let engine = Memory::demo();
     let (surface, knob, sw, meter, _) = surface();
-    let mut rt = sync::connect(&engine, surface).await.unwrap();
+    let mut rt = sync::connect(&sync::Local(&engine), surface).await.unwrap();
     boxes(&mut rt, knob, sw, meter);
     let m = Modifiers::default();
     let mut calls = rt.pointer(Input::Down { x: 140.0, y: 40.0, t: 0.0, mods: m }, 0.0);
     calls.extend(rt.pointer(Input::Up { x: 140.0, y: 40.0, t: 120.0 }, 120.0));
-    sync::send(&engine, calls).await.unwrap();
+    sync::send(&sync::Local(&engine), calls).await.unwrap();
     assert_eq!(engine.value(&ParamAddr::new("drive/on")), Some(1.0));
 }
 
@@ -123,7 +123,7 @@ async fn footswitch_tap_toggles_a_param() {
 async fn meter_follows_telemetry_with_ballistics() {
     let engine = Memory::demo();
     let (surface, _, _, meter, bar) = surface();
-    let mut rt = sync::connect(&engine, surface).await.unwrap();
+    let mut rt = sync::connect(&sync::Local(&engine), surface).await.unwrap();
     rt.apply_frame(StreamFrame { id: EntryId::new("out_level"), values: vec![-27.0, -40.0] }, 0.0);
     let bar_h = |rt: &Runtime, t| rt.frame(t).node(bar).unwrap().size.height;
     assert!((bar_h(&rt, 0.0) - 50.0).abs() < 1e-9, "-27 dB is mid-scale on -60..+6");

@@ -34,7 +34,7 @@ impl Player {
     /// # Errors
     /// When the surface has no page, or the engine refuses.
     pub fn new(engine: Memory, surface: Surface) -> Result<Self, String> {
-        let mut rt = pollster::block_on(sync::connect(&engine, surface)).map_err(|e| format!("engine: {e:?}"))?;
+        let mut rt = pollster::block_on(sync::connect(&sync::Local(&engine), surface)).map_err(|e| format!("engine: {e:?}"))?;
         let scene = &rt.surface().scene;
         let page = *scene.pages().first().ok_or("surface has no <Page>")?;
         let boxes = render::build_scene_layout_boxes(scene, page);
@@ -156,7 +156,7 @@ impl Player {
                 _ => None,
             })
             .collect();
-        if let Err(e) = pollster::block_on(sync::send(&self.engine, calls)) {
+        if let Err(e) = pollster::block_on(sync::send(&sync::Local(&self.engine), calls)) {
             eprintln!("frame: engine refused: {e:?}");
         }
         // Reflect what the engine actually holds (stepped params snap).
@@ -326,7 +326,7 @@ mod tests {
         let (id, _) = p.first_knob().unwrap();
         let addr = p.param_of(id).unwrap();
         pollster::block_on(sync::send(
-            p.engine(),
+            &sync::Local(p.engine()),
             vec![EngineCall::SetParam { addr: addr.clone(), value: 0.9, phase: surface_proto::EditPhase::End }],
         ))
         .unwrap();

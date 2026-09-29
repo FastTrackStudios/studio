@@ -8,18 +8,14 @@ description = "The surface contract: catalogs, controls, bindings, curves, and t
 [dependencies]
 architect.workspace = true
 facet.workspace = true
-thiserror.workspace = true
 uuid.workspace = true
 serde.workspace = true
 vox = { workspace = true, optional = true }
-sea-orm = { workspace = true, optional = true }
 
-# The proto-crate profile. `vox` is the RPC face (on by default); `server`
-# adds the SeaORM storage and the migration. That is the whole contract.
+# `vox` is the RPC face (on by default); without it the trait is plain.
 [features]
 default = ["vox"]
 vox = ["dep:vox", "architect/vox"]
-server = ["dep:sea-orm", "architect/server"]
 
 [lints]
 workspace = true

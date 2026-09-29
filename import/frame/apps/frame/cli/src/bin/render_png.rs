@@ -125,7 +125,7 @@ fn run() -> Result<(), String> {
         .map(|bytes| TextFontRef { bytes, index: 0 });
     render::paint_scene_into(&mut scene, &doc, root, scene_transform, text_font_ref);
 
-    let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor::default());
+    let instance = wgpu::Instance::new(wgpu::InstanceDescriptor::new_without_display_handle());
     let adapter = pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions::default()))
         .map_err(|e| format!("request_adapter failed: {e}"))?;
 

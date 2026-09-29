@@ -5,7 +5,7 @@
 //!   streams, collections) and how values map to engineering units.
 //! - [`control`]: what makes a design node a control ([`Control`]:
 //!   kind, [`Binding`], MIDI mapping, slots) and validation against a catalog.
-//! - [`SurfaceEngine`]: the service any engine implements (signal rigs, a
+//! - [`engine::SurfaceEngine`]: the service any engine implements (signal rigs, a
 //!   plugin, the mock engine). Surfaces only ever talk to an engine through
 //!   it — in-process, over a WebSocket, or from an iPad.
 
@@ -43,42 +43,57 @@ pub enum EditPhase {
     End,
 }
 
-#[architect::error]
-#[derive(Eq)]
+/// Why an engine refused a call.
+#[derive(Debug, Clone, PartialEq, Eq, facet::Facet, serde::Serialize, serde::Deserialize)]
+#[repr(u8)]
 pub enum SurfaceError {
-    #[error("no parameter `{0}`")]
-    #[architect(http_status = 404)]
     UnknownParam(String),
-    #[error("no action `{0}`")]
-    #[architect(http_status = 404)]
     UnknownAction(String),
-    #[error("no collection `{0}`")]
-    #[architect(http_status = 404)]
     UnknownCollection(String),
-    #[error("index {0} out of range")]
-    #[architect(http_status = 400)]
     OutOfRange(u32),
 }
 
-/// An engine, as a surface sees it.
-#[architect::service]
-pub trait SurfaceEngine {
-    /// What this engine exposes.
-    async fn catalog(&self) -> Result<Catalog, SurfaceError>;
-    /// Every parameter's current value.
-    async fn values(&self) -> Result<Vec<ParamValue>, SurfaceError>;
-    /// Set a parameter (normalized). `phase` brackets a gesture.
-    async fn set_param(&self, addr: ParamAddr, value: f64, phase: EditPhase) -> Result<(), SurfaceError>;
-    /// Fire an action.
-    async fn invoke(&self, action: EntryId) -> Result<(), SurfaceError>;
-    /// Select an item of a collection.
-    async fn select(&self, collection: EntryId, index: u32) -> Result<(), SurfaceError>;
-    /// Parameter changes from anywhere (other surfaces, MIDI, automation).
-    #[subscribe]
-    fn param_changes(&self) -> ParamValue;
-    /// Telemetry frames (meters, spectrum, tuner) at each stream's rate.
-    #[subscribe]
-    fn telemetry(&self) -> StreamFrame;
+impl std::fmt::Display for SurfaceError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::UnknownParam(a) => write!(f, "no parameter `{a}`"),
+            Self::UnknownAction(a) => write!(f, "no action `{a}`"),
+            Self::UnknownCollection(c) => write!(f, "no collection `{c}`"),
+            Self::OutOfRange(i) => write!(f, "index {i} out of range"),
+        }
+    }
 }
 
-pub use prelude::*;
+impl std::error::Error for SurfaceError {}
+
+pub mod engine {
+    //! The engine service. `SurfaceEngine` → `SurfaceEngineClient` /
+    //! `SurfaceEngineService` / `surface_engine_serve`, plus the stream
+    //! sibling (`SurfaceEngineStreamClient`, `SurfaceEngineStreamService`,
+    //! the `SurfaceEngineStreamSource` backend contract).
+    use super::{Catalog, EditPhase, EntryId, ParamAddr, ParamValue, StreamFrame, SurfaceError};
+
+    /// An engine, as a surface sees it. Backends implement it synchronously
+    /// (like signal's rig services); remote callers get the async client.
+    #[architect::rpc]
+    pub trait SurfaceEngine {
+        /// What this engine exposes.
+        fn catalog(&self) -> Catalog;
+        /// Every parameter's current value.
+        fn values(&self) -> Vec<ParamValue>;
+        /// Set a parameter (normalized). `phase` brackets a gesture.
+        fn set_param(&self, addr: ParamAddr, value: f64, phase: EditPhase) -> Result<(), SurfaceError>;
+        /// Fire an action.
+        fn invoke(&self, action: EntryId) -> Result<(), SurfaceError>;
+        /// Select an item of a collection.
+        fn select(&self, collection: EntryId, index: u32) -> Result<(), SurfaceError>;
+        /// Parameter changes from anywhere (other surfaces, MIDI, automation).
+        #[subscribe]
+        fn param_changes(&self) -> ParamValue;
+        /// Telemetry frames (meters, spectrum, tuner) at each stream's rate.
+        #[subscribe]
+        fn telemetry(&self) -> StreamFrame;
+    }
+}
+
+pub use engine::*;

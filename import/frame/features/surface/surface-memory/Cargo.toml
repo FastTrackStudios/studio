@@ -6,7 +6,7 @@ publish = false
 description = "In-memory surface backend — tests, demos, offline."
 
 [dependencies]
-architect = { workspace = true, features = ["vox", "local", "http-client"] }
+architect = { workspace = true, features = ["vox", "local"] }
 surface-proto = { path = "../surface-proto" }
 
 
