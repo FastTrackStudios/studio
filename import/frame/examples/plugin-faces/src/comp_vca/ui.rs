@@ -8,10 +8,7 @@
 
 use document_proto::{Node, NodeId, NodeKind, StrokeAlign, TextAlign, TextCase, Transform};
 use surface_kit::{Place, draw};
-use surface_proto::{
-    Binding, Control, ControlKind, Curve, CurvePoint, EntryId, ParamInfo, Range, SlotRole, StreamInfo, StreamKind, Unit,
-    ValueFormat,
-};
+use surface_proto::{Binding, Curve, CurvePoint, EntryId, ParamInfo, Range, SlotRole, StreamInfo, StreamKind, Unit};
 use surface_widgets::Builder;
 
 // ── placing ──────────────────────────────────────────────────────────────
@@ -287,23 +284,6 @@ pub fn lamp(b: &mut Builder<'_>, parent: NodeId, cx: f64, cy: f64, d: f64, color
     }
 }
 
-/// A recessed readout window with a live, lit `Value` slot printed in
-/// `format` — the one concession to the screen: the number behind a
-/// printed scale.
-#[allow(clippy::too_many_arguments)]
-pub fn readout(b: &mut Builder<'_>, parent: NodeId, name: &str, binding: Binding, cx: f64, cy: f64, w: f64, h: f64, ink: &str, format: ValueFormat) -> NodeId {
-    let mut win = draw::frame(name, cx - w / 2.0, cy - h / 2.0, w, h);
-    win.fills = vec![draw::linear(180.0, &[(0.0, "#07080a"), (1.0, "#121418")])];
-    let win = draw::with_effects(draw::stroked(draw::rounded(win, 3.0), "#00000099", 1.0), vec![draw::inner_shadow("#000000c0", 0.0, 1.5, 3.0), draw::drop_shadow("#ffffff1c", 0.0, 1.0, 0.0)]);
-    let root = b.add(parent, win);
-    let size = (h * 0.52).round();
-    let value = b.add(root, draw::emissive(text("value", "", 0.0, h / 2.0, w, size, ink, TextAlign::Center, 600.0, false), draw::hex(ink), 0.4, size * 0.6));
-    let mut c = Control::new(ControlKind::Readout).slot(SlotRole::Value, value.0).formatted(format);
-    c.binding = Some(binding);
-    b.controls.insert(root, c);
-    root
-}
-
 // ── catalog entries ──────────────────────────────────────────────────────
 
 /// A continuous param with a real range; `default` in real units.
@@ -316,15 +296,6 @@ pub fn param(addr: &str, name: &str, range: Range, default: f64) -> ParamInfo {
 #[must_use]
 pub fn db(addr: &str, name: &str, min: f64, max: f64, default: f64) -> ParamInfo {
     let p = param(addr, name, Range::linear(min, max, Unit::Db), default);
-    if min < 0.0 && max > 0.0 { p.bipolar() } else { p }
-}
-
-/// A dB param in whole `step`-dB clicks (the API's 2 dB gain).
-#[must_use]
-pub fn db_stepped(addr: &str, name: &str, min: f64, max: f64, step: f64, default: f64) -> ParamInfo {
-    let mut r = Range::linear(min, max, Unit::Db);
-    r.steps = Some(((max - min) / step).round() as u32 + 1);
-    let p = param(addr, name, r, default);
     if min < 0.0 && max > 0.0 { p.bipolar() } else { p }
 }
 

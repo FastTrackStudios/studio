@@ -3,7 +3,7 @@
   "version": 1,
   "params": [
     {
-      "addr": "1176/input",
+      "addr": "fet/input",
       "name": "Input",
       "short_name": null,
       "group": "FET",
@@ -20,7 +20,7 @@
       "featured": true
     },
     {
-      "addr": "1176/output",
+      "addr": "fet/output",
       "name": "Output",
       "short_name": null,
       "group": "FET",
@@ -37,7 +37,7 @@
       "featured": true
     },
     {
-      "addr": "1176/attack",
+      "addr": "fet/attack",
       "name": "Attack",
       "short_name": null,
       "group": "FET",
@@ -54,7 +54,7 @@
       "featured": true
     },
     {
-      "addr": "1176/release",
+      "addr": "fet/release",
       "name": "Release",
       "short_name": null,
       "group": "FET",
@@ -71,7 +71,7 @@
       "featured": true
     },
     {
-      "addr": "1176/ratio",
+      "addr": "fet/ratio",
       "name": "Ratio",
       "short_name": null,
       "group": "FET",
@@ -98,7 +98,7 @@
       "featured": true
     },
     {
-      "addr": "1176/meter",
+      "addr": "fet/meter",
       "name": "Meter",
       "short_name": null,
       "group": "FET",
@@ -124,7 +124,7 @@
       "featured": true
     },
     {
-      "addr": "1176/on",
+      "addr": "fet/on",
       "name": "Power",
       "short_name": null,
       "group": "FET",
@@ -141,7 +141,7 @@
       "featured": true
     },
     {
-      "addr": "la2a/gain",
+      "addr": "opto/gain",
       "name": "Gain",
       "short_name": "Gain",
       "group": null,
@@ -158,7 +158,7 @@
       "featured": true
     },
     {
-      "addr": "la2a/peak_reduction",
+      "addr": "opto/peak_reduction",
       "name": "Peak Reduction",
       "short_name": "Peak Red",
       "group": null,
@@ -175,7 +175,7 @@
       "featured": true
     },
     {
-      "addr": "la2a/limit",
+      "addr": "opto/limit",
       "name": "Compress / Limit",
       "short_name": "Limit",
       "group": null,
@@ -192,7 +192,7 @@
       "featured": true
     },
     {
-      "addr": "la2a/meter",
+      "addr": "opto/meter",
       "name": "Meter",
       "short_name": null,
       "group": null,
@@ -217,7 +217,7 @@
       "featured": true
     },
     {
-      "addr": "la2a/power",
+      "addr": "opto/power",
       "name": "Power",
       "short_name": null,
       "group": null,
@@ -234,24 +234,57 @@
       "featured": true
     },
     {
-      "addr": "cl1b/threshold",
+      "addr": "optocomp/threshold",
       "name": "Threshold",
       "short_name": "Thresh",
       "group": null,
       "kind": "Continuous",
       "range": {
-        "min": -40.0,
-        "max": 0.0,
-        "scale": "Linear",
+        "min": 10.0,
+        "max": -40.0,
+        "scale": {
+          "Curve": {
+            "curve": {
+              "Points": {
+                "points": [
+                  {
+                    "x": 0.0,
+                    "y": -0.0
+                  },
+                  {
+                    "x": 0.10833333333333334,
+                    "y": 0.2
+                  },
+                  {
+                    "x": 0.275,
+                    "y": 0.4
+                  },
+                  {
+                    "x": 0.5208333333333334,
+                    "y": 0.6
+                  },
+                  {
+                    "x": 0.6916666666666667,
+                    "y": 0.8
+                  },
+                  {
+                    "x": 1.0,
+                    "y": 1.0
+                  }
+                ]
+              }
+            }
+          }
+        },
         "unit": "Db",
         "steps": null
       },
-      "default": 0.5,
+      "default": 0.5208333333333339,
       "bipolar": false,
       "featured": true
     },
     {
-      "addr": "cl1b/ratio",
+      "addr": "optocomp/ratio",
       "name": "Ratio",
       "short_name": null,
       "group": null,
@@ -268,7 +301,7 @@
       "featured": true
     },
     {
-      "addr": "cl1b/attack",
+      "addr": "optocomp/attack",
       "name": "Attack",
       "short_name": null,
       "group": null,
@@ -285,25 +318,25 @@
       "featured": true
     },
     {
-      "addr": "cl1b/release",
+      "addr": "optocomp/release",
       "name": "Release",
       "short_name": null,
       "group": null,
       "kind": "Continuous",
       "range": {
         "min": 0.05,
-        "max": 3.0,
+        "max": 10.0,
         "scale": "Logarithmic",
         "unit": "Seconds",
         "steps": null
       },
-      "default": 0.5623818557528477,
+      "default": 0.4345879896760937,
       "bipolar": false,
       "featured": true
     },
     {
-      "addr": "cl1b/timing",
-      "name": "Attack / Release Mode",
+      "addr": "optocomp/timing",
+      "name": "Attack / Release Select",
       "short_name": "Timing",
       "group": null,
       "kind": {
@@ -327,24 +360,124 @@
       "featured": true
     },
     {
-      "addr": "cl1b/gain",
+      "addr": "optocomp/gain",
       "name": "Gain",
       "short_name": null,
       "group": null,
       "kind": "Continuous",
       "range": {
-        "min": 0.0,
-        "max": 24.0,
-        "scale": "Linear",
+        "min": -20.0,
+        "max": 30.0,
+        "scale": {
+          "Curve": {
+            "curve": {
+              "Points": {
+                "points": [
+                  {
+                    "x": 0.0,
+                    "y": 0.0
+                  },
+                  {
+                    "x": 0.14583333333333334,
+                    "y": 0.2
+                  },
+                  {
+                    "x": 0.2708333333333333,
+                    "y": 0.4
+                  },
+                  {
+                    "x": 0.5166666666666667,
+                    "y": 0.6
+                  },
+                  {
+                    "x": 0.6833333333333333,
+                    "y": 0.8
+                  },
+                  {
+                    "x": 1.0,
+                    "y": 1.0
+                  }
+                ]
+              }
+            }
+          }
+        },
         "unit": "Db",
         "steps": null
       },
-      "default": 0.16666666666666666,
+      "default": 0.2708333333333339,
       "bipolar": false,
       "featured": true
     },
     {
-      "addr": "cl1b/power",
+      "addr": "optocomp/meter",
+      "name": "Meter",
+      "short_name": null,
+      "group": null,
+      "kind": {
+        "Choice": {
+          "options": [
+            "Input",
+            "Compression",
+            "Output"
+          ]
+        }
+      },
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 3
+      },
+      "default": 0.5,
+      "bipolar": false,
+      "featured": true
+    },
+    {
+      "addr": "optocomp/sidechain",
+      "name": "Sidechain Bus Select",
+      "short_name": "SC Bus",
+      "group": null,
+      "kind": {
+        "Choice": {
+          "options": [
+            "Off",
+            "1",
+            "2"
+          ]
+        }
+      },
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 3
+      },
+      "default": 0.0,
+      "bipolar": false,
+      "featured": true
+    },
+    {
+      "addr": "optocomp/active",
+      "name": "In",
+      "short_name": null,
+      "group": null,
+      "kind": "Toggle",
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 2
+      },
+      "default": 1.0,
+      "bipolar": false,
+      "featured": true
+    },
+    {
+      "addr": "optocomp/power",
       "name": "Power",
       "short_name": null,
       "group": null,
@@ -361,8 +494,8 @@
       "featured": true
     },
     {
-      "addr": "fairchild/input_gain",
-      "name": "Input Gain",
+      "addr": "twinvalve/input_gain_a",
+      "name": "Left-Lat Input Gain",
       "short_name": "Input",
       "group": null,
       "kind": "Continuous",
@@ -371,32 +504,32 @@
         "max": 0.0,
         "scale": "Linear",
         "unit": "Db",
-        "steps": null
+        "steps": 11
       },
       "default": 1.0,
       "bipolar": false,
       "featured": true
     },
     {
-      "addr": "fairchild/threshold",
-      "name": "Threshold",
+      "addr": "twinvalve/threshold_a",
+      "name": "Left-Lat Threshold",
       "short_name": "Thresh",
       "group": null,
       "kind": "Continuous",
       "range": {
-        "min": -40.0,
-        "max": 0.0,
+        "min": 0.0,
+        "max": 10.0,
         "scale": "Linear",
-        "unit": "Db",
+        "unit": "None",
         "steps": null
       },
-      "default": 0.55,
+      "default": 0.4,
       "bipolar": false,
       "featured": true
     },
     {
-      "addr": "fairchild/time_constant",
-      "name": "Time Constant",
+      "addr": "twinvalve/time_constant_a",
+      "name": "Left-Lat Time Constant",
       "short_name": "Time",
       "group": null,
       "kind": {
@@ -423,7 +556,119 @@
       "featured": true
     },
     {
-      "addr": "fairchild/agc",
+      "addr": "twinvalve/metering_a",
+      "name": "Left-Lat Metering",
+      "short_name": "Meter",
+      "group": null,
+      "kind": {
+        "Choice": {
+          "options": [
+            "Bal −",
+            "Zero",
+            "Bal +"
+          ]
+        }
+      },
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 3
+      },
+      "default": 0.5,
+      "bipolar": false,
+      "featured": true
+    },
+    {
+      "addr": "twinvalve/input_gain_b",
+      "name": "Right-Vert Input Gain",
+      "short_name": "Input",
+      "group": null,
+      "kind": "Continuous",
+      "range": {
+        "min": -20.0,
+        "max": 0.0,
+        "scale": "Linear",
+        "unit": "Db",
+        "steps": 11
+      },
+      "default": 1.0,
+      "bipolar": false,
+      "featured": true
+    },
+    {
+      "addr": "twinvalve/threshold_b",
+      "name": "Right-Vert Threshold",
+      "short_name": "Thresh",
+      "group": null,
+      "kind": "Continuous",
+      "range": {
+        "min": 0.0,
+        "max": 10.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": null
+      },
+      "default": 0.4,
+      "bipolar": false,
+      "featured": true
+    },
+    {
+      "addr": "twinvalve/time_constant_b",
+      "name": "Right-Vert Time Constant",
+      "short_name": "Time",
+      "group": null,
+      "kind": {
+        "Choice": {
+          "options": [
+            "1",
+            "2",
+            "3",
+            "4",
+            "5 (auto)",
+            "6 (auto)"
+          ]
+        }
+      },
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 6
+      },
+      "default": 0.2,
+      "bipolar": false,
+      "featured": true
+    },
+    {
+      "addr": "twinvalve/metering_b",
+      "name": "Right-Vert Metering",
+      "short_name": "Meter",
+      "group": null,
+      "kind": {
+        "Choice": {
+          "options": [
+            "Bal −",
+            "Zero",
+            "Bal +"
+          ]
+        }
+      },
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 3
+      },
+      "default": 0.5,
+      "bipolar": false,
+      "featured": true
+    },
+    {
+      "addr": "twinvalve/agc",
       "name": "AGC",
       "short_name": null,
       "group": null,
@@ -447,24 +692,7 @@
       "featured": true
     },
     {
-      "addr": "fairchild/output",
-      "name": "Output",
-      "short_name": null,
-      "group": null,
-      "kind": "Continuous",
-      "range": {
-        "min": 0.0,
-        "max": 20.0,
-        "scale": "Linear",
-        "unit": "Db",
-        "steps": null
-      },
-      "default": 0.3,
-      "bipolar": false,
-      "featured": true
-    },
-    {
-      "addr": "fairchild/power",
+      "addr": "twinvalve/power",
       "name": "Power",
       "short_name": null,
       "group": null,
@@ -482,8 +710,8 @@
     },
     {
       "addr": "varimu/input",
-      "name": "Input",
-      "short_name": null,
+      "name": "Dual Input",
+      "short_name": "Input",
       "group": null,
       "kind": "Continuous",
       "range": {
@@ -498,8 +726,8 @@
       "featured": true
     },
     {
-      "addr": "varimu/threshold",
-      "name": "Threshold",
+      "addr": "varimu/threshold_l",
+      "name": "Left Threshold",
       "short_name": "Thresh",
       "group": null,
       "kind": "Continuous",
@@ -515,35 +743,35 @@
       "featured": true
     },
     {
-      "addr": "varimu/attack",
-      "name": "Attack",
+      "addr": "varimu/attack_l",
+      "name": "Left Attack",
       "short_name": null,
       "group": null,
       "kind": "Continuous",
       "range": {
-        "min": 25.0,
-        "max": 70.0,
+        "min": 70.0,
+        "max": 25.0,
         "scale": "Linear",
         "unit": "Milliseconds",
         "steps": null
       },
-      "default": 0.4444444444444444,
+      "default": 0.5555555555555556,
       "bipolar": false,
       "featured": true
     },
     {
-      "addr": "varimu/recovery",
-      "name": "Recovery",
+      "addr": "varimu/recovery_l",
+      "name": "Left Recovery",
       "short_name": null,
       "group": null,
       "kind": {
         "Choice": {
           "options": [
-            "0.2 s",
-            "0.4 s",
-            "0.6 s",
+            "8 s",
+            "2.5 s",
             "1.2 s",
-            "2.5 s"
+            "0.6 s",
+            "0.2 s"
           ]
         }
       },
@@ -559,8 +787,8 @@
       "featured": true
     },
     {
-      "addr": "varimu/output",
-      "name": "Output",
+      "addr": "varimu/output_l",
+      "name": "Left Output",
       "short_name": null,
       "group": null,
       "kind": "Continuous",
@@ -576,8 +804,8 @@
       "featured": true
     },
     {
-      "addr": "varimu/limit",
-      "name": "Comp / Limit",
+      "addr": "varimu/limit_l",
+      "name": "Left Limit / Compress",
       "short_name": "Limit",
       "group": null,
       "kind": "Toggle",
@@ -593,9 +821,172 @@
       "featured": true
     },
     {
-      "addr": "varimu/hp_sc",
-      "name": "HP Sidechain 100 Hz",
+      "addr": "varimu/hp_sc_l",
+      "name": "Left HP Sidechain",
       "short_name": "HP SC",
+      "group": null,
+      "kind": "Toggle",
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 2
+      },
+      "default": 1.0,
+      "bipolar": false,
+      "featured": true
+    },
+    {
+      "addr": "varimu/bypass_l",
+      "name": "Left In / Bypass",
+      "short_name": "In",
+      "group": null,
+      "kind": "Toggle",
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 2
+      },
+      "default": 1.0,
+      "bipolar": false,
+      "featured": true
+    },
+    {
+      "addr": "varimu/threshold_r",
+      "name": "Right Threshold",
+      "short_name": "Thresh",
+      "group": null,
+      "kind": "Continuous",
+      "range": {
+        "min": -40.0,
+        "max": 0.0,
+        "scale": "Linear",
+        "unit": "Db",
+        "steps": null
+      },
+      "default": 0.5,
+      "bipolar": false,
+      "featured": true
+    },
+    {
+      "addr": "varimu/attack_r",
+      "name": "Right Attack",
+      "short_name": null,
+      "group": null,
+      "kind": "Continuous",
+      "range": {
+        "min": 70.0,
+        "max": 25.0,
+        "scale": "Linear",
+        "unit": "Milliseconds",
+        "steps": null
+      },
+      "default": 0.5555555555555556,
+      "bipolar": false,
+      "featured": true
+    },
+    {
+      "addr": "varimu/recovery_r",
+      "name": "Right Recovery",
+      "short_name": null,
+      "group": null,
+      "kind": {
+        "Choice": {
+          "options": [
+            "8 s",
+            "2.5 s",
+            "1.2 s",
+            "0.6 s",
+            "0.2 s"
+          ]
+        }
+      },
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 5
+      },
+      "default": 0.5,
+      "bipolar": false,
+      "featured": true
+    },
+    {
+      "addr": "varimu/output_r",
+      "name": "Right Output",
+      "short_name": null,
+      "group": null,
+      "kind": "Continuous",
+      "range": {
+        "min": -6.0,
+        "max": 18.0,
+        "scale": "Linear",
+        "unit": "Db",
+        "steps": null
+      },
+      "default": 0.25,
+      "bipolar": false,
+      "featured": true
+    },
+    {
+      "addr": "varimu/limit_r",
+      "name": "Right Limit / Compress",
+      "short_name": "Limit",
+      "group": null,
+      "kind": "Toggle",
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 2
+      },
+      "default": 0.0,
+      "bipolar": false,
+      "featured": true
+    },
+    {
+      "addr": "varimu/hp_sc_r",
+      "name": "Right HP Sidechain",
+      "short_name": "HP SC",
+      "group": null,
+      "kind": "Toggle",
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 2
+      },
+      "default": 1.0,
+      "bipolar": false,
+      "featured": true
+    },
+    {
+      "addr": "varimu/bypass_r",
+      "name": "Right In / Bypass",
+      "short_name": "In",
+      "group": null,
+      "kind": "Toggle",
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 2
+      },
+      "default": 1.0,
+      "bipolar": false,
+      "featured": true
+    },
+    {
+      "addr": "varimu/link",
+      "name": "Sep / Link",
+      "short_name": "Link",
       "group": null,
       "kind": "Toggle",
       "range": {
@@ -627,7 +1018,7 @@
       "featured": true
     },
     {
-      "addr": "sslbus/threshold",
+      "addr": "buscomp/threshold",
       "name": "Threshold",
       "short_name": null,
       "group": null,
@@ -644,7 +1035,7 @@
       "featured": true
     },
     {
-      "addr": "sslbus/ratio",
+      "addr": "buscomp/ratio",
       "name": "Ratio",
       "short_name": null,
       "group": null,
@@ -669,7 +1060,7 @@
       "featured": true
     },
     {
-      "addr": "sslbus/attack",
+      "addr": "buscomp/attack",
       "name": "Attack",
       "short_name": null,
       "group": null,
@@ -697,7 +1088,7 @@
       "featured": false
     },
     {
-      "addr": "sslbus/release",
+      "addr": "buscomp/release",
       "name": "Release",
       "short_name": null,
       "group": null,
@@ -724,7 +1115,7 @@
       "featured": false
     },
     {
-      "addr": "sslbus/makeup",
+      "addr": "buscomp/makeup",
       "name": "Make-up",
       "short_name": null,
       "group": null,
@@ -741,25 +1132,8 @@
       "featured": true
     },
     {
-      "addr": "sslbus/mix",
-      "name": "Mix",
-      "short_name": null,
-      "group": null,
-      "kind": "Continuous",
-      "range": {
-        "min": 0.0,
-        "max": 100.0,
-        "scale": "Linear",
-        "unit": "Percent",
-        "steps": null
-      },
-      "default": 1.0,
-      "bipolar": false,
-      "featured": false
-    },
-    {
-      "addr": "sslbus/in",
-      "name": "In",
+      "addr": "buscomp/in",
+      "name": "Compressor In",
       "short_name": null,
       "group": null,
       "kind": "Toggle",
@@ -775,7 +1149,95 @@
       "featured": true
     },
     {
-      "addr": "dbx160/threshold",
+      "addr": "buscomp/ext_sc",
+      "name": "External Side-Chain",
+      "short_name": null,
+      "group": null,
+      "kind": "Toggle",
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 2
+      },
+      "default": 0.0,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "buscomp/autofade",
+      "name": "Auto Fade",
+      "short_name": null,
+      "group": null,
+      "kind": "Toggle",
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 2
+      },
+      "default": 0.0,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "buscomp/fade_rate",
+      "name": "Fade Rate",
+      "short_name": null,
+      "group": null,
+      "kind": "Continuous",
+      "range": {
+        "min": 1.0,
+        "max": 60.0,
+        "scale": {
+          "Curve": {
+            "curve": {
+              "Points": {
+                "points": [
+                  {
+                    "x": 0.0,
+                    "y": 0.0
+                  },
+                  {
+                    "x": 0.16666666666666666,
+                    "y": 0.03389830508474576
+                  },
+                  {
+                    "x": 0.3333333333333333,
+                    "y": 0.0847457627118644
+                  },
+                  {
+                    "x": 0.5,
+                    "y": 0.15254237288135594
+                  },
+                  {
+                    "x": 0.6666666666666666,
+                    "y": 0.3220338983050847
+                  },
+                  {
+                    "x": 0.8333333333333334,
+                    "y": 0.6610169491525424
+                  },
+                  {
+                    "x": 1.0,
+                    "y": 1.0
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "unit": "Seconds",
+        "steps": null
+      },
+      "default": 0.4999999999999982,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "vcacomp/threshold",
       "name": "Threshold",
       "short_name": null,
       "group": null,
@@ -792,7 +1254,7 @@
       "featured": true
     },
     {
-      "addr": "dbx160/ratio",
+      "addr": "vcacomp/ratio",
       "name": "Compression",
       "short_name": null,
       "group": null,
@@ -854,7 +1316,7 @@
       "featured": true
     },
     {
-      "addr": "dbx160/output",
+      "addr": "vcacomp/output",
       "name": "Output Gain",
       "short_name": null,
       "group": null,
@@ -871,7 +1333,7 @@
       "featured": true
     },
     {
-      "addr": "dbx160/meter",
+      "addr": "vcacomp/meter",
       "name": "Meter",
       "short_name": null,
       "group": null,
@@ -896,7 +1358,7 @@
       "featured": false
     },
     {
-      "addr": "distressor/input",
+      "addr": "charcomp/input",
       "name": "Input",
       "short_name": null,
       "group": null,
@@ -913,7 +1375,7 @@
       "featured": true
     },
     {
-      "addr": "distressor/attack",
+      "addr": "charcomp/attack",
       "name": "Attack",
       "short_name": null,
       "group": null,
@@ -930,7 +1392,7 @@
       "featured": true
     },
     {
-      "addr": "distressor/release",
+      "addr": "charcomp/release",
       "name": "Release",
       "short_name": null,
       "group": null,
@@ -947,7 +1409,7 @@
       "featured": true
     },
     {
-      "addr": "distressor/output",
+      "addr": "charcomp/output",
       "name": "Output",
       "short_name": null,
       "group": null,
@@ -964,7 +1426,7 @@
       "featured": true
     },
     {
-      "addr": "distressor/ratio",
+      "addr": "charcomp/ratio",
       "name": "Ratio",
       "short_name": null,
       "group": null,
@@ -994,7 +1456,7 @@
       "featured": true
     },
     {
-      "addr": "distressor/detector",
+      "addr": "charcomp/detector",
       "name": "Detector",
       "short_name": null,
       "group": null,
@@ -1019,7 +1481,7 @@
       "featured": false
     },
     {
-      "addr": "distressor/audio",
+      "addr": "charcomp/audio",
       "name": "Audio",
       "short_name": null,
       "group": null,
@@ -1044,24 +1506,7 @@
       "featured": false
     },
     {
-      "addr": "distressor/mix",
-      "name": "Mix",
-      "short_name": null,
-      "group": null,
-      "kind": "Continuous",
-      "range": {
-        "min": 0.0,
-        "max": 100.0,
-        "scale": "Linear",
-        "unit": "Percent",
-        "steps": null
-      },
-      "default": 1.0,
-      "bipolar": false,
-      "featured": false
-    },
-    {
-      "addr": "distressor/in",
+      "addr": "charcomp/in",
       "name": "In",
       "short_name": null,
       "group": null,
@@ -1081,13 +1526,13 @@
   "actions": [],
   "streams": [
     {
-      "id": "1176/gr",
+      "id": "fet/gr",
       "name": "Gain Reduction",
       "kind": "GainReduction",
       "rate_hz": 30.0
     },
     {
-      "id": "1176/out",
+      "id": "fet/out",
       "name": "Output Level",
       "kind": {
         "Level": {
@@ -1097,13 +1542,13 @@
       "rate_hz": 30.0
     },
     {
-      "id": "la2a/gr",
+      "id": "opto/gr",
       "name": "Opto Leveler Gain Reduction",
       "kind": "GainReduction",
       "rate_hz": 30.0
     },
     {
-      "id": "la2a/out",
+      "id": "opto/out",
       "name": "Opto Leveler Output",
       "kind": {
         "Level": {
@@ -1113,14 +1558,14 @@
       "rate_hz": 30.0
     },
     {
-      "id": "cl1b/gr",
-      "name": "CL 1B Gain Reduction",
+      "id": "optocomp/gr",
+      "name": "Opto Compressor Gain Reduction",
       "kind": "GainReduction",
       "rate_hz": 30.0
     },
     {
-      "id": "cl1b/out",
-      "name": "CL 1B Output",
+      "id": "optocomp/out",
+      "name": "Opto Compressor Output",
       "kind": {
         "Level": {
           "channels": 2
@@ -1129,19 +1574,35 @@
       "rate_hz": 30.0
     },
     {
-      "id": "fairchild/gr",
-      "name": "670 Gain Reduction",
-      "kind": "GainReduction",
-      "rate_hz": 30.0
-    },
-    {
-      "id": "fairchild/out",
-      "name": "670 Output",
+      "id": "optocomp/in",
+      "name": "Opto Compressor Input",
       "kind": {
         "Level": {
           "channels": 2
         }
       },
+      "rate_hz": 30.0
+    },
+    {
+      "id": "twinvalve/gr",
+      "name": "Twin Valve Limiter Gain Reduction",
+      "kind": "GainReduction",
+      "rate_hz": 30.0
+    },
+    {
+      "id": "twinvalve/out",
+      "name": "Twin Valve Limiter Output",
+      "kind": {
+        "Level": {
+          "channels": 2
+        }
+      },
+      "rate_hz": 30.0
+    },
+    {
+      "id": "twinvalve/gr_b",
+      "name": "Twin Valve Limiter Gain Reduction (Right-Vert)",
+      "kind": "GainReduction",
       "rate_hz": 30.0
     },
     {
@@ -1161,19 +1622,25 @@
       "rate_hz": 30.0
     },
     {
-      "id": "sslbus/gr",
+      "id": "varimu/gr_r",
+      "name": "Vari-Mu Gain Reduction (Right)",
+      "kind": "GainReduction",
+      "rate_hz": 30.0
+    },
+    {
+      "id": "buscomp/gr",
       "name": "Gain Reduction",
       "kind": "GainReduction",
       "rate_hz": 30.0
     },
     {
-      "id": "dbx160/gr",
+      "id": "vcacomp/gr",
       "name": "Gain Reduction",
       "kind": "GainReduction",
       "rate_hz": 30.0
     },
     {
-      "id": "dbx160/meter_level",
+      "id": "vcacomp/meter_level",
       "name": "Meter (METER select)",
       "kind": {
         "Level": {
@@ -1183,7 +1650,7 @@
       "rate_hz": 30.0
     },
     {
-      "id": "distressor/gr",
+      "id": "charcomp/gr",
       "name": "Gain Reduction",
       "kind": "GainReduction",
       "rate_hz": 30.0

@@ -3,7 +3,7 @@
   "version": 1,
   "params": [
     {
-      "addr": "pultec/low_boost",
+      "addr": "progeq/low_boost",
       "name": "Low Boost",
       "short_name": null,
       "group": null,
@@ -20,7 +20,7 @@
       "featured": true
     },
     {
-      "addr": "pultec/low_atten",
+      "addr": "progeq/low_atten",
       "name": "Low Atten",
       "short_name": null,
       "group": null,
@@ -37,7 +37,7 @@
       "featured": true
     },
     {
-      "addr": "pultec/low_freq",
+      "addr": "progeq/low_freq",
       "name": "Low Frequency",
       "short_name": null,
       "group": null,
@@ -63,7 +63,7 @@
       "featured": true
     },
     {
-      "addr": "pultec/high_boost",
+      "addr": "progeq/high_boost",
       "name": "High Boost",
       "short_name": null,
       "group": null,
@@ -80,7 +80,7 @@
       "featured": true
     },
     {
-      "addr": "pultec/high_boost_freq",
+      "addr": "progeq/high_boost_freq",
       "name": "High Frequency",
       "short_name": null,
       "group": null,
@@ -109,7 +109,7 @@
       "featured": false
     },
     {
-      "addr": "pultec/bandwidth",
+      "addr": "progeq/bandwidth",
       "name": "Bandwidth",
       "short_name": null,
       "group": null,
@@ -126,7 +126,7 @@
       "featured": false
     },
     {
-      "addr": "pultec/high_atten",
+      "addr": "progeq/high_atten",
       "name": "High Atten",
       "short_name": null,
       "group": null,
@@ -143,7 +143,7 @@
       "featured": false
     },
     {
-      "addr": "pultec/high_atten_freq",
+      "addr": "progeq/high_atten_freq",
       "name": "Atten Sel",
       "short_name": null,
       "group": null,
@@ -168,24 +168,7 @@
       "featured": false
     },
     {
-      "addr": "pultec/trim",
-      "name": "Output",
-      "short_name": null,
-      "group": null,
-      "kind": "Continuous",
-      "range": {
-        "min": -24.0,
-        "max": 24.0,
-        "scale": "Linear",
-        "unit": "Db",
-        "steps": null
-      },
-      "default": 0.5,
-      "bipolar": true,
-      "featured": false
-    },
-    {
-      "addr": "pultec/eq_in",
+      "addr": "progeq/eq_in",
       "name": "EQ In",
       "short_name": null,
       "group": null,
@@ -202,7 +185,7 @@
       "featured": true
     },
     {
-      "addr": "sslch/hpf",
+      "addr": "consoleeq/hpf",
       "name": "HPF",
       "short_name": null,
       "group": null,
@@ -251,12 +234,12 @@
         "unit": "Hz",
         "steps": null
       },
-      "default": 0.16666666666666607,
+      "default": 1.7763568394002505e-15,
       "bipolar": false,
       "featured": false
     },
     {
-      "addr": "sslch/lpf",
+      "addr": "consoleeq/lpf",
       "name": "LPF",
       "short_name": null,
       "group": null,
@@ -274,24 +257,20 @@
                     "y": 0.0
                   },
                   {
-                    "x": 0.16666666666666666,
-                    "y": 0.10526315789473684
+                    "x": 0.2,
+                    "y": 0.02631578947368421
                   },
                   {
-                    "x": 0.3333333333333333,
+                    "x": 0.4,
+                    "y": 0.05263157894736842
+                  },
+                  {
+                    "x": 0.6,
                     "y": 0.2631578947368421
                   },
                   {
-                    "x": 0.5,
+                    "x": 0.8,
                     "y": 0.47368421052631576
-                  },
-                  {
-                    "x": 0.6666666666666666,
-                    "y": 0.6842105263157895
-                  },
-                  {
-                    "x": 0.8333333333333334,
-                    "y": 0.8947368421052632
                   },
                   {
                     "x": 1.0,
@@ -310,7 +289,7 @@
       "featured": false
     },
     {
-      "addr": "sslch/filters_in",
+      "addr": "consoleeq/filters_in",
       "name": "Filters In",
       "short_name": null,
       "group": null,
@@ -327,7 +306,7 @@
       "featured": false
     },
     {
-      "addr": "sslch/lf_gain",
+      "addr": "consoleeq/lf_gain",
       "name": "LF Gain",
       "short_name": null,
       "group": null,
@@ -344,7 +323,7 @@
       "featured": true
     },
     {
-      "addr": "sslch/lf_freq",
+      "addr": "consoleeq/lf_freq",
       "name": "LF Freq",
       "short_name": null,
       "group": null,
@@ -362,20 +341,24 @@
                     "y": 0.0
                   },
                   {
-                    "x": 0.2,
+                    "x": 0.16666666666666666,
                     "y": 0.047619047619047616
                   },
                   {
-                    "x": 0.4,
+                    "x": 0.3333333333333333,
                     "y": 0.16666666666666666
                   },
                   {
-                    "x": 0.6,
+                    "x": 0.5,
                     "y": 0.40476190476190477
                   },
                   {
-                    "x": 0.8,
+                    "x": 0.6666666666666666,
                     "y": 0.6428571428571429
+                  },
+                  {
+                    "x": 0.8333333333333334,
+                    "y": 0.8809523809523809
                   },
                   {
                     "x": 1.0,
@@ -389,12 +372,12 @@
         "unit": "Hz",
         "steps": null
       },
-      "default": 0.40000000000000036,
+      "default": 0.3333333333333339,
       "bipolar": false,
       "featured": false
     },
     {
-      "addr": "sslch/lf_bell",
+      "addr": "consoleeq/lf_bell",
       "name": "LF Bell",
       "short_name": null,
       "group": null,
@@ -411,7 +394,7 @@
       "featured": false
     },
     {
-      "addr": "sslch/lmf_gain",
+      "addr": "consoleeq/lmf_gain",
       "name": "LMF Gain",
       "short_name": null,
       "group": null,
@@ -428,7 +411,7 @@
       "featured": true
     },
     {
-      "addr": "sslch/lmf_freq",
+      "addr": "consoleeq/lmf_freq",
       "name": "LMF Freq",
       "short_name": null,
       "group": null,
@@ -482,7 +465,7 @@
       "featured": false
     },
     {
-      "addr": "sslch/lmf_q",
+      "addr": "consoleeq/lmf_q",
       "name": "LMF Q",
       "short_name": null,
       "group": null,
@@ -528,7 +511,7 @@
       "featured": false
     },
     {
-      "addr": "sslch/lmf_div3",
+      "addr": "consoleeq/lmf_div3",
       "name": "LMF ÷3",
       "short_name": null,
       "group": null,
@@ -545,7 +528,7 @@
       "featured": false
     },
     {
-      "addr": "sslch/hmf_gain",
+      "addr": "consoleeq/hmf_gain",
       "name": "HMF Gain",
       "short_name": null,
       "group": null,
@@ -562,7 +545,7 @@
       "featured": true
     },
     {
-      "addr": "sslch/hmf_freq",
+      "addr": "consoleeq/hmf_freq",
       "name": "HMF Freq",
       "short_name": null,
       "group": null,
@@ -616,7 +599,7 @@
       "featured": false
     },
     {
-      "addr": "sslch/hmf_q",
+      "addr": "consoleeq/hmf_q",
       "name": "HMF Q",
       "short_name": null,
       "group": null,
@@ -662,7 +645,7 @@
       "featured": false
     },
     {
-      "addr": "sslch/hmf_x3",
+      "addr": "consoleeq/hmf_x3",
       "name": "HMF ×3",
       "short_name": null,
       "group": null,
@@ -679,7 +662,7 @@
       "featured": false
     },
     {
-      "addr": "sslch/hf_gain",
+      "addr": "consoleeq/hf_gain",
       "name": "HF Gain",
       "short_name": null,
       "group": null,
@@ -696,7 +679,7 @@
       "featured": true
     },
     {
-      "addr": "sslch/hf_freq",
+      "addr": "consoleeq/hf_freq",
       "name": "HF Freq",
       "short_name": null,
       "group": null,
@@ -750,7 +733,7 @@
       "featured": false
     },
     {
-      "addr": "sslch/hf_bell",
+      "addr": "consoleeq/hf_bell",
       "name": "HF Bell",
       "short_name": null,
       "group": null,
@@ -767,7 +750,7 @@
       "featured": false
     },
     {
-      "addr": "sslch/eq_in",
+      "addr": "consoleeq/eq_in",
       "name": "EQ In",
       "short_name": null,
       "group": null,
@@ -784,7 +767,7 @@
       "featured": true
     },
     {
-      "addr": "sslch/phase",
+      "addr": "consoleeq/phase",
       "name": "Phase",
       "short_name": null,
       "group": null,
@@ -801,7 +784,7 @@
       "featured": false
     },
     {
-      "addr": "sslch/trim",
+      "addr": "consoleeq/trim",
       "name": "Trim",
       "short_name": null,
       "group": null,
@@ -818,33 +801,19 @@
       "featured": false
     },
     {
-      "addr": "sslch/drive",
-      "name": "Drive",
-      "short_name": null,
-      "group": null,
-      "kind": "Continuous",
-      "range": {
-        "min": 0.0,
-        "max": 100.0,
-        "scale": "Linear",
-        "unit": "Percent",
-        "steps": null
-      },
-      "default": 0.0,
-      "bipolar": false,
-      "featured": false
-    },
-    {
-      "addr": "api550/low_freq",
+      "addr": "propeq/low_freq",
       "name": "Low Freq",
       "short_name": null,
       "group": null,
       "kind": {
         "Choice": {
           "options": [
+            "30 Hz",
+            "40 Hz",
             "50 Hz",
             "100 Hz",
             "200 Hz",
+            "300 Hz",
             "400 Hz"
           ]
         }
@@ -854,14 +823,14 @@
         "max": 1.0,
         "scale": "Linear",
         "unit": "None",
-        "steps": 4
+        "steps": 7
       },
-      "default": 0.3333333333333333,
+      "default": 0.5,
       "bipolar": false,
       "featured": false
     },
     {
-      "addr": "api550/low_gain",
+      "addr": "propeq/low_gain",
       "name": "Low Gain",
       "short_name": null,
       "group": null,
@@ -869,23 +838,78 @@
       "range": {
         "min": -12.0,
         "max": 12.0,
-        "scale": "Linear",
+        "scale": {
+          "Curve": {
+            "curve": {
+              "Points": {
+                "points": [
+                  {
+                    "x": 0.0,
+                    "y": 0.0
+                  },
+                  {
+                    "x": 0.1,
+                    "y": 0.125
+                  },
+                  {
+                    "x": 0.2,
+                    "y": 0.25
+                  },
+                  {
+                    "x": 0.3,
+                    "y": 0.3333333333333333
+                  },
+                  {
+                    "x": 0.4,
+                    "y": 0.4166666666666667
+                  },
+                  {
+                    "x": 0.5,
+                    "y": 0.5
+                  },
+                  {
+                    "x": 0.6,
+                    "y": 0.5833333333333334
+                  },
+                  {
+                    "x": 0.7,
+                    "y": 0.6666666666666666
+                  },
+                  {
+                    "x": 0.8,
+                    "y": 0.75
+                  },
+                  {
+                    "x": 0.9,
+                    "y": 0.875
+                  },
+                  {
+                    "x": 1.0,
+                    "y": 1.0
+                  }
+                ]
+              }
+            }
+          }
+        },
         "unit": "Db",
-        "steps": 13
+        "steps": 11
       },
       "default": 0.5,
       "bipolar": true,
       "featured": true
     },
     {
-      "addr": "api550/mid_freq",
+      "addr": "propeq/mid_freq",
       "name": "Mid Freq",
       "short_name": null,
       "group": null,
       "kind": {
         "Choice": {
           "options": [
+            "200 Hz",
             "400 Hz",
+            "600 Hz",
             "800 Hz",
             "1.5 kHz",
             "3 kHz",
@@ -898,14 +922,14 @@
         "max": 1.0,
         "scale": "Linear",
         "unit": "None",
-        "steps": 5
+        "steps": 7
       },
-      "default": 0.5,
+      "default": 0.6666666666666666,
       "bipolar": false,
       "featured": false
     },
     {
-      "addr": "api550/mid_gain",
+      "addr": "propeq/mid_gain",
       "name": "Mid Gain",
       "short_name": null,
       "group": null,
@@ -913,27 +937,82 @@
       "range": {
         "min": -12.0,
         "max": 12.0,
-        "scale": "Linear",
+        "scale": {
+          "Curve": {
+            "curve": {
+              "Points": {
+                "points": [
+                  {
+                    "x": 0.0,
+                    "y": 0.0
+                  },
+                  {
+                    "x": 0.1,
+                    "y": 0.125
+                  },
+                  {
+                    "x": 0.2,
+                    "y": 0.25
+                  },
+                  {
+                    "x": 0.3,
+                    "y": 0.3333333333333333
+                  },
+                  {
+                    "x": 0.4,
+                    "y": 0.4166666666666667
+                  },
+                  {
+                    "x": 0.5,
+                    "y": 0.5
+                  },
+                  {
+                    "x": 0.6,
+                    "y": 0.5833333333333334
+                  },
+                  {
+                    "x": 0.7,
+                    "y": 0.6666666666666666
+                  },
+                  {
+                    "x": 0.8,
+                    "y": 0.75
+                  },
+                  {
+                    "x": 0.9,
+                    "y": 0.875
+                  },
+                  {
+                    "x": 1.0,
+                    "y": 1.0
+                  }
+                ]
+              }
+            }
+          }
+        },
         "unit": "Db",
-        "steps": 13
+        "steps": 11
       },
       "default": 0.5,
       "bipolar": true,
       "featured": true
     },
     {
-      "addr": "api550/high_freq",
+      "addr": "propeq/high_freq",
       "name": "High Freq",
       "short_name": null,
       "group": null,
       "kind": {
         "Choice": {
           "options": [
+            "2.5 kHz",
             "5 kHz",
             "7 kHz",
             "10 kHz",
             "12.5 kHz",
-            "15 kHz"
+            "15 kHz",
+            "20 kHz"
           ]
         }
       },
@@ -942,14 +1021,14 @@
         "max": 1.0,
         "scale": "Linear",
         "unit": "None",
-        "steps": 5
+        "steps": 7
       },
       "default": 0.5,
       "bipolar": false,
       "featured": false
     },
     {
-      "addr": "api550/high_gain",
+      "addr": "propeq/high_gain",
       "name": "High Gain",
       "short_name": null,
       "group": null,
@@ -957,16 +1036,120 @@
       "range": {
         "min": -12.0,
         "max": 12.0,
-        "scale": "Linear",
+        "scale": {
+          "Curve": {
+            "curve": {
+              "Points": {
+                "points": [
+                  {
+                    "x": 0.0,
+                    "y": 0.0
+                  },
+                  {
+                    "x": 0.1,
+                    "y": 0.125
+                  },
+                  {
+                    "x": 0.2,
+                    "y": 0.25
+                  },
+                  {
+                    "x": 0.3,
+                    "y": 0.3333333333333333
+                  },
+                  {
+                    "x": 0.4,
+                    "y": 0.4166666666666667
+                  },
+                  {
+                    "x": 0.5,
+                    "y": 0.5
+                  },
+                  {
+                    "x": 0.6,
+                    "y": 0.5833333333333334
+                  },
+                  {
+                    "x": 0.7,
+                    "y": 0.6666666666666666
+                  },
+                  {
+                    "x": 0.8,
+                    "y": 0.75
+                  },
+                  {
+                    "x": 0.9,
+                    "y": 0.875
+                  },
+                  {
+                    "x": 1.0,
+                    "y": 1.0
+                  }
+                ]
+              }
+            }
+          }
+        },
         "unit": "Db",
-        "steps": 13
+        "steps": 11
       },
       "default": 0.5,
       "bipolar": true,
       "featured": true
     },
     {
-      "addr": "api550/eq_in",
+      "addr": "propeq/low_peak",
+      "name": "LF Peak",
+      "short_name": null,
+      "group": null,
+      "kind": "Toggle",
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 2
+      },
+      "default": 0.0,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "propeq/high_peak",
+      "name": "HF Peak",
+      "short_name": null,
+      "group": null,
+      "kind": "Toggle",
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 2
+      },
+      "default": 0.0,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "propeq/filter",
+      "name": "Filter",
+      "short_name": null,
+      "group": null,
+      "kind": "Toggle",
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 2
+      },
+      "default": 0.0,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "propeq/eq_in",
       "name": "EQ In",
       "short_name": null,
       "group": null,
@@ -983,42 +1166,8 @@
       "featured": true
     },
     {
-      "addr": "api550/drive",
-      "name": "Drive",
-      "short_name": null,
-      "group": null,
-      "kind": "Continuous",
-      "range": {
-        "min": 0.0,
-        "max": 100.0,
-        "scale": "Linear",
-        "unit": "Percent",
-        "steps": null
-      },
-      "default": 0.0,
-      "bipolar": false,
-      "featured": false
-    },
-    {
-      "addr": "api550/trim",
-      "name": "Trim",
-      "short_name": null,
-      "group": null,
-      "kind": "Continuous",
-      "range": {
-        "min": -24.0,
-        "max": 24.0,
-        "scale": "Linear",
-        "unit": "Db",
-        "steps": null
-      },
-      "default": 0.5,
-      "bipolar": true,
-      "featured": false
-    },
-    {
-      "addr": "neve1073/drive",
-      "name": "Drive",
+      "addr": "classaeq/drive",
+      "name": "Gain",
       "short_name": null,
       "group": null,
       "kind": "Continuous",
@@ -1034,7 +1183,7 @@
       "featured": true
     },
     {
-      "addr": "neve1073/high_gain",
+      "addr": "classaeq/high_gain",
       "name": "High Gain",
       "short_name": null,
       "group": null,
@@ -1051,7 +1200,7 @@
       "featured": true
     },
     {
-      "addr": "neve1073/mid_freq",
+      "addr": "classaeq/mid_freq",
       "name": "Mid Freq",
       "short_name": null,
       "group": null,
@@ -1080,7 +1229,7 @@
       "featured": true
     },
     {
-      "addr": "neve1073/mid_gain",
+      "addr": "classaeq/mid_gain",
       "name": "Mid Gain",
       "short_name": null,
       "group": null,
@@ -1097,7 +1246,7 @@
       "featured": true
     },
     {
-      "addr": "neve1073/low_freq",
+      "addr": "classaeq/low_freq",
       "name": "Low Freq",
       "short_name": null,
       "group": null,
@@ -1124,7 +1273,7 @@
       "featured": false
     },
     {
-      "addr": "neve1073/low_gain",
+      "addr": "classaeq/low_gain",
       "name": "Low Gain",
       "short_name": null,
       "group": null,
@@ -1141,7 +1290,7 @@
       "featured": false
     },
     {
-      "addr": "neve1073/hpf",
+      "addr": "classaeq/hpf",
       "name": "High Pass",
       "short_name": null,
       "group": null,
@@ -1168,24 +1317,7 @@
       "featured": false
     },
     {
-      "addr": "neve1073/trim",
-      "name": "Trim",
-      "short_name": null,
-      "group": null,
-      "kind": "Continuous",
-      "range": {
-        "min": -10.0,
-        "max": 10.0,
-        "scale": "Linear",
-        "unit": "Db",
-        "steps": null
-      },
-      "default": 0.5,
-      "bipolar": true,
-      "featured": false
-    },
-    {
-      "addr": "neve1073/phase",
+      "addr": "classaeq/phase",
       "name": "Phase",
       "short_name": null,
       "group": null,
@@ -1202,8 +1334,8 @@
       "featured": false
     },
     {
-      "addr": "neve1073/eq_in",
-      "name": "EQL",
+      "addr": "classaeq/eq_in",
+      "name": "EQ In",
       "short_name": null,
       "group": null,
       "kind": "Toggle",
@@ -1222,7 +1354,7 @@
   "actions": [],
   "streams": [
     {
-      "id": "sslch/out",
+      "id": "consoleeq/out",
       "name": "Output Level",
       "kind": {
         "Level": {
