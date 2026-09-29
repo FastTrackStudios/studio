@@ -5723,6 +5723,7 @@ dependencies = [
 name = "surface-kit"
 version = "0.1.0"
 dependencies = [
+ "design-lint",
  "document-proto",
  "serde_json",
  "surface-memory",

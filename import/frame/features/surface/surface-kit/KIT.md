@@ -36,7 +36,11 @@ like any other nodes.
 - **Legend + scale**: honour `Place::legend` and `Place::scale` (printed scale
   labels, first = start of travel) where the style prints them; otherwise use
   the source kit's defaults for that style.
-- **Binding**: pass `Place::binding` into the control unchanged.
+- **Binding**: pass `Place::binding` into the control unchanged. (One
+  exception: a needle meter whose printed scale isn't linear in dB — a VU
+  card — swaps a *linear* stream binding's `curve` for its scale law, which
+  the runtime's `Gauge` applies over `floor_db..ceiling_db`, so the needle
+  lands on the printed marks. See `meters::scale`.)
   `ComponentDef::binds` says what it expects: `"param"`, `"choice param"`,
   `"toggle param"`, `"level stream"`, `"action"`, `"none"` (panels).
 - **Kinds**: knobs → `ControlKind::Knob { sweep_degrees }` (use the style's real

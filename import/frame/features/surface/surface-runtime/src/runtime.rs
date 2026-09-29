@@ -289,7 +289,10 @@ impl Runtime {
             (ControlKind::Gauge { floor_db, ceiling_db, .. }, Some(Source::Stream { channel, .. })) => {
                 let ch = channel.unwrap_or(0);
                 let m = self.meters.get(&(id, ch));
-                let scale = MeterScale { floor_db: *floor_db, ceiling_db: *ceiling_db, curve: surface_proto::Curve::Linear };
+                // The binding's curve shapes the dB span, so a needle can
+                // follow a printed scale law (a VU card crowds its low end).
+                let curve = control.binding.as_ref().map_or(surface_proto::Curve::Linear, |b| b.curve.clone());
+                let scale = MeterScale { floor_db: *floor_db, ceiling_db: *ceiling_db, curve };
                 ControlState {
                     position: m.map_or(0.0, |m| scale.position(m.level_db(t))),
                     peak: m.map(|m| scale.position(m.peak_hold_db(t))),
