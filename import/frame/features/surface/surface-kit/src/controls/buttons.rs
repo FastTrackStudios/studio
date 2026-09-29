@@ -255,6 +255,8 @@ fn cap(b: &mut Builder<'_>, parent: NodeId, x: f64, y: f64, k: f64, spec: &Spec,
             lit,
             vec![draw::drop_shadow(&alpha(lamp_c, 0.9), 0.0, 0.0, bloom * k), draw::inner_shadow("#ffffff80", 0.0, lip, 0.0)],
         );
+        // Its light rides on the `Led` node, so it dims when the cap goes out.
+        let lit = draw::emissive(lit, draw::hex(lamp_c), 0.6, bloom * k);
         leds.push(b.add(parent, lit));
     }
     // Down in its well: the light on the top lip is now on the bottom one,

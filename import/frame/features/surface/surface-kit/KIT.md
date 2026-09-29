@@ -15,7 +15,7 @@ whose **slots** point at the moving parts:
 
 | role | used for |
 |---|---|
-| `Needle` | anything that rotates with the value (knob pointer/body index, VU needle). Rotates about the **centre of its parent** — so put it inside a square frame centred on the pivot. Draw it at the **centre of travel** (pointing up for a standard 300° knob). |
+| `Needle` | anything that rotates with the value (a knob's turning body, a VU needle). Rotates about the **centre of its parent** — so put it inside a square frame centred on the pivot. Draw it at the **centre of travel** (pointing up for a standard 300° knob). A `Frame` in this slot turns its whole subtree (text included), so a knob's body is a square frame filling the knob holding everything that turns with the shaft: teeth, knurl, index, wing/beak and their shadows, numerals on the skirt. (A `Group`'s own transform is *not* inherited — rotating containers must be frames.) |
 | `ValueArc` | an arc drawn from start of travel to the value |
 | `Fill` / `Thumb` / `PeakHold` | bars and sliders (drawn at full extent / top) |
 | `Value` / `Label` | readout text / legend text (an authored legend wins) |
@@ -53,6 +53,19 @@ like any other nodes.
   `radial_at(cx, cy, r, stops)` (unit-square hot-spot), `conic(start, stops)`
   (brushed metal), `drop_shadow`/`inner_shadow`, geometry `polar`, `sector`,
   `lobed`, `regular`, `polygon`, `rotated`. Angles: degrees, 0 = up, clockwise.
+- **What turns and what doesn't**: the room's light doesn't rotate with a
+  knob. Keep lit shading (off-centre gradients, highlights, rim light,
+  directional shadows) *outside* the `Needle` frame — round tiers under it,
+  highlights in a fixed overlay above it — and paint turning parts with
+  rotation-invariant fills (flat, or radial about the shaft). A turning
+  part's shadow has no offset (it would swing round with it); vectors take
+  box-shaped effect shadows, so soften a turning outline with stacked
+  outsets instead of `drop_shadow`.
+- **Light**: `draw::emissive(node, color, intensity, radius)` sets
+  `Node::emission` where real hardware glows (lamps, jewels, backlit caps,
+  LEDs, a lit meter card or needle). Put it on the node an `Led` slot dims,
+  so the light goes out with the lamp; keep intensities tasteful (≈0.3–0.9).
+  It's optional — a component must read without an effects stage.
 - **Descriptions** are for a model choosing a component: what it looks like,
   which unit it's from, when to use it. One or two sentences.
 

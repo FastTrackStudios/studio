@@ -129,6 +129,24 @@ fn toggles_are_toggles_and_choices_select() {
 }
 
 #[test]
+fn lit_buttons_give_off_light_from_their_led_slot() {
+    for def in families().into_iter().filter(|d| d.family == Family::Button && !d.id.starts_with("button.push_in")) {
+        let built = build(def.id, &placement(&def));
+        for c in built.controls.values() {
+            let lights: Vec<_> = c
+                .slots_of(SlotRole::Led)
+                .filter_map(|id| built.scene.node(NodeId(id))?.emission.clone())
+                .collect();
+            assert_eq!(lights.len(), 1, "{}: one Led node carries the light", def.id);
+            assert!(lights[0].intensity > 0.0 && lights[0].radius > 0.0, "{}", def.id);
+        }
+        // Nothing else in it glows: the light dims with the lamp.
+        let glowing = built.scene.walk(built.root).into_iter().filter(|id| built.scene.node(*id).is_some_and(|n| n.emission.is_some())).count();
+        assert_eq!(glowing, built.controls.len(), "{}", def.id);
+    }
+}
+
+#[test]
 fn banks_follow_their_options() {
     for def in families().into_iter().filter(|d| d.id.ends_with("_bank")) {
         let p = Place::new("Ratio").bind(Binding::param("amp/channel")).options(&["4", "8", "12", "20", "All"]);

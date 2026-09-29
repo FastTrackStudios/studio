@@ -144,3 +144,30 @@ fn the_decibel_card_reads_linearly() {
     let got = needle_angle("meter.vu_ivory", Some("db"), -10.0);
     assert!((got - printed_angle(Card::Decibels, -10.0)).abs() < 0.5);
 }
+
+/// Names of the nodes under `root` that give off light.
+fn lights(id: &str, variant: Option<&str>) -> Vec<String> {
+    let p = Place { variant: variant.map(str::to_string), ..Place::new("Out").bind(level()) };
+    let (scene, root) = placed(id, &p);
+    scene.walk(root).into_iter().filter_map(|n| scene.node(n).filter(|n| n.emission.is_some()).map(|n| n.name.clone())).collect()
+}
+
+#[test]
+fn lit_meters_give_off_light_where_the_lamp_shows() {
+    assert_eq!(lights("meter.vu_amber", None), vec!["lamp", "lamp hotspot"]);
+    assert!(lights("meter.vu_ivory", None).is_empty(), "a white lamp only tints its card");
+    assert_eq!(lights("meter.vu_ivory", Some("lit_amber")), vec!["card"], "a lit frame glows round the opening");
+    assert_eq!(lights("meter.vu_backlit", Some("red")), vec!["lamp", "needle core"]);
+}
+
+#[test]
+fn a_backlit_needle_is_a_turning_group_of_halo_lines() {
+    let (scene, root) = placed("meter.vu_backlit", &Place::new("Out").bind(level()));
+    let control = scene.node(root).and_then(|n| n.control.clone()).expect("control");
+    let needle = scene.node(NodeId(control.slots_of(SlotRole::Needle).next().expect("needle"))).expect("needle node");
+    assert!(matches!(needle.kind, NodeKind::Frame));
+    let names: Vec<_> = needle.children.iter().map(|c| scene.node(*c).expect("child").name.as_str()).collect();
+    assert_eq!(names, ["halo 0", "halo 1", "halo 2", "needle core"]);
+    let widths: Vec<f64> = needle.children.iter().map(|c| scene.node(*c).expect("child").size.width).collect();
+    assert!(widths.windows(2).all(|w| w[0] > w[1]), "widest halo first: {widths:?}");
+}

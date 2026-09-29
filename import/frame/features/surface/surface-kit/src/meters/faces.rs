@@ -55,6 +55,9 @@ pub struct Lamp {
     pub y: f64,
     pub reach: f64,
     pub core: Option<(&'static str, f64, f64, f64)>,
+    /// The light the lamp throws past the card, as `(wash, hotspot)` bloom
+    /// intensities — zero where the real meter's lamp is only a tint.
+    pub light: (f64, f64),
 }
 
 /// The frame lip's shadow on the card: from the top lip and the left side.
@@ -293,6 +296,7 @@ pub static AMBER: Face = Face {
         reach: 70.0,
         // The spot you can see plainly in the middle of an LA-2A's face.
         core: Some(("rgba(255,236,186,0.42)", 50.0, 56.0, 30.0)),
+        light: (0.35, 0.6),
     }),
     glass: Some(GLASS),
     bezel: &BLACK_RACK,
@@ -312,6 +316,7 @@ pub static IVORY: Face = Face {
         y: 8.0,
         reach: 68.0,
         core: Some(("rgba(255,252,242,0.26)", 50.0, 54.0, 28.0)),
+        light: (0.0, 0.0),
     }),
     glass: Some(GLASS),
     bezel: &BLACK_RACK,
@@ -331,6 +336,7 @@ pub static AMBER_BLUE: Face = Face {
         y: 8.0,
         reach: 68.0,
         core: Some(("rgba(255,238,190,0.34)", 50.0, 55.0, 28.0)),
+        light: (0.0, 0.0),
     }),
     glass: Some(GLASS),
     bezel: &BLACK_RACK,
@@ -350,6 +356,7 @@ pub static BLUE: Face = Face {
         y: 8.0,
         reach: 68.0,
         core: Some(("rgba(206,232,255,0.26)", 50.0, 55.0, 28.0)),
+        light: (0.0, 0.0),
     }),
     glass: Some(GLASS),
     bezel: &BLACK_RACK,
@@ -371,7 +378,8 @@ pub static BACKLIT: Face = Face {
         hub_opacity: 0.55,
         halo: Some(("rgba(190,222,255,0.34)", 6.5)),
     },
-    lamp: Some(Lamp { color: "rgba(130,190,255,0.50)", x: 50.0, y: 102.0, reach: 60.0, core: None }),
+    // The pool behind the needle is the one lamp you can see glowing.
+    lamp: Some(Lamp { color: "rgba(130,190,255,0.50)", x: 50.0, y: 102.0, reach: 60.0, core: None, light: (0.8, 0.0) }),
     glass: Some(Lin {
         angle: 146.0,
         stops: &[

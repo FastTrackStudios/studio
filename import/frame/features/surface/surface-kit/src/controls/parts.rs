@@ -109,7 +109,9 @@ pub(crate) fn lamp(b: &mut Builder<'_>, parent: NodeId, cx: f64, cy: f64, d: f64
         draw::circle("lamp", cx, cy, r, rad(0.36, 0.30, 0.95, &hot)),
         vec![draw::drop_shadow(&alpha(color, 0.85), 0.0, 0.0, d * 0.8)],
     );
-    b.add(parent, lit)
+    // The light it throws, on the lit lens itself so an `Led` slot dimming
+    // it (off = 20%) dims the light with it.
+    b.add(parent, draw::emissive(lit, draw::hex(color), 0.9, d))
 }
 
 /// A solid paint from a computed colour string.

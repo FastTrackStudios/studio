@@ -7,21 +7,23 @@
 //!
 //! ```text
 //! <root control=Knob{sweep}>          box × (box + legend)
-//!   knob   (square, centred on the shaft — the needle's pivot)
-//!     scale: arc / ticks / dots / numerals printed on the panel
-//!     shadows, tiers (outermost first), light, knurl
-//!     index  ← Needle slot: everything that turns, drawn pointing up
-//!     hub
+//!   knob   (square, centred on the shaft)
+//!     scale: arc / ticks / dots / numerals printed on the panel   (fixed)
+//!     shadows and the round tiers, lit by the room               (fixed)
+//!     body  ← Needle slot: a square frame over the knob, turning about
+//!             the shaft with everything that turns — teeth, knurl, index,
+//!             wing / beak, the skirt's numerals — drawn pointing up
+//!     light: highlights, the light on teeth and mouldings, the hub (fixed)
 //!   legend ← Label slot (Place::legend, else the bound param's name)
 //! ```
 //!
-//! Only the `Needle` node turns (the renderer doesn't compose a parent's
-//! rotation into its children, and text doesn't rotate), so everything that
-//! has to turn is geometry in that one vector node — two colours at most:
-//! its fill and its stroke geometry. Knurls and gear teeth are rotationally
-//! symmetric and stay put; the light never turns anyway.
+//! The renderer composes a frame's rotation into its children, so the body
+//! is ordinary nodes (text included). What must *not* turn is what the room
+//! does to the knob: the shading of a round tier is its lighting, so round
+//! tiers stay put under the body, and a turning part's own paint is kept
+//! rotation-invariant (centred on the shaft) with the directional light laid
+//! over it from the fixed overlay above.
 
-mod glyphs;
 pub mod spec;
 
 use document_proto::{
@@ -248,6 +250,16 @@ fn circle_path(cx: f64, cy: f64, r: f64) -> String {
     )
 }
 
+/// A full circle wound the other way: a hole in a nonzero path.
+fn circle_path_ccw(cx: f64, cy: f64, r: f64) -> String {
+    format!(
+        "M {:.3} {cy:.3} A {r:.3} {r:.3} 0 1 0 {:.3} {cy:.3} A {r:.3} {r:.3} 0 1 0 {:.3} {cy:.3} Z ",
+        cx + r,
+        cx - r,
+        cx + r
+    )
+}
+
 /// The scalloped outline (the source's quadratic lobes, sampled): radius
 /// `r`, `lobes` of `depth` (same units), centred on (`cx`, `cy`).
 fn scallop(cx: f64, cy: f64, r: f64, lobes: u32, depth: f64) -> Vec<(f64, f64)> {
@@ -380,33 +392,48 @@ fn build(b: &mut Builder<'_>, parent: NodeId, p: &Place, spec: &KnobSpec, title:
     let root = b.add(parent, draw::frame(name, 0.0, 0.0, side, height));
     let knob = b.add(root, draw::frame("knob", 0.0, 0.0, side, side));
 
+    // ── fixed: the panel, the shadows, the round (lit) tiers ──
     printed_scale(b, knob, g, spec, &labels, ring_r, label_r);
-
-    // Body shadow, sized to the outermost tier: the knob sits proud.
     let outer = spec.tiers.first().map_or(1.0, |t| t.r);
     let (sx, sy) = g.p(0.0, 1.5);
     b.add(knob, ellipse("body shadow", sx, sy, BODY_R * outer * k, vec![Paint::solid(css("rgba(0,0,0,0.35)"))]));
-
     for (i, tier) in spec.tiers.iter().enumerate() {
         add_tier(b, knob, g, tier, tint, i);
+    }
+    if let Index::Beak { .. } = spec.index {
+        // The lobe is centred on the shaft: its cast shadow never moves.
+        let (x, y) = g.p(0.9, 1.8);
+        b.add(knob, ellipse("moulding shadow", x, y, BODY_R * BEAK_LOBE * k, vec![Paint::solid(css("rgba(0,0,0,0.45)"))]));
+    }
+
+    // ── turning: the body ──
+    let body = b.add(knob, draw::frame("body", 0.0, 0.0, side, side));
+    for (i, tier) in spec.tiers.iter().enumerate() {
+        if let Edge::Toothed { teeth, depth } = tier.edge {
+            add_teeth(b, body, g, tier, (teeth, depth), tint, i);
+        }
+    }
+    if let Some(fl) = spec.flutes {
+        add_flutes(b, body, g, d, &fl);
+    }
+    add_index(b, body, g, spec, tint, &labels);
+
+    // ── fixed: the room's light over it, and the shaft ──
+    for (i, tier) in spec.tiers.iter().enumerate() {
+        if let Edge::Toothed { depth, .. } = tier.edge {
+            let r = BODY_R * tier.r * k;
+            let depth = BODY_R * depth * k;
+            let ring = circle_path(g.c, g.c, r - depth * 0.3) + &circle_path_ccw(g.c, g.c, r - depth);
+            b.add(knob, vector(&format!("tier {i} light"), 0.0, 0.0, side, side, ring, vec![room_light(0.16, 0.26)]));
+        }
+    }
+    if let Index::Beak { .. } = spec.index {
+        let lobe = circle_path(g.c, g.c, BODY_R * BEAK_LOBE * k * 0.98);
+        b.add(knob, vector("moulding light", 0.0, 0.0, side, side, lobe, vec![room_light(0.24, 0.20)]));
     }
     if let Some(lit) = spec.specular {
         add_light(b, knob, g, d, &lit);
     }
-    if let Some(fl) = spec.flutes {
-        add_flutes(b, knob, g, d, &fl);
-    }
-    if let Index::Beak { .. } = spec.index {
-        // The chicken-head's lobe is centred on the shaft, so its shadow and
-        // edge don't move when it turns: drawn fixed, under the moulding.
-        let (x, y) = g.p(0.9, 1.8);
-        b.add(knob, ellipse("moulding shadow", x, y, BODY_R * BEAK_LOBE * k, vec![Paint::solid(css("rgba(0,0,0,0.45)"))]));
-        let mut edge = ellipse("moulding edge", g.c, g.c, BODY_R * BEAK_LOBE * k, Vec::new());
-        edge = outline(edge, css("rgba(0,0,0,0.55)"), (0.9 * k).max(0.6), StrokeAlign::Outside);
-        b.add(knob, edge);
-    }
-
-    let needle = b.add(knob, index_node(g, spec, tint, &labels));
     if let Some(hub) = spec.hub {
         b.add(knob, ellipse("hub", g.c, g.c, 2.6 * k, vec![Paint::solid(css(hub))]));
     }
@@ -419,11 +446,42 @@ fn build(b: &mut Builder<'_>, parent: NodeId, p: &Place, spec: &KnobSpec, title:
     let legend_node = b.add(root, legend(p.legend.as_deref().unwrap_or(""), legend_y, side, legend_size));
 
     let mut c = Control::new(ControlKind::Knob { sweep_degrees: spec.sweep })
-        .slot(SlotRole::Needle, needle.0)
+        .slot(SlotRole::Needle, body.0)
         .slot(SlotRole::Label, legend_node.0);
     c.binding = p.binding.clone();
     b.controls.insert(root, c);
     root
+}
+
+/// The room's light on a turning part, as a fixed wash laid over it: lit
+/// from the upper left (`lit` white) into shadow at the lower right (`dark`
+/// black).
+fn room_light(lit: f64, dark: f64) -> Paint {
+    linear(
+        160.0,
+        &[
+            (0.0, Color { a: lit, ..WHITE }),
+            (0.42, Color { a: 0.0, ..WHITE }),
+            (0.58, Color { a: 0.0, ..BLACK }),
+            (1.0, Color { a: dark, ..BLACK }),
+        ],
+    )
+}
+
+/// A straight stroke from `a` to `b`, `w` wide and square-capped, as a
+/// closed subpath (always wound the same way, so overlaps union).
+fn seg(a: (f64, f64), b: (f64, f64), w: f64) -> String {
+    let (dx, dy) = (b.0 - a.0, b.1 - a.1);
+    let len = dx.hypot(dy).max(1e-6);
+    let (ux, uy) = (dx / len * w / 2.0, dy / len * w / 2.0);
+    let (nx, ny) = (-uy, ux);
+    let p = [
+        (a.0 - ux + nx, a.1 - uy + ny),
+        (b.0 + ux + nx, b.1 + uy + ny),
+        (b.0 + ux - nx, b.1 + uy - ny),
+        (a.0 - ux - nx, a.1 - uy - ny),
+    ];
+    format!("{} ", fmt_pts(&p))
 }
 
 /// The scale printed on the panel around the knob (the source's `Ring`).
@@ -435,7 +493,7 @@ fn printed_scale(b: &mut Builder<'_>, knob: NodeId, g: Geo, spec: &KnobSpec, lab
         RingKind::Ticks => {
             let arc = draw::sector(g.c, g.c, (ring_r - 0.3) * g.k, (ring_r + 0.3) * g.k, angle(0.0), angle(1.0));
             b.add(knob, draw::with_opacity(vector("scale arc", 0.0, 0.0, side, side, arc, vec![draw::solid(INK)]), 0.35));
-            let tick = |n: f64, len: f64, w: f64| glyphs::quad(g.polar(ring_r - 1.0, angle(n)), g.polar(ring_r + len, angle(n)), w * g.k);
+            let tick = |n: f64, len: f64, w: f64| seg(g.polar(ring_r - 1.0, angle(n)), g.polar(ring_r + len, angle(n)), w * g.k);
             let majors: String = at.iter().map(|n| tick(*n, 5.0, 1.4)).collect();
             let minors: String = at.windows(2).map(|w| tick((w[0] + w[1]) / 2.0, 3.0, 0.8)).collect();
             if !majors.is_empty() {
@@ -469,18 +527,35 @@ fn printed_scale(b: &mut Builder<'_>, knob: NodeId, g: Geo, spec: &KnobSpec, lab
     }
 }
 
-fn add_tier(b: &mut Builder<'_>, knob: NodeId, g: Geo, tier: &Tier, tint: Option<Color>, i: usize) {
-    let k = g.k;
-    let r = BODY_R * tier.r * k;
-    let name = format!("tier {i}");
-    let fills = match tier.paint {
+/// The paints a tier's surface takes (empty for a groove).
+fn tier_fills(tier: &Tier, tint: Option<Color>) -> Vec<Paint> {
+    match tier.paint {
         TierPaint::Surface { grad, finish, tint: tintable } => match (tintable, tint) {
             (true, Some(c)) => tinted(finish, c),
             _ => grad_paints(grad),
         },
         TierPaint::Flat(c) => vec![Paint::solid(css(c))],
         TierPaint::Groove { .. } => Vec::new(),
-    };
+    }
+}
+
+/// A tier's body colour, for the parts of it that turn (teeth).
+fn tier_color(tier: &Tier, tint: Option<Color>) -> Color {
+    match (tier.paint, tint) {
+        (TierPaint::Surface { tint: true, .. }, Some(t)) => t,
+        (TierPaint::Surface { grad: Grad::Linear(_, s) | Grad::Radial(_, _, s), .. }, _) => css(s[s.len() / 2].1),
+        (TierPaint::Surface { grad: Grad::Brushed, .. }, _) => css("#b4b4af"),
+        (TierPaint::Flat(c) | TierPaint::Groove { color: c, .. }, _) => css(c),
+    }
+}
+
+/// A tier's fixed part: a round tier whole (its shading is the room's
+/// light), a toothed tier's shadow and the lit disc inside its teeth.
+fn add_tier(b: &mut Builder<'_>, knob: NodeId, g: Geo, tier: &Tier, tint: Option<Color>, i: usize) {
+    let k = g.k;
+    let r = BODY_R * tier.r * k;
+    let name = format!("tier {i}");
+    let fills = tier_fills(tier, tint);
     match tier.edge {
         Edge::Round => {
             if tier.shadow > 0.0 {
@@ -513,23 +588,38 @@ fn add_tier(b: &mut Builder<'_>, knob: NodeId, g: Geo, tier: &Tier, tint: Option
             }
             b.add(knob, n);
         }
-        Edge::Toothed { teeth, depth } => {
-            // A path in the tier's own square, so its gradient maps to it.
-            let (x0, side) = (g.c - r - 2.0, 2.0 * r + 4.0);
-            let local = side / 2.0;
-            let pts = scallop(local, local, r, teeth, BODY_R * depth * k);
+        Edge::Toothed { depth, .. } => {
+            let depth = BODY_R * depth * k;
             if tier.shadow > 0.0 {
-                let d = fmt_pts(&pts);
-                let dy = BODY_R * tier.shadow * k;
-                b.add(knob, vector(&format!("{name} shadow"), x0, x0 + dy, side, side, d, vec![Paint::solid(css("rgba(0,0,0,0.45)"))]));
+                // Round, so the teeth turning over it don't drag it along.
+                let (x, y) = g.p(0.0, BODY_R * tier.shadow);
+                b.add(knob, ellipse(&format!("{name} shadow"), x, y, r - depth * 0.45, vec![Paint::solid(css("rgba(0,0,0,0.45)"))]));
             }
-            let mut n = vector(&name, x0, x0, side, side, fmt_pts(&pts), fills);
-            if let Some((c, w)) = tier.stroke {
-                n = with_stroke_geometry(n, outline_band(local, local, &pts, (w * k).max(0.5)), css(c));
-            }
-            b.add(knob, n);
+            // The disc inside the teeth, lit like a round tier; the teeth
+            // turn over its edge.
+            b.add(knob, ellipse(&name, g.c, g.c, r - depth + 0.5, fills));
         }
     }
+}
+
+/// A toothed tier's teeth: a band from the tooth roots out, shaded about
+/// the shaft only (so it can turn), with the tier's outline.
+fn add_teeth(b: &mut Builder<'_>, body: NodeId, g: Geo, tier: &Tier, (teeth, depth): (u32, f64), tint: Option<Color>, i: usize) {
+    let r = BODY_R * tier.r * g.k;
+    let depth = BODY_R * depth * g.k;
+    let (x0, side) = (g.c - r - 2.0, 2.0 * r + 4.0);
+    let local = side / 2.0;
+    let pts = scallop(local, local, r, teeth, depth);
+    let band = format!("{} {}", fmt_pts(&pts), circle_path_ccw(local, local, r - depth));
+    let c = tier_color(tier, tint);
+    let root = (r - depth) / local;
+    let stops = [(0.0, hex_of(c)), (root, hex_of(c)), (1.0, hex_of(draw::mix(c, BLACK, 0.35)))];
+    let fill = draw::radial_at(0.5, 0.5, 0.5, &refs(&stops));
+    let mut n = vector(&format!("tier {i} teeth"), x0, x0, side, side, band, vec![fill]);
+    if let Some((sc, w)) = tier.stroke {
+        n = with_stroke_geometry(n, outline_band(local, local, &pts, (w * g.k).max(0.5)), css(sc));
+    }
+    b.add(body, n);
 }
 
 fn shadow_alpha(mut e: Effect, a: f64) -> Effect {
@@ -562,10 +652,10 @@ fn add_light(b: &mut Builder<'_>, knob: NodeId, g: Geo, d: f64, lit: &Specular) 
     }
 }
 
-fn add_flutes(b: &mut Builder<'_>, knob: NodeId, g: Geo, d: f64, fl: &Flutes) {
+fn add_flutes(b: &mut Builder<'_>, body: NodeId, g: Geo, d: f64, fl: &Flutes) {
     let n = flute_count(fl.count, d * fl.to);
     let (inner, outer) = (BODY_R * fl.from, BODY_R * fl.to);
-    let ridge = |a: f64| glyphs::quad(g.polar(inner, a), g.polar(outer, a), fl.width * g.k);
+    let ridge = |a: f64| seg(g.polar(inner, a), g.polar(outer, a), fl.width * g.k);
     let step = 360.0 / f64::from(n);
     let lit: String = (0..n).map(|i| ridge(f64::from(i) * step)).collect();
     let mut node = vector("knurl", 0.0, 0.0, g.size(), g.size(), lit, vec![Paint::solid(css(fl.stroke))]);
@@ -573,7 +663,7 @@ fn add_flutes(b: &mut Builder<'_>, knob: NodeId, g: Geo, d: f64, fl: &Flutes) {
         let shade: String = (0..n).map(|i| ridge(f64::from(i) * step + step / 2.0)).collect();
         node = with_stroke_geometry(node, shade, css(dark));
     }
-    b.add(knob, node);
+    b.add(body, node);
 }
 
 /// How far a Marconi wing overhangs, and how far its tail runs back.
@@ -604,15 +694,29 @@ fn bar(g: Geo, from: f64, to: f64, width: f64) -> (String, String) {
     (rrect(x - o, y - o, w + 2.0 * o, h + 2.0 * o, r + o), rrect(x, y, w, h, r))
 }
 
-/// The `Needle`: every part that turns, drawn pointing up, as one vector —
-/// its fill geometry in one colour and its stroke geometry in a second.
-fn index_node(g: Geo, spec: &KnobSpec, tint: Option<Color>, labels: &[String]) -> Node {
+/// A part's soft contact shadow: its outline `d` in black, blurred — no
+/// offset, so it stays under the part whichever way the part points.
+///
+/// `shape(o)` is the part's outline pushed out by `o` units; the blur is
+/// three stacked outsets, softest outermost (the renderer blurs a vector's
+/// box, not its outline).
+fn contact(b: &mut Builder<'_>, body: NodeId, g: Geo, name: &str, shape: &dyn Fn(f64) -> String, alpha: f64, blur: f64) {
+    for o in [1.0, 0.6, 0.25] {
+        let d = shape(o * blur);
+        b.add(body, vector(name, 0.0, 0.0, g.size(), g.size(), d, vec![Paint::solid(Color { a: alpha / 3.0, ..BLACK })]));
+    }
+}
+
+/// The index: every part that reads the value, drawn pointing up into the
+/// turning `body`.
+#[allow(clippy::too_many_lines)]
+fn add_index(b: &mut Builder<'_>, body: NodeId, g: Geo, spec: &KnobSpec, tint: Option<Color>, labels: &[String]) {
     let side = g.size();
     let pts = |p: &[(f64, f64)]| fmt_pts(&p.iter().map(|(u, v)| g.p(*u, *v)).collect::<Vec<_>>());
-    let node = |d: String, fills: Vec<Paint>| vector("index", 0.0, 0.0, side, side, d, fills);
+    let node = |name: &str, d: String, fills: Vec<Paint>| vector(name, 0.0, 0.0, side, side, d, fills);
     // What the cap's tier is tinted — the colour an index has to read on.
     let face = tint.filter(|_| !matches!(spec.index, Index::Wing { .. }));
-    let mut n = match spec.index {
+    match spec.index {
         Index::Bar { from, to, width, color } => {
             let (edge, line) = bar(g, from, to, width);
             let (fill, fill_color) = match spec.collar_index {
@@ -620,29 +724,41 @@ fn index_node(g: Geo, spec: &KnobSpec, tint: Option<Color>, labels: &[String]) -
                 Some(Index::Bar { from: cf, to: ct, width: cw, color: cc }) => (bar(g, cf, ct, cw).1 + &edge, css(cc)),
                 _ => (edge, css("rgba(0,0,0,0.38)")),
             };
-            with_stroke_geometry(node(fill, vec![Paint::solid(fill_color)]), line, legible(color, face))
+            b.add(body, with_stroke_geometry(node("index", fill, vec![Paint::solid(fill_color)]), line, legible(color, face)));
         }
         Index::Blade { to, half_width, color } => {
             let (l, hw) = (BODY_R * to, BODY_R * half_width);
-            node(pts(&[(-hw, 0.0), (hw, 0.0), (hw * 0.35, -l), (-hw * 0.35, -l)]), vec![Paint::solid(legible(color, face))])
+            let blade = |o: f64| pts(&[(-hw - o, o), (hw + o, o), (hw * 0.35 + o, -l - o), (-hw * 0.35 - o, -l - o)]);
+            contact(b, body, g, "index shadow", &blade, 0.35, 1.2);
+            b.add(body, node("index", blade(0.0), vec![Paint::solid(legible(color, face))]));
         }
         Index::Taper { from, to, hub_half, tip_half, color } => {
             let (f, t) = (BODY_R * from, BODY_R * to);
-            let shape = |dx: f64, dy: f64| pts(&[(-hub_half + dx, -f + dy), (hub_half + dx, -f + dy), (tip_half + dx, -t + dy), (-tip_half + dx, -t + dy)]);
-            with_stroke_geometry(node(shape(0.7, 1.0), vec![Paint::solid(css("rgba(0,0,0,0.34)"))]), shape(0.0, 0.0), legible(color, face))
+            let shape = |dx: f64, dy: f64| {
+                pts(&[(-hub_half + dx, -f + dy), (hub_half + dx, -f + dy), (tip_half + dx, -t + dy), (-tip_half + dx, -t + dy)])
+            };
+            let shadow = node("index", shape(0.7, 1.0), vec![Paint::solid(css("rgba(0,0,0,0.34)"))]);
+            b.add(body, with_stroke_geometry(shadow, shape(0.0, 0.0), legible(color, face)));
         }
         Index::Nose { color } => {
             let w = BODY_R * 0.30;
-            let nose = pts(&[(-w, -(BODY_R * 0.55)), (w, -(BODY_R * 0.55)), (w * 0.34, -(BODY_R + 9.0)), (-w * 0.34, -(BODY_R + 9.0))]);
+            let (base, tip) = (BODY_R * 0.84, BODY_R + 9.0);
+            let nose = |o: f64| pts(&[(-w - o, -base + o), (w + o, -base + o), (w * 0.34 + o, -tip - o), (-w * 0.34 - o, -tip - o)]);
+            let tone = face.map_or_else(|| css("#232327"), |t| draw::mix(t, BLACK, 0.2));
+            contact(b, body, g, "nose shadow", &nose, 0.5, 2.0);
+            b.add(body, node("nose", nose(0.0), vec![Paint::solid(tone)]));
             let (x, y) = g.p(-1.2, -(BODY_R + 7.0));
             let line = rrect(x, y, 2.4 * g.k, BODY_R * 0.55 * g.k, g.k);
-            let body = face.map_or_else(|| css("#232327"), |t| draw::mix(t, BLACK, 0.2));
-            with_stroke_geometry(node(nose, vec![Paint::solid(body)]), line, legible(color, face))
+            b.add(body, node("index", line, vec![Paint::solid(legible(color, face))]));
         }
-        Index::Wing { color, body } => {
-            let w = BODY_R * body * 0.46;
+        Index::Wing { color, body: disc } => {
+            let w = BODY_R * disc * 0.46;
             let (tail, reach) = (BODY_R * WING_TAIL, BODY_R * WING_REACH);
-            let wing = pts(&[(-w, tail), (w, tail), (w * 0.64, -reach), (-w * 0.64, -reach)]);
+            let wing = |o: f64| pts(&[(-w - o, tail + o), (w + o, tail + o), (w * 0.64 + o, -reach - o), (-w * 0.64 - o, -reach - o)]);
+            // The moulding's dark parting line, and the shadow it throws on
+            // the disc under it.
+            contact(b, body, g, "wing shadow", &|o| wing(0.7 + o), 0.55, 2.6);
+            b.add(body, node("wing edge", wing(0.7), vec![Paint::solid(css("rgba(0,0,0,0.72)"))]));
             let paint = tint.unwrap_or_else(|| css("#3a3a40"));
             // The lit flank down the left side, so the wing reads as a raised
             // bar rather than a painted stripe; the right flank falls away.
@@ -658,47 +774,62 @@ fn index_node(g: Geo, spec: &KnobSpec, tint: Option<Color>, labels: &[String]) -
                     (1.0, draw::mix(paint, BLACK, 0.3)),
                 ],
             );
+            b.add(body, node("wing", wing(0.0), vec![fill]));
             let (lx, ly) = g.p(-1.3, -(reach - 3.0));
             let line = rrect(lx, ly, 2.6 * g.k, (reach - 3.0) * g.k, g.k);
-            with_stroke_geometry(node(wing, vec![fill]), line, legible(color, Some(paint)))
+            b.add(body, node("index", line, vec![Paint::solid(legible(color, Some(paint)))]));
         }
         Index::Beak { color, .. } => {
-            let lr = BODY_R * BEAK_LOBE * g.k;
-            let (tx, ty) = g.p(0.0, -(BODY_R * BEAK_REACH));
-            let (sx, sy) = (lr * BEAK_SHOULDER.sin(), -lr * BEAK_SHOULDER.cos());
-            let beak = format!(
-                "M {tx:.3} {ty:.3} L {:.3} {:.3} A {lr:.3} {lr:.3} 0 1 0 {:.3} {:.3} Z",
-                g.c - sx,
-                g.c + sy,
-                g.c + sx,
-                g.c + sy
-            );
+            // `o` px of outline all round.
+            let beak = |o: f64| {
+                let lr = BODY_R * BEAK_LOBE * g.k + o;
+                let (tx, ty) = g.p(0.0, -(BODY_R * BEAK_REACH) - 1.6 * o / g.k);
+                let (sx, sy) = (lr * BEAK_SHOULDER.sin(), -lr * BEAK_SHOULDER.cos());
+                format!(
+                    "M {tx:.3} {ty:.3} L {:.3} {:.3} A {lr:.3} {lr:.3} 0 1 0 {:.3} {:.3} Z",
+                    g.c - sx,
+                    g.c + sy,
+                    g.c + sx,
+                    g.c + sy
+                )
+            };
+            // The moulding's edge and the shadow of its beak turn with it.
+            contact(b, body, g, "moulding shadow", &|o| beak((0.8 + o) * g.k), 0.5, 2.4);
+            b.add(body, node("moulding edge", beak(0.8 * g.k), vec![Paint::solid(css("rgba(0,0,0,0.6)"))]));
             let moulding = tint.unwrap_or_else(|| css("#e8e2d4"));
-            let fill = linear(178.0, &[(0.0, draw::mix(moulding, WHITE, 0.12)), (0.5, moulding), (1.0, draw::mix(moulding, BLACK, 0.14))]);
+            // Shaded about the shaft only; the fixed light over the lobe
+            // does the rest.
+            let lobe = BODY_R * BEAK_LOBE * g.k / side;
+            let stops = [
+                (0.0, hex_of(draw::mix(moulding, WHITE, 0.10))),
+                (lobe * 1.8, hex_of(moulding)),
+                (1.0, hex_of(draw::mix(moulding, BLACK, 0.30))),
+            ];
+            b.add(body, node("moulding", beak(0.0), vec![draw::radial_at(0.5, 0.5, 0.5, &refs(&stops))]));
             let (x, y) = g.p(-1.4, -(BODY_R * (BEAK_REACH - 0.14)));
             let line = rrect(x, y, 2.8 * g.k, BODY_R * (BEAK_REACH - 0.30) * g.k, 1.4 * g.k);
-            with_stroke_geometry(node(beak, vec![fill]), line, legible(color, Some(moulding)))
+            b.add(body, node("index", line, vec![Paint::solid(legible(color, Some(moulding)))]));
         }
         Index::None => {
             // The Distressor: numerals printed on the skirt, standing on the
             // radius, increasing anticlockwise so the one under the panel's
-            // fixed index is the value as the dial turns clockwise.
+            // fixed index is the value as the dial turns clockwise. Each is
+            // real text in a frame turned to its angle.
             let r = BODY_R * 0.80;
-            let at = positions(labels.len());
-            let d: String = labels
-                .iter()
-                .zip(&at)
-                .filter(|(s, _)| !s.is_empty())
-                .map(|(s, n)| {
-                    let a = -(n - 0.5) * spec.sweep;
-                    glyphs::outline(s, 5.4 * g.k, 0.95 * g.k, a, g.polar(r, a))
-                })
-                .collect();
-            node(d, vec![draw::solid("#15171a")])
+            let size = 7.4 * g.k;
+            for (s, n) in labels.iter().zip(positions(labels.len())) {
+                if s.is_empty() {
+                    continue;
+                }
+                let a = -(n - 0.5) * spec.sweep;
+                let mut t = label("numeral", s, g.polar(r, a), size, "#15171a");
+                let (w, h) = (t.size.width, t.size.height);
+                let holder = b.add(body, draw::rotated(draw::frame("numeral", t.transform.tx, t.transform.ty, w, h), a));
+                t.transform = Transform::IDENTITY;
+                b.add(holder, t);
+            }
         }
-    };
-    n.name = "index".into();
-    n
+    }
 }
 
 #[cfg(test)]

@@ -3,7 +3,7 @@
 
 use std::collections::BTreeMap;
 
-use document_proto::{NodeId, Scene};
+use document_proto::{NodeId, NodeKind, Scene};
 use surface_kit::{Family, Place, components, place};
 use surface_proto::{Binding, Control, ControlKind, SlotRole};
 use surface_widgets::{Builder, Theme};
@@ -63,12 +63,43 @@ fn every_knob_places_with_one_needle_inside_it() {
         let subtree = scene.walk(root);
         assert!(subtree.contains(&needle) && needle != root, "{id}'s needle is not a descendant");
         // It turns about its parent's centre, which must be the knob's
-        // shaft: a square frame the needle fills.
+        // shaft: the needle is the knob's body — a square frame filling the
+        // square knob frame, with the turning parts inside it.
         let n = scene.node(needle).unwrap();
+        assert!(matches!(n.kind, NodeKind::Frame), "{id}: the needle is a frame");
+        assert!(!n.children.is_empty(), "{id}: the body carries the turning parts");
         let parent = scene.node(n.parent.unwrap()).unwrap();
         assert!((parent.size.width - parent.size.height).abs() < 1e-9, "{id}: pivot frame not square");
-        assert!(subtree.len() < 150, "{id} is {} nodes", subtree.len());
+        assert_eq!(n.size, parent.size, "{id}: the body fills the pivot frame");
+        assert_eq!(n.transform, document_proto::Transform::IDENTITY, "{id}: drawn at the centre of travel");
+        assert!(subtree.len() < 200, "{id} is {} nodes", subtree.len());
         assert_eq!(control.slots_of(SlotRole::Label).count(), 1, "{id}");
+    }
+}
+
+/// Text inside `id`'s needle frame.
+fn turning_text(id: &str, p: &Place) -> Vec<String> {
+    let (scene, _, control) = placed(id, p).unwrap();
+    let needle = NodeId(control.slots_of(SlotRole::Needle).next().unwrap());
+    scene.walk(needle).into_iter().filter_map(|n| scene.node(n)?.text().map(|t| t.characters.clone())).collect()
+}
+
+#[test]
+fn a_dials_numerals_are_text_that_turns_and_a_panel_scale_does_not() {
+    let turning = turning_text("knob.dial", &Place::new("x").scale(&["0", "5", "10"]));
+    assert_eq!(turning, vec!["0", "5", "10"]);
+    assert!(turning_text("knob.daka", &Place::new("x")).is_empty(), "the Pultec's scale is printed on the panel");
+}
+
+#[test]
+fn the_rooms_light_does_not_turn() {
+    for id in knob_ids() {
+        let (scene, _, control) = placed(id, &Place::new("x")).unwrap();
+        let needle = NodeId(control.slots_of(SlotRole::Needle).next().unwrap());
+        for n in scene.walk(needle) {
+            let name = &scene.node(n).unwrap().name;
+            assert!(!name.contains("light") && name != "hub", "{id}: {name} turns");
+        }
     }
 }
 

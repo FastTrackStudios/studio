@@ -8,7 +8,7 @@
 //! angle are both described.
 
 use document_proto::{
-    BlendMode, Color, CornerRadii, Effect, EffectKind, GradientStop, Node, NodeKind, Paint, PaintKind, Size, Stroke,
+    BlendMode, Color, CornerRadii, Effect, EffectKind, Emission, GradientStop, Node, NodeKind, Paint, PaintKind, Size, Stroke,
     StrokeAlign, TextAlign, TextData, Transform,
 };
 
@@ -190,6 +190,16 @@ pub fn with_effects(mut n: Node, effects: Vec<Effect>) -> Node {
 #[must_use]
 pub fn with_opacity(mut n: Node, o: f64) -> Node {
     n.opacity = o;
+    n
+}
+
+/// Make `n` give off light: `color` blooming `radius` px at `intensity`
+/// (1 = the node's own brightness). Optional by design — renderers without
+/// an effects stage draw a soft glow or nothing — and it scales with the
+/// node's opacity, so put it on the node an `Led` slot dims.
+#[must_use]
+pub fn emissive(mut n: Node, color: Color, intensity: f64, radius: f64) -> Node {
+    n.emission = Some(Emission { color: Color { a: 1.0, ..color }, intensity, radius });
     n
 }
 

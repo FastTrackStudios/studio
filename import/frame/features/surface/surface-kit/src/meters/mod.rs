@@ -313,14 +313,27 @@ fn build(face: &Face, b: &mut Builder<'_>, parent: NodeId, p: &Place) -> NodeId 
         ..document_proto::Stroke::default()
     };
     card_node.effects = vec![inner(css("rgba(0,0,0,0.45)"), 0.0, 0.0, 10.0 * s)];
+    // A lit frame: the lamp's light spills out of the opening onto it.
+    if let Some(g) = bezel.and_then(|z| z.glow) {
+        card_node = draw::emissive(card_node, css(g.color), 0.5, g.spread * s);
+    }
     let card_id = b.add(root, draw::rounded(card_node, 3.0 * s));
 
     // The lamp behind the card: the wash, then the bulb's hotspot inside it.
+    // Where the real lamp shows through, it gives off light too.
     if let Some(l) = face.lamp {
         let color = tint.map_or_else(|| css(l.color), |t| draw::with_alpha(t, 0.5));
-        b.add(card_id, draw::rect("lamp", 0.0, 0.0, cw, ch, glow(l.x, l.y, l.reach, color)));
+        let mut wash = draw::rect("lamp", 0.0, 0.0, cw, ch, glow(l.x, l.y, l.reach, color));
+        if l.light.0 > 0.0 {
+            wash = draw::emissive(wash, color, l.light.0, 18.0 * s);
+        }
+        b.add(card_id, wash);
         if let Some((c, x, y, reach)) = l.core {
-            b.add(card_id, draw::rect("lamp hotspot", 0.0, 0.0, cw, ch, glow(x, y, reach, css(c))));
+            let mut spot = draw::rect("lamp hotspot", 0.0, 0.0, cw, ch, glow(x, y, reach, css(c)));
+            if l.light.1 > 0.0 {
+                spot = draw::emissive(spot, css(c), l.light.1, 10.0 * s);
+            }
+            b.add(card_id, spot);
         }
     }
 
@@ -370,28 +383,33 @@ fn build(face: &Face, b: &mut Builder<'_>, parent: NodeId, p: &Place) -> NodeId 
     }
 
     // The needle, in a square frame centred on the pivot so the `Needle`
-    // slot rotates about it; drawn at the centre of travel (straight up). The
-    // slot is one leaf node — the renderer rotates a node's own paint, not a
-    // group's children — so a lit needle's bloom is its outside stroke (the
-    // source's widest halo stroke) rather than extra lines.
+    // slot rotates about it; drawn at the centre of travel (straight up). A
+    // lit needle is a group — the frame's rotation carries its children — of
+    // layered halo lines, widest and faintest first, under the needle itself.
     let w = face.needle.width * k;
     let len = NEEDLE_LEN * k;
-    let bloom = face.needle.halo.map(|(c, spread)| {
-        let color = tint.map_or_else(|| css(c), |t| draw::with_alpha(t, 0.34));
-        (color, (spread - 1.0) * w / 2.0)
-    });
-    let r = len + w + bloom.map_or(0.0, |(_, bw)| bw);
+    let halo = face.needle.halo.map(|(c, spread)| (tint.map_or_else(|| css(c), |t| draw::with_alpha(t, 0.34)), spread));
+    let r = len + w * halo.map_or(1.0, |(_, spread)| spread);
     let pivot = b.add(card_id, draw::frame("needle pivot", PIVOT_X * k - r, PIVOT_Y * k - r, 2.0 * r, 2.0 * r));
-    let mut n = draw::rounded(draw::rect("needle", r - w / 2.0, r - len - w / 2.0, w, len + w, solid(css(face.needle.color))), w / 2.0);
-    if let Some((color, bw)) = bloom {
-        n.stroke = document_proto::Stroke {
-            paints: vec![solid(color)],
-            weight: bw,
-            align: document_proto::StrokeAlign::Outside,
-            ..document_proto::Stroke::default()
-        };
-    }
-    let needle = b.add(pivot, n);
+    let line = |name: &str, lw: f64, color: Color| {
+        draw::rounded(draw::rect(name, r - lw / 2.0, r - len - lw / 2.0, lw, len + lw, solid(color)), lw / 2.0)
+    };
+    let needle_color = css(face.needle.color);
+    let needle = match halo {
+        None => b.add(pivot, line("needle", w, needle_color)),
+        Some((color, spread)) => {
+            let group = b.add(pivot, draw::frame("needle", 0.0, 0.0, 2.0 * r, 2.0 * r));
+            // Each layer's alpha is a share of the source's halo, so the
+            // stack peaks at its colour along the needle and fades outward.
+            for (i, (f, a)) in [(1.0, 0.30), (0.62, 0.45), (0.34, 0.7)].into_iter().enumerate() {
+                let lw = w * (1.0 + (spread - 1.0) * f);
+                b.add(group, line(&format!("halo {i}"), lw, Color { a: color.a * a, ..color }));
+            }
+            let glow = tint.map_or(color, |t| draw::mix(t, draw::hex("#ffffff"), 0.4));
+            b.add(group, draw::emissive(line("needle core", w, needle_color), glow, 0.7, 4.0 * w));
+            group
+        }
+    };
     // The hub, on the card's bottom edge: only its top half shows.
     let hub = draw::circle("hub", PIVOT_X * k, VU_H * k, face.needle.hub_r * k, solid(css(face.needle.color)));
     b.add(card_id, draw::with_opacity(hub, face.needle.hub_opacity));
