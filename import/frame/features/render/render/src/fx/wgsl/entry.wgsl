@@ -24,7 +24,9 @@ fn fx_fs_main(in: FxVsOut) -> @location(0) vec4<f32> {
         // Outside the node's box the subtree draws plainly.
         return sample_src_px(px);
     }
-    // Keep the result a valid premultiplied colour.
+    // Keep the result a valid premultiplied colour, at the node's opacity
+    // (`to_local_x.w` = 1 − opacity).
     let a = clamp(c.a, 0.0, 1.0);
-    return vec4<f32>(clamp(c.rgb, vec3<f32>(0.0), vec3<f32>(a)), a);
+    let o = clamp(1.0 - fx.to_local_x.w, 0.0, 1.0);
+    return vec4<f32>(clamp(c.rgb, vec3<f32>(0.0), vec3<f32>(a)), a) * o;
 }

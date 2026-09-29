@@ -3,7 +3,7 @@
 //! ```text
 //! render_surface --out surface.png [--theme stage-dark|daylight]
 //!                [--markup surface.fm] [--catalog catalog.json] [--set amp/gain=0.8 ...]
-//!                [--stream ID=V[,V2…] ...] [--level -12] [--demo-feeds]
+//!                [--stream ID=V[,V2…] ...] [--stream-file FILE] [--level -12] [--demo-feeds]
 //!                [--scale 2] [--fx gpu|fallback|off] [--time SECONDS]
 //!                [--frames N [--fps 30] [--columns 4] [--gif anim.gif] [--frames-dir DIR]]
 //!                [--set-at SECONDS:addr=v ...] [--stream-at SECONDS:ID=V[,V2…] ...]
@@ -96,6 +96,13 @@ fn run() -> Result<(), String> {
             }
             "--set" => sets.push(set(&args.next().ok_or("--set needs addr=value")?)?),
             "--stream" => streams.push(stream(&args.next().ok_or("--stream needs id=v[,v2…]")?)?),
+            "--stream-file" => {
+                let path = args.next().ok_or("--stream-file needs a file")?;
+                let text = std::fs::read_to_string(&path).map_err(|e| format!("reading {path}: {e}"))?;
+                for line in text.lines().map(str::trim).filter(|l| !l.is_empty() && !l.starts_with('#')) {
+                    streams.push(stream(line)?);
+                }
+            }
             "--set-at" => {
                 let (t, kv) = at(&args.next().ok_or("--set-at needs SECONDS:addr=value")?, "--set-at")?;
                 timeline.push((t, Change::Set(set(&kv)?)));

@@ -169,9 +169,13 @@ colour, stems from node to 0 dB, the gold sum, and node rings (a 3 px 8 %
 ring 4 px out, a 40 % outline); frequency and dB labels and the range
 picker where processor's DOM puts them. The band panel, chip and menus are
 unchanged and paint after the light. Variant `panel` keeps the lit-panel
-look (the glow in its `glow` frame under the traces). An engine registers
-its own `eq.response` (signal: `eq-dsp`) for exact curves; frame's builtin
-is RBJ.
+look (the glow in its `glow` frame under the traces). `no_range` hides the
+range picker, as the rig shows none (Blitz draws its `<select>` empty). An
+engine registers its own `eq.response` (signal: `eq-dsp`) for exact curves;
+frame's builtin is RBJ sections with the band's Q read as Pro-Q (and
+`eq-dsp`) reads it — a cut's Q scales its most resonant section with Q 1 =
+Butterworth, a bell's and a notch's section runs at Q/√2 — so at the rig's
+defaults its curves land on the rig's to the pixel.
 
 ### Lit visualizers
 
@@ -192,6 +196,13 @@ layer (`viz::lit`; params and feeds from `viz::lit_catalog`):
   are bucketed (a tap's bar by loudness, a reflection by age, a shimmer by
   brightness) and gradients that travel (the delay sweep's trail, the
   shimmer's band) are drawn in slices.
+- **Compositing**: a lit shader's result lands as signal's rig shows it:
+  processor's `ShaderSurface` alpha-blends the panel into a cleared texture
+  and vello composites that texture as straight alpha, so a partly covered
+  pixel is `rgb·a²` over the ground (`viz_out`) — every falloff, haze and
+  fill is darker than the shader's maths alone. A shader node's effective
+  opacity (its own × its ancestors') applies to its result, as it would to
+  the subtree it replaces (the rig dims an unselected lane to 60 %).
 - **Colour**: `color=#hex` (the lane colour; processor's defaults
   otherwise: comp grey, delay `#3b82f6`, reverb `#a78bfa`, modulation
   `#22d3ee` — `#f472b6` for motion).

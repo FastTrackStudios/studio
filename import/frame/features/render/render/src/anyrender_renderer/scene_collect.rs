@@ -943,6 +943,7 @@ impl Cx<'_> {
                     params: fx.params.clone(),
                     control: nearest_control(scene, node_id),
                     inputs: fx.inputs.clone(),
+                    opacity: effective_opacity,
                 });
             }
         }

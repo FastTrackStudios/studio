@@ -576,6 +576,14 @@ fn eq_graph(b: &mut Builder<'_>, parent: NodeId, p: &Place) -> NodeId {
         .slot(SlotRole::Label, rv.0)
         .interacting(Interact { double_click: vec![Command::Reset { addr: ParamAddr::new(ad.view("range")) }], ..Interact::default() });
     b.controls.insert(range, rc);
+    // `no_range`: signal's rig mounts the graph where Blitz draws its range
+    // `<select>` as nothing (a 12 × 6 box, no text) — the rig shows no
+    // picker, and a surface recreating the rig shows none either.
+    if p.flag("no_range")
+        && let Some(n) = b.scene.node_mut(range)
+    {
+        n.visible = false;
+    }
     // (The rig's graph has no layer toggles: its analyser shows what's fed.)
     let toggles = if rig { Vec::new() } else { vec![("pre", "PRE", "#8c8c96"), ("post", "POST", "#64b4ff"), ("ext", "EXT", "#ffaa50")] };
     for (i, (k, legend, color)) in toggles.into_iter().enumerate() {

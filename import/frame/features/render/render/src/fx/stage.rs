@@ -387,6 +387,10 @@ fn region_uniforms(r: &ShaderRegion, frame: &Frame<'_>, w: u32, h: u32) -> (FxUn
         params,
         inputs: [[0; 4]; 8],
     };
+    let mut uniforms = uniforms;
+    // `to_local_x.w` (otherwise unused) carries how much the region fades:
+    // 1 − its effective opacity (0 for an opaque node).
+    uniforms.to_local[0][3] = (1.0 - r.opacity.clamp(0.0, 1.0)) as f32;
     (uniforms, box_px)
 }
 

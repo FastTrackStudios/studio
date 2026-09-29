@@ -58,6 +58,10 @@ pub struct ShaderRegion {
     pub control: Option<(NodeId, Option<f64>)>,
     /// The live data the shader reads (resolved per frame by the host).
     pub inputs: Vec<document_proto::ShaderInput>,
+    /// The node's effective opacity (its own × its ancestors'): the effect's
+    /// result is laid down at this opacity, as the subtree it replaces
+    /// would have been.
+    pub opacity: f64,
 }
 
 /// Everything the effects stage runs for one frame.

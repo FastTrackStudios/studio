@@ -22,12 +22,17 @@ fn tonemap(c: vec3<f32>) -> vec3<f32> {
     return c * ((l / (1.0 + l)) / l);
 }
 
-// A panel shader's result (premultiplied `rgb`, `a`), as processor's panel
-// texture composites it (alpha-blended into a cleared target, then laid over
-// the panel's ground): straight colour `rgb`, coverage `a`.
+// A panel shader's result (premultiplied `rgb`, `a`), as it lands on screen
+// in signal's rig. processor's `ShaderSurface` renders it with
+// `ALPHA_BLENDING` into a cleared target (texel `rgb·a`, `a`), and vello
+// composites that texture as STRAIGHT alpha (`register_texture` declares
+// `ImageAlphaType::Alpha`), multiplying by `a` once more: what reaches the
+// screen is `rgb·a²` over the ground at `1 − a`. Every partly covered pixel
+// — a glow's falloff, a haze, a fill — is that much darker than the shader's
+// own maths says; this is the picture the rig shows, so it is the one drawn.
 fn viz_out(c: vec4<f32>) -> vec4<f32> {
     let a = clamp(c.a, 0.0, 1.0);
-    return vec4<f32>(c.rgb * a, a);
+    return vec4<f32>(c.rgb * a * a, a);
 }
 
 // processor's `lane::beats` — the beat grid its time lanes draw as 1 px

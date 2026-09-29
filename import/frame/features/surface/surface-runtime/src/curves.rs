@@ -291,8 +291,10 @@ impl Biquad {
     }
 }
 
-/// The sections of one EQ band (cuts cascade Butterworth sections to their
-/// slope; a 12 dB/oct cut keeps the band's own Q as its resonance).
+/// The sections of one filter band, by the textbook (cuts cascade
+/// Butterworth sections to their slope; a 12 dB/oct cut keeps the band's own
+/// Q as its resonance; bells and notches take their Q as the RBJ Q) — what
+/// `filter.response` draws. An EQ band is [`eq_band_sections`].
 #[must_use]
 pub fn band_sections(shape: Shape, freq: f64, gain: f64, q: f64, slope_db: f64, sample_rate: f64) -> Vec<Biquad> {
     match shape {
@@ -324,6 +326,40 @@ pub fn band_sections(shape: Shape, freq: f64, gain: f64, q: f64, slope_db: f64, 
             Biquad::rbj(Shape::HighShelf, freq, gain / 2.0, 0.3, sample_rate),
         ],
         _ => vec![Biquad::rbj(shape, freq, gain, q, sample_rate)],
+    }
+}
+
+/// The sections of one EQ band with the band's Q in Pro-Q's sense — which is
+/// processor's `eq-dsp`, what signal's rig (and FTS EQ) designs and draws:
+///
+/// - a cut's Q scales its most resonant Butterworth section, and `Q = 1` is
+///   Butterworth (`cascade_qs`: analog damping `√2 / (Q_natural · Q)`), so
+///   the default 0.707 is a gentler knee, 6 dB down at the corner;
+/// - a bell's and a notch's section runs at `Q / √2` (`bell_s2_proq4`,
+///   `notch`), so 0.707 is a broad Q-0.5 bell.
+///
+/// Shelves and the rest are [`band_sections`]'s.
+#[must_use]
+pub fn eq_band_sections(shape: Shape, freq: f64, gain: f64, q: f64, slope_db: f64, sample_rate: f64) -> Vec<Biquad> {
+    match shape {
+        Shape::LowCut | Shape::HighCut => {
+            let high = shape == Shape::LowCut;
+            let order = ((slope_db / 6.0).round() as i64).clamp(1, 16) as usize;
+            let mut out: Vec<Biquad> = (0..order / 2)
+                .map(|k| {
+                    let theta = (order - 2 * k - 1) as f64 * PI / (2 * order) as f64;
+                    // The first section is the most resonant (θ largest).
+                    let user = if k == 0 { q.max(1e-3) } else { 1.0 };
+                    Biquad::rbj(shape, freq, 0.0, user / (2.0 * theta.cos()), sample_rate)
+                })
+                .collect();
+            if order % 2 == 1 {
+                out.push(Biquad::first_order(high, freq, sample_rate));
+            }
+            out
+        }
+        Shape::Bell | Shape::Notch => vec![Biquad::rbj(shape, freq, gain, q * std::f64::consts::FRAC_1_SQRT_2, sample_rate)],
+        _ => band_sections(shape, freq, gain, q, slope_db, sample_rate),
     }
 }
 
@@ -374,7 +410,7 @@ pub fn eq_response(inputs: &CurveInputs) -> Vec<Series> {
         let shape = Shape::from_index(arg("shape").unwrap_or(0.0));
         let slope = arg("slope_index").map_or_else(|| arg("slope").unwrap_or(12.0), slope_db);
         let (gain, q) = (arg("gain").unwrap_or(0.0), arg("q").unwrap_or(0.707));
-        let sections = band_sections(shape, freq, gain, q, slope, sr);
+        let sections = eq_band_sections(shape, freq, gain, q, slope, sr);
         let db = |f: f64| sections.iter().map(|s| s.db_at(f, sr)).sum::<f64>();
         let pts: Vec<(f64, f64)> = xs.iter().map(|&f| (f, db(f))).collect();
         for (acc, (_, db)) in sum.iter_mut().zip(&pts) {
@@ -390,7 +426,7 @@ pub fn eq_response(inputs: &CurveInputs) -> Vec<Series> {
         }
         if let Some(range) = arg("dyn_range") {
             let pts = if range.abs() >= 0.05 && shape.uses_gain() {
-                let far = band_sections(shape, freq, gain + range, q, slope, sr);
+                let far = eq_band_sections(shape, freq, gain + range, q, slope, sr);
                 xs.iter().map(|&f| (f, far.iter().map(|s| s.db_at(f, sr)).sum::<f64>())).collect()
             } else {
                 Vec::new()
@@ -533,17 +569,26 @@ mod tests {
     #[test]
     fn cuts_fall_at_their_slope() {
         for slope in [6.0, 12.0, 18.0, 24.0, 48.0] {
-            let s = band_sections(Shape::LowCut, 1000.0, 0.0, 0.707, slope, 96_000.0);
+            // Q 1 is Butterworth in Pro-Q's sense (and eq-dsp's).
+            let s = eq_band_sections(Shape::LowCut, 1000.0, 0.0, 1.0, slope, 96_000.0);
             let db = |f: f64| s.iter().map(|b| b.db_at(f, 96_000.0)).sum::<f64>();
             // Between one and two octaves down: close to the slope per octave.
             let per_oct = db(500.0) - db(250.0);
             assert!((per_oct - slope).abs() < 1.2, "{slope} dB/oct cut falls {per_oct} dB/oct");
             assert!(db(10_000.0).abs() < 0.1, "passband flat");
-            if slope != 12.0 {
-                // Butterworth: −3 dB at the corner.
-                assert!((db(1000.0) + 3.01).abs() < 0.1, "{slope}: {} at the corner", db(1000.0));
-            }
+            // Butterworth: −3 dB at the corner.
+            assert!((db(1000.0) + 3.01).abs() < 0.1, "{slope}: {} at the corner", db(1000.0));
         }
+    }
+
+    /// The default Q (0.707) is eq-dsp's `highpass_s2_proq4` at analog
+    /// damping √2/Q = 2: critically damped, 6 dB down at the corner — what
+    /// signal's rig draws for a 12 dB/oct cut.
+    #[test]
+    fn a_default_q_cut_is_six_db_down_at_the_corner() {
+        let s = eq_band_sections(Shape::LowCut, 80.0, 0.0, 0.707, 12.0, 48_000.0);
+        let db = s.iter().map(|b| b.db_at(80.0, 48_000.0)).sum::<f64>();
+        assert!((db + 6.0).abs() < 0.1, "{db} at the corner");
     }
 
     #[test]

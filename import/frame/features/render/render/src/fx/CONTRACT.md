@@ -33,7 +33,9 @@ fn effect(uv: vec2<f32>) -> vec4<f32>
 ```
 
 - `uv` — node-local, `0..1` across the node's box (`(0,0)` = its top-left).
-- Return a **premultiplied** RGBA colour. The stage clamps `rgb` to `0..a`.
+- Return a **premultiplied** RGBA colour. The stage clamps `rgb` to `0..a`
+  and scales the result by the node's effective opacity (its own × its
+  ancestors'), as the subtree it replaces would have been.
 - Sample with `textureSampleLevel` (or the helpers below).
 - Don't declare bindings or entry points; the stage prepends the prelude
   below and appends `fx_vs_main`/`fx_fs_main`. Names starting with `fx_` are
@@ -50,7 +52,8 @@ struct FxUniforms {
     param_mask: u32,      // bit i set = param slot i given by the document
     resolution: vec2<f32>,  // target size, px
     node_size: vec2<f32>,   // the node's box, node units
-    to_local_x: vec4<f32>,  // target px → node-local units (rows of a 2×3
+    to_local_x: vec4<f32>,  // target px → node-local units (rows of a 2×3;
+                            //   `.w` = 1 − the node's effective opacity
     to_local_y: vec4<f32>,  //   affine: local = (dot(x.xyz, (px,1)), dot(y.xyz, (px,1))))
     to_px_x: vec4<f32>,     // node-local units → target px
     to_px_y: vec4<f32>,
