@@ -75,6 +75,23 @@ impl Engine for SurfaceEngineClient {
     }
 }
 
+/// Connect to an engine served over a WebSocket (e.g. signal's
+/// `ws://127.0.0.1:4040/vox`), optionally picking a rig by instance scope
+/// (`"guitar"`), and return its `SurfaceEngine` client.
+///
+/// # Errors
+/// When the socket can't be opened or the vox handshake fails.
+#[cfg(feature = "remote")]
+pub async fn connect_ws(url: &str, scope: Option<&str>) -> Result<SurfaceEngineClient, EngineError> {
+    let link = vox_websocket::WsLink::connect(url).await.map_err(|e| EngineError(format!("ws connect {url}: {e:?}")))?;
+    let client: SurfaceEngineClient =
+        vox_core::initiator_on(link).establish().await.map_err(|e| EngineError(format!("vox handshake: {e:?}")))?;
+    Ok(match scope {
+        Some(s) => architect::scope_client!(client, s.to_string()),
+        None => client,
+    })
+}
+
 /// Fetch the catalog and current values and build a runtime for `surface`.
 ///
 /// # Errors

@@ -9,11 +9,16 @@ publish = false
 surface-proto = { path = "../surface-proto", default-features = false }
 document-proto = { path = "../../document/document-proto", default-features = false }
 uuid.workspace = true
+architect = { workspace = true, optional = true }
+vox-core = { workspace = true, optional = true }
+vox-websocket = { workspace = true, optional = true }
 
 [features]
 default = ["vox"]
 # The vox client as an `Engine` (remote engines).
 vox = ["surface-proto/vox"]
+# Connect to a remote engine over a WebSocket (`sync::connect_ws`).
+remote = ["vox", "dep:architect", "architect/vox", "dep:vox-core", "dep:vox-websocket"]
 
 [dev-dependencies]
 architect = { workspace = true, features = ["vox", "local"] }
