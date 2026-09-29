@@ -2218,6 +2218,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "frame-mcp"
+version = "0.1.0"
+dependencies = [
+ "design-session",
+ "document-proto",
+ "document-text",
+ "serde_json",
+ "surface-memory",
+]
+
+[[package]]
 name = "funty"
 version = "2.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"

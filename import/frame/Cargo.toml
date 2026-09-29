@@ -7,6 +7,7 @@ resolver = "2"
 members = [
     # ── apps ──────────────────────────────────────────────────────────
     "apps/frame/cli",
+    "apps/frame/mcp",
     # ── facade ────────────────────────────────────────────────────────
     "crates/frame",
     # ── design: AI authoring — lint, tools, MCP ──────────────────────
@@ -34,6 +35,7 @@ members = [
 ]
 default-members = [
     "apps/frame/cli",
+    "apps/frame/mcp",
     "crates/frame",
     "features/design/design-lint",
     "features/design/design-session",
