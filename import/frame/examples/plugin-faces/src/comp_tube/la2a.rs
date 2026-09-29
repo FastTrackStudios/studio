@@ -9,7 +9,8 @@
 //! or release to touch.
 
 use document_proto::NodeId;
-use surface_kit::Place;
+use surface_kit::{Ink as KitInk, Place};
+use surface_proto::{MeterTap, SourceSelect};
 use surface_widgets::Builder;
 
 use super::ui::{self, Ink};
@@ -47,38 +48,40 @@ fn build(b: &mut Builder<'_>, root: NodeId) {
     ui::silk_left(b, panel, "Optical · Tube · T4 Cell", x0, 80.0, Ink::new(7.5, DIM).weight(600.0).track(0.16));
 
     // COMPRESS / LIMIT — the switch that decides the knee.
-    let sw = ui::put(b, panel, "switch.toggle_bat", &Place::new("Compress / Limit").size(46.0).legend("Mode").options(&["Limit", "Compress"]).bind(ui::bind("la2a/limit")));
+    let sw = ui::put(b, panel, "switch.toggle_bat", &Place::new("Compress / Limit").size(46.0).legend("Mode").options(&["Limit", "Compress"]).ink(dark()).bind(ui::bind("la2a/limit")));
     let (sw_w, _) = ui::size_of(b, sw);
     ui::move_to(b, sw, x0 + 58.0 - sw_w / 2.0 + 18.0, 118.0);
-    ui::reink(b, sw, INK);
     ui::caption_style(b, sw, 8.0, 700.0, DIM);
 
     // ── Gain | meter | Peak reduction ────────────────────────────────
     let scale = ["0", "10", "20", "30", "40", "50", "60", "70", "80", "90", "100"];
     let numerals = Ink::new(8.0, INK).weight(600.0).track(0.0);
-    let gain = ui::rotary_at(b, panel, "knob.pointer", &Place::new("Gain").size(60.0).legend("Gain").scale(&scale).bind(ui::bind("la2a/gain")), 262.0, ROW);
-    ui::reink(b, gain, INK);
-    ui::knob_scale(b, panel, gain, (262.0, ROW), 62.0, &scale, numerals);
+    let gain = ui::rotary_at(b, panel, "knob.pointer", &Place::new("Gain").size(60.0).legend("Gain").scale(&scale).ink(dark()).bind(ui::bind("la2a/gain")), 262.0, ROW);
+    ui::knob_scale(b, panel, gain, (262.0, ROW), 62.0, 300.0, &scale, numerals);
     ui::caption_style(b, gain, 11.0, 800.0, INK);
 
-    ui::centred_at(b, panel, "meter.vu_amber", &Place::new("Gain Reduction meter").size(206.0).variant("black_rack").legend("VU").bind(ui::stream("la2a/gr")), W / 2.0, ROW - 6.0);
+    // The meter switch really switches it: the output on its +10 range,
+    // gain reduction, or the output on +4.
+    let vu = Place::new("Gain Reduction meter").size(206.0).variant("black_rack").legend("VU").bind(ui::stream("la2a/gr")).select(SourceSelect::new(
+        "la2a/meter",
+        vec![Some(MeterTap::new("la2a/out").offset(-10.0)), Some(MeterTap::new("la2a/gr")), Some(MeterTap::new("la2a/out").offset(-4.0))],
+    ));
+    ui::centred_at(b, panel, "meter.vu_amber", &vu, W / 2.0, ROW - 6.0);
     ui::silk(b, panel, "Gain Reduction", W / 2.0, 224.0, Ink::new(7.5, DIM).weight(700.0).track(0.24));
 
-    let peak = ui::rotary_at(b, panel, "knob.pointer", &Place::new("Peak Reduction").size(60.0).legend("Peak Reduction").scale(&scale).bind(ui::bind("la2a/peak_reduction")), W - 262.0, ROW);
-    ui::reink(b, peak, INK);
-    ui::knob_scale(b, panel, peak, (W - 262.0, ROW), 62.0, &scale, numerals);
+    let peak = ui::rotary_at(b, panel, "knob.pointer", &Place::new("Peak Reduction").size(60.0).legend("Peak Reduction").scale(&scale).ink(dark()).bind(ui::bind("la2a/peak_reduction")), W - 262.0, ROW);
+    ui::knob_scale(b, panel, peak, (W - 262.0, ROW), 62.0, 300.0, &scale, numerals);
     ui::caption_style(b, peak, 11.0, 800.0, INK);
 
     // ── Meter selector over power, right ─────────────────────────────
     let mx = 790.0;
-    let meter = ui::selector(b, panel, &Place::new("Meter").size(40.0).variant("black").legend("Meter").bind(ui::bind("la2a/meter")), (mx, 70.0), &["+10", "GR", "+4"], numerals, INK);
+    let meter = ui::selector(b, panel, &Place::new("Meter").size(40.0).variant("black").legend("Meter").bind(ui::bind("la2a/meter")), (mx, 70.0), &["+10", "GR", "+4"], numerals);
     ui::caption_style(b, meter, 8.5, 800.0, INK);
     ui::caption_y(b, meter, 102.0);
 
-    let power = ui::put(b, panel, "switch.toggle_bat", &Place::new("Power").size(40.0).legend("Power").options(&["On", "Off"]).bind(ui::bind("la2a/power")));
+    let power = ui::put(b, panel, "switch.toggle_bat", &Place::new("Power").size(40.0).legend("Power").options(&["On", "Off"]).ink(dark()).bind(ui::bind("la2a/power")));
     let (pw, _) = ui::size_of(b, power);
     ui::move_to(b, power, mx - pw / 2.0 - 4.0, 150.0);
-    ui::reink(b, power, INK);
     ui::caption_style(b, power, 8.0, 700.0, DIM);
     ui::centred_at(b, panel, "button.jewel", &Place::new("Pilot").size(22.0).variant("red").bind(ui::bind("la2a/power")), mx + 34.0, 172.0);
 
@@ -86,4 +89,9 @@ fn build(b: &mut Builder<'_>, root: NodeId) {
     ui::silk_left(b, panel, "Input 600 Ω · Output +10 dBm max", x0, 224.0, Ink::new(6.5, DIM).weight(600.0).track(0.14));
     ui::silk_right(b, panel, "Serial No. 2A-1965", W - 52.0, 224.0, Ink::new(6.5, DIM).weight(600.0).track(0.14));
     ui::fit_root(b, root, panel);
+}
+
+/// The kit's print in the panel's black-brown ink.
+fn dark() -> KitInk {
+    KitInk::Color(INK.into())
 }

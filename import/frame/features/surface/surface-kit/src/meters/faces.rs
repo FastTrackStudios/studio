@@ -296,7 +296,7 @@ pub static AMBER: Face = Face {
         reach: 70.0,
         // The spot you can see plainly in the middle of an LA-2A's face.
         core: Some(("rgba(255,236,186,0.42)", 50.0, 56.0, 30.0)),
-        light: (0.35, 0.6),
+        light: (0.05, 0.0),
     }),
     glass: Some(GLASS),
     bezel: &BLACK_RACK,

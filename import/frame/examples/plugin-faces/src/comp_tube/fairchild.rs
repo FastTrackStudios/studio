@@ -14,7 +14,7 @@
 
 use document_proto::NodeId;
 use surface_kit::{Place, draw};
-use surface_proto::{Range, Unit};
+use surface_proto::{Range, Unit, ValueFormat};
 use surface_widgets::Builder;
 
 use super::ui::{self, Ink};
@@ -89,29 +89,30 @@ fn build(b: &mut Builder<'_>, root: NodeId) {
     // ── The channel ──────────────────────────────────────────────────
     let numerals = Ink::new(8.0, INK).weight(600.0).track(0.0);
     let knob = |b: &mut Builder<'_>, name: &str, addr: &str, scale: &[&str], x: f64, value: &str| {
+        let format = Some(ValueFormat::decimals(1));
         let k = ui::rotary_at(b, panel, "knob.bakelite", &Place::new(name).size(64.0).legend(name).scale(scale).bind(ui::bind(addr)), x, ROW);
-        ui::knob_scale(b, panel, k, (x, ROW), 52.0, scale, numerals);
+        ui::knob_scale(b, panel, k, (x, ROW), 52.0, 300.0, scale, numerals);
         ui::caption_style(b, k, 9.5, 800.0, INK);
         ui::caption_y(b, k, CAPTION);
-        ui::readout(b, panel, &format!("{name} readout"), ui::bind(addr), (x, READOUT), (64.0, 16.0), value, GLOW);
+        ui::readout(b, panel, &format!("{name} readout"), ui::bind(addr), (x, READOUT), (64.0, 16.0), value, GLOW, format);
     };
-    knob(b, "Input Gain", "fairchild/input_gain", &["-20", "-16", "-12", "-8", "-4", "0"], 118.0, "0.00 dB");
+    knob(b, "Input Gain", "fairchild/input_gain", &["-20", "-16", "-12", "-8", "-4", "0"], 118.0, "0.0 dB");
     knob(b, "Threshold", "fairchild/threshold", &["-40", "-32", "-24", "-16", "-8", "0"], 252.0, "-18.0 dB");
 
     // TIME CONSTANT — six detents, and the plate that says what they are.
     let tc = 400.0;
-    let sw = ui::selector(b, panel, &Place::new("Time Constant").size(56.0).variant("black").legend("Time Constant").bind(ui::bind("fairchild/time_constant")), (tc, ROW), &["1", "2", "3", "4", "5", "6"], numerals.size(9.0).weight(700.0), INK);
+    let sw = ui::selector(b, panel, &Place::new("Time Constant").size(56.0).variant("black").legend("Time Constant").bind(ui::bind("fairchild/time_constant")), (tc, ROW), &["1", "2", "3", "4", "5", "6"], numerals.size(9.0).weight(700.0));
     ui::caption_style(b, sw, 9.5, 800.0, INK);
     ui::caption_y(b, sw, CAPTION);
     time_constant_plate(b, panel, 488.0, ROW - 62.0);
 
     let agc_x = 726.0;
-    let agc = ui::selector(b, panel, &Place::new("AGC").size(48.0).variant("black").legend("AGC").bind(ui::bind("fairchild/agc")), (agc_x, ROW), &["L-R", "Lat-Vert"], numerals, INK);
+    let agc = ui::selector(b, panel, &Place::new("AGC").size(48.0).variant("black").legend("AGC").bind(ui::bind("fairchild/agc")), (agc_x, ROW), &["L-R", "Lat-Vert"], numerals);
     ui::caption_style(b, agc, 9.5, 800.0, INK);
     ui::caption_y(b, agc, CAPTION);
-    ui::readout(b, panel, "AGC readout", ui::bind("fairchild/agc"), (agc_x, READOUT), (76.0, 16.0), "Left / Right", GLOW);
+    ui::readout(b, panel, "AGC readout", ui::bind("fairchild/agc"), (agc_x, READOUT), (76.0, 16.0), "Left / Right", GLOW, None);
 
-    knob(b, "Output", "fairchild/output", &["0", "4", "8", "12", "16", "20"], 852.0, "6.00 dB");
+    knob(b, "Output", "fairchild/output", &["0", "4", "8", "12", "16", "20"], 852.0, "6.0 dB");
 
     ui::fit_root(b, root, panel);
 }

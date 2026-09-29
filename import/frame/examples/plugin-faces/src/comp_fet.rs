@@ -22,10 +22,10 @@
 //! prints the silkscreen, and wires the bindings.
 
 use document_proto::{Node, NodeId, NodeKind, TextAlign, TextCase, Transform};
-use surface_kit::{Place, draw, place};
+use surface_kit::{Ink, Place, TOUCH_MIN, draw, place};
 use surface_proto::{
-    Binding, ButtonMode, Control, ControlKind, EntryId, ParamInfo, Range, SlotRole, StreamInfo,
-    StreamKind, Unit,
+    Binding, Control, ControlKind, EntryId, MeterTap, ParamInfo, Range, SlotRole, SourceSelect,
+    StreamInfo, StreamKind, Unit, ValueFormat,
 };
 use surface_widgets::Builder;
 
@@ -184,13 +184,6 @@ fn unit(b: &mut Builder<'_>, root: NodeId, f: &Finish) {
             "ends=ears",
         ]),
     );
-    // The renderer paints an *inside* stroke on a clipped, rounded frame as
-    // a ~15 px dark band along the top edge; centred, it's the hairline the
-    // kit means.
-    if let Some(n) = b.scene.node_mut(panel) {
-        n.stroke.align = document_proto::StrokeAlign::Center;
-    }
-
     // ── INPUT / OUTPUT ──
     big_knob(b, panel, f, "Input", INPUT, 140.0);
     big_knob(b, panel, f, "Output", OUTPUT, 322.0);
@@ -200,22 +193,13 @@ fn unit(b: &mut Builder<'_>, root: NodeId, f: &Finish) {
     time_knob(b, panel, f, "Release", RELEASE, 466.0, 222.0);
 
     // ── ratio: push-ins, printed 20 at the top with All above ──
-    let ratio = bank(
-        b,
-        panel,
-        "Ratio",
-        RATIO,
-        &["All", "20", "12", "8", "4"],
-        572.0,
-        f,
-    );
-    reverse_select(b, ratio);
+    bank(b, panel, "Ratio", RATIO, RATIOS, true, 572.0, f);
 
     // ── the blue band: jewel, meter, lettering, readouts ──
     meter_band(b, panel);
 
     // ── meter source ──
-    bank(b, panel, "Meter", METER_SRC, METER, 888.0, f);
+    bank(b, panel, "Meter", METER_SRC, METER, false, 888.0, f);
 }
 
 /// Place a kit component (the ids here are the kit's own; a typo is a bug).
@@ -232,17 +216,6 @@ fn size_of(b: &Builder<'_>, id: NodeId) -> (f64, f64) {
 fn move_to(b: &mut Builder<'_>, id: NodeId, x: f64, y: f64) {
     if let Some(n) = b.scene.node_mut(id) {
         n.transform = Transform::translate(x, y);
-    }
-}
-
-/// Repaint every text / scale node under `id` whose name is in `names`.
-fn repaint(b: &mut Builder<'_>, id: NodeId, names: &[&str], color: &str) {
-    for n in b.scene.walk(id) {
-        if let Some(node) = b.scene.node_mut(n)
-            && names.contains(&node.name.as_str())
-        {
-            node.fills = vec![draw::solid(color)];
-        }
     }
 }
 
@@ -274,51 +247,21 @@ fn ink(
     n
 }
 
-/// Set a knob's legend (the kit's `Label` slot) in the panel's ink, and
-/// give it a `Value` readout under the legend.
-fn style_knob(
-    b: &mut Builder<'_>,
-    knob: NodeId,
-    f: &Finish,
-    legend_size: f64,
-    readout: Option<f64>,
-) {
-    repaint(b, knob, &["numeral", "scale dots"], f.ink);
-    let (w, h) = size_of(b, knob);
-    for n in b.scene.walk(knob) {
-        if let Some(node) = b.scene.node_mut(n)
-            && node.name == "legend"
-            && let NodeKind::Text(t) = &mut node.kind
-        {
-            t.font_size = legend_size;
-            t.font_weight = Some(750.0);
-            t.letter_spacing = legend_size * 0.16;
-            t.text_case = TextCase::Upper;
-            node.size.height = (legend_size * 1.35).ceil();
-            node.fills = vec![draw::solid(f.ink)];
-        }
-    }
-    if let Some(size) = readout {
-        let value = draw::text(
-            "readout",
-            "—",
-            0.0,
-            h + 1.0,
-            w,
-            size,
-            f.dim,
-            TextAlign::Center,
-        );
-        let value = b.add(knob, with_weight(value, 500.0));
-        if let Some(n) = b.scene.node_mut(knob) {
-            n.size.height = h + 1.0 + (size * 1.35).ceil();
-        }
-        if let Some(c) = b.controls.get_mut(&knob) {
-            c.slots.push(surface_proto::Slot {
-                role: SlotRole::Value,
-                node: value.0,
-            });
-        }
+/// A live `Value` readout printed under a knob's legend (the kit's knob
+/// prints none), in the finish's secondary ink.
+fn readout_under(b: &mut Builder<'_>, knob: NodeId, f: &Finish, size: f64) {
+    let label = b.controls.get(&knob).and_then(|c| c.slots_of(SlotRole::Label).next());
+    let (w, _) = size_of(b, knob);
+    let top = label
+        .and_then(|l| b.scene.node(NodeId(l)))
+        .map_or(w, |n| n.transform.ty + n.size.height);
+    let value = draw::text("readout", "—", 0.0, top + 1.0, w, size, f.dim, TextAlign::Center);
+    let value = b.add(knob, with_weight(value, 500.0));
+    if let Some(c) = b.controls.get_mut(&knob) {
+        c.slots.push(surface_proto::Slot {
+            role: SlotRole::Value,
+            node: value.0,
+        });
     }
 }
 
@@ -341,9 +284,11 @@ fn big_knob(b: &mut Builder<'_>, panel: NodeId, f: &Finish, legend: &str, addr: 
             .legend(legend)
             .scale(ATTEN)
             .variant("silver")
+            .ink(Ink::Color(f.ink.into()))
+            .touch(TOUCH_MIN)
             .bind(Binding::param(addr)),
     );
-    style_knob(b, k, f, 12.0, Some(10.0));
+    readout_under(b, k, f, 10.0);
     let (w, _) = size_of(b, k);
     move_to(b, k, cx - w / 2.0, ROW - 8.0 - w / 2.0);
 }
@@ -368,27 +313,30 @@ fn time_knob(
             .legend(legend)
             .scale(TIMES)
             .variant("silver")
+            .ink(Ink::Color(f.ink.into()))
+            .touch(TOUCH_MIN)
             .bind(Binding::param(addr)),
     );
-    style_knob(b, k, f, 10.0, None);
     let (w, _) = size_of(b, k);
-    // The kit's legend row sits under the knob; lift it over the top and
-    // trim the frame to the square round the shaft, so the pair can't
-    // overlap and the caption can't be mistaken for the other knob's.
+    // The kit's legend sits under the knob; lift it over the top of the
+    // drawing, so the stacked pair's captions can't be mistaken for each
+    // other's.
     let kids: Vec<NodeId> = b
         .scene
         .node(k)
         .map(|n| n.children.clone())
         .unwrap_or_default();
+    let drawing_top = kids
+        .iter()
+        .filter_map(|id| b.scene.node(*id))
+        .find(|n| n.name == "knob")
+        .map_or(0.0, |n| n.transform.ty);
     for id in kids {
         if let Some(n) = b.scene.node_mut(id)
             && n.name == "legend"
         {
-            n.transform = Transform::translate(n.transform.tx, -n.size.height - 4.0);
+            n.transform = Transform::translate(n.transform.tx, drawing_top - n.size.height - 4.0);
         }
-    }
-    if let Some(n) = b.scene.node_mut(k) {
-        n.size.height = w;
     }
     // Small knobs print small numerals; bring them up to a readable size.
     for id in b.scene.walk(k) {
@@ -414,27 +362,26 @@ fn time_knob(
 
 /// A push-in bank with its caps centred on `cx`, title above, in the
 /// panel's ink.
+#[allow(clippy::too_many_arguments)]
 fn bank(
     b: &mut Builder<'_>,
     panel: NodeId,
     title: &str,
     addr: &str,
     options: &[&str],
+    reverse: bool,
     cx: f64,
     f: &Finish,
-) -> NodeId {
+) {
     let cap = 30.0;
-    let id = kit(
-        b,
-        panel,
-        "button.push_in_bank",
-        &Place::new(title)
-            .size(cap)
-            .options(options)
-            .variant("black")
-            .bind(Binding::param(addr)),
-    );
-    repaint(b, id, &["legend"], f.ink);
+    let mut p = Place::new(title)
+        .size(cap)
+        .options(options)
+        .variant("black")
+        .ink(Ink::Color(f.ink.into()))
+        .bind(Binding::param(addr));
+    p.reverse = reverse;
+    let id = kit(b, panel, "button.push_in_bank", &p);
     let (w, _) = size_of(b, id);
     // The caps are the right-hand column of the bank (housing = cap + 2 × 2 px pad).
     let housing = cap + 4.0 * cap / 26.0;
@@ -445,29 +392,6 @@ fn bank(
         panel,
         ink("title", title, (cx, y - 14.0), 10.0, f.ink, (750.0, 0.16)),
     );
-    id
-}
-
-/// The bank prints its options top-to-bottom as select indices 0…n; ours
-/// are printed in the opposite order to the param's, so flip the indices.
-fn reverse_select(b: &mut Builder<'_>, bank: NodeId) {
-    let rows: Vec<NodeId> = b
-        .scene
-        .node(bank)
-        .map(|n| n.children.clone())
-        .unwrap_or_default();
-    for row in rows {
-        if let Some(Control {
-            kind:
-                ControlKind::Button {
-                    mode: ButtonMode::Select { index, count },
-                },
-            ..
-        }) = b.controls.get_mut(&row)
-        {
-            *index = *count - 1 - *index;
-        }
-    }
 }
 
 /// The painted band: power jewel on the blue, the VU movement reading gain
@@ -531,7 +455,18 @@ fn meter_band(b: &mut Builder<'_>, panel: NodeId) {
         &Place::new("GR meter")
             .size(182.0)
             .legend("VU")
-            .bind(Binding::stream(GR)),
+            .bind(Binding::stream(GR))
+            // The METER bank switches the movement: gain reduction, the
+            // output on its +8 or +4 range, or off (at rest).
+            .select(SourceSelect::new(
+                METER_SRC,
+                vec![
+                    Some(MeterTap::new(GR)),
+                    Some(MeterTap::new(OUT_LEVEL).offset(-8.0)),
+                    Some(MeterTap::new(OUT_LEVEL).offset(-4.0)),
+                    None,
+                ],
+            )),
     );
     let (vw, vh) = size_of(b, vu);
     move_to(b, vu, cx - vw / 2.0, 66.0);
@@ -627,8 +562,11 @@ fn readout(
         TextAlign::Right,
     );
     value = with_weight(value, 600.0);
-    let value = b.add(root, value);
-    let mut c = Control::new(ControlKind::Readout).slot(SlotRole::Value, value.0);
+    // Backlit figures: a faint glow of their own.
+    let value = b.add(root, draw::emissive(value, draw::hex("#bfe6f5"), 0.35, 4.0));
+    let mut c = Control::new(ControlKind::Readout)
+        .slot(SlotRole::Value, value.0)
+        .formatted(ValueFormat::decimals(1).unit(""));
     c.binding = Some(Binding::stream(stream));
     b.controls.insert(root, c);
 }

@@ -11,8 +11,7 @@
 //! red gain, blue filter, grey bands.
 
 use document_proto::NodeId;
-use surface_kit::{Place, draw};
-use surface_proto::{Control, ControlKind, SlotRole};
+use surface_kit::{Ink, Place, TOUCH_MIN, detent_sweep, draw};
 use surface_widgets::Builder;
 
 use crate::comp_vca::ui::{self, Glyph, bind};
@@ -29,67 +28,53 @@ const MID_FREQS: &[&str] = &["Off", "·36", "·7", "1·6", "3·2", "4·8", "7·2
 const LOW_FREQS: &[&str] = &["Off", "35", "60", "110", "220"];
 const HPF_FREQS: &[&str] = &["Off", "50", "80", "160", "300"];
 
-/// Collar radius, and the cap's diameter, of a concentric pair.
+/// Collar radius of a concentric pair (the row's scale radius).
 const COLLAR: f64 = 46.0;
-const CAP: f64 = 52.0;
 
-/// A concentric pair: a stepped frequency collar with a gain cap in it.
-///
-/// Two controls may not share a hit box, so the collar's box is the band
-/// *above* the cap (grab the collar by its top edge, as you would the real
-/// one) and the cap's box is the cap; the collar is drawn whole under both.
-#[allow(clippy::too_many_arguments)]
-fn concentric(b: &mut Builder<'_>, panel: NodeId, freq: &str, gain: &str, labels: &[&str], legend: &str, cx: f64) {
-    let (r, pad) = (COLLAR, 32.0);
-    let n = labels.len();
-    let sweep = ui::detent_sweep(n);
-    ui::detents(b, panel, cx, ROW, r + 6.0, r + 17.0, labels, sweep, 8.5, INK);
-
-    // The collar control: its box the band above the cap.
-    let top = ROW - r - pad;
-    let root = b.add(panel, draw::frame(&format!("{legend} frequency"), cx - r - pad, top, 2.0 * (r + pad), ROW - CAP / 2.0 - top));
-    let collar = b.add(root, draw::frame("collar", pad, pad, 2.0 * r, 2.0 * r));
-    let ring = draw::circle("ring", r, r, r, draw::radial_at(0.38, 0.3, 0.9, &[(0.0, "#e3e5e8"), (0.55, "#aeb2b8"), (1.0, "#6c7076")]));
-    let ring = draw::with_effects(draw::stroked(ring, "#00000080", 1.0), vec![draw::drop_shadow("#0000008c", 0.0, 2.5, 6.0), draw::inner_shadow("#ffffff66", 0.0, 1.0, 1.0)]);
-    b.add(collar, ring);
-    // Knurled grip around the rim.
-    let knurl: String = (0..72)
-        .map(|i| {
-            let a = f64::from(i) * 5.0;
-            let (x0, y0) = draw::polar(r, r, r - 5.0, a);
-            let (x1, y1) = draw::polar(r, r, r - 1.2, a);
-            let (nx, ny) = (a.to_radians().cos() * 0.5, a.to_radians().sin() * 0.5);
-            draw::polygon(&[(x0 - nx, y0 - ny), (x0 + nx, y0 + ny), (x1 + nx, y1 + ny), (x1 - nx, y1 - ny)])
-        })
-        .collect();
-    b.add(collar, draw::path("knurl", 0.0, 0.0, 2.0 * r, 2.0 * r, knurl, draw::solid("#00000038")));
-    // The index that turns: a white tab at the rim, drawn at centre of travel.
-    let tab = draw::polygon(&[(r - 3.2, 1.0), (r + 3.2, 1.0), (r + 2.0, 15.0), (r - 2.0, 15.0)]);
-    let index = b.add(collar, draw::path("index", 0.0, 0.0, 2.0 * r, 2.0 * r, tab, draw::solid("#f4f4f0")));
-    let mut c = Control::new(ControlKind::Knob { sweep_degrees: sweep }).slot(SlotRole::Needle, index.0);
-    c.binding = Some(bind(freq));
-    b.controls.insert(root, c);
-
-    // The gain cap in the middle.
-    let p = Place::new(format!("{legend} gain")).size(CAP).variant("grey").bind(bind(gain)).scale(&[""]);
-    let k = ui::put(b, panel, "knob.neve", &p, cx, ROW);
-    ui::strip_scale(b, k);
-    ui::strip_legend(b, k);
-    ui::tighten(b, k, CAP);
-
-    ui::silk(b, panel, legend, cx, ROW + r + 30.0, 9.0, INK, 800.0);
+/// The panel's light ink, for the kit's print.
+fn ink() -> Ink {
+    Ink::Color(INK.into())
 }
 
-/// A wing knob (the two coloured controls on the module).
-fn wing(b: &mut Builder<'_>, panel: NodeId, addr: &str, legend: &str, color: &str, cx: f64) -> NodeId {
-    let p = Place::new(legend).size(80.0).variant(color).bind(bind(addr)).scale(&[""]);
-    let k = ui::put(b, panel, "knob.marconi", &p, cx, ROW);
-    ui::strip_scale(b, k);
-    ui::strip_legend(b, k);
-    if !legend.is_empty() {
-        ui::silk(b, panel, legend, cx, ROW + COLLAR + 30.0, 9.0, INK, 800.0);
+/// A concentric pair: a stepped frequency collar with the gain cap in it —
+/// the cap's control nested in the collar's, so each has its own disc.
+fn concentric(b: &mut Builder<'_>, panel: NodeId, freq: &str, gain: &str, labels: &[&str], legend: &str, cx: f64) {
+    let cap = Place::new(format!("{legend} gain")).bind(bind(gain));
+    let p = Place::new(format!("{legend} frequency"))
+        .size(2.0 * COLLAR)
+        .variant("grey_black")
+        .legend(legend)
+        .keep_case()
+        .scale(labels)
+        .sweep(detent_sweep(labels.len()))
+        .ink(ink())
+        .bind(bind(freq))
+        .inner(cap);
+    let collar = ui::put(b, panel, "knob.concentric", &p, cx, ROW);
+    // The cap is read by its index, as on the module: no second legend.
+    let caps: Vec<NodeId> = b.scene.walk(collar).into_iter().filter(|id| *id != collar && b.controls.contains_key(id)).collect();
+    for c in caps {
+        ui::strip_legend(b, c);
     }
-    k
+}
+
+/// A wing knob (the two coloured controls on the module), its scale printed
+/// round it; `stepped` makes it click through exactly those positions.
+#[allow(clippy::too_many_arguments)]
+fn wing(b: &mut Builder<'_>, panel: NodeId, addr: &str, legend: &str, color: &str, scale: &[&str], stepped: bool, cx: f64) {
+    let p = Place::new(if legend.is_empty() { "Drive" } else { legend }).size(80.0).variant(color).legend(legend).keep_case().ink(ink()).touch(TOUCH_MIN).bind(bind(addr));
+    let p = if stepped { p.options(scale) } else { p.scale(scale) };
+    let k = ui::put(b, panel, "knob.marconi", &p, cx, ROW);
+    if legend.is_empty() {
+        ui::strip_legend(b, k);
+    }
+}
+
+/// A grey knob with its scale printed round it.
+#[allow(clippy::too_many_arguments)]
+fn grey(b: &mut Builder<'_>, panel: NodeId, addr: &str, name: &str, legend: &str, d: f64, scale: &[&str], cx: f64) -> NodeId {
+    let p = Place::new(name).size(d).variant("grey").format(surface_proto::ValueFormat::decimals(1)).legend(legend).keep_case().scale(scale).ink(ink()).touch(TOUCH_MIN).bind(bind(addr));
+    ui::put(b, panel, "knob.neve", &p, cx, ROW)
 }
 
 pub fn face() -> Face {
@@ -99,18 +84,11 @@ pub fn face() -> Face {
 
         // ── Gain: the red wing, the biggest thing on the panel ─────────
         ui::silk(b, panel, "Drive", 140.0, GLYPH_Y, 9.0, INK, 800.0);
-        wing(b, panel, "neve1073/drive", "", "red", 140.0);
-        let drive = ["0", "2", "4", "6", "8", "10"];
-        ui::detents(b, panel, 140.0, ROW, COLLAR + 6.0, COLLAR + 17.0, &drive, 300.0, 8.5, INK);
+        wing(b, panel, "neve1073/drive", "", "red", &["0", "2", "4", "6", "8", "10"], false, 140.0);
 
         // ── High shelf, fixed at 12 kHz ────────────────────────────────
         ui::glyph(b, panel, Glyph::HighShelf, 322.0, GLYPH_Y, 34.0, INK);
-        let p = Place::new("12 kHz").size(64.0).variant("grey").bind(bind("neve1073/high_gain")).scale(&[""]);
-        let k = ui::put(b, panel, "knob.neve", &p, 322.0, ROW);
-        ui::strip_scale(b, k);
-        ui::strip_legend(b, k);
-        ui::detents(b, panel, 322.0, ROW, COLLAR + 6.0, COLLAR + 17.0, &["-16", "-8", "0", "+8", "+16"], 300.0, 8.5, INK);
-        ui::silk(b, panel, "12 kHz", 322.0, ROW + COLLAR + 30.0, 9.0, INK, 800.0);
+        grey(b, panel, "neve1073/high_gain", "12 kHz", "12 kHz", 64.0, &["-16", "-8", "0", "+8", "+16"], 322.0);
 
         // ── Mid and low: concentric pairs ──────────────────────────────
         ui::glyph(b, panel, Glyph::Bell, 510.0, GLYPH_Y, 34.0, INK);
@@ -120,18 +98,12 @@ pub fn face() -> Face {
 
         // ── High pass: the blue wing, stepped ─────────────────────────
         ui::glyph(b, panel, Glyph::HighPass, 888.0, GLYPH_Y, 34.0, INK);
-        let hpf = wing(b, panel, "neve1073/hpf", "Hz", "blue", 888.0);
-        let sweep = ui::detent_sweep(HPF_FREQS.len());
-        ui::set_sweep(b, hpf, sweep);
-        ui::detents(b, panel, 888.0, ROW, COLLAR + 6.0, COLLAR + 17.0, HPF_FREQS, sweep, 8.5, INK);
+        wing(b, panel, "neve1073/hpf", "Hz", "blue", HPF_FREQS, true, 888.0);
 
         // ── Output trim ────────────────────────────────────────────────
         ui::silk(b, panel, "Trim", 1030.0, GLYPH_Y, 9.0, INK, 800.0);
-        let p = Place::new("Trim").size(48.0).variant("grey").bind(bind("neve1073/trim")).scale(&[""]);
-        let t = ui::put(b, panel, "knob.neve", &p, 1030.0, ROW);
-        ui::strip_scale(b, t);
+        let t = grey(b, panel, "neve1073/trim", "Trim", "", 48.0, &["-10", "", "0", "", "+10"], 1030.0);
         ui::strip_legend(b, t);
-        ui::detents(b, panel, 1030.0, ROW, 34.0, 45.0, &["-10", "", "0", "", "+10"], 300.0, 8.5, INK);
         ui::add_value(b, t, 8.0, DIM);
 
         // ── The pale strip: phase and EQL ──────────────────────────────

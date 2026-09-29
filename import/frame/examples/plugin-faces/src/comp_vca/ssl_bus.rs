@@ -8,7 +8,7 @@
 //! carry live readouts under their legends. MIX (the plugin's parallel
 //! blend) sits with IN at the right, apart from the circuit's own controls.
 
-use surface_kit::Place;
+use surface_kit::{Ink, Place, TOUCH_MIN};
 
 use super::ui::{self, bind};
 use crate::face::{Face, canvas};
@@ -24,15 +24,11 @@ const RATIOS: &[&str] = &["2", "4", "10"];
 const ATTACKS: &[&str] = &[".1", ".3", "1", "3", "10", "30"];
 const RELEASES: &[&str] = &[".1", ".3", ".6", "1.2", "Auto"];
 
-/// A collet cap turned into a rotary switch: the kit's even dot ring
-/// swapped for detents at the switch's real spacing.
+/// A collet cap turned into a rotary switch: stepped through its printed
+/// detents, turning exactly as far as they go.
 fn switch_knob(b: &mut surface_widgets::Builder<'_>, panel: document_proto::NodeId, addr: &str, legend: &str, labels: &[&str], cx: f64) {
-    let p = Place::new(legend).size(KNOB).variant("black").legend(legend).bind(bind(addr)).scale(&[""]);
-    let k = ui::put(b, panel, "knob.collet", &p, cx, ROW);
-    ui::strip_scale(b, k);
-    let sweep = ui::detent_sweep(labels.len());
-    ui::set_sweep(b, k, sweep);
-    ui::detents(b, panel, cx, ROW, KNOB / 2.0 + 6.0, KNOB / 2.0 + 16.0, labels, sweep, 8.0, INK);
+    let p = Place::new(legend).size(KNOB).variant("black").legend(legend).options(labels).ink(Ink::Color(INK.into())).touch(TOUCH_MIN).bind(bind(addr));
+    ui::put(b, panel, "knob.collet", &p, cx, ROW);
 }
 
 pub fn face() -> Face {
@@ -57,7 +53,7 @@ pub fn face() -> Face {
         switch_knob(b, panel, "sslbus/attack", "Attack ms", ATTACKS, 548.0);
         switch_knob(b, panel, "sslbus/release", "Release s", RELEASES, 652.0);
 
-        let mk = Place::new("Make-up").size(KNOB).variant("grey").legend("Make-up").bind(bind("sslbus/makeup")).scale(&["0", "6", "12", "18"]);
+        let mk = Place::new("Make-up").size(KNOB).format(surface_proto::ValueFormat::decimals(1)).variant("grey").legend("Make-up").bind(bind("sslbus/makeup")).scale(&["0", "6", "12", "18"]);
         let mk = ui::put(b, panel, "knob.collet", &mk, 756.0, ROW);
         ui::add_value(b, mk, 8.0, DIM);
 

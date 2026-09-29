@@ -2,15 +2,16 @@
 //! meter, in walnut cheeks.
 //!
 //! THRESHOLD (printed in the unit's input volts, 10 mV → 3 V) with its
-//! BELOW / ABOVE lamps — here driven by the gain-reduction stream, so they
-//! do what the real ones do — COMPRESSION from 1:1 to ∞:1 on the unit's own
+//! BELOW / ABOVE lamps — a two-lamp ladder on the gain-reduction stream:
+//! dark with no reduction, BELOW lit as the signal reaches threshold (half
+//! a dB of reduction), ABOVE once it is over (1 dB) — COMPRESSION from 1:1 to ∞:1 on the unit's own
 //! uneven scale, and OUTPUT GAIN ±20 dB. The meter is an amber card printed
 //! in blue with a plain decibel scale, fed by whichever signal the METER
 //! buttons pick (input, output or gain change), as the unit's is.
 
 use document_proto::NodeId;
-use surface_kit::Place;
-use surface_proto::{Binding, Unit};
+use surface_kit::{Ink, Place, TOUCH_MIN};
+use surface_proto::{Binding, Unit, ValueFormat};
 use surface_widgets::Builder;
 
 use super::ui::{self, bind};
@@ -38,14 +39,14 @@ fn header(b: &mut Builder<'_>, panel: NodeId, lines: &[&str], cx: f64) {
     }
 }
 
-/// A fluted aluminium knob with its scale, and the legend taken off: the
-/// header above names it.
+/// A fluted aluminium knob with its scale and no legend: the header above
+/// names it.
 fn knob(b: &mut Builder<'_>, panel: NodeId, addr: &str, name: &str, size: f64, scale: &[&str], cx: f64) -> NodeId {
-    let p = Place::new(name).size(size).variant("silver").bind(bind(addr)).scale(&[""]);
+    let ticks = vec![""; scale.len()];
+    let p = Place::new(name).size(size).variant("silver").scale(&ticks).ink(Ink::Color(INK.into())).touch(TOUCH_MIN).format(ValueFormat::decimals(1)).bind(bind(addr));
     let k = ui::put(b, panel, "knob.metal_fluted", &p, cx, ROW);
     ui::strip_legend(b, k);
-    ui::strip_scale(b, k);
-    ui::print_scale(b, panel, cx, ROW, size / 2.0 + 8.0, scale, 300.0, 8.0, INK);
+    ui::scale_labels(b, panel, cx, ROW, size / 2.0 + 19.0, scale, 300.0, 8.0, INK);
     k
 }
 
@@ -56,9 +57,18 @@ pub fn face() -> Face {
 
         // ── Threshold, with its below/above lamps ──────────────────────
         header(b, panel, &["Threshold"], 180.0);
-        ui::threshold_lamps(b, panel, "dbx160/gr", (138.0, 74.0), (222.0, 74.0), 9.0, ("#f0c93a", "#e0463a"), 1.0);
-        ui::silk_right(b, panel, "Below", 126.0, 74.0, 7.0, DIM, 700.0);
-        ui::silk_left(b, panel, "Above", 234.0, 74.0, 7.0, DIM, 700.0);
+        let lamps = Place::new("Threshold lamps").size(84.0).variant("red").scale(&["0.5", "1"]).options(&["gr"]).bind(Binding::stream("dbx160/gr"));
+        let lamps = ui::put(b, panel, "meter.led_ladder", &lamps, 180.0, 80.0);
+        // The unit prints what the lamps mean, not their thresholds.
+        for id in b.scene.walk(lamps) {
+            if let Some(n) = b.scene.node_mut(id)
+                && n.name == "threshold"
+            {
+                n.visible = false;
+            }
+        }
+        ui::silk_right(b, panel, "Below", 150.0, 74.0, 7.0, DIM, 700.0);
+        ui::silk_left(b, panel, "Above", 210.0, 74.0, 7.0, DIM, 700.0);
         let thr = knob(b, panel, "dbx160/threshold", "Threshold", 60.0, THRESHOLDS, 180.0);
         ui::add_value(b, thr, 8.0, DIM);
 

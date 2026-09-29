@@ -1,11 +1,10 @@
 //! Panel-building helpers shared by the tube faces: placing kit components
-//! by their centre, silkscreen that survives both 1× and 2×, restyling a
-//! component's printed ink for a light panel, readout windows, and the
-//! catalog entries every face declares.
+//! by their centre, silkscreen that survives both 1× and 2×, readout
+//! windows, and the catalog entries every face declares.
 
 use document_proto::{Node, NodeId, NodeKind, Paint, TextAlign, TextCase, TextData, Transform};
-use surface_kit::{Place, draw};
-use surface_proto::{Binding, Control, ControlKind, ParamInfo, Range, SlotRole, StreamInfo, StreamKind, Unit};
+use surface_kit::{Place, TOUCH_MIN, draw};
+use surface_proto::{Binding, Control, ControlKind, ParamInfo, Range, SlotRole, StreamInfo, StreamKind, Unit, ValueFormat};
 use surface_widgets::Builder;
 
 // ── placing ─────────────────────────────────────────────────────────────
@@ -49,19 +48,6 @@ pub fn centred_at(b: &mut Builder<'_>, parent: NodeId, id: &str, p: &Place, cx: 
     let (w, h) = size_of(b, n);
     move_to(b, n, cx - w / 2.0, cy - h / 2.0);
     n
-}
-
-/// Recolour every printed part of a placed component — its text, scale
-/// ticks, dots and detents — for the panel it sits on. The kit prints light
-/// ink for dark panels; the LA-2A's grey and the brushed faces want dark.
-pub fn reink(b: &mut Builder<'_>, root: NodeId, color: &str) {
-    for id in b.scene.walk(root) {
-        let Some(n) = b.scene.node_mut(id) else { continue };
-        let printed = n.text().is_some() || n.name.starts_with("scale ") || n.name == "detent" || n.name == "numeral";
-        if printed {
-            n.fills = vec![draw::solid(color)];
-        }
-    }
 }
 
 /// Restyle a component's caption (its `Label` text) — size, weight, colour.
@@ -127,54 +113,43 @@ pub fn dial_numerals(b: &mut Builder<'_>, parent: NodeId, (cx, cy): (f64, f64), 
 }
 
 /// A knob's scale, re-engraved: the kit's numerals hidden, `labels` set
-/// outward from radius `r` over the knob's 300° travel.
-pub fn knob_scale(b: &mut Builder<'_>, parent: NodeId, knob: NodeId, at: (f64, f64), r: f64, labels: &[&str], ink: Ink<'_>) {
+/// outward from radius `r` over the knob's `sweep`.
+#[allow(clippy::too_many_arguments)]
+pub fn knob_scale(b: &mut Builder<'_>, parent: NodeId, knob: NodeId, at: (f64, f64), r: f64, sweep: f64, labels: &[&str], ink: Ink<'_>) {
     drop_numerals(b, knob);
-    dial_numerals(b, parent, at, r, 300.0, labels, ink);
+    dial_numerals(b, parent, at, r, sweep, labels, ink);
 }
 
 /// A detented rotary selector over a choice param: the kit's chicken-head
-/// (its pointer is one vector, so it turns cleanly) re-swept to the
-/// switch's real detents — at most 60° a step — with a dot at each detent
-/// and the legends engraved outward from them. `variant` is the moulding
-/// (`cream`, `black`, `red`). Returns the control's root.
-#[allow(clippy::too_many_arguments)]
-pub fn selector(
-    b: &mut Builder<'_>,
-    parent: NodeId,
-    p: &Place,
-    at: (f64, f64),
-    labels: &[&str],
-    ink: Ink<'_>,
-    dots: &str,
-) -> NodeId {
-    let n = labels.len().max(2);
-    let step = (300.0 / (n - 1) as f64).min(60.0);
-    let sweep = step * (n - 1) as f64;
-    let blanks = vec![""; n];
-    let place = Place { scale: Some(blanks.iter().map(ToString::to_string).collect()), ..p.clone() };
+/// stepped through `labels` (≤ 60° a detent, its scale printed in the
+/// panel's ink), its hit box tight to the pointer, and the legends
+/// engraved outward at a size the panel can read. `p` carries the moulding
+/// variant, legend and binding. Returns the control's root.
+pub fn selector(b: &mut Builder<'_>, parent: NodeId, p: &Place, at: (f64, f64), labels: &[&str], ink: Ink<'_>) -> NodeId {
+    let place = p.clone().options(labels).ink(surface_kit::Ink::Color(ink.color.to_string())).touch(TOUCH_MIN);
     let root = rotary_at(b, parent, "knob.chicken_head", &place, at.0, at.1);
-    for id in b.scene.walk(root) {
-        if let Some(node) = b.scene.node_mut(id)
-            && node.name.starts_with("scale ")
-        {
-            node.visible = false;
-        }
-    }
-    if let Some(c) = b.controls.get_mut(&root)
-        && let ControlKind::Knob { sweep_degrees } = &mut c.kind
-    {
-        *sweep_degrees = sweep;
-    }
-    let d = p.size.unwrap_or(64.0);
-    let r_dot = d * 0.5 * 1.25 + 4.0;
-    for i in 0..n {
-        let a = (i as f64 / (n - 1) as f64 - 0.5) * sweep;
-        let (x, y) = draw::polar(at.0, at.1, r_dot, a);
-        b.add(parent, draw::circle("detent", x, y, 1.6, draw::solid(dots)));
-    }
-    dial_numerals(b, parent, at, r_dot + 5.0, sweep, labels, ink);
+    // Engrave from where the kit printed its own (clear of its ticks).
+    let r = numeral_radius(b, root).unwrap_or(p.size.unwrap_or(64.0) * 0.8) - 2.0;
+    knob_scale(b, parent, root, at, r, surface_kit::detent_sweep(labels.len()), labels, ink);
     root
+}
+
+/// How far from the shaft a placed rotary prints its numerals: the mean
+/// distance of their centres from the centre of its (tight, shaft-centred)
+/// box.
+fn numeral_radius(b: &Builder<'_>, root: NodeId) -> Option<f64> {
+    let (w, h) = size_of(b, root);
+    let mut acc = Vec::new();
+    let mut stack: Vec<(NodeId, f64, f64)> = b.scene.node(root)?.children.iter().map(|c| (*c, 0.0, 0.0)).collect();
+    while let Some((id, ox, oy)) = stack.pop() {
+        let Some(n) = b.scene.node(id) else { continue };
+        let (x, y) = (ox + n.transform.tx, oy + n.transform.ty);
+        if n.name == "numeral" {
+            acc.push((x + n.size.width / 2.0 - w / 2.0).hypot(y + n.size.height / 2.0 - h / 2.0));
+        }
+        stack.extend(n.children.iter().map(|c| (*c, x, y)));
+    }
+    (!acc.is_empty()).then(|| acc.iter().sum::<f64>() / acc.len() as f64)
 }
 
 /// Repaint a panel with a straight top-to-bottom sheen (`stops` top first).
@@ -280,8 +255,9 @@ pub fn plate(b: &mut Builder<'_>, parent: NodeId, name: &str, x: f64, y: f64, w:
 // ── readouts ────────────────────────────────────────────────────────────
 
 /// A small readout window: a dark recessed glass with the bound value
-/// printed in it (the runtime writes the `Value` slot). `placeholder` is
-/// what a still render shows before the engine speaks.
+/// printed in it (the runtime writes the `Value` slot, in `format`), its
+/// figures lit. `placeholder` is what a still render shows before the
+/// engine speaks.
 #[allow(clippy::too_many_arguments)]
 pub fn readout(
     b: &mut Builder<'_>,
@@ -292,6 +268,7 @@ pub fn readout(
     (w, h): (f64, f64),
     placeholder: &str,
     glow: &str,
+    format: Option<ValueFormat>,
 ) -> NodeId {
     let mut n = draw::frame(name, cx - w / 2.0, cy - h / 2.0, w, h);
     n.fills = vec![draw::solid("#0b0c0d")];
@@ -307,10 +284,10 @@ pub fn readout(
     let ink = Ink::new(size, glow).weight(600.0).track(0.06).plain();
     let mut t = text_node(placeholder, 0.0, h / 2.0, w, &ink, TextAlign::Center);
     t.name = "value".into();
-    t.effects = vec![draw::drop_shadow(&format!("{glow}8c"), 0.0, 0.0, size * 0.5)];
-    let value = b.add(root, t);
+    let value = b.add(root, draw::emissive(t, draw::hex(glow), 0.45, size * 0.6));
     let mut c = Control::new(ControlKind::Readout).slot(SlotRole::Value, value.0);
     c.binding = Some(binding);
+    c.format = format;
     b.controls.insert(root, c);
     root
 }

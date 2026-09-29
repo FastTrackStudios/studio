@@ -9,8 +9,8 @@
 //! whole mix, and POWER.
 
 use document_proto::NodeId;
-use surface_kit::Place;
-use surface_proto::{Range, Unit};
+use surface_kit::{Ink as KitInk, Place};
+use surface_proto::{Range, Unit, ValueFormat};
 use surface_widgets::Builder;
 
 use super::ui::{self, Ink};
@@ -53,15 +53,14 @@ fn build(b: &mut Builder<'_>, root: NodeId) {
     // ── Gain staging, left ───────────────────────────────────────────
     let numerals = Ink::new(8.0, INK).weight(600.0).track(0.0);
     let knob = |b: &mut Builder<'_>, name: &str, addr: &str, scale: &[&str], x: f64, value: &str| {
-        let k = ui::rotary_at(b, panel, "knob.metal", &Place::new(name).size(56.0).variant("black").legend(name).scale(scale).bind(ui::bind(addr)), x, ROW);
-        ui::reink(b, k, INK);
-        ui::knob_scale(b, panel, k, (x, ROW), 45.0, scale, numerals);
+        let k = ui::rotary_at(b, panel, "knob.metal", &Place::new(name).size(56.0).variant("black").legend(name).scale(scale).ink(KitInk::Color(INK.into())).bind(ui::bind(addr)), x, ROW);
+        ui::knob_scale(b, panel, k, (x, ROW), 45.0, 300.0, scale, numerals);
         ui::caption_style(b, k, 9.5, 800.0, INK);
         ui::caption_y(b, k, CAPTION);
-        ui::readout(b, panel, &format!("{name} readout"), ui::bind(addr), (x, READOUT), (62.0, 16.0), value, GLOW);
+        ui::readout(b, panel, &format!("{name} readout"), ui::bind(addr), (x, READOUT), (62.0, 16.0), value, GLOW, Some(ValueFormat::decimals(1)));
     };
     let x1 = 92.0;
-    knob(b, "Input", "varimu/input", &["-8", "-4", "0", "+4", "+8"], x1, "0.00 dB");
+    knob(b, "Input", "varimu/input", &["-8", "-4", "0", "+4", "+8"], x1, "0.0 dB");
     knob(b, "Threshold", "varimu/threshold", &["-40", "-30", "-20", "-10", "0"], x1 + PITCH, "-20.0 dB");
     knob(b, "Attack", "varimu/attack", &["25", "36", "48", "59", "70"], x1 + 2.0 * PITCH, "45.0 ms");
 
@@ -72,18 +71,16 @@ fn build(b: &mut Builder<'_>, root: NodeId) {
 
     // ── Recovery + output, right ─────────────────────────────────────
     let rx = 652.0;
-    let rec = ui::selector(b, panel, &Place::new("Recovery").size(42.0).variant("black").legend("Recovery").bind(ui::bind("varimu/recovery")), (rx, ROW), &[".2", ".4", ".6", "1.2", "2.5"], numerals, INK);
-    ui::reink(b, rec, INK);
+    let rec = ui::selector(b, panel, &Place::new("Recovery").size(42.0).variant("black").legend("Recovery").bind(ui::bind("varimu/recovery")), (rx, ROW), &[".2", ".4", ".6", "1.2", "2.5"], numerals);
     ui::caption_style(b, rec, 9.5, 800.0, INK);
     ui::caption_y(b, rec, CAPTION);
-    ui::readout(b, panel, "Recovery readout", ui::bind("varimu/recovery"), (rx, READOUT), (62.0, 16.0), "0.6 s", GLOW);
-    knob(b, "Output", "varimu/output", &["-6", "0", "+6", "+12", "+18"], rx + 108.0, "0.00 dB");
+    ui::readout(b, panel, "Recovery readout", ui::bind("varimu/recovery"), (rx, READOUT), (62.0, 16.0), "0.6 s", GLOW, None);
+    knob(b, "Output", "varimu/output", &["-6", "0", "+6", "+12", "+18"], rx + 108.0, "0.0 dB");
 
     // ── The switch column ────────────────────────────────────────────
     let sx = 836.0;
     let bat = |b: &mut Builder<'_>, name: &str, addr: &str, legends: &[&str], top: f64| {
-        let s = ui::put(b, panel, "switch.toggle_bat", &Place::new(name).size(34.0).legend(name).options(legends).bind(ui::bind(addr)));
-        ui::reink(b, s, INK);
+        let s = ui::put(b, panel, "switch.toggle_bat", &Place::new(name).size(34.0).legend(name).options(legends).ink(KitInk::Color(INK.into())).bind(ui::bind(addr)));
         ui::caption_style(b, s, 7.5, 800.0, INK);
         let (w, _) = ui::size_of(b, s);
         ui::move_to(b, s, sx - w / 2.0, top);

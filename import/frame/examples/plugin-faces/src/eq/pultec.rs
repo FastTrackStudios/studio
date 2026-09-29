@@ -8,8 +8,8 @@
 //! SHARP to BROAD, the high-cut frequency selector, the IN/OUT toggle with
 //! its pilot jewel, and the output.
 
-use surface_kit::Place;
-use surface_proto::Binding;
+use surface_kit::{Place, TOUCH_MIN};
+use surface_proto::{Binding, ValueFormat};
 
 use crate::comp_vca::ui::{self, bind};
 use crate::face::{Face, canvas};
@@ -31,10 +31,9 @@ const HIGH_FREQS: &[&str] = &["3", "4", "5", "8", "10", "12", "16"];
 #[allow(clippy::too_many_arguments)]
 fn lever(b: &mut surface_widgets::Builder<'_>, panel: document_proto::NodeId, addr: &str, title: &str, unit: &str, options: &[&str], size: f64, cx: f64) {
     ui::silk(b, panel, title, cx, 198.0, 8.5, INK, 800.0);
-    let p = Place::new(title).size(size).variant("light").bind(bind(addr)).options(options);
+    let p = Place::new(title).size(size).variant("light").touch(TOUCH_MIN).bind(bind(addr)).options(options);
     let l = ui::put(b, panel, "lever.pultec", &p, cx, BOTTOM + 14.0);
     ui::strip_legend(b, l);
-    ui::unfold_needle(b, l);
     ui::silk(b, panel, unit, cx, 314.0, 7.5, DIM, 700.0);
 }
 
@@ -43,7 +42,7 @@ fn daka(b: &mut surface_widgets::Builder<'_>, panel: document_proto::NodeId, add
     let p = Place::new(legend).size(d).legend(legend).bind(bind(addr)).scale(ZERO_TEN);
     ui::put(b, panel, "knob.daka", &p, cx, cy);
     if window {
-        ui::readout(b, panel, &format!("{legend} dB"), Binding::param(addr), cx, cy - d / 2.0 - 36.0, 58.0, 18.0, READ);
+        ui::readout(b, panel, &format!("{legend} dB"), Binding::param(addr), cx, cy - d / 2.0 - 36.0, 58.0, 18.0, READ, ValueFormat::decimals(1));
     }
 }
 
@@ -67,9 +66,8 @@ pub fn face() -> Face {
 
         // The high-cut frequency: a small selector at the top right.
         ui::silk(b, panel, "Atten Sel", 792.0, 40.0, 7.5, INK, 800.0);
-        let sel = Place::new("Atten Sel").size(40.0).legend("KCS").bind(bind("pultec/high_atten_freq")).options(&["5", "10", "20"]);
-        let sel = ui::put(b, panel, "switch.rotary", &sel, 792.0, TOP - 14.0);
-        ui::unfold_needle(b, sel);
+        let sel = Place::new("Atten Sel").size(40.0).legend("KCS").touch(TOUCH_MIN).bind(bind("pultec/high_atten_freq")).options(&["5", "10", "20"]);
+        ui::put(b, panel, "switch.rotary", &sel, 792.0, TOP - 14.0);
 
         // ── Bottom row: the levers and bandwidth ──────────────────────
         lever(b, panel, "pultec/low_freq", "Low Frequency", "CPS", LOW_FREQS, 104.0, 226.0);
@@ -84,11 +82,11 @@ pub fn face() -> Face {
         let sw = Place::new("EQ").size(40.0).legend("EQ").bind(bind("pultec/eq_in")).options(&["In", "Out"]);
         ui::put(b, panel, "switch.toggle_bat", &sw, 712.0, BOTTOM + 24.0);
 
-        ui::readout(b, panel, "Output dB", Binding::param("pultec/trim"), 800.0, 196.0, 58.0, 18.0, READ);
-        let out = Place::new("Output").size(44.0).legend("Output").bind(bind("pultec/trim")).scale(&[""]);
-        let out = ui::put(b, panel, "knob.pointer", &out, 800.0, BOTTOM + 10.0);
-        ui::strip_scale(b, out);
-        ui::print_scale(b, panel, 800.0, BOTTOM + 10.0, 32.0, &["-24", "-12", "0", "+12", "+24"], 300.0, 7.0, INK);
+        ui::readout(b, panel, "Output dB", Binding::param("pultec/trim"), 800.0, 190.0, 58.0, 18.0, READ, ValueFormat::decimals(1));
+        // The knob prints the ticks; the dB legends are set clear of them.
+        let out = Place::new("Output").size(44.0).legend("Output").touch(TOUCH_MIN).bind(bind("pultec/trim")).scale(&[""; 5]);
+        ui::put(b, panel, "knob.pointer", &out, 800.0, BOTTOM + 10.0);
+        ui::scale_labels(b, panel, 800.0, BOTTOM + 10.0, 42.0, &["-24", "-12", "0", "+12", "+24"], 300.0, 7.0, INK);
     });
 
     let params = vec![

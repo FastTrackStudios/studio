@@ -11,7 +11,8 @@
 //! skirts stand for.
 
 use document_proto::NodeId;
-use surface_kit::Place;
+use surface_kit::{Ink, Place, TOUCH_MIN};
+use surface_proto::ValueFormat;
 use surface_widgets::Builder;
 
 use super::ui::{self, bind};
@@ -23,16 +24,17 @@ const INK: &str = "#e8eaec";
 const DIM: &str = "#9aa1a8";
 const LINE: &str = "#e8eaec73";
 
-/// Gain-reduction lamps, left to right: deepest first, 1 dB at the right.
-const LADDER: &[f64] = &[26.0, 23.0, 20.0, 17.0, 14.0, 12.0, 10.0, 9.0, 8.0, 7.0, 6.0, 5.0, 4.0, 3.0, 2.0, 1.0];
+/// Gain-reduction lamps in the order they light: 1 dB first (at the right).
+const LADDER: &[&str] = &["1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "12", "14", "17", "20", "23", "26"];
 const RATIOS: &[&str] = &["1:1", "2:1", "3:1", "4:1", "6:1", "10:1", "20:1", "Nuke"];
 const DIAL_ROW: f64 = 268.0;
 const DIAL: f64 = 80.0;
 
 /// A big dial with its legend printed above it and a readout below.
-fn dial(b: &mut Builder<'_>, panel: NodeId, addr: &str, legend: &str, cx: f64) {
+fn dial(b: &mut Builder<'_>, panel: NodeId, addr: &str, legend: &str, format: Option<ValueFormat>, cx: f64) {
     ui::silk(b, panel, legend, cx, 196.0, 9.5, INK, 800.0);
-    let p = Place::new(legend).size(DIAL).variant("black").bind(bind(addr));
+    let mut p = Place::new(legend).size(DIAL).variant("black").touch(TOUCH_MIN).bind(bind(addr));
+    p.format = format;
     let k = ui::put(b, panel, "knob.dial", &p, cx, DIAL_ROW);
     ui::strip_legend(b, k);
     ui::add_value(b, k, 8.0, DIM);
@@ -51,13 +53,10 @@ pub fn face() -> Face {
         let inb = Place::new("In").size(30.0).variant("grey").legend("In").bind(bind("distressor/in"));
         ui::put(b, panel, "button.console", &inb, 96.0, 124.0);
 
-        // The ladder: 16 lamps, printed with the dB each stands for.
-        let pitch = 25.0;
-        let x0 = 522.0 - pitch * LADDER.len() as f64 / 2.0;
-        ui::gr_ladder(b, panel, "Gain Reduction", "distressor/gr", x0, 30.0, pitch, 9.0, LADDER, "#ff4a36");
-        for (i, db) in LADDER.iter().enumerate() {
-            ui::plain(b, panel, &format!("{db}"), x0 + pitch * (i as f64 + 0.5), 55.0, 7.0, DIM, 600.0);
-        }
+        // The ladder: 16 lamps lit right to left, printed with the dB each
+        // stands for.
+        let ladder = Place::new("Gain Reduction").size(25.0 * LADDER.len() as f64).variant("red").scale(LADDER).options(&["gr"]).reversed().ink(Ink::Color(DIM.into())).bind(bind_stream("distressor/gr"));
+        ui::put(b, panel, "meter.led_ladder", &ladder, 522.0, 44.0);
         ui::silk(b, panel, "Gain Reduction  dB", 522.0, 72.0, 7.0, INK, 700.0);
 
         // Ratio: the lamps are the switch.
@@ -76,14 +75,14 @@ pub fn face() -> Face {
 
         // ── Lower section: the dials ───────────────────────────────────
         ui::section(b, panel, 40.0, 180.0, 860.0, 164.0, LINE, 1.2);
-        dial(b, panel, "distressor/input", "Input", 146.0);
-        dial(b, panel, "distressor/attack", "Attack", 306.0);
-        dial(b, panel, "distressor/release", "Release", 466.0);
-        dial(b, panel, "distressor/output", "Output", 626.0);
+        dial(b, panel, "distressor/input", "Input", Some(ValueFormat::decimals(1)), 146.0);
+        dial(b, panel, "distressor/attack", "Attack", Some(ValueFormat::decimals(1)), 306.0);
+        dial(b, panel, "distressor/release", "Release", None, 466.0);
+        dial(b, panel, "distressor/output", "Output", Some(ValueFormat::decimals(1)), 626.0);
 
         ui::rule(b, panel, 716.0, 194.0, 1.0, 136.0, LINE);
         ui::silk(b, panel, "Mix", 808.0, 196.0, 9.5, INK, 800.0);
-        let mix = Place::new("Mix").size(48.0).variant("black").bind(bind("distressor/mix")).scale(&["Dry", "", "", "", "Comp"]);
+        let mix = Place::new("Mix").size(48.0).variant("black").touch(TOUCH_MIN).bind(bind("distressor/mix")).scale(&["Dry", "", "", "", "Comp"]);
         let mix = ui::put(b, panel, "knob.pointer", &mix, 808.0, DIAL_ROW - 4.0);
         ui::strip_legend(b, mix);
         ui::add_value(b, mix, 8.0, DIM);
@@ -102,4 +101,8 @@ pub fn face() -> Face {
     ];
     let streams = vec![ui::gr_stream("distressor/gr", "Gain Reduction")];
     Face { file: "10-distressor", plugin: "comp", scene, params, streams }
+}
+
+fn bind_stream(id: &str) -> surface_proto::Binding {
+    surface_proto::Binding::stream(id)
 }

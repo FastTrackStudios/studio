@@ -4,11 +4,10 @@
 //! each a detented skirted selector turning exactly through its positions,
 //! over a gain knob that clicks in 2 dB steps from -12 to +12. The coarseness
 //! is the design: a console EQ you set rather than dial. The panel is light,
-//! so every scale and legend is printed here in the panel's dark ink rather
-//! than the kit's light silkscreen.
+//! so every scale and legend is printed in the panel's dark ink.
 
 use document_proto::NodeId;
-use surface_kit::Place;
+use surface_kit::{Ink, Place, TOUCH_MIN, detent_sweep};
 use surface_widgets::Builder;
 
 use crate::comp_vca::ui::{self, bind};
@@ -27,29 +26,26 @@ const MID: &[&str] = &[".4", ".8", "1.5", "3", "5"];
 const HIGH: &[&str] = &["5", "7", "10", "12.5", "15"];
 const GAIN: &[&str] = &["-12", "-8", "-4", "0", "+4", "+8", "+12"];
 
-/// A detented frequency selector: skirted knob, printed detents, sweep of
-/// exactly its positions.
+/// A detented frequency selector: skirted knob stepped through exactly its
+/// positions. The knob prints the ticks; the legends are set here, clear
+/// of them and big enough to read.
 fn selector(b: &mut Builder<'_>, panel: NodeId, addr: &str, legend: &str, labels: &[&str], cx: f64) {
-    let p = Place::new(legend).size(52.0).variant("black").bind(bind(addr)).scale(&[""]);
-    let k = ui::put(b, panel, "knob.skirted", &p, cx, FREQ_ROW);
-    ui::strip_scale(b, k);
-    ui::strip_legend(b, k);
-    let sweep = ui::detent_sweep(labels.len());
-    ui::set_sweep(b, k, sweep);
-    ui::detents(b, panel, cx, FREQ_ROW, 36.0, 48.0, labels, sweep, 9.0, INK);
-    ui::silk(b, panel, legend, cx, FREQ_ROW + 50.0, 8.5, INK, 800.0);
+    let ticks = vec![""; labels.len()];
+    let p = Place::new(legend).size(52.0).variant("black").legend(legend).keep_case().options(labels).scale(&ticks).ink(Ink::Dark).touch(TOUCH_MIN).bind(bind(addr));
+    ui::put(b, panel, "knob.skirted", &p, cx, FREQ_ROW);
+    ui::scale_labels(b, panel, cx, FREQ_ROW, 43.0, labels, detent_sweep(labels.len()), 9.0, INK);
 }
 
-/// A knob with a scale and legend printed in dark ink.
+/// A knob with its scale and legend printed in dark ink.
 #[allow(clippy::too_many_arguments)]
-fn knob(b: &mut Builder<'_>, panel: NodeId, addr: &str, legend: &str, d: f64, labels: &[&str], cx: f64, cy: f64) -> NodeId {
-    let p = Place::new(legend).size(d).variant("black").bind(bind(addr)).scale(&[""]);
+fn knob(b: &mut Builder<'_>, panel: NodeId, addr: &str, legend: &str, d: f64, labels: &[&str], cx: f64, cy: f64) {
+    let ticks = vec![""; labels.len()];
+    let p = Place::new(legend).size(d).variant("black").scale(&ticks).ink(Ink::Dark).touch(TOUCH_MIN).bind(bind(addr));
     let k = ui::put(b, panel, "knob.bakelite", &p, cx, cy);
-    ui::strip_scale(b, k);
+    // The legend goes under the printed scale, not inside it.
     ui::strip_legend(b, k);
-    ui::print_scale(b, panel, cx, cy, d / 2.0 + 7.0, labels, 300.0, 8.0, INK);
     ui::silk(b, panel, legend, cx, cy + d / 2.0 + 26.0, 8.5, INK, 800.0);
-    k
+    ui::scale_labels(b, panel, cx, cy, d * 0.82 + 2.0, labels, 300.0, 8.0, INK);
 }
 
 pub fn face() -> Face {

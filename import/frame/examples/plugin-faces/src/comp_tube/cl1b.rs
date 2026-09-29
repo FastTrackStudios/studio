@@ -10,7 +10,7 @@
 
 use document_proto::NodeId;
 use surface_kit::Place;
-use surface_proto::{Range, Unit};
+use surface_proto::{Range, Unit, ValueFormat};
 use surface_widgets::Builder;
 
 use super::ui::{self, Ink};
@@ -63,28 +63,28 @@ fn build(b: &mut Builder<'_>, root: NodeId) {
 
     // ── The knob row ─────────────────────────────────────────────────
     let numerals = Ink::new(7.5, INK).weight(600.0).track(0.0);
-    let knob = |b: &mut Builder<'_>, name: &str, addr: &str, scale: &[&str], x: f64, value: &str| {
+    let knob = |b: &mut Builder<'_>, name: &str, addr: &str, scale: &[&str], x: f64, value: &str, format: Option<ValueFormat>| {
         let k = ui::rotary_at(b, panel, "knob.bakelite", &Place::new(name).size(54.0).legend(name).scale(scale).bind(ui::bind(addr)), x, ROW);
-        ui::knob_scale(b, panel, k, (x, ROW), 43.0, scale, numerals);
+        ui::knob_scale(b, panel, k, (x, ROW), 43.0, 300.0, scale, numerals);
         ui::caption_style(b, k, 9.5, 800.0, INK);
         ui::caption_y(b, k, CAPTION);
-        ui::readout(b, panel, &format!("{name} readout"), ui::bind(addr), (x, READOUT), (62.0, 16.0), value, GLOW);
+        ui::readout(b, panel, &format!("{name} readout"), ui::bind(addr), (x, READOUT), (62.0, 16.0), value, GLOW, format);
     };
     let x1 = 424.0;
-    knob(b, "Threshold", "cl1b/threshold", &["-40", "-30", "-20", "-10", "0"], x1, "-20.0 dB");
-    knob(b, "Ratio", "cl1b/ratio", &["2", "4", "6", "8", "10"], x1 + PITCH, "4.00 :1");
-    knob(b, "Attack", "cl1b/attack", &["0.5", "1.8", "6.5", "23", "84", "300"], x1 + 2.0 * PITCH, "10.0 ms");
-    knob(b, "Release", "cl1b/release", &[".05", ".11", ".26", ".58", "1.3", "3"], x1 + 3.0 * PITCH, "500 ms");
+    knob(b, "Threshold", "cl1b/threshold", &["-40", "-30", "-20", "-10", "0"], x1, "-20.0 dB", Some(ValueFormat::decimals(1)));
+    knob(b, "Ratio", "cl1b/ratio", &["2", "4", "6", "8", "10"], x1 + PITCH, "4.0 :1", Some(ValueFormat::decimals(1)));
+    knob(b, "Attack", "cl1b/attack", &["0.5", "1.8", "6.5", "23", "84", "300"], x1 + 2.0 * PITCH, "10.0 ms", Some(ValueFormat::decimals(1)));
+    knob(b, "Release", "cl1b/release", &[".05", ".11", ".26", ".58", "1.3", "3"], x1 + 3.0 * PITCH, "500 ms", None);
 
     // FIXED / FIX-MAN / MANUAL: the program-dependent fixed timing, the
     // knobs, or the knobs riding on the fixed curve.
     let tx = x1 + 4.0 * PITCH;
-    let timing = ui::selector(b, panel, &Place::new("Timing").size(46.0).variant("black").legend("Timing").bind(ui::bind("cl1b/timing")), (tx, ROW), &["Fixed", "Fix-Man", "Manual"], numerals, INK);
+    let timing = ui::selector(b, panel, &Place::new("Timing").size(46.0).variant("black").legend("Timing").bind(ui::bind("cl1b/timing")), (tx, ROW), &["Fixed", "Fix-Man", "Manual"], numerals);
     ui::caption_style(b, timing, 9.5, 800.0, INK);
     ui::caption_y(b, timing, CAPTION);
-    ui::readout(b, panel, "Timing readout", ui::bind("cl1b/timing"), (tx, READOUT), (62.0, 16.0), "Manual", GLOW);
+    ui::readout(b, panel, "Timing readout", ui::bind("cl1b/timing"), (tx, READOUT), (62.0, 16.0), "Manual", GLOW, None);
 
-    knob(b, "Gain", "cl1b/gain", &["0", "6", "12", "18", "24"], x1 + 5.0 * PITCH, "4.00 dB");
+    knob(b, "Gain", "cl1b/gain", &["0", "6", "12", "18", "24"], x1 + 5.0 * PITCH, "4.0 dB", Some(ValueFormat::decimals(1)));
 
     ui::fit_root(b, root, panel);
 }

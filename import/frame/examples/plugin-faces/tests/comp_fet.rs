@@ -146,14 +146,18 @@ fn the_gr_needle_rests_on_zero_vu_and_swings_left() {
 fn the_ratio_bank_reads_twenty_at_the_top_and_selects_by_param_order() {
     let face = &comp_fet::faces()[0];
     let options = ["4", "8", "12", "20", "All"];
-    let rows: Vec<(String, u32, u32)> = controls(&face.scene)
+    let mut rows: Vec<(f64, String, u32, u32)> = controls(&face.scene)
         .into_iter()
         .filter(|(_, _, c)| matches!(&c.binding.as_ref().unwrap().source, Source::Param { addr } if addr.0 == comp_fet::RATIO))
         .map(|(id, _, c)| {
             let ControlKind::Button { mode: ButtonMode::Select { index, count } } = c.kind else { panic!("ratio is a select bank") };
-            (text_of(&face.scene, id).expect("row legend"), index, count)
+            let y = face.scene.node(id).map_or(0.0, |n| n.transform.ty);
+            (y, text_of(&face.scene, id).expect("row legend"), index, count)
         })
         .collect();
+    // Top to bottom as printed, whatever order the rows were built in.
+    rows.sort_by(|a, b| a.0.total_cmp(&b.0));
+    let rows: Vec<(String, u32, u32)> = rows.into_iter().map(|(_, l, i, c)| (l, i, c)).collect();
     assert_eq!(
         rows.iter().map(|r| r.0.as_str()).collect::<Vec<_>>(),
         ["All", "20", "12", "8", "4"],

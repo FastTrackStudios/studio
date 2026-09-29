@@ -711,14 +711,23 @@ fn bar(g: Geo, from: f64, to: f64, width: f64) -> (String, String) {
 /// A part's soft contact shadow: its outline `d` in black, blurred — no
 /// offset, so it stays under the part whichever way the part points.
 ///
-/// `shape(o)` is the part's outline pushed out by `o` units; the blur is
-/// three stacked outsets, softest outermost (the renderer blurs a vector's
-/// box, not its outline).
+/// `shape(o)` is the part's outline pushed out by `o` units. The shadow is
+/// one vector — the outline itself, hidden under the part — with a
+/// zero-offset drop shadow the renderer draws round its real outline,
+/// reaching about `blur` units out.
 fn contact(b: &mut Builder<'_>, body: NodeId, g: Geo, name: &str, shape: &dyn Fn(f64) -> String, alpha: f64, blur: f64) {
-    for o in [1.0, 0.6, 0.25] {
-        let d = shape(o * blur);
-        b.add(body, vector(name, 0.0, 0.0, g.size(), g.size(), d, vec![Paint::solid(Color { a: alpha / 3.0, ..BLACK })]));
-    }
+    let shade = Color { a: alpha, ..BLACK };
+    let mut n = vector(name, 0.0, 0.0, g.size(), g.size(), shape(0.0), vec![Paint::solid(shade)]);
+    n.effects = vec![Effect {
+        kind: document_proto::EffectKind::DropShadow,
+        visible: true,
+        color: shade,
+        offset_x: 0.0,
+        offset_y: 0.0,
+        radius: 2.0 * blur * g.k,
+        spread: 0.0,
+    }];
+    b.add(body, n);
 }
 
 /// The index: every part that reads the value, drawn pointing up into the

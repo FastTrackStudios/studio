@@ -14,7 +14,7 @@
 
 use document_proto::NodeId;
 use surface_kit::Place;
-use surface_proto::Unit;
+use surface_proto::{Binding, Source, Unit};
 use surface_widgets::Builder;
 
 use crate::comp_vca::ui::{self, bind};
@@ -135,8 +135,11 @@ pub fn face() -> Face {
         // ── The output meter: two LED bars on a printed dB scale ───────
         ui::silk(b, panel, "Out", 968.0, HEAD, 10.0, INK, 800.0);
         let (top, bottom, floor, ceiling) = (52.0, 280.0, -40.0, 6.0);
-        ui::led_column(b, panel, "Output L", "sslch/out", 0, 950.0, top, 14.0, bottom - top, 23, floor, ceiling);
-        ui::led_column(b, panel, "Output R", "sslch/out", 1, 972.0, top, 14.0, bottom - top, 23, floor, ceiling);
+        for (name, ch, x) in [("Output L", 0, 950.0), ("Output R", 1, 972.0)] {
+            let bind = Binding { source: Source::Stream { id: surface_proto::EntryId::new("sslch/out"), channel: Some(ch) }, ..Binding::stream("sslch/out") };
+            let col = Place::new(name).size(bottom - top).options(&["floor=-40", "ceiling=6", "segments=23", "thick=14"]).bind(bind);
+            ui::put_at(b, panel, "meter.led_column", &col, x, top);
+        }
         for db in [6.0, 0.0, -10.0, -20.0, -30.0, -40.0] {
             let y = top + 2.0 + (bottom - top - 4.0) * (ceiling - db) / (ceiling - floor);
             let label = if db > 0.0 { format!("+{db}") } else { format!("{db}") };

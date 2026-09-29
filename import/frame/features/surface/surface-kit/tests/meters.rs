@@ -158,7 +158,8 @@ fn lights(id: &str, variant: Option<&str>) -> Vec<String> {
 
 #[test]
 fn lit_meters_give_off_light_where_the_lamp_shows() {
-    assert_eq!(lights("meter.vu_amber", None), vec!["lamp", "lamp hotspot"]);
+    // The wash glows gently; the hotspot only tints (its light would wash out the print).
+    assert_eq!(lights("meter.vu_amber", None), vec!["lamp"]);
     assert!(lights("meter.vu_ivory", None).is_empty(), "a white lamp only tints its card");
     assert_eq!(lights("meter.vu_ivory", Some("lit_amber")), vec!["card"], "a lit frame glows round the opening");
     assert_eq!(lights("meter.vu_backlit", Some("red")), vec!["lamp", "needle core"]);

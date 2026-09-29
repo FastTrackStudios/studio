@@ -90,9 +90,9 @@ select), and end with `registry::tighten` when `touch` is set.
   directional shadows) *outside* the `Needle` frame — round tiers under it,
   highlights in a fixed overlay above it — and paint turning parts with
   rotation-invariant fills (flat, or radial about the shaft). A turning
-  part's shadow has no offset (it would swing round with it); vectors take
-  box-shaped effect shadows, so soften a turning outline with stacked
-  outsets instead of `drop_shadow`.
+  part's shadow has no offset (it would swing round with it): give the
+  part's outline one zero-offset `drop_shadow` — the renderer shadows a
+  vector along its real outline, so it turns with the part.
 - **Light**: `draw::emissive(node, color, intensity, radius)` sets
   `Node::emission` where real hardware glows (lamps, jewels, backlit caps,
   LEDs, a lit meter card or needle). Put it on the node an `Led` slot dims,
