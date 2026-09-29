@@ -454,6 +454,7 @@ fn collect(scene: &Scene, root: NodeId, options: CollectOptions, plan: bool) -> 
         options,
         plan: plan.then(EffectsPlan::default),
         groups: Vec::new(),
+        clips: Vec::new(),
         in_shader: false,
         in_mask_def: 0,
         flicker: None,
@@ -472,6 +473,8 @@ struct Cx<'a> {
     plan: Option<EffectsPlan>,
     /// Open `GroupStart` transforms, each composed with the ones before.
     groups: Vec<AffineTransform2D>,
+    /// Open `ClipStart`s with the group transform each was opened under.
+    clips: Vec<(AffineTransform2D, PaintPrimitive)>,
     /// Inside a shader region (nested shaders draw plainly).
     in_shader: bool,
     /// Inside a mask definition (no effects there).
@@ -676,8 +679,14 @@ impl Cx<'_> {
                 cx < x - EPS || cy < y - EPS || (cx + cw) > x + width + EPS || (cy + ch) > y + height + EPS
             });
         let clip_subtree = node.clips_content && !node.children.is_empty() && (fills.is_empty() || child_overflows);
+        let ancestor_clips = if self.plan.is_some() && node.emission.is_some() { self.clips.clone() } else { Vec::new() };
         if clip_subtree && width > 0.0 && height > 0.0 {
-            self.out.push(PaintPrimitive::ClipStart { node_id, x, y, width, height, corner_radii: radii });
+            let clip = PaintPrimitive::ClipStart { node_id, x, y, width, height, corner_radii: radii };
+            if self.plan.is_some() {
+                let world = self.groups.last().copied().unwrap_or_else(AffineTransform2D::identity);
+                self.clips.push((world, clip.clone()));
+            }
+            self.out.push(clip);
         }
 
         let mut atomic_svg = false;
@@ -808,6 +817,7 @@ impl Cx<'_> {
                         node_id,
                         primitives,
                         world,
+                        clips: ancestor_clips,
                         color,
                         strength: em.intensity * effective_opacity,
                         radius: em.radius.max(0.0),
@@ -832,6 +842,9 @@ impl Cx<'_> {
         }
 
         if clip_subtree && width > 0.0 && height > 0.0 {
+            if self.plan.is_some() {
+                self.clips.pop();
+            }
             self.out.push(PaintPrimitive::ClipEnd { node_id });
         }
         if needs_layer {

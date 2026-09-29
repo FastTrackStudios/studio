@@ -24,6 +24,10 @@ pub struct EmissiveDraw {
     /// The enclosing groups' transform (flattened scene → world), already
     /// composed; paint `primitives` under `root · world`.
     pub world: AffineTransform2D,
+    /// The ancestors' open clips (`ClipStart`s), outermost first, each with
+    /// the world transform it was opened under: the light is cut to them
+    /// like the node itself is, so a needle's glow stays inside its window.
+    pub clips: Vec<(AffineTransform2D, PaintPrimitive)>,
     /// The emission colour (alpha 1).
     pub color: Rgba,
     /// Light strength: emission intensity × the node's effective opacity.

@@ -210,7 +210,13 @@ impl Stage {
             scene.reset();
             for (d, s) in &draws {
                 scene.push_layer(peniko::Fill::NonZero, peniko::Mix::Normal, (s / max_s) as f32, kurbo::Affine::IDENTITY, &clip);
+                for (world, c) in &d.clips {
+                    push_clip(scene, c, to_emit * to_kurbo(world));
+                }
                 paint_primitives_into_scene_with(scene, &d.primitives, to_emit * to_kurbo(&d.world), frame.font);
+                for _ in &d.clips {
+                    scene.pop_layer();
+                }
                 scene.pop_layer();
             }
             vello_into(renderer, device, queue, scene, &emit, peniko::Color::TRANSPARENT, frame.antialiasing)?;
@@ -367,6 +373,19 @@ fn region_uniforms(r: &ShaderRegion, frame: &Frame<'_>, w: u32, h: u32) -> FxUni
 
 fn has_draws(prims: &[PaintPrimitive]) -> bool {
     prims.iter().any(|p| matches!(p, PaintPrimitive::Rect { .. } | PaintPrimitive::Path { .. } | PaintPrimitive::Text { .. }))
+}
+
+/// Open a `ClipStart`'s clip on `scene` under `transform` (other primitives:
+/// an unbounded clip, so the caller's pops stay balanced).
+fn push_clip(scene: &mut vello::Scene, clip: &PaintPrimitive, transform: kurbo::Affine) {
+    let PaintPrimitive::ClipStart { x, y, width, height, corner_radii, .. } = clip else {
+        scene.push_clip_layer(peniko::Fill::NonZero, kurbo::Affine::IDENTITY, &kurbo::Rect::new(-1e9, -1e9, 1e9, 1e9));
+        return;
+    };
+    let rect = kurbo::Rect::new(*x, *y, x + width, y + height);
+    let r = corner_radii;
+    let rr = kurbo::RoundedRect::from_rect(rect, kurbo::RoundedRectRadii::new(r.top_left, r.top_right, r.bottom_right, r.bottom_left));
+    scene.push_clip_layer(peniko::Fill::NonZero, transform, &rr);
 }
 
 /// `prims[range]` as a self-contained list: the groups, layers, clips and

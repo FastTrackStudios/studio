@@ -233,3 +233,19 @@ fn builtins_compile_through_naga() {
         .unwrap_or_else(|e| panic!("{id}: {}", e.emit_to_string(&src)));
     }
 }
+
+#[test]
+fn emission_is_cut_to_its_ancestors_clips() {
+    let Some(mut o) = offscreen() else { return };
+    // A window 0..100 × 0..50 that clips a bar hanging out of it (20..80).
+    let mut window = Node::new(NodeKind::Frame, "window");
+    window.size = doc::Size { width: 100.0, height: 50.0 };
+    window.clips_content = true;
+    let mut bar = shape(NodeKind::Rectangle, 48.0, 20.0, 4.0, 60.0, (1.0, 0.1, 0.1));
+    bar.emission = Some(doc::Emission { color: doc::Color::rgba(1.0, 0.2, 0.1, 1.0), intensity: 1.5, radius: 16.0 });
+    let (scene, root) = scene_of(vec![(None, window), (Some(0), bar)]);
+    let gpu = render(&mut o, &scene, root, Mode::Gpu);
+    assert!(px(&gpu, 56, 40)[0] > 12, "the visible part glows: {:?}", px(&gpu, 56, 40));
+    // Just past where the clipped-away bar would end: no light leaks out.
+    assert!(px(&gpu, 50, 85)[0] < 3, "light from the clipped part: {:?}", px(&gpu, 50, 85));
+}
