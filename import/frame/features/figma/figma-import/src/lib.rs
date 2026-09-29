@@ -17,7 +17,7 @@ use base64::Engine as _;
 use document_proto::{
     AlignSelf, AutoLayout, BlendMode, BooleanOp, Color, CornerRadii, CrossAxisAlign, Effect, EffectKind,
     GradientStop, ImageScaleMode, LayoutChild, LayoutDirection, MainAxisAlign, MaskKind, Node, NodeId, NodeKind,
-    Paint, PaintKind, Scene, Size, SourceRef, Stroke, StrokeAlign, StrokeCap, StrokeJoin, TextCase, TextData,
+    Paint, PaintKind, Rect, Scene, Size, SourceRef, Stroke, StrokeAlign, StrokeCap, StrokeJoin, TextCase, TextData,
     TextRun, Transform,
 };
 use figma_model::{
@@ -64,7 +64,12 @@ fn import_node(doc: &FrameDocument, fnode: &figma_model::FrameNode, scene: &mut 
     node.children = fnode.children.iter().map(|c| NodeId(c.0)).collect();
     node.visible = fnode.visible;
     node.locked = fnode.locked;
-    node.source = Some(SourceRef { tool: "figma".into(), id: fnode.figma_id.clone(), node_type: fnode.figma_type.clone() });
+    node.source = Some(SourceRef {
+        tool: "figma".into(),
+        id: fnode.figma_id.clone(),
+        node_type: fnode.figma_type.clone(),
+        bounds: absolute_bounds(raw),
+    });
 
     node.transform = relative_transform(raw);
     node.size = size(raw);
@@ -210,7 +215,28 @@ fn corner_radii(raw: &Value) -> CornerRadii {
         let r = |i: usize| arr[i].as_f64().unwrap_or(0.0).max(0.0);
         return CornerRadii { top_left: r(0), top_right: r(1), bottom_right: r(2), bottom_left: r(3) };
     }
-    CornerRadii::uniform(f64_at(raw, "cornerRadius").unwrap_or(0.0).max(0.0))
+    let uniform = f64_at(raw, "cornerRadius").unwrap_or(0.0).max(0.0);
+    if uniform > 0.0 {
+        return CornerRadii::uniform(uniform);
+    }
+    // Mixed radii: plugin exports drop `cornerRadius` and carry each corner.
+    let r = |key: &str| f64_at(raw, key).unwrap_or(0.0).max(0.0);
+    CornerRadii {
+        top_left: r("topLeftRadius"),
+        top_right: r("topRightRadius"),
+        bottom_right: r("bottomRightRadius"),
+        bottom_left: r("bottomLeftRadius"),
+    }
+}
+
+fn absolute_bounds(raw: &Value) -> Option<Rect> {
+    let bb = raw.get("absoluteBoundingBox")?;
+    Some(Rect {
+        x: f64_at(bb, "x")?,
+        y: f64_at(bb, "y")?,
+        width: f64_at(bb, "width")?,
+        height: f64_at(bb, "height")?,
+    })
 }
 
 fn blend_mode(raw: &Value) -> BlendMode {

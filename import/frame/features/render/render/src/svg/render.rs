@@ -1,11 +1,7 @@
-use super::normalize::{
-    extract_export_base_color, extract_export_bbox, normalize_svg_for_figma_parity,
-    NormalizeOptions,
-};
+use super::normalize::{normalize_svg_for_figma_parity, NormalizeOptions};
 use super::context::RenderCtx;
-use super::source_bridge::{
-    collect_source_absolute_bboxes, collect_source_stroke_data, extract_export_root_id,
-    extract_export_root_name, raw_stroke_paints,
+use super::scene_source::{
+    export_base_color, export_bbox, export_root, source_bounds, source_id, stroke_paints,
 };
 #[cfg(feature = "svg_export")]
 use kurbo::Shape;
@@ -34,8 +30,8 @@ impl ElementExt for svg::node::element::Element {
 
 #[cfg(feature = "svg_export")]
 pub fn run_cli() -> Result<(), String> {
-    use crate::{build_layout_boxes, build_paint_primitives, PaintPrimitive};
-    use figma_model::FrameDocument;
+    use crate::{build_scene_layout_boxes, build_scene_primitives, PaintPrimitive};
+    use document_proto::NodeKind;
     use svg::node::element::{
         ClipPath, Element, ForeignObject, Group, Image, Line, Mask,
         Path as SvgPath, Pattern, Rectangle, Use,
@@ -80,37 +76,32 @@ pub fn run_cli() -> Result<(), String> {
 
     let out_path = out_path.ok_or_else(|| "--out <output_svg> is required".to_string())?;
     let bytes = std::fs::read(&input).map_err(|e| format!("failed reading {input}: {e}"))?;
-    let export_bbox = extract_export_bbox(&bytes, root_figma_id.as_deref())?;
-    let base_color = extract_export_base_color(&bytes, root_figma_id.as_deref())?
+    let scene = figma_import::import_bytes(&bytes)
+        .map_err(|e| format!("failed importing source document from {input}: {e}"))?;
+    let export_node = export_root(&scene, root_figma_id.as_deref());
+    let export_bbox = export_node.and_then(export_bbox);
+    let base_color = export_node
+        .and_then(export_base_color)
         .unwrap_or((255, 255, 255, 255));
-    let source_bboxes = collect_source_absolute_bboxes(&bytes)?;
-    let source_stroke_data = collect_source_stroke_data(&bytes)?;
-    let root_name = extract_export_root_name(&bytes, root_figma_id.as_deref())?;
-    let export_root_id = extract_export_root_id(&bytes, root_figma_id.as_deref())?;
     // Text parity fixtures in this corpus validate text outline serialization only.
     // Keep non-text geometry out of SVG export for parity/text/* scenarios.
-    let text_only_mode = root_name
-        .as_deref()
-        .map(|name| name.starts_with("parity/text/") && !name.contains("alignment-truncation"))
+    let text_only_mode = export_node
+        .map(|n| n.name.starts_with("parity/text/") && !n.name.contains("alignment-truncation"))
         .unwrap_or(false);
-    let doc = FrameDocument::from_source_bytes(&bytes)
-        .map_err(|e| format!("failed importing source document from {input}: {e}"))?;
     let root = match root_figma_id.as_deref() {
-        Some(figma_id) => doc
-            .get_by_figma_id(figma_id)
-            .map(|n| n.id)
+        Some(figma_id) => figma_import::node_for_figma_id(&scene, figma_id)
             .ok_or_else(|| format!("root figma id not found: {figma_id}"))?,
-        None => doc.pages.first().copied().unwrap_or(doc.root),
+        None => scene.pages().first().copied().unwrap_or(scene.root),
     };
     let root_id_suffix = root_figma_id
         .clone()
-        .or(export_root_id)
-        .or_else(|| doc.get_node(root).map(|n| n.figma_id.clone()))
+        .or_else(|| export_node.and_then(source_id).map(ToString::to_string))
+        .or_else(|| scene.node(root).and_then(source_id).map(ToString::to_string))
         .unwrap_or_else(|| "root".to_string())
         .replace(':', "_");
 
-    let layout_boxes = build_layout_boxes(&doc, root);
-    let subtree = doc.walk_subtree(root);
+    let layout_boxes = build_scene_layout_boxes(&scene, root);
+    let subtree = scene.walk(root);
 
     let mut min_x = f64::INFINITY;
     let mut min_y = f64::INFINITY;
@@ -160,7 +151,7 @@ pub fn run_cli() -> Result<(), String> {
         height.max(bbox_height)
     };
 
-    let primitives = build_paint_primitives(&doc, root);
+    let primitives = build_scene_primitives(&scene, root);
 
     let mut svg_doc = Document::new()
         .set("width", width)
@@ -353,9 +344,9 @@ pub fn run_cli() -> Result<(), String> {
                 let rw = width.max(0.0);
                 let rh = height.max(0.0);
                 accumulate_bounds_if_active(&mut active_mask_bounds, rx, ry, rx + rw, ry + rh);
-                let node = doc.get_node(figma_model::NodeId(node_id.0));
+                let node = scene.node(node_id);
                 let frame_rect_uses_transform = node
-                    .map(|n| n.figma_type == "FRAME")
+                    .map(|n| matches!(n.kind, NodeKind::Frame))
                     .unwrap_or(false);
                 // The document background rectangle is emitted above. Skip an identical
                 // full-canvas top-level rect to avoid duplicate backgrounds.
@@ -383,76 +374,9 @@ pub fn run_cli() -> Result<(), String> {
                         }
                     }
                 }
-                let effective_corner_radii = if !corner_radii.is_zero() {
-                    corner_radii
-                } else {
-                    node.and_then(|n| {
-                        n.raw
-                            .get("rectangleCornerRadii")
-                            .and_then(|v| v.as_array())
-                            .and_then(|arr| {
-                                if arr.len() >= 4 {
-                                    Some(figma_model::CornerRadii {
-                                        top_left: arr[0].as_f64().unwrap_or(0.0).max(0.0),
-                                        top_right: arr[1].as_f64().unwrap_or(0.0).max(0.0),
-                                        bottom_right: arr[2].as_f64().unwrap_or(0.0).max(0.0),
-                                        bottom_left: arr[3].as_f64().unwrap_or(0.0).max(0.0),
-                                    })
-                                } else {
-                                    None
-                                }
-                            })
-                            .or_else(|| {
-                                let uniform = n
-                                    .raw
-                                    .get("cornerRadius")
-                                    .and_then(|v| v.as_f64())
-                                    .unwrap_or(0.0)
-                                    .max(0.0);
-                                if uniform > 0.0 {
-                                    Some(figma_model::CornerRadii::uniform(uniform))
-                                } else {
-                                    None
-                                }
-                            })
-                            .or_else(|| {
-                                let tl = n
-                                    .raw
-                                    .get("topLeftRadius")
-                                    .and_then(|v| v.as_f64())
-                                    .unwrap_or(0.0)
-                                    .max(0.0);
-                                let tr = n
-                                    .raw
-                                    .get("topRightRadius")
-                                    .and_then(|v| v.as_f64())
-                                    .unwrap_or(0.0)
-                                    .max(0.0);
-                                let br = n
-                                    .raw
-                                    .get("bottomRightRadius")
-                                    .and_then(|v| v.as_f64())
-                                    .unwrap_or(0.0)
-                                    .max(0.0);
-                                let bl = n
-                                    .raw
-                                    .get("bottomLeftRadius")
-                                    .and_then(|v| v.as_f64())
-                                    .unwrap_or(0.0)
-                                    .max(0.0);
-                                if tl > 0.0 || tr > 0.0 || br > 0.0 || bl > 0.0 {
-                                    Some(figma_model::CornerRadii {
-                                        top_left: tl,
-                                        top_right: tr,
-                                        bottom_right: br,
-                                        bottom_left: bl,
-                                    })
-                                } else {
-                                    None
-                                }
-                            })
-                    }).unwrap_or(corner_radii)
-                };
+                // The importer resolves Figma's per-corner / uniform radius
+                // spellings, so the primitive's radii are already the node's.
+                let effective_corner_radii = corner_radii;
                 if fills.len() > 1 && !effects.is_empty() {
                     let mut aggregate_group = Group::new();
                     for (fill, fill_blend) in &fills {
@@ -662,9 +586,7 @@ pub fn run_cli() -> Result<(), String> {
                 // FRAME nodes with gradient strokes emit their stroke overlay rects even
                 // when there is only one gradient fill.
                 let raw_frame_strokes_early = node
-                    .and_then(|n| source_stroke_data.get(&n.figma_id).map(|(p, _)| p.clone()))
-                    .filter(|p| !p.is_empty())
-                    .or_else(|| node.map(|n| raw_stroke_paints(&n.raw)))
+                    .map(|n| stroke_paints(n, &scene))
                     .unwrap_or_default();
                 let has_complex_frame_strokes_early = raw_frame_strokes_early.len() > 1
                     || raw_frame_strokes_early.iter().any(|paint| {
@@ -673,15 +595,7 @@ pub fn run_cli() -> Result<(), String> {
                 let frame_stroke_width_early = stroke
                     .as_ref()
                     .map(|s| s.width.max(0.0))
-                    .or_else(|| {
-                        node.and_then(|n| source_stroke_data.get(&n.figma_id))
-                            .and_then(|(_, w)| *w)
-                            .map(|w| w.max(0.0))
-                    })
-                    .or_else(|| {
-                        node.and_then(|n| n.raw.get("strokeWeight").and_then(|v| v.as_f64()))
-                            .map(|w| w.max(0.0))
-                    })
+                    .or_else(|| node.map(|n| n.stroke.weight.max(0.0)))
                     .unwrap_or(0.0);
 
                 if fills.len() == 1 {
@@ -1559,9 +1473,11 @@ pub fn run_cli() -> Result<(), String> {
                         continue;
                     }
                 }
-                let node = doc.get_node(figma_model::NodeId(node_id.0));
-                let figma_type = node.map(|n| n.figma_type.as_str()).unwrap_or("");
-                let is_rectangle_node = figma_type == "RECTANGLE";
+                let node = scene.node(node_id);
+                let kind = node.map(|n| &n.kind);
+                let is_rectangle_node = matches!(kind, Some(NodeKind::Rectangle));
+                let is_ellipse_node = matches!(kind, Some(NodeKind::Ellipse));
+                let is_line_node = matches!(kind, Some(NodeKind::Line));
                 if !text_outline && is_rectangle_node && svg_base64.is_none() {
                     let rotation_degrees = rotation.to_degrees();
                     let ResolvedRectGeometry {
@@ -1571,10 +1487,8 @@ pub fn run_cli() -> Result<(), String> {
                         rh,
                         ..
                     } = resolve_rect_geometry(
-                        &doc,
-                        figma_model::NodeId(node_id.0),
+                        node,
                         &layout_boxes,
-                        &source_bboxes,
                         x,
                         y,
                         width,
@@ -1585,7 +1499,7 @@ pub fn run_cli() -> Result<(), String> {
                         &fill_paths,
                         stroke.as_ref(),
                     );
-                    let mut rect_corner_radii = figma_model::CornerRadii::default();
+                    let mut rect_corner_radii = document_proto::CornerRadii::default();
                     let mut rect = Rectangle::new()
                         .set("x", fmt_f64(rx))
                         .set("y", fmt_f64(ry))
@@ -1603,40 +1517,17 @@ pub fn run_cli() -> Result<(), String> {
                         );
                     }
                     if let Some(node) = node {
-                        let corner_radius = node
-                            .raw
-                            .get("rectangleCornerRadii")
-                            .and_then(|v| v.as_array())
-                            .and_then(|arr| {
-                                if arr.len() >= 4 {
-                                    let tl = arr[0].as_f64().unwrap_or(0.0).max(0.0);
-                                    let tr = arr[1].as_f64().unwrap_or(0.0).max(0.0);
-                                    let br = arr[2].as_f64().unwrap_or(0.0).max(0.0);
-                                    let bl = arr[3].as_f64().unwrap_or(0.0).max(0.0);
-                                    rect_corner_radii = figma_model::CornerRadii {
-                                        top_left: tl,
-                                        top_right: tr,
-                                        bottom_right: br,
-                                        bottom_left: bl,
-                                    };
-                                    if (tl - tr).abs() <= f64::EPSILON
-                                        && (tl - br).abs() <= f64::EPSILON
-                                        && (tl - bl).abs() <= f64::EPSILON
-                                    {
-                                        Some(tl)
-                                    } else {
-                                        None
-                                    }
-                                } else {
-                                    None
-                                }
-                            })
-                            .or_else(|| node.raw.get("cornerRadius").and_then(|v| v.as_f64()));
-                        if let Some(corner_radius) = corner_radius {
-                            rect_corner_radii = figma_model::CornerRadii::uniform(corner_radius);
-                            if corner_radius > 0.0 {
-                                rect = rect.set("rx", fmt_f64(corner_radius));
+                        let r = node.corner_radii;
+                        if (r.top_left - r.top_right).abs() <= f64::EPSILON
+                            && (r.top_left - r.bottom_right).abs() <= f64::EPSILON
+                            && (r.top_left - r.bottom_left).abs() <= f64::EPSILON
+                        {
+                            rect_corner_radii = document_proto::CornerRadii::uniform(r.top_left);
+                            if r.top_left > 0.0 {
+                                rect = rect.set("rx", fmt_f64(r.top_left));
                             }
+                        } else {
+                            rect_corner_radii = r;
                         }
                     }
                     let node_blend_mode = svg_mix_blend_mode(&blend);
@@ -1646,9 +1537,7 @@ pub fn run_cli() -> Result<(), String> {
                     let blend_mode = fill_blend_mode.or(node_blend_mode);
                     let mut blend_group_opacity: Option<String> = None;
                     let raw_strokes = node
-                        .and_then(|n| source_stroke_data.get(&n.figma_id).map(|(p, _)| p.clone()))
-                        .filter(|p| !p.is_empty())
-                        .or_else(|| node.map(|n| raw_stroke_paints(&n.raw)))
+                        .map(|n| stroke_paints(n, &scene))
                         .unwrap_or_default();
                     let has_complex_raw_strokes = raw_strokes.len() > 1
                         || raw_strokes.iter().any(|paint| {
@@ -1847,15 +1736,7 @@ pub fn run_cli() -> Result<(), String> {
                     let stroke_width = stroke
                         .as_ref()
                         .map(|s| s.width.max(0.0))
-                        .or_else(|| {
-                            node.and_then(|n| source_stroke_data.get(&n.figma_id))
-                                .and_then(|(_, w)| *w)
-                                .map(|w| w.max(0.0))
-                        })
-                        .or_else(|| {
-                            node.and_then(|n| n.raw.get("strokeWeight").and_then(|v| v.as_f64()))
-                                .map(|w| w.max(0.0))
-                        })
+                        .or_else(|| node.map(|n| n.stroke.weight.max(0.0)))
                         .unwrap_or(0.0);
                     let mut stroke_overlays: Vec<Rectangle> = Vec::new();
                     if has_complex_raw_strokes && stroke_width > 0.0 {
@@ -2005,7 +1886,7 @@ pub fn run_cli() -> Result<(), String> {
                 // Use circle primitives only for full ellipses. Arc/slice ellipses are
                 // exported as paths and must remain paths.
                 if !text_outline
-                    && figma_type == "ELLIPSE"
+                    && is_ellipse_node
                     && fill_paths
                         .iter()
                         .all(|d| svg_path_is_full_ellipse_like(d))
@@ -2018,12 +1899,12 @@ pub fn run_cli() -> Result<(), String> {
                     let mut cx_box_w = width.max(0.0);
                     let mut cy_box_h = height.max(0.0);
                     if let Some(node) = node {
-                        if let Some((bx, by, bw, bh)) = source_bboxes.get(&node.figma_id) {
-                            cx_box_x = *bx;
-                            cy_box_y = *by;
-                            cx_box_w = (*bw).max(0.0);
-                            cy_box_h = (*bh).max(0.0);
-                        } else if let Some(b) = layout_boxes.get(&figma_model::NodeId(node_id.0)).copied() {
+                        if let Some((bx, by, bw, bh)) = source_bounds(node) {
+                            cx_box_x = bx;
+                            cy_box_y = by;
+                            cx_box_w = bw.max(0.0);
+                            cy_box_h = bh.max(0.0);
+                        } else if let Some(b) = layout_boxes.get(&node_id).copied() {
                             cx_box_x = b.x;
                             cy_box_y = b.y;
                             cx_box_w = b.width.max(0.0);
@@ -2051,54 +1932,43 @@ pub fn run_cli() -> Result<(), String> {
                     let mut circle_cy = cy;
                     let mut circle_transform: Option<String> = None;
                     if let Some(node) = node {
-                        if let Some(rt) = node.raw.get("relativeTransform").and_then(|v| v.as_array()) {
-                            if rt.len() >= 2 {
-                                let row0 = rt[0].as_array();
-                                let row1 = rt[1].as_array();
-                                if let (Some(row0), Some(row1)) = (row0, row1) {
-                                    if row0.len() >= 3 && row1.len() >= 3 {
-                                        let a = row0[0].as_f64().unwrap_or(1.0);
-                                        let c = row0[1].as_f64().unwrap_or(0.0);
-                                        let b = row1[0].as_f64().unwrap_or(0.0);
-                                        let d = row1[1].as_f64().unwrap_or(1.0);
-                                        let det = a * d - b * c;
-                                        let is_rotation = det > 0.0
-                                            && (a - d).abs() <= 1e-4
-                                            && (c + b).abs() <= 1e-4;
-                                        if det < -1e-6 {
-                                            // The circle sits at local origin (r, r); use the
-                                            // absoluteBoundingBox center (cx, cy) to derive the
-                                            // correct world-space translation rather than the
-                                            // local relativeTransform tx/ty, which is relative to
-                                            // the immediate parent and ignores the ancestor chain.
-                                            // SVG matrix(a,b,c,d,e,f): x'=a*x+c*y+e, y'=b*x+d*y+f
-                                            // For circle at (r,r) → (cx,cy): e = cx-(a+c)*r
-                                            let e = cx - (a + c) * r;
-                                            let f = cy - (b + d) * r;
-                                            circle_cx = r;
-                                            circle_cy = r;
-                                            circle_transform = Some(format!(
-                                                "matrix({} {} {} {} {} {})",
-                                                fmt_f64(a),
-                                                fmt_f64(b),
-                                                fmt_f64(c),
-                                                fmt_f64(d),
-                                                fmt_f64(e),
-                                                fmt_f64(f)
-                                            ));
-                                        } else if is_rotation {
-                                            let angle = b.atan2(a).to_degrees();
-                                            if angle.abs() > 0.0001 {
-                                                circle_transform = Some(format!(
-                                                    "rotate({} {} {})",
-                                                    fmt_f64(angle),
-                                                    fmt_f64(cx),
-                                                    fmt_f64(cy)
-                                                ));
-                                            }
-                                        }
-                                    }
-                                }
+                        // relativeTransform rows [[a c e] [b d f]] in SVG matrix naming.
+                        let t = node.transform;
+                        let (a, c, b, d) = (t.a, t.b, t.c, t.d);
+                        let det = a * d - b * c;
+                        let is_rotation = det > 0.0
+                            && (a - d).abs() <= 1e-4
+                            && (c + b).abs() <= 1e-4;
+                        if det < -1e-6 {
+                            // The circle sits at local origin (r, r); use the
+                            // absoluteBoundingBox center (cx, cy) to derive the
+                            // correct world-space translation rather than the
+                            // local relativeTransform tx/ty, which is relative to
+                            // the immediate parent and ignores the ancestor chain.
+                            // SVG matrix(a,b,c,d,e,f): x'=a*x+c*y+e, y'=b*x+d*y+f
+                            // For circle at (r,r) → (cx,cy): e = cx-(a+c)*r
+                            let e = cx - (a + c) * r;
+                            let f = cy - (b + d) * r;
+                            circle_cx = r;
+                            circle_cy = r;
+                            circle_transform = Some(format!(
+                                "matrix({} {} {} {} {} {})",
+                                fmt_f64(a),
+                                fmt_f64(b),
+                                fmt_f64(c),
+                                fmt_f64(d),
+                                fmt_f64(e),
+                                fmt_f64(f)
+                            ));
+                        } else if is_rotation {
+                            let angle = b.atan2(a).to_degrees();
+                            if angle.abs() > 0.0001 {
+                                circle_transform = Some(format!(
+                                    "rotate({} {} {})",
+                                    fmt_f64(angle),
+                                    fmt_f64(cx),
+                                    fmt_f64(cy)
+                                ));
                             }
                         }
                     }
@@ -2198,10 +2068,7 @@ pub fn run_cli() -> Result<(), String> {
                                     defs = defs.add(ClipPath::new().set("id", clip_id.clone()).add(clip_circle));
                                     has_defs = true;
 
-                                    let stroke_weight = node
-                                        .and_then(|n| n.raw.get("strokeWeight"))
-                                        .and_then(|v| v.as_f64())
-                                        .unwrap_or(0.0);
+                                    let stroke_weight = node.map_or(0.0, |n| n.stroke.weight);
                                     let (a, b, c, d) = if let Some(t) = transform.as_ref() {
                                         let rw = 2.0 * r;
                                         (
@@ -2392,16 +2259,16 @@ pub fn run_cli() -> Result<(), String> {
                     );
                     continue;
                 }
-                if !text_outline && figma_type == "LINE" {
+                if !text_outline && is_line_node {
                     let mut lx = x;
                     let mut ly = y;
                     let mut lw = width;
                     if let Some(node) = node {
-                        if let Some((bx, by, bw, _bh)) = source_bboxes.get(&node.figma_id) {
-                            lx = *bx;
-                            ly = *by;
-                            lw = *bw;
-                        } else if let Some(b) = layout_boxes.get(&figma_model::NodeId(node_id.0)).copied() {
+                        if let Some((bx, by, bw, _bh)) = source_bounds(node) {
+                            lx = bx;
+                            ly = by;
+                            lw = bw;
+                        } else if let Some(b) = layout_boxes.get(&node_id).copied() {
                             lx = b.x;
                             ly = b.y;
                             lw = b.width;
@@ -2477,7 +2344,7 @@ pub fn run_cli() -> Result<(), String> {
                 let mut px = x + tx;
                 let mut py = y + ty;
                 let is_nonfull_ellipse = !text_outline
-                    && figma_type == "ELLIPSE"
+                    && is_ellipse_node
                     && (!fill_paths.iter().all(|d| svg_path_is_full_ellipse_like(d))
                         || !stroke_paths.iter().all(|d| svg_path_is_full_ellipse_like(d)));
                 if is_nonfull_ellipse {
@@ -2485,18 +2352,18 @@ pub fn run_cli() -> Result<(), String> {
                     px += ellipse_inset;
                     py += ellipse_inset;
                     if let Some(node) = node {
-                        if let Some((bx, by, _bw, _bh)) = source_bboxes.get(&node.figma_id) {
-                            px = *bx + tx + ellipse_inset;
-                            py = *by + ty + ellipse_inset;
-                        } else if let Some(b) = layout_boxes.get(&figma_model::NodeId(node_id.0)).copied() {
+                        if let Some((bx, by, _bw, _bh)) = source_bounds(node) {
+                            px = bx + tx + ellipse_inset;
+                            py = by + ty + ellipse_inset;
+                        } else if let Some(b) = layout_boxes.get(&node_id).copied() {
                             px = b.x + tx + ellipse_inset;
                             py = b.y + ty + ellipse_inset;
                         }
                     }
                 } else if !text_outline {
                     if let Some(node) = node {
-                    if let Some((bx, by, bw, bh)) = source_bboxes.get(&node.figma_id) {
-                        let target = (*bx + tx, *by + ty, (*bw).max(0.0), (*bh).max(0.0));
+                    if let Some((bx, by, bw, bh)) = source_bounds(node) {
+                        let target = (bx + tx, by + ty, bw.max(0.0), bh.max(0.0));
                         let source_paths = if fill_paths.is_empty() {
                             &stroke_paths
                         } else {
@@ -2532,14 +2399,11 @@ pub fn run_cli() -> Result<(), String> {
                     && has_native_geometry
                 {
                     // Resolve the absolute bounding box center for rotation.
-                    // Prefer source_bboxes (Figma absoluteBoundingBox) when available,
+                    // Prefer the source bounds (Figma absoluteBoundingBox) when available,
                     // fall back to the layout box center.
                     let bbox_center = node
-                        .and_then(|n| {
-                            source_bboxes
-                                .get(&n.figma_id)
-                                .map(|(bx, by, bw, bh)| (*bx + tx + *bw / 2.0, *by + ty + *bh / 2.0))
-                        })
+                        .and_then(source_bounds)
+                        .map(|(bx, by, bw, bh)| (bx + tx + bw / 2.0, by + ty + bh / 2.0))
                         .or_else(|| {
                             Some((x + tx + width / 2.0, y + ty + height / 2.0))
                         });
@@ -3193,7 +3057,7 @@ fn push_complex_frame_stroke_overlays(
     ry: f64,
     rw: f64,
     rh: f64,
-    corner_radii: &figma_model::CornerRadii,
+    corner_radii: &document_proto::CornerRadii,
     frame_stroke_width: f64,
     raw_frame_strokes: &[crate::anyrender_renderer::FillPaint],
     fill_blend: &crate::anyrender_renderer::BlendMix,
@@ -3300,10 +3164,8 @@ fn bbox_alignment_error(
 
 #[cfg(feature = "svg_export")]
 fn resolve_rect_geometry(
-    doc: &figma_model::FrameDocument,
-    node_id: figma_model::NodeId,
-    layout_boxes: &std::collections::HashMap<figma_model::NodeId, crate::anyrender_renderer::LayoutBox>,
-    source_bboxes: &std::collections::HashMap<String, (f64, f64, f64, f64)>,
+    node: Option<&document_proto::Node>,
+    layout_boxes: &std::collections::HashMap<document_proto::NodeId, crate::anyrender_renderer::LayoutBox>,
     x: f64,
     y: f64,
     width: f64,
@@ -3314,7 +3176,6 @@ fn resolve_rect_geometry(
     fill_paths: &[String],
     stroke: Option<&crate::anyrender_renderer::StrokeStyle>,
 ) -> ResolvedRectGeometry {
-    let node = doc.get_node(node_id);
     let mut rx = x + tx;
     let mut ry = y + ty;
     let mut rw = width.max(0.0);
@@ -3322,16 +3183,16 @@ fn resolve_rect_geometry(
     let mut used_bbox_fallback = false;
     if rw <= 1.0 || rh <= 1.0 {
         if let Some(node) = node {
-            if let Some((bx, by, bw, bh)) = source_bboxes.get(&node.figma_id) {
-                rx = *bx + tx;
-                ry = *by + ty;
-                rw = *bw;
-                rh = *bh;
+            if let Some((bx, by, bw, bh)) = source_bounds(node) {
+                rx = bx + tx;
+                ry = by + ty;
+                rw = bw;
+                rh = bh;
                 used_bbox_fallback = true;
             }
         }
         if !used_bbox_fallback {
-            if let Some(b) = layout_boxes.get(&node_id).copied() {
+            if let Some(b) = node.and_then(|n| layout_boxes.get(&n.id)).copied() {
                 rx = b.x + tx;
                 ry = b.y + ty;
                 rw = b.width.max(0.0);
@@ -3367,8 +3228,7 @@ fn resolve_rect_geometry(
     }
     if let Some(stroke) = stroke {
         let stroke_align_inside = node
-            .and_then(|n| n.raw.get("strokeAlign").and_then(|v| v.as_str()))
-            .map(|v| v.eq_ignore_ascii_case("INSIDE"))
+            .map(|n| n.stroke.align == document_proto::StrokeAlign::Inside)
             .unwrap_or(false);
         if used_bbox_fallback || stroke_align_inside {
             let inset = stroke.width.max(0.0) * 0.5;
@@ -3405,7 +3265,7 @@ fn apply_fill_style_rect(
 #[cfg(feature = "svg_export")]
 pub(super) fn apply_corner_radii_rect(
     mut rect: svg::node::element::Rectangle,
-    corner_radii: &figma_model::CornerRadii,
+    corner_radii: &document_proto::CornerRadii,
 ) -> svg::node::element::Rectangle {
     let tl = corner_radii.top_left.max(0.0);
     let tr = corner_radii.top_right.max(0.0);

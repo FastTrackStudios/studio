@@ -207,7 +207,7 @@ pub enum PaintPrimitive {
         y: f64,
         width: f64,
         height: f64,
-        corner_radii: figma_model::CornerRadii,
+        corner_radii: document_proto::CornerRadii,
     },
     ClipEnd {
         node_id: NodeId,
@@ -241,7 +241,7 @@ pub enum PaintPrimitive {
         height: f64,
         fills: Vec<(FillPaint, BlendMix)>,
         stroke: Option<StrokeStyle>,
-        corner_radii: figma_model::CornerRadii,
+        corner_radii: document_proto::CornerRadii,
         effects: Vec<NodeEffect>,
         blend: BlendMix,
         rotation: f64,

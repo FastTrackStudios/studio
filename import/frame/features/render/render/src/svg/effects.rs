@@ -344,7 +344,7 @@ pub(super) fn push_rect_with_effects(
     y: f64,
     width: f64,
     height: f64,
-    corner_radii: &figma_model::CornerRadii,
+    corner_radii: &document_proto::CornerRadii,
     extra_rects: &[svg::node::element::Rectangle],
 ) {
     use crate::anyrender_renderer::EffectKind;
@@ -414,7 +414,7 @@ pub(super) fn push_rect_with_effects(
                 if let Some(opacity) = stroke_opacity {
                     stroke_rect = stroke_rect.set("stroke-opacity", opacity);
                 }
-                let inset_radii = figma_model::CornerRadii {
+                let inset_radii = document_proto::CornerRadii {
                     top_left: (corner_radii.top_left - inset).max(0.0),
                     top_right: (corner_radii.top_right - inset).max(0.0),
                     bottom_right: (corner_radii.bottom_right - inset).max(0.0),

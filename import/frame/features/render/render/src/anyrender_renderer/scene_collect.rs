@@ -55,7 +55,7 @@ fn stops(stops: &[doc::GradientStop], paint_opacity: f64) -> Vec<GradientStop> {
     stops.iter().map(|s| GradientStop { offset: clamp01(s.position), color: rgba(&s.color, paint_opacity) }).collect()
 }
 
-fn fill_paint(p: &doc::Paint, scene: &Scene) -> Option<FillPaint> {
+pub(crate) fn fill_paint(p: &doc::Paint, scene: &Scene) -> Option<FillPaint> {
     Some(match &p.kind {
         doc::PaintKind::Solid { color } => FillPaint::Solid(rgba(color, p.opacity)),
         doc::PaintKind::LinearGradient { stops: s, transform } => {
@@ -166,15 +166,6 @@ pub(super) fn node_effects(effects: &[doc::Effect], opacity: f64) -> Vec<NodeEff
             spread: e.spread,
         })
         .collect()
-}
-
-pub(super) fn corner_radii(r: &doc::CornerRadii) -> figma_model::CornerRadii {
-    figma_model::CornerRadii {
-        top_left: r.top_left,
-        top_right: r.top_right,
-        bottom_right: r.bottom_right,
-        bottom_left: r.bottom_left,
-    }
 }
 
 fn text_case(c: doc::TextCase) -> TextCase {
@@ -444,9 +435,9 @@ impl Cx<'_> {
             self.boxes.get(&node_id).map_or((chain_x, chain_y, lw, lh), |b| (b.x, b.y, b.width, b.height))
         };
 
-        let mut radii = corner_radii(&node.corner_radii);
+        let mut radii = node.corner_radii;
         if matches!(node.kind, NodeKind::Ellipse) && radii.is_zero() {
-            radii = figma_model::CornerRadii::uniform(width.min(height) * 0.5);
+            radii = doc::CornerRadii::uniform(width.min(height) * 0.5);
         }
         let blend = blend_mix(node.blend);
         let has_filter_effects = node.effects.iter().any(|e| {
@@ -494,7 +485,7 @@ impl Cx<'_> {
             });
         let clip_subtree = node.clips_content && !node.children.is_empty() && (fills.is_empty() || child_overflows);
         if clip_subtree && width > 0.0 && height > 0.0 {
-            self.out.push(PaintPrimitive::ClipStart { node_id, x, y, width, height, corner_radii: radii.clone() });
+            self.out.push(PaintPrimitive::ClipStart { node_id, x, y, width, height, corner_radii: radii });
         }
 
         let mut atomic_svg = false;

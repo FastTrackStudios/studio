@@ -9,7 +9,7 @@ mod normalize;
 #[cfg(feature = "svg_export")]
 mod render;
 #[cfg(feature = "svg_export")]
-mod source_bridge;
+mod scene_source;
 
 #[cfg(feature = "svg_export")]
 pub use cli::run_cli;

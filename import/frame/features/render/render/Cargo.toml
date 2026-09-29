@@ -7,6 +7,7 @@ edition.workspace = true
 [dependencies]
 figma-model = { path = "../../figma/figma-model" }
 document-proto = { path = "../../document/document-proto", default-features = false }
+figma-import = { path = "../../figma/figma-import", optional = true }
 figma-api = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
@@ -31,7 +32,7 @@ fixed = { version = "1.28", optional = true }
 
 [features]
 default = []
-svg_export = ["dep:svg", "dep:rust_decimal", "dep:fixed", "dep:kurbo"]
+svg_export = ["dep:figma-import", "dep:svg", "dep:rust_decimal", "dep:fixed", "dep:kurbo"]
 anyrender = ["dep:anyrender", "dep:anyrender_svg", "dep:anyrender_vello", "dep:vello", "dep:kurbo", "dep:peniko", "dep:skrifa", "dep:image", "dep:winit", "dep:pollster", "svg_export"]
 
 [dev-dependencies]

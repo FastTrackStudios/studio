@@ -103,6 +103,15 @@ pub struct Size {
     pub height: f64,
 }
 
+/// An axis-aligned rectangle.
+#[derive(Debug, Clone, Copy, PartialEq, Default, Serialize, Deserialize, Facet)]
+pub struct Rect {
+    pub x: f64,
+    pub y: f64,
+    pub width: f64,
+    pub height: f64,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Default, Serialize, Deserialize, Facet)]
 pub struct CornerRadii {
     pub top_left: f64,
@@ -484,6 +493,10 @@ pub struct SourceRef {
     pub id: String,
     /// The source tool's node type (Figma `"FRAME"`).
     pub node_type: String,
+    /// The node's absolute, axis-aligned bounds as the source tool computed
+    /// them at import (Figma `absoluteBoundingBox`). A snapshot for exporters
+    /// that reproduce the source's own output; edits don't maintain it.
+    pub bounds: Option<Rect>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Facet)]

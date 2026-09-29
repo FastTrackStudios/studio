@@ -131,14 +131,14 @@ fn collect_primitives_recursive(
             .and_then(|v| v.as_array())
         {
             if arr.len() >= 4 {
-                figma_model::CornerRadii {
+                document_proto::CornerRadii {
                     top_left: arr[0].as_f64().unwrap_or(0.0).max(0.0),
                     top_right: arr[1].as_f64().unwrap_or(0.0).max(0.0),
                     bottom_right: arr[2].as_f64().unwrap_or(0.0).max(0.0),
                     bottom_left: arr[3].as_f64().unwrap_or(0.0).max(0.0),
                 }
             } else {
-                figma_model::CornerRadii::uniform(
+                document_proto::CornerRadii::uniform(
                     node.raw
                         .get("cornerRadius")
                         .and_then(|v| v.as_f64())
@@ -147,7 +147,7 @@ fn collect_primitives_recursive(
                 )
             }
         } else {
-            figma_model::CornerRadii::uniform(
+            document_proto::CornerRadii::uniform(
                 node.raw
                     .get("cornerRadius")
                     .and_then(|v| v.as_f64())
@@ -161,7 +161,7 @@ fn collect_primitives_recursive(
     // half the smaller axis so the RoundedRect is a circle/pill shape.
     let corner_radii = if node.figma_type == "ELLIPSE" && corner_radii.is_zero() {
         let r = width.min(height) * 0.5;
-        figma_model::CornerRadii::uniform(r)
+        document_proto::CornerRadii::uniform(r)
     } else {
         corner_radii
     };
