@@ -5,6 +5,7 @@
 //! frame [FILE] --screenshot OUT.png [--frames N] [--script drag-first-knob]
 //! frame [FILE] --engine ws://127.0.0.1:4040/vox [--rig guitar] [...]
 //! frame DIR                        # gallery: ] / Tab next, [ / Shift-Tab previous
+//! frame --library ws://127.0.0.1:4050/vox [--surface ID | --browse] [--engine …] [--install-dir DIR]
 //! ```
 //! Runs a control surface live against the in-process mock engine
 //! (`surface_memory::Memory::demo()`): moving meters, knobs/faders/buttons
@@ -21,11 +22,26 @@
 //! the link drops, a banner says so, the surface keeps its last state, and
 //! the player reconnects with backoff.
 //!
+//! `--library` plays surfaces from a library server
+//! (`frame-library-server`): `--surface ID` puts one on stage and follows
+//! it — every new version (an agent's edit through `frame-mcp --library`,
+//! a save on the server's disk) swaps in place, keeping values, a drag in
+//! flight and meter ballistics; an update that doesn't parse or adds lint
+//! errors is refused with a toast and the stage stays as it was. Without
+//! `--surface` (or with `--browse`) it opens the browser: a grid of
+//! previews (only those fitting the engine, with `--engine`), arrows to
+//! select, Enter or click to preview live, I to install into
+//! `--install-dir`, F to fork, B to go back. With no `--engine`, the mock
+//! engine also serves the catalogs the library knows.
+//!
 //! `--screenshot` runs the same loop offscreen for N frames and writes the
 //! last one — a headless check that input, engine and rendering agree.
 
+mod browser;
 mod headless;
 mod input;
+mod library;
+mod libview;
 mod player;
 mod remote;
 mod source;
@@ -38,6 +54,7 @@ use surface_runtime::Surface;
 use surface_runtime::sync::Engine as _;
 use surface_widgets::Theme;
 
+use crate::libview::LibraryView;
 use crate::player::Backend;
 use crate::remote::Remote;
 use crate::source::Source;
@@ -71,22 +88,42 @@ pub struct Args {
     /// Light/shader effects: the GPU stage by default; `--no-fx` = the
     /// vector fallback (soft glows, no shaders).
     pub fx: render::fx::Mode,
+    /// `--library URL`: surfaces from a library server.
+    pub library: Option<LibraryArg>,
+    /// `--screenshot` with a library: stop after this many live updates,
+    /// writing `OUT-<n>.png` after each (0 = don't wait for any).
+    pub updates: u32,
+}
+
+/// A library to play from.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LibraryArg {
+    pub url: String,
+    /// `--surface ID`: start on it, followed live.
+    pub surface: Option<String>,
+    /// Start on the browser grid.
+    pub browse: bool,
+    pub install_dir: PathBuf,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Script {
     DragFirstKnob,
+    /// Library browser: preview the selected surface on frame 1.
+    OpenSelected,
 }
 
 const USAGE: &str = "usage: frame [FILE.fm|FILE.frame] [--theme stage-dark|daylight] [--stats] [--size WxH] [--no-fx|--fx gpu|fallback|off]\n       \
                      frame [FILE] --screenshot OUT.png [--frames N] [--script drag-first-knob]\n       \
                      frame [FILE] --engine ws://HOST:PORT/vox [--rig NAME] [...]\n       \
-                     frame DIR   (gallery of every .fm/.frame in DIR; ] / Tab next, [ / Shift-Tab previous)";
+                     frame DIR   (gallery of every .fm/.frame in DIR; ] / Tab next, [ / Shift-Tab previous)\n       \
+                     frame --library ws://HOST:PORT/vox [--surface ID | --browse] [--engine …] [--install-dir DIR] [--screenshot OUT.png [--updates N]]";
 
 fn parse_args(args: impl IntoIterator<Item = String>) -> Result<Args, String> {
     let mut file = None;
     let mut theme = Theme::stage_dark();
     let mut rig = None;
+    let (mut library, mut surface, mut browse, mut install_dir) = (None, None, false, None);
     let mut out = Args {
         source: Source::Generated { theme: Box::new(Theme::stage_dark()) },
         gallery: Vec::new(),
@@ -98,6 +135,8 @@ fn parse_args(args: impl IntoIterator<Item = String>) -> Result<Args, String> {
         engine: None,
         catalogs: Vec::new(),
         fx: render::fx::Mode::Gpu,
+        library: None,
+        updates: 0,
     };
     let mut args = args.into_iter();
     while let Some(a) = args.next() {
@@ -123,17 +162,34 @@ fn parse_args(args: impl IntoIterator<Item = String>) -> Result<Args, String> {
             "--script" => {
                 out.script = match value()?.as_str() {
                     "drag-first-knob" => Some(Script::DragFirstKnob),
-                    other => return Err(format!("unknown script {other:?} (drag-first-knob)")),
+                    "open-selected" => Some(Script::OpenSelected),
+                    other => return Err(format!("unknown script {other:?} (drag-first-knob|open-selected)")),
                 }
             }
             "--engine" => out.engine = Some(EngineArg { url: value()?, rig: None }),
             "--rig" => rig = Some(value()?),
             "--catalog" => out.catalogs.push(value()?.into()),
+            "--library" => library = Some(value()?),
+            "--surface" => surface = Some(value()?),
+            "--browse" => browse = true,
+            "--install-dir" => install_dir = Some(PathBuf::from(value()?)),
+            "--updates" => out.updates = value()?.parse().map_err(|_| "--updates wants a count")?,
             "-h" | "--help" => return Err(USAGE.into()),
             flag if flag.starts_with('-') => return Err(format!("unknown flag {flag}\n{USAGE}")),
             path if file.is_none() => file = Some(PathBuf::from(path)),
             extra => return Err(format!("unexpected argument {extra}\n{USAGE}")),
         }
+    }
+    match (library, &file) {
+        (Some(_), Some(_)) => return Err(format!("--library plays from the library; drop the file argument\n{USAGE}")),
+        (Some(url), None) => {
+            let install_dir = install_dir.unwrap_or_else(library::default_install_dir);
+            out.library = Some(LibraryArg { url, surface, browse, install_dir });
+        }
+        (None, _) if surface.is_some() || browse || install_dir.is_some() => {
+            return Err(format!("--surface/--browse/--install-dir need --library\n{USAGE}"));
+        }
+        (None, _) => {}
     }
     match file {
         Some(dir) if dir.is_dir() => {
@@ -169,13 +225,22 @@ fn sibling_catalogs(dir: &std::path::Path) -> Vec<PathBuf> {
     out
 }
 
-/// The demo rig plus every extra catalog, as one mock engine.
-fn mock_engine(extra: &[PathBuf]) -> Result<surface_memory::Memory, String> {
+/// The demo rig plus every extra catalog (files, and those a library
+/// served), as one mock engine.
+fn mock_engine(extra: &[PathBuf], served: Vec<surface_proto::Catalog>) -> Result<surface_memory::Memory, String> {
     let mut catalog = surface_memory::demo_catalog();
+    let mut all = Vec::new();
     for path in extra {
         let text = std::fs::read_to_string(path).map_err(|e| format!("{}: {e}", path.display()))?;
         let c: surface_proto::Catalog = serde_json::from_str(&text).map_err(|e| format!("{}: {e}", path.display()))?;
         eprintln!("frame: mock engine also serves `{}` ({} params) from {}", c.id, c.params.len(), path.display());
+        all.push(c);
+    }
+    if !served.is_empty() {
+        let ids: Vec<&str> = served.iter().map(|c| c.id.as_str()).collect();
+        eprintln!("frame: mock engine also serves the library's catalogs: {}", ids.join(", "));
+    }
+    for c in all.into_iter().chain(served) {
         catalog.params.extend(c.params);
         catalog.actions.extend(c.actions);
         catalog.streams.extend(c.streams);
@@ -198,14 +263,31 @@ fn gallery(dir: &std::path::Path) -> Result<Vec<Source>, String> {
     Ok(paths.into_iter().map(Source::from_path).collect())
 }
 
-/// The engine (mock, or connected live) and the first surface to play. A
-/// broken file isn't fatal: it yields the placeholder plus its error.
+/// What [`start`] sets up.
+pub struct Started {
+    pub engine: Backend,
+    pub surface: Surface,
+    /// Why the first surface couldn't load (shown in the banner).
+    pub error: Option<String>,
+    pub library: Option<LibraryView>,
+}
+
+/// The engine (mock, or connected live), the library (if any) and the
+/// first surface to play. A broken file isn't fatal: it yields the
+/// placeholder plus its error.
 ///
 /// # Errors
-/// When `--engine` can't be reached.
-pub fn start(args: &Args) -> Result<(Backend, Surface, Option<String>), String> {
+/// When `--engine` or `--library` can't be reached.
+pub fn start(args: &Args) -> Result<Started, String> {
+    let mut library = match &args.library {
+        Some(l) => Some(LibraryView::start(&l.url, l.surface.clone(), l.browse, l.install_dir.clone())?),
+        None => None,
+    };
     let engine = match &args.engine {
-        None => Backend::Local(mock_engine(&args.catalogs)?),
+        None => {
+            let served = library.as_mut().map(LibraryView::catalogs).unwrap_or_default();
+            Backend::Local(mock_engine(&args.catalogs, served)?)
+        }
         Some(e) => {
             eprintln!("frame: connecting to {}{}", e.url, e.rig.as_ref().map_or(String::new(), |r| format!(" (rig {r})")));
             let mut remote = Remote::start(&e.url, e.rig.as_deref())?;
@@ -214,11 +296,19 @@ pub fn start(args: &Args) -> Result<(Backend, Surface, Option<String>), String> 
         }
     };
     let catalog = pollster::block_on(engine.catalog()).map_err(|e| format!("engine: {e}"))?;
-    Ok(match args.source.load(&catalog) {
-        Ok(s) => (engine, s, None),
+    if let (Some(lib), Some(_)) = (&mut library, &args.engine) {
+        // Only offer surfaces whose bindings all resolve on this engine.
+        lib.set_fits(&catalog.id, library_link::Signature::of_catalog(&catalog));
+    }
+    let loaded = match &mut library {
+        Some(lib) => lib.initial().map(|s| s.unwrap_or_else(source::placeholder)),
+        None => args.source.load(&catalog),
+    };
+    Ok(match loaded {
+        Ok(surface) => Started { engine, surface, error: None, library },
         Err(e) => {
             eprintln!("{e}");
-            (engine, source::placeholder(), Some(e))
+            Started { engine, surface: source::placeholder(), error: Some(e), library }
         }
     })
 }

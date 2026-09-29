@@ -124,23 +124,35 @@ impl Player {
         })
     }
 
-    /// Swap in a new design, keeping the engine (and so every value).
+    /// Swap in a new design in place (a reload, a live update, the next
+    /// surface of a gallery), keeping the engine and the running state:
+    /// every value (incl. edits still in flight), meter ballistics, and a
+    /// gesture in progress on a control that is still there.
     ///
     /// # Errors
-    /// As [`Player::new`]; the old surface stays on error.
+    /// When the surface has no page; the old surface stays.
     pub fn swap(&mut self, surface: Surface) -> Result<(), String> {
-        let mut rt = match &self.engine {
-            Backend::Local(_) => pollster::block_on(sync::connect(&self.engine, surface)).map_err(|e| format!("engine: {e}"))?,
-            // The connect-time snapshot is stale; the running runtime (fed by
-            // the stream) is current, and works while disconnected too.
-            Backend::Remote(_) => Runtime::new(surface, self.rt.catalog().clone()),
-        };
-        if matches!(self.engine, Backend::Remote(_)) {
-            rt.apply_values(self.rt.values());
+        if surface.scene.pages().is_empty() {
+            return Err("surface has no <Page>".into());
         }
-        self.install(Built::new(rt)?);
-        self.focus = None;
-        self.clicks = Clicks::default();
+        let dragging = self.dragging.take();
+        let placeholder = Runtime::new(Surface::from_scene(Scene::new("")), Catalog::default());
+        let mut rt = std::mem::replace(&mut self.rt, placeholder);
+        rt.swap_surface(surface);
+        if let Backend::Local(engine) = &self.engine {
+            // The in-process engine is the truth (other callers may have
+            // changed it); only a param mid-drag keeps its optimistic value.
+            let values = surface_proto::SurfaceEngine::values(engine);
+            rt.apply_values(values.into_iter().filter(|v| dragging.as_ref() != Some(&v.addr)));
+        }
+        let b = Built::new(rt)?;
+        self.install(b);
+        // Focus and a drag survive when their control does.
+        let alive = |id: &NodeId| self.rt.surface().controls.contains_key(id);
+        self.focus = self.focus.filter(alive);
+        self.dragging = dragging.filter(|addr| {
+            self.rt.surface().controls.values().any(|c| matches!(c.binding.as_ref().map(|b| &b.source), Some(Binding::Param { addr: a }) if a == addr))
+        });
         Ok(())
     }
 
@@ -195,6 +207,12 @@ impl Player {
     /// the last call (a generated surface should be regenerated).
     pub fn take_catalog_changed(&mut self) -> bool {
         std::mem::take(&mut self.catalog_changed)
+    }
+
+    /// The design on stage (controls stored on their nodes).
+    #[must_use]
+    pub fn scene(&self) -> &Scene {
+        &self.rt.surface().scene
     }
 
     /// The catalog the surface runs against.

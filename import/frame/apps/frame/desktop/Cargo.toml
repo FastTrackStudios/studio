@@ -19,6 +19,8 @@ surface-runtime = { path = "../../../features/surface/surface-runtime", features
 surface-widgets = { path = "../../../features/surface/surface-widgets" }
 surface-memory = { path = "../../../features/surface/surface-memory" }
 feed-memory = { path = "../../../features/feed/feed-memory" }
+library-link = { path = "../../../features/library/library-link" }
+design-lint = { path = "../../../features/design/design-lint" }
 serde_json = { workspace = true }
 kurbo = { workspace = true }
 peniko = { workspace = true }
@@ -31,6 +33,7 @@ tokio = { workspace = true }
 architect = { workspace = true, features = ["platform"] }
 
 [dev-dependencies]
+library-fs = { path = "../../../features/library/library-fs" }
 architect = { workspace = true, features = ["platform", "vox", "local"] }
 
 [lints]

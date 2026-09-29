@@ -187,6 +187,12 @@ The wasm remote uses SVG export of the same document.
 
 ## 7. Live reload: agents edit, the running app updates
 
+Status: push reload built. `frame --library ws://… --surface ID` follows a
+surface in `SurfaceStore`: updates are whole snapshots (see `library-proto`
+for why not deltas), swapped in with `Runtime::swap_surface`, and gated by
+parse and lint (refused with a toast). `frame-mcp --library` publishes after
+every edit. The Loro multi-editor merge below is not built yet.
+
 Nothing requires a relaunch. The document is the unit of change, and every
 host re-renders when it changes:
 - **Today:** the desktop player polls its `.fm` file and reloads it, and
@@ -206,6 +212,12 @@ host re-renders when it changes:
   MIDI/param mappings.
 
 ## 8. Surface library: browse, share, download
+
+Status: `library-proto`, `library-fs` (a watched folder), `library-link`
+(WebSocket serve/connect, `Follow`), the `frame-library-server` app (vox plus
+HTTP index, downloads and previews) and the desktop browser (`frame
+--library … --browse`: grid, fits filter, preview live, install, fork) are
+built. Ratings, a community index and the WGSL sandbox are not.
 
 A feature (`features/library`) for storing and finding surfaces:
 - `library-proto`: `SurfaceStore` rpc.

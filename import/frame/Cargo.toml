@@ -9,6 +9,7 @@ members = [
     "apps/frame/cli",
     "apps/frame/mcp",
     "apps/frame/desktop",
+    "apps/frame/library-server",
     # ── facade ────────────────────────────────────────────────────────
     "crates/frame",
     # ── design: AI authoring — lint, tools, MCP ──────────────────────
@@ -27,6 +28,10 @@ members = [
     "features/figma/figma-import",
     "features/figma/figma-model",
     "features/figma/figma-rest",
+    # ── library: store, find and live-follow surfaces ─────────────────
+    "features/library/library-proto",
+    "features/library/library-fs",
+    "features/library/library-link",
     # ── render ────────────────────────────────────────────────────────
     "features/render/render",
     # ── surface: controls, bindings, engine contract, runtime ─────────
@@ -44,6 +49,7 @@ default-members = [
     "apps/frame/cli",
     "apps/frame/mcp",
     "apps/frame/desktop",
+    "apps/frame/library-server",
     "crates/frame",
     "features/design/design-lint",
     "features/design/design-session",
@@ -57,6 +63,9 @@ default-members = [
     "features/figma/figma-import",
     "features/figma/figma-model",
     "features/figma/figma-rest",
+    "features/library/library-proto",
+    "features/library/library-fs",
+    "features/library/library-link",
     "features/render/render",
     "features/surface/surface-proto",
     "features/surface/surface-memory",

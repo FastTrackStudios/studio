@@ -19,6 +19,9 @@ use crate::gesture::{Bounds, Gesture, Input, Output};
 use crate::meter::{Ballistics, MeterScale, Sense};
 use crate::visual::{ControlState, control_ops};
 
+// Live reload: swap the design, keep the running state.
+mod swap;
+
 /// A design plus the controls attached to its nodes.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Surface {

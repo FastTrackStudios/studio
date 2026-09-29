@@ -1,0 +1,21 @@
+[package]
+name = "library-fs"
+version.workspace = true
+edition.workspace = true
+publish = false
+description = "Surface library backed by a folder of .frame bundles and .fm markup, watched for edits."
+
+[dependencies]
+architect = { workspace = true, features = ["vox", "local"] }
+library-proto = { path = "../library-proto" }
+surface-proto = { path = "../../surface/surface-proto" }
+document-proto = { path = "../../document/document-proto", default-features = false }
+serde.workspace = true
+serde_json.workspace = true
+
+[dev-dependencies]
+tokio.workspace = true
+facet.workspace = true
+
+[lints]
+workspace = true

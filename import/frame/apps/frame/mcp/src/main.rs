@@ -2,11 +2,19 @@
 //!
 //! ```text
 //! frame-mcp [--file surface.fm] [--engine ws://127.0.0.1:4040/vox [--rig guitar]]
+//!           [--library ws://127.0.0.1:4050/vox [--surface ID]]
 //! ```
 //! Serves the `design-session` tool registry over MCP. With `--file`, the
 //! document is loaded from (and, after every edit, atomically saved to) a
 //! frame-markup file — point the `frame` desktop player at the same file
 //! and it hot-reloads as the model works.
+//!
+//! With `--library`, every edit is also published to a surface library
+//! (`frame-library-server`) as a new version of `--surface ID` (default:
+//! the `--file` name, else a fresh id from the design's name), so every
+//! player following it (`frame --library … --surface ID`) swaps it in
+//! live. Without `--file`, the session starts from that surface's current
+//! version in the library — how you edit a fork.
 //!
 //! The catalog designed against is the built-in demo rig's, or with
 //! `--engine` a live engine's (fetched at startup; `--rig` picks the
@@ -32,7 +40,31 @@ to see the document → build with `generate` (full starting surface), `add_cont
 or `write` (frame markup; call `reference` for the syntax) → `lint` and fix every error → iterate. Every tool \
 call is one undoable step. Bind only to catalog entries (param:<addr>, action:<id>, stream:<id>[:channel]).";
 
-const USAGE: &str = "usage: frame-mcp [--file surface.fm] [--engine ws://HOST:PORT/vox [--rig NAME]]";
+const USAGE: &str =
+    "usage: frame-mcp [--file surface.fm] [--engine ws://HOST:PORT/vox [--rig NAME]] [--library ws://HOST:PORT/vox [--surface ID]]";
+
+/// Where edits are published (`--library`).
+struct Publish {
+    client: library_link::Blocking,
+    /// The surface id; `None` until the library assigns one.
+    id: Option<String>,
+}
+
+impl Publish {
+    /// Publish the session's document as the next version.
+    fn publish(&mut self, session: &Session) -> Result<String, String> {
+        let scene = session.scene();
+        let meta = library_link::PublishMeta {
+            id: self.id.clone().unwrap_or_default(),
+            name: library_link::scene_name(scene).unwrap_or_default(),
+            author: std::env::var("USER").unwrap_or_default(),
+            ..library_link::PublishMeta::default()
+        };
+        let p = self.client.publish(&library_link::Content::markup(scene), &meta)?;
+        self.id = Some(p.id.clone());
+        Ok(format!("{}@{}", p.id, p.version))
+    }
+}
 
 /// Where a fresh catalog comes from (`refresh_catalog`).
 trait CatalogSource {
@@ -97,12 +129,16 @@ fn main() {
     let mut file: Option<PathBuf> = None;
     let mut url: Option<String> = None;
     let mut rig: Option<String> = None;
+    let mut library: Option<String> = None;
+    let mut surface: Option<String> = None;
     let mut args = std::env::args().skip(1);
     while let Some(a) = args.next() {
         match a.as_str() {
             "--file" => file = args.next().map(PathBuf::from),
             "--engine" => url = args.next(),
             "--rig" => rig = args.next(),
+            "--library" => library = args.next(),
+            "--surface" => surface = args.next(),
             "-h" | "--help" => {
                 eprintln!("{USAGE}");
                 return;
@@ -117,6 +153,22 @@ fn main() {
         eprintln!("frame-mcp: --rig needs --engine\n{USAGE}");
         std::process::exit(2);
     }
+    if surface.is_some() && library.is_none() {
+        eprintln!("frame-mcp: --surface needs --library\n{USAGE}");
+        std::process::exit(2);
+    }
+    let mut publish = match library.as_deref().map(library_link::Blocking::new) {
+        None => None,
+        Some(Ok(client)) => {
+            let id = surface.clone().or_else(|| file.as_ref().and_then(|f| f.file_stem()).map(|s| s.to_string_lossy().into_owned()));
+            eprintln!("frame-mcp: publishing every edit to {} as {}", client.url(), id.as_deref().unwrap_or("a new surface"));
+            Some(Publish { client, id })
+        }
+        Some(Err(e)) => {
+            eprintln!("frame-mcp: {e}");
+            std::process::exit(1);
+        }
+    };
     let mut engine = match url.map(|u| LiveEngine::new(u, rig)) {
         None => None,
         Some(Ok(e)) => Some(e),
@@ -148,7 +200,20 @@ fn main() {
                 std::process::exit(1);
             }
         },
-        None => Session::blank(catalog),
+        None => match (&mut publish, &surface) {
+            // No file: start from the library's current version.
+            (Some(p), Some(id)) => match p.client.get(id, None).and_then(|s| s.content.decode()) {
+                Ok(scene) => {
+                    eprintln!("frame-mcp: editing {id} from {}", p.client.url());
+                    Session::new(scene, catalog)
+                }
+                Err(e) => {
+                    eprintln!("frame-mcp: {id} isn't in the library yet ({e}); starting blank");
+                    Session::blank(catalog)
+                }
+            },
+            _ => Session::blank(catalog),
+        },
     };
 
     let stdin = std::io::stdin();
@@ -159,7 +224,12 @@ fn main() {
             continue;
         }
         let reply = match serde_json::from_str::<Value>(&line) {
-            Ok(msg) => handle(&mut session, file.as_ref(), engine.as_mut().map(|e| e as &mut dyn CatalogSource), &msg),
+            Ok(msg) => handle(
+                &mut session,
+                Sinks { file: file.as_ref(), library: publish.as_mut() },
+                engine.as_mut().map(|e| e as &mut dyn CatalogSource),
+                &msg,
+            ),
             Err(e) => Some(json!({"jsonrpc": "2.0", "id": null, "error": {"code": -32700, "message": e.to_string()}})),
         };
         if let Some(r) = reply {
@@ -194,13 +264,15 @@ fn refresh_catalog(session: &mut Session, engine: Option<&mut dyn CatalogSource>
     }
 }
 
+/// Where a mutating tool call's result goes.
+#[derive(Default)]
+struct Sinks<'a> {
+    file: Option<&'a PathBuf>,
+    library: Option<&'a mut Publish>,
+}
+
 /// One JSON-RPC message → optional reply (notifications get none).
-fn handle(
-    session: &mut Session,
-    file: Option<&PathBuf>,
-    engine: Option<&mut dyn CatalogSource>,
-    msg: &Value,
-) -> Option<Value> {
+fn handle(session: &mut Session, sinks: Sinks<'_>, engine: Option<&mut dyn CatalogSource>, msg: &Value) -> Option<Value> {
     let id = msg.get("id").cloned()?; // notifications carry no id
     let method = msg.get("method").and_then(Value::as_str).unwrap_or_default();
     let params = msg.get("params").cloned().unwrap_or(Value::Null);
@@ -240,15 +312,20 @@ fn handle(
                 refresh_catalog(session, engine)
             } else {
                 match session.call(name, &args) {
-                    Ok(text) => {
+                    Ok(mut text) => {
                         let mutates = tools().iter().any(|t| t.name == name && t.mutates);
-                        match (mutates, file) {
-                            (true, Some(path)) => match save(session, path) {
-                                Ok(()) => (text, false),
-                                Err(e) => (format!("{text}\n(warning: saving {} failed: {e})", path.display()), false),
-                            },
-                            _ => (text, false),
+                        if mutates && let Some(path) = sinks.file
+                            && let Err(e) = save(session, path)
+                        {
+                            text += &format!("\n(warning: saving {} failed: {e})", path.display());
                         }
+                        if mutates && let Some(library) = sinks.library {
+                            match library.publish(session) {
+                                Ok(at) => text += &format!("\n(published {at})"),
+                                Err(e) => text += &format!("\n(warning: publishing to the library failed: {e})"),
+                            }
+                        }
+                        (text, false)
                     }
                     Err(e) => (e.0, true),
                 }
@@ -275,11 +352,11 @@ mod tests {
     use super::*;
 
     fn rpc(s: &mut Session, method: &str, params: Value) -> Value {
-        handle(s, None, None, &json!({"jsonrpc": "2.0", "id": 1, "method": method, "params": params})).unwrap()
+        handle(s, Sinks::default(), None, &json!({"jsonrpc": "2.0", "id": 1, "method": method, "params": params})).unwrap()
     }
 
     fn rpc_with(s: &mut Session, engine: &mut dyn CatalogSource, method: &str, params: Value) -> Value {
-        handle(s, None, Some(engine), &json!({"jsonrpc": "2.0", "id": 1, "method": method, "params": params})).unwrap()
+        handle(s, Sinks::default(), Some(engine), &json!({"jsonrpc": "2.0", "id": 1, "method": method, "params": params})).unwrap()
     }
 
     fn tool_names(list: &Value) -> Vec<String> {
@@ -356,7 +433,7 @@ mod tests {
         let mut s = Session::blank(surface_memory::demo_catalog());
         let init = rpc(&mut s, "initialize", json!({"protocolVersion": "2025-06-18"}));
         assert_eq!(init["result"]["serverInfo"]["name"], "frame");
-        assert!(handle(&mut s, None, None, &json!({"jsonrpc": "2.0", "method": "notifications/initialized"})).is_none());
+        assert!(handle(&mut s, Sinks::default(), None, &json!({"jsonrpc": "2.0", "method": "notifications/initialized"})).is_none());
         let list = rpc(&mut s, "tools/list", json!({}));
         let names: Vec<&str> = list["result"]["tools"].as_array().unwrap().iter().filter_map(|t| t["name"].as_str()).collect();
         assert!(names.contains(&"generate") && names.contains(&"reference") && names.contains(&"lint"));
@@ -368,12 +445,39 @@ mod tests {
     }
 
     #[test]
+    fn edits_publish_to_the_library() {
+        use architect::Services as _;
+        use library_fs::SurfaceStore as _;
+        let dir = std::env::temp_dir().join(format!("frame-mcp-lib-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let lib = library_fs::FsLibrary::open(&dir).unwrap();
+        let served = library_link::Served::start(lib.clone().into_router(), std::net::TcpListener::bind("127.0.0.1:0").unwrap()).unwrap();
+        let mut publish = Publish { client: library_link::Blocking::new(&served.url).unwrap(), id: Some("agent/one".into()) };
+        let mut s = Session::blank(surface_memory::demo_catalog());
+        let call = |s: &mut Session, p: &mut Publish, name: &str| {
+            let msg = json!({"jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": {"name": name, "arguments": {}}});
+            handle(s, Sinks { file: None, library: Some(p) }, None, &msg).unwrap()
+        };
+        let r = call(&mut s, &mut publish, "generate");
+        assert!(r["result"]["content"][0]["text"].as_str().unwrap().ends_with("(published agent/one@1)"), "{r}");
+        let stored = lib.get("agent/one".into(), None).unwrap();
+        assert_eq!(stored.content.decode().unwrap(), *s.scene());
+        // Read-only tools don't publish.
+        let r = call(&mut s, &mut publish, "lint");
+        assert!(!r["result"]["content"][0]["text"].as_str().unwrap().contains("published"), "{r}");
+        assert_eq!(lib.get("agent/one".into(), None).unwrap().meta.version, 1);
+        drop(served);
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
     fn edits_save_to_the_file() {
         let dir = std::env::temp_dir().join(format!("frame-mcp-test-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         let path = dir.join("s.fm");
         let mut s = Session::blank(surface_memory::demo_catalog());
-        handle(&mut s, Some(&path), None, &json!({"jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": {"name": "generate", "arguments": {}}}));
+        handle(&mut s, Sinks { file: Some(&path), library: None }, None, &json!({"jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": {"name": "generate", "arguments": {}}}));
         let text = std::fs::read_to_string(&path).unwrap();
         assert_eq!(document_text::parse(&text, Default::default()).unwrap(), *s.scene());
         let _ = std::fs::remove_dir_all(dir);

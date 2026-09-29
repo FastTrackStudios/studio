@@ -14,16 +14,18 @@ use winit::keyboard::{Key as WinitKey, ModifiersState, NamedKey};
 use winit::window::{Window, WindowId};
 
 use crate::Args;
+use crate::browser::Nav;
 use crate::input::{self, View};
+use crate::libview::{LibraryView, Outcome};
 use crate::player::{Player, banner, font};
 use crate::source::{self, Source, Watch};
 
 pub fn run(args: &Args) -> Result<(), String> {
-    let (engine, surface, error) = crate::start(args)?;
+    let crate::Started { engine, surface, error, library } = crate::start(args)?;
     let player = Player::new(engine, surface)?;
     let now = Instant::now();
-    let watch = args.source.path().map(|p| Watch::new(source::stamp(p), now));
-    if let Some(p) = args.source.path() {
+    let watch = args.source.path().filter(|_| library.is_none()).map(|p| Watch::new(source::stamp(p), now));
+    if let Some(p) = args.source.path().filter(|_| library.is_none()) {
         eprintln!("frame: watching {} for changes", p.display());
     }
     let mut app = App {
@@ -45,6 +47,9 @@ pub fn run(args: &Args) -> Result<(), String> {
         scene: vello::Scene::new(),
         fx: args.fx,
         fx_animating: false,
+        library,
+        title: String::new(),
+        next_poll: now,
     };
     app.set_error(error);
     let event_loop = EventLoop::new().map_err(|e| format!("event loop: {e}"))?;
@@ -110,7 +115,16 @@ struct App {
     fx: render::fx::Mode,
     /// The last frame had a time-dependent effect (a flicker): keep drawing.
     fx_animating: bool,
+    /// `--library`: the browser and the live-followed surface.
+    library: Option<LibraryView>,
+    /// The window title last set (library mode retitles on mode changes).
+    title: String,
+    /// When to next drain the library link.
+    next_poll: Instant,
 }
+
+/// How often the library link is drained when nothing else redraws.
+const LIBRARY_POLL: Duration = Duration::from_millis(50);
 
 impl App {
     fn t(&self) -> f64 {
@@ -127,9 +141,67 @@ impl App {
             .map_or((1.0, 1.0), |g| (f64::from(g.surface.config.width), f64::from(g.surface.config.height)))
     }
 
+    fn browsing(&self) -> bool {
+        self.library.as_ref().is_some_and(LibraryView::browsing)
+    }
+
     fn view(&self) -> View {
         let (w, h) = self.physical_size();
-        View::fit(self.player.content(), w, h)
+        let content = match &self.library {
+            Some(lib) if lib.browsing() => lib.content(),
+            _ => self.player.content(),
+        };
+        View::fit(content, w, h)
+    }
+
+    /// Drain the library link; redraw when something changed.
+    fn poll_library(&mut self) {
+        let Some(lib) = &mut self.library else { return };
+        let outcomes = lib.tick(&mut self.player);
+        if outcomes.iter().any(|o| matches!(o, Outcome::Applied { .. })) {
+            self.error = None;
+            self.banner = None;
+        }
+        if !outcomes.is_empty() {
+            self.redraw();
+        }
+        self.retitle();
+    }
+
+    fn retitle(&mut self) {
+        let Some(lib) = &self.library else { return };
+        let title = lib.title();
+        if title != self.title {
+            if let Some(g) = &self.gpu {
+                g.window.set_title(&title);
+            }
+            self.title = title;
+        }
+    }
+
+    /// A key for the library view; true when it took it.
+    fn library_key(&mut self, key: &WinitKey) -> bool {
+        let browsing = self.browsing();
+        let Some(lib) = &mut self.library else { return false };
+        let ch = match key {
+            WinitKey::Character(c) => c.to_lowercase(),
+            _ => String::new(),
+        };
+        match (key, ch.as_str()) {
+            (WinitKey::Named(NamedKey::ArrowLeft), _) if browsing => lib.nav(Nav::Left),
+            (WinitKey::Named(NamedKey::ArrowRight), _) if browsing => lib.nav(Nav::Right),
+            (WinitKey::Named(NamedKey::ArrowUp), _) if browsing => lib.nav(Nav::Up),
+            (WinitKey::Named(NamedKey::ArrowDown), _) if browsing => lib.nav(Nav::Down),
+            (WinitKey::Named(NamedKey::PageUp), _) if browsing => lib.nav(Nav::PageUp),
+            (WinitKey::Named(NamedKey::PageDown), _) if browsing => lib.nav(Nav::PageDown),
+            (WinitKey::Named(NamedKey::Enter), _) if browsing => lib.open_selected(&mut self.player),
+            (WinitKey::Named(NamedKey::Backspace), _) | (_, "b") if !browsing => lib.back(),
+            (_, "i") => lib.install(),
+            (_, "f") => lib.fork(&mut self.player),
+            _ => return false,
+        }
+        self.retitle();
+        true
     }
 
     fn redraw(&self) {
@@ -160,6 +232,9 @@ impl App {
     }
 
     fn reload(&mut self) {
+        if self.library.is_some() {
+            return;
+        }
         let result = self.source.load(self.player.catalog()).and_then(|s| self.player.swap(s));
         match result {
             Ok(()) => {
@@ -232,7 +307,12 @@ impl App {
         let view = self.view();
         let (width, _) = self.physical_size();
         let scale = self.scale_factor();
-        let message = self.error.as_deref().map(|e| self.source.short_error(e)).or_else(|| self.player.engine_banner());
+        let message = self
+            .error
+            .as_deref()
+            .map(|e| self.source.short_error(e))
+            .or_else(|| self.library.as_ref().and_then(LibraryView::banner))
+            .or_else(|| self.player.engine_banner());
         if self.banner.as_ref().is_some_and(|b| b.2 != width || Some(&b.3) != message.as_ref()) {
             self.banner = None;
         }
@@ -244,20 +324,34 @@ impl App {
         if let Some((b, page, _, _)) = &self.banner {
             render::paint_scene_into(&mut self.scene, b, *page, kurbo::Affine::scale(scale), Some(font()));
         }
-        let (doc, page) = self.player.document(t);
-        let values = self.player.control_positions();
+        let (logical_w, logical_h) = (width / scale, self.physical_size().1 / scale);
+        let toast = self.library.as_mut().and_then(|lib| lib.toast(t, logical_w));
+        if let Some((toast, page, tw, th)) = &toast {
+            let at = kurbo::Affine::scale(scale) * kurbo::Affine::translate(((logical_w - tw) / 2.0, logical_h - th - 18.0));
+            render::paint_scene_into(&mut self.scene, toast, *page, at, Some(font()));
+        }
+        let browsing = self.browsing();
+        let (doc, page, base) = match self.library.as_mut().and_then(LibraryView::document) {
+            Some((scene, page)) => (scene.clone(), *page, crate::browser::BACKGROUND),
+            None => {
+                let (doc, page) = self.player.document(t);
+                (doc, page, self.player.background())
+            }
+        };
+        let values = if browsing { Default::default() } else { self.player.control_positions() };
+        let overlay = self.banner.is_some() || toast.is_some();
 
         let Some(gpu) = &mut self.gpu else { return };
         let device = &self.context.devices[gpu.surface.dev_id];
         let (w, h) = (gpu.surface.config.width, gpu.surface.config.height);
         let frame = render::fx::Frame {
             transform: view.affine(),
-            base: self.player.background(),
+            base,
             font: Some(font()),
             mode: self.fx,
             time_s: t / 1000.0,
             values: Some(&values),
-            overlay: self.banner.is_some().then_some(&self.scene),
+            overlay: overlay.then_some(&self.scene),
             antialiasing: AaConfig::Area,
             ..render::fx::Frame::new(&doc, page, w, h)
         };
@@ -268,7 +362,7 @@ impl App {
                 return;
             }
         };
-        self.fx_animating = gpu.stage.time_dependent();
+        self.fx_animating = gpu.stage.time_dependent() || toast.is_some();
         let (vello::wgpu::CurrentSurfaceTexture::Success(texture) | vello::wgpu::CurrentSurfaceTexture::Suboptimal(texture)) =
             gpu.surface.surface.get_current_texture()
         else {
@@ -321,13 +415,19 @@ impl ApplicationHandler for App {
         {
             self.reload();
         }
-        if self.player.animating() || self.fx_animating {
+        if self.library.is_some() && now >= self.next_poll {
+            self.next_poll = now + LIBRARY_POLL;
+            self.poll_library();
+        }
+        if (self.player.animating() && !self.browsing()) || self.fx_animating {
             self.redraw();
         }
-        event_loop.set_control_flow(match &self.watch {
-            Some(w) => ControlFlow::WaitUntil(w.deadline()),
-            None => ControlFlow::Wait,
-        });
+        let deadline = match (&self.watch, self.library.is_some()) {
+            (Some(w), _) => Some(w.deadline()),
+            (None, true) => Some(self.next_poll),
+            (None, false) => None,
+        };
+        event_loop.set_control_flow(deadline.map_or(ControlFlow::Wait, ControlFlow::WaitUntil));
     }
 
     fn window_event(&mut self, event_loop: &ActiveEventLoop, id: WindowId, event: WindowEvent) {
@@ -349,25 +449,38 @@ impl ApplicationHandler for App {
             WindowEvent::Focused(false) => self.player.cancel(t),
             WindowEvent::CursorMoved { position, .. } => {
                 self.cursor = Some((position.x, position.y));
+                if self.browsing() {
+                    return;
+                }
                 if let Some((at, _)) = self.cursor() {
                     self.player.pointer_move(at, mods, t);
                 }
             }
             WindowEvent::MouseInput { state, button: MouseButton::Left, .. } => match state {
                 ElementState::Pressed => {
-                    if let Some((at, logical)) = self.cursor() {
+                    let cursor = self.cursor();
+                    if let (Some(lib), Some((at, _))) = (self.library.as_mut().filter(|l| l.browsing()), cursor) {
+                        lib.click(at, &mut self.player);
+                        self.retitle();
+                    } else if let Some((at, logical)) = cursor {
                         self.player.pointer_down(at, logical, mods, t);
                     }
                 }
                 ElementState::Released => self.player.pointer_up(t),
             },
             WindowEvent::MouseWheel { delta, .. } => {
-                self.player.wheel(input::wheel_notches(delta, self.scale_factor()), mods, t);
+                let notches = input::wheel_notches(delta, self.scale_factor());
+                if let Some(lib) = self.library.as_mut().filter(|l| l.browsing()) {
+                    lib.nav(if notches > 0.0 { Nav::Up } else { Nav::Down });
+                } else {
+                    self.player.wheel(notches, mods, t);
+                }
             }
             WindowEvent::KeyboardInput { event, .. } if event.state == ElementState::Pressed => {
                 let shift = self.modifiers.shift_key();
                 if event.logical_key == WinitKey::Named(NamedKey::Escape) {
                     event_loop.exit();
+                } else if self.library_key(&event.logical_key) {
                 } else if event.logical_key == WinitKey::Named(NamedKey::Tab) {
                     self.show(if shift { -1 } else { 1 });
                 } else if event.logical_key == WinitKey::Character("]".into()) {
