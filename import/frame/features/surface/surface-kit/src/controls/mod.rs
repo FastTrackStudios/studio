@@ -6,6 +6,7 @@ mod buttons;
 mod key_column;
 pub(crate) mod parts;
 mod levers;
+mod studio;
 mod switches;
 
 use crate::registry::ComponentDef;
@@ -16,5 +17,6 @@ pub(crate) fn defs() -> Vec<ComponentDef> {
     all.extend(switches::defs());
     all.extend(levers::defs());
     all.extend(key_column::defs());
+    all.extend(studio::defs());
     all
 }
