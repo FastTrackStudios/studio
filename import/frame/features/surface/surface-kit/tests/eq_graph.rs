@@ -138,8 +138,9 @@ fn double_clicking_empty_space_adds_a_band_shaped_by_where() {
     { let a0 = point(&rt, 12_000.0, 8.0); double_click(&mut rt, a0, 2000.0); }
     assert_eq!(real(&rt, "eq/b8_shape"), 2.0, "high shelf");
     assert!(real(&rt, "eq/b8_gain") > 7.0);
-    // Deep down: a notch.
-    { let a0 = point(&rt, 3000.0, -11.5); double_click(&mut rt, a0, 3000.0); }
+    // Deep down: a notch. (Clear of the band panel, docked on the floor
+    // under the 12 kHz band just added — a double-click on it doesn't add.)
+    { let a0 = point(&rt, 300.0, -11.5); double_click(&mut rt, a0, 3000.0); }
     assert_eq!(real(&rt, "eq/b9_shape"), 5.0, "notch");
 }
 
@@ -321,11 +322,12 @@ fn the_band_panel_follows_its_band_and_edits_it() {
     let at = at_handle(&rt, 3);
     drag(&mut rt, at, (at.0 + 80.0, at.1 - 30.0), M, 100.0);
     let after = rt.popover_origin(panel).unwrap();
-    let hb = rt.hit_box(handle(&rt, 3)).unwrap();
     assert!((after.0 - before.0 - 80.0).abs() < 1.0, "follows across: {before:?} → {after:?}");
-    let below = (after.1 - (hb.y + hb.height + 2.0)).abs() < 1.0;
-    let above = (after.1 + 104.0 - (hb.y - 2.0)).abs() < 1.0;
-    assert!(below || above, "right under (or, without room, right over) the node: {after:?} {hb:?}");
+    // Docked: the band moved up 30 px, the panel did not move vertically,
+    // and it sits on the plot's floor.
+    assert_eq!(after.1, before.1, "locked vertically");
+    let (_, cb) = canvas(&rt);
+    assert!((after.1 + 104.0 - (cb.y + cb.height)).abs() <= 18.5, "docked to the plot's bottom: {after:?} {cb:?}");
     // Its controls act on band 3, where the panel is drawn.
     let bypass = named(&rt, "bypass");
     let pb = rt.hit_box(panel).unwrap();
@@ -343,12 +345,29 @@ fn the_band_panel_follows_its_band_and_edits_it() {
     let db = rt.hit_box(del).unwrap();
     click(&mut rt, (there.0 + db.x - pb.x + 5.0, there.1 + db.y - pb.y + 5.0), M, 3000.0);
     assert!(!used(&rt, 5) && used(&rt, 3), "the panel's delete removed band 5");
-    // Flipped above near the bottom edge.
-    let (_, cb) = canvas(&rt);
+    // Near the bottom edge it still docks there: it never flips or jumps.
     let at = at_handle(&rt, 2);
-    drag(&mut rt, at, (at.0, cb.y + cb.height - 3.0), M, 4000.0);
+    drag(&mut rt, at, (at.0, cb.y + cb.height - 3.0), M, 8000.0);
     let (_, y) = rt.popover_origin(panel).unwrap();
-    assert!(y + 104.0 <= rt.hit_box(handle(&rt, 2)).unwrap().y + 1.0 || y + 104.0 <= 1e9, "fits");
+    assert_eq!(y, there.1, "same height for every band, wherever it is");
+}
+
+#[test]
+fn the_docked_panel_holds_still_while_it_is_used() {
+    let mut rt = eq();
+    let panel = named(&rt, "band panel");
+    { let a0 = at_handle(&rt, 3); click(&mut rt, a0, M, 0.0); }
+    let (x0, y0) = rt.popover_origin(panel).unwrap();
+    // Touch the panel (hover over it), then move the band from elsewhere:
+    // the panel stays under the hand.
+    rt.pointer(Input::Move { x: x0 + 20.0, y: y0 + 20.0, t: 100.0, mods: M }, 100.0);
+    rt.apply_values([surface_proto::ParamValue { addr: ParamAddr::new("eq/b3_freq"), value: 0.8 }]);
+    assert_eq!(rt.popover_origin(panel).unwrap().0, x0, "held while the pointer is on it");
+    // Leave it: held for the hold time, then it catches up with its band.
+    rt.pointer(Input::Move { x: 1.0, y: 1.0, t: 200.0, mods: M }, 200.0);
+    assert_eq!(rt.popover_origin(panel).unwrap().0, x0, "still held just after leaving");
+    rt.pointer(Input::Move { x: 2.0, y: 1.0, t: 2300.0, mods: M }, 2300.0);
+    assert_ne!(rt.popover_origin(panel).unwrap().0, x0, "follows again once left alone");
 }
 
 #[test]

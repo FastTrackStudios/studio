@@ -633,6 +633,23 @@ impl Runtime {
             return Some(id);
         }
         let order = self.surface.scene.walk(self.surface.scene.root);
+        let under = |id: &NodeId, handles: bool| {
+            let (x, y) = self.local(*id, x, y);
+            self.surface.controls.get(id).is_some_and(|c| {
+                c.kind.is_input()
+                    && matches!(c.kind, ControlKind::Handle { .. }) == handles
+                    && self.hit_box_of(*id, c).is_some_and(|b| x >= b.x && y >= b.y && x <= b.x + b.width && y <= b.y + b.height)
+                    && self.floating_root(*id).is_none()
+                    && self.hittable(*id, c)
+            })
+        };
+        // Handles are drawn over a docked panel, and hit first.
+        if let Some(id) = order.iter().rev().find(|id| under(id, true)) {
+            return Some(*id);
+        }
+        if let Some(id) = self.hit_floating_where(x, y, true) {
+            return Some(id);
+        }
         order.into_iter().rev().find(|id| {
             let (x, y) = self.local(*id, x, y);
             self.surface.controls.get(id).is_some_and(|c| {
@@ -650,6 +667,12 @@ impl Runtime {
         // Hover drives `hover` motion sources.
         if let Input::Move { x, y, .. } | Input::Down { x, y, .. } = input {
             self.hovered = self.hit(x, y);
+        }
+        // Docked panels hold still while in use.
+        match input {
+            Input::Move { x, y, t: at, .. } | Input::Down { x, y, t: at, .. } => self.track_docked(Some((x, y)), at),
+            Input::Up { x, y, t: at } => self.track_docked(Some((x, y)), at),
+            _ => {}
         }
         match input {
             Input::Down { x, y, mods, .. } => self.press(x, y, mods, input, t),

@@ -99,7 +99,19 @@ pub(crate) struct Ui {
     pub focus: Option<NodeId>,
     /// The item context popovers follow.
     pub active: Option<(NodeId, u32)>,
+    /// Docked popovers pinned while in use: (x, last touch ms, the item it
+    /// was showing — another item's panel goes where that item is).
+    pub held: HashMap<NodeId, (f64, f64, Option<(NodeId, u32)>)>,
+    /// The docked popover under the pointer, if any.
+    pub pointer_in_popover: Option<NodeId>,
+    /// The latest input time (ms).
+    pub clock: f64,
 }
+
+/// How long a docked popover stays put after it was last touched (ms):
+/// turning a band's FREQ dial must not slide the panel out from under the
+/// hand turning it.
+pub const POPOVER_HOLD_MS: f64 = 2000.0;
 
 impl Ui {
     /// Forget what no longer exists (after a rebuild).
@@ -278,7 +290,7 @@ impl Runtime {
 
     /// The anchor node of a popover right now (a context popover's: the
     /// active item's instance of it).
-    fn popover_anchor(&self, id: NodeId) -> Option<NodeId> {
+    pub(crate) fn popover_anchor(&self, id: NodeId) -> Option<NodeId> {
         let ControlKind::Popover { anchor, context, .. } = &self.surface.controls.get(&id)?.kind else { return None };
         let anchor = NodeId((*anchor)?);
         match context {
@@ -338,6 +350,21 @@ impl Runtime {
         let a = self.anchor_box(anchor)?;
         let size = self.surface.scene.node(id)?.size;
         let stage = self.stage_of(id).unwrap_or(Bounds { x: f64::MIN / 4.0, y: f64::MIN / 4.0, width: f64::MAX / 2.0, height: f64::MAX / 2.0 });
+        if matches!(placement, Placement::DockBottom | Placement::DockTop) {
+            // Docked to the anchor's area: a handle's plot, else the stage.
+            let area = if self.surface.controls.get(&anchor).is_some_and(|c| matches!(c.kind, ControlKind::Handle { .. })) {
+                self.handle_area(anchor)
+            } else {
+                stage
+            };
+            let (x, y) = place(a, (size.width, size.height), *placement, *gap, area);
+            // Held where it was while it is being used.
+            let x = match self.ui.held.get(&id) {
+                Some(h) if h.2 == self.ui.active && (self.ui.pointer_in_popover == Some(id) || self.ui.clock - h.1 < POPOVER_HOLD_MS) => h.0,
+                _ => x,
+            };
+            return Some((x, y));
+        }
         Some(place(a, (size.width, size.height), *placement, *gap, stage))
     }
 
@@ -348,6 +375,52 @@ impl Runtime {
         let b = b.or_else(|| self.box_of(anchor))?;
         let (dx, dy) = self.displacement(anchor);
         Some(Bounds { x: b.x + dx, y: b.y + dy, ..b })
+    }
+
+    /// Note the pointer against docked popovers: one under the pointer is
+    /// in use, and keeps the x it had when first touched until
+    /// [`POPOVER_HOLD_MS`] after the pointer leaves it.
+    pub(crate) fn track_docked(&mut self, at: Option<(f64, f64)>, t: f64) {
+        self.ui.clock = t;
+        let docked: Vec<NodeId> = self
+            .surface
+            .controls
+            .iter()
+            .filter(|(_, c)| matches!(c.kind, ControlKind::Popover { placement: Placement::DockBottom | Placement::DockTop, .. }))
+            .map(|(id, _)| *id)
+            .collect();
+        let mut under = None;
+        for id in docked {
+            let Some((x, y)) = self.popover_origin(id) else {
+                self.ui.held.remove(&id);
+                continue;
+            };
+            let Some(size) = self.surface.scene.node(id).map(|n| n.size) else { continue };
+            // On the panel where it's drawn: not a handle drawn over it.
+            let inside = at.is_some_and(|(px, py)| {
+                px >= x
+                    && py >= y
+                    && px <= x + size.width
+                    && py <= y + size.height
+                    && self.hit(px, py).is_none_or(|h| h == id || self.floating_root(h) == Some(id))
+            });
+            if inside {
+                under = Some(id);
+                let active = self.ui.active;
+                let x0 = self.ui.held.get(&id).filter(|h| h.2 == active).map_or(x, |h| h.0);
+                self.ui.held.insert(id, (x0, t, active));
+            }
+        }
+        // A drag that began on the panel keeps it in use until release.
+        if under.is_none() && self.captured.is_some() {
+            under = self.ui.pointer_in_popover.filter(|id| self.captured.is_some_and(|c| self.floating_root(c) == Some(*id)));
+        }
+        self.ui.pointer_in_popover = under;
+        if let Some(id) = under
+            && let Some(h) = self.ui.held.get_mut(&id)
+        {
+            h.1 = t;
+        }
     }
 
     fn menu_origin(&self, id: NodeId) -> Option<(f64, f64)> {
@@ -364,8 +437,23 @@ impl Runtime {
     /// Controls on the floating layer (open menus, then shown popovers,
     /// topmost first) under a point.
     pub(crate) fn hit_floating(&self, x: f64, y: f64) -> Option<NodeId> {
-        let mut roots: Vec<NodeId> = self.ui.menus.iter().rev().map(|m| m.node).collect();
-        let mut pops = self.popover_layers();
+        self.hit_floating_where(x, y, false)
+    }
+
+    /// Whether popover `id` is docked (drawn under its area's handles).
+    pub(crate) fn is_docked(&self, id: NodeId) -> bool {
+        self.surface
+            .controls
+            .get(&id)
+            .is_some_and(|c| matches!(c.kind, ControlKind::Popover { placement: Placement::DockBottom | Placement::DockTop, .. }))
+    }
+
+    /// Floating controls under a point: menus and ordinary popovers
+    /// (`docked == false`), or only docked popovers (`docked == true`), which
+    /// sit under the handles of their area.
+    pub(crate) fn hit_floating_where(&self, x: f64, y: f64, docked: bool) -> Option<NodeId> {
+        let mut roots: Vec<NodeId> = if docked { Vec::new() } else { self.ui.menus.iter().rev().map(|m| m.node).collect() };
+        let mut pops: Vec<NodeId> = self.popover_layers().into_iter().filter(|id| self.is_docked(*id) == docked).collect();
         pops.reverse();
         roots.extend(pops);
         for root in roots {
@@ -1301,6 +1389,8 @@ pub fn place(a: Bounds, (w, h): (f64, f64), side: Placement, gap: f64, stage: Bo
             };
             (cx - w / 2.0, y)
         }
+        Placement::DockBottom => (cx - w / 2.0, sy1 - h - gap),
+        Placement::DockTop => (cx - w / 2.0, sy0 + gap),
         Placement::Left | Placement::Right => {
             let left = a.x - gap - w;
             let right = a.x + a.width + gap;

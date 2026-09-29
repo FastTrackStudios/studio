@@ -156,8 +156,43 @@ impl Runtime {
         let _ = scene.transact(ops);
         let floating: Vec<NodeId> = up.into_iter().chain(self.ui.menus.iter().map(|m| m.node)).collect();
         for id in floating {
-            self.lift(scene, id);
+            if self.is_docked(id) {
+                self.dock(scene, id);
+            } else {
+                self.lift(scene, id);
+            }
         }
+    }
+
+    /// Place docked popover `id` in its anchor's area, under that area's
+    /// handles: a band panel is drawn over the curves but never over a band.
+    fn dock(&self, scene: &mut Scene, id: NodeId) {
+        let Some((x, y)) = self.floating_origin(id) else { return };
+        let anchor = self.popover_anchor(id);
+        // The area: the anchor's parent (a handle's plot), and the layer it
+        // is drawn in (a repeat instance) — the panel goes in the area's
+        // container, before the first child holding a handle.
+        let layer = anchor.and_then(|a| scene.node(a)?.parent);
+        let Some(container) = layer.and_then(|l| scene.node(l)?.parent) else {
+            self.lift(scene, id);
+            return;
+        };
+        let Some(cbox) = self.box_of(container) else {
+            self.lift(scene, id);
+            return;
+        };
+        let has_handle = |root: NodeId| {
+            scene.walk(root).into_iter().any(|n| self.surface.controls.get(&n).is_some_and(|c| matches!(c.kind, ControlKind::Handle { .. })))
+        };
+        let children = scene.node(container).map(|n| n.children.clone()).unwrap_or_default();
+        let index = children.iter().position(|c| *c != id && has_handle(*c)).unwrap_or(children.len());
+        let Some(node) = scene.node(id) else { return };
+        let t = Transform { tx: x - cbox.x, ty: y - cbox.y, ..node.transform };
+        let _ = scene.transact([
+            Op::Move { id, parent: container, index: u32::try_from(index).unwrap_or(u32::MAX) },
+            set(id, Prop::Transform(t)),
+            set(id, Prop::Visible(true)),
+        ]);
     }
 
     /// Move floating node `id` to the top of its stage, at its placement.

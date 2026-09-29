@@ -405,6 +405,14 @@ pub enum Placement {
     Below,
     Left,
     Right,
+    /// Docked to the bottom edge of its anchor's area (a handle's plot),
+    /// `gap` above it, following the anchor only horizontally — a band
+    /// panel that stays put vertically while its band moves. Held still
+    /// for a moment after it is touched so its own controls don't slide
+    /// away from the pointer driving them.
+    DockBottom,
+    /// As [`Placement::DockBottom`], docked to the top edge.
+    DockTop,
 }
 
 /// When a popover is up.

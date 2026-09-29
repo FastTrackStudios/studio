@@ -458,7 +458,7 @@ fn eq_graph(b: &mut Builder<'_>, parent: NodeId, p: &Place) -> NodeId {
     b.controls.insert(a.area, canvas);
 
     // ── the band panel and readout chip (follow the active band) ────────
-    band_panel(b, root, &ad, band, handle);
+    band_panel(b, root, &ad, band, handle, a.h);
     chip(b, root, &ad, band, handle);
 
     // ── toolbar: range, analyser layers ─────────────────────────────────
@@ -615,8 +615,12 @@ fn button(b: &mut Builder<'_>, parent: NodeId, name: &str, r: (f64, f64, f64, f6
     btn
 }
 
-/// The band panel: one popover for all bands, following the active one.
-fn band_panel(b: &mut Builder<'_>, root: NodeId, ad: &Addrs, band: NodeId, handle: NodeId) {
+/// The band panel: one popover for all bands, following the active one:
+/// docked to the bottom of the plot and following its band
+/// only horizontally (Pro-Q style), so it never jumps while the band is
+/// dragged and its readouts stay where the eye is. It floats 18 px above
+/// the plot's floor, flush on a short plot where the gap would cost curve.
+fn band_panel(b: &mut Builder<'_>, root: NodeId, ad: &Addrs, band: NodeId, handle: NodeId, plot_h: f64) {
     let mut shell = draw::frame("band panel", 0.0, 0.0, PANEL_W, PANEL_H);
     shell.fills = vec![draw::solid(PANEL_BG)];
     let shell = draw::with_effects(draw::rounded(draw::stroked(shell, PANEL_RIM, 1.0), 10.0), vec![draw::drop_shadow("#0000008c", 0.0, 6.0, 18.0)]);
@@ -683,7 +687,8 @@ fn band_panel(b: &mut Builder<'_>, root: NodeId, ad: &Addrs, band: NodeId, handl
             text(b, slope, "slope legend", "SLOPE", (0.0, 28.0, 64.0), 8.0, DIM, TextAlign::Center, 600.0);
         }
     }
-    let c = Control::new(ControlKind::Popover { anchor: Some(handle.0), placement: Placement::Below, gap: 2.0, show: Show::Active, context: Some(band.0) });
+    let gap = if plot_h < 420.0 { 0.0 } else { 18.0 };
+    let c = Control::new(ControlKind::Popover { anchor: Some(handle.0), placement: Placement::DockBottom, gap, show: Show::Active, context: Some(band.0) });
     b.controls.insert(pop, c);
 }
 
