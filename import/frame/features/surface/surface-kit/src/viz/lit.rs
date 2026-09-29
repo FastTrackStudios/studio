@@ -427,6 +427,50 @@ fn mod_lfo(b: &mut Builder<'_>, parent: NodeId, p: &Place) -> NodeId {
 
 // ── viz.eq_glow ──────────────────────────────────────────────────────────
 
+/// The graph span an EQ glow lays its halos on.
+pub(crate) enum GlowSpan {
+    /// ± this many dB.
+    Fixed(f64),
+    /// A zoom param (a choice) picking from these spans.
+    Param { addr: String, spans: Vec<f64> },
+}
+
+/// What an EQ's glow reads.
+pub(crate) struct GlowSpec<'a> {
+    pub ns: &'a str,
+    pub bands: usize,
+    /// Bind `b{n}_used` too (signal's wire family has it).
+    pub used: bool,
+    pub spectrum: String,
+    pub f: (f64, f64),
+    pub span: GlowSpan,
+    pub floor: f64,
+}
+
+/// A `w × h` light running `eq.glow` fed by an EQ's spectrum feed and band
+/// params: processor's EQ light. Its children are the vector fallback (an
+/// EQ graph puts its analyser there — the glow draws the analyser as light,
+/// as processor's graph does).
+pub(crate) fn glow_light(b: &mut Builder<'_>, parent: NodeId, (w, h): (f64, f64), spec: &GlowSpec<'_>) -> NodeId {
+    let keys: &[&str] = if spec.used { &["freq", "gain", "on", "used"] } else { &["freq", "gain", "on"] };
+    let band_inputs: Vec<CurveInput> =
+        (1..=spec.bands.min(GLOW_BANDS)).flat_map(|n| keys.iter().map(move |k| CurveInput::param(format!("b{n}_{k}"), format!("{}/b{n}_{k}", spec.ns)))).collect();
+    let mut inputs = vec![
+        ShaderInput::stream("spectrum", spec.spectrum.clone()).len(GLOW_BINS),
+        ShaderInput::curve("bands", "eq.bands", band_inputs, Some("bands")),
+        ShaderInput::constant("floor", vec![spec.floor]),
+    ];
+    match &spec.span {
+        GlowSpan::Fixed(r) => inputs.push(ShaderInput::constant("db_range", vec![*r])),
+        GlowSpan::Param { addr, spans } => {
+            inputs.push(ShaderInput::param("range", addr.clone()));
+            inputs.push(ShaderInput::constant("ranges", spans.clone()));
+        }
+    }
+    let params = [("p0", spec.f.0), ("p1", spec.f.1)].into_iter().map(|(k, v)| (k.to_string(), v)).collect();
+    light(b, parent, w, h, "eq.glow", params, inputs)
+}
+
 fn eq_glow(b: &mut Builder<'_>, parent: NodeId, p: &Place) -> NodeId {
     let ns = ns(p);
     let w = p.size.unwrap_or(800.0).max(120.0);
@@ -443,17 +487,16 @@ fn eq_glow(b: &mut Builder<'_>, parent: NodeId, p: &Place) -> NodeId {
         n.clips_content = true;
         n
     });
-    let band_inputs: Vec<CurveInput> = (1..=bands)
-        .flat_map(|n| ["freq", "gain", "on"].map(|k| CurveInput::param(format!("b{n}_{k}"), format!("{ns}/b{n}_{k}"))))
-        .collect();
-    let inputs = vec![
-        ShaderInput::stream("spectrum", spectrum.clone()).len(GLOW_BINS),
-        ShaderInput::curve("bands", "eq.bands", band_inputs, Some("bands")),
-        ShaderInput::constant("db_range", vec![range]),
-        ShaderInput::constant("floor", vec![opt_f(p, "floor", -90.0)]),
-    ];
-    let params = [("p0", f_min), ("p1", f_max)].into_iter().map(|(k, v)| (k.to_string(), v)).collect();
-    let light = light(b, root, w, h, "eq.glow", params, inputs);
+    let spec = GlowSpec {
+        ns: &ns,
+        bands,
+        used: !p.flag("no_used"),
+        spectrum: spectrum.clone(),
+        f: (f_min, f_max),
+        span: GlowSpan::Fixed(range),
+        floor: opt_f(p, "floor", -90.0),
+    };
+    let light = glow_light(b, root, (w, h), &spec);
 
     // The graph's own analyser (`paint_spectrum`): the glow draws it as
     // light; without the stage, this.

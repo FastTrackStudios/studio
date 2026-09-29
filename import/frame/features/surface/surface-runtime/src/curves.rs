@@ -383,7 +383,9 @@ pub fn eq_response(inputs: &CurveInputs) -> Vec<Series> {
         out.push(Series::new(name.clone(), pts));
         if stems {
             let at = db(freq);
-            let stem = if at.abs() > 0.1 { vec![(freq, 0.0), (freq, at)] } else { Vec::new() };
+            // From the node (its gain) to 0 dB, as processor's graph draws it
+            // (`paint_connecting_lines`), when the band does anything there.
+            let stem = if at.abs() > 0.1 && gain.abs() > 1e-9 { vec![(freq, 0.0), (freq, gain)] } else { Vec::new() };
             extra.push(Series::new(format!("{name}_stem"), stem));
         }
         if let Some(range) = arg("dyn_range") {

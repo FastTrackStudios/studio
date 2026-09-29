@@ -15,7 +15,8 @@
 //! | `delay.taps` | `delay_ms` (the delay time), `feedback`, `mix`, `tap_div_l`, `tap_div_r` (division index, [`DIVISIONS`]), `bpm`, `on`; clock | `left`, `right` (`at_s, level`), `lane` (`window_s, beat_s`); `beats`, `bars`, `env_up`, `env_down`, `stems_{0,1,2}`, `caps_{0,1,2}`, `head`, `trail_{0..5}`, `blooms` |
 //! | `reverb.tail` | `decay` (s), `predelay` (ms), `density`, `bpm`, `on`; clock | `beats`, `bars`, `env`, `refl_{0,1,2}`, `pre`, `shimmer_{0,1,2}` (by brightness), `band_{0..3}` |
 //! | `mod.lfo` | `rate` (Hz), `depth`, `engine` ([`MOD_ENGINES`] index), `on`; clock | `bright`, `thin`, `mid`, `faint`, `grid`, `fill_up`, `fill_down`, `teeth_hi`, `teeth_mid`, `teeth_lo`, `dots_bright`, `dots_base`, `trail_{0,1,2}` |
-//! | `eq.bands` | `b{n}_freq`, `b{n}_gain`, `b{n}_on` (n = 1..=24) | `bands` (`freq_hz, gain_db` per enabled band) |
+//! | `eq.bands` | `b{n}_freq`, `b{n}_gain`, `b{n}_on`, `b{n}_used` (n = 1..=24) | `bands` (`freq_hz, gain_db` per used, enabled band) |
+//! | `eq.grid` | `range` (a zoom param's option index), `span_{i}` (the spans it picks from) or `db_range` | `minor`, `zero`: processor's dB grid (a line every 2/3/6 dB by span) in unit space |
 
 use std::f64::consts::{FRAC_PI_2, TAU};
 
@@ -52,6 +53,7 @@ pub(crate) fn register(r: &mut CurveRegistry) {
     r.register_animated("reverb.tail", reverb_tail);
     r.register_animated("mod.lfo", mod_lfo);
     r.register("eq.bands", eq_bands);
+    r.register("eq.grid", eq_grid);
 }
 
 /// A series's points.
@@ -538,11 +540,39 @@ pub fn eq_bands(inputs: &CurveInputs) -> Vec<Series> {
     let bands = (1..=24)
         .filter_map(|n| {
             let freq = inputs.get(&format!("b{n}_freq"))?;
-            let on = inputs.or(&format!("b{n}_on"), 1.0) >= 0.5;
+            let on = inputs.or(&format!("b{n}_on"), 1.0) >= 0.5 && inputs.or(&format!("b{n}_used"), 1.0) >= 0.5;
             on.then(|| (freq, inputs.or(&format!("b{n}_gain"), 0.0)))
         })
         .collect();
     vec![Series::new("bands", bands)]
+}
+
+/// `eq.grid`: processor's dB grid lines (`paint_grid`) for the graph's
+/// current span — every 2 dB up to ±6, 3 up to ±12, else 6 — as unit-space
+/// segments: `minor`, and the `zero` line.
+#[must_use]
+pub fn eq_grid(inputs: &CurveInputs) -> Vec<Series> {
+    let span = match inputs.get("range") {
+        Some(i) => inputs.or(&format!("span_{}", i.round().max(0.0) as i64), 12.0),
+        None => inputs.or("db_range", 12.0),
+    }
+    .max(0.5);
+    let step = if span <= 6.0 {
+        2.0
+    } else if span <= 12.0 {
+        3.0
+    } else {
+        6.0
+    };
+    let (mut minor, mut zero) = (Vec::new(), Vec::new());
+    let mut db = -span;
+    while db <= span + 1e-9 {
+        let y = 0.5 + db / (2.0 * span);
+        let line = if db.abs() < 0.01 { &mut zero } else { &mut minor };
+        line.extend([(0.0, y), (1.0, y), gap_at(1.0)]);
+        db += step;
+    }
+    vec![Series::new("minor", minor), Series::new("zero", zero)]
 }
 
 #[cfg(test)]
@@ -592,6 +622,16 @@ mod tests {
             let s = mod_lfo(&args().with("engine", f64::from(engine)).with("time", 0.4));
             assert!(s.iter().any(|s| !s.points.is_empty()), "engine {engine}");
         }
+    }
+
+    #[test]
+    fn the_eq_grid_follows_the_span() {
+        let lines = |s: &[Series]| s[0].points.iter().filter(|p| p.1.is_finite()).count() / 2;
+        // ±12: every 3 dB, less 0 → 8 minor lines.
+        assert_eq!(lines(&eq_grid(&args().with("db_range", 12.0))), 8);
+        // ±6 picked by index: every 2 dB → 6.
+        assert_eq!(lines(&eq_grid(&args().with("range", 1.0).with("span_0", 3.0).with("span_1", 6.0))), 6);
+        assert_eq!(eq_grid(&args())[1].points[0].1, 0.5);
     }
 
     #[test]

@@ -5,7 +5,8 @@
 //
 // Inputs: IN_SPECTRUM (bins in dB, log-spaced 20 Hz–20 kHz; resample to
 // 128), IN_BANDS (`freq_hz, gain_db` per enabled band — `eq.bands`),
-// IN_DB_RANGE (the graph's ± dB span, default 24), IN_FLOOR (the analyser's
+// IN_DB_RANGE (the graph's ± dB span, default 24) or IN_RANGE + IN_RANGES
+// (a zoom param's option index and the spans it picks from), IN_FLOOR (the analyser's
 // floor dB, default −90). Params: `strength` = node glow (1), `amount` =
 // spectrum glow (1), `softness` = hue spread (1), `radius` = bloom (1);
 // `p0`/`p1` = the frequency axis (20, 20000 Hz).
@@ -185,7 +186,13 @@ fn effect(uv: vec2<f32>) -> vec4<f32> {
 fn glow_load() {
     let n = min(input_len(IN_BANDS) / 2u, MAX_NODES);
     u.frame = vec4<f32>(node_px(), fx.time_s, f32(min(input_len(IN_SPECTRUM), MAX_BINS)));
-    u.cfg = vec4<f32>(f32(n), input_or(IN_DB_RANGE, 24.0), input_or(IN_FLOOR, -90.0), 0.0);
+    // The graph's span: fixed (IN_DB_RANGE), or a zoom param's pick
+    // (IN_RANGE, an index) from its table (IN_RANGES).
+    var span = input_or(IN_DB_RANGE, 24.0);
+    if (input_len(IN_RANGES) > 0u) {
+        span = input_raw(IN_RANGES, u32(max(round(input_or(IN_RANGE, 0.0)), 0.0)));
+    }
+    u.cfg = vec4<f32>(f32(n), span, input_or(IN_FLOOR, -90.0), 0.0);
     u.style = vec4<f32>(param_or(P_STRENGTH, 1.0), param_or(P_AMOUNT, 1.0), param_or(P_SOFTNESS, 1.0), param_or(P_RADIUS, 1.0));
 }
 

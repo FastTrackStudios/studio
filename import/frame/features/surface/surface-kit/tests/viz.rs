@@ -142,7 +142,8 @@ fn curves_evaluate_once_per_change_and_share_across_bands() {
     let evals = rt.curve_evaluations();
     // The combined curve once; each band's curve (shared with its dynamic
     // range) and its stem once.
-    assert_eq!(evals, 1 + 2 * 4);
+    // (And the dB grid, `eq.grid`, once.)
+    assert_eq!(evals, 1 + 2 * 4 + 1);
     let _ = rt.frame(16.0);
     assert_eq!(rt.curve_evaluations(), evals, "nothing changed");
     // A spectrum frame moves the plot, not the curves.

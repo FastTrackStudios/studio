@@ -3,82 +3,19 @@
   "version": 1,
   "params": [
     {
-      "addr": "eq/b1_freq",
-      "name": "Band 1 Freq",
-      "short_name": "Freq",
+      "addr": "eq/b1_used",
+      "name": "Band 1 Used",
+      "short_name": "Used",
       "group": "Band 1",
-      "kind": "Continuous",
-      "range": {
-        "min": 20.0,
-        "max": 20000.0,
-        "scale": "Logarithmic",
-        "unit": "Hz",
-        "steps": null
-      },
-      "default": 0.10034333188799373,
-      "bipolar": false,
-      "featured": false
-    },
-    {
-      "addr": "eq/b1_gain",
-      "name": "Band 1 Gain",
-      "short_name": "Gain",
-      "group": "Band 1",
-      "kind": "Continuous",
-      "range": {
-        "min": -24.0,
-        "max": 24.0,
-        "scale": "Linear",
-        "unit": "Db",
-        "steps": null
-      },
-      "default": 0.5,
-      "bipolar": true,
-      "featured": false
-    },
-    {
-      "addr": "eq/b1_q",
-      "name": "Band 1 Q",
-      "short_name": "Q",
-      "group": "Band 1",
-      "kind": "Continuous",
-      "range": {
-        "min": 0.1,
-        "max": 18.0,
-        "scale": "Logarithmic",
-        "unit": "None",
-        "steps": null
-      },
-      "default": 0.3774525458865035,
-      "bipolar": false,
-      "featured": false
-    },
-    {
-      "addr": "eq/b1_shape",
-      "name": "Band 1 Shape",
-      "short_name": "Shape",
-      "group": "Band 1",
-      "kind": {
-        "Choice": {
-          "options": [
-            "Bell",
-            "Low Shelf",
-            "High Shelf",
-            "Low Cut",
-            "High Cut",
-            "Notch",
-            "Band Pass"
-          ]
-        }
-      },
+      "kind": "Toggle",
       "range": {
         "min": 0.0,
         "max": 1.0,
         "scale": "Linear",
         "unit": "None",
-        "steps": 7
+        "steps": 2
       },
-      "default": 0.5,
+      "default": 1.0,
       "bipolar": false,
       "featured": false
     },
@@ -100,61 +37,61 @@
       "featured": false
     },
     {
-      "addr": "eq/b2_freq",
-      "name": "Band 2 Freq",
+      "addr": "eq/b1_freq",
+      "name": "Band 1 Freq",
       "short_name": "Freq",
-      "group": "Band 2",
+      "group": "Band 1",
       "kind": "Continuous",
       "range": {
-        "min": 20.0,
-        "max": 20000.0,
+        "min": 10.0,
+        "max": 30000.0,
         "scale": "Logarithmic",
         "unit": "Hz",
         "steps": null
       },
-      "default": 0.25938375012788123,
+      "default": 0.17314897791118378,
       "bipolar": false,
       "featured": false
     },
     {
-      "addr": "eq/b2_gain",
-      "name": "Band 2 Gain",
+      "addr": "eq/b1_gain",
+      "name": "Band 1 Gain",
       "short_name": "Gain",
-      "group": "Band 2",
+      "group": "Band 1",
       "kind": "Continuous",
       "range": {
-        "min": -24.0,
-        "max": 24.0,
+        "min": -30.0,
+        "max": 30.0,
         "scale": "Linear",
         "unit": "Db",
         "steps": null
       },
-      "default": 0.5625,
+      "default": 0.5,
       "bipolar": true,
       "featured": false
     },
     {
-      "addr": "eq/b2_q",
-      "name": "Band 2 Q",
+      "addr": "eq/b1_q",
+      "name": "Band 1 Q",
       "short_name": "Q",
-      "group": "Band 2",
+      "group": "Band 1",
       "kind": "Continuous",
       "range": {
-        "min": 0.1,
-        "max": 18.0,
+        "min": 0.025,
+        "max": 40.0,
         "scale": "Logarithmic",
         "unit": "None",
         "steps": null
       },
-      "default": 0.3774525458865035,
+      "default": 0.45357800204546916,
       "bipolar": false,
       "featured": false
     },
     {
-      "addr": "eq/b2_shape",
-      "name": "Band 2 Shape",
+      "addr": "eq/b1_shape",
+      "name": "Band 1 Shape",
       "short_name": "Shape",
-      "group": "Band 2",
+      "group": "Band 1",
       "kind": {
         "Choice": {
           "options": [
@@ -164,7 +101,10 @@
             "Low Cut",
             "High Cut",
             "Notch",
-            "Band Pass"
+            "Band Pass",
+            "Tilt Shelf",
+            "Flat Tilt",
+            "All Pass"
           ]
         }
       },
@@ -173,9 +113,137 @@
         "max": 1.0,
         "scale": "Linear",
         "unit": "None",
-        "steps": 7
+        "steps": 10
       },
-      "default": 0.16666666666666666,
+      "default": 0.3333333333333333,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "eq/b1_slope",
+      "name": "Band 1 Slope",
+      "short_name": "Slope",
+      "group": "Band 1",
+      "kind": {
+        "Choice": {
+          "options": [
+            "0 dB/oct",
+            "6 dB/oct",
+            "12 dB/oct",
+            "18 dB/oct",
+            "24 dB/oct",
+            "30 dB/oct",
+            "36 dB/oct",
+            "48 dB/oct",
+            "72 dB/oct",
+            "96 dB/oct",
+            "Brickwall"
+          ]
+        }
+      },
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 11
+      },
+      "default": 0.2,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "eq/b1_name",
+      "name": "Band 1 Name",
+      "short_name": "Name",
+      "group": "Band 1",
+      "kind": "Text",
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": null
+      },
+      "default": 0.0,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "eq/b1_placement",
+      "name": "Band 1 Placement",
+      "short_name": "Placement",
+      "group": "Band 1",
+      "kind": {
+        "Choice": {
+          "options": [
+            "ST",
+            "L",
+            "R",
+            "M",
+            "S"
+          ]
+        }
+      },
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 5
+      },
+      "default": 0.0,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "eq/b1_focus",
+      "name": "Band 1 Focus",
+      "short_name": "Focus",
+      "group": "Band 1",
+      "kind": "Toggle",
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 2
+      },
+      "default": 0.0,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "eq/b1_dyn_range",
+      "name": "Band 1 Dyn Range",
+      "short_name": "Dyn",
+      "group": "Band 1",
+      "kind": "Continuous",
+      "range": {
+        "min": -30.0,
+        "max": 30.0,
+        "scale": "Linear",
+        "unit": "Db",
+        "steps": null
+      },
+      "default": 0.5,
+      "bipolar": true,
+      "featured": false
+    },
+    {
+      "addr": "eq/b2_used",
+      "name": "Band 2 Used",
+      "short_name": "Used",
+      "group": "Band 2",
+      "kind": "Toggle",
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 2
+      },
+      "default": 1.0,
       "bipolar": false,
       "featured": false
     },
@@ -197,61 +265,61 @@
       "featured": false
     },
     {
-      "addr": "eq/b3_freq",
-      "name": "Band 3 Freq",
+      "addr": "eq/b2_freq",
+      "name": "Band 2 Freq",
       "short_name": "Freq",
-      "group": "Band 3",
+      "group": "Band 2",
       "kind": "Continuous",
       "range": {
-        "min": 20.0,
-        "max": 20000.0,
+        "min": 10.0,
+        "max": 30000.0,
         "scale": "Logarithmic",
         "unit": "Hz",
         "steps": null
       },
-      "default": 0.44073976491130645,
+      "default": 0.3103662964248948,
       "bipolar": false,
       "featured": false
     },
     {
-      "addr": "eq/b3_gain",
-      "name": "Band 3 Gain",
+      "addr": "eq/b2_gain",
+      "name": "Band 2 Gain",
       "short_name": "Gain",
-      "group": "Band 3",
+      "group": "Band 2",
       "kind": "Continuous",
       "range": {
-        "min": -24.0,
-        "max": 24.0,
+        "min": -30.0,
+        "max": 30.0,
         "scale": "Linear",
         "unit": "Db",
         "steps": null
       },
-      "default": 0.4166666666666667,
+      "default": 0.55,
       "bipolar": true,
       "featured": false
     },
     {
-      "addr": "eq/b3_q",
-      "name": "Band 3 Q",
+      "addr": "eq/b2_q",
+      "name": "Band 2 Q",
       "short_name": "Q",
-      "group": "Band 3",
+      "group": "Band 2",
       "kind": "Continuous",
       "range": {
-        "min": 0.1,
-        "max": 18.0,
+        "min": 0.025,
+        "max": 40.0,
         "scale": "Logarithmic",
         "unit": "None",
         "steps": null
       },
-      "default": 0.5081993564346398,
+      "default": 0.45357800204546916,
       "bipolar": false,
       "featured": false
     },
     {
-      "addr": "eq/b3_shape",
-      "name": "Band 3 Shape",
+      "addr": "eq/b2_shape",
+      "name": "Band 2 Shape",
       "short_name": "Shape",
-      "group": "Band 3",
+      "group": "Band 2",
       "kind": {
         "Choice": {
           "options": [
@@ -261,7 +329,10 @@
             "Low Cut",
             "High Cut",
             "Notch",
-            "Band Pass"
+            "Band Pass",
+            "Tilt Shelf",
+            "Flat Tilt",
+            "All Pass"
           ]
         }
       },
@@ -270,9 +341,137 @@
         "max": 1.0,
         "scale": "Linear",
         "unit": "None",
-        "steps": 7
+        "steps": 10
+      },
+      "default": 0.1111111111111111,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "eq/b2_slope",
+      "name": "Band 2 Slope",
+      "short_name": "Slope",
+      "group": "Band 2",
+      "kind": {
+        "Choice": {
+          "options": [
+            "0 dB/oct",
+            "6 dB/oct",
+            "12 dB/oct",
+            "18 dB/oct",
+            "24 dB/oct",
+            "30 dB/oct",
+            "36 dB/oct",
+            "48 dB/oct",
+            "72 dB/oct",
+            "96 dB/oct",
+            "Brickwall"
+          ]
+        }
+      },
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 11
+      },
+      "default": 0.2,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "eq/b2_name",
+      "name": "Band 2 Name",
+      "short_name": "Name",
+      "group": "Band 2",
+      "kind": "Text",
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": null
       },
       "default": 0.0,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "eq/b2_placement",
+      "name": "Band 2 Placement",
+      "short_name": "Placement",
+      "group": "Band 2",
+      "kind": {
+        "Choice": {
+          "options": [
+            "ST",
+            "L",
+            "R",
+            "M",
+            "S"
+          ]
+        }
+      },
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 5
+      },
+      "default": 0.0,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "eq/b2_focus",
+      "name": "Band 2 Focus",
+      "short_name": "Focus",
+      "group": "Band 2",
+      "kind": "Toggle",
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 2
+      },
+      "default": 0.0,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "eq/b2_dyn_range",
+      "name": "Band 2 Dyn Range",
+      "short_name": "Dyn",
+      "group": "Band 2",
+      "kind": "Continuous",
+      "range": {
+        "min": -30.0,
+        "max": 30.0,
+        "scale": "Linear",
+        "unit": "Db",
+        "steps": null
+      },
+      "default": 0.5,
+      "bipolar": true,
+      "featured": false
+    },
+    {
+      "addr": "eq/b3_used",
+      "name": "Band 3 Used",
+      "short_name": "Used",
+      "group": "Band 3",
+      "kind": "Toggle",
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 2
+      },
+      "default": 1.0,
       "bipolar": false,
       "featured": false
     },
@@ -294,61 +493,61 @@
       "featured": false
     },
     {
-      "addr": "eq/b4_freq",
-      "name": "Band 4 Freq",
+      "addr": "eq/b3_freq",
+      "name": "Band 3 Freq",
       "short_name": "Freq",
-      "group": "Band 4",
+      "group": "Band 3",
       "kind": "Continuous",
       "range": {
-        "min": 20.0,
-        "max": 20000.0,
+        "min": 10.0,
+        "max": 30000.0,
         "scale": "Logarithmic",
         "unit": "Hz",
         "steps": null
       },
-      "default": 0.6514141698131083,
+      "default": 0.46683712516340553,
       "bipolar": false,
       "featured": false
     },
     {
-      "addr": "eq/b4_gain",
-      "name": "Band 4 Gain",
+      "addr": "eq/b3_gain",
+      "name": "Band 3 Gain",
       "short_name": "Gain",
-      "group": "Band 4",
+      "group": "Band 3",
       "kind": "Continuous",
       "range": {
-        "min": -24.0,
-        "max": 24.0,
+        "min": -30.0,
+        "max": 30.0,
         "scale": "Linear",
         "unit": "Db",
         "steps": null
       },
-      "default": 0.5416666666666666,
+      "default": 0.43333333333333335,
       "bipolar": true,
       "featured": false
     },
     {
-      "addr": "eq/b4_q",
-      "name": "Band 4 Q",
+      "addr": "eq/b3_q",
+      "name": "Band 3 Q",
       "short_name": "Q",
-      "group": "Band 4",
+      "group": "Band 3",
       "kind": "Continuous",
       "range": {
-        "min": 0.1,
-        "max": 18.0,
+        "min": 0.025,
+        "max": 40.0,
         "scale": "Logarithmic",
         "unit": "None",
         "steps": null
       },
-      "default": 0.44340539679225754,
+      "default": 0.5456062932940204,
       "bipolar": false,
       "featured": false
     },
     {
-      "addr": "eq/b4_shape",
-      "name": "Band 4 Shape",
+      "addr": "eq/b3_shape",
+      "name": "Band 3 Shape",
       "short_name": "Shape",
-      "group": "Band 4",
+      "group": "Band 3",
       "kind": {
         "Choice": {
           "options": [
@@ -358,7 +557,10 @@
             "Low Cut",
             "High Cut",
             "Notch",
-            "Band Pass"
+            "Band Pass",
+            "Tilt Shelf",
+            "Flat Tilt",
+            "All Pass"
           ]
         }
       },
@@ -367,9 +569,137 @@
         "max": 1.0,
         "scale": "Linear",
         "unit": "None",
-        "steps": 7
+        "steps": 10
       },
       "default": 0.0,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "eq/b3_slope",
+      "name": "Band 3 Slope",
+      "short_name": "Slope",
+      "group": "Band 3",
+      "kind": {
+        "Choice": {
+          "options": [
+            "0 dB/oct",
+            "6 dB/oct",
+            "12 dB/oct",
+            "18 dB/oct",
+            "24 dB/oct",
+            "30 dB/oct",
+            "36 dB/oct",
+            "48 dB/oct",
+            "72 dB/oct",
+            "96 dB/oct",
+            "Brickwall"
+          ]
+        }
+      },
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 11
+      },
+      "default": 0.2,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "eq/b3_name",
+      "name": "Band 3 Name",
+      "short_name": "Name",
+      "group": "Band 3",
+      "kind": "Text",
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": null
+      },
+      "default": 0.0,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "eq/b3_placement",
+      "name": "Band 3 Placement",
+      "short_name": "Placement",
+      "group": "Band 3",
+      "kind": {
+        "Choice": {
+          "options": [
+            "ST",
+            "L",
+            "R",
+            "M",
+            "S"
+          ]
+        }
+      },
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 5
+      },
+      "default": 0.0,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "eq/b3_focus",
+      "name": "Band 3 Focus",
+      "short_name": "Focus",
+      "group": "Band 3",
+      "kind": "Toggle",
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 2
+      },
+      "default": 0.0,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "eq/b3_dyn_range",
+      "name": "Band 3 Dyn Range",
+      "short_name": "Dyn",
+      "group": "Band 3",
+      "kind": "Continuous",
+      "range": {
+        "min": -30.0,
+        "max": 30.0,
+        "scale": "Linear",
+        "unit": "Db",
+        "steps": null
+      },
+      "default": 0.5,
+      "bipolar": true,
+      "featured": false
+    },
+    {
+      "addr": "eq/b4_used",
+      "name": "Band 4 Used",
+      "short_name": "Used",
+      "group": "Band 4",
+      "kind": "Toggle",
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 2
+      },
+      "default": 1.0,
       "bipolar": false,
       "featured": false
     },
@@ -391,61 +721,61 @@
       "featured": false
     },
     {
-      "addr": "eq/b5_freq",
-      "name": "Band 5 Freq",
+      "addr": "eq/b4_freq",
+      "name": "Band 4 Freq",
       "short_name": "Freq",
-      "group": "Band 5",
+      "group": "Band 4",
       "kind": "Continuous",
       "range": {
-        "min": 20.0,
-        "max": 20000.0,
+        "min": 10.0,
+        "max": 30000.0,
         "scale": "Logarithmic",
         "unit": "Hz",
         "steps": null
       },
-      "default": 0.7740730982446398,
+      "default": 0.6845350125425831,
       "bipolar": false,
       "featured": false
     },
     {
-      "addr": "eq/b5_gain",
-      "name": "Band 5 Gain",
+      "addr": "eq/b4_gain",
+      "name": "Band 4 Gain",
       "short_name": "Gain",
-      "group": "Band 5",
+      "group": "Band 4",
       "kind": "Continuous",
       "range": {
-        "min": -24.0,
-        "max": 24.0,
+        "min": -30.0,
+        "max": 30.0,
         "scale": "Linear",
         "unit": "Db",
         "steps": null
       },
-      "default": 0.6041666666666666,
+      "default": 0.5416666666666666,
       "bipolar": true,
       "featured": false
     },
     {
-      "addr": "eq/b5_q",
-      "name": "Band 5 Q",
+      "addr": "eq/b4_q",
+      "name": "Band 4 Q",
       "short_name": "Q",
-      "group": "Band 5",
+      "group": "Band 4",
       "kind": "Continuous",
       "range": {
-        "min": 0.1,
-        "max": 18.0,
+        "min": 0.025,
+        "max": 40.0,
         "scale": "Logarithmic",
         "unit": "None",
         "steps": null
       },
-      "default": 0.4231162785339834,
+      "default": 0.5,
       "bipolar": false,
       "featured": false
     },
     {
-      "addr": "eq/b5_shape",
-      "name": "Band 5 Shape",
+      "addr": "eq/b4_shape",
+      "name": "Band 4 Shape",
       "short_name": "Shape",
-      "group": "Band 5",
+      "group": "Band 4",
       "kind": {
         "Choice": {
           "options": [
@@ -455,7 +785,10 @@
             "Low Cut",
             "High Cut",
             "Notch",
-            "Band Pass"
+            "Band Pass",
+            "Tilt Shelf",
+            "Flat Tilt",
+            "All Pass"
           ]
         }
       },
@@ -464,9 +797,137 @@
         "max": 1.0,
         "scale": "Linear",
         "unit": "None",
-        "steps": 7
+        "steps": 10
       },
       "default": 0.0,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "eq/b4_slope",
+      "name": "Band 4 Slope",
+      "short_name": "Slope",
+      "group": "Band 4",
+      "kind": {
+        "Choice": {
+          "options": [
+            "0 dB/oct",
+            "6 dB/oct",
+            "12 dB/oct",
+            "18 dB/oct",
+            "24 dB/oct",
+            "30 dB/oct",
+            "36 dB/oct",
+            "48 dB/oct",
+            "72 dB/oct",
+            "96 dB/oct",
+            "Brickwall"
+          ]
+        }
+      },
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 11
+      },
+      "default": 0.2,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "eq/b4_name",
+      "name": "Band 4 Name",
+      "short_name": "Name",
+      "group": "Band 4",
+      "kind": "Text",
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": null
+      },
+      "default": 0.0,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "eq/b4_placement",
+      "name": "Band 4 Placement",
+      "short_name": "Placement",
+      "group": "Band 4",
+      "kind": {
+        "Choice": {
+          "options": [
+            "ST",
+            "L",
+            "R",
+            "M",
+            "S"
+          ]
+        }
+      },
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 5
+      },
+      "default": 0.0,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "eq/b4_focus",
+      "name": "Band 4 Focus",
+      "short_name": "Focus",
+      "group": "Band 4",
+      "kind": "Toggle",
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 2
+      },
+      "default": 0.0,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "eq/b4_dyn_range",
+      "name": "Band 4 Dyn Range",
+      "short_name": "Dyn",
+      "group": "Band 4",
+      "kind": "Continuous",
+      "range": {
+        "min": -30.0,
+        "max": 30.0,
+        "scale": "Linear",
+        "unit": "Db",
+        "steps": null
+      },
+      "default": 0.5,
+      "bipolar": true,
+      "featured": false
+    },
+    {
+      "addr": "eq/b5_used",
+      "name": "Band 5 Used",
+      "short_name": "Used",
+      "group": "Band 5",
+      "kind": "Toggle",
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 2
+      },
+      "default": 1.0,
       "bipolar": false,
       "featured": false
     },
@@ -488,61 +949,61 @@
       "featured": false
     },
     {
-      "addr": "eq/b6_freq",
-      "name": "Band 6 Freq",
+      "addr": "eq/b5_freq",
+      "name": "Band 5 Freq",
       "short_name": "Freq",
-      "group": "Band 6",
+      "group": "Band 5",
       "kind": "Continuous",
       "range": {
-        "min": 20.0,
-        "max": 20000.0,
+        "min": 10.0,
+        "max": 30000.0,
         "scale": "Logarithmic",
         "unit": "Hz",
         "steps": null
       },
-      "default": 0.884404171258448,
+      "default": 0.8496230913516148,
       "bipolar": false,
       "featured": false
     },
     {
-      "addr": "eq/b6_gain",
-      "name": "Band 6 Gain",
+      "addr": "eq/b5_gain",
+      "name": "Band 5 Gain",
       "short_name": "Gain",
-      "group": "Band 6",
+      "group": "Band 5",
       "kind": "Continuous",
       "range": {
-        "min": -24.0,
-        "max": 24.0,
+        "min": -30.0,
+        "max": 30.0,
         "scale": "Linear",
         "unit": "Db",
         "steps": null
       },
-      "default": 0.5520833333333334,
+      "default": 0.5416666666666666,
       "bipolar": true,
       "featured": false
     },
     {
-      "addr": "eq/b6_q",
-      "name": "Band 6 Q",
+      "addr": "eq/b5_q",
+      "name": "Band 5 Q",
       "short_name": "Q",
-      "group": "Band 6",
+      "group": "Band 5",
       "kind": "Continuous",
       "range": {
-        "min": 0.1,
-        "max": 18.0,
+        "min": 0.025,
+        "max": 40.0,
         "scale": "Logarithmic",
         "unit": "None",
         "steps": null
       },
-      "default": 0.3774525458865035,
+      "default": 0.45357800204546916,
       "bipolar": false,
       "featured": false
     },
     {
-      "addr": "eq/b6_shape",
-      "name": "Band 6 Shape",
+      "addr": "eq/b5_shape",
+      "name": "Band 5 Shape",
       "short_name": "Shape",
-      "group": "Band 6",
+      "group": "Band 5",
       "kind": {
         "Choice": {
           "options": [
@@ -552,7 +1013,10 @@
             "Low Cut",
             "High Cut",
             "Notch",
-            "Band Pass"
+            "Band Pass",
+            "Tilt Shelf",
+            "Flat Tilt",
+            "All Pass"
           ]
         }
       },
@@ -561,9 +1025,137 @@
         "max": 1.0,
         "scale": "Linear",
         "unit": "None",
-        "steps": 7
+        "steps": 10
       },
-      "default": 0.3333333333333333,
+      "default": 0.2222222222222222,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "eq/b5_slope",
+      "name": "Band 5 Slope",
+      "short_name": "Slope",
+      "group": "Band 5",
+      "kind": {
+        "Choice": {
+          "options": [
+            "0 dB/oct",
+            "6 dB/oct",
+            "12 dB/oct",
+            "18 dB/oct",
+            "24 dB/oct",
+            "30 dB/oct",
+            "36 dB/oct",
+            "48 dB/oct",
+            "72 dB/oct",
+            "96 dB/oct",
+            "Brickwall"
+          ]
+        }
+      },
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 11
+      },
+      "default": 0.2,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "eq/b5_name",
+      "name": "Band 5 Name",
+      "short_name": "Name",
+      "group": "Band 5",
+      "kind": "Text",
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": null
+      },
+      "default": 0.0,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "eq/b5_placement",
+      "name": "Band 5 Placement",
+      "short_name": "Placement",
+      "group": "Band 5",
+      "kind": {
+        "Choice": {
+          "options": [
+            "ST",
+            "L",
+            "R",
+            "M",
+            "S"
+          ]
+        }
+      },
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 5
+      },
+      "default": 0.0,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "eq/b5_focus",
+      "name": "Band 5 Focus",
+      "short_name": "Focus",
+      "group": "Band 5",
+      "kind": "Toggle",
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 2
+      },
+      "default": 0.0,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "eq/b5_dyn_range",
+      "name": "Band 5 Dyn Range",
+      "short_name": "Dyn",
+      "group": "Band 5",
+      "kind": "Continuous",
+      "range": {
+        "min": -30.0,
+        "max": 30.0,
+        "scale": "Linear",
+        "unit": "Db",
+        "steps": null
+      },
+      "default": 0.5,
+      "bipolar": true,
+      "featured": false
+    },
+    {
+      "addr": "eq/b6_used",
+      "name": "Band 6 Used",
+      "short_name": "Used",
+      "group": "Band 6",
+      "kind": "Toggle",
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 2
+      },
+      "default": 0.0,
       "bipolar": false,
       "featured": false
     },
@@ -582,6 +1174,200 @@
       },
       "default": 1.0,
       "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "eq/b6_freq",
+      "name": "Band 6 Freq",
+      "short_name": "Freq",
+      "group": "Band 6",
+      "kind": "Continuous",
+      "range": {
+        "min": 10.0,
+        "max": 30000.0,
+        "scale": "Logarithmic",
+        "unit": "Hz",
+        "steps": null
+      },
+      "default": 0.5751884543241927,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "eq/b6_gain",
+      "name": "Band 6 Gain",
+      "short_name": "Gain",
+      "group": "Band 6",
+      "kind": "Continuous",
+      "range": {
+        "min": -30.0,
+        "max": 30.0,
+        "scale": "Linear",
+        "unit": "Db",
+        "steps": null
+      },
+      "default": 0.5,
+      "bipolar": true,
+      "featured": false
+    },
+    {
+      "addr": "eq/b6_q",
+      "name": "Band 6 Q",
+      "short_name": "Q",
+      "group": "Band 6",
+      "kind": "Continuous",
+      "range": {
+        "min": 0.025,
+        "max": 40.0,
+        "scale": "Logarithmic",
+        "unit": "None",
+        "steps": null
+      },
+      "default": 0.4530040738117794,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "eq/b6_shape",
+      "name": "Band 6 Shape",
+      "short_name": "Shape",
+      "group": "Band 6",
+      "kind": {
+        "Choice": {
+          "options": [
+            "Bell",
+            "Low Shelf",
+            "High Shelf",
+            "Low Cut",
+            "High Cut",
+            "Notch",
+            "Band Pass",
+            "Tilt Shelf",
+            "Flat Tilt",
+            "All Pass"
+          ]
+        }
+      },
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 10
+      },
+      "default": 0.0,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "eq/b6_slope",
+      "name": "Band 6 Slope",
+      "short_name": "Slope",
+      "group": "Band 6",
+      "kind": {
+        "Choice": {
+          "options": [
+            "0 dB/oct",
+            "6 dB/oct",
+            "12 dB/oct",
+            "18 dB/oct",
+            "24 dB/oct",
+            "30 dB/oct",
+            "36 dB/oct",
+            "48 dB/oct",
+            "72 dB/oct",
+            "96 dB/oct",
+            "Brickwall"
+          ]
+        }
+      },
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 11
+      },
+      "default": 0.2,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "eq/b6_name",
+      "name": "Band 6 Name",
+      "short_name": "Name",
+      "group": "Band 6",
+      "kind": "Text",
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": null
+      },
+      "default": 0.0,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "eq/b6_placement",
+      "name": "Band 6 Placement",
+      "short_name": "Placement",
+      "group": "Band 6",
+      "kind": {
+        "Choice": {
+          "options": [
+            "ST",
+            "L",
+            "R",
+            "M",
+            "S"
+          ]
+        }
+      },
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 5
+      },
+      "default": 0.0,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "eq/b6_focus",
+      "name": "Band 6 Focus",
+      "short_name": "Focus",
+      "group": "Band 6",
+      "kind": "Toggle",
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 2
+      },
+      "default": 0.0,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "eq/b6_dyn_range",
+      "name": "Band 6 Dyn Range",
+      "short_name": "Dyn",
+      "group": "Band 6",
+      "kind": "Continuous",
+      "range": {
+        "min": -30.0,
+        "max": 30.0,
+        "scale": "Linear",
+        "unit": "Db",
+        "steps": null
+      },
+      "default": 0.5,
+      "bipolar": true,
       "featured": false
     }
   ],

@@ -25,9 +25,14 @@
 //!   placement submenus, reset gain, rename, delete);
 //! - a range switch (±3…±30 dB), pre / post / external analyser layers.
 //!
-//! The GPU glow layer (analyser field and node halos) is a separate
-//! component; this one leaves an empty `glow` frame at the bottom of its
-//! traces for it.
+//! It draws as the EQ in signal's guitar rig does — processor's
+//! `EqGraphWidget`: a full-bleed plot on `#0a0a0a`, the GPU glow
+//! (`eq.glow`, `viz::lit`) under processor's grid, band curves in each
+//! band's colour, the gold sum and the node rings, with the axis labels and
+//! range picker where its DOM puts them. The glow draws the analyser as
+//! light; without the effects stage the analyser layers draw instead. The
+//! `panel` variant keeps the earlier look: a lit panel and well with the
+//! scales printed round it, the glow in its `glow` frame under the traces.
 
 use document_proto::{Node, NodeId, NodeKind, Stroke, StrokeAlign, StrokeCap, StrokeJoin, TextAlign, TextData};
 use surface_proto::{
@@ -172,10 +177,26 @@ fn eq_graph(b: &mut Builder<'_>, parent: NodeId, p: &Place) -> NodeId {
     let w = p.size.unwrap_or(820.0).max(360.0);
     let h = opt_f(p, "h", (w * 0.42).round());
     let bands = opt_f(p, "bands", 24.0).clamp(1.0, 24.0) as u32;
+    // The panel look; else signal's rig look (processor's graph widget).
+    let lit_panel = p.variant.as_deref() == Some("panel");
+    let rig = !lit_panel;
     let f = (opt_f(p, "f_min", 20.0), opt_f(p, "f_max", 20_000.0));
-    let root = panel(b, parent, &p.name, w, h);
-    let (ax, ay, right, bottom) = (12.0, 30.0, 34.0, 22.0);
-    let a = area(b, root, ax, ay, w - ax - right, h - ay - bottom);
+    let (root, (ax, ay, right, bottom)) = if rig {
+        let mut n = draw::frame(&p.name, 0.0, 0.0, w, h);
+        n.fills = vec![draw::solid(RIG_GROUND)];
+        (b.add(parent, n), (0.0, 0.0, 0.0, 0.0))
+    } else {
+        (panel(b, parent, &p.name, w, h), (12.0, 30.0, 34.0, 22.0))
+    };
+    let a = if rig {
+        let area = b.add(root, draw::frame("plot area", 0.0, 0.0, w, h));
+        let mut clip = draw::frame("traces", 0.0, 0.0, w, h);
+        clip.clips_content = true;
+        let clip = b.add(area, clip);
+        Area { area, clip, w, h }
+    } else {
+        area(b, root, ax, ay, w - ax - right, h - ay - bottom)
+    };
     let x = Axis::Log { f_min: f.0, f_max: f.1 };
     let y = Axis::Linear { min: -12.0, max: 12.0 };
     let tint = ramp_over(&x);
@@ -188,12 +209,51 @@ fn eq_graph(b: &mut Builder<'_>, parent: NodeId, p: &Place) -> NodeId {
     let xs: Vec<(f64, bool)> =
         LINES.iter().chain(&[20_000.0]).filter(|v| **v > f.0 && **v < f.1).map(|v| (x.to_unit(*v), [100.0, 1000.0, 10_000.0].contains(v))).collect();
     let ys: Vec<(f64, bool)> = (1..8).map(|i| (f64::from(i) / 8.0, i == 4)).collect();
-    grid(b, &a, &xs, &ys);
-    for (hz, s) in [(20.0, "20"), (50.0, "50"), (100.0, "100"), (200.0, "200"), (500.0, "500"), (1000.0, "1k"), (2000.0, "2k"), (5000.0, "5k"), (10_000.0, "10k"), (20_000.0, "20k")] {
+    // The glow, fed by the spectrum and the bands: under everything in the
+    // rig look (its analyser layers are its fallback), in the `glow` frame
+    // under the traces in the panel look.
+    let spectrum = match &p.binding {
+        Some(Binding { source: Source::Stream { id, .. }, .. }) => id.0.clone(),
+        _ => p.opt("spectrum").map_or_else(|| ad.view("spectrum"), ToString::to_string),
+    };
+    let floor = opt_f(p, "floor", -90.0);
+    let glow_spec = super::lit::GlowSpec {
+        ns: &ad.ns,
+        bands: bands as usize,
+        used: true,
+        spectrum: spectrum.clone(),
+        f,
+        span: super::lit::GlowSpan::Param { addr: ad.view("range"), spans: RANGES.to_vec() },
+        floor,
+    };
+    let rig_glow = rig.then(|| super::lit::glow_light(b, a.area, (a.w, a.h), &glow_spec));
+    if rig {
+        rig_grid(b, &a, &x, f, &ad);
+        // Glow, then grid, then the traces.
+        if let Some(n) = b.scene.node_mut(a.area) {
+            let clip = a.clip;
+            n.children.retain(|c| *c != clip);
+            n.children.push(clip);
+        }
+    } else {
+        grid(b, &a, &xs, &ys);
+    }
+    const FREQ_LABELS: [(f64, &str); 10] =
+        [(20.0, "20"), (50.0, "50"), (100.0, "100"), (200.0, "200"), (500.0, "500"), (1000.0, "1k"), (2000.0, "2k"), (5000.0, "5k"), (10_000.0, "10k"), (20_000.0, "20k")];
+    for (i, (hz, s)) in FREQ_LABELS.into_iter().enumerate() {
         if hz < f.0 || hz > f.1 {
             continue;
         }
         let u = x.to_unit(hz);
+        if rig {
+            // processor's DOM: 2 px off the floor, the ends kept inside.
+            let align = if i == 0 { TextAlign::Left } else if i == FREQ_LABELS.len() - 1 { TextAlign::Right } else { TextAlign::Center };
+            let t = label(b, root, s, (u * a.w, a.h - 2.0 - 6.0), align, RIG_FREQ_INK);
+            if let Some(n) = b.scene.node_mut(t) {
+                n.effects = vec![draw::drop_shadow("#000000ff", 0.0, 1.0, 2.0)];
+            }
+            continue;
+        }
         let align = if u < 0.02 { TextAlign::Left } else if u > 0.98 { TextAlign::Right } else { TextAlign::Center };
         label(b, root, s, (ax + u * a.w, ay + a.h + 11.0), align, LABEL);
     }
@@ -207,28 +267,48 @@ fn eq_graph(b: &mut Builder<'_>, parent: NodeId, p: &Place) -> NodeId {
             })
             .collect();
         let cy = ay + (1.0 - (frac + 1.0) / 2.0) * a.h;
-        let holder = frame(b, root, "dB label", (ax + a.w + 3.0, (cy - 6.0).clamp(ay, ay + a.h - 12.0), 28.0, 12.0), None, 0.0);
-        let t = text(b, holder, "value", "", (0.0, 0.0, 28.0), 9.0, LABEL, TextAlign::Left, 500.0);
+        let (holder, t) = if rig {
+            // processor's DOM: a pill 3 px in from the right edge, kept
+            // clear of the top rim and the frequency labels.
+            let cy = cy.clamp(20.0, (a.h - 16.0).max(20.0));
+            let holder = frame(b, root, "dB label", (a.w - 3.0 - 24.0, cy - 6.0, 24.0, 12.0), Some(RIG_DB_PILL), 2.0);
+            (holder, text(b, holder, "value", "", (0.0, 1.0, 24.0), 9.0, RIG_DB_INK, TextAlign::Center, 500.0))
+        } else {
+            let holder = frame(b, root, "dB label", (ax + a.w + 3.0, (cy - 6.0).clamp(ay, ay + a.h - 12.0), 28.0, 12.0), None, 0.0);
+            (holder, text(b, holder, "value", "", (0.0, 0.0, 28.0), 9.0, LABEL, TextAlign::Left, 500.0))
+        };
         let refs: Vec<&str> = labels.iter().map(String::as_str).collect();
         let c = Control::new(ControlKind::Readout).bound(Binding::param(ad.view("range"))).slot(SlotRole::Value, t.0).formatted(ValueFormat::labels(&refs));
         b.controls.insert(holder, c);
     }
 
-    // ── traces: glow hook, analyser layers, band curves, the sum ────────
-    // The GPU glow layer (a separate component) goes in this frame.
-    b.add(a.clip, draw::frame("glow", 0.0, 0.0, a.w, a.h));
-    let spectrum = match &p.binding {
-        Some(Binding { source: Source::Stream { id, .. }, .. }) => id.0.clone(),
-        _ => p.opt("spectrum").map_or_else(|| ad.view("spectrum"), ToString::to_string),
+    // ── traces: glow, analyser layers, band curves, the sum ─────────────
+    let glow_frame = b.add(a.clip, draw::frame("glow", 0.0, 0.0, a.w, a.h));
+    if !rig {
+        super::lit::glow_light(b, glow_frame, (a.w, a.h), &glow_spec);
+    }
+    // The analyser: processor's colours, its level axis (0 dB at the top,
+    // 90 down) in the rig look. There the glow draws it as light, so the
+    // layers are the glow's fallback.
+    let layers = if rig {
+        [
+            ("analyser pre", ad.view("spectrum_pre"), "show_pre", Some("#8c8c9610"), Some(("#8c8c9646", 1.0))),
+            ("analyser post", spectrum, "show_post", Some("#64b4ff1c"), Some(("#64b4ff78", 1.0))),
+            ("analyser ext", ad.view("sidechain"), "show_ext", None, Some(("#ffaa5096", 1.0))),
+        ]
+    } else {
+        [
+            ("analyser pre", ad.view("spectrum_pre"), "show_pre", Some("#8c8c9612"), Some(("#8c8c9646", 1.0))),
+            ("analyser post", spectrum, "show_post", Some("#64b4ff1f"), Some(("#64b4ff78", 1.0))),
+            ("analyser ext", ad.view("sidechain"), "show_ext", None, Some(("#ffaa5096", 1.0))),
+        ]
     };
-    let floor = opt_f(p, "floor", -90.0);
-    let layers = [
-        ("analyser pre", ad.view("spectrum_pre"), "show_pre", Some("#8c8c9612"), Some(("#8c8c9646", 1.0))),
-        ("analyser post", spectrum, "show_post", Some("#64b4ff1f"), Some(("#64b4ff78", 1.0))),
-        ("analyser ext", ad.view("sidechain"), "show_ext", None, Some(("#ffaa5096", 1.0))),
-    ];
+    let (layer_parent, level) = match rig_glow {
+        Some(g) => (g, PlotRange::linear(-90.0, 0.0)),
+        None => (a.clip, PlotRange::linear(floor, 6.0)),
+    };
     for (name, feed, toggle, fill, line) in layers {
-        let holder = b.add(a.clip, draw::frame(name, 0.0, 0.0, a.w, a.h));
+        let holder = b.add(layer_parent, draw::frame(name, 0.0, 0.0, a.w, a.h));
         let mut slots = Vec::new();
         if let Some(fc) = fill {
             slots.push((SlotRole::Area, vector(b, holder, &a, "fill", Some(fc), None)));
@@ -236,7 +316,7 @@ fn eq_graph(b: &mut Builder<'_>, parent: NodeId, p: &Place) -> NodeId {
         if let Some((lc, lw)) = line {
             slots.push((SlotRole::Trace, vector(b, holder, &a, "line", None, Some((lc, lw, false)))));
         }
-        let c = Control::new(ControlKind::Plot { style: PlotStyle::Line, x: x.clone(), y: PlotRange::linear(floor, 6.0) })
+        let c = Control::new(ControlKind::Plot { style: PlotStyle::Line, x: x.clone(), y: level.clone() })
             .bound(Binding::stream(feed))
             .shown_if(Condition::on(ad.view(toggle)));
         b.controls.insert(holder, with_slots(c, &slots));
@@ -273,7 +353,9 @@ fn eq_graph(b: &mut Builder<'_>, parent: NodeId, p: &Place) -> NodeId {
         c.tint = tint.clone();
         b.controls.insert(holder, with_slots(c, &slots));
     };
-    band_curve(b, "curve", "b{n}", PlotStyle::Area { baseline: 0.0 }, Vec::new(), (Some("#ffffff38"), Some(("#ffffff99", 1.5, false))));
+    // processor: the band's colour at 25 % under a 60 % line.
+    let band_fill = if rig { "#ffffff40" } else { "#ffffff38" };
+    band_curve(b, "curve", "b{n}", PlotStyle::Area { baseline: 0.0 }, Vec::new(), (Some(band_fill), Some(("#ffffff99", 1.5, false))));
     band_curve(b, "stem", "b{n}_stem", PlotStyle::Line, vec![CurveInput::constant("stems", 1.0)], (None, Some(("#ffffff80", 1.5, false))));
     band_curve(b, "dynamic range", "b{n}_dyn", PlotStyle::Line, Vec::new(), (None, Some(("#ffffffb0", 1.2, true))));
 
@@ -289,6 +371,10 @@ fn eq_graph(b: &mut Builder<'_>, parent: NodeId, p: &Place) -> NodeId {
         n.children.retain(|c| *c != h);
         let at = n.children.iter().position(|c| *c == l).unwrap_or(0);
         n.children.insert(at, h);
+    }
+    // processor strokes the sum once, 2 px, no halo.
+    if rig && let Some(n) = b.scene.node_mut(halo) {
+        n.visible = false;
     }
     let inputs: Vec<CurveInput> = (1..=bands).flat_map(|n| band_inputs(&ad, &n.to_string())).collect();
     let mut c = Control::new(ControlKind::Curve {
@@ -307,19 +393,39 @@ fn eq_graph(b: &mut Builder<'_>, parent: NodeId, p: &Place) -> NodeId {
     b.controls.insert(band, Control::new(ControlKind::Repeat { first: 1, count: bands, used: Some(ParamAddr::new(ad.band("used"))) }));
     let handle = b.add(band, draw::frame("band {n} handle", (a.w - HANDLE) / 2.0, (a.h - HANDLE) / 2.0, HANDLE, HANDLE));
     let c0 = HANDLE / 2.0;
-    let halo = b.add(handle, draw::circle("halo", c0, c0, DISC / 2.0 + 4.0, draw::solid("#ffffff14")));
-    let hover = b.add(handle, draw::circle("hover", c0, c0, DISC / 2.0 + 5.0, draw::solid("#ffffff2e")));
-    let mut ring = draw::circle("selection", c0, c0, DISC / 2.0 + 5.5, draw::solid("#00000000"));
+    let r = DISC / 2.0;
+    let (halo, hover) = if rig {
+        // processor's node: a 3 px white ring 4 px out (8 %, 18 % on hover),
+        // and on hover a brighter outline.
+        let halo = b.add(handle, ring_node("halo", c0, r + 4.0, 3.0, "#ffffff14"));
+        let hover = b.add(handle, draw::frame("hover", 0.0, 0.0, HANDLE, HANDLE));
+        b.add(hover, ring_node("glow", c0, r + 4.0, 3.0, "#ffffff2e"));
+        b.add(hover, ring_node("outline", c0, r, 1.5, "#ffffffb3"));
+        (halo, hover)
+    } else {
+        (b.add(handle, draw::circle("halo", c0, c0, DISC / 2.0 + 4.0, draw::solid("#ffffff14"))), b.add(handle, draw::circle("hover", c0, c0, DISC / 2.0 + 5.0, draw::solid("#ffffff2e"))))
+    };
+    let mut ring = draw::circle("selection", c0, c0, if rig { r + 5.0 } else { DISC / 2.0 + 5.5 }, draw::solid("#00000000"));
     ring.fills.clear();
     ring.stroke = Stroke { paints: vec![draw::solid("#ffffffe6")], weight: 1.5, align: StrokeAlign::Center, ..Stroke::default() };
     let ring = b.add(handle, ring);
     // On / off: a Readout of `on` shows the lit disc or the grey one.
     let state = b.add(handle, draw::frame("state", 0.0, 0.0, HANDLE, HANDLE));
-    let mut lit = draw::circle("disc", c0, c0, DISC / 2.0, draw::solid("#ff6b6b"));
-    lit.stroke = Stroke { paints: vec![draw::solid("#ffffff66")], weight: 1.5, align: StrokeAlign::Inside, ..Stroke::default() };
-    let lit = b.add(state, draw::with_effects(lit, vec![draw::drop_shadow("#00000099", 0.0, 1.0, 4.0)]));
+    let (lit, lit_shown) = if rig {
+        // processor's node: the disc in the band's colour under a 40 %
+        // white outline (the outline keeps its white: it isn't tinted).
+        let group = b.add(state, draw::frame("lit", 0.0, 0.0, HANDLE, HANDLE));
+        let disc = b.add(group, draw::circle("disc", c0, c0, r, draw::solid("#ff6b6b")));
+        b.add(group, ring_node("outline", c0, r, 1.5, "#ffffff66"));
+        (disc, group)
+    } else {
+        let mut lit = draw::circle("disc", c0, c0, DISC / 2.0, draw::solid("#ff6b6b"));
+        lit.stroke = Stroke { paints: vec![draw::solid("#ffffff66")], weight: 1.5, align: StrokeAlign::Inside, ..Stroke::default() };
+        let lit = b.add(state, draw::with_effects(lit, vec![draw::drop_shadow("#00000099", 0.0, 1.0, 4.0)]));
+        (lit, lit)
+    };
     let grey = b.add(state, draw::circle("bypassed", c0, c0, DISC / 2.0, draw::solid("#555555")));
-    b.controls.insert(state, with_slots(Control::new(ControlKind::Readout).bound(Binding::param(ad.band("on"))), &[(SlotRole::On, lit), (SlotRole::Off, grey)]));
+    b.controls.insert(state, with_slots(Control::new(ControlKind::Readout).bound(Binding::param(ad.band("on"))), &[(SlotRole::On, lit_shown), (SlotRole::Off, grey)]));
 
     // The name label riding above the handle; double-click renames.
     let label_pop = b.add(band, draw::frame("band {n} label", 0.0, 0.0, 120.0, 16.0));
@@ -462,7 +568,7 @@ fn eq_graph(b: &mut Builder<'_>, parent: NodeId, p: &Place) -> NodeId {
     chip(b, root, &ad, band, handle);
 
     // ── toolbar: range, analyser layers ─────────────────────────────────
-    let range = stroked_frame(b, root, "range", (ax, 6.0, 64.0, 18.0), "#0f0f12eb", "#50505599", 4.0);
+    let range = stroked_frame(b, root, "range", (if rig { 6.0 } else { ax }, 6.0, 64.0, 18.0), "#0f0f12eb", "#50505599", 4.0);
     let rv = text(b, range, "value", "±12 dB", (0.0, 3.0, 64.0), 10.0, "#dddddd", TextAlign::Center, 500.0);
     let rc = Control::new(ControlKind::Button { mode: ButtonMode::Cycle })
         .bound(Binding::param(ad.view("range")))
@@ -470,7 +576,9 @@ fn eq_graph(b: &mut Builder<'_>, parent: NodeId, p: &Place) -> NodeId {
         .slot(SlotRole::Label, rv.0)
         .interacting(Interact { double_click: vec![Command::Reset { addr: ParamAddr::new(ad.view("range")) }], ..Interact::default() });
     b.controls.insert(range, rc);
-    for (i, (k, legend, color)) in [("pre", "PRE", "#8c8c96"), ("post", "POST", "#64b4ff"), ("ext", "EXT", "#ffaa50")].into_iter().enumerate() {
+    // (The rig's graph has no layer toggles: its analyser shows what's fed.)
+    let toggles = if rig { Vec::new() } else { vec![("pre", "PRE", "#8c8c96"), ("post", "POST", "#64b4ff"), ("ext", "EXT", "#ffaa50")] };
+    for (i, (k, legend, color)) in toggles.into_iter().enumerate() {
         let bx = w - right - 3.0 * 46.0 + i as f64 * 46.0;
         let btn = stroked_frame(b, root, &format!("{legend} analyser"), (bx, 6.0, 42.0, 18.0), "#0f0f12eb", "#50505599", 4.0);
         let dot_on = b.add(btn, draw::circle("on", 9.0, 9.0, 3.0, draw::solid(color)));
@@ -484,6 +592,70 @@ fn eq_graph(b: &mut Builder<'_>, parent: NodeId, p: &Place) -> NodeId {
         b.controls.insert(btn, c);
     }
     root
+}
+
+/// The rig look's ground (processor's `(10, 10, 10)`).
+const RIG_GROUND: &str = "#0a0a0a";
+/// processor's DOM frequency labels, `rgba(160,160,172,0.85)`.
+const RIG_FREQ_INK: &str = "#a0a0acd9";
+/// processor's DOM dB labels: `rgba(170,170,182,0.95)` on `rgba(10,10,14,0.78)`.
+const RIG_DB_INK: &str = "#aaaab6f2";
+const RIG_DB_PILL: &str = "#0a0a0ec7";
+
+/// A stroked ring of radius `r` centred at (`c`, `c`).
+fn ring_node(name: &str, c: f64, r: f64, weight: f64, color: &str) -> Node {
+    let mut n = draw::circle(name, c, c, r, draw::solid("#00000000"));
+    n.fills.clear();
+    n.stroke = Stroke { paints: vec![draw::solid(color)], weight, align: StrokeAlign::Center, ..Stroke::default() };
+    n
+}
+
+/// processor's `paint_grid`: log frequency lines in three tiers (decades
+/// thickest, the 1-2-5 anchors medium, the rest thin) and dB lines every
+/// 2/3/6 dB by the current span (`eq.grid`), zero thickest.
+fn rig_grid(b: &mut Builder<'_>, a: &Area, x: &Axis, f: (f64, f64), ad: &Addrs) {
+    const MINOR: &str = "#37373c5a";
+    const MID: &str = "#46464b6e";
+    const MAJOR: &str = "#5a5a5f8c";
+    #[rustfmt::skip]
+    const LINES: [(f64, u8); 29] = [
+        (15.0, 0), (20.0, 1), (30.0, 0), (40.0, 0), (50.0, 1), (60.0, 0), (70.0, 0), (80.0, 0), (90.0, 0),
+        (100.0, 2), (200.0, 1), (300.0, 0), (400.0, 0), (500.0, 1), (600.0, 0), (700.0, 0), (800.0, 0), (900.0, 0),
+        (1000.0, 2), (2000.0, 1), (3000.0, 0), (4000.0, 0), (5000.0, 1), (6000.0, 0), (7000.0, 0), (8000.0, 0), (9000.0, 0),
+        (10_000.0, 2), (20_000.0, 1),
+    ];
+    for (tier, color, weight) in [(0_u8, MINOR, 0.5), (1, MID, 0.75), (2, MAJOR, 1.25)] {
+        let d: String = LINES
+            .iter()
+            .filter(|(hz, t)| *t == tier && *hz >= f.0 && *hz <= f.1)
+            .map(|(hz, _)| format!("M {:.2} 0 V {:.1} ", x.to_unit(*hz) * a.w, a.h))
+            .collect();
+        if d.is_empty() {
+            continue;
+        }
+        let mut n = draw::path("grid", 0.0, 0.0, a.w, a.h, d.trim_end().to_string(), draw::solid("#00000000"));
+        n.fills.clear();
+        n.stroke = Stroke { paints: vec![draw::solid(color)], weight, align: StrokeAlign::Center, ..Stroke::default() };
+        b.add(a.area, n);
+    }
+    let mut inputs = vec![CurveInput::param("range", ad.view("range"))];
+    inputs.extend(RANGES.iter().enumerate().map(|(i, r)| CurveInput::constant(format!("span_{i}"), *r)));
+    for (series, color, weight) in [("minor", MINOR, 0.5), ("zero", MAJOR, 1.25)] {
+        let holder = b.add(a.area, draw::frame(&format!("dB grid {series}"), 0.0, 0.0, a.w, a.h));
+        let line = vector(b, holder, a, "line", None, Some((color, weight, false)));
+        if let Some(n) = b.scene.node_mut(line) {
+            n.stroke.cap = StrokeCap::None;
+        }
+        let c = Control::new(ControlKind::Curve {
+            provider: "eq.grid".into(),
+            inputs: inputs.clone(),
+            series: Some(series.into()),
+            style: PlotStyle::Line,
+            x: Axis::Linear { min: 0.0, max: 1.0 },
+            y: PlotRange::linear(0.0, 1.0),
+        });
+        b.controls.insert(holder, with_slots(c, &[(SlotRole::Trace, line)]));
+    }
 }
 
 /// One menu row as drawn.
@@ -721,8 +893,8 @@ pub(crate) fn defs() -> Vec<ComponentDef> {
         id: "viz.eq_graph",
         family: Family::Viz,
         title: "EQ graph",
-        description: "A full parametric EQ editor over an analyser: up to 24 bands (`<ns>/b{n}_{used,on,freq,gain,q,shape,slope,name,placement,focus,dyn_range}`, `bands=`), each a handle tinted by its frequency with its name riding above it. Double-click empty space to add a band (its shape from where you click), drag handles (Alt: frequency only, Cmd: resonance), marquee- and Cmd/Shift-click to select several and drag them together, drag one out of the graph (or press Delete) to remove it, double-click to rename, right-click for its menu. The active band gets a panel (bypass, shape, name, placement, focus, delete, FREQ/GAIN/Q/DYN knobs) and a readout chip. `<ns>/range` zooms ±3…±30 dB; `<ns>/show_{pre,post,ext}` show the `<ns>/spectrum_pre`, `<ns>/spectrum` (or the binding) and `<ns>/sidechain` analysers.",
-        variants: &[],
+        description: "A full parametric EQ editor over an analyser: up to 24 bands (`<ns>/b{n}_{used,on,freq,gain,q,shape,slope,name,placement,focus,dyn_range}`, `bands=`), each a handle tinted by its frequency with its name riding above it. Double-click empty space to add a band (its shape from where you click), drag handles (Alt: frequency only, Cmd: resonance), marquee- and Cmd/Shift-click to select several and drag them together, drag one out of the graph (or press Delete) to remove it, double-click to rename, right-click for its menu. The active band gets a panel (bypass, shape, name, placement, focus, delete, FREQ/GAIN/Q/DYN knobs) and a readout chip. `<ns>/range` zooms ±3…±30 dB; `<ns>/show_{pre,post,ext}` show the `<ns>/spectrum_pre`, `<ns>/spectrum` (or the binding) and `<ns>/sidechain` analysers. Drawn as signal's rig EQ (processor's graph: full-bleed, the GPU glow — analyser as light, a bloom per band — under its grid, curves and node rings); variant `panel` is a lit panel with printed scales.",
+        variants: &["panel"],
         default_size: 820.0,
         binds: "params by namespace",
         build: eq_graph,

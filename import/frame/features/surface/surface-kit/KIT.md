@@ -157,6 +157,22 @@ Anything always moving (flicker, LFOs) keeps hosts drawing, so make it opt-in.
   them); the `glow` frame at the bottom of the traces is where a GPU glow
   layer goes. See `docs/eq-parity.md`.
 
+### The EQ graph's look
+
+`viz.eq_graph` draws as signal's rig EQ (processor's `EqGraphWidget`): a
+full-bleed plot on `#0a0a0a`; the `eq.glow` light first (the analyser as a
+hue-swept field and a bloom per band, fed by the bound spectrum and the band
+params, its span following `<ns>/range`) — its fallback is the analyser
+layers, as processor draws them only without the glow; then processor's
+grid (`eq.grid` for the dB lines), band curves at 25 % / 60 % of the band's
+colour, stems from node to 0 dB, the gold sum, and node rings (a 3 px 8 %
+ring 4 px out, a 40 % outline); frequency and dB labels and the range
+picker where processor's DOM puts them. The band panel, chip and menus are
+unchanged and paint after the light. Variant `panel` keeps the lit-panel
+look (the glow in its `glow` frame under the traces). An engine registers
+its own `eq.response` (signal: `eq-dsp`) for exact curves; frame's builtin
+is RBJ.
+
 ### Lit visualizers
 
 processor's panel shaders as components — `viz.comp_scope`,

@@ -88,7 +88,10 @@ pub fn examples() -> Vec<Example> {
 pub fn bare_examples() -> Vec<Example> {
     let (comp_params, comp_feeds) = viz::lit_catalog::comp_scope("comp", 120);
     let (eq_params, eq_feeds) = viz::lit_catalog::eq_glow("eq", 6, 128);
+    let mut graph_params = viz::catalog::eq_params("eq", 24);
+    graph_params.extend(viz::catalog::eq_view_params("eq"));
     [
+        ("eqgraph", "viz.eq_graph", Place::new("EQ").size(820.0).options(&["ns=eq", "h=340", "f_max=24000"]), graph_params, viz::catalog::eq_streams("eq", 128)),
         ("comp", "viz.comp_scope", Place::new("Comp").size(620.0).options(&["ns=comp", "len=120", "h=520"]), comp_params, comp_feeds),
         ("delay", "viz.delay_taps", Place::new("Delay").size(760.0).options(&["ns=delay", "h=190"]), viz::lit_catalog::delay_params("delay"), Vec::new()),
         ("reverb", "viz.reverb_space", Place::new("Reverb").size(760.0).options(&["ns=reverb", "h=190"]), viz::lit_catalog::reverb_params("reverb"), Vec::new()),
