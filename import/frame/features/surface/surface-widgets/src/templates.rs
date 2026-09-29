@@ -65,6 +65,44 @@ pub fn hug(scene: &mut Scene, id: NodeId) {
     scene.transact(ops).expect("hug only resizes existing nodes");
 }
 
+/// Break a horizontal container whose children overflow `max_width` into
+/// a column of rows (greedy, in order). Hug first so child sizes are known.
+pub fn wrap_rows(scene: &mut Scene, id: NodeId, max_width: f64) {
+    let Some(node) = scene.node(id).cloned() else { return };
+    let Some(al) = node.layout.clone().filter(|l| l.direction == LayoutDirection::Horizontal) else { return };
+    let mut rows: Vec<Vec<NodeId>> = vec![Vec::new()];
+    let mut width = 0.0;
+    for c in &node.children {
+        let w = scene.node(*c).map_or(0.0, |n| n.size.width);
+        let current = rows.last_mut().expect("rows is never empty");
+        let next = if current.is_empty() { w } else { width + al.gap + w };
+        if !current.is_empty() && next > max_width {
+            rows.push(vec![*c]);
+            width = w;
+        } else {
+            current.push(*c);
+            width = next;
+        }
+    }
+    if rows.len() < 2 {
+        return;
+    }
+    let mut ops = vec![document_proto::Op::Set {
+        id,
+        prop: document_proto::Prop::Layout(Some(AutoLayout { direction: LayoutDirection::Vertical, ..al.clone() })),
+    }];
+    for (i, row) in rows.into_iter().enumerate() {
+        let mut frame = Node::new(NodeKind::Frame, format!("{} {}", node.name, i + 1));
+        frame.layout = Some(AutoLayout { padding_left: 0.0, padding_right: 0.0, padding_top: 0.0, padding_bottom: 0.0, ..al.clone() });
+        let row_id = frame.id;
+        ops.push(document_proto::Op::Insert { node: frame, parent: id, index: u32::MAX });
+        for c in row {
+            ops.push(document_proto::Op::Move { id: c, parent: row_id, index: u32::MAX });
+        }
+    }
+    scene.transact(ops).expect("wrap only regroups existing children");
+}
+
 /// Options for [`surface_for_catalog`].
 #[derive(Debug, Clone)]
 pub struct Options {
@@ -74,11 +112,13 @@ pub struct Options {
     pub footswitch_row: bool,
     /// Master fader + meters, when the catalog has a level stream.
     pub output_strip: bool,
+    /// Rows of panels / footswitches wrap past this width (px).
+    pub max_width: f64,
 }
 
 impl Default for Options {
     fn default() -> Self {
-        Self { theme: Theme::default(), knob_size: ControlSize::Medium, footswitch_row: true, output_strip: true }
+        Self { theme: Theme::default(), knob_size: ControlSize::Medium, footswitch_row: true, output_strip: true, max_width: 1600.0 }
     }
 }
 
@@ -105,6 +145,7 @@ pub fn surface_for_catalog(catalog: &Catalog, opts: &Options) -> Surface {
         n.fills = vec![Paint::solid(t.background)];
     }
     let top = b.stack(root, "panels", LayoutDirection::Horizontal, t.gap, 0.0);
+    let mut footswitches = None;
 
     let output_params: Vec<&ParamInfo> = catalog.params.iter().filter(|p| p.group.as_deref() == Some("Output")).collect();
     // Large engines mark what a performer reaches for; build from that when
@@ -148,6 +189,7 @@ pub fn surface_for_catalog(catalog: &Catalog, opts: &Options) -> Surface {
 
     if opts.footswitch_row {
         let row = b.stack(root, "footswitches", LayoutDirection::Horizontal, t.gap, 0.0);
+        footswitches = Some(row);
         for p in catalog.params.iter().filter(|p| matches!(p.kind, ParamKind::Toggle) && shown(p)) {
             let name = p.name.trim_end_matches(" On").to_string();
             b.footswitch(row, &name, Some(Binding::param(p.addr.0.clone())));
@@ -157,6 +199,12 @@ pub fn surface_for_catalog(catalog: &Catalog, opts: &Options) -> Surface {
         }
     }
 
+    hug(&mut scene, root);
+    let inner = opts.max_width - 2.0 * t.padding * 1.5;
+    wrap_rows(&mut scene, top, inner);
+    if let Some(f) = footswitches {
+        wrap_rows(&mut scene, f, inner);
+    }
     hug(&mut scene, root);
     Surface { scene, controls }
 }

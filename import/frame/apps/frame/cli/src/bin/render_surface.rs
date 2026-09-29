@@ -2,7 +2,7 @@
 //!
 //! ```text
 //! render_surface --out surface.png [--theme stage-dark|daylight]
-//!                [--markup surface.fm] [--set amp/gain=0.8 ...] [--level -12] [--scale 2]
+//!                [--markup surface.fm] [--catalog catalog.json] [--set amp/gain=0.8 ...] [--level -12] [--scale 2]
 //! ```
 //! Builds a surface from the demo engine catalog, applies the given
 //! parameter values (normalized) and a meter level, and renders one frame.
@@ -33,11 +33,13 @@ fn run() -> Result<(), String> {
     let mut level = None;
     let mut scale = 1.0_f64;
     let mut markup: Option<String> = None;
+    let mut catalog_path: Option<String> = None;
     let mut args = std::env::args().skip(1);
     while let Some(a) = args.next() {
         match a.as_str() {
             "--out" => out = args.next(),
             "--markup" => markup = args.next(),
+            "--catalog" => catalog_path = args.next(),
             "--theme" => {
                 theme = match args.next().as_deref() {
                     Some("daylight") => Theme::daylight(),
@@ -56,7 +58,13 @@ fn run() -> Result<(), String> {
     }
     let out = out.ok_or("--out <png> is required")?;
 
-    let catalog = surface_memory::demo_catalog();
+    let catalog = match &catalog_path {
+        Some(path) => {
+            let text = std::fs::read_to_string(path).map_err(|e| format!("reading {path}: {e}"))?;
+            serde_json::from_str(&text).map_err(|e| format!("{path}: {e}"))?
+        }
+        None => surface_memory::demo_catalog(),
+    };
     let surface = match &markup {
         Some(path) => {
             let text = std::fs::read_to_string(path).map_err(|e| format!("reading {path}: {e}"))?;

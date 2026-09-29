@@ -10,7 +10,7 @@ pub mod templates;
 pub mod theme;
 pub mod widgets;
 
-pub use templates::{Options, hug, surface_for_catalog};
+pub use templates::{Options, hug, surface_for_catalog, wrap_rows};
 pub use theme::{ControlSize, Theme};
 pub use widgets::{Builder, sector_path};
 
@@ -83,6 +83,15 @@ mod tests {
             assert!(bound.iter().any(|b| b == addr), "{addr} missing: {bound:?}");
         }
         assert!(!bound.iter().any(|b| b == "amp/bass"), "unfeatured params are left out");
+    }
+
+    #[test]
+    fn wide_surfaces_wrap_into_rows() {
+        let surface = surface_for_catalog(&demo_catalog(), &Options { max_width: 700.0, ..Options::default() });
+        let root = surface.scene.node(surface.scene.pages()[0]).unwrap().children[0];
+        let w = surface.scene.node(root).unwrap().size.width;
+        assert!(w <= 700.0 + 1e-9, "root is {w} wide");
+        assert!(surface.scene.nodes.values().any(|n| n.name == "panels 2"), "panels wrapped");
     }
 
     #[test]

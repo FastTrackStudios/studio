@@ -1,7 +1,7 @@
 //! Talk to a live engine's `SurfaceEngine` and prove the round trip.
 //!
 //! ```text
-//! engine_probe [--url ws://127.0.0.1:4040/vox] [--rig guitar] [--set ADDR=VALUE]
+//! engine_probe [--url ws://127.0.0.1:4040/vox] [--rig guitar] [--set ADDR=VALUE] [--catalog-out catalog.json]
 //! ```
 //! Prints the catalog (groups, params, actions, streams), sets one param
 //! (normalized) and reads the value back through the engine.
@@ -14,11 +14,13 @@ fn main() {
     let mut url = "ws://127.0.0.1:4040/vox".to_string();
     let mut rig = Some("guitar".to_string());
     let mut set: Option<(String, f64)> = None;
+    let mut catalog_out: Option<String> = None;
     let mut args = std::env::args().skip(1);
     while let Some(a) = args.next() {
         match a.as_str() {
             "--url" => url = args.next().unwrap_or(url),
             "--rig" => rig = args.next().filter(|r| r != "none"),
+            "--catalog-out" => catalog_out = args.next(),
             "--set" => {
                 let kv = args.next().unwrap_or_default();
                 set = kv.split_once('=').and_then(|(k, v)| Some((k.to_string(), v.parse().ok()?)));
@@ -37,6 +39,11 @@ fn main() {
         for (group, params) in catalog.groups() {
             let names: Vec<String> = params.iter().map(|p| p.addr.0.rsplit('/').next().unwrap_or_default().to_string()).collect();
             println!("  [{}] {}", group.unwrap_or("-"), names.join(", "));
+        }
+        if let Some(path) = &catalog_out {
+            let json = serde_json::to_string_pretty(&catalog).map_err(|e| surface_runtime::sync::EngineError(e.to_string()))?;
+            std::fs::write(path, json).map_err(|e| surface_runtime::sync::EngineError(format!("{path}: {e}")))?;
+            println!("wrote catalog to {path}");
         }
         let values = Engine::values(&engine).await?;
         println!("{} values", values.len());
