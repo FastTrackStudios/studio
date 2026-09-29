@@ -9,6 +9,11 @@ publish = false
 figma-model = { path = "../../../features/figma/figma-model" }
 figma-rest = { path = "../../../features/figma/figma-rest" }
 render = { path = "../../../features/render/render" }
+document-proto = { path = "../../../features/document/document-proto", default-features = false }
+surface-proto = { path = "../../../features/surface/surface-proto" }
+surface-runtime = { path = "../../../features/surface/surface-runtime" }
+surface-widgets = { path = "../../../features/surface/surface-widgets" }
+surface-memory = { path = "../../../features/surface/surface-memory" }
 serde = { workspace = true }
 serde_json = { workspace = true }
 roxmltree = "0.20"

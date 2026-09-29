@@ -177,6 +177,14 @@ pub enum TextCase {
     SmallCapsForced,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum TextAlignment {
+    #[default]
+    Left,
+    Center,
+    Right,
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct TextStyleRun {
     pub text: String,
@@ -258,6 +266,9 @@ pub enum PaintPrimitive {
         text_case: TextCase,
         style_runs: Vec<TextStyleRun>,
         blend: BlendMix,
+        /// The text box width, for alignment.
+        width: f64,
+        align: TextAlignment,
     },
     Path {
         node_id: NodeId,

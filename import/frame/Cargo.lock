@@ -2157,6 +2157,7 @@ dependencies = [
 name = "frame-cli"
 version = "0.1.0"
 dependencies = [
+ "document-proto",
  "figma-model",
  "figma-rest",
  "image",
@@ -2168,6 +2169,10 @@ dependencies = [
  "serde",
  "serde_json",
  "skrifa 0.26.6",
+ "surface-memory",
+ "surface-proto",
+ "surface-runtime",
+ "surface-widgets",
  "vello",
  "winit",
 ]

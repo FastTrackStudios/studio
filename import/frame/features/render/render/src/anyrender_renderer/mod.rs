@@ -24,13 +24,13 @@ pub use transform::AffineTransform2D;
 pub use types::{
     BlendMix, EffectKind, FillPaint, GradientStop, ImageScaleMode, LayoutBox, NodeEffect,
     PaintPrimitive, RenderDiagnostics, Rgba, StrokeAlign, StrokeCap, StrokeJoin, StrokeStyle,
-    TextCase,
+    TextAlignment, TextCase,
 };
 
 #[cfg(feature = "anyrender")]
 pub use paint::{
     paint_into_scene, paint_into_scene_with, paint_into_scene_with_font,
-    paint_primitives_into_scene_with,
+    paint_primitives_into_scene_with, paint_scene_into,
 };
 #[cfg(feature = "anyrender")]
 pub use types::TextFontRef;

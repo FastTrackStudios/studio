@@ -251,6 +251,12 @@ impl ParamInfo {
     }
 
     #[must_use]
+    pub fn short(mut self, short_name: impl Into<String>) -> Self {
+        self.short_name = Some(short_name.into());
+        self
+    }
+
+    #[must_use]
     pub fn in_group(mut self, group: impl Into<String>) -> Self {
         self.group = Some(group.into());
         self

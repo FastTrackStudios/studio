@@ -32,6 +32,18 @@ pub fn paint_into_scene_with(
     paint_primitives_into_scene_with(scene, &primitives, scene_transform, text_font);
 }
 
+/// Paint a frame document (`root`'s subtree) into a vello scene.
+pub fn paint_scene_into(
+    scene: &mut vello::Scene,
+    doc: &document_proto::Scene,
+    root: document_proto::NodeId,
+    scene_transform: kurbo::Affine,
+    text_font: Option<TextFontRef<'_>>,
+) {
+    let primitives = super::scene_collect::build_scene_primitives(doc, root);
+    paint_primitives_into_scene_with(scene, &primitives, scene_transform, text_font);
+}
+
 pub fn paint_primitives_into_scene_with(
     scene: &mut vello::Scene,
     primitives: &[PaintPrimitive],
@@ -586,6 +598,8 @@ pub fn paint_primitives_into_scene_with(
                 text_case,
                 style_runs,
                 blend: _,
+                width: box_width,
+                align,
                 ..
             } => {
                 let (x, y, font_size, letter_spacing) = (
@@ -622,9 +636,35 @@ pub fn paint_primitives_into_scene_with(
                             .collect::<Vec<_>>()
                     };
 
-                    let mut line_idx: usize = 0;
-                    let mut pen_x: f64 = 0.0;
                     let charmap = font_ref.charmap();
+                    // Measure each line first so it can be aligned in its box.
+                    let mut line_widths: Vec<f64> = vec![0.0];
+                    for run in &runs {
+                        let size = Size::new(run.font_size.unwrap_or(font_size).max(1.0) as f32);
+                        let var_loc = font_ref.axes().location(std::iter::empty::<(&str, f32)>());
+                        let gm = font_ref.glyph_metrics(size, &var_loc);
+                        let spacing = run.letter_spacing.unwrap_or(letter_spacing);
+                        for ch in run.text.chars() {
+                            if ch == '\n' {
+                                line_widths.push(0.0);
+                                continue;
+                            }
+                            let gid = charmap.map(ch).unwrap_or_default();
+                            if let Some(w) = line_widths.last_mut() {
+                                *w += f64::from(gm.advance_width(gid).unwrap_or_default()) + spacing;
+                            }
+                        }
+                    }
+                    let line_start = |line: usize| -> f64 {
+                        let w = line_widths.get(line).copied().unwrap_or(0.0);
+                        match align {
+                            TextAlignment::Left => 0.0,
+                            TextAlignment::Center => ((*box_width - w) * 0.5).max(0.0),
+                            TextAlignment::Right => (*box_width - w).max(0.0),
+                        }
+                    };
+                    let mut line_idx: usize = 0;
+                    let mut pen_x: f64 = line_start(0);
                     for run in runs {
                         let run_size = run.font_size.unwrap_or(font_size).max(1.0);
                         let run_letter_spacing = run.letter_spacing.unwrap_or(letter_spacing) as f32;
@@ -648,7 +688,7 @@ pub fn paint_primitives_into_scene_with(
                         for ch in run.text.chars() {
                             if ch == '\n' {
                                 line_idx += 1;
-                                pen_x = 0.0;
+                                pen_x = line_start(line_idx);
                                 continue;
                             }
                             let gid = charmap.map(ch).unwrap_or_default();

@@ -426,6 +426,8 @@ fn collect_primitives_recursive(
                     text_case,
                     style_runs: parse_text_style_runs(&node.raw, content_opacity),
                     blend: primitive_blend.clone(),
+                    width,
+                    align: TextAlignment::Left,
                 });
             }
         }

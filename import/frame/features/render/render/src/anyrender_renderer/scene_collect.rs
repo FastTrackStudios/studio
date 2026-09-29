@@ -541,6 +541,12 @@ impl Cx<'_> {
                         text_case: text_case(text.text_case),
                         style_runs: text_style_runs(text, content_opacity),
                         blend: primitive_blend.clone(),
+                        width,
+                        align: match text.align {
+                            doc::TextAlign::Center => TextAlignment::Center,
+                            doc::TextAlign::Right => TextAlignment::Right,
+                            doc::TextAlign::Left | doc::TextAlign::Justified => TextAlignment::Left,
+                        },
                     });
                 }
             }

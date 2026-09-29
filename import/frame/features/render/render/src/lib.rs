@@ -17,5 +17,8 @@ pub use anyrender_renderer::{
 #[cfg(feature = "anyrender")]
 pub use anyrender_renderer::{
     paint_into_scene, paint_into_scene_with, paint_into_scene_with_font,
-    paint_primitives_into_scene_with, TextFontRef,
+    paint_primitives_into_scene_with, paint_scene_into, TextFontRef,
 };
+
+#[cfg(feature = "anyrender")]
+pub mod offscreen;
