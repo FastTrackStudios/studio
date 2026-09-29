@@ -5,9 +5,9 @@
 //! - **Digital** — a 1U-style rack delay line: a VFD reading both times in
 //!   ms *and* as note values, TAP, FREE/SYNC, LINK, an echo train drawn on
 //!   the glass.
-//! - **Tape** — a tape echo: two reels, the tape across a record head and
-//!   three playback heads you switch in (each head lights), a VU on the
-//!   record level, cream enamel with walnut cheeks.
+//! - **Tape** — a multi-head tape echo: the tape loop past a record head and
+//!   three playback heads you switch in (each head lights), a small VU on the
+//!   record level, chrome-skirted knobs on a black and green plate in tolex.
 //! - **Analog** — a bucket-brigade stompbox: green enclosure, the BBD chip
 //!   in a window, bypass and tap footswitches.
 //! - **Pitch** — a pitch-shifting delay: repeats climbing a staircase on a

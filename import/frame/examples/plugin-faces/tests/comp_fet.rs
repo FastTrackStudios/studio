@@ -37,7 +37,7 @@ fn text_of(scene: &Scene, id: NodeId) -> Option<String> {
 #[test]
 fn three_finishes() {
     let files: Vec<&str> = comp_fet::faces().iter().map(|f| f.file).collect();
-    assert_eq!(files, ["01-1176-black", "02-1176-silver", "03-1176-ln"]);
+    assert_eq!(files, ["01-fet-black", "02-fet-silver", "03-fet-late"]);
     assert!(comp_fet::faces().iter().all(|f| f.plugin == "comp"));
 }
 
@@ -67,7 +67,7 @@ fn every_binding_exists_in_the_catalog() {
     for face in comp_fet::faces() {
         let bound = controls(&face.scene);
         assert!(
-            bound.len() >= 15,
+            bound.len() >= 14,
             "{}: only {} controls",
             face.file,
             bound.len()

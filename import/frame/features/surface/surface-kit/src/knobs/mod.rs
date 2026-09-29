@@ -24,7 +24,9 @@
 //! rotation-invariant (centred on the shaft) with the directional light laid
 //! over it from the fixed overlay above.
 
+pub(crate) mod chrome_skirt;
 pub(crate) mod concentric;
+pub(crate) mod knurled_cap;
 pub mod spec;
 
 use document_proto::{

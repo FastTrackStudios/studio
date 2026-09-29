@@ -3,6 +3,7 @@
 //! `button_parts`, `switches`, `lever`) — see `KIT.md`.
 
 mod buttons;
+mod key_column;
 pub(crate) mod parts;
 mod levers;
 mod switches;
@@ -14,5 +15,6 @@ pub(crate) fn defs() -> Vec<ComponentDef> {
     let mut all = buttons::defs();
     all.extend(switches::defs());
     all.extend(levers::defs());
+    all.extend(key_column::defs());
     all
 }
