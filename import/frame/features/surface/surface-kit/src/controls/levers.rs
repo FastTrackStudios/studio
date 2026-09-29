@@ -6,10 +6,10 @@
 //! linear levers (`Fader`), drawn in the same hardware idiom.
 
 use document_proto::{NodeId, TextAlign};
-use surface_proto::{Control, ControlKind, Orientation, SlotRole};
+use surface_proto::{ControlKind, Orientation, SlotRole};
 use surface_widgets::Builder;
 
-use super::parts::{PANEL_INK, ink, lin, shade, text_w, tint};
+use super::parts::{PANEL_INK, cased, ink as parts_ink, lin, shade, text_w, tint};
 use crate::draw;
 use crate::registry::{ComponentDef, Family, Place};
 
@@ -48,15 +48,21 @@ fn paddle_path(c: f64, k: f64, dx: f64, dy: f64) -> String {
 /// The Pultec frequency lever: a `Knob` whose sweep is the lever's ±62°,
 /// the paddle its `Needle`, the legends printed in an arc above.
 fn pultec(b: &mut Builder<'_>, parent: NodeId, p: &Place) -> NodeId {
+    let case = p.case();
+    #[allow(clippy::too_many_arguments)]
+    let ink = |name: &str, s: &str, x: f64, cy: f64, w: f64, size: f64, color: &str, align: TextAlign, weight: f64| {
+        cased(parts_ink(name, s, x, cy, w, size, color, align, weight), case)
+    };
     let s = p.size.unwrap_or(110.0);
     let k = s / 110.0;
-    let ink_c = if p.variant.as_deref() == Some("dark") { "#1e2328" } else { "#e6ecf0" };
+    let ink_c = p.ink_color(if p.variant.as_deref() == Some("dark") { "#1e2328" } else { "#e6ecf0" });
+    let ink_c = ink_c.as_str();
     let opts: Vec<String> = match &p.options {
         Some(o) if !o.is_empty() => o.clone(),
         _ => (1..=3).map(|i| i.to_string()).collect(),
     };
     let n = opts.len();
-    let sweep = if n < 2 { 0.0 } else { 2.0 * LEVER_SWEEP_DEG };
+    let sweep = p.sweep.unwrap_or(if n < 2 { 0.0 } else { 2.0 * LEVER_SWEEP_DEG });
     // Headroom above the box for the unit caption.
     let head = 12.0 * k;
     let root = b.add(parent, draw::frame(&p.name, 0.0, 0.0, s, s + head));
@@ -69,8 +75,11 @@ fn pultec(b: &mut Builder<'_>, parent: NodeId, p: &Place) -> NodeId {
         let w = text_w(o, 10.0 * k) + 6.0;
         b.add(root, ink("position", o, lx - w / 2.0, ly, w, 10.0 * k, ink_c, TextAlign::Center, 700.0));
     }
-    // The paddle turns about the box centre (the pivot).
-    let paddle = b.add(root, draw::frame("paddle", 0.0, head, s, s));
+    // The paddle turns about the pivot: it fills a square frame centred on
+    // it (a `Needle` turns about its parent's centre, and the root is
+    // taller than it is wide).
+    let pivot = b.add(root, draw::frame("pivot", 0.0, head, s, s));
+    let paddle = b.add(pivot, draw::frame("paddle", 0.0, 0.0, s, s));
     b.add(paddle, draw::path("cast", 0.0, 0.0, s, s, paddle_path(c, k, 1.2, 2.0), draw::solid("#0000006b")));
     let body = draw::path("bar", 0.0, 0.0, s, s, paddle_path(c, k, 0.0, 0.0), lin(90.0, &[(0.0, "#3a3a41".into()), (0.35, "#232328".into()), (1.0, "#101013".into())]));
     b.add(paddle, draw::stroked(body, "#00000099", (0.6 * k).max(0.5)));
@@ -82,9 +91,12 @@ fn pultec(b: &mut Builder<'_>, parent: NodeId, p: &Place) -> NodeId {
     // Pivot boss.
     b.add(root, draw::circle("boss", c, head + c, 7.0 * k, draw::radial_at(0.4, 0.35, 0.7, &[(0.0, "#2e2e33"), (1.0, "#141416")])));
     b.add(root, draw::circle("screw", c, head + c, 2.4 * k, draw::solid("#ffffff24")));
-    let mut ctl = Control::new(ControlKind::Knob { sweep_degrees: sweep }).slot(SlotRole::Needle, paddle.0).slot(SlotRole::Label, label.0);
-    ctl.binding.clone_from(&p.binding);
+    let ctl = p.control(ControlKind::Knob { sweep_degrees: sweep }).slot(SlotRole::Needle, paddle.0).slot(SlotRole::Label, label.0);
     b.controls.insert(root, ctl);
+    if let Some(touch) = p.touch {
+        // The paddle's reach: 26 of the box's 55 half-units.
+        crate::registry::tighten(b, root, (c, head + c), 60.0 * k, touch);
+    }
     root
 }
 
@@ -102,6 +114,12 @@ fn cap_colors(variant: Option<&str>) -> (&'static str, &'static str) {
 /// A long-throw console fader: a dark slot with a printed scale either
 /// side, and a grooved cap with a white index line as the `Thumb`.
 fn fader(b: &mut Builder<'_>, parent: NodeId, p: &Place) -> NodeId {
+    let case = p.case();
+    #[allow(clippy::too_many_arguments)]
+    let ink = |name: &str, s: &str, x: f64, cy: f64, w: f64, size: f64, color: &str, align: TextAlign, weight: f64| {
+        cased(parts_ink(name, s, x, cy, w, size, color, align, weight), case)
+    };
+    let inkc = p.ink_color(PANEL_INK);
     let travel = p.size.unwrap_or(160.0);
     let k = travel / 160.0;
     let (body_c, line_c) = cap_colors(p.variant.as_deref());
@@ -114,9 +132,9 @@ fn fader(b: &mut Builder<'_>, parent: NodeId, p: &Place) -> NodeId {
     // Scale: ticks either side, majors every quarter.
     for i in 0..=20 {
         let y = top + travel * f64::from(i) / 20.0;
-        let (len, a) = if i % 5 == 0 { (8.0 * k, PANEL_INK) } else { (4.0 * k, "#e6e2d8a0") };
-        b.add(root, draw::rect("tick", x0 - 7.0 * k - len, y - 0.5 * k, len, k.max(1.0), draw::solid(a)));
-        b.add(root, draw::rect("tick", x0 + 7.0 * k, y - 0.5 * k, len, k.max(1.0), draw::solid(a)));
+        let (len, a) = if i % 5 == 0 { (8.0 * k, inkc.clone()) } else { (4.0 * k, super::parts::alpha(&inkc, 0.63)) };
+        b.add(root, draw::rect("tick", x0 - 7.0 * k - len, y - 0.5 * k, len, k.max(1.0), draw::solid(&a)));
+        b.add(root, draw::rect("tick", x0 + 7.0 * k, y - 0.5 * k, len, k.max(1.0), draw::solid(&a)));
     }
     let slot = draw::rect("slot", x0 - 2.5 * k, top - 2.0 * k, 5.0 * k, travel + 4.0 * k, draw::solid("#060607"));
     b.add(root, draw::with_effects(draw::rounded(slot, 2.5 * k), vec![draw::inner_shadow("#ffffff1f", 0.0, -k, 0.0)]));
@@ -131,9 +149,8 @@ fn fader(b: &mut Builder<'_>, parent: NodeId, p: &Place) -> NodeId {
         b.add(cap, draw::rect("groove", 2.0 * k, y - 0.6 * k, cap_w - 4.0 * k, 1.2 * k, draw::solid("#00000073")));
     }
     b.add(cap, draw::rect("index", 1.5 * k, cap_h / 2.0 - 1.0 * k, cap_w - 3.0 * k, 2.0 * k, draw::solid(line_c)));
-    let label = b.add(root, ink("label", p.legend.as_deref().unwrap_or(""), 0.0, travel + cap_h + 6.0 * k + lab_h / 2.0, w, 9.0 * k, PANEL_INK, TextAlign::Center, 700.0));
-    let mut c = Control::new(ControlKind::Fader { orientation: Orientation::Vertical }).slot(SlotRole::Thumb, cap.0).slot(SlotRole::Label, label.0);
-    c.binding.clone_from(&p.binding);
+    let label = b.add(root, ink("label", p.legend.as_deref().unwrap_or(""), 0.0, travel + cap_h + 6.0 * k + lab_h / 2.0, w, 9.0 * k, &inkc, TextAlign::Center, 700.0));
+    let c = p.control(ControlKind::Fader { orientation: Orientation::Vertical }).slot(SlotRole::Thumb, cap.0).slot(SlotRole::Label, label.0);
     b.controls.insert(root, c);
     root
 }
@@ -141,13 +158,19 @@ fn fader(b: &mut Builder<'_>, parent: NodeId, p: &Place) -> NodeId {
 /// A horizontal slide lever: a slot in a recessed plate, a ridged grip as
 /// the `Thumb`.
 fn slide(b: &mut Builder<'_>, parent: NodeId, p: &Place) -> NodeId {
+    let case = p.case();
+    #[allow(clippy::too_many_arguments)]
+    let ink = |name: &str, s: &str, x: f64, cy: f64, w: f64, size: f64, color: &str, align: TextAlign, weight: f64| {
+        cased(parts_ink(name, s, x, cy, w, size, color, align, weight), case)
+    };
+    let inkc = p.ink_color(PANEL_INK);
     let w = p.size.unwrap_or(120.0);
     let k = w / 120.0;
     let (body_c, line_c) = cap_colors(p.variant.as_deref());
     let (grip_w, grip_h) = (14.0 * k, 26.0 * k);
     let lab_h = (9.0 * k * 1.4).ceil();
     let root = b.add(parent, draw::frame(&p.name, 0.0, 0.0, w, lab_h + 4.0 * k + grip_h));
-    let label = b.add(root, ink("label", p.legend.as_deref().unwrap_or(""), 0.0, lab_h / 2.0, w, 9.0 * k, PANEL_INK, TextAlign::Center, 700.0));
+    let label = b.add(root, ink("label", p.legend.as_deref().unwrap_or(""), 0.0, lab_h / 2.0, w, 9.0 * k, &inkc, TextAlign::Center, 700.0));
     let top = lab_h + 4.0 * k;
     let plate = draw::rect("plate", 0.0, top + grip_h * 0.3, w, grip_h * 0.4, lin(180.0, &[(0.0, "#141416".into()), (1.0, "#2a2a2e".into())]));
     b.add(root, draw::with_effects(draw::rounded(plate, grip_h * 0.2), vec![draw::inner_shadow("#000000b3", 0.0, k, 2.0 * k)]));
@@ -161,8 +184,7 @@ fn slide(b: &mut Builder<'_>, parent: NodeId, p: &Place) -> NodeId {
         b.add(grip, draw::rect("ridge", grip_w / 2.0 + i * 3.5 * k - 0.6 * k, 3.0 * k, 1.2 * k, grip_h - 6.0 * k, draw::solid("#00000066")));
     }
     b.add(grip, draw::rect("index", grip_w / 2.0 - k, 2.0 * k, 2.0 * k, grip_h - 4.0 * k, draw::solid(line_c)));
-    let mut c = Control::new(ControlKind::Fader { orientation: Orientation::Horizontal }).slot(SlotRole::Thumb, grip.0).slot(SlotRole::Label, label.0);
-    c.binding.clone_from(&p.binding);
+    let c = p.control(ControlKind::Fader { orientation: Orientation::Horizontal }).slot(SlotRole::Thumb, grip.0).slot(SlotRole::Label, label.0);
     b.controls.insert(root, c);
     root
 }

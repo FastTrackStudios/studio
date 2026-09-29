@@ -112,7 +112,9 @@ fn run() -> Result<(), String> {
         c
     };
 
-    let catalog = surface_memory::demo_catalog();
+    let mut catalog = surface_memory::demo_catalog();
+    // A gain-reduction stream for the meters that read one.
+    catalog.streams.push(surface_proto::StreamInfo { id: EntryId::new("comp/gr"), name: "GR".into(), kind: surface_proto::StreamKind::GainReduction, rate_hz: 30.0 });
     if swatch {
         let r = row(&mut b, root, "linear");
         for angle in [0.0, 45.0, 90.0, 135.0, 180.0, 270.0] {
@@ -153,14 +155,36 @@ fn run() -> Result<(), String> {
             let c = cell(&mut b, r, def.id);
             let binding = match def.binds {
                 "level stream" => Binding { source: Source::Stream { id: EntryId::new("out_level"), channel: Some(0) }, ..Binding::stream("out_level") },
+                "scalar stream" => Binding::stream("tempo"),
                 "choice param" => Binding::param("amp/channel"),
                 "toggle param" => Binding::param(if i % 2 == 0 { "drive/on" } else { "delay/on" }),
                 "action" => Binding::action("tap_tempo"),
                 "none" => Binding::param(""),
                 _ => Binding::param("delay/mix"),
             };
-            let place = surface_kit::Place { binding: (def.binds != "none").then_some(binding), ..surface_kit::Place::new(def.title) };
-            surface_kit::place(&mut b, c, def.id, &place)?;
+            let place = surface_kit::Place {
+                binding: (def.binds != "none").then_some(binding),
+                inner: Some(Box::new(surface_kit::Place::new("Bass").bind(Binding::param("amp/bass")).legend("Bass"))),
+                ..surface_kit::Place::new(def.title)
+            };
+            // In a cell the size of its drawing: a tight box's print hangs out.
+            surface_kit::place_in_cell(&mut b, c, def.id, &place)?;
+        }
+        // The options each family takes, shown once: inks, tight boxes,
+        // stepped sweeps, reversed banks, gain reduction, ladders.
+        let extras = variations(family.as_deref());
+        if !extras.is_empty() {
+            let r = row(&mut b, root, "variations");
+            for (title, id, place, light) in extras {
+                let c = cell(&mut b, r, &title);
+                if light {
+                    // A light panel, for dark ink.
+                    if let Some(n) = b.scene.node_mut(c) {
+                        n.fills = vec![draw::solid("#c9c6bd")];
+                    }
+                }
+                surface_kit::place_in_cell(&mut b, c, id, &place)?;
+            }
         }
     }
     hug(&mut scene, root);
@@ -177,6 +201,8 @@ fn run() -> Result<(), String> {
         ParamValue { addr: surface_proto::ParamAddr::new("drive/on"), value: 1.0 },
     ]);
     rt.apply_frame(StreamFrame { id: EntryId::new("out_level"), values: vec![-9.0, -12.0] }, 0.0);
+    rt.apply_frame(StreamFrame { id: EntryId::new("tempo"), values: vec![180.0] }, 0.0);
+    rt.apply_frame(StreamFrame { id: EntryId::new("in_level"), values: vec![-5.0] }, 0.0);
     let frame = rt.frame(0.0);
     let size = frame.node(frame.node(frame.pages()[0]).and_then(|p| p.children.first().copied()).ok_or("empty")?).ok_or("no root")?.size;
     let (w, h) = ((size.width * scale).ceil() as u32, (size.height * scale).ceil() as u32);
@@ -194,4 +220,62 @@ fn run() -> Result<(), String> {
     image::RgbaImage::from_raw(px.width, px.height, px.rgba).ok_or("bad pixels")?.save(&out).map_err(|e| format!("{out}: {e}"))?;
     println!("{{\"ok\":true,\"out\":\"{out}\",\"width\":{w},\"height\":{h}}}");
     Ok(())
+}
+
+/// Extra cells showing what a family's `Place` options do:
+/// `(title, component, place, on a light panel)`.
+#[cfg(feature = "anyrender")]
+fn variations(family: Option<&str>) -> Vec<(String, &'static str, surface_kit::Place, bool)> {
+    use surface_kit::{Ink, Place, TOUCH_MIN};
+    use surface_proto::Binding;
+    let mix = || Binding::param("delay/mix");
+    let choice = || Binding::param("amp/channel");
+    let level = || Binding::stream("in_level");
+    let mut v: Vec<(String, &'static str, Place, bool)> = Vec::new();
+    let all = family.is_none();
+    if all || family == Some("knob") {
+        v.push(("dark ink, kept case".into(), "knob.bakelite", Place::new("Trim").bind(mix()).legend("Trim dB").ink(Ink::Dark).keep_case(), true));
+        v.push(("touch(44): tight box".into(), "knob.collet", Place::new("Freq").size(36.0).bind(mix()).legend("Freq").touch(TOUCH_MIN), false));
+        v.push(("stepped by options".into(), "knob.chicken_head", Place::new("Mode").bind(choice()).legend("Mode").options(&["Clean", "Crunch", "Lead"]), false));
+        v.push(("sweep 270, red ink".into(), "knob.neve", Place::new("Gain").bind(mix()).legend("Gain").sweep(270.0).ink(Ink::Color("#d0342c".into())), false));
+        v.push((
+            "concentric grey_black".into(),
+            "knob.concentric",
+            Place::new("Freq").bind(mix()).legend("kHz").keep_case().variant("grey_black").inner(Place::new("Gain").bind(Binding::param("amp/bass")).legend("Gain")),
+            false,
+        ));
+    }
+    if all || family == Some("meter") {
+        v.push(("VU on GR, no data: rests at 0".into(), "meter.vu_ivory", Place::new("GR").bind(Binding::stream("comp/gr")).size(180.0), false));
+        v.push(("ladder: gr (5 dB), reversed".into(), "meter.led_ladder", Place::new("GR").bind(level()).options(&["gr"]).reversed().size(200.0), false));
+        v.push((
+            "column with scale".into(),
+            "meter.led_column",
+            Place::new("In").bind(level()).options(&["floor=-30", "ceiling=6", "segments=12"]).scale(&["-30", "-18", "-6", "+6"]),
+            false,
+        ));
+        v.push(("bar, dark-ink scale".into(), "meter.led_bar", Place::new("Out").bind(level()).scale(&["-40", "-20", "0"]).variant("blue").ink(Ink::Dark), true));
+    }
+    if all || family == Some("button") {
+        v.push((
+            "bank reversed, long legends".into(),
+            "button.square_bank",
+            Place::new("Algo").bind(choice()).options(&["Hall", "Shimmer", "Spectral"]).reversed().variant("yellow"),
+            false,
+        ));
+        v.push(("push-in bank, dark ink".into(), "button.push_in_bank", Place::new("Ratio").bind(choice()).options(&["4", "8", "12"]).ink(Ink::Dark), true));
+    }
+    if all || family == Some("switch") {
+        v.push((
+            "footswitch: momentary, blue".into(),
+            "switch.footswitch",
+            Place::new("Tap").bind(Binding::param("delay/on")).variant("blue").options(&["momentary"]).legend("Tap"),
+            false,
+        ));
+        v.push(("rotary: sweep 90, dark ink".into(), "switch.rotary", Place::new("Mode").bind(choice()).options(&["A", "B", "C"]).sweep(90.0).ink(Ink::Dark).legend("Mode"), true));
+    }
+    if all || family == Some("lever") {
+        v.push(("pultec, dark ink".into(), "lever.pultec", Place::new("CPS").bind(choice()).options(&["20", "30", "60"]).ink(Ink::Dark).legend("CPS"), true));
+    }
+    v
 }

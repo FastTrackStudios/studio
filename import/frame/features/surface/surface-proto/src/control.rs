@@ -11,7 +11,7 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::curve::Curve;
-use crate::param::{Catalog, EntryId, ParamAddr, ParamKind, StreamKind};
+use crate::param::{Catalog, EntryId, ParamAddr, ParamKind, StreamKind, ValueFormat};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, Facet)]
 #[repr(u8)]
@@ -214,6 +214,9 @@ pub enum SlotRole {
     Led,
     /// Peak-hold marker on meters.
     PeakHold,
+    /// Its opacity follows the value (0 = dark, 1 = full): a lamp whose
+    /// brightness is a stream (an LFO rate lamp). Emission scales with it.
+    Glow,
 }
 
 /// "Node `node` plays `role`." `node` is a design node id (uuid).
@@ -234,12 +237,74 @@ pub struct Control {
     /// Position (0..1) a reset returns to; `None` = the parameter default.
     pub default: Option<f64>,
     pub slots: Vec<Slot>,
+    /// How `Value` slots print the value (decimals, unit, note name, one
+    /// label per step); `None` = the parameter's (or stream's) own display.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[facet(default)]
+    pub format: Option<ValueFormat>,
+    /// A meter whose source follows a choice param — the 1176's meter
+    /// switch showing GR, +4 or +8 output, or nothing. Overrides the
+    /// binding's stream while its param selects a tap.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[facet(default)]
+    pub select: Option<SourceSelect>,
+}
+
+/// One stream a switched meter can read.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Facet)]
+pub struct MeterTap {
+    pub stream: EntryId,
+    pub channel: Option<u8>,
+    /// Added to the stream's dB before the meter reads it: a VU on its
+    /// `+4` range reads the level with `offset_db = -4`.
+    pub offset_db: f64,
+}
+
+impl MeterTap {
+    #[must_use]
+    pub fn new(stream: impl Into<String>) -> Self {
+        Self { stream: EntryId::new(stream), channel: None, offset_db: 0.0 }
+    }
+
+    #[must_use]
+    pub fn channel(mut self, ch: u8) -> Self {
+        self.channel = Some(ch);
+        self
+    }
+
+    #[must_use]
+    pub fn offset(mut self, db: f64) -> Self {
+        self.offset_db = db;
+        self
+    }
+}
+
+/// A meter's source switched by a choice (or toggle) param: option `i`
+/// reads `taps[i]`; `None` (or an option past the end) rests the meter —
+/// the switch's OFF.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Facet)]
+pub struct SourceSelect {
+    pub param: ParamAddr,
+    pub taps: Vec<Option<MeterTap>>,
+}
+
+impl SourceSelect {
+    #[must_use]
+    pub fn new(param: impl Into<String>, taps: Vec<Option<MeterTap>>) -> Self {
+        Self { param: ParamAddr::new(param), taps }
+    }
+
+    /// The tap option `index` selects.
+    #[must_use]
+    pub fn tap(&self, index: usize) -> Option<&MeterTap> {
+        self.taps.get(index).and_then(Option::as_ref)
+    }
 }
 
 impl Control {
     #[must_use]
     pub fn new(kind: ControlKind) -> Self {
-        Self { kind, binding: None, y_binding: None, midi: None, default: None, slots: Vec::new() }
+        Self { kind, binding: None, y_binding: None, midi: None, default: None, slots: Vec::new(), format: None, select: None }
     }
 
     #[must_use]
@@ -251,6 +316,12 @@ impl Control {
     #[must_use]
     pub fn slot(mut self, role: SlotRole, node: Uuid) -> Self {
         self.slots.push(Slot { role, node });
+        self
+    }
+
+    #[must_use]
+    pub fn formatted(mut self, format: ValueFormat) -> Self {
+        self.format = Some(format);
         self
     }
 
@@ -333,6 +404,20 @@ impl Control {
         check(b);
         if let Some(y) = &self.y_binding {
             check(y);
+        }
+        if let Some(sel) = &self.select {
+            match catalog.param(&sel.param) {
+                None => issues.push(BindingIssue::UnknownParam { addr: sel.param.clone() }),
+                Some(p) if !matches!(p.kind, ParamKind::Choice { .. } | ParamKind::Toggle) => {
+                    issues.push(BindingIssue::Mismatch { detail: format!("meter source switched by continuous parameter `{}`", sel.param) });
+                }
+                Some(_) => {}
+            }
+            for tap in sel.taps.iter().flatten() {
+                if catalog.stream(&tap.stream).is_none() {
+                    issues.push(BindingIssue::UnknownStream { id: tap.stream.clone() });
+                }
+            }
         }
         issues
     }

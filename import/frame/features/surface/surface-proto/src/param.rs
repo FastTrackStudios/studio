@@ -179,24 +179,141 @@ impl Range {
         self.quantize(n.clamp(0.0, 1.0))
     }
 
-    /// Human readout: `"440 Hz"`, `"-6.0 dB"`, `"2.50 s"`, `"35 %"`.
+    /// Human readout: `"440 Hz"`, `"-6.0 dB"`, `"2.50 s"`, `"35 %"`. A
+    /// stepped linear range prints as many decimals as its step needs
+    /// (`0.5`-dB clicks read `-1.5 dB`; whole steps read whole).
     #[must_use]
     pub fn format(&self, real: f64) -> String {
-        let (value, unit) = match self.unit {
-            Unit::Hz if real.abs() >= 1000.0 => (real / 1000.0, "kHz".to_string()),
-            Unit::Seconds if real.abs() < 1.0 => (real * 1000.0, "ms".to_string()),
-            ref u => (real, u.suffix().to_string()),
+        self.format_as(real, &ValueFormat::default())
+    }
+
+    /// [`Self::format`] under an explicit [`ValueFormat`]: fixed decimals,
+    /// another unit (or none), the note a pitch is, or one label per step.
+    #[must_use]
+    pub fn format_as(&self, real: f64, f: &ValueFormat) -> String {
+        match &f.style {
+            FormatStyle::Labels { labels } if !labels.is_empty() => {
+                let last = labels.len() - 1;
+                let i = (self.to_normalized(real) * last as f64).round() as usize;
+                return labels[i.min(last)].clone();
+            }
+            FormatStyle::Note => {
+                let midi = match self.unit {
+                    Unit::Hz if real > 0.0 => 69.0 + 12.0 * (real / 440.0).log2(),
+                    _ => real,
+                };
+                return note_name(midi);
+            }
+            _ => {}
+        }
+        let (value, unit, converted) = match (&f.unit, &self.unit) {
+            (Some(u), _) => (real, u.clone(), false),
+            (None, Unit::Hz) if real.abs() >= 1000.0 => (real / 1000.0, "kHz".to_string(), true),
+            (None, Unit::Seconds) if real.abs() < 1.0 => (real * 1000.0, "ms".to_string(), true),
+            (None, u) => (real, u.suffix().to_string(), false),
         };
-        let text = if self.steps.is_some() {
-            format!("{value:.0}")
-        } else if value.abs() >= 100.0 {
-            format!("{value:.0}")
-        } else if value.abs() >= 10.0 {
-            format!("{value:.1}")
-        } else {
-            format!("{value:.2}")
+        let decimals = f.decimals.map(usize::from).or_else(|| if converted { None } else { self.step_decimals() });
+        let text = match decimals {
+            Some(d) => format!("{value:.d$}"),
+            None if self.steps.is_some() => format!("{value:.0}"),
+            None if value.abs() >= 100.0 => format!("{value:.0}"),
+            None if value.abs() >= 10.0 => format!("{value:.1}"),
+            None => format!("{value:.2}"),
+        };
+        // `-0.0` reads as a glitch on a panel.
+        let text = match text.strip_prefix('-') {
+            Some(rest) if rest.chars().all(|c| c == '0' || c == '.') => rest.to_string(),
+            _ => text,
         };
         if unit.is_empty() { text } else { format!("{text} {unit}") }
+    }
+
+    /// Decimals a stepped range's step needs (`None` = not stepped). Only a
+    /// linear range has one step size; a stepped curve prints whole values.
+    fn step_decimals(&self) -> Option<usize> {
+        let n = self.steps.filter(|s| *s >= 2)?;
+        if !matches!(self.scale, Scale::Linear) {
+            return Some(0);
+        }
+        let step = ((self.max - self.min) / f64::from(n - 1)).abs();
+        let whole_at = |d: i32| {
+            let k = step * 10f64.powi(d);
+            (k - k.round()).abs() < 1e-6 * k.max(1.0)
+        };
+        Some((0..=3).find(|d| whole_at(*d)).unwrap_or(3) as usize)
+    }
+}
+
+/// `"A4"`, `"C#3"` for a MIDI note number (rounded to the nearest note).
+#[must_use]
+pub fn note_name(midi: f64) -> String {
+    const NAMES: [&str; 12] = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
+    let n = midi.round() as i64;
+    format!("{}{}", NAMES[n.rem_euclid(12) as usize], n.div_euclid(12) - 1)
+}
+
+/// How a readout prints a value. Carried on a [`Control`](crate::Control)
+/// (`Control::format`), so one param can read `-6 dB` on a knob and
+/// `-6.0` in a window.
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize, Facet)]
+pub struct ValueFormat {
+    /// Fixed decimals (`None` = the range's own: its step, else by size).
+    pub decimals: Option<u8>,
+    /// A unit suffix instead of the range's (`Some("")` prints none).
+    pub unit: Option<String>,
+    pub style: FormatStyle,
+}
+
+/// What a readout prints.
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize, Facet)]
+#[repr(u8)]
+pub enum FormatStyle {
+    /// The number (and unit).
+    #[default]
+    Number,
+    /// The note it is: a `Hz` value as its nearest note, anything else as
+    /// a MIDI note number (`69` → `A4`).
+    Note,
+    /// One label per position, evenly over the range: note divisions, a
+    /// stepped knob whose positions have names but isn't a choice param.
+    Labels { labels: Vec<String> },
+}
+
+impl ValueFormat {
+    #[must_use]
+    pub fn decimals(d: u8) -> Self {
+        Self { decimals: Some(d), ..Self::default() }
+    }
+
+    #[must_use]
+    pub fn note() -> Self {
+        Self { style: FormatStyle::Note, ..Self::default() }
+    }
+
+    #[must_use]
+    pub fn labels(labels: &[&str]) -> Self {
+        Self { style: FormatStyle::Labels { labels: labels.iter().map(ToString::to_string).collect() }, ..Self::default() }
+    }
+
+    /// Print `unit` instead of the range's own (`""` = none).
+    #[must_use]
+    pub fn unit(mut self, unit: impl Into<String>) -> Self {
+        self.unit = Some(unit.into());
+        self
+    }
+
+    #[must_use]
+    pub fn with_decimals(mut self, d: u8) -> Self {
+        self.decimals = Some(d);
+        self
+    }
+
+    /// A level in dB (a meter's readout): `decimals` (default 1) and this
+    /// format's unit (default `dB`).
+    #[must_use]
+    pub fn db(&self, db: f64) -> String {
+        let f = Self { decimals: Some(self.decimals.unwrap_or(1)), style: FormatStyle::Number, unit: self.unit.clone() };
+        Range::linear(-1.0e9, 1.0e9, Unit::Db).format_as(db, &f)
     }
 }
 
@@ -298,6 +415,24 @@ impl ParamInfo {
     /// The display string for a normalized value.
     #[must_use]
     pub fn display(&self, normalized: f64) -> String {
+        self.display_as(normalized, None)
+    }
+
+    /// [`Self::display`] under a readout's own [`ValueFormat`]. A toggle or
+    /// choice keeps its words unless the format names labels.
+    #[must_use]
+    pub fn display_as(&self, normalized: f64, format: Option<&ValueFormat>) -> String {
+        if let Some(f) = format {
+            match (&f.style, &self.kind) {
+                (FormatStyle::Labels { labels }, _) if !labels.is_empty() => {
+                    let last = labels.len() - 1;
+                    let i = (normalized.clamp(0.0, 1.0) * last as f64).round() as usize;
+                    return labels[i.min(last)].clone();
+                }
+                (_, ParamKind::Continuous) => return self.range.format_as(self.range.to_real(normalized), f),
+                _ => {}
+            }
+        }
         match &self.kind {
             ParamKind::Toggle => if normalized >= 0.5 { "On" } else { "Off" }.to_string(),
             ParamKind::Choice { options } if !options.is_empty() => {
@@ -428,6 +563,39 @@ mod tests {
         assert_eq!(Range::log(20.0, 20_000.0, Unit::Hz).format(2500.0), "2.50 kHz");
         assert_eq!(Range::linear(-60.0, 12.0, Unit::Db).format(-6.0), "-6.00 dB");
         assert_eq!(Range::linear(0.0, 10.0, Unit::Seconds).format(0.25), "250 ms");
+    }
+
+    #[test]
+    fn a_stepped_range_prints_the_decimals_its_step_needs() {
+        let half_db = Range { steps: Some(49), ..Range::linear(-12.0, 12.0, Unit::Db) };
+        assert_eq!(half_db.format(-1.5), "-1.5 dB");
+        assert_eq!(half_db.format(3.0), "3.0 dB");
+        let whole = Range { steps: Some(101), ..Range::linear(0.0, 100.0, Unit::Percent) };
+        assert_eq!(whole.format(35.0), "35 %");
+        let tenths = Range { steps: Some(21), ..Range::linear(0.0, 2.0, Unit::Ratio) };
+        assert_eq!(tenths.format(0.3), "0.3 :1");
+        assert_eq!(Range { steps: Some(5), ..Range::linear(-2.0, 2.0, Unit::Db) }.format(-0.0), "0 dB");
+    }
+
+    #[test]
+    fn a_readout_format_overrides_decimals_unit_and_style() {
+        let r = Range::linear(0.0, 10.0, Unit::Seconds);
+        assert_eq!(r.format_as(2.6, &ValueFormat::decimals(0)), "3 s");
+        assert_eq!(r.format_as(2.5, &ValueFormat::decimals(1).unit("")), "2.5");
+        assert_eq!(r.format_as(0.25, &ValueFormat::default().unit("sec")), "0.25 sec", "an explicit unit is not converted");
+        let hz = Range::log(20.0, 20_000.0, Unit::Hz);
+        assert_eq!(hz.format_as(440.0, &ValueFormat::note()), "A4");
+        assert_eq!(hz.format_as(261.7, &ValueFormat::note()), "C4");
+        assert_eq!(Range::linear(0.0, 127.0, Unit::None).format_as(61.0, &ValueFormat::note()), "C#4");
+        let divs = ValueFormat::labels(&["1/4", "1/8", "1/16"]);
+        assert_eq!(Range::linear(0.0, 1.0, Unit::None).format_as(0.5, &divs), "1/8");
+        let p = ParamInfo::new("d/div", "Division", Range::default());
+        assert_eq!(p.display_as(1.0, Some(&divs)), "1/16");
+        assert_eq!(ValueFormat::default().db(-6.04), "-6.0 dB");
+        assert_eq!(ValueFormat::decimals(0).unit("VU").db(-3.2), "-3 VU");
+        // Choices keep their words under a number format.
+        let c = ParamInfo::new("m", "Meter", Range::default()).choice(&["GR", "+4"]);
+        assert_eq!(c.display_as(1.0, Some(&ValueFormat::decimals(2))), "+4");
     }
 
     #[test]

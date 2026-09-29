@@ -10,7 +10,12 @@
 //! - A needle is drawn at the *center* of its sweep (pointing up for a
 //!   standard knob) and rotates about the center of its parent.
 //! - Fill/thumb/peak-hold nodes are drawn at *full* extent / *top* position
-//!   and are scaled/moved along the control's axis within their parent.
+//!   and are scaled/moved along the control's axis within their parent. A
+//!   gauge has no axis of its own: a fill grows along its long side, a thumb
+//!   along its lane's.
+//! - A gauge's or meter's `Led`s are a ladder: lamp `i` of `n` lights at
+//!   position `(i + 1) / n`. An unlit `Led` also stops giving off light.
+//! - A `Glow`'s opacity (and so its light) is the position.
 
 use std::f64::consts::PI;
 
@@ -48,9 +53,14 @@ impl ControlState {
 pub fn control_ops(scene: &Scene, control_node: NodeId, control: &Control, state: &ControlState) -> Vec<Op> {
     let mut ops = Vec::new();
     let axis = match control.kind {
-        ControlKind::Fader { orientation } | ControlKind::Meter { orientation } => orientation,
-        _ => Orientation::Vertical,
+        ControlKind::Fader { orientation } | ControlKind::Meter { orientation } => Some(orientation),
+        _ => None,
     };
+    // A gauge's lamps (Led slots, in order) light one by one: lamp i of n
+    // at position (i + 1) / n. Its binding's curve puts each threshold there.
+    let ladder = matches!(control.kind, ControlKind::Gauge { .. } | ControlKind::Meter { .. });
+    let lamps = control.slots_of(SlotRole::Led).count();
+    let mut lamp = 0usize;
     let sweep = match control.kind {
         ControlKind::Knob { sweep_degrees } | ControlKind::Gauge { sweep_degrees, .. } => sweep_degrees,
         _ => 270.0,
@@ -74,12 +84,21 @@ pub fn control_ops(scene: &Scene, control_node: NodeId, control: &Control, state
                 Some((lo, hi)) => arc_ops(&mut ops, node, sweep, lo, hi),
                 None => ops.push(set(id, Prop::Visible(false))),
             },
-            SlotRole::Fill => fill_ops(&mut ops, node, axis, state.position),
-            SlotRole::Thumb => ops.push(set(id, Prop::Transform(along(node, parent, axis, state.position)))),
+            // Without a stated orientation (a gauge's bar, an LED row), a
+            // fill grows along its own long side and a thumb travels along
+            // its lane's.
+            SlotRole::Fill => fill_ops(&mut ops, node, axis.unwrap_or_else(|| long_axis(node.size)), state.position),
+            SlotRole::Thumb => {
+                ops.push(set(id, Prop::Transform(along(node, parent, axis.unwrap_or_else(|| long_axis(parent)), state.position))));
+            }
             SlotRole::PeakHold => match state.peak {
-                Some(p) => ops.push(set(id, Prop::Transform(along(node, parent, axis, p)))),
+                Some(p) => ops.push(set(id, Prop::Transform(along(node, parent, axis.unwrap_or_else(|| long_axis(parent)), p)))),
                 None => ops.push(set(id, Prop::Visible(false))),
             },
+            SlotRole::Glow => {
+                let opacity = node.opacity * state.position.clamp(0.0, 1.0);
+                ops.push(set(id, Prop::Opacity(opacity)));
+            }
             SlotRole::Value => {
                 if let Some(text) = &state.value_text {
                     text_ops(&mut ops, node, text);
@@ -93,12 +112,28 @@ pub fn control_ops(scene: &Scene, control_node: NodeId, control: &Control, state
                 }
             }
             SlotRole::Led => {
-                let opacity = if state.on() { node.opacity } else { node.opacity * 0.2 };
+                let on = if ladder && lamps > 0 {
+                    let at = (lamp + 1) as f64 / lamps as f64;
+                    lamp += 1;
+                    state.position >= at - 1e-9
+                } else {
+                    state.on()
+                };
+                let opacity = if on { node.opacity } else { node.opacity * 0.2 };
                 ops.push(set(id, Prop::Opacity(opacity)));
+                // An unlit lamp is a dark lens, not a dim light.
+                if !on && node.emission.is_some() {
+                    ops.push(set(id, Prop::Emission(None)));
+                }
             }
         }
     }
     ops
+}
+
+/// The axis along a box's longer side (vertical for a square).
+fn long_axis(size: Size) -> Orientation {
+    if size.width > size.height { Orientation::Horizontal } else { Orientation::Vertical }
 }
 
 fn set(id: NodeId, prop: Prop) -> Op {

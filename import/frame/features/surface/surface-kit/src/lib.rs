@@ -25,4 +25,6 @@ pub mod meters;
 pub mod panels;
 pub mod registry;
 
-pub use registry::{ComponentDef, Family, Place, components, find, place};
+pub use registry::{
+    ComponentDef, DARK_INK, Family, Ink, Place, TOUCH_MIN, components, detent_sweep, drawn_bounds, find, place, place_in_cell,
+};

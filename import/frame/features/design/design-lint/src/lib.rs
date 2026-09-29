@@ -11,7 +11,7 @@
 //! | `slot-dangling` | error | a slot names a node that isn't in the control's subtree |
 //! | `slot-missing` | error | a control lacks the slots its kind needs to show its value |
 //! | `midi-duplicate` | error | two controls listen to the same MIDI message |
-//! | `overlap` | error | two input controls overlap (ambiguous touches) |
+//! | `overlap` | error | two input controls overlap (ambiguous touches); a declared concentric pair — one control nested in the other's node and box — is fine |
 //! | `touch-target` | warning | an input control smaller than the minimum touch size |
 //! | `size-inconsistent` | warning | same-kind controls in one group with different sizes |
 //! | `contrast` | warning | text too close in luminance to what's behind it |
@@ -158,9 +158,12 @@ impl Cx<'_> {
         let needs: &[(&[SlotRole], &str)] = match control.kind {
             ControlKind::Knob { .. } => &[(&[SlotRole::Needle, SlotRole::ValueArc], "a Needle or a ValueArc")],
             ControlKind::Fader { .. } => &[(&[SlotRole::Fill, SlotRole::Thumb], "a Fill or a Thumb")],
-            ControlKind::Meter { .. } => &[(&[SlotRole::Fill], "a Fill")],
-            ControlKind::Gauge { .. } => &[(&[SlotRole::Needle], "a Needle")],
-            ControlKind::Readout => &[(&[SlotRole::Value], "a Value text")],
+            ControlKind::Meter { .. } => &[(&[SlotRole::Fill, SlotRole::Thumb, SlotRole::Led], "a Fill, a Thumb or Led lamps")],
+            ControlKind::Gauge { .. } => &[(
+                &[SlotRole::Needle, SlotRole::Fill, SlotRole::Thumb, SlotRole::Led, SlotRole::Glow],
+                "a Needle (or a Fill, a Thumb, Led lamps, a Glow)",
+            )],
+            ControlKind::Readout => &[(&[SlotRole::Value, SlotRole::Glow], "a Value text or a Glow")],
             ControlKind::Button { .. } | ControlKind::Footswitch { .. } | ControlKind::XyPad | ControlKind::Selector => &[],
         };
         for (any_of, what) in needs {
@@ -281,12 +284,34 @@ impl Cx<'_> {
         })
     }
 
+    /// Whether `inner` is a control nested in control `outer`'s node and
+    /// drawn wholly inside its box: a declared concentric pair (a cap on a
+    /// collar). Touches inside the inner box go to it (it paints later),
+    /// the rest of the outer box to the outer.
+    fn nested(&self, (outer, ob): (&Node, &LayoutBox), (inner, ib): (&Node, &LayoutBox)) -> bool {
+        const EPS: f64 = 0.5;
+        let mut up = inner.parent;
+        while let Some(p) = up {
+            if p == outer.id {
+                return ib.x >= ob.x - EPS
+                    && ib.y >= ob.y - EPS
+                    && ib.x + ib.width <= ob.x + ob.width + EPS
+                    && ib.y + ib.height <= ob.y + ob.height + EPS;
+            }
+            up = self.scene.node(p).and_then(|n| n.parent);
+        }
+        false
+    }
+
     fn overlaps(&mut self, controls: &[(&Node, &Control)]) {
         let inputs: Vec<(&Node, LayoutBox)> =
             controls.iter().filter(|(_, c)| c.kind.is_input()).filter_map(|(n, _)| self.boxes.get(&n.id).map(|b| (*n, *b))).collect();
         let mut found = Vec::new();
         for (i, (a, ab)) in inputs.iter().enumerate() {
             for (b, bb) in &inputs[i + 1..] {
+                if self.nested((a, ab), (b, bb)) || self.nested((b, bb), (a, ab)) {
+                    continue;
+                }
                 let ix = (ab.x + ab.width).min(bb.x + bb.width) - ab.x.max(bb.x);
                 let iy = (ab.y + ab.height).min(bb.y + bb.height) - ab.y.max(bb.y);
                 if ix > 0.5 && iy > 0.5 {

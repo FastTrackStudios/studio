@@ -96,3 +96,34 @@ fn unbound_controls_are_flagged() {
     assert!(issues.iter().any(|i| i.rule == "binding" && i.message.contains("not bound")));
     let _ = ParamAddr::new("x");
 }
+
+/// A 100×100 knob with a 50×50 knob inside it: nested in its node (a
+/// concentric pair) or a sibling laid over it.
+fn pair(nested: bool, inner_at: f64) -> document_proto::Scene {
+    use document_proto::{Node, NodeKind, Transform};
+    use surface_proto::{Control, ControlKind};
+    let add = |s: &mut document_proto::Scene, parent, name: &str, at: f64, w: f64, bind: &str| {
+        let mut n = Node::new(NodeKind::Frame, name);
+        n.size = Size { width: w, height: w };
+        n.transform = Transform::translate(at, at);
+        let pointer = Node::new(NodeKind::Rectangle, "pointer");
+        n.control = Some(Control::new(ControlKind::knob()).bound(Binding::param(bind)).slot(SlotRole::Needle, pointer.id.0));
+        let id = n.id;
+        s.apply(Op::Insert { node: n, parent, index: u32::MAX }).unwrap();
+        s.apply(Op::Insert { node: pointer, parent: id, index: 0 }).unwrap();
+        id
+    };
+    let mut s = document_proto::Scene::new("s");
+    let page = s.pages()[0];
+    let outer = add(&mut s, page, "Collar", 0.0, 100.0, "amp/gain");
+    add(&mut s, if nested { outer } else { page }, "Cap", inner_at, 50.0, "amp/bass");
+    s
+}
+
+#[test]
+fn a_concentric_pair_is_not_an_overlap() {
+    let overlaps = |s: &document_proto::Scene| lint(s, &demo_catalog(), &Config::default()).iter().filter(|i| i.rule == "overlap").count();
+    assert_eq!(overlaps(&pair(true, 25.0)), 0, "a cap nested in its collar");
+    assert_eq!(overlaps(&pair(false, 25.0)), 1, "a sibling laid over another is still ambiguous");
+    assert_eq!(overlaps(&pair(true, 70.0)), 1, "nested but hanging out of the collar's box");
+}

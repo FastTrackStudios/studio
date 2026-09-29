@@ -2,11 +2,20 @@
 //!
 //! ```text
 //! render_surface --out surface.png [--theme stage-dark|daylight]
-//!                [--markup surface.fm] [--catalog catalog.json] [--set amp/gain=0.8 ...] [--level -12] [--scale 2]
+//!                [--markup surface.fm] [--catalog catalog.json] [--set amp/gain=0.8 ...]
+//!                [--stream ID=V[,V2…] ...] [--level -12] [--scale 2]
 //!                [--fx gpu|fallback|off] [--time SECONDS]
 //! ```
-//! Builds a surface from the demo engine catalog, applies the given
-//! parameter values (normalized) and a meter level, and renders one frame.
+//! Builds a surface from the demo engine catalog (or `--markup` +
+//! `--catalog`), applies the given parameter values (normalized) and stream
+//! frames, and renders one frame.
+//!
+//! `--stream id=v[,v2…]` feeds one frame to any stream — a level in dBFS
+//! per channel (`plate/in=-12,-14`), gain reduction (`la2a/gr=-6`), an LFO
+//! scalar (`chorus/lfo=0.8`) — and repeats. `--level DB` feeds every level
+//! stream in the catalog (DB on the first channel, DB − 4 on the rest)
+//! unless `--stream` names streams explicitly; then it only fills in the
+//! level streams none of them named.
 
 #[cfg(not(feature = "anyrender"))]
 fn main() {
@@ -32,6 +41,7 @@ fn run() -> Result<(), String> {
     let mut theme = Theme::stage_dark();
     let mut sets = Vec::new();
     let mut level = None;
+    let mut streams: Vec<StreamFrame> = Vec::new();
     let mut scale = 1.0_f64;
     let mut markup: Option<String> = None;
     let mut catalog_path: Option<String> = None;
@@ -53,6 +63,12 @@ fn run() -> Result<(), String> {
                 let kv = args.next().ok_or("--set needs addr=value")?;
                 let (k, v) = kv.split_once('=').ok_or("--set needs addr=value")?;
                 sets.push(ParamValue { addr: ParamAddr::new(k), value: v.parse::<f64>().map_err(|e| format!("{kv}: {e}"))? });
+            }
+            "--stream" => {
+                let kv = args.next().ok_or("--stream needs id=v[,v2…]")?;
+                let (k, v) = kv.split_once('=').ok_or("--stream needs id=v[,v2…]")?;
+                let values = v.split(',').map(|x| x.trim().parse::<f64>().map_err(|e| format!("{kv}: {e}"))).collect::<Result<Vec<_>, _>>()?;
+                streams.push(StreamFrame { id: EntryId::new(k), values });
             }
             "--level" => level = Some(args.next().ok_or("--level needs dB")?.parse::<f64>().map_err(|e| e.to_string())?),
             "--fx" => fx = args.next().ok_or("--fx needs gpu|fallback|off")?.parse()?,
@@ -80,8 +96,14 @@ fn run() -> Result<(), String> {
     };
     let mut rt = Runtime::new(surface, catalog);
     rt.apply_values(sets);
-    if let Some(db) = level {
-        rt.apply_frame(StreamFrame { id: EntryId::new("out_level"), values: vec![db, db - 4.0] }, 0.0);
+    for f in level_frames(rt.catalog(), level, &streams) {
+        rt.apply_frame(f, 0.0);
+    }
+    for f in streams {
+        if rt.catalog().stream(&f.id).is_none() {
+            eprintln!("render_surface: warning: no stream `{}` in the catalog", f.id.0);
+        }
+        rt.apply_frame(f, 0.0);
     }
     let frame = rt.frame(0.0);
 
@@ -117,8 +139,56 @@ fn run() -> Result<(), String> {
     Ok(())
 }
 
+/// `--level`'s frames: `db` (and `db − 4` on further channels) on every
+/// level stream of the catalog that no explicit `--stream` names.
+#[cfg(feature = "anyrender")]
+fn level_frames(catalog: &surface_proto::Catalog, level: Option<f64>, explicit: &[surface_proto::StreamFrame]) -> Vec<surface_proto::StreamFrame> {
+    let Some(db) = level else { return Vec::new() };
+    catalog
+        .streams
+        .iter()
+        .filter(|s| !explicit.iter().any(|f| f.id == s.id))
+        .filter_map(|s| match s.kind {
+            surface_proto::StreamKind::Level { channels } => Some(surface_proto::StreamFrame {
+                id: s.id.clone(),
+                values: (0..channels.max(1)).map(|c| if c == 0 { db } else { db - 4.0 }).collect(),
+            }),
+            _ => None,
+        })
+        .collect()
+}
+
 /// Every control's position, for effect shaders' `value`.
 #[cfg(feature = "anyrender")]
 fn control_positions(rt: &surface_runtime::Runtime) -> std::collections::HashMap<document_proto::NodeId, f64> {
     rt.surface().controls.iter().map(|(id, c)| (*id, rt.position(*id, c))).collect()
+}
+
+#[cfg(all(test, feature = "anyrender"))]
+mod tests {
+    use surface_proto::{Catalog, EntryId, StreamFrame, StreamInfo, StreamKind};
+
+    fn stream(id: &str, kind: StreamKind) -> StreamInfo {
+        StreamInfo { id: EntryId::new(id), name: id.into(), kind, rate_hz: 30.0 }
+    }
+
+    #[test]
+    fn level_feeds_every_level_stream_an_explicit_stream_leaves_alone() {
+        let catalog = Catalog {
+            streams: vec![
+                stream("plate/in", StreamKind::Level { channels: 2 }),
+                stream("plate/out", StreamKind::Level { channels: 1 }),
+                stream("plate/gr", StreamKind::GainReduction),
+            ],
+            ..Catalog::default()
+        };
+        let ids = |fs: &[StreamFrame]| fs.iter().map(|f| (f.id.0.clone(), f.values.clone())).collect::<Vec<_>>();
+        assert_eq!(
+            ids(&super::level_frames(&catalog, Some(-12.0), &[])),
+            [("plate/in".to_string(), vec![-12.0, -16.0]), ("plate/out".to_string(), vec![-12.0])]
+        );
+        let explicit = [StreamFrame { id: EntryId::new("plate/in"), values: vec![-3.0] }];
+        assert_eq!(ids(&super::level_frames(&catalog, Some(-12.0), &explicit)), [("plate/out".to_string(), vec![-12.0])]);
+        assert!(super::level_frames(&catalog, None, &[]).is_empty());
+    }
 }

@@ -14,11 +14,11 @@
 //! latching switch whose position you cannot see is read as broken. A
 //! `_bank` places one `Button { Select }` per `Place::options` entry.
 
-use document_proto::{NodeId, TextAlign};
+use document_proto::{NodeId, TextAlign, TextCase};
 use surface_proto::{ButtonMode, Control, ControlKind, SlotRole};
 use surface_widgets::Builder;
 
-use super::parts::{alpha, fixed, ink, lamp, lin, mixs, shade, text_w, tint};
+use super::parts::{alpha, cased, fixed, ink, lamp, lin, mixs, shade, text_w, tint};
 use crate::draw;
 use crate::registry::{ComponentDef, Family, Place};
 
@@ -221,7 +221,7 @@ struct CapParts {
 
 /// Draw one cap (with its surround, if the part has one) at (`x`, `y`).
 #[allow(clippy::too_many_arguments)]
-fn cap(b: &mut Builder<'_>, parent: NodeId, x: f64, y: f64, k: f64, spec: &Spec, cap_c: &str, ink_c: &str, lamp_c: &str, legend: &str) -> CapParts {
+fn cap(b: &mut Builder<'_>, parent: NodeId, x: f64, y: f64, k: f64, spec: &Spec, (cap_c, ink_c, lamp_c): (&str, &str, &str), legend: &str, case: TextCase) -> CapParts {
     let pad = spec.surround.map_or(0.0, |s| s.pad * k);
     let (cw, ch) = (spec.w * k, spec.h * k);
     let lip = k.clamp(0.6, 1.6);
@@ -267,15 +267,27 @@ fn cap(b: &mut Builder<'_>, parent: NodeId, x: f64, y: f64, k: f64, spec: &Spec,
         vec![draw::inner_shadow("#0000008c", 0.0, lip * 1.5, drop * 2.0), draw::inner_shadow("#ffffff1a", 0.0, -lip, 0.0)],
     );
     leds.push(b.add(parent, pressed));
-    let size = spec.legend * k;
-    // Caps are narrow: no tracking, and a little headroom for a param name
-    // the runtime writes in.
-    let mut text = ink("legend", legend, cx - 2.0 * k, cy + ch / 2.0, cw + 4.0 * k, size * 0.9, ink_c, TextAlign::Center, 800.0);
+    // Caps are narrow: no tracking, a little headroom for a param name the
+    // runtime writes in, and a long word set smaller until it fits the cap.
+    let size = fit_legend(legend, spec.legend * k * 0.9, cw - 3.0 * k);
+    let mut text = cased(ink("legend", legend, cx - 2.0 * k, cy + ch / 2.0, cw + 4.0 * k, size, ink_c, TextAlign::Center, 800.0), case);
     if let document_proto::NodeKind::Text(t) = &mut text.kind {
         t.letter_spacing = 0.0;
     }
     let label = b.add(parent, text);
     CapParts { leds, label }
+}
+
+/// The type size a cap legend is set at: `size`, or smaller (down to a
+/// legible floor) until `legend`'s longest line fits `width`.
+fn fit_legend(legend: &str, size: f64, width: f64) -> f64 {
+    let longest = legend.lines().map(|l| l.chars().count()).max().unwrap_or(0) as f64;
+    if longest == 0.0 {
+        return size;
+    }
+    // Bold capitals run about 0.68 em a character.
+    let fits = width / (longest * 0.68);
+    size.min(fits).max((size * 0.45).min(5.5))
 }
 
 /// The unit a cap occupies: surround included, plus the jewel below it.
@@ -299,7 +311,7 @@ fn button_at(b: &mut Builder<'_>, parent: NodeId, x: f64, y: f64, k: f64, style:
     let root = b.add(parent, draw::frame(name, x, y, w, h));
     let pad = spec.surround.map_or(0.0, |s| s.pad);
     let unit_w = (spec.w + 2.0 * pad) * k;
-    let parts = cap(b, root, (w - unit_w) / 2.0, 0.0, k, &spec, &cap_c, ink_c, lamp_c, legend);
+    let parts = cap(b, root, (w - unit_w) / 2.0, 0.0, k, &spec, (&cap_c, ink_c, lamp_c), legend, p.case());
     let mut c = Control::new(ControlKind::Button { mode });
     for led in parts.leds {
         c = c.slot(SlotRole::Led, led.0);
@@ -340,7 +352,8 @@ fn bank(b: &mut Builder<'_>, parent: NodeId, p: &Place, style: Style) -> NodeId 
     let root = b.add(parent, draw::frame(&p.name, 0.0, 0.0, n as f64 * w + (n as f64 - 1.0) * gap, h));
     for (i, label) in opts.iter().enumerate() {
         let mode = ButtonMode::Select { index: i as u32, count: n as u32 };
-        button_at(b, root, i as f64 * (w + gap), 0.0, k, style, p, label, mode, &format!("{} {label}", p.name));
+        let at = if p.reverse { n - 1 - i } else { i };
+        button_at(b, root, at as f64 * (w + gap), 0.0, k, style, p, label, mode, &format!("{} {label}", p.name));
     }
     root
 }
@@ -352,7 +365,8 @@ fn push_in_bank(b: &mut Builder<'_>, parent: NodeId, p: &Place) -> NodeId {
     let k = p.size.unwrap_or(spec.w) / spec.w;
     let (cap_c, _, _) = Style::PushIn.colors(p.variant.as_deref());
     // The scale is silkscreened in the panel's ink, not the cap's.
-    let panel_ink = super::parts::PANEL_INK;
+    let panel_ink = p.ink_color(super::parts::PANEL_INK);
+    let panel_ink = panel_ink.as_str();
     let opts = options(p);
     let n = opts.len() as f64;
     let (cw, ch) = (spec.w * k, spec.h * k);
@@ -366,8 +380,10 @@ fn push_in_bank(b: &mut Builder<'_>, parent: NodeId, p: &Place) -> NodeId {
     let housing = draw::stroked(draw::rounded(housing, 2.5 * k), "#000000b3", k.max(1.0));
     b.add(root, fixed(draw::with_effects(housing, vec![draw::inner_shadow("#00000099", 0.0, k, 3.0 * k)])));
     for (i, label) in opts.iter().enumerate() {
-        let row = b.add(root, draw::frame(&format!("{} {label}", p.name), 0.0, pad + i as f64 * ch, hx + hw, ch));
-        let text = b.add(row, ink("legend", label, 0.0, ch / 2.0, label_w, size, panel_ink, TextAlign::Right, 700.0));
+        // Top to bottom in param order — or, reversed, the last option on top.
+        let at = if p.reverse { opts.len() - 1 - i } else { i };
+        let row = b.add(root, draw::frame(&format!("{} {label}", p.name), 0.0, pad + at as f64 * ch, hx + hw, ch));
+        let text = b.add(row, cased(ink("legend", label, 0.0, ch / 2.0, label_w, size, panel_ink, TextAlign::Right, 700.0), p.case()));
         let body = draw::rect("cap", hx + pad, 0.0, cw, ch, lin(180.0, &[(0.0, tint(&cap_c, 0.10)), (1.0, shade(&cap_c, 0.35))]));
         let body = draw::with_effects(
             draw::rounded(body, 1.5 * k),
@@ -423,9 +439,12 @@ fn led_bank(b: &mut Builder<'_>, parent: NodeId, p: &Place) -> NodeId {
     let d = 9.0 * k;
     let h = size * 1.4 + 3.0 * k + d + 2.0 * k;
     let root = b.add(parent, draw::frame(&p.name, 0.0, 0.0, pitch * opts.len() as f64, h));
+    let legend_ink = p.ink_color("#cfd4d8");
     for (i, label) in opts.iter().enumerate() {
-        let cell = b.add(root, draw::frame(&format!("{} {label}", p.name), i as f64 * pitch, 0.0, pitch, h));
-        let text = b.add(cell, ink("legend", label, 0.0, size * 0.7, pitch, size, "#cfd4d8", TextAlign::Center, 700.0));
+        let at = if p.reverse { opts.len() - 1 - i } else { i };
+        let cell = b.add(root, draw::frame(&format!("{} {label}", p.name), at as f64 * pitch, 0.0, pitch, h));
+        let size = fit_legend(label, size, pitch - 2.0 * k);
+        let text = b.add(cell, cased(ink("legend", label, 0.0, 7.5 * k * 0.7, pitch, size, &legend_ink, TextAlign::Center, 700.0), p.case()));
         let lens = lamp(b, cell, pitch / 2.0, size * 1.4 + 3.0 * k + d / 2.0, d, color);
         let mut c = Control::new(ControlKind::Button { mode: ButtonMode::Select { index: i as u32, count: opts.len() as u32 } })
             .slot(SlotRole::Led, lens.0)

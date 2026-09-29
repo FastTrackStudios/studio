@@ -3,9 +3,10 @@
 
 use std::collections::BTreeMap;
 
-use document_proto::{NodeId, NodeKind, Scene};
-use surface_kit::{Family, Place, components, place};
-use surface_proto::{Binding, Control, ControlKind, SlotRole};
+use document_proto::{NodeId, NodeKind, Paint, PaintKind, Scene, TextCase};
+use surface_kit::{DARK_INK, Family, Ink, Place, TOUCH_MIN, components, draw, place};
+use surface_proto::{Binding, Control, ControlKind, ParamAddr, ParamValue, SlotRole};
+use surface_runtime::{Bounds, Runtime, Surface};
 use surface_widgets::{Builder, Theme};
 
 fn knob_ids() -> Vec<&'static str> {
@@ -138,8 +139,179 @@ fn a_legend_and_a_scale_are_honoured() {
 fn every_knob_lints_clean_bound_to_a_param() {
     let catalog = surface_memory::demo_catalog();
     for id in knob_ids() {
-        let (scene, _, _) = placed(id, &Place::new("Gain").bind(Binding::param("amp/gain"))).unwrap();
+        // (The cap of a concentric pair binds its own param; others ignore it.)
+        let p = Place::new("Gain").bind(Binding::param("amp/gain")).inner(Place::new("Bass").bind(Binding::param("amp/bass")));
+        let (scene, _, _) = placed(id, &p).unwrap();
         let issues = design_lint::lint(&scene, &catalog, &design_lint::Config::default());
         assert!(issues.is_empty(), "{id}: {}", issues.iter().map(ToString::to_string).collect::<Vec<_>>().join("\n"));
     }
+}
+
+fn solid(p: &Paint) -> Option<String> {
+    match &p.kind {
+        PaintKind::Solid { color } => Some(format!("{:.3},{:.3},{:.3}", color.r, color.g, color.b)),
+        _ => None,
+    }
+}
+
+fn hex(c: &str) -> String {
+    let c = draw::hex(c);
+    format!("{:.3},{:.3},{:.3}", c.r, c.g, c.b)
+}
+
+/// The inks of the printed parts (scale, numerals, legend) of a placed knob.
+fn printed_inks(id: &str, p: &Place) -> Vec<(String, String)> {
+    let (scene, root, _) = placed(id, p).unwrap();
+    scene
+        .walk(root)
+        .into_iter()
+        .filter_map(|n| scene.node(n))
+        .filter(|n| n.name.starts_with("scale ") || n.name == "numeral" || n.name == "legend")
+        .map(|n| (n.name.clone(), n.fills.first().and_then(solid).unwrap_or_default()))
+        .collect()
+}
+
+#[test]
+fn the_print_takes_the_place_s_ink() {
+    for id in ["knob.bakelite", "knob.neve", "knob.daka", "knob.concentric"] {
+        let p = Place::new("x").legend("Drive");
+        let light = printed_inks(id, &p);
+        assert!(light.len() > 3, "{id}: {light:?}");
+        assert!(light.iter().all(|(_, c)| *c != hex(DARK_INK)), "{id}: light by default");
+        let dark = printed_inks(id, &p.clone().ink(Ink::Dark));
+        assert!(dark.iter().all(|(_, c)| *c == hex(DARK_INK)), "{id}: {dark:?}");
+        let red = printed_inks(id, &p.clone().ink(Ink::Color("#b3281f".into())));
+        assert!(red.iter().all(|(_, c)| *c == hex("#b3281f")), "{id}: {red:?}");
+    }
+}
+
+#[test]
+fn legends_are_capitals_unless_the_case_is_kept() {
+    let case = |p: &Place| {
+        let (scene, _, control) = placed("knob.bakelite", p).unwrap();
+        let legend = NodeId(control.slots_of(SlotRole::Label).next().unwrap());
+        scene.node(legend).unwrap().text().unwrap().text_case
+    };
+    assert_eq!(case(&Place::new("x").legend("Drive")), TextCase::Upper);
+    assert_eq!(case(&Place::new("x").legend("kHz").keep_case()), TextCase::Original);
+}
+
+fn sweep_of(c: &Control) -> f64 {
+    match c.kind {
+        ControlKind::Knob { sweep_degrees } => sweep_degrees,
+        ref k => panic!("not a knob: {}", k.name()),
+    }
+}
+
+#[test]
+fn a_stepped_knob_turns_through_its_detents() {
+    let (scene, root, c) = placed("knob.chicken_head", &Place::new("Mode").options(&["Hall", "Room", "Plate", "Spring"])).unwrap();
+    assert!((sweep_of(&c) - 180.0).abs() < 1e-9, "four detents, 60° apart");
+    let printed: Vec<String> = scene.walk(root).into_iter().filter_map(|n| scene.node(n).filter(|n| n.name == "numeral")?.text().map(|t| t.characters.clone())).collect();
+    assert_eq!(printed, ["Hall", "Room", "Plate", "Spring"]);
+    // Many positions share 300°; an explicit sweep wins over both.
+    let (_, _, c) = placed("knob.pointer", &Place::new("x").options(&["1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11"])).unwrap();
+    assert!((sweep_of(&c) - 300.0).abs() < 1e-9);
+    let (_, _, c) = placed("knob.bakelite", &Place::new("x").sweep(270.0)).unwrap();
+    assert!((sweep_of(&c) - 270.0).abs() < 1e-9);
+    let (_, _, c) = placed("knob.bakelite", &Place::new("x")).unwrap();
+    assert!((sweep_of(&c) - 300.0).abs() < 1e-9, "a continuous knob keeps its style's travel");
+}
+
+/// The shaft of a placed knob, in its root's space.
+fn shaft(scene: &Scene, root: NodeId) -> (f64, f64) {
+    let knob = scene.node(root).unwrap().children.iter().find_map(|c| scene.node(*c).filter(|n| n.name == "knob")).unwrap();
+    (knob.transform.tx + knob.size.width / 2.0, knob.transform.ty + knob.size.height / 2.0)
+}
+
+#[test]
+fn a_touch_box_is_the_knob_s_body_padded_to_a_fingertip() {
+    for id in knob_ids() {
+        let loose = placed(id, &Place::new("x").size(64.0)).unwrap();
+        let tight = placed(id, &Place::new("x").size(64.0).touch(TOUCH_MIN)).unwrap();
+        let (lw, tw) = (loose.0.node(loose.1).unwrap().size, tight.0.node(tight.1).unwrap().size);
+        assert!(tw.width == 64.0 && tw.height == 64.0, "{id}: {tw:?}");
+        if id != "knob.concentric" {
+            assert!(lw.width > 64.0 * 1.2, "{id}: the default box still holds the scale ({lw:?})");
+            assert_eq!(shaft(&tight.0, tight.1), (32.0, 32.0), "{id}: the box is centred on the shaft");
+        }
+        // Small knobs are padded out to the touch minimum.
+        let small = placed(id, &Place::new("x").size(30.0).touch(TOUCH_MIN)).unwrap();
+        let sw = small.0.node(small.1).unwrap().size;
+        assert_eq!((sw.width, sw.height), (44.0, 44.0), "{id}");
+    }
+    // The print hangs outside the box, where it was.
+    let (scene, root, c) = placed("knob.bakelite", &Place::new("x").size(64.0).legend("Gain").touch(TOUCH_MIN)).unwrap();
+    let legend = scene.node(NodeId(c.slots_of(SlotRole::Label).next().unwrap())).unwrap();
+    assert!(legend.transform.ty > 64.0, "legend under the box: {}", legend.transform.ty);
+    let (x, y, w, h) = surface_kit::drawn_bounds(&scene, root);
+    assert!(x < 0.0 && y < 0.0 && w > 64.0 && h > 64.0, "{x} {y} {w} {h}");
+}
+
+#[test]
+fn a_cell_holds_what_a_tight_knob_draws() {
+    let mut scene = Scene::new("Kit");
+    let page = scene.pages()[0];
+    let mut controls = BTreeMap::new();
+    let theme = Theme::stage_dark();
+    let mut b = Builder { scene: &mut scene, controls: &mut controls, theme: &theme };
+    let root = surface_kit::place_in_cell(&mut b, page, "knob.bakelite", &Place::new("x").size(64.0).legend("Gain").touch(TOUCH_MIN)).unwrap();
+    let holder = b.scene.node(root).unwrap().parent.unwrap();
+    let (x, y, w, h) = surface_kit::drawn_bounds(b.scene, root);
+    let hs = b.scene.node(holder).unwrap().size;
+    assert_eq!((hs.width, hs.height), (w, h));
+    let t = b.scene.node(root).unwrap().transform;
+    assert_eq!((t.tx, t.ty), (-x, -y), "nothing hangs out of the cell");
+}
+
+fn concentric() -> (Runtime, NodeId, NodeId) {
+    let p = Place::new("Freq").size(80.0).bind(Binding::param("amp/gain")).inner(Place::new("Boost").bind(Binding::param("amp/bass")).legend("Boost"));
+    let mut scene = Scene::new("Kit");
+    let page = scene.pages()[0];
+    let mut controls = BTreeMap::new();
+    let theme = Theme::stage_dark();
+    let root = {
+        let mut b = Builder { scene: &mut scene, controls: &mut controls, theme: &theme };
+        let root = place(&mut b, page, "knob.concentric", &p).unwrap();
+        b.scene.node_mut(root).unwrap().transform = document_proto::Transform::translate(100.0, 100.0);
+        root
+    };
+    let cap = *controls.keys().find(|k| **k != root).expect("two controls");
+    for (n, c) in &controls {
+        scene.node_mut(*n).unwrap().control = Some(c.clone());
+    }
+    let mut rt = Runtime::new(Surface::from_scene(scene), surface_memory::demo_catalog());
+    let boxes = render::build_scene_layout_boxes(&rt.surface().scene, page)
+        .into_iter()
+        .map(|(id, b)| (id, Bounds { x: b.x, y: b.y, width: b.width, height: b.height }))
+        .collect::<Vec<_>>();
+    rt.set_boxes(boxes);
+    (rt, root, cap)
+}
+
+#[test]
+fn a_concentric_pair_is_two_controls_on_one_shaft() {
+    let (rt, collar, cap) = concentric();
+    let scene = rt.surface().to_scene();
+    assert_eq!(rt.surface().controls.len(), 2);
+    assert_eq!(scene.node(cap).unwrap().parent, Some(collar), "the cap's control is nested in the collar's");
+    let issues = design_lint::lint(&scene, rt.catalog(), &design_lint::Config::default());
+    let (errors, warnings, _) = design_lint::counts(&issues);
+    assert_eq!((errors, warnings), (0, 0), "{}", issues.iter().map(ToString::to_string).collect::<Vec<_>>().join("\n"));
+    // The cap takes its disc; the collar the ring round it.
+    assert_eq!(rt.hit(140.0, 140.0), Some(cap), "centre");
+    assert_eq!(rt.hit(140.0, 104.0), Some(collar), "top of the collar ring");
+    assert_eq!(rt.hit(40.0, 40.0), None);
+}
+
+#[test]
+fn turning_the_collar_leaves_the_cap_alone() {
+    let (mut rt, collar, cap) = concentric();
+    let needle = |id: NodeId| NodeId(rt.surface().controls[&id].slots_of(SlotRole::Needle).next().unwrap());
+    let (outer, inner) = (needle(collar), needle(cap));
+    assert!(!rt.surface().scene.walk(outer).contains(&inner), "the cap doesn't ride on the collar's body");
+    rt.apply_values([ParamValue { addr: ParamAddr::new("amp/gain"), value: 1.0 }, ParamValue { addr: ParamAddr::new("amp/bass"), value: 0.5 }]);
+    let f = rt.frame(0.0);
+    assert!((f.node(outer).unwrap().transform.rotation().to_degrees() - 150.0).abs() < 1e-6);
+    assert!(f.node(inner).unwrap().transform.rotation().abs() < 1e-9);
 }

@@ -10,13 +10,13 @@ use std::collections::{BTreeMap, HashMap};
 
 use document_proto::{NodeId, NodeKind, Scene, Transform};
 use surface_proto::{
-    Binding, Catalog, Control, ControlKind, EditPhase, EntryId, ParamAddr, ParamKind, ParamValue, Source, StreamFrame,
-    StreamKind,
+    Binding, Catalog, Control, ControlKind, EditPhase, EntryId, MeterTap, ParamAddr, ParamKind, ParamValue, Source,
+    StreamFrame, StreamKind,
 };
 
 use crate::coalesce::Coalescer;
 use crate::gesture::{Bounds, Gesture, Input, Output};
-use crate::meter::{Ballistics, MeterScale};
+use crate::meter::{Ballistics, MeterScale, Sense};
 use crate::visual::{ControlState, control_ops};
 
 /// A design plus the controls attached to its nodes.
@@ -59,7 +59,9 @@ pub struct Runtime {
     catalog: Catalog,
     values: BTreeMap<ParamAddr, f64>,
     streams: HashMap<EntryId, Vec<f64>>,
-    meters: HashMap<(NodeId, u8), Ballistics>,
+    /// Ballistics per (control, stream, channel): a switched meter keeps
+    /// every tap moving, so switching shows a settled reading.
+    meters: HashMap<(NodeId, EntryId, u8), Ballistics>,
     gestures: HashMap<NodeId, Gesture>,
     /// XY pads' second axis, and footswitch/button positions not tied to params.
     local_positions: HashMap<NodeId, f64>,
@@ -163,23 +165,80 @@ impl Runtime {
     }
 
     pub fn apply_frame(&mut self, frame: StreamFrame, t: f64) {
-        let is_level = matches!(
-            self.catalog.stream(&frame.id).map(|s| &s.kind),
-            Some(StreamKind::Level { .. } | StreamKind::GainReduction)
-        );
-        if is_level {
+        let sense = match self.catalog.stream(&frame.id).map(|s| &s.kind) {
+            Some(StreamKind::Level { .. }) => Some(Sense::Level),
+            Some(StreamKind::GainReduction) => Some(Sense::Reduction),
+            _ => None,
+        };
+        if let Some(sense) = sense {
             for (id, control) in &self.surface.controls {
-                if let Some(Binding { source: Source::Stream { id: sid, channel }, .. }) = &control.binding
-                    && *sid == frame.id
-                {
+                // Every stream the control can show: its binding's, and
+                // each tap its meter switch can select.
+                let bound = match &control.binding {
+                    Some(Binding { source: Source::Stream { id: sid, channel }, .. }) => Some((sid, *channel)),
+                    _ => None,
+                };
+                let taps = control.select.iter().flat_map(|s| s.taps.iter().flatten()).map(|tap| (&tap.stream, tap.channel));
+                for (sid, channel) in bound.into_iter().chain(taps) {
+                    if *sid != frame.id {
+                        continue;
+                    }
                     let ch = channel.unwrap_or(0);
                     if let Some(db) = frame.values.get(usize::from(ch)) {
-                        self.meters.entry((*id, ch)).or_default().push(*db, t);
+                        self.meters.entry((*id, sid.clone(), ch)).or_insert_with(|| Ballistics::for_sense(sense)).push(*db, t);
                     }
                 }
             }
         }
         self.streams.insert(frame.id.clone(), frame.values);
+    }
+
+    /// The stream a meter reads right now: its switch's selected tap (or
+    /// `None` when the switch is off), else its binding's stream.
+    fn tap(&self, control: &Control) -> Option<MeterTap> {
+        if let Some(sel) = &control.select {
+            let info = self.catalog.param(&sel.param);
+            let v = self.values.get(&sel.param).copied().unwrap_or_else(|| info.map_or(0.0, |p| p.default));
+            let n = match info.map(|p| &p.kind) {
+                Some(ParamKind::Choice { options }) => options.len(),
+                Some(ParamKind::Toggle) => 2,
+                _ => sel.taps.len(),
+            };
+            let i = if n < 2 { 0 } else { (v.clamp(0.0, 1.0) * (n - 1) as f64).round() as usize };
+            return sel.tap(i).cloned();
+        }
+        match &control.binding {
+            Some(Binding { source: Source::Stream { id, channel }, .. }) => {
+                Some(MeterTap { stream: id.clone(), channel: *channel, offset_db: 0.0 })
+            }
+            _ => None,
+        }
+    }
+
+    /// A meter's state over `scale` for its current tap: the ballistic
+    /// level, or its rest (silence; 0 dB of gain reduction) before data.
+    fn meter_state(&self, id: NodeId, control: &Control, scale: &MeterScale, t: f64) -> ControlState {
+        let Some(tap) = self.tap(control) else {
+            // Switched off: the movement rests at its left stop.
+            return ControlState::default();
+        };
+        let sense = match self.catalog.stream(&tap.stream).map(|s| &s.kind) {
+            Some(StreamKind::GainReduction) => Sense::Reduction,
+            _ => Sense::Level,
+        };
+        let m = self.meters.get(&(id, tap.stream.clone(), tap.channel.unwrap_or(0)));
+        let level = m.map_or(sense.rest_db(), |m| m.level_db(t)) + tap.offset_db;
+        let peak = m.map(|m| m.peak_hold_db(t) + tap.offset_db);
+        let fmt = control.format.clone().unwrap_or_default();
+        // A bar reads its held peak; a needle its level. Before data the
+        // text stays as authored (a placeholder).
+        let shown = if matches!(control.kind, ControlKind::Meter { .. }) { peak } else { m.map(|_| level) };
+        ControlState {
+            position: scale.position(level),
+            peak: peak.map(|p| scale.position(p)),
+            value_text: shown.map(|db| fmt.db(db)),
+            ..ControlState::default()
+        }
     }
 
     // ── input → engine ────────────────────────────────────────────────────
@@ -346,30 +405,21 @@ impl Runtime {
     /// What each control shows right now.
     #[must_use]
     pub fn state(&self, id: NodeId, control: &Control, t: f64) -> ControlState {
+        // The binding's curve shapes a meter's dB span, so a needle follows
+        // a printed scale law (a VU card crowds its low end) and a ladder's
+        // lamps land on their printed thresholds.
+        let curve = || control.binding.as_ref().map_or(surface_proto::Curve::Linear, |b| b.curve.clone());
+        let level_stream = |sid: &EntryId| {
+            matches!(self.catalog.stream(sid).map(|s| &s.kind), Some(StreamKind::Level { .. } | StreamKind::GainReduction))
+        };
         match (&control.kind, control.binding.as_ref().map(|b| &b.source)) {
-            (ControlKind::Gauge { floor_db, ceiling_db, .. }, Some(Source::Stream { channel, .. })) => {
-                let ch = channel.unwrap_or(0);
-                let m = self.meters.get(&(id, ch));
-                // The binding's curve shapes the dB span, so a needle can
-                // follow a printed scale law (a VU card crowds its low end).
-                let curve = control.binding.as_ref().map_or(surface_proto::Curve::Linear, |b| b.curve.clone());
-                let scale = MeterScale { floor_db: *floor_db, ceiling_db: *ceiling_db, curve };
-                ControlState {
-                    position: m.map_or(0.0, |m| scale.position(m.level_db(t))),
-                    peak: m.map(|m| scale.position(m.peak_hold_db(t))),
-                    value_text: m.map(|m| format!("{:.1} dB", m.level_db(t))),
-                    ..ControlState::default()
-                }
+            (ControlKind::Gauge { floor_db, ceiling_db, .. }, Some(Source::Stream { id: sid, .. })) if level_stream(sid) || control.select.is_some() => {
+                let scale = MeterScale { floor_db: *floor_db, ceiling_db: *ceiling_db, curve: curve() };
+                self.meter_state(id, control, &scale, t)
             }
-            (ControlKind::Meter { .. }, Some(Source::Stream { channel, .. })) => {
-                let ch = channel.unwrap_or(0);
-                let m = self.meters.get(&(id, ch));
-                ControlState {
-                    position: m.map_or(0.0, |m| self.meter_scale.position(m.level_db(t))),
-                    peak: m.map(|m| self.meter_scale.position(m.peak_hold_db(t))),
-                    value_text: m.map(|m| format!("{:.1} dB", m.peak_hold_db(t))),
-                    ..ControlState::default()
-                }
+            (ControlKind::Meter { .. }, Some(Source::Stream { id: sid, .. })) if level_stream(sid) || control.select.is_some() => {
+                let scale = MeterScale { curve: curve(), ..self.meter_scale.clone() };
+                self.meter_state(id, control, &scale, t)
             }
             (_, Some(Source::Stream { id: sid, channel })) => {
                 let v = self.streams.get(sid).and_then(|v| v.get(usize::from(channel.unwrap_or(0)))).copied();
@@ -382,7 +432,12 @@ impl Runtime {
                         (Some(r), Some(v)) => r.to_normalized(v),
                         _ => 0.0,
                     },
-                    value_text: v.map(|v| range.map_or_else(|| format!("{v:.1}"), |r| r.format(v))),
+                    value_text: v.map(|v| match (range, &control.format) {
+                        (Some(r), Some(f)) => r.format_as(v, f),
+                        (Some(r), None) => r.format(v),
+                        (None, Some(f)) => surface_proto::Range::linear(0.0, 1.0, surface_proto::Unit::None).format_as(v, f),
+                        (None, None) => format!("{v:.1}"),
+                    }),
                     ..ControlState::default()
                 }
             }
@@ -400,7 +455,7 @@ impl Runtime {
                     lit,
                     position: self.position(id, control),
                     bipolar: info.is_some_and(|p| p.bipolar),
-                    value_text: info.map(|p| p.display(value)),
+                    value_text: info.map(|p| p.display_as(value, control.format.as_ref())),
                     label_text: info.map(|p| p.short_name.clone().unwrap_or_else(|| p.name.clone())),
                     ..ControlState::default()
                 }

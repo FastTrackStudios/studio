@@ -59,11 +59,24 @@ pub(crate) fn rad(cx: f64, cy: f64, r: f64, stops: &[(f64, String)]) -> Paint {
 #[must_use]
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn ink(name: &str, s: &str, x: f64, cy: f64, w: f64, size: f64, color: &str, align: TextAlign, weight: f64) -> Node {
+    cased(ink_raw(name, s, x, cy, w, size, color, align, weight), TextCase::Upper)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn ink_raw(name: &str, s: &str, x: f64, cy: f64, w: f64, size: f64, color: &str, align: TextAlign, weight: f64) -> Node {
     let mut n = draw::text(name, s, x, cy - size * 0.68, w, size, color, align);
     if let NodeKind::Text(t) = &mut n.kind {
         t.font_weight = Some(weight);
-        t.text_case = TextCase::Upper;
         t.letter_spacing = size * 0.04;
+    }
+    n
+}
+
+/// A text node set in `case` (a placed component's [`Place::case`](crate::Place::case)).
+#[must_use]
+pub(crate) fn cased(mut n: Node, case: TextCase) -> Node {
+    if let NodeKind::Text(t) = &mut n.kind {
+        t.text_case = case;
     }
     n
 }

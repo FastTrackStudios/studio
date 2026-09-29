@@ -353,17 +353,34 @@ impl Session {
             },
             _ => None,
         });
+        let number = |k: &str| -> Result<Option<f64>> {
+            match a.0.get(k) {
+                None | Some(Value::Null) => Ok(None),
+                Some(v) => Ok(Some(v.as_f64().ok_or_else(|| ToolError(format!("`{k}` must be a number")))?)),
+            }
+        };
+        let flag = |k: &str| a.0.get(k).and_then(Value::as_bool).unwrap_or(false);
+        let ink = match a.opt_str("ink")? {
+            None => None,
+            Some("light") => Some(surface_kit::Ink::Light),
+            Some("dark") => Some(surface_kit::Ink::Dark),
+            Some(c) if c.starts_with('#') => Some(surface_kit::Ink::Color(c.to_string())),
+            Some(other) => return err(format!("`ink` is light | dark | #hex, not `{other}`")),
+        };
         let place = surface_kit::Place {
             name: a.opt_str("name")?.map_or(default_name, ToString::to_string),
-            size: match a.0.get("size") {
-                None | Some(Value::Null) => None,
-                Some(v) => Some(v.as_f64().ok_or_else(|| ToolError("`size` must be a number (px)".into()))?),
-            },
+            size: number("size")?,
             binding,
             variant: a.opt_str("variant")?.map(ToString::to_string),
             legend: a.opt_str("legend")?.map(ToString::to_string),
             scale: list("scale")?,
             options,
+            ink,
+            keep_case: flag("keep_case"),
+            sweep: number("sweep")?,
+            touch: number("touch")?,
+            reverse: flag("reverse"),
+            ..surface_kit::Place::default()
         };
         let theme = self.theme.clone();
         let (ops, root) = self.build(parent, |b| surface_kit::place(b, parent, id, &place).map_err(ToolError), &theme)?;
@@ -722,9 +739,9 @@ pub fn tools() -> Vec<ToolDef> {
         },
         ToolDef {
             name: "add_component",
-            description: "Place a kit component (see `components`) under `parent`, fully wired. bind: param:<addr> | stream:<id>[:ch] | action:<id>. size: px (primary dimension). variant: a colour/finish from the component's list. legend: printed name. scale: printed scale labels (start → end of travel). options: labels for banks/selectors (defaults to the choice param's options). Panels bind nothing and return a frame to place other components into.",
+            description: "Place a kit component (see `components`) under `parent`, fully wired. bind: param:<addr> | stream:<id>[:ch] | action:<id>. size: px (primary dimension). variant: a colour/finish from the component's list. legend: printed name. scale: printed scale labels (start → end of travel). options: labels for banks/selectors (defaults to the choice param's options). Panels bind nothing and return a frame to place other components into. ink: light | dark | #hex for the printed scale and legends (dark on light panels). keep_case: print legends as written, not in capitals. sweep: degrees of travel for rotaries (a stepped knob with options picks its own). touch: px — a tight hit box (the knob's body, padded to this; 44 for the lint) with the print hanging outside. reverse: lay a bank/ladder out last option first.",
             input_schema: obj(
-                json!({"parent": node, "component": {"type": "string"}, "bind": {"type": "string"}, "size": {"type": "number"}, "variant": {"type": "string"}, "legend": {"type": "string"}, "name": {"type": "string"}, "scale": {"type": "array", "items": {"type": "string"}}, "options": {"type": "array", "items": {"type": "string"}}}),
+                json!({"parent": node, "component": {"type": "string"}, "bind": {"type": "string"}, "size": {"type": "number"}, "variant": {"type": "string"}, "legend": {"type": "string"}, "name": {"type": "string"}, "scale": {"type": "array", "items": {"type": "string"}}, "options": {"type": "array", "items": {"type": "string"}}, "ink": {"type": "string"}, "keep_case": {"type": "boolean"}, "sweep": {"type": "number"}, "touch": {"type": "number"}, "reverse": {"type": "boolean"}}),
                 &["parent", "component"],
             ),
             mutates: true,

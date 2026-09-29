@@ -17,10 +17,11 @@
 //! [`scale`].
 
 pub mod faces;
+mod leds;
 pub mod scale;
 
 use document_proto::{Color, GradientStop, Node, NodeId, Paint, PaintKind, TextAlign, TextData, Transform};
-use surface_proto::{Control, ControlKind, Curve, SlotRole, Source};
+use surface_proto::{ControlKind, Curve, SlotRole, Source};
 use surface_widgets::Builder;
 
 use self::faces::{Bezel, CardPaint, Ellipse, Face, Lin};
@@ -43,7 +44,7 @@ pub(crate) fn defs() -> Vec<ComponentDef> {
         binds: "level stream",
         build,
     };
-    vec![
+    let mut all = vec![
         def(
             "meter.vu_amber",
             "VU (amber)",
@@ -79,7 +80,9 @@ pub(crate) fn defs() -> Vec<ComponentDef> {
             BACKLIT_VARIANTS,
             build_backlit,
         ),
-    ]
+    ];
+    all.extend(leds::defs());
+    all
 }
 
 /// Frame variants (card = the face's own), then the other card with each.
@@ -441,8 +444,8 @@ fn build(face: &Face, b: &mut Builder<'_>, parent: NodeId, p: &Place) -> NodeId 
         bd
     });
     let (floor_db, ceiling_db) = card.range();
-    let mut control = Control::new(ControlKind::Gauge { sweep_degrees: 2.0 * SWEEP_DEG, floor_db, ceiling_db })
-        .slot(SlotRole::Needle, needle.0);
+    // A switched meter (`Place::select`) reads through the same law.
+    let mut control = p.control(ControlKind::Gauge { sweep_degrees: 2.0 * SWEEP_DEG, floor_db, ceiling_db }).slot(SlotRole::Needle, needle.0);
     control.binding = binding;
     b.controls.insert(root, control);
     root

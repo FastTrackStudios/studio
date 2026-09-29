@@ -24,12 +24,13 @@
 //! rotation-invariant (centred on the shaft) with the directional light laid
 //! over it from the fixed overlay above.
 
+pub(crate) mod concentric;
 pub mod spec;
 
 use document_proto::{
     Color, Effect, Node, NodeId, NodeKind, Paint, Size, Stroke, StrokeAlign, TextAlign, TextCase, TextData, Transform,
 };
-use surface_proto::{Control, ControlKind, SlotRole};
+use surface_proto::{ControlKind, SlotRole};
 use surface_widgets::Builder;
 
 use crate::draw;
@@ -338,14 +339,14 @@ fn label(name: &str, s: &str, (cx, cy): (f64, f64), size: f64, color: &str) -> N
     n
 }
 
-fn legend(text: &str, y: f64, w: f64, size: f64) -> Node {
+fn legend(text: &str, y: f64, w: f64, size: f64, ink: &str, case: TextCase) -> Node {
     let mut n = Node::new(
         NodeKind::Text(TextData {
             characters: text.to_string(),
             font_size: size,
             font_weight: Some(600.0),
             letter_spacing: size * 0.06,
-            text_case: TextCase::Upper,
+            text_case: case,
             align: TextAlign::Center,
             ..TextData::default()
         }),
@@ -353,7 +354,7 @@ fn legend(text: &str, y: f64, w: f64, size: f64) -> Node {
     );
     n.transform = Transform::translate(0.0, y);
     n.size = Size { width: w, height: (size * 1.35).ceil() };
-    n.fills = vec![draw::solid(INK)];
+    n.fills = vec![draw::solid(ink)];
     n
 }
 
@@ -374,7 +375,17 @@ fn build(b: &mut Builder<'_>, parent: NodeId, p: &Place, spec: &KnobSpec, title:
     let k = d / (2.0 * BODY_R);
     let which = p.variant.as_deref().and_then(|v| spec.variants.iter().position(|n| *n == v)).unwrap_or(0);
     let tint: Option<Color> = spec.tints.get(which).copied().flatten().map(css);
-    let labels: Vec<String> = p.scale.clone().unwrap_or_else(|| spec.scale.iter().map(ToString::to_string).collect());
+    // A stepped knob (options given) prints its positions and turns through
+    // exactly its detents; an authored scale or sweep wins.
+    let stepped = p.options.as_ref().filter(|o| !o.is_empty());
+    let labels: Vec<String> = p
+        .scale
+        .clone()
+        .or_else(|| stepped.cloned())
+        .unwrap_or_else(|| spec.scale.iter().map(ToString::to_string).collect());
+    let sweep = p.sweep.unwrap_or_else(|| stepped.map_or(spec.sweep, |o| crate::registry::detent_sweep(o.len())));
+    let spec = &KnobSpec { sweep, ..*spec };
+    let ink = p.ink_color(INK);
     let (ring_r, label_r) = {
         let (r, l) = spec.ring.geometry();
         (r + spec.ring_offset, l + spec.ring_offset)
@@ -393,7 +404,7 @@ fn build(b: &mut Builder<'_>, parent: NodeId, p: &Place, spec: &KnobSpec, title:
     let knob = b.add(root, draw::frame("knob", 0.0, 0.0, side, side));
 
     // ── fixed: the panel, the shadows, the round (lit) tiers ──
-    printed_scale(b, knob, g, spec, &labels, ring_r, label_r);
+    printed_scale(b, knob, g, spec, &labels, (ring_r, label_r), &ink, stepped.is_some() && p.scale.is_none());
     let outer = spec.tiers.first().map_or(1.0, |t| t.r);
     let (sx, sy) = g.p(0.0, 1.5);
     b.add(knob, ellipse("body shadow", sx, sy, BODY_R * outer * k, vec![Paint::solid(css("rgba(0,0,0,0.35)"))]));
@@ -440,16 +451,17 @@ fn build(b: &mut Builder<'_>, parent: NodeId, p: &Place, spec: &KnobSpec, title:
     if spec.ring == RingKind::OnKnob {
         // The panel's fixed index the turning numerals are read against.
         let pts = [g.p(0.0, -(BODY_R + 6.0)), g.p(-3.2, -(BODY_R + 12.0)), g.p(3.2, -(BODY_R + 12.0))];
-        b.add(knob, vector("panel index", 0.0, 0.0, side, side, fmt_pts(&pts), vec![draw::solid("#e8eaec")]));
+        let index_ink = p.ink.as_ref().map_or_else(|| "#e8eaec".to_string(), |_| ink.clone());
+        b.add(knob, vector("panel index", 0.0, 0.0, side, side, fmt_pts(&pts), vec![draw::solid(&index_ink)]));
     }
 
-    let legend_node = b.add(root, legend(p.legend.as_deref().unwrap_or(""), legend_y, side, legend_size));
+    let legend_node = b.add(root, legend(p.legend.as_deref().unwrap_or(""), legend_y, side, legend_size, &ink, p.case()));
 
-    let mut c = Control::new(ControlKind::Knob { sweep_degrees: spec.sweep })
-        .slot(SlotRole::Needle, body.0)
-        .slot(SlotRole::Label, legend_node.0);
-    c.binding = p.binding.clone();
+    let c = p.control(ControlKind::Knob { sweep_degrees: spec.sweep }).slot(SlotRole::Needle, body.0).slot(SlotRole::Label, legend_node.0);
     b.controls.insert(root, c);
+    if let Some(touch) = p.touch {
+        crate::registry::tighten(b, root, (g.c, g.c), d, touch);
+    }
     root
 }
 
@@ -485,27 +497,29 @@ fn seg(a: (f64, f64), b: (f64, f64), w: f64) -> String {
 }
 
 /// The scale printed on the panel around the knob (the source's `Ring`).
-fn printed_scale(b: &mut Builder<'_>, knob: NodeId, g: Geo, spec: &KnobSpec, labels: &[String], ring_r: f64, label_r: f64) {
+#[allow(clippy::too_many_arguments)]
+fn printed_scale(b: &mut Builder<'_>, knob: NodeId, g: Geo, spec: &KnobSpec, labels: &[String], (ring_r, label_r): (f64, f64), ink: &str, stepped: bool) {
     let side = g.size();
     let at = positions(labels.len());
     let angle = |n: f64| (n - 0.5) * spec.sweep;
     match spec.ring {
         RingKind::Ticks => {
             let arc = draw::sector(g.c, g.c, (ring_r - 0.3) * g.k, (ring_r + 0.3) * g.k, angle(0.0), angle(1.0));
-            b.add(knob, draw::with_opacity(vector("scale arc", 0.0, 0.0, side, side, arc, vec![draw::solid(INK)]), 0.35));
+            b.add(knob, draw::with_opacity(vector("scale arc", 0.0, 0.0, side, side, arc, vec![draw::solid(ink)]), 0.35));
             let tick = |n: f64, len: f64, w: f64| seg(g.polar(ring_r - 1.0, angle(n)), g.polar(ring_r + len, angle(n)), w * g.k);
             let majors: String = at.iter().map(|n| tick(*n, 5.0, 1.4)).collect();
             let minors: String = at.windows(2).map(|w| tick((w[0] + w[1]) / 2.0, 3.0, 0.8)).collect();
             if !majors.is_empty() {
-                b.add(knob, draw::with_opacity(vector("scale majors", 0.0, 0.0, side, side, majors, vec![draw::solid(INK)]), 0.9));
+                b.add(knob, draw::with_opacity(vector("scale majors", 0.0, 0.0, side, side, majors, vec![draw::solid(ink)]), 0.9));
             }
             if !minors.is_empty() {
-                b.add(knob, draw::with_opacity(vector("scale minors", 0.0, 0.0, side, side, minors, vec![draw::solid(INK)]), 0.55));
+                b.add(knob, draw::with_opacity(vector("scale minors", 0.0, 0.0, side, side, minors, vec![draw::solid(ink)]), 0.55));
             }
         }
         RingKind::Dots => {
-            // 21 is the 1073's: an arc from across the room, countable up close.
-            let n = labels.len().max(21);
+            // 21 is the 1073's: an arc from across the room, countable up
+            // close. A stepped knob has a dot per detent.
+            let n = if stepped { labels.len() } else { labels.len().max(21) };
             let dots: String = positions(n)
                 .iter()
                 .map(|t| {
@@ -513,7 +527,7 @@ fn printed_scale(b: &mut Builder<'_>, knob: NodeId, g: Geo, spec: &KnobSpec, lab
                     circle_path(x, y, 1.35 * g.k)
                 })
                 .collect();
-            b.add(knob, draw::with_opacity(vector("scale dots", 0.0, 0.0, side, side, dots, vec![draw::solid(INK)]), 0.92));
+            b.add(knob, draw::with_opacity(vector("scale dots", 0.0, 0.0, side, side, dots, vec![draw::solid(ink)]), 0.92));
         }
         RingKind::Numerals | RingKind::OnKnob => {}
     }
@@ -521,7 +535,7 @@ fn printed_scale(b: &mut Builder<'_>, knob: NodeId, g: Geo, spec: &KnobSpec, lab
         let size = 7.0 * g.k;
         for (s, n) in labels.iter().zip(&at) {
             if !s.is_empty() {
-                b.add(knob, label("numeral", s, g.polar(label_r, angle(*n)), size, INK));
+                b.add(knob, label("numeral", s, g.polar(label_r, angle(*n)), size, ink));
             }
         }
     }
