@@ -99,7 +99,20 @@ fn heads(b: &mut Builder<'_>, panel: NodeId) {
     let (lx0, lx1, ty, by) = (x0 + 14.0, x0 + w - 14.0, y0 + 74.0, y0 + 40.0);
     let loop_pts = vec![(lx0 + 10.0, ty), (lx1 - 10.0, ty), (lx1, ty - 8.0), (lx1, by + 8.0), (lx1 - 10.0, by), (lx0 + 10.0, by), (lx0, by + 8.0), (lx0, ty - 8.0), (lx0 + 10.0, ty)];
     parts::line(b, panel, "tape loop", &loop_pts, 2.4, "#1c1a16");
-    parts::line(b, panel, "tape loop edge", &loop_pts, 0.8, "#8a6a44");
+    // The oxide edge, dashed where the splices and wear show, runs round
+    // the loop at the motor's speed (the shorter the REPEAT RATE, the faster
+    // the tape) and wanders with WOW — motion.
+    let edge = parts::line(b, panel, "tape loop edge", &loop_pts, 0.8, "#8a6a44");
+    if let Some(n) = b.scene.node_mut(edge) {
+        n.stroke.dash_pattern = vec![7.0, 3.0];
+        n.motion = vec![
+            surface_kit::motion::spin("(1.2 + 6*(1 - norm(tape_echo/time)))").on(surface_kit::motion::Target::DashOffset).range(0.0, -10.0),
+            surface_kit::motion::Motion::new(surface_kit::motion::Target::Y).dynamics(surface_kit::motion::Dynamics::Noise {
+                rate: surface_kit::motion::Num::Value(2.5),
+                amount: surface_kit::motion::Num::Expr("0.8*norm(tape_echo/wow)".into()),
+            }),
+        ];
+    }
     let head_x = [x0 + 30.0, x0 + 60.0, x0 + 88.0, x0 + 116.0];
     for x in head_x {
         art::head(b, panel, (x, ty + 8.0), 14.0, 16.0);

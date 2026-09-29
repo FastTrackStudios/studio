@@ -11,10 +11,12 @@ surface-widgets = { path = "../../features/surface/surface-widgets" }
 surface-proto = { path = "../../features/surface/surface-proto", default-features = false }
 document-proto = { path = "../../features/document/document-proto", default-features = false }
 document-text = { path = "../../features/document/document-text" }
+motion-runtime = { path = "../../features/motion/motion-runtime" }
 serde_json = { workspace = true }
 
 [dev-dependencies]
 design-lint = { path = "../../features/design/design-lint" }
+surface-runtime = { path = "../../features/surface/surface-runtime" }
 
 [lints]
 workspace = true

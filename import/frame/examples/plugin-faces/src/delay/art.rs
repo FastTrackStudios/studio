@@ -74,8 +74,9 @@ pub struct Reel<'a> {
 
 /// A tape reel seen face-on: the oxide pack wound to `fill` of the radius,
 /// under a flange with three windows cut through it, and the hub and
-/// spindle. Decoration.
-pub fn reel(b: &mut Builder<'_>, parent: NodeId, (cx, cy): (f64, f64), r: f64, fill: f64, rot: f64, s: Reel<'_>) {
+/// spindle. Decoration. Returns the frame of the parts that turn (bands,
+/// flange, hub): square and centred on the spindle, for a spin motion.
+pub fn reel(b: &mut Builder<'_>, parent: NodeId, (cx, cy): (f64, f64), r: f64, fill: f64, rot: f64, s: Reel<'_>) -> NodeId {
     let side = 2.0 * r + 8.0;
     let (ox, oy) = (cx - side / 2.0, cy - side / 2.0);
     let c = side / 2.0;
@@ -86,6 +87,10 @@ pub fn reel(b: &mut Builder<'_>, parent: NodeId, (cx, cy): (f64, f64), r: f64, f
     let rp = r * fill;
     let pack = draw::circle("tape pack", c, c, rp, draw::radial_at(0.5, 0.5, 0.5, &[(0.0, &mixed(s.oxide, "#000000", 0.4)), (0.3, s.oxide), (0.92, &mixed(s.oxide, "#ffffff", 0.08)), (1.0, &mixed(s.oxide, "#000000", 0.35))]));
     b.add(root, pack);
+    // Everything that turns with the spindle, in a frame the size of the
+    // reel (so it turns about the spindle); the shadow and the pack (round
+    // about the spindle anyway) stay put.
+    let root = b.add(root, draw::frame("reel turning", 0.0, 0.0, side, side));
     let bands: String = (1..6).map(|k| circle_d(c, c, r * 0.26 + (rp - r * 0.26) * f64::from(k) / 6.0, false)).collect();
     let mut bands = draw::stroked(draw::path("pack bands", 0.0, 0.0, side, side, bands, draw::solid("#000000")), "#000000", 0.7);
     bands.fills = Vec::new();
@@ -118,6 +123,7 @@ pub fn reel(b: &mut Builder<'_>, parent: NodeId, (cx, cy): (f64, f64), r: f64, f
         .collect();
     b.add(root, parts::lines_node("drive dogs", &dogs, r * 0.05, "#c9cbcf"));
     b.add(root, draw::circle("spindle", c, c, r * 0.065, draw::radial_at(0.35, 0.3, 0.8, &[(0.0, "#ffffff"), (0.5, "#b8babd"), (1.0, "#5c5e62")])));
+    root
 }
 
 /// A chrome tape guide / capstan post.
@@ -194,7 +200,7 @@ pub fn enclosure(b: &mut Builder<'_>, parent: NodeId, (w, h): (f64, f64), paint:
 
 /// A preamp valve standing in its socket, `w` wide and `h` tall from the
 /// top of the glass to the socket, its heater glowing `glow` (0..1).
-pub fn valve(b: &mut Builder<'_>, parent: NodeId, (cx, top): (f64, f64), (w, h): (f64, f64), glow: f64) {
+pub fn valve(b: &mut Builder<'_>, parent: NodeId, (cx, top): (f64, f64), (w, h): (f64, f64), glow: f64) -> NodeId {
     let root = b.add(parent, draw::frame("valve", cx - w / 2.0 - 12.0, top - 12.0, w + 24.0, h + 24.0));
     let (x0, y0) = (12.0, 12.0);
     let glass_h = h - 16.0;
@@ -231,6 +237,7 @@ pub fn valve(b: &mut Builder<'_>, parent: NodeId, (cx, top): (f64, f64), (w, h):
     // Base and socket.
     let base = draw::rounded(draw::rect("base", x0 - 3.0, y0 + glass_h - 2.0, w + 6.0, 14.0, draw::linear(180.0, &[(0.0, "#3a3633"), (1.0, "#0f0e0d")])), 3.0);
     b.add(root, draw::with_effects(base, vec![draw::drop_shadow("#00000099", 0.0, 2.0, 3.0)]));
+    heater
 }
 
 // ── iron ─────────────────────────────────────────────────────────────────

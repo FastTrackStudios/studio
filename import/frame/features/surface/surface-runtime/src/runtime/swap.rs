@@ -13,7 +13,8 @@ impl Runtime {
     /// coalescing), the latest stream frames, meter ballistics, local
     /// positions, and a gesture in flight — for every control whose node
     /// is still there with the same kind (node ids are stable across
-    /// edits). Controls that are gone drop their state.
+    /// edits). Controls that are gone drop their state. Motions keep
+    /// theirs for every node (and motion slot) still there.
     ///
     /// The host lays the new design out and passes its boxes again
     /// ([`Runtime::set_boxes`]).
@@ -36,6 +37,13 @@ impl Runtime {
             }
         }
         next.captured = self.captured.filter(|id| kept.contains(id));
+        next.hovered = self.hovered.filter(|id| kept.contains(id));
+        // Motions keep their state (a ringing spring, a turning reel) for
+        // every node still there, and the clock runs on.
+        if let (Ok(motion), Ok(prev)) = (next.motion.get_mut(), self.motion.get_mut()) {
+            std::mem::swap(motion, prev);
+            motion.swap(&next.surface.scene);
+        }
         *self = next;
     }
 }

@@ -208,3 +208,38 @@ A gradient without a `transform` runs left to right across the node, so this met
   `features/render/render/src/fx/CONTRACT.md`). Optional: a surface must read
   correctly without it (non-GPU renderers skip shaders).
 
+
+## Motion (animation)
+
+`motion={[…]}` (or one `motion={{…}}`) animates a node. Each motion writes
+one **target** from an **input** expression through **dynamics**, output
+0..1 mapped onto `from`..`to`:
+
+```jsx
+<Frame name="Reel" w=60 h=60 motion={{"target":"rotate","input":"0.3 + 1.2*norm(tape/speed)","dynamics":"spin","to":360}} />
+<Rectangle name="Needle" w=2 h=40 motion={{"target":"rotate","input":"norm(wah/position)","dynamics":{"spring":{"stiffness":260,"damping":14}},"from":-20,"to":20,"pivot":{"x":0.5,"y":1}}} />
+<Ellipse name="Lamp" w=12 h=12 motion={{"target":"opacity","dynamics":{"lfo":{"rate":"param(chorus/rate)"}},"from":0.2}} />
+<Frame name="Coil" w=400 h=60 motion={[{"name":"ring","target":"none","dynamics":{"oscillator":{"freq":5,"decay":"param(spring/decay)","excite":"level(spring/in)"}}},{"target":"y","input":"motion(ring)","to":8}]} />
+```
+
+- **target**: `none` (a named signal for `motion(name)`), `x`, `y` (px),
+  `rotate` (°), `scale`, `stretch_x`, `stretch_y`, `skew_x`, `skew_y`,
+  `opacity`, `emission`, `dash_offset`, `{"fill":{"colors":["#…","#…"]}}`,
+  `{"stroke":{"colors":[…]}}`, `{"morph":{"shapes":["M…","M…"]}}`,
+  `{"shape":{"provider":"coil|reverb.room|wave","part":"…","inputs":{…}}}`.
+  Rotate/scale/stretch/skew turn about `pivot` (fractions of the node's box,
+  default centre). Rotating containers must be `Frame`s.
+- **input**: `norm(addr)`, `param(addr)`, `level(feed[,ch])`, `gr(feed)`,
+  `scalar(feed)`, `band(feed,lo,hi)`, `feed(feed,i)`, `motion(name)`, `time`,
+  `hover`, `press`, numbers, `+ - * / ( )`, `clamp min max abs lerp smoothstep
+  step pow sqrt sin cos floor fract sign curve or`. A feed with no data is
+  missing and makes the sum missing — wrap optional ones: `or(level(x/out), 0)`.
+- **dynamics**: `"follow"` (default), `{"spring":{stiffness,damping,mass}}`,
+  `{"oscillator":{freq,decay|damping,excite,gain}}` (rings when `excite`
+  rises), `{"lfo":{rate,shape,phase}}`, `{"noise":{rate,amount}}`,
+  `{"ballistic":{attack,release}}`, `{"keyframes":{times,values,easing,loop}}`,
+  `"spin"` (input in turns/s). Any number may be an expression.
+- `lag: true` adds only the dynamics' overshoot to what a control already
+  shows (a spring on a needle). `name` lets others read it with `motion(name)`.
+
+The `animate` tool edits motions; `lint` checks their sources.

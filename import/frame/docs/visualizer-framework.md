@@ -240,3 +240,127 @@ A feature (`features/library`) for storing and finding surfaces:
 - Safety: surfaces are data. Custom WGSL (`asset:` shaders) is validated by
   naga and sandboxed to the effect contract, and anything that fails falls
   back to plain drawing.
+
+## 9. Motion: animation as data on nodes
+
+Status: built (`features/motion`: `motion-proto`, `motion-runtime`; hooked
+into `surface-runtime`; kit presets; `animate` tool; lint rule `motion`;
+`render_surface --frames`). Applied to the spring and room reverbs, the tape
+machine's reels, the tape echo's loop, the valve preamp's heaters, the
+pedals' rate lamps and the wah's treadle.
+
+A **motion** drives one property of the node it sits on
+(`Node::motion: Vec<Motion>`, serde/facet-defaulted, printed as
+`motion={[…]}` in markup, round-tripping). Every frame it reads an
+**input** expression, runs it through **dynamics**, maps the result
+`0 → from`, `1 → to`, and writes the **target**. It's plain data, so an
+agent authors it, it live-reloads, it ships inside a shared surface, and it
+renders identically offline.
+
+```jsx
+<Frame name="Spring 1" w=832 h=150 motion={[
+  {"name":"ring","target":"none","dynamics":{"oscillator":{
+     "freq":"2.2 + 4.5*norm(spring/tension)",
+     "decay":"(0.35 + 2.8*norm(spring/dwell)) * (1.15 - norm(spring/damping))",
+     "excite":"or(level(spring/in), 0) * (0.35 + norm(spring/dwell)) * norm(spring/on)"}}}]}>
+  <Vector name="coil front" w=832 h=150 stroke="#9aa0a5" geometry="M …"
+    motion={[{"target":{"shape":{"provider":"coil","part":"front",
+      "inputs":{"x0":108,"x1":724,"y":52.5,"r":13,"bend":"motion(ring) * 12"}}}}]} />
+</Frame>
+<Frame name="reel turning" w=46 h=46 motion={{"target":"rotate","input":"0.3 * pow(2, 2*norm(tape_sat/speed))","dynamics":"spin","to":360}} />
+```
+
+```rust
+use surface_kit::motion;
+motion::add(b, body, motion::spring_lag("norm(wah/position)", motion::Target::Rotate, 16.0)); // treadle overshoot
+motion::add(b, reel, motion::spin("0.3 + 1.2*norm(tape/speed)"));
+motion::add(b, coil, motion::ring_on("spring/in", 5.0, "param(spring/decay)").range(0.0, 12.0));
+motion::add(b, filament, motion::flicker("0.25*norm(tube/drive)"));
+motion::add(b, lamp, motion::pulse("param(chorus/rate)", 0.2));
+```
+
+**Targets** (compose onto the node's transform after controls, in list
+order): `none` (a named signal), `x`, `y` (px), `rotate` (°, clockwise, about
+`pivot`, default the node's centre), `scale`, `stretch_x`, `stretch_y`
+(factor, anchored at `pivot` — springs, coils), `skew_x`, `skew_y` (°),
+`opacity` (absolute; overrides a control's reading), `emission` (scales the
+light), `dash_offset` (px), `{"fill"|"stroke":{"colors":[…]}}` (blend along
+colours), `{"morph":{"shapes":[…]}}` (keyed paths, point by point when the
+commands match), `{"shape":{"provider","part","inputs"}}` (geometry from a
+registered provider fed numbers/expressions plus `value`). `lag: true`
+drives only the dynamics' deviation from the input and *adds* it to what a
+control already shows — physics layered on a needle or treadle.
+
+**Sources** (`motion_proto::expr`, a small total language): `norm(addr)` /
+`param(addr)` (normalized / real units), `level(feed[,ch])` (0..1 over
+−60…0 dBFS, loudest channel), `gr(feed)` (0..1 over 0…20 dB), `scalar(feed)`,
+`band(feed, lo, hi)` (spectrum energy), `feed(feed, i)` (raw), `motion(name)`
+(looked up on the node, its ancestors, then anywhere; evaluated in
+dependency order), `time`, `hover`, `press`; `+ - * /`, `clamp min max abs
+lerp smoothstep step pow sqrt sin cos floor fract sign curve or`. A source
+without data is *missing*: it propagates through arithmetic, `or(a, b)`
+takes the first present one, and a motion whose input is missing holds its
+rest. Every dynamics number may be an expression (damping ← a param).
+
+**Dynamics**: `follow`; `spring {stiffness, damping, mass}` (defaults 170 /
+26 / 1); `oscillator {freq, decay (T60 s) | damping (ζ), excite, gain}` — a
+struck resonator at rest on its input, kicked by each *rise* of `excite`
+(amplitude ≈ gain × rise), ringing at `freq` and falling 60 dB over `decay`;
+`lfo {rate, shape: sine|triangle|saw|square|sample_hold, phase}` (input ×
+wave 0..1); `noise {rate, amount}` (smooth value noise ±amount about the
+input: flicker, drift); `ballistic {attack, release}` (time constants);
+`keyframes {times, values, easing, loop}` (a lookup of the input — `time` by
+default); `spin` (integrates the input in turns/s, wrapping — reels).
+
+**Runtime** (`motion-runtime::Animator`, owned by `surface_runtime::Runtime`
+in a `Mutex`, stepped inside `frame(t)` on the render copy; chosen over a
+separate host-driven crate call so every existing host animates without
+changes, while the evaluator stays independent of surfaces — it only needs
+an `Inputs` sampler and a `Scene`):
+- Each frame samples every source once, evaluates inputs and parameters once,
+  then integrates with a **fixed 1 ms step** (accumulator; ≤ 100 ms of catch-up
+  after a stall). A spring reads the same at 30, 60 or 240 Hz (tested to
+  0.02), and stays stable through a 30 s stall.
+- The first frame (and a clock that runs backwards) starts every motion at
+  rest on its input; time-driven dynamics start at phase `rate × t`. So
+  `render_surface --time T` is deterministic, and a `--frames` run is
+  deterministic frame to frame. A source's first value snaps its motions to
+  rest there. After a frame where everything was settled, the next frame
+  starts from rest rather than integrating the idle gap.
+- `Runtime::is_animating()` (and `animating()`) is true while a spring or
+  resonator moves, an LFO / noise / spin runs, or an input reads `time`;
+  settled motions let hosts sleep.
+- `swap_surface` keeps each motion's state when its node, slot and dynamics
+  kind survive (a ringing spring keeps ringing through a live reload).
+- Shape providers (`ShapeRegistry`): builtins `coil` (a spring's loops, bent
+  by its modes), `reverb.room` (the room box, reflection paths, tap diagram
+  from size / decay / diffusion) and `wave`; hosts override or add with
+  `Runtime::register_shape`. Outputs are memoised on their inputs.
+- Cost: 200 motions (springs, resonators, noise, LFOs; advance + apply)
+  take **0.016 ms per 60 Hz frame** in release
+  (`cargo test --release -p motion-runtime two_hundred -- --nocapture`).
+- Works with `--fx off`: motions change ordinary node properties
+  (transform, opacity, geometry, paint); emission changes only show where
+  light is drawn.
+
+**Authoring**: `surface_kit::motion` presets (`spring_follow`, `spring_lag`,
+`ring_on`, `spin`, `flicker`, `pulse`, `add`); kit `meter.lamp` warms and
+cools through a spring by default and takes a `flicker` option (as do the VU
+faces' lamps). The `animate` tool (design-session / MCP) adds, replaces,
+removes or lists a node's motions, raw or by preset, and reports the
+`motion` lint rule's findings: unparseable expressions, unknown params or
+feeds (with a nearest-name fix), feeds read the wrong way, unresolved
+`motion(name)`, bad colours / morphs / keyframes (errors); non-builtin shape
+providers and moved `Group`s (warnings).
+
+**Offline**: `render_surface --frames N --fps F [--columns C] [--gif a.gif]
+[--frames-dir DIR]` renders N frames from `--time` into a contact sheet, a
+looping GIF and/or per-frame PNGs; `--set-at T:addr=v` and
+`--stream-at T:id=v,…` change params and feeds mid-run (feeds are re-sent
+every frame), e.g. a level burst then silence:
+`--stream spring/in=-90,-90 --stream-at 0.2:spring/in=-4,-6 --stream-at 0.45:spring/in=-90,-90`.
+
+Not yet: motion on text content (counters), a per-motion `enabled` gate
+other than multiplying by an expression, hover in hosts that don't send
+pointer moves, and a shared curve/shape registry with the Curve controls
+(§3) — `reverb.room` and `coil` live in motion-runtime's own registry.

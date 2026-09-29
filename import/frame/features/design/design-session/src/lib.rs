@@ -9,6 +9,9 @@
 
 use std::collections::BTreeMap;
 
+// The `animate` tool: motions on nodes.
+mod animate;
+
 use design_lint::{Config, Issue, Severity};
 use document_proto::{History, Node, NodeId, NodeKind, Op, OpError, Prop, Scene};
 use serde_json::{Value, json};
@@ -135,6 +138,10 @@ impl Session {
                 self.bind(node, a.opt_str("source")?, a.opt_str("kind")?, a.0.get("slots"))
             }
             "generate" => self.generate(a.opt_str("theme")?),
+            "animate" => {
+                let node = a.node(&self.scene, "node")?;
+                self.animate(node, &a)
+            }
             "set_theme" => {
                 self.theme = parse_theme(a.str("theme")?)?;
                 Ok(format!("theme is now {} (applies to controls added from here on)", self.theme.name))
@@ -789,6 +796,7 @@ pub fn tools() -> Vec<ToolDef> {
             input_schema: obj(json!({"theme": {"type": "string", "enum": ["stage-dark", "daylight"]}}), &["theme"]),
             mutates: false,
         },
+        animate::def(),
         ToolDef { name: "undo", description: "Revert the last edit (one tool call).", input_schema: obj(json!({}), &[]), mutates: true },
         ToolDef { name: "redo", description: "Re-apply the last undone edit.", input_schema: obj(json!({}), &[]), mutates: true },
     ]

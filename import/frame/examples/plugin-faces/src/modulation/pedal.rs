@@ -2,7 +2,9 @@
 //! and the catalog entries a modulator binds.
 
 use document_proto::{NodeId, TextAlign};
-use surface_kit::draw;
+use document_proto::motion::{Dynamics, Motion, Num, Target, Wave};
+use surface_kit::{draw, motion};
+use surface_proto::SlotRole;
 use surface_proto::{ParamInfo, Range, StreamInfo, Unit};
 use surface_widgets::Builder;
 
@@ -20,10 +22,17 @@ pub fn body(b: &mut Builder<'_>, root: NodeId, paint: [&str; 3]) -> NodeId {
     ui::enclosure(b, root, W, H, paint, "#6c6d6a")
 }
 
-/// The rate lamp with its legend under it.
+/// The rate lamp with its legend under it. It follows the engine's LFO
+/// feed through a spring (a bulb warming and cooling); until the feed
+/// sends anything it pulses on its own at the RATE param — an LFO motion.
 #[allow(clippy::too_many_arguments)]
 pub fn rate_lamp(b: &mut Builder<'_>, lid: NodeId, face: &str, cx: f64, cy: f64, color: &str, ink: &str) {
-    ui::stream_lamp(b, lid, "Rate lamp", &format!("{face}/lfo"), "Rate", cx, cy, 26.0, color, ink);
+    let lamp = ui::stream_lamp(b, lid, "Rate lamp", &format!("{face}/lfo"), "Rate", cx, cy, 26.0, color, ink);
+    let glow = b.controls.get(&lamp).and_then(|c| c.slots_of(SlotRole::Glow).next()).map(NodeId);
+    if let Some(glow) = glow {
+        motion::add(b, glow, Motion::new(Target::None).named("lfo").dynamics(Dynamics::Lfo { rate: Num::Expr(format!("param({face}/rate)")), shape: Wave::Sine, phase: 0.0 }));
+        motion::add(b, glow, Motion::new(Target::Opacity).input(format!("or(scalar({face}/lfo), motion(lfo))")).dynamics(Dynamics::spring(900.0, 50.0)));
+    }
 }
 
 /// The bypass stomp, centred low on the lid, its LED above it.

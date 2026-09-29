@@ -21,6 +21,10 @@
 //! | `label-duplicate` | warning | two controls in one panel show the same label |
 //! | `param-duplicate` | info | two controls bound to the same parameter |
 //! | `unlabeled` | info | an input control with no label |
+//! | `motion` | error / warning | a motion reads a param, feed or motion that doesn't exist (or a feed the wrong way), or doesn't parse; warns on a non-builtin shape provider or a moved `Group` |
+
+// Rule `motion`: node animations read things that exist.
+mod motion;
 
 use std::collections::{BTreeMap, HashMap};
 
@@ -95,6 +99,7 @@ pub fn lint(scene: &Scene, catalog: &Catalog, config: &Config) -> Vec<Issue> {
     cx.overlaps(&controls);
     cx.sizes(&controls);
     cx.contrast();
+    motion::check(scene, catalog, &mut cx.out);
     cx.out.sort_by(|a, b| b.severity.cmp(&a.severity).then_with(|| a.rule.cmp(&b.rule)));
     cx.out
 }

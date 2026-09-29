@@ -78,6 +78,9 @@ fn treadle(b: &mut Builder<'_>, parent: NodeId, ax: f64, ay: f64, len: f64, heel
     part(b, "ribs", ribs, draw::solid("#5a5a60"));
     // A painted index on the toe: where it points on the scale.
     part(b, "index", draw::polygon(&[(lx1 - 34.0, ly0 + 10.0), (lx1 - 10.0, ly0 + 10.0), (lx1 - 10.0, ly0 + 13.0), (lx1 - 34.0, ly0 + 13.0)]), draw::solid("#f2b23a"));
+    // It rocks: the treadle swings past where the position puts it and
+    // settles, a spring's lag on the knob's turn (motion).
+    surface_kit::motion::add(b, body, surface_kit::motion::spring_lag("norm(wah/position)", surface_kit::motion::Target::Rotate, TRAVEL));
     let mut c = Control::new(ControlKind::Knob { sweep_degrees: TRAVEL }).slot(SlotRole::Needle, body.0);
     c.binding = Some(Binding::param("wah/position"));
     b.controls.insert(root, c);

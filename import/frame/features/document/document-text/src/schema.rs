@@ -100,6 +100,7 @@ pub(crate) const COMMON_ATTRS: &[&str] = &[
     "control",
     "emission",
     "shader",
+    "motion",
     "source",
 ];
 

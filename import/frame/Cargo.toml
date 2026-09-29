@@ -32,6 +32,9 @@ members = [
     "features/library/library-proto",
     "features/library/library-fs",
     "features/library/library-link",
+    # ── motion: declarative animation on nodes — data + evaluator ─────
+    "features/motion/motion-proto",
+    "features/motion/motion-runtime",
     # ── render ────────────────────────────────────────────────────────
     "features/render/render",
     # ── surface: controls, bindings, engine contract, runtime ─────────
@@ -66,6 +69,8 @@ default-members = [
     "features/library/library-proto",
     "features/library/library-fs",
     "features/library/library-link",
+    "features/motion/motion-proto",
+    "features/motion/motion-runtime",
     "features/render/render",
     "features/surface/surface-proto",
     "features/surface/surface-memory",

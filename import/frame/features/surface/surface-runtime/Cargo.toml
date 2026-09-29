@@ -8,6 +8,7 @@ publish = false
 [dependencies]
 surface-proto = { path = "../surface-proto", default-features = false }
 document-proto = { path = "../../document/document-proto", default-features = false }
+motion-runtime = { path = "../../motion/motion-runtime" }
 uuid.workspace = true
 architect = { workspace = true, optional = true }
 vox-core = { workspace = true, optional = true }

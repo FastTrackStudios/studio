@@ -7,13 +7,15 @@
 //! tape FORMULATION (standard or hot, the family's two profiles). Below, the
 //! record electronics: RECORD LEVEL (drive into the tape), BIAS (under- or
 //! over-biased from the calibrated point), EMPHASIS, COMPRESSION, and MIX and
-//! OUTPUT last.
+//! OUTPUT last. Between the meters a pair of reels turns at the speed the
+//! switch sets.
 
 use document_proto::NodeId;
-use surface_kit::{Place, draw};
+use surface_kit::{Place, draw, motion};
 use surface_proto::{Binding, EntryId, Source};
 use surface_widgets::Builder;
 
+use crate::delay::art;
 use crate::delay::parts::{self, Ink};
 use crate::face::{Face, canvas};
 
@@ -27,6 +29,22 @@ const FORMULATIONS: &[&str] = &["Standard", "Hot"];
 
 fn a(s: &str) -> String {
     format!("tape_sat/{s}")
+}
+
+/// The transport between the meters: supply reel over take-up reel, the
+/// tape between them, both turning at the SPEED switch's rate (the
+/// emptier take-up hub turns faster) — motion `spin`.
+fn transport(b: &mut Builder<'_>, bridge: NodeId, (cx, cy): (f64, f64)) {
+    let r = 19.0;
+    let (top, bottom) = ((cx, cy - 27.0), (cx, cy + 27.0));
+    art::tape(b, bridge, &[(cx + r * 0.72, top.1), (cx + r * 0.9, cy), (cx + r * 0.5, bottom.1)], 2.0, "#3a2416");
+    let metal = art::Reel { flange: ("#e8e9ea", "#a9abae", "#6d6f73"), oxide: "#4a2c18" };
+    // 7½ / 15 / 30 in/s: each step doubles the turn rate.
+    let speed = "0.3 * pow(2, 2*norm(tape_sat/speed))";
+    for ((c, fill, rot), name) in [((top, 0.82, 10.0), "supply"), ((bottom, 0.5, 70.0), "take-up")] {
+        let turning = art::reel(b, bridge, c, r, fill, rot, metal);
+        motion::add(b, turning, motion::spin(&format!("{speed} / {fill}")).named(name));
+    }
 }
 
 /// One VU on the bridge, reading channel `ch` of the output.
@@ -54,6 +72,7 @@ pub fn face() -> Face {
         let bridge = parts::well(b, panel, "Meter bridge", (246.0, 18.0, 468.0, 146.0), draw::linear(180.0, &[(0.0, "#1c1a17"), (1.0, "#121110")]), 6.0);
         vu(b, bridge, 0, 118.0, "Left");
         vu(b, bridge, 1, 350.0, "Right");
+        transport(b, bridge, (234.0, 66.0));
         parts::silk(b, bridge, "Level to tape", 234.0, 136.0, Ink::new(6.0, "#7d7466").weight(700.0).track(0.2));
 
         // ── Formulation ────────────────────────────────────────────────

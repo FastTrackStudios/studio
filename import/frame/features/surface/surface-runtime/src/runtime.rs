@@ -37,6 +37,8 @@ const CURVE_CACHE_MAX: usize = 512;
 
 // Live reload: swap the design, keep the running state.
 mod swap;
+// Motion: `Node::motion` animations, run on the render copy.
+mod motion;
 
 /// A design plus the controls attached to its nodes.
 #[derive(Debug, Clone, PartialEq)]
@@ -95,6 +97,10 @@ pub struct Runtime {
     histories: HashMap<NodeId, VecDeque<f64>>,
     curves: CurveRegistry,
     curve_cache: Mutex<CurveCache>,
+    /// The surface's motions (stateful; stepped by `frame`).
+    motion: std::sync::Mutex<motion_runtime::Animator>,
+    /// The input control under the pointer (for `hover` motion sources).
+    hovered: Option<NodeId>,
 }
 
 impl Runtime {
@@ -102,6 +108,7 @@ impl Runtime {
     pub fn new(surface: Surface, catalog: Catalog) -> Self {
         let values = catalog.params.iter().map(|p| (p.addr.clone(), p.default)).collect();
         let gestures = surface.controls.iter().map(|(id, c)| (*id, Gesture::new(c.kind.clone()))).collect();
+        let motion = motion::animator(&surface.scene);
         Self {
             surface,
             catalog,
@@ -118,6 +125,8 @@ impl Runtime {
             histories: HashMap::new(),
             curves: CurveRegistry::builtin(),
             curve_cache: Mutex::new(CurveCache::default()),
+            motion,
+            hovered: None,
         }
     }
 
@@ -580,6 +589,9 @@ impl Runtime {
     /// Feed pointer input at time `t` (ms). A control captures the pointer
     /// from `Down` until `Up`/`Cancel`.
     pub fn pointer(&mut self, input: Input, t: f64) -> Vec<EngineCall> {
+        if let Input::Move { x, y, .. } | Input::Down { x, y, .. } = input {
+            self.hovered = self.hit(x, y);
+        }
         let target = match input {
             Input::Down { x, y, .. } => {
                 self.captured = self.hit(x, y);
@@ -892,6 +904,7 @@ impl Runtime {
             // slot, which lint reports — skip that control rather than abort.
             let _ = scene.transact(ops);
         }
+        self.animate(&mut scene, t);
         scene
     }
 
@@ -899,7 +912,7 @@ impl Runtime {
     /// a gesture in flight) — lets hosts sleep when nothing moves.
     #[must_use]
     pub fn animating(&self) -> bool {
-        self.captured.is_some() || !self.meters.is_empty() || !self.histories.is_empty()
+        self.captured.is_some() || !self.meters.is_empty() || !self.histories.is_empty() || self.motion_animating()
     }
 
     /// Controls whose parameter is a choice/toggle (for selector hit-mapping).

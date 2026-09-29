@@ -38,6 +38,7 @@ pub enum Prop {
     Control(Option<surface_proto::Control>),
     Emission(Option<crate::model::Emission>),
     Shader(Option<crate::model::ShaderFx>),
+    Motion(Vec<motion_proto::Motion>),
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Facet)]
@@ -218,6 +219,7 @@ fn set_prop(node: &mut Node, prop: Prop) -> Prop {
         Prop::Control(v) => Prop::Control(replace(&mut node.control, v)),
         Prop::Emission(v) => Prop::Emission(replace(&mut node.emission, v)),
         Prop::Shader(v) => Prop::Shader(replace(&mut node.shader, v)),
+        Prop::Motion(v) => Prop::Motion(replace(&mut node.motion, v)),
     }
 }
 

@@ -7,10 +7,12 @@
 //! the output VU and the power toggle with its pilot. The knob row: DRIVE
 //! and BIAS first (bias leans the curve — the even harmonics are there),
 //! then SAG, HEAT (how hot the heater runs), TILT, and MIX and OUTPUT last,
-//! where they are on every saturation face.
+//! where they are on every saturation face. The heaters glow with DRIVE
+//! and HEAT and flicker as they're pushed (motion), with or without a GPU.
 
 use document_proto::NodeId;
-use surface_kit::{Place, draw};
+use document_proto::motion::{Dynamics, Motion, Num, Target};
+use surface_kit::{Place, draw, motion};
 use surface_widgets::Builder;
 
 use crate::delay::art;
@@ -25,6 +27,20 @@ const STAGES: &[&str] = &["Triode", "Pentode"];
 
 fn a(s: &str) -> String {
     format!("tube/{s}")
+}
+
+/// A valve's heater glow, alive: it warms (slowly, as a cathode does)
+/// with DRIVE and HEAT and goes dark with the power off, and it wavers —
+/// more the harder it's driven. Its light (emission) flickers with it.
+fn heat(b: &mut Builder<'_>, heater: NodeId) {
+    let warm = "(0.6 + 0.4*norm(tube/drive)) * (0.8 + 0.2*norm(tube/heat)) * norm(tube/power)";
+    motion::add(b, heater, Motion::new(Target::Opacity).input(warm).dynamics(Dynamics::Ballistic { attack: Num::Value(0.35), release: Num::Value(0.9) }));
+    let waver = Motion::new(Target::Opacity).dynamics(Dynamics::Noise { rate: Num::Value(7.0), amount: Num::Expr("0.03 + 0.12*norm(tube/drive)".into()) });
+    motion::add(b, heater, Motion { input: "0".into(), lag: true, ..waver });
+    let glows: Vec<NodeId> = b.scene.walk(heater).into_iter().skip(1).filter(|id| b.scene.node(*id).is_some_and(|n| n.emission.is_some())).collect();
+    for g in glows {
+        motion::add(b, g, motion::flicker("0.05 + 0.25*norm(tube/drive)"));
+    }
 }
 
 /// The window onto the valves.
@@ -46,8 +62,9 @@ fn window(b: &mut Builder<'_>, panel: NodeId) {
         b.add(win, pool);
     }
     // Two valves, and a transformer can between them for scale.
-    art::valve(b, win, (110.0, 22.0), (46.0, 118.0), 0.85);
-    art::valve(b, win, (250.0, 22.0), (46.0, 118.0), 0.7);
+    for heater in [art::valve(b, win, (110.0, 22.0), (46.0, 118.0), 0.85), art::valve(b, win, (250.0, 22.0), (46.0, 118.0), 0.7)] {
+        heat(b, heater);
+    }
     let can = draw::rounded(draw::rect("output can", 158.0, 62.0, 44.0, 70.0, draw::linear(90.0, &[(0.0, "#2a2b2d"), (0.4, "#6a6c70"), (0.6, "#4a4c50"), (1.0, "#1c1d1f")])), 4.0);
     b.add(win, draw::with_effects(can, vec![draw::drop_shadow("#000000", 0.0, 2.0, 4.0)]));
     parts::silk(b, win, "V1", 110.0, h - 10.0, Ink::new(6.5, "#c9c2b2").weight(800.0).track(0.2));

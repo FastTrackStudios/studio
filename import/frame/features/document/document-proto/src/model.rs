@@ -591,6 +591,13 @@ pub struct Node {
     #[serde(default)]
     #[facet(default)]
     pub shader: Option<ShaderFx>,
+    /// Animations on this node: each drives one property from params,
+    /// feeds, time or gestures through physical dynamics (springs,
+    /// struck resonators, LFOs, noise…). Run by the surface runtime every
+    /// frame on the render copy; the authored node is what shows at rest.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    #[facet(default)]
+    pub motion: Vec<motion_proto::Motion>,
 
     pub source: Option<SourceRef>,
 }
@@ -625,6 +632,7 @@ impl Node {
             control: None,
             emission: None,
             shader: None,
+            motion: Vec::new(),
             source: None,
         }
     }

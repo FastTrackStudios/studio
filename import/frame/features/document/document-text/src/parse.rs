@@ -826,6 +826,7 @@ fn apply_common(at: &Attrs<'_>, n: &mut Node) -> Result<()> {
     n.control = at.convert("control", from_json)?;
     n.emission = at.convert("emission", from_json)?;
     n.shader = at.convert("shader", from_json)?;
+    n.motion = at.convert("motion", motion_value)?.unwrap_or_default();
     n.source = at.convert("source", source_value)?;
     Ok(())
 }
@@ -837,6 +838,16 @@ fn paints_value(v: Value) -> std::result::Result<Vec<document_proto::Paint>, Str
             Err(format!("\"{s}\" is not a color — write \"#rrggbb\" / \"#rrggbbaa\", or a paint list {{[…]}}"))
         }
         v => paints_from_json(v),
+    }
+}
+
+/// `motion={[…]}` (a list) or `motion={{…}}` (one motion). Expressions
+/// are checked by lint (`motion` rule), not here, so any scene prints and
+/// parses back.
+fn motion_value(v: Value) -> std::result::Result<Vec<document_proto::motion::Motion>, String> {
+    match v {
+        Value::Array(_) => from_json(v),
+        v => Ok(vec![from_json(v)?]),
     }
 }
 

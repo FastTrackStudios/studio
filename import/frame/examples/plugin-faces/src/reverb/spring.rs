@@ -8,12 +8,19 @@
 //! the amp's row: cream chicken-heads for DWELL, TONE and MIX — the three
 //! a spring is set by — black bakelite for the rest, the springs selector,
 //! the IN bat and a jewel pilot.
+//!
+//! The springs move: each is a struck resonator (motion) that the input
+//! level rings — it bounces and settles over the time DWELL and DAMPING
+//! give it, at a pitch TENSION sets, and rings not at all with the reverb
+//! switched out.
 
-use document_proto::NodeId;
-use surface_kit::{Place, draw};
+use document_proto::motion::{Dynamics, Motion, Num, Target};
+use document_proto::{Node, NodeId, Stroke, StrokeCap, StrokeJoin};
+use surface_kit::{Place, draw, motion};
 use surface_widgets::Builder;
 
 use super::ui::{self, Dial, bind};
+use crate::animate;
 use crate::face::{Face, canvas};
 
 const W: f64 = 960.0;
@@ -21,32 +28,48 @@ const H: f64 = 350.0;
 const INK: &str = "#ece3c6";
 const DIM: &str = "#a7b29c";
 
-/// One spring seen from the side: `n` loops of a helix between `x0..x1`
-/// at `y`, `r` tall. Back halves dark, front halves bright.
-fn coil(b: &mut Builder<'_>, tank: NodeId, x0: f64, x1: f64, y: f64, r: f64) {
-    let pitch = 5.5;
-    let n = ((x1 - x0) / pitch) as usize;
-    let mut back = Vec::new();
-    let mut front = Vec::new();
-    for i in 0..n {
-        let cx = x0 + pitch * (i as f64 + 0.5);
-        // Each loop leans a little along the spring, as a helix does.
-        let arc = |from: f64, to: f64| -> Vec<(f64, f64)> {
-            (0..=10)
-                .map(|k| {
-                    let t = from + (to - from) * f64::from(k) / 10.0;
-                    (cx + pitch * 0.55 * t.cos() + pitch * 0.35 * t.sin(), y + r * t.sin())
-                })
-                .collect()
-        };
-        back.push(arc(std::f64::consts::PI, std::f64::consts::TAU));
-        front.push(arc(0.0, std::f64::consts::PI));
-    }
-    b.add(tank, ui::strokes("coil back", &back, 1.2, draw::solid("#5e6368")));
+/// One spring seen from the side, `n` loops of a helix between `x0..x1`
+/// at `y`, `r` tall, back halves dark and front halves bright — and alive:
+/// the spring's frame carries two struck resonators, `ring` (the
+/// fundamental, bending the coil sideways) and `ripple` (the second mode,
+/// running along it). Rises of the input level (and, weaker, the output's
+/// ring-back) strike them — harder with more DWELL, not at all with the
+/// reverb off; TENSION tunes them and DWELL / DAMPING set how long they
+/// ring. The three strokes are redrawn from the `coil` shape provider.
+#[allow(clippy::too_many_arguments)]
+fn spring(b: &mut Builder<'_>, tank: NodeId, i: usize, (w, h): (f64, f64), x0: f64, x1: f64, y: f64, r: f64) {
+    let frame = b.add(tank, draw::frame(&format!("Spring {}", i + 1), 0.0, 0.0, w, h));
+    // Each spring a little apart in pitch, as real ones are.
+    let k = 1.0 + 0.13 * i as f64;
+    let freq = format!("{:.3} + {:.3}*norm(spring/tension)", 2.2 * k, 4.5 * k);
+    let decay = "(0.35 + 2.8*norm(spring/dwell)) * (1.15 - norm(spring/damping))";
+    let excite = "(or(level(spring/in), 0) + 0.5*or(level(spring/out), 0)) * (0.35 + norm(spring/dwell)) * norm(spring/on)";
+    let resonator = |name: &str, freq: String, decay: String, gain: f64| {
+        Motion::new(Target::None).named(name).dynamics(Dynamics::Oscillator {
+            freq: Num::Expr(freq),
+            decay: Some(Num::Expr(decay)),
+            damping: None,
+            excite: excite.into(),
+            gain: Num::Value(gain),
+        })
+    };
+    motion::add(b, frame, resonator("ring", freq.clone(), decay.into(), 1.0));
+    motion::add(b, frame, resonator("ripple", format!("2.6 * ({freq})"), format!("0.5 * {decay}"), 0.6));
+
+    // Its shadow on the floor, then the coil.
+    b.add(frame, draw::with_opacity(draw::rounded(draw::rect("shadow", x0, y + 7.0, x1 - x0, 5.0, draw::solid("#00000040")), 2.5), 1.0));
+    let fixed = [("x0", x0), ("x1", x1), ("y", y), ("r", r), ("pitch", 5.5)];
+    let live = [("bend", "motion(ring) * 12"), ("ripple", "motion(ripple) * (1.5 + 5*norm(spring/drip))"), ("squeeze", "motion(ripple) * 2")];
+    let rest = [("bend", 0.0), ("ripple", 0.0), ("squeeze", 0.0)];
+    let stroke = |mut n: Node, weight: f64, color: &str| {
+        n.stroke = Stroke { paints: vec![draw::solid(color)], weight, cap: StrokeCap::Round, join: StrokeJoin::Round, ..Stroke::default() };
+        n
+    };
+    let part = |name: &str, part: &str| animate::shape_node(name, "coil", part, (w, h), &fixed, &live, &rest);
+    b.add(frame, stroke(part("coil back", "back"), 1.2, "#5e6368"));
     // The front halves: steel, with the light running along their tops.
-    let lit: Vec<Vec<(f64, f64)>> = front.iter().map(|l| l.iter().map(|(x, y)| (*x, y - 0.45)).collect()).collect();
-    b.add(tank, ui::strokes("coil front", &front, 1.6, draw::solid("#9aa0a5")));
-    b.add(tank, ui::strokes("coil light", &lit, 0.6, draw::solid("#f2f4f5")));
+    b.add(frame, stroke(part("coil front", "front"), 1.6, "#9aa0a5"));
+    b.add(frame, stroke(part("coil light", "light"), 0.6, "#f2f4f5"));
 }
 
 /// A transducer can with its winding, centred at (`cx`, `cy`).
@@ -95,9 +118,8 @@ fn tank_art(b: &mut Builder<'_>, tank: NodeId, w: f64, h: f64, springs: usize) {
         // Hooks from the transducers.
         ui::line(b, tank, "hook", &[(tx0 + 24.0, y), (tx0 + 46.0, y)], 1.6, "#e2e5e7");
         ui::line(b, tank, "hook", &[(tx1 - 46.0, y), (tx1 - 24.0, y)], 1.6, "#e2e5e7");
-        // Spring shadow on the floor, then the coil.
-        b.add(tank, draw::with_opacity(draw::rounded(draw::rect("shadow", tx0 + 44.0, y + 7.0, tx1 - tx0 - 88.0, 5.0, draw::solid("#00000040")), 2.5), 1.0));
-        coil(b, tank, tx0 + 44.0, tx1 - 44.0, y, (gap * 0.3).min(13.0));
+        // The spring: shadow and coil, ringing.
+        spring(b, tank, i, (w, h), tx0 + 44.0, tx1 - 44.0, y, (gap * 0.3).min(13.0));
     }
     transducer(b, tank, tx0, h / 2.0, "Input");
     transducer(b, tank, tx1, h / 2.0, "Output");

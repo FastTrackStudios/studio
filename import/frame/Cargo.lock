@@ -1225,6 +1225,7 @@ version = "0.1.0"
 dependencies = [
  "document-proto",
  "facet",
+ "motion-runtime",
  "render",
  "serde",
  "surface-memory",
@@ -1344,6 +1345,7 @@ dependencies = [
  "blake3",
  "facet",
  "facet-json",
+ "motion-proto",
  "serde",
  "serde_json",
  "surface-proto",
@@ -3534,6 +3536,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "motion-proto"
+version = "0.1.0"
+dependencies = [
+ "facet",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "motion-runtime"
+version = "0.1.0"
+dependencies = [
+ "document-proto",
+ "motion-proto",
+]
+
+[[package]]
 name = "mutants"
 version = "0.0.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4341,9 +4360,11 @@ dependencies = [
  "design-lint",
  "document-proto",
  "document-text",
+ "motion-runtime",
  "serde_json",
  "surface-kit",
  "surface-proto",
+ "surface-runtime",
  "surface-widgets",
 ]
 
@@ -5864,6 +5885,7 @@ dependencies = [
  "architect 0.1.0 (git+https://github.com/FastTrackStudios/architect?tag=v0.0.2)",
  "document-proto",
  "kurbo 0.13.1",
+ "motion-runtime",
  "peniko",
  "render",
  "surface-memory",

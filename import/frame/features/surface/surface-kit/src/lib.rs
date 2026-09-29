@@ -22,6 +22,7 @@ pub mod controls;
 pub mod draw;
 pub mod knobs;
 pub mod meters;
+pub mod motion;
 pub mod panels;
 pub mod registry;
 pub mod viz;

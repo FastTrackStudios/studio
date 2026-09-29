@@ -5,6 +5,8 @@
 //!                [--markup surface.fm] [--catalog catalog.json] [--set amp/gain=0.8 ...]
 //!                [--stream ID=V[,V2…] ...] [--level -12] [--demo-feeds]
 //!                [--scale 2] [--fx gpu|fallback|off] [--time SECONDS]
+//!                [--frames N [--fps 30] [--columns 4] [--gif anim.gif] [--frames-dir DIR]]
+//!                [--set-at SECONDS:addr=v ...] [--stream-at SECONDS:ID=V[,V2…] ...]
 //! ```
 //! Builds a surface from the demo engine catalog (or `--markup` +
 //! `--catalog`), applies the given parameter values (normalized) and stream
@@ -16,6 +18,14 @@
 //! stream in the catalog (DB on the first channel, DB − 4 on the rest)
 //! unless `--stream` names streams explicitly; then it only fills in the
 //! level streams none of them named.
+//!
+//! `--frames N` renders an animation: N frames from `--time` at `--fps`,
+//! the motions (springs, resonators, LFOs, reels) stepped deterministically
+//! from frame to frame. `--out` gets a contact sheet (`--columns` wide),
+//! `--gif` a looping GIF, `--frames-dir` one PNG per frame. `--set-at` and
+//! `--stream-at` change a param or a feed at a time — a level burst, then
+//! silence: `--stream-at 0.2:spring/in=-6,-8 --stream-at 0.5:spring/in=-90,-90`.
+//! Feeds are re-sent every frame, as an engine streams them.
 //!
 //! `--demo-feeds` feeds every other feed of the catalog (levels, gain
 //! reduction, spectra, histories, scopes, envelopes, tuner, scalars) from
@@ -52,7 +62,27 @@ fn run() -> Result<(), String> {
     let mut catalog_path: Option<String> = None;
     let mut fx = render::fx::Mode::Gpu;
     let mut time_s = 0.0_f64;
+    let mut frames = 0_usize;
+    let mut fps = 30.0_f64;
+    let mut columns = 4_usize;
+    let mut gif: Option<String> = None;
+    let mut frames_dir: Option<String> = None;
+    // Timed changes: (seconds, what).
+    let mut timeline: Vec<(f64, Change)> = Vec::new();
     let mut args = std::env::args().skip(1);
+    let at = |kv: &str, what: &str| -> Result<(f64, String), String> {
+        let (t, rest) = kv.split_once(':').ok_or_else(|| format!("{what} needs SECONDS:…"))?;
+        Ok((t.parse::<f64>().map_err(|e| format!("{kv}: {e}"))?, rest.to_string()))
+    };
+    let set = |kv: &str| -> Result<ParamValue, String> {
+        let (k, v) = kv.split_once('=').ok_or("--set needs addr=value")?;
+        Ok(ParamValue { addr: ParamAddr::new(k), value: v.parse::<f64>().map_err(|e| format!("{kv}: {e}"))? })
+    };
+    let stream = |kv: &str| -> Result<StreamFrame, String> {
+        let (k, v) = kv.split_once('=').ok_or("--stream needs id=v[,v2…]")?;
+        let values = v.split(',').map(|x| x.trim().parse::<f64>().map_err(|e| format!("{kv}: {e}"))).collect::<Result<Vec<_>, _>>()?;
+        Ok(StreamFrame { id: EntryId::new(k), values })
+    };
     while let Some(a) = args.next() {
         match a.as_str() {
             "--out" => out = args.next(),
@@ -64,26 +94,31 @@ fn run() -> Result<(), String> {
                     _ => Theme::stage_dark(),
                 }
             }
-            "--set" => {
-                let kv = args.next().ok_or("--set needs addr=value")?;
-                let (k, v) = kv.split_once('=').ok_or("--set needs addr=value")?;
-                sets.push(ParamValue { addr: ParamAddr::new(k), value: v.parse::<f64>().map_err(|e| format!("{kv}: {e}"))? });
+            "--set" => sets.push(set(&args.next().ok_or("--set needs addr=value")?)?),
+            "--stream" => streams.push(stream(&args.next().ok_or("--stream needs id=v[,v2…]")?)?),
+            "--set-at" => {
+                let (t, kv) = at(&args.next().ok_or("--set-at needs SECONDS:addr=value")?, "--set-at")?;
+                timeline.push((t, Change::Set(set(&kv)?)));
             }
-            "--stream" => {
-                let kv = args.next().ok_or("--stream needs id=v[,v2…]")?;
-                let (k, v) = kv.split_once('=').ok_or("--stream needs id=v[,v2…]")?;
-                let values = v.split(',').map(|x| x.trim().parse::<f64>().map_err(|e| format!("{kv}: {e}"))).collect::<Result<Vec<_>, _>>()?;
-                streams.push(StreamFrame { id: EntryId::new(k), values });
+            "--stream-at" => {
+                let (t, kv) = at(&args.next().ok_or("--stream-at needs SECONDS:id=v[,v2…]")?, "--stream-at")?;
+                timeline.push((t, Change::Stream(stream(&kv)?)));
             }
             "--demo-feeds" => demo_feeds = true,
             "--level" => level = Some(args.next().ok_or("--level needs dB")?.parse::<f64>().map_err(|e| e.to_string())?),
             "--fx" => fx = args.next().ok_or("--fx needs gpu|fallback|off")?.parse()?,
             "--time" => time_s = args.next().ok_or("--time needs seconds")?.parse::<f64>().map_err(|e| e.to_string())?,
             "--scale" => scale = args.next().ok_or("--scale needs a factor")?.parse::<f64>().map_err(|e| e.to_string())?,
+            "--frames" => frames = args.next().ok_or("--frames needs a count")?.parse::<usize>().map_err(|e| e.to_string())?,
+            "--fps" => fps = args.next().ok_or("--fps needs a rate")?.parse::<f64>().map_err(|e| e.to_string())?.max(1.0),
+            "--columns" => columns = args.next().ok_or("--columns needs a count")?.parse::<usize>().map_err(|e| e.to_string())?.max(1),
+            "--gif" => gif = args.next(),
+            "--frames-dir" => frames_dir = args.next(),
             other => return Err(format!("unknown arg: {other}")),
         }
     }
     let out = out.ok_or("--out <png> is required")?;
+    timeline.sort_by(|a, b| a.0.total_cmp(&b.0));
 
     let catalog = match &catalog_path {
         Some(path) => {
@@ -102,53 +137,127 @@ fn run() -> Result<(), String> {
     };
     let mut rt = Runtime::new(surface, catalog);
     rt.apply_values(sets);
-    let levels = level_frames(rt.catalog(), level, &streams);
-    if demo_feeds {
-        let named: Vec<&EntryId> = streams.iter().chain(&levels).map(|f| &f.id).collect();
-        for f in demo_frames(rt.catalog(), time_s, &named) {
-            rt.apply_frame(f, 0.0);
-        }
-    }
-    for f in levels {
-        rt.apply_frame(f, 0.0);
-    }
-    for f in streams {
+    for f in &streams {
         if rt.catalog().stream(&f.id).is_none() {
             eprintln!("render_surface: warning: no stream `{}` in the catalog", f.id.0);
         }
-        rt.apply_frame(f, 0.0);
     }
-    let frame = rt.frame(0.0);
+    // The feeds held at each instant: `--level`/`--stream` from the start,
+    // `--stream-at` from its time on; re-sent every frame, as an engine
+    // streams them.
+    let levels = level_frames(rt.catalog(), level, &streams);
+    let mut held: Vec<StreamFrame> = levels.into_iter().chain(streams).collect();
+    let named: Vec<EntryId> = held.iter().map(|f| f.id.clone()).chain(timeline.iter().filter_map(|(_, c)| match c {
+        Change::Stream(f) => Some(f.id.clone()),
+        Change::Set(_) => None,
+    })).collect();
 
-    let page = frame.pages()[0];
-    let root = frame.node(page).and_then(|p| p.children.first().copied()).ok_or("empty surface")?;
-    let size = frame.node(root).map(|n| n.size).ok_or("no root")?;
-    let (w, h) = ((size.width * scale).ceil() as u32, (size.height * scale).ceil() as u32);
-
-    let bg = frame
-        .node(root)
-        .and_then(|n| n.fills.iter().find_map(|p| match &p.kind {
-            document_proto::PaintKind::Solid { color } => Some(*color),
-            _ => None,
-        }))
-        .unwrap_or(theme.background);
-    let base = peniko::Color::from_rgba8((bg.r * 255.0) as u8, (bg.g * 255.0) as u8, (bg.b * 255.0) as u8, 255);
+    let times: Vec<f64> = if frames == 0 { vec![time_s] } else { (0..frames).map(|k| time_s + k as f64 / fps).collect() };
+    let mut offscreen = render::offscreen::Offscreen::new()?;
     let font = include_bytes!("../../assets/inter/Inter-Variable.ttf");
-    let values = control_positions(&rt);
-    let px = render::offscreen::Offscreen::new()?.render_with_effects(&render::fx::Frame {
-        transform: kurbo::Affine::scale(scale),
-        base,
-        font: Some(render::TextFontRef { bytes: font, index: 0 }),
-        mode: fx,
-        time_s,
-        values: Some(&values),
-        ..render::fx::Frame::new(&frame, page, w, h)
-    })?;
-    image::RgbaImage::from_raw(px.width, px.height, px.rgba)
-        .ok_or("bad pixel buffer")?
-        .save(&out)
-        .map_err(|e| format!("writing {out}: {e}"))?;
-    println!("{{\"ok\":true,\"out\":\"{out}\",\"width\":{w},\"height\":{h},\"controls\":{}}}", rt.surface().controls.len());
+    let mut shots = Vec::with_capacity(times.len());
+    let mut next = 0;
+    let (mut w, mut h) = (0, 0);
+    for &t in &times {
+        while let Some((at, change)) = timeline.get(next).filter(|(at, _)| *at <= t + 1e-9) {
+            let _ = at;
+            match change {
+                Change::Set(v) => rt.apply_values([v.clone()]),
+                Change::Stream(f) => {
+                    held.retain(|h| h.id != f.id);
+                    held.push(f.clone());
+                }
+            }
+            next += 1;
+        }
+        let ms = t * 1000.0;
+        if demo_feeds {
+            let skip: Vec<&EntryId> = named.iter().collect();
+            for f in demo_frames(rt.catalog(), t, &skip) {
+                rt.apply_frame(f, ms);
+            }
+        }
+        for f in &held {
+            rt.apply_frame(f.clone(), ms);
+        }
+        let frame = rt.frame(ms);
+
+        let page = frame.pages()[0];
+        let root = frame.node(page).and_then(|p| p.children.first().copied()).ok_or("empty surface")?;
+        let size = frame.node(root).map(|n| n.size).ok_or("no root")?;
+        (w, h) = ((size.width * scale).ceil() as u32, (size.height * scale).ceil() as u32);
+        let bg = frame
+            .node(root)
+            .and_then(|n| n.fills.iter().find_map(|p| match &p.kind {
+                document_proto::PaintKind::Solid { color } => Some(*color),
+                _ => None,
+            }))
+            .unwrap_or(theme.background);
+        let base = peniko::Color::from_rgba8((bg.r * 255.0) as u8, (bg.g * 255.0) as u8, (bg.b * 255.0) as u8, 255);
+        let values = control_positions(&rt);
+        let px = offscreen.render_with_effects(&render::fx::Frame {
+            transform: kurbo::Affine::scale(scale),
+            base,
+            font: Some(render::TextFontRef { bytes: font, index: 0 }),
+            mode: fx,
+            time_s: t,
+            values: Some(&values),
+            ..render::fx::Frame::new(&frame, page, w, h)
+        })?;
+        shots.push(image::RgbaImage::from_raw(px.width, px.height, px.rgba).ok_or("bad pixel buffer")?);
+    }
+
+    if frames == 0 {
+        shots[0].save(&out).map_err(|e| format!("writing {out}: {e}"))?;
+    } else {
+        save_animation(&shots, fps, columns, &out, gif.as_deref(), frames_dir.as_deref())?;
+    }
+    println!(
+        "{{\"ok\":true,\"out\":\"{out}\",\"width\":{w},\"height\":{h},\"frames\":{},\"controls\":{},\"motions\":{}}}",
+        shots.len(),
+        rt.surface().controls.len(),
+        rt.motions()
+    );
+    Ok(())
+}
+
+/// A timed change for an animation: a param set, or a feed's new value.
+#[cfg(feature = "anyrender")]
+enum Change {
+    Set(surface_proto::ParamValue),
+    Stream(surface_proto::StreamFrame),
+}
+
+/// The frames as a contact sheet (`columns` wide, left to right, top to
+/// bottom) at `out`, and optionally a looping GIF and one PNG per frame.
+#[cfg(feature = "anyrender")]
+fn save_animation(shots: &[image::RgbaImage], fps: f64, columns: usize, out: &str, gif: Option<&str>, dir: Option<&str>) -> Result<(), String> {
+    let (w, h) = shots.first().map(|s| (s.width(), s.height())).ok_or("no frames")?;
+    let cols = columns.min(shots.len()).max(1);
+    let rows = shots.len().div_ceil(cols);
+    let gap = 4;
+    let mut sheet = image::RgbaImage::from_pixel(cols as u32 * (w + gap) - gap, rows as u32 * (h + gap) - gap, image::Rgba([0, 0, 0, 255]));
+    for (i, s) in shots.iter().enumerate() {
+        let (c, r) = ((i % cols) as u32, (i / cols) as u32);
+        image::imageops::overlay(&mut sheet, s, i64::from(c * (w + gap)), i64::from(r * (h + gap)));
+    }
+    sheet.save(out).map_err(|e| format!("writing {out}: {e}"))?;
+    if let Some(dir) = dir {
+        std::fs::create_dir_all(dir).map_err(|e| format!("{dir}: {e}"))?;
+        for (i, s) in shots.iter().enumerate() {
+            let p = format!("{dir}/frame-{i:04}.png");
+            s.save(&p).map_err(|e| format!("writing {p}: {e}"))?;
+        }
+    }
+    if let Some(path) = gif {
+        let file = std::fs::File::create(path).map_err(|e| format!("{path}: {e}"))?;
+        let mut enc = image::codecs::gif::GifEncoder::new_with_speed(std::io::BufWriter::new(file), 10);
+        enc.set_repeat(image::codecs::gif::Repeat::Infinite).map_err(|e| e.to_string())?;
+        let delay = image::Delay::from_numer_denom_ms(1000, fps.round().max(1.0) as u32);
+        for s in shots {
+            enc.encode_frame(image::Frame::from_parts(s.clone(), 0, 0, delay)).map_err(|e| format!("{path}: {e}"))?;
+        }
+    }
     Ok(())
 }
 

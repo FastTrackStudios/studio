@@ -228,6 +228,15 @@ fn lamp(b: &mut Builder<'_>, parent: NodeId, p: &Place) -> NodeId {
     let hot = rad(0.38, 0.32, 0.9, &[(0.0, "#ffffffee".into()), (0.2, tint(color, 0.55)), (0.55, color.to_string()), (1.0, shade(color, 0.5))]);
     let lit = draw::with_effects(draw::circle("lamp", c0, c0, r, hot), vec![draw::drop_shadow(&alpha(color, 0.85), 0.0, 0.0, s * 0.6)]);
     let lit = b.add(root, draw::emissive(lit, draw::hex(color), 1.0, s));
+    // The bulb takes a moment to warm and cool: its glow follows the
+    // stream through a spring (a lag on the Glow slot's reading), and with
+    // `flicker` its light wavers like a filament's.
+    if let Some(surface_proto::Binding { source: surface_proto::Source::Stream { id, .. }, .. }) = &p.binding {
+        crate::motion::add(b, lit, crate::motion::spring_lag(&format!("scalar({})", id.0), crate::motion::Target::Opacity, 1.0));
+    }
+    if p.flag("flicker") {
+        crate::motion::add(b, lit, crate::motion::flicker(0.12));
+    }
     let mut c = p.control(ControlKind::Readout).slot(SlotRole::Glow, lit.0);
     if !legend.is_empty() {
         let inkc = p.ink_color(PANEL_INK);
@@ -280,7 +289,7 @@ pub(crate) fn defs() -> Vec<ComponentDef> {
         def(
             "meter.lamp",
             "Stream lamp",
-            "A jewel lamp in a chrome bezel whose brightness follows a scalar stream (0…1 of its range) — an LFO rate lamp, a signal-present lamp. The lit lens is a `Glow` slot, so its light scales with the value. `legend` prints under it; `color=#hex` lights it in any colour. Size = bezel diameter.",
+            "A jewel lamp in a chrome bezel whose brightness follows a scalar stream (0…1 of its range) — an LFO rate lamp, a signal-present lamp. The lit lens is a `Glow` slot, so its light scales with the value; it warms and cools through a spring, and the `flicker` option makes its light waver like a filament. `legend` prints under it; `color=#hex` lights it in any colour. Size = bezel diameter.",
             &["red", "green", "amber", "white", "blue"],
             22.0,
             "scalar stream",

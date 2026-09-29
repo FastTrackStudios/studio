@@ -9,6 +9,7 @@ publish = false
 document-proto = { path = "../../document/document-proto", default-features = false }
 surface-proto = { path = "../../surface/surface-proto", default-features = false }
 render = { path = "../../render/render", default-features = false }
+motion-runtime = { path = "../../motion/motion-runtime" }
 facet.workspace = true
 serde.workspace = true
 

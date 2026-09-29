@@ -5,6 +5,7 @@
 //! plus `OUT_DIR/<plugin>/<plugin>.catalog.json`, so `frame OUT_DIR/<plugin>`
 //! plays a plugin's faces as a gallery.
 
+pub mod animate;
 pub mod comp_fet;
 pub mod comp_tube;
 pub mod comp_vca;

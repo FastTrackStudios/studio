@@ -134,6 +134,18 @@ placed component expects, for engines and mock catalogs alike.
 - **Curves** share one evaluation when their provider and inputs match —
   give every band curve of an EQ all the bands' inputs and pick its own
   with `series`.
+## Motion
+
+Parts that move by themselves carry `Node::motion` (see
+`docs/visualizer-framework.md` §9). `surface_kit::motion` has the presets —
+`spring_follow(param)`, `spring_lag(input, target, travel)` (physics on a part
+a control already moves), `ring_on(level_feed, freq, decay)`,
+`spin(turns_per_second)`, `flicker(amount)`, `pulse(rate, low)` — and
+`motion::add(b, node, m)`. In the kit: `meter.lamp` warms and cools through a
+spring (a lag on its `Glow`), and `flicker` (an `options` flag on `meter.lamp`
+and the VU faces with a lamp) makes a filament's light waver. Keep motion
+optional in the same way as light: a component must read right at rest.
+Anything always moving (flicker, LFOs) keeps hosts drawing, so make it opt-in.
 
 ## Looking at it
 

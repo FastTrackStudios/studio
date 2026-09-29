@@ -185,7 +185,7 @@ fn reference_examples_parse() {
         }
         count += 1;
     }
-    assert_eq!(count, 3);
+    assert_eq!(count, 4);
 }
 
 #[test]

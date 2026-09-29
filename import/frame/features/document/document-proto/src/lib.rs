@@ -7,3 +7,5 @@ pub mod ops;
 
 pub use model::*;
 pub use ops::{History, Op, OpError, Prop};
+/// The motion contract nodes carry (`Node::motion`).
+pub use motion_proto as motion;

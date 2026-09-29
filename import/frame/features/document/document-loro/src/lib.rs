@@ -464,6 +464,7 @@ fn prop_entry(prop: &Prop) -> (&'static str, Value) {
         Prop::Control(v) => ("control", json(v)),
         Prop::Emission(v) => ("emission", json(v)),
         Prop::Shader(v) => ("shader", json(v)),
+        Prop::Motion(v) => ("motion", json(v)),
     }
 }
 

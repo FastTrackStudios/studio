@@ -340,6 +340,10 @@ fn build(face: &Face, b: &mut Builder<'_>, parent: NodeId, p: &Place) -> NodeId 
         let mut wash = draw::rect("lamp", 0.0, 0.0, cw, ch, glow(l.x, l.y, l.reach, color));
         if l.light.0 > 0.0 {
             wash = draw::emissive(wash, color, l.light.0, 18.0 * s);
+            // `flicker`: the lamp's light wavers like a filament's.
+            if p.flag("flicker") {
+                wash.motion.push(crate::motion::flicker(0.06));
+            }
         }
         b.add(card_id, wash);
         if let Some((c, x, y, reach)) = l.core {

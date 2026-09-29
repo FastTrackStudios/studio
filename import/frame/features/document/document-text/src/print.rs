@@ -247,6 +247,9 @@ fn attributes(n: &Node, has_children: bool) -> (Vec<(&'static str, String)>, Opt
     if let Some(s) = &n.shader {
         a.push(("shader", braced(&to_json(s))));
     }
+    if !n.motion.is_empty() {
+        a.push(("motion", braced(&to_json(&n.motion))));
+    }
     if let Some(s) = &n.source {
         a.push(("source", source(s)));
     }
