@@ -278,6 +278,7 @@ pub fn components() -> Vec<ComponentDef> {
     all.extend(crate::knobs::chrome_skirt::defs());
     all.extend(crate::knobs::studio::defs());
     all.extend(crate::knobs::valve::defs());
+    all.extend(crate::knobs::outboard::defs());
     all.extend(crate::meters::defs());
     all.extend(crate::controls::defs());
     all.extend(crate::panels::defs());

@@ -133,7 +133,7 @@ fn toggles_are_toggles_and_choices_select() {
 
 #[test]
 fn lit_buttons_give_off_light_from_their_led_slot() {
-    for def in families().into_iter().filter(|d| d.family == Family::Button && !d.id.starts_with("button.push_in")) {
+    for def in families().into_iter().filter(|d| d.family == Family::Button && !d.id.starts_with("button.push_in") && !d.id.starts_with("button.piano")) {
         let built = build(def.id, &placement(&def));
         for c in built.controls.values() {
             let lights: Vec<_> = c

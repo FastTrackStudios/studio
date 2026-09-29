@@ -1,18 +1,20 @@
-//! Faces: the VCA and hybrid compressors — the console bus compressor, the
-//! desktop VCA with three knobs, and the digitally-controlled hybrid.
+//! Faces: the VCA and hybrid compressors — the console bus compressor in
+//! its rack form, the desktop VCA with three knobs, and the digitally
+//! controlled character compressor.
 //!
-//! Laid out from the units (`comp-ui/src/faces/units.rs` in FTS): the
-//! controls each really has, their stepped positions and printed scales,
-//! and the meter each reads — a VU movement for the bus compressor, a
-//! decibel card for the desktop unit, an LED ladder for the hybrid.
+//! Each is laid out from photographs of the real unit: its proportions, the
+//! controls it really has, their stepped positions and printed scales, and
+//! the meter it reads — an amber compression movement for the bus
+//! compressor, a blue-printed decibel card for the desktop unit, an LED
+//! ladder for the character compressor.
 
-mod dbx160;
-mod distressor;
-mod ssl_bus;
+mod bus_comp;
+mod character_comp;
 pub(crate) mod ui;
+mod vca_comp;
 
 use crate::face::Face;
 
 pub fn faces() -> Vec<Face> {
-    vec![ssl_bus::face(), dbx160::face(), distressor::face()]
+    vec![bus_comp::face(), vca_comp::face(), character_comp::face()]
 }
