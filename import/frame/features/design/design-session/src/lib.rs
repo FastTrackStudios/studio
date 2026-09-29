@@ -125,6 +125,11 @@ impl Session {
                 let parent = a.node(&self.scene, "parent")?;
                 self.add_control(parent, a.str("kind")?, a.opt_str("bind")?, a.opt_str("size")?, a.opt_str("name")?)
             }
+            "components" => Ok(components_text(a.opt_str("family")?)),
+            "add_component" => {
+                let parent = a.node(&self.scene, "parent")?;
+                self.add_component(parent, &a)
+            }
             "bind" => {
                 let node = a.node(&self.scene, "node")?;
                 self.bind(node, a.opt_str("source")?, a.opt_str("kind")?, a.0.get("slots"))
@@ -321,6 +326,51 @@ impl Session {
         Ok(format!("added {kind} {root} \"{name}\"\n{}", self.lint_summary()))
     }
 
+    fn add_component(&mut self, parent: NodeId, a: &Args<'_>) -> Result<String> {
+        let id = a.str("component")?;
+        let binding = a.opt_str("bind")?.map(parse_source).transpose()?;
+        let list = |k: &str| -> Result<Option<Vec<String>>> {
+            match a.0.get(k) {
+                None | Some(Value::Null) => Ok(None),
+                Some(Value::Array(v)) => Ok(Some(v.iter().map(|x| x.as_str().map_or_else(|| x.to_string(), ToString::to_string)).collect())),
+                Some(_) => err(format!("`{k}` must be an array of strings")),
+            }
+        };
+        let default_name = binding
+            .as_ref()
+            .and_then(|b| match &b.source {
+                Source::Param { addr } => self.catalog.param(addr).map(|p| p.name.clone()),
+                Source::Action { id } => self.catalog.action(id).map(|a| a.name.clone()),
+                Source::Stream { id, .. } => self.catalog.stream(id).map(|s| s.name.clone()),
+                Source::Collection { id } => self.catalog.collection(id).map(|c| c.name.clone()),
+            })
+            .unwrap_or_else(|| id.rsplit('.').next().unwrap_or(id).to_string());
+        // A choice param's options label a bank / selector unless given.
+        let options = list("options")?.or_else(|| match binding.as_ref().map(|b| &b.source) {
+            Some(Source::Param { addr }) => match self.catalog.param(addr).map(|p| &p.kind) {
+                Some(ParamKind::Choice { options }) => Some(options.clone()),
+                _ => None,
+            },
+            _ => None,
+        });
+        let place = surface_kit::Place {
+            name: a.opt_str("name")?.map_or(default_name, ToString::to_string),
+            size: match a.0.get("size") {
+                None | Some(Value::Null) => None,
+                Some(v) => Some(v.as_f64().ok_or_else(|| ToolError("`size` must be a number (px)".into()))?),
+            },
+            binding,
+            variant: a.opt_str("variant")?.map(ToString::to_string),
+            legend: a.opt_str("legend")?.map(ToString::to_string),
+            scale: list("scale")?,
+            options,
+        };
+        let theme = self.theme.clone();
+        let (ops, root) = self.build(parent, |b| surface_kit::place(b, parent, id, &place).map_err(ToolError), &theme)?;
+        self.commit(ops)?;
+        Ok(format!("added {id} {root} \"{}\"\n{}", place.name, self.lint_summary()))
+    }
+
     /// Run a widget builder against a scratch copy and turn what it added
     /// into `Insert` ops (so it's one undoable transaction).
     fn build(&self, parent: NodeId, f: impl FnOnce(&mut Builder<'_>) -> Result<NodeId>, theme: &Theme) -> Result<(Vec<Op>, NodeId)> {
@@ -426,6 +476,25 @@ fn with_label(mut ops: Vec<Op>, root: NodeId, label: &str) -> Vec<Op> {
         }
     }
     ops
+}
+
+/// The kit, grouped by family, for a model choosing components.
+fn components_text(family: Option<&str>) -> String {
+    let all: Vec<_> = surface_kit::components().into_iter().filter(|c| family.is_none_or(|f| c.family.name() == f)).collect();
+    if all.is_empty() {
+        return "no components (for that family); families: knob, meter, button, switch, lever, panel".into();
+    }
+    let mut out = String::from("hardware kit — place with add_component {parent, component, bind, size?, variant?, legend?, scale?, options?}\n");
+    let mut fam = None;
+    for c in all {
+        if fam != Some(c.family) {
+            out.push_str(&format!("\n[{}]\n", c.family.name()));
+            fam = Some(c.family);
+        }
+        let variants = if c.variants.is_empty() { String::new() } else { format!(" variants: {}.", c.variants.join(" | ")) };
+        out.push_str(&format!("  {:<24} binds {:<13} {}px — {}{}\n", c.id, c.binds, c.default_size, c.description, variants));
+    }
+    out
 }
 
 fn position(scene: &Scene, parent: NodeId, id: NodeId) -> u32 {
@@ -642,6 +711,21 @@ pub fn tools() -> Vec<ToolDef> {
             input_schema: obj(
                 json!({"parent": node, "kind": {"type": "string", "enum": ["knob", "fader", "button", "trigger", "footswitch", "meter", "readout"]}, "bind": {"type": "string"}, "size": {"type": "string", "enum": ["small", "medium", "large", "stage"]}, "name": {"type": "string"}}),
                 &["parent", "kind"],
+            ),
+            mutates: true,
+        },
+        ToolDef {
+            name: "components",
+            description: "The hardware component kit: knobs (Bakelite, Daka, Marconi, Collet, silver-top…), VU meters, buttons, switches, levers, panels — each with what it binds to, its default size and variants. Use these for hardware-style surfaces.",
+            input_schema: obj(json!({"family": {"type": "string", "enum": ["knob", "meter", "button", "switch", "lever", "panel"]}}), &[]),
+            mutates: false,
+        },
+        ToolDef {
+            name: "add_component",
+            description: "Place a kit component (see `components`) under `parent`, fully wired. bind: param:<addr> | stream:<id>[:ch] | action:<id>. size: px (primary dimension). variant: a colour/finish from the component's list. legend: printed name. scale: printed scale labels (start → end of travel). options: labels for banks/selectors (defaults to the choice param's options). Panels bind nothing and return a frame to place other components into.",
+            input_schema: obj(
+                json!({"parent": node, "component": {"type": "string"}, "bind": {"type": "string"}, "size": {"type": "number"}, "variant": {"type": "string"}, "legend": {"type": "string"}, "name": {"type": "string"}, "scale": {"type": "array", "items": {"type": "string"}}, "options": {"type": "array", "items": {"type": "string"}}}),
+                &["parent", "component"],
             ),
             mutates: true,
         },

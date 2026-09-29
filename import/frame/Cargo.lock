@@ -1240,6 +1240,7 @@ dependencies = [
  "document-proto",
  "document-text",
  "serde_json",
+ "surface-kit",
  "surface-memory",
  "surface-proto",
  "surface-widgets",
