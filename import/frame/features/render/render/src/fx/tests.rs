@@ -249,3 +249,26 @@ fn emission_is_cut_to_its_ancestors_clips() {
     // Just past where the clipped-away bar would end: no light leaks out.
     assert!(px(&gpu, 50, 85)[0] < 3, "light from the clipped part: {:?}", px(&gpu, 50, 85));
 }
+
+#[test]
+fn a_stroked_line_glows_along_the_line_not_its_box() {
+    let Some(mut o) = offscreen() else { return };
+    // A diagonal open line across a 60×60 box at 20..80, stroke only.
+    let mut line = Node::new(NodeKind::Vector, "line");
+    line.transform = doc::Transform::translate(20.0, 20.0);
+    line.size = doc::Size { width: 60.0, height: 60.0 };
+    line.fill_geometry = vec!["M 0 60 L 60 0".to_string()];
+    line.stroke = doc::Stroke {
+        paints: vec![doc::Paint::solid(doc::Color::rgba(1.0, 0.1, 0.1, 1.0))],
+        weight: 2.0,
+        align: doc::StrokeAlign::Center,
+        ..doc::Stroke::default()
+    };
+    line.emission = Some(doc::Emission { color: doc::Color::rgba(1.0, 0.2, 0.1, 1.0), intensity: 1.5, radius: 6.0 });
+    let (scene, root) = scene_of(vec![(None, line)]);
+    let gpu = render(&mut o, &scene, root, Mode::Gpu);
+    assert!(px(&gpu, 53, 50)[0] > 12, "glow beside the line: {:?}", px(&gpu, 53, 50));
+    // The box's far corners are ~42 px from the line: dark.
+    assert!(px(&gpu, 24, 24)[0] < 3, "the box glows: {:?}", px(&gpu, 24, 24));
+    assert!(px(&gpu, 76, 76)[0] < 3, "the box glows: {:?}", px(&gpu, 76, 76));
+}

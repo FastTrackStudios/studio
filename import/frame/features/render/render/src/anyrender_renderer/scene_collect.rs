@@ -557,7 +557,13 @@ fn recolor(p: &PaintPrimitive, color: &Rgba) -> Option<PaintPrimitive> {
                 height: *height,
                 normalize_to_origin: *normalize_to_origin,
                 text_outline: *text_outline,
-                fill_paths: if fills.is_empty() { Vec::new() } else { fill_paths.clone() },
+                // A stroke with no stroke geometry strokes the fill geometry
+                // (an open line): keep it so the light follows the line.
+                fill_paths: if fills.is_empty() && (stroke.is_none() || !stroke_paths.is_empty()) {
+                    Vec::new()
+                } else {
+                    fill_paths.clone()
+                },
                 stroke_paths: if stroke.is_some() { stroke_paths.clone() } else { Vec::new() },
                 svg_base64: None,
                 fills: if fills.is_empty() { Vec::new() } else { solid() },
