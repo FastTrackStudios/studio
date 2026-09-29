@@ -286,6 +286,17 @@ impl Runtime {
     #[must_use]
     pub fn state(&self, id: NodeId, control: &Control, t: f64) -> ControlState {
         match (&control.kind, control.binding.as_ref().map(|b| &b.source)) {
+            (ControlKind::Gauge { floor_db, ceiling_db, .. }, Some(Source::Stream { channel, .. })) => {
+                let ch = channel.unwrap_or(0);
+                let m = self.meters.get(&(id, ch));
+                let scale = MeterScale { floor_db: *floor_db, ceiling_db: *ceiling_db, curve: surface_proto::Curve::Linear };
+                ControlState {
+                    position: m.map_or(0.0, |m| scale.position(m.level_db(t))),
+                    peak: m.map(|m| scale.position(m.peak_hold_db(t))),
+                    value_text: m.map(|m| format!("{:.1} dB", m.level_db(t))),
+                    ..ControlState::default()
+                }
+            }
             (ControlKind::Meter { .. }, Some(Source::Stream { channel, .. })) => {
                 let ch = channel.unwrap_or(0);
                 let m = self.meters.get(&(id, ch));
@@ -314,7 +325,15 @@ impl Runtime {
             (_, Some(Source::Param { addr })) => {
                 let info = self.catalog.param(addr);
                 let value = self.values.get(addr).copied().unwrap_or(0.0);
+                let lit = match control.kind {
+                    ControlKind::Button { mode: surface_proto::ButtonMode::Select { index, count } } => {
+                        let at = surface_proto::ButtonMode::select_position(index, count);
+                        Some((self.position(id, control) - at).abs() < 0.5 / f64::from(count.max(2) - 1))
+                    }
+                    _ => None,
+                };
                 ControlState {
+                    lit,
                     position: self.position(id, control),
                     bipolar: info.is_some_and(|p| p.bipolar),
                     value_text: info.map(|p| p.display(value)),

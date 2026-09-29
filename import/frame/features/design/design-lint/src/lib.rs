@@ -159,6 +159,7 @@ impl Cx<'_> {
             ControlKind::Knob { .. } => &[(&[SlotRole::Needle, SlotRole::ValueArc], "a Needle or a ValueArc")],
             ControlKind::Fader { .. } => &[(&[SlotRole::Fill, SlotRole::Thumb], "a Fill or a Thumb")],
             ControlKind::Meter { .. } => &[(&[SlotRole::Fill], "a Fill")],
+            ControlKind::Gauge { .. } => &[(&[SlotRole::Needle], "a Needle")],
             ControlKind::Readout => &[(&[SlotRole::Value], "a Value text")],
             ControlKind::Button { .. } | ControlKind::Footswitch { .. } | ControlKind::XyPad | ControlKind::Selector => &[],
         };

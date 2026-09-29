@@ -524,6 +524,7 @@ fn parse_kind(k: &str) -> Result<ControlKind> {
         "trigger" => ControlKind::Button { mode: ButtonMode::Trigger },
         "footswitch" => ControlKind::footswitch(),
         "meter" => ControlKind::Meter { orientation: Orientation::Vertical },
+        "gauge" | "vu" => ControlKind::Gauge { sweep_degrees: 96.0, floor_db: -20.0, ceiling_db: 3.0 },
         "xy" => ControlKind::XyPad,
         "selector" => ControlKind::Selector,
         "readout" => ControlKind::Readout,

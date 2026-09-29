@@ -32,11 +32,14 @@ pub struct ControlState {
     pub peak: Option<f64>,
     /// Modulation extent (positions) for `ModArc` slots.
     pub mod_range: Option<(f64, f64)>,
+    /// Overrides the on/off reading of `position` for `Led` slots (radio
+    /// buttons are lit when *their* option is selected).
+    pub lit: Option<bool>,
 }
 
 impl ControlState {
     fn on(&self) -> bool {
-        self.position >= 0.5
+        self.lit.unwrap_or(self.position >= 0.5)
     }
 }
 
@@ -49,7 +52,7 @@ pub fn control_ops(scene: &Scene, control_node: NodeId, control: &Control, state
         _ => Orientation::Vertical,
     };
     let sweep = match control.kind {
-        ControlKind::Knob { sweep_degrees } => sweep_degrees,
+        ControlKind::Knob { sweep_degrees } | ControlKind::Gauge { sweep_degrees, .. } => sweep_degrees,
         _ => 270.0,
     };
     for slot in &control.slots {

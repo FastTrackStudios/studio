@@ -31,6 +31,17 @@ pub enum ButtonMode {
     Momentary,
     /// Fires an action; no state.
     Trigger,
+    /// One of a bank of radio buttons: sets the bound (choice) param to
+    /// option `index` of `count`; lit while that option is selected.
+    Select { index: u32, count: u32 },
+}
+
+impl ButtonMode {
+    /// The position (0..1) a `Select` button sets.
+    #[must_use]
+    pub fn select_position(index: u32, count: u32) -> f64 {
+        if count < 2 { 0.0 } else { f64::from(index.min(count - 1)) / f64::from(count - 1) }
+    }
 }
 
 /// The behavior of a control. Each kind has a fixed interaction contract
@@ -53,6 +64,10 @@ pub enum ControlKind {
     },
     /// Level / gain-reduction meter, driven by a stream.
     Meter { orientation: Orientation },
+    /// A needle meter (VU, gain reduction, tuner): the `Needle` slot sweeps
+    /// `sweep_degrees` (centered on straight up) across `floor_db..ceiling_db`
+    /// of a level stream — or across a bound param's range.
+    Gauge { sweep_degrees: f64, floor_db: f64, ceiling_db: f64 },
     /// Two parameters at once (x → `binding`, y → `y_binding`).
     XyPad,
     /// Pick one of a choice parameter's options (segmented, dropdown, radio).
@@ -86,6 +101,7 @@ impl ControlKind {
             Self::Button { .. } => "button",
             Self::Footswitch { .. } => "footswitch",
             Self::Meter { .. } => "meter",
+            Self::Gauge { .. } => "gauge",
             Self::XyPad => "xy-pad",
             Self::Selector => "selector",
             Self::Readout => "readout",
@@ -95,7 +111,7 @@ impl ControlKind {
     /// Whether the control writes a value (vs. only displaying one).
     #[must_use]
     pub const fn is_input(&self) -> bool {
-        !matches!(self, Self::Meter { .. } | Self::Readout)
+        !matches!(self, Self::Meter { .. } | Self::Gauge { .. } | Self::Readout)
     }
 }
 

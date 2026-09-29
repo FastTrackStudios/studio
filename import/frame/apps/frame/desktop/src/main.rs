@@ -65,6 +65,9 @@ pub struct Args {
     pub frames: u32,
     pub script: Option<Script>,
     pub engine: Option<EngineArg>,
+    /// Extra catalogs the mock engine serves alongside the demo rig
+    /// (`--catalog FILE`, plus any `*.catalog.json` next to the surfaces).
+    pub catalogs: Vec<PathBuf>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -90,6 +93,7 @@ fn parse_args(args: impl IntoIterator<Item = String>) -> Result<Args, String> {
         frames: 60,
         script: None,
         engine: None,
+        catalogs: Vec::new(),
     };
     let mut args = args.into_iter();
     while let Some(a) = args.next() {
@@ -118,6 +122,7 @@ fn parse_args(args: impl IntoIterator<Item = String>) -> Result<Args, String> {
             }
             "--engine" => out.engine = Some(EngineArg { url: value()?, rig: None }),
             "--rig" => rig = Some(value()?),
+            "--catalog" => out.catalogs.push(value()?.into()),
             "-h" | "--help" => return Err(USAGE.into()),
             flag if flag.starts_with('-') => return Err(format!("unknown flag {flag}\n{USAGE}")),
             path if file.is_none() => file = Some(PathBuf::from(path)),
@@ -128,8 +133,14 @@ fn parse_args(args: impl IntoIterator<Item = String>) -> Result<Args, String> {
         Some(dir) if dir.is_dir() => {
             out.gallery = gallery(&dir)?;
             out.source = out.gallery[0].clone();
+            out.catalogs.extend(sibling_catalogs(&dir));
         }
-        Some(path) => out.source = Source::from_path(path),
+        Some(path) => {
+            if let Some(dir) = path.parent() {
+                out.catalogs.extend(sibling_catalogs(dir));
+            }
+            out.source = Source::from_path(path);
+        }
         None => out.source = Source::Generated { theme: Box::new(theme) },
     }
     match (&mut out.engine, rig) {
@@ -138,6 +149,33 @@ fn parse_args(args: impl IntoIterator<Item = String>) -> Result<Args, String> {
         (None, None) => {}
     }
     Ok(out)
+}
+
+/// `*.catalog.json` files in `dir` — engines a surface there was designed for.
+fn sibling_catalogs(dir: &std::path::Path) -> Vec<PathBuf> {
+    let mut out: Vec<PathBuf> = std::fs::read_dir(if dir.as_os_str().is_empty() { std::path::Path::new(".") } else { dir })
+        .into_iter()
+        .flatten()
+        .filter_map(|e| e.ok().map(|e| e.path()))
+        .filter(|p| p.file_name().is_some_and(|n| n.to_string_lossy().ends_with(".catalog.json")))
+        .collect();
+    out.sort();
+    out
+}
+
+/// The demo rig plus every extra catalog, as one mock engine.
+fn mock_engine(extra: &[PathBuf]) -> Result<surface_memory::Memory, String> {
+    let mut catalog = surface_memory::demo_catalog();
+    for path in extra {
+        let text = std::fs::read_to_string(path).map_err(|e| format!("{}: {e}", path.display()))?;
+        let c: surface_proto::Catalog = serde_json::from_str(&text).map_err(|e| format!("{}: {e}", path.display()))?;
+        eprintln!("frame: mock engine also serves `{}` ({} params) from {}", c.id, c.params.len(), path.display());
+        catalog.params.extend(c.params);
+        catalog.actions.extend(c.actions);
+        catalog.streams.extend(c.streams);
+        catalog.collections.extend(c.collections);
+    }
+    Ok(surface_memory::Memory::new(catalog))
 }
 
 /// Every `.fm` / `.frame` in `dir`, sorted by name.
@@ -161,7 +199,7 @@ fn gallery(dir: &std::path::Path) -> Result<Vec<Source>, String> {
 /// When `--engine` can't be reached.
 pub fn start(args: &Args) -> Result<(Backend, Surface, Option<String>), String> {
     let engine = match &args.engine {
-        None => Backend::Local(surface_memory::Memory::demo()),
+        None => Backend::Local(mock_engine(&args.catalogs)?),
         Some(e) => {
             eprintln!("frame: connecting to {}{}", e.url, e.rig.as_ref().map_or(String::new(), |r| format!(" (rig {r})")));
             let mut remote = Remote::start(&e.url, e.rig.as_deref())?;

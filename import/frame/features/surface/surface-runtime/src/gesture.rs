@@ -118,7 +118,7 @@ impl Gesture {
             ControlKind::Footswitch { hold_ms } => self.footswitch(input, f64::from(hold_ms)),
             ControlKind::XyPad => self.xy(input, bounds),
             ControlKind::Selector => self.selector(input, position),
-            ControlKind::Meter { .. } | ControlKind::Readout => Vec::new(),
+            ControlKind::Meter { .. } | ControlKind::Gauge { .. } | ControlKind::Readout => Vec::new(),
         }
     }
 
@@ -217,6 +217,9 @@ impl Gesture {
         };
         match (mode, input, self.drag) {
             (ButtonMode::Trigger, Input::Down { .. }, _) => vec![Output::Fire],
+            (ButtonMode::Select { index, count }, Input::Down { .. } | Input::Key { key: Key::Space | Key::Enter, .. }, _) => {
+                vec![Output::Set { position: ButtonMode::select_position(index, count), phase: EditPhase::End }]
+            }
             (ButtonMode::Momentary, Input::Down { .. }, _) => {
                 self.drag = Drag::Button;
                 vec![Output::Set { position: 1.0, phase: EditPhase::End }]
@@ -403,6 +406,14 @@ mod tests {
         assert_eq!(last_pos(&g.handle(Input::Up { x: 5.0, y: 5.0, t: 0.0 }, 0.0, B)), 1.0);
         g.handle(down(5.0, 5.0), 1.0, B);
         assert!(g.handle(Input::Up { x: 500.0, y: 5.0, t: 0.0 }, 1.0, B).is_empty(), "released outside: no flip");
+    }
+
+    #[test]
+    fn select_buttons_set_their_option() {
+        let mut g = Gesture::new(ControlKind::Button { mode: ButtonMode::Select { index: 2, count: 5 } });
+        assert_eq!(last_pos(&g.handle(down(1.0, 1.0), 0.0, B)), 0.5);
+        let mut last = Gesture::new(ControlKind::Button { mode: ButtonMode::Select { index: 4, count: 5 } });
+        assert_eq!(last_pos(&last.handle(down(1.0, 1.0), 0.0, B)), 1.0);
     }
 
     #[test]
