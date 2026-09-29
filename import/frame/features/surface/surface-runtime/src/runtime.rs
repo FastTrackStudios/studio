@@ -15,7 +15,7 @@ use surface_proto::{
 };
 
 use crate::coalesce::Coalescer;
-use crate::gesture::{Bounds, Gesture, Input, Output};
+use crate::gesture::{Bounds, Gesture, Input, Key, Output};
 use crate::meter::{Ballistics, MeterScale, Sense};
 use crate::visual::{ControlState, control_ops};
 
@@ -303,6 +303,11 @@ impl Runtime {
             }
             other => other,
         };
+        // A stepped param moves a whole detent per wheel notch or arrow key:
+        // the gesture's small nudges would snap straight back.
+        if let Some(calls) = self.step_by_detent(id, &control, &input, t) {
+            return calls;
+        }
         let outputs = self.gestures.entry(id).or_insert_with(|| Gesture::new(control.kind.clone())).handle(input, position, bounds);
         let mut calls = Vec::new();
         for o in outputs {
@@ -373,9 +378,40 @@ impl Runtime {
         }
     }
 
+    /// The number of positions a param steps through (choices, toggles,
+    /// stepped ranges), when it has 2 or more.
+    fn param_steps(&self, b: &Binding) -> Option<u32> {
+        let Source::Param { addr } = &b.source else { return None };
+        self.catalog.param(addr).and_then(|p| p.range.steps).filter(|n| *n >= 2)
+    }
+
+    /// Wheel and arrow keys on a stepped param: one detent per notch/press.
+    fn step_by_detent(&mut self, id: NodeId, control: &Control, input: &Input, t: f64) -> Option<Vec<EngineCall>> {
+        let b = control.binding.as_ref()?;
+        let n = self.param_steps(b)?;
+        let delta = match input {
+            Input::Wheel { notches, .. } if *notches != 0.0 => notches.signum() * notches.abs().round().max(1.0),
+            Input::Key { key: Key::Up | Key::Right | Key::PageUp, .. } => 1.0,
+            Input::Key { key: Key::Down | Key::Left | Key::PageDown, .. } => -1.0,
+            _ => return None,
+        };
+        let Source::Param { addr } = &b.source else { return None };
+        let k = f64::from(n - 1);
+        let value = self.values.get(addr).copied().unwrap_or_else(|| b.to_target(self.position(id, control)));
+        let next = (((value * k).round() + delta).clamp(0.0, k)) / k;
+        let mut calls = Vec::new();
+        self.set_position(id, Some(b), b.to_position(next), EditPhase::End, t, &mut calls);
+        Some(calls)
+    }
+
     fn send(&mut self, b: &Binding, position: f64, phase: EditPhase, t: f64, calls: &mut Vec<EngineCall>) {
         let Source::Param { addr } = &b.source else { return };
-        let value = b.to_target(position);
+        let mut value = b.to_target(position);
+        // A stepped param lands on its detents: a 3-way switch never sits
+        // between positions, even mid-drag.
+        if let Some(p) = self.catalog.param(addr) {
+            value = p.range.quantize(value);
+        }
         // Optimistic: show the edit immediately; the engine echo confirms.
         self.values.insert(addr.clone(), value);
         calls.extend(

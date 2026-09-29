@@ -89,7 +89,9 @@ impl Range {
         Self { min, max, scale: Scale::Logarithmic, unit, steps: None }
     }
 
-    fn quantize(&self, n: f64) -> f64 {
+    /// Snap a normalized value (0..1) to this range's steps, if it has any.
+    #[must_use]
+    pub fn quantize(&self, n: f64) -> f64 {
         match self.steps {
             Some(s) if s >= 2 => {
                 let k = f64::from(s - 1);
