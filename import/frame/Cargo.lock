@@ -1396,6 +1396,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "design-lint"
+version = "0.1.0"
+dependencies = [
+ "document-proto",
+ "facet",
+ "render",
+ "serde",
+ "surface-memory",
+ "surface-proto",
+ "surface-widgets",
+]
+
+[[package]]
 name = "diff"
 version = "0.1.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
