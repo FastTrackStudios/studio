@@ -1,0 +1,277 @@
+<Document id="47112c49-6676-402e-b30f-c8bf1ebcd123">
+  <Page name="Surface" id="cc0c1cb7-6629-408a-8020-7e758bc6bde1">
+    <Frame name="Reverb" id="fbe60fb1-b722-4055-8e66-646a1f290b8d" w=1140 h=210>
+      <Frame name="Unit" id="06d6ff5f-4d42-4908-bc84-6aec7d2044c5" w=1140 h=210 radius=3 fill={[{"kind":{"LinearGradient":{"stops":[{"color":"#58595c","position":0.0},{"color":"#46474a","position":1.0}],"transform":{"a":1.6653345369377348e-16,"b":-1.0,"c":1.0,"d":1.6653345369377348e-16,"tx":1.0,"ty":-1.942890293094024e-16}}}},{"kind":{"LinearGradient":{"stops":[{"color":"#ffffff00","position":0.0},{"color":"#ffffff10","position":0.5},{"color":"#ffffff00","position":1.0}],"transform":{"a":1.0,"b":5.551115123125783e-17,"c":-5.551115123125783e-17,"d":1.0,"tx":-2.7755575615628914e-17,"ty":0.0}}}}]} effects={[{"color":"#ffffff80","kind":"InnerShadow","offset_y":1.0,"radius":0.5},{"color":"#00000040","kind":"DropShadow","offset_y":1.0,"radius":2.0}]}>
+        <Frame name="Bay 1" id="81bb12a0-92bc-410d-a8d6-8406dec47013" x=28 y=6 w=551 h=198 radius=3 fill={[{"kind":{"LinearGradient":{"stops":[{"color":"#737476","position":0.0},{"color":"#5c5d60","position":1.0}],"transform":{"a":1.6653345369377348e-16,"b":-1.0,"c":1.0,"d":1.6653345369377348e-16,"tx":1.0,"ty":-1.942890293094024e-16}}}},{"kind":{"LinearGradient":{"stops":[{"color":"#ffffff00","position":0.0},{"color":"#ffffff10","position":0.5},{"color":"#ffffff00","position":1.0}],"transform":{"a":1.0,"b":5.551115123125783e-17,"c":-5.551115123125783e-17,"d":1.0,"tx":-2.7755575615628914e-17,"ty":0.0}}}}]} effects={[{"color":"#ffffff80","kind":"InnerShadow","offset_y":1.0,"radius":0.5},{"color":"#00000040","kind":"DropShadow","offset_y":1.0,"radius":2.0}]}>
+          <Text name="print" id="60e664e6-cdfd-4ce5-88e9-113e936789fa" x=13.440000000000001 y=23.72 w=57.12 h=29 fill="#d9dadc" size=21 weight=400 text-align="center">R</Text>
+          <Text name="print" id="c31ca44e-05b4-4637-8110-15df3c7c1254" x=13.440000000000001 y=49.72 w=57.12 h=29 fill="#d9dadc" size=21 weight=400 text-align="center">E</Text>
+          <Text name="print" id="7558f1aa-b50f-498b-be8c-76da42c0eec4" x=13.440000000000001 y=75.72 w=57.12 h=29 fill="#d9dadc" size=21 weight=400 text-align="center">V</Text>
+          <Text name="print" id="819f6bc9-a6ac-4a14-9a2b-a204ef5e70ab" x=13.440000000000001 y=101.72 w=57.12 h=29 fill="#d9dadc" size=21 weight=400 text-align="center">E</Text>
+          <Text name="print" id="5cf335f5-130b-4666-841a-5be1396e75d5" x=13.440000000000001 y=127.72 w=57.12 h=29 fill="#d9dadc" size=21 weight=400 text-align="center">R</Text>
+          <Text name="print" id="c05ea73f-ed29-4782-b4b2-96897d212c93" x=13.440000000000001 y=153.72 w=57.12 h=29 fill="#d9dadc" size=21 weight=400 text-align="center">B</Text>
+          <Rectangle name="bezel" id="c7a3995a-9c1d-4cee-8f0e-27570214dcc9" x=113 y=21 w=310 h=90 radius=6 fill={[{"kind":{"LinearGradient":{"stops":[{"color":"#050506","position":0.0},{"color":"#1c1d20","position":1.0}],"transform":{"a":1.6653345369377348e-16,"b":-1.0,"c":1.0,"d":1.6653345369377348e-16,"tx":1.0,"ty":-1.942890293094024e-16}}}}]} effects={[{"color":"#ffffff1f","kind":"DropShadow","offset_y":1.0,"radius":0.0},{"color":"#000000","kind":"InnerShadow","offset_y":2.0,"radius":3.0}]} />
+          <Frame name="Display" id="e1e113af-2cf5-449a-b7f6-92a62b110e3b" x=118 y=26 w=300 h=80 radius=3 clip=true fill={[{"kind":{"RadialGradient":{"stops":[{"color":"#17181a","position":0.0},{"color":"#040505","position":1.0}],"transform":{"a":1.5,"b":0.0,"c":0.0,"d":1.5,"tx":-0.25,"ty":-0.3}}}}]} effects={[{"color":"#000000e0","kind":"InnerShadow","offset_y":2.0,"radius":8.0}]} shader={{"params":{"strength":0.3},"shader":"glass"}}>
+            <Text name="lit" id="41b42bfc-9a57-451b-98db-3895142a93c1" x=12 y=6.56 w=60 h=11 fill="#b9bcc2" size=8 weight=500 letter-spacing=0.48 emission={{"color":"#b9bcc2","intensity":0.6,"radius":2.4}}>MODE</Text>
+            <Frame name="Mode" id="da06cbb0-ad64-49b6-9308-b0d681d5b565" x=12 y=22 w=90 h=20 control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Param":{"addr":"verb/mode"}}},"kind":"Readout","slots":[{"node":"7c924810-60da-4a38-93c6-3ad982bbca19","role":"Value"}]}}>
+              <Text name="value" id="7c924810-60da-4a38-93c6-3ad982bbca19" y=1.1600000000000001 w=90 h=18 fill="#e8eaee" size=13 weight=600 letter-spacing=0.52 emission={{"color":"#e8eaee","intensity":0.7,"radius":3.9}} />
+            </Frame>
+            <Text name="lit" id="a8fba449-6b27-4c51-855d-9c071934e704" x=12 y=56.56 w=30 h=11 fill="#b9bcc2" size=8 weight=500 letter-spacing=0.48 emission={{"color":"#b9bcc2","intensity":0.6,"radius":2.4}}>MIX</Text>
+            <Frame name="verb/mix bar" id="cb4e3e05-208d-4e22-9596-4e35c88310a1" x=38 y=58 w=40 h=8 control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Param":{"addr":"verb/mix"}}},"kind":{"Fader":{"orientation":"Horizontal"}},"slots":[{"node":"be0159a7-623d-44fc-b4ed-6796d29db9a5","role":"Fill"}]}}>
+              <Rectangle name="frame" id="f3496fb4-213c-4d11-98b5-1672eadcc7e1" w=40 h=8 fill="#00000000" stroke="#e8eaee" stroke-align="inside" />
+              <Rectangle name="fill" id="be0159a7-623d-44fc-b4ed-6796d29db9a5" x=1.5 y=1.5 w=37 h=5 fill="#e8eaee" emission={{"color":"#e8eaee","intensity":0.3,"radius":3.0}} />
+            </Frame>
+            <Frame name="Mix" id="71cb9318-f782-4d14-9693-70dc6fd47913" x=80 y=56 w=34 h=12 control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Param":{"addr":"verb/mix"}}},"format":{"decimals":0,"style":"Number"},"kind":"Readout","slots":[{"node":"3cb1df69-1ffd-41e1-9888-cdad4653f907","role":"Value"}]}}>
+              <Text name="value" id="3cb1df69-1ffd-41e1-9888-cdad4653f907" y=0.5599999999999996 w=34 h=11 fill="#e8eaee" size=8 weight=600 letter-spacing=0.32 emission={{"color":"#e8eaee","intensity":0.7,"radius":2.4}} />
+            </Frame>
+            <Text name="lit" id="9c36583c-7122-4886-9023-66baef84046b" x=124 y=8.559999999999999 w=80 h=11 fill="#b9bcc2" size=8 weight=500 letter-spacing=0.48 emission={{"color":"#b9bcc2","intensity":0.6,"radius":2.4}}>PRE-DELAY</Text>
+            <Frame name="verb/predelay bar" id="93ff6a89-db99-49d6-8c62-a6b3a9e74018" x=206 y=10 w=40 h=8 control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Param":{"addr":"verb/predelay"}}},"kind":{"Fader":{"orientation":"Horizontal"}},"slots":[{"node":"c08d301d-77bc-4e0d-aed5-7570b9295adc","role":"Fill"}]}}>
+              <Rectangle name="frame" id="2311d137-29e2-46ce-8d0d-740769761480" w=40 h=8 fill="#00000000" stroke="#e8eaee" stroke-align="inside" />
+              <Rectangle name="fill" id="c08d301d-77bc-4e0d-aed5-7570b9295adc" x=1.5 y=1.5 w=37 h=5 fill="#e8eaee" emission={{"color":"#e8eaee","intensity":0.3,"radius":3.0}} />
+            </Frame>
+            <Frame name="PRE-DELAY" id="4bf5ab0f-a822-4dbc-9261-1010e47c7f45" x=250 y=8 w=46 h=12 control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Param":{"addr":"verb/predelay"}}},"format":{"decimals":0,"style":"Number"},"kind":"Readout","slots":[{"node":"d40a2b5b-06d7-41e3-9add-a60601ba327f","role":"Value"}]}}>
+              <Text name="value" id="d40a2b5b-06d7-41e3-9add-a60601ba327f" y=0.5599999999999996 w=46 h=11 fill="#e8eaee" size=8 weight=600 letter-spacing=0.32 emission={{"color":"#e8eaee","intensity":0.7,"radius":2.4}} />
+            </Frame>
+            <Text name="lit" id="5b84e1be-26b5-446e-ad2c-08f792cfb785" x=124 y=32.56 w=80 h=11 fill="#b9bcc2" size=8 weight=500 letter-spacing=0.48 emission={{"color":"#b9bcc2","intensity":0.6,"radius":2.4}}>DECAY</Text>
+            <Frame name="verb/decay bar" id="0f5f6200-028c-4c17-8e6f-6b82644e71d1" x=206 y=34 w=40 h=8 control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Param":{"addr":"verb/decay"}}},"kind":{"Fader":{"orientation":"Horizontal"}},"slots":[{"node":"5aa470c8-877d-43db-8146-f71e243b3399","role":"Fill"}]}}>
+              <Rectangle name="frame" id="90651b77-df10-4956-ad94-9b161e4ae185" w=40 h=8 fill="#00000000" stroke="#e8eaee" stroke-align="inside" />
+              <Rectangle name="fill" id="5aa470c8-877d-43db-8146-f71e243b3399" x=1.5 y=1.5 w=37 h=5 fill="#e8eaee" emission={{"color":"#e8eaee","intensity":0.3,"radius":3.0}} />
+            </Frame>
+            <Frame name="DECAY" id="9f02485f-c3b7-4962-a32e-fa28bdb5626a" x=250 y=32 w=46 h=12 control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Param":{"addr":"verb/decay"}}},"kind":"Readout","slots":[{"node":"42ae9f09-aa6e-4135-9157-18e740cc61ec","role":"Value"}]}}>
+              <Text name="value" id="42ae9f09-aa6e-4135-9157-18e740cc61ec" y=0.5599999999999996 w=46 h=11 fill="#e8eaee" size=8 weight=600 letter-spacing=0.32 emission={{"color":"#e8eaee","intensity":0.7,"radius":2.4}} />
+            </Frame>
+            <Text name="lit" id="a802ec5f-9966-45f5-accd-50baac7ea514" x=124 y=56.56 w=40 h=11 fill="#b9bcc2" size=8 weight=500 letter-spacing=0.48 emission={{"color":"#b9bcc2","intensity":0.6,"radius":2.4}}>FILTER</Text>
+            <Frame name="Low cut" id="020c3915-c11b-4fbf-897c-73c8ea4e7357" x=158 y=56 w=46 h=12 control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Param":{"addr":"verb/low"}}},"kind":"Readout","slots":[{"node":"7ca125a5-cc6f-4b0a-a6b6-50db06f62d31","role":"Value"}]}}>
+              <Text name="value" id="7ca125a5-cc6f-4b0a-a6b6-50db06f62d31" y=0.5599999999999996 w=46 h=11 fill="#e8eaee" size=8 weight=600 letter-spacing=0.32 emission={{"color":"#e8eaee","intensity":0.7,"radius":2.4}} />
+            </Frame>
+            <Frame name="verb/high bar" id="c0a40ae0-f0eb-4d8b-8634-bbb9ab53ec1a" x=206 y=58 w=40 h=8 control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Param":{"addr":"verb/high"}}},"kind":{"Fader":{"orientation":"Horizontal"}},"slots":[{"node":"f6d6a9b7-57b0-4f24-b272-12de8e7ccd7b","role":"Fill"}]}}>
+              <Rectangle name="frame" id="ec0fd980-10b3-461f-a5df-19460dfc06a4" w=40 h=8 fill="#00000000" stroke="#e8eaee" stroke-align="inside" />
+              <Rectangle name="fill" id="f6d6a9b7-57b0-4f24-b272-12de8e7ccd7b" x=1.5 y=1.5 w=37 h=5 fill="#e8eaee" emission={{"color":"#e8eaee","intensity":0.3,"radius":3.0}} />
+            </Frame>
+            <Frame name="High cut" id="87cbf54c-1d91-4739-a181-a7da5da86dd8" x=250 y=56 w=46 h=12 control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Param":{"addr":"verb/high"}}},"kind":"Readout","slots":[{"node":"7ab9a5e9-bdf6-4cea-bdef-c4368b575d1a","role":"Value"}]}}>
+              <Text name="value" id="7ab9a5e9-bdf6-4cea-bdef-c4368b575d1a" y=0.5599999999999996 w=46 h=11 fill="#e8eaee" size=8 weight=600 letter-spacing=0.32 emission={{"color":"#e8eaee","intensity":0.7,"radius":2.4}} />
+            </Frame>
+            <Rectangle name="glass" id="e6bdcdf2-cd53-41e1-bcb4-58b84c5be6a4" w=300 h=80 fill={[{"kind":{"LinearGradient":{"stops":[{"color":"#ffffff1a","position":0.0},{"color":"#ffffff08","position":0.34},{"color":"#ffffff00","position":0.35},{"color":"#ffffff00","position":1.0}],"transform":{"a":0.4383715832837809,"b":-1.2044160264027588,"c":1.2044160264027588,"d":0.4383715832837809,"tx":0.883022221559489,"ty":-0.32139380484326985}}}}]} />
+          </Frame>
+          <Vector name="art" id="c0e69db6-c026-41e3-ac8d-cca033b63572" x=146.14541573784388 y=147.44 w=70.25458426215613 h=28 stroke="#ee8a1e" stroke-weight=3.08 stroke-cap="round" stroke-join="round" geometry="M 19.060 3.833 L 21.065 5.196 L 22.779 6.910 L 24.141 8.915 L 25.104 11.140 L 25.633 13.506 L 25.709 15.929 L 25.330 18.323 L 24.509 20.604 L 23.275 22.691 L 21.672 24.509 L 19.756 25.995 L 17.596 27.096 L 15.268 27.772 L 12.855 28.000 L 10.441 27.772 L 8.113 27.096 L 5.953 25.995 L 4.038 24.509 L 2.434 22.691 L 1.200 20.604 L 0.379 18.323 L 0.000 15.929 L 0.076 13.506 L 0.605 11.140 L 1.568 8.915 L 2.930 6.910 L 4.645 5.196 L 6.650 3.833 M 31.615 0.000 L 35.535 11.760 L 34.415 27.440 M 42.255 17.360 L 44.005 15.003 L 45.755 13.004 L 47.505 11.669 L 49.255 11.200 L 51.005 11.669 L 52.755 13.004 L 54.505 15.003 L 56.255 17.360 L 58.005 19.717 L 59.755 21.716 L 61.505 23.051 L 63.255 23.520 L 65.005 23.051 L 66.755 21.716 L 68.505 19.717 L 70.255 17.360 " />
+          <Text name="print" id="b96af2da-ecde-4e11-9389-4109218207a7" x=451.3 y=27.54 w=49.4 h=13 fill="#d9dadc" size=9.5 weight=500 letter-spacing=0.76 case="upper" text-align="center">Hall</Text>
+          <Text name="print" id="63bafe63-60ec-4a91-b850-061baa4a6dc4" x=447.5 y=105.53999999999999 w=57 h=13 fill="#d9dadc" size=9.5 weight=500 letter-spacing=0.76 case="upper" text-align="center">Plate</Text>
+          <Frame name="Hall / Plate" id="71ab0b7e-62ea-46f5-a4f9-ae52b09f1097" x=454 y=49 w=55.333333333333336 h=48 control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Param":{"addr":"verb/mode"}}},"kind":{"Button":{"mode":"Toggle"}},"slots":[{"node":"e6f2c3b6-3d4a-4a06-b9c4-54bafcb23ef7","role":"Thumb"}]}}>
+            <Ellipse name="washer shadow" id="5525d811-c985-483c-a7e9-d8ce2957ff7a" x=10.266666666666667 y=12.933333333333332 w=24.8 h=24.8 fill={[{"kind":{"RadialGradient":{"stops":[{"color":"#00000080","position":0.0},{"color":"#00000040","position":0.8},{"color":"#00000000","position":1.0}]}}}]} />
+            <Ellipse name="washer" id="956c44b6-4587-49a1-bd50-ad3a7e8543c3" x=10.799999999999999 y=12.799999999999999 w=22.400000000000002 h=22.400000000000002 fill={[{"kind":{"AngularGradient":{"stops":[{"color":"#f2f2ef","position":0.0},{"color":"#8e8f8c","position":0.2},{"color":"#ecece8","position":0.45},{"color":"#7c7d7a","position":0.7},{"color":"#f2f2ef","position":1.0}],"transform":{"a":0.3420201433256688,"b":0.9396926207859083,"c":-0.9396926207859083,"d":0.3420201433256688,"tx":-0.1408563820557886,"ty":0.7988362387301198}}}}]} stroke="#00000066" stroke-weight=0.6666666666666667 stroke-align="inside" />
+            <Vector name="nut" id="644deebf-70da-4c4b-85fa-6c24fdc83f1a" w=55.333333333333336 h=48 fill={[{"kind":{"LinearGradient":{"stops":[{"color":"#fbfbf8","position":0.0},{"color":"#a7a8a5","position":0.45},{"color":"#6e6f6c","position":0.6},{"color":"#d2d3cf","position":1.0}],"transform":{"a":0.6830127018922192,"b":-1.1830127018922196,"c":1.1830127018922196,"d":0.6830127018922192,"tx":0.7500000000000002,"ty":-0.4330127018922193}}}}]} stroke="#00000059" stroke-weight=0.5 stroke-align="inside" geometry="M 26.400 16.379 L 30.800 24.000 L 26.400 31.621 L 17.600 31.621 L 13.200 24.000 L 17.600 16.379 Z" />
+            <Ellipse name="bushing" id="d9fa5b2b-33a1-48f8-b476-2254b43c9a9f" x=18 y=20 w=8 h=8 fill={[{"kind":{"RadialGradient":{"stops":[{"color":"#d6d6d2","position":0.0},{"color":"#3a3a38","position":1.0}],"transform":{"a":1.6,"b":0.0,"c":0.0,"d":1.6,"tx":-0.4,"ty":-0.45000000000000007}}}}]} />
+            <Frame name="lane" id="06202eef-3505-42d9-b2c7-52f503660ace" x=18.6 y=2 w=6.800000000000001 h=44>
+              <Rectangle name="bat" id="e6f2c3b6-3d4a-4a06-b9c4-54bafcb23ef7" w=6.800000000000001 h=23.2 radius=3.4000000000000004 fill={[{"kind":{"LinearGradient":{"stops":[{"color":"#050506","position":0.0},{"color":"#3a3a3e","position":0.35},{"color":"#1c1c1f","position":0.55},{"color":"#050506","position":1.0}],"transform":{"a":1.0,"b":5.551115123125783e-17,"c":-5.551115123125783e-17,"d":1.0,"tx":-2.7755575615628914e-17,"ty":0.0}}}}]} effects={[{"color":"#000000a6","kind":"DropShadow","offset_x":0.8333333333333334,"offset_y":1.6666666666666667,"radius":2.5}]} />
+            </Frame>
+          </Frame>
+          <Ellipse name="dot" id="d1decbfe-915a-4937-ad15-cfc26ce8167f" x=513 y=165 w=14 h=14 fill="#d9dadc" />
+          <Ellipse name="dot" id="d9aec6e4-45f9-40a6-a377-0b3cab08d80b" x=502.5 y=168.5 w=7 h=7 fill="#d9dadc" />
+        </Frame>
+        <Frame name="Bay 2" id="7f241f50-5112-4ce7-bdcb-d534d72c1242" x=581 y=6 w=405 h=198 radius=3 fill={[{"kind":{"LinearGradient":{"stops":[{"color":"#737476","position":0.0},{"color":"#5c5d60","position":1.0}],"transform":{"a":1.6653345369377348e-16,"b":-1.0,"c":1.0,"d":1.6653345369377348e-16,"tx":1.0,"ty":-1.942890293094024e-16}}}},{"kind":{"LinearGradient":{"stops":[{"color":"#ffffff00","position":0.0},{"color":"#ffffff10","position":0.5},{"color":"#ffffff00","position":1.0}],"transform":{"a":1.0,"b":5.551115123125783e-17,"c":-5.551115123125783e-17,"d":1.0,"tx":-2.7755575615628914e-17,"ty":0.0}}}}]} effects={[{"color":"#ffffff80","kind":"InnerShadow","offset_y":1.0,"radius":0.5},{"color":"#00000040","kind":"DropShadow","offset_y":1.0,"radius":2.0}]}>
+          <Frame name="verb/predelay" id="953df872-05ff-41f4-834e-545118a03106" x=45.03636363636364 y=17.200000000000003 w=57.92727272727272 h=141.6 control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Param":{"addr":"verb/predelay"}}},"kind":{"Fader":{"orientation":"Vertical"}},"slots":[{"node":"49c2633f-41b5-48dd-bcb0-dd0d2cbdd44b","role":"Thumb"}]}}>
+            <Rectangle name="tick" id="70159888-77a6-40d2-baeb-e1428fd8d69a" x=8.58181818181818 y=11.3 w=9.654545454545454 h=1 fill="#9a9b9d" />
+            <Rectangle name="tick" id="6ee249bd-03ed-4dc5-8047-195168965967" x=39.69090909090909 y=11.3 w=9.654545454545454 h=1 fill="#9a9b9d" />
+            <Rectangle name="tick" id="bbd39456-3b15-43a4-a3b3-8827e3e32165" x=11.799999999999997 y=21.133333333333333 w=6.4363636363636365 h=1 fill="#9a9b9d" />
+            <Rectangle name="tick" id="55e8300e-4fd6-46a1-9763-82092f98bac9" x=39.69090909090909 y=21.133333333333333 w=6.4363636363636365 h=1 fill="#9a9b9d" />
+            <Rectangle name="tick" id="6e3f04e3-d34b-41a6-80d5-25b73e3ee258" x=11.799999999999997 y=30.96666666666667 w=6.4363636363636365 h=1 fill="#9a9b9d" />
+            <Rectangle name="tick" id="493606cf-7497-445a-93a6-b911d4be3185" x=39.69090909090909 y=30.96666666666667 w=6.4363636363636365 h=1 fill="#9a9b9d" />
+            <Rectangle name="tick" id="7e23e0c4-396b-422b-bba2-c42c57f2814a" x=8.58181818181818 y=40.8 w=9.654545454545454 h=1 fill="#9a9b9d" />
+            <Rectangle name="tick" id="f8c2e919-d420-4a11-9cdd-f06382bcb8e5" x=39.69090909090909 y=40.8 w=9.654545454545454 h=1 fill="#9a9b9d" />
+            <Rectangle name="tick" id="6e38a8a2-8211-4ab8-a385-7303b0ab7b7b" x=11.799999999999997 y=50.63333333333334 w=6.4363636363636365 h=1 fill="#9a9b9d" />
+            <Rectangle name="tick" id="78f58204-3d1b-4d42-b0d8-be7fca016222" x=39.69090909090909 y=50.63333333333334 w=6.4363636363636365 h=1 fill="#9a9b9d" />
+            <Rectangle name="tick" id="28904e91-642b-409a-8db0-f63e8448a52e" x=11.799999999999997 y=60.46666666666667 w=6.4363636363636365 h=1 fill="#9a9b9d" />
+            <Rectangle name="tick" id="b24f98a4-ab5d-4d42-8c57-5f64bba2c30d" x=39.69090909090909 y=60.46666666666667 w=6.4363636363636365 h=1 fill="#9a9b9d" />
+            <Rectangle name="tick" id="6f350693-ea1c-4c84-b443-a49bd108d478" x=8.58181818181818 y=70.3 w=9.654545454545454 h=1 fill="#9a9b9d" />
+            <Rectangle name="tick" id="52187e05-dd90-452d-974f-a5db1d7a88a9" x=39.69090909090909 y=70.3 w=9.654545454545454 h=1 fill="#9a9b9d" />
+            <Rectangle name="tick" id="b252f408-3cfb-4d5f-b107-ce51f3785e80" x=11.799999999999997 y=80.13333333333333 w=6.4363636363636365 h=1 fill="#9a9b9d" />
+            <Rectangle name="tick" id="6adbf90f-2d0a-4618-b891-45f1483f0a9a" x=39.69090909090909 y=80.13333333333333 w=6.4363636363636365 h=1 fill="#9a9b9d" />
+            <Rectangle name="tick" id="18c3c420-f295-46a8-ab1c-0b0e19524f95" x=11.799999999999997 y=89.96666666666667 w=6.4363636363636365 h=1 fill="#9a9b9d" />
+            <Rectangle name="tick" id="8659ca22-bf00-4a20-be57-ae29604bf2d2" x=39.69090909090909 y=89.96666666666667 w=6.4363636363636365 h=1 fill="#9a9b9d" />
+            <Rectangle name="tick" id="7e3b8137-0808-40ad-a417-3b00716421dc" x=8.58181818181818 y=99.8 w=9.654545454545454 h=1 fill="#9a9b9d" />
+            <Rectangle name="tick" id="862818d5-1ea1-407b-957c-f197ccae70f2" x=39.69090909090909 y=99.8 w=9.654545454545454 h=1 fill="#9a9b9d" />
+            <Rectangle name="tick" id="7fa41b6a-684f-4c71-bb31-100d7452564d" x=11.799999999999997 y=109.63333333333333 w=6.4363636363636365 h=1 fill="#9a9b9d" />
+            <Rectangle name="tick" id="0512e26e-3416-49db-a1cb-0936dc267001" x=39.69090909090909 y=109.63333333333333 w=6.4363636363636365 h=1 fill="#9a9b9d" />
+            <Rectangle name="tick" id="5ad72968-20a4-4884-9e2c-ec30ea9d6340" x=11.799999999999997 y=119.46666666666667 w=6.4363636363636365 h=1 fill="#9a9b9d" />
+            <Rectangle name="tick" id="c065f165-607a-48c4-bf4f-167db9c059dd" x=39.69090909090909 y=119.46666666666667 w=6.4363636363636365 h=1 fill="#9a9b9d" />
+            <Rectangle name="tick" id="8b376a5c-f035-4a12-a990-e01574e92bc1" x=8.58181818181818 y=129.3 w=9.654545454545454 h=1 fill="#9a9b9d" />
+            <Rectangle name="tick" id="32a65255-d1d5-4505-8d8b-03d319b2bc4d" x=39.69090909090909 y=129.3 w=9.654545454545454 h=1 fill="#9a9b9d" />
+            <Rectangle name="slot" id="5df71af8-a852-4a6b-bdb6-89c67cb2058c" x=23.599999999999998 w=10.727272727272727 h=141.6 radius=5.363636363636363 fill={[{"kind":{"LinearGradient":{"stops":[{"color":"#0a0a0b","position":0.0},{"color":"#2a2a2c","position":0.5},{"color":"#0a0a0b","position":1.0}],"transform":{"a":1.0,"b":5.551115123125783e-17,"c":-5.551115123125783e-17,"d":1.0,"tx":-2.7755575615628914e-17,"ty":0.0}}}}]} effects={[{"color":"#000000","kind":"InnerShadow","offset_y":1.5,"radius":2.0},{"color":"#ffffff40","kind":"DropShadow","offset_y":1.0,"radius":0.0}]} />
+            <Frame name="lane" id="23f3a207-6977-4e20-844e-bedad73acb7c" x=12.872727272727271 w=32.18181818181818 h=141.6>
+              <Frame name="cap" id="49c2633f-41b5-48dd-bcb0-dd0d2cbdd44b" w=32.18181818181818 h=23.6>
+                <Rectangle name="shell" id="2a2ba32c-1e2e-49bc-8036-745b3661d7c6" w=32.18181818181818 h=23.6 radius=11.8 fill={[{"kind":{"LinearGradient":{"stops":[{"color":"#f4f0ea","position":0.0},{"color":"#ece6dc","position":0.45},{"color":"#a5a19a","position":1.0}],"transform":{"a":1.6653345369377348e-16,"b":-1.0,"c":1.0,"d":1.6653345369377348e-16,"tx":1.0,"ty":-1.942890293094024e-16}}}}]} effects={[{"color":"#00000080","kind":"DropShadow","offset_y":2.1454545454545455,"radius":3.2181818181818183}]} />
+                <Rectangle name="groove" id="a2e96fe4-ff39-44c1-bc57-db6e53c39bca" x=3.2181818181818183 y=7.852363636363637 w=25.745454545454542 h=1.2872727272727273 fill="#76736ecc" />
+                <Rectangle name="groove" id="cd4e794a-449e-4222-8865-e117e6787b29" x=3.2181818181818183 y=14.460363636363637 w=25.745454545454542 h=1.2872727272727273 fill="#76736ecc" />
+              </Frame>
+            </Frame>
+          </Frame>
+          <Text name="print" id="19c90845-3884-4a21-82a1-deb6bca3fd52" x=30.300000000000004 y=171.54 w=87.39999999999999 h=13 fill="#d9dadc" size=9.5 weight=500 letter-spacing=0.76 case="upper" text-align="center">Pre-Delay</Text>
+          <Frame name="verb/decay" id="a9e37627-4da3-47b5-bbc2-a7605f3398d1" x=111.03636363636363 y=17.200000000000003 w=57.92727272727272 h=141.6 control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Param":{"addr":"verb/decay"}}},"kind":{"Fader":{"orientation":"Vertical"}},"slots":[{"node":"f81fc064-163f-43ef-b551-21cdb977a5cd","role":"Thumb"}]}}>
+            <Rectangle name="tick" id="41fe3d35-1153-416e-9072-291261df3150" x=8.58181818181818 y=11.3 w=9.654545454545454 h=1 fill="#9a9b9d" />
+            <Rectangle name="tick" id="cfda198d-5962-4e1f-83d2-f9d74c91a14f" x=39.69090909090909 y=11.3 w=9.654545454545454 h=1 fill="#9a9b9d" />
+            <Rectangle name="tick" id="85ea1aa2-15d2-4ce0-a44f-2f739d366e11" x=11.799999999999997 y=21.133333333333333 w=6.4363636363636365 h=1 fill="#9a9b9d" />
+            <Rectangle name="tick" id="ce87bb90-5881-4ac6-ba54-d1f434306435" x=39.69090909090909 y=21.133333333333333 w=6.4363636363636365 h=1 fill="#9a9b9d" />
+            <Rectangle name="tick" id="6912be35-58d4-4e2f-a1c2-18f248341749" x=11.799999999999997 y=30.96666666666667 w=6.4363636363636365 h=1 fill="#9a9b9d" />
+            <Rectangle name="tick" id="7234c693-00cc-41a7-b67d-5b80c69edf65" x=39.69090909090909 y=30.96666666666667 w=6.4363636363636365 h=1 fill="#9a9b9d" />
+            <Rectangle name="tick" id="17d9ffb2-e67f-470b-b045-50716f551e24" x=8.58181818181818 y=40.8 w=9.654545454545454 h=1 fill="#9a9b9d" />
+            <Rectangle name="tick" id="3310a405-c85d-4c3b-866b-05a77da88472" x=39.69090909090909 y=40.8 w=9.654545454545454 h=1 fill="#9a9b9d" />
+            <Rectangle name="tick" id="0ef20b82-0c0f-4b1d-b8d9-4f98cca0ac07" x=11.799999999999997 y=50.63333333333334 w=6.4363636363636365 h=1 fill="#9a9b9d" />
+            <Rectangle name="tick" id="7a5b7561-de49-4ea7-bd7a-f6d582690a34" x=39.69090909090909 y=50.63333333333334 w=6.4363636363636365 h=1 fill="#9a9b9d" />
+            <Rectangle name="tick" id="e402e4b4-625a-4a80-8f96-a4dc1d4d0d8f" x=11.799999999999997 y=60.46666666666667 w=6.4363636363636365 h=1 fill="#9a9b9d" />
+            <Rectangle name="tick" id="5f609283-e20c-4d39-aaa3-72b975877550" x=39.69090909090909 y=60.46666666666667 w=6.4363636363636365 h=1 fill="#9a9b9d" />
+            <Rectangle name="tick" id="cad2cad2-656b-41e0-aec0-f8878cf49d54" x=8.58181818181818 y=70.3 w=9.654545454545454 h=1 fill="#9a9b9d" />
+            <Rectangle name="tick" id="6277984f-ecf3-4a08-a013-a7d6e15a58ef" x=39.69090909090909 y=70.3 w=9.654545454545454 h=1 fill="#9a9b9d" />
+            <Rectangle name="tick" id="23bd0e0b-3888-408a-bc01-84ffab1e75b8" x=11.799999999999997 y=80.13333333333333 w=6.4363636363636365 h=1 fill="#9a9b9d" />
+            <Rectangle name="tick" id="2ec0b1b9-1a1f-4db5-b9d1-61d0b583174e" x=39.69090909090909 y=80.13333333333333 w=6.4363636363636365 h=1 fill="#9a9b9d" />
+            <Rectangle name="tick" id="95f59981-91d1-43f7-a971-22a1db9adbb2" x=11.799999999999997 y=89.96666666666667 w=6.4363636363636365 h=1 fill="#9a9b9d" />
+            <Rectangle name="tick" id="b9866141-37d4-40cf-bc62-dd588ed9deb0" x=39.69090909090909 y=89.96666666666667 w=6.4363636363636365 h=1 fill="#9a9b9d" />
+            <Rectangle name="tick" id="233f16a4-2623-4446-823c-67987f6636cd" x=8.58181818181818 y=99.8 w=9.654545454545454 h=1 fill="#9a9b9d" />
+            <Rectangle name="tick" id="1b52b009-1f28-4b2e-8fcf-42530af8f0cd" x=39.69090909090909 y=99.8 w=9.654545454545454 h=1 fill="#9a9b9d" />
+            <Rectangle name="tick" id="6b72b17e-1297-4e87-9200-8c8f904b39c2" x=11.799999999999997 y=109.63333333333333 w=6.4363636363636365 h=1 fill="#9a9b9d" />
+            <Rectangle name="tick" id="215aac10-83ac-484b-9b74-66557f9182cc" x=39.69090909090909 y=109.63333333333333 w=6.4363636363636365 h=1 fill="#9a9b9d" />
+            <Rectangle name="tick" id="4762706b-f399-497a-ac55-b5265c349205" x=11.799999999999997 y=119.46666666666667 w=6.4363636363636365 h=1 fill="#9a9b9d" />
+            <Rectangle name="tick" id="b88709fa-be81-4123-8b6e-7dee38971523" x=39.69090909090909 y=119.46666666666667 w=6.4363636363636365 h=1 fill="#9a9b9d" />
+            <Rectangle name="tick" id="fffd705f-8a3c-46e7-ae62-d8de8cebe26f" x=8.58181818181818 y=129.3 w=9.654545454545454 h=1 fill="#9a9b9d" />
+            <Rectangle name="tick" id="675a3391-042a-4878-b091-973137bd39d4" x=39.69090909090909 y=129.3 w=9.654545454545454 h=1 fill="#9a9b9d" />
+            <Rectangle name="slot" id="23574371-d709-4667-9694-25649fb59d2b" x=23.599999999999998 w=10.727272727272727 h=141.6 radius=5.363636363636363 fill={[{"kind":{"LinearGradient":{"stops":[{"color":"#0a0a0b","position":0.0},{"color":"#2a2a2c","position":0.5},{"color":"#0a0a0b","position":1.0}],"transform":{"a":1.0,"b":5.551115123125783e-17,"c":-5.551115123125783e-17,"d":1.0,"tx":-2.7755575615628914e-17,"ty":0.0}}}}]} effects={[{"color":"#000000","kind":"InnerShadow","offset_y":1.5,"radius":2.0},{"color":"#ffffff40","kind":"DropShadow","offset_y":1.0,"radius":0.0}]} />
+            <Frame name="lane" id="f4e7980e-f0ab-41e1-b71d-151c2c789de3" x=12.872727272727271 w=32.18181818181818 h=141.6>
+              <Frame name="cap" id="f81fc064-163f-43ef-b551-21cdb977a5cd" w=32.18181818181818 h=23.6>
+                <Rectangle name="shell" id="9884ff1c-78ef-4785-986a-ae1b7343800b" w=32.18181818181818 h=23.6 radius=11.8 fill={[{"kind":{"LinearGradient":{"stops":[{"color":"#f4f0ea","position":0.0},{"color":"#ece6dc","position":0.45},{"color":"#a5a19a","position":1.0}],"transform":{"a":1.6653345369377348e-16,"b":-1.0,"c":1.0,"d":1.6653345369377348e-16,"tx":1.0,"ty":-1.942890293094024e-16}}}}]} effects={[{"color":"#00000080","kind":"DropShadow","offset_y":2.1454545454545455,"radius":3.2181818181818183}]} />
+                <Rectangle name="groove" id="5ef34e87-0eac-4097-b822-6bf686d340d4" x=3.2181818181818183 y=7.852363636363637 w=25.745454545454542 h=1.2872727272727273 fill="#76736ecc" />
+                <Rectangle name="groove" id="98ca6ad8-5327-4628-ad90-2f35f3d999ca" x=3.2181818181818183 y=14.460363636363637 w=25.745454545454542 h=1.2872727272727273 fill="#76736ecc" />
+              </Frame>
+            </Frame>
+          </Frame>
+          <Text name="print" id="ab474927-8e43-4f7c-a067-e6d7c57c3821" x=111.5 y=171.54 w=57 h=13 fill="#d9dadc" size=9.5 weight=500 letter-spacing=0.76 case="upper" text-align="center">Decay</Text>
+          <Frame name="verb/low" id="1b0927d6-51ee-4163-8321-3b2311307255" x=178.03636363636363 y=17.200000000000003 w=57.92727272727272 h=141.6 control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Param":{"addr":"verb/low"}}},"kind":{"Fader":{"orientation":"Vertical"}},"slots":[{"node":"cec8eb11-515f-43cb-95b2-262fa34638ec","role":"Thumb"}]}}>
+            <Rectangle name="tick" id="b055bde8-3d07-4330-9ee4-c08b6c92bad8" x=8.58181818181818 y=11.3 w=9.654545454545454 h=1 fill="#9a9b9d" />
+            <Rectangle name="tick" id="cbe819dd-12dd-495b-9b19-b6003800c33f" x=39.69090909090909 y=11.3 w=9.654545454545454 h=1 fill="#9a9b9d" />
+            <Rectangle name="tick" id="bd14b05a-059e-4c36-a3bb-eff4b298e5f5" x=11.799999999999997 y=21.133333333333333 w=6.4363636363636365 h=1 fill="#9a9b9d" />
+            <Rectangle name="tick" id="83dc2898-6f99-44d2-9317-d3cc2bda8dc2" x=39.69090909090909 y=21.133333333333333 w=6.4363636363636365 h=1 fill="#9a9b9d" />
+            <Rectangle name="tick" id="77ae45ba-dc1a-47f6-9fec-6536bd25639a" x=11.799999999999997 y=30.96666666666667 w=6.4363636363636365 h=1 fill="#9a9b9d" />
+            <Rectangle name="tick" id="66dc8661-68b4-4c36-89fe-4c368b945af2" x=39.69090909090909 y=30.96666666666667 w=6.4363636363636365 h=1 fill="#9a9b9d" />
+            <Rectangle name="tick" id="12d51698-6db1-4379-96d7-9f01292acde3" x=8.58181818181818 y=40.8 w=9.654545454545454 h=1 fill="#9a9b9d" />
+            <Rectangle name="tick" id="7f51f0d5-e201-4072-8b49-e128793fdc5c" x=39.69090909090909 y=40.8 w=9.654545454545454 h=1 fill="#9a9b9d" />
+            <Rectangle name="tick" id="80d635c5-6713-41ec-b927-bb886a6025a7" x=11.799999999999997 y=50.63333333333334 w=6.4363636363636365 h=1 fill="#9a9b9d" />
+            <Rectangle name="tick" id="3491a9a7-abf7-43de-9218-dcbc953ddaa6" x=39.69090909090909 y=50.63333333333334 w=6.4363636363636365 h=1 fill="#9a9b9d" />
+            <Rectangle name="tick" id="6fd0a570-3c81-431e-887e-4fccaa564540" x=11.799999999999997 y=60.46666666666667 w=6.4363636363636365 h=1 fill="#9a9b9d" />
+            <Rectangle name="tick" id="1f571e7c-c7a8-424b-bf87-dbe22db34d4c" x=39.69090909090909 y=60.46666666666667 w=6.4363636363636365 h=1 fill="#9a9b9d" />
+            <Rectangle name="tick" id="c8dbf33a-0e99-4eb2-a5e6-87dd7d561944" x=8.58181818181818 y=70.3 w=9.654545454545454 h=1 fill="#9a9b9d" />
+            <Rectangle name="tick" id="6d7a7da2-62fe-4d44-a849-fcdfec27e7a4" x=39.69090909090909 y=70.3 w=9.654545454545454 h=1 fill="#9a9b9d" />
+            <Rectangle name="tick" id="e19eb313-df6f-4387-acef-bf8a3bcbef60" x=11.799999999999997 y=80.13333333333333 w=6.4363636363636365 h=1 fill="#9a9b9d" />
+            <Rectangle name="tick" id="69218714-49b1-488b-a0fc-a5ce0da43a9d" x=39.69090909090909 y=80.13333333333333 w=6.4363636363636365 h=1 fill="#9a9b9d" />
+            <Rectangle name="tick" id="14d1520a-33be-4c67-81a0-2648c9fa0ded" x=11.799999999999997 y=89.96666666666667 w=6.4363636363636365 h=1 fill="#9a9b9d" />
+            <Rectangle name="tick" id="85ebe18d-64f1-4889-8749-33ccdd88fbb5" x=39.69090909090909 y=89.96666666666667 w=6.4363636363636365 h=1 fill="#9a9b9d" />
+            <Rectangle name="tick" id="03766bea-62df-4054-93b2-83e42ee55597" x=8.58181818181818 y=99.8 w=9.654545454545454 h=1 fill="#9a9b9d" />
+            <Rectangle name="tick" id="46a82fd0-13a9-4f25-be4a-9db6dd1e2c1c" x=39.69090909090909 y=99.8 w=9.654545454545454 h=1 fill="#9a9b9d" />
+            <Rectangle name="tick" id="5338909a-8206-4361-bea5-9a6005202411" x=11.799999999999997 y=109.63333333333333 w=6.4363636363636365 h=1 fill="#9a9b9d" />
+            <Rectangle name="tick" id="7e7bbe7e-e3bf-4ccc-8c84-37cf24bbb49f" x=39.69090909090909 y=109.63333333333333 w=6.4363636363636365 h=1 fill="#9a9b9d" />
+            <Rectangle name="tick" id="0fb01d88-0b72-4da8-a14d-25e10c47c8e5" x=11.799999999999997 y=119.46666666666667 w=6.4363636363636365 h=1 fill="#9a9b9d" />
+            <Rectangle name="tick" id="95b9897e-d112-41c7-b176-23ca2bea1872" x=39.69090909090909 y=119.46666666666667 w=6.4363636363636365 h=1 fill="#9a9b9d" />
+            <Rectangle name="tick" id="6dbbf135-e344-4884-9a04-b65822123e29" x=8.58181818181818 y=129.3 w=9.654545454545454 h=1 fill="#9a9b9d" />
+            <Rectangle name="tick" id="930a2786-4402-4d18-8161-fa21aa927517" x=39.69090909090909 y=129.3 w=9.654545454545454 h=1 fill="#9a9b9d" />
+            <Rectangle name="slot" id="861b6ebe-7bda-43e6-8e4b-9f0c4c3600ff" x=23.599999999999998 w=10.727272727272727 h=141.6 radius=5.363636363636363 fill={[{"kind":{"LinearGradient":{"stops":[{"color":"#0a0a0b","position":0.0},{"color":"#2a2a2c","position":0.5},{"color":"#0a0a0b","position":1.0}],"transform":{"a":1.0,"b":5.551115123125783e-17,"c":-5.551115123125783e-17,"d":1.0,"tx":-2.7755575615628914e-17,"ty":0.0}}}}]} effects={[{"color":"#000000","kind":"InnerShadow","offset_y":1.5,"radius":2.0},{"color":"#ffffff40","kind":"DropShadow","offset_y":1.0,"radius":0.0}]} />
+            <Frame name="lane" id="f40f7b5b-bd62-4478-a5c3-ab9a2e6509e9" x=12.872727272727271 w=32.18181818181818 h=141.6>
+              <Frame name="cap" id="cec8eb11-515f-43cb-95b2-262fa34638ec" w=32.18181818181818 h=23.6>
+                <Rectangle name="shell" id="8fef3dd9-d516-448f-9034-196262ae2f3b" w=32.18181818181818 h=23.6 radius=11.8 fill={[{"kind":{"LinearGradient":{"stops":[{"color":"#f5b978","position":0.0},{"color":"#ee8a1e","position":0.45},{"color":"#a76115","position":1.0}],"transform":{"a":1.6653345369377348e-16,"b":-1.0,"c":1.0,"d":1.6653345369377348e-16,"tx":1.0,"ty":-1.942890293094024e-16}}}}]} effects={[{"color":"#00000080","kind":"DropShadow","offset_y":2.1454545454545455,"radius":3.2181818181818183}]} />
+                <Rectangle name="groove" id="222f23aa-255f-4baf-82a3-bcdbce62f0de" x=3.2181818181818183 y=7.852363636363637 w=25.745454545454542 h=1.2872727272727273 fill="#77450fcc" />
+                <Rectangle name="groove" id="a38a2bfd-a222-41c4-bb97-e735da22f3f0" x=3.2181818181818183 y=14.460363636363637 w=25.745454545454542 h=1.2872727272727273 fill="#77450fcc" />
+              </Frame>
+            </Frame>
+          </Frame>
+          <Vector name="art" id="27d34b73-9514-4e06-a231-6cabc1cffb0f" x=198 y=174 w=18 h=6 stroke="#d9dadc" stroke-weight=1.4 stroke-cap="round" stroke-join="round" geometry="M 0.000 6.000 L 4.000 0.000 L 18.000 0.000 " />
+          <Frame name="verb/high" id="bb745335-d6a2-4cc8-a8ce-a10e563c3855" x=245.03636363636363 y=17.200000000000003 w=57.92727272727272 h=141.6 control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Param":{"addr":"verb/high"}}},"kind":{"Fader":{"orientation":"Vertical"}},"slots":[{"node":"d4187e3d-667c-4db1-98e9-a33faa41cfa5","role":"Thumb"}]}}>
+            <Rectangle name="tick" id="02ab106b-7505-433e-a973-2c4d9309d430" x=8.58181818181818 y=11.3 w=9.654545454545454 h=1 fill="#9a9b9d" />
+            <Rectangle name="tick" id="8791ae0f-0b12-4ddf-8492-5aaf2facc594" x=39.69090909090909 y=11.3 w=9.654545454545454 h=1 fill="#9a9b9d" />
+            <Rectangle name="tick" id="65d2e65c-91c2-4d1e-81a5-037a302c60c7" x=11.799999999999997 y=21.133333333333333 w=6.4363636363636365 h=1 fill="#9a9b9d" />
+            <Rectangle name="tick" id="8e362c4d-a102-435a-a03e-41313603c8b3" x=39.69090909090909 y=21.133333333333333 w=6.4363636363636365 h=1 fill="#9a9b9d" />
+            <Rectangle name="tick" id="fadb4c8e-a45e-4ad4-a929-a96b4df00da4" x=11.799999999999997 y=30.96666666666667 w=6.4363636363636365 h=1 fill="#9a9b9d" />
+            <Rectangle name="tick" id="cb25d337-2bac-4c84-8e47-4cf145da87c6" x=39.69090909090909 y=30.96666666666667 w=6.4363636363636365 h=1 fill="#9a9b9d" />
+            <Rectangle name="tick" id="c60e9d5e-e597-4e9c-b3a4-16d0594337fa" x=8.58181818181818 y=40.8 w=9.654545454545454 h=1 fill="#9a9b9d" />
+            <Rectangle name="tick" id="cc69462f-b645-4fda-94aa-1e267ddc7803" x=39.69090909090909 y=40.8 w=9.654545454545454 h=1 fill="#9a9b9d" />
+            <Rectangle name="tick" id="5555dca1-4902-4b95-b821-87ef92197d36" x=11.799999999999997 y=50.63333333333334 w=6.4363636363636365 h=1 fill="#9a9b9d" />
+            <Rectangle name="tick" id="43b1eb3b-9263-4be9-8879-aca94ba147cc" x=39.69090909090909 y=50.63333333333334 w=6.4363636363636365 h=1 fill="#9a9b9d" />
+            <Rectangle name="tick" id="85a2603d-7ab6-4c7f-8624-c5bd45c0c5e9" x=11.799999999999997 y=60.46666666666667 w=6.4363636363636365 h=1 fill="#9a9b9d" />
+            <Rectangle name="tick" id="89f5c2bb-d4a2-4731-9eeb-c1736fd2f446" x=39.69090909090909 y=60.46666666666667 w=6.4363636363636365 h=1 fill="#9a9b9d" />
+            <Rectangle name="tick" id="536bad90-d5e4-43f8-8dbc-287905667253" x=8.58181818181818 y=70.3 w=9.654545454545454 h=1 fill="#9a9b9d" />
+            <Rectangle name="tick" id="af8c5428-b74f-4bba-baea-aa9cc8036222" x=39.69090909090909 y=70.3 w=9.654545454545454 h=1 fill="#9a9b9d" />
+            <Rectangle name="tick" id="be09c514-999a-4ae4-b788-e12f93c44720" x=11.799999999999997 y=80.13333333333333 w=6.4363636363636365 h=1 fill="#9a9b9d" />
+            <Rectangle name="tick" id="c2e28ea2-ffb0-426c-8d27-bfbd61e15641" x=39.69090909090909 y=80.13333333333333 w=6.4363636363636365 h=1 fill="#9a9b9d" />
+            <Rectangle name="tick" id="2f34e4d8-0482-4a41-9d7a-df4c27f5e66b" x=11.799999999999997 y=89.96666666666667 w=6.4363636363636365 h=1 fill="#9a9b9d" />
+            <Rectangle name="tick" id="0ec0adc4-3731-467e-9515-59ef3abc724e" x=39.69090909090909 y=89.96666666666667 w=6.4363636363636365 h=1 fill="#9a9b9d" />
+            <Rectangle name="tick" id="fb949a13-342d-44cb-962c-f809c04741ee" x=8.58181818181818 y=99.8 w=9.654545454545454 h=1 fill="#9a9b9d" />
+            <Rectangle name="tick" id="82e7184f-a65d-4fda-afc1-86ea169c5454" x=39.69090909090909 y=99.8 w=9.654545454545454 h=1 fill="#9a9b9d" />
+            <Rectangle name="tick" id="3f423c84-433a-457c-8362-1c6e286262d7" x=11.799999999999997 y=109.63333333333333 w=6.4363636363636365 h=1 fill="#9a9b9d" />
+            <Rectangle name="tick" id="ba916af6-7608-4893-b4f5-fb3718655e32" x=39.69090909090909 y=109.63333333333333 w=6.4363636363636365 h=1 fill="#9a9b9d" />
+            <Rectangle name="tick" id="b2404d47-a995-4206-900b-997756bd9288" x=11.799999999999997 y=119.46666666666667 w=6.4363636363636365 h=1 fill="#9a9b9d" />
+            <Rectangle name="tick" id="495db71e-0c70-4ebd-ba09-5ae04d7bbaeb" x=39.69090909090909 y=119.46666666666667 w=6.4363636363636365 h=1 fill="#9a9b9d" />
+            <Rectangle name="tick" id="2b9096db-7046-46e4-861a-f367504dfe4d" x=8.58181818181818 y=129.3 w=9.654545454545454 h=1 fill="#9a9b9d" />
+            <Rectangle name="tick" id="31fdbd35-9062-4e61-a99e-9dade8cc3e5e" x=39.69090909090909 y=129.3 w=9.654545454545454 h=1 fill="#9a9b9d" />
+            <Rectangle name="slot" id="59417835-c130-4f2d-9e9a-570f6f8e5e55" x=23.599999999999998 w=10.727272727272727 h=141.6 radius=5.363636363636363 fill={[{"kind":{"LinearGradient":{"stops":[{"color":"#0a0a0b","position":0.0},{"color":"#2a2a2c","position":0.5},{"color":"#0a0a0b","position":1.0}],"transform":{"a":1.0,"b":5.551115123125783e-17,"c":-5.551115123125783e-17,"d":1.0,"tx":-2.7755575615628914e-17,"ty":0.0}}}}]} effects={[{"color":"#000000","kind":"InnerShadow","offset_y":1.5,"radius":2.0},{"color":"#ffffff40","kind":"DropShadow","offset_y":1.0,"radius":0.0}]} />
+            <Frame name="lane" id="90d20383-eb04-4a15-a37a-2b62198a8f2a" x=12.872727272727271 w=32.18181818181818 h=141.6>
+              <Frame name="cap" id="d4187e3d-667c-4db1-98e9-a33faa41cfa5" w=32.18181818181818 h=23.6>
+                <Rectangle name="shell" id="054769c0-fa8c-4987-9ac3-149c56da7ce0" w=32.18181818181818 h=23.6 radius=11.8 fill={[{"kind":{"LinearGradient":{"stops":[{"color":"#f5b978","position":0.0},{"color":"#ee8a1e","position":0.45},{"color":"#a76115","position":1.0}],"transform":{"a":1.6653345369377348e-16,"b":-1.0,"c":1.0,"d":1.6653345369377348e-16,"tx":1.0,"ty":-1.942890293094024e-16}}}}]} effects={[{"color":"#00000080","kind":"DropShadow","offset_y":2.1454545454545455,"radius":3.2181818181818183}]} />
+                <Rectangle name="groove" id="e09c22d5-b45f-4d1c-a648-ea77749e58cd" x=3.2181818181818183 y=7.852363636363637 w=25.745454545454542 h=1.2872727272727273 fill="#77450fcc" />
+                <Rectangle name="groove" id="a516c5d3-3d5f-4413-92ba-347122c13b0f" x=3.2181818181818183 y=14.460363636363637 w=25.745454545454542 h=1.2872727272727273 fill="#77450fcc" />
+              </Frame>
+            </Frame>
+          </Frame>
+          <Vector name="art" id="b41c2894-1bfb-4679-a93a-962de9744ed2" x=265 y=174 w=18 h=6 stroke="#d9dadc" stroke-weight=1.4 stroke-cap="round" stroke-join="round" geometry="M 0.000 0.000 L 14.000 0.000 L 18.000 6.000 " />
+          <Frame name="verb/mix" id="2980b231-0958-4a7c-8478-24b20cc12da8" x=306.03636363636366 y=17.200000000000003 w=57.92727272727272 h=141.6 control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Param":{"addr":"verb/mix"}}},"kind":{"Fader":{"orientation":"Vertical"}},"slots":[{"node":"c3bff167-3523-49fd-a714-29f20c5cac98","role":"Thumb"}]}}>
+            <Rectangle name="tick" id="504f8568-fdf2-4933-9d2a-a4606cc6fd09" x=8.58181818181818 y=11.3 w=9.654545454545454 h=1 fill="#9a9b9d" />
+            <Rectangle name="tick" id="a6c745ee-0cbf-4212-b75b-0268523c24fc" x=39.69090909090909 y=11.3 w=9.654545454545454 h=1 fill="#9a9b9d" />
+            <Rectangle name="tick" id="c8a9ccaf-b356-461e-9cdd-91b72ee0423d" x=11.799999999999997 y=21.133333333333333 w=6.4363636363636365 h=1 fill="#9a9b9d" />
+            <Rectangle name="tick" id="c46bab55-854a-4eba-a4d1-2151f8702b00" x=39.69090909090909 y=21.133333333333333 w=6.4363636363636365 h=1 fill="#9a9b9d" />
+            <Rectangle name="tick" id="5920def2-2b77-4788-8ab3-441e6f5b9f4f" x=11.799999999999997 y=30.96666666666667 w=6.4363636363636365 h=1 fill="#9a9b9d" />
+            <Rectangle name="tick" id="d0761ea9-c65a-4829-9408-714c6c589fcb" x=39.69090909090909 y=30.96666666666667 w=6.4363636363636365 h=1 fill="#9a9b9d" />
+            <Rectangle name="tick" id="07eb36ab-a9bb-4794-a0bc-00154247110c" x=8.58181818181818 y=40.8 w=9.654545454545454 h=1 fill="#9a9b9d" />
+            <Rectangle name="tick" id="1dd449b2-408c-4fc7-9547-541a63134291" x=39.69090909090909 y=40.8 w=9.654545454545454 h=1 fill="#9a9b9d" />
+            <Rectangle name="tick" id="5449460e-2ff4-45d5-b502-0901dcd40a69" x=11.799999999999997 y=50.63333333333334 w=6.4363636363636365 h=1 fill="#9a9b9d" />
+            <Rectangle name="tick" id="0b75dab3-3e4f-43a3-81ce-0596a029b684" x=39.69090909090909 y=50.63333333333334 w=6.4363636363636365 h=1 fill="#9a9b9d" />
+            <Rectangle name="tick" id="533fe5ff-e478-48fa-9153-8101f9213bf1" x=11.799999999999997 y=60.46666666666667 w=6.4363636363636365 h=1 fill="#9a9b9d" />
+            <Rectangle name="tick" id="8e0849f1-5371-4622-a2f4-22bad02223f3" x=39.69090909090909 y=60.46666666666667 w=6.4363636363636365 h=1 fill="#9a9b9d" />
+            <Rectangle name="tick" id="7c7c7526-7c00-422c-963f-1728c9d4a8b7" x=8.58181818181818 y=70.3 w=9.654545454545454 h=1 fill="#9a9b9d" />
+            <Rectangle name="tick" id="17f5465f-3518-42af-884d-4fd03abe47c3" x=39.69090909090909 y=70.3 w=9.654545454545454 h=1 fill="#9a9b9d" />
+            <Rectangle name="tick" id="078f97e1-7261-46f2-8d50-1416d2a2bf06" x=11.799999999999997 y=80.13333333333333 w=6.4363636363636365 h=1 fill="#9a9b9d" />
+            <Rectangle name="tick" id="0e19326a-437e-494c-a382-dab803e739a3" x=39.69090909090909 y=80.13333333333333 w=6.4363636363636365 h=1 fill="#9a9b9d" />
+            <Rectangle name="tick" id="0998edd5-717d-4e88-9b50-6ad4ba54a171" x=11.799999999999997 y=89.96666666666667 w=6.4363636363636365 h=1 fill="#9a9b9d" />
+            <Rectangle name="tick" id="47509cb2-c6be-4738-9e9a-83417a577c73" x=39.69090909090909 y=89.96666666666667 w=6.4363636363636365 h=1 fill="#9a9b9d" />
+            <Rectangle name="tick" id="3d6a39d9-be6d-45ec-9481-2e66edf64268" x=8.58181818181818 y=99.8 w=9.654545454545454 h=1 fill="#9a9b9d" />
+            <Rectangle name="tick" id="bb14932e-3534-4c20-bea2-30a003577e5d" x=39.69090909090909 y=99.8 w=9.654545454545454 h=1 fill="#9a9b9d" />
+            <Rectangle name="tick" id="2ff52de2-d732-49e0-afb7-6848b054e857" x=11.799999999999997 y=109.63333333333333 w=6.4363636363636365 h=1 fill="#9a9b9d" />
+            <Rectangle name="tick" id="983b59a9-3868-4685-b6e6-3773e889f9e4" x=39.69090909090909 y=109.63333333333333 w=6.4363636363636365 h=1 fill="#9a9b9d" />
+            <Rectangle name="tick" id="da87e819-f96f-47d6-8764-0956a319fbc9" x=11.799999999999997 y=119.46666666666667 w=6.4363636363636365 h=1 fill="#9a9b9d" />
+            <Rectangle name="tick" id="bbc32b04-bec3-4001-b4b6-5fbde7fa0fff" x=39.69090909090909 y=119.46666666666667 w=6.4363636363636365 h=1 fill="#9a9b9d" />
+            <Rectangle name="tick" id="58558a79-d706-41d8-bbe5-b3e80e612abd" x=8.58181818181818 y=129.3 w=9.654545454545454 h=1 fill="#9a9b9d" />
+            <Rectangle name="tick" id="40401fdf-bf86-4b44-a0b6-b26818043d71" x=39.69090909090909 y=129.3 w=9.654545454545454 h=1 fill="#9a9b9d" />
+            <Rectangle name="slot" id="03ae384a-084f-49a5-8721-9c8da8829b32" x=23.599999999999998 w=10.727272727272727 h=141.6 radius=5.363636363636363 fill={[{"kind":{"LinearGradient":{"stops":[{"color":"#0a0a0b","position":0.0},{"color":"#2a2a2c","position":0.5},{"color":"#0a0a0b","position":1.0}],"transform":{"a":1.0,"b":5.551115123125783e-17,"c":-5.551115123125783e-17,"d":1.0,"tx":-2.7755575615628914e-17,"ty":0.0}}}}]} effects={[{"color":"#000000","kind":"InnerShadow","offset_y":1.5,"radius":2.0},{"color":"#ffffff40","kind":"DropShadow","offset_y":1.0,"radius":0.0}]} />
+            <Frame name="lane" id="f2f435ef-7532-4dac-bca0-d3161076faa1" x=12.872727272727271 w=32.18181818181818 h=141.6>
+              <Frame name="cap" id="c3bff167-3523-49fd-a714-29f20c5cac98" w=32.18181818181818 h=23.6>
+                <Rectangle name="shell" id="c2fa39a3-18c2-4fb3-b44c-7f891bf233e5" w=32.18181818181818 h=23.6 radius=11.8 fill={[{"kind":{"LinearGradient":{"stops":[{"color":"#f4f0ea","position":0.0},{"color":"#ece6dc","position":0.45},{"color":"#a5a19a","position":1.0}],"transform":{"a":1.6653345369377348e-16,"b":-1.0,"c":1.0,"d":1.6653345369377348e-16,"tx":1.0,"ty":-1.942890293094024e-16}}}}]} effects={[{"color":"#00000080","kind":"DropShadow","offset_y":2.1454545454545455,"radius":3.2181818181818183}]} />
+                <Rectangle name="groove" id="8b33ed2c-5108-447a-b4f1-53cc3953a526" x=3.2181818181818183 y=7.852363636363637 w=25.745454545454542 h=1.2872727272727273 fill="#76736ecc" />
+                <Rectangle name="groove" id="c1fcd2c6-b552-4c65-bac0-e17e94133bae" x=3.2181818181818183 y=14.460363636363637 w=25.745454545454542 h=1.2872727272727273 fill="#76736ecc" />
+              </Frame>
+            </Frame>
+          </Frame>
+          <Text name="print" id="a71aa29b-f7d2-4329-8517-6eeb3a6e5ecf" x=314.1 y=171.54 w=41.8 h=13 fill="#d9dadc" size=9.5 weight=500 letter-spacing=0.76 case="upper" text-align="center">Mix</Text>
+        </Frame>
+        <Frame name="Bay 3" id="1278d557-28ba-4eb4-baf1-557e5459e7f5" x=988 y=6 w=124 h=198 radius=3 fill={[{"kind":{"LinearGradient":{"stops":[{"color":"#737476","position":0.0},{"color":"#5c5d60","position":1.0}],"transform":{"a":1.6653345369377348e-16,"b":-1.0,"c":1.0,"d":1.6653345369377348e-16,"tx":1.0,"ty":-1.942890293094024e-16}}}},{"kind":{"LinearGradient":{"stops":[{"color":"#ffffff00","position":0.0},{"color":"#ffffff10","position":0.5},{"color":"#ffffff00","position":1.0}],"transform":{"a":1.0,"b":5.551115123125783e-17,"c":-5.551115123125783e-17,"d":1.0,"tx":-2.7755575615628914e-17,"ty":0.0}}}}]} effects={[{"color":"#ffffff80","kind":"InnerShadow","offset_y":1.0,"radius":0.5},{"color":"#00000040","kind":"DropShadow","offset_y":1.0,"radius":2.0}]}>
+          <Vector name="art" id="3e3eec9e-1e88-4862-b090-6c475b6b7ebf" x=30 y=38.69502116084186 w=60 h=21.613284313099214 stroke="#aeb0b4" stroke-weight=1.1 stroke-cap="round" stroke-join="round" geometry="M 0.000 11.305 L 1.200 7.343 L 2.400 3.910 L 3.600 1.386 L 4.800 0.040 L 6.000 0.000 L 7.200 1.244 L 8.400 3.604 L 9.600 6.787 L 10.800 10.415 L 12.000 14.065 L 13.200 17.321 L 14.400 19.823 L 15.600 21.302 L 16.800 21.613 L 18.000 20.748 L 19.200 18.832 L 20.400 16.108 L 21.600 12.904 L 22.800 9.595 L 24.000 6.561 L 25.200 4.140 L 26.400 2.592 L 27.600 2.070 L 28.800 2.609 L 30.000 4.119 L 31.200 6.403 L 32.400 9.182 L 33.600 12.126 L 34.800 14.897 L 36.000 17.184 L 37.200 18.740 L 38.400 19.411 L 39.600 19.143 L 40.800 17.997 L 42.000 16.126 L 43.200 13.767 L 44.400 11.202 L 45.600 8.728 L 46.800 6.625 L 48.000 5.119 L 49.200 4.362 L 50.400 4.416 L 51.600 5.247 L 52.800 6.734 L 54.000 8.686 L 55.200 10.865 L 56.400 13.014 L 57.600 14.890 L 58.800 16.290 L 60.000 17.073 " />
+          <Frame name="LED" id="97c49c13-9772-41c4-b01e-0f5f9c28f453" x=55 y=91 w=14 h=14 control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Param":{"addr":"verb/on"}}},"kind":"Readout","slots":[{"node":"1f42d490-a59e-4a4d-82fe-c1deaba37c8a","role":"On"},{"node":"b63f1d9b-761b-4f64-8789-a6f129b3e531","role":"Off"}]}}>
+            <Ellipse name="bezel" id="6c996136-96b0-4145-bd74-9c612437e8e1" x=1.54 y=1.54 w=10.92 h=10.92 fill={[{"kind":{"RadialGradient":{"stops":[{"color":"#767677","position":0.0},{"color":"#121214","position":1.0}],"transform":{"a":1.6,"b":0.0,"c":0.0,"d":1.6,"tx":-0.4,"ty":-0.45000000000000007}}}}]} effects={[{"color":"#00000059","kind":"DropShadow","offset_y":0.56,"radius":1.4000000000000001}]} />
+            <Ellipse name="lens" id="b63f1d9b-761b-4f64-8789-a6f129b3e531" x=3.5 y=3.5 w=7 h=7 fill={[{"kind":{"RadialGradient":{"stops":[{"color":"#ffffff59","position":0.0},{"color":"#9d9c95","position":0.5},{"color":"#4d4b46","position":1.0}],"transform":{"a":1.8,"b":0.0,"c":0.0,"d":1.8,"tx":-0.5,"ty":-0.56}}}}]} />
+            <Ellipse name="lamp" id="1f42d490-a59e-4a4d-82fe-c1deaba37c8a" x=3.5 y=3.5 w=7 h=7 fill={[{"kind":{"RadialGradient":{"stops":[{"color":"#ffffff","position":0.0},{"color":"#fffdf6","position":0.3},{"color":"#fffbe8","position":0.75},{"color":"#b3b0a2","position":1.0}],"transform":{"a":1.6,"b":0.0,"c":0.0,"d":1.6,"tx":-0.35000000000000003,"ty":-0.4}}}}]} effects={[{"color":"#fffbe8cc","kind":"DropShadow","radius":6.3}]} emission={{"color":"#fffbe8","intensity":0.9,"radius":12.6}} />
+          </Frame>
+          <Frame name="verb/on" id="728cb31b-c1b9-49b4-850d-bf812d6fef59" x=40 y=114 w=44 h=44 control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Param":{"addr":"verb/on"}}},"kind":{"Button":{"mode":"Toggle"}},"slots":[{"node":"44692646-7e69-40a1-a3fc-28d03d284bea","role":"Led"}]}}>
+            <Rectangle name="bezel" id="ae6b4fa2-4181-4e28-b2c0-d055d7266aaa" x=3.120000000000001 y=3.120000000000001 w=37.76 h=37.76 radius=5.6000000000000005 fill={[{"kind":{"LinearGradient":{"stops":[{"color":"#fbfbf9","position":0.0},{"color":"#b9bab8","position":1.0}],"transform":{"a":0.4383715832837809,"b":-1.2044160264027588,"c":1.2044160264027588,"d":0.4383715832837809,"tx":0.883022221559489,"ty":-0.32139380484326985}}}}]} effects={[{"color":"#00000059","kind":"DropShadow","offset_y":1.6,"radius":3.2}]} />
+            <Rectangle name="cap" id="a96a3697-5e54-44d2-8b17-84bb76ad7805" x=6 y=6 w=32 h=32 radius=4 fill={[{"kind":{"RadialGradient":{"stops":[{"color":"#a76115","position":0.0},{"color":"#6b3e0d","position":1.0}],"transform":{"a":1.4,"b":0.0,"c":0.0,"d":1.4,"tx":-0.19999999999999996,"ty":-0.19999999999999996}}}}]} effects={[{"color":"#00000066","kind":"InnerShadow","offset_y":1.2000000000000002,"radius":2.4000000000000004}]} />
+            <Frame name="lit" id="44692646-7e69-40a1-a3fc-28d03d284bea" x=6 y=6 w=32 h=32 radius=4 emission={{"color":"#ee8a1e","intensity":0.6,"radius":16.0}}>
+              <Rectangle name="glow" id="576f276f-be3a-46ca-b20f-0adcec964853" w=32 h=32 radius=4 fill={[{"kind":{"RadialGradient":{"stops":[{"color":"#f1a14b","position":0.0},{"color":"#ee8a1e","position":0.6},{"color":"#9b5a14","position":1.0}],"transform":{"a":1.4,"b":0.0,"c":0.0,"d":1.4,"tx":-0.19999999999999996,"ty":-0.19999999999999996}}}}]} />
+              <Rectangle name="core" id="b84845a7-8886-44f5-b2bd-6e840285b9b8" x=7.04 y=7.04 w=17.92 h=17.92 radius=2.4000000000000004 fill={[{"kind":{"RadialGradient":{"stops":[{"color":"#ffffff","position":0.0},{"color":"#f7c48f","position":1.0}],"transform":{"a":1.2,"b":0.0,"c":0.0,"d":1.2,"tx":-0.09999999999999998,"ty":-0.09999999999999998}}}}]} effects={[{"color":"#00000040","kind":"InnerShadow","offset_y":1.0,"radius":2.0}]} />
+            </Frame>
+          </Frame>
+          <Text name="print" id="5183ca4c-71fc-4995-a8ec-153c608564f8" x=33.5 y=171.54 w=57 h=13 fill="#d9dadc" size=9.5 weight=500 letter-spacing=0.76 case="upper" text-align="center">Power</Text>
+        </Frame>
+      </Frame>
+    </Frame>
+  </Page>
+</Document>
