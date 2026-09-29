@@ -1,0 +1,19 @@
+[package]
+name = "surface-runtime"
+description = "Runs a control surface: gestures, value → visuals, meter ballistics, edit coalescing, engine sync."
+version.workspace = true
+edition.workspace = true
+publish = false
+
+[dependencies]
+surface-proto = { path = "../surface-proto" }
+document-proto = { path = "../../document/document-proto", default-features = false }
+uuid.workspace = true
+
+[dev-dependencies]
+architect = { workspace = true, features = ["vox", "local"] }
+surface-memory = { path = "../surface-memory" }
+tokio.workspace = true
+
+[lints]
+workspace = true

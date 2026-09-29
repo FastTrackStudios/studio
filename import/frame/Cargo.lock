@@ -5661,6 +5661,40 @@ dependencies = [
 ]
 
 [[package]]
+name = "surface-memory"
+version = "0.1.0"
+dependencies = [
+ "architect",
+ "surface-proto",
+ "tokio",
+]
+
+[[package]]
+name = "surface-proto"
+version = "0.1.0"
+dependencies = [
+ "architect",
+ "facet",
+ "sea-orm",
+ "serde",
+ "thiserror 2.0.18",
+ "uuid",
+ "vox",
+]
+
+[[package]]
+name = "surface-runtime"
+version = "0.1.0"
+dependencies = [
+ "architect",
+ "document-proto",
+ "surface-memory",
+ "surface-proto",
+ "tokio",
+ "uuid",
+]
+
+[[package]]
 name = "svg"
 version = "0.18.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
