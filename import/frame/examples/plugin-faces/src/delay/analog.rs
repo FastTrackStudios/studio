@@ -74,18 +74,21 @@ pub fn face() -> Face {
         // ── Foot: bypass | window onto the chip | tap ──────────────────
         let fy = 452.0;
         let foot = Ink::new(7.0, DIM).weight(700.0).track(0.2);
-        let on = art::footswitch(b, lid, "Bypass", &a("on"), (150.0, fy), 52.0, 44.0, LED);
-        parts::label_at(b, on, "On", (184.0, fy - 44.0), foot);
-        let tap = art::footswitch(b, lid, "Tap", &a("tap"), (710.0, fy), 52.0, 44.0, "#ffb02e");
-        parts::label_at(b, tap, "Tap", (744.0, fy - 44.0), foot);
+        let bypass = Place::new("Bypass").size(34.0).variant("red").bind(bind(&a("on")));
+        let on = parts::footswitch(b, lid, &bypass, (150.0, fy));
+        parts::label_at(b, on, "On", (180.0, fy - 36.0), foot);
+        let tap = Place { options: Some(vec!["momentary".into()]), ..Place::new("Tap").size(34.0).variant("amber").bind(bind(&a("tap"))) };
+        let tap = parts::footswitch(b, lid, &tap, (710.0, fy));
+        parts::label_at(b, tap, "Tap", (740.0, fy - 36.0), foot);
         let board = parts::well(b, lid, "Window", (282.0, 386.0, 296.0, 96.0), draw::linear(160.0, &[(0.0, "#1f4a2a"), (1.0, "#12301b")]), 6.0);
         // Traces on the board, then the chip over them.
-        let mut traces = String::new();
-        for i in 0..6 {
-            let y = 14.0 + f64::from(i) * 13.0;
-            traces.push_str(&art::ribbon(&[(0.0, y), (60.0, y), (74.0, y + 6.0), (230.0, y + 6.0), (244.0, y), (296.0, y)], 1.6));
-        }
-        art::path_in(b, board, "traces", traces, draw::solid("#c9a24a55"));
+        let traces: Vec<Vec<(f64, f64)>> = (0..6)
+            .map(|i| {
+                let y = 14.0 + f64::from(i) * 13.0;
+                vec![(0.0, y), (60.0, y), (74.0, y + 6.0), (230.0, y + 6.0), (244.0, y), (296.0, y)]
+            })
+            .collect();
+        b.add(board, parts::stroke_path("traces", (0.0, 0.0, 296.0, 96.0), &traces, 1.6, "#c9a24a55", false));
         art::chip(b, board, (148.0, 48.0), (150.0, 44.0), 8, "BBD-4096", "Dual · low noise");
         for (x, y) in [(22.0, 20.0), (22.0, 76.0), (274.0, 20.0), (274.0, 76.0)] {
             b.add(board, draw::rounded(draw::rect("cap", x - 6.0, y - 4.0, 12.0, 8.0, draw::linear(180.0, &[(0.0, "#d9b25c"), (1.0, "#8a6a24")])), 2.0));

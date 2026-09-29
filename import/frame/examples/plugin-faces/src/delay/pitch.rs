@@ -10,7 +10,7 @@
 //! (each repeat an octave up, fed back into the next).
 
 use document_proto::{NodeId, TextAlign};
-use surface_kit::{Place, draw};
+use surface_kit::Place;
 use surface_proto::{Range, Unit};
 use surface_widgets::Builder;
 
@@ -48,7 +48,7 @@ fn staircase(b: &mut Builder<'_>, win: NodeId, (x, y, w, h): (f64, f64, f64, f64
     }
     // The dry note, on the floor.
     let floor = y + h - 2.0;
-    art::path_in(b, win, "floor", art::ribbon(&[(x, floor), (x + w, floor)], 1.0), draw::solid(LCD_DIM));
+    parts::rule(b, win, x, x + w, floor, 1.0, LCD_DIM);
     art::tag(b, win, "+7 st per repeat", (x + 2.0, y + 8.0), 6.5, LCD_DIM);
 }
 
@@ -56,19 +56,19 @@ pub fn face() -> Face {
     let scene = canvas("Pitch Delay", |b, root| {
         parts::fit_root(b, root, W, H);
         let panel = parts::panel(b, root, "panel.brushed", "black", W, H, "ears");
-        parts::underpaint(b, panel, &[(0.0, "#2b2540"), (0.5, "#1f1a2f"), (1.0, "#141120")]);
+        parts::repaint(b, panel, &[(0.0, "#2b2540"), (0.5, "#1f1a2f"), (1.0, "#141120")]);
 
         // ── Model line ─────────────────────────────────────────────────
         parts::silk_left(b, panel, "Pitch Echo", 50.0, 34.0, Ink::new(15.0, INK).weight(800.0).track(0.08));
         parts::rule(b, panel, 50.0, 214.0, 47.0, 1.0, "#ece7fa38");
         parts::silk_left(b, panel, "Harmonic delay · ±12 semitones", 50.0, 60.0, Ink::new(6.8, DIM).weight(600.0).track(0.16));
         let modes = Place::new("Voicing").size(46.0).variant("blue").bind(bind(&a("mode"))).options(MODES);
-        let modes = parts::put(b, panel, "button.illuminated_bank", &modes, 132.0, 98.0);
-        parts::fit_legends(b, modes, 7.5);
+        parts::put(b, panel, "button.illuminated_bank", &modes, 132.0, 98.0);
         parts::silk(b, panel, "Voicing", 132.0, 136.0, Ink::new(6.5, DIM).weight(700.0).track(0.2));
 
         // ── Display ────────────────────────────────────────────────────
         let win = parts::screen(b, panel, "Display", (262.0, 24.0, 440.0, 112.0), Screen { glass: ("#070a16", "#0c1124"), ink: LCD, mesh: false });
+        parts::shader(b, win, "crt", &[("strength", 0.35), ("scale", 3.0)]);
         art::tag(b, win, "Interval", (16.0, 16.0), 7.0, LCD_DIM);
         parts::readout(b, win, "Interval", bind(&a("interval")), (12.0, 46.0, 126.0), 30.0, LCD, TextAlign::Left);
         art::tag(b, win, "Spread", (16.0, 76.0), 7.0, LCD_DIM);

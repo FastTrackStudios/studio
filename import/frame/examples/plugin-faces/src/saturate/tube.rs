@@ -43,7 +43,7 @@ fn window(b: &mut Builder<'_>, panel: NodeId) {
     // Each valve throws its light on the chassis at its foot.
     for cx in [110.0, 250.0] {
         let pool = draw::rect("pool", cx - 60.0, h - 30.0, 120.0, 26.0, draw::radial(&[(0.0, "#ff8a2a50"), (1.0, "#ff8a2a00")]));
-        b.add(win, parts::emit(pool, "#ff8a2a", 0.4, 20.0));
+        b.add(win, pool);
     }
     // Two valves, and a transformer can between them for scale.
     art::valve(b, win, (110.0, 22.0), (46.0, 118.0), 0.85);
@@ -61,20 +61,21 @@ pub fn face() -> Face {
     let scene = canvas("Valve Preamp", |b, root| {
         parts::fit_root(b, root, W, H);
         let panel = parts::panel(b, root, "panel.painted", "black", W, H, "ears");
-        parts::underpaint(b, panel, &[(0.0, "#2b231e"), (0.5, "#1e1814"), (1.0, "#14100d")]);
+        parts::repaint(b, panel, &[(0.0, "#2b231e"), (0.5, "#1e1814"), (1.0, "#14100d")]);
 
         // ── Nameplate and stage ───────────────────────────────────────
         parts::silk_left(b, panel, "Valve Preamp", 50.0, 36.0, Ink::new(16.0, INK).weight(800.0).track(0.06).plain());
         parts::rule(b, panel, 50.0, 214.0, 49.0, 1.0, "#eadcb850");
         parts::silk_left(b, panel, "Class A · single-ended", 50.0, 62.0, Ink::new(6.8, DIM).weight(700.0).track(0.18));
-        let stage = parts::selector(b, panel, "Stage", &a("stage"), "cream", (130.0, 122.0), 44.0, STAGES, Ink::new(7.0, INK).weight(700.0).track(0.1));
-        parts::legend_at(b, stage, "Stage", 160.0, Ink::new(7.0, DIM).weight(800.0).track(0.22));
+        let stage = parts::selector(b, panel, "Stage", &a("stage"), "cream", (130.0, 128.0), 54.0, STAGES, INK);
+        parts::legend_at(b, stage, "Stage", 168.0, Ink::new(7.0, DIM).weight(800.0).track(0.22));
 
         window(b, panel);
 
         // ── Output VU, power ───────────────────────────────────────────
         let vu = Place::new("Output").size(176.0).variant("black_rack").legend("VU").bind(parts::stream(&a("out")));
-        parts::put(b, panel, "meter.vu_amber", &vu, 752.0, 92.0);
+        let vu = parts::put(b, panel, "meter.vu_amber", &vu, 752.0, 92.0);
+        parts::glass(b, vu);
         parts::silk(b, panel, "Output", 752.0, 160.0, Ink::new(6.8, DIM).weight(800.0).track(0.22));
         let power = Place::new("Power").size(38.0).variant("chrome").legend("Power").options(&["On", "Off"]).bind(bind(&a("power")));
         let pw = parts::put(b, panel, "switch.toggle_bat", &power, 882.0, 76.0);

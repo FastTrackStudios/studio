@@ -13,7 +13,7 @@
 //! age, and the echo level (mix) last.
 
 use document_proto::{NodeId, TextAlign};
-use surface_kit::{Place, draw};
+use surface_kit::{Ink as KitInk, Place, draw};
 use surface_widgets::Builder;
 
 use super::art::{self, Reel};
@@ -81,7 +81,7 @@ pub fn face() -> Face {
     let scene = canvas("Tape Echo", |b, root| {
         parts::fit_root(b, root, W, H);
         let panel = parts::panel(b, root, "panel.painted", "cream", W, H, "wood");
-        parts::underpaint(b, panel, &[(0.0, "#e9dfc9"), (0.5, "#dacfb5"), (1.0, "#c5b89b")]);
+        parts::repaint(b, panel, &[(0.0, "#e9dfc9"), (0.5, "#dacfb5"), (1.0, "#c5b89b")]);
 
         deck(b, panel);
 
@@ -90,7 +90,8 @@ pub fn face() -> Face {
         parts::silk(b, panel, "Tape Echo", cx, 30.0, Ink::new(17.0, INK).weight(800.0).track(0.06).plain());
         parts::silk(b, panel, "EC-3 · Three-head repeat", cx, 47.0, Ink::new(6.5, DIM).weight(700.0).track(0.2));
         let vu = Place::new("Record level").size(158.0).variant("black_rack").legend("VU").bind(parts::stream(&a("in")));
-        parts::put(b, panel, "meter.vu_amber", &vu, cx, 112.0);
+        let vu = parts::put(b, panel, "meter.vu_amber", &vu, cx, 112.0);
+        parts::glass(b, vu);
         parts::silk(b, panel, "Record level", cx, 178.0, Ink::new(6.5, DIM).weight(700.0).track(0.22));
 
         let win = parts::well(b, panel, "Time window", (cx - 110.0, 190.0, 220.0, 30.0), draw::linear(180.0, &[(0.0, "#150d06"), (1.0, "#22160b")]), 4.0);
@@ -124,9 +125,8 @@ pub fn face() -> Face {
             }
         }
         // Free-running or locked to the tempo: a bat toggle by itself.
-        let sync = Place::new("Sync").size(40.0).variant("chrome").legend("Time").options(&["Sync", "Free"]).bind(bind(&a("sync")));
+        let sync = Place::new("Sync").size(40.0).variant("chrome").legend("Time").options(&["Sync", "Free"]).bind(bind(&a("sync"))).ink(KitInk::Color(INK.into()));
         let sw = parts::put(b, panel, "switch.toggle_bat", &sync, 734.0, row - 2.0);
-        parts::reink(b, sw, INK);
         parts::caption_style(b, sw, Ink::new(7.5, INK).weight(800.0).track(0.14));
     });
 

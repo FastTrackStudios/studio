@@ -3,16 +3,14 @@
 //! window, a transformer's core and windings, a bucket-brigade chip, and
 //! the stroked traces a display draws (echo trains, transfer curves).
 //!
-//! Geometry only — paths are filled (the renderer fills, it doesn't
-//! stroke), so a line is a ribbon of quads and a ring is two circles wound
-//! against each other (non-zero fill leaves the hole).
+//! Lines are open paths, stroked; a ring cut through a disc (a reel's
+//! windows) is a subpath wound against it (non-zero fill leaves the hole).
 
-use document_proto::{NodeId, TextAlign};
+use document_proto::{NodeId, StrokeCap, TextAlign};
 use surface_kit::draw;
-use surface_proto::{Control, ControlKind, SlotRole};
 use surface_widgets::Builder;
 
-use super::parts::{self, Ink, bind, emit, hexa, mixed};
+use super::parts::{self, Ink, emit, hexa, mixed};
 
 // ── geometry ─────────────────────────────────────────────────────────────
 
@@ -39,23 +37,6 @@ pub fn poly_d(points: &[(f64, f64)], hole: bool) -> String {
     draw::polygon(&pts) + " "
 }
 
-/// A stroked polyline: a ribbon `w` wide through `pts`, each quad run a
-/// little into the next so the joints stay closed.
-#[must_use]
-pub fn ribbon(pts: &[(f64, f64)], w: f64) -> String {
-    let hw = w / 2.0;
-    let mut d = String::new();
-    for s in pts.windows(2) {
-        let ((ax, ay), (bx, by)) = (s[0], s[1]);
-        let len = (bx - ax).hypot(by - ay).max(1e-6);
-        let (nx, ny) = (-(by - ay) / len * hw, (bx - ax) / len * hw);
-        let (ex, ey) = ((bx - ax) / len * hw * 0.8, (by - ay) / len * hw * 0.8);
-        d.push_str(&draw::polygon(&[(ax + nx, ay + ny), (bx + ex + nx, by + ey + ny), (bx + ex - nx, by + ey - ny), (ax - nx, ay - ny)]));
-        d.push(' ');
-    }
-    d
-}
-
 /// A ring sector as a path, `a0..a1` degrees (0 = up, clockwise).
 #[must_use]
 pub fn sector_d(cx: f64, cy: f64, r_in: f64, r_out: f64, a0: f64, a1: f64, hole: bool) -> String {
@@ -70,27 +51,14 @@ pub fn sector_d(cx: f64, cy: f64, r_in: f64, r_out: f64, a0: f64, a1: f64, hole:
     poly_d(&pts, hole)
 }
 
-/// A path drawn in `parent`'s own coordinates, its box the parent's. Its
-/// geometry must stay inside that box (the renderer fits geometry that
-/// strays outside its node's box back into it).
-#[must_use]
-fn over(b: &Builder<'_>, parent: NodeId, name: &str, d: String, fill: document_proto::Paint) -> document_proto::Node {
-    let (w, h) = parts::size_of(b, parent);
-    draw::path(name, 0.0, 0.0, w, h, d, fill)
-}
-
 // ── fasteners ────────────────────────────────────────────────────────────
 
 /// A panel screw: a domed head with a slot at `angle`.
 pub fn screw(b: &mut Builder<'_>, parent: NodeId, (cx, cy): (f64, f64), r: f64, angle: f64) {
     let head = draw::circle("screw", cx, cy, r, draw::radial_at(0.4, 0.35, 0.8, &[(0.0, "#f2f2ef"), (0.45, "#a9aaa6"), (1.0, "#4e4f4c")]));
     b.add(parent, draw::with_effects(head, vec![draw::drop_shadow("#00000099", 0.0, 0.8, 1.2)]));
-    // The slot in its own box round the head: a path's geometry has to
-    // stay inside its node's box, and a screw can sit on its parent's edge.
-    let (x0, y0) = draw::polar(r, r, r * 0.8, angle);
-    let (x1, y1) = draw::polar(r, r, r * 0.8, angle + 180.0);
-    let d = ribbon(&[(x0, y0), (x1, y1)], r * 0.32);
-    b.add(parent, draw::path("screw slot", cx - r, cy - r, 2.0 * r, 2.0 * r, d, draw::solid("#2a2a28cc")));
+    let slot = [draw::polar(cx, cy, r * 0.72, angle), draw::polar(cx, cy, r * 0.72, angle + 180.0)];
+    parts::line(b, parent, "screw slot", &slot, r * 0.32, "#2a2a28cc");
 }
 
 // ── tape ─────────────────────────────────────────────────────────────────
@@ -118,12 +86,11 @@ pub fn reel(b: &mut Builder<'_>, parent: NodeId, (cx, cy): (f64, f64), r: f64, f
     let rp = r * fill;
     let pack = draw::circle("tape pack", c, c, rp, draw::radial_at(0.5, 0.5, 0.5, &[(0.0, &mixed(s.oxide, "#000000", 0.4)), (0.3, s.oxide), (0.92, &mixed(s.oxide, "#ffffff", 0.08)), (1.0, &mixed(s.oxide, "#000000", 0.35))]));
     b.add(root, pack);
-    let mut bands = String::new();
-    for k in 1..6 {
-        let rr = r * 0.26 + (rp - r * 0.26) * f64::from(k) / 6.0;
-        bands.push_str(&ring_d(c, c, rr - 0.35, rr + 0.35));
-    }
-    b.add(root, draw::with_opacity(draw::path("pack bands", 0.0, 0.0, side, side, bands, draw::solid("#000000")), 0.25));
+    let bands: String = (1..6).map(|k| circle_d(c, c, r * 0.26 + (rp - r * 0.26) * f64::from(k) / 6.0, false)).collect();
+    let mut bands = draw::stroked(draw::path("pack bands", 0.0, 0.0, side, side, bands, draw::solid("#000000")), "#000000", 0.7);
+    bands.fills = Vec::new();
+    bands.stroke.align = document_proto::StrokeAlign::Center;
+    b.add(root, draw::with_opacity(bands, 0.25));
     // The flange: a disc with three windows. Windows are holes (wound
     // backwards), so the pack and the deck show through.
     let mut d = circle_d(c, c, r, false);
@@ -143,14 +110,13 @@ pub fn reel(b: &mut Builder<'_>, parent: NodeId, (cx, cy): (f64, f64), r: f64, f
     b.add(root, draw::with_opacity(draw::path("flange rim", 0.0, 0.0, side, side, rim, draw::solid("#ffffff")), 0.35));
     // Hub and spindle: a dark boss with three drive dogs.
     b.add(root, draw::circle("hub", c, c, r * 0.2, draw::radial_at(0.4, 0.35, 0.8, &[(0.0, "#56585c"), (1.0, "#101113")])));
-    let mut dogs = String::new();
-    for i in 0..3 {
-        let a = rot + 60.0 + 120.0 * f64::from(i);
-        let (x0, y0) = draw::polar(c, c, r * 0.07, a);
-        let (x1, y1) = draw::polar(c, c, r * 0.18, a);
-        dogs.push_str(&ribbon(&[(x0, y0), (x1, y1)], r * 0.05));
-    }
-    b.add(root, draw::path("drive dogs", 0.0, 0.0, side, side, dogs, draw::solid("#c9cbcf")));
+    let dogs: Vec<Vec<(f64, f64)>> = (0..3)
+        .map(|i| {
+            let a = rot + 60.0 + 120.0 * f64::from(i);
+            vec![draw::polar(c, c, r * 0.08, a), draw::polar(c, c, r * 0.17, a)]
+        })
+        .collect();
+    b.add(root, parts::lines_node("drive dogs", &dogs, r * 0.05, "#c9cbcf"));
     b.add(root, draw::circle("spindle", c, c, r * 0.065, draw::radial_at(0.35, 0.3, 0.8, &[(0.0, "#ffffff"), (0.5, "#b8babd"), (1.0, "#5c5e62")])));
 }
 
@@ -167,10 +133,10 @@ pub fn roller(b: &mut Builder<'_>, parent: NodeId, (cx, cy): (f64, f64), r: f64)
     b.add(parent, draw::circle("roller hub", cx, cy, r * 0.3, draw::radial_at(0.4, 0.35, 0.8, &[(0.0, "#e8e9eb"), (1.0, "#6a6c70")])));
 }
 
-/// The tape itself: a ribbon of oxide through `pts`.
+/// The tape itself: oxide `w` wide through `pts`.
 pub fn tape(b: &mut Builder<'_>, parent: NodeId, pts: &[(f64, f64)], w: f64, oxide: &str) {
-    let d = ribbon(pts, w);
-    let n = over(b, parent, "tape", d, draw::solid(oxide));
+    let mut n = parts::lines_node("tape", &[pts.to_vec()], w, oxide);
+    n.stroke.cap = StrokeCap::None;
     b.add(parent, n);
 }
 
@@ -224,40 +190,6 @@ pub fn enclosure(b: &mut Builder<'_>, parent: NodeId, (w, h): (f64, f64), paint:
     lid
 }
 
-/// A stomp footswitch: a hex nut round a chrome plunger cap, `d` across,
-/// with its status LED `led_dy` above. A `Footswitch` over a toggle param;
-/// the LED is the `Led` slot. The control's box spans switch and LED.
-#[allow(clippy::too_many_arguments)]
-pub fn footswitch(b: &mut Builder<'_>, parent: NodeId, name: &str, addr: &str, (cx, cy): (f64, f64), d: f64, led_dy: f64, led: &str) -> NodeId {
-    let top = cy - led_dy - 8.0;
-    let (bw, bh) = (d * 1.25, cy + d * 0.62 - top);
-    let root = b.add(parent, draw::frame(name, cx - bw / 2.0, top, bw, bh));
-    let (x, y) = (bw / 2.0, cy - top);
-    // LED in its chrome bezel.
-    let ly = y - led_dy;
-    b.add(root, draw::circle("led bezel", x, ly, 6.2, draw::radial_at(0.4, 0.3, 0.8, &[(0.0, "#f4f4f2"), (1.0, "#6c6d6a")])));
-    b.add(root, parts::dark_lens(x, ly, 4.2, led));
-    let lit = b.add(root, parts::lens(x, ly, 4.2, led));
-    // Nut, washer, plunger.
-    let nut = draw::path("nut", 0.0, 0.0, bw, bh, draw::regular(x, y, d * 0.5, 6, 30.0), draw::linear(160.0, &[(0.0, "#f0f1f2"), (0.45, "#9a9da2"), (1.0, "#3c3e42")]));
-    b.add(root, draw::with_effects(draw::circle("nut shadow", x, y + 3.0, d * 0.46, draw::solid("#00000099")), vec![draw::drop_shadow("#000000a0", 0.0, 2.0, 6.0)]));
-    b.add(root, nut);
-    b.add(root, draw::circle("washer", x, y, d * 0.4, draw::conic(10.0, &[(0.0, "#f2f2f0"), (0.25, "#8f9194"), (0.5, "#e4e5e6"), (0.75, "#7b7d80"), (1.0, "#f2f2f0")])));
-    let cap = draw::circle("plunger", x, y, d * 0.3, draw::radial_at(0.38, 0.32, 0.85, &[(0.0, "#ffffff"), (0.3, "#d9dbde"), (0.75, "#8a8d92"), (1.0, "#4a4c50")]));
-    b.add(root, draw::with_effects(cap, vec![draw::drop_shadow("#00000080", 0.0, 1.5, 2.0)]));
-    let mut c = Control::new(ControlKind::Footswitch { hold_ms: 500 }).slot(SlotRole::Led, lit.0);
-    c.binding = Some(bind(addr));
-    b.controls.insert(root, c);
-    root
-}
-
-/// A jack socket on the enclosure's top edge, with its legend.
-pub fn jack(b: &mut Builder<'_>, parent: NodeId, (cx, cy): (f64, f64), legend: &str, ink: Ink<'_>) {
-    b.add(parent, draw::circle("jack nut", cx, cy, 9.0, draw::linear(160.0, &[(0.0, "#eeeeec"), (1.0, "#55565a")])));
-    b.add(parent, draw::circle("jack", cx, cy, 5.0, draw::solid("#0b0b0c")));
-    parts::silk(b, parent, legend, cx, cy + 18.0, ink);
-}
-
 // ── valves ───────────────────────────────────────────────────────────────
 
 /// A preamp valve standing in its socket, `w` wide and `h` tall from the
@@ -279,11 +211,15 @@ pub fn valve(b: &mut Builder<'_>, parent: NodeId, (cx, top): (f64, f64), (w, h):
     b.add(root, plates);
     // The slot in the plates the cathode glows through.
     let slot = draw::rounded(draw::rect("cathode", x0 + w / 2.0 - w * 0.07, plate_y + plate_h * 0.14, w * 0.14, plate_h * 0.72, draw::linear(90.0, &[(0.0, "#ff6a1a"), (0.5, "#ffd08a"), (1.0, "#ff6a1a")])), 2.0);
-    let slot = draw::with_effects(slot, vec![draw::drop_shadow(&hexa("#ff7a22", 0.9 * glow), 0.0, 0.0, 7.0)]);
-    b.add(root, draw::with_opacity(emit(slot, "#ff8a2a", 1.5 * glow, 16.0), 0.4 + 0.6 * glow));
+    // The heater's light — cathode and filament — flickers faintly on a
+    // renderer that runs shaders.
+    let (rw, rh) = parts::size_of(b, root);
+    let heater = b.add(root, draw::frame("heater", 0.0, 0.0, rw, rh));
+    parts::shader(b, heater, "flicker", &[("strength", 0.12), ("speed", 7.0)]);
+    b.add(heater, draw::with_opacity(emit(slot, "#ff8a2a", 1.5 * glow, 16.0), 0.4 + 0.6 * glow));
     // Heater filament glow below the plates.
     let fil = draw::circle("filament", x0 + w / 2.0, plate_y + plate_h + 7.0, w * 0.1, draw::radial(&[(0.0, "#ffe2b0"), (0.5, "#ff8a2a"), (1.0, "#ff8a2a00")]));
-    b.add(root, emit(fil, "#ff8a2a", 1.2 * glow, 12.0));
+    b.add(heater, emit(fil, "#ff8a2a", 1.2 * glow, 12.0));
     // Glass: a rounded envelope with a nipple on top and a getter flash.
     let glass = draw::rounded(draw::rect("glass", x0, y0, w, glass_h, draw::linear(90.0, &[(0.0, "#ffffff30"), (0.12, "#ffffff10"), (0.5, "#ffffff05"), (0.85, "#ffffff16"), (1.0, "#ffffff2e")])), w * 0.48);
     b.add(root, draw::stroked(glass, "#ffffff40", 1.0));
@@ -307,25 +243,19 @@ pub fn transformer(b: &mut Builder<'_>, parent: NodeId, (x, y, w, h): (f64, f64,
     // Core: laminations as fine horizontal stripes.
     let core = draw::rect("core", 0.0, 0.0, w, h, draw::linear(90.0, &[(0.0, "#3e4247"), (0.5, "#5d6268"), (1.0, "#34373b")]));
     b.add(root, draw::stroked(core, "#16181a", 1.0));
-    let mut lam = String::new();
-    let mut yy = 2.0;
-    while yy < h {
-        lam.push_str(&format!("M 0 {yy:.2} L {w:.2} {yy:.2} L {w:.2} {:.2} L 0 {:.2} Z ", yy + 0.6, yy + 0.6));
-        yy += 2.4;
-    }
-    b.add(root, draw::with_opacity(draw::path("laminations", 0.0, 0.0, w, h, lam, draw::solid("#0c0d0e")), 0.45));
+    let lam: Vec<Vec<(f64, f64)>> = (0..).map(|i| 2.3 + 2.4 * f64::from(i)).take_while(|y| *y < h).map(|y| vec![(0.0, y), (w, y)]).collect();
+    let mut lam = parts::stroke_path("laminations", (0.0, 0.0, w, h), &lam, 0.6, "#0c0d0e", false);
+    lam.stroke.cap = StrokeCap::None;
+    b.add(root, draw::with_opacity(lam, 0.45));
     // The two windows of the E, with the winding filling them.
     let (wx, ww) = (w * 0.16, w * 0.68);
     let (wy, wh) = (h * 0.2, h * 0.6);
     let copper = draw::rect("winding", wx, wy, ww, wh, draw::linear(180.0, &[(0.0, "#e0a064"), (0.35, "#b8692f"), (0.7, "#8c4a1e"), (1.0, "#5e2f12")]));
     b.add(root, draw::with_effects(copper, vec![draw::inner_shadow("#000000a0", 0.0, 0.0, 4.0)]));
-    let mut turns = String::new();
-    let mut xx = wx + 1.5;
-    while xx < wx + ww {
-        turns.push_str(&format!("M {xx:.2} {wy:.2} L {:.2} {wy:.2} L {:.2} {:.2} L {xx:.2} {:.2} Z ", xx + 0.7, xx + 0.7, wy + wh, wy + wh));
-        xx += 2.2;
-    }
-    b.add(root, draw::with_opacity(draw::path("turns", 0.0, 0.0, w, h, turns, draw::solid("#3a1a08")), 0.5));
+    let turns: Vec<Vec<(f64, f64)>> = (0..).map(|i| wx + 1.85 + 2.2 * f64::from(i)).take_while(|x| *x < wx + ww).map(|x| vec![(x, wy), (x, wy + wh)]).collect();
+    let mut turns = parts::stroke_path("turns", (wx, wy, ww, wh), &turns, 0.7, "#3a1a08", false);
+    turns.stroke.cap = StrokeCap::None;
+    b.add(root, draw::with_opacity(turns, 0.5));
     // The centre leg of the E through the middle of the winding.
     b.add(root, draw::stroked(draw::rect("centre leg", w * 0.43, wy, w * 0.14, wh, draw::linear(90.0, &[(0.0, "#3e4247"), (0.5, "#666b71"), (1.0, "#34373b")])), "#16181a", 0.8));
     // Heat in the copper as it's driven.
@@ -364,14 +294,14 @@ pub fn chip(b: &mut Builder<'_>, parent: NodeId, (cx, cy): (f64, f64), (w, h): (
 
 // ── traces ───────────────────────────────────────────────────────────────
 
-/// A lit trace on a display: the ribbon through `pts` in `color`, `w` wide,
-/// with a glow round it.
+/// A lit trace on a display: the line through `pts` in `color`, `w` wide,
+/// giving off its light.
 pub fn trace(b: &mut Builder<'_>, parent: NodeId, name: &str, pts: &[(f64, f64)], w: f64, color: &str) -> NodeId {
-    for (k, a) in [(5.0, 0.08), (3.0, 0.16), (1.8, 0.3)] {
-        let halo = over(b, parent, "glow", ribbon(pts, w * k), draw::solid(&hexa(color, a)));
-        b.add(parent, halo);
-    }
-    let n = over(b, parent, name, ribbon(pts, w), draw::solid(color));
+    let mut n = parts::lines_node(name, &[pts.to_vec()], w, color);
+    // A clear fill keeps the line's geometry in the GPU bloom pass, which
+    // drops a stroke-only path's geometry and glows its box instead. An
+    // open path is never filled, so it paints nothing.
+    n.fills = vec![draw::solid("#00000000")];
     b.add(parent, emit(n, color, 1.0, w * 4.0))
 }
 
@@ -379,33 +309,20 @@ pub fn trace(b: &mut Builder<'_>, parent: NodeId, name: &str, pts: &[(f64, f64)]
 #[allow(clippy::too_many_arguments)]
 pub fn bar(b: &mut Builder<'_>, parent: NodeId, (x, y, w, h): (f64, f64, f64, f64), color: &str, alpha: f64) -> NodeId {
     let n = draw::rounded(draw::rect("bar", x, y, w, h, draw::linear(180.0, &[(0.0, &mixed(color, "#ffffff", 0.35)), (1.0, color)])), (w * 0.25).min(2.0));
-    let n = draw::with_opacity(draw::with_effects(n, vec![draw::drop_shadow(&hexa(color, 0.6), 0.0, 0.0, 5.0)]), alpha);
+    let n = draw::with_opacity(n, alpha);
     b.add(parent, emit(n, color, 0.8 * alpha, 8.0))
 }
 
 /// Faint graticule over a display: `nx × ny` cells in `(w, h)`.
 pub fn graticule(b: &mut Builder<'_>, parent: NodeId, (x, y, w, h): (f64, f64, f64, f64), (nx, ny): (u32, u32), color: &str) {
-    let mut d = String::new();
-    for i in 0..=nx {
-        let xx = x + w * f64::from(i) / f64::from(nx);
-        d.push_str(&format!("M {:.2} {y:.2} L {:.2} {y:.2} L {:.2} {:.2} L {:.2} {:.2} Z ", xx - 0.35, xx + 0.35, xx + 0.35, y + h, xx - 0.35, y + h));
-    }
-    for j in 0..=ny {
-        let yy = y + h * f64::from(j) / f64::from(ny);
-        d.push_str(&format!("M {x:.2} {:.2} L {:.2} {:.2} L {:.2} {:.2} L {x:.2} {:.2} Z ", yy - 0.35, x + w, yy - 0.35, x + w, yy + 0.35, yy + 0.35));
-    }
-    let n = over(b, parent, "graticule", d, draw::solid(color));
+    let mut lines: Vec<Vec<(f64, f64)>> = (0..=nx).map(|i| x + w * f64::from(i) / f64::from(nx)).map(|xx| vec![(xx, y), (xx, y + h)]).collect();
+    lines.extend((0..=ny).map(|j| y + h * f64::from(j) / f64::from(ny)).map(|yy| vec![(x, yy), (x + w, yy)]));
+    let mut n = parts::stroke_path("graticule", (x, y, w, h), &lines, 0.7, color, false);
+    n.stroke.cap = StrokeCap::None;
     b.add(parent, n);
 }
 
 /// Tiny lit label on a display.
 pub fn tag(b: &mut Builder<'_>, parent: NodeId, s: &str, (x, cy): (f64, f64), size: f64, color: &str) {
     parts::lit(b, parent, s, (x, cy), Ink::new(size, color).weight(700.0).track(0.14), TextAlign::Left);
-}
-
-/// A shape node in `parent`'s coordinates (public for faces that draw
-/// their own).
-pub fn path_in(b: &mut Builder<'_>, parent: NodeId, name: &str, d: String, fill: document_proto::Paint) -> NodeId {
-    let n = over(b, parent, name, d, fill);
-    b.add(parent, n)
 }

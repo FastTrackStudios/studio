@@ -54,7 +54,7 @@ pub fn face() -> Face {
     let scene = canvas("Rhythmic Delay", |b, root| {
         parts::fit_root(b, root, W, H);
         let panel = parts::panel(b, root, "panel.painted", "charcoal", W, H, "ears");
-        parts::underpaint(b, panel, &[(0.0, "#44474e"), (0.5, "#33363c"), (1.0, "#25282d")]);
+        parts::repaint(b, panel, &[(0.0, "#44474e"), (0.5, "#33363c"), (1.0, "#25282d")]);
 
         // ── Model line ─────────────────────────────────────────────────
         parts::silk_left(b, panel, "Multi-Tap", 50.0, 34.0, Ink::new(15.0, INK).weight(800.0).track(0.08));

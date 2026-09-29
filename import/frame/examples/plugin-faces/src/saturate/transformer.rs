@@ -52,7 +52,7 @@ fn chassis(b: &mut Builder<'_>, panel: NodeId) {
                 (x0 + (x1 - x0) * t, y0 + (y1 - y0) * e)
             })
             .collect();
-        art::path_in(b, win, "lead", art::ribbon(&pts, 2.6), draw::solid(col));
+        parts::line(b, win, "lead", &pts, 2.6, col);
         b.add(win, draw::rounded(draw::rect("tag", sx + 6.0, ty - 4.0, 16.0, 8.0, draw::linear(180.0, &[(0.0, "#f0d27a"), (0.5, "#c9a24a"), (1.0, "#8a6a2a")])), 1.5));
         b.add(win, draw::circle("solder", sx + 12.0, ty, 3.4, draw::radial_at(0.4, 0.35, 0.8, &[(0.0, "#ffffff"), (0.5, "#b9bcc0"), (1.0, "#6a6d72")])));
         parts::silk_left(b, win, label, sx + 26.0, ty, Ink::new(5.5, "#e9d6b8").weight(800.0).track(0.06).plain());
@@ -68,7 +68,7 @@ pub fn face() -> Face {
     let scene = canvas("Transformer", |b, root| {
         parts::fit_root(b, root, W, H);
         let panel = parts::panel(b, root, "panel.brushed", "black", W, H, "ears");
-        parts::underpaint(b, panel, &[(0.0, "#434a53"), (0.5, "#323840"), (1.0, "#22272e")]);
+        parts::repaint(b, panel, &[(0.0, "#434a53"), (0.5, "#323840"), (1.0, "#22272e")]);
 
         // ── Nameplate ──────────────────────────────────────────────────
         parts::silk_left(b, panel, "Transformer", 50.0, 34.0, Ink::new(15.0, INK).weight(800.0).track(0.06));

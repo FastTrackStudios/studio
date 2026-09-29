@@ -56,8 +56,7 @@ pub fn face() -> Face {
 
         // Voicing: a clean line, or repeats through a resonant filter.
         let voice = Place::new("Voicing").size(46.0).bind(bind(&a("mode"))).options(MODES);
-        let voice = parts::put(b, panel, "button.square_bank", &voice, 116.0, 100.0);
-        parts::fit_legends(b, voice, 7.5);
+        parts::put(b, panel, "button.square_bank", &voice, 116.0, 100.0);
         parts::silk(b, panel, "Voicing", 116.0, 132.0, Ink::new(7.0, DIM).weight(700.0).track(0.2));
 
         // ── The display ────────────────────────────────────────────────

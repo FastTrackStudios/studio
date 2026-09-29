@@ -3,16 +3,20 @@
 //! lamps and lit windows, LED meters, and the catalog entries every face
 //! declares.
 //!
-//! Gathered from the compressor and EQ faces (`comp_vca::ui`,
-//! `comp_tube::ui`) — placing by shaft, `tighten`, `unfold_needle`, `reink`,
-//! the LED column built from a `Gauge` — plus what these units need that
-//! those didn't: lit windows that *emit* (a display's phosphor, a lamp's
-//! lens), the note-division table, and time params.
+//! Placing is by shaft, with the kit's own tight boxes (`Place::touch`),
+//! ink and stepped sweeps; what the kit doesn't print (scales with marks
+//! where the value really lands, legends on one baseline) the face prints.
+//! Lines are open stroked paths; lit things (a display's phosphor, a lamp's
+//! lens, glowing text) *emit* rather than wear a drop-shadow glow.
 
-use document_proto::{Color, Emission, Node, NodeId, NodeKind, Paint, TextAlign, TextCase, TextData, Transform};
-use surface_kit::{Place, draw};
+use std::collections::BTreeMap;
+
+use document_proto::{
+    Node, NodeId, NodeKind, Paint, ShaderFx, Stroke, StrokeAlign, StrokeCap, StrokeJoin, TextAlign, TextCase, TextData, Transform,
+};
+use surface_kit::{Place, TOUCH_MIN, draw};
 use surface_proto::{
-    Binding, ButtonMode, Control, ControlKind, EntryId, ParamInfo, Range, SlotRole, StreamInfo, StreamKind, Unit,
+    Binding, ButtonMode, Control, ControlKind, EntryId, ParamInfo, Range, SlotRole, Source, StreamInfo, StreamKind, Unit, ValueFormat,
 };
 use surface_widgets::Builder;
 
@@ -85,20 +89,10 @@ pub fn fit_root(b: &mut Builder<'_>, root: NodeId, w: f64, h: f64) {
     }
 }
 
-/// Lay a straight top-to-bottom paint under everything on a kit panel.
-///
-/// The painted panels' own paint runs at a slight angle, and at the top
-/// edge the renderer shows a dark band where the gradient starts; a square
-/// coat underneath the ears/cheeks and the rest hides it.
-pub fn underpaint(b: &mut Builder<'_>, panel: NodeId, stops: &[(f64, &str)]) {
-    let (w, h) = size_of(b, panel);
-    let coat = draw::rect("paint", 0.0, 0.0, w, h, draw::linear(180.0, stops));
-    let _ = b.scene.apply(document_proto::Op::Insert { node: coat, parent: panel, index: 0 });
-}
-
-/// Repaint a node with `stops` top to bottom.
-pub fn repaint(b: &mut Builder<'_>, id: NodeId, stops: &[(f64, &str)]) {
-    if let Some(n) = b.scene.node_mut(id) {
+/// Paint a placed panel (its own fill) straight top to bottom in `stops`:
+/// a unit's own colour on the kit's finish.
+pub fn repaint(b: &mut Builder<'_>, panel: NodeId, stops: &[(f64, &str)]) {
+    if let Some(n) = b.scene.node_mut(panel) {
         n.fills = vec![draw::linear(180.0, stops)];
     }
 }
@@ -129,72 +123,12 @@ pub fn strip_legend(b: &mut Builder<'_>, control: NodeId) {
         c.slots.retain(|s| s.role != SlotRole::Label);
     }
     remove(b, ids);
-    let dial = b.scene.node(control).and_then(|n| n.children.iter().find_map(|c| b.scene.node(*c).filter(|k| k.name == "knob").map(|k| k.size.height)));
-    if let (Some(h), Some(n)) = (dial, b.scene.node_mut(control)) {
-        n.size.height = h;
-    }
 }
 
-/// Shrink a placed knob's box to its body (`d` across), keeping the shaft
-/// where it is: the kit's box includes the scale margin and legend, too big
-/// a touch target where controls sit close.
-pub fn tighten(b: &mut Builder<'_>, control: NodeId, d: f64) {
-    let Some(n) = b.scene.node(control) else { return };
-    let (tx, ty) = (n.transform.tx, n.transform.ty);
-    let Some((kid, side)) = n.children.iter().find_map(|c| b.scene.node(*c).filter(|k| k.name == "knob").map(|k| (*c, k.size.width))) else { return };
-    let inset = (side - d) / 2.0;
-    move_to(b, kid, -inset, -inset);
-    move_to(b, control, tx + inset, ty + inset);
-    if let Some(n) = b.scene.node_mut(control) {
-        n.size = document_proto::Size { width: d, height: d };
-    }
-    // Anything else in the box (a legend) follows the knob.
-    let others: Vec<NodeId> = b.scene.node(control).map(|n| n.children.iter().copied().filter(|c| *c != kid).collect()).unwrap_or_default();
-    for o in others {
-        if let Some(n) = b.scene.node_mut(o) {
-            n.transform.tx -= inset;
-            n.transform.ty -= inset;
-        }
-    }
-}
-
-/// Make a placed control's turning *frame* turn properly: its parts become
-/// the `Needle`s instead (the chicken-head selector's pointer frame; the
-/// renderer moves a turned frame's children without turning them).
-pub fn unfold_needle(b: &mut Builder<'_>, control: NodeId) {
-    let Some(c) = b.controls.get(&control) else { return };
-    let frames: Vec<(NodeId, Vec<NodeId>)> = c
-        .slots_of(SlotRole::Needle)
-        .filter_map(|id| b.scene.node(NodeId(id)).filter(|n| matches!(n.kind, NodeKind::Frame) && !n.children.is_empty()).map(|n| (NodeId(id), n.children.clone())))
-        .collect();
-    let Some(c) = b.controls.get_mut(&control) else { return };
-    for (frame, parts) in frames {
-        c.slots.retain(|s| !(s.role == SlotRole::Needle && s.node == frame.0));
-        c.slots.extend(parts.into_iter().map(|p| surface_proto::Slot { role: SlotRole::Needle, node: p.0 }));
-    }
-}
-
-/// Change a knob control's sweep (a stepped selector turns through exactly
-/// its detents).
-pub fn set_sweep(b: &mut Builder<'_>, control: NodeId, sweep: f64) {
+/// Set how a placed control's readout prints its value.
+pub fn format(b: &mut Builder<'_>, control: NodeId, f: ValueFormat) {
     if let Some(c) = b.controls.get_mut(&control) {
-        c.kind = ControlKind::Knob { sweep_degrees: sweep };
-    }
-}
-
-/// Set every legend a placed button (or bank) prints at `size`: the kit
-/// scales a cap's legend with the cap, so a long word ("Shimmer",
-/// "Spectral") runs off a cap sized to sit in a row.
-pub fn fit_legends(b: &mut Builder<'_>, control: NodeId, size: f64) {
-    for id in b.scene.walk(control) {
-        if let Some(n) = b.scene.node_mut(id)
-            && let NodeKind::Text(t) = &mut n.kind
-        {
-            let dy = (t.font_size - size) * 0.68;
-            t.font_size = size;
-            t.letter_spacing = size * 0.06;
-            n.transform.ty += dy;
-        }
+        c.format = Some(f);
     }
 }
 
@@ -202,37 +136,6 @@ pub fn fit_legends(b: &mut Builder<'_>, control: NodeId, size: f64) {
 pub fn momentary(b: &mut Builder<'_>, control: NodeId) {
     if let Some(c) = b.controls.get_mut(&control) {
         c.kind = ControlKind::Button { mode: ButtonMode::Momentary };
-    }
-}
-
-/// Detent spacing for an `n`-position switch: ≤ 60° a click, ≤ 300° in all.
-#[must_use]
-pub fn detent_sweep(n: usize) -> f64 {
-    if n < 2 {
-        return 0.0;
-    }
-    let step = (300.0 / (n - 1) as f64).min(60.0);
-    step * (n - 1) as f64
-}
-
-/// Angle of position `i` of `n` over `sweep` (0 = up, clockwise).
-#[must_use]
-pub fn detent_angle(i: usize, n: usize, sweep: f64) -> f64 {
-    if n < 2 {
-        return 0.0;
-    }
-    -sweep / 2.0 + sweep * i as f64 / (n - 1) as f64
-}
-
-/// Recolour every printed part of a placed component — text, scale ticks,
-/// dots, detents — for the panel it sits on (the kit prints light ink).
-pub fn reink(b: &mut Builder<'_>, root: NodeId, color: &str) {
-    for id in b.scene.walk(root) {
-        let Some(n) = b.scene.node_mut(id) else { continue };
-        let printed = n.text().is_some() || n.name.starts_with("scale ") || n.name == "detent" || n.name == "numeral";
-        if printed {
-            n.fills = vec![draw::solid(color)];
-        }
     }
 }
 
@@ -252,37 +155,20 @@ pub fn caption_style(b: &mut Builder<'_>, root: NodeId, ink: Ink<'_>) {
     }
 }
 
-/// Add a live value readout (`Value` slot) under a placed knob's box,
-/// growing the control's box to hold it.
-pub fn add_value(b: &mut Builder<'_>, control: NodeId, size: f64, color: &str) -> NodeId {
-    let (w, h) = size_of(b, control);
-    let mut t = text_node("", 0.0, h + size * 0.72, w, &Ink::new(size, color).weight(600.0).track(0.02).plain(), TextAlign::Center);
-    t.name = "value".into();
-    let id = b.add(control, t);
-    if let Some(n) = b.scene.node_mut(control) {
-        n.size.height = h + (size * 1.5).ceil();
-    }
-    if let Some(c) = b.controls.get_mut(&control) {
-        c.slots.push(surface_proto::Slot { role: SlotRole::Value, node: id.0 });
-    }
-    id
-}
-
 /// A knob as these faces use it: kit style `id` of diameter `d` with its
-/// shaft at (`cx`, `cy`), its own legend and printed scale off, the box
-/// tightened to the body, and the legend set by the face under it at
-/// `legend_dy` below the shaft — so a row of knobs of different sizes still
-/// has one baseline.
+/// shaft at (`cx`, `cy`), its own legend and printed scale off (the face
+/// prints both: marks where the value lands, legends on one baseline so a
+/// row of knobs of different sizes reads as a row), and a tight box — the
+/// body, at least a fingertip.
 #[allow(clippy::too_many_arguments)]
 pub fn knob(b: &mut Builder<'_>, parent: NodeId, id: &str, variant: &str, addr: &str, legend: &str, (cx, cy): (f64, f64), d: f64) -> NodeId {
-    let mut p = Place::new(legend).size(d).bind(bind(addr)).legend(legend);
+    let mut p = Place::new(legend).size(d).bind(bind(addr)).legend(legend).touch(TOUCH_MIN);
     if !variant.is_empty() {
         p = p.variant(variant);
     }
     let k = put(b, parent, id, &p, cx, cy);
     strip_legend(b, k);
     strip_scale(b, k);
-    tighten(b, k, d);
     k
 }
 
@@ -340,28 +226,18 @@ pub fn label_at(b: &mut Builder<'_>, control: NodeId, s: &str, (cx, cy): (f64, f
 pub fn marks(b: &mut Builder<'_>, parent: NodeId, (cx, cy): (f64, f64), r: f64, sweep: f64, marks: &[(f64, &str)], minors: usize, ink: Ink<'_>) {
     let side = 2.0 * (r + 10.0);
     let (ox, oy) = (cx - side / 2.0, cy - side / 2.0);
-    let c = side / 2.0;
     let angle = |p: f64| (p - 0.5) * sweep;
-    let tick = |a: f64, len: f64, w: f64| {
-        let (x0, y0) = draw::polar(c, c, r, a);
-        let (x1, y1) = draw::polar(c, c, r + len, a);
-        let (nx, ny) = (a.to_radians().cos() * w / 2.0, a.to_radians().sin() * w / 2.0);
-        draw::polygon(&[(x0 - nx, y0 - ny), (x0 + nx, y0 + ny), (x1 + nx, y1 + ny), (x1 - nx, y1 - ny)])
-    };
+    let tick = |a: f64, len: f64| vec![draw::polar(cx, cy, r, a), draw::polar(cx, cy, r + len, a)];
     if minors >= 2 {
-        let mut minor = String::new();
-        for i in 0..minors {
-            minor.push_str(&tick(angle(i as f64 / (minors - 1) as f64), 2.6, 0.8));
-            minor.push(' ');
-        }
-        b.add(parent, draw::with_opacity(draw::path("scale minors", ox, oy, side, side, minor, draw::solid(ink.color)), 0.6));
+        let minor: Vec<Vec<(f64, f64)>> = (0..minors).map(|i| tick(angle(i as f64 / (minors - 1) as f64), 2.6)).collect();
+        let mut n = stroke_path("scale minors", (ox, oy, side, side), &minor, 0.8, ink.color, false);
+        n.stroke.cap = StrokeCap::None;
+        b.add(parent, draw::with_opacity(n, 0.6));
     }
-    let mut major = String::new();
-    for (p, _) in marks {
-        major.push_str(&tick(angle(*p), 4.2, 1.3));
-        major.push(' ');
-    }
-    b.add(parent, draw::path("scale majors", ox, oy, side, side, major, draw::solid(ink.color)));
+    let major: Vec<Vec<(f64, f64)>> = marks.iter().map(|(p, _)| tick(angle(*p), 4.2)).collect();
+    let mut n = stroke_path("scale majors", (ox, oy, side, side), &major, 1.3, ink.color, false);
+    n.stroke.cap = StrokeCap::None;
+    b.add(parent, n);
     for (p, l) in marks {
         if l.is_empty() {
             continue;
@@ -381,22 +257,74 @@ pub fn log_pos(v: f64, min: f64, max: f64) -> f64 {
 }
 
 /// A detented rotary selector over a choice param: the kit's chicken-head
-/// re-swept to the switch's real detents (≤ 60° a step), a dot at each and
-/// the legends set round it. `variant` is the moulding (`cream`, `black`,
-/// `red`).
+/// given its positions (`Place::options` — stepped, ≤ 60° a detent, the
+/// positions printed round it in `ink`, as written). `variant` is the
+/// moulding (`cream`, `black`, `red`). The face prints the legend.
 #[allow(clippy::too_many_arguments)]
-pub fn selector(b: &mut Builder<'_>, parent: NodeId, name: &str, addr: &str, variant: &str, (cx, cy): (f64, f64), d: f64, labels: &[&str], ink: Ink<'_>) -> NodeId {
-    let n = labels.len().max(2);
-    let sweep = detent_sweep(n);
-    let blanks = vec![""; n];
-    let p = Place::new(name).size(d).variant(variant).legend(name).scale(&blanks).bind(bind(addr));
+pub fn selector(b: &mut Builder<'_>, parent: NodeId, name: &str, addr: &str, variant: &str, (cx, cy): (f64, f64), d: f64, labels: &[&str], ink: &str) -> NodeId {
+    let p = Place::new(name).size(d).variant(variant).legend(name).options(labels).bind(bind(addr)).ink(surface_kit::Ink::Color(ink.into())).keep_case().touch(TOUCH_MIN);
     let k = put(b, parent, "knob.chicken_head", &p, cx, cy);
-    strip_scale(b, k);
     strip_legend(b, k);
-    tighten(b, k, d * 1.1);
-    set_sweep(b, k, sweep);
-    detents(b, parent, (cx, cy), d * 0.62 + 4.0, d * 0.62 + 14.0, labels, sweep, ink);
+    clear_ticks(b, k);
     k
+}
+
+/// Set a placed knob's printed positions out past its ticks: the kit
+/// centres each word on one radius, close enough that a word runs across
+/// its tick. Each moves outward by half its width's sideways reach, and
+/// clear of the tick's end.
+fn clear_ticks(b: &mut Builder<'_>, knob: NodeId) {
+    let Some(dial) = children_named(b, knob, &["knob"]).first().copied() else { return };
+    let (side, _) = size_of(b, dial);
+    for id in children_named(b, dial, &["numeral"]) {
+        let Some(n) = b.scene.node_mut(id) else { continue };
+        let Some(t) = n.text() else { continue };
+        let (reach, size) = (t.characters.chars().count() as f64 * t.font_size * 0.3, t.font_size);
+        let (dx, dy) = (n.transform.tx + n.size.width / 2.0 - side / 2.0, n.transform.ty + n.size.height / 2.0 - side / 2.0);
+        let r = dx.hypot(dy).max(1.0);
+        let push = reach * (dx / r).abs() + size * 0.4 * (dy / r).abs();
+        n.transform.tx += dx / r * push;
+        n.transform.ty += dy / r * push;
+    }
+}
+
+/// A stomp footswitch (the kit's), its actuator centred on (`cx`, `cy`).
+pub fn footswitch(b: &mut Builder<'_>, parent: NodeId, p: &Place, (cx, cy): (f64, f64)) -> NodeId {
+    let root = surface_kit::place(b, parent, "switch.footswitch", p).unwrap_or_else(|e| panic!("{e}"));
+    let cap = b.scene.node(root).and_then(|n| n.children.iter().find_map(|c| b.scene.node(*c).filter(|k| k.name == "cap").map(|k| (k.transform.tx + k.size.width / 2.0, k.transform.ty + k.size.height / 2.0))));
+    let (ax, ay) = cap.unwrap_or_else(|| {
+        let (w, h) = size_of(b, root);
+        (w / 2.0, h / 2.0)
+    });
+    move_to(b, root, cx - ax, cy - ay);
+    root
+}
+
+/// A vertical LED bar meter (the kit's `meter.led_column`), `thick × len`
+/// with its top-left at (`x`, `y`): `segments` over `floor..ceiling` dB, lit
+/// from the bottom by channel `channel` of `stream`.
+#[allow(clippy::too_many_arguments)]
+pub fn led_column(b: &mut Builder<'_>, parent: NodeId, name: &str, stream: &str, channel: u8, (x, y, thick, len): (f64, f64, f64, f64), segments: usize, (floor, ceiling): (f64, f64)) -> NodeId {
+    let binding = Binding { source: Source::Stream { id: EntryId::new(stream), channel: Some(channel) }, ..Binding::stream(stream) };
+    let opts = [format!("floor={floor}"), format!("ceiling={ceiling}"), format!("segments={segments}"), format!("thick={thick}")];
+    let p = Place { options: Some(opts.to_vec()), ..Place::new(name).size(len).bind(binding) };
+    put_at(b, parent, "meter.led_column", &p, x, y)
+}
+
+/// Put a shader post-effect on `id` (GPU renderers only — the face reads
+/// the same without it).
+pub fn shader(b: &mut Builder<'_>, id: NodeId, name: &str, params: &[(&str, f64)]) {
+    if let Some(n) = b.scene.node_mut(id) {
+        n.shader = Some(ShaderFx { shader: name.into(), params: params.iter().map(|(k, v)| ((*k).to_string(), *v)).collect::<BTreeMap<_, _>>() });
+    }
+}
+
+/// Glass over a placed VU's window (its `card`).
+pub fn glass(b: &mut Builder<'_>, vu: NodeId) {
+    let card = b.scene.walk(vu).into_iter().find(|c| b.scene.node(*c).is_some_and(|n| n.name == "card"));
+    if let Some(card) = card {
+        shader(b, card, "glass", &[("strength", 0.45)]);
+    }
 }
 
 // ── silkscreen ───────────────────────────────────────────────────────────
@@ -486,14 +414,66 @@ pub fn silk_right(b: &mut Builder<'_>, parent: NodeId, s: &str, x: f64, cy: f64,
     b.add(parent, text_node(s, x - w, cy, w, &ink, TextAlign::Right))
 }
 
+// ── lines ────────────────────────────────────────────────────────────────
+
+/// A stroked path node: each of `lines` a polyline (open, or `closed`),
+/// stroked `weight` wide in `color` with round joins, centred on the line.
+/// Geometry is in the coordinates of the node's parent; the node's box is
+/// `bx, by, bw, bh` there (geometry is drawn as written — it may reach past
+/// the box).
+#[must_use]
+pub fn stroke_path(name: &str, (bx, by, bw, bh): (f64, f64, f64, f64), lines: &[Vec<(f64, f64)>], weight: f64, color: &str, closed: bool) -> Node {
+    let mut d = String::new();
+    for pts in lines {
+        for (i, (x, y)) in pts.iter().enumerate() {
+            d.push_str(&format!("{} {:.3} {:.3} ", if i == 0 { "M" } else { "L" }, x - bx, y - by));
+        }
+        if closed {
+            d.push_str("Z ");
+        }
+    }
+    let mut n = draw::path(name, bx, by, bw.max(1.0), bh.max(1.0), d, draw::solid(color));
+    n.fills = Vec::new();
+    n.stroke = Stroke { paints: vec![draw::solid(color)], weight, cap: StrokeCap::Round, join: StrokeJoin::Round, align: StrokeAlign::Center, ..Stroke::default() };
+    n
+}
+
+/// The box round `lines`, padded by `pad`.
+fn bounds(lines: &[Vec<(f64, f64)>], pad: f64) -> (f64, f64, f64, f64) {
+    let pts = lines.iter().flatten();
+    let (mut x0, mut y0, mut x1, mut y1) = (f64::MAX, f64::MAX, f64::MIN, f64::MIN);
+    for (x, y) in pts {
+        (x0, y0, x1, y1) = (x0.min(*x), y0.min(*y), x1.max(*x), y1.max(*y));
+    }
+    if x0 > x1 {
+        return (0.0, 0.0, 0.0, 0.0);
+    }
+    (x0 - pad, y0 - pad, x1 - x0 + 2.0 * pad, y1 - y0 + 2.0 * pad)
+}
+
+/// [`stroke_path`] boxed to its own lines.
+#[must_use]
+pub fn lines_node(name: &str, lines: &[Vec<(f64, f64)>], weight: f64, color: &str) -> Node {
+    stroke_path(name, bounds(lines, weight / 2.0), lines, weight, color, false)
+}
+
+/// A polyline through `pts` in `parent`'s coordinates.
+pub fn line(b: &mut Builder<'_>, parent: NodeId, name: &str, pts: &[(f64, f64)], weight: f64, color: &str) -> NodeId {
+    b.add(parent, lines_node(name, &[pts.to_vec()], weight, color))
+}
+
 /// A horizontal hairline from `x0` to `x1` at `y`.
 pub fn rule(b: &mut Builder<'_>, parent: NodeId, x0: f64, x1: f64, y: f64, weight: f64, color: &str) -> NodeId {
-    b.add(parent, draw::rect("rule", x0, y - weight / 2.0, x1 - x0, weight, draw::solid(color)))
+    let mut n = lines_node("rule", &[vec![(x0, y), (x1, y)]], weight, color);
+    n.stroke.cap = StrokeCap::None;
+    b.add(parent, n)
 }
 
 /// A vertical hairline from `y0` to `y1` at `x`.
 pub fn vrule(b: &mut Builder<'_>, parent: NodeId, x: f64, y0: f64, y1: f64, weight: f64, color: &str) -> NodeId {
-    b.add(parent, draw::rect("rule", x - weight / 2.0, y0, weight, y1 - y0, draw::solid(color)))
+    let mut n = lines_node("rule", &[vec![(x, y0), (x, y1)]], weight, color);
+    n.stroke.cap = StrokeCap::None;
+    b.add(parent, n)
 }
 
 /// An engraved groove: a dark line with a light one under it.
@@ -523,62 +503,6 @@ pub fn well(b: &mut Builder<'_>, parent: NodeId, name: &str, (x, y, w, h): (f64,
     b.add(parent, draw::with_effects(n, vec![draw::inner_shadow("#000000c0", 0.0, 2.0, 5.0), draw::drop_shadow("#ffffff1f", 0.0, 1.0, 0.0)]))
 }
 
-/// A section outline.
-pub fn section(b: &mut Builder<'_>, parent: NodeId, (x, y, w, h): (f64, f64, f64, f64), color: &str, radius: f64) -> NodeId {
-    b.add(parent, draw::stroked(draw::rounded(draw::frame("section", x, y, w, h), radius), color, 1.0))
-}
-
-/// Detent dots and legends printed around a shaft at (`cx`, `cy`).
-#[allow(clippy::too_many_arguments)]
-pub fn detents(b: &mut Builder<'_>, parent: NodeId, (cx, cy): (f64, f64), r_dot: f64, r_lbl: f64, labels: &[&str], sweep: f64, ink: Ink<'_>) {
-    let n = labels.len();
-    for (i, l) in labels.iter().enumerate() {
-        let a = detent_angle(i, n, sweep);
-        let (dx, dy) = draw::polar(cx, cy, r_dot, a);
-        b.add(parent, draw::circle("detent", dx, dy, (ink.size * 0.17).max(1.1), draw::solid(ink.color)));
-        if !l.is_empty() {
-            let (lx, ly) = draw::polar(cx, cy, r_lbl, a);
-            silk(b, parent, l, lx, ly, ink);
-        }
-    }
-}
-
-/// A scale printed round a shaft: ticks at each label over `sweep`, minor
-/// ticks between, labels set outward so long ones clear the ticks.
-#[allow(clippy::too_many_arguments)]
-pub fn print_scale(b: &mut Builder<'_>, parent: NodeId, (cx, cy): (f64, f64), r: f64, labels: &[&str], sweep: f64, ink: Ink<'_>) {
-    let n = labels.len();
-    let side = 2.0 * (r + 8.0);
-    let (ox, oy) = (cx - side / 2.0, cy - side / 2.0);
-    let c = side / 2.0;
-    let tick = |a: f64, len: f64, w: f64| {
-        let (x0, y0) = draw::polar(c, c, r, a);
-        let (x1, y1) = draw::polar(c, c, r + len, a);
-        let (nx, ny) = (a.to_radians().cos() * w / 2.0, a.to_radians().sin() * w / 2.0);
-        draw::polygon(&[(x0 - nx, y0 - ny), (x0 + nx, y0 + ny), (x1 + nx, y1 + ny), (x1 - nx, y1 - ny)])
-    };
-    let mut majors = String::new();
-    let mut minors = String::new();
-    for i in 0..n {
-        majors.push_str(&tick(detent_angle(i, n, sweep), 4.0, 1.2));
-        if i + 1 < n {
-            minors.push_str(&tick((detent_angle(i, n, sweep) + detent_angle(i + 1, n, sweep)) / 2.0, 2.5, 0.8));
-        }
-    }
-    b.add(parent, draw::path("scale majors", ox, oy, side, side, majors, draw::solid(ink.color)));
-    b.add(parent, draw::with_opacity(draw::path("scale minors", ox, oy, side, side, minors, draw::solid(ink.color)), 0.6));
-    for (i, l) in labels.iter().enumerate() {
-        if l.is_empty() {
-            continue;
-        }
-        let a = detent_angle(i, n, sweep);
-        let tw = l.chars().count() as f64 * ink.size * 0.6;
-        let push = 0.5 * (tw * a.to_radians().sin().abs() + ink.size * a.to_radians().cos().abs());
-        let (lx, ly) = draw::polar(cx, cy, r + 6.0 + push, a);
-        silk(b, parent, l, lx, ly, ink);
-    }
-}
-
 // ── light ────────────────────────────────────────────────────────────────
 
 /// `#rrggbbaa` of `c` at alpha `a`.
@@ -597,13 +521,11 @@ pub fn mixed(a: &str, b: &str, t: f64) -> String {
     format!("#{:02x}{:02x}{:02x}", q(c.r), q(c.g), q(c.b))
 }
 
-/// Make `n` emit light: a bloom on the GPU renderer, nothing elsewhere
-/// (pair it with a drawn glow for the still render).
+/// Make `n` give off light: a bloom on the GPU renderer, a soft glow from
+/// the fallback — the only glow a lit thing needs.
 #[must_use]
-pub fn emit(mut n: Node, color: &str, intensity: f64, radius: f64) -> Node {
-    let c: Color = draw::hex(color);
-    n.emission = Some(Emission { color: c, intensity, radius });
-    n
+pub fn emit(n: Node, color: &str, intensity: f64, radius: f64) -> Node {
+    draw::emissive(n, draw::hex(color), intensity, radius)
 }
 
 /// A lit lens: hot core, the colour, a dark rim, and its glow.
@@ -611,8 +533,7 @@ pub fn emit(mut n: Node, color: &str, intensity: f64, radius: f64) -> Node {
 pub fn lens(cx: f64, cy: f64, r: f64, color: &str) -> Node {
     let hot = [(0.0, "#ffffffee".to_string()), (0.2, mixed(color, "#ffffff", 0.55)), (0.55, color.to_string()), (1.0, mixed(color, "#000000", 0.5))];
     let stops: Vec<(f64, &str)> = hot.iter().map(|(p, c)| (*p, c.as_str())).collect();
-    let n = draw::with_effects(draw::circle("lamp", cx, cy, r, draw::radial_at(0.38, 0.32, 0.9, &stops)), vec![draw::drop_shadow(&hexa(color, 0.8), 0.0, 0.0, r * 2.2)]);
-    emit(n, color, 1.2, r * 3.0)
+    emit(draw::circle("lamp", cx, cy, r, draw::radial_at(0.38, 0.32, 0.9, &stops)), color, 1.2, r * 3.0)
 }
 
 /// An unlit lens.
@@ -672,28 +593,17 @@ pub fn screen(b: &mut Builder<'_>, parent: NodeId, name: &str, (x, y, w, h): (f6
     let win = draw::with_effects(draw::rounded(win, 3.0), vec![draw::inner_shadow("#000000d0", 0.0, 2.0, 6.0)]);
     let root = b.add(parent, win);
     if s.mesh {
-        let mut d = String::new();
-        let pitch = 3.0;
-        let mut yy = 1.5;
-        while yy < h {
-            d.push_str(&format!("M 0 {yy:.2} L {w:.2} {yy:.2} L {w:.2} {:.2} L 0 {:.2} Z ", yy + 0.45, yy + 0.45));
-            yy += pitch;
-        }
-        b.add(root, draw::with_opacity(draw::path("mesh", 0.0, 0.0, w, h, d, draw::solid("#000000")), 0.35));
+        let rows: Vec<Vec<(f64, f64)>> = (0..).map(|i| 1.7 + 3.0 * f64::from(i)).take_while(|y| *y < h).map(|y| vec![(0.0, y), (w, y)]).collect();
+        let mut mesh = stroke_path("mesh", (0.0, 0.0, w, h), &rows, 0.45, "#000000", false);
+        mesh.stroke.cap = StrokeCap::None;
+        b.add(root, draw::with_opacity(mesh, 0.35));
     }
     root
 }
 
-/// The glass sheen over a window: a soft diagonal highlight, added last.
-pub fn sheen(b: &mut Builder<'_>, win: NodeId) {
-    let (w, h) = size_of(b, win);
-    let d = draw::polygon(&[(w * 0.08, 0.0), (w * 0.42, 0.0), (w * 0.26, h), (0.0, h), (0.0, h * 0.35)]);
-    b.add(win, draw::path("sheen", 0.0, 0.0, w, h, d, draw::linear(90.0, &[(0.0, "#ffffff00"), (0.5, "#ffffff0f"), (1.0, "#ffffff00")])));
-}
-
 /// A live readout in a window: the bound value, lit, left-, centre- or
-/// right-aligned in the box (`x, cy, w`) at `size`. `placeholder` is what a
-/// still render prints before the engine speaks.
+/// right-aligned in the box (`x, cy, w`) at `size`; it gives off its own
+/// light.
 #[allow(clippy::too_many_arguments)]
 pub fn readout(b: &mut Builder<'_>, parent: NodeId, name: &str, binding: Binding, (x, cy, w): (f64, f64, f64), size: f64, ink: &str, align: TextAlign) -> NodeId {
     let h = (size * 1.5).ceil();
@@ -701,9 +611,7 @@ pub fn readout(b: &mut Builder<'_>, parent: NodeId, name: &str, binding: Binding
     let lit = Ink::new(size, ink).weight(600.0).track(0.04).plain();
     let mut t = text_node("", 0.0, h / 2.0, w, &lit, align);
     t.name = "value".into();
-    t.effects = vec![draw::drop_shadow(&hexa(ink, 0.7), 0.0, 0.0, size * 0.45)];
-    let t = emit(t, ink, 0.9, size * 0.8);
-    let value = b.add(root, t);
+    let value = b.add(root, emit(t, ink, 0.9, size * 0.8));
     let mut c = Control::new(ControlKind::Readout).slot(SlotRole::Value, value.0);
     c.binding = Some(binding);
     b.controls.insert(root, c);
@@ -712,7 +620,8 @@ pub fn readout(b: &mut Builder<'_>, parent: NodeId, name: &str, binding: Binding
 
 /// A note-value picker on a display: the division the time locks to, lit,
 /// with the step arrows beside it. A `Selector` over the division param —
-/// wheel or arrow keys step it — whose `Value` slot is the lit text.
+/// wheel or arrow keys step it — whose `Value` slot is the lit text, printed
+/// as the division's name.
 #[allow(clippy::too_many_arguments)]
 pub fn note_picker(b: &mut Builder<'_>, parent: NodeId, name: &str, addr: &str, (x, cy, w): (f64, f64, f64), size: f64, ink: &str, frame: &str) -> NodeId {
     let h = (size * 1.6).ceil();
@@ -720,7 +629,6 @@ pub fn note_picker(b: &mut Builder<'_>, parent: NodeId, name: &str, addr: &str, 
     let lit_ink = Ink::new(size, ink).weight(600.0).track(0.04).plain();
     let mut t = text_node("", 0.0, h / 2.0, w - 10.0, &lit_ink, TextAlign::Center);
     t.name = "value".into();
-    t.effects = vec![draw::drop_shadow(&hexa(ink, 0.7), 0.0, 0.0, size * 0.45)];
     let value = b.add(root, emit(t, ink, 0.9, size * 0.8));
     let (ax, s) = (w - 8.0, size * 0.22);
     let up = draw::polygon(&[(ax - s, h / 2.0 - 1.5), (ax + s, h / 2.0 - 1.5), (ax, h / 2.0 - 1.5 - s * 1.2)]);
@@ -728,6 +636,7 @@ pub fn note_picker(b: &mut Builder<'_>, parent: NodeId, name: &str, addr: &str, 
     b.add(root, draw::path("step arrows", 0.0, 0.0, w, h, format!("{up} {down}"), draw::solid(frame)));
     let mut c = Control::new(ControlKind::Selector).slot(SlotRole::Value, value.0);
     c.binding = Some(bind(addr));
+    c.format = Some(ValueFormat::labels(DIVISIONS));
     b.controls.insert(root, c);
     root
 }
@@ -740,84 +649,8 @@ pub fn lit(b: &mut Builder<'_>, parent: NodeId, s: &str, (x, cy): (f64, f64), in
         TextAlign::Right => x - w,
         _ => x,
     };
-    let mut t = text_node(s, x0, cy, w, &ink, align);
-    t.effects = vec![draw::drop_shadow(&hexa(ink.color, 0.6), 0.0, 0.0, ink.size * 0.5)];
+    let t = text_node(s, x0, cy, w, &ink, align);
     b.add(parent, emit(t, ink.color, 0.6, ink.size))
-}
-
-// ── LED meters ───────────────────────────────────────────────────────────
-
-/// Colour of an LED at `db`: green, amber from -6, red from 0.
-fn level_color(db: f64) -> &'static str {
-    if db >= 0.0 {
-        "#ff3b2f"
-    } else if db >= -6.0 {
-        "#ffb21e"
-    } else {
-        "#46e05a"
-    }
-}
-
-/// A vertical LED bar meter: `n` segments over `floor..ceiling` dB, lit from
-/// the bottom by `stream` channel `channel`. A `Gauge` whose moving part is
-/// a dark overlay sliding off the lit column — a `Thumb` in a lane twice
-/// the column's height, clipped to the column (bar meters ignore curves).
-#[allow(clippy::too_many_arguments)]
-pub fn led_column(b: &mut Builder<'_>, parent: NodeId, name: &str, stream: &str, channel: u8, (x, y, w, h): (f64, f64, f64, f64), n: usize, (floor, ceiling): (f64, f64)) -> NodeId {
-    let mut housing = draw::frame(name, x, y, w, h);
-    housing.fills = vec![draw::solid("#070809")];
-    let housing = draw::with_effects(draw::stroked(draw::rounded(housing, 2.0), "#000000", 1.0), vec![draw::inner_shadow("#000000", 0.0, 1.0, 3.0), draw::drop_shadow("#ffffff14", 0.0, 1.0, 0.0)]);
-    let root = b.add(parent, housing);
-    let pad = 2.0;
-    let (cw, ch) = (w - 2.0 * pad, h - 2.0 * pad);
-    let mut col = draw::frame("column", pad, pad, cw, ch);
-    col.clips_content = true;
-    let col = b.add(root, col);
-    let pitch = ch / n as f64;
-    for i in 0..n {
-        let db = floor + (ceiling - floor) * (i as f64 + 1.0) / n as f64;
-        let c = level_color(db - 0.01);
-        let sy = ch - (i as f64 + 1.0) * pitch + pitch * 0.18;
-        let seg = draw::rounded(draw::rect("segment", 0.0, sy, cw, pitch * 0.64, draw::linear(90.0, &[(0.0, &mixed(c, "#000000", 0.25)), (0.5, &mixed(c, "#ffffff", 0.18)), (1.0, &mixed(c, "#000000", 0.25))])), 1.0);
-        b.add(col, emit(seg, c, 0.8, pitch));
-    }
-    let lane = b.add(col, draw::frame("lane", 0.0, -ch, cw, 2.0 * ch));
-    let mask = b.add(lane, draw::rect("unlit", 0.0, 0.0, cw, ch, draw::solid("#060708db")));
-    let mut c = Control::new(ControlKind::Gauge { sweep_degrees: 0.0, floor_db: floor, ceiling_db: ceiling }).slot(SlotRole::Needle, col.0).slot(SlotRole::Thumb, mask.0);
-    c.binding = Some(Binding { source: surface_proto::Source::Stream { id: EntryId::new(stream), channel: Some(channel) }, ..Binding::stream(stream) });
-    b.controls.insert(root, c);
-    root
-}
-
-/// A horizontal LED bar meter, lit from the left (a digital unit's input
-/// or output ladder): `n` segments over `floor..ceiling` dB.
-#[allow(clippy::too_many_arguments)]
-pub fn led_row(b: &mut Builder<'_>, parent: NodeId, name: &str, stream: &str, channel: u8, (x, y, w, h): (f64, f64, f64, f64), n: usize, (floor, ceiling): (f64, f64)) -> NodeId {
-    let mut housing = draw::frame(name, x, y, w, h);
-    housing.fills = vec![draw::solid("#070809")];
-    let housing = draw::with_effects(draw::stroked(draw::rounded(housing, 2.0), "#000000", 1.0), vec![draw::inner_shadow("#000000", 0.0, 1.0, 3.0), draw::drop_shadow("#ffffff14", 0.0, 1.0, 0.0)]);
-    let root = b.add(parent, housing);
-    let pad = 2.0;
-    let (cw, ch) = (w - 2.0 * pad, h - 2.0 * pad);
-    let mut col = draw::frame("row", pad, pad, cw, ch);
-    col.clips_content = true;
-    let col = b.add(root, col);
-    let pitch = cw / n as f64;
-    for i in 0..n {
-        let db = floor + (ceiling - floor) * (i as f64 + 1.0) / n as f64;
-        let c = level_color(db - 0.01);
-        let sx = i as f64 * pitch + pitch * 0.14;
-        let seg = draw::rounded(draw::rect("segment", sx, 0.0, pitch * 0.72, ch, draw::linear(180.0, &[(0.0, &mixed(c, "#ffffff", 0.2)), (1.0, &mixed(c, "#000000", 0.3))])), 1.0);
-        b.add(col, emit(seg, c, 0.8, pitch));
-    }
-    // The cover slides right as the level rises: a Thumb in a lane twice
-    // the row's width. A Thumb travels along a lane's long axis.
-    let lane = b.add(col, draw::frame("lane", 0.0, 0.0, 2.0 * cw, ch));
-    let mask = b.add(lane, draw::rect("unlit", 0.0, 0.0, cw, ch, draw::solid("#060708db")));
-    let mut c = Control::new(ControlKind::Gauge { sweep_degrees: 0.0, floor_db: floor, ceiling_db: ceiling }).slot(SlotRole::Needle, col.0).slot(SlotRole::Thumb, mask.0);
-    c.binding = Some(Binding { source: surface_proto::Source::Stream { id: EntryId::new(stream), channel: Some(channel) }, ..Binding::stream(stream) });
-    b.controls.insert(root, c);
-    root
 }
 
 // ── catalog entries ──────────────────────────────────────────────────────

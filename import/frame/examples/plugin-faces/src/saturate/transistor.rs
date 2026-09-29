@@ -8,7 +8,7 @@
 //! part itself printed beside it — a PNP transistor's symbol.
 
 use document_proto::NodeId;
-use surface_kit::{Place, draw};
+use surface_kit::{Ink as KitInk, Place, draw};
 use surface_widgets::Builder;
 
 use crate::delay::art;
@@ -19,7 +19,6 @@ const W: f64 = 760.0;
 const H: f64 = 520.0;
 const INK: &str = "#17181a";
 const DIM: &str = "#3d4045";
-const LED: &str = "#ff3b2e";
 
 fn a(s: &str) -> String {
     format!("transistor/{s}")
@@ -27,32 +26,41 @@ fn a(s: &str) -> String {
 
 /// A PNP transistor's schematic symbol, printed at (`cx`, `cy`), radius `r`.
 fn symbol(b: &mut Builder<'_>, lid: NodeId, (cx, cy): (f64, f64), r: f64, ink: &str) {
-    let side = 2.0 * r + 40.0;
-    let (ox, oy) = (cx - side / 2.0, cy - side / 2.0);
-    let c = side / 2.0;
     let wt = 2.2;
-    let mut d = art::ring_d(c, c, r - wt / 2.0, r + wt / 2.0);
-    // Base: lead in from the left to the bar.
-    let bar_x = c - r * 0.28;
-    d.push_str(&art::ribbon(&[(c - r - 16.0, c), (bar_x, c)], wt));
-    d.push_str(&art::ribbon(&[(bar_x, c - r * 0.5), (bar_x, c + r * 0.5)], wt * 2.0));
-    // Collector and emitter: diagonals out to the right, then up and down.
-    let (ex, ey) = (c + r * 0.42, c - r * 0.62);
-    let (kx, ky) = (c + r * 0.42, c + r * 0.62);
-    d.push_str(&art::ribbon(&[(bar_x, c - r * 0.22), (ex, ey), (ex, c - r - 16.0)], wt));
-    d.push_str(&art::ribbon(&[(bar_x, c + r * 0.22), (kx, ky), (kx, c + r + 16.0)], wt));
+    // The envelope: a circle, stroked.
+    let ring: Vec<(f64, f64)> = (0..=72).map(|i| draw::polar(cx, cy, r, f64::from(i) * 5.0)).collect();
+    b.add(lid, parts::stroke_path("envelope", (cx - r - wt, cy - r - wt, 2.0 * (r + wt), 2.0 * (r + wt)), &[ring], wt, ink, true));
+    // Base: a lead in from the left to the bar.
+    let bar_x = cx - r * 0.28;
+    let (ex, ey) = (cx + r * 0.42, cy - r * 0.62);
+    let (kx, ky) = (cx + r * 0.42, cy + r * 0.62);
+    let leads = [
+        vec![(cx - r - 16.0, cy), (bar_x, cy)],
+        // Collector and emitter: diagonals out to the right, then up and down.
+        vec![(bar_x, cy - r * 0.22), (ex, ey), (ex, cy - r - 16.0)],
+        vec![(bar_x, cy + r * 0.22), (kx, ky), (kx, cy + r + 16.0)],
+    ];
+    let mut leads = parts::lines_node("leads", &leads, wt, ink);
+    leads.stroke.cap = document_proto::StrokeCap::None;
+    b.add(lid, leads);
+    let mut bar = parts::lines_node("base bar", &[vec![(bar_x, cy - r * 0.5), (bar_x, cy + r * 0.5)]], wt * 2.0, ink);
+    bar.stroke.cap = document_proto::StrokeCap::None;
+    b.add(lid, bar);
     // PNP: the emitter's arrow points in, toward the bar.
-    let (mx, my) = ((bar_x + ex) / 2.0 - 1.0, (c - r * 0.22 + ey) / 2.0 + 0.5);
-    let (ux, uy) = ((bar_x - ex), (c - r * 0.22 - ey));
+    let (mx, my) = ((bar_x + ex) / 2.0 - 1.0, (cy - r * 0.22 + ey) / 2.0 + 0.5);
+    let (ux, uy) = ((bar_x - ex), (cy - r * 0.22 - ey));
     let len = ux.hypot(uy);
     let (ux, uy) = (ux / len, uy / len);
     let (px, py) = (-uy, ux);
     let s = 7.0;
-    d.push_str(&art::poly_d(&[(mx + ux * s, my + uy * s), (mx - ux * s * 0.3 + px * s * 0.6, my - uy * s * 0.3 + py * s * 0.6), (mx - ux * s * 0.3 - px * s * 0.6, my - uy * s * 0.3 - py * s * 0.6)], false));
-    b.add(lid, draw::path("transistor symbol", ox, oy, side, side, d, draw::solid(ink)));
-    parts::silk(b, lid, "E", ox + ex + 10.0, oy + c - r - 10.0, Ink::new(8.0, ink).weight(800.0).track(0.0));
-    parts::silk(b, lid, "C", ox + kx + 10.0, oy + c + r + 10.0, Ink::new(8.0, ink).weight(800.0).track(0.0));
-    parts::silk(b, lid, "B", ox + c - r - 22.0, oy + c - 10.0, Ink::new(8.0, ink).weight(800.0).track(0.0));
+    let arrow = [(mx + ux * s, my + uy * s), (mx - ux * s * 0.3 + px * s * 0.6, my - uy * s * 0.3 + py * s * 0.6), (mx - ux * s * 0.3 - px * s * 0.6, my - uy * s * 0.3 - py * s * 0.6)];
+    let (ax, ay) = (mx - s, my - s);
+    let local: Vec<(f64, f64)> = arrow.iter().map(|(x, y)| (x - ax, y - ay)).collect();
+    b.add(lid, draw::path("emitter arrow", ax, ay, 2.0 * s, 2.0 * s, draw::polygon(&local), draw::solid(ink)));
+    let t = Ink::new(8.0, ink).weight(800.0).track(0.0);
+    parts::silk(b, lid, "E", ex + 10.0, cy - r - 10.0, t);
+    parts::silk(b, lid, "C", kx + 10.0, cy + r + 10.0, t);
+    parts::silk(b, lid, "B", cx - r - 22.0, cy - 10.0, t);
 }
 
 pub fn face() -> Face {
@@ -92,12 +100,12 @@ pub fn face() -> Face {
 
         // ── Foot ───────────────────────────────────────────────────────
         let fy = 452.0;
-        let mode = Place::new("Mode").size(38.0).variant("chrome").legend("Mode").options(&["Fuzz", "Drive"]).bind(bind(&a("fuzz")));
+        let mode = Place::new("Mode").size(38.0).variant("chrome").legend("Mode").options(&["Fuzz", "Drive"]).bind(bind(&a("fuzz"))).ink(KitInk::Color(INK.into()));
         let sw = parts::put(b, lid, "switch.toggle_bat", &mode, 170.0, fy - 16.0);
-        parts::reink(b, sw, INK);
         parts::caption_style(b, sw, Ink::new(7.5, INK).weight(900.0).track(0.18));
-        let on = art::footswitch(b, lid, "Bypass", &a("on"), (376.0, fy), 58.0, 48.0, LED);
-        parts::label_at(b, on, "On", (412.0, fy - 48.0), Ink::new(7.5, DIM).weight(900.0).track(0.2));
+        let bypass = Place::new("Bypass").size(38.0).variant("red").bind(bind(&a("on")));
+        let on = parts::footswitch(b, lid, &bypass, (376.0, fy));
+        parts::label_at(b, on, "On", (408.0, fy - 40.0), Ink::new(7.5, DIM).weight(900.0).track(0.2));
         symbol(b, lid, (586.0, fy - 18.0), 26.0, INK);
     });
 

@@ -9,9 +9,9 @@
 //! the crusher's BITS and RATE, TONE and DITHER, and MIX and OUTPUT last.
 //! Output level on two LED columns.
 
-use document_proto::{NodeId, TextAlign};
+use document_proto::{NodeId, StrokeCap, TextAlign};
 use surface_kit::{Place, draw};
-use surface_proto::{Range, Unit};
+use surface_proto::{Range, Unit, ValueFormat};
 use surface_widgets::Builder;
 
 use crate::delay::art;
@@ -35,14 +35,13 @@ fn curve(b: &mut Builder<'_>, win: NodeId, (x, y, w, h): (f64, f64, f64, f64)) {
     art::graticule(b, win, (x, y, w, h), (8, 4), "#ff6f9a14");
     let (cx, cy) = (x + w / 2.0, y + h / 2.0);
     // Unity, dashed: what the curve bends away from.
-    let mut dash = String::new();
-    for i in 0..24 {
-        let t0 = f64::from(i) / 24.0;
-        let t1 = t0 + 0.5 / 24.0;
-        dash.push_str(&art::ribbon(&[(x + w * t0, y + h * (1.0 - t0)), (x + w * t1, y + h * (1.0 - t1))], 0.8));
-    }
-    art::path_in(b, win, "unity", dash, draw::solid(LCD_DIM));
-    art::path_in(b, win, "axes", format!("{}{}", art::ribbon(&[(x, cy), (x + w, cy)], 0.7), art::ribbon(&[(cx, y), (cx, y + h)], 0.7)), draw::solid(LCD_DIM));
+    let mut unity = parts::lines_node("unity", &[vec![(x, y + h), (x + w, y)]], 0.8, LCD_DIM);
+    unity.stroke.cap = StrokeCap::None;
+    unity.stroke.dash_pattern = vec![w.hypot(h) / 48.0; 2];
+    b.add(win, unity);
+    let mut axes = parts::lines_node("axes", &[vec![(x, cy), (x + w, cy)], vec![(cx, y), (cx, y + h)]], 0.7, LCD_DIM);
+    axes.stroke.cap = StrokeCap::None;
+    b.add(win, axes);
     // Drive 2×, a soft ceiling at 0.7, quantised to 4 bits (±7 steps).
     let ceiling = 0.7_f64;
     let levels = 7.0;
@@ -73,15 +72,14 @@ pub fn face() -> Face {
     let scene = canvas("Digital Saturation", |b, root| {
         parts::fit_root(b, root, W, H);
         let panel = parts::panel(b, root, "panel.painted", "black", W, H, "ears");
-        parts::underpaint(b, panel, &[(0.0, "#1e2129"), (0.5, "#171a20"), (1.0, "#0f1116")]);
+        parts::repaint(b, panel, &[(0.0, "#1e2129"), (0.5, "#171a20"), (1.0, "#0f1116")]);
 
         // ── Nameplate, mode ────────────────────────────────────────────
         parts::silk_left(b, panel, "Digital", 50.0, 34.0, Ink::new(15.0, INK).weight(800.0).track(0.1));
         b.add(panel, draw::rect("accent", 50.0, 46.0, 30.0, 3.0, draw::solid(LCD)));
         parts::silk_left(b, panel, "Clipper · bit-crusher", 50.0, 62.0, Ink::new(6.8, DIM).weight(700.0).track(0.18));
         let modes = Place::new("Mode").size(46.0).variant("red").bind(bind(&a("mode"))).options(MODES);
-        let modes = parts::put(b, panel, "button.square_bank", &modes, 124.0, 108.0);
-        parts::fit_legends(b, modes, 8.0);
+        parts::put(b, panel, "button.square_bank", &modes, 124.0, 108.0);
         parts::silk(b, panel, "Stage", 124.0, 141.0, Ink::new(6.5, DIM).weight(800.0).track(0.22));
 
         // ── LCD ────────────────────────────────────────────────────────
@@ -90,7 +88,11 @@ pub fn face() -> Face {
         let rows = [("Bits", "bits", 24.0), ("Rate", "rate", 56.0), ("Ceiling", "ceiling", 88.0)];
         for (tag, addr, y) in rows {
             art::tag(b, win, tag, (282.0, y), 7.0, LCD_DIM);
-            parts::readout(b, win, tag, bind(&a(addr)), (320.0, y, 118.0), 17.0, LCD, TextAlign::Right);
+            let r = parts::readout(b, win, tag, bind(&a(addr)), (320.0, y, 118.0), 17.0, LCD, TextAlign::Right);
+            if addr == "rate" {
+                // 8.0 kHz, 44.1 kHz — one decimal whatever the magnitude.
+                parts::format(b, r, ValueFormat::decimals(1));
+            }
         }
 
         // ── Output meters ──────────────────────────────────────────────

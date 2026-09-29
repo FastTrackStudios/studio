@@ -32,8 +32,9 @@ fn a(s: &str) -> String {
 /// One VU on the bridge, reading channel `ch` of the output.
 fn vu(b: &mut Builder<'_>, bridge: NodeId, ch: u8, cx: f64, legend: &str) {
     let binding = Binding { source: Source::Stream { id: EntryId::new(a("out")), channel: Some(ch) }, ..Binding::stream(a("out")) };
-    let p = Place::new(&format!("VU {legend}")).size(182.0).variant("black_rack").legend("VU").bind(binding);
-    parts::put(b, bridge, "meter.vu_ivory", &p, cx, 66.0);
+    let p = Place::new(format!("VU {legend}")).size(182.0).variant("black_rack").legend("VU").bind(binding);
+    let vu = parts::put(b, bridge, "meter.vu_ivory", &p, cx, 66.0);
+    parts::glass(b, vu);
     parts::silk(b, bridge, legend, cx, 136.0, Ink::new(7.0, DIM).weight(800.0).track(0.3));
 }
 
@@ -41,14 +42,13 @@ pub fn face() -> Face {
     let scene = canvas("Tape Machine", |b, root| {
         parts::fit_root(b, root, W, H);
         let panel = parts::panel(b, root, "panel.brushed", "black", W, H, "ears");
-        parts::underpaint(b, panel, &[(0.0, "#4d453c"), (0.5, "#3b342d"), (1.0, "#2a2520")]);
+        parts::repaint(b, panel, &[(0.0, "#4d453c"), (0.5, "#3b342d"), (1.0, "#2a2520")]);
 
         // ── Nameplate, speed ───────────────────────────────────────────
         parts::silk_left(b, panel, "Tape Machine", 50.0, 34.0, Ink::new(15.0, INK).weight(800.0).track(0.06));
         parts::silk_left(b, panel, "Two-track · ¼ inch · record electronics", 50.0, 54.0, Ink::new(6.5, DIM).weight(600.0).track(0.14));
-        let sel = Ink::new(7.5, INK).weight(700.0).track(0.04).plain();
-        let speed = parts::selector(b, panel, "Speed", &a("speed"), "black", (132.0, 116.0), 44.0, SPEEDS, sel);
-        parts::legend_at(b, speed, "Speed in/s", 154.0, Ink::new(6.8, DIM).weight(800.0).track(0.2));
+        let speed = parts::selector(b, panel, "Speed", &a("speed"), "black", (132.0, 128.0), 54.0, SPEEDS, INK);
+        parts::legend_at(b, speed, "Speed in/s", 168.0, Ink::new(6.8, DIM).weight(800.0).track(0.2));
 
         // ── Meter bridge ───────────────────────────────────────────────
         let bridge = parts::well(b, panel, "Meter bridge", (246.0, 18.0, 468.0, 146.0), draw::linear(180.0, &[(0.0, "#1c1a17"), (1.0, "#121110")]), 6.0);
@@ -57,8 +57,8 @@ pub fn face() -> Face {
         parts::silk(b, bridge, "Level to tape", 234.0, 136.0, Ink::new(6.0, "#7d7466").weight(700.0).track(0.2));
 
         // ── Formulation ────────────────────────────────────────────────
-        let tape = parts::selector(b, panel, "Tape", &a("formulation"), "black", (822.0, 116.0), 44.0, FORMULATIONS, sel);
-        parts::legend_at(b, tape, "Formulation", 154.0, Ink::new(6.8, DIM).weight(800.0).track(0.2));
+        let tape = parts::selector(b, panel, "Tape", &a("formulation"), "black", (822.0, 128.0), 54.0, FORMULATIONS, INK);
+        parts::legend_at(b, tape, "Formulation", 168.0, Ink::new(6.8, DIM).weight(800.0).track(0.2));
         parts::lamp(b, panel, (822.0, 40.0), 8.0, "#ff4a36", true);
         parts::silk(b, panel, "Record", 822.0, 56.0, Ink::new(6.0, DIM).weight(800.0).track(0.24));
 

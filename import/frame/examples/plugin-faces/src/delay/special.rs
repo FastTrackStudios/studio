@@ -34,7 +34,7 @@ fn a(s: &str) -> String {
 fn smear(b: &mut Builder<'_>, win: NodeId, (x, y, w, h): (f64, f64, f64, f64)) {
     art::graticule(b, win, (x, y, w, h), (10, 4), "#ff5d9814");
     let mid = y + h / 2.0;
-    art::path_in(b, win, "axis", art::ribbon(&[(x, mid), (x + w, mid)], 0.8), draw::solid(PINK_DIM));
+    parts::rule(b, win, x, x + w, mid, 0.8, PINK_DIM);
     let bars = 84;
     let windows = 3.0;
     for i in 0..bars {
@@ -55,19 +55,19 @@ pub fn face() -> Face {
     let scene = canvas("Special Delay", |b, root| {
         parts::fit_root(b, root, W, H);
         let panel = parts::panel(b, root, "panel.painted", "black", W, H, "ears");
-        parts::underpaint(b, panel, &[(0.0, "#1d1d20"), (0.5, "#141416"), (1.0, "#0b0b0d")]);
+        parts::repaint(b, panel, &[(0.0, "#1d1d20"), (0.5, "#141416"), (1.0, "#0b0b0d")]);
 
         // ── Model line, with the accent stripe ────────────────────────
         b.add(panel, draw::rect("stripe", 50.0, 22.0, 4.0, 40.0, draw::linear(180.0, &[(0.0, PINK), (1.0, "#a3305e")])));
         parts::silk_left(b, panel, "Special", 62.0, 32.0, Ink::new(15.0, INK).weight(800.0).track(0.1));
         parts::silk_left(b, panel, "Delay · reverse / spectral / diffuse", 62.0, 52.0, Ink::new(6.5, DIM).weight(600.0).track(0.16));
         let modes = Place::new("Machine").size(50.0).variant("red").bind(bind(&a("mode"))).options(MODES);
-        let modes = parts::put(b, panel, "button.illuminated_bank", &modes, 142.0, 100.0);
-        parts::fit_legends(b, modes, 7.0);
+        parts::put(b, panel, "button.illuminated_bank", &modes, 142.0, 100.0);
         parts::silk(b, panel, "Machine", 142.0, 136.0, Ink::new(6.5, DIM).weight(700.0).track(0.2));
 
         // ── Scope ──────────────────────────────────────────────────────
         let win = parts::screen(b, panel, "Scope", (268.0, 24.0, 460.0, 112.0), Screen { glass: ("#12060b", "#1a0810"), ink: PINK, mesh: false });
+        parts::shader(b, win, "crt", &[("strength", 0.45), ("scale", 3.0)]);
         smear(b, win, (12.0, 20.0, 312.0, 82.0));
         art::tag(b, win, "Repeat, reversed", (14.0, 11.0), 6.5, PINK_DIM);
         parts::readout(b, win, "Time", bind(&a("time")), (336.0, 30.0, 112.0), 22.0, PINK, TextAlign::Right);
