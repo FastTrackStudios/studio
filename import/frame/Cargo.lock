@@ -1980,6 +1980,7 @@ dependencies = [
 name = "frame-cli"
 version = "0.1.0"
 dependencies = [
+ "architect 0.1.0 (git+https://github.com/FastTrackStudios/architect?tag=v0.0.2)",
  "document-proto",
  "document-text",
  "figma-import",
@@ -2006,6 +2007,7 @@ dependencies = [
 name = "frame-desktop"
 version = "0.1.0"
 dependencies = [
+ "architect 0.1.0 (git+https://github.com/FastTrackStudios/architect?tag=v0.0.2)",
  "document-bundle",
  "document-proto",
  "document-text",
@@ -2019,6 +2021,7 @@ dependencies = [
  "surface-proto",
  "surface-runtime",
  "surface-widgets",
+ "tokio",
  "vello",
  "winit",
 ]
@@ -2027,11 +2030,15 @@ dependencies = [
 name = "frame-mcp"
 version = "0.1.0"
 dependencies = [
+ "architect 0.1.0 (git+https://github.com/FastTrackStudios/architect?tag=v0.0.2)",
  "design-session",
  "document-proto",
  "document-text",
  "serde_json",
  "surface-memory",
+ "surface-proto",
+ "surface-runtime",
+ "tokio",
 ]
 
 [[package]]

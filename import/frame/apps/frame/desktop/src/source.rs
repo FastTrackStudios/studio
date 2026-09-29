@@ -4,13 +4,15 @@ use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant, SystemTime};
 
+use surface_proto::Catalog;
 use surface_runtime::Surface;
 use surface_widgets::{Options, Theme, surface_for_catalog};
 
 #[derive(Debug, Clone)]
 pub enum Source {
-    /// The surface generated from the demo engine's catalog.
-    Demo { theme: Box<Theme> },
+    /// The surface generated from the engine's catalog (the demo engine's,
+    /// or a live engine's with `--engine`).
+    Generated { theme: Box<Theme> },
     /// frame markup text (`.fm`).
     Markup(PathBuf),
     /// A `.frame` bundle.
@@ -26,7 +28,7 @@ impl Source {
     #[must_use]
     pub fn path(&self) -> Option<&Path> {
         match self {
-            Self::Demo { .. } => None,
+            Self::Generated { .. } => None,
             Self::Markup(p) | Self::Bundle(p) => Some(p),
         }
     }
@@ -44,16 +46,16 @@ impl Source {
             .map_or_else(|| error.to_owned(), |rest| format!("{name}{rest}"))
     }
 
-    /// Build the surface. Errors are one line, ready for stderr and the
-    /// in-window banner: `path:line:col: message` for markup.
+    /// Build the surface; `catalog` is what a generated surface binds to.
+    /// Errors are one line, ready for stderr and the in-window banner:
+    /// `path:line:col: message` for markup.
     ///
     /// # Errors
     /// Unreadable file, markup parse error, or a broken bundle.
-    pub fn load(&self) -> Result<Surface, String> {
+    pub fn load(&self, catalog: &Catalog) -> Result<Surface, String> {
         match self {
-            Self::Demo { theme } => {
-                let catalog = surface_memory::demo_catalog();
-                Ok(surface_for_catalog(&catalog, &Options { theme: (**theme).clone(), ..Options::default() }))
+            Self::Generated { theme } => {
+                Ok(surface_for_catalog(catalog, &Options { theme: (**theme).clone(), ..Options::default() }))
             }
             Self::Markup(path) => {
                 let src = std::fs::read_to_string(path).map_err(|e| format!("{}: {e}", path.display()))?;
@@ -192,7 +194,7 @@ mod tests {
         std::fs::create_dir_all(&dir).unwrap();
         let f = dir.join("bad.fm");
         std::fs::write(&f, "<Document>\n  <Page>\n</Document>").unwrap();
-        let err = Source::Markup(f.clone()).load().unwrap_err();
+        let err = Source::Markup(f.clone()).load(&surface_memory::demo_catalog()).unwrap_err();
         assert!(err.starts_with(&format!("{}:", f.display())), "{err}");
         assert!(err.split(':').nth(1).is_some_and(|l| l.parse::<usize>().is_ok()), "{err}");
         assert!(Source::Markup(f).short_error(&err).starts_with("bad.fm:"), "{err}");

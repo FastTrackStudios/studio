@@ -18,22 +18,17 @@ use crate::input::{self, View};
 use crate::player::{Player, banner, font};
 use crate::source::{self, Source, Watch};
 
-pub fn run(args: Args) -> Result<(), String> {
-    let (surface, error) = match args.source.load() {
-        Ok(s) => (s, None),
-        Err(e) => {
-            eprintln!("{e}");
-            (source::placeholder(), Some(e))
-        }
-    };
-    let player = Player::new(surface_memory::Memory::demo(), surface)?;
+pub fn run(args: &Args) -> Result<(), String> {
+    let (engine, surface, error) = crate::start(args)?;
+    let player = Player::new(engine, surface)?;
     let now = Instant::now();
     let watch = args.source.path().map(|p| Watch::new(source::stamp(p), now));
     if let Some(p) = args.source.path() {
         eprintln!("frame: watching {} for changes", p.display());
     }
     let mut app = App {
-        source: args.source,
+        source: args.source.clone(),
+        remote: args.engine.as_ref().map(|e| e.url.clone()),
         watch,
         player,
         error: None,
@@ -86,11 +81,14 @@ impl Stats {
 
 struct App {
     source: Source,
+    /// `--engine` URL, for the title.
+    remote: Option<String>,
     watch: Option<Watch>,
     player: Player,
     error: Option<String>,
-    /// The error banner scene, rebuilt when the error or width changes.
-    banner: Option<(Scene, NodeId, f64)>,
+    /// The banner scene (file error, else engine status), rebuilt when the
+    /// message or width changes.
+    banner: Option<(Scene, NodeId, f64, String)>,
     stats: Option<Stats>,
     size: (u32, u32),
     start: Instant,
@@ -134,7 +132,7 @@ impl App {
     }
 
     fn reload(&mut self) {
-        let result = self.source.load().and_then(|s| self.player.swap(s));
+        let result = self.source.load(self.player.catalog()).and_then(|s| self.player.swap(s));
         match result {
             Ok(()) => {
                 eprintln!("frame: reloaded");
@@ -154,9 +152,10 @@ impl App {
                 .create_window(
                     Window::default_attributes()
                         .with_inner_size(LogicalSize::new(self.size.0, self.size.1))
-                        .with_title(match self.source.path() {
-                            Some(p) => format!("frame — {}", p.display()),
-                            None => "frame — demo surface".into(),
+                        .with_title(match (self.source.path(), &self.remote) {
+                            (Some(p), _) => format!("frame — {}", p.display()),
+                            (None, Some(url)) => format!("frame — {url}"),
+                            (None, None) => "frame — demo surface".into(),
                         }),
                 )
                 .map_err(|e| format!("window: {e}"))?,
@@ -193,23 +192,25 @@ impl App {
         let started = Instant::now();
         let t = self.t();
         self.player.tick(t);
+        if self.player.take_catalog_changed() && self.source.path().is_none() {
+            // The engine came back different: regenerate its surface.
+            eprintln!("frame: engine catalog changed; regenerating the surface");
+            self.reload();
+        }
         let view = self.view();
         let (width, _) = self.physical_size();
         let scale = self.scale_factor();
-        if self.banner.as_ref().is_some_and(|b| b.2 != width) {
+        let message = self.error.as_deref().map(|e| self.source.short_error(e)).or_else(|| self.player.engine_banner());
+        if self.banner.as_ref().is_some_and(|b| b.2 != width || Some(&b.3) != message.as_ref()) {
             self.banner = None;
         }
         if self.banner.is_none() {
-            self.banner = self
-                .error
-                .as_deref()
-                .and_then(|e| banner(&self.source.short_error(e), width / scale))
-                .map(|(s, p)| (s, p, width));
+            self.banner = message.and_then(|m| banner(&m, width / scale).map(|(s, p)| (s, p, width, m)));
         }
 
         self.scene.reset();
         self.player.paint(&mut self.scene, &view, t);
-        if let Some((b, page, _)) = &self.banner {
+        if let Some((b, page, _, _)) = &self.banner {
             render::paint_scene_into(&mut self.scene, b, *page, kurbo::Affine::scale(scale), Some(font()));
         }
 

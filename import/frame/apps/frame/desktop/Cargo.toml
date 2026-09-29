@@ -15,7 +15,7 @@ document-proto = { path = "../../../features/document/document-proto", default-f
 document-text = { path = "../../../features/document/document-text" }
 document-bundle = { path = "../../../features/document/document-bundle" }
 surface-proto = { path = "../../../features/surface/surface-proto" }
-surface-runtime = { path = "../../../features/surface/surface-runtime" }
+surface-runtime = { path = "../../../features/surface/surface-runtime", features = ["remote"] }
 surface-widgets = { path = "../../../features/surface/surface-widgets" }
 surface-memory = { path = "../../../features/surface/surface-memory" }
 serde_json = { workspace = true }
@@ -25,6 +25,12 @@ vello = { workspace = true }
 winit = { workspace = true }
 pollster = { workspace = true }
 image = { workspace = true }
+# `--engine`: the background runtime that owns the remote engine link.
+tokio = { workspace = true }
+architect = { workspace = true, features = ["platform"] }
+
+[dev-dependencies]
+architect = { workspace = true, features = ["platform", "vox", "local"] }
 
 [lints]
 workspace = true

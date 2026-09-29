@@ -107,6 +107,13 @@ impl Runtime {
 
     // ── engine → surface ──────────────────────────────────────────────────
 
+    /// Every parameter value the runtime holds (engine state plus
+    /// optimistic local edits) — to carry over into a rebuilt runtime.
+    #[must_use]
+    pub fn values(&self) -> Vec<ParamValue> {
+        self.values.iter().map(|(addr, value)| ParamValue { addr: addr.clone(), value: *value }).collect()
+    }
+
     pub fn apply_values(&mut self, values: impl IntoIterator<Item = ParamValue>) {
         for v in values {
             self.values.insert(v.addr, v.value);

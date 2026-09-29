@@ -7,7 +7,7 @@ use surface_runtime::Modifiers;
 
 use crate::input::View;
 use crate::player::{Player, banner};
-use crate::{Args, Script, source};
+use crate::{Args, Script};
 
 /// Frame period of the simulated clock (60 fps).
 const FRAME_MS: f64 = 1000.0 / 60.0;
@@ -18,14 +18,8 @@ const DRAG_STEP_PX: f64 = 5.0;
 
 pub fn run(args: &Args) -> Result<(), String> {
     let out = args.screenshot.as_ref().ok_or("--screenshot needs a path")?;
-    let (surface, error) = match args.source.load() {
-        Ok(s) => (s, None),
-        Err(e) => (source::placeholder(), Some(e)),
-    };
-    if let Some(e) = &error {
-        eprintln!("{e}");
-    }
-    let mut player = Player::new(surface_memory::Memory::demo(), surface)?;
+    let (engine, surface, error) = crate::start(args)?;
+    let mut player = Player::new(engine, surface)?;
     let (w, h) = args.size;
     let view = View::fit(player.content(), f64::from(w), f64::from(h));
 
@@ -33,7 +27,7 @@ pub fn run(args: &Args) -> Result<(), String> {
         Some(Script::DragFirstKnob) => {
             let (id, b) = player.first_knob().ok_or("--script drag-first-knob: the surface has no knob")?;
             let addr = player.param_of(id).ok_or("first knob isn't bound to a param")?;
-            let before = player.engine().value(&addr).unwrap_or_default();
+            let before = player.engine_value(&addr).unwrap_or_default();
             if args.frames < DRAG_STEPS + 3 {
                 eprintln!("frame: --frames {} is too few to finish the drag (need {})", args.frames, DRAG_STEPS + 3);
             }
@@ -63,7 +57,8 @@ pub fn run(args: &Args) -> Result<(), String> {
         player.tick(t);
         scene.reset();
         player.paint(&mut scene, &view, t);
-        if let Some((b, page)) = error.as_deref().and_then(|e| banner(&args.source.short_error(e), f64::from(w))) {
+        let message = error.as_deref().map(|e| args.source.short_error(e)).or_else(|| player.engine_banner());
+        if let Some((b, page)) = message.and_then(|m| banner(&m, f64::from(w))) {
             render::paint_scene_into(&mut scene, &b, page, kurbo::Affine::IDENTITY, Some(crate::player::font()));
         }
         pixels = Some(offscreen.render(&scene, w, h, player.background())?);
@@ -89,7 +84,7 @@ pub fn run(args: &Args) -> Result<(), String> {
         args.frames,
     );
     if let Some((addr, before, _)) = &knob {
-        let after = player.engine().value(addr).unwrap_or_default();
+        let after = player.engine_value(addr).unwrap_or_default();
         report += &format!(",\"param\":\"{}\",\"before\":{before:.4},\"after\":{after:.4}", addr.0);
     }
     if let Some(e) = &error {

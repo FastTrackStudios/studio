@@ -79,6 +79,13 @@ impl Session {
         &self.catalog
     }
 
+    /// Design against a different catalog (e.g. a live engine's, re-fetched).
+    /// The document is untouched; bindings the new catalog lacks show up
+    /// in [`issues`](Self::issues).
+    pub fn set_catalog(&mut self, catalog: Catalog) {
+        self.catalog = catalog;
+    }
+
     #[must_use]
     pub fn issues(&self) -> Vec<Issue> {
         design_lint::lint(&self.scene, &self.catalog, &self.lint)
@@ -740,5 +747,18 @@ mod tests {
         assert!(c.contains("amp/channel") && c.contains("Clean | Crunch | Lead") && c.contains("tap_tempo"), "{c}");
         call(&mut s, "undo", json!({}));
         assert_eq!(s.scene().nodes.len(), 2, "generate undoes as one step");
+    }
+
+    #[test]
+    fn a_new_catalog_relints_the_same_document() {
+        let mut s = Session::blank(demo_catalog());
+        call(&mut s, "generate", json!({}));
+        let nodes = s.scene().nodes.len();
+        let mut smaller = demo_catalog();
+        smaller.params.retain(|p| !p.addr.0.starts_with("delay/"));
+        s.set_catalog(smaller);
+        assert_eq!(s.scene().nodes.len(), nodes, "document untouched");
+        assert!(s.catalog().param(&surface_proto::ParamAddr::new("delay/time")).is_none());
+        assert!(s.issues().iter().any(|i| i.severity == Severity::Error), "delay controls now dangle");
     }
 }
