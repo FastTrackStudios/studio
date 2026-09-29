@@ -9,7 +9,7 @@
 use surface_proto::engine::SurfaceEngine;
 #[cfg(feature = "vox")]
 use surface_proto::engine::SurfaceEngineClient;
-use surface_proto::{Catalog, ParamValue};
+use surface_proto::{Catalog, FeedInfo, FeedRequest, ParamValue};
 
 use crate::runtime::{EngineCall, Runtime, Surface};
 
@@ -31,6 +31,12 @@ pub trait Engine {
     async fn catalog(&self) -> Result<Catalog, EngineError>;
     async fn values(&self) -> Result<Vec<ParamValue>, EngineError>;
     async fn call(&self, call: EngineCall) -> Result<(), EngineError>;
+    /// Ask for feeds shaped for the surface (a plot's bins, a history's
+    /// length). An engine that can't reshape keeps its catalog's shapes.
+    async fn request_feeds(&self, requests: Vec<FeedRequest>) -> Result<Vec<FeedInfo>, EngineError> {
+        let _ = requests;
+        Ok(Vec::new())
+    }
 }
 
 /// An in-process backend.
@@ -53,6 +59,10 @@ impl<E: SurfaceEngine> Engine for Local<'_, E> {
         };
         r.map_err(|e| EngineError(e.to_string()))
     }
+
+    async fn request_feeds(&self, requests: Vec<FeedRequest>) -> Result<Vec<FeedInfo>, EngineError> {
+        self.0.request_feeds(requests).map_err(|e| EngineError(e.to_string()))
+    }
 }
 
 #[cfg(feature = "vox")]
@@ -72,6 +82,10 @@ impl Engine for SurfaceEngineClient {
             EngineCall::Select { collection, index } => self.select(collection, index).await,
         };
         r.map_err(|e| EngineError(format!("{e:?}")))
+    }
+
+    async fn request_feeds(&self, requests: Vec<FeedRequest>) -> Result<Vec<FeedInfo>, EngineError> {
+        SurfaceEngineClient::request_feeds(self, requests).await.map_err(|e| EngineError(format!("{e:?}")))
     }
 }
 
@@ -254,6 +268,12 @@ pub async fn connect(engine: &impl Engine, surface: Surface) -> Result<Runtime, 
     let values = engine.values().await?;
     let mut rt = Runtime::new(surface, catalog);
     rt.apply_values(values);
+    // Best effort: an engine that refuses keeps its catalog's shapes, and
+    // plots draw whatever arrives.
+    let requests = rt.feed_requests();
+    if !requests.is_empty() {
+        let _ = engine.request_feeds(requests).await;
+    }
     Ok(rt)
 }
 

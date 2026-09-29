@@ -22,6 +22,8 @@ use std::f64::consts::PI;
 use document_proto::{Node, NodeId, NodeKind, Op, Prop, Scene, Size, TextData, Transform};
 use surface_proto::{Control, ControlKind, Orientation, SlotRole};
 
+use crate::plot::{self, Trace};
+
 /// What a control currently shows.
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct ControlState {
@@ -40,6 +42,11 @@ pub struct ControlState {
     /// Overrides the on/off reading of `position` for `Led` slots (radio
     /// buttons are lit when *their* option is selected).
     pub lit: Option<bool>,
+    /// A plot's or curve's points for `Trace` / `Area` / `Marker` slots.
+    pub trace: Option<Trace>,
+    /// A handle's place in its parent, unit space (`x` right, `y` up);
+    /// `None` on an axis it doesn't move along.
+    pub handle: Option<(Option<f64>, Option<f64>)>,
 }
 
 impl ControlState {
@@ -65,12 +72,49 @@ pub fn control_ops(scene: &Scene, control_node: NodeId, control: &Control, state
         ControlKind::Knob { sweep_degrees } | ControlKind::Gauge { sweep_degrees, .. } => sweep_degrees,
         _ => 270.0,
     };
+    // A handle moves itself: centred on its point in its parent.
+    if let (Some(uv), Some(node)) = (state.handle, scene.node(control_node)) {
+        let parent = node.parent.and_then(|p| scene.node(p)).map_or(node.size, |p| p.size);
+        let (tx, ty) = handle_offset(node, parent, uv);
+        if (tx, ty) != (node.transform.tx, node.transform.ty) {
+            ops.push(set(control_node, Prop::Transform(Transform { tx, ty, ..node.transform })));
+        }
+    }
     for slot in &control.slots {
         let id = NodeId(slot.node);
         let Some(node) = scene.node(id) else { continue };
         let parent = node.parent.and_then(|p| scene.node(p)).map_or(node.size, |p| p.size);
-        let _ = control_node;
         match slot.role {
+            SlotRole::Trace | SlotRole::Area => {
+                let d = state.trace.as_ref().filter(|t| !t.is_empty()).map(|t| {
+                    let (w, h) = (node.size.width, node.size.height);
+                    if slot.role == SlotRole::Trace {
+                        let dot = (node.stroke.weight * 1.2).max(1.5);
+                        plot::line_path(&t.points, w, h, t.style, dot)
+                    } else {
+                        plot::area_path(&t.points, w, h, t.style, t.baseline)
+                    }
+                });
+                match d.filter(|d| !d.is_empty()) {
+                    Some(d) => {
+                        if !matches!(node.kind, NodeKind::Vector) {
+                            ops.push(set(id, Prop::Kind(NodeKind::Vector)));
+                        }
+                        ops.push(set(id, Prop::FillGeometry(vec![d])));
+                        if !node.stroke_geometry.is_empty() {
+                            ops.push(set(id, Prop::StrokeGeometry(Vec::new())));
+                        }
+                    }
+                    None => ops.push(set(id, Prop::Visible(false))),
+                }
+            }
+            SlotRole::Marker => match state.trace.as_ref().and_then(|t| t.marker) {
+                Some((u, v)) => {
+                    let (tx, ty) = handle_offset(node, parent, (Some(u), Some(v)));
+                    ops.push(set(id, Prop::Transform(Transform { tx, ty, ..node.transform })));
+                }
+                None => ops.push(set(id, Prop::Visible(false))),
+            },
             SlotRole::Needle => {
                 let angle = (state.position - 0.5) * sweep.to_radians();
                 let pivot = (parent.width * 0.5, parent.height * 0.5);
@@ -129,6 +173,15 @@ pub fn control_ops(scene: &Scene, control_node: NodeId, control: &Control, state
         }
     }
     ops
+}
+
+/// Where a node centred on unit point `(u, v)` of its parent (`v` up) sits:
+/// its translation. An axis given as `None` keeps the authored offset.
+#[must_use]
+pub fn handle_offset(node: &Node, parent: Size, (u, v): (Option<f64>, Option<f64>)) -> (f64, f64) {
+    let tx = u.map_or(node.transform.tx, |u| u.clamp(0.0, 1.0) * parent.width - node.size.width / 2.0);
+    let ty = v.map_or(node.transform.ty, |v| (1.0 - v.clamp(0.0, 1.0)) * parent.height - node.size.height / 2.0);
+    (tx, ty)
 }
 
 /// The axis along a box's longer side (vertical for a square).

@@ -1,7 +1,7 @@
 //! Paint the hardware kit to one PNG, for review.
 //!
 //! ```text
-//! kit_sheet --out kit.png [--family knob|meter|button|switch|lever|panel] [--scale 2] [--swatch]
+//! kit_sheet --out kit.png [--family knob|meter|button|switch|lever|panel|viz] [--scale 2] [--swatch]
 //!           [--fx gpu|fallback|off]
 //! ```
 //! Every registered component (or one family), in a labelled grid, each
@@ -115,6 +115,16 @@ fn run() -> Result<(), String> {
     let mut catalog = surface_memory::demo_catalog();
     // A gain-reduction stream for the meters that read one.
     catalog.streams.push(surface_proto::StreamInfo { id: EntryId::new("comp/gr"), name: "GR".into(), kind: surface_proto::StreamKind::GainReduction, rate_hz: 30.0 });
+    // What the visualizers bind: an EQ, a compressor, an envelope, a scope.
+    let viz_feeds = {
+        use surface_kit::viz::catalog as vc;
+        catalog.params.extend(vc::eq_params("eq", 6).into_iter().chain(vc::comp_params("comp")).chain(vc::adsr_params("env")));
+        let mut feeds = vec![vc::spectrum_stream("eq", 128), vc::adsr_stream("env", 4)];
+        feeds.extend(vc::comp_streams("comp", 300).into_iter().filter(|f| f.id.0 != "comp/gr"));
+        feeds.push(surface_proto::FeedInfo::new("scope", "Scope", surface_proto::FeedKind::Waveform { len: 512 }));
+        catalog.streams.extend(feeds.iter().cloned());
+        feeds
+    };
     if swatch {
         let r = row(&mut b, root, "linear");
         for angle in [0.0, 45.0, 90.0, 135.0, 180.0, 270.0] {
@@ -160,11 +170,23 @@ fn run() -> Result<(), String> {
                 "toggle param" => Binding::param(if i % 2 == 0 { "drive/on" } else { "delay/on" }),
                 "action" => Binding::action("tap_tempo"),
                 "none" => Binding::param(""),
+                "spectrum stream" => Binding::stream("eq/spectrum"),
+                "gain-reduction stream" => Binding::stream("comp/gr"),
+                "waveform stream" => Binding::stream("scope"),
                 _ => Binding::param("delay/mix"),
             };
+            // Visualizers find their params by namespace (`viz::catalog`).
+            let options: &[&str] = match def.id {
+                "viz.eq_graph" => &["ns=eq"],
+                "viz.comp" => &["ns=comp"],
+                "viz.adsr" => &["ns=env", "playheads=env/voices"],
+                _ => &[],
+            };
             let place = surface_kit::Place {
-                binding: (def.binds != "none").then_some(binding),
+                binding: (def.binds != "none" && def.binds != "params by namespace").then_some(binding)
+                    .or_else(|| (def.id == "viz.eq_graph").then(|| Binding::stream("eq/spectrum"))),
                 inner: Some(Box::new(surface_kit::Place::new("Bass").bind(Binding::param("amp/bass")).legend("Bass"))),
+                options: (!options.is_empty()).then(|| options.iter().map(ToString::to_string).collect()),
                 ..surface_kit::Place::new(def.title)
             };
             // In a cell the size of its drawing: a tight box's print hangs out.
@@ -203,6 +225,14 @@ fn run() -> Result<(), String> {
     rt.apply_frame(StreamFrame { id: EntryId::new("out_level"), values: vec![-21.0, -24.0] }, 0.0);
     rt.apply_frame(StreamFrame { id: EntryId::new("tempo"), values: vec![180.0] }, 0.0);
     rt.apply_frame(StreamFrame { id: EntryId::new("in_level"), values: vec![-5.0] }, 0.0);
+    // The visualizers, mid-song.
+    for f in feed_memory::frames(&viz_feeds, 2.3) {
+        rt.apply_frame(f, 0.0);
+    }
+    // A reading, sampled for four seconds: the GR history's ring fills.
+    for i in 0..240 {
+        rt.apply_frame(StreamFrame { id: EntryId::new("comp/gr"), values: vec![feed_memory::gr_db(f64::from(i) / 60.0) * 1.6] }, 0.0);
+    }
     let frame = rt.frame(0.0);
     let size = frame.node(frame.node(frame.pages()[0]).and_then(|p| p.children.first().copied()).ok_or("empty")?).ok_or("no root")?.size;
     let (w, h) = ((size.width * scale).ceil() as u32, (size.height * scale).ceil() as u32);

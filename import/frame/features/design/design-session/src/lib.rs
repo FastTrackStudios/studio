@@ -430,7 +430,7 @@ impl Session {
                 c
             }
             (Some(c), None) => c,
-            (None, None) => return err("this node isn't a control yet; pass `kind` (knob | fader | button | trigger | footswitch | meter | readout | xy | selector)"),
+            (None, None) => return err("this node isn't a control yet; pass `kind` (knob | fader | button | trigger | footswitch | meter | readout | xy | selector | plot | spectrum | history)"),
         };
         if binding.is_some() {
             control.binding = binding;
@@ -614,6 +614,23 @@ fn parse_kind(k: &str) -> Result<ControlKind> {
         "xy" => ControlKind::XyPad,
         "selector" => ControlKind::Selector,
         "readout" => ControlKind::Readout,
+        // Plots of a feed; curves and handles carry their own inputs and
+        // axes, so they are authored in markup or placed from the viz kit.
+        "plot" | "scope" => ControlKind::Plot {
+            style: surface_proto::PlotStyle::Line,
+            x: surface_proto::Axis::Linear { min: 0.0, max: 1.0 },
+            y: surface_proto::PlotRange::linear(-1.0, 1.0),
+        },
+        "spectrum" => ControlKind::Plot {
+            style: surface_proto::PlotStyle::Line,
+            x: surface_proto::Axis::Log { f_min: 20.0, f_max: 20_000.0 },
+            y: surface_proto::PlotRange::linear(-90.0, 0.0),
+        },
+        "history" => ControlKind::Plot {
+            style: surface_proto::PlotStyle::Area { baseline: 0.0 },
+            x: surface_proto::Axis::Time { len: 240 },
+            y: surface_proto::PlotRange::linear(-24.0, 0.0),
+        },
         other => return err(format!("unknown control kind `{other}`")),
     })
 }
@@ -629,7 +646,15 @@ fn parse_role(r: &str) -> Result<SlotRole> {
         "label" => SlotRole::Label,
         "led" => SlotRole::Led,
         "peakhold" | "peak" => SlotRole::PeakHold,
-        _ => return err(format!("unknown slot role `{r}`; use needle | value-arc | mod-arc | fill | thumb | value | label | led | peak-hold")),
+        "glow" => SlotRole::Glow,
+        "trace" | "line" => SlotRole::Trace,
+        "area" | "region" => SlotRole::Area,
+        "marker" | "ball" => SlotRole::Marker,
+        _ => {
+            return err(format!(
+                "unknown slot role `{r}`; use needle | value-arc | mod-arc | fill | thumb | value | label | led | peak-hold | glow | trace | area | marker"
+            ));
+        }
     })
 }
 

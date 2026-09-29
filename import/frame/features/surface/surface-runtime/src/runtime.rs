@@ -6,18 +6,34 @@
 //! async glue to a [`SurfaceEngine`](surface_proto::SurfaceEngine) is
 //! [`crate::sync`].
 
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, HashMap, VecDeque};
+use std::hash::{Hash, Hasher};
+use std::sync::{Arc, Mutex};
 
 use document_proto::{NodeId, NodeKind, Scene, Transform};
 use surface_proto::{
-    Binding, Catalog, Control, ControlKind, EditPhase, EntryId, MeterTap, ParamAddr, ParamKind, ParamValue, Source,
-    StreamFrame, StreamKind,
+    Axis, Binding, Catalog, Control, ControlKind, EditPhase, EntryId, FeedRequest, HandleAxis, InputSource, MeterTap, ParamAddr,
+    ParamKind, ParamValue, PlotRange, PlotStyle, Source, StreamFrame, StreamKind,
 };
 
 use crate::coalesce::Coalescer;
+use crate::curves::{CurveInputs, CurveRegistry, Series};
 use crate::gesture::{Bounds, Gesture, Input, Key, Output};
 use crate::meter::{Ballistics, MeterScale, Sense};
-use crate::visual::{ControlState, control_ops};
+use crate::plot::{self, Trace};
+use crate::visual::{ControlState, control_ops, handle_offset};
+
+/// Evaluated curves, shared by every control asking for the same provider
+/// with the same inputs.
+#[derive(Debug, Default)]
+struct CurveCache {
+    results: HashMap<u64, Arc<Vec<Series>>>,
+    evaluations: u64,
+}
+
+/// Cache entries kept before the cache starts over (a drag produces one
+/// per distinct value; old ones are never asked for again).
+const CURVE_CACHE_MAX: usize = 512;
 
 // Live reload: swap the design, keep the running state.
 mod swap;
@@ -75,6 +91,10 @@ pub struct Runtime {
     to_box: HashMap<NodeId, Transform>,
     coalescer: Coalescer,
     meter_scale: MeterScale,
+    /// Time plots' rings (x = `Axis::Time`), newest last.
+    histories: HashMap<NodeId, VecDeque<f64>>,
+    curves: CurveRegistry,
+    curve_cache: Mutex<CurveCache>,
 }
 
 impl Runtime {
@@ -95,7 +115,36 @@ impl Runtime {
             to_box: HashMap::new(),
             coalescer: Coalescer::default(),
             meter_scale: MeterScale::default(),
+            histories: HashMap::new(),
+            curves: CurveRegistry::builtin(),
+            curve_cache: Mutex::new(CurveCache::default()),
         }
+    }
+
+    /// Use `curves` for `Curve` controls (the builtins plus an engine's own).
+    #[must_use]
+    pub fn with_curves(mut self, curves: CurveRegistry) -> Self {
+        self.curves = curves;
+        self.cache().results.clear();
+        self
+    }
+
+    /// The curve providers, to register an engine's own (overriding a
+    /// builtin of the same name).
+    pub fn curves_mut(&mut self) -> &mut CurveRegistry {
+        self.cache().results.clear();
+        &mut self.curves
+    }
+
+    /// How many times a curve provider has run (memoised curves only run
+    /// when an input changes).
+    #[must_use]
+    pub fn curve_evaluations(&self) -> u64 {
+        self.cache().evaluations
+    }
+
+    fn cache(&self) -> std::sync::MutexGuard<'_, CurveCache> {
+        self.curve_cache.lock().unwrap_or_else(std::sync::PoisonError::into_inner)
     }
 
     #[must_use]
@@ -193,7 +242,273 @@ impl Runtime {
                 }
             }
         }
+        // History plots keep their own ring: a reading (a level, a gain
+        // reduction) is pushed; a series (a `History` feed) is the history
+        // the engine kept, taken as is.
+        let pushes = !self.catalog.stream(&frame.id).is_some_and(|s| s.kind.is_series());
+        for (id, control) in &self.surface.controls {
+            let ControlKind::Plot { x: Axis::Time { len }, .. } = control.kind else { continue };
+            let Some(Binding { source: Source::Stream { id: sid, channel }, .. }) = &control.binding else { continue };
+            if *sid != frame.id {
+                continue;
+            }
+            let len = len.max(2) as usize;
+            let ring = self.histories.entry(*id).or_insert_with(|| VecDeque::with_capacity(len));
+            if pushes || frame.values.len() == 1 {
+                let v = frame.values.get(usize::from(channel.unwrap_or(0))).copied().unwrap_or(f64::NAN);
+                ring.push_back(v);
+            } else {
+                ring.clear();
+                ring.extend(frame.values.iter().rev().take(len).rev());
+            }
+            while ring.len() > len {
+                ring.pop_front();
+            }
+        }
         self.streams.insert(frame.id.clone(), frame.values);
+    }
+
+    // ── plots, curves, handles ────────────────────────────────────────────
+
+    /// The feeds this surface's plots want, shaped to them: a spectrum at
+    /// half a bin per pixel of its plot, a history `len` long, a scope a
+    /// sample per pixel. Hosts pass these to the engine's `request_feeds`
+    /// ([`crate::sync::connect`] does).
+    #[must_use]
+    pub fn feed_requests(&self) -> Vec<FeedRequest> {
+        let mut out: Vec<FeedRequest> = Vec::new();
+        for (id, control) in &self.surface.controls {
+            let ControlKind::Plot { x, .. } = &control.kind else { continue };
+            let Some(Binding { source: Source::Stream { id: sid, .. }, .. }) = &control.binding else { continue };
+            let Some(info) = self.catalog.stream(sid) else { continue };
+            let width = self.surface.scene.node(*id).map_or(0.0, |n| n.size.width).max(1.0);
+            let r = FeedRequest::new(sid.0.clone());
+            let r = match (&info.kind, x) {
+                (StreamKind::Spectrum { .. }, _) => r.bins((width / 2.0).round().clamp(16.0, 4096.0) as u16),
+                (StreamKind::History { .. }, Axis::Time { len }) => r.len(*len),
+                (StreamKind::Waveform { .. }, _) => r.len(width.round() as u32),
+                _ => continue,
+            };
+            // Two plots of one feed: the larger ask wins.
+            match out.iter_mut().find(|o| o.id == r.id) {
+                Some(o) => {
+                    o.options.bins = o.options.bins.max(r.options.bins);
+                    o.options.len = o.options.len.max(r.options.len);
+                }
+                None => out.push(r),
+            }
+        }
+        out
+    }
+
+    /// A param's value in engineering units: a choice's option index, a
+    /// toggle's 0/1, else the range's real value.
+    #[must_use]
+    pub fn real(&self, addr: &ParamAddr) -> Option<f64> {
+        let info = self.catalog.param(addr)?;
+        let v = self.values.get(addr).copied().unwrap_or(info.default);
+        Some(match &info.kind {
+            ParamKind::Choice { options } => (v.clamp(0.0, 1.0) * options.len().saturating_sub(1) as f64).round(),
+            ParamKind::Toggle => f64::from(u8::from(v >= 0.5)),
+            ParamKind::Continuous => info.range.to_real(v),
+        })
+    }
+
+    /// The normalized value that puts `addr` at `real` engineering units.
+    fn normalized(&self, addr: &ParamAddr, real: f64) -> Option<f64> {
+        let info = self.catalog.param(addr)?;
+        Some(match &info.kind {
+            ParamKind::Choice { options } if options.len() > 1 => (real.round() / (options.len() - 1) as f64).clamp(0.0, 1.0),
+            ParamKind::Toggle => f64::from(u8::from(real >= 0.5)),
+            _ => info.range.to_normalized(real),
+        })
+    }
+
+    fn stream_value(&self, id: &EntryId, channel: Option<u8>) -> Option<f64> {
+        self.streams.get(id).and_then(|v| v.get(usize::from(channel.unwrap_or(0)))).copied()
+    }
+
+    /// A plot's points: the bound stream's latest frame (or its history).
+    fn plot_trace(&self, id: NodeId, control: &Control, style: PlotStyle, x: &Axis, y: &PlotRange) -> Option<Trace> {
+        let Some(Binding { source: Source::Stream { id: sid, channel }, .. }) = &control.binding else { return None };
+        let points: Vec<(f64, f64)> = match *x {
+            Axis::Time { len } => {
+                let ring = self.histories.get(&id)?;
+                let (len, n) = (f64::from(len.max(2)), ring.len());
+                ring.iter().enumerate().map(|(i, v)| ((len - n as f64 + i as f64) / (len - 1.0), y.to_unit(*v))).collect()
+            }
+            _ => {
+                let values = self.streams.get(sid)?;
+                let band = match self.catalog.stream(sid).map(|s| &s.kind) {
+                    Some(StreamKind::Spectrum { f_min, f_max, .. }) if *f_min > 0.0 && f_max > f_min => Some((*f_min, *f_max)),
+                    _ => None,
+                };
+                let spectrum = band.is_some();
+                // A level stream plotted across channels reads them all; one
+                // channel picked reads just that one (a single point).
+                let values: &[f64] = match channel {
+                    Some(c) if !spectrum => values.get(usize::from(*c)..=usize::from(*c)).unwrap_or(&[]),
+                    _ => values,
+                };
+                let n = values.len();
+                let last = (n.max(2) - 1) as f64;
+                values
+                    .iter()
+                    .enumerate()
+                    .map(|(i, v)| {
+                        let u = match (x, band) {
+                            // Log-spaced bins (centred in their slice of the
+                            // feed's band), placed on this axis.
+                            (Axis::Log { .. }, Some((lo, hi))) => x.to_unit(lo * (hi / lo).powf((i as f64 + 0.5) / n as f64)),
+                            _ => i as f64 / last,
+                        };
+                        (u, y.to_unit(*v))
+                    })
+                    .collect()
+            }
+        };
+        Some(Trace { points: Arc::new(points), style, baseline: baseline(style, y), marker: None })
+    }
+
+    /// A curve's evaluated series (all of them), memoised on its inputs.
+    fn curve_series(&self, provider: &str, inputs: &[surface_proto::CurveInput], x: &Axis) -> Option<Arc<Vec<Series>>> {
+        let mut args = CurveInputs::new(x.clone());
+        for input in inputs.iter().filter(|i| i.name != "marker") {
+            let v = match &input.source {
+                InputSource::Param { addr } => self.real(addr),
+                InputSource::Stream { id, channel } => self.stream_value(id, *channel),
+                InputSource::Const { value } => Some(*value),
+            };
+            if let Some(v) = v {
+                args.values.insert(input.name.clone(), v);
+            }
+        }
+        let mut h = std::collections::hash_map::DefaultHasher::new();
+        provider.hash(&mut h);
+        for (k, v) in &args.values {
+            k.hash(&mut h);
+            v.to_bits().hash(&mut h);
+        }
+        format!("{x:?}").hash(&mut h);
+        args.samples.hash(&mut h);
+        let key = h.finish();
+        if let Some(hit) = self.cache().results.get(&key) {
+            return Some(hit.clone());
+        }
+        let series = Arc::new(self.curves.eval(provider, &args)?);
+        let mut cache = self.cache();
+        cache.evaluations += 1;
+        if cache.results.len() >= CURVE_CACHE_MAX {
+            cache.results.clear();
+        }
+        cache.results.insert(key, series.clone());
+        Some(series)
+    }
+
+    /// A `Curve` control's selected series in engineering units (`None`
+    /// for other controls or an unknown provider).
+    #[must_use]
+    pub fn curve(&self, id: NodeId) -> Option<Series> {
+        let ControlKind::Curve { provider, inputs, series, x, .. } = &self.surface.controls.get(&id)?.kind else { return None };
+        let all = self.curve_series(provider, inputs, x)?;
+        pick(&all, series.as_deref()).cloned()
+    }
+
+    fn curve_trace(&self, control: &Control) -> Option<Trace> {
+        let ControlKind::Curve { provider, inputs, series, style, x, y } = &control.kind else { return None };
+        let all = self.curve_series(provider, inputs, x)?;
+        let s = pick(&all, series.as_deref())?;
+        let points: Vec<(f64, f64)> = s.points.iter().map(|(px, py)| (x.to_unit(*px), y.to_unit(*py))).collect();
+        let marker = inputs.iter().find(|i| i.name == "marker").and_then(|m| {
+            let at = match &m.source {
+                InputSource::Param { addr } => self.real(addr),
+                InputSource::Stream { id, channel } => self.stream_value(id, *channel),
+                InputSource::Const { value } => Some(*value),
+            }?;
+            let u = x.to_unit(at).clamp(0.0, 1.0);
+            let v = plot::sample(&points, u)?;
+            Some((u, v))
+        });
+        Some(Trace { points: Arc::new(points), style: *style, baseline: baseline(*style, y), marker })
+    }
+
+    /// One handle axis's place (unit), or `None` when it doesn't move.
+    fn handle_axis(&self, b: Option<&Binding>, map: &HandleAxis) -> Option<f64> {
+        if !map.follows(b.is_some()) {
+            return None;
+        }
+        let bound = match b.map(|b| &b.source) {
+            Some(Source::Param { addr }) => self.real(addr).unwrap_or(0.0),
+            _ => 0.0,
+        };
+        let after: f64 = map.after.iter().filter_map(|a| self.real(a)).sum();
+        Some(map.axis.to_unit(bound + after + map.shift).clamp(0.0, 1.0))
+    }
+
+    /// A handle's unit point in its parent (`None` per unmoving axis).
+    fn handle_uv(&self, control: &Control) -> Option<(Option<f64>, Option<f64>)> {
+        let ControlKind::Handle { x, y, x_map, y_map, .. } = &control.kind else { return None };
+        Some((self.handle_axis(x.as_ref(), x_map), self.handle_axis(y.as_ref(), y_map)))
+    }
+
+    /// A handle's parent area in box space: its layout box less its
+    /// authored offset, the parent's size.
+    fn handle_area(&self, id: NodeId) -> Bounds {
+        let scene = &self.surface.scene;
+        let Some(node) = scene.node(id) else { return Bounds::default() };
+        let b = self.boxes.get(&id).copied().unwrap_or_default();
+        let size = node.parent.and_then(|p| scene.node(p)).map_or(node.size, |p| p.size);
+        Bounds { x: b.x - node.transform.tx, y: b.y - node.transform.ty, width: size.width, height: size.height }
+    }
+
+    /// A control's hit box now (box space; see [`Self::set_boxes`]): its
+    /// layout box — for a handle, wherever its values have moved it.
+    #[must_use]
+    pub fn hit_box(&self, id: NodeId) -> Option<Bounds> {
+        self.hit_box_of(id, self.surface.controls.get(&id)?)
+    }
+
+    fn hit_box_of(&self, id: NodeId, control: &Control) -> Option<Bounds> {
+        let b = *self.boxes.get(&id)?;
+        let Some(uv) = self.handle_uv(control) else { return Some(b) };
+        let scene = &self.surface.scene;
+        let node = scene.node(id)?;
+        let parent = node.parent.and_then(|p| scene.node(p)).map_or(node.size, |p| p.size);
+        let (tx, ty) = handle_offset(node, parent, uv);
+        Some(Bounds { x: b.x + tx - node.transform.tx, y: b.y + ty - node.transform.ty, ..b })
+    }
+
+    /// A handle's edit: unit point → its params, through its axes.
+    fn handle_output(&mut self, control: &Control, o: Output, t: f64, calls: &mut Vec<EngineCall>) {
+        let ControlKind::Handle { x, y, wheel, x_map, y_map } = &control.kind else { return };
+        match o {
+            Output::SetXy { x: u, y: v, phase } => {
+                for (b, map, unit) in [(x, x_map, u), (y, y_map, v)] {
+                    let Some(b @ Binding { source: Source::Param { addr }, .. }) = b else { continue };
+                    let after: f64 = map.after.iter().filter_map(|a| self.real(a)).sum();
+                    let real = map.axis.from_unit(unit) - after - map.shift;
+                    if let Some(n) = self.normalized(addr, real) {
+                        let position = b.to_position(n);
+                        self.send(b, position, phase, t, calls);
+                    }
+                }
+            }
+            Output::Nudge { delta } => {
+                if let Some(b @ Binding { source: Source::Param { addr }, .. }) = wheel {
+                    let now = self.values.get(addr).map_or(0.0, |v| b.to_position(*v));
+                    self.send(b, (now + delta).clamp(0.0, 1.0), EditPhase::End, t, calls);
+                }
+            }
+            Output::Reset => {
+                for b in [x, y, wheel].into_iter().flatten() {
+                    if let Source::Param { addr } = &b.source {
+                        let position = self.catalog.param(addr).map_or(0.0, |p| b.to_position(p.default));
+                        self.send(b, position, EditPhase::End, t, calls);
+                    }
+                }
+            }
+            _ => {}
+        }
     }
 
     /// The stream a meter reads right now: its switch's selected tap (or
@@ -256,8 +571,9 @@ impl Runtime {
         let order = self.surface.scene.walk(self.surface.scene.root);
         order.into_iter().rev().find(|id| {
             let (x, y) = self.local(*id, x, y);
-            self.surface.controls.get(id).is_some_and(|c| c.kind.is_input())
-                && self.boxes.get(id).is_some_and(|b| x >= b.x && y >= b.y && x <= b.x + b.width && y <= b.y + b.height)
+            self.surface.controls.get(id).is_some_and(|c| {
+                c.kind.is_input() && self.hit_box_of(*id, c).is_some_and(|b| x >= b.x && y >= b.y && x <= b.x + b.width && y <= b.y + b.height)
+            })
         })
     }
 
@@ -303,6 +619,17 @@ impl Runtime {
             }
             other => other,
         };
+        if let Some((u, v)) = self.handle_uv(&control) {
+            let area = self.handle_area(id);
+            // An unmoving axis drags nothing; start it mid-way.
+            let uv = (u.unwrap_or(0.5), v.unwrap_or(0.5));
+            let outputs = self.gestures.entry(id).or_insert_with(|| Gesture::new(control.kind.clone())).point(input, uv, area);
+            let mut calls = Vec::new();
+            for o in outputs {
+                self.handle_output(&control, o, t, &mut calls);
+            }
+            return calls;
+        }
         // A stepped param moves a whole detent per wheel notch or arrow key:
         // the gesture's small nudges would snap straight back.
         if let Some(calls) = self.step_by_detent(id, &control, &input, t) {
@@ -358,6 +685,7 @@ impl Runtime {
                 // record it locally so the design can show it (LED).
                 self.local_positions.insert(id, if matches!(o, Output::Hold) { 1.0 } else { 0.0 });
             }
+            Output::Nudge { .. } => self.handle_output(control, o, t, calls),
         }
     }
 
@@ -434,7 +762,12 @@ impl Runtime {
     /// A control's current position (0..1).
     #[must_use]
     pub fn position(&self, id: NodeId, control: &Control) -> f64 {
-        match control.binding.as_ref() {
+        // A handle reads as its x param (else its y).
+        let binding = match &control.kind {
+            ControlKind::Handle { x, y, .. } => x.as_ref().or(y.as_ref()),
+            _ => control.binding.as_ref(),
+        };
+        match binding {
             Some(b @ Binding { source: Source::Param { addr }, .. }) => {
                 self.values.get(addr).map_or(0.0, |v| b.to_position(*v))
             }
@@ -447,6 +780,42 @@ impl Runtime {
     /// What each control shows right now.
     #[must_use]
     pub fn state(&self, id: NodeId, control: &Control, t: f64) -> ControlState {
+        match &control.kind {
+            ControlKind::Plot { style, x, y } => {
+                let trace = self.plot_trace(id, control, *style, x, y);
+                // A history's (or a scalar's) latest reading, for a `Value` slot.
+                let latest = match (x, &control.binding) {
+                    (Axis::Time { .. }, _) => self.histories.get(&id).and_then(|r| r.back().copied()),
+                    (_, Some(Binding { source: Source::Stream { id: sid, channel: Some(c) }, .. })) => self.stream_value(sid, Some(*c)),
+                    _ => None,
+                };
+                let fmt = control.format.clone().unwrap_or_default();
+                return ControlState { trace, value_text: latest.filter(|v| v.is_finite()).map(|v| fmt.db(v)), ..ControlState::default() };
+            }
+            ControlKind::Curve { .. } => return ControlState { trace: self.curve_trace(control), ..ControlState::default() },
+            ControlKind::Handle { x, y, .. } => {
+                let display = |b: &Option<Binding>| match b.as_ref().map(|b| &b.source) {
+                    Some(Source::Param { addr }) => {
+                        let info = self.catalog.param(addr)?;
+                        Some(info.display_as(self.values.get(addr).copied().unwrap_or(info.default), control.format.as_ref()))
+                    }
+                    _ => None,
+                };
+                let text: Vec<String> = [display(x), display(y)].into_iter().flatten().collect();
+                let label = [x, y].into_iter().flatten().find_map(|b| match &b.source {
+                    Source::Param { addr } => self.catalog.param(addr).map(|p| p.short_name.clone().unwrap_or_else(|| p.name.clone())),
+                    _ => None,
+                });
+                return ControlState {
+                    position: self.position(id, control),
+                    handle: self.handle_uv(control),
+                    value_text: (!text.is_empty()).then(|| text.join("  ")),
+                    label_text: label,
+                    ..ControlState::default()
+                };
+            }
+            _ => {}
+        }
         // The binding's curve shapes a meter's dB span, so a needle follows
         // a printed scale law (a VU card crowds its low end) and a ladder's
         // lamps land on their printed thresholds.
@@ -530,7 +899,7 @@ impl Runtime {
     /// a gesture in flight) — lets hosts sleep when nothing moves.
     #[must_use]
     pub fn animating(&self) -> bool {
-        self.captured.is_some() || !self.meters.is_empty()
+        self.captured.is_some() || !self.meters.is_empty() || !self.histories.is_empty()
     }
 
     /// Controls whose parameter is a choice/toggle (for selector hit-mapping).
@@ -544,6 +913,25 @@ impl Runtime {
             },
             _ => None,
         }
+    }
+}
+
+/// Where a plot's `Area` closes (unit `y`): its baseline, else the bottom.
+fn baseline(style: PlotStyle, y: &PlotRange) -> f64 {
+    match style {
+        PlotStyle::Area { baseline } => {
+            let b = y.to_unit(baseline);
+            if b.is_finite() { b } else { 0.0 }
+        }
+        _ => 0.0,
+    }
+}
+
+/// Series `name`, or the first.
+fn pick<'a>(all: &'a [Series], name: Option<&str>) -> Option<&'a Series> {
+    match name {
+        Some(n) => all.iter().find(|s| s.name == n),
+        None => all.first(),
     }
 }
 

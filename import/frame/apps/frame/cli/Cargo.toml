@@ -35,5 +35,8 @@ default = ["anyrender", "svg_export"]
 svg_export = ["render/svg_export"]
 anyrender = ["render/anyrender", "dep:kurbo", "dep:peniko", "dep:skrifa", "dep:vello", "dep:winit", "dep:image", "dep:pollster", "svg_export"]
 
+[dev-dependencies]
+design-lint = { path = "../../../features/design/design-lint" }
+
 [lints]
 workspace = true

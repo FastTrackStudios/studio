@@ -60,7 +60,12 @@ pub enum Output {
     Hold,
     /// Footswitch: released after a hold.
     HoldRelease,
+    /// Handle: turn the wheel param by `delta` (position units).
+    Nudge { delta: f64 },
 }
+
+/// Wheel step of a handle's wheel param (an EQ band's Q), per notch.
+pub const HANDLE_WHEEL_STEP: f64 = 0.02;
 
 /// Drag distance for a full 0→1 knob sweep (the spec's sensitivity constant).
 pub const KNOB_FULL_SWEEP_PX: f64 = 200.0;
@@ -88,6 +93,8 @@ enum Drag {
     Pressed { t0: f64, held: bool },
     /// Button pressed (for toggle-on-release / momentary).
     Button,
+    /// Handle drag: unit point `(u, v)` after the last event at `(x, y)`.
+    Point { last_x: f64, last_y: f64, u: f64, v: f64 },
 }
 
 /// One control's interaction state.
@@ -118,7 +125,55 @@ impl Gesture {
             ControlKind::Footswitch { hold_ms } => self.footswitch(input, f64::from(hold_ms)),
             ControlKind::XyPad => self.xy(input, bounds),
             ControlKind::Selector => self.selector(input, position),
-            ControlKind::Meter { .. } | ControlKind::Gauge { .. } | ControlKind::Readout => Vec::new(),
+            // Handles need their point and area: see `point`.
+            ControlKind::Meter { .. }
+            | ControlKind::Gauge { .. }
+            | ControlKind::Readout
+            | ControlKind::Plot { .. }
+            | ControlKind::Curve { .. }
+            | ControlKind::Handle { .. } => Vec::new(),
+        }
+    }
+
+    /// A handle: drag moves its unit point `(u, v)` (`v` up) by the
+    /// pointer's travel over `area` (its parent) — relative, so grabbing it
+    /// off-centre doesn't jump — Shift for fine; the wheel nudges its wheel
+    /// param; double-click (or Alt-press) resets; arrows step it.
+    pub fn point(&mut self, input: Input, (u, v): (f64, f64), area: Bounds) -> Vec<Output> {
+        let (w, h) = (area.width.max(1.0), area.height.max(1.0));
+        let key_step = |mods: Modifiers| if mods.fine { KEY_STEP * FINE } else { KEY_STEP };
+        let at = |u: f64, v: f64, phase| Output::SetXy { x: u.clamp(0.0, 1.0), y: v.clamp(0.0, 1.0), phase };
+        match (input, self.drag) {
+            (Input::Down { mods, .. }, _) if mods.alt => vec![Output::Reset],
+            (Input::Down { x, y, .. }, _) => {
+                self.drag = Drag::Point { last_x: x, last_y: y, u, v };
+                vec![at(u, v, EditPhase::Begin)]
+            }
+            (Input::Move { x, y, mods, .. }, Drag::Point { last_x, last_y, u, v }) => {
+                let s = if mods.fine { FINE } else { 1.0 };
+                let (nu, nv) = ((u + (x - last_x) / w * s).clamp(0.0, 1.0), (v - (y - last_y) / h * s).clamp(0.0, 1.0));
+                self.drag = Drag::Point { last_x: x, last_y: y, u: nu, v: nv };
+                vec![at(nu, nv, EditPhase::Change)]
+            }
+            (Input::Up { .. } | Input::Cancel { .. }, Drag::Point { u, v, .. }) => {
+                self.drag = Drag::Idle;
+                vec![at(u, v, EditPhase::End)]
+            }
+            (Input::Wheel { notches, mods }, _) => {
+                vec![Output::Nudge { delta: notches * HANDLE_WHEEL_STEP * if mods.fine { FINE } else { 1.0 } }]
+            }
+            (Input::DoubleClick, _) => {
+                self.drag = Drag::Idle;
+                vec![Output::Reset]
+            }
+            (Input::Key { key, mods }, Drag::Idle) => match key {
+                Key::Left => vec![at(u - key_step(mods), v, EditPhase::End)],
+                Key::Right => vec![at(u + key_step(mods), v, EditPhase::End)],
+                Key::Up => vec![at(u, v + key_step(mods), EditPhase::End)],
+                Key::Down => vec![at(u, v - key_step(mods), EditPhase::End)],
+                _ => Vec::new(),
+            },
+            _ => Vec::new(),
         }
     }
 
@@ -443,6 +498,25 @@ mod tests {
         let mut g = Gesture::new(ControlKind::footswitch());
         g.handle(Input::Down { x: 0.0, y: 0.0, t: 0.0, mods: Modifiers::default() }, 0.0, B);
         assert_eq!(g.handle(Input::Up { x: 0.0, y: 0.0, t: 800.0 }, 0.0, B), vec![Output::Hold, Output::HoldRelease]);
+    }
+
+    #[test]
+    fn a_handle_moves_by_the_pointer_relative_to_its_area() {
+        let mut g = Gesture::new(ControlKind::XyPad);
+        let area = Bounds { x: 100.0, y: 100.0, width: 200.0, height: 100.0 };
+        // Grabbed off-centre: no jump.
+        assert_eq!(g.point(down(10.0, 10.0), (0.25, 0.5), area), vec![Output::SetXy { x: 0.25, y: 0.5, phase: EditPhase::Begin }]);
+        // 50 px right of 200 = +0.25; 20 px up of 100 = +0.2.
+        let out = g.point(mv(60.0, -10.0), (0.0, 0.0), area);
+        assert_eq!(out, vec![Output::SetXy { x: 0.5, y: 0.7, phase: EditPhase::Change }]);
+        let fine = Input::Move { x: 160.0, y: -10.0, t: 0.0, mods: Modifiers { fine: true, alt: false } };
+        let Output::SetXy { x, .. } = g.point(fine, (0.0, 0.0), area)[0] else { panic!() };
+        assert!((x - 0.55).abs() < 1e-12, "fine: a tenth");
+        assert_eq!(g.point(Input::Up { x: 0.0, y: 0.0, t: 0.0 }, (0.0, 0.0), area), vec![Output::SetXy { x: 0.55, y: 0.7, phase: EditPhase::End }]);
+        assert_eq!(g.point(Input::Wheel { notches: 2.0, mods: Modifiers::default() }, (0.5, 0.5), area), vec![Output::Nudge { delta: 2.0 * HANDLE_WHEEL_STEP }]);
+        assert_eq!(g.point(Input::DoubleClick, (0.5, 0.5), area), vec![Output::Reset]);
+        let key = Input::Key { key: Key::Right, mods: Modifiers::default() };
+        assert_eq!(g.point(key, (0.5, 0.5), area), vec![Output::SetXy { x: 0.51, y: 0.5, phase: EditPhase::End }]);
     }
 
     #[test]

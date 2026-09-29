@@ -2,7 +2,7 @@
 //!
 //! ```text
 //! frame [FILE.fm | FILE.frame] [--theme stage-dark|daylight] [--stats] [--size WxH] [--no-fx | --fx gpu|fallback|off]
-//! frame [FILE] --screenshot OUT.png [--frames N] [--script drag-first-knob]
+//! frame [FILE] --screenshot OUT.png [--frames N] [--script drag-first-knob|drag-first-handle]
 //! frame [FILE] --engine ws://127.0.0.1:4040/vox [--rig guitar] [...]
 //! frame DIR                        # gallery: ] / Tab next, [ / Shift-Tab previous
 //! frame --library ws://127.0.0.1:4050/vox [--surface ID | --browse] [--engine …] [--install-dir DIR]
@@ -111,10 +111,11 @@ pub enum Script {
     DragFirstKnob,
     /// Library browser: preview the selected surface on frame 1.
     OpenSelected,
+    DragFirstHandle,
 }
 
 const USAGE: &str = "usage: frame [FILE.fm|FILE.frame] [--theme stage-dark|daylight] [--stats] [--size WxH] [--no-fx|--fx gpu|fallback|off]\n       \
-                     frame [FILE] --screenshot OUT.png [--frames N] [--script drag-first-knob]\n       \
+                     frame [FILE] --screenshot OUT.png [--frames N] [--script drag-first-knob|drag-first-handle]\n       \
                      frame [FILE] --engine ws://HOST:PORT/vox [--rig NAME] [...]\n       \
                      frame DIR   (gallery of every .fm/.frame in DIR; ] / Tab next, [ / Shift-Tab previous)\n       \
                      frame --library ws://HOST:PORT/vox [--surface ID | --browse] [--engine …] [--install-dir DIR] [--screenshot OUT.png [--updates N]]";
@@ -163,7 +164,8 @@ fn parse_args(args: impl IntoIterator<Item = String>) -> Result<Args, String> {
                 out.script = match value()?.as_str() {
                     "drag-first-knob" => Some(Script::DragFirstKnob),
                     "open-selected" => Some(Script::OpenSelected),
-                    other => return Err(format!("unknown script {other:?} (drag-first-knob|open-selected)")),
+                    "drag-first-handle" => Some(Script::DragFirstHandle),
+                    other => return Err(format!("unknown script {other:?} (drag-first-knob | drag-first-handle | open-selected)")),
                 }
             }
             "--engine" => out.engine = Some(EngineArg { url: value()?, rig: None }),

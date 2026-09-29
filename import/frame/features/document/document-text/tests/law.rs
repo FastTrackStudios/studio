@@ -283,6 +283,57 @@ fn kitchen_sink_round_trips() {
     assert!(text.contains("transform={"), "{text}");
 }
 
+/// Visualizer controls — a plot, a curve with inputs of every source, a
+/// handle with offset axes — are markup like any control.
+#[test]
+fn plots_curves_and_handles_round_trip() {
+    use surface_proto::{
+        Axis, Binding, Control, ControlKind, Curve, CurveInput, HandleAxis, InputSource, PlotRange, PlotStyle, SlotRole,
+    };
+    let mut s = Scene::new("Viz");
+    let page = s.pages()[0];
+    let mut area = Node::new(NodeKind::Frame, "area");
+    area.size = Size { width: 400.0, height: 200.0 };
+    let area = add(&mut s, page, area);
+    let line = add(&mut s, area, Node::new(NodeKind::Vector, "line"));
+    let ball = add(&mut s, area, Node::new(NodeKind::Ellipse, "ball"));
+    let plot = Control::new(ControlKind::Plot {
+        style: PlotStyle::Area { baseline: -0.5 },
+        x: Axis::Time { len: 240 },
+        y: PlotRange { min: -24.0, max: 0.0, curve: Curve::Power { exponent: 0.5 } },
+    })
+    .bound(Binding::stream("comp/gr"))
+    .slot(SlotRole::Area, line.0);
+    let curve = Control::new(ControlKind::Curve {
+        provider: "comp.transfer".into(),
+        inputs: vec![
+            CurveInput::param("threshold", "comp/threshold"),
+            CurveInput::constant("ratio", 4.0),
+            CurveInput { name: "marker".into(), source: InputSource::Stream { id: surface_proto::EntryId::new("comp/in"), channel: Some(1) } },
+        ],
+        series: Some("transfer".into()),
+        style: PlotStyle::Dots,
+        x: Axis::Log { f_min: 20.0, f_max: 20_000.0 },
+        y: PlotRange::linear(-60.0, 6.0),
+    })
+    .slot(SlotRole::Trace, line.0)
+    .slot(SlotRole::Marker, ball.0);
+    let handle = Control::new(ControlKind::Handle {
+        x: Some(Binding::param("env/decay")),
+        y: None,
+        wheel: Some(Binding::param("env/curve")),
+        x_map: HandleAxis::new(Axis::Linear { min: 0.0, max: 4.0 }).after(&["env/attack"], 0.25),
+        y_map: HandleAxis::new(Axis::Linear { min: 0.0, max: 1.0 }),
+    });
+    for (name, c) in [("plot", plot), ("curve", curve), ("handle", handle)] {
+        let mut n = Node::new(NodeKind::Frame, name);
+        n.control = Some(c);
+        add(&mut s, area, n);
+    }
+    let text = assert_law(&s);
+    assert!(text.contains("\"Plot\"") && text.contains("\"Curve\"") && text.contains("\"Handle\""), "{text}");
+}
+
 #[test]
 fn every_prop_variant_is_covered() {
     // Setting each Prop to a non-default value on a node round-trips.

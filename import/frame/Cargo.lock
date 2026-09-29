@@ -1360,6 +1360,7 @@ dependencies = [
  "proptest",
  "serde",
  "serde_json",
+ "surface-proto",
  "uuid",
 ]
 
@@ -2005,6 +2006,7 @@ name = "frame-cli"
 version = "0.1.0"
 dependencies = [
  "architect 0.1.0 (git+https://github.com/FastTrackStudios/architect?tag=v0.0.2)",
+ "design-lint",
  "document-proto",
  "document-text",
  "feed-memory",

@@ -7,7 +7,10 @@
 //!
 //! | rule | severity | checks |
 //! |---|---|---|
-//! | `binding` | error | control unbound, bound to an unknown address, or to the wrong kind of source |
+//! | `binding` | error | control unbound, bound to an unknown address, or to the wrong kind of source (a plot bound to a missing feed or a param; a curve input or handle axis bound to a missing param) |
+//! | `curve-input` | error | a curve lacks an input its provider needs (`comp.transfer` without `threshold`) |
+//! | `curve-provider` | warning | a curve names a provider frame doesn't ship (only an engine that registers it draws it) |
+//! | `handle-area` | error | a handle's parent (the area it moves in) has no size |
 //! | `slot-dangling` | error | a slot names a node that isn't in the control's subtree |
 //! | `slot-missing` | error | a control lacks the slots its kind needs to show its value |
 //! | `midi-duplicate` | error | two controls listen to the same MIDI message |
@@ -25,7 +28,7 @@ use document_proto::{Color, Node, NodeId, PaintKind, Scene};
 use facet::Facet;
 use render::LayoutBox;
 use serde::{Deserialize, Serialize};
-use surface_proto::{Catalog, Control, ControlKind, MidiMessage, SlotRole, Source};
+use surface_proto::{BUILTIN_CURVES, Catalog, Control, ControlKind, MidiMessage, SlotRole, Source};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize, Facet)]
 #[repr(u8)]
@@ -81,6 +84,8 @@ pub fn lint(scene: &Scene, catalog: &Catalog, config: &Config) -> Vec<Issue> {
         scene.walk(scene.root).into_iter().filter_map(|id| scene.node(id)).filter_map(|n| n.control.as_ref().map(|c| (n, c))).collect();
     for (node, control) in &controls {
         cx.binding(node, control);
+        cx.curve(node, control);
+        cx.handle(node, control);
         cx.slots(node, control);
         cx.touch(node, control);
         cx.labeled(node, control);
@@ -140,6 +145,55 @@ impl Cx<'_> {
         }
     }
 
+    /// A curve names a provider frame knows (else only an engine that
+    /// registers it draws it) and binds every input that provider needs.
+    fn curve(&mut self, node: &Node, control: &Control) {
+        let ControlKind::Curve { provider, inputs, .. } = &control.kind else { return };
+        let Some((_, required)) = BUILTIN_CURVES.iter().find(|(name, _)| name == provider) else {
+            let known: Vec<&str> = BUILTIN_CURVES.iter().map(|(n, _)| *n).collect();
+            self.push(
+                Severity::Warning,
+                "curve-provider",
+                node,
+                format!("no builtin curve provider `{provider}`; it draws only where an engine registers one"),
+                format!("use a builtin{} or register `{provider}` with the runtime", nearest(provider, known.iter().copied())),
+            );
+            return;
+        };
+        let has = |name: &str| inputs.iter().any(|i| i.name == name);
+        let mut missing: Vec<&str> = required.iter().copied().filter(|r| !has(r)).collect();
+        // An EQ needs at least one band.
+        if *provider == "eq.response" && !inputs.iter().any(|i| i.name.starts_with('b') && i.name.ends_with("_freq")) {
+            missing.push("b1_freq");
+        }
+        if !missing.is_empty() {
+            self.push(
+                Severity::Error,
+                "curve-input",
+                node,
+                format!("`{provider}` curve has no input `{}`", missing.join("`, `")),
+                format!("add {} to its `inputs`, bound to a param (or a constant)", missing.iter().map(|m| format!("`{m}`")).collect::<Vec<_>>().join(", ")),
+            );
+        }
+    }
+
+    /// A handle moves inside its parent, so the parent needs a size.
+    fn handle(&mut self, node: &Node, control: &Control) {
+        if !matches!(control.kind, ControlKind::Handle { .. }) {
+            return;
+        }
+        let parent = node.parent.and_then(|p| self.scene.node(p));
+        if parent.is_none_or(|p| p.size.width <= 0.0 || p.size.height <= 0.0) {
+            self.push(
+                Severity::Error,
+                "handle-area",
+                node,
+                "a handle moves within its parent, which has no size".into(),
+                "put the handle in the plot-area frame its axes describe".into(),
+            );
+        }
+    }
+
     fn slots(&mut self, node: &Node, control: &Control) {
         let subtree = self.scene.walk(node.id);
         for slot in &control.slots {
@@ -164,7 +218,9 @@ impl Cx<'_> {
                 "a Needle (or a Fill, a Thumb, Led lamps, a Glow)",
             )],
             ControlKind::Readout => &[(&[SlotRole::Value, SlotRole::Glow], "a Value text or a Glow")],
-            ControlKind::Button { .. } | ControlKind::Footswitch { .. } | ControlKind::XyPad | ControlKind::Selector => &[],
+            ControlKind::Plot { .. } => &[(&[SlotRole::Trace, SlotRole::Area], "a Trace (or an Area) vector")],
+            ControlKind::Curve { .. } => &[(&[SlotRole::Trace, SlotRole::Area, SlotRole::Marker], "a Trace, an Area or a Marker")],
+            ControlKind::Button { .. } | ControlKind::Footswitch { .. } | ControlKind::XyPad | ControlKind::Selector | ControlKind::Handle { .. } => &[],
         };
         for (any_of, what) in needs {
             if !any_of.iter().any(|r| has(*r)) {
@@ -304,8 +360,13 @@ impl Cx<'_> {
     }
 
     fn overlaps(&mut self, controls: &[(&Node, &Control)]) {
-        let inputs: Vec<(&Node, LayoutBox)> =
-            controls.iter().filter(|(_, c)| c.kind.is_input()).filter_map(|(n, _)| self.boxes.get(&n.id).map(|b| (*n, *b))).collect();
+        // Handles move with their values (and sit on the plots they drag),
+        // so where their boxes are authored says nothing.
+        let inputs: Vec<(&Node, LayoutBox)> = controls
+            .iter()
+            .filter(|(_, c)| c.kind.is_input() && !matches!(c.kind, ControlKind::Handle { .. }))
+            .filter_map(|(n, _)| self.boxes.get(&n.id).map(|b| (*n, *b)))
+            .collect();
         let mut found = Vec::new();
         for (i, (a, ab)) in inputs.iter().enumerate() {
             for (b, bb) in &inputs[i + 1..] {

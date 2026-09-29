@@ -21,6 +21,12 @@ whose **slots** point at the moving parts:
 | `Value` / `Label` | readout text / legend text (an authored legend wins). `Control::format` (`ValueFormat`: decimals, unit, note name, one label per step) says how `Value` prints |
 | `Led` | lamps: full opacity when on, 20% (and no emission) when off (for `ButtonMode::Select` banks, when *its* option is selected). On a `Gauge`/`Meter` the `Led`s are a **ladder**: lamp `i` of `n` (slot order) lights once the reading reaches position `(i + 1) / n` — the binding's curve puts each printed threshold there |
 | `Glow` | brightness follows the value: opacity = position (so its emission scales too) — a lamp on a scalar stream |
+| `Trace` / `Area` | a `Plot`'s or `Curve`'s line (stroke it, `align` centre) / the region between it and the baseline (fill it, a top → bottom gradient): the runtime rewrites the vector's geometry, decimated to its width, in the node's own box — make them the plot area's size |
+| `Marker` | a node centred on a `Curve` at its `marker` input (the compressor's input ball); hidden without a reading |
+
+A `Handle` needs no slot: its node (a touch-sized frame, the dot drawn
+centred in it) is moved to its point in its **parent**, which is the area
+its axes span.
 
 Nothing else is special. A placed component can be restyled or taken apart
 like any other nodes.
@@ -105,6 +111,29 @@ select), and end with `registry::tighten` when `touch` is set.
   It's optional — a component must read without an effects stage.
 - **Descriptions** are for a model choosing a component: what it looks like,
   which unit it's from, when to use it. One or two sentences.
+
+## Visualizers (`viz.*`)
+
+Graphs, not hardware: `viz.spectrum`, `viz.gr_history`, `viz.scope`
+(one feed each, bound by `Place::binding`) and `viz.eq_graph`, `viz.comp`,
+`viz.adsr`, which find their params by namespace (`options: ns=<ns>`) on a
+fixed pattern — `surface_kit::viz::catalog` builds the params and feeds a
+placed component expects, for engines and mock catalogs alike.
+
+- **Structure**: a panel; a *well* (the lit plot background); a *plot
+  area* frame holding the grid and the handles (unclipped, so a handle at
+  an edge shows whole); inside it a clipped *traces* frame holding one
+  area-sized frame per `Plot` / `Curve` control with its `Area` then
+  `Trace` vectors. Labels are text nodes printed round the area.
+- **Look**: soft grid (`#ffffff0f`, majors `#ffffff21`), labels `#8e98a8`
+  at 9 px, a lit line (`draw::emissive`) over a gradient region; band
+  colours from `viz::BAND_COLORS`.
+- **Handles**: a 44 px frame (the touch box) with the dot centred in it.
+  `design-lint` doesn't check handles for overlap (they move with their
+  values), and needs their parent to have a size (`handle-area`).
+- **Curves** share one evaluation when their provider and inputs match —
+  give every band curve of an EQ all the bands' inputs and pick its own
+  with `series`.
 
 ## Looking at it
 

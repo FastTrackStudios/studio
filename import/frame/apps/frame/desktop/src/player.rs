@@ -50,6 +50,13 @@ impl Engine for Backend {
             Self::Remote(r) => r.call(call).await,
         }
     }
+
+    async fn request_feeds(&self, requests: Vec<surface_proto::FeedRequest>) -> Result<Vec<surface_proto::FeedInfo>, EngineError> {
+        match self {
+            Self::Local(m) => sync::Local(m).request_feeds(requests).await,
+            Self::Remote(r) => r.request_feeds(requests).await,
+        }
+    }
 }
 
 /// A runtime laid out for one surface.
@@ -368,10 +375,27 @@ impl Player {
             .and_then(|id| boxes.get(&id).map(|b| (id, bounds(b))))
     }
 
-    /// The param a control is bound to.
+    /// The first handle in paint order and its hit box where its values
+    /// put it (for scripted input).
+    #[must_use]
+    pub fn first_handle(&self) -> Option<(NodeId, Bounds)> {
+        let s = self.rt.surface();
+        s.scene
+            .walk(s.scene.root)
+            .into_iter()
+            .find(|id| s.controls.get(id).is_some_and(|c| matches!(c.kind, ControlKind::Handle { .. })))
+            .and_then(|id| self.rt.hit_box(id).map(|b| (id, b)))
+    }
+
+    /// The param a control is bound to (a handle's: its x, else its y).
     #[must_use]
     pub fn param_of(&self, id: NodeId) -> Option<ParamAddr> {
-        match self.rt.surface().controls.get(&id)?.binding.as_ref()?.source.clone() {
+        let c = self.rt.surface().controls.get(&id)?;
+        let binding = match &c.kind {
+            ControlKind::Handle { x, y, .. } => x.as_ref().or(y.as_ref()),
+            _ => c.binding.as_ref(),
+        };
+        match binding?.source.clone() {
             Binding::Param { addr } => Some(addr),
             _ => None,
         }

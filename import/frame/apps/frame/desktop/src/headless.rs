@@ -120,18 +120,23 @@ pub fn run(args: &Args) -> Result<(), String> {
         overlay: vello::Scene::new(),
     };
 
-    let knob = match args.script {
-        Some(Script::DragFirstKnob) => {
+    // A knob is dragged up; a handle up and to the right.
+    let (target, dx) = match args.script {
+        Some(Script::DragFirstKnob) => (Some(shot.player.first_knob().ok_or("--script drag-first-knob: the surface has no knob")?), 0.0),
+        Some(Script::DragFirstHandle) => (Some(shot.player.first_handle().ok_or("--script drag-first-handle: the surface has no handle")?), 1.0),
+        Some(Script::OpenSelected) | None => (None, 0.0),
+    };
+    let knob = match target {
+        Some((id, b)) => {
             let view = shot.view();
-            let (id, b) = shot.player.first_knob().ok_or("--script drag-first-knob: the surface has no knob")?;
-            let addr = shot.player.param_of(id).ok_or("first knob isn't bound to a param")?;
+            let addr = shot.player.param_of(id).ok_or("the dragged control isn't bound to a param")?;
             let before = shot.player.engine_value(&addr).unwrap_or_default();
             if args.frames < DRAG_STEPS + 3 {
                 eprintln!("frame: --frames {} is too few to finish the drag (need {})", args.frames, DRAG_STEPS + 3);
             }
             Some((addr, before, view.to_window(b.x + b.width / 2.0, b.y + b.height / 2.0)))
         }
-        Some(Script::OpenSelected) | None => None,
+        None => None,
     };
 
     let mut pixels = None;
@@ -148,7 +153,7 @@ pub fn run(args: &Args) -> Result<(), String> {
         if let Some((_, _, (wx, wy))) = &knob {
             let view = shot.view();
             // Scripted events arrive in window px, like winit's.
-            let at = |dy: f64| view.to_surface(*wx, wy - dy * view.scale);
+            let at = |dy: f64| view.to_surface(wx + dx * dy * view.scale, wy - dy * view.scale);
             let step = f64::from(i.saturating_sub(1).min(DRAG_STEPS)) * DRAG_STEP_PX;
             match i {
                 1 => shot.player.pointer_down(at(0.0), (*wx, *wy), Modifiers::default(), t),

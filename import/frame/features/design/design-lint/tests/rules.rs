@@ -127,3 +127,85 @@ fn a_concentric_pair_is_not_an_overlap() {
     assert_eq!(overlaps(&pair(false, 25.0)), 1, "a sibling laid over another is still ambiguous");
     assert_eq!(overlaps(&pair(true, 70.0)), 1, "nested but hanging out of the collar's box");
 }
+
+/// A 200×100 plot area holding one control of `kind` (a trace vector in
+/// its `Trace` slot), the control node the area's size.
+fn in_area(kind: surface_proto::ControlKind, binding: Option<Binding>, area: Size) -> document_proto::Scene {
+    use document_proto::{Node, NodeKind};
+    use surface_proto::Control;
+    let mut s = document_proto::Scene::new("s");
+    let page = s.pages()[0];
+    let mut a = Node::new(NodeKind::Frame, "area");
+    a.size = area;
+    let a_id = a.id;
+    s.apply(Op::Insert { node: a, parent: page, index: 0 }).unwrap();
+    let mut n = Node::new(NodeKind::Frame, "viz");
+    n.size = Size { width: 44.0, height: 44.0 };
+    let line = Node::new(NodeKind::Vector, "line");
+    let mut c = Control::new(kind).slot(SlotRole::Trace, line.id.0);
+    c.binding = binding;
+    n.control = Some(c);
+    let id = n.id;
+    s.apply(Op::Insert { node: n, parent: a_id, index: 0 }).unwrap();
+    s.apply(Op::Insert { node: line, parent: id, index: 0 }).unwrap();
+    s
+}
+
+fn rules(s: &document_proto::Scene) -> Vec<(String, Severity)> {
+    lint(s, &demo_catalog(), &Config::default()).into_iter().map(|i| (i.rule, i.severity)).collect()
+}
+
+#[test]
+fn a_plot_bound_to_a_missing_feed_or_a_param_is_a_binding_error() {
+    use surface_proto::{Axis, ControlKind, PlotRange, PlotStyle};
+    let plot = || ControlKind::Plot { style: PlotStyle::Line, x: Axis::Log { f_min: 20.0, f_max: 20_000.0 }, y: PlotRange::linear(-90.0, 0.0) };
+    let area = Size { width: 200.0, height: 100.0 };
+    let missing = rules(&in_area(plot(), Some(Binding::stream("eq/spectrum")), area));
+    assert!(missing.contains(&("binding".into(), Severity::Error)), "{missing:?}");
+    let param = rules(&in_area(plot(), Some(Binding::param("amp/gain")), area));
+    assert!(param.contains(&("binding".into(), Severity::Error)), "{param:?}");
+    let ok = rules(&in_area(plot(), Some(Binding::stream("out_level")), area));
+    assert!(!ok.iter().any(|(_, s)| *s == Severity::Error), "{ok:?}");
+}
+
+#[test]
+fn a_curve_missing_an_input_or_its_provider_is_flagged() {
+    use surface_proto::{Axis, ControlKind, CurveInput, PlotRange, PlotStyle};
+    let curve = |provider: &str, inputs: Vec<CurveInput>| ControlKind::Curve {
+        provider: provider.into(),
+        inputs,
+        series: None,
+        style: PlotStyle::Line,
+        x: Axis::Linear { min: -60.0, max: 0.0 },
+        y: PlotRange::linear(-60.0, 0.0),
+    };
+    let area = Size { width: 200.0, height: 100.0 };
+    let no_ratio = rules(&in_area(curve("comp.transfer", vec![CurveInput::param("threshold", "amp/master")]), None, area));
+    assert!(no_ratio.contains(&("curve-input".into(), Severity::Error)), "{no_ratio:?}");
+    let full = vec![CurveInput::param("threshold", "amp/master"), CurveInput::constant("ratio", 4.0)];
+    assert!(rules(&in_area(curve("comp.transfer", full.clone()), None, area)).is_empty(), "a complete curve is clean");
+    let unknown_param = vec![CurveInput::param("threshold", "comp/threshold"), CurveInput::constant("ratio", 4.0)];
+    assert!(rules(&in_area(curve("comp.transfer", unknown_param), None, area)).contains(&("binding".into(), Severity::Error)));
+    let typo = rules(&in_area(curve("comp.transfr", full), None, area));
+    assert!(typo.contains(&("curve-provider".into(), Severity::Warning)), "{typo:?}");
+    let no_bands = rules(&in_area(curve("eq.response", Vec::new()), None, area));
+    assert!(no_bands.contains(&("curve-input".into(), Severity::Error)), "{no_bands:?}");
+}
+
+#[test]
+fn a_handle_needs_params_and_an_area() {
+    use surface_proto::{Axis, ControlKind, HandleAxis};
+    let handle = |x: &str| ControlKind::Handle {
+        x: Some(Binding::param(x)),
+        y: None,
+        wheel: None,
+        x_map: HandleAxis::new(Axis::Linear { min: 0.0, max: 10.0 }),
+        y_map: HandleAxis::new(Axis::Linear { min: 0.0, max: 1.0 }),
+    };
+    let ok = rules(&in_area(handle("amp/gain"), None, Size { width: 200.0, height: 100.0 }));
+    assert!(!ok.iter().any(|(_, s)| *s == Severity::Error), "{ok:?}");
+    let flat = rules(&in_area(handle("amp/gain"), None, Size { width: 0.0, height: 0.0 }));
+    assert!(flat.contains(&("handle-area".into(), Severity::Error)), "{flat:?}");
+    let unknown = rules(&in_area(handle("amp/gian"), None, Size { width: 200.0, height: 100.0 }));
+    assert!(unknown.contains(&("binding".into(), Severity::Error)), "{unknown:?}");
+}
