@@ -77,7 +77,7 @@ pub fn face() -> Face {
         let bypass = Place::new("Bypass").size(34.0).variant("red").bind(bind(&a("on")));
         let on = parts::footswitch(b, lid, &bypass, (150.0, fy));
         parts::label_at(b, on, "On", (180.0, fy - 36.0), foot);
-        let tap = Place { options: Some(vec!["momentary".into()]), ..Place::new("Tap").size(34.0).variant("amber").bind(bind(&a("tap"))) };
+        let tap = Place::new("Tap").size(34.0).variant("amber").options(&["momentary"]).bind(bind(&a("tap")));
         let tap = parts::footswitch(b, lid, &tap, (710.0, fy));
         parts::label_at(b, tap, "Tap", (740.0, fy - 36.0), foot);
         let board = parts::well(b, lid, "Window", (282.0, 386.0, 296.0, 96.0), draw::linear(160.0, &[(0.0, "#1f4a2a"), (1.0, "#12301b")]), 6.0);

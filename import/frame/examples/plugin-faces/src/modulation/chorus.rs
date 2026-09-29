@@ -40,8 +40,8 @@ pub fn face() -> Face {
         pedal::rule(b, lid, 340.0, &ui::alpha(INK, 0.35));
 
         // Circuit selector and the rate lamp.
-        let sel = Dial::new("switch.rotary", "black", 38.0, INK, DIM).options(MODELS).sweep(200.0).legend(7.5).legend_at(412.0);
-        ui::dial(b, lid, "chorus/model", "Circuit", 96.0, 380.0, &sel);
+        let sel = Dial::new("switch.rotary", "black", 38.0, INK, DIM).options(MODELS).sweep(200.0).legend(7.5).legend_at(420.0);
+        ui::dial(b, lid, "chorus/model", "Circuit", 96.0, 388.0, &sel);
         pedal::rate_lamp(b, lid, F, LW - 90.0, 378.0, "#ff3b2f", INK);
 
         pedal::stomp(b, lid, F, "#ff3b2f");

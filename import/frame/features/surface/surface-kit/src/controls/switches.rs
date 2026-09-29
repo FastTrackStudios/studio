@@ -122,81 +122,20 @@ fn rocker(b: &mut Builder<'_>, parent: NodeId, p: &Place) -> NodeId {
     root
 }
 
-/// A detented rotary selector: a black Bakelite chicken-head pointer, a dot
-/// at each detent and the option legends printed around it.
+/// A detented rotary selector: the kit's chicken-head (`knob.chicken_head`
+/// — the same moulding, beak and hub) over a dot at each detent, the
+/// option legends printed round it clear of the dots. Black by default;
+/// three numbered positions without options.
 fn rotary(b: &mut Builder<'_>, parent: NodeId, p: &Place) -> NodeId {
-    let inkc = p.ink_color(PANEL_INK);
-    let case = p.case();
-    #[allow(clippy::too_many_arguments)]
-    let ink = |name: &str, s: &str, x: f64, cy: f64, w: f64, size: f64, color: &str, align: TextAlign, weight: f64| {
-        cased(parts_ink(name, s, x, cy, w, size, color, align, weight), case)
-    };
-    let d = p.size.unwrap_or(48.0);
-    let k = d / 48.0;
-    let body_c = match p.variant.as_deref() {
-        Some("cream") => "#e2d8c0",
-        Some("red") => "#a8261e",
-        _ => "#1d1b1a",
-    };
-    let line_c = if p.variant.as_deref() == Some("cream") { "#1d1b1a" } else { "#f2efe6" };
-    let opts: Vec<String> = match &p.options {
-        Some(o) if !o.is_empty() => o.clone(),
-        _ => (1..=3).map(|i| i.to_string()).collect(),
-    };
-    let n = opts.len();
-    // A rotary switch clicks through ≤ 60° a detent, ≤ 300° in all —
-    // unless the place says otherwise.
-    let sweep = p.sweep.unwrap_or_else(|| crate::registry::detent_sweep(n));
-    let step = if n < 2 { 0.0 } else { sweep / (n - 1) as f64 };
-    let size = 9.0 * k;
-    let widest = opts.iter().map(|o| text_w(o, size)).fold(0.0, f64::max);
-    let r_dot = d * 0.5 + 4.0 * k;
-    let r_lbl = r_dot + 5.0 * k + size * 0.6;
-    let half = r_lbl + widest / 2.0 + 2.0;
-    let side = 2.0 * half;
-    let cap_h = (9.0 * k * 1.4).ceil();
-    let root = b.add(parent, draw::frame(&p.name, 0.0, 0.0, side, side * 0.5 + d * 0.5 + 6.0 * k + cap_h));
-    let (cx, cy) = (half, half);
-    let ink_c = inkc.as_str();
-    for (i, o) in opts.iter().enumerate() {
-        let a = -sweep / 2.0 + i as f64 * step;
-        let (dx, dy) = draw::polar(cx, cy, r_dot, a);
-        b.add(root, draw::circle("detent", dx, dy, 1.4 * k, draw::solid(ink_c)));
-        let (lx, ly) = draw::polar(cx, cy, r_lbl, a);
-        let w = text_w(o, size) + 6.0;
-        b.add(root, ink("option", o, lx - w / 2.0, ly, w, size, ink_c, TextAlign::Center, 700.0));
+    let mut p = p.clone();
+    if p.variant.is_none() {
+        p.variant = Some("black".into());
     }
-    let label = b.add(root, ink("label", p.legend.as_deref().unwrap_or(""), 0.0, cy + d * 0.5 + 6.0 * k + cap_h / 2.0, side, 9.0 * k, ink_c, TextAlign::Center, 700.0));
-    // The dial: a square centred on the pivot, so the pointer inside it
-    // rotates about the shaft.
-    let dial = b.add(root, draw::frame("dial", cx - d / 2.0, cy - d / 2.0, d, d));
-    let c0 = d / 2.0;
-    let pointer = b.add(dial, draw::frame("pointer", 0.0, 0.0, d, d));
-    // Chicken head, pointing up (the centre of travel): a tapered bar from
-    // a narrow tip to a wide, rounded tail, over a round boss.
-    let pt = |x: f64, y: f64| format!("{:.3} {:.3}", c0 + x * d, c0 + y * d);
-    let head = format!(
-        "M {} Q {} {} L {} Q {} {} Q {} {} Z",
-        pt(-0.035, -0.5),
-        pt(0.0, -0.53),
-        pt(0.035, -0.5),
-        pt(0.2, 0.18),
-        pt(0.24, 0.36),
-        pt(0.0, 0.40),
-        pt(-0.24, 0.36),
-        pt(-0.2, 0.18),
-    );
-    let body = |c: &str| rad(0.42, 0.3, 0.8, &[(0.0, tint(c, 0.28)), (0.5, c.to_string()), (1.0, shade(c, 0.5))]);
-    b.add(pointer, draw::path("head", 0.0, 0.0, d, d, head, body(body_c)));
-    b.add(pointer, draw::with_effects(draw::circle("boss", c0, c0 + d * 0.06, d * 0.2, body(body_c)), vec![draw::drop_shadow("#000000a0", 0.0, d * 0.05, d * 0.1), draw::inner_shadow("#ffffff26", 0.0, k, k)]));
-    let lw = (d * 0.05).max(1.5);
-    b.add(pointer, draw::rounded(draw::rect("index", c0 - lw / 2.0, c0 - d * 0.47, lw, d * 0.34, draw::solid(line_c)), lw / 2.0));
-    let c = p.control(ControlKind::Knob { sweep_degrees: sweep }).slot(SlotRole::Needle, pointer.0).slot(SlotRole::Label, label.0);
-    b.controls.insert(root, c);
-    if let Some(touch) = p.touch {
-        crate::registry::tighten(b, root, (cx, cy), d, touch);
+    if p.scale.is_none() && p.options.as_ref().is_none_or(Vec::is_empty) {
+        p.options = Some((1..=3).map(|i| i.to_string()).collect());
     }
-    root
+    let spec = crate::knobs::spec::KnobSpec { ring: crate::knobs::spec::RingKind::Dots, ..crate::knobs::spec::CHICKEN_HEAD };
+    crate::knobs::build(b, parent, &p, &spec, "Rotary selector", 48.0)
 }
 
 /// A stompbox footswitch: a domed chrome actuator through a hex nut and
@@ -213,6 +152,8 @@ fn footswitch(b: &mut Builder<'_>, parent: NodeId, p: &Place) -> NodeId {
         Some("amber") => Some("#ffb21e"),
         _ => Some("#ff3b2f"),
     };
+    let custom = p.lamp_color(0);
+    let led = if led.is_some() { custom.as_deref().or(led) } else { None };
     let nut = d * 0.78;
     let led_d = d * 0.22;
     let led_gap = d * 1.05;
@@ -253,7 +194,7 @@ pub(crate) fn defs() -> Vec<ComponentDef> {
             id: "switch.footswitch",
             family: Family::Switch,
             title: "Footswitch",
-            description: "A stompbox footswitch: a domed chrome actuator through a hex nut, with a status LED above it that lights while the toggle param is on (variant = LED colour, or `none`). Latching by default (a `Footswitch`: tap flips the param, hold is its own gesture); the `momentary` option makes it on only while held. `legend` prints under it. Size = actuator diameter.",
+            description: "A stompbox footswitch: a domed chrome actuator through a hex nut, with a status LED above it that lights while the toggle param is on (variant = LED colour, or `none`; `color=#hex` in `options` for any other). Latching by default (a `Footswitch`: tap flips the param, hold is its own gesture); the `momentary` option makes it on only while held. `legend` prints under it. Size = actuator diameter.",
             variants: &["red", "green", "blue", "amber", "none"],
             default_size: 30.0,
             binds: "toggle param",
@@ -283,7 +224,7 @@ pub(crate) fn defs() -> Vec<ComponentDef> {
             id: "switch.rotary",
             family: Family::Switch,
             title: "Rotary selector",
-            description: "A detented rotary switch: black Bakelite chicken-head pointer with a dot and printed legend at each position (LA-2A/Manley meter and mode selectors). Put the choice param's option names in `Place::options` — the sweep is built from their count (≤60° per detent); without them it prints three numbered positions. Size = knob diameter.",
+            description: "A detented rotary switch: the chicken-head moulding (as `knob.chicken_head`; black, cream or red) with a dot and printed legend at each position (LA-2A/Manley meter and mode selectors). Put the choice param's option names in `Place::options` — the sweep is built from their count (≤60° per detent); without them it prints three numbered positions. Size = knob diameter.",
             variants: &["black", "cream", "red"],
             default_size: 48.0,
             binds: "choice param",

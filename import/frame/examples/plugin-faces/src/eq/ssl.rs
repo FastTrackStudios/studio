@@ -13,8 +13,8 @@
 //! all real here. The output meter is a stereo LED bar on the output level.
 
 use document_proto::NodeId;
-use surface_kit::Place;
-use surface_proto::{Binding, Source, Unit};
+use surface_kit::{Place, TOUCH_MIN};
+use surface_proto::{Binding, Source, Unit, ValueFormat};
 use surface_widgets::Builder;
 
 use crate::comp_vca::ui::{self, bind};
@@ -56,12 +56,26 @@ fn marks(values: &[f64], khz: bool) -> Vec<String> {
     values.iter().map(|v| mark(*v, khz)).collect()
 }
 
+/// Every other mark printed (the rest left as ticks): the two filter caps
+/// sit close enough that a full scale at a readable size runs together.
+fn alternate(marks: &[String]) -> Vec<String> {
+    marks.iter().enumerate().map(|(i, m)| if i % 2 == 0 { m.clone() } else { String::new() }).collect()
+}
+
 /// A collet cap with its printed scale and legend.
 #[allow(clippy::too_many_arguments)]
 fn cap(b: &mut Builder<'_>, panel: NodeId, addr: &str, legend: &str, color: &str, d: f64, scale: &[String], cx: f64, cy: f64) -> NodeId {
     let scale: Vec<&str> = scale.iter().map(String::as_str).collect();
-    let p = Place::new(legend).size(d).variant(color).legend(legend).bind(bind(addr)).scale(&scale);
+    let p = Place::new(legend).size(d).variant(color).legend(legend).touch(TOUCH_MIN).bind(bind(addr)).scale(&scale);
     ui::put(b, panel, "knob.collet", &p, cx, cy)
+}
+
+/// How a placed control's readout prints: 0.1 dB for the trim, whole
+/// percent for the drive — not the range's default hundredths.
+fn readout_format(b: &mut Builder<'_>, control: NodeId, f: ValueFormat) {
+    if let Some(c) = b.controls.get_mut(&control) {
+        c.format = Some(f);
+    }
 }
 
 /// A small backlit switch at the foot of a column.
@@ -84,8 +98,8 @@ pub fn face() -> Face {
         // ── Filters ────────────────────────────────────────────────────
         ui::silk(b, panel, "Filters", 110.0, HEAD, 10.0, INK, 800.0);
         ui::plain(b, panel, "E · G Series", 110.0, HEAD + 16.0, 7.0, DIM, 600.0);
-        cap(b, panel, "sslch/hpf", "HP Hz", "cream", FREQ, &marks(HPF, false), 72.0, FREQ_ROW);
-        cap(b, panel, "sslch/lpf", "LP kHz", "cream", FREQ, &marks(LPF, true), 148.0, FREQ_ROW);
+        cap(b, panel, "sslch/hpf", "HP Hz", "cream", FREQ, &alternate(&marks(HPF, false)), 72.0, FREQ_ROW);
+        cap(b, panel, "sslch/lpf", "LP kHz", "cream", FREQ, &alternate(&marks(LPF, true)), 148.0, FREQ_ROW);
         switch(b, panel, "sslch/filters_in", "In", "white", 110.0, SWITCH_ROW);
         divider(b, panel, 190.0);
 
@@ -128,8 +142,10 @@ pub fn face() -> Face {
         ui::silk(b, panel, "Phase", 866.0, GAIN_ROW + 20.0, 7.0, DIM, 700.0);
         let trim = cap(b, panel, "sslch/trim", "Trim", "cream", 38.0, &["-24", "", "", "0", "", "", "+24"].map(ToString::to_string), 804.0, FREQ_ROW);
         ui::add_value(b, trim, 7.0, DIM);
+        readout_format(b, trim, ValueFormat::decimals(1));
         let drive = cap(b, panel, "sslch/drive", "Drive", "cream", 34.0, &["0", "", "", "", "10"].map(ToString::to_string), 872.0, FREQ_ROW);
         ui::add_value(b, drive, 7.0, DIM);
+        readout_format(b, drive, ValueFormat::decimals(0));
         divider(b, panel, 904.0);
 
         // ── The output meter: two LED bars on a printed dB scale ───────

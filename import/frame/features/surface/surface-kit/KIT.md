@@ -37,7 +37,7 @@ like any other nodes.
 | `inner` | the cap of a concentric pair (`knob.concentric`): its binding, legend, sweep |
 | `select` | a meter's source switched by a choice param (`SourceSelect` of `MeterTap { stream, channel, offset_db }`, `None` = off): the 1176's GR / +4 / +8 / OFF. Bind the default stream too |
 | `format` | the control's `ValueFormat` |
-| `options` | also carries `key=value` settings and flags for components configured that way (`panel.*`: `w=`, `h=`; LED meters: `floor=`, `ceiling=`, `segments=`, `gr`, `vertical`; footswitch: `momentary`) — `Place::opt`, `Place::flag` |
+| `options` | also carries `key=value` settings and flags for components configured that way (`panel.*`: `w=`, `h=`; LED meters: `floor=`, `ceiling=`, `segments=`, `gr`, `vertical`; lamps, LED meters, footswitch LEDs: `color=#hex`, or per lamp `colors=#a,#b,…` (`Place::lamp_color`); footswitch and single buttons: `momentary`; VU meters: `glass`, a glass shader over the window on GPU renderers) — `Place::opt`, `Place::flag` |
 
 Builders read these through `Place::ink_color(light)`, `Place::case()`, and
 `Place::control(kind)` (a `Control` carrying the binding, format and

@@ -244,6 +244,13 @@ fn variations(family: Option<&str>) -> Vec<(String, &'static str, surface_kit::P
             Place::new("Freq").bind(mix()).legend("kHz").keep_case().variant("grey_black").inner(Place::new("Gain").bind(Binding::param("amp/bass")).legend("Gain")),
             false,
         ));
+        v.push(("stepped words at 44 px".into(), "knob.chicken_head", Place::new("Stage").size(44.0).bind(choice()).legend("Stage").keep_case().options(&["Triode", "Pentode", "Standard"]), false));
+        v.push((
+            "concentric grey, stepped".into(),
+            "knob.concentric",
+            Place::new("Freq").bind(choice()).legend("kHz").keep_case().variant("grey").options(&["Off", "·36", "·7", "1·6", "3·2"]).inner(Place::new("Gain").bind(Binding::param("amp/bass"))),
+            false,
+        ));
     }
     if all || family == Some("meter") {
         v.push(("VU on GR, no data: rests at 0".into(), "meter.vu_ivory", Place::new("GR").bind(Binding::stream("comp/gr")).size(180.0), false));
@@ -254,6 +261,8 @@ fn variations(family: Option<&str>) -> Vec<(String, &'static str, surface_kit::P
             Place::new("In").bind(level()).options(&["floor=-30", "ceiling=6", "segments=12"]).scale(&["-30", "-18", "-6", "+6"]),
             false,
         ));
+        v.push(("bar: colors=… per lamp".into(), "meter.led_bar", Place::new("Tail").bind(level()).options(&["segments=6", "colors=#6f7cff,#8a7cff,#a57cff,#c07cff,#db7cff,#ff7ad9"]), false));
+        v.push(("VU: glass".into(), "meter.vu_amber", Place::new("GR").bind(Binding::stream("comp/gr")).size(180.0).options(&["glass"]), false));
         v.push(("bar, dark-ink scale".into(), "meter.led_bar", Place::new("Out").bind(level()).scale(&["-40", "-20", "0"]).variant("blue").ink(Ink::Dark), true));
     }
     if all || family == Some("button") {
@@ -263,6 +272,8 @@ fn variations(family: Option<&str>) -> Vec<(String, &'static str, surface_kit::P
             Place::new("Algo").bind(choice()).options(&["Hall", "Shimmer", "Spectral"]).reversed().variant("yellow"),
             false,
         ));
+        v.push(("bank fitted as one".into(), "button.illuminated_bank", Place::new("Voice").bind(choice()).options(&["Clean", "Filtered", "Dark"]), false));
+        v.push(("illuminated: momentary (TAP)".into(), "button.illuminated", Place::new("Tap").bind(Binding::param("delay/tap")).legend("Tap").variant("red").options(&["momentary"]), false));
         v.push(("push-in bank, dark ink".into(), "button.push_in_bank", Place::new("Ratio").bind(choice()).options(&["4", "8", "12"]).ink(Ink::Dark), true));
     }
     if all || family == Some("switch") {
@@ -272,6 +283,8 @@ fn variations(family: Option<&str>) -> Vec<(String, &'static str, surface_kit::P
             Place::new("Tap").bind(Binding::param("delay/on")).variant("blue").options(&["momentary"]).legend("Tap"),
             false,
         ));
+        v.push(("rotary: words, cream".into(), "switch.rotary", Place::new("Mode").bind(choice()).options(&["Opto", "Stereo", "Harm"]).variant("cream").legend("Mode"), false));
+        v.push(("footswitch: color=#b77dff".into(), "switch.footswitch", Place::new("On").bind(Binding::param("delay/on")).options(&["color=#b77dff"]).legend("On"), false));
         v.push(("rotary: sweep 90, dark ink".into(), "switch.rotary", Place::new("Mode").bind(choice()).options(&["A", "B", "C"]).sweep(90.0).ink(Ink::Dark).legend("Mode"), true));
     }
     if all || family == Some("lever") {

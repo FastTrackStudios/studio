@@ -58,13 +58,13 @@ fn build(b: &mut Builder<'_>, root: NodeId) {
 
     // ── The meter ────────────────────────────────────────────────────
     let mx = 270.0;
-    ui::centred_at(b, panel, "meter.vu_ivory", &Place::new("Gain Reduction meter").size(190.0).variant("black_rack").bind(ui::stream("cl1b/gr")), mx, ROW + 2.0);
+    ui::centred_at(b, panel, "meter.vu_ivory", &Place::new("Gain Reduction meter").size(190.0).variant("black_rack").options(&["glass"]).bind(ui::stream("cl1b/gr")), mx, ROW + 2.0);
     ui::silk(b, panel, "Gain Reduction", mx, CAPTION + 22.0, Ink::new(7.5, DIM).weight(700.0).track(0.24));
 
     // ── The knob row ─────────────────────────────────────────────────
     let numerals = Ink::new(7.5, INK).weight(600.0).track(0.0);
     let knob = |b: &mut Builder<'_>, name: &str, addr: &str, scale: &[&str], x: f64, value: &str, format: Option<ValueFormat>| {
-        let k = ui::rotary_at(b, panel, "knob.bakelite", &Place::new(name).size(54.0).legend(name).scale(scale).bind(ui::bind(addr)), x, ROW);
+        let k = ui::rotary_at(b, panel, "knob.bakelite", &Place::new(name).size(54.0).legend(name).scale(scale).touch(surface_kit::TOUCH_MIN).bind(ui::bind(addr)), x, ROW);
         ui::knob_scale(b, panel, k, (x, ROW), 43.0, 300.0, scale, numerals);
         ui::caption_style(b, k, 9.5, 800.0, INK);
         ui::caption_y(b, k, CAPTION);

@@ -121,35 +121,13 @@ pub fn knob_scale(b: &mut Builder<'_>, parent: NodeId, knob: NodeId, at: (f64, f
 }
 
 /// A detented rotary selector over a choice param: the kit's chicken-head
-/// stepped through `labels` (≤ 60° a detent, its scale printed in the
-/// panel's ink), its hit box tight to the pointer, and the legends
-/// engraved outward at a size the panel can read. `p` carries the moulding
-/// variant, legend and binding. Returns the control's root.
+/// stepped through `labels` (≤ 60° a detent), which it prints round itself
+/// clear of its ticks, in the panel's ink, at a size the panel can read; its
+/// hit box tight to the pointer. `p` carries the moulding variant, legend
+/// and binding. Returns the control's root.
 pub fn selector(b: &mut Builder<'_>, parent: NodeId, p: &Place, at: (f64, f64), labels: &[&str], ink: Ink<'_>) -> NodeId {
     let place = p.clone().options(labels).ink(surface_kit::Ink::Color(ink.color.to_string())).touch(TOUCH_MIN);
-    let root = rotary_at(b, parent, "knob.chicken_head", &place, at.0, at.1);
-    // Engrave from where the kit printed its own (clear of its ticks).
-    let r = numeral_radius(b, root).unwrap_or(p.size.unwrap_or(64.0) * 0.8) - 2.0;
-    knob_scale(b, parent, root, at, r, surface_kit::detent_sweep(labels.len()), labels, ink);
-    root
-}
-
-/// How far from the shaft a placed rotary prints its numerals: the mean
-/// distance of their centres from the centre of its (tight, shaft-centred)
-/// box.
-fn numeral_radius(b: &Builder<'_>, root: NodeId) -> Option<f64> {
-    let (w, h) = size_of(b, root);
-    let mut acc = Vec::new();
-    let mut stack: Vec<(NodeId, f64, f64)> = b.scene.node(root)?.children.iter().map(|c| (*c, 0.0, 0.0)).collect();
-    while let Some((id, ox, oy)) = stack.pop() {
-        let Some(n) = b.scene.node(id) else { continue };
-        let (x, y) = (ox + n.transform.tx, oy + n.transform.ty);
-        if n.name == "numeral" {
-            acc.push((x + n.size.width / 2.0 - w / 2.0).hypot(y + n.size.height / 2.0 - h / 2.0));
-        }
-        stack.extend(n.children.iter().map(|c| (*c, x, y)));
-    }
-    (!acc.is_empty()).then(|| acc.iter().sum::<f64>() / acc.len() as f64)
+    rotary_at(b, parent, "knob.chicken_head", &place, at.0, at.1)
 }
 
 /// Repaint a panel with a straight top-to-bottom sheen (`stops` top first).

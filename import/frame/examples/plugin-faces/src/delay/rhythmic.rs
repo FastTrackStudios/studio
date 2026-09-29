@@ -82,9 +82,8 @@ pub fn face() -> Face {
         parts::note_picker(b, win, "Note", &a("div"), (26.0, 39.0, 66.0), 10.0, LED, "#7a3a14");
         let sync = Place::new("Time mode").size(30.0).bind(bind(&a("sync"))).options(parts::TIME_MODES);
         parts::put(b, panel, "button.square_bank", &sync, 822.0, 112.0);
-        let tap = Place::new("Tap").size(34.0).variant("amber").legend("Tap").bind(bind(&a("tap")));
-        let tap = parts::put(b, panel, "button.illuminated", &tap, 887.0, 112.0);
-        parts::momentary(b, tap);
+        let tap = Place::new("Tap").size(34.0).variant("amber").legend("Tap").options(&["momentary"]).bind(bind(&a("tap")));
+        parts::put(b, panel, "button.illuminated", &tap, 887.0, 112.0);
 
         // A small key: mute the dry signal (the taps alone).
         let kill = Place::new("Kill dry").size(34.0).variant("red").legend("Kill").bind(bind(&a("kill_dry")));

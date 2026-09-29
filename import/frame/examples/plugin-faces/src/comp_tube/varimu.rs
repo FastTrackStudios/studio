@@ -53,7 +53,7 @@ fn build(b: &mut Builder<'_>, root: NodeId) {
     // ── Gain staging, left ───────────────────────────────────────────
     let numerals = Ink::new(8.0, INK).weight(600.0).track(0.0);
     let knob = |b: &mut Builder<'_>, name: &str, addr: &str, scale: &[&str], x: f64, value: &str| {
-        let k = ui::rotary_at(b, panel, "knob.metal", &Place::new(name).size(56.0).variant("black").legend(name).scale(scale).ink(KitInk::Color(INK.into())).bind(ui::bind(addr)), x, ROW);
+        let k = ui::rotary_at(b, panel, "knob.metal", &Place::new(name).size(56.0).variant("black").legend(name).scale(scale).touch(surface_kit::TOUCH_MIN).ink(KitInk::Color(INK.into())).bind(ui::bind(addr)), x, ROW);
         ui::knob_scale(b, panel, k, (x, ROW), 45.0, 300.0, scale, numerals);
         ui::caption_style(b, k, 9.5, 800.0, INK);
         ui::caption_y(b, k, CAPTION);
@@ -66,7 +66,7 @@ fn build(b: &mut Builder<'_>, root: NodeId) {
 
     // ── The meter ────────────────────────────────────────────────────
     let mx = 492.0;
-    ui::centred_at(b, panel, "meter.vu_amber", &Place::new("Gain Reduction meter").size(196.0).variant("chrome").bind(ui::stream("varimu/gr")), mx, ROW - 14.0);
+    ui::centred_at(b, panel, "meter.vu_amber", &Place::new("Gain Reduction meter").size(196.0).variant("chrome").options(&["glass"]).bind(ui::stream("varimu/gr")), mx, ROW - 14.0);
     ui::silk(b, panel, "Gain Reduction", mx, CAPTION + 12.0, Ink::new(8.0, DIM).weight(700.0).track(0.24));
 
     // ── Recovery + output, right ─────────────────────────────────────

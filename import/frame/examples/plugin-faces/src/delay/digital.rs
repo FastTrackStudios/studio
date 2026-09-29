@@ -81,9 +81,8 @@ pub fn face() -> Face {
         art::tag(b, win, "Repeats", (tx, 101.0), 6.5, VFD_DIM);
 
         // ── Keys ───────────────────────────────────────────────────────
-        let tap = Place::new("Tap").size(50.0).variant("red").legend("Tap").bind(bind(&a("tap")));
-        let tap = parts::put(b, panel, "button.illuminated", &tap, 700.0, 80.0);
-        parts::momentary(b, tap);
+        let tap = Place::new("Tap").size(50.0).variant("red").legend("Tap").options(&["momentary"]).bind(bind(&a("tap")));
+        parts::put(b, panel, "button.illuminated", &tap, 700.0, 80.0);
         parts::silk(b, panel, "Tempo", 700.0, 118.0, Ink::new(6.5, DIM).weight(700.0).track(0.2));
         let sync = Place::new("Time mode").size(36.0).bind(bind(&a("sync"))).options(parts::TIME_MODES);
         parts::put(b, panel, "button.square_bank", &sync, 786.0, 58.0);

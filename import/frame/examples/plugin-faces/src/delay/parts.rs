@@ -132,13 +132,6 @@ pub fn format(b: &mut Builder<'_>, control: NodeId, f: ValueFormat) {
     }
 }
 
-/// Make a placed button momentary (a TAP key: on while held).
-pub fn momentary(b: &mut Builder<'_>, control: NodeId) {
-    if let Some(c) = b.controls.get_mut(&control) {
-        c.kind = ControlKind::Button { mode: ButtonMode::Momentary };
-    }
-}
-
 /// Restyle a component's caption (its `Label` text).
 pub fn caption_style(b: &mut Builder<'_>, root: NodeId, ink: Ink<'_>) {
     let label = b.controls.get(&root).and_then(|c| c.slots_of(SlotRole::Label).next());
@@ -265,27 +258,7 @@ pub fn selector(b: &mut Builder<'_>, parent: NodeId, name: &str, addr: &str, var
     let p = Place::new(name).size(d).variant(variant).legend(name).options(labels).bind(bind(addr)).ink(surface_kit::Ink::Color(ink.into())).keep_case().touch(TOUCH_MIN);
     let k = put(b, parent, "knob.chicken_head", &p, cx, cy);
     strip_legend(b, k);
-    clear_ticks(b, k);
     k
-}
-
-/// Set a placed knob's printed positions out past its ticks: the kit
-/// centres each word on one radius, close enough that a word runs across
-/// its tick. Each moves outward by half its width's sideways reach, and
-/// clear of the tick's end.
-fn clear_ticks(b: &mut Builder<'_>, knob: NodeId) {
-    let Some(dial) = children_named(b, knob, &["knob"]).first().copied() else { return };
-    let (side, _) = size_of(b, dial);
-    for id in children_named(b, dial, &["numeral"]) {
-        let Some(n) = b.scene.node_mut(id) else { continue };
-        let Some(t) = n.text() else { continue };
-        let (reach, size) = (t.characters.chars().count() as f64 * t.font_size * 0.3, t.font_size);
-        let (dx, dy) = (n.transform.tx + n.size.width / 2.0 - side / 2.0, n.transform.ty + n.size.height / 2.0 - side / 2.0);
-        let r = dx.hypot(dy).max(1.0);
-        let push = reach * (dx / r).abs() + size * 0.4 * (dy / r).abs();
-        n.transform.tx += dx / r * push;
-        n.transform.ty += dy / r * push;
-    }
 }
 
 /// A stomp footswitch (the kit's), its actuator centred on (`cx`, `cy`).

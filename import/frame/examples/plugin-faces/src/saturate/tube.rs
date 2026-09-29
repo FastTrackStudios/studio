@@ -67,7 +67,7 @@ pub fn face() -> Face {
         parts::silk_left(b, panel, "Valve Preamp", 50.0, 36.0, Ink::new(16.0, INK).weight(800.0).track(0.06).plain());
         parts::rule(b, panel, 50.0, 214.0, 49.0, 1.0, "#eadcb850");
         parts::silk_left(b, panel, "Class A · single-ended", 50.0, 62.0, Ink::new(6.8, DIM).weight(700.0).track(0.18));
-        let stage = parts::selector(b, panel, "Stage", &a("stage"), "cream", (130.0, 128.0), 54.0, STAGES, INK);
+        let stage = parts::selector(b, panel, "Stage", &a("stage"), "cream", (130.0, 134.0), 54.0, STAGES, INK);
         parts::legend_at(b, stage, "Stage", 168.0, Ink::new(7.0, DIM).weight(800.0).track(0.22));
 
         window(b, panel);

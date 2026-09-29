@@ -94,7 +94,7 @@ pub fn face() -> Face {
         ui::rule(b, panel, 669.0, 30.0, 1.0, 240.0, "#ffffff12");
 
         // ── The movement and the panel's mark ──────────────────────────
-        let meter = Place::new("Decibels").size(200.0).legend("dB").bind(Binding::stream("dbx160/meter_level"));
+        let meter = Place::new("Decibels").size(200.0).legend("dB").options(&["glass"]).bind(Binding::stream("dbx160/meter_level"));
         ui::put(b, panel, "meter.vu_amber_blue", &meter, 790.0, 118.0);
         ui::plain(b, panel, "160", 790.0, 226.0, 22.0, INK, 800.0);
         ui::silk(b, panel, "Compressor / Limiter", 790.0, 254.0, 7.5, DIM, 700.0);

@@ -5,7 +5,7 @@
 //! catalog entries these faces declare.
 
 use document_proto::{
-    Color, Emission, GradientStop, Node, NodeId, NodeKind, Paint, PaintKind, ShaderFx, Size, Stroke, StrokeCap, StrokeJoin, TextAlign, TextCase,
+    Color, Emission, Node, NodeId, NodeKind, Paint, ShaderFx, Size, Stroke, StrokeCap, StrokeJoin, TextAlign, TextCase,
     Transform,
 };
 use surface_kit::{Ink, Place, TOUCH_MIN, draw};
@@ -233,106 +233,6 @@ pub fn blend(a: &str, b: &str, t: f64) -> String {
     hex_of(Color { a: 1.0, ..draw::mix(draw::hex(a), draw::hex(b), t) })
 }
 
-fn to_hsl(c: Color) -> (f64, f64, f64) {
-    let (mx, mn) = (c.r.max(c.g).max(c.b), c.r.min(c.g).min(c.b));
-    let l = (mx + mn) / 2.0;
-    let d = mx - mn;
-    if d < 1e-9 {
-        return (0.0, 0.0, l);
-    }
-    let s = d / (1.0 - (2.0 * l - 1.0).abs()).max(1e-9);
-    let h = if (mx - c.r).abs() < 1e-12 {
-        60.0 * ((c.g - c.b) / d).rem_euclid(6.0)
-    } else if (mx - c.g).abs() < 1e-12 {
-        60.0 * ((c.b - c.r) / d + 2.0)
-    } else {
-        60.0 * ((c.r - c.g) / d + 4.0)
-    };
-    (h, s.min(1.0), l)
-}
-
-fn from_hsl(h: f64, s: f64, l: f64, a: f64) -> Color {
-    let c = (1.0 - (2.0 * l - 1.0).abs()) * s;
-    let x = c * (1.0 - ((h / 60.0).rem_euclid(2.0) - 1.0).abs());
-    let m = l - c / 2.0;
-    let (r, g, b) = match (h.rem_euclid(360.0) / 60.0) as u32 {
-        0 => (c, x, 0.0),
-        1 => (x, c, 0.0),
-        2 => (0.0, c, x),
-        3 => (0.0, x, c),
-        4 => (x, 0.0, c),
-        _ => (c, 0.0, x),
-    };
-    Color { r: r + m, g: g + m, b: b + m, a }
-}
-
-/// `c`, a shade of the lamp colour `from`, as the same shade of `to`: its
-/// hue becomes `to`'s, its saturation and mid-tones follow `to`, and its
-/// whites and blacks stay.
-fn retint(c: Color, from: (f64, f64, f64), to: (f64, f64, f64)) -> Color {
-    let (_, s, l) = to_hsl(c);
-    if s < 0.08 {
-        return c;
-    }
-    let s = (s * to.1 / from.1.max(1e-6)).clamp(0.0, 1.0);
-    let l = (l + (to.2 - from.2) * (1.0 - (2.0 * l - 1.0).abs())).clamp(0.0, 1.0);
-    from_hsl(to.0, s, l, c.a)
-}
-
-fn retint_paint(p: &mut Paint, from: (f64, f64, f64), to: (f64, f64, f64)) {
-    let stops: &mut Vec<GradientStop> = match &mut p.kind {
-        PaintKind::Solid { color } => {
-            *color = retint(*color, from, to);
-            return;
-        }
-        PaintKind::LinearGradient { stops, .. } | PaintKind::RadialGradient { stops, .. } | PaintKind::AngularGradient { stops, .. } => stops,
-        PaintKind::Image { .. } => return,
-    };
-    for s in stops {
-        s.color = retint(s.color, from, to);
-    }
-}
-
-fn retint_node(n: &mut Node, from: (f64, f64, f64), to: (f64, f64, f64)) {
-    for p in &mut n.fills {
-        retint_paint(p, from, to);
-    }
-    for e in &mut n.effects {
-        e.color = retint(e.color, from, to);
-    }
-}
-
-/// Light a placed kit lamp, LED bar or ladder, or footswitch LED in the
-/// face's own colours (the kit's are red, green, amber, blue, white):
-/// lamp `i` (slot order) takes `colors(i)` — its lit lens, the light it
-/// gives off, and the dark glass under it.
-pub fn tint_lamps(b: &mut Builder<'_>, control: NodeId, colors: &dyn Fn(usize) -> String) {
-    let lit: Vec<NodeId> = b.controls.get(&control).map(|c| c.slots.iter().filter(|s| matches!(s.role, SlotRole::Led | SlotRole::Glow)).map(|s| NodeId(s.node)).collect()).unwrap_or_default();
-    for (i, id) in lit.into_iter().enumerate() {
-        let Some(base) = b.scene.node(id).and_then(|n| n.emission.as_ref()).map(|e| e.color) else { continue };
-        let to_c = draw::hex(&colors(i));
-        let (from, to) = (to_hsl(base), to_hsl(to_c));
-        // The unlit glass is the lamp's sibling painted just before it.
-        let under = b.scene.walk(b.scene.root).into_iter().find_map(|p| {
-            let kids = &b.scene.node(p)?.children;
-            let at = kids.iter().position(|k| *k == id)?;
-            at.checked_sub(1).map(|j| kids[j])
-        });
-        if let Some(n) = b.scene.node_mut(id) {
-            retint_node(n, from, to);
-            if let Some(e) = n.emission.as_mut() {
-                e.color = Color { a: 1.0, ..to_c };
-            }
-        }
-        if let Some(u) = under
-            && let Some(n) = b.scene.node_mut(u)
-            && matches!(n.name.as_str(), "lens" | "unlit")
-        {
-            retint_node(n, from, to);
-        }
-    }
-}
-
 // ── light ────────────────────────────────────────────────────────────────
 
 /// Make `n` give off light in `color`: its `emission` (the GPU renderer
@@ -538,16 +438,19 @@ pub fn led_column(b: &mut Builder<'_>, parent: NodeId, name: &str, stream: &str,
     put_at(b, parent, "meter.led_column", &p, x, y)
 }
 
+/// The kit option lighting lamp `i` of `n` in `colors(i)`.
+fn lamp_colors(n: usize, colors: &dyn Fn(usize) -> String) -> String {
+    format!("colors={}", (0..n).map(colors).collect::<Vec<_>>().join(","))
+}
+
 /// A `meter.led_bar` of `n` lamps lit left to right over `floor..ceiling`
 /// dB by a level stream, `len × thick` from (`x`, `y`), lamp `i` in
 /// `colors(i)`; `scale` printed under it.
 #[allow(clippy::too_many_arguments)]
 pub fn led_bar(b: &mut Builder<'_>, parent: NodeId, name: &str, stream: &str, (x, y, len, thick): (f64, f64, f64, f64), n: usize, (floor, ceiling): (f64, f64), scale: &[&str], ink: &str, colors: &dyn Fn(usize) -> String) -> NodeId {
-    let opts = [format!("floor={floor}"), format!("ceiling={ceiling}"), format!("segments={n}"), format!("thick={thick}")];
-    let p = Place { options: Some(opts.to_vec()), ..Place::new(name).size(len).bind(Binding::stream(stream)).scale(scale).ink(Ink::Color(ink.into())).keep_case() };
-    let bar = put_at(b, parent, "meter.led_bar", &p, x, y);
-    tint_lamps(b, bar, colors);
-    bar
+    let opts = vec![format!("floor={floor}"), format!("ceiling={ceiling}"), format!("segments={n}"), format!("thick={thick}"), lamp_colors(n, colors)];
+    let p = Place { options: Some(opts), ..Place::new(name).size(len).bind(Binding::stream(stream)).scale(scale).ink(Ink::Color(ink.into())).keep_case() };
+    put_at(b, parent, "meter.led_bar", &p, x, y)
 }
 
 /// A `meter.lamp` (`d` across the bezel) that brightens and dims with a
@@ -555,9 +458,8 @@ pub fn led_bar(b: &mut Builder<'_>, parent: NodeId, name: &str, stream: &str, (x
 /// under it in `ink`.
 #[allow(clippy::too_many_arguments)]
 pub fn stream_lamp(b: &mut Builder<'_>, parent: NodeId, name: &str, stream: &str, legend: &str, cx: f64, cy: f64, d: f64, color: &str, ink: &str) -> NodeId {
-    let p = Place::new(name).size(d).bind(Binding::stream(stream));
+    let p = Place::new(name).size(d).bind(Binding::stream(stream)).options(&[&format!("color={color}")]);
     let lamp = put_by(b, parent, "meter.lamp", &p, &["bezel"], cx, cy);
-    tint_lamps(b, lamp, &|_| color.to_string());
     // Printed, not a `Label`: the lamp reads out the control it names.
     silk(b, parent, legend, cx, cy + d / 2.0 + 10.0, 7.5, ink, 800.0);
     lamp
@@ -567,10 +469,8 @@ pub fn stream_lamp(b: &mut Builder<'_>, parent: NodeId, name: &str, stream: &str
 /// centred at (`cx`, `cy`)), its status LED lit in `led`.
 #[allow(clippy::too_many_arguments)]
 pub fn stomp(b: &mut Builder<'_>, parent: NodeId, name: &str, addr: &str, cx: f64, cy: f64, d: f64, led: &str) -> NodeId {
-    let p = Place::new(name).size(d).variant("red").bind(bind(addr));
-    let fs = put_by(b, parent, "switch.footswitch", &p, &["cap"], cx, cy);
-    tint_lamps(b, fs, &|_| led.to_string());
-    fs
+    let p = Place::new(name).size(d).bind(bind(addr)).options(&[&format!("color={led}")]);
+    put_by(b, parent, "switch.footswitch", &p, &["cap"], cx, cy)
 }
 
 /// An LFO stream: the modulator's output, 0..1, at a lamp's frame rate.
@@ -742,24 +642,6 @@ impl<'a> Dial<'a> {
     }
 }
 
-/// Push the legends printed round a placed knob or rotary switch (`option`
-/// / `numeral` texts in `holder`, turning about `pivot`) out along their
-/// radius by as much of their own width as faces the pivot, so a legend at
-/// the side clears its tick or detent dot as one at the top does.
-fn clear_dots(b: &mut Builder<'_>, holder: NodeId, (px, py): (f64, f64)) {
-    let kids = b.scene.node(holder).map(|n| n.children.clone()).unwrap_or_default();
-    for c in kids {
-        let Some(n) = b.scene.node_mut(c).filter(|n| matches!(n.name.as_str(), "option" | "numeral")) else { continue };
-        let NodeKind::Text(t) = &n.kind else { continue };
-        let w = t.characters.chars().count() as f64 * t.font_size * 0.56;
-        let (x, y) = (n.transform.tx + n.size.width / 2.0 - px, n.transform.ty + n.size.height / 2.0 - py);
-        let r = x.hypot(y).max(1e-6);
-        let push = 0.5 * w * (x / r).abs();
-        n.transform.tx += x / r * push;
-        n.transform.ty += y / r * push;
-    }
-}
-
 /// Place a kit knob (or rotary switch) with its shaft at (`cx`, `cy`),
 /// printed in the face's ink, its box tight round the moving part; the
 /// live value just under it and the legend below that, in the face's inks.
@@ -771,18 +653,6 @@ pub fn dial(b: &mut Builder<'_>, parent: NodeId, addr: &str, legend: &str, cx: f
     }
     let k = put(b, parent, s.style, &p, cx, cy);
     strip_legend(b, k);
-    // A rotary prints round its `dial`, in its own box; a knob round the
-    // centre of its `knob` frame.
-    let kids = b.scene.node(k).map(|n| n.children.clone()).unwrap_or_default();
-    for c in kids {
-        let Some(n) = b.scene.node(c) else { continue };
-        let (x, y, w, h) = (n.transform.tx, n.transform.ty, n.size.width, n.size.height);
-        match n.name.as_str() {
-            "dial" => clear_dots(b, k, (x + w / 2.0, y + h / 2.0)),
-            "knob" => clear_dots(b, c, (w / 2.0, h / 2.0)),
-            _ => {}
-        }
-    }
     if s.value {
         add_value(b, k, (s.d * 0.14).clamp(7.5, 9.0), s.dim);
     }

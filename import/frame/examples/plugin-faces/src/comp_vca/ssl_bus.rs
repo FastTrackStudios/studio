@@ -41,7 +41,7 @@ pub fn face() -> Face {
         ui::silk_left(b, panel, "Quad VCA · G Series", 46.0, 52.0, 7.5, DIM, 600.0);
 
         // ── Gain reduction: a VU card read as compression ─────────────
-        let meter = Place::new("Compression").size(214.0).legend("GR").bind(surface_proto::Binding::stream("sslbus/gr"));
+        let meter = Place::new("Compression").size(214.0).legend("GR").options(&["glass"]).bind(surface_proto::Binding::stream("sslbus/gr"));
         ui::put(b, panel, "meter.vu_ivory", &meter, 160.0, 160.0);
 
         // ── The five controls ─────────────────────────────────────────

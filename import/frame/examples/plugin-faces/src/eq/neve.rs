@@ -2,7 +2,7 @@
 //! one row.
 //!
 //! A red gain wing at the left; a fixed 12 kHz shelf; the mid and low bands
-//! as **concentric** pairs — the grey collar clicks through the stepped
+//! as **concentric** pairs (all grey, as on the module) — the grey collar clicks through the stepped
 //! frequencies (OFF · 0·36 … 7·2 kHz, OFF · 35 … 220 Hz), the cap in the
 //! middle sets the gain — which is how the module fits a whole EQ in one
 //! row; the blue high-pass wing; the output trim; and the latching PHASE and
@@ -11,7 +11,7 @@
 //! red gain, blue filter, grey bands.
 
 use document_proto::NodeId;
-use surface_kit::{Ink, Place, TOUCH_MIN, detent_sweep, draw};
+use surface_kit::{Ink, Place, TOUCH_MIN, draw};
 use surface_widgets::Builder;
 
 use crate::comp_vca::ui::{self, Glyph, bind};
@@ -42,11 +42,10 @@ fn concentric(b: &mut Builder<'_>, panel: NodeId, freq: &str, gain: &str, labels
     let cap = Place::new(format!("{legend} gain")).bind(bind(gain));
     let p = Place::new(format!("{legend} frequency"))
         .size(2.0 * COLLAR)
-        .variant("grey_black")
+        .variant("grey")
         .legend(legend)
         .keep_case()
-        .scale(labels)
-        .sweep(detent_sweep(labels.len()))
+        .options(labels)
         .ink(ink())
         .bind(bind(freq))
         .inner(cap);

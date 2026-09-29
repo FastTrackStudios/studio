@@ -81,9 +81,8 @@ pub fn face() -> Face {
 
         let sync = Place::new("Time mode").size(40.0).bind(bind(&a("sync"))).options(parts::TIME_MODES);
         parts::put(b, panel, "button.square_bank", &sync, 790.0, 60.0);
-        let tap = Place::new("Tap").size(40.0).variant("blue").legend("Tap").bind(bind(&a("tap")));
-        let tap = parts::put(b, panel, "button.illuminated", &tap, 790.0, 110.0);
-        parts::momentary(b, tap);
+        let tap = Place::new("Tap").size(40.0).variant("blue").legend("Tap").options(&["momentary"]).bind(bind(&a("tap")));
+        parts::put(b, panel, "button.illuminated", &tap, 790.0, 110.0);
         for (i, x) in [874.0, 890.0].into_iter().enumerate() {
             parts::led_column(b, panel, if i == 0 { "Wet L" } else { "Wet R" }, &a("wet"), i as u8, (x, 28.0, 12.0, 100.0), 13, (-36.0, 3.0));
         }

@@ -32,7 +32,10 @@ const HIGH_FREQS: &[&str] = &["3", "4", "5", "8", "10", "12", "16"];
 fn lever(b: &mut surface_widgets::Builder<'_>, panel: document_proto::NodeId, addr: &str, title: &str, unit: &str, options: &[&str], size: f64, cx: f64) {
     ui::silk(b, panel, title, cx, 198.0, 8.5, INK, 800.0);
     let p = Place::new(title).size(size).variant("light").touch(TOUCH_MIN).bind(bind(addr)).options(options);
-    let l = ui::put(b, panel, "lever.pultec", &p, cx, BOTTOM + 14.0);
+    // By its pivot (the tight box is centred on it), where the panel has
+    // it: half the lever's caption headroom (12 of 110) below the centre
+    // of its full drawing.
+    let l = ui::put(b, panel, "lever.pultec", &p, cx, BOTTOM + 14.0 + 6.0 * size / 110.0);
     ui::strip_legend(b, l);
     ui::silk(b, panel, unit, cx, 314.0, 7.5, DIM, 700.0);
 }
@@ -83,10 +86,9 @@ pub fn face() -> Face {
         ui::put(b, panel, "switch.toggle_bat", &sw, 712.0, BOTTOM + 24.0);
 
         ui::readout(b, panel, "Output dB", Binding::param("pultec/trim"), 800.0, 190.0, 58.0, 18.0, READ, ValueFormat::decimals(1));
-        // The knob prints the ticks; the dB legends are set clear of them.
-        let out = Place::new("Output").size(44.0).legend("Output").touch(TOUCH_MIN).bind(bind("pultec/trim")).scale(&[""; 5]);
+        // The kit sets the dB legends clear of the ticks, the legend under them.
+        let out = Place::new("Output").size(44.0).legend("Output").touch(TOUCH_MIN).bind(bind("pultec/trim")).scale(&["-24", "-12", "0", "+12", "+24"]);
         ui::put(b, panel, "knob.pointer", &out, 800.0, BOTTOM + 10.0);
-        ui::scale_labels(b, panel, 800.0, BOTTOM + 10.0, 42.0, &["-24", "-12", "0", "+12", "+24"], 300.0, 7.0, INK);
     });
 
     let params = vec![

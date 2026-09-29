@@ -292,20 +292,72 @@ fn banks_can_run_backwards() {
 }
 
 #[test]
-fn a_long_cap_legend_is_set_small_enough_to_fit() {
-    let p = Place::new("Algo").bind(Binding::param("amp/channel")).size(28.0).options(&["Hall", "Shimmer", "Spectral"]);
-    let built = build("button.square_bank", &p);
-    for id in built.scene.walk(built.root) {
-        let n = built.scene.node(id).unwrap();
-        if let Some(t) = n.text() {
-            let width = t.characters.chars().count() as f64 * t.font_size * 0.68;
-            assert!(width <= 28.0, "{}: {width} px on a 28 px cap at {}", t.characters, t.font_size);
+fn a_bank_sets_every_cap_legend_at_one_size_that_fits() {
+    // A bank reads as one set: CLEAN is not set big beside FILTERED small —
+    // every cap takes the size the longest word needs, and that word keeps
+    // a margin inside its cap.
+    for (id, cap) in [("button.square_bank", 28.0), ("button.illuminated_bank", 34.0)] {
+        let p = Place::new("Algo").bind(Binding::param("amp/channel")).size(cap).options(&["Hall", "Shimmer", "Spectral"]);
+        let built = build(id, &p);
+        let sizes: Vec<(String, f64)> = built
+            .scene
+            .walk(built.root)
+            .into_iter()
+            .filter_map(|n| built.scene.node(n)?.text().map(|t| (t.characters.clone(), t.font_size)))
+            .collect();
+        assert_eq!(sizes.len(), 3, "{id}: {sizes:?}");
+        assert!(sizes.iter().all(|(_, s)| (s - sizes[0].1).abs() < 1e-9), "{id}: one size for the bank, {sizes:?}");
+        for (word, size) in &sizes {
+            let width = word.chars().count() as f64 * size * 0.62;
+            assert!(width <= cap - 4.0, "{id}: {word} runs {width} px on a {cap} px cap");
         }
     }
-    let size_of = |s: &str| {
-        built.scene.walk(built.root).into_iter().filter_map(|n| built.scene.node(n)?.text().filter(|t| t.characters == s).map(|t| t.font_size)).next().unwrap()
+    // A single cap is fitted on its own: a short legend keeps the style's size.
+    let one = |legend: &str| {
+        let b = build("button.square", &Place::new("x").bind(Binding::param("amp/on")).size(28.0).legend(legend));
+        b.scene.walk(b.root).into_iter().find_map(|n| b.scene.node(n)?.text().map(|t| t.font_size)).unwrap()
     };
-    assert!(size_of("Hall") > size_of("Spectral"), "a short word keeps its size");
+    assert!(one("In") > one("Spectral"));
+}
+
+#[test]
+fn a_single_button_can_be_momentary() {
+    for id in ["button.illuminated", "button.console", "button.square", "button.metal"] {
+        let mode = |p: &Place| match build(id, p).controls.values().next().unwrap().kind {
+            ControlKind::Button { mode } => mode,
+            ref k => panic!("{id}: {}", k.name()),
+        };
+        let p = Place::new("Tap").bind(Binding::param("delay/tap")).legend("Tap");
+        assert_eq!(mode(&p), ButtonMode::Toggle, "{id}");
+        assert_eq!(mode(&p.options(&["momentary"])), ButtonMode::Momentary, "{id}: on only while held");
+    }
+}
+
+#[test]
+fn lamps_take_any_colour() {
+    let emitted = |id: &str, p: &Place| -> Vec<String> {
+        let b = build(id, p);
+        let c = b.controls.values().next().unwrap();
+        c.slots
+            .iter()
+            .filter(|s| matches!(s.role, SlotRole::Led | SlotRole::Glow))
+            .filter_map(|s| b.scene.node(NodeId(s.node))?.emission.as_ref().map(|e| format!("{:.2},{:.2},{:.2}", e.color.r, e.color.g, e.color.b)))
+            .collect()
+    };
+    let hex = |h: &str| {
+        let c = surface_kit::draw::hex(h);
+        format!("{:.2},{:.2},{:.2}", c.r, c.g, c.b)
+    };
+    let purple = hex("#b77dff");
+    for id in ["meter.lamp", "switch.footswitch", "meter.led_bar", "meter.led_ladder"] {
+        let def = surface_kit::find(id).unwrap();
+        let lit = emitted(id, &placement(&def).options(&["color=#b77dff"]));
+        assert!(!lit.is_empty() && lit.iter().all(|c| *c == purple), "{id}: {lit:?}");
+    }
+    // Per lamp, the last colour carrying on.
+    let def = surface_kit::find("meter.led_bar").unwrap();
+    let lit = emitted("meter.led_bar", &placement(&def).options(&["segments=4", "colors=#ff0000,#00ff00"]));
+    assert_eq!(lit, [hex("#ff0000"), hex("#00ff00"), hex("#00ff00"), hex("#00ff00")]);
 }
 
 #[test]

@@ -169,6 +169,58 @@ pub fn label_at(name: &str, s: &str, cx: f64, cy: f64, size: f64, color: &str) -
     text(name, s, cx - w / 2.0, cy - size * 0.68, w, size, color, TextAlign::Center)
 }
 
+/// Rough set width of `s` at `size` (bold, untracked) — for placing labels.
+/// Pass the string as it will show (upper-cased, if it will be).
+#[must_use]
+pub fn text_width(s: &str, size: f64) -> f64 {
+    s.chars().map(|c| if c.is_uppercase() { 0.68 } else { 0.58 }).sum::<f64>() * size
+}
+
+/// Smallest type a printed scale is set at, px: the numerals and position
+/// words round a knob or switch stay readable however small the knob is.
+pub const SCALE_TYPE_MIN: f64 = 9.0;
+
+/// Where a label printed round a shaft sits so that its box clears radius
+/// `r` (the end of its tick or dot, plus a gap): the box of `w × h` has its
+/// centre on the ray at `deg`, pushed outward by the box's half-extent in
+/// that direction. Returns `(centre, distance of the centre from the shaft)`.
+#[must_use]
+pub fn radial_centre(cx: f64, cy: f64, r: f64, deg: f64, w: f64, h: f64) -> ((f64, f64), f64) {
+    let (s, c) = deg.to_radians().sin_cos();
+    let rc = r + 0.5 * (w * s.abs() + h * c.abs());
+    (polar(cx, cy, rc, deg), rc)
+}
+
+/// The box (`x0, y0, x1, y1`, relative to the shaft) a [`radial_label`]
+/// of `s` at `size` covers — for sizing the frame around a scale.
+#[must_use]
+pub fn radial_extent(s: &str, r: f64, deg: f64, size: f64) -> (f64, f64, f64, f64) {
+    let (w, h) = (text_width(s, size), size * 0.9);
+    let ((x, y), _) = radial_centre(0.0, 0.0, r, deg, w, h);
+    (x - w / 2.0, y - h / 2.0, x + w / 2.0, y + h / 2.0)
+}
+
+/// A scale label round a shaft at (`cx`, `cy`) whose box clears radius `r`
+/// at `deg` (see [`radial_centre`]). On the sides it is anchored at its
+/// inner edge — set left on the right, right on the left — so a word set
+/// wider than estimated grows away from the knob, never back over its tick.
+#[must_use]
+#[allow(clippy::too_many_arguments)]
+pub fn radial_label(name: &str, s: &str, (cx, cy): (f64, f64), r: f64, deg: f64, size: f64, color: &str) -> Node {
+    let (w, h) = (text_width(s, size), size * 0.9);
+    let ((x, y), _) = radial_centre(cx, cy, r, deg, w, h);
+    let bw = w * 1.4 + size;
+    let sin = deg.to_radians().sin();
+    let (bx, align) = if sin > 0.3 {
+        (x - w / 2.0, TextAlign::Left)
+    } else if sin < -0.3 {
+        (x + w / 2.0 - bw, TextAlign::Right)
+    } else {
+        (x - bw / 2.0, TextAlign::Center)
+    };
+    text(name, s, bx, y - size * 0.68, bw, size, color, align)
+}
+
 #[must_use]
 pub fn stroked(mut n: Node, color: &str, weight: f64) -> Node {
     n.stroke = Stroke { paints: vec![solid(color)], weight, align: StrokeAlign::Inside, ..Stroke::default() };

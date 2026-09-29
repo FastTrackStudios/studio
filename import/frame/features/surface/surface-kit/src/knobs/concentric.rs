@@ -40,6 +40,8 @@ fn colors(variant: Option<&str>) -> (&'static str, &'static str, &'static str, &
         Some("black_red") => ("#1c1c1f", "#f1f1ef", "#b3281f", "#f4ece8", false),
         Some("grey_black") => ("#7a7e84", "#f4f4f2", "#1c1d20", "#f1f1ef", false),
         Some("cream_black") => ("#d9d1bd", "#1c1d20", "#1c1d20", "#f1f1ef", false),
+        // The Neve 1073's pair: grey collar, grey cap, white lines on both.
+        Some("grey") => ("#71757c", "#f4f4f2", "#8b9098", "#f7f7f5", false),
         _ => ("#1c1c1f", "#f1f1ef", "#c4c6c9", "#1a1b1e", true),
     }
 }
@@ -76,13 +78,25 @@ fn concentric(b: &mut Builder<'_>, parent: NodeId, p: &Place) -> NodeId {
     let inner = p.inner.as_deref().cloned().unwrap_or_default();
     let (collar_c, collar_ix, cap_c, cap_ix, metal) = colors(p.variant.as_deref());
     let ink = p.ink_color(PANEL_INK);
-    let sweep = p.sweep.unwrap_or(300.0);
-    let labels: Vec<String> = p.scale.clone().unwrap_or_else(|| (0..=10).step_by(2).map(|i| i.to_string()).collect());
+    // Options make the collar stepped (it prints them and clicks through
+    // exactly its detents); an authored scale or sweep wins.
+    let stepped = p.options.as_ref().filter(|o| !o.is_empty());
+    let sweep = p.sweep.unwrap_or_else(|| stepped.map_or(300.0, |o| crate::registry::detent_sweep(o.len())));
+    let labels: Vec<String> = p.scale.clone().or_else(|| stepped.cloned()).unwrap_or_else(|| (0..=10).step_by(2).map(|i| i.to_string()).collect());
 
-    // The drawing, in a square centred on the shaft with room for the scale.
+    // The drawing, in a square centred on the shaft with room for the scale:
+    // labels clear the ticks, at a readable size.
     let r = d / 2.0;
     let (ring_r, label_r) = (r + 4.0 * k, r + 12.0 * k);
-    let half = label_r + 8.0 * k;
+    let clear = ring_r + 7.5 * k;
+    let size = (7.0 * k).max(draw::SCALE_TYPE_MIN);
+    let n = labels.len();
+    let at = |i: usize| if n < 2 { 0.5 } else { i as f64 / (n - 1) as f64 };
+    let angle = |t: f64| (t - 0.5) * sweep;
+    let extents: Vec<(f64, f64, f64, f64)> = labels.iter().enumerate().filter(|(_, s)| !s.is_empty()).map(|(i, s)| draw::radial_extent(s, clear, angle(at(i)), size)).collect();
+    let reach = extents.iter().map(|e| e.0.abs().max(e.1.abs()).max(e.2.abs()).max(e.3.abs())).fold(0.0, f64::max);
+    let bottom = extents.iter().map(|e| e.3).fold(label_r, f64::max);
+    let half = (label_r + 8.0 * k).max(reach + 3.0);
     let side = 2.0 * half;
     let c = half;
     let touch = p.touch.unwrap_or(0.0);
@@ -92,10 +106,7 @@ fn concentric(b: &mut Builder<'_>, parent: NodeId, p: &Place) -> NodeId {
     let root = b.add(parent, draw::frame(&p.name, 0.0, 0.0, bx, bx));
     let knob = b.add(root, draw::frame("knob", o, o, side, side));
 
-    // ── the panel's scale, round the collar ──
-    let angle = |t: f64| (t - 0.5) * sweep;
-    let n = labels.len();
-    let at = |i: usize| if n < 2 { 0.5 } else { i as f64 / (n - 1) as f64 };
+    // ── the panel's scale, round the collar (none for an empty scale) ──
     let mut ticks = String::new();
     for i in 0..n {
         let a = angle(at(i));
@@ -105,13 +116,14 @@ fn concentric(b: &mut Builder<'_>, parent: NodeId, p: &Place) -> NodeId {
         ticks.push_str(&draw::polygon(&[(x0 - nx, y0 - ny), (x0 + nx, y0 + ny), (x1 + nx, y1 + ny), (x1 - nx, y1 - ny)]));
         ticks.push(' ');
     }
-    b.add(knob, draw::with_opacity(draw::path("scale majors", 0.0, 0.0, side, side, ticks, draw::solid(&ink)), 0.9));
+    if n > 0 {
+        b.add(knob, draw::with_opacity(draw::path("scale majors", 0.0, 0.0, side, side, ticks, draw::solid(&ink)), 0.9));
+    }
     for (i, s) in labels.iter().enumerate() {
         if s.is_empty() {
             continue;
         }
-        let (x, y) = draw::polar(c, c, label_r + 2.0 * k, angle(at(i)));
-        let mut t = draw::label_at("numeral", s, x, y, 7.0 * k, &ink);
+        let mut t = draw::radial_label("numeral", s, (c, c), clear, angle(at(i)), size, &ink);
         if let NodeKind::Text(td) = &mut t.kind {
             td.font_weight = Some(700.0);
         }
@@ -157,7 +169,7 @@ fn concentric(b: &mut Builder<'_>, parent: NodeId, p: &Place) -> NodeId {
     b.add(dial, draw::circle("cap light", rc * 0.78, rc * 0.62, rc * 0.42, draw::radial(&[(0.0, "#ffffff40"), (1.0, "#ffffff00")])));
 
     // ── legends: the collar's, then the cap's under it ──
-    let legend_y = o + c + label_r + 4.0 * k + legend_size * 0.6;
+    let legend_y = o + c + bottom + 4.0 * k + legend_size * 0.6;
     let outer_legend = b.add(root, caption("legend", p.legend.as_deref().unwrap_or(""), shaft, legend_y, legend_size, &ink, p.case()));
     let inner_ink = inner.ink_color(&ink);
     let inner_y = legend_y + legend_size * 1.3 - (shaft - bi / 2.0);
@@ -181,8 +193,8 @@ pub(crate) fn defs() -> Vec<ComponentDef> {
         id: "knob.concentric",
         family: Family::Knob,
         title: "Concentric",
-        description: "Two controls on one shaft: a wide knurled collar with a white index, and a cap sitting in it with its own index (an API 550's frequency ring round its gain cap). The collar binds `Place::binding`; the cap binds `Place::inner` (its binding, legend, sweep). The box is tight to the collar and the cap's control is nested in it, so hit-testing gives the cap its disc and the collar the ring. Size = collar diameter.",
-        variants: &["black_silver", "black_red", "grey_black", "cream_black"],
+        description: "Two controls on one shaft: a wide knurled collar with a white index, and a cap sitting in it with its own index (an API 550's frequency ring round its gain cap). The collar binds `Place::binding`; the cap binds `Place::inner` (its binding, legend, sweep). `options` make the collar stepped (printed, ≤ 60° a detent). Variants: `grey` is the Neve 1073's all-grey pair. The box is tight to the collar and the cap's control is nested in it, so hit-testing gives the cap its disc and the collar the ring. Size = collar diameter.",
+        variants: &["black_silver", "black_red", "grey_black", "cream_black", "grey"],
         default_size: 76.0,
         binds: "param",
         build: concentric,

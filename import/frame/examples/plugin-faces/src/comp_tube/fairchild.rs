@@ -61,8 +61,8 @@ fn build(b: &mut Builder<'_>, root: NodeId) {
 
     // ── The meters ───────────────────────────────────────────────────
     let (m1, m2) = (220.0, W - 220.0);
-    ui::centred_at(b, panel, "meter.vu_amber", &Place::new("Gain Reduction meter").size(232.0).variant("black_rack").bind(ui::stream("fairchild/gr")), m1, METERS);
-    let out = ui::centred_at(b, panel, "meter.vu_amber", &Place::new("Output meter").size(232.0).variant("black_rack").bind(ui::stream("fairchild/out")), m2, METERS);
+    ui::centred_at(b, panel, "meter.vu_amber", &Place::new("Gain Reduction meter").size(232.0).variant("black_rack").options(&["glass"]).bind(ui::stream("fairchild/gr")), m1, METERS);
+    let out = ui::centred_at(b, panel, "meter.vu_amber", &Place::new("Output meter").size(232.0).variant("black_rack").options(&["glass"]).bind(ui::stream("fairchild/out")), m2, METERS);
     // 0 VU = -18 dBFS on the output meter.
     ui::calibrate_vu(b, out, -18.0);
     let label = Ink::new(8.5, RED).weight(800.0).track(0.24);
@@ -90,7 +90,7 @@ fn build(b: &mut Builder<'_>, root: NodeId) {
     let numerals = Ink::new(8.0, INK).weight(600.0).track(0.0);
     let knob = |b: &mut Builder<'_>, name: &str, addr: &str, scale: &[&str], x: f64, value: &str| {
         let format = Some(ValueFormat::decimals(1));
-        let k = ui::rotary_at(b, panel, "knob.bakelite", &Place::new(name).size(64.0).legend(name).scale(scale).bind(ui::bind(addr)), x, ROW);
+        let k = ui::rotary_at(b, panel, "knob.bakelite", &Place::new(name).size(64.0).legend(name).scale(scale).touch(surface_kit::TOUCH_MIN).bind(ui::bind(addr)), x, ROW);
         ui::knob_scale(b, panel, k, (x, ROW), 52.0, 300.0, scale, numerals);
         ui::caption_style(b, k, 9.5, 800.0, INK);
         ui::caption_y(b, k, CAPTION);

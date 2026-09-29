@@ -13,6 +13,8 @@
 //! "pressed" overlay — the cap's shadow moving inside it — because a
 //! latching switch whose position you cannot see is read as broken. A
 //! `_bank` places one `Button { Select }` per `Place::options` entry.
+//! Any single button takes the `momentary` flag (`Place::options`) and is
+//! then `Button { Momentary }`: on while held — a TAP key.
 
 use document_proto::{NodeId, TextAlign, TextCase};
 use surface_proto::{ButtonMode, Control, ControlKind, SlotRole};
@@ -221,7 +223,7 @@ struct CapParts {
 
 /// Draw one cap (with its surround, if the part has one) at (`x`, `y`).
 #[allow(clippy::too_many_arguments)]
-fn cap(b: &mut Builder<'_>, parent: NodeId, x: f64, y: f64, k: f64, spec: &Spec, (cap_c, ink_c, lamp_c): (&str, &str, &str), legend: &str, case: TextCase) -> CapParts {
+fn cap(b: &mut Builder<'_>, parent: NodeId, x: f64, y: f64, k: f64, spec: &Spec, (cap_c, ink_c, lamp_c): (&str, &str, &str), (legend, size): (&str, f64), case: TextCase) -> CapParts {
     let pad = spec.surround.map_or(0.0, |s| s.pad * k);
     let (cw, ch) = (spec.w * k, spec.h * k);
     let lip = k.clamp(0.6, 1.6);
@@ -267,9 +269,7 @@ fn cap(b: &mut Builder<'_>, parent: NodeId, x: f64, y: f64, k: f64, spec: &Spec,
         vec![draw::inner_shadow("#0000008c", 0.0, lip * 1.5, drop * 2.0), draw::inner_shadow("#ffffff1a", 0.0, -lip, 0.0)],
     );
     leds.push(b.add(parent, pressed));
-    // Caps are narrow: no tracking, a little headroom for a param name the
-    // runtime writes in, and a long word set smaller until it fits the cap.
-    let size = fit_legend(legend, spec.legend * k * 0.9, cw - 3.0 * k);
+    // Caps are narrow: no tracking, and the size the caller fitted.
     let mut text = cased(ink("legend", legend, cx - 2.0 * k, cy + ch / 2.0, cw + 4.0 * k, size, ink_c, TextAlign::Center, 800.0), case);
     if let document_proto::NodeKind::Text(t) = &mut text.kind {
         t.letter_spacing = 0.0;
@@ -278,15 +278,26 @@ fn cap(b: &mut Builder<'_>, parent: NodeId, x: f64, y: f64, k: f64, spec: &Spec,
     CapParts { leds, label }
 }
 
-/// The type size a cap legend is set at: `size`, or smaller (down to a
+/// The type size a cap's legend is set at: the style's size, or smaller
+/// until the longest word fits inside the cap with a margin either side.
+/// A bank fits all its caps at once — every cap takes the smallest size
+/// any of them needs, so a row reads as one set, not CLEAN big and
+/// FILTERED small.
+fn cap_legend_size<'a>(spec: &Spec, k: f64, legends: impl IntoIterator<Item = &'a str>) -> f64 {
+    let (size, width) = (spec.legend * k * 0.9, spec.w * k - 6.0 * k);
+    legends.into_iter().map(|l| fit_legend(l, size, width)).fold(size, f64::min)
+}
+
+/// The type size a legend is set at: `size`, or smaller (down to a
 /// legible floor) until `legend`'s longest line fits `width`.
 fn fit_legend(legend: &str, size: f64, width: f64) -> f64 {
     let longest = legend.lines().map(|l| l.chars().count()).max().unwrap_or(0) as f64;
     if longest == 0.0 {
         return size;
     }
-    // Bold capitals run about 0.68 em a character.
-    let fits = width / (longest * 0.68);
+    // Bold capitals, untracked, set about 0.62 em a character (measured: a
+    // word of eight runs 4.8 em).
+    let fits = width / (longest * 0.62);
     size.min(fits).max((size * 0.45).min(5.5))
 }
 
@@ -304,7 +315,7 @@ fn unit(spec: &Spec, k: f64) -> (f64, f64) {
 /// One button (with its jewel) under `parent` at (`x`, `y`), registered as a
 /// control of `mode`.
 #[allow(clippy::too_many_arguments)]
-fn button_at(b: &mut Builder<'_>, parent: NodeId, x: f64, y: f64, k: f64, style: Style, p: &Place, legend: &str, mode: ButtonMode, name: &str) -> NodeId {
+fn button_at(b: &mut Builder<'_>, parent: NodeId, x: f64, y: f64, k: f64, style: Style, p: &Place, legend: (&str, f64), mode: ButtonMode, name: &str) -> NodeId {
     let spec = style.spec();
     let (cap_c, ink_c, lamp_c) = style.colors(p.variant.as_deref());
     let (w, h) = unit(&spec, k);
@@ -330,7 +341,10 @@ fn single(b: &mut Builder<'_>, parent: NodeId, p: &Place, style: Style) -> NodeI
     let spec = style.spec();
     let k = p.size.unwrap_or(spec.w) / spec.w;
     let legend = p.legend.clone().unwrap_or_default();
-    button_at(b, parent, 0.0, 0.0, k, style, p, &legend, ButtonMode::Toggle, &p.name)
+    let size = cap_legend_size(&spec, k, [legend.as_str()]);
+    // A TAP key: on only while held.
+    let mode = if p.flag("momentary") { ButtonMode::Momentary } else { ButtonMode::Toggle };
+    button_at(b, parent, 0.0, 0.0, k, style, p, (&legend, size), mode, &p.name)
 }
 
 /// Bank options: `Place::options`, else numbered positions.
@@ -350,10 +364,11 @@ fn bank(b: &mut Builder<'_>, parent: NodeId, p: &Place, style: Style) -> NodeId 
     let (w, h) = unit(&spec, k);
     let gap = 6.0 * k;
     let root = b.add(parent, draw::frame(&p.name, 0.0, 0.0, n as f64 * w + (n as f64 - 1.0) * gap, h));
+    let size = cap_legend_size(&spec, k, opts.iter().map(String::as_str));
     for (i, label) in opts.iter().enumerate() {
         let mode = ButtonMode::Select { index: i as u32, count: n as u32 };
         let at = if p.reverse { n - 1 - i } else { i };
-        button_at(b, root, at as f64 * (w + gap), 0.0, k, style, p, label, mode, &format!("{} {label}", p.name));
+        button_at(b, root, at as f64 * (w + gap), 0.0, k, style, p, (label, size), mode, &format!("{} {label}", p.name));
     }
     root
 }
@@ -436,6 +451,8 @@ fn led_bank(b: &mut Builder<'_>, parent: NodeId, p: &Place) -> NodeId {
     };
     let opts = options(p);
     let size = 7.5 * k;
+    // One size for the row: the smallest any of its legends needs.
+    let fitted = opts.iter().map(|l| fit_legend(l, size, pitch - 4.0 * k)).fold(size, f64::min);
     let d = 9.0 * k;
     let h = size * 1.4 + 3.0 * k + d + 2.0 * k;
     let root = b.add(parent, draw::frame(&p.name, 0.0, 0.0, pitch * opts.len() as f64, h));
@@ -443,8 +460,7 @@ fn led_bank(b: &mut Builder<'_>, parent: NodeId, p: &Place) -> NodeId {
     for (i, label) in opts.iter().enumerate() {
         let at = if p.reverse { opts.len() - 1 - i } else { i };
         let cell = b.add(root, draw::frame(&format!("{} {label}", p.name), at as f64 * pitch, 0.0, pitch, h));
-        let size = fit_legend(label, size, pitch - 2.0 * k);
-        let text = b.add(cell, cased(ink("legend", label, 0.0, 7.5 * k * 0.7, pitch, size, &legend_ink, TextAlign::Center, 700.0), p.case()));
+        let text = b.add(cell, cased(ink("legend", label, 0.0, 7.5 * k * 0.7, pitch, fitted, &legend_ink, TextAlign::Center, 700.0), p.case()));
         let lens = lamp(b, cell, pitch / 2.0, size * 1.4 + 3.0 * k + d / 2.0, d, color);
         let mut c = Control::new(ControlKind::Button { mode: ButtonMode::Select { index: i as u32, count: opts.len() as u32 } })
             .slot(SlotRole::Led, lens.0)
@@ -505,7 +521,7 @@ pub(crate) fn defs() -> Vec<ComponentDef> {
         def(
             "button.illuminated",
             "Illuminated button",
-            "A glossy cap that lights from within, legend glowing through it, set in a dark bezel — the SSL bus compressor's amber IN button. Use for a main in/bypass switch. Size = cap width. `button.illuminated_bank` makes a radio row.",
+            "A glossy cap that lights from within, legend glowing through it, set in a dark bezel — the SSL bus compressor's amber IN button. Use for a main in/bypass switch — or, with the `momentary` option, a TAP key (on only while held). Size = cap width. `button.illuminated_bank` makes a radio row.",
             Style::Illuminated,
             "toggle param",
             illuminated,

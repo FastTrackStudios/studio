@@ -56,20 +56,20 @@ fn build(b: &mut Builder<'_>, root: NodeId) {
     // ── Gain | meter | Peak reduction ────────────────────────────────
     let scale = ["0", "10", "20", "30", "40", "50", "60", "70", "80", "90", "100"];
     let numerals = Ink::new(8.0, INK).weight(600.0).track(0.0);
-    let gain = ui::rotary_at(b, panel, "knob.pointer", &Place::new("Gain").size(60.0).legend("Gain").scale(&scale).ink(dark()).bind(ui::bind("la2a/gain")), 262.0, ROW);
+    let gain = ui::rotary_at(b, panel, "knob.pointer", &Place::new("Gain").size(60.0).legend("Gain").scale(&scale).touch(surface_kit::TOUCH_MIN).ink(dark()).bind(ui::bind("la2a/gain")), 262.0, ROW);
     ui::knob_scale(b, panel, gain, (262.0, ROW), 62.0, 300.0, &scale, numerals);
     ui::caption_style(b, gain, 11.0, 800.0, INK);
 
     // The meter switch really switches it: the output on its +10 range,
     // gain reduction, or the output on +4.
-    let vu = Place::new("Gain Reduction meter").size(206.0).variant("black_rack").legend("VU").bind(ui::stream("la2a/gr")).select(SourceSelect::new(
+    let vu = Place::new("Gain Reduction meter").size(206.0).variant("black_rack").legend("VU").options(&["glass"]).bind(ui::stream("la2a/gr")).select(SourceSelect::new(
         "la2a/meter",
         vec![Some(MeterTap::new("la2a/out").offset(-10.0)), Some(MeterTap::new("la2a/gr")), Some(MeterTap::new("la2a/out").offset(-4.0))],
     ));
     ui::centred_at(b, panel, "meter.vu_amber", &vu, W / 2.0, ROW - 6.0);
     ui::silk(b, panel, "Gain Reduction", W / 2.0, 224.0, Ink::new(7.5, DIM).weight(700.0).track(0.24));
 
-    let peak = ui::rotary_at(b, panel, "knob.pointer", &Place::new("Peak Reduction").size(60.0).legend("Peak Reduction").scale(&scale).ink(dark()).bind(ui::bind("la2a/peak_reduction")), W - 262.0, ROW);
+    let peak = ui::rotary_at(b, panel, "knob.pointer", &Place::new("Peak Reduction").size(60.0).legend("Peak Reduction").scale(&scale).touch(surface_kit::TOUCH_MIN).ink(dark()).bind(ui::bind("la2a/peak_reduction")), W - 262.0, ROW);
     ui::knob_scale(b, panel, peak, (W - 262.0, ROW), 62.0, 300.0, &scale, numerals);
     ui::caption_style(b, peak, 11.0, 800.0, INK);
 

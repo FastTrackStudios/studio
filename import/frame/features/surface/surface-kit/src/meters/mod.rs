@@ -320,6 +320,11 @@ fn build(face: &Face, b: &mut Builder<'_>, parent: NodeId, p: &Place) -> NodeId 
     if let Some(g) = bezel.and_then(|z| z.glow) {
         card_node = draw::emissive(card_node, css(g.color), 0.5, g.spread * s);
     }
+    // The `glass` option: a glass post-effect over the window (GPU
+    // renderers only — the card reads the same without it).
+    if p.flag("glass") {
+        card_node.shader = Some(document_proto::ShaderFx { shader: "glass".into(), params: std::iter::once(("strength".to_string(), 0.4)).collect() });
+    }
     let card_id = b.add(root, draw::rounded(card_node, 3.0 * s));
 
     // The lamp behind the card: the wash, then the bulb's hotspot inside it.

@@ -183,6 +183,16 @@ impl Place {
         self.options.iter().flatten().any(|o| o == flag)
     }
 
+    /// A lamp colour the place asks for, for lamp `i` (slot order — a
+    /// meter's lamps from the floor up): `colors=#a,#b,…` one per lamp (the
+    /// last carries on), or `color=#hex` for every lamp. Lamps, LED meters
+    /// and footswitch LEDs take it over their variant's colour.
+    #[must_use]
+    pub fn lamp_color(&self, i: usize) -> Option<String> {
+        let list: Vec<&str> = self.opt("colors").map(|v| v.split(',').map(str::trim).filter(|c| c.starts_with('#')).collect()).unwrap_or_default();
+        list.get(i).or_else(|| list.last()).map(|c| (*c).to_string()).or_else(|| self.opt("color").filter(|c| c.starts_with('#')).map(ToString::to_string))
+    }
+
     /// The control carrying this place's binding and readout format.
     #[must_use]
     pub fn control(&self, kind: ControlKind) -> Control {

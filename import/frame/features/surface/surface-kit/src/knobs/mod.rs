@@ -370,7 +370,7 @@ fn positions(n: usize) -> Vec<f64> {
 }
 
 /// Place a knob of `spec` under `parent`.
-fn build(b: &mut Builder<'_>, parent: NodeId, p: &Place, spec: &KnobSpec, title: &str, default_size: f64) -> NodeId {
+pub(crate) fn build(b: &mut Builder<'_>, parent: NodeId, p: &Place, spec: &KnobSpec, title: &str, default_size: f64) -> NodeId {
     let d = p.size.unwrap_or(default_size).max(12.0);
     let k = d / (2.0 * BODY_R);
     let which = p.variant.as_deref().and_then(|v| spec.variants.iter().position(|n| *n == v)).unwrap_or(0);
@@ -390,21 +390,45 @@ fn build(b: &mut Builder<'_>, parent: NodeId, p: &Place, spec: &KnobSpec, title:
         let (r, l) = spec.ring.geometry();
         (r + spec.ring_offset, l + spec.ring_offset)
     };
-    // Half the frame, in units: the numerals plus a margin, or the widest
+    // The printed labels: set clear of their ticks, at a readable size
+    // whatever the knob's (px, relative to the shaft).
+    // Position words (a stepped knob's options) are set in the place's
+    // case, like its legend; an authored scale as written.
+    let words = stepped.is_some() && p.scale.is_none();
+    let case = if words { p.case() } else { TextCase::Original };
+    let print = Print { clear: clearance(spec.ring, ring_r, label_r) * k, size: (7.0 * k).max(draw::SCALE_TYPE_MIN), case };
+    let shown = |s: &str| if case == TextCase::Upper { s.to_uppercase() } else { s.to_string() };
+    let angle = |t: f64| (t - 0.5) * spec.sweep;
+    let extents: Vec<(f64, f64, f64, f64)> = if spec.ring == RingKind::OnKnob {
+        Vec::new()
+    } else {
+        labels.iter().zip(positions(labels.len())).filter(|(s, _)| !s.is_empty()).map(|(s, t)| draw::radial_extent(&shown(s), print.clear, angle(t), print.size)).collect()
+    };
+    let reach = extents.iter().map(|e| e.0.abs().max(e.1.abs()).max(e.2.abs()).max(e.3.abs())).fold(0.0, f64::max);
+    let bottom = extents.iter().map(|e| e.3).fold(f64::MIN, f64::max);
+    // Half the frame, in units: the labels plus a margin, or the widest
     // overhang when the scale is on the knob.
-    let half = if spec.ring == RingKind::OnKnob { 44.0 } else { (label_r + 6.0).max(44.0) };
+    let half = if spec.ring == RingKind::OnKnob { 44.0 } else { (label_r + 6.0).max(44.0).max(reach / k + 3.0) };
     let g = Geo { k, c: half * k };
     let side = g.size();
 
     let legend_size = (9.5 * k).max(8.0);
-    let legend_y = g.c + (0.866 * label_r.max(BODY_R + 4.0) + 5.0) * k;
+    // The legend sits under whatever is printed lowest: the knob, the ends
+    // of its ring, its lowest label.
+    let ring_bottom = if labels.is_empty() || spec.ring == RingKind::OnKnob { 0.0 } else { -(ring_r + 5.0) * (spec.sweep / 2.0).to_radians().cos() };
+    let body_r = BODY_R * spec.tiers.first().map_or(1.0, |t| t.r).max(1.0);
+    let legend_y = if spec.ring == RingKind::OnKnob {
+        g.c + (0.866 * label_r + 5.0) * k
+    } else {
+        g.c + ((body_r + 6.0) * k).max((ring_bottom + 4.0) * k).max(bottom + 4.0)
+    };
     let height = side.max(legend_y + (legend_size * 1.35).ceil());
     let name = if p.name.is_empty() { title } else { p.name.as_str() };
     let root = b.add(parent, draw::frame(name, 0.0, 0.0, side, height));
     let knob = b.add(root, draw::frame("knob", 0.0, 0.0, side, side));
 
     // ── fixed: the panel, the shadows, the round (lit) tiers ──
-    printed_scale(b, knob, g, spec, &labels, (ring_r, label_r), &ink, stepped.is_some() && p.scale.is_none());
+    printed_scale(b, knob, g, spec, &labels, ring_r, print, &ink, stepped.is_some() && p.scale.is_none());
     let outer = spec.tiers.first().map_or(1.0, |t| t.r);
     let (sx, sy) = g.p(0.0, 1.5);
     b.add(knob, ellipse("body shadow", sx, sy, BODY_R * outer * k, vec![Paint::solid(css("rgba(0,0,0,0.35)"))]));
@@ -496,9 +520,33 @@ fn seg(a: (f64, f64), b: (f64, f64), w: f64) -> String {
     format!("{} ", fmt_pts(&p))
 }
 
+/// How a knob's scale labels are set: `clear` is the radius (px from the
+/// shaft) their boxes stay outside — the end of the ticks or dots plus a
+/// gap — and `size` their type size, px.
+#[derive(Clone, Copy)]
+struct Print {
+    clear: f64,
+    size: f64,
+    case: TextCase,
+}
+
+/// The radius (units) a ring's labels clear: past its major ticks or its
+/// dots, or — numerals alone — about where the source centred them.
+fn clearance(ring: RingKind, ring_r: f64, label_r: f64) -> f64 {
+    match ring {
+        RingKind::Ticks | RingKind::OnKnob => ring_r + 5.0 + 4.0,
+        RingKind::Dots => ring_r + 1.35 + 4.5,
+        RingKind::Numerals => label_r - 3.5,
+    }
+}
+
 /// The scale printed on the panel around the knob (the source's `Ring`).
+/// An empty scale prints nothing — no ring either.
 #[allow(clippy::too_many_arguments)]
-fn printed_scale(b: &mut Builder<'_>, knob: NodeId, g: Geo, spec: &KnobSpec, labels: &[String], (ring_r, label_r): (f64, f64), ink: &str, stepped: bool) {
+fn printed_scale(b: &mut Builder<'_>, knob: NodeId, g: Geo, spec: &KnobSpec, labels: &[String], ring_r: f64, print: Print, ink: &str, stepped: bool) {
+    if labels.is_empty() {
+        return;
+    }
     let side = g.size();
     let at = positions(labels.len());
     let angle = |n: f64| (n - 0.5) * spec.sweep;
@@ -532,10 +580,16 @@ fn printed_scale(b: &mut Builder<'_>, knob: NodeId, g: Geo, spec: &KnobSpec, lab
         RingKind::Numerals | RingKind::OnKnob => {}
     }
     if spec.ring != RingKind::OnKnob {
-        let size = 7.0 * g.k;
         for (s, n) in labels.iter().zip(&at) {
             if !s.is_empty() {
-                b.add(knob, label("numeral", s, g.polar(label_r, angle(*n)), size, ink));
+                let est = if print.case == TextCase::Upper { s.to_uppercase() } else { s.clone() };
+                let mut t = draw::radial_label("numeral", &est, (g.c, g.c), print.clear, angle(*n), print.size, ink);
+                if let NodeKind::Text(t) = &mut t.kind {
+                    t.characters.clone_from(s);
+                    t.font_weight = Some(700.0);
+                    t.text_case = print.case;
+                }
+                b.add(knob, t);
             }
         }
     }

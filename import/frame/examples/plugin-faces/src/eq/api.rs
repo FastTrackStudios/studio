@@ -7,7 +7,7 @@
 //! so every scale and legend is printed in the panel's dark ink.
 
 use document_proto::NodeId;
-use surface_kit::{Ink, Place, TOUCH_MIN, detent_sweep};
+use surface_kit::{Ink, Place, TOUCH_MIN};
 use surface_widgets::Builder;
 
 use crate::comp_vca::ui::{self, bind};
@@ -27,25 +27,21 @@ const HIGH: &[&str] = &["5", "7", "10", "12.5", "15"];
 const GAIN: &[&str] = &["-12", "-8", "-4", "0", "+4", "+8", "+12"];
 
 /// A detented frequency selector: skirted knob stepped through exactly its
-/// positions. The knob prints the ticks; the legends are set here, clear
-/// of them and big enough to read.
+/// positions, which it prints round itself clear of its ticks.
 fn selector(b: &mut Builder<'_>, panel: NodeId, addr: &str, legend: &str, labels: &[&str], cx: f64) {
-    let ticks = vec![""; labels.len()];
-    let p = Place::new(legend).size(52.0).variant("black").legend(legend).keep_case().options(labels).scale(&ticks).ink(Ink::Dark).touch(TOUCH_MIN).bind(bind(addr));
+    let p = Place::new(legend).size(52.0).variant("black").legend(legend).keep_case().options(labels).ink(Ink::Dark).touch(TOUCH_MIN).bind(bind(addr));
     ui::put(b, panel, "knob.skirted", &p, cx, FREQ_ROW);
-    ui::scale_labels(b, panel, cx, FREQ_ROW, 43.0, labels, detent_sweep(labels.len()), 9.0, INK);
 }
 
-/// A knob with its scale and legend printed in dark ink.
+/// A knob with its scale (the kit sets it clear of the ticks) and legend
+/// printed in dark ink.
 #[allow(clippy::too_many_arguments)]
 fn knob(b: &mut Builder<'_>, panel: NodeId, addr: &str, legend: &str, d: f64, labels: &[&str], cx: f64, cy: f64) {
-    let ticks = vec![""; labels.len()];
-    let p = Place::new(legend).size(d).variant("black").scale(&ticks).ink(Ink::Dark).touch(TOUCH_MIN).bind(bind(addr));
+    let p = Place::new(legend).size(d).variant("black").scale(labels).ink(Ink::Dark).touch(TOUCH_MIN).bind(bind(addr));
     let k = ui::put(b, panel, "knob.bakelite", &p, cx, cy);
     // The legend goes under the printed scale, not inside it.
     ui::strip_legend(b, k);
-    ui::silk(b, panel, legend, cx, cy + d / 2.0 + 26.0, 8.5, INK, 800.0);
-    ui::scale_labels(b, panel, cx, cy, d * 0.82 + 2.0, labels, 300.0, 8.0, INK);
+    ui::silk(b, panel, legend, cx, cy + d / 2.0 + 30.0, 8.5, INK, 800.0);
 }
 
 pub fn face() -> Face {

@@ -47,7 +47,7 @@ pub fn face() -> Face {
         // ── Nameplate, speed ───────────────────────────────────────────
         parts::silk_left(b, panel, "Tape Machine", 50.0, 34.0, Ink::new(15.0, INK).weight(800.0).track(0.06));
         parts::silk_left(b, panel, "Two-track · ¼ inch · record electronics", 50.0, 54.0, Ink::new(6.5, DIM).weight(600.0).track(0.14));
-        let speed = parts::selector(b, panel, "Speed", &a("speed"), "black", (132.0, 128.0), 54.0, SPEEDS, INK);
+        let speed = parts::selector(b, panel, "Speed", &a("speed"), "black", (132.0, 134.0), 54.0, SPEEDS, INK);
         parts::legend_at(b, speed, "Speed in/s", 168.0, Ink::new(6.8, DIM).weight(800.0).track(0.2));
 
         // ── Meter bridge ───────────────────────────────────────────────
@@ -57,7 +57,7 @@ pub fn face() -> Face {
         parts::silk(b, bridge, "Level to tape", 234.0, 136.0, Ink::new(6.0, "#7d7466").weight(700.0).track(0.2));
 
         // ── Formulation ────────────────────────────────────────────────
-        let tape = parts::selector(b, panel, "Tape", &a("formulation"), "black", (822.0, 128.0), 54.0, FORMULATIONS, INK);
+        let tape = parts::selector(b, panel, "Tape", &a("formulation"), "black", (822.0, 134.0), 54.0, FORMULATIONS, INK);
         parts::legend_at(b, tape, "Formulation", 168.0, Ink::new(6.8, DIM).weight(800.0).track(0.2));
         parts::lamp(b, panel, (822.0, 40.0), 8.0, "#ff4a36", true);
         parts::silk(b, panel, "Record", 822.0, 56.0, Ink::new(6.0, DIM).weight(800.0).track(0.24));

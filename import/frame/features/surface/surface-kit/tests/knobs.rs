@@ -107,8 +107,9 @@ fn the_rooms_light_does_not_turn() {
 #[test]
 fn sizes_scale_with_place_size() {
     for id in knob_ids() {
-        let (a, ra, _) = placed(id, &Place::new("A").size(50.0)).unwrap();
-        let (b, rb, _) = placed(id, &Place::new("B").size(100.0)).unwrap();
+        // Above the size where the printed scale's type floor holds it.
+        let (a, ra, _) = placed(id, &Place::new("A").size(80.0)).unwrap();
+        let (b, rb, _) = placed(id, &Place::new("B").size(160.0)).unwrap();
         let (wa, wb) = (a.node(ra).unwrap().size.width, b.node(rb).unwrap().size.width);
         assert!((wb / wa - 2.0).abs() < 0.02, "{id}: {wa} → {wb}");
     }
@@ -314,4 +315,84 @@ fn turning_the_collar_leaves_the_cap_alone() {
     let f = rt.frame(0.0);
     assert!((f.node(outer).unwrap().transform.rotation().to_degrees() - 150.0).abs() < 1e-6);
     assert!(f.node(inner).unwrap().transform.rotation().abs() < 1e-9);
+}
+
+/// The printed labels round a placed knob: `(text, font size, how near the
+/// set words come to the shaft)` — the glyphs' estimated box, anchored as
+/// the label is aligned, measured from the centre of the `knob` frame.
+fn label_reach(scene: &Scene, root: NodeId) -> Vec<(String, f64, f64)> {
+    let knob = scene.node(root).unwrap().children.iter().copied().find(|c| scene.node(*c).unwrap().name == "knob").unwrap();
+    let side = scene.node(knob).unwrap().size.width;
+    let (cx, cy) = (side / 2.0, side / 2.0);
+    scene
+        .walk(knob)
+        .into_iter()
+        .filter_map(|id| {
+            let n = scene.node(id)?;
+            let t = n.text().filter(|_| n.name == "numeral")?;
+            let shown = if t.text_case == TextCase::Upper { t.characters.to_uppercase() } else { t.characters.clone() };
+            let w = draw::text_width(&shown, t.font_size);
+            let (x, y, bw) = (n.transform.tx, n.transform.ty + t.font_size * 0.68, n.size.width);
+            let x0 = match t.align {
+                document_proto::TextAlign::Left => x,
+                document_proto::TextAlign::Right => x + bw - w,
+                _ => x + (bw - w) / 2.0,
+            };
+            let h = t.font_size * 0.9;
+            // The nearest point of the glyph box to the shaft.
+            let nx = cx.clamp(x0, x0 + w) - cx;
+            let ny = cy.clamp(y - h / 2.0, y + h / 2.0) - cy;
+            Some((t.characters.clone(), t.font_size, nx.hypot(ny)))
+        })
+        .collect()
+}
+
+#[test]
+fn stepped_words_clear_their_ticks_at_a_readable_size() {
+    // "Triode" and "Standard" used to be centred on one radius — across
+    // their ticks — and set at 7·d/60 px, 5 px on a 44 px knob.
+    let spec = surface_kit::knobs::spec_of("knob.chicken_head").unwrap();
+    for d in [44.0, 64.0, 96.0] {
+        let p = Place::new("Stage").size(d).options(&["Triode", "Pentode", "Standard"]);
+        let (scene, root, _) = placed("knob.chicken_head", &p).unwrap();
+        let tick_end = (spec.ring.geometry().0 + spec.ring_offset + 5.0) * d / 60.0;
+        let labels = label_reach(&scene, root);
+        assert_eq!(labels.len(), 3, "{labels:?}");
+        for (s, size, reach) in labels {
+            assert!(size >= draw::SCALE_TYPE_MIN, "{d} px: {s} at {size} px");
+            assert!(reach > tick_end + 1.0, "{d} px: {s} comes to {reach:.1} px of the shaft, its tick ends at {tick_end:.1}");
+        }
+    }
+}
+
+#[test]
+fn scale_numerals_are_readable_and_clear_on_a_small_knob() {
+    for id in ["knob.bakelite", "knob.pointer", "knob.skirted", "knob.metal"] {
+        let spec = surface_kit::knobs::spec_of(id).unwrap();
+        let (scene, root, _) = placed(id, &Place::new("x").size(44.0)).unwrap();
+        let tick_end = (spec.ring.geometry().0 + spec.ring_offset + 5.0) * 44.0 / 60.0;
+        for (s, size, reach) in label_reach(&scene, root) {
+            assert!(size >= draw::SCALE_TYPE_MIN, "{id}: {s} at {size} px");
+            assert!(reach > tick_end + 1.0, "{id}: {s} at {reach:.1}, ticks end at {tick_end:.1}");
+        }
+    }
+}
+
+#[test]
+fn an_empty_scale_prints_no_ring() {
+    for id in knob_ids() {
+        let (scene, root, _) = placed(id, &Place::new("x").scale(&[])).unwrap();
+        let printed: Vec<String> = scene.walk(root).into_iter().filter_map(|n| scene.node(n)).filter(|n| n.name.starts_with("scale") || n.name == "numeral").map(|n| n.name.clone()).collect();
+        // The dial prints its numerals on its own skirt, not as a ring.
+        if id != "knob.dial" {
+            assert!(printed.is_empty(), "{id}: {printed:?}");
+        }
+    }
+}
+
+#[test]
+fn a_concentric_pair_can_be_all_grey_and_stepped() {
+    let p = Place::new("Freq").variant("grey").options(&["Off", "35", "60", "110", "220"]).inner(Place::new("Gain"));
+    let (_, _, c) = placed("knob.concentric", &p).unwrap();
+    assert_eq!(c.kind, ControlKind::Knob { sweep_degrees: surface_kit::detent_sweep(5) });
 }

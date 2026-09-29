@@ -454,6 +454,7 @@ fn meter_band(b: &mut Builder<'_>, panel: NodeId) {
         "meter.vu_ivory",
         &Place::new("GR meter")
             .size(182.0)
+            .options(&["glass"])
             .legend("VU")
             .bind(Binding::stream(GR))
             // The METER bank switches the movement: gain reduction, the

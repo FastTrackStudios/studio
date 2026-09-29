@@ -87,7 +87,8 @@ fn bar(b: &mut Builder<'_>, parent: NodeId, p: &Place, horizontal: bool) -> Node
         let slot = if p.reverse { n - 1 - i } else { i };
         // The dB at this segment's top edge colours it.
         let db = floor + (ceiling - floor) * (i as f64 + 1.0) / n as f64;
-        let color = lamp_color(p.variant.as_deref(), db - 0.01, gr);
+        let color = p.lamp_color(i).unwrap_or_else(|| lamp_color(p.variant.as_deref(), db - 0.01, gr).to_string());
+        let color = color.as_str();
         let rect = if horizontal {
             (pad + slot as f64 * pitch + pitch * 0.12, pad, pitch * 0.76, sh)
         } else {
@@ -179,7 +180,8 @@ fn led_ladder(b: &mut Builder<'_>, parent: NodeId, p: &Place) -> NodeId {
         let slot = if p.reverse { n - 1 - i } else { i };
         let along = pitch * (slot as f64 + 0.5);
         let (cx, cy) = if vertical { (d / 2.0 + 4.0, len - along) } else { (along, d / 2.0 + 3.0) };
-        let color = lamp_color(p.variant.as_deref(), *t, gr);
+        let color = p.lamp_color(i).unwrap_or_else(|| lamp_color(p.variant.as_deref(), *t, gr).to_string());
+        let color = color.as_str();
         let r = d / 2.0;
         b.add(root, draw::circle("bezel", cx, cy, r + (d * 0.16).max(1.2), lin(180.0, &[(0.0, "#2a2b2e".into()), (1.0, "#060607".into())])));
         let dark = rad(0.38, 0.3, 0.95, &[(0.0, "#ffffff22".into()), (0.5, mixs(color, "#000000", 0.62)), (1.0, "#000000d0".into())]);
@@ -211,6 +213,8 @@ fn lamp(b: &mut Builder<'_>, parent: NodeId, p: &Place) -> NodeId {
         Some("blue") => "#4aa0f4",
         _ => "#e33a2a",
     };
+    let custom = p.lamp_color(0);
+    let color = custom.as_deref().unwrap_or(color);
     let legend = p.legend.clone().unwrap_or_default();
     let size = (s * 0.4).clamp(7.0, 9.0);
     let cap_h = if legend.is_empty() { 0.0 } else { size * 1.6 };
@@ -249,7 +253,7 @@ pub(crate) fn defs() -> Vec<ComponentDef> {
         def(
             "meter.led_bar",
             "LED bar (horizontal)",
-            "A horizontal segmented LED bar lit from the left — a digital unit's input/output ladder. Green, amber from −6, red from 0 (or one colour by variant). `options`: `floor=-40`, `ceiling=3`, `segments=16`, `gr` (lights as gain reduction deepens; span 0…−20). `scale` prints labels along it; `reverse` lights it from the right. Honours the binding's curve. Size = length.",
+            "A horizontal segmented LED bar lit from the left — a digital unit's input/output ladder. Green, amber from −6, red from 0 (or one colour by variant; any colours with `color=#hex` or per lamp `colors=#a,#b,…`, the last carrying on). `options`: `floor=-40`, `ceiling=3`, `segments=16`, `gr` (lights as gain reduction deepens; span 0…−20). `scale` prints labels along it; `reverse` lights it from the right. Honours the binding's curve. Size = length.",
             &["traffic", "green", "amber", "red", "blue"],
             160.0,
             "level stream",
@@ -267,7 +271,7 @@ pub(crate) fn defs() -> Vec<ComponentDef> {
         def(
             "meter.led_ladder",
             "LED ladder",
-            "A row of round lamps, each lit once the reading reaches the threshold printed under it — the Distressor's GR ladder, a signal/over pair. `scale` = the thresholds in dB (default −20 −10 −6 −3 0 +3; with the `gr` option, dB of reduction, default 1…20). `vertical` stacks it; `reverse` lights it right to left. Lit lamps give off light. Size = length.",
+            "A row of round lamps, each lit once the reading reaches the threshold printed under it — the Distressor's GR ladder, a signal/over pair. `scale` = the thresholds in dB (default −20 −10 −6 −3 0 +3; with the `gr` option, dB of reduction, default 1…20). `vertical` stacks it; `reverse` lights it right to left. Lit lamps give off light. `color=` / `colors=` as `meter.led_bar`. Size = length.",
             &["traffic", "green", "amber", "red", "blue"],
             144.0,
             "level stream",
@@ -276,7 +280,7 @@ pub(crate) fn defs() -> Vec<ComponentDef> {
         def(
             "meter.lamp",
             "Stream lamp",
-            "A jewel lamp in a chrome bezel whose brightness follows a scalar stream (0…1 of its range) — an LFO rate lamp, a signal-present lamp. The lit lens is a `Glow` slot, so its light scales with the value. `legend` prints under it. Size = bezel diameter.",
+            "A jewel lamp in a chrome bezel whose brightness follows a scalar stream (0…1 of its range) — an LFO rate lamp, a signal-present lamp. The lit lens is a `Glow` slot, so its light scales with the value. `legend` prints under it; `color=#hex` lights it in any colour. Size = bezel diameter.",
             &["red", "green", "amber", "white", "blue"],
             22.0,
             "scalar stream",
