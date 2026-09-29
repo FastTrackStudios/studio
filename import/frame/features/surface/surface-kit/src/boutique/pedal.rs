@@ -50,7 +50,7 @@ fn paint(v: Option<&str>) -> [&'static str; 5] {
         Some("black") => ["#2a2b31", "#1e1f24", "#15161a", "#6a6d7a", "#050506"],
         Some("cream") => ["#e9dfcc", "#d9ccb2", "#c4b596", "#fffaf0", "#8f8266"],
         Some("red") => ["#8e2a2a", "#761f22", "#5a171a", "#d06a60", "#2e0a0c"],
-        _ => ["#373d62", "#2e3354", "#262a46", "#8e97cc", "#0b0d1a"],
+        _ => ["#31365a", "#292d4b", "#20233a", "#9aa2d8", "#07080f"],
     }
 }
 
@@ -87,9 +87,9 @@ fn painted_pedal(b: &mut Builder<'_>, parent: NodeId, p: &Place) -> NodeId {
         let y0 = lh * (i as f64 + rng.f()) / n as f64;
         let x0 = rng.range(-10.0, w * 0.4);
         let len = rng.range(w * 0.4, w * 1.1);
-        let amp = rng.range(0.2, 1.2);
+        let amp = rng.range(0.4, 2.4);
         let ph = rng.range(0.0, std::f64::consts::TAU);
-        let freq = rng.range(0.02, 0.07);
+        let freq = rng.range(0.03, 0.11);
         let tilt = rng.range(-0.03, 0.03);
         let pts: Vec<(f64, f64)> = (0..=24).map(|k| {
             let x = x0 + len * f64::from(k) / 24.0;
@@ -97,7 +97,7 @@ fn painted_pedal(b: &mut Builder<'_>, parent: NodeId, p: &Place) -> NodeId {
         }).collect();
         bands[i % 4].push(pts);
     }
-    let styles = [(light, 0.26, 0.9), (dark, 0.55, 1.8), (light, 0.14, 2.6), (dark, 0.4, 0.7)];
+    let styles = [(light, 0.3, 0.8), (dark, 0.6, 2.0), (light, 0.16, 2.8), (dark, 0.45, 0.8)];
     for (k, (lines, (c, a, wgt))) in bands.iter().zip(styles).enumerate() {
         let col = crate::controls::parts::alpha(c, a);
         b.add(lid_id, strokes(&format!("brush {k}"), w, lh, lines, &col, wgt));

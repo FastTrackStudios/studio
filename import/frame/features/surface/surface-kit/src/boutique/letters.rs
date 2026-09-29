@@ -97,7 +97,7 @@ impl Hand {
     /// Paint-marker capitals at `size` px.
     #[must_use]
     pub const fn marker(size: f64) -> Self {
-        Self { size, weight: 0.16, slant: 0.0, wobble: 0.075, tracking: 0.12 }
+        Self { size, weight: 0.12, slant: 0.0, wobble: 0.075, tracking: 0.12 }
     }
 
     /// A slanted brush script (an amp's logo).

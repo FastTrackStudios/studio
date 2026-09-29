@@ -246,7 +246,7 @@ pub fn silk_combo() -> Face {
     const H: f64 = 770.0;
     const INK: &str = "#f1ece4";
     let scene = canvas("Silk Combo", |b, root| {
-        let cab = cabinet(b, root, W, H, "black");
+        let cab = cabinet(b, root, W, H, "brown");
         let (px, py, pw, ph) = (24.0, 20.0, W - 48.0, 76.0);
         let mut plate = draw::frame("Faceplate", px, py, pw, ph);
         plate.fills = vec![draw::linear(180.0, &[(0.0, "#1a1918"), (1.0, "#0e0d0d")])];

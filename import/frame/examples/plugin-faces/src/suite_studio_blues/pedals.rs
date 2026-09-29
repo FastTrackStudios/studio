@@ -17,7 +17,7 @@ use crate::reverb::ui;
 
 const H: f64 = PEDAL_H;
 /// Knob-legend capitals, px.
-const LEG: f64 = 8.5;
+const LEG: f64 = 8.0;
 /// Stomp row: actuator diameter and centre line.
 const STOMP_D: f64 = 26.0;
 const STOMP_Y: f64 = 0.79 * H;
@@ -41,9 +41,9 @@ pub fn plain_boost() -> Face {
         knob(b, lid, "knob.fluted_white", "white", "boost/volume", "Volume", 50.0, W * 0.5, H * 0.135);
         letter(b, lid, "VOLUME", W * 0.5, H * 0.265, LEG);
         letter(b, lid, "BOOST", W * 0.5, H * 0.39, LEG);
-        toggle(b, lid, "boost/boost", "Boost", 11.0, W * 0.5, H * 0.47);
-        tape(b, lid, "PLAIN", W * 0.52, H * 0.6, W * 0.72, 13.0, "#c9c9d6", -0.6);
-        tape(b, lid, "BOOST", W * 0.46, H * 0.665, W * 0.68, 13.0, "#c9c9d6", 0.5);
+        toggle(b, lid, "boost/boost", "Boost", 13.0, W * 0.5, H * 0.47);
+        tape(b, lid, "PLAIN", W * 0.52, H * 0.6, W * 0.72, 14.0, "#c9c9d6", -0.6);
+        tape(b, lid, "BOOST", W * 0.46, H * 0.665, W * 0.68, 14.0, "#c9c9d6", 0.5);
         stomp(b, lid, "boost/on", "Bypass", STOMP_D, W * 0.56, STOMP_Y, "#3b8cff", true);
     });
     let params = vec![
@@ -66,10 +66,10 @@ pub fn peak_filter() -> Face {
         }
         for (addr, name, up, down, x) in [("filter/direction", "Direction", "UP", "DOWN", 0.19), ("filter/speed", "Speed", "FAST", "SLOW", 0.5), ("filter/range", "Range", "Hi", "LO", 0.81)] {
             letter(b, lid, up, W * x, H * 0.32, LEG * 0.95);
-            toggle(b, lid, addr, name, 10.0, W * x, H * 0.385);
+            toggle(b, lid, addr, name, 13.0, W * x, H * 0.385);
             letter(b, lid, down, W * x, H * 0.452, LEG * 0.95);
         }
-        tape(b, lid, "PEAK FILTER", W * 0.5, H * 0.62, W * 0.86, 14.0, "#f2a9bd", -0.4);
+        tape(b, lid, "PEAK FILTER", W * 0.5, H * 0.62, W * 0.86, 16.0, "#f2a9bd", -0.4);
         stomp(b, lid, "filter/on", "Bypass", STOMP_D, W * 0.5, STOMP_Y, "#ff3b2f", true);
     });
     let params = vec![
@@ -93,7 +93,7 @@ pub fn mild_drive() -> Face {
             knob(b, lid, "knob.knurled_dome", "brown", addr, name, 48.0, W * x, H * y);
             letter(b, lid, name, W * x, H * ly, LEG);
         }
-        tape(b, lid, "MILD DRIVE", W * 0.5, H * 0.64, W * 0.84, 14.0, "#dcdce6", 0.3);
+        tape(b, lid, "MILD DRIVE", W * 0.5, H * 0.64, W * 0.84, 16.0, "#dcdce6", 0.3);
         stomp(b, lid, "mild/on", "Bypass", STOMP_D, W * 0.5, STOMP_Y, "#ff3b2f", true);
     });
     let params = vec![level("mild", "gain", "Gain", 50.0).featured(), level("mild", "level", "Level", 50.0).featured(), level("mild", "treble", "Treble", 50.0), on("mild")];
@@ -111,9 +111,9 @@ pub fn teal_drive() -> Face {
             letter(b, lid, name, W * x, H * ly, LEG);
         }
         letter(b, lid, "BB", W * 0.5, H * 0.065, LEG);
-        toggle(b, lid, "teal/voice", "Voice", 10.0, W * 0.5, H * 0.14);
+        toggle(b, lid, "teal/voice", "Voice", 13.0, W * 0.5, H * 0.14);
         letter(b, lid, "TS", W * 0.5, H * 0.215, LEG);
-        tape(b, lid, "TEAL DRIVE", W * 0.5, H * 0.63, W * 0.88, 14.0, "#8fd9a4", -0.3);
+        tape(b, lid, "TEAL DRIVE", W * 0.5, H * 0.63, W * 0.88, 16.0, "#8fd9a4", -0.3);
         stomp(b, lid, "teal/on", "Bypass", STOMP_D, W * 0.5, STOMP_Y, "#ff3b2f", true);
     });
     let params = vec![
@@ -138,7 +138,7 @@ pub fn short_delay() -> Face {
             knob(b, lid, "knob.dome", "teal", addr, name, 40.0, W * x, H * y);
             letter(b, lid, name, W * x, H * ly, if name == "FEEDBACK" { LEG * 0.8 } else { LEG });
         }
-        tape(b, lid, "SHORT DELAY", W * 0.5, H * 0.63, W * 0.86, 14.0, "#86b8e0", 0.3);
+        tape(b, lid, "SHORT DELAY", W * 0.5, H * 0.63, W * 0.86, 16.0, "#86b8e0", 0.3);
         stomp(b, lid, "short/on", "Bypass", STOMP_D, W * 0.5, STOMP_Y, "#3b8cff", true);
     });
     let params = vec![
@@ -171,10 +171,10 @@ pub fn haze_delay() -> Face {
         parts::radio(b, lid, "haze/mode", 3, dx + dw * 0.95, dy + dh * 0.25, dh * 0.25, 5.0, "#ffffff");
         // SYNC and PING PONG.
         letter(b, lid, "SYNC", W * 0.765, H * 0.065, LEG * 0.95);
-        toggle(b, lid, "haze/sync", "Sync", 10.0, W * 0.765, H * 0.155);
+        toggle(b, lid, "haze/sync", "Sync", 12.0, W * 0.765, H * 0.155);
         letter(b, lid, "PiNG", W * 0.921, H * 0.05, LEG * 0.85);
         letter(b, lid, "PONG", W * 0.921, H * 0.09, LEG * 0.85);
-        toggle(b, lid, "haze/pingpong", "Ping pong", 10.0, W * 0.921, H * 0.165);
+        toggle(b, lid, "haze/pingpong", "Ping pong", 12.0, W * 0.921, H * 0.165);
         for (addr, name, x) in [("haze/mix", "MiX", 0.13), ("haze/hardness", "HARDNESS", 0.385), ("haze/feedback", "FEEDBACK", 0.64), ("haze/time", "TiME", 0.89)] {
             knob(b, lid, "knob.bar_dome", "black", addr, name, 44.0, W * x, H * 0.35);
             letter(b, lid, name, W * x, H * 0.5, if name.len() > 5 { LEG * 0.85 } else { LEG });
@@ -182,7 +182,7 @@ pub fn haze_delay() -> Face {
         letter(b, lid, "ACTiVE", W * 0.13, H * 0.672, LEG);
         letter(b, lid, "TAP", W * 0.89, H * 0.64, LEG);
         letter(b, lid, "TEMPO", W * 0.89, H * 0.685, LEG);
-        tape(b, lid, "HAZE DELAY", W * 0.51, H * 0.665, W * 0.46, 15.0, "#c98fdc", 0.3);
+        tape(b, lid, "HAZE DELAY", W * 0.51, H * 0.665, W * 0.46, 16.0, "#c98fdc", 0.3);
         stomp(b, lid, "haze/on", "Active", STOMP_D, W * 0.13, STOMP_Y, "#ff6a5a", false);
         let tap = surface_kit::Place::new("Tap tempo").size(STOMP_D).bind(ui::bind("haze/tap")).legend("").options(&["side=left", "color=#ff6a5a", "momentary"]);
         let t = surface_kit::place(b, lid, "switch.stomp_side_led", &tap).unwrap_or_else(|e| panic!("{e}"));
@@ -219,9 +219,9 @@ pub fn plate_verb() -> Face {
             letter(b, lid, "CUT", W * x, H * 0.53, LEG);
         }
         letter(b, lid, "HALL", W * 0.5, H * 0.315, LEG);
-        toggle(b, lid, "plate/type", "Type", 10.0, W * 0.5, H * 0.375);
+        toggle(b, lid, "plate/type", "Type", 13.0, W * 0.5, H * 0.375);
         letter(b, lid, "PLATE", W * 0.5, H * 0.435, LEG);
-        tape(b, lid, "PLATE VERB", W * 0.5, H * 0.665, W * 0.82, 14.0, "#f7a58a", -0.3);
+        tape(b, lid, "PLATE VERB", W * 0.5, H * 0.665, W * 0.82, 16.0, "#f7a58a", -0.3);
         stomp(b, lid, "plate/on", "Bypass", STOMP_D, W * 0.5, STOMP_Y, "#ff3b2f", false);
     });
     let params = vec![

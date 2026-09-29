@@ -119,7 +119,7 @@ fn grille(b: &mut Builder<'_>, parent: NodeId, p: &Place) -> NodeId {
                 }
                 v
             };
-            for (name, off, color) in [("piping red", -3.6, "#c8405c"), ("piping green", 0.0, "#b4e0c8"), ("piping red 2", 3.6, "#c8405c")] {
+            for (name, off, color) in [("piping red", -4.4, "#c8405c"), ("piping green", 0.0, "#d6f2e2"), ("piping red 2", 4.4, "#c8405c")] {
                 let mut n = draw::path(name, 0.0, 0.0, w, h, polylines(&lines(off)), draw::solid("#00000000"));
                 n.fills.clear();
                 n.stroke = Stroke { paints: vec![draw::solid(color)], weight: 1.5, cap: StrokeCap::None, dash_pattern: vec![3.0, 1.6], ..Stroke::default() };
