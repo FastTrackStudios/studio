@@ -225,3 +225,188 @@ fn path_fit_cancels_node_origin_for_absolute_geometry() {
     let transform = compute_path_fit_transform(&fill_paths, &[], 100.0, 200.0, 100.0, 100.0, false);
     assert_eq!(transform, kurbo::Affine::translate((-100.0, -200.0)));
 }
+
+// ── inherited (group) transforms ─────────────────────────────────────────
+
+/// A 90° rotation (x axis → +y, i.e. clockwise on a y-down screen) with its
+/// origin at `(tx, ty)`.
+fn rot90(tx: f64, ty: f64) -> doc::Transform {
+    doc::Transform { a: 0.0, b: -1.0, tx, c: 1.0, d: 0.0, ty }
+}
+
+fn red_rect(x: f64, y: f64, w: f64, h: f64) -> Node {
+    let mut rect = node(NodeKind::Rectangle, x, y, w, h);
+    rect.fills = vec![solid(1.0, 0.0, 0.0, 1.0)];
+    rect
+}
+
+fn groups(primitives: &[PaintPrimitive]) -> Vec<AffineTransform2D> {
+    primitives
+        .iter()
+        .filter_map(|p| match p {
+            PaintPrimitive::GroupStart { transform, .. } => Some(*transform),
+            _ => None,
+        })
+        .collect()
+}
+
+fn approx(a: (f64, f64), b: (f64, f64)) -> bool {
+    (a.0 - b.0).abs() < 1e-9 && (a.1 - b.1).abs() < 1e-9
+}
+
+/// The filled rect's local origin, mapped through every enclosing group.
+fn world_origin_of_child_rect(primitives: &[PaintPrimitive]) -> (f64, f64) {
+    let mut stack = vec![AffineTransform2D::identity()];
+    for p in primitives {
+        match p {
+            PaintPrimitive::GroupStart { transform, .. } => stack.push(*stack.last().unwrap() * *transform),
+            PaintPrimitive::GroupEnd { .. } => {
+                stack.pop();
+            }
+            PaintPrimitive::Rect { x, y, fills, rotation, .. } if !fills.is_empty() => {
+                assert!(rotation.abs() < 1e-12, "the group carries the rotation, not the child");
+                return stack.last().unwrap().transform_point(*x, *y);
+            }
+            _ => {}
+        }
+    }
+    panic!("no filled rect");
+}
+
+#[test]
+fn untransformed_containers_and_rotated_leaves_emit_no_groups() {
+    let frame = node(NodeKind::Frame, 10.0, 10.0, 100.0, 100.0);
+    let mut leaf = red_rect(5.0, 5.0, 20.0, 10.0);
+    leaf.transform = rot90(40.0, 5.0);
+    let (scene, root) = scene_of(vec![(None, frame), (Some(0), leaf)]);
+    let primitives = build_scene_primitives(&scene, root);
+    assert!(groups(&primitives).is_empty());
+    assert!(primitives.iter().any(
+        |p| matches!(p, PaintPrimitive::Rect { rotation, .. } if (rotation - std::f64::consts::FRAC_PI_2).abs() < 1e-12)
+    ));
+}
+
+#[test]
+fn rotated_frame_rotates_its_children_about_its_origin() {
+    // Frame origin at (100, 100), rotated 90°; child 20×10 at local (10, 0).
+    let mut frame = node(NodeKind::Frame, 0.0, 0.0, 100.0, 100.0);
+    frame.transform = rot90(100.0, 100.0);
+    let (scene, root) = scene_of(vec![(None, frame), (Some(0), red_rect(10.0, 0.0, 20.0, 10.0))]);
+    let primitives = build_scene_primitives(&scene, root);
+
+    // Pivot about the frame's origin: T(100,100) · R90 · T(-100,-100).
+    assert_eq!(groups(&primitives), vec![AffineTransform2D { a: 0.0, b: -1.0, tx: 200.0, c: 1.0, d: 0.0, ty: 0.0 }]);
+    assert!(matches!(primitives.first(), Some(PaintPrimitive::GroupStart { .. })));
+    assert!(matches!(primitives.last(), Some(PaintPrimitive::GroupEnd { .. })));
+    // Local (10, 0) → frame origin + R90·(10, 0) = (100, 110).
+    assert!(approx(world_origin_of_child_rect(&primitives), (100.0, 110.0)));
+}
+
+#[test]
+fn nested_rotations_compose() {
+    // Outer: origin (100, 100), 90°. Inner: at outer-local (50, 0), another 90°.
+    let mut outer = node(NodeKind::Frame, 0.0, 0.0, 100.0, 100.0);
+    outer.transform = rot90(100.0, 100.0);
+    let mut inner = node(NodeKind::Frame, 0.0, 0.0, 40.0, 40.0);
+    inner.transform = rot90(50.0, 0.0);
+    let (scene, root) =
+        scene_of(vec![(None, outer), (Some(0), inner), (Some(1), red_rect(10.0, 0.0, 20.0, 10.0))]);
+    let primitives = build_scene_primitives(&scene, root);
+    assert_eq!(groups(&primitives).len(), 2);
+    // 180° total: inner-local (10, 0) → outer-local (50, 10) → world (90, 150).
+    assert!(approx(world_origin_of_child_rect(&primitives), (90.0, 150.0)));
+}
+
+#[test]
+fn scaled_parent_scales_children() {
+    let mut frame = node(NodeKind::Frame, 0.0, 0.0, 50.0, 50.0);
+    frame.transform = doc::Transform { a: 2.0, b: 0.0, tx: 10.0, c: 0.0, d: 2.0, ty: 10.0 };
+    let (scene, root) = scene_of(vec![(None, frame), (Some(0), red_rect(5.0, 5.0, 10.0, 10.0))]);
+    let primitives = build_scene_primitives(&scene, root);
+    assert_eq!(groups(&primitives), vec![AffineTransform2D { a: 2.0, b: 0.0, tx: -10.0, c: 0.0, d: 2.0, ty: -10.0 }]);
+    assert!(approx(world_origin_of_child_rect(&primitives), (20.0, 20.0)));
+}
+
+#[test]
+fn groups_are_transparent_to_their_childrens_transforms() {
+    // Figma semantics: a GROUP's children already carry its transform.
+    let mut group = node(NodeKind::Group, 0.0, 0.0, 100.0, 100.0);
+    group.transform = rot90(100.0, 0.0);
+    let (scene, root) = scene_of(vec![(None, group), (Some(0), red_rect(10.0, 0.0, 20.0, 10.0))]);
+    assert!(groups(&build_scene_primitives(&scene, root)).is_empty());
+}
+
+#[test]
+fn transformed_mask_bounds_cover_the_transformed_box() {
+    let frame = node(NodeKind::Frame, 0.0, 0.0, 200.0, 200.0);
+    let mut mask = red_rect(0.0, 0.0, 40.0, 10.0);
+    mask.transform = rot90(100.0, 20.0);
+    mask.mask = Some(doc::MaskKind::Alpha);
+    let (scene, root) =
+        scene_of(vec![(None, frame), (Some(0), mask), (Some(0), red_rect(0.0, 0.0, 200.0, 200.0))]);
+    let bounds = build_scene_primitives(&scene, root).into_iter().find_map(|p| match p {
+        PaintPrimitive::MaskDefStart { x, y, width, height, .. } => Some((x, y, width, height)),
+        _ => None,
+    });
+    let (x, y, w, h) = bounds.expect("mask");
+    assert!(approx((x, y), (90.0, 20.0)) && approx((w, h), (10.0, 40.0)), "{bounds:?}");
+}
+
+#[cfg(feature = "anyrender")]
+mod pixels {
+    use super::*;
+
+    /// Render `scene` (no text font) and report which `points` are red;
+    /// `None` when there is no GPU.
+    fn red_at(scene: &Scene, root: doc::NodeId, size: u32, points: &[(u32, u32)]) -> Option<Vec<bool>> {
+        let mut vs = vello::Scene::new();
+        paint_scene_into(&mut vs, scene, root, kurbo::Affine::IDENTITY, None);
+        let Ok(mut offscreen) = crate::offscreen::Offscreen::new() else {
+            eprintln!("skipping pixel check: no GPU adapter");
+            return None;
+        };
+        let px = offscreen.render(&vs, size, size, peniko::Color::from_rgba8(0, 0, 0, 255)).expect("render");
+        Some(
+            points
+                .iter()
+                .map(|&(x, y)| {
+                    let i = ((y * px.width + x) * 4) as usize;
+                    px.rgba[i] > 200 && px.rgba[i + 1] < 50 && px.rgba[i + 2] < 50
+                })
+                .collect(),
+        )
+    }
+
+    #[test]
+    fn rotated_frame_child_pixels_land_rotated() {
+        let mut frame = node(NodeKind::Frame, 0.0, 0.0, 100.0, 100.0);
+        frame.transform = rot90(100.0, 100.0);
+        let (scene, root) = scene_of(vec![(None, frame), (Some(0), red_rect(10.0, 0.0, 20.0, 10.0))]);
+        // Rotated: x ∈ [90, 100], y ∈ [110, 130]. Unrotated: x ∈ [110, 130], y ∈ [100, 110].
+        if let Some(hits) = red_at(&scene, root, 220, &[(95, 120), (120, 105)]) {
+            assert_eq!(hits, vec![true, false]);
+        }
+    }
+
+    #[test]
+    fn nested_and_scaled_pixels() {
+        let mut outer = node(NodeKind::Frame, 0.0, 0.0, 100.0, 100.0);
+        outer.transform = rot90(100.0, 100.0);
+        let mut inner = node(NodeKind::Frame, 0.0, 0.0, 40.0, 40.0);
+        inner.transform = rot90(50.0, 0.0);
+        let (scene, root) =
+            scene_of(vec![(None, outer), (Some(0), inner), (Some(1), red_rect(10.0, 0.0, 20.0, 10.0))]);
+        // 180°: x ∈ [70, 90], y ∈ [140, 150]. Without inheritance: [160, 180] × [100, 110].
+        if let Some(hits) = red_at(&scene, root, 220, &[(80, 145), (170, 105)]) {
+            assert_eq!(hits, vec![true, false]);
+        }
+
+        let mut frame = node(NodeKind::Frame, 0.0, 0.0, 50.0, 50.0);
+        frame.transform = doc::Transform { a: 2.0, b: 0.0, tx: 10.0, c: 0.0, d: 2.0, ty: 10.0 };
+        let (scene, root) = scene_of(vec![(None, frame), (Some(0), red_rect(5.0, 5.0, 10.0, 10.0))]);
+        // Scaled: [20, 40]²; unscaled would be [15, 25]².
+        if let Some(hits) = red_at(&scene, root, 64, &[(35, 35), (21, 21), (17, 17)]) {
+            assert_eq!(hits, vec![true, true, false]);
+        }
+    }
+}

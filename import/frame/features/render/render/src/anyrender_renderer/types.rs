@@ -192,8 +192,29 @@ pub struct TextStyleRun {
     pub font_weight: Option<f64>,
 }
 
+/// Paint primitives, in paint order.
+///
+/// Coordinates are in *flattened scene space*: a child sits at its parent's
+/// box origin plus its own `tx`/`ty`, in the parent's unrotated frame. A
+/// container whose transform has a non-translation part (rotation, scale,
+/// skew, flip) wraps its own primitives and its whole subtree in a
+/// [`PaintPrimitive::GroupStart`]/[`PaintPrimitive::GroupEnd`] pair; painters
+/// apply the group's matrix on top of everything between them, so children
+/// inherit the parent's transform (world = parent world ∘ local). Scenes
+/// without such containers emit no groups, so their primitives are exactly
+/// what they were before groups existed.
 #[derive(Debug, Clone, PartialEq)]
 pub enum PaintPrimitive {
+    /// Apply `transform` (flattened scene space → flattened scene space,
+    /// pivot included) to every primitive until the matching `GroupEnd`,
+    /// composing with any enclosing group (`outer * transform`).
+    GroupStart {
+        node_id: NodeId,
+        transform: AffineTransform2D,
+    },
+    GroupEnd {
+        node_id: NodeId,
+    },
     LayerStart {
         node_id: NodeId,
         x: f64,

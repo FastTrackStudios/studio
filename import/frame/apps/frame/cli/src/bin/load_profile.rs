@@ -4,6 +4,8 @@ use std::time::Instant;
 
 #[derive(Default, Clone, Copy)]
 struct PrimitivePassCounts {
+    group_start: usize,
+    group_end: usize,
     layer_start: usize,
     layer_end: usize,
     clip_start: usize,
@@ -41,6 +43,8 @@ fn count_passes(primitives: &[render::PaintPrimitive]) -> PrimitivePassCounts {
     let mut out = PrimitivePassCounts::default();
     for p in primitives {
         match p {
+            render::PaintPrimitive::GroupStart { .. } => out.group_start += 1,
+            render::PaintPrimitive::GroupEnd { .. } => out.group_end += 1,
             render::PaintPrimitive::LayerStart { .. } => out.layer_start += 1,
             render::PaintPrimitive::LayerEnd { .. } => out.layer_end += 1,
             render::PaintPrimitive::ClipStart { .. } => out.clip_start += 1,
@@ -166,6 +170,8 @@ fn run() -> Result<(), String> {
             "nodeCount": samples.last().map(|s| s.node_count).unwrap_or(0),
             "primitiveCount": samples.last().map(|s| s.primitive_count).unwrap_or(0),
             "passCounts": {
+                "groupStart": samples.last().map(|s| s.pass_counts.group_start).unwrap_or(0),
+                "groupEnd": samples.last().map(|s| s.pass_counts.group_end).unwrap_or(0),
                 "layerStart": samples.last().map(|s| s.pass_counts.layer_start).unwrap_or(0),
                 "layerEnd": samples.last().map(|s| s.pass_counts.layer_end).unwrap_or(0),
                 "clipStart": samples.last().map(|s| s.pass_counts.clip_start).unwrap_or(0),

@@ -5771,10 +5771,14 @@ version = "0.1.0"
 dependencies = [
  "architect 0.1.0 (git+https://github.com/FastTrackStudios/architect?tag=v0.0.2)",
  "document-proto",
+ "kurbo 0.13.1",
+ "peniko",
+ "render",
  "surface-memory",
  "surface-proto",
  "tokio",
  "uuid",
+ "vello",
  "vox-core",
  "vox-websocket",
 ]

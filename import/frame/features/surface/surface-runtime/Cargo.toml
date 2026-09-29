@@ -29,6 +29,10 @@ vox-websocket.workspace = true
 surface-proto = { path = "../surface-proto" }
 surface-memory = { path = "../surface-memory" }
 tokio.workspace = true
+render = { path = "../../render/render", features = ["anyrender"] }
+vello.workspace = true
+kurbo.workspace = true
+peniko.workspace = true
 
 [lints]
 workspace = true

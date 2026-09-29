@@ -218,9 +218,46 @@ fn local_rect(node: &doc::Node) -> (f64, f64, f64, f64) {
     (node.transform.tx, node.transform.ty, node.size.width, node.size.height)
 }
 
+/// Whether `t`'s 2×2 linear part is (within `EPS`) the identity: a pure
+/// translation, which positions children but doesn't transform them.
+fn is_translation(t: &doc::Transform) -> bool {
+    const EPS: f64 = 1e-9;
+    (t.a - 1.0).abs() <= EPS && t.b.abs() <= EPS && t.c.abs() <= EPS && (t.d - 1.0).abs() <= EPS
+}
+
+/// Whether a node's transform applies to its children.
+///
+/// Groups and boolean operations are transparent: like Figma's, their
+/// children are authored in the enclosing container's space and already carry
+/// the group's transform, so propagating it would apply it twice.
+fn propagates_transform(node: &doc::Node) -> bool {
+    !matches!(node.kind, NodeKind::Group | NodeKind::BooleanOperation { .. }) && !is_translation(&node.transform)
+}
+
+/// The group matrix for a node whose box origin sits at `(x, y)` in
+/// flattened scene space: its linear part, pivoted about its origin
+/// (`T(x, y) · L · T(-x, -y)`).
+fn group_transform(t: &doc::Transform, x: f64, y: f64) -> AffineTransform2D {
+    AffineTransform2D {
+        a: t.a,
+        b: t.b,
+        tx: x - (t.a * x + t.b * y),
+        c: t.c,
+        d: t.d,
+        ty: y - (t.c * x + t.d * y),
+    }
+}
+
 // ── layout ───────────────────────────────────────────────────────────────
 
 /// Absolute boxes for `root` and its subtree, running auto layout.
+///
+/// Boxes are axis-aligned in *flattened* scene space: each child sits at its
+/// parent's box origin plus its own offset, in the parent's **unrotated**
+/// frame. Ancestor rotation/scale/skew is not applied (the painters apply it
+/// through [`PaintPrimitive::GroupStart`]); a hit-tester over a transformed
+/// container must map the pointer through the inverse of the containers'
+/// transforms first.
 #[must_use]
 pub fn build_scene_layout_boxes(scene: &Scene, root: NodeId) -> HashMap<NodeId, LayoutBox> {
     let mut out = HashMap::new();
@@ -398,7 +435,6 @@ impl Cx<'_> {
             return;
         }
         let effective_opacity = clamp01(inherited_opacity * clamp01(node.opacity));
-        let rotation = node.transform.rotation();
         let (lx, ly, lw, lh) = local_rect(node);
         let (chain_x, chain_y) = (parent_x + lx, parent_y + ly);
         let (x, y, width, height) = if force_local {
@@ -432,10 +468,6 @@ impl Cx<'_> {
         let mut child_blurs = inherited_blurs.to_vec();
         child_blurs.extend(effects.iter().filter(|e| matches!(e.kind, EffectKind::LayerBlur)).cloned());
 
-        if needs_layer {
-            self.out.push(PaintPrimitive::LayerStart { node_id, x, y, width, height, blend: blend.clone(), opacity: effective_opacity });
-        }
-
         let fill_paths = node.fill_geometry.clone();
         let stroke_paths = node.stroke_geometry.clone();
         let svg_base64 = snapshot_base64(node, scene);
@@ -446,6 +478,20 @@ impl Cx<'_> {
             _ => None,
         };
         let is_boolean = matches!(node.kind, NodeKind::BooleanOperation { .. });
+
+        // A container with a non-translation transform paints itself and its
+        // subtree inside a group carrying that transform, so children inherit
+        // it. Leaves keep their own `rotation` (no group, unchanged output).
+        let has_descendants = !node.children.is_empty()
+            || matches!(instance_component, Some(Some(main)) if scene.node(main).is_some_and(|m| !m.children.is_empty()));
+        let group = (has_descendants && propagates_transform(node)).then(|| group_transform(&node.transform, x, y));
+        let rotation = if group.is_some() { 0.0 } else { node.transform.rotation() };
+        if let Some(transform) = group {
+            self.out.push(PaintPrimitive::GroupStart { node_id, transform });
+        }
+        if needs_layer {
+            self.out.push(PaintPrimitive::LayerStart { node_id, x, y, width, height, blend: blend.clone(), opacity: effective_opacity });
+        }
 
         let child_overflows = node.clips_content
             && width > 0.0
@@ -575,6 +621,9 @@ impl Cx<'_> {
         if needs_layer {
             self.out.push(PaintPrimitive::LayerEnd { node_id });
         }
+        if group.is_some() {
+            self.out.push(PaintPrimitive::GroupEnd { node_id });
+        }
     }
 
     /// Children in order; a mask child masks the siblings after it.
@@ -587,7 +636,15 @@ impl Cx<'_> {
                 if let Some(m) = active_mask.take() {
                     self.out.push(PaintPrimitive::MaskApplyEnd { node_id: m });
                 }
-                let (mx, my, mw, mh) = self.child_box(child_id, x, y);
+                let (mut mx, mut my, mut mw, mut mh) = self.child_box(child_id, x, y);
+                if !is_translation(&child.transform) {
+                    // A transformed mask covers its transformed box.
+                    let g = group_transform(&child.transform, mx, my);
+                    let pts = [(mx, my), (mx + mw, my), (mx, my + mh), (mx + mw, my + mh)].map(|(px, py)| g.transform_point(px, py));
+                    let (x0, y0) = pts.iter().fold((f64::INFINITY, f64::INFINITY), |(a, b), p| (a.min(p.0), b.min(p.1)));
+                    let (x1, y1) = pts.iter().fold((f64::NEG_INFINITY, f64::NEG_INFINITY), |(a, b), p| (a.max(p.0), b.max(p.1)));
+                    (mx, my, mw, mh) = (x0, y0, x1 - x0, y1 - y0);
+                }
                 if mw > 0.0 && mh > 0.0 {
                     self.out.push(PaintPrimitive::MaskDefStart { node_id: child_id, x: mx, y: my, width: mw, height: mh, luminance: false });
                     self.node(child_id, x, y, false, opacity, blurs);

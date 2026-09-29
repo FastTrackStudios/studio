@@ -21,7 +21,7 @@ pub fn paint_scene_into(
 pub fn paint_primitives_into_scene_with(
     scene: &mut vello::Scene,
     primitives: &[PaintPrimitive],
-    scene_transform: kurbo::Affine,
+    root_transform: kurbo::Affine,
     text_font: Option<TextFontRef<'_>>,
 ) {
     use base64::Engine;
@@ -70,6 +70,9 @@ pub fn paint_primitives_into_scene_with(
     let mut capturing_mask = false;
     let mut mask_def_primitives: Vec<&PaintPrimitive> = Vec::new();
     let mut mask_bounds: Option<Rect> = None;
+    // Inherited group transforms (`GroupStart`), outermost first; each entry
+    // is already composed with the ones before it.
+    let mut group_stack: Vec<kurbo::Affine> = Vec::new();
 
     for primitive in primitives {
         // If we're capturing mask definition primitives, buffer them instead of rendering
@@ -85,7 +88,14 @@ pub fn paint_primitives_into_scene_with(
             continue;
         }
 
+        let scene_transform = group_stack.last().copied().unwrap_or(root_transform);
         match primitive {
+            PaintPrimitive::GroupStart { transform, .. } => {
+                group_stack.push(scene_transform * to_kurbo_affine(transform));
+            }
+            PaintPrimitive::GroupEnd { .. } => {
+                group_stack.pop();
+            }
             PaintPrimitive::LayerStart {
                 x,
                 y,
@@ -1578,8 +1588,17 @@ pub fn paint_primitives_into_scene_with(
         _font_data: &Option<FontData>,
         _font_ref: Option<&FontRef<'_>>,
     ) {
+        let root_transform = scene_transform;
+        let mut group_stack: Vec<kurbo::Affine> = Vec::new();
         for prim in prims {
+            let scene_transform = group_stack.last().copied().unwrap_or(root_transform);
             match prim {
+                PaintPrimitive::GroupStart { transform, .. } => {
+                    group_stack.push(scene_transform * to_kurbo_affine(transform));
+                }
+                PaintPrimitive::GroupEnd { .. } => {
+                    group_stack.pop();
+                }
                 PaintPrimitive::Rect {
                     x, y, width, height, fills, corner_radii, rotation, ..
                 } => {
@@ -1641,6 +1660,11 @@ pub fn paint_primitives_into_scene_with(
                 }
             }
         }
+    }
+
+    /// Row-major `[[a, b, tx], [c, d, ty]]` → kurbo's column-major coefficients.
+    fn to_kurbo_affine(t: &AffineTransform2D) -> kurbo::Affine {
+        kurbo::Affine::new([t.a, t.c, t.b, t.d, t.tx, t.ty])
     }
 
     fn apply_text_case(text: &str, text_case: &TextCase) -> String {

@@ -24,9 +24,28 @@ pub(super) fn source_id(node: &Node) -> Option<&str> {
     node.source.as_ref().map(|s| s.id.as_str())
 }
 
+#[cfg(feature = "svg_export")]
+thread_local! {
+    /// How many transform groups (`PaintPrimitive::GroupStart`) the exporter
+    /// is currently inside.
+    static GROUP_DEPTH: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+/// Track entering (`+1`) / leaving (`-1`) a transform group; `None` resets.
+#[cfg(feature = "svg_export")]
+pub(super) fn set_group_depth(delta: Option<isize>) {
+    GROUP_DEPTH.with(|d| d.set(delta.map_or(0, |delta| d.get().saturating_add_signed(delta))));
+}
+
 /// The source tool's absolute bounds `(x, y, w, h)`, sizes clamped to ≥ 0.
+///
+/// `None` inside a transform group: absolute bounds already include the
+/// ancestors' transforms, which the enclosing `<g transform>` applies again.
 #[cfg(feature = "svg_export")]
 pub(super) fn source_bounds(node: &Node) -> Option<(f64, f64, f64, f64)> {
+    if GROUP_DEPTH.with(std::cell::Cell::get) > 0 {
+        return None;
+    }
     let b = node.source.as_ref()?.bounds?;
     Some((b.x, b.y, b.width.max(0.0), b.height.max(0.0)))
 }

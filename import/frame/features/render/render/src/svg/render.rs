@@ -1,7 +1,7 @@
 use super::normalize::{normalize_svg_for_figma_parity, NormalizeOptions};
 use super::context::RenderCtx;
 use super::scene_source::{
-    export_base_color, export_bbox, export_root, source_bounds, source_id, stroke_paints,
+    export_base_color, export_bbox, export_root, set_group_depth, source_bounds, source_id, stroke_paints,
 };
 #[cfg(feature = "svg_export")]
 use kurbo::Shape;
@@ -204,12 +204,15 @@ pub fn run_cli<E: std::fmt::Display>(
     let mut clip_depth: usize = 0;
     // (depth_at_deferral, stroke_rect) — drained when the matching ClipEnd fires.
     let mut pending_post_clip_stroke: Vec<(usize, Rectangle)> = Vec::new();
+    set_group_depth(None);
 
     for primitive in primitives {
         if text_only_mode {
             match &primitive {
                 PaintPrimitive::Path { text_outline, .. } if *text_outline => {}
-                PaintPrimitive::Rect { .. }
+                PaintPrimitive::GroupStart { .. }
+                | PaintPrimitive::GroupEnd { .. }
+                | PaintPrimitive::Rect { .. }
                 | PaintPrimitive::LayerStart { .. }
                 | PaintPrimitive::LayerEnd { .. }
                 | PaintPrimitive::ClipStart { .. }
@@ -222,6 +225,30 @@ pub fn run_cli<E: std::fmt::Display>(
             }
         }
         match primitive {
+            PaintPrimitive::GroupStart { transform: g, .. } => {
+                // `g` maps flattened scene space; conjugate it by the export
+                // offset so it maps SVG user space: T(t) · g · T(-t).
+                let e = g.tx + tx - (g.a * tx + g.b * ty);
+                let f = g.ty + ty - (g.c * tx + g.d * ty);
+                let group = Group::new().set(
+                    "transform",
+                    format!(
+                        "matrix({} {} {} {} {} {})",
+                        fmt_f64(g.a),
+                        fmt_f64(g.c),
+                        fmt_f64(g.b),
+                        fmt_f64(g.d),
+                        fmt_f64(e),
+                        fmt_f64(f)
+                    ),
+                );
+                open_scoped_group(&mut group_stack, group);
+                set_group_depth(Some(1));
+            }
+            PaintPrimitive::GroupEnd { .. } => {
+                close_scoped_group(&mut svg_doc, &mut group_stack);
+                set_group_depth(Some(-1));
+            }
             PaintPrimitive::LayerStart { opacity, blend, .. } => {
                 let mut group = Group::new().set("opacity", fmt_f64(opacity.clamp(0.0, 1.0)));
                 if let Some(mode) = svg_mix_blend_mode(&blend) {
@@ -3863,6 +3890,36 @@ pub(super) fn push_node<N: svg::Node>(
     } else {
         let current = std::mem::replace(doc, svg::Document::new());
         *doc = current.add(node);
+    }
+}
+
+/// Open a group that also nests correctly while a mask definition is being
+/// captured (its content lands in the mask, not the document).
+#[cfg(feature = "svg_export")]
+fn open_scoped_group(groups: &mut Vec<svg::node::element::Group>, group: svg::node::element::Group) {
+    let mut group = Some(group);
+    MASK_CAPTURE_STATE.with(|slot| {
+        if let Some(state) = slot.borrow_mut().as_mut() {
+            state.groups.push(group.take().expect("group present"));
+        }
+    });
+    if let Some(group) = group {
+        groups.push(group);
+    }
+}
+
+/// Close the group [`open_scoped_group`] opened, adding it to its parent.
+#[cfg(feature = "svg_export")]
+fn close_scoped_group(doc: &mut svg::Document, groups: &mut Vec<svg::node::element::Group>) {
+    let captured = MASK_CAPTURE_STATE.with(|slot| slot.borrow_mut().as_mut().map(|state| state.groups.pop()));
+    match captured {
+        Some(Some(group)) => push_node(doc, groups, group),
+        Some(None) => {}
+        None => {
+            if let Some(group) = groups.pop() {
+                push_node(doc, groups, group);
+            }
+        }
     }
 }
 
