@@ -1,0 +1,19 @@
+[package]
+name = "surface-kit"
+description = "The hardware component kit: knobs, VU meters, buttons, switches, levers and panels — ported from FTS's audio UI kit as frame components agents can list, place and bind."
+version.workspace = true
+edition.workspace = true
+publish = false
+
+[dependencies]
+surface-proto = { path = "../surface-proto", default-features = false }
+surface-widgets = { path = "../surface-widgets" }
+document-proto = { path = "../../document/document-proto", default-features = false }
+serde_json = { workspace = true }
+
+[dev-dependencies]
+surface-runtime = { path = "../surface-runtime" }
+surface-memory = { path = "../surface-memory" }
+
+[lints]
+workspace = true

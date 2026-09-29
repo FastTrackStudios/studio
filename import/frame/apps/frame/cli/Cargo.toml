@@ -15,6 +15,7 @@ surface-proto = { path = "../../../features/surface/surface-proto" }
 surface-runtime = { path = "../../../features/surface/surface-runtime", features = ["remote"] }
 tokio = { workspace = true }
 architect = { workspace = true, features = ["vox"] }
+surface-kit = { path = "../../../features/surface/surface-kit" }
 surface-widgets = { path = "../../../features/surface/surface-widgets" }
 surface-memory = { path = "../../../features/surface/surface-memory" }
 serde = { workspace = true }

@@ -1994,6 +1994,7 @@ dependencies = [
  "serde",
  "serde_json",
  "skrifa 0.26.6",
+ "surface-kit",
  "surface-memory",
  "surface-proto",
  "surface-runtime",
@@ -5715,6 +5716,18 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c64fc7232dd8d2e4ac5ce4ef302b1d81e0b80d055b9d77c7c4f51f6aa4c867d6"
 dependencies = [
  "is_ci",
+]
+
+[[package]]
+name = "surface-kit"
+version = "0.1.0"
+dependencies = [
+ "document-proto",
+ "serde_json",
+ "surface-memory",
+ "surface-proto",
+ "surface-runtime",
+ "surface-widgets",
 ]
 
 [[package]]

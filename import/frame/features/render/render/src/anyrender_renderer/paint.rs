@@ -1360,6 +1360,9 @@ pub fn paint_primitives_into_scene_with(
         let end_angle = start_angle + std::f32::consts::PI * 2.0;
         Some(
             peniko::Gradient::new_sweep(center, start_angle, end_angle)
+                // A sweep is periodic: wrap past the seam instead of padding,
+                // so a start angle other than +x doesn't leave a flat wedge.
+                .with_extend(peniko::Extend::Repeat)
                 .with_stops(to_peniko_stops(stops).as_slice()),
         )
     }

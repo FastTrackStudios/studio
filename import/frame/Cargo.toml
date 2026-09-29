@@ -30,6 +30,7 @@ members = [
     "features/surface/surface-memory",
     "features/surface/surface-runtime",
     "features/surface/surface-widgets",
+    "features/surface/surface-kit",
     # ── tooling ───────────────────────────────────────────────────────
     "xtask",
 ]
@@ -52,6 +53,7 @@ default-members = [
     "features/surface/surface-memory",
     "features/surface/surface-runtime",
     "features/surface/surface-widgets",
+    "features/surface/surface-kit",
 ]
 
 [workspace.package]
