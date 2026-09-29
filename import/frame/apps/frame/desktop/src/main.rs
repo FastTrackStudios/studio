@@ -4,6 +4,7 @@
 //! frame [FILE.fm | FILE.frame] [--theme stage-dark|daylight] [--stats] [--size WxH]
 //! frame [FILE] --screenshot OUT.png [--frames N] [--script drag-first-knob]
 //! frame [FILE] --engine ws://127.0.0.1:4040/vox [--rig guitar] [...]
+//! frame DIR                        # gallery: ] / Tab next, [ / Shift-Tab previous
 //! ```
 //! Runs a control surface live against the in-process mock engine
 //! (`surface_memory::Memory::demo()`): moving meters, knobs/faders/buttons
@@ -54,6 +55,9 @@ pub struct EngineArg {
 
 pub struct Args {
     pub source: Source,
+    /// With a directory argument: every surface in it, `source` first.
+    /// `]`/Tab and `[`/Shift-Tab step through them in the window.
+    pub gallery: Vec<Source>,
     pub stats: bool,
     /// Initial window / screenshot size, logical px.
     pub size: (u32, u32),
@@ -70,7 +74,8 @@ pub enum Script {
 
 const USAGE: &str = "usage: frame [FILE.fm|FILE.frame] [--theme stage-dark|daylight] [--stats] [--size WxH]\n       \
                      frame [FILE] --screenshot OUT.png [--frames N] [--script drag-first-knob]\n       \
-                     frame [FILE] --engine ws://HOST:PORT/vox [--rig NAME] [...]";
+                     frame [FILE] --engine ws://HOST:PORT/vox [--rig NAME] [...]\n       \
+                     frame DIR   (gallery of every .fm/.frame in DIR; ] / Tab next, [ / Shift-Tab previous)";
 
 fn parse_args(args: impl IntoIterator<Item = String>) -> Result<Args, String> {
     let mut file = None;
@@ -78,6 +83,7 @@ fn parse_args(args: impl IntoIterator<Item = String>) -> Result<Args, String> {
     let mut rig = None;
     let mut out = Args {
         source: Source::Generated { theme: Box::new(Theme::stage_dark()) },
+        gallery: Vec::new(),
         stats: false,
         size: (1280, 480),
         screenshot: None,
@@ -118,13 +124,34 @@ fn parse_args(args: impl IntoIterator<Item = String>) -> Result<Args, String> {
             extra => return Err(format!("unexpected argument {extra}\n{USAGE}")),
         }
     }
-    out.source = file.map_or(Source::Generated { theme: Box::new(theme) }, Source::from_path);
+    match file {
+        Some(dir) if dir.is_dir() => {
+            out.gallery = gallery(&dir)?;
+            out.source = out.gallery[0].clone();
+        }
+        Some(path) => out.source = Source::from_path(path),
+        None => out.source = Source::Generated { theme: Box::new(theme) },
+    }
     match (&mut out.engine, rig) {
         (Some(e), rig) => e.rig = rig,
         (None, Some(_)) => return Err(format!("--rig needs --engine\n{USAGE}")),
         (None, None) => {}
     }
     Ok(out)
+}
+
+/// Every `.fm` / `.frame` in `dir`, sorted by name.
+fn gallery(dir: &std::path::Path) -> Result<Vec<Source>, String> {
+    let mut paths: Vec<PathBuf> = std::fs::read_dir(dir)
+        .map_err(|e| format!("{}: {e}", dir.display()))?
+        .filter_map(|e| e.ok().map(|e| e.path()))
+        .filter(|p| p.extension().is_some_and(|x| x == "fm" || x == "frame"))
+        .collect();
+    paths.sort();
+    if paths.is_empty() {
+        return Err(format!("{}: no .fm or .frame surfaces", dir.display()));
+    }
+    Ok(paths.into_iter().map(Source::from_path).collect())
 }
 
 /// The engine (mock, or connected live) and the first surface to play. A

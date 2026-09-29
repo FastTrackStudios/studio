@@ -130,6 +130,10 @@ impl Session {
                 self.bind(node, a.opt_str("source")?, a.opt_str("kind")?, a.0.get("slots"))
             }
             "generate" => self.generate(a.opt_str("theme")?),
+            "set_theme" => {
+                self.theme = parse_theme(a.str("theme")?)?;
+                Ok(format!("theme is now {} (applies to controls added from here on)", self.theme.name))
+            }
             "undo" => Ok(if self.history.undo(&mut self.scene)? { "undone".into() } else { "nothing to undo".into() }),
             "redo" => Ok(if self.history.redo(&mut self.scene)? { "redone".into() } else { "nothing to redo".into() }),
             other => err(format!("unknown tool `{other}`; tools: {}", tools().iter().map(|t| t.name).collect::<Vec<_>>().join(", "))),
@@ -377,11 +381,7 @@ impl Session {
     }
 
     fn generate(&mut self, theme: Option<&str>) -> Result<String> {
-        let theme = match theme.unwrap_or("stage-dark") {
-            "stage-dark" => Theme::stage_dark(),
-            "daylight" => Theme::daylight(),
-            other => return err(format!("unknown theme `{other}`; use stage-dark | daylight")),
-        };
+        let theme = parse_theme(theme.unwrap_or("stage-dark"))?;
         self.theme = theme.clone();
         let generated = surface_for_catalog(&self.catalog, &Options { theme, ..Options::default() }).to_scene();
         let gen_page = generated.pages()[0];
@@ -504,6 +504,14 @@ fn parse_source(s: &str) -> Result<Binding> {
         other => return err(format!("unknown source kind `{other}`; use param | action | stream | collection")),
     };
     Ok(Binding { source, ..Binding::param("") })
+}
+
+fn parse_theme(t: &str) -> Result<Theme> {
+    match t {
+        "stage-dark" => Ok(Theme::stage_dark()),
+        "daylight" => Ok(Theme::daylight()),
+        other => err(format!("unknown theme `{other}`; use stage-dark | daylight")),
+    }
 }
 
 fn parse_kind(k: &str) -> Result<ControlKind> {
@@ -647,6 +655,12 @@ pub fn tools() -> Vec<ToolDef> {
             description: "Replace the page with a complete, bound surface generated from the catalog (a panel per group, output strip, footswitch row). A good starting point to refine.",
             input_schema: obj(json!({"theme": {"type": "string", "enum": ["stage-dark", "daylight"]}}), &[]),
             mutates: true,
+        },
+        ToolDef {
+            name: "set_theme",
+            description: "Theme for controls added from now on (add_control): stage-dark (dim stages) | daylight (bright rooms). Existing nodes keep their colors.",
+            input_schema: obj(json!({"theme": {"type": "string", "enum": ["stage-dark", "daylight"]}}), &["theme"]),
+            mutates: false,
         },
         ToolDef { name: "undo", description: "Revert the last edit (one tool call).", input_schema: obj(json!({}), &[]), mutates: true },
         ToolDef { name: "redo", description: "Re-apply the last undone edit.", input_schema: obj(json!({}), &[]), mutates: true },

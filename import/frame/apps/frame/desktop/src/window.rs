@@ -28,6 +28,8 @@ pub fn run(args: &Args) -> Result<(), String> {
     }
     let mut app = App {
         source: args.source.clone(),
+        gallery: args.gallery.clone(),
+        index: 0,
         remote: args.engine.as_ref().map(|e| e.url.clone()),
         watch,
         player,
@@ -81,6 +83,8 @@ impl Stats {
 
 struct App {
     source: Source,
+    gallery: Vec<Source>,
+    index: usize,
     /// `--engine` URL, for the title.
     remote: Option<String>,
     watch: Option<Watch>,
@@ -131,6 +135,22 @@ impl App {
         self.banner = None;
     }
 
+    /// Step through the gallery (`delta` = ±1), wrapping.
+    fn show(&mut self, delta: isize) {
+        if self.gallery.len() < 2 {
+            return;
+        }
+        let n = self.gallery.len() as isize;
+        self.index = (self.index as isize + delta).rem_euclid(n) as usize;
+        self.source = self.gallery[self.index].clone();
+        self.watch = self.source.path().map(|p| Watch::new(source::stamp(p), Instant::now()));
+        if let (Some(g), Some(p)) = (&self.gpu, self.source.path()) {
+            g.window.set_title(&format!("frame — {} ({}/{})", p.display(), self.index + 1, self.gallery.len()));
+        }
+        self.banner = None;
+        self.reload();
+    }
+
     fn reload(&mut self) {
         let result = self.source.load(self.player.catalog()).and_then(|s| self.player.swap(s));
         match result {
@@ -153,6 +173,9 @@ impl App {
                     Window::default_attributes()
                         .with_inner_size(LogicalSize::new(self.size.0, self.size.1))
                         .with_title(match (self.source.path(), &self.remote) {
+                            (Some(p), _) if self.gallery.len() > 1 => {
+                                format!("frame — {} (1/{}) — ] / Tab for the next surface", p.display(), self.gallery.len())
+                            }
                             (Some(p), _) => format!("frame — {}", p.display()),
                             (None, Some(url)) => format!("frame — {url}"),
                             (None, None) => "frame — demo surface".into(),
@@ -329,8 +352,15 @@ impl ApplicationHandler for App {
                 self.player.wheel(input::wheel_notches(delta, self.scale_factor()), mods, t);
             }
             WindowEvent::KeyboardInput { event, .. } if event.state == ElementState::Pressed => {
+                let shift = self.modifiers.shift_key();
                 if event.logical_key == WinitKey::Named(NamedKey::Escape) {
                     event_loop.exit();
+                } else if event.logical_key == WinitKey::Named(NamedKey::Tab) {
+                    self.show(if shift { -1 } else { 1 });
+                } else if event.logical_key == WinitKey::Character("]".into()) {
+                    self.show(1);
+                } else if event.logical_key == WinitKey::Character("[".into()) {
+                    self.show(-1);
                 } else if let Some(key) = input::key(&event.logical_key) {
                     self.player.key(key, mods, t);
                 }
