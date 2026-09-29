@@ -483,6 +483,12 @@ A `Pedal` form is a **size class plus an optional outline**:
   horizontal line, as in Neural's rows.
 - `switches: u8` (1–3) declares the footswitch count, so Stomp boards can map them.
 
+**Decided 2026-09-29: pedals share one height.** Every pedal class has the same
+height (depth) so a pedalboard row lines up top and bottom, and classes differ
+only in **width**: narrow (Micro), standard, wide, double and big-box widths,
+with footswitch lines on the same baseline. Treadles (wah, expression) are the
+one exception. A custom outline stays inside that fixed height.
+
 ### 4.7 Boards
 
 A board is its own document type, a sibling of a surface (§5.4). It holds:
@@ -828,7 +834,25 @@ phases.
 
 ---
 
-## 7. Decisions for you
+## 7. Decisions
+
+Decided by the user on 2026-09-29:
+- **Views are pages in one document** (decision 2): accepted.
+- **Derived views are saved and editable** (decision 3): accepted.
+- **Forms are optional per module:** a module supports only the forms that are
+  relevant to it. None is mandatory, so there is no "complete" requirement and no
+  `module-complete` lint error; it is at most an informational badge.
+- **Accepted module forms:** Full, Square, Pedal, Rack, 500-series, plus Head,
+  Strip, Wide, Tile and Eurorack.
+- **Pedals:** custom outlines are allowed. All pedals share one standard height, and
+  classes vary by width (see 4.6).
+
+Still open (defaults used unless the user says otherwise): 60 px/in density (1),
+the new `ParamInfo.priority`/`role` and `Control.kit` fields (5), instance address
+prefixes on boards (7), and a single plugin's Full view (9).
+
+### Original list
+
 
 1. **Design density of 60 px/in.** This gives round rack and 500-series numbers (1U = 105,
    19 in = 1140, slot = 90 × 315). Today's 1176 face is 1120 wide (≈ 59 px/in), which is within
