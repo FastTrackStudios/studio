@@ -68,13 +68,13 @@ fn room_art(b: &mut Builder<'_>, plate: NodeId, w: f64, h: f64) {
         let l = if ms >= 80.0 { "80 ms".to_string() } else { format!("{ms:.0}") };
         ui::plain(b, plate, &l, x, base + 11.0, 6.5, DIM, 600.0);
     }
-    let mut spikes = String::new();
+    let mut spikes = Vec::new();
     for (ms, a) in TAPS {
         let x = x0 + (x1 - x0) * ms / 80.0;
         let y = base - (base - top) * a;
-        spikes.push_str(&draw::polygon(&[(x - 1.1, base), (x - 1.1, y), (x + 1.1, y), (x + 1.1, base)]));
+        spikes.push(vec![(x, base), (x, y)]);
     }
-    b.add(plate, ui::glowing(ui::area("taps", spikes, w, h, draw::solid(RAY)), RAY, 0.7, 3.0));
+    b.add(plate, ui::glowing(ui::bars("taps", &spikes, 2.2, RAY), RAY, 0.7, 3.0));
     for (ms, a) in TAPS {
         let x = x0 + (x1 - x0) * ms / 80.0;
         b.add(plate, draw::circle("tap head", x, base - (base - top) * a, 1.8, draw::solid(RAY)));
@@ -102,8 +102,8 @@ pub fn face() -> Face {
 
         // ── SIZE and DECAY, with the room keys ─────────────────────────
         let big = Dial::new("knob.metal", "silver", 58.0, INK, DIM).legend(10.0);
-        ui::dial(b, panel, "room/size", "Size", 704.0, 96.0, &Dial { scale: &["0", "", "", "", "", "100"], ..big.legend_at(160.0) });
-        ui::dial(b, panel, "room/decay", "Decay", 842.0, 96.0, &Dial { scale: &["0.2", "", "", "", "", "4 s"], ..big.legend_at(160.0) });
+        ui::dial(b, panel, "room/size", "Size", 704.0, 96.0, &big.scale(&["0", "", "", "", "", "100"]).legend_at(160.0));
+        ui::dial(b, panel, "room/decay", "Decay", 842.0, 96.0, &big.scale(&["0.2", "", "", "", "", "4 s"]).legend_at(160.0));
         let keys = Place::new("Room").size(62.0).variant("green").bind(bind("room/type")).options(&["Room", "Chamber", "Studio"]);
         let k = ui::put(b, panel, "button.led_bank", &keys, 773.0, 240.0);
         ui::strip_legend(b, k);

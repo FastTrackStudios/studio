@@ -20,7 +20,7 @@ pub fn face() -> Face {
     let scene = canvas("Stereo Chorus", |b, root| {
         let lid = pedal::body(b, root, ["#b9dcf2", "#8fc3e6", "#6ea7d0"]);
 
-        let big = Dial { scale: &["", "", "", "", "", ""], ..Dial::new("knob.soft_pointer", "black", 58.0, INK, DIM) }.legend(10.0).legend_at(128.0);
+        let big = Dial::new("knob.soft_pointer", "black", 58.0, INK, DIM).scale(&["", "", "", "", "", ""]).legend(10.0).legend_at(128.0);
         pedal::knob_row(b, lid, &[("chorus/rate", "Rate"), ("chorus/depth", "Depth"), ("chorus/mix", "Mix")], 70.0, &big);
         let small = Dial::new("knob.soft_pointer", "black", 32.0, INK, DIM).legend(7.5).legend_at(214.0);
         pedal::knob_row(
@@ -40,7 +40,7 @@ pub fn face() -> Face {
         pedal::rule(b, lid, 340.0, &ui::alpha(INK, 0.35));
 
         // Circuit selector and the rate lamp.
-        let sel = Dial { scale: MODELS, value: false, ..Dial::new("knob.chicken_head", "black", 34.0, INK, DIM) }.sweep(200.0).legend(7.5).legend_at(412.0);
+        let sel = Dial::new("switch.rotary", "black", 38.0, INK, DIM).options(MODELS).sweep(200.0).legend(7.5).legend_at(412.0);
         ui::dial(b, lid, "chorus/model", "Circuit", 96.0, 380.0, &sel);
         pedal::rate_lamp(b, lid, F, LW - 90.0, 378.0, "#ff3b2f", INK);
 

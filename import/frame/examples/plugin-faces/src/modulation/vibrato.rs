@@ -5,7 +5,7 @@
 //! is a chorus. The lid's artwork is a tone whose pitch swings; the circuit
 //! (the valve-style one or the poly-synth's) is a bat beside the rate lamp.
 
-use surface_kit::Place;
+use surface_kit::{Ink, Place};
 
 use crate::face::{Face, canvas};
 use crate::reverb::ui::{self, Dial, bind};
@@ -34,7 +34,7 @@ pub fn face() -> Face {
     let scene = canvas("Vibrato", |b, root| {
         let lid = pedal::body(b, root, ["#f3e9cf", "#e4d4ad", "#cdb98c"]);
 
-        let big = Dial { scale: &["", "", "", "", "", ""], ..Dial::new("knob.chicken_head", "black", 60.0, INK, DIM) }.legend(10.0).legend_at(128.0);
+        let big = Dial::new("knob.chicken_head", "black", 60.0, INK, DIM).scale(&["", "", "", "", "", ""]).legend(10.0).legend_at(128.0);
         pedal::knob_row(b, lid, &[("vibrato/rate", "Speed"), ("vibrato/depth", "Intensity")], 72.0, &big);
         let small = Dial::new("knob.bakelite", "brown", 32.0, INK, DIM).legend(7.5).legend_at(214.0);
         pedal::knob_row(b, lid, &[("vibrato/tone", "Tone"), ("vibrato/width", "Width"), ("vibrato/voices", "Voices"), ("vibrato/output", "Output")], 170.0, &small);
@@ -44,10 +44,9 @@ pub fn face() -> Face {
         pedal::title(b, lid, "Vibrato", "True pitch vibrato · wet only", 290.0, INK, DIM);
         pedal::rule(b, lid, 340.0, &ui::alpha(INK, 0.3));
 
-        let bat = Place::new("Circuit").size(38.0).variant("black").legend("").bind(bind("vibrato/model")).options(&["Poly", "Valve"]);
+        let bat = Place::new("Circuit").size(38.0).variant("black").legend("").bind(bind("vibrato/model")).options(&["Poly", "Valve"]).ink(Ink::Color(INK.into()));
         let t = ui::put(b, lid, "switch.toggle_bat", &bat, 96.0, 378.0);
         ui::strip_legend(b, t);
-        ui::reink(b, t, INK);
         ui::silk(b, lid, "Circuit", 96.0, 412.0, 7.5, INK, 800.0);
         pedal::rate_lamp(b, lid, F, LW - 90.0, 378.0, "#ffae2e", INK);
 

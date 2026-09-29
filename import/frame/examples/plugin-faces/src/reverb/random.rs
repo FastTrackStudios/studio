@@ -47,7 +47,6 @@ fn scope(b: &mut Builder<'_>, win: NodeId, w: f64, h: f64) {
             .collect();
         let hue = ui::blend(TRACE, "#8fb6ff", fk / f64::from(n - 1));
         let o = 0.55 + 0.45 * super::jitter(fk + 2.0);
-        ui::line(b, win, "trace haze", &pts, 5.0, &ui::alpha(&hue, 0.1 * o));
         b.add(win, ui::glowing(ui::line_node("trace", &pts, 1.3, &ui::alpha(&hue, o)), &hue, o, 4.0));
         // The write head: where the line is now.
         let (x, y) = pts[pts.len() - 1];
@@ -67,20 +66,20 @@ pub fn face() -> Face {
         ui::silk_left(b, panel, "Randomised lines · never repeats", 142.0, 42.0, 6.0, DIM, 700.0);
 
         // DECAY and SIZE.
-        let big = Dial { scale: &["", "", "", "", "", ""], ..Dial::new("knob.soft_pointer", "black", 60.0, INK, DIM) }.legend(10.0).legend_at(196.0);
+        let big = Dial::new("knob.soft_pointer", "black", 60.0, INK, DIM).scale(&["", "", "", "", "", ""]).legend(10.0).legend_at(196.0);
         ui::dial(b, panel, "random/decay", "Decay", 116.0, 124.0, &big);
         ui::dial(b, panel, "random/size", "Size", 226.0, 124.0, &big);
 
         // The scope.
         let (sx, sy, sw, sh) = (304.0, 54.0, 352.0, 150.0);
-        let win = ui::display(b, panel, "Lines", sx, sy, sw, sh, TRACE, false);
+        let win = ui::display(b, panel, "Lines", sx, sy, sw, sh, TRACE, "glass");
         scope(b, win, sw, sh);
         ui::glass(b, win);
 
         // DRIFT and DENSITY, ringed.
         ui::section(b, panel, 690.0, 48.0, 226.0, 160.0, &ui::alpha(TRACE, 0.45), 1.2);
         ui::silk(b, panel, "Randomiser", 803.0, 62.0, 7.0, TRACE, 800.0);
-        let pair = Dial { scale: &["0", "", "", "", "", "10"], ..Dial::new("knob.soft_pointer", "blue", 52.0, INK, DIM) }.legend(9.5).legend_at(186.0);
+        let pair = Dial::new("knob.soft_pointer", "blue", 52.0, INK, DIM).scale(&["0", "", "", "", "", "10"]).legend(9.5).legend_at(186.0);
         ui::dial(b, panel, "random/drift", "Drift", 750.0, 118.0, &pair);
         ui::dial(b, panel, "random/density", "Density", 856.0, 118.0, &pair);
 
@@ -91,7 +90,7 @@ pub fn face() -> Face {
             ui::dial(b, panel, addr, legend, 116.0 + 110.0 * i as f64, 262.0, &small);
         }
         let lamps = |i: usize| if i >= 10 { "#ffb04a".to_string() } else { ui::blend("#2f9fd0", TRACE, i as f64 / 9.0) };
-        ui::lamp_row(b, panel, "Tail", "random/out", 700.0, 258.0, 12, 17.0, 12.0, 9.0, -48.0, 0.0, &lamps);
+        ui::led_bar(b, panel, "Tail", "random/out", (699.0, 256.0, 208.0, 13.0), 12, (-48.0, 0.0), &[], INK, &lamps);
         ui::silk(b, panel, "Tail", 803.0, 284.0, 7.5, INK, 800.0);
     });
 

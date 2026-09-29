@@ -23,13 +23,12 @@ pub fn body(b: &mut Builder<'_>, root: NodeId, paint: [&str; 3]) -> NodeId {
 /// The rate lamp with its legend under it.
 #[allow(clippy::too_many_arguments)]
 pub fn rate_lamp(b: &mut Builder<'_>, lid: NodeId, face: &str, cx: f64, cy: f64, color: &str, ink: &str) {
-    ui::lfo_lamp(b, lid, "Rate lamp", &format!("{face}/lfo"), cx, cy, 16.0, color);
-    ui::silk(b, lid, "Rate", cx, cy + 24.0, 7.0, ink, 800.0);
+    ui::stream_lamp(b, lid, "Rate lamp", &format!("{face}/lfo"), "Rate", cx, cy, 26.0, color, ink);
 }
 
 /// The bypass stomp, centred low on the lid, its LED above it.
 pub fn stomp(b: &mut Builder<'_>, lid: NodeId, face: &str, led: &str) {
-    ui::footswitch(b, lid, "Bypass", &format!("{face}/on"), LW / 2.0, LH - 84.0, 52.0, led);
+    ui::stomp(b, lid, "Bypass", &format!("{face}/on"), LW / 2.0, LH - 84.0, 52.0, led);
 }
 
 /// The model name, big, centred at `cy`, with the maker's line under it.

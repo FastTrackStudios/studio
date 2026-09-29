@@ -67,12 +67,13 @@ fn plate_art(b: &mut Builder<'_>, tank: NodeId, w: f64, h: f64) {
     let sheet = draw::rect("plate", px, py, pw, ph, draw::linear(100.0, &[(0.0, "#e4e7e9"), (0.3, "#b6bbc0"), (0.55, "#d5d9dc"), (0.8, "#a9afb4"), (1.0, "#c7ccd0")]));
     b.add(tank, draw::with_effects(sheet, vec![draw::drop_shadow("#000000b0", 0.0, 3.0, 6.0), draw::inner_shadow("#ffffff80", 0.0, 1.0, 0.0)]));
     // Rolling-mill grain along the sheet.
-    let mut grain = String::new();
-    for i in 0..26 {
-        let y = py + 3.0 + (ph - 6.0) * f64::from(i) / 25.0 + super::jitter(f64::from(i)) * 2.0;
-        grain.push_str(&draw::polygon(&[(px + 2.0, y), (px + pw - 2.0, y), (px + pw - 2.0, y + 0.5), (px + 2.0, y + 0.5)]));
-    }
-    b.add(tank, ui::area("grain", grain, w, h, draw::solid("#ffffff2e")));
+    let grain: Vec<Vec<(f64, f64)>> = (0..26)
+        .map(|i| {
+            let y = py + 3.25 + (ph - 6.0) * f64::from(i) / 25.0 + super::jitter(f64::from(i)) * 2.0;
+            vec![(px + 2.0, y), (px + pw - 2.0, y)]
+        })
+        .collect();
+    b.add(tank, ui::bars("grain", &grain, 0.5, "#ffffff2e"));
     // Standing waves, faintly, as a ringing plate is drawn.
     for i in 1..5 {
         let y0 = py + ph * f64::from(i) / 5.0;
@@ -140,17 +141,18 @@ pub fn face() -> Face {
         tank.clips_content = true;
         tank.corner_radii = document_proto::CornerRadii::uniform(5.0);
         tank.effects = vec![draw::inner_shadow("#000000", 0.0, 3.0, 10.0)];
+        tank.shader = Some(document_proto::ShaderFx { shader: "glass".into(), params: std::collections::BTreeMap::from([("strength".to_string(), 0.25)]) });
         let tank = b.add(panel, tank);
         plate_art(b, tank, tw, th);
         let sheen = draw::linear(160.0, &[(0.0, "#ffffff14"), (0.3, "#ffffff06"), (0.31, "#ffffff00"), (1.0, "#ffffff00")]);
         b.add(tank, draw::rect("glass", 0.0, 0.0, tw, th, sheen));
 
         // ── The remote: DECAY TIME ─────────────────────────────────────
-        let (kx, ky) = (690.0, 150.0);
+        let (kx, ky) = (690.0, 158.0);
         ui::silk(b, panel, "Decay Time", kx, 62.0, 10.0, INK, 800.0);
-        let big = Dial { scale: DECAY_MARKS, legend: 0.0, ..Dial::new("knob.pointer", "black", 88.0, INK, DIM) };
+        let big = Dial::new("knob.pointer", "black", 76.0, INK, DIM).scale(DECAY_MARKS).legend(0.0);
         ui::dial(b, panel, "plate/decay", "Decay Time", kx, ky, &big);
-        ui::silk(b, panel, "Seconds", kx, ky + 82.0, 7.0, DIM, 800.0);
+        ui::silk(b, panel, "Seconds", kx, ky + 76.0, 7.0, DIM, 800.0);
 
         // Output VU.
         let vu = Place::new("Output").size(170.0).variant("satin_plate").legend("VU").bind(surface_proto::Binding::stream("plate/out"));

@@ -2,9 +2,9 @@
 //!
 //! The treadle is the control: it rocks on its axle over a rack-and-pinion
 //! housing — drag it, and it tilts heel-down (bass) to toe-down (treble)
-//! through the pedal's real 16°. It is a `Knob` whose `Needle`s are the
-//! treadle's parts, each turning about the axle (they sit in a square
-//! frame centred on it). Beside it, the side module a modern wah grows:
+//! through the pedal's real 16°. It is a `Knob` whose `Needle` is the
+//! treadle — one frame of its parts, turning about the axle (it fills a
+//! square centred on it). Beside it, the side module a modern wah grows:
 //! the MODE (pedal, auto, rhythmic), the voicing — Q, sensitivity, shape —
 //! the sweep RATE with its lamp for the auto modes, MIX and OUTPUT, and the
 //! engage stomp.
@@ -25,8 +25,8 @@ const DIM: &str = "#9ca1ab";
 /// The treadle's travel, heel-down to toe-down.
 const TRAVEL: f64 = 16.0;
 
-/// The rocking treadle: a `Knob` over `wah/position` whose parts turn about
-/// the axle at (`ax`, `ay`). `len` is the treadle's length, the axle
+/// The rocking treadle: a `Knob` over `wah/position` whose body turns
+/// about the axle at (`ax`, `ay`). `len` is the treadle's length, the axle
 /// `heel` from its heel end.
 fn treadle(b: &mut Builder<'_>, parent: NodeId, ax: f64, ay: f64, len: f64, heel: f64) -> NodeId {
     let (x0, x1) = (ax - heel, ax - heel + len);
@@ -37,12 +37,14 @@ fn treadle(b: &mut Builder<'_>, parent: NodeId, ax: f64, ay: f64, len: f64, heel
     let r = len.max(heel) + 10.0;
     let (px, py) = (ax - ox, ay - oy);
     let pivot = b.add(root, draw::frame("pivot", px - r, py - r, 2.0 * r, 2.0 * r));
+    let body = b.add(pivot, draw::frame("treadle", 0.0, 0.0, 2.0 * r, 2.0 * r));
     // Parts, in pivot coordinates (the axle is at (r, r)).
     let (lx0, lx1) = (x0 - ax + r, x1 - ax + r);
     let (ly0, ly1) = (top - ay + r, bottom - ay + r);
     let s = 2.0 * r;
-    let mut parts: Vec<NodeId> = Vec::new();
-    let mut part = |b: &mut Builder<'_>, name: &str, d: String, paint| parts.push(b.add(pivot, ui::area(name, d, s, s, paint)));
+    let part = |b: &mut Builder<'_>, name: &str, d: String, paint| {
+        b.add(body, ui::area(name, d, s, s, paint));
+    };
     // The side ears the axle passes through.
     let ears = draw::polygon(&[(r - 30.0, ly1 - 2.0), (r + 30.0, ly1 - 2.0), (r + 20.0, r + 14.0), (r - 20.0, r + 14.0)]);
     part(b, "ears", ears, draw::linear(180.0, &[(0.0, "#2c2d31"), (1.0, "#101012")]));
@@ -76,10 +78,7 @@ fn treadle(b: &mut Builder<'_>, parent: NodeId, ax: f64, ay: f64, len: f64, heel
     part(b, "ribs", ribs, draw::solid("#5a5a60"));
     // A painted index on the toe: where it points on the scale.
     part(b, "index", draw::polygon(&[(lx1 - 34.0, ly0 + 10.0), (lx1 - 10.0, ly0 + 10.0), (lx1 - 10.0, ly0 + 13.0), (lx1 - 34.0, ly0 + 13.0)]), draw::solid("#f2b23a"));
-    let mut c = Control::new(ControlKind::Knob { sweep_degrees: TRAVEL });
-    for p in parts {
-        c = c.slot(SlotRole::Needle, p.0);
-    }
+    let mut c = Control::new(ControlKind::Knob { sweep_degrees: TRAVEL }).slot(SlotRole::Needle, body.0);
     c.binding = Some(Binding::param("wah/position"));
     b.controls.insert(root, c);
     root
@@ -132,13 +131,13 @@ pub fn face() -> Face {
         board.fills = vec![draw::linear(180.0, &[(0.0, "#1d1d20"), (1.0, "#101012")]), draw::radial_at(0.35, 0.5, 0.7, &[(0.0, "#ffffff0c"), (1.0, "#ffffff00")])];
         board.corner_radii = document_proto::CornerRadii::uniform(10.0);
         let board = b.add(root, board);
-        let mut weave = String::new();
+        let mut weave = Vec::new();
         let mut yy = 3.0;
         while yy < H {
-            weave.push_str(&draw::polygon(&[(0.0, yy), (W, yy), (W, yy + 0.6), (0.0, yy + 0.6)]));
+            weave.push(vec![(0.0, yy + 0.3), (W, yy + 0.3)]);
             yy += 3.0;
         }
-        b.add(board, ui::area("weave", weave, W, H, draw::solid("#ffffff06")));
+        b.add(board, ui::bars("weave", &weave, 0.6, "#ffffff06"));
 
         // ── The pedal, side on ─────────────────────────────────────────
         let (hx, hy, hw, hh) = (60.0, 262.0, 560.0, 104.0);
@@ -175,7 +174,7 @@ pub fn face() -> Face {
         // ── The side module ────────────────────────────────────────────
         let (mx, my, mw, mh) = (668.0, 28.0, 240.0, 424.0);
         let m = module(b, board, mx, my, mw, mh);
-        let mode = Dial { scale: &["Pedal", "Auto", "Rhythm"], value: false, ..Dial::new("knob.chicken_head", "cream", 40.0, INK, DIM) }.sweep(120.0).legend(8.0).legend_at(96.0);
+        let mode = Dial::new("switch.rotary", "cream", 40.0, INK, DIM).options(&["Pedal", "Auto", "Rhythm"]).sweep(120.0).legend(8.0).legend_at(96.0);
         ui::dial(b, m, "wah/mode", "Mode", mw / 2.0, 56.0, &mode);
         let knob = Dial::new("knob.daka", "black", 36.0, INK, DIM).legend(7.5);
         let grid: &[(&str, &str, f64, f64)] = &[
@@ -189,9 +188,8 @@ pub fn face() -> Face {
         for (addr, legend, cx, cy) in grid {
             ui::dial(b, m, addr, legend, *cx, *cy, &knob.legend_at(cy + 44.0));
         }
-        ui::lfo_lamp(b, m, "Sweep lamp", "wah/lfo", mw / 2.0, 214.0, 16.0, "#ffae2e");
-        ui::silk(b, m, "Sweep", mw / 2.0, 238.0, 7.0, INK, 800.0);
-        ui::footswitch(b, m, "Engage", "wah/on", mw / 2.0, mh - 36.0, 40.0, "#ff3b2f");
+        ui::stream_lamp(b, m, "Sweep lamp", "wah/lfo", "Sweep", mw / 2.0, 214.0, 26.0, "#ffae2e", INK);
+        ui::stomp(b, m, "Engage", "wah/on", mw / 2.0, mh - 36.0, 40.0, "#ff3b2f");
     });
 
     let params = vec![

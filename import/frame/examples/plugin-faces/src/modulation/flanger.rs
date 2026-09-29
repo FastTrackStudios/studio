@@ -6,7 +6,7 @@
 //! (tape-style through-zero or bucket-brigade) is a bat switch beside the
 //! rate lamp.
 
-use surface_kit::Place;
+use surface_kit::{Ink, Place};
 
 use crate::face::{Face, canvas};
 use crate::reverb::ui::{self, Dial, bind};
@@ -37,7 +37,7 @@ pub fn face() -> Face {
     let scene = canvas("Flanger", |b, root| {
         let lid = pedal::body(b, root, ["#7a5aa8", "#553a82", "#3a2660"]);
 
-        let big = Dial { scale: &["", "", "", "", "", ""], ..Dial::new("knob.metal", "silver", 58.0, INK, DIM) }.legend(10.0).legend_at(128.0);
+        let big = Dial::new("knob.metal", "silver", 58.0, INK, DIM).scale(&["", "", "", "", "", ""]).legend(10.0).legend_at(128.0);
         pedal::knob_row(b, lid, &[("flanger/rate", "Rate"), ("flanger/depth", "Depth"), ("flanger/regen", "Regen")], 70.0, &big);
         let small = Dial::new("knob.metal", "black", 32.0, INK, DIM).legend(7.5).legend_at(214.0);
         pedal::knob_row(
@@ -53,7 +53,7 @@ pub fn face() -> Face {
         pedal::title(b, lid, "Flanger", "Through-zero jet · regeneration", 290.0, INK, DIM);
         pedal::rule(b, lid, 340.0, &ui::alpha(INK, 0.3));
 
-        let bat = Place::new("Circuit").size(38.0).variant("chrome").legend("").bind(bind("flanger/model")).options(&["BBD", "Tape"]);
+        let bat = Place::new("Circuit").size(38.0).variant("chrome").legend("").bind(bind("flanger/model")).options(&["BBD", "Tape"]).ink(Ink::Color(INK.into()));
         let t = ui::put(b, lid, "switch.toggle_bat", &bat, 96.0, 378.0);
         ui::strip_legend(b, t);
         ui::silk(b, lid, "Circuit", 96.0, 412.0, 7.5, INK, 800.0);

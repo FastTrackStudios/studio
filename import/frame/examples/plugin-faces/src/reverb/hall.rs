@@ -43,16 +43,14 @@ const FADERS: &[(&str, &str, &str)] = &[
 fn decay_graphic(b: &mut Builder<'_>, face: NodeId, x0: f64, x1: f64, top: f64, base: f64) {
     let h = base - top;
     // Faint grid and a time axis, 0…2 s.
-    for i in 1..4 {
+    let grid: Vec<Vec<(f64, f64)>> = (1..4).map(|i| {
         let y = base - h * f64::from(i) / 4.0;
-        let mut d = String::new();
-        let mut x = x0;
-        while x < x1 {
-            d.push_str(&draw::polygon(&[(x, y - 0.4), (x + 2.0, y - 0.4), (x + 2.0, y + 0.4), (x, y + 0.4)]));
-            x += 6.0;
-        }
-        b.add(face, ui::area("grid", d, x1 + 20.0, base + 20.0, draw::solid(&ui::alpha(VFD, 0.16))));
-    }
+        vec![(x0, y), (x1, y)]
+    }).collect();
+    let mut grid = ui::strokes("grid", &grid, 0.8, draw::solid(&ui::alpha(VFD, 0.16)));
+    grid.stroke.cap = document_proto::StrokeCap::None;
+    grid.stroke.dash_pattern = vec![2.0, 4.0];
+    b.add(face, grid);
     ui::line(b, face, "axis", &[(x0, base), (x1, base)], 1.0, &ui::alpha(VFD, 0.55));
     let secs = 2.0;
     for i in 0..=4 {
@@ -66,15 +64,15 @@ fn decay_graphic(b: &mut Builder<'_>, face: NodeId, x0: f64, x1: f64, top: f64, 
     // Pre-delay: nothing, then the direct-path marker.
     let pre = 0.024;
     // Early reflections: sparse, loud, irregular.
-    let mut er = String::new();
+    let mut er = Vec::new();
     let taps = [(0.031, 0.92), (0.043, 0.7), (0.052, 0.83), (0.067, 0.58), (0.079, 0.66), (0.094, 0.47), (0.108, 0.52), (0.121, 0.38)];
     for (t, a) in taps {
         let x = px(t + pre);
-        er.push_str(&draw::polygon(&[(x - 0.9, base), (x - 0.9, base - h * a), (x + 0.9, base - h * a), (x + 0.9, base)]));
+        er.push(vec![(x, base), (x, base - h * a)]);
     }
-    b.add(face, ui::glowing(ui::area("early reflections", er, x1 + 20.0, base + 20.0, draw::solid(VFD)), VFD, 0.9, 4.0));
+    b.add(face, ui::glowing(ui::bars("early reflections", &er, 1.8, VFD), VFD, 0.9, 4.0));
     // The tail: dense, under an exponential envelope (RT60 ≈ 2.4 s).
-    let mut tail = String::new();
+    let mut tail = Vec::new();
     let mut env = Vec::new();
     let rt = 2.4;
     let mut t = 0.13;
@@ -86,12 +84,12 @@ fn decay_graphic(b: &mut Builder<'_>, face: NodeId, x0: f64, x1: f64, top: f64, 
         if x > x1 {
             break;
         }
-        tail.push_str(&draw::polygon(&[(x - 0.8, base), (x - 0.8, base - h * a), (x + 0.8, base - h * a), (x + 0.8, base)]));
+        tail.push(vec![(x, base), (x, base - h * a)]);
         env.push((x, base - h * e - 1.5));
         t += 0.011;
         i += 1.0;
     }
-    b.add(face, ui::glowing(ui::area("tail", tail, x1 + 20.0, base + 20.0, draw::solid(&ui::alpha(VFD, 0.62))), VFD, 0.5, 3.0));
+    b.add(face, ui::glowing(ui::bars("tail", &tail, 1.6, &ui::alpha(VFD, 0.62)), VFD, 0.5, 3.0));
     b.add(face, ui::glowing(ui::line_node("envelope", &env, 1.2, VFD), VFD, 0.8, 3.0));
 }
 
@@ -107,7 +105,7 @@ pub fn face() -> Face {
 
         // ── The display ────────────────────────────────────────────────
         let (dx, dy, dw, dh) = (56.0, 62.0, 420.0, 150.0);
-        let face = ui::display(b, panel, "Display", dx, dy, dw, dh, VFD, true);
+        let face = ui::display(b, panel, "Display", dx, dy, dw, dh, VFD, "crt");
         ui::lit_text(b, face, "P1", 12.0, 17.0, 26.0, 10.0, VFD_DIM, TextAlign::Left, 700.0);
         ui::lit_readout(b, face, "Program", bind("hall/program"), 36.0, 17.0, 200.0, 13.0, VFD, TextAlign::Left);
         ui::lit_text(b, face, "Bank A · Halls", dw - 142.0, 17.0, 130.0, 8.0, VFD_DIM, TextAlign::Right, 600.0);
@@ -128,7 +126,7 @@ pub fn face() -> Face {
         // Output ladder beside the display.
         let mx = dx + dw + 16.0;
         for (ch, x) in [(0u8, mx), (1u8, mx + 14.0)] {
-            ui::led_column(b, panel, if ch == 0 { "Out L" } else { "Out R" }, "hall/out", ch, x, dy - 2.0, 10.0, dh + 4.0, 18, -42.0, 3.0);
+            ui::led_column(b, panel, if ch == 0 { "Out L" } else { "Out R" }, "hall/out", ch, (x, dy - 2.0, 10.0, dh + 4.0), 18, -42.0, 3.0);
         }
         ui::silk(b, panel, "L", mx + 5.0, dy + dh + 14.0, 6.5, DIM, 700.0);
         ui::silk(b, panel, "R", mx + 19.0, dy + dh + 14.0, 6.5, DIM, 700.0);

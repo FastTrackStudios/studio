@@ -8,7 +8,7 @@
 //! controls, which only re-shape what was recorded, are on the right.
 
 use document_proto::{NodeId, TextAlign};
-use surface_kit::{Place, draw};
+use surface_kit::Place;
 use surface_widgets::Builder;
 
 use super::ui::{self, Dial, bind};
@@ -22,14 +22,12 @@ const LCD: &str = "#62ccf0";
 const LCD_DIM: &str = "#2f7a96";
 
 const FILES: &[&str] = &["Large Hall", "Chamber", "Steel Plate", "Spring Tank", "Stone Church", "Studio A"];
-const KEYS: &[&str] = &["1", "2", "3", "4", "5", "6"];
 const NAMES: &[&str] = &["Hall", "Chamber", "Plate", "Spring", "Church", "Studio"];
 
 /// The recorded impulse, mirrored about its axis.
 fn impulse(b: &mut Builder<'_>, face: NodeId, x0: f64, x1: f64, mid: f64, amp: f64) {
     let secs = 3.2;
     let px = |t: f64| x0 + (x1 - x0) * t / secs;
-    let (w, h) = (x1 + 20.0, mid + amp + 20.0);
     // Axis and a quiet grid.
     ui::line(b, face, "axis", &[(x0, mid), (x1, mid)], 0.8, &ui::alpha(LCD, 0.45));
     for i in 0..=8 {
@@ -45,7 +43,7 @@ fn impulse(b: &mut Builder<'_>, face: NodeId, x0: f64, x1: f64, mid: f64, amp: f
     let pre = 0.012;
     ui::line(b, face, "onset", &[(px(pre), mid - amp - 2.0), (px(pre), mid + amp + 2.0)], 0.8, &ui::alpha(LCD, 0.7));
     // The impulse: one column per 8 ms.
-    let mut bars = String::new();
+    let mut bars = Vec::new();
     let mut upper = Vec::new();
     let mut i = 0.0;
     let mut t = pre;
@@ -53,12 +51,12 @@ fn impulse(b: &mut Builder<'_>, face: NodeId, x0: f64, x1: f64, mid: f64, amp: f
         let e = if t - pre < 0.004 { 1.0 } else { 0.78 * (-1.35 * (t - pre)).exp() * (1.0 - (-(t - pre) * 30.0).exp() * 0.3) };
         let a = e * (0.4 + 0.6 * super::jitter(i));
         let x = px(t);
-        bars.push_str(&draw::polygon(&[(x - 0.7, mid - amp * a), (x + 0.7, mid - amp * a), (x + 0.7, mid + amp * a), (x - 0.7, mid + amp * a)]));
+        bars.push(vec![(x, mid - amp * a), (x, mid + amp * a)]);
         upper.push((x, mid - amp * e));
         t += 0.008;
         i += 1.0;
     }
-    b.add(face, ui::glowing(ui::area("impulse", bars, w, h, draw::solid(&ui::alpha(LCD, 0.75))), LCD, 0.6, 3.0));
+    b.add(face, ui::glowing(ui::bars("impulse", &bars, 1.4, &ui::alpha(LCD, 0.75)), LCD, 0.6, 3.0));
     let lower: Vec<(f64, f64)> = upper.iter().map(|(x, y)| (*x, 2.0 * mid - y)).collect();
     b.add(face, ui::glowing(ui::line_node("envelope", &upper, 1.0, LCD), LCD, 0.8, 2.0));
     b.add(face, ui::glowing(ui::line_node("envelope", &lower, 1.0, LCD), LCD, 0.8, 2.0));
@@ -75,7 +73,7 @@ pub fn face() -> Face {
 
         // ── The display ────────────────────────────────────────────────
         let (dx, dy, dw, dh) = (56.0, 56.0, 500.0, 148.0);
-        let face = ui::display(b, panel, "Display", dx, dy, dw, dh, LCD, false);
+        let face = ui::display(b, panel, "Display", dx, dy, dw, dh, LCD, "glass");
         ui::lit_text(b, face, "IR", 12.0, 16.0, 22.0, 9.0, LCD_DIM, TextAlign::Left, 800.0);
         ui::lit_readout(b, face, "Impulse", bind("ir/file"), 34.0, 16.0, 220.0, 12.0, LCD, TextAlign::Left);
         ui::lit_text(b, face, "48 kHz · 24 bit · 4 ch · 3.2 s", dw - 232.0, 16.0, 220.0, 7.5, LCD_DIM, TextAlign::Right, 600.0);
@@ -93,17 +91,16 @@ pub fn face() -> Face {
         ui::glass(b, face);
         let mx = dx + dw + 14.0;
         for (ch, x) in [(0u8, mx), (1u8, mx + 13.0)] {
-            ui::led_column(b, panel, if ch == 0 { "Out L" } else { "Out R" }, "ir/out", ch, x, dy - 2.0, 9.0, dh + 4.0, 18, -42.0, 3.0);
+            ui::led_column(b, panel, if ch == 0 { "Out L" } else { "Out R" }, "ir/out", ch, (x, dy - 2.0, 9.0, dh + 4.0), 18, -42.0, 3.0);
         }
         ui::silk(b, panel, "L", mx + 4.5, dy + dh + 13.0, 6.0, DIM, 700.0);
         ui::silk(b, panel, "R", mx + 17.5, dy + dh + 13.0, 6.0, DIM, 700.0);
 
-        // ── The file bank ──────────────────────────────────────────────
-        let bank = Place::new("Impulse").size(44.0).variant("black").bind(bind("ir/file")).options(KEYS);
+        // ── The file bank: a key per impulse, its name on the cap ──────
+        let bank = Place::new("Impulse").size(44.0).variant("black").bind(bind("ir/file")).options(NAMES).keep_case();
         let k = ui::put(b, panel, "button.metal_bank", &bank, dx + dw / 2.0, 246.0);
         ui::strip_legend(b, k);
-        ui::bank_labels(b, panel, k, NAMES, 291.0, 6.5, DIM);
-        ui::silk(b, panel, "Impulse", dx + dw / 2.0, 306.0, 7.5, INK, 800.0);
+        ui::silk(b, panel, "Impulse", dx + dw / 2.0, 300.0, 7.5, INK, 800.0);
 
         // ── Shaping, on the right ──────────────────────────────────────
         ui::rule(b, panel, 614.0, 34.0, 1.0, 256.0, "#00000099");

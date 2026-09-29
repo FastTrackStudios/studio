@@ -30,8 +30,6 @@ fn halo(b: &mut Builder<'_>, panel: NodeId, cx: f64, cy: f64) {
         let o = (0.95 * (1.0 - fi / 7.5)).max(0.08);
         let w = 2.4 - fi * 0.22;
         let pts = ui::ellipse_pts(cx, cy, r, r * 0.86, 96);
-        // A soft ring under a hard one: the software glow for a vector.
-        ui::line(b, panel, "ring haze", &pts, w * 4.0, &ui::alpha(GLOW, o * 0.12));
         b.add(panel, ui::glowing(ui::line_node("ring", &pts, w, &ui::alpha(GLOW, o)), GLOW, o, 6.0));
     }
     b.add(panel, ui::glowing(draw::circle("core", cx, cy, 7.0, draw::radial(&[(0.0, "#ffffff"), (0.5, "#d6c8ff"), (1.0, GLOW)])), GLOW, 1.0, 14.0));
@@ -50,15 +48,15 @@ pub fn face() -> Face {
         halo(b, panel, 480.0, 132.0);
 
         // DECAY and SPREAD.
-        let big = Dial { scale: &["", "", "", "", "", ""], ..Dial::new("knob.marconi", "blue", 64.0, INK, DIM) }.legend(10.0).legend_at(196.0);
+        let big = Dial::new("knob.marconi", "blue", 64.0, INK, DIM).scale(&["", "", "", "", "", ""]).legend(10.0).legend_at(196.0);
         ui::dial(b, panel, "ambient/decay", "Decay", 128.0, 124.0, &big);
         ui::dial(b, panel, "ambient/spread", "Spread", 248.0, 124.0, &big);
 
         // The engine, and the wash ladder.
-        let engine = Dial { scale: &["Cloud", "Bloom", "Swell", "Velvet"], value: false, ..Dial::new("knob.marconi", "grey", 46.0, INK, DIM) }.sweep(150.0).legend(9.0).legend_at(128.0);
+        let engine = Dial::new("knob.marconi", "grey", 56.0, INK, DIM).options(&["Cloud", "Bloom", "Swell", "Velvet"]).sweep(150.0).legend(9.0).legend_at(128.0);
         ui::dial(b, panel, "ambient/engine", "Engine", 790.0, 82.0, &engine);
         let lamps = |i: usize| if i >= 10 { "#ff7ad9".to_string() } else { ui::blend("#6f7cff", GLOW, i as f64 / 9.0) };
-        ui::lamp_row(b, panel, "Wash", "ambient/out", 700.0, 156.0, 12, 15.0, 11.0, 8.0, -48.0, 0.0, &lamps);
+        ui::led_bar(b, panel, "Wash", "ambient/out", (698.0, 154.0, 184.0, 12.0), 12, (-48.0, 0.0), &[], INK, &lamps);
         ui::silk(b, panel, "Wash", 790.0, 180.0, 7.5, INK, 800.0);
 
         // The row.

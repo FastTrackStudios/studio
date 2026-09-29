@@ -23,11 +23,11 @@ const DIM: &str = "#a7b29c";
 
 /// One spring seen from the side: `n` loops of a helix between `x0..x1`
 /// at `y`, `r` tall. Back halves dark, front halves bright.
-fn coil(b: &mut Builder<'_>, tank: NodeId, (w, h): (f64, f64), x0: f64, x1: f64, y: f64, r: f64) {
+fn coil(b: &mut Builder<'_>, tank: NodeId, x0: f64, x1: f64, y: f64, r: f64) {
     let pitch = 5.5;
     let n = ((x1 - x0) / pitch) as usize;
-    let mut back = String::new();
-    let mut front = String::new();
+    let mut back = Vec::new();
+    let mut front = Vec::new();
     for i in 0..n {
         let cx = x0 + pitch * (i as f64 + 0.5);
         // Each loop leans a little along the spring, as a helix does.
@@ -39,11 +39,14 @@ fn coil(b: &mut Builder<'_>, tank: NodeId, (w, h): (f64, f64), x0: f64, x1: f64,
                 })
                 .collect()
         };
-        back.push_str(&ui::ribbon(&arc(std::f64::consts::PI, std::f64::consts::TAU), 0.6));
-        front.push_str(&ui::ribbon(&arc(0.0, std::f64::consts::PI), 0.75));
+        back.push(arc(std::f64::consts::PI, std::f64::consts::TAU));
+        front.push(arc(0.0, std::f64::consts::PI));
     }
-    b.add(tank, ui::area("coil back", back, w, h, draw::solid("#5e6368")));
-    b.add(tank, ui::area("coil front", front, w, h, draw::linear(180.0, &[(0.0, "#f2f4f5"), (0.5, "#b4babf"), (1.0, "#6c7277")])));
+    b.add(tank, ui::strokes("coil back", &back, 1.2, draw::solid("#5e6368")));
+    // The front halves: steel, with the light running along their tops.
+    let lit: Vec<Vec<(f64, f64)>> = front.iter().map(|l| l.iter().map(|(x, y)| (*x, y - 0.45)).collect()).collect();
+    b.add(tank, ui::strokes("coil front", &front, 1.6, draw::solid("#9aa0a5")));
+    b.add(tank, ui::strokes("coil light", &lit, 0.6, draw::solid("#f2f4f5")));
 }
 
 /// A transducer can with its winding, centred at (`cx`, `cy`).
@@ -52,12 +55,13 @@ fn transducer(b: &mut Builder<'_>, tank: NodeId, cx: f64, cy: f64, label: &str) 
     b.add(tank, draw::with_effects(can, vec![draw::drop_shadow("#000000a0", 0.0, 3.0, 5.0)]));
     let wind = draw::rounded(draw::rect("winding", cx - 12.0, cy - 18.0, 24.0, 36.0, draw::linear(90.0, &[(0.0, "#7a3f16"), (0.3, "#e0a266"), (0.55, "#b8753a"), (1.0, "#6a3410")])), 3.0);
     b.add(tank, wind);
-    let mut turns = String::new();
-    for i in 0..16 {
-        let y = cy - 17.0 + f64::from(i) * 2.2;
-        turns.push_str(&draw::polygon(&[(cx - 12.0, y), (cx + 12.0, y), (cx + 12.0, y + 0.6), (cx - 12.0, y + 0.6)]));
-    }
-    b.add(tank, ui::area("turns", turns, cx + 40.0, cy + 40.0, draw::solid("#4a220a88")));
+    let turns: Vec<Vec<(f64, f64)>> = (0..16)
+        .map(|i| {
+            let y = cy - 16.7 + f64::from(i) * 2.2;
+            vec![(cx - 12.0, y), (cx + 12.0, y)]
+        })
+        .collect();
+    b.add(tank, ui::bars("turns", &turns, 0.6, "#4a220a88"));
     ui::silk(b, tank, label, cx, cy + 40.0, 6.0, "#3b3f43", 800.0);
 }
 
@@ -93,7 +97,7 @@ fn tank_art(b: &mut Builder<'_>, tank: NodeId, w: f64, h: f64, springs: usize) {
         ui::line(b, tank, "hook", &[(tx1 - 46.0, y), (tx1 - 24.0, y)], 1.6, "#e2e5e7");
         // Spring shadow on the floor, then the coil.
         b.add(tank, draw::with_opacity(draw::rounded(draw::rect("shadow", tx0 + 44.0, y + 7.0, tx1 - tx0 - 88.0, 5.0, draw::solid("#00000040")), 2.5), 1.0));
-        coil(b, tank, (w, h), tx0 + 44.0, tx1 - 44.0, y, (gap * 0.3).min(13.0));
+        coil(b, tank, tx0 + 44.0, tx1 - 44.0, y, (gap * 0.3).min(13.0));
     }
     transducer(b, tank, tx0, h / 2.0, "Input");
     transducer(b, tank, tx1, h / 2.0, "Output");
@@ -119,7 +123,7 @@ pub fn face() -> Face {
         // ── The amp's row ──────────────────────────────────────────────
         let row = 262.0;
         let legend_y = row + 56.0;
-        let cream = Dial { scale: &["0", "", "", "", "", "10"], ..Dial::new("knob.chicken_head", "cream", 56.0, INK, DIM) }.legend_at(legend_y);
+        let cream = Dial::new("knob.chicken_head", "cream", 56.0, INK, DIM).scale(&["0", "", "", "", "", "10"]).legend_at(legend_y);
         let black = Dial::new("knob.bakelite", "black", 40.0, INK, DIM).legend_at(legend_y);
         ui::dial(b, panel, "spring/dwell", "Dwell", 110.0, row, &cream);
         ui::dial(b, panel, "spring/tone", "Tone", 210.0, row, &cream);
@@ -129,7 +133,7 @@ pub fn face() -> Face {
         ui::dial(b, panel, "spring/warble", "Warble", 536.0, row, &black);
         ui::dial(b, panel, "spring/mix", "Mix", 632.0, row, &cream);
         // The springs selector: three detents.
-        let sel = Dial { scale: &["1", "2", "3"], value: false, ..Dial::new("knob.chicken_head", "black", 44.0, INK, DIM) }.sweep(120.0).legend_at(legend_y);
+        let sel = Dial::new("switch.rotary", "black", 44.0, INK, DIM).options(&["1", "2", "3"]).sweep(120.0).legend_at(legend_y);
         ui::dial(b, panel, "spring/springs", "Springs", 730.0, row, &sel);
 
         // IN bat and the pilot.

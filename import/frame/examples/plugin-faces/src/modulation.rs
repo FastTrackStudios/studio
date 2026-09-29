@@ -28,5 +28,5 @@ mod wah;
 use crate::face::Face;
 
 pub fn faces() -> Vec<Face> {
-    vec![chorus::face(), flanger::face(), vibrato::face(), tremolo::face(), wah::face()]
+    [chorus::face(), flanger::face(), vibrato::face(), tremolo::face(), wah::face()].into_iter().map(crate::reverb::ui::formatted).collect()
 }

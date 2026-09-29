@@ -46,7 +46,7 @@ pub fn face() -> Face {
     let scene = canvas("Tremolo", |b, root| {
         let lid = pedal::body(b, root, ["#80643f", "#5f4629", "#43301b"]);
 
-        let big = Dial { scale: &["", "", "", "", "", ""], ..Dial::new("knob.pointer", "brown", 60.0, INK, DIM) }.legend(10.0).legend_at(128.0);
+        let big = Dial::new("knob.pointer", "brown", 60.0, INK, DIM).scale(&["", "", "", "", "", ""]).legend(10.0).legend_at(128.0);
         pedal::knob_row(b, lid, &[("tremolo/rate", "Speed"), ("tremolo/depth", "Depth")], 72.0, &big);
         let small = Dial::new("knob.pointer", "black", 32.0, INK, DIM).legend(7.5).legend_at(214.0);
         pedal::knob_row(b, lid, &[("tremolo/groove", "Groove"), ("tremolo/feel", "Feel"), ("tremolo/mix", "Mix"), ("tremolo/output", "Output")], 170.0, &small);
@@ -56,7 +56,7 @@ pub fn face() -> Face {
         opto(b, lid, LW / 2.0, 318.0);
         pedal::rule(b, lid, 346.0, &ui::alpha(INK, 0.3));
 
-        let shape = Dial { scale: &["Opto", "Stereo", "Harm"], value: false, ..Dial::new("knob.chicken_head", "cream", 34.0, INK, DIM) }.sweep(120.0).legend(7.5).legend_at(414.0);
+        let shape = Dial::new("switch.rotary", "cream", 38.0, INK, DIM).options(&["Opto", "Stereo", "Harm"]).sweep(120.0).legend(7.5).legend_at(414.0);
         ui::dial(b, lid, "tremolo/shape", "Shape", 96.0, 384.0, &shape);
         pedal::rate_lamp(b, lid, F, LW - 90.0, 382.0, "#ffae2e", INK);
 

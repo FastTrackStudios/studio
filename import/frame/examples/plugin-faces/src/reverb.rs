@@ -39,7 +39,7 @@ use surface_proto::{ParamInfo, Range, StreamInfo, Unit};
 use crate::face::Face;
 
 pub fn faces() -> Vec<Face> {
-    vec![ir::face(), hall::face(), plate::face(), room::face(), spring::face(), ambient::face(), random::face(), special::face()]
+    [ir::face(), hall::face(), plate::face(), room::face(), spring::face(), ambient::face(), random::face(), special::face()].into_iter().map(ui::formatted).collect()
 }
 
 /// Pre-delay as a dial prints it: evenly spaced marks, uneven ms.
