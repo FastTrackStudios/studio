@@ -12,6 +12,8 @@ members = [
     # ── document: the frame file format + model ───────────────────────
     "features/document/document-proto",
     "features/document/document-memory",
+    "features/document/document-loro",
+    "features/document/document-bundle",
     # ── figma: import only, one way into frame documents ──────────────
     "features/figma/figma-import",
     "features/figma/figma-model",
@@ -31,6 +33,8 @@ default-members = [
     "crates/frame",
     "features/document/document-proto",
     "features/document/document-memory",
+    "features/document/document-loro",
+    "features/document/document-bundle",
     "features/figma/figma-import",
     "features/figma/figma-model",
     "features/figma/figma-rest",
