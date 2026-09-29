@@ -1,0 +1,20 @@
+[package]
+name = "plugin-faces"
+description = "Hardware-style plugin faces (compressors, EQs, delays, reverbs, saturation, modulation) built from the surface kit — written out as frame markup + catalogs."
+version.workspace = true
+edition.workspace = true
+publish = false
+
+[dependencies]
+surface-kit = { path = "../../features/surface/surface-kit" }
+surface-widgets = { path = "../../features/surface/surface-widgets" }
+surface-proto = { path = "../../features/surface/surface-proto", default-features = false }
+document-proto = { path = "../../features/document/document-proto", default-features = false }
+document-text = { path = "../../features/document/document-text" }
+serde_json = { workspace = true }
+
+[dev-dependencies]
+design-lint = { path = "../../features/design/design-lint" }
+
+[lints]
+workspace = true

@@ -4246,6 +4246,19 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b4596b6d070b27117e987119b4dac604f3c58cfb0b191112e24771b2faeac1a6"
 
 [[package]]
+name = "plugin-faces"
+version = "0.1.0"
+dependencies = [
+ "design-lint",
+ "document-proto",
+ "document-text",
+ "serde_json",
+ "surface-kit",
+ "surface-proto",
+ "surface-widgets",
+]
+
+[[package]]
 name = "png"
 version = "0.17.16"
 source = "registry+https://github.com/rust-lang/crates.io-index"

@@ -31,6 +31,8 @@ members = [
     "features/surface/surface-runtime",
     "features/surface/surface-widgets",
     "features/surface/surface-kit",
+    # ── examples ──────────────────────────────────────────────────────
+    "examples/plugin-faces",
     # ── tooling ───────────────────────────────────────────────────────
     "xtask",
 ]
