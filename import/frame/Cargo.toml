@@ -22,6 +22,7 @@ members = [
     "features/surface/surface-proto",
     "features/surface/surface-memory",
     "features/surface/surface-runtime",
+    "features/surface/surface-widgets",
     # ── tooling ───────────────────────────────────────────────────────
     "xtask",
 ]
@@ -37,6 +38,7 @@ default-members = [
     "features/surface/surface-proto",
     "features/surface/surface-memory",
     "features/surface/surface-runtime",
+    "features/surface/surface-widgets",
 ]
 
 [workspace.package]

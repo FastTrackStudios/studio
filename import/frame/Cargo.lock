@@ -5695,6 +5695,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "surface-widgets"
+version = "0.1.0"
+dependencies = [
+ "document-proto",
+ "surface-memory",
+ "surface-proto",
+ "surface-runtime",
+]
+
+[[package]]
 name = "svg"
 version = "0.18.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
