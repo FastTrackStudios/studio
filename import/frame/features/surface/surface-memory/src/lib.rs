@@ -2,8 +2,9 @@
 //! designing surfaces without a running rig.
 //!
 //! It holds a [`Catalog`], stores parameter values, fans changes out to
-//! subscribers, and can synthesize telemetry ([`Memory::tick`]) so meters
-//! move in a preview.
+//! subscribers, and synthesizes every feed kind ([`Memory::tick`], from
+//! `feed-memory`'s generators) so meters, spectra, traces, scopes and
+//! envelopes move in a preview — shaped by `request_feeds` options.
 
 use std::collections::BTreeMap;
 use std::sync::{Arc, Mutex};
@@ -23,6 +24,8 @@ pub struct Memory {
     values: Arc<Mutex<BTreeMap<ParamAddr, f64>>>,
     invoked: Arc<Mutex<Vec<EntryId>>>,
     selected: Arc<Mutex<BTreeMap<EntryId, u32>>>,
+    /// Feed options by feed, as last requested.
+    requested: Arc<Mutex<BTreeMap<EntryId, FeedOptions>>>,
     changes: PubSub<ParamValue>,
     telemetry: PubSub<StreamFrame>,
 }
@@ -37,6 +40,7 @@ impl Memory {
             values: Arc::new(Mutex::new(values)),
             invoked: Arc::new(Mutex::new(Vec::new())),
             selected: Arc::new(Mutex::new(BTreeMap::new())),
+            requested: Arc::new(Mutex::new(BTreeMap::new())),
             changes: PubSub::sliding(256),
             telemetry: PubSub::sliding(64),
         }
@@ -59,22 +63,24 @@ impl Memory {
         lock(&self.invoked).clone()
     }
 
-    /// Publish one synthetic frame per stream, as a function of time `t`
-    /// (seconds), so previews have moving meters.
+    /// Every feed as currently shaped: its catalog entry resolved against
+    /// the latest request for it.
+    #[must_use]
+    pub fn feeds(&self) -> Vec<FeedInfo> {
+        let requested = lock(&self.requested);
+        self.catalog.streams.iter().map(|s| requested.get(&s.id).map_or_else(|| s.clone(), |o| s.resolve(o))).collect()
+    }
+
+    /// One synthetic frame per feed at `t` (seconds), shaped as requested.
+    #[must_use]
+    pub fn frames(&self, t: f64) -> Vec<StreamFrame> {
+        feed_memory::frames(&self.feeds(), t)
+    }
+
+    /// Publish [`Self::frames`] at `t` (seconds), so previews move.
     pub fn tick(&self, t: f64) {
-        for s in &self.catalog.streams {
-            let values = match &s.kind {
-                StreamKind::Level { channels } => (0..*channels)
-                    .map(|c| -18.0 + 12.0 * (t * 2.3 + f64::from(c) * 0.7).sin() - 6.0 * (t * 0.37).cos().abs())
-                    .collect(),
-                StreamKind::GainReduction => vec![-3.0 - 3.0 * (t * 1.7).sin().abs()],
-                StreamKind::Spectrum { bins } => {
-                    (0..*bins).map(|b| -30.0 - 0.3 * f64::from(b) + 6.0 * (t * 3.0 + f64::from(b) * 0.2).sin()).collect()
-                }
-                StreamKind::Tuner => vec![64.0, 8.0 * (t * 0.9).sin()],
-                StreamKind::Scalar { range } => vec![range.to_real(0.5 + 0.5 * (t * 0.5).sin())],
-            };
-            self.telemetry.publish(StreamFrame { id: s.id.clone(), values });
+        for f in self.frames(t) {
+            self.telemetry.publish(f);
         }
     }
 }
@@ -113,6 +119,21 @@ impl SurfaceEngine for Memory {
         }
         lock(&self.selected).insert(collection, index);
         Ok(())
+    }
+
+    fn request_feeds(&self, requests: Vec<FeedRequest>) -> Result<Vec<FeedInfo>, SurfaceError> {
+        let infos = requests
+            .iter()
+            .map(|r| {
+                let info = self.catalog.stream(&r.id).ok_or_else(|| SurfaceError::UnknownFeed(r.id.0.clone()))?;
+                Ok(info.resolve(&r.options))
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        let mut requested = lock(&self.requested);
+        for r in requests {
+            requested.insert(r.id, r.options);
+        }
+        Ok(infos)
     }
 }
 
@@ -228,6 +249,29 @@ mod tests {
         assert_eq!(m.value(&ParamAddr::new("amp/channel")), Some(0.5));
         m.set_param(ParamAddr::new("drive/on"), 0.7, EditPhase::Change).unwrap();
         assert_eq!(m.value(&ParamAddr::new("drive/on")), Some(1.0));
+    }
+
+    #[tokio::test]
+    async fn feeds_follow_requests_over_vox() {
+        let engine = Memory::new(Catalog { streams: feed_memory::demo_feeds(), ..demo_catalog() });
+        let scope = Scope::new();
+        let local = LocalServer::serve(engine.clone().into_router(), scope.clone());
+        let client: SurfaceEngineClient = local.establish().await.unwrap();
+        let got = client
+            .request_feeds(vec![FeedRequest::new("demo/spectrum").bins(200).smoothing(0.5), FeedRequest::new("demo/gr_trace").len(32).rate(60.0)])
+            .await
+            .unwrap();
+        assert_eq!(got[0].kind.frame_len(), 200);
+        assert_eq!((got[1].kind.frame_len(), got[1].rate_hz), (32, 60.0));
+        let refused = client.request_feeds(vec![FeedRequest::new("nope")]).await.unwrap_err();
+        assert!(format!("{refused:?}").contains("UnknownFeed"), "{refused:?}");
+        let frames = engine.frames(1.0);
+        let len = |id: &str| frames.iter().find(|f| f.id.0 == id).map(|f| f.values.len());
+        assert_eq!(len("demo/spectrum"), Some(200));
+        assert_eq!(len("demo/gr_trace"), Some(32));
+        assert_eq!(len("demo/scope"), Some(512), "unrequested feeds keep the catalog's shape");
+        assert_eq!(frames.len(), engine.catalog().streams.len());
+        scope.close().await;
     }
 
     #[test]

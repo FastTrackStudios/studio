@@ -1,8 +1,11 @@
 //! The `surface` contract: how a control surface talks to an engine.
 //!
-//! - [`curve`]: the one response-curve type.
+//! - [`curve`]: the one response-curve type (from `feed-proto`).
 //! - [`param`]: what an engine exposes ([`Catalog`]: params, actions,
-//!   streams, collections) and how values map to engineering units.
+//!   feeds, collections) and how values map to engineering units.
+//! - feeds ([`FeedKind`], [`FeedInfo`], [`FeedRequest`], [`FeedFrame`]):
+//!   `feed-proto`'s typed telemetry, re-exported. `StreamKind`,
+//!   `StreamInfo` and `StreamFrame` are the same types under their old names.
 //! - [`control`]: what makes a design node a control ([`Control`]:
 //!   kind, [`Binding`], MIDI mapping, slots) and validation against a catalog.
 //! - [`engine::SurfaceEngine`]: the service any engine implements (signal rigs, a
@@ -10,8 +13,10 @@
 //!   it — in-process, over a WebSocket, or from an iPad.
 
 pub mod control;
-pub mod curve;
 pub mod param;
+
+pub use feed_proto::curve;
+pub use feed_proto::{FeedFrame, FeedOptions, FeedRequest, Tap, Trigger, VoiceState};
 
 pub use control::*;
 pub use curve::{Curve, CurvePoint};
@@ -24,14 +29,9 @@ pub struct ParamValue {
     pub value: f64,
 }
 
-/// One sample of a telemetry stream. `values` by stream kind:
-/// `Level` — dBFS per channel; `GainReduction` — `[dB]`;
-/// `Spectrum` — dB per bin; `Tuner` — `[midi_note, cents]`; `Scalar` — `[v]`.
-#[derive(Debug, Clone, PartialEq, facet::Facet, serde::Serialize, serde::Deserialize)]
-pub struct StreamFrame {
-    pub id: EntryId,
-    pub values: Vec<f64>,
-}
+/// One sample of a telemetry stream — a [`FeedFrame`] (`values` laid out
+/// by the feed's [`FeedKind`]). The old name, kept for existing code.
+pub type StreamFrame = FeedFrame;
 
 /// Where a parameter edit is in its gesture, so engines can group undo and
 /// automation writes (begin → changes → end).
@@ -51,6 +51,7 @@ pub enum SurfaceError {
     UnknownAction(String),
     UnknownCollection(String),
     OutOfRange(u32),
+    UnknownFeed(String),
 }
 
 impl std::fmt::Display for SurfaceError {
@@ -60,6 +61,7 @@ impl std::fmt::Display for SurfaceError {
             Self::UnknownAction(a) => write!(f, "no action `{a}`"),
             Self::UnknownCollection(c) => write!(f, "no collection `{c}`"),
             Self::OutOfRange(i) => write!(f, "index {i} out of range"),
+            Self::UnknownFeed(id) => write!(f, "no feed `{id}`"),
         }
     }
 }
@@ -71,7 +73,7 @@ pub mod engine {
     //! `SurfaceEngineService` / `surface_engine_serve`, plus the stream
     //! sibling (`SurfaceEngineStreamClient`, `SurfaceEngineStreamService`,
     //! the `SurfaceEngineStreamSource` backend contract).
-    use super::{Catalog, EditPhase, EntryId, ParamAddr, ParamValue, StreamFrame, SurfaceError};
+    use super::{Catalog, EditPhase, EntryId, FeedInfo, FeedRequest, ParamAddr, ParamValue, StreamFrame, SurfaceError};
 
     /// An engine, as a surface sees it. Backends implement it synchronously
     /// (like signal's rig services); remote callers get the async client.
@@ -87,10 +89,25 @@ pub mod engine {
         fn invoke(&self, action: EntryId) -> Result<(), SurfaceError>;
         /// Select an item of a collection.
         fn select(&self, collection: EntryId, index: u32) -> Result<(), SurfaceError>;
+        /// Ask for feeds shaped by options (spectrum bins, history length,
+        /// rate, tap, smoothing). The engine answers with each feed as it
+        /// will now publish it on `telemetry` ([`FeedInfo::resolve`]).
+        /// Options are engine-wide: the latest request for a feed wins.
+        ///
+        /// The default ignores the options and answers with the catalog's
+        /// entries, so engines written before feeds keep compiling.
+        fn request_feeds(&self, requests: Vec<FeedRequest>) -> Result<Vec<FeedInfo>, SurfaceError> {
+            let catalog = self.catalog();
+            requests
+                .iter()
+                .map(|r| catalog.stream(&r.id).cloned().ok_or_else(|| SurfaceError::UnknownFeed(r.id.0.clone())))
+                .collect()
+        }
         /// Parameter changes from anywhere (other surfaces, MIDI, automation).
         #[subscribe]
         fn param_changes(&self) -> ParamValue;
-        /// Telemetry frames (meters, spectrum, tuner) at each stream's rate.
+        /// Feed frames (meters, spectrum, traces, scopes, envelopes, tuner)
+        /// at each feed's rate, shaped as last requested.
         #[subscribe]
         fn telemetry(&self) -> StreamFrame;
     }

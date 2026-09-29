@@ -3,8 +3,8 @@
 //! ```text
 //! render_surface --out surface.png [--theme stage-dark|daylight]
 //!                [--markup surface.fm] [--catalog catalog.json] [--set amp/gain=0.8 ...]
-//!                [--stream ID=V[,V2…] ...] [--level -12] [--scale 2]
-//!                [--fx gpu|fallback|off] [--time SECONDS]
+//!                [--stream ID=V[,V2…] ...] [--level -12] [--demo-feeds]
+//!                [--scale 2] [--fx gpu|fallback|off] [--time SECONDS]
 //! ```
 //! Builds a surface from the demo engine catalog (or `--markup` +
 //! `--catalog`), applies the given parameter values (normalized) and stream
@@ -16,6 +16,10 @@
 //! stream in the catalog (DB on the first channel, DB − 4 on the rest)
 //! unless `--stream` names streams explicitly; then it only fills in the
 //! level streams none of them named.
+//!
+//! `--demo-feeds` feeds every other feed of the catalog (levels, gain
+//! reduction, spectra, histories, scopes, envelopes, tuner, scalars) from
+//! `feed-memory`'s demo generators at `--time` seconds.
 
 #[cfg(not(feature = "anyrender"))]
 fn main() {
@@ -41,6 +45,7 @@ fn run() -> Result<(), String> {
     let mut theme = Theme::stage_dark();
     let mut sets = Vec::new();
     let mut level = None;
+    let mut demo_feeds = false;
     let mut streams: Vec<StreamFrame> = Vec::new();
     let mut scale = 1.0_f64;
     let mut markup: Option<String> = None;
@@ -70,6 +75,7 @@ fn run() -> Result<(), String> {
                 let values = v.split(',').map(|x| x.trim().parse::<f64>().map_err(|e| format!("{kv}: {e}"))).collect::<Result<Vec<_>, _>>()?;
                 streams.push(StreamFrame { id: EntryId::new(k), values });
             }
+            "--demo-feeds" => demo_feeds = true,
             "--level" => level = Some(args.next().ok_or("--level needs dB")?.parse::<f64>().map_err(|e| e.to_string())?),
             "--fx" => fx = args.next().ok_or("--fx needs gpu|fallback|off")?.parse()?,
             "--time" => time_s = args.next().ok_or("--time needs seconds")?.parse::<f64>().map_err(|e| e.to_string())?,
@@ -96,7 +102,14 @@ fn run() -> Result<(), String> {
     };
     let mut rt = Runtime::new(surface, catalog);
     rt.apply_values(sets);
-    for f in level_frames(rt.catalog(), level, &streams) {
+    let levels = level_frames(rt.catalog(), level, &streams);
+    if demo_feeds {
+        let named: Vec<&EntryId> = streams.iter().chain(&levels).map(|f| &f.id).collect();
+        for f in demo_frames(rt.catalog(), time_s, &named) {
+            rt.apply_frame(f, 0.0);
+        }
+    }
+    for f in levels {
         rt.apply_frame(f, 0.0);
     }
     for f in streams {
@@ -158,6 +171,13 @@ fn level_frames(catalog: &surface_proto::Catalog, level: Option<f64>, explicit: 
         .collect()
 }
 
+/// `--demo-feeds`' frames: every feed of the catalog not in `skip`, from
+/// the demo generators at `t` seconds.
+#[cfg(feature = "anyrender")]
+fn demo_frames(catalog: &surface_proto::Catalog, t: f64, skip: &[&surface_proto::EntryId]) -> Vec<surface_proto::StreamFrame> {
+    feed_memory::frames(catalog.streams.iter().filter(|s| !skip.contains(&&s.id)), t)
+}
+
 /// Every control's position, for effect shaders' `value`.
 #[cfg(feature = "anyrender")]
 fn control_positions(rt: &surface_runtime::Runtime) -> std::collections::HashMap<document_proto::NodeId, f64> {
@@ -190,5 +210,17 @@ mod tests {
         let explicit = [StreamFrame { id: EntryId::new("plate/in"), values: vec![-3.0] }];
         assert_eq!(ids(&super::level_frames(&catalog, Some(-12.0), &explicit)), [("plate/out".to_string(), vec![-12.0])]);
         assert!(super::level_frames(&catalog, None, &[]).is_empty());
+    }
+
+    #[test]
+    fn demo_feeds_fill_every_feed_not_named() {
+        let catalog = Catalog { streams: feed_memory::demo_feeds(), ..Catalog::default() };
+        let skip = EntryId::new("demo/gr");
+        let frames = super::demo_frames(&catalog, 1.5, &[&skip]);
+        assert_eq!(frames.len(), catalog.streams.len() - 1);
+        assert!(frames.iter().all(|f| f.id != skip));
+        for f in &frames {
+            assert_eq!(f.values.len(), catalog.stream(&f.id).unwrap().kind.frame_len(), "{}", f.id);
+        }
     }
 }

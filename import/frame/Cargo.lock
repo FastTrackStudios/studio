@@ -1764,6 +1764,29 @@ dependencies = [
 ]
 
 [[package]]
+name = "feed-dsp"
+version = "0.1.0"
+dependencies = [
+ "feed-proto",
+]
+
+[[package]]
+name = "feed-memory"
+version = "0.1.0"
+dependencies = [
+ "feed-proto",
+]
+
+[[package]]
+name = "feed-proto"
+version = "0.1.0"
+dependencies = [
+ "facet",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "figma-api"
 version = "0.31.4"
 source = "git+https://github.com/gridaco/figma-api-rust.git#e284c687b55fe7a31352de69fe668b1a3392b607"
@@ -1984,6 +2007,7 @@ dependencies = [
  "architect 0.1.0 (git+https://github.com/FastTrackStudios/architect?tag=v0.0.2)",
  "document-proto",
  "document-text",
+ "feed-memory",
  "figma-import",
  "figma-rest",
  "image",
@@ -2013,6 +2037,7 @@ dependencies = [
  "document-bundle",
  "document-proto",
  "document-text",
+ "feed-memory",
  "image",
  "kurbo 0.13.1",
  "peniko",
@@ -5751,6 +5776,7 @@ name = "surface-memory"
 version = "0.1.0"
 dependencies = [
  "architect 0.1.0 (git+https://github.com/FastTrackStudios/architect?tag=v0.0.2)",
+ "feed-memory",
  "surface-proto",
  "tokio",
 ]
@@ -5761,6 +5787,7 @@ version = "0.1.0"
 dependencies = [
  "architect 0.1.0 (git+https://github.com/FastTrackStudios/architect?tag=v0.0.2)",
  "facet",
+ "feed-proto",
  "serde",
  "uuid",
  "vox",

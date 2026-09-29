@@ -19,6 +19,10 @@ members = [
     "features/document/document-loro",
     "features/document/document-bundle",
     "features/document/document-text",
+    # ── feed: typed telemetry — kinds, requests, realtime taps, demos ─
+    "features/feed/feed-proto",
+    "features/feed/feed-dsp",
+    "features/feed/feed-memory",
     # ── figma: import only, one way into frame documents ──────────────
     "features/figma/figma-import",
     "features/figma/figma-model",
@@ -47,6 +51,9 @@ default-members = [
     "features/document/document-loro",
     "features/document/document-bundle",
     "features/document/document-text",
+    "features/feed/feed-proto",
+    "features/feed/feed-dsp",
+    "features/feed/feed-memory",
     "features/figma/figma-import",
     "features/figma/figma-model",
     "features/figma/figma-rest",

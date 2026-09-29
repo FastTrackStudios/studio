@@ -20,34 +20,102 @@ engine (signal / processor / plugin)            frame surface
                                              └──────────────────────────────┘
 ```
 
-### 1. Feeds: typed data a widget can request (`features/feed`)
+### 1. Feeds: typed data a widget can request (`features/feed`) — built
 
 A **feed** is a stream with a declared shape. The catalog lists which feeds an
-engine offers, and a surface subscribes with options (bins, rate, history
-length, pre or post). The engine resamples to what was asked for. Reusable kinds:
+engine offers (`Catalog::streams`, unchanged on the wire), and a surface asks
+for them with options (bins, rate, history length, tap, smoothing). The
+engine resamples to what was asked for. Frames carry `values: Vec<f64>`
+laid out by kind (`FeedKind::frame_len`):
 
-| Kind | Frame payload | Options |
+| Kind | Frame `values` | Options that reshape it |
 |---|---|---|
-| `Level { channels }` | dBFS per channel | — |
-| `GainReduction` | dB ≤ 0 | — |
-| `Spectrum { bins, f_min, f_max, floor_db }` | dB per log-spaced bin | bins, tap (pre/post/sidechain), smoothing |
-| `History { of, len }` | ring of the last `len` values of a scalar feed (GR, input level) | len, rate |
-| `Waveform { len }` | samples −1..1 (a scope) | len, trigger |
-| `Envelope { stages }` | stage index + position 0..1 + level (ADSR playhead per voice) | voices |
-| `Scalar { range }` | one value | — |
-| `Tuner` | note, cents | — |
+| `Level { channels }` | peak dBFS per channel | — |
+| `GainReduction` | `[dB]`, ≤ 0 | — |
+| `Spectrum { bins, f_min, f_max, floor_db }` | dB per log-spaced bin, `f_min`→`f_max` | `bins`, `smoothing` (octaves), `tap` |
+| `Tuner` | `[midi_note, cents]` | — |
+| `Scalar { range }` | `[v]` in `range` units | — |
+| `History { of: ScalarKind, len }` | last `len` values of `of` (`Level`, `GainReduction`, `Scalar{range}`), oldest first, one per `1/rate_hz` s | `len`, `rate_hz` |
+| `Waveform { len }` | `len` samples −1..1, triggered | `len`, `trigger` (`Free`/`Rising`/`Falling`) |
+| `Envelope { stages: Vec<String>, voices }` | `voices` × `[stage (−1 idle), position 0..1, level 0..1]` (`VoiceState::decode`) | `voices` |
 
-- `feed-proto`: the kinds, `FeedInfo` (in the catalog), `FeedRequest`
-  (id + options) and `FeedFrame`. Wire-compatible with `surface-proto`'s
-  `StreamKind`/`StreamFrame`, which become these types (re-exported), so
-  existing surfaces keep working.
-- `feed-dsp`: realtime-safe producers the engines share, so every plugin
-  gets the same analyser: `SpectrumTap` (windowed FFT → log bins, ballistics),
-  `HistoryTap` (lock-free ring, control-thread snapshot), `LevelTap`,
-  `EnvelopeTap`, `ScopeTap`. The audio thread only pushes; the control thread
-  publishes at the requested rate. No allocation on the audio thread.
-- `feed-memory`: demo generators for every kind (drives the mock engine,
-  tests and offline renders).
+Variant order is wire order (the five old kinds first, new kinds appended).
+`Spectrum`'s band fields default (20 Hz–20 kHz, −90 dB) so old
+`{"Spectrum":{"bins":64}}` JSON still reads; every other old kind
+serializes byte-for-byte as before.
+
+**`feed-proto`** (`facet` + `serde` only, no architect):
+- `FeedKind`, `ScalarKind`, `FeedInfo { id, name, kind, rate_hz }`,
+  `FeedOptions { bins, len, rate_hz, tap: Tap(Pre|Post|Sidechain), smoothing,
+  trigger, voices }` (all `Option`, all `serde(default)`),
+  `FeedRequest { id, options }` (builder: `.bins() .len() .rate() .tap()
+  .smoothing() .trigger() .voices()`), `FeedFrame { id, values }`,
+  `VoiceState`.
+- `FeedInfo::resolve(&options)` is the one rule for "what does this request
+  produce" (clamped: bins ≤ 4096, len ≤ 65536, rate ≤ 240 Hz); engines answer
+  requests with it.
+- It also now owns the value types feeds and params share — `EntryId`,
+  `Range`, `Scale`, `Unit`, `ValueFormat`, `FormatStyle`, `note_name`, and
+  `curve::{Curve, CurvePoint}` (moved from `surface-proto`, which re-exports
+  all of them at the same paths).
+- `surface-proto` keeps the old names as aliases: `StreamKind = FeedKind`,
+  `StreamInfo = FeedInfo`, `StreamFrame = FeedFrame`, and adds
+  `Catalog::feed(id)`.
+
+**RPC** (`SurfaceEngine`, backward compatible):
+`fn request_feeds(&self, requests: Vec<FeedRequest>) -> Result<Vec<FeedInfo>, SurfaceError>`
+returns each feed as it will now be published on the existing `telemetry`
+subscription. It has a default body (options ignored, catalog entries
+returned), so engines written before feeds compile unchanged; unknown ids
+give the new `SurfaceError::UnknownFeed`. Options are engine-wide (latest
+request per feed wins). `surface-memory::Memory` implements it (stores the
+options; `Memory::feeds()` / `frames(t)` / `tick(t)` generate each feed at its
+requested shape), and the desktop player's local mock uses `Memory::frames`.
+
+**`feed-dsp`** (depends only on `feed-proto`): each producer is a pair made
+off the audio thread — a *tap* (audio thread: wait-free, lock-free, no
+allocation; asserted by an allocation-counting global allocator test) and a
+*reader* (control thread) that implements `FeedSource`:
+
+| constructor | audio-thread tap | control-thread reader |
+|---|---|---|
+| `spectrum(fft_size, sr)` | `SpectrumTap::push / push_stereo` | `SpectrumAnalyzer`: Hann → radix-2 FFT (own, no dep) → log bins (max of FFT bins inside, interpolated when narrower) → power-domain octave smoothing → instant attack, dB/s decay, floor; `configure(SpectrumConfig)` resamples to any bin count |
+| `history(cap, sr, rate_hz, Aggregate, rest)` | `HistoryTap::push(value, frames)` folds per point (`Max`/`Min`/`Mean`/`Last`) / `push_point` | `HistoryReader::snapshot` last N oldest-first, `set_rate` |
+| `level(channels, sr)` | `LevelTap::push(ch, block) / push_interleaved` | `LevelReader::peak_db` (peak since last read) / `rms_db` (300 ms) |
+| `scalar(Aggregate, rest)` | `ScalarTap::push(v)` (GR, LFO, CPU) | `ScalarReader::take` (extreme since last read) |
+| `scope(cap)` | `ScopeTap::push` | `ScopeReader::snapshot` (latest trigger with a full window) |
+| `envelope(voices)` | `EnvelopeTap::set(voice, stage, pos, level) / idle` (one `AtomicU64` per voice) | `EnvelopeReader::read_into` |
+
+All taps share `ring()`: an overwriting SPSC ring of `AtomicU32` samples with
+seqlock-style lap detection. `Publisher` holds one `FeedSource` per catalog
+feed: `add(info, reader)`, `request(&[FeedRequest])` (→ resolved infos, the
+body of `request_feeds`), `poll(now, emit)` emits due frames at each feed's
+rate.
+
+Engine integration recipe (processor / signal block):
+1. When the block is built: `let (tap, reader) = feed_dsp::spectrum(4096, sr);`
+   (and `scalar`, `history`, …); move taps into the audio processor, add
+   readers to a `Publisher` with the `FeedInfo`s the block lists in its
+   catalog (`publisher.infos()`).
+2. Audio thread, per block: `tap.push(&block)`, `gr_tap.push(gr_db)`,
+   `trace_tap.push(gr_db, frames)` — nothing else.
+3. `SurfaceEngine::request_feeds` → `publisher.request(&requests)`
+   (map `Err(id)` to `SurfaceError::UnknownFeed`).
+4. A control-thread timer (≥ the fastest feed, e.g. 60 Hz):
+   `publisher.poll(now, |f| telemetry_hub.publish(f))`.
+
+**`feed-memory`**: pure generators of time for every kind — `frame(info, t)`,
+`frames(feeds, t)`, `values(kind, rate, t)`, plus `level_db`, `gr_db`,
+`spectrum_db` (pink slope, pulsing kick, gliding tone, presence bump),
+`waveform`, `Adsr { … }::voice(t, v)`, and `demo_feeds()` (one feed of every
+kind under `demo/`). A history is the scalar generator sampled backwards at the
+feed's rate, so a GR trace ends at the GR meter's value.
+`render_surface --demo-feeds [--time T]` feeds every catalog feed not named by
+`--stream`/`--level` from these generators at `T`.
+
+Not yet: the desktop player doesn't issue `request_feeds` itself (Plot
+controls will, from their options); per-subscriber options would need
+connection identity in the rpc.
 
 ### 2. Plots: a node that draws a feed
 

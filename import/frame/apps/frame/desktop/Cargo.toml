@@ -18,6 +18,7 @@ surface-proto = { path = "../../../features/surface/surface-proto" }
 surface-runtime = { path = "../../../features/surface/surface-runtime", features = ["remote"] }
 surface-widgets = { path = "../../../features/surface/surface-widgets" }
 surface-memory = { path = "../../../features/surface/surface-memory" }
+feed-memory = { path = "../../../features/feed/feed-memory" }
 serde_json = { workspace = true }
 kurbo = { workspace = true }
 peniko = { workspace = true }

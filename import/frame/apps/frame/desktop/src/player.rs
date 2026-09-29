@@ -8,7 +8,7 @@ use std::time::Duration;
 
 use document_proto::{NodeId, PaintKind, Scene};
 use surface_memory::Memory;
-use surface_proto::{Catalog, ControlKind, ParamAddr, ParamValue, Source as Binding, StreamFrame, StreamKind};
+use surface_proto::{Catalog, ControlKind, ParamAddr, ParamValue, Source as Binding};
 use surface_runtime::sync::{Engine, EngineError, Incoming};
 use surface_runtime::{Bounds, EngineCall, Input, Key, Modifiers, Runtime, Surface, sync};
 
@@ -214,8 +214,9 @@ impl Player {
     /// engine), coalesced edits out.
     pub fn tick(&mut self, t: f64) {
         match &mut self.engine {
-            Backend::Local(_) => {
-                for frame in telemetry(self.rt.catalog(), t / 1000.0) {
+            Backend::Local(m) => {
+                // Shaped by whatever feeds were requested of the mock.
+                for frame in m.frames(t / 1000.0) {
                     self.rt.apply_frame(frame, t);
                 }
             }
@@ -378,30 +379,6 @@ pub fn banner(message: &str, width: f64) -> Option<(Scene, NodeId)> {
     Some((scene, page))
 }
 
-/// Synthetic telemetry at `t` seconds — the same signals as
-/// [`Memory::tick`], computed here so the host feeds the runtime directly.
-#[must_use]
-pub fn telemetry(catalog: &Catalog, t: f64) -> Vec<StreamFrame> {
-    catalog
-        .streams
-        .iter()
-        .map(|s| {
-            let values = match &s.kind {
-                StreamKind::Level { channels } => (0..*channels)
-                    .map(|c| -18.0 + 12.0 * (t * 2.3 + f64::from(c) * 0.7).sin() - 6.0 * (t * 0.37).cos().abs())
-                    .collect(),
-                StreamKind::GainReduction => vec![-3.0 - 3.0 * (t * 1.7).sin().abs()],
-                StreamKind::Spectrum { bins } => (0..*bins)
-                    .map(|b| -30.0 - 0.3 * f64::from(b) + 6.0 * (t * 3.0 + f64::from(b) * 0.2).sin())
-                    .collect(),
-                StreamKind::Tuner => vec![64.0, 8.0 * (t * 0.9).sin()],
-                StreamKind::Scalar { range } => vec![range.to_real(0.5 + 0.5 * (t * 0.5).sin())],
-            };
-            StreamFrame { id: s.id.clone(), values }
-        })
-        .collect()
-}
-
 fn bounds(b: &render::LayoutBox) -> Bounds {
     Bounds { x: b.x, y: b.y, width: b.width, height: b.height }
 }
@@ -514,9 +491,14 @@ mod tests {
     #[test]
     fn telemetry_matches_the_catalog_streams() {
         let c = surface_memory::demo_catalog();
-        let frames = telemetry(&c, 1.25);
+        let frames = feed_memory::frames(&c.streams, 1.25);
         assert_eq!(frames.len(), c.streams.len());
         assert_eq!(frames[0].values.len(), 2, "stereo out_level");
+        // Every feed kind generates, at its shape.
+        let all = Catalog { streams: feed_memory::demo_feeds(), ..Catalog::default() };
+        for (f, info) in feed_memory::frames(&all.streams, 2.0).iter().zip(&all.streams) {
+            assert_eq!(f.values.len(), info.kind.frame_len(), "{}", info.id);
+        }
     }
 
     /// Tick until `done` (the remote side is asynchronous).
