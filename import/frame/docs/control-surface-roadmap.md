@@ -10,9 +10,37 @@ Reference clones (read-only) live in `/run/media/Development/research/`:
 `open-pencil`, `grida` (TS editor + Figma io), `grida-nothing` (Grida's Rust engine),
 `figma-rust`, `figma-rs`.
 
+## Status (2026-09-29)
+
+**Built:**
+
+| Area | What exists |
+|---|---|
+| Document | `document-proto`: typed `Scene` with hug sizing and `Node.control`; ops with inverses; `History` |
+| Storage and text | `document-loro` (Loro replica, merge), `document-bundle` (`.frame` zip: styx manifest + `doc.loro` + content-addressed assets), `document-text` (lossless JSX-like markup + `REFERENCE.md`) |
+| Import | `figma-import`: Figma → Scene. Scene rendering was proven identical to the old Figma path on all 26 parity scenarios; SVG export is byte-identical (130/130) |
+| Surface | `surface-proto` (one `Curve`, `Catalog`, `Control`/`Binding`/`Slot`, `SurfaceEngine` service with `param_changes` + `telemetry` streams), `surface-memory` (mock engine), `surface-runtime` (gestures per the knob spec, slot driving, ballistics, coalescing, vox sync), `surface-widgets` (canonical controls, themes, `surface_for_catalog`) |
+| AI | `design-lint` (11 rules, each with a fix), `design-session` (one tool registry; every call atomic and undoable), `frame-mcp` (stdio MCP; saves the markup file after every edit) |
+| Apps | `frame` desktop player (hot reload, error banner, headless screenshot mode), `frame-cli` (`render_surface`, `export_markup`, parity tooling) |
+
+**The design loop works end to end:**
+```
+frame-mcp --file stage.fm  ⇄  model (catalog → write/add_control → lint → fix)
+frame stage.fm             ←  hot-reloads each edit; play it against the mock engine
+```
+
+**Next:**
+- signal integration: publish a real `Catalog` from signal's rigs (`ParamTarget` on the wire), and a `SurfaceEngine` impl over vox.
+- Design tokens as document variables with modes (theme switching without regenerating).
+- Selector / XY / graph widgets (EQ, ADSR); modulation rings.
+- `.fig` Kiwi import.
+- Hosts: embedding in Blitz/Dioxus (signal-desktop), a baseview plugin window, native iOS.
+- The editor UI (bind mode, MIDI learn) on architect-ui.
+- Value-only render fast path and cached chrome, for large surfaces.
+
 ---
 
-## 1. Where frame is today
+## 1. Where frame was (2026-09-28)
 
 - **Figma fidelity is strong.** There are 26 parity scenarios and 23 pass. The 3 failures are
   background blur ×2 and single-pixel anchoring. It renders with vello and exports SVG.
