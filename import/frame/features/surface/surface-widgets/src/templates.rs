@@ -107,12 +107,16 @@ pub fn surface_for_catalog(catalog: &Catalog, opts: &Options) -> Surface {
     let top = b.stack(root, "panels", LayoutDirection::Horizontal, t.gap, 0.0);
 
     let output_params: Vec<&ParamInfo> = catalog.params.iter().filter(|p| p.group.as_deref() == Some("Output")).collect();
+    // Large engines mark what a performer reaches for; build from that when
+    // they do, otherwise from everything.
+    let any_featured = catalog.params.iter().any(|p| p.featured);
+    let shown = |p: &ParamInfo| !any_featured || p.featured;
     for (group, params) in catalog.groups() {
         let name = group.unwrap_or("Other");
         if opts.output_strip && name == "Output" {
             continue;
         }
-        let continuous: Vec<_> = params.iter().filter(|p| !matches!(p.kind, ParamKind::Toggle)).collect();
+        let continuous: Vec<_> = params.iter().filter(|p| !matches!(p.kind, ParamKind::Toggle) && shown(p)).collect();
         if continuous.is_empty() {
             continue;
         }
@@ -144,7 +148,7 @@ pub fn surface_for_catalog(catalog: &Catalog, opts: &Options) -> Surface {
 
     if opts.footswitch_row {
         let row = b.stack(root, "footswitches", LayoutDirection::Horizontal, t.gap, 0.0);
-        for p in catalog.params.iter().filter(|p| matches!(p.kind, ParamKind::Toggle)) {
+        for p in catalog.params.iter().filter(|p| matches!(p.kind, ParamKind::Toggle) && shown(p)) {
             let name = p.name.trim_end_matches(" On").to_string();
             b.footswitch(row, &name, Some(Binding::param(p.addr.0.clone())));
         }

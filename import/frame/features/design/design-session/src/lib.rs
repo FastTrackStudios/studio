@@ -172,7 +172,7 @@ impl Session {
 
     fn catalog_text(&self) -> String {
         let c = &self.catalog;
-        let mut out = format!("engine `{}` v{}\n\nparams (bind as param:<addr>):\n", c.id, c.version);
+        let mut out = format!("engine `{}` v{}\n\nparams (bind as param:<addr>; ★ = featured, what a performer reaches for):\n", c.id, c.version);
         for (group, params) in c.groups() {
             out.push_str(&format!("  [{}]\n", group.unwrap_or("Other")));
             for p in params {
@@ -190,7 +190,8 @@ impl Session {
                     ParamKind::Toggle => "toggle".into(),
                     ParamKind::Choice { options } => format!("choice: {}", options.join(" | ")),
                 };
-                out.push_str(&format!("    {:<18} {:<12} {}  default {}\n", p.addr.0, p.name, kind.trim(), p.display(p.default)));
+                let star = if p.featured { "★ " } else { "  " };
+                out.push_str(&format!("  {star}{:<18} {:<12} {}  default {}\n", p.addr.0, p.name, kind.trim(), p.display(p.default)));
             }
         }
         out.push_str("\nactions (bind as action:<id>):\n");

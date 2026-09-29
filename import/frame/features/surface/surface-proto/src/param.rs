@@ -227,6 +227,12 @@ pub struct ParamInfo {
     pub default: f64,
     /// Neutral at center (pan, bipolar macros).
     pub bipolar: bool,
+    /// What a performer reaches for (a block's main control, its bypass).
+    /// Engines with large catalogs mark these so generated and AI-designed
+    /// surfaces start from the controls that matter.
+    #[serde(default)]
+    #[facet(default)]
+    pub featured: bool,
 }
 
 impl ParamInfo {
@@ -241,7 +247,14 @@ impl ParamInfo {
             range,
             default: 0.0,
             bipolar: false,
+            featured: false,
         }
+    }
+
+    #[must_use]
+    pub fn featured(mut self) -> Self {
+        self.featured = true;
+        self
     }
 
     #[must_use]

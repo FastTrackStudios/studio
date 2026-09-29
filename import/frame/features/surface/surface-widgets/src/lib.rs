@@ -65,6 +65,27 @@ mod tests {
     }
 
     #[test]
+    fn featured_params_limit_generated_surfaces() {
+        let mut catalog = demo_catalog();
+        for p in &mut catalog.params {
+            p.featured = matches!(p.addr.0.as_str(), "amp/gain" | "delay/mix" | "delay/on");
+        }
+        let surface = surface_for_catalog(&catalog, &Options::default());
+        let bound: Vec<String> = surface
+            .controls
+            .values()
+            .filter_map(|c| match c.binding.as_ref().map(|b| &b.source) {
+                Some(surface_proto::Source::Param { addr }) => Some(addr.0.clone()),
+                _ => None,
+            })
+            .collect();
+        for addr in ["amp/gain", "delay/mix", "delay/on"] {
+            assert!(bound.iter().any(|b| b == addr), "{addr} missing: {bound:?}");
+        }
+        assert!(!bound.iter().any(|b| b == "amp/bass"), "unfeatured params are left out");
+    }
+
+    #[test]
     fn knob_slots_are_complete() {
         let surface = surface_for_catalog(&demo_catalog(), &Options::default());
         let knob = surface.controls.values().find(|c| matches!(c.kind, ControlKind::Knob { .. })).unwrap();
