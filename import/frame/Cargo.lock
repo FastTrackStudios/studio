@@ -2219,6 +2219,27 @@ dependencies = [
 ]
 
 [[package]]
+name = "frame-desktop"
+version = "0.1.0"
+dependencies = [
+ "document-bundle",
+ "document-proto",
+ "document-text",
+ "image",
+ "kurbo 0.13.0",
+ "peniko",
+ "pollster",
+ "render",
+ "serde_json",
+ "surface-memory",
+ "surface-proto",
+ "surface-runtime",
+ "surface-widgets",
+ "vello",
+ "winit",
+]
+
+[[package]]
 name = "frame-mcp"
 version = "0.1.0"
 dependencies = [

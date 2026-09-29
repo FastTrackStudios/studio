@@ -1,0 +1,240 @@
+<Document id="7642380e-6347-4cdb-84a7-8b65099ef4e2">
+  <Page name="Surface" id="69eb876f-c82d-4003-8cf3-7c3000e00344">
+    <Frame name="demo.guitar surface" id="fe953214-99d4-4266-9eb0-232faba489ba" w=1424 h=437 fill="#0e0f12" layout="column" gap=18 padding=24 align="start">
+      <Frame name="panels" id="03cfee5e-2131-4cee-8988-30d896cae2bf" w=1376 h=259 layout="row" gap=12 align="start">
+        <Frame name="Amp" id="48838e3a-8d1f-4caa-9ca2-efc5af4d3663" w=496 h=155 radius=10 fill="#17191e" layout="column" gap=9 padding=16 align="start">
+          <Text name="caption" id="5e030438-ea55-4b5c-8429-08cff96a5a4b" w=160 h=17 fill="#f2f2f2" size=12>AMP</Text>
+          <Frame name="controls" id="1a45a973-3dfe-492c-9ec5-ea12756c677e" w=464 h=97 layout="row" gap=12 align="start">
+            <Frame name="Gain" id="b5905c02-3fa4-4e88-b874-caa59ddcd5f0" w=56 h=97 control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Param":{"addr":"amp/gain"}}},"kind":{"Knob":{"sweep_degrees":270.0}},"slots":[{"node":"78cb14fe-bdd4-4fac-9855-211fa8592faa","role":"Label"},{"node":"0fa7b5a5-cc50-47bf-bd9b-34b584baab2c","role":"ValueArc"},{"node":"d69d697c-b265-4492-b9ed-595fa36d7565","role":"Needle"},{"node":"642bdbbe-4c56-4559-a8eb-f0db7c22e973","role":"Value"}]}}>
+              <Text name="label" id="78cb14fe-bdd4-4fac-9855-211fa8592faa" w=56 h=16 fill="#9aa0ab" size=11 text-align="center" />
+              <Frame name="dial" id="c6c53edb-a6ac-45f3-a989-c92b75433023" y=20 w=56 h=56>
+                <Vector name="track" id="5ed3178d-bc25-421c-b6e1-7b2715acbb82" w=56 h=56 fill="#0a0b0d" geometry="M 8.201 47.799 A 28.000 28.000 0 1 1 47.799 47.799 L 42.255 42.255 A 20.160 20.160 0 1 0 13.745 42.255 Z" />
+                <Ellipse name="value-arc" id="0fa7b5a5-cc50-47bf-bd9b-34b584baab2c" w=56 h=56 fill="#ff7a1a" />
+                <Ellipse name="cap" id="b154d818-c9c2-4837-a6ce-5884d8d65fe2" x=10.64 y=10.64 w=34.72 h=34.72 fill="#262930" stroke="#0a0b0d" />
+                <Rectangle name="pointer" id="d69d697c-b265-4492-b9ed-595fa36d7565" x=26.32 y=12.88 w=3.36 h=11.8048 radius=1.68 fill="#f2f2f2" />
+              </Frame>
+              <Text name="value" id="642bdbbe-4c56-4559-a8eb-f0db7c22e973" y=80 w=56 h=17 fill="#f2f2f2" size=12 text-align="center" />
+            </Frame>
+            <Frame name="Bass" id="48301ce1-ec06-4517-b074-53d6ab2e4de8" w=56 h=97 control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Param":{"addr":"amp/bass"}}},"kind":{"Knob":{"sweep_degrees":270.0}},"slots":[{"node":"61c5fb08-a8ca-439f-907a-40f5a3f82b2e","role":"Label"},{"node":"3ada74f7-b235-4a97-b24e-f1703d5e7a05","role":"ValueArc"},{"node":"c1a0ba5f-5528-4c03-8dce-8cbcf594f988","role":"Needle"},{"node":"d6eba760-0f4f-4c0d-923b-460d503dd680","role":"Value"}]}}>
+              <Text name="label" id="61c5fb08-a8ca-439f-907a-40f5a3f82b2e" w=56 h=16 fill="#9aa0ab" size=11 text-align="center" />
+              <Frame name="dial" id="01fff3e2-bc25-4d90-b71d-d35c6b01e469" y=20 w=56 h=56>
+                <Vector name="track" id="a954252a-0bf4-400a-a7b8-fd3fb096490b" w=56 h=56 fill="#0a0b0d" geometry="M 8.201 47.799 A 28.000 28.000 0 1 1 47.799 47.799 L 42.255 42.255 A 20.160 20.160 0 1 0 13.745 42.255 Z" />
+                <Ellipse name="value-arc" id="3ada74f7-b235-4a97-b24e-f1703d5e7a05" w=56 h=56 fill="#ff7a1a" />
+                <Ellipse name="cap" id="d191940c-41bc-493a-b2fa-32e35c4c8be2" x=10.64 y=10.64 w=34.72 h=34.72 fill="#262930" stroke="#0a0b0d" />
+                <Rectangle name="pointer" id="c1a0ba5f-5528-4c03-8dce-8cbcf594f988" x=26.32 y=12.88 w=3.36 h=11.8048 radius=1.68 fill="#f2f2f2" />
+              </Frame>
+              <Text name="value" id="d6eba760-0f4f-4c0d-923b-460d503dd680" y=80 w=56 h=17 fill="#f2f2f2" size=12 text-align="center" />
+            </Frame>
+            <Frame name="Mid" id="cbf02779-2ea1-4326-b14a-f0656947008c" w=56 h=97 control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Param":{"addr":"amp/mid"}}},"kind":{"Knob":{"sweep_degrees":270.0}},"slots":[{"node":"2e1f3fa4-f583-47b3-9754-92d0f3131711","role":"Label"},{"node":"0546ddce-4c29-40e6-85b1-1edf4e1c1ebb","role":"ValueArc"},{"node":"7e77346a-7103-40d6-ab10-fbee26b9b654","role":"Needle"},{"node":"7a3c0107-8981-4c91-a0d5-f5fabcd7861f","role":"Value"}]}}>
+              <Text name="label" id="2e1f3fa4-f583-47b3-9754-92d0f3131711" w=56 h=16 fill="#9aa0ab" size=11 text-align="center" />
+              <Frame name="dial" id="a8bc0eb8-fde0-428c-83e1-cf89e98cc363" y=20 w=56 h=56>
+                <Vector name="track" id="42509fa6-5d50-41ac-be18-48bb98c849ea" w=56 h=56 fill="#0a0b0d" geometry="M 8.201 47.799 A 28.000 28.000 0 1 1 47.799 47.799 L 42.255 42.255 A 20.160 20.160 0 1 0 13.745 42.255 Z" />
+                <Ellipse name="value-arc" id="0546ddce-4c29-40e6-85b1-1edf4e1c1ebb" w=56 h=56 fill="#ff7a1a" />
+                <Ellipse name="cap" id="a1663116-a320-4b42-904d-574b4160c592" x=10.64 y=10.64 w=34.72 h=34.72 fill="#262930" stroke="#0a0b0d" />
+                <Rectangle name="pointer" id="7e77346a-7103-40d6-ab10-fbee26b9b654" x=26.32 y=12.88 w=3.36 h=11.8048 radius=1.68 fill="#f2f2f2" />
+              </Frame>
+              <Text name="value" id="7a3c0107-8981-4c91-a0d5-f5fabcd7861f" y=80 w=56 h=17 fill="#f2f2f2" size=12 text-align="center" />
+            </Frame>
+            <Frame name="Treble" id="10ec805b-54b2-4500-ad73-26d69ec9d20b" w=56 h=97 control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Param":{"addr":"amp/treble"}}},"kind":{"Knob":{"sweep_degrees":270.0}},"slots":[{"node":"d4de2223-148b-44fa-af72-3ea5e1c8a522","role":"Label"},{"node":"1c405657-a0e2-40a0-b106-3e56194e4df9","role":"ValueArc"},{"node":"2ca51cb9-c139-4c6a-b3f7-00ebe2ae84e5","role":"Needle"},{"node":"4ae53c48-0561-475b-9a0a-625e24aa073e","role":"Value"}]}}>
+              <Text name="label" id="d4de2223-148b-44fa-af72-3ea5e1c8a522" w=56 h=16 fill="#9aa0ab" size=11 text-align="center" />
+              <Frame name="dial" id="d0d0adfd-3a11-40a3-9716-90fb8b623080" y=20 w=56 h=56>
+                <Vector name="track" id="fcf426cf-55bf-4058-a3b3-b11b63127e5a" w=56 h=56 fill="#0a0b0d" geometry="M 8.201 47.799 A 28.000 28.000 0 1 1 47.799 47.799 L 42.255 42.255 A 20.160 20.160 0 1 0 13.745 42.255 Z" />
+                <Ellipse name="value-arc" id="1c405657-a0e2-40a0-b106-3e56194e4df9" w=56 h=56 fill="#ff7a1a" />
+                <Ellipse name="cap" id="acc71235-c928-4ceb-a9de-166233c833b8" x=10.64 y=10.64 w=34.72 h=34.72 fill="#262930" stroke="#0a0b0d" />
+                <Rectangle name="pointer" id="2ca51cb9-c139-4c6a-b3f7-00ebe2ae84e5" x=26.32 y=12.88 w=3.36 h=11.8048 radius=1.68 fill="#f2f2f2" />
+              </Frame>
+              <Text name="value" id="4ae53c48-0561-475b-9a0a-625e24aa073e" y=80 w=56 h=17 fill="#f2f2f2" size=12 text-align="center" />
+            </Frame>
+            <Frame name="Presence" id="9aa1bf04-b119-409f-aed4-15b3b7bd893c" w=56 h=97 control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Param":{"addr":"amp/presence"}}},"kind":{"Knob":{"sweep_degrees":270.0}},"slots":[{"node":"f7359e51-49d5-41b8-9132-f871cc8cd30b","role":"Label"},{"node":"7c85e485-c367-4bcb-9890-f5ed1e212c86","role":"ValueArc"},{"node":"fd6d0351-239a-42c5-9147-a6c0b359123b","role":"Needle"},{"node":"4a890a65-98b2-48cd-b6f5-5cbf35b61f51","role":"Value"}]}}>
+              <Text name="label" id="f7359e51-49d5-41b8-9132-f871cc8cd30b" w=56 h=16 fill="#9aa0ab" size=11 text-align="center" />
+              <Frame name="dial" id="6db5a79a-1121-43f7-9110-4fb788dd16f3" y=20 w=56 h=56>
+                <Vector name="track" id="6f1d1a05-a55b-4476-8a1a-0ce3552d5762" w=56 h=56 fill="#0a0b0d" geometry="M 8.201 47.799 A 28.000 28.000 0 1 1 47.799 47.799 L 42.255 42.255 A 20.160 20.160 0 1 0 13.745 42.255 Z" />
+                <Ellipse name="value-arc" id="7c85e485-c367-4bcb-9890-f5ed1e212c86" w=56 h=56 fill="#ff7a1a" />
+                <Ellipse name="cap" id="bb256adb-a079-41d9-9753-ea75cb2d1a63" x=10.64 y=10.64 w=34.72 h=34.72 fill="#262930" stroke="#0a0b0d" />
+                <Rectangle name="pointer" id="fd6d0351-239a-42c5-9147-a6c0b359123b" x=26.32 y=12.88 w=3.36 h=11.8048 radius=1.68 fill="#f2f2f2" />
+              </Frame>
+              <Text name="value" id="4a890a65-98b2-48cd-b6f5-5cbf35b61f51" y=80 w=56 h=17 fill="#f2f2f2" size=12 text-align="center" />
+            </Frame>
+            <Frame name="Master" id="189c76c1-930b-4cbc-851f-3b20c61eb997" w=56 h=97 control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Param":{"addr":"amp/master"}}},"kind":{"Knob":{"sweep_degrees":270.0}},"slots":[{"node":"b10cc23e-2922-4491-8512-b021282ed482","role":"Label"},{"node":"30208d13-4579-4594-adca-b72bfa62c351","role":"ValueArc"},{"node":"8299e42d-d40f-4817-86ff-560b1df8fad4","role":"Needle"},{"node":"b03c4a22-8318-4423-a0c6-d4f2d96140cd","role":"Value"}]}}>
+              <Text name="label" id="b10cc23e-2922-4491-8512-b021282ed482" w=56 h=16 fill="#9aa0ab" size=11 text-align="center" />
+              <Frame name="dial" id="391fc29a-9fc4-4e81-9a3b-026123dc360f" y=20 w=56 h=56>
+                <Vector name="track" id="fa58f940-2651-4856-bda2-7d37e2b95c74" w=56 h=56 fill="#0a0b0d" geometry="M 8.201 47.799 A 28.000 28.000 0 1 1 47.799 47.799 L 42.255 42.255 A 20.160 20.160 0 1 0 13.745 42.255 Z" />
+                <Ellipse name="value-arc" id="30208d13-4579-4594-adca-b72bfa62c351" w=56 h=56 fill="#ff7a1a" />
+                <Ellipse name="cap" id="5e053fc2-4ade-4c95-8965-7a43e12bc4f1" x=10.64 y=10.64 w=34.72 h=34.72 fill="#262930" stroke="#0a0b0d" />
+                <Rectangle name="pointer" id="8299e42d-d40f-4817-86ff-560b1df8fad4" x=26.32 y=12.88 w=3.36 h=11.8048 radius=1.68 fill="#f2f2f2" />
+              </Frame>
+              <Text name="value" id="b03c4a22-8318-4423-a0c6-d4f2d96140cd" y=80 w=56 h=17 fill="#f2f2f2" size=12 text-align="center" />
+            </Frame>
+            <Frame name="Channel" id="73fc8b55-5121-4e48-be55-a45399684e4c" w=56 h=97 control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Param":{"addr":"amp/channel"}}},"kind":{"Knob":{"sweep_degrees":270.0}},"slots":[{"node":"4a00915f-4345-4fe0-ad74-17030fbb5e5d","role":"Label"},{"node":"535ed9f6-a086-4859-83e9-869ddcbec2c3","role":"ValueArc"},{"node":"44cf742d-1ba0-4b67-acd9-32b641df4a0f","role":"Needle"},{"node":"a797e2fa-fd2c-44b7-96e0-81d2077ba53e","role":"Value"}]}}>
+              <Text name="label" id="4a00915f-4345-4fe0-ad74-17030fbb5e5d" w=56 h=16 fill="#9aa0ab" size=11 text-align="center" />
+              <Frame name="dial" id="06b69069-eb7f-4cfd-8082-2859cffe6d04" y=20 w=56 h=56>
+                <Vector name="track" id="e351174c-939f-4473-a210-ba90a83c8212" w=56 h=56 fill="#0a0b0d" geometry="M 8.201 47.799 A 28.000 28.000 0 1 1 47.799 47.799 L 42.255 42.255 A 20.160 20.160 0 1 0 13.745 42.255 Z" />
+                <Ellipse name="value-arc" id="535ed9f6-a086-4859-83e9-869ddcbec2c3" w=56 h=56 fill="#ff7a1a" />
+                <Ellipse name="cap" id="4042baa6-87cf-4bae-b68b-7b20a5b0c884" x=10.64 y=10.64 w=34.72 h=34.72 fill="#262930" stroke="#0a0b0d" />
+                <Rectangle name="pointer" id="44cf742d-1ba0-4b67-acd9-32b641df4a0f" x=26.32 y=12.88 w=3.36 h=11.8048 radius=1.68 fill="#f2f2f2" />
+              </Frame>
+              <Text name="value" id="a797e2fa-fd2c-44b7-96e0-81d2077ba53e" y=80 w=56 h=17 fill="#f2f2f2" size=12 text-align="center" />
+            </Frame>
+          </Frame>
+        </Frame>
+        <Frame name="Drive" id="5641bdc3-a966-4ea7-9332-8e1aa400c8ad" w=192 h=155 radius=10 fill="#17191e" layout="column" gap=9 padding=16 align="start">
+          <Text name="caption" id="d5b0deaa-2b9a-4953-bb00-1ec058699823" w=160 h=17 fill="#f2f2f2" size=12>DRIVE</Text>
+          <Frame name="controls" id="fc659e9b-3474-49bf-81f7-b4d91731560b" w=124 h=97 layout="row" gap=12 align="start">
+            <Frame name="Drive" id="ab79ceea-f4b1-456f-9c56-2089b5f12fe4" w=56 h=97 control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Param":{"addr":"drive/amount"}}},"kind":{"Knob":{"sweep_degrees":270.0}},"slots":[{"node":"dfdfe204-17c6-4d01-bf75-3fa1ba2e1884","role":"Label"},{"node":"6ec3427d-f744-4f71-aac6-e72e1c9d1207","role":"ValueArc"},{"node":"cf0d0858-969a-43ed-b600-41e0e54704cc","role":"Needle"},{"node":"f802743b-96a6-43d5-ad48-cdd3d5d966bf","role":"Value"}]}}>
+              <Text name="label" id="dfdfe204-17c6-4d01-bf75-3fa1ba2e1884" w=56 h=16 fill="#9aa0ab" size=11 text-align="center" />
+              <Frame name="dial" id="5ff199e6-f4c5-4e02-8c38-4f54274ae169" y=20 w=56 h=56>
+                <Vector name="track" id="6989b119-f138-40ff-b173-862d2a720beb" w=56 h=56 fill="#0a0b0d" geometry="M 8.201 47.799 A 28.000 28.000 0 1 1 47.799 47.799 L 42.255 42.255 A 20.160 20.160 0 1 0 13.745 42.255 Z" />
+                <Ellipse name="value-arc" id="6ec3427d-f744-4f71-aac6-e72e1c9d1207" w=56 h=56 fill="#ff7a1a" />
+                <Ellipse name="cap" id="c74356df-f7f0-442c-ba80-d4f7dcd5530e" x=10.64 y=10.64 w=34.72 h=34.72 fill="#262930" stroke="#0a0b0d" />
+                <Rectangle name="pointer" id="cf0d0858-969a-43ed-b600-41e0e54704cc" x=26.32 y=12.88 w=3.36 h=11.8048 radius=1.68 fill="#f2f2f2" />
+              </Frame>
+              <Text name="value" id="f802743b-96a6-43d5-ad48-cdd3d5d966bf" y=80 w=56 h=17 fill="#f2f2f2" size=12 text-align="center" />
+            </Frame>
+            <Frame name="Tone" id="2fb28a1c-530e-46b8-af58-f80826e6e36b" w=56 h=97 control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Param":{"addr":"drive/tone"}}},"kind":{"Knob":{"sweep_degrees":270.0}},"slots":[{"node":"879fd19c-18fa-48c2-acf5-cfdb7143aa0d","role":"Label"},{"node":"7ac8e407-8cf5-4dd9-8296-b548658efc87","role":"ValueArc"},{"node":"14dcb67b-0798-4744-83ec-40be512adfc7","role":"Needle"},{"node":"56278465-757c-4365-b2a3-97b1a9122a77","role":"Value"}]}}>
+              <Text name="label" id="879fd19c-18fa-48c2-acf5-cfdb7143aa0d" w=56 h=16 fill="#9aa0ab" size=11 text-align="center" />
+              <Frame name="dial" id="32e8d1f6-0377-417e-9c80-7b150afeecb3" y=20 w=56 h=56>
+                <Vector name="track" id="870bd78c-e022-4cf2-9cc5-478174a09175" w=56 h=56 fill="#0a0b0d" geometry="M 8.201 47.799 A 28.000 28.000 0 1 1 47.799 47.799 L 42.255 42.255 A 20.160 20.160 0 1 0 13.745 42.255 Z" />
+                <Ellipse name="value-arc" id="7ac8e407-8cf5-4dd9-8296-b548658efc87" w=56 h=56 fill="#ff7a1a" />
+                <Ellipse name="cap" id="9f017556-b9b4-4284-909a-dbe021a872ff" x=10.64 y=10.64 w=34.72 h=34.72 fill="#262930" stroke="#0a0b0d" />
+                <Rectangle name="pointer" id="14dcb67b-0798-4744-83ec-40be512adfc7" x=26.32 y=12.88 w=3.36 h=11.8048 radius=1.68 fill="#f2f2f2" />
+              </Frame>
+              <Text name="value" id="56278465-757c-4365-b2a3-97b1a9122a77" y=80 w=56 h=17 fill="#f2f2f2" size=12 text-align="center" />
+            </Frame>
+          </Frame>
+        </Frame>
+        <Frame name="Delay" id="afe55acd-9490-46f3-a980-efdf609b70c3" w=224 h=155 radius=10 fill="#17191e" layout="column" gap=9 padding=16 align="start">
+          <Text name="caption" id="8d859bda-c895-4895-93b8-d12f4c3a92d9" w=160 h=17 fill="#f2f2f2" size=12>DELAY</Text>
+          <Frame name="controls" id="60bdeeef-0622-41d0-a883-831df70f6a68" w=192 h=97 layout="row" gap=12 align="start">
+            <Frame name="Time" id="4de6b25a-49c8-4886-b7b1-cfff13213a7e" w=56 h=97 control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Param":{"addr":"delay/time"}}},"kind":{"Knob":{"sweep_degrees":270.0}},"slots":[{"node":"2791b889-a86b-4fc0-ab6e-e103de7859d7","role":"Label"},{"node":"6d407b76-3298-4b00-82ab-986087ceeed2","role":"ValueArc"},{"node":"6ac13036-72b5-4058-a00f-98e023da2dd2","role":"Needle"},{"node":"aea5c686-5ef0-4c54-af9f-d6c4ce014ef1","role":"Value"}]}}>
+              <Text name="label" id="2791b889-a86b-4fc0-ab6e-e103de7859d7" w=56 h=16 fill="#9aa0ab" size=11 text-align="center" />
+              <Frame name="dial" id="ea0fb315-ad50-4280-a44d-2c56bea40793" y=20 w=56 h=56>
+                <Vector name="track" id="97331ac4-f297-4fed-926d-49bce7270de5" w=56 h=56 fill="#0a0b0d" geometry="M 8.201 47.799 A 28.000 28.000 0 1 1 47.799 47.799 L 42.255 42.255 A 20.160 20.160 0 1 0 13.745 42.255 Z" />
+                <Ellipse name="value-arc" id="6d407b76-3298-4b00-82ab-986087ceeed2" w=56 h=56 fill="#ff7a1a" />
+                <Ellipse name="cap" id="e62e6f3f-0d1a-4d62-ab6f-6658d5e55f84" x=10.64 y=10.64 w=34.72 h=34.72 fill="#262930" stroke="#0a0b0d" />
+                <Rectangle name="pointer" id="6ac13036-72b5-4058-a00f-98e023da2dd2" x=26.32 y=12.88 w=3.36 h=11.8048 radius=1.68 fill="#f2f2f2" />
+              </Frame>
+              <Text name="value" id="aea5c686-5ef0-4c54-af9f-d6c4ce014ef1" y=80 w=56 h=17 fill="#f2f2f2" size=12 text-align="center" />
+            </Frame>
+            <Frame name="Feedback" id="a4f9d849-0a05-4f63-99ef-37816e30a057" w=56 h=97 control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Param":{"addr":"delay/feedback"}}},"kind":{"Knob":{"sweep_degrees":270.0}},"slots":[{"node":"136b3e39-0615-4c9c-976a-bb3a698cd98c","role":"Label"},{"node":"682b4da4-b4b4-4d40-90b5-d84a99643ecf","role":"ValueArc"},{"node":"1e227eb8-8175-4f40-b409-5cf5cc02bf59","role":"Needle"},{"node":"6f513c6c-fde8-41a3-8fd9-0e4ec468e90d","role":"Value"}]}}>
+              <Text name="label" id="136b3e39-0615-4c9c-976a-bb3a698cd98c" w=56 h=16 fill="#9aa0ab" size=11 text-align="center" />
+              <Frame name="dial" id="f2d74a23-4440-4138-9b70-aa727cd80fb1" y=20 w=56 h=56>
+                <Vector name="track" id="3931c10b-f8f7-4134-a83d-cc44fc64c068" w=56 h=56 fill="#0a0b0d" geometry="M 8.201 47.799 A 28.000 28.000 0 1 1 47.799 47.799 L 42.255 42.255 A 20.160 20.160 0 1 0 13.745 42.255 Z" />
+                <Ellipse name="value-arc" id="682b4da4-b4b4-4d40-90b5-d84a99643ecf" w=56 h=56 fill="#ff7a1a" />
+                <Ellipse name="cap" id="4b8c32b0-3ae3-44ba-8460-515c11bcee75" x=10.64 y=10.64 w=34.72 h=34.72 fill="#262930" stroke="#0a0b0d" />
+                <Rectangle name="pointer" id="1e227eb8-8175-4f40-b409-5cf5cc02bf59" x=26.32 y=12.88 w=3.36 h=11.8048 radius=1.68 fill="#f2f2f2" />
+              </Frame>
+              <Text name="value" id="6f513c6c-fde8-41a3-8fd9-0e4ec468e90d" y=80 w=56 h=17 fill="#f2f2f2" size=12 text-align="center" />
+            </Frame>
+            <Frame name="Mix" id="217b1b7a-1393-40c8-8c1e-0640e07a9d2e" w=56 h=97 control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Param":{"addr":"delay/mix"}}},"kind":{"Knob":{"sweep_degrees":270.0}},"slots":[{"node":"014ee922-aed0-48d5-98b9-ee1c3e945fad","role":"Label"},{"node":"b4ed133d-3026-4ff3-a60a-4da02519de77","role":"ValueArc"},{"node":"f3edeabb-41f6-47b1-957d-b60fc90f75c6","role":"Needle"},{"node":"97529db5-4683-48fb-b3bf-523f5b967083","role":"Value"}]}}>
+              <Text name="label" id="014ee922-aed0-48d5-98b9-ee1c3e945fad" w=56 h=16 fill="#9aa0ab" size=11 text-align="center" />
+              <Frame name="dial" id="50ef7e2f-f9f0-4537-a5a7-d9957c650fe3" y=20 w=56 h=56>
+                <Vector name="track" id="517a015f-56ba-41f0-8942-376f7adcd875" w=56 h=56 fill="#0a0b0d" geometry="M 8.201 47.799 A 28.000 28.000 0 1 1 47.799 47.799 L 42.255 42.255 A 20.160 20.160 0 1 0 13.745 42.255 Z" />
+                <Ellipse name="value-arc" id="b4ed133d-3026-4ff3-a60a-4da02519de77" w=56 h=56 fill="#ff7a1a" />
+                <Ellipse name="cap" id="f7b0e796-19fe-4460-86a3-6e1b71419bd8" x=10.64 y=10.64 w=34.72 h=34.72 fill="#262930" stroke="#0a0b0d" />
+                <Rectangle name="pointer" id="f3edeabb-41f6-47b1-957d-b60fc90f75c6" x=26.32 y=12.88 w=3.36 h=11.8048 radius=1.68 fill="#f2f2f2" />
+              </Frame>
+              <Text name="value" id="97529db5-4683-48fb-b3bf-523f5b967083" y=80 w=56 h=17 fill="#f2f2f2" size=12 text-align="center" />
+            </Frame>
+          </Frame>
+        </Frame>
+        <Frame name="Reverb" id="8247e1ef-525c-4457-8582-0a814fb3fb3c" w=224 h=155 radius=10 fill="#17191e" layout="column" gap=9 padding=16 align="start">
+          <Text name="caption" id="83d451da-bd61-4d33-a8b3-c5cbb0465686" w=160 h=17 fill="#f2f2f2" size=12>REVERB</Text>
+          <Frame name="controls" id="a766de7e-f070-49ba-a969-f6ae8e47bd5b" w=192 h=97 layout="row" gap=12 align="start">
+            <Frame name="Decay" id="ac464db3-fc8a-4f4a-8d41-4ee17e8f7fc3" w=56 h=97 control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Param":{"addr":"reverb/decay"}}},"kind":{"Knob":{"sweep_degrees":270.0}},"slots":[{"node":"836bcf18-3813-4669-854e-9ffa6494c7c0","role":"Label"},{"node":"1e781956-1646-4a88-9f83-161e4c43269d","role":"ValueArc"},{"node":"16f90dea-4eb4-431f-b015-77236b4c8cea","role":"Needle"},{"node":"08b5ad89-f653-48c5-989c-5acb1a45bcc7","role":"Value"}]}}>
+              <Text name="label" id="836bcf18-3813-4669-854e-9ffa6494c7c0" w=56 h=16 fill="#9aa0ab" size=11 text-align="center" />
+              <Frame name="dial" id="90d3268c-bdc0-4fca-b1cf-cbe80d9607ca" y=20 w=56 h=56>
+                <Vector name="track" id="989dca3d-78ba-4e38-a15c-3815acde8269" w=56 h=56 fill="#0a0b0d" geometry="M 8.201 47.799 A 28.000 28.000 0 1 1 47.799 47.799 L 42.255 42.255 A 20.160 20.160 0 1 0 13.745 42.255 Z" />
+                <Ellipse name="value-arc" id="1e781956-1646-4a88-9f83-161e4c43269d" w=56 h=56 fill="#ff7a1a" />
+                <Ellipse name="cap" id="307c4ee2-5db7-44f0-829e-4db9912a8749" x=10.64 y=10.64 w=34.72 h=34.72 fill="#262930" stroke="#0a0b0d" />
+                <Rectangle name="pointer" id="16f90dea-4eb4-431f-b015-77236b4c8cea" x=26.32 y=12.88 w=3.36 h=11.8048 radius=1.68 fill="#f2f2f2" />
+              </Frame>
+              <Text name="value" id="08b5ad89-f653-48c5-989c-5acb1a45bcc7" y=80 w=56 h=17 fill="#f2f2f2" size=12 text-align="center" />
+            </Frame>
+            <Frame name="Tone" id="9b1768c2-c5bd-44eb-b4ed-2feb614878ef" w=56 h=97 control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Param":{"addr":"reverb/tone"}}},"kind":{"Knob":{"sweep_degrees":270.0}},"slots":[{"node":"52e6f3f8-32c5-4abe-b8a4-ca6e4d81d61c","role":"Label"},{"node":"f691199c-1106-43c3-8e5c-5871e13cb1f4","role":"ValueArc"},{"node":"40cbdd8e-7046-49b3-8ac1-8ab8dc57b0ae","role":"Needle"},{"node":"c571178f-89cb-4b88-996a-94a19460d672","role":"Value"}]}}>
+              <Text name="label" id="52e6f3f8-32c5-4abe-b8a4-ca6e4d81d61c" w=56 h=16 fill="#9aa0ab" size=11 text-align="center" />
+              <Frame name="dial" id="5a9c646d-35ba-47b5-9a3b-9dd99824b3d4" y=20 w=56 h=56>
+                <Vector name="track" id="fe447cf8-7ce8-4a94-8363-32960ccac351" w=56 h=56 fill="#0a0b0d" geometry="M 8.201 47.799 A 28.000 28.000 0 1 1 47.799 47.799 L 42.255 42.255 A 20.160 20.160 0 1 0 13.745 42.255 Z" />
+                <Ellipse name="value-arc" id="f691199c-1106-43c3-8e5c-5871e13cb1f4" w=56 h=56 fill="#ff7a1a" />
+                <Ellipse name="cap" id="2cd513ef-b5a3-4103-97c6-86bf292b42f7" x=10.64 y=10.64 w=34.72 h=34.72 fill="#262930" stroke="#0a0b0d" />
+                <Rectangle name="pointer" id="40cbdd8e-7046-49b3-8ac1-8ab8dc57b0ae" x=26.32 y=12.88 w=3.36 h=11.8048 radius=1.68 fill="#f2f2f2" />
+              </Frame>
+              <Text name="value" id="c571178f-89cb-4b88-996a-94a19460d672" y=80 w=56 h=17 fill="#f2f2f2" size=12 text-align="center" />
+            </Frame>
+            <Frame name="Mix" id="06850605-3325-4e49-9530-435e3dca788c" w=56 h=97 control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Param":{"addr":"reverb/mix"}}},"kind":{"Knob":{"sweep_degrees":270.0}},"slots":[{"node":"1674a501-07ae-4198-bf4d-a58f0653df57","role":"Label"},{"node":"faa8f27d-e833-4a3c-9cb8-53a1e86a508c","role":"ValueArc"},{"node":"bc69a839-9ba2-4835-9dd8-1b2568122256","role":"Needle"},{"node":"d56eb62d-f354-405a-9b1e-5e7cf675f4f1","role":"Value"}]}}>
+              <Text name="label" id="1674a501-07ae-4198-bf4d-a58f0653df57" w=56 h=16 fill="#9aa0ab" size=11 text-align="center" />
+              <Frame name="dial" id="1b1528a4-93b7-44c4-946b-10ee3dd13a7f" y=20 w=56 h=56>
+                <Vector name="track" id="f1b295d3-ef25-4e9e-ba4d-7daad7230d9d" w=56 h=56 fill="#0a0b0d" geometry="M 8.201 47.799 A 28.000 28.000 0 1 1 47.799 47.799 L 42.255 42.255 A 20.160 20.160 0 1 0 13.745 42.255 Z" />
+                <Ellipse name="value-arc" id="faa8f27d-e833-4a3c-9cb8-53a1e86a508c" w=56 h=56 fill="#ff7a1a" />
+                <Ellipse name="cap" id="07f1c6bd-6f53-4a77-a448-c83a86cb8858" x=10.64 y=10.64 w=34.72 h=34.72 fill="#262930" stroke="#0a0b0d" />
+                <Rectangle name="pointer" id="bc69a839-9ba2-4835-9dd8-1b2568122256" x=26.32 y=12.88 w=3.36 h=11.8048 radius=1.68 fill="#f2f2f2" />
+              </Frame>
+              <Text name="value" id="d56eb62d-f354-405a-9b1e-5e7cf675f4f1" y=80 w=56 h=17 fill="#f2f2f2" size=12 text-align="center" />
+            </Frame>
+          </Frame>
+        </Frame>
+        <Frame name="Output" id="59cbf6a2-c33b-4cb2-af3a-550826b6316a" w=192 h=259 radius=10 fill="#17191e" layout="column" gap=9 padding=16 align="start">
+          <Text name="caption" id="1eb46ba0-ae2b-4977-86cb-e8cec6603087" w=160 h=17 fill="#f2f2f2" size=12>OUTPUT</Text>
+          <Frame name="controls" id="926d457d-f599-48a3-b7ef-cbd684465da6" w=140 h=201 layout="row" gap=12 align="start">
+            <Frame name="Volume" id="976a8608-2507-4b67-adf0-9587bd184239" w=44 h=201 control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Param":{"addr":"rig/volume"}}},"kind":{"Fader":{"orientation":"Vertical"}},"slots":[{"node":"480a877b-6998-422e-bf21-193e3b9c5b91","role":"Label"},{"node":"fc0b9205-9dac-48e7-9603-465e1d39d692","role":"Fill"},{"node":"a8ec36ed-a886-4dc3-b5b2-484be01e7421","role":"Thumb"},{"node":"6874f925-dc31-4df1-bfc4-c4fcd8c1018b","role":"Value"}]}}>
+              <Text name="label" id="480a877b-6998-422e-bf21-193e3b9c5b91" w=44 h=16 fill="#9aa0ab" size=11 text-align="center" />
+              <Frame name="lane" id="1ff3f0fd-8b0e-463d-8f33-d939ed067a40" y=20 w=44 h=160>
+                <Rectangle name="slot" id="621d54ec-add6-4ec6-961f-2717fe84f27a" x=19 w=6 h=160 radius=3 fill="#0a0b0d" />
+                <Rectangle name="fill" id="fc0b9205-9dac-48e7-9603-465e1d39d692" x=19 w=6 h=160 radius=3 fill="#ff7a1a" />
+                <Rectangle name="cap" id="a8ec36ed-a886-4dc3-b5b2-484be01e7421" w=44 h=18 radius=4 fill="#262930" stroke="#f2f2f2" />
+              </Frame>
+              <Text name="value" id="6874f925-dc31-4df1-bfc4-c4fcd8c1018b" y=184 w=44 h=17 fill="#f2f2f2" size=12 text-align="center" />
+            </Frame>
+            <Frame name="Output L" id="cf7b0a7a-5edc-4bda-9a55-8868b4f01202" w=10 h=196 radius=2 clip=true fill="#0a0b0d" control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Stream":{"channel":0,"id":"out_level"}}},"kind":{"Meter":{"orientation":"Vertical"}},"slots":[{"node":"e0da1513-8923-495d-b2cf-8b8e7b94ef34","role":"Fill"},{"node":"1ce0aad5-743f-4456-8f0a-3d60d6bfc228","role":"PeakHold"}]}}>
+              <Rectangle name="fill" id="e0da1513-8923-495d-b2cf-8b8e7b94ef34" w=10 h=196 fill="#3dd67a" />
+              <Rectangle name="peak" id="1ce0aad5-743f-4456-8f0a-3d60d6bfc228" w=10 h=2 fill="#f5c42c" />
+            </Frame>
+            <Frame name="Output R" id="e1f7c1b0-5ea9-43b2-81d4-010a757105d6" w=10 h=196 radius=2 clip=true fill="#0a0b0d" control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Stream":{"channel":1,"id":"out_level"}}},"kind":{"Meter":{"orientation":"Vertical"}},"slots":[{"node":"2b4ac7c4-91a0-4114-9a04-fa7c2f20b46a","role":"Fill"},{"node":"356a86b1-c001-4c66-b580-6828604b48dd","role":"PeakHold"}]}}>
+              <Rectangle name="fill" id="2b4ac7c4-91a0-4114-9a04-fa7c2f20b46a" w=10 h=196 fill="#3dd67a" />
+              <Rectangle name="peak" id="356a86b1-c001-4c66-b580-6828604b48dd" w=10 h=2 fill="#f5c42c" />
+            </Frame>
+            <Frame name="Pan" id="5169e664-50ba-4df9-8a06-c99b31d0511b" w=40 h=81 control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Param":{"addr":"rig/pan"}}},"kind":{"Knob":{"sweep_degrees":270.0}},"slots":[{"node":"4b7f10e8-a707-4981-bb63-ea22c3dea3b1","role":"Label"},{"node":"23500b0d-e5c2-42ee-bb06-55bdb684b877","role":"ValueArc"},{"node":"1b83f329-4200-41f2-84e8-94dc8b23a06b","role":"Needle"},{"node":"ecbb714c-4af1-4032-90e4-45266c02ba5f","role":"Value"}]}}>
+              <Text name="label" id="4b7f10e8-a707-4981-bb63-ea22c3dea3b1" w=40 h=16 fill="#9aa0ab" size=11 text-align="center" />
+              <Frame name="dial" id="297e927d-cf8d-4d54-b255-b2e112e19138" y=20 w=40 h=40>
+                <Vector name="track" id="f9c6c7e8-ef5e-4165-ba73-eb2c5b689ee2" w=40 h=40 fill="#0a0b0d" geometry="M 5.858 34.142 A 20.000 20.000 0 1 1 34.142 34.142 L 30.182 30.182 A 14.400 14.400 0 1 0 9.818 30.182 Z" />
+                <Ellipse name="value-arc" id="23500b0d-e5c2-42ee-bb06-55bdb684b877" w=40 h=40 fill="#ff7a1a" />
+                <Ellipse name="cap" id="bb0ea26a-2271-42ae-8d87-16b0473d854e" x=7.6000000000000005 y=7.6000000000000005 w=24.799999999999997 h=24.799999999999997 fill="#262930" stroke="#0a0b0d" />
+                <Rectangle name="pointer" id="1b83f329-4200-41f2-84e8-94dc8b23a06b" x=18.8 y=9.200000000000001 w=2.4 h=8.432 radius=1.2 fill="#f2f2f2" />
+              </Frame>
+              <Text name="value" id="ecbb714c-4af1-4032-90e4-45266c02ba5f" y=64 w=40 h=17 fill="#f2f2f2" size=12 text-align="center" />
+            </Frame>
+          </Frame>
+        </Frame>
+      </Frame>
+      <Frame name="footswitches" id="1a954b68-11ff-47a5-be71-325747731bd6" w=856 h=112 layout="row" gap=12 align="start">
+        <Frame name="Drive" id="0b475278-1197-4205-b451-c55498cd73f1" w=112 h=112 radius=10 fill="#262930" stroke="#0a0b0d" control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Param":{"addr":"drive/on"}}},"kind":{"Footswitch":{"hold_ms":500}},"slots":[{"node":"f6baedaf-d86d-4816-aa9a-c7430645e9f2","role":"Led"},{"node":"9c0bfb0c-bbd3-4d59-a830-53d023636b04","role":"Label"}]}}>
+          <Ellipse name="led" id="f6baedaf-d86d-4816-aa9a-c7430645e9f2" x=49.28 y=20.16 w=13.44 h=13.44 fill="#3dff7a" />
+          <Text name="label" id="9c0bfb0c-bbd3-4d59-a830-53d023636b04" y=61.60000000000001 w=112 h=19 fill="#f2f2f2" size=13 text-align="center" />
+        </Frame>
+        <Frame name="Delay" id="50f15f41-79d8-46b8-8c23-107edbcd5e91" w=112 h=112 radius=10 fill="#262930" stroke="#0a0b0d" control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Param":{"addr":"delay/on"}}},"kind":{"Footswitch":{"hold_ms":500}},"slots":[{"node":"d78c2e53-f009-410a-9bf5-3e19b33c4e2b","role":"Led"},{"node":"7db6be6a-d9a4-42bf-8ca3-c7806436b87f","role":"Label"}]}}>
+          <Ellipse name="led" id="d78c2e53-f009-410a-9bf5-3e19b33c4e2b" x=49.28 y=20.16 w=13.44 h=13.44 fill="#3dff7a" />
+          <Text name="label" id="7db6be6a-d9a4-42bf-8ca3-c7806436b87f" y=61.60000000000001 w=112 h=19 fill="#f2f2f2" size=13 text-align="center" />
+        </Frame>
+        <Frame name="Reverb" id="4aa5eac8-4607-4e5a-a1fb-0c51fd1f450c" w=112 h=112 radius=10 fill="#262930" stroke="#0a0b0d" control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Param":{"addr":"reverb/on"}}},"kind":{"Footswitch":{"hold_ms":500}},"slots":[{"node":"e87618c3-ed02-42d4-92ae-15b1b5d19369","role":"Led"},{"node":"4aa49e47-da15-4066-983e-5a6967b4d407","role":"Label"}]}}>
+          <Ellipse name="led" id="e87618c3-ed02-42d4-92ae-15b1b5d19369" x=49.28 y=20.16 w=13.44 h=13.44 fill="#3dff7a" />
+          <Text name="label" id="4aa49e47-da15-4066-983e-5a6967b4d407" y=61.60000000000001 w=112 h=19 fill="#f2f2f2" size=13 text-align="center" />
+        </Frame>
+        <Frame name="Tap Tempo" id="e868b1e6-b207-42c0-8c1c-402445426d17" w=112 h=112 radius=10 fill="#262930" stroke="#0a0b0d" control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Action":{"id":"tap_tempo"}}},"kind":{"Footswitch":{"hold_ms":500}},"slots":[{"node":"d1572d1e-b6c8-4462-97af-b3b74001a012","role":"Led"},{"node":"5101d7b2-8320-4e9a-ac88-ff52dcc17b4f","role":"Label"}]}}>
+          <Ellipse name="led" id="d1572d1e-b6c8-4462-97af-b3b74001a012" x=49.28 y=20.16 w=13.44 h=13.44 fill="#3dff7a" />
+          <Text name="label" id="5101d7b2-8320-4e9a-ac88-ff52dcc17b4f" y=61.60000000000001 w=112 h=19 fill="#f2f2f2" size=13 text-align="center" />
+        </Frame>
+        <Frame name="Next Song" id="bb3f8e3b-980d-4861-98c0-410bad297e7c" w=112 h=112 radius=10 fill="#262930" stroke="#0a0b0d" control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Action":{"id":"next_song"}}},"kind":{"Footswitch":{"hold_ms":500}},"slots":[{"node":"1855a570-b36d-4534-83b3-3480a44c9b96","role":"Led"},{"node":"bc2bfcf2-cbbe-410b-94f2-d8c348069a21","role":"Label"}]}}>
+          <Ellipse name="led" id="1855a570-b36d-4534-83b3-3480a44c9b96" x=49.28 y=20.16 w=13.44 h=13.44 fill="#3dff7a" />
+          <Text name="label" id="bc2bfcf2-cbbe-410b-94f2-d8c348069a21" y=61.60000000000001 w=112 h=19 fill="#f2f2f2" size=13 text-align="center" />
+        </Frame>
+        <Frame name="Previous Song" id="6b2bcc9c-bf80-4355-ac2b-0f4fff046379" w=112 h=112 radius=10 fill="#262930" stroke="#0a0b0d" control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Action":{"id":"prev_song"}}},"kind":{"Footswitch":{"hold_ms":500}},"slots":[{"node":"5bfe4bda-52af-4514-bccc-7a308457e434","role":"Led"},{"node":"04ae9c0e-950d-4f9e-9acb-6d314bba3087","role":"Label"}]}}>
+          <Ellipse name="led" id="5bfe4bda-52af-4514-bccc-7a308457e434" x=49.28 y=20.16 w=13.44 h=13.44 fill="#3dff7a" />
+          <Text name="label" id="04ae9c0e-950d-4f9e-9acb-6d314bba3087" y=61.60000000000001 w=112 h=19 fill="#f2f2f2" size=13 text-align="center" />
+        </Frame>
+        <Frame name="Tuner" id="d04ef1f6-989b-49d3-b67c-b2f6a03d8e3c" w=112 h=112 radius=10 fill="#262930" stroke="#0a0b0d" control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Action":{"id":"tuner"}}},"kind":{"Footswitch":{"hold_ms":500}},"slots":[{"node":"8b507aa5-dd81-4392-ac63-fb64617f7e93","role":"Led"},{"node":"5d8a20ee-f0d1-4d34-9803-7826d00fad90","role":"Label"}]}}>
+          <Ellipse name="led" id="8b507aa5-dd81-4392-ac63-fb64617f7e93" x=49.28 y=20.16 w=13.44 h=13.44 fill="#3dff7a" />
+          <Text name="label" id="5d8a20ee-f0d1-4d34-9803-7826d00fad90" y=61.60000000000001 w=112 h=19 fill="#f2f2f2" size=13 text-align="center" />
+        </Frame>
+      </Frame>
+    </Frame>
+  </Page>
+</Document>

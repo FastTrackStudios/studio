@@ -8,6 +8,7 @@ members = [
     # ── apps ──────────────────────────────────────────────────────────
     "apps/frame/cli",
     "apps/frame/mcp",
+    "apps/frame/desktop",
     # ── facade ────────────────────────────────────────────────────────
     "crates/frame",
     # ── design: AI authoring — lint, tools, MCP ──────────────────────
@@ -36,6 +37,7 @@ members = [
 default-members = [
     "apps/frame/cli",
     "apps/frame/mcp",
+    "apps/frame/desktop",
     "crates/frame",
     "features/design/design-lint",
     "features/design/design-session",

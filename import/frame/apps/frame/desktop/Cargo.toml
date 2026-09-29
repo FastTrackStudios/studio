@@ -1,0 +1,30 @@
+[package]
+name = "frame-desktop"
+description = "Frame desktop player: runs a control surface live against an engine, hot-reloading its markup."
+version.workspace = true
+edition.workspace = true
+publish = false
+
+[[bin]]
+name = "frame"
+path = "src/main.rs"
+
+[dependencies]
+render = { path = "../../../features/render/render", features = ["anyrender"] }
+document-proto = { path = "../../../features/document/document-proto", default-features = false }
+document-text = { path = "../../../features/document/document-text" }
+document-bundle = { path = "../../../features/document/document-bundle" }
+surface-proto = { path = "../../../features/surface/surface-proto" }
+surface-runtime = { path = "../../../features/surface/surface-runtime" }
+surface-widgets = { path = "../../../features/surface/surface-widgets" }
+surface-memory = { path = "../../../features/surface/surface-memory" }
+serde_json = { workspace = true }
+kurbo = { workspace = true }
+peniko = { workspace = true }
+vello = { workspace = true }
+winit = { workspace = true }
+pollster = { workspace = true }
+image = { workspace = true }
+
+[lints]
+workspace = true
