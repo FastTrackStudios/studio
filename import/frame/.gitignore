@@ -18,3 +18,4 @@ node_modules/
 .dolt/
 *.db
 .beads/.beads-credential-key
+.tmp/

@@ -1,0 +1,29 @@
+[package]
+name = "frame-cli"
+description = "Frame command-line tools: import, render, diff, diagnostics"
+version.workspace = true
+edition.workspace = true
+publish = false
+
+[dependencies]
+figma-model = { path = "../../../features/figma/figma-model" }
+figma-rest = { path = "../../../features/figma/figma-rest" }
+render = { path = "../../../features/render/render" }
+serde = { workspace = true }
+serde_json = { workspace = true }
+roxmltree = "0.20"
+kurbo = { workspace = true, optional = true }
+peniko = { workspace = true, optional = true }
+skrifa = { version = "0.26", optional = true }
+vello = { workspace = true, optional = true }
+winit = { workspace = true, optional = true }
+image = { workspace = true, optional = true }
+pollster = { workspace = true, optional = true }
+
+[features]
+default = ["anyrender", "svg_export"]
+svg_export = ["render/svg_export"]
+anyrender = ["render/anyrender", "dep:kurbo", "dep:peniko", "dep:skrifa", "dep:vello", "dep:winit", "dep:image", "dep:pollster", "svg_export"]
+
+[lints]
+workspace = true

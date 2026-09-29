@@ -1,13 +1,43 @@
+# frame — an architect consumer repo (github.com/FastTrackStudios/architect).
+# Layout: apps/<app>/<role>, crates/ (facades), features/<feature>/<feature>-<role>,
+# xtask/ (build tooling; in members, never default-members).
+
 [workspace]
-members = ["crates/*", "xtask"]
 resolver = "2"
+members = [
+    # ── apps ──────────────────────────────────────────────────────────
+    "apps/frame/cli",
+    # ── facade ────────────────────────────────────────────────────────
+    "crates/frame",
+    # ── document: the frame file format + model ───────────────────────
+    "features/document/document-proto",
+    "features/document/document-memory",
+    # ── figma: import only, one way into frame documents ──────────────
+    "features/figma/figma-model",
+    "features/figma/figma-rest",
+    # ── render ────────────────────────────────────────────────────────
+    "features/render/render",
+    # ── tooling ───────────────────────────────────────────────────────
+    "xtask",
+]
+default-members = [
+    "apps/frame/cli",
+    "crates/frame",
+    "features/document/document-proto",
+    "features/document/document-memory",
+    "features/figma/figma-model",
+    "features/figma/figma-rest",
+    "features/render/render",
+]
 
 [workspace.package]
-edition = "2021"
+edition = "2024"
 version = "0.1.0"
 license = "MIT OR Apache-2.0"
 
 [workspace.lints.rust]
+# architect's derive macros emit `cfg(feature = "fake")` arms.
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(feature, values("vox", "server", "fake"))'] }
 
 [workspace.lints.clippy]
 
@@ -22,18 +52,17 @@ thiserror = "2.0"
 uuid = { version = "1", features = ["v4", "v5", "v7", "serde"] }
 tokio = { version = "1.48", features = ["full"] }
 
-# Facet (used by frame-proto) - use crates.io 0.43.x to match roam's constraint
-facet = { version = "0.44" }
-facet-core = { version = "0.44" }
-facet-format = { version = "0.44" }
-facet-json = { version = "0.44" }
-facet-postcard = { version = "0.44" }
-facet-pretty = { version = "0.44" }
-facet-value = { version = "0.44" }
-facet-yaml = { version = "0.44" }
+# architect stack — pinned to the same tag/revs as the rest of the fleet.
+# Bump these together: architect's own Cargo.toml is the source of truth
+# for the facet / vox / dioxus pins below.
+architect = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.9.4" }
+crdt = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.9.4" }
+chrono = { version = "0.4", default-features = false, features = ["clock", "std", "wasmbind", "serde"] }
+facet = { version = "0.50.0-rc.7", features = ["reflect", "chrono", "uuid"] }
+vox = { version = "0.10.0-rc.7", default-features = false, features = ["runtime"] }
+sea-orm = { version = "1", features = ["sqlx-sqlite", "sqlx-postgres", "runtime-tokio-rustls", "macros", "with-uuid", "with-chrono"] }
 
-# UI/rendering (optional, behind features in frame-ui)
-dioxus = "0.7.2"
+# Rendering (behind features in features/render/render)
 anyrender = { git = "https://github.com/DioxusLabs/anyrender.git", branch = "main" }
 anyrender_svg = { git = "https://github.com/DioxusLabs/anyrender.git", branch = "main" }
 anyrender_vello = { git = "https://github.com/DioxusLabs/anyrender.git", branch = "main" }
@@ -44,3 +73,13 @@ image = "0.25"
 winit = "0.30"
 vello = "0.7.0"
 pollster = "0.4"
+
+# Mirrors architect's own [patch.crates-io] (minus blitz, which frame doesn't
+# link yet). Patches only apply in the workspace that declares them, so every
+# architect consumer repeats these — without them the vox handshake over
+# `architect::local` fails ("peer closed during handshake").
+[patch.crates-io]
+phon = { git = "https://github.com/FastTrackStudios/vendor", tag = "v0.4.0" }
+phon-jit = { git = "https://github.com/FastTrackStudios/vendor", tag = "v0.2.3" }
+facet-core = { git = "https://github.com/FastTrackStudios/vendor", tag = "v0.4.0" }
+vox-phon = { git = "https://github.com/FastTrackStudios/vendor", tag = "v0.3.0" }

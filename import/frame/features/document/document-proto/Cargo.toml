@@ -1,0 +1,25 @@
+[package]
+name = "document-proto"
+version.workspace = true
+edition.workspace = true
+publish = false
+description = "The document contract: entities, services, errors — every wire is generated from here."
+
+[dependencies]
+architect.workspace = true
+chrono.workspace = true
+facet.workspace = true
+thiserror.workspace = true
+uuid.workspace = true
+vox = { workspace = true, optional = true }
+sea-orm = { workspace = true, optional = true }
+
+# The proto-crate profile. `vox` is the RPC face (on by default); `server`
+# adds the SeaORM storage and the migration. That is the whole contract.
+[features]
+default = ["vox"]
+vox = ["dep:vox", "architect/vox"]
+server = ["dep:sea-orm", "architect/server"]
+
+[lints]
+workspace = true

@@ -9,9 +9,9 @@ Primary corpus source: `/tmp/fts-figma-export.json`
 Quick coverage summary command:
 
 ```bash
-tools/feature_coverage_report.sh \
-  tests/frame/parity/scenarios/paint.alpha-steps/export/latest-bridge-export.json \
-  --out-json tests/frame/parity/reports/feature-coverage.json
+xtask/scripts/feature_coverage_report.sh \
+  features/render/tests/parity/scenarios/paint.alpha-steps/export/latest-bridge-export.json \
+  --out-json features/render/tests/parity/reports/feature-coverage.json
 ```
 
 Observed baseline (captured with `cells/frame/tools/analyze_fts_export.sh`):
@@ -84,7 +84,7 @@ Observed baseline (captured with `cells/frame/tools/analyze_fts_export.sh`):
 ## Current Gap Inventory (from baseline run)
 
 Open high impact gaps:
-- IMAGE fill draw path is not yet connected in `frame-ui` renderer.
+- IMAGE fill draw path is not yet connected in the `render` crate.
 - Effects pipeline is partially implemented (drop shadow draw, inner/layer blur placeholder).
 - Stroke semantics are simplified (no cap/join/dash parity yet).
 - Boolean/vector fidelity still relies heavily on SVG fallback.
