@@ -13,11 +13,12 @@
 //! right is a pale card printed in blue with a plain decibel scale, in a
 //! deep bevelled frame, fed by whichever signal the METER keys pick.
 
-use document_proto::NodeId;
+use document_proto::{NodeId, TextAlign};
 use surface_kit::{Ink, Place, TOUCH_MIN, draw};
 use surface_proto::{Binding, Unit};
 use surface_widgets::Builder;
 
+use super::logo;
 use super::ui::{self, bind};
 use crate::face::{Face, canvas};
 
@@ -137,12 +138,24 @@ pub fn face() -> Face {
         ui::rule(b, panel, br - 58.0, by, 58.0, 1.5, INK);
         ui::silk(b, panel, "Meter", fx(0.40), by + 1.0, 9.5, INK, 800.0);
 
-        // ── The meter and the name ─────────────────────────────
+        // ── The meter, and the name set as the unit's logotype ─────────
         let mx = fx(0.80);
         let meter = Place::new("Decibels").size(300.0).legend("DECIBELS").options(&["glass"]).bind(Binding::stream("vcacomp/meter_level"));
         ui::put(b, panel, "meter.vu_decibel_white", &meter, mx, 140.0);
-        ui::silk(b, panel, "VCA Compressor", mx, 280.0, 13.0, INK, 800.0);
-        ui::silk(b, panel, "Compressor/Limiter", mx, 304.0, 10.0, INK, 800.0);
+        // Heavy, tightly set lowercase, a dark jewel-like dot, then a bold
+        // word — in the logotype's off-white.
+        let heavy = logo::Style { size: 40.0, weight: 900.0, italic: false, tracking: -0.04 };
+        let bold = logo::Style { size: 30.0, weight: 800.0, italic: false, tracking: -0.01 };
+        logo::mark(b, panel, "vca", mx - 150.0, 272.0, 138.0, heavy, "#ecebe6", TextAlign::Right);
+        b.add(
+            panel,
+            draw::with_effects(
+                draw::circle("mark dot", mx - 1.0, 274.0, 5.5, draw::radial_at(0.4, 0.35, 0.8, &[(0.0, "#2a2b2e"), (1.0, "#020203")])),
+                vec![draw::drop_shadow("#ffffff26", 0.0, 1.0, 0.0)],
+            ),
+        );
+        logo::mark(b, panel, "comp", mx + 12.0, 276.0, 140.0, bold, "#ecebe6", TextAlign::Left);
+        ui::silk(b, panel, "Compressor/Limiter", mx, 306.0, 11.0, "#ecebe6", 800.0);
     });
 
     let params = vec![

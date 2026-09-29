@@ -10,6 +10,7 @@
 
 mod bus_comp;
 mod character_comp;
+mod logo;
 pub(crate) mod ui;
 mod vca_comp;
 

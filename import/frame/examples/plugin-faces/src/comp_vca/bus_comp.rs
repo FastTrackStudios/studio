@@ -11,11 +11,12 @@
 //! as far as those detents go. The meter's needle rests at the left stop
 //! and swings right as the reduction deepens (0 → 20 dB).
 
-use document_proto::NodeId;
+use document_proto::{NodeId, TextAlign};
 use surface_kit::{Ink, Place, TOUCH_MIN, draw};
 use surface_proto::{Binding, Unit};
 use surface_widgets::Builder;
 
+use super::logo;
 use super::ui::{self, bind};
 use crate::face::{Face, canvas};
 
@@ -88,6 +89,13 @@ pub fn face() -> Face {
             n.fills = vec![draw::linear(178.0, &[(0.0, "#dde1e5"), (0.5, "#cdd1d6"), (1.0, "#b4b9bf")])];
         }
 
+        // ── The maker's corner: the name stacked in three lines, as the
+        // unit stacks its maker's ─────────────────────────────────────
+        let stack = logo::Style { size: 15.0, weight: 600.0, italic: false, tracking: -0.01 };
+        for (i, l) in ["Stereo", "Bus", "Comp"].iter().enumerate() {
+            logo::mark(b, panel, l, 52.0, 50.0 + i as f64 * 16.0, 80.0, stack, INK, TextAlign::Left);
+        }
+
         // ── Gain reduction: a tall black housing ───────────────────────
         let meter = Place::new("Compression").size(148.0).legend("Compression").options(&["glass"]).bind(Binding::stream("buscomp/gr"));
         ui::put(b, panel, "meter.gr_compression", &meter, fx(0.1435), H / 2.0);
@@ -113,9 +121,16 @@ pub fn face() -> Face {
         ui::rule(b, panel, l, y, r - l + 1.0, 1.0, INK);
         ui::rule(b, panel, r, ROW + 26.0, 1.0, 10.0, INK);
 
-        // ── The name, in the panel's own silkscreen ────────────────────
-        ui::silk(b, panel, "Bus", fx(0.955), 58.0, 10.0, INK, 800.0);
-        ui::silk(b, panel, "Compressor", fx(0.955), 72.0, 8.0, INK, 800.0);
+        // ── The series badge at the right, set as the unit's is: a big
+        // slanted word over a rule, spaced small capitals, and a black tag
+        // reversed out in white.
+        let bx = fx(0.953);
+        let big = logo::Style { size: 24.0, weight: 700.0, italic: true, tracking: -0.02 };
+        logo::mark(b, panel, "Bus", bx - 36.0, 56.0, 72.0, big, INK, TextAlign::Center);
+        ui::rule(b, panel, bx - 34.0, 70.0, 68.0, 1.2, INK);
+        ui::silk(b, panel, "Stereo", bx, 76.0, 6.0, INK, 600.0);
+        b.add(panel, draw::rect("badge tag", bx - 34.0, 81.0, 68.0, 9.0, draw::solid(INK)));
+        ui::silk(b, panel, "Compressor", bx, 86.0, 5.8, "#dde1e5", 700.0);
     });
 
     let params = vec![

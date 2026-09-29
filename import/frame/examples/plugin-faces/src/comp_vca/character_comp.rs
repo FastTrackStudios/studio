@@ -17,6 +17,7 @@ use surface_kit::{Place, TOUCH_MIN, draw};
 use surface_proto::{Binding, ButtonMode, Control, ControlKind, SlotRole, ValueFormat};
 use surface_widgets::Builder;
 
+use super::logo;
 use super::ui::{self, bind};
 use crate::face::{Face, canvas};
 
@@ -129,8 +130,10 @@ pub fn face() -> Face {
         // The ladder stands in the left frame's top line.
         knock(b, panel, (fx(0.105) + fx(0.360)) / 2.0, HEADER, fx(0.360) - fx(0.105), 8.0);
 
-        // ── The name, in plain silkscreen, and the IN key ──────────────────────────
-        ui::silk_left(b, panel, "Character Compressor", fx(0.062), 66.0, 10.0, INK, 800.0);
+        // ── The name, set as the unit's logotype (big, heavy, slanted
+        // white), and the IN key ─────────────────────────────────────
+        let script = logo::Style { size: 34.0, weight: 800.0, italic: true, tracking: -0.02 };
+        logo::mark(b, panel, "Character", fx(0.057), 62.0, 200.0, script, "#f2f2f0", TextAlign::Left);
         let dimple = grey_key(b, panel, fx(0.2), 67.0, 44.0, 20.0, true);
         b.add(panel, dimple);
         lamp_toggle(b, panel, "charcomp/in", fx(0.2) - 24.0, fx(0.245), 67.0);
