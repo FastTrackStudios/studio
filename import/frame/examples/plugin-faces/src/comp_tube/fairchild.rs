@@ -62,9 +62,7 @@ fn build(b: &mut Builder<'_>, root: NodeId) {
     // ── The meters ───────────────────────────────────────────────────
     let (m1, m2) = (220.0, W - 220.0);
     ui::centred_at(b, panel, "meter.vu_amber", &Place::new("Gain Reduction meter").size(232.0).variant("black_rack").options(&["glass"]).bind(ui::stream("fairchild/gr")), m1, METERS);
-    let out = ui::centred_at(b, panel, "meter.vu_amber", &Place::new("Output meter").size(232.0).variant("black_rack").options(&["glass"]).bind(ui::stream("fairchild/out")), m2, METERS);
-    // 0 VU = -18 dBFS on the output meter.
-    ui::calibrate_vu(b, out, -18.0);
+    ui::centred_at(b, panel, "meter.vu_amber", &Place::new("Output meter").size(232.0).variant("black_rack").options(&["glass"]).bind(ui::stream("fairchild/out")), m2, METERS);
     let label = Ink::new(8.5, RED).weight(800.0).track(0.24);
     ui::silk(b, panel, "Gain Reduction", m1, METERS + 92.0, label);
     ui::silk(b, panel, "Output Level", m2, METERS + 92.0, label.color(INK));

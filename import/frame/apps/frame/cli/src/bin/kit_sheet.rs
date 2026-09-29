@@ -200,7 +200,7 @@ fn run() -> Result<(), String> {
         ParamValue { addr: surface_proto::ParamAddr::new("amp/channel"), value: 0.5 },
         ParamValue { addr: surface_proto::ParamAddr::new("drive/on"), value: 1.0 },
     ]);
-    rt.apply_frame(StreamFrame { id: EntryId::new("out_level"), values: vec![-9.0, -12.0] }, 0.0);
+    rt.apply_frame(StreamFrame { id: EntryId::new("out_level"), values: vec![-21.0, -24.0] }, 0.0);
     rt.apply_frame(StreamFrame { id: EntryId::new("tempo"), values: vec![180.0] }, 0.0);
     rt.apply_frame(StreamFrame { id: EntryId::new("in_level"), values: vec![-5.0] }, 0.0);
     let frame = rt.frame(0.0);

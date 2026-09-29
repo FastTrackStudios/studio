@@ -1098,13 +1098,13 @@
     },
     {
       "id": "la2a/gr",
-      "name": "LA-2A Gain Reduction",
+      "name": "Opto Leveler Gain Reduction",
       "kind": "GainReduction",
       "rate_hz": 30.0
     },
     {
       "id": "la2a/out",
-      "name": "LA-2A Output",
+      "name": "Opto Leveler Output",
       "kind": {
         "Level": {
           "channels": 2

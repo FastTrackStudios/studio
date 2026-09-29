@@ -227,8 +227,11 @@ impl Runtime {
             _ => Sense::Level,
         };
         let m = self.meters.get(&(id, tap.stream.clone(), tap.channel.unwrap_or(0)));
-        let level = m.map_or(sense.rest_db(), |m| m.level_db(t)) + tap.offset_db;
-        let peak = m.map(|m| m.peak_hold_db(t) + tap.offset_db);
+        // A level in dBFS reads against the meter's reference (0 VU =
+        // −18 dBFS); gain reduction is already relative to unity.
+        let offset = tap.offset_db - if sense == Sense::Level { control.reference_dbfs.unwrap_or(0.0) } else { 0.0 };
+        let level = m.map_or(sense.rest_db(), |m| m.level_db(t)) + offset;
+        let peak = m.map(|m| m.peak_hold_db(t) + offset);
         let fmt = control.format.clone().unwrap_or_default();
         // A bar reads its held peak; a needle its level. Before data the
         // text stays as authored (a placeholder).

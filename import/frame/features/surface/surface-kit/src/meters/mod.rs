@@ -452,6 +452,8 @@ fn build(face: &Face, b: &mut Builder<'_>, parent: NodeId, p: &Place) -> NodeId 
     // A switched meter (`Place::select`) reads through the same law.
     let mut control = p.control(ControlKind::Gauge { sweep_degrees: 2.0 * SWEEP_DEG, floor_db, ceiling_db }).slot(SlotRole::Needle, needle.0);
     control.binding = binding;
+    // A VU is calibrated: 0 VU = −18 dBFS on a level stream.
+    control.reference_dbfs = Some(surface_proto::VU_REFERENCE_DBFS);
     b.controls.insert(root, control);
     root
 }

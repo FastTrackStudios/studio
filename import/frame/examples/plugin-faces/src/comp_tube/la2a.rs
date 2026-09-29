@@ -26,7 +26,7 @@ const RED: &str = "#9c2a20";
 const ROW: f64 = 128.0;
 
 pub fn face() -> Face {
-    let scene = canvas("LA-2A", build);
+    let scene = canvas("Opto Leveler", build);
     let params = vec![
         ui::dial_0_100("la2a/gain", "Gain", 40.0).short("Gain"),
         ui::dial_0_100("la2a/peak_reduction", "Peak Reduction", 45.0).short("Peak Red"),
@@ -34,18 +34,18 @@ pub fn face() -> Face {
         ui::choice("la2a/meter", "Meter", &["Output +10", "Gain Reduction", "Output +4"], 1),
         ui::toggle("la2a/power", "Power", true),
     ];
-    Face { file: "04-la2a", plugin: "comp", scene, params, streams: ui::streams("la2a", "LA-2A") }
+    Face { file: "04-la2a", plugin: "comp", scene, params, streams: ui::streams("la2a", "Opto Leveler") }
 }
 
 fn build(b: &mut Builder<'_>, root: NodeId) {
-    let panel = ui::put(b, root, "panel.painted", &Place::new("LA-2A panel").variant("grey").options(&[&format!("w={W}"), &format!("h={H}")]));
+    let panel = ui::put(b, root, "panel.painted", &Place::new("Leveler panel").variant("grey").options(&[&format!("w={W}"), &format!("h={H}")]));
 
     // ── Identity plate, top left ─────────────────────────────────────
     let x0 = 52.0;
     ui::silk_left(b, panel, "Leveling Amplifier", x0, 34.0, Ink::new(9.0, INK).weight(700.0).track(0.22));
     ui::rule(b, panel, x0, x0 + 150.0, 45.0, 1.0, INK);
-    ui::silk_left(b, panel, "Model LA-2A", x0, 60.0, Ink::new(17.0, RED).weight(800.0).track(0.04).plain());
-    ui::silk_left(b, panel, "Optical · Tube · T4 Cell", x0, 80.0, Ink::new(7.5, DIM).weight(600.0).track(0.16));
+    ui::silk_left(b, panel, "Opto Leveler", x0, 60.0, Ink::new(17.0, RED).weight(800.0).track(0.04).plain());
+    ui::silk_left(b, panel, "Optical · Tube · Photocell", x0, 80.0, Ink::new(7.5, DIM).weight(600.0).track(0.16));
 
     // COMPRESS / LIMIT — the switch that decides the knee.
     let sw = ui::put(b, panel, "switch.toggle_bat", &Place::new("Compress / Limit").size(46.0).legend("Mode").options(&["Limit", "Compress"]).ink(dark()).bind(ui::bind("la2a/limit")));
@@ -87,7 +87,7 @@ fn build(b: &mut Builder<'_>, root: NodeId) {
 
     // A fine rule under the whole row, the serial plate at the foot.
     ui::silk_left(b, panel, "Input 600 Ω · Output +10 dBm max", x0, 224.0, Ink::new(6.5, DIM).weight(600.0).track(0.14));
-    ui::silk_right(b, panel, "Serial No. 2A-1965", W - 52.0, 224.0, Ink::new(6.5, DIM).weight(600.0).track(0.14));
+    ui::silk_right(b, panel, "Serial No. 0417", W - 52.0, 224.0, Ink::new(6.5, DIM).weight(600.0).track(0.14));
     ui::fit_root(b, root, panel);
 }
 

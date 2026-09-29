@@ -109,13 +109,15 @@ fn meters_lint_clean_bound_to_the_output_level() {
     }
 }
 
-/// The needle's angle (degrees) with `db` on the bound stream.
+/// The needle's angle (degrees) with a level of `db` on the meter's own
+/// scale (0 = 0 VU) — fed as `db + VU_REFERENCE_DBFS` dBFS.
 fn needle_angle(id: &str, variant: Option<&str>, db: f64) -> f64 {
     let p = Place { variant: variant.map(str::to_string), ..Place::new("Out").bind(level()) };
     let (scene, root) = placed(id, &p);
     let needle = NodeId(scene.node(root).and_then(|n| n.control.as_ref()).and_then(|c| c.slots_of(SlotRole::Needle).next()).expect("needle"));
     let mut rt = Runtime::new(Surface::from_scene(scene), surface_memory::demo_catalog());
-    rt.apply_frame(StreamFrame { id: EntryId::new("out_level"), values: vec![db, db] }, 0.0);
+    let dbfs = db + surface_proto::VU_REFERENCE_DBFS;
+    rt.apply_frame(StreamFrame { id: EntryId::new("out_level"), values: vec![dbfs, dbfs] }, 0.0);
     rt.frame(0.0).node(needle).expect("needle").transform.rotation().to_degrees()
 }
 
@@ -302,12 +304,26 @@ fn a_switched_vu_reads_what_its_meter_switch_selects() {
     let p = Place::new("VU").bind(Binding::stream("comp/gr")).select(SourceSelect::new("comp/meter", taps));
     let (mut rt, root) = running("meter.vu_ivory", &p);
     feed(&mut rt, "comp/gr", -7.0);
-    feed(&mut rt, "out_level", 1.0);
+    // +1 dB over the −18 dBFS reference: +1 VU on the plain 0 VU range.
+    feed(&mut rt, "out_level", -17.0);
     let select = |rt: &mut Runtime, i: f64| rt.apply_values([ParamValue { addr: ParamAddr::new("comp/meter"), value: i / 3.0 }]);
     for (i, db, what) in [(0.0, -7.0, "GR"), (1.0, -3.0, "+4: +1 out reads −3"), (2.0, -7.0, "+8: reads −7"), (3.0, -20.0, "off: at the stop")] {
         select(&mut rt, i);
         assert!((angle(&rt, root) - printed_angle(Card::Vu, db)).abs() < 0.5, "{what}");
     }
+}
+
+#[test]
+fn zero_vu_is_minus_18_dbfs_and_gain_reduction_ignores_it() {
+    let (mut rt, root) = running("meter.vu_ivory", &Place::new("Out").bind(level()));
+    feed(&mut rt, "out_level", -18.0);
+    assert!((angle(&rt, root) - printed_angle(Card::Vu, 0.0)).abs() < 0.5, "−18 dBFS reads 0 VU: {}", angle(&rt, root));
+    let (mut rt, root) = running("meter.vu_ivory", &Place::new("Out").bind(level()));
+    feed(&mut rt, "out_level", -25.0);
+    assert!((angle(&rt, root) - printed_angle(Card::Vu, -7.0)).abs() < 0.5, "−25 dBFS reads −7 VU");
+    let (mut rt, root) = running("meter.vu_ivory", &Place::new("GR").bind(Binding::stream("comp/gr")));
+    feed(&mut rt, "comp/gr", -3.0);
+    assert!((angle(&rt, root) - printed_angle(Card::Vu, -3.0)).abs() < 0.5, "3 dB of reduction reads −3");
 }
 
 #[test]

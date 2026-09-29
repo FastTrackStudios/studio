@@ -248,7 +248,18 @@ pub struct Control {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[facet(default)]
     pub select: Option<SourceSelect>,
+    /// The dBFS a level stream must read to sit at the meter scale's 0 — a
+    /// VU's operating level ([`VU_REFERENCE_DBFS`]). Level readings are
+    /// shifted by it before the scale reads them; gain reduction (already in
+    /// dB relative to unity) is not. `None` = the scale is in dBFS.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[facet(default)]
+    pub reference_dbfs: Option<f64>,
 }
+
+/// 0 VU = −18 dBFS: the digital operating level every VU meter is
+/// calibrated to (a sine at −18 dBFS reads 0 VU; +4/+8 ranges offset from it).
+pub const VU_REFERENCE_DBFS: f64 = -18.0;
 
 /// One stream a switched meter can read.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Facet)]
@@ -304,7 +315,7 @@ impl SourceSelect {
 impl Control {
     #[must_use]
     pub fn new(kind: ControlKind) -> Self {
-        Self { kind, binding: None, y_binding: None, midi: None, default: None, slots: Vec::new(), format: None, select: None }
+        Self { kind, binding: None, y_binding: None, midi: None, default: None, slots: Vec::new(), format: None, select: None, reference_dbfs: None }
     }
 
     #[must_use]

@@ -81,6 +81,11 @@ select), and end with `registry::tighten` when `touch` is set.
   0 VU) and attacks *downward*, recovering at the release rate. Readings of
   either sign count as reduction. Author lamps and covers in their rest
   state so a still render with no data reads right.
+- **0 VU = −18 dBFS**: every needle VU sets `Control::reference_dbfs` to
+  `surface_proto::VU_REFERENCE_DBFS`, so a level stream at −18 dBFS reads
+  0 VU. Gain reduction ignores it (already relative to unity). A meter
+  switch's `+4`/`+8` ranges are `MeterTap::offset(-4.0 / -8.0)` on top.
+  LED bars, columns and ladders stay in dBFS.
 - **Paint** with `crate::draw` helpers: `linear(angle, stops)` (CSS angles),
   `radial_at(cx, cy, r, stops)` (unit-square hot-spot), `conic(start, stops)`
   (brushed metal), `drop_shadow`/`inner_shadow`, geometry `polar`, `sector`,

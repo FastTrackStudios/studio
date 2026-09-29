@@ -270,20 +270,6 @@ pub fn readout(
     root
 }
 
-// ── gauges ──────────────────────────────────────────────────────────────
-
-/// Re-range a placed needle meter: its card still prints `-20 … +3`, but
-/// the needle reads `floor..ceiling` of the bound stream — an output meter
-/// calibrated so 0 VU is `zero_dbfs`.
-pub fn calibrate_vu(b: &mut Builder<'_>, meter: NodeId, zero_dbfs: f64) {
-    if let Some(c) = b.controls.get_mut(&meter)
-        && let ControlKind::Gauge { floor_db, ceiling_db, .. } = &mut c.kind
-    {
-        *floor_db = -20.0 + zero_dbfs;
-        *ceiling_db = 3.0 + zero_dbfs;
-    }
-}
-
 // ── catalog ─────────────────────────────────────────────────────────────
 
 /// A continuous, featured param.
