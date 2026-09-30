@@ -51,8 +51,8 @@ impl<'a> Letter<'a> {
     }
 }
 
-const INTER: &[u8] = include_bytes!("../../../../apps/frame/cli/assets/inter/Inter-Variable.ttf");
-const INTER_ITALIC: &[u8] = include_bytes!("../../../../apps/frame/cli/assets/inter/Inter-Italic-Variable.ttf");
+const INTER: &[u8] = include_bytes!("../../../../features/render/render-fonts/assets/inter/Inter-Variable.ttf");
+const INTER_ITALIC: &[u8] = include_bytes!("../../../../features/render/render-fonts/assets/inter/Inter-Italic-Variable.ttf");
 
 struct SvgPen {
     d: String,

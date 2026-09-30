@@ -3023,8 +3023,13 @@ pub fn run_cli<E: std::fmt::Display>(
                     height.max(0.0),
                 );
             }
-            // Figma parity SVG exports are path-based for text.
-            PaintPrimitive::Text { .. } => {}
+            // Figma text arrives as outlines (`Path`s); authored text is a
+            // `<text>` carrying its family, weight, style and width.
+            text @ PaintPrimitive::Text { .. } => {
+                if let Some(el) = super::text::text_element(&text, tx, ty, render_fonts::FontBook::bundled()) {
+                    push_node(&mut svg_doc, &mut group_stack, el);
+                }
+            }
         }
     }
 

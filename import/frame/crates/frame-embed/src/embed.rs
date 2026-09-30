@@ -540,11 +540,12 @@ impl Embed {
         let scene = self.frame(0.0);
         let prims = render::build_scene_primitives(&scene, self.page);
         let live = &self.live;
+        let font = self.font.for_scene(&scene);
         paint_filtered(
             canvas,
             &prims,
             at * Affine::scale(self.scale),
-            &self.font,
+            &font,
             &|id| !live.contains(&id),
         );
         self.dirty = false;
@@ -566,11 +567,12 @@ impl Embed {
         let scene = self.frame(t);
         let prims = render::build_scene_primitives(&scene, self.page);
         let live = &self.live;
+        let font = self.font.for_scene(&scene);
         paint_filtered(
             canvas,
             &prims,
             at * Affine::scale(self.scale),
-            &self.font,
+            &font,
             &|id| live.contains(&id),
         );
     }
@@ -581,7 +583,8 @@ impl Embed {
         self.settle();
         let scene = self.frame(t);
         let prims = render::build_scene_primitives(&scene, self.page);
-        crate::paint::paint_primitives(canvas, &prims, at * Affine::scale(self.scale), &self.font);
+        let font = self.font.for_scene(&scene);
+        crate::paint::paint_primitives(canvas, &prims, at * Affine::scale(self.scale), &font);
         self.dirty = false;
     }
 

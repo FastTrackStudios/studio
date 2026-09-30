@@ -18,6 +18,7 @@ surface-kit = { path = "../../features/surface/surface-kit" }
 document-proto = { path = "../../features/document/document-proto", default-features = false }
 # Only the primitive collector: no GPU backend is pulled in.
 render = { path = "../../features/render/render", default-features = false }
+render-fonts = { path = "../../features/render/render-fonts" }
 
 kurbo = { workspace = true }
 peniko = { workspace = true }

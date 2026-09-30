@@ -162,6 +162,129 @@ pub fn text(name: &str, s: &str, x: f64, y: f64, w: f64, size: f64, color: &str,
     n
 }
 
+// ── lettering ────────────────────────────────────────────────────────────
+
+/// Families every frame renderer bundles (see `render_fonts::BUNDLED`).
+/// Any other name falls back to Inter; a document can bring more as font
+/// assets.
+pub mod family {
+    /// The UI sans (the default when no family is set).
+    pub const INTER: &str = "Inter";
+    /// Condensed display sans: model names, big legends, amp badges.
+    pub const OSWALD: &str = "Oswald";
+    /// Technical sans with a width axis (50–125): condensed to extended.
+    pub const SAIRA: &str = "Saira";
+    /// Wide engraved caps: brushed-metal panels, hi-fi faceplates.
+    pub const MICHROMA: &str = "Michroma";
+    /// Geometric tech caps (400–900): synth and modern-metal logos.
+    pub const ORBITRON: &str = "Orbitron";
+    /// Flowing script (400–700): signature logos.
+    pub const DANCING_SCRIPT: &str = "Dancing Script";
+    /// Fat retro brush script: surf, funk and 50s logos.
+    pub const PACIFICO: &str = "Pacifico";
+    /// Marker handwriting: scribbled labels, tape strips.
+    pub const CAVEAT_BRUSH: &str = "Caveat Brush";
+    /// Heavy brush marker: punk, funk, graffiti logos.
+    pub const KNEWAVE: &str = "Knewave";
+    /// High-contrast serif (400–900): boutique and valve-era plates.
+    pub const PLAYFAIR_DISPLAY: &str = "Playfair Display";
+    /// 7-segment digits (300/400/700, italics): tuners, BPM, time.
+    pub const DSEG7: &str = "DSEG7 Classic";
+    /// 14-segment alphanumerics (400/700, italic): preset names.
+    pub const DSEG14: &str = "DSEG14 Classic";
+    /// Dot matrix (100–900): VFD and LED-matrix displays.
+    pub const DOTO: &str = "Doto";
+    /// Pixel terminal: CRT readouts.
+    pub const VT323: &str = "VT323";
+    /// Monospace (100–800): readouts that must not jitter.
+    pub const JETBRAINS_MONO: &str = "JetBrains Mono";
+    /// Blackletter (bold): metal and gothic logos.
+    pub const UNIFRAKTUR_COOK: &str = "UnifrakturCook";
+    /// Condensed gothic display: metal logos.
+    pub const PIRATA_ONE: &str = "Pirata One";
+}
+
+/// How text is lettered: family, weight, italic and width. Unset fields
+/// keep the renderer's defaults (Inter, regular, upright, normal width).
+///
+/// ```ignore
+/// let logo = draw::lettered(draw::text("logo", "Blackout", x, y, w, 42.0, "#f2f2f0", TextAlign::Center),
+///     &Lettering::family(family::PIRATA_ONE).weight(400.0));
+/// ```
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct Lettering {
+    pub family: Option<String>,
+    /// 100–900.
+    pub weight: Option<f64>,
+    pub italic: bool,
+    /// Percent of normal width: 75 condensed, 125 extended (exact on
+    /// families with a width axis, like Saira).
+    pub width: Option<f64>,
+}
+
+impl Lettering {
+    #[must_use]
+    pub fn family(family: &str) -> Self {
+        Self { family: Some(family.to_string()), ..Self::default() }
+    }
+
+    #[must_use]
+    pub fn weight(mut self, weight: f64) -> Self {
+        self.weight = Some(weight);
+        self
+    }
+
+    #[must_use]
+    pub fn bold(self) -> Self {
+        self.weight(700.0)
+    }
+
+    #[must_use]
+    pub fn italic(mut self) -> Self {
+        self.italic = true;
+        self
+    }
+
+    #[must_use]
+    pub fn width(mut self, percent: f64) -> Self {
+        self.width = Some(percent);
+        self
+    }
+
+    /// Set these on a text node (other nodes are left alone). Runs keep
+    /// their own settings and inherit the rest.
+    pub fn apply(&self, n: &mut Node) {
+        if let NodeKind::Text(t) = &mut n.kind {
+            if self.family.is_some() {
+                t.font_family.clone_from(&self.family);
+            }
+            if self.weight.is_some() {
+                t.font_weight = self.weight;
+            }
+            if self.italic {
+                t.font_style = Some("italic".into());
+            }
+            if self.width.is_some() {
+                t.font_width = self.width;
+            }
+        }
+    }
+}
+
+/// `n` lettered as `l` (see [`Lettering::apply`]).
+#[must_use]
+pub fn lettered(mut n: Node, l: &Lettering) -> Node {
+    l.apply(&mut n);
+    n
+}
+
+/// [`text`] in a family, weight, italic and width.
+#[must_use]
+#[allow(clippy::too_many_arguments)]
+pub fn styled_text(name: &str, s: &str, x: f64, y: f64, w: f64, size: f64, color: &str, align: TextAlign, l: &Lettering) -> Node {
+    lettered(text(name, s, x, y, w, size, color, align), l)
+}
+
 /// Centred text whose box is centred on (`cx`, `cy`).
 #[must_use]
 pub fn label_at(name: &str, s: &str, cx: f64, cy: f64, size: f64, color: &str) -> Node {

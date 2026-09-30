@@ -59,8 +59,8 @@ fn shadow(kind: doc::EffectKind, dx: f64, dy: f64, radius: f64) -> doc::Effect {
 
 fn render(scene: &Scene, root: doc::NodeId, w: u32, h: u32, font: bool) -> Option<Pixels> {
     let mut vs = vello::Scene::new();
-    let font = font.then_some(TextFontRef { bytes: ROBOTO, index: 0 });
-    paint_scene_into(&mut vs, scene, root, kurbo::Affine::IDENTITY, font);
+    let book = font.then(|| crate::FontBook::single(ROBOTO));
+    paint_scene_into(&mut vs, scene, root, kurbo::Affine::IDENTITY, book.as_ref());
     let Ok(mut offscreen) = Offscreen::new() else {
         eprintln!("skipping pixel check: no GPU adapter");
         return None;
@@ -248,4 +248,63 @@ fn clipping_frames_clip_authored_geometry_that_reaches_past_its_box() {
     };
     assert!(clipped(false));
     assert!(!clipped(true), "Figma imports keep their clip decisions");
+}
+
+/// Ink across one row: how many pixels are red.
+fn red_run(p: &Pixels, row: u32) -> usize {
+    (0..p.width).filter(|&x| is_red(px(p, x, row))).count()
+}
+
+fn render_with(scene: &Scene, root: doc::NodeId, w: u32, h: u32, book: &crate::FontBook) -> Option<Pixels> {
+    let mut vs = vello::Scene::new();
+    paint_scene_into(&mut vs, scene, root, kurbo::Affine::IDENTITY, Some(book));
+    let Ok(mut offscreen) = Offscreen::new() else {
+        eprintln!("skipping pixel check: no GPU adapter");
+        return None;
+    };
+    Some(offscreen.render(&vs, w, h, peniko::Color::from_rgba8(255, 255, 255, 255)).expect("render"))
+}
+
+fn text_node(chars: &str, weight: Option<f64>, family: Option<&str>) -> Node {
+    let mut t = node(
+        NodeKind::Text(doc::TextData {
+            characters: chars.into(),
+            font_size: 60.0,
+            font_weight: weight,
+            font_family: family.map(Into::into),
+            ..doc::TextData::default()
+        }),
+        10.0,
+        10.0,
+        300.0,
+        80.0,
+    );
+    t.fills = vec![paint((1.0, 0.0, 0.0))];
+    t
+}
+
+#[test]
+fn node_weight_thickens_the_stems() {
+    // One stem (an `I`): at weight 900 it is a heavier instance of the
+    // glyph, far wider than regular — not the regular glyph drawn twice.
+    let book = crate::FontBook::bundled();
+    let stem = |weight| {
+        let (scene, root) = scene_of(vec![(None, text_node("I", weight, None))]);
+        render_with(&scene, root, 120, 100, book).map(|p| red_run(&p, 50))
+    };
+    let (Some(regular), Some(black)) = (stem(None), stem(Some(900.0))) else { return };
+    assert!(regular >= 4, "regular stem {regular}px");
+    assert!(black as f64 >= regular as f64 * 1.8, "black stem {black}px vs regular {regular}px");
+}
+
+#[test]
+fn family_changes_the_letterforms() {
+    let book = crate::FontBook::bundled();
+    let ink = |family| {
+        let (scene, root) = scene_of(vec![(None, text_node("88", None, family))]);
+        render_with(&scene, root, 320, 100, book).map(|p| (0..100).map(|y| red_run(&p, y)).sum::<usize>())
+    };
+    let (Some(inter), Some(lcd), Some(unknown)) = (ink(None), ink(Some("DSEG7 Classic")), ink(Some("No Such Family"))) else { return };
+    assert_ne!(inter, lcd, "DSEG7 draws segments, not Inter's 8");
+    assert_eq!(inter, unknown, "an unknown family falls back to Inter");
 }

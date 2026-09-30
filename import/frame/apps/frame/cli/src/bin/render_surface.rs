@@ -161,7 +161,6 @@ fn run() -> Result<(), String> {
 
     let times: Vec<f64> = if frames == 0 { vec![time_s] } else { (0..frames).map(|k| time_s + k as f64 / fps).collect() };
     let mut offscreen = render::offscreen::Offscreen::new()?;
-    let font = include_bytes!("../../assets/inter/Inter-Variable.ttf");
     let mut shots = Vec::with_capacity(times.len());
     let mut next = 0;
     let (mut w, mut h) = (0, 0);
@@ -207,7 +206,7 @@ fn run() -> Result<(), String> {
         let px = offscreen.render_with_effects(&render::fx::Frame {
             transform: kurbo::Affine::scale(scale),
             base,
-            font: Some(render::TextFontRef { bytes: font, index: 0 }),
+            fonts: Some(render::FontBook::bundled()),
             mode: fx,
             time_s: t,
             values: Some(&values),

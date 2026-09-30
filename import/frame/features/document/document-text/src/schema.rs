@@ -105,7 +105,7 @@ pub(crate) const COMMON_ATTRS: &[&str] = &[
 ];
 
 pub(crate) const TEXT_ATTRS: &[&str] =
-    &["text", "font", "size", "weight", "line-height", "letter-spacing", "case", "text-align", "runs"];
+    &["text", "font", "size", "weight", "style", "stretch", "line-height", "letter-spacing", "case", "text-align", "runs"];
 
 /// Attributes only one element accepts: `(attr, tag)`.
 pub(crate) const KIND_ATTRS: &[(&str, &str)] = &[("component", "Instance"), ("op", "BooleanOperation"), ("tag", "Other")];
@@ -168,6 +168,11 @@ const ATTR_SYNONYMS: &[(&str, &str)] = &[
     ("fontweight", "weight"),
     ("font-family", "font"),
     ("fontfamily", "font"),
+    ("font-style", "style"),
+    ("fontstyle", "style"),
+    ("font-stretch", "stretch"),
+    ("font-width", "stretch"),
+    ("width-percent", "stretch"),
     ("content", "text"),
     ("characters", "text"),
     ("label", "text"),

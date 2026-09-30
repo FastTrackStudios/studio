@@ -192,6 +192,47 @@ nix develop . -c cargo run --release -p frame-cli --features anyrender --bin kit
 nix develop . -c cargo run --release -p frame-cli --features anyrender --bin kit_sheet -- --only panel.pedal_3d --fx gpu --scale 2 --out pedals.png
 nix develop . -c cargo run --release -p frame-cli --features anyrender --bin kit_sheet -- --only panel.amp_head,panel.amp_combo --fx gpu --scale 2 --out amps.png
 ```
+## Lettering
+
+Every renderer (vello, SVG export, frame-embed's outline text, caret
+measurement) sets text from one font book, so a node's `font_family`,
+`font_weight`, `font_style` (`"italic"`, `"Bold Italic"`, `"condensed"`) and
+`font_width` (percent, 75 = condensed) — and each run's — are drawn as
+written. Variable families are instanced on their axes (`wght`, `wdth`,
+`ital`/`slnt`); a weight a static family lacks is emboldened and a missing
+italic slanted. Unknown families and missing glyphs fall back to Inter.
+**Never fake weight** with overlapping offset copies or glyph outlines: set
+the weight, or pick a heavier family.
+
+Build lettered text with `draw::styled_text(…, &Lettering)` or
+`draw::lettered(node, &Lettering)`; `Lettering::family(family::OSWALD)
+.weight(700.0).italic().width(75.0)`. The bundled families (`draw::family::*`,
+`render_fonts::BUNDLED`; markup `font="…"`):
+
+| family | what it suits | weights |
+|---|---|---|
+| `Inter` | UI sans (default): labels, values, legends | 100–900, italic |
+| `Oswald` | condensed display sans: model names, badges, big legends | 200–700 |
+| `Saira` | technical sans with a width axis (`width` 50–125): condensed/extended rack lettering | 100–900 |
+| `Michroma` | wide engraved caps: brushed-metal panels, hi-fi faceplates | 400 |
+| `Orbitron` | geometric tech caps: synth, modern-metal logos | 400–900 |
+| `Dancing Script` | flowing script: signature logos, boutique badges | 400–700 |
+| `Pacifico` | fat retro brush script: surf, funk, 50s logos | 400 |
+| `Caveat Brush` | marker handwriting: scribbled labels, tape strips | 400 |
+| `Knewave` | heavy brush marker: punk, funk, graffiti logos | 400 |
+| `Playfair Display` | high-contrast serif: boutique and valve-era plates | 400–900 |
+| `DSEG7 Classic` | 7-segment LCD digits: tuners, BPM, time | 300/400/700, italic |
+| `DSEG14 Classic` | 14-segment alphanumeric LCD: preset names | 400/700, italic |
+| `Doto` | dot matrix: VFD and LED-matrix displays | 100–900 |
+| `VT323` | pixel terminal: CRT readouts | 400 |
+| `JetBrains Mono` | monospace: readouts that must not jitter | 100–800 |
+| `UnifrakturCook` | blackletter: metal and gothic logos | 700 |
+| `Pirata One` | condensed gothic display: metal logos | 400 |
+
+A document can carry more as `font/ttf`/`font/otf` assets
+(`Scene::add_asset`); renderers register them over the host's book, so a
+shared surface brings its own lettering. Hosts extend their book with
+`FontBook::register`.
 
 ## Visualizers (`viz.*`)
 

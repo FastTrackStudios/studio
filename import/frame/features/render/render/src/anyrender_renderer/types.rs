@@ -1,4 +1,5 @@
 use document_proto::NodeId;
+pub use render_fonts::FontSpec;
 
 pub use super::transform::AffineTransform2D;
 
@@ -194,6 +195,21 @@ pub struct TextStyleRun {
     pub letter_spacing: Option<f64>,
     pub font_style: Option<String>,
     pub font_weight: Option<f64>,
+    pub font_family: Option<String>,
+    pub font_width: Option<f64>,
+}
+
+impl TextStyleRun {
+    /// The run's own font settings (unset fields inherit the node's).
+    #[must_use]
+    pub fn font(&self) -> FontSpec {
+        FontSpec {
+            family: self.font_family.clone(),
+            weight: self.font_weight,
+            style: self.font_style.clone(),
+            width: self.font_width,
+        }
+    }
 }
 
 /// Paint primitives, in paint order.
@@ -290,6 +306,8 @@ pub enum PaintPrimitive {
         line_height: Option<f64>,
         letter_spacing: f64,
         text_case: TextCase,
+        /// The node's family, weight, style and width; runs override it.
+        font: FontSpec,
         style_runs: Vec<TextStyleRun>,
         blend: BlendMix,
         /// The text box width, for alignment.
@@ -372,11 +390,4 @@ impl RenderDiagnostics {
             self.luminance_mask_nodes
         )
     }
-}
-
-#[cfg(feature = "anyrender")]
-#[derive(Debug, Clone, Copy)]
-pub struct TextFontRef<'a> {
-    pub bytes: &'a [u8],
-    pub index: u32,
 }

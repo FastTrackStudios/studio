@@ -14,13 +14,12 @@ pub use anyrender_renderer::{
     collect_render_diagnostics, CollectOptions, EffectsPlan, LayoutBox, PaintPrimitive, RenderDiagnostics, Rgba,
 };
 #[cfg(feature = "anyrender")]
-pub use anyrender_renderer::{paint_primitives_into_scene_with, paint_scene_into, TextFontRef};
+pub use anyrender_renderer::{paint_primitives_into_scene_with, paint_scene_into};
+
+pub mod fonts;
+pub use fonts::{book_for_scene, text_advance, FontBook, FontSpec};
 
 #[cfg(feature = "anyrender")]
 pub mod fx;
-#[cfg(feature = "anyrender")]
-mod text_measure;
-#[cfg(feature = "anyrender")]
-pub use text_measure::text_advance;
 #[cfg(feature = "anyrender")]
 pub mod offscreen;

@@ -6,7 +6,6 @@ use document_proto::{PaintKind, Scene};
 use library_fs::Previewer;
 use render::offscreen::Offscreen;
 
-const FONT: &[u8] = include_bytes!("../../cli/assets/inter/Inter-Variable.ttf");
 /// Thumbnail width, px.
 const WIDTH: f64 = 480.0;
 /// Background under a design with no solid fill.
@@ -60,7 +59,7 @@ fn thumbnail(gpu: &mut Offscreen, scene: &Scene) -> Result<Vec<u8>, String> {
     let px = gpu.render_with_effects(&render::fx::Frame {
         transform: kurbo::Affine::scale(scale) * kurbo::Affine::translate((-b.x, -b.y)),
         base,
-        font: Some(render::TextFontRef { bytes: FONT, index: 0 }),
+        fonts: Some(render::FontBook::bundled()),
         ..render::fx::Frame::new(scene, page, w, h)
     })?;
     let img = image::RgbaImage::from_raw(px.width, px.height, px.rgba).ok_or("bad pixel buffer")?;

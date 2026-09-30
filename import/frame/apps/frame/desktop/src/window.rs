@@ -17,7 +17,7 @@ use crate::Args;
 use crate::browser::Nav;
 use crate::input::{self, View};
 use crate::libview::{LibraryView, Outcome};
-use crate::player::{Player, banner, font};
+use crate::player::{Player, banner, fonts};
 use crate::source::{self, Source, Watch};
 
 pub fn run(args: &Args) -> Result<(), String> {
@@ -322,13 +322,13 @@ impl App {
 
         self.scene.reset();
         if let Some((b, page, _, _)) = &self.banner {
-            render::paint_scene_into(&mut self.scene, b, *page, kurbo::Affine::scale(scale), Some(font()));
+            render::paint_scene_into(&mut self.scene, b, *page, kurbo::Affine::scale(scale), Some(fonts()));
         }
         let (logical_w, logical_h) = (width / scale, self.physical_size().1 / scale);
         let toast = self.library.as_mut().and_then(|lib| lib.toast(t, logical_w));
         if let Some((toast, page, tw, th)) = &toast {
             let at = kurbo::Affine::scale(scale) * kurbo::Affine::translate(((logical_w - tw) / 2.0, logical_h - th - 18.0));
-            render::paint_scene_into(&mut self.scene, toast, *page, at, Some(font()));
+            render::paint_scene_into(&mut self.scene, toast, *page, at, Some(fonts()));
         }
         let browsing = self.browsing();
         let (doc, page, base) = match self.library.as_mut().and_then(LibraryView::document) {
@@ -348,7 +348,7 @@ impl App {
         let frame = render::fx::Frame {
             transform: view.affine(),
             base,
-            font: Some(font()),
+            fonts: Some(fonts()),
             mode: self.fx,
             time_s: t / 1000.0,
             values: Some(&values),

@@ -209,6 +209,12 @@ fn attributes(n: &Node, has_children: bool) -> (Vec<(&'static str, String)>, Opt
         if let Some(w) = t.font_weight {
             a.push(("weight", num(w)));
         }
+        if let Some(st) = &t.font_style {
+            a.push(("style", quote(st)));
+        }
+        if let Some(w) = t.font_width {
+            a.push(("stretch", num(w)));
+        }
         if let Some(lh) = t.line_height {
             a.push(("line-height", num(lh)));
         }

@@ -244,6 +244,8 @@ fn kitchen_sink() -> Scene {
         font_family: Some("Inter".into()),
         font_size: 12.5,
         font_weight: Some(600.0),
+        font_style: Some("italic".into()),
+        font_width: Some(75.0),
         line_height: Some(16.0),
         letter_spacing: -0.2,
         text_case: TextCase::SmallCapsForced,
@@ -257,6 +259,7 @@ fn kitchen_sink() -> Scene {
                 font_size: Some(20.0),
                 font_weight: Some(300.0),
                 font_style: Some("Italic".into()),
+                font_width: Some(112.5),
                 letter_spacing: Some(1.0),
             },
         ],
@@ -499,21 +502,25 @@ mod random {
             opt_f(),
             f(),
             prop::collection::vec(
-                (".*", paints(), prop::option::of(".*"), opt_f()).prop_map(|(text, fills, font_style, font_size)| TextRun {
+                (".*", paints(), prop::option::of(".*"), opt_f(), opt_f()).prop_map(|(text, fills, font_style, font_size, font_width)| TextRun {
                     text,
                     fills,
                     font_style,
                     font_size,
+                    font_width,
                     ..TextRun::default()
                 }),
                 0..2,
             ),
+            (prop::option::of("[A-Za-z ]{0,12}"), opt_f()),
         )
-            .prop_map(|(characters, font_family, font_size, font_weight, line_height, letter_spacing, runs)| TextData {
+            .prop_map(|(characters, font_family, font_size, font_weight, line_height, letter_spacing, runs, (font_style, font_width))| TextData {
                 characters,
                 font_family,
                 font_size,
                 font_weight,
+                font_style,
+                font_width,
                 line_height,
                 letter_spacing,
                 text_case: TextCase::Upper,

@@ -58,11 +58,11 @@ impl Shot<'_> {
             .or_else(|| self.library.as_ref().and_then(LibraryView::banner))
             .or_else(|| self.player.engine_banner());
         if let Some((b, page)) = message.and_then(|m| banner(&m, f64::from(w))) {
-            render::paint_scene_into(&mut self.overlay, &b, page, kurbo::Affine::IDENTITY, Some(crate::player::font()));
+            render::paint_scene_into(&mut self.overlay, &b, page, kurbo::Affine::IDENTITY, Some(crate::player::fonts()));
         }
         if let Some((toast, page, tw, th)) = self.library.as_mut().and_then(|l| l.toast(t, f64::from(w))) {
             let at = kurbo::Affine::translate(((f64::from(w) - tw) / 2.0, f64::from(h) - th - 18.0));
-            render::paint_scene_into(&mut self.overlay, &toast, page, at, Some(crate::player::font()));
+            render::paint_scene_into(&mut self.overlay, &toast, page, at, Some(crate::player::fonts()));
         }
         let browsing = self.library.as_ref().is_some_and(LibraryView::browsing);
         let (doc, page, base) = match self.library.as_mut().and_then(LibraryView::document) {
@@ -78,7 +78,7 @@ impl Shot<'_> {
         self.offscreen.render_with_effects(&render::fx::Frame {
             transform: view.affine(),
             base,
-            font: Some(crate::player::font()),
+            fonts: Some(crate::player::fonts()),
             mode: self.args.fx,
             time_s: t / 1000.0,
             values: Some(&values),

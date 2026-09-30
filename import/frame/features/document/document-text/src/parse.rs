@@ -652,6 +652,8 @@ fn text_data(el: &El, at: &Attrs<'_>) -> Result<TextData> {
         t.font_size = v;
     }
     t.font_weight = at.num("weight")?;
+    t.font_style = at.str("style")?;
+    t.font_width = at.num("stretch")?;
     t.line_height = at.num("line-height")?;
     if let Some(v) = at.num("letter-spacing")? {
         t.letter_spacing = v;

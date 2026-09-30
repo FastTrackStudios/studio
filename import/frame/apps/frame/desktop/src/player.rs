@@ -15,7 +15,6 @@ use surface_runtime::{Bounds, EngineCall, Input, Key, Modifiers, Runtime, Surfac
 use crate::input::Clicks;
 use crate::remote::{Event, Remote};
 
-const FONT: &[u8] = include_bytes!("../../cli/assets/inter/Inter-Variable.ttf");
 /// Background when the surface's root frame has no solid fill.
 const DARK: peniko::Color = peniko::Color::from_rgb8(0x0e, 0x0f, 0x12);
 /// How long a scripted read of a remote engine may take.
@@ -71,8 +70,8 @@ struct Built {
 impl Built {
     fn new(mut rt: Runtime) -> Result<Self, String> {
         // Carets land where the painted glyphs end.
-        rt.set_text_measure(std::sync::Arc::new(|text: &str, size: f64, spacing: f64| {
-            render::text_advance(font(), text, size, spacing).unwrap_or_else(|| surface_runtime::runtime::text::estimate(text, size, spacing))
+        rt.set_text_measure(std::sync::Arc::new(|data: &document_proto::TextData, text: &str| {
+            render::text_advance(fonts(), &render::fonts::text_font(data), text, data.font_size, data.letter_spacing)
         }));
         let scene = &rt.surface().scene;
         let page = *scene.pages().first().ok_or("surface has no <Page>")?;
@@ -474,9 +473,10 @@ impl Player {
     }
 }
 
+/// The fonts surfaces are set in: frame's bundled book.
 #[must_use]
-pub fn font() -> render::TextFontRef<'static> {
-    render::TextFontRef { bytes: FONT, index: 0 }
+pub fn fonts() -> &'static render::FontBook {
+    render::FontBook::bundled()
 }
 
 /// A one-line red banner, `width` logical px wide, as a scene to paint

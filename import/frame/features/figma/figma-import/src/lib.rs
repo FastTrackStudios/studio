@@ -527,6 +527,8 @@ fn text_data(raw: &Value) -> TextData {
             .map(ToString::to_string),
         font_size: style_f64(raw, "fontSize", "fontSize").unwrap_or(14.0),
         font_weight: style_f64(raw, "fontWeight", "fontWeight"),
+        font_style: None,
+        font_width: None,
         line_height: style_f64(raw, "lineHeightPx", "lineHeightPx").filter(|v| *v > 0.0),
         letter_spacing: style_f64(raw, "letterSpacingPx", "letterSpacing").unwrap_or(0.0),
         text_case,
@@ -555,6 +557,7 @@ fn text_runs(raw: &Value, scene: &mut Scene) -> Vec<TextRun> {
                 font_style: str_at(seg, "fontStyle")
                     .or_else(|| seg.get("fontName").and_then(|f| str_at(f, "style")))
                     .map(ToString::to_string),
+                font_width: None,
                 letter_spacing: f64_at(seg, "letterSpacingPx")
                     .or_else(|| seg.get("letterSpacing").and_then(|l| f64_at(l, "value"))),
             })

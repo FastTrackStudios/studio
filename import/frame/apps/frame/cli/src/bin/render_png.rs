@@ -14,7 +14,7 @@ fn main() {
 
 #[cfg(feature = "anyrender")]
 fn run() -> Result<(), String> {
-    use render::{build_scene_layout_boxes, TextFontRef};
+    use render::build_scene_layout_boxes;
     use image::RgbaImage;
     use kurbo::Affine;
     use peniko::Color;
@@ -119,11 +119,8 @@ fn run() -> Result<(), String> {
 
     let mut scene = Scene::new();
     let scene_transform = Affine::translate((-min_x, -min_y));
-    let text_font_bytes = load_default_text_font_bytes();
-    let text_font_ref = text_font_bytes
-        .as_ref()
-        .map(|bytes| TextFontRef { bytes, index: 0 });
-    render::paint_scene_into(&mut scene, &doc, root, scene_transform, text_font_ref);
+    // The bundled book: Inter (Figma's default) first, then frame's families.
+    render::paint_scene_into(&mut scene, &doc, root, scene_transform, Some(render::FontBook::bundled()));
 
     let instance = wgpu::Instance::new(wgpu::InstanceDescriptor::new_without_display_handle());
     let adapter = pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions::default()))
@@ -270,36 +267,6 @@ fn run() -> Result<(), String> {
         input, out_path, width, height
     );
     Ok(())
-}
-
-#[cfg(feature = "anyrender")]
-fn load_default_text_font_bytes() -> Option<Vec<u8>> {
-    // Prefer vendored Inter for parity with Figma defaults.
-    if let Some(bytes) = load_vendored_inter() {
-        return Some(bytes);
-    }
-
-    let candidates = [
-        "/System/Library/Fonts/SFNS.ttf",
-        "/System/Library/Fonts/Supplemental/Arial.ttf",
-        "/Library/Fonts/Arial Unicode.ttf",
-    ];
-    for path in candidates {
-        if let Ok(bytes) = std::fs::read(path) {
-            return Some(bytes);
-        }
-    }
-    None
-}
-
-#[cfg(feature = "anyrender")]
-fn load_vendored_inter() -> Option<Vec<u8>> {
-    let bytes = include_bytes!("../../assets/inter/Inter-Variable.ttf");
-    if bytes.is_empty() {
-        None
-    } else {
-        Some(bytes.to_vec())
-    }
 }
 
 #[cfg(feature = "anyrender")]

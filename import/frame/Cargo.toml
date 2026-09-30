@@ -39,6 +39,7 @@ members = [
     "features/motion/motion-runtime",
     # ── render ────────────────────────────────────────────────────────
     "features/render/render",
+    "features/render/render-fonts",
     # ── surface: controls, bindings, engine contract, runtime ─────────
     "features/surface/surface-proto",
     "features/surface/surface-memory",
@@ -75,6 +76,7 @@ default-members = [
     "features/motion/motion-proto",
     "features/motion/motion-runtime",
     "features/render/render",
+    "features/render/render-fonts",
     "features/surface/surface-proto",
     "features/surface/surface-memory",
     "features/surface/surface-runtime",

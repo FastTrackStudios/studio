@@ -1267,6 +1267,7 @@ dependencies = [
  "design-lint",
  "document-proto",
  "document-text",
+ "render-fonts",
  "serde_json",
  "surface-kit",
  "surface-memory",
@@ -2113,6 +2114,7 @@ dependencies = [
  "nice-plug-core",
  "peniko",
  "render",
+ "render-fonts",
  "serde",
  "skrifa 0.26.6",
  "surface-kit",
@@ -5080,6 +5082,7 @@ dependencies = [
  "kurbo 0.13.1",
  "peniko",
  "pollster",
+ "render-fonts",
  "roxmltree 0.20.0",
  "rust_decimal",
  "serde",
@@ -5090,6 +5093,14 @@ dependencies = [
  "tokio",
  "vello",
  "winit",
+]
+
+[[package]]
+name = "render-fonts"
+version = "0.1.0"
+dependencies = [
+ "kurbo 0.13.1",
+ "skrifa 0.26.6",
 ]
 
 [[package]]

@@ -102,16 +102,52 @@ With `layout` set, a container places its children like CSS flexbox and ignores 
 | Attribute | Value | Default |
 |---|---|---|
 | body, or `text` | the characters | `""` |
-| `font` | family, e.g. `"Inter"` | the app font |
+| `font` | family, e.g. `"Oswald"` (see [Fonts](#fonts)) | `"Inter"` |
 | `size` | font size | `14` |
-| `weight` | 100–900 | regular |
+| `weight` | 100–900 (400 regular, 700 bold) | regular |
+| `style` | `"italic"`, or a style name such as `"Bold Italic"` or `"Condensed"` | upright |
+| `stretch` | width in percent: `75` condensed, `125` extended | `100` |
 | `line-height` | px | natural |
 | `letter-spacing` | px | `0` |
 | `case` | `original upper lower title small-caps small-caps-forced` | `original` |
 | `text-align` | `left`, `center`, `right` or `justified` | `left` |
-| `runs` | `{[{"text":"Bold","font_weight":700,"fills":["#ff0000"]}, …]}`: styled spans in order. Their `text` values concatenate to the characters. Span keys: `text`, `fills`, `font_family`, `font_size`, `font_weight`, `font_style`, `letter_spacing`. | none |
+| `runs` | `{[{"text":"Bold","font_weight":700,"fills":["#ff0000"]}, …]}`: styled spans in order. Their `text` values concatenate to the characters. Span keys: `text`, `fills`, `font_family`, `font_size`, `font_weight`, `font_style`, `font_width`, `letter_spacing`. A span inherits the keys it leaves out. | none |
 
 The text color is `fill`.
+
+### Fonts
+
+Every renderer bundles these families. Write `font`, `weight`, `style` and `stretch` rather than faking weight with overlapping copies or outlines:
+
+| Family | What it is — use it for | Weights | Italic / width |
+|---|---|---|---|
+| `Inter` | UI sans (the default): labels, values, legends | 100–900 | italic |
+| `Oswald` | condensed display sans: model names, big legends, amp badges | 200–700 | slanted |
+| `Saira` | technical sans with a width axis: condensed to extended rack lettering | 100–900 | `stretch` 50–125 |
+| `Michroma` | wide engraved/geometric caps: brushed-metal panels, hi-fi faceplates | 400 | slanted |
+| `Orbitron` | geometric tech caps: synth and modern-metal logos | 400–900 | slanted |
+| `Dancing Script` | flowing script: signature logos, boutique and vintage badges | 400–700 | — |
+| `Pacifico` | fat retro brush script: surf, funk and 50s logos | 400 | — |
+| `Caveat Brush` | marker handwriting: scribbled labels, tape strips | 400 | — |
+| `Knewave` | heavy brush marker: punk, funk and graffiti logos | 400 | — |
+| `Playfair Display` | high-contrast serif: boutique, hi-fi, valve-era plates | 400–900 | slanted |
+| `DSEG7 Classic` | 7-segment LCD/LED digits: tuners, BPM, time (digits and a few letters) | 300, 400, 700 | italic |
+| `DSEG14 Classic` | 14-segment alphanumeric LCD: preset and patch names | 400, 700 | italic |
+| `Doto` | dot matrix: VFD and LED-matrix displays | 100–900 | — |
+| `VT323` | pixel terminal: CRT readouts, retro digital units | 400 | — |
+| `JetBrains Mono` | monospace: readouts that must not jitter, tables | 100–800 | slanted |
+| `UnifrakturCook` | blackletter: metal and gothic logos | 700 | — |
+| `Pirata One` | condensed gothic display: metal logos | 400 | — |
+
+Generic names work too: `sans-serif`/`system-ui` (Inter), `serif` (Playfair Display), `monospace` (JetBrains Mono), `cursive` (Dancing Script), `fantasy` (Pirata One), and `DSEG7`, `DSEG14`, `lcd`, `dot-matrix`, `marker`, `blackletter`. Names ignore case, spaces and hyphens (`jetbrains-mono`). An unknown family, or a character a family lacks (DSEG has no accents), falls back to Inter. Weights a static family doesn't have are emboldened, and italics it doesn't have are slanted. A document can bring its own fonts as `font/ttf` or `font/otf` assets: their families can then be named like the bundled ones.
+
+```jsx
+<Text name="Logo" w=300 h=60 size=44 font="Pirata One" fill="#e8e2d0">Blackout</Text>
+<Text name="Model" w=200 h=30 size=22 font="Oswald" weight=600 case="upper" letter-spacing=2 fill="#f2f2f0">Mk II</Text>
+<Text name="Badge" w=200 h=40 size=30 font="Dancing Script" weight=700 fill="#ffd27a">Funk Works</Text>
+<Text name="Rack" w=200 h=20 size=14 font="Saira" weight=700 stretch=62.5 fill="#c7c7cc">STEREO DELAY</Text>
+<Text name="Tuner" w=120 h=40 size=32 font="DSEG7 Classic" style="italic" fill="#ff3b30">440.0</Text>
+```
 
 ## Paints (`fill={[…]}` / `stroke={[…]}`)
 

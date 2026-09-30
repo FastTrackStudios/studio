@@ -12,6 +12,7 @@ surface-proto = { path = "../../surface/surface-proto", default-features = false
 surface-widgets = { path = "../../surface/surface-widgets" }
 surface-kit = { path = "../../surface/surface-kit" }
 design-lint = { path = "../design-lint" }
+render-fonts = { path = "../../render/render-fonts" }
 serde_json = { workspace = true }
 uuid.workspace = true
 

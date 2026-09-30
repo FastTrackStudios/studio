@@ -38,7 +38,10 @@ const INSTRUCTIONS: &str = "frame designs live-performance control surfaces (kno
 that are bound to an audio engine's parameters. Workflow: `catalog` to see what can be controlled → `describe` \
 to see the document → build with `generate` (full starting surface), `add_control` (canonical themed controls), \
 or `write` (frame markup; call `reference` for the syntax) → `lint` and fix every error → iterate. Every tool \
-call is one undoable step. Bind only to catalog entries (param:<addr>, action:<id>, stream:<id>[:channel]).";
+call is one undoable step. Bind only to catalog entries (param:<addr>, action:<id>, stream:<id>[:channel]). \
+Letter text with real fonts: `fonts` lists the bundled families (Inter, Oswald, Saira, Michroma, Orbitron, \
+Dancing Script, Pacifico, Caveat Brush, Knewave, Playfair Display, DSEG7/DSEG14 Classic, Doto, VT323, JetBrains Mono, \
+UnifrakturCook, Pirata One); set them with `font`, `weight`, `style` and `stretch` on <Text>.";
 
 const USAGE: &str =
     "usage: frame-mcp [--file surface.fm] [--engine ws://HOST:PORT/vox [--rig NAME]] [--library ws://HOST:PORT/vox [--surface ID]]";
@@ -291,7 +294,7 @@ fn handle(session: &mut Session, sinks: Sinks<'_>, engine: Option<&mut dyn Catal
                 .collect();
             list.push(json!({
                 "name": "reference",
-                "description": "The frame markup authoring reference (elements, attributes, examples). Read before using `write`/`replace`.",
+                "description": "The frame markup authoring reference (elements, attributes, fonts, examples). Read before using `write`/`replace`.",
                 "inputSchema": {"type": "object", "properties": {}},
             }));
             if engine.is_some() {

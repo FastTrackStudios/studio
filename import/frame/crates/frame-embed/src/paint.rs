@@ -229,6 +229,7 @@ pub fn paint_filtered(
                 line_height,
                 letter_spacing,
                 text_case,
+                font: spec,
                 style_runs,
                 width,
                 align,
@@ -237,23 +238,51 @@ pub fn paint_filtered(
                 if !keep(*node_id) || text.is_empty() {
                     continue;
                 }
-                let weight = style_runs
-                    .first()
-                    .and_then(|r| r.font_weight)
-                    .unwrap_or(400.0);
-                let text = cased(text, text_case);
                 let lh = line_height.unwrap_or(font_size * 1.2).max(1.0);
-                let ascent = font.ascent(*font_size);
-                let brush = Brush::Solid(color(c));
-                for (i, line) in text.lines().enumerate() {
-                    let laid = font.line(line, *font_size, *letter_spacing, weight);
+                // Styled spans (the whole text as one without runs), each in
+                // its own family, weight, size and colour, split into lines.
+                let runs: Vec<(String, render::fonts::FontSpec, f64, f64, &Rgba)> = if style_runs.is_empty() {
+                    vec![(cased(text, text_case), spec.clone(), *font_size, *letter_spacing, c)]
+                } else {
+                    style_runs
+                        .iter()
+                        .map(|r| {
+                            (
+                                cased(&r.text, text_case),
+                                r.font().over(spec),
+                                r.font_size.unwrap_or(*font_size),
+                                r.letter_spacing.unwrap_or(*letter_spacing),
+                                r.color.as_ref().unwrap_or(c),
+                            )
+                        })
+                        .collect()
+                };
+                // Per line: (pieces placed from the line's pen start, width).
+                let mut lines: Vec<Line<'_>> = vec![(Vec::new(), 0.0)];
+                for (s, run_spec, size, spacing, run_color) in &runs {
+                    let ascent = font.ascent_of(run_spec, *size);
+                    for (i, part) in s.split('\n').enumerate() {
+                        if i > 0 {
+                            lines.push((Vec::new(), 0.0));
+                        }
+                        let laid = font.line_of(run_spec, part, *size, *spacing);
+                        if let Some((pieces, w)) = lines.last_mut() {
+                            let at = Affine::translate((*w, ascent)) * laid.path;
+                            pieces.push((at, *run_color));
+                            *w += laid.width;
+                        }
+                    }
+                }
+                for (i, (pieces, w)) in lines.iter().enumerate() {
                     let dx = match align {
                         TextAlignment::Left => 0.0,
-                        TextAlignment::Center => ((width - laid.width) / 2.0).max(0.0),
-                        TextAlignment::Right => (width - laid.width).max(0.0),
+                        TextAlignment::Center => ((width - w) / 2.0).max(0.0),
+                        TextAlignment::Right => (width - w).max(0.0),
                     };
-                    let at = Affine::translate((x + 1.0 + dx, y + 1.0 + ascent + i as f64 * lh));
-                    canvas.fill(t * at, Fill::NonZero, &brush, None, &laid.path);
+                    let at = Affine::translate((x + 1.0 + dx, y + 1.0 + i as f64 * lh));
+                    for (path, run_color) in pieces {
+                        canvas.fill(t * at, Fill::NonZero, &Brush::Solid(color(run_color)), None, path);
+                    }
                 }
             }
         }
@@ -451,6 +480,9 @@ fn closed_only(p: &BezPath) -> BezPath {
     }
     out
 }
+
+/// A laid-out line of text: its coloured pieces and its width.
+type Line<'a> = (Vec<(BezPath, &'a Rgba)>, f64);
 
 fn cased(text: &str, case: &TextCase) -> String {
     match case {

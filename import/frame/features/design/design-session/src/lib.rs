@@ -129,6 +129,7 @@ impl Session {
                 self.add_control(parent, a.str("kind")?, a.opt_str("bind")?, a.opt_str("size")?, a.opt_str("name")?)
             }
             "components" => Ok(components_text(a.opt_str("family")?)),
+            "fonts" => Ok(fonts_text()),
             "add_component" => {
                 let parent = a.node(&self.scene, "parent")?;
                 self.add_component(parent, &a)
@@ -505,6 +506,29 @@ fn with_label(mut ops: Vec<Op>, root: NodeId, label: &str) -> Vec<Op> {
     ops
 }
 
+/// The bundled font families, for a model lettering a surface.
+fn fonts_text() -> String {
+    let mut out = String::from(
+        "fonts every renderer bundles — <Text font=\"…\" weight=100–900 style=\"italic\" stretch=75> (runs: font_family, font_weight, font_style, font_width).\n\
+         Unknown families and missing glyphs fall back to Inter; missing weights are emboldened, missing italics slanted. \
+         Use real weight and family, never overlapping copies or outlines to fake them.\n\n",
+    );
+    for f in render_fonts::BUNDLED {
+        let weights = if f.weights.0 == f.weights.1 { f.weights.0.to_string() } else { format!("{}–{}", f.weights.0, f.weights.1) };
+        let mut extra = Vec::new();
+        if f.italic {
+            extra.push("italic".to_string());
+        }
+        if f.widths.0 != f.widths.1 {
+            extra.push(format!("stretch {}–{}", f.widths.0, f.widths.1));
+        }
+        let extra = if extra.is_empty() { String::new() } else { format!(", {}", extra.join(", ")) };
+        out.push_str(&format!("  {:<18} weight {weights}{extra} — {}\n", f.name, f.role));
+    }
+    out.push_str("\ngeneric: sans-serif (Inter), serif (Playfair Display), monospace (JetBrains Mono), cursive (Dancing Script), fantasy (Pirata One); also DSEG7, DSEG14, lcd, dot-matrix, marker, blackletter.\n");
+    out
+}
+
 /// The kit, grouped by family, for a model choosing components.
 fn components_text(family: Option<&str>) -> String {
     let all: Vec<_> = surface_kit::components().into_iter().filter(|c| family.is_none_or(|f| c.family.name() == f)).collect();
@@ -740,7 +764,7 @@ pub fn tools() -> Vec<ToolDef> {
         },
         ToolDef {
             name: "write",
-            description: "Insert a frame-markup fragment (one or more elements) under `parent` at `index` (default: end). Omit ids to get fresh ones. Returns the new top-level ids and lint.",
+            description: "Insert a frame-markup fragment (one or more elements) under `parent` at `index` (default: end). Omit ids to get fresh ones. Returns the new top-level ids and lint. Letter text with font/weight/style/stretch (see `fonts`).",
             input_schema: obj(json!({"parent": node, "markup": {"type": "string"}, "index": {"type": "integer", "minimum": 0}}), &["parent", "markup"]),
             mutates: true,
         },
@@ -770,6 +794,12 @@ pub fn tools() -> Vec<ToolDef> {
             name: "components",
             description: "The hardware component kit: knobs (Bakelite, Daka, Marconi, Collet, silver-top…), VU meters, buttons, switches, levers, panels — each with what it binds to, its default size and variants. Use these for hardware-style surfaces.",
             input_schema: obj(json!({"family": {"type": "string", "enum": ["knob", "meter", "button", "switch", "lever", "panel", "material"]}}), &[]),
+            mutates: false,
+        },
+        ToolDef {
+            name: "fonts",
+            description: "The font families every renderer bundles — UI sans (Inter), condensed display (Oswald, Saira with a width axis), engraved and tech caps (Michroma, Orbitron), scripts (Dancing Script, Pacifico), markers (Caveat Brush, Knewave), serif (Playfair Display), 7/14-segment LCD (DSEG7/DSEG14 Classic), dot matrix (Doto, VT323), monospace (JetBrains Mono), blackletter (UnifrakturCook, Pirata One) — with their weights and what each suits. Set them on <Text> with font, weight, style and stretch.",
+            input_schema: obj(json!({}), &[]),
             mutates: false,
         },
         ToolDef {
@@ -824,6 +854,20 @@ mod tests {
             assert!(!matches!(&r, Err(ToolError(m)) if m.starts_with("unknown tool")), "{}", t.name);
             assert_eq!(t.input_schema["type"], "object");
         }
+    }
+
+    #[test]
+    fn fonts_lists_every_bundled_family_and_markup_takes_them() {
+        let mut s = Session::blank(demo_catalog());
+        let out = call(&mut s, "fonts", json!({}));
+        for f in render_fonts::BUNDLED {
+            assert!(out.contains(f.name), "{} missing from:\n{out}", f.name);
+        }
+        let page = s.scene().pages()[0].to_string();
+        let markup = r##"<Text name="Logo" w=200 h=40 size=30 font="Oswald" weight=700 style="italic" stretch=75 fill="#ffffff">AMP</Text>"##;
+        call(&mut s, "write", json!({"parent": page, "markup": markup}));
+        let out = call(&mut s, "read", json!({"node": "Logo"}));
+        assert!(out.contains("font=\"Oswald\"") && out.contains("weight=700") && out.contains("style=\"italic\"") && out.contains("stretch=75"), "{out}");
     }
 
     #[test]

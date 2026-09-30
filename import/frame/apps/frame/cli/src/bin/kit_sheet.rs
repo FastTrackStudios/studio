@@ -257,13 +257,12 @@ fn run() -> Result<(), String> {
     let frame = rt.frame(0.0);
     let size = frame.node(frame.node(frame.pages()[0]).and_then(|p| p.children.first().copied()).ok_or("empty")?).ok_or("no root")?.size;
     let (w, h) = ((size.width * scale).ceil() as u32, (size.height * scale).ceil() as u32);
-    let font = include_bytes!("../../assets/inter/Inter-Variable.ttf");
     let values: std::collections::HashMap<_, _> =
         rt.surface().controls.iter().map(|(id, c)| (*id, rt.position(*id, c))).collect();
     let px = render::offscreen::Offscreen::new()?.render_with_effects(&render::fx::Frame {
         transform: kurbo::Affine::scale(scale),
         base: peniko::Color::from_rgba8(58, 58, 62, 255),
-        font: Some(render::TextFontRef { bytes: font, index: 0 }),
+        fonts: Some(render::FontBook::bundled()),
         mode: fx,
         values: Some(&values),
         ..render::fx::Frame::new(&frame, frame.pages()[0], w, h)

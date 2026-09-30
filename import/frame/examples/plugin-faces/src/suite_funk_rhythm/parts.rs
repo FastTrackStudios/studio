@@ -157,7 +157,7 @@ pub fn words(b: &mut Builder<'_>, parent: NodeId, s: &str, x: f64, cy: f64, w: f
             }
             // The weight as a run, which the renderer sets bold from.
             if t.weight >= 600.0 {
-                d.runs = vec![TextRun { text: s.to_string(), fills: Vec::new(), font_family: None, font_size: None, font_weight: Some(t.weight), font_style: None, letter_spacing: None }];
+                d.runs = vec![TextRun { text: s.to_string(), fills: Vec::new(), font_family: None, font_size: None, font_weight: Some(t.weight), font_style: None, font_width: None, letter_spacing: None }];
             }
         }
         n

@@ -164,6 +164,17 @@ fn text_case(c: doc::TextCase) -> TextCase {
     }
 }
 
+/// A text node's font settings.
+#[must_use]
+pub fn text_font(text: &doc::TextData) -> FontSpec {
+    FontSpec {
+        family: text.font_family.clone(),
+        weight: text.font_weight,
+        style: text.font_style.clone(),
+        width: text.font_width,
+    }
+}
+
 fn text_style_runs(text: &doc::TextData, opacity: f64) -> Vec<TextStyleRun> {
     text.runs
         .iter()
@@ -180,6 +191,8 @@ fn text_style_runs(text: &doc::TextData, opacity: f64) -> Vec<TextStyleRun> {
             letter_spacing: r.letter_spacing,
             font_style: r.font_style.clone(),
             font_weight: r.font_weight,
+            font_family: r.font_family.clone(),
+            font_width: r.font_width,
         })
         .collect()
 }
@@ -790,6 +803,7 @@ impl Cx<'_> {
                         line_height: text.line_height,
                         letter_spacing: text.letter_spacing,
                         text_case: text_case(text.text_case),
+                        font: text_font(text),
                         style_runs: text_style_runs(text, content_opacity),
                         blend: primitive_blend.clone(),
                         width,

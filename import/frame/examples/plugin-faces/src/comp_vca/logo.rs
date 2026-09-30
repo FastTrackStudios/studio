@@ -43,6 +43,7 @@ pub fn mark(b: &mut Builder<'_>, parent: NodeId, s: &str, x: f64, cy: f64, w: f6
                 font_size: Some(style.size),
                 font_weight: Some(style.weight),
                 font_style: style.italic.then(|| "Italic".to_string()),
+                font_width: None,
                 letter_spacing: Some(style.size * style.tracking),
             }];
         }

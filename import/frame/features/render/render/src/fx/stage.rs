@@ -10,7 +10,7 @@ use super::passes::{FxUniforms, Passes, LIGHT, TARGET};
 use super::{flicker_level, pack_params, EmissiveDraw, Mode, ShaderRegion};
 use crate::anyrender_renderer::{
     build_scene_primitives_and_effects, build_scene_primitives_with, paint_primitives_into_scene_with,
-    AffineTransform2D, CollectOptions, PaintPrimitive, TextFontRef,
+    AffineTransform2D, CollectOptions, PaintPrimitive,
 };
 
 /// One frame to render through the effects stage.
@@ -25,7 +25,9 @@ pub struct Frame<'a> {
     pub height: u32,
     /// The colour under everything.
     pub base: peniko::Color,
-    pub font: Option<TextFontRef<'a>>,
+    /// The host's fonts (the document's own are added); `None` draws text
+    /// as baseline bars.
+    pub fonts: Option<&'a crate::FontBook>,
     pub mode: Mode,
     /// Seconds, for time-dependent shaders (`flicker`, custom ones).
     pub time_s: f64,
@@ -50,7 +52,7 @@ impl<'a> Frame<'a> {
             width,
             height,
             base: peniko::Color::from_rgba8(0, 0, 0, 255),
-            font: None,
+            fonts: None,
             mode: Mode::Gpu,
             time_s: 0.0,
             values: None,
@@ -222,7 +224,7 @@ impl Stage {
                 for (world, c) in &d.clips {
                     push_clip(scene, c, to_emit * to_kurbo(world));
                 }
-                paint_primitives_into_scene_with(scene, &d.primitives, to_emit * to_kurbo(&d.world), frame.font);
+                paint_primitives_into_scene_with(scene, &d.primitives, to_emit * to_kurbo(&d.world), frame.fonts.map(|f| crate::book_for_scene(f, frame.doc)).as_deref());
                 for _ in &d.clips {
                     scene.pop_layer();
                 }
@@ -327,7 +329,7 @@ fn to_kurbo(t: &AffineTransform2D) -> kurbo::Affine {
 
 fn paint(scene: &mut vello::Scene, prims: &[PaintPrimitive], frame: &Frame<'_>, overlay: Option<&vello::Scene>) {
     scene.reset();
-    paint_primitives_into_scene_with(scene, prims, frame.transform, frame.font);
+    paint_primitives_into_scene_with(scene, prims, frame.transform, frame.fonts.map(|f| crate::book_for_scene(f, frame.doc)).as_deref());
     if let Some(o) = overlay {
         scene.append(o, None);
     }

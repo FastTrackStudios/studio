@@ -345,16 +345,37 @@ pub struct TextRun {
     pub font_family: Option<String>,
     pub font_size: Option<f64>,
     pub font_weight: Option<f64>,
+    /// A style name: `"italic"`, Figma's `"Semi Bold Italic"`,
+    /// `"condensed"`. Weight and width words apply where `font_weight` /
+    /// `font_width` are unset.
     pub font_style: Option<String>,
+    /// Width, percent of normal (CSS `font-stretch`): 75 condensed.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[facet(default)]
+    pub font_width: Option<f64>,
     pub letter_spacing: Option<f64>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Facet)]
 pub struct TextData {
     pub characters: String,
+    /// A family name (`"Oswald"`, `"DSEG7 Classic"`) or a generic one
+    /// (`"monospace"`); `None` = the host's UI face. Missing families and
+    /// glyphs fall back through the host's font book.
     pub font_family: Option<String>,
     pub font_size: f64,
+    /// 1–1000 (400 regular, 700 bold); `None` = regular.
     pub font_weight: Option<f64>,
+    /// A style name: `"italic"`, `"Bold Italic"`, `"condensed"` (see
+    /// [`TextRun::font_style`]).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[facet(default)]
+    pub font_style: Option<String>,
+    /// Width, percent of normal (CSS `font-stretch`): 75 condensed, 125
+    /// expanded. Variable fonts with a `wdth` axis draw it exactly.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[facet(default)]
+    pub font_width: Option<f64>,
     /// Line height in px; `None` = the font's natural line height.
     pub line_height: Option<f64>,
     /// Letter spacing in px.
@@ -371,6 +392,8 @@ impl Default for TextData {
             font_family: None,
             font_size: 14.0,
             font_weight: None,
+            font_style: None,
+            font_width: None,
             line_height: None,
             letter_spacing: 0.0,
             text_case: TextCase::Original,

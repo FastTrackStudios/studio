@@ -15,8 +15,9 @@ use super::ui::Edit;
 use super::{EngineCall, Runtime};
 use crate::gesture::{Key, Modifiers};
 
-/// Advance width of `text` at `size` px with `letter_spacing` px.
-pub type TextMeasure = Arc<dyn Fn(&str, f64, f64) -> f64 + Send + Sync>;
+/// Advance width of `text` set in a text node's style (family, weight,
+/// style, width, size, letter spacing).
+pub type TextMeasure = Arc<dyn Fn(&TextData, &str) -> f64 + Send + Sync>;
 
 /// The estimate used without a font: Inter's average advance.
 #[must_use]
@@ -45,10 +46,10 @@ impl Runtime {
         self.text_measure = Some(measure);
     }
 
-    fn measure(&self, text: &str, size: f64, spacing: f64) -> f64 {
+    fn measure(&self, data: &TextData, text: &str) -> f64 {
         match &self.text_measure {
-            Some(m) => m(text, size, spacing),
-            None => estimate(text, size, spacing),
+            Some(m) => m(data, text),
+            None => estimate(text, data.font_size, data.letter_spacing),
         }
     }
 
@@ -196,7 +197,7 @@ impl Runtime {
 
     /// Where the text starts in its node (its alignment in its box).
     fn text_left(&self, data: &TextData, width: f64, text: &str) -> f64 {
-        let w = self.measure(text, data.font_size, data.letter_spacing);
+        let w = self.measure(data, text);
         match data.align {
             TextAlign::Center => ((width - w) / 2.0).max(0.0),
             TextAlign::Right => (width - w).max(0.0),
@@ -214,7 +215,7 @@ impl Runtime {
         let chars: Vec<char> = text.chars().collect();
         for i in 0..=chars.len() {
             let prefix: String = chars[..i].iter().collect();
-            let d = (left + self.measure(&prefix, data.font_size, data.letter_spacing) - x).abs();
+            let d = (left + self.measure(&data, &prefix) - x).abs();
             if d < best.1 {
                 best = (i, d);
             }
@@ -235,7 +236,7 @@ impl Runtime {
         let left = self.text_left(&data, width, &e.buffer);
         let x_of = |i: usize| {
             let prefix: String = e.buffer.chars().take(i).collect();
-            left + self.measure(&prefix, data.font_size, data.letter_spacing)
+            left + self.measure(&data, &prefix)
         };
         let (lo, hi) = (e.caret.min(e.anchor), e.caret.max(e.anchor));
         Some(EditView { text: e.buffer.clone(), caret_x: x_of(e.caret), selection: (lo != hi).then(|| (x_of(lo), x_of(hi))) })

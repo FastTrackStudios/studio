@@ -4,68 +4,53 @@ use super::geometry::{compute_path_fit_transform, extract_scale, to_peniko};
 use super::subpaths::split_open_closed;
 use super::soft::{self, Soft};
 use super::types::*;
+use render_fonts::FontBook;
 
 const TEXT_ANCHOR_SHIFT_X: f64 = 1.0;
 const TEXT_ANCHOR_SHIFT_Y: f64 = 1.0;
 
-/// Paint a frame document (`root`'s subtree) into a vello scene.
+/// Paint a frame document (`root`'s subtree) into a vello scene. Text is
+/// set from `fonts` (the host's book) plus the fonts the document carries;
+/// without a book, text is drawn as baseline bars.
 pub fn paint_scene_into(
     scene: &mut vello::Scene,
     doc: &document_proto::Scene,
     root: document_proto::NodeId,
     scene_transform: kurbo::Affine,
-    text_font: Option<TextFontRef<'_>>,
+    fonts: Option<&FontBook>,
 ) {
     let primitives = super::scene_collect::build_scene_primitives(doc, root);
-    paint_primitives_into_scene_with(scene, &primitives, scene_transform, text_font);
+    let book = fonts.map(|f| crate::fonts::book_for_scene(f, doc));
+    paint_primitives_into_scene_with(scene, &primitives, scene_transform, book.as_deref());
+}
+
+/// A face's bytes as a vello font, cached by face so every frame (and
+/// vello's glyph cache) sees the same blob.
+fn font_data(face: &render_fonts::Face) -> peniko::FontData {
+    use std::collections::HashMap;
+    use std::sync::{Arc, LazyLock, Mutex};
+    static CACHE: LazyLock<Mutex<HashMap<u64, peniko::FontData>>> = LazyLock::new(|| Mutex::new(HashMap::new()));
+    if let Some(hit) = CACHE.lock().ok().and_then(|c| c.get(&face.id()).cloned()) {
+        return hit;
+    }
+    let data = peniko::FontData::new(peniko::Blob::new(Arc::new(face.font_bytes().clone())), face.index);
+    if let Ok(mut c) = CACHE.lock() {
+        c.insert(face.id(), data.clone());
+    }
+    data
 }
 
 pub fn paint_primitives_into_scene_with(
     scene: &mut vello::Scene,
     primitives: &[PaintPrimitive],
     root_transform: kurbo::Affine,
-    text_font: Option<TextFontRef<'_>>,
+    fonts: Option<&FontBook>,
 ) {
     use base64::Engine;
     use kurbo::{BezPath, Rect, RoundedRect, Stroke};
-    use peniko::{Blob, Fill, FontData, ImageBrush, ImageData, ImageSampler};
-    use skrifa::instance::Size;
-    use skrifa::raw::{FileRef, FontRef};
-    use skrifa::MetadataProvider;
+    use peniko::{Blob, Fill, ImageBrush, ImageData, ImageSampler};
     use std::sync::Arc;
     use vello::Glyph;
-
-    let font_data: Option<FontData> = text_font.map(|font| {
-        // Cache the Arc<[u8]> allocation to avoid copying font bytes every frame.
-        // Key on (pointer, length, index) since the same slice is typically passed repeatedly.
-        use std::sync::{LazyLock, Mutex};
-        static FONT_CACHE: LazyLock<Mutex<Option<(usize, usize, u32, FontData)>>> =
-            LazyLock::new(|| Mutex::new(None));
-
-        let ptr = font.bytes.as_ptr() as usize;
-        let len = font.bytes.len();
-        if let Ok(cache) = FONT_CACHE.lock() {
-            if let Some((cp, cl, ci, ref data)) = *cache {
-                if cp == ptr && cl == len && ci == font.index {
-                    return data.clone();
-                }
-            }
-        }
-
-        let data = FontData::new(Blob::new(Arc::new(font.bytes.to_vec())), font.index);
-        if let Ok(mut cache) = FONT_CACHE.lock() {
-            *cache = Some((ptr, len, font.index, data.clone()));
-        }
-        data
-    });
-
-    let font_ref: Option<FontRef<'_>> = font_data.as_ref().and_then(|f| {
-        let file_ref = FileRef::new(f.data.as_ref()).ok()?;
-        match file_ref {
-            FileRef::Font(font) => Some(font),
-            FileRef::Collection(collection) => collection.get(f.index).ok(),
-        }
-    });
 
     // Mask buffering state: collect primitives between MaskDefStart..MaskDefEnd
     // so they can be replayed as a luminance mask when MaskApplyEnd is reached.
@@ -178,14 +163,7 @@ pub fn paint_primitives_into_scene_with(
                 scene.push_luminance_mask_layer(Fill::NonZero, 1.0, scene_transform, &clip);
                 // Replay mask definition primitives
                 if !mask_def_primitives.is_empty() {
-                    render_mask_primitives(
-                        scene,
-                        &mask_def_primitives,
-                        scene_transform,
-                        text_font,
-                        &font_data,
-                        font_ref.as_ref(),
-                    );
+                    render_mask_primitives(scene, &mask_def_primitives, scene_transform);
                 }
                 scene.pop_layer(); // luminance mask
                 scene.pop_layer(); // isolation
@@ -612,6 +590,7 @@ pub fn paint_primitives_into_scene_with(
                 line_height,
                 letter_spacing,
                 text_case,
+                font,
                 style_runs,
                 blend: _,
                 width: box_width,
@@ -632,7 +611,7 @@ pub fn paint_primitives_into_scene_with(
                     (max_line_chars as f64 * (font_size * 0.6 + letter_spacing)).max(font_size);
                 let line_count = text.lines().count().max(1) as f64;
                 let _bounds_rect = Rect::new(x, y, x + approx_width, y + line_count * line_height);
-                if let (Some(font_data), Some(font_ref)) = (&font_data, font_ref.as_ref()) {
+                if let Some(book) = fonts {
                     let runs = if style_runs.is_empty() {
                         vec![TextStyleRun {
                             text: text.clone(),
@@ -641,6 +620,8 @@ pub fn paint_primitives_into_scene_with(
                             letter_spacing: Some(letter_spacing),
                             font_style: None,
                             font_weight: None,
+                            font_family: None,
+                            font_width: None,
                         }]
                     } else {
                         style_runs
@@ -652,23 +633,23 @@ pub fn paint_primitives_into_scene_with(
                             })
                             .collect::<Vec<_>>()
                     };
+                    // Each run's faces: its own settings over the node's.
+                    let chains: Vec<render_fonts::Chain> =
+                        runs.iter().map(|run| book.chain(&run.font().over(font).query())).collect();
 
-                    let charmap = font_ref.charmap();
                     // Measure each line first so it can be aligned in its box.
                     let mut line_widths: Vec<f64> = vec![0.0];
-                    for run in &runs {
-                        let size = Size::new(run.font_size.unwrap_or(font_size).max(1.0) as f32);
-                        let var_loc = font_ref.axes().location(std::iter::empty::<(&str, f32)>());
-                        let gm = font_ref.glyph_metrics(size, &var_loc);
+                    for (run, chain) in runs.iter().zip(&chains) {
+                        let size = run.font_size.unwrap_or(font_size).max(1.0);
                         let spacing = run.letter_spacing.unwrap_or(letter_spacing);
                         for ch in run.text.chars() {
                             if ch == '\n' {
                                 line_widths.push(0.0);
                                 continue;
                             }
-                            let gid = charmap.map(ch).unwrap_or_default();
+                            let advance = chain.pick(ch).map_or(0.0, |(f, g)| f.advance(g, size));
                             if let Some(w) = line_widths.last_mut() {
-                                *w += f64::from(gm.advance_width(gid).unwrap_or_default()) + spacing;
+                                *w += advance + spacing;
                             }
                         }
                     }
@@ -682,96 +663,53 @@ pub fn paint_primitives_into_scene_with(
                     };
                     let mut line_idx: usize = 0;
                     let mut pen_x: f64 = line_start(0);
-                    // (glyph, size, colour, transform, glyph → text space, bold)
-                    let mut placed: Vec<(skrifa::GlyphId, f64, Rgba, kurbo::Affine, kurbo::Affine, bool)> = Vec::new();
-                    for run in runs {
+                    let mut placed: Vec<Placed<'_>> = Vec::new();
+                    for (run, chain) in runs.iter().zip(&chains) {
                         let run_size = run.font_size.unwrap_or(font_size).max(1.0);
                         let run_letter_spacing = run.letter_spacing.unwrap_or(letter_spacing) as f32;
                         let run_color = run.color.clone().unwrap_or_else(|| color.clone());
-                        let style_str = run
-                            .font_style
-                            .as_deref()
-                            .map(|s| s.to_ascii_lowercase())
-                            .unwrap_or_default();
-                        let is_bold = run.font_weight.unwrap_or(400.0) >= 600.0
-                            || style_str.contains("bold");
-                        let is_italic = style_str.contains("italic");
-
-                        let size = Size::new(run_size as f32);
-                        let axes = font_ref.axes();
-                        let var_loc = axes.location(std::iter::empty::<(&str, f32)>());
-                        let metrics = font_ref.metrics(size, &var_loc);
-                        let glyph_metrics = font_ref.glyph_metrics(size, &var_loc);
-                        let ascent = f64::from(metrics.ascent);
-
+                        let ascent = chain.primary().map_or(run_size * 0.8, |f| f.ascent(run_size));
                         for ch in run.text.chars() {
                             if ch == '\n' {
                                 line_idx += 1;
                                 pen_x = line_start(line_idx);
                                 continue;
                             }
-                            let gid = charmap.map(ch).unwrap_or_default();
-                            let advance = f64::from(glyph_metrics.advance_width(gid).unwrap_or_default());
-                            let base_transform = scene_transform
-                                * kurbo::Affine::translate((
-                                    x + pen_x,
-                                    y + ascent + (line_idx as f64 * line_height),
-                                ));
-                            let text_transform = if is_italic {
-                                base_transform * kurbo::Affine::new([1.0, 0.0, 0.22, 1.0, 0.0, 0.0])
-                            } else {
-                                base_transform
-                            };
-                            let local = kurbo::Affine::translate((x + pen_x, y + ascent + (line_idx as f64 * line_height)))
-                                * if is_italic { kurbo::Affine::new([1.0, 0.0, 0.22, 1.0, 0.0, 0.0]) } else { kurbo::Affine::IDENTITY };
-                            placed.push((gid, run_size, run_color.clone(), text_transform, local, is_bold));
+                            let Some((face, gid)) = chain.pick(ch) else { continue };
+                            let advance = face.advance(gid, run_size);
+                            let local = kurbo::Affine::translate((x + pen_x, y + ascent + (line_idx as f64 * line_height)));
+                            placed.push(Placed { face, gid, size: run_size, color: run_color.clone(), local });
                             pen_x += advance + f64::from(run_letter_spacing);
                         }
                     }
                     // Shadows and glows follow the glyph outlines.
-                    let outline = (!effects.is_empty()).then(|| glyph_outlines(font_ref, &placed));
+                    let outline = (!effects.is_empty()).then(|| glyph_outlines(&placed));
                     for effect in effects {
                         if let (Some(o), EffectKind::DropShadow | EffectKind::Glow) = (&outline, &effect.kind) {
                             let soft = Soft::Outer { dx: effect.offset_x, dy: effect.offset_y, spread: effect.spread };
                             soft::paint(scene, scene_transform, &[o], &effect.color, effect.radius, soft);
                         }
                     }
-                    for (gid, run_size, run_color, text_transform, _, is_bold) in placed {
-                        {
-                            scene
-                                .draw_glyphs(font_data)
-                                .font_size(run_size as f32)
-                                .hint(true)
-                                .brush(to_peniko(run_color.clone()))
-                                .brush_alpha(1.0)
-                                .transform(text_transform)
-                                .draw(
-                                    Fill::NonZero,
-                                    std::iter::once(Glyph {
-                                        id: gid.to_u32(),
-                                        x: 0.0,
-                                        y: 0.0,
-                                    }),
-                                );
-
-                            if is_bold {
-                                scene
-                                    .draw_glyphs(font_data)
-                                    .font_size(run_size as f32)
-                                    .hint(true)
-                                    .brush(to_peniko(run_color.clone()))
-                                    .brush_alpha(1.0)
-                                    .transform(text_transform * kurbo::Affine::translate((0.45, 0.0)))
-                                    .draw(
-                                        Fill::NonZero,
-                                        std::iter::once(Glyph {
-                                            id: gid.to_u32(),
-                                            x: 0.0,
-                                            y: 0.0,
-                                        }),
-                                    );
-                            }
+                    for g in &placed {
+                        let face = g.face;
+                        let mut run = scene
+                            .draw_glyphs(&font_data(&face.face))
+                            .font_size(g.size as f32)
+                            .hint(true)
+                            .normalized_coords(&face.coords)
+                            .brush(to_peniko(g.color.clone()))
+                            .brush_alpha(1.0)
+                            .transform(scene_transform * g.local);
+                        if face.synthetic_italic {
+                            // Glyph space is y-up: lean the tops right.
+                            run = run.glyph_transform(Some(kurbo::Affine::new([1.0, 0.0, render_fonts::SYNTHETIC_SKEW, 1.0, 0.0, 0.0])));
                         }
+                        let grow = face.embolden(g.size);
+                        if grow > 0.0 {
+                            run = run.font_embolden(vello::FontEmbolden::new(kurbo::Diagonal2::new(grow, grow * 0.5)));
+                        }
+                        let dx = grow as f32;
+                        run.draw(Fill::NonZero, std::iter::once(Glyph { id: g.gid.to_u32(), x: dx, y: 0.0 }));
                     }
                     for effect in effects {
                         if let (Some(o), EffectKind::InnerShadow) = (&outline, &effect.kind) {
@@ -805,44 +743,23 @@ pub fn paint_primitives_into_scene_with(
         }
     }
 
-    /// The placed glyphs' outlines in text space (bold glyphs twice, as
-    /// they are drawn).
-    fn glyph_outlines(font: &FontRef<'_>, placed: &[(skrifa::GlyphId, f64, Rgba, kurbo::Affine, kurbo::Affine, bool)]) -> BezPath {
-        use skrifa::outline::{DrawSettings, OutlinePen};
-        struct Pen(BezPath);
-        impl OutlinePen for Pen {
-            fn move_to(&mut self, x: f32, y: f32) {
-                self.0.move_to((f64::from(x), -f64::from(y)));
-            }
-            fn line_to(&mut self, x: f32, y: f32) {
-                self.0.line_to((f64::from(x), -f64::from(y)));
-            }
-            fn quad_to(&mut self, cx0: f32, cy0: f32, x: f32, y: f32) {
-                self.0.quad_to((f64::from(cx0), -f64::from(cy0)), (f64::from(x), -f64::from(y)));
-            }
-            fn curve_to(&mut self, cx0: f32, cy0: f32, cx1: f32, cy1: f32, x: f32, y: f32) {
-                self.0.curve_to(
-                    (f64::from(cx0), -f64::from(cy0)),
-                    (f64::from(cx1), -f64::from(cy1)),
-                    (f64::from(x), -f64::from(y)),
-                );
-            }
-            fn close(&mut self) {
-                self.0.close_path();
-            }
-        }
-        let glyphs = font.outline_glyphs();
-        let location = font.axes().location(std::iter::empty::<(&str, f32)>());
+    /// A glyph placed in text space: which face draws it, where its pen
+    /// starts on the baseline.
+    struct Placed<'c> {
+        face: &'c render_fonts::Resolved,
+        gid: skrifa::GlyphId,
+        size: f64,
+        color: Rgba,
+        local: kurbo::Affine,
+    }
+
+    /// The placed glyphs' outlines in text space, as drawn (instanced,
+    /// slanted, emboldened).
+    fn glyph_outlines(placed: &[Placed<'_>]) -> BezPath {
         let mut out = BezPath::new();
-        for (gid, size, _, _, local, bold) in placed {
-            let Some(glyph) = glyphs.get(*gid) else { continue };
-            let mut pen = Pen(BezPath::new());
-            if glyph.draw(DrawSettings::unhinted(Size::new(*size as f32), &location), &mut pen).is_err() {
-                continue;
-            }
-            out.extend((*local * pen.0.clone()).elements().iter().copied());
-            if *bold {
-                out.extend((*local * kurbo::Affine::translate((0.45, 0.0)) * pen.0).elements().iter().copied());
+        for g in placed {
+            if let Some(p) = g.face.outline(g.gid, g.size) {
+                out.extend((g.local * p).elements().iter().copied());
             }
         }
         out
@@ -1874,9 +1791,6 @@ pub fn paint_primitives_into_scene_with(
         scene: &mut vello::Scene,
         prims: &[&PaintPrimitive],
         scene_transform: kurbo::Affine,
-        _text_font: Option<TextFontRef<'_>>,
-        _font_data: &Option<FontData>,
-        _font_ref: Option<&FontRef<'_>>,
     ) {
         let root_transform = scene_transform;
         let mut group_stack: Vec<kurbo::Affine> = Vec::new();
