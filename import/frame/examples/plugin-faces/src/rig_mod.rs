@@ -21,8 +21,8 @@ use crate::face::{Face, canvas};
 use crate::reverb::ui;
 use crate::rig_time::kit;
 
-pub const W: f64 = 480.0;
-pub const H: f64 = 168.0;
+pub const W: f64 = 400.0;
+pub const H: f64 = 340.0;
 pub const MOD: &str = "mod";
 pub const MOTION: &str = "motion";
 /// Modulation light blue, Motion pink (Signal's group colours).
@@ -114,9 +114,9 @@ fn panel(name: &str, t: &Theme, build: impl FnOnce(&mut Builder<'_>, NodeId)) ->
     })
 }
 
-/// The picture's window on the right, clipped.
+/// The picture's window across the middle, clipped.
 fn view(b: &mut Builder<'_>, parent: NodeId, t: &Theme) -> (NodeId, f64, f64) {
-    let (x, y, w, h) = (VIEW_X, 8.0, W - VIEW_X - 8.0, H - 16.0);
+    let (x, y, w, h) = (10.0, VIEW_Y, W - 20.0, 186.0);
     let mut v = draw::frame("View", x, y, w, h);
     v.fills = vec![draw::linear(180.0, &t.window)];
     v.clips_content = true;
@@ -125,26 +125,26 @@ fn view(b: &mut Builder<'_>, parent: NodeId, t: &Theme) -> (NodeId, f64, f64) {
     (b.add(parent, v), w, h)
 }
 
-/// The picture's window starts here; left of it, the name and the knobs.
-const VIEW_X: f64 = 200.0;
+/// The picture's window starts here; above it the name, below it the
+/// knobs.
+const VIEW_Y: f64 = 66.0;
 
-/// The left column: the name, light, its line of description, the On key
-/// beside the name, and the knobs in a row under them.
+/// The face's frame of controls: its On key and name, light, across the
+/// top (the top-right corner is the host's, for the unit's preset), its
+/// line of description, and the knobs spread along the bottom.
 fn column(b: &mut Builder<'_>, p: NodeId, t: &Theme, ns: &str, name: &str, sub: &str, list: &[(&str, &str)]) {
     let sans = draw::Lettering::family(draw::family::INTER).weight(300.0);
-    // The On key first, then the name: the top-right corner is the host's.
     kit::bypass(b, p, ns, 25.0, 30.0, 22.0, t.bypass, "On");
     let w = name.chars().count() as f64 * 11.5;
     crate::suite_studio_blues::parts::set(b, p, name, 46.0 + w / 2.0, 30.0, 21.0, t.ink, &sans, 0.02);
-    ui::silk_left(b, p, sub, 14.0, 49.0, 6.0, t.dim, 700.0);
-    ui::rule(b, p, 14.0, 57.0, VIEW_X - 30.0, 1.0, &ui::alpha(t.accent, 0.6));
+    ui::silk_left(b, p, sub, 14.0, 52.0, 6.0, t.dim, 700.0);
     let pointer = format!("pointer={}", t.accent);
     let color = format!("color={}", t.knob);
     let skirt = format!("skirt_color={}", t.skirt);
     let opts = [color.as_str(), pointer.as_str(), "index=line", "index_w=0.1", "skirt=plain", skirt.as_str()];
-    let step = ((VIEW_X - 30.0) / list.len() as f64).min(46.0);
+    let step = (W - 20.0) / list.len() as f64;
     for (i, (id, legend)) in list.iter().enumerate() {
-        kit::knob3d(b, p, &a(ns, id), legend, 28.0, (14.0 + step * (i as f64 + 0.5), 100.0), &opts, t.ink, t.dim);
+        kit::knob3d(b, p, &a(ns, id), legend, 34.0, (10.0 + step * (i as f64 + 0.5), 280.0), &opts, t.ink, t.dim);
     }
 }
 
