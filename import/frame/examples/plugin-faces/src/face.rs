@@ -1,6 +1,6 @@
 //! What a face is, and the scaffolding every face uses.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 
 use document_proto::{Node, NodeId, NodeKind, Scene};
 use surface_proto::{Catalog, Control, ParamInfo};
@@ -60,4 +60,61 @@ pub fn catalogs(faces: &[Face]) -> BTreeMap<&'static str, Catalog> {
         }
     }
     out
+}
+
+/// Namespace of the faces' stable node ids (uuid v5).
+const ID_NAMESPACE: uuid::Uuid = uuid::Uuid::from_u128(0x6a1f_3c2e_9d4b_4f7a_8e21_5b0c_d9e3_f471);
+
+/// `scene` with every node id replaced by a stable one: a uuid v5 of
+/// `key` and the node's path of names from the document root (a sibling
+/// sharing its name with earlier ones gets `#n`). Regenerating a face then
+/// rewrites nothing that didn't change, and a live reload keeps the state
+/// of every node it can still match. Every reference to an id (children,
+/// parents, control slots, links…) follows it.
+///
+/// # Panics
+/// If the scene doesn't round-trip through JSON (it always does).
+#[must_use]
+pub fn stable_ids(mut scene: Scene, key: &str) -> Scene {
+    let mut map: HashMap<NodeId, NodeId> = HashMap::new();
+    let mut stack = vec![(scene.root, key.to_string())];
+    while let Some((id, path)) = stack.pop() {
+        map.insert(id, NodeId(uuid::Uuid::new_v5(&ID_NAMESPACE, path.as_bytes())));
+        let Some(node) = scene.node(id) else { continue };
+        let mut seen: HashMap<&str, usize> = HashMap::new();
+        for c in &node.children {
+            let name = scene.node(*c).map_or("", |n| n.name.as_str());
+            let n = seen.entry(name).or_insert(0);
+            let seg = if *n == 0 { name.to_string() } else { format!("{name}#{n}") };
+            *n += 1;
+            stack.push((*c, format!("{path}/{seg}")));
+        }
+    }
+    // Nodes off the tree (none today) take an id from their place in it.
+    let off: Vec<NodeId> = scene.nodes.keys().filter(|id| !map.contains_key(id)).copied().collect();
+    for (i, id) in off.into_iter().enumerate() {
+        map.insert(id, NodeId(uuid::Uuid::new_v5(&ID_NAMESPACE, format!("{key}/~{i}").as_bytes())));
+    }
+    let by_text: HashMap<String, String> = map.iter().map(|(a, b)| (a.to_string(), b.to_string())).collect();
+    // Rewrite each id wherever it appears, through the serialized scene
+    // (its assets aside: they're content-addressed, and large).
+    let assets = std::mem::take(&mut scene.assets);
+    let json = serde_json::to_string(&scene).expect("scene to json");
+    let mut out = String::with_capacity(json.len());
+    let mut rest = json.as_str();
+    while let Some(i) = rest.find('-') {
+        // A uuid's first dash is its 9th character, of 36.
+        if let Some(new) = i.checked_sub(8).and_then(|start| rest.get(start..i + 28)).and_then(|s| by_text.get(s)) {
+            out.push_str(&rest[..i - 8]);
+            out.push_str(new);
+            rest = &rest[i + 28..];
+            continue;
+        }
+        out.push_str(&rest[..=i]);
+        rest = &rest[i + 1..];
+    }
+    out.push_str(rest);
+    let mut scene: Scene = serde_json::from_str(&out).expect("scene from json");
+    scene.assets = assets;
+    scene
 }

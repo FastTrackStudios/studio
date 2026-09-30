@@ -44,5 +44,27 @@ pub fn all() -> Vec<Face> {
     v.extend(suite_djent_forge::faces());
     v.extend(suite_modern_rhythm::faces());
     v.extend(suite_blackout_gain::faces());
+    for f in &mut v {
+        let scene = std::mem::replace(&mut f.scene, document_proto::Scene::new("Surface"));
+        f.scene = face::stable_ids(scene, &format!("{}/{}", f.plugin, f.file));
+    }
     v
+}
+
+/// Write every face (`OUT/<plugin>/<file>.fm` and its sidecar) and each
+/// plugin's catalog under `out`; returns the number of faces.
+///
+/// # Panics
+/// On a write error.
+pub fn write_all(out: &std::path::Path) -> usize {
+    let faces = all();
+    for f in &faces {
+        let path = out.join(f.plugin).join(format!("{}.fm", f.file));
+        document_io::save_surface(&path, &f.scene).unwrap_or_else(|e| panic!("write face: {e}"));
+    }
+    for (plugin, catalog) in catalogs(&faces) {
+        let path = out.join(plugin).join(format!("{plugin}.catalog.json"));
+        std::fs::write(&path, serde_json::to_string_pretty(&catalog).expect("json")).expect("write catalog");
+    }
+    faces.len()
 }

@@ -15,6 +15,7 @@ render-fonts = { path = "../../features/render/render-fonts" }
 document-io = { path = "../../features/document/document-io" }
 motion-runtime = { path = "../../features/motion/motion-runtime" }
 serde_json = { workspace = true }
+uuid = { workspace = true }
 skrifa = "0.26"
 
 [dev-dependencies]

@@ -4505,6 +4505,7 @@ dependencies = [
  "surface-proto",
  "surface-runtime",
  "surface-widgets",
+ "uuid",
 ]
 
 [[package]]
