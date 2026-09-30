@@ -236,8 +236,8 @@ fn mic_column(b: &mut Builder<'_>, root: NodeId, ns: &str, x0: f64) {
     mic_select(b, root, ns, x0, 60.0);
     arc_knob(b, root, &format!("{ns}/position"), "POSITION", x0 + 60.0, 190.0, Some(ValueFormat::decimals(3)));
     arc_knob(b, root, &format!("{ns}/distance"), "DISTANCE", x0 + 180.0, 190.0, Some(ValueFormat::decimals(3)));
-    arc_knob(b, root, &format!("{ns}/level"), "MIC LEVEL", x0 + 60.0, 360.0, None);
-    arc_knob(b, root, &format!("{ns}/pan"), "PAN", x0 + 180.0, 360.0, Some(ValueFormat::decimals(0)));
+    arc_knob(b, root, &format!("{ns}/level"), "MIC LEVEL", x0 + 60.0, 360.0, Some(ValueFormat::default().signed()));
+    arc_knob(b, root, &format!("{ns}/pan"), "PAN", x0 + 180.0, 360.0, Some(ValueFormat::decimals(0).mark(0.0, "C")));
     ui::rule(b, root, x0, 482.0, 240.0, 1.0, "#ffffff1a");
     phase(b, root, ns, x0 + 120.0, 790.0);
 }
@@ -290,7 +290,7 @@ pub fn face() -> Face {
         let rx = W - 24.0 - 120.0;
         text(b, root, "ROOM SEND", rx - 18.0, 520.0, 15.0, TEXT, 600.0);
         slide_toggle(b, root, "room/on", "Room send on", rx + 70.0, 520.0);
-        arc_knob(b, root, "room/send", "LEVEL", rx, 600.0, None);
+        arc_knob(b, root, "room/send", "LEVEL", rx, 600.0, Some(ValueFormat::default().signed()));
         finish_picker(b, root);
     });
     let mut params = vec![parts::pick("cab", "finish", "Cab Finish", &["White", "Pink", "Clear"], 0)];

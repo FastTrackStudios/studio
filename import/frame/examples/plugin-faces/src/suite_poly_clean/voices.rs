@@ -166,6 +166,10 @@ fn screen_knob(b: &mut Builder<'_>, parent: NodeId, id: &str, caption: &str, cx:
     let t = b.add(r, screen_text("value", "", 0.0, 5.0, 30.0, 7.0, TEXT, TextAlign::Left, 700.0));
     let mut c = Control::new(ControlKind::Readout).slot(SlotRole::Value, t.0);
     c.binding = Some(ui::bind(&addr));
+    if id == "output" {
+        // A gain: a boost reads +.
+        c.format = Some(ValueFormat::decimals(1).signed());
+    }
     b.controls.insert(r, c);
 }
 
@@ -247,7 +251,7 @@ pub fn face() -> Face {
             }
             value_bar(b, scr, &format!("Voice {n} level"), &format!("{v}_level"), (x, 100.0, 55.0, 12.0), false, Some(on_tab(0.0)));
             value_bar(b, scr, &format!("Voice {n} pan"), &format!("{v}_pan"), (x, 130.0, 55.0, 12.0), false, Some(on_tab(0.0)));
-            value_box(b, scr, &format!("Voice {n} detune"), &format!("{v}_detune"), (x, 100.0, 55.0, 12.0), color, on_tab(1.0), ValueFormat::decimals(0).unit("cents"));
+            value_box(b, scr, &format!("Voice {n} detune"), &format!("{v}_detune"), (x, 100.0, 55.0, 12.0), color, on_tab(1.0), ValueFormat::decimals(0).unit("cents").signed());
             value_box(b, scr, &format!("Voice {n} delay"), &format!("{v}_delay"), (x, 130.0, 55.0, 12.0), color, on_tab(1.0), ValueFormat::decimals(1));
         }
         ui::rule(b, scr, 60.5, 52.0, 0.6, 92.0, "#ffffff26");

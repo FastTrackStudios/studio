@@ -41,8 +41,8 @@ pub fn boost() -> Face {
     let scene = canvas("Gold Boost (Standard pedal, 156×286)", |b, root| {
         let lid = pedal(b, root, W, PEDAL_H, ["#c6b39c", "#ac9880", "#94806a"], "#f1e3cf");
         jacks(b, lid, x(0.5), y(0.045), 26.0, ink, true);
-        word(b, lid, "gain", x(0.24), y(0.105), 10.0, ink, 700.0, 0.12);
-        word(b, lid, "level", x(0.76), y(0.105), 10.0, ink, 700.0, 0.12);
+        word(b, lid, "gain", x(0.24), y(0.088), 10.0, ink, 700.0, 0.12);
+        word(b, lid, "level", x(0.76), y(0.088), 10.0, ink, 700.0, 0.12);
         knob(b, lid, &GOLD, "boost/gain", "Gain", 36.0, x(0.24), y(0.19), "#2a1d0c");
         knob(b, lid, &GOLD, "boost/level", "Level", 36.0, x(0.76), y(0.19), "#2a1d0c");
         knob(b, lid, &GOLD, "boost/bass", "Bass", 36.0, x(0.24), y(0.385), "#2a1d0c");
@@ -68,8 +68,8 @@ pub fn compressor() -> Face {
     let scene = canvas("Bronze Compressor (Standard pedal, 156×286)", |b, root| {
         let lid = pedal(b, root, W, PEDAL_H, ["#a07a4e", "#8a6538", "#76532b"], "#d9b88c");
         jacks(b, lid, x(0.5), y(0.045), 26.0, ink, true);
-        word(b, lid, "comp", x(0.22), y(0.105), 10.0, ink, 700.0, 0.12);
-        word(b, lid, "level", x(0.78), y(0.105), 10.0, ink, 700.0, 0.12);
+        word(b, lid, "comp", x(0.22), y(0.088), 10.0, ink, 700.0, 0.12);
+        word(b, lid, "level", x(0.78), y(0.088), 10.0, ink, 700.0, 0.12);
         knob(b, lid, &GOLD, "comp/comp", "Comp", 36.0, x(0.22), y(0.19), "#2a1d0c");
         knob(b, lid, &GOLD, "comp/level", "Level", 36.0, x(0.78), y(0.19), "#2a1d0c");
         switch(b, lid, "switch.mini_lever", "gold", "comp/attack", "Attack", 22.0, x(0.5), y(0.39), &[], &["bushing"]);
@@ -95,8 +95,8 @@ pub fn overdrive() -> Face {
     let scene = canvas("Rose Overdrive (Standard pedal, 156×286)", |b, root| {
         let lid = pedal(b, root, W, PEDAL_H, ["#c09aa7", "#a67b8b", "#916676"], "#ecd2da");
         jacks(b, lid, x(0.5), y(0.045), 26.0, ink, true);
-        word(b, lid, "drive", x(0.23), y(0.105), 10.0, ink, 700.0, 0.12);
-        word(b, lid, "level", x(0.77), y(0.105), 10.0, ink, 700.0, 0.12);
+        word(b, lid, "drive", x(0.23), y(0.088), 10.0, ink, 700.0, 0.12);
+        word(b, lid, "level", x(0.77), y(0.088), 10.0, ink, 700.0, 0.12);
         knob(b, lid, &ROSE, "drive/drive", "Drive", 36.0, x(0.23), y(0.19), "#2a1d0c");
         knob(b, lid, &ROSE, "drive/level", "Level", 36.0, x(0.77), y(0.19), "#2a1d0c");
         knob(b, lid, &ROSE, "drive/tone", "Tone", 36.0, x(0.5), y(0.36), "#2a1d0c");
@@ -134,8 +134,8 @@ pub fn reverb() -> Face {
     let scene = canvas("Lilac Reverb (Standard pedal, 156×286)", |b, root| {
         let lid = pedal(b, root, W, PEDAL_H, ["#efe2ec", "#e3d2df", "#d5c1d0"], "#fff8fd");
         jacks(b, lid, x(0.5), y(0.045), 26.0, "#3b2f36", true);
-        word(b, lid, "mix", x(0.23), y(0.1), 10.0, ink, 700.0, 0.1);
-        word(b, lid, "decay", x(0.77), y(0.1), 10.0, ink, 500.0, 0.12);
+        word(b, lid, "mix", x(0.23), y(0.085), 10.0, ink, 700.0, 0.1);
+        word(b, lid, "decay", x(0.77), y(0.085), 10.0, ink, 500.0, 0.12);
         knob(b, lid, &MAGENTA, "verb/mix", "Mix", 36.0, x(0.23), y(0.195), "#2a1d0c");
         knob(b, lid, &MAGENTA, "verb/decay", "Decay", 36.0, x(0.77), y(0.195), "#2a1d0c");
         knob(b, lid, &MAGENTA, "verb/low", "Low Cut", 36.0, x(0.23), y(0.37), "#2a1d0c");

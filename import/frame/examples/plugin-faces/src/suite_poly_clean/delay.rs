@@ -105,7 +105,7 @@ pub fn face() -> Face {
             b.add(lid, surface_kit::draw::circle("guide dot", px(x0), py(242.0), 1.6, surface_kit::draw::solid(INK)));
         }
         // Knobs.
-        let k = 34.0;
+        let k = 40.0;
         word(b, lid, "mix", px(103.0), py(80.0), 10.5, INK, 500.0, 0.08);
         word(b, lid, "feedback", px(731.0), py(80.0), 10.5, INK, 500.0, 0.08);
         knob(b, lid, &BLACK, "delay/mix", "Mix", k, px(106.0), py(150.0), "#2a1d0c");

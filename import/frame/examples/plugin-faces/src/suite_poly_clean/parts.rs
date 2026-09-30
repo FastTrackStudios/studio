@@ -149,41 +149,59 @@ pub struct Cap {
     pub id: &'static str,
     pub variant: &'static str,
     pub opts: &'static [&'static str],
+    /// How far (a fraction of the knob's size) the shaft sits below the
+    /// point asked for: a tall cap seen from the front stands up off its
+    /// shaft, so its top lands where a flat knob's face would.
+    pub drop: f64,
 }
 
 impl Cap {
-    const fn render(variant: &'static str, opts: &'static [&'static str]) -> Self {
-        Self { id: "knob.render", variant, opts }
+    /// A GPU-rendered knob (`knob.3d`, `knob.render` without the GPU): a
+    /// preset and its options.
+    const fn gpu(preset: &'static str, opts: &'static [&'static str]) -> Self {
+        Self { id: "knob.3d", variant: preset, opts, drop: 0.0 }
+    }
+
+    const fn drop(mut self, f: f64) -> Self {
+        self.drop = f;
+        self
     }
 }
 
-/// Gold knurled cylinders (the boost and compressor).
-pub const GOLD: Cap = Cap::render("knurled", &["material=metal", "color=#d6b26c", "pointer=#2a1d0c", "ticks=none", "bevel=1.6", "spec=1.3"]);
+/// Gold knurled cylinders (the boost and compressor): polished gold, a
+/// tall diamond-knurled side, a dark dot.
+pub const GOLD: Cap = Cap::gpu("gold_knurl", &["color=#d9ae6a", "pointer=#2a1d0c", "ticks=none", "height=0.74", "tilt=36", "ribs=44", "index_w=0.09"]).drop(0.24);
 /// Rose-gold knurled cylinders (the overdrive).
-pub const ROSE: Cap = Cap::render("knurled", &["material=metal", "color=#e4b09c", "pointer=#2a1d0c", "ticks=none", "bevel=1.6", "spec=1.3"]);
-/// A big pearl-white knurled cap (the chorus).
-pub const PEARL: Cap = Cap::render("knurled", &["material=plastic", "color=#ecebe6", "pointer=#2f3432", "ticks=none", "bevel=1.8"]);
+pub const ROSE: Cap = Cap::gpu("gold_knurl", &["color=#e4ab96", "pointer=#2a1d0c", "ticks=none", "height=0.74", "tilt=36", "ribs=44", "index_w=0.09"]).drop(0.24);
+/// A big pearl-white cap, knurled round its foot (the chorus).
+pub const PEARL: Cap = Cap::gpu("white_knurl", &["color=#e6e5e0", "pointer=#2f3432", "ticks=none", "diamond=0", "knurl_band=0.3", "ribs=70", "dome=0.06", "height=0.7", "tilt=34"]).drop(0.08);
 /// Magenta anodised knurled caps (the reverb).
-pub const MAGENTA: Cap = Cap::render("knurled", &["material=metal", "color=#b0305f", "pointer=#1c0a12", "ticks=none", "bevel=1.6", "spec=1.2"]);
-/// Black knurled caps (the delay).
-pub const BLACK: Cap = Cap::render("knurled", &["material=plastic", "color=#232325", "pointer=#f2f2f2", "ticks=none", "bevel=1.6", "spec=1.1"]);
-/// The lead head: pink chrome domes on black skirts, a printed tick ring.
-pub const LEAD: Cap = Cap::render("domed", &["material=chrome", "color=#e7b3c2", "pointer=#2a1219", "skirt=plain", "skirt_color=#1b1a1b", "ticks=lines"]);
-/// The rhythm head: white domes on white skirts, a printed tick ring.
-pub const RHYTHM: Cap = Cap::render("domed", &["material=plastic", "color=#f2f2f0", "pointer=#3a3a3a", "skirt=plain", "skirt_color=#e4e4e2", "ticks=lines", "spec=0.7"]);
-/// The acoustic head: black knurled caps, a printed tick ring.
-pub const ACOUSTIC: Cap = Cap::render("knurled", &["material=plastic", "color=#1f1f21", "pointer=#eeeeee", "ticks=lines", "bevel=1.3"]);
-/// The EQ: big pink caps with a milled edge.
-pub const EQ_PINK: Cap = Cap::render("knurled", &["material=plastic", "color=#d9909f", "pointer=#3a1f28", "ticks=none", "bevel=0.5", "spec=0.3"]);
+pub const MAGENTA: Cap = Cap::gpu("gold_knurl", &["color=#b0305f", "pointer=#1c0a12", "ticks=none", "rough=0.26", "height=0.74", "tilt=36", "ribs=44", "index_w=0.09"]).drop(0.24);
+/// Black knurled caps with glossy domed tops, a white dot (the delay).
+pub const BLACK: Cap = Cap::gpu("white_knurl", &["color=#1e1e20", "pointer=#f2f2f2", "ticks=none", "diamond=0", "ribs=44", "rough=0.2", "coat=0.7", "dome=0.16", "knurl_band=0.62", "height=0.8", "tilt=36", "index_w=0.1", "index_in=0.56", "index_out=0.56"]).drop(0.04);
+/// The lead head: pink spun-metal caps in black skirts, a dark dot, a
+/// printed tick ring.
+pub const LEAD: Cap = Cap::gpu("spun_metal", &["color=#e7aebf", "pointer=#2a1219", "skirt_color=#1b1a1b", "index=dot", "index_w=0.07", "index_in=0.62", "index_out=0.62", "ticks=lines", "material=chrome"]);
+/// The rhythm head: soft white cylinders on white skirts, a printed tick ring.
+pub const RHYTHM: Cap = Cap::gpu("flat", &["color=#efefed", "pointer=#cfcfcc", "skirt_color=#e2e2e0", "rough=0.7", "coat=0", "spec=0.5", "index=dot", "index_in=0.6", "index_out=0.6", "ticks=lines"]);
+/// The acoustic head: black knurled caps, a spun top, a white dot, a
+/// printed tick ring.
+pub const ACOUSTIC: Cap = Cap::gpu("knurled", &["color=#1f1f21", "pointer=#eeeeee", "index=dot", "index_w=0.08", "index_in=0.6", "index_out=0.6", "cap_r=0.86", "height=0.55", "knurl_band=0.55", "ribs=64", "aniso=0.7", "ticks=lines"]);
+/// The EQ: big pink caps with a milled foot, a dark dot.
+pub const EQ_PINK: Cap = Cap::gpu("white_knurl", &["color=#d98f9e", "pointer=#3a1f28", "ticks=none", "diamond=0", "knurl_band=1", "rough=0.6", "dome=0.02", "index_in=0.6", "index_out=0.6", "index_w=0.09", "tilt=26", "height=0.5", "ribs=80"]);
+/// The white EQ's caps.
+pub const EQ_WHITE: Cap = Cap::gpu("white_knurl", &["color=#eeeeec", "pointer=#2a2a2c", "ticks=none", "diamond=0", "knurl_band=1", "rough=0.6", "dome=0.02", "index_in=0.6", "index_out=0.6", "index_w=0.09", "tilt=26", "height=0.5", "ribs=80"]);
+/// The black EQ's caps.
+pub const EQ_BLACK: Cap = Cap::gpu("white_knurl", &["color=#202022", "pointer=#eeeeee", "ticks=none", "diamond=0", "knurl_band=1", "rough=0.45", "dome=0.02", "index_in=0.6", "index_out=0.6", "index_w=0.09", "tilt=26", "height=0.5", "ribs=80"]);
 /// The cab page's plugin-style flat arc knobs.
-pub const SCREEN: Cap = Cap { id: "knob.arc_disc", variant: "dark", opts: &[] };
+pub const SCREEN: Cap = Cap { id: "knob.arc_disc", variant: "dark", opts: &[], drop: 0.0 };
 
 /// A knob in `cap`'s look with its shaft at (`cx`, `cy`), a tight touch
 /// box, no printed legend (the unit letters its own); ticks in `ink`.
 #[allow(clippy::too_many_arguments)]
 pub fn knob(b: &mut Builder<'_>, parent: NodeId, cap: &Cap, addr: &str, name: &str, d: f64, cx: f64, cy: f64, ink: &str) -> NodeId {
     let p = Place::new(name).size(d).variant(cap.variant).bind(ui::bind(addr)).legend("").touch(TOUCH_MIN).options(cap.opts).ink(surface_kit::Ink::Color(ink.into()));
-    let k = ui::put(b, parent, cap.id, &p, cx, cy);
+    let k = ui::put(b, parent, cap.id, &p, cx, cy + cap.drop * d);
     ui::strip_legend(b, k);
     k
 }
