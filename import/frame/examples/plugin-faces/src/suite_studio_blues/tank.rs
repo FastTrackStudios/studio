@@ -27,6 +27,13 @@ fn screw(b: &mut Builder<'_>, parent: NodeId, cx: f64, cy: f64) {
     b.add(parent, draw::circle("screw head", cx, cy, 5.5, draw::radial_at(0.4, 0.35, 0.9, &[(0.0, "#8a8f9c"), (1.0, "#2a2d36")])));
 }
 
+/// A bracket over a section name, its ticks reaching up to the controls.
+fn bracket_up(b: &mut Builder<'_>, parent: NodeId, x0: f64, x1: f64, y: f64, ticks: &[f64]) {
+    let mut lines = vec![vec![(x0, y), (x1, y)]];
+    lines.extend(ticks.iter().map(|x| vec![(*x, y), (*x, y - 9.0)]));
+    b.add(parent, ui::strokes("bracket", &lines, 1.6, draw::solid(DIM)));
+}
+
 /// A bracket under a section name: a rule with ticks down at `ticks`.
 fn bracket(b: &mut Builder<'_>, parent: NodeId, x0: f64, x1: f64, y: f64, ticks: &[f64]) {
     let mut lines = vec![vec![(x0, y), (x1, y)]];
@@ -201,7 +208,7 @@ pub fn spring_tank_compact(t: &Tank, file: &'static str, w: f64, h: f64) -> Face
         }
         // The mesh window in its copper surround, across the top: the
         // unit's face, kept whole.
-        let (mx, my, mw, mh) = (22.0, 18.0, w - 44.0, h * 0.24);
+        let (mx, my, mw, mh) = (22.0, 18.0, w - 44.0, h * 0.3);
         b.add(case, draw::with_effects(draw::rounded(draw::rect("surround", mx - 4.0, my - 4.0, mw + 8.0, mh + 8.0, draw::linear(180.0, &[(0.0, "#f2c7a6"), (0.5, "#c98a66"), (1.0, "#f0c09c")])), 14.0), vec![draw::drop_shadow("#00000080", 0.0, 2.0, 4.0)]));
         let mesh = Place { options: Some(vec![format!("w={mw}"), format!("h={mh}"), "r=11".into()]), ..Place::new("Mesh").variant("mesh") };
         let m = ui::put_at(b, case, "panel.amp_grille", &mesh, mx, my);
@@ -211,10 +218,13 @@ pub fn spring_tank_compact(t: &Tank, file: &'static str, w: f64, h: f64) -> Face
         for e in light::edge("mesh recess", (mx, my, mw, mh), 11.0, 4.0, 1.2, false) {
             b.add(case, e);
         }
-        let d = (h * 0.36).min(w * 0.13);
-        let row = my + mh + 14.0 + d * 0.5;
-        let label_y = row + d * 0.5 + 14.0;
-        let section_y = h - 20.0;
+        // From the bottom up: the section names, their brackets reaching up
+        // to the knobs, the knobs' names, the knobs.
+        let d = (h * 0.34).min(w * 0.13);
+        let section_y = h - 16.0;
+        let bracket_y = section_y - 16.0;
+        let label_y = bracket_y - 16.0;
+        let row = label_y - 14.0 - d * 0.5;
         // Tremolo: on, intensity, speed.
         print(b, case, "ON", w * 0.05, row - 30.0, 11.0, INK, 500.0, 0.08);
         toggle(b, case, t.trem_on, "Tremolo", 22.0, w * 0.05, row);
@@ -232,9 +242,8 @@ pub fn spring_tank_compact(t: &Tank, file: &'static str, w: f64, h: f64) -> Face
         toggle(b, case, t.verb_on, "Reverb", 22.0, w * 0.95, row);
         print(b, case, "OFF", w * 0.95, row + 30.0, 11.0, INK, 500.0, 0.08);
         // The sections named along the bottom, bracketed as on the unit.
-        let by = section_y - 14.0;
-        bracket(b, case, w * 0.03, w * 0.4, by, &[w * 0.03, w * 0.4]);
-        bracket(b, case, w * 0.46, w * 0.97, by, &[w * 0.46, w * 0.97]);
+        bracket_up(b, case, w * 0.03, w * 0.4, bracket_y, &[w * 0.03, w * 0.4]);
+        bracket_up(b, case, w * 0.46, w * 0.97, bracket_y, &[w * 0.46, w * 0.97]);
         print(b, case, "Harmonic Tremolo", w * 0.215, section_y, 13.0, INK, 500.0, 0.03);
         print(b, case, "Spring Reverb", w * 0.715, section_y, 13.0, INK, 500.0, 0.03);
     });
