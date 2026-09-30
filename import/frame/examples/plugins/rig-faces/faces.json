@@ -194,6 +194,14 @@
       392.0
     ]
   },
+  "filter_picture": {
+    "face": "32-filter-viz",
+    "ns": "qtron",
+    "size": [
+      300.0,
+      286.0
+    ]
+  },
   "gate": {
     "face": "51-gate",
     "ns": "gate",
@@ -202,6 +210,30 @@
       392.0
     ]
   },
+  "input": [
+    {
+      "face": "30-wah-cry-baby",
+      "match": [
+        "wah"
+      ],
+      "ns": "wah",
+      "size": [
+        190.0,
+        286.0
+      ]
+    },
+    {
+      "face": "31-filter-q-tron",
+      "match": [
+        "filter"
+      ],
+      "ns": "qtron",
+      "size": [
+        240.0,
+        286.0
+      ]
+    }
+  ],
   "pictures": [
     {
       "face": "53-spring-viz",

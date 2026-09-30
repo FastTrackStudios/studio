@@ -207,6 +207,10 @@ fn pre_entries() -> Vec<Face> {
     vec![d(drives::aqua_puss()), trem, spring]
 }
 
+fn d_(f: Face) -> Face {
+    Face { plugin: PLUGIN, ..f }
+}
+
 /// Every face in the set.
 #[must_use]
 pub fn faces() -> Vec<Face> {
@@ -217,6 +221,7 @@ pub fn faces() -> Vec<Face> {
     v.push(gate());
     v.push(eq());
     v.push(spring_viz());
+    v.extend([d_(drives::cry_baby()), d_(drives::q_tron()), d_(drives::filter_viz())]);
     v
 }
 
@@ -251,6 +256,12 @@ pub fn manifest() -> String {
         "amps": amps,
         "gate": { "face": "51-gate", "ns": "gate", "size": size(&gate()) },
         "eq": { "face": "52-amp-eq", "ns": "eq", "size": size(&eq()) },
+        // The input stage's units, by block type, and the filter's picture.
+        "input": [
+            { "match": ["wah"], "face": "30-wah-cry-baby", "ns": "wah", "size": size(&drives::cry_baby()) },
+            { "match": ["filter"], "face": "31-filter-q-tron", "ns": "qtron", "size": size(&drives::q_tron()) },
+        ],
+        "filter_picture": { "face": "32-filter-viz", "ns": "qtron", "size": size(&drives::filter_viz()) },
         // Pictures of a block, beside its unit: a reverb's springs.
         "pictures": [ { "match": ["reverb"], "face": "53-spring-viz", "ns": "spring", "size": size(&spring_viz()) } ],
     });

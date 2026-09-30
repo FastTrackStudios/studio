@@ -18,6 +18,8 @@ use surface_kit::Place;
 use surface_kit::draw::{self, Lettering, family};
 use surface_proto::{Binding, ButtonMode, Control, ControlKind, Range, SlotRole, Unit};
 use surface_widgets::Builder;
+use document_proto::motion::{Dynamics, Motion, Num, Target, Wave};
+use surface_kit::motion;
 
 use crate::comp_tube::ui as place;
 use crate::face::{Face, canvas};
@@ -397,6 +399,144 @@ pub fn aqua_puss() -> Face {
         on(NS),
     ];
     Face { file: "17-pedal-aqua-puss", plugin: PLUGIN, scene, params, streams: Vec::new() }
+}
+
+/// A Cry Baby wah: the black body, the chrome rocker with its ribbed
+/// rubber tread and script badge, the rocker's travel as a long fader down
+/// the tread (heel at the bottom, toe at the top), the toe switch.
+#[must_use]
+pub fn cry_baby() -> Face {
+    const W: f64 = 190.0;
+    const NS: &str = "wah";
+    let scene = canvas("Cry Baby", |b, root| {
+        let (lid, lw, lh) = enclosure(b, root, W, "#141416", "powder", &["jack_inset=8", "front=0", "radius=12"]);
+        led(b, lid, NS, lw * 0.5, 10.0, 5.0, "#e0281c");
+        // The rocker: chrome, the tread on it.
+        let (rx, ry, rw, rh) = (10.0, 22.0, lw - 20.0, lh - 34.0);
+        let rocker = draw::rounded(draw::rect("rocker", rx, ry, rw, rh, draw::linear(90.0, &[(0.0, "#6e7075"), (0.2, "#e6e8ea"), (0.5, "#a9acb0"), (0.8, "#eef0f2"), (1.0, "#6e7075")])), 10.0);
+        b.add(lid, draw::with_effects(rocker, vec![draw::drop_shadow("#000000b0", 0.0, 3.0, 6.0)]));
+        let tread = draw::rounded(draw::rect("tread", rx + 10.0, ry + 10.0, rw - 20.0, rh - 60.0, draw::linear(180.0, &[(0.0, "#26272a"), (1.0, "#101113")])), 6.0);
+        b.add(lid, tread);
+        let ribs: Vec<Vec<(f64, f64)>> = (0..14).map(|i| {
+            let y = ry + 18.0 + f64::from(i) * (rh - 76.0) / 13.0;
+            vec![(rx + 16.0, y), (rx + rw - 16.0, y)]
+        }).collect();
+        b.add(lid, ui::strokes("ribs", &ribs, 2.0, draw::solid("#34363a")));
+        let script = Lettering::family(family::PACIFICO);
+        set(b, lid, "cry baby", lw * 0.5, ry + rh - 26.0, 22.0, "#111", &script, 0.0);
+        // The rocker's travel: toe down is the top.
+        let p = Place::new("Position").size(rh - 90.0).variant("black").legend("").bind(ui::bind(&format!("{NS}/position"))).options(&["touch=44"]);
+        place::centred_at(b, lid, "lever.fader", &p, lw * 0.5, ry + 10.0 + (rh - 60.0) / 2.0);
+    });
+    let params = vec![
+        ui::param(&format!("{NS}/position"), "Position", Range::linear(0.0, 1.0, Unit::None), 0.5).featured(),
+        on(NS),
+    ];
+    Face { file: "30-wah-cry-baby", plugin: PLUGIN, scene, params, streams: Vec::new() }
+}
+
+/// The Q-Tron: the silver box, GAIN and PEAK, the MODE (LP / BP / HP),
+/// RANGE and DRIVE switches, the name in heavy blue.
+#[must_use]
+pub fn q_tron() -> Face {
+    const W: f64 = 240.0;
+    const NS: &str = "qtron";
+    const INK: &str = "#1a2a52";
+    let scene = canvas("Q-Tron", |b, root| {
+        let (lid, lw, lh) = enclosure(b, root, W, "#c9ccd1", "brushed", &["jack_inset=10"]);
+        led(b, lid, NS, lw * 0.5, 10.0, 5.0, "#e0281c");
+        for (i, (id, name)) in [("gain", "GAIN"), ("peak", "PEAK")].iter().enumerate() {
+            let cx = lw * (0.27 + 0.46 * i as f64);
+            knob(b, lid, "flat", &["color=#141416", "pointer=#f2f2f4", "index=line", "index_w=0.1", "skirt=plain", "skirt_color=#0c0c0d"], &format!("{NS}/{id}"), name, 60.0, cx, lh * 0.2);
+            parts::print(b, lid, name, cx, lh * 0.2 + 40.0, 9.0, INK, 800.0, 0.1);
+        }
+        for (i, (id, name)) in [("mode", "MODE"), ("range", "RANGE"), ("drive", "DRIVE")].iter().enumerate() {
+            let cx = lw * (0.2 + 0.3 * i as f64);
+            parts::print(b, lid, name, cx, lh * 0.4, 8.0, INK, 800.0, 0.08);
+            let id_full = format!("{NS}/{id}");
+            if *id == "mode" {
+                let t = Place::new("Mode").size(20.0).variant("chrome").bind(ui::bind(&id_full)).legend("").options(&["touch=44"]);
+                place::centred_at(b, lid, "switch.brass_toggle3", &t, cx, lh * 0.47);
+            } else {
+                parts::toggle(b, lid, &id_full, name, 12.0, cx, lh * 0.47);
+            }
+        }
+        let heavy = Lettering::family(family::OSWALD).weight(700.0);
+        set(b, lid, "Q-TRON", lw * 0.5, lh * 0.59, 32.0, INK, &heavy, 0.06);
+        parts::print(b, lid, "ENVELOPE CONTROLLED FILTER", lw * 0.5, lh * 0.69, 6.5, INK, 700.0, 0.1);
+        stomp(b, lid, NS, 32.0, lw * 0.5, lh * 0.8);
+        parts::print(b, lid, "electro-harmonix", lw * 0.5, lh * 0.93, 8.0, INK, 700.0, 0.06);
+    });
+    let params = vec![
+        ui::param(&format!("{NS}/gain"), "Gain", Range::linear(0.0, 1.0, Unit::None), 0.5).featured(),
+        ui::param(&format!("{NS}/peak"), "Peak", Range::linear(0.0, 1.0, Unit::None), 0.6).featured(),
+        ui::choice(&format!("{NS}/mode"), "Mode", &["LP", "BP", "HP"], 1),
+        ui::toggle(&format!("{NS}/range"), "Range high", false),
+        ui::toggle(&format!("{NS}/drive"), "Drive up", true),
+        on(NS),
+    ];
+    Face { file: "31-filter-q-tron", plugin: PLUGIN, scene, params, streams: Vec::new() }
+}
+
+/// What the Q-Tron is doing: a dark screen on a log-frequency grid, the
+/// filter's resonant peak riding up and down it with the envelope (the
+/// input's level, gained by GAIN — idling on a slow sweep with no input),
+/// narrower and taller with PEAK, starting higher with RANGE.
+#[must_use]
+pub fn filter_viz() -> Face {
+    const W: f64 = 300.0;
+    const H: f64 = 286.0;
+    let scene = canvas("Filter picture", |b, root| {
+        ui::fit_root(b, root, W, H);
+        let mut screen = draw::frame("Screen", 0.0, 0.0, W, H);
+        screen.fills = vec![draw::linear(180.0, &[(0.0, "#0c1220"), (1.0, "#060a12")])];
+        screen.clips_content = true;
+        screen.corner_radii = CornerRadii::uniform(8.0);
+        let screen = b.add(root, screen);
+        // The grid: octaves across, levels up.
+        let mut grid = Vec::new();
+        for i in 1..10 {
+            let x = W * f64::from(i) / 10.0;
+            grid.push(vec![(x, 12.0), (x, H - 22.0)]);
+        }
+        for i in 1..4 {
+            let y = 12.0 + (H - 34.0) * f64::from(i) / 4.0;
+            grid.push(vec![(0.0, y), (W, y)]);
+        }
+        b.add(screen, ui::strokes("grid", &grid, 1.0, draw::solid("#ffffff10")));
+        for (i, l) in ["100", "300", "1k", "3k"].iter().enumerate() {
+            b.add(screen, draw::text("freq", l, W * (0.12 + 0.22 * i as f64), H - 18.0, 30.0, 8.0, "#6b7a99", document_proto::TextAlign::Left));
+        }
+        // The response: a band-pass bump, drawn once across twice the
+        // screen and slid under it by the sweep.
+        let (floor, base) = (H - 30.0, H * 0.55);
+        let pts: Vec<(f64, f64)> = (0..=120)
+            .map(|i| {
+                let x = -W * 0.5 + 2.0 * W * f64::from(i) / 120.0;
+                let d = (x - W * 0.5) / (W * 0.12);
+                let y = floor - (floor - base) * 0.2 - (floor - 30.0) * 0.8 / (1.0 + d * d);
+                (x, y)
+            })
+            .collect();
+        let curve = b.add(screen, draw::frame("Response", 0.0, 0.0, W, H));
+        let mut fill = pts.clone();
+        fill.push((1.5 * W, floor));
+        fill.push((-0.5 * W, floor));
+        b.add(curve, draw::path("area", 0.0, 0.0, W, H, draw::polygon(&fill), draw::linear(180.0, &[(0.0, "#4dd0ff55"), (1.0, "#4dd0ff05")])));
+        b.add(curve, draw::emissive(ui::strokes("line", &[pts], 2.2, draw::solid("#8fe3ff")), draw::hex("#4dd0ff"), 0.6, 8.0));
+        // The sweep: the envelope, or a slow idle sweep with no input.
+        motion::add(b, curve, Motion::new(Target::None).named("idle").dynamics(Dynamics::Lfo { rate: Num::Value(0.35), shape: Wave::Sine, phase: 0.0 }));
+        let sweep = format!("({span}) * (0.15*norm(qtron/range) + or(level(qtron/in) * (0.3 + norm(qtron/gain)), 0.5 + 0.35*motion(idle))) - {half}", span = W * 0.8, half = W * 0.4);
+        motion::add(b, curve, Motion::new(Target::X).input(sweep).dynamics(Dynamics::spring(400.0, 30.0)));
+        motion::add(b, curve, Motion::new(Target::StretchY).input("0.6 + 0.7*norm(qtron/peak)").dynamics(Dynamics::spring(400.0, 30.0)));
+        b.add(screen, draw::text("title", "FILTER", 10.0, 8.0, 80.0, 9.0, "#8fa3c8", document_proto::TextAlign::Left));
+    });
+    let params = vec![
+        ui::param("qtron/gain", "Gain", Range::linear(0.0, 1.0, Unit::None), 0.5),
+        ui::param("qtron/peak", "Peak", Range::linear(0.0, 1.0, Unit::None), 0.6),
+        ui::toggle("qtron/range", "Range high", false),
+    ];
+    Face { file: "32-filter-viz", plugin: PLUGIN, scene, params, streams: Vec::new() }
 }
 
 /// The four, in chain order.
