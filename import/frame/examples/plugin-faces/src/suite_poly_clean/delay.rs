@@ -10,7 +10,7 @@ use document_proto::{NodeId, NodeKind, TextAlign};
 use surface_proto::{ButtonMode, Control, ControlKind, Range, SlotRole, Unit, ValueFormat};
 use surface_widgets::Builder;
 
-use super::parts::{self, BIG_W, PEDAL_H, jacks, knob, pedal, switch, word};
+use super::parts::{self, BIG_W, BLACK, PEDAL_H, jacks, knob, pedal, switch, word};
 use super::PLUGIN;
 use crate::face::{Face, canvas};
 use crate::reverb::ui;
@@ -92,7 +92,10 @@ pub fn face() -> Face {
             if let Some(v) = b.controls.get(&r).and_then(|c| c.slots_of(SlotRole::Value).next()).map(NodeId)
                 && let Some(NodeKind::Text(t)) = b.scene.node_mut(v).map(|n| &mut n.kind)
             {
-                t.font_weight = Some(500.0);
+                // The LCD's own dot-matrix characters.
+                t.font_family = Some(surface_kit::draw::family::DOTO.into());
+                t.font_weight = Some(800.0);
+                t.font_size *= 1.25;
             }
         }
         // Lines from the LCD down to time and amount.
@@ -105,12 +108,12 @@ pub fn face() -> Face {
         let k = 34.0;
         word(b, lid, "mix", px(103.0), py(80.0), 10.5, INK, 500.0, 0.08);
         word(b, lid, "feedback", px(731.0), py(80.0), 10.5, INK, 500.0, 0.08);
-        knob(b, lid, "knob.gold_knurl", "black", "delay/mix", "Mix", k, px(106.0), py(150.0));
-        knob(b, lid, "knob.gold_knurl", "black", "delay/feedback", "Feedback", k, px(731.0), py(150.0));
-        knob(b, lid, "knob.gold_knurl", "black", "delay/lowcut", "Low Cut", k, px(106.0), py(300.0));
-        knob(b, lid, "knob.gold_knurl", "black", "delay/time", "Time", k, px(313.0), py(300.0));
-        knob(b, lid, "knob.gold_knurl", "black", "delay/amount", "Amount", k, px(525.0), py(300.0));
-        knob(b, lid, "knob.gold_knurl", "black", "delay/highcut", "High Cut", k, px(731.0), py(300.0));
+        knob(b, lid, &BLACK, "delay/mix", "Mix", k, px(106.0), py(150.0), "#2a1d0c");
+        knob(b, lid, &BLACK, "delay/feedback", "Feedback", k, px(731.0), py(150.0), "#2a1d0c");
+        knob(b, lid, &BLACK, "delay/lowcut", "Low Cut", k, px(106.0), py(300.0), "#2a1d0c");
+        knob(b, lid, &BLACK, "delay/time", "Time", k, px(313.0), py(300.0), "#2a1d0c");
+        knob(b, lid, &BLACK, "delay/amount", "Amount", k, px(525.0), py(300.0), "#2a1d0c");
+        knob(b, lid, &BLACK, "delay/highcut", "High Cut", k, px(731.0), py(300.0), "#2a1d0c");
         parts::cut_glyph(b, lid, px(106.0), py(385.0), 14.0, true, INK);
         parts::cut_glyph(b, lid, px(731.0), py(385.0), 14.0, false, INK);
         word(b, lid, "time", px(313.0), py(392.0), 10.5, INK, 500.0, 0.08);
@@ -123,12 +126,12 @@ pub fn face() -> Face {
         word(b, lid, "delay", px(419.0), py(530.0), 22.0, INK, 600.0, 0.1);
     });
     let params = vec![
-        parts::pct(NS, "mix", "Mix", 30.0).featured(),
-        parts::pct(NS, "feedback", "Feedback", 50.0).featured(),
+        parts::pct(NS, "mix", "Mix", 55.0).featured(),
+        parts::pct(NS, "feedback", "Feedback", 55.0).featured(),
         ui::param("delay/time", "Time", Range::log(20.0, 2000.0, Unit::Milliseconds), 375.0).featured(),
-        parts::pct(NS, "amount", "Amount", 25.0),
-        parts::hz(NS, "lowcut", "Low Cut", 20.0, 1000.0, 80.0),
-        parts::hz(NS, "highcut", "High Cut", 1000.0, 20000.0, 8000.0),
+        parts::pct(NS, "amount", "Amount", 50.0),
+        parts::hz(NS, "lowcut", "Low Cut", 20.0, 1000.0, 23.0),
+        parts::hz(NS, "highcut", "High Cut", 1000.0, 20000.0, 17500.0),
         ui::param("delay/tempo", "Tempo", Range::linear(40.0, 240.0, Unit::None), 120.0),
         parts::pick(NS, "sync", "Sync", &["Tap", "DAW", "Free"], 0),
         parts::pick(NS, "mode", "Mode", &["Wide", "Ping Pong", "Normal"], 2),

@@ -6,10 +6,10 @@
 
 use document_proto::{CornerRadii, NodeId, TextAlign};
 use surface_kit::{Place, draw};
-use surface_proto::{ButtonMode, Control, ControlKind, ParamInfo, Range, SlotRole, Unit};
+use surface_proto::{ButtonMode, Condition, Control, ControlKind, ParamAddr, ParamInfo, Range, SlotRole, Unit, ValueFormat};
 use surface_widgets::Builder;
 
-use super::parts::{self, knob_with};
+use super::parts::{self, knob};
 use super::PLUGIN;
 use crate::face::{Face, canvas};
 use crate::reverb::ui;
@@ -24,13 +24,35 @@ const INK: &str = "#4a2a35";
 
 /// A plain live value (a `Readout`'s `Value` text) centred on (`cx`, `cy`).
 #[allow(clippy::too_many_arguments)]
-fn value(b: &mut Builder<'_>, parent: NodeId, name: &str, addr: &str, cx: f64, cy: f64, w: f64, size: f64) -> NodeId {
+fn value(b: &mut Builder<'_>, parent: NodeId, name: &str, addr: &str, cx: f64, cy: f64, w: f64, size: f64, format: Option<ValueFormat>, show_if: Option<Condition>) -> NodeId {
     let root = b.add(parent, draw::frame(name, cx - w / 2.0, cy - size, w, size * 2.0));
-    let t = b.add(root, ui::text("value", "", 0.0, size, w, size, INK, TextAlign::Center, 500.0, false));
+    let t = b.add(root, draw::lettered(ui::text("value", "", 0.0, size, w, size, INK, TextAlign::Center, 500.0, false), &parts::Hand::Ui.lettering(500.0)));
     let mut c = Control::new(ControlKind::Readout).slot(SlotRole::Value, t.0);
     c.binding = Some(ui::bind(addr));
+    c.format = format;
+    c.show_if = show_if;
     b.controls.insert(root, c);
     root
+}
+
+/// A filter's readout: its frequency while it cuts, `OFF` printed in its
+/// place while it rests at the end of its travel (`off_at`, from below for
+/// the high-pass, from above for the low-pass).
+#[allow(clippy::too_many_arguments)]
+fn cut_value(b: &mut Builder<'_>, parent: NodeId, name: &str, addr: &str, cx: f64, cy: f64, off_at: f64, high_pass: bool) {
+    let cutting = Condition { addr: ParamAddr::new(addr), any_of: Vec::new(), at_least: off_at, not: !high_pass };
+    value(b, parent, name, addr, cx, cy, 90.0, 10.0, None, Some(cutting.clone()));
+    let size = 10.0;
+    let root = b.add(parent, draw::frame(&format!("{name} off"), cx - 45.0, cy - size, 90.0, size * 2.0));
+    b.add(root, draw::lettered(ui::text("off", "OFF", 0.0, size, 90.0, size, INK, TextAlign::Center, 500.0, false), &parts::Hand::Ui.lettering(500.0)));
+    // Its value slot stays invisible: the lamp only has to print OFF.
+    let mut v = ui::text("value", "", 0.0, size, 90.0, size, INK, TextAlign::Center, 500.0, false);
+    v.opacity = 0.0;
+    let v = b.add(root, v);
+    let mut c = Control::new(ControlKind::Readout).slot(SlotRole::Value, v.0);
+    c.binding = Some(ui::bind(addr));
+    c.show_if = Some(cutting.negated());
+    b.controls.insert(root, c);
 }
 
 /// The power lever: a black capsule, its chrome ball at the right when on.
@@ -82,24 +104,24 @@ pub fn face() -> Face {
         b.add(body, draw::rect("bottom lip", 0.0, BODY_H - 6.0, W, 6.0, draw::linear(180.0, &[(0.0, "#a86a80"), (1.0, "#8d5569")])));
 
         // High-pass: its readout, the knee, the big knob, the power lever.
-        value(b, body, "HPF readout", "eq/hpf", 146.0, 32.0, 90.0, 10.0);
+        cut_value(b, body, "HPF readout", "eq/hpf", 146.0, 32.0, 20.5, true);
         parts::cut_glyph(b, body, 146.0, 60.0, 26.0, true, INK);
-        knob_with(b, body, "knob.amp_cap", "eq_pink", "eq/hpf", "High Pass", 98.0, 146.0, 139.0, &[], INK);
+        knob(b, body, &parts::EQ_PINK, "eq/hpf", "High Pass", 98.0, 146.0, 139.0, INK);
         lever(b, body, "eq/on", 146.0, 230.0);
         // Low-pass and the pilot.
-        value(b, body, "LPF readout", "eq/lpf", 951.0, 32.0, 90.0, 10.0);
+        cut_value(b, body, "LPF readout", "eq/lpf", 951.0, 32.0, 19_900.0, false);
         parts::cut_glyph(b, body, 951.0, 60.0, 26.0, false, INK);
-        knob_with(b, body, "knob.amp_cap", "eq_pink", "eq/lpf", "Low Pass", 98.0, 951.0, 139.0, &[], INK);
+        knob(b, body, &parts::EQ_PINK, "eq/lpf", "Low Pass", 98.0, 951.0, 139.0, INK);
         pilot(b, body, "eq/on", 951.0, 230.0);
 
         for ((id, label), x) in BANDS.iter().zip(XS) {
             let addr = format!("eq/g{id}");
-            value(b, body, &format!("{label} readout"), &addr, x, 32.0, 64.0, 10.0);
+            value(b, body, &format!("{label} readout"), &addr, x, 32.0, 64.0, 10.0, Some(ValueFormat::decimals(1).unit("db")), None);
             let p = Place::new(format!("{label} gain")).size(145.0).bind(ui::bind(&addr));
             let f = surface_kit::place(b, body, "lever.glow_cap", &p).unwrap_or_else(|e| panic!("{e}"));
             let fw = b.scene.node(f).map_or(0.0, |n| n.size.width);
             ui::move_to(b, f, x - fw / 2.0, 44.0);
-            parts::word(b, body, label, x, 247.0, 10.0, INK, 500.0, 0.08);
+            parts::print(b, body, label, x, 247.0, 10.0, INK, 500.0, 0.08);
         }
     });
     let mut params: Vec<ParamInfo> = BANDS.iter().map(|(id, label)| ui::param(&format!("{NS}/g{id}"), &format!("{label} Gain"), Range::linear(-12.0, 12.0, Unit::Db), 0.0).bipolar()).collect();
