@@ -20,12 +20,13 @@ use std::time::{Duration, Instant};
 
 use document_proto::{NodeId, PaintKind, Scene};
 use surface_proto::{Catalog, ParamAddr, ParamValue, Source as Binding};
-use surface_runtime::{Bounds, EngineCall, Input, Modifiers, Runtime, Surface};
+use surface_runtime::{Bounds, EngineCall, Input, Runtime, Surface};
 use vello::wgpu;
 use vello::{AaConfig, Renderer, RendererOptions};
 
 pub use render::fx::Mode;
 pub use surface_runtime::EngineCall as Call;
+pub use surface_runtime::Modifiers;
 
 /// How often to look at the files.
 const POLL: Duration = Duration::from_millis(250);
