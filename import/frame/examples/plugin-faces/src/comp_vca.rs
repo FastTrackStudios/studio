@@ -9,7 +9,7 @@
 //! ladder for the character compressor.
 
 mod bus_comp;
-mod character_comp;
+pub(crate) mod character_comp;
 mod logo;
 pub(crate) mod ui;
 mod vca_comp;

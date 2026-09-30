@@ -100,6 +100,26 @@ fn trio_as(aspect: f64, variant: bool) -> Face {
     Face { file, plugin: PLUGIN, scene, params, streams: Vec::new() }
 }
 
+/// The post compressor: the Distressor's 1U front on the rig's Post Comp
+/// block. INPUT is the unit's own 0–10 (signal drives the threshold from
+/// it, −6 dB a step), OUTPUT the block's level, the ratio lamps the
+/// block's ratio (by the table in `faces.json`), IN its bypass.
+fn post_comp() -> Face {
+    use crate::comp_vca::character_comp as dist;
+    let scene = dist::unit("dist", "Distressor", "dist/input", "dist/level", "dist/on");
+    let params = vec![
+        ui::param("dist/input", "Input", Range::linear(0.0, 10.0, Unit::None), 6.7).featured(),
+        ui::param("dist/attack", "Attack", Range::log(0.1, 200.0, Unit::Milliseconds), 10.0).featured(),
+        ui::param("dist/release", "Release", Range::log(5.0, 1000.0, Unit::Milliseconds), 120.0).featured(),
+        ui::param("dist/level", "Output", Range::linear(-24.0, 12.0, Unit::Db), 0.0).featured(),
+        ui::choice("dist/ratio", "Ratio", dist::RATIO_NAMES, 3).featured(),
+        ui::choice("dist/detector", "Detector", &["Off", "HP", "HP+"], 0),
+        ui::choice("dist/audio", "Audio", &["Clean", "Dist 2", "Dist 3"], 0),
+        ui::toggle("dist/on", "In", true).featured(),
+    ];
+    Face { file: "55-post-comp-distressor", plugin: PLUGIN, scene, params, streams: Vec::new() }
+}
+
 /// The gate's picture on the rig's Gate block.
 fn gate() -> Face {
     let scene = canvas("Gate", |b, root| {
@@ -241,6 +261,7 @@ pub fn faces() -> Vec<Face> {
     let mut v: Vec<Face> = drive_entries().into_iter().map(|(f, _, _)| f).collect();
     v.extend(pre_entries());
     v.push(trio());
+    v.push(post_comp());
     v.extend(AmpModel::EVERY.iter().map(|m| amp_face(*m)));
     v.extend(TRIO_ASPECTS.iter().map(|a| trio_as(*a, true)));
     v.extend(AmpModel::EVERY.iter().flat_map(|m| AMP_ASPECTS.iter().map(move |a| amp_face_as(*m, *a, true))));
@@ -283,6 +304,13 @@ pub fn manifest() -> String {
         "pre": pre,
         "amps": amps,
         "gate": { "face": "51-gate", "ns": "gate", "size": size(&gate()) },
+        // The post compressor's unit. `maps`: face params that aren't the
+        // block's own — `input` drives `threshold` (value × a + b), the
+        // ratio lamps' index picks `ratio` from the table.
+        "post_comp": { "face": "55-post-comp-distressor", "ns": "dist", "size": size(&post_comp()), "maps": [
+            { "face": "input", "param": "threshold", "linear": [-6.0, 0.0] },
+            { "face": "ratio", "param": "ratio", "table": [1.0, 2.0, 3.0, 4.0, 6.0, 10.0, 20.0, 20.0] },
+        ] },
         "eq": { "face": "52-amp-eq", "ns": "eq", "size": size(&eq()) },
         "cab": { "face": "54-cab-2x12", "ns": "cab", "size": size(&cab()) },
         // The input stage's units, by block type, and the filter's picture.

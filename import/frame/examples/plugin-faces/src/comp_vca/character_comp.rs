@@ -117,7 +117,35 @@ fn dial(b: &mut Builder<'_>, panel: NodeId, addr: &str, legend: &str, format: Op
 }
 
 pub fn face() -> Face {
-    let scene = canvas("Character Compressor", |b, root| {
+    let scene = unit("charcomp", "Character", "charcomp/input", "charcomp/output", "charcomp/in");
+    let params = vec![
+        ui::param("charcomp/input", "Input", surface_proto::Range::linear(0.0, 10.0, surface_proto::Unit::None), 5.0).featured(),
+        ui::ms("charcomp/attack", "Attack", 0.05, 50.0, 5.0).featured(),
+        ui::ms("charcomp/release", "Release", 50.0, 3500.0, 400.0).featured(),
+        ui::db("charcomp/output", "Output", -12.0, 24.0, 0.0).featured(),
+        ui::choice("charcomp/ratio", "Ratio", RATIOS, 3).featured(),
+        ui::choice("charcomp/detector", "Detector", &["Off", "HP", "HP+"], 0),
+        ui::choice("charcomp/audio", "Audio", &["Clean", "Dist 2", "Dist 3"], 0),
+        ui::toggle("charcomp/in", "In", true),
+    ];
+    let streams = vec![ui::gr_stream("charcomp/gr", "Gain Reduction")];
+    Face { file: "10-character-comp", plugin: "comp", scene, params, streams }
+}
+
+/// The unit's size (a 1U front).
+pub const SIZE: (f64, f64) = (W, H);
+
+/// The ratio lamps' order, for a host mapping them to its own ratios.
+pub const RATIO_NAMES: &[&str] = RATIOS;
+
+/// The unit's front, its controls under `ns/` (`attack`, `release`,
+/// `ratio`, `detector`, `audio`, `in`, the `gr` stream), its logotype
+/// `name`, its INPUT and OUTPUT dials bound to `input` and `output` (a
+/// host may drive a threshold and a level with them) and its IN key to
+/// `on`.
+pub fn unit(ns: &str, name: &str, input: &str, output: &str, on: &str) -> document_proto::Scene {
+    let a = |id: &str| format!("{ns}/{id}");
+    canvas("Character Compressor", |b, root| {
         ui::fit_root(b, root, W, H);
         let panel = ui::panel(b, root, "panel.painted", "black", W, H, "ears");
         if let Some(n) = b.scene.node_mut(panel) {
@@ -133,13 +161,13 @@ pub fn face() -> Face {
         // ── The name, set as the unit's logotype (big, heavy, slanted
         // white), and the IN key ─────────────────────────────────────
         let script = logo::Style { size: 34.0, weight: 800.0, italic: true, tracking: -0.02 };
-        logo::mark(b, panel, "Character", fx(0.057), 62.0, 200.0, script, "#f2f2f0", TextAlign::Left);
+        logo::mark(b, panel, name, fx(0.057), 62.0, 200.0, script, "#f2f2f0", TextAlign::Left);
         let dimple = grey_key(b, panel, fx(0.2), 67.0, 44.0, 20.0, true);
         b.add(panel, dimple);
-        lamp_toggle(b, panel, "charcomp/in", fx(0.2) - 24.0, fx(0.245), 67.0);
+        lamp_toggle(b, panel, on, fx(0.2) - 24.0, fx(0.245), 67.0);
 
         // ── Gain reduction: 16 lamps, numbers above ────────────────────
-        let ladder = Place::new("Gain Reduction").size(23.7 * LADDER.len() as f64).scale(LADDER).options(&["gr", LADDER_COLORS]).reversed().bind(Binding::stream("charcomp/gr"));
+        let ladder = Place::new("Gain Reduction").size(23.7 * LADDER.len() as f64).scale(LADDER).options(&["gr", LADDER_COLORS]).reversed().bind(Binding::stream(a("gr")));
         let lad = ui::put(b, panel, "meter.led_ladder", &ladder, fx(0.2325), 30.0);
         for id in b.scene.walk(lad) {
             if let Some(n) = b.scene.node_mut(id)
@@ -161,7 +189,7 @@ pub fn face() -> Face {
                 ((x, 110.0), (x, 97.0), (x - 17.0, 89.0, 34.0, 28.0))
             })
             .collect();
-        lamp_select(b, panel, "charcomp/ratio", RATIOS, RATIO_COLORS, &cells, 8.0);
+        lamp_select(b, panel, &a("ratio"), RATIOS, RATIO_COLORS, &cells, 8.0);
         header(b, panel, "Ratio", fx(0.216), 124.0, 11.0);
         // The unlit REDLINE and 1% THD lamps, by their sine.
         let sx = fx(0.297);
@@ -185,8 +213,8 @@ pub fn face() -> Face {
 
         // ── Detector and audio: lamp columns over grey keys ────────────
         for (addr, opts, colors, keyx, legend) in [
-            ("charcomp/detector", &["Off", "HP", "HP+"], &["#46e05a", "#f6d43c", "#ff3b2f"], fx(0.391), "Detector"),
-            ("charcomp/audio", &["Clean", "Dist 2", "Dist 3"], &["#46e05a", "#f6d43c", "#ff3b2f"], fx(0.443), "Audio"),
+            (a("detector"), &["Off", "HP", "HP+"], &["#46e05a", "#f6d43c", "#ff3b2f"], fx(0.391), "Detector"),
+            (a("audio"), &["Clean", "Dist 2", "Dist 3"], &["#46e05a", "#f6d43c", "#ff3b2f"], fx(0.443), "Audio"),
         ] {
             let lx = keyx + 18.0;
             let cells: Vec<_> = (0..3)
@@ -195,7 +223,7 @@ pub fn face() -> Face {
                     ((lx, y), (lx - 26.0, y), (lx - 48.0, y - 10.0, 56.0, 20.0))
                 })
                 .collect();
-            lamp_select(b, panel, addr, opts, colors, &cells, 8.5);
+            lamp_select(b, panel, &addr, opts, colors, &cells, 8.5);
             let d = grey_key(b, panel, keyx, 94.0, 36.0, 20.0, false);
             b.add(panel, d);
             header(b, panel, legend, keyx, 114.0, 10.5);
@@ -203,13 +231,13 @@ pub fn face() -> Face {
 
         // ── The dials ──────────────────────────────────────────────────
         for (addr, legend, format, f, hx) in [
-            ("charcomp/input", "Input", Some(ValueFormat::decimals(1)), 0.517, 0.4875),
-            ("charcomp/attack", "Attack", Some(ValueFormat::decimals(1)), 0.622, 0.592),
-            ("charcomp/release", "Release", None, 0.727, 0.696),
-            ("charcomp/output", "Output", Some(ValueFormat::decimals(1)), 0.833, 0.803),
+            (input.to_string(), "Input", Some(ValueFormat::decimals(1)), 0.517, 0.4875),
+            (a("attack"), "Attack", Some(ValueFormat::decimals(1)), 0.622, 0.592),
+            (a("release"), "Release", None, 0.727, 0.696),
+            (output.to_string(), "Output", Some(ValueFormat::decimals(1)), 0.833, 0.803),
         ] {
             header(b, panel, legend, fx(hx), HEADER, 11.5);
-            dial(b, panel, addr, legend, format, fx(f));
+            dial(b, panel, &addr, legend, format, fx(f));
         }
 
         // ── Power ──────────────────────────────────────────────────────
@@ -225,20 +253,7 @@ pub fn face() -> Face {
         );
         let rocker = draw::rect("rocker", px - 12.0, py - 25.0, 24.0, 50.0, draw::linear(180.0, &[(0.0, "#3a3b3e"), (0.48, "#1d1e20"), (0.52, "#0d0d0e"), (1.0, "#1a1b1d")]));
         b.add(panel, draw::with_effects(draw::rounded(rocker, 1.5), vec![draw::inner_shadow("#ffffff26", 0.0, 1.0, 0.0)]));
-    });
-
-    let params = vec![
-        ui::param("charcomp/input", "Input", surface_proto::Range::linear(0.0, 10.0, surface_proto::Unit::None), 5.0).featured(),
-        ui::ms("charcomp/attack", "Attack", 0.05, 50.0, 5.0).featured(),
-        ui::ms("charcomp/release", "Release", 50.0, 3500.0, 400.0).featured(),
-        ui::db("charcomp/output", "Output", -12.0, 24.0, 0.0).featured(),
-        ui::choice("charcomp/ratio", "Ratio", RATIOS, 3).featured(),
-        ui::choice("charcomp/detector", "Detector", &["Off", "HP", "HP+"], 0),
-        ui::choice("charcomp/audio", "Audio", &["Clean", "Dist 2", "Dist 3"], 0),
-        ui::toggle("charcomp/in", "In", true),
-    ];
-    let streams = vec![ui::gr_stream("charcomp/gr", "Gain Reduction")];
-    Face { file: "10-character-comp", plugin: "comp", scene, params, streams }
+    })
 }
 
 /// The IN key's lamp and legend: a toggle whose `Led` is the lamp, over the

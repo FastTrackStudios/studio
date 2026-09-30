@@ -1108,6 +1108,38 @@
       ]
     }
   ],
+  "post_comp": {
+    "face": "55-post-comp-distressor",
+    "maps": [
+      {
+        "face": "input",
+        "linear": [
+          -6.0,
+          0.0
+        ],
+        "param": "threshold"
+      },
+      {
+        "face": "ratio",
+        "param": "ratio",
+        "table": [
+          1.0,
+          2.0,
+          3.0,
+          4.0,
+          6.0,
+          10.0,
+          20.0,
+          20.0
+        ]
+      }
+    ],
+    "ns": "dist",
+    "size": [
+      1500.0,
+      136.0
+    ]
+  },
   "pre": [
     {
       "face": "17-pedal-aqua-puss",
