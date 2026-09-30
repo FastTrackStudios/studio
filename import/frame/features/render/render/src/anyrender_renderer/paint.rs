@@ -697,7 +697,7 @@ pub fn paint_primitives_into_scene_with(
                         let mut run = scene
                             .draw_glyphs(&font_data(&face.face))
                             .font_size(g.size as f32)
-                            .hint(true)
+                            .hint(false)
                             .normalized_coords(&face.coords)
                             .brush(to_peniko(g.color.clone()))
                             .brush_alpha(1.0)

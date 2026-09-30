@@ -79,11 +79,41 @@ impl View {
     }
 }
 
+thread_local! {
+    /// One vello renderer per device for every surface on this thread: its
+    /// pipelines and buffers are the heavy part, and a host drawing twenty
+    /// faces needs them once, not twenty times.
+    static SHARED: std::cell::RefCell<Option<(wgpu::Device, std::rc::Rc<std::cell::RefCell<Renderer>>)>> = const { std::cell::RefCell::new(None) };
+}
+
+/// This thread's renderer for `device`, made on first use.
+fn shared_renderer(device: &wgpu::Device) -> Result<std::rc::Rc<std::cell::RefCell<Renderer>>, String> {
+    SHARED.with(|slot| {
+        let mut slot = slot.borrow_mut();
+        if let Some((d, r)) = slot.as_ref()
+            && d == device
+        {
+            return Ok(std::rc::Rc::clone(r));
+        }
+        let renderer = Renderer::new(
+            device,
+            RendererOptions { use_cpu: false, antialiasing_support: [AaConfig::Area].into_iter().collect(), num_init_threads: None, pipeline_cache: None },
+        )
+        .map_err(|e| format!("renderer: {e}"))?;
+        let r = std::rc::Rc::new(std::cell::RefCell::new(renderer));
+        *slot = Some((device.clone(), std::rc::Rc::clone(&r)));
+        Ok(r)
+    })
+}
+
 /// The GPU half, on the host's device.
 struct Gpu {
     device: wgpu::Device,
     queue: wgpu::Queue,
-    renderer: Renderer,
+    renderer: std::rc::Rc<std::cell::RefCell<Renderer>>,
+    /// The next frame checks vello's buffers (the first, and after a
+    /// resize or a reload); the rest render straight through.
+    check_next: bool,
     stage: render::fx::Stage,
     /// The host's texture, which the frame is copied into.
     target: Option<(wgpu::Texture, (u32, u32))>,
@@ -111,10 +141,15 @@ pub struct LiveSurface {
     /// Something changed since the last render.
     dirty: bool,
     time_dependent: bool,
+    /// When the last render began, to pace clock-driven redraws.
+    rendered_at: Option<std::time::Instant>,
     error: Option<String>,
     /// Fill the element exactly rather than fit it (pictures).
     stretch: bool,
 }
+
+/// How often a face that only moves with the clock is rendered: 30 fps.
+pub const CLOCK_FRAME: std::time::Duration = std::time::Duration::from_millis(33);
 
 fn stamp(path: &Path) -> Option<u64> {
     document_io::fingerprint(path)
@@ -185,6 +220,7 @@ impl LiveSurface {
             calls: Vec::new(),
             dirty: true,
             time_dependent: false,
+            rendered_at: None,
             error: None,
         };
         me.install(Runtime::new(surface, cat))?;
@@ -269,6 +305,9 @@ impl LiveSurface {
                 match self.install(rt) {
                     Ok(()) => {
                         self.error = None;
+                        if let Some(g) = self.gpu.as_mut() {
+                            g.check_next = true;
+                        }
                         true
                     }
                     Err(e) => {
@@ -337,10 +376,14 @@ impl LiveSurface {
     }
 
     /// Whether the host should render again: something changed, a control
-    /// is animating, or a shader reads the clock.
+    /// is animating, or a shader reads the clock and a frame's time
+    /// ([`CLOCK_FRAME`]) has passed. A clock-driven face (an LFO lamp, an
+    /// idle sweep) is paced, not re-rendered at whatever rate the window
+    /// happens to redraw.
     #[must_use]
     pub fn needs_redraw(&self) -> bool {
-        self.dirty || self.time_dependent || self.rt.animating()
+        let clock_due = self.time_dependent && self.rendered_at.is_none_or(|at| at.elapsed() >= CLOCK_FRAME);
+        self.dirty || clock_due || self.rt.animating()
     }
 
     fn t(&self) -> f64 {
@@ -434,13 +477,9 @@ impl LiveSurface {
     /// # Errors
     /// When vello cannot build its pipelines on it.
     pub fn attach_gpu(&mut self, device: wgpu::Device, queue: wgpu::Queue) -> Result<(), String> {
-        let renderer = Renderer::new(
-            &device,
-            RendererOptions { use_cpu: false, antialiasing_support: [AaConfig::Area].into_iter().collect(), num_init_threads: None, pipeline_cache: None },
-        )
-        .map_err(|e| format!("renderer: {e}"))?;
+        let renderer = shared_renderer(&device)?;
         let stage = render::fx::Stage::new(&device);
-        self.gpu = Some(Gpu { device, queue, renderer, stage, target: None });
+        self.gpu = Some(Gpu { device, queue, renderer, check_next: true, stage, target: None });
         self.dirty = true;
         Ok(())
     }
@@ -465,6 +504,7 @@ impl LiveSurface {
     /// # Errors
     /// With no device attached, or when vello fails.
     pub fn render(&mut self, width: u32, height: u32, scale: f64) -> Result<(wgpu::Texture, bool), String> {
+        self.rendered_at = Some(std::time::Instant::now());
         let t = self.t();
         let calls = self.rt.poll(t);
         self.dispatch(calls);
@@ -487,9 +527,11 @@ impl LiveSurface {
             inputs: Some(&inputs),
             overlay: None,
             antialiasing: AaConfig::Area,
+            checked: gpu.check_next || gpu.target.as_ref().is_none_or(|(_, size)| *size != (w, h)),
             ..render::fx::Frame::new(&doc, self.page, w, h)
         };
-        let rendered = gpu.stage.render(&gpu.device, &gpu.queue, &mut gpu.renderer, &frame)?;
+        let rendered = gpu.stage.render(&gpu.device, &gpu.queue, &mut gpu.renderer.borrow_mut(), &frame)?;
+        gpu.check_next = false;
         self.time_dependent = gpu.stage.time_dependent();
         let fresh = !gpu.target.as_ref().is_some_and(|(_, size)| *size == (w, h));
         if fresh {

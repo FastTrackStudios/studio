@@ -347,6 +347,11 @@ impl Animator {
             .map(|(i, p)| ((p.node, p.slot), (p.sig(), std::mem::take(&mut self.states[i]), self.outputs[i])))
             .collect();
         self.compile(scene);
+        // A scene left with no motions is still: nothing will step it to
+        // say so (hosts skip an empty animator), so say it here.
+        if self.progs.is_empty() {
+            self.animating = false;
+        }
         let mut old = old;
         for (i, p) in self.progs.iter().enumerate() {
             if let Some((sig, st, out)) = old.remove(&(p.node, p.slot))

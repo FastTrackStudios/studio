@@ -38,6 +38,11 @@ pub struct Frame<'a> {
     /// Painted last, over everything (a status banner), in target px.
     pub overlay: Option<&'a vello::Scene>,
     pub antialiasing: AaConfig,
+    /// Check each vello pass for buffer overflow (a readback of one row,
+    /// which waits on the GPU) and band it if so. A live host drawing a
+    /// small surface every frame turns it off once the surface has drawn
+    /// whole.
+    pub checked: bool,
 }
 
 impl<'a> Frame<'a> {
@@ -59,6 +64,7 @@ impl<'a> Frame<'a> {
             inputs: None,
             overlay: None,
             antialiasing: AaConfig::Area,
+            checked: true,
         }
     }
 }
@@ -107,7 +113,7 @@ impl Stage {
                 let options = CollectOptions { emission_glow: frame.mode == Mode::Fallback };
                 let prims = build_scene_primitives_with(frame.doc, frame.root, options);
                 paint(&mut scene, &prims, frame, frame.overlay);
-                vello_into(renderer, device, queue, &scene, &out, frame.base, frame.antialiasing)
+                vello_into(frame.checked, renderer, device, queue, &scene, &out, frame.base, frame.antialiasing)
             }
             Mode::Gpu => self.render_gpu(device, queue, renderer, frame, &mut scene, &out),
         };
@@ -137,7 +143,7 @@ impl Stage {
 
         if regions.is_empty() {
             paint(scene, &prims, frame, frame.overlay);
-            vello_into(renderer, device, queue, scene, out, frame.base, aa)?;
+            vello_into(frame.checked, renderer, device, queue, scene, out, frame.base, aa)?;
         } else {
             let scratch = self.texture(device, "scratch", w, h, TARGET);
             let scratch_view = scratch.create_view(&wgpu::TextureViewDescriptor::default());
@@ -152,10 +158,10 @@ impl Stage {
                 let seg = slice_with_context(&prims, cursor..r.range.start);
                 if i == 0 {
                     paint(scene, &seg, frame, None);
-                    vello_into(renderer, device, queue, scene, out, frame.base, aa)?;
+                    vello_into(frame.checked, renderer, device, queue, scene, out, frame.base, aa)?;
                 } else if has_draws(&seg) {
                     paint(scene, &seg, frame, None);
-                    vello_into(renderer, device, queue, scene, &scratch, clear, aa)?;
+                    vello_into(frame.checked, renderer, device, queue, scene, &scratch, clear, aa)?;
                     let mut enc = encoder(device);
                     self.passes.blit_over(device, &mut enc, &scratch_view, &out_view);
                     queue.submit([enc.finish()]);
@@ -168,7 +174,7 @@ impl Stage {
                 if !generator {
                     let sub = slice_with_context(&prims, r.range.clone());
                     paint(scene, &sub, frame, None);
-                    vello_into(renderer, device, queue, scene, &scratch, clear, aa)?;
+                    vello_into(frame.checked, renderer, device, queue, scene, &scratch, clear, aa)?;
                 }
                 let src_view = if generator { blank_view.as_ref().unwrap_or(&scratch_view) } else { &scratch_view };
                 if let Some(pipeline) = self.passes.cached_effect(&r.shader) {
@@ -190,7 +196,7 @@ impl Stage {
             let tail = slice_with_context(&prims, cursor..prims.len());
             if has_draws(&tail) || frame.overlay.is_some() {
                 paint(scene, &tail, frame, frame.overlay);
-                vello_into(renderer, device, queue, scene, &scratch, clear, aa)?;
+                vello_into(frame.checked, renderer, device, queue, scene, &scratch, clear, aa)?;
                 let mut enc = encoder(device);
                 self.passes.blit_over(device, &mut enc, &scratch_view, &out_view);
                 queue.submit([enc.finish()]);
@@ -246,7 +252,7 @@ impl Stage {
                 }
                 scene.pop_layer();
             }
-            vello_into(renderer, device, queue, scene, &emit, peniko::Color::TRANSPARENT, frame.antialiasing)?;
+            vello_into(frame.checked, renderer, device, queue, scene, &emit, peniko::Color::TRANSPARENT, frame.antialiasing)?;
             // Emission radius is a CSS-style blur radius (≈ 2σ), in scene px.
             let sigma = radius * 0.5 * scale * f64::from(ew) / f64::from(w);
             for (sigma, weight) in [(sigma * 0.3, 0.9), (sigma, 0.9)] {
@@ -353,6 +359,7 @@ fn paint(scene: &mut vello::Scene, prims: &[PaintPrimitive], frame: &Frame<'_>, 
 }
 
 fn vello_into(
+    checked: bool,
     renderer: &mut Renderer,
     device: &wgpu::Device,
     queue: &wgpu::Queue,
@@ -363,7 +370,13 @@ fn vello_into(
 ) -> Result<(), String> {
     // Banded when the scene overflows vello's buffers, never left blank
     // (or holding the texture's previous frame).
-    crate::offscreen::render_checked(renderer, device, queue, scene, target, base, antialiasing).map(|_| ())
+    if checked {
+        return crate::offscreen::render_checked(renderer, device, queue, scene, target, base, antialiasing).map(|_| ());
+    }
+    let view = target.create_view(&wgpu::TextureViewDescriptor::default());
+    renderer
+        .render_to_texture(device, queue, scene, &view, &vello::RenderParams { base_color: base, width: target.width(), height: target.height(), antialiasing_method: antialiasing })
+        .map_err(|e| format!("render_to_texture failed: {e}"))
 }
 
 /// The uniform block for one shader region, and the region's box in target

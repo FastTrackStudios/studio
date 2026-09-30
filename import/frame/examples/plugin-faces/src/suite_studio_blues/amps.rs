@@ -74,16 +74,13 @@ fn screw(b: &mut Builder<'_>, parent: NodeId, cx: f64, cy: f64, r: f64) {
     surface_kit::materials::enclosure::screw(b, parent, cx, cy, r);
 }
 
-/// The pilot/bypass jewel: a kit jewel on `addr`, its lamp flickering a
-/// little like the valve heater behind it.
+/// The pilot/bypass jewel: a kit jewel on `addr`. Its lamp burns steady:
+/// a flicker keeps the face (and the whole window around it) redrawing
+/// thirty times a second for a wobble nobody sees.
 fn jewel(b: &mut Builder<'_>, parent: NodeId, addr: &str, variant: &str, d: f64, cx: f64, cy: f64) -> NodeId {
     let p = Place::new("Power").size(d).variant(variant).bind(Binding::param(addr)).legend("").touch(TOUCH_MIN);
     let j = ui::put(b, parent, "button.jewel", &p, cx, cy);
     ui::strip_legend(b, j);
-    let leds: Vec<NodeId> = b.controls.get(&j).map(|c| c.slots_of(surface_proto::SlotRole::Led).map(NodeId).collect()).unwrap_or_default();
-    for l in leds {
-        surface_kit::motion::add(b, l, surface_kit::motion::flicker(0.06));
-    }
     j
 }
 
@@ -422,11 +419,10 @@ pub fn lead_head() -> Face {
         print(b, plate, "ON", x(1028.0), y(38.0), 10.0, INK, 400.0, 0.0);
         parts::toggle(b, plate, "lead/on", "Standby", 15.0, x(1028.0), y(76.0));
         print(b, plate, "STANDBY", x(1028.0), y(128.0), 10.0, INK, 400.0, 0.0);
-        // The pilot light, its filament wavering a little.
+        // The pilot light, steady (see `jewel`).
         b.add(plate, draw::circle("pilot bezel", x(1085.0), y(76.0), 10.0, draw::linear(180.0, &[(0.0, "#3a3b3e"), (1.0, "#060607")])));
         let lens = draw::circle("pilot", x(1085.0), y(76.0), 7.0, draw::radial_at(0.4, 0.35, 0.9, &[(0.0, "#ffe0e0"), (0.35, "#ff4a4a"), (1.0, "#8a0a0a")]));
-        let lens = b.add(plate, draw::emissive(lens, draw::hex("#ff2a2a"), 0.9, 18.0));
-        surface_kit::motion::add(b, lens, surface_kit::motion::flicker(0.06));
+        b.add(plate, draw::emissive(lens, draw::hex("#ff2a2a"), 0.9, 18.0));
     });
     let ns = "lead";
     let params = vec![
