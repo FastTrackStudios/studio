@@ -16,6 +16,7 @@
 //! cable, and a player's scribble (invented) at the right end.
 
 use document_proto::NodeId;
+use surface_kit::materials::{self, Grain, Material, light};
 use surface_kit::{Place, draw, motion};
 use surface_widgets::Builder;
 
@@ -99,11 +100,80 @@ fn corners(b: &mut Builder<'_>, root: NodeId, (x, y, w, h): (f64, f64, f64, f64)
     }
 }
 
-/// The cabinet box in `covering` paint, rounded; returns nothing — the face
-/// lays the front out over it.
-fn cabinet(b: &mut Builder<'_>, root: NodeId, (x, y, w, h): (f64, f64, f64, f64), covering: (&str, &str), radius: f64) {
-    let n = draw::rounded(draw::rect("cabinet", x, y, w, h, draw::linear(180.0, &[(0.0, covering.0), (1.0, covering.1)])), radius);
-    b.add(root, draw::with_effects(draw::stroked(n, "#000000", 1.5), vec![draw::drop_shadow("#000000c0", 0.0, 8.0, 18.0), draw::inner_shadow("#ffffff1c", 0.0, 2.0, 2.0), draw::inner_shadow("#00000080", 0.0, -3.0, 6.0)]));
+/// The cabinet box covered in `m` (tolex, croc, powder…) from the kit's
+/// materials, lit from the upper left, its edge rolled, standing on the
+/// shelf with a cast shadow.
+fn covered(b: &mut Builder<'_>, root: NodeId, (x, y, w, h): (f64, f64, f64, f64), m: &Material, radius: f64) {
+    let under = draw::rounded(draw::rect("cabinet", x, y, w, h, draw::solid("#101012")), radius);
+    b.add(root, draw::with_effects(under, light::stand(12.0, 1.0)));
+    materials::fill(b, root, (x, y, w, h), radius, m);
+    for n in light::edge("cabinet edge", (x, y, w, h), radius, 6.0, 1.0, true) {
+        b.add(root, n);
+    }
+    b.add(root, draw::stroked(draw::rounded(draw::rect("cabinet outline", x, y, w, h, draw::solid("#00000000")), radius), "#000000", 1.5));
+}
+
+/// Crocodile scales in vector, over a croc-covered box (the material's
+/// relief is pixels, which a face written out as markup doesn't carry):
+/// a jittered lattice of rounded polygons, each inset from its neighbours
+/// by a pale seam, lit on its upper-left edge and shaded on its lower
+/// right, the scales running in taller rows as the hide's do.
+fn croc_scales(b: &mut Builder<'_>, root: NodeId, (x, y, w, h): (f64, f64, f64, f64), (px, py): (f64, f64), seed: u64) {
+    let mut r = Rng(seed | 1);
+    let cols = (w / px).ceil() as usize + 2;
+    let rows = (h / py).ceil() as usize + 2;
+    let mut pts = vec![vec![(0.0, 0.0); cols + 1]; rows + 1];
+    for (j, row) in pts.iter_mut().enumerate() {
+        for (i, p) in row.iter_mut().enumerate() {
+            let stagger = if j % 2 == 1 { px * 0.5 } else { 0.0 };
+            *p = (x - px + i as f64 * px + stagger + (r.f() - 0.5) * px * 0.55, y - py + j as f64 * py + (r.f() - 0.5) * py * 0.45);
+        }
+    }
+    let (mut body, mut lit, mut shade) = (String::new(), String::new(), String::new());
+    for j in 0..rows {
+        for i in 0..cols {
+            let q = [pts[j][i], pts[j][i + 1], pts[j + 1][i + 1], pts[j + 1][i]];
+            let (cx, cy) = (q.iter().map(|p| p.0).sum::<f64>() / 4.0, q.iter().map(|p| p.1).sum::<f64>() / 4.0);
+            let inset = |k: f64, dx: f64, dy: f64| -> String {
+                let v: Vec<(f64, f64)> = q.iter().map(|(qx, qy)| (cx + (qx - cx) * k + dx, cy + (qy - cy) * k + dy)).collect();
+                // Rounded: corners cut by quadratic curves through the midpoints.
+                let mid = |a: (f64, f64), b: (f64, f64)| ((a.0 + b.0) / 2.0, (a.1 + b.1) / 2.0);
+                let m0 = mid(v[3], v[0]);
+                let mut d = format!("M {:.1} {:.1} ", m0.0, m0.1);
+                for k in 0..4 {
+                    let m = mid(v[k], v[(k + 1) % 4]);
+                    d.push_str(&format!("Q {:.1} {:.1} {:.1} {:.1} ", v[k].0, v[k].1, m.0, m.1));
+                }
+                d.push_str("Z ");
+                d
+            };
+            body.push_str(&inset(0.84, 0.0, 0.0));
+            lit.push_str(&inset(0.6, -px * 0.08, -py * 0.08));
+            shade.push_str(&inset(0.7, px * 0.07, py * 0.08));
+        }
+    }
+    let mut f = draw::frame("croc scales", x, y, w, h);
+    f.clips_content = true;
+    let f = b.add(root, f);
+    let at = |d: &str| {
+        let mut n = draw::path("scales", -x, -y, x + w, y + h, d.to_string(), draw::solid("#000000"));
+        n.fills = Vec::new();
+        n
+    };
+    b.add(f, draw::rect("seams", 0.0, 0.0, w, h, draw::solid("#6d6962")));
+    let mut n = at(&body);
+    n.name = "scales".into();
+    n.fills = vec![draw::linear(165.0, &[(0.0, "#58544d"), (0.5, "#403d38"), (1.0, "#2b2926")])];
+    b.add(f, n);
+    let mut n = at(&shade);
+    n.name = "scale shade".into();
+    n.fills = vec![draw::solid("#00000040")];
+    b.add(f, n);
+    let mut n = at(&lit);
+    n.name = "scale light".into();
+    n.fills = vec![draw::solid("#ffffff12")];
+    b.add(f, n);
+    b.add(f, draw::rect("room light", 0.0, 0.0, w, h, light::sheen(0.12, 0.3)));
 }
 
 // ── valves ───────────────────────────────────────────────────────────────
@@ -250,7 +320,7 @@ fn strip(b: &mut Builder<'_>, root: NodeId, (x, y, w, h): (f64, f64, f64, f64), 
 fn knob(b: &mut Builder<'_>, p: NodeId, id: &str, variant: &str, opts: &[&str], addr: &str, name: &str, (cx, cy): (f64, f64), d: f64, ink: &str, legend_y: f64) {
     let mut place = Place::new(name).size(d).variant(variant).bind(rk::bind(addr)).touch(surface_kit::TOUCH_MIN).ink(surface_kit::Ink::Color(ink.into()));
     place.options = Some(opts.iter().map(ToString::to_string).collect());
-    let k = parts::put(b, p, id, &place, cx, cy);
+    let k = parts::put(b, p, super::knob_id(id), &place, cx, cy);
     parts::strip_legend(b, k);
     legend(b, k, &name.to_uppercase(), (cx, legend_y), Letter::new(10.5, 760.0, ink).track(0.06));
 }
@@ -314,7 +384,7 @@ fn hex_rhythm() -> Face {
         feet(b, root, (210.0, 1010.0), 510.0);
         strap_handle(b, root, (W / 2.0 + 10.0, 14.0, 300.0), "#1c1d1f");
         let cab = (84.0, 66.0, 1090.0, 446.0);
-        cabinet(b, root, cab, ("#26272a", "#141416"), 10.0);
+        covered(b, root, cab, &Material::Tolex { grain: Grain::Levant, color: "#232426".into(), scale: 1.0 }, 10.0);
         grain(b, root, cab, 0.06, (0.05, 0.25), 0x4e11);
         corners(b, root, cab);
         // The grille window: valves behind a hex lattice, a black frame round it.
@@ -345,41 +415,6 @@ fn hex_rhythm() -> Face {
 
 // ── 06 · Croc Clean ──────────────────────────────────────────────────────
 
-/// Crocodile covering: rows of irregular rounded scales with dark seams.
-fn croc(b: &mut Builder<'_>, root: NodeId, (x, y, w, h): (f64, f64, f64, f64), seed: u64) {
-    let mut r = Rng(seed | 1);
-    let mut light = String::new();
-    let mut pale = String::new();
-    let mut dark = String::new();
-    // Columns of scales, each column its own run of heights (the hide's
-    // scales run in vertical bands, as the head's covering shows them).
-    let mut xx = x;
-    while xx < x + w {
-        let cw = 9.0 + r.f() * 8.0;
-        let mut yy = y - r.f() * 20.0;
-        while yy < y + h {
-            let rh = 11.0 + r.f() * 11.0;
-            let (x0, x1) = ((xx + 0.9).max(x), (xx + cw - 0.9).min(x + w));
-            let (y0, y1) = ((yy + 0.9).max(y), (yy + rh - 0.9).min(y + h));
-            if x1 > x0 + 2.0 && y1 > y0 + 2.0 {
-                let rr = 4.0f64.min((x1 - x0) / 2.0).min((y1 - y0) / 2.0);
-                let light = if r.f() < 0.35 { &mut pale } else { &mut light };
-                light.push_str(&format!(
-                    "M {:.1} {y0:.1} L {:.1} {y0:.1} Q {x1:.1} {y0:.1} {x1:.1} {:.1} L {x1:.1} {:.1} Q {x1:.1} {y1:.1} {:.1} {y1:.1} L {:.1} {y1:.1} Q {x0:.1} {y1:.1} {x0:.1} {:.1} L {x0:.1} {:.1} Q {x0:.1} {y0:.1} {:.1} {y0:.1} Z ",
-                    x0 + rr, x1 - rr, y0 + rr, y1 - rr, x1 - rr, x0 + rr, y1 - rr, y0 + rr, x0 + rr
-                ));
-                dark.push_str(&format!("M {:.1} {:.1} L {x1:.1} {:.1} L {x1:.1} {y1:.1} L {:.1} {y1:.1} Z ", x0 + 1.5, y1 - 3.0, y1 - 3.0, x0 + 1.5));
-            }
-            yy += rh;
-        }
-        xx += cw;
-    }
-    b.add(root, draw::rect("croc seams", x, y, w, h, draw::solid("#77736c")));
-    b.add(root, draw::path("croc scales", 0.0, 0.0, W, H, light, draw::linear(170.0, &[(0.0, "#46433f"), (0.5, "#34322e"), (1.0, "#282624")])));
-    b.add(root, draw::path("croc scales pale", 0.0, 0.0, W, H, pale, draw::linear(170.0, &[(0.0, "#524e49"), (0.5, "#3d3a36"), (1.0, "#2e2c29")])));
-    b.add(root, draw::with_opacity(draw::path("croc shade", 0.0, 0.0, W, H, dark, draw::solid("#000000")), 0.35));
-}
-
 /// Croc Clean — Head, 1200 × 545. Grey crocodile over the whole front, a
 /// scratched steel strip: BRIGHT, then GAIN BASS MIDDLE TREBLE MASTER
 /// OUTPUT on cream pointer knobs inside tick rings.
@@ -396,8 +431,8 @@ fn croc_clean() -> Face {
             b.add(root, draw::rounded(draw::rect("handle cap", x, 18.0, 110.0 * 0.3, 20.0, draw::linear(180.0, &[(0.0, "#e2e3e5"), (1.0, "#7c7d80")])), 3.0));
         }
         let cab = (100.0, 40.0, 1070.0, 470.0);
-        cabinet(b, root, cab, ("#34322f", "#1d1c1a"), 10.0);
-        croc(b, root, (112.0, 52.0, 1046.0, 446.0), 0xc40c);
+        covered(b, root, cab, &Material::Croc { color: "#4a4741".into(), scale: 1.25 }, 10.0);
+        croc_scales(b, root, (cab.0 + 3.0, cab.1 + 3.0, cab.2 - 6.0, cab.3 - 6.0), (15.0, 21.0), 0xc40c);
         corners(b, root, cab);
         // The front's upper edge: a dark piping line.
         b.add(root, draw::stroked(draw::rect("front frame", 140.0, 76.0, 990.0, 290.0, draw::solid("#00000000")), "#1a1917", 3.0));
@@ -432,7 +467,7 @@ fn cube_crunch() -> Face {
         feet(b, root, (200.0, 1030.0), 508.0);
         strap_handle(b, root, (W / 2.0 - 25.0, 10.0, 300.0), "#9c5a3a");
         let cab = (84.0, 62.0, 1090.0, 448.0);
-        cabinet(b, root, cab, ("#ece8dd", "#d8d2c3"), 10.0);
+        covered(b, root, cab, &Material::Tolex { grain: Grain::Bronco, color: "#e4dece".into(), scale: 1.0 }, 10.0);
         grain(b, root, cab, 0.05, (0.2, 0.08), 0xc0be);
         // Chrome corners instead of black.
         for (cx, cy) in [(cab.0 + 6.0, cab.1 + 6.0), (cab.0 + cab.2 - 6.0, cab.1 + 6.0), (cab.0 + 6.0, cab.1 + cab.3 - 6.0), (cab.0 + cab.2 - 6.0, cab.1 + cab.3 - 6.0)] {
@@ -480,7 +515,8 @@ fn cage_lead() -> Face {
         parts::line(b, root, "handle", &wire, 5.0, "#2e2f31");
         parts::line(b, root, "handle sheen", &wire.iter().map(|(x, y)| (x - 1.0, y - 1.0)).collect::<Vec<_>>(), 1.2, "#8a8b8d");
         let cab = (118.0, 90.0, 1005.0, 418.0);
-        cabinet(b, root, cab, ("#26272a", "#111214"), 6.0);
+        covered(b, root, cab, &Material::Powder { color: "#232427".into(), coarse: true }, 6.0);
+        grain(b, root, cab, 0.08, (0.06, 0.12), 0xca9e);
         let g = (126.0, 98.0, 989.0, 262.0);
         valve_row(b, root, g, 1.0);
         perforated(b, root, g, 17.0, 5.6);

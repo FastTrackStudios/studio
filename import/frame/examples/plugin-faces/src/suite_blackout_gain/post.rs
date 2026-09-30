@@ -15,7 +15,7 @@ pub fn faces() -> Vec<Face> {
     vec![delay(), reverb()]
 }
 
-const KNOB: KnobStyle<'static> = KnobStyle::new("knob.pedal_lobed", "black", 44.0, INK);
+const KNOB: KnobStyle<'static> = super::pedal_knob(44.0);
 const LCD_BG: (&str, &str) = ("#2d3a33", "#23302a");
 const LCD_INK: &str = "#d6e4d8";
 
@@ -36,75 +36,83 @@ fn hexagram(b: &mut Builder<'_>, p: NodeId, size: (f64, f64), (cx, cy): (f64, f6
 
 // ── 07 · Crypt Delay ─────────────────────────────────────────────────────
 
-/// Crypt Delay — Pedal, BigBox (404 × 286). MIX and FEEDBACK in the top
-/// corners, SYNC and PING-PONG bat toggles between them over a grey-green
-/// LCD (the sync source and ping-pong state, the note value and the tempo),
-/// TIME and TONE either side of a hexagram, two skulls looking out, the
-/// name in tall condensed capitals, ENGAGE and TAP TEMPO stomps with their
-/// green LEDs in the bottom band, the maker's badge between them.
+/// Crypt Delay — Pedal, Large (286 × 286: the original is a near-square
+/// big box, 1.15 : 1, so the square class keeps its proportions). MIX and
+/// FEEDBACK big in the top corners, SYNC and PING-PONG bat toggles between
+/// them over a grey-green LCD (the sync source and ping-pong state, the
+/// note value and the tempo), TIME and TONE either side of a hexagram, two
+/// skulls looking out from the sides, the name in the family's spurred
+/// capitals, ENGAGE and TAP TEMPO stomps in the bottom corners with their
+/// green LEDs inboard, the maker's badge between them.
+#[allow(clippy::too_many_lines)]
 fn delay() -> Face {
     let ns = "bgdelay";
     let a = |s: &str| format!("{ns}/{s}");
     let scene = canvas("Crypt Delay", |b, root| {
-        let e = black("bigbox");
+        let e = black("large");
         let p = rk::pedal_body(b, root, &e);
         let size = e.size();
         let (w, _) = size;
-        art::border(b, p, size, 7.0, (15.0, 272.0), "9V DC");
-        art::skull(b, p, size, &Put::new(8.0, 104.0, 84.0, true));
-        art::skull(b, p, size, &Put::new(w - 92.0, 104.0, 84.0, false));
-        art::locks(b, p, size, (96.0, 110.0), 70.0, 3, 3.6, 1.2);
-        art::locks(b, p, size, (w - 96.0, 110.0), 70.0, 3, 3.6, 1.2);
-        art::flourish(b, p, size, (30.0, 30.0), 30.0, false);
-        art::flourish(b, p, size, (w - 30.0, 30.0), 30.0, true);
-        hexagram(b, p, size, (w / 2.0, 128.0), 16.0);
+        art::border(b, p, size, 6.0, (12.0, 262.0), "9V DC");
+        // The skulls look out from the sides, their locks falling past the knobs.
+        art::skull(b, p, size, &Put::new(4.0, 112.0, 66.0, true));
+        art::skull(b, p, size, &Put::new(w - 70.0, 112.0, 66.0, false));
+        art::locks(b, p, size, (60.0, 128.0), 70.0, 3, 3.2, 1.0);
+        art::locks(b, p, size, (w - 60.0, 128.0), 70.0, 3, 3.2, 1.0);
+        hexagram(b, p, size, (w / 2.0, 137.0), 15.0);
 
-        let legend = art::knob_letter(11.0);
         let none = Ink::new(6.0, INK);
-        for (addr, name, at, ly) in [("mix", "MIX", (58.0, 54.0), 88.0), ("feedback", "FEEDBACK", (w - 58.0, 54.0), 88.0), ("time", "TIME", (124.0, 146.0), 114.0), ("tone", "TONE", (w - 124.0, 146.0), 114.0)] {
-            let k = rk::knob(b, p, &KNOB, &a(addr), "", at, 0.0, none);
-            art::label_letter(b, k, name, (at.0, ly), legend);
+        let big = KNOB.size(46.0);
+        let mid = KNOB.size(38.0);
+        for (addr, name, at, ly, k) in [
+            ("mix", "MIX", (40.0, 38.0), 97.0, big),
+            ("feedback", "FEEDBACK", (w - 40.0, 38.0), 97.0, big),
+            ("time", "TIME", (88.0, 146.0), 114.0, mid),
+            ("tone", "TONE", (w - 88.0, 146.0), 114.0, mid),
+        ] {
+            let kn = rk::knob(b, p, &k, &a(addr), "", at, 0.0, none);
+            art::label_letter(b, kn, name, (at.0, ly), art::knob_letter(10.0));
         }
-        for (addr, name, x) in [("sync", "SYNC", 124.0), ("pingpong", "PING PONG", w - 124.0)] {
-            let t = rk::mini_toggle(b, p, name, &a(addr), (x, 42.0), 16.0, "chrome");
-            art::label_letter(b, t, name, (x, 25.0), art::knob_letter(7.5));
-            for dx in [-7.0, 7.0] {
-                b.add(p, draw::circle("position dot", x + dx, 55.0, 1.3, draw::solid(INK)));
+        for (addr, name, x) in [("sync", "SYNC", 88.0), ("pingpong", "PING PONG", w - 88.0)] {
+            let t = rk::mini_toggle(b, p, name, &a(addr), (x, 38.0), 14.0, "chrome");
+            art::label_letter(b, t, name, (x, 22.0), art::knob_letter(6.8));
+            for dx in [-6.0, 6.0] {
+                b.add(p, draw::circle("position dot", x + dx, 50.0, 1.2, draw::solid(INK)));
             }
         }
         // The LCD.
-        let win = parts::screen(b, p, "LCD", (148.0, 62.0, 108.0, 38.0), Screen { glass: LCD_BG, ink: LCD_INK, mesh: false });
-        let small = Ink::new(5.2, "#9fb0a3").weight(600.0).track(0.04);
-        parts::silk_left(b, win, "FREE / DAW / TAP", 4.0, 7.5, small);
-        parts::silk_right(b, win, "P-P: OFF / ON", 104.0, 7.5, small);
-        parts::note_picker(b, win, "Note", &a("div"), (2.0, 25.0, 44.0), 10.0, LCD_INK, "#50605600");
-        let bpm = parts::readout(b, win, "Tempo", rk::bind(&a("tempo")), (44.0, 25.0, 62.0), 10.0, LCD_INK, TextAlign::Right);
-        parts::format(b, bpm, surface_proto::ValueFormat::decimals(1));
+        let win = parts::screen(b, p, "LCD", (80.0, 58.0, 126.0, 34.0), Screen { glass: LCD_BG, ink: LCD_INK, mesh: false });
+        let small = Ink::new(5.0, "#9fb0a3").weight(600.0).track(0.04);
+        parts::silk_left(b, win, "FREE / DAW / TAP", 4.0, 7.0, small);
+        parts::silk_right(b, win, "P-P: OFF / ON", 122.0, 7.0, small);
+        let seg = rk::lcd::dots(10.0, LCD_INK);
+        rk::lcd::readout(b, win, "Note", rk::bind(&a("div")), (3.0, 22.5, 48.0), seg, TextAlign::Left, None, surface_proto::ValueFormat::labels(rk::DIVISIONS));
+        rk::lcd::readout(b, win, "Tempo", rk::bind(&a("tempo")), (50.0, 22.5, 72.0), seg, TextAlign::Right, None, surface_proto::ValueFormat::decimals(1).unit("BPM"));
 
-        art::title(b, p, "DELAY", (w / 2.0, 184.0), 118.0);
-        rk::silk(b, p, "HANDMADE IN THE DARK", w / 2.0, 202.0, Ink::new(5.0, INK).weight(700.0).track(0.12));
-        // The bottom band: ENGAGE and TAP TEMPO, LEDs inboard of them.
-        art::switch_ring(b, p, (44.0, 236.0), 21.0);
-        art::switch_ring(b, p, (w - 44.0, 236.0), 21.0);
-        let on = art::stomp(b, p, "Engage", &a("on"), (44.0, 236.0), 34.0, GREEN, (48.0, -4.0), 15.0, false);
-        art::label_letter(b, on, "ENGAGE", (92.0, 256.0), art::knob_letter(8.0));
-        let tap = art::stomp(b, p, "Tap Tempo", &a("tap"), (w - 44.0, 236.0), 34.0, GREEN, (-48.0, -4.0), 15.0, true);
-        art::label_letter(b, tap, "TAP TEMPO", (w - 92.0, 256.0), art::knob_letter(8.0));
-        art::badge(b, p, size, (w / 2.0, 250.0), 120.0);
+        art::title_max(b, p, "DELAY", (w / 2.0, 186.0), 92.0, 40.0);
+        rk::silk(b, p, "HANDMADE IN THE DARK", w / 2.0, 209.0, Ink::new(4.6, INK).weight(700.0).track(0.12));
+        // The bottom corners: ENGAGE and TAP TEMPO, LEDs inboard of them.
+        art::switch_ring(b, p, (30.0, 228.0), 19.0);
+        art::switch_ring(b, p, (w - 30.0, 228.0), 19.0);
+        let on = art::stomp(b, p, "Engage", &a("on"), (30.0, 228.0), 30.0, GREEN, (39.0, 5.0), 14.0, false);
+        art::label_letter(b, on, "ENGAGE", (66.0, 252.0), art::knob_letter(7.0));
+        let tap = art::stomp(b, p, "Tap Tempo", &a("tap"), (w - 30.0, 228.0), 30.0, GREEN, (-39.0, 5.0), 14.0, true);
+        art::label_letter(b, tap, "TAP TEMPO", (w - 66.0, 252.0), art::knob_letter(7.0));
+        art::badge(b, p, size, (w / 2.0, 247.0), 96.0);
     });
     let params = vec![
-        rk::ms(&a("time"), "Time", 20.0, 2000.0, 500.0).featured(),
+        rk::ms(&a("time"), "Time", 20.0, 2000.0, 200.0).featured(),
         rk::choice(&a("div"), "Note", rk::DIVISIONS, 4),
         rk::toggle(&a("sync"), "Sync", true),
         rk::toggle(&a("pingpong"), "Ping Pong", false),
-        rk::percent(&a("mix"), "Mix", 30.0).featured(),
-        rk::percent(&a("feedback"), "Feedback", 40.0).featured(),
-        rk::percent(&a("tone"), "Tone", 60.0),
+        rk::percent(&a("mix"), "Mix", 50.0).featured(),
+        rk::percent(&a("feedback"), "Feedback", 50.0).featured(),
+        rk::percent(&a("tone"), "Tone", 50.0),
         crate::delay::parts::param(&a("tempo"), "Tempo", surface_proto::Range::linear(40.0, 240.0, surface_proto::Unit::Bpm), 120.0),
         rk::toggle(&a("on"), "Engage", true).featured(),
         rk::toggle(&a("tap"), "Tap Tempo", false),
     ];
-    Face { file: "07-post-bigbox-crypt-delay", plugin: PLUGIN, scene, params, streams: Vec::new() }
+    Face { file: "07-post-large-crypt-delay", plugin: PLUGIN, scene, params, streams: Vec::new() }
 }
 
 // ── 08 · Tomb Verb ───────────────────────────────────────────────────────

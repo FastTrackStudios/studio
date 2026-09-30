@@ -15,6 +15,7 @@ use surface_widgets::Builder;
 
 use crate::delay::parts::{self, Ink};
 
+pub mod lcd;
 pub mod lettering;
 pub use lettering::{Letter, letter, letter_aligned, letter_fit};
 
@@ -83,7 +84,7 @@ pub fn pedal_body(b: &mut Builder<'_>, root: NodeId, e: &Enclosure<'_>) -> NodeI
         opts.push(format!("radius={r}"));
     }
     let p = Place { options: Some(opts), ..Place::new("Enclosure").variant(e.class) };
-    parts::put_at(b, root, "panel.pedal", &p, 0.0, 0.0)
+    parts::put_at(b, root, "panel.pedal_3d", &p, 0.0, 0.0)
 }
 
 /// A knob style as a unit uses it.
@@ -160,6 +161,28 @@ pub fn label(b: &mut Builder<'_>, control: NodeId, s: &str, (cx, cy): (f64, f64)
     let (tx, ty) = b.scene.node(control).map_or((0.0, 0.0), |n| (n.transform.tx, n.transform.ty));
     let text = if ink.upper { s.to_uppercase() } else { s.to_string() };
     let id = letter(b, control, &text, (cx - tx, cy - ty), Letter::new(ink.size, ink.weight, ink.color).track(ink.track));
+    if let Some(c) = b.controls.get_mut(&control) {
+        c.slots.retain(|s| s.role != SlotRole::Label);
+        c.slots.push(surface_proto::Slot { role: SlotRole::Label, node: id.0 });
+    }
+    id
+}
+
+/// [`knob`] with its legend set in display lettering `l` (capitals).
+#[allow(clippy::too_many_arguments)]
+pub fn knob_l(b: &mut Builder<'_>, parent: NodeId, s: &KnobStyle<'_>, addr: &str, legend: &str, at: (f64, f64), legend_y: f64, l: Letter<'_>) -> NodeId {
+    let k = knob(b, parent, s, addr, "", at, legend_y, Ink::new(l.size, l.color));
+    if !legend.is_empty() {
+        label_l(b, k, &legend.to_uppercase(), (at.0, legend_y), l);
+    }
+    k
+}
+
+/// A control's printed legend in display lettering `l`, centred on panel
+/// (`cx`, `cy`), as its `Label` slot.
+pub fn label_l(b: &mut Builder<'_>, control: NodeId, s: &str, (cx, cy): (f64, f64), l: Letter<'_>) -> NodeId {
+    let (tx, ty) = b.scene.node(control).map_or((0.0, 0.0), |n| (n.transform.tx, n.transform.ty));
+    let id = letter(b, control, s, (cx - tx, cy - ty), l);
     if let Some(c) = b.controls.get_mut(&control) {
         c.slots.retain(|s| s.role != SlotRole::Label);
         c.slots.push(surface_proto::Slot { role: SlotRole::Label, node: id.0 });

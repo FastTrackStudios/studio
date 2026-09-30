@@ -25,7 +25,7 @@ pub(super) const XR: f64 = 123.0;
 pub(super) const Y1: f64 = 47.0;
 
 pub(super) const fn knob(ink: &'static str) -> KnobStyle<'static> {
-    KnobStyle::new("knob.pedal_tall", "grey", 36.0, ink).opts(&["dots=21"])
+    KnobStyle::new(super::knob_id("knob.pedal_tall"), "grey", 36.0, ink).opts(&["dots=21"])
 }
 
 /// A legend's lettering: bold, small, as the lids print it.

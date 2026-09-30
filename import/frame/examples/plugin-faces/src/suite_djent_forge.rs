@@ -39,6 +39,53 @@ pub const BLUE: &str = "#1f5fa3";
 /// The lit blue of the pedals' status LEDs.
 pub const LED_BLUE: &str = "#7cc4ff";
 
+/// The component every knob of the suite is placed as. One line to switch
+/// the whole suite to another knob (the GPU `knob.3d` when it lands).
+pub const KNOB_ID: &str = "knob.render";
+
+/// The pedals' knob: a glossy black fluted cap with a white index line,
+/// `d` across.
+#[must_use]
+pub const fn pedal_knob(d: f64) -> rk::KnobStyle<'static> {
+    rk::KnobStyle::new(KNOB_ID, "fluted", d, "#ffffff").opts(&["color=#141416", "pointer=#f4f4f2", "ticks=none", "spec=1.4", "bevel=1.2"])
+}
+
+/// A knob of the suite in any cap, colour and extra options (`knob.render`
+/// options: `color=`, `skirt=`, `ticks=`, …).
+#[must_use]
+pub const fn knob(cap: &'static str, d: f64, ink: &'static str, opts: &'static [&'static str]) -> rk::KnobStyle<'static> {
+    rk::KnobStyle::new(KNOB_ID, cap, d, ink).opts(opts)
+}
+
+/// The suite's lettering.
+pub mod type_ {
+    use crate::rigkit::Letter;
+    use surface_kit::draw::family;
+
+    /// Model names across a pedal: wide engraved capitals, widely spaced.
+    #[must_use]
+    pub const fn name(size: f64, color: &str) -> Letter<'_> {
+        Letter::new(size, 400.0, color).family(family::MICHROMA).track(0.14)
+    }
+    /// Control legends: a semi-condensed bold technical sans.
+    #[must_use]
+    pub const fn legend(size: f64, color: &str) -> Letter<'_> {
+        Letter::new(size, 650.0, color).family(family::SAIRA).stretch(0.92).track(0.02)
+    }
+    /// The maker's mark: heavy geometric tech capitals.
+    #[must_use]
+    pub const fn mark(size: f64, color: &str) -> Letter<'_> {
+        Letter::new(size, 900.0, color).family(family::ORBITRON)
+    }
+    /// Fine print ("designed in …"): the engraved face, small and spaced.
+    #[must_use]
+    pub const fn fine(size: f64, color: &str) -> Letter<'_> {
+        Letter::new(size, 400.0, color).family(family::MICHROMA).track(0.2)
+    }
+}
+
+use crate::rigkit as rk;
+
 /// Every unit of the suite, in signal order.
 #[must_use]
 pub fn faces() -> Vec<Face> {

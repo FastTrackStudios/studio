@@ -34,6 +34,14 @@ use crate::face::Face;
 /// The suite's plugin id.
 pub const PLUGIN: &str = "suite-modern-rhythm";
 
+/// Every knob of the suite is placed through this: the component for a
+/// knob of kind `id`. One line to switch the whole suite to another knob
+/// (the GPU `knob.3d` when it lands): return it here.
+#[must_use]
+pub const fn knob_id(id: &str) -> &str {
+    id
+}
+
 /// Every unit of the suite, in signal order.
 #[must_use]
 pub fn faces() -> Vec<Face> {

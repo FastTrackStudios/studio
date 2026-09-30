@@ -11,7 +11,7 @@
 //! | `04-amp-head-blackout` | Blackout head: black leather, black panel, green jewel, seven knobs, I/II inputs | Head 1200 × 460 (the plugin's 2.9 : 1 faceplate plus its handle) |
 //! | `05-cab-4x12` | 4×12 cabinet with two mics and room | Cab 900 × 900 |
 //! | `06-eq-tabletop-nine-band` | Nine-band graphic EQ, blue-lit faders, HPF/LPF | Tabletop 1000 × 302 (3.3 : 1) |
-//! | `07-post-bigbox-crypt-delay` | Crypt Delay: LCD, SYNC/PING-PONG, ENGAGE + TAP | Pedal BigBox 404 × 286 |
+//! | `07-post-large-crypt-delay` | Crypt Delay: LCD, SYNC/PING-PONG, ENGAGE + TAP | Pedal Large 286 × 286 (the original is near square) |
 //! | `08-post-standard-tomb-verb` | Tomb Verb: MIX / DECAY / TONE | Pedal Standard |
 //!
 //! No real maker, artist or product name is printed: the maker's badge
@@ -30,6 +30,23 @@ use crate::face::Face;
 
 /// The suite's plugin id.
 pub const PLUGIN: &str = "suite-blackout-gain";
+
+/// The component every pedal knob of the suite is placed as — one line to
+/// switch the suite to another knob (the GPU `knob.3d` when it lands).
+pub const KNOB_ID: &str = "knob.render";
+
+/// The pedals' knob: glossy black fluted plastic with a white index.
+#[must_use]
+pub const fn pedal_knob(d: f64) -> crate::rigkit::KnobStyle<'static> {
+    crate::rigkit::KnobStyle::new(KNOB_ID, "fluted", d, art::INK).opts(&["color=#121213", "pointer=#f2efe8", "ticks=none", "spec=1.3", "bevel=1.2"])
+}
+
+/// The component for a knob of kind `id` (the amp's, the EQ's, the cab
+/// strip's) — every other knob of the suite is placed through this.
+#[must_use]
+pub const fn knob_id(id: &str) -> &str {
+    id
+}
 
 /// Every unit of the suite, in signal order.
 #[must_use]

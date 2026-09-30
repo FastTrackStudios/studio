@@ -7,6 +7,7 @@
 //! down with [`Put`] (where, how big, mirrored or not).
 
 use document_proto::NodeId;
+use surface_kit::draw::family;
 use surface_kit::{Place, TOUCH_MIN, draw};
 use surface_widgets::Builder;
 
@@ -97,39 +98,62 @@ pub fn stroke(b: &mut Builder<'_>, parent: NodeId, name: &str, size: (f64, f64),
 
 // ── skull ────────────────────────────────────────────────────────────────
 
-const CRANIUM: &str = "M 8 46 C 4 26 18 8 42 5 C 66 2 86 12 92 30 C 94 38 92 44 95 50 L 99 58 L 93 60 L 94 64 L 90 66 C 80 67 60 68 44 70 C 32 71 26 74 22 80 C 14 72 8 60 8 46 Z";
-const JAW: &str = "M 30 76 C 40 73 70 72 91 71 L 90 80 C 88 88 80 94 66 96 C 52 97 42 94 36 90 C 32 86 30 81 30 76 Z";
-const BACK_SHADE: &str = "M 8 46 C 4 26 18 8 42 5 C 28 12 18 26 18 44 C 18 58 24 70 30 76 L 22 80 C 14 72 8 60 8 46 Z";
-const EYE: &str = "M 58 30 C 64 22 80 22 86 32 C 89 41 82 49 72 48 C 62 47 55 40 58 30 Z";
-const BROW: &str = "M 50 24 C 62 14 84 14 92 28 C 84 20 64 20 54 30 Z";
-const NOSE: &str = "M 89 42 C 92 47 94 52 95 56 L 88 56 C 89 51 88 46 89 42 Z";
-const CHEEK: &str = "M 44 52 C 54 46 72 48 84 56 C 72 54 58 54 46 58 Z";
-const TEMPLE: &str = "M 28 14 C 22 26 22 38 30 48 M 34 58 C 40 52 48 52 54 58 M 40 88 C 50 90 60 90 70 88";
+// The skull is drawn as the boxes print it: an engraved profile, facing
+// right — a high domed cranium, a deep socket under a heavy brow, the
+// nasal notch, a jutting cheekbone, the upper teeth set in the maxilla and
+// a separate jaw hinged under the ear, hatched on its unlit (back) side.
+const CRANIUM: &str = "M 10 48 C 6 28 20 8 44 5 C 64 2 82 10 89 24 C 92 30 91 36 94 41 L 97 47 C 97 51 99 55 99 59 L 94 60 C 94 63 95 66 93 68 C 80 69 64 70 52 70 C 46 70 42 67 38 63 C 35 68 31 73 25 75 C 16 70 11 60 10 48 Z";
+const JAW: &str = "M 40 64 C 44 66 46 70 49 73 L 93 72 C 94 79 92 85 86 89 C 76 95 62 96 52 93 C 46 91 43 86 42 80 C 40 74 38 68 40 64 Z";
+const EYE: &str = "M 63 32 C 67 24 81 24 86 32 C 89 39 84 47 76 47 C 67 47 61 40 63 32 Z";
+const EYE_DEEP: &str = "M 69 34 C 72 30 80 30 83 35 C 85 40 81 44 76 44 C 71 44 67 39 69 34 Z";
+const BROW: &str = "M 52 25 C 62 14 82 14 91 27 C 84 21 66 20 56 30 Z";
+const NOSE: &str = "M 90 43 C 93 48 97 53 96 58 L 86 58 C 86 53 88 47 90 43 Z";
+const CHEEK: &str = "M 46 50 C 56 45 72 47 86 55 L 85 59 C 72 55 58 55 48 59 Z";
+const HINGE: &str = "M 34 58 C 38 60 41 63 42 67 C 39 67 36 64 34 58 Z";
 
 /// A profile skull, grinning, facing right (or left if flipped).
 pub fn skull(b: &mut Builder<'_>, parent: NodeId, size: (f64, f64), p: &Put) {
     let k = p.s / 100.0;
-    let p = &Put { tall: p.tall * 0.86, ..*p };
+    let p = &Put { tall: p.tall * 0.9, ..*p };
+    let hair = (0.7 * k).max(0.45);
     fill(b, parent, "skull", size, CRANIUM, p, INK);
-    fill(b, parent, "skull shade", size, BACK_SHADE, p, SHADE);
     fill(b, parent, "skull jaw", size, JAW, p, INK);
+    // Engraved shading: arcs following the back of the cranium, tighter
+    // towards the edge, and a few along the jaw's underside.
+    let mut hatch = String::new();
+    for i in 0..9 {
+        let r = 33.0 - f64::from(i) * 2.3;
+        let (a0, a1) = (246.0 + f64::from(i) * 1.5, 304.0 - f64::from(i) * 2.0);
+        for j in 0..=10 {
+            let a = (a0 + (a1 - a0) * f64::from(j) / 10.0).to_radians();
+            let (u, v) = (50.0 + r * a.sin() * 1.02, 41.0 - r * a.cos());
+            hatch.push_str(&format!("{} {u:.1} {v:.1} ", if j == 0 { "M" } else { "L" }));
+        }
+    }
+    for i in 0..5 {
+        let v = 84.0 + f64::from(i) * 2.2;
+        let fi = f64::from(i);
+        hatch.push_str(&format!("M {:.1} {v:.1} C 60 {:.1} 74 {:.1} {:.1} {:.1} ", 48.0 + fi * 2.0, v + 3.0, v + 3.0, 88.0 - fi * 2.0, v - 1.0));
+    }
+    stroke(b, parent, "skull hatching", size, &hatch, p, hair, SHADE);
+    // Temple ridge, the suture, the cheek's hollow.
+    stroke(b, parent, "skull ridges", size, "M 30 20 C 46 12 66 13 82 22 M 44 8 C 46 16 42 22 46 30 C 50 36 46 42 50 46 M 40 60 C 46 56 52 56 58 60", p, hair * 1.2, SHADE);
+    fill(b, parent, "skull cheek", size, CHEEK, p, SHADE);
     fill(b, parent, "skull brow", size, BROW, p, SHADE);
     fill(b, parent, "skull eye", size, EYE, p, BLACK);
+    fill(b, parent, "skull eye depth", size, EYE_DEEP, p, "#2a2927");
     fill(b, parent, "skull nose", size, NOSE, p, BLACK);
-    fill(b, parent, "skull cheek", size, CHEEK, p, SHADE);
-    fill(b, parent, "skull temple", size, "M 32 26 C 44 30 50 42 46 56 C 40 50 34 40 32 26 Z", p, SHADE);
-    fill(b, parent, "skull hinge", size, "M 26 66 C 30 70 34 74 36 80 C 32 80 28 76 26 66 Z", p, BLACK);
-    stroke(b, parent, "skull cracks", size, TEMPLE, p, 0.9 * k.max(0.4), SHADE);
+    fill(b, parent, "skull hinge", size, HINGE, p, BLACK);
     // Teeth: the upper row hangs from the maxilla, the lower rises from
     // the jaw; the gap between them is the grin.
     let mut upper = String::new();
     let mut lower = String::new();
     for i in 0..9 {
-        let u = 48.0 + f64::from(i) * 4.8;
-        upper.push_str(&format!("M {u} 64.5 L {} 64.5 L {} 71.5 L {} 72 L {} 71.5 Z ", u + 4.1, u + 3.7, u + 2.05, u + 0.4));
-        lower.push_str(&format!("M {u} 80 L {} 80 L {} 74 L {} 73.5 L {} 74 Z ", u + 4.1, u + 3.7, u + 2.05, u + 0.4));
+        let u = 51.0 + f64::from(i) * 4.6;
+        upper.push_str(&format!("M {u} 66.5 L {} 66.5 L {} 72.5 L {} 73.2 L {} 72.5 Z ", u + 3.9, u + 3.6, u + 1.95, u + 0.3));
+        lower.push_str(&format!("M {u} 80 L {} 80 L {} 75 L {} 74.4 L {} 75 Z ", u + 3.9, u + 3.6, u + 1.95, u + 0.3));
     }
-    fill(b, parent, "skull gap", size, "M 44 63 L 94 62 L 92 81 L 42 82 Z", p, BLACK);
+    fill(b, parent, "skull gap", size, "M 49 66 L 94 65 L 93 81 L 48 82 Z", p, BLACK);
     fill(b, parent, "skull teeth", size, &upper, p, INK);
     fill(b, parent, "skull teeth", size, &lower, p, INK);
 }
@@ -184,13 +208,52 @@ pub fn rosette(b: &mut Builder<'_>, parent: NodeId, size: (f64, f64), (cx, cy): 
     b.add(parent, draw::circle("rosette seat", cx, cy, r * 0.6, draw::solid(BLACK)));
 }
 
-/// A knot square (a celtic tile): an over-under loop in a square box.
+/// A celtic knot tile: a four-lobed interlace woven through a ring, drawn
+/// as a white ribbon with black edges and a centre groove, the ring laid
+/// over the lobes at alternate crossings — `s` px square at (`cx`, `cy`).
 pub fn knot(b: &mut Builder<'_>, parent: NodeId, size: (f64, f64), (cx, cy): (f64, f64), s: f64) {
     let h = s / 2.0;
     let p = Put::new(cx - h, cy - h, s, false);
-    const LOOP: &str = "M 20 50 C 20 20 50 20 50 50 C 50 80 80 80 80 50 C 80 20 50 20 50 50 C 50 80 20 80 20 50 Z M 50 20 C 80 20 80 50 50 50 C 20 50 20 80 50 80 C 80 80 80 50 50 50 C 20 50 20 20 50 20 Z";
-    stroke(b, parent, "knot", size, LOOP, &p, (s * 0.07).max(1.0), INK);
-    stroke(b, parent, "knot", size, LOOP, &p, (s * 0.025).max(0.5), BLACK);
+    // Four lobes, each a loop out from the centre along a diagonal.
+    let mut lobes = String::new();
+    for q in 0..4 {
+        let a = 45.0 + 90.0 * f64::from(q);
+        let tip = draw::polar(50.0, 50.0, 46.0, a);
+        let l = draw::polar(50.0, 50.0, 40.0, a - 44.0);
+        let r = draw::polar(50.0, 50.0, 40.0, a + 44.0);
+        let c0 = draw::polar(50.0, 50.0, 8.0, a - 80.0);
+        let c1 = draw::polar(50.0, 50.0, 8.0, a + 80.0);
+        let t = ((r.0 - l.0) * 0.28, (r.1 - l.1) * 0.28);
+        lobes.push_str(&format!(
+            "M {:.2} {:.2} C {:.2} {:.2} {:.2} {:.2} {:.2} {:.2} C {:.2} {:.2} {:.2} {:.2} {:.2} {:.2} ",
+            c0.0, c0.1, l.0, l.1, tip.0 - t.0, tip.1 - t.1, tip.0, tip.1, tip.0 + t.0, tip.1 + t.1, r.0, r.1, c1.0, c1.1
+        ));
+    }
+    let rr = 27.0;
+    let k = 0.552_284_75 * rr;
+    let ring = format!(
+        "M 77 50 C 77 {:.2} {:.2} 23 50 23 C {:.2} 23 23 {:.2} 23 50 C 23 {:.2} {:.2} 77 50 77 C {:.2} 77 77 {:.2} 77 50 Z ",
+        50.0 - k, 50.0 + k, 50.0 - k, 50.0 - k, 50.0 + k, 50.0 - k, 50.0 + k, 50.0 + k
+    );
+    let wide = (s * 0.075).max(1.2);
+    let edge = wide + (s * 0.035).max(0.7);
+    let groove = (s * 0.014).max(0.3);
+    for (name, d) in [("knot lobes", &lobes), ("knot ring", &ring)] {
+        stroke(b, parent, &format!("{name} edge"), size, d, &p, edge, BLACK);
+        stroke(b, parent, name, size, d, &p, wide, INK);
+        stroke(b, parent, &format!("{name} groove"), size, d, &p, groove, BLACK);
+    }
+    // Over-under: at alternate crossings the lobe passes over the ring —
+    // a short piece of the lobe's ribbon laid back on top.
+    for q in 0..4 {
+        let a = 45.0 + 90.0 * f64::from(q) - 32.0;
+        let (u, v) = draw::polar(50.0, 50.0, rr, a);
+        let (dx, dy) = draw::polar(0.0, 0.0, 5.0, a - 40.0);
+        let piece = format!("M {:.2} {:.2} L {:.2} {:.2}", u - dx, v - dy, u + dx, v + dy);
+        stroke(b, parent, "knot over edge", size, &piece, &p, edge, BLACK);
+        stroke(b, parent, "knot over", size, &piece, &p, wide, INK);
+        stroke(b, parent, "knot over groove", size, &piece, &p, groove, BLACK);
+    }
 }
 
 /// A scroll flourish (a curl pair) centred on (`cx`, `cy`), `w` wide.
@@ -299,9 +362,19 @@ pub fn legend(size: f64) -> Ink<'static> {
     Ink::new(size, INK).weight(700.0).track(0.04)
 }
 
-/// Model-name lettering: tall condensed heavy capitals.
+/// Model-name lettering: the boxes' tall condensed display capitals with
+/// spurred serifs (Pirata One), fitted to `w` but never taller than a
+/// capital of `max` px.
 pub fn title(b: &mut Builder<'_>, parent: NodeId, s: &str, (cx, cy): (f64, f64), w: f64) -> f64 {
-    let (_, size) = rk::letter_fit(b, parent, s, (cx, cy), w, Letter::new(20.0, 800.0, INK).stretch(0.78).track(0.04));
+    title_max(b, parent, s, (cx, cy), w, 46.0)
+}
+
+/// [`title`] with its own size cap.
+pub fn title_max(b: &mut Builder<'_>, parent: NodeId, s: &str, (cx, cy): (f64, f64), w: f64, max: f64) -> f64 {
+    let l = Letter::new(20.0, 400.0, INK).family(family::PIRATA_ONE).track(0.04);
+    let probe = rk::lettering::set_width(s, &l.size(100.0));
+    let size = (100.0 * w / probe).min(max);
+    rk::letter(b, parent, s, (cx, cy), l.size(size));
     size
 }
 
@@ -309,13 +382,22 @@ pub fn title(b: &mut Builder<'_>, parent: NodeId, s: &str, (cx, cy): (f64, f64),
 /// gate prints its name.
 pub fn hollow_title(b: &mut Builder<'_>, parent: NodeId, s: &str, (cx, cy): (f64, f64), (w, h): (f64, f64), weight: f64) {
     use crate::rigkit::lettering::outline;
-    let l = Letter::new(100.0, 900.0, INK).stretch(0.72).track(0.1);
-    // Cut at 100 px, then scale to `w` wide and `h` tall (the caps: the
-    // cap line sits 5.3 px under the box top at 100 px, the baseline at 78).
-    let (d, set) = outline(s, &l);
-    let (sx, sy) = (w / set.max(1.0), h / 72.7);
-    let (x0, y0) = (cx - w / 2.0, cy - h / 2.0 - 5.3 * sy);
-    let mapped = map_xy(&d, |x, y| (x0 + x * sx, y0 + y * sy));
+    let l = Letter::new(100.0, 400.0, INK).family(family::PIRATA_ONE).track(0.08);
+    // Cut at 100 px, then scale the outline's own box to `w` × `h`.
+    let (d, _) = outline(s, &l);
+    let nums: Vec<f64> = d.split_whitespace().filter_map(|t| t.parse::<f64>().ok()).collect();
+    let (mut bx0, mut by0, mut bx1, mut by1) = (f64::MAX, f64::MAX, f64::MIN, f64::MIN);
+    for xy in nums.chunks(2) {
+        if let [x, y] = xy {
+            bx0 = bx0.min(*x);
+            bx1 = bx1.max(*x);
+            by0 = by0.min(*y);
+            by1 = by1.max(*y);
+        }
+    }
+    let (sx, sy) = (w / (bx1 - bx0).max(1.0), h / (by1 - by0).max(1.0));
+    let (x0, y0) = (cx - w / 2.0, cy - h / 2.0);
+    let mapped = map_xy(&d, |x, y| (x0 + (x - bx0) * sx, y0 + (y - by0) * sy));
     let mut n = draw::path(&format!("lettering {s}"), 0.0, 0.0, cx + w / 2.0, cy + h / 2.0, mapped, draw::solid(INK));
     n.fills = Vec::new();
     n.stroke = document_proto::Stroke { paints: vec![draw::solid(INK)], weight, join: document_proto::StrokeJoin::Miter, ..document_proto::Stroke::default() };
@@ -362,10 +444,10 @@ pub fn label_letter(b: &mut Builder<'_>, control: NodeId, s: &str, (cx, cy): (f6
     id
 }
 
-/// The family's knob legend: condensed heavy capitals.
+/// The family's knob legend: tall condensed heavy capitals.
 #[must_use]
 pub fn knob_letter(size: f64) -> Letter<'static> {
-    Letter::new(size, 760.0, INK).stretch(0.82).track(0.02)
+    Letter::new(size * 1.12, 600.0, INK).family(family::OSWALD).track(0.03)
 }
 
 /// Black leather tolex over `(x, y, w, h)` (rounded `radius`): a near-black

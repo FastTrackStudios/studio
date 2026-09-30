@@ -189,7 +189,7 @@ fn ridge_clean() -> Face {
         jack_and_cable(b, root, (138.0, cy), 13.0, (w, h), "#1c1d20", false);
         head_toggle(b, root, "Boost", &a("boost"), (190.0, cy), 16.0, Some((362.0, ink)));
         head_toggle(b, root, "Voice", &a("voice"), (243.0, cy), 16.0, Some((362.0, ink)));
-        let style = KnobStyle::new("knob.amp_ticked", "black", 40.0, "#d8d9dc");
+        let style = super::knob("flat", 38.0, "#d8d9dc", &["color=#17181b", "ticks=lines", "skirt=ridged", "skirt_color=#0e0f11", "spec=1.2"]);
         for (i, (addr, name, _)) in TONE_STACK.iter().enumerate() {
             let x = 323.0 + 92.3 * i as f64;
             rk::knob_lt(b, root, &style, &a(addr), name, (x, cy + 2.0), 355.0, ink);
@@ -317,7 +317,7 @@ fn mech_rhythm() -> Face {
         rk::line(b, root, &[(131.0, 419.0), (131.0, 428.0)], 1.2, ORANGE);
         head_toggle(b, root, "Voice", &a("voice"), (200.0, cy), 16.0, Some((ly, ink)));
         rk::line(b, root, &[(200.0, 419.0), (200.0, 428.0)], 1.2, ORANGE);
-        let style = KnobStyle::new("knob.cup", "white", 54.0, "#3b3e44");
+        let style = super::knob("domed", 50.0, "#3b3e44", &["color=#f2f2f1", "pointer=#ef7a2c", "ticks=none", "shadow=1.3"]);
         for (i, (addr, name, _)) in TONE_STACK.iter().enumerate() {
             rk::knob_lt(b, root, &style, &a(addr), name, (287.0 + 103.5 * i as f64, cy), ly, ink);
         }

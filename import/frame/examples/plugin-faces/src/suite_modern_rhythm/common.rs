@@ -101,14 +101,14 @@ pub fn brushing(b: &mut Builder<'_>, p: NodeId, (x, y, w, h): (f64, f64, f64, f6
 }
 
 /// A small LCD: a dark green-grey window in a black bezel, its reading
-/// (the bound param, lit) centred.
+/// (the bound param, lit, in fourteen segments) centred.
 #[allow(clippy::too_many_arguments)]
 pub fn lcd(b: &mut Builder<'_>, p: NodeId, name: &str, addr: &str, (x, y, w, h): (f64, f64, f64, f64), size: f64, format: Option<ValueFormat>) -> NodeId {
     let win = parts::screen(b, p, name, (x, y, w, h), Screen { glass: ("#1c231f", "#27302a"), ink: "#d8e9dc", mesh: false });
-    let r = parts::readout(b, win, name, rk::bind(addr), (2.0, h / 2.0, w - 4.0, ), size, "#d8e9dc", TextAlign::Center);
-    if let Some(f) = format {
-        parts::format(b, r, f);
-    }
+    // Fourteen-segment characters over their unlit ghosts, as the LCDs read.
+    let seg = rk::lcd::seg14(size * 0.82, "#d8e9dc").track(0.06);
+    let cells = ((w - 6.0) / rk::lettering::set_width("~", &seg).max(1.0)).floor() as usize;
+    let r = rk::lcd::readout(b, win, name, rk::bind(addr), (2.0, h / 2.0, w - 4.0), seg, TextAlign::Center, Some(("#d8e9dc14", cells)), format.unwrap_or_default());
     capitals(b, r);
     r
 }

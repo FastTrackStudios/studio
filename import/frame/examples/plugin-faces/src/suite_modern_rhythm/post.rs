@@ -60,10 +60,10 @@ fn delay_2() -> Face {
         let win = parts::screen(b, p, "Display", (112.0, 57.0, 180.0, 36.0), Screen { glass: ("#34493f", "#40584c"), ink: "#dcebe1", mesh: false });
         rk::letter_aligned(b, win, "FREE / DAW / TAP", (6.0, 8.0), Letter::new(6.2, 640.0, "#dcebe1").track(0.02), TextAlign::Left);
         rk::letter_aligned(b, win, "P-P: OFF / ON", (174.0, 8.0), Letter::new(6.2, 640.0, "#dcebe1").track(0.02), TextAlign::Right);
-        let t = parts::readout(b, win, "Time readout", rk::bind(&a("time")), (4.0, 24.0, 86.0), 13.0, "#dcebe1", TextAlign::Left);
-        parts::format(b, t, ValueFormat { decimals: Some(0), ..ValueFormat::default() });
-        let bpm = parts::readout(b, win, "Tempo readout", rk::bind(&a("bpm")), (86.0, 24.0, 90.0), 13.0, "#dcebe1", TextAlign::Right);
-        parts::format(b, bpm, ValueFormat { decimals: Some(1), ..ValueFormat::default() });
+        // Fourteen-segment readings, as the LCD shows them.
+        let seg = rk::lcd::seg14(10.5, "#dcebe1").track(0.06);
+        let t = rk::lcd::readout(b, win, "Time readout", rk::bind(&a("time")), (4.0, 24.0, 86.0), seg, TextAlign::Left, None, ValueFormat { decimals: Some(0), ..ValueFormat::default() });
+        let bpm = rk::lcd::readout(b, win, "Tempo readout", rk::bind(&a("bpm")), (86.0, 24.0, 90.0), seg, TextAlign::Right, None, ValueFormat { decimals: Some(1), ..ValueFormat::default() });
         common::capitals(b, t);
         common::capitals(b, bpm);
         // Second row: low cut, TIME, MOD, high cut.

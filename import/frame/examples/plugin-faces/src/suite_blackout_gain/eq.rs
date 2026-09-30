@@ -104,7 +104,7 @@ fn unlit(b: &mut Builder<'_>, readout: NodeId) {
 /// slope glyph under it.
 fn filter_knob(b: &mut Builder<'_>, root: NodeId, addr: &str, name: &str, x: f64, slope: &str, legend: Ink<'_>) {
     let p = Place::new(name).size(54.0).variant("bare").bind(rk::bind(&a(addr))).touch(TOUCH_MIN);
-    let k = parts::put(b, root, "knob.knurled_cap", &p, x, 91.0);
+    let k = parts::put(b, root, super::knob_id("knob.knurled_cap"), &p, x, 91.0);
     parts::strip_legend(b, k);
     parts::strip_scale(b, k);
     rk::silk(b, root, &format!("{name} :"), x - 22.0, 31.0, legend);

@@ -17,8 +17,8 @@ pub fn faces() -> Vec<Face> {
     vec![gate(), drive(), boost()]
 }
 
-const BIG: KnobStyle<'static> = KnobStyle::new("knob.pedal_lobed", "black", 50.0, INK);
-const SMALL: KnobStyle<'static> = KnobStyle::new("knob.pedal_lobed", "black", 40.0, INK);
+const BIG: KnobStyle<'static> = super::pedal_knob(48.0);
+const SMALL: KnobStyle<'static> = super::pedal_knob(40.0);
 
 fn enclosure() -> Enclosure<'static> {
     Enclosure::new("standard", BLACK, "satin").base("#0b0b0b").jacks("top")
@@ -137,7 +137,7 @@ fn boost() -> Face {
         rk::knob(b, p, &BIG, &a("level"), "", (w / 2.0, 72.0), 0.0, Ink::new(6.0, INK));
         art::flourish(b, p, size, (30.0, 150.0), 34.0, false);
         art::flourish(b, p, size, (w - 30.0, 150.0), 34.0, true);
-        rk::letter_fit(b, p, "MAUL", (w / 2.0, 176.0), 110.0, rk::Letter::new(20.0, 540.0, INK).stretch(1.08).track(0.14));
+        rk::letter_fit(b, p, "MAUL", (w / 2.0, 176.0), 112.0, rk::Letter::new(20.0, 400.0, INK).family(surface_kit::draw::family::PIRATA_ONE).track(0.22));
         medallion(b, p, size, (w / 2.0, 204.0), 13.0);
         furniture(b, p, size, &a("on"), GREEN, "9V DC");
     });

@@ -11,6 +11,7 @@ surface-widgets = { path = "../../features/surface/surface-widgets" }
 surface-proto = { path = "../../features/surface/surface-proto", default-features = false }
 document-proto = { path = "../../features/document/document-proto", default-features = false }
 document-text = { path = "../../features/document/document-text" }
+render-fonts = { path = "../../features/render/render-fonts" }
 motion-runtime = { path = "../../features/motion/motion-runtime" }
 serde_json = { workspace = true }
 skrifa = "0.26"

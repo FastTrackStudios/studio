@@ -10,7 +10,7 @@
 
 use document_proto::{NodeId, TextAlign};
 use surface_kit::{Place, TOUCH_MIN, draw};
-use surface_proto::{ButtonMode, Control, ControlKind, SlotRole, ValueFormat};
+use surface_proto::{Axis, ButtonMode, Control, ControlKind, HandleAxis, SlotRole, ValueFormat};
 use surface_widgets::Builder;
 
 use super::PLUGIN;
@@ -94,12 +94,41 @@ fn speaker(b: &mut Builder<'_>, parent: NodeId, (cx, cy): (f64, f64), r: f64) {
     b.add(parent, draw::with_effects(draw::circle("dust cap", cx, cy, r * 0.32, draw::radial_at(0.4, 0.35, 0.8, &[(0.0, "#5e6166"), (0.6, "#2c2d31"), (1.0, "#141517")])), vec![draw::drop_shadow("#00000099", 0.0, 3.0, 6.0)]));
 }
 
-/// A mic seen from the front, aimed at a cone: its body, grille and clip.
-fn mic(b: &mut Builder<'_>, parent: NodeId, (x, y): (f64, f64), len: f64, deg: f64) {
-    let body = draw::rotated(draw::rounded(draw::rect("mic body", x - len / 2.0, y - 7.0, len, 14.0, draw::linear(180.0, &[(0.0, "#55585e"), (0.5, "#1a1b1d"), (1.0, "#3a3c40")])), 6.0), deg);
-    b.add(parent, draw::with_effects(body, vec![draw::drop_shadow("#000000aa", 2.0, 6.0, 8.0)]));
-    let (gx, gy) = (x + (len / 2.0 - 10.0) * deg.to_radians().cos(), y + (len / 2.0 - 10.0) * deg.to_radians().sin());
-    b.add(parent, draw::circle("mic grille", gx, gy, 9.0, draw::radial_at(0.4, 0.35, 0.8, &[(0.0, "#8a8d93"), (1.0, "#2a2b2e")])));
+/// A mic laid across a cone, aimed in from the side, on a `Handle`: its
+/// grille follows the mic's position (from the dust cap out to the rim)
+/// and distance (down the cone, away from the speaker's centre line). The
+/// body runs out towards `side` (-1 left, +1 right) past the rim.
+fn mic(b: &mut Builder<'_>, parent: NodeId, ns: &str, which: &str, (cx, cy): (f64, f64), r: f64, side: f64) {
+    let a = |s: &str| format!("{ns}/{which}_{s}");
+    let (aw, ah) = (r * 0.85, r * 0.42);
+    let ax = if side < 0.0 { cx - aw } else { cx };
+    let area = b.add(parent, draw::frame(&format!("Mic {which} travel"), ax, cy - 4.0, aw, ah));
+    let t = 44.0;
+    let h = b.add(area, draw::frame(&format!("Mic {} on cone", which.to_uppercase()), 0.0, 0.0, t, t));
+    let (c, len, thick) = (t / 2.0, 110.0, 16.0);
+    // The body, the clip ring and the cable end, running out from the head.
+    let (bx0, bx1) = if side < 0.0 { (c - len, c - 8.0) } else { (c + 8.0, c + len) };
+    let body = draw::rounded(draw::rect("mic body", bx0, c - thick / 2.0, bx1 - bx0, thick, draw::linear(180.0, &[(0.0, "#5b5e64"), (0.3, "#26272b"), (0.7, "#101113"), (1.0, "#2a2b2f")])), thick / 2.0);
+    b.add(h, draw::with_effects(body, vec![draw::drop_shadow("#000000a6", 6.0, 10.0, 9.0)]));
+    let ring_x = if side < 0.0 { c - 30.0 } else { c + 26.0 };
+    b.add(h, draw::rect("mic ring", ring_x, c - thick / 2.0 - 0.5, 4.0, thick + 1.0, draw::linear(180.0, &[(0.0, "#d8dadd"), (0.5, "#6a6c70"), (1.0, "#b8babd")])));
+    // The grille: a shorter, lighter barrel of mesh at the tip.
+    let (gx0, gw) = if side < 0.0 { (c - 9.0, 13.0) } else { (c - 4.0, 13.0) };
+    let grille = draw::rounded(draw::rect("mic grille", gx0, c - 7.5, gw, 15.0, draw::linear(180.0, &[(0.0, "#9ea1a6"), (0.45, "#4c4e53"), (1.0, "#6d7075")])), 4.5);
+    b.add(h, draw::with_effects(grille, vec![draw::drop_shadow("#00000099", 4.0, 7.0, 6.0)]));
+    let mesh: Vec<Vec<(f64, f64)>> = (0..5).map(|k| {
+        let x = gx0 + 2.0 + 2.2 * f64::from(k);
+        vec![(x, c - 6.5), (x, c + 6.5)]
+    }).collect();
+    b.add(h, parts::stroke_path("mic mesh", (0.0, 0.0, t, t), &mesh, 0.6, "#2a2b2e", false));
+    let kind = ControlKind::Handle {
+        x: Some(rk::bind(&a("position"))),
+        y: Some(rk::bind(&a("distance"))),
+        wheel: None,
+        x_map: HandleAxis::new(if side < 0.0 { Axis::Linear { min: 100.0, max: 0.0 } } else { Axis::Linear { min: 0.0, max: 100.0 } }),
+        y_map: HandleAxis::new(Axis::Linear { min: 100.0, max: 0.0 }),
+    };
+    b.controls.insert(h, Control::new(kind));
 }
 
 /// One mic's column of controls, its left edge at `x`.
@@ -161,8 +190,8 @@ fn cab() -> Face {
         for (cx, cy) in [(116.0, 146.0), (340.0, 146.0), (116.0, 400.0), (340.0, 400.0)] {
             speaker(b, baffle, (cx, cy), 98.0);
         }
-        mic(b, baffle, (84.0, 138.0), 96.0, 12.0);
-        mic(b, baffle, (372.0, 138.0), 96.0, 168.0);
+        mic(b, baffle, ns, "a", (116.0, 146.0), 98.0, -1.0);
+        mic(b, baffle, ns, "b", (340.0, 146.0), 98.0, 1.0);
         // The page's controls: the two mic columns and the room send.
         mic_column(b, root, ns, "a", 22.0, true);
         mic_column(b, root, ns, "b", 716.0, false);

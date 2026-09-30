@@ -147,7 +147,7 @@ fn strip(b: &mut Builder<'_>, root: NodeId) {
     n.fills = vec![draw::solid("#0b0b0bd9")];
     let n = draw::with_effects(draw::stroked(draw::rounded(n, 12.0), "#ffffff1f", 1.0), vec![draw::drop_shadow("#000000a0", 0.0, 4.0, 12.0)]);
     let s = b.add(root, n);
-    let knob = KnobStyle::new("knob.pedal_grip", "black", 36.0, "#8a8a88").opts(&["dots=21"]);
+    let knob = KnobStyle::new(super::knob_id("knob.pedal_grip"), "black", 36.0, "#8a8a88").opts(&["dots=21"]);
     let legend = Ink::new(8.0, TEXT).weight(600.0).track(0.06);
     let value = Ink::new(7.0, "#8a8a88").weight(500.0).track(0.02).plain();
     for (m, x0) in [("a", 14.0), ("b", w - 354.0)] {
