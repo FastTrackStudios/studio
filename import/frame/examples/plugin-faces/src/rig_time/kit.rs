@@ -214,3 +214,45 @@ pub fn stub(ns: &str, name: &str, color: &str) -> document_proto::Scene {
         }
     })
 }
+
+/// A rendered knob (`knob.3d`) on `addr` with the kit's `options` (colour,
+/// pointer, skirt…), `d` across at (`cx`, `cy`), its legend under it and
+/// its live value between, in the face's inks.
+#[allow(clippy::too_many_arguments)]
+pub fn knob3d(b: &mut Builder<'_>, parent: NodeId, addr: &str, legend_text: &str, d: f64, (cx, cy): (f64, f64), options: &[&str], ink: &str, dim: &str) -> NodeId {
+    let mut opts = vec!["touch=44", "ticks=none"];
+    opts.extend_from_slice(options);
+    let p = Place::new(legend_text).legend(" ").size(d).variant("flat").options(&opts).bind(ui::bind(addr));
+    let k = ui::put(b, parent, "knob.3d", &p, cx, cy);
+    ui::strip_legend(b, k);
+    ui::add_value(b, k, (d * 0.16).clamp(7.0, 9.0), dim);
+    let size = (d * 0.19).clamp(7.0, 10.0);
+    ui::silk(b, parent, legend_text, cx, cy + d / 2.0 + 20.0, size, ink, 800.0);
+    k
+}
+
+/// A seven-segment readout of `addr` (to `decimals`, no unit), lit in
+/// `color` over its unlit segments ("888…", `digits` wide), right-aligned
+/// in the box (`x`, `cy`, `w`) at `size`.
+#[allow(clippy::too_many_arguments)]
+pub fn seg_readout(b: &mut Builder<'_>, parent: NodeId, addr: &str, (x, cy, w): (f64, f64, f64), size: f64, digits: usize, decimals: u8, color: &str) -> NodeId {
+    use document_proto::{NodeKind, TextData};
+    let h = (size * 1.3).ceil();
+    let root = b.add(parent, draw::frame(&format!("{addr} readout"), x, cy - h / 2.0, w, h));
+    let text = |s: &str, fill: &str| {
+        let mut n = draw::text("segments", s, 0.0, 0.0, w, size, fill, TextAlign::Right);
+        if let NodeKind::Text(t) = &mut n.kind {
+            *t = TextData { characters: s.to_string(), font_family: Some(draw::family::DSEG7.into()), font_size: size, align: TextAlign::Right, ..TextData::default() };
+        }
+        n
+    };
+    let unlit = if decimals == 0 { "8".repeat(digits) } else { format!("{}.{}", "8".repeat(digits - usize::from(decimals)), "8".repeat(usize::from(decimals))) };
+    b.add(root, text(&unlit, &ui::alpha(color, 0.12)));
+    let lit = b.add(root, draw::emissive(text("", color), draw::hex(color), 0.9, size * 0.5));
+    let c = surface_proto::Control::new(surface_proto::ControlKind::Readout)
+        .slot(surface_proto::SlotRole::Value, lit.0)
+        .bound(ui::bind(addr))
+        .formatted(surface_proto::ValueFormat::decimals(decimals).unit(""));
+    b.controls.insert(root, c);
+    root
+}

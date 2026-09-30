@@ -1,9 +1,105 @@
-//! Digital: placeholder until its machine is drawn.
+//! Digital: a studio digital delay in the rack — black anodised faceplate
+//! and ears, the delay time on red seven-segment LEDs, a phosphor scope
+//! showing the echoes as they will fall (each at a multiple of the time,
+//! each lower by the feedback), the data wheel for the time, and the
+//! parameter knobs in a grid.
+
+use document_proto::NodeId;
+use surface_kit::draw;
+use surface_widgets::Builder;
 
 use crate::face::Face;
-use crate::rig_time::kit;
+use crate::reverb::ui;
+use crate::rig_time::kit::{self, DLY};
+
+const INK: &str = "#d9dde2";
+const DIM: &str = "#7d838b";
+const LED: &str = "#ff3b30";
+const PHOSPHOR: &str = "#5dffb0";
+
+fn a(id: &str) -> String {
+    format!("{DLY}/{id}")
+}
+
+/// A recessed dark window (`x, y, w, h`) with smoked glass; returns it.
+fn window(b: &mut Builder<'_>, parent: NodeId, name: &str, (x, y, w, h): (f64, f64, f64, f64), glass: (&str, &str)) -> NodeId {
+    let bezel = draw::rounded(draw::rect("bezel", x - 3.0, y - 3.0, w + 6.0, h + 6.0, draw::linear(180.0, &[(0.0, "#000000"), (1.0, "#2a2c30")])), 4.0);
+    b.add(parent, bezel);
+    let mut win = draw::frame(name, x, y, w, h);
+    win.fills = vec![draw::linear(180.0, &[(0.0, glass.0), (1.0, glass.1)])];
+    win.clips_content = true;
+    win.corner_radii = document_proto::CornerRadii::uniform(2.0);
+    win.effects = vec![draw::inner_shadow("#000000e0", 0.0, 2.0, 5.0)];
+    b.add(parent, win)
+}
+
+/// A rack ear with its two slotted holes, `x` wide from `x0`.
+fn ear(b: &mut Builder<'_>, parent: NodeId, x0: f64, w: f64) {
+    for cy in [30.0, kit::H - 30.0] {
+        let slot = draw::rounded(draw::rect("rack slot", x0 + w / 2.0 - 6.0, cy - 3.5, 12.0, 7.0, draw::solid("#050505")), 3.5);
+        b.add(parent, draw::with_effects(slot, vec![draw::inner_shadow("#000000", 0.0, 1.0, 2.0), draw::drop_shadow("#ffffff1a", 0.0, 1.0, 0.0)]));
+    }
+}
 
 #[must_use]
 pub fn face() -> Face {
-    kit::delay_face("61-dly-digital", kit::stub(kit::DLY, "Digital", "#5ff2d2"))
+    let scene = kit::lane("Digital", |b, root| {
+        let mut plate = draw::frame("Faceplate", 0.0, 0.0, kit::W, kit::H);
+        plate.fills = vec![draw::linear(180.0, &[(0.0, "#1f2124"), (0.5, "#16181a"), (1.0, "#0f1012")])];
+        plate.corner_radii = document_proto::CornerRadii::uniform(4.0);
+        let plate = b.add(root, draw::with_effects(plate, vec![draw::inner_shadow("#ffffff22", 0.0, 1.0, 0.0), draw::inner_shadow("#00000080", 0.0, -2.0, 3.0)]));
+        // Brushed anodising.
+        let brush: Vec<Vec<(f64, f64)>> = (0..80).map(|i| {
+            let y = 1.0 + f64::from(i) * 2.05;
+            vec![(0.0, y), (kit::W, y)]
+        }).collect();
+        b.add(plate, ui::strokes("brush", &brush, 0.5, draw::solid("#ffffff08")));
+        let ear_w = 26.0;
+        ear(b, plate, 0.0, ear_w);
+        ear(b, plate, kit::W - ear_w, ear_w);
+        for x in [ear_w, kit::W - ear_w] {
+            ui::rule(b, plate, x, 6.0, 1.0, kit::H - 12.0, "#00000099");
+            ui::rule(b, plate, x + 1.0, 6.0, 1.0, kit::H - 12.0, "#ffffff14");
+        }
+
+        // ── The display: the time in milliseconds ──────────────────────
+        let x0 = ear_w + 18.0;
+        ui::silk_left(b, plate, "Digital Delay", x0, 16.0, 8.0, INK, 800.0);
+        ui::silk_left(b, plate, "24-bit · 96 kHz", x0 + 94.0, 16.0, 6.0, DIM, 700.0);
+        let disp = window(b, plate, "Display", (x0, 28.0, 250.0, 78.0), ("#1a0303", "#0d0101"));
+        kit::seg_readout(b, disp, &a("time"), (8.0, 42.0, 190.0), 40.0, 4, 0, LED);
+        ui::silk_left(b, disp, "ms", 204.0, 58.0, 9.0, LED, 800.0);
+        ui::silk_left(b, disp, "Delay", 8.0, 10.0, 6.0, &ui::alpha(LED, 0.6), 800.0);
+        // Feedback and level as smaller LED readouts under it.
+        let sub = window(b, plate, "Sub display", (x0, 118.0, 250.0, 30.0), ("#1a0303", "#0d0101"));
+        ui::silk_left(b, sub, "Fdbk", 8.0, 15.0, 6.0, &ui::alpha(LED, 0.6), 800.0);
+        kit::seg_readout(b, sub, &a("feedback"), (34.0, 15.0, 70.0), 15.0, 3, 2, LED);
+        ui::silk_left(b, sub, "Lvl dB", 126.0, 15.0, 6.0, &ui::alpha(LED, 0.6), 800.0);
+        kit::seg_readout(b, sub, &a("level"), (160.0, 15.0, 80.0), 15.0, 3, 0, LED);
+
+        // ── The scope: the echoes as they fall ─────────────────────────
+        let (sx, sy, sw, sh) = (x0 + 268.0, 28.0, 250.0, 120.0);
+        let scope = window(b, plate, "Scope", (sx, sy, sw, sh), ("#03140c", "#010905"));
+        let grid: Vec<Vec<(f64, f64)>> = (1..10).map(|i| vec![(sw * f64::from(i) / 10.0, 0.0), (sw * f64::from(i) / 10.0, sh)])
+            .chain((1..4).map(|i| vec![(0.0, sh * f64::from(i) / 4.0), (sw, sh * f64::from(i) / 4.0)]))
+            .collect();
+        b.add(scope, ui::strokes("graticule", &grid, 0.5, draw::solid(&ui::alpha(PHOSPHOR, 0.12))));
+        kit::echo_train(b, scope, (8.0, 14.0, sw - 16.0, sh - 26.0), 10, 2500.0, PHOSPHOR);
+        ui::silk_left(b, scope, "0", 6.0, sh - 6.0, 5.5, &ui::alpha(PHOSPHOR, 0.5), 700.0);
+        ui::silk(b, scope, "2.5 s", sw - 16.0, sh - 6.0, 5.5, &ui::alpha(PHOSPHOR, 0.5), 700.0);
+        b.add(scope, draw::rect("glass", 0.0, 0.0, sw, sh, draw::linear(160.0, &[(0.0, "#ffffff10"), (0.4, "#ffffff00")])));
+
+        // ── The wheel and the knobs ────────────────────────────────────
+        let wx = sx + sw + 58.0;
+        let wheel = ["color=#2a2d31", "pointer=#e9ecef", "index=dot", "skirt=plain", "skirt_color=#3a3e44"];
+        kit::knob3d(b, plate, &a("time"), "Delay Time", 62.0, (wx, 66.0), &wheel, INK, DIM);
+        let cap = ["color=#c4c8cd", "pointer=#101113", "index=line", "index_w=0.12", "skirt=plain", "skirt_color=#1a1c1f"];
+        let grid = [("feedback", "Feedback"), ("high_cut", "Hi Cut"), ("mod_rate", "Mod Rate"), ("level", "Level"), ("high_pass", "Lo Cut"), ("mod_depth", "Mod Depth")];
+        for (i, (id, legend)) in grid.iter().enumerate() {
+            let (col, row) = (i % 3, i / 3);
+            kit::knob3d(b, plate, &a(id), legend, 26.0, (wx + 74.0 + 52.0 * col as f64, 42.0 + 64.0 * row as f64), &cap, INK, DIM);
+        }
+        kit::bypass(b, plate, DLY, kit::W - ear_w - 24.0, 118.0, 24.0, "red", "On");
+    });
+    kit::delay_face("61-dly-digital", scene)
 }
