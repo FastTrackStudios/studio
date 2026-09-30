@@ -1,16 +1,15 @@
-//! The pitch unit: four voices and a doubler, and a ladder that shows
+//! The pitch unit: four voices, and a ladder that shows
 //! where every voice sits against the note.
 //!
 //! The ladder runs two octaves down to two up, its octaves and unison
 //! marked: the dry note a white line at unison, each voice a bar in its
-//! colour at its interval — as long as its level — and the doubler a pair
-//! of hairlines hugging unison, spread by its detune. Beside it, a column
-//! per voice (its interval, read as a musical name, and its level), the
-//! doubler (on, detune, delay, width) and the dry level and mix.
+//! colour at its interval — as long as its level. Beside it, a column
+//! per voice (its interval, read as a musical name, and its level), and
+//! the dry level and mix. The doubler is a unit of its own (`doubler.rs`).
 //!
 //! Voices A and B are the rig's pitch block (`semitones`/`a_level`,
-//! `b_semitones`/`b_level`); C, D and the doubler are drawn and bound for
-//! the engine to take up (`c_*`, `d_*`, `dbl_*`).
+//! `b_semitones`/`b_level`); C and D are drawn and bound for the engine
+//! to take up (`c_*`, `d_*`).
 
 use document_proto::motion::{Dynamics, Motion, Target};
 use document_proto::{CornerRadii, NodeId, ResizeX, TextAlign};
@@ -29,7 +28,7 @@ use crate::suite_studio_blues::parts::set;
 const NS: &str = "pitch";
 const INK: &str = "#ece7dc";
 const DIM: &str = "#8b8f98";
-const W: f64 = 760.0;
+const W: f64 = 540.0;
 
 /// Each voice: its label, interval and level params, its colour.
 const VOICES: [(&str, &str, &str, &str); 4] = [
@@ -50,8 +49,7 @@ fn interval_format() -> ValueFormat {
         .fold(ValueFormat::decimals(0).signed(), |f, (at, l)| f.mark(*at, *l))
 }
 
-/// The ladder in `v` (`w × h`): the scale, the dry note, the voices, the
-/// doubler.
+/// The ladder in `v` (`w × h`): the scale, the dry note, the voices.
 fn ladder(b: &mut Builder<'_>, v: NodeId, w: f64, h: f64) {
     let (top, bottom) = (14.0, h - 14.0);
     let y_of = |semis: f64| top + (bottom - top) * (24.0 - semis) / 48.0;
@@ -78,16 +76,6 @@ fn ladder(b: &mut Builder<'_>, v: NodeId, w: f64, h: f64) {
     }
     b.add(dry, ui::glowing(draw::rounded(draw::rect("note", 0.0, 0.0, w - 70.0, 4.0, draw::solid("#f7f5ef")), 2.0), "#ffffff", 0.6, 4.0));
     motion::add(b, dry, Motion::new(Target::StretchX).input("param(pitch/dry)".to_string()).range(0.02, 1.0).pivot(0.0, 0.5).dynamics(Dynamics::spring(300.0, 30.0)));
-    // The doubler: two hairlines either side of unison, spread by detune.
-    for side in [-1.0, 1.0] {
-        let d = b.add(v, draw::frame("double", 56.0, y_of(0.0) - 1.0, w - 70.0, 2.0));
-        if let Some(n) = b.scene.node_mut(d) {
-            n.layout_child.resize_x = Some(ResizeX::Stretch);
-        }
-        b.add(d, draw::rect("line", 0.0, 0.0, w - 70.0, 1.2, draw::solid("#c4b5fd")));
-        motion::add(b, d, Motion::new(Target::Y).input("norm(pitch/dbl_detune) * param(pitch/dbl_on)".to_string()).range(0.0, side * 10.0).dynamics(Dynamics::spring(300.0, 30.0)));
-        motion::add(b, d, Motion::new(Target::Opacity).input("param(pitch/dbl_on)".to_string()).range(0.0, 0.9));
-    }
     // The voices: a bar each at its interval, as long as its level.
     let bar_h = 10.0;
     let lane_w = w - 70.0;
@@ -132,10 +120,10 @@ pub fn pitch_unit() -> Face {
         let p = b.add(root, draw::with_effects(p, vec![draw::inner_shadow("#ffffff14", 0.0, 1.0, 0.0)]));
         let head = Lettering::family(family::INTER).weight(800.0);
         set(b, p, "PITCH", 36.0, 18.0, 12.0, "#facc15", &head, 0.3);
-        ui::silk_left(b, p, "Four voices · doubler", 72.0, 18.0, 6.5, DIM, 700.0);
+        ui::silk_left(b, p, "Four voices · harmony", 72.0, 18.0, 6.5, DIM, 700.0);
 
         // ── The ladder ──────────────────────────────────────────────────
-        let (vx, vy, vw, vh) = (12.0, 30.0, 300.0, H - 42.0);
+        let (vx, vy, vw, vh) = (12.0, 30.0, 190.0, H - 42.0);
         let mut v = draw::frame("Ladder", vx, vy, vw, vh);
         v.fills = vec![draw::linear(180.0, &[(0.0, "#0c0d10"), (1.0, "#08090b")])];
         v.clips_content = true;
@@ -154,16 +142,11 @@ pub fn pitch_unit() -> Face {
             dial(b, p, &a(st), "Interval", 42.0, (cx, 84.0), color, Some(interval_format()));
             dial(b, p, &a(lv), "Level", 32.0, (cx, 180.0), color, None);
         }
-        // ── The doubler, the dry and the mix ─────────────────────────────
+        // ── The dry and the mix ─────────────────────────────────────────
         let dx = x0 + col * 4.0 + 16.0;
         b.add(p, draw::rect("divider", dx - 8.0, 34.0, 1.0, H - 50.0, draw::solid("#ffffff14")));
-        ui::silk_left(b, p, "Doubler", dx + 4.0, 42.0, 7.5, "#c4b5fd", 800.0);
-        let key = surface_kit::Place::new("Doubler").size(18.0).variant("purple").legend("").bind(ui::bind(&a("dbl_on")));
-        ui::put(b, p, "button.illuminated", &key, dx + 88.0, 42.0);
-        dial(b, p, &a("dbl_detune"), "Detune", 30.0, (dx + 22.0, 84.0), "#c4b5fd", None);
-        dial(b, p, &a("dbl_delay"), "Delay", 30.0, (dx + 76.0, 84.0), "#c4b5fd", None);
-        dial(b, p, &a("dry"), "Dry", 30.0, (dx + 22.0, 180.0), "#f7f5ef", None);
-        dial(b, p, &a("mix"), "Mix", 30.0, (dx + 76.0, 180.0), "#f7f5ef", None);
+        dial(b, p, &a("dry"), "Dry", 30.0, (dx + 18.0, 84.0), "#f7f5ef", None);
+        dial(b, p, &a("mix"), "Mix", 30.0, (dx + 18.0, 180.0), "#f7f5ef", None);
         // The unit's own On, top right of its column.
         kit::bypass(b, p, NS, W - 26.0, 20.0, 20.0, "amber", "On");
 
@@ -181,9 +164,6 @@ pub fn pitch_unit() -> Face {
         level("c_level", "Voice C level", 0.0),
         semis("d_semitones", "Voice D", 4.0),
         level("d_level", "Voice D level", 0.0),
-        ui::toggle(&a("dbl_on"), "Doubler", false),
-        ui::param(&a("dbl_detune"), "Doubler detune", Range::linear(0.0, 30.0, Unit::None), 9.0),
-        ui::param(&a("dbl_delay"), "Doubler delay", Range::linear(5.0, 40.0, Unit::Milliseconds), 18.0),
         level("dry", "Dry", 1.0),
         level("mix", "Mix", 0.5),
         ui::toggle(&a("on"), "Pitch", false),

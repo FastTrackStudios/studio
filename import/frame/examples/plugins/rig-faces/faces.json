@@ -1089,13 +1089,24 @@
       ]
     },
     {
+      "face": "35-doubler",
+      "match": [
+        "doubler"
+      ],
+      "ns": "doubler",
+      "size": [
+        300.0,
+        286.0
+      ]
+    },
+    {
       "face": "33-pitch-voices",
       "match": [
         "pitch"
       ],
       "ns": "pitch",
       "size": [
-        760.0,
+        540.0,
         286.0
       ]
     }

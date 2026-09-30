@@ -7734,57 +7734,6 @@
       "featured": false
     },
     {
-      "addr": "pitch/dbl_on",
-      "name": "Doubler",
-      "short_name": null,
-      "group": null,
-      "kind": "Toggle",
-      "range": {
-        "min": 0.0,
-        "max": 1.0,
-        "scale": "Linear",
-        "unit": "None",
-        "steps": 2
-      },
-      "default": 0.0,
-      "bipolar": false,
-      "featured": false
-    },
-    {
-      "addr": "pitch/dbl_detune",
-      "name": "Doubler detune",
-      "short_name": null,
-      "group": null,
-      "kind": "Continuous",
-      "range": {
-        "min": 0.0,
-        "max": 30.0,
-        "scale": "Linear",
-        "unit": "None",
-        "steps": null
-      },
-      "default": 0.3,
-      "bipolar": false,
-      "featured": false
-    },
-    {
-      "addr": "pitch/dbl_delay",
-      "name": "Doubler delay",
-      "short_name": null,
-      "group": null,
-      "kind": "Continuous",
-      "range": {
-        "min": 5.0,
-        "max": 40.0,
-        "scale": "Linear",
-        "unit": "Milliseconds",
-        "steps": null
-      },
-      "default": 0.37142857142857144,
-      "bipolar": false,
-      "featured": false
-    },
-    {
       "addr": "pitch/dry",
       "name": "Dry",
       "short_name": null,
@@ -7832,6 +7781,91 @@
         "steps": 2
       },
       "default": 0.0,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "doubler/detune",
+      "name": "Detune",
+      "short_name": null,
+      "group": null,
+      "kind": "Continuous",
+      "range": {
+        "min": 0.0,
+        "max": 30.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": null
+      },
+      "default": 0.3,
+      "bipolar": false,
+      "featured": true
+    },
+    {
+      "addr": "doubler/delay",
+      "name": "Delay",
+      "short_name": null,
+      "group": null,
+      "kind": "Continuous",
+      "range": {
+        "min": 5.0,
+        "max": 40.0,
+        "scale": "Linear",
+        "unit": "Milliseconds",
+        "steps": null
+      },
+      "default": 0.37142857142857144,
+      "bipolar": false,
+      "featured": true
+    },
+    {
+      "addr": "doubler/width",
+      "name": "Width",
+      "short_name": null,
+      "group": null,
+      "kind": "Continuous",
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": null
+      },
+      "default": 0.8,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "doubler/mix",
+      "name": "Mix",
+      "short_name": null,
+      "group": null,
+      "kind": "Continuous",
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": null
+      },
+      "default": 0.6,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "doubler/on",
+      "name": "Doubler",
+      "short_name": null,
+      "group": null,
+      "kind": "Toggle",
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 2
+      },
+      "default": 1.0,
       "bipolar": false,
       "featured": false
     },
