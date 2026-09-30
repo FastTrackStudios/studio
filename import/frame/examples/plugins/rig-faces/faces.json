@@ -1284,6 +1284,27 @@
       ]
     }
   ],
+  "pre_comp_pedal": {
+    "face": "10-drive-compressor",
+    "maps": [
+      {
+        "face": "sustain",
+        "linear": [
+          -5.0,
+          0.0
+        ],
+        "param": "threshold"
+      }
+    ],
+    "match": [
+      "pre comp"
+    ],
+    "ns": "precomp",
+    "size": [
+      196.0,
+      286.0
+    ]
+  },
   "time": {
     "delay": [
       {

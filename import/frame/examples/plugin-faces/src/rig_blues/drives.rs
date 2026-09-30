@@ -657,3 +657,43 @@ pub fn all() -> Vec<Face> {
 pub fn every() -> Vec<Face> {
     vec![blade(), pegasus(), british_blues(), tube_drive(), king_of_tone(), morning_glory()]
 }
+
+/// The compressor at the head of the board: a satin red box, two big
+/// knobs (SUSTAIN, LEVEL) over two small ones (ATTACK, BLEND), the name in
+/// white script, the LED and the stomp. Bound to the rig's Pre Comp block:
+/// `precomp/sustain` 0–10 maps onto its threshold (the host's map, more
+/// sustain lower), the rest are its own params.
+#[must_use]
+pub fn compressor() -> Face {
+    const W: f64 = 196.0;
+    const NS: &str = "precomp";
+    const INK: &str = "#fbeee9";
+    let scene = canvas("Compressor", |b, root| {
+        let (lid, lw, lh) = enclosure(b, root, W, "#b8221c", "satin", &["jack_inset=8", "radius=12"]);
+        b.add(lid, draw::rect("sheen", 0.0, 0.0, lw, lh, draw::linear(120.0, &[(0.0, "#ffffff1c"), (0.45, "#ffffff00"), (1.0, "#00000026")])));
+        led(b, lid, NS, lw * 0.5, 10.0, 5.0, "#ff3a2e");
+        let big = ["color=#141416", "pointer=#f6f2ee", "index=line", "index_w=0.09", "skirt=plain", "skirt_color=#0b0b0c"];
+        for (i, (id, name)) in [("sustain", "SUSTAIN"), ("makeup", "LEVEL")].iter().enumerate() {
+            let cx = lw * (0.28 + 0.44 * i as f64);
+            knob(b, lid, "flat", &big, &format!("{NS}/{id}"), name, 52.0, cx, lh * 0.16);
+            parts::print(b, lid, name, cx, lh * 0.16 + 35.0, 8.5, INK, 750.0, 0.12);
+        }
+        let small = ["color=#141416", "pointer=#f6f2ee", "index=line", "index_w=0.1", "skirt=plain", "skirt_color=#0b0b0c"];
+        for (i, (id, name)) in [("attack", "ATTACK"), ("mix", "BLEND")].iter().enumerate() {
+            let cx = lw * (0.28 + 0.44 * i as f64);
+            knob(b, lid, "flat", &small, &format!("{NS}/{id}"), name, 36.0, cx, lh * 0.43);
+            parts::print(b, lid, name, cx, lh * 0.43 + 25.0, 7.5, INK, 750.0, 0.12);
+        }
+        let script = Lettering::family(family::DANCING_SCRIPT).weight(700.0);
+        set(b, lid, "Compressor", lw * 0.5, lh * 0.62, 26.0, INK, &script, 0.0);
+        stomp(b, lid, NS, 34.0, lw * 0.5, lh * 0.8);
+    });
+    let params = vec![
+        ui::param(&format!("{NS}/sustain"), "Sustain", Range::linear(0.0, 10.0, Unit::None), 6.0).featured(),
+        ui::param(&format!("{NS}/makeup"), "Level", Range::linear(-24.0, 24.0, Unit::Db), 0.0).featured(),
+        ui::param(&format!("{NS}/attack"), "Attack", Range::log(0.1, 200.0, Unit::Milliseconds), 20.0),
+        ui::param(&format!("{NS}/mix"), "Blend", Range::linear(0.0, 1.0, Unit::None), 1.0),
+        on(NS),
+    ];
+    Face { file: "10-drive-compressor", plugin: PLUGIN, scene, params, streams: Vec::new() }
+}

@@ -269,6 +269,7 @@ fn d_(f: Face) -> Face {
 #[must_use]
 pub fn faces() -> Vec<Face> {
     let mut v: Vec<Face> = drive_entries().into_iter().map(|(f, _, _)| f).collect();
+    v.push(Face { plugin: PLUGIN, ..drives::compressor() });
     v.extend(pre_entries());
     v.push(trio());
     v.push(post_comp());
@@ -310,8 +311,12 @@ pub fn manifest() -> String {
         // Spring"): frame's spring reverb.
         json!({ "match": ["spring"], "face": pre[2].file, "ns": "spring", "size": size(&pre[2]) }),
     ];
+    // The compressor at the head of the drive board: the Pre Comp block.
+    let comp = Face { plugin: PLUGIN, ..drives::compressor() };
+    let pre_comp_pedal = json!({ "match": ["pre comp"], "face": comp.file, "ns": "precomp", "size": size(&comp), "maps": [{ "face": "sustain", "param": "threshold", "linear": [-5.0, 0.0] }] });
     let doc = json!({
         "drives": drives,
+        "pre_comp_pedal": pre_comp_pedal,
         "pre": pre,
         "amps": amps,
         "gate": { "face": "51-gate", "ns": "gate", "size": size(&gate()) },
