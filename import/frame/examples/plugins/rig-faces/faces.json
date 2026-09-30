@@ -240,14 +240,14 @@
       ]
     },
     {
-      "face": "19-gravity-tank-spring",
+      "face": "19-spring-reverb",
       "match": [
-        "gravity tank spring"
+        "spring"
       ],
       "ns": "spring",
       "size": [
-        470.0,
-        300.0
+        560.0,
+        330.0
       ]
     }
   ]

@@ -211,3 +211,57 @@ pub fn face() -> Face {
     ];
     Face { file: "05-spring", plugin: "reverb", scene, params, streams: super::levels("spring") }
 }
+
+/// The spring reverb for a rig row, on a rig's reverb block: the same
+/// green chassis and walnut cheeks, the open tank with two ringing springs
+/// across the top, and the three a spring is set by — DWELL (the block's
+/// decay), TONE, MIX (its level) — on cream chicken-heads, DAMP on black
+/// bakelite, the IN bat and the pilot. `w × h`.
+#[must_use]
+pub fn rig_face(file: &'static str, plugin: &'static str, w: f64, h: f64) -> Face {
+    let a = Springs {
+        dwell: "spring/decay",
+        damping: "spring/damping",
+        tension: "spring/tension",
+        drip: "spring/modulation",
+        on: "spring/on",
+        input: "spring/in",
+        output: "spring/out",
+    };
+    let scene = canvas("Spring Reverb", |b, root| {
+        ui::fit_root(b, root, w, h);
+        let panel = ui::panel(b, root, "panel.desktop", "green", w, h, "wood");
+        let (tx, ty, tw, th) = (46.0, 20.0, w - 92.0, h * 0.46);
+        let mut tank = draw::frame("Tank", tx, ty, tw, th);
+        tank.clips_content = true;
+        tank.corner_radii = document_proto::CornerRadii::uniform(6.0);
+        tank.effects = vec![draw::drop_shadow("#000000b0", 0.0, 4.0, 10.0)];
+        let tank = b.add(panel, tank);
+        tank_art_with(b, tank, &a, tw, th, 2, "");
+        let row = ty + th + (h - ty - th) * 0.44;
+        let legend_y = h - 18.0;
+        let d = ((h - ty - th) * 0.52).min(78.0);
+        let cream = Dial::new("knob.chicken_head", "cream", d, INK, DIM).legend_at(legend_y);
+        let black = Dial::new("knob.bakelite", "black", d * 0.72, INK, DIM).legend_at(legend_y);
+        let x = |f: f64| tx + tw * f;
+        ui::dial(b, panel, "spring/decay", "Dwell", x(0.1), row, &cream);
+        ui::dial(b, panel, "spring/tone", "Tone", x(0.3), row, &cream);
+        ui::dial(b, panel, "spring/damping", "Damp", x(0.48), row, &black);
+        ui::dial(b, panel, "spring/level", "Mix", x(0.66), row, &cream);
+        let bat = Place::new("In").size(34.0).variant("chrome").legend("").bind(bind("spring/on")).options(&["On", "Off"]);
+        let t = ui::put(b, panel, "switch.toggle_bat", &bat, x(0.84), row - 4.0);
+        ui::strip_legend(b, t);
+        ui::silk(b, panel, "Reverb", x(0.84), legend_y, 9.0, INK, 800.0);
+        ui::lamp(b, panel, x(0.96), row - 4.0, 12.0, "#e8452c", true);
+    });
+    let params = vec![
+        ui::param("spring/decay", "Dwell", surface_proto::Range::linear(0.0, 1.0, surface_proto::Unit::None), 0.35).featured(),
+        ui::param("spring/tone", "Tone", surface_proto::Range::linear(-1.0, 1.0, surface_proto::Unit::None), 0.0).featured(),
+        ui::param("spring/damping", "Damping", surface_proto::Range::linear(0.0, 1.0, surface_proto::Unit::None), 0.3),
+        ui::param("spring/level", "Mix", surface_proto::Range::linear(-60.0, 12.0, surface_proto::Unit::Db), -16.5).featured(),
+        ui::param("spring/tension", "Tension", surface_proto::Range::linear(0.0, 1.0, surface_proto::Unit::None), 0.5),
+        ui::param("spring/modulation", "Drip", surface_proto::Range::linear(0.0, 1.0, surface_proto::Unit::None), 0.2),
+        ui::toggle("spring/on", "Reverb", true),
+    ];
+    Face { file, plugin, scene, params, streams: Vec::new() }
+}

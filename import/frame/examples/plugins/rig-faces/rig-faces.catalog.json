@@ -595,19 +595,19 @@
       "featured": false
     },
     {
-      "addr": "spring/level",
-      "name": "Mix",
+      "addr": "spring/decay",
+      "name": "Dwell",
       "short_name": null,
       "group": null,
       "kind": "Continuous",
       "range": {
-        "min": -60.0,
-        "max": 12.0,
+        "min": 0.0,
+        "max": 1.0,
         "scale": "Linear",
-        "unit": "Db",
+        "unit": "None",
         "steps": null
       },
-      "default": 0.6041666666666666,
+      "default": 0.35,
       "bipolar": false,
       "featured": true
     },
@@ -626,11 +626,11 @@
       },
       "default": 0.5,
       "bipolar": false,
-      "featured": false
+      "featured": true
     },
     {
-      "addr": "spring/decay",
-      "name": "Decay",
+      "addr": "spring/damping",
+      "name": "Damping",
       "short_name": null,
       "group": null,
       "kind": "Continuous",
@@ -641,7 +641,58 @@
         "unit": "None",
         "steps": null
       },
-      "default": 0.35,
+      "default": 0.3,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "spring/level",
+      "name": "Mix",
+      "short_name": null,
+      "group": null,
+      "kind": "Continuous",
+      "range": {
+        "min": -60.0,
+        "max": 12.0,
+        "scale": "Linear",
+        "unit": "Db",
+        "steps": null
+      },
+      "default": 0.6041666666666666,
+      "bipolar": false,
+      "featured": true
+    },
+    {
+      "addr": "spring/tension",
+      "name": "Tension",
+      "short_name": null,
+      "group": null,
+      "kind": "Continuous",
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": null
+      },
+      "default": 0.5,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "spring/modulation",
+      "name": "Drip",
+      "short_name": null,
+      "group": null,
+      "kind": "Continuous",
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": null
+      },
+      "default": 0.2,
       "bipolar": false,
       "featured": false
     },
@@ -660,7 +711,7 @@
       },
       "default": 1.0,
       "bipolar": false,
-      "featured": true
+      "featured": false
     },
     {
       "addr": "trio/drive",
@@ -6689,57 +6740,6 @@
         "steps": 15
       },
       "default": 0.21428571428571427,
-      "bipolar": false,
-      "featured": false
-    },
-    {
-      "addr": "spring/damping",
-      "name": "Damping",
-      "short_name": null,
-      "group": null,
-      "kind": "Continuous",
-      "range": {
-        "min": 0.0,
-        "max": 1.0,
-        "scale": "Linear",
-        "unit": "None",
-        "steps": null
-      },
-      "default": 0.3,
-      "bipolar": false,
-      "featured": false
-    },
-    {
-      "addr": "spring/tension",
-      "name": "Tension",
-      "short_name": null,
-      "group": null,
-      "kind": "Continuous",
-      "range": {
-        "min": 0.0,
-        "max": 1.0,
-        "scale": "Linear",
-        "unit": "None",
-        "steps": null
-      },
-      "default": 0.5,
-      "bipolar": false,
-      "featured": false
-    },
-    {
-      "addr": "spring/modulation",
-      "name": "Modulation",
-      "short_name": null,
-      "group": null,
-      "kind": "Continuous",
-      "range": {
-        "min": 0.0,
-        "max": 1.0,
-        "scale": "Linear",
-        "unit": "None",
-        "steps": null
-      },
-      "default": 0.2,
       "bipolar": false,
       "featured": false
     }
