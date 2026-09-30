@@ -500,3 +500,44 @@ fn knob_3d_cost() {
         eprintln!("stage, 30 knob.3d regions at 2x (1200 x 1000), {mode:?}: {:.2} ms/frame", t0.elapsed().as_secs_f64() * 1000.0 / 20.0);
     }
 }
+
+/// The stage keeps its renders between frames and re-renders only what
+/// changed (a run of primitives; a faded layer by fading it): frame after
+/// frame, a pulsing lamp under a shape must look exactly as a fresh
+/// render of the same frame does.
+#[test]
+fn kept_renders_match_fresh_ones_frame_after_frame() {
+    let Some(mut kept) = offscreen() else { return };
+    let bg = shape(NodeKind::Rectangle, 0.0, 0.0, 100.0, 100.0, (0.1, 0.1, 0.12));
+    let mut lamp = shape(NodeKind::Ellipse, 30.0, 30.0, 30.0, 30.0, (0.2, 1.0, 0.6));
+    lamp.emission = Some(doc::Emission { color: doc::Color::rgba(0.2, 1.0, 0.6, 1.0), intensity: 1.0, radius: 10.0 });
+    let needle = shape(NodeKind::Rectangle, 20.0, 20.0, 6.0, 60.0, (0.9, 0.9, 0.9));
+    let cover = shape(NodeKind::Rectangle, 45.0, 45.0, 30.0, 30.0, (0.8, 0.2, 0.2));
+    // A lamp of parts (a frame, faded as a whole): a layer.
+    let mut glow = shape(NodeKind::Frame, 60.0, 10.0, 30.0, 30.0, (0.1, 0.3, 1.0));
+    glow.clips_content = false;
+    let bulb = shape(NodeKind::Ellipse, 5.0, 5.0, 20.0, 20.0, (0.9, 0.9, 0.2));
+    let spark = shape(NodeKind::Rectangle, 12.0, 0.0, 6.0, 30.0, (1.0, 1.0, 1.0));
+    let (lamp_id, needle_id, glow_id) = (lamp.id, needle.id, glow.id);
+    let (mut scene, root) =
+        scene_of(vec![(None, bg), (None, lamp), (None, needle), (None, glow), (Some(3), bulb), (Some(3), spark), (None, cover)]);
+    for (alpha, x) in [(0.2, 20.0), (0.9, 20.0), (0.5, 20.0), (0.5, 60.0), (0.35, 70.0), (1.0, 70.0), (0.6, 70.0)] {
+        scene.node_mut(lamp_id).unwrap().opacity = alpha;
+        scene.node_mut(glow_id).unwrap().opacity = 1.0 - alpha * 0.5;
+        scene.node_mut(needle_id).unwrap().transform = doc::Transform::translate(x, 20.0);
+        let got = render(&mut kept, &scene, root, Mode::Gpu);
+        let mut fresh = offscreen().expect("an adapter a moment ago");
+        let want = render(&mut fresh, &scene, root, Mode::Gpu);
+        let worst = got.rgba.iter().zip(&want.rgba).map(|(a, b)| a.abs_diff(*b)).max().unwrap_or(0);
+        assert!(worst <= 2, "alpha {alpha}, needle at {x}: kept render differs by {worst}");
+    }
+    // Only the layer fading: rendered once, faded as it's laid over.
+    for fade in [0.3, 0.8, 0.55, 1.0, 0.1] {
+        scene.node_mut(glow_id).unwrap().opacity = fade;
+        let got = render(&mut kept, &scene, root, Mode::Gpu);
+        let mut fresh = offscreen().expect("an adapter a moment ago");
+        let want = render(&mut fresh, &scene, root, Mode::Gpu);
+        let worst = got.rgba.iter().zip(&want.rgba).map(|(a, b)| a.abs_diff(*b)).max().unwrap_or(0);
+        assert!(worst <= 2, "layer at {fade}: kept render differs by {worst}");
+    }
+}

@@ -2164,11 +2164,13 @@ dependencies = [
  "document-proto",
  "kurbo 0.13.1",
  "peniko",
+ "pollster",
  "render",
  "serde_json",
  "surface-proto",
  "surface-runtime",
  "vello",
+ "wgpu",
 ]
 
 [[package]]

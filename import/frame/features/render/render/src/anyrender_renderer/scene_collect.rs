@@ -320,7 +320,6 @@ fn is_authored(node: &doc::Node) -> bool {
 /// Node-local bounds `(x0, y0, x1, y1)` of an authored node's geometry,
 /// stroke included; `None` for Figma imports and nodes without geometry.
 fn authored_geometry_bounds(node: &doc::Node) -> Option<(f64, f64, f64, f64)> {
-    use kurbo::Shape;
     if !is_authored(node) || (node.fill_geometry.is_empty() && node.stroke_geometry.is_empty()) {
         return None;
     }
@@ -328,8 +327,7 @@ fn authored_geometry_bounds(node: &doc::Node) -> Option<(f64, f64, f64, f64)> {
         .fill_geometry
         .iter()
         .chain(&node.stroke_geometry)
-        .filter_map(|d| kurbo::BezPath::from_svg(d).ok())
-        .map(|p| p.bounding_box())
+        .filter_map(cached_path_bounds)
         .filter(|r| r.x0.is_finite() && r.y0.is_finite() && r.x1.is_finite() && r.y1.is_finite())
         .reduce(|a, b| a.union(b))?;
     let stroked = node.stroke.paints.iter().any(|p| p.visible) && node.stroke_geometry.is_empty();
@@ -1068,4 +1066,30 @@ impl Cx<'_> {
             self.out.push(PaintPrimitive::MaskApplyEnd { node_id: m });
         }
     }
+}
+
+/// Bounds of SVG path data, parsed once: asked for every authored node on
+/// every frame (culling), and parsing the path again each time was most of
+/// a still face's cost to render.
+fn cached_path_bounds(path_data: &String) -> Option<kurbo::Rect> {
+    use kurbo::Shape;
+    use std::collections::HashMap;
+    use std::hash::{Hash, Hasher};
+    use std::sync::{LazyLock, Mutex};
+
+    static CACHE: LazyLock<Mutex<HashMap<u64, Option<kurbo::Rect>>>> = LazyLock::new(|| Mutex::new(HashMap::new()));
+
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    path_data.hash(&mut hasher);
+    let key = hasher.finish();
+    if let Ok(cache) = CACHE.lock()
+        && let Some(cached) = cache.get(&key)
+    {
+        return *cached;
+    }
+    let bounds = kurbo::BezPath::from_svg(path_data).ok().map(|p| p.bounding_box());
+    if let Ok(mut cache) = CACHE.lock() {
+        cache.insert(key, bounds);
+    }
+    bounds
 }

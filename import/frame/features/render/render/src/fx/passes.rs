@@ -359,6 +359,13 @@ impl Passes {
         Self::run(encoder, &self.blit, &bind, dst, false);
     }
 
+    /// Straight-alpha `src` over `dst`, faded to `opacity`.
+    pub fn blit_over_faded(&self, device: &wgpu::Device, encoder: &mut wgpu::CommandEncoder, src: &wgpu::TextureView, dst: &wgpu::TextureView, opacity: f32) {
+        let u = PassUniforms { premul: 1, gain: opacity, ..Default::default() };
+        let bind = self.bind(device, &u.bytes(), src);
+        Self::run(encoder, &self.blit, &bind, dst, false);
+    }
+
     /// `src` box-downsampled by `step` into `dst` (premultiplying first when
     /// `premul`).
     pub fn down(&self, device: &wgpu::Device, encoder: &mut wgpu::CommandEncoder, src: &wgpu::TextureView, dst: &wgpu::TextureView, step: u32, premul: bool) {

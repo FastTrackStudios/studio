@@ -49,7 +49,10 @@ fn premultiply(c: vec4<f32>) -> vec4<f32> {
 // "over" (One, OneMinusSrcAlpha).
 @fragment
 fn fs_blit(in: VsOut) -> @location(0) vec4<f32> {
-    return premultiply(load(vec2<i32>(in.pos.xy)));
+    let c = premultiply(load(vec2<i32>(in.pos.xy)));
+    // `premul` = 1: faded by `gain` (a layer's opacity, applied here
+    // rather than rendered in).
+    return select(c, c * u.gain, u.premul == 1u);
 }
 
 // Box-average `step`×`step` source texels into one; premultiply first when

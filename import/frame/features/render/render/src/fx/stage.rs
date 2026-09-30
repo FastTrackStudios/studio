@@ -76,12 +76,31 @@ pub struct Stage {
     textures: HashMap<String, wgpu::Texture>,
     scene: vello::Scene,
     time_dependent: bool,
+    /// Each vello render of the last frame (a segment, a bloom bucket),
+    /// by name, with what it drew: a frame drawing the same again reuses
+    /// the texture instead of rendering it.
+    renders: HashMap<String, CachedRender>,
+}
+
+/// A vello render kept: what went into it and the texture it made.
+struct CachedRender {
+    key: RenderKey,
+    texture: wgpu::Texture,
+}
+
+/// Everything a render's picture depends on.
+#[derive(PartialEq)]
+enum RenderKey {
+    /// A run of primitives painted under a transform.
+    Prims { prims: Vec<PaintPrimitive>, transform: kurbo::Affine, base: peniko::Color, size: (u32, u32) },
+    /// A bloom bucket's emitters, each at its share of the strength.
+    Emit { draws: Vec<(EmissiveDraw, f64)>, transform: kurbo::Affine, size: (u32, u32) },
 }
 
 impl Stage {
     #[must_use]
     pub fn new(device: &wgpu::Device) -> Self {
-        Self { passes: Passes::new(device), textures: HashMap::new(), scene: vello::Scene::new(), time_dependent: false }
+        Self { passes: Passes::new(device), textures: HashMap::new(), scene: vello::Scene::new(), time_dependent: false, renders: HashMap::new() }
     }
 
     /// Whether the last frame rendered had a time-dependent effect (a
@@ -112,8 +131,8 @@ impl Stage {
             Mode::Fallback | Mode::Off => {
                 let options = CollectOptions { emission_glow: frame.mode == Mode::Fallback };
                 let prims = build_scene_primitives_with(frame.doc, frame.root, options);
-                paint(&mut scene, &prims, frame, frame.overlay);
-                vello_into(frame.checked, renderer, device, queue, &scene, &out, frame.base, frame.antialiasing)
+                self.render_prims("all", prims, frame.overlay, frame, renderer, device, queue, &mut scene, (w, h), frame.base)
+                    .map(|kept| copy_whole(device, queue, &kept, &out))
             }
             Mode::Gpu => self.render_gpu(device, queue, renderer, frame, &mut scene, &out),
         };
@@ -141,12 +160,11 @@ impl Stage {
         let clear = peniko::Color::TRANSPARENT;
         let aa = frame.antialiasing;
 
+        let _ = aa;
         if regions.is_empty() {
-            paint(scene, &prims, frame, frame.overlay);
-            vello_into(frame.checked, renderer, device, queue, scene, out, frame.base, aa)?;
+            let kept = self.render_prims("all", prims, frame.overlay, frame, renderer, device, queue, scene, (w, h), frame.base)?;
+            copy_whole(device, queue, &kept, out);
         } else {
-            let scratch = self.texture(device, "scratch", w, h, TARGET);
-            let scratch_view = scratch.create_view(&wgpu::TextureViewDescriptor::default());
             // What a generator's pass binds as its source: never drawn to,
             // so transparent (its box's 1 px margin reads it).
             let blank_view = regions
@@ -157,13 +175,13 @@ impl Stage {
             for (i, r) in regions.iter().enumerate() {
                 let seg = slice_with_context(&prims, cursor..r.range.start);
                 if i == 0 {
-                    paint(scene, &seg, frame, None);
-                    vello_into(frame.checked, renderer, device, queue, scene, out, frame.base, aa)?;
+                    let kept = self.render_prims("seg0", seg, None, frame, renderer, device, queue, scene, (w, h), frame.base)?;
+                    copy_whole(device, queue, &kept, out);
                 } else if has_draws(&seg) {
-                    paint(scene, &seg, frame, None);
-                    vello_into(frame.checked, renderer, device, queue, scene, &scratch, clear, aa)?;
+                    let kept = self.render_prims(&format!("seg{i}"), seg, None, frame, renderer, device, queue, scene, (w, h), clear)?;
+                    let kept_view = kept.create_view(&wgpu::TextureViewDescriptor::default());
                     let mut enc = encoder(device);
-                    self.passes.blit_over(device, &mut enc, &scratch_view, &out_view);
+                    self.passes.blit_over(device, &mut enc, &kept_view, &out_view);
                     queue.submit([enc.finish()]);
                 }
                 // A generator (an effect that never reads its source) draws
@@ -171,12 +189,14 @@ impl Stage {
                 // rendered at all — the region costs one pass, not a vello
                 // render and two blits.
                 let generator = self.passes.generates(&r.shader);
-                if !generator {
+                let sub_view = if generator {
+                    None
+                } else {
                     let sub = slice_with_context(&prims, r.range.clone());
-                    paint(scene, &sub, frame, None);
-                    vello_into(frame.checked, renderer, device, queue, scene, &scratch, clear, aa)?;
-                }
-                let src_view = if generator { blank_view.as_ref().unwrap_or(&scratch_view) } else { &scratch_view };
+                    let kept = self.render_prims(&format!("region{i}"), sub, None, frame, renderer, device, queue, scene, (w, h), clear)?;
+                    Some(kept.create_view(&wgpu::TextureViewDescriptor::default()))
+                };
+                let Some(src_view) = sub_view.as_ref().or(blank_view.as_ref()) else { continue };
                 if let Some(pipeline) = self.passes.cached_effect(&r.shader) {
                     let (mut uniforms, box_px) = region_uniforms(r, frame, w, h);
                     let data = frame.inputs.and_then(|i| i.get(&r.node_id));
@@ -186,8 +206,8 @@ impl Stage {
                     // The effect runs over the node's box only; the rest of
                     // the subtree (children overflowing it) draws plainly.
                     self.passes.effect_pass(device, &mut enc, pipeline, &uniforms, &values, src_view, &out_view, Some(box_px));
-                    if !generator {
-                        self.passes.blit_over_in(device, &mut enc, &scratch_view, &out_view, &outside(box_px, w, h));
+                    if let Some(sub_view) = &sub_view {
+                        self.passes.blit_over_in(device, &mut enc, sub_view, &out_view, &outside(box_px, w, h));
                     }
                     queue.submit([enc.finish()]);
                 }
@@ -195,10 +215,10 @@ impl Stage {
             }
             let tail = slice_with_context(&prims, cursor..prims.len());
             if has_draws(&tail) || frame.overlay.is_some() {
-                paint(scene, &tail, frame, frame.overlay);
-                vello_into(frame.checked, renderer, device, queue, scene, &scratch, clear, aa)?;
+                let kept = self.render_prims("tail", tail, frame.overlay, frame, renderer, device, queue, scene, (w, h), clear)?;
+                let kept_view = kept.create_view(&wgpu::TextureViewDescriptor::default());
                 let mut enc = encoder(device);
-                self.passes.blit_over(device, &mut enc, &scratch_view, &out_view);
+                self.passes.blit_over(device, &mut enc, &kept_view, &out_view);
                 queue.submit([enc.finish()]);
             }
         }
@@ -233,15 +253,61 @@ impl Stage {
         }
         let scale = frame.transform.determinant().abs().sqrt();
         let (ew, eh) = (w.div_ceil(2), h.div_ceil(2));
-        let emit = self.texture(device, "emit", ew, eh, TARGET);
-        let emit_view = emit.create_view(&wgpu::TextureViewDescriptor::default());
         let to_emit = kurbo::Affine::scale_non_uniform(f64::from(ew) / f64::from(w), f64::from(eh) / f64::from(h)) * frame.transform;
         let clip = kurbo::Rect::new(0.0, 0.0, f64::from(ew), f64::from(eh));
         for (key, draws) in buckets {
             let radius = key as f64 / 2.0;
             let max_s = draws.iter().map(|(_, s)| *s).fold(0.0, f64::max);
+            // The bucket's light, rendered once while its emitters hold
+            // still (a lamp that isn't pulsing).
+            let name = format!("emit{key}");
+            let render_key = RenderKey::Emit {
+                // By shape: the bucket's strength is applied in the blur, so a
+                // lamp pulsing (strength only) keeps its render.
+                draws: draws
+                    .iter()
+                    .map(|(d, s)| (EmissiveDraw { strength: 0.0, ..(*d).clone() }, s / max_s))
+                    .collect(),
+                transform: to_emit,
+                size: (ew, eh),
+            };
+            let emit = match self.renders.get(&name) {
+                Some(kept) if kept.key == render_key => kept.texture.clone(),
+                _ => {
+                    let emit = self.kept_texture(device, &name, ew, eh);
+                    self.render_emit(frame, renderer, device, queue, scene, &draws, max_s, to_emit, clip, &emit)?;
+                    self.renders.insert(name, CachedRender { key: render_key, texture: emit.clone() });
+                    emit
+                }
+            };
+            let emit_view = emit.create_view(&wgpu::TextureViewDescriptor::default());
+            // Emission radius is a CSS-style blur radius (≈ 2σ), in scene px.
+            let sigma = radius * 0.5 * scale * f64::from(ew) / f64::from(w);
+            for (sigma, weight) in [(sigma * 0.3, 0.9), (sigma, 0.9)] {
+                self.blur_add(device, queue, &emit_view, (ew, eh), sigma as f32, (max_s * weight) as f32, out_view);
+            }
+        }
+        Ok(())
+    }
+
+    /// One bloom bucket's emitters, painted into `emit`.
+    #[allow(clippy::too_many_arguments)]
+    fn render_emit(
+        &mut self,
+        frame: &Frame<'_>,
+        renderer: &mut Renderer,
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        scene: &mut vello::Scene,
+        draws: &[(&EmissiveDraw, f64)],
+        max_s: f64,
+        to_emit: kurbo::Affine,
+        clip: kurbo::Rect,
+        emit: &wgpu::Texture,
+    ) -> Result<(), String> {
+        {
             scene.reset();
-            for (d, s) in &draws {
+            for (d, s) in draws {
                 scene.push_layer(peniko::Fill::NonZero, peniko::Mix::Normal, (s / max_s) as f32, kurbo::Affine::IDENTITY, &clip);
                 for (world, c) in &d.clips {
                     push_clip(scene, c, to_emit * to_kurbo(world));
@@ -252,12 +318,7 @@ impl Stage {
                 }
                 scene.pop_layer();
             }
-            vello_into(frame.checked, renderer, device, queue, scene, &emit, peniko::Color::TRANSPARENT, frame.antialiasing)?;
-            // Emission radius is a CSS-style blur radius (≈ 2σ), in scene px.
-            let sigma = radius * 0.5 * scale * f64::from(ew) / f64::from(w);
-            for (sigma, weight) in [(sigma * 0.3, 0.9), (sigma, 0.9)] {
-                self.blur_add(device, queue, &emit_view, (ew, eh), sigma as f32, (max_s * weight) as f32, out_view);
-            }
+            vello_into(frame.checked, renderer, device, queue, scene, emit, peniko::Color::TRANSPARENT, frame.antialiasing)?;
         }
         Ok(())
     }
@@ -302,6 +363,167 @@ impl Stage {
     }
 
     /// A cached texture by role and size (recreated when either changes).
+    /// Paint `prims` with vello into the texture kept as `name`, unless it
+    /// already holds exactly them (same primitives, transform, base, size):
+    /// a still face's body, rendered once. `overlay` (a host's drawing
+    /// over the frame) is never kept.
+    #[allow(clippy::too_many_arguments)]
+    fn render_prims(
+        &mut self,
+        name: &str,
+        prims: Vec<PaintPrimitive>,
+        overlay: Option<&vello::Scene>,
+        frame: &Frame<'_>,
+        renderer: &mut Renderer,
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        scene: &mut vello::Scene,
+        (w, h): (u32, u32),
+        base: peniko::Color,
+    ) -> Result<wgpu::Texture, String> {
+        let key = RenderKey::Prims { prims, transform: frame.transform, base, size: (w, h) };
+        if overlay.is_none()
+            && let Some(kept) = self.renders.get(name)
+            && kept.key == key
+        {
+            return Ok(kept.texture.clone());
+        }
+        // Only a run changed (a lamp, a needle): render that run alone and
+        // put it between the kept renders of what's under and over it.
+        if overlay.is_none()
+            && let Some((a, b)) = self.changed_run(name, &key)
+        {
+            let RenderKey::Prims { prims, .. } = &key else { unreachable!() };
+            let n = prims.len();
+            let under = self.render_run(&format!("{name}/under"), slice_with_context(prims, 0..a), frame, renderer, device, queue, scene, (w, h), base)?;
+            // A run that is one faded layer (a lamp's glow, pulsing):
+            // rendered opaque once, faded as it's laid over.
+            let mut run_prims = slice_with_context(prims, a..b);
+            let fade = whole_layer(prims, a, b).and_then(|_| match run_prims.iter_mut().find(|p| matches!(p, PaintPrimitive::LayerStart { .. })) {
+                Some(PaintPrimitive::LayerStart { opacity, .. }) => Some(std::mem::replace(opacity, 1.0) as f32),
+                _ => None,
+            });
+            let run = self.render_run(&format!("{name}/run"), run_prims, frame, renderer, device, queue, scene, (w, h), peniko::Color::TRANSPARENT)?;
+            let over = (b < n)
+                .then(|| self.render_run(&format!("{name}/over"), slice_with_context(prims, b..n), frame, renderer, device, queue, scene, (w, h), peniko::Color::TRANSPARENT))
+                .transpose()?;
+            let texture = self.kept_texture(device, name, w, h);
+            copy_whole(device, queue, &under, &texture);
+            let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
+            let mut enc = encoder(device);
+            let run_view = run.create_view(&wgpu::TextureViewDescriptor::default());
+            match fade {
+                Some(opacity) => self.passes.blit_over_faded(device, &mut enc, &run_view, &view, opacity),
+                None => self.passes.blit_over(device, &mut enc, &run_view, &view),
+            }
+            if let Some(over) = &over {
+                let over_view = over.create_view(&wgpu::TextureViewDescriptor::default());
+                self.passes.blit_over(device, &mut enc, &over_view, &view);
+            }
+            queue.submit([enc.finish()]);
+            self.renders.insert(name.to_string(), CachedRender { key, texture: texture.clone() });
+            return Ok(texture);
+        }
+        let texture = self.kept_texture(device, name, w, h);
+        let RenderKey::Prims { prims, .. } = &key else { unreachable!() };
+        paint(scene, prims, frame, overlay);
+        vello_into(frame.checked, renderer, device, queue, scene, &texture, base, frame.antialiasing)?;
+        if overlay.is_none() {
+            self.renders.insert(name.to_string(), CachedRender { key, texture: texture.clone() });
+        } else {
+            self.renders.remove(name);
+        }
+        Ok(texture)
+    }
+
+    /// A run's render, kept as `name` like [`Self::render_prims`] but never
+    /// split again.
+    #[allow(clippy::too_many_arguments)]
+    fn render_run(
+        &mut self,
+        name: &str,
+        prims: Vec<PaintPrimitive>,
+        frame: &Frame<'_>,
+        renderer: &mut Renderer,
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        scene: &mut vello::Scene,
+        (w, h): (u32, u32),
+        base: peniko::Color,
+    ) -> Result<wgpu::Texture, String> {
+        let key = RenderKey::Prims { prims, transform: frame.transform, base, size: (w, h) };
+        if let Some(kept) = self.renders.get(name)
+            && kept.key == key
+        {
+            return Ok(kept.texture.clone());
+        }
+        let texture = self.kept_texture(device, name, w, h);
+        let RenderKey::Prims { prims, .. } = &key else { unreachable!() };
+        paint(scene, prims, frame, None);
+        vello_into(frame.checked, renderer, device, queue, scene, &texture, base, frame.antialiasing)?;
+        self.renders.insert(name.to_string(), CachedRender { key, texture: texture.clone() });
+        Ok(texture)
+    }
+
+    /// The one run `a..b` of primitives that differs from the kept render
+    /// `name`'s, when everything else is the same and drawing the run
+    /// separately and laying it over is exact: every draw from `a` on
+    /// blends normally, and no group open across either end is faded,
+    /// blended or masked. `None`: render it all.
+    fn changed_run(&self, name: &str, key: &RenderKey) -> Option<(usize, usize)> {
+        let RenderKey::Prims { prims, transform, base, size } = key else { return None };
+        let kept = self.renders.get(name)?;
+        let RenderKey::Prims { prims: old, transform: t0, base: b0, size: s0 } = &kept.key else { return None };
+        if old.len() != prims.len() || t0 != transform || b0 != base || s0 != size {
+            return None;
+        }
+        let a = prims.iter().zip(old).position(|(p, q)| p != q)?;
+        let b = prims.len() - prims.iter().rev().zip(old.iter().rev()).position(|(p, q)| p != q)?;
+        // Containers the run opens, it closes: extend it to their ends.
+        let mut b = b;
+        let mut depth = 0_i64;
+        for (i, p) in prims.iter().enumerate().skip(a) {
+            if i >= b && depth <= 0 {
+                break;
+            }
+            depth += match p {
+                PaintPrimitive::GroupStart { .. }
+                | PaintPrimitive::LayerStart { .. }
+                | PaintPrimitive::ClipStart { .. }
+                | PaintPrimitive::MaskDefStart { .. }
+                | PaintPrimitive::MaskApplyStart { .. } => 1,
+                PaintPrimitive::GroupEnd { .. }
+                | PaintPrimitive::LayerEnd { .. }
+                | PaintPrimitive::ClipEnd { .. }
+                | PaintPrimitive::MaskDefEnd { .. }
+                | PaintPrimitive::MaskApplyEnd { .. } => -1,
+                _ => 0,
+            };
+            b = b.max(i + 1);
+        }
+        if a == 0 || b <= a {
+            return None;
+        }
+        // A run to the end has nothing over it: only where it starts splits.
+        let b = b.min(prims.len());
+        let over_end = if b < prims.len() { Some(b) } else { None };
+        let exact = prims[a..].iter().all(blends_normally)
+            && open_at(prims, a).chain(over_end.into_iter().flat_map(|b| open_at(prims, b))).all(splits_cleanly);
+        exact.then_some((a, b))
+    }
+
+    /// A texture of its own for the kept render `name` (reused while the
+    /// size holds, so what it holds stays until rendered over).
+    fn kept_texture(&mut self, device: &wgpu::Device, name: &str, w: u32, h: u32) -> wgpu::Texture {
+        if let Some(kept) = self.renders.get(name)
+            && kept.texture.width() == w
+            && kept.texture.height() == h
+        {
+            return kept.texture.clone();
+        }
+        self.texture(device, &format!("kept:{name}"), w, h, TARGET)
+    }
+
     fn texture(&mut self, device: &wgpu::Device, key: &str, w: u32, h: u32, format: wgpu::TextureFormat) -> wgpu::Texture {
         if let Some(t) = self.textures.get(key)
             && t.width() == w
@@ -527,4 +749,90 @@ pub(super) fn slice_with_context(prims: &[PaintPrimitive], range: Range<usize>) 
     }
     out.extend(closers.into_iter().rev());
     out
+}
+
+/// Copy all of `src` onto `dst` (same size).
+fn copy_whole(device: &wgpu::Device, queue: &wgpu::Queue, src: &wgpu::Texture, dst: &wgpu::Texture) {
+    let mut enc = encoder(device);
+    enc.copy_texture_to_texture(
+        src.as_image_copy(),
+        dst.as_image_copy(),
+        wgpu::Extent3d { width: src.width().min(dst.width()), height: src.height().min(dst.height()), depth_or_array_layers: 1 },
+    );
+    queue.submit([enc.finish()]);
+}
+
+/// Whether a primitive draws with normal blending (so drawing it into its
+/// own texture and laying that over gives the same picture).
+fn blends_normally(p: &PaintPrimitive) -> bool {
+    use crate::anyrender_renderer::BlendMix;
+    match p {
+        PaintPrimitive::Rect { fills, blend, .. } | PaintPrimitive::Path { fills, blend, .. } => {
+            *blend == BlendMix::Normal && fills.iter().all(|(_, b)| *b == BlendMix::Normal)
+        }
+        PaintPrimitive::Text { blend, .. } => *blend == BlendMix::Normal,
+        PaintPrimitive::LayerStart { blend, .. } => *blend == BlendMix::Normal,
+        _ => true,
+    }
+}
+
+/// Whether a container open across a split may be split there: a layer
+/// that neither fades nor blends, a group or a clip. Not a mask.
+fn splits_cleanly(p: &PaintPrimitive) -> bool {
+    use crate::anyrender_renderer::BlendMix;
+    match p {
+        PaintPrimitive::LayerStart { blend, opacity, .. } => *blend == BlendMix::Normal && (*opacity - 1.0).abs() < 1e-9,
+        PaintPrimitive::GroupStart { .. } | PaintPrimitive::ClipStart { .. } => true,
+        _ => false,
+    }
+}
+
+/// The containers open at index `at` of `prims` (their start primitives).
+fn open_at(prims: &[PaintPrimitive], at: usize) -> impl Iterator<Item = &PaintPrimitive> {
+    let mut stack: Vec<&PaintPrimitive> = Vec::new();
+    for p in &prims[..at.min(prims.len())] {
+        match p {
+            PaintPrimitive::GroupStart { .. }
+            | PaintPrimitive::LayerStart { .. }
+            | PaintPrimitive::ClipStart { .. }
+            | PaintPrimitive::MaskDefStart { .. }
+            | PaintPrimitive::MaskApplyStart { .. } => stack.push(p),
+            PaintPrimitive::GroupEnd { .. }
+            | PaintPrimitive::LayerEnd { .. }
+            | PaintPrimitive::ClipEnd { .. }
+            | PaintPrimitive::MaskDefEnd { .. }
+            | PaintPrimitive::MaskApplyEnd { .. } => {
+                stack.pop();
+            }
+            _ => {}
+        }
+    }
+    stack.into_iter()
+}
+
+/// Whether `prims[a..b]` is exactly one layer (its start at `a`, its end at
+/// `b - 1` or past the slice), a plain one: normal blend.
+fn whole_layer(prims: &[PaintPrimitive], a: usize, b: usize) -> Option<()> {
+    use crate::anyrender_renderer::BlendMix;
+    let PaintPrimitive::LayerStart { blend: BlendMix::Normal, .. } = prims.get(a)? else { return None };
+    let mut depth = 0_i64;
+    for (i, p) in prims.iter().enumerate().take(b).skip(a) {
+        depth += match p {
+            PaintPrimitive::GroupStart { .. }
+            | PaintPrimitive::LayerStart { .. }
+            | PaintPrimitive::ClipStart { .. }
+            | PaintPrimitive::MaskDefStart { .. }
+            | PaintPrimitive::MaskApplyStart { .. } => 1,
+            PaintPrimitive::GroupEnd { .. }
+            | PaintPrimitive::LayerEnd { .. }
+            | PaintPrimitive::ClipEnd { .. }
+            | PaintPrimitive::MaskDefEnd { .. }
+            | PaintPrimitive::MaskApplyEnd { .. } => -1,
+            _ => 0,
+        };
+        if depth == 0 && i + 1 < b {
+            return None;
+        }
+    }
+    Some(())
 }

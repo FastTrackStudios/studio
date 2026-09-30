@@ -21,5 +21,9 @@ kurbo = { workspace = true }
 peniko = { workspace = true }
 vello = { workspace = true }
 
+[dev-dependencies]
+wgpu = "29"
+pollster = "0.4"
+
 [lints]
 workspace = true
