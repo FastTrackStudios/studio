@@ -87,7 +87,7 @@ fn plate(b: &mut Builder<'_>, tank: NodeId, w: f64, h: f64) {
                 (px + 6.0 + (pw - 12.0) * u, y0 + (u * std::f64::consts::TAU * 3.0 + f64::from(i)).sin() * 2.6 * (1.0 - 0.6 * u))
             })
             .collect();
-        let m = ui::line(b, tank, "mode", &pts, 0.9, "#4f7ea3");
+        let m = ui::line(b, tank, "mode", &pts, 1.1, "#8a63e0");
         let swing = format!("0.5 + 0.5 * sin(time * (3 + 2 * norm({VERB}/tone)) + {i}) * param({VERB}/on)");
         motion::add(b, m, Motion::new(Target::Opacity).input(swing).range(0.15, 0.7).dynamics(Dynamics::spring(200.0, 24.0)));
     }
@@ -111,7 +111,7 @@ fn plate(b: &mut Builder<'_>, tank: NodeId, w: f64, h: f64) {
     b.add(d, draw::circle("coil", c, c, r * 0.62, draw::conic(0.0, &[(0.0, "#e0a064"), (0.25, "#8a4f22"), (0.5, "#d69457"), (0.75, "#7a4219"), (1.0, "#e0a064")])));
     b.add(d, draw::circle("pole", c, c, r * 0.24, draw::solid("#1b1b1d")));
     // Its lamp: lit while the plate is driven.
-    let lit = b.add(d, draw::emissive(draw::circle("drive lamp", c + r * 0.72, c - r * 0.72, 2.6, draw::solid("#ffb347")), draw::hex("#ffb347"), 0.9, 6.0));
+    let lit = b.add(d, draw::emissive(draw::circle("drive lamp", c + r * 0.72, c - r * 0.72, 2.6, draw::solid(kit::PURPLE_LAMP)), draw::hex(kit::PURPLE_LAMP), 0.9, 6.0));
     motion::add(b, lit, Motion::new(Target::Opacity).input(format!("param({VERB}/on)")).range(0.0, 1.0));
     let kind = ControlKind::Handle {
         x: Some(bind(&a("size"))),
@@ -187,7 +187,7 @@ pub fn face() -> Face {
         ui::silk_left(b, panel, "Reverberation unit", x0 + 62.0, 32.0, 6.0, DIM, 700.0);
         ui::rule(b, panel, x0 - 10.0, 12.0, 1.0, kit::H - 24.0, "#00000033");
         ui::rule(b, panel, x0 - 9.0, 12.0, 1.0, kit::H - 24.0, "#ffffff66");
-        kit::bypass(b, panel, VERB, x0 + 20.0, 104.0, 30.0, "amber", "In");
+        kit::bypass(b, panel, VERB, x0 + 20.0, 104.0, 30.0, "purple", "In");
         let big = Dial::new("knob.pointer", "black", 60.0, INK, DIM).legend(8.5);
         ui::dial(b, panel, &a("decay"), "Decay Time", x0 + 96.0, 92.0, &big);
         let small = Dial::new("knob.collet", "black", 36.0, INK, DIM).legend(7.5);

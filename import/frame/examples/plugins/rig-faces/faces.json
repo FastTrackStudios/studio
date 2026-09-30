@@ -1273,9 +1273,9 @@
         ]
       },
       {
-        "face": "62-dly-dbucket",
+        "face": "62-dly-analog",
         "match": [
-          "dbucket"
+          "analog"
         ],
         "ns": "dly",
         "size": [

@@ -167,9 +167,9 @@ impl Style {
     const fn variants(self) -> &'static [&'static str] {
         match self {
             Self::Console => &["cream", "black", "red", "grey", "blue"],
-            Self::Illuminated => &["amber", "green", "red", "white", "blue"],
+            Self::Illuminated => &["amber", "green", "red", "white", "blue", "purple"],
             Self::PushIn => &["black", "grey", "cream"],
-            Self::Square => &["white", "yellow", "red", "green", "blue"],
+            Self::Square => &["white", "yellow", "red", "green", "blue", "purple"],
             Self::Metal => &["silver", "black", "gold"],
         }
     }
@@ -191,6 +191,7 @@ impl Style {
                     "red" => "#ec4a3a",
                     "white" => "#fff4d6",
                     "blue" => "#4aa0f4",
+                    "purple" => "#b58cff",
                     "yellow" => "#f6d43c",
                     _ if self == Self::Square => "#fff4d6",
                     _ => "#f4a62c",
@@ -426,6 +427,7 @@ fn jewel(b: &mut Builder<'_>, parent: NodeId, p: &Place) -> NodeId {
         Some("amber") => "#f4a62c",
         Some("white") => "#fff2d0",
         Some("blue") => "#4aa0f4",
+        Some("purple") => "#b58cff",
         _ => "#e33a2a",
     };
     let root = b.add(parent, draw::frame(&p.name, 0.0, 0.0, s, s));
@@ -587,7 +589,7 @@ pub(crate) fn defs() -> Vec<ComponentDef> {
             family: Family::Button,
             title: "Jewel lamp switch",
             description: "A domed jewel lamp in a chrome bezel that is itself the switch — the 1176's red power jewel. Lit when the toggle is on. Size = bezel diameter.",
-            variants: &["red", "green", "amber", "white", "blue"],
+            variants: &["red", "green", "amber", "white", "blue", "purple"],
             default_size: 26.0,
             binds: "toggle param",
             build: jewel,

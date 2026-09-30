@@ -2,7 +2,7 @@
 
 mod tape;
 mod digital;
-mod dbucket;
+mod analog;
 mod lo_fi;
 mod shimmer;
 mod reverse;
@@ -19,5 +19,5 @@ use crate::face::Face;
 /// Every delay face, in `kit::DELAY_ALGOS` order.
 #[must_use]
 pub fn faces() -> Vec<Face> {
-    vec![tape::face(), digital::face(), dbucket::face(), lo_fi::face(), shimmer::face(), reverse::face(), ice::face(), rhythm::face(), drum::face(), oil_can::face(), multitap::face(), spectral::face(), filter::face()]
+    vec![tape::face(), digital::face(), analog::face(), lo_fi::face(), shimmer::face(), reverse::face(), ice::face(), rhythm::face(), drum::face(), oil_can::face(), multitap::face(), spectral::face(), filter::face()]
 }

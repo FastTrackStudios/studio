@@ -21,9 +21,10 @@ use crate::rig_time::kit::{self, DLY};
 use crate::suite_boutique_clean::look::{self, KnobLook};
 use crate::suite_funk_rhythm::parts::{self, Type};
 
-const ORANGE: &str = "#ee8a1e";
+/// The accent: delay blue where the original is orange.
+const ORANGE: &str = kit::BLUE;
 const INK: &str = "#1f2023";
-const LAMP: &str = "#fffbe8";
+const LAMP: &str = "#e2eeff";
 
 fn a(id: &str) -> String {
     format!("{DLY}/{id}")
@@ -141,8 +142,8 @@ pub fn face() -> Face {
         // Bay 3: the knobs.
         let bw3 = 318.0;
         let bay3 = bay(b, unit, "Bay 3", (510.0, y, bw3, bh), &grey);
-        let black = KnobLook { preset: "knurled", opts: &["color=#1c1c1e", "pointer=#ee8a1e", "index=dot", "cap_r=0.9", "height=0.6", "dome=0.08", "edge=0.1", "ribs=48", "rib_depth=0.03", "knurl_band=0.7", "index_w=0.09", "index_in=0.66", "index_out=0.66", "coat=0.5", "rough=0.25", "ticks=none"] };
-        let orange = KnobLook { preset: "knurled", opts: &["color=#ee8a1e", "pointer=#ffd9a0", "index=dot", "cap_r=0.9", "height=0.6", "dome=0.05", "edge=0.08", "ribs=24", "rib_depth=0.06", "knurl_band=1", "index_w=0.08", "index_in=0.66", "index_out=0.66", "coat=0.4", "rough=0.3", "ticks=none"] };
+        let black = KnobLook { preset: "knurled", opts: &["color=#1c1c1e", "pointer=#3b82f6", "index=dot", "cap_r=0.9", "height=0.6", "dome=0.08", "edge=0.1", "ribs=48", "rib_depth=0.03", "knurl_band=0.7", "index_w=0.09", "index_in=0.66", "index_out=0.66", "coat=0.5", "rough=0.25", "ticks=none"] };
+        let orange = KnobLook { preset: "knurled", opts: &["color=#3b82f6", "pointer=#dbe8ff", "index=dot", "cap_r=0.9", "height=0.6", "dome=0.05", "edge=0.08", "ribs=24", "rib_depth=0.06", "knurl_band=1", "index_w=0.08", "index_in=0.66", "index_out=0.66", "coat=0.4", "rough=0.3", "ticks=none"] };
         let knobs = [
             ("feedback", "Feedback", false, 0, 0),
             ("mod_depth", "Tape-Mod", false, 1, 0),

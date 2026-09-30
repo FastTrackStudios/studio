@@ -14,8 +14,8 @@ use crate::rig_time::kit::{self, DLY};
 
 const INK: &str = "#d9dde2";
 const DIM: &str = "#7d838b";
-const LED: &str = "#ff3b30";
-const PHOSPHOR: &str = "#5dffb0";
+const LED: &str = kit::BLUE_LAMP;
+const PHOSPHOR: &str = "#8cc8ff";
 
 fn a(id: &str) -> String {
     format!("{DLY}/{id}")
@@ -66,12 +66,12 @@ pub fn face() -> Face {
         let x0 = ear_w + 18.0;
         ui::silk_left(b, plate, "Digital Delay", x0, 16.0, 8.0, INK, 800.0);
         ui::silk_left(b, plate, "24-bit · 96 kHz", x0 + 94.0, 16.0, 6.0, DIM, 700.0);
-        let disp = window(b, plate, "Display", (x0, 28.0, 250.0, 78.0), ("#1a0303", "#0d0101"));
+        let disp = window(b, plate, "Display", (x0, 28.0, 250.0, 78.0), ("#030a1c", "#01050e"));
         kit::seg_readout(b, disp, &a("time"), (8.0, 42.0, 190.0), 40.0, 4, 0, LED);
         ui::silk_left(b, disp, "ms", 204.0, 58.0, 9.0, LED, 800.0);
         ui::silk_left(b, disp, "Delay", 8.0, 10.0, 6.0, &ui::alpha(LED, 0.6), 800.0);
         // Feedback and level as smaller LED readouts under it.
-        let sub = window(b, plate, "Sub display", (x0, 118.0, 250.0, 30.0), ("#1a0303", "#0d0101"));
+        let sub = window(b, plate, "Sub display", (x0, 118.0, 250.0, 30.0), ("#030a1c", "#01050e"));
         ui::silk_left(b, sub, "Fdbk", 8.0, 15.0, 6.0, &ui::alpha(LED, 0.6), 800.0);
         kit::seg_readout(b, sub, &a("feedback"), (34.0, 15.0, 70.0), 15.0, 3, 2, LED);
         ui::silk_left(b, sub, "Lvl dB", 126.0, 15.0, 6.0, &ui::alpha(LED, 0.6), 800.0);
@@ -79,7 +79,7 @@ pub fn face() -> Face {
 
         // ── The scope: the echoes as they fall ─────────────────────────
         let (sx, sy, sw, sh) = (x0 + 268.0, 28.0, 250.0, 120.0);
-        let scope = window(b, plate, "Scope", (sx, sy, sw, sh), ("#03140c", "#010905"));
+        let scope = window(b, plate, "Scope", (sx, sy, sw, sh), ("#03101f", "#010710"));
         let grid: Vec<Vec<(f64, f64)>> = (1..10).map(|i| vec![(sw * f64::from(i) / 10.0, 0.0), (sw * f64::from(i) / 10.0, sh)])
             .chain((1..4).map(|i| vec![(0.0, sh * f64::from(i) / 4.0), (sw, sh * f64::from(i) / 4.0)]))
             .collect();
@@ -99,7 +99,7 @@ pub fn face() -> Face {
             let (col, row) = (i % 3, i / 3);
             kit::knob3d(b, plate, &a(id), legend, 26.0, (wx + 74.0 + 52.0 * col as f64, 42.0 + 64.0 * row as f64), &cap, INK, DIM);
         }
-        kit::bypass(b, plate, DLY, kit::W - ear_w - 24.0, 118.0, 24.0, "red", "On");
+        kit::bypass(b, plate, DLY, kit::W - ear_w - 24.0, 118.0, 24.0, "blue", "On");
     });
     kit::delay_face("61-dly-digital", scene)
 }

@@ -31,9 +31,25 @@ pub const DLY: &str = "dly";
 /// The reverb faces' namespace (signal's Reverb block).
 pub const VERB: &str = "verb";
 
+// The section's colours, as Signal draws the Time module: every delay is
+// blue and every reverb purple — a face's own finish can be anything, but
+// its accents (lamps, displays, pointers, the bypass) are these, so a
+// glance tells which section you're reading.
+/// Delay blue (Signal's `DELAY_COLORS[0]`), a lighter tint, a deep shade,
+/// and a lamp's glow.
+pub const BLUE: &str = "#3b82f6";
+pub const BLUE_LIGHT: &str = "#bcd6ff";
+pub const BLUE_DEEP: &str = "#1e3a8a";
+pub const BLUE_LAMP: &str = "#4aa0f4";
+/// Reverb purple (Signal's `VERB_COLORS[0]`), likewise.
+pub const PURPLE: &str = "#a78bfa";
+pub const PURPLE_LIGHT: &str = "#ddd0ff";
+pub const PURPLE_DEEP: &str = "#3b1d6e";
+pub const PURPLE_LAMP: &str = "#b58cff";
+
 /// The delay's machines, in the block's `style` order.
 pub const DELAY_ALGOS: [&str; 13] = [
-    "Tape", "Digital", "dBucket", "Lo-Fi", "Shimmer", "Reverse", "Ice", "Rhythm", "Drum", "Oil Can", "MultiTap", "Spectral", "Filter",
+    "Tape", "Digital", "Analog", "Lo-Fi", "Shimmer", "Reverse", "Ice", "Rhythm", "Drum", "Oil Can", "MultiTap", "Spectral", "Filter",
 ];
 /// The reverb's algorithms, in the block's `algorithm` order.
 pub const VERB_ALGOS: [&str; 15] = [
@@ -191,7 +207,9 @@ pub fn legend(b: &mut Builder<'_>, parent: NodeId, s: &str, cx: f64, cy: f64, si
 pub fn stub(ns: &str, name: &str, color: &str) -> document_proto::Scene {
     let ns = ns.to_string();
     let name = name.to_string();
-    let color = color.to_string();
+    // The section's colour, whatever the placeholder asked for.
+    let _ = color;
+    let color = if ns == DLY { BLUE } else { PURPLE }.to_string();
     lane(&name.clone(), move |b, root| {
         const INK: &str = "#e8e6e1";
         const DIM: &str = "#8a8d94";

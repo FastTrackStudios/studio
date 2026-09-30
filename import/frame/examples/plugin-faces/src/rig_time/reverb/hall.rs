@@ -18,8 +18,8 @@ use crate::reverb::ui;
 use crate::rig_time::kit::{self, VERB};
 
 /// Blueprint ink and paper.
-const LINE: &str = "#8fd3ff";
-const PAPER: (&str, &str) = ("#0d2140", "#081629");
+const LINE: &str = "#cdb8ff";
+const PAPER: (&str, &str) = ("#1d1340", "#110b28");
 /// The house: velvet and gilt.
 const GILT: &str = "#d9b56a";
 const GILT_DIM: &str = "#a8874a";
@@ -151,7 +151,7 @@ pub fn face() -> Face {
     let scene = kit::lane("Hall", |b, root| {
         // The house: velvet in a gilt frame.
         let mut panel = draw::frame("House", 0.0, 0.0, kit::W, kit::H);
-        panel.fills = vec![draw::linear(180.0, &[(0.0, "#4a1320"), (0.55, "#2e0b14"), (1.0, "#1c060c")])];
+        panel.fills = vec![draw::linear(180.0, &[(0.0, "#3d1b63"), (0.55, "#281043"), (1.0, "#180929")])];
         panel.corner_radii = document_proto::CornerRadii::uniform(6.0);
         panel.stroke = document_proto::Stroke { paints: vec![draw::solid(GILT_DIM)], weight: 2.0, ..document_proto::Stroke::default() };
         let panel = b.add(root, panel);
@@ -185,7 +185,7 @@ pub fn face() -> Face {
         b.add(panel, ui::text("sub2", "Stage · stalls · balcony", x0 + 82.0, 36.0, 150.0, 5.5, &ui::alpha(GILT_DIM, 0.8), TextAlign::Left, 600.0, true));
         let ink = "#ecdcbc";
         let dim = "#b39c77";
-        kit::bypass(b, panel, VERB, x0 + 14.0, 104.0, 28.0, "amber", "In");
+        kit::bypass(b, panel, VERB, x0 + 14.0, 104.0, 28.0, "purple", "In");
         let brass = ["color=#c9a45c", "pointer=#2a1a0c", "index=line", "index_w=0.1", "skirt=plain", "skirt_color=#6e5428"];
         kit::knob3d(b, panel, &a("decay"), "Decay", 54.0, (x0 + 78.0, 80.0), &brass, ink, dim);
         let small = ["color=#1a0a0e", "pointer=#d9b56a", "index=line", "index_w=0.12", "skirt=plain", "skirt_color=#a8874a"];
