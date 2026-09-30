@@ -13,7 +13,7 @@
 use document_proto::{NodeId, TextAlign};
 use surface_kit::materials::{Grain, Material, fill};
 use surface_kit::{Place, TOUCH_MIN, draw};
-use surface_proto::{Range, Unit};
+use surface_proto::{Range, Unit, ValueFormat};
 use surface_widgets::Builder;
 
 use super::look::{self, TEAL};
@@ -126,12 +126,26 @@ fn blush(b: &mut Builder<'_>, layer: NodeId) {
     look::signature(b, s, (w / 2.0 + 6.0, h - 36.0), 13.0, "#6a5055");
 }
 
-/// A flat chrome knob with its caption and live value.
+/// The mic panels' knob: a low white plastic disc with a dark line, as the
+/// plugin's own panels draw it.
+const PANEL_KNOB: look::KnobLook<'static> = look::KnobLook {
+    preset: "flat",
+    opts: &["color=#f6f7fb", "skirt=none", "index=line", "pointer=#1c1d22", "cap_r=0.96", "height=0.26", "edge=0.1", "tilt=14", "spec=0.6", "index_in=0.15", "index_out=0.9", "ticks=none"],
+};
+
+/// A flat white knob with its caption and live value (a pan reads `C` at
+/// its centre).
 fn flat(b: &mut Builder<'_>, parent: NodeId, addr: &str, legend: &str, at: (f64, f64)) {
-    let p = Place::new(legend).size(48.0).variant("light").bind(ui::bind(addr)).touch(TOUCH_MIN);
-    let k = ui::put(b, parent, "knob.flat_line", &p, at.0, at.1);
-    ui::strip_legend(b, k);
-    ui::add_value(b, k, 11.0, INK);
+    let k = look::place_knob(b, parent, &PANEL_KNOB, addr, legend, 48.0, at, INK);
+    // The value a little clear of the knob's skirt (the vector knob
+    // reaches its box's edge).
+    let v = ui::add_value(b, k, 11.0, INK);
+    if let Some(n) = b.scene.node_mut(v) {
+        n.transform.ty += 4.0;
+    }
+    if addr.ends_with("pan") {
+        look::set_format(b, k, ValueFormat::decimals(0).mark(0.0, "C"));
+    }
     parts::centred(b, parent, legend, (at.0, at.1 + 58.0), Type::new(9.5, DIM, 700.0).track(0.08).upper());
 }
 

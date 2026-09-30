@@ -14,13 +14,13 @@
 use document_proto::{NodeId, TextAlign};
 use surface_kit::meters::scale::Card;
 use surface_kit::{Place, TOUCH_MIN, draw};
-use surface_proto::{Binding, Control, ControlKind, Orientation, SlotRole};
+use surface_proto::{Binding, Control, ControlKind, Orientation, SlotRole, ValueFormat};
 use surface_widgets::Builder;
 
-use super::look;
+use super::look::{self, KnobLook};
 use crate::face::{Face, canvas};
 use crate::reverb::ui;
-use crate::suite_funk_rhythm::parts::{self, KnobLook, RACK_W, Type};
+use crate::suite_funk_rhythm::parts::{self, RACK_W, Type};
 
 const ORANGE: &str = "#ee8a1e";
 const INK: &str = "#1f2023";
@@ -140,8 +140,8 @@ pub(super) fn echo() -> Face {
         parts::art(b, bay2, &[arc], 1.2, INK);
         // The mode selector: a big white knurled dial stepping through the
         // five detents (220° of travel).
-        let dial = KnobLook { cap: "knurled", opts: &["color=#ecebe8", "pointer=#b9b8b4", "ticks=none", "bevel=1.4"] };
-        let s = parts::knob(b, bay2, &dial, "echo/mode", "Mode", 92.0, (97.0, 150.0), INK);
+        let dial = KnobLook { preset: "white_knurl", opts: &["color=#eeede9", "index=none", "diamond=0", "ribs=90", "knurl_band=0.5", "rib_depth=0.02", "cap_r=0.97", "height=0.5", "dome=0.03", "edge=0.1", "ticks=none", "fallback=knurled"] };
+        let s = look::place_knob(b, bay2, &dial, "echo/mode", "Mode", 92.0, (97.0, 150.0), INK);
         if let Some(c) = b.controls.get_mut(&s) {
             c.kind = ControlKind::Knob { sweep_degrees: 220.0 };
         }
@@ -166,8 +166,8 @@ pub(super) fn echo() -> Face {
             ("echo/treble", "Treble", "orange", 247.0, 176.0),
             ("echo/width", "Width", "black", 332.0, 176.0),
         ];
-        let black = KnobLook { cap: "knurled", opts: &["color=#1c1c1e", "pointer=#ee8a1e", "ticks=none"] };
-        let orange = KnobLook { cap: "knurled", opts: &["color=#ee8a1e", "pointer=#fff0d8", "ticks=none"] };
+        let black = KnobLook { preset: "knurled", opts: &["color=#1c1c1e", "pointer=#ee8a1e", "index=dot", "cap_r=0.9", "height=0.6", "dome=0.08", "edge=0.1", "ribs=48", "rib_depth=0.03", "knurl_band=0.7", "index_w=0.09", "index_in=0.66", "index_out=0.66", "coat=0.5", "rough=0.25", "ticks=none"] };
+        let orange = KnobLook { preset: "knurled", opts: &["color=#ee8a1e", "pointer=#ffd9a0", "index=dot", "cap_r=0.9", "height=0.6", "dome=0.05", "edge=0.08", "ribs=24", "rib_depth=0.06", "knurl_band=1", "index_w=0.08", "index_in=0.66", "index_out=0.66", "coat=0.4", "rough=0.3", "ticks=none"] };
         for (addr, legend, v, x, y) in knobs {
             let look = if v == "orange" { &orange } else { &black };
             look::knob(b, bay3, look, addr, 42.0, (x, y), 11, INK, false);
@@ -242,9 +242,11 @@ pub(super) fn reverb() -> Face {
             ui::lit_readout(b, disp, label, ui::bind(addr), 250.0, y, 46.0, 8.0, lit, TextAlign::Left);
         }
         ui::lit_text(b, disp, "FILTER", 124.0, 62.0, 40.0, 8.0, "#b9bcc2", TextAlign::Left, 500.0);
-        ui::lit_readout(b, disp, "Low cut", ui::bind("verb/low"), 158.0, 62.0, 46.0, 8.0, lit, TextAlign::Left);
+        let low = ui::lit_readout(b, disp, "Low cut", ui::bind("verb/low"), 158.0, 62.0, 46.0, 8.0, lit, TextAlign::Left);
+        look::set_format(b, low, ValueFormat::default().mark(20.0, "OFF"));
         bar(b, disp, "verb/high", (206.0, 62.0), 40.0);
-        ui::lit_readout(b, disp, "High cut", ui::bind("verb/high"), 250.0, 62.0, 46.0, 8.0, lit, TextAlign::Left);
+        let high = ui::lit_readout(b, disp, "High cut", ui::bind("verb/high"), 250.0, 62.0, 46.0, 8.0, lit, TextAlign::Left);
+        look::set_format(b, high, ValueFormat::default().mark(20_000.0, "OFF"));
         ui::glass(b, disp);
         look::brush_mark(b, bay1, (180.0, 162.0), 28.0, ORANGE);
         parts::centred(b, bay1, "Hall", (476.0, 34.0), t);

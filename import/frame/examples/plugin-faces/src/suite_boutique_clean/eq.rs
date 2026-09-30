@@ -5,18 +5,21 @@
 //! brass lines (both open, as the reference shows them), a brass bypass
 //! toggle, nine wide faders (deep rounded slots, dark domed caps with a
 //! cream index) over tick scales with the gain printed above each and the
-//! band below, and the teal pilot.
+//! band below, and the teal pilot. HPF and LPF read OFF at their open
+//! stops and the gains read signed; three swatches under the pilot pick
+//! the colourway.
 
 use document_proto::{NodeId, TextAlign};
 use surface_kit::materials::{Dir, Material, fill};
 use surface_kit::draw;
-use surface_proto::{Control, ControlKind, Orientation, SlotRole};
+use surface_proto::{ButtonMode, Control, ControlKind, Orientation, SlotRole, ValueFormat};
 use surface_widgets::Builder;
 
 use super::look::{self, TEAL};
 use crate::face::{Face, canvas};
 use crate::reverb::ui;
-use crate::suite_funk_rhythm::parts::{self, KnobLook, RACK_W, Type};
+use super::look::KnobLook;
+use crate::suite_funk_rhythm::parts::{self, RACK_W, Type};
 
 const INK: &str = "#1e1719";
 const BANDS: [(&str, &str); 9] = [("65", "65 Hz"), ("125", "125 Hz"), ("250", "250 Hz"), ("500", "500 Hz"), ("1k", "1 kHz"), ("2k", "2 kHz"), ("4k", "4 kHz"), ("8k", "8 kHz"), ("16k", "16 kHz")];
@@ -71,6 +74,32 @@ fn fader(b: &mut Builder<'_>, parent: NodeId, addr: &str, name: &str, x: f64) ->
     root
 }
 
+/// The filters' ranges: each reads OFF at its open stop.
+const HPF: (f64, f64) = (20.0, 500.0);
+const LPF: (f64, f64) = (2000.0, 20000.0);
+
+/// The colourways, in `eq/color`'s order: name and swatch.
+const COLOURWAYS: [(&str, &str); 3] = [("Blush", "#eec7ca"), ("Gold", "#c79a4e"), ("Cream", "#f0ece5")];
+
+/// The on-face colourway selector: a row of three swatch buttons centred
+/// on `(cx, cy)`, each a `Select` over `eq/color`, the chosen one ringed
+/// in brass.
+fn colour_selector(b: &mut Builder<'_>, parent: NodeId, (cx, cy): (f64, f64)) {
+    let (r, pitch) = (4.5, 15.0);
+    let n = COLOURWAYS.len();
+    for (i, (name, swatch)) in COLOURWAYS.iter().enumerate() {
+        let x = cx + (i as f64 - (n - 1) as f64 / 2.0) * pitch;
+        let s = pitch;
+        let root = b.add(parent, draw::frame(&format!("Colour {name}"), x - s / 2.0, cy - s / 2.0, s, s));
+        let dot = draw::with_effects(draw::circle("swatch", s / 2.0, s / 2.0, r, draw::solid(swatch)), vec![draw::drop_shadow("#00000070", 0.0, 0.8, 1.5)]);
+        b.add(root, draw::stroked(dot, "#1e171955", 0.6));
+        let ring = b.add(root, draw::stroked(draw::circle("chosen", s / 2.0, s / 2.0, r + 2.2, draw::solid("#00000000")), "#b8893c", 1.4));
+        let mut c = Control::new(ControlKind::Button { mode: ButtonMode::Select { index: i as u32, count: n as u32 } }).slot(SlotRole::Led, ring.0);
+        c.binding = Some(ui::bind("eq/color"));
+        b.controls.insert(root, c);
+    }
+}
+
 /// The case in colourway `i`: blush paint, brushed gold, cream paint.
 fn case(b: &mut Builder<'_>, layer: NodeId, (w, h): (f64, f64), i: usize) {
     let mut shell = draw::rounded(draw::frame("Case", 0.0, 0.0, w, h), 16.0);
@@ -100,17 +129,19 @@ pub(super) fn face() -> Face {
         }
         let case = b.add(root, draw::frame("Controls", 0.0, 0.0, w, h - 12.0));
         let lab = Type::new(10.5, INK, 700.0);
-        let knob = KnobLook { cap: "fluted", opts: &["color=#2a1d1c", "pointer=#e0b060", "ticks=none"] };
+        let knob = KnobLook { preset: "scalloped", opts: &["color=#1e1413", "pointer=#dcaa4c", "ribs=9", "rib_depth=0.13", "coat=0.85", "rough=0.14", "height=0.56", "index_in=0.05", "index_out=0.72", "index_w=0.07", "ticks=none", "fallback=fluted"] };
         // HPF.
         parts::words(b, case, "HPF :", 100.0, 35.0, 44.0, TextAlign::Right, lab);
-        readout(b, case, "eq/hpf", (148.0, 35.0), 60.0, lab, TextAlign::Left);
-        parts::knob(b, case, &knob, "eq/hpf", "HPF", 62.0, (153.0, 116.0), INK);
+        let hpf = readout(b, case, "eq/hpf", (148.0, 35.0), 60.0, lab, TextAlign::Left);
+        look::set_format(b, hpf, ValueFormat::default().mark(HPF.0, "OFF"));
+        look::place_knob(b, case, &knob, "eq/hpf", "HPF", 62.0, (153.0, 116.0), INK);
         parts::art(b, case, &[vec![(142.0, 176.0), (146.0, 169.0), (158.0, 169.0)]], 1.8, INK);
         look::brass_toggle(b, case, "eq/on", "Bypass", 20.0, (150.0, 218.0));
         // LPF.
         parts::words(b, case, "LPF :", 944.0, 35.0, 44.0, TextAlign::Right, lab);
-        readout(b, case, "eq/lpf", (992.0, 35.0), 70.0, lab, TextAlign::Left);
-        parts::knob(b, case, &knob, "eq/lpf", "LPF", 62.0, (990.0, 116.0), INK);
+        let lpf = readout(b, case, "eq/lpf", (992.0, 35.0), 70.0, lab, TextAlign::Left);
+        look::set_format(b, lpf, ValueFormat::default().mark(LPF.1, "OFF"));
+        look::place_knob(b, case, &knob, "eq/lpf", "LPF", 62.0, (990.0, 116.0), INK);
         parts::art(b, case, &[vec![(980.0, 169.0), (992.0, 169.0), (996.0, 176.0)]], 1.8, INK);
         parts::status_led(b, case, "eq/on", 12.0, (990.0, 218.0), TEAL, "light", None);
         // The nine faders.
@@ -118,14 +149,16 @@ pub(super) fn face() -> Face {
             let x = 262.0 + 76.4 * i as f64;
             let addr = format!("eq/g{id}");
             fader(b, case, &addr, band, x);
-            readout(b, case, &addr, (x, 35.0), 70.0, lab, TextAlign::Center);
+            let gain = readout(b, case, &addr, (x, 35.0), 70.0, lab, TextAlign::Center);
+            look::set_format(b, gain, ValueFormat::decimals(1).signed());
             parts::centred(b, case, band, (x, 238.0), lab);
         }
+        colour_selector(b, case, (990.0, 252.0));
     });
     let mut params = vec![
-        parts::pick("eq/color", "Colour", &["Blush", "Gold", "Cream"], 0),
-        parts::hz("eq/hpf", "HPF", 20.0, 500.0, 20.0),
-        parts::hz("eq/lpf", "LPF", 2000.0, 20000.0, 20000.0),
+        parts::pick("eq/color", "Colour", &COLOURWAYS.map(|(n, _)| n), 0),
+        parts::hz("eq/hpf", "HPF", HPF.0, HPF.1, HPF.0),
+        parts::hz("eq/lpf", "LPF", LPF.0, LPF.1, LPF.1),
         parts::switch("eq/on", "Bypass", true),
     ];
     // The reference's faders: top, middle, bottom, repeated.

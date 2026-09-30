@@ -27,7 +27,8 @@ use surface_widgets::Builder;
 use super::look::{self, TEAL};
 use crate::face::{Face, canvas};
 use crate::reverb::ui;
-use crate::suite_funk_rhythm::parts::{self, HEAD_W, KnobLook, Type};
+use super::look::KnobLook;
+use crate::suite_funk_rhythm::parts::{self, HEAD_W, Type};
 
 // ── shared ───────────────────────────────────────────────────────────────
 
@@ -205,7 +206,7 @@ pub(super) fn blush() -> Face {
         look::emblem(b, plate, (52.0, 48.0), 30.0, INK);
         let t = Type::new(10.5, INK, 600.0).track(0.28).upper();
         parts::centred(b, shelf, "Input", (245.0, 58.0), t);
-        let knob = KnobLook { cap: "fluted", opts: &["color=#241b1e", "pointer=#e6b870", "ticks=none", "spec=1.2"] };
+        let knob = KnobLook { preset: "scalloped", opts: &["color=#0e0b0c", "pointer=#d9a64e", "ribs=9", "rib_depth=0.12", "height=0.6", "coat=0.85", "rough=0.14", "index_in=0.08", "index_out=0.74", "index_w=0.07", "ticks=none", "fallback=fluted"] };
         let knobs = [("blush/volume", "Volume"), ("blush/bass", "Bass"), ("blush/cut", "Cut"), ("blush/master", "Master"), ("blush/level", "Level")];
         for (i, (addr, legend)) in knobs.iter().enumerate() {
             let x = 358.0 + 133.0 * i as f64;
@@ -286,7 +287,7 @@ pub(super) fn ranch() -> Face {
         parts::centred(b, plate, "Thick", (182.0, 98.0), small);
         parts::centred(b, plate, "Normal", (138.0, 132.0), small);
         look::brass_toggle3(b, plate, "ranch/mode", "Mode", 20.0, (138.0, 98.0));
-        let knob = KnobLook { cap: "domed", opts: &["color=#1a1818", "pointer=#e0a878", "ticks=none"] };
+        let knob = KnobLook { preset: "knurled", opts: &["color=#171616", "pointer=#e0b48a", "index=line", "cap_r=0.96", "height=0.62", "dome=0.06", "edge=0.12", "ribs=70", "knurl_band=0.55", "rib_depth=0.025", "tilt=18", "index_in=0.02", "index_out=0.95", "index_w=0.06", "coat=0.6", "rough=0.22", "ticks=none", "fallback=domed"] };
         let knobs = [("ranch/gain", "Gain"), ("ranch/bass", "Bass"), ("ranch/mid", "Mid"), ("ranch/treble", "Treble"), ("ranch/presence", "Presence"), ("ranch/master", "Master"), ("ranch/output", "Output")];
         for (i, (addr, legend)) in knobs.iter().enumerate() {
             let x = 253.0 + 100.0 * i as f64;
@@ -599,10 +600,10 @@ pub(super) fn kintsugi() -> Face {
         parts::centred(b, strip, "Input", (218.0, 86.0), t);
         push(b, strip, "kintsugi/bright", 26.0, (306.0, cy), true);
         parts::centred(b, strip, "Bright", (306.0, 86.0), t);
-        let knob = KnobLook { cap: "chicken_head", opts: &["color=#4e1e22", "pointer=#f1e6cf", "ticks=dots", "material=bakelite"] };
+        let knob = KnobLook { preset: "fluted", opts: &["color=#3b2427", "pointer=#e8d6bc", "ribs=18", "rib_depth=0.045", "cap_r=0.92", "height=0.6", "dome=0.04", "edge=0.1", "index=line", "index_in=0.3", "index_out=0.85", "index_w=0.05", "coat=0.5", "rough=0.25", "ticks=dots", "fallback=fluted"] };
         let knobs: [(&str, &str, f64); 7] = [("kintsugi/gain", "Gain", 388.0), ("kintsugi/bass", "Bass", 475.0), ("kintsugi/middle", "Middle", 561.0), ("kintsugi/treble", "Treble", 648.0), ("kintsugi/master", "Master", 808.0), ("kintsugi/presence", "Presence", 894.0), ("kintsugi/output", "Output", 979.0)];
         for (addr, legend, x) in knobs {
-            parts::knob(b, strip, &knob, addr, legend, 48.0, (x, cy - 4.0), INK);
+            look::place_knob(b, strip, &knob, addr, legend, 48.0, (x, cy - 4.0), INK);
             parts::centred(b, strip, legend, (x, 90.0), t);
         }
         push(b, strip, "kintsugi/shift", 26.0, (729.0, cy), true);

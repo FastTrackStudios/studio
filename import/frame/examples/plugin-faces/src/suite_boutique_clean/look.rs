@@ -5,12 +5,12 @@
 
 use document_proto::{Node, NodeId};
 use surface_kit::materials::{Dir, Material, fill};
-use surface_kit::{Place, TOUCH_MIN, draw};
+use surface_kit::{Ink, Place, TOUCH_MIN, draw};
 use surface_widgets::Builder;
 
 use crate::face::Face;
 use crate::reverb::ui;
-use crate::suite_funk_rhythm::parts::{self, KnobLook, Type};
+use crate::suite_funk_rhythm::parts::{self, Lid, Type};
 
 pub const PLUGIN: &str = "suite-boutique-clean";
 /// The suite's lamp colour.
@@ -121,10 +121,33 @@ pub fn tick_ring(b: &mut Builder<'_>, parent: NodeId, (cx, cy): (f64, f64), r: f
     if minmax {
         // Beside the ends of the travel, as the reference prints them.
         let t = Type::new((r * 0.2).max(3.5), ink, 500.0);
-        let (dx, dy) = (r + len * 2.4, r * 0.8);
+        let (dx, dy) = (r + len * 1.2, r * 0.95);
         parts::centred(b, parent, "min", (cx - dx, cy + dy), t);
         parts::centred(b, parent, "max", (cx + dx, cy + dy), t);
     }
+}
+
+/// How one of the suite's knobs looks: a `knob.3d` preset and its options
+/// (the GPU knob; `knob.render` draws underneath where the shader doesn't
+/// run).
+#[derive(Clone, Copy)]
+pub struct KnobLook<'a> {
+    pub preset: &'a str,
+    pub opts: &'a [&'a str],
+}
+
+/// Every knob of the suite is placed here: a `knob.3d` of diameter `d` on
+/// `addr`, its shaft at (`cx`, `cy`), its hit box tight round the body, its
+/// printed ring (if any) in `ink`. The face prints the legend.
+#[allow(clippy::too_many_arguments)]
+pub fn place_knob(b: &mut Builder<'_>, parent: NodeId, look: &KnobLook<'_>, addr: &str, name: &str, d: f64, (cx, cy): (f64, f64), ink: &str) -> NodeId {
+    let mut p = Place::new(name).size(d).variant(look.preset).bind(ui::bind(addr)).ink(Ink::Color(ink.into())).keep_case().touch(TOUCH_MIN);
+    if !look.opts.is_empty() {
+        p = p.options(look.opts);
+    }
+    let k = ui::put(b, parent, "knob.3d", &p, cx, cy);
+    ui::strip_legend(b, k);
+    k
 }
 
 /// The suite's knob: `look` of diameter `d` on `addr` at `at`, with its
@@ -134,7 +157,36 @@ pub fn knob(b: &mut Builder<'_>, parent: NodeId, look: &KnobLook<'_>, addr: &str
     if n > 0 {
         tick_ring(b, parent, at, d * 0.56, d * 0.09, n, ink, minmax);
     }
-    parts::knob(b, parent, look, addr, "", d, at, ink)
+    place_knob(b, parent, look, addr, "", d, at, ink)
+}
+
+/// Give a control's readout its own format (`OFF` at a filter's stop,
+/// `+` on a gain).
+pub fn set_format(b: &mut Builder<'_>, control: NodeId, f: surface_proto::ValueFormat) {
+    if let Some(c) = b.controls.get_mut(&control) {
+        c.format = Some(f);
+    }
+}
+
+/// A rendered stompbox (`panel.pedal_3d`) filling the page (`w × h`): the
+/// lid in `finish` and `color` running down to the board (no front-face
+/// band: the reference's boxes show only their lid), the jacks out of its
+/// sides. Returns the lid; the pedal's parts go on it.
+///
+/// # Panics
+/// If the kit's enclosure has no `lid` frame.
+pub fn stompbox(b: &mut Builder<'_>, root: NodeId, (w, h): (f64, f64), color: &str, finish: &str, radius: f64) -> Lid {
+    parts::page(b, root, w, h);
+    let opts = vec![format!("w={w}"), format!("h={h}"), format!("color={color}"), format!("finish={finish}"), format!("radius={radius}"), "jacks=side".into(), "front=0".into()];
+    let p = Place { options: Some(opts), ..Place::new("Enclosure").variant("standard") };
+    let body = ui::put_at(b, root, "panel.pedal_3d", &p, 0.0, 0.0);
+    let lid = b
+        .scene
+        .node(body)
+        .and_then(|n| n.children.iter().copied().find(|c| b.scene.node(*c).is_some_and(|k| k.name == "lid")))
+        .expect("panel.pedal_3d has a lid");
+    let (lw, lh) = b.scene.node(lid).map_or((w, h), |n| (n.size.width, n.size.height));
+    Lid { id: lid, w: lw, h: lh }
 }
 
 /// A brass stomp on `addr`, its cap `d` across, centred at `at`.
