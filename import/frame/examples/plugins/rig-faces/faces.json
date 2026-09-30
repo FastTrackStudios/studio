@@ -1,0 +1,118 @@
+{
+  "amps": [
+    {
+      "face": "20-amp-dumble-sss",
+      "match": [
+        "steel string singer",
+        "dumble sss"
+      ],
+      "name": "DUMBLE SSS",
+      "ns": "dumble_sss"
+    },
+    {
+      "face": "21-amp-dumble-ods",
+      "match": [
+        "dumble",
+        "ods"
+      ],
+      "name": "DUMBLE ODS",
+      "ns": "dumble_ods"
+    },
+    {
+      "face": "22-amp-vibroverb",
+      "match": [
+        "vibroverb"
+      ],
+      "name": "'64 VIBROVERB",
+      "ns": "vibroverb"
+    },
+    {
+      "face": "23-amp-tworock",
+      "match": [
+        "two-rock",
+        "two rock",
+        "tworock",
+        "trck"
+      ],
+      "name": "TWO-ROCK",
+      "ns": "tworock"
+    },
+    {
+      "face": "24-amp-deluxe",
+      "match": [
+        "deluxe reverb",
+        "deluxe"
+      ],
+      "name": "DELUXE REVERB",
+      "ns": "deluxe"
+    },
+    {
+      "face": "25-amp-twin",
+      "match": [
+        "twin reverb",
+        "twin"
+      ],
+      "name": "TWIN REVERB",
+      "ns": "twin"
+    }
+  ],
+  "drives": [
+    {
+      "face": "15-drive-king-of-tone",
+      "match": [
+        "king of tone"
+      ],
+      "ns": "kingoftone"
+    },
+    {
+      "face": "16-drive-morning-glory",
+      "match": [
+        "morning glory"
+      ],
+      "ns": "morningglory"
+    },
+    {
+      "face": "11-drive-blade",
+      "match": [
+        "katana"
+      ],
+      "ns": "katana"
+    },
+    {
+      "face": "12-drive-pegasus",
+      "match": [
+        "klon",
+        "centaur"
+      ],
+      "ns": "klon"
+    },
+    {
+      "face": "13-drive-british-blues",
+      "match": [
+        "bluesbreaker",
+        "blues breaker"
+      ],
+      "ns": "bluesbreaker"
+    },
+    {
+      "face": "14-drive-tube-drive",
+      "match": [
+        "tube screamer",
+        "ts10",
+        "ts-10",
+        "ts9",
+        "ts808",
+        "screamer"
+      ],
+      "ns": "tubescreamer"
+    }
+  ],
+  "eq": {
+    "face": "52-amp-eq",
+    "ns": "eq"
+  },
+  "gate": {
+    "face": "51-gate",
+    "ns": "gate"
+  }
+}

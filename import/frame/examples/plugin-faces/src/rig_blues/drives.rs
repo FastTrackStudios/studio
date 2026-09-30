@@ -57,6 +57,21 @@ fn inter(weight: f64) -> Lettering {
     Lettering::family(family::INTER).weight(weight)
 }
 
+/// The capture's drive — the rig block's `drive`, 0..1.
+fn drive(ns: &str, name: &str) -> surface_proto::ParamInfo {
+    ui::param(&format!("{ns}/drive"), name, Range::linear(0.0, 1.0, Unit::None), 0.5).featured()
+}
+
+/// The pedal's tone — the drive block's own EQ (to come), 0..1.
+fn tone(ns: &str, name: &str) -> surface_proto::ParamInfo {
+    ui::param(&format!("{ns}/tone"), name, Range::linear(0.0, 1.0, Unit::None), 0.5)
+}
+
+/// The output — the rig block's output level, dB.
+pub fn level(ns: &str) -> surface_proto::ParamInfo {
+    ui::param(&format!("{ns}/level"), "Output", Range::linear(-24.0, 12.0, Unit::Db), 0.0).featured()
+}
+
 fn on(ns: &str) -> surface_proto::ParamInfo {
     ui::toggle(&format!("{ns}/on"), "Bypass", true).featured()
 }
@@ -88,13 +103,13 @@ fn led(b: &mut Builder<'_>, parent: NodeId, ns: &str, cx: f64, cy: f64, d: f64, 
 #[must_use]
 pub fn blade() -> Face {
     const W: f64 = 172.0;
-    const NS: &str = "blade";
+    const NS: &str = "katana";
     const INK: &str = "#e9e9ec";
     let scene = canvas("Katana", |b, root| {
         let (lid, lw, lh) = enclosure(b, root, W, "#111113", "gloss", &["jack_inset=10", "radius=14"]);
         b.add(lid, draw::stroked(draw::rounded(draw::rect("border", 6.0, 16.0, lw - 12.0, lh - 26.0, draw::solid("#00000000")), 9.0), INK, 1.4));
         led(b, lid, NS, lw * 0.5, 9.0, 5.0, "#3d6bff");
-        knob(b, lid, "knurled", &["color=#161618", "ribs=44", "index=line", "pointer=#f2f2f4", "index_w=0.08", "skirt=none"], &format!("{NS}/volume"), "Volume", 86.0, lw * 0.5, lh * 0.34);
+        knob(b, lid, "knurled", &["color=#161618", "ribs=44", "index=line", "pointer=#f2f2f4", "index_w=0.08", "skirt=none"], &format!("{NS}/drive"), "Volume", 86.0, lw * 0.5, lh * 0.34);
         parts::print(b, lid, "VOLUME", lw * 0.5, lh * 0.34 + 52.0, 9.0, INK, 650.0, 0.14);
         set(b, lid, "KATANA", lw * 0.5, lh * 0.64, 24.0, "#f4f4f6", &inter(500.0).width(92.0), 0.04);
         stomp(b, lid, NS, 34.0, lw * 0.5, lh * 0.79);
@@ -103,7 +118,8 @@ pub fn blade() -> Face {
         set(b, lid, "K", lw * 0.5, my + ms * 0.52, 14.0, INK, &inter(800.0).italic(), 0.0);
     });
     let params = vec![
-        ui::param(&format!("{NS}/volume"), "Volume", Range::linear(0.0, 23.0, Unit::Db), 11.0).featured(),
+        drive(NS, "Volume"),
+        level(NS),
         on(NS),
     ];
     Face { file: "11-drive-blade", plugin: PLUGIN, scene, params, streams: Vec::new() }
@@ -115,13 +131,13 @@ pub fn blade() -> Face {
 #[must_use]
 pub fn pegasus() -> Face {
     const W: f64 = 400.0;
-    const NS: &str = "pegasus";
+    const NS: &str = "klon";
     const INK: &str = "#2b1c08";
     let serif = Lettering::family(family::PLAYFAIR_DISPLAY).weight(700.0);
     let scene = canvas("Klon Centaur", |b, root| {
         let (lid, lw, lh) = enclosure(b, root, W, "#c99038", "satin", &["jack_inset=8"]);
         b.add(lid, draw::rect("sheen", 0.0, 0.0, lw, lh, draw::linear(115.0, &[(0.0, "#ffe2a02a"), (0.4, "#ffffff00"), (0.75, "#4a2c0620"), (1.0, "#ffe2a014")])));
-        for (i, (id, name)) in [("gain", "GAIN"), ("treble", "TREBLE"), ("output", "OUTPUT")].iter().enumerate() {
+        for (i, (id, name)) in [("drive", "GAIN"), ("tone", "TREBLE"), ("level", "OUTPUT")].iter().enumerate() {
             let cx = lw * (0.2 + 0.3 * i as f64);
             knob(b, lid, "domed", &["color=#3a0f0c", "pointer=#e8d2b0", "index=line", "index_w=0.07", "skirt=plain", "skirt_color=#2a0a08", "dome=0.35", "coat=0.8"], &format!("{NS}/{id}"), name, 84.0, cx, lh * 0.3);
             set(b, lid, name, cx, lh * 0.3 + 58.0, 15.0, INK, &serif, 0.12);
@@ -133,9 +149,9 @@ pub fn pegasus() -> Face {
         set(b, lid, "CENTAUR", lw * 0.84, lh * 0.8, 15.0, INK, &serif, 0.16);
     });
     let params = vec![
-        ui::percent(&format!("{NS}/gain"), "Gain", 30.0).featured(),
-        ui::percent(&format!("{NS}/treble"), "Treble", 50.0).featured(),
-        ui::percent(&format!("{NS}/output"), "Output", 60.0).featured(),
+        drive(NS, "Gain"),
+        tone(NS, "Treble"),
+        level(NS),
         on(NS),
     ];
     Face { file: "12-drive-pegasus", plugin: PLUGIN, scene, params, streams: Vec::new() }
@@ -148,7 +164,7 @@ pub fn pegasus() -> Face {
 #[must_use]
 pub fn british_blues() -> Face {
     const W: f64 = 240.0;
-    const NS: &str = "british";
+    const NS: &str = "bluesbreaker";
     const BLUE: &str = "#5cc4f0";
     let scene = canvas("Blues Breaker", |b, root| {
         let (lid, lw, lh) = enclosure(b, root, W, "#1c1c1e", "hammertone", &["jack_inset=10"]);
@@ -156,7 +172,7 @@ pub fn british_blues() -> Face {
         let ledge = draw::rect("ledge", 0.0, 0.0, lw, ledge_h, draw::linear(180.0, &[(0.0, "#2c2c2f"), (0.8, "#1a1a1c"), (1.0, "#0a0a0b")]));
         b.add(lid, draw::with_effects(ledge, vec![draw::drop_shadow("#000000d0", 0.0, 3.0, 5.0)]));
         b.add(lid, draw::rect("ledge lip", 0.0, ledge_h - 1.0, lw, 1.0, draw::solid("#48484c")));
-        for (i, (id, name)) in [("gain", "GAIN"), ("tone", "TONE"), ("volume", "VOLUME")].iter().enumerate() {
+        for (i, (id, name)) in [("drive", "GAIN"), ("tone", "TONE"), ("level", "VOLUME")].iter().enumerate() {
             let cx = lw * (0.18 + 0.32 * i as f64);
             knob(b, lid, "knurled", &["color=#121214", &format!("pointer={BLUE}"), "index=line", "index_w=0.12", "ribs=36"], &format!("{NS}/{id}"), name, 60.0, cx, ledge_h * 0.44);
             parts::print(b, lid, name, cx, ledge_h * 0.44 + 38.0, 9.5, "#e8e8ec", 650.0, 0.08);
@@ -176,9 +192,9 @@ pub fn british_blues() -> Face {
         set(b, lid, "Marshall", lw * 0.5, sy, 32.0, "#1e1e21", &script, 0.0);
     });
     let params = vec![
-        ui::percent(&format!("{NS}/gain"), "Gain", 40.0).featured(),
-        ui::percent(&format!("{NS}/tone"), "Tone", 50.0).featured(),
-        ui::percent(&format!("{NS}/volume"), "Volume", 55.0).featured(),
+        drive(NS, "Gain"),
+        tone(NS, "Tone"),
+        level(NS),
         on(NS),
     ];
     Face { file: "13-drive-british-blues", plugin: PLUGIN, scene, params, streams: Vec::new() }
@@ -190,7 +206,7 @@ pub fn british_blues() -> Face {
 #[must_use]
 pub fn tube_drive() -> Face {
     const W: f64 = 200.0;
-    const NS: &str = "tubedrive";
+    const NS: &str = "tubescreamer";
     const GREEN: &str = "#57c23f";
     const DARK: &str = "#0d2a08";
     let scene = canvas("Tube Screamer", |b, root| {
@@ -233,9 +249,9 @@ pub fn tube_drive() -> Face {
         b.controls.insert(tread, Control::new(ControlKind::Button { mode: ButtonMode::Toggle }).bound(Binding::param(format!("{NS}/on"))));
     });
     let params = vec![
-        ui::percent(&format!("{NS}/drive"), "Drive", 45.0).featured(),
-        ui::percent(&format!("{NS}/tone"), "Tone", 50.0).featured(),
-        ui::percent(&format!("{NS}/level"), "Level", 55.0).featured(),
+        drive(NS, "Drive"),
+        tone(NS, "Tone"),
+        level(NS),
         on(NS),
     ];
     Face { file: "14-drive-tube-drive", plugin: PLUGIN, scene, params, streams: Vec::new() }
@@ -279,8 +295,85 @@ fn centaur(b: &mut Builder<'_>, parent: NodeId, (cx, cy): (f64, f64), size: f64,
     b.add(parent, ui::strokes("bow", &[bow, vec![top, (x0 + 47.0 * k, y0 + 27.0 * k), bottom]], 1.4, draw::solid(ink)));
 }
 
+/// King of Tone: the ivory box, its two sides' knobs (VOLUME, DRIVE,
+/// TONE — the capture's drive and output, the block EQ's tone), the crown
+/// and the name in black serif, a red LED and a yellow one.
+#[must_use]
+pub fn king_of_tone() -> Face {
+    const W: f64 = 240.0;
+    const NS: &str = "kingoftone";
+    const INK: &str = "#1b1714";
+    let serif = Lettering::family(family::PLAYFAIR_DISPLAY).weight(800.0);
+    let scene = canvas("King of Tone", |b, root| {
+        let (lid, lw, lh) = enclosure(b, root, W, "#ece3cf", "satin", &["jack_inset=10"]);
+        led(b, lid, NS, lw * 0.3, 10.0, 5.0, "#e0281c");
+        let other = b.add(lid, draw::with_effects(draw::circle("yellow led", lw * 0.7, 10.0, 2.5, draw::solid("#5a4a10")), vec![draw::drop_shadow("#00000060", 0.0, 1.0, 1.0)]));
+        let _ = other;
+        for (i, (id, name)) in [("level", "VOLUME"), ("drive", "DRIVE"), ("tone", "TONE")].iter().enumerate() {
+            let cx = lw * (0.18 + 0.32 * i as f64);
+            let cy = lh * 0.2;
+            knob(b, lid, "flat", &["color=#141414", "pointer=#f4f0e6", "index=line", "index_w=0.1", "skirt=plain", "skirt_color=#0c0c0c"], &format!("{NS}/{id}"), name, 56.0, cx, cy);
+            parts::print(b, lid, name, cx, cy + 38.0, 8.5, INK, 750.0, 0.08);
+        }
+        // The crown over the name.
+        let (cx, cy, k) = (lw * 0.5, lh * 0.45, 1.3);
+        let crown = draw::polygon(&[
+            (cx - 18.0 * k, cy + 8.0 * k), (cx - 20.0 * k, cy - 8.0 * k), (cx - 9.0 * k, cy), (cx, cy - 12.0 * k),
+            (cx + 9.0 * k, cy), (cx + 20.0 * k, cy - 8.0 * k), (cx + 18.0 * k, cy + 8.0 * k),
+        ]);
+        b.add(lid, draw::path("crown", 0.0, 0.0, lw, lh, crown, draw::solid("#b8201a")));
+        set(b, lid, "KING OF TONE", lw * 0.5, lh * 0.56, 19.0, INK, &serif, 0.04);
+        stomp(b, lid, NS, 34.0, lw * 0.5, lh * 0.76);
+        parts::print(b, lid, "ANALOGMAN", lw * 0.5, lh * 0.92, 8.0, INK, 800.0, 0.2);
+    });
+    let params = vec![drive(NS, "Drive"), tone(NS, "Tone"), level(NS), on(NS)];
+    Face { file: "15-drive-king-of-tone", plugin: PLUGIN, scene, params, streams: Vec::new() }
+}
+
+/// JHS Morning Glory: the blue box, VOLUME, DRIVE and TONE in black, the
+/// gain switch choosing the capture (Low, Medium, High Gain), the name in
+/// white script.
+#[must_use]
+pub fn morning_glory() -> Face {
+    const W: f64 = 200.0;
+    const NS: &str = "morningglory";
+    const INK: &str = "#f4f6fa";
+    let scene = canvas("Morning Glory", |b, root| {
+        let (lid, lw, lh) = enclosure(b, root, W, "#3f7fc4", "gloss", &["jack_inset=8"]);
+        led(b, lid, NS, lw * 0.5, 10.0, 5.0, "#e0281c");
+        for (i, (id, name)) in [("level", "VOLUME"), ("drive", "DRIVE"), ("tone", "TONE")].iter().enumerate() {
+            let cx = lw * (0.19 + 0.31 * i as f64);
+            let cy = lh * 0.21;
+            knob(b, lid, "flat", &["color=#131315", "pointer=#f4f6fa", "index=line", "index_w=0.1", "skirt=plain", "skirt_color=#0b0b0c"], &format!("{NS}/{id}"), name, 52.0, cx, cy);
+            parts::print(b, lid, name, cx, cy + 36.0, 8.5, INK, 750.0, 0.08);
+        }
+        // The gain switch: which capture plays.
+        parts::print(b, lid, "GAIN", lw * 0.5, lh * 0.43, 8.0, INK, 750.0, 0.1);
+        let gain = Place::new("Gain").size(22.0).variant("chrome").bind(ui::bind(&format!("{NS}/option"))).legend("").options(&["touch=44"]);
+        place::centred_at(b, lid, "switch.brass_toggle3", &gain, lw * 0.5, lh * 0.5);
+        let script = Lettering::family(family::DANCING_SCRIPT).weight(700.0);
+        set(b, lid, "Morning Glory", lw * 0.5, lh * 0.63, 26.0, INK, &script, 0.0);
+        stomp(b, lid, NS, 34.0, lw * 0.5, lh * 0.77);
+        parts::print(b, lid, "JHS", lw * 0.5, lh * 0.92, 10.0, INK, 900.0, 0.2);
+    });
+    let params = vec![
+        drive(NS, "Drive"),
+        tone(NS, "Tone"),
+        level(NS),
+        ui::choice(&format!("{NS}/option"), "Gain", &["Low Gain", "Medium Gain", "High Gain"], 1),
+        on(NS),
+    ];
+    Face { file: "16-drive-morning-glory", plugin: PLUGIN, scene, params, streams: Vec::new() }
+}
+
 /// The four, in chain order.
 #[must_use]
 pub fn all() -> Vec<Face> {
     vec![blade(), pegasus(), british_blues(), tube_drive()]
+}
+
+/// Every drive face.
+#[must_use]
+pub fn every() -> Vec<Face> {
+    vec![blade(), pegasus(), british_blues(), tube_drive(), king_of_tone(), morning_glory()]
 }

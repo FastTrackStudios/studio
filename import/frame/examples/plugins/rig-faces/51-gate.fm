@@ -1,0 +1,39 @@
+<Document id="839284bd-92dc-5987-b641-f888d9cfad7c">
+  <Page name="Surface" id="005c17a2-21d1-535c-9ec0-bfeddc261d37">
+    <Frame name="Gate" id="633e88ef-9ad5-566b-bbb7-0da50d8b3b1e" w=250 h=392>
+      <Frame name="Gate" id="8ad0f0c2-0334-5360-b98f-85f9dfe29349" w=250 h=392 radius=10 fill="#101319" stroke="#232a35" stroke-align="inside" effects={[{"color":"#00000073","kind":"DropShadow","offset_y":6.0,"radius":18.0},{"color":"#ffffff0a","kind":"InnerShadow","offset_y":1.0,"radius":0.0}]}>
+        <Text name="title" id="b95c9548-5e17-56b6-b212-2506bba77423" x=12 y=9 w=80 h=18 fill="#e6ebf2" size=13 weight=700 letter-spacing=2>GATE</Text>
+        <Text name="threshold" id="99138c77-68bd-5762-a8c4-b65808339d18" x=108 y=10 w=90 h=17 fill="#69db7c" size=12 weight=600 text-align="right" control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Param":{"addr":"gate/threshold"}}},"format":{"decimals":0,"style":"Number","unit":"dB"},"kind":"Readout","slots":[{"node":"99138c77-68bd-5762-a8c4-b65808339d18","role":"Value"}]}}>-60 dB</Text>
+        <Frame name="power" id="9a1db164-45cc-59b5-b22b-653dbdec8343" x=208 y=3 w=30 h=28 control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Param":{"addr":"gate/on"}}},"kind":{"Button":{"mode":"Toggle"}},"slots":[{"node":"83f619ee-0705-58ba-aa8f-7444e7774188","role":"Led"}]}}>
+          <Ellipse name="ring" id="9d73ecd0-73bb-5e3e-90aa-754acf204e20" x=6 y=5 w=18 h=18 fill="#0c0f14" stroke="#3a4250" stroke-weight=1.4 stroke-align="inside" />
+          <Ellipse name="lit" id="83f619ee-0705-58ba-aa8f-7444e7774188" x=6 y=5 w=18 h=18 fill="#69db7c40" stroke="#69db7c" stroke-weight=1.6 stroke-align="inside" emission={{"color":"#69db7c","intensity":0.6,"radius":8.0}} />
+        </Frame>
+        <Frame name="well" id="adab86b0-3248-554a-88a4-11b6a401f636" x=30 y=38 w=210 h=342 radius=5 fill={[{"kind":{"LinearGradient":{"stops":[{"color":"#161b24","position":0.0},{"color":"#0c0f14","position":1.0}],"transform":{"a":1.6653345369377348e-16,"b":-1.0,"c":1.0,"d":1.6653345369377348e-16,"tx":1.0,"ty":-1.942890293094024e-16}}}},{"kind":{"RadialGradient":{"stops":[{"color":"#2a3448","position":0.0},{"color":"#2a344800","position":1.0}],"transform":{"a":1.6,"b":0.0,"c":0.0,"d":1.6,"tx":-0.30000000000000004,"ty":-0.45000000000000007}}}}]} stroke="#ffffff0d" stroke-align="inside" effects={[{"color":"#000000b3","kind":"InnerShadow","offset_y":2.0,"radius":10.0}]} />
+        <Frame name="plot area" id="693999aa-5038-5448-91f6-23f3855d5741" x=30 y=38 w=210 h=342>
+          <Frame name="traces" id="df26c672-1afc-5f31-8548-0ad85ef46907" w=210 h=342 clip=true>
+            <Frame name="input level" id="9548b2a4-b1b6-57dd-9194-3cbd8c0c6186" w=210 h=342 control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Stream":{"id":"gate/in_history"}}},"kind":{"Plot":{"style":"Line","x":{"Time":{"len":240}},"y":{"curve":"Linear","max":0.0,"min":-90.0}}},"slots":[{"node":"bfe7a657-4eaf-596e-913f-65d80439080c","role":"Area"},{"node":"2c430d50-9b17-5c3b-b47b-d0adba72d29d","role":"Trace"}]}}>
+              <Vector name="fill" id="bfe7a657-4eaf-596e-913f-65d80439080c" w=210 h=342 fill={[{"kind":{"LinearGradient":{"stops":[{"color":"#69db7c52","position":0.0},{"color":"#69db7c08","position":1.0}],"transform":{"a":1.6653345369377348e-16,"b":-1.0,"c":1.0,"d":1.6653345369377348e-16,"tx":1.0,"ty":-1.942890293094024e-16}}}}]} />
+              <Vector name="line" id="2c430d50-9b17-5c3b-b47b-d0adba72d29d" w=210 h=342 stroke="#69db7ce6" stroke-weight=1.4 stroke-cap="round" stroke-join="round" emission={{"color":"#69db7c","intensity":0.4,"radius":5.0}} />
+            </Frame>
+            <Frame name="gain reduction" id="70422436-e53a-5822-9ef2-e5ce86af2f30" w=210 h=342 control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Stream":{"id":"gate/gr_history"}}},"kind":{"Plot":{"style":{"Area":{"baseline":0.0}},"x":{"Time":{"len":240}},"y":{"curve":"Linear","max":0.0,"min":-60.0}}},"slots":[{"node":"350f8f3e-cfc1-57c0-8b54-7a31440841ab","role":"Area"},{"node":"6da52dc1-347a-5633-9430-e65475b12678","role":"Trace"}]}}>
+              <Vector name="fill" id="350f8f3e-cfc1-57c0-8b54-7a31440841ab" w=210 h=342 fill={[{"kind":{"LinearGradient":{"stops":[{"color":"#ff6b6b5c","position":0.0},{"color":"#ff6b6b0a","position":1.0}],"transform":{"a":1.6653345369377348e-16,"b":-1.0,"c":1.0,"d":1.6653345369377348e-16,"tx":1.0,"ty":-1.942890293094024e-16}}}}]} />
+              <Vector name="line" id="6da52dc1-347a-5633-9430-e65475b12678" w=210 h=342 stroke="#ff6b6b" stroke-weight=1.6 stroke-cap="round" stroke-join="round" emission={{"color":"#ff6b6b","intensity":0.6,"radius":6.0}} />
+            </Frame>
+          </Frame>
+          <Vector name="grid" id="bdc3754d-6597-5926-8b15-1baa6269e269" w=210 h=342 stroke="#ffffff0f" geometry="M 35.5 0 V 342.0 M 70.5 0 V 342.0 M 105.5 0 V 342.0 M 140.5 0 V 342.0 M 175.5 0 V 342.0 M 0 274.5 H 210.0 M 0 205.5 H 210.0 M 0 137.5 H 210.0 M 0 68.5 H 210.0" />
+          <Frame name="threshold" id="75f90744-eebd-5948-a048-0a0e49da3933" y=149 w=210 h=44 control={{"kind":{"Handle":{"wheel":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Param":{"addr":"gate/threshold"}}},"x_map":{"after":[],"axis":{"Linear":{"max":1.0,"min":0.0}},"shift":0.0},"y":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Param":{"addr":"gate/threshold"}}},"y_map":{"after":[],"axis":{"Linear":{"max":0.0,"min":-90.0}},"shift":0.0}}},"slots":[]}}>
+            <Vector name="line" id="7c0fc9e5-f354-5902-afee-b37bee138981" w=210 h=44 stroke="#ffd43bcc" stroke-weight=1.4 stroke-dash="5 4" geometry="M 0 22.0 H 210.0" />
+            <Frame name="chip" id="1eba7eaf-e3cb-5b3c-85e8-b9d5a9c0b611" x=170 y=14 w=36 h=16 radius=8 fill="#ffd43b" emission={{"color":"#ffd43b","intensity":0.45,"radius":8.0}}>
+              <Text name="legend" id="c5010d2b-761b-56ca-a83a-dccd6c391681" y=3 w=36 h=12 fill="#1f1a00" size=8.5 weight=800 letter-spacing=0.8 text-align="center">THR</Text>
+            </Frame>
+          </Frame>
+          <Text name="label" id="1e49ed07-72a8-5899-9ed9-8e52c2cb8db4" x=6 y=326.88 w=32.480000000000004 h=13 fill="#8e98a8" size=9 weight=500 letter-spacing=0.2>SHUT</Text>
+        </Frame>
+        <Text name="label" id="e1ca6b0c-31bc-51ac-9be5-a0e3ac14170a" x=1.3400000000000034 y=305.48 w=23.659999999999997 h=13 fill="#8e98a8" size=9 weight=500 letter-spacing=0.2 text-align="right">-72</Text>
+        <Text name="label" id="bd6cd85a-e0c6-58d9-b17d-9cb65ece2f11" x=1.3400000000000034 y=237.07999999999998 w=23.659999999999997 h=13 fill="#8e98a8" size=9 weight=500 letter-spacing=0.2 text-align="right">-54</Text>
+        <Text name="label" id="fe651af6-77d4-5dfa-b36a-77c70d7d32a5" x=1.3400000000000034 y=168.68 w=23.659999999999997 h=13 fill="#8e98a8" size=9 weight=500 letter-spacing=0.2 text-align="right">-36</Text>
+        <Text name="label" id="98f41ef9-99e5-530b-8fb2-d76cafd956f3" x=1.3400000000000034 y=100.27999999999999 w=23.659999999999997 h=13 fill="#8e98a8" size=9 weight=500 letter-spacing=0.2 text-align="right">-18</Text>
+      </Frame>
+    </Frame>
+  </Page>
+</Document>

@@ -274,6 +274,44 @@ impl LiveSurface {
         std::mem::take(&mut self.calls)
     }
 
+    /// Values from the engine in their own units (Hz, dB, 0..1…), by
+    /// address; each is normalized through the surface catalog's range.
+    /// Addresses the catalog does not know are ignored.
+    pub fn apply_real(&mut self, values: impl IntoIterator<Item = (String, f64)>) {
+        let normalized: Vec<ParamValue> = values
+            .into_iter()
+            .filter_map(|(addr, real)| {
+                let addr = ParamAddr::new(addr);
+                let info = self.rt.catalog().param(&addr)?;
+                Some(ParamValue { value: info.range.to_normalized(real), addr })
+            })
+            .collect();
+        self.apply_values(normalized);
+    }
+
+    /// The param edits made since the last take, as (address, value in the
+    /// param's own units) — the catalog's range turns the surface's
+    /// normalized value back into Hz, dB, 0..1…
+    pub fn take_edits(&mut self) -> Vec<(String, f64)> {
+        let calls = std::mem::take(&mut self.calls);
+        calls
+            .into_iter()
+            .filter_map(|c| match c {
+                EngineCall::SetParam { addr, value, .. } => {
+                    let real = self.rt.catalog().param(&addr).map_or(value, |p| p.range.to_real(value));
+                    Some((addr.to_string(), real))
+                }
+                _ => None,
+            })
+            .collect()
+    }
+
+    /// The params the surface's catalog knows, by address.
+    #[must_use]
+    pub fn addresses(&self) -> Vec<String> {
+        self.rt.catalog().params.iter().map(|p| p.addr.to_string()).collect()
+    }
+
     /// Whether the host should render again: something changed, a control
     /// is animating, or a shader reads the clock.
     #[must_use]

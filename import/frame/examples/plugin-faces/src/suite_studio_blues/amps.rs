@@ -127,10 +127,18 @@ pub enum AmpModel {
     /// The Two-Rock signature prototype: black panel, bakelite
     /// chicken-heads, silver italic logo, black cloth behind gold piping.
     TwoRock,
+    /// Fender Deluxe Reverb (blackface), as the Vibroverb.
+    DeluxeReverb,
+    /// Dumble Overdrive Special, in the Steel String Singer's dress.
+    DumbleOds,
+    /// Fender Twin Reverb (blackface), as the Vibroverb.
+    TwinReverb,
 }
 
 impl AmpModel {
     pub const ALL: [Self; 3] = [Self::SteelStringSinger, Self::Vibroverb, Self::TwoRock];
+    /// Every model with a face.
+    pub const EVERY: [Self; 6] = [Self::SteelStringSinger, Self::DumbleOds, Self::Vibroverb, Self::TwoRock, Self::DeluxeReverb, Self::TwinReverb];
 
     /// Its short name, for pickers.
     #[must_use]
@@ -139,6 +147,24 @@ impl AmpModel {
             Self::SteelStringSinger => "DUMBLE SSS",
             Self::Vibroverb => "'64 VIBROVERB",
             Self::TwoRock => "TWO-ROCK",
+            Self::DeluxeReverb => "DELUXE REVERB",
+            Self::TwinReverb => "TWIN REVERB",
+            Self::DumbleOds => "DUMBLE ODS",
+        }
+    }
+
+    /// A blackface Fender.
+    #[must_use]
+    pub fn blackface(self) -> bool {
+        matches!(self, Self::Vibroverb | Self::DeluxeReverb | Self::TwinReverb)
+    }
+
+    /// The model name printed under the Fender script.
+    fn fender_name(self) -> &'static str {
+        match self {
+            Self::DeluxeReverb => "DELUXE REVERB",
+            Self::TwinReverb => "TWIN REVERB",
+            _ => "VIBROVERB",
         }
     }
 }
@@ -151,19 +177,19 @@ impl AmpModel {
 #[must_use]
 pub fn amp_compact(model: AmpModel, prefix: &str, w: f64, h: f64) -> Face {
     let scene = canvas(model.short(), |b, root| {
-        let mut spec = CabinetSpec::new(if model == AmpModel::Vibroverb { Kind::Combo } else { Kind::Head }, w, h);
+        let mut spec = CabinetSpec::new(if model.blackface() { Kind::Combo } else { Kind::Head }, w, h);
         spec.handle = Handle::None;
         spec.face_frac = 0.48;
         spec.corners = Some("black".into());
         let (ink, cap, legend) = match model {
-            AmpModel::SteelStringSinger => {
+            AmpModel::SteelStringSinger | AmpModel::DumbleOds => {
                 spec.covering = Material::Tolex { grain: Grain::Bronco, color: "#1d1c1c".into(), scale: 1.0 };
                 spec.grille = Material::DiamondGrille { cloth: "#161314".into(), stripes: vec!["#b8324a".into(), "#e6e2d6".into(), "#5f9e86".into()], pitch: 96.0 };
                 spec.face = Material::Brushed { color: "#c3c4c6".into(), dir: Dir::Horizontal };
                 spec.piping = Some("#b9babc".into());
                 ("#141414", Cap::ChromeSkirt, Lettering::family(family::PIRATA_ONE))
             }
-            AmpModel::Vibroverb => {
+            AmpModel::Vibroverb | AmpModel::DeluxeReverb | AmpModel::TwinReverb => {
                 spec.covering = Material::Tolex { grain: Grain::Levant, color: "#161616".into(), scale: 0.8 };
                 spec.grille = Material::GrilleCloth { cloth: Cloth::Silver };
                 spec.face = Material::Plastic { color: "#121213".into(), gloss: 0.3 };
@@ -183,14 +209,14 @@ pub fn amp_compact(model: AmpModel, prefix: &str, w: f64, h: f64) -> Face {
         let d = (ph * 0.58).min(pw * 0.2);
         let numbered: &[&str] = &["1", "2", "3", "4", "5", "6", "7", "8", "9", "10"];
         let dots: &[&str] = &["", "", "", "", "", "", "", "", "", "", ""];
-        for (id, name, fx) in [("gain", "GAIN", 0.16), ("level", "LEVEL", 0.4)] {
+        for (id, name, fx) in [("drive", "GAIN", 0.16), ("level", "LEVEL", 0.4)] {
             let addr = format!("{prefix}/{id}");
             let (cx, cy) = (pw * fx, ph * 0.43);
             match model {
-                AmpModel::Vibroverb => {
+                AmpModel::Vibroverb | AmpModel::DeluxeReverb | AmpModel::TwinReverb => {
                     knob_scaled(b, plate, cap, &addr, name, d * 0.9, cx, cy, numbered, ink);
                 }
-                AmpModel::SteelStringSinger => {
+                AmpModel::SteelStringSinger | AmpModel::DumbleOds => {
                     knob_scaled(b, plate, cap, &addr, name, d, cx, cy, dots, ink);
                 }
                 AmpModel::TwoRock => {
@@ -203,15 +229,16 @@ pub fn amp_compact(model: AmpModel, prefix: &str, w: f64, h: f64) -> Face {
         let lx = pw * 0.7;
         let big = (ph * 0.2).min(pw * 0.075);
         match model {
-            AmpModel::SteelStringSinger => {
+            AmpModel::SteelStringSinger | AmpModel::DumbleOds => {
                 let script = Lettering::family(family::DANCING_SCRIPT).weight(700.0);
                 set(b, plate, "Dumble", lx, ph * 0.38, big * 1.4, "#0e0e0e", &script, 0.0);
-                set(b, plate, "Steel String Singer", lx, ph * 0.72, big * 0.5, "#1a1a1a", &Lettering::family(family::PLAYFAIR_DISPLAY).weight(700.0).italic(), 0.04);
+                let sub = if model == AmpModel::DumbleOds { "Overdrive Special" } else { "Steel String Singer" };
+                set(b, plate, sub, lx, ph * 0.72, big * 0.5, "#1a1a1a", &Lettering::family(family::PLAYFAIR_DISPLAY).weight(700.0).italic(), 0.04);
             }
-            AmpModel::Vibroverb => {
+            AmpModel::Vibroverb | AmpModel::DeluxeReverb | AmpModel::TwinReverb => {
                 let script = Lettering::family(family::DANCING_SCRIPT).weight(700.0);
                 set(b, plate, "Fender", lx, ph * 0.4, big * 1.3, "#f4f4f2", &script, 0.0);
-                set(b, plate, "VIBROVERB", lx, ph * 0.74, big * 0.5, "#e6e6e4", &Lettering::family(family::INTER).weight(700.0), 0.2);
+                set(b, plate, model.fender_name(), lx, ph * 0.74, big * 0.5, "#e6e6e4", &Lettering::family(family::INTER).weight(700.0), 0.2);
             }
             AmpModel::TwoRock => {
                 let logo = Lettering::family(family::OSWALD).weight(700.0).italic();
@@ -222,8 +249,8 @@ pub fn amp_compact(model: AmpModel, prefix: &str, w: f64, h: f64) -> Face {
         jewel(b, plate, &format!("{prefix}/on"), "red", (ph * 0.22).min(pw * 0.06), pw * 0.93, ph * 0.45);
     });
     let params = vec![
-        ui::param(&format!("{prefix}/gain"), "Gain", Range::linear(0.0, 10.0, Unit::None), 5.0).featured(),
-        ui::param(&format!("{prefix}/level"), "Level", Range::linear(0.0, 10.0, Unit::None), 5.0).featured(),
+        ui::param(&format!("{prefix}/drive"), "Gain", Range::linear(0.0, 1.0, Unit::None), 0.5).featured(),
+        ui::param(&format!("{prefix}/level"), "Level", Range::linear(-24.0, 12.0, Unit::Db), 0.0).featured(),
         ui::toggle(&format!("{prefix}/on"), "Power", true),
     ];
     Face { file: "07-amp-compact", plugin: PLUGIN, scene, params, streams: Vec::new() }

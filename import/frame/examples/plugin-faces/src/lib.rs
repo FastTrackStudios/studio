@@ -15,6 +15,7 @@ pub mod face;
 pub mod modulation;
 pub mod reverb;
 pub mod rig_blues;
+pub mod rig_faces;
 pub mod saturate;
 pub mod suite_boutique_clean;
 pub mod suite_funk_rhythm;
@@ -43,6 +44,7 @@ pub fn all() -> Vec<Face> {
     v.extend(suite_studio_blues::faces());
     v.extend(suite_poly_clean::faces());
     v.extend(rig_blues::faces());
+    v.extend(rig_faces::faces());
     v.extend(suite_djent_forge::faces());
     v.extend(suite_modern_rhythm::faces());
     v.extend(suite_blackout_gain::faces());
@@ -68,5 +70,6 @@ pub fn write_all(out: &std::path::Path) -> usize {
         let path = out.join(plugin).join(format!("{plugin}.catalog.json"));
         std::fs::write(&path, serde_json::to_string_pretty(&catalog).expect("json")).expect("write catalog");
     }
+    std::fs::write(out.join(rig_faces::PLUGIN).join("faces.json"), rig_faces::manifest()).expect("write faces.json");
     faces.len()
 }

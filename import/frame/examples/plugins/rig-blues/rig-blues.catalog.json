@@ -3,24 +3,41 @@
   "version": 1,
   "params": [
     {
-      "addr": "blade/volume",
+      "addr": "katana/drive",
       "name": "Volume",
       "short_name": null,
       "group": null,
       "kind": "Continuous",
       "range": {
         "min": 0.0,
-        "max": 23.0,
+        "max": 1.0,
         "scale": "Linear",
-        "unit": "Db",
+        "unit": "None",
         "steps": null
       },
-      "default": 0.4782608695652174,
+      "default": 0.5,
       "bipolar": false,
       "featured": true
     },
     {
-      "addr": "blade/on",
+      "addr": "katana/level",
+      "name": "Output",
+      "short_name": null,
+      "group": null,
+      "kind": "Continuous",
+      "range": {
+        "min": -24.0,
+        "max": 12.0,
+        "scale": "Linear",
+        "unit": "Db",
+        "steps": null
+      },
+      "default": 0.6666666666666666,
+      "bipolar": false,
+      "featured": true
+    },
+    {
+      "addr": "katana/on",
       "name": "Bypass",
       "short_name": null,
       "group": null,
@@ -37,58 +54,58 @@
       "featured": true
     },
     {
-      "addr": "pegasus/gain",
+      "addr": "klon/drive",
       "name": "Gain",
       "short_name": null,
       "group": null,
       "kind": "Continuous",
       "range": {
         "min": 0.0,
-        "max": 100.0,
+        "max": 1.0,
         "scale": "Linear",
-        "unit": "Percent",
+        "unit": "None",
         "steps": null
       },
-      "default": 0.3,
+      "default": 0.5,
       "bipolar": false,
       "featured": true
     },
     {
-      "addr": "pegasus/treble",
+      "addr": "klon/tone",
       "name": "Treble",
       "short_name": null,
       "group": null,
       "kind": "Continuous",
       "range": {
         "min": 0.0,
-        "max": 100.0,
+        "max": 1.0,
         "scale": "Linear",
-        "unit": "Percent",
+        "unit": "None",
         "steps": null
       },
       "default": 0.5,
       "bipolar": false,
-      "featured": true
+      "featured": false
     },
     {
-      "addr": "pegasus/output",
+      "addr": "klon/level",
       "name": "Output",
       "short_name": null,
       "group": null,
       "kind": "Continuous",
       "range": {
-        "min": 0.0,
-        "max": 100.0,
+        "min": -24.0,
+        "max": 12.0,
         "scale": "Linear",
-        "unit": "Percent",
+        "unit": "Db",
         "steps": null
       },
-      "default": 0.6,
+      "default": 0.6666666666666666,
       "bipolar": false,
       "featured": true
     },
     {
-      "addr": "pegasus/on",
+      "addr": "klon/on",
       "name": "Bypass",
       "short_name": null,
       "group": null,
@@ -105,33 +122,16 @@
       "featured": true
     },
     {
-      "addr": "british/gain",
+      "addr": "bluesbreaker/drive",
       "name": "Gain",
       "short_name": null,
       "group": null,
       "kind": "Continuous",
       "range": {
         "min": 0.0,
-        "max": 100.0,
+        "max": 1.0,
         "scale": "Linear",
-        "unit": "Percent",
-        "steps": null
-      },
-      "default": 0.4,
-      "bipolar": false,
-      "featured": true
-    },
-    {
-      "addr": "british/tone",
-      "name": "Tone",
-      "short_name": null,
-      "group": null,
-      "kind": "Continuous",
-      "range": {
-        "min": 0.0,
-        "max": 100.0,
-        "scale": "Linear",
-        "unit": "Percent",
+        "unit": "None",
         "steps": null
       },
       "default": 0.5,
@@ -139,24 +139,41 @@
       "featured": true
     },
     {
-      "addr": "british/volume",
-      "name": "Volume",
+      "addr": "bluesbreaker/tone",
+      "name": "Tone",
       "short_name": null,
       "group": null,
       "kind": "Continuous",
       "range": {
         "min": 0.0,
-        "max": 100.0,
+        "max": 1.0,
         "scale": "Linear",
-        "unit": "Percent",
+        "unit": "None",
         "steps": null
       },
-      "default": 0.55,
+      "default": 0.5,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "bluesbreaker/level",
+      "name": "Output",
+      "short_name": null,
+      "group": null,
+      "kind": "Continuous",
+      "range": {
+        "min": -24.0,
+        "max": 12.0,
+        "scale": "Linear",
+        "unit": "Db",
+        "steps": null
+      },
+      "default": 0.6666666666666666,
       "bipolar": false,
       "featured": true
     },
     {
-      "addr": "british/on",
+      "addr": "bluesbreaker/on",
       "name": "Bypass",
       "short_name": null,
       "group": null,
@@ -173,33 +190,16 @@
       "featured": true
     },
     {
-      "addr": "tubedrive/drive",
+      "addr": "tubescreamer/drive",
       "name": "Drive",
       "short_name": null,
       "group": null,
       "kind": "Continuous",
       "range": {
         "min": 0.0,
-        "max": 100.0,
+        "max": 1.0,
         "scale": "Linear",
-        "unit": "Percent",
-        "steps": null
-      },
-      "default": 0.45,
-      "bipolar": false,
-      "featured": true
-    },
-    {
-      "addr": "tubedrive/tone",
-      "name": "Tone",
-      "short_name": null,
-      "group": null,
-      "kind": "Continuous",
-      "range": {
-        "min": 0.0,
-        "max": 100.0,
-        "scale": "Linear",
-        "unit": "Percent",
+        "unit": "None",
         "steps": null
       },
       "default": 0.5,
@@ -207,24 +207,41 @@
       "featured": true
     },
     {
-      "addr": "tubedrive/level",
-      "name": "Level",
+      "addr": "tubescreamer/tone",
+      "name": "Tone",
       "short_name": null,
       "group": null,
       "kind": "Continuous",
       "range": {
         "min": 0.0,
-        "max": 100.0,
+        "max": 1.0,
         "scale": "Linear",
-        "unit": "Percent",
+        "unit": "None",
         "steps": null
       },
-      "default": 0.55,
+      "default": 0.5,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "tubescreamer/level",
+      "name": "Output",
+      "short_name": null,
+      "group": null,
+      "kind": "Continuous",
+      "range": {
+        "min": -24.0,
+        "max": 12.0,
+        "scale": "Linear",
+        "unit": "Db",
+        "steps": null
+      },
+      "default": 0.6666666666666666,
       "bipolar": false,
       "featured": true
     },
     {
-      "addr": "tubedrive/on",
+      "addr": "tubescreamer/on",
       "name": "Bypass",
       "short_name": null,
       "group": null,
@@ -978,14 +995,14 @@
       "featured": false
     },
     {
-      "addr": "amp_l/gain",
+      "addr": "amp_l/drive",
       "name": "Gain",
       "short_name": null,
       "group": null,
       "kind": "Continuous",
       "range": {
         "min": 0.0,
-        "max": 10.0,
+        "max": 1.0,
         "scale": "Linear",
         "unit": "None",
         "steps": null
@@ -1001,13 +1018,13 @@
       "group": null,
       "kind": "Continuous",
       "range": {
-        "min": 0.0,
-        "max": 10.0,
+        "min": -24.0,
+        "max": 12.0,
         "scale": "Linear",
-        "unit": "None",
+        "unit": "Db",
         "steps": null
       },
-      "default": 0.5,
+      "default": 0.6666666666666666,
       "bipolar": false,
       "featured": true
     },
@@ -1029,14 +1046,14 @@
       "featured": false
     },
     {
-      "addr": "amp_r/gain",
+      "addr": "amp_r/drive",
       "name": "Gain",
       "short_name": null,
       "group": null,
       "kind": "Continuous",
       "range": {
         "min": 0.0,
-        "max": 10.0,
+        "max": 1.0,
         "scale": "Linear",
         "unit": "None",
         "steps": null
@@ -1052,13 +1069,13 @@
       "group": null,
       "kind": "Continuous",
       "range": {
-        "min": 0.0,
-        "max": 10.0,
+        "min": -24.0,
+        "max": 12.0,
         "scale": "Linear",
-        "unit": "None",
+        "unit": "Db",
         "steps": null
       },
-      "default": 0.5,
+      "default": 0.6666666666666666,
       "bipolar": false,
       "featured": true
     },
@@ -1080,14 +1097,14 @@
       "featured": false
     },
     {
-      "addr": "dumble/gain",
+      "addr": "dumble/drive",
       "name": "Gain",
       "short_name": null,
       "group": null,
       "kind": "Continuous",
       "range": {
         "min": 0.0,
-        "max": 10.0,
+        "max": 1.0,
         "scale": "Linear",
         "unit": "None",
         "steps": null
@@ -1103,13 +1120,13 @@
       "group": null,
       "kind": "Continuous",
       "range": {
-        "min": 0.0,
-        "max": 10.0,
+        "min": -24.0,
+        "max": 12.0,
         "scale": "Linear",
-        "unit": "None",
+        "unit": "Db",
         "steps": null
       },
-      "default": 0.5,
+      "default": 0.6666666666666666,
       "bipolar": false,
       "featured": true
     },
@@ -1131,14 +1148,14 @@
       "featured": false
     },
     {
-      "addr": "vibroverb/gain",
+      "addr": "vibroverb/drive",
       "name": "Gain",
       "short_name": null,
       "group": null,
       "kind": "Continuous",
       "range": {
         "min": 0.0,
-        "max": 10.0,
+        "max": 1.0,
         "scale": "Linear",
         "unit": "None",
         "steps": null
@@ -1154,13 +1171,13 @@
       "group": null,
       "kind": "Continuous",
       "range": {
-        "min": 0.0,
-        "max": 10.0,
+        "min": -24.0,
+        "max": 12.0,
         "scale": "Linear",
-        "unit": "None",
+        "unit": "Db",
         "steps": null
       },
-      "default": 0.5,
+      "default": 0.6666666666666666,
       "bipolar": false,
       "featured": true
     },
@@ -1182,14 +1199,14 @@
       "featured": false
     },
     {
-      "addr": "tworock/gain",
+      "addr": "tworock/drive",
       "name": "Gain",
       "short_name": null,
       "group": null,
       "kind": "Continuous",
       "range": {
         "min": 0.0,
-        "max": 10.0,
+        "max": 1.0,
         "scale": "Linear",
         "unit": "None",
         "steps": null
@@ -1205,13 +1222,13 @@
       "group": null,
       "kind": "Continuous",
       "range": {
-        "min": 0.0,
-        "max": 10.0,
+        "min": -24.0,
+        "max": 12.0,
         "scale": "Linear",
-        "unit": "None",
+        "unit": "Db",
         "steps": null
       },
-      "default": 0.5,
+      "default": 0.6666666666666666,
       "bipolar": false,
       "featured": true
     },
