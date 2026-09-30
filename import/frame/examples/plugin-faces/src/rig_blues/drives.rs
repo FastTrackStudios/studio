@@ -168,25 +168,25 @@ pub fn british_blues() -> Face {
     const BLUE: &str = "#5cc4f0";
     let scene = canvas("Blues Breaker", |b, root| {
         let (lid, lw, lh) = enclosure(b, root, W, "#1c1c1e", "hammertone", &["jack_inset=10"]);
-        let ledge_h = lh * 0.33;
+        let ledge_h = lh * 0.46;
         let ledge = draw::rect("ledge", 0.0, 0.0, lw, ledge_h, draw::linear(180.0, &[(0.0, "#2c2c2f"), (0.8, "#1a1a1c"), (1.0, "#0a0a0b")]));
         b.add(lid, draw::with_effects(ledge, vec![draw::drop_shadow("#000000d0", 0.0, 3.0, 5.0)]));
         b.add(lid, draw::rect("ledge lip", 0.0, ledge_h - 1.0, lw, 1.0, draw::solid("#48484c")));
         for (i, (id, name)) in [("drive", "GAIN"), ("tone", "TONE"), ("level", "VOLUME")].iter().enumerate() {
             let cx = lw * (0.18 + 0.32 * i as f64);
-            knob(b, lid, "knurled", &["color=#121214", &format!("pointer={BLUE}"), "index=line", "index_w=0.12", "ribs=36"], &format!("{NS}/{id}"), name, 60.0, cx, ledge_h * 0.44);
-            parts::print(b, lid, name, cx, ledge_h * 0.44 + 38.0, 9.5, "#e8e8ec", 650.0, 0.08);
+            knob(b, lid, "knurled", &["color=#121214", &format!("pointer={BLUE}"), "index=line", "index_w=0.12", "ribs=36"], &format!("{NS}/{id}"), name, 56.0, cx, ledge_h * 0.6);
+            parts::print(b, lid, name, cx, ledge_h * 0.6 + 36.0, 9.5, "#e8e8ec", 650.0, 0.08);
         }
         let logo = Lettering::family(family::OSWALD).weight(700.0).italic();
-        let ly = lh * 0.47;
+        let ly = lh * 0.6;
         b.add(lid, draw::rect("rule", 12.0, ly - 16.0, lw - 24.0, 1.6, draw::solid(BLUE)));
         set(b, lid, "BLUES BREAKER", lw * 0.5, ly, 21.0, BLUE, &logo, 0.0);
         b.add(lid, draw::rect("rule", 12.0, ly + 12.0, lw - 24.0, 1.6, draw::solid(BLUE)));
-        led(b, lid, NS, lw * 0.5, lh * 0.58, 5.0, "#e0281c");
-        stomp(b, lid, NS, 34.0, lw * 0.5, lh * 0.7);
+        led(b, lid, NS, lw * 0.5, lh * 0.69, 5.0, "#e0281c");
+        stomp(b, lid, NS, 34.0, lw * 0.5, lh * 0.79);
         // The script, embossed: a lit edge above, a shadow below.
         let script = Lettering::family(family::DANCING_SCRIPT).weight(700.0);
-        let sy = lh * 0.86;
+        let sy = lh * 0.93;
         set(b, lid, "Marshall", lw * 0.5 - 0.8, sy - 0.9, 32.0, "#46464b", &script, 0.0);
         set(b, lid, "Marshall", lw * 0.5 + 0.8, sy + 0.9, 32.0, "#050506", &script, 0.0);
         set(b, lid, "Marshall", lw * 0.5, sy, 32.0, "#1e1e21", &script, 0.0);
