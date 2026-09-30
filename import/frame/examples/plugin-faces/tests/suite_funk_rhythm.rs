@@ -114,3 +114,38 @@ fn no_maker_artist_or_product_is_printed() {
         }
     }
 }
+
+#[test]
+fn every_hardware_knob_is_a_gpu_knob() {
+    // The cab's mic knobs are the plugin's flat UI knobs, not hardware.
+    for face in suite_funk_rhythm::faces().iter().filter(|f| !f.file.contains("cab")) {
+        let s = &face.scene;
+        for (n, c) in controls(s) {
+            if !matches!(c.kind, surface_proto::ControlKind::Knob { .. }) {
+                continue;
+            }
+            let gpu = s.walk(n.id).into_iter().filter_map(|id| s.node(id)).any(|k| k.shader.as_ref().is_some_and(|f| f.shader == "knob.3d"));
+            assert!(gpu, "{}: {} isn't a knob.3d", face.file, n.name);
+        }
+    }
+}
+
+#[test]
+fn the_eq_reads_off_at_its_stops_and_signs_its_gains() {
+    let cat = catalog();
+    let faces = suite_funk_rhythm::faces();
+    let eq = faces.iter().find(|f| f.file.starts_with("10-eq")).expect("eq");
+    let read = |addr: &str, n: f64| {
+        let (_, c) = controls(&eq.scene)
+            .into_iter()
+            .find(|(_, c)| matches!(c.kind, surface_proto::ControlKind::Readout) && matches!(c.binding.as_ref().map(|b| &b.source), Some(Source::Param { addr: a }) if a.0 == addr))
+            .unwrap_or_else(|| panic!("{addr} readout"));
+        cat.params.iter().find(|p| p.addr.0 == addr).expect("param").display_as(n, c.format.as_ref())
+    };
+    assert_eq!(read("eq/hpf", 0.0), "OFF");
+    assert_eq!(read("eq/lpf", 1.0), "OFF");
+    assert_ne!(read("eq/hpf", 0.5), "OFF");
+    assert_eq!(read("eq/b65", 1.0), "+12.0 dB");
+    assert_eq!(read("eq/b65", 0.0), "-12.0 dB");
+    assert_eq!(read("eq/b65", 0.5), "0 dB");
+}

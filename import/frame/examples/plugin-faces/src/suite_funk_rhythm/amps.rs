@@ -6,8 +6,8 @@
 //!
 //! - `06-critic-head-1200x580`: *The Tone Critic* — pale blue tolex with
 //!   black moulded corners and a moulded carry handle on chrome posts, a
-//!   grille of blue bars in nested chevrons — stacks rising from the floor
-//!   and hanging from the top, crossing where they meet — over glowing
+//!   cut blue plate whose bars are stacked zigzags — regular nested
+//!   chevrons rising and hanging in turn across it — over glowing
 //!   power valves, a cream strip: volume, bright, bass, middle, treble,
 //!   master, presence, output, drive, power.
 //! - `07-engine-head-1200x600`: *The Clean Engine* — a walnut box, a cream
@@ -47,7 +47,7 @@ struct Strip<'a> {
 
 fn strip_knobs(b: &mut Builder<'_>, parent: NodeId, s: &Strip<'_>, ks: &[Knob<'_>]) {
     for Knob(addr, legend, x) in ks {
-        parts::knob(b, parent, &s.look, addr, legend, s.d, (*x, s.knob_y), s.ink);
+        parts::knob3d(b, parent, &s.look, addr, legend, s.d, (*x, s.knob_y), s.ink);
         parts::centred(b, parent, legend, (*x, s.legend_y), Type::new(12.0, s.ink, 600.0));
     }
 }
@@ -138,27 +138,18 @@ fn moulded_handle(b: &mut Builder<'_>, root: NodeId, (x0, x1): (f64, f64), y: f6
     b.add(root, ui::strokes("grip ribs", &ribs, 2.2, draw::solid("#00000070")));
 }
 
-/// Nested chevrons of bars across a grille `w × h`: stacks rising from the
-/// floor at `ups` (fractions of the width) and hanging from the top at
-/// `downs`, `levels` deep, `pitch` apart — crossing where neighbouring
-/// stacks meet, as the reference's cut grille does.
-fn chevron_bars(ups: &[(f64, usize)], downs: &[(f64, usize)], w: f64, h: f64, pitch: f64) -> Vec<Vec<(f64, f64)>> {
-    let mut lines = Vec::new();
-    for (fx, levels) in ups {
-        let c = fx * w;
-        for k in 1..=*levels {
-            let r = pitch * k as f64;
-            lines.push(vec![(c - r - 40.0, h + 40.0), (c, h - r), (c + r + 40.0, h + 40.0)]);
-        }
-    }
-    for (fx, levels) in downs {
-        let c = fx * w;
-        for k in 1..=*levels {
-            let r = pitch * k as f64;
-            lines.push(vec![(c - r - 40.0, -40.0), (c, r), (c + r + 40.0, -40.0)]);
-        }
-    }
-    lines
+/// The grille's bars: identical zigzags stacked `pitch` apart, so they
+/// read as nested chevrons — rising stacks (`^`) at the zigzag's peaks,
+/// hanging ones (`v`) midway between — every bar `slope` steep. Peaks at
+/// `peak0 + k·period` across a grille `w × h`.
+fn zigzag_bars((peak0, period): (f64, f64), slope: f64, pitch: f64, w: f64, h: f64) -> Vec<Vec<(f64, f64)>> {
+    let half = period / 2.0;
+    let drop = slope * half;
+    // A peak at or left of the edge, then a corner every half period.
+    let first = peak0 - period * (peak0 / period).ceil();
+    let corners: Vec<(f64, f64)> = (0..).map(|i| (first + half * f64::from(i), if i % 2 == 0 { 0.0 } else { drop })).take_while(|(x, _)| *x < w + half).collect();
+    let (n0, n1) = (-(drop / pitch).ceil() as i32 - 1, (h / pitch).ceil() as i32 + 1);
+    (n0..=n1).map(|k| corners.iter().map(|(x, dy)| (*x, f64::from(k) * pitch + dy)).collect()).collect()
 }
 
 fn face(file: &'static str, scene: document_proto::Scene, params: Vec<ParamInfo>) -> Face {
@@ -182,7 +173,7 @@ pub(super) fn critic() -> Face {
         let mut shell = draw::rounded(draw::frame("tolex box", 0.0, top, w, bottom - top), 10.0);
         shell.effects = vec![draw::drop_shadow("#00000080", 0.0, 6.0, 14.0)];
         let shell = b.add(root, shell);
-        fill(b, shell, (0.0, 0.0, w, bottom - top), 10.0, &Material::Tolex { grain: Grain::Levant, color: "#6f90cc".into(), scale: 1.4 });
+        fill(b, shell, (0.0, 0.0, w, bottom - top), 10.0, &Material::Tolex { grain: Grain::Levant, color: "#7896c2".into(), scale: 1.4 });
         for n in surface_kit::materials::light::edge("tolex edge", (0.0, 0.0, w, bottom - top), 10.0, 6.0, 0.8, true) {
             b.add(shell, n);
         }
@@ -196,23 +187,36 @@ pub(super) fn critic() -> Face {
             let (sx, sy) = m(8.0, 8.0);
             b.add(root, draw::circle("corner rivet", x + sx, y + sy, 2.6, draw::radial_at(0.35, 0.3, 0.8, &[(0.0, "#d9dadc"), (1.0, "#4a4b4e")])));
         }
-        // The grille: glowing valves under blue bars in nested chevrons.
-        let (gx, gy, gw, gh) = (30.0, top + 26.0, w - 60.0, 278.0);
+        // The grille: a blue cut plate over glowing valves, its bars
+        // stacked zigzags: nested chevrons rising and hanging in turn (the
+        // reference, measured).
+        let (gx, gy, gw, gh) = (30.0, top + 26.0, w - 60.0, 282.0);
+        let plate = "#315982";
         let mut grille = draw::frame("grille", gx, gy, gw, gh);
-        grille.fills = vec![draw::linear(180.0, &[(0.0, "#0c0c0e"), (1.0, "#16161a")])];
-        grille.clips_content = true;
+        grille.fills = vec![draw::solid(plate)];
         let grille = b.add(root, grille);
-        valves(b, grille, &[250.0, 380.0, 530.0, 670.0, 820.0], 60.0, 64.0, 170.0);
-        let bars = chevron_bars(&[(0.097, 6), (0.485, 7), (0.893, 6)], &[(0.291, 6), (0.689, 7), (1.06, 4), (-0.06, 3)], gw, gh, 36.0);
+        let (ow, oh) = (gw - 16.0, gh - 24.0);
+        let mut opening = draw::frame("grille opening", 8.0, 5.0, ow, oh);
+        opening.fills = vec![draw::linear(180.0, &[(0.0, "#07080a"), (1.0, "#101114")])];
+        opening.clips_content = true;
+        let opening = b.add(grille, opening);
+        valves(b, opening, &[250.0, 380.0, 530.0, 670.0, 820.0], 60.0, 64.0, 170.0);
+        // Peaks 456 apart from x = 110; a bar every 47 px down a column,
+        // 20 px of it bar, 0.95 steep; the first bar's peak 39 px down.
+        let bars: Vec<Vec<(f64, f64)>> = zigzag_bars((110.0, 456.0), 0.95, 47.0, ow, oh).into_iter().map(|l| l.into_iter().map(|(x, y)| (x, y + 39.0)).collect()).collect();
         let off = |dx: f64, dy: f64| bars.iter().map(|l| l.iter().map(|(x, y)| (x + dx, y + dy)).collect()).collect::<Vec<Vec<(f64, f64)>>>();
-        b.add(grille, ui::strokes("bar shade", &off(3.0, 5.0), 14.0, draw::solid("#000000a0")));
-        b.add(grille, ui::strokes("bars", &bars, 13.0, draw::solid("#2a5290")));
-        b.add(grille, ui::strokes("bar light", &off(-1.2, -4.0), 2.0, draw::solid("#9cbcf05c")));
-        for n in surface_kit::materials::light::edge("grille recess", (0.0, 0.0, gw, gh), 0.0, 5.0, 1.0, false) {
+        let thick = 20.0 / 0.95_f64.hypot(1.0);
+        b.add(opening, ui::strokes("bar shade", &off(2.0, 4.0), thick, draw::solid("#00000099")));
+        b.add(opening, ui::strokes("bars", &bars, thick, draw::solid(plate)));
+        b.add(opening, ui::strokes("bar light", &off(0.0, -thick * 0.5 + 1.0), 1.6, draw::solid("#8fb0dc55")));
+        for n in surface_kit::materials::light::edge("grille recess", (0.0, 0.0, ow, oh), 0.0, 4.0, 1.0, false) {
+            b.add(opening, n);
+        }
+        for n in surface_kit::materials::light::edge("plate edge", (0.0, 0.0, gw, gh), 0.0, 3.0, 0.7, true) {
             b.add(grille, n);
         }
-        for (sx, sy) in [(8.0, 8.0), (gw - 8.0, 8.0), (8.0, gh - 8.0), (gw - 8.0, gh - 8.0)] {
-            parts::screw(b, grille, sx, sy, 3.5, "#6d6e6c");
+        for (sx, sy) in [(5.0, 4.0), (gw - 5.0, 4.0), (5.0, gh - 12.0), (gw - 5.0, gh - 12.0)] {
+            parts::screw(b, grille, sx, sy, 2.6, "#2a3440");
         }
         // The cream strip.
         let (sx, sy, sw, sh) = (30.0, top + 310.0, w - 60.0, 140.0);
@@ -220,7 +224,7 @@ pub(super) fn critic() -> Face {
         let strip = b.add(root, draw::with_effects(strip, vec![draw::drop_shadow("#00000066", 0.0, 1.0, 2.0)]));
         let ink = "#232120";
         let knob_y = 66.0;
-        let s = Strip { look: KnobLook { cap: "knurled", opts: &["color=#1f1f21", "pointer=#f2f0ea", "ticks=dots"] }, d: 44.0, ink, knob_y, legend_y: 20.0 };
+        let s = Strip { look: KnobLook { cap: "knurled", opts: &["color=#18181a", "pointer=#f4f2ee", "index=dot", "index_w=0.09", "index_in=0.66", "index_out=0.66", "cap_r=0.92", "dome=0.1", "edge=0.12", "rough=0.28", "ticks=dots"] }, d: 44.0, ink, knob_y, legend_y: 20.0 };
         strip_knobs(b, strip, &s, &[
             Knob("critic/volume", "volume", 199.0),
             Knob("critic/bass", "bass", 338.0),
@@ -301,7 +305,7 @@ pub(super) fn engine() -> Face {
         fill(b, strip, (0.0, 0.0, sw, sh), 0.0, &Material::Powder { color: "#235a44".into(), coarse: false });
         let ink = "#f4f1e8";
         let knob_y = 80.0;
-        let s = Strip { look: KnobLook { cap: "knurled", opts: &["color=#efeeea", "pointer=#1a1a1a", "ticks=dots"] }, d: 54.0, ink, knob_y, legend_y: 28.0 };
+        let s = Strip { look: KnobLook { cap: "white_knurl", opts: &["ticks=dots"] }, d: 54.0, ink, knob_y, legend_y: 28.0 };
         strip_knobs(b, strip, &s, &[
             Knob("engine/volume", "volume", 205.0),
             Knob("engine/bass", "bass", 357.0),
@@ -381,7 +385,7 @@ pub(super) fn desk() -> Face {
         }
         let ink = "#262422";
         let knob_y = 78.0;
-        let s = Strip { look: KnobLook { cap: "pointer", opts: &["color=#4f6a74", "skirt_color=#3b525b", "ticks=dots"] }, d: 42.0, ink, knob_y, legend_y: 33.0 };
+        let s = Strip { look: KnobLook { cap: "domed", opts: &["color=#4f6a74", "pointer=#f2f0ea", "index=line", "cap_r=0.9", "dome=0.16", "ribs=24", "rough=0.35", "ticks=dots"] }, d: 42.0, ink, knob_y, legend_y: 33.0 };
         strip_knobs(b, strip, &s, &[
             Knob("desk/comp", "comp", 132.0),
             Knob("desk/sat", "tube sat", 262.0),

@@ -36,8 +36,12 @@ const WHITE: &str = "#fbfaf6";
 const LED: &str = "#e8f6ff";
 /// The enclosures' front face and base: a rosy copper.
 pub(super) const BASE: &str = "#b06f68";
-/// The pedals' knob: a white teardrop cap on a black ridged skirt.
-pub(super) const KNOB: KnobLook<'static> = KnobLook { cap: "pointer", opts: &["color=#f2efe8", "skirt_color=#1d1c1e", "ticks=dots"] };
+/// The pedals' knob (`knob.3d`): a black fluted body on a flared skirt,
+/// a cream teardrop insert on top for the index.
+pub(super) const KNOB: KnobLook<'static> =
+    KnobLook { cap: "pedal_chicken", opts: &["insert_color=#f1ede4", "insert_metal=0", "insert_rough=0.3", "insert_r=0.8", "insert_h=0.14", "cap_r=0.72", "fallback_color=#f2efe8", "material=plastic", "skirt_color=#18181a", "ticks=dots"] };
+/// The lid sits in from the sides as far as the reference's jacks stand out.
+pub(super) const LID: &[&str] = &["jack_inset=13"];
 /// Knob diameter on a standard lid.
 const KNOB_D: f64 = 33.0;
 
@@ -50,7 +54,7 @@ pub(super) fn knobs(b: &mut Builder<'_>, lid: &Lid, ks: &[K<'_>], d: f64) {
     let t = Type::new(7.8, WHITE, 800.0);
     for K(addr, legend, (fx, fy), above) in ks {
         let (x, y) = lid.at(*fx, *fy);
-        parts::knob(b, lid.id, &KNOB, addr, legend, d, (x, y), WHITE);
+        parts::knob3d(b, lid.id, &KNOB, addr, legend, d, (x, y), WHITE);
         let ly = if *above { y - d * 0.5 - 12.5 } else { y + d * 0.5 + 12.5 };
         if !legend.is_empty() {
             parts::centred(b, lid.id, legend, (x, ly), t);
@@ -86,7 +90,7 @@ pub(super) struct Pedal<'a> {
 
 pub(super) fn standard(p: &Pedal<'_>) -> document_proto::Scene {
     canvas(p.title, |b, root| {
-        let lid = parts::stompbox(b, root, (STANDARD_W, PEDAL_H), p.color, "powder", BASE, 9.0);
+        let lid = parts::stompbox_with(b, root, (STANDARD_W, PEDAL_H), p.color, "powder", BASE, 9.0, LID);
         knobs(b, &lid, p.knobs, KNOB_D);
         if let Some(extra) = p.extra {
             extra(b, &lid);
@@ -290,7 +294,7 @@ fn shimmer_button(b: &mut Builder<'_>, lid: &Lid) {
 }
 
 pub(super) fn rinse() -> Face {
-    let ks = vec![K("rinse/mix", "Mix", (0.17, 0.15), true), K("rinse/decay", "Decay", (0.83, 0.15), true), K("rinse/low", "", (0.2, 0.345), false), K("rinse/high", "", (0.8, 0.345), false)];
+    let ks = vec![K("rinse/mix", "Mix", (0.16, 0.15), true), K("rinse/decay", "Decay", (0.84, 0.15), true), K("rinse/low", "", (0.2, 0.345), false), K("rinse/high", "", (0.8, 0.345), false)];
     let scene = standard(&Pedal { title: "The Rinse Reverb", ns: "rinse", color: "#3ab4c6", knobs: &ks, name: &["The", "Rinse"], icon: rinse_icon, pulse: None, extra: Some(shimmer_button) });
     // Mix and decay at noon; the low cut turned to the left and the high
     // cut to the right, as in the reference.

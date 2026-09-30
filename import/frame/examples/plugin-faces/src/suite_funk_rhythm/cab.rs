@@ -136,6 +136,12 @@ fn flat(b: &mut Builder<'_>, parent: NodeId, addr: &str, caption: &str, (cx, cy)
     let k = ui::put(b, parent, "knob.flat_line", &p, cx, cy);
     ui::strip_legend(b, k);
     ui::add_value(b, k, 13.0, INK);
+    // A pan reads C at its centre; a level signed.
+    if addr.ends_with("pan") {
+        parts::format(b, k, ValueFormat::decimals(0).mark(0.0, "C"));
+    } else if addr.ends_with("level") {
+        parts::format(b, k, ValueFormat::decimals(1).signed());
+    }
     parts::centred(b, parent, caption, (cx, cy + 58.0), Type::new(10.5, DIM, 600.0).upper().track(0.04));
 }
 
@@ -178,6 +184,7 @@ pub(super) fn face() -> Face {
         let k = ui::put(b, bg, "knob.flat_line", &p, 450.0, 780.0);
         ui::strip_legend(b, k);
         ui::add_value(b, k, 12.0, INK);
+        parts::format(b, k, ValueFormat::decimals(1).signed());
     });
     let mut params = vec![parts::pick("cab/model", "Cab", CABS, 0)];
     for m in ["a", "b"] {

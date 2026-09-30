@@ -34,7 +34,7 @@ fn dot_matrix(b: &mut Builder<'_>, root: NodeId, weight: f64) {
 
 pub(super) fn face() -> Face {
     let scene = canvas("Repeat-t-t Delay", |b, root| {
-        let lid = parts::stompbox(b, root, (BIGBOX_W, PEDAL_H), "#52bf4f", "powder", pedals::BASE, 14.0);
+        let lid = parts::stompbox_with(b, root, (BIGBOX_W, PEDAL_H), "#52bf4f", "powder", pedals::BASE, 14.0, pedals::LID);
         let t = Type::new(7.0, WHITE, 800.0);
         // The mini toggles and their legends.
         for (addr, legend, fx) in [("repeat/sync", "Sync", 0.31), ("repeat/dual", "Single/Dual", 0.69)] {

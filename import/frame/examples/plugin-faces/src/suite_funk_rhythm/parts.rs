@@ -61,9 +61,19 @@ impl Lid {
 ///
 /// # Panics
 /// If the kit's enclosure has no `lid` frame.
-pub fn stompbox(b: &mut Builder<'_>, root: NodeId, (w, h): (f64, f64), color: &str, finish: &str, base: &str, radius: f64) -> Lid {
+pub fn stompbox(b: &mut Builder<'_>, root: NodeId, size: (f64, f64), color: &str, finish: &str, base: &str, radius: f64) -> Lid {
+    stompbox_with(b, root, size, color, finish, base, radius, &[])
+}
+
+/// [`stompbox`] with more `panel.pedal_3d` options (`jack_inset=`, `front=`).
+///
+/// # Panics
+/// If the kit's enclosure has no `lid` frame.
+#[allow(clippy::too_many_arguments)]
+pub fn stompbox_with(b: &mut Builder<'_>, root: NodeId, (w, h): (f64, f64), color: &str, finish: &str, base: &str, radius: f64, extra: &[&str]) -> Lid {
     page(b, root, w, h);
-    let opts = vec![format!("w={w}"), format!("h={h}"), format!("color={color}"), format!("finish={finish}"), format!("base={base}"), format!("radius={radius}"), "jacks=side".into()];
+    let mut opts = vec![format!("w={w}"), format!("h={h}"), format!("color={color}"), format!("finish={finish}"), format!("base={base}"), format!("radius={radius}"), "jacks=side".into()];
+    opts.extend(extra.iter().map(ToString::to_string));
     let class = if w > 300.0 { "bigbox" } else { "standard" };
     let p = Place { options: Some(opts), ..Place::new("Enclosure").variant(class) };
     let body = ui::put_at(b, root, "panel.pedal_3d", &p, 0.0, 0.0);
@@ -96,6 +106,27 @@ pub fn knob(b: &mut Builder<'_>, parent: NodeId, look: &KnobLook<'_>, addr: &str
     let k = ui::put(b, parent, "knob.render", &p, cx, cy);
     ui::strip_legend(b, k);
     k
+}
+
+/// [`knob`] as a GPU knob (`knob.3d`): `look.cap` names its preset,
+/// `look.opts` its options. Where the GPU stage doesn't run it draws as
+/// `knob.render` (the preset's fallback).
+#[allow(clippy::too_many_arguments)]
+pub fn knob3d(b: &mut Builder<'_>, parent: NodeId, look: &KnobLook<'_>, addr: &str, name: &str, d: f64, (cx, cy): (f64, f64), ink: &str) -> NodeId {
+    let mut p = Place::new(name).size(d).variant(look.cap).bind(ui::bind(addr)).ink(Ink::Color(ink.into())).keep_case().touch(TOUCH_MIN);
+    if !look.opts.is_empty() {
+        p = p.options(look.opts);
+    }
+    let k = ui::put(b, parent, "knob.3d", &p, cx, cy);
+    ui::strip_legend(b, k);
+    k
+}
+
+/// Give the readout control `id` its own value format.
+pub fn format(b: &mut Builder<'_>, id: NodeId, f: surface_proto::ValueFormat) {
+    if let Some(c) = b.controls.get_mut(&id) {
+        c.format = Some(f);
+    }
 }
 
 /// A kit control placed by the centre of its child named one of `anchor`
