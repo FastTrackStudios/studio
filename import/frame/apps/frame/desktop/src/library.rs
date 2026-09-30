@@ -58,6 +58,8 @@ impl Live {
                 Err(_) => std::thread::sleep(Duration::from_millis(200)),
             }
         };
+        let mut index = index;
+        fill_previews(&mut client, &mut index);
         let follow_thread = Follow::start(url, follow.clone())?;
         Ok(Self { follow: follow_thread, client, following: follow, index, shown: None, lost: None })
     }
@@ -137,7 +139,8 @@ impl Live {
                 Event::Connected => {
                     if self.lost.take().is_some() {
                         // Missed index changes while away: re-list.
-                        if let Ok(index) = self.client.list(&ListQuery::default()) {
+                        if let Ok(mut index) = self.client.list(&ListQuery::default()) {
+                            fill_previews(&mut self.client, &mut index);
                             self.index = index;
                         }
                         out.push(Change::Index);
@@ -317,5 +320,15 @@ mod tests {
         let path = install(&stored, &dir).unwrap();
         assert_eq!(document_io::load_surface(&path).unwrap(), scene);
         let _ = std::fs::remove_dir_all(dir);
+    }
+}
+
+/// Fetch each listed surface's preview one call at a time: the list comes
+/// without them, since a big library's previews outgrow one message.
+fn fill_previews(client: &mut Blocking, index: &mut [SurfaceMeta]) {
+    for meta in index.iter_mut().filter(|m| m.preview_png.is_empty()) {
+        if let Ok(png) = client.preview(&meta.id) {
+            meta.preview_png = png;
+        }
     }
 }

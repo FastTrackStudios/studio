@@ -174,6 +174,15 @@ impl Blocking {
     }
 
     /// # Errors
+    /// The library is unreachable.
+    pub fn preview(&mut self, id: &str) -> Result<Vec<u8>, String> {
+        self.call(|c| {
+            let id = id.to_owned();
+            async move { c.preview(id).await.map_err(Call::transport) }
+        })
+    }
+
+    /// # Errors
     /// Unreachable, or no such surface.
     pub fn get(&mut self, id: &str, version: Option<u64>) -> Result<Surface, String> {
         self.call(|c| {

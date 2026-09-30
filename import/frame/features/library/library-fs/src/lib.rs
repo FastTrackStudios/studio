@@ -524,7 +524,22 @@ fn valid_id(id: &str) -> bool {
 
 impl SurfaceStore for FsLibrary {
     fn list(&self, query: ListQuery) -> Vec<SurfaceMeta> {
-        lock(&self.inner.state).entries.values().filter(|e| query.matches(&e.meta)).map(|e| e.meta.clone()).collect()
+        lock(&self.inner.state)
+            .entries
+            .values()
+            .filter(|e| query.matches(&e.meta))
+            .map(|e| {
+                let mut meta = e.meta.clone();
+                if !query.previews {
+                    meta.preview_png = Vec::new();
+                }
+                meta
+            })
+            .collect()
+    }
+
+    fn preview(&self, id: String) -> Vec<u8> {
+        lock(&self.inner.state).entries.get(&id).map(|e| e.meta.preview_png.clone()).unwrap_or_default()
     }
 
     fn get(&self, id: String, version: Option<u64>) -> Result<Surface, LibraryError> {

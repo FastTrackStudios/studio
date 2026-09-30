@@ -286,6 +286,12 @@ pub struct ListQuery {
     pub tags: Vec<String>,
     /// Only surfaces that fit this engine signature.
     pub fits: Option<Signature>,
+    /// Include each surface's preview PNG. Off by default: a list of a big
+    /// library with previews inline outgrows one message — fetch them with
+    /// `preview` as they're shown.
+    #[serde(default)]
+    #[facet(default)]
+    pub previews: bool,
 }
 
 impl ListQuery {
@@ -367,6 +373,8 @@ pub mod store {
         fn list(&self, query: ListQuery) -> Vec<SurfaceMeta>;
         /// A surface at `version` (`None` = the latest).
         fn get(&self, id: String, version: Option<u64>) -> Result<Surface, LibraryError>;
+        /// A surface's preview PNG (empty when it has none).
+        fn preview(&self, id: String) -> Vec<u8>;
         /// Store `content` as a new surface, or a new version of `meta.id`.
         fn publish(&self, content: Content, meta: PublishMeta) -> Result<Published, LibraryError>;
         /// The engine catalogs the library knows (`*.catalog.json` next to

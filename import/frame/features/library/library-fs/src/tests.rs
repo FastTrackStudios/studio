@@ -297,3 +297,15 @@ async fn an_asset_change_on_disk_is_pushed_live() {
     call.abort();
     scope.close().await;
 }
+
+#[test]
+fn lists_leave_previews_out_unless_asked_and_preview_fetches_one() {
+    let dir = Dir::new("previews");
+    std::fs::write(dir.0.join("head.fm"), panel("Head")).unwrap();
+    let png: Previewer = Arc::new(|_: &Scene| Some(vec![0x89, b'P', b'N', b'G']));
+    let lib = FsLibrary::open_with(&dir.0, Some(png)).unwrap();
+    assert!(lib.list(ListQuery::default())[0].preview_png.is_empty(), "a list is metadata only");
+    assert_eq!(lib.list(ListQuery { previews: true, ..ListQuery::default() })[0].preview_png, [0x89, b'P', b'N', b'G']);
+    assert_eq!(lib.preview("head".into()), [0x89, b'P', b'N', b'G']);
+    assert!(lib.preview("nope".into()).is_empty());
+}
