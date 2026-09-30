@@ -60,8 +60,20 @@ fn amp_match(model: AmpModel) -> &'static [&'static str] {
 }
 
 fn amp_face(model: AmpModel) -> Face {
-    let f = amps::amp_compact(model, ns(model), AMP.0, AMP.1);
-    let file: &'static str = Box::leak(format!("2{}-amp-{}", AmpModel::EVERY.iter().position(|m| *m == model).unwrap_or(0), ns(model).replace('_', "-")).into_boxed_str());
+    amp_face_as(model, AMP.0 / AMP.1, false)
+}
+
+/// The proportions (width ÷ height) each amp is also laid out at: signal
+/// draws whichever fits the amp's panel, so the amp reflows — knobs,
+/// badge, grille — as the window resizes instead of shrinking in place.
+const AMP_ASPECTS: [f64; 15] = [1.6, 1.8, 2.0, 2.2, 2.4, 2.6, 2.8, 3.0, 3.2, 3.4, 3.6, 3.8, 4.0, 4.2, 4.4];
+/// The trio's (three amps side by side).
+const TRIO_ASPECTS: [f64; 13] = [2.4, 2.7, 3.0, 3.3, 3.6, 3.9, 4.2, 4.5, 4.8, 5.2, 5.6, 6.0, 6.5];
+
+fn amp_face_as(model: AmpModel, aspect: f64, variant: bool) -> Face {
+    let f = amps::amp_compact(model, ns(model), AMP.1 * aspect, AMP.1);
+    let base = format!("2{}-amp-{}", AmpModel::EVERY.iter().position(|m| *m == model).unwrap_or(0), ns(model).replace('_', "-"));
+    let file: &'static str = Box::leak(if variant { format!("{base}@{aspect:.1}") } else { base }.into_boxed_str());
     Face { file, plugin: PLUGIN, ..f }
 }
 
@@ -69,18 +81,23 @@ fn amp_face(model: AmpModel) -> Face {
 /// Steel String Singer #002 and the Two-Rock prototype blended): the three
 /// side by side, their GAIN and LEVEL all the one capture's.
 fn trio() -> Face {
-    const W: f64 = 1180.0;
-    let (aw, gap) = ((W - 2.0 * 14.0) / 3.0, 14.0);
+    trio_as(1180.0 / AMP.1, false)
+}
+
+fn trio_as(aspect: f64, variant: bool) -> Face {
+    let w = AMP.1 * aspect;
+    let (aw, gap) = ((w - 2.0 * 14.0) / 3.0, 14.0);
     let models = [AmpModel::Vibroverb, AmpModel::SteelStringSinger, AmpModel::TwoRock];
     let faces: Vec<Face> = models.iter().map(|m| amps::amp_compact(*m, "trio", aw, AMP.1)).collect();
     let scene = canvas("John Mayer trio", |b, root| {
-        ui::fit_root(b, root, W, AMP.1);
+        ui::fit_root(b, root, w, AMP.1);
         for (i, f) in faces.iter().enumerate() {
             crate::face::embed(b, root, f, (i as f64 * (aw + gap), 0.0, aw, AMP.1));
         }
     });
     let params = faces.into_iter().next().map(|f| f.params).unwrap_or_default();
-    Face { file: "27-amp-jm-trio", plugin: PLUGIN, scene, params, streams: Vec::new() }
+    let file: &'static str = if variant { Box::leak(format!("27-amp-jm-trio@{aspect:.1}").into_boxed_str()) } else { "27-amp-jm-trio" };
+    Face { file, plugin: PLUGIN, scene, params, streams: Vec::new() }
 }
 
 /// The gate's picture on the rig's Gate block.
@@ -225,6 +242,8 @@ pub fn faces() -> Vec<Face> {
     v.extend(pre_entries());
     v.push(trio());
     v.extend(AmpModel::EVERY.iter().map(|m| amp_face(*m)));
+    v.extend(TRIO_ASPECTS.iter().map(|a| trio_as(*a, true)));
+    v.extend(AmpModel::EVERY.iter().flat_map(|m| AMP_ASPECTS.iter().map(move |a| amp_face_as(*m, *a, true))));
     v.push(gate());
     v.push(eq());
     v.push(spring_viz());
@@ -244,10 +263,11 @@ pub fn manifest() -> String {
     // The trio first: its capture's name mentions all three amps
     // (`a+b` = every word).
     let t = trio();
-    let mut amps = vec![json!({ "match": ["vibroverb+dumble+two-rock"], "face": t.file, "ns": "trio", "name": "JOHN MAYER TRIO", "size": size(&t) })];
+    let variants = |faces: Vec<Face>| -> Vec<serde_json::Value> { faces.iter().map(|f| json!({ "face": f.file, "size": size(f) })).collect() };
+    let mut amps = vec![json!({ "match": ["vibroverb+dumble+two-rock"], "face": t.file, "ns": "trio", "name": "JOHN MAYER TRIO", "size": size(&t), "variants": variants(TRIO_ASPECTS.iter().map(|a| trio_as(*a, true)).collect()) })];
     amps.extend(AmpModel::EVERY.iter().map(|m| {
         let f = amp_face(*m);
-        json!({ "match": amp_match(*m), "face": f.file, "ns": ns(*m), "name": m.short(), "size": size(&f) })
+        json!({ "match": amp_match(*m), "face": f.file, "ns": ns(*m), "name": m.short(), "size": size(&f), "variants": variants(AMP_ASPECTS.iter().map(|a| amp_face_as(*m, *a, true)).collect()) })
     }));
     let pre = pre_entries();
     let pre = vec![

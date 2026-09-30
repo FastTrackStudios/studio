@@ -1,0 +1,20 @@
+{
+  "format": 1,
+  "assets": [
+    {
+      "id": "45424635dc52e10478ab7243f1226ae7513438b291fceff5d3ec52a72debfa4e",
+      "mime": "image/png",
+      "file": "45424635dc52e10478ab7243f1226ae7513438b291fceff5d3ec52a72debfa4e.png"
+    },
+    {
+      "id": "d51ba20ea6f62f2c8fd0d6539c42fb11b5832c4d0168e26769a48d0e189d39e6",
+      "mime": "image/png",
+      "file": "d51ba20ea6f62f2c8fd0d6539c42fb11b5832c4d0168e26769a48d0e189d39e6.png"
+    },
+    {
+      "id": "d9027440be86dcba140dae48d77b6dc1387c71b3243f3d491e0e85a2a3e55410",
+      "mime": "image/png",
+      "file": "d9027440be86dcba140dae48d77b6dc1387c71b3243f3d491e0e85a2a3e55410.png"
+    }
+  ]
+}

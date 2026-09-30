@@ -218,9 +218,15 @@ pub fn amp_compact(model: AmpModel, prefix: &str, w: f64, h: f64) -> Face {
         let d = (ph * 0.58).min(pw * 0.2);
         let numbered: &[&str] = &["1", "2", "3", "4", "5", "6", "7", "8", "9", "10"];
         let dots: &[&str] = &["", "", "", "", "", "", "", "", "", "", ""];
-        for (id, name, fx) in [("drive", "GAIN", 0.16), ("level", "LEVEL", 0.4)] {
+        // Laid out from the knobs' size, not the panel's width: a wider amp
+        // keeps its controls together at the left and its badge and jewel
+        // at the right, the panel and grille taking the width between, as
+        // a wider real one does.
+        let gap = (d * 1.75).min(pw * 0.24);
+        let first = (d * 0.95 + pw * 0.02).min(pw * 0.16);
+        for (i, (id, name)) in [("drive", "GAIN"), ("level", "LEVEL")].into_iter().enumerate() {
             let addr = format!("{prefix}/{id}");
-            let (cx, cy) = (pw * fx, ph * 0.43);
+            let (cx, cy) = (first + gap * i as f64, ph * 0.43);
             match model {
                 AmpModel::Vibroverb | AmpModel::DeluxeReverb | AmpModel::TwinReverb => {
                     knob_scaled(b, plate, cap, &addr, name, d * 0.9, cx, cy, numbered, ink);
@@ -235,7 +241,8 @@ pub fn amp_compact(model: AmpModel, prefix: &str, w: f64, h: f64) -> Face {
             let size = (ph * 0.12).min(pw * 0.045);
             set(b, plate, name, cx, ph * 0.88, size, ink, &legend, 0.08);
         }
-        let lx = pw * 0.7;
+        let jewel_x = pw - (pw * 0.07).min(d * 0.7);
+        let lx = jewel_x - (pw * 0.23).min(d * 2.2);
         let big = (ph * 0.2).min(pw * 0.075);
         match model {
             AmpModel::SteelStringSinger | AmpModel::DumbleOds => {
@@ -260,7 +267,7 @@ pub fn amp_compact(model: AmpModel, prefix: &str, w: f64, h: f64) -> Face {
                 set(b, plate, "Signature Prototype", lx, ph * 0.72, big * 0.45, "#c9a864", &Lettering::family(family::DANCING_SCRIPT).weight(700.0), 0.0);
             }
         }
-        jewel(b, plate, &format!("{prefix}/on"), "red", (ph * 0.22).min(pw * 0.06), pw * 0.93, ph * 0.45);
+        jewel(b, plate, &format!("{prefix}/on"), "red", (ph * 0.22).min(pw * 0.06), jewel_x, ph * 0.45);
     });
     let params = vec![
         ui::param(&format!("{prefix}/drive"), "Gain", Range::linear(0.0, 1.0, Unit::None), 0.5).featured(),
