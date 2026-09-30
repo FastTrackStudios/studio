@@ -5,7 +5,8 @@
 //! a pedal preset in a drive slot or a NAM capture in an amp. This set
 //! only answers "what does that look like": signal matches a drive slot's
 //! pedal preset name, or an amp's capture file name, against each entry's
-//! `match` words (case-insensitive, first entry wins) and draws the face,
+//! `match` words (case-insensitive, first entry wins; `a+b` needs every
+//! word) and draws the face,
 //! or its own plain card with the name when nothing matches.
 //!
 //! Binding, by convention: a face param `<ns>/<name>` is the block's param
@@ -48,7 +49,7 @@ fn ns(model: AmpModel) -> &'static str {
 /// specific first.
 fn amp_match(model: AmpModel) -> &'static [&'static str] {
     match model {
-        AmpModel::SteelStringSinger => &["steel string singer", "dumble sss"],
+        AmpModel::SteelStringSinger => &["steel string singer", "dumble sss", "dumble steel"],
         AmpModel::DumbleOds => &["dumble", "ods"],
         AmpModel::Vibroverb => &["vibroverb"],
         AmpModel::TwoRock => &["two-rock", "two rock", "tworock", "trck"],
@@ -62,6 +63,24 @@ fn amp_face(model: AmpModel) -> Face {
     let f = amps::amp_compact(model, ns(model), AMP.0, AMP.1);
     let file: &'static str = Box::leak(format!("2{}-amp-{}", AmpModel::EVERY.iter().position(|m| *m == model).unwrap_or(0), ns(model).replace('_', "-")).into_boxed_str());
     Face { file, plugin: PLUGIN, ..f }
+}
+
+/// The John Mayer trio as one capture (the '64 Vibroverb, the Dumble
+/// Steel String Singer #002 and the Two-Rock prototype blended): the three
+/// side by side, their GAIN and LEVEL all the one capture's.
+fn trio() -> Face {
+    const W: f64 = 1180.0;
+    let (aw, gap) = ((W - 2.0 * 14.0) / 3.0, 14.0);
+    let models = [AmpModel::Vibroverb, AmpModel::SteelStringSinger, AmpModel::TwoRock];
+    let faces: Vec<Face> = models.iter().map(|m| amps::amp_compact(*m, "trio", aw, AMP.1)).collect();
+    let scene = canvas("John Mayer trio", |b, root| {
+        ui::fit_root(b, root, W, AMP.1);
+        for (i, f) in faces.iter().enumerate() {
+            crate::face::embed(b, root, f, (i as f64 * (aw + gap), 0.0, aw, AMP.1));
+        }
+    });
+    let params = faces.into_iter().next().map(|f| f.params).unwrap_or_default();
+    Face { file: "27-amp-jm-trio", plugin: PLUGIN, scene, params, streams: Vec::new() }
 }
 
 /// The gate's picture on the rig's Gate block.
@@ -107,6 +126,7 @@ fn drive_entries() -> Vec<(Face, &'static str, &'static [&'static str])> {
 #[must_use]
 pub fn faces() -> Vec<Face> {
     let mut v: Vec<Face> = drive_entries().into_iter().map(|(f, _, _)| f).collect();
+    v.push(trio());
     v.extend(AmpModel::EVERY.iter().map(|m| amp_face(*m)));
     v.push(gate());
     v.push(eq());
@@ -121,13 +141,14 @@ pub fn manifest() -> String {
         json!([w.round(), h.round()])
     };
     let drives: Vec<_> = drive_entries().into_iter().map(|(f, ns, m)| json!({ "match": m, "face": f.file, "ns": ns, "size": size(&f) })).collect();
-    let amps: Vec<_> = AmpModel::EVERY
-        .iter()
-        .map(|m| {
-            let f = amp_face(*m);
-            json!({ "match": amp_match(*m), "face": f.file, "ns": ns(*m), "name": m.short(), "size": size(&f) })
-        })
-        .collect();
+    // The trio first: its capture's name mentions all three amps
+    // (`a+b` = every word).
+    let t = trio();
+    let mut amps = vec![json!({ "match": ["vibroverb+dumble+two-rock"], "face": t.file, "ns": "trio", "name": "JOHN MAYER TRIO", "size": size(&t) })];
+    amps.extend(AmpModel::EVERY.iter().map(|m| {
+        let f = amp_face(*m);
+        json!({ "match": amp_match(*m), "face": f.file, "ns": ns(*m), "name": m.short(), "size": size(&f) })
+    }));
     let doc = json!({
         "drives": drives,
         "amps": amps,

@@ -1,10 +1,23 @@
 {
   "amps": [
     {
+      "face": "27-amp-jm-trio",
+      "match": [
+        "vibroverb+dumble+two-rock"
+      ],
+      "name": "JOHN MAYER TRIO",
+      "ns": "trio",
+      "size": [
+        1180.0,
+        392.0
+      ]
+    },
+    {
       "face": "20-amp-dumble-sss",
       "match": [
         "steel string singer",
-        "dumble sss"
+        "dumble sss",
+        "dumble steel"
       ],
       "name": "DUMBLE SSS",
       "ns": "dumble_sss",
