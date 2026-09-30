@@ -8194,6 +8194,284 @@
       "default": 1.0,
       "bipolar": false,
       "featured": false
+    },
+    {
+      "addr": "mod/rate",
+      "name": "Rate",
+      "short_name": null,
+      "group": null,
+      "kind": "Continuous",
+      "range": {
+        "min": 0.05,
+        "max": 10.0,
+        "scale": "Logarithmic",
+        "unit": "Hz",
+        "steps": null
+      },
+      "default": 0.5654120103239064,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "mod/depth",
+      "name": "Depth",
+      "short_name": null,
+      "group": null,
+      "kind": "Continuous",
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": null
+      },
+      "default": 0.4,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "mod/mix",
+      "name": "Mix",
+      "short_name": null,
+      "group": null,
+      "kind": "Continuous",
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": null
+      },
+      "default": 0.4,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "mod/engine",
+      "name": "Engine",
+      "short_name": null,
+      "group": null,
+      "kind": {
+        "Choice": {
+          "options": [
+            "Cubic",
+            "BBD",
+            "Tape",
+            "Orbit",
+            "Juno",
+            "CE-2",
+            "Dimension",
+            "Clone",
+            "Tri-Chorus",
+            "SCF",
+            "Julia"
+          ]
+        }
+      },
+      "range": {
+        "min": 0.0,
+        "max": 10.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 11
+      },
+      "default": 0.0,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "mod/color",
+      "name": "Color",
+      "short_name": null,
+      "group": null,
+      "kind": "Continuous",
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": null
+      },
+      "default": 0.5,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "mod/feedback",
+      "name": "Feedback",
+      "short_name": null,
+      "group": null,
+      "kind": "Continuous",
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": null
+      },
+      "default": 0.0,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "mod/width",
+      "name": "Width",
+      "short_name": null,
+      "group": null,
+      "kind": "Continuous",
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": null
+      },
+      "default": 1.0,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "mod/on",
+      "name": "Bypass",
+      "short_name": null,
+      "group": null,
+      "kind": "Toggle",
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 2
+      },
+      "default": 1.0,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "motion/rate",
+      "name": "Rate",
+      "short_name": null,
+      "group": null,
+      "kind": "Continuous",
+      "range": {
+        "min": 0.05,
+        "max": 12.0,
+        "scale": "Logarithmic",
+        "unit": "Hz",
+        "steps": null
+      },
+      "default": 0.7995466762115763,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "motion/depth",
+      "name": "Depth",
+      "short_name": null,
+      "group": null,
+      "kind": "Continuous",
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": null
+      },
+      "default": 0.5,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "motion/mix",
+      "name": "Mix",
+      "short_name": null,
+      "group": null,
+      "kind": "Continuous",
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": null
+      },
+      "default": 1.0,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "motion/mode",
+      "name": "Mode",
+      "short_name": null,
+      "group": null,
+      "kind": {
+        "Choice": {
+          "options": [
+            "Mono",
+            "Stereo",
+            "Harmonic"
+          ]
+        }
+      },
+      "range": {
+        "min": 0.0,
+        "max": 2.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 3
+      },
+      "default": 0.5,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "motion/on",
+      "name": "Bypass",
+      "short_name": null,
+      "group": null,
+      "kind": "Toggle",
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 2
+      },
+      "default": 1.0,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "motion/engine",
+      "name": "Engine",
+      "short_name": null,
+      "group": null,
+      "kind": {
+        "Choice": {
+          "options": [
+            "Cubic",
+            "BBD",
+            "Tape",
+            "Orbit",
+            "Juno",
+            "CE-2",
+            "Dimension",
+            "Clone",
+            "Tri-Chorus",
+            "SCF",
+            "Julia"
+          ]
+        }
+      },
+      "range": {
+        "min": 0.0,
+        "max": 10.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 11
+      },
+      "default": 0.0,
+      "bipolar": false,
+      "featured": false
     }
   ],
   "actions": [],

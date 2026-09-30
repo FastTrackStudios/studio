@@ -1095,6 +1095,42 @@
       ]
     }
   ],
+  "modulation": [
+    {
+      "face": "100-mod-chorus",
+      "match": [
+        "chorus"
+      ],
+      "ns": "mod",
+      "size": [
+        480.0,
+        150.0
+      ]
+    },
+    {
+      "face": "101-motion-tremolo",
+      "match": [
+        "trem",
+        "tremolo"
+      ],
+      "ns": "motion",
+      "size": [
+        480.0,
+        150.0
+      ]
+    },
+    {
+      "face": "102-motion-vibrato",
+      "match": [
+        "vibrato"
+      ],
+      "ns": "motion",
+      "size": [
+        480.0,
+        150.0
+      ]
+    }
+  ],
   "pictures": [
     {
       "face": "53-spring-viz",

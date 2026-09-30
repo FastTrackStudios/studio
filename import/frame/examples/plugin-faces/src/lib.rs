@@ -16,6 +16,7 @@ pub mod modulation;
 pub mod reverb;
 pub mod rig_blues;
 pub mod rig_faces;
+pub mod rig_mod;
 pub mod rig_time;
 pub mod saturate;
 pub mod suite_boutique_clean;
@@ -47,6 +48,7 @@ pub fn all() -> Vec<Face> {
     v.extend(rig_blues::faces());
     v.extend(rig_faces::faces());
     v.extend(rig_time::faces());
+    v.extend(rig_mod::faces());
     v.extend(suite_djent_forge::faces());
     v.extend(suite_modern_rhythm::faces());
     v.extend(suite_blackout_gain::faces());
