@@ -130,7 +130,8 @@ fn control_panel(b: &mut Builder<'_>, root: NodeId) -> NodeId {
     let knobs = [("mvc", "MVC", 374.5), ("presence", "Presence", 451.0), ("bass", "Bass", 527.0), ("middle", "Middle", 606.0), ("treble", "Treble", 682.0), ("gain2", "", 759.0), ("gain1", "", 836.0)];
     let marks: &[(f64, &str)] = &[(0.0, "0"), (0.2, "2"), (0.4, "4"), (0.6, "6"), (0.8, "8"), (1.0, "10")];
     for (addr, name, x) in knobs {
-        let p = Place::new(if name.is_empty() { addr } else { name }).size(40.0).variant("black").bind(rk::bind(&a(addr))).touch(TOUCH_MIN);
+        let mut p = Place::new(if name.is_empty() { addr } else { name }).size(40.0).variant("flat").bind(rk::bind(&a(addr))).touch(TOUCH_MIN);
+        p.options = Some(super::AMP_KNOB.iter().map(ToString::to_string).collect());
         let k = parts::put(b, root, super::knob_id("knob.bakelite"), &p, x, KNOB_Y);
         parts::strip_legend(b, k);
         parts::strip_scale(b, k);

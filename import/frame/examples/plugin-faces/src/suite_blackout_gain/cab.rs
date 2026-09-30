@@ -147,7 +147,7 @@ fn strip(b: &mut Builder<'_>, root: NodeId) {
     n.fills = vec![draw::solid("#0b0b0bd9")];
     let n = draw::with_effects(draw::stroked(draw::rounded(n, 12.0), "#ffffff1f", 1.0), vec![draw::drop_shadow("#000000a0", 0.0, 4.0, 12.0)]);
     let s = b.add(root, n);
-    let knob = KnobStyle::new(super::knob_id("knob.pedal_grip"), "black", 36.0, "#8a8a88").opts(&["dots=21"]);
+    let knob = KnobStyle::new(super::knob_id("knob.pedal_grip"), "knurled", 36.0, "#8a8a88").opts(super::CAB_KNOB);
     let legend = Ink::new(8.0, TEXT).weight(600.0).track(0.06);
     let value = Ink::new(7.0, "#8a8a88").weight(500.0).track(0.02).plain();
     for (m, x0) in [("a", 14.0), ("b", w - 354.0)] {
@@ -160,12 +160,18 @@ fn strip(b: &mut Builder<'_>, root: NodeId) {
             let kx = x0 + 42.0 + 84.0 * i as f64;
             let k = rk::knob(b, s, &knob, &a(&format!("mic_{m}_{p}")), name, (kx, 78.0), 118.0, legend);
             parts::value_at(b, k, 128.0, value);
+            match *p {
+                "level" => parts::format(b, k, ValueFormat::decimals(1).signed()),
+                "pan" => parts::format(b, k, ValueFormat::decimals(0).mark(0.0, "C")),
+                _ => {}
+            }
         }
     }
     let cx = w / 2.0;
     pill_toggle(b, s, "Room send", &a("room_on"), (cx - 24.0, 13.0, 48.0, 30.0), "ROOM");
     let k = rk::knob(b, s, &knob, &a("room_level"), "Room", (cx, 78.0), 118.0, legend);
     parts::value_at(b, k, 128.0, value);
+    parts::format(b, k, ValueFormat::decimals(1).signed());
 }
 
 /// A dark pill that is a toggle: its text lights green while on.

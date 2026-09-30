@@ -53,8 +53,8 @@ pub fn face() -> Face {
         for (i, x) in XS.iter().enumerate() {
             fader(b, root, i, *x, legend);
         }
-        filter_knob(b, root, "hpf", "HPF", 136.0, "/", legend);
-        filter_knob(b, root, "lpf", "LPF", 866.0, "\\", legend);
+        filter_knob(b, root, "hpf", "HPF", 136.0, "/", legend, 20.0);
+        filter_knob(b, root, "lpf", "LPF", 866.0, "\\", legend, 20_000.0);
         let t = rk::mini_toggle(b, root, "Power", &a("on"), (136.0, 204.0), 22.0, "chrome");
         let _ = t;
         badge(b, root, (864.0, 204.0));
@@ -88,7 +88,7 @@ fn fader(b: &mut Builder<'_>, root: NodeId, i: usize, x: f64, legend: Ink<'_>) {
     parts::label_at(b, f, BANDS[i], (x, 240.0), legend);
     // The gain, read over the slot.
     let r = parts::readout(b, root, &format!("{} readout", BANDS[i]), rk::bind(&a(&format!("b{}", i + 1))), (x - 34.0, 31.0, 68.0), 10.0, PRINT, TextAlign::Center);
-    parts::format(b, r, ValueFormat::decimals(1));
+    parts::format(b, r, ValueFormat::decimals(1).signed());
     unlit(b, r);
 }
 
@@ -102,14 +102,17 @@ fn unlit(b: &mut Builder<'_>, readout: NodeId) {
 
 /// A filter knob: the chrome-capped knob, its setting read over it and the
 /// slope glyph under it.
-fn filter_knob(b: &mut Builder<'_>, root: NodeId, addr: &str, name: &str, x: f64, slope: &str, legend: Ink<'_>) {
-    let p = Place::new(name).size(54.0).variant("bare").bind(rk::bind(&a(addr))).touch(TOUCH_MIN);
+#[allow(clippy::too_many_arguments)]
+fn filter_knob(b: &mut Builder<'_>, root: NodeId, addr: &str, name: &str, x: f64, slope: &str, legend: Ink<'_>, stop: f64) {
+    let mut p = Place::new(name).size(54.0).variant("spun_metal").bind(rk::bind(&a(addr))).touch(TOUCH_MIN);
+    p.options = Some(super::EQ_KNOB.iter().map(ToString::to_string).collect());
     let k = parts::put(b, root, super::knob_id("knob.knurled_cap"), &p, x, 91.0);
     parts::strip_legend(b, k);
     parts::strip_scale(b, k);
     rk::silk(b, root, &format!("{name} :"), x - 22.0, 31.0, legend);
     let r = parts::readout(b, root, &format!("{name} readout"), rk::bind(&a(addr)), (x - 4.0, 31.0, 60.0), 10.0, PRINT, TextAlign::Left);
-    parts::format(b, r, ValueFormat::decimals(0));
+    // At its stop the filter is out: the readout says so.
+    parts::format(b, r, ValueFormat::decimals(0).mark(stop, "OFF"));
     unlit(b, r);
     parts::label_at(b, k, name, (x, 31.0), legend.color("#00000000"));
     let g = if slope == "/" { vec![(x - 6.0, 152.0), (x - 1.0, 152.0), (x + 4.0, 144.0)] } else { vec![(x - 4.0, 144.0), (x + 1.0, 144.0), (x + 6.0, 152.0)] };
