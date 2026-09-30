@@ -229,7 +229,17 @@ pub fn spring_tank_compact(t: &Tank, file: &'static str, w: f64, h: f64) -> Face
         print(b, case, "ON", w * 0.05, row - 30.0, 11.0, INK, 500.0, 0.08);
         toggle(b, case, t.trem_on, "Tremolo", 22.0, w * 0.05, row);
         print(b, case, "OFF", w * 0.05, row + 30.0, 11.0, INK, 500.0, 0.08);
-        for (addr, name, fx) in [(t.intensity, "INTENSITY", 0.18), (t.speed, "SPEED", 0.33)] {
+        // The tremolo's lamp: it pulses at the speed, swinging as deep as
+        // the intensity (steady at none), dark while the tremolo is off —
+        // the rate and depth at a glance.
+        let lamp = ui::stream_lamp(b, case, "Tremolo lamp", t.lfo, "", w * 0.105, row, 22.0, "#3cf0a0", INK);
+        let glow = b.controls.get(&lamp).and_then(|c| c.slots_of(SlotRole::Glow).next()).map(NodeId);
+        if let Some(glow) = glow {
+            motion::add(b, glow, Motion::new(Target::None).named("lfo").dynamics(Dynamics::Lfo { rate: Num::Expr(format!("param({})", t.speed)), shape: Wave::Sine, phase: 0.0 }));
+            let pulse = format!("or(scalar({lfo}), lerp(1, motion(lfo), param({depth}))) * param({on})", lfo = t.lfo, depth = t.intensity, on = t.trem_on);
+            motion::add(b, glow, Motion::new(Target::Opacity).input(pulse).dynamics(Dynamics::spring(900.0, 50.0)));
+        }
+        for (addr, name, fx) in [(t.intensity, "INTENSITY", 0.2), (t.speed, "SPEED", 0.345)] {
             knob(b, case, Cap::Cream, addr, name, d, w * fx, row);
             print(b, case, name, w * fx, label_y, 11.0, INK, 500.0, 0.12);
         }
