@@ -1,13 +1,15 @@
 //! Paint the hardware kit to one PNG, for review.
 //!
 //! ```text
-//! kit_sheet --out kit.png [--family knob|meter|button|switch|lever|panel|viz] [--scale 2] [--swatch]
-//!           [--fx gpu|fallback|off]
+//! kit_sheet --out kit.png [--family knob|meter|button|switch|lever|panel|viz|material] [--scale 2] [--swatch]
+//!           [--only knob.render,panel.pedal_3d] [--fx gpu|fallback|off]
 //! ```
 //! Every registered component (or one family), in a labelled grid, each
 //! bound to a demo param at a mid value so pointers and meters show a
 //! position. `--swatch` instead paints the kit's paint helpers (angled
-//! linears, offset radials, conics) to check gradient geometry.
+//! linears, offset radials, conics) to check gradient geometry. `--only`
+//! keeps the components whose ids start with one of the given prefixes; a
+//! `material` swatch shows one cell per variant.
 
 #[cfg(not(feature = "anyrender"))]
 fn main() {
@@ -35,6 +37,7 @@ fn run() -> Result<(), String> {
 
     let mut out = None;
     let mut family: Option<String> = None;
+    let mut only: Vec<String> = Vec::new();
     let mut scale = 1.0_f64;
     let mut swatch = false;
     let mut fx = render::fx::Mode::Gpu;
@@ -43,6 +46,7 @@ fn run() -> Result<(), String> {
         match a.as_str() {
             "--out" => out = args.next(),
             "--family" => family = args.next(),
+            "--only" => only = args.next().ok_or("--only needs id prefixes")?.split(',').map(ToString::to_string).collect(),
             "--scale" => scale = args.next().ok_or("--scale needs a factor")?.parse().map_err(|e| format!("{e}"))?,
             "--swatch" => swatch = true,
             "--fx" => fx = args.next().ok_or("--fx needs gpu|fallback|off")?.parse()?,
@@ -148,6 +152,7 @@ fn run() -> Result<(), String> {
         let defs: Vec<_> = surface_kit::components()
             .into_iter()
             .filter(|c| family.as_deref().is_none_or(|f| c.family.name() == f))
+            .filter(|c| only.is_empty() || only.iter().any(|o| c.id.starts_with(o.as_str())))
             .collect();
         if defs.is_empty() {
             return Err("no components registered (for that family)".into());
@@ -191,13 +196,29 @@ fn run() -> Result<(), String> {
             };
             // In a cell the size of its drawing: a tight box's print hangs out.
             surface_kit::place_in_cell(&mut b, c, def.id, &place)?;
+            // A material shows every finish it comes in.
+            if def.family == surface_kit::Family::Material {
+                for v in def.variants.iter().skip(1) {
+                    if per_row == 6 {
+                        r = row(&mut b, root, def.family.name());
+                        per_row = 0;
+                    }
+                    per_row += 1;
+                    let c = cell(&mut b, r, &format!("{} {v}", def.id));
+                    surface_kit::place_in_cell(&mut b, c, def.id, &surface_kit::Place::new(def.title).variant(*v))?;
+                }
+            }
         }
         // The options each family takes, shown once: inks, tight boxes,
         // stepped sweeps, reversed banks, gain reduction, ladders.
-        let extras = variations(family.as_deref());
+        let extras = variations(family.as_deref(), &only);
         if !extras.is_empty() {
-            let r = row(&mut b, root, "variations");
-            for (title, id, place, light) in extras {
+            let mut r = row(&mut b, root, "variations");
+            let per_row = if extras.iter().any(|e| e.1.starts_with("panel.amp")) { 2 } else { 8 };
+            for (i, (title, id, place, light)) in extras.into_iter().enumerate() {
+                if i > 0 && i % per_row == 0 {
+                    r = row(&mut b, root, "variations");
+                }
                 let c = cell(&mut b, r, &title);
                 if light {
                     // A light panel, for dark ink.
@@ -255,13 +276,73 @@ fn run() -> Result<(), String> {
 /// Extra cells showing what a family's `Place` options do:
 /// `(title, component, place, on a light panel)`.
 #[cfg(feature = "anyrender")]
-fn variations(family: Option<&str>) -> Vec<(String, &'static str, surface_kit::Place, bool)> {
+fn variations(family: Option<&str>, only: &[String]) -> Vec<(String, &'static str, surface_kit::Place, bool)> {
     use surface_kit::{Ink, Place, TOUCH_MIN};
     use surface_proto::Binding;
     let mix = || Binding::param("delay/mix");
     let choice = || Binding::param("amp/channel");
     let level = || Binding::stream("in_level");
     let mut v: Vec<(String, &'static str, Place, bool)> = Vec::new();
+    if only.iter().any(|o| o.starts_with("knob.render")) {
+        // The rendered knob's range: shapes in materials, the look's dials, print.
+        let k = |cap: &str, opts: &[&str]| Place::new("Drive").bind(mix()).size(64.0).legend("Drive").variant(cap).options(opts);
+        let rows: [(&str, &str, &[&str], bool); 20] = [
+            ("flat, metal (spun)", "flat", &["material=metal"], false),
+            ("domed, chrome", "domed", &["material=chrome"], false),
+            ("fluted, rubber", "fluted", &["material=rubber"], false),
+            ("knurled, metal", "knurled", &["material=metal", "color=#8d9094"], false),
+            ("flat, bakelite red", "flat", &["material=bakelite", "color=#a3241c", "skirt=none"], false),
+            ("pointer, cream on ridged", "pointer", &[], true),
+            ("chicken head, bakelite", "chicken_head", &["material=bakelite"], true),
+            ("flat, flared skirt", "flat", &["skirt=flared", "color=#202022"], false),
+            ("flat, chrome skirt", "flat", &["skirt=chrome"], false),
+            ("fluted, white", "fluted", &["color=#e9e6df"], true),
+            ("domed, bevel 2 spec 2 shadow 2", "domed", &["bevel=2", "spec=2", "shadow=2"], false),
+            ("flat, bevel 0 spec 0", "flat", &["bevel=0", "spec=0", "shadow=0.5"], false),
+            ("knurled, ticks=lines", "knurled", &["ticks=lines"], false),
+            ("fluted, legend=top", "fluted", &["legend=top"], true),
+            ("flat, green pedal knob", "knurled", &["color=#3a3b3d", "pointer=#ffffff"], false),
+            ("domed, cream plastic", "domed", &["color=#efe6cf"], false),
+            ("pointer, black cap", "pointer", &["color=#1b1b1c", "skirt=plain"], false),
+            ("chicken head, ivory", "chicken_head", &["color=#efe9da"], false),
+            ("flat, rubber, ticks none", "flat", &["material=rubber", "ticks=none"], false),
+            ("fluted, red", "fluted", &["color=#8f1d1d"], true),
+        ];
+        for (title, cap, opts, light) in rows {
+            let place = if light { k(cap, opts).ink(Ink::Dark) } else { k(cap, opts) };
+            v.push((title.into(), "knob.render", place, light));
+        }
+        v.push(("stepped words".into(), "knob.render", Place::new("Mode").bind(choice()).size(64.0).legend("Mode").variant("chicken_head").options(&["Clean", "Crunch", "Lead"]), false));
+        v.push(("scale 0..10".into(), "knob.render", Place::new("Gain").bind(mix()).size(64.0).legend("Gain").variant("pointer").scale(&["0", "2", "4", "6", "8", "10"]).options(&["ticks=lines"]), false));
+        v.push(("32 px, touch 44".into(), "knob.render", Place::new("Tone").bind(mix()).size(32.0).legend("Tone").variant("fluted").touch(TOUCH_MIN), false));
+        v.push(("112 px domed".into(), "knob.render", Place::new("Master").bind(mix()).size(112.0).legend("Master").variant("domed"), false));
+        return v;
+    }
+    if only.iter().any(|o| o.starts_with("panel.pedal_3d")) {
+        let pd = |cls: &str, opts: &[&str]| Place::new("Pedal").variant(cls).options(opts);
+        for (title, cls, opts) in [
+            ("standard, powder red, screws", "standard", &["color=#c0392b", "screws"][..]),
+            ("standard, brushed", "standard", &["color=#c9cacc", "finish=brushed"]),
+            ("standard, hammertone", "standard", &["color=#56715c", "finish=hammertone"]),
+            ("standard, gloss purple", "standard", &["color=#7d5aa6", "finish=gloss"]),
+            ("wide, coarse powder", "wide", &["color=#2e3033", "finish=powder:coarse", "jacks=both"]),
+            ("micro, satin", "micro", &["color=#3b7d6e", "finish=satin"]),
+            ("bigbox, chrome", "bigbox", &["finish=chrome", "jacks=top"]),
+        ] {
+            v.push((title.into(), "panel.pedal_3d", pd(cls, opts), false));
+        }
+        return v;
+    }
+    if only.iter().any(|o| o.starts_with("panel.amp")) {
+        let amp = |opts: &[&str]| Place::new("Amp").size(500.0).options(opts);
+        v.push(("head: cream bronco, chevron, bottom face".into(), "panel.amp_head", amp(&["tolex=tolex:levant", "color=#e6dfcb", "grille=chevron", "grille_color=#e8e2d2", "face=powder", "face_color=#3a3b3e", "face_at=bottom", "face_frac=0.3", "piping=none"]), false));
+        v.push(("head: black bronco, diamond".into(), "panel.amp_head", amp(&["tolex=tolex:bronco", "color=#1b1a19", "grille=diamond", "face=brushed", "face_color=#b9bbbd", "piping=#8a857a", "corners=black"]), false));
+        v.push(("combo: blonde, oxblood, strap".into(), "panel.amp_combo", amp(&["tolex=tolex:bronco", "color=#d9c7a0", "grille=cloth:oxblood", "face=plastic", "face_color=#2a2020", "handle=strap", "handle_color=#3a2a20"]), false));
+        v.push(("combo: croc, basket, brass".into(), "panel.amp_combo", amp(&["tolex=croc", "color=#2a2522", "grille=cloth:basket", "face=hammertone", "face_color=#7c8488", "corners=brass", "handle=leather"]), false));
+        v.push(("head: wood, perforated".into(), "panel.amp_head", amp(&["tolex=wood", "grille=perforated", "face=chrome", "piping=none", "corners=none", "handle=none"]), false));
+        v.push(("head: elephant, expanded".into(), "panel.amp_head", amp(&["tolex=tolex:elephant", "color=#2c2724", "grille=expanded", "face=brushed", "face_color=#c8b07a"]), false));
+        return v;
+    }
     let all = family.is_none();
     if all || family == Some("knob") {
         v.push(("dark ink, kept case".into(), "knob.bakelite", Place::new("Trim").bind(mix()).legend("Trim dB").ink(Ink::Dark).keep_case(), true));

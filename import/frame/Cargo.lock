@@ -5986,6 +5986,7 @@ dependencies = [
  "document-proto",
  "document-text",
  "library-proto",
+ "miniz_oxide",
  "render",
  "serde_json",
  "surface-memory",

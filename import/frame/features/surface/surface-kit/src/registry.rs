@@ -14,6 +14,7 @@ pub enum Family {
     Lever,
     Panel,
     Viz,
+    Material,
 }
 
 impl Family {
@@ -27,6 +28,7 @@ impl Family {
             Self::Lever => "lever",
             Self::Panel => "panel",
             Self::Viz => "viz",
+            Self::Material => "material",
         }
     }
 }
@@ -293,6 +295,7 @@ pub fn components() -> Vec<ComponentDef> {
     all.extend(crate::stomp::defs());
     all.extend(crate::boutique::defs());
     all.extend(crate::deluxe::defs());
+    all.extend(crate::materials::defs());
     all.sort_by_key(|c| (c.family, c.id));
     all
 }

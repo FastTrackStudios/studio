@@ -10,6 +10,7 @@ surface-proto = { path = "../surface-proto", default-features = false }
 surface-widgets = { path = "../surface-widgets" }
 document-proto = { path = "../../document/document-proto", default-features = false }
 serde_json = { workspace = true }
+miniz_oxide = "0.8"
 
 [dev-dependencies]
 surface-runtime = { path = "../surface-runtime" }

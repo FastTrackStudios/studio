@@ -112,6 +112,87 @@ select), and end with `registry::tighten` when `touch` is set.
 - **Descriptions** are for a model choosing a component: what it looks like,
   which unit it's from, when to use it. One or two sentences.
 
+## Materials (`materials`, `material.*`)
+
+What surfaces are made of, and the rendered parts built from them
+(`src/materials/`). New work in the Neural-render style should reach for
+these instead of hand-rolled gradients.
+
+- **One light**: `materials::light` — a key light from the **upper left**
+  (`AZIMUTH` = −35°, kit angles). Lit faces tilt toward it; a rim catches
+  it on its upper-left arc; a dome's hotspot sits up-left
+  (`light::hotspot`); shadows fall down and a little right
+  (`light::shadow_offset`). Helpers: `sheen(lit, dark)` (a face's broad
+  gradient), `stand(height, strength)` (contact + cast drop shadows for a
+  part standing off the panel), `edge(name, rect, radius, depth, strength,
+  raised)` (a bevel or recess as two gradient strokes). Use `edge`, not
+  `bevel`/`recess` (inner shadows), on anything large: each inner shadow is
+  an effect layer over the node's whole area, and a page of them exhausts
+  vello's buffers (a blank render).
+- **Paints**: `materials::fill(b, parent, rect, radius, &Material)` covers a
+  box and returns a clipped frame. `Material`: `Tolex { grain: Levant |
+  Bronco | Elephant | Fine, color, scale }`, `Leather`, `Croc`, `Powder {
+  coarse }`, `Hammertone`, `Brushed { dir }`, `Spun`, `Wood { dir }`,
+  `GrilleCloth { Basket | Wheat | Oxblood | Black | Silver }`,
+  `Perforated { pitch }`, `Expanded { pitch }`, `DiamondGrille`,
+  `ChevronGrille`, `Chrome`, `Nickel`, `Plastic { gloss }`, `Rubber`.
+  `Material::parse("tolex:bronco", Some("#hex"))` reads the spec strings the
+  parts' options take.
+- **Textures**: pixels only where a surface needs them (grain, pebble,
+  dimples, pores, weave, perforation) — `materials::texture` generates
+  small tileable tiles in code (periodic value/fBm/cellular noise, shaded
+  by the kit's light; weaves drawn per pixel), PNG-encodes them and puts
+  them in the scene's asset table (content-addressed: a texture used by
+  ten surfaces is stored once). A relief tile is white-where-lit,
+  black-where-shaded with alpha as strength, so the paint's own hue stays.
+  The renderer doesn't repeat a `Tile` image, so a surface is a clipped
+  frame of image rects (≤ `MAX_TILES` = 48; the tile grows past that).
+  Tiles are 192–256 px drawn at 128–256 design px: 1–60 KB each.
+  Everything else (lighting, wood figure, spun rings, diamond piping,
+  chevrons) is a few gradient or vector nodes.
+- **Cost** (a 480 × 320 swatch): chrome, nickel, spun 6 nodes, no pixels;
+  brushed 9 nodes + 4 tiles (19 KB); wood 11 + 4 (33 KB); tolex, powder,
+  hammertone, leather, plastic 17–18 nodes + 12 tiles (36–51 KB); croc
+  11 + 6 (61 KB); rubber 40 + 35 (51 KB); cloths, perforated, expanded,
+  chevron, diamond 25–35 nodes + 20 tiles (1–47 KB). A rendered knob is
+  15–17 nodes and no pixels; `panel.pedal_3d` 33 nodes; `panel.amp_head`
+  ~100 nodes, `panel.amp_combo` ~140 (≤ 80 tiles, ≤ 112 KB of textures).
+- **`knob.render`**: the generic rendered knob. Variant = cap (`flat`,
+  `domed`, `fluted`, `knurled`, `chicken_head`, `pointer`); options
+  `material=plastic|rubber|metal|chrome|bakelite`, `color=`, `skirt=none|
+  plain|flared|ridged|chrome`, `skirt_color=`, `pointer=`, `bevel=`,
+  `spec=`, `shadow=` (0..2), `ticks=dots|lines|none`, `legend=top`; from
+  Rust `materials::knob::{Look, build}`. It follows *What turns and what
+  doesn't*: the body (Needle) holds only rotation-invariant fills (flat, or
+  radial about the shaft) — the lobes, teeth, beak, face disc and pointer —
+  with zero-offset shadows; the occlusion, the side wall (the knob's
+  height, seen under its top), skirt and every lit overlay (face sheen, rim
+  light, flute light, the specular hotspot) are fixed, so the hotspot stays
+  put while the pointer turns.
+- **`panel.pedal_3d`**: `panel.pedal`'s classes (one height of 286, widths
+  by class) as a render: the lid in any finish (`finish=powder|
+  powder:coarse|brushed|hammertone|gloss|satin|anodized|chrome|…`), its
+  edge rolling into the front face, the base plate, side (or top) jacks
+  with hex nuts, `screws`, contact and cast shadows.
+- **`panel.amp_head`, `panel.amp_combo`**: a covered box (`tolex=` any
+  material spec, `color=`) with lit edges, metal corners (`corners=chrome|
+  black|brass|none`), a handle (`handle=leather|strap|none`), feet, a
+  faceplate that stands proud (`face=`, `face_color=`, `face_at=top|
+  bottom`, `face_frac=`) and a recessed grille (`grille=cloth:wheat|…|
+  diamond|chevron|perforated|expanded`) framed by piping (`piping=#hex|
+  none`). From Rust, `materials::cabinet::cabinet` returns the `faceplate`
+  and `grille` frames to fill.
+- **Swatches**: every material is a `material.*` component (family
+  `material`, binds none, `w=`/`h=`, `color=`, `scale=`) — for the sheet,
+  and for an agent that wants a patch of tolex or cloth.
+
+```sh
+nix develop . -c cargo run --release -p frame-cli --features anyrender --bin kit_sheet -- --family material --fx gpu --scale 2 --out materials.png
+nix develop . -c cargo run --release -p frame-cli --features anyrender --bin kit_sheet -- --only knob.render --fx gpu --scale 2 --out knobs.png
+nix develop . -c cargo run --release -p frame-cli --features anyrender --bin kit_sheet -- --only panel.pedal_3d --fx gpu --scale 2 --out pedals.png
+nix develop . -c cargo run --release -p frame-cli --features anyrender --bin kit_sheet -- --only panel.amp_head,panel.amp_combo --fx gpu --scale 2 --out amps.png
+```
+
 ## Visualizers (`viz.*`)
 
 Graphs, not hardware: `viz.spectrum`, `viz.gr_history`, `viz.scope`

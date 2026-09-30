@@ -413,7 +413,9 @@ impl Session {
                 n.control = Some(c);
             }
         }
-        let mut ops = Vec::new();
+        // Assets the builder added (a material's texture tiles) go in first.
+        let mut ops: Vec<Op> =
+            scratch.assets.values().filter(|a| self.scene.asset(&a.id).is_none()).map(|a| Op::PutAsset { asset: a.clone() }).collect();
         for id in scratch.walk(root) {
             let mut n = scratch.node(id).cloned().ok_or_else(|| ToolError("builder lost a node".into()))?;
             let p = n.parent.unwrap_or(parent);
@@ -507,7 +509,7 @@ fn with_label(mut ops: Vec<Op>, root: NodeId, label: &str) -> Vec<Op> {
 fn components_text(family: Option<&str>) -> String {
     let all: Vec<_> = surface_kit::components().into_iter().filter(|c| family.is_none_or(|f| c.family.name() == f)).collect();
     if all.is_empty() {
-        return "no components (for that family); families: knob, meter, button, switch, lever, panel".into();
+        return "no components (for that family); families: knob, meter, button, switch, lever, panel, material".into();
     }
     let mut out = String::from("hardware kit — place with add_component {parent, component, bind, size?, variant?, legend?, scale?, options?}\n");
     let mut fam = None;
@@ -767,7 +769,7 @@ pub fn tools() -> Vec<ToolDef> {
         ToolDef {
             name: "components",
             description: "The hardware component kit: knobs (Bakelite, Daka, Marconi, Collet, silver-top…), VU meters, buttons, switches, levers, panels — each with what it binds to, its default size and variants. Use these for hardware-style surfaces.",
-            input_schema: obj(json!({"family": {"type": "string", "enum": ["knob", "meter", "button", "switch", "lever", "panel"]}}), &[]),
+            input_schema: obj(json!({"family": {"type": "string", "enum": ["knob", "meter", "button", "switch", "lever", "panel", "material"]}}), &[]),
             mutates: false,
         },
         ToolDef {

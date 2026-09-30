@@ -23,6 +23,7 @@ pub mod controls;
 pub mod deluxe;
 pub mod draw;
 pub mod knobs;
+pub mod materials;
 pub mod meters;
 pub mod motion;
 pub mod panels;
