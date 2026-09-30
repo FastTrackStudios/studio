@@ -484,7 +484,7 @@ pub fn q_tron() -> Face {
 /// narrower and taller with PEAK, starting higher with RANGE.
 #[must_use]
 pub fn filter_viz() -> Face {
-    const W: f64 = 300.0;
+    const W: f64 = 560.0;
     const H: f64 = 286.0;
     let scene = canvas("Filter picture", |b, root| {
         ui::fit_root(b, root, W, H);
