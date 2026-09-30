@@ -901,6 +901,23 @@
       "default": 0.0,
       "bipolar": false,
       "featured": false
+    },
+    {
+      "addr": "clean/gain",
+      "name": "Gain",
+      "short_name": null,
+      "group": null,
+      "kind": "Continuous",
+      "range": {
+        "min": 0.0,
+        "max": 10.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": null
+      },
+      "default": 0.5,
+      "bipolar": false,
+      "featured": true
     }
   ],
   "actions": [],
