@@ -6,8 +6,9 @@
 //! ```
 //! Serves the `design-session` tool registry over MCP. With `--file`, the
 //! document is loaded from (and, after every edit, atomically saved to) a
-//! frame-markup file — point the `frame` desktop player at the same file
-//! and it hot-reloads as the model works.
+//! frame-markup file, its textures and fonts in `<file>.assets/` (see
+//! `document-io`) — point the `frame` desktop player at the same file and
+//! it hot-reloads as the model works.
 //!
 //! With `--library`, every edit is also published to a surface library
 //! (`frame-library-server`) as a new version of `--surface ID` (default:
@@ -194,10 +195,9 @@ fn main() {
         },
     };
     let mut session = match file.as_ref().filter(|p| p.exists()) {
-        Some(p) => match std::fs::read_to_string(p).map_err(|e| e.to_string()).and_then(|t| {
-            document_text::parse(&t, Default::default()).map_err(|e| e.to_string())
-        }) {
-            Ok(scene) => Session::new(scene, catalog),
+        // `.fm` with its `.fm.assets/` textures and fonts, or a `.frame`.
+        Some(p) => match Session::open(p, catalog) {
+            Ok(session) => session,
             Err(e) => {
                 eprintln!("frame-mcp: can't load {}: {e}", p.display());
                 std::process::exit(1);
@@ -318,7 +318,7 @@ fn handle(session: &mut Session, sinks: Sinks<'_>, engine: Option<&mut dyn Catal
                     Ok(mut text) => {
                         let mutates = tools().iter().any(|t| t.name == name && t.mutates);
                         if mutates && let Some(path) = sinks.file
-                            && let Err(e) = save(session, path)
+                            && let Err(e) = session.save(path)
                         {
                             text += &format!("\n(warning: saving {} failed: {e})", path.display());
                         }
@@ -341,13 +341,6 @@ fn handle(session: &mut Session, sinks: Sinks<'_>, engine: Option<&mut dyn Catal
         Ok(r) => json!({"jsonrpc": "2.0", "id": id, "result": r}),
         Err(e) => json!({"jsonrpc": "2.0", "id": id, "error": e}),
     })
-}
-
-/// Write-then-rename so a watcher never sees a half-written file.
-fn save(session: &Session, path: &PathBuf) -> std::io::Result<()> {
-    let tmp = path.with_extension("fm.tmp");
-    std::fs::write(&tmp, document_text::print(session.scene()))?;
-    std::fs::rename(tmp, path)
 }
 
 #[cfg(test)]
@@ -481,8 +474,25 @@ mod tests {
         let path = dir.join("s.fm");
         let mut s = Session::blank(surface_memory::demo_catalog());
         handle(&mut s, Sinks { file: Some(&path), library: None }, None, &json!({"jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": {"name": "generate", "arguments": {}}}));
-        let text = std::fs::read_to_string(&path).unwrap();
-        assert_eq!(document_text::parse(&text, Default::default()).unwrap(), *s.scene());
+        assert_eq!(document_io::load_surface(&path).unwrap(), *s.scene());
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn a_textured_file_keeps_its_textures_across_edits() {
+        let dir = std::env::temp_dir().join(format!("frame-mcp-assets-{}", std::process::id()));
+        let path = dir.join("tex.fm");
+        let mut scene = Session::blank(surface_memory::demo_catalog()).scene().clone();
+        scene.add_asset("image/png", b"texture".to_vec());
+        document_io::save_surface(&path, &scene).unwrap();
+
+        let mut s = Session::open(&path, surface_memory::demo_catalog()).unwrap();
+        let page = s.scene().pages()[0].to_string();
+        let msg = json!({"jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": {"name": "write", "arguments": {"parent": page, "markup": "<Frame name=\"New\" w=10 h=10 />"}}});
+        handle(&mut s, Sinks { file: Some(&path), library: None }, None, &msg);
+        let back = document_io::load_surface(&path).unwrap();
+        assert!(back.nodes.values().any(|n| n.name == "New"), "the edit was saved");
+        assert_eq!(back.assets, scene.assets, "…with the textures");
         let _ = std::fs::remove_dir_all(dir);
     }
 }

@@ -22,6 +22,7 @@ members = [
     "features/document/document-loro",
     "features/document/document-bundle",
     "features/document/document-text",
+    "features/document/document-io",
     # ── feed: typed telemetry — kinds, requests, realtime taps, demos ─
     "features/feed/feed-proto",
     "features/feed/feed-dsp",
@@ -64,6 +65,7 @@ default-members = [
     "features/document/document-loro",
     "features/document/document-bundle",
     "features/document/document-text",
+    "features/document/document-io",
     "features/feed/feed-proto",
     "features/feed/feed-dsp",
     "features/feed/feed-memory",

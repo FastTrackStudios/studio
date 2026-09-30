@@ -12,6 +12,7 @@ path = "src/main.rs"
 [dependencies]
 library-fs = { path = "../../../features/library/library-fs" }
 library-link = { path = "../../../features/library/library-link" }
+document-io = { path = "../../../features/document/document-io" }
 document-proto = { path = "../../../features/document/document-proto", default-features = false }
 render = { path = "../../../features/render/render", features = ["anyrender"] }
 architect = { workspace = true, features = ["vox"] }

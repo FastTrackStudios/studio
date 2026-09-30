@@ -11,6 +11,7 @@ figma-import = { path = "../../../features/figma/figma-import" }
 render = { path = "../../../features/render/render" }
 document-proto = { path = "../../../features/document/document-proto", default-features = false }
 document-text = { path = "../../../features/document/document-text" }
+document-io = { path = "../../../features/document/document-io" }
 surface-proto = { path = "../../../features/surface/surface-proto" }
 surface-runtime = { path = "../../../features/surface/surface-runtime", features = ["remote"] }
 tokio = { workspace = true }

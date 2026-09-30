@@ -72,6 +72,24 @@ impl Session {
         Self::new(Scene::new("Surface"), catalog)
     }
 
+    /// Edit the surface at `path` (`.fm` with its `.fm.assets/` textures
+    /// and fonts, or a `.frame`).
+    ///
+    /// # Errors
+    /// See [`document_io::load_surface`].
+    pub fn open(path: impl AsRef<std::path::Path>, catalog: Catalog) -> std::result::Result<Self, document_io::Error> {
+        Ok(Self::new(document_io::load_surface(path)?, catalog))
+    }
+
+    /// Write the document to `path`, assets and all (see
+    /// [`document_io::save_surface`]).
+    ///
+    /// # Errors
+    /// I/O, or an extension that isn't `.fm` / `.frame`.
+    pub fn save(&self, path: impl AsRef<std::path::Path>) -> std::result::Result<(), document_io::Error> {
+        document_io::save_surface(path, &self.scene)
+    }
+
     #[must_use]
     pub fn scene(&self) -> &Scene {
         &self.scene
@@ -842,6 +860,28 @@ mod tests {
 
     fn call(s: &mut Session, name: &str, args: Value) -> String {
         s.call(name, &args).unwrap_or_else(|e| panic!("{name}: {e}"))
+    }
+
+    #[test]
+    fn a_textured_file_survives_open_edit_save() {
+        let dir = std::env::temp_dir().join(format!("design-session-assets-{}", std::process::id()));
+        let path = dir.join("tex.fm");
+        let mut scene = document_text::parse(r#"<Document><Page><Frame name="Panel" w=100 h=50 /></Page></Document>"#, Default::default()).unwrap();
+        let id = scene.add_asset("image/png", b"texture".to_vec());
+        let fill = format!(r#"fill={{[{{"kind":{{"Image":{{"asset":"{id}","scale_mode":"Stretch"}}}}}}]}}"#);
+        document_io::save_surface(&path, &scene).unwrap();
+
+        let mut s = Session::open(&path, demo_catalog()).unwrap();
+        assert_eq!(s.scene().assets, scene.assets);
+        // An agent rewrites the panel, naming the texture by id as `read` shows it.
+        let panel = s.scene().nodes.values().find(|n| n.name == "Panel").unwrap().id;
+        call(&mut s, "replace", json!({"node": panel.to_string(), "markup": format!(r#"<Frame name="Panel" w=120 h=50 {fill} />"#)}));
+        assert!(call(&mut s, "read", json!({})).contains(&id.0));
+        s.save(&path).unwrap();
+        let back = document_io::load_surface(&path).unwrap();
+        assert_eq!(back, *s.scene());
+        assert_eq!(back.asset(&id).map(|a| a.bytes.as_slice()), Some(&b"texture"[..]));
+        let _ = std::fs::remove_dir_all(dir);
     }
 
     #[test]

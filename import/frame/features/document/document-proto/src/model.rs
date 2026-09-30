@@ -676,7 +676,7 @@ impl Node {
 
 // ── assets + scene ───────────────────────────────────────────────────────
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Facet)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Facet)]
 pub struct Asset {
     pub id: AssetId,
     /// e.g. `image/png`, `image/svg+xml`, `font/ttf`.

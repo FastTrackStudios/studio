@@ -2,7 +2,7 @@
 //!
 //! ```text
 //! render_surface --out surface.png [--theme stage-dark|daylight]
-//!                [--markup surface.fm] [--catalog catalog.json] [--set amp/gain=0.8 ...]
+//!                [--markup surface.fm|surface.frame] [--catalog catalog.json] [--set amp/gain=0.8 ...]
 //!                [--stream ID=V[,V2…] ...] [--stream-file FILE] [--level -12] [--demo-feeds]
 //!                [--scale 2] [--fx gpu|fallback|off] [--time SECONDS]
 //!                [--frames N [--fps 30] [--columns 4] [--gif anim.gif] [--frames-dir DIR]]
@@ -136,8 +136,8 @@ fn run() -> Result<(), String> {
     };
     let surface = match &markup {
         Some(path) => {
-            let text = std::fs::read_to_string(path).map_err(|e| format!("reading {path}: {e}"))?;
-            let scene = document_text::parse(&text, Default::default()).map_err(|e| format!("{path}:{e}"))?;
+            // `.fm` with its `.fm.assets/` textures and fonts, or a `.frame`.
+            let scene = document_io::load_surface(path).map_err(|e| e.to_string())?;
             surface_runtime::Surface::from_scene(scene)
         }
         None => surface_for_catalog(&catalog, &Options { theme: theme.clone(), ..Options::default() }),

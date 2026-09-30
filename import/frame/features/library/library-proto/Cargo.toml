@@ -16,6 +16,9 @@ document-text = { path = "../../document/document-text", optional = true }
 document-bundle = { path = "../../document/document-bundle", optional = true }
 vox = { workspace = true, optional = true }
 
+[dev-dependencies]
+serde_json.workspace = true
+
 [features]
 default = ["vox", "codec"]
 vox = ["dep:vox", "architect/vox", "surface-proto/vox"]

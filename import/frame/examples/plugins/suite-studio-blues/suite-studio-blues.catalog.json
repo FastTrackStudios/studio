@@ -320,6 +320,30 @@
       "featured": false
     },
     {
+      "addr": "teal/colour",
+      "name": "Colourway",
+      "short_name": null,
+      "group": null,
+      "kind": {
+        "Choice": {
+          "options": [
+            "Mint",
+            "Midnight"
+          ]
+        }
+      },
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 2
+      },
+      "default": 0.0,
+      "bipolar": false,
+      "featured": false
+    },
+    {
       "addr": "teal/on",
       "name": "Bypass",
       "short_name": null,
@@ -578,7 +602,7 @@
         "unit": "None",
         "steps": null
       },
-      "default": 0.5,
+      "default": 0.4,
       "bipolar": false,
       "featured": true
     },
@@ -595,7 +619,7 @@
         "unit": "None",
         "steps": 2
       },
-      "default": 0.0,
+      "default": 1.0,
       "bipolar": false,
       "featured": false
     },
@@ -612,7 +636,7 @@
         "unit": "None",
         "steps": 2
       },
-      "default": 0.0,
+      "default": 1.0,
       "bipolar": false,
       "featured": false
     },
@@ -738,7 +762,7 @@
         "unit": "None",
         "steps": 2
       },
-      "default": 0.0,
+      "default": 1.0,
       "bipolar": false,
       "featured": false
     },
@@ -789,7 +813,7 @@
         "unit": "None",
         "steps": 2
       },
-      "default": 0.0,
+      "default": 1.0,
       "bipolar": false,
       "featured": false
     },
@@ -949,7 +973,7 @@
         "unit": "None",
         "steps": null
       },
-      "default": 0.5,
+      "default": 0.55,
       "bipolar": false,
       "featured": true
     },
@@ -1051,7 +1075,7 @@
         "unit": "None",
         "steps": null
       },
-      "default": 0.5,
+      "default": 0.45,
       "bipolar": false,
       "featured": false
     },
@@ -1068,7 +1092,7 @@
         "unit": "None",
         "steps": null
       },
-      "default": 0.5,
+      "default": 0.55,
       "bipolar": false,
       "featured": false
     },
@@ -1085,7 +1109,7 @@
         "unit": "None",
         "steps": null
       },
-      "default": 0.5,
+      "default": 0.45,
       "bipolar": false,
       "featured": false
     },
@@ -1187,7 +1211,7 @@
         "unit": "None",
         "steps": 2
       },
-      "default": 0.0,
+      "default": 1.0,
       "bipolar": false,
       "featured": false
     },

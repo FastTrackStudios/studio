@@ -8,6 +8,7 @@ publish = false
 [dependencies]
 document-proto = { path = "../../document/document-proto", default-features = false }
 document-text = { path = "../../document/document-text" }
+document-io = { path = "../../document/document-io" }
 surface-proto = { path = "../../surface/surface-proto", default-features = false }
 surface-widgets = { path = "../../surface/surface-widgets" }
 surface-kit = { path = "../../surface/surface-kit" }

@@ -12,6 +12,7 @@ surface-proto = { path = "../../features/surface/surface-proto", default-feature
 document-proto = { path = "../../features/document/document-proto", default-features = false }
 document-text = { path = "../../features/document/document-text" }
 render-fonts = { path = "../../features/render/render-fonts" }
+document-io = { path = "../../features/document/document-io" }
 motion-runtime = { path = "../../features/motion/motion-runtime" }
 serde_json = { workspace = true }
 skrifa = "0.26"
@@ -19,6 +20,9 @@ skrifa = "0.26"
 [dev-dependencies]
 design-lint = { path = "../../features/design/design-lint" }
 surface-runtime = { path = "../../features/surface/surface-runtime" }
+# `tests/fm_assets.rs`: a face loaded from disk renders like the one in memory.
+render = { path = "../../features/render/render", features = ["anyrender"] }
+kurbo = { workspace = true }
 
 [lints]
 workspace = true

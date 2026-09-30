@@ -13,7 +13,7 @@ path = "src/main.rs"
 render = { path = "../../../features/render/render", features = ["anyrender"] }
 document-proto = { path = "../../../features/document/document-proto", default-features = false }
 document-text = { path = "../../../features/document/document-text" }
-document-bundle = { path = "../../../features/document/document-bundle" }
+document-io = { path = "../../../features/document/document-io" }
 surface-proto = { path = "../../../features/surface/surface-proto" }
 surface-runtime = { path = "../../../features/surface/surface-runtime", features = ["remote"] }
 surface-widgets = { path = "../../../features/surface/surface-widgets" }

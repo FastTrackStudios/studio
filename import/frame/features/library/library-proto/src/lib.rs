@@ -24,7 +24,7 @@
 
 use std::collections::BTreeSet;
 
-use document_proto::Scene;
+use document_proto::{Asset, Scene};
 use facet::Facet;
 use serde::{Deserialize, Serialize};
 use surface_proto::{Binding, Catalog, Control, ControlKind, InputSource, Source};
@@ -219,10 +219,18 @@ impl Format {
 }
 
 /// A surface document, as stored.
+///
+/// Markup names its images and fonts by id only, so a markup surface
+/// carries their bytes alongside (what `<name>.fm.assets/` holds on disk):
+/// a surface shared through a library brings its textures and fonts. A
+/// `.frame` bundle holds its own; its `assets` stay empty.
 #[derive(Debug, Clone, PartialEq, Eq, Facet, Serialize, Deserialize)]
 pub struct Content {
     pub format: Format,
     pub bytes: Vec<u8>,
+    /// The assets markup `bytes` reference (empty for a bundle).
+    #[serde(default)]
+    pub assets: Vec<Asset>,
 }
 
 /// What the library knows about one surface.

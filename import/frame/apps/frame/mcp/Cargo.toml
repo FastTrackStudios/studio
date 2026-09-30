@@ -12,7 +12,7 @@ path = "src/main.rs"
 [dependencies]
 design-session = { path = "../../../features/design/design-session" }
 document-proto = { path = "../../../features/document/document-proto", default-features = false }
-document-text = { path = "../../../features/document/document-text" }
+document-io = { path = "../../../features/document/document-io" }
 surface-memory = { path = "../../../features/surface/surface-memory" }
 surface-proto = { path = "../../../features/surface/surface-proto" }
 surface-runtime = { path = "../../../features/surface/surface-runtime", features = ["remote"] }

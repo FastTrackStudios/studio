@@ -210,7 +210,8 @@ pub fn accept(update: &SurfaceUpdate, current: &Scene, catalog: &Catalog) -> Res
     Ok((stored, Surface::from_scene(scene)))
 }
 
-/// Copy a surface into `dir` (`<dir>/<id>.<ext>`), returning the path.
+/// Copy a surface into `dir` (`<dir>/<id>.<ext>`, plus `<id>.fm.assets/`
+/// for markup that carries textures or fonts), returning the path.
 ///
 /// # Errors
 /// When it can't be written.
@@ -220,7 +221,15 @@ pub fn install(stored: &Stored, dir: &Path) -> Result<PathBuf, String> {
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent).map_err(|e| format!("{}: {e}", parent.display()))?;
     }
-    std::fs::write(&path, &stored.content.bytes).map_err(|e| format!("{}: {e}", path.display()))?;
+    match stored.content.format {
+        library_link::Format::Markup => {
+            let text = std::str::from_utf8(&stored.content.bytes).map_err(|e| format!("{}: not UTF-8: {e}", path.display()))?;
+            document_io::write_markup(&path, text, &stored.content.assets).map_err(|e| e.to_string())?;
+        }
+        library_link::Format::Frame => {
+            std::fs::write(&path, &stored.content.bytes).map_err(|e| format!("{}: {e}", path.display()))?;
+        }
+    }
     Ok(path)
 }
 
@@ -293,6 +302,20 @@ mod tests {
         let path = install(&stored, &dir).unwrap();
         assert_eq!(path, dir.join("comp/x/y.fm"));
         assert_eq!(std::fs::read_to_string(&path).unwrap(), GOOD);
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn install_brings_the_textures_along() {
+        let dir = std::env::temp_dir().join(format!("frame-install-assets-{}", std::process::id()));
+        let mut scene = current();
+        scene.add_asset("image/png", b"texture".to_vec());
+        let stored = Stored {
+            meta: SurfaceMeta { id: "amp/tex".into(), version: 1, ..SurfaceMeta::default() },
+            content: Content::markup(&scene),
+        };
+        let path = install(&stored, &dir).unwrap();
+        assert_eq!(document_io::load_surface(&path).unwrap(), scene);
         let _ = std::fs::remove_dir_all(dir);
     }
 }

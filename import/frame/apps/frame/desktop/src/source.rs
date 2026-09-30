@@ -2,7 +2,7 @@
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
-use std::time::{Duration, Instant, SystemTime};
+use std::time::{Duration, Instant};
 
 use surface_proto::Catalog;
 use surface_runtime::Surface;
@@ -13,7 +13,7 @@ pub enum Source {
     /// The surface generated from the engine's catalog (the demo engine's,
     /// or a live engine's with `--engine`).
     Generated { theme: Box<Theme> },
-    /// frame markup text (`.fm`).
+    /// frame markup text (`.fm`, with its `.fm.assets/` textures and fonts).
     Markup(PathBuf),
     /// A `.frame` bundle.
     Bundle(PathBuf),
@@ -57,15 +57,8 @@ impl Source {
             Self::Generated { theme } => {
                 Ok(surface_for_catalog(catalog, &Options { theme: (**theme).clone(), ..Options::default() }))
             }
-            Self::Markup(path) => {
-                let src = std::fs::read_to_string(path).map_err(|e| format!("{}: {e}", path.display()))?;
-                let scene =
-                    document_text::parse(&src, BTreeMap::new()).map_err(|e| format!("{}:{e}", path.display()))?;
-                Ok(Surface::from_scene(scene))
-            }
-            Self::Bundle(path) => {
-                let (_, doc) = document_bundle::load(path).map_err(|e| format!("{}: {e}", path.display()))?;
-                Ok(Surface::from_scene(doc.scene()))
+            Self::Markup(path) | Self::Bundle(path) => {
+                document_io::load_surface(path).map(Surface::from_scene).map_err(|e| e.to_string())
             }
         }
     }
@@ -82,14 +75,15 @@ pub fn placeholder() -> Surface {
 /// How often to look at the file.
 pub const POLL: Duration = Duration::from_millis(250);
 
-/// A file's identity for change detection: mtime plus length, so a
-/// same-second rewrite on a coarse-mtime filesystem still registers.
-pub type Stamp = Option<(SystemTime, u64)>;
+/// A surface's identity for change detection: the mtimes and lengths of
+/// its file and (for markup) its assets sidecar, so a same-second rewrite
+/// on a coarse-mtime filesystem still registers, and so does a texture
+/// swap. `None` while the file is missing.
+pub type Stamp = Option<u64>;
 
 #[must_use]
 pub fn stamp(path: &Path) -> Stamp {
-    let m = std::fs::metadata(path).ok()?;
-    Some((m.modified().ok()?, m.len()))
+    document_io::fingerprint(path)
 }
 
 /// Polls a stamp and says when to reload.
@@ -134,7 +128,7 @@ mod tests {
     use super::*;
 
     fn at(secs: u64, len: u64) -> Stamp {
-        Some((SystemTime::UNIX_EPOCH + Duration::from_secs(secs), len))
+        Some(secs * 1000 + len)
     }
 
     #[test]
@@ -173,7 +167,32 @@ mod tests {
         let f = dir.join("s.fm");
         assert_eq!(stamp(&f), None);
         std::fs::write(&f, "abc").unwrap();
-        assert_eq!(stamp(&f).map(|s| s.1), Some(3));
+        let first = stamp(&f);
+        assert!(first.is_some());
+        std::fs::write(&f, "abcd").unwrap();
+        assert_ne!(stamp(&f), first, "an edit changes it");
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn markup_loads_with_its_textures_and_an_asset_change_is_seen() {
+        let dir = std::env::temp_dir().join(format!("frame-desktop-assets-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let f = dir.join("tex.fm");
+        let mut scene = placeholder().scene;
+        scene.add_asset("font/ttf", b"font one".to_vec());
+        document_io::save_surface(&f, &scene).unwrap();
+        let loaded = Source::from_path(f.clone()).load(&surface_memory::demo_catalog()).unwrap();
+        assert_eq!(loaded.scene.assets, scene.assets);
+
+        let t0 = Instant::now();
+        let mut w = Watch::new(stamp(&f), t0);
+        assert!(!w.observe(stamp(&f), t0 + POLL));
+        // Only the sidecar changes (markup doesn't name fonts): still a reload.
+        scene.assets.clear();
+        scene.add_asset("font/ttf", b"font two, longer".to_vec());
+        document_io::save_surface(&f, &scene).unwrap();
+        assert!(w.observe(stamp(&f), t0 + POLL * 2));
         std::fs::remove_dir_all(&dir).unwrap();
     }
 

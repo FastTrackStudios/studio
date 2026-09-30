@@ -37,8 +37,10 @@ fn run() -> Result<(), String> {
 
     let catalog = surface_memory::demo_catalog();
     let surface = surface_for_catalog(&catalog, &Options { theme, ..Options::default() });
-    let text = document_text::print(&surface.to_scene());
-    std::fs::write(&out, &text).map_err(|e| format!("writing {out}: {e}"))?;
+    let scene = surface.to_scene();
+    let text = document_text::print(&scene);
+    // Markup plus its `.fm.assets/` sidecar when the scene carries any.
+    document_io::save_surface(&out, &scene).map_err(|e| format!("writing {e}"))?;
     println!("{{\"ok\":true,\"out\":\"{out}\",\"bytes\":{},\"controls\":{}}}", text.len(), surface.controls.len());
     Ok(())
 }

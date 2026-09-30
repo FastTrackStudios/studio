@@ -10,7 +10,8 @@
 //!   watched, so an edit on disk (an agent's MCP autosave, an editor)
 //!   reaches every open player within a fraction of a second.
 //! - `http://HOST:HTTP/` (default PORT+1): `index.json`, downloads at
-//!   `surfaces/<id>` and thumbnails at `previews/<id>.png`.
+//!   `surfaces/<id>`, a markup surface's textures and fonts at
+//!   `assets/<asset id>`, and thumbnails at `previews/<id>.png`.
 //!
 //! Previews are rendered on the GPU at startup and on every change
 //! (`--no-previews`, or no GPU, leaves them empty unless a `<id>.png`

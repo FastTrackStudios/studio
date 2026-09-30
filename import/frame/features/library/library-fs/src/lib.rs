@@ -5,6 +5,7 @@
 //! ```text
 //! root/
 //!   comp/07-vari-mu.fm            surface `comp/07-vari-mu`
+//!   comp/07-vari-mu.fm.assets/    its textures and fonts (see `document-io`)
 //!   comp/07-vari-mu.meta.json     optional: author, description, tags, license, forked_from, version
 //!   comp/07-vari-mu.png           optional: the preview (else rendered by the previewer, if any)
 //!   comp/comp.catalog.json        a catalog (served by `catalogs()`, tags surfaces that fit it)
@@ -15,7 +16,9 @@
 //! a person's editor) becomes a new version pushed to every subscriber. A
 //! poll rather than OS notifications: it needs no platform backend, sees
 //! atomic write-then-rename saves as one change, and a stat of a few
-//! hundred files every 200 ms costs nothing. A file's content hash decides
+//! hundred files every 200 ms costs nothing. A markup surface's stamp
+//! covers its `.fm.assets/` sidecar too, so replacing a texture is an edit
+//! like any other. A file's content hash (markup and asset ids) decides
 //! whether it changed, so a publish (which writes the file) doesn't come
 //! back as a second update.
 
@@ -84,7 +87,8 @@ impl Sidecar {
 
 struct Entry {
     path: PathBuf,
-    stamp: Stamp,
+    /// [`document_io::fingerprint`]: the file and its assets sidecar.
+    stamp: Option<u64>,
     hash: u64,
     meta: SurfaceMeta,
     content: Content,
@@ -173,6 +177,13 @@ impl FsLibrary {
         lock(&self.inner.state).entries.get(id).map(|e| e.path.clone())
     }
 
+    /// An asset some surface carries (for downloads). Ids are content
+    /// hashes, so any surface's copy is the asset.
+    #[must_use]
+    pub fn asset(&self, id: &str) -> Option<document_proto::Asset> {
+        lock(&self.inner.state).entries.values().find_map(|e| e.content.assets.iter().find(|a| a.id.0 == id).cloned())
+    }
+
     /// Look at the folder once: new, changed and removed files become
     /// versions and updates. Returns how many surfaces changed.
     pub fn rescan(&self) -> usize {
@@ -247,7 +258,7 @@ impl FsLibrary {
             out.index.push(IndexChange { id, meta: None });
         }
         for (id, path) in found {
-            let st = stamp(&path);
+            let st = document_io::fingerprint(&path);
             let entry = state.entries.get_mut(&id);
             if let Some(e) = &entry
                 && e.path == path
@@ -256,8 +267,10 @@ impl FsLibrary {
             {
                 continue;
             }
-            let Ok(bytes) = std::fs::read(&path) else { continue };
-            let h = hash(&bytes);
+            let format = path.extension().and_then(|e| e.to_str()).and_then(Format::from_extension).unwrap_or(Format::Markup);
+            // Unreadable (or a sidecar mid-write): the next scan retries.
+            let Some(content) = read_content(&path, format) else { continue };
+            let h = content_hash(&content);
             if let Some(e) = entry
                 && e.path == path
                 && e.hash == h
@@ -268,8 +281,6 @@ impl FsLibrary {
                 }
                 continue;
             }
-            let format = path.extension().and_then(|e| e.to_str()).and_then(Format::from_extension).unwrap_or(Format::Markup);
-            let content = Content { format, bytes };
             let old = state.entries.remove(&id);
             let entry = self.build(&id, path, st, h, content, old, None, &engines);
             out.updates.push(entry.update());
@@ -308,7 +319,7 @@ impl FsLibrary {
         &self,
         id: &str,
         path: PathBuf,
-        stamp: Stamp,
+        stamp: Option<u64>,
         hash: u64,
         content: Content,
         old: Option<Entry>,
@@ -407,7 +418,36 @@ fn is_catalog(p: &Path) -> bool {
     p.file_name().is_some_and(|n| n.to_string_lossy().ends_with(".catalog.json"))
 }
 
-/// Every file under `dir` (hidden dirs, `target` and `node_modules` skipped).
+/// A surface file's content: a bundle's bytes, or markup text plus the
+/// assets in its sidecar.
+fn read_content(path: &Path, format: Format) -> Option<Content> {
+    match format {
+        Format::Frame => std::fs::read(path).ok().map(|bytes| Content { format, bytes, assets: Vec::new() }),
+        Format::Markup => match document_io::read_markup(path) {
+            Ok(m) => Some(Content::markup_with(m.text, m.assets.into_values())),
+            Err(e) => {
+                eprintln!("library-fs: skipping {e}");
+                None
+            }
+        },
+    }
+}
+
+/// What decides whether a surface changed: its bytes and its assets' ids
+/// (content hashes themselves).
+fn content_hash(content: &Content) -> u64 {
+    use std::hash::{Hash, Hasher};
+    let mut h = std::collections::hash_map::DefaultHasher::new();
+    hash(&content.bytes).hash(&mut h);
+    for a in &content.assets {
+        a.id.hash(&mut h);
+        a.mime.hash(&mut h);
+    }
+    h.finish()
+}
+
+/// Every file under `dir` (hidden dirs, `target`, `node_modules` and
+/// markup assets sidecars skipped).
 fn walk(dir: &Path, depth: usize, out: &mut Vec<PathBuf>) {
     if depth > 6 {
         return;
@@ -421,7 +461,7 @@ fn walk(dir: &Path, depth: usize, out: &mut Vec<PathBuf>) {
             continue;
         }
         if p.is_dir() {
-            if name != "target" && name != "node_modules" {
+            if name != "target" && name != "node_modules" && !document_io::is_assets_dir(&p) {
                 walk(&p, depth + 1, out);
             }
         } else {
@@ -516,7 +556,13 @@ impl SurfaceStore for FsLibrary {
         let old = state.entries.remove(&id);
         let io = |e: std::io::Error| LibraryError::Io(format!("{}: {e}", path.display()));
         let result = (|| {
-            write_atomic(&path, &content.bytes).map_err(io)?;
+            match content.format {
+                Format::Markup => {
+                    let text = std::str::from_utf8(&content.bytes).map_err(|e| LibraryError::BadContent(e.to_string()))?;
+                    document_io::write_markup(&path, text, &content.assets).map_err(|e| LibraryError::Io(e.to_string()))?;
+                }
+                Format::Frame => write_atomic(&path, &content.bytes).map_err(io)?,
+            }
             let version = old.as_ref().map_or(1, |o| o.meta.version + 1);
             let side = Sidecar {
                 name: meta.name.clone(),
@@ -539,15 +585,16 @@ impl SurfaceStore for FsLibrary {
             }
             return Err(e);
         }
-        // A format change leaves the other file behind: remove it.
+        // A format change leaves the other file (and its sidecar) behind:
+        // remove it.
         if let Some(o) = &old
             && o.path != path
         {
-            let _ = std::fs::remove_file(&o.path);
+            let _ = document_io::remove_surface(&o.path);
         }
         let engines: Vec<(String, Signature)> =
             state.catalogs.values().map(|(_, c)| (c.id.clone(), Signature::of_catalog(c))).collect();
-        let (st, h) = (stamp(&path), hash(&content.bytes));
+        let (st, h) = (document_io::fingerprint(&path), content_hash(&content));
         let mut entry = self.build(&id, path, st, h, content, old, Some(meta.preview_png), &engines);
         if !meta.name.is_empty() {
             entry.meta.name = meta.name;

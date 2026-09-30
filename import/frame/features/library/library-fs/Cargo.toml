@@ -8,6 +8,7 @@ description = "Surface library backed by a folder of .frame bundles and .fm mark
 [dependencies]
 architect = { workspace = true, features = ["vox", "local"] }
 library-proto = { path = "../library-proto" }
+document-io = { path = "../../document/document-io" }
 surface-proto = { path = "../../surface/surface-proto" }
 document-proto = { path = "../../document/document-proto", default-features = false }
 serde.workspace = true

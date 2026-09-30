@@ -208,3 +208,92 @@ async fn subscribing_to_a_missing_surface_says_so() {
     call.abort();
     scope.close().await;
 }
+
+/// The panel, its frame filled with a texture, plus a document font.
+fn textured(name: &str, texture: &[u8], font: &[u8]) -> Scene {
+    let mut scene = Content::markup_text(panel(name)).decode().unwrap();
+    let image = scene.add_asset("image/png", texture.to_vec());
+    scene.add_asset("font/ttf", font.to_vec());
+    let frame = scene.nodes.values_mut().find(|n| n.name == name).unwrap();
+    frame.fills = vec![document_proto::Paint {
+        kind: document_proto::PaintKind::Image {
+            asset: image,
+            source_ref: None,
+            scale_mode: document_proto::ImageScaleMode::Stretch,
+            transform: None,
+        },
+        opacity: 1.0,
+        blend: document_proto::BlendMode::Normal,
+        visible: true,
+    }];
+    scene
+}
+
+#[tokio::test]
+async fn published_markup_brings_its_assets() {
+    let dir = Dir::new("assets");
+    let lib = FsLibrary::open(&dir.0).unwrap();
+    let scope = Scope::new();
+    let local = LocalServer::serve(lib.clone().into_router(), scope.clone());
+    let client: SurfaceStoreClient = local.establish().await.unwrap();
+
+    // Over the wire, with its textures and fonts.
+    let scene = textured("Tex", b"texture one", b"font one");
+    let content = Content::markup(&scene);
+    assert_eq!(content.assets.len(), 2);
+    client.publish(content.clone(), PublishMeta { id: "amp/tex".into(), ..PublishMeta::default() }).await.unwrap();
+
+    // Stored as markup + sidecar…
+    let path = dir.0.join("amp/tex.fm");
+    assert!(document_io::assets_dir(&path).join(document_io::MANIFEST).exists());
+    assert_eq!(document_io::load_surface(&path).unwrap(), scene);
+    // …served back whole, and each asset on its own (for downloads)…
+    let got = client.get("amp/tex".into(), None).await.unwrap();
+    assert_eq!(got.content, content);
+    assert_eq!(got.content.decode().unwrap(), scene);
+    for a in scene.assets.values() {
+        assert_eq!(lib.asset(&a.id.0).as_ref(), Some(a));
+    }
+    // …and read back by a fresh library, with nothing counted twice.
+    assert_eq!(lib.rescan(), 0);
+    let reopened = FsLibrary::open(&dir.0).unwrap();
+    assert_eq!(reopened.get("amp/tex".into(), None).unwrap().content, content);
+    assert_eq!(reopened.list(ListQuery::default()).len(), 1, "the sidecar isn't a surface");
+
+    // Republished without assets: the sidecar goes.
+    lib.publish(Content::markup_text(panel("Plain")), PublishMeta { id: "amp/tex".into(), ..PublishMeta::default() }).unwrap();
+    assert!(!document_io::assets_dir(&path).exists());
+    scope.close().await;
+}
+
+#[tokio::test]
+async fn an_asset_change_on_disk_is_pushed_live() {
+    let dir = Dir::new("asset-live");
+    let path = dir.0.join("live.fm");
+    let original = textured("Live", b"texture", b"font one");
+    document_io::save_surface(&path, &original).unwrap();
+    let lib = FsLibrary::open(&dir.0).unwrap();
+    let _watch = lib.watch_every(Duration::from_millis(20));
+    let scope = Scope::new();
+    let local = LocalServer::serve(lib.clone().into_router(), scope.clone());
+    let stream: SurfaceStoreStreamClient = local.establish().await.unwrap();
+
+    let (tx, mut rx) = architect::vox::channel::<SurfaceUpdate>();
+    let call = tokio::spawn(async move { stream.updates("live".into(), tx).await });
+    assert_eq!(next(&mut rx).await.version, 1);
+    let before = std::fs::read_to_string(&path).unwrap();
+
+    // A new document font: markup doesn't name fonts, so only the sidecar
+    // changes — and that's an update like any other.
+    let mut edited = original.clone();
+    edited.assets.retain(|_, a| a.mime != "font/ttf");
+    edited.add_asset("font/ttf", b"font two".to_vec());
+    document_io::save_surface(&path, &edited).unwrap();
+    assert_eq!(std::fs::read_to_string(&path).unwrap(), before, "same markup");
+    let second = next(&mut rx).await;
+    assert_eq!(second.version, 2);
+    assert_eq!(second.surface.unwrap().content.decode().unwrap(), edited);
+
+    call.abort();
+    scope.close().await;
+}

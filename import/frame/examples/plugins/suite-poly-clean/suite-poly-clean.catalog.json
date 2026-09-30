@@ -15,7 +15,7 @@
         "unit": "Db",
         "steps": null
       },
-      "default": 0.5,
+      "default": 0.3541666666666667,
       "bipolar": false,
       "featured": true
     },
@@ -26,13 +26,13 @@
       "group": null,
       "kind": "Continuous",
       "range": {
-        "min": -24.0,
+        "min": -12.0,
         "max": 12.0,
         "scale": "Linear",
         "unit": "Db",
         "steps": null
       },
-      "default": 0.6666666666666666,
+      "default": 0.5,
       "bipolar": true,
       "featured": false
     },
@@ -100,7 +100,7 @@
         "unit": "Percent",
         "steps": null
       },
-      "default": 0.5,
+      "default": 0.4,
       "bipolar": false,
       "featured": true
     },
@@ -111,13 +111,13 @@
       "group": null,
       "kind": "Continuous",
       "range": {
-        "min": -24.0,
+        "min": -12.0,
         "max": 12.0,
         "scale": "Linear",
         "unit": "Db",
         "steps": null
       },
-      "default": 0.6666666666666666,
+      "default": 0.5,
       "bipolar": true,
       "featured": false
     },
@@ -168,7 +168,7 @@
         "unit": "Percent",
         "steps": null
       },
-      "default": 0.45,
+      "default": 0.4,
       "bipolar": false,
       "featured": true
     },
@@ -179,13 +179,13 @@
       "group": null,
       "kind": "Continuous",
       "range": {
-        "min": -24.0,
+        "min": -12.0,
         "max": 12.0,
         "scale": "Linear",
         "unit": "Db",
         "steps": null
       },
-      "default": 0.6666666666666666,
+      "default": 0.5,
       "bipolar": true,
       "featured": false
     },
@@ -236,7 +236,7 @@
         "unit": "None",
         "steps": null
       },
-      "default": 0.65,
+      "default": 0.43,
       "bipolar": false,
       "featured": true
     },
@@ -287,7 +287,7 @@
         "unit": "None",
         "steps": null
       },
-      "default": 0.55,
+      "default": 0.5,
       "bipolar": false,
       "featured": false
     },
@@ -508,7 +508,7 @@
         "unit": "None",
         "steps": null
       },
-      "default": 0.4,
+      "default": 0.5,
       "bipolar": false,
       "featured": true
     },
@@ -559,7 +559,7 @@
         "unit": "None",
         "steps": null
       },
-      "default": 0.55,
+      "default": 0.5,
       "bipolar": false,
       "featured": false
     },
@@ -632,6 +632,31 @@
       "featured": true
     },
     {
+      "addr": "cab/finish",
+      "name": "Cab Finish",
+      "short_name": null,
+      "group": null,
+      "kind": {
+        "Choice": {
+          "options": [
+            "White",
+            "Pink",
+            "Clear"
+          ]
+        }
+      },
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 3
+      },
+      "default": 0.0,
+      "bipolar": false,
+      "featured": false
+    },
+    {
       "addr": "mic1/position",
       "name": "Mic 1 Position",
       "short_name": null,
@@ -644,9 +669,26 @@
         "unit": "None",
         "steps": null
       },
-      "default": 0.45,
+      "default": 0.5,
       "bipolar": false,
       "featured": true
+    },
+    {
+      "addr": "mic1/distance",
+      "name": "Mic 1 Distance",
+      "short_name": null,
+      "group": null,
+      "kind": "Continuous",
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": null
+      },
+      "default": 0.0,
+      "bipolar": false,
+      "featured": false
     },
     {
       "addr": "mic1/model",
@@ -672,24 +714,24 @@
         "unit": "None",
         "steps": 6
       },
-      "default": 0.0,
+      "default": 1.0,
       "bipolar": false,
       "featured": false
     },
     {
-      "addr": "mic1/distance",
-      "name": "Mic 1 Distance",
+      "addr": "mic1/on",
+      "name": "Mic 1 On",
       "short_name": null,
       "group": null,
-      "kind": "Continuous",
+      "kind": "Toggle",
       "range": {
         "min": 0.0,
         "max": 1.0,
         "scale": "Linear",
         "unit": "None",
-        "steps": null
+        "steps": 2
       },
-      "default": 0.0,
+      "default": 1.0,
       "bipolar": false,
       "featured": false
     },
@@ -728,6 +770,23 @@
       "featured": false
     },
     {
+      "addr": "mic1/phase",
+      "name": "Mic 1 Phase",
+      "short_name": null,
+      "group": null,
+      "kind": "Toggle",
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 2
+      },
+      "default": 0.0,
+      "bipolar": false,
+      "featured": false
+    },
+    {
       "addr": "mic2/position",
       "name": "Mic 2 Position",
       "short_name": null,
@@ -740,9 +799,26 @@
         "unit": "None",
         "steps": null
       },
-      "default": 0.6,
+      "default": 0.5,
       "bipolar": false,
       "featured": true
+    },
+    {
+      "addr": "mic2/distance",
+      "name": "Mic 2 Distance",
+      "short_name": null,
+      "group": null,
+      "kind": "Continuous",
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": null
+      },
+      "default": 0.0,
+      "bipolar": false,
+      "featured": false
     },
     {
       "addr": "mic2/model",
@@ -768,24 +844,24 @@
         "unit": "None",
         "steps": 6
       },
-      "default": 1.0,
+      "default": 0.0,
       "bipolar": false,
       "featured": false
     },
     {
-      "addr": "mic2/distance",
-      "name": "Mic 2 Distance",
+      "addr": "mic2/on",
+      "name": "Mic 2 On",
       "short_name": null,
       "group": null,
-      "kind": "Continuous",
+      "kind": "Toggle",
       "range": {
         "min": 0.0,
         "max": 1.0,
         "scale": "Linear",
         "unit": "None",
-        "steps": null
+        "steps": 2
       },
-      "default": 0.0,
+      "default": 1.0,
       "bipolar": false,
       "featured": false
     },
@@ -824,19 +900,53 @@
       "featured": false
     },
     {
-      "addr": "room/send",
+      "addr": "mic2/phase",
+      "name": "Mic 2 Phase",
+      "short_name": null,
+      "group": null,
+      "kind": "Toggle",
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 2
+      },
+      "default": 0.0,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "room/on",
       "name": "Room Send",
+      "short_name": null,
+      "group": null,
+      "kind": "Toggle",
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 2
+      },
+      "default": 0.0,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "room/send",
+      "name": "Room Send Level",
       "short_name": null,
       "group": null,
       "kind": "Continuous",
       "range": {
         "min": -60.0,
-        "max": 0.0,
+        "max": 12.0,
         "scale": "Linear",
         "unit": "Db",
         "steps": null
       },
-      "default": 0.0,
+      "default": 0.8333333333333334,
       "bipolar": false,
       "featured": false
     },
@@ -1057,7 +1167,7 @@
         "unit": "Percent",
         "steps": null
       },
-      "default": 0.5,
+      "default": 0.42,
       "bipolar": false,
       "featured": true
     },
@@ -1091,7 +1201,7 @@
         "unit": "Percent",
         "steps": null
       },
-      "default": 0.3,
+      "default": 0.55,
       "bipolar": false,
       "featured": true
     },
@@ -1108,7 +1218,7 @@
         "unit": "Percent",
         "steps": null
       },
-      "default": 0.5,
+      "default": 0.55,
       "bipolar": false,
       "featured": true
     },
@@ -1142,7 +1252,7 @@
         "unit": "Percent",
         "steps": null
       },
-      "default": 0.25,
+      "default": 0.5,
       "bipolar": false,
       "featured": false
     },
@@ -1159,7 +1269,7 @@
         "unit": "Hz",
         "steps": null
       },
-      "default": 0.35436764027111584,
+      "default": 0.035726257790721395,
       "bipolar": false,
       "featured": false
     },
@@ -1176,7 +1286,7 @@
         "unit": "Hz",
         "steps": null
       },
-      "default": 0.6941346394792774,
+      "default": 0.955426126091666,
       "bipolar": false,
       "featured": false
     },
@@ -1319,7 +1429,7 @@
         "unit": "Percent",
         "steps": null
       },
-      "default": 0.3,
+      "default": 0.08,
       "bipolar": false,
       "featured": true
     },
@@ -1336,7 +1446,7 @@
         "unit": "Percent",
         "steps": null
       },
-      "default": 0.5,
+      "default": 0.58,
       "bipolar": false,
       "featured": true
     },
@@ -1353,7 +1463,7 @@
         "unit": "Hz",
         "steps": null
       },
-      "default": 0.35436764027111584,
+      "default": 0.04660544085271826,
       "bipolar": false,
       "featured": false
     },
@@ -1370,7 +1480,7 @@
         "unit": "Hz",
         "steps": null
       },
-      "default": 0.6941346394792774,
+      "default": 0.945749848565416,
       "bipolar": false,
       "featured": false
     },
@@ -1455,7 +1565,7 @@
         "unit": "None",
         "steps": 12
       },
-      "default": 0.8181818181818182,
+      "default": 0.36363636363636365,
       "bipolar": false,
       "featured": false
     },
@@ -1467,11 +1577,11 @@
       "kind": {
         "Choice": {
           "options": [
-            "MAJOR",
-            "NATURAL MINOR",
-            "HARMONIC MINOR",
-            "DORIAN",
-            "MIXOLYDIAN"
+            "Major",
+            "Natural Minor",
+            "Harmonic Minor",
+            "Dorian",
+            "Mixolydian"
           ]
         }
       },
@@ -1494,11 +1604,11 @@
       "kind": {
         "Choice": {
           "options": [
-            "<SELECT CHORD>",
-            "TRIAD",
-            "SUS2",
-            "SUS4",
-            "SEVENTH"
+            "<Select chord>",
+            "Triad",
+            "Sus2",
+            "Sus4",
+            "Seventh"
           ]
         }
       },
@@ -1519,6 +1629,30 @@
       "short_name": null,
       "group": null,
       "kind": "Toggle",
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 2
+      },
+      "default": 0.0,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "voices/view",
+      "name": "View",
+      "short_name": null,
+      "group": null,
+      "kind": {
+        "Choice": {
+          "options": [
+            "Level/Pan",
+            "Detune/Delay"
+          ]
+        }
+      },
       "range": {
         "min": 0.0,
         "max": 1.0,
@@ -1597,7 +1731,7 @@
         "unit": "Db",
         "steps": null
       },
-      "default": 0.8333333333333334,
+      "default": 0.6666666666666666,
       "bipolar": false,
       "featured": false
     },
@@ -1616,6 +1750,40 @@
       },
       "default": 0.25,
       "bipolar": true,
+      "featured": false
+    },
+    {
+      "addr": "voices/v1_detune",
+      "name": "Voice 1 Detune",
+      "short_name": null,
+      "group": null,
+      "kind": "Continuous",
+      "range": {
+        "min": -50.0,
+        "max": 50.0,
+        "scale": "Linear",
+        "unit": "Cents",
+        "steps": null
+      },
+      "default": 0.75,
+      "bipolar": true,
+      "featured": false
+    },
+    {
+      "addr": "voices/v1_delay",
+      "name": "Voice 1 Delay",
+      "short_name": null,
+      "group": null,
+      "kind": "Continuous",
+      "range": {
+        "min": 0.0,
+        "max": 500.0,
+        "scale": "Linear",
+        "unit": "Milliseconds",
+        "steps": null
+      },
+      "default": 0.2,
+      "bipolar": false,
       "featured": false
     },
     {
@@ -1685,7 +1853,7 @@
         "unit": "Db",
         "steps": null
       },
-      "default": 0.6666666666666666,
+      "default": 0.8333333333333334,
       "bipolar": false,
       "featured": false
     },
@@ -1704,6 +1872,40 @@
       },
       "default": 0.375,
       "bipolar": true,
+      "featured": false
+    },
+    {
+      "addr": "voices/v2_detune",
+      "name": "Voice 2 Detune",
+      "short_name": null,
+      "group": null,
+      "kind": "Continuous",
+      "range": {
+        "min": -50.0,
+        "max": 50.0,
+        "scale": "Linear",
+        "unit": "Cents",
+        "steps": null
+      },
+      "default": 1.0,
+      "bipolar": true,
+      "featured": false
+    },
+    {
+      "addr": "voices/v2_delay",
+      "name": "Voice 2 Delay",
+      "short_name": null,
+      "group": null,
+      "kind": "Continuous",
+      "range": {
+        "min": 0.0,
+        "max": 500.0,
+        "scale": "Linear",
+        "unit": "Milliseconds",
+        "steps": null
+      },
+      "default": 0.4,
+      "bipolar": false,
       "featured": false
     },
     {
@@ -1773,7 +1975,7 @@
         "unit": "Db",
         "steps": null
       },
-      "default": 0.6666666666666666,
+      "default": 0.8333333333333334,
       "bipolar": false,
       "featured": false
     },
@@ -1792,6 +1994,40 @@
       },
       "default": 0.625,
       "bipolar": true,
+      "featured": false
+    },
+    {
+      "addr": "voices/v3_detune",
+      "name": "Voice 3 Detune",
+      "short_name": null,
+      "group": null,
+      "kind": "Continuous",
+      "range": {
+        "min": -50.0,
+        "max": 50.0,
+        "scale": "Linear",
+        "unit": "Cents",
+        "steps": null
+      },
+      "default": 0.25,
+      "bipolar": true,
+      "featured": false
+    },
+    {
+      "addr": "voices/v3_delay",
+      "name": "Voice 3 Delay",
+      "short_name": null,
+      "group": null,
+      "kind": "Continuous",
+      "range": {
+        "min": 0.0,
+        "max": 500.0,
+        "scale": "Linear",
+        "unit": "Milliseconds",
+        "steps": null
+      },
+      "default": 0.6,
+      "bipolar": false,
       "featured": false
     },
     {
@@ -1861,7 +2097,7 @@
         "unit": "Db",
         "steps": null
       },
-      "default": 0.3333333333333333,
+      "default": 0.6666666666666666,
       "bipolar": false,
       "featured": false
     },
@@ -1880,6 +2116,40 @@
       },
       "default": 0.75,
       "bipolar": true,
+      "featured": false
+    },
+    {
+      "addr": "voices/v4_detune",
+      "name": "Voice 4 Detune",
+      "short_name": null,
+      "group": null,
+      "kind": "Continuous",
+      "range": {
+        "min": -50.0,
+        "max": 50.0,
+        "scale": "Linear",
+        "unit": "Cents",
+        "steps": null
+      },
+      "default": 0.0,
+      "bipolar": true,
+      "featured": false
+    },
+    {
+      "addr": "voices/v4_delay",
+      "name": "Voice 4 Delay",
+      "short_name": null,
+      "group": null,
+      "kind": "Continuous",
+      "range": {
+        "min": 0.0,
+        "max": 500.0,
+        "scale": "Linear",
+        "unit": "Milliseconds",
+        "steps": null
+      },
+      "default": 0.8,
+      "bipolar": false,
       "featured": false
     },
     {

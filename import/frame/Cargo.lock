@@ -1265,6 +1265,7 @@ name = "design-session"
 version = "0.1.0"
 dependencies = [
  "design-lint",
+ "document-io",
  "document-proto",
  "document-text",
  "render-fonts",
@@ -1351,6 +1352,18 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d4b8a88685455ed29a21542a33abd9cb6510b6b129abadabdcef0f4c55bc8f61"
 dependencies = [
  "litrs",
+]
+
+[[package]]
+name = "document-io"
+version = "0.1.0"
+dependencies = [
+ "document-bundle",
+ "document-proto",
+ "document-text",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.18",
 ]
 
 [[package]]
@@ -2052,6 +2065,7 @@ version = "0.1.0"
 dependencies = [
  "architect 0.1.0 (git+https://github.com/FastTrackStudios/architect?tag=v0.0.2)",
  "design-lint",
+ "document-io",
  "document-proto",
  "document-text",
  "feed-memory",
@@ -2082,7 +2096,7 @@ version = "0.1.0"
 dependencies = [
  "architect 0.1.0 (git+https://github.com/FastTrackStudios/architect?tag=v0.0.2)",
  "design-lint",
- "document-bundle",
+ "document-io",
  "document-proto",
  "document-text",
  "feed-memory",
@@ -2130,6 +2144,7 @@ name = "frame-library-server"
 version = "0.1.0"
 dependencies = [
  "architect 0.1.0 (git+https://github.com/FastTrackStudios/architect?tag=v0.0.2)",
+ "document-io",
  "document-proto",
  "image",
  "kurbo 0.13.1",
@@ -2147,8 +2162,8 @@ version = "0.1.0"
 dependencies = [
  "architect 0.1.0 (git+https://github.com/FastTrackStudios/architect?tag=v0.0.2)",
  "design-session",
+ "document-io",
  "document-proto",
- "document-text",
  "library-fs",
  "library-link",
  "serde_json",
@@ -3263,6 +3278,7 @@ name = "library-fs"
 version = "0.1.0"
 dependencies = [
  "architect 0.1.0 (git+https://github.com/FastTrackStudios/architect?tag=v0.0.2)",
+ "document-io",
  "document-proto",
  "facet",
  "library-proto",
@@ -3295,6 +3311,7 @@ dependencies = [
  "document-text",
  "facet",
  "serde",
+ "serde_json",
  "surface-proto",
  "vox",
 ]
@@ -4475,9 +4492,12 @@ name = "plugin-faces"
 version = "0.1.0"
 dependencies = [
  "design-lint",
+ "document-io",
  "document-proto",
  "document-text",
+ "kurbo 0.13.1",
  "motion-runtime",
+ "render",
  "render-fonts",
  "serde_json",
  "skrifa 0.26.6",
