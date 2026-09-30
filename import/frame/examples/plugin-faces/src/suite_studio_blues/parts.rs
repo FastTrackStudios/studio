@@ -169,22 +169,25 @@ pub enum Cap {
 }
 
 impl Cap {
-    /// The component, its variant and options.
+    /// The component, its variant and options: `knob.3d` (drawn per pixel
+    /// on the GPU, `knob.render` without it) for every hardware cap but
+    /// those whose print turns with them — the chevron, the coral rings,
+    /// the numbered skirt and dial — and the plugin's own flat arc knob.
     fn look(self) -> (&'static str, &'static str, &'static [&'static str]) {
         match self {
-            Self::WhiteFluted => ("knob.render", "fluted", &["material=plastic", "color=#efede6", "pointer=#161616", "ticks=none", "shadow=1.4"]),
-            Self::PlumDome => ("knob.render", "flat", &["material=plastic", "color=#a2338f", "skirt=none", "bevel=1.8", "pointer=#f4f4f4", "ticks=none", "shadow=1.5", "spec=0.6"]),
-            Self::BrownDome => ("knob.render", "domed", &["material=plastic", "color=#3b2620", "skirt=none", "bevel=1.6", "pointer=#efe8e0", "ticks=none", "shadow=1.5", "spec=0.5"]),
+            Self::WhiteFluted => ("knob.3d", "fluted_cream", &["color=#efede6", "ribs=9", "rib_depth=0.09", "height=0.62", "index=line", "pointer=#161616", "index_w=0.07", "index_in=0.12", "index_out=0.8", "shadow=1.3"]),
+            Self::PlumDome => ("knob.3d", "flat", &["color=#a2338f", "skirt=none", "cap_r=0.97", "height=0.62", "edge=0.16", "coat=0.55", "rough=0.3", "index=line", "pointer=#f4f4f4", "index_w=0.07", "index_in=0.62", "index_out=0.96", "shadow=1.4"]),
+            Self::BrownDome => ("knob.3d", "knurled_dome", &["color=#2e1917", "tilt=22", "spec=0.8", "fallback_color=#3b2620", "index=line", "pointer=#efe8e0", "index_w=0.06", "index_in=0.66", "index_out=0.98", "shadow=1.4"]),
             Self::MintChevron => ("knob.chevron", "green", &[]),
-            Self::BluePointer => ("knob.render", "domed", &["material=plastic", "color=#1c1c20", "skirt=none", "bevel=1.6", "pointer=#5b9bff", "ticks=none", "shadow=1.5", "spec=0.7"]),
-            Self::TealDome => ("knob.render", "flat", &["material=plastic", "color=#2a7d8a", "skirt=none", "bevel=1.8", "pointer=#eef6f6", "ticks=none", "shadow=1.5", "spec=0.6"]),
-            Self::BlackBar => ("knob.bar_dome", "black", &[]),
+            Self::BluePointer => ("knob.3d", "knurled", &["color=#3a3a3e", "ribs=44", "rib_depth=0.04", "knurl_band=0.62", "cap_r=0.96", "height=0.64", "dome=0.05", "edge=0.1", "coat=0.3", "index=line", "pointer=#5b9bff", "index_w=0.09", "index_in=0.3", "index_out=0.92", "fallback_color=#26262a", "shadow=1.4"]),
+            Self::TealDome => ("knob.3d", "flat", &["color=#2a8290", "skirt=none", "cap_r=0.97", "height=0.62", "edge=0.16", "coat=0.45", "rough=0.32", "index=line", "pointer=#eef6f6", "index_w=0.07", "index_in=0.62", "index_out=0.96", "shadow=1.4"]),
+            Self::BlackBar => ("knob.3d", "amp_pointer", &["color=#0b0b0d", "skirt=none", "cap_r=0.97", "height=0.56", "tilt=14", "index=line", "pointer=#d9d9dc", "index_w=0.1", "index_in=0.0", "index_out=0.92", "coat=1", "rough=0.12", "spec=1.4", "fallback=chicken_head", "shadow=1.3"]),
             Self::CoralRing => ("knob.ring_insert", "coral", &[]),
-            Self::Cream => ("knob.render", "flat", &["material=plastic", "color=#e6d3b6", "skirt=plain", "skirt_color=#c7a57e", "pointer=#3b2a20", "ticks=none", "bevel=1.4", "shadow=1.3"]),
-            Self::ChromeSkirt => ("knob.render", "domed", &["material=chrome", "skirt=ridged", "skirt_color=#8d9094", "pointer=#1a1a1a", "ticks=none", "shadow=1.3"]),
-            Self::ChickenHead => ("knob.render", "chicken_head", &["material=bakelite", "color=#2a2626", "pointer=#e8e2d6", "ticks=none", "shadow=1.3"]),
+            Self::Cream => ("knob.3d", "stepped_cream", &["color=#e6d3b6", "skirt=plain", "skirt_color=#c7a57e", "skirt_r=1.0", "skirt_h=0.12", "pointer=#3b2a20", "shadow=1.2"]),
+            Self::ChromeSkirt => ("knob.3d", "teardrop", &["color=#161617", "ribs=28", "rib_depth=0.015", "cap_r=0.64", "height=0.5", "insert_color=#dccdbd", "insert_metal=1", "insert_rough=0.16", "insert_r=0.66", "insert_h=0.14", "skirt=metal", "skirt_color=#c6c8cc", "skirt_metal=1", "skirt_rough=0.22", "skirt_r=1.0", "skirt_h=0.2", "fallback=domed", "material=chrome", "fallback_color=#d9dde1", "shadow=1.3"]),
+            Self::ChickenHead => ("knob.3d", "bakelite_chicken", &["color=#1a1818", "pointer=#e8e2d6", "shadow=1.3"]),
             Self::BlackSkirt => ("knob.numbered_skirt", "black", &[]),
-            Self::DeskKnurl => ("knob.render", "flat", &["material=plastic", "color=#4a4745", "skirt=ridged", "skirt_color=#5e544c", "pointer=#f0f0f0", "ticks=none", "shadow=1.3", "spec=0.5"]),
+            Self::DeskKnurl => ("knob.3d", "flat", &["color=#4a4745", "cap_r=0.66", "height=0.6", "edge=0.1", "dome=0.03", "rough=0.4", "skirt=knurled", "skirt_color=#6d655e", "skirt_metal=0.8", "skirt_rough=0.35", "skirt_r=1.0", "skirt_h=0.24", "skirt_teeth=48", "index=line", "pointer=#f0f0f0", "index_w=0.07", "index_in=0.2", "index_out=0.95", "spec=0.6", "shadow=1.3"]),
             Self::GreyDial => ("knob.dial", "black", &[]),
             Self::ArcDisc => ("knob.arc_disc", "dark", &[]),
         }
