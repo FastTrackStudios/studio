@@ -37,13 +37,14 @@ const DIM: &str = "#a7b29c";
 /// reverb off; TENSION tunes them and DWELL / DAMPING set how long they
 /// ring. The three strokes are redrawn from the `coil` shape provider.
 #[allow(clippy::too_many_arguments)]
-fn spring(b: &mut Builder<'_>, tank: NodeId, i: usize, (w, h): (f64, f64), x0: f64, x1: f64, y: f64, r: f64) {
+fn spring(b: &mut Builder<'_>, tank: NodeId, a: &Springs, i: usize, (w, h): (f64, f64), x0: f64, x1: f64, y: f64, r: f64) {
     let frame = b.add(tank, draw::frame(&format!("Spring {}", i + 1), 0.0, 0.0, w, h));
     // Each spring a little apart in pitch, as real ones are.
     let k = 1.0 + 0.13 * i as f64;
-    let freq = format!("{:.3} + {:.3}*norm(spring/tension)", 2.2 * k, 4.5 * k);
-    let decay = "(0.35 + 2.8*norm(spring/dwell)) * (1.15 - norm(spring/damping))";
-    let excite = "(or(level(spring/in), 0) + 0.5*or(level(spring/out), 0)) * (0.35 + norm(spring/dwell)) * norm(spring/on)";
+    let freq = format!("{:.3} + {:.3}*norm({})", 2.2 * k, 4.5 * k, a.tension);
+    let decay = format!("(0.35 + 2.8*norm({})) * (1.15 - norm({}))", a.dwell, a.damping);
+    let excite = format!("(or(level({}), 0) + 0.5*or(level({}), 0)) * (0.35 + norm({})) * norm({})", a.input, a.output, a.dwell, a.on);
+    let excite = excite.as_str();
     let resonator = |name: &str, freq: String, decay: String, gain: f64| {
         Motion::new(Target::None).named(name).dynamics(Dynamics::Oscillator {
             freq: Num::Expr(freq),
@@ -53,13 +54,14 @@ fn spring(b: &mut Builder<'_>, tank: NodeId, i: usize, (w, h): (f64, f64), x0: f
             gain: Num::Value(gain),
         })
     };
-    motion::add(b, frame, resonator("ring", freq.clone(), decay.into(), 1.0));
+    motion::add(b, frame, resonator("ring", freq.clone(), decay.clone(), 1.0));
     motion::add(b, frame, resonator("ripple", format!("2.6 * ({freq})"), format!("0.5 * {decay}"), 0.6));
 
     // Its shadow on the floor, then the coil.
     b.add(frame, draw::with_opacity(draw::rounded(draw::rect("shadow", x0, y + 7.0, x1 - x0, 5.0, draw::solid("#00000040")), 2.5), 1.0));
     let fixed = [("x0", x0), ("x1", x1), ("y", y), ("r", r), ("pitch", 5.5)];
-    let live = [("bend", "motion(ring) * 12"), ("ripple", "motion(ripple) * (1.5 + 5*norm(spring/drip))"), ("squeeze", "motion(ripple) * 2")];
+    let ripple = format!("motion(ripple) * (1.5 + 5*norm({}))", a.drip);
+    let live = [("bend", "motion(ring) * 12"), ("ripple", ripple.as_str()), ("squeeze", "motion(ripple) * 2")];
     let rest = [("bend", 0.0), ("ripple", 0.0), ("squeeze", 0.0)];
     let stroke = |mut n: Node, weight: f64, color: &str| {
         n.stroke = Stroke { paints: vec![draw::solid(color)], weight, cap: StrokeCap::Round, join: StrokeJoin::Round, ..Stroke::default() };
@@ -88,7 +90,36 @@ fn transducer(b: &mut Builder<'_>, tank: NodeId, cx: f64, cy: f64, label: &str) 
     ui::silk(b, tank, label, cx, cy + 40.0, 6.0, "#3b3f43", 800.0);
 }
 
+/// What the springs ring from: the params and levels a tank reads.
+pub struct Springs {
+    pub dwell: &'static str,
+    pub damping: &'static str,
+    pub tension: &'static str,
+    pub drip: &'static str,
+    pub on: &'static str,
+    pub input: &'static str,
+    pub output: &'static str,
+}
+
+impl Springs {
+    /// The spring reverb face's own.
+    pub const FACE: Self = Self {
+        dwell: "spring/dwell",
+        damping: "spring/damping",
+        tension: "spring/tension",
+        drip: "spring/drip",
+        on: "spring/on",
+        input: "spring/in",
+        output: "spring/out",
+    };
+}
+
 fn tank_art(b: &mut Builder<'_>, tank: NodeId, w: f64, h: f64, springs: usize) {
+    tank_art_with(b, tank, &Springs::FACE, w, h, springs, "Type 4  ·  Long decay  ·  Horizontal");
+}
+
+/// The open tank, `w × h`, its springs ringing from `a`.
+pub fn tank_art_with(b: &mut Builder<'_>, tank: NodeId, a: &Springs, w: f64, h: f64, springs: usize, caption: &str) {
     // The pan: galvanised steel with a rolled lip.
     let pan = draw::rounded(draw::rect("pan", 0.0, 0.0, w, h, draw::linear(170.0, &[(0.0, "#d4d7d8"), (0.25, "#b0b5b8"), (0.5, "#c9cdcf"), (0.75, "#a3a8ac"), (1.0, "#bfc3c6")])), 6.0);
     b.add(tank, pan);
@@ -119,11 +150,11 @@ fn tank_art(b: &mut Builder<'_>, tank: NodeId, w: f64, h: f64, springs: usize) {
         ui::line(b, tank, "hook", &[(tx0 + 24.0, y), (tx0 + 46.0, y)], 1.6, "#e2e5e7");
         ui::line(b, tank, "hook", &[(tx1 - 46.0, y), (tx1 - 24.0, y)], 1.6, "#e2e5e7");
         // The spring: shadow and coil, ringing.
-        spring(b, tank, i, (w, h), tx0 + 44.0, tx1 - 44.0, y, (gap * 0.3).min(13.0));
+        spring(b, tank, a, i, (w, h), tx0 + 44.0, tx1 - 44.0, y, (gap * 0.3).min(13.0));
     }
     transducer(b, tank, tx0, h / 2.0, "Input");
     transducer(b, tank, tx1, h / 2.0, "Output");
-    ui::silk(b, tank, "Type 4  ·  Long decay  ·  Horizontal", w / 2.0, h - 22.0, 6.0, "#4a4f54", 800.0);
+    ui::silk(b, tank, caption, w / 2.0, h - 22.0, 6.0, "#4a4f54", 800.0);
 }
 
 pub fn face() -> Face {

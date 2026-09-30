@@ -97,6 +97,54 @@ fn gate() -> Face {
     Face { file: "51-gate", plugin: PLUGIN, scene, params, streams: Vec::new() }
 }
 
+/// The reverb algorithms of the rig's reverb block, in its DSP's order.
+const VERB_ALGOS: [&str; 15] = [
+    "Room", "Hall", "Plate", "Spring", "Cloud", "Bloom", "Shimmer", "Chorale", "Magneto", "NonLinear", "Swell", "Reflections", "Velvet", "FreeVerb", "Convolution",
+];
+
+/// A spring reverb block's picture, tall and narrow for a panel beside its
+/// unit: the open tank stood on end, its springs ringing as the reverb's
+/// decay, damping and modulation set, and the algorithm the block is
+/// actually running named over it.
+fn spring_viz() -> Face {
+    const W: f64 = 230.0;
+    const H: f64 = 392.0;
+    let a = crate::reverb::spring::Springs {
+        dwell: "spring/decay",
+        damping: "spring/damping",
+        tension: "spring/tension",
+        drip: "spring/modulation",
+        on: "spring/on",
+        input: "spring/in",
+        output: "spring/out",
+    };
+    let scene = canvas("Spring picture", |b, root| {
+        ui::fit_root(b, root, W, H);
+        // The algorithm, over the tank.
+        let head = b.add(root, surface_kit::draw::text("algorithm", "SPRING", 0.0, 10.0, W, 12.0, "#c9cdd2", document_proto::TextAlign::Center));
+        let c = surface_proto::Control::new(surface_proto::ControlKind::Readout)
+            .slot(surface_proto::SlotRole::Value, head.0)
+            .bound(ui::bind("spring/algorithm"));
+        b.controls.insert(head, c);
+        // The tank, drawn lying down and stood on end.
+        let (len, depth) = (H - 44.0, W - 24.0);
+        let mut tank = surface_kit::draw::frame("Tank", W / 2.0 - len / 2.0, 34.0 + (H - 34.0) / 2.0 - depth / 2.0 - 4.0, len, depth);
+        tank.clips_content = true;
+        tank.corner_radii = document_proto::CornerRadii::uniform(6.0);
+        let tank = b.add(root, surface_kit::draw::rotated(tank, 90.0));
+        crate::reverb::spring::tank_art_with(b, tank, &a, len, depth, 2, "");
+    });
+    let params = vec![
+        ui::choice("spring/algorithm", "Algorithm", &VERB_ALGOS, 3),
+        ui::param("spring/decay", "Decay", Range::linear(0.0, 1.0, Unit::None), 0.35),
+        ui::param("spring/damping", "Damping", Range::linear(0.0, 1.0, Unit::None), 0.3),
+        ui::param("spring/tension", "Tension", Range::linear(0.0, 1.0, Unit::None), 0.5),
+        ui::param("spring/modulation", "Modulation", Range::linear(0.0, 1.0, Unit::None), 0.2),
+        ui::toggle("spring/on", "Reverb", true),
+    ];
+    Face { file: "53-spring-viz", plugin: PLUGIN, scene, params, streams: Vec::new() }
+}
+
 /// The Amp EQ's full graph (the rig's 24 bands).
 fn eq() -> Face {
     let scene = canvas("Amp EQ", |b, root| {
@@ -166,6 +214,7 @@ pub fn faces() -> Vec<Face> {
     v.extend(AmpModel::EVERY.iter().map(|m| amp_face(*m)));
     v.push(gate());
     v.push(eq());
+    v.push(spring_viz());
     v
 }
 
@@ -198,6 +247,8 @@ pub fn manifest() -> String {
         "amps": amps,
         "gate": { "face": "51-gate", "ns": "gate", "size": size(&gate()) },
         "eq": { "face": "52-amp-eq", "ns": "eq", "size": size(&eq()) },
+        // Pictures of a block, beside its unit: a reverb's springs.
+        "pictures": [ { "match": ["reverb"], "face": "53-spring-viz", "ns": "spring", "size": size(&spring_viz()) } ],
     });
     serde_json::to_string_pretty(&doc).expect("json")
 }

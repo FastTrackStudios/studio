@@ -31,7 +31,7 @@ mod plate;
 mod random;
 mod room;
 mod special;
-mod spring;
+pub mod spring;
 pub mod ui;
 
 use surface_proto::{ParamInfo, Range, StreamInfo, Unit};
