@@ -45,7 +45,7 @@ impl std::fmt::Display for ParamAddr {
     }
 }
 
-pub use feed_proto::{EntryId, FeedInfo, FeedKind, FormatStyle, Range, Scale, ScalarKind, Unit, ValueFormat, note_name};
+pub use feed_proto::{EntryId, FeedInfo, FeedKind, FormatMark, FormatStyle, Range, Scale, ScalarKind, Unit, ValueFormat, note_name};
 
 /// A catalog's telemetry entry — a [`FeedInfo`]. The old name, kept so
 /// existing engines and surfaces compile unchanged.
@@ -325,6 +325,26 @@ mod tests {
         // Choices keep their words under a number format.
         let c = ParamInfo::new("m", "Meter", Range::default()).choice(&["GR", "+4"]);
         assert_eq!(c.display_as(1.0, Some(&ValueFormat::decimals(2))), "+4");
+    }
+
+    #[test]
+    fn a_readout_signs_gains_and_names_its_stops() {
+        let gain = Range::linear(-12.0, 12.0, Unit::Db);
+        let f = ValueFormat::decimals(1).signed();
+        assert_eq!(gain.format_as(3.0, &f), "+3.0 dB");
+        assert_eq!(gain.format_as(-3.0, &f), "-3.0 dB");
+        assert_eq!(gain.format_as(0.01, &f), "0.0 dB", "zero reads unsigned");
+        let hpf = Range::log(20.0, 800.0, Unit::Hz);
+        let f = ValueFormat::decimals(0).mark(20.0, "OFF");
+        assert_eq!(hpf.format_as(20.0, &f), "OFF");
+        assert_eq!(hpf.format_as(20.3, &f), "OFF", "reads as the stop");
+        assert_eq!(hpf.format_as(80.0, &f), "80 Hz");
+        let pan = Range::linear(-50.0, 50.0, Unit::None);
+        let f = ValueFormat::decimals(0).mark(0.0, "C");
+        assert_eq!(pan.format_as(0.2, &f), "C");
+        assert_eq!(pan.format_as(12.0, &f), "12");
+        let p = ParamInfo::new("eq/hpf", "HPF", hpf);
+        assert_eq!(p.display_as(0.0, Some(&ValueFormat::decimals(0).mark(20.0, "OFF"))), "OFF");
     }
 
     #[test]

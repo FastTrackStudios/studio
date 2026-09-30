@@ -20,7 +20,7 @@
 //!
 //! Variant = a [`preset`] (`pedal_chicken`, `teardrop`, `fluted_cream`,
 //! `knurled_dome`, `spun_metal`, `bakelite_chicken`, `amp_pointer`,
-//! `gold_knurl`, `white_knurl`, `stepped_cream`, `amp_skirted`, and
+//! `gold_knurl`, `white_knurl`, `stepped_cream`, `amp_skirted`, `scalloped`, and
 //! `knob.render`'s caps `flat`, `domed`, `fluted`, `knurled`,
 //! `chicken_head`, `pointer`). Options override it:
 //!
@@ -32,6 +32,14 @@
 //! | `ribs=` | flutes or knurl teeth |
 //! | `tilt=` | view tilt, degrees (0 = straight down) |
 //! | `ticks=`, `legend=top` | as `knob.render` |
+//! | `profile=` | the cap's shape: `flat`, `domed`, `fluted`, `knurled`, `chicken_head`, `teardrop`, `wing`, `stepped`, `insert` |
+//! | `skirt=` | `none`, `plain`, `flared`, `knurled`, `metal`, `dished` (the fallback's nearest too) |
+//! | `index=` | the pointer: `none`, `line`, `dot`, `full`, `groove` |
+//! | `cap_r=`, `height=`, `dome=`, `edge=`, `rib_depth=`, `knurl_band=`, `diamond=` | the cap's proportions (knob units: the footprint's radius is 1) |
+//! | `step_r=`, `step_h=`, `skirt_r=`, `skirt_h=`, `skirt_teeth=`, `insert_r=`, `insert_h=` | the step, skirt and insert |
+//! | `index_w=`, `index_in=`, `index_out=` | the pointer's width and its ends (cap radii) |
+//! | `skirt_metal=`, `skirt_rough=`, `skirt_coat=`, `insert_metal=`, `insert_rough=` | the skirt's and insert's material |
+//! | `fallback=`, `material=`, `fallback_color=` | the vector fallback's cap, material and colour |
 //!
 //! [`Look3d`] is the same from Rust; [`Look3d::shader`] its `ShaderFx`.
 
@@ -245,10 +253,87 @@ impl Look3d {
 
     /// The look a `Place` asks for: its preset (variant), then options.
     #[must_use]
+    #[allow(clippy::too_many_lines)]
     pub fn from_place(p: &Place) -> Self {
         let mut l = preset(p.variant.as_deref().unwrap_or("flat"));
         let num = |k: &str| p.opt(k).and_then(|v| v.parse::<f64>().ok());
         let hex = |k: &str| p.opt(k).filter(|c| c.starts_with('#')).map(str::to_string);
+        // The fallback's cap and material first, so the options below
+        // repaint it.
+        if let Some(cap) = p.opt("fallback") {
+            l.fallback.cap = Cap::parse(cap);
+        }
+        if let Some(m) = p.opt("material") {
+            l.fallback.material = match m {
+                "rubber" => KnobMaterial::Rubber,
+                "metal" | "spun" => KnobMaterial::Metal,
+                "chrome" => KnobMaterial::Chrome,
+                "bakelite" => KnobMaterial::Bakelite,
+                _ => KnobMaterial::Plastic,
+            };
+        }
+        // The shape.
+        if let Some(s) = p.opt("profile") {
+            l.profile = match s {
+                "domed" => Profile::Domed,
+                "fluted" => Profile::Fluted,
+                "knurled" => Profile::Knurled,
+                "chicken_head" => Profile::ChickenHead,
+                "teardrop" => Profile::Teardrop,
+                "wing" => Profile::Wing,
+                "stepped" => Profile::Stepped,
+                "insert" => Profile::Insert,
+                _ => Profile::Flat,
+            };
+        }
+        if let Some(s) = p.opt("skirt") {
+            (l.skirt, l.fallback.skirt) = match s {
+                "plain" => (SkirtKind::Plain, Skirt::Plain),
+                "flared" => (SkirtKind::Flared, Skirt::Flared),
+                "knurled" => (SkirtKind::Knurled, Skirt::Ridged),
+                "metal" => (SkirtKind::Metal, Skirt::Chrome),
+                "dished" => (SkirtKind::Dished, Skirt::Plain),
+                _ => (SkirtKind::None, Skirt::None),
+            };
+        }
+        if let Some(s) = p.opt("index") {
+            l.pointer = match s {
+                "line" => Pointer::Line,
+                "dot" => Pointer::Dot,
+                "full" => Pointer::Full,
+                "groove" => Pointer::Groove,
+                _ => Pointer::None,
+            };
+        }
+        if let Some(v) = p.opt("diamond") {
+            l.diamond = v == "true" || v == "1";
+        }
+        let set = |v: &mut f64, k: &str, lo: f64, hi: f64| {
+            if let Some(n) = num(k) {
+                *v = n.clamp(lo, hi);
+            }
+        };
+        set(&mut l.cap_r, "cap_r", 0.1, 1.0);
+        set(&mut l.height, "height", 0.05, 1.5);
+        set(&mut l.dome, "dome", 0.0, 0.6);
+        set(&mut l.bevel, "edge", 0.0, 0.4);
+        set(&mut l.rib_depth, "rib_depth", 0.0, 0.3);
+        set(&mut l.knurl_band, "knurl_band", 0.0, 1.0);
+        set(&mut l.step.0, "step_r", 0.05, 1.0);
+        set(&mut l.step.1, "step_h", 0.0, 1.0);
+        set(&mut l.skirt_size.0, "skirt_r", 0.1, 1.0);
+        set(&mut l.skirt_size.1, "skirt_h", 0.0, 1.0);
+        set(&mut l.skirt_teeth, "skirt_teeth", 0.0, 200.0);
+        set(&mut l.insert_size.0, "insert_r", 0.05, 1.0);
+        set(&mut l.insert_size.1, "insert_h", 0.0, 0.5);
+        set(&mut l.pointer_size.0, "index_w", 0.0, 0.5);
+        set(&mut l.pointer_size.1, "index_in", 0.0, 1.5);
+        set(&mut l.pointer_size.2, "index_out", 0.0, 1.5);
+        set(&mut l.skirt_finish.metal, "skirt_metal", 0.0, 1.0);
+        set(&mut l.skirt_finish.rough, "skirt_rough", 0.02, 1.0);
+        set(&mut l.skirt_finish.coat, "skirt_coat", 0.0, 1.0);
+        set(&mut l.insert.metal, "insert_metal", 0.0, 1.0);
+        set(&mut l.insert.rough, "insert_rough", 0.02, 1.0);
         if let Some(c) = hex("color") {
             l.fallback.color.clone_from(&c);
             l.cap.color = c;
@@ -263,6 +348,9 @@ impl Look3d {
         }
         if let Some(c) = hex("insert_color") {
             l.insert.color = c;
+        }
+        if let Some(c) = hex("fallback_color") {
+            l.fallback.color = c;
         }
         l.cap.metal = num("metal").unwrap_or(l.cap.metal).clamp(0.0, 1.0);
         l.cap.rough = num("rough").unwrap_or(l.cap.rough).clamp(0.02, 1.0);
@@ -285,7 +373,7 @@ impl Look3d {
 }
 
 /// The presets, by name: the reference knobs, then `knob.render`'s caps.
-pub const PRESETS: [&str; 17] = [
+pub const PRESETS: [&str; 18] = [
     "pedal_chicken",
     "teardrop",
     "fluted_cream",
@@ -297,6 +385,7 @@ pub const PRESETS: [&str; 17] = [
     "white_knurl",
     "stepped_cream",
     "amp_skirted",
+    "scalloped",
     "flat",
     "domed",
     "fluted",
@@ -537,6 +626,26 @@ pub fn preset(name: &str) -> Look3d {
             }),
             ..Look3d::base(Cap::Knurled)
         },
+        // The Asato pedals: a tall cylinder of rounded scallops under a
+        // flat top whose edge follows them, a painted line for the index.
+        "scalloped" => Look3d {
+            profile: Profile::Fluted,
+            ribs: 18.0,
+            cap: Finish::plastic("#4f6f70", 0.34).coat(0.35),
+            cap_r: 0.96,
+            height: 0.66,
+            dome: 0.03,
+            bevel: 0.1,
+            rib_depth: 0.07,
+            pointer: Pointer::Line,
+            pointer_color: "#eef0ea".into(),
+            pointer_size: (0.085, 0.18, 0.58),
+            fallback: fb(Cap::Fluted, &|l| {
+                l.color = "#56777a".into();
+                l.pointer = "#eef0ea".into();
+            }),
+            ..Look3d::base(Cap::Fluted)
+        },
         // `knob.render`'s caps, with its default colours.
         "domed" => Look3d { profile: Profile::Domed, cap_r: 1.0, cap: Finish::plastic("#19191b", 0.32).coat(0.5), dome: 0.2, bevel: 0.14, ..Look3d::base(Cap::Domed) },
         "fluted" => Look3d { profile: Profile::Fluted, cap_r: 1.0, ribs: 8.0, rib_depth: 0.1, cap: Finish::plastic("#1b1b1d", 0.26).coat(0.3), ..Look3d::base(Cap::Fluted) },
@@ -589,7 +698,7 @@ pub(crate) fn defs() -> Vec<ComponentDef> {
         id: "knob.3d",
         family: Family::Knob,
         title: "3D knob",
-        description: "A knob rendered per pixel on the GPU like a plugin's product render: a lathe-turned or moulded cap (flutes, knurl, dome, chicken head, teardrop, wing, stepped), a skirt, a pointer or insert, with PBR-ish plastic, bakelite (clearcoat), polished and spun (anisotropic) metal, occlusion in the grooves and a soft shadow on the panel. The ribs turn with the value under a fixed upper-left light. Variant = preset: `pedal_chicken`, `teardrop`, `fluted_cream`, `knurled_dome`, `spun_metal`, `bakelite_chicken`, `amp_pointer`, `gold_knurl`, `white_knurl`, `stepped_cream`, `amp_skirted`, or a cap `flat|domed|fluted|knurled|chicken_head|pointer`. Options: `color=`/`skirt_color=`/`pointer=`/`insert_color=` (#hex), `metal=`/`rough=`/`coat=`/`aniso=` (0..1), `spec=`/`shadow=` (0..2), `ribs=`, `tilt=` (degrees), `ticks=`, `legend=top`. Without the GPU stage it draws as `knob.render`. Size = knob diameter.",
+        description: "A knob rendered per pixel on the GPU like a plugin's product render: a lathe-turned or moulded cap (flutes, knurl, dome, chicken head, teardrop, wing, stepped), a skirt, a pointer or insert, with PBR-ish plastic, bakelite (clearcoat), polished and spun (anisotropic) metal, occlusion in the grooves and a soft shadow on the panel. The ribs turn with the value under a fixed upper-left light. Variant = preset: `pedal_chicken`, `teardrop`, `fluted_cream`, `knurled_dome`, `spun_metal`, `bakelite_chicken`, `amp_pointer`, `gold_knurl`, `white_knurl`, `stepped_cream`, `amp_skirted`, `scalloped`, or a cap `flat|domed|fluted|knurled|chicken_head|pointer`. Options: `color=`/`skirt_color=`/`pointer=`/`insert_color=` (#hex), `metal=`/`rough=`/`coat=`/`aniso=` (0..1), `spec=`/`shadow=` (0..2), `ribs=`, `tilt=` (degrees), `ticks=`, `legend=top`; the shape: `profile=`, `skirt=`, `index=` (none|line|dot|full|groove), `cap_r=`/`height=`/`dome=`/`edge=`/`rib_depth=`/`knurl_band=`/`diamond=`, `step_r=`/`step_h=`, `skirt_r=`/`skirt_h=`/`skirt_teeth=`, `insert_r=`/`insert_h=`, `index_w=`/`index_in=`/`index_out=`, `skirt_metal=`/`skirt_rough=`/`skirt_coat=`, `insert_metal=`/`insert_rough=`; the fallback: `fallback=` (cap), `material=`, `fallback_color=`. Without the GPU stage it draws as `knob.render`. Size = knob diameter.",
         variants: &PRESETS,
         default_size: 48.0,
         binds: "param",

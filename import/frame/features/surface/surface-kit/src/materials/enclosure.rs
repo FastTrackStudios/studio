@@ -12,7 +12,9 @@
 //!
 //! Options: `color=#hex`, `finish=powder|powder:coarse|brushed|hammertone|gloss|satin|spun|chrome|…`
 //! (any material spec), `jacks=side|top|both|none`, `screws` (four lid
-//! screws), `base=#hex` (the front face and base), `radius=`, `w=`/`h=`.
+//! screws), `base=#hex` (the front face and base), `front=` (the front
+//! face's height; `0` = none), `jack_inset=` (how far side jacks push the
+//! lid in from each side), `radius=`, `w=`/`h=`.
 //! No control: the returned frame spans the footprint; place components in
 //! it. The lid's rect is also a child frame named `lid` for callers that
 //! want to clip to it.
@@ -87,20 +89,24 @@ fn pedal_3d(b: &mut Builder<'_>, parent: NodeId, p: &Place) -> NodeId {
     let base = p.opt("base").filter(|c| c.starts_with('#')).map_or_else(|| shade(&color, 0.42), ToString::to_string);
     let side_j = matches!(jacks, "side" | "both");
     let top_j = matches!(jacks, "top" | "both");
-    let jw = if side_j { (w * 0.06).clamp(7.0, 12.0) } else { 0.0 };
+    // How far the lid sits in from each side (where side jacks stand).
+    let nut_w = (w * 0.06).clamp(7.0, 12.0);
+    let jw = if side_j { num(p, "jack_inset").map_or(nut_w, |v| v.clamp(0.0, w * 0.3)) } else { 0.0 };
     let jt = if top_j { 10.0 } else { 0.0 };
     let (bx, by, bw, bh) = (jw, jt, w - 2.0 * jw, h - jt);
     // The front face under the lid's edge, and the base plate under that.
-    let front = (bh * 0.07).clamp(8.0, 22.0);
-    let plate = (bh * 0.012).clamp(2.0, 5.0);
+    // `front=0`: no front face or base plate (the lid runs to the bottom).
+    let front = num(p, "front").map_or_else(|| (bh * 0.07).clamp(8.0, 22.0), |v| v.clamp(0.0, bh * 0.3));
+    let plate = if front > 0.0 { (bh * 0.012).clamp(2.0, 5.0) } else { 0.0 };
     let lid_h = bh - front;
 
     let root = b.add(parent, draw::frame(&p.name, 0.0, 0.0, w, h));
     if side_j {
         let jy = by + bh * 0.56;
         let jh = (bh * 0.13).clamp(22.0, 44.0);
-        jack(b, root, (0.0, jy, jw + 4.0, jh), true);
-        jack(b, root, (w - jw - 4.0, jy, jw + 4.0, jh), true);
+        // The nut stands out of the side, a little under the lid's edge.
+        jack(b, root, (jw - nut_w, jy, nut_w + 4.0, jh), true);
+        jack(b, root, (w - jw - 4.0, jy, nut_w + 4.0, jh), true);
     }
     if top_j {
         for fx in [0.25, 0.75] {
@@ -114,14 +120,16 @@ fn pedal_3d(b: &mut Builder<'_>, parent: NodeId, p: &Place) -> NodeId {
         radius,
     );
     b.add(root, fixed(draw::with_effects(body, light::stand(14.0, 1.0))));
-    // The front face: lit a little on the left, the edge where the lid rolls over.
-    let face = lin(90.0, &[(0.0, tint(&base, 0.12)), (0.4, base.clone()), (1.0, shade(&base, 0.25))]);
-    let mut fr = draw::rect("front face", bx, by + lid_h - radius, bw, front + radius - plate, face);
-    fr.corner_radii = CornerRadii { top_left: 0.0, top_right: 0.0, bottom_right: radius * 0.6, bottom_left: radius * 0.6 };
-    b.add(root, fixed(fr));
-    let mut pl = draw::rect("base plate", bx + 1.5, by + bh - plate, bw - 3.0, plate, draw::solid(&shade(&base, 0.7)));
-    pl.corner_radii = CornerRadii { top_left: 0.0, top_right: 0.0, bottom_right: radius * 0.5, bottom_left: radius * 0.5 };
-    b.add(root, fixed(pl));
+    if front > 0.0 {
+        // The front face: lit a little on the left, the edge where the lid rolls over.
+        let face = lin(90.0, &[(0.0, tint(&base, 0.12)), (0.4, base.clone()), (1.0, shade(&base, 0.25))]);
+        let mut fr = draw::rect("front face", bx, by + lid_h - radius, bw, front + radius - plate, face);
+        fr.corner_radii = CornerRadii { top_left: 0.0, top_right: 0.0, bottom_right: radius * 0.6, bottom_left: radius * 0.6 };
+        b.add(root, fixed(fr));
+        let mut pl = draw::rect("base plate", bx + 1.5, by + bh - plate, bw - 3.0, plate, draw::solid(&shade(&base, 0.7)));
+        pl.corner_radii = CornerRadii { top_left: 0.0, top_right: 0.0, bottom_right: radius * 0.5, bottom_left: radius * 0.5 };
+        b.add(root, fixed(pl));
+    }
 
     // The lid, in its finish.
     let mut lid = draw::rounded(draw::frame("lid", bx, by, bw, lid_h), radius);
@@ -140,7 +148,9 @@ fn pedal_3d(b: &mut Builder<'_>, parent: NodeId, p: &Place) -> NodeId {
     }
     b.add(lid, fixed(draw::stroked(draw::rounded(draw::rect("outline", 0.0, 0.0, bw, lid_h, draw::solid("#00000000")), radius), &alpha("#000000", 0.5), 1.0)));
     // The crease where the lid's roll meets the front face catches a line of light.
-    b.add(root, fixed(draw::rect("crease light", bx + radius, by + lid_h - 0.5, bw - 2.0 * radius, 1.0, draw::solid(&alpha(&mixs(&color, "#ffffff", 0.6), 0.35)))));
+    if front > 0.0 {
+        b.add(root, fixed(draw::rect("crease light", bx + radius, by + lid_h - 0.5, bw - 2.0 * radius, 1.0, draw::solid(&alpha(&mixs(&color, "#ffffff", 0.6), 0.35)))));
+    }
 
     if p.flag("screws") || p.opt("screws").is_some_and(|v| v != "0") {
         let inset = radius * 0.95 + 3.0;
@@ -157,7 +167,7 @@ pub(crate) fn defs() -> Vec<ComponentDef> {
         id: "panel.pedal_3d",
         family: Family::Panel,
         title: "Pedal enclosure (rendered)",
-        description: "A stompbox as a product render shows it: the lid in a material finish with its rounded edge lit and rolling into the front face, the base plate, side jacks with hex nuts, optional lid screws, and contact + cast shadows. Sized by class (variant: `micro` 92 … `standard` 156 … `bigbox` 404 wide, all 286 tall; `treadle` 241 × 600). Options: `color=#hex`, `finish=powder|powder:coarse|brushed|hammertone|gloss|satin|chrome|…`, `jacks=side|top|both|none`, `screws`, `base=#hex`, `radius=`, `w=`/`h=`. No control; a parent for knobs, the footswitch and silkscreen.",
+        description: "A stompbox as a product render shows it: the lid in a material finish with its rounded edge lit and rolling into the front face, the base plate, side jacks with hex nuts, optional lid screws, and contact + cast shadows. Sized by class (variant: `micro` 92 … `standard` 156 … `bigbox` 404 wide, all 286 tall; `treadle` 241 × 600). Options: `color=#hex`, `finish=powder|powder:coarse|brushed|hammertone|gloss|satin|chrome|…`, `jacks=side|top|both|none`, `screws`, `base=#hex`, `front=` (front-face height, 0 = none), `jack_inset=` (the lid's inset from each side for side jacks), `radius=`, `w=`/`h=`. No control; a parent for knobs, the footswitch and silkscreen.",
         variants: &["micro", "nano", "standard", "compact", "wide", "medium", "large", "bigbox", "treadle"],
         default_size: 156.0,
         binds: "none",

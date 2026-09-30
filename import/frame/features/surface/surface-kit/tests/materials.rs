@@ -164,6 +164,36 @@ fn a_3d_knobs_options_reach_its_shader() {
 }
 
 #[test]
+fn a_3d_knobs_shape_options_reshape_the_preset() {
+    use surface_kit::materials::knob::{Cap, Skirt};
+    use surface_kit::materials::knob3d::{Look3d, Pointer, Profile, SkirtKind};
+    let p = Place::new("Drive").variant("scalloped").options(&["profile=stepped", "skirt=knurled", "index=dot", "cap_r=0.7", "step_r=0.4", "fallback=domed"]);
+    let l = Look3d::from_place(&p);
+    assert_eq!((l.profile, l.skirt, l.pointer), (Profile::Stepped, SkirtKind::Knurled, Pointer::Dot));
+    assert_eq!((l.cap_r, l.step.0), (0.7, 0.4));
+    assert_eq!((l.fallback.cap, l.fallback.skirt), (Cap::Domed, Skirt::Ridged));
+}
+
+#[test]
+fn a_pedal_without_a_front_face_is_all_lid() {
+    let names = |p: &Place| {
+        let (s, r) = build("panel.pedal_3d", p);
+        s.walk(r).into_iter().map(|id| s.node(id).unwrap().name.clone()).collect::<Vec<_>>()
+    };
+    let with = names(&Place::new("Box").variant("standard"));
+    let without = names(&Place::new("Box").variant("standard").options(&["front=0"]));
+    assert!(with.iter().any(|n| n == "front face") && with.iter().any(|n| n == "base plate"));
+    assert!(!without.iter().any(|n| n == "front face" || n == "base plate"));
+    let lid_w = |p: &Place| {
+        let (s, r) = build("panel.pedal_3d", p);
+        s.walk(r).into_iter().map(|id| s.node(id).unwrap()).find(|n| n.name == "lid").unwrap().size.width
+    };
+    let std_w = lid_w(&Place::new("Box").variant("standard"));
+    let narrow = lid_w(&Place::new("Box").variant("standard").options(&["jack_inset=18"]));
+    assert!((narrow - (156.0 - 36.0)).abs() < 1e-9 && narrow < std_w, "{narrow} vs {std_w}");
+}
+
+#[test]
 fn a_rendered_knob_keeps_its_light_out_of_the_turning_body() {
     use surface_proto::SlotRole;
     for cap in ["flat", "domed", "fluted", "knurled", "chicken_head", "pointer"] {

@@ -139,6 +139,11 @@ impl Range {
     /// another unit (or none), the note a pitch is, or one label per step.
     #[must_use]
     pub fn format_as(&self, real: f64, f: &ValueFormat) -> String {
+        if !f.marks.is_empty() {
+            let plain = ValueFormat { marks: Vec::new(), ..f.clone() };
+            let text = self.format_as(real, &plain);
+            return f.marks.iter().find(|m| self.format_as(m.at, &plain) == text).map_or(text, |m| m.label.clone());
+        }
         match &f.style {
             FormatStyle::Labels { labels } if !labels.is_empty() => {
                 let last = labels.len() - 1;
@@ -173,6 +178,7 @@ impl Range {
             Some(rest) if rest.chars().all(|c| c == '0' || c == '.') => rest.to_string(),
             _ => text,
         };
+        let text = if f.sign && !text.starts_with('-') && text.chars().any(|c| c.is_ascii_digit() && c != '0') { format!("+{text}") } else { text };
         if unit.is_empty() { text } else { format!("{text} {unit}") }
     }
 
@@ -210,6 +216,24 @@ pub struct ValueFormat {
     /// A unit suffix instead of the range's (`Some("")` prints none).
     pub unit: Option<String>,
     pub style: FormatStyle,
+    /// A number reads `+` before a positive value (a gain, a pitch offset).
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    #[facet(default)]
+    pub sign: bool,
+    /// Words that replace particular values: `OFF` at a filter's stop,
+    /// `C` at a pan's centre. A mark prints when the value reads the same
+    /// as the mark's value would.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    #[facet(default)]
+    pub marks: Vec<FormatMark>,
+}
+
+/// A word a readout prints in place of one value (see [`ValueFormat::mark`]).
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize, Facet)]
+pub struct FormatMark {
+    /// The value, in the range's units.
+    pub at: f64,
+    pub label: String,
 }
 
 /// What a readout prints.
@@ -256,11 +280,26 @@ impl ValueFormat {
         self
     }
 
+    /// Print `+` before a positive number.
+    #[must_use]
+    pub fn signed(mut self) -> Self {
+        self.sign = true;
+        self
+    }
+
+    /// Print `label` where the value reads as `at` does (`OFF` at a
+    /// filter's stop, `C` at a pan's centre).
+    #[must_use]
+    pub fn mark(mut self, at: f64, label: impl Into<String>) -> Self {
+        self.marks.push(FormatMark { at, label: label.into() });
+        self
+    }
+
     /// A level in dB (a meter's readout): `decimals` (default 1) and this
     /// format's unit (default `dB`).
     #[must_use]
     pub fn db(&self, db: f64) -> String {
-        let f = Self { decimals: Some(self.decimals.unwrap_or(1)), style: FormatStyle::Number, unit: self.unit.clone() };
+        let f = Self { decimals: Some(self.decimals.unwrap_or(1)), style: FormatStyle::Number, unit: self.unit.clone(), sign: self.sign, marks: Vec::new() };
         Range::linear(-1.0e9, 1.0e9, Unit::Db).format_as(db, &f)
     }
 }
