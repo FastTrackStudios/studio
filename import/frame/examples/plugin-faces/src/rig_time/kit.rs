@@ -280,3 +280,68 @@ pub fn seg_readout(b: &mut Builder<'_>, parent: NodeId, addr: &str, (x, cy, w): 
     b.controls.insert(root, c);
     root
 }
+
+/// Make a face responsive about its picture: `stretch` (the picture's
+/// window, a bay of knobs) takes a change of width; the rest of `parent`'s
+/// children pin to whichever side of it they sit on — left of it to the
+/// left edge, right of it to the right — so controls keep their size and
+/// spacing while the picture widens or narrows. Anything spanning the
+/// whole face (its ground) stretches of itself.
+pub fn responsive(b: &mut Builder<'_>, parent: NodeId, stretch: &[NodeId]) {
+    use document_proto::ResizeX;
+    let span = |b: &Builder<'_>, id: NodeId| b.scene.node(id).map(|n| (n.transform.tx, n.transform.tx + n.size.width));
+    let Some((l, r)) = stretch.iter().filter_map(|id| span(b, *id)).reduce(|a, c| (a.0.min(c.0), a.1.max(c.1))) else { return };
+    let kids = b.scene.node(parent).map(|n| n.children.clone()).unwrap_or_default();
+    let pw = b.scene.node(parent).map_or(0.0, |n| n.size.width);
+    for id in kids {
+        let Some(n) = b.scene.node_mut(id) else { continue };
+        if n.layout_child.resize_x.is_some() {
+            continue;
+        }
+        let (x, w) = (n.transform.tx, n.size.width);
+        n.layout_child.resize_x = if stretch.contains(&id) {
+            Some(ResizeX::Stretch)
+        } else if w >= pw * 0.95 {
+            None
+        } else if x + w / 2.0 <= l {
+            Some(ResizeX::Left)
+        } else if x + w / 2.0 >= r {
+            Some(ResizeX::Right)
+        } else {
+            None
+        };
+    }
+}
+
+/// `id` with its sibling `offset` places along (−1: the one drawn just
+/// before it, a window's bezel; +1: just after, its rim), for
+/// [`responsive`].
+#[must_use]
+pub fn with_sibling(b: &Builder<'_>, parent: NodeId, id: NodeId, offset: isize) -> Vec<NodeId> {
+    let kids = b.scene.node(parent).map(|n| n.children.clone()).unwrap_or_default();
+    let mut v = vec![id];
+    if let Some(i) = kids.iter().position(|k| *k == id)
+        && let Some(s) = kids.get(i.wrapping_add_signed(offset))
+    {
+        v.push(*s);
+    }
+    v
+}
+
+/// A drawing that should scale with its window (a plate's sheet and
+/// pickups, a hall's plan): `parent`'s children take position and width in
+/// proportion when the window resizes (their own children keep their size);
+/// what spans the window stretches with it instead.
+pub fn scale_children(b: &mut Builder<'_>, parent: NodeId) {
+    let kids = b.scene.node(parent).map(|n| n.children.clone()).unwrap_or_default();
+    let pw = b.scene.node(parent).map_or(0.0, |n| n.size.width);
+    for id in kids {
+        if let Some(n) = b.scene.node_mut(id)
+            && n.layout_child.resize_x.is_none()
+            // What spans the window (its frame, its glass) stretches with it.
+            && n.size.width < pw * 0.9
+        {
+            n.layout_child.resize_x = Some(document_proto::ResizeX::Scale);
+        }
+    }
+}

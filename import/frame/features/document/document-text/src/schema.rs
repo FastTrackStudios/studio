@@ -88,6 +88,7 @@ pub(crate) const COMMON_ATTRS: &[&str] = &[
     "justify",
     "align",
     "grow",
+    "resize-x",
     "align-self",
     "absolute",
     "min-w",

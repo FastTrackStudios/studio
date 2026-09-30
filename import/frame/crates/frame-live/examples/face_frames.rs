@@ -57,6 +57,7 @@ fn main() -> Result<(), String> {
     live.attach_gpu(device.clone(), queue.clone())?;
     live.set_max_fps(std::env::var("FPS").ok().and_then(|v| v.parse().ok()).unwrap_or(0));
     live.set_stretch(std::env::var_os("STRETCH").is_some());
+    live.set_responsive(std::env::var_os("RESPONSIVE").is_some());
 
     let mut last: Option<Vec<u8>> = None;
     let mut prev: Option<wgpu::Texture> = None;

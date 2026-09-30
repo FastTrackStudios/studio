@@ -465,6 +465,27 @@ pub enum AlignSelf {
     Stretch,
 }
 
+/// How a node follows its parent's width when the parent is laid out
+/// wider or narrower than it was drawn — a responsive host fitting a
+/// surface to a box of other proportions ([`Scene::resize_width`]).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Facet)]
+#[repr(u8)]
+pub enum ResizeX {
+    /// Keeps its distance from the parent's left edge.
+    Left,
+    /// Keeps its distance from the parent's right edge.
+    Right,
+    /// Keeps its offset from the parent's centre.
+    Center,
+    /// Keeps both distances: its width takes the change.
+    Stretch,
+    /// Drawn in proportion: its position scaled and the node itself
+    /// squeezed or stretched with the change (its transform, so its
+    /// outlines and children scale with it) — for a drawing that must hold
+    /// together, not for a control.
+    Scale,
+}
+
 /// How a node sits inside an auto-layout parent.
 #[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize, Facet)]
 pub struct LayoutChild {
@@ -476,6 +497,12 @@ pub struct LayoutChild {
     pub min_height: Option<f64>,
     pub max_width: Option<f64>,
     pub max_height: Option<f64>,
+    /// How it follows its parent's width changing ([`ResizeX`]). `None`:
+    /// it stretches when it spans the parent, else keeps its size and
+    /// moves in proportion (a knob, a label never distorts).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[facet(default)]
+    pub resize_x: Option<ResizeX>,
 }
 
 // ── nodes ────────────────────────────────────────────────────────────────
@@ -697,6 +724,54 @@ pub struct Scene {
     pub root: NodeId,
     pub nodes: BTreeMap<NodeId, Node>,
     pub assets: BTreeMap<AssetId, Asset>,
+}
+
+impl Scene {
+    /// Lay `node` out `width` wide instead of what it was drawn, its
+    /// descendants following by their [`ResizeX`]: what a responsive host
+    /// does to fit a surface to a box of other proportions without
+    /// distorting it.
+    pub fn resize_width(&mut self, node: NodeId, width: f64) {
+        let Some(n) = self.nodes.get_mut(&node) else { return };
+        let old = n.size.width;
+        if old <= 0.0 || (width - old).abs() < 1e-6 {
+            return;
+        }
+        n.size.width = width;
+        self.follow_width(node, old, width);
+    }
+
+    fn follow_width(&mut self, parent: NodeId, old: f64, new: f64) {
+        let kids = self.nodes.get(&parent).map(|p| p.children.clone()).unwrap_or_default();
+        let (dw, ratio) = (new - old, new / old);
+        for id in kids {
+            let Some(n) = self.nodes.get_mut(&id) else { continue };
+            let (x, w) = (n.transform.tx, n.size.width);
+            let spans = w >= old * 0.95 && x <= old * 0.03;
+            let rule = n.layout_child.resize_x.unwrap_or(if spans { ResizeX::Stretch } else { ResizeX::Center });
+            let proportional = n.layout_child.resize_x.is_none() && !spans;
+            let (nx, nw) = match rule {
+                ResizeX::Left => (x, w),
+                ResizeX::Right => (x + dw, w),
+                // The default: its centre where the change puts it.
+                ResizeX::Center if proportional => ((x + w / 2.0) * ratio - w / 2.0, w),
+                ResizeX::Center => (x + dw / 2.0, w),
+                ResizeX::Stretch => (x, (w + dw).max(0.0)),
+                ResizeX::Scale => {
+                    // Squeezed whole: its drawing scales, its size stays.
+                    n.transform.a *= ratio;
+                    n.transform.b *= ratio;
+                    (x * ratio, w)
+                }
+            };
+            n.transform.tx = nx;
+            let resized = (nw - w).abs() > 1e-6;
+            n.size.width = nw;
+            if resized && w > 0.0 {
+                self.follow_width(id, w, nw);
+            }
+        }
+    }
 }
 
 impl Scene {

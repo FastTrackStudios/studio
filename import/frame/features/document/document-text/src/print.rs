@@ -193,6 +193,9 @@ fn attributes(n: &Node, has_children: bool) -> (Vec<(&'static str, String)>, Opt
     if lc.absolute {
         a.push(("absolute", "true".into()));
     }
+    if let Some(r) = lc.resize_x {
+        a.push(("resize-x", quote(&r.keyword())));
+    }
     for (k, v) in [("min-w", lc.min_width), ("min-h", lc.min_height), ("max-w", lc.max_width), ("max-h", lc.max_height)] {
         if let Some(v) = v {
             a.push((k, num(v)));

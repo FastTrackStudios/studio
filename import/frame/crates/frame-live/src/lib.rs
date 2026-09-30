@@ -153,6 +153,14 @@ pub struct LiveSurface {
     error: Option<String>,
     /// Fill the element exactly rather than fit it (pictures).
     stretch: bool,
+    /// Lay the face out for the element's proportions (see
+    /// [`LiveSurface::set_responsive`]).
+    responsive: bool,
+    /// The face as drawn, to lay out afresh for each width.
+    design: Option<Surface>,
+    /// The width it is laid out at now (its drawn width until a
+    /// responsive render changes it).
+    laid_width: f64,
 }
 
 /// How often a face that only moves with the clock is rendered unless the
@@ -225,6 +233,9 @@ impl LiveSurface {
             born: Instant::now(),
             view: View { scale: 1.0, scale_y: 1.0, tx: 0.0, ty: 0.0 },
             stretch: false,
+            responsive: false,
+            design: Some(surface.clone()),
+            laid_width: 0.0,
             cursor: None,
             last_press: None,
             dragging: None,
@@ -267,6 +278,42 @@ impl LiveSurface {
         self.dirty = true;
     }
 
+    /// Lay the face out for the element's proportions instead of fitting
+    /// it as drawn: kept at the element's height, it is made as wide as
+    /// the element (within 0.6–1.8× its drawn width), its parts following
+    /// their [`ResizeX`](document_proto::ResizeX) — windows and grounds
+    /// stretch, knobs and labels keep their size and spread or close up.
+    pub fn set_responsive(&mut self, responsive: bool) {
+        self.responsive = responsive;
+        self.dirty = true;
+    }
+
+    /// Relay the design for an element `width × height`, when its
+    /// proportions call for another width than the one laid out.
+    fn respond(&mut self, width: u32, height: u32) {
+        let Some(design) = self.design.as_ref() else { return };
+        let scene = &design.scene;
+        let Some(page) = scene.pages().first().copied() else { return };
+        let Some(root) = scene.node(page).and_then(|p| p.children.first().copied()) else { return };
+        let Some((dw, dh)) = scene.node(root).map(|n| (n.size.width, n.size.height)) else { return };
+        if dw <= 0.0 || dh <= 0.0 || width == 0 || height == 0 {
+            return;
+        }
+        let want = (dh * f64::from(width) / f64::from(height)).clamp(dw * 0.6, dw * 1.8);
+        let now = if self.laid_width > 0.0 { self.laid_width } else { dw };
+        if (want - now).abs() <= dw * 0.005 {
+            return;
+        }
+        let mut surface = design.clone();
+        surface.scene.resize_width(root, want);
+        let placeholder = Runtime::new(Surface::from_scene(Scene::new("")), Catalog::default());
+        let mut rt = std::mem::replace(&mut self.rt, placeholder);
+        rt.swap_surface(surface);
+        if self.install(rt).is_ok() {
+            self.laid_width = want;
+        }
+    }
+
     /// The effects mode (GPU by default).
     pub fn set_mode(&mut self, mode: Mode) {
         self.mode = mode;
@@ -305,6 +352,8 @@ impl LiveSurface {
                     self.error = Some("surface has no <Page>".into());
                     return false;
                 }
+                self.design = Some(surface.clone());
+                self.laid_width = 0.0;
                 let placeholder = Runtime::new(Surface::from_scene(Scene::new("")), Catalog::default());
                 let mut rt = std::mem::replace(&mut self.rt, placeholder);
                 if catalog != *rt.catalog() {
@@ -546,6 +595,9 @@ impl LiveSurface {
     /// # Errors
     /// With no device attached, or when vello fails.
     pub fn render(&mut self, width: u32, height: u32, scale: f64) -> Result<(wgpu::Texture, bool), String> {
+        if self.responsive {
+            self.respond(width, height);
+        }
         self.rendered_at = Some(std::time::Instant::now());
         if self.dirty {
             self.settle_until = self.rendered_at.map(|at| at + SETTLE);

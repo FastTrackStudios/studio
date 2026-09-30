@@ -172,6 +172,8 @@ pub fn face(dark: bool) -> Face {
         glow_key(b, bay4, &a("on"), 26.0, (c4, 108.0), ORANGE);
         parts::centred(b, bay4, "Power", (c4, 136.0), t);
         screws(b, bay4, &[(w - 836.0 - 9.0, bh - 9.0)]);
+        // Responsive: the knob bay takes the width.
+        kit::responsive(b, unit, &[bay3]);
     });
     kit::delay_face(kit::file("60-dly-tape", dark), scene)
 }

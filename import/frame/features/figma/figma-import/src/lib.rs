@@ -530,6 +530,7 @@ fn layout(raw: &Value) -> (Option<AutoLayout>, LayoutChild) {
         min_height: al.min_height,
         max_width: al.max_width,
         max_height: al.max_height,
+        resize_x: None,
     };
     (container, child)
 }

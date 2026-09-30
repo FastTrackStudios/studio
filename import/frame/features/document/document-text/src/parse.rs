@@ -3,7 +3,7 @@
 
 use std::collections::{BTreeMap, HashMap};
 
-use document_proto::{
+use document_proto::{ResizeX, 
     AlignSelf, Asset, AssetId, AutoLayout, BlendMode, BooleanOp, CornerRadii, CrossAxisAlign, LayoutDirection,
     MainAxisAlign, MaskKind, Node, NodeId, NodeKind, Scene, SourceRef, StrokeAlign, StrokeCap, StrokeJoin, TextAlign,
     TextCase, TextData,
@@ -817,6 +817,7 @@ fn apply_common(at: &Attrs<'_>, n: &mut Node) -> Result<()> {
     lc.min_height = at.num("min-h")?;
     lc.max_width = at.num("max-w")?;
     lc.max_height = at.num("max-h")?;
+    lc.resize_x = at.keyword::<ResizeX>("resize-x")?;
 
     if let Some(v) = at.convert("geometry", geometry_value)? {
         n.fill_geometry = v;

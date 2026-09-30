@@ -132,11 +132,12 @@ const VIEW_X: f64 = 200.0;
 /// beside the name, and the knobs in a row under them.
 fn column(b: &mut Builder<'_>, p: NodeId, t: &Theme, ns: &str, name: &str, sub: &str, list: &[(&str, &str)]) {
     let sans = draw::Lettering::family(draw::family::INTER).weight(300.0);
+    // The On key first, then the name: the top-right corner is the host's.
+    kit::bypass(b, p, ns, 25.0, 30.0, 22.0, t.bypass, "On");
     let w = name.chars().count() as f64 * 11.5;
-    crate::suite_studio_blues::parts::set(b, p, name, 14.0 + w / 2.0, 30.0, 21.0, t.ink, &sans, 0.02);
+    crate::suite_studio_blues::parts::set(b, p, name, 46.0 + w / 2.0, 30.0, 21.0, t.ink, &sans, 0.02);
     ui::silk_left(b, p, sub, 14.0, 49.0, 6.0, t.dim, 700.0);
     ui::rule(b, p, 14.0, 57.0, VIEW_X - 30.0, 1.0, &ui::alpha(t.accent, 0.6));
-    kit::bypass(b, p, ns, VIEW_X - 30.0, 30.0, 22.0, t.bypass, "On");
     let pointer = format!("pointer={}", t.accent);
     let color = format!("color={}", t.knob);
     let skirt = format!("skirt_color={}", t.skirt);
@@ -199,6 +200,8 @@ fn chorus() -> Face {
         ui::silk_left(b, v, "Dry", 10.0, 12.0, 5.5, t.ink, 800.0);
         ui::silk_left(b, v, "Voices", 30.0, 12.0, 5.5, t.accent, 800.0);
         column(b, p, t, MOD, "Chorus", "Voices · detune · width", &[("rate", "Rate"), ("depth", "Depth"), ("width", "Width"), ("mix", "Mix")]);
+        // Responsive: the picture takes the width; the column pins left.
+        kit::responsive(b, p, &[v]);
     });
     Face { file: "100-mod-chorus", plugin: PLUGIN, scene, params: chorus_params(), streams: Vec::new() }
 }
@@ -273,6 +276,8 @@ fn tremolo() -> Face {
         }
         ui::silk_left(b, v, "Volume", lamp_x + 6.0, vh - 8.0, 5.5, t.dim, 800.0);
         column(b, p, t, MOTION, "Tremolo", "Volume · rate · depth", &[("rate", "Rate"), ("depth", "Depth"), ("mix", "Mix")]);
+        // Responsive: the picture takes the width; the column pins left.
+        kit::responsive(b, p, &[v]);
     });
     Face { file: "101-motion-tremolo", plugin: PLUGIN, scene, params: trem_params(), streams: Vec::new() }
 }
@@ -322,6 +327,8 @@ fn vibrato() -> Face {
         b.add(w, ui::strokes("wave", &[wave], 1.4, draw::solid(&ui::alpha(t.ink, 0.7))));
         motion::add(b, w, Motion::new(Target::StretchX).input(swing).range(1.12, 0.88).pivot(0.0, 0.5));
         column(b, p, t, MOTION, "Vibrato", "Pitch · rate · depth", &[("rate", "Rate"), ("depth", "Depth"), ("mix", "Mix")]);
+        // Responsive: the picture takes the width; the column pins left.
+        kit::responsive(b, p, &[v]);
     });
     Face { file: "102-motion-vibrato", plugin: PLUGIN, scene, params: vibrato_params(), streams: Vec::new() }
 }

@@ -210,6 +210,7 @@ pub fn face(dark: bool) -> Face {
         sheet.effects = vec![draw::inner_shadow(l.sheet_shadow, 0.0, 2.0, 8.0)];
         let sheet = b.add(panel, sheet);
         hall(b, sheet, pw, ph, l.line);
+        kit::scale_children(b, sheet);
         // A gilt frame round the drawing.
         let mut rim = draw::rect("gilt", px - 2.0, py - 2.0, pw + 4.0, ph + 4.0, draw::solid("#00000000"));
         rim.fills.clear();
@@ -230,6 +231,9 @@ pub fn face(dark: bool) -> Face {
         for (i, (id, legend)) in [("size", "Size"), ("predelay", "Pre-Delay"), ("damping", "Damp"), ("level", "Level")].iter().enumerate() {
             kit::knob3d(b, panel, &a(id), legend, 34.0, (x0 + 140.0 + 54.0 * i as f64, 96.0), &small, ink, dim);
         }
+        // Responsive: the drawing (and its gilt rim) takes the width.
+        let stretch = kit::with_sibling(b, panel, sheet, 1);
+        kit::responsive(b, panel, &stretch);
     });
     kit::reverb_face(kit::file("81-verb-hall", dark), scene)
 }

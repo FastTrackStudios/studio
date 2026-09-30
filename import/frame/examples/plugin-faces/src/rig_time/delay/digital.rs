@@ -107,6 +107,10 @@ pub fn face(dark: bool) -> Face {
             kit::knob3d(b, plate, &a(id), legend, 26.0, (wx + 74.0 + 52.0 * col as f64, 42.0 + 64.0 * row as f64), &cap, ink, dim);
         }
         kit::bypass(b, plate, DLY, kit::W - ear_w - 24.0, 118.0, 24.0, "blue", "On");
+        kit::scale_children(b, scope);
+        // Responsive: the scope (and its bezel) takes the width.
+        let stretch = kit::with_sibling(b, plate, scope, -1);
+        kit::responsive(b, plate, &stretch);
     });
     kit::delay_face(kit::file("61-dly-digital", dark), scene)
 }

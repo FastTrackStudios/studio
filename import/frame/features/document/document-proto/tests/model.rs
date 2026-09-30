@@ -125,3 +125,38 @@ fn scene_round_trips_through_serde_json() {
     let back: Scene = serde_json::from_str(&json).unwrap();
     assert_eq!(back, scene);
 }
+
+#[test]
+fn resizing_a_width_moves_and_stretches_by_each_nodes_rule() {
+    let mut scene = Scene::new("Page");
+    let page = scene.pages()[0];
+    let add = |scene: &mut Scene, parent, x: f64, w: f64, rule: Option<ResizeX>| {
+        let mut n = Node::new(NodeKind::Frame, "n");
+        n.transform = Transform { tx: x, ..Transform::IDENTITY };
+        n.size = Size { width: w, height: 10.0 };
+        n.layout_child.resize_x = rule;
+        let id = n.id;
+        scene.apply(Op::Insert { node: n, parent, index: u32::MAX }).unwrap();
+        id
+    };
+    let root = add(&mut scene, page, 0.0, 100.0, None);
+    let ground = add(&mut scene, root, 0.0, 100.0, None);
+    let knob = add(&mut scene, root, 45.0, 10.0, None);
+    let pinned = add(&mut scene, root, 80.0, 10.0, Some(ResizeX::Right));
+    let window = add(&mut scene, root, 10.0, 50.0, Some(ResizeX::Stretch));
+    let inside = add(&mut scene, window, 0.0, 50.0, None);
+    let drawing = add(&mut scene, root, 60.0, 20.0, Some(ResizeX::Scale));
+    scene.resize_width(root, 200.0);
+    let at = |id| {
+        let n = scene.node(id).unwrap();
+        (n.transform.tx, n.size.width)
+    };
+    assert_eq!(at(root), (0.0, 200.0));
+    assert_eq!(at(ground), (0.0, 200.0), "spanning its parent, it stretches");
+    assert_eq!(at(knob), (95.0, 10.0), "its centre moves in proportion; its size stays");
+    assert_eq!(at(pinned), (180.0, 10.0), "pinned right");
+    assert_eq!(at(window), (10.0, 150.0), "stretched: its width takes the change");
+    assert_eq!(at(inside), (0.0, 150.0), "and what spans it follows");
+    assert_eq!(at(drawing), (120.0, 20.0), "scaled: moved in proportion, its size as drawn…");
+    assert_eq!(scene.node(drawing).unwrap().transform.a, 2.0, "…and squeezed by its transform");
+}

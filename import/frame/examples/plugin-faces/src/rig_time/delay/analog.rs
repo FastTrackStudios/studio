@@ -111,6 +111,8 @@ pub fn face(dark: bool) -> Face {
             kit::knob3d(b, panel, &a(id), legend, 34.0, (x0 + 20.0 + 62.0 * i as f64, 92.0), &knob, ink, dim);
         }
         kit::bypass(b, panel, DLY, kit::W - 36.0, 92.0, 26.0, "blue", "On");
+        // Responsive: the line takes the width.
+        kit::responsive(b, panel, &[view]);
     });
     kit::delay_face(kit::file("62-dly-analog", dark), scene)
 }

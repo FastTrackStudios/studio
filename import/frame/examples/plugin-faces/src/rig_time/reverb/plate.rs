@@ -154,6 +154,13 @@ fn plate(b: &mut Builder<'_>, tank: NodeId, w: f64, h: f64) {
         y_map: HandleAxis::new(Axis::Linear { min: 0.0, max: 1.0 }),
     };
     b.controls.insert(dm, Control::new(kind).bound(bind(&a("decay"))));
+    // Responsive: the handles' ranges stretch with the window (the
+    // controls in them keep their shape); the rest of the drawing scales.
+    for id in [area, travel] {
+        if let Some(n) = b.scene.node_mut(id) {
+            n.layout_child.resize_x = Some(document_proto::ResizeX::Stretch);
+        }
+    }
     // The motor, fixed at the frame.
     b.add(tank, draw::with_effects(draw::rounded(draw::rect("motor", w - 28.0, h / 2.0 - 11.0, 16.0, 22.0, draw::linear(90.0, &[(0.0, "#4a4d51"), (0.5, "#8e949a"), (1.0, "#3c3f43")])), 3.0), vec![draw::drop_shadow("#00000080", 0.0, 2.0, 3.0)]));
 }
@@ -183,6 +190,7 @@ pub fn face(dark: bool) -> Face {
         tank.effects = vec![draw::inner_shadow("#000000", 0.0, 3.0, 10.0)];
         let tank = b.add(panel, tank);
         plate(b, tank, tw, th);
+        kit::scale_children(b, tank);
         let sheen = draw::linear(160.0, &[(0.0, "#ffffff14"), (0.3, "#ffffff06"), (0.31, "#ffffff00"), (1.0, "#ffffff00")]);
         b.add(tank, draw::rect("glass", 0.0, 0.0, tw, th, sheen));
 
@@ -200,6 +208,9 @@ pub fn face(dark: bool) -> Face {
         for (i, (id, legend)) in [("predelay", "Pre-Delay"), ("damping", "HF Damp"), ("level", "Level")].iter().enumerate() {
             ui::dial(b, panel, &a(id), legend, x0 + 176.0 + 64.0 * i as f64, 96.0, &small);
         }
+        // Responsive: the plate's window takes the width; the remote pins right.
+        let stretch = kit::with_sibling(b, panel, tank, -1);
+        kit::responsive(b, panel, &stretch);
     });
     kit::reverb_face(kit::file("82-verb-plate", dark), scene)
 }

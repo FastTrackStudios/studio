@@ -2,7 +2,7 @@
 //! keyword enums, and the compact JSON forms of paints / effects / runs.
 
 use document_proto::{
-    AlignSelf, BlendMode, BooleanOp, Color, CrossAxisAlign, Effect, MainAxisAlign, MaskKind, Paint, PaintKind,
+    AlignSelf, BlendMode, ResizeX, BooleanOp, Color, CrossAxisAlign, Effect, MainAxisAlign, MaskKind, Paint, PaintKind,
     StrokeAlign, StrokeCap, StrokeJoin, TextAlign, TextCase, TextRun, Transform,
 };
 use serde::Serialize;
@@ -121,6 +121,7 @@ keywords! {
     MainAxisAlign: [Start, Center, End, SpaceBetween];
     CrossAxisAlign: [Start, Center, End, Baseline];
     AlignSelf: [Start, Center, End, Stretch];
+    ResizeX: [Left, Right, Center, Stretch, Scale];
     BooleanOp: [Union, Subtract, Intersect, Exclude];
 }
 

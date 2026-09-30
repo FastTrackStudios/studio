@@ -154,6 +154,8 @@ pub fn face(dark: bool) -> Face {
         for (i, (id, legend)) in small.iter().enumerate() {
             kit::knob3d(b, panel, &a(id), legend, 30.0, (x0 + 140.0 + 50.0 * i as f64, 92.0), &pearl, ink, dim);
         }
+        // Responsive: the sky takes the width.
+        kit::responsive(b, root, &[s]);
     });
     kit::reverb_face(kit::file("84-verb-cloud", dark), scene)
 }
