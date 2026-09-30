@@ -116,7 +116,8 @@ pub fn spring_lane() -> Face {
         let serif = Lettering::family(family::PLAYFAIR_DISPLAY).weight(700.0);
         set(b, p, "Spring", x0 + 38.0, 28.0, 22.0, INK, &serif, 0.02);
         ui::silk_left(b, p, "Reverb tank", x0 + 84.0, 29.0, 6.5, DIM, 700.0);
-        kit::bypass(b, p, NS, w - 30.0, 30.0, 22.0, "purple", "On");
+        // Below the host's top-right corner.
+        kit::bypass(b, p, NS, w - 30.0, 52.0, 20.0, "purple", "On");
         let knob = ["color=#241640", "pointer=#c4b5fd", "index=line", "index_w=0.1", "skirt=plain", "skirt_color=#100820"];
         for (i, (id, legend)) in [("decay", "Dwell"), ("tone", "Tone"), ("modulation", "Drip"), ("level", "Mix")].iter().enumerate() {
             kit::knob3d(b, p, &format!("{NS}/{id}"), legend, 34.0, (x0 + 24.0 + 64.0 * i as f64, 96.0), &knob, INK, DIM);

@@ -148,7 +148,8 @@ pub fn pitch_unit() -> Face {
         dial(b, p, &a("dry"), "Dry", 30.0, (dx + 18.0, 84.0), "#f7f5ef", None);
         dial(b, p, &a("mix"), "Mix", 30.0, (dx + 18.0, 180.0), "#f7f5ef", None);
         // The unit's own On, top right of its column.
-        kit::bypass(b, p, NS, W - 26.0, 20.0, 20.0, "amber", "On");
+        // Its On key in the header: the top-right corner is the host's.
+        kit::bypass(b, p, NS, 196.0, 18.0, 18.0, "amber", "On");
 
         // Responsive: the ladder takes the width; the controls pin right.
         kit::responsive(b, p, &[v]);

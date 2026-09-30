@@ -55,7 +55,8 @@ pub fn doubler_unit() -> Face {
         let p = b.add(root, draw::with_effects(p, vec![draw::inner_shadow("#ffffff14", 0.0, 1.0, 0.0)]));
         let head = Lettering::family(family::INTER).weight(800.0);
         set(b, p, "DOUBLER", 44.0, 18.0, 12.0, TAKE, &head, 0.3);
-        kit::bypass(b, p, NS, W - 24.0, 18.0, 20.0, "purple", "On");
+        // Its On key by the name: the top-right corner is the host's.
+        kit::bypass(b, p, NS, 106.0, 18.0, 18.0, "purple", "On");
 
         // ── The field, from above ───────────────────────────────────────
         let (fx, fy, fw, fh) = (12.0, 32.0, W - 24.0, 138.0);
