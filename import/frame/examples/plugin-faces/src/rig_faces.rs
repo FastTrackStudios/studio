@@ -40,6 +40,7 @@ fn ns(model: AmpModel) -> &'static str {
         AmpModel::TwoRock => "tworock",
         AmpModel::DeluxeReverb => "deluxe",
         AmpModel::TwinReverb => "twin",
+        AmpModel::Ac30 => "ac30",
     }
 }
 
@@ -51,8 +52,9 @@ fn amp_match(model: AmpModel) -> &'static [&'static str] {
         AmpModel::DumbleOds => &["dumble", "ods"],
         AmpModel::Vibroverb => &["vibroverb"],
         AmpModel::TwoRock => &["two-rock", "two rock", "tworock", "trck"],
-        AmpModel::DeluxeReverb => &["deluxe reverb", "deluxe"],
+        AmpModel::DeluxeReverb => &["deluxe reverb", "deluxe", "drri", "fender clean"],
         AmpModel::TwinReverb => &["twin reverb", "twin"],
+        AmpModel::Ac30 => &["ac30", "ac-30", "ac 30", "vox", "vx "],
     }
 }
 

@@ -57,7 +57,9 @@
       "face": "24-amp-deluxe",
       "match": [
         "deluxe reverb",
-        "deluxe"
+        "deluxe",
+        "drri",
+        "fender clean"
       ],
       "name": "DELUXE REVERB",
       "ns": "deluxe",
@@ -74,6 +76,22 @@
       ],
       "name": "TWIN REVERB",
       "ns": "twin",
+      "size": [
+        792.0,
+        392.0
+      ]
+    },
+    {
+      "face": "26-amp-ac30",
+      "match": [
+        "ac30",
+        "ac-30",
+        "ac 30",
+        "vox",
+        "vx "
+      ],
+      "name": "VOX AC30",
+      "ns": "ac30",
       "size": [
         792.0,
         392.0

@@ -131,6 +131,9 @@ pub enum AmpModel {
     DeluxeReverb,
     /// Dumble Overdrive Special, in the Steel String Singer's dress.
     DumbleOds,
+    /// Vox AC30: black tolex, the fawn diamond cloth, the copper panel with
+    /// cream pointer knobs, the gold VOX badge.
+    Ac30,
     /// Fender Twin Reverb (blackface), as the Vibroverb.
     TwinReverb,
 }
@@ -138,7 +141,7 @@ pub enum AmpModel {
 impl AmpModel {
     pub const ALL: [Self; 3] = [Self::SteelStringSinger, Self::Vibroverb, Self::TwoRock];
     /// Every model with a face.
-    pub const EVERY: [Self; 6] = [Self::SteelStringSinger, Self::DumbleOds, Self::Vibroverb, Self::TwoRock, Self::DeluxeReverb, Self::TwinReverb];
+    pub const EVERY: [Self; 7] = [Self::SteelStringSinger, Self::DumbleOds, Self::Vibroverb, Self::TwoRock, Self::DeluxeReverb, Self::TwinReverb, Self::Ac30];
 
     /// Its short name, for pickers.
     #[must_use]
@@ -150,6 +153,7 @@ impl AmpModel {
             Self::DeluxeReverb => "DELUXE REVERB",
             Self::TwinReverb => "TWIN REVERB",
             Self::DumbleOds => "DUMBLE ODS",
+            Self::Ac30 => "VOX AC30",
         }
     }
 
@@ -177,7 +181,7 @@ impl AmpModel {
 #[must_use]
 pub fn amp_compact(model: AmpModel, prefix: &str, w: f64, h: f64) -> Face {
     let scene = canvas(model.short(), |b, root| {
-        let mut spec = CabinetSpec::new(if model.blackface() { Kind::Combo } else { Kind::Head }, w, h);
+        let mut spec = CabinetSpec::new(if model.blackface() || model == AmpModel::Ac30 { Kind::Combo } else { Kind::Head }, w, h);
         spec.handle = Handle::None;
         spec.face_frac = 0.48;
         spec.corners = Some("black".into());
@@ -196,6 +200,14 @@ pub fn amp_compact(model: AmpModel, prefix: &str, w: f64, h: f64) -> Face {
                 spec.piping = Some("#d8d8d8".into());
                 spec.corners = Some("chrome".into());
                 ("#f2f2f0", Cap::BlackSkirt, Lettering::family(family::INTER).weight(600.0))
+            }
+            AmpModel::Ac30 => {
+                spec.covering = Material::Tolex { grain: Grain::Levant, color: "#141313".into(), scale: 0.8 };
+                spec.grille = Material::DiamondGrille { cloth: "#5a3e26".into(), stripes: vec!["#caa272".into(), "#2e1e10".into()], pitch: 44.0 };
+                spec.face = Material::Brushed { color: "#b8703e".into(), dir: Dir::Horizontal };
+                spec.piping = Some("#d8c7a0".into());
+                spec.corners = Some("chrome".into());
+                ("#1c1208", Cap::Cream, Lettering::family(family::INTER).weight(700.0))
             }
             AmpModel::TwoRock => {
                 spec.covering = Material::Tolex { grain: Grain::Bronco, color: "#1b1a1a".into(), scale: 0.8 };
@@ -219,7 +231,7 @@ pub fn amp_compact(model: AmpModel, prefix: &str, w: f64, h: f64) -> Face {
                 AmpModel::SteelStringSinger | AmpModel::DumbleOds => {
                     knob_scaled(b, plate, cap, &addr, name, d, cx, cy, dots, ink);
                 }
-                AmpModel::TwoRock => {
+                AmpModel::TwoRock | AmpModel::Ac30 => {
                     knob(b, plate, cap, &addr, name, d, cx, cy);
                 }
             }
@@ -239,6 +251,11 @@ pub fn amp_compact(model: AmpModel, prefix: &str, w: f64, h: f64) -> Face {
                 let script = Lettering::family(family::DANCING_SCRIPT).weight(700.0);
                 set(b, plate, "Fender", lx, ph * 0.4, big * 1.3, "#f4f4f2", &script, 0.0);
                 set(b, plate, model.fender_name(), lx, ph * 0.74, big * 0.5, "#e6e6e4", &Lettering::family(family::INTER).weight(700.0), 0.2);
+            }
+            AmpModel::Ac30 => {
+                let badge = Lettering::family(family::INTER).weight(900.0);
+                set(b, plate, "VOX", lx, ph * 0.4, big * 1.3, "#e8c36a", &badge, 0.18);
+                set(b, plate, "AC30", lx, ph * 0.74, big * 0.55, "#1c1208", &Lettering::family(family::INTER).weight(800.0), 0.2);
             }
             AmpModel::TwoRock => {
                 let logo = Lettering::family(family::OSWALD).weight(700.0).italic();
