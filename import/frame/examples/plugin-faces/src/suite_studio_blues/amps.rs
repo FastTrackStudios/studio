@@ -105,6 +105,12 @@ fn with_shadow(n: Node, a: &str) -> Node {
 
 /// The boutique clean head.
 pub fn clean_head() -> Face {
+    clean_head_with(|_, _| {})
+}
+
+/// The clean head with `inside` building into its grille once the head is
+/// done (a rig page seats its drive pedals there).
+pub fn clean_head_with(inside: impl FnOnce(&mut Builder<'_>, NodeId)) -> Face {
     const W: f64 = 1200.0;
     const H: f64 = 548.0;
     const INK: &str = "#141414";
@@ -118,7 +124,7 @@ pub fn clean_head() -> Face {
         spec.corners = Some("black".into());
         spec.handle = Handle::Leather;
         spec.handle_color = "#1e1c1b".into();
-        let (plate, _grille, (pw, ph)) = build(b, root, &spec);
+        let (plate, grille, (pw, ph)) = build(b, root, &spec);
         // Age: grime specks and a few rust spots on the steel.
         let mut rng = 7_u64;
         let mut next = |m: f64| {
@@ -186,6 +192,7 @@ pub fn clean_head() -> Face {
         set(b, plate, "ROOM", x(1010.0), y(72.0), 25.0, "#0e0e0e", &slab, 0.0);
         set(b, plate, "hand wired", x(1010.0), y(104.0), 17.0, "#1a1a1a", &legend, 0.08);
         jewel(b, plate, "clean/on", "red", 30.0, x(1088.0), y(70.0));
+        inside(b, grille);
     });
     let ns = "clean";
     let params = vec![

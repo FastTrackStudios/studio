@@ -1,0 +1,506 @@
+{
+  "id": "fts.rig-blues",
+  "version": 1,
+  "params": [
+    {
+      "addr": "boost/volume",
+      "name": "Volume",
+      "short_name": null,
+      "group": null,
+      "kind": "Continuous",
+      "range": {
+        "min": 0.0,
+        "max": 20.0,
+        "scale": "Linear",
+        "unit": "Db",
+        "steps": null
+      },
+      "default": 0.5,
+      "bipolar": false,
+      "featured": true
+    },
+    {
+      "addr": "boost/boost",
+      "name": "Boost",
+      "short_name": null,
+      "group": null,
+      "kind": "Toggle",
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 2
+      },
+      "default": 0.0,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "boost/on",
+      "name": "Bypass",
+      "short_name": null,
+      "group": null,
+      "kind": "Toggle",
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 2
+      },
+      "default": 1.0,
+      "bipolar": false,
+      "featured": true
+    },
+    {
+      "addr": "mild/gain",
+      "name": "Gain",
+      "short_name": null,
+      "group": null,
+      "kind": "Continuous",
+      "range": {
+        "min": 0.0,
+        "max": 100.0,
+        "scale": "Linear",
+        "unit": "Percent",
+        "steps": null
+      },
+      "default": 0.5,
+      "bipolar": false,
+      "featured": true
+    },
+    {
+      "addr": "mild/level",
+      "name": "Level",
+      "short_name": null,
+      "group": null,
+      "kind": "Continuous",
+      "range": {
+        "min": 0.0,
+        "max": 100.0,
+        "scale": "Linear",
+        "unit": "Percent",
+        "steps": null
+      },
+      "default": 0.5,
+      "bipolar": false,
+      "featured": true
+    },
+    {
+      "addr": "mild/treble",
+      "name": "Treble",
+      "short_name": null,
+      "group": null,
+      "kind": "Continuous",
+      "range": {
+        "min": 0.0,
+        "max": 100.0,
+        "scale": "Linear",
+        "unit": "Percent",
+        "steps": null
+      },
+      "default": 0.5,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "mild/on",
+      "name": "Bypass",
+      "short_name": null,
+      "group": null,
+      "kind": "Toggle",
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 2
+      },
+      "default": 1.0,
+      "bipolar": false,
+      "featured": true
+    },
+    {
+      "addr": "teal/gain",
+      "name": "Gain",
+      "short_name": null,
+      "group": null,
+      "kind": "Continuous",
+      "range": {
+        "min": 0.0,
+        "max": 100.0,
+        "scale": "Linear",
+        "unit": "Percent",
+        "steps": null
+      },
+      "default": 0.5,
+      "bipolar": false,
+      "featured": true
+    },
+    {
+      "addr": "teal/level",
+      "name": "Level",
+      "short_name": null,
+      "group": null,
+      "kind": "Continuous",
+      "range": {
+        "min": 0.0,
+        "max": 100.0,
+        "scale": "Linear",
+        "unit": "Percent",
+        "steps": null
+      },
+      "default": 0.5,
+      "bipolar": false,
+      "featured": true
+    },
+    {
+      "addr": "teal/tone",
+      "name": "Tone",
+      "short_name": null,
+      "group": null,
+      "kind": "Continuous",
+      "range": {
+        "min": 0.0,
+        "max": 100.0,
+        "scale": "Linear",
+        "unit": "Percent",
+        "steps": null
+      },
+      "default": 0.5,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "teal/voice",
+      "name": "Voicing",
+      "short_name": null,
+      "group": null,
+      "kind": {
+        "Choice": {
+          "options": [
+            "TS",
+            "BB"
+          ]
+        }
+      },
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 2
+      },
+      "default": 1.0,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "teal/colour",
+      "name": "Colourway",
+      "short_name": null,
+      "group": null,
+      "kind": {
+        "Choice": {
+          "options": [
+            "Mint",
+            "Midnight"
+          ]
+        }
+      },
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 2
+      },
+      "default": 0.0,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "teal/on",
+      "name": "Bypass",
+      "short_name": null,
+      "group": null,
+      "kind": "Toggle",
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 2
+      },
+      "default": 1.0,
+      "bipolar": false,
+      "featured": true
+    },
+    {
+      "addr": "clean/volume",
+      "name": "Volume",
+      "short_name": null,
+      "group": null,
+      "kind": "Continuous",
+      "range": {
+        "min": 0.0,
+        "max": 10.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": null
+      },
+      "default": 0.4,
+      "bipolar": false,
+      "featured": true
+    },
+    {
+      "addr": "clean/bright",
+      "name": "Bright",
+      "short_name": null,
+      "group": null,
+      "kind": "Toggle",
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 2
+      },
+      "default": 1.0,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "clean/deep",
+      "name": "Deep",
+      "short_name": null,
+      "group": null,
+      "kind": "Toggle",
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 2
+      },
+      "default": 1.0,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "clean/voice",
+      "name": "Voicing",
+      "short_name": null,
+      "group": null,
+      "kind": {
+        "Choice": {
+          "options": [
+            "Mic",
+            "Guitar"
+          ]
+        }
+      },
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 2
+      },
+      "default": 1.0,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "clean/treble",
+      "name": "Treble",
+      "short_name": null,
+      "group": null,
+      "kind": "Continuous",
+      "range": {
+        "min": 0.0,
+        "max": 10.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": null
+      },
+      "default": 0.5,
+      "bipolar": false,
+      "featured": true
+    },
+    {
+      "addr": "clean/middle",
+      "name": "Middle",
+      "short_name": null,
+      "group": null,
+      "kind": "Continuous",
+      "range": {
+        "min": 0.0,
+        "max": 10.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": null
+      },
+      "default": 0.5,
+      "bipolar": false,
+      "featured": true
+    },
+    {
+      "addr": "clean/bass",
+      "name": "Bass",
+      "short_name": null,
+      "group": null,
+      "kind": "Continuous",
+      "range": {
+        "min": 0.0,
+        "max": 10.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": null
+      },
+      "default": 0.5,
+      "bipolar": false,
+      "featured": true
+    },
+    {
+      "addr": "clean/high",
+      "name": "Filter high",
+      "short_name": null,
+      "group": null,
+      "kind": "Continuous",
+      "range": {
+        "min": 0.0,
+        "max": 10.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": null
+      },
+      "default": 0.5,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "clean/low",
+      "name": "Filter low",
+      "short_name": null,
+      "group": null,
+      "kind": "Continuous",
+      "range": {
+        "min": 0.0,
+        "max": 10.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": null
+      },
+      "default": 0.5,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "clean/reverb_on",
+      "name": "Reverb",
+      "short_name": null,
+      "group": null,
+      "kind": "Toggle",
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 2
+      },
+      "default": 1.0,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "clean/send",
+      "name": "Reverb send",
+      "short_name": null,
+      "group": null,
+      "kind": "Continuous",
+      "range": {
+        "min": 0.0,
+        "max": 10.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": null
+      },
+      "default": 0.5,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "clean/return",
+      "name": "Reverb return",
+      "short_name": null,
+      "group": null,
+      "kind": "Continuous",
+      "range": {
+        "min": 0.0,
+        "max": 10.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": null
+      },
+      "default": 0.5,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "clean/mid",
+      "name": "Mid boost",
+      "short_name": null,
+      "group": null,
+      "kind": "Toggle",
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 2
+      },
+      "default": 1.0,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "clean/level",
+      "name": "Level",
+      "short_name": null,
+      "group": null,
+      "kind": "Continuous",
+      "range": {
+        "min": 0.0,
+        "max": 10.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": null
+      },
+      "default": 0.5,
+      "bipolar": false,
+      "featured": true
+    },
+    {
+      "addr": "clean/on",
+      "name": "Power",
+      "short_name": null,
+      "group": null,
+      "kind": "Toggle",
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 2
+      },
+      "default": 1.0,
+      "bipolar": false,
+      "featured": false
+    }
+  ],
+  "actions": [],
+  "streams": [],
+  "collections": []
+}

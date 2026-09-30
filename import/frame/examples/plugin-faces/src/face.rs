@@ -118,3 +118,46 @@ pub fn stable_ids(mut scene: Scene, key: &str) -> Scene {
     scene.assets = assets;
     scene
 }
+
+/// Place `face`'s design inside `parent` of the scene `b` builds, its top
+/// frame fitted into `(x, y, w, h)` of `parent` (scaled uniformly, centred)
+/// and made the child's own group transform. Every node, control and asset
+/// comes along, so an embedded pedal still plays: a rig page is faces
+/// arranged, not faces redrawn. Returns the embedded top frame.
+///
+/// # Panics
+/// If `face` has no top frame (every face has one).
+pub fn embed(b: &mut Builder<'_>, parent: NodeId, face: &Face, (x, y, w, h): (f64, f64, f64, f64)) -> NodeId {
+    let src = &face.scene;
+    let page = src.pages()[0];
+    let top = src.node(page).and_then(|p| p.children.first().copied()).expect("face top frame");
+    let size = src.node(top).map_or(document_proto::Size { width: 1.0, height: 1.0 }, |n| n.size);
+    let s = (w / size.width.max(1.0)).min(h / size.height.max(1.0));
+    let (ox, oy) = (x + (w - size.width * s) / 2.0, y + (h - size.height * s) / 2.0);
+    for id in src.walk(top) {
+        let Some(mut n) = src.node(id).cloned() else { continue };
+        if id == top {
+            n.parent = Some(parent);
+            n.transform = document_proto::Transform { a: s, b: 0.0, tx: ox, c: 0.0, d: s, ty: oy };
+        }
+        b.scene.nodes.insert(id, n);
+    }
+    if let Some(p) = b.scene.node_mut(parent) {
+        p.children.push(top);
+    }
+    for (k, v) in &src.assets {
+        b.scene.assets.entry(k.clone()).or_insert_with(|| v.clone());
+    }
+    top
+}
+
+/// The size a face draws at (its top frame).
+#[must_use]
+pub fn face_size(face: &Face) -> (f64, f64) {
+    let page = face.scene.pages()[0];
+    face.scene
+        .node(page)
+        .and_then(|p| p.children.first().copied())
+        .and_then(|t| face.scene.node(t))
+        .map_or((0.0, 0.0), |n| (n.size.width, n.size.height))
+}

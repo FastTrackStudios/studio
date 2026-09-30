@@ -12,11 +12,11 @@
 //!
 //! Every unit binds its own namespace in the `suite-studio-blues` catalog.
 
-mod amps;
+pub mod amps;
 mod cab;
 mod desk;
 mod parts;
-mod pedals;
+pub mod pedals;
 mod tank;
 
 use crate::face::Face;
