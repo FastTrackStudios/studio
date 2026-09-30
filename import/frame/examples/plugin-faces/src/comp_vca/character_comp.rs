@@ -461,5 +461,6 @@ pub fn unit_box(ns: &str, name: &str, input: &str, output: &str, on: &str, w: f6
         b.add(panel, draw::with_effects(draw::rounded(rocker, 1.5), vec![draw::inner_shadow("#ffffff26", 0.0, 1.0, 0.0)]));
         ui::silk(b, panel, "Empirical", px, py + 42.0 * k, 9.0 * k, "#e8c547", 800.0);
         ui::silk(b, panel, "Labs", px, py + 54.0 * k, 9.0 * k, "#e8c547", 800.0);
+        crate::reverb::ui::flush(b, root, w, h);
     })
 }

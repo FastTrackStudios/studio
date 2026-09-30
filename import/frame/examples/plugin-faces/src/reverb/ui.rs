@@ -663,3 +663,22 @@ pub fn dial(b: &mut Builder<'_>, parent: NodeId, addr: &str, legend: &str, cx: f
     }
     k
 }
+
+/// Square off a face's panel so it sits flush in its host's box, edge to
+/// edge against the next module: every child of `root` covering the whole
+/// `w × h` loses its rounded corners and its outline. A host that frames
+/// the face already draws the edge; a second, rounded one inside it reads
+/// as a card in a card.
+pub fn flush(b: &mut Builder<'_>, root: NodeId, w: f64, h: f64) {
+    let kids = b.scene.node(root).map(|n| n.children.clone()).unwrap_or_default();
+    for id in kids {
+        if let Some(n) = b.scene.node_mut(id) {
+            let whole = n.transform.tx.abs() < 1.0 && n.transform.ty.abs() < 1.0 && (n.size.width - w).abs() < 1.0 && (n.size.height - h).abs() < 1.0;
+            if whole {
+                n.corner_radii = document_proto::CornerRadii::default();
+                n.stroke.paints.clear();
+                n.stroke.weight = 0.0;
+            }
+        }
+    }
+}

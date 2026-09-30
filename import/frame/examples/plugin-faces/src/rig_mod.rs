@@ -110,6 +110,7 @@ fn panel(name: &str, t: &Theme, build: impl FnOnce(&mut Builder<'_>, NodeId)) ->
         p.corner_radii = document_proto::CornerRadii::uniform(8.0);
         let p = b.add(root, draw::with_effects(draw::stroked(p, edge, 1.0), vec![draw::inner_shadow("#ffffff26", 0.0, 1.0, 0.0)]));
         build(b, p);
+        ui::flush(b, root, W, H);
     })
 }
 

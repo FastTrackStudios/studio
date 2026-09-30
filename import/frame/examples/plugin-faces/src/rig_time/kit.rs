@@ -127,6 +127,7 @@ pub fn lane(name: &str, build: impl FnOnce(&mut Builder<'_>, NodeId)) -> documen
     canvas(name, |b, root| {
         ui::fit_root(b, root, W, H);
         build(b, root);
+        ui::flush(b, root, W, H);
     })
 }
 
