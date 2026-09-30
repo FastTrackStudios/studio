@@ -130,19 +130,6 @@ fn post_comp_as(aspect: f64, variant: bool) -> Face {
     Face { file, plugin: PLUGIN, scene, params, streams: Vec::new() }
 }
 
-/// The gate's picture on the rig's Gate block.
-fn gate() -> Face {
-    let scene = canvas("Gate", |b, root| {
-        ui::fit_root(b, root, GATE.0, GATE.1);
-        let p = Place::new("Gate").size(GATE.0).options(&["ns=gate", &format!("h={}", GATE.1)]);
-        ui::put_at(b, root, "viz.gate", &p, 0.0, 0.0);
-    });
-    let params = vec![
-        ui::param("gate/threshold", "Threshold", Range::linear(-90.0, 0.0, Unit::Db), -50.0).featured(),
-        ui::toggle("gate/on", "Gate", true).featured(),
-    ];
-    Face { file: "51-gate", plugin: PLUGIN, scene, params, streams: Vec::new() }
-}
 
 /// The reverb algorithms of the rig's reverb block, in its DSP's order.
 const VERB_ALGOS: [&str; 15] = [
@@ -277,7 +264,7 @@ pub fn faces() -> Vec<Face> {
     v.extend(AmpModel::EVERY.iter().map(|m| amp_face(*m)));
     v.extend(TRIO_ASPECTS.iter().map(|a| trio_as(*a, true)));
     v.extend(AmpModel::EVERY.iter().flat_map(|m| AMP_ASPECTS.iter().map(move |a| amp_face_as(*m, *a, true))));
-    v.push(gate());
+    v.extend(crate::rig_amp::faces());
     v.push(eq());
     v.push(spring_viz());
     v.push(cab());
@@ -319,7 +306,8 @@ pub fn manifest() -> String {
         "pre_comp_pedal": pre_comp_pedal,
         "pre": pre,
         "amps": amps,
-        "gate": { "face": "51-gate", "ns": "gate", "size": size(&gate()) },
+        "gate": { "face": "51-gate", "ns": "gate", "size": [crate::rig_amp::GATE.0, crate::rig_amp::GATE.1] },
+        "trim": { "face": "53-trim", "ns": "trim", "size": [crate::rig_amp::TRIM.0, crate::rig_amp::TRIM.1] },
         // The Time module's units: a face per delay machine and reverb
         // algorithm, by its name.
         "time": crate::rig_time::manifest(),

@@ -16,6 +16,7 @@ pub mod modulation;
 pub mod reverb;
 pub mod rig_blues;
 pub mod rig_faces;
+pub mod rig_amp;
 pub mod rig_mod;
 pub mod rig_time;
 pub mod saturate;
