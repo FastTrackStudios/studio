@@ -98,7 +98,7 @@ fn fader(b: &mut Builder<'_>, p: NodeId, i: usize, addr: &str, (cx, y0, len): (f
     let value = b.add(root, t);
     let mut c = Control::new(ControlKind::Fader { orientation: Orientation::Vertical }).slot(SlotRole::Thumb, cap.0).slot(SlotRole::Value, value.0);
     c.binding = Some(rk::bind(addr));
-    c.format = Some(ValueFormat { decimals: Some(1), ..ValueFormat::default() });
+    c.format = Some(ValueFormat::decimals(1).signed());
     b.controls.insert(root, c);
     // The frequencies: the player's set on the violet finishes, the
     // original's on the white (the one in the violet layer names the band).
@@ -128,9 +128,11 @@ fn ladder(b: &mut Builder<'_>, p: NodeId, cx: f64, (y0, y1): (f64, f64)) {
 
 /// A spun filter knob with its readout over it ("HPF : 20 HZ").
 #[allow(clippy::too_many_arguments)]
-fn filter(b: &mut Builder<'_>, p: NodeId, name: &str, addr: &str, (cx, cy): (f64, f64), label: &str, glyph: bool) {
-    let place = Place::new(name).size(62.0).variant("silver").bind(rk::bind(addr)).touch(surface_kit::TOUCH_MIN).options(&["ticks=0"]);
-    let k = parts::put(b, p, super::knob_id("knob.spun_cap"), &place, cx, cy);
+fn filter(b: &mut Builder<'_>, p: NodeId, name: &str, addr: &str, (cx, cy): (f64, f64), label: &str, glyph: bool, stop: f64) {
+    // A dark spun cap in a darker rim, a white line for the index.
+    let look = ["ticks=none", "color=#4a4b50", "skirt_color=#16171a", "pointer=#f4f4f2", "index_in=0.25", "index_out=0.92", "fallback_color=#55565b"];
+    let place = Place::new(name).size(62.0).variant("spun_metal").bind(rk::bind(addr)).touch(surface_kit::TOUCH_MIN).options(&look);
+    let k = parts::put(b, p, super::knob_id("knob.3d"), &place, cx, cy);
     parts::strip_legend(b, k);
     rk::letter_aligned(b, p, &format!("{label} :"), (cx - 2.0, 22.0), Letter::new(9.0, 700.0, INK), TextAlign::Right);
     let mut t = parts::text_node("", cx + 3.0, 22.0, 70.0, &parts::Ink::new(9.0, INK).weight(700.0).track(0.02), TextAlign::Left);
@@ -144,7 +146,8 @@ fn filter(b: &mut Builder<'_>, p: NodeId, name: &str, addr: &str, (cx, cy): (f64
     });
     if let Some(c) = b.controls.get_mut(&k) {
         c.slots.push(surface_proto::Slot { role: SlotRole::Value, node: v.0 });
-        c.format = Some(ValueFormat { decimals: Some(0), ..ValueFormat::default() });
+        // At its stop the filter is out: the readout says so.
+        c.format = Some(ValueFormat::decimals(0).mark(stop, "OFF"));
     }
     // The slope glyph under the readout: a low cut rises, a high cut falls.
     let y = 50.0;
@@ -219,8 +222,8 @@ fn nine_band() -> Face {
         for (i, x) in xs.iter().enumerate() {
             fader(b, root, i, &a(&format!("b{}", i + 1)), (*x, 50.0, 158.0), 22.0, 222.0);
         }
-        filter(b, root, "HPF", &a("hpf"), (128.0, 108.0), "HPF", true);
-        filter(b, root, "LPF", &a("lpf"), (872.0, 108.0), "LPF", false);
+        filter(b, root, "HPF", &a("hpf"), (128.0, 108.0), "HPF", true, 20.0);
+        filter(b, root, "LPF", &a("lpf"), (872.0, 108.0), "LPF", false, 20000.0);
         let t = rk::mini_toggle(b, root, "Power", &a("power"), (128.0, 182.0 - 6.0), 12.0, "chrome");
         legend(b, t, "POWER", (128.0, 216.0), Letter::new(8.0, 760.0, INK).track(0.04));
         rk::led(b, root, (872.0, 182.0), 9.0, VIOLET, true);

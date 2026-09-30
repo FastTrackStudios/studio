@@ -286,12 +286,12 @@ fn four_by_twelve() -> Face {
         let fmt3 = Some(ValueFormat { decimals: Some(3), unit: Some(String::new()), ..ValueFormat::default() });
         ui_knob(b, root, "Position", &a("position"), (x0, 800.0), 42.0, fmt3.clone());
         ui_knob(b, root, "Distance", &a("distance"), (x0 + pitch, 800.0), 42.0, fmt3);
-        ui_knob(b, root, "Mic Level", &a("level"), (x0 + 2.0 * pitch, 800.0), 42.0, Some(ValueFormat { decimals: Some(1), ..ValueFormat::default() }));
-        ui_knob(b, root, "Pan", &a("pan"), (x0 + 3.0 * pitch, 800.0), 42.0, Some(ValueFormat { decimals: Some(0), unit: Some(String::new()), ..ValueFormat::default() }));
+        ui_knob(b, root, "Mic Level", &a("level"), (x0 + 2.0 * pitch, 800.0), 42.0, Some(ValueFormat::decimals(1).signed()));
+        ui_knob(b, root, "Pan", &a("pan"), (x0 + 3.0 * pitch, 800.0), 42.0, Some(ValueFormat::decimals(0).unit("").mark(0.0, "C")));
         parts::vrule(b, root, 700.0, 776.0, 874.0, 1.0, "#3a3b3f");
         rk::letter(b, root, "ROOM SEND", (755.0, 780.0), Letter::new(9.5, 700.0, INK).track(0.04));
         pill(b, root, "Room Send", &a("room"), (822.0, 780.0));
-        ui_knob(b, root, "Room Level", &a("room_level"), (760.0, 822.0), 34.0, Some(ValueFormat { decimals: Some(1), ..ValueFormat::default() }));
+        ui_knob(b, root, "Room Level", &a("room_level"), (760.0, 822.0), 34.0, Some(ValueFormat::decimals(1).signed()));
         outline_button(b, root, "Phase", &a("phase"), (852.0, 848.0, 64.0));
     });
     let params = vec![

@@ -24,8 +24,52 @@ pub(super) const XL: f64 = 33.0;
 pub(super) const XR: f64 = 123.0;
 pub(super) const Y1: f64 = 47.0;
 
+/// The pedals' knob: a tall grey cap, knurled round its foot, a domed
+/// satin top with a white dot (`knob.3d`'s knurled dome, recoloured). Its
+/// ring of 21 dots is printed by [`place`].
 pub(super) const fn knob(ink: &'static str) -> KnobStyle<'static> {
-    KnobStyle::new(super::knob_id("knob.pedal_tall"), "grey", 36.0, ink).opts(&["dots=21"])
+    KnobStyle::new(super::knob_id("knob.3d"), "knurled_dome", 36.0, ink).opts(KNOB_LOOK)
+}
+
+const KNOB_LOOK: &[&str] = &[
+    "ticks=none",
+    "color=#4d4f53",
+    "metal=0.35",
+    "rough=0.34",
+    "coat=0.3",
+    "aniso=0.4",
+    "ribs=30",
+    "knurl_band=0.55",
+    "rib_depth=0.065",
+    "height=0.72",
+    "dome=0.07",
+    "edge=0.1",
+    "cap_r=0.92",
+    "index=dot",
+    "pointer=#f4f4f2",
+    "index_w=0.07",
+    "index_in=0.76",
+    "index_out=0.76",
+    "fallback=knurled",
+    "fallback_color=#4a4b4f",
+];
+
+/// A pedal knob `s` with its shaft at `at`, inside the lid's printed ring of
+/// 21 fine dots; no legend (the caller cuts it).
+pub(super) fn place(b: &mut surface_widgets::Builder<'_>, p: document_proto::NodeId, s: &KnobStyle<'_>, addr: &str, (cx, cy): (f64, f64)) -> document_proto::NodeId {
+    let r = s.d / 2.0 * 1.34;
+    let dot = (s.d * 0.022).max(0.55);
+    let n = 21;
+    let d: String = (0..n)
+        .map(|i| {
+            let a = (f64::from(i) / f64::from(n - 1) - 0.5) * 300.0;
+            let (x, y) = surface_kit::draw::polar(cx, cy, r, a);
+            format!("M {:.3} {y:.3} A {dot:.3} {dot:.3} 0 1 1 {:.3} {y:.3} A {dot:.3} {dot:.3} 0 1 1 {:.3} {y:.3} Z ", x - dot, x + dot, x - dot)
+        })
+        .collect();
+    let (w, h) = b.scene.node(p).map_or((cx * 2.0, cy * 2.0), |n| (n.size.width, n.size.height));
+    b.add(p, surface_kit::draw::path("scale dots", 0.0, 0.0, w, h, d, surface_kit::draw::solid(s.ink)));
+    rk::knob(b, p, s, addr, "", (cx, cy), 0.0, crate::delay::parts::Ink::new(6.0, s.ink))
 }
 
 /// A legend's lettering: bold, small, as the lids print it.
@@ -49,7 +93,7 @@ pub(super) fn lid<'a>(b: &mut surface_widgets::Builder<'_>, root: document_proto
 /// A knob with its legend above (`above`) or below it.
 #[allow(clippy::too_many_arguments)]
 pub(super) fn dial(b: &mut surface_widgets::Builder<'_>, p: document_proto::NodeId, ink: &'static str, addr: &str, name: &str, at: (f64, f64), above: bool) {
-    let k = rk::knob(b, p, &knob(ink), addr, "", at, 0.0, crate::delay::parts::Ink::new(6.0, ink));
+    let k = place(b, p, &knob(ink), addr, at);
     let ly = if above { at.1 - 34.5 } else { at.1 + 29.0 };
     legend(b, k, name, (at.0, ly), leg(ink));
 }

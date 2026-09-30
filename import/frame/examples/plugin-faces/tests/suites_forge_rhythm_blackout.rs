@@ -156,3 +156,31 @@ fn no_real_names_are_printed() {
         }
     }
 }
+
+#[test]
+fn modern_rhythm_knobs_are_gpu_knobs_and_its_readouts_name_their_stops() {
+    use surface_proto::{ControlKind, ParamKind};
+    let faces = plugin_faces::suite_modern_rhythm::faces();
+    for f in &faces {
+        // Every hardware knob carries the `knob.3d` shader (the cab's flat
+        // dials are the plugin's own UI, not hardware).
+        let knobs: Vec<_> = f.scene.nodes.values().filter(|n| n.control.as_ref().is_some_and(|c| matches!(c.kind, ControlKind::Knob { .. }))).collect();
+        let gpu = knobs.iter().filter(|n| f.scene.walk(n.id).iter().any(|id| f.scene.node(*id).and_then(|c| c.shader.as_ref()).is_some_and(|s| s.shader == "knob.3d"))).count();
+        if f.file.starts_with("09-cab") {
+            assert_eq!(gpu, 0, "{}", f.file);
+        } else {
+            assert_eq!(gpu, knobs.len(), "{}: every knob is a knob.3d", f.file);
+        }
+    }
+    let eq = faces.iter().find(|f| f.file.starts_with("10-eq")).expect("eq");
+    let read = |addr: &str, n: f64| {
+        let node = eq.scene.nodes.values().find(|x| x.control.as_ref().is_some_and(|c| c.binding.as_ref().is_some_and(|b| matches!(&b.source, Source::Param { addr: a } if a.0.ends_with(addr))) && c.format.is_some())).expect(addr);
+        let p = eq.params.iter().find(|p| p.addr.0.ends_with(addr)).expect(addr);
+        assert!(matches!(p.kind, ParamKind::Continuous));
+        p.display_as(n, node.control.as_ref().and_then(|c| c.format.as_ref()))
+    };
+    assert_eq!(read("/hpf", 0.0), "OFF");
+    assert_eq!(read("/lpf", 1.0), "OFF");
+    assert_eq!(read("/lpf", 0.0), "2 kHz");
+    assert!(read("/b1", 1.0).starts_with('+'), "a boost reads +");
+}

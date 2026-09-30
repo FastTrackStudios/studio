@@ -315,15 +315,67 @@ fn strip(b: &mut Builder<'_>, root: NodeId, (x, y, w, h): (f64, f64, f64, f64), 
     }
 }
 
-/// An amp knob: `id` style at (`cx`, `cy`), its legend cut above.
+/// What the strip prints round an amp knob.
+#[derive(Clone, Copy)]
+enum Scale {
+    /// 0–10 round it.
+    Numerals,
+    /// A ring of `n` ticks, every fifth long.
+    Ticks(usize),
+}
+
+/// The scale printed on the strip round a knob of boss diameter `d` at
+/// (`cx`, `cy`) — fixed, in the strip's ink, outside the turning knob.
+fn print_scale(b: &mut Builder<'_>, p: NodeId, scale: Scale, (cx, cy): (f64, f64), d: f64, ink: &str) {
+    let k = d / 40.0;
+    let r_print = d / 2.0 * 1.12 + 4.0 * k;
+    let sweep = 300.0;
+    match scale {
+        Scale::Numerals => {
+            let size = (6.2 * k).max(6.0);
+            for i in 0..=10 {
+                let a = (f64::from(i) / 10.0 - 0.5) * sweep;
+                b.add(p, draw::radial_label("numeral", &i.to_string(), (cx, cy), r_print + size * 0.55, a, size, ink));
+            }
+        }
+        Scale::Ticks(n) => {
+            let lines: Vec<Vec<(f64, f64)>> = (0..n)
+                .map(|i| {
+                    let a = (i as f64 / (n - 1) as f64 - 0.5) * sweep;
+                    let len = if i % 5 == 0 { 5.5 * k } else { 3.2 * k };
+                    vec![draw::polar(cx, cy, r_print, a), draw::polar(cx, cy, r_print + len, a)]
+                })
+                .collect();
+            b.add(p, parts::stroke_path("scale ticks", (0.0, 0.0, W, H), &lines, 0.8 * k, ink, false));
+        }
+    }
+}
+
+/// An amp knob: a `knob.3d` in `preset` + `opts`, its boss `d` across at
+/// (`cx`, `cy`), the strip's `scale` round it and its legend cut above.
 #[allow(clippy::too_many_arguments)]
-fn knob(b: &mut Builder<'_>, p: NodeId, id: &str, variant: &str, opts: &[&str], addr: &str, name: &str, (cx, cy): (f64, f64), d: f64, ink: &str, legend_y: f64) {
-    let mut place = Place::new(name).size(d).variant(variant).bind(rk::bind(addr)).touch(surface_kit::TOUCH_MIN).ink(surface_kit::Ink::Color(ink.into()));
-    place.options = Some(opts.iter().map(ToString::to_string).collect());
-    let k = parts::put(b, p, super::knob_id(id), &place, cx, cy);
+fn knob(b: &mut Builder<'_>, p: NodeId, preset: &str, opts: &[&str], scale: Scale, addr: &str, name: &str, (cx, cy): (f64, f64), d: f64, ink: &str, legend_y: f64) {
+    print_scale(b, p, scale, (cx, cy), d, ink);
+    let mut o: Vec<String> = vec!["ticks=none".into()];
+    o.extend(opts.iter().map(ToString::to_string));
+    let place = Place::new(name).size(if preset == "amp_pointer" { d * KNOB_SCALE } else { d * 1.2 }).variant(preset).bind(rk::bind(addr)).touch(surface_kit::TOUCH_MIN).ink(surface_kit::Ink::Color(ink.into()));
+    let place = Place { options: Some(o), ..place };
+    let k = parts::put(b, p, super::knob_id("knob.3d"), &place, cx, cy);
     parts::strip_legend(b, k);
     legend(b, k, &name.to_uppercase(), (cx, legend_y), Letter::new(10.5, 760.0, ink).track(0.06));
 }
+
+/// A pointer knob's footprint over its boss diameter: the fin runs out past
+/// the boss to the scale.
+const KNOB_SCALE: f64 = 1.4;
+
+/// The black pointer knob (Hex Rhythm, Cube Crunch): a black dome crossed
+/// by a fin.
+const BLACK_POINTER: &[&str] = &["color=#141416", "skirt=none", "cap_r=0.8", "height=0.8", "rough=0.3", "coat=0.5", "fallback_color=#1c1c1e", "pointer=#f2f0ea"];
+/// The cream pointer knob (Croc Clean).
+const CREAM_POINTER: &[&str] = &["color=#eeece6", "skirt=none", "cap_r=0.8", "height=0.8", "rough=0.42"];
+/// Cage Lead's black spun cap, a white index.
+const BLACK_SPUN: &[&str] = &["color=#34353a", "pointer=#f2f2f0", "skirt=none", "cap_r=0.96", "index_in=0.45", "fallback_color=#2c2d31"];
 
 /// The input jack with its cable running off to the left and down.
 fn jack(b: &mut Builder<'_>, root: NodeId, (cx, cy): (f64, f64)) {
@@ -401,7 +453,7 @@ fn hex_rhythm() -> Face {
         const INK: &str = "#1a1a1a";
         let xs = [245.0, 330.0, 429.0, 527.0, 623.0, 714.0, 809.0, 905.0];
         for ((a, n, _), x) in knobs.iter().zip(xs) {
-            knob(b, root, "knob.amp_pointer", "black", &["numerals"], &format!("{ns}/{a}"), n, (x, 430.0), 34.0, INK, 390.0);
+            knob(b, root, "amp_pointer", BLACK_POINTER, Scale::Numerals, &format!("{ns}/{a}"), n, (x, 430.0), 34.0, INK, 390.0);
         }
         separator(b, root, 287.0, (386.0, 470.0), "#1a1a1a90");
         separator(b, root, 576.0, (386.0, 470.0), "#1a1a1a90");
@@ -441,7 +493,7 @@ fn croc_clean() -> Face {
         const INK: &str = "#f2f2f0";
         let xs = [357.0, 463.0, 568.0, 673.0, 777.0, 884.0];
         for ((a, n, _), x) in knobs.iter().zip(xs) {
-            knob(b, root, "knob.amp_pointer", "cream", &["ticks=21"], &format!("{ns}/{a}"), n, (x, 430.0), 40.0, INK, 384.0);
+            knob(b, root, "amp_pointer", CREAM_POINTER, Scale::Ticks(21), &format!("{ns}/{a}"), n, (x, 430.0), 40.0, INK, 384.0);
         }
         let t = rk::mini_toggle(b, root, "Bright", &format!("{ns}/bright"), (279.0, 430.0 - 6.0), 14.0, "chrome");
         legend(b, t, "BRIGHT", (279.0, 395.0), Letter::new(10.0, 760.0, INK).track(0.06));
@@ -484,7 +536,7 @@ fn cube_crunch() -> Face {
         const INK: &str = "#f0f0ee";
         let xs = [301.0, 391.0, 476.0, 561.0, 651.0, 741.0, 815.0, 914.0];
         for ((a, n, _), x) in knobs.iter().zip(xs) {
-            knob(b, root, "knob.amp_pointer", "black", &["numerals"], &format!("{ns}/{a}"), n, (x, 428.0), 30.0, INK, 384.0);
+            knob(b, root, "amp_pointer", BLACK_POINTER, Scale::Numerals, &format!("{ns}/{a}"), n, (x, 428.0), 30.0, INK, 384.0);
         }
         separator(b, root, 346.0, (380.0, 465.0), "#f0f0ee70");
         separator(b, root, 608.0, (380.0, 465.0), "#f0f0ee70");
@@ -527,7 +579,7 @@ fn cage_lead() -> Face {
         const INK: &str = "#eeeeec";
         let xs = [277.0, 395.0, 513.0, 632.0, 752.0, 871.0];
         for ((a, n, _), x) in knobs.iter().zip(xs) {
-            knob(b, root, "knob.spun_cap", "black", &["ticks=21"], &format!("{ns}/{a}"), n, (x, 444.0), 44.0, INK, 400.0);
+            knob(b, root, "spun_metal", BLACK_SPUN, Scale::Ticks(21), &format!("{ns}/{a}"), n, (x, 444.0), 44.0, INK, 400.0);
         }
         jack(b, root, (178.0, 432.0));
         power(b, root, &format!("{ns}/power"), (962.0, 440.0), 56.0);

@@ -13,7 +13,7 @@ use document_proto::{NodeId, TextAlign};
 use surface_proto::ValueFormat;
 use surface_widgets::Builder;
 
-use crate::delay::parts::{self, Ink, Screen};
+use crate::delay::parts::{self, Screen};
 use crate::face::{Face, canvas};
 use crate::rigkit::{self as rk, Enclosure, Letter};
 
@@ -46,7 +46,7 @@ fn delay_2() -> Face {
         let lbl = pre::leg(INK);
         // Top row: MIX and FEEDBACK, the toggles, the LCD.
         for (addr, name, x) in [("mix", "MIX", 54.0), ("feedback", "FEEDBACK", 350.0)] {
-            let k = rk::knob(b, p, &knob, &a(addr), "", (x, 64.0), 0.0, Ink::new(6.0, INK));
+            let k = pre::place(b, p, &knob, &a(addr), (x, 64.0));
             legend(b, k, name, (x, 28.0), lbl);
         }
         for (addr, name, x, dots) in [("sync", "SYNC", 124.0, 3), ("pingpong", "PING-PONG", 280.0, 2)] {
@@ -69,7 +69,7 @@ fn delay_2() -> Face {
         // Second row: low cut, TIME, MOD, high cut.
         let row2 = [("low_cut", "", 56.0), ("time", "TIME", 154.0), ("mod", "MOD", 251.0), ("high_cut", "", 349.0)];
         for (addr, name, x) in row2 {
-            let k = rk::knob(b, p, &knob, &a(addr), "", (x, 142.0), 0.0, Ink::new(6.0, INK));
+            let k = pre::place(b, p, &knob, &a(addr), (x, 142.0));
             if name.is_empty() {
                 slope(b, p, (x, 107.0), addr == "low_cut", INK);
             } else {
@@ -112,7 +112,7 @@ fn reverb() -> Face {
         pre::dial(b, p, INK, &a("mix"), "MIX", (XL, Y1), true);
         pre::dial(b, p, INK, &a("decay"), "DECAY", (XR, Y1), true);
         for (addr, x, low) in [("low_cut", XL, true), ("high_cut", XR, false)] {
-            rk::knob(b, p, &pre::knob(INK), &a(addr), "", (x, 104.0), 0.0, Ink::new(6.0, INK));
+            pre::place(b, p, &pre::knob(INK), &a(addr), (x, 104.0));
             slope(b, p, (x, 134.0), low, INK);
         }
     });

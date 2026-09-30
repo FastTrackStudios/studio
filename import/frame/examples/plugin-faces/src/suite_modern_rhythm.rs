@@ -35,8 +35,9 @@ use crate::face::Face;
 pub const PLUGIN: &str = "suite-modern-rhythm";
 
 /// Every knob of the suite is placed through this: the component for a
-/// knob of kind `id`. One line to switch the whole suite to another knob
-/// (the GPU `knob.3d` when it lands): return it here.
+/// knob of kind `id`. The hardware knobs are all `knob.3d` (the GPU knob,
+/// `knob.render` without the GPU stage); the cab's flat dials are the
+/// plugin's own UI and draw themselves.
 #[must_use]
 pub const fn knob_id(id: &str) -> &str {
     id
