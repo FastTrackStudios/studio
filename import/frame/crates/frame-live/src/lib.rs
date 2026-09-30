@@ -33,8 +33,9 @@ const POLL: Duration = Duration::from_millis(250);
 /// Max gap and travel between two presses of a double-click.
 const DOUBLE_CLICK_MS: f64 = 350.0;
 const DOUBLE_CLICK_PX: f64 = 4.0;
-/// Under a page with no solid fill.
-const DARK: peniko::Color = peniko::Color::from_rgb8(0x0e, 0x0f, 0x12);
+/// Under a page with no solid fill: nothing — the host's panel shows
+/// through (the texture is straight alpha).
+const DARK: peniko::Color = peniko::Color::from_rgba8(0, 0, 0, 0);
 
 /// Fit of the surface's content into the element: surface → element px.
 #[derive(Debug, Clone, Copy, PartialEq)]

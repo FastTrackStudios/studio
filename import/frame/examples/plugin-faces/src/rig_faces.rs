@@ -122,15 +122,12 @@ fn drive_entries() -> Vec<(Face, &'static str, &'static [&'static str])> {
     ]
 }
 
-/// The pre effects: the Aqua-Puss on the Pre Delay; the Gravity Tank on
-/// the Pre Verb, its tremolo half on the Pre Motion.
-fn pre_entries() -> Vec<Face> {
-    let d = |f: Face| Face { plugin: PLUGIN, ..f };
-    // The Gravity Tank is the suite's spring tank, bound to the rig's two
-    // blocks and named as the plugin names it.
-    let tank = crate::suite_studio_blues::tank::spring_tank_as(&crate::suite_studio_blues::tank::Tank {
+/// The Gravity Tank's bindings: the suite's spring tank on the rig's two
+/// blocks, named as the plugin names it.
+fn tank_bind() -> crate::suite_studio_blues::tank::Tank {
+    crate::suite_studio_blues::tank::Tank {
         title: "GRAVITY TANK",
-        file: "18-pedal-gravity-tank",
+        file: "19-gravity-tank-full",
         plugin: PLUGIN,
         trem_on: "trem/on",
         intensity: "trem/depth",
@@ -143,7 +140,16 @@ fn pre_entries() -> Vec<Face> {
         verb_on: "spring/on",
         lfo: "trem/lfo",
         rig: true,
-    });
+    }
+}
+
+/// The pre effects: the Aqua-Puss on the Pre Delay; the Gravity Tank on
+/// the Pre Verb, its tremolo half on the Pre Motion.
+fn pre_entries() -> Vec<Face> {
+    let d = |f: Face| Face { plugin: PLUGIN, ..f };
+    // The rig row's tank: the suite's spring tank, compact, the knobs as big
+    // as a row allows.
+    let tank = crate::suite_studio_blues::tank::spring_tank_compact(&tank_bind(), "18-pedal-gravity-tank", 760.0, 300.0);
     vec![d(drives::aqua_puss()), tank]
 }
 

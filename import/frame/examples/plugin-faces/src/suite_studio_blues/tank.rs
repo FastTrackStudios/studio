@@ -183,3 +183,48 @@ pub fn spring_tank_as(t: &Tank) -> Face {
     };
     Face { file: t.file, plugin: t.plugin, scene, params, streams: vec![ui::lfo_stream(t.lfo, "Tremolo LFO")] }
 }
+
+/// The tank for a rig row: the same navy case, copper trim and cream caps,
+/// without the mesh window — the name in the corner, the two sections side
+/// by side, knobs as big as the height allows. `w × h`.
+#[must_use]
+pub fn spring_tank_compact(t: &Tank, file: &'static str, w: f64, h: f64) -> Face {
+    let scene = canvas("Gravity Tank (compact)", |b, root| {
+        ui::fit_root(b, root, w, h);
+        let mut case = draw::frame("Case", 0.0, 0.0, w, h);
+        case.corner_radii = CornerRadii::uniform(18.0);
+        case.stroke = document_proto::Stroke { paints: vec![draw::linear(90.0, &[(0.0, "#a8664a"), (0.5, "#5a3a34"), (1.0, "#a8664a")])], weight: 3.0, ..document_proto::Stroke::default() };
+        let case = b.add(root, case);
+        paint::fill(b, case, (0.0, 0.0, w, h), 18.0, &paint::Material::Powder { color: "#30334a".into(), coarse: false });
+        for e in light::edge("case edge", (0.0, 0.0, w, h), 18.0, 5.0, 1.1, true) {
+            b.add(case, e);
+        }
+        // A copper strip where the mesh window was: the unit's signature.
+        b.add(case, draw::rounded(draw::rect("copper", 18.0, 14.0, w - 36.0, 8.0, draw::linear(180.0, &[(0.0, "#f2c7a6"), (0.5, "#c98a66"), (1.0, "#f0c09c")])), 4.0));
+        print_left(b, case, t.title, 22.0, 46.0, 24.0, INK, 600.0, 0.08);
+        print_left(b, case, "Harmonic Tremolo", 24.0, 78.0, 13.0, DIM, 500.0, 0.03);
+        print_right(b, case, "Spring Reverb", w - 24.0, 78.0, 13.0, DIM, 500.0, 0.03);
+        let d = (h * 0.42).min(w * 0.12);
+        let row = h * 0.6;
+        let label_y = row + d * 0.5 + 18.0;
+        // Tremolo: on, intensity, speed.
+        print(b, case, "ON", w * 0.05, row - 34.0, 11.0, INK, 500.0, 0.08);
+        toggle(b, case, t.trem_on, "Tremolo", 22.0, w * 0.05, row);
+        print(b, case, "OFF", w * 0.05, row + 34.0, 11.0, INK, 500.0, 0.08);
+        for (addr, name, fx) in [(t.intensity, "INTENSITY", 0.17), (t.speed, "SPEED", 0.32)] {
+            knob(b, case, Cap::Cream, addr, name, d, w * fx, row);
+            print(b, case, name, w * fx, label_y, 12.0, INK, 500.0, 0.12);
+        }
+        b.add(case, draw::rect("divider", w * 0.415, row - d * 0.6, 1.5, d * 1.3, draw::solid("#c9b8ac40")));
+        // Reverb: mix, tone, decay, on.
+        for (addr, name, fx) in [(t.mix, "MIX", 0.51), (t.tone, "TONE", 0.66), (t.decay, "DECAY", 0.81)] {
+            knob(b, case, Cap::Cream, addr, name, d, w * fx, row);
+            print(b, case, name, w * fx, label_y, 12.0, INK, 500.0, 0.12);
+        }
+        print(b, case, "ON", w * 0.94, row - 34.0, 11.0, INK, 500.0, 0.08);
+        toggle(b, case, t.verb_on, "Reverb", 22.0, w * 0.94, row);
+        print(b, case, "OFF", w * 0.94, row + 34.0, 11.0, INK, 500.0, 0.08);
+    });
+    let full = spring_tank_as(t);
+    Face { file, plugin: t.plugin, scene, params: full.params, streams: full.streams }
+}
