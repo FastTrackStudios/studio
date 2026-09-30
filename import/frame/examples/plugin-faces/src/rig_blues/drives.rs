@@ -83,8 +83,8 @@ fn led(b: &mut Builder<'_>, parent: NodeId, ns: &str, cx: f64, cy: f64, d: f64, 
 }
 
 /// The dual-FET clean boost. Gloss black, a white hairline round the lid,
-/// the blue LED at its head, the volume knob out of the right side with a
-/// scale printed beside it, the maker's square mark at the foot.
+/// the blue LED at its head. The real one's volume knob stands out of its
+/// side; here it is on the lid, big and centred, where a finger finds it.
 #[must_use]
 pub fn blade() -> Face {
     const W: f64 = 172.0;
@@ -93,28 +93,14 @@ pub fn blade() -> Face {
     let scene = canvas("Blade", |b, root| {
         let (lid, lw, lh) = enclosure(b, root, W, "#111113", "gloss", &["jack_inset=10", "radius=14"]);
         b.add(lid, draw::stroked(draw::rounded(draw::rect("border", 6.0, 16.0, lw - 12.0, lh - 26.0, draw::solid("#00000000")), 9.0), INK, 1.4));
-        parts::print_left(b, lid, "9VDC ⊖·⊕", 12.0, 9.0, 5.5, INK, 600.0, 0.04);
-        led(b, lid, NS, lw * 0.52, 10.0, 5.0, "#3d6bff");
-        // The scale beside the side knob.
-        let ky = lh * 0.26;
-        let ticks: Vec<Vec<(f64, f64)>> = (0..10)
-            .map(|i| {
-                let y = ky - 24.0 + f64::from(i) * 5.4;
-                let len = if i % 3 == 0 { 11.0 } else { 7.0 };
-                vec![(lw - 40.0 - len, y), (lw - 40.0, y)]
-            })
-            .collect();
-        b.add(lid, ui::strokes("scale", &ticks, 0.9, draw::solid(INK)));
-        parts::print(b, lid, "PULL: BOOST", lw - 46.0, ky + 34.0, 4.6, INK, 600.0, 0.04);
-        set(b, lid, "BLADE", lw * 0.5, lh * 0.5, 25.0, "#f4f4f6", &inter(500.0).width(92.0), 0.04);
-        parts::print(b, lid, "DUAL FET CLASS A CLEAN BOOST", lw * 0.5, lh * 0.5 + 18.0, 5.4, "#bdbdc2", 500.0, 0.06);
-        stomp(b, lid, NS, 34.0, lw * 0.5, lh * 0.71);
-        let (mx, my, ms) = (lw * 0.5 - 13.0, lh * 0.8, 26.0);
-        b.add(lid, draw::stroked(draw::rounded(draw::rect("mark", mx, my, ms, ms, draw::solid("#00000000")), 3.0), INK, 1.6));
-        set(b, lid, "B", lw * 0.5, my + ms * 0.52, 17.0, INK, &inter(800.0).italic(), 0.0);
-        parts::print(b, lid, "HAND BUILT · CLEAN FROM THE FIRST FET", lw * 0.5, lh - 14.0, 4.2, "#9d9da3", 500.0, 0.05);
-        // The volume knob stands out of the right side, over the jack.
-        knob(b, root, "knurled", &["color=#161618", "ribs=40", "index=none", "skirt=none"], &format!("{NS}/volume"), "Volume", 46.0, W - 14.0, 10.0 + ky);
+        led(b, lid, NS, lw * 0.5, 9.0, 5.0, "#3d6bff");
+        knob(b, lid, "knurled", &["color=#161618", "ribs=44", "index=line", "pointer=#f2f2f4", "index_w=0.08", "skirt=none"], &format!("{NS}/volume"), "Volume", 86.0, lw * 0.5, lh * 0.3);
+        parts::print(b, lid, "VOLUME", lw * 0.5, lh * 0.3 + 52.0, 9.0, INK, 650.0, 0.14);
+        set(b, lid, "BLADE", lw * 0.5, lh * 0.58, 25.0, "#f4f4f6", &inter(500.0).width(92.0), 0.04);
+        stomp(b, lid, NS, 34.0, lw * 0.5, lh * 0.76);
+        let (mx, my, ms) = (lw * 0.5 - 11.0, lh * 0.86, 22.0);
+        b.add(lid, draw::stroked(draw::rounded(draw::rect("mark", mx, my, ms, ms, draw::solid("#00000000")), 3.0), INK, 1.4));
+        set(b, lid, "B", lw * 0.5, my + ms * 0.52, 14.0, INK, &inter(800.0).italic(), 0.0);
     });
     let params = vec![
         ui::param(&format!("{NS}/volume"), "Volume", Range::linear(0.0, 23.0, Unit::Db), 11.0).featured(),
@@ -124,8 +110,8 @@ pub fn blade() -> Face {
 }
 
 /// The gold overdrive. Landscape, gold with the paint worn soft, three
-/// oxblood domes (the gain's with a pointer), spaced serif capitals, the
-/// LED low by the gain, the name split round a small chrome stomp.
+/// oxblood domes with pointers, spaced serif capitals under them, the LED
+/// by the gain, the name split round a small chrome stomp.
 #[must_use]
 pub fn pegasus() -> Face {
     const W: f64 = 400.0;
@@ -137,14 +123,13 @@ pub fn pegasus() -> Face {
         b.add(lid, draw::rect("sheen", 0.0, 0.0, lw, lh, draw::linear(115.0, &[(0.0, "#ffe2a02a"), (0.4, "#ffffff00"), (0.75, "#4a2c0620"), (1.0, "#ffe2a014")])));
         for (i, (id, name)) in [("gain", "GAIN"), ("treble", "TREBLE"), ("output", "OUTPUT")].iter().enumerate() {
             let cx = lw * (0.2 + 0.3 * i as f64);
-            let pointer = if i == 0 { "index=full" } else { "index=none" };
-            knob(b, lid, "domed", &["color=#3a0f0c", "pointer=#3a0f0c", "skirt=plain", "skirt_color=#2a0a08", "dome=0.35", "coat=0.8", pointer], &format!("{NS}/{id}"), name, 66.0, cx, lh * 0.2);
-            set(b, lid, name, cx, lh * 0.4, 11.0, INK, &serif, 0.12);
+            knob(b, lid, "domed", &["color=#3a0f0c", "pointer=#e8d2b0", "index=line", "index_w=0.07", "skirt=plain", "skirt_color=#2a0a08", "dome=0.35", "coat=0.8"], &format!("{NS}/{id}"), name, 84.0, cx, lh * 0.24);
+            set(b, lid, name, cx, lh * 0.24 + 58.0, 15.0, INK, &serif, 0.12);
         }
-        led(b, lid, NS, lw * 0.07, lh * 0.38, 6.0, "#d0261a");
-        stomp(b, lid, NS, 30.0, lw * 0.66, lh * 0.72);
-        set(b, lid, "ORO", lw * 0.2, lh * 0.73, 12.0, INK, &serif, 0.14);
-        set(b, lid, "PEGASUS", lw * 0.84, lh * 0.73, 12.0, INK, &serif, 0.14);
+        led(b, lid, NS, lw * 0.06, lh * 0.24, 6.0, "#d0261a");
+        stomp(b, lid, NS, 34.0, lw * 0.5, lh * 0.74);
+        set(b, lid, "ORO", lw * 0.22, lh * 0.74, 14.0, INK, &serif, 0.14);
+        set(b, lid, "PEGASUS", lw * 0.78, lh * 0.74, 14.0, INK, &serif, 0.14);
     });
     let params = vec![
         ui::percent(&format!("{NS}/gain"), "Gain", 30.0).featured(),
@@ -157,37 +142,37 @@ pub fn pegasus() -> Face {
 
 /// The 1991 British overdrive. Black crinkle; the knobs stand on a raised
 /// ledge across the top, black with blue lines; the logo in blue italic
-/// between rules; a red LED over the stomp; the maker's script embossed in
-/// the lid below.
+/// between rules; a red LED over the stomp; the maker's script embossed
+/// low in the lid.
 #[must_use]
 pub fn british_blues() -> Face {
-    const W: f64 = 222.0;
+    const W: f64 = 240.0;
     const NS: &str = "british";
     const BLUE: &str = "#5cc4f0";
     let scene = canvas("British Blues", |b, root| {
         let (lid, lw, lh) = enclosure(b, root, W, "#1c1c1e", "hammertone", &["jack_inset=10"]);
-        let ledge_h = lh * 0.2;
+        let ledge_h = lh * 0.33;
         let ledge = draw::rect("ledge", 0.0, 0.0, lw, ledge_h, draw::linear(180.0, &[(0.0, "#2c2c2f"), (0.8, "#1a1a1c"), (1.0, "#0a0a0b")]));
         b.add(lid, draw::with_effects(ledge, vec![draw::drop_shadow("#000000d0", 0.0, 3.0, 5.0)]));
         b.add(lid, draw::rect("ledge lip", 0.0, ledge_h - 1.0, lw, 1.0, draw::solid("#48484c")));
-        for (i, (id, name)) in [("gain", "Gain"), ("tone", "Tone"), ("volume", "Volume")].iter().enumerate() {
-            let cx = lw * (0.22 + 0.28 * i as f64);
-            knob(b, lid, "knurled", &["color=#121214", &format!("pointer={BLUE}"), "index=line", "index_w=0.14", "ribs=36"], &format!("{NS}/{id}"), name, 40.0, cx, ledge_h * 0.5);
-            parts::print(b, lid, name, cx, ledge_h + 10.0, 7.5, "#e2e2e6", 500.0, 0.02);
+        for (i, (id, name)) in [("gain", "GAIN"), ("tone", "TONE"), ("volume", "VOLUME")].iter().enumerate() {
+            let cx = lw * (0.18 + 0.32 * i as f64);
+            knob(b, lid, "knurled", &["color=#121214", &format!("pointer={BLUE}"), "index=line", "index_w=0.12", "ribs=36"], &format!("{NS}/{id}"), name, 60.0, cx, ledge_h * 0.44);
+            parts::print(b, lid, name, cx, ledge_h * 0.44 + 38.0, 9.5, "#e8e8ec", 650.0, 0.08);
         }
         let logo = Lettering::family(family::OSWALD).weight(700.0).italic();
-        let ly = lh * 0.4;
+        let ly = lh * 0.47;
         b.add(lid, draw::rect("rule", 12.0, ly - 16.0, lw - 24.0, 1.6, draw::solid(BLUE)));
-        set(b, lid, "BRITISH BLUES", lw * 0.5, ly, 20.0, BLUE, &logo, 0.0);
+        set(b, lid, "BRITISH BLUES", lw * 0.5, ly, 21.0, BLUE, &logo, 0.0);
         b.add(lid, draw::rect("rule", 12.0, ly + 12.0, lw - 24.0, 1.6, draw::solid(BLUE)));
-        led(b, lid, NS, lw * 0.5, lh * 0.5, 5.0, "#e0281c");
-        stomp(b, lid, NS, 34.0, lw * 0.5, lh * 0.6);
+        led(b, lid, NS, lw * 0.5, lh * 0.58, 5.0, "#e0281c");
+        stomp(b, lid, NS, 34.0, lw * 0.5, lh * 0.7);
         // The script, embossed: a lit edge above, a shadow below.
         let script = Lettering::family(family::DANCING_SCRIPT).weight(700.0);
-        let sy = lh * 0.82;
-        set(b, lid, "Kingsway", lw * 0.5 - 0.8, sy - 0.9, 38.0, "#46464b", &script, 0.0);
-        set(b, lid, "Kingsway", lw * 0.5 + 0.8, sy + 0.9, 38.0, "#050506", &script, 0.0);
-        set(b, lid, "Kingsway", lw * 0.5, sy, 38.0, "#1e1e21", &script, 0.0);
+        let sy = lh * 0.86;
+        set(b, lid, "Kingsway", lw * 0.5 - 0.8, sy - 0.9, 32.0, "#46464b", &script, 0.0);
+        set(b, lid, "Kingsway", lw * 0.5 + 0.8, sy + 0.9, 32.0, "#050506", &script, 0.0);
+        set(b, lid, "Kingsway", lw * 0.5, sy, 32.0, "#1e1e21", &script, 0.0);
     });
     let params = vec![
         ui::percent(&format!("{NS}/gain"), "Gain", 40.0).featured(),
@@ -198,42 +183,31 @@ pub fn british_blues() -> Face {
     Face { file: "13-drive-british-blues", plugin: PLUGIN, scene, params, streams: Vec::new() }
 }
 
-/// The green overdrive. Three black knobs with broad mint pointers and
-/// scales, the grey name band with its model box, and a black rubber
-/// treadle ribbed in chevrons — the whole treadle is the switch.
+/// The green overdrive. Three black knobs with broad mint pointers, the
+/// grey name band, and a black rubber treadle ribbed in chevrons — the
+/// whole treadle is the switch.
 #[must_use]
 pub fn tube_drive() -> Face {
-    const W: f64 = 172.0;
+    const W: f64 = 200.0;
     const NS: &str = "tubedrive";
     const GREEN: &str = "#57c23f";
     const DARK: &str = "#0d2a08";
     let scene = canvas("Tube Drive", |b, root| {
         let (lid, lw, lh) = enclosure(b, root, W, GREEN, "gloss", &["jack_inset=6", "front=0", "radius=10"]);
-        parts::print(b, lid, "▲OUT", lw * 0.14, 6.0, 5.0, DARK, 700.0, 0.02);
-        parts::print(b, lid, "▼DC", lw * 0.66, 6.0, 5.0, DARK, 700.0, 0.02);
-        parts::print(b, lid, "▼IN", lw * 0.86, 6.0, 5.0, DARK, 700.0, 0.02);
-        led(b, lid, NS, lw * 0.5, 7.0, 5.0, "#e01818");
+        led(b, lid, NS, lw * 0.5, 8.0, 5.0, "#e01818");
         for (i, (id, name)) in [("drive", "DRIVE"), ("tone", "TONE"), ("level", "LEVEL")].iter().enumerate() {
-            let cx = lw * (0.19 + 0.31 * i as f64);
+            let cx = lw * (0.18 + 0.32 * i as f64);
             let cy = lh * 0.2;
-            knob(b, lid, "flat", &["color=#101012", "pointer=#7ee8b4", "index=full", "index_w=0.42", "index_in=0", "index_out=0.95", "skirt=plain"], &format!("{NS}/{id}"), name, 42.0, cx, cy);
-            parts::print(b, lid, name, cx, cy - 34.0, 5.5, DARK, 700.0, 0.04);
-            let (lo, hi) = if *id == "tone" { ("−", "+") } else { ("0", "10") };
-            parts::print(b, lid, lo, cx - 16.0, cy + 27.0, 5.5, DARK, 700.0, 0.0);
-            parts::print(b, lid, hi, cx + 16.0, cy + 27.0, 5.5, DARK, 700.0, 0.0);
+            knob(b, lid, "flat", &["color=#101012", "pointer=#7ee8b4", "index=full", "index_w=0.42", "index_in=0", "index_out=0.95", "skirt=plain"], &format!("{NS}/{id}"), name, 54.0, cx, cy);
+            parts::print(b, lid, name, cx, cy + 36.0, 8.5, DARK, 750.0, 0.08);
         }
         // The name band.
-        let (by, bh) = (lh * 0.33, lh * 0.12);
+        let (by, bh) = (lh * 0.38, lh * 0.1);
         b.add(lid, draw::rect("band", 0.0, by, lw, bh, draw::linear(180.0, &[(0.0, "#46494c"), (1.0, "#2a2c2f")])));
-        set(b, lid, "TUBE DRIVE", lw * 0.56, by + bh * 0.32, 15.0, "#f1f1ef", &inter(700.0).width(88.0), 0.0);
-        set(b, lid, "CLASSIC", lw * 0.74, by + bh * 0.76, 9.0, "#8fe07a", &inter(800.0), 0.04);
-        set(b, lid, "TD10", lw * 0.1, by + bh * 0.76, 7.5, "#f1f1ef", &inter(800.0), 0.0);
-        for i in 0..5 {
-            b.add(lid, draw::rect("stripe", 2.0, by + bh + 6.0 + f64::from(i) * 5.0, lw * 0.07, 1.4, draw::solid("#e6ebe4")));
-        }
+        set(b, lid, "TUBE DRIVE", lw * 0.5, by + bh * 0.5, 16.0, "#f1f1ef", &inter(700.0).width(88.0), 0.02);
         // The treadle: the whole of it is the switch.
-        let (tx, ty) = (lw * 0.12, by + bh + 4.0);
-        let (tw, th) = (lw * 0.84, lh - ty - 6.0);
+        let (tx, ty) = (lw * 0.08, by + bh + 6.0);
+        let (tw, th) = (lw * 0.84, lh - ty - 8.0);
         let mut tread = draw::frame("treadle", tx, ty, tw, th);
         tread.fills = vec![draw::linear(180.0, &[(0.0, "#2c2c2e"), (0.08, "#18181a"), (1.0, "#0c0c0d")])];
         tread.corner_radii = CornerRadii::uniform(6.0);
