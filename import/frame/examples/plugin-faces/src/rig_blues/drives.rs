@@ -630,7 +630,9 @@ pub fn filter_viz() -> Face {
         b.add(curve, draw::path("area", 0.0, 0.0, W, H, draw::polygon(&fill), draw::linear(180.0, &[(0.0, "#4dd0ff55"), (1.0, "#4dd0ff05")])));
         b.add(curve, draw::emissive(ui::strokes("line", &[pts], 2.2, draw::solid("#8fe3ff")), draw::hex("#4dd0ff"), 0.6, 8.0));
         // The sweep: the envelope, or a slow idle sweep with no input.
-        motion::add(b, curve, Motion::new(Target::None).named("idle").dynamics(Dynamics::Lfo { rate: Num::Value(0.35), shape: Wave::Sine, phase: 0.0 }));
+        // The idle sweep runs only while the filter is on (its input is
+        // the on switch): off, the picture holds still.
+        motion::add(b, curve, Motion::new(Target::None).named("idle").input("param(qtron/on)").dynamics(Dynamics::Lfo { rate: Num::Value(0.35), shape: Wave::Sine, phase: 0.0 }));
         let sweep = format!("({span}) * (0.15*norm(qtron/range) + or(level(qtron/in) * (0.3 + norm(qtron/gain)), 0.5 + 0.35*motion(idle))) - {half}", span = W * 0.8, half = W * 0.4);
         motion::add(b, curve, Motion::new(Target::X).input(sweep).dynamics(Dynamics::spring(400.0, 30.0)));
         motion::add(b, curve, Motion::new(Target::StretchY).input("0.6 + 0.7*norm(qtron/peak)").dynamics(Dynamics::spring(400.0, 30.0)));

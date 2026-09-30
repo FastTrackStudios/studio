@@ -138,7 +138,7 @@ pub fn spring_tank_as(t: &Tank) -> Face {
         let lamp = ui::stream_lamp(b, case, "Tremolo lamp", t.lfo, "", 171.0, row, 30.0, "#3cf0a0", INK);
         let glow = b.controls.get(&lamp).and_then(|c| c.slots_of(SlotRole::Glow).next()).map(NodeId);
         if let Some(glow) = glow {
-            motion::add(b, glow, Motion::new(Target::None).named("lfo").dynamics(Dynamics::Lfo { rate: Num::Expr(format!("param({})", t.speed)), shape: Wave::Sine, phase: 0.0 }));
+            motion::add(b, glow, idle_lfo(t));
             motion::add(b, glow, Motion::new(Target::Opacity).input(format!("or(scalar({}), motion(lfo))", t.lfo)).dynamics(Dynamics::spring(900.0, 50.0)));
         }
         for (addr, name, cx) in [(t.intensity, "INTENSITY", 266.0), (t.speed, "SPEED", 381.0)] {
@@ -235,7 +235,7 @@ pub fn spring_tank_compact(t: &Tank, file: &'static str, w: f64, h: f64) -> Face
         let lamp = ui::stream_lamp(b, case, "Tremolo lamp", t.lfo, "", w * 0.105, row, 22.0, "#3cf0a0", INK);
         let glow = b.controls.get(&lamp).and_then(|c| c.slots_of(SlotRole::Glow).next()).map(NodeId);
         if let Some(glow) = glow {
-            motion::add(b, glow, Motion::new(Target::None).named("lfo").dynamics(Dynamics::Lfo { rate: Num::Expr(format!("param({})", t.speed)), shape: Wave::Sine, phase: 0.0 }));
+            motion::add(b, glow, idle_lfo(t));
             let pulse = format!("or(scalar({lfo}), lerp(1, motion(lfo), param({depth}))) * param({on})", lfo = t.lfo, depth = t.intensity, on = t.trem_on);
             motion::add(b, glow, Motion::new(Target::Opacity).input(pulse).dynamics(Dynamics::spring(900.0, 50.0)));
         }
@@ -314,7 +314,7 @@ pub fn tank_unit(t: &Tank, half: TankHalf, file: &'static str, w: f64, h: f64) -
                 let lamp = ui::stream_lamp(b, case, "Tremolo lamp", t.lfo, "", w * 0.2, row, 22.0, "#3cf0a0", INK);
                 let glow = b.controls.get(&lamp).and_then(|c| c.slots_of(SlotRole::Glow).next()).map(NodeId);
                 if let Some(glow) = glow {
-                    motion::add(b, glow, Motion::new(Target::None).named("lfo").dynamics(Dynamics::Lfo { rate: Num::Expr(format!("param({})", t.speed)), shape: Wave::Sine, phase: 0.0 }));
+                    motion::add(b, glow, idle_lfo(t));
                     let pulse = format!("or(scalar({lfo}), lerp(1, motion(lfo), param({depth}))) * param({on})", lfo = t.lfo, depth = t.intensity, on = t.trem_on);
                     motion::add(b, glow, Motion::new(Target::Opacity).input(pulse).dynamics(Dynamics::spring(900.0, 50.0)));
                 }
@@ -343,4 +343,15 @@ pub fn tank_unit(t: &Tank, half: TankHalf, file: &'static str, w: f64, h: f64) -
     let params = full.params.into_iter().filter(|p| mine(&p.addr.to_string())).collect();
     let streams = if half == TankHalf::Tremolo { full.streams } else { Vec::new() };
     Face { file, plugin: t.plugin, scene, params, streams }
+}
+
+/// The tremolo lamp's own LFO, for when no engine sends one: at the rate
+/// knob's speed, and only while the tremolo is on. Its input is the on
+/// switch, so an LFO that is off is still — it doesn't keep the face (and
+/// the window around it) redrawing for a lamp that is dark.
+fn idle_lfo(t: &Tank) -> Motion {
+    Motion::new(Target::None)
+        .named("lfo")
+        .input(format!("param({})", t.trem_on))
+        .dynamics(Dynamics::Lfo { rate: Num::Expr(format!("param({})", t.speed)), shape: Wave::Sine, phase: 0.0 })
 }

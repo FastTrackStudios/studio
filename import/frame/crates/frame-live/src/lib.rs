@@ -143,13 +143,24 @@ pub struct LiveSurface {
     time_dependent: bool,
     /// When the last render began, to pace clock-driven redraws.
     rendered_at: Option<std::time::Instant>,
+    /// The pace of clock-driven renders.
+    clock_frame: std::time::Duration,
+    /// Whether motion may run on its own (see [`LiveSurface::set_animate`]).
+    animate: bool,
+    /// Held still, motion still runs until then after a change, so a
+    /// needle's spring finishes its move rather than freezing mid-way.
+    settle_until: Option<std::time::Instant>,
     error: Option<String>,
     /// Fill the element exactly rather than fit it (pictures).
     stretch: bool,
 }
 
-/// How often a face that only moves with the clock is rendered: 30 fps.
+/// How often a face that only moves with the clock is rendered unless the
+/// host says otherwise ([`LiveSurface::set_max_fps`]): 30 fps.
 pub const CLOCK_FRAME: std::time::Duration = std::time::Duration::from_millis(33);
+
+/// How long motion keeps running after a change on a face held still.
+const SETTLE: std::time::Duration = std::time::Duration::from_millis(600);
 
 fn stamp(path: &Path) -> Option<u64> {
     document_io::fingerprint(path)
@@ -221,6 +232,9 @@ impl LiveSurface {
             dirty: true,
             time_dependent: false,
             rendered_at: None,
+            clock_frame: CLOCK_FRAME,
+            animate: true,
+            settle_until: None,
             error: None,
         };
         me.install(Runtime::new(surface, cat))?;
@@ -375,15 +389,43 @@ impl LiveSurface {
         self.rt.catalog().params.iter().map(|p| p.addr.to_string()).collect()
     }
 
+    /// Pace clock-driven renders to at most `fps` a second (the display's
+    /// rate, say); 0 leaves them unpaced.
+    pub fn set_max_fps(&mut self, fps: u32) {
+        self.clock_frame = if fps == 0 { std::time::Duration::ZERO } else { std::time::Duration::from_secs_f64(1.0 / f64::from(fps)) };
+    }
+
+    /// Let the face move on its own (LFOs, springs settling, clock-driven
+    /// shaders) or hold it still: a host with nothing running (its audio
+    /// stopped) holds it, and the face redraws only when something changes.
+    /// A control in the hand still moves.
+    pub fn set_animate(&mut self, animate: bool) {
+        if animate != self.animate {
+            self.animate = animate;
+            self.dirty = true;
+        }
+    }
+
+    /// Whether the face has something new to show or is moving: what a
+    /// host asks to decide whether to draw another frame at all. Unlike
+    /// [`Self::needs_redraw`] it ignores the clock pacing — a face whose
+    /// LFO is between frames is still moving.
+    #[must_use]
+    pub fn is_moving(&self) -> bool {
+        let moving = self.animate || self.settle_until.is_some_and(|at| std::time::Instant::now() < at);
+        self.dirty || (moving && (self.time_dependent || self.rt.animating()))
+    }
+
     /// Whether the host should render again: something changed, a control
     /// is animating, or a shader reads the clock and a frame's time
-    /// ([`CLOCK_FRAME`]) has passed. A clock-driven face (an LFO lamp, an
+    /// (its [max fps](Self::set_max_fps)) has passed. A clock-driven face (an LFO lamp, an
     /// idle sweep) is paced, not re-rendered at whatever rate the window
     /// happens to redraw.
     #[must_use]
     pub fn needs_redraw(&self) -> bool {
-        let clock_due = self.time_dependent && self.rendered_at.is_none_or(|at| at.elapsed() >= CLOCK_FRAME);
-        self.dirty || clock_due || self.rt.animating()
+        let clock_due = self.time_dependent && self.rendered_at.is_none_or(|at| at.elapsed() >= self.clock_frame);
+        let moving = self.animate || self.settle_until.is_some_and(|at| std::time::Instant::now() < at);
+        self.dirty || (moving && (clock_due || self.rt.animating()))
     }
 
     fn t(&self) -> f64 {
@@ -505,6 +547,9 @@ impl LiveSurface {
     /// With no device attached, or when vello fails.
     pub fn render(&mut self, width: u32, height: u32, scale: f64) -> Result<(wgpu::Texture, bool), String> {
         self.rendered_at = Some(std::time::Instant::now());
+        if self.dirty {
+            self.settle_until = self.rendered_at.map(|at| at + SETTLE);
+        }
         let t = self.t();
         let calls = self.rt.poll(t);
         self.dispatch(calls);
