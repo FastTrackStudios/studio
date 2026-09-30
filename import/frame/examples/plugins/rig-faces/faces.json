@@ -111,6 +111,14 @@
       ]
     }
   ],
+  "cab": {
+    "face": "54-cab-2x12",
+    "ns": "cab",
+    "size": [
+      560.0,
+      392.0
+    ]
+  },
   "drives": [
     {
       "face": "15-drive-king-of-tone",

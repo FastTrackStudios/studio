@@ -145,6 +145,13 @@ fn spring_viz() -> Face {
     Face { file: "53-spring-viz", plugin: PLUGIN, scene, params, streams: Vec::new() }
 }
 
+/// A cab beside its amp (wide screens): the 2×12 in the amp's tolex, a mic
+/// on each speaker.
+fn cab() -> Face {
+    let f = crate::rig_blues::amp_cab::cab_sized(560.0, AMP.1);
+    Face { file: "54-cab-2x12", plugin: PLUGIN, ..f }
+}
+
 /// The Amp EQ's full graph (the rig's 24 bands).
 fn eq() -> Face {
     let scene = canvas("Amp EQ", |b, root| {
@@ -221,6 +228,7 @@ pub fn faces() -> Vec<Face> {
     v.push(gate());
     v.push(eq());
     v.push(spring_viz());
+    v.push(cab());
     v.extend([d_(drives::cry_baby()), d_(drives::q_tron()), d_(drives::filter_viz()), d_(drives::pitch_voices())]);
     v
 }
@@ -256,6 +264,7 @@ pub fn manifest() -> String {
         "amps": amps,
         "gate": { "face": "51-gate", "ns": "gate", "size": size(&gate()) },
         "eq": { "face": "52-amp-eq", "ns": "eq", "size": size(&eq()) },
+        "cab": { "face": "54-cab-2x12", "ns": "cab", "size": size(&cab()) },
         // The input stage's units, by block type, and the filter's picture.
         "input": [
             { "match": ["wah"], "face": "30-wah-cry-baby", "ns": "wah", "size": size(&drives::cry_baby()) },

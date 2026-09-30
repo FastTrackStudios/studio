@@ -6744,6 +6744,318 @@
       "featured": false
     },
     {
+      "addr": "cab/room_size",
+      "name": "Room size",
+      "short_name": null,
+      "group": null,
+      "kind": {
+        "Choice": {
+          "options": [
+            "S",
+            "M",
+            "L"
+          ]
+        }
+      },
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 3
+      },
+      "default": 0.5,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "cab/m1_model",
+      "name": "Mic 1 model",
+      "short_name": null,
+      "group": null,
+      "kind": {
+        "Choice": {
+          "options": [
+            "Dynamic 57",
+            "Dynamic 57 Off-Axis",
+            "Dynamic 409",
+            "Dynamic 421",
+            "Condenser 184",
+            "Condenser 414",
+            "Condenser 4006",
+            "Condenser U67",
+            "Ribbon 121",
+            "Ribbon 121 Horizontal",
+            "Ribbon 160"
+          ]
+        }
+      },
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 11
+      },
+      "default": 0.9,
+      "bipolar": false,
+      "featured": true
+    },
+    {
+      "addr": "cab/m1_on",
+      "name": "Mic 1",
+      "short_name": null,
+      "group": null,
+      "kind": "Toggle",
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 2
+      },
+      "default": 1.0,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "cab/m1_position",
+      "name": "Mic 1 position",
+      "short_name": null,
+      "group": null,
+      "kind": "Continuous",
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": null
+      },
+      "default": 0.3,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "cab/m1_distance",
+      "name": "Mic 1 distance",
+      "short_name": null,
+      "group": null,
+      "kind": "Continuous",
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": null
+      },
+      "default": 0.0,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "cab/m1_level",
+      "name": "Mic 1 level",
+      "short_name": null,
+      "group": null,
+      "kind": "Continuous",
+      "range": {
+        "min": -24.0,
+        "max": 12.0,
+        "scale": "Linear",
+        "unit": "Db",
+        "steps": null
+      },
+      "default": 0.6666666666666666,
+      "bipolar": false,
+      "featured": true
+    },
+    {
+      "addr": "cab/m1_pan",
+      "name": "Mic 1 pan",
+      "short_name": null,
+      "group": null,
+      "kind": "Continuous",
+      "range": {
+        "min": -100.0,
+        "max": 100.0,
+        "scale": "Linear",
+        "unit": "Percent",
+        "steps": null
+      },
+      "default": 0.5,
+      "bipolar": true,
+      "featured": false
+    },
+    {
+      "addr": "cab/m2_model",
+      "name": "Mic 2 model",
+      "short_name": null,
+      "group": null,
+      "kind": {
+        "Choice": {
+          "options": [
+            "Dynamic 57",
+            "Dynamic 57 Off-Axis",
+            "Dynamic 409",
+            "Dynamic 421",
+            "Condenser 184",
+            "Condenser 414",
+            "Condenser 4006",
+            "Condenser U67",
+            "Ribbon 121",
+            "Ribbon 121 Horizontal",
+            "Ribbon 160"
+          ]
+        }
+      },
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 11
+      },
+      "default": 0.0,
+      "bipolar": false,
+      "featured": true
+    },
+    {
+      "addr": "cab/m2_on",
+      "name": "Mic 2",
+      "short_name": null,
+      "group": null,
+      "kind": "Toggle",
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 2
+      },
+      "default": 1.0,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "cab/m2_position",
+      "name": "Mic 2 position",
+      "short_name": null,
+      "group": null,
+      "kind": "Continuous",
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": null
+      },
+      "default": 0.3,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "cab/m2_distance",
+      "name": "Mic 2 distance",
+      "short_name": null,
+      "group": null,
+      "kind": "Continuous",
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": null
+      },
+      "default": 0.0,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "cab/m2_level",
+      "name": "Mic 2 level",
+      "short_name": null,
+      "group": null,
+      "kind": "Continuous",
+      "range": {
+        "min": -24.0,
+        "max": 12.0,
+        "scale": "Linear",
+        "unit": "Db",
+        "steps": null
+      },
+      "default": 0.6666666666666666,
+      "bipolar": false,
+      "featured": true
+    },
+    {
+      "addr": "cab/m2_pan",
+      "name": "Mic 2 pan",
+      "short_name": null,
+      "group": null,
+      "kind": "Continuous",
+      "range": {
+        "min": -100.0,
+        "max": 100.0,
+        "scale": "Linear",
+        "unit": "Percent",
+        "steps": null
+      },
+      "default": 0.5,
+      "bipolar": true,
+      "featured": false
+    },
+    {
+      "addr": "cab/room_on",
+      "name": "Room send",
+      "short_name": null,
+      "group": null,
+      "kind": "Toggle",
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 2
+      },
+      "default": 0.0,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "cab/room_level",
+      "name": "Room level",
+      "short_name": null,
+      "group": null,
+      "kind": "Continuous",
+      "range": {
+        "min": -60.0,
+        "max": 0.0,
+        "scale": "Linear",
+        "unit": "Db",
+        "steps": null
+      },
+      "default": 0.3333333333333333,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "cab/phase",
+      "name": "Phase",
+      "short_name": null,
+      "group": null,
+      "kind": "Toggle",
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 2
+      },
+      "default": 0.0,
+      "bipolar": false,
+      "featured": false
+    },
+    {
       "addr": "wah/position",
       "name": "Position",
       "short_name": null,
