@@ -525,6 +525,64 @@ pub fn q_tron() -> Face {
     Face { file: "31-filter-q-tron", plugin: PLUGIN, scene, params, streams: Vec::new() }
 }
 
+/// The pitch stage: up to four voices, each its interval (semitones, the
+/// number read out under it) and its own level on a fader, then the dry
+/// level and the overall mix. Voices A and B are the rig's pitch block
+/// (`semitones`/`a_level`, `b_semitones`/`b_level`); C and D are drawn for
+/// the voices to come.
+#[must_use]
+pub fn pitch_voices() -> Face {
+    const W: f64 = 460.0;
+    const H: f64 = 286.0;
+    const NS: &str = "pitch";
+    const INK: &str = "#e8e6e1";
+    const DIM: &str = "#8a8d94";
+    let scene = canvas("Pitch", |b, root| {
+        ui::fit_root(b, root, W, H);
+        let mut panel = draw::frame("Panel", 0.0, 0.0, W, H);
+        panel.fills = vec![draw::linear(180.0, &[(0.0, "#1b1d22"), (1.0, "#121317")])];
+        panel.corner_radii = CornerRadii::uniform(10.0);
+        let panel = b.add(root, panel);
+        let head = Lettering::family(family::INTER).weight(800.0);
+        set(b, panel, "PITCH", 34.0, 18.0, 11.0, "#facc15", &head, 0.3);
+        let voices = [("A", "semitones", "a_level", true), ("B", "b_semitones", "b_level", true), ("C", "c_semitones", "c_level", false), ("D", "d_semitones", "d_level", false)];
+        let col = (W - 110.0) / 4.0;
+        for (i, (v, st, lv, live)) in voices.iter().enumerate() {
+            let cx = 18.0 + col * (i as f64 + 0.5);
+            let ink = if *live { INK } else { DIM };
+            parts::print(b, panel, &format!("VOICE {v}"), cx, 42.0, 8.0, ink, 800.0, 0.1);
+            knob(b, panel, "flat", &["color=#222428", "pointer=#facc15", "index=line", "index_w=0.1", "skirt=plain", "skirt_color=#16171a"], &format!("{NS}/{st}"), "Interval", 46.0, cx, 82.0);
+            let value = b.add(panel, draw::text("interval", "+12", cx - 24.0, 106.0, 48.0, 11.0, "#facc15", document_proto::TextAlign::Center));
+            let c = Control::new(ControlKind::Readout).slot(SlotRole::Value, value.0).bound(ui::bind(&format!("{NS}/{st}"))).formatted(surface_proto::ValueFormat::decimals(0));
+            b.controls.insert(value, c);
+            let f = Place::new("Level").size(120.0).variant("black").legend("").bind(ui::bind(&format!("{NS}/{lv}"))).options(&["touch=44"]);
+            place::centred_at(b, panel, "lever.fader", &f, cx, 186.0);
+        }
+        // Dry and mix, at the right.
+        let x = W - 70.0;
+        b.add(panel, draw::rect("divider", x - 30.0, 36.0, 1.0, H - 56.0, draw::solid("#ffffff14")));
+        let f = Place::new("Dry").size(110.0).variant("black").legend("").bind(ui::bind(&format!("{NS}/dry"))).options(&["touch=44"]);
+        place::centred_at(b, panel, "lever.fader", &f, x - 8.0, 122.0);
+        knob(b, panel, "flat", &["color=#222428", "pointer=#e8e6e1", "index=line", "skirt=plain"], &format!("{NS}/mix"), "Mix", 34.0, x - 8.0, 232.0);
+        parts::print(b, panel, "MIX", x - 8.0, 264.0, 7.5, INK, 700.0, 0.1);
+    });
+    let semis = |id: &str, name: &str, d: f64| ui::param(&format!("{NS}/{id}"), name, Range::linear(-24.0, 24.0, Unit::None), d);
+    let level = |id: &str, name: &str, d: f64| ui::param(&format!("{NS}/{id}"), name, Range::linear(0.0, 1.0, Unit::None), d);
+    let params = vec![
+        semis("semitones", "Voice A", 12.0).featured(),
+        level("a_level", "Voice A level", 0.7).featured(),
+        semis("b_semitones", "Voice B", -12.0),
+        level("b_level", "Voice B level", 0.7),
+        semis("c_semitones", "Voice C", 7.0),
+        level("c_level", "Voice C level", 0.0),
+        semis("d_semitones", "Voice D", 5.0),
+        level("d_level", "Voice D level", 0.0),
+        level("dry", "Dry", 1.0),
+        level("mix", "Mix", 0.5),
+    ];
+    Face { file: "33-pitch-voices", plugin: PLUGIN, scene, params, streams: Vec::new() }
+}
+
 /// What the Q-Tron is doing: a dark screen on a log-frequency grid, the
 /// filter's resonant peak riding up and down it with the envelope (the
 /// input's level, gained by GAIN — idling on a slow sweep with no input),

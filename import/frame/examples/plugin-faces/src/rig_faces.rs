@@ -221,7 +221,7 @@ pub fn faces() -> Vec<Face> {
     v.push(gate());
     v.push(eq());
     v.push(spring_viz());
-    v.extend([d_(drives::cry_baby()), d_(drives::q_tron()), d_(drives::filter_viz())]);
+    v.extend([d_(drives::cry_baby()), d_(drives::q_tron()), d_(drives::filter_viz()), d_(drives::pitch_voices())]);
     v
 }
 
@@ -260,6 +260,7 @@ pub fn manifest() -> String {
         "input": [
             { "match": ["wah"], "face": "30-wah-cry-baby", "ns": "wah", "size": size(&drives::cry_baby()) },
             { "match": ["filter"], "face": "31-filter-q-tron", "ns": "qtron", "size": size(&drives::q_tron()) },
+            { "match": ["pitch"], "face": "33-pitch-voices", "ns": "pitch", "size": size(&drives::pitch_voices()) },
         ],
         "filter_picture": { "face": "32-filter-viz", "ns": "qtron", "size": size(&drives::filter_viz()) },
         // Pictures of a block, beside its unit: a reverb's springs.

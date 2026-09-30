@@ -232,6 +232,17 @@
         340.0,
         286.0
       ]
+    },
+    {
+      "face": "33-pitch-voices",
+      "match": [
+        "pitch"
+      ],
+      "ns": "pitch",
+      "size": [
+        460.0,
+        286.0
+      ]
     }
   ],
   "pictures": [
