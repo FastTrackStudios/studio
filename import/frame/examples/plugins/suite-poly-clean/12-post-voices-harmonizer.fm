@@ -1,345 +1,345 @@
-<Document id="65168775-030a-4f6a-aced-17ef27fb0fc9">
-  <Page name="Surface" id="e619c9f7-fcbc-41ff-a4e6-c197e526efbf">
-    <Frame name="Voices Harmonizer (floor unit, 480×286)" id="dd3f6ed6-bbd3-4a9e-9b71-41f4c7a46963" w=480 h=286>
-      <Frame name="Side" id="7aa0efd0-ea91-4f7b-8d32-8ab8d2e672dc" y=18 w=480 h=268 radius=10 fill={[{"kind":{"LinearGradient":{"stops":[{"color":"#626967","position":0.0},{"color":"#363938","position":1.0}],"transform":{"a":1.6653345369377348e-16,"b":-1.0,"c":1.0,"d":1.6653345369377348e-16,"tx":1.0,"ty":-1.942890293094024e-16}}}}]} effects={[{"color":"#00000099","kind":"DropShadow","offset_y":4.0,"radius":10.0}]} />
-      <Frame name="Lid" id="19f99c4d-56e8-4fc0-a517-977cd3e90e7f" w=480 h=277 radius=9 fill={[{"kind":{"LinearGradient":{"stops":[{"color":"#d0dad7","position":0.0},{"color":"#c3cecb","position":0.55},{"color":"#b3bfbc","position":1.0}],"transform":{"a":1.6653345369377348e-16,"b":-1.0,"c":1.0,"d":1.6653345369377348e-16,"tx":1.0,"ty":-1.942890293094024e-16}}}},{"kind":{"LinearGradient":{"stops":[{"color":"#ffffff00","position":0.0},{"color":"#ffffff10","position":0.3},{"color":"#ffffff00","position":0.55},{"color":"#0000000c","position":1.0}],"transform":{"a":1.1408563820557882,"b":-0.20116376126988006,"c":0.20116376126988006,"d":1.1408563820557882,"tx":0.030153689607045814,"ty":-0.17101007166283416}}}}]} effects={[{"color":"#f2f8f6","kind":"InnerShadow","offset_y":1.2,"radius":0.6},{"color":"#00000040","kind":"InnerShadow","offset_y":-1.5,"radius":2.0},{"color":"#00000070","kind":"DropShadow","offset_y":1.5,"radius":1.5}]}>
-        <Frame name="edge" id="43da90c6-b701-42ce-a57b-ba1f3d7f8fa7" x=0.5 y=0.5 w=479 h=276 radius=8.5 stroke="#f2f8f6" stroke-align="inside" />
-        <Frame name="Screen" id="4e7f5c1a-25fa-474c-beb5-7e5597ce3e81" x=19 y=20 w=442 h=200 radius=6 fill={[{"kind":{"LinearGradient":{"stops":[{"color":"#252527","position":0.0},{"color":"#1d1d1f","position":0.5},{"color":"#232325","position":1.0}],"transform":{"a":0.4383715832837809,"b":-1.2044160264027588,"c":1.2044160264027588,"d":0.4383715832837809,"tx":0.883022221559489,"ty":-0.32139380484326985}}}},{"kind":{"RadialGradient":{"stops":[{"color":"#ffffff0a","position":0.0},{"color":"#ffffff00","position":1.0}],"transform":{"a":1.2,"b":0.0,"c":0.0,"d":1.2,"tx":-0.3,"ty":0.0}}}}]} effects={[{"color":"#000000","kind":"InnerShadow","offset_y":1.5,"radius":3.0},{"color":"#ffffff66","kind":"DropShadow","offset_y":1.0,"radius":0.5}]}>
-          <Text name="label" id="99e003ae-789e-48a0-bfbb-08963f0969b9" x=6 y=5.58 w=33.25 h=9 fill="#e6e6e8" size=6.5 weight=700>TUNING</Text>
-          <Frame name="Tuning" id="3c332cb5-0467-48b2-9dc4-04ea6e138986" x=36 y=5 w=36 h=10 control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Param":{"addr":"voices/tuning"}}},"kind":"Readout","slots":[{"node":"298e15ba-6c8b-43d1-9b9f-a49315e7e0e4","role":"Value"}]}}>
-            <Text name="value" id="298e15ba-6c8b-43d1-9b9f-a49315e7e0e4" y=0.5800000000000001 w=36 h=9 fill="#e6e6e8" size=6.5 weight=700 />
+<Document id="57893dc4-85fe-4f6c-bf62-3d89884494df">
+  <Page name="Surface" id="d73dc882-df00-4c81-b3cc-479451e9cddb">
+    <Frame name="Voices Harmonizer (floor unit, 480×286)" id="eb65971b-9c51-47dd-a46a-6ac3b5084ecc" w=480 h=286>
+      <Frame name="Side" id="1980cc1f-0661-4b9e-83e5-8e4640f96469" y=18 w=480 h=268 radius=10 fill={[{"kind":{"LinearGradient":{"stops":[{"color":"#626967","position":0.0},{"color":"#363938","position":1.0}],"transform":{"a":1.6653345369377348e-16,"b":-1.0,"c":1.0,"d":1.6653345369377348e-16,"tx":1.0,"ty":-1.942890293094024e-16}}}}]} effects={[{"color":"#00000099","kind":"DropShadow","offset_y":4.0,"radius":10.0}]} />
+      <Frame name="Lid" id="383f614d-d086-40f0-a2d7-6e701481df0d" w=480 h=277 radius=9 fill={[{"kind":{"LinearGradient":{"stops":[{"color":"#d0dad7","position":0.0},{"color":"#c3cecb","position":0.55},{"color":"#b3bfbc","position":1.0}],"transform":{"a":1.6653345369377348e-16,"b":-1.0,"c":1.0,"d":1.6653345369377348e-16,"tx":1.0,"ty":-1.942890293094024e-16}}}},{"kind":{"LinearGradient":{"stops":[{"color":"#ffffff00","position":0.0},{"color":"#ffffff10","position":0.3},{"color":"#ffffff00","position":0.55},{"color":"#0000000c","position":1.0}],"transform":{"a":1.1408563820557882,"b":-0.20116376126988006,"c":0.20116376126988006,"d":1.1408563820557882,"tx":0.030153689607045814,"ty":-0.17101007166283416}}}}]} effects={[{"color":"#f2f8f6","kind":"InnerShadow","offset_y":1.2,"radius":0.6},{"color":"#00000040","kind":"InnerShadow","offset_y":-1.5,"radius":2.0},{"color":"#00000070","kind":"DropShadow","offset_y":1.5,"radius":1.5}]}>
+        <Frame name="edge" id="25163305-11cb-4c3b-93b1-f324dd05864c" x=0.5 y=0.5 w=479 h=276 radius=8.5 stroke="#f2f8f6" stroke-align="inside" />
+        <Frame name="Screen" id="3c3922e1-a574-46d8-ad3f-fa8392954252" x=19 y=20 w=442 h=200 radius=6 fill={[{"kind":{"LinearGradient":{"stops":[{"color":"#252527","position":0.0},{"color":"#1d1d1f","position":0.5},{"color":"#232325","position":1.0}],"transform":{"a":0.4383715832837809,"b":-1.2044160264027588,"c":1.2044160264027588,"d":0.4383715832837809,"tx":0.883022221559489,"ty":-0.32139380484326985}}}},{"kind":{"RadialGradient":{"stops":[{"color":"#ffffff0a","position":0.0},{"color":"#ffffff00","position":1.0}],"transform":{"a":1.2,"b":0.0,"c":0.0,"d":1.2,"tx":-0.3,"ty":0.0}}}}]} effects={[{"color":"#000000","kind":"InnerShadow","offset_y":1.5,"radius":3.0},{"color":"#ffffff66","kind":"DropShadow","offset_y":1.0,"radius":0.5}]}>
+          <Text name="label" id="e1cb8bd0-e7eb-4ce3-b136-688ef1f49302" x=6 y=5.58 w=33.25 h=9 fill="#e6e6e8" size=6.5 weight=700>TUNING</Text>
+          <Frame name="Tuning" id="0009dd3b-72a1-44a0-9d3e-f7988873b1e3" x=36 y=5 w=36 h=10 control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Param":{"addr":"voices/tuning"}}},"kind":"Readout","slots":[{"node":"92591dd5-a3e7-41f8-83c8-d8ce19ef0c8a","role":"Value"}]}}>
+            <Text name="value" id="92591dd5-a3e7-41f8-83c8-d8ce19ef0c8a" y=0.5800000000000001 w=36 h=9 fill="#e6e6e8" size=6.5 weight=700 />
           </Frame>
-          <Text name="label" id="08dbde14-7bdf-44b9-a7c6-4b341f635931" x=80 y=5.58 w=18.625 h=9 fill="#e6e6e8" size=6.5 weight=700>KEY</Text>
-          <Frame name="Key" id="a2ad2ac1-cad0-4246-bd09-90b40bc42875" x=96 y=4 w=26 h=12 control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Param":{"addr":"voices/key"}}},"kind":"Selector","slots":[{"node":"13edee24-4260-4f06-9a72-744d1e8a5751","role":"Value"}]}}>
-            <Rectangle name="box" id="9956e5cb-ea90-44fe-ae11-2212947d4171" w=26 h=12 radius=2.5 fill="#3a3a3d" />
-            <Text name="value" id="13edee24-4260-4f06-9a72-744d1e8a5751" x=3.5 y=1.5119999999999996 w=14 h=9 fill="#e6e6e8" size=6.6000000000000005 weight=700 />
-            <Vector name="chevron" id="bbb1a768-2d41-492c-865e-e99b1141734a" x=18 y=4.8 w=5 h=2.4000000000000004 stroke="#e6e6e8" stroke-weight=0.8 stroke-cap="round" stroke-join="round" geometry="M 0.000 0.000 L 2.500 2.400 L 5.000 0.000 " />
+          <Text name="label" id="e58899e7-93b5-4553-90e7-0c193a870278" x=80 y=5.58 w=18.625 h=9 fill="#e6e6e8" size=6.5 weight=700>KEY</Text>
+          <Frame name="Key" id="57757d6e-8124-4ea7-823f-32ef4b4e64a1" x=96 y=4 w=26 h=12 control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Param":{"addr":"voices/key"}}},"kind":"Selector","slots":[{"node":"c14ffe97-1ab9-471d-aac4-e6b54a1234a3","role":"Value"}]}}>
+            <Rectangle name="box" id="17acab61-fd8d-4ef3-bc49-2d83a60b074e" w=26 h=12 radius=2.5 fill="#3a3a3d" />
+            <Text name="value" id="c14ffe97-1ab9-471d-aac4-e6b54a1234a3" x=3.5 y=1.5119999999999996 w=14 h=9 fill="#e6e6e8" size=6.6000000000000005 weight=700 />
+            <Vector name="chevron" id="48a9892e-10e3-4dca-89a9-bb184d15d558" x=18 y=4.8 w=5 h=2.4000000000000004 stroke="#e6e6e8" stroke-weight=0.8 stroke-cap="round" stroke-join="round" geometry="M 0.000 0.000 L 2.500 2.400 L 5.000 0.000 " />
           </Frame>
-          <Text name="label" id="57958734-3331-406a-92f9-7db767487118" x=130 y=5.58 w=28.375 h=9 fill="#e6e6e8" size=6.5 weight=700>SCALE</Text>
-          <Frame name="Scale" id="83244b79-1bab-4bc6-afbf-a10d6ff6ad12" x=152 y=4 w=68 h=12 control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Param":{"addr":"voices/scale"}}},"kind":"Selector","slots":[{"node":"eb79dd6c-5147-4298-8fa5-70acf12cd0b9","role":"Value"}]}}>
-            <Rectangle name="box" id="a70c6e77-3a0a-4ae0-92aa-846816882588" w=68 h=12 radius=2.5 fill="#3a3a3d" />
-            <Text name="value" id="eb79dd6c-5147-4298-8fa5-70acf12cd0b9" x=3.5 y=1.5119999999999996 w=56 h=9 fill="#e6e6e8" size=6.6000000000000005 weight=700 />
-            <Vector name="chevron" id="b1405352-e86b-445b-83c6-2e2468b870f5" x=60 y=4.8 w=5 h=2.4000000000000004 stroke="#e6e6e8" stroke-weight=0.8 stroke-cap="round" stroke-join="round" geometry="M 0.000 0.000 L 2.500 2.400 L 5.000 0.000 " />
+          <Text name="label" id="ba466b82-4ce4-42ec-be04-75a2185bd5aa" x=130 y=5.58 w=28.375 h=9 fill="#e6e6e8" size=6.5 weight=700>SCALE</Text>
+          <Frame name="Scale" id="c83a88d4-cfae-4d1c-b270-6e27c08cc250" x=152 y=4 w=68 h=12 control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Param":{"addr":"voices/scale"}}},"kind":"Selector","slots":[{"node":"6723ac8d-8045-4cad-ad96-f0b53c9043d6","role":"Value"}]}}>
+            <Rectangle name="box" id="080bd4ed-35e7-4631-9a52-54dcfe536640" w=68 h=12 radius=2.5 fill="#3a3a3d" />
+            <Text name="value" id="6723ac8d-8045-4cad-ad96-f0b53c9043d6" x=3.5 y=1.5119999999999996 w=56 h=9 fill="#e6e6e8" size=6.6000000000000005 weight=700 />
+            <Vector name="chevron" id="6648eaed-55e9-4680-bc77-ce51bacb1f03" x=60 y=4.8 w=5 h=2.4000000000000004 stroke="#e6e6e8" stroke-weight=0.8 stroke-cap="round" stroke-join="round" geometry="M 0.000 0.000 L 2.500 2.400 L 5.000 0.000 " />
           </Frame>
-          <Text name="label" id="ea51ccc9-a7ce-4080-bbe9-4febfe50cf0e" x=224 y=5.58 w=38.125 h=9 fill="#e6e6e8" size=6.5 weight=700>VOICING</Text>
-          <Frame name="Voicing" id="b7aa8877-2150-4001-8895-257813c13ab5" x=254 y=4 w=110 h=12 control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Param":{"addr":"voices/voicing"}}},"kind":"Selector","slots":[{"node":"8c262bec-d7a5-4081-94c1-e9a04f85ee1c","role":"Value"}]}}>
-            <Rectangle name="box" id="2a16437f-d8fd-4683-a0b1-ae94b7ef620e" w=110 h=12 radius=2.5 fill="#3a3a3d" />
-            <Text name="value" id="8c262bec-d7a5-4081-94c1-e9a04f85ee1c" x=3.5 y=1.5119999999999996 w=98 h=9 fill="#e6e6e8" size=6.6000000000000005 weight=700 />
-            <Vector name="chevron" id="d4fc6514-7648-4553-b900-0bbbbecc5c98" x=102 y=4.8 w=5 h=2.4000000000000004 stroke="#e6e6e8" stroke-weight=0.8 stroke-cap="round" stroke-join="round" geometry="M 0.000 0.000 L 2.500 2.400 L 5.000 0.000 " />
+          <Text name="label" id="c7920f1e-96f0-4c93-ac5f-84c8138776c2" x=224 y=5.58 w=38.125 h=9 fill="#e6e6e8" size=6.5 weight=700>VOICING</Text>
+          <Frame name="Voicing" id="4618f305-526c-44b0-88f0-53c54895258d" x=254 y=4 w=110 h=12 control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Param":{"addr":"voices/voicing"}}},"kind":"Selector","slots":[{"node":"e2a497e9-728f-4be6-8e16-b300c496fcb5","role":"Value"}]}}>
+            <Rectangle name="box" id="ed24b382-24d2-47e9-a34a-3991e48c178c" w=110 h=12 radius=2.5 fill="#3a3a3d" />
+            <Text name="value" id="e2a497e9-728f-4be6-8e16-b300c496fcb5" x=3.5 y=1.5119999999999996 w=98 h=9 fill="#e6e6e8" size=6.6000000000000005 weight=700 />
+            <Vector name="chevron" id="4870a761-d9d5-4ca9-9736-7f2a547bd3b9" x=102 y=4.8 w=5 h=2.4000000000000004 stroke="#e6e6e8" stroke-weight=0.8 stroke-cap="round" stroke-join="round" geometry="M 0.000 0.000 L 2.500 2.400 L 5.000 0.000 " />
           </Frame>
-          <Text name="label" id="490825c8-8e93-4675-8314-675b994007b0" x=372 y=5.92 w=40 h=9 fill="#e6e6e8" size=6 weight=700>QUANTIZE</Text>
-          <Frame name="Quantize" id="5634ac7b-4118-4a7a-9b05-23451df3731f" x=406 y=4 w=32 h=12 control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Param":{"addr":"voices/quantize"}}},"kind":{"Button":{"mode":"Toggle"}},"slots":[{"node":"9b7fb9e8-9ecd-4b87-9a52-4a1005f05cac","role":"Off"},{"node":"bd09a533-b8b9-4d75-a119-dbbe08ade76e","role":"On"}]}}>
-            <Rectangle name="well" id="094db221-21f4-4cc8-90ee-909f9993d576" w=32 h=12 radius=2.5 fill="#3a3a3d" />
-            <Frame name="off" id="9b7fb9e8-9ecd-4b87-9a52-4a1005f05cac" w=32 h=12>
-              <Rectangle name="seg" id="7b04492d-6feb-4e90-a776-94c392db9529" x=1 y=1 w=15 h=10 radius=2 fill="#5e5e62" />
+          <Text name="label" id="f9ed2117-8e67-4d29-a82b-3dad03b30a0c" x=372 y=5.92 w=40 h=9 fill="#e6e6e8" size=6 weight=700>QUANTIZE</Text>
+          <Frame name="Quantize" id="1e2e414f-3f8f-4639-b4fe-fc42e2b61b94" x=406 y=4 w=32 h=12 control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Param":{"addr":"voices/quantize"}}},"kind":{"Button":{"mode":"Toggle"}},"slots":[{"node":"99f00369-6b77-44c2-81d4-d5daeda3c177","role":"Off"},{"node":"a73e790b-1a3d-49c4-b2db-2a268ebc58d7","role":"On"}]}}>
+            <Rectangle name="well" id="e5950909-be83-4d4a-bf3f-f5dcca9981a8" w=32 h=12 radius=2.5 fill="#3a3a3d" />
+            <Frame name="off" id="99f00369-6b77-44c2-81d4-d5daeda3c177" w=32 h=12>
+              <Rectangle name="seg" id="816050f9-ec49-4777-ae4d-16e0b5190c12" x=1 y=1 w=15 h=10 radius=2 fill="#5e5e62" />
             </Frame>
-            <Frame name="on" id="bd09a533-b8b9-4d75-a119-dbbe08ade76e" w=32 h=12>
-              <Rectangle name="seg" id="8a701049-04c5-4d2b-bd98-264f5f009cd8" x=16 y=1 w=15 h=10 radius=2 fill="#5e5e62" />
+            <Frame name="on" id="a73e790b-1a3d-49c4-b2db-2a268ebc58d7" w=32 h=12>
+              <Rectangle name="seg" id="474ff775-6d53-4a1e-a55b-ac9ef2d781ea" x=16 y=1 w=15 h=10 radius=2 fill="#5e5e62" />
             </Frame>
-            <Text name="OFF" id="9fe00f61-4541-4377-b800-bfa67b0f51c5" x=1 y=2.26 w=15 h=8 fill="#e6e6e8" size=5.5 weight=700 text-align="center">OFF</Text>
-            <Text name="ON" id="42715bd3-c160-4f69-bc64-40dde21ebffc" x=16 y=2.26 w=15 h=8 fill="#8a8a90" size=5.5 weight=700 text-align="center">ON</Text>
+            <Text name="OFF" id="fa4b6480-fa53-42c7-83d9-a8106718ebbb" x=1 y=2.26 w=15 h=8 fill="#e6e6e8" size=5.5 weight=700 text-align="center">OFF</Text>
+            <Text name="ON" id="4043b21b-cd0d-488b-a569-796f83aa60a9" x=16 y=2.26 w=15 h=8 fill="#8a8a90" size=5.5 weight=700 text-align="center">ON</Text>
           </Frame>
-          <Frame name="Voice 1" id="ca447e5d-20dd-4ed7-815a-d3ccda342b61" x=5 y=34 w=55 h=12 control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Param":{"addr":"voices/v1_on"}}},"kind":{"Button":{"mode":"Toggle"}},"slots":[{"node":"604abe23-0cba-4699-b90c-b1c0361e400e","role":"On"},{"node":"85260dcc-335f-40bb-b42e-510de434edd7","role":"Off"}]}}>
-            <Rectangle name="box" id="39544d40-3611-4c88-bd08-38c4cf0a3506" w=55 h=12 radius=1.5 fill={[{"kind":{"LinearGradient":{"stops":[{"color":"#6a6a6e","position":0.0},{"color":"#57575b","position":1.0}],"transform":{"a":1.6653345369377348e-16,"b":-1.0,"c":1.0,"d":1.6653345369377348e-16,"tx":1.0,"ty":-1.942890293094024e-16}}}}]} />
-            <Text name="title" id="b2ad17e9-f097-45bb-bd2f-2305155c5a1c" x=4 y=1.5119999999999996 w=37 h=9 fill="#e6e6e8" size=6.6000000000000005 weight=700 text-align="center">VOICE 1</Text>
-            <Frame name="on" id="604abe23-0cba-4699-b90c-b1c0361e400e" w=55 h=12>
-              <Rectangle name="pill" id="bfe72333-638e-43d4-81ce-bf0609815d59" x=40 y=3.5 w=10 h=5 radius=2.5 fill="#f4f4f4" />
-              <Ellipse name="dot" id="b79faaf6-02c1-48dd-91a2-7341833dce30" x=45.9 y=4.4 w=3.2 h=3.2 fill="#3a3a3d" />
+          <Frame name="Voice 1" id="ee8b4227-f2cc-4c3f-b3c5-50dca17ee2c8" x=5 y=34 w=55 h=12 control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Param":{"addr":"voices/v1_on"}}},"kind":{"Button":{"mode":"Toggle"}},"slots":[{"node":"1a35fb1d-7e3f-41c6-85be-08c622365df6","role":"On"},{"node":"6e7d63b4-b53b-4460-98c6-c3f01f2b9538","role":"Off"}]}}>
+            <Rectangle name="box" id="a12973e2-b609-4aa1-bbc2-1b22bb6c5701" w=55 h=12 radius=1.5 fill={[{"kind":{"LinearGradient":{"stops":[{"color":"#6a6a6e","position":0.0},{"color":"#57575b","position":1.0}],"transform":{"a":1.6653345369377348e-16,"b":-1.0,"c":1.0,"d":1.6653345369377348e-16,"tx":1.0,"ty":-1.942890293094024e-16}}}}]} />
+            <Text name="title" id="1668c346-5643-4882-822c-f90cbfd4198e" x=4 y=1.5119999999999996 w=37 h=9 fill="#e6e6e8" size=6.6000000000000005 weight=700 text-align="center">VOICE 1</Text>
+            <Frame name="on" id="1a35fb1d-7e3f-41c6-85be-08c622365df6" w=55 h=12>
+              <Rectangle name="pill" id="bb83ca52-b7f1-45a2-9445-d1dd09ce60bf" x=40 y=3.5 w=10 h=5 radius=2.5 fill="#f4f4f4" />
+              <Ellipse name="dot" id="637b83fb-2bc1-4bf2-9b86-5ee0c7bc5ee3" x=45.9 y=4.4 w=3.2 h=3.2 fill="#3a3a3d" />
             </Frame>
-            <Frame name="off" id="85260dcc-335f-40bb-b42e-510de434edd7" w=55 h=12>
-              <Rectangle name="pill" id="f04a6a71-b6a1-4bb6-b6eb-3d2aa2f1e827" x=40 y=3.5 w=10 h=5 radius=2.5 fill="#00000000" stroke="#f4f4f4" stroke-weight=0.7 stroke-align="inside" />
-              <Ellipse name="dot" id="7f427ebd-3094-4542-b088-34e2ad0a9923" x=41.1 y=4.6 w=2.8 h=2.8 fill="#f4f4f4" />
-            </Frame>
-          </Frame>
-          <Text name="label" id="ac3a98e0-52be-4abc-ba5f-767b7ef84a73" x=5 y=59.58 w=43 h=9 fill="#e6e6e8" size=6.5 weight=700>INTERVAL</Text>
-          <Frame name="Voice 1 interval" id="5f4ff158-4abd-4d4d-9259-20de840e5b25" x=5 y=70 w=55 h=12 control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Param":{"addr":"voices/v1_interval"}}},"kind":{"Fader":{"orientation":"Horizontal"}},"slots":[{"node":"40fd1a4d-37d6-47dc-9170-9b1dffc1e1cc","role":"Thumb"},{"node":"9d5037c5-2a86-4830-afac-eb8ca4bbab36","role":"Value"}]}}>
-            <Rectangle name="well" id="eb9e3dc4-2ad0-48f2-982a-1631ee0326ed" w=55 h=12 radius=2 fill={[{"kind":{"LinearGradient":{"stops":[{"color":"#46464a","position":0.0},{"color":"#39393c","position":1.0}],"transform":{"a":1.6653345369377348e-16,"b":-1.0,"c":1.0,"d":1.6653345369377348e-16,"tx":1.0,"ty":-1.942890293094024e-16}}}}]} />
-            <Frame name="lane" id="1ded287d-b7bf-4dd6-8236-3b51d66ca295" w=55 h=12>
-              <Rectangle name="marker" id="40fd1a4d-37d6-47dc-9170-9b1dffc1e1cc" w=7 h=12 fill="#a066e8cc" />
-            </Frame>
-            <Rectangle name="underline" id="36cd4fc3-bffe-47fe-a1c5-27fb7d76e79e" y=11 w=55 h=1 fill="#a066e8e6" />
-            <Text name="value" id="9d5037c5-2a86-4830-afac-eb8ca4bbab36" y=0.9408000000000003 w=55 h=11 fill="#e6e6e8" size=7.4399999999999995 weight=700 text-align="center" />
-          </Frame>
-          <Text name="label" id="c90f42b8-0598-429f-8504-4c8434cbbb8d" x=5 y=89.58 w=28.375 h=9 fill="#e6e6e8" size=6.5 weight=700>LEVEL</Text>
-          <Frame name="Voice 1 level" id="61493c48-e1ca-48ef-a78e-84d3a039640f" x=5 y=100 w=55 h=12 control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Param":{"addr":"voices/v1_level"}}},"format":{"decimals":1,"style":"Number"},"kind":{"Fader":{"orientation":"Horizontal"}},"slots":[{"node":"71a63243-177c-459b-a6d8-6ee4b6ce8a1f","role":"Fill"},{"node":"a0a3df42-0f1f-4a82-8113-12a8709fb75b","role":"Value"}]}}>
-            <Rectangle name="well" id="6aa5c087-cf99-4702-92af-3dfe971c0991" w=55 h=12 radius=2 fill={[{"kind":{"LinearGradient":{"stops":[{"color":"#46464a","position":0.0},{"color":"#39393c","position":1.0}],"transform":{"a":1.6653345369377348e-16,"b":-1.0,"c":1.0,"d":1.6653345369377348e-16,"tx":1.0,"ty":-1.942890293094024e-16}}}}]} />
-            <Frame name="lane" id="18235b93-60ce-40b7-90f7-ae16f1ae1eb3" w=55 h=12>
-              <Rectangle name="fill" id="71a63243-177c-459b-a6d8-6ee4b6ce8a1f" w=55 h=12 fill={[{"kind":{"LinearGradient":{"stops":[{"color":"#a066e8bf","position":0.0},{"color":"#a066e88c","position":1.0}],"transform":{"a":1.0,"b":5.551115123125783e-17,"c":-5.551115123125783e-17,"d":1.0,"tx":-2.7755575615628914e-17,"ty":0.0}}}}]} />
-            </Frame>
-            <Rectangle name="underline" id="76a4bd28-3111-4f89-958d-afef1f446382" y=11 w=55 h=1 fill="#a066e8e6" />
-            <Text name="value" id="a0a3df42-0f1f-4a82-8113-12a8709fb75b" y=0.9408000000000003 w=55 h=11 fill="#e6e6e8" size=7.4399999999999995 weight=700 text-align="center" />
-          </Frame>
-          <Text name="label" id="1e72540d-dfad-405a-850b-7ba71fff5194" x=5 y=119.58 w=18.625 h=9 fill="#e6e6e8" size=6.5 weight=700>PAN</Text>
-          <Frame name="Voice 1 pan" id="98ff8901-8194-4891-9efc-0d24df13de62" x=5 y=130 w=55 h=12 control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Param":{"addr":"voices/v1_pan"}}},"kind":{"Fader":{"orientation":"Horizontal"}},"slots":[{"node":"439f86a6-f8ab-485e-a879-1d64e8d43bb6","role":"Fill"},{"node":"e5f89cea-48be-46af-9b1b-164d6f3e02da","role":"Value"}]}}>
-            <Rectangle name="well" id="c6aac1b8-b723-4e7e-8931-6f7f0c1fa529" w=55 h=12 radius=2 fill={[{"kind":{"LinearGradient":{"stops":[{"color":"#46464a","position":0.0},{"color":"#39393c","position":1.0}],"transform":{"a":1.6653345369377348e-16,"b":-1.0,"c":1.0,"d":1.6653345369377348e-16,"tx":1.0,"ty":-1.942890293094024e-16}}}}]} />
-            <Frame name="lane" id="edf3d5c9-ff35-4540-971c-b19e7cdc5651" w=55 h=12>
-              <Rectangle name="fill" id="439f86a6-f8ab-485e-a879-1d64e8d43bb6" w=55 h=12 fill={[{"kind":{"LinearGradient":{"stops":[{"color":"#a066e8bf","position":0.0},{"color":"#a066e88c","position":1.0}],"transform":{"a":1.0,"b":5.551115123125783e-17,"c":-5.551115123125783e-17,"d":1.0,"tx":-2.7755575615628914e-17,"ty":0.0}}}}]} />
-            </Frame>
-            <Rectangle name="underline" id="efd20185-0d53-4b8b-81d8-b4f3292befb5" y=11 w=55 h=1 fill="#a066e8e6" />
-            <Text name="value" id="e5f89cea-48be-46af-9b1b-164d6f3e02da" y=0.9408000000000003 w=55 h=11 fill="#e6e6e8" size=7.4399999999999995 weight=700 text-align="center" />
-          </Frame>
-          <Frame name="Voice 2" id="db075c24-f63a-413f-972b-f4d9bf120e20" x=62 y=34 w=55 h=12 control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Param":{"addr":"voices/v2_on"}}},"kind":{"Button":{"mode":"Toggle"}},"slots":[{"node":"1328dd05-15da-4f29-8942-b568bf164c51","role":"On"},{"node":"09778f29-2fca-4662-a3f9-ddb621d5f61f","role":"Off"}]}}>
-            <Rectangle name="box" id="06f7e990-960e-48a7-aa41-6afb400d50ca" w=55 h=12 radius=1.5 fill={[{"kind":{"LinearGradient":{"stops":[{"color":"#6a6a6e","position":0.0},{"color":"#57575b","position":1.0}],"transform":{"a":1.6653345369377348e-16,"b":-1.0,"c":1.0,"d":1.6653345369377348e-16,"tx":1.0,"ty":-1.942890293094024e-16}}}}]} />
-            <Text name="title" id="ab5f0c4b-fffa-4f74-ba35-7e11e5ec0caa" x=4 y=1.5119999999999996 w=37 h=9 fill="#e6e6e8" size=6.6000000000000005 weight=700 text-align="center">VOICE 2</Text>
-            <Frame name="on" id="1328dd05-15da-4f29-8942-b568bf164c51" w=55 h=12>
-              <Rectangle name="pill" id="359f8151-d5eb-49ea-957f-4d12ea88a7f3" x=40 y=3.5 w=10 h=5 radius=2.5 fill="#f4f4f4" />
-              <Ellipse name="dot" id="0a465921-8403-429f-a9b8-8a9a19bc43e2" x=45.9 y=4.4 w=3.2 h=3.2 fill="#3a3a3d" />
-            </Frame>
-            <Frame name="off" id="09778f29-2fca-4662-a3f9-ddb621d5f61f" w=55 h=12>
-              <Rectangle name="pill" id="2e46b720-47d3-4930-8333-b3d47a23c542" x=40 y=3.5 w=10 h=5 radius=2.5 fill="#00000000" stroke="#f4f4f4" stroke-weight=0.7 stroke-align="inside" />
-              <Ellipse name="dot" id="9dca7847-856e-40bf-ac2a-2e624d7dab7a" x=41.1 y=4.6 w=2.8 h=2.8 fill="#f4f4f4" />
+            <Frame name="off" id="6e7d63b4-b53b-4460-98c6-c3f01f2b9538" w=55 h=12>
+              <Rectangle name="pill" id="a34afe4c-c8bc-457a-aed0-971efdd61157" x=40 y=3.5 w=10 h=5 radius=2.5 fill="#00000000" stroke="#f4f4f4" stroke-weight=0.7 stroke-align="inside" />
+              <Ellipse name="dot" id="2fb0048f-db0d-453d-935b-e7ff8b6a518d" x=41.1 y=4.6 w=2.8 h=2.8 fill="#f4f4f4" />
             </Frame>
           </Frame>
-          <Text name="label" id="8b799cab-7bd5-4d64-9e8b-86353b6c1ac1" x=62 y=59.58 w=43 h=9 fill="#8a8a90" size=6.5 weight=700>INTERVAL</Text>
-          <Frame name="Voice 2 interval" id="18b8dded-4142-4ae3-b1c5-b3b01e06a4d9" x=62 y=70 w=55 h=12 control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Param":{"addr":"voices/v2_interval"}}},"kind":{"Fader":{"orientation":"Horizontal"}},"slots":[{"node":"98730e24-5b38-4b3e-8101-abe321d71446","role":"Thumb"},{"node":"f8325d0e-fdfb-4d76-92c0-10ce506f2a91","role":"Value"}]}}>
-            <Rectangle name="well" id="a1395a08-a579-428d-94b6-274f104acfcc" w=55 h=12 radius=2 fill={[{"kind":{"LinearGradient":{"stops":[{"color":"#46464a","position":0.0},{"color":"#39393c","position":1.0}],"transform":{"a":1.6653345369377348e-16,"b":-1.0,"c":1.0,"d":1.6653345369377348e-16,"tx":1.0,"ty":-1.942890293094024e-16}}}}]} />
-            <Frame name="lane" id="a78a6b4e-faa3-4e12-a7c4-b32a4f6d6781" w=55 h=12>
-              <Rectangle name="marker" id="98730e24-5b38-4b3e-8101-abe321d71446" w=7 h=12 fill="#a066e8cc" />
+          <Text name="label" id="9c319e2d-c703-4313-acc3-d1382c5fbbb6" x=5 y=59.58 w=43 h=9 fill="#e6e6e8" size=6.5 weight=700>INTERVAL</Text>
+          <Frame name="Voice 1 interval" id="3ffc6628-76a6-456d-9e09-75965cb94d11" x=5 y=70 w=55 h=12 control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Param":{"addr":"voices/v1_interval"}}},"kind":{"Fader":{"orientation":"Horizontal"}},"slots":[{"node":"956de205-1831-49e7-9213-413db1970f6f","role":"Thumb"},{"node":"4dea94aa-7e95-4928-b079-bf1a24a63094","role":"Value"}]}}>
+            <Rectangle name="well" id="ad6774f7-35ab-4401-8cc3-bdb91ced8cfc" w=55 h=12 radius=2 fill={[{"kind":{"LinearGradient":{"stops":[{"color":"#46464a","position":0.0},{"color":"#39393c","position":1.0}],"transform":{"a":1.6653345369377348e-16,"b":-1.0,"c":1.0,"d":1.6653345369377348e-16,"tx":1.0,"ty":-1.942890293094024e-16}}}}]} />
+            <Frame name="lane" id="a98c45d7-6c5c-496b-882a-e3284af69118" w=55 h=12>
+              <Rectangle name="marker" id="956de205-1831-49e7-9213-413db1970f6f" w=7 h=12 fill="#a066e8cc" />
             </Frame>
-            <Rectangle name="underline" id="64de29e8-f634-4550-9905-139bd179954d" y=11 w=55 h=1 fill="#a066e8e6" />
-            <Text name="value" id="f8325d0e-fdfb-4d76-92c0-10ce506f2a91" y=0.9408000000000003 w=55 h=11 fill="#e6e6e8" size=7.4399999999999995 weight=700 text-align="center" />
+            <Rectangle name="underline" id="2fd6c6a2-dd36-4ab2-b32a-65eba285a63c" y=11 w=55 h=1 fill="#a066e8e6" />
+            <Text name="value" id="4dea94aa-7e95-4928-b079-bf1a24a63094" y=0.9408000000000003 w=55 h=11 fill="#e6e6e8" size=7.4399999999999995 weight=700 text-align="center" />
           </Frame>
-          <Text name="label" id="e66cd659-bc9c-4c3b-85d1-82f61c46d530" x=62 y=89.58 w=28.375 h=9 fill="#8a8a90" size=6.5 weight=700>LEVEL</Text>
-          <Frame name="Voice 2 level" id="7abf512c-22e9-4420-b228-af36d470aebe" x=62 y=100 w=55 h=12 control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Param":{"addr":"voices/v2_level"}}},"format":{"decimals":1,"style":"Number"},"kind":{"Fader":{"orientation":"Horizontal"}},"slots":[{"node":"443eda72-ec7e-40c6-8203-0ce5b6f032ee","role":"Fill"},{"node":"e9352bc4-7a4a-49ca-b658-43c2f853dfbc","role":"Value"}]}}>
-            <Rectangle name="well" id="252c718f-bd91-496c-b2ba-d7e543b2f327" w=55 h=12 radius=2 fill={[{"kind":{"LinearGradient":{"stops":[{"color":"#46464a","position":0.0},{"color":"#39393c","position":1.0}],"transform":{"a":1.6653345369377348e-16,"b":-1.0,"c":1.0,"d":1.6653345369377348e-16,"tx":1.0,"ty":-1.942890293094024e-16}}}}]} />
-            <Frame name="lane" id="69e1b63d-b9d1-45b8-b75d-609431f36baa" w=55 h=12>
-              <Rectangle name="fill" id="443eda72-ec7e-40c6-8203-0ce5b6f032ee" w=55 h=12 fill={[{"kind":{"LinearGradient":{"stops":[{"color":"#a066e8bf","position":0.0},{"color":"#a066e88c","position":1.0}],"transform":{"a":1.0,"b":5.551115123125783e-17,"c":-5.551115123125783e-17,"d":1.0,"tx":-2.7755575615628914e-17,"ty":0.0}}}}]} />
+          <Text name="label" id="04c6514c-84ee-4316-ab8b-9f4f2b6be086" x=5 y=89.58 w=28.375 h=9 fill="#e6e6e8" size=6.5 weight=700>LEVEL</Text>
+          <Frame name="Voice 1 level" id="73a8a59d-a340-4250-a500-5a823baf4fbc" x=5 y=100 w=55 h=12 control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Param":{"addr":"voices/v1_level"}}},"format":{"decimals":1,"style":"Number"},"kind":{"Fader":{"orientation":"Horizontal"}},"slots":[{"node":"7fcb0d7e-152e-45e4-8573-2b866d10d75b","role":"Fill"},{"node":"0287e7a0-5d3d-4135-b95f-dddea1f8827f","role":"Value"}]}}>
+            <Rectangle name="well" id="05ed26bb-1c29-49da-945f-7b8ddfca45ff" w=55 h=12 radius=2 fill={[{"kind":{"LinearGradient":{"stops":[{"color":"#46464a","position":0.0},{"color":"#39393c","position":1.0}],"transform":{"a":1.6653345369377348e-16,"b":-1.0,"c":1.0,"d":1.6653345369377348e-16,"tx":1.0,"ty":-1.942890293094024e-16}}}}]} />
+            <Frame name="lane" id="8ac2fca2-8cb6-4e30-b8c4-41653a2f82d1" w=55 h=12>
+              <Rectangle name="fill" id="7fcb0d7e-152e-45e4-8573-2b866d10d75b" w=55 h=12 fill={[{"kind":{"LinearGradient":{"stops":[{"color":"#a066e8bf","position":0.0},{"color":"#a066e88c","position":1.0}],"transform":{"a":1.0,"b":5.551115123125783e-17,"c":-5.551115123125783e-17,"d":1.0,"tx":-2.7755575615628914e-17,"ty":0.0}}}}]} />
             </Frame>
-            <Rectangle name="underline" id="284823ce-5187-4df0-9aae-d58988bdb501" y=11 w=55 h=1 fill="#a066e8e6" />
-            <Text name="value" id="e9352bc4-7a4a-49ca-b658-43c2f853dfbc" y=0.9408000000000003 w=55 h=11 fill="#e6e6e8" size=7.4399999999999995 weight=700 text-align="center" />
+            <Rectangle name="underline" id="2b52ef5b-aacd-4c7f-9a34-da420adcc60b" y=11 w=55 h=1 fill="#a066e8e6" />
+            <Text name="value" id="0287e7a0-5d3d-4135-b95f-dddea1f8827f" y=0.9408000000000003 w=55 h=11 fill="#e6e6e8" size=7.4399999999999995 weight=700 text-align="center" />
           </Frame>
-          <Text name="label" id="b83336f7-fd34-4960-a3d6-de20aceeb06f" x=62 y=119.58 w=18.625 h=9 fill="#8a8a90" size=6.5 weight=700>PAN</Text>
-          <Frame name="Voice 2 pan" id="b4797a33-8c46-4f51-bfb0-bea5fd392800" x=62 y=130 w=55 h=12 control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Param":{"addr":"voices/v2_pan"}}},"kind":{"Fader":{"orientation":"Horizontal"}},"slots":[{"node":"57d06a87-012d-47a8-bf4d-43a8a97970fc","role":"Fill"},{"node":"635a0dcf-0e00-4816-a10c-78c79b8e15a4","role":"Value"}]}}>
-            <Rectangle name="well" id="98085eb0-e238-430a-9cfe-eea27323df41" w=55 h=12 radius=2 fill={[{"kind":{"LinearGradient":{"stops":[{"color":"#46464a","position":0.0},{"color":"#39393c","position":1.0}],"transform":{"a":1.6653345369377348e-16,"b":-1.0,"c":1.0,"d":1.6653345369377348e-16,"tx":1.0,"ty":-1.942890293094024e-16}}}}]} />
-            <Frame name="lane" id="6d05d49f-beba-4f2e-b39d-3552364d8c91" w=55 h=12>
-              <Rectangle name="fill" id="57d06a87-012d-47a8-bf4d-43a8a97970fc" w=55 h=12 fill={[{"kind":{"LinearGradient":{"stops":[{"color":"#a066e8bf","position":0.0},{"color":"#a066e88c","position":1.0}],"transform":{"a":1.0,"b":5.551115123125783e-17,"c":-5.551115123125783e-17,"d":1.0,"tx":-2.7755575615628914e-17,"ty":0.0}}}}]} />
+          <Text name="label" id="1d9ac4be-ea87-4da9-95a0-a29d52250888" x=5 y=119.58 w=18.625 h=9 fill="#e6e6e8" size=6.5 weight=700>PAN</Text>
+          <Frame name="Voice 1 pan" id="1ee6276a-f2dd-4389-a67a-1c597eaf0f96" x=5 y=130 w=55 h=12 control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Param":{"addr":"voices/v1_pan"}}},"kind":{"Fader":{"orientation":"Horizontal"}},"slots":[{"node":"c57c9528-f8cd-4562-a920-d668145b5b75","role":"Fill"},{"node":"add5ce83-1a39-471f-a2f2-a527b6c8742c","role":"Value"}]}}>
+            <Rectangle name="well" id="721b6aed-8333-4a11-88b0-36e66adc1026" w=55 h=12 radius=2 fill={[{"kind":{"LinearGradient":{"stops":[{"color":"#46464a","position":0.0},{"color":"#39393c","position":1.0}],"transform":{"a":1.6653345369377348e-16,"b":-1.0,"c":1.0,"d":1.6653345369377348e-16,"tx":1.0,"ty":-1.942890293094024e-16}}}}]} />
+            <Frame name="lane" id="e67c36ee-3b2e-4a3c-b2e0-42dfd72aee17" w=55 h=12>
+              <Rectangle name="fill" id="c57c9528-f8cd-4562-a920-d668145b5b75" w=55 h=12 fill={[{"kind":{"LinearGradient":{"stops":[{"color":"#a066e8bf","position":0.0},{"color":"#a066e88c","position":1.0}],"transform":{"a":1.0,"b":5.551115123125783e-17,"c":-5.551115123125783e-17,"d":1.0,"tx":-2.7755575615628914e-17,"ty":0.0}}}}]} />
             </Frame>
-            <Rectangle name="underline" id="c2dc4138-cae7-4ff6-b18e-984036fa24cb" y=11 w=55 h=1 fill="#a066e8e6" />
-            <Text name="value" id="635a0dcf-0e00-4816-a10c-78c79b8e15a4" y=0.9408000000000003 w=55 h=11 fill="#e6e6e8" size=7.4399999999999995 weight=700 text-align="center" />
+            <Rectangle name="underline" id="99075aae-0aba-4589-b493-f7944920ed50" y=11 w=55 h=1 fill="#a066e8e6" />
+            <Text name="value" id="add5ce83-1a39-471f-a2f2-a527b6c8742c" y=0.9408000000000003 w=55 h=11 fill="#e6e6e8" size=7.4399999999999995 weight=700 text-align="center" />
           </Frame>
-          <Frame name="Voice 3" id="9ff3b569-2457-4691-ad91-363c32b43ddb" x=324 y=34 w=55 h=12 control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Param":{"addr":"voices/v3_on"}}},"kind":{"Button":{"mode":"Toggle"}},"slots":[{"node":"961a1eee-8e68-4f77-a746-ef3543ae2ebd","role":"On"},{"node":"fad9aa97-e791-4b9a-b1d7-f5163d085187","role":"Off"}]}}>
-            <Rectangle name="box" id="f2074009-7b5e-4035-9922-49bfc6f3772f" w=55 h=12 radius=1.5 fill={[{"kind":{"LinearGradient":{"stops":[{"color":"#6a6a6e","position":0.0},{"color":"#57575b","position":1.0}],"transform":{"a":1.6653345369377348e-16,"b":-1.0,"c":1.0,"d":1.6653345369377348e-16,"tx":1.0,"ty":-1.942890293094024e-16}}}}]} />
-            <Text name="title" id="d0ede79c-e864-4c0a-aed1-4813117dc04b" x=4 y=1.5119999999999996 w=37 h=9 fill="#e6e6e8" size=6.6000000000000005 weight=700 text-align="center">VOICE 3</Text>
-            <Frame name="on" id="961a1eee-8e68-4f77-a746-ef3543ae2ebd" w=55 h=12>
-              <Rectangle name="pill" id="eac7923b-deeb-4213-98c3-b5c0d4fcd1e4" x=40 y=3.5 w=10 h=5 radius=2.5 fill="#f4f4f4" />
-              <Ellipse name="dot" id="c7c7660f-562c-4ab9-9957-0bdc8d0d4c36" x=45.9 y=4.4 w=3.2 h=3.2 fill="#3a3a3d" />
+          <Frame name="Voice 2" id="666e91aa-9cdd-4d0b-8812-134b575b5edb" x=62 y=34 w=55 h=12 control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Param":{"addr":"voices/v2_on"}}},"kind":{"Button":{"mode":"Toggle"}},"slots":[{"node":"3006f59e-62b6-48f5-9e50-bd30d1b69226","role":"On"},{"node":"ab822b9a-203f-450c-91a2-c91468cb7f17","role":"Off"}]}}>
+            <Rectangle name="box" id="b6a820f3-98f0-46ab-9464-603ad168631a" w=55 h=12 radius=1.5 fill={[{"kind":{"LinearGradient":{"stops":[{"color":"#6a6a6e","position":0.0},{"color":"#57575b","position":1.0}],"transform":{"a":1.6653345369377348e-16,"b":-1.0,"c":1.0,"d":1.6653345369377348e-16,"tx":1.0,"ty":-1.942890293094024e-16}}}}]} />
+            <Text name="title" id="e5d3ee18-0d41-4649-ba4c-4610c9518d8c" x=4 y=1.5119999999999996 w=37 h=9 fill="#e6e6e8" size=6.6000000000000005 weight=700 text-align="center">VOICE 2</Text>
+            <Frame name="on" id="3006f59e-62b6-48f5-9e50-bd30d1b69226" w=55 h=12>
+              <Rectangle name="pill" id="a7b7330b-fa31-414b-9c5e-224c8e831e01" x=40 y=3.5 w=10 h=5 radius=2.5 fill="#f4f4f4" />
+              <Ellipse name="dot" id="888289fe-8f10-417b-a524-1a9bc2085abf" x=45.9 y=4.4 w=3.2 h=3.2 fill="#3a3a3d" />
             </Frame>
-            <Frame name="off" id="fad9aa97-e791-4b9a-b1d7-f5163d085187" w=55 h=12>
-              <Rectangle name="pill" id="79e3daae-2e0d-4118-8260-6818c5e0f0f5" x=40 y=3.5 w=10 h=5 radius=2.5 fill="#00000000" stroke="#f4f4f4" stroke-weight=0.7 stroke-align="inside" />
-              <Ellipse name="dot" id="64281622-7c20-488e-a7cd-f1544b43df34" x=41.1 y=4.6 w=2.8 h=2.8 fill="#f4f4f4" />
-            </Frame>
-          </Frame>
-          <Text name="label" id="6de596fb-9000-4659-bb2d-9e6f4343c1d6" x=324 y=59.58 w=43 h=9 fill="#8a8a90" size=6.5 weight=700>INTERVAL</Text>
-          <Frame name="Voice 3 interval" id="ac687bbc-915f-47f2-85f3-c4231e857311" x=324 y=70 w=55 h=12 control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Param":{"addr":"voices/v3_interval"}}},"kind":{"Fader":{"orientation":"Horizontal"}},"slots":[{"node":"6b46f49d-a8ca-48e0-bbfe-5fe024aefba6","role":"Thumb"},{"node":"936c0149-b522-437c-91f8-fcb48fd8d9a9","role":"Value"}]}}>
-            <Rectangle name="well" id="eddf47fe-d53e-4f64-a850-db1f96832098" w=55 h=12 radius=2 fill={[{"kind":{"LinearGradient":{"stops":[{"color":"#46464a","position":0.0},{"color":"#39393c","position":1.0}],"transform":{"a":1.6653345369377348e-16,"b":-1.0,"c":1.0,"d":1.6653345369377348e-16,"tx":1.0,"ty":-1.942890293094024e-16}}}}]} />
-            <Frame name="lane" id="3f570d6e-baaf-46c2-b2a2-7769426235d3" w=55 h=12>
-              <Rectangle name="marker" id="6b46f49d-a8ca-48e0-bbfe-5fe024aefba6" w=7 h=12 fill="#a066e8cc" />
-            </Frame>
-            <Rectangle name="underline" id="f58c7c5f-ec1d-4161-9368-63fcb23159d6" y=11 w=55 h=1 fill="#a066e8e6" />
-            <Text name="value" id="936c0149-b522-437c-91f8-fcb48fd8d9a9" y=0.9408000000000003 w=55 h=11 fill="#e6e6e8" size=7.4399999999999995 weight=700 text-align="center" />
-          </Frame>
-          <Text name="label" id="1bc488c1-f791-45a4-aaf9-e4b0612bd253" x=324 y=89.58 w=28.375 h=9 fill="#8a8a90" size=6.5 weight=700>LEVEL</Text>
-          <Frame name="Voice 3 level" id="44bb25bd-b1b8-427b-8341-1c643b1550b6" x=324 y=100 w=55 h=12 control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Param":{"addr":"voices/v3_level"}}},"format":{"decimals":1,"style":"Number"},"kind":{"Fader":{"orientation":"Horizontal"}},"slots":[{"node":"125d5432-ed67-47ee-a6a6-5d99450c8aaa","role":"Fill"},{"node":"f9074d9f-0597-4841-9456-cb16ca183d8a","role":"Value"}]}}>
-            <Rectangle name="well" id="0572c01b-1135-4cda-8534-24bb612ee386" w=55 h=12 radius=2 fill={[{"kind":{"LinearGradient":{"stops":[{"color":"#46464a","position":0.0},{"color":"#39393c","position":1.0}],"transform":{"a":1.6653345369377348e-16,"b":-1.0,"c":1.0,"d":1.6653345369377348e-16,"tx":1.0,"ty":-1.942890293094024e-16}}}}]} />
-            <Frame name="lane" id="c846274e-3f3a-4f94-b274-7bd5c9fc9fb3" w=55 h=12>
-              <Rectangle name="fill" id="125d5432-ed67-47ee-a6a6-5d99450c8aaa" w=55 h=12 fill={[{"kind":{"LinearGradient":{"stops":[{"color":"#a066e8bf","position":0.0},{"color":"#a066e88c","position":1.0}],"transform":{"a":1.0,"b":5.551115123125783e-17,"c":-5.551115123125783e-17,"d":1.0,"tx":-2.7755575615628914e-17,"ty":0.0}}}}]} />
-            </Frame>
-            <Rectangle name="underline" id="8d6beda6-a7b3-4318-bd9a-34933338be7e" y=11 w=55 h=1 fill="#a066e8e6" />
-            <Text name="value" id="f9074d9f-0597-4841-9456-cb16ca183d8a" y=0.9408000000000003 w=55 h=11 fill="#e6e6e8" size=7.4399999999999995 weight=700 text-align="center" />
-          </Frame>
-          <Text name="label" id="1dd26adf-eff5-42ef-a7f2-caea119dff87" x=324 y=119.58 w=18.625 h=9 fill="#8a8a90" size=6.5 weight=700>PAN</Text>
-          <Frame name="Voice 3 pan" id="bddea878-7c2c-4960-9001-8a8c44d89758" x=324 y=130 w=55 h=12 control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Param":{"addr":"voices/v3_pan"}}},"kind":{"Fader":{"orientation":"Horizontal"}},"slots":[{"node":"c4657ab0-7056-4964-8b59-0f502b331414","role":"Fill"},{"node":"062822ba-a6c2-40a3-bc3a-b7a4a7e58654","role":"Value"}]}}>
-            <Rectangle name="well" id="6e1880ba-19dc-4f7b-905b-813ea7ba9e97" w=55 h=12 radius=2 fill={[{"kind":{"LinearGradient":{"stops":[{"color":"#46464a","position":0.0},{"color":"#39393c","position":1.0}],"transform":{"a":1.6653345369377348e-16,"b":-1.0,"c":1.0,"d":1.6653345369377348e-16,"tx":1.0,"ty":-1.942890293094024e-16}}}}]} />
-            <Frame name="lane" id="acc39351-b0e0-4361-a8a3-04f993bf3b53" w=55 h=12>
-              <Rectangle name="fill" id="c4657ab0-7056-4964-8b59-0f502b331414" w=55 h=12 fill={[{"kind":{"LinearGradient":{"stops":[{"color":"#a066e8bf","position":0.0},{"color":"#a066e88c","position":1.0}],"transform":{"a":1.0,"b":5.551115123125783e-17,"c":-5.551115123125783e-17,"d":1.0,"tx":-2.7755575615628914e-17,"ty":0.0}}}}]} />
-            </Frame>
-            <Rectangle name="underline" id="93ad030e-82d7-4961-96e7-8c7d138742d7" y=11 w=55 h=1 fill="#a066e8e6" />
-            <Text name="value" id="062822ba-a6c2-40a3-bc3a-b7a4a7e58654" y=0.9408000000000003 w=55 h=11 fill="#e6e6e8" size=7.4399999999999995 weight=700 text-align="center" />
-          </Frame>
-          <Frame name="Voice 4" id="6875ca52-6769-4252-a45a-31ad72d3d7c4" x=382 y=34 w=55 h=12 control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Param":{"addr":"voices/v4_on"}}},"kind":{"Button":{"mode":"Toggle"}},"slots":[{"node":"dc44f9df-949c-4dd6-974c-188e8cbd6cfb","role":"On"},{"node":"a977cca1-4bf8-4399-9b6c-74830a599048","role":"Off"}]}}>
-            <Rectangle name="box" id="2a6fbb33-169f-428f-8e95-31496f9f1610" w=55 h=12 radius=1.5 fill={[{"kind":{"LinearGradient":{"stops":[{"color":"#6a6a6e","position":0.0},{"color":"#57575b","position":1.0}],"transform":{"a":1.6653345369377348e-16,"b":-1.0,"c":1.0,"d":1.6653345369377348e-16,"tx":1.0,"ty":-1.942890293094024e-16}}}}]} />
-            <Text name="title" id="fca0b2bc-b31c-43c3-b1b1-4039ae355c58" x=4 y=1.5119999999999996 w=37 h=9 fill="#e6e6e8" size=6.6000000000000005 weight=700 text-align="center">VOICE 4</Text>
-            <Frame name="on" id="dc44f9df-949c-4dd6-974c-188e8cbd6cfb" w=55 h=12>
-              <Rectangle name="pill" id="4214d6bc-a40e-486c-a337-294400e1565f" x=40 y=3.5 w=10 h=5 radius=2.5 fill="#f4f4f4" />
-              <Ellipse name="dot" id="e8b16a0f-47d4-4cbc-b6ed-6557821bbbad" x=45.9 y=4.4 w=3.2 h=3.2 fill="#3a3a3d" />
-            </Frame>
-            <Frame name="off" id="a977cca1-4bf8-4399-9b6c-74830a599048" w=55 h=12>
-              <Rectangle name="pill" id="9a17ca3f-fd59-4172-a36d-68792e8276c8" x=40 y=3.5 w=10 h=5 radius=2.5 fill="#00000000" stroke="#f4f4f4" stroke-weight=0.7 stroke-align="inside" />
-              <Ellipse name="dot" id="62c1e1b6-9248-4401-bc98-fdd04024f233" x=41.1 y=4.6 w=2.8 h=2.8 fill="#f4f4f4" />
+            <Frame name="off" id="ab822b9a-203f-450c-91a2-c91468cb7f17" w=55 h=12>
+              <Rectangle name="pill" id="39d64d51-47e5-45b1-994d-dec533f6cf77" x=40 y=3.5 w=10 h=5 radius=2.5 fill="#00000000" stroke="#f4f4f4" stroke-weight=0.7 stroke-align="inside" />
+              <Ellipse name="dot" id="517b1b3b-be58-4c1e-a207-0a4d816a8bcf" x=41.1 y=4.6 w=2.8 h=2.8 fill="#f4f4f4" />
             </Frame>
           </Frame>
-          <Text name="label" id="f0067bde-a304-4f42-ac1c-bd000697e782" x=382 y=59.58 w=43 h=9 fill="#e6e6e8" size=6.5 weight=700>INTERVAL</Text>
-          <Frame name="Voice 4 interval" id="e9095774-e90e-4ed4-9d46-7bf8160ff57a" x=382 y=70 w=55 h=12 control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Param":{"addr":"voices/v4_interval"}}},"kind":{"Fader":{"orientation":"Horizontal"}},"slots":[{"node":"ac44d987-2ea8-45dc-b248-b83fe2bd0dfb","role":"Thumb"},{"node":"caf6a016-a8c3-4f41-b0c5-9784919bf721","role":"Value"}]}}>
-            <Rectangle name="well" id="ea7e83ce-325c-4198-9697-6c8e83ae78d8" w=55 h=12 radius=2 fill={[{"kind":{"LinearGradient":{"stops":[{"color":"#46464a","position":0.0},{"color":"#39393c","position":1.0}],"transform":{"a":1.6653345369377348e-16,"b":-1.0,"c":1.0,"d":1.6653345369377348e-16,"tx":1.0,"ty":-1.942890293094024e-16}}}}]} />
-            <Frame name="lane" id="2a7f20f2-f93b-4005-b239-e0e900ba91d5" w=55 h=12>
-              <Rectangle name="marker" id="ac44d987-2ea8-45dc-b248-b83fe2bd0dfb" w=7 h=12 fill="#a066e8cc" />
+          <Text name="label" id="6db92307-20ad-4907-b147-b40e9cb4a46d" x=62 y=59.58 w=43 h=9 fill="#8a8a90" size=6.5 weight=700>INTERVAL</Text>
+          <Frame name="Voice 2 interval" id="4eb17964-5eb8-4657-a849-e03a1f245b7d" x=62 y=70 w=55 h=12 control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Param":{"addr":"voices/v2_interval"}}},"kind":{"Fader":{"orientation":"Horizontal"}},"slots":[{"node":"3118144b-94f3-47de-809b-963ba1494532","role":"Thumb"},{"node":"1cd0da03-6926-41b3-8bf5-a124af7272c2","role":"Value"}]}}>
+            <Rectangle name="well" id="6ab996bc-19c6-47a7-a11a-0ed629b00f8e" w=55 h=12 radius=2 fill={[{"kind":{"LinearGradient":{"stops":[{"color":"#46464a","position":0.0},{"color":"#39393c","position":1.0}],"transform":{"a":1.6653345369377348e-16,"b":-1.0,"c":1.0,"d":1.6653345369377348e-16,"tx":1.0,"ty":-1.942890293094024e-16}}}}]} />
+            <Frame name="lane" id="eac10990-730f-42f4-8168-76c9367acb8a" w=55 h=12>
+              <Rectangle name="marker" id="3118144b-94f3-47de-809b-963ba1494532" w=7 h=12 fill="#a066e8cc" />
             </Frame>
-            <Rectangle name="underline" id="3a13a3a7-eb41-46c1-8c5d-cb31d3f7d924" y=11 w=55 h=1 fill="#a066e8e6" />
-            <Text name="value" id="caf6a016-a8c3-4f41-b0c5-9784919bf721" y=0.9408000000000003 w=55 h=11 fill="#e6e6e8" size=7.4399999999999995 weight=700 text-align="center" />
+            <Rectangle name="underline" id="828b3999-5750-4198-b43c-0a47b3885177" y=11 w=55 h=1 fill="#a066e8e6" />
+            <Text name="value" id="1cd0da03-6926-41b3-8bf5-a124af7272c2" y=0.9408000000000003 w=55 h=11 fill="#e6e6e8" size=7.4399999999999995 weight=700 text-align="center" />
           </Frame>
-          <Text name="label" id="012030bf-f932-45f1-8326-e4bee414950e" x=382 y=89.58 w=28.375 h=9 fill="#e6e6e8" size=6.5 weight=700>LEVEL</Text>
-          <Frame name="Voice 4 level" id="ad96f3d9-1e94-4894-8545-42b4e713393e" x=382 y=100 w=55 h=12 control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Param":{"addr":"voices/v4_level"}}},"format":{"decimals":1,"style":"Number"},"kind":{"Fader":{"orientation":"Horizontal"}},"slots":[{"node":"5db1dedb-7dde-4921-947e-4db7241083ce","role":"Fill"},{"node":"65caa880-303e-4b27-b66f-068102ec904e","role":"Value"}]}}>
-            <Rectangle name="well" id="ddc1a44e-33fb-4554-9c63-14d2c870e7d2" w=55 h=12 radius=2 fill={[{"kind":{"LinearGradient":{"stops":[{"color":"#46464a","position":0.0},{"color":"#39393c","position":1.0}],"transform":{"a":1.6653345369377348e-16,"b":-1.0,"c":1.0,"d":1.6653345369377348e-16,"tx":1.0,"ty":-1.942890293094024e-16}}}}]} />
-            <Frame name="lane" id="9802d6e7-d3ca-417b-a61d-e304f6505aeb" w=55 h=12>
-              <Rectangle name="fill" id="5db1dedb-7dde-4921-947e-4db7241083ce" w=55 h=12 fill={[{"kind":{"LinearGradient":{"stops":[{"color":"#a066e8bf","position":0.0},{"color":"#a066e88c","position":1.0}],"transform":{"a":1.0,"b":5.551115123125783e-17,"c":-5.551115123125783e-17,"d":1.0,"tx":-2.7755575615628914e-17,"ty":0.0}}}}]} />
+          <Text name="label" id="bc0109da-2143-45cb-bc50-b047e699237c" x=62 y=89.58 w=28.375 h=9 fill="#8a8a90" size=6.5 weight=700>LEVEL</Text>
+          <Frame name="Voice 2 level" id="e1bffb03-b817-4270-8d8c-1746943b7f03" x=62 y=100 w=55 h=12 control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Param":{"addr":"voices/v2_level"}}},"format":{"decimals":1,"style":"Number"},"kind":{"Fader":{"orientation":"Horizontal"}},"slots":[{"node":"e6efbdd4-26b2-4492-ac9e-66d6a0b053d9","role":"Fill"},{"node":"a2bcb8b3-43a3-4ae8-8b75-8d2c382a2af6","role":"Value"}]}}>
+            <Rectangle name="well" id="e77f54b1-1ce4-4279-8ad0-1558d3434c6c" w=55 h=12 radius=2 fill={[{"kind":{"LinearGradient":{"stops":[{"color":"#46464a","position":0.0},{"color":"#39393c","position":1.0}],"transform":{"a":1.6653345369377348e-16,"b":-1.0,"c":1.0,"d":1.6653345369377348e-16,"tx":1.0,"ty":-1.942890293094024e-16}}}}]} />
+            <Frame name="lane" id="501081d5-2da4-4608-9cf3-fce55b717f32" w=55 h=12>
+              <Rectangle name="fill" id="e6efbdd4-26b2-4492-ac9e-66d6a0b053d9" w=55 h=12 fill={[{"kind":{"LinearGradient":{"stops":[{"color":"#a066e8bf","position":0.0},{"color":"#a066e88c","position":1.0}],"transform":{"a":1.0,"b":5.551115123125783e-17,"c":-5.551115123125783e-17,"d":1.0,"tx":-2.7755575615628914e-17,"ty":0.0}}}}]} />
             </Frame>
-            <Rectangle name="underline" id="cc4bd23c-9269-4c14-8f2c-dd55960d215d" y=11 w=55 h=1 fill="#a066e8e6" />
-            <Text name="value" id="65caa880-303e-4b27-b66f-068102ec904e" y=0.9408000000000003 w=55 h=11 fill="#e6e6e8" size=7.4399999999999995 weight=700 text-align="center" />
+            <Rectangle name="underline" id="8a97e6a7-29df-44ea-a3fe-3385456c8a9c" y=11 w=55 h=1 fill="#a066e8e6" />
+            <Text name="value" id="a2bcb8b3-43a3-4ae8-8b75-8d2c382a2af6" y=0.9408000000000003 w=55 h=11 fill="#e6e6e8" size=7.4399999999999995 weight=700 text-align="center" />
           </Frame>
-          <Text name="label" id="58affd14-d0eb-409f-bf55-72a47b7c3fb9" x=382 y=119.58 w=18.625 h=9 fill="#e6e6e8" size=6.5 weight=700>PAN</Text>
-          <Frame name="Voice 4 pan" id="cd57e37f-d8bf-46fb-adc3-9acc5fe7c3d2" x=382 y=130 w=55 h=12 control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Param":{"addr":"voices/v4_pan"}}},"kind":{"Fader":{"orientation":"Horizontal"}},"slots":[{"node":"46988d3f-82a1-475a-adad-a4524e91c96d","role":"Fill"},{"node":"7e9450bc-d37b-4705-bf0d-6b0cc4dafff8","role":"Value"}]}}>
-            <Rectangle name="well" id="4e47000d-6a68-42d6-9ef2-d95235cb51d8" w=55 h=12 radius=2 fill={[{"kind":{"LinearGradient":{"stops":[{"color":"#46464a","position":0.0},{"color":"#39393c","position":1.0}],"transform":{"a":1.6653345369377348e-16,"b":-1.0,"c":1.0,"d":1.6653345369377348e-16,"tx":1.0,"ty":-1.942890293094024e-16}}}}]} />
-            <Frame name="lane" id="3c0d6744-550d-44f2-bbc7-61384605107e" w=55 h=12>
-              <Rectangle name="fill" id="46988d3f-82a1-475a-adad-a4524e91c96d" w=55 h=12 fill={[{"kind":{"LinearGradient":{"stops":[{"color":"#a066e8bf","position":0.0},{"color":"#a066e88c","position":1.0}],"transform":{"a":1.0,"b":5.551115123125783e-17,"c":-5.551115123125783e-17,"d":1.0,"tx":-2.7755575615628914e-17,"ty":0.0}}}}]} />
+          <Text name="label" id="4bd63987-56cd-4811-8fa7-9f7d0e7b748d" x=62 y=119.58 w=18.625 h=9 fill="#8a8a90" size=6.5 weight=700>PAN</Text>
+          <Frame name="Voice 2 pan" id="18adb450-9921-4da4-9c0f-833cf25102d6" x=62 y=130 w=55 h=12 control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Param":{"addr":"voices/v2_pan"}}},"kind":{"Fader":{"orientation":"Horizontal"}},"slots":[{"node":"9885cb86-5e0f-4640-942a-03350fe22ab5","role":"Fill"},{"node":"2ad84fca-c0a5-4bf4-9453-7e6dbba6b37f","role":"Value"}]}}>
+            <Rectangle name="well" id="a549fe0d-b94d-45a6-aa32-7ecb59ed7456" w=55 h=12 radius=2 fill={[{"kind":{"LinearGradient":{"stops":[{"color":"#46464a","position":0.0},{"color":"#39393c","position":1.0}],"transform":{"a":1.6653345369377348e-16,"b":-1.0,"c":1.0,"d":1.6653345369377348e-16,"tx":1.0,"ty":-1.942890293094024e-16}}}}]} />
+            <Frame name="lane" id="0381e929-c720-4c12-b9b5-11b7762d48d3" w=55 h=12>
+              <Rectangle name="fill" id="9885cb86-5e0f-4640-942a-03350fe22ab5" w=55 h=12 fill={[{"kind":{"LinearGradient":{"stops":[{"color":"#a066e8bf","position":0.0},{"color":"#a066e88c","position":1.0}],"transform":{"a":1.0,"b":5.551115123125783e-17,"c":-5.551115123125783e-17,"d":1.0,"tx":-2.7755575615628914e-17,"ty":0.0}}}}]} />
             </Frame>
-            <Rectangle name="underline" id="9b1666ed-0c19-40e3-b243-5b1a9f6510d5" y=11 w=55 h=1 fill="#a066e8e6" />
-            <Text name="value" id="7e9450bc-d37b-4705-bf0d-6b0cc4dafff8" y=0.9408000000000003 w=55 h=11 fill="#e6e6e8" size=7.4399999999999995 weight=700 text-align="center" />
+            <Rectangle name="underline" id="07787fc9-35cd-4562-90e7-a67fb6e00f24" y=11 w=55 h=1 fill="#a066e8e6" />
+            <Text name="value" id="2ad84fca-c0a5-4bf4-9453-7e6dbba6b37f" y=0.9408000000000003 w=55 h=11 fill="#e6e6e8" size=7.4399999999999995 weight=700 text-align="center" />
           </Frame>
-          <Rectangle name="rule" id="bbbd7ede-9fa2-42eb-a0ed-8a48c0abbe7e" x=60.5 y=52 w=0.6 h=92 fill="#ffffff26" />
-          <Rectangle name="rule" id="7e81e115-93ef-4616-82c0-df713323635e" x=380.5 y=52 w=0.6 h=92 fill="#ffffff26" />
-          <Frame name="Level pan view" id="035c010d-f902-4c6a-85fe-4040e5439fab" x=124 y=34 w=194 h=114 radius=4 fill={[{"kind":{"LinearGradient":{"stops":[{"color":"#39393c","position":0.0},{"color":"#303033","position":1.0}],"transform":{"a":1.6653345369377348e-16,"b":-1.0,"c":1.0,"d":1.6653345369377348e-16,"tx":1.0,"ty":-1.942890293094024e-16}}}}]}>
-            <Text name="tab" id="74fcaa9e-ac5f-401e-8570-710d09fc9b48" x=38 y=3.58 w=56 h=9 fill="#e6e6e8" size=6.5 weight=700 text-align="center">LEVEL/PAN</Text>
-            <Rectangle name="tab rule" id="b128a091-de4b-4d37-880b-1900db9b6737" x=40 y=13.5 w=52 h=1 fill="#e6e6e8" />
-            <Text name="tab" id="3bf730aa-00bc-4ae3-b4e8-5a9b9e8d6baa" x=96 y=3.58 w=64 h=9 fill="#8a8a90" size=6.5 weight=700 text-align="center">DETUNE/DELAY</Text>
-            <Rectangle name="rule" id="fe03ac51-2177-4e83-984b-6831394b1d9b" y=15 w=194 h=0.6 fill="#ffffff1f" />
-            <Frame name="Stem 1" id="09b1b2ab-3123-46a9-8db6-a3292a187bc1" x=38.559999999999995 y=20 w=16 h=76 control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Param":{"addr":"voices/v1_level"}}},"kind":{"Fader":{"orientation":"Vertical"}},"slots":[{"node":"1309720a-1f52-4436-b4a3-11b70e8bbe5a","role":"Fill"},{"node":"41d37f18-08ee-479b-9554-e389d3a2502c","role":"Thumb"}]}}>
-              <Frame name="lane" id="e74f6e65-b406-4a12-858b-2c835d6d5360" w=16 h=76>
-                <Rectangle name="stem" id="1309720a-1f52-4436-b4a3-11b70e8bbe5a" x=6.8 w=2.4 h=76 fill="#e58cf0" />
-                <Frame name="ring" id="41d37f18-08ee-479b-9554-e389d3a2502c" w=16 h=16>
-                  <Ellipse name="halo" id="d71ffaf3-cf08-40f9-becb-76c185a25935" x=0.5 y=0.5 w=15 h=15 fill="#e58cf073" />
-                  <Ellipse name="cap" id="9e9a776c-dfd6-4889-b351-539a34da24c9" x=2.5 y=2.5 w=11 h=11 fill="#fafafa" />
-                  <Text name="n" id="b9fd5cd1-51f7-408a-bc6d-47386885409d" y=4.26 w=16 h=8 fill="#3a3a3d" size=5.5 weight=700 text-align="center">1</Text>
+          <Frame name="Voice 3" id="67b45dd5-655f-4709-a183-e6f500927630" x=324 y=34 w=55 h=12 control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Param":{"addr":"voices/v3_on"}}},"kind":{"Button":{"mode":"Toggle"}},"slots":[{"node":"0b853476-68c0-4221-afa2-dc5381d6788f","role":"On"},{"node":"6af7000c-a63a-46cf-98a1-b897af5569cc","role":"Off"}]}}>
+            <Rectangle name="box" id="67dd3cc1-eaf4-4c81-b0de-606ba749d108" w=55 h=12 radius=1.5 fill={[{"kind":{"LinearGradient":{"stops":[{"color":"#6a6a6e","position":0.0},{"color":"#57575b","position":1.0}],"transform":{"a":1.6653345369377348e-16,"b":-1.0,"c":1.0,"d":1.6653345369377348e-16,"tx":1.0,"ty":-1.942890293094024e-16}}}}]} />
+            <Text name="title" id="0cc17655-ce68-4c52-a123-074cc19272df" x=4 y=1.5119999999999996 w=37 h=9 fill="#e6e6e8" size=6.6000000000000005 weight=700 text-align="center">VOICE 3</Text>
+            <Frame name="on" id="0b853476-68c0-4221-afa2-dc5381d6788f" w=55 h=12>
+              <Rectangle name="pill" id="472230b8-48da-42b7-a9ed-c302bf413d9d" x=40 y=3.5 w=10 h=5 radius=2.5 fill="#f4f4f4" />
+              <Ellipse name="dot" id="96848765-540a-450f-b843-4f433d27f5b2" x=45.9 y=4.4 w=3.2 h=3.2 fill="#3a3a3d" />
+            </Frame>
+            <Frame name="off" id="6af7000c-a63a-46cf-98a1-b897af5569cc" w=55 h=12>
+              <Rectangle name="pill" id="38f35a8e-07dd-4280-b73f-94f6e4c52842" x=40 y=3.5 w=10 h=5 radius=2.5 fill="#00000000" stroke="#f4f4f4" stroke-weight=0.7 stroke-align="inside" />
+              <Ellipse name="dot" id="28079680-6ad0-4924-9745-01da4382fafd" x=41.1 y=4.6 w=2.8 h=2.8 fill="#f4f4f4" />
+            </Frame>
+          </Frame>
+          <Text name="label" id="543f0b62-8dd2-4634-9990-be2f12540ac4" x=324 y=59.58 w=43 h=9 fill="#8a8a90" size=6.5 weight=700>INTERVAL</Text>
+          <Frame name="Voice 3 interval" id="530ae564-b74b-435b-8d94-8c4d069221ca" x=324 y=70 w=55 h=12 control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Param":{"addr":"voices/v3_interval"}}},"kind":{"Fader":{"orientation":"Horizontal"}},"slots":[{"node":"580effe4-ef7f-4c0c-870b-d5e8ff902743","role":"Thumb"},{"node":"1b00e398-9897-4915-8a59-44637035d0bc","role":"Value"}]}}>
+            <Rectangle name="well" id="0ae75a5f-1512-4e20-b3af-5bde0234578c" w=55 h=12 radius=2 fill={[{"kind":{"LinearGradient":{"stops":[{"color":"#46464a","position":0.0},{"color":"#39393c","position":1.0}],"transform":{"a":1.6653345369377348e-16,"b":-1.0,"c":1.0,"d":1.6653345369377348e-16,"tx":1.0,"ty":-1.942890293094024e-16}}}}]} />
+            <Frame name="lane" id="719ccbc1-613e-4c07-8799-a5cb20496aa6" w=55 h=12>
+              <Rectangle name="marker" id="580effe4-ef7f-4c0c-870b-d5e8ff902743" w=7 h=12 fill="#a066e8cc" />
+            </Frame>
+            <Rectangle name="underline" id="6749fd3d-744b-45fe-852c-9ed06a625d45" y=11 w=55 h=1 fill="#a066e8e6" />
+            <Text name="value" id="1b00e398-9897-4915-8a59-44637035d0bc" y=0.9408000000000003 w=55 h=11 fill="#e6e6e8" size=7.4399999999999995 weight=700 text-align="center" />
+          </Frame>
+          <Text name="label" id="ff7ed34d-6cd5-4f10-aa87-0da65ca8ae0b" x=324 y=89.58 w=28.375 h=9 fill="#8a8a90" size=6.5 weight=700>LEVEL</Text>
+          <Frame name="Voice 3 level" id="330aba8a-e6ea-4953-945d-acc684f25e21" x=324 y=100 w=55 h=12 control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Param":{"addr":"voices/v3_level"}}},"format":{"decimals":1,"style":"Number"},"kind":{"Fader":{"orientation":"Horizontal"}},"slots":[{"node":"c67e35a0-acfa-459b-aec7-02d14c24b24f","role":"Fill"},{"node":"f2110d8f-768e-42bd-b018-48a624f4b8ed","role":"Value"}]}}>
+            <Rectangle name="well" id="56201a8c-00c2-43f5-8f9f-6d3a9718117e" w=55 h=12 radius=2 fill={[{"kind":{"LinearGradient":{"stops":[{"color":"#46464a","position":0.0},{"color":"#39393c","position":1.0}],"transform":{"a":1.6653345369377348e-16,"b":-1.0,"c":1.0,"d":1.6653345369377348e-16,"tx":1.0,"ty":-1.942890293094024e-16}}}}]} />
+            <Frame name="lane" id="b88f6dd6-d796-4db8-a92c-b6af9618ee73" w=55 h=12>
+              <Rectangle name="fill" id="c67e35a0-acfa-459b-aec7-02d14c24b24f" w=55 h=12 fill={[{"kind":{"LinearGradient":{"stops":[{"color":"#a066e8bf","position":0.0},{"color":"#a066e88c","position":1.0}],"transform":{"a":1.0,"b":5.551115123125783e-17,"c":-5.551115123125783e-17,"d":1.0,"tx":-2.7755575615628914e-17,"ty":0.0}}}}]} />
+            </Frame>
+            <Rectangle name="underline" id="fccbdd28-3b00-43a4-8685-c61ec458fe98" y=11 w=55 h=1 fill="#a066e8e6" />
+            <Text name="value" id="f2110d8f-768e-42bd-b018-48a624f4b8ed" y=0.9408000000000003 w=55 h=11 fill="#e6e6e8" size=7.4399999999999995 weight=700 text-align="center" />
+          </Frame>
+          <Text name="label" id="59bf2f79-c615-40de-97e1-0a50706957e9" x=324 y=119.58 w=18.625 h=9 fill="#8a8a90" size=6.5 weight=700>PAN</Text>
+          <Frame name="Voice 3 pan" id="383a30d2-d0e2-4789-a65b-0984430f4ee0" x=324 y=130 w=55 h=12 control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Param":{"addr":"voices/v3_pan"}}},"kind":{"Fader":{"orientation":"Horizontal"}},"slots":[{"node":"0935457b-97c2-4e0c-a477-d455ceba4544","role":"Fill"},{"node":"3d347b94-b474-4b9a-9a9b-bcdf81cfc34b","role":"Value"}]}}>
+            <Rectangle name="well" id="24c012fa-4b5d-444c-a71f-6e1ef37e6e5b" w=55 h=12 radius=2 fill={[{"kind":{"LinearGradient":{"stops":[{"color":"#46464a","position":0.0},{"color":"#39393c","position":1.0}],"transform":{"a":1.6653345369377348e-16,"b":-1.0,"c":1.0,"d":1.6653345369377348e-16,"tx":1.0,"ty":-1.942890293094024e-16}}}}]} />
+            <Frame name="lane" id="7b77f479-947d-4b4a-9d80-e3305f8db329" w=55 h=12>
+              <Rectangle name="fill" id="0935457b-97c2-4e0c-a477-d455ceba4544" w=55 h=12 fill={[{"kind":{"LinearGradient":{"stops":[{"color":"#a066e8bf","position":0.0},{"color":"#a066e88c","position":1.0}],"transform":{"a":1.0,"b":5.551115123125783e-17,"c":-5.551115123125783e-17,"d":1.0,"tx":-2.7755575615628914e-17,"ty":0.0}}}}]} />
+            </Frame>
+            <Rectangle name="underline" id="7ce49649-da53-47c7-b8db-7ae06bea1d89" y=11 w=55 h=1 fill="#a066e8e6" />
+            <Text name="value" id="3d347b94-b474-4b9a-9a9b-bcdf81cfc34b" y=0.9408000000000003 w=55 h=11 fill="#e6e6e8" size=7.4399999999999995 weight=700 text-align="center" />
+          </Frame>
+          <Frame name="Voice 4" id="bf239377-aa83-4c71-b247-508880340209" x=382 y=34 w=55 h=12 control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Param":{"addr":"voices/v4_on"}}},"kind":{"Button":{"mode":"Toggle"}},"slots":[{"node":"a847e792-df32-4e83-9d12-9064b42e5974","role":"On"},{"node":"64c8c8a0-d29d-4668-91d6-b141bc5e164a","role":"Off"}]}}>
+            <Rectangle name="box" id="8e30b7ac-ceaa-45a3-8fdf-1c5d89a50075" w=55 h=12 radius=1.5 fill={[{"kind":{"LinearGradient":{"stops":[{"color":"#6a6a6e","position":0.0},{"color":"#57575b","position":1.0}],"transform":{"a":1.6653345369377348e-16,"b":-1.0,"c":1.0,"d":1.6653345369377348e-16,"tx":1.0,"ty":-1.942890293094024e-16}}}}]} />
+            <Text name="title" id="fcd029cc-bbfe-4132-921d-9a09948f84e1" x=4 y=1.5119999999999996 w=37 h=9 fill="#e6e6e8" size=6.6000000000000005 weight=700 text-align="center">VOICE 4</Text>
+            <Frame name="on" id="a847e792-df32-4e83-9d12-9064b42e5974" w=55 h=12>
+              <Rectangle name="pill" id="a1bc0f68-7fe7-4c01-9ce1-82dda9bdb3d5" x=40 y=3.5 w=10 h=5 radius=2.5 fill="#f4f4f4" />
+              <Ellipse name="dot" id="5a3646f9-ce99-45b2-981b-9cb7eb9da936" x=45.9 y=4.4 w=3.2 h=3.2 fill="#3a3a3d" />
+            </Frame>
+            <Frame name="off" id="64c8c8a0-d29d-4668-91d6-b141bc5e164a" w=55 h=12>
+              <Rectangle name="pill" id="c62c3ad5-e712-410d-9af4-d3a61aa057dd" x=40 y=3.5 w=10 h=5 radius=2.5 fill="#00000000" stroke="#f4f4f4" stroke-weight=0.7 stroke-align="inside" />
+              <Ellipse name="dot" id="17271809-ae4e-496b-a22d-9fa90ba6d648" x=41.1 y=4.6 w=2.8 h=2.8 fill="#f4f4f4" />
+            </Frame>
+          </Frame>
+          <Text name="label" id="9efad7ca-daa9-4ad8-9d1b-7b68ca2b289e" x=382 y=59.58 w=43 h=9 fill="#e6e6e8" size=6.5 weight=700>INTERVAL</Text>
+          <Frame name="Voice 4 interval" id="1ba996fb-8ceb-49cf-899b-7677415e177c" x=382 y=70 w=55 h=12 control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Param":{"addr":"voices/v4_interval"}}},"kind":{"Fader":{"orientation":"Horizontal"}},"slots":[{"node":"3b36797b-9306-472c-80e6-5f3499b497c3","role":"Thumb"},{"node":"c48dd8a5-ce1a-43ca-ba1f-944b4b4e72f1","role":"Value"}]}}>
+            <Rectangle name="well" id="6c2b0b0e-b80d-4f3e-a22e-a6bc26917039" w=55 h=12 radius=2 fill={[{"kind":{"LinearGradient":{"stops":[{"color":"#46464a","position":0.0},{"color":"#39393c","position":1.0}],"transform":{"a":1.6653345369377348e-16,"b":-1.0,"c":1.0,"d":1.6653345369377348e-16,"tx":1.0,"ty":-1.942890293094024e-16}}}}]} />
+            <Frame name="lane" id="51dae317-980b-498b-a83e-8d10c6551238" w=55 h=12>
+              <Rectangle name="marker" id="3b36797b-9306-472c-80e6-5f3499b497c3" w=7 h=12 fill="#a066e8cc" />
+            </Frame>
+            <Rectangle name="underline" id="973f0b96-de36-43a3-b257-e251ffaf1b27" y=11 w=55 h=1 fill="#a066e8e6" />
+            <Text name="value" id="c48dd8a5-ce1a-43ca-ba1f-944b4b4e72f1" y=0.9408000000000003 w=55 h=11 fill="#e6e6e8" size=7.4399999999999995 weight=700 text-align="center" />
+          </Frame>
+          <Text name="label" id="89b3bf2d-c492-4be6-b8b0-04c49107347f" x=382 y=89.58 w=28.375 h=9 fill="#e6e6e8" size=6.5 weight=700>LEVEL</Text>
+          <Frame name="Voice 4 level" id="11611cef-9572-4cae-a3de-8e22e4e882ce" x=382 y=100 w=55 h=12 control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Param":{"addr":"voices/v4_level"}}},"format":{"decimals":1,"style":"Number"},"kind":{"Fader":{"orientation":"Horizontal"}},"slots":[{"node":"196e86e0-3db3-418a-bf9b-9040e7bb4c56","role":"Fill"},{"node":"d99b8530-d6c0-4a8b-9c72-e5c2d9566a94","role":"Value"}]}}>
+            <Rectangle name="well" id="a4a94860-f5e4-4492-9582-de00736156fd" w=55 h=12 radius=2 fill={[{"kind":{"LinearGradient":{"stops":[{"color":"#46464a","position":0.0},{"color":"#39393c","position":1.0}],"transform":{"a":1.6653345369377348e-16,"b":-1.0,"c":1.0,"d":1.6653345369377348e-16,"tx":1.0,"ty":-1.942890293094024e-16}}}}]} />
+            <Frame name="lane" id="50d764c3-0cbe-4996-938e-dce0e6ff2c51" w=55 h=12>
+              <Rectangle name="fill" id="196e86e0-3db3-418a-bf9b-9040e7bb4c56" w=55 h=12 fill={[{"kind":{"LinearGradient":{"stops":[{"color":"#a066e8bf","position":0.0},{"color":"#a066e88c","position":1.0}],"transform":{"a":1.0,"b":5.551115123125783e-17,"c":-5.551115123125783e-17,"d":1.0,"tx":-2.7755575615628914e-17,"ty":0.0}}}}]} />
+            </Frame>
+            <Rectangle name="underline" id="29bc95d4-c779-4ec9-bab5-f2ce7526f87a" y=11 w=55 h=1 fill="#a066e8e6" />
+            <Text name="value" id="d99b8530-d6c0-4a8b-9c72-e5c2d9566a94" y=0.9408000000000003 w=55 h=11 fill="#e6e6e8" size=7.4399999999999995 weight=700 text-align="center" />
+          </Frame>
+          <Text name="label" id="dc2ecce2-0755-4cd7-bcd4-748522d1fb1f" x=382 y=119.58 w=18.625 h=9 fill="#e6e6e8" size=6.5 weight=700>PAN</Text>
+          <Frame name="Voice 4 pan" id="d994592e-5d1c-4c73-89a6-f2ea9d9c15be" x=382 y=130 w=55 h=12 control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Param":{"addr":"voices/v4_pan"}}},"kind":{"Fader":{"orientation":"Horizontal"}},"slots":[{"node":"53bd7cbe-b1db-4e76-a08f-0e8e736151a3","role":"Fill"},{"node":"0753c1a7-92d2-4c58-8ad3-6e094d1a8673","role":"Value"}]}}>
+            <Rectangle name="well" id="4df47e9b-128b-4618-bb44-bbf92f7e416f" w=55 h=12 radius=2 fill={[{"kind":{"LinearGradient":{"stops":[{"color":"#46464a","position":0.0},{"color":"#39393c","position":1.0}],"transform":{"a":1.6653345369377348e-16,"b":-1.0,"c":1.0,"d":1.6653345369377348e-16,"tx":1.0,"ty":-1.942890293094024e-16}}}}]} />
+            <Frame name="lane" id="0a3f27cc-8859-4fd7-830f-a2828e18bce4" w=55 h=12>
+              <Rectangle name="fill" id="53bd7cbe-b1db-4e76-a08f-0e8e736151a3" w=55 h=12 fill={[{"kind":{"LinearGradient":{"stops":[{"color":"#a066e8bf","position":0.0},{"color":"#a066e88c","position":1.0}],"transform":{"a":1.0,"b":5.551115123125783e-17,"c":-5.551115123125783e-17,"d":1.0,"tx":-2.7755575615628914e-17,"ty":0.0}}}}]} />
+            </Frame>
+            <Rectangle name="underline" id="857dc769-4036-4db3-806a-d77c6c455b3d" y=11 w=55 h=1 fill="#a066e8e6" />
+            <Text name="value" id="0753c1a7-92d2-4c58-8ad3-6e094d1a8673" y=0.9408000000000003 w=55 h=11 fill="#e6e6e8" size=7.4399999999999995 weight=700 text-align="center" />
+          </Frame>
+          <Rectangle name="rule" id="54ff345d-6af0-4e0c-b1f1-176b4c96471d" x=60.5 y=52 w=0.6 h=92 fill="#ffffff26" />
+          <Rectangle name="rule" id="d0a1b26b-3dd9-420a-bf63-ce948a467106" x=380.5 y=52 w=0.6 h=92 fill="#ffffff26" />
+          <Frame name="Level pan view" id="a579da80-b5c4-4c83-9a46-cdf1aefe4f32" x=124 y=34 w=194 h=114 radius=4 fill={[{"kind":{"LinearGradient":{"stops":[{"color":"#39393c","position":0.0},{"color":"#303033","position":1.0}],"transform":{"a":1.6653345369377348e-16,"b":-1.0,"c":1.0,"d":1.6653345369377348e-16,"tx":1.0,"ty":-1.942890293094024e-16}}}}]}>
+            <Text name="tab" id="69144335-7a68-430e-9a02-caca8625bd7c" x=38 y=3.58 w=56 h=9 fill="#e6e6e8" size=6.5 weight=700 text-align="center">LEVEL/PAN</Text>
+            <Rectangle name="tab rule" id="13324e00-e1af-4637-ba28-532015c3e4cc" x=40 y=13.5 w=52 h=1 fill="#e6e6e8" />
+            <Text name="tab" id="ab92168b-e9d4-422f-ae72-4e0337ba327a" x=96 y=3.58 w=64 h=9 fill="#8a8a90" size=6.5 weight=700 text-align="center">DETUNE/DELAY</Text>
+            <Rectangle name="rule" id="d769462a-0646-4f65-bf3b-5f1097d6269b" y=15 w=194 h=0.6 fill="#ffffff1f" />
+            <Frame name="Stem 1" id="2c02a0a2-996c-4075-84dc-8a8fe27e8f3e" x=38.559999999999995 y=20 w=16 h=76 control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Param":{"addr":"voices/v1_level"}}},"kind":{"Fader":{"orientation":"Vertical"}},"slots":[{"node":"559406b6-026a-459d-9e67-4b3d8756fa1a","role":"Fill"},{"node":"4bb8cb7f-18a2-46dd-9a29-3428dab27bf2","role":"Thumb"}]}}>
+              <Frame name="lane" id="16b250c4-bea5-4966-b02f-c7c89d1db815" w=16 h=76>
+                <Rectangle name="stem" id="559406b6-026a-459d-9e67-4b3d8756fa1a" x=6.8 w=2.4 h=76 fill="#e58cf0" />
+                <Frame name="ring" id="4bb8cb7f-18a2-46dd-9a29-3428dab27bf2" w=16 h=16>
+                  <Ellipse name="halo" id="03d5f2f1-9e15-4aa1-b1eb-95d39346d3d6" x=0.5 y=0.5 w=15 h=15 fill="#e58cf073" />
+                  <Ellipse name="cap" id="c22d4842-60a3-4f4e-ade3-c54ae431c244" x=2.5 y=2.5 w=11 h=11 fill="#fafafa" />
+                  <Text name="n" id="1d61345f-96d0-4d66-b208-b340c46ac199" y=4.26 w=16 h=8 fill="#3a3a3d" size=5.5 weight=700 text-align="center">1</Text>
                 </Frame>
               </Frame>
             </Frame>
-            <Frame name="Stem 2" id="cc4fb3a9-b1aa-485c-920e-e10183d873b4" x=63.78 y=20 w=16 h=76 control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Param":{"addr":"voices/v2_level"}}},"kind":{"Fader":{"orientation":"Vertical"}},"slots":[{"node":"39b5c476-0dc1-4faf-bc48-ad279c0570bf","role":"Fill"},{"node":"40e03223-e153-4db8-a71f-2919344d0f64","role":"Thumb"}]}}>
-              <Frame name="lane" id="867eaff5-40e5-408d-ad90-ad0d138e1f7e" w=16 h=76>
-                <Rectangle name="stem" id="39b5c476-0dc1-4faf-bc48-ad279c0570bf" x=6.8 w=2.4 h=76 fill="#9b62d6" />
-                <Frame name="ring" id="40e03223-e153-4db8-a71f-2919344d0f64" w=16 h=16>
-                  <Ellipse name="halo" id="bd13d1db-bf4f-41b9-b1c6-43033333394a" x=0.5 y=0.5 w=15 h=15 fill="#9b62d673" />
-                  <Ellipse name="cap" id="45194c35-11ca-40ce-adf3-5361d246c476" x=2.5 y=2.5 w=11 h=11 fill="#c9c9cc" />
-                  <Text name="n" id="3dc83874-f662-4925-88fa-8850d16d1c23" y=4.26 w=16 h=8 fill="#3a3a3d" size=5.5 weight=700 text-align="center">2</Text>
+            <Frame name="Stem 2" id="613c4869-90e9-4677-91f3-894c14dc5a60" x=63.78 y=20 w=16 h=76 control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Param":{"addr":"voices/v2_level"}}},"kind":{"Fader":{"orientation":"Vertical"}},"slots":[{"node":"4518594b-3c42-4d3c-ac37-e56bfd074f7c","role":"Fill"},{"node":"6971ff08-8fc3-440a-94ee-82749d82d024","role":"Thumb"}]}}>
+              <Frame name="lane" id="f181e1a6-7c37-4d53-a25f-27ef48a79e4a" w=16 h=76>
+                <Rectangle name="stem" id="4518594b-3c42-4d3c-ac37-e56bfd074f7c" x=6.8 w=2.4 h=76 fill="#9b62d6" />
+                <Frame name="ring" id="6971ff08-8fc3-440a-94ee-82749d82d024" w=16 h=16>
+                  <Ellipse name="halo" id="dfffe876-a1f7-4568-97cd-68d578b6e25c" x=0.5 y=0.5 w=15 h=15 fill="#9b62d673" />
+                  <Ellipse name="cap" id="127a07da-4895-40cf-be57-15b64ceb1b55" x=2.5 y=2.5 w=11 h=11 fill="#c9c9cc" />
+                  <Text name="n" id="d2068d69-3ff5-499b-ae7d-0c33cd8dfa0b" y=4.26 w=16 h=8 fill="#3a3a3d" size=5.5 weight=700 text-align="center">2</Text>
                 </Frame>
               </Frame>
             </Frame>
-            <Frame name="Stem DI" id="933dc32e-68bb-4edd-b6c0-0398ee4a6804" x=89 y=20 w=16 h=76 control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Param":{"addr":"voices/dry"}}},"kind":{"Fader":{"orientation":"Vertical"}},"slots":[{"node":"1aaaf2d7-2fdf-4e3d-a4b4-a7fe9f920c47","role":"Fill"},{"node":"8d25ee3a-3b07-41d0-967e-037a0e48dc46","role":"Thumb"}]}}>
-              <Frame name="lane" id="e8bd0ced-7e94-47e2-83a2-bb3c5f9216c8" w=16 h=76>
-                <Rectangle name="stem" id="1aaaf2d7-2fdf-4e3d-a4b4-a7fe9f920c47" x=6.8 w=2.4 h=76 fill="#e58cf0" />
-                <Frame name="ring" id="8d25ee3a-3b07-41d0-967e-037a0e48dc46" w=16 h=16>
-                  <Ellipse name="halo" id="244f827d-2154-4f5a-868e-1323c9f30a74" x=0.5 y=0.5 w=15 h=15 fill="#e58cf073" />
-                  <Ellipse name="cap" id="6faa94e6-092a-4e58-876b-9205008d2295" x=2.5 y=2.5 w=11 h=11 fill="#fafafa" />
-                  <Text name="n" id="d1b23bb0-9ce7-4c8f-bb6c-1324da8714b3" y=4.26 w=16 h=8 fill="#3a3a3d" size=5.5 weight=700 text-align="center">DI</Text>
+            <Frame name="Stem DI" id="146b7867-d995-4cf7-a48a-711187758464" x=89 y=20 w=16 h=76 control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Param":{"addr":"voices/dry"}}},"kind":{"Fader":{"orientation":"Vertical"}},"slots":[{"node":"4c7a0c12-c774-4c10-9e68-ae35e98450a4","role":"Fill"},{"node":"9d8edb40-c741-457f-9ba1-37d075ee6677","role":"Thumb"}]}}>
+              <Frame name="lane" id="a93ea698-3fc5-4620-a76d-9e18297ed323" w=16 h=76>
+                <Rectangle name="stem" id="4c7a0c12-c774-4c10-9e68-ae35e98450a4" x=6.8 w=2.4 h=76 fill="#e58cf0" />
+                <Frame name="ring" id="9d8edb40-c741-457f-9ba1-37d075ee6677" w=16 h=16>
+                  <Ellipse name="halo" id="ddb1689b-2e07-4207-9ab7-f841395102c8" x=0.5 y=0.5 w=15 h=15 fill="#e58cf073" />
+                  <Ellipse name="cap" id="76d24c5f-3250-481f-934d-e7b9d71587a2" x=2.5 y=2.5 w=11 h=11 fill="#fafafa" />
+                  <Text name="n" id="a1100cc0-246e-4913-aa52-8a4c27292e43" y=4.26 w=16 h=8 fill="#3a3a3d" size=5.5 weight=700 text-align="center">DI</Text>
                 </Frame>
               </Frame>
             </Frame>
-            <Frame name="Stem 3" id="b288ea0a-29d5-4505-861c-5a6052ca6145" x=114.22 y=20 w=16 h=76 control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Param":{"addr":"voices/v3_level"}}},"kind":{"Fader":{"orientation":"Vertical"}},"slots":[{"node":"421702d1-769d-4237-aca6-a4d0cfe8c1e2","role":"Fill"},{"node":"9f43895a-c466-4c97-92c5-5d26d21b86d1","role":"Thumb"}]}}>
-              <Frame name="lane" id="d95f0fe4-f608-44e5-8f4b-134068f4b92a" w=16 h=76>
-                <Rectangle name="stem" id="421702d1-769d-4237-aca6-a4d0cfe8c1e2" x=6.8 w=2.4 h=76 fill="#9b62d6" />
-                <Frame name="ring" id="9f43895a-c466-4c97-92c5-5d26d21b86d1" w=16 h=16>
-                  <Ellipse name="halo" id="8293b024-dfef-4635-9610-9810b270e6fb" x=0.5 y=0.5 w=15 h=15 fill="#9b62d673" />
-                  <Ellipse name="cap" id="d6944d1a-ea94-4598-99f1-67508b058bc8" x=2.5 y=2.5 w=11 h=11 fill="#c9c9cc" />
-                  <Text name="n" id="504ce7ac-2739-443d-b3e2-e33245f050aa" y=4.26 w=16 h=8 fill="#3a3a3d" size=5.5 weight=700 text-align="center">3</Text>
+            <Frame name="Stem 3" id="1d98c3ed-7243-4c08-8954-d6e27dcf7f17" x=114.22 y=20 w=16 h=76 control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Param":{"addr":"voices/v3_level"}}},"kind":{"Fader":{"orientation":"Vertical"}},"slots":[{"node":"6cfe7e33-e0b5-465e-8869-b8664188d2f0","role":"Fill"},{"node":"948a7422-dd8d-4e9b-88f6-33bd57bbc096","role":"Thumb"}]}}>
+              <Frame name="lane" id="7d9b98d8-ae1c-4e5b-b6a1-93a9885a602c" w=16 h=76>
+                <Rectangle name="stem" id="6cfe7e33-e0b5-465e-8869-b8664188d2f0" x=6.8 w=2.4 h=76 fill="#9b62d6" />
+                <Frame name="ring" id="948a7422-dd8d-4e9b-88f6-33bd57bbc096" w=16 h=16>
+                  <Ellipse name="halo" id="ac0d3f7b-0f1e-484d-ad34-451c510447c3" x=0.5 y=0.5 w=15 h=15 fill="#9b62d673" />
+                  <Ellipse name="cap" id="cde7f60a-c882-4de6-b656-22b2af527ab2" x=2.5 y=2.5 w=11 h=11 fill="#c9c9cc" />
+                  <Text name="n" id="6e462c93-fd11-44e9-87d4-0fb8eb36392d" y=4.26 w=16 h=8 fill="#3a3a3d" size=5.5 weight=700 text-align="center">3</Text>
                 </Frame>
               </Frame>
             </Frame>
-            <Frame name="Stem 4" id="4c5297b5-ab4d-4c8c-b3fc-e01b38b1590f" x=139.44 y=20 w=16 h=76 control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Param":{"addr":"voices/v4_level"}}},"kind":{"Fader":{"orientation":"Vertical"}},"slots":[{"node":"ea3c150f-acf8-4036-8221-f42755899995","role":"Fill"},{"node":"cc615741-d9f3-4516-87b1-6fb9bba68ff6","role":"Thumb"}]}}>
-              <Frame name="lane" id="e5cf5523-cfa8-464f-a963-020bca9ce672" w=16 h=76>
-                <Rectangle name="stem" id="ea3c150f-acf8-4036-8221-f42755899995" x=6.8 w=2.4 h=76 fill="#e58cf0" />
-                <Frame name="ring" id="cc615741-d9f3-4516-87b1-6fb9bba68ff6" w=16 h=16>
-                  <Ellipse name="halo" id="dd9c62dc-0d8a-48e4-ba4d-1e53ea7fd02a" x=0.5 y=0.5 w=15 h=15 fill="#e58cf073" />
-                  <Ellipse name="cap" id="3492cfcb-f783-4046-82bb-fa53cd1ec7cd" x=2.5 y=2.5 w=11 h=11 fill="#fafafa" />
-                  <Text name="n" id="e2870922-1c2f-448d-a0b3-bd1cd660562b" y=4.26 w=16 h=8 fill="#3a3a3d" size=5.5 weight=700 text-align="center">4</Text>
+            <Frame name="Stem 4" id="234d9087-b718-4ed8-bd01-a517e2c82789" x=139.44 y=20 w=16 h=76 control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Param":{"addr":"voices/v4_level"}}},"kind":{"Fader":{"orientation":"Vertical"}},"slots":[{"node":"d7ab04e1-e2f1-455e-bd96-1ae4188370b5","role":"Fill"},{"node":"8ab3db05-6c61-455e-8d75-551ff9778eda","role":"Thumb"}]}}>
+              <Frame name="lane" id="a5b0b973-f24e-4bad-b084-d39b59eadce2" w=16 h=76>
+                <Rectangle name="stem" id="d7ab04e1-e2f1-455e-bd96-1ae4188370b5" x=6.8 w=2.4 h=76 fill="#e58cf0" />
+                <Frame name="ring" id="8ab3db05-6c61-455e-8d75-551ff9778eda" w=16 h=16>
+                  <Ellipse name="halo" id="e0588708-aad4-4bd5-827d-f22dc0a4b850" x=0.5 y=0.5 w=15 h=15 fill="#e58cf073" />
+                  <Ellipse name="cap" id="45f509c7-aecc-4318-969a-e35ea0e11f56" x=2.5 y=2.5 w=11 h=11 fill="#fafafa" />
+                  <Text name="n" id="4e40c443-7e8a-4b3c-8f49-ab16cefebdd7" y=4.26 w=16 h=8 fill="#3a3a3d" size=5.5 weight=700 text-align="center">4</Text>
                 </Frame>
               </Frame>
             </Frame>
           </Frame>
-          <Frame name="UNISONS" id="2ad4f2ac-4787-452b-8cb2-b49ccada6d4d" x=26 y=148 w=44 h=44 control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Param":{"addr":"voices/unisons"}}},"kind":{"Knob":{"sweep_degrees":270.0}},"slots":[{"node":"f9c37654-38b3-4930-987c-a5f2799c830c","role":"Needle"},{"node":"ea439135-0e85-4ea9-9b0d-67fa9814ab16","role":"ValueArc"}]}}>
-            <Frame name="knob" id="714e697a-9e0c-4edd-8143-f4454481d030" x=8 y=8 w=28 h=28>
-              <Vector name="track" id="798378f4-5a06-4844-a208-3d82a578eb10" w=28 h=28 fill="#ffffff1f" geometry="M 4.808 23.192 A 13.000 13.000 0 1 1 23.192 23.192 L 22.061 22.061 A 11.400 11.400 0 1 0 5.939 22.061 Z" />
-              <Vector name="value arc" id="ea439135-0e85-4ea9-9b0d-67fa9814ab16" x=1 y=1 w=26 h=26 fill="#f2f2f2" />
-              <Ellipse name="disc" id="1cfeb555-5a2a-4a6c-b3a4-24acfc35f1f3" x=4 y=4 w=20 h=20 fill={[{"kind":{"LinearGradient":{"stops":[{"color":"#3a3a3d","position":0.0},{"color":"#1c1c1e","position":1.0}],"transform":{"a":0.31698729810778103,"b":-1.1830127018922196,"c":1.1830127018922196,"d":0.31698729810778103,"tx":0.9330127018922193,"ty":-0.2500000000000002}}}}]} stroke="#00000080" stroke-weight=0.3 stroke-align="inside" effects={[{"color":"#00000080","kind":"DropShadow","offset_y":1.0,"radius":2.0},{"color":"#ffffff1a","kind":"InnerShadow","offset_y":0.5,"radius":0.4}]} />
-              <Frame name="body" id="f9c37654-38b3-4930-987c-a5f2799c830c" w=28 h=28>
-                <Rectangle name="index" id="d23b62b8-d252-4f2b-b5d4-1aaf9a9c5afa" x=13.4 y=5 w=1.2 h=5.5 radius=0.6 fill="#f2f2f2" />
+          <Frame name="UNISONS" id="033b71c4-7f1f-4c6a-8b36-d297b4802f42" x=26 y=148 w=44 h=44 control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Param":{"addr":"voices/unisons"}}},"kind":{"Knob":{"sweep_degrees":270.0}},"slots":[{"node":"2762425f-51b3-49fe-988a-d2c94a33cfbc","role":"Needle"},{"node":"b6534742-eef7-4922-b5e9-ecb10bccb08c","role":"ValueArc"}]}}>
+            <Frame name="knob" id="14ad6e7c-d92b-431a-9ebf-324f532d57e4" x=8 y=8 w=28 h=28>
+              <Vector name="track" id="97958c54-330e-4b4b-bf35-5e29b2fb1d16" w=28 h=28 fill="#ffffff1f" geometry="M 4.808 23.192 A 13.000 13.000 0 1 1 23.192 23.192 L 22.061 22.061 A 11.400 11.400 0 1 0 5.939 22.061 Z" />
+              <Vector name="value arc" id="b6534742-eef7-4922-b5e9-ecb10bccb08c" x=1 y=1 w=26 h=26 fill="#f2f2f2" />
+              <Ellipse name="disc" id="4949a8d1-faaf-4699-bca0-d2d42ee6f221" x=4 y=4 w=20 h=20 fill={[{"kind":{"LinearGradient":{"stops":[{"color":"#3a3a3d","position":0.0},{"color":"#1c1c1e","position":1.0}],"transform":{"a":0.31698729810778103,"b":-1.1830127018922196,"c":1.1830127018922196,"d":0.31698729810778103,"tx":0.9330127018922193,"ty":-0.2500000000000002}}}}]} stroke="#00000080" stroke-weight=0.3 stroke-align="inside" effects={[{"color":"#00000080","kind":"DropShadow","offset_y":1.0,"radius":2.0},{"color":"#ffffff1a","kind":"InnerShadow","offset_y":0.5,"radius":0.4}]} />
+              <Frame name="body" id="2762425f-51b3-49fe-988a-d2c94a33cfbc" w=28 h=28>
+                <Rectangle name="index" id="6d4d73d0-b530-4910-86d0-a5d81355fe6c" x=13.4 y=5 w=1.2 h=5.5 radius=0.6 fill="#f2f2f2" />
               </Frame>
             </Frame>
           </Frame>
-          <Text name="label" id="f7dc3996-36ab-4b4c-aad1-730ac6b4c0cd" x=16.099999999999998 y=187.24 w=40.75 h=10 fill="#e6e6e8" size=7 weight=700>UNISONS</Text>
-          <Frame name="UNISONS value" id="8d130a6f-cdf7-48a2-8257-8ef07a3d957d" x=54.900000000000006 y=187 w=30 h=10 control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Param":{"addr":"voices/unisons"}}},"format":{"decimals":0,"style":"Number"},"kind":"Readout","slots":[{"node":"69a43660-1266-4e89-8b33-a8d28fb7fdaf","role":"Value"}]}}>
-            <Text name="value" id="69a43660-1266-4e89-8b33-a8d28fb7fdaf" y=0.23999999999999932 w=30 h=10 fill="#e6e6e8" size=7 weight=700 />
+          <Text name="label" id="65ac7318-f66a-4fe8-a9b5-437189b65600" x=16.099999999999998 y=187.24 w=40.75 h=10 fill="#e6e6e8" size=7 weight=700>UNISONS</Text>
+          <Frame name="UNISONS value" id="622f8d20-ceb4-4125-b455-0114aad4408d" x=54.900000000000006 y=187 w=30 h=10 control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Param":{"addr":"voices/unisons"}}},"format":{"decimals":0,"style":"Number"},"kind":"Readout","slots":[{"node":"87aa2b06-ae73-4031-be66-eed45cc137d3","role":"Value"}]}}>
+            <Text name="value" id="87aa2b06-ae73-4031-be66-eed45cc137d3" y=0.23999999999999932 w=30 h=10 fill="#e6e6e8" size=7 weight=700 />
           </Frame>
-          <Vector name="unison rail" id="feb8602c-b280-46b4-b4a0-773904788ae1" x=96 y=191 w=38 h=1 stroke="#8a8a90" stroke-weight=0.6 stroke-cap="round" stroke-join="round" geometry="M 0.000 0.000 L 38.000 0.000 " />
-          <Frame name="WIDTH" id="4c153fc2-205e-4f60-be61-d941e424556f" x=142 y=148 w=44 h=44 control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Param":{"addr":"voices/width"}}},"kind":{"Knob":{"sweep_degrees":270.0}},"slots":[{"node":"51487258-bd04-4bfc-9f53-2eed2d1e8501","role":"Needle"},{"node":"3125a76f-7079-454e-8f73-f99d747e01e9","role":"ValueArc"}]}}>
-            <Frame name="knob" id="7db68fa1-9a1c-406b-bf69-4fc24f6bb957" x=8 y=8 w=28 h=28>
-              <Vector name="track" id="fb2a5a51-558f-468e-a3cc-a3827809c2ca" w=28 h=28 fill="#ffffff1f" geometry="M 4.808 23.192 A 13.000 13.000 0 1 1 23.192 23.192 L 22.061 22.061 A 11.400 11.400 0 1 0 5.939 22.061 Z" />
-              <Vector name="value arc" id="3125a76f-7079-454e-8f73-f99d747e01e9" x=1 y=1 w=26 h=26 fill="#f2f2f2" />
-              <Ellipse name="disc" id="0825fcb1-ca2d-4661-83d8-31f7a780032a" x=4 y=4 w=20 h=20 fill={[{"kind":{"LinearGradient":{"stops":[{"color":"#3a3a3d","position":0.0},{"color":"#1c1c1e","position":1.0}],"transform":{"a":0.31698729810778103,"b":-1.1830127018922196,"c":1.1830127018922196,"d":0.31698729810778103,"tx":0.9330127018922193,"ty":-0.2500000000000002}}}}]} stroke="#00000080" stroke-weight=0.3 stroke-align="inside" effects={[{"color":"#00000080","kind":"DropShadow","offset_y":1.0,"radius":2.0},{"color":"#ffffff1a","kind":"InnerShadow","offset_y":0.5,"radius":0.4}]} />
-              <Frame name="body" id="51487258-bd04-4bfc-9f53-2eed2d1e8501" w=28 h=28>
-                <Rectangle name="index" id="cf841842-8e19-48a9-8225-23170d5c7a5f" x=13.4 y=5 w=1.2 h=5.5 radius=0.6 fill="#f2f2f2" />
+          <Vector name="unison rail" id="183cbcf2-7eb1-4238-8e57-f556d22e078f" x=96 y=191 w=38 h=1 stroke="#8a8a90" stroke-weight=0.6 stroke-cap="round" stroke-join="round" geometry="M 0.000 0.000 L 38.000 0.000 " />
+          <Frame name="WIDTH" id="4e77a6db-27c5-49f0-bb50-e0b1139d4c8a" x=142 y=148 w=44 h=44 control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Param":{"addr":"voices/width"}}},"kind":{"Knob":{"sweep_degrees":270.0}},"slots":[{"node":"547caf68-3b88-487c-945d-b9408450ba74","role":"Needle"},{"node":"ec07c792-21b6-4e28-a130-1dfc0f215728","role":"ValueArc"}]}}>
+            <Frame name="knob" id="30799180-75a7-47db-a3e5-5d34ea915b34" x=8 y=8 w=28 h=28>
+              <Vector name="track" id="6aa0027a-a03a-480b-a2e9-3034dc5cac68" w=28 h=28 fill="#ffffff1f" geometry="M 4.808 23.192 A 13.000 13.000 0 1 1 23.192 23.192 L 22.061 22.061 A 11.400 11.400 0 1 0 5.939 22.061 Z" />
+              <Vector name="value arc" id="ec07c792-21b6-4e28-a130-1dfc0f215728" x=1 y=1 w=26 h=26 fill="#f2f2f2" />
+              <Ellipse name="disc" id="e194a33b-44d2-4533-be3a-487d619f1d21" x=4 y=4 w=20 h=20 fill={[{"kind":{"LinearGradient":{"stops":[{"color":"#3a3a3d","position":0.0},{"color":"#1c1c1e","position":1.0}],"transform":{"a":0.31698729810778103,"b":-1.1830127018922196,"c":1.1830127018922196,"d":0.31698729810778103,"tx":0.9330127018922193,"ty":-0.2500000000000002}}}}]} stroke="#00000080" stroke-weight=0.3 stroke-align="inside" effects={[{"color":"#00000080","kind":"DropShadow","offset_y":1.0,"radius":2.0},{"color":"#ffffff1a","kind":"InnerShadow","offset_y":0.5,"radius":0.4}]} />
+              <Frame name="body" id="547caf68-3b88-487c-945d-b9408450ba74" w=28 h=28>
+                <Rectangle name="index" id="e280fb17-70d9-4501-a428-0ad2b0a6c407" x=13.4 y=5 w=1.2 h=5.5 radius=0.6 fill="#f2f2f2" />
               </Frame>
             </Frame>
           </Frame>
-          <Text name="label" id="323ddc2f-b035-4bae-b5dd-2f0df07e8b59" x=137.5 y=187.24 w=30.25 h=10 fill="#e6e6e8" size=7 weight=700>WIDTH</Text>
-          <Frame name="WIDTH value" id="0fb03a86-411c-4b68-b593-7ef685b5236c" x=165.5 y=187 w=30 h=10 control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Param":{"addr":"voices/width"}}},"format":{"decimals":0,"style":"Number"},"kind":"Readout","slots":[{"node":"112e7cad-f196-41ad-962c-3b3944a1ccb6","role":"Value"}]}}>
-            <Text name="value" id="112e7cad-f196-41ad-962c-3b3944a1ccb6" y=0.23999999999999932 w=30 h=10 fill="#e6e6e8" size=7 weight=700 />
+          <Text name="label" id="79a0eaae-5e88-490e-a6d9-d91663b209ac" x=137.5 y=187.24 w=30.25 h=10 fill="#e6e6e8" size=7 weight=700>WIDTH</Text>
+          <Frame name="WIDTH value" id="749df3f3-b7aa-41e4-92f3-6a23be01e1f5" x=165.5 y=187 w=30 h=10 control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Param":{"addr":"voices/width"}}},"format":{"decimals":0,"style":"Number"},"kind":"Readout","slots":[{"node":"aa436751-9c4d-4bb3-859b-2ca401e72855","role":"Value"}]}}>
+            <Text name="value" id="aa436751-9c4d-4bb3-859b-2ca401e72855" y=0.23999999999999932 w=30 h=10 fill="#e6e6e8" size=7 weight=700 />
           </Frame>
-          <Frame name="TONE" id="d0b6b870-ef54-4971-b336-9560e3dd8dac" x=260 y=148 w=44 h=44 control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Param":{"addr":"voices/tone"}}},"kind":{"Knob":{"sweep_degrees":270.0}},"slots":[{"node":"d38b3d4d-3b1e-4ac8-8772-6a263eaa15bc","role":"Needle"},{"node":"9c162270-ec9f-406d-9e35-3dec14250234","role":"ValueArc"}]}}>
-            <Frame name="knob" id="f3fc5165-00c3-4795-b1c1-92150ce7d6e2" x=8 y=8 w=28 h=28>
-              <Vector name="track" id="d7a980cc-c18e-46d1-9689-3fff1920e417" w=28 h=28 fill="#ffffff1f" geometry="M 4.808 23.192 A 13.000 13.000 0 1 1 23.192 23.192 L 22.061 22.061 A 11.400 11.400 0 1 0 5.939 22.061 Z" />
-              <Vector name="value arc" id="9c162270-ec9f-406d-9e35-3dec14250234" x=1 y=1 w=26 h=26 fill="#f2f2f2" />
-              <Ellipse name="disc" id="aa5cb8bf-77de-4dd4-a969-fb16ff0ecd32" x=4 y=4 w=20 h=20 fill={[{"kind":{"LinearGradient":{"stops":[{"color":"#3a3a3d","position":0.0},{"color":"#1c1c1e","position":1.0}],"transform":{"a":0.31698729810778103,"b":-1.1830127018922196,"c":1.1830127018922196,"d":0.31698729810778103,"tx":0.9330127018922193,"ty":-0.2500000000000002}}}}]} stroke="#00000080" stroke-weight=0.3 stroke-align="inside" effects={[{"color":"#00000080","kind":"DropShadow","offset_y":1.0,"radius":2.0},{"color":"#ffffff1a","kind":"InnerShadow","offset_y":0.5,"radius":0.4}]} />
-              <Frame name="body" id="d38b3d4d-3b1e-4ac8-8772-6a263eaa15bc" w=28 h=28>
-                <Rectangle name="index" id="624fe036-33bc-4bae-8f76-6e726859e169" x=13.4 y=5 w=1.2 h=5.5 radius=0.6 fill="#f2f2f2" />
+          <Frame name="TONE" id="278190c1-ca02-413f-98e1-70460aad468a" x=260 y=148 w=44 h=44 control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Param":{"addr":"voices/tone"}}},"kind":{"Knob":{"sweep_degrees":270.0}},"slots":[{"node":"f7bfb5ee-ab38-41db-8b9a-6c4947d7ce35","role":"Needle"},{"node":"1ca64e72-32c6-4d9f-804a-14f5b624f71e","role":"ValueArc"}]}}>
+            <Frame name="knob" id="62bc7f61-743b-4617-950f-545cb2a4ba0b" x=8 y=8 w=28 h=28>
+              <Vector name="track" id="c5723a03-38e8-484a-b51b-517d5375c858" w=28 h=28 fill="#ffffff1f" geometry="M 4.808 23.192 A 13.000 13.000 0 1 1 23.192 23.192 L 22.061 22.061 A 11.400 11.400 0 1 0 5.939 22.061 Z" />
+              <Vector name="value arc" id="1ca64e72-32c6-4d9f-804a-14f5b624f71e" x=1 y=1 w=26 h=26 fill="#f2f2f2" />
+              <Ellipse name="disc" id="dcbf3180-c215-424e-afb6-1eb9966d9a31" x=4 y=4 w=20 h=20 fill={[{"kind":{"LinearGradient":{"stops":[{"color":"#3a3a3d","position":0.0},{"color":"#1c1c1e","position":1.0}],"transform":{"a":0.31698729810778103,"b":-1.1830127018922196,"c":1.1830127018922196,"d":0.31698729810778103,"tx":0.9330127018922193,"ty":-0.2500000000000002}}}}]} stroke="#00000080" stroke-weight=0.3 stroke-align="inside" effects={[{"color":"#00000080","kind":"DropShadow","offset_y":1.0,"radius":2.0},{"color":"#ffffff1a","kind":"InnerShadow","offset_y":0.5,"radius":0.4}]} />
+              <Frame name="body" id="f7bfb5ee-ab38-41db-8b9a-6c4947d7ce35" w=28 h=28>
+                <Rectangle name="index" id="fc1e8dee-4b63-4a4e-8001-490c2206adcd" x=13.4 y=5 w=1.2 h=5.5 radius=0.6 fill="#f2f2f2" />
               </Frame>
             </Frame>
           </Frame>
-          <Text name="label" id="90a3d1e1-0a1e-4888-84a6-54b62827fa10" x=258.2 y=187.24 w=25 h=10 fill="#e6e6e8" size=7 weight=700>TONE</Text>
-          <Frame name="TONE value" id="f294a6b4-d7dc-497a-afcf-6020e6c74f2e" x=280.8 y=187 w=30 h=10 control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Param":{"addr":"voices/tone"}}},"format":{"decimals":0,"style":"Number"},"kind":"Readout","slots":[{"node":"e648a56a-2694-4840-b505-8b8a2be87c29","role":"Value"}]}}>
-            <Text name="value" id="e648a56a-2694-4840-b505-8b8a2be87c29" y=0.23999999999999932 w=30 h=10 fill="#e6e6e8" size=7 weight=700 />
+          <Text name="label" id="1b9cc89e-62ac-4a7c-9b5d-6841995164ee" x=258.2 y=187.24 w=25 h=10 fill="#e6e6e8" size=7 weight=700>TONE</Text>
+          <Frame name="TONE value" id="cabdc72c-5202-4288-a8b8-3667053b11a4" x=280.8 y=187 w=30 h=10 control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Param":{"addr":"voices/tone"}}},"format":{"decimals":0,"style":"Number"},"kind":"Readout","slots":[{"node":"c0a2ae6c-7319-46b3-95f1-cc5ca29b8f5f","role":"Value"}]}}>
+            <Text name="value" id="c0a2ae6c-7319-46b3-95f1-cc5ca29b8f5f" y=0.23999999999999932 w=30 h=10 fill="#e6e6e8" size=7 weight=700 />
           </Frame>
-          <Frame name="OUTPUT" id="bbfca8c6-1d5a-44a7-9f62-445f6aeca583" x=376 y=148 w=44 h=44 control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Param":{"addr":"voices/output"}}},"kind":{"Knob":{"sweep_degrees":270.0}},"slots":[{"node":"1525fc9d-23a2-472f-b56d-690ff6a7b00f","role":"Needle"},{"node":"82fe67a4-c8cb-4cf0-be77-1554138fbcea","role":"ValueArc"}]}}>
-            <Frame name="knob" id="32f26957-a9ba-435e-98a5-cd70c446f446" x=8 y=8 w=28 h=28>
-              <Vector name="track" id="8aa87aa2-2010-4074-ac49-b95a969a5a66" w=28 h=28 fill="#ffffff1f" geometry="M 4.808 23.192 A 13.000 13.000 0 1 1 23.192 23.192 L 22.061 22.061 A 11.400 11.400 0 1 0 5.939 22.061 Z" />
-              <Vector name="value arc" id="82fe67a4-c8cb-4cf0-be77-1554138fbcea" x=1 y=1 w=26 h=26 fill="#f2f2f2" />
-              <Ellipse name="disc" id="d304c011-f222-4c9d-a4ad-3972e4b9e017" x=4 y=4 w=20 h=20 fill={[{"kind":{"LinearGradient":{"stops":[{"color":"#3a3a3d","position":0.0},{"color":"#1c1c1e","position":1.0}],"transform":{"a":0.31698729810778103,"b":-1.1830127018922196,"c":1.1830127018922196,"d":0.31698729810778103,"tx":0.9330127018922193,"ty":-0.2500000000000002}}}}]} stroke="#00000080" stroke-weight=0.3 stroke-align="inside" effects={[{"color":"#00000080","kind":"DropShadow","offset_y":1.0,"radius":2.0},{"color":"#ffffff1a","kind":"InnerShadow","offset_y":0.5,"radius":0.4}]} />
-              <Frame name="body" id="1525fc9d-23a2-472f-b56d-690ff6a7b00f" w=28 h=28>
-                <Rectangle name="index" id="c5f6dab1-6e08-43bc-b77c-75ce3a54cccd" x=13.4 y=5 w=1.2 h=5.5 radius=0.6 fill="#f2f2f2" />
+          <Frame name="OUTPUT" id="3acf2250-ff95-4b83-ba1c-033233d88c64" x=376 y=148 w=44 h=44 control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Param":{"addr":"voices/output"}}},"kind":{"Knob":{"sweep_degrees":270.0}},"slots":[{"node":"2b61a0bc-1e17-420c-94de-4ba758e25c04","role":"Needle"},{"node":"ee32ee80-2cae-409a-92b4-17f0507875b0","role":"ValueArc"}]}}>
+            <Frame name="knob" id="c556b72e-7ebc-4c3d-a83b-9bc7e39822d5" x=8 y=8 w=28 h=28>
+              <Vector name="track" id="fd765400-cf6f-4711-a7f5-65c0a54c301f" w=28 h=28 fill="#ffffff1f" geometry="M 4.808 23.192 A 13.000 13.000 0 1 1 23.192 23.192 L 22.061 22.061 A 11.400 11.400 0 1 0 5.939 22.061 Z" />
+              <Vector name="value arc" id="ee32ee80-2cae-409a-92b4-17f0507875b0" x=1 y=1 w=26 h=26 fill="#f2f2f2" />
+              <Ellipse name="disc" id="bb81ea3d-dab8-4fc8-b2c9-14e463e0a9f6" x=4 y=4 w=20 h=20 fill={[{"kind":{"LinearGradient":{"stops":[{"color":"#3a3a3d","position":0.0},{"color":"#1c1c1e","position":1.0}],"transform":{"a":0.31698729810778103,"b":-1.1830127018922196,"c":1.1830127018922196,"d":0.31698729810778103,"tx":0.9330127018922193,"ty":-0.2500000000000002}}}}]} stroke="#00000080" stroke-weight=0.3 stroke-align="inside" effects={[{"color":"#00000080","kind":"DropShadow","offset_y":1.0,"radius":2.0},{"color":"#ffffff1a","kind":"InnerShadow","offset_y":0.5,"radius":0.4}]} />
+              <Frame name="body" id="2b61a0bc-1e17-420c-94de-4ba758e25c04" w=28 h=28>
+                <Rectangle name="index" id="a039f086-62a6-4068-905f-b460ba52ca5a" x=13.4 y=5 w=1.2 h=5.5 radius=0.6 fill="#f2f2f2" />
               </Frame>
             </Frame>
           </Frame>
-          <Text name="label" id="5bf303e7-119a-4ba2-975e-5d1b2a3683c7" x=368.8 y=187.24 w=35.5 h=10 fill="#e6e6e8" size=7 weight=700>OUTPUT</Text>
-          <Frame name="OUTPUT value" id="1d119d8e-0e79-4b04-9b4f-4b33563f2381" x=402.20000000000005 y=187 w=30 h=10 control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Param":{"addr":"voices/output"}}},"format":{"decimals":1,"style":"Number"},"kind":"Readout","slots":[{"node":"c416362c-614e-4504-bc92-5bda9b82ef62","role":"Value"}]}}>
-            <Text name="value" id="c416362c-614e-4504-bc92-5bda9b82ef62" y=0.23999999999999932 w=30 h=10 fill="#e6e6e8" size=7 weight=700 />
+          <Text name="label" id="2289cea4-7464-451d-bb84-96c432ca0e61" x=368.8 y=187.24 w=35.5 h=10 fill="#e6e6e8" size=7 weight=700>OUTPUT</Text>
+          <Frame name="OUTPUT value" id="d191f4db-42b2-41a1-bd50-0cd18979497e" x=402.20000000000005 y=187 w=30 h=10 control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Param":{"addr":"voices/output"}}},"format":{"decimals":1,"style":"Number"},"kind":"Readout","slots":[{"node":"703e5268-4187-4a2e-ab58-0c0275d33f4e","role":"Value"}]}}>
+            <Text name="value" id="703e5268-4187-4a2e-ab58-0c0275d33f4e" y=0.23999999999999932 w=30 h=10 fill="#e6e6e8" size=7 weight=700 />
           </Frame>
         </Frame>
-        <Frame name="MIDI" id="0ec2b736-41e0-4629-84f8-ae4ba6dea6a0" x=16.96 y=222.96 w=67.68 h=54.239999999999995 control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Param":{"addr":"voices/midi"}}},"kind":{"Footswitch":{"hold_ms":500}},"slots":[{"node":"d2788ac8-df9d-46fb-8eb2-7214ec6e2b79","role":"Led"}]}}>
-          <Vector name="shadow" id="09f02c99-e28e-4f7d-bc00-6e9a192b2e30" w=67.68 h=54.239999999999995 fill="#00000073" effects={[{"color":"#00000059","kind":"DropShadow","offset_y":2.4000000000000004,"radius":4.0}]} geometry="M 43.680 33.600 A 20.640 18.576 0 1 1 2.400 33.600 A 20.640 18.576 0 1 1 43.680 33.600 Z" />
-          <Vector name="nut" id="7cd8088b-feca-4309-bbd5-b5d35548c1f3" w=67.68 h=54.239999999999995 fill={[{"kind":{"LinearGradient":{"stops":[{"color":"#ffffff","position":0.0},{"color":"#b9babc","position":0.4},{"color":"#4b4d50","position":0.62},{"color":"#b9babc","position":1.0}],"transform":{"a":0.6830127018922192,"b":-1.1830127018922196,"c":1.1830127018922196,"d":0.6830127018922192,"tx":0.7500000000000002,"ty":-0.4330127018922193}}}}]} stroke="#4b4d50e6" stroke-weight=0.48 stroke-align="inside" effects={[{"color":"#ffffff55","kind":"InnerShadow","offset_y":0.8,"radius":0.8}]} geometry="M 23.040 10.560 L 40.915 20.880 L 40.915 41.520 L 23.040 51.840 L 5.165 41.520 L 5.165 20.880 Z" />
-          <Ellipse name="washer" id="f09db40d-9a9d-4e86-83e4-83e808c31f91" x=7.766399999999999 y=15.9264 w=30.5472 h=30.5472 fill={[{"kind":{"AngularGradient":{"stops":[{"color":"#ffffff","position":0.0},{"color":"#4b4d50","position":0.22},{"color":"#ffffff","position":0.45},{"color":"#4b4d50","position":0.72},{"color":"#ffffff","position":1.0}],"transform":{"a":6.123233995736766e-17,"b":1.0,"c":-1.0,"d":6.123233995736766e-17,"tx":-5.551115123125783e-17,"ty":1.0}}}}]} stroke="#4b4d50cc" stroke-weight=0.4 stroke-align="inside" />
-          <Rectangle name="slot" id="137555e8-835f-40e4-928c-22533a2cee10" x=20.16 y=43.584 w=5.76 h=3.12 radius=0.8 fill="#0d0b09" />
-          <Rectangle name="barrel" id="63b81177-762c-4509-a431-3ecacf3661f6" x=11.76 y=23.04 w=22.56 h=8.16 fill={[{"kind":{"LinearGradient":{"stops":[{"color":"#4b4d50","position":0.0},{"color":"#ffffff","position":0.3},{"color":"#b9babc","position":0.55},{"color":"#4b4d50","position":1.0}],"transform":{"a":1.0,"b":5.551115123125783e-17,"c":-5.551115123125783e-17,"d":1.0,"tx":-2.7755575615628914e-17,"ty":0.0}}}}]} />
-          <Vector name="barrel foot" id="1913e104-f1ab-4115-a9fa-68105688e3c7" w=67.68 h=54.239999999999995 fill="#4b4d50e6" geometry="M 34.320 31.200 A 11.280 3.840 0 1 1 11.760 31.200 A 11.280 3.840 0 1 1 34.320 31.200 Z" />
-          <Ellipse name="cap" id="8c689f52-36a7-435a-82f6-ea2e6b50379c" x=11.04 y=11.04 w=24 h=24 fill={[{"kind":{"RadialGradient":{"stops":[{"color":"#ffffff","position":0.0},{"color":"#ffffff","position":0.2},{"color":"#b9babc","position":0.6},{"color":"#4b4d50","position":1.0}],"transform":{"a":1.7,"b":0.0,"c":0.0,"d":1.7,"tx":-0.49,"ty":-0.55}}}}]} stroke="#4b4d50e6" stroke-weight=0.5599999999999999 stroke-align="inside" effects={[{"color":"#00000059","kind":"InnerShadow","offset_y":-1.2000000000000002,"radius":2.4000000000000004}]} />
-          <Ellipse name="spec" id="0399a91c-8f03-45be-aef1-ef20d162b8e8" x=16.319999999999997 y=15.84 w=6.24 h=6.24 fill="#ffffffb0" />
-          <Ellipse name="bezel" id="0aee18df-3e5c-4a8d-a68c-1c8c546522e9" x=54.44 y=25.16 w=8.24 h=8.24 fill="#0c0c0e" />
-          <Ellipse name="lens" id="adc71318-1ef1-465d-8a7a-af892c54de00" x=55.44 y=26.16 w=6.24 h=6.24 fill={[{"kind":{"RadialGradient":{"stops":[{"color":"#ffffff1a","position":0.0},{"color":"#9b9fa6","position":0.52},{"color":"#000000c7","position":1.0}],"transform":{"a":1.9,"b":0.0,"c":0.0,"d":1.9,"tx":-0.59,"ty":-0.6499999999999999}}}}]} effects={[{"color":"#000000c0","kind":"InnerShadow","radius":2.1216000000000004}]} />
-          <Ellipse name="lamp" id="d2788ac8-df9d-46fb-8eb2-7214ec6e2b79" x=55.44 y=26.16 w=6.24 h=6.24 fill={[{"kind":{"RadialGradient":{"stops":[{"color":"#fffffff2","position":0.0},{"color":"#f7faff","position":0.16},{"color":"#eef4ff","position":0.46},{"color":"#eef4ff","position":0.7},{"color":"#6b6e73","position":1.0}],"transform":{"a":1.9,"b":0.0,"c":0.0,"d":1.9,"tx":-0.59,"ty":-0.6499999999999999}}}}]} effects={[{"color":"#eef4ffd9","kind":"DropShadow","radius":4.992000000000001}]} emission={{"color":"#eef4ff","intensity":0.9,"radius":6.24}} />
+        <Frame name="MIDI" id="c95608d9-b363-44c4-91db-fe7f465ca9a6" x=16.96 y=222.96 w=67.68 h=54.239999999999995 control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Param":{"addr":"voices/midi"}}},"kind":{"Footswitch":{"hold_ms":500}},"slots":[{"node":"7a4d2a4d-a920-4386-ba5f-7a76710e1bf1","role":"Led"}]}}>
+          <Vector name="shadow" id="a874feef-c009-4f00-9d1e-57c671086449" w=67.68 h=54.239999999999995 fill="#00000073" effects={[{"color":"#00000059","kind":"DropShadow","offset_y":2.4000000000000004,"radius":4.0}]} geometry="M 43.680 33.600 A 20.640 18.576 0 1 1 2.400 33.600 A 20.640 18.576 0 1 1 43.680 33.600 Z" />
+          <Vector name="nut" id="f83ecaee-bb84-487f-916d-1e4dff5d20a2" w=67.68 h=54.239999999999995 fill={[{"kind":{"LinearGradient":{"stops":[{"color":"#ffffff","position":0.0},{"color":"#b9babc","position":0.4},{"color":"#4b4d50","position":0.62},{"color":"#b9babc","position":1.0}],"transform":{"a":0.6830127018922192,"b":-1.1830127018922196,"c":1.1830127018922196,"d":0.6830127018922192,"tx":0.7500000000000002,"ty":-0.4330127018922193}}}}]} stroke="#4b4d50e6" stroke-weight=0.48 stroke-align="inside" effects={[{"color":"#ffffff55","kind":"InnerShadow","offset_y":0.8,"radius":0.8}]} geometry="M 23.040 10.560 L 40.915 20.880 L 40.915 41.520 L 23.040 51.840 L 5.165 41.520 L 5.165 20.880 Z" />
+          <Ellipse name="washer" id="40e29a06-da17-42a9-8b9a-7a9a9f09d8f8" x=7.766399999999999 y=15.9264 w=30.5472 h=30.5472 fill={[{"kind":{"AngularGradient":{"stops":[{"color":"#ffffff","position":0.0},{"color":"#4b4d50","position":0.22},{"color":"#ffffff","position":0.45},{"color":"#4b4d50","position":0.72},{"color":"#ffffff","position":1.0}],"transform":{"a":6.123233995736766e-17,"b":1.0,"c":-1.0,"d":6.123233995736766e-17,"tx":-5.551115123125783e-17,"ty":1.0}}}}]} stroke="#4b4d50cc" stroke-weight=0.4 stroke-align="inside" />
+          <Rectangle name="slot" id="99052595-26f7-449a-b57f-43dddd9611d6" x=20.16 y=43.584 w=5.76 h=3.12 radius=0.8 fill="#0d0b09" />
+          <Rectangle name="barrel" id="d4e9e61e-73c1-4966-b146-4833f9a9fec6" x=11.76 y=23.04 w=22.56 h=8.16 fill={[{"kind":{"LinearGradient":{"stops":[{"color":"#4b4d50","position":0.0},{"color":"#ffffff","position":0.3},{"color":"#b9babc","position":0.55},{"color":"#4b4d50","position":1.0}],"transform":{"a":1.0,"b":5.551115123125783e-17,"c":-5.551115123125783e-17,"d":1.0,"tx":-2.7755575615628914e-17,"ty":0.0}}}}]} />
+          <Vector name="barrel foot" id="70a0185f-b6f0-4177-a406-9ffcde80850b" w=67.68 h=54.239999999999995 fill="#4b4d50e6" geometry="M 34.320 31.200 A 11.280 3.840 0 1 1 11.760 31.200 A 11.280 3.840 0 1 1 34.320 31.200 Z" />
+          <Ellipse name="cap" id="e6c21964-18ae-4417-8691-268743f1e3ef" x=11.04 y=11.04 w=24 h=24 fill={[{"kind":{"RadialGradient":{"stops":[{"color":"#ffffff","position":0.0},{"color":"#ffffff","position":0.2},{"color":"#b9babc","position":0.6},{"color":"#4b4d50","position":1.0}],"transform":{"a":1.7,"b":0.0,"c":0.0,"d":1.7,"tx":-0.49,"ty":-0.55}}}}]} stroke="#4b4d50e6" stroke-weight=0.5599999999999999 stroke-align="inside" effects={[{"color":"#00000059","kind":"InnerShadow","offset_y":-1.2000000000000002,"radius":2.4000000000000004}]} />
+          <Ellipse name="spec" id="72a7196c-931f-4a91-bb93-77f25066afc6" x=16.319999999999997 y=15.84 w=6.24 h=6.24 fill="#ffffffb0" />
+          <Ellipse name="bezel" id="1cf36f44-4558-48e0-9a34-5be0cbaa226d" x=54.44 y=25.16 w=8.24 h=8.24 fill="#0c0c0e" />
+          <Ellipse name="lens" id="1573e11a-ce1d-4be0-8af8-3b705fb64323" x=55.44 y=26.16 w=6.24 h=6.24 fill={[{"kind":{"RadialGradient":{"stops":[{"color":"#ffffff1a","position":0.0},{"color":"#9b9fa6","position":0.52},{"color":"#000000c7","position":1.0}],"transform":{"a":1.9,"b":0.0,"c":0.0,"d":1.9,"tx":-0.59,"ty":-0.6499999999999999}}}}]} effects={[{"color":"#000000c0","kind":"InnerShadow","radius":2.1216000000000004}]} />
+          <Ellipse name="lamp" id="7a4d2a4d-a920-4386-ba5f-7a76710e1bf1" x=55.44 y=26.16 w=6.24 h=6.24 fill={[{"kind":{"RadialGradient":{"stops":[{"color":"#fffffff2","position":0.0},{"color":"#f7faff","position":0.16},{"color":"#eef4ff","position":0.46},{"color":"#eef4ff","position":0.7},{"color":"#6b6e73","position":1.0}],"transform":{"a":1.9,"b":0.0,"c":0.0,"d":1.9,"tx":-0.59,"ty":-0.6499999999999999}}}}]} effects={[{"color":"#eef4ffd9","kind":"DropShadow","radius":4.992000000000001}]} emission={{"color":"#eef4ff","intensity":0.9,"radius":6.24}} />
         </Frame>
-        <Text name="word" id="e824d03b-d2cc-4132-a2f5-dc8ec989fd54" x=74.4 y=239.2 w=47.199999999999996 h=14 fill="#6c7270" size=10 weight=500 letter-spacing=0.6 text-align="center">midi</Text>
-        <Frame name="Engage" id="2bb5626d-5776-49c1-b58d-be7e79836df5" x=395.36 y=222.96 w=67.68 h=54.239999999999995 control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Param":{"addr":"voices/on"}}},"kind":{"Footswitch":{"hold_ms":500}},"slots":[{"node":"ae684af9-3f24-4531-ab8a-3dadcaf6078f","role":"Led"}]}}>
-          <Vector name="shadow" id="27fb96d9-f02c-4a39-b8fc-bfb185b51360" w=67.68 h=54.239999999999995 fill="#00000073" effects={[{"color":"#00000059","kind":"DropShadow","offset_y":2.4000000000000004,"radius":4.0}]} geometry="M 65.280 33.600 A 20.640 18.576 0 1 1 24.000 33.600 A 20.640 18.576 0 1 1 65.280 33.600 Z" />
-          <Vector name="nut" id="b1e7c86f-ed1c-42e6-aa65-f3603fdfd79f" w=67.68 h=54.239999999999995 fill={[{"kind":{"LinearGradient":{"stops":[{"color":"#ffffff","position":0.0},{"color":"#b9babc","position":0.4},{"color":"#4b4d50","position":0.62},{"color":"#b9babc","position":1.0}],"transform":{"a":0.6830127018922192,"b":-1.1830127018922196,"c":1.1830127018922196,"d":0.6830127018922192,"tx":0.7500000000000002,"ty":-0.4330127018922193}}}}]} stroke="#4b4d50e6" stroke-weight=0.48 stroke-align="inside" effects={[{"color":"#ffffff55","kind":"InnerShadow","offset_y":0.8,"radius":0.8}]} geometry="M 44.640 10.560 L 62.515 20.880 L 62.515 41.520 L 44.640 51.840 L 26.765 41.520 L 26.765 20.880 Z" />
-          <Ellipse name="washer" id="89050c25-0d86-4b3d-b46d-60dd40db0e0d" x=29.366400000000006 y=15.9264 w=30.5472 h=30.5472 fill={[{"kind":{"AngularGradient":{"stops":[{"color":"#ffffff","position":0.0},{"color":"#4b4d50","position":0.22},{"color":"#ffffff","position":0.45},{"color":"#4b4d50","position":0.72},{"color":"#ffffff","position":1.0}],"transform":{"a":6.123233995736766e-17,"b":1.0,"c":-1.0,"d":6.123233995736766e-17,"tx":-5.551115123125783e-17,"ty":1.0}}}}]} stroke="#4b4d50cc" stroke-weight=0.4 stroke-align="inside" />
-          <Rectangle name="slot" id="9186ee0a-8e8e-41a0-8602-52367824b1fc" x=41.760000000000005 y=43.584 w=5.76 h=3.12 radius=0.8 fill="#0d0b09" />
-          <Rectangle name="barrel" id="fac75f32-17de-4b09-a79a-ae20a7d3f4d2" x=33.36000000000001 y=23.04 w=22.56 h=8.16 fill={[{"kind":{"LinearGradient":{"stops":[{"color":"#4b4d50","position":0.0},{"color":"#ffffff","position":0.3},{"color":"#b9babc","position":0.55},{"color":"#4b4d50","position":1.0}],"transform":{"a":1.0,"b":5.551115123125783e-17,"c":-5.551115123125783e-17,"d":1.0,"tx":-2.7755575615628914e-17,"ty":0.0}}}}]} />
-          <Vector name="barrel foot" id="98f718da-5c4c-4ea6-a300-9ebbdb245685" w=67.68 h=54.239999999999995 fill="#4b4d50e6" geometry="M 55.920 31.200 A 11.280 3.840 0 1 1 33.360 31.200 A 11.280 3.840 0 1 1 55.920 31.200 Z" />
-          <Ellipse name="cap" id="0bec8c98-2be0-4815-a771-104546ddd796" x=32.64000000000001 y=11.04 w=24 h=24 fill={[{"kind":{"RadialGradient":{"stops":[{"color":"#ffffff","position":0.0},{"color":"#ffffff","position":0.2},{"color":"#b9babc","position":0.6},{"color":"#4b4d50","position":1.0}],"transform":{"a":1.7,"b":0.0,"c":0.0,"d":1.7,"tx":-0.49,"ty":-0.55}}}}]} stroke="#4b4d50e6" stroke-weight=0.5599999999999999 stroke-align="inside" effects={[{"color":"#00000059","kind":"InnerShadow","offset_y":-1.2000000000000002,"radius":2.4000000000000004}]} />
-          <Ellipse name="spec" id="1828b46c-9700-4a2c-80a2-73263d7c95fe" x=37.92000000000001 y=15.84 w=6.24 h=6.24 fill="#ffffffb0" />
-          <Ellipse name="bezel" id="3c0ddd4b-3357-49d3-b43f-8d61e14ccf14" x=5.0000000000000115 y=25.16 w=8.24 h=8.24 fill="#0c0c0e" />
-          <Ellipse name="lens" id="b9f3139a-6830-469b-99af-f3bae89e1777" x=6.0000000000000115 y=26.16 w=6.24 h=6.24 fill={[{"kind":{"RadialGradient":{"stops":[{"color":"#ffffff1a","position":0.0},{"color":"#9b9fa6","position":0.52},{"color":"#000000c7","position":1.0}],"transform":{"a":1.9,"b":0.0,"c":0.0,"d":1.9,"tx":-0.59,"ty":-0.6499999999999999}}}}]} effects={[{"color":"#000000c0","kind":"InnerShadow","radius":2.1216000000000004}]} />
-          <Ellipse name="lamp" id="ae684af9-3f24-4531-ab8a-3dadcaf6078f" x=6.0000000000000115 y=26.16 w=6.24 h=6.24 fill={[{"kind":{"RadialGradient":{"stops":[{"color":"#fffffff2","position":0.0},{"color":"#f7faff","position":0.16},{"color":"#eef4ff","position":0.46},{"color":"#eef4ff","position":0.7},{"color":"#6b6e73","position":1.0}],"transform":{"a":1.9,"b":0.0,"c":0.0,"d":1.9,"tx":-0.59,"ty":-0.6499999999999999}}}}]} effects={[{"color":"#eef4ffd9","kind":"DropShadow","radius":4.992000000000001}]} emission={{"color":"#eef4ff","intensity":0.9,"radius":6.24}} />
+        <Text name="word" id="fcb50dfd-83ff-44c1-9e26-126872d5a494" x=74.4 y=239.2 w=47.199999999999996 h=14 fill="#6c7270" size=10 weight=500 letter-spacing=0.6 text-align="center">midi</Text>
+        <Frame name="Engage" id="06e3599d-4380-4359-90a2-20cb05d5e8c7" x=395.36 y=222.96 w=67.68 h=54.239999999999995 control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Param":{"addr":"voices/on"}}},"kind":{"Footswitch":{"hold_ms":500}},"slots":[{"node":"dd2b87d3-71b9-48be-8ae5-9724599daca3","role":"Led"}]}}>
+          <Vector name="shadow" id="5e4c4b8e-67d9-4f6e-95d2-40069f10d421" w=67.68 h=54.239999999999995 fill="#00000073" effects={[{"color":"#00000059","kind":"DropShadow","offset_y":2.4000000000000004,"radius":4.0}]} geometry="M 65.280 33.600 A 20.640 18.576 0 1 1 24.000 33.600 A 20.640 18.576 0 1 1 65.280 33.600 Z" />
+          <Vector name="nut" id="158cc90b-1811-4a99-9e22-fc47f2ae1ba2" w=67.68 h=54.239999999999995 fill={[{"kind":{"LinearGradient":{"stops":[{"color":"#ffffff","position":0.0},{"color":"#b9babc","position":0.4},{"color":"#4b4d50","position":0.62},{"color":"#b9babc","position":1.0}],"transform":{"a":0.6830127018922192,"b":-1.1830127018922196,"c":1.1830127018922196,"d":0.6830127018922192,"tx":0.7500000000000002,"ty":-0.4330127018922193}}}}]} stroke="#4b4d50e6" stroke-weight=0.48 stroke-align="inside" effects={[{"color":"#ffffff55","kind":"InnerShadow","offset_y":0.8,"radius":0.8}]} geometry="M 44.640 10.560 L 62.515 20.880 L 62.515 41.520 L 44.640 51.840 L 26.765 41.520 L 26.765 20.880 Z" />
+          <Ellipse name="washer" id="b2ae1fc7-9edf-47d6-b941-caec75694af8" x=29.366400000000006 y=15.9264 w=30.5472 h=30.5472 fill={[{"kind":{"AngularGradient":{"stops":[{"color":"#ffffff","position":0.0},{"color":"#4b4d50","position":0.22},{"color":"#ffffff","position":0.45},{"color":"#4b4d50","position":0.72},{"color":"#ffffff","position":1.0}],"transform":{"a":6.123233995736766e-17,"b":1.0,"c":-1.0,"d":6.123233995736766e-17,"tx":-5.551115123125783e-17,"ty":1.0}}}}]} stroke="#4b4d50cc" stroke-weight=0.4 stroke-align="inside" />
+          <Rectangle name="slot" id="dd7a0c74-02ce-4842-b120-96d97454d8b7" x=41.760000000000005 y=43.584 w=5.76 h=3.12 radius=0.8 fill="#0d0b09" />
+          <Rectangle name="barrel" id="b08ed328-e3d9-492a-90d7-c00c643d6fa7" x=33.36000000000001 y=23.04 w=22.56 h=8.16 fill={[{"kind":{"LinearGradient":{"stops":[{"color":"#4b4d50","position":0.0},{"color":"#ffffff","position":0.3},{"color":"#b9babc","position":0.55},{"color":"#4b4d50","position":1.0}],"transform":{"a":1.0,"b":5.551115123125783e-17,"c":-5.551115123125783e-17,"d":1.0,"tx":-2.7755575615628914e-17,"ty":0.0}}}}]} />
+          <Vector name="barrel foot" id="a053738c-c5b0-447f-95f5-c5d54c23764c" w=67.68 h=54.239999999999995 fill="#4b4d50e6" geometry="M 55.920 31.200 A 11.280 3.840 0 1 1 33.360 31.200 A 11.280 3.840 0 1 1 55.920 31.200 Z" />
+          <Ellipse name="cap" id="a08a413f-42c2-4930-ad08-8ade6b4c68ad" x=32.64000000000001 y=11.04 w=24 h=24 fill={[{"kind":{"RadialGradient":{"stops":[{"color":"#ffffff","position":0.0},{"color":"#ffffff","position":0.2},{"color":"#b9babc","position":0.6},{"color":"#4b4d50","position":1.0}],"transform":{"a":1.7,"b":0.0,"c":0.0,"d":1.7,"tx":-0.49,"ty":-0.55}}}}]} stroke="#4b4d50e6" stroke-weight=0.5599999999999999 stroke-align="inside" effects={[{"color":"#00000059","kind":"InnerShadow","offset_y":-1.2000000000000002,"radius":2.4000000000000004}]} />
+          <Ellipse name="spec" id="bf562436-9878-457d-8708-f9a4103fd67e" x=37.92000000000001 y=15.84 w=6.24 h=6.24 fill="#ffffffb0" />
+          <Ellipse name="bezel" id="600f6b3f-f688-4e07-8336-b657c3ca0839" x=5.0000000000000115 y=25.16 w=8.24 h=8.24 fill="#0c0c0e" />
+          <Ellipse name="lens" id="a44ed085-7bf5-4e84-91dd-2c677a9deb4d" x=6.0000000000000115 y=26.16 w=6.24 h=6.24 fill={[{"kind":{"RadialGradient":{"stops":[{"color":"#ffffff1a","position":0.0},{"color":"#9b9fa6","position":0.52},{"color":"#000000c7","position":1.0}],"transform":{"a":1.9,"b":0.0,"c":0.0,"d":1.9,"tx":-0.59,"ty":-0.6499999999999999}}}}]} effects={[{"color":"#000000c0","kind":"InnerShadow","radius":2.1216000000000004}]} />
+          <Ellipse name="lamp" id="dd2b87d3-71b9-48be-8ae5-9724599daca3" x=6.0000000000000115 y=26.16 w=6.24 h=6.24 fill={[{"kind":{"RadialGradient":{"stops":[{"color":"#fffffff2","position":0.0},{"color":"#f7faff","position":0.16},{"color":"#eef4ff","position":0.46},{"color":"#eef4ff","position":0.7},{"color":"#6b6e73","position":1.0}],"transform":{"a":1.9,"b":0.0,"c":0.0,"d":1.9,"tx":-0.59,"ty":-0.6499999999999999}}}}]} effects={[{"color":"#eef4ffd9","kind":"DropShadow","radius":4.992000000000001}]} emission={{"color":"#eef4ff","intensity":0.9,"radius":6.24}} />
         </Frame>
-        <Text name="word" id="1cad3bd1-b42e-4b37-a383-b59b23d231d2" x=341.6 y=239.2 w=60.8 h=14 fill="#6c7270" size=10 weight=500 letter-spacing=0.6 text-align="center">engage</Text>
-        <Text name="word" id="3599c47d-bd5c-4f8f-88ca-1814af294c82" x=146.55 y=231.72 w=186.89999999999998 h=29 fill="#55595a" size=21 weight=700 letter-spacing=1.4700000000000002 text-align="center">harmonizer</Text>
+        <Text name="word" id="736c7dfc-d271-4ce4-a60a-2f6935302c75" x=341.6 y=239.2 w=60.8 h=14 fill="#6c7270" size=10 weight=500 letter-spacing=0.6 text-align="center">engage</Text>
+        <Text name="word" id="e4abfdcd-eb74-4af3-9a14-26294178b69b" x=146.55 y=231.72 w=186.89999999999998 h=29 fill="#55595a" size=21 weight=700 letter-spacing=1.4700000000000002 text-align="center">harmonizer</Text>
       </Frame>
     </Frame>
   </Page>
