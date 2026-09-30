@@ -199,31 +199,44 @@ pub fn spring_tank_compact(t: &Tank, file: &'static str, w: f64, h: f64) -> Face
         for e in light::edge("case edge", (0.0, 0.0, w, h), 18.0, 5.0, 1.1, true) {
             b.add(case, e);
         }
-        // A copper strip where the mesh window was: the unit's signature.
-        b.add(case, draw::rounded(draw::rect("copper", 18.0, 14.0, w - 36.0, 8.0, draw::linear(180.0, &[(0.0, "#f2c7a6"), (0.5, "#c98a66"), (1.0, "#f0c09c")])), 4.0));
-        print_left(b, case, t.title, 22.0, 46.0, 24.0, INK, 600.0, 0.08);
-        print_left(b, case, "Harmonic Tremolo", 24.0, 78.0, 13.0, DIM, 500.0, 0.03);
-        print_right(b, case, "Spring Reverb", w - 24.0, 78.0, 13.0, DIM, 500.0, 0.03);
-        let d = (h * 0.42).min(w * 0.12);
-        let row = h * 0.6;
-        let label_y = row + d * 0.5 + 18.0;
+        // The mesh window in its copper surround, across the top: the
+        // unit's face, kept whole.
+        let (mx, my, mw, mh) = (22.0, 18.0, w - 44.0, h * 0.24);
+        b.add(case, draw::with_effects(draw::rounded(draw::rect("surround", mx - 4.0, my - 4.0, mw + 8.0, mh + 8.0, draw::linear(180.0, &[(0.0, "#f2c7a6"), (0.5, "#c98a66"), (1.0, "#f0c09c")])), 14.0), vec![draw::drop_shadow("#00000080", 0.0, 2.0, 4.0)]));
+        let mesh = Place { options: Some(vec![format!("w={mw}"), format!("h={mh}"), "r=11".into()]), ..Place::new("Mesh").variant("mesh") };
+        let m = ui::put_at(b, case, "panel.amp_grille", &mesh, mx, my);
+        if let Some(n) = b.scene.node_mut(m) {
+            n.effects.clear();
+        }
+        for e in light::edge("mesh recess", (mx, my, mw, mh), 11.0, 4.0, 1.2, false) {
+            b.add(case, e);
+        }
+        let d = (h * 0.36).min(w * 0.13);
+        let row = my + mh + 14.0 + d * 0.5;
+        let label_y = row + d * 0.5 + 14.0;
+        let section_y = h - 20.0;
         // Tremolo: on, intensity, speed.
-        print(b, case, "ON", w * 0.05, row - 34.0, 11.0, INK, 500.0, 0.08);
+        print(b, case, "ON", w * 0.05, row - 30.0, 11.0, INK, 500.0, 0.08);
         toggle(b, case, t.trem_on, "Tremolo", 22.0, w * 0.05, row);
-        print(b, case, "OFF", w * 0.05, row + 34.0, 11.0, INK, 500.0, 0.08);
-        for (addr, name, fx) in [(t.intensity, "INTENSITY", 0.17), (t.speed, "SPEED", 0.32)] {
+        print(b, case, "OFF", w * 0.05, row + 30.0, 11.0, INK, 500.0, 0.08);
+        for (addr, name, fx) in [(t.intensity, "INTENSITY", 0.18), (t.speed, "SPEED", 0.33)] {
             knob(b, case, Cap::Cream, addr, name, d, w * fx, row);
-            print(b, case, name, w * fx, label_y, 12.0, INK, 500.0, 0.12);
+            print(b, case, name, w * fx, label_y, 11.0, INK, 500.0, 0.12);
         }
-        b.add(case, draw::rect("divider", w * 0.415, row - d * 0.6, 1.5, d * 1.3, draw::solid("#c9b8ac40")));
         // Reverb: mix, tone, decay, on.
-        for (addr, name, fx) in [(t.mix, "MIX", 0.51), (t.tone, "TONE", 0.66), (t.decay, "DECAY", 0.81)] {
+        for (addr, name, fx) in [(t.mix, "MIX", 0.52), (t.tone, "TONE", 0.67), (t.decay, "DECAY", 0.82)] {
             knob(b, case, Cap::Cream, addr, name, d, w * fx, row);
-            print(b, case, name, w * fx, label_y, 12.0, INK, 500.0, 0.12);
+            print(b, case, name, w * fx, label_y, 11.0, INK, 500.0, 0.12);
         }
-        print(b, case, "ON", w * 0.94, row - 34.0, 11.0, INK, 500.0, 0.08);
-        toggle(b, case, t.verb_on, "Reverb", 22.0, w * 0.94, row);
-        print(b, case, "OFF", w * 0.94, row + 34.0, 11.0, INK, 500.0, 0.08);
+        print(b, case, "ON", w * 0.95, row - 30.0, 11.0, INK, 500.0, 0.08);
+        toggle(b, case, t.verb_on, "Reverb", 22.0, w * 0.95, row);
+        print(b, case, "OFF", w * 0.95, row + 30.0, 11.0, INK, 500.0, 0.08);
+        // The sections named along the bottom, bracketed as on the unit.
+        let by = section_y - 14.0;
+        bracket(b, case, w * 0.03, w * 0.4, by, &[w * 0.03, w * 0.4]);
+        bracket(b, case, w * 0.46, w * 0.97, by, &[w * 0.46, w * 0.97]);
+        print(b, case, "Harmonic Tremolo", w * 0.215, section_y, 13.0, INK, 500.0, 0.03);
+        print(b, case, "Spring Reverb", w * 0.715, section_y, 13.0, INK, 500.0, 0.03);
     });
     let full = spring_tank_as(t);
     Face { file, plugin: t.plugin, scene, params: full.params, streams: full.streams }
