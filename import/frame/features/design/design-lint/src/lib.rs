@@ -387,6 +387,36 @@ impl Cx<'_> {
         false
     }
 
+    /// Every `show_if` a node is shown under: its own control's and each
+    /// ancestor control's (a colourway layer hides everything on it).
+    fn shown_under<'n>(&'n self, node: &'n Node) -> Vec<&'n surface_proto::Condition> {
+        let mut out = Vec::new();
+        let mut cur = Some(node);
+        while let Some(n) = cur {
+            if let Some(c) = n.control.as_ref().and_then(|c| c.show_if.as_ref()) {
+                out.push(c);
+            }
+            cur = n.parent.and_then(|p| self.scene.node(p));
+        }
+        out
+    }
+
+    /// Whether two nodes can never be shown together: each is shown only
+    /// for a set of values of the same param, and the sets don't meet.
+    fn exclusive(&self, a: &Node, b: &Node) -> bool {
+        let (ca, cb) = (self.shown_under(a), self.shown_under(b));
+        ca.iter().any(|x| {
+            cb.iter().any(|y| {
+                x.addr == y.addr
+                    && !x.not
+                    && !y.not
+                    && !x.any_of.is_empty()
+                    && !y.any_of.is_empty()
+                    && x.any_of.iter().all(|v| !y.any_of.iter().any(|w| (v - w).abs() < 1e-9))
+            })
+        })
+    }
+
     fn overlaps(&mut self, controls: &[(&Node, &Control)]) {
         // Handles move with their values (and sit on the plots they drag),
         // so where their boxes are authored says nothing.
@@ -399,6 +429,10 @@ impl Cx<'_> {
         for (i, (a, ab)) in inputs.iter().enumerate() {
             for (b, bb) in &inputs[i + 1..] {
                 if self.nested((a, ab), (b, bb)) || self.nested((b, bb), (a, ab)) {
+                    continue;
+                }
+                // Colourway / variant layers: never shown at the same time.
+                if self.exclusive(a, b) {
                     continue;
                 }
                 let ix = (ab.x + ab.width).min(bb.x + bb.width) - ab.x.max(bb.x);

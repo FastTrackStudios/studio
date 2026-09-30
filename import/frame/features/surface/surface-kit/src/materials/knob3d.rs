@@ -272,6 +272,10 @@ impl Look3d {
                 _ => KnobMaterial::Plastic,
             };
         }
+        // The fallback's bevel (flute and knurl depth with fx off).
+        if let Some(b) = num("bevel") {
+            l.fallback.bevel = b.clamp(0.0, 2.0);
+        }
         // The shape.
         if let Some(s) = p.opt("profile") {
             l.profile = match s {

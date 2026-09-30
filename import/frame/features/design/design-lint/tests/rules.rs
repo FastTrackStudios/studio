@@ -209,3 +209,34 @@ fn a_handle_needs_params_and_an_area() {
     let unknown = rules(&in_area(handle("amp/gian"), None, Size { width: 200.0, height: 100.0 }));
     assert!(unknown.contains(&("binding".into(), Severity::Error)), "{unknown:?}");
 }
+
+#[test]
+fn controls_on_exclusive_variant_layers_do_not_overlap() {
+    // Bass laid over Gain, as in `overlap_and_inconsistent_size`: then shown
+    // only for different values of one choice (colourway layers), which are
+    // never on screen together — not an overlap. The same value is.
+    use surface_proto::{Condition, ParamAddr as Addr};
+    let mut s = demo();
+    let (bass, gain) = (control_named(&s, "Bass").clone(), control_named(&s, "Gain").clone());
+    let mut lc = bass.layout_child.clone();
+    lc.absolute = true;
+    let at = gain.transform;
+    let shown = |node: &document_proto::Node, v: f64| {
+        let mut c = node.control.clone().unwrap();
+        c.show_if = Some(Condition::any_of(Addr::new("amp/channel").0, &[v]));
+        Prop::Control(Some(c))
+    };
+    s.transact([
+        Op::Set { id: bass.id, prop: Prop::LayoutChild(lc) },
+        Op::Set { id: bass.id, prop: Prop::Transform(at) },
+        Op::Set { id: bass.id, prop: Prop::Size(gain.size) },
+        Op::Set { id: bass.id, prop: shown(&bass, 0.0) },
+        Op::Set { id: gain.id, prop: shown(&gain, 1.0) },
+    ])
+    .unwrap();
+    let overlaps = |s: &document_proto::Scene| lint(s, &demo_catalog(), &Config::default()).iter().filter(|i| i.rule == "overlap").count();
+    assert_eq!(overlaps(&s), 0, "different colourways never show together");
+    let gain2 = control_named(&s, "Gain").clone();
+    s.apply(Op::Set { id: gain2.id, prop: shown(&gain2, 0.0) }).unwrap();
+    assert!(overlaps(&s) > 0, "the same colourway still overlaps");
+}

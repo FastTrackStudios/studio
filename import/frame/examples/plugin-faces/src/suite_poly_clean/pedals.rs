@@ -72,11 +72,11 @@ pub fn compressor() -> Face {
         word(b, lid, "level", x(0.78), y(0.088), 10.0, ink, 700.0, 0.12);
         knob(b, lid, &GOLD, "comp/comp", "Comp", 36.0, x(0.22), y(0.19), "#2a1d0c");
         knob(b, lid, &GOLD, "comp/level", "Level", 36.0, x(0.78), y(0.19), "#2a1d0c");
-        switch(b, lid, "switch.mini_lever", "gold", "comp/attack", "Attack", 22.0, x(0.5), y(0.39), &[], &["bushing"]);
-        word(b, lid, "slow", x(0.345), y(0.345), 7.5, ink, 600.0, 0.04);
-        word(b, lid, "fast", x(0.655), y(0.345), 7.5, ink, 600.0, 0.04);
-        parts::cut_glyph(b, lid, x(0.36), y(0.375), 5.0, false, ink);
-        word(b, lid, "attack", x(0.5), y(0.465), 10.0, ink, 700.0, 0.12);
+        switch(b, lid, "switch.mini_lever", "gold", "comp/attack", "Attack", 22.0, x(0.5), y(0.42), &[], &["bushing"]);
+        word(b, lid, "slow", x(0.345), y(0.375), 7.5, ink, 600.0, 0.04);
+        word(b, lid, "fast", x(0.655), y(0.375), 7.5, ink, 600.0, 0.04);
+        parts::cut_glyph(b, lid, x(0.36), y(0.405), 5.0, false, ink);
+        word(b, lid, "attack", x(0.5), y(0.495), 10.0, ink, 700.0, 0.12);
         word(b, lid, "compressor", x(0.5), y(0.63), 16.5, ink, 700.0, 0.07);
         stomp(b, lid, NS, "gold");
     });
