@@ -2,8 +2,11 @@
 //!
 //! ```text
 //! kit_sheet --out kit.png [--family knob|meter|button|switch|lever|panel|viz|material] [--scale 2] [--swatch]
-//!           [--only knob.render,panel.pedal_3d] [--fx gpu|fallback|off]
+//!           [--only knob.render,panel.pedal_3d] [--fx gpu|fallback|off] [--save-markup sheet.fm]
 //! ```
+//! `--save-markup` also writes the sheet as markup, for
+//! `render_surface --markup` (its controls bind the demo catalog's params:
+//! `--set-at 0.5:delay/mix=1` turns every knob).
 //! Every registered component (or one family), in a labelled grid, each
 //! bound to a demo param at a mid value so pointers and meters show a
 //! position. `--swatch` instead paints the kit's paint helpers (angled
@@ -41,6 +44,7 @@ fn run() -> Result<(), String> {
     let mut scale = 1.0_f64;
     let mut swatch = false;
     let mut fx = render::fx::Mode::Gpu;
+    let mut save_markup: Option<String> = None;
     let mut args = std::env::args().skip(1);
     while let Some(a) = args.next() {
         match a.as_str() {
@@ -50,6 +54,7 @@ fn run() -> Result<(), String> {
             "--scale" => scale = args.next().ok_or("--scale needs a factor")?.parse().map_err(|e| format!("{e}"))?,
             "--swatch" => swatch = true,
             "--fx" => fx = args.next().ok_or("--fx needs gpu|fallback|off")?.parse()?,
+            "--save-markup" => save_markup = args.next(),
             other => return Err(format!("unknown arg {other}")),
         }
     }
@@ -236,6 +241,10 @@ fn run() -> Result<(), String> {
             n.control = Some(c.clone());
         }
     }
+    if let Some(path) = &save_markup {
+        // The sheet as markup, for `render_surface --markup` (animations).
+        std::fs::write(path, document_text::print(&scene)).map_err(|e| format!("{path}: {e}"))?;
+    }
 
     let mut rt = Runtime::new(Surface::from_scene(scene), catalog);
     rt.apply_values([
@@ -282,6 +291,24 @@ fn variations(family: Option<&str>, only: &[String]) -> Vec<(String, &'static st
     let choice = || Binding::param("amp/channel");
     let level = || Binding::stream("in_level");
     let mut v: Vec<(String, &'static str, Place, bool)> = Vec::new();
+    if only.iter().any(|o| o.starts_with("knob.3d")) {
+        // Every preset, then options.
+        let light = ["fluted_cream", "white_knurl", "stepped_cream", "amp_pointer", "pointer", "gold_knurl", "spun_metal"];
+        for name in &surface_kit::materials::knob3d::PRESETS {
+            let place = Place::new("Drive").bind(mix()).size(64.0).legend("Drive").variant(*name);
+            let on_light = light.contains(name);
+            v.push(((*name).to_string(), "knob.3d", if on_light { place.ink(Ink::Dark) } else { place }, on_light));
+        }
+        let k = |preset: &str, opts: &[&str]| Place::new("Tone").bind(mix()).size(64.0).legend("Tone").variant(preset).options(opts);
+        v.push(("fluted_cream red".into(), "knob.3d", k("fluted_cream", &["color=#9c2a22", "pointer=#f3ead8"]), false));
+        v.push(("spun_metal gold".into(), "knob.3d", k("spun_metal", &["color=#d8b47a"]), false));
+        v.push(("domed rough 0.8".into(), "knob.3d", k("domed", &["rough=0.8", "color=#3b4f7a"]), false));
+        v.push(("knurled ribs 24".into(), "knob.3d", k("knurled", &["ribs=24", "tilt=0"]), false));
+        v.push(("stepped words".into(), "knob.3d", Place::new("Mode").bind(choice()).size(64.0).legend("Mode").variant("bakelite_chicken").options(&["Clean", "Crunch", "Lead"]), false));
+        v.push(("32 px, touch 44".into(), "knob.3d", Place::new("Tone").bind(mix()).size(32.0).legend("Tone").variant("pedal_chicken").touch(TOUCH_MIN), false));
+        v.push(("112 px gold".into(), "knob.3d", Place::new("Master").bind(mix()).size(112.0).legend("Master").variant("gold_knurl").ink(Ink::Dark), true));
+        return v;
+    }
     if only.iter().any(|o| o.starts_with("knob.render")) {
         // The rendered knob's range: shapes in materials, the look's dials, print.
         let k = |cap: &str, opts: &[&str]| Place::new("Drive").bind(mix()).size(64.0).legend("Drive").variant(cap).options(opts);

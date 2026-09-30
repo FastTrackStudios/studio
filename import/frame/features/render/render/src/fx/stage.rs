@@ -141,6 +141,12 @@ impl Stage {
         } else {
             let scratch = self.texture(device, "scratch", w, h, TARGET);
             let scratch_view = scratch.create_view(&wgpu::TextureViewDescriptor::default());
+            // What a generator's pass binds as its source: never drawn to,
+            // so transparent (its box's 1 px margin reads it).
+            let blank_view = regions
+                .iter()
+                .any(|r| self.passes.generates(&r.shader))
+                .then(|| self.texture(device, "blank", 1, 1, TARGET).create_view(&wgpu::TextureViewDescriptor::default()));
             let mut cursor = 0;
             for (i, r) in regions.iter().enumerate() {
                 let seg = slice_with_context(&prims, cursor..r.range.start);
@@ -154,9 +160,17 @@ impl Stage {
                     self.passes.blit_over(device, &mut enc, &scratch_view, &out_view);
                     queue.submit([enc.finish()]);
                 }
-                let sub = slice_with_context(&prims, r.range.clone());
-                paint(scene, &sub, frame, None);
-                vello_into(renderer, device, queue, scene, &scratch, clear, aa)?;
+                // A generator (an effect that never reads its source) draws
+                // its own picture: its subtree, the vector fallback, isn't
+                // rendered at all — the region costs one pass, not a vello
+                // render and two blits.
+                let generator = self.passes.generates(&r.shader);
+                if !generator {
+                    let sub = slice_with_context(&prims, r.range.clone());
+                    paint(scene, &sub, frame, None);
+                    vello_into(renderer, device, queue, scene, &scratch, clear, aa)?;
+                }
+                let src_view = if generator { blank_view.as_ref().unwrap_or(&scratch_view) } else { &scratch_view };
                 if let Some(pipeline) = self.passes.cached_effect(&r.shader) {
                     let (mut uniforms, box_px) = region_uniforms(r, frame, w, h);
                     let data = frame.inputs.and_then(|i| i.get(&r.node_id));
@@ -165,8 +179,10 @@ impl Stage {
                     let mut enc = encoder(device);
                     // The effect runs over the node's box only; the rest of
                     // the subtree (children overflowing it) draws plainly.
-                    self.passes.effect_pass(device, &mut enc, pipeline, &uniforms, &values, &scratch_view, &out_view, Some(box_px));
-                    self.passes.blit_over_in(device, &mut enc, &scratch_view, &out_view, &outside(box_px, w, h));
+                    self.passes.effect_pass(device, &mut enc, pipeline, &uniforms, &values, src_view, &out_view, Some(box_px));
+                    if !generator {
+                        self.passes.blit_over_in(device, &mut enc, &scratch_view, &out_view, &outside(box_px, w, h));
+                    }
                     queue.submit([enc.finish()]);
                 }
                 cursor = r.range.end;

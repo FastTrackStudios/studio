@@ -169,6 +169,33 @@ these instead of hand-rolled gradients.
   height, seen under its top), skirt and every lit overlay (face sheen, rim
   light, flute light, the specular hotspot) are fixed, so the hotspot stays
   put while the pointer turns.
+- **`knob.3d`**: the same knob rendered per pixel on the GPU, for the
+  Neural-render look vectors can't reach (ribs that turn under a fixed
+  light). It is `knob.render` with everything that stands off the panel —
+  occlusion, skirt, wall, the turning `body` (Needle), the lit overlays —
+  moved into a `cap` frame carrying `shader: knob.3d` (render's built-in:
+  a distance-field cap, skirt and insert, sphere-traced from a slightly
+  front-on camera, GGX + clearcoat + anisotropic spun metal, occlusion in
+  the grooves, a soft shadow on the panel; see render's `fx/CONTRACT.md`).
+  The printed ring and legend stay vector. With the stage (`--fx gpu`) the
+  shader replaces the `cap` subtree and turns with the control's position;
+  without it (`--fx off`/`fallback`, SVG, Figma) the vector knob draws
+  unchanged. Variant = preset: `pedal_chicken` (Cory Wong pedals: black
+  flutes, polished teardrop insert, flared skirt), `teardrop` (satin
+  teardrop on a knurled skirt), `fluted_cream`, `knurled_dome` (Halfman OD:
+  glossy oxblood dome over a knurled band), `spun_metal` (spun aluminium
+  in a black skirt), `bakelite_chicken` (Signature 83), `amp_pointer` (Nolly:
+  dome crossed by a fin), `gold_knurl` (THX pedals), `white_knurl` (Clean
+  Machine), `stepped_cream` (Gravity Tank), `amp_skirted`, and
+  `knob.render`'s caps `flat`, `domed`, `fluted`, `knurled`,
+  `chicken_head`, `pointer`. Options override the preset: `color=`,
+  `skirt_color=`, `pointer=`, `insert_color=`, `metal=`/`rough=`/`coat=`/
+  `aniso=` (0..1), `spec=`/`shadow=` (0..2), `ribs=`, `tilt=` (degrees),
+  `ticks=`, `legend=top`. From Rust: `materials::knob3d::{preset, Look3d,
+  build}` — a `Look3d` is the shader's params and `Const` inputs
+  (`Look3d::shader`) plus the fallback `Look`. Cost: 16–17 vector nodes
+  (the fallback) and one GPU pass of ~10 µs per knob (RTX 4080); the stage
+  skips rendering a generator's subtree, so a knob adds no vello pass.
 - **`panel.pedal_3d`**: `panel.pedal`'s classes (one height of 286, widths
   by class) as a render: the lid in any finish (`finish=powder|
   powder:coarse|brushed|hammertone|gloss|satin|anodized|chrome|…`), its
@@ -189,6 +216,9 @@ these instead of hand-rolled gradients.
 ```sh
 nix develop . -c cargo run --release -p frame-cli --features anyrender --bin kit_sheet -- --family material --fx gpu --scale 2 --out materials.png
 nix develop . -c cargo run --release -p frame-cli --features anyrender --bin kit_sheet -- --only knob.render --fx gpu --scale 2 --out knobs.png
+nix develop . -c cargo run --release -p frame-cli --features anyrender --bin kit_sheet -- --only knob.3d --fx gpu --scale 2 --out knobs3d.png --save-markup knobs3d.fm
+# the ribs turn, the light stays: value 0 → 1 over five frames
+nix develop . -c cargo run --release -p frame-cli --features anyrender --bin render_surface -- --markup knobs3d.fm --fx gpu --scale 2 --frames 5 --fps 1 --columns 5 --set-at 0:delay/mix=0 --set-at 1:delay/mix=0.25 --set-at 2:delay/mix=0.5 --set-at 3:delay/mix=0.75 --set-at 4:delay/mix=1 --out turn.png
 nix develop . -c cargo run --release -p frame-cli --features anyrender --bin kit_sheet -- --only panel.pedal_3d --fx gpu --scale 2 --out pedals.png
 nix develop . -c cargo run --release -p frame-cli --features anyrender --bin kit_sheet -- --only panel.amp_head,panel.amp_combo --fx gpu --scale 2 --out amps.png
 ```

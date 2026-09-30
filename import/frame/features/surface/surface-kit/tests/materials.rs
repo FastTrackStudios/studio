@@ -113,6 +113,57 @@ fn a_cabinet_gives_its_faceplate_and_grille_to_fill() {
 }
 
 #[test]
+fn a_3d_knob_is_a_rendered_knob_whose_standing_parts_carry_the_shader() {
+    use surface_kit::materials::knob3d::{PRESETS, preset};
+    use surface_proto::SlotRole;
+    for name in PRESETS {
+        let mut scene = Scene::new("Kit");
+        let page = scene.pages()[0];
+        let mut controls = BTreeMap::new();
+        let theme = Theme::stage_dark();
+        let root = {
+            let mut b = Builder { scene: &mut scene, controls: &mut controls, theme: &theme };
+            surface_kit::place(&mut b, page, "knob.3d", &Place::new("Drive").variant(name).size(64.0).legend("Drive")).unwrap()
+        };
+        let shaded: Vec<_> = scene.walk(root).into_iter().filter(|id| scene.node(*id).unwrap().shader.is_some()).collect();
+        assert_eq!(shaded.len(), 1, "{name}: one shader node");
+        let cap = scene.node(shaded[0]).unwrap();
+        let fx = cap.shader.as_ref().unwrap();
+        assert_eq!((cap.name.as_str(), fx.shader.as_str()), ("cap", "knob.3d"), "{name}");
+        assert_eq!(fx.params["angle"], 300.0, "{name}: the knob's travel");
+        assert_eq!(fx.params["p0"], f64::from(preset(name).profile as u8), "{name}");
+        assert!(fx.inputs.iter().all(|i| matches!(i.source, document_proto::ShaderInputSource::Const { .. })), "{name}: its look needs no host");
+        // The turning body (the fallback's Needle) is under the shader node;
+        // the printed ring is not.
+        let needle = NodeId(controls[&root].slots_of(SlotRole::Needle).next().unwrap());
+        assert!(scene.walk(shaded[0]).contains(&needle), "{name}: the Needle draws under the shader");
+        let ring = scene.walk(root).into_iter().find(|id| scene.node(*id).unwrap().name == "scale dots").unwrap();
+        assert!(!scene.walk(shaded[0]).contains(&ring), "{name}: the printed ring stays outside the shader");
+        // The knob sits in the middle of the shader's box, `radius` of it.
+        let side = cap.size.width;
+        assert!((fx.params["radius"] - 32.0 / (side / 2.0)).abs() < 1e-9, "{name}");
+    }
+}
+
+#[test]
+fn a_3d_knob_without_the_stage_is_the_rendered_knob() {
+    // The same nodes as `knob.render` in the matching look, plus the `cap`.
+    let (a, ra) = build("knob.3d", &Place::new("Drive").variant("fluted"));
+    let (b, rb) = build("knob.render", &Place::new("Drive").variant("fluted"));
+    let names = |s: &Scene, r| s.walk(r).into_iter().map(|id| s.node(id).unwrap().name.clone()).filter(|n| n != "cap").collect::<Vec<_>>();
+    assert_eq!(names(&a, ra), names(&b, rb));
+}
+
+#[test]
+fn a_3d_knobs_options_reach_its_shader() {
+    let p = Place::new("Drive").variant("gold_knurl").options(&["color=#ff0000", "rough=0.7", "ribs=30", "tilt=10"]).sweep(270.0);
+    let (scene, root) = build("knob.3d", &p);
+    let fx = scene.walk(root).into_iter().find_map(|id| scene.node(id).unwrap().shader.clone()).unwrap();
+    assert_eq!((fx.params["tint_r"], fx.params["tint_g"]), (1.0, 0.0));
+    assert_eq!((fx.params["softness"], fx.params["p1"], fx.params["elevation"], fx.params["angle"]), (0.7, 30.0, 10.0, 270.0));
+}
+
+#[test]
 fn a_rendered_knob_keeps_its_light_out_of_the_turning_body() {
     use surface_proto::SlotRole;
     for cap in ["flat", "domed", "fluted", "knurled", "chicken_head", "pointer"] {

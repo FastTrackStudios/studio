@@ -10,6 +10,7 @@
 //!   perforated and expanded metal, diamond and chevron grilles, chrome,
 //!   nickel, glossy plastic, rubber.
 //! - [`knob`] — `knob.render`, the generic rendered knob.
+//! - [`knob3d`] — `knob.3d`, the same knob rendered per pixel on the GPU.
 //! - [`enclosure`] — `panel.pedal_3d`.
 //! - [`cabinet`] — `panel.amp_head`, `panel.amp_combo`.
 //!
@@ -19,6 +20,7 @@
 pub mod cabinet;
 pub mod enclosure;
 pub mod knob;
+pub mod knob3d;
 pub mod light;
 pub mod paint;
 pub mod texture;
@@ -118,6 +120,7 @@ swatches! {
 pub(crate) fn defs() -> Vec<ComponentDef> {
     let mut all = swatch_defs();
     all.extend(knob::defs());
+    all.extend(knob3d::defs());
     all.extend(enclosure::defs());
     all.extend(cabinet::defs());
     all

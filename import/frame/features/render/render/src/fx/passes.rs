@@ -117,6 +117,9 @@ pub(super) struct Passes {
     /// Compiled effects by shader id, with the input slots their source
     /// reads; `None` = failed (drawn plainly).
     effects: HashMap<String, Option<(wgpu::RenderPipeline, Vec<String>)>>,
+    /// Compiled effects that never read their source (`sample_src`,
+    /// `src_tex`): generators, drawing their own picture.
+    generators: HashSet<String>,
     /// Bound as the data buffer where a pass has no inputs.
     empty_data: wgpu::Buffer,
     /// Shader ids whose failure was already reported.
@@ -213,6 +216,7 @@ impl Passes {
             pipeline_layout,
             sampler,
             effects: HashMap::new(),
+            generators: HashSet::new(),
             empty_data,
             reported: HashSet::new(),
         }
@@ -231,6 +235,9 @@ impl Passes {
             // the result — pipeline or failure — is cached for good.
             let compiled = compile(device, &self.pipeline_layout, &super::effect_module(&body));
             let entry = compiled.map_err(|e| self.report(id, &e)).ok().map(|p| (p, super::effect_inputs(&body)));
+            if entry.is_some() && super::generates(&body) {
+                self.generators.insert(id.to_string());
+            }
             self.effects.insert(id.to_string(), entry);
         }
         self.cached_effect(id)
@@ -239,6 +246,11 @@ impl Passes {
     /// The effect for `id` if it's already compiled.
     pub fn cached_effect(&self, id: &str) -> Option<&wgpu::RenderPipeline> {
         self.effects.get(id).and_then(Option::as_ref).map(|(p, _)| p)
+    }
+
+    /// Whether a compiled effect draws without reading its source.
+    pub fn generates(&self, id: &str) -> bool {
+        self.generators.contains(id)
     }
 
     /// The input slots (`IN_<NAME>`, in slot order) a compiled effect reads.

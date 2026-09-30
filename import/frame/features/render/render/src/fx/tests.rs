@@ -297,3 +297,206 @@ fn inputs_are_the_in_names_an_effect_mentions_in_slot_order() {
     assert_eq!(table[0], [0, 2, 2, 1]);
     assert_eq!(values, [0.1, 0.2, -18.0]);
 }
+
+#[test]
+fn generators_are_the_effects_that_never_read_their_source() {
+    let body = |id| super::builtin_source(id).unwrap();
+    assert!(super::generates(body("knob.3d")) && super::generates(body("viz.comp")));
+    assert!(!super::generates(body("glass")) && !super::generates(body("lighting")));
+}
+
+#[test]
+fn const_inputs_need_no_host() {
+    let body = "fn effect(uv: vec2<f32>) -> vec4<f32> { return vec4<f32>(input_or(IN_LOOK, 0.0) + input_or(IN_LIVE, 0.0)); }";
+    let inputs = [doc::ShaderInput::constant("look", vec![0.25, 0.5]).map(0.0, 0.5), doc::ShaderInput::param("live", "a/b")];
+    let (table, values) = super::pack_inputs(&super::effect_inputs(body), &inputs, None);
+    // `live` (slot 0) has no host data; `look` (slot 1) comes from the document, shaped.
+    assert_eq!(table[0], [0, 0, 0, 2]);
+    assert_eq!(values, [0.5, 1.0]);
+    // A host's values still win.
+    let data = BTreeMap::from([("look".to_string(), vec![9.0])]);
+    assert_eq!(super::pack_inputs(&super::effect_inputs(body), &inputs, Some(&data)).1, [9.0]);
+}
+
+/// A 60 × 60 `knob.3d` at 20..80 over a grey panel, at `value` (fed as the
+/// `value` input: no control needed).
+fn knob_3d(value: f64, params: &[(&str, f64)]) -> (Scene, doc::NodeId) {
+    let panel = shape(NodeKind::Rectangle, 0.0, 0.0, 100.0, 100.0, (0.6, 0.6, 0.6));
+    let mut knob = Node::new(NodeKind::Frame, "cap");
+    knob.transform = doc::Transform::translate(20.0, 20.0);
+    knob.size = doc::Size { width: 60.0, height: 60.0 };
+    let params = params.iter().map(|(k, v)| ((*k).to_string(), *v)).collect();
+    knob.shader = Some(doc::ShaderFx { shader: "knob.3d".into(), params, inputs: vec![doc::ShaderInput::constant("value", vec![value])] });
+    scene_of(vec![(None, panel), (None, knob)])
+}
+
+#[test]
+fn knob_3d_draws_a_knob_and_its_shadow_inside_its_box() {
+    let Some(mut o) = offscreen() else { return };
+    let (scene, root) = knob_3d(0.5, &[("tint_r", 0.1), ("tint_g", 0.1), ("tint_b", 0.1)]);
+    let off = render(&mut o, &scene, root, Mode::Off);
+    let gpu = render(&mut o, &scene, root, Mode::Gpu);
+    for y in 0..SIZE {
+        for x in 0..SIZE {
+            if !((20..80).contains(&x) && (20..80).contains(&y)) {
+                assert_eq!(px(&off, x, y), px(&gpu, x, y), "changed ({x},{y}) outside its box");
+            }
+        }
+    }
+    let (c, p) = (px(&gpu, 50, 45), px(&off, 50, 45));
+    assert!(c[0] + 40 < p[0], "a dark cap in the middle: {c:?} over {p:?}");
+    assert_eq!(px(&gpu, 21, 78), px(&off, 21, 78), "the box's far corner stays clear");
+    let (s, p) = (px(&gpu, 62, 63), px(&off, 62, 63));
+    assert!(s[0] + 10 < p[0], "a shadow down and right of the knob: {s:?} over {p:?}");
+}
+
+#[test]
+fn knob_3d_turns_its_ribs_under_a_fixed_light() {
+    let Some(mut o) = offscreen() else { return };
+    let look = [("p0", 2.0), ("p1", 8.0), ("tint_r", 0.8), ("tint_g", 0.8), ("tint_b", 0.78)];
+    let (low, low_root) = knob_3d(0.0, &look);
+    let (high, high_root) = knob_3d(1.0, &look);
+    let (a, b) = (render(&mut o, &low, low_root, Mode::Gpu), render(&mut o, &high, high_root, Mode::Gpu));
+    let changed = (0..SIZE * SIZE).filter(|i| px(&a, i % SIZE, i / SIZE) != px(&b, i % SIZE, i / SIZE)).count();
+    assert!(changed > 150, "the flutes and pointer turn: {changed} px changed");
+    // The top's upper-left, clear of the pointer at either end: lit alike.
+    let (p, q) = (px(&a, 45, 38), px(&b, 45, 38));
+    assert!(p.iter().zip(q).all(|(x, y)| x.abs_diff(y) <= 2), "the light stays put: {p:?} vs {q:?}");
+}
+
+/// GPU cost of `knob.3d` alone: 30 knobs in 97 × 97-unit boxes (a 64 px
+/// knob's) at 2×, the effect passes timed against a trivial effect over the
+/// same boxes.
+/// `cargo test -p render --release --lib knob_3d_cost -- --ignored --nocapture`
+#[test]
+#[ignore = "timing"]
+fn knob_3d_cost() {
+    use super::passes::{FxUniforms, Passes, TARGET};
+    use vello::wgpu;
+    let instance = wgpu::Instance::new(wgpu::InstanceDescriptor::new_without_display_handle());
+    let Ok(adapter) = pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions::default())) else { return };
+    // GPU timestamps round the passes, where the adapter has them (else
+    // wall-clock time round submit + wait).
+    let stamps = wgpu::Features::TIMESTAMP_QUERY | wgpu::Features::TIMESTAMP_QUERY_INSIDE_ENCODERS;
+    let stamps = adapter.features().contains(stamps).then_some(stamps);
+    let desc = wgpu::DeviceDescriptor { required_features: stamps.unwrap_or_default(), ..Default::default() };
+    let (device, queue) = pollster::block_on(adapter.request_device(&desc)).expect("device");
+    eprintln!("adapter: {:?}, timestamps: {}", adapter.get_info().name, stamps.is_some());
+    let queries = stamps.map(|_| {
+        let set = device.create_query_set(&wgpu::QuerySetDescriptor { label: None, ty: wgpu::QueryType::Timestamp, count: 2 });
+        let usage = wgpu::BufferUsages::QUERY_RESOLVE | wgpu::BufferUsages::COPY_SRC;
+        let resolve = device.create_buffer(&wgpu::BufferDescriptor { label: None, size: 16, usage, mapped_at_creation: false });
+        let usage = wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST;
+        let read = device.create_buffer(&wgpu::BufferDescriptor { label: None, size: 16, usage, mapped_at_creation: false });
+        (set, resolve, read)
+    });
+    let (side, n) = (97.0_f32, 30_u32);
+    let (w, h) = (6 * 200, 5 * 200);
+    let tex = |label| {
+        device.create_texture(&wgpu::TextureDescriptor {
+            label: Some(label),
+            size: wgpu::Extent3d { width: w, height: h, depth_or_array_layers: 1 },
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: TARGET,
+            usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::RENDER_ATTACHMENT,
+            view_formats: &[],
+        })
+    };
+    let (src, dst) = (tex("src").create_view(&Default::default()), tex("dst").create_view(&Default::default()));
+    let mut passes = Passes::new(&device);
+    let mut scene = Scene::new("Page");
+    let trivial = scene.add_asset("text/wgsl", b"fn effect(uv: vec2<f32>) -> vec4<f32> { return vec4<f32>(uv * 0.5, 0.0, 0.5); }".to_vec());
+    let trivial = format!("asset:{}", trivial.0);
+    let inputs = [doc::ShaderInput::constant("shape", vec![0.64, 0.6, 0.0, 0.05]), doc::ShaderInput::constant("insert", vec![0.9, 0.9, 0.9, 1.0, 0.12])];
+    let mut time = |id: &str, scale: f32| -> f64 {
+        passes.effect(&device, &scene, id).expect("compiles");
+        let slots = passes.effect_slots(id).to_vec();
+        let pipeline = passes.cached_effect(id).unwrap();
+        // Long enough a warm-up for the clocks to ramp up.
+        let (warm, frames) = (1500, 500);
+        let mut total = 0.0;
+        for f in 0..frames + warm {
+            let mut enc = device.create_command_encoder(&Default::default());
+            if let Some((set, _, _)) = &queries {
+                enc.write_timestamp(set, 0);
+            }
+            for i in 0..n {
+                // The profiles in turn: insert, chicken head, knurl, flutes, …
+                let params = BTreeMap::from([
+                    ("p0".to_string(), f64::from([8_u8, 4, 3, 2, 1, 6, 5, 7, 0][i as usize % 9])),
+                    ("p2".to_string(), f64::from(i % 4)),
+                    ("p1".to_string(), if i % 9 == 2 { 64.0 } else { 0.0 }),
+                ]);
+                let (values, param_mask) = super::pack_params(&params);
+                let (x0, y0) = ((i % 6) as f32 * 200.0, ((i / 6) % 5) as f32 * 200.0);
+                let (table, data) = super::pack_inputs(&slots, &inputs, None);
+                let u = FxUniforms {
+                    time_s: 0.0,
+                    value: (f as f32 * 0.01 + i as f32 * 0.03) % 1.0,
+                    px_per_unit: scale,
+                    param_mask,
+                    resolution: [w as f32, h as f32],
+                    node_size: [side, side],
+                    to_local: [[1.0 / scale, 0.0, -x0 / scale, 0.0], [0.0, 1.0 / scale, -y0 / scale, 0.0]],
+                    to_px: [[scale, 0.0, x0, 0.0], [0.0, scale, y0, 0.0]],
+                    params: values,
+                    inputs: table,
+                };
+                let px = (side * scale) as u32;
+                passes.effect_pass(&device, &mut enc, pipeline, &u, &data, &src, &dst, Some([x0 as u32, y0 as u32, px, px]));
+            }
+            if let Some((set, resolve, read)) = &queries {
+                enc.write_timestamp(set, 1);
+                enc.resolve_query_set(set, 0..2, resolve, 0);
+                enc.copy_buffer_to_buffer(resolve, 0, read, 0, 16);
+            }
+            let t0 = std::time::Instant::now();
+            queue.submit([enc.finish()]);
+            let _ = device.poll(wgpu::PollType::wait_indefinitely());
+            let mut elapsed = t0.elapsed().as_secs_f64();
+            if let Some((_, _, read)) = &queries {
+                read.slice(..).map_async(wgpu::MapMode::Read, |_| {});
+                let _ = device.poll(wgpu::PollType::wait_indefinitely());
+                let ticks: Vec<u64> = read.slice(..).get_mapped_range().chunks(8).map(|c| u64::from_le_bytes(c.try_into().unwrap())).collect();
+                read.unmap();
+                elapsed = ticks[1].saturating_sub(ticks[0]) as f64 * f64::from(queue.get_timestamp_period()) * 1e-9;
+            }
+            if f >= warm {
+                total += elapsed;
+            }
+        }
+        total / f64::from(frames) * 1000.0
+    };
+    for scale in [1.0, 2.0] {
+        let base = time(&trivial, scale);
+        let knob = time("knob.3d", scale);
+        let px = side * scale;
+        eprintln!("30 knobs at {scale}x ({px} px boxes): knob.3d {knob:.3} ms/frame, trivial effect {base:.3} ms, shader cost ~ {:.3} ms", knob - base);
+    }
+
+    // The whole stage (wall clock, read-back included): each shader region
+    // also renders its subtree alone and composites it.
+    let Some(mut o) = offscreen() else { return };
+    let mut nodes = vec![(None, shape(NodeKind::Rectangle, 0.0, 0.0, 600.0, 500.0, (0.6, 0.6, 0.6)))];
+    for i in 0..30_u32 {
+        let mut knob = Node::new(NodeKind::Frame, "cap");
+        knob.transform = doc::Transform::translate(f64::from(i % 6) * 100.0, f64::from(i / 6) * 100.0);
+        knob.size = doc::Size { width: 97.0, height: 97.0 };
+        let params = BTreeMap::from([("p0".to_string(), f64::from(i % 9))]);
+        knob.shader = Some(doc::ShaderFx { shader: "knob.3d".into(), params, inputs: Vec::new() });
+        nodes.push((None, knob));
+        nodes.push((Some(nodes.len() - 1), shape(NodeKind::Ellipse, 16.0, 16.0, 64.0, 64.0, (0.1, 0.1, 0.1))));
+    }
+    let (scene, root) = scene_of(nodes);
+    for mode in [Mode::Off, Mode::Gpu] {
+        let frame = Frame { mode, transform: kurbo::Affine::scale(2.0), ..Frame::new(&scene, root, 1200, 1000) };
+        let _ = o.render_with_effects(&frame);
+        let t0 = std::time::Instant::now();
+        for _ in 0..20 {
+            let _ = o.render_with_effects(&frame);
+        }
+        eprintln!("stage, 30 knob.3d regions at 2x (1200 x 1000), {mode:?}: {:.2} ms/frame", t0.elapsed().as_secs_f64() * 1000.0 / 20.0);
+    }
+}

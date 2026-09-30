@@ -2,7 +2,8 @@
 
 A node's `shader={{"shader":"<id>","params":{…}}}` runs a WGSL effect over the
 node's subtree on the GPU effects stage (`render::fx`, `Mode::Gpu`). `<id>` is
-a built-in (`glass`, `crt`, `lighting`, `flicker`) or `asset:<asset id>`: the
+a built-in (`glass`, `crt`, `lighting`, `flicker`, the visualizers,
+`knob.3d`) or `asset:<asset id>`: the
 UTF-8 WGSL stored in the document's asset table. Custom and built-in effects
 use exactly the same contract.
 
@@ -142,8 +143,11 @@ the document doesn't bind, or that has no data yet, reads as empty
 returns every shader node's values (`render::fx::FxInputs`), which go in
 `Frame::inputs`; `Runtime::set_clock(seconds)` is the clock animated curve
 providers read. Without a host (a plain render of a document) every input is
-empty. Renderers without the stage ignore inputs entirely: the node's
-subtree — the vector fallback — draws.
+empty — except `Const` inputs, which the stage takes from the document
+itself (mapped and resampled the same way) when the host gave none: a
+shader's fixed look (a preset table) needs no host. Renderers without the
+stage ignore inputs entirely: the node's subtree — the vector fallback —
+draws.
 
 ## Built-ins
 
@@ -172,6 +176,71 @@ each as a component (`viz.comp_scope`, `viz.delay_taps`, `viz.reverb_space`,
 | `viz.reverb` | `decay` (s), `predelay` (ms), `density`, `damp`, `mix`, `bpm`, `family` (0 Room … 7 Convolution), `on` | — (rules its own beat grid) |
 | `viz.modulation` | `rate` (Hz), `depth`, `mix`, `engine` (0 Chorus … 5 Rotary), `on` | — |
 | `eq.glow` | `spectrum` (dB bins, 128), `bands` (`freq_hz, gain_db` pairs), `db_range`, `floor` | `strength` node glow, `amount` spectrum glow, `softness` hue spread, `radius` bloom (all 1); `p0`/`p1` the frequency axis (20, 20 000) |
+
+### Rendered parts
+
+| id | does | params | inputs |
+|---|---|---|---|
+| `knob.3d` | a knob sphere-traced per pixel from a distance field: cap, skirt, insert, pointer; PBR-ish shading under the kit's light; turns with `value`. **Replaces** the subtree (the vector `knob.render` knob, its fallback) | see below | `shape`, `skirt`, `insert`, `pointer`, `light` (`Const`), `value` |
+
+**`knob.3d`.** The knob stands in the middle of the node's box: its
+footprint (skirt, or the cap without one) is `radius` × half the box's
+shorter side, and the rest of the box holds its lean and its shadow. The
+view is oblique — a camera a little in front of the panel (`elevation`°
+from straight down): the panel stays square, what stands off it leans up
+and shows its front wall. Light: the kit's key from the upper left
+(azimuth −35°, 50° up), a cool fill from the lower right, a rim/strip
+light behind; a studio environment (softbox, strip, ceiling, lit panel)
+for reflections; GGX specular (anisotropic for spun metal: highlights
+stretch across the turning rings), a clearcoat lobe, one-tap occlusion in
+grooves, a soft shadow on the skirt under the cap, and an analytic contact
++ cast shadow on the panel, faded before the box edge. The ribs, knurl,
+beak and pointer turn by `(value − 0.5) × angle`; the light, highlights
+and shadow don't. Edges are anti-aliased from the ray's closest approach
+(`fwidth`), ribs finer than ~2.5 px average out. Output is premultiplied;
+knob units have the footprint's radius 1.
+
+| slot | meaning (default) |
+|---|---|
+| `strength` | specular strength (1) |
+| `speed` | the cap's anisotropy, 0..1 — spun metal (0) |
+| `amount` | the cap's metalness, 0..1 (0) |
+| `scale` | the top edge's bevel radius (0.07) |
+| `angle` | travel, degrees (300) |
+| `elevation` | view tilt, degrees (30) |
+| `softness` | the cap's roughness (0.38) |
+| `radius` | footprint ÷ half the box (0.66) |
+| `tint_r/g/b` | the cap's colour, sRGB 0..1 |
+| `tint_a` | the cap's clearcoat, 0..1 (0) |
+| `p0` | profile: 0 flat · 1 domed · 2 fluted · 3 knurled · 4 chicken head · 5 teardrop pointer cap · 6 wing (dome + fin) · 7 stepped · 8 fluted body + teardrop insert |
+| `p1` | flutes or knurl teeth (0 = the profile's: 8, 60, 12) |
+| `p2` | skirt: 0 none · 1 plain · 2 flared · 3 knurled · 4 metal · 5 dished |
+| `p3` | pointer: 0 none · 1 line on the top · 2 dot · 3 line down the side too · 4 engraved groove (1) |
+
+| input (`Const`) | values (defaults) |
+|---|---|
+| `shape` | cap radius (0.72), height (0.5), dome (0; 0.16 domed), rib depth (0.045; 0.02 knurled), knurl band 0..1 from the panel (1), step radius (0.5), step height (0.14), diamond knurl 0/1 (0), skirt teeth (48) |
+| `skirt` | r, g, b, metal, roughness, clearcoat, radius (1), height (0.16) |
+| `insert` | r, g, b, metal (1), roughness (0.2), anisotropy, size (0.62), height (0.09) |
+| `pointer` | r, g, b, width (0.075), inner and outer end in cap radii (0.3, 0.92) |
+| `light` | shadow (1), occlusion (1), fill (1), rim (1), key (1) |
+| `value` | the position 0..1, overriding `value` (bind a param with a `map`) |
+
+The kit's `knob.3d` component (`surface-kit`, `materials::knob3d`) fills
+these from a preset table. Cost (RTX 4080, GPU timestamps): 30 knobs in
+97-unit boxes ≈ 0.25 ms at 1×, 0.29 ms at 2× — each pass is a single
+latency-bound wave, so the cost follows the number of knobs more than
+their size.
+
+## Generators
+
+An effect that never reads its source — its body mentions neither
+`sample_src*` nor `src_tex` (`knob.3d`, the visualizers) — draws its own
+picture. The stage doesn't render its node's subtree at all on the GPU
+path: no offscreen vello render and no blits, just the effect's pass
+(`src_tex` is bound to a transparent texture). So a generator's subtree
+doesn't overflow its box there either: it is only the fallback, for
+renderers without the stage.
 
 ## Failure
 

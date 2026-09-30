@@ -77,8 +77,8 @@ pub const PARAM_SLOTS: [&str; 16] = [
 /// The built-in effects, by id: post-effects over a subtree, then the
 /// visualizers (which draw their own picture from live inputs and replace
 /// the subtree, their vector fallback — see `CONTRACT.md`).
-pub const BUILTINS: [&str; 9] =
-    ["glass", "crt", "lighting", "flicker", "viz.comp", "viz.delay", "viz.reverb", "viz.modulation", "eq.glow"];
+pub const BUILTINS: [&str; 10] =
+    ["glass", "crt", "lighting", "flicker", "viz.comp", "viz.delay", "viz.reverb", "viz.modulation", "eq.glow", "knob.3d"];
 
 /// The slot of a param name, if it has one.
 #[must_use]
@@ -114,8 +114,17 @@ pub fn builtin_source(id: &str) -> Option<&'static str> {
         "viz.reverb" => concat!(include_str!("wgsl/viz/common.wgsl"), include_str!("wgsl/viz/reverb.wgsl")),
         "viz.modulation" => concat!(include_str!("wgsl/viz/common.wgsl"), include_str!("wgsl/viz/modulation.wgsl")),
         "eq.glow" => concat!(include_str!("wgsl/viz/common.wgsl"), include_str!("wgsl/viz/eq_glow.wgsl")),
+        "knob.3d" => include_str!("wgsl/knob3d.wgsl"),
         _ => return None,
     })
+}
+
+/// Whether an effect body draws its own picture without reading its source
+/// (no `sample_src*`, no `src_tex`): the stage then skips rendering the
+/// node's subtree for it (see `CONTRACT.md`, "Generators").
+#[must_use]
+pub fn generates(body: &str) -> bool {
+    !body.contains("sample_src") && !body.contains("src_tex")
 }
 
 /// The inputs an effect body reads: every `IN_<NAME>` it mentions, sorted,
@@ -165,14 +174,24 @@ pub fn effect_module(body: &str) -> String {
 
 /// Pack a region's live inputs: the slot table (`(offset, len)` per slot,
 /// in [`effect_inputs`] order) and the values back to back, at most
-/// [`MAX_DATA`] floats (later inputs are cut short, then empty).
+/// [`MAX_DATA`] floats (later inputs are cut short, then empty). A `Const`
+/// input the host didn't resolve is taken from the document.
 #[must_use]
 pub fn pack_inputs(slots: &[String], inputs: &[document_proto::ShaderInput], data: Option<&BTreeMap<String, Vec<f32>>>) -> ([[u32; 4]; 8], Vec<f32>) {
     let mut table = [[0_u32; 4]; 8];
     let mut values = Vec::new();
     for (i, slot) in slots.iter().enumerate().take(16) {
         let Some(input) = inputs.iter().find(|n| n.constant_name() == *slot) else { continue };
-        let Some(v) = data.and_then(|d| d.get(&input.name)) else { continue };
+        // A `Const` input needs no host: its values are in the document.
+        let constant;
+        let v = match (data.and_then(|d| d.get(&input.name)), &input.source) {
+            (Some(v), _) => v,
+            (None, document_proto::ShaderInputSource::Const { values }) => {
+                constant = input.shape(values);
+                &constant
+            }
+            (None, _) => continue,
+        };
         let take = v.len().min(MAX_DATA - values.len());
         let offset = values.len() as u32;
         values.extend_from_slice(&v[..take]);

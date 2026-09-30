@@ -266,9 +266,36 @@ fn about_shaft(mid: &str, edge: &str) -> document_proto::Paint {
     draw::radial(&[(0.0, mid), (0.7, mid), (1.0, edge)])
 }
 
+/// A knob's travel in degrees: `Place::sweep`, else a stepped knob's detents
+/// (its bare options), else 300°.
+#[must_use]
+pub fn travel(p: &Place) -> f64 {
+    let steps = p.options.iter().flatten().filter(|o| !o.contains('=')).count();
+    p.sweep.unwrap_or(if steps > 0 { crate::registry::detent_sweep(steps) } else { 300.0 })
+}
+
+/// The `cap` frame [`build_with`] makes, in the knob's own frame: `(side,
+/// footprint radius)` — a square `side` wide with the knob `radius` round
+/// in its middle.
+#[must_use]
+pub fn cap_box(p: &Place) -> (f64, f64) {
+    let d = p.size.unwrap_or(48.0).max(16.0);
+    let r = d / 2.0;
+    let dot = (d * 0.032).max(0.9);
+    (2.0 * (r * 1.26 + dot + d * 0.1), r)
+}
+
 /// Place a rendered knob: the builder behind `knob.render`.
-#[allow(clippy::too_many_lines)]
 pub fn build(b: &mut Builder<'_>, parent: NodeId, p: &Place, look: &Look) -> NodeId {
+    build_with(b, parent, p, look, None)
+}
+
+/// [`build`], with everything that stands off the panel — occlusion,
+/// skirt, wall, the turning body, the lit overlays — in a `cap` frame (the
+/// knob's box less its printed ring) carrying `shader`: a GPU renderer
+/// draws the knob with it (`knob.3d`), everything else this vector knob.
+#[allow(clippy::too_many_lines)]
+pub fn build_with(b: &mut Builder<'_>, parent: NodeId, p: &Place, look: &Look, shader: Option<document_proto::ShaderFx>) -> NodeId {
     let d = p.size.unwrap_or(48.0).max(16.0);
     let r = d / 2.0;
     let k = d / 48.0;
@@ -276,7 +303,7 @@ pub fn build(b: &mut Builder<'_>, parent: NodeId, p: &Place, look: &Look) -> Nod
     let labels: Vec<String> = p.options.iter().flatten().filter(|o| !o.contains('=')).cloned().collect();
     let stepped = !labels.is_empty();
     let labels = if stepped { labels } else { p.scale.clone().unwrap_or_default() };
-    let sweep = p.sweep.unwrap_or(if stepped { crate::registry::detent_sweep(labels.len()) } else { 300.0 });
+    let sweep = travel(p);
     let print_ring = p.scale.as_ref().is_none_or(|s| !s.is_empty()) && look.ticks != Ticks::None;
 
     let ring_r = r * 1.26;
@@ -317,6 +344,16 @@ pub fn build(b: &mut Builder<'_>, parent: NodeId, p: &Place, look: &Look) -> Nod
             b.add(knob, t);
         }
     }
+
+    // Everything below stands off the panel: under a shader, in its own frame.
+    let knob = match shader {
+        Some(fx) => {
+            let mut cap = draw::frame("cap", 0.0, 0.0, side, side);
+            cap.shader = Some(fx);
+            b.add(knob, cap)
+        }
+        None => knob,
+    };
 
     // ── geometry ──
     let has_skirt = look.skirt != Skirt::None;
