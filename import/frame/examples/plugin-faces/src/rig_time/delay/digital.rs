@@ -42,10 +42,17 @@ fn ear(b: &mut Builder<'_>, parent: NodeId, x0: f64, w: f64) {
 }
 
 #[must_use]
-pub fn face() -> Face {
+pub fn face(dark: bool) -> Face {
+    // Dark: black anodising. Light: brushed silver. The displays stay dark
+    // glass either way, as they are on the real thing.
+    let (ink, dim, fill, brush_ink, rules) = if dark {
+        (INK, DIM, [(0.0, "#1f2124"), (0.5, "#16181a"), (1.0, "#0f1012")], "#ffffff08", ("#00000099", "#ffffff14"))
+    } else {
+        ("#1c1f23", "#5d636b", [(0.0, "#eceef0"), (0.5, "#d9dbde"), (1.0, "#c3c6ca")], "#0000000c", ("#00000040", "#ffffff90"))
+    };
     let scene = kit::lane("Digital", |b, root| {
         let mut plate = draw::frame("Faceplate", 0.0, 0.0, kit::W, kit::H);
-        plate.fills = vec![draw::linear(180.0, &[(0.0, "#1f2124"), (0.5, "#16181a"), (1.0, "#0f1012")])];
+        plate.fills = vec![draw::linear(180.0, &fill)];
         plate.corner_radii = document_proto::CornerRadii::uniform(4.0);
         let plate = b.add(root, draw::with_effects(plate, vec![draw::inner_shadow("#ffffff22", 0.0, 1.0, 0.0), draw::inner_shadow("#00000080", 0.0, -2.0, 3.0)]));
         // Brushed anodising.
@@ -53,19 +60,19 @@ pub fn face() -> Face {
             let y = 1.0 + f64::from(i) * 2.05;
             vec![(0.0, y), (kit::W, y)]
         }).collect();
-        b.add(plate, ui::strokes("brush", &brush, 0.5, draw::solid("#ffffff08")));
+        b.add(plate, ui::strokes("brush", &brush, 0.5, draw::solid(brush_ink)));
         let ear_w = 26.0;
         ear(b, plate, 0.0, ear_w);
         ear(b, plate, kit::W - ear_w, ear_w);
         for x in [ear_w, kit::W - ear_w] {
-            ui::rule(b, plate, x, 6.0, 1.0, kit::H - 12.0, "#00000099");
-            ui::rule(b, plate, x + 1.0, 6.0, 1.0, kit::H - 12.0, "#ffffff14");
+            ui::rule(b, plate, x, 6.0, 1.0, kit::H - 12.0, rules.0);
+            ui::rule(b, plate, x + 1.0, 6.0, 1.0, kit::H - 12.0, rules.1);
         }
 
         // ── The display: the time in milliseconds ──────────────────────
         let x0 = ear_w + 18.0;
-        ui::silk_left(b, plate, "Digital Delay", x0, 16.0, 8.0, INK, 800.0);
-        ui::silk_left(b, plate, "24-bit · 96 kHz", x0 + 94.0, 16.0, 6.0, DIM, 700.0);
+        ui::silk_left(b, plate, "Digital Delay", x0, 16.0, 8.0, ink, 800.0);
+        ui::silk_left(b, plate, "24-bit · 96 kHz", x0 + 94.0, 16.0, 6.0, dim, 700.0);
         let disp = window(b, plate, "Display", (x0, 28.0, 250.0, 78.0), ("#030a1c", "#01050e"));
         kit::seg_readout(b, disp, &a("time"), (8.0, 42.0, 190.0), 40.0, 4, 0, LED);
         ui::silk_left(b, disp, "ms", 204.0, 58.0, 9.0, LED, 800.0);
@@ -92,14 +99,14 @@ pub fn face() -> Face {
         // ── The wheel and the knobs ────────────────────────────────────
         let wx = sx + sw + 58.0;
         let wheel = ["color=#2a2d31", "pointer=#e9ecef", "index=dot", "skirt=plain", "skirt_color=#3a3e44"];
-        kit::knob3d(b, plate, &a("time"), "Delay Time", 62.0, (wx, 66.0), &wheel, INK, DIM);
+        kit::knob3d(b, plate, &a("time"), "Delay Time", 62.0, (wx, 66.0), &wheel, ink, dim);
         let cap = ["color=#c4c8cd", "pointer=#101113", "index=line", "index_w=0.12", "skirt=plain", "skirt_color=#1a1c1f"];
         let grid = [("feedback", "Feedback"), ("high_cut", "Hi Cut"), ("mod_rate", "Mod Rate"), ("level", "Level"), ("high_pass", "Lo Cut"), ("mod_depth", "Mod Depth")];
         for (i, (id, legend)) in grid.iter().enumerate() {
             let (col, row) = (i % 3, i / 3);
-            kit::knob3d(b, plate, &a(id), legend, 26.0, (wx + 74.0 + 52.0 * col as f64, 42.0 + 64.0 * row as f64), &cap, INK, DIM);
+            kit::knob3d(b, plate, &a(id), legend, 26.0, (wx + 74.0 + 52.0 * col as f64, 42.0 + 64.0 * row as f64), &cap, ink, dim);
         }
         kit::bypass(b, plate, DLY, kit::W - ear_w - 24.0, 118.0, 24.0, "blue", "On");
     });
-    kit::delay_face("61-dly-digital", scene)
+    kit::delay_face(kit::file("61-dly-digital", dark), scene)
 }

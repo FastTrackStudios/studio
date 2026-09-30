@@ -159,16 +159,22 @@ fn plate(b: &mut Builder<'_>, tank: NodeId, w: f64, h: f64) {
 }
 
 #[must_use]
-pub fn face() -> Face {
+pub fn face(dark: bool) -> Face {
+    // Light: the painted grey remote. Dark: charcoal, lettered in white.
+    let (paint, ink, dim, well, rule) = if dark {
+        ("charcoal", "#e6e8eb", "#9aa0a7", [(0.0, "#0c0d0f"), (1.0, "#3a3e44")], ("#000000aa", "#ffffff1f"))
+    } else {
+        ("api", INK, DIM, [(0.0, "#6d7278"), (1.0, "#e2e5e8")], ("#00000033", "#ffffff66"))
+    };
     let scene = kit::lane("Plate", |b, root| {
-        let panel = ui::panel(b, root, "panel.painted", "api", kit::W, kit::H, "none");
+        let panel = ui::panel(b, root, "panel.painted", paint, kit::W, kit::H, "none");
         if let Some(n) = b.scene.node_mut(panel) {
             n.corner_radii = document_proto::CornerRadii::uniform(6.0);
         }
 
         // ── The plate, through its window ──────────────────────────────
         let (tx, ty, tw, th) = (12.0, 12.0, 560.0, kit::H - 24.0);
-        let well = draw::rounded(draw::rect("window", tx - 4.0, ty - 4.0, tw + 8.0, th + 8.0, draw::linear(180.0, &[(0.0, "#6d7278"), (1.0, "#e2e5e8")])), 7.0);
+        let well = draw::rounded(draw::rect("window", tx - 4.0, ty - 4.0, tw + 8.0, th + 8.0, draw::linear(180.0, &well)), 7.0);
         b.add(panel, draw::with_effects(well, vec![draw::inner_shadow("#00000066", 0.0, 1.0, 1.0)]));
         let mut tank = draw::frame("Plate", tx, ty, tw, th);
         tank.fills = vec![draw::linear(180.0, &[(0.0, "#1b1d20"), (1.0, "#2b2e32")])];
@@ -182,18 +188,18 @@ pub fn face() -> Face {
 
         // ── The remote ─────────────────────────────────────────────────
         let x0 = tx + tw + 20.0;
-        ui::plain(b, panel, "Plate", x0 + 28.0, 26.0, 18.0, INK, 800.0);
-        ui::silk_left(b, panel, "Steel plate", x0 + 62.0, 22.0, 7.0, INK, 800.0);
-        ui::silk_left(b, panel, "Reverberation unit", x0 + 62.0, 32.0, 6.0, DIM, 700.0);
-        ui::rule(b, panel, x0 - 10.0, 12.0, 1.0, kit::H - 24.0, "#00000033");
-        ui::rule(b, panel, x0 - 9.0, 12.0, 1.0, kit::H - 24.0, "#ffffff66");
+        ui::plain(b, panel, "Plate", x0 + 28.0, 26.0, 18.0, ink, 800.0);
+        ui::silk_left(b, panel, "Steel plate", x0 + 62.0, 22.0, 7.0, ink, 800.0);
+        ui::silk_left(b, panel, "Reverberation unit", x0 + 62.0, 32.0, 6.0, dim, 700.0);
+        ui::rule(b, panel, x0 - 10.0, 12.0, 1.0, kit::H - 24.0, rule.0);
+        ui::rule(b, panel, x0 - 9.0, 12.0, 1.0, kit::H - 24.0, rule.1);
         kit::bypass(b, panel, VERB, x0 + 20.0, 104.0, 30.0, "purple", "In");
-        let big = Dial::new("knob.pointer", "black", 60.0, INK, DIM).legend(8.5);
+        let big = Dial::new("knob.pointer", "black", 60.0, ink, dim).legend(8.5);
         ui::dial(b, panel, &a("decay"), "Decay Time", x0 + 96.0, 92.0, &big);
-        let small = Dial::new("knob.collet", "black", 36.0, INK, DIM).legend(7.5);
+        let small = Dial::new("knob.collet", "black", 36.0, ink, dim).legend(7.5);
         for (i, (id, legend)) in [("predelay", "Pre-Delay"), ("damping", "HF Damp"), ("level", "Level")].iter().enumerate() {
             ui::dial(b, panel, &a(id), legend, x0 + 176.0 + 64.0 * i as f64, 96.0, &small);
         }
     });
-    kit::reverb_face("82-verb-plate", scene)
+    kit::reverb_face(kit::file("82-verb-plate", dark), scene)
 }

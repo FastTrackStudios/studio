@@ -19,7 +19,43 @@ use crate::rig_time::kit::{self, VERB};
 
 /// Blueprint ink and paper.
 const LINE: &str = "#cdb8ff";
-const PAPER: (&str, &str) = ("#1d1340", "#110b28");
+
+/// One finish's colours.
+struct Look {
+    house: [(f64, &'static str); 3],
+    pile: &'static str,
+    paper: (&'static str, &'static str),
+    line: &'static str,
+    sheet_shadow: &'static str,
+    title: &'static str,
+    ink: &'static str,
+    dim: &'static str,
+    small: [&'static str; 6],
+}
+
+const DARK: Look = Look {
+    house: [(0.0, "#3d1b63"), (0.55, "#281043"), (1.0, "#180929")],
+    pile: "#ffffff07",
+    paper: ("#1d1340", "#110b28"),
+    line: LINE,
+    sheet_shadow: "#000000b0",
+    title: GILT,
+    ink: "#ecdcbc",
+    dim: "#b39c77",
+    small: ["color=#1a0a0e", "pointer=#d9b56a", "index=line", "index_w=0.12", "skirt=plain", "skirt_color=#a8874a"],
+};
+
+const LIGHT: Look = Look {
+    house: [(0.0, "#f8f3ea"), (0.55, "#efe6d6"), (1.0, "#e2d5be")],
+    pile: "#5a3a8a0a",
+    paper: ("#f7f3fe", "#e9e1f8"),
+    line: "#6b4bc4",
+    sheet_shadow: "#3b1d6e40",
+    title: "#4c2a85",
+    ink: "#3a2a4f",
+    dim: "#7a6a8c",
+    small: ["color=#2a1840", "pointer=#d9b56a", "index=line", "index_w=0.12", "skirt=plain", "skirt_color=#a8874a"],
+};
 /// The house: velvet and gilt.
 const GILT: &str = "#d9b56a";
 const GILT_DIM: &str = "#a8874a";
@@ -36,11 +72,11 @@ fn lines(b: &mut Builder<'_>, parent: NodeId, name: &str, segs: &[Vec<(f64, f64)
 /// The hall in plan, in `plan` (`w × h`): drawn at full size, squeezed
 /// toward the stage by the size motion on its group.
 #[allow(clippy::too_many_lines)]
-fn hall(b: &mut Builder<'_>, plan: NodeId, w: f64, h: f64) {
+fn hall(b: &mut Builder<'_>, plan: NodeId, w: f64, h: f64, line: &str) {
     // Faint drafting grid over the whole sheet.
     let mut grid: Vec<Vec<(f64, f64)>> = (1..(w / 14.0) as i32).map(|i| vec![(f64::from(i) * 14.0, 0.0), (f64::from(i) * 14.0, h)]).collect();
     grid.extend((1..(h / 14.0) as i32).map(|i| vec![(0.0, f64::from(i) * 14.0), (w, f64::from(i) * 14.0)]));
-    lines(b, plan, "grid", &grid, 0.5, &ui::alpha(LINE, 0.08));
+    lines(b, plan, "grid", &grid, 0.5, &ui::alpha(line, 0.08));
 
     // The building: grows with the size, the stage end fixed.
     let (x0, y0, hh) = (18.0, 18.0, h - 52.0);
@@ -50,7 +86,7 @@ fn hall(b: &mut Builder<'_>, plan: NodeId, w: f64, h: f64) {
     motion::add(b, g, Motion::new(Target::StretchY).input(format!("norm({VERB}/size)")).range(0.82, 1.0).pivot(0.0, 0.5).dynamics(Dynamics::spring(260.0, 28.0)));
     // Walls (double line: masonry), the stage end squared off.
     let wall = |b: &mut Builder<'_>, inset: f64, weight: f64, alpha: f64| {
-        let r = draw::stroked(draw::rect("wall", inset, inset, len - 2.0 * inset, hh - 2.0 * inset, draw::solid("#00000000")), &ui::alpha(LINE, alpha), weight);
+        let r = draw::stroked(draw::rect("wall", inset, inset, len - 2.0 * inset, hh - 2.0 * inset, draw::solid("#00000000")), &ui::alpha(line, alpha), weight);
         let mut r = r;
         r.fills.clear();
         b.add(g, r);
@@ -59,8 +95,8 @@ fn hall(b: &mut Builder<'_>, plan: NodeId, w: f64, h: f64) {
     wall(b, 4.0, 0.8, 0.55);
     // The stage and its curved apron.
     let stage_w = len * 0.16;
-    let mut stage = draw::rect("stage", 4.0, 4.0, stage_w, hh - 8.0, draw::solid(&ui::alpha(LINE, 0.1)));
-    stage.stroke = document_proto::Stroke { paints: vec![draw::solid(&ui::alpha(LINE, 0.7))], weight: 1.0, ..document_proto::Stroke::default() };
+    let mut stage = draw::rect("stage", 4.0, 4.0, stage_w, hh - 8.0, draw::solid(&ui::alpha(line, 0.1)));
+    stage.stroke = document_proto::Stroke { paints: vec![draw::solid(&ui::alpha(line, 0.7))], weight: 1.0, ..document_proto::Stroke::default() };
     b.add(g, stage);
     let apron: Vec<(f64, f64)> = (0..=24)
         .map(|i| {
@@ -68,8 +104,8 @@ fn hall(b: &mut Builder<'_>, plan: NodeId, w: f64, h: f64) {
             (4.0 + stage_w + t.cos() * hh * 0.12, hh / 2.0 + t.sin() * (hh / 2.0 - 12.0))
         })
         .collect();
-    ui::line(b, g, "apron", &apron, 1.0, &ui::alpha(LINE, 0.7));
-    ui::silk(b, g, "Stage", 4.0 + stage_w / 2.0, 16.0, 6.0, &ui::alpha(LINE, 0.8), 800.0);
+    ui::line(b, g, "apron", &apron, 1.0, &ui::alpha(line, 0.7));
+    ui::silk(b, g, "Stage", 4.0 + stage_w / 2.0, 16.0, 6.0, &ui::alpha(line, 0.8), 800.0);
     // The stalls: rows either side of the centre aisle, gently curved to
     // face the stage.
     let (sx0, sx1) = (stage_w + hh * 0.16 + 14.0, len - 34.0);
@@ -92,10 +128,10 @@ fn hall(b: &mut Builder<'_>, plan: NodeId, w: f64, h: f64) {
         seats.push(half(16.0, hh / 2.0 - aisle));
         seats.push(half(hh / 2.0 + aisle, hh - 16.0));
     }
-    lines(b, g, "stalls", &seats, 1.1, &ui::alpha(LINE, 0.45));
+    lines(b, g, "stalls", &seats, 1.1, &ui::alpha(line, 0.45));
     // Balconies along the long walls, and the side aisles under them.
     for y in [10.0, hh - 10.0] {
-        lines(b, g, "balcony", &[vec![(sx0 - 6.0, y), (len - 10.0, y)]], 2.2, &ui::alpha(LINE, 0.35));
+        lines(b, g, "balcony", &[vec![(sx0 - 6.0, y), (len - 10.0, y)]], 2.2, &ui::alpha(line, 0.35));
     }
     // Doors at the back: gaps with their swing arcs.
     for y in [hh * 0.3, hh * 0.7] {
@@ -103,11 +139,11 @@ fn hall(b: &mut Builder<'_>, plan: NodeId, w: f64, h: f64) {
             let t = std::f64::consts::FRAC_PI_2 * f64::from(i) / 8.0;
             (len - t.sin() * 9.0, y - 9.0 + t.cos() * 9.0)
         }).collect();
-        ui::line(b, g, "door", &arc, 0.8, &ui::alpha(LINE, 0.6));
+        ui::line(b, g, "door", &arc, 0.8, &ui::alpha(line, 0.6));
     }
     // Dimension line along the bottom.
     let dy = -9.0;
-    lines(b, g, "dimension", &[vec![(0.0, dy), (len, dy)], vec![(0.0, dy - 3.0), (0.0, dy + 3.0)], vec![(len, dy - 3.0), (len, dy + 3.0)]], 0.7, &ui::alpha(LINE, 0.55));
+    lines(b, g, "dimension", &[vec![(0.0, dy), (len, dy)], vec![(0.0, dy - 3.0), (0.0, dy + 3.0)], vec![(len, dy - 3.0), (len, dy + 3.0)]], 0.7, &ui::alpha(line, 0.55));
 
     // ── The sound: a source on the stage, and its wavefronts ──────────
     let (cx, cy) = (x0 + 4.0 + stage_w * 0.55, y0 + hh / 2.0);
@@ -121,9 +157,9 @@ fn hall(b: &mut Builder<'_>, plan: NodeId, w: f64, h: f64) {
     let (lx, ly) = (cx - (x0 + 5.0), cy - (y0 + 5.0));
     for i in 0..5 {
         let ring = b.add(room, draw::frame(&format!("wavefront {i}"), lx - r_max, ly - r_max, 2.0 * r_max, 2.0 * r_max));
-        let mut c = draw::stroked(draw::circle("front", r_max, r_max, r_max - 3.0, draw::solid("#00000000")), LINE, 5.0);
+        let mut c = draw::stroked(draw::circle("front", r_max, r_max, r_max - 3.0, draw::solid("#00000000")), line, 5.0);
         c.fills.clear();
-        b.add(ring, ui::glowing(c, LINE, 0.6, 5.0));
+        b.add(ring, ui::glowing(c, line, 0.6, 5.0));
         // Each front spreads from the source and fades; they come slower
         // and ring longer as the decay grows.
         let phase = format!("fract(time * lerp(0.55, 0.16, norm({VERB}/decay)) + {})", f64::from(i) / 5.0);
@@ -139,19 +175,22 @@ fn hall(b: &mut Builder<'_>, plan: NodeId, w: f64, h: f64) {
     // Title block, as a drawing has.
     let (tx, ty) = (w - 212.0, h - 28.0);
     let mut tb = draw::rect("title block", tx, ty, 194.0, 20.0, draw::solid("#00000000"));
-    tb.stroke = document_proto::Stroke { paints: vec![draw::solid(&ui::alpha(LINE, 0.6))], weight: 0.8, ..document_proto::Stroke::default() };
+    tb.stroke = document_proto::Stroke { paints: vec![draw::solid(&ui::alpha(line, 0.6))], weight: 0.8, ..document_proto::Stroke::default() };
     tb.fills.clear();
     b.add(plan, tb);
-    ui::silk_left(b, plan, "Concert Hall · Plan", tx + 6.0, ty + 10.0, 6.5, LINE, 800.0);
-    ui::silk_left(b, plan, "1 : 200 · A-2", tx + 128.0, ty + 10.0, 5.5, &ui::alpha(LINE, 0.7), 700.0);
+    ui::silk_left(b, plan, "Concert Hall · Plan", tx + 6.0, ty + 10.0, 6.5, line, 800.0);
+    ui::silk_left(b, plan, "1 : 200 · A-2", tx + 128.0, ty + 10.0, 5.5, &ui::alpha(line, 0.7), 700.0);
 }
 
 #[must_use]
-pub fn face() -> Face {
+pub fn face(dark: bool) -> Face {
+    // Dark: purple velvet, the drawing a violet print. Light: an ivory
+    // house, the drawing purple ink on lavender paper.
+    let l = if dark { &DARK } else { &LIGHT };
     let scene = kit::lane("Hall", |b, root| {
         // The house: velvet in a gilt frame.
         let mut panel = draw::frame("House", 0.0, 0.0, kit::W, kit::H);
-        panel.fills = vec![draw::linear(180.0, &[(0.0, "#3d1b63"), (0.55, "#281043"), (1.0, "#180929")])];
+        panel.fills = vec![draw::linear(180.0, &l.house)];
         panel.corner_radii = document_proto::CornerRadii::uniform(6.0);
         panel.stroke = document_proto::Stroke { paints: vec![draw::solid(GILT_DIM)], weight: 2.0, ..document_proto::Stroke::default() };
         let panel = b.add(root, panel);
@@ -160,17 +199,17 @@ pub fn face() -> Face {
             let x = 612.0 + f64::from(i) * 4.4;
             vec![(x, 4.0), (x, kit::H - 4.0)]
         }).collect();
-        b.add(panel, ui::strokes("pile", &pile, 1.6, draw::solid("#ffffff07")));
+        b.add(panel, ui::strokes("pile", &pile, 1.6, draw::solid(l.pile)));
 
         // ── The drawing ────────────────────────────────────────────────
         let (px, py, pw, ph) = (10.0, 10.0, 592.0, kit::H - 20.0);
         let mut sheet = draw::frame("Blueprint", px, py, pw, ph);
-        sheet.fills = vec![draw::linear(160.0, &[(0.0, PAPER.0), (1.0, PAPER.1)])];
+        sheet.fills = vec![draw::linear(160.0, &[(0.0, l.paper.0), (1.0, l.paper.1)])];
         sheet.clips_content = true;
         sheet.corner_radii = document_proto::CornerRadii::uniform(3.0);
-        sheet.effects = vec![draw::inner_shadow("#000000b0", 0.0, 2.0, 8.0)];
+        sheet.effects = vec![draw::inner_shadow(l.sheet_shadow, 0.0, 2.0, 8.0)];
         let sheet = b.add(panel, sheet);
-        hall(b, sheet, pw, ph);
+        hall(b, sheet, pw, ph, l.line);
         // A gilt frame round the drawing.
         let mut rim = draw::rect("gilt", px - 2.0, py - 2.0, pw + 4.0, ph + 4.0, draw::solid("#00000000"));
         rim.fills.clear();
@@ -180,18 +219,17 @@ pub fn face() -> Face {
         // ── The house's name, and its controls ─────────────────────────
         let x0 = 622.0;
         let serif = draw::Lettering::family(draw::family::PLAYFAIR_DISPLAY).weight(700.0);
-        crate::suite_studio_blues::parts::set(b, panel, "Hall", x0 + 38.0, 30.0, 24.0, GILT, &serif, 0.06);
+        crate::suite_studio_blues::parts::set(b, panel, "Hall", x0 + 38.0, 30.0, 24.0, l.title, &serif, 0.06);
         b.add(panel, ui::text("sub", "Concert hall reverberation", x0 + 82.0, 26.0, 150.0, 6.5, GILT_DIM, TextAlign::Left, 700.0, true));
         b.add(panel, ui::text("sub2", "Stage · stalls · balcony", x0 + 82.0, 36.0, 150.0, 5.5, &ui::alpha(GILT_DIM, 0.8), TextAlign::Left, 600.0, true));
-        let ink = "#ecdcbc";
-        let dim = "#b39c77";
+        let (ink, dim) = (l.ink, l.dim);
         kit::bypass(b, panel, VERB, x0 + 14.0, 104.0, 28.0, "purple", "In");
         let brass = ["color=#c9a45c", "pointer=#2a1a0c", "index=line", "index_w=0.1", "skirt=plain", "skirt_color=#6e5428"];
         kit::knob3d(b, panel, &a("decay"), "Decay", 54.0, (x0 + 78.0, 80.0), &brass, ink, dim);
-        let small = ["color=#1a0a0e", "pointer=#d9b56a", "index=line", "index_w=0.12", "skirt=plain", "skirt_color=#a8874a"];
+        let small = l.small;
         for (i, (id, legend)) in [("size", "Size"), ("predelay", "Pre-Delay"), ("damping", "Damp"), ("level", "Level")].iter().enumerate() {
             kit::knob3d(b, panel, &a(id), legend, 34.0, (x0 + 140.0 + 54.0 * i as f64, 96.0), &small, ink, dim);
         }
     });
-    kit::reverb_face("81-verb-hall", scene)
+    kit::reverb_face(kit::file("81-verb-hall", dark), scene)
 }

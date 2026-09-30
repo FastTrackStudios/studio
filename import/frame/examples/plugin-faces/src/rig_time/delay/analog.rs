@@ -42,10 +42,10 @@ fn swell(b: &mut Builder<'_>, parent: NodeId, name: &str, (cx, base): (f64, f64)
 }
 
 /// The line in `view` (`w × h`): the note, then its repeats.
-fn repeats(b: &mut Builder<'_>, view: NodeId, w: f64, h: f64) {
+fn repeats(b: &mut Builder<'_>, view: NodeId, w: f64, h: f64, ink: &str, dim: &str, grid: &str) {
     let base = h - 18.0;
     // The baseline, and a faint time grid under it (a tick a quarter-second).
-    b.add(view, ui::strokes("baseline", &[vec![(0.0, base), (w, base)]], 1.0, draw::solid(&ui::alpha(kit::BLUE_LIGHT, 0.35))));
+    b.add(view, ui::strokes("baseline", &[vec![(0.0, base), (w, base)]], 1.0, draw::solid(&ui::alpha(grid, 0.35))));
     let window = 2500.0;
     let lead = 20.0;
     let span = w - lead - 16.0;
@@ -53,11 +53,11 @@ fn repeats(b: &mut Builder<'_>, view: NodeId, w: f64, h: f64) {
         let x = lead + span * f64::from(i) * 250.0 / window;
         vec![(x, base + 3.0), (x, base + 7.0)]
     }).collect();
-    b.add(view, ui::strokes("ticks", &ticks, 1.0, draw::solid(&ui::alpha(kit::BLUE_LIGHT, 0.3))));
-    ui::silk_left(b, view, "0", lead - 2.0, base + 12.0, 5.5, DIM, 700.0);
-    ui::silk(b, view, "2.5 s", lead + span - 6.0, base + 12.0, 5.5, DIM, 700.0);
+    b.add(view, ui::strokes("ticks", &ticks, 1.0, draw::solid(&ui::alpha(grid, 0.3))));
+    ui::silk_left(b, view, "0", lead - 2.0, base + 12.0, 5.5, dim, 700.0);
+    ui::silk(b, view, "2.5 s", lead + span - 6.0, base + 12.0, 5.5, dim, 700.0);
     // The note.
-    let note = draw::rect("note", lead - 1.0, 10.0, 2.0, base - 10.0, draw::solid(INK));
+    let note = draw::rect("note", lead - 1.0, 10.0, 2.0, base - 10.0, draw::solid(ink));
     b.add(view, ui::glowing(note, kit::BLUE_LIGHT, 0.9, 5.0));
     // The repeats: each drawn at the left, slid to its time, shrunk by the
     // feedback, wider each time round.
@@ -77,35 +77,40 @@ fn repeats(b: &mut Builder<'_>, view: NodeId, w: f64, h: f64) {
 }
 
 #[must_use]
-pub fn face() -> Face {
+pub fn face(dark: bool) -> Face {
+    // Dark: midnight. Light: a pale blue-white panel, a bright window.
+    let (ink, dim, fill, edge, window, grid, knob) = if dark {
+        (INK, DIM, [(0.0, "#16223d"), (1.0, "#0c1426")], "#2a3d66", [(0.0, "#0a1122"), (1.0, "#070c19")], kit::BLUE_LIGHT, ["color=#1b2a4a", "pointer=#bcd6ff", "index=line", "index_w=0.1", "skirt=plain", "skirt_color=#0b1224"])
+    } else {
+        ("#12264a", "#62779f", [(0.0, "#f3f7fd"), (1.0, "#dde7f5")], "#b9cbe6", [(0.0, "#ffffff"), (1.0, "#eaf1fb")], kit::BLUE_DEEP, ["color=#f8fafd", "pointer=#1e3a8a", "index=line", "index_w=0.1", "skirt=plain", "skirt_color=#b9cbe6"])
+    };
     let scene = kit::lane("Analog", |b, root| {
         let mut panel = draw::frame("Panel", 0.0, 0.0, kit::W, kit::H);
-        panel.fills = vec![draw::linear(180.0, &[(0.0, "#16223d"), (1.0, "#0c1426")])];
+        panel.fills = vec![draw::linear(180.0, &fill)];
         panel.corner_radii = document_proto::CornerRadii::uniform(10.0);
-        let panel = b.add(root, draw::with_effects(draw::stroked(panel, "#2a3d66", 1.0), vec![draw::inner_shadow("#ffffff1c", 0.0, 1.0, 0.0)]));
+        let panel = b.add(root, draw::with_effects(draw::stroked(panel, edge, 1.0), vec![draw::inner_shadow("#ffffff1c", 0.0, 1.0, 0.0)]));
 
         // ── The line ───────────────────────────────────────────────────
         let (vx, vy, vw, vh) = (14.0, 14.0, 540.0, kit::H - 28.0);
         let mut view = draw::frame("Repeats", vx, vy, vw, vh);
-        view.fills = vec![draw::linear(180.0, &[(0.0, "#0a1122"), (1.0, "#070c19")])];
+        view.fills = vec![draw::linear(180.0, &window)];
         view.clips_content = true;
         view.corner_radii = document_proto::CornerRadii::uniform(7.0);
         view.effects = vec![draw::inner_shadow("#000000b0", 0.0, 2.0, 6.0)];
         let view = b.add(panel, view);
-        repeats(b, view, vw, vh);
+        repeats(b, view, vw, vh, ink, dim, grid);
 
         // ── Name and knobs ─────────────────────────────────────────────
         let x0 = 578.0;
         let sans = draw::Lettering::family(draw::family::INTER).weight(300.0);
-        crate::suite_studio_blues::parts::set(b, panel, "Analog", x0 + 44.0, 30.0, 26.0, INK, &sans, 0.02);
-        ui::silk_left(b, panel, "Bucket-brigade delay", x0 + 96.0, 31.0, 6.5, DIM, 700.0);
+        crate::suite_studio_blues::parts::set(b, panel, "Analog", x0 + 44.0, 30.0, 26.0, ink, &sans, 0.02);
+        ui::silk_left(b, panel, "Bucket-brigade delay", x0 + 96.0, 31.0, 6.5, dim, 700.0);
         ui::rule(b, panel, x0, 48.0, 214.0, 1.0, &ui::alpha(kit::BLUE, 0.5));
-        let knob = ["color=#1b2a4a", "pointer=#bcd6ff", "index=line", "index_w=0.1", "skirt=plain", "skirt_color=#0b1224"];
         let knobs = [("time", "Time"), ("feedback", "Repeats"), ("high_cut", "Tone"), ("mod_depth", "Mod"), ("level", "Level")];
         for (i, (id, legend)) in knobs.iter().enumerate() {
-            kit::knob3d(b, panel, &a(id), legend, 34.0, (x0 + 20.0 + 62.0 * i as f64, 92.0), &knob, INK, DIM);
+            kit::knob3d(b, panel, &a(id), legend, 34.0, (x0 + 20.0 + 62.0 * i as f64, 92.0), &knob, ink, dim);
         }
         kit::bypass(b, panel, DLY, kit::W - 36.0, 92.0, 26.0, "blue", "On");
     });
-    kit::delay_face("62-dly-analog", scene)
+    kit::delay_face(kit::file("62-dly-analog", dark), scene)
 }

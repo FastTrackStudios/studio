@@ -4,6 +4,6 @@ use crate::face::Face;
 use crate::rig_time::kit;
 
 #[must_use]
-pub fn face() -> Face {
-    kit::delay_face("64-dly-shimmer", kit::stub(kit::DLY, "Shimmer", "#b9d7ff"))
+pub fn face(dark: bool) -> Face {
+    kit::delay_face(kit::file("64-dly-shimmer", dark), kit::stub(kit::DLY, "Shimmer", "#b9d7ff", dark))
 }

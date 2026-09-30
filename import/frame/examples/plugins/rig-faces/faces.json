@@ -1287,6 +1287,7 @@
   "time": {
     "delay": [
       {
+        "dark": "60-dly-tape-dark",
         "face": "60-dly-tape",
         "match": [
           "tape"
@@ -1298,6 +1299,7 @@
         ]
       },
       {
+        "dark": "61-dly-digital-dark",
         "face": "61-dly-digital",
         "match": [
           "digital"
@@ -1309,6 +1311,7 @@
         ]
       },
       {
+        "dark": "62-dly-analog-dark",
         "face": "62-dly-analog",
         "match": [
           "analog"
@@ -1320,6 +1323,7 @@
         ]
       },
       {
+        "dark": "63-dly-lo-fi-dark",
         "face": "63-dly-lo-fi",
         "match": [
           "lo-fi"
@@ -1331,6 +1335,7 @@
         ]
       },
       {
+        "dark": "64-dly-shimmer-dark",
         "face": "64-dly-shimmer",
         "match": [
           "shimmer"
@@ -1342,6 +1347,7 @@
         ]
       },
       {
+        "dark": "65-dly-reverse-dark",
         "face": "65-dly-reverse",
         "match": [
           "reverse"
@@ -1353,6 +1359,7 @@
         ]
       },
       {
+        "dark": "66-dly-ice-dark",
         "face": "66-dly-ice",
         "match": [
           "ice"
@@ -1364,6 +1371,7 @@
         ]
       },
       {
+        "dark": "67-dly-rhythm-dark",
         "face": "67-dly-rhythm",
         "match": [
           "rhythm"
@@ -1375,6 +1383,7 @@
         ]
       },
       {
+        "dark": "68-dly-drum-dark",
         "face": "68-dly-drum",
         "match": [
           "drum"
@@ -1386,6 +1395,7 @@
         ]
       },
       {
+        "dark": "69-dly-oil-can-dark",
         "face": "69-dly-oil-can",
         "match": [
           "oil can"
@@ -1397,6 +1407,7 @@
         ]
       },
       {
+        "dark": "70-dly-multitap-dark",
         "face": "70-dly-multitap",
         "match": [
           "multitap"
@@ -1408,6 +1419,7 @@
         ]
       },
       {
+        "dark": "71-dly-spectral-dark",
         "face": "71-dly-spectral",
         "match": [
           "spectral"
@@ -1419,6 +1431,7 @@
         ]
       },
       {
+        "dark": "72-dly-filter-dark",
         "face": "72-dly-filter",
         "match": [
           "filter"
@@ -1432,6 +1445,7 @@
     ],
     "reverb": [
       {
+        "dark": "80-verb-room-dark",
         "face": "80-verb-room",
         "match": [
           "room"
@@ -1443,6 +1457,7 @@
         ]
       },
       {
+        "dark": "81-verb-hall-dark",
         "face": "81-verb-hall",
         "match": [
           "hall"
@@ -1454,6 +1469,7 @@
         ]
       },
       {
+        "dark": "82-verb-plate-dark",
         "face": "82-verb-plate",
         "match": [
           "plate"
@@ -1465,6 +1481,7 @@
         ]
       },
       {
+        "dark": "83-verb-spring-dark",
         "face": "83-verb-spring",
         "match": [
           "spring"
@@ -1476,6 +1493,7 @@
         ]
       },
       {
+        "dark": "84-verb-cloud-dark",
         "face": "84-verb-cloud",
         "match": [
           "cloud"
@@ -1487,6 +1505,7 @@
         ]
       },
       {
+        "dark": "85-verb-bloom-dark",
         "face": "85-verb-bloom",
         "match": [
           "bloom"
@@ -1498,6 +1517,7 @@
         ]
       },
       {
+        "dark": "86-verb-shimmer-dark",
         "face": "86-verb-shimmer",
         "match": [
           "shimmer"
@@ -1509,6 +1529,7 @@
         ]
       },
       {
+        "dark": "87-verb-chorale-dark",
         "face": "87-verb-chorale",
         "match": [
           "chorale"
@@ -1520,6 +1541,7 @@
         ]
       },
       {
+        "dark": "88-verb-magneto-dark",
         "face": "88-verb-magneto",
         "match": [
           "magneto"
@@ -1531,6 +1553,7 @@
         ]
       },
       {
+        "dark": "89-verb-nonlinear-dark",
         "face": "89-verb-nonlinear",
         "match": [
           "nonlinear"
@@ -1542,6 +1565,7 @@
         ]
       },
       {
+        "dark": "90-verb-swell-dark",
         "face": "90-verb-swell",
         "match": [
           "swell"
@@ -1553,6 +1577,7 @@
         ]
       },
       {
+        "dark": "91-verb-reflections-dark",
         "face": "91-verb-reflections",
         "match": [
           "reflections"
@@ -1564,6 +1589,7 @@
         ]
       },
       {
+        "dark": "92-verb-velvet-dark",
         "face": "92-verb-velvet",
         "match": [
           "velvet"
@@ -1575,6 +1601,7 @@
         ]
       },
       {
+        "dark": "93-verb-freeverb-dark",
         "face": "93-verb-freeverb",
         "match": [
           "freeverb"
@@ -1586,6 +1613,7 @@
         ]
       },
       {
+        "dark": "94-verb-convolution-dark",
         "face": "94-verb-convolution",
         "match": [
           "convolution"

@@ -20,6 +20,6 @@ use crate::face::Face;
 
 /// Every reverb face, in `kit::VERB_ALGOS` order.
 #[must_use]
-pub fn faces() -> Vec<Face> {
-    vec![room::face(), hall::face(), plate::face(), spring::face(), cloud::face(), bloom::face(), shimmer::face(), chorale::face(), magneto::face(), nonlinear::face(), swell::face(), reflections::face(), velvet::face(), freeverb::face(), convolution::face()]
+pub fn faces(dark: bool) -> Vec<Face> {
+    vec![room::face(dark), hall::face(dark), plate::face(dark), spring::face(dark), cloud::face(dark), bloom::face(dark), shimmer::face(dark), chorale::face(dark), magneto::face(dark), nonlinear::face(dark), swell::face(dark), reflections::face(dark), velvet::face(dark), freeverb::face(dark), convolution::face(dark)]
 }

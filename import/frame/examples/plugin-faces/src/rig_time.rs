@@ -24,8 +24,10 @@ use crate::face::Face;
 /// Every time face.
 #[must_use]
 pub fn faces() -> Vec<Face> {
-    let mut v = delay::faces();
-    v.extend(reverb::faces());
+    let mut v = delay::faces(false);
+    v.extend(delay::faces(true));
+    v.extend(reverb::faces(false));
+    v.extend(reverb::faces(true));
     v
 }
 
@@ -35,13 +37,13 @@ pub fn manifest() -> serde_json::Value {
     let size = [kit::W, kit::H];
     let delays: Vec<_> = kit::DELAY_ALGOS
         .iter()
-        .zip(delay::faces())
-        .map(|(name, f)| json!({ "match": [name.to_lowercase()], "face": f.file, "ns": kit::DLY, "size": size }))
+        .zip(delay::faces(false).into_iter().zip(delay::faces(true)))
+        .map(|(name, (f, d))| json!({ "match": [name.to_lowercase()], "face": f.file, "dark": d.file, "ns": kit::DLY, "size": size }))
         .collect();
     let reverbs: Vec<_> = kit::VERB_ALGOS
         .iter()
-        .zip(reverb::faces())
-        .map(|(name, f)| json!({ "match": [name.to_lowercase()], "face": f.file, "ns": kit::VERB, "size": size }))
+        .zip(reverb::faces(false).into_iter().zip(reverb::faces(true)))
+        .map(|(name, (f, d))| json!({ "match": [name.to_lowercase()], "face": f.file, "dark": d.file, "ns": kit::VERB, "size": size }))
         .collect();
     json!({ "delay": delays, "reverb": reverbs })
 }

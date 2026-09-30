@@ -52,7 +52,7 @@ fn screws(b: &mut Builder<'_>, parent: NodeId, pts: &[(f64, f64)]) {
 /// The VU printed on the panel, needle pivoting at (`px`, `py`), scale
 /// radius `r` — a real VU card's law (−20 crowded left, 0 VU at about
 /// 70 %), orange past 0. The needle rides the repeats.
-fn vu(b: &mut Builder<'_>, parent: NodeId, (px, py): (f64, f64), r: f64) {
+fn vu(b: &mut Builder<'_>, parent: NodeId, (px, py): (f64, f64), r: f64, ink: &str) {
     let card = Card::Vu;
     let sweep = 100.0;
     let (floor, ceil) = card.range();
@@ -61,18 +61,18 @@ fn vu(b: &mut Builder<'_>, parent: NodeId, (px, py): (f64, f64), r: f64) {
     let root = b.add(parent, draw::frame("VU", px - c, py - c, side, side));
     let at = |db: f64| (card.fraction(db) - 0.5) * sweep;
     let arc: Vec<(f64, f64)> = (0..=60).map(|i| draw::polar(c, c, r, at(floor + (ceil - floor) * f64::from(i) / 60.0))).collect();
-    b.add(root, ui::strokes("arc", &[arc], 1.1, draw::solid(INK)));
+    b.add(root, ui::strokes("arc", &[arc], 1.1, draw::solid(ink)));
     let hot: Vec<(f64, f64)> = (0..=16).map(|i| draw::polar(c, c, r + 2.5, at(3.0 * f64::from(i) / 16.0))).collect();
     b.add(root, ui::strokes("over", &[hot], 5.0, draw::solid(ORANGE)));
-    let numeral = Type::new(7.5, INK, 400.0).family(draw::family::SAIRA);
+    let numeral = Type::new(7.5, ink, 400.0).family(draw::family::SAIRA);
     for (db, s) in [(-20.0, "-20"), (-10.0, "10"), (-5.0, "5"), (-3.0, "3"), (0.0, "0"), (1.0, "1"), (3.0, "3+")] {
         let a = at(db);
-        let col = if db >= 0.0 { ORANGE } else { INK };
+        let col = if db >= 0.0 { ORANGE } else { ink };
         b.add(root, ui::strokes("tick", &[vec![draw::polar(c, c, r, a), draw::polar(c, c, r + 5.5, a)]], 1.2, draw::solid(col)));
         let (x, y) = draw::polar(c, c, r + 12.0, a);
         parts::centred(b, root, s, (x, y), Type { color: col, ..numeral });
     }
-    parts::centred(b, root, "VU", (c, c - r * 0.48), Type::new(14.0, INK, 400.0).family(draw::family::SAIRA).width(85.0));
+    parts::centred(b, root, "VU", (c, c - r * 0.48), Type::new(14.0, ink, 400.0).family(draw::family::SAIRA).width(85.0));
     // The needle, drawn upright, turned by the repeats from the rest.
     let needle = b.add(root, draw::frame("needle", 0.0, 0.0, side, side));
     b.add(needle, draw::with_effects(draw::rect("blade", c - 0.8, c - r - 2.0, 1.6, r + 2.0, draw::solid("#1a1a1c")), vec![draw::drop_shadow("#00000040", 1.5, 2.0, 1.5)]));
@@ -89,20 +89,26 @@ fn glow_key(b: &mut Builder<'_>, parent: NodeId, addr: &str, d: f64, at: (f64, f
 }
 
 #[must_use]
-pub fn face() -> Face {
+pub fn face(dark: bool) -> Face {
+    // Light: the original's pale grey. Dark: the same unit in graphite,
+    // lettered in white.
+    let (ink, grey, unit_fill) = if dark {
+        ("#e8e9eb", [(0.0, "#3a3c41"), (1.0, "#2b2d31")], [(0.0, "#1f2023"), (1.0, "#17181a")])
+    } else {
+        (INK, [(0.0, "#e6e7e8"), (1.0, "#cfd0d2")], [(0.0, "#bfc0c2"), (1.0, "#a9aaac")])
+    };
     let scene = kit::lane("Tape", |b, root| {
         let (w, h) = (kit::W, kit::H);
-        let grey = [(0.0, "#e6e7e8"), (1.0, "#cfd0d2")];
-        let unit = bay(b, root, "Unit", (0.0, 0.0, w, h), &[(0.0, "#bfc0c2"), (1.0, "#a9aaac")]);
-        let t = Type::new(8.0, INK, 500.0).track(0.08).upper();
+        let unit = bay(b, root, "Unit", (0.0, 0.0, w, h), &unit_fill);
+        let t = Type::new(8.0, ink, 500.0).track(0.08).upper();
         let (y, bh) = (6.0, h - 12.0);
 
         // Bay 1: the letters, the VU, the display.
         let bay1 = bay(b, unit, "Bay 1", (6.0, y, 330.0, bh), &grey);
         for (i, ch) in "ECHO".chars().enumerate() {
-            parts::centred(b, bay1, &ch.to_string(), (30.0, 24.0 + 33.0 * i as f64), Type::new(30.0, INK, 300.0).family(draw::family::SAIRA).width(88.0));
+            parts::centred(b, bay1, &ch.to_string(), (30.0, 24.0 + 33.0 * i as f64), Type::new(30.0, ink, 300.0).family(draw::family::SAIRA).width(88.0));
         }
-        vu(b, bay1, (194.0, 84.0), 54.0);
+        vu(b, bay1, (194.0, 84.0), 54.0, ink);
         let disp = ui::display(b, bay1, "Display", 76.0, 114.0, 236.0, 26.0, "#9aa0a8", "glass");
         ui::lit_text(b, disp, "DELAY TIME", 8.0, 13.0, 70.0, 7.5, "#c9ccd2", TextAlign::Left, 500.0);
         ui::lit_readout(b, disp, "Delay time", ui::bind(&a("time")), 74.0, 13.0, 56.0, 8.0, "#e8eaee", TextAlign::Left);
@@ -115,8 +121,8 @@ pub fn face() -> Face {
         let bw2 = 170.0;
         let bay2 = bay(b, unit, "Bay 2", (338.0, y, bw2, bh), &grey);
         let cx = bw2 / 2.0;
-        parts::centred(b, bay2, "Active Heads", (cx, 13.0), Type::new(6.5, INK, 500.0).track(0.08).upper());
-        parts::art(b, bay2, &[vec![(cx - 44.0, 22.0), (cx - 44.0, 13.0), (cx - 36.0, 13.0)], vec![(cx + 44.0, 22.0), (cx + 44.0, 13.0), (cx + 36.0, 13.0)]], 0.9, INK);
+        parts::centred(b, bay2, "Active Heads", (cx, 13.0), Type::new(6.5, ink, 500.0).track(0.08).upper());
+        parts::art(b, bay2, &[vec![(cx - 44.0, 22.0), (cx - 44.0, 13.0), (cx - 36.0, 13.0)], vec![(cx + 44.0, 22.0), (cx + 44.0, 13.0), (cx + 36.0, 13.0)]], 0.9, ink);
         for (n, x) in [(1, cx - 36.0), (2, cx), (3, cx + 36.0)] {
             // The lamp's socket, and the lamp flashing on its head's repeat.
             b.add(bay2, draw::with_effects(draw::circle("lamp socket", x, 27.0, 4.8, draw::radial_at(0.4, 0.35, 0.8, &[(0.0, "#d8d9db"), (1.0, "#8e9094")])), vec![draw::inner_shadow("#00000060", 0.0, 1.0, 1.5)]));
@@ -125,13 +131,13 @@ pub fn face() -> Face {
             motion::add(b, lamp, Motion::new(Target::Opacity).input(flash).range(0.05, 1.0));
         }
         let arc: Vec<(f64, f64)> = (0..=30).map(|i| draw::polar(cx, 90.0, 48.0, -135.0 + 270.0 * f64::from(i) / 30.0)).collect();
-        parts::art(b, bay2, &[arc], 1.0, INK);
+        parts::art(b, bay2, &[arc], 1.0, ink);
         for i in 0..5 {
             let (x, y) = draw::polar(cx, 90.0, 54.0, -135.0 + 67.5 * f64::from(i));
-            b.add(bay2, draw::circle("detent", x, y, 2.2, draw::solid(INK)));
+            b.add(bay2, draw::circle("detent", x, y, 2.2, draw::solid(ink)));
         }
         let dial = KnobLook { preset: "white_knurl", opts: &["color=#eeede9", "index=none", "diamond=0", "ribs=90", "knurl_band=0.5", "rib_depth=0.02", "cap_r=0.97", "height=0.5", "dome=0.03", "edge=0.1", "ticks=none", "fallback=knurled"] };
-        look::place_knob(b, bay2, &dial, &a("time"), "Delay Time", 80.0, (cx, 90.0), INK);
+        look::place_knob(b, bay2, &dial, &a("time"), "Delay Time", 80.0, (cx, 90.0), ink);
         parts::centred(b, bay2, "Delay", (cx, 85.0), Type::new(6.5, "#3a3b3e", 600.0).track(0.08).upper());
         parts::centred(b, bay2, "Time", (cx, 95.0), Type::new(6.5, "#3a3b3e", 600.0).track(0.08).upper());
         // Its pointer: an orange index at the rim, turning with the time.
@@ -154,18 +160,18 @@ pub fn face() -> Face {
         ];
         for (id, legend, warm, col, row) in knobs {
             let (x, cy) = (58.0 + 101.0 * f64::from(col), 38.0 + 64.0 * f64::from(row));
-            look::knob(b, bay3, if warm { &orange } else { &black }, &a(id), 32.0, (x, cy), 11, INK, false);
-            parts::centred(b, bay3, legend, (x, cy + 28.0), Type::new(7.0, INK, 500.0).track(0.08).upper());
+            look::knob(b, bay3, if warm { &orange } else { &black }, &a(id), 32.0, (x, cy), 11, ink, false);
+            parts::centred(b, bay3, legend, (x, cy + 28.0), Type::new(7.0, ink, 500.0).track(0.08).upper());
         }
 
         // Bay 4: the mark, the emblem, the power.
         let bay4 = bay(b, unit, "Bay 4", (830.0, y, w - 836.0, bh), &grey);
         let c4 = (w - 836.0) / 2.0;
         look::brush_mark(b, bay4, (c4, 42.0), 16.0, "#8a8c90");
-        look::emblem(b, bay4, (c4, 74.0), 12.0, INK);
+        look::emblem(b, bay4, (c4, 74.0), 12.0, ink);
         glow_key(b, bay4, &a("on"), 26.0, (c4, 108.0), ORANGE);
         parts::centred(b, bay4, "Power", (c4, 136.0), t);
         screws(b, bay4, &[(w - 836.0 - 9.0, bh - 9.0)]);
     });
-    kit::delay_face("60-dly-tape", scene)
+    kit::delay_face(kit::file("60-dly-tape", dark), scene)
 }

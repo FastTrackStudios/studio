@@ -18,6 +18,6 @@ use crate::face::Face;
 
 /// Every delay face, in `kit::DELAY_ALGOS` order.
 #[must_use]
-pub fn faces() -> Vec<Face> {
-    vec![tape::face(), digital::face(), analog::face(), lo_fi::face(), shimmer::face(), reverse::face(), ice::face(), rhythm::face(), drum::face(), oil_can::face(), multitap::face(), spectral::face(), filter::face()]
+pub fn faces(dark: bool) -> Vec<Face> {
+    vec![tape::face(dark), digital::face(dark), analog::face(dark), lo_fi::face(dark), shimmer::face(dark), reverse::face(dark), ice::face(dark), rhythm::face(dark), drum::face(dark), oil_can::face(dark), multitap::face(dark), spectral::face(dark), filter::face(dark)]
 }

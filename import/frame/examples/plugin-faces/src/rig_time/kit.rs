@@ -122,6 +122,12 @@ pub fn reverb_face(file: &'static str, scene: document_proto::Scene) -> Face {
     Face { file, plugin: PLUGIN, scene, params: reverb_params(), streams: Vec::new() }
 }
 
+/// A face's file: `base` for its light finish, `base-dark` for its dark.
+#[must_use]
+pub fn file(base: &'static str, dark: bool) -> &'static str {
+    if dark { Box::leak(format!("{base}-dark").into_boxed_str()) } else { base }
+}
+
 /// A lane's canvas: `build` draws into the root, already `W` × `H`.
 pub fn lane(name: &str, build: impl FnOnce(&mut Builder<'_>, NodeId)) -> document_proto::Scene {
     canvas(name, |b, root| {
@@ -205,30 +211,29 @@ pub fn legend(b: &mut Builder<'_>, parent: NodeId, s: &str, cx: f64, cy: f64, si
 /// A placeholder unit until the machine's own face is drawn: its name, the
 /// selector, the main knobs and the picture.
 #[must_use]
-pub fn stub(ns: &str, name: &str, color: &str) -> document_proto::Scene {
+pub fn stub(ns: &str, name: &str, color: &str, dark: bool) -> document_proto::Scene {
     let ns = ns.to_string();
     let name = name.to_string();
     // The section's colour, whatever the placeholder asked for.
     let _ = color;
     let color = if ns == DLY { BLUE } else { PURPLE }.to_string();
     lane(&name.clone(), move |b, root| {
-        const INK: &str = "#e8e6e1";
-        const DIM: &str = "#8a8d94";
+        let (ink, dim, top, bottom) = if dark { ("#e8e6e1", "#8a8d94", "#1d1f24", "#121317") } else { ("#1d1f24", "#686c74", "#eceef1", "#d7dae0") };
         let mut panel = draw::frame("Panel", 0.0, 0.0, W, H);
-        panel.fills = vec![draw::linear(180.0, &[(0.0, "#1d1f24"), (1.0, "#121317")])];
+        panel.fills = vec![draw::linear(180.0, &[(0.0, top), (1.0, bottom)])];
         panel.corner_radii = document_proto::CornerRadii::uniform(8.0);
         let panel = b.add(root, panel);
         b.add(panel, ui::text("name", &name, 22.0, 30.0, 200.0, 20.0, &color, TextAlign::Left, 800.0, true));
-        bypass(b, panel, &ns, 60.0, 100.0, 34.0, "green", "On");
+        bypass(b, panel, &ns, 60.0, 100.0, 34.0, if ns == DLY { "blue" } else { "purple" }, "On");
         if ns == DLY {
             echo_train(b, panel, (220.0, 24.0, 380.0, 116.0), 8, 2000.0, &color);
             for (i, (id, l)) in [("time", "Time"), ("feedback", "Feedback"), ("level", "Level")].iter().enumerate() {
-                knob(b, panel, "knob.3d", "flat", &a(&ns, id), l, 46.0, 670.0 + 100.0 * i as f64, 70.0, INK, DIM);
+                knob(b, panel, "knob.3d", "flat", &a(&ns, id), l, 46.0, 670.0 + 100.0 * i as f64, 70.0, ink, dim);
             }
         } else {
             decay(b, panel, (220.0, 24.0, 380.0, 116.0), &color);
             for (i, (id, l)) in [("decay", "Decay"), ("size", "Size"), ("level", "Level")].iter().enumerate() {
-                knob(b, panel, "knob.3d", "flat", &a(&ns, id), l, 46.0, 670.0 + 100.0 * i as f64, 70.0, INK, DIM);
+                knob(b, panel, "knob.3d", "flat", &a(&ns, id), l, 46.0, 670.0 + 100.0 * i as f64, 70.0, ink, dim);
             }
         }
     })
