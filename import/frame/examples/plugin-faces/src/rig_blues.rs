@@ -435,28 +435,31 @@ pub fn row_drives() -> Face {
     Face { file: "31-row-drives", plugin: PLUGIN, scene, params, streams: Vec::new() }
 }
 
-/// The Amp/Cab row: the head on the left, the cab (at the head's height)
-/// on its right, the gate right of the cab, and the mics' rail after it —
-/// all on one floor.
+/// The Amp/Cab row: the head on the left, the cab on its right with its
+/// box exactly the head's (the handle stands above, in the margin), and
+/// the gate right of the cab, as tall as the cab.
 #[must_use]
 pub fn row_amp_cab() -> Face {
     let ac = AmpCab::new();
     let (hw, hh) = face_size(&ac.head);
-    let cab = amp_cab::cab_sized(1200.0, hh);
+    // The head's box: under its leather handle (9 % of its height), over
+    // its feet (3.5 %). The cab has no handle, so its height is that box
+    // plus its own feet.
+    let (handle, feet) = (hh * 0.09, hh * 0.035);
+    let head_box = hh - handle - feet;
+    let cab = amp_cab::cab_sized(1200.0, head_box / (1.0 - 0.035));
     let (cw, ch) = face_size(&cab);
     let (gw, gh) = face_size(&ac.gate);
-    let (m, gap, rail_w) = (24.0, 36.0, 230.0);
-    let w = m + hw + gap + cw + gap + gw + gap + rail_w + m;
-    let h = m + ch.max(hh) + m;
+    let gs = ch / gh;
+    let (m, gap) = (20.0, 36.0);
+    let w = m + hw + gap + cw + gap + gw * gs + m;
+    let h = hh + m;
     let scene = canvas("Amp / Cab row", |b, root| {
         page(b, root, w, h);
-        let floor = h - m;
-        embed(b, root, &ac.head, (m, floor - hh, hw, hh));
+        embed(b, root, &ac.head, (m, 0.0, hw, hh));
         let cx = m + hw + gap;
-        embed(b, root, &cab, (cx, floor - ch, cw, ch));
-        let gx = cx + cw + gap;
-        embed(b, root, &ac.gate, (gx, floor - gh, gw, gh));
-        amp_cab::cab_rail(b, root, (gx + gw + gap, m + 30.0, rail_w), 4);
+        embed(b, root, &cab, (cx, handle, cw, ch));
+        embed(b, root, &ac.gate, (cx + cw + gap, handle, gw * gs, ch));
     });
     let mut faces = ac.faces();
     faces.push(&cab);
