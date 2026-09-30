@@ -7712,7 +7712,7 @@
         "unit": "None",
         "steps": null
       },
-      "default": 0.6041666666666666,
+      "default": 0.5833333333333334,
       "bipolar": false,
       "featured": false
     },
@@ -7730,6 +7730,57 @@
         "steps": null
       },
       "default": 0.0,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "pitch/dbl_on",
+      "name": "Doubler",
+      "short_name": null,
+      "group": null,
+      "kind": "Toggle",
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 2
+      },
+      "default": 0.0,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "pitch/dbl_detune",
+      "name": "Doubler detune",
+      "short_name": null,
+      "group": null,
+      "kind": "Continuous",
+      "range": {
+        "min": 0.0,
+        "max": 30.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": null
+      },
+      "default": 0.3,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "pitch/dbl_delay",
+      "name": "Doubler delay",
+      "short_name": null,
+      "group": null,
+      "kind": "Continuous",
+      "range": {
+        "min": 5.0,
+        "max": 40.0,
+        "scale": "Linear",
+        "unit": "Milliseconds",
+        "steps": null
+      },
+      "default": 0.37142857142857144,
       "bipolar": false,
       "featured": false
     },
@@ -7764,6 +7815,23 @@
         "steps": null
       },
       "default": 0.5,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "pitch/on",
+      "name": "Pitch",
+      "short_name": null,
+      "group": null,
+      "kind": "Toggle",
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 2
+      },
+      "default": 0.0,
       "bipolar": false,
       "featured": false
     },

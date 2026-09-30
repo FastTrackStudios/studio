@@ -268,7 +268,7 @@ pub fn faces() -> Vec<Face> {
     v.push(eq());
     v.push(spring_viz());
     v.push(cab());
-    v.extend([d_(crate::rig_blues::filters::wah_unit()), d_(crate::rig_blues::filters::q_tron_unit()), d_(crate::rig_blues::filters::postal_unit()), d_(drives::pitch_voices())]);
+    v.extend([d_(crate::rig_blues::filters::wah_unit()), d_(crate::rig_blues::filters::q_tron_unit()), d_(crate::rig_blues::filters::postal_unit()), d_(crate::rig_blues::pitch::pitch_unit())]);
     v
 }
 
@@ -328,7 +328,7 @@ pub fn manifest() -> String {
             // the John Mayer rig's Q-Tron (the default).
             { "match": ["postal"], "face": "34-filter-postal", "ns": "env", "size": size(&crate::rig_blues::filters::postal_unit()) },
             { "match": ["filter", "q-tron", "qtron"], "face": "31-filter-q-tron", "ns": "env", "size": size(&crate::rig_blues::filters::q_tron_unit()) },
-            { "match": ["pitch"], "face": "33-pitch-voices", "ns": "pitch", "size": size(&drives::pitch_voices()) },
+            { "match": ["pitch"], "face": "33-pitch-voices", "ns": "pitch", "size": size(&crate::rig_blues::pitch::pitch_unit()) },
         ],
         // Pictures of a block, beside its unit: a reverb's springs.
         "pictures": [ { "match": ["reverb"], "face": "53-spring-viz", "ns": "spring", "size": size(&spring_viz()) } ],
