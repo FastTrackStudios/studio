@@ -14,6 +14,7 @@ members = [
     "crates/frame",
     # ── embed: frame surfaces in a host's strip (mixer rack, REAPER TCP/MCP)
     "crates/frame-embed",
+    "crates/frame-live",
     # ── design: AI authoring — lint, tools, MCP ──────────────────────
     "features/design/design-lint",
     "features/design/design-session",
@@ -59,6 +60,8 @@ default-members = [
     "apps/frame/library-server",
     "crates/frame",
     "crates/frame-embed",
+    # ── live: a surface in a host GPU renderer (signal's Blitz widgets), hot-reloading
+    "crates/frame-live",
     "features/design/design-lint",
     "features/design/design-session",
     "features/document/document-proto",

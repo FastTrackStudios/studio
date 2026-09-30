@@ -2157,6 +2157,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "frame-live"
+version = "0.1.0"
+dependencies = [
+ "document-io",
+ "document-proto",
+ "kurbo 0.13.1",
+ "peniko",
+ "render",
+ "serde_json",
+ "surface-proto",
+ "surface-runtime",
+ "vello",
+]
+
+[[package]]
 name = "frame-mcp"
 version = "0.1.0"
 dependencies = [
