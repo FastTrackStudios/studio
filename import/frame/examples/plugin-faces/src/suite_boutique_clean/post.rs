@@ -12,6 +12,7 @@
 //!   of its param), the HALL / PLATE toggle, five pill faders and POWER.
 
 use document_proto::{NodeId, TextAlign};
+use surface_kit::meters::scale::Card;
 use surface_kit::{Place, TOUCH_MIN, draw};
 use surface_proto::{Binding, Control, ControlKind, Orientation, SlotRole};
 use surface_widgets::Builder;
@@ -19,7 +20,7 @@ use surface_widgets::Builder;
 use super::look;
 use crate::face::{Face, canvas};
 use crate::reverb::ui;
-use crate::suite_funk_rhythm::parts::{self, RACK_W, Type};
+use crate::suite_funk_rhythm::parts::{self, KnobLook, RACK_W, Type};
 
 const ORANGE: &str = "#ee8a1e";
 const INK: &str = "#1f2023";
@@ -37,34 +38,51 @@ fn tall_letters(b: &mut Builder<'_>, parent: NodeId, word: &str, cx: f64, y0: f6
 }
 
 /// The VU printed on the panel: a `Gauge` on the input level whose needle
-/// turns about (`px`, `py`), scale radius `r`.
+/// turns about (`px`, `py`), scale radius `r`. The scale is a real VU
+/// card's law (`meters::scale::Card::Vu`: −20 crowded at the left, 0 VU at
+/// about 70 % of the travel), and the binding carries the same law, so
+/// the needle lands on the printed marks. Under the dB scale, the
+/// percentage-of-0-VU scale (0 … 100 %).
 fn vu(b: &mut Builder<'_>, parent: NodeId, (px, py): (f64, f64), r: f64) {
+    let card = Card::Vu;
     let sweep = 100.0;
-    let (floor, ceil) = (-20.0, 3.0);
+    let (floor, ceil) = card.range();
     let side = 2.0 * (r + 26.0);
     let c = side / 2.0;
     let root = b.add(parent, draw::frame("VU", px - c, py - c, side, side));
-    let at = |db: f64| (db - floor) / (ceil - floor) * sweep - sweep / 2.0;
-    // The arc and its ticks, red past 0.
-    let arc: Vec<(f64, f64)> = (0..=40).map(|i| draw::polar(c, c, r, at(floor + (ceil - floor) * f64::from(i) / 40.0))).collect();
+    let at = |db: f64| (card.fraction(db) - 0.5) * sweep;
+    // The arc, its ticks and numerals, orange past 0.
+    let arc: Vec<(f64, f64)> = (0..=60).map(|i| draw::polar(c, c, r, at(floor + (ceil - floor) * f64::from(i) / 60.0))).collect();
     b.add(root, ui::strokes("arc", &[arc], 1.4, draw::solid(INK)));
-    let red: Vec<(f64, f64)> = (0..=12).map(|i| draw::polar(c, c, r + 4.0, at(3.0 * f64::from(i) / 12.0))).collect();
-    b.add(root, ui::strokes("over", &[red], 8.0, draw::solid(ORANGE)));
+    let hot: Vec<(f64, f64)> = (0..=16).map(|i| draw::polar(c, c, r + 4.0, at(3.0 * f64::from(i) / 16.0))).collect();
+    b.add(root, ui::strokes("over", &[hot], 8.0, draw::solid(ORANGE)));
+    let numeral = Type::new(12.5, INK, 400.0).family(draw::family::SAIRA);
     for (db, s) in [(-20.0, "-20"), (-10.0, "10"), (-7.0, "7"), (-5.0, "5"), (-3.0, "3"), (-2.0, "2"), (-1.0, "1"), (0.0, "0"), (1.0, "1"), (2.0, "2"), (3.0, "3+")] {
         let a = at(db);
-        let col = if db > 0.0 || s == "0" { ORANGE } else { INK };
+        let col = if db >= 0.0 { ORANGE } else { INK };
         b.add(root, ui::strokes("tick", &[vec![draw::polar(c, c, r, a), draw::polar(c, c, r + 9.0, a)]], 1.6, draw::solid(col)));
         let (x, y) = draw::polar(c, c, r + 19.0, a);
-        parts::centred(b, root, s, (x, y), Type::new(13.0, col, 500.0));
+        parts::centred(b, root, s, (x, y), Type { color: col, ..numeral });
     }
-    parts::centred(b, root, "VU", (c, c - r * 0.52), Type::new(22.0, INK, 400.0));
+    // The inner percentage scale: 100 % = 0 VU, placed by the same law.
+    for pc in [20.0_f64, 40.0, 60.0, 80.0, 100.0] {
+        let db = 20.0 * (pc / 100.0).log10();
+        let a = at(db);
+        b.add(root, ui::strokes("pc tick", &[vec![draw::polar(c, c, r - 2.0, a), draw::polar(c, c, r - 6.0, a)]], 1.0, draw::solid(INK)));
+        let (x, y) = draw::polar(c, c, r - 13.0, a);
+        let label = if pc >= 100.0 { "100%".to_string() } else { format!("{pc:.0}") };
+        parts::centred(b, root, &label, (x, y), Type::new(6.5, INK, 500.0));
+    }
+    parts::centred(b, root, "VU", (c, c - r * 0.5), Type::new(24.0, INK, 400.0).family(draw::family::SAIRA).width(85.0));
     // The needle, drawn up at mid travel, turning about the pivot.
     let needle = b.add(root, draw::frame("needle", 0.0, 0.0, side, side));
     b.add(needle, draw::with_effects(draw::rect("blade", c - 1.2, c - r - 4.0, 2.4, r + 4.0, draw::solid("#1a1a1c")), vec![draw::drop_shadow("#00000040", 2.0, 3.0, 2.0)]));
     let base = draw::rounded(draw::rect("pivot cover", c - 16.0, c - 18.0, 32.0, 46.0, draw::linear(90.0, &[(0.0, "#2a2a2c"), (0.5, "#3c3c40"), (1.0, "#141416")])), 12.0);
     b.add(root, draw::with_effects(base, vec![draw::drop_shadow("#00000060", 0.0, 3.0, 4.0)]));
+    let mut binding = Binding::stream("echo/in");
+    binding.curve = card.curve();
     let mut ctl = Control::new(ControlKind::Gauge { sweep_degrees: sweep, floor_db: floor, ceiling_db: ceil }).slot(SlotRole::Needle, needle.0);
-    ctl.binding = Some(Binding::stream("echo/in"));
+    ctl.binding = Some(binding);
     ctl.reference_dbfs = Some(surface_proto::VU_REFERENCE_DBFS);
     b.controls.insert(root, ctl);
 }
@@ -98,7 +116,7 @@ pub(super) fn echo() -> Face {
         let t = Type::new(10.5, INK, 500.0).track(0.08).upper();
         // Bay 1: letters, VU, display.
         let bay1 = panel(b, unit, "Bay 1", (28.0, 30.0, 354.0, 314.0), &grey);
-        tall_letters(b, bay1, "ECHO", 42.0, 58.0, 70.0, Type::new(58.0, INK, 300.0));
+        tall_letters(b, bay1, "ECHO", 42.0, 58.0, 70.0, Type::new(62.0, INK, 300.0).family(draw::family::SAIRA).width(88.0));
         vu(b, bay1, (212.0, 147.0), 100.0);
         let disp = ui::display(b, bay1, "Display", 118.0, 234.0, 204.0, 50.0, "#9aa0a8", "glass");
         ui::lit_text(b, disp, "DELAY TIME", 10.0, 15.0, 100.0, 9.5, "#c9ccd2", TextAlign::Left, 500.0);
@@ -120,9 +138,13 @@ pub(super) fn echo() -> Face {
         }
         let arc: Vec<(f64, f64)> = (0..=30).map(|i| draw::polar(97.0, 150.0, 62.0, -110.0 + 220.0 * f64::from(i) / 30.0)).collect();
         parts::art(b, bay2, &[arc], 1.2, INK);
-        let sel = Place::new("Mode").size(96.0).variant("white").bind(ui::bind("echo/mode")).sweep(220.0).options(&["dots=0", "smooth"]).legend("").touch(TOUCH_MIN);
-        let s = ui::put(b, bay2, "knob.dot_knurl", &sel, 97.0, 150.0);
-        ui::strip_legend(b, s);
+        // The mode selector: a big white knurled dial stepping through the
+        // five detents (220° of travel).
+        let dial = KnobLook { cap: "knurled", opts: &["color=#ecebe8", "pointer=#b9b8b4", "ticks=none", "bevel=1.4"] };
+        let s = parts::knob(b, bay2, &dial, "echo/mode", "Mode", 92.0, (97.0, 150.0), INK);
+        if let Some(c) = b.controls.get_mut(&s) {
+            c.kind = ControlKind::Knob { sweep_degrees: 220.0 };
+        }
         parts::centred(b, bay2, "Mode", (97.0, 143.0), Type::new(8.5, "#3a3b3e", 600.0).track(0.08).upper());
         parts::centred(b, bay2, "Selector", (97.0, 156.0), Type::new(8.5, "#3a3b3e", 600.0).track(0.08).upper());
         for (x, s) in [(52.0, "Free"), (97.0, "Daw"), (142.0, "Tap")] {
@@ -144,9 +166,11 @@ pub(super) fn echo() -> Face {
             ("echo/treble", "Treble", "orange", 247.0, 176.0),
             ("echo/width", "Width", "black", 332.0, 176.0),
         ];
+        let black = KnobLook { cap: "knurled", opts: &["color=#1c1c1e", "pointer=#ee8a1e", "ticks=none"] };
+        let orange = KnobLook { cap: "knurled", opts: &["color=#ee8a1e", "pointer=#fff0d8", "ticks=none"] };
         for (addr, legend, v, x, y) in knobs {
-            let line = if v == "orange" { "line=#fff0d8" } else { "line=#ee8a1e" };
-            parts::knob(b, bay3, "knob.fluted_line", v, addr, legend, 44.0, (x, y), &["ticks=11", "ticklen=9", "lobes=40", line], INK);
+            let look = if v == "orange" { &orange } else { &black };
+            look::knob(b, bay3, look, addr, 42.0, (x, y), 11, INK, false);
             parts::centred(b, bay3, legend, (x, y + 42.0), Type::new(9.0, INK, 500.0).track(0.08).upper());
         }
         glow_key(b, bay3, "echo/tap", 34.0, (74.0, 262.0), "#fff2c0", true);
@@ -161,14 +185,15 @@ pub(super) fn echo() -> Face {
         screws(b, bay4, &[(110.0, 14.0), (110.0, 300.0)]);
     });
     let params = vec![
+        // Every knob at noon, as the reference shows them.
         parts::pick("echo/time", "Delay Time", DIVS, 1),
-        parts::pct("echo/feedback", "Feedback", 35.0),
-        parts::pct("echo/tape_mod", "Tape-Mod", 25.0),
-        parts::pct("echo/mix", "Mix", 30.0),
-        parts::pct("echo/drive", "Tape Drive", 40.0),
+        parts::pct("echo/feedback", "Feedback", 50.0),
+        parts::pct("echo/tape_mod", "Tape-Mod", 50.0),
+        parts::pct("echo/mix", "Mix", 50.0),
+        parts::pct("echo/drive", "Tape Drive", 50.0),
         parts::db("echo/bass", "Bass", -12.0, 12.0, 0.0),
         parts::db("echo/treble", "Treble", -12.0, 12.0, 0.0),
-        parts::pct("echo/width", "Width", 60.0),
+        parts::pct("echo/width", "Width", 50.0),
         parts::pick("echo/mode", "Mode", &["1", "2", "3", "1+2", "1+2+3"], 0),
         parts::pick("echo/sync", "Sync", &["Free", "DAW", "Tap"], 1),
         ui::param("echo/bpm", "Tempo", surface_proto::Range::linear(40.0, 240.0, surface_proto::Unit::Bpm), 120.0).featured(),
@@ -202,7 +227,7 @@ pub(super) fn reverb() -> Face {
         let pale = "#d9dadc";
         let t = Type::new(9.5, pale, 500.0).track(0.08).upper();
         let bay1 = panel(b, unit, "Bay 1", (28.0, 6.0, 551.0, 198.0), &dark);
-        tall_letters(b, bay1, "REVERB", 42.0, 38.0, 26.0, Type::new(21.0, pale, 400.0));
+        tall_letters(b, bay1, "REVERB", 42.0, 38.0, 26.0, Type::new(21.0, pale, 400.0).family(draw::family::SAIRA).width(88.0));
         let disp = ui::display(b, bay1, "Display", 118.0, 26.0, 300.0, 80.0, "#9aa0a8", "glass");
         let lit = "#e8eaee";
         ui::lit_text(b, disp, "MODE", 12.0, 12.0, 60.0, 8.0, "#b9bcc2", TextAlign::Left, 500.0);
@@ -245,11 +270,7 @@ pub(super) fn reverb() -> Face {
             }
         }
         let bay3 = panel(b, unit, "Bay 3", (988.0, 6.0, 124.0, 198.0), &dark);
-        let sig: Vec<(f64, f64)> = (0..=50).map(|i| {
-            let u = f64::from(i) / 50.0;
-            (30.0 + 60.0 * u, 50.0 - 12.0 * (u * 17.0).sin() * (1.0 - u * 0.5))
-        }).collect();
-        parts::art(b, bay3, &[sig], 1.1, "#aeb0b4");
+        look::signature(b, bay3, (62.0, 48.0), 17.0, "#aeb0b4");
         parts::status_led(b, bay3, "verb/on", 7.0, (62.0, 98.0), "#fffbe8", "dark", None);
         glow_key(b, bay3, "verb/on", 32.0, (62.0, 136.0), ORANGE, false);
         parts::centred(b, bay3, "Power", (62.0, 178.0), t);

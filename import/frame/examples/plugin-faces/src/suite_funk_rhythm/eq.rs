@@ -1,16 +1,20 @@
 //! `10-eq-desktop-1140x282`: the *Nine-Band Desk EQ*, a desktop graphic
 //! EQ as wide as a rack face (1140 × 282, the reference's 4:1) in a
-//! speckled mauve-grey case — big taupe dome knobs for the high-pass and
-//! low-pass filters (their settings printed live above), nine lit white
-//! faders from 65 Hz to 16 kHz with their gain printed above, a cream
-//! POWER button and its pilot LED.
+//! powder-coated case in three colourways (mauve, slate or blue:
+//! `eq/color`, each a layer shown for its option) — big taupe dome knobs
+//! for the high-pass and low-pass filters (their settings printed live
+//! above; both open, as the reference shows them), nine lit white faders
+//! from 65 Hz to 16 kHz with their gain printed above (set in the
+//! reference's −12 / 0 / +12 pattern), a cream POWER button and its pilot
+//! LED.
 
-use document_proto::NodeId;
+use document_proto::{NodeId, TextAlign};
+use surface_kit::materials::{Material, fill};
 use surface_kit::{Place, TOUCH_MIN, draw};
 use surface_proto::{Range, Unit};
 use surface_widgets::Builder;
 
-use super::parts::{self, RACK_W, Type};
+use super::parts::{self, KnobLook, RACK_W, Type};
 use super::pedals::PLUGIN;
 use crate::face::{Face, canvas};
 use crate::reverb::ui;
@@ -26,16 +30,18 @@ const BANDS: &[(&str, &str, f64)] = &[
     ("b8k", "8 kHz", 792.0),
     ("b16k", "16 kHz", 865.0),
 ];
+/// The colourways: name and case paint.
+const COLOURS: [(&str, &str); 3] = [("Mauve", "#9c8a8d"), ("Slate", "#3f4b53"), ("Blue", "#56799a")];
 const INK: &str = "#f4efec";
 
 /// A live value line: `prefix` printed, then the param's value.
 fn value_line(b: &mut Builder<'_>, parent: NodeId, addr: &str, prefix: &str, (cx, cy): (f64, f64), w: f64) {
     let t = Type::new(10.5, INK, 800.0).track(0.06);
     if prefix.is_empty() {
-        ui::lit_readout(b, parent, &format!("{addr} readout"), ui::bind(addr), cx - w / 2.0, cy, w, 10.5, INK, document_proto::TextAlign::Center);
+        ui::lit_readout(b, parent, &format!("{addr} readout"), ui::bind(addr), cx - w / 2.0, cy, w, 10.5, INK, TextAlign::Center);
     } else {
-        parts::words(b, parent, prefix, cx - w / 2.0, cy, w / 2.0 - 2.0, document_proto::TextAlign::Right, t);
-        ui::lit_readout(b, parent, &format!("{addr} readout"), ui::bind(addr), cx + 2.0, cy, w / 2.0, 10.5, INK, document_proto::TextAlign::Left);
+        parts::words(b, parent, prefix, cx - w / 2.0, cy, w / 2.0 - 2.0, TextAlign::Right, t);
+        ui::lit_readout(b, parent, &format!("{addr} readout"), ui::bind(addr), cx + 2.0, cy, w / 2.0, 10.5, INK, TextAlign::Left);
     }
 }
 
@@ -45,30 +51,35 @@ fn slope(b: &mut Builder<'_>, parent: NodeId, (cx, cy): (f64, f64), high: bool) 
     parts::art(b, parent, &[pts], 2.0, INK);
 }
 
+/// The case in one colourway: powder coat, lit edges, a slot rebate round
+/// each fader.
+fn case(b: &mut Builder<'_>, layer: NodeId, (w, h): (f64, f64), color: &str) {
+    let mut shell = draw::rounded(draw::frame("case", 0.0, 0.0, w, h), 12.0);
+    shell.effects = vec![draw::drop_shadow("#00000080", 0.0, 6.0, 12.0)];
+    let shell = b.add(layer, shell);
+    fill(b, shell, (0.0, 0.0, w, h), 12.0, &Material::Powder { color: color.into(), coarse: false });
+    for n in surface_kit::materials::light::edge("case edge", (0.0, 0.0, w, h), 12.0, 8.0, 1.0, true) {
+        b.add(shell, n);
+    }
+    // The case's front lip, darker along the bottom.
+    b.add(shell, draw::rect("lip", 0.0, h - 14.0, w, 14.0, draw::linear(180.0, &[(0.0, "#00000000"), (1.0, "#00000040")])));
+}
+
 pub(super) fn face() -> Face {
     let (w, h) = (RACK_W, 282.0);
     let scene = canvas("Nine-Band Desk EQ", |b, root| {
         parts::page(b, root, w, h);
-        let case = draw::rect("case", 0.0, 0.0, w, h, draw::linear(180.0, &[(0.0, "#b3a2a4"), (0.12, "#9f8e90"), (0.85, "#8e7e80"), (1.0, "#6f6163")]));
-        let case = b.add(root, draw::with_effects(draw::rounded(case, 12.0), vec![draw::drop_shadow("#00000080", 0.0, 6.0, 12.0), draw::inner_shadow("#ffffff4d", 0.0, 2.0, 2.0), draw::inner_shadow("#00000059", 0.0, -4.0, 6.0)]));
-        // Speckle.
-        let mut sp = String::new();
-        let mut seed: u32 = 0x1234_5678;
-        for _ in 0..2400 {
-            seed ^= seed << 13;
-            seed ^= seed >> 17;
-            seed ^= seed << 5;
-            let (x, y) = (f64::from(seed % 11_400) / 10.0, f64::from((seed / 11_400) % 2_820) / 10.0);
-            sp.push_str(&format!("M {x:.1} {y:.1} h 0.7 v 0.7 h -0.7 Z "));
+        for (i, (_, color)) in COLOURS.iter().enumerate() {
+            let layer = parts::variant_layer(b, root, "eq/color", i, (0.0, 0.0, w, h));
+            case(b, layer, (w, h), color);
         }
-        b.add(case, draw::path("speckle", 0.0, 0.0, w, h, sp, draw::solid("#ffffff1c")));
-        // Filters.
+        let case = b.add(root, draw::frame("controls", 0.0, 0.0, w, h));
+        // Filters: big taupe domes.
+        let look = KnobLook { cap: "domed", opts: &["color=#b9a89a", "pointer=#1a1716", "ticks=none", "bevel=1.6"] };
         for (addr, prefix, x, high) in [("eq/hpf", "HPF :", 174.0, true), ("eq/lpf", "LPF :", 967.0, false)] {
             value_line(b, case, addr, prefix, (x, 36.0), 150.0);
             slope(b, case, (x, 72.0), high);
-            let p = Place::new(prefix).size(92.0).variant("taupe").bind(ui::bind(addr)).options(&["dots=0", "smooth"]).touch(TOUCH_MIN);
-            let k = ui::put(b, case, "knob.dot_knurl", &p, x, 139.0);
-            ui::strip_legend(b, k);
+            parts::knob(b, case, &look, addr, prefix, 88.0, (x, 139.0), INK);
         }
         // Bands.
         for (id, hz, x) in BANDS {
@@ -88,12 +99,15 @@ pub(super) fn face() -> Face {
         parts::status_led(b, case, "eq/power", 7.0, (964.0, 232.0), "#eef6ff", "chrome", None);
     });
     let mut params = vec![
+        parts::pick("eq/color", "Colour", &COLOURS.map(|c| c.0), 0),
         parts::hz("eq/hpf", "HPF", 20.0, 1000.0, 20.0),
         parts::hz("eq/lpf", "LPF", 1000.0, 20000.0, 20000.0),
         parts::switch("eq/power", "Power", true),
     ];
-    for (id, hz, _) in BANDS {
-        params.push(ui::param(&format!("eq/{id}"), hz, Range::linear(-12.0, 12.0, Unit::Db), 0.0).featured().bipolar());
+    // The reference's bands: −12, 0, +12, repeated.
+    for (i, (id, hz, _)) in BANDS.iter().enumerate() {
+        let v = [-12.0, 0.0, 12.0][i % 3];
+        params.push(ui::param(&format!("eq/{id}"), hz, Range::linear(-12.0, 12.0, Unit::Db), v).featured().bipolar());
     }
     ui::formatted(Face { file: "10-eq-desktop-1140x282", plugin: PLUGIN, scene, params, streams: Vec::new() })
 }

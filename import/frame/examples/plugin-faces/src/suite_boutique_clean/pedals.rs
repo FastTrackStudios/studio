@@ -1,8 +1,12 @@
-//! The four pre-FX stompboxes (156 × 286, the Standard class): soft satin
-//! enclosures in cream, peach and khaki, teal fluted knobs inside fine tick
-//! rings with `min` / `max`, the brush mark at the top, the block-caps name
+//! The four pre-FX stompboxes (156 × 286, the Standard class) as rendered
+//! enclosures (`panel.pedal_3d`: soft satin lids in cream, peach and
+//! khaki, the jacks out of the sides): teal fluted knobs inside fine tick
+//! rings with `min` / `max` (all turned down near `min`, as the reference
+//! shows them), the brush-lettered mark at the top, the block-caps name
 //! between chevrons, and a carved walnut plate round a brass stomp with a
 //! teal cap and a glowing teal LED.
+//!
+//! Positions are fractions of the lid, measured off the reference.
 //!
 //! - `01-comp-standard-156x286`: COMP (Comp, EQ, Volume, Mix) — grooves.
 //! - `02-od1-standard-156x286`: OD1 (Volume, Gain, Tone, Mid Boost) — a
@@ -20,57 +24,70 @@ use surface_widgets::Builder;
 use super::look::{self, INK, TEAL};
 use crate::face::{Face, canvas};
 use crate::reverb::ui;
-use crate::suite_funk_rhythm::parts::{self, PEDAL_H, STANDARD_W, Type};
+use crate::suite_funk_rhythm::parts::{self, KnobLook, Lid, PEDAL_H, STANDARD_W, Type};
 
 const DIM: &str = "#4a4744";
 const KNOB_D: f64 = 38.0;
+/// The pedals' knob: a flat teal cap on a darker ridged skirt.
+pub const KNOB: KnobLook<'static> = KnobLook { cap: "flat", opts: &["color=#7aa9a5", "skirt=ridged", "skirt_color=#44686a", "pointer=#f1ebdc", "ticks=none", "bevel=1.4"] };
+/// Where the reference leaves every pedal knob: turned down near `min`.
+const DOWN: f64 = 0.07;
 
-/// Plate geometry (in the lid's space).
-const PLATE: (f64, f64, f64, f64) = (10.0, 177.0, 136.0, 92.0);
+/// Plate geometry, as fractions of the lid.
+const PLATE: (f64, f64, f64, f64) = (0.068, 0.615, 0.864, 0.315);
+
+/// A carving: the plate, its size, and the stomp's centre in it.
+type Carve = fn(&mut Builder<'_>, NodeId, (f64, f64), (f64, f64));
 
 struct Pedal<'a> {
     title: &'a str,
     ns: &'a str,
     name: &'a str,
     color: &'a str,
-    /// Knob: param id, legend, centre, legend y.
+    base: &'a str,
+    /// Knob: param id, legend, centre and legend y (lid fractions).
     knobs: &'a [(&'a str, &'a str, (f64, f64), f64)],
-    carve: fn(&mut Builder<'_>, NodeId),
+    carve: Carve,
     pulse: Option<&'a str>,
-    extra: Option<fn(&mut Builder<'_>, NodeId)>,
+    extra: Option<fn(&mut Builder<'_>, &Lid)>,
 }
 
 fn build(p: &Pedal<'_>) -> document_proto::Scene {
     canvas(p.title, |b, root| {
-        let lid = parts::stompbox(b, root, STANDARD_W, PEDAL_H, p.color, "satin", 12.0);
-        look::brush_mark(b, lid, (STANDARD_W / 2.0, 11.0), 8.0, INK);
-        for (id, legend, at, ly) in p.knobs {
-            parts::knob(b, lid, "knob.fluted_line", "teal", &format!("{}/{id}", p.ns), legend, KNOB_D, *at, &["ticks=29", "minmax"], DIM);
-            parts::centred(b, lid, legend, (at.0, *ly), Type::new(7.0, INK, 800.0).track(0.03));
+        let lid = parts::stompbox(b, root, (STANDARD_W, PEDAL_H), p.color, "satin", p.base, 12.0);
+        look::brush_mark(b, lid.id, lid.at(0.5, 0.042), 11.0, INK);
+        for (id, legend, (fx, fy), ly) in p.knobs {
+            look::knob(b, lid.id, &KNOB, &format!("{}/{id}", p.ns), KNOB_D, lid.at(*fx, *fy), 29, DIM, true);
+            parts::centred(b, lid.id, legend, lid.at(*fx, *ly), Type::new(6.8, INK, 700.0).track(0.04));
         }
         if let Some(extra) = p.extra {
-            extra(b, lid);
+            extra(b, &lid);
         }
-        look::name_row(b, lid, p.name, STANDARD_W, 153.0, INK);
-        let plate = look::walnut(b, lid, PLATE);
-        (p.carve)(b, plate);
+        look::name_row(b, lid.id, p.name, lid.w, lid.h * 0.533, INK);
+        let (px, py) = lid.at(PLATE.0, PLATE.1);
+        let (pw, ph) = (lid.w * PLATE.2, lid.h * PLATE.3);
+        let plate = look::walnut(b, lid.id, (px, py, pw, ph));
+        let stomp_at = lid.at(0.5, 0.78);
+        (p.carve)(b, plate, (pw, ph), (stomp_at.0 - px, stomp_at.1 - py));
+        look::plate_edge(b, plate);
         let on = format!("{}/on", p.ns);
-        parts::status_led(b, lid, &on, 5.5, (STANDARD_W / 2.0, 193.0), TEAL, "dark", p.pulse);
-        look::stomp(b, lid, &on, 20.0, (STANDARD_W / 2.0, 231.0), "teal");
+        parts::status_led(b, lid.id, &on, 5.5, lid.at(0.5, 0.668), TEAL, "dark", p.pulse);
+        look::stomp(b, lid.id, &on, 20.0, stomp_at, "teal");
     })
 }
 
-// ── carvings, in the plate's own space (136 × 92) ─────────────────────────
+// ── carvings, in the plate's own space (w × h), `c` the stomp ─────────────
 
-fn grooves(b: &mut Builder<'_>, plate: NodeId) {
-    let lines: Vec<Vec<(f64, f64)>> = (0..34).map(|i| {
+fn grooves(b: &mut Builder<'_>, plate: NodeId, (w, h): (f64, f64), _: (f64, f64)) {
+    let n = (w / 4.0) as i32 + 2;
+    let lines: Vec<Vec<(f64, f64)>> = (0..n).map(|i| {
         let x = 2.0 + 4.0 * f64::from(i);
-        vec![(x, -2.0), (x, 94.0)]
+        vec![(x, -2.0), (x, h + 2.0)]
     }).collect();
     look::carve(b, plate, &lines, 1.5);
 }
 
-fn hexes(b: &mut Builder<'_>, plate: NodeId) {
+fn hexes(b: &mut Builder<'_>, plate: NodeId, _: (f64, f64), _: (f64, f64)) {
     let r = 7.5;
     let (dx, dy) = (r * 3.0_f64.sqrt(), r * 1.5);
     let mut lines = Vec::new();
@@ -78,9 +95,8 @@ fn hexes(b: &mut Builder<'_>, plate: NodeId) {
         for col in -1..11 {
             let cx = f64::from(col) * dx + if row % 2 == 0 { 0.0 } else { dx / 2.0 };
             let cy = f64::from(row) * dy;
-            let mut hex: Vec<(f64, f64)> = (0..=6).map(|i| surface_kit::draw::polar(cx, cy, r, 60.0 * f64::from(i))).collect();
+            let hex: Vec<(f64, f64)> = (0..=6).map(|i| surface_kit::draw::polar(cx, cy, r, 60.0 * f64::from(i))).collect();
             let inner: Vec<(f64, f64)> = (0..=6).map(|i| surface_kit::draw::polar(cx, cy, r * 0.5, 60.0 * f64::from(i))).collect();
-            hex.truncate(7);
             lines.push(hex);
             lines.push(inner[..4].to_vec());
         }
@@ -88,7 +104,7 @@ fn hexes(b: &mut Builder<'_>, plate: NodeId) {
     look::carve(b, plate, &lines, 0.9);
 }
 
-fn blocks(b: &mut Builder<'_>, plate: NodeId) {
+fn blocks(b: &mut Builder<'_>, plate: NodeId, (w, h): (f64, f64), _: (f64, f64)) {
     let r = 11.0;
     let (dx, dy) = (r * 3.0_f64.sqrt(), r * 1.5);
     let mut lines = Vec::new();
@@ -112,58 +128,69 @@ fn blocks(b: &mut Builder<'_>, plate: NodeId) {
         }
     }
     look::carve(b, plate, &lines, 0.9);
-    b.add(plate, surface_kit::draw::path("droplets", 0.0, 0.0, 136.0, 92.0, drops, surface_kit::draw::solid("#4a2213b0")));
+    b.add(plate, surface_kit::draw::path("droplets", 0.0, 0.0, w, h, drops, surface_kit::draw::solid("#3e1b0fb8")));
 }
 
-fn rings(b: &mut Builder<'_>, plate: NodeId) {
-    let (cx, cy) = (STANDARD_W / 2.0 - PLATE.0, 231.0 - PLATE.1);
+fn rings(b: &mut Builder<'_>, plate: NodeId, _: (f64, f64), (cx, cy): (f64, f64)) {
     let lines: Vec<Vec<(f64, f64)>> = (1..22).map(|i| parts::ring(cx, cy, 6.0 + 5.0 * f64::from(i))).collect();
     look::carve(b, plate, &lines, 1.6);
 }
 
 // ── the pedals ───────────────────────────────────────────────────────────
 
-const TWO_BY_TWO: [((f64, f64), f64); 4] = [((38.0, 37.0), 68.0), ((118.0, 37.0), 68.0), ((38.0, 98.0), 130.0), ((118.0, 98.0), 130.0)];
+/// Four knobs two by two: centre and legend y.
+const TWO_BY_TWO: [((f64, f64), f64); 4] = [((0.252, 0.13), 0.228), ((0.748, 0.13), 0.228), ((0.252, 0.34), 0.44), ((0.748, 0.34), 0.44)];
+
+/// A 0..100 % control left where the reference leaves it.
+fn down_pct(addr: &str, name: &str) -> surface_proto::ParamInfo {
+    parts::pct(addr, name, DOWN * 100.0)
+}
+
+/// A ±12 dB control left where the reference leaves it.
+fn down_db(addr: &str, name: &str) -> surface_proto::ParamInfo {
+    parts::db(addr, name, -12.0, 12.0, -12.0 + 24.0 * DOWN)
+}
 
 pub(super) fn comp() -> Face {
     let k = [("comp", "Comp"), ("eq", "EQ"), ("volume", "Volume"), ("mix", "Mix")];
     let knobs: Vec<(&str, &str, (f64, f64), f64)> = k.iter().zip(TWO_BY_TWO).map(|((id, l), (at, y))| (*id, *l, at, y)).collect();
-    let scene = build(&Pedal { title: "Comp", ns: "comp", name: "COMP", color: "#ebe5da", knobs: &knobs, carve: grooves, pulse: None, extra: None });
-    let params = vec![parts::pct("comp/comp", "Comp", 50.0), parts::pct("comp/eq", "EQ", 50.0), parts::db("comp/volume", "Volume", -12.0, 12.0, 0.0), parts::pct("comp/mix", "Mix", 60.0), parts::switch("comp/on", "Bypass", true)];
+    let scene = build(&Pedal { title: "Comp", ns: "comp", name: "COMP", color: "#ece6dc", base: "#c9c0b2", knobs: &knobs, carve: grooves, pulse: None, extra: None });
+    let params = vec![down_pct("comp/comp", "Comp"), down_pct("comp/eq", "EQ"), down_db("comp/volume", "Volume"), down_pct("comp/mix", "Mix"), parts::switch("comp/on", "Bypass", true)];
     look::face("01-comp-standard-156x286", scene, params)
 }
 
 pub(super) fn od1() -> Face {
     let k = [("volume", "Volume"), ("gain", "Gain"), ("tone", "Tone"), ("mid", "Mid Boost")];
     let knobs: Vec<(&str, &str, (f64, f64), f64)> = k.iter().zip(TWO_BY_TWO).map(|((id, l), (at, y))| (*id, *l, at, y)).collect();
-    let scene = build(&Pedal { title: "OD1", ns: "od1", name: "OD1", color: "#e6e0d6", knobs: &knobs, carve: hexes, pulse: None, extra: None });
-    let params = vec![parts::db("od1/volume", "Volume", -12.0, 12.0, 0.0), parts::pct("od1/gain", "Gain", 35.0), parts::pct("od1/tone", "Tone", 50.0), parts::pct("od1/mid", "Mid Boost", 40.0), parts::switch("od1/on", "Bypass", true)];
+    let scene = build(&Pedal { title: "OD1", ns: "od1", name: "OD1", color: "#e7e1d7", base: "#c6bdaf", knobs: &knobs, carve: hexes, pulse: None, extra: None });
+    let params = vec![down_db("od1/volume", "Volume"), down_pct("od1/gain", "Gain"), down_pct("od1/tone", "Tone"), down_pct("od1/mid", "Mid Boost"), parts::switch("od1/on", "Bypass", true)];
     look::face("02-od1-standard-156x286", scene, params)
 }
 
 pub(super) fn od2() -> Face {
-    let knobs = [("volume", "Volume", (40.0, 38.0), 67.0), ("gain", "Gain", (116.0, 38.0), 67.0), ("cut", "Cut", (78.0, 99.0), 127.0)];
-    let scene = build(&Pedal { title: "OD2", ns: "od2", name: "OD2", color: "#ecc7ae", knobs: &knobs, carve: blocks, pulse: None, extra: None });
-    let params = vec![parts::db("od2/volume", "Volume", -12.0, 12.0, 0.0), parts::pct("od2/gain", "Gain", 55.0), parts::pct("od2/cut", "Cut", 40.0), parts::switch("od2/on", "Bypass", true)];
+    let knobs = [("volume", "Volume", (0.26, 0.135), 0.24), ("gain", "Gain", (0.74, 0.135), 0.24), ("cut", "Cut", (0.5, 0.33), 0.443)];
+    let scene = build(&Pedal { title: "OD2", ns: "od2", name: "OD2", color: "#edc8ae", base: "#cf9f86", knobs: &knobs, carve: blocks, pulse: None, extra: None });
+    let params = vec![down_db("od2/volume", "Volume"), down_pct("od2/gain", "Gain"), down_pct("od2/cut", "Cut"), parts::switch("od2/on", "Bypass", true)];
     look::face("03-od2-standard-156x286", scene, params)
 }
 
-fn mode_switch(b: &mut Builder<'_>, lid: NodeId) {
-    look::brass_toggle3(b, lid, "mod/mode", "Mode", 18.0, (78.0, 100.0));
-    let t = Type::new(7.0, INK, 800.0).track(0.03);
-    parts::centred(b, lid, "Tremolo", (40.0, 96.0), t);
-    parts::centred(b, lid, "Vibrato", (116.0, 96.0), t);
-    parts::centred(b, lid, "Chorus", (78.0, 124.0), t);
+fn mode_switch(b: &mut Builder<'_>, lid: &Lid) {
+    look::brass_toggle3(b, lid.id, "mod/mode", "Mode", 18.0, lid.at(0.5, 0.354));
+    let t = Type::new(6.8, INK, 700.0).track(0.04);
+    parts::centred(b, lid.id, "Tremolo", lid.at(0.24, 0.34), t);
+    parts::centred(b, lid.id, "Vibrato", lid.at(0.76, 0.34), t);
+    parts::centred(b, lid.id, "Chorus", lid.at(0.5, 0.43), t);
 }
 
 pub(super) fn modulation() -> Face {
-    let knobs = [("speed", "Speed", (40.0, 38.0), 67.0), ("intensity", "Intensity", (116.0, 38.0), 67.0)];
-    let scene = build(&Pedal { title: "MOD", ns: "mod", name: "MOD", color: "#dcd2b3", knobs: &knobs, carve: rings, pulse: Some("param(mod/speed)"), extra: Some(mode_switch) });
+    let knobs = [("speed", "Speed", (0.26, 0.13), 0.228), ("intensity", "Intensity", (0.74, 0.13), 0.228)];
+    let scene = build(&Pedal { title: "MOD", ns: "mod", name: "MOD", color: "#ddd3b5", base: "#b9ad8c", knobs: &knobs, carve: rings, pulse: Some("param(mod/speed)"), extra: Some(mode_switch) });
     let params = vec![
-        ui::param("mod/speed", "Speed", Range::log(0.1, 12.0, Unit::Hz), 3.0).featured(),
-        parts::pct("mod/intensity", "Intensity", 50.0),
-        // In the toggle's order: right, down, left.
-        parts::pick("mod/mode", "Mode", &["Vibrato", "Chorus", "Tremolo"], 1),
+        ui::param("mod/speed", "Speed", Range::log(0.1, 12.0, Unit::Hz), parts::log_at(0.1, 12.0, DOWN)).featured(),
+        down_pct("mod/intensity", "Intensity"),
+        // In the toggle's order: right, down, left. The reference's lever
+        // leans right.
+        parts::pick("mod/mode", "Mode", &["Vibrato", "Chorus", "Tremolo"], 0),
         parts::switch("mod/on", "Bypass", true),
     ];
     look::face("04-mod-standard-156x286", scene, params)

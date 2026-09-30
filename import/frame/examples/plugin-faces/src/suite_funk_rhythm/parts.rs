@@ -1,13 +1,15 @@
 //! What the amp-suite faces share: sizing the page to the unit's form,
-//! placing kit parts by their centre with the face's own legends, the
-//! printed lettering, and the catalog entries a unit declares.
+//! rendered pedal enclosures, the one knob helper, placing kit parts by
+//! their centre with the face's own legends, the printed lettering (real
+//! families and weights), colourway layers, and the catalog entries a unit
+//! declares.
 //!
 //! Used by both artist-style suites (`suite_funk_rhythm`,
 //! `suite_boutique_clean`).
 
-use document_proto::{NodeId, NodeKind, TextAlign, TextCase, TextRun};
+use document_proto::{NodeId, NodeKind, TextAlign, TextCase};
 use surface_kit::{Ink, Place, TOUCH_MIN, draw};
-use surface_proto::{ParamInfo, Range, Unit};
+use surface_proto::{Axis, Condition, Control, ControlKind, HandleAxis, ParamInfo, Range, Unit};
 use surface_widgets::Builder;
 
 use crate::reverb::ui;
@@ -36,29 +38,62 @@ pub fn page(b: &mut Builder<'_>, root: NodeId, w: f64, h: f64) {
     ui::fit_root(b, root, w, h);
 }
 
-/// A painted stompbox enclosure filling the page (`variant`: `metallic` or
-/// `satin`), returned as the parent for its parts.
-pub fn stompbox(b: &mut Builder<'_>, root: NodeId, w: f64, h: f64, color: &str, variant: &str, radius: f64) -> NodeId {
-    page(b, root, w, h);
-    let opts = [format!("w={w}"), format!("h={h}"), format!("color={color}"), format!("radius={radius}")];
-    let p = Place { options: Some(opts.to_vec()), ..Place::new("Enclosure").variant(variant) };
-    ui::put_at(b, root, "panel.stompbox", &p, 0.0, 0.0)
+/// A rendered pedal's lid: the frame its parts go on, and its size.
+#[derive(Clone, Copy)]
+pub struct Lid {
+    pub id: NodeId,
+    pub w: f64,
+    pub h: f64,
 }
 
-/// A kit knob `id`/`variant` of diameter `d` on `addr`, its shaft at
-/// (`cx`, `cy`), its hit box tight round the body, the scale printed in
-/// `ink`; `opts` are the kit's options (`dots=`, `ticks=`, `minmax`). The
-/// face prints the legend.
+impl Lid {
+    /// A point given as fractions of the lid.
+    #[must_use]
+    pub fn at(&self, fx: f64, fy: f64) -> (f64, f64) {
+        (self.w * fx, self.h * fy)
+    }
+}
+
+/// A rendered stompbox (`panel.pedal_3d`) filling the page (`w × h`): the
+/// lid in `finish` and `color`, its front face and base plate in `base`,
+/// the jacks standing out of its sides. Returns the lid — the pedal's parts
+/// go on it, in its own coordinates.
+///
+/// # Panics
+/// If the kit's enclosure has no `lid` frame.
+pub fn stompbox(b: &mut Builder<'_>, root: NodeId, (w, h): (f64, f64), color: &str, finish: &str, base: &str, radius: f64) -> Lid {
+    page(b, root, w, h);
+    let opts = vec![format!("w={w}"), format!("h={h}"), format!("color={color}"), format!("finish={finish}"), format!("base={base}"), format!("radius={radius}"), "jacks=side".into()];
+    let class = if w > 300.0 { "bigbox" } else { "standard" };
+    let p = Place { options: Some(opts), ..Place::new("Enclosure").variant(class) };
+    let body = ui::put_at(b, root, "panel.pedal_3d", &p, 0.0, 0.0);
+    let lid = b
+        .scene
+        .node(body)
+        .and_then(|n| n.children.iter().copied().find(|c| b.scene.node(*c).is_some_and(|k| k.name == "lid")))
+        .expect("panel.pedal_3d has a lid");
+    let (lw, lh) = b.scene.node(lid).map_or((w, h), |n| (n.size.width, n.size.height));
+    Lid { id: lid, w: lw, h: lh }
+}
+
+/// How a rendered knob looks: `knob.render`'s cap variant and options.
+#[derive(Clone, Copy)]
+pub struct KnobLook<'a> {
+    pub cap: &'a str,
+    pub opts: &'a [&'a str],
+}
+
+/// Every knob of both artist suites is placed here — one place to switch
+/// them all to another knob renderer: a rendered knob (`knob.render`) of
+/// diameter `d` on `addr`, its shaft at (`cx`, `cy`), its hit box tight
+/// round the body, its printed ring in `ink`. The face prints the legend.
 #[allow(clippy::too_many_arguments)]
-pub fn knob(b: &mut Builder<'_>, parent: NodeId, id: &str, variant: &str, addr: &str, name: &str, d: f64, (cx, cy): (f64, f64), opts: &[&str], ink: &str) -> NodeId {
-    let mut p = Place::new(name).size(d).bind(ui::bind(addr)).ink(Ink::Color(ink.into())).keep_case().touch(TOUCH_MIN);
-    if !variant.is_empty() {
-        p = p.variant(variant);
+pub fn knob(b: &mut Builder<'_>, parent: NodeId, look: &KnobLook<'_>, addr: &str, name: &str, d: f64, (cx, cy): (f64, f64), ink: &str) -> NodeId {
+    let mut p = Place::new(name).size(d).variant(look.cap).bind(ui::bind(addr)).ink(Ink::Color(ink.into())).keep_case().touch(TOUCH_MIN);
+    if !look.opts.is_empty() {
+        p = p.options(look.opts);
     }
-    if !opts.is_empty() {
-        p = p.options(opts);
-    }
-    let k = ui::put(b, parent, id, &p, cx, cy);
+    let k = ui::put(b, parent, "knob.render", &p, cx, cy);
     ui::strip_legend(b, k);
     k
 }
@@ -114,9 +149,60 @@ pub fn status_led(b: &mut Builder<'_>, parent: NodeId, addr: &str, d: f64, at: (
     k
 }
 
+// ── colourways ───────────────────────────────────────────────────────────
+
+/// A layer of a unit's art shown only while choice `addr` is option
+/// `index` (a colourway, a cab's look): a frame `(x, y, w, h)` under
+/// `parent` carrying a `Readout` of the choice with a `show_if`, so the
+/// runtime hides it for the other options. Paint the variant into it; put
+/// the unit's controls outside it.
+pub fn variant_layer(b: &mut Builder<'_>, parent: NodeId, addr: &str, index: usize, (x, y, w, h): (f64, f64, f64, f64)) -> NodeId {
+    let layer = b.add(parent, draw::frame(&format!("{addr} = {index}"), x, y, w, h));
+    // The readout's value: the option's name, printed clear (nothing on
+    // the unit shows it; the layer's art is the reading).
+    let value = b.add(layer, draw::text("colourway", "", 0.0, 0.0, 8.0, 1.0, "#00000000", TextAlign::Left));
+    let mut c = Control::new(ControlKind::Readout).slot(surface_proto::SlotRole::Value, value.0);
+    c.binding = Some(ui::bind(addr));
+    c.show_if = Some(Condition::any_of(addr, &[index as f64]));
+    b.controls.insert(layer, c);
+    layer
+}
+
+// ── cab mics ─────────────────────────────────────────────────────────────
+
+/// A mic seen from the front, on a `Handle` over the speaker at
+/// (`cx`, `cy`), radius `r`: x is its position (`pos`: the dust cap out to
+/// the cone's edge), y its distance (`dist`: up and away from the cone).
+pub fn mic_handle(b: &mut Builder<'_>, parent: NodeId, (cx, cy, r): (f64, f64, f64), label: &str, pos: &str, dist: &str) -> NodeId {
+    let lane = b.add(parent, draw::frame(&format!("{label} lane"), cx, cy - r * 0.9, r, r * 0.9));
+    let touch = 44.0;
+    let handle = b.add(lane, draw::frame(label, 0.0, 0.0, touch, touch));
+    let c = touch / 2.0;
+    // A shadow on the cone, the body falling away below the head, the
+    // head's mesh.
+    b.add(handle, draw::with_effects(draw::circle("mic shadow", c + 6.0, c + 9.0, 13.0, draw::solid("#00000050")), vec![draw::drop_shadow("#00000040", 0.0, 0.0, 5.0)]));
+    b.add(handle, draw::rounded(draw::rect("mic body", c - 7.0, c, 14.0, 40.0, draw::linear(90.0, &[(0.0, "#050505"), (0.45, "#4a4a4e"), (0.6, "#1a1a1b"), (1.0, "#050505")])), 5.0));
+    b.add(handle, draw::with_effects(draw::circle("mic head", c, c, 13.0, draw::radial_at(0.38, 0.32, 0.8, &[(0.0, "#8a8a8e"), (0.5, "#3a3a3d"), (1.0, "#0b0b0c")])), vec![draw::drop_shadow("#00000080", 0.0, 2.0, 3.0)]));
+    let mesh: Vec<Vec<(f64, f64)>> = (1..4).map(|k| ring(c, c, 3.5 * f64::from(k))).collect();
+    b.add(handle, ui::strokes("mic mesh", &mesh, 0.7, draw::solid("#b8b8bc80")));
+    let tag = label.chars().last().map(|ch| ch.to_string()).unwrap_or_default();
+    centred(b, handle, &tag, (c, c + 27.0), Type::new(8.0, "#f4f4f2", 800.0));
+    let kind = ControlKind::Handle {
+        x: Some(ui::bind(pos)),
+        y: Some(ui::bind(dist)),
+        wheel: None,
+        x_map: HandleAxis::new(Axis::Linear { min: 0.0, max: 1.0 }),
+        y_map: HandleAxis::new(Axis::Linear { min: 0.0, max: 1.0 }),
+    };
+    b.controls.insert(handle, Control::new(kind));
+    handle
+}
+
 // ── lettering ────────────────────────────────────────────────────────────
 
-/// How a line of lettering is set.
+/// How a line of lettering is set: size, colour, weight, tracking, case,
+/// and the family (Inter unless set) — set in the font's own weight, never
+/// faked.
 #[derive(Clone, Copy)]
 pub struct Type<'a> {
     pub size: f64,
@@ -125,12 +211,16 @@ pub struct Type<'a> {
     /// Letter spacing, in ems.
     pub track: f64,
     pub upper: bool,
+    pub family: Option<&'a str>,
+    pub italic: bool,
+    /// Percent of normal width (families with a width axis).
+    pub width: Option<f64>,
 }
 
 impl<'a> Type<'a> {
     #[must_use]
     pub const fn new(size: f64, color: &'a str, weight: f64) -> Self {
-        Self { size, color, weight, track: 0.0, upper: false }
+        Self { size, color, weight, track: 0.0, upper: false, family: None, italic: false, width: None }
     }
     #[must_use]
     pub const fn track(mut self, em: f64) -> Self {
@@ -142,40 +232,60 @@ impl<'a> Type<'a> {
         self.upper = true;
         self
     }
+    #[must_use]
+    pub const fn family(mut self, family: &'a str) -> Self {
+        self.family = Some(family);
+        self
+    }
+    #[must_use]
+    pub const fn italic(mut self) -> Self {
+        self.italic = true;
+        self
+    }
+    #[must_use]
+    pub const fn width(mut self, percent: f64) -> Self {
+        self.width = Some(percent);
+        self
+    }
+}
+
+/// The text node for `s` set as `t`, in a box `w` wide from `x`, centred
+/// on `cy`.
+#[must_use]
+#[allow(clippy::too_many_arguments)]
+pub fn set(s: &str, x: f64, cy: f64, w: f64, align: TextAlign, t: Type<'_>) -> document_proto::Node {
+    let mut n = ui::text("print", s, x, cy, w, t.size, t.color, align, t.weight, false);
+    if let NodeKind::Text(d) = &mut n.kind {
+        d.letter_spacing = t.size * t.track;
+        if t.upper {
+            d.text_case = TextCase::Upper;
+        }
+    }
+    let mut l = t.family.map_or_else(draw::Lettering::default, draw::Lettering::family).weight(t.weight);
+    if t.italic {
+        l = l.italic();
+    }
+    if let Some(wd) = t.width {
+        l = l.width(wd);
+    }
+    draw::lettered(n, &l)
 }
 
 /// A line of lettering in a box `w` wide from `x`, aligned `align`,
 /// vertically centred on `cy`.
 #[allow(clippy::too_many_arguments)]
 pub fn words(b: &mut Builder<'_>, parent: NodeId, s: &str, x: f64, cy: f64, w: f64, align: TextAlign, t: Type<'_>) -> NodeId {
-    let make = |dx: f64| {
-        let mut n = ui::text("print", s, x + dx, cy, w, t.size, t.color, align, t.weight, false);
-        if let NodeKind::Text(d) = &mut n.kind {
-            d.letter_spacing = t.size * t.track;
-            if t.upper {
-                d.text_case = TextCase::Upper;
-            }
-            // The weight as a run, which the renderer sets bold from.
-            if t.weight >= 600.0 {
-                d.runs = vec![TextRun { text: s.to_string(), fills: Vec::new(), font_family: None, font_size: None, font_weight: Some(t.weight), font_style: None, font_width: None, letter_spacing: None }];
-            }
-        }
-        n
-    };
-    // Heavier than bold: the same line drawn again either side, a hair
-    // apart, so a black-weight name reads black with one font file.
-    if t.weight >= 750.0 {
-        let e = t.size * if t.weight >= 850.0 { 0.05 } else { 0.03 };
-        for dx in [-e, e] {
-            b.add(parent, make(dx));
-        }
-    }
-    b.add(parent, make(0.0))
+    b.add(parent, set(s, x, cy, w, align, t))
+}
+
+/// A generous box width for `s` set as `t`.
+fn box_w(s: &str, t: Type<'_>) -> f64 {
+    (s.chars().count() as f64 * t.size * (0.72 + t.track) + t.size * 2.0).max(8.0)
 }
 
 /// Lettering centred on (`cx`, `cy`).
 pub fn centred(b: &mut Builder<'_>, parent: NodeId, s: &str, (cx, cy): (f64, f64), t: Type<'_>) -> NodeId {
-    let w = (s.chars().count() as f64 * t.size * (0.72 + t.track) + t.size * 2.0).max(8.0);
+    let w = box_w(s, t);
     words(b, parent, s, cx - w / 2.0, cy, w, TextAlign::Center, t)
 }
 
@@ -183,18 +293,19 @@ pub fn centred(b: &mut Builder<'_>, parent: NodeId, s: &str, (cx, cy): (f64, f64
 /// `lead` px apart (a pedal's name in the corner).
 pub fn stacked(b: &mut Builder<'_>, parent: NodeId, lines: &[&str], (x, cy): (f64, f64), lead: f64, t: Type<'_>) {
     for (i, l) in lines.iter().enumerate() {
-        let w = l.chars().count() as f64 * t.size * 0.8 + t.size * 2.0;
-        words(b, parent, l, x, cy + lead * i as f64, w, TextAlign::Left, t);
+        words(b, parent, l, x, cy + lead * i as f64, box_w(l, t), TextAlign::Left, t);
     }
 }
 
-/// Lettering with an outline (the cartoon maker's mark): `outline` drawn
-/// as a slightly larger dark copy offset round the text, then the fill.
-pub fn outlined(b: &mut Builder<'_>, parent: NodeId, s: &str, (cx, cy): (f64, f64), t: Type<'_>, outline: &str, px: f64) {
-    for (dx, dy) in [(-px, 0.0), (px, 0.0), (0.0, -px), (0.0, px), (-px, -px), (px, px), (-px, px), (px, -px), (0.0, px * 2.0)] {
-        centred(b, parent, s, (cx + dx, cy + dy), Type { color: outline, ..t });
-    }
-    centred(b, parent, s, (cx, cy), t);
+/// Lettering with a cartoon outline (a maker's mark): one line of text
+/// whose `outline` is a crisp glow `px` wide round the glyphs, dropped a
+/// little so the letters sit on a thicker lower edge.
+pub fn outlined(b: &mut Builder<'_>, parent: NodeId, s: &str, (cx, cy): (f64, f64), t: Type<'_>, outline: &str, px: f64) -> NodeId {
+    let w = box_w(s, t);
+    let mut n = set(s, cx - w / 2.0, cy, w, TextAlign::Center, t);
+    let glow = |dy: f64| document_proto::Effect { kind: document_proto::EffectKind::DropShadow, visible: true, color: draw::hex(outline), offset_x: 0.0, offset_y: dy, radius: px * 0.25, spread: px };
+    n.effects = vec![glow(px * 0.7), glow(0.0)];
+    b.add(parent, n)
 }
 
 /// A stroked line drawing (icons, printed artwork), points in `parent`'s
@@ -274,6 +385,13 @@ pub fn hz(addr: &str, name: &str, lo: f64, hi: f64, v: f64) -> ParamInfo {
 #[must_use]
 pub fn ms(addr: &str, name: &str, lo: f64, hi: f64, v: f64) -> ParamInfo {
     ui::param(addr, name, Range::log(lo, hi, Unit::Milliseconds), v).featured()
+}
+
+/// The value of a log range `lo..hi` at position `t` (0..1): for setting a
+/// default to where the reference's knob points.
+#[must_use]
+pub fn log_at(lo: f64, hi: f64, t: f64) -> f64 {
+    lo * (hi / lo).powf(t)
 }
 
 /// An on/off.

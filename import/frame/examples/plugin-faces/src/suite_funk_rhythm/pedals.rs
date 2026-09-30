@@ -1,8 +1,12 @@
-//! The standard-size stompboxes (156 × 286, the Standard class): candy
-//! metallic enclosures, black fluted knobs with white teardrop caps inside
-//! rings of white dots, the engage LED between the knobs, a white line
+//! The standard-size stompboxes (156 × 286, the Standard class) as
+//! rendered enclosures (`panel.pedal_3d`: the metallic lid, the copper
+//! front face and base, the jacks out of the sides): black ridged knobs
+//! with white teardrop caps inside rings of white dots, all at noon as the
+//! reference shows them, the engage LED between the knobs, a white line
 //! icon, arrows for the signal path, the stomp, and the name set lowercase
-//! and heavy, stacked in the bottom-left corner.
+//! in a heavy sans, stacked in the bottom-left corner.
+//!
+//! Positions are fractions of the lid, measured off the reference.
 //!
 //! - `02-envelope-standard-156x286`: *the envelope pusher* — an envelope
 //!   filter (Range, Sensitivity, Attack, Decay).
@@ -22,7 +26,7 @@ use surface_kit::{Place, TOUCH_MIN, draw};
 use surface_proto::ParamInfo;
 use surface_widgets::Builder;
 
-use super::parts::{self, PEDAL_H, STANDARD_W, Type};
+use super::parts::{self, KnobLook, Lid, PEDAL_H, STANDARD_W, Type};
 use crate::face::{Face, canvas};
 use crate::reverb::ui;
 
@@ -30,32 +34,40 @@ pub(super) const PLUGIN: &str = "suite-funk-rhythm";
 const WHITE: &str = "#fbfaf6";
 /// The engage LED's light.
 const LED: &str = "#e8f6ff";
+/// The enclosures' front face and base: a rosy copper.
+pub(super) const BASE: &str = "#b06f68";
+/// The pedals' knob: a white teardrop cap on a black ridged skirt.
+pub(super) const KNOB: KnobLook<'static> = KnobLook { cap: "pointer", opts: &["color=#f2efe8", "skirt_color=#1d1c1e", "ticks=dots"] };
+/// Knob diameter on a standard lid.
+const KNOB_D: f64 = 33.0;
 
-/// A knob on a pedal: address, legend, centre, legend above (else below).
+/// A knob on a pedal: address, legend, centre (lid fractions), legend
+/// above (else below).
 pub(super) struct K<'a>(pub &'a str, pub &'a str, pub (f64, f64), pub bool);
 
 /// The shared top half: knobs and their legends.
-pub(super) fn knobs(b: &mut Builder<'_>, lid: NodeId, ks: &[K<'_>], d: f64, cap: &str) {
-    let t = Type::new(8.2, WHITE, 800.0);
-    for K(addr, legend, (x, y), above) in ks {
-        parts::knob(b, lid, "knob.teardrop", cap, addr, legend, d, (*x, *y), &["dots=11"], WHITE);
-        let ly = if *above { y - d / 2.0 - 11.0 } else { y + d / 2.0 + 11.0 };
+pub(super) fn knobs(b: &mut Builder<'_>, lid: &Lid, ks: &[K<'_>], d: f64) {
+    let t = Type::new(7.8, WHITE, 800.0);
+    for K(addr, legend, (fx, fy), above) in ks {
+        let (x, y) = lid.at(*fx, *fy);
+        parts::knob(b, lid.id, &KNOB, addr, legend, d, (x, y), WHITE);
+        let ly = if *above { y - d * 0.5 - 12.5 } else { y + d * 0.5 + 12.5 };
         if !legend.is_empty() {
-            parts::centred(b, lid, legend, (*x, ly), t);
+            parts::centred(b, lid.id, legend, (x, ly), t);
         }
     }
 }
 
 /// The in/out arrows either side at `y`.
-pub(super) fn arrows(b: &mut Builder<'_>, lid: NodeId, w: f64, y: f64) {
-    for x in [11.0, w - 15.0] {
-        b.add(lid, draw::path("arrow", 0.0, 0.0, w, PEDAL_H, draw::polygon(&[(x, y - 4.0), (x + 4.5, y), (x, y + 4.0)]), draw::solid(WHITE)));
+pub(super) fn arrows(b: &mut Builder<'_>, lid: &Lid, y: f64) {
+    for x in [lid.w * 0.05, lid.w * 0.95 - 4.5] {
+        b.add(lid.id, draw::path("arrow", 0.0, 0.0, lid.w, lid.h, draw::polygon(&[(x, y - 4.0), (x + 4.5, y), (x, y + 4.0)]), draw::solid(WHITE)));
     }
 }
 
 /// The DC jack's printed symbol and legend.
 pub(super) fn dc(b: &mut Builder<'_>, lid: NodeId, (cx, cy): (f64, f64)) {
-    parts::centred(b, lid, "9VDC", (cx, cy - 6.0), Type::new(3.6, WHITE, 800.0));
+    parts::centred(b, lid, "9VDC", (cx, cy - 6.0), Type::new(3.8, WHITE, 800.0));
     parts::art(b, lid, &[parts::ring(cx - 5.5, cy, 1.9), parts::ring(cx, cy, 2.3), parts::ring(cx + 5.5, cy, 1.9), vec![(cx - 3.6, cy), (cx - 2.3, cy)], vec![(cx + 2.3, cy), (cx + 3.6, cy)]], 0.8, WHITE);
 }
 
@@ -66,39 +78,39 @@ pub(super) struct Pedal<'a> {
     pub color: &'a str,
     pub knobs: &'a [K<'a>],
     pub name: &'a [&'a str],
-    pub icon: fn(&mut Builder<'_>, NodeId, (f64, f64)),
+    pub icon: fn(&mut Builder<'_>, &Lid, (f64, f64)),
     pub pulse: Option<&'a str>,
     /// Extra controls (a push button): run after the knobs.
-    pub extra: Option<fn(&mut Builder<'_>, NodeId)>,
+    pub extra: Option<fn(&mut Builder<'_>, &Lid)>,
 }
 
 pub(super) fn standard(p: &Pedal<'_>) -> document_proto::Scene {
     canvas(p.title, |b, root| {
-        let (w, h) = (STANDARD_W, PEDAL_H);
-        let lid = parts::stompbox(b, root, w, h, p.color, "metallic", 11.0);
-        knobs(b, lid, p.knobs, 38.0, "white");
+        let lid = parts::stompbox(b, root, (STANDARD_W, PEDAL_H), p.color, "powder", BASE, 9.0);
+        knobs(b, &lid, p.knobs, KNOB_D);
         if let Some(extra) = p.extra {
-            extra(b, lid);
+            extra(b, &lid);
         }
-        parts::status_led(b, lid, &format!("{}/on", p.ns), 5.0, (w / 2.0, 122.0), LED, "light", p.pulse);
-        (p.icon)(b, lid, (w / 2.0, 160.0));
-        arrows(b, lid, w, 190.0);
-        parts::footswitch(b, lid, &format!("{}/on", p.ns), "Bypass", 25.0, (w / 2.0, 212.0), false);
-        dc(b, lid, (133.0, 229.0));
+        parts::status_led(b, lid.id, &format!("{}/on", p.ns), 5.0, lid.at(0.5, 0.46), LED, "light", p.pulse);
+        (p.icon)(b, &lid, lid.at(0.5, 0.615));
+        arrows(b, &lid, lid.h * 0.72);
+        parts::footswitch(b, lid.id, &format!("{}/on", p.ns), "Bypass", 24.0, lid.at(0.5, 0.8), false);
+        dc(b, lid.id, lid.at(0.865, 0.862));
         let lines = p.name.len() as f64;
-        parts::stacked(b, lid, p.name, (10.0, 267.0 - 10.6 * (lines - 1.0)), 10.6, Type::new(11.0, WHITE, 800.0).track(-0.02));
+        let lead = 9.4;
+        parts::stacked(b, lid.id, p.name, (lid.w * 0.06, lid.h * 0.955 - lead * (lines - 1.0)), lead, Type::new(10.6, WHITE, 800.0).track(-0.03));
     })
 }
 
 fn four(ns: &'static str, names: [(&'static str, &'static str); 4]) -> Vec<K<'static>> {
     // Leaked once per face: the layout table lives as long as the face.
     let a = |i: usize| -> &'static str { Box::leak(format!("{ns}/{}", names[i].0).into_boxed_str()) };
-    vec![K(a(0), names[0].1, (35.0, 44.0), true), K(a(1), names[1].1, (121.0, 44.0), true), K(a(2), names[2].1, (35.0, 93.0), false), K(a(3), names[3].1, (121.0, 93.0), false)]
+    vec![K(a(0), names[0].1, (0.215, 0.16), true), K(a(1), names[1].1, (0.785, 0.16), true), K(a(2), names[2].1, (0.215, 0.342), false), K(a(3), names[3].1, (0.785, 0.342), false)]
 }
 
 fn three(ns: &'static str, names: [(&'static str, &'static str); 3]) -> Vec<K<'static>> {
     let a = |i: usize| -> &'static str { Box::leak(format!("{ns}/{}", names[i].0).into_boxed_str()) };
-    vec![K(a(0), names[0].1, (78.0, 43.0), true), K(a(1), names[1].1, (35.0, 93.0), false), K(a(2), names[2].1, (121.0, 93.0), false)]
+    vec![K(a(0), names[0].1, (0.5, 0.16), true), K(a(1), names[1].1, (0.215, 0.342), false), K(a(2), names[2].1, (0.785, 0.342), false)]
 }
 
 fn face(file: &'static str, scene: document_proto::Scene, params: Vec<ParamInfo>) -> Face {
@@ -107,7 +119,7 @@ fn face(file: &'static str, scene: document_proto::Scene, params: Vec<ParamInfo>
 
 // ── icons (white line art, ~34 px) ───────────────────────────────────────
 
-fn envelope_icon(b: &mut Builder<'_>, lid: NodeId, (cx, cy): (f64, f64)) {
+fn envelope_icon(b: &mut Builder<'_>, lid: &Lid, (cx, cy): (f64, f64)) {
     let (w, h) = (30.0, 20.0);
     let (x, y) = (cx - w / 2.0, cy - h / 2.0);
     let body = parts::round_rect(x, y, w, h, 2.0);
@@ -116,10 +128,10 @@ fn envelope_icon(b: &mut Builder<'_>, lid: NodeId, (cx, cy): (f64, f64)) {
         let u = f64::from(i) / 24.0;
         (x + 3.0 + (w - 6.0) * u, y + h + 7.0 - 5.0 * (u * std::f64::consts::PI).sin().powf(3.0))
     }).collect();
-    parts::art(b, lid, &[body, flap, sweep], 1.8, WHITE);
+    parts::art(b, lid.id, &[body, flap, sweep], 1.8, WHITE);
 }
 
-fn selector_icon(b: &mut Builder<'_>, lid: NodeId, (cx, cy): (f64, f64)) {
+fn selector_icon(b: &mut Builder<'_>, lid: &Lid, (cx, cy): (f64, f64)) {
     let base = cy + 7.0;
     let mut lines = vec![vec![(cx - 25.0, base), (cx + 25.0, base)]];
     for i in 0..5 {
@@ -134,10 +146,10 @@ fn selector_icon(b: &mut Builder<'_>, lid: NodeId, (cx, cy): (f64, f64)) {
         // The slot's numeral as a tick below the line.
         lines.push(vec![(x, base + 3.0), (x, base + 6.5)]);
     }
-    parts::art(b, lid, &lines, 1.5, WHITE);
+    parts::art(b, lid.id, &lines, 1.5, WHITE);
 }
 
-fn tube_icon(b: &mut Builder<'_>, lid: NodeId, (cx, cy): (f64, f64)) {
+fn tube_icon(b: &mut Builder<'_>, lid: &Lid, (cx, cy): (f64, f64)) {
     let (w, h) = (16.0, 28.0);
     let (x, y) = (cx - w / 2.0, cy - h / 2.0 - 2.0);
     let mut envelope = vec![(x, y + h), (x, y + 6.0)];
@@ -159,10 +171,10 @@ fn tube_icon(b: &mut Builder<'_>, lid: NodeId, (cx, cy): (f64, f64)) {
     for dx in [-4.5, -1.5, 1.5, 4.5] {
         lines.push(vec![(cx + dx, y + h + 2.0), (cx + dx, y + h + 6.0)]);
     }
-    parts::art(b, lid, &lines, 1.4, WHITE);
+    parts::art(b, lid.id, &lines, 1.4, WHITE);
 }
 
-fn truck_icon(b: &mut Builder<'_>, lid: NodeId, (cx, cy): (f64, f64)) {
+fn truck_icon(b: &mut Builder<'_>, lid: &Lid, (cx, cy): (f64, f64)) {
     let (x0, y0) = (cx - 22.0, cy - 13.0);
     // The dump body, the cab, the chassis and two big wheels.
     let bed = vec![(x0 + 14.0, y0 + 2.0), (x0 + 44.0, y0), (x0 + 42.0, y0 + 13.0), (x0 + 16.0, y0 + 14.0), (x0 + 14.0, y0 + 2.0)];
@@ -170,10 +182,10 @@ fn truck_icon(b: &mut Builder<'_>, lid: NodeId, (cx, cy): (f64, f64)) {
     let chassis = vec![(x0, y0 + 18.0), (x0 + 44.0, y0 + 18.0)];
     let window = vec![(x0 + 6.5, y0 + 13.0), (x0 + 7.5, y0 + 9.5), (x0 + 12.0, y0 + 9.5), (x0 + 12.0, y0 + 13.0), (x0 + 6.5, y0 + 13.0)];
     let lines = vec![bed, cab, chassis, window, parts::ring(x0 + 10.0, y0 + 24.0, 5.5), parts::ring(x0 + 32.0, y0 + 24.0, 5.5), parts::ring(x0 + 10.0, y0 + 24.0, 2.0), parts::ring(x0 + 32.0, y0 + 24.0, 2.0)];
-    parts::art(b, lid, &lines, 1.7, WHITE);
+    parts::art(b, lid.id, &lines, 1.7, WHITE);
 }
 
-fn coil_icon(b: &mut Builder<'_>, lid: NodeId, (cx, cy): (f64, f64)) {
+fn coil_icon(b: &mut Builder<'_>, lid: &Lid, (cx, cy): (f64, f64)) {
     // A spring toy arched over: loops round a semicircle.
     let mut lines = Vec::new();
     for i in 0..=26 {
@@ -182,10 +194,10 @@ fn coil_icon(b: &mut Builder<'_>, lid: NodeId, (cx, cy): (f64, f64)) {
         let (ox, oy) = (cx + 25.0 * a.cos(), cy + 8.0 - 25.0 * a.sin());
         lines.push(vec![(ix, iy), (ox, oy)]);
     }
-    parts::art(b, lid, &lines, 1.3, WHITE);
+    parts::art(b, lid.id, &lines, 1.3, WHITE);
 }
 
-fn wave_icon(b: &mut Builder<'_>, lid: NodeId, (cx, cy): (f64, f64)) {
+fn wave_icon(b: &mut Builder<'_>, lid: &Lid, (cx, cy): (f64, f64)) {
     let mut lines = Vec::new();
     for k in 0..4 {
         let off = f64::from(k) * 3.2;
@@ -196,7 +208,7 @@ fn wave_icon(b: &mut Builder<'_>, lid: NodeId, (cx, cy): (f64, f64)) {
             (x, cy + off - 4.0 - 12.0 * env * (u * std::f64::consts::TAU * 1.5).cos())
         }).collect());
     }
-    parts::art(b, lid, &lines, 1.3, WHITE);
+    parts::art(b, lid.id, &lines, 1.3, WHITE);
 }
 
 // ── the pedals ───────────────────────────────────────────────────────────
@@ -204,11 +216,12 @@ fn wave_icon(b: &mut Builder<'_>, lid: NodeId, (cx, cy): (f64, f64)) {
 pub(super) fn envelope() -> Face {
     let ks = four("envelope", [("range", "Range"), ("sens", "Sensitivity"), ("attack", "Attack"), ("decay", "Decay")]);
     let scene = standard(&Pedal { title: "Envelope Pusher", ns: "envelope", color: "#d46c9b", knobs: &ks, name: &["the", "envelope", "pusher"], icon: envelope_icon, pulse: None, extra: None });
+    // Every knob at noon, as the reference sets them.
     let params = vec![
-        parts::pct("envelope/range", "Range", 60.0),
-        parts::pct("envelope/sens", "Sensitivity", 55.0),
-        parts::ms("envelope/attack", "Attack", 1.0, 200.0, 10.0),
-        parts::ms("envelope/decay", "Decay", 20.0, 2000.0, 250.0),
+        parts::pct("envelope/range", "Range", 50.0),
+        parts::pct("envelope/sens", "Sensitivity", 50.0),
+        parts::ms("envelope/attack", "Attack", 1.0, 200.0, parts::log_at(1.0, 200.0, 0.5)),
+        parts::ms("envelope/decay", "Decay", 20.0, 2000.0, parts::log_at(20.0, 2000.0, 0.5)),
         parts::switch("envelope/on", "Bypass", true),
     ];
     face("02-envelope-standard-156x286", scene, params)
@@ -218,9 +231,9 @@ pub(super) fn squeeze() -> Face {
     let ks = four("squeeze", [("blend", "Blend"), ("tone", "Tone"), ("comp", "Compression"), ("volume", "Volume")]);
     let scene = standard(&Pedal { title: "Fourth Slot Compressor", ns: "squeeze", color: "#4b72c2", knobs: &ks, name: &["the fourth", "slot", "compressor"], icon: selector_icon, pulse: None, extra: None });
     let params = vec![
-        parts::pct("squeeze/blend", "Blend", 70.0),
+        parts::pct("squeeze/blend", "Blend", 50.0),
         parts::pct("squeeze/tone", "Tone", 50.0),
-        parts::pct("squeeze/comp", "Compression", 55.0),
+        parts::pct("squeeze/comp", "Compression", 50.0),
         parts::db("squeeze/volume", "Volume", -12.0, 12.0, 0.0),
         parts::switch("squeeze/on", "Bypass", true),
     ];
@@ -229,15 +242,15 @@ pub(super) fn squeeze() -> Face {
 
 pub(super) fn glass() -> Face {
     let ks = three("glass", [("tone", "Tone"), ("drive", "Drive"), ("level", "Level")]);
-    let scene = standard(&Pedal { title: "Glass Bottle Drive", ns: "glass", color: "#59b86a", knobs: &ks, name: &["the", "glass bottle"], icon: tube_icon, pulse: None, extra: None });
-    let params = vec![parts::pct("glass/tone", "Tone", 50.0), parts::pct("glass/drive", "Drive", 40.0), parts::db("glass/level", "Level", -12.0, 12.0, 0.0), parts::switch("glass/on", "Bypass", true)];
+    let scene = standard(&Pedal { title: "Glass Bottle Drive", ns: "glass", color: "#5cb86b", knobs: &ks, name: &["the", "glass bottle"], icon: tube_icon, pulse: None, extra: None });
+    let params = vec![parts::pct("glass/tone", "Tone", 50.0), parts::pct("glass/drive", "Drive", 50.0), parts::db("glass/level", "Level", -12.0, 12.0, 0.0), parts::switch("glass/on", "Bypass", true)];
     face("04-glass-standard-156x286", scene, params)
 }
 
 pub(super) fn haul() -> Face {
     let ks = three("haul", [("tone", "Tone"), ("drive", "Drive"), ("level", "Level")]);
-    let scene = standard(&Pedal { title: "Heavy Haul Overdrive", ns: "haul", color: "#c4a03c", knobs: &ks, name: &["the heavy haul", "overdrive"], icon: truck_icon, pulse: None, extra: None });
-    let params = vec![parts::pct("haul/tone", "Tone", 55.0), parts::pct("haul/drive", "Drive", 60.0), parts::db("haul/level", "Level", -12.0, 12.0, 0.0), parts::switch("haul/on", "Bypass", true)];
+    let scene = standard(&Pedal { title: "Heavy Haul Overdrive", ns: "haul", color: "#c29e3a", knobs: &ks, name: &["the heavy haul", "overdrive"], icon: truck_icon, pulse: None, extra: None });
+    let params = vec![parts::pct("haul/tone", "Tone", 50.0), parts::pct("haul/drive", "Drive", 50.0), parts::db("haul/level", "Level", -12.0, 12.0, 0.0), parts::switch("haul/on", "Bypass", true)];
     face("05-haul-standard-156x286", scene, params)
 }
 
@@ -246,7 +259,7 @@ pub(super) fn neon() -> Face {
     let scene = standard(&Pedal {
         title: "The Neon Chorus",
         ns: "neon",
-        color: "#9dbddb",
+        color: "#a0c0d6",
         knobs: &ks,
         name: &["The", "Neon"],
         icon: coil_icon,
@@ -255,33 +268,37 @@ pub(super) fn neon() -> Face {
     });
     let params = vec![
         parts::pct("neon/mix", "Mix", 50.0),
-        ui::param("neon/rate", "Rate", surface_proto::Range::log(0.1, 10.0, surface_proto::Unit::Hz), 0.8).featured(),
-        parts::pct("neon/width", "Width", 70.0),
+        ui::param("neon/rate", "Rate", surface_proto::Range::log(0.1, 10.0, surface_proto::Unit::Hz), 1.0).featured(),
+        parts::pct("neon/width", "Width", 50.0),
         parts::switch("neon/on", "Bypass", true),
     ];
     face("11-neon-standard-156x286", scene, params)
 }
 
-fn shimmer_button(b: &mut Builder<'_>, lid: NodeId) {
-    let p = Place::new("Shimmer").size(15.0).variant("cream").bind(ui::bind("rinse/shimmer")).options(&["nolamp"]).legend("").touch(TOUCH_MIN);
-    let k = surface_kit::place(b, lid, "button.round_cap", &p).unwrap_or_else(|e| panic!("{e}"));
+fn shimmer_button(b: &mut Builder<'_>, lid: &Lid) {
+    let (cx, cy) = lid.at(0.5, 0.158);
+    let p = Place::new("Shimmer").size(14.0).variant("cream").bind(ui::bind("rinse/shimmer")).options(&["nolamp"]).legend("").touch(TOUCH_MIN);
+    let k = surface_kit::place(b, lid.id, "button.round_cap", &p).unwrap_or_else(|e| panic!("{e}"));
     ui::strip_legend(b, k);
-    parts::centre_on(b, k, (78.0, 44.0));
-    parts::centred(b, lid, "Shimmer", (78.0, 20.0), Type::new(7.6, WHITE, 800.0));
-    for (x, s) in [(67.0, "Off"), (89.0, "On")] {
-        parts::centred(b, lid, s, (x, 67.0), Type::new(4.8, WHITE, 800.0));
+    parts::centre_on(b, k, (cx, cy));
+    parts::centred(b, lid.id, "Shimmer", (cx, lid.h * 0.078), Type::new(7.2, WHITE, 800.0));
+    for (dx, s) in [(-10.0, "Off"), (10.0, "On")] {
+        parts::centred(b, lid.id, s, (cx + dx, cy + 23.0), Type::new(4.6, WHITE, 800.0));
     }
-    parts::art(b, lid, &[vec![(62.0, 62.5), (63.0, 59.5), (71.0, 59.5), (72.0, 62.5), (62.0, 62.5)], vec![(84.0, 60.5), (94.0, 60.5)], vec![(84.0, 62.5), (94.0, 62.5)]], 0.9, WHITE);
+    let (y0, x0, x1) = (cy + 18.0, cx - 15.0, cx + 5.0);
+    parts::art(b, lid.id, &[vec![(x0, y0), (x0 + 1.0, y0 - 3.0), (x0 + 9.0, y0 - 3.0), (x0 + 10.0, y0), (x0, y0)], vec![(x1, y0 - 2.0), (x1 + 10.0, y0 - 2.0)], vec![(x1, y0), (x1 + 10.0, y0)]], 0.9, WHITE);
 }
 
 pub(super) fn rinse() -> Face {
-    let ks = vec![K("rinse/mix", "Mix", (33.0, 44.0), true), K("rinse/decay", "Decay", (123.0, 44.0), true), K("rinse/low", "", (33.0, 93.0), false), K("rinse/high", "", (123.0, 93.0), false)];
-    let scene = standard(&Pedal { title: "The Rinse Reverb", ns: "rinse", color: "#35b2c4", knobs: &ks, name: &["The", "Rinse"], icon: rinse_icon, pulse: None, extra: Some(shimmer_button) });
+    let ks = vec![K("rinse/mix", "Mix", (0.17, 0.15), true), K("rinse/decay", "Decay", (0.83, 0.15), true), K("rinse/low", "", (0.2, 0.345), false), K("rinse/high", "", (0.8, 0.345), false)];
+    let scene = standard(&Pedal { title: "The Rinse Reverb", ns: "rinse", color: "#3ab4c6", knobs: &ks, name: &["The", "Rinse"], icon: rinse_icon, pulse: None, extra: Some(shimmer_button) });
+    // Mix and decay at noon; the low cut turned to the left and the high
+    // cut to the right, as in the reference.
     let params = vec![
-        parts::pct("rinse/mix", "Mix", 35.0),
-        ui::param("rinse/decay", "Decay", surface_proto::Range::log(0.3, 20.0, surface_proto::Unit::Seconds), 3.0).featured(),
-        parts::hz("rinse/low", "Low Cut", 20.0, 1000.0, 120.0),
-        parts::hz("rinse/high", "High Cut", 1000.0, 20000.0, 8000.0),
+        parts::pct("rinse/mix", "Mix", 50.0),
+        ui::param("rinse/decay", "Decay", surface_proto::Range::log(0.3, 20.0, surface_proto::Unit::Seconds), parts::log_at(0.3, 20.0, 0.5)).featured(),
+        parts::hz("rinse/low", "Low Cut", 20.0, 1000.0, parts::log_at(20.0, 1000.0, 0.2)),
+        parts::hz("rinse/high", "High Cut", 1000.0, 20000.0, parts::log_at(1000.0, 20000.0, 0.8)),
         parts::switch("rinse/shimmer", "Shimmer", false),
         parts::switch("rinse/on", "Bypass", true),
     ];
@@ -289,9 +306,9 @@ pub(super) fn rinse() -> Face {
 }
 
 /// The rinse's icon, plus the filter curves printed under its tone knobs.
-fn rinse_icon(b: &mut Builder<'_>, lid: NodeId, at: (f64, f64)) {
+fn rinse_icon(b: &mut Builder<'_>, lid: &Lid, at: (f64, f64)) {
     wave_icon(b, lid, at);
-    filter_marks(b, lid, (33.0, 118.0), (123.0, 118.0));
+    filter_marks(b, lid.id, lid.at(0.2, 0.47), lid.at(0.8, 0.47));
 }
 
 /// The low-cut and high-cut curves printed under a pair of knobs.

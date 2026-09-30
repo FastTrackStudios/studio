@@ -53,13 +53,20 @@ fn every_binding_exists_and_every_param_is_bound() {
         for (node, c) in controls(&face.scene) {
             let issues = c.validate(&catalog);
             assert!(issues.is_empty(), "{f} / {}: {issues:?}", node.name);
-            match c.binding.as_ref().map(|b| &b.source) {
-                Some(Source::Param { addr }) => {
-                    assert!(face.params.iter().any(|p| &p.addr == addr), "{f}: {addr} is not this unit's");
-                    bound.insert(addr.0.clone());
+            // A handle binds its two axes; everything else its binding.
+            let bindings = match &c.kind {
+                surface_proto::ControlKind::Handle { x, y, .. } => vec![x.as_ref(), y.as_ref()],
+                _ => vec![c.binding.as_ref()],
+            };
+            for binding in bindings {
+                match binding.map(|b| &b.source) {
+                    Some(Source::Param { addr }) => {
+                        assert!(face.params.iter().any(|p| &p.addr == addr), "{f}: {addr} is not this unit's");
+                        bound.insert(addr.0.clone());
+                    }
+                    Some(Source::Stream { id, .. }) => assert!(face.streams.iter().any(|s| &s.id == id), "{f}: {} is not this unit's", id.0),
+                    other => panic!("{f}: \"{}\" has binding {other:?}", node.name),
                 }
-                Some(Source::Stream { id, .. }) => assert!(face.streams.iter().any(|s| &s.id == id), "{f}: {} is not this unit's", id.0),
-                other => panic!("{f}: \"{}\" has binding {other:?}", node.name),
             }
         }
         for p in &face.params {

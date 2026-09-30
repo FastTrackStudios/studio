@@ -17,6 +17,14 @@ fn controls(scene: &Scene) -> Vec<(&document_proto::Node, &surface_proto::Contro
     scene.walk(scene.root).into_iter().filter_map(|id| scene.node(id)).filter_map(|n| n.control.as_ref().map(|c| (n, c))).collect()
 }
 
+/// What a control binds: a handle's two axes, else its binding.
+fn bindings(c: &surface_proto::Control) -> Vec<Option<&surface_proto::Binding>> {
+    match &c.kind {
+        surface_proto::ControlKind::Handle { x, y, .. } => vec![x.as_ref(), y.as_ref()],
+        _ => vec![c.binding.as_ref()],
+    }
+}
+
 fn lint_errors(face: &Face, scene: &Scene, catalog: &Catalog) {
     let issues = design_lint::lint(scene, catalog, &design_lint::Config::default());
     let errors: Vec<String> = issues.iter().filter(|i| i.severity == design_lint::Severity::Error).map(ToString::to_string).collect();
@@ -53,12 +61,14 @@ fn every_binding_exists_and_every_param_is_bound() {
         for (node, c) in controls(&face.scene) {
             let issues = c.validate(&catalog);
             assert!(issues.is_empty(), "{f} / {}: {issues:?}", node.name);
-            match c.binding.as_ref().map(|b| &b.source) {
-                Some(Source::Param { addr }) => {
-                    assert!(face.params.iter().any(|p| &p.addr == addr), "{f}: {addr} is not this unit's");
-                    bound.insert(addr.0.clone());
+            for binding in bindings(c) {
+                match binding.map(|b| &b.source) {
+                    Some(Source::Param { addr }) => {
+                        assert!(face.params.iter().any(|p| &p.addr == addr), "{f}: {addr} is not this unit's");
+                        bound.insert(addr.0.clone());
+                    }
+                    other => panic!("{f}: \"{}\" has binding {other:?}", node.name),
                 }
-                other => panic!("{f}: \"{}\" has binding {other:?}", node.name),
             }
         }
         for p in &face.params {
