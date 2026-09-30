@@ -436,7 +436,7 @@ pub fn row_drives() -> Face {
 }
 
 /// The Amp/Cab row, sized to a row of the Control view: the amp as its
-/// panel of VOLUME, GAIN and LEVEL over its cloth (no handle, no tone
+/// panel of GAIN and LEVEL over its cloth (no handle, no tone
 /// stack — the zoomed-in view has the whole head), the cab narrowed to its two speakers with a mic on each, and
 /// the gate, all the same height.
 #[must_use]

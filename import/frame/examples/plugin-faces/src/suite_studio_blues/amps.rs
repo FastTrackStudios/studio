@@ -115,8 +115,8 @@ pub fn clean_head_with(inside: impl FnOnce(&mut Builder<'_>, NodeId)) -> Face {
 }
 
 /// The clean head as a rig row shows it, `w × h`: no handle, and a panel
-/// carrying only what a player reaches for mid-set — VOLUME, GAIN and
-/// LEVEL on big chrome caps, the logo, the pilot jewel — over the diamond
+/// carrying only what a player reaches for mid-set — GAIN (the head's
+/// volume is its preamp gain) and LEVEL on big chrome caps, the logo, the pilot jewel — over the diamond
 /// cloth. The tone stack and reverb are left to the rig's own EQ and
 /// effects; the whole head is the zoomed-in view.
 pub fn clean_head_compact(w: f64, h: f64) -> Face {
@@ -134,19 +134,18 @@ pub fn clean_head_compact(w: f64, h: f64) -> Face {
         let legend = Lettering::family(family::PIRATA_ONE);
         let d = ph * 0.6;
         let dots: &[&str] = &["", "", "", "", "", "", "", "", "", "", ""];
-        for (addr, name, fx) in [("clean/volume", "VOLUME", 0.13), ("clean/gain", "GAIN", 0.33), ("clean/level", "LEVEL", 0.53)] {
+        for (addr, name, fx) in [("clean/gain", "GAIN", 0.17), ("clean/level", "LEVEL", 0.42)] {
             knob_scaled(b, plate, Cap::ChromeSkirt, addr, name, d, pw * fx, ph * 0.43, dots, INK);
             set(b, plate, name, pw * fx, ph * 0.87, ph * 0.13, INK, &legend, 0.04);
         }
         let slab = Lettering::family(family::PLAYFAIR_DISPLAY).weight(900.0).italic();
-        let lx = pw * 0.76;
+        let lx = pw * 0.72;
         set(b, plate, "OPEN", lx, ph * 0.3, ph * 0.2, "#0e0e0e", &slab, 0.0);
         set(b, plate, "ROOM", lx, ph * 0.55, ph * 0.2, "#0e0e0e", &slab, 0.0);
         set(b, plate, "hand wired", lx, ph * 0.8, ph * 0.12, "#1a1a1a", &legend, 0.08);
         jewel(b, plate, "clean/on", "red", ph * 0.24, pw * 0.93, ph * 0.5);
     });
     let params = vec![
-        pct("clean", "volume", "Volume", 4.0).featured(),
         pct("clean", "gain", "Gain", 5.0).featured(),
         pct("clean", "level", "Level", 5.0).featured(),
         ui::toggle("clean/on", "Power", true),
