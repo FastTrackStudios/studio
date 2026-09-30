@@ -201,5 +201,32 @@
       250.0,
       392.0
     ]
-  }
+  },
+  "pre": [
+    {
+      "face": "17-pedal-aqua-puss",
+      "match": [
+        "aqua"
+      ],
+      "ns": "aquapuss",
+      "size": [
+        200.0,
+        286.0
+      ]
+    },
+    {
+      "also": {
+        "trem": "Pre Motion"
+      },
+      "face": "18-pedal-gravity-tank",
+      "match": [
+        "gravity"
+      ],
+      "ns": "spring",
+      "size": [
+        400.0,
+        286.0
+      ]
+    }
+  ]
 }

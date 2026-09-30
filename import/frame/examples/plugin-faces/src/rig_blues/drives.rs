@@ -366,6 +366,85 @@ pub fn morning_glory() -> Face {
     Face { file: "16-drive-morning-glory", plugin: PLUGIN, scene, params, streams: Vec::new() }
 }
 
+/// The Aqua-Puss (analog-voiced slapback): the turquoise box, DELAY,
+/// FEEDBACK and BLEND on white caps, the name in a bubbly hand. Binds the
+/// rig's delay block: DELAY its `time`, FEEDBACK its `feedback`, BLEND its
+/// `level` (the wet's level).
+#[must_use]
+pub fn aqua_puss() -> Face {
+    const W: f64 = 200.0;
+    const NS: &str = "aquapuss";
+    const INK: &str = "#0b2a33";
+    let scene = canvas("Aqua-Puss", |b, root| {
+        let (lid, lw, lh) = enclosure(b, root, W, "#3fb4c8", "gloss", &["jack_inset=8"]);
+        led(b, lid, NS, lw * 0.5, 10.0, 5.0, "#e0281c");
+        for (i, (id, name)) in [("time", "DELAY"), ("feedback", "FEEDBACK"), ("level", "BLEND")].iter().enumerate() {
+            let cx = lw * (0.19 + 0.31 * i as f64);
+            let cy = lh * 0.22;
+            knob(b, lid, "flat", &["color=#f2f1ec", "pointer=#0b2a33", "index=line", "index_w=0.1", "skirt=plain", "skirt_color=#d6d4cc"], &format!("{NS}/{id}"), name, 50.0, cx, cy);
+            parts::print(b, lid, name, cx, cy + 35.0, 8.0, INK, 800.0, 0.06);
+        }
+        let bubbly = Lettering::family(family::KNEWAVE);
+        set(b, lid, "Aqua-Puss", lw * 0.5, lh * 0.49, 30.0, "#f4fbfd", &bubbly, 0.0);
+        parts::print(b, lid, "ANALOG DELAY", lw * 0.5, lh * 0.62, 7.5, INK, 800.0, 0.2);
+        stomp(b, lid, NS, 34.0, lw * 0.5, lh * 0.77);
+        parts::print(b, lid, "WAY HUGE", lw * 0.5, lh * 0.92, 9.0, INK, 900.0, 0.2);
+    });
+    let params = vec![
+        ui::param(&format!("{NS}/time"), "Delay", Range::log(20.0, 600.0, Unit::Milliseconds), 120.0).featured(),
+        ui::param(&format!("{NS}/feedback"), "Feedback", Range::linear(0.0, 0.95, Unit::None), 0.15).featured(),
+        ui::param(&format!("{NS}/level"), "Blend", Range::linear(-60.0, 12.0, Unit::Db), -16.0).featured(),
+        on(NS),
+    ];
+    Face { file: "17-pedal-aqua-puss", plugin: PLUGIN, scene, params, streams: Vec::new() }
+}
+
+/// The Gravity Tank: a spring reverb and a harmonic tremolo in one box —
+/// SPRING (DWELL, TONE, MIX) on the rig's Pre Verb, HARMONIC TREM (SPEED,
+/// DEPTH) on its Pre Motion, a footswitch each.
+#[must_use]
+pub fn gravity_tank() -> Face {
+    const W: f64 = 400.0;
+    const INK: &str = "#e9e4d6";
+    let scene = canvas("Gravity Tank", |b, root| {
+        let (lid, lw, lh) = enclosure(b, root, W, "#1f2a38", "powder", &["jack_inset=8", "screws"]);
+        // The cream panel the knobs sit on.
+        let panel = draw::rounded(draw::rect("panel", 14.0, 14.0, lw - 28.0, lh * 0.52, draw::linear(180.0, &[(0.0, "#efe8d6"), (1.0, "#d9d0b8")])), 6.0);
+        b.add(lid, draw::with_effects(panel, vec![draw::drop_shadow("#00000080", 0.0, 2.0, 4.0)]));
+        let dark = "#1f2a38";
+        let head = Lettering::family(family::MICHROMA);
+        set(b, lid, "SPRING", lw * 0.28, 30.0, 10.0, dark, &head, 0.2);
+        set(b, lid, "HARMONIC TREM", lw * 0.785, 30.0, 8.5, dark, &head, 0.06);
+        b.add(lid, draw::rect("divider", lw * 0.57, 24.0, 1.4, lh * 0.52 - 22.0, draw::solid("#1f2a3855")));
+        let cy = lh * 0.3;
+        for (i, (addr, name)) in [("spring/decay", "DWELL"), ("spring/tone", "TONE"), ("spring/level", "MIX")].iter().enumerate() {
+            let cx = lw * (0.1 + 0.18 * i as f64);
+            knob(b, lid, "flat", &["color=#1f2a38", "pointer=#efe8d6", "index=line", "index_w=0.1", "skirt=plain", "skirt_color=#141b24"], addr, name, 50.0, cx, cy);
+            parts::print(b, lid, name, cx, cy + 34.0, 8.0, dark, 800.0, 0.08);
+        }
+        for (i, (addr, name)) in [("trem/rate", "SPEED"), ("trem/depth", "DEPTH")].iter().enumerate() {
+            let cx = lw * (0.7 + 0.17 * i as f64);
+            knob(b, lid, "flat", &["color=#1f2a38", "pointer=#efe8d6", "index=line", "index_w=0.1", "skirt=plain", "skirt_color=#141b24"], addr, name, 50.0, cx, cy);
+            parts::print(b, lid, name, cx, cy + 34.0, 8.0, dark, 800.0, 0.08);
+        }
+        set(b, lid, "GRAVITY TANK", lw * 0.5, lh * 0.66, 22.0, INK, &head, 0.18);
+        led(b, lid, "spring", lw * 0.28, lh * 0.74, 5.0, "#3db6ff");
+        led(b, lid, "trem", lw * 0.72, lh * 0.74, 5.0, "#ff5a8a");
+        stomp(b, lid, "spring", 32.0, lw * 0.28, lh * 0.85);
+        stomp(b, lid, "trem", 32.0, lw * 0.72, lh * 0.85);
+    });
+    let params = vec![
+        ui::param("spring/decay", "Dwell", Range::linear(0.0, 1.0, Unit::None), 0.35).featured(),
+        ui::param("spring/tone", "Tone", Range::linear(-1.0, 1.0, Unit::None), 0.0),
+        ui::param("spring/level", "Mix", Range::linear(-60.0, 12.0, Unit::Db), -16.5).featured(),
+        on("spring"),
+        ui::param("trem/rate", "Speed", Range::log(0.05, 12.0, Unit::Hz), 4.0).featured(),
+        ui::param("trem/depth", "Depth", Range::linear(0.0, 1.0, Unit::None), 0.5).featured(),
+        on("trem"),
+    ];
+    Face { file: "18-pedal-gravity-tank", plugin: PLUGIN, scene, params, streams: Vec::new() }
+}
+
 /// The four, in chain order.
 #[must_use]
 pub fn all() -> Vec<Face> {

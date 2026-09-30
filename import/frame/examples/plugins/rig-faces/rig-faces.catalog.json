@@ -419,6 +419,193 @@
       "featured": true
     },
     {
+      "addr": "aquapuss/time",
+      "name": "Delay",
+      "short_name": null,
+      "group": null,
+      "kind": "Continuous",
+      "range": {
+        "min": 20.0,
+        "max": 600.0,
+        "scale": "Logarithmic",
+        "unit": "Milliseconds",
+        "steps": null
+      },
+      "default": 0.5268025545616606,
+      "bipolar": false,
+      "featured": true
+    },
+    {
+      "addr": "aquapuss/feedback",
+      "name": "Feedback",
+      "short_name": null,
+      "group": null,
+      "kind": "Continuous",
+      "range": {
+        "min": 0.0,
+        "max": 0.95,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": null
+      },
+      "default": 0.15789473684210525,
+      "bipolar": false,
+      "featured": true
+    },
+    {
+      "addr": "aquapuss/level",
+      "name": "Blend",
+      "short_name": null,
+      "group": null,
+      "kind": "Continuous",
+      "range": {
+        "min": -60.0,
+        "max": 12.0,
+        "scale": "Linear",
+        "unit": "Db",
+        "steps": null
+      },
+      "default": 0.6111111111111112,
+      "bipolar": false,
+      "featured": true
+    },
+    {
+      "addr": "aquapuss/on",
+      "name": "Bypass",
+      "short_name": null,
+      "group": null,
+      "kind": "Toggle",
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 2
+      },
+      "default": 1.0,
+      "bipolar": false,
+      "featured": true
+    },
+    {
+      "addr": "spring/decay",
+      "name": "Dwell",
+      "short_name": null,
+      "group": null,
+      "kind": "Continuous",
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": null
+      },
+      "default": 0.35,
+      "bipolar": false,
+      "featured": true
+    },
+    {
+      "addr": "spring/tone",
+      "name": "Tone",
+      "short_name": null,
+      "group": null,
+      "kind": "Continuous",
+      "range": {
+        "min": -1.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": null
+      },
+      "default": 0.5,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "spring/level",
+      "name": "Mix",
+      "short_name": null,
+      "group": null,
+      "kind": "Continuous",
+      "range": {
+        "min": -60.0,
+        "max": 12.0,
+        "scale": "Linear",
+        "unit": "Db",
+        "steps": null
+      },
+      "default": 0.6041666666666666,
+      "bipolar": false,
+      "featured": true
+    },
+    {
+      "addr": "spring/on",
+      "name": "Bypass",
+      "short_name": null,
+      "group": null,
+      "kind": "Toggle",
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 2
+      },
+      "default": 1.0,
+      "bipolar": false,
+      "featured": true
+    },
+    {
+      "addr": "trem/rate",
+      "name": "Speed",
+      "short_name": null,
+      "group": null,
+      "kind": "Continuous",
+      "range": {
+        "min": 0.05,
+        "max": 12.0,
+        "scale": "Logarithmic",
+        "unit": "Hz",
+        "steps": null
+      },
+      "default": 0.7995466762115763,
+      "bipolar": false,
+      "featured": true
+    },
+    {
+      "addr": "trem/depth",
+      "name": "Depth",
+      "short_name": null,
+      "group": null,
+      "kind": "Continuous",
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": null
+      },
+      "default": 0.5,
+      "bipolar": false,
+      "featured": true
+    },
+    {
+      "addr": "trem/on",
+      "name": "Bypass",
+      "short_name": null,
+      "group": null,
+      "kind": "Toggle",
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 2
+      },
+      "default": 1.0,
+      "bipolar": false,
+      "featured": true
+    },
+    {
       "addr": "trio/drive",
       "name": "Gain",
       "short_name": null,

@@ -122,10 +122,18 @@ fn drive_entries() -> Vec<(Face, &'static str, &'static [&'static str])> {
     ]
 }
 
+/// The pre effects: the Aqua-Puss on the Pre Delay; the Gravity Tank on
+/// the Pre Verb, its tremolo half on the Pre Motion.
+fn pre_entries() -> Vec<Face> {
+    let d = |f: Face| Face { plugin: PLUGIN, ..f };
+    vec![d(drives::aqua_puss()), d(drives::gravity_tank())]
+}
+
 /// Every face in the set.
 #[must_use]
 pub fn faces() -> Vec<Face> {
     let mut v: Vec<Face> = drive_entries().into_iter().map(|(f, _, _)| f).collect();
+    v.extend(pre_entries());
     v.push(trio());
     v.extend(AmpModel::EVERY.iter().map(|m| amp_face(*m)));
     v.push(gate());
@@ -149,8 +157,16 @@ pub fn manifest() -> String {
         let f = amp_face(*m);
         json!({ "match": amp_match(*m), "face": f.file, "ns": ns(*m), "name": m.short(), "size": size(&f) })
     }));
+    let pre = pre_entries();
+    let pre = vec![
+        json!({ "match": ["aqua"], "face": pre[0].file, "ns": "aquapuss", "size": size(&pre[0]) }),
+        // One face over two blocks: `also` names the other block its
+        // `trem/` controls belong to.
+        json!({ "match": ["gravity"], "face": pre[1].file, "ns": "spring", "size": size(&pre[1]), "also": { "trem": "Pre Motion" } }),
+    ];
     let doc = json!({
         "drives": drives,
+        "pre": pre,
         "amps": amps,
         "gate": { "face": "51-gate", "ns": "gate", "size": size(&gate()) },
         "eq": { "face": "52-amp-eq", "ns": "eq", "size": size(&eq()) },
