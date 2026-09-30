@@ -318,7 +318,6 @@ pub fn aqua_puss_unit() -> Face {
     const W: f64 = 560.0;
     const NS: &str = "aquapuss";
     const INK: &str = "#0b2a33";
-    const GLOW: &str = "#8ff3ff";
     let scene = canvas("Aqua-Puss", |b, root| {
         let (lid, lw, lh) = enclosure(b, root, W, "#3fb4c8", "gloss", &["jack_inset=8"]);
         let left = lw * 0.36;
@@ -335,46 +334,7 @@ pub fn aqua_puss_unit() -> Face {
         parts::print(b, lid, "WAY HUGE", left * 0.5, lh * 0.92, 9.0, INK, 900.0, 0.2);
 
         // The screen: the repeats.
-        let (sx, sy, sw, sh) = (left + 6.0, lh * 0.08, lw - left - 18.0, lh * 0.84);
-        let mut s = draw::frame("Screen", sx, sy, sw, sh);
-        s.fills = vec![draw::linear(180.0, &[(0.0, "#062a33"), (1.0, "#03161b")])];
-        s.corner_radii = CornerRadii::uniform(6.0);
-        s.effects = vec![draw::inner_shadow("#000000c0", 0.0, 2.0, 6.0)];
-        s.layout_child.resize_x = Some(ResizeX::Stretch);
-        let screen = b.add(lid, s);
-        let mut glass = draw::frame("glass", 0.0, 0.0, sw, sh);
-        glass.clips_content = true;
-        let glass = b.add(screen, glass);
-        let mut ride = draw::frame("ride", 0.0, 0.0, sw, sh);
-        ride.layout_child.resize_x = Some(ResizeX::Scale);
-        let ride = b.add(glass, ride);
-        let base = sh - 22.0;
-        let window = 1000.0;
-        let (lead, span) = (18.0, sw - 34.0);
-        let grid: Vec<Vec<(f64, f64)>> = (0..=10).map(|i| {
-            let x = lead + span * f64::from(i) / 10.0;
-            vec![(x, 10.0), (x, base)]
-        }).collect();
-        b.add(ride, ui::strokes("grid", &grid, 1.0, draw::solid("#8ff3ff14")));
-        b.add(ride, ui::strokes("baseline", &[vec![(0.0, base), (sw, base)]], 1.0, draw::solid("#8ff3ff55")));
-        for (i, l) in ["0", "250", "500", "750", "1 s"].iter().enumerate() {
-            b.add(ride, draw::text("t", l, lead + span * i as f64 / 4.0 - 14.0, base + 11.0, 28.0, 7.0, "#8ff3ff88", TextAlign::Center));
-        }
-        // The note.
-        b.add(ride, ui::glowing(draw::rect("note", lead - 1.5, 12.0, 3.0, base - 12.0, draw::solid("#f4fbfd")), GLOW, 0.8, 5.0));
-        // The repeats.
-        let spring = Dynamics::spring(260.0, 28.0);
-        for i in 1..=10_u32 {
-            let fi = f64::from(i);
-            let wd = 6.0 + 2.5 * fi;
-            let g = b.add(ride, draw::frame(&format!("repeat {i}"), lead - wd / 2.0, 12.0, wd, base - 12.0));
-            b.add(g, ui::glowing(draw::rounded(draw::rect("echo", 0.0, 0.0, wd, base - 12.0, draw::linear(180.0, &[(0.0, GLOW), (1.0, "#2bb6cc")])), wd / 2.0), GLOW, 0.6, 4.0));
-            let at = format!("clamp({i} * param({NS}/time) / {window}, 0, 1.2)");
-            motion::add(b, g, Motion::new(Target::X).input(at).range(0.0, span).dynamics(spring.clone()));
-            let fall = format!("pow(param({NS}/feedback), {}) * (0.3 + 0.7 * param({NS}/on))", i - 1);
-            motion::add(b, g, Motion::new(Target::StretchY).input(fall).range(0.01, 1.0).pivot(0.5, 1.0).dynamics(spring.clone()));
-        }
-        parts::print(b, screen, "REPEATS", 52.0, 12.0, 6.5, "#8ff3ffaa", 800.0, 0.14);
+        let screen = repeats_screen(b, lid, (left + 6.0, lh * 0.08, lw - left - 18.0, lh * 0.84), NS);
         crate::rig_time::kit::responsive(b, lid, &[screen]);
     });
     let params = vec![
@@ -384,4 +344,52 @@ pub fn aqua_puss_unit() -> Face {
         on(NS),
     ];
     Face { file: "17-pedal-aqua-puss", plugin: PLUGIN, scene, params, streams: Vec::new() }
+}
+
+/// A screen of a delay's repeats, (`sx`, `sy`, `sw`, `sh`) in `lid`: the
+/// note, then each echo a delay time on (`ns/time`, over one second),
+/// lower by the feedback, softer and wider as the analog line dulls them.
+/// The screen stretches with its face; what is in it scales.
+pub(super) fn repeats_screen(b: &mut Builder<'_>, lid: NodeId, (sx, sy, sw, sh): (f64, f64, f64, f64), ns: &str) -> NodeId {
+    const GLOW: &str = "#8ff3ff";
+    let mut s = draw::frame("Screen", sx, sy, sw, sh);
+    s.fills = vec![draw::linear(180.0, &[(0.0, "#062a33"), (1.0, "#03161b")])];
+    s.corner_radii = CornerRadii::uniform(6.0);
+    s.effects = vec![draw::inner_shadow("#000000c0", 0.0, 2.0, 6.0)];
+    s.layout_child.resize_x = Some(ResizeX::Stretch);
+    let screen = b.add(lid, s);
+    let mut glass = draw::frame("glass", 0.0, 0.0, sw, sh);
+    glass.clips_content = true;
+    let glass = b.add(screen, glass);
+    let mut ride = draw::frame("ride", 0.0, 0.0, sw, sh);
+    ride.layout_child.resize_x = Some(ResizeX::Scale);
+    let ride = b.add(glass, ride);
+    let base = sh - 22.0;
+    let window = 1000.0;
+    let (lead, span) = (18.0, sw - 34.0);
+    let grid: Vec<Vec<(f64, f64)>> = (0..=10).map(|i| {
+        let x = lead + span * f64::from(i) / 10.0;
+        vec![(x, 10.0), (x, base)]
+    }).collect();
+    b.add(ride, ui::strokes("grid", &grid, 1.0, draw::solid("#8ff3ff14")));
+    b.add(ride, ui::strokes("baseline", &[vec![(0.0, base), (sw, base)]], 1.0, draw::solid("#8ff3ff55")));
+    for (i, l) in ["0", "250", "500", "750", "1 s"].iter().enumerate() {
+        b.add(ride, draw::text("t", l, lead + span * i as f64 / 4.0 - 14.0, base + 11.0, 28.0, 7.0, "#8ff3ff88", TextAlign::Center));
+    }
+    // The note.
+    b.add(ride, ui::glowing(draw::rect("note", lead - 1.5, 12.0, 3.0, base - 12.0, draw::solid("#f4fbfd")), GLOW, 0.8, 5.0));
+    // The repeats.
+    let spring = Dynamics::spring(260.0, 28.0);
+    for i in 1..=10_u32 {
+        let fi = f64::from(i);
+        let wd = 6.0 + 2.5 * fi;
+        let g = b.add(ride, draw::frame(&format!("repeat {i}"), lead - wd / 2.0, 12.0, wd, base - 12.0));
+        b.add(g, ui::glowing(draw::rounded(draw::rect("echo", 0.0, 0.0, wd, base - 12.0, draw::linear(180.0, &[(0.0, GLOW), (1.0, "#2bb6cc")])), wd / 2.0), GLOW, 0.6, 4.0));
+        let at = format!("clamp({i} * param({ns}/time) / {window}, 0, 1.2)");
+        motion::add(b, g, Motion::new(Target::X).input(at).range(0.0, span).dynamics(spring.clone()));
+        let fall = format!("pow(param({ns}/feedback), {}) * (0.3 + 0.7 * param({ns}/on))", i - 1);
+        motion::add(b, g, Motion::new(Target::StretchY).input(fall).range(0.01, 1.0).pivot(0.5, 1.0).dynamics(spring.clone()));
+    }
+    parts::print(b, screen, "REPEATS", 52.0, 12.0, 6.5, "#8ff3ffaa", 800.0, 0.14);
+    screen
 }

@@ -244,8 +244,8 @@ fn pre_entries() -> Vec<Face> {
     let _ = TankHalf::Spring;
     let trem = tank_unit(&tank_bind(), TankHalf::Tremolo, "18-gravity-tank-trem", 360.0, 300.0);
     // The spring: frame's spring reverb, trimmed to a rig row.
-    let spring = crate::reverb::spring::rig_face("19-spring-reverb", PLUGIN, 560.0, 330.0);
-    vec![d(crate::rig_blues::filters::aqua_puss_unit()), trem, spring]
+    // The delay and the spring as lanes, in the Time module's form.
+    vec![d(crate::rig_blues::prefx::aqua_lane()), trem, d(crate::rig_blues::prefx::spring_lane())]
 }
 
 fn d_(f: Face) -> Face {

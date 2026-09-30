@@ -280,7 +280,7 @@ impl LiveSurface {
 
     /// Lay the face out for the element's proportions instead of fitting
     /// it as drawn: kept at the element's height, it is made as wide as
-    /// the element (within 0.6–1.8× its drawn width), its parts following
+    /// the element (within 0.6–2.4× its drawn width), its parts following
     /// their [`ResizeX`](document_proto::ResizeX) — windows and grounds
     /// stretch, knobs and labels keep their size and spread or close up.
     pub fn set_responsive(&mut self, responsive: bool) {
@@ -299,7 +299,7 @@ impl LiveSurface {
         if dw <= 0.0 || dh <= 0.0 || width == 0 || height == 0 {
             return;
         }
-        let want = (dh * f64::from(width) / f64::from(height)).clamp(dw * 0.6, dw * 1.8);
+        let want = (dh * f64::from(width) / f64::from(height)).clamp(dw * 0.6, dw * 2.4);
         let now = if self.laid_width > 0.0 { self.laid_width } else { dw };
         if (want - now).abs() <= dw * 0.005 {
             return;
