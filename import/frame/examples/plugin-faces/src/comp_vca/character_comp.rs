@@ -270,3 +270,196 @@ fn lamp_toggle(b: &mut Builder<'_>, panel: NodeId, addr: &str, x0: f64, cx: f64,
     c.binding = Some(bind(addr));
     b.controls.insert(cell, c);
 }
+
+/// A big cream dial `d` across at (`cx`, `cy`), its header on the frame
+/// line at `line` with the index tick down to the dial.
+#[allow(clippy::too_many_arguments)]
+fn dial_at(b: &mut Builder<'_>, panel: NodeId, addr: &str, legend: &str, format: Option<ValueFormat>, (cx, cy): (f64, f64), d: f64, line: f64) {
+    let mut p = Place::new(legend).size(d).variant("cream").touch(TOUCH_MIN).bind(bind(addr));
+    p.format = format;
+    let k = ui::put(b, panel, "knob.numbered_cream", &p, cx, cy);
+    ui::strip_legend(b, k);
+    for id in b.scene.walk(k) {
+        if let Some(n) = b.scene.node_mut(id)
+            && n.name == "panel index"
+        {
+            n.visible = false;
+        }
+    }
+    header(b, panel, legend, cx, line, (d * 0.105).clamp(10.0, 15.0));
+    ui::rule(b, panel, cx - 1.0, line + 6.0, 2.0, (cy - d / 2.0 - line - 7.0).max(2.0), INK);
+}
+
+/// The same unit, not a rackspace: its front laid out to fill a `w` × `h`
+/// box (a panel of a rig's row), staying with the photographed unit. Its
+/// top half is the unit's left and middle, as they are on the front: the
+/// gain-reduction ladder across the top with its numbers above, the name
+/// with the BY PASS key and lamp beside it, the sine with REDLINE and 1%
+/// THD, the ratio lamps (NUKE blue, "Opto" under 10:1) over the RATIO
+/// bracket with the RATIO key, then the DETECTOR and AUDIO lamp columns
+/// over their keys. Its bottom half is the unit's right: INPUT, ATTACK,
+/// RELEASE and OUTPUT on their header line — INPUT the big numbered dial —
+/// and POWER with the maker's mark. Addresses as [`unit`].
+#[allow(clippy::too_many_lines)]
+pub fn unit_box(ns: &str, name: &str, input: &str, output: &str, on: &str, w: f64, h: f64) -> document_proto::Scene {
+    let a = |id: &str| format!("{ns}/{id}");
+    canvas("Character Compressor", |b, root| {
+        ui::fit_root(b, root, w, h);
+        let panel = ui::panel(b, root, "panel.painted", "black", w, h, "none");
+        if let Some(n) = b.scene.node_mut(panel) {
+            n.fills = vec![draw::linear(178.0, &[(0.0, "#232427"), (0.5, "#1b1c1e"), (1.0, "#141517")])];
+            n.corner_radii = document_proto::CornerRadii::uniform(6.0);
+        }
+        let pad = (h * 0.045).max(10.0);
+        let mid = h * 0.5;
+        // The unit's scale here: its 1U front is 136 tall; each half of
+        // this box is about that.
+        let k = ((mid - pad) / 136.0).clamp(0.75, 1.6);
+
+        // ── Top half: the meter section and the switch section, at the
+        // unit's own proportions, centred ────────────────────────────────
+        let (at, ab) = (pad + 6.0, mid - pad * 0.6);
+        let ah = ab - at;
+        let gap = pad * 0.8;
+        let room = w - 2.0 * pad - gap;
+        let aw = (room * 0.68).min(ah * 5.4);
+        let bw = (room - aw).min(ah * 2.4);
+        let ax0 = pad + (room - aw - bw) / 2.0;
+        let ax1 = ax0 + aw;
+        ui::section(b, panel, ax0, at, aw, ah, LINE, 1.6);
+        let row = |f: f64| at + ah * f;
+
+        // The ladder across the top, its numbers on the frame line above,
+        // lit right to left.
+        let (lx0, lx1) = (ax0 + aw * 0.3, ax1 - aw * 0.03);
+        let pitch = (lx1 - lx0) / LADDER.len() as f64;
+        let ly = row(0.2);
+        let ladder = Place::new("Gain Reduction").size(pitch * LADDER.len() as f64).scale(LADDER).options(&["gr", LADDER_COLORS]).reversed().bind(Binding::stream(a("gr")));
+        let lad = ui::put(b, panel, "meter.led_ladder", &ladder, (lx0 + lx1) / 2.0, ly);
+        for id in b.scene.walk(lad) {
+            if let Some(n) = b.scene.node_mut(id)
+                && n.name == "threshold"
+            {
+                n.visible = false;
+            }
+        }
+        let numbers = (pitch * 0.34).clamp(7.5, 12.0);
+        knock(b, panel, (lx0 + lx1) / 2.0, at, lx1 - lx0 + 6.0, numbers * 1.4);
+        for (i, l) in LADDER.iter().rev().enumerate() {
+            ui::silk(b, panel, l, lx0 + pitch * (i as f64 + 0.5), at, numbers, INK, 800.0);
+        }
+        ui::silk(b, panel, "Gain Reduction", lx0 + (lx1 - lx0) * 0.62, row(0.34), (10.5 * k).min(pitch * 0.5), INK, 800.0);
+
+        // The name, heavy and slanted; BY PASS beside it.
+        let size = (ah * 0.24).min(aw * 0.075);
+        let script = logo::Style { size, weight: 800.0, italic: true, tracking: -0.02 };
+        logo::mark(b, panel, name, ax0 + aw * 0.03, row(0.5), aw * 0.34, script, "#f2f2f0", TextAlign::Left);
+        // Clear of the name, however narrow the box.
+        let bx = (ax0 + aw * 0.44).max(ax0 + aw * 0.03 + size * 5.3 + 24.0 * k);
+        let key = grey_key(b, panel, bx, row(0.45), 40.0 * k, 18.0 * k, true);
+        b.add(panel, key);
+        lamp_toggle(b, panel, on, bx + 24.0 * k, bx + 30.0 * k, row(0.45));
+        ui::silk(b, panel, "By Pass", bx, row(0.45) + 14.0 * k, 8.0 * k, INK, 800.0);
+
+        // The sine, with REDLINE and 1% THD.
+        let sx = (ax0 + aw * 0.66).max(bx + 76.0 * k);
+        let sy = row(0.53);
+        let sine: String = (0..=24)
+            .map(|i| {
+                let t = f64::from(i) / 24.0;
+                format!("{} {:.2} {:.2} ", if i == 0 { "M" } else { "L" }, t * 28.0 * k, 7.0 * k - 6.0 * k * (t * std::f64::consts::TAU).sin())
+            })
+            .collect();
+        let mut sn = draw::stroked(draw::path("sine", sx - 14.0 * k, sy - 7.0 * k, 28.0 * k, 14.0 * k, sine.trim_end().to_string(), draw::solid("#00000000")), INK, 1.5);
+        sn.fills.clear();
+        b.add(panel, sn);
+        ui::rule(b, panel, sx - 16.0 * k, sy, 32.0 * k, 1.0, INK);
+        let rx = sx + 26.0 * k;
+        ui::lamp(b, panel, rx, sy - 9.0 * k, 6.5 * k, "#ff3b2f", false);
+        ui::silk_left(b, panel, "Redline", rx + 7.0 * k, sy - 9.0 * k, 8.0 * k, INK, 800.0);
+        ui::lamp(b, panel, rx, sy + 9.0 * k, 6.5 * k, "#f6d43c", false);
+        ui::silk_left(b, panel, "1% THD", rx + 7.0 * k, sy + 9.0 * k, 8.0 * k, INK, 800.0);
+
+        // The ratio lamps, legends above ("Opto" under 10:1), over the
+        // RATIO bracket; the RATIO key at the row's end.
+        let (rx0, rx1) = (ax0 + aw * 0.05, ax0 + aw * 0.82);
+        let rp = (rx1 - rx0) / RATIOS.len() as f64;
+        let ry = row(0.82);
+        let label = (8.5 * k).clamp(7.5, 11.0).min(rp * 0.3);
+        let cells: Vec<_> = (0..RATIOS.len())
+            .map(|i| {
+                let x = rx0 + rp * (i as f64 + 0.5);
+                ((x, ry), (x, row(0.69)), (x - rp / 2.0, row(0.64), rp, ry - row(0.64) + 8.0 * k))
+            })
+            .collect();
+        lamp_select(b, panel, &a("ratio"), RATIOS, RATIO_COLORS, &cells, label);
+        ui::silk(b, panel, "Opto", rx0 + rp * 5.5, ry + 11.0 * k, 7.5 * k, INK, 700.0);
+        header(b, panel, "Ratio", (rx0 + rx1) / 2.0, ab, 11.0 * k);
+        let kx = ax0 + aw * 0.91;
+        let rk = grey_key(b, panel, kx, row(0.72), 36.0 * k, 20.0 * k, false);
+        b.add(panel, rk);
+        ui::silk(b, panel, "Ratio", kx, row(0.72) + 18.0 * k, 9.0 * k, INK, 800.0);
+
+        // ── The switch section: DETECTOR and AUDIO lamp columns over their
+        // keys ───────────────────────────────────────────────────────────
+        let bx0 = ax1 + gap;
+        ui::section(b, panel, bx0, at, bw, ah, LINE, 1.6);
+        for (gi, (addr, opts, colors, legend)) in [
+            (a("detector"), ["HP", "Band", "Link"], ["#46e05a", "#f6d43c", "#ff8a24"], "Detector"),
+            (a("audio"), ["HP", "Dist 2", "Dist 3"], ["#46e05a", "#f6d43c", "#ff3b2f"], "Audio"),
+        ]
+        .iter()
+        .enumerate()
+        {
+            let cx = bx0 + bw * (0.27 + 0.46 * gi as f64);
+            let step = ah * 0.16;
+            let cells: Vec<_> = (0..3)
+                .map(|i| {
+                    let y = row(0.16) + step * i as f64;
+                    ((cx - 12.0 * k, y), (cx + 10.0 * k, y), (cx - 26.0 * k, y - step / 2.0, 64.0 * k, step))
+                })
+                .collect();
+            lamp_select(b, panel, addr, &opts[..], &colors[..], &cells, (8.5 * k).min(10.0));
+            let key = grey_key(b, panel, cx, row(0.74), 36.0 * k, 20.0 * k, false);
+            b.add(panel, key);
+            header(b, panel, legend, cx, ab, 10.0 * k);
+        }
+
+        // ── Bottom half: the dials on their header line, and POWER ─────
+        let line = mid + pad * 1.2;
+        let room = h - pad - line - 8.0;
+        let big = room.min((w - 2.0 * pad) / 5.4);
+        let span = (w - 2.0 * pad - 130.0 * k).min(big * 5.2);
+        let (dx0, dx1) = (pad + (w - 2.0 * pad - 130.0 * k - span) / 2.0, pad + (w - 2.0 * pad - 130.0 * k - span) / 2.0 + span);
+        ui::rule(b, panel, dx0, line, dx1 - dx0, 1.6, LINE);
+        for (i, (addr, legend, format, d, note)) in [
+            (input.to_string(), "Input", Some(ValueFormat::decimals(1)), big, ""),
+            (a("attack"), "Attack", Some(ValueFormat::decimals(1)), big * 0.88, "Stereo Image Link"),
+            (a("release"), "Release", None, big * 0.88, "British Mode (1:1)"),
+            (output.to_string(), "Output", Some(ValueFormat::decimals(1)), big * 0.88, ""),
+        ]
+        .iter()
+        .enumerate()
+        {
+            let cx = dx0 + (dx1 - dx0) * (0.125 + 0.25 * i as f64);
+            let cy = line + 6.0 + room / 2.0;
+            dial_at(b, panel, addr, legend, format.clone(), (cx, cy), *d, line);
+            if !note.is_empty() && (dx1 - dx0) / 4.0 > d * 1.7 {
+                ui::silk_left(b, panel, note, cx + d * 0.46, line + 13.0 * k, 7.0 * k, "#e8c547", 700.0);
+            }
+        }
+        // POWER, and the maker's mark beside it.
+        let px = dx1 + 65.0 * k;
+        let py = line + 6.0 + room / 2.0;
+        header(b, panel, "Power", px, line, 11.0 * k);
+        let bezel = draw::rect("rocker bezel", px - 17.0 * k, py - 30.0 * k, 34.0 * k, 60.0 * k, draw::linear(180.0, &[(0.0, "#0b0b0c"), (1.0, "#1c1d1f")]));
+        b.add(
+            panel,
+            draw::with_effects(draw::stroked(draw::rounded(bezel, 2.0), "#000000", 1.0), vec![draw::drop_shadow("#ffffff22", 0.0, 1.0, 0.0), draw::inner_shadow("#000000", 0.0, 2.0, 3.0)]),
+        );
+        let rocker = draw::rect("rocker", px - 12.0 * k, py - 25.0 * k, 24.0 * k, 50.0 * k, draw::linear(180.0, &[(0.0, "#3a3b3e"), (0.48, "#1d1e20"), (0.52, "#0d0d0e"), (1.0, "#1a1b1d")]));
+        b.add(panel, draw::with_effects(draw::rounded(rocker, 1.5), vec![draw::inner_shadow("#ffffff26", 0.0, 1.0, 0.0)]));
+        ui::silk(b, panel, "Empirical", px, py + 42.0 * k, 9.0 * k, "#e8c547", 800.0);
+        ui::silk(b, panel, "Labs", px, py + 54.0 * k, 9.0 * k, "#e8c547", 800.0);
+    })
+}

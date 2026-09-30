@@ -105,19 +105,29 @@ fn trio_as(aspect: f64, variant: bool) -> Face {
 /// it, −6 dB a step), OUTPUT the block's level, the ratio lamps the
 /// block's ratio (by the table in `faces.json`), IN its bypass.
 fn post_comp() -> Face {
+    post_comp_as(POST_COMP.0 / POST_COMP.1, false)
+}
+
+/// The post compressor's box (a panel of the POST row).
+pub const POST_COMP: (f64, f64) = (960.0, 340.0);
+/// The proportions it is also laid out at (see `AMP_ASPECTS`).
+const POST_COMP_ASPECTS: [f64; 10] = [1.8, 2.1, 2.4, 2.7, 3.0, 3.3, 3.6, 4.0, 4.5, 5.0];
+
+fn post_comp_as(aspect: f64, variant: bool) -> Face {
     use crate::comp_vca::character_comp as dist;
-    let scene = dist::unit("dist", "Distressor", "dist/input", "dist/level", "dist/on");
+    let scene = dist::unit_box("dist", "Distressor", "dist/input", "dist/level", "dist/on", POST_COMP.1 * aspect, POST_COMP.1);
     let params = vec![
         ui::param("dist/input", "Input", Range::linear(0.0, 10.0, Unit::None), 6.7).featured(),
         ui::param("dist/attack", "Attack", Range::log(0.1, 200.0, Unit::Milliseconds), 10.0).featured(),
         ui::param("dist/release", "Release", Range::log(5.0, 1000.0, Unit::Milliseconds), 120.0).featured(),
         ui::param("dist/level", "Output", Range::linear(-24.0, 12.0, Unit::Db), 0.0).featured(),
         ui::choice("dist/ratio", "Ratio", dist::RATIO_NAMES, 3).featured(),
-        ui::choice("dist/detector", "Detector", &["Off", "HP", "HP+"], 0),
-        ui::choice("dist/audio", "Audio", &["Clean", "Dist 2", "Dist 3"], 0),
+        ui::choice("dist/detector", "Detector", &["HP", "Band", "Link"], 0),
+        ui::choice("dist/audio", "Audio", &["HP", "Dist 2", "Dist 3"], 1),
         ui::toggle("dist/on", "In", true).featured(),
     ];
-    Face { file: "55-post-comp-distressor", plugin: PLUGIN, scene, params, streams: Vec::new() }
+    let file: &'static str = if variant { Box::leak(format!("55-post-comp-distressor@{aspect:.1}").into_boxed_str()) } else { "55-post-comp-distressor" };
+    Face { file, plugin: PLUGIN, scene, params, streams: Vec::new() }
 }
 
 /// The gate's picture on the rig's Gate block.
@@ -262,6 +272,7 @@ pub fn faces() -> Vec<Face> {
     v.extend(pre_entries());
     v.push(trio());
     v.push(post_comp());
+    v.extend(POST_COMP_ASPECTS.iter().map(|a| post_comp_as(*a, true)));
     v.extend(AmpModel::EVERY.iter().map(|m| amp_face(*m)));
     v.extend(TRIO_ASPECTS.iter().map(|a| trio_as(*a, true)));
     v.extend(AmpModel::EVERY.iter().flat_map(|m| AMP_ASPECTS.iter().map(move |a| amp_face_as(*m, *a, true))));
@@ -307,7 +318,7 @@ pub fn manifest() -> String {
         // The post compressor's unit. `maps`: face params that aren't the
         // block's own — `input` drives `threshold` (value × a + b), the
         // ratio lamps' index picks `ratio` from the table.
-        "post_comp": { "face": "55-post-comp-distressor", "ns": "dist", "size": size(&post_comp()), "maps": [
+        "post_comp": { "face": "55-post-comp-distressor", "ns": "dist", "size": size(&post_comp()), "variants": variants(POST_COMP_ASPECTS.iter().map(|a| post_comp_as(*a, true)).collect()), "maps": [
             { "face": "input", "param": "threshold", "linear": [-6.0, 0.0] },
             { "face": "ratio", "param": "ratio", "table": [1.0, 2.0, 3.0, 4.0, 6.0, 10.0, 20.0, 20.0] },
         ] },

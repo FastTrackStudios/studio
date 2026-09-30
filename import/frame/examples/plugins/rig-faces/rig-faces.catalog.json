@@ -870,9 +870,9 @@
       "kind": {
         "Choice": {
           "options": [
-            "Off",
             "HP",
-            "HP+"
+            "Band",
+            "Link"
           ]
         }
       },
@@ -895,7 +895,7 @@
       "kind": {
         "Choice": {
           "options": [
-            "Clean",
+            "HP",
             "Dist 2",
             "Dist 3"
           ]
@@ -908,7 +908,7 @@
         "unit": "None",
         "steps": 3
       },
-      "default": 0.0,
+      "default": 0.5,
       "bipolar": false,
       "featured": false
     },

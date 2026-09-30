@@ -1136,8 +1136,80 @@
     ],
     "ns": "dist",
     "size": [
-      1500.0,
-      136.0
+      960.0,
+      340.0
+    ],
+    "variants": [
+      {
+        "face": "55-post-comp-distressor@1.8",
+        "size": [
+          612.0,
+          340.0
+        ]
+      },
+      {
+        "face": "55-post-comp-distressor@2.1",
+        "size": [
+          714.0,
+          340.0
+        ]
+      },
+      {
+        "face": "55-post-comp-distressor@2.4",
+        "size": [
+          816.0,
+          340.0
+        ]
+      },
+      {
+        "face": "55-post-comp-distressor@2.7",
+        "size": [
+          918.0,
+          340.0
+        ]
+      },
+      {
+        "face": "55-post-comp-distressor@3.0",
+        "size": [
+          1020.0,
+          340.0
+        ]
+      },
+      {
+        "face": "55-post-comp-distressor@3.3",
+        "size": [
+          1122.0,
+          340.0
+        ]
+      },
+      {
+        "face": "55-post-comp-distressor@3.6",
+        "size": [
+          1224.0,
+          340.0
+        ]
+      },
+      {
+        "face": "55-post-comp-distressor@4.0",
+        "size": [
+          1360.0,
+          340.0
+        ]
+      },
+      {
+        "face": "55-post-comp-distressor@4.5",
+        "size": [
+          1530.0,
+          340.0
+        ]
+      },
+      {
+        "face": "55-post-comp-distressor@5.0",
+        "size": [
+          1700.0,
+          340.0
+        ]
+      }
     ]
   },
   "pre": [
