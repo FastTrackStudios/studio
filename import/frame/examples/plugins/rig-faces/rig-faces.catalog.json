@@ -487,8 +487,25 @@
       "featured": true
     },
     {
-      "addr": "spring/decay",
-      "name": "Dwell",
+      "addr": "trem/on",
+      "name": "Tremolo",
+      "short_name": null,
+      "group": null,
+      "kind": "Toggle",
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 2
+      },
+      "default": 0.0,
+      "bipolar": false,
+      "featured": true
+    },
+    {
+      "addr": "trem/depth",
+      "name": "Intensity",
       "short_name": null,
       "group": null,
       "kind": "Continuous",
@@ -499,24 +516,81 @@
         "unit": "None",
         "steps": null
       },
-      "default": 0.35,
+      "default": 0.4,
       "bipolar": false,
       "featured": true
     },
     {
-      "addr": "spring/tone",
-      "name": "Tone",
+      "addr": "trem/rate",
+      "name": "Speed",
       "short_name": null,
       "group": null,
       "kind": "Continuous",
       "range": {
-        "min": -1.0,
+        "min": 0.05,
+        "max": 12.0,
+        "scale": "Logarithmic",
+        "unit": "Hz",
+        "steps": null
+      },
+      "default": 0.8402615553406947,
+      "bipolar": false,
+      "featured": true
+    },
+    {
+      "addr": "trem/division",
+      "name": "Division",
+      "short_name": null,
+      "group": null,
+      "kind": {
+        "Choice": {
+          "options": [
+            "1/1",
+            "1/2",
+            "1/4",
+            "1/4D",
+            "1/4T",
+            "1/8",
+            "1/8D",
+            "1/8T",
+            "1/16",
+            "1/16D",
+            "1/16T"
+          ]
+        }
+      },
+      "range": {
+        "min": 0.0,
         "max": 1.0,
         "scale": "Linear",
         "unit": "None",
-        "steps": null
+        "steps": 11
       },
-      "default": 0.5,
+      "default": 0.6,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "trem/sync",
+      "name": "Sync",
+      "short_name": null,
+      "group": null,
+      "kind": {
+        "Choice": {
+          "options": [
+            "Free",
+            "Sync"
+          ]
+        }
+      },
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 2
+      },
+      "default": 0.0,
       "bipolar": false,
       "featured": false
     },
@@ -538,47 +612,13 @@
       "featured": true
     },
     {
-      "addr": "spring/on",
-      "name": "Bypass",
-      "short_name": null,
-      "group": null,
-      "kind": "Toggle",
-      "range": {
-        "min": 0.0,
-        "max": 1.0,
-        "scale": "Linear",
-        "unit": "None",
-        "steps": 2
-      },
-      "default": 1.0,
-      "bipolar": false,
-      "featured": true
-    },
-    {
-      "addr": "trem/rate",
-      "name": "Speed",
+      "addr": "spring/tone",
+      "name": "Tone",
       "short_name": null,
       "group": null,
       "kind": "Continuous",
       "range": {
-        "min": 0.05,
-        "max": 12.0,
-        "scale": "Logarithmic",
-        "unit": "Hz",
-        "steps": null
-      },
-      "default": 0.7995466762115763,
-      "bipolar": false,
-      "featured": true
-    },
-    {
-      "addr": "trem/depth",
-      "name": "Depth",
-      "short_name": null,
-      "group": null,
-      "kind": "Continuous",
-      "range": {
-        "min": 0.0,
+        "min": -1.0,
         "max": 1.0,
         "scale": "Linear",
         "unit": "None",
@@ -586,11 +626,28 @@
       },
       "default": 0.5,
       "bipolar": false,
-      "featured": true
+      "featured": false
     },
     {
-      "addr": "trem/on",
-      "name": "Bypass",
+      "addr": "spring/decay",
+      "name": "Decay",
+      "short_name": null,
+      "group": null,
+      "kind": "Continuous",
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": null
+      },
+      "default": 0.35,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "spring/on",
+      "name": "Reverb",
       "short_name": null,
       "group": null,
       "kind": "Toggle",
@@ -6600,6 +6657,23 @@
     }
   ],
   "actions": [],
-  "streams": [],
+  "streams": [
+    {
+      "id": "trem/lfo",
+      "name": "Tremolo LFO",
+      "kind": {
+        "Scalar": {
+          "range": {
+            "min": 0.0,
+            "max": 1.0,
+            "scale": "Linear",
+            "unit": "None",
+            "steps": null
+          }
+        }
+      },
+      "rate_hz": 60.0
+    }
+  ],
   "collections": []
 }

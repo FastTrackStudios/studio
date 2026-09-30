@@ -17,7 +17,7 @@ pub mod cab;
 mod desk;
 pub mod parts;
 pub mod pedals;
-mod tank;
+pub mod tank;
 
 use crate::face::Face;
 

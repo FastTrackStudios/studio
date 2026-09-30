@@ -35,7 +35,54 @@ fn bracket(b: &mut Builder<'_>, parent: NodeId, x0: f64, x1: f64, y: f64, ticks:
 }
 
 pub fn spring_tank() -> Face {
-    let scene = canvas("Spring Tank", |b, root| {
+    spring_tank_as(&Tank::PLUGIN)
+}
+
+/// Where the tank's controls bind, and what it is called.
+pub struct Tank {
+    pub title: &'static str,
+    pub file: &'static str,
+    pub plugin: &'static str,
+    pub trem_on: &'static str,
+    pub intensity: &'static str,
+    pub speed: &'static str,
+    pub division: &'static str,
+    pub sync: &'static str,
+    pub mix: &'static str,
+    pub tone: &'static str,
+    pub decay: &'static str,
+    pub verb_on: &'static str,
+    pub lfo: &'static str,
+    /// The rig's ranges (a tremolo block's depth 0..1 and rate in Hz, a
+    /// reverb block's level in dB, tone -1..1, decay 0..1) rather than the
+    /// plugin's percentages.
+    pub rig: bool,
+}
+
+impl Tank {
+    /// The suite's own unit.
+    pub const PLUGIN: Self = Self {
+        title: "SPRING TANK",
+        file: "10-tabletop-spring-tank",
+        plugin: PLUGIN,
+        trem_on: "tank/trem_on",
+        intensity: "tank/intensity",
+        speed: "tank/speed",
+        division: "tank/division",
+        sync: "tank/sync",
+        mix: "tank/mix",
+        tone: "tank/tone",
+        decay: "tank/decay",
+        verb_on: "tank/verb_on",
+        lfo: "tank/lfo",
+        rig: false,
+    };
+}
+
+/// The tank drawn with `t`'s bindings.
+#[must_use]
+pub fn spring_tank_as(t: &Tank) -> Face {
+    let scene = canvas(if t.rig { "Gravity Tank" } else { "Spring Tank" }, |b, root| {
         ui::fit_root(b, root, W, H);
         // Copper feet under the case.
         for x in [92.0, 1016.0] {
@@ -69,7 +116,7 @@ pub fn spring_tank() -> Face {
         }
 
         // The name and the two sections.
-        print_left(b, case, "SPRING TANK", 40.0, 212.0, 40.0, INK, 600.0, 0.08);
+        print_left(b, case, t.title, 40.0, 212.0, 40.0, INK, 600.0, 0.08);
         print_left(b, case, "Harmonic Tremolo", 44.0, 262.0, 16.0, INK, 500.0, 0.03);
         print_right(b, case, "Spring Reverb", 1160.0, 262.0, 16.0, INK, 500.0, 0.03);
         bracket(b, case, 45.0, 576.0, 290.0, &[45.0, 266.0, 381.0, 576.0]);
@@ -79,46 +126,60 @@ pub fn spring_tank() -> Face {
         let label_y = 420.0;
         // Tremolo.
         print(b, case, "ON", 102.0, 322.0, 12.0, INK, 500.0, 0.08);
-        toggle(b, case, "tank/trem_on", "Tremolo", 24.0, 102.0, row);
+        toggle(b, case, t.trem_on, "Tremolo", 24.0, 102.0, row);
         print(b, case, "OFF", 102.0, 394.0, 12.0, INK, 500.0, 0.08);
-        let lamp = ui::stream_lamp(b, case, "Tremolo lamp", "tank/lfo", "", 171.0, row, 30.0, "#3cf0a0", INK);
+        let lamp = ui::stream_lamp(b, case, "Tremolo lamp", t.lfo, "", 171.0, row, 30.0, "#3cf0a0", INK);
         let glow = b.controls.get(&lamp).and_then(|c| c.slots_of(SlotRole::Glow).next()).map(NodeId);
         if let Some(glow) = glow {
-            motion::add(b, glow, Motion::new(Target::None).named("lfo").dynamics(Dynamics::Lfo { rate: Num::Expr("param(tank/speed)".into()), shape: Wave::Sine, phase: 0.0 }));
-            motion::add(b, glow, Motion::new(Target::Opacity).input("or(scalar(tank/lfo), motion(lfo))").dynamics(Dynamics::spring(900.0, 50.0)));
+            motion::add(b, glow, Motion::new(Target::None).named("lfo").dynamics(Dynamics::Lfo { rate: Num::Expr(format!("param({})", t.speed)), shape: Wave::Sine, phase: 0.0 }));
+            motion::add(b, glow, Motion::new(Target::Opacity).input(format!("or(scalar({}), motion(lfo))", t.lfo)).dynamics(Dynamics::spring(900.0, 50.0)));
         }
-        for (addr, name, cx) in [("tank/intensity", "INTENSITY", 266.0), ("tank/speed", "SPEED", 381.0)] {
+        for (addr, name, cx) in [(t.intensity, "INTENSITY", 266.0), (t.speed, "SPEED", 381.0)] {
             knob(b, case, Cap::Cream, addr, name, 84.0, cx, row);
             print(b, case, name, cx, label_y, 12.0, INK, 500.0, 0.12);
         }
-        parts::segments(b, case, "tank/division", (455.0, row - 19.0, 76.0, 38.0), 5, 15.0, "#c4d2ff", ValueFormat::default(), true);
+        parts::segments(b, case, t.division, (455.0, row - 19.0, 76.0, 38.0), 5, 15.0, "#c4d2ff", ValueFormat::default(), true);
         b.add(case, draw::rect("dash", 535.0, row - 0.8, 14.0, 1.6, draw::solid(DIM)));
         print(b, case, "SYNC", 577.0, 318.0, 12.0, INK, 500.0, 0.12);
-        toggle(b, case, "tank/sync", "Sync", 24.0, 577.0, row);
+        toggle(b, case, t.sync, "Sync", 24.0, 577.0, row);
         print(b, case, "FREE", 577.0, 394.0, 12.0, INK, 500.0, 0.12);
         // Reverb.
-        for (addr, name, cx) in [("tank/mix", "MIX", 714.0), ("tank/tone", "TONE", 830.0), ("tank/decay", "DECAY", 942.0)] {
+        for (addr, name, cx) in [(t.mix, "MIX", 714.0), (t.tone, "TONE", 830.0), (t.decay, "DECAY", 942.0)] {
             knob(b, case, Cap::Cream, addr, name, 84.0, cx, row);
             print(b, case, name, cx, label_y, 12.0, INK, 500.0, 0.12);
         }
-        let jewel = Place::new("Reverb lamp").size(30.0).variant("green").bind(ui::bind("tank/verb_on")).legend("").touch(surface_kit::TOUCH_MIN);
+        let jewel = Place::new("Reverb lamp").size(30.0).variant("green").bind(ui::bind(t.verb_on)).legend("").touch(surface_kit::TOUCH_MIN);
         let j = ui::put(b, case, "button.jewel", &jewel, 1033.0, row);
         ui::strip_legend(b, j);
         print(b, case, "ON", 1101.0, 322.0, 12.0, INK, 500.0, 0.08);
-        toggle(b, case, "tank/verb_on", "Reverb", 24.0, 1101.0, row);
+        toggle(b, case, t.verb_on, "Reverb", 24.0, 1101.0, row);
         print(b, case, "OFF", 1101.0, 394.0, 12.0, INK, 500.0, 0.08);
     });
     let divisions = ["1/1", "1/2", "1/4", "1/4D", "1/4T", "1/8", "1/8D", "1/8T", "1/16", "1/16D", "1/16T"];
-    let params = vec![
-        ui::toggle("tank/trem_on", "Tremolo", true).featured(),
-        ui::percent("tank/intensity", "Intensity", 50.0).featured(),
-        ui::param("tank/speed", "Speed", Range::log(0.5, 12.0, Unit::Hz), 4.0).featured(),
-        ui::choice("tank/division", "Division", &divisions, 6),
-        ui::choice("tank/sync", "Sync", &["Free", "Sync"], 1),
-        ui::percent("tank/mix", "Mix", 50.0).featured(),
-        ui::percent("tank/tone", "Tone", 50.0),
-        ui::percent("tank/decay", "Decay", 50.0),
-        ui::toggle("tank/verb_on", "Reverb", true).featured(),
-    ];
-    Face { file: "10-tabletop-spring-tank", plugin: PLUGIN, scene, params, streams: vec![ui::lfo_stream("tank/lfo", "Tremolo LFO")] }
+    let params = if t.rig {
+        vec![
+            ui::toggle(t.trem_on, "Tremolo", false).featured(),
+            ui::param(t.intensity, "Intensity", Range::linear(0.0, 1.0, Unit::None), 0.4).featured(),
+            ui::param(t.speed, "Speed", Range::log(0.05, 12.0, Unit::Hz), 5.0).featured(),
+            ui::choice(t.division, "Division", &divisions, 6),
+            ui::choice(t.sync, "Sync", &["Free", "Sync"], 0),
+            ui::param(t.mix, "Mix", Range::linear(-60.0, 12.0, Unit::Db), -16.5).featured(),
+            ui::param(t.tone, "Tone", Range::linear(-1.0, 1.0, Unit::None), 0.0),
+            ui::param(t.decay, "Decay", Range::linear(0.0, 1.0, Unit::None), 0.35),
+            ui::toggle(t.verb_on, "Reverb", true).featured(),
+        ]
+    } else {
+        vec![
+            ui::toggle(t.trem_on, "Tremolo", true).featured(),
+            ui::percent(t.intensity, "Intensity", 50.0).featured(),
+            ui::param(t.speed, "Speed", Range::log(0.5, 12.0, Unit::Hz), 4.0).featured(),
+            ui::choice(t.division, "Division", &divisions, 6),
+            ui::choice(t.sync, "Sync", &["Free", "Sync"], 1),
+            ui::percent(t.mix, "Mix", 50.0).featured(),
+            ui::percent(t.tone, "Tone", 50.0),
+            ui::percent(t.decay, "Decay", 50.0),
+            ui::toggle(t.verb_on, "Reverb", true).featured(),
+        ]
+    };
+    Face { file: t.file, plugin: t.plugin, scene, params, streams: vec![ui::lfo_stream(t.lfo, "Tremolo LFO")] }
 }
