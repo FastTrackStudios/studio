@@ -49,7 +49,7 @@
         "unit": "Percent",
         "steps": null
       },
-      "default": 0.6,
+      "default": 0.5,
       "bipolar": false,
       "featured": true
     },
@@ -66,7 +66,7 @@
         "unit": "Percent",
         "steps": null
       },
-      "default": 0.55,
+      "default": 0.5,
       "bipolar": false,
       "featured": true
     },
@@ -83,7 +83,7 @@
         "unit": "Milliseconds",
         "steps": null
       },
-      "default": 0.4345879896760937,
+      "default": 0.5,
       "bipolar": false,
       "featured": true
     },
@@ -100,7 +100,7 @@
         "unit": "Milliseconds",
         "steps": null
       },
-      "default": 0.5484550065040282,
+      "default": 0.5,
       "bipolar": false,
       "featured": true
     },
@@ -134,7 +134,7 @@
         "unit": "Percent",
         "steps": null
       },
-      "default": 0.7,
+      "default": 0.5,
       "bipolar": false,
       "featured": true
     },
@@ -168,7 +168,7 @@
         "unit": "Percent",
         "steps": null
       },
-      "default": 0.55,
+      "default": 0.5,
       "bipolar": false,
       "featured": true
     },
@@ -236,7 +236,7 @@
         "unit": "Percent",
         "steps": null
       },
-      "default": 0.4,
+      "default": 0.5,
       "bipolar": false,
       "featured": true
     },
@@ -287,7 +287,7 @@
         "unit": "Percent",
         "steps": null
       },
-      "default": 0.55,
+      "default": 0.5,
       "bipolar": false,
       "featured": true
     },
@@ -304,7 +304,7 @@
         "unit": "Percent",
         "steps": null
       },
-      "default": 0.6,
+      "default": 0.5,
       "bipolar": false,
       "featured": true
     },
@@ -372,7 +372,7 @@
         "unit": "None",
         "steps": null
       },
-      "default": 0.5,
+      "default": 0.6,
       "bipolar": false,
       "featured": true
     },
@@ -406,7 +406,7 @@
         "unit": "None",
         "steps": null
       },
-      "default": 0.6,
+      "default": 0.5,
       "bipolar": false,
       "featured": true
     },
@@ -423,7 +423,7 @@
         "unit": "None",
         "steps": null
       },
-      "default": 0.5,
+      "default": 0.47000000000000003,
       "bipolar": false,
       "featured": true
     },
@@ -440,7 +440,7 @@
         "unit": "None",
         "steps": null
       },
-      "default": 0.5,
+      "default": 0.55,
       "bipolar": false,
       "featured": true
     },
@@ -576,7 +576,7 @@
         "unit": "None",
         "steps": null
       },
-      "default": 0.6,
+      "default": 0.5,
       "bipolar": false,
       "featured": true
     },
@@ -661,7 +661,7 @@
         "unit": "Percent",
         "steps": null
       },
-      "default": 0.4,
+      "default": 0.5,
       "bipolar": false,
       "featured": true
     },
@@ -678,7 +678,7 @@
         "unit": "Percent",
         "steps": null
       },
-      "default": 0.3,
+      "default": 0.5,
       "bipolar": false,
       "featured": true
     },
@@ -695,7 +695,7 @@
         "unit": "Hz",
         "steps": null
       },
-      "default": 0.3413030972429927,
+      "default": 0.5,
       "bipolar": false,
       "featured": true
     },
@@ -712,7 +712,7 @@
         "unit": "Hz",
         "steps": null
       },
-      "default": 0.7781512503836435,
+      "default": 0.5,
       "bipolar": false,
       "featured": true
     },
@@ -780,7 +780,7 @@
         "unit": "Db",
         "steps": null
       },
-      "default": 0.6666666666666666,
+      "default": 0.5,
       "bipolar": true,
       "featured": true
     },
@@ -952,7 +952,7 @@
         "unit": "None",
         "steps": null
       },
-      "default": 0.5,
+      "default": 0.35,
       "bipolar": false,
       "featured": true
     },
@@ -969,7 +969,7 @@
         "unit": "None",
         "steps": null
       },
-      "default": 0.0,
+      "default": 0.15,
       "bipolar": false,
       "featured": true
     },
@@ -1082,7 +1082,7 @@
         "unit": "None",
         "steps": null
       },
-      "default": 0.5,
+      "default": 0.35,
       "bipolar": false,
       "featured": true
     },
@@ -1099,7 +1099,7 @@
         "unit": "None",
         "steps": null
       },
-      "default": 0.0,
+      "default": 0.15,
       "bipolar": false,
       "featured": true
     },
@@ -1167,7 +1167,7 @@
         "unit": "None",
         "steps": 2
       },
-      "default": 0.0,
+      "default": 1.0,
       "bipolar": false,
       "featured": true
     },
@@ -1184,8 +1184,33 @@
         "unit": "Db",
         "steps": null
       },
-      "default": 0.6666666666666666,
+      "default": 0.5555555555555556,
       "bipolar": true,
+      "featured": true
+    },
+    {
+      "addr": "eq/color",
+      "name": "Colour",
+      "short_name": null,
+      "group": null,
+      "kind": {
+        "Choice": {
+          "options": [
+            "Mauve",
+            "Slate",
+            "Blue"
+          ]
+        }
+      },
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 3
+      },
+      "default": 0.0,
+      "bipolar": false,
       "featured": true
     },
     {
@@ -1252,7 +1277,7 @@
         "unit": "Db",
         "steps": null
       },
-      "default": 0.5,
+      "default": 0.0,
       "bipolar": true,
       "featured": true
     },
@@ -1286,7 +1311,7 @@
         "unit": "Db",
         "steps": null
       },
-      "default": 0.5,
+      "default": 1.0,
       "bipolar": true,
       "featured": true
     },
@@ -1303,7 +1328,7 @@
         "unit": "Db",
         "steps": null
       },
-      "default": 0.5,
+      "default": 0.0,
       "bipolar": true,
       "featured": true
     },
@@ -1337,7 +1362,7 @@
         "unit": "Db",
         "steps": null
       },
-      "default": 0.5,
+      "default": 1.0,
       "bipolar": true,
       "featured": true
     },
@@ -1354,7 +1379,7 @@
         "unit": "Db",
         "steps": null
       },
-      "default": 0.5,
+      "default": 0.0,
       "bipolar": true,
       "featured": true
     },
@@ -1388,7 +1413,7 @@
         "unit": "Db",
         "steps": null
       },
-      "default": 0.5,
+      "default": 1.0,
       "bipolar": true,
       "featured": true
     },
@@ -1422,7 +1447,7 @@
         "unit": "Hz",
         "steps": null
       },
-      "default": 0.4515449934959717,
+      "default": 0.5,
       "bipolar": false,
       "featured": true
     },
@@ -1439,7 +1464,7 @@
         "unit": "Percent",
         "steps": null
       },
-      "default": 0.7,
+      "default": 0.5,
       "bipolar": false,
       "featured": true
     },
@@ -1473,7 +1498,7 @@
         "unit": "Percent",
         "steps": null
       },
-      "default": 0.3,
+      "default": 0.5,
       "bipolar": false,
       "featured": true
     },
@@ -1490,7 +1515,7 @@
         "unit": "Percent",
         "steps": null
       },
-      "default": 0.35,
+      "default": 0.5,
       "bipolar": false,
       "featured": true
     },
@@ -1507,7 +1532,7 @@
         "unit": "Hz",
         "steps": null
       },
-      "default": 0.41140808993222105,
+      "default": 0.2,
       "bipolar": false,
       "featured": true
     },
@@ -1524,7 +1549,7 @@
         "unit": "Hz",
         "steps": null
       },
-      "default": 0.5981040045018439,
+      "default": 0.8,
       "bipolar": false,
       "featured": true
     },
@@ -1692,7 +1717,7 @@
         "unit": "Percent",
         "steps": null
       },
-      "default": 0.35,
+      "default": 0.5,
       "bipolar": false,
       "featured": true
     },
@@ -1709,7 +1734,7 @@
         "unit": "Seconds",
         "steps": null
       },
-      "default": 0.5482730454388061,
+      "default": 0.5,
       "bipolar": false,
       "featured": true
     },
@@ -1726,7 +1751,7 @@
         "unit": "Hz",
         "steps": null
       },
-      "default": 0.45801353078493934,
+      "default": 0.2,
       "bipolar": false,
       "featured": true
     },
@@ -1743,7 +1768,7 @@
         "unit": "Hz",
         "steps": null
       },
-      "default": 0.6941346394792774,
+      "default": 0.8,
       "bipolar": false,
       "featured": true
     },

@@ -1,635 +1,304 @@
-<Document id="a5280fda-9b4e-4566-931d-cb2bfe1f9851">
-  <Page name="Surface" id="e7884fb1-e2b1-45ae-8cfa-dd6c89cb504c">
-    <Frame name="Graphic EQ" id="7c2791fd-9e81-40a1-9da8-014fbdba2cb7" w=1140 h=286>
-      <Frame name="Case" id="c2c48ca5-59d2-4f6c-ae79-60e2b74c88f2" w=1140 h=274 radius=16 fill={[{"kind":{"LinearGradient":{"stops":[{"color":"#f6dcdd","position":0.0},{"color":"#ecc6c8","position":0.12},{"color":"#e3b6b9","position":0.85},{"color":"#cf9ea2","position":1.0}],"transform":{"a":1.6653345369377348e-16,"b":-1.0,"c":1.0,"d":1.6653345369377348e-16,"tx":1.0,"ty":-1.942890293094024e-16}}}}]} effects={[{"color":"#00000066","kind":"DropShadow","offset_y":8.0,"radius":16.0},{"color":"#ffffffb0","kind":"InnerShadow","offset_y":2.0,"radius":1.0},{"color":"#9a5a6255","kind":"InnerShadow","offset_y":-3.0,"radius":5.0}]}>
-        <Text name="print" id="6c45dd5a-970d-46cb-ab09-0612d1439a3f" x=99.685 y=27.86 w=44 h=15 fill="#1e1719" size=10.5 weight=800 text-align="right" runs={[{"font_weight":800.0,"text":"HPF :"}]}>HPF :</Text>
-        <Text name="print" id="071b234a-c8e3-46bc-aac7-25137938abc5" x=100.315 y=27.86 w=44 h=15 fill="#1e1719" size=10.5 weight=800 text-align="right" runs={[{"font_weight":800.0,"text":"HPF :"}]}>HPF :</Text>
-        <Text name="print" id="6823075d-f354-458c-8596-0f8a646a89d5" x=100 y=27.86 w=44 h=15 fill="#1e1719" size=10.5 weight=800 text-align="right" runs={[{"font_weight":800.0,"text":"HPF :"}]}>HPF :</Text>
-        <Frame name="eq/hpf readout" id="7e47c446-deb1-4b5a-9299-ff2b2847dcec" x=148 y=26.5 w=60 h=17 control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Param":{"addr":"eq/hpf"}}},"kind":"Readout","slots":[{"node":"869fb7f9-e796-497e-a803-22d1197c2886","role":"Value"}]}}>
-          <Text name="print" id="e2de34af-d7e4-42af-a51d-681daec0e9c2" x=-0.315 y=1.3599999999999994 w=60 h=15 fill="#1e1719" size=10.5 weight=800 runs={[{"font_weight":800.0,"text":""}]} />
-          <Text name="print" id="4eb0bad7-8922-4609-911d-81edbdf26b4a" x=0.315 y=1.3599999999999994 w=60 h=15 fill="#1e1719" size=10.5 weight=800 runs={[{"font_weight":800.0,"text":""}]} />
-          <Text name="print" id="869fb7f9-e796-497e-a803-22d1197c2886" y=1.3599999999999994 w=60 h=15 fill="#1e1719" size=10.5 weight=800 runs={[{"font_weight":800.0,"text":""}]} />
-        </Frame>
-        <Frame name="HPF" id="fdcb0bd2-9945-4cdc-8eef-524226dea7a6" x=121 y=84 w=64 h=64 control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Param":{"addr":"eq/hpf"}}},"kind":{"Knob":{"sweep_degrees":300.0}},"slots":[{"node":"bd259dd6-3328-40ef-a2d7-58dd8c4189f4","role":"Needle"}]}}>
-          <Frame name="knob" id="6b5f1d4e-3a87-471a-a278-ff758789ebe8" x=-1.4545454545454533 y=-1.4545454545454533 w=66.9090909090909 h=66.9090909090909>
-            <Ellipse name="shadow" id="fa93f38e-aa0f-47b6-917d-801f95a953be" x=2.6181818181818173 y=5.2363636363636346 w=64 h=64 fill="#00000066" />
-            <Frame name="body" id="bd259dd6-3328-40ef-a2d7-58dd8c4189f4" w=66.9090909090909 h=66.9090909090909>
-              <Vector name="skirt" id="fcd855e8-15cb-43fe-a48b-df506fa57bc5" w=66.9090909090909 h=66.9090909090909 fill={[{"kind":{"RadialGradient":{"stops":[{"color":"#4f3f3a","position":0.0},{"color":"#3b2a24","position":0.7},{"color":"#201714","position":1.0}],"transform":{"a":0.9756521739130435,"b":0.0,"c":0.0,"d":0.9756521739130435,"tx":0.012173913043478257,"ty":0.012173913043478257}}}}]} effects={[{"color":"#00000073","kind":"DropShadow","radius":3.6363636363636367}]} geometry="M 33.455 1.455 L 34.831 1.919 L 36.157 2.565 L 37.423 3.314 L 38.624 4.135 L 39.761 5.007 L 40.835 5.911 L 41.848 6.833 L 42.807 7.758 L 44.137 7.666 L 45.506 7.611 L 46.909 7.608 L 48.341 7.671 L 49.789 7.815 L 51.240 8.055 L 52.670 8.412 L 54.024 8.941 L 54.780 10.182 L 55.380 11.529 L 55.868 12.916 L 56.261 14.317 L 56.572 15.716 L 56.813 17.099 L 56.997 18.457 L 57.136 19.782 L 58.214 20.565 L 59.298 21.404 L 60.375 22.304 L 61.431 23.272 L 62.448 24.313 L 63.405 25.429 L 64.272 26.623 L 64.968 27.898 L 64.750 29.334 L 64.344 30.752 L 63.826 32.128 L 63.227 33.455 L 62.566 34.726 L 61.861 35.940 L 61.129 37.098 L 60.385 38.203 L 60.707 39.496 L 60.998 40.835 L 61.245 42.217 L 61.431 43.637 L 61.541 45.088 L 61.557 46.559 L 61.453 48.030 L 61.167 49.455 L 60.077 50.415 L 58.854 51.240 L 57.573 51.961 L 56.261 52.592 L 54.938 53.140 L 53.618 53.618 L 52.313 54.035 L 51.032 54.402 L 50.447 55.600 L 49.810 56.813 L 49.111 58.030 L 48.341 59.238 L 47.492 60.420 L 46.559 61.557 L 45.534 62.617 L 44.399 63.525 L 42.946 63.559 L 41.480 63.405 L 40.034 63.135 L 38.624 62.774 L 37.258 62.344 L 35.940 61.861 L 34.672 61.342 L 33.455 60.800 L 32.237 61.342 L 30.969 61.861 L 29.651 62.344 L 28.285 62.774 L 26.875 63.135 L 25.429 63.405 L 23.963 63.559 L 22.510 63.525 L 21.375 62.617 L 20.350 61.557 L 19.417 60.420 L 18.569 59.238 L 17.798 58.030 L 17.099 56.813 L 16.462 55.600 L 15.877 54.402 L 14.596 54.035 L 13.291 53.618 L 11.971 53.140 L 10.648 52.592 L 9.336 51.961 L 8.055 51.240 L 6.833 50.415 L 5.742 49.455 L 5.456 48.030 L 5.352 46.559 L 5.368 45.088 L 5.478 43.637 L 5.664 42.217 L 5.911 40.835 L 6.202 39.496 L 6.525 38.203 L 5.780 37.098 L 5.048 35.940 L 4.344 34.726 L 3.682 33.455 L 3.083 32.128 L 2.565 30.752 L 2.159 29.334 L 1.941 27.898 L 2.637 26.623 L 3.504 25.429 L 4.461 24.313 L 5.478 23.272 L 6.534 22.304 L 7.611 21.404 L 8.695 20.565 L 9.773 19.782 L 9.912 18.457 L 10.096 17.099 L 10.337 15.716 L 10.648 14.317 L 11.041 12.916 L 11.529 11.529 L 12.129 10.182 L 12.885 8.941 L 14.239 8.412 L 15.669 8.055 L 17.120 7.815 L 18.569 7.671 L 20.000 7.608 L 21.404 7.611 L 22.772 7.666 L 24.102 7.758 L 25.061 6.833 L 26.074 5.911 L 27.148 5.007 L 28.285 4.135 L 29.486 3.314 L 30.752 2.565 L 32.078 1.919 Z" />
-              <Vector name="flutes" id="30bfbb02-9d03-4b07-bec5-cdc3cd02c4f3" w=66.9090909090909 h=66.9090909090909 fill="#18110e4d" geometry="M 33.455 3.200 L 34.760 3.554 L 36.027 4.057 L 37.247 4.648 L 38.418 5.305 L 39.538 6.012 L 40.609 6.755 L 41.631 7.523 L 42.608 8.305 L 43.860 8.334 L 45.136 8.403 L 46.434 8.522 L 47.746 8.700 L 49.066 8.950 L 50.381 9.281 L 51.674 9.711 L 52.902 10.278 L 53.674 11.389 L 54.321 12.588 L 54.876 13.825 L 55.351 15.081 L 55.755 16.343 L 56.097 17.600 L 56.386 18.845 L 56.633 20.073 L 57.572 20.900 L 58.506 21.773 L 59.423 22.698 L 60.314 23.678 L 61.165 24.717 L 61.959 25.817 L 62.674 26.977 L 63.249 28.201 L 63.127 29.548 L 62.852 30.883 L 62.482 32.187 L 62.038 33.455 L 61.536 34.681 L 60.990 35.864 L 60.412 37.004 L 59.812 38.102 L 60.000 39.340 L 60.154 40.609 L 60.262 41.907 L 60.314 43.231 L 60.298 44.573 L 60.200 45.926 L 60.002 47.274 L 59.656 48.582 L 58.696 49.535 L 57.628 50.381 L 56.506 51.142 L 55.351 51.828 L 54.178 52.444 L 53.000 53.000 L 51.824 53.501 L 50.658 53.957 L 50.007 55.026 L 49.309 56.097 L 48.557 57.161 L 47.746 58.209 L 46.871 59.227 L 45.926 60.200 L 44.908 61.105 L 43.802 61.885 L 42.454 61.998 L 41.092 61.959 L 39.743 61.821 L 38.418 61.604 L 37.123 61.323 L 35.864 60.990 L 34.641 60.619 L 33.455 60.218 L 32.269 60.619 L 31.045 60.990 L 29.786 61.323 L 28.491 61.604 L 27.166 61.821 L 25.817 61.959 L 24.455 61.998 L 23.107 61.885 L 22.001 61.105 L 20.983 60.200 L 20.038 59.227 L 19.163 58.209 L 18.352 57.161 L 17.600 56.097 L 16.902 55.026 L 16.251 53.957 L 15.085 53.501 L 13.909 53.000 L 12.731 52.444 L 11.558 51.828 L 10.404 51.142 L 9.281 50.381 L 8.213 49.535 L 7.253 48.582 L 6.908 47.274 L 6.709 45.926 L 6.611 44.573 L 6.595 43.231 L 6.647 41.907 L 6.755 40.609 L 6.909 39.340 L 7.098 38.102 L 6.497 37.004 L 5.919 35.864 L 5.373 34.681 L 4.871 33.455 L 4.427 32.187 L 4.057 30.883 L 3.782 29.548 L 3.660 28.201 L 4.235 26.977 L 4.950 25.817 L 5.744 24.717 L 6.595 23.678 L 7.486 22.698 L 8.403 21.773 L 9.337 20.900 L 10.277 20.073 L 10.523 18.845 L 10.812 17.600 L 11.155 16.343 L 11.558 15.081 L 12.033 13.825 L 12.588 12.588 L 13.235 11.389 L 14.007 10.278 L 15.235 9.711 L 16.528 9.281 L 17.843 8.950 L 19.163 8.700 L 20.475 8.522 L 21.773 8.403 L 23.049 8.334 L 24.301 8.305 L 25.278 7.523 L 26.301 6.755 L 27.371 6.012 L 28.491 5.305 L 29.662 4.648 L 30.883 4.057 L 32.149 3.554 Z" />
-              <Ellipse name="top" id="3dd87243-727b-42e1-8846-09c94f4d3ea1" x=10.414545454545454 y=10.414545454545454 w=46.08 h=46.08 fill={[{"kind":{"RadialGradient":{"stops":[{"color":"#665954","position":0.0},{"color":"#3b2a24","position":0.75},{"color":"#2c201b","position":1.0}],"transform":{"a":1.0,"b":0.0,"c":0.0,"d":1.0,"tx":0.0,"ty":0.0}}}}]} effects={[{"color":"#0000004d","kind":"DropShadow","radius":2.1818181818181817}]} />
-              <Rectangle name="index" id="15ebcea1-aa89-45b0-83aa-552906bfd6c0" x=31.418181818181818 y=13.640145454545454 w=4.072727272727272 h=12.9024 radius=2.036363636363636 fill="#e0b060" />
+<Document id="c7f93feb-b1d6-47c3-8be8-5148c51bb52c">
+  <Page name="Surface" id="aaf65773-5107-4bf2-bf26-fa0136d53294">
+    <Frame name="Graphic EQ" id="3a5a38f1-c6f9-432e-8adf-7cd2b42ca0fc" w=1140 h=286>
+      <Rectangle name="foot" id="20ffbce3-3440-4d9f-bcf1-9fa09842b153" x=120 y=272 w=50 h=14 radius=4 fill="#1b1b1d" />
+      <Rectangle name="foot" id="8a7ca4be-840c-4ba1-ad8f-1452535db988" x=970 y=272 w=50 h=14 radius=4 fill="#1b1b1d" />
+      <Frame name="eq/color = 0" id="cd2564d2-11e3-42c1-823e-7dfd98071573" w=1140 h=274 control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Param":{"addr":"eq/color"}}},"kind":"Readout","show_if":{"addr":"eq/color","any_of":[0.0],"at_least":0.0,"not":false},"slots":[{"node":"1f31a2d6-fcf6-4241-b91b-da64d8c3aa02","role":"Value"}]}}>
+        <Text name="colourway" id="1f31a2d6-fcf6-4241-b91b-da64d8c3aa02" w=8 h=2 fill="#00000000" size=1 />
+        <Frame name="Case" id="49542f52-9fa7-4e29-9236-2d241531fbce" w=1140 h=274 radius=16 effects={[{"color":"#00000066","kind":"DropShadow","offset_y":8.0,"radius":16.0}]}>
+          <Frame name="material powder" id="7370a611-b20f-4b3c-839b-d352495526fe" w=1140 h=274 radius=16 clip=true absolute=true>
+            <Rectangle name="base" id="8cb537ec-83c9-45b2-97b3-780346aa63fb" w=1140 h=274 fill={[{"kind":{"LinearGradient":{"stops":[{"color":"#efcacd","position":0.0},{"color":"#eec7ca","position":0.5},{"color":"#d1afb2","position":1.0}],"transform":{"a":0.7988362387301198,"b":-1.140856382055789,"c":1.140856382055789,"d":0.7988362387301198,"tx":0.6710100716628347,"ty":-0.4698463103929543}}}}]} absolute=true />
+            <Frame name="texture" id="0daa4bdb-8c0e-42fa-a432-d955848373c4" w=1140 h=274 clip=true absolute=true>
+              <Rectangle name="tile" id="7eb688b8-4cd9-484b-93dc-a28a96513184" w=128 h=128 fill={[{"kind":{"Image":{"asset":"5cebaae1ab061bba4f4a2909f98ec55f27cebb539a6630b8cb1baf20ecb268b6","scale_mode":"Stretch"}},"opacity":0.1813756862745098}]} absolute=true />
+              <Rectangle name="tile" id="9ffaf04b-ead5-41c4-a5be-0f515a44116a" x=128 w=128 h=128 fill={[{"kind":{"Image":{"asset":"5cebaae1ab061bba4f4a2909f98ec55f27cebb539a6630b8cb1baf20ecb268b6","scale_mode":"Stretch"}},"opacity":0.1813756862745098}]} absolute=true />
+              <Rectangle name="tile" id="f89af4bd-27f6-4a3c-995e-91d3b90f653b" x=256 w=128 h=128 fill={[{"kind":{"Image":{"asset":"5cebaae1ab061bba4f4a2909f98ec55f27cebb539a6630b8cb1baf20ecb268b6","scale_mode":"Stretch"}},"opacity":0.1813756862745098}]} absolute=true />
+              <Rectangle name="tile" id="0e9ea42a-90af-47d5-b614-49cb2493dbde" x=384 w=128 h=128 fill={[{"kind":{"Image":{"asset":"5cebaae1ab061bba4f4a2909f98ec55f27cebb539a6630b8cb1baf20ecb268b6","scale_mode":"Stretch"}},"opacity":0.1813756862745098}]} absolute=true />
+              <Rectangle name="tile" id="0dba808c-f661-4d14-b465-545ec02edb3b" x=512 w=128 h=128 fill={[{"kind":{"Image":{"asset":"5cebaae1ab061bba4f4a2909f98ec55f27cebb539a6630b8cb1baf20ecb268b6","scale_mode":"Stretch"}},"opacity":0.1813756862745098}]} absolute=true />
+              <Rectangle name="tile" id="5646a716-7310-44eb-84d0-10a40c166cb5" x=640 w=128 h=128 fill={[{"kind":{"Image":{"asset":"5cebaae1ab061bba4f4a2909f98ec55f27cebb539a6630b8cb1baf20ecb268b6","scale_mode":"Stretch"}},"opacity":0.1813756862745098}]} absolute=true />
+              <Rectangle name="tile" id="996e39cf-3f65-4e23-9f60-4b8e3d34efe7" x=768 w=128 h=128 fill={[{"kind":{"Image":{"asset":"5cebaae1ab061bba4f4a2909f98ec55f27cebb539a6630b8cb1baf20ecb268b6","scale_mode":"Stretch"}},"opacity":0.1813756862745098}]} absolute=true />
+              <Rectangle name="tile" id="9f9c6522-c23f-4b4a-80f8-e0c004fb4e1d" x=896 w=128 h=128 fill={[{"kind":{"Image":{"asset":"5cebaae1ab061bba4f4a2909f98ec55f27cebb539a6630b8cb1baf20ecb268b6","scale_mode":"Stretch"}},"opacity":0.1813756862745098}]} absolute=true />
+              <Rectangle name="tile" id="6fe7189b-197b-41a5-a4e3-f2ed18c1acad" x=1024 w=128 h=128 fill={[{"kind":{"Image":{"asset":"5cebaae1ab061bba4f4a2909f98ec55f27cebb539a6630b8cb1baf20ecb268b6","scale_mode":"Stretch"}},"opacity":0.1813756862745098}]} absolute=true />
+              <Rectangle name="tile" id="39a09875-e926-45ae-94b8-26e3427e3b85" y=128 w=128 h=128 fill={[{"kind":{"Image":{"asset":"5cebaae1ab061bba4f4a2909f98ec55f27cebb539a6630b8cb1baf20ecb268b6","scale_mode":"Stretch"}},"opacity":0.1813756862745098}]} absolute=true />
+              <Rectangle name="tile" id="084f1a4e-fd63-46a8-8e67-215ba51c2ce5" x=128 y=128 w=128 h=128 fill={[{"kind":{"Image":{"asset":"5cebaae1ab061bba4f4a2909f98ec55f27cebb539a6630b8cb1baf20ecb268b6","scale_mode":"Stretch"}},"opacity":0.1813756862745098}]} absolute=true />
+              <Rectangle name="tile" id="170aff35-861a-46b1-9877-2c37be5d50f3" x=256 y=128 w=128 h=128 fill={[{"kind":{"Image":{"asset":"5cebaae1ab061bba4f4a2909f98ec55f27cebb539a6630b8cb1baf20ecb268b6","scale_mode":"Stretch"}},"opacity":0.1813756862745098}]} absolute=true />
+              <Rectangle name="tile" id="1d736eb6-c0c4-472e-b2f2-7cf7fab680f5" x=384 y=128 w=128 h=128 fill={[{"kind":{"Image":{"asset":"5cebaae1ab061bba4f4a2909f98ec55f27cebb539a6630b8cb1baf20ecb268b6","scale_mode":"Stretch"}},"opacity":0.1813756862745098}]} absolute=true />
+              <Rectangle name="tile" id="da9c7b90-7d47-42f1-8600-d0fd0ffc1fc1" x=512 y=128 w=128 h=128 fill={[{"kind":{"Image":{"asset":"5cebaae1ab061bba4f4a2909f98ec55f27cebb539a6630b8cb1baf20ecb268b6","scale_mode":"Stretch"}},"opacity":0.1813756862745098}]} absolute=true />
+              <Rectangle name="tile" id="eeb8eead-08c9-4b7f-8055-38efcc32ac80" x=640 y=128 w=128 h=128 fill={[{"kind":{"Image":{"asset":"5cebaae1ab061bba4f4a2909f98ec55f27cebb539a6630b8cb1baf20ecb268b6","scale_mode":"Stretch"}},"opacity":0.1813756862745098}]} absolute=true />
+              <Rectangle name="tile" id="f46442ea-02d8-409b-b72b-4b5c56db6ac2" x=768 y=128 w=128 h=128 fill={[{"kind":{"Image":{"asset":"5cebaae1ab061bba4f4a2909f98ec55f27cebb539a6630b8cb1baf20ecb268b6","scale_mode":"Stretch"}},"opacity":0.1813756862745098}]} absolute=true />
+              <Rectangle name="tile" id="61c11fcd-a61d-469b-bfca-4fb864a2d006" x=896 y=128 w=128 h=128 fill={[{"kind":{"Image":{"asset":"5cebaae1ab061bba4f4a2909f98ec55f27cebb539a6630b8cb1baf20ecb268b6","scale_mode":"Stretch"}},"opacity":0.1813756862745098}]} absolute=true />
+              <Rectangle name="tile" id="83bb58f3-252d-4db1-89aa-3159a63110b3" x=1024 y=128 w=128 h=128 fill={[{"kind":{"Image":{"asset":"5cebaae1ab061bba4f4a2909f98ec55f27cebb539a6630b8cb1baf20ecb268b6","scale_mode":"Stretch"}},"opacity":0.1813756862745098}]} absolute=true />
+              <Rectangle name="tile" id="0b5758e7-69d6-46b0-8a59-8ee5d28dd84b" y=256 w=128 h=128 fill={[{"kind":{"Image":{"asset":"5cebaae1ab061bba4f4a2909f98ec55f27cebb539a6630b8cb1baf20ecb268b6","scale_mode":"Stretch"}},"opacity":0.1813756862745098}]} absolute=true />
+              <Rectangle name="tile" id="08f510b5-1b69-40c0-b209-59b206c37c87" x=128 y=256 w=128 h=128 fill={[{"kind":{"Image":{"asset":"5cebaae1ab061bba4f4a2909f98ec55f27cebb539a6630b8cb1baf20ecb268b6","scale_mode":"Stretch"}},"opacity":0.1813756862745098}]} absolute=true />
+              <Rectangle name="tile" id="3a1234ab-26d5-43fd-aab8-9bf119179e22" x=256 y=256 w=128 h=128 fill={[{"kind":{"Image":{"asset":"5cebaae1ab061bba4f4a2909f98ec55f27cebb539a6630b8cb1baf20ecb268b6","scale_mode":"Stretch"}},"opacity":0.1813756862745098}]} absolute=true />
+              <Rectangle name="tile" id="140f3b58-42d3-4b96-adde-6f9f223efee2" x=384 y=256 w=128 h=128 fill={[{"kind":{"Image":{"asset":"5cebaae1ab061bba4f4a2909f98ec55f27cebb539a6630b8cb1baf20ecb268b6","scale_mode":"Stretch"}},"opacity":0.1813756862745098}]} absolute=true />
+              <Rectangle name="tile" id="82d80a70-a074-4fa2-a274-530afd1b4c8f" x=512 y=256 w=128 h=128 fill={[{"kind":{"Image":{"asset":"5cebaae1ab061bba4f4a2909f98ec55f27cebb539a6630b8cb1baf20ecb268b6","scale_mode":"Stretch"}},"opacity":0.1813756862745098}]} absolute=true />
+              <Rectangle name="tile" id="a764c4f3-8c4b-4bdb-a455-301df1912e84" x=640 y=256 w=128 h=128 fill={[{"kind":{"Image":{"asset":"5cebaae1ab061bba4f4a2909f98ec55f27cebb539a6630b8cb1baf20ecb268b6","scale_mode":"Stretch"}},"opacity":0.1813756862745098}]} absolute=true />
+              <Rectangle name="tile" id="83c7509d-f6a4-4b3e-9d2c-79eb54a76eed" x=768 y=256 w=128 h=128 fill={[{"kind":{"Image":{"asset":"5cebaae1ab061bba4f4a2909f98ec55f27cebb539a6630b8cb1baf20ecb268b6","scale_mode":"Stretch"}},"opacity":0.1813756862745098}]} absolute=true />
+              <Rectangle name="tile" id="f8370470-18f7-4bdd-8179-56010f667b28" x=896 y=256 w=128 h=128 fill={[{"kind":{"Image":{"asset":"5cebaae1ab061bba4f4a2909f98ec55f27cebb539a6630b8cb1baf20ecb268b6","scale_mode":"Stretch"}},"opacity":0.1813756862745098}]} absolute=true />
+              <Rectangle name="tile" id="98d00099-3aab-48b5-a2d0-9ea297895f7b" x=1024 y=256 w=128 h=128 fill={[{"kind":{"Image":{"asset":"5cebaae1ab061bba4f4a2909f98ec55f27cebb539a6630b8cb1baf20ecb268b6","scale_mode":"Stretch"}},"opacity":0.1813756862745098}]} absolute=true />
             </Frame>
-            <Ellipse name="glint" id="0c19a56d-34ca-4478-a158-2aee3e1f3c3f" x=9.262545454545453 y=7.41934545454545 w=34.56 h=34.56 fill={[{"kind":{"RadialGradient":{"stops":[{"color":"#ffffff5e","position":0.0},{"color":"#ffffff00","position":1.0}]}}}]} />
-            <Vector name="rim light" id="f02f1c0b-d964-4af0-bd2c-30d59837cd9d" w=66.9090909090909 h=66.9090909090909 fill="#ffffff2e" geometry="M 4.204 22.808 A 31.127 31.127 0 0 1 53.463 9.610 L 51.967 11.392 A 28.800 28.800 0 0 0 6.391 23.604 Z" />
+            <Rectangle name="sheen" id="353629aa-c50f-4ea5-95d6-9322d7724cbb" w=1140 h=274 fill={[{"kind":{"LinearGradient":{"stops":[{"color":"#ffffff1a","position":0.0},{"color":"#ffffff00","position":0.42},{"color":"#00000000","position":0.62},{"color":"#00000024","position":1.0}],"transform":{"a":0.7988362387301198,"b":-1.140856382055789,"c":1.140856382055789,"d":0.7988362387301198,"tx":0.6710100716628347,"ty":-0.4698463103929543}}}}]} absolute=true />
           </Frame>
+          <Rectangle name="case edge soft" id="7e40306b-4010-49a1-8e3c-8ffdcfedbbba" w=1140 h=274 radius=16 stroke={[{"kind":{"LinearGradient":{"stops":[{"color":"#ffffff39","position":0.0},{"color":"#ffffff0e","position":0.4},{"color":"#00000000","position":0.5},{"color":"#00000013","position":0.62},{"color":"#0000003f","position":1.0}],"transform":{"a":0.7988362387301198,"b":-1.140856382055789,"c":1.140856382055789,"d":0.7988362387301198,"tx":0.6710100716628347,"ty":-0.4698463103929543}}}}]} stroke-weight=18 stroke-align="inside" absolute=true />
+          <Rectangle name="case edge" id="21907cbe-fc0b-4fea-8c5a-f8d6af8f2661" w=1140 h=274 radius=16 stroke={[{"kind":{"LinearGradient":{"stops":[{"color":"#ffffff80","position":0.0},{"color":"#ffffff20","position":0.4},{"color":"#00000000","position":0.5},{"color":"#0000002a","position":0.62},{"color":"#0000008c","position":1.0}],"transform":{"a":0.7988362387301198,"b":-1.140856382055789,"c":1.140856382055789,"d":0.7988362387301198,"tx":0.6710100716628347,"ty":-0.4698463103929543}}}}]} stroke-weight=5.5 stroke-align="inside" absolute=true />
         </Frame>
-        <Vector name="art" id="ab17a857-3f7c-4051-8cf6-2e446ace5c63" x=142 y=169 w=16 h=7 stroke="#1e1719" stroke-weight=1.8 stroke-cap="round" stroke-join="round" geometry="M 0.000 7.000 L 4.000 0.000 L 16.000 0.000 " />
-        <Frame name="Bypass" id="88376ce8-352b-49aa-9662-6aa276d481d8" x=126 y=194 w=48 h=48 control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Param":{"addr":"eq/on"}}},"kind":{"Button":{"mode":"Toggle"}},"slots":[{"node":"5060c147-bc8c-4e44-aa33-09a51001f56b","role":"Thumb"}]}}>
-          <Ellipse name="washer shadow" id="305bbc37-fa7b-4601-87a1-88539785fbe2" x=12.200000000000001 y=13.200000000000001 w=24.8 h=24.8 fill={[{"kind":{"RadialGradient":{"stops":[{"color":"#00000070","position":0.0},{"color":"#00000000","position":1.0}]}}}]} />
-          <Ellipse name="washer" id="050c8382-057e-4434-a4e2-fdacab32f19a" x=12.799999999999999 y=12.799999999999999 w=22.400000000000002 h=22.400000000000002 fill={[{"kind":{"AngularGradient":{"stops":[{"color":"#fff1c4","position":0.0},{"color":"#9a7236","position":0.25},{"color":"#e9cf8e","position":0.5},{"color":"#9a7236","position":0.75},{"color":"#fff1c4","position":1.0}],"transform":{"a":0.3420201433256688,"b":0.9396926207859083,"c":-0.9396926207859083,"d":0.3420201433256688,"tx":-0.1408563820557886,"ty":0.7988362387301198}}}}]} stroke="#5e421a" stroke-weight=0.8 stroke-align="inside" />
-          <Vector name="nut" id="0eb29562-2d61-45c3-b018-386fb9755193" w=48 h=48 fill={[{"kind":{"LinearGradient":{"stops":[{"color":"#fff1c4","position":0.0},{"color":"#d8b36a","position":0.35},{"color":"#9a7236","position":0.62},{"color":"#e9cf8e","position":1.0}],"transform":{"a":0.6830127018922192,"b":-1.1830127018922196,"c":1.1830127018922196,"d":0.6830127018922192,"tx":0.7500000000000002,"ty":-0.4330127018922193}}}}]} geometry="M 28.400 16.379 L 32.800 24.000 L 28.400 31.621 L 19.600 31.621 L 15.200 24.000 L 19.600 16.379 Z" />
-          <Ellipse name="bushing" id="49a85c30-b4db-455b-baa3-f045a4f35a9c" x=19.2 y=19.2 w=9.6 h=9.6 fill={[{"kind":{"RadialGradient":{"stops":[{"color":"#fff1c4","position":0.0},{"color":"#6b4e22","position":1.0}],"transform":{"a":1.6,"b":0.0,"c":0.0,"d":1.6,"tx":-0.4,"ty":-0.45000000000000007}}}}]} />
-          <Frame name="lane" id="28379f7e-963d-4ff1-9bca-42acf616fb9f" x=20.4 y=2 w=7.199999999999999 h=44>
-            <Rectangle name="bat" id="5060c147-bc8c-4e44-aa33-09a51001f56b" w=7.199999999999999 h=23.2 radius=3.5999999999999996 fill={[{"kind":{"LinearGradient":{"stops":[{"color":"#7a5a2a","position":0.0},{"color":"#fff1c4","position":0.35},{"color":"#c9a45c","position":0.6},{"color":"#6b4e22","position":1.0}],"transform":{"a":1.0,"b":5.551115123125783e-17,"c":-5.551115123125783e-17,"d":1.0,"tx":-2.7755575615628914e-17,"ty":0.0}}}}]} effects={[{"color":"#000000a6","kind":"DropShadow","offset_x":1.0,"offset_y":2.0,"radius":3.0}]} />
-          </Frame>
-        </Frame>
-        <Text name="print" id="464f2bfa-bd8a-47e4-ad8c-e553020352bc" x=943.685 y=27.86 w=44 h=15 fill="#1e1719" size=10.5 weight=800 text-align="right" runs={[{"font_weight":800.0,"text":"LPF :"}]}>LPF :</Text>
-        <Text name="print" id="4a8b536c-4ab2-4a22-b4c8-ab4719fec4fb" x=944.315 y=27.86 w=44 h=15 fill="#1e1719" size=10.5 weight=800 text-align="right" runs={[{"font_weight":800.0,"text":"LPF :"}]}>LPF :</Text>
-        <Text name="print" id="770ede50-3eeb-4f72-8972-8267d910e4e5" x=944 y=27.86 w=44 h=15 fill="#1e1719" size=10.5 weight=800 text-align="right" runs={[{"font_weight":800.0,"text":"LPF :"}]}>LPF :</Text>
-        <Frame name="eq/lpf readout" id="54cc1c04-1f76-4df3-96bd-e9d51327a0f2" x=992 y=26.5 w=70 h=17 control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Param":{"addr":"eq/lpf"}}},"kind":"Readout","slots":[{"node":"6422452e-8660-46d5-9be1-c3fec6be26e1","role":"Value"}]}}>
-          <Text name="print" id="011e8d21-83f7-4ebb-ac24-efb4d3d3c0d9" x=-0.315 y=1.3599999999999994 w=70 h=15 fill="#1e1719" size=10.5 weight=800 runs={[{"font_weight":800.0,"text":""}]} />
-          <Text name="print" id="0c8591aa-0445-433f-8a62-1f0bf7a35e0a" x=0.315 y=1.3599999999999994 w=70 h=15 fill="#1e1719" size=10.5 weight=800 runs={[{"font_weight":800.0,"text":""}]} />
-          <Text name="print" id="6422452e-8660-46d5-9be1-c3fec6be26e1" y=1.3599999999999994 w=70 h=15 fill="#1e1719" size=10.5 weight=800 runs={[{"font_weight":800.0,"text":""}]} />
-        </Frame>
-        <Frame name="LPF" id="7adfc7bf-6034-4418-91fc-24bf20e46416" x=958 y=84 w=64 h=64 control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Param":{"addr":"eq/lpf"}}},"kind":{"Knob":{"sweep_degrees":300.0}},"slots":[{"node":"01c204b2-bc64-43c9-8344-2cfbca61830f","role":"Needle"}]}}>
-          <Frame name="knob" id="feabb26d-f799-4cdc-997c-f4617d4c6146" x=-1.4545454545454533 y=-1.4545454545454533 w=66.9090909090909 h=66.9090909090909>
-            <Ellipse name="shadow" id="3f7c5054-ffc4-4aaa-a23a-efbc541b58f8" x=2.6181818181818173 y=5.2363636363636346 w=64 h=64 fill="#00000066" />
-            <Frame name="body" id="01c204b2-bc64-43c9-8344-2cfbca61830f" w=66.9090909090909 h=66.9090909090909>
-              <Vector name="skirt" id="67145160-ab78-4613-afb4-bc9d7d24ecf1" w=66.9090909090909 h=66.9090909090909 fill={[{"kind":{"RadialGradient":{"stops":[{"color":"#4f3f3a","position":0.0},{"color":"#3b2a24","position":0.7},{"color":"#201714","position":1.0}],"transform":{"a":0.9756521739130435,"b":0.0,"c":0.0,"d":0.9756521739130435,"tx":0.012173913043478257,"ty":0.012173913043478257}}}}]} effects={[{"color":"#00000073","kind":"DropShadow","radius":3.6363636363636367}]} geometry="M 33.455 1.455 L 34.831 1.919 L 36.157 2.565 L 37.423 3.314 L 38.624 4.135 L 39.761 5.007 L 40.835 5.911 L 41.848 6.833 L 42.807 7.758 L 44.137 7.666 L 45.506 7.611 L 46.909 7.608 L 48.341 7.671 L 49.789 7.815 L 51.240 8.055 L 52.670 8.412 L 54.024 8.941 L 54.780 10.182 L 55.380 11.529 L 55.868 12.916 L 56.261 14.317 L 56.572 15.716 L 56.813 17.099 L 56.997 18.457 L 57.136 19.782 L 58.214 20.565 L 59.298 21.404 L 60.375 22.304 L 61.431 23.272 L 62.448 24.313 L 63.405 25.429 L 64.272 26.623 L 64.968 27.898 L 64.750 29.334 L 64.344 30.752 L 63.826 32.128 L 63.227 33.455 L 62.566 34.726 L 61.861 35.940 L 61.129 37.098 L 60.385 38.203 L 60.707 39.496 L 60.998 40.835 L 61.245 42.217 L 61.431 43.637 L 61.541 45.088 L 61.557 46.559 L 61.453 48.030 L 61.167 49.455 L 60.077 50.415 L 58.854 51.240 L 57.573 51.961 L 56.261 52.592 L 54.938 53.140 L 53.618 53.618 L 52.313 54.035 L 51.032 54.402 L 50.447 55.600 L 49.810 56.813 L 49.111 58.030 L 48.341 59.238 L 47.492 60.420 L 46.559 61.557 L 45.534 62.617 L 44.399 63.525 L 42.946 63.559 L 41.480 63.405 L 40.034 63.135 L 38.624 62.774 L 37.258 62.344 L 35.940 61.861 L 34.672 61.342 L 33.455 60.800 L 32.237 61.342 L 30.969 61.861 L 29.651 62.344 L 28.285 62.774 L 26.875 63.135 L 25.429 63.405 L 23.963 63.559 L 22.510 63.525 L 21.375 62.617 L 20.350 61.557 L 19.417 60.420 L 18.569 59.238 L 17.798 58.030 L 17.099 56.813 L 16.462 55.600 L 15.877 54.402 L 14.596 54.035 L 13.291 53.618 L 11.971 53.140 L 10.648 52.592 L 9.336 51.961 L 8.055 51.240 L 6.833 50.415 L 5.742 49.455 L 5.456 48.030 L 5.352 46.559 L 5.368 45.088 L 5.478 43.637 L 5.664 42.217 L 5.911 40.835 L 6.202 39.496 L 6.525 38.203 L 5.780 37.098 L 5.048 35.940 L 4.344 34.726 L 3.682 33.455 L 3.083 32.128 L 2.565 30.752 L 2.159 29.334 L 1.941 27.898 L 2.637 26.623 L 3.504 25.429 L 4.461 24.313 L 5.478 23.272 L 6.534 22.304 L 7.611 21.404 L 8.695 20.565 L 9.773 19.782 L 9.912 18.457 L 10.096 17.099 L 10.337 15.716 L 10.648 14.317 L 11.041 12.916 L 11.529 11.529 L 12.129 10.182 L 12.885 8.941 L 14.239 8.412 L 15.669 8.055 L 17.120 7.815 L 18.569 7.671 L 20.000 7.608 L 21.404 7.611 L 22.772 7.666 L 24.102 7.758 L 25.061 6.833 L 26.074 5.911 L 27.148 5.007 L 28.285 4.135 L 29.486 3.314 L 30.752 2.565 L 32.078 1.919 Z" />
-              <Vector name="flutes" id="dfa04de5-b126-4176-b5dd-a39afcac4425" w=66.9090909090909 h=66.9090909090909 fill="#18110e4d" geometry="M 33.455 3.200 L 34.760 3.554 L 36.027 4.057 L 37.247 4.648 L 38.418 5.305 L 39.538 6.012 L 40.609 6.755 L 41.631 7.523 L 42.608 8.305 L 43.860 8.334 L 45.136 8.403 L 46.434 8.522 L 47.746 8.700 L 49.066 8.950 L 50.381 9.281 L 51.674 9.711 L 52.902 10.278 L 53.674 11.389 L 54.321 12.588 L 54.876 13.825 L 55.351 15.081 L 55.755 16.343 L 56.097 17.600 L 56.386 18.845 L 56.633 20.073 L 57.572 20.900 L 58.506 21.773 L 59.423 22.698 L 60.314 23.678 L 61.165 24.717 L 61.959 25.817 L 62.674 26.977 L 63.249 28.201 L 63.127 29.548 L 62.852 30.883 L 62.482 32.187 L 62.038 33.455 L 61.536 34.681 L 60.990 35.864 L 60.412 37.004 L 59.812 38.102 L 60.000 39.340 L 60.154 40.609 L 60.262 41.907 L 60.314 43.231 L 60.298 44.573 L 60.200 45.926 L 60.002 47.274 L 59.656 48.582 L 58.696 49.535 L 57.628 50.381 L 56.506 51.142 L 55.351 51.828 L 54.178 52.444 L 53.000 53.000 L 51.824 53.501 L 50.658 53.957 L 50.007 55.026 L 49.309 56.097 L 48.557 57.161 L 47.746 58.209 L 46.871 59.227 L 45.926 60.200 L 44.908 61.105 L 43.802 61.885 L 42.454 61.998 L 41.092 61.959 L 39.743 61.821 L 38.418 61.604 L 37.123 61.323 L 35.864 60.990 L 34.641 60.619 L 33.455 60.218 L 32.269 60.619 L 31.045 60.990 L 29.786 61.323 L 28.491 61.604 L 27.166 61.821 L 25.817 61.959 L 24.455 61.998 L 23.107 61.885 L 22.001 61.105 L 20.983 60.200 L 20.038 59.227 L 19.163 58.209 L 18.352 57.161 L 17.600 56.097 L 16.902 55.026 L 16.251 53.957 L 15.085 53.501 L 13.909 53.000 L 12.731 52.444 L 11.558 51.828 L 10.404 51.142 L 9.281 50.381 L 8.213 49.535 L 7.253 48.582 L 6.908 47.274 L 6.709 45.926 L 6.611 44.573 L 6.595 43.231 L 6.647 41.907 L 6.755 40.609 L 6.909 39.340 L 7.098 38.102 L 6.497 37.004 L 5.919 35.864 L 5.373 34.681 L 4.871 33.455 L 4.427 32.187 L 4.057 30.883 L 3.782 29.548 L 3.660 28.201 L 4.235 26.977 L 4.950 25.817 L 5.744 24.717 L 6.595 23.678 L 7.486 22.698 L 8.403 21.773 L 9.337 20.900 L 10.277 20.073 L 10.523 18.845 L 10.812 17.600 L 11.155 16.343 L 11.558 15.081 L 12.033 13.825 L 12.588 12.588 L 13.235 11.389 L 14.007 10.278 L 15.235 9.711 L 16.528 9.281 L 17.843 8.950 L 19.163 8.700 L 20.475 8.522 L 21.773 8.403 L 23.049 8.334 L 24.301 8.305 L 25.278 7.523 L 26.301 6.755 L 27.371 6.012 L 28.491 5.305 L 29.662 4.648 L 30.883 4.057 L 32.149 3.554 Z" />
-              <Ellipse name="top" id="3ca64df1-55c6-4d65-9ea9-f362881b0538" x=10.414545454545454 y=10.414545454545454 w=46.08 h=46.08 fill={[{"kind":{"RadialGradient":{"stops":[{"color":"#665954","position":0.0},{"color":"#3b2a24","position":0.75},{"color":"#2c201b","position":1.0}],"transform":{"a":1.0,"b":0.0,"c":0.0,"d":1.0,"tx":0.0,"ty":0.0}}}}]} effects={[{"color":"#0000004d","kind":"DropShadow","radius":2.1818181818181817}]} />
-              <Rectangle name="index" id="8f914f3b-45f6-4ac2-ae46-31b138b290d0" x=31.418181818181818 y=13.640145454545454 w=4.072727272727272 h=12.9024 radius=2.036363636363636 fill="#e0b060" />
-            </Frame>
-            <Ellipse name="glint" id="aab2770d-3a97-4d6a-8cf1-2f2d7c6bca89" x=9.262545454545453 y=7.41934545454545 w=34.56 h=34.56 fill={[{"kind":{"RadialGradient":{"stops":[{"color":"#ffffff5e","position":0.0},{"color":"#ffffff00","position":1.0}]}}}]} />
-            <Vector name="rim light" id="86b26037-5b30-4adb-9401-a8bbe76b1e0b" w=66.9090909090909 h=66.9090909090909 fill="#ffffff2e" geometry="M 4.204 22.808 A 31.127 31.127 0 0 1 53.463 9.610 L 51.967 11.392 A 28.800 28.800 0 0 0 6.391 23.604 Z" />
-          </Frame>
-        </Frame>
-        <Vector name="art" id="569e1455-cbce-448f-8d7c-93c186100b90" x=980 y=169 w=16 h=7 stroke="#1e1719" stroke-weight=1.8 stroke-cap="round" stroke-join="round" geometry="M 0.000 0.000 L 12.000 0.000 L 16.000 7.000 " />
-        <Frame name="LED" id="2142fd64-fd5a-4f16-919d-26cf4719d6c6" x=978 y=206 w=24 h=24 control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Param":{"addr":"eq/on"}}},"kind":"Readout","slots":[{"node":"a428e6d8-adbe-48f9-9135-b863c866e622","role":"On"},{"node":"292111bc-7810-44f2-a349-9e3f46d7fe18","role":"Off"}]}}>
-          <Ellipse name="bezel" id="bb31fa55-7fcd-4f80-919d-db6560e19e26" x=2.6400000000000006 y=2.6400000000000006 w=18.72 h=18.72 fill={[{"kind":{"RadialGradient":{"stops":[{"color":"#efeeea","position":0.0},{"color":"#a09e9a","position":1.0}],"transform":{"a":1.6,"b":0.0,"c":0.0,"d":1.6,"tx":-0.4,"ty":-0.45000000000000007}}}}]} effects={[{"color":"#00000059","kind":"DropShadow","offset_y":0.96,"radius":2.4000000000000004}]} />
-          <Ellipse name="lens" id="292111bc-7810-44f2-a349-9e3f46d7fe18" x=6 y=6 w=12 h=12 fill={[{"kind":{"RadialGradient":{"stops":[{"color":"#ffffff59","position":0.0},{"color":"#609895","position":0.5},{"color":"#134845","position":1.0}],"transform":{"a":1.8,"b":0.0,"c":0.0,"d":1.8,"tx":-0.5,"ty":-0.56}}}}]} />
-          <Ellipse name="lamp" id="a428e6d8-adbe-48f9-9135-b863c866e622" x=6 y=6 w=12 h=12 fill={[{"kind":{"RadialGradient":{"stops":[{"color":"#ffffff","position":0.0},{"color":"#b2f9f5","position":0.3},{"color":"#3ff0e6","position":0.75},{"color":"#2ca8a1","position":1.0}],"transform":{"a":1.6,"b":0.0,"c":0.0,"d":1.6,"tx":-0.35000000000000003,"ty":-0.4}}}}]} effects={[{"color":"#3ff0e6cc","kind":"DropShadow","radius":10.8}]} emission={{"color":"#3ff0e6","intensity":0.9,"radius":21.6}} />
-        </Frame>
-        <Frame name="65 Hz" id="ededb454-8888-4d5f-b11e-abf75b72b7b7" x=235.75 y=38 w=52.5 h=203.25 control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Param":{"addr":"eq/g65"}}},"kind":{"Fader":{"orientation":"Vertical"}},"slots":[{"node":"2c6474fe-a88a-412c-873a-5310fadac4a2","role":"Thumb"}]}}>
-          <Rectangle name="tick" id="f0e7ad84-44df-4b26-b00f-b9b5340b9a43" x=12.1875 y=17.34375 w=7.5 h=1 fill="#6a5256" />
-          <Rectangle name="tick" id="abb4bdcb-f053-44e8-b83f-385a56db5090" x=32.8125 y=17.34375 w=7.5 h=1 fill="#6a5256" />
-          <Rectangle name="tick" id="5f262807-6041-4285-b1ad-b40a1bc2e5f1" x=15.9375 y=24.84375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="c0d8e3a0-ba69-4965-a9f2-79087a5cc1bc" x=32.8125 y=24.84375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="dd945212-4d42-446e-9e63-7435469bf530" x=15.9375 y=32.34375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="3ff37fe6-6777-440b-acab-607db15ebf80" x=32.8125 y=32.34375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="ebefaf8c-8d22-4bd9-9222-87cb3bacc7e0" x=15.9375 y=39.84375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="8c7a142f-27be-4152-a74d-d861d5e4b80e" x=32.8125 y=39.84375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="b623e8aa-0d64-495e-ba56-19d6de6afb84" x=15.9375 y=47.34375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="198ba665-7078-40f4-ace8-2b81bf55145c" x=32.8125 y=47.34375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="72ce61eb-00b4-476f-9336-14752409f793" x=12.1875 y=54.84375 w=7.5 h=1 fill="#6a5256" />
-          <Rectangle name="tick" id="70a39a12-c6b5-4d45-9d20-c1c746cbaa96" x=32.8125 y=54.84375 w=7.5 h=1 fill="#6a5256" />
-          <Rectangle name="tick" id="ddee4f31-fe1a-49c9-83ed-90286ca6e180" x=15.9375 y=62.34375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="e071d26e-329a-4817-81a7-76ec7062f307" x=32.8125 y=62.34375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="3b97ba1f-2950-4075-ab33-12afb39257d1" x=15.9375 y=69.84375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="baf91337-e81e-47c1-a63e-9546e03f3f1c" x=32.8125 y=69.84375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="9b80f17d-3331-4e26-9cfd-52c6862ebffa" x=15.9375 y=77.34375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="9c70f804-7eb4-4055-8a52-2f04082817b3" x=32.8125 y=77.34375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="76bde6b6-be55-4b2a-bd38-6daa2e827d43" x=15.9375 y=84.84375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="6d12fb60-5a9b-4b16-a23a-f64e1db7ed4a" x=32.8125 y=84.84375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="b87f1099-8b32-4841-a87b-7b3debacb189" x=12.1875 y=92.34375 w=7.5 h=1 fill="#6a5256" />
-          <Rectangle name="tick" id="3ddd2627-a5f3-4242-84ba-8b90664ad214" x=32.8125 y=92.34375 w=7.5 h=1 fill="#6a5256" />
-          <Rectangle name="tick" id="a2729fc7-fc6f-4e6a-9e0b-b9f33165a33b" x=15.9375 y=99.84375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="59711fb2-113f-4eac-8e98-ace6ccaab8d3" x=32.8125 y=99.84375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="cafe8d94-7b74-4095-ad09-0fb6e6a4b3cb" x=15.9375 y=107.34375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="53398072-6ada-4142-a210-51f9626e2963" x=32.8125 y=107.34375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="094601f2-77fa-4857-bca5-4fc5637e0185" x=15.9375 y=114.84375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="47cc86d6-a961-41d5-b43f-64a1fc4e51ea" x=32.8125 y=114.84375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="2a26aff8-a554-4ab5-b4ce-df79db246237" x=15.9375 y=122.34375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="b8524d68-9010-491a-b874-a019fb59fe8e" x=32.8125 y=122.34375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="07cb691e-8e0f-481b-b94d-43391e02486c" x=12.1875 y=129.84375 w=7.5 h=1 fill="#6a5256" />
-          <Rectangle name="tick" id="1e945d12-c93f-484f-b95b-a371d31b7fed" x=32.8125 y=129.84375 w=7.5 h=1 fill="#6a5256" />
-          <Rectangle name="tick" id="4e6990b1-6aff-40ba-bdc8-20422f1d9719" x=15.9375 y=137.34375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="78733898-9a48-4f3b-8e23-eb20e100030b" x=32.8125 y=137.34375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="b25bf95d-83d9-4ab6-8d2b-19ec43115906" x=15.9375 y=144.84375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="d5dfa028-4568-43c0-92b8-710e4526ad6d" x=32.8125 y=144.84375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="68b3847c-7a3d-46d7-81a6-b1d824c8239f" x=15.9375 y=152.34375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="cbd30bb7-380b-4f48-ae11-1128f05fb63a" x=32.8125 y=152.34375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="7962b6e9-dfb3-4692-add3-e3043b0395f7" x=15.9375 y=159.84375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="78b6fb6f-5113-44d8-a3cc-3900fd52ebe6" x=32.8125 y=159.84375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="0ad3dfc4-65a3-401f-a344-7a1dcfc340ba" x=12.1875 y=167.34375 w=7.5 h=1 fill="#6a5256" />
-          <Rectangle name="tick" id="cc76efdf-4ac5-4deb-9d0c-5ae6ec039902" x=32.8125 y=167.34375 w=7.5 h=1 fill="#6a5256" />
-          <Rectangle name="slot" id="4b29d698-4b9a-4ad7-a219-d1037b1ce6b1" x=23.90625 y=15.9375 w=4.6875 h=153.75 radius=2.34375 fill="#060607" effects={[{"color":"#ffffff1f","kind":"InnerShadow","offset_y":-0.9375,"radius":0.0}]} />
-          <Frame name="lane" id="0da259a0-ee95-40df-9261-e51e2b079fc6" x=14.0625 w=24.375 h=185.625>
-            <Frame name="cap" id="2c6474fe-a88a-412c-873a-5310fadac4a2" w=24.375 h=35.625>
-              <Rectangle name="shell" id="3110284c-d35d-46e4-a415-76c45105adac" w=24.375 h=35.625 radius=2.8125 fill={[{"kind":{"LinearGradient":{"stops":[{"color":"#4f5052","position":0.0},{"color":"#1d1e21","position":0.48},{"color":"#161619","position":0.52},{"color":"#2f3033","position":1.0}],"transform":{"a":1.6653345369377348e-16,"b":-1.0,"c":1.0,"d":1.6653345369377348e-16,"tx":1.0,"ty":-1.942890293094024e-16}}}}]} stroke="#000000b3" stroke-align="inside" effects={[{"color":"#000000a0","kind":"DropShadow","offset_y":2.8125,"radius":4.6875},{"color":"#ffffff40","kind":"InnerShadow","offset_y":0.9375,"radius":0.0}]} />
-              <Rectangle name="groove" id="082c0f04-50ce-4338-b5b0-5b068ba72210" x=1.875 y=7.875 w=20.625 h=1.125 fill="#00000073" />
-              <Rectangle name="groove" id="f1ec203a-0538-4fb9-b6b9-89af8cfa2beb" x=1.875 y=12.5625 w=20.625 h=1.125 fill="#00000073" />
-              <Rectangle name="groove" id="c15b4fae-45bd-4518-888a-6c4662b16ab5" x=1.875 y=21.9375 w=20.625 h=1.125 fill="#00000073" />
-              <Rectangle name="groove" id="0cc153be-f9cd-42c0-aba6-ce65c5962996" x=1.875 y=26.625 w=20.625 h=1.125 fill="#00000073" />
-              <Rectangle name="index" id="c6cf5f2e-80d4-4f11-9081-668ee042407f" x=1.40625 y=16.875 w=21.5625 h=1.875 fill="#f1f1ef" />
-            </Frame>
-          </Frame>
-        </Frame>
-        <Frame name="eq/g65 readout" id="33bfcd5a-427d-4f58-9dc2-617271893158" x=227 y=26.5 w=70 h=17 control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Param":{"addr":"eq/g65"}}},"format":{"decimals":1,"style":"Number"},"kind":"Readout","slots":[{"node":"5bb2ecad-7870-4d69-9da9-9638a23ebbed","role":"Value"}]}}>
-          <Text name="print" id="f28e378e-18dc-4a5d-ba61-0bb0e5174b74" x=-0.315 y=1.3599999999999994 w=70 h=15 fill="#1e1719" size=10.5 weight=800 text-align="center" runs={[{"font_weight":800.0,"text":""}]} />
-          <Text name="print" id="37ab2d59-44a3-41bf-929e-1d63724bb114" x=0.315 y=1.3599999999999994 w=70 h=15 fill="#1e1719" size=10.5 weight=800 text-align="center" runs={[{"font_weight":800.0,"text":""}]} />
-          <Text name="print" id="5bb2ecad-7870-4d69-9da9-9638a23ebbed" y=1.3599999999999994 w=70 h=15 fill="#1e1719" size=10.5 weight=800 text-align="center" runs={[{"font_weight":800.0,"text":""}]} />
-        </Frame>
-        <Text name="print" id="49d5076f-7835-491e-867f-3eb2978b4230" x=232.285 y=224.86 w=58.8 h=15 fill="#1e1719" size=10.5 weight=800 text-align="center" runs={[{"font_weight":800.0,"text":"65 Hz"}]}>65 Hz</Text>
-        <Text name="print" id="ba7fd387-3e91-4123-9710-b8b7661dd18c" x=232.915 y=224.86 w=58.8 h=15 fill="#1e1719" size=10.5 weight=800 text-align="center" runs={[{"font_weight":800.0,"text":"65 Hz"}]}>65 Hz</Text>
-        <Text name="print" id="89bce706-b733-46dd-9b1d-50fbbad75df8" x=232.6 y=224.86 w=58.8 h=15 fill="#1e1719" size=10.5 weight=800 text-align="center" runs={[{"font_weight":800.0,"text":"65 Hz"}]}>65 Hz</Text>
-        <Frame name="125 Hz" id="ac633108-66a8-43a9-976e-4de5a2fe5cf2" x=312.15 y=38 w=52.5 h=203.25 control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Param":{"addr":"eq/g125"}}},"kind":{"Fader":{"orientation":"Vertical"}},"slots":[{"node":"a0f85c3a-2b25-42b6-8222-289d669abb85","role":"Thumb"}]}}>
-          <Rectangle name="tick" id="0df77a57-e677-4c07-9b40-089d017e9053" x=12.1875 y=17.34375 w=7.5 h=1 fill="#6a5256" />
-          <Rectangle name="tick" id="8257c26e-c1b4-4c65-acfc-30a8ca864955" x=32.8125 y=17.34375 w=7.5 h=1 fill="#6a5256" />
-          <Rectangle name="tick" id="3e84adcc-0ade-4c32-9f75-1331fe2104dd" x=15.9375 y=24.84375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="d069204d-c7c2-4906-9a82-e35368a71db6" x=32.8125 y=24.84375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="b310686f-de58-46e4-ac8d-f58f1b8211a2" x=15.9375 y=32.34375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="e7d5ef33-5c54-4f27-98f1-49d3f9f08491" x=32.8125 y=32.34375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="0659178b-c1a3-4cc8-ace9-92d74b5cee92" x=15.9375 y=39.84375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="a880dc13-d47b-41ba-8d39-0a7efad3aef3" x=32.8125 y=39.84375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="44980cc0-e84f-40a1-aeef-456dc08a4078" x=15.9375 y=47.34375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="1f2fe28a-56c2-404f-9bba-bfb8fc9d2d98" x=32.8125 y=47.34375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="1a5427c5-c73d-4e2f-94f6-6a73c1a45140" x=12.1875 y=54.84375 w=7.5 h=1 fill="#6a5256" />
-          <Rectangle name="tick" id="385797d2-4430-4d7d-88b6-8e61a87764bf" x=32.8125 y=54.84375 w=7.5 h=1 fill="#6a5256" />
-          <Rectangle name="tick" id="266f85c0-fabc-4bca-9fdd-b96b9b0b3993" x=15.9375 y=62.34375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="fefc0c1e-6a92-4d96-8175-31a20b2dbbff" x=32.8125 y=62.34375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="bfe5eb8a-60a0-4fd2-878b-2e41e13d16d7" x=15.9375 y=69.84375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="f18ba2c2-d0f4-45dd-811d-865b654d4fa0" x=32.8125 y=69.84375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="80b559c0-64bd-44f0-bcca-d03c39b940f2" x=15.9375 y=77.34375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="3952c513-6dce-4b92-851c-2042b1f67752" x=32.8125 y=77.34375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="17ce8fd4-22af-4fe0-bce4-cd2fc5abc77f" x=15.9375 y=84.84375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="4e5ca6d4-c14c-4202-a968-5015d18e621b" x=32.8125 y=84.84375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="16429817-d9ca-40a2-85ab-a3244ac07913" x=12.1875 y=92.34375 w=7.5 h=1 fill="#6a5256" />
-          <Rectangle name="tick" id="fc16e35c-1148-4163-a49c-4263ce86e8a1" x=32.8125 y=92.34375 w=7.5 h=1 fill="#6a5256" />
-          <Rectangle name="tick" id="688c1284-187d-4d27-ad67-093cfbd554cd" x=15.9375 y=99.84375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="09d96936-941b-4885-81a8-ccdc058f38ad" x=32.8125 y=99.84375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="dd7bf5fc-eb4a-44a8-aca4-8c6ec4a932a3" x=15.9375 y=107.34375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="b2757b8c-3129-45a8-8479-307da999acf1" x=32.8125 y=107.34375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="e4177499-5c07-4fc7-86b3-b7826216112c" x=15.9375 y=114.84375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="1660836d-b0e9-477f-82df-eed5452d3196" x=32.8125 y=114.84375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="13083a83-67c3-4738-b38f-973c08ff07d2" x=15.9375 y=122.34375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="d517a41d-ee72-4bcb-b376-c73d1f12b943" x=32.8125 y=122.34375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="a694958c-283e-4991-8367-b86c94a902cb" x=12.1875 y=129.84375 w=7.5 h=1 fill="#6a5256" />
-          <Rectangle name="tick" id="42b80970-9b8e-4fdd-9e85-5853c17d4865" x=32.8125 y=129.84375 w=7.5 h=1 fill="#6a5256" />
-          <Rectangle name="tick" id="59b0e548-45cf-4348-b0a8-0069d0ec1345" x=15.9375 y=137.34375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="6c9ab709-86ba-4de3-b905-7e3276d6d86a" x=32.8125 y=137.34375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="45626c09-789a-4fee-8c54-325a0b071b4d" x=15.9375 y=144.84375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="fc2a19d4-7ae3-4afb-bb41-7015b31be56c" x=32.8125 y=144.84375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="df3f4246-b3eb-4011-88f2-93efdcb3a0d8" x=15.9375 y=152.34375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="12690cc9-d4e4-4992-8d80-f6244afcea35" x=32.8125 y=152.34375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="c844a23e-badd-4ae0-a6cf-e8b014deafbf" x=15.9375 y=159.84375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="ca87d463-50d7-4e55-89a6-5965679aa227" x=32.8125 y=159.84375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="30cc1080-d5a3-4488-82d0-af1f7402f538" x=12.1875 y=167.34375 w=7.5 h=1 fill="#6a5256" />
-          <Rectangle name="tick" id="314f819e-40d4-4711-be16-b9f9caac6da5" x=32.8125 y=167.34375 w=7.5 h=1 fill="#6a5256" />
-          <Rectangle name="slot" id="ad72bd42-98ec-4016-a7a6-944dfda94e6f" x=23.90625 y=15.9375 w=4.6875 h=153.75 radius=2.34375 fill="#060607" effects={[{"color":"#ffffff1f","kind":"InnerShadow","offset_y":-0.9375,"radius":0.0}]} />
-          <Frame name="lane" id="dd1296ea-7496-4e49-a48a-15f469e8367e" x=14.0625 w=24.375 h=185.625>
-            <Frame name="cap" id="a0f85c3a-2b25-42b6-8222-289d669abb85" w=24.375 h=35.625>
-              <Rectangle name="shell" id="fe315c4c-7d1c-44df-986f-0932c726d388" w=24.375 h=35.625 radius=2.8125 fill={[{"kind":{"LinearGradient":{"stops":[{"color":"#4f5052","position":0.0},{"color":"#1d1e21","position":0.48},{"color":"#161619","position":0.52},{"color":"#2f3033","position":1.0}],"transform":{"a":1.6653345369377348e-16,"b":-1.0,"c":1.0,"d":1.6653345369377348e-16,"tx":1.0,"ty":-1.942890293094024e-16}}}}]} stroke="#000000b3" stroke-align="inside" effects={[{"color":"#000000a0","kind":"DropShadow","offset_y":2.8125,"radius":4.6875},{"color":"#ffffff40","kind":"InnerShadow","offset_y":0.9375,"radius":0.0}]} />
-              <Rectangle name="groove" id="fbed5137-8027-4001-b360-6f85aeb11705" x=1.875 y=7.875 w=20.625 h=1.125 fill="#00000073" />
-              <Rectangle name="groove" id="e5ac01c2-fe68-486a-ac9b-0705cc2ae399" x=1.875 y=12.5625 w=20.625 h=1.125 fill="#00000073" />
-              <Rectangle name="groove" id="76e4f383-496a-4251-b52e-1a494377ab30" x=1.875 y=21.9375 w=20.625 h=1.125 fill="#00000073" />
-              <Rectangle name="groove" id="3dfe71f7-7870-4452-a7ad-6249841002a6" x=1.875 y=26.625 w=20.625 h=1.125 fill="#00000073" />
-              <Rectangle name="index" id="6b3cd57b-e2ef-463c-9226-4bd1147c74c3" x=1.40625 y=16.875 w=21.5625 h=1.875 fill="#f1f1ef" />
-            </Frame>
-          </Frame>
-        </Frame>
-        <Frame name="eq/g125 readout" id="6a46a5a0-bbc7-42e9-959f-a52b930bb3f7" x=303.4 y=26.5 w=70 h=17 control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Param":{"addr":"eq/g125"}}},"format":{"decimals":1,"style":"Number"},"kind":"Readout","slots":[{"node":"46b95d4c-345c-4c4e-a626-b33e53be1d11","role":"Value"}]}}>
-          <Text name="print" id="cadd7034-f605-40e6-b474-e206e5a4d0fc" x=-0.315 y=1.3599999999999994 w=70 h=15 fill="#1e1719" size=10.5 weight=800 text-align="center" runs={[{"font_weight":800.0,"text":""}]} />
-          <Text name="print" id="742f34a3-9550-4ac6-9f56-e16a7067bda4" x=0.315 y=1.3599999999999994 w=70 h=15 fill="#1e1719" size=10.5 weight=800 text-align="center" runs={[{"font_weight":800.0,"text":""}]} />
-          <Text name="print" id="46b95d4c-345c-4c4e-a626-b33e53be1d11" y=1.3599999999999994 w=70 h=15 fill="#1e1719" size=10.5 weight=800 text-align="center" runs={[{"font_weight":800.0,"text":""}]} />
-        </Frame>
-        <Text name="print" id="bd94f681-dbc2-4126-bc5c-8f0765b60cc0" x=304.905 y=224.86 w=66.36 h=15 fill="#1e1719" size=10.5 weight=800 text-align="center" runs={[{"font_weight":800.0,"text":"125 Hz"}]}>125 Hz</Text>
-        <Text name="print" id="aeb8a529-41de-4147-99af-1c72ec22489d" x=305.53499999999997 y=224.86 w=66.36 h=15 fill="#1e1719" size=10.5 weight=800 text-align="center" runs={[{"font_weight":800.0,"text":"125 Hz"}]}>125 Hz</Text>
-        <Text name="print" id="ce1b894d-cfe1-4775-8c7a-c6f110148be5" x=305.21999999999997 y=224.86 w=66.36 h=15 fill="#1e1719" size=10.5 weight=800 text-align="center" runs={[{"font_weight":800.0,"text":"125 Hz"}]}>125 Hz</Text>
-        <Frame name="250 Hz" id="678414f0-1526-4237-9680-040a59d522ce" x=388.55 y=38 w=52.5 h=203.25 control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Param":{"addr":"eq/g250"}}},"kind":{"Fader":{"orientation":"Vertical"}},"slots":[{"node":"c932eb86-b7e4-47ee-a148-484e1059c04d","role":"Thumb"}]}}>
-          <Rectangle name="tick" id="2bb72d56-61e0-4107-82d4-aa1d519411ac" x=12.1875 y=17.34375 w=7.5 h=1 fill="#6a5256" />
-          <Rectangle name="tick" id="8988bcb0-686c-4e60-b473-1c98e505f2e3" x=32.8125 y=17.34375 w=7.5 h=1 fill="#6a5256" />
-          <Rectangle name="tick" id="719383ce-b987-45ee-9f85-a476ab87ec2d" x=15.9375 y=24.84375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="141cd7d2-8604-47df-9541-5b6348ca7197" x=32.8125 y=24.84375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="948ebf66-8ec3-4821-a45e-f7c172c0e9da" x=15.9375 y=32.34375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="b9c4e3b7-ef76-452d-acd6-b95768099468" x=32.8125 y=32.34375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="2064a0e9-b1a8-4ffb-a467-dc39cbb2d52e" x=15.9375 y=39.84375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="5bae5616-afe1-4277-8088-919209f2f1b7" x=32.8125 y=39.84375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="e31d9274-803c-4db7-b75e-f6ca1d5dbc03" x=15.9375 y=47.34375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="fb9d4389-45d6-4dd6-8b0d-c6394b092d39" x=32.8125 y=47.34375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="1b693c1c-eac4-446f-a92e-ef2e889ab81a" x=12.1875 y=54.84375 w=7.5 h=1 fill="#6a5256" />
-          <Rectangle name="tick" id="93ea6857-4ba6-4754-ad43-194a1d0479b0" x=32.8125 y=54.84375 w=7.5 h=1 fill="#6a5256" />
-          <Rectangle name="tick" id="fe721b06-1d0c-4625-8046-83176fdea4eb" x=15.9375 y=62.34375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="c89a2c57-2cca-4b10-935d-735e17f4af64" x=32.8125 y=62.34375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="35caf831-b63f-4dad-9eea-de4961f317f9" x=15.9375 y=69.84375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="89e5a877-3beb-4f4c-944c-cd0fad9e73d1" x=32.8125 y=69.84375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="a8a52de2-7c53-4085-a93c-f1860d0b803e" x=15.9375 y=77.34375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="43448bd4-823b-48e9-8fe0-7a615f5d5d02" x=32.8125 y=77.34375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="9593d44f-088f-4de5-842d-0dec763d136c" x=15.9375 y=84.84375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="ee2be8dd-e959-450a-9c17-b8455714b0f4" x=32.8125 y=84.84375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="9ccbf4b7-61b8-427f-a389-82382a1d6f1d" x=12.1875 y=92.34375 w=7.5 h=1 fill="#6a5256" />
-          <Rectangle name="tick" id="36e59a74-b11c-4576-adc6-8934e5f2e8a8" x=32.8125 y=92.34375 w=7.5 h=1 fill="#6a5256" />
-          <Rectangle name="tick" id="e14d31a0-d3c9-4b9d-b484-dea2ba9e2015" x=15.9375 y=99.84375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="ee606f9a-3898-43b7-b317-ee3dc51f824b" x=32.8125 y=99.84375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="543bf891-8612-4edf-8bd2-faeeecf0d7a3" x=15.9375 y=107.34375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="86662892-7091-4628-9c5e-ec1a5642590d" x=32.8125 y=107.34375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="9e04f73d-b2c2-4ec1-85c3-3444f5a9109a" x=15.9375 y=114.84375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="8550e621-a24e-4b3e-a6f7-d5af6d36a79a" x=32.8125 y=114.84375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="f4dafafd-e608-4d4a-b242-89f2abfe5f39" x=15.9375 y=122.34375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="2b4db129-6249-4540-a156-8f4f8e042bb5" x=32.8125 y=122.34375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="1479b4ed-395d-491b-9d51-0377026c9315" x=12.1875 y=129.84375 w=7.5 h=1 fill="#6a5256" />
-          <Rectangle name="tick" id="9d4ff7bf-6dba-4f45-9127-a34e08e97b22" x=32.8125 y=129.84375 w=7.5 h=1 fill="#6a5256" />
-          <Rectangle name="tick" id="639e6aad-39e5-4b2a-977f-1ae83815bfff" x=15.9375 y=137.34375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="c70b3cd4-f5ff-4938-a359-ead848c880f0" x=32.8125 y=137.34375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="0b0cc443-ddef-4c18-b158-eb10d12beb90" x=15.9375 y=144.84375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="5095c2b5-913e-4e6a-a49c-982c01713c88" x=32.8125 y=144.84375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="034c4d69-3cb2-4923-a436-1533ac8d687f" x=15.9375 y=152.34375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="d0714e7b-d796-4c80-a3b8-fba1a0ffc92b" x=32.8125 y=152.34375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="63dda060-adbb-4293-9e9d-68e25683e9a5" x=15.9375 y=159.84375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="a4cf7056-cfb6-440e-9709-2e45683e4f88" x=32.8125 y=159.84375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="102cd093-7d46-4329-b9ff-0a615f79d75e" x=12.1875 y=167.34375 w=7.5 h=1 fill="#6a5256" />
-          <Rectangle name="tick" id="1b82004e-0e7f-43fc-9ec8-b1b1f6e37fe4" x=32.8125 y=167.34375 w=7.5 h=1 fill="#6a5256" />
-          <Rectangle name="slot" id="357c0f69-016f-46ef-8f5b-6d9fe9dead6e" x=23.90625 y=15.9375 w=4.6875 h=153.75 radius=2.34375 fill="#060607" effects={[{"color":"#ffffff1f","kind":"InnerShadow","offset_y":-0.9375,"radius":0.0}]} />
-          <Frame name="lane" id="d48abbb4-c723-41a9-99c4-e25faac73860" x=14.0625 w=24.375 h=185.625>
-            <Frame name="cap" id="c932eb86-b7e4-47ee-a148-484e1059c04d" w=24.375 h=35.625>
-              <Rectangle name="shell" id="94800b4d-3117-42ae-8773-554481c31496" w=24.375 h=35.625 radius=2.8125 fill={[{"kind":{"LinearGradient":{"stops":[{"color":"#4f5052","position":0.0},{"color":"#1d1e21","position":0.48},{"color":"#161619","position":0.52},{"color":"#2f3033","position":1.0}],"transform":{"a":1.6653345369377348e-16,"b":-1.0,"c":1.0,"d":1.6653345369377348e-16,"tx":1.0,"ty":-1.942890293094024e-16}}}}]} stroke="#000000b3" stroke-align="inside" effects={[{"color":"#000000a0","kind":"DropShadow","offset_y":2.8125,"radius":4.6875},{"color":"#ffffff40","kind":"InnerShadow","offset_y":0.9375,"radius":0.0}]} />
-              <Rectangle name="groove" id="aa3bccfc-b41c-4b5e-96fe-522f07a18bc6" x=1.875 y=7.875 w=20.625 h=1.125 fill="#00000073" />
-              <Rectangle name="groove" id="605bf7e0-29bf-49d6-8fe7-22d6f9a58e90" x=1.875 y=12.5625 w=20.625 h=1.125 fill="#00000073" />
-              <Rectangle name="groove" id="a78fd863-0587-4a52-8b81-2becb60fee57" x=1.875 y=21.9375 w=20.625 h=1.125 fill="#00000073" />
-              <Rectangle name="groove" id="8b004699-8e36-4cc0-b3f2-a5c3a43b7629" x=1.875 y=26.625 w=20.625 h=1.125 fill="#00000073" />
-              <Rectangle name="index" id="91f98b2f-5aef-4957-aaf5-82646898cd64" x=1.40625 y=16.875 w=21.5625 h=1.875 fill="#f1f1ef" />
-            </Frame>
-          </Frame>
-        </Frame>
-        <Frame name="eq/g250 readout" id="5d39a57f-66df-416b-9f31-4b98b31206e5" x=379.8 y=26.5 w=70 h=17 control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Param":{"addr":"eq/g250"}}},"format":{"decimals":1,"style":"Number"},"kind":"Readout","slots":[{"node":"2b82ab2e-c19a-4e38-af31-6b03edb1eb69","role":"Value"}]}}>
-          <Text name="print" id="1d7db02e-09d1-427b-a0b1-5c20bf816fca" x=-0.315 y=1.3599999999999994 w=70 h=15 fill="#1e1719" size=10.5 weight=800 text-align="center" runs={[{"font_weight":800.0,"text":""}]} />
-          <Text name="print" id="1d584c41-db0b-4a63-815d-c226558a2408" x=0.315 y=1.3599999999999994 w=70 h=15 fill="#1e1719" size=10.5 weight=800 text-align="center" runs={[{"font_weight":800.0,"text":""}]} />
-          <Text name="print" id="2b82ab2e-c19a-4e38-af31-6b03edb1eb69" y=1.3599999999999994 w=70 h=15 fill="#1e1719" size=10.5 weight=800 text-align="center" runs={[{"font_weight":800.0,"text":""}]} />
-        </Frame>
-        <Text name="print" id="20501975-f562-48a4-85e0-af141bb98c2e" x=381.305 y=224.86 w=66.36 h=15 fill="#1e1719" size=10.5 weight=800 text-align="center" runs={[{"font_weight":800.0,"text":"250 Hz"}]}>250 Hz</Text>
-        <Text name="print" id="d79cb36a-2b08-42d4-8c94-99e80f4b69f1" x=381.935 y=224.86 w=66.36 h=15 fill="#1e1719" size=10.5 weight=800 text-align="center" runs={[{"font_weight":800.0,"text":"250 Hz"}]}>250 Hz</Text>
-        <Text name="print" id="c957eb65-2e94-4d69-8d39-f536a9aaa497" x=381.62 y=224.86 w=66.36 h=15 fill="#1e1719" size=10.5 weight=800 text-align="center" runs={[{"font_weight":800.0,"text":"250 Hz"}]}>250 Hz</Text>
-        <Frame name="500 Hz" id="48ead39b-278d-471d-9f2d-41b50079f9bc" x=464.95000000000005 y=38 w=52.5 h=203.25 control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Param":{"addr":"eq/g500"}}},"kind":{"Fader":{"orientation":"Vertical"}},"slots":[{"node":"17c3849a-40c8-4065-b135-18617341a8a0","role":"Thumb"}]}}>
-          <Rectangle name="tick" id="02d507d0-c6eb-431a-a6fb-50a1c24b5fcf" x=12.1875 y=17.34375 w=7.5 h=1 fill="#6a5256" />
-          <Rectangle name="tick" id="0f38c41a-c077-4a1b-9046-12520a6dd12d" x=32.8125 y=17.34375 w=7.5 h=1 fill="#6a5256" />
-          <Rectangle name="tick" id="e47f7dbd-b0f0-4f90-a146-8ed4b894ed88" x=15.9375 y=24.84375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="28dc969e-f2ad-4e90-ba5c-e1298b0570eb" x=32.8125 y=24.84375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="762e6df2-297e-4acd-aaeb-5ad5661d0821" x=15.9375 y=32.34375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="47391eda-eacb-4d47-8660-848863273a88" x=32.8125 y=32.34375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="398e4f3d-fa23-47c0-83a8-cac43c6c927c" x=15.9375 y=39.84375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="3b2058f1-3bb1-4b4d-ba79-f368b203b037" x=32.8125 y=39.84375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="eccb2b5d-b66b-43fd-8387-3b6c26bf7052" x=15.9375 y=47.34375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="a7a57497-0514-4f55-a306-66dddfe4df4d" x=32.8125 y=47.34375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="0b20b6a0-50f2-42dd-ab3c-285376f9383d" x=12.1875 y=54.84375 w=7.5 h=1 fill="#6a5256" />
-          <Rectangle name="tick" id="b4f4dd87-dc5f-4b06-bd88-cd1d51010d1c" x=32.8125 y=54.84375 w=7.5 h=1 fill="#6a5256" />
-          <Rectangle name="tick" id="180ef1ba-8779-4818-902c-8dc7f6741489" x=15.9375 y=62.34375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="b8ab7ee0-5c0e-49bf-8e8b-2170a494955f" x=32.8125 y=62.34375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="190c01e5-a2c7-4f7a-936b-2c5603405f85" x=15.9375 y=69.84375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="2e44af78-5bfc-4ebd-860d-f7a57946bf63" x=32.8125 y=69.84375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="7d3979d7-f8fe-48a0-b4f2-4c9a5e953c46" x=15.9375 y=77.34375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="4d9f360e-ed11-4b85-b918-7294f2c7cfee" x=32.8125 y=77.34375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="a020a868-8635-459d-84a5-d00e20e1809d" x=15.9375 y=84.84375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="b5387924-7c00-4775-b4f0-5c504cc79c81" x=32.8125 y=84.84375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="00fe9327-aceb-4b9c-8f0f-d9507827c2d2" x=12.1875 y=92.34375 w=7.5 h=1 fill="#6a5256" />
-          <Rectangle name="tick" id="43777822-875e-4abf-b9fe-65d6d2d773e8" x=32.8125 y=92.34375 w=7.5 h=1 fill="#6a5256" />
-          <Rectangle name="tick" id="238b74c8-ecfa-4b4d-b6c7-cbd4b4a12983" x=15.9375 y=99.84375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="5de4cafb-5c9d-4762-b5f8-f05fb5cc5684" x=32.8125 y=99.84375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="70bfaf25-e8ba-4939-8322-d2db2b79e6bd" x=15.9375 y=107.34375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="93f9f11f-87c2-4176-a558-39f5f5f7fa68" x=32.8125 y=107.34375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="18b15972-a4e3-4a37-a302-56552034ee5a" x=15.9375 y=114.84375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="4792a95a-e15e-4a3b-9aa3-bbdc6b1fa78c" x=32.8125 y=114.84375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="094d021e-10d4-4e54-868f-a7e0577cca4d" x=15.9375 y=122.34375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="73ac5208-d7f6-4ffc-941f-4fca211cfa58" x=32.8125 y=122.34375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="4855a975-8a2c-4cc8-abdb-a789270ef35a" x=12.1875 y=129.84375 w=7.5 h=1 fill="#6a5256" />
-          <Rectangle name="tick" id="ade1d6f6-26d3-48b8-9331-0bc48919938b" x=32.8125 y=129.84375 w=7.5 h=1 fill="#6a5256" />
-          <Rectangle name="tick" id="f209c97e-c671-470c-8884-48352e5c1025" x=15.9375 y=137.34375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="b5b0bbdf-668e-4a76-abe2-8903ac572913" x=32.8125 y=137.34375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="2ffae577-6252-43fd-82a6-61fb9f38b3e5" x=15.9375 y=144.84375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="dd75a81d-7d4e-4185-8ffa-3ecf5ac89049" x=32.8125 y=144.84375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="f2b3bca8-64aa-4ec5-b3b1-eeac91296664" x=15.9375 y=152.34375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="449ba2ef-9d3a-4335-99db-0f03ffdace20" x=32.8125 y=152.34375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="04312588-f78f-4f6a-a968-30dd78b04ea0" x=15.9375 y=159.84375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="2cc5a045-ecea-42bb-9422-22ce6f008489" x=32.8125 y=159.84375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="05b30761-2a4c-4f7d-92c1-6a21467e51aa" x=12.1875 y=167.34375 w=7.5 h=1 fill="#6a5256" />
-          <Rectangle name="tick" id="8c480a3f-b03c-4899-aa9a-bb9c444ccaa9" x=32.8125 y=167.34375 w=7.5 h=1 fill="#6a5256" />
-          <Rectangle name="slot" id="a0d6b7a2-91b3-4c2e-b693-5f21c430fde2" x=23.90625 y=15.9375 w=4.6875 h=153.75 radius=2.34375 fill="#060607" effects={[{"color":"#ffffff1f","kind":"InnerShadow","offset_y":-0.9375,"radius":0.0}]} />
-          <Frame name="lane" id="4f2e7049-45ea-48ea-9a3f-caf2a77e787b" x=14.0625 w=24.375 h=185.625>
-            <Frame name="cap" id="17c3849a-40c8-4065-b135-18617341a8a0" w=24.375 h=35.625>
-              <Rectangle name="shell" id="a0f528f1-dac1-46a4-84a6-28d855823a18" w=24.375 h=35.625 radius=2.8125 fill={[{"kind":{"LinearGradient":{"stops":[{"color":"#4f5052","position":0.0},{"color":"#1d1e21","position":0.48},{"color":"#161619","position":0.52},{"color":"#2f3033","position":1.0}],"transform":{"a":1.6653345369377348e-16,"b":-1.0,"c":1.0,"d":1.6653345369377348e-16,"tx":1.0,"ty":-1.942890293094024e-16}}}}]} stroke="#000000b3" stroke-align="inside" effects={[{"color":"#000000a0","kind":"DropShadow","offset_y":2.8125,"radius":4.6875},{"color":"#ffffff40","kind":"InnerShadow","offset_y":0.9375,"radius":0.0}]} />
-              <Rectangle name="groove" id="1a6c3363-107d-4a5b-be33-734fe6cf7719" x=1.875 y=7.875 w=20.625 h=1.125 fill="#00000073" />
-              <Rectangle name="groove" id="b9ffe07a-57fc-4896-81fd-b396abcd2638" x=1.875 y=12.5625 w=20.625 h=1.125 fill="#00000073" />
-              <Rectangle name="groove" id="41c07c93-f077-42ae-aa4e-ee5a35e40c0b" x=1.875 y=21.9375 w=20.625 h=1.125 fill="#00000073" />
-              <Rectangle name="groove" id="a4d7bc63-fb5d-4ab1-b680-608c35e618bd" x=1.875 y=26.625 w=20.625 h=1.125 fill="#00000073" />
-              <Rectangle name="index" id="113f57f7-7ec7-428b-ad7f-769b6a683892" x=1.40625 y=16.875 w=21.5625 h=1.875 fill="#f1f1ef" />
-            </Frame>
-          </Frame>
-        </Frame>
-        <Frame name="eq/g500 readout" id="1685d7be-d4cf-4bd5-a5df-5f2babacee23" x=456.20000000000005 y=26.5 w=70 h=17 control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Param":{"addr":"eq/g500"}}},"format":{"decimals":1,"style":"Number"},"kind":"Readout","slots":[{"node":"b981ad65-d253-4aa8-9513-21ec02495ace","role":"Value"}]}}>
-          <Text name="print" id="340e2935-2f14-49b7-94f8-f69dc680eeb4" x=-0.315 y=1.3599999999999994 w=70 h=15 fill="#1e1719" size=10.5 weight=800 text-align="center" runs={[{"font_weight":800.0,"text":""}]} />
-          <Text name="print" id="4c3aeb55-25ab-4afd-b0d7-a2ba94350486" x=0.315 y=1.3599999999999994 w=70 h=15 fill="#1e1719" size=10.5 weight=800 text-align="center" runs={[{"font_weight":800.0,"text":""}]} />
-          <Text name="print" id="b981ad65-d253-4aa8-9513-21ec02495ace" y=1.3599999999999994 w=70 h=15 fill="#1e1719" size=10.5 weight=800 text-align="center" runs={[{"font_weight":800.0,"text":""}]} />
-        </Frame>
-        <Text name="print" id="a9e106f1-c8dc-4553-941c-3fe38eb5fe2b" x=457.70500000000004 y=224.86 w=66.36 h=15 fill="#1e1719" size=10.5 weight=800 text-align="center" runs={[{"font_weight":800.0,"text":"500 Hz"}]}>500 Hz</Text>
-        <Text name="print" id="009bdecb-e880-4116-bd98-3ecd806847ba" x=458.33500000000004 y=224.86 w=66.36 h=15 fill="#1e1719" size=10.5 weight=800 text-align="center" runs={[{"font_weight":800.0,"text":"500 Hz"}]}>500 Hz</Text>
-        <Text name="print" id="6cebd4ca-5a12-4969-9ce0-607b50acafe5" x=458.02000000000004 y=224.86 w=66.36 h=15 fill="#1e1719" size=10.5 weight=800 text-align="center" runs={[{"font_weight":800.0,"text":"500 Hz"}]}>500 Hz</Text>
-        <Frame name="1 kHz" id="5a07116c-1ae3-453d-8562-4cf65ad8512b" x=541.35 y=38 w=52.5 h=203.25 control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Param":{"addr":"eq/g1k"}}},"kind":{"Fader":{"orientation":"Vertical"}},"slots":[{"node":"54c41824-65c0-4f3d-bf88-874e68d59d87","role":"Thumb"}]}}>
-          <Rectangle name="tick" id="30e9cf28-ea6c-4352-9d54-ac93b502c0f2" x=12.1875 y=17.34375 w=7.5 h=1 fill="#6a5256" />
-          <Rectangle name="tick" id="6a54ad5f-3fb4-48cb-95e0-110075e3113e" x=32.8125 y=17.34375 w=7.5 h=1 fill="#6a5256" />
-          <Rectangle name="tick" id="00e3f5ce-9af2-4a4f-8e9b-8935885cfe0c" x=15.9375 y=24.84375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="8cef1b65-87bc-40bb-b78d-1541d0b37643" x=32.8125 y=24.84375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="74a5d1d4-3411-43b8-bd58-3798f9d8c215" x=15.9375 y=32.34375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="9e37435e-b4e6-4ef5-a1a3-542066d3ea95" x=32.8125 y=32.34375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="c7800a78-f7e4-4940-be12-f67f877a3d0a" x=15.9375 y=39.84375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="0c26f8eb-b2fb-4c23-8fbe-3883b64cecc3" x=32.8125 y=39.84375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="dd052ce8-df00-47d3-8f23-72ac8f1bbaba" x=15.9375 y=47.34375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="0b2f4eeb-32c3-4fa8-a24b-22efa5af7ccf" x=32.8125 y=47.34375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="150580d6-af52-4830-94ca-5e91010b0c03" x=12.1875 y=54.84375 w=7.5 h=1 fill="#6a5256" />
-          <Rectangle name="tick" id="9881d055-31f6-4fb0-8d7c-8ac49d41fce2" x=32.8125 y=54.84375 w=7.5 h=1 fill="#6a5256" />
-          <Rectangle name="tick" id="7ab107b0-5864-456e-916b-025305013a64" x=15.9375 y=62.34375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="074a93c8-cf5a-477b-83c0-6166bb331826" x=32.8125 y=62.34375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="f6a58ef2-5d1d-4f31-863b-8dc98bb32234" x=15.9375 y=69.84375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="8dd91eea-2da5-447b-8664-87b3b8810c28" x=32.8125 y=69.84375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="3911dab4-4d4a-4c73-98c5-5032ba21cf35" x=15.9375 y=77.34375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="80cdea04-5703-4e8c-82f0-df8ed19aebe2" x=32.8125 y=77.34375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="682ccfc9-76f8-49d7-9821-ced90bd80f99" x=15.9375 y=84.84375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="ae7d2a50-b8b4-4143-8ad1-2c5366577c63" x=32.8125 y=84.84375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="3d455798-31ee-43b8-8783-5763993793b2" x=12.1875 y=92.34375 w=7.5 h=1 fill="#6a5256" />
-          <Rectangle name="tick" id="b1e80b37-4dcc-4dad-b66f-988b2eb21091" x=32.8125 y=92.34375 w=7.5 h=1 fill="#6a5256" />
-          <Rectangle name="tick" id="cc2311e0-029f-4b31-b663-26e1a39eec89" x=15.9375 y=99.84375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="72f562aa-2def-4624-8332-72de9e4719b5" x=32.8125 y=99.84375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="05c58d45-6e44-4841-8906-1978b28d4ce9" x=15.9375 y=107.34375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="91910b77-8a76-41b8-933b-7b9e6599a1e9" x=32.8125 y=107.34375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="697502a0-b64d-4409-8ca0-df87192382d6" x=15.9375 y=114.84375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="5a888973-c8a1-4172-b7d6-883d13256fa9" x=32.8125 y=114.84375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="bbf5d04c-7c33-42fc-9214-91ab31216a19" x=15.9375 y=122.34375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="0f591722-9d6f-4cbc-8ec0-aa3858a0c207" x=32.8125 y=122.34375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="d5b38b43-7ef9-47d0-b446-7c353f3730ec" x=12.1875 y=129.84375 w=7.5 h=1 fill="#6a5256" />
-          <Rectangle name="tick" id="7b39286f-b80d-4183-a8a2-0ce4e233324b" x=32.8125 y=129.84375 w=7.5 h=1 fill="#6a5256" />
-          <Rectangle name="tick" id="6f727c5f-4d12-40b5-ba2b-fd07abc0eb26" x=15.9375 y=137.34375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="7f3fd17b-322b-4bb5-b3b2-930065af2b5f" x=32.8125 y=137.34375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="0ff4a6e9-1bb8-47a2-ba11-16ea806f7e58" x=15.9375 y=144.84375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="ce3e011e-101b-4fa7-9482-5f559d5b6e50" x=32.8125 y=144.84375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="a97aacac-f199-400f-9e8c-f8aeb46d2471" x=15.9375 y=152.34375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="7c3a700d-9218-4359-b669-c8f0290b2ecd" x=32.8125 y=152.34375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="e5e6dfd2-7e2b-47c1-86a2-12dc09cf4eaf" x=15.9375 y=159.84375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="779ebe8f-ce67-4dd7-a6ea-6b128e0b80ba" x=32.8125 y=159.84375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="be65d34b-6ace-4c35-90e2-bbc8b9dd4220" x=12.1875 y=167.34375 w=7.5 h=1 fill="#6a5256" />
-          <Rectangle name="tick" id="0fceca41-1e66-4835-9292-12e02075d1ef" x=32.8125 y=167.34375 w=7.5 h=1 fill="#6a5256" />
-          <Rectangle name="slot" id="334dce56-4a47-48ba-ace2-114e400250f5" x=23.90625 y=15.9375 w=4.6875 h=153.75 radius=2.34375 fill="#060607" effects={[{"color":"#ffffff1f","kind":"InnerShadow","offset_y":-0.9375,"radius":0.0}]} />
-          <Frame name="lane" id="e017043b-e0ee-4109-949b-fab0241cdae0" x=14.0625 w=24.375 h=185.625>
-            <Frame name="cap" id="54c41824-65c0-4f3d-bf88-874e68d59d87" w=24.375 h=35.625>
-              <Rectangle name="shell" id="f38f0e4e-af66-4e71-924b-64490a9263b0" w=24.375 h=35.625 radius=2.8125 fill={[{"kind":{"LinearGradient":{"stops":[{"color":"#4f5052","position":0.0},{"color":"#1d1e21","position":0.48},{"color":"#161619","position":0.52},{"color":"#2f3033","position":1.0}],"transform":{"a":1.6653345369377348e-16,"b":-1.0,"c":1.0,"d":1.6653345369377348e-16,"tx":1.0,"ty":-1.942890293094024e-16}}}}]} stroke="#000000b3" stroke-align="inside" effects={[{"color":"#000000a0","kind":"DropShadow","offset_y":2.8125,"radius":4.6875},{"color":"#ffffff40","kind":"InnerShadow","offset_y":0.9375,"radius":0.0}]} />
-              <Rectangle name="groove" id="623e1cb8-6710-4cfa-afb4-8b9c1db4d9e1" x=1.875 y=7.875 w=20.625 h=1.125 fill="#00000073" />
-              <Rectangle name="groove" id="17a6469e-1664-42a6-8f50-f03c0970c1d0" x=1.875 y=12.5625 w=20.625 h=1.125 fill="#00000073" />
-              <Rectangle name="groove" id="009ea389-bc33-4eac-a7cc-ebf2a81e9c0f" x=1.875 y=21.9375 w=20.625 h=1.125 fill="#00000073" />
-              <Rectangle name="groove" id="ce06b4a6-6df9-4d06-a249-af88f2f97e3f" x=1.875 y=26.625 w=20.625 h=1.125 fill="#00000073" />
-              <Rectangle name="index" id="0f9f0237-b677-48fb-accd-483c973fe597" x=1.40625 y=16.875 w=21.5625 h=1.875 fill="#f1f1ef" />
-            </Frame>
-          </Frame>
-        </Frame>
-        <Frame name="eq/g1k readout" id="dcdc139d-86d1-4296-990d-ac97b2a40f1a" x=532.6 y=26.5 w=70 h=17 control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Param":{"addr":"eq/g1k"}}},"format":{"decimals":1,"style":"Number"},"kind":"Readout","slots":[{"node":"d9c1ec62-1e90-4089-98ac-92a01aea81ad","role":"Value"}]}}>
-          <Text name="print" id="b1280a36-27fa-4b6b-b166-01772d37490f" x=-0.315 y=1.3599999999999994 w=70 h=15 fill="#1e1719" size=10.5 weight=800 text-align="center" runs={[{"font_weight":800.0,"text":""}]} />
-          <Text name="print" id="a3a2b724-f6ab-437c-b35e-de1ee94e0783" x=0.315 y=1.3599999999999994 w=70 h=15 fill="#1e1719" size=10.5 weight=800 text-align="center" runs={[{"font_weight":800.0,"text":""}]} />
-          <Text name="print" id="d9c1ec62-1e90-4089-98ac-92a01aea81ad" y=1.3599999999999994 w=70 h=15 fill="#1e1719" size=10.5 weight=800 text-align="center" runs={[{"font_weight":800.0,"text":""}]} />
-        </Frame>
-        <Text name="print" id="e8c7bade-a1dd-4ec6-a5de-239588dea355" x=537.885 y=224.86 w=58.8 h=15 fill="#1e1719" size=10.5 weight=800 text-align="center" runs={[{"font_weight":800.0,"text":"1 kHz"}]}>1 kHz</Text>
-        <Text name="print" id="24904b18-baa9-43f6-85e6-94fec0babcca" x=538.5150000000001 y=224.86 w=58.8 h=15 fill="#1e1719" size=10.5 weight=800 text-align="center" runs={[{"font_weight":800.0,"text":"1 kHz"}]}>1 kHz</Text>
-        <Text name="print" id="419e8207-3a87-43d1-8787-9bd7df431f93" x=538.2 y=224.86 w=58.8 h=15 fill="#1e1719" size=10.5 weight=800 text-align="center" runs={[{"font_weight":800.0,"text":"1 kHz"}]}>1 kHz</Text>
-        <Frame name="2 kHz" id="192b73ff-8d4f-45ed-bc85-665b28ecc89b" x=617.75 y=38 w=52.5 h=203.25 control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Param":{"addr":"eq/g2k"}}},"kind":{"Fader":{"orientation":"Vertical"}},"slots":[{"node":"3ef9eaea-de66-4771-a852-c5332c047109","role":"Thumb"}]}}>
-          <Rectangle name="tick" id="86e21ccb-c469-4a15-ae44-2bab7e45a476" x=12.1875 y=17.34375 w=7.5 h=1 fill="#6a5256" />
-          <Rectangle name="tick" id="d2f82180-8f2e-498a-8757-a6faefdd00c3" x=32.8125 y=17.34375 w=7.5 h=1 fill="#6a5256" />
-          <Rectangle name="tick" id="de27480b-f810-49d0-b92c-a34ab568f4a8" x=15.9375 y=24.84375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="caef2e6b-1350-429c-ba31-d008d45c652d" x=32.8125 y=24.84375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="5f49f59a-cdc4-41db-bd44-eeb76bcb086c" x=15.9375 y=32.34375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="dd0be057-2bc9-42b4-b698-04e0d59888a9" x=32.8125 y=32.34375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="a20b3f05-9a5f-4284-a853-640c1a558589" x=15.9375 y=39.84375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="b2a4b92e-998a-4e82-bc2c-ee066a58b627" x=32.8125 y=39.84375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="de116194-9d66-4c0d-b643-e3569f5ef11e" x=15.9375 y=47.34375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="5b3a8229-7e23-4547-8931-638f8eddbfe4" x=32.8125 y=47.34375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="05f118f6-34bd-4773-8006-54c8910d1dff" x=12.1875 y=54.84375 w=7.5 h=1 fill="#6a5256" />
-          <Rectangle name="tick" id="e45c606d-b935-4fcf-a02e-3d8aff018f86" x=32.8125 y=54.84375 w=7.5 h=1 fill="#6a5256" />
-          <Rectangle name="tick" id="cf7273f9-3821-450c-adda-30097354626b" x=15.9375 y=62.34375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="163ccf78-8d87-4519-9662-86ea19089fef" x=32.8125 y=62.34375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="9b1bc1e2-963b-44ed-9511-4d3f884e89ae" x=15.9375 y=69.84375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="18340c5e-a6ca-46fc-8b2a-368ecd9042ee" x=32.8125 y=69.84375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="1eafaf9b-e285-41ae-af9c-a0e5d1b7034c" x=15.9375 y=77.34375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="091efc52-d69a-4bad-ad58-c0b283df74a9" x=32.8125 y=77.34375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="f48674c8-db2f-4c31-8c5e-dbe1d6e6ec90" x=15.9375 y=84.84375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="8a6d546e-ffe3-4e26-a2a4-0c02e5fa9afb" x=32.8125 y=84.84375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="dd4b6d42-210d-4f96-8f9c-a98fb17b1a73" x=12.1875 y=92.34375 w=7.5 h=1 fill="#6a5256" />
-          <Rectangle name="tick" id="12aec20c-e771-4550-b5b1-65c654f6f7b7" x=32.8125 y=92.34375 w=7.5 h=1 fill="#6a5256" />
-          <Rectangle name="tick" id="847b2f69-5322-489f-8f9e-79426b8cf2a4" x=15.9375 y=99.84375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="c36c1e5f-983e-4b5e-8fcf-598436152abb" x=32.8125 y=99.84375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="f4bde413-cff5-44c4-95bd-c2fa0c74e802" x=15.9375 y=107.34375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="a1c1f34a-6645-4a0a-b3e6-4b1fbf65a4a3" x=32.8125 y=107.34375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="c390e887-9b95-4aa8-9ebd-09b028fe3bba" x=15.9375 y=114.84375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="b314bdcb-67fc-46c5-87cf-1296f9e02e6f" x=32.8125 y=114.84375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="5e1bd186-c9b2-415d-b1d3-10cdaaf15ffc" x=15.9375 y=122.34375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="a6e4b7c4-9614-42e4-8b7d-873e4c33574b" x=32.8125 y=122.34375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="7b37ccfa-86fe-4d9f-993a-554b2c64dea5" x=12.1875 y=129.84375 w=7.5 h=1 fill="#6a5256" />
-          <Rectangle name="tick" id="c486dbd6-f960-40d4-a20b-ea71429ef9f4" x=32.8125 y=129.84375 w=7.5 h=1 fill="#6a5256" />
-          <Rectangle name="tick" id="28215fd6-db59-4673-8c8b-6c6cf0ec1384" x=15.9375 y=137.34375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="ead8f11b-110f-4f25-8837-3db5074472d1" x=32.8125 y=137.34375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="ec9812a2-bd70-4e89-a298-53f2bd9a4769" x=15.9375 y=144.84375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="72e0af54-5568-4858-870b-2be0731659ce" x=32.8125 y=144.84375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="ec094c14-104a-4789-bc60-fa0021f72078" x=15.9375 y=152.34375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="01b77a15-b44b-4595-b655-ae2e74b50b46" x=32.8125 y=152.34375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="9d5fe492-39c6-440c-9e36-fd933b60e9ac" x=15.9375 y=159.84375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="a0a1a187-6848-4abf-a17e-703de88c7fd1" x=32.8125 y=159.84375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="a9a81593-f976-4781-8096-7f110c2da92f" x=12.1875 y=167.34375 w=7.5 h=1 fill="#6a5256" />
-          <Rectangle name="tick" id="fefdefde-c3b3-4f92-8463-62346ee1a348" x=32.8125 y=167.34375 w=7.5 h=1 fill="#6a5256" />
-          <Rectangle name="slot" id="1ac92ad7-8f29-4d81-b159-9f6006eedb8c" x=23.90625 y=15.9375 w=4.6875 h=153.75 radius=2.34375 fill="#060607" effects={[{"color":"#ffffff1f","kind":"InnerShadow","offset_y":-0.9375,"radius":0.0}]} />
-          <Frame name="lane" id="ba0133c6-f479-469a-b61e-dedd7ace373f" x=14.0625 w=24.375 h=185.625>
-            <Frame name="cap" id="3ef9eaea-de66-4771-a852-c5332c047109" w=24.375 h=35.625>
-              <Rectangle name="shell" id="8e2c97f4-f11f-48da-a976-074b3eaae046" w=24.375 h=35.625 radius=2.8125 fill={[{"kind":{"LinearGradient":{"stops":[{"color":"#4f5052","position":0.0},{"color":"#1d1e21","position":0.48},{"color":"#161619","position":0.52},{"color":"#2f3033","position":1.0}],"transform":{"a":1.6653345369377348e-16,"b":-1.0,"c":1.0,"d":1.6653345369377348e-16,"tx":1.0,"ty":-1.942890293094024e-16}}}}]} stroke="#000000b3" stroke-align="inside" effects={[{"color":"#000000a0","kind":"DropShadow","offset_y":2.8125,"radius":4.6875},{"color":"#ffffff40","kind":"InnerShadow","offset_y":0.9375,"radius":0.0}]} />
-              <Rectangle name="groove" id="db3854f3-16e7-4663-8072-2d0a41cf46ce" x=1.875 y=7.875 w=20.625 h=1.125 fill="#00000073" />
-              <Rectangle name="groove" id="e594408d-5db3-4f6f-8048-7cfbda3f8abf" x=1.875 y=12.5625 w=20.625 h=1.125 fill="#00000073" />
-              <Rectangle name="groove" id="0ee9867a-08f1-48a4-bd33-c3f99654f451" x=1.875 y=21.9375 w=20.625 h=1.125 fill="#00000073" />
-              <Rectangle name="groove" id="b69050f4-4c64-4ae6-b054-b5dc1868bee7" x=1.875 y=26.625 w=20.625 h=1.125 fill="#00000073" />
-              <Rectangle name="index" id="507ab881-8b91-4bc8-8806-0c978a3ea211" x=1.40625 y=16.875 w=21.5625 h=1.875 fill="#f1f1ef" />
-            </Frame>
-          </Frame>
-        </Frame>
-        <Frame name="eq/g2k readout" id="155abeac-83b7-4f9c-a4d7-2b5f89b51a37" x=609 y=26.5 w=70 h=17 control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Param":{"addr":"eq/g2k"}}},"format":{"decimals":1,"style":"Number"},"kind":"Readout","slots":[{"node":"6814fe45-c84f-428a-ac87-6c04c13cb639","role":"Value"}]}}>
-          <Text name="print" id="ac292f74-a66f-44d8-9542-2d0feed05082" x=-0.315 y=1.3599999999999994 w=70 h=15 fill="#1e1719" size=10.5 weight=800 text-align="center" runs={[{"font_weight":800.0,"text":""}]} />
-          <Text name="print" id="0788a344-630f-4458-bf00-f37aeb8db9f0" x=0.315 y=1.3599999999999994 w=70 h=15 fill="#1e1719" size=10.5 weight=800 text-align="center" runs={[{"font_weight":800.0,"text":""}]} />
-          <Text name="print" id="6814fe45-c84f-428a-ac87-6c04c13cb639" y=1.3599999999999994 w=70 h=15 fill="#1e1719" size=10.5 weight=800 text-align="center" runs={[{"font_weight":800.0,"text":""}]} />
-        </Frame>
-        <Text name="print" id="ac503d47-b2b1-43ea-b6f1-73136853353e" x=614.285 y=224.86 w=58.8 h=15 fill="#1e1719" size=10.5 weight=800 text-align="center" runs={[{"font_weight":800.0,"text":"2 kHz"}]}>2 kHz</Text>
-        <Text name="print" id="351c0b10-a0b4-46f2-ac77-c95688f18749" x=614.9150000000001 y=224.86 w=58.8 h=15 fill="#1e1719" size=10.5 weight=800 text-align="center" runs={[{"font_weight":800.0,"text":"2 kHz"}]}>2 kHz</Text>
-        <Text name="print" id="ddea2149-c7a5-453a-9221-9c4b367c0855" x=614.6 y=224.86 w=58.8 h=15 fill="#1e1719" size=10.5 weight=800 text-align="center" runs={[{"font_weight":800.0,"text":"2 kHz"}]}>2 kHz</Text>
-        <Frame name="4 kHz" id="743d23bf-7534-478f-8d4f-fba049f2ad71" x=694.1500000000001 y=38 w=52.5 h=203.25 control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Param":{"addr":"eq/g4k"}}},"kind":{"Fader":{"orientation":"Vertical"}},"slots":[{"node":"562abf5b-b6e3-4b29-945a-1e31784bce10","role":"Thumb"}]}}>
-          <Rectangle name="tick" id="c0dcae99-75fb-40f9-a89d-d0803900b3dd" x=12.1875 y=17.34375 w=7.5 h=1 fill="#6a5256" />
-          <Rectangle name="tick" id="cb7301ef-8ced-4393-b2e0-47dc9455c570" x=32.8125 y=17.34375 w=7.5 h=1 fill="#6a5256" />
-          <Rectangle name="tick" id="ec11ba38-7e77-42b9-ba2d-3b00dcd3fa4c" x=15.9375 y=24.84375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="e9c61f4d-4424-4f83-b56a-5810bbcf6276" x=32.8125 y=24.84375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="1eca5107-6a0b-4101-987b-8a1b69f66236" x=15.9375 y=32.34375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="3cc32263-dd87-48f7-8b2b-0f842f7985f6" x=32.8125 y=32.34375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="15f18108-4d3c-47a2-842a-f98054a57a77" x=15.9375 y=39.84375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="abd93de7-e44e-4a61-a27d-f7bcb7f41deb" x=32.8125 y=39.84375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="c26b6074-1c81-4eae-83bb-7c5d0b997bcd" x=15.9375 y=47.34375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="ace8cccf-9d76-4612-ba22-21502ce4a41f" x=32.8125 y=47.34375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="b0554411-1cf3-4a53-b2ad-f2cf3bc0335b" x=12.1875 y=54.84375 w=7.5 h=1 fill="#6a5256" />
-          <Rectangle name="tick" id="d735c1af-e6c5-4498-8e1c-e7978d00ae91" x=32.8125 y=54.84375 w=7.5 h=1 fill="#6a5256" />
-          <Rectangle name="tick" id="324ffd1d-8582-4715-af0a-28e6f96f42f7" x=15.9375 y=62.34375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="921193a9-4562-4836-944f-b9f475764ca6" x=32.8125 y=62.34375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="cb86da95-fa9f-4c98-b405-bfebf74bf08d" x=15.9375 y=69.84375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="829dd152-835d-4221-9407-e3a55d56e10d" x=32.8125 y=69.84375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="fa38c23d-4fb2-43b8-bc52-9350fa436b91" x=15.9375 y=77.34375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="439ca8a4-ffc0-4002-bf68-eb62cf6d6650" x=32.8125 y=77.34375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="92c36994-a29d-4bae-bcaa-74d7e0bf7d6a" x=15.9375 y=84.84375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="3c02b74b-9dce-475e-8f9d-0271c69b26f2" x=32.8125 y=84.84375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="1d8ff682-d1c6-4ed8-bda0-df93a0b2dc18" x=12.1875 y=92.34375 w=7.5 h=1 fill="#6a5256" />
-          <Rectangle name="tick" id="c23a7b8c-7095-497d-a34b-0723a7a61bea" x=32.8125 y=92.34375 w=7.5 h=1 fill="#6a5256" />
-          <Rectangle name="tick" id="f6297831-6d3c-4ffa-b47c-7b2f50490833" x=15.9375 y=99.84375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="2b7658f9-e6cc-47c0-b1f6-33f30c3ae5b8" x=32.8125 y=99.84375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="519a1db6-c83b-4bf4-af48-b1d2c1225dc0" x=15.9375 y=107.34375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="787205c3-b9c0-4ef6-8f8c-a55e45e653fb" x=32.8125 y=107.34375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="d3d597ae-b900-4ad2-a060-36e41454785e" x=15.9375 y=114.84375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="eb5acdef-7e16-4a16-a524-00013204d595" x=32.8125 y=114.84375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="c8af0f36-92b0-4f00-8313-8d7d12028ec2" x=15.9375 y=122.34375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="129b20bc-24e5-4004-b457-994831ab081a" x=32.8125 y=122.34375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="b13f7883-6e24-4d53-9c5c-59f357042120" x=12.1875 y=129.84375 w=7.5 h=1 fill="#6a5256" />
-          <Rectangle name="tick" id="e9c377ca-71db-4cee-b5a5-ddea8aa451e2" x=32.8125 y=129.84375 w=7.5 h=1 fill="#6a5256" />
-          <Rectangle name="tick" id="27d7ecd6-2fd2-44fc-8acc-bfd66a488fdc" x=15.9375 y=137.34375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="12ab88fc-db28-45f6-adcc-374d73e3ee86" x=32.8125 y=137.34375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="2ec3aa14-9763-4f26-8225-0c0908476e32" x=15.9375 y=144.84375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="f6a48a88-0630-44a5-b584-9f8d35e453b0" x=32.8125 y=144.84375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="ae690beb-e0db-462a-881e-913e4a096f6b" x=15.9375 y=152.34375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="1bb9c818-7f62-4f77-8297-16dde2079538" x=32.8125 y=152.34375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="26bdc72f-f9d5-4d59-be1b-7d0b2cd1e468" x=15.9375 y=159.84375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="36bbcc98-b5aa-4f1a-8851-48943839a466" x=32.8125 y=159.84375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="1ad94fa3-0921-4c6c-b439-bb004f391167" x=12.1875 y=167.34375 w=7.5 h=1 fill="#6a5256" />
-          <Rectangle name="tick" id="9edb1c8c-1f3c-409c-a204-312a5772c506" x=32.8125 y=167.34375 w=7.5 h=1 fill="#6a5256" />
-          <Rectangle name="slot" id="e8aee717-3e80-4e89-9d1a-c34ea74a2b91" x=23.90625 y=15.9375 w=4.6875 h=153.75 radius=2.34375 fill="#060607" effects={[{"color":"#ffffff1f","kind":"InnerShadow","offset_y":-0.9375,"radius":0.0}]} />
-          <Frame name="lane" id="9b745ea4-46c3-4bb6-b77c-859fcc59f25a" x=14.0625 w=24.375 h=185.625>
-            <Frame name="cap" id="562abf5b-b6e3-4b29-945a-1e31784bce10" w=24.375 h=35.625>
-              <Rectangle name="shell" id="a343bc9b-9d76-4ea6-b380-7ba68fcaadf4" w=24.375 h=35.625 radius=2.8125 fill={[{"kind":{"LinearGradient":{"stops":[{"color":"#4f5052","position":0.0},{"color":"#1d1e21","position":0.48},{"color":"#161619","position":0.52},{"color":"#2f3033","position":1.0}],"transform":{"a":1.6653345369377348e-16,"b":-1.0,"c":1.0,"d":1.6653345369377348e-16,"tx":1.0,"ty":-1.942890293094024e-16}}}}]} stroke="#000000b3" stroke-align="inside" effects={[{"color":"#000000a0","kind":"DropShadow","offset_y":2.8125,"radius":4.6875},{"color":"#ffffff40","kind":"InnerShadow","offset_y":0.9375,"radius":0.0}]} />
-              <Rectangle name="groove" id="7ad39909-2fd8-4db5-adae-5bbe5f220491" x=1.875 y=7.875 w=20.625 h=1.125 fill="#00000073" />
-              <Rectangle name="groove" id="43a8ca7b-06c6-4b4b-b402-bd051f958b4d" x=1.875 y=12.5625 w=20.625 h=1.125 fill="#00000073" />
-              <Rectangle name="groove" id="0c0f9838-0aaf-4a4a-9c48-0428ae3f6019" x=1.875 y=21.9375 w=20.625 h=1.125 fill="#00000073" />
-              <Rectangle name="groove" id="ef748904-042c-4daa-b05c-c669426901d2" x=1.875 y=26.625 w=20.625 h=1.125 fill="#00000073" />
-              <Rectangle name="index" id="03027598-f18e-4de8-b962-75747078a05d" x=1.40625 y=16.875 w=21.5625 h=1.875 fill="#f1f1ef" />
-            </Frame>
-          </Frame>
-        </Frame>
-        <Frame name="eq/g4k readout" id="d6d3d579-17a0-48bb-a106-af02349da54d" x=685.4000000000001 y=26.5 w=70 h=17 control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Param":{"addr":"eq/g4k"}}},"format":{"decimals":1,"style":"Number"},"kind":"Readout","slots":[{"node":"61c5b438-42c1-464b-9cfa-b3720de849ac","role":"Value"}]}}>
-          <Text name="print" id="c555e798-0c46-4ca0-baec-3a68fcfc6485" x=-0.315 y=1.3599999999999994 w=70 h=15 fill="#1e1719" size=10.5 weight=800 text-align="center" runs={[{"font_weight":800.0,"text":""}]} />
-          <Text name="print" id="f78ccf1a-a582-4390-90c5-68065fb03b5b" x=0.315 y=1.3599999999999994 w=70 h=15 fill="#1e1719" size=10.5 weight=800 text-align="center" runs={[{"font_weight":800.0,"text":""}]} />
-          <Text name="print" id="61c5b438-42c1-464b-9cfa-b3720de849ac" y=1.3599999999999994 w=70 h=15 fill="#1e1719" size=10.5 weight=800 text-align="center" runs={[{"font_weight":800.0,"text":""}]} />
-        </Frame>
-        <Text name="print" id="b6be65dc-ec3a-439e-8873-f34bf3d94003" x=690.6850000000001 y=224.86 w=58.8 h=15 fill="#1e1719" size=10.5 weight=800 text-align="center" runs={[{"font_weight":800.0,"text":"4 kHz"}]}>4 kHz</Text>
-        <Text name="print" id="96a199f1-1b44-4355-b5cd-852d181a8467" x=691.3150000000002 y=224.86 w=58.8 h=15 fill="#1e1719" size=10.5 weight=800 text-align="center" runs={[{"font_weight":800.0,"text":"4 kHz"}]}>4 kHz</Text>
-        <Text name="print" id="d6e06f55-af52-4823-b4e3-e195ca320b5d" x=691.0000000000001 y=224.86 w=58.8 h=15 fill="#1e1719" size=10.5 weight=800 text-align="center" runs={[{"font_weight":800.0,"text":"4 kHz"}]}>4 kHz</Text>
-        <Frame name="8 kHz" id="7cf4ff86-e7f7-4e53-807a-536c5454e1f8" x=770.5500000000001 y=38 w=52.5 h=203.25 control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Param":{"addr":"eq/g8k"}}},"kind":{"Fader":{"orientation":"Vertical"}},"slots":[{"node":"29d0fa65-6844-4109-a830-8fb72d71f3c7","role":"Thumb"}]}}>
-          <Rectangle name="tick" id="4c3e5eb2-b3e2-4d9d-a968-8bad97c6de7c" x=12.1875 y=17.34375 w=7.5 h=1 fill="#6a5256" />
-          <Rectangle name="tick" id="226d23ba-1274-41d2-b456-14a2f4275696" x=32.8125 y=17.34375 w=7.5 h=1 fill="#6a5256" />
-          <Rectangle name="tick" id="0aa5edfd-fed3-4101-b9c0-4f2c10456939" x=15.9375 y=24.84375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="4970d048-8120-41c4-a413-b65e2e81dbfe" x=32.8125 y=24.84375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="ae978aa4-1903-4647-bac2-a2f2325f9293" x=15.9375 y=32.34375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="5e67de6e-aca9-4f8f-8b60-00bd31153667" x=32.8125 y=32.34375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="50b65919-9f6e-4cac-95b9-094ab6104898" x=15.9375 y=39.84375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="16fe2b18-f441-4d5e-a1d4-16d334fef8ae" x=32.8125 y=39.84375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="9d656d0a-6c0f-4428-b4d1-07a694dc852c" x=15.9375 y=47.34375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="10167bc8-6657-4200-b710-969aa1244b05" x=32.8125 y=47.34375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="000adec0-98cd-41ad-8dcf-675d91b93d37" x=12.1875 y=54.84375 w=7.5 h=1 fill="#6a5256" />
-          <Rectangle name="tick" id="25237828-3d8d-4f4f-94bb-b9ff4f825a7e" x=32.8125 y=54.84375 w=7.5 h=1 fill="#6a5256" />
-          <Rectangle name="tick" id="d9206339-f7d0-4caa-989a-bea2587797c4" x=15.9375 y=62.34375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="9bef9470-cc73-4336-b29e-35b874e60396" x=32.8125 y=62.34375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="725e9b12-fa6f-4805-a824-962f8e734f95" x=15.9375 y=69.84375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="f985539d-9678-495e-bf62-c0c0ac47db94" x=32.8125 y=69.84375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="da4e4e1c-8afc-4130-ba0a-ffcbb9482487" x=15.9375 y=77.34375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="c596659d-2b73-4a0d-8663-1388bc99ab98" x=32.8125 y=77.34375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="e3ead1d1-0009-4721-a89e-4c7982e753cf" x=15.9375 y=84.84375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="064e9963-2d18-4d30-b6df-e72b3d526e13" x=32.8125 y=84.84375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="bf528d5e-6146-40a7-927e-cabea426d52f" x=12.1875 y=92.34375 w=7.5 h=1 fill="#6a5256" />
-          <Rectangle name="tick" id="0d8c3ed3-907d-4bae-880d-31d9a55c7b33" x=32.8125 y=92.34375 w=7.5 h=1 fill="#6a5256" />
-          <Rectangle name="tick" id="b40ed8be-b150-45e3-ab7c-e84b46d6d3f9" x=15.9375 y=99.84375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="56680c9c-5eb6-4f46-af59-995f127afd12" x=32.8125 y=99.84375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="f56c474e-6b0b-449d-85e6-a34d1974d9a9" x=15.9375 y=107.34375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="16703671-f7e6-47d4-961a-6e05fa1d926a" x=32.8125 y=107.34375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="f129b767-f895-4e74-9231-1d350d311ce7" x=15.9375 y=114.84375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="2c108229-11bd-4c16-b5f1-e756d785d153" x=32.8125 y=114.84375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="7708dbf5-f0a5-4175-b0f4-ac8a6bd3d97c" x=15.9375 y=122.34375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="1e100a7b-9aaf-43f6-9271-af64d4ff3323" x=32.8125 y=122.34375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="ddc6dfd1-610f-4457-992b-d58ac13f8a37" x=12.1875 y=129.84375 w=7.5 h=1 fill="#6a5256" />
-          <Rectangle name="tick" id="d4e93d61-45ed-4fa8-abe7-3557f31f8ef4" x=32.8125 y=129.84375 w=7.5 h=1 fill="#6a5256" />
-          <Rectangle name="tick" id="d7c8368d-62fa-4286-ada8-afd402ae18c4" x=15.9375 y=137.34375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="6e423063-b15c-4c97-a0cf-0edae4ce5444" x=32.8125 y=137.34375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="2eac7faa-c271-4731-99ad-3084d6f99380" x=15.9375 y=144.84375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="89b21050-bed5-43bb-903c-894ef40b4877" x=32.8125 y=144.84375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="f62bf68c-6846-470a-9b91-998024cd591c" x=15.9375 y=152.34375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="d8ab45f7-1475-46ce-a8e6-1abac1428044" x=32.8125 y=152.34375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="d107554e-27ee-4e5d-86ed-f21276051d4a" x=15.9375 y=159.84375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="2d8e99ac-5bcb-416e-9245-b7142a2c16c8" x=32.8125 y=159.84375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="6f899775-7fc9-44db-a2e1-eda1ad009584" x=12.1875 y=167.34375 w=7.5 h=1 fill="#6a5256" />
-          <Rectangle name="tick" id="27bc7daa-8acd-4633-99d5-879459837ddf" x=32.8125 y=167.34375 w=7.5 h=1 fill="#6a5256" />
-          <Rectangle name="slot" id="27bae73e-c1c3-47d6-a0e9-a5005539429a" x=23.90625 y=15.9375 w=4.6875 h=153.75 radius=2.34375 fill="#060607" effects={[{"color":"#ffffff1f","kind":"InnerShadow","offset_y":-0.9375,"radius":0.0}]} />
-          <Frame name="lane" id="988e1731-12cf-4bad-acba-e91afc4089bf" x=14.0625 w=24.375 h=185.625>
-            <Frame name="cap" id="29d0fa65-6844-4109-a830-8fb72d71f3c7" w=24.375 h=35.625>
-              <Rectangle name="shell" id="1f6b281f-29e3-4084-8c14-7c2e649c1bb0" w=24.375 h=35.625 radius=2.8125 fill={[{"kind":{"LinearGradient":{"stops":[{"color":"#4f5052","position":0.0},{"color":"#1d1e21","position":0.48},{"color":"#161619","position":0.52},{"color":"#2f3033","position":1.0}],"transform":{"a":1.6653345369377348e-16,"b":-1.0,"c":1.0,"d":1.6653345369377348e-16,"tx":1.0,"ty":-1.942890293094024e-16}}}}]} stroke="#000000b3" stroke-align="inside" effects={[{"color":"#000000a0","kind":"DropShadow","offset_y":2.8125,"radius":4.6875},{"color":"#ffffff40","kind":"InnerShadow","offset_y":0.9375,"radius":0.0}]} />
-              <Rectangle name="groove" id="3b3e86e4-beb9-4ec0-b65c-8b382a042b17" x=1.875 y=7.875 w=20.625 h=1.125 fill="#00000073" />
-              <Rectangle name="groove" id="3512368b-7f32-4dda-be6a-ea72807b32d8" x=1.875 y=12.5625 w=20.625 h=1.125 fill="#00000073" />
-              <Rectangle name="groove" id="b60588f8-197e-4d3e-9b5c-24ffb949fd1d" x=1.875 y=21.9375 w=20.625 h=1.125 fill="#00000073" />
-              <Rectangle name="groove" id="c7f2de49-629c-4887-a076-63a086ad9a06" x=1.875 y=26.625 w=20.625 h=1.125 fill="#00000073" />
-              <Rectangle name="index" id="97a79c82-856b-4596-8cac-b48d83f581d4" x=1.40625 y=16.875 w=21.5625 h=1.875 fill="#f1f1ef" />
-            </Frame>
-          </Frame>
-        </Frame>
-        <Frame name="eq/g8k readout" id="e98dcdc0-26d0-4564-86e2-2e4f392e0e96" x=761.8000000000001 y=26.5 w=70 h=17 control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Param":{"addr":"eq/g8k"}}},"format":{"decimals":1,"style":"Number"},"kind":"Readout","slots":[{"node":"cced9a1c-e02f-435b-b4ce-d3f9b3dcbf90","role":"Value"}]}}>
-          <Text name="print" id="db5e3f9a-d506-420b-a63f-7a3b71ac9f97" x=-0.315 y=1.3599999999999994 w=70 h=15 fill="#1e1719" size=10.5 weight=800 text-align="center" runs={[{"font_weight":800.0,"text":""}]} />
-          <Text name="print" id="3f4d7ba7-4ce9-4254-90d8-fac466263ddf" x=0.315 y=1.3599999999999994 w=70 h=15 fill="#1e1719" size=10.5 weight=800 text-align="center" runs={[{"font_weight":800.0,"text":""}]} />
-          <Text name="print" id="cced9a1c-e02f-435b-b4ce-d3f9b3dcbf90" y=1.3599999999999994 w=70 h=15 fill="#1e1719" size=10.5 weight=800 text-align="center" runs={[{"font_weight":800.0,"text":""}]} />
-        </Frame>
-        <Text name="print" id="b23fe3b4-b459-4d28-a913-7d9510b17676" x=767.085 y=224.86 w=58.8 h=15 fill="#1e1719" size=10.5 weight=800 text-align="center" runs={[{"font_weight":800.0,"text":"8 kHz"}]}>8 kHz</Text>
-        <Text name="print" id="ff7e05b3-9af5-452c-a7a7-2653b15814b4" x=767.7150000000001 y=224.86 w=58.8 h=15 fill="#1e1719" size=10.5 weight=800 text-align="center" runs={[{"font_weight":800.0,"text":"8 kHz"}]}>8 kHz</Text>
-        <Text name="print" id="2492b649-1a3e-4bef-b0f7-01ee57cfc3ef" x=767.4000000000001 y=224.86 w=58.8 h=15 fill="#1e1719" size=10.5 weight=800 text-align="center" runs={[{"font_weight":800.0,"text":"8 kHz"}]}>8 kHz</Text>
-        <Frame name="16 kHz" id="84409e4e-6608-42d8-a989-d5884043da70" x=846.95 y=38 w=52.5 h=203.25 control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Param":{"addr":"eq/g16k"}}},"kind":{"Fader":{"orientation":"Vertical"}},"slots":[{"node":"40489574-56f2-4c49-828a-2e55f8bb16c3","role":"Thumb"}]}}>
-          <Rectangle name="tick" id="b0154a93-57ee-4b25-a6df-63e249807cac" x=12.1875 y=17.34375 w=7.5 h=1 fill="#6a5256" />
-          <Rectangle name="tick" id="b4e100f7-6c21-4f2f-be4a-5aefd673b937" x=32.8125 y=17.34375 w=7.5 h=1 fill="#6a5256" />
-          <Rectangle name="tick" id="48a3e066-d87e-4405-acee-65e8f22e9fe3" x=15.9375 y=24.84375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="ae58ed18-431f-48be-8f9d-b7951ddb72f3" x=32.8125 y=24.84375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="fbb2c874-2d79-4014-96ba-41e7fea01759" x=15.9375 y=32.34375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="fbc005f0-25bc-4c41-879b-d15627bbaff9" x=32.8125 y=32.34375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="8506b3d4-30e3-4361-9020-cfc43331b6f7" x=15.9375 y=39.84375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="081f2387-b98a-4c9c-bf7a-57d363eedd9a" x=32.8125 y=39.84375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="6e5de233-98f4-466d-b1ac-ac8c500f30e2" x=15.9375 y=47.34375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="055bcad1-15ba-4f15-bc65-623906df887f" x=32.8125 y=47.34375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="b801ffd4-092e-4fd1-b60b-3586165a2e57" x=12.1875 y=54.84375 w=7.5 h=1 fill="#6a5256" />
-          <Rectangle name="tick" id="b9d44cc6-fa1c-4371-8b51-d6e1a387aec8" x=32.8125 y=54.84375 w=7.5 h=1 fill="#6a5256" />
-          <Rectangle name="tick" id="0d7fb454-8ebe-42ec-af47-10811e5f6afd" x=15.9375 y=62.34375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="e5023a10-46c6-4e88-87b0-076d5d7a7295" x=32.8125 y=62.34375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="bf396b8c-c13a-40a5-a223-33529094e816" x=15.9375 y=69.84375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="5a69bb10-919c-4abf-9f81-7b6caac19026" x=32.8125 y=69.84375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="75ce92a9-6da3-4dd6-a5aa-8d5536183808" x=15.9375 y=77.34375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="b92e9b19-3f41-4e82-98e2-8bc39f74c907" x=32.8125 y=77.34375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="fc56dde0-0a4d-48cb-9a58-35b904c38c73" x=15.9375 y=84.84375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="b555b31a-a09f-40ae-98ee-38a2ee2947d9" x=32.8125 y=84.84375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="871a3290-1a1c-410d-b99a-d2af15e9fd5f" x=12.1875 y=92.34375 w=7.5 h=1 fill="#6a5256" />
-          <Rectangle name="tick" id="b85be810-e390-4dd9-87e4-31f4ef495785" x=32.8125 y=92.34375 w=7.5 h=1 fill="#6a5256" />
-          <Rectangle name="tick" id="7cdcbb0f-1329-40ff-8cdc-a998a3b2bc7b" x=15.9375 y=99.84375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="65e1da11-c3b9-49cc-b8ca-665375296620" x=32.8125 y=99.84375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="4fdac7db-e588-4925-b4a2-0580d03ce20b" x=15.9375 y=107.34375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="79f65873-4d46-4079-843c-1abf9d0db55f" x=32.8125 y=107.34375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="c308bca7-6e62-40f5-a9f4-e2a9a5488f55" x=15.9375 y=114.84375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="22794fbc-fbf3-4ae9-815d-5104cd9c4402" x=32.8125 y=114.84375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="ea724f4e-0ed1-4d9c-b439-9700e0f38052" x=15.9375 y=122.34375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="df8687cf-19f4-4ad6-8855-6a751a56a1ff" x=32.8125 y=122.34375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="8e4a886a-5c3a-434b-a1e7-8b1605ebfbf8" x=12.1875 y=129.84375 w=7.5 h=1 fill="#6a5256" />
-          <Rectangle name="tick" id="ad8011c5-2a4e-4eb0-89e4-13936e01d888" x=32.8125 y=129.84375 w=7.5 h=1 fill="#6a5256" />
-          <Rectangle name="tick" id="5e14078f-b081-457a-a1fe-a9a14ccca2d3" x=15.9375 y=137.34375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="5121f191-11e6-44ff-81b6-4678bcb9fdc4" x=32.8125 y=137.34375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="c1117d19-ff4c-4f07-a844-977c50f855ff" x=15.9375 y=144.84375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="fa3d7257-b59d-4967-acc3-4afcc7ba31f1" x=32.8125 y=144.84375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="0dfd5373-78a2-43fa-a7ed-d49fb0687b9c" x=15.9375 y=152.34375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="1c1d09c1-8001-43df-8595-31d0e161a9b2" x=32.8125 y=152.34375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="04537365-17ea-461c-9034-7ffc7525ae71" x=15.9375 y=159.84375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="4c968491-86b2-4179-b150-0a1f27c80bbf" x=32.8125 y=159.84375 w=3.75 h=1 fill="#6a5256a1" />
-          <Rectangle name="tick" id="b53f6bb6-b644-46a4-985f-8a5428bbf411" x=12.1875 y=167.34375 w=7.5 h=1 fill="#6a5256" />
-          <Rectangle name="tick" id="0b9e4a97-0def-4eac-8f57-db5599c6b20e" x=32.8125 y=167.34375 w=7.5 h=1 fill="#6a5256" />
-          <Rectangle name="slot" id="35fc6c31-552e-41da-b955-66ca230f584e" x=23.90625 y=15.9375 w=4.6875 h=153.75 radius=2.34375 fill="#060607" effects={[{"color":"#ffffff1f","kind":"InnerShadow","offset_y":-0.9375,"radius":0.0}]} />
-          <Frame name="lane" id="7256930a-89b4-4bb3-88c5-a86ed3125067" x=14.0625 w=24.375 h=185.625>
-            <Frame name="cap" id="40489574-56f2-4c49-828a-2e55f8bb16c3" w=24.375 h=35.625>
-              <Rectangle name="shell" id="34eb3c4d-8d8a-404b-8c10-2d07c60ecd9d" w=24.375 h=35.625 radius=2.8125 fill={[{"kind":{"LinearGradient":{"stops":[{"color":"#4f5052","position":0.0},{"color":"#1d1e21","position":0.48},{"color":"#161619","position":0.52},{"color":"#2f3033","position":1.0}],"transform":{"a":1.6653345369377348e-16,"b":-1.0,"c":1.0,"d":1.6653345369377348e-16,"tx":1.0,"ty":-1.942890293094024e-16}}}}]} stroke="#000000b3" stroke-align="inside" effects={[{"color":"#000000a0","kind":"DropShadow","offset_y":2.8125,"radius":4.6875},{"color":"#ffffff40","kind":"InnerShadow","offset_y":0.9375,"radius":0.0}]} />
-              <Rectangle name="groove" id="6bb148f2-61f6-43a6-8723-8241cd6ea892" x=1.875 y=7.875 w=20.625 h=1.125 fill="#00000073" />
-              <Rectangle name="groove" id="4aff1bd0-abd3-4185-afbe-f71483f1b767" x=1.875 y=12.5625 w=20.625 h=1.125 fill="#00000073" />
-              <Rectangle name="groove" id="b165e6ca-ff53-4063-b037-a69a56962546" x=1.875 y=21.9375 w=20.625 h=1.125 fill="#00000073" />
-              <Rectangle name="groove" id="e23cc78f-1701-4325-90c8-3734168f65e6" x=1.875 y=26.625 w=20.625 h=1.125 fill="#00000073" />
-              <Rectangle name="index" id="ae0ad472-d0d3-47e3-952e-504c21192283" x=1.40625 y=16.875 w=21.5625 h=1.875 fill="#f1f1ef" />
-            </Frame>
-          </Frame>
-        </Frame>
-        <Frame name="eq/g16k readout" id="19924dcc-9f7b-4334-955f-d95f036e7415" x=838.2 y=26.5 w=70 h=17 control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Param":{"addr":"eq/g16k"}}},"format":{"decimals":1,"style":"Number"},"kind":"Readout","slots":[{"node":"fdd89a46-6177-418a-b738-cb0814214ee3","role":"Value"}]}}>
-          <Text name="print" id="046fda05-d021-4b75-80a7-f8a10159f8af" x=-0.315 y=1.3599999999999994 w=70 h=15 fill="#1e1719" size=10.5 weight=800 text-align="center" runs={[{"font_weight":800.0,"text":""}]} />
-          <Text name="print" id="2c390f42-f0c2-4c67-b84a-6976f0f6fc0e" x=0.315 y=1.3599999999999994 w=70 h=15 fill="#1e1719" size=10.5 weight=800 text-align="center" runs={[{"font_weight":800.0,"text":""}]} />
-          <Text name="print" id="fdd89a46-6177-418a-b738-cb0814214ee3" y=1.3599999999999994 w=70 h=15 fill="#1e1719" size=10.5 weight=800 text-align="center" runs={[{"font_weight":800.0,"text":""}]} />
-        </Frame>
-        <Text name="print" id="1fee5465-6da5-4cc8-a27c-32a7eb02ea17" x=839.705 y=224.86 w=66.36 h=15 fill="#1e1719" size=10.5 weight=800 text-align="center" runs={[{"font_weight":800.0,"text":"16 kHz"}]}>16 kHz</Text>
-        <Text name="print" id="b51003e5-2dd0-4493-b1dc-6d8f4e1b2601" x=840.3350000000002 y=224.86 w=66.36 h=15 fill="#1e1719" size=10.5 weight=800 text-align="center" runs={[{"font_weight":800.0,"text":"16 kHz"}]}>16 kHz</Text>
-        <Text name="print" id="c72a13bc-3fa1-4cf4-b602-93fd016a7f34" x=840.0200000000001 y=224.86 w=66.36 h=15 fill="#1e1719" size=10.5 weight=800 text-align="center" runs={[{"font_weight":800.0,"text":"16 kHz"}]}>16 kHz</Text>
       </Frame>
-      <Rectangle name="foot" id="aed3d419-cb13-420f-8805-f9709cd503c4" x=120 y=272 w=50 h=14 radius=4 fill="#1b1b1d" />
-      <Rectangle name="foot" id="88792fcf-86a9-4cad-b370-80b865edc6b3" x=970 y=272 w=50 h=14 radius=4 fill="#1b1b1d" />
+      <Frame name="eq/color = 1" id="4c304e03-b640-4157-822b-d5e89e6a919d" w=1140 h=274 control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Param":{"addr":"eq/color"}}},"kind":"Readout","show_if":{"addr":"eq/color","any_of":[1.0],"at_least":0.0,"not":false},"slots":[{"node":"a07cbea4-ab63-4886-b342-2683f01ae7e3","role":"Value"}]}}>
+        <Text name="colourway" id="a07cbea4-ab63-4886-b342-2683f01ae7e3" w=8 h=2 fill="#00000000" size=1 />
+        <Frame name="Case" id="4f182f07-8fdc-4452-b318-c78dd804c264" w=1140 h=274 radius=16 effects={[{"color":"#00000066","kind":"DropShadow","offset_y":8.0,"radius":16.0}]}>
+          <Frame name="material brushed" id="78ff1546-6c4a-49f1-a06c-c5e696fbefbe" w=1140 h=274 radius=16 clip=true absolute=true>
+            <Rectangle name="base" id="95f6d87a-e327-46b4-a6b4-52d365f70f2f" w=1140 h=274 fill={[{"kind":{"LinearGradient":{"stops":[{"color":"#cfa867","position":0.0},{"color":"#c79a4e","position":0.45},{"color":"#bf944b","position":0.55},{"color":"#9f7b3e","position":1.0}],"transform":{"a":1.6653345369377348e-16,"b":-1.0,"c":1.0,"d":1.6653345369377348e-16,"tx":1.0,"ty":-1.942890293094024e-16}}}}]} absolute=true />
+            <Frame name="texture" id="978917f3-279e-4882-96ea-ccdd42b7bc93" w=1140 h=274 clip=true absolute=true>
+              <Rectangle name="tile" id="beafa3bb-c94d-48aa-a043-ad22c0ea6d40" w=256 h=256 fill={[{"kind":{"Image":{"asset":"c5abf078390fc4f057c976a9c906686aca4a6c11641c385f1ae3852206546090","scale_mode":"Stretch"}},"opacity":0.1781912862745098}]} absolute=true />
+              <Rectangle name="tile" id="8bdf1395-5970-4dcf-89ec-ae41387087cc" x=256 w=256 h=256 fill={[{"kind":{"Image":{"asset":"c5abf078390fc4f057c976a9c906686aca4a6c11641c385f1ae3852206546090","scale_mode":"Stretch"}},"opacity":0.1781912862745098}]} absolute=true />
+              <Rectangle name="tile" id="8ea29bf0-cd35-4bb8-9650-e3fc47785c38" x=512 w=256 h=256 fill={[{"kind":{"Image":{"asset":"c5abf078390fc4f057c976a9c906686aca4a6c11641c385f1ae3852206546090","scale_mode":"Stretch"}},"opacity":0.1781912862745098}]} absolute=true />
+              <Rectangle name="tile" id="38121cf4-42c5-45bc-93b1-f6bf352d6f09" x=768 w=256 h=256 fill={[{"kind":{"Image":{"asset":"c5abf078390fc4f057c976a9c906686aca4a6c11641c385f1ae3852206546090","scale_mode":"Stretch"}},"opacity":0.1781912862745098}]} absolute=true />
+              <Rectangle name="tile" id="d19e4432-0a9c-412b-9223-15b3ffc0044b" x=1024 w=256 h=256 fill={[{"kind":{"Image":{"asset":"c5abf078390fc4f057c976a9c906686aca4a6c11641c385f1ae3852206546090","scale_mode":"Stretch"}},"opacity":0.1781912862745098}]} absolute=true />
+              <Rectangle name="tile" id="b2ec16c0-a4bf-4686-a375-3e441278c68d" y=256 w=256 h=256 fill={[{"kind":{"Image":{"asset":"c5abf078390fc4f057c976a9c906686aca4a6c11641c385f1ae3852206546090","scale_mode":"Stretch"}},"opacity":0.1781912862745098}]} absolute=true />
+              <Rectangle name="tile" id="42f8c82c-2d43-41be-99f3-747a46b45c5b" x=256 y=256 w=256 h=256 fill={[{"kind":{"Image":{"asset":"c5abf078390fc4f057c976a9c906686aca4a6c11641c385f1ae3852206546090","scale_mode":"Stretch"}},"opacity":0.1781912862745098}]} absolute=true />
+              <Rectangle name="tile" id="0bc389ce-3a90-4322-b6b9-36736cebeb83" x=512 y=256 w=256 h=256 fill={[{"kind":{"Image":{"asset":"c5abf078390fc4f057c976a9c906686aca4a6c11641c385f1ae3852206546090","scale_mode":"Stretch"}},"opacity":0.1781912862745098}]} absolute=true />
+              <Rectangle name="tile" id="1d9eb8fd-36c0-4e15-a22f-572dd95e26b6" x=768 y=256 w=256 h=256 fill={[{"kind":{"Image":{"asset":"c5abf078390fc4f057c976a9c906686aca4a6c11641c385f1ae3852206546090","scale_mode":"Stretch"}},"opacity":0.1781912862745098}]} absolute=true />
+              <Rectangle name="tile" id="fcce17bc-42da-4f2c-814c-cd7d84e52d7a" x=1024 y=256 w=256 h=256 fill={[{"kind":{"Image":{"asset":"c5abf078390fc4f057c976a9c906686aca4a6c11641c385f1ae3852206546090","scale_mode":"Stretch"}},"opacity":0.1781912862745098}]} absolute=true />
+            </Frame>
+            <Rectangle name="anisotropy" id="6936acc3-3edf-4d3f-b24d-e39d8e29a73b" w=1140 h=274 fill={[{"kind":{"LinearGradient":{"stops":[{"color":"#ffffff00","position":0.0},{"color":"#ffffff29","position":0.3},{"color":"#ffffff00","position":0.42},{"color":"#00000000","position":0.7},{"color":"#00000014","position":0.8},{"color":"#00000000","position":1.0}],"transform":{"a":1.1408563820557887,"b":0.79883623873012,"c":-0.79883623873012,"d":1.1408563820557887,"tx":-0.4698463103929543,"ty":0.32898992833716567}}}}]} absolute=true />
+          </Frame>
+          <Rectangle name="case edge soft" id="68cf180c-f98b-4b89-80d6-7a05c79c588d" w=1140 h=274 radius=16 stroke={[{"kind":{"LinearGradient":{"stops":[{"color":"#ffffff39","position":0.0},{"color":"#ffffff0e","position":0.4},{"color":"#00000000","position":0.5},{"color":"#00000013","position":0.62},{"color":"#0000003f","position":1.0}],"transform":{"a":0.7988362387301198,"b":-1.140856382055789,"c":1.140856382055789,"d":0.7988362387301198,"tx":0.6710100716628347,"ty":-0.4698463103929543}}}}]} stroke-weight=18 stroke-align="inside" absolute=true />
+          <Rectangle name="case edge" id="1c432d80-8e78-47e3-b3d4-675822d2a138" w=1140 h=274 radius=16 stroke={[{"kind":{"LinearGradient":{"stops":[{"color":"#ffffff80","position":0.0},{"color":"#ffffff20","position":0.4},{"color":"#00000000","position":0.5},{"color":"#0000002a","position":0.62},{"color":"#0000008c","position":1.0}],"transform":{"a":0.7988362387301198,"b":-1.140856382055789,"c":1.140856382055789,"d":0.7988362387301198,"tx":0.6710100716628347,"ty":-0.4698463103929543}}}}]} stroke-weight=5.5 stroke-align="inside" absolute=true />
+        </Frame>
+      </Frame>
+      <Frame name="eq/color = 2" id="66fa4af5-129c-4ce9-be9f-d6bcd64f69f8" w=1140 h=274 control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Param":{"addr":"eq/color"}}},"kind":"Readout","show_if":{"addr":"eq/color","any_of":[2.0],"at_least":0.0,"not":false},"slots":[{"node":"15e39cb7-3e06-4778-8d86-4a0abceb4188","role":"Value"}]}}>
+        <Text name="colourway" id="15e39cb7-3e06-4778-8d86-4a0abceb4188" w=8 h=2 fill="#00000000" size=1 />
+        <Frame name="Case" id="6638be67-1d46-4580-908c-2c38fd054b8e" w=1140 h=274 radius=16 effects={[{"color":"#00000066","kind":"DropShadow","offset_y":8.0,"radius":16.0}]}>
+          <Frame name="material powder" id="ad6580e8-8266-4955-ba54-27699bd869ec" w=1140 h=274 radius=16 clip=true absolute=true>
+            <Rectangle name="base" id="da27f76e-afe6-4a6f-953d-2a649a99e047" w=1140 h=274 fill={[{"kind":{"LinearGradient":{"stops":[{"color":"#f1ede7","position":0.0},{"color":"#f0ece5","position":0.5},{"color":"#d3d0ca","position":1.0}],"transform":{"a":0.7988362387301198,"b":-1.140856382055789,"c":1.140856382055789,"d":0.7988362387301198,"tx":0.6710100716628347,"ty":-0.4698463103929543}}}}]} absolute=true />
+            <Frame name="texture" id="8a1b1dea-df25-46c4-bef7-c191bb68cd81" w=1140 h=274 clip=true absolute=true>
+              <Rectangle name="tile" id="edd6ce62-ab45-46e7-832a-f89b56b8266a" w=128 h=128 fill={[{"kind":{"Image":{"asset":"5cebaae1ab061bba4f4a2909f98ec55f27cebb539a6630b8cb1baf20ecb268b6","scale_mode":"Stretch"}},"opacity":0.19268431372549022}]} absolute=true />
+              <Rectangle name="tile" id="dc885f35-556b-404d-9bb8-a4ccd039d22a" x=128 w=128 h=128 fill={[{"kind":{"Image":{"asset":"5cebaae1ab061bba4f4a2909f98ec55f27cebb539a6630b8cb1baf20ecb268b6","scale_mode":"Stretch"}},"opacity":0.19268431372549022}]} absolute=true />
+              <Rectangle name="tile" id="b3eabc13-da94-48a1-ac72-c61fa23c4f67" x=256 w=128 h=128 fill={[{"kind":{"Image":{"asset":"5cebaae1ab061bba4f4a2909f98ec55f27cebb539a6630b8cb1baf20ecb268b6","scale_mode":"Stretch"}},"opacity":0.19268431372549022}]} absolute=true />
+              <Rectangle name="tile" id="299c1300-7d0e-4fd7-9c75-085db3f8b007" x=384 w=128 h=128 fill={[{"kind":{"Image":{"asset":"5cebaae1ab061bba4f4a2909f98ec55f27cebb539a6630b8cb1baf20ecb268b6","scale_mode":"Stretch"}},"opacity":0.19268431372549022}]} absolute=true />
+              <Rectangle name="tile" id="f86fb07d-63ab-4639-8a18-5c5b851e79e5" x=512 w=128 h=128 fill={[{"kind":{"Image":{"asset":"5cebaae1ab061bba4f4a2909f98ec55f27cebb539a6630b8cb1baf20ecb268b6","scale_mode":"Stretch"}},"opacity":0.19268431372549022}]} absolute=true />
+              <Rectangle name="tile" id="2c36abfb-134f-4c66-b79f-51e3f1750409" x=640 w=128 h=128 fill={[{"kind":{"Image":{"asset":"5cebaae1ab061bba4f4a2909f98ec55f27cebb539a6630b8cb1baf20ecb268b6","scale_mode":"Stretch"}},"opacity":0.19268431372549022}]} absolute=true />
+              <Rectangle name="tile" id="a22b4d9d-54ca-4e2d-b274-14508a7574fc" x=768 w=128 h=128 fill={[{"kind":{"Image":{"asset":"5cebaae1ab061bba4f4a2909f98ec55f27cebb539a6630b8cb1baf20ecb268b6","scale_mode":"Stretch"}},"opacity":0.19268431372549022}]} absolute=true />
+              <Rectangle name="tile" id="31d43c9b-b168-4da0-bbb3-e9c42aedfac4" x=896 w=128 h=128 fill={[{"kind":{"Image":{"asset":"5cebaae1ab061bba4f4a2909f98ec55f27cebb539a6630b8cb1baf20ecb268b6","scale_mode":"Stretch"}},"opacity":0.19268431372549022}]} absolute=true />
+              <Rectangle name="tile" id="0c9faf69-6c53-4772-b895-678f876decb9" x=1024 w=128 h=128 fill={[{"kind":{"Image":{"asset":"5cebaae1ab061bba4f4a2909f98ec55f27cebb539a6630b8cb1baf20ecb268b6","scale_mode":"Stretch"}},"opacity":0.19268431372549022}]} absolute=true />
+              <Rectangle name="tile" id="2605b562-66f6-4693-a639-b34154735322" y=128 w=128 h=128 fill={[{"kind":{"Image":{"asset":"5cebaae1ab061bba4f4a2909f98ec55f27cebb539a6630b8cb1baf20ecb268b6","scale_mode":"Stretch"}},"opacity":0.19268431372549022}]} absolute=true />
+              <Rectangle name="tile" id="da416454-5933-45dd-af93-fc5ca1db743a" x=128 y=128 w=128 h=128 fill={[{"kind":{"Image":{"asset":"5cebaae1ab061bba4f4a2909f98ec55f27cebb539a6630b8cb1baf20ecb268b6","scale_mode":"Stretch"}},"opacity":0.19268431372549022}]} absolute=true />
+              <Rectangle name="tile" id="e8196e91-fcdf-4889-8af9-a1dcfa518594" x=256 y=128 w=128 h=128 fill={[{"kind":{"Image":{"asset":"5cebaae1ab061bba4f4a2909f98ec55f27cebb539a6630b8cb1baf20ecb268b6","scale_mode":"Stretch"}},"opacity":0.19268431372549022}]} absolute=true />
+              <Rectangle name="tile" id="13308943-7d5b-4acb-855d-3700e415d6b9" x=384 y=128 w=128 h=128 fill={[{"kind":{"Image":{"asset":"5cebaae1ab061bba4f4a2909f98ec55f27cebb539a6630b8cb1baf20ecb268b6","scale_mode":"Stretch"}},"opacity":0.19268431372549022}]} absolute=true />
+              <Rectangle name="tile" id="8a02bcc7-0488-481d-9e36-e14d5090c622" x=512 y=128 w=128 h=128 fill={[{"kind":{"Image":{"asset":"5cebaae1ab061bba4f4a2909f98ec55f27cebb539a6630b8cb1baf20ecb268b6","scale_mode":"Stretch"}},"opacity":0.19268431372549022}]} absolute=true />
+              <Rectangle name="tile" id="6a49c1db-893f-4987-a9aa-0d22917150e0" x=640 y=128 w=128 h=128 fill={[{"kind":{"Image":{"asset":"5cebaae1ab061bba4f4a2909f98ec55f27cebb539a6630b8cb1baf20ecb268b6","scale_mode":"Stretch"}},"opacity":0.19268431372549022}]} absolute=true />
+              <Rectangle name="tile" id="d2dd2d1e-00fe-42e1-bd8a-dc4c1483ec7e" x=768 y=128 w=128 h=128 fill={[{"kind":{"Image":{"asset":"5cebaae1ab061bba4f4a2909f98ec55f27cebb539a6630b8cb1baf20ecb268b6","scale_mode":"Stretch"}},"opacity":0.19268431372549022}]} absolute=true />
+              <Rectangle name="tile" id="29a9ad69-a310-4139-8581-db43566578c9" x=896 y=128 w=128 h=128 fill={[{"kind":{"Image":{"asset":"5cebaae1ab061bba4f4a2909f98ec55f27cebb539a6630b8cb1baf20ecb268b6","scale_mode":"Stretch"}},"opacity":0.19268431372549022}]} absolute=true />
+              <Rectangle name="tile" id="a593feee-0d7a-417f-91da-9c82888fb376" x=1024 y=128 w=128 h=128 fill={[{"kind":{"Image":{"asset":"5cebaae1ab061bba4f4a2909f98ec55f27cebb539a6630b8cb1baf20ecb268b6","scale_mode":"Stretch"}},"opacity":0.19268431372549022}]} absolute=true />
+              <Rectangle name="tile" id="3ad1c344-1e36-4aa7-8d17-18fc8d6a1178" y=256 w=128 h=128 fill={[{"kind":{"Image":{"asset":"5cebaae1ab061bba4f4a2909f98ec55f27cebb539a6630b8cb1baf20ecb268b6","scale_mode":"Stretch"}},"opacity":0.19268431372549022}]} absolute=true />
+              <Rectangle name="tile" id="751cbc81-0870-44b3-bedf-ff8adb7fd558" x=128 y=256 w=128 h=128 fill={[{"kind":{"Image":{"asset":"5cebaae1ab061bba4f4a2909f98ec55f27cebb539a6630b8cb1baf20ecb268b6","scale_mode":"Stretch"}},"opacity":0.19268431372549022}]} absolute=true />
+              <Rectangle name="tile" id="2546feaf-daae-4b2e-9646-baa053c46901" x=256 y=256 w=128 h=128 fill={[{"kind":{"Image":{"asset":"5cebaae1ab061bba4f4a2909f98ec55f27cebb539a6630b8cb1baf20ecb268b6","scale_mode":"Stretch"}},"opacity":0.19268431372549022}]} absolute=true />
+              <Rectangle name="tile" id="89703998-cba3-4e36-b2e3-81f3311de5fc" x=384 y=256 w=128 h=128 fill={[{"kind":{"Image":{"asset":"5cebaae1ab061bba4f4a2909f98ec55f27cebb539a6630b8cb1baf20ecb268b6","scale_mode":"Stretch"}},"opacity":0.19268431372549022}]} absolute=true />
+              <Rectangle name="tile" id="aee5845d-606b-4795-b240-868f82c0840b" x=512 y=256 w=128 h=128 fill={[{"kind":{"Image":{"asset":"5cebaae1ab061bba4f4a2909f98ec55f27cebb539a6630b8cb1baf20ecb268b6","scale_mode":"Stretch"}},"opacity":0.19268431372549022}]} absolute=true />
+              <Rectangle name="tile" id="e162ee58-75d5-4732-9c60-baee261cd89b" x=640 y=256 w=128 h=128 fill={[{"kind":{"Image":{"asset":"5cebaae1ab061bba4f4a2909f98ec55f27cebb539a6630b8cb1baf20ecb268b6","scale_mode":"Stretch"}},"opacity":0.19268431372549022}]} absolute=true />
+              <Rectangle name="tile" id="f87427d9-3b04-453c-9d58-d94be314ccbf" x=768 y=256 w=128 h=128 fill={[{"kind":{"Image":{"asset":"5cebaae1ab061bba4f4a2909f98ec55f27cebb539a6630b8cb1baf20ecb268b6","scale_mode":"Stretch"}},"opacity":0.19268431372549022}]} absolute=true />
+              <Rectangle name="tile" id="644d7811-9faf-4862-83ed-d6d6e2fa7fb8" x=896 y=256 w=128 h=128 fill={[{"kind":{"Image":{"asset":"5cebaae1ab061bba4f4a2909f98ec55f27cebb539a6630b8cb1baf20ecb268b6","scale_mode":"Stretch"}},"opacity":0.19268431372549022}]} absolute=true />
+              <Rectangle name="tile" id="69c41735-faad-4ab5-9a9b-e997d80512bf" x=1024 y=256 w=128 h=128 fill={[{"kind":{"Image":{"asset":"5cebaae1ab061bba4f4a2909f98ec55f27cebb539a6630b8cb1baf20ecb268b6","scale_mode":"Stretch"}},"opacity":0.19268431372549022}]} absolute=true />
+            </Frame>
+            <Rectangle name="sheen" id="4e4463ba-53de-4f32-aa2a-74605f1c3a68" w=1140 h=274 fill={[{"kind":{"LinearGradient":{"stops":[{"color":"#ffffff1a","position":0.0},{"color":"#ffffff00","position":0.42},{"color":"#00000000","position":0.62},{"color":"#00000024","position":1.0}],"transform":{"a":0.7988362387301198,"b":-1.140856382055789,"c":1.140856382055789,"d":0.7988362387301198,"tx":0.6710100716628347,"ty":-0.4698463103929543}}}}]} absolute=true />
+          </Frame>
+          <Rectangle name="case edge soft" id="011e45ea-5b6f-405f-b4a9-f01ac68d5ee0" w=1140 h=274 radius=16 stroke={[{"kind":{"LinearGradient":{"stops":[{"color":"#ffffff39","position":0.0},{"color":"#ffffff0e","position":0.4},{"color":"#00000000","position":0.5},{"color":"#00000013","position":0.62},{"color":"#0000003f","position":1.0}],"transform":{"a":0.7988362387301198,"b":-1.140856382055789,"c":1.140856382055789,"d":0.7988362387301198,"tx":0.6710100716628347,"ty":-0.4698463103929543}}}}]} stroke-weight=18 stroke-align="inside" absolute=true />
+          <Rectangle name="case edge" id="24f1b6aa-0594-4733-b653-b1c873fbc8f3" w=1140 h=274 radius=16 stroke={[{"kind":{"LinearGradient":{"stops":[{"color":"#ffffff80","position":0.0},{"color":"#ffffff20","position":0.4},{"color":"#00000000","position":0.5},{"color":"#0000002a","position":0.62},{"color":"#0000008c","position":1.0}],"transform":{"a":0.7988362387301198,"b":-1.140856382055789,"c":1.140856382055789,"d":0.7988362387301198,"tx":0.6710100716628347,"ty":-0.4698463103929543}}}}]} stroke-weight=5.5 stroke-align="inside" absolute=true />
+        </Frame>
+      </Frame>
+      <Frame name="Controls" id="21ac227c-7e8d-4f5b-8f4b-0af2d814b07d" w=1140 h=274>
+        <Text name="print" id="59c890c5-8b7d-49c6-ab8e-d0cbbd9dff0d" x=100 y=27.86 w=44 h=15 fill="#1e1719" size=10.5 weight=700 text-align="right">HPF :</Text>
+        <Frame name="eq/hpf readout" id="ccfc4c47-ac34-47e7-92e2-5fda406ab701" x=148 y=26.5 w=60 h=17 control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Param":{"addr":"eq/hpf"}}},"kind":"Readout","slots":[{"node":"5a37fc1d-fe96-4b26-88a1-92d4a2a9f82f","role":"Value"}]}}>
+          <Text name="print" id="5a37fc1d-fe96-4b26-88a1-92d4a2a9f82f" y=1.3599999999999994 w=60 h=15 fill="#1e1719" size=10.5 weight=700 />
+        </Frame>
+        <Frame name="HPF" id="af77d06d-6ce2-4350-9ee7-b195a423e51b" x=122 y=85 w=62 h=62 control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Param":{"addr":"eq/hpf"}}},"kind":{"Knob":{"sweep_degrees":300.0}},"slots":[{"node":"d5842071-7d65-4ded-ab16-f7546181c740","role":"Needle"}]}}>
+          <Frame name="knob" id="e642f7a0-bc3f-4036-8ce1-13b01228a7e4" x=-16.244000000000007 y=-16.244000000000007 w=94.48800000000001 h=94.48800000000001>
+            <Ellipse name="occlusion" id="f584091c-9ab3-4719-afff-70347300c56d" x=13.859895647957075 y=15.96699413967341 w=70.67999999999999 h=70.67999999999999 fill={[{"kind":{"RadialGradient":{"stops":[{"color":"#000000b3","position":0.0},{"color":"#00000073","position":0.72},{"color":"#00000000","position":1.0}]}}}]} />
+            <Ellipse name="foot" id="681e7b54-2c02-446b-ada8-40c7ab75a012" x=16.244000000000007 y=21.51400000000001 w=62 h=62 fill={[{"kind":{"LinearGradient":{"stops":[{"color":"#443837","position":0.0},{"color":"#1d1414","position":0.45},{"color":"#0d0908","position":1.0}],"transform":{"a":1.0,"b":5.551115123125783e-17,"c":-5.551115123125783e-17,"d":1.0,"tx":-2.7755575615628914e-17,"ty":0.0}}}}]} effects={[{"color":"#0000008c","kind":"DropShadow","offset_x":1.6625113007635073,"offset_y":3.4535450187223895,"radius":7.378},{"color":"#0000006b","kind":"DropShadow","offset_x":6.650045203054029,"offset_y":13.814180074889558,"radius":33.728}]} />
+            <Frame name="body" id="d5842071-7d65-4ded-ab16-f7546181c740" w=94.48800000000001 h=94.48800000000001>
+              <Vector name="flutes" id="9800a862-7c9c-4418-9e7b-d85b4db86c8d" w=94.48800000000001 h=94.48800000000001 fill={[{"kind":{"RadialGradient":{"stops":[{"color":"#2a1d1c","position":0.0},{"color":"#2a1d1c","position":0.7},{"color":"#221716","position":1.0}]}}}]} geometry="M 47.244 16.244 L 48.760 16.379 L 50.244 16.784 L 51.659 17.479 L 52.899 18.816 L 54.018 20.200 L 55.187 21.060 L 56.363 21.759 L 57.565 22.327 L 58.817 22.775 L 60.143 23.112 L 61.577 23.331 L 63.347 23.144 L 65.169 23.075 L 66.661 23.584 L 67.997 24.347 L 69.164 25.324 L 70.141 26.491 L 70.904 27.827 L 71.413 29.319 L 71.344 31.141 L 71.157 32.911 L 71.376 34.345 L 71.713 35.671 L 72.161 36.923 L 72.729 38.125 L 73.428 39.301 L 74.288 40.470 L 75.672 41.589 L 77.009 42.829 L 77.704 44.244 L 78.109 45.728 L 78.244 47.244 L 78.109 48.760 L 77.704 50.244 L 77.009 51.659 L 75.672 52.899 L 74.288 54.018 L 73.428 55.187 L 72.729 56.363 L 72.161 57.565 L 71.713 58.817 L 71.376 60.143 L 71.157 61.577 L 71.344 63.347 L 71.413 65.169 L 70.904 66.661 L 70.141 67.997 L 69.164 69.164 L 67.997 70.141 L 66.661 70.904 L 65.169 71.413 L 63.347 71.344 L 61.577 71.157 L 60.143 71.376 L 58.817 71.713 L 57.565 72.161 L 56.363 72.729 L 55.187 73.428 L 54.018 74.288 L 52.899 75.672 L 51.659 77.009 L 50.244 77.704 L 48.760 78.109 L 47.244 78.244 L 45.728 78.109 L 44.244 77.704 L 42.829 77.009 L 41.589 75.672 L 40.470 74.288 L 39.301 73.428 L 38.125 72.729 L 36.923 72.161 L 35.671 71.713 L 34.345 71.376 L 32.911 71.157 L 31.141 71.344 L 29.319 71.413 L 27.827 70.904 L 26.491 70.141 L 25.324 69.164 L 24.347 67.997 L 23.584 66.661 L 23.075 65.169 L 23.144 63.347 L 23.331 61.577 L 23.112 60.143 L 22.775 58.817 L 22.327 57.565 L 21.759 56.363 L 21.060 55.187 L 20.200 54.018 L 18.816 52.899 L 17.479 51.659 L 16.784 50.244 L 16.379 48.760 L 16.244 47.244 L 16.379 45.728 L 16.784 44.244 L 17.479 42.829 L 18.816 41.589 L 20.200 40.470 L 21.060 39.301 L 21.759 38.125 L 22.327 36.923 L 22.775 35.671 L 23.112 34.345 L 23.331 32.911 L 23.144 31.141 L 23.075 29.319 L 23.584 27.827 L 24.347 26.491 L 25.324 25.324 L 26.491 24.347 L 27.827 23.584 L 29.319 23.075 L 31.141 23.144 L 32.911 23.331 L 34.345 23.112 L 35.671 22.775 L 36.923 22.327 L 38.125 21.759 L 39.301 21.060 L 40.470 20.200 L 41.589 18.816 L 42.829 17.479 L 44.244 16.784 L 45.728 16.379 Z" />
+              <Vector name="grooves" id="a30d9c0e-e2c9-4fcb-9d7c-ff78c34472d8" w=94.48800000000001 h=94.48800000000001 fill="#00000059" geometry="M 57.201 26.042 L 58.923 21.883 L 56.918 21.053 L 55.196 25.211 Z M 69.277 39.292 L 73.435 37.570 L 72.605 35.565 L 68.446 37.287 Z M 68.446 57.201 L 72.605 58.923 L 73.435 56.918 L 69.277 55.196 Z M 55.196 69.277 L 56.918 73.435 L 58.923 72.605 L 57.201 68.446 Z M 37.287 68.446 L 35.565 72.605 L 37.570 73.435 L 39.292 69.277 Z M 25.211 55.196 L 21.053 56.918 L 21.883 58.923 L 26.042 57.201 Z M 26.042 37.287 L 21.883 35.565 L 21.053 37.570 L 25.211 39.292 Z M 39.292 25.211 L 37.570 21.053 L 35.565 21.883 L 37.287 26.042 Z " />
+              <Ellipse name="face" id="6a4fa27e-2789-4c03-a551-42ce3f8e6072" x=24.304000000000006 y=24.304000000000006 w=45.88 h=45.88 fill={[{"kind":{"RadialGradient":{"stops":[{"color":"#332625","position":0.0},{"color":"#332625","position":0.7},{"color":"#2a1d1c","position":1.0}]}}}]} />
+              <Rectangle name="pointer" id="56cb7e62-e4a0-4d17-95a5-1b19d5f06887" x=45.53900000000001 y=25.221600000000006 w=3.41 h=15.1404 radius=1.705 fill="#e0b060" effects={[{"color":"#00000066","kind":"DropShadow","radius":2.046}]} />
+            </Frame>
+            <Ellipse name="face light" id="cc8e4ffe-8f9e-460a-a46a-f551d728c52b" x=24.304000000000006 y=24.304000000000006 w=45.88 h=45.88 fill={[{"kind":{"LinearGradient":{"stops":[{"color":"#ffffff24","position":0.0},{"color":"#ffffff00","position":0.42},{"color":"#00000000","position":0.62},{"color":"#00000052","position":1.0}],"transform":{"a":0.7988362387301198,"b":-1.140856382055789,"c":1.140856382055789,"d":0.7988362387301198,"tx":0.6710100716628347,"ty":-0.4698463103929543}}}}]} />
+            <Vector name="rim light" id="b8fd9ba2-0af2-46ee-9252-72216b88da4d" w=94.48800000000001 h=94.48800000000001 fill={[{"kind":{"LinearGradient":{"stops":[{"color":"#756c6be6","position":0.0},{"color":"#756c6b40","position":0.35},{"color":"#00000000","position":0.55},{"color":"#130d0dcc","position":1.0}],"transform":{"a":0.7988362387301198,"b":-1.140856382055789,"c":1.140856382055789,"d":0.7988362387301198,"tx":0.6710100716628347,"ty":-0.4698463103929543}}}}]} geometry="M 24.304 47.244 A 22.940 22.940 0 1 1 70.184 47.244 A 22.940 22.940 0 1 1 24.304 47.244 Z M 27.404 47.244 A 19.840 19.840 0 1 0 67.084 47.244 A 19.840 19.840 0 1 0 27.404 47.244 Z " />
+            <Vector name="flute light" id="a626ceba-6891-4480-a39d-4deafa4cbb24" w=94.48800000000001 h=94.48800000000001 fill={[{"kind":{"LinearGradient":{"stops":[{"color":"#ffffff47","position":0.0},{"color":"#ffffff00","position":0.42},{"color":"#00000000","position":0.62},{"color":"#00000073","position":1.0}],"transform":{"a":0.7988362387301198,"b":-1.140856382055789,"c":1.140856382055789,"d":0.7988362387301198,"tx":0.6710100716628347,"ty":-0.4698463103929543}}}}]} geometry="M 20.274 47.244 A 26.970 26.970 0 1 1 74.214 47.244 A 26.970 26.970 0 1 1 20.274 47.244 Z M 24.304 47.244 A 22.940 22.940 0 1 0 70.184 47.244 A 22.940 22.940 0 1 0 24.304 47.244 Z " />
+            <Ellipse name="specular light" id="384c0925-b5fb-4a6e-bbc5-d98a7dfc15a0" x=33.25676453705779 y=30.214672136165692 w=13.764000000000001 h=13.764000000000001 fill={[{"kind":{"RadialGradient":{"stops":[{"color":"#ffffffa3","position":0.0},{"color":"#ffffff39","position":0.35},{"color":"#ffffff00","position":1.0}],"transform":{"a":1.0,"b":0.0,"c":0.0,"d":1.0,"tx":0.0,"ty":0.0}}}}]} />
+          </Frame>
+        </Frame>
+        <Vector name="art" id="5f9593b5-a7a4-40e2-b930-40c88617f7b0" x=142 y=169 w=16 h=7 stroke="#1e1719" stroke-weight=1.8 stroke-cap="round" stroke-join="round" geometry="M 0.000 7.000 L 4.000 0.000 L 16.000 0.000 " />
+        <Frame name="Bypass" id="5999b8c5-e725-42be-9fea-f6276a57f327" x=126 y=194 w=48 h=48 control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Param":{"addr":"eq/on"}}},"kind":{"Button":{"mode":"Toggle"}},"slots":[{"node":"605e1997-f4ab-449f-b79e-ede834213c34","role":"Thumb"}]}}>
+          <Ellipse name="washer shadow" id="e118aa7d-1b03-4400-803d-268a3c8098ef" x=12.200000000000001 y=13.200000000000001 w=24.8 h=24.8 fill={[{"kind":{"RadialGradient":{"stops":[{"color":"#00000070","position":0.0},{"color":"#00000000","position":1.0}]}}}]} />
+          <Ellipse name="washer" id="359722dd-caa9-4c3c-83c5-ade0118a3440" x=12.799999999999999 y=12.799999999999999 w=22.400000000000002 h=22.400000000000002 fill={[{"kind":{"AngularGradient":{"stops":[{"color":"#fff1c4","position":0.0},{"color":"#9a7236","position":0.25},{"color":"#e9cf8e","position":0.5},{"color":"#9a7236","position":0.75},{"color":"#fff1c4","position":1.0}],"transform":{"a":0.3420201433256688,"b":0.9396926207859083,"c":-0.9396926207859083,"d":0.3420201433256688,"tx":-0.1408563820557886,"ty":0.7988362387301198}}}}]} stroke="#5e421a" stroke-weight=0.8 stroke-align="inside" />
+          <Vector name="nut" id="16df966d-2d1b-44c0-8b2f-41992bdc93d1" w=48 h=48 fill={[{"kind":{"LinearGradient":{"stops":[{"color":"#fff1c4","position":0.0},{"color":"#d8b36a","position":0.35},{"color":"#9a7236","position":0.62},{"color":"#e9cf8e","position":1.0}],"transform":{"a":0.6830127018922192,"b":-1.1830127018922196,"c":1.1830127018922196,"d":0.6830127018922192,"tx":0.7500000000000002,"ty":-0.4330127018922193}}}}]} geometry="M 28.400 16.379 L 32.800 24.000 L 28.400 31.621 L 19.600 31.621 L 15.200 24.000 L 19.600 16.379 Z" />
+          <Ellipse name="bushing" id="ac3089c8-db0c-4269-9ba8-d64aa107b17f" x=19.2 y=19.2 w=9.6 h=9.6 fill={[{"kind":{"RadialGradient":{"stops":[{"color":"#fff1c4","position":0.0},{"color":"#6b4e22","position":1.0}],"transform":{"a":1.6,"b":0.0,"c":0.0,"d":1.6,"tx":-0.4,"ty":-0.45000000000000007}}}}]} />
+          <Frame name="lane" id="220242a4-5e2b-4571-b065-a079e43dc31b" x=20.4 y=2 w=7.199999999999999 h=44>
+            <Rectangle name="bat" id="605e1997-f4ab-449f-b79e-ede834213c34" w=7.199999999999999 h=23.2 radius=3.5999999999999996 fill={[{"kind":{"LinearGradient":{"stops":[{"color":"#7a5a2a","position":0.0},{"color":"#fff1c4","position":0.35},{"color":"#c9a45c","position":0.6},{"color":"#6b4e22","position":1.0}],"transform":{"a":1.0,"b":5.551115123125783e-17,"c":-5.551115123125783e-17,"d":1.0,"tx":-2.7755575615628914e-17,"ty":0.0}}}}]} effects={[{"color":"#000000a6","kind":"DropShadow","offset_x":1.0,"offset_y":2.0,"radius":3.0}]} />
+          </Frame>
+        </Frame>
+        <Text name="print" id="ca745e30-7e2f-4447-840e-4e0b88d72d6e" x=944 y=27.86 w=44 h=15 fill="#1e1719" size=10.5 weight=700 text-align="right">LPF :</Text>
+        <Frame name="eq/lpf readout" id="100819c3-0026-4935-bfc0-1d1131354e30" x=992 y=26.5 w=70 h=17 control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Param":{"addr":"eq/lpf"}}},"kind":"Readout","slots":[{"node":"acee253e-e74f-4fca-9a5d-c4091ffe7fa5","role":"Value"}]}}>
+          <Text name="print" id="acee253e-e74f-4fca-9a5d-c4091ffe7fa5" y=1.3599999999999994 w=70 h=15 fill="#1e1719" size=10.5 weight=700 />
+        </Frame>
+        <Frame name="LPF" id="ea7862a7-0b49-40a8-b0e7-2e572472aa5c" x=959 y=85 w=62 h=62 control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Param":{"addr":"eq/lpf"}}},"kind":{"Knob":{"sweep_degrees":300.0}},"slots":[{"node":"4d43a64f-79a3-4b14-afa7-5448974628c9","role":"Needle"}]}}>
+          <Frame name="knob" id="c68649fe-5187-401c-8bca-7df860445251" x=-16.244000000000007 y=-16.244000000000007 w=94.48800000000001 h=94.48800000000001>
+            <Ellipse name="occlusion" id="6d8c2c9d-2b11-4649-89cc-d676fe5432c3" x=13.859895647957075 y=15.96699413967341 w=70.67999999999999 h=70.67999999999999 fill={[{"kind":{"RadialGradient":{"stops":[{"color":"#000000b3","position":0.0},{"color":"#00000073","position":0.72},{"color":"#00000000","position":1.0}]}}}]} />
+            <Ellipse name="foot" id="7df862c2-f276-464d-be1c-da41ba5a058a" x=16.244000000000007 y=21.51400000000001 w=62 h=62 fill={[{"kind":{"LinearGradient":{"stops":[{"color":"#443837","position":0.0},{"color":"#1d1414","position":0.45},{"color":"#0d0908","position":1.0}],"transform":{"a":1.0,"b":5.551115123125783e-17,"c":-5.551115123125783e-17,"d":1.0,"tx":-2.7755575615628914e-17,"ty":0.0}}}}]} effects={[{"color":"#0000008c","kind":"DropShadow","offset_x":1.6625113007635073,"offset_y":3.4535450187223895,"radius":7.378},{"color":"#0000006b","kind":"DropShadow","offset_x":6.650045203054029,"offset_y":13.814180074889558,"radius":33.728}]} />
+            <Frame name="body" id="4d43a64f-79a3-4b14-afa7-5448974628c9" w=94.48800000000001 h=94.48800000000001>
+              <Vector name="flutes" id="13368ff4-16a3-4ab3-807b-0cfbd387c224" w=94.48800000000001 h=94.48800000000001 fill={[{"kind":{"RadialGradient":{"stops":[{"color":"#2a1d1c","position":0.0},{"color":"#2a1d1c","position":0.7},{"color":"#221716","position":1.0}]}}}]} geometry="M 47.244 16.244 L 48.760 16.379 L 50.244 16.784 L 51.659 17.479 L 52.899 18.816 L 54.018 20.200 L 55.187 21.060 L 56.363 21.759 L 57.565 22.327 L 58.817 22.775 L 60.143 23.112 L 61.577 23.331 L 63.347 23.144 L 65.169 23.075 L 66.661 23.584 L 67.997 24.347 L 69.164 25.324 L 70.141 26.491 L 70.904 27.827 L 71.413 29.319 L 71.344 31.141 L 71.157 32.911 L 71.376 34.345 L 71.713 35.671 L 72.161 36.923 L 72.729 38.125 L 73.428 39.301 L 74.288 40.470 L 75.672 41.589 L 77.009 42.829 L 77.704 44.244 L 78.109 45.728 L 78.244 47.244 L 78.109 48.760 L 77.704 50.244 L 77.009 51.659 L 75.672 52.899 L 74.288 54.018 L 73.428 55.187 L 72.729 56.363 L 72.161 57.565 L 71.713 58.817 L 71.376 60.143 L 71.157 61.577 L 71.344 63.347 L 71.413 65.169 L 70.904 66.661 L 70.141 67.997 L 69.164 69.164 L 67.997 70.141 L 66.661 70.904 L 65.169 71.413 L 63.347 71.344 L 61.577 71.157 L 60.143 71.376 L 58.817 71.713 L 57.565 72.161 L 56.363 72.729 L 55.187 73.428 L 54.018 74.288 L 52.899 75.672 L 51.659 77.009 L 50.244 77.704 L 48.760 78.109 L 47.244 78.244 L 45.728 78.109 L 44.244 77.704 L 42.829 77.009 L 41.589 75.672 L 40.470 74.288 L 39.301 73.428 L 38.125 72.729 L 36.923 72.161 L 35.671 71.713 L 34.345 71.376 L 32.911 71.157 L 31.141 71.344 L 29.319 71.413 L 27.827 70.904 L 26.491 70.141 L 25.324 69.164 L 24.347 67.997 L 23.584 66.661 L 23.075 65.169 L 23.144 63.347 L 23.331 61.577 L 23.112 60.143 L 22.775 58.817 L 22.327 57.565 L 21.759 56.363 L 21.060 55.187 L 20.200 54.018 L 18.816 52.899 L 17.479 51.659 L 16.784 50.244 L 16.379 48.760 L 16.244 47.244 L 16.379 45.728 L 16.784 44.244 L 17.479 42.829 L 18.816 41.589 L 20.200 40.470 L 21.060 39.301 L 21.759 38.125 L 22.327 36.923 L 22.775 35.671 L 23.112 34.345 L 23.331 32.911 L 23.144 31.141 L 23.075 29.319 L 23.584 27.827 L 24.347 26.491 L 25.324 25.324 L 26.491 24.347 L 27.827 23.584 L 29.319 23.075 L 31.141 23.144 L 32.911 23.331 L 34.345 23.112 L 35.671 22.775 L 36.923 22.327 L 38.125 21.759 L 39.301 21.060 L 40.470 20.200 L 41.589 18.816 L 42.829 17.479 L 44.244 16.784 L 45.728 16.379 Z" />
+              <Vector name="grooves" id="a1dde2f0-7e01-4286-bb08-846eab9d1ad9" w=94.48800000000001 h=94.48800000000001 fill="#00000059" geometry="M 57.201 26.042 L 58.923 21.883 L 56.918 21.053 L 55.196 25.211 Z M 69.277 39.292 L 73.435 37.570 L 72.605 35.565 L 68.446 37.287 Z M 68.446 57.201 L 72.605 58.923 L 73.435 56.918 L 69.277 55.196 Z M 55.196 69.277 L 56.918 73.435 L 58.923 72.605 L 57.201 68.446 Z M 37.287 68.446 L 35.565 72.605 L 37.570 73.435 L 39.292 69.277 Z M 25.211 55.196 L 21.053 56.918 L 21.883 58.923 L 26.042 57.201 Z M 26.042 37.287 L 21.883 35.565 L 21.053 37.570 L 25.211 39.292 Z M 39.292 25.211 L 37.570 21.053 L 35.565 21.883 L 37.287 26.042 Z " />
+              <Ellipse name="face" id="bdff1c42-6837-4591-8192-dbf848631aa8" x=24.304000000000006 y=24.304000000000006 w=45.88 h=45.88 fill={[{"kind":{"RadialGradient":{"stops":[{"color":"#332625","position":0.0},{"color":"#332625","position":0.7},{"color":"#2a1d1c","position":1.0}]}}}]} />
+              <Rectangle name="pointer" id="e90af182-1949-4bc2-895b-db14ccdcd3b9" x=45.53900000000001 y=25.221600000000006 w=3.41 h=15.1404 radius=1.705 fill="#e0b060" effects={[{"color":"#00000066","kind":"DropShadow","radius":2.046}]} />
+            </Frame>
+            <Ellipse name="face light" id="0f876267-90e3-4864-8b5e-c41e8874447c" x=24.304000000000006 y=24.304000000000006 w=45.88 h=45.88 fill={[{"kind":{"LinearGradient":{"stops":[{"color":"#ffffff24","position":0.0},{"color":"#ffffff00","position":0.42},{"color":"#00000000","position":0.62},{"color":"#00000052","position":1.0}],"transform":{"a":0.7988362387301198,"b":-1.140856382055789,"c":1.140856382055789,"d":0.7988362387301198,"tx":0.6710100716628347,"ty":-0.4698463103929543}}}}]} />
+            <Vector name="rim light" id="0996011d-d831-44a5-8b9e-2c7f3583f625" w=94.48800000000001 h=94.48800000000001 fill={[{"kind":{"LinearGradient":{"stops":[{"color":"#756c6be6","position":0.0},{"color":"#756c6b40","position":0.35},{"color":"#00000000","position":0.55},{"color":"#130d0dcc","position":1.0}],"transform":{"a":0.7988362387301198,"b":-1.140856382055789,"c":1.140856382055789,"d":0.7988362387301198,"tx":0.6710100716628347,"ty":-0.4698463103929543}}}}]} geometry="M 24.304 47.244 A 22.940 22.940 0 1 1 70.184 47.244 A 22.940 22.940 0 1 1 24.304 47.244 Z M 27.404 47.244 A 19.840 19.840 0 1 0 67.084 47.244 A 19.840 19.840 0 1 0 27.404 47.244 Z " />
+            <Vector name="flute light" id="71dcb8f4-c54b-4abe-9d20-0089acad6316" w=94.48800000000001 h=94.48800000000001 fill={[{"kind":{"LinearGradient":{"stops":[{"color":"#ffffff47","position":0.0},{"color":"#ffffff00","position":0.42},{"color":"#00000000","position":0.62},{"color":"#00000073","position":1.0}],"transform":{"a":0.7988362387301198,"b":-1.140856382055789,"c":1.140856382055789,"d":0.7988362387301198,"tx":0.6710100716628347,"ty":-0.4698463103929543}}}}]} geometry="M 20.274 47.244 A 26.970 26.970 0 1 1 74.214 47.244 A 26.970 26.970 0 1 1 20.274 47.244 Z M 24.304 47.244 A 22.940 22.940 0 1 0 70.184 47.244 A 22.940 22.940 0 1 0 24.304 47.244 Z " />
+            <Ellipse name="specular light" id="4376d004-bccf-4b87-a844-9f46631a162c" x=33.25676453705779 y=30.214672136165692 w=13.764000000000001 h=13.764000000000001 fill={[{"kind":{"RadialGradient":{"stops":[{"color":"#ffffffa3","position":0.0},{"color":"#ffffff39","position":0.35},{"color":"#ffffff00","position":1.0}],"transform":{"a":1.0,"b":0.0,"c":0.0,"d":1.0,"tx":0.0,"ty":0.0}}}}]} />
+          </Frame>
+        </Frame>
+        <Vector name="art" id="b3d1c448-e120-4933-be1a-abd364dd9cd0" x=980 y=169 w=16 h=7 stroke="#1e1719" stroke-weight=1.8 stroke-cap="round" stroke-join="round" geometry="M 0.000 0.000 L 12.000 0.000 L 16.000 7.000 " />
+        <Frame name="LED" id="101a2b09-649a-4d36-b2b6-593f7481c6a8" x=978 y=206 w=24 h=24 control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Param":{"addr":"eq/on"}}},"kind":"Readout","slots":[{"node":"753917a2-c4d6-443f-93e4-33c3cc903693","role":"On"},{"node":"b679b52d-5896-4513-b791-8fa5334fdde7","role":"Off"}]}}>
+          <Ellipse name="bezel" id="ce1196ee-d068-460c-82f6-6fcc1fb93872" x=2.6400000000000006 y=2.6400000000000006 w=18.72 h=18.72 fill={[{"kind":{"RadialGradient":{"stops":[{"color":"#efeeea","position":0.0},{"color":"#a09e9a","position":1.0}],"transform":{"a":1.6,"b":0.0,"c":0.0,"d":1.6,"tx":-0.4,"ty":-0.45000000000000007}}}}]} effects={[{"color":"#00000059","kind":"DropShadow","offset_y":0.96,"radius":2.4000000000000004}]} />
+          <Ellipse name="lens" id="b679b52d-5896-4513-b791-8fa5334fdde7" x=6 y=6 w=12 h=12 fill={[{"kind":{"RadialGradient":{"stops":[{"color":"#ffffff59","position":0.0},{"color":"#609895","position":0.5},{"color":"#134845","position":1.0}],"transform":{"a":1.8,"b":0.0,"c":0.0,"d":1.8,"tx":-0.5,"ty":-0.56}}}}]} />
+          <Ellipse name="lamp" id="753917a2-c4d6-443f-93e4-33c3cc903693" x=6 y=6 w=12 h=12 fill={[{"kind":{"RadialGradient":{"stops":[{"color":"#ffffff","position":0.0},{"color":"#b2f9f5","position":0.3},{"color":"#3ff0e6","position":0.75},{"color":"#2ca8a1","position":1.0}],"transform":{"a":1.6,"b":0.0,"c":0.0,"d":1.6,"tx":-0.35000000000000003,"ty":-0.4}}}}]} effects={[{"color":"#3ff0e6cc","kind":"DropShadow","radius":10.8}]} emission={{"color":"#3ff0e6","intensity":0.9,"radius":21.6}} />
+        </Frame>
+        <Frame name="65 Hz" id="2b7783fb-344f-4fab-aec7-c3400fd4304e" x=231 y=48 w=62 h=170 control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Param":{"addr":"eq/g65"}}},"kind":{"Fader":{"orientation":"Vertical"}},"slots":[{"node":"7222d69a-e3d6-43b7-acac-b7e09f7fa7b8","role":"Thumb"}]}}>
+          <Vector name="ticks" id="e3b254de-78ee-447d-b950-700437b3a5cb" x=9 y=10 w=44 h=150 stroke="#1e171966" stroke-weight=0.9 stroke-cap="round" stroke-join="round" geometry="M 0.000 0.000 L 9.000 0.000 M 35.000 0.000 L 44.000 0.000 M 3.000 12.500 L 9.000 12.500 M 35.000 12.500 L 41.000 12.500 M 3.000 25.000 L 9.000 25.000 M 35.000 25.000 L 41.000 25.000 M 3.000 37.500 L 9.000 37.500 M 35.000 37.500 L 41.000 37.500 M 3.000 50.000 L 9.000 50.000 M 35.000 50.000 L 41.000 50.000 M 3.000 62.500 L 9.000 62.500 M 35.000 62.500 L 41.000 62.500 M 0.000 75.000 L 9.000 75.000 M 35.000 75.000 L 44.000 75.000 M 3.000 87.500 L 9.000 87.500 M 35.000 87.500 L 41.000 87.500 M 3.000 100.000 L 9.000 100.000 M 35.000 100.000 L 41.000 100.000 M 3.000 112.500 L 9.000 112.500 M 35.000 112.500 L 41.000 112.500 M 3.000 125.000 L 9.000 125.000 M 35.000 125.000 L 41.000 125.000 M 3.000 137.500 L 9.000 137.500 M 35.000 137.500 L 41.000 137.500 M 0.000 150.000 L 9.000 150.000 M 35.000 150.000 L 44.000 150.000 " />
+          <Rectangle name="slot" id="c8d16caf-0705-46b9-b623-64d9fc12654d" x=24 y=4 w=14 h=162 radius=7 fill={[{"kind":{"LinearGradient":{"stops":[{"color":"#050405","position":0.0},{"color":"#221b1d","position":0.5},{"color":"#0a0809","position":1.0}],"transform":{"a":1.0,"b":5.551115123125783e-17,"c":-5.551115123125783e-17,"d":1.0,"tx":-2.7755575615628914e-17,"ty":0.0}}}}]} effects={[{"color":"#ffffff80","kind":"DropShadow","offset_y":1.0,"radius":0.0}]} />
+          <Frame name="lane" id="f5cbbefe-1801-46ac-b7cd-198adf2d0a69" x=14 w=34 h=170>
+            <Frame name="cap" id="7222d69a-e3d6-43b7-acac-b7e09f7fa7b8" w=34 h=20>
+              <Rectangle name="cap body" id="9a13727c-047a-4db9-bda9-2fac80a57f2d" w=34 h=20 radius=10 fill={[{"kind":{"LinearGradient":{"stops":[{"color":"#5a5456","position":0.0},{"color":"#2a2426","position":0.35},{"color":"#0d0a0b","position":1.0}],"transform":{"a":1.6653345369377348e-16,"b":-1.0,"c":1.0,"d":1.6653345369377348e-16,"tx":1.0,"ty":-1.942890293094024e-16}}}}]} effects={[{"color":"#000000a0","kind":"DropShadow","offset_x":1.0,"offset_y":4.0,"radius":5.0}]} />
+              <Rectangle name="cap sheen" id="fa4b472a-c60c-40e5-a2fe-88ce378d08ed" x=4 y=2 w=26 h=7 radius=4 fill="#ffffff24" />
+              <Rectangle name="index" id="e7585329-575f-4575-a3e4-df0d7684dbd0" x=5 y=8.8 w=24 h=2.4 radius=1.2 fill="#efe0c4" />
+            </Frame>
+          </Frame>
+        </Frame>
+        <Frame name="eq/g65 readout" id="6ca71082-a7b9-401d-b050-abeca5cd8100" x=227 y=26.5 w=70 h=17 control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Param":{"addr":"eq/g65"}}},"format":{"decimals":1,"style":"Number"},"kind":"Readout","slots":[{"node":"65b5af58-494d-4f7f-accb-8e2320a7f43e","role":"Value"}]}}>
+          <Text name="print" id="65b5af58-494d-4f7f-accb-8e2320a7f43e" y=1.3599999999999994 w=70 h=15 fill="#1e1719" size=10.5 weight=700 text-align="center" />
+        </Frame>
+        <Text name="print" id="19a6132e-2a76-484b-b193-109a800d4d9a" x=232.6 y=230.86 w=58.8 h=15 fill="#1e1719" size=10.5 weight=700 text-align="center">65 Hz</Text>
+        <Frame name="125 Hz" id="af18728d-8cda-4500-a897-ee3917477cd7" x=307.4 y=48 w=62 h=170 control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Param":{"addr":"eq/g125"}}},"kind":{"Fader":{"orientation":"Vertical"}},"slots":[{"node":"9a3a5040-f4be-40f1-959a-76f5868d346b","role":"Thumb"}]}}>
+          <Vector name="ticks" id="51665aa5-1103-4156-96a2-7b599ddd1de5" x=9 y=10 w=44 h=150 stroke="#1e171966" stroke-weight=0.9 stroke-cap="round" stroke-join="round" geometry="M 0.000 0.000 L 9.000 0.000 M 35.000 0.000 L 44.000 0.000 M 3.000 12.500 L 9.000 12.500 M 35.000 12.500 L 41.000 12.500 M 3.000 25.000 L 9.000 25.000 M 35.000 25.000 L 41.000 25.000 M 3.000 37.500 L 9.000 37.500 M 35.000 37.500 L 41.000 37.500 M 3.000 50.000 L 9.000 50.000 M 35.000 50.000 L 41.000 50.000 M 3.000 62.500 L 9.000 62.500 M 35.000 62.500 L 41.000 62.500 M 0.000 75.000 L 9.000 75.000 M 35.000 75.000 L 44.000 75.000 M 3.000 87.500 L 9.000 87.500 M 35.000 87.500 L 41.000 87.500 M 3.000 100.000 L 9.000 100.000 M 35.000 100.000 L 41.000 100.000 M 3.000 112.500 L 9.000 112.500 M 35.000 112.500 L 41.000 112.500 M 3.000 125.000 L 9.000 125.000 M 35.000 125.000 L 41.000 125.000 M 3.000 137.500 L 9.000 137.500 M 35.000 137.500 L 41.000 137.500 M 0.000 150.000 L 9.000 150.000 M 35.000 150.000 L 44.000 150.000 " />
+          <Rectangle name="slot" id="5d3a9c27-6764-4910-a099-01262575529e" x=24 y=4 w=14 h=162 radius=7 fill={[{"kind":{"LinearGradient":{"stops":[{"color":"#050405","position":0.0},{"color":"#221b1d","position":0.5},{"color":"#0a0809","position":1.0}],"transform":{"a":1.0,"b":5.551115123125783e-17,"c":-5.551115123125783e-17,"d":1.0,"tx":-2.7755575615628914e-17,"ty":0.0}}}}]} effects={[{"color":"#ffffff80","kind":"DropShadow","offset_y":1.0,"radius":0.0}]} />
+          <Frame name="lane" id="97555a8c-7944-40dc-9b1a-9c92f9614bea" x=14 w=34 h=170>
+            <Frame name="cap" id="9a3a5040-f4be-40f1-959a-76f5868d346b" w=34 h=20>
+              <Rectangle name="cap body" id="1273fbbf-6d31-45d1-9ffd-666cc0c4da96" w=34 h=20 radius=10 fill={[{"kind":{"LinearGradient":{"stops":[{"color":"#5a5456","position":0.0},{"color":"#2a2426","position":0.35},{"color":"#0d0a0b","position":1.0}],"transform":{"a":1.6653345369377348e-16,"b":-1.0,"c":1.0,"d":1.6653345369377348e-16,"tx":1.0,"ty":-1.942890293094024e-16}}}}]} effects={[{"color":"#000000a0","kind":"DropShadow","offset_x":1.0,"offset_y":4.0,"radius":5.0}]} />
+              <Rectangle name="cap sheen" id="163eb887-7394-435f-885e-51b276e145be" x=4 y=2 w=26 h=7 radius=4 fill="#ffffff24" />
+              <Rectangle name="index" id="e8039193-d7de-4ce3-8e54-fc4927dce3dd" x=5 y=8.8 w=24 h=2.4 radius=1.2 fill="#efe0c4" />
+            </Frame>
+          </Frame>
+        </Frame>
+        <Frame name="eq/g125 readout" id="9587d859-b251-48bb-9cbb-8ee22cef24bb" x=303.4 y=26.5 w=70 h=17 control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Param":{"addr":"eq/g125"}}},"format":{"decimals":1,"style":"Number"},"kind":"Readout","slots":[{"node":"d5f3427f-25de-43d2-8068-6c344bbf6788","role":"Value"}]}}>
+          <Text name="print" id="d5f3427f-25de-43d2-8068-6c344bbf6788" y=1.3599999999999994 w=70 h=15 fill="#1e1719" size=10.5 weight=700 text-align="center" />
+        </Frame>
+        <Text name="print" id="a3abc792-b546-4cc8-90fd-ab37a80d09a7" x=305.21999999999997 y=230.86 w=66.36 h=15 fill="#1e1719" size=10.5 weight=700 text-align="center">125 Hz</Text>
+        <Frame name="250 Hz" id="82ff9cb4-4167-49c5-9ff0-16e1ccd0a2c1" x=383.8 y=48 w=62 h=170 control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Param":{"addr":"eq/g250"}}},"kind":{"Fader":{"orientation":"Vertical"}},"slots":[{"node":"516a0f21-e329-44f8-9843-1a2d3521a033","role":"Thumb"}]}}>
+          <Vector name="ticks" id="44437e64-3775-41b5-a3bd-14b7f2d7f66b" x=9 y=10 w=44 h=150 stroke="#1e171966" stroke-weight=0.9 stroke-cap="round" stroke-join="round" geometry="M 0.000 0.000 L 9.000 0.000 M 35.000 0.000 L 44.000 0.000 M 3.000 12.500 L 9.000 12.500 M 35.000 12.500 L 41.000 12.500 M 3.000 25.000 L 9.000 25.000 M 35.000 25.000 L 41.000 25.000 M 3.000 37.500 L 9.000 37.500 M 35.000 37.500 L 41.000 37.500 M 3.000 50.000 L 9.000 50.000 M 35.000 50.000 L 41.000 50.000 M 3.000 62.500 L 9.000 62.500 M 35.000 62.500 L 41.000 62.500 M 0.000 75.000 L 9.000 75.000 M 35.000 75.000 L 44.000 75.000 M 3.000 87.500 L 9.000 87.500 M 35.000 87.500 L 41.000 87.500 M 3.000 100.000 L 9.000 100.000 M 35.000 100.000 L 41.000 100.000 M 3.000 112.500 L 9.000 112.500 M 35.000 112.500 L 41.000 112.500 M 3.000 125.000 L 9.000 125.000 M 35.000 125.000 L 41.000 125.000 M 3.000 137.500 L 9.000 137.500 M 35.000 137.500 L 41.000 137.500 M 0.000 150.000 L 9.000 150.000 M 35.000 150.000 L 44.000 150.000 " />
+          <Rectangle name="slot" id="2dbf105c-7dd6-4a66-8d5c-8ea7d79522b7" x=24 y=4 w=14 h=162 radius=7 fill={[{"kind":{"LinearGradient":{"stops":[{"color":"#050405","position":0.0},{"color":"#221b1d","position":0.5},{"color":"#0a0809","position":1.0}],"transform":{"a":1.0,"b":5.551115123125783e-17,"c":-5.551115123125783e-17,"d":1.0,"tx":-2.7755575615628914e-17,"ty":0.0}}}}]} effects={[{"color":"#ffffff80","kind":"DropShadow","offset_y":1.0,"radius":0.0}]} />
+          <Frame name="lane" id="e2f6d21c-5794-4307-a02c-96bd0e505fdb" x=14 w=34 h=170>
+            <Frame name="cap" id="516a0f21-e329-44f8-9843-1a2d3521a033" w=34 h=20>
+              <Rectangle name="cap body" id="247cd0ab-1530-4320-849a-2cdf80eaf65b" w=34 h=20 radius=10 fill={[{"kind":{"LinearGradient":{"stops":[{"color":"#5a5456","position":0.0},{"color":"#2a2426","position":0.35},{"color":"#0d0a0b","position":1.0}],"transform":{"a":1.6653345369377348e-16,"b":-1.0,"c":1.0,"d":1.6653345369377348e-16,"tx":1.0,"ty":-1.942890293094024e-16}}}}]} effects={[{"color":"#000000a0","kind":"DropShadow","offset_x":1.0,"offset_y":4.0,"radius":5.0}]} />
+              <Rectangle name="cap sheen" id="e840c131-3b91-4e1b-b575-b1c139be6785" x=4 y=2 w=26 h=7 radius=4 fill="#ffffff24" />
+              <Rectangle name="index" id="79ad0f8c-0df9-4cef-bbe0-4b40cfbdc83d" x=5 y=8.8 w=24 h=2.4 radius=1.2 fill="#efe0c4" />
+            </Frame>
+          </Frame>
+        </Frame>
+        <Frame name="eq/g250 readout" id="e5ac2f64-9047-4833-b39e-407a53981ad1" x=379.8 y=26.5 w=70 h=17 control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Param":{"addr":"eq/g250"}}},"format":{"decimals":1,"style":"Number"},"kind":"Readout","slots":[{"node":"b59de3a9-a752-4e7a-ab7d-bbbbd1c359a5","role":"Value"}]}}>
+          <Text name="print" id="b59de3a9-a752-4e7a-ab7d-bbbbd1c359a5" y=1.3599999999999994 w=70 h=15 fill="#1e1719" size=10.5 weight=700 text-align="center" />
+        </Frame>
+        <Text name="print" id="0517cde9-aa61-43bf-bcad-26581ce5e3aa" x=381.62 y=230.86 w=66.36 h=15 fill="#1e1719" size=10.5 weight=700 text-align="center">250 Hz</Text>
+        <Frame name="500 Hz" id="c520cfac-213d-4e45-9598-490ea0617679" x=460.20000000000005 y=48 w=62 h=170 control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Param":{"addr":"eq/g500"}}},"kind":{"Fader":{"orientation":"Vertical"}},"slots":[{"node":"81444121-9775-4807-86ef-2ca352ce0e51","role":"Thumb"}]}}>
+          <Vector name="ticks" id="d5d543a2-6692-4490-abf1-8126a0693ed7" x=9 y=10 w=44 h=150 stroke="#1e171966" stroke-weight=0.9 stroke-cap="round" stroke-join="round" geometry="M 0.000 0.000 L 9.000 0.000 M 35.000 0.000 L 44.000 0.000 M 3.000 12.500 L 9.000 12.500 M 35.000 12.500 L 41.000 12.500 M 3.000 25.000 L 9.000 25.000 M 35.000 25.000 L 41.000 25.000 M 3.000 37.500 L 9.000 37.500 M 35.000 37.500 L 41.000 37.500 M 3.000 50.000 L 9.000 50.000 M 35.000 50.000 L 41.000 50.000 M 3.000 62.500 L 9.000 62.500 M 35.000 62.500 L 41.000 62.500 M 0.000 75.000 L 9.000 75.000 M 35.000 75.000 L 44.000 75.000 M 3.000 87.500 L 9.000 87.500 M 35.000 87.500 L 41.000 87.500 M 3.000 100.000 L 9.000 100.000 M 35.000 100.000 L 41.000 100.000 M 3.000 112.500 L 9.000 112.500 M 35.000 112.500 L 41.000 112.500 M 3.000 125.000 L 9.000 125.000 M 35.000 125.000 L 41.000 125.000 M 3.000 137.500 L 9.000 137.500 M 35.000 137.500 L 41.000 137.500 M 0.000 150.000 L 9.000 150.000 M 35.000 150.000 L 44.000 150.000 " />
+          <Rectangle name="slot" id="7a2ecd97-a96b-4da9-a9f8-4e23d635e7ba" x=24 y=4 w=14 h=162 radius=7 fill={[{"kind":{"LinearGradient":{"stops":[{"color":"#050405","position":0.0},{"color":"#221b1d","position":0.5},{"color":"#0a0809","position":1.0}],"transform":{"a":1.0,"b":5.551115123125783e-17,"c":-5.551115123125783e-17,"d":1.0,"tx":-2.7755575615628914e-17,"ty":0.0}}}}]} effects={[{"color":"#ffffff80","kind":"DropShadow","offset_y":1.0,"radius":0.0}]} />
+          <Frame name="lane" id="57e60b50-a5b7-4ad4-8de3-d658efb3df22" x=14 w=34 h=170>
+            <Frame name="cap" id="81444121-9775-4807-86ef-2ca352ce0e51" w=34 h=20>
+              <Rectangle name="cap body" id="befa5573-c80d-4832-ad0a-e858cd9e58d4" w=34 h=20 radius=10 fill={[{"kind":{"LinearGradient":{"stops":[{"color":"#5a5456","position":0.0},{"color":"#2a2426","position":0.35},{"color":"#0d0a0b","position":1.0}],"transform":{"a":1.6653345369377348e-16,"b":-1.0,"c":1.0,"d":1.6653345369377348e-16,"tx":1.0,"ty":-1.942890293094024e-16}}}}]} effects={[{"color":"#000000a0","kind":"DropShadow","offset_x":1.0,"offset_y":4.0,"radius":5.0}]} />
+              <Rectangle name="cap sheen" id="cb62c033-8b7c-4dfa-a2e6-bf88400810d8" x=4 y=2 w=26 h=7 radius=4 fill="#ffffff24" />
+              <Rectangle name="index" id="3a7086db-1304-42c1-815b-52767332dd6c" x=5 y=8.8 w=24 h=2.4 radius=1.2 fill="#efe0c4" />
+            </Frame>
+          </Frame>
+        </Frame>
+        <Frame name="eq/g500 readout" id="ce0e571c-382e-4808-a506-821b5695bb2f" x=456.20000000000005 y=26.5 w=70 h=17 control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Param":{"addr":"eq/g500"}}},"format":{"decimals":1,"style":"Number"},"kind":"Readout","slots":[{"node":"b5c5f628-88ee-400c-9f21-50b5959e133e","role":"Value"}]}}>
+          <Text name="print" id="b5c5f628-88ee-400c-9f21-50b5959e133e" y=1.3599999999999994 w=70 h=15 fill="#1e1719" size=10.5 weight=700 text-align="center" />
+        </Frame>
+        <Text name="print" id="48bffc11-6393-430b-8090-5bb6e1bf3e04" x=458.02000000000004 y=230.86 w=66.36 h=15 fill="#1e1719" size=10.5 weight=700 text-align="center">500 Hz</Text>
+        <Frame name="1 kHz" id="ddb40ecf-7aa4-4122-8ca2-baa716cd974d" x=536.6 y=48 w=62 h=170 control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Param":{"addr":"eq/g1k"}}},"kind":{"Fader":{"orientation":"Vertical"}},"slots":[{"node":"e244435d-1564-40f8-a355-7b8fcd54d5bc","role":"Thumb"}]}}>
+          <Vector name="ticks" id="0c346fa2-eba7-4423-bfc8-f4fe2078572f" x=9 y=10 w=44 h=150 stroke="#1e171966" stroke-weight=0.9 stroke-cap="round" stroke-join="round" geometry="M 0.000 0.000 L 9.000 0.000 M 35.000 0.000 L 44.000 0.000 M 3.000 12.500 L 9.000 12.500 M 35.000 12.500 L 41.000 12.500 M 3.000 25.000 L 9.000 25.000 M 35.000 25.000 L 41.000 25.000 M 3.000 37.500 L 9.000 37.500 M 35.000 37.500 L 41.000 37.500 M 3.000 50.000 L 9.000 50.000 M 35.000 50.000 L 41.000 50.000 M 3.000 62.500 L 9.000 62.500 M 35.000 62.500 L 41.000 62.500 M 0.000 75.000 L 9.000 75.000 M 35.000 75.000 L 44.000 75.000 M 3.000 87.500 L 9.000 87.500 M 35.000 87.500 L 41.000 87.500 M 3.000 100.000 L 9.000 100.000 M 35.000 100.000 L 41.000 100.000 M 3.000 112.500 L 9.000 112.500 M 35.000 112.500 L 41.000 112.500 M 3.000 125.000 L 9.000 125.000 M 35.000 125.000 L 41.000 125.000 M 3.000 137.500 L 9.000 137.500 M 35.000 137.500 L 41.000 137.500 M 0.000 150.000 L 9.000 150.000 M 35.000 150.000 L 44.000 150.000 " />
+          <Rectangle name="slot" id="c4764589-687e-412e-9586-fa09cd8a8d70" x=24 y=4 w=14 h=162 radius=7 fill={[{"kind":{"LinearGradient":{"stops":[{"color":"#050405","position":0.0},{"color":"#221b1d","position":0.5},{"color":"#0a0809","position":1.0}],"transform":{"a":1.0,"b":5.551115123125783e-17,"c":-5.551115123125783e-17,"d":1.0,"tx":-2.7755575615628914e-17,"ty":0.0}}}}]} effects={[{"color":"#ffffff80","kind":"DropShadow","offset_y":1.0,"radius":0.0}]} />
+          <Frame name="lane" id="9976124e-17f7-4422-a602-8c9a949fbbbe" x=14 w=34 h=170>
+            <Frame name="cap" id="e244435d-1564-40f8-a355-7b8fcd54d5bc" w=34 h=20>
+              <Rectangle name="cap body" id="4002c718-88bf-488a-a2de-11e39cffce9e" w=34 h=20 radius=10 fill={[{"kind":{"LinearGradient":{"stops":[{"color":"#5a5456","position":0.0},{"color":"#2a2426","position":0.35},{"color":"#0d0a0b","position":1.0}],"transform":{"a":1.6653345369377348e-16,"b":-1.0,"c":1.0,"d":1.6653345369377348e-16,"tx":1.0,"ty":-1.942890293094024e-16}}}}]} effects={[{"color":"#000000a0","kind":"DropShadow","offset_x":1.0,"offset_y":4.0,"radius":5.0}]} />
+              <Rectangle name="cap sheen" id="4b432fce-1619-496d-984d-75db2c152473" x=4 y=2 w=26 h=7 radius=4 fill="#ffffff24" />
+              <Rectangle name="index" id="80962d86-9d3e-41cc-bba2-14078f30220d" x=5 y=8.8 w=24 h=2.4 radius=1.2 fill="#efe0c4" />
+            </Frame>
+          </Frame>
+        </Frame>
+        <Frame name="eq/g1k readout" id="6396cf0b-2d27-4ac1-8b6c-bf8907937af4" x=532.6 y=26.5 w=70 h=17 control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Param":{"addr":"eq/g1k"}}},"format":{"decimals":1,"style":"Number"},"kind":"Readout","slots":[{"node":"4a2845f9-10d0-4adf-8f02-7b7ee85b3a6d","role":"Value"}]}}>
+          <Text name="print" id="4a2845f9-10d0-4adf-8f02-7b7ee85b3a6d" y=1.3599999999999994 w=70 h=15 fill="#1e1719" size=10.5 weight=700 text-align="center" />
+        </Frame>
+        <Text name="print" id="10042843-01e0-4ff6-83cb-581155238b7b" x=538.2 y=230.86 w=58.8 h=15 fill="#1e1719" size=10.5 weight=700 text-align="center">1 kHz</Text>
+        <Frame name="2 kHz" id="9134c422-6840-4cbe-8feb-250ecd04ddca" x=613 y=48 w=62 h=170 control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Param":{"addr":"eq/g2k"}}},"kind":{"Fader":{"orientation":"Vertical"}},"slots":[{"node":"92d92784-c0f7-42fe-b27c-bd8c8493f9cb","role":"Thumb"}]}}>
+          <Vector name="ticks" id="6f70264a-ca38-406c-9067-dce2d485f3ac" x=9 y=10 w=44 h=150 stroke="#1e171966" stroke-weight=0.9 stroke-cap="round" stroke-join="round" geometry="M 0.000 0.000 L 9.000 0.000 M 35.000 0.000 L 44.000 0.000 M 3.000 12.500 L 9.000 12.500 M 35.000 12.500 L 41.000 12.500 M 3.000 25.000 L 9.000 25.000 M 35.000 25.000 L 41.000 25.000 M 3.000 37.500 L 9.000 37.500 M 35.000 37.500 L 41.000 37.500 M 3.000 50.000 L 9.000 50.000 M 35.000 50.000 L 41.000 50.000 M 3.000 62.500 L 9.000 62.500 M 35.000 62.500 L 41.000 62.500 M 0.000 75.000 L 9.000 75.000 M 35.000 75.000 L 44.000 75.000 M 3.000 87.500 L 9.000 87.500 M 35.000 87.500 L 41.000 87.500 M 3.000 100.000 L 9.000 100.000 M 35.000 100.000 L 41.000 100.000 M 3.000 112.500 L 9.000 112.500 M 35.000 112.500 L 41.000 112.500 M 3.000 125.000 L 9.000 125.000 M 35.000 125.000 L 41.000 125.000 M 3.000 137.500 L 9.000 137.500 M 35.000 137.500 L 41.000 137.500 M 0.000 150.000 L 9.000 150.000 M 35.000 150.000 L 44.000 150.000 " />
+          <Rectangle name="slot" id="cf773369-1baf-4d90-8e46-d864cf711990" x=24 y=4 w=14 h=162 radius=7 fill={[{"kind":{"LinearGradient":{"stops":[{"color":"#050405","position":0.0},{"color":"#221b1d","position":0.5},{"color":"#0a0809","position":1.0}],"transform":{"a":1.0,"b":5.551115123125783e-17,"c":-5.551115123125783e-17,"d":1.0,"tx":-2.7755575615628914e-17,"ty":0.0}}}}]} effects={[{"color":"#ffffff80","kind":"DropShadow","offset_y":1.0,"radius":0.0}]} />
+          <Frame name="lane" id="96c03f5f-8e76-400c-9592-3d4efdbbbffe" x=14 w=34 h=170>
+            <Frame name="cap" id="92d92784-c0f7-42fe-b27c-bd8c8493f9cb" w=34 h=20>
+              <Rectangle name="cap body" id="cd8a8827-3cad-4ac3-ba28-897c43c869f4" w=34 h=20 radius=10 fill={[{"kind":{"LinearGradient":{"stops":[{"color":"#5a5456","position":0.0},{"color":"#2a2426","position":0.35},{"color":"#0d0a0b","position":1.0}],"transform":{"a":1.6653345369377348e-16,"b":-1.0,"c":1.0,"d":1.6653345369377348e-16,"tx":1.0,"ty":-1.942890293094024e-16}}}}]} effects={[{"color":"#000000a0","kind":"DropShadow","offset_x":1.0,"offset_y":4.0,"radius":5.0}]} />
+              <Rectangle name="cap sheen" id="6d5ef6fb-5faa-4615-81c7-8f90fff28294" x=4 y=2 w=26 h=7 radius=4 fill="#ffffff24" />
+              <Rectangle name="index" id="68fdf817-8d5c-468b-858b-1406aebdbb14" x=5 y=8.8 w=24 h=2.4 radius=1.2 fill="#efe0c4" />
+            </Frame>
+          </Frame>
+        </Frame>
+        <Frame name="eq/g2k readout" id="2856da50-ca65-469e-bb83-847960cd544b" x=609 y=26.5 w=70 h=17 control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Param":{"addr":"eq/g2k"}}},"format":{"decimals":1,"style":"Number"},"kind":"Readout","slots":[{"node":"dea0c9d1-c291-41df-80f3-63d84a67b788","role":"Value"}]}}>
+          <Text name="print" id="dea0c9d1-c291-41df-80f3-63d84a67b788" y=1.3599999999999994 w=70 h=15 fill="#1e1719" size=10.5 weight=700 text-align="center" />
+        </Frame>
+        <Text name="print" id="7eeaa66a-e1e9-4d04-afa7-12ec293f0c27" x=614.6 y=230.86 w=58.8 h=15 fill="#1e1719" size=10.5 weight=700 text-align="center">2 kHz</Text>
+        <Frame name="4 kHz" id="91fc3cb5-f228-4a98-9617-489d01a9ae12" x=689.4000000000001 y=48 w=62 h=170 control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Param":{"addr":"eq/g4k"}}},"kind":{"Fader":{"orientation":"Vertical"}},"slots":[{"node":"e138fc3e-2f6a-49c1-be0e-9e57ef919e57","role":"Thumb"}]}}>
+          <Vector name="ticks" id="35141188-e37f-469e-af19-a9314661f41f" x=9 y=10 w=44 h=150 stroke="#1e171966" stroke-weight=0.9 stroke-cap="round" stroke-join="round" geometry="M 0.000 0.000 L 9.000 0.000 M 35.000 0.000 L 44.000 0.000 M 3.000 12.500 L 9.000 12.500 M 35.000 12.500 L 41.000 12.500 M 3.000 25.000 L 9.000 25.000 M 35.000 25.000 L 41.000 25.000 M 3.000 37.500 L 9.000 37.500 M 35.000 37.500 L 41.000 37.500 M 3.000 50.000 L 9.000 50.000 M 35.000 50.000 L 41.000 50.000 M 3.000 62.500 L 9.000 62.500 M 35.000 62.500 L 41.000 62.500 M 0.000 75.000 L 9.000 75.000 M 35.000 75.000 L 44.000 75.000 M 3.000 87.500 L 9.000 87.500 M 35.000 87.500 L 41.000 87.500 M 3.000 100.000 L 9.000 100.000 M 35.000 100.000 L 41.000 100.000 M 3.000 112.500 L 9.000 112.500 M 35.000 112.500 L 41.000 112.500 M 3.000 125.000 L 9.000 125.000 M 35.000 125.000 L 41.000 125.000 M 3.000 137.500 L 9.000 137.500 M 35.000 137.500 L 41.000 137.500 M 0.000 150.000 L 9.000 150.000 M 35.000 150.000 L 44.000 150.000 " />
+          <Rectangle name="slot" id="96bcc0e9-6d41-4b6d-a8cf-1cb3683d780e" x=24 y=4 w=14 h=162 radius=7 fill={[{"kind":{"LinearGradient":{"stops":[{"color":"#050405","position":0.0},{"color":"#221b1d","position":0.5},{"color":"#0a0809","position":1.0}],"transform":{"a":1.0,"b":5.551115123125783e-17,"c":-5.551115123125783e-17,"d":1.0,"tx":-2.7755575615628914e-17,"ty":0.0}}}}]} effects={[{"color":"#ffffff80","kind":"DropShadow","offset_y":1.0,"radius":0.0}]} />
+          <Frame name="lane" id="3a31027f-a23a-45f9-b179-559854e0c4d6" x=14 w=34 h=170>
+            <Frame name="cap" id="e138fc3e-2f6a-49c1-be0e-9e57ef919e57" w=34 h=20>
+              <Rectangle name="cap body" id="1036e3f3-cb21-4119-a901-0b1e1a354caa" w=34 h=20 radius=10 fill={[{"kind":{"LinearGradient":{"stops":[{"color":"#5a5456","position":0.0},{"color":"#2a2426","position":0.35},{"color":"#0d0a0b","position":1.0}],"transform":{"a":1.6653345369377348e-16,"b":-1.0,"c":1.0,"d":1.6653345369377348e-16,"tx":1.0,"ty":-1.942890293094024e-16}}}}]} effects={[{"color":"#000000a0","kind":"DropShadow","offset_x":1.0,"offset_y":4.0,"radius":5.0}]} />
+              <Rectangle name="cap sheen" id="3e9723d1-6410-4a34-a0ab-7770acde9807" x=4 y=2 w=26 h=7 radius=4 fill="#ffffff24" />
+              <Rectangle name="index" id="5218ceee-27cf-4386-9073-1806b31dcf01" x=5 y=8.8 w=24 h=2.4 radius=1.2 fill="#efe0c4" />
+            </Frame>
+          </Frame>
+        </Frame>
+        <Frame name="eq/g4k readout" id="d913704b-819d-4dde-a00a-5107c9a39124" x=685.4000000000001 y=26.5 w=70 h=17 control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Param":{"addr":"eq/g4k"}}},"format":{"decimals":1,"style":"Number"},"kind":"Readout","slots":[{"node":"e6f8fcb1-7f21-4657-b072-6ba375dc05f3","role":"Value"}]}}>
+          <Text name="print" id="e6f8fcb1-7f21-4657-b072-6ba375dc05f3" y=1.3599999999999994 w=70 h=15 fill="#1e1719" size=10.5 weight=700 text-align="center" />
+        </Frame>
+        <Text name="print" id="b1476c1c-9461-4892-8ef4-b161f4777c05" x=691.0000000000001 y=230.86 w=58.8 h=15 fill="#1e1719" size=10.5 weight=700 text-align="center">4 kHz</Text>
+        <Frame name="8 kHz" id="47539dc4-c972-42fe-b190-bf07feb9580b" x=765.8000000000001 y=48 w=62 h=170 control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Param":{"addr":"eq/g8k"}}},"kind":{"Fader":{"orientation":"Vertical"}},"slots":[{"node":"248d59f0-fbd1-42df-b17a-7100ac336dbc","role":"Thumb"}]}}>
+          <Vector name="ticks" id="ece8e66b-30a4-4979-a79f-5851696ff011" x=9 y=10 w=44 h=150 stroke="#1e171966" stroke-weight=0.9 stroke-cap="round" stroke-join="round" geometry="M 0.000 0.000 L 9.000 0.000 M 35.000 0.000 L 44.000 0.000 M 3.000 12.500 L 9.000 12.500 M 35.000 12.500 L 41.000 12.500 M 3.000 25.000 L 9.000 25.000 M 35.000 25.000 L 41.000 25.000 M 3.000 37.500 L 9.000 37.500 M 35.000 37.500 L 41.000 37.500 M 3.000 50.000 L 9.000 50.000 M 35.000 50.000 L 41.000 50.000 M 3.000 62.500 L 9.000 62.500 M 35.000 62.500 L 41.000 62.500 M 0.000 75.000 L 9.000 75.000 M 35.000 75.000 L 44.000 75.000 M 3.000 87.500 L 9.000 87.500 M 35.000 87.500 L 41.000 87.500 M 3.000 100.000 L 9.000 100.000 M 35.000 100.000 L 41.000 100.000 M 3.000 112.500 L 9.000 112.500 M 35.000 112.500 L 41.000 112.500 M 3.000 125.000 L 9.000 125.000 M 35.000 125.000 L 41.000 125.000 M 3.000 137.500 L 9.000 137.500 M 35.000 137.500 L 41.000 137.500 M 0.000 150.000 L 9.000 150.000 M 35.000 150.000 L 44.000 150.000 " />
+          <Rectangle name="slot" id="574ba182-db6c-40aa-a4ab-e2c475ade579" x=24 y=4 w=14 h=162 radius=7 fill={[{"kind":{"LinearGradient":{"stops":[{"color":"#050405","position":0.0},{"color":"#221b1d","position":0.5},{"color":"#0a0809","position":1.0}],"transform":{"a":1.0,"b":5.551115123125783e-17,"c":-5.551115123125783e-17,"d":1.0,"tx":-2.7755575615628914e-17,"ty":0.0}}}}]} effects={[{"color":"#ffffff80","kind":"DropShadow","offset_y":1.0,"radius":0.0}]} />
+          <Frame name="lane" id="c6f36623-39b2-460e-a65e-6eaba52f2b2e" x=14 w=34 h=170>
+            <Frame name="cap" id="248d59f0-fbd1-42df-b17a-7100ac336dbc" w=34 h=20>
+              <Rectangle name="cap body" id="ba18e632-fc57-4b1e-9197-dafa37f78d81" w=34 h=20 radius=10 fill={[{"kind":{"LinearGradient":{"stops":[{"color":"#5a5456","position":0.0},{"color":"#2a2426","position":0.35},{"color":"#0d0a0b","position":1.0}],"transform":{"a":1.6653345369377348e-16,"b":-1.0,"c":1.0,"d":1.6653345369377348e-16,"tx":1.0,"ty":-1.942890293094024e-16}}}}]} effects={[{"color":"#000000a0","kind":"DropShadow","offset_x":1.0,"offset_y":4.0,"radius":5.0}]} />
+              <Rectangle name="cap sheen" id="7fbc6f09-0069-47d9-bdb9-7623b1042d41" x=4 y=2 w=26 h=7 radius=4 fill="#ffffff24" />
+              <Rectangle name="index" id="b4f38d60-ae53-4296-bcf0-3556a0014680" x=5 y=8.8 w=24 h=2.4 radius=1.2 fill="#efe0c4" />
+            </Frame>
+          </Frame>
+        </Frame>
+        <Frame name="eq/g8k readout" id="c99f3df7-aba8-4ae5-858c-975d80b9c360" x=761.8000000000001 y=26.5 w=70 h=17 control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Param":{"addr":"eq/g8k"}}},"format":{"decimals":1,"style":"Number"},"kind":"Readout","slots":[{"node":"dd3c0095-59b0-4ff3-820d-327db6250536","role":"Value"}]}}>
+          <Text name="print" id="dd3c0095-59b0-4ff3-820d-327db6250536" y=1.3599999999999994 w=70 h=15 fill="#1e1719" size=10.5 weight=700 text-align="center" />
+        </Frame>
+        <Text name="print" id="d3bfd437-3380-44ab-83cc-366ef18100fc" x=767.4000000000001 y=230.86 w=58.8 h=15 fill="#1e1719" size=10.5 weight=700 text-align="center">8 kHz</Text>
+        <Frame name="16 kHz" id="7fc37b06-7499-4cad-b607-67b97937b0d3" x=842.2 y=48 w=62 h=170 control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Param":{"addr":"eq/g16k"}}},"kind":{"Fader":{"orientation":"Vertical"}},"slots":[{"node":"1c517e68-4c2d-426d-81d7-3c9f2830c353","role":"Thumb"}]}}>
+          <Vector name="ticks" id="a557b021-3c15-4874-9a37-d331ca7a143f" x=9 y=10 w=44 h=150 stroke="#1e171966" stroke-weight=0.9 stroke-cap="round" stroke-join="round" geometry="M 0.000 0.000 L 9.000 0.000 M 35.000 0.000 L 44.000 0.000 M 3.000 12.500 L 9.000 12.500 M 35.000 12.500 L 41.000 12.500 M 3.000 25.000 L 9.000 25.000 M 35.000 25.000 L 41.000 25.000 M 3.000 37.500 L 9.000 37.500 M 35.000 37.500 L 41.000 37.500 M 3.000 50.000 L 9.000 50.000 M 35.000 50.000 L 41.000 50.000 M 3.000 62.500 L 9.000 62.500 M 35.000 62.500 L 41.000 62.500 M 0.000 75.000 L 9.000 75.000 M 35.000 75.000 L 44.000 75.000 M 3.000 87.500 L 9.000 87.500 M 35.000 87.500 L 41.000 87.500 M 3.000 100.000 L 9.000 100.000 M 35.000 100.000 L 41.000 100.000 M 3.000 112.500 L 9.000 112.500 M 35.000 112.500 L 41.000 112.500 M 3.000 125.000 L 9.000 125.000 M 35.000 125.000 L 41.000 125.000 M 3.000 137.500 L 9.000 137.500 M 35.000 137.500 L 41.000 137.500 M 0.000 150.000 L 9.000 150.000 M 35.000 150.000 L 44.000 150.000 " />
+          <Rectangle name="slot" id="1b613969-a9cb-41d9-abeb-ba7f1d302433" x=24 y=4 w=14 h=162 radius=7 fill={[{"kind":{"LinearGradient":{"stops":[{"color":"#050405","position":0.0},{"color":"#221b1d","position":0.5},{"color":"#0a0809","position":1.0}],"transform":{"a":1.0,"b":5.551115123125783e-17,"c":-5.551115123125783e-17,"d":1.0,"tx":-2.7755575615628914e-17,"ty":0.0}}}}]} effects={[{"color":"#ffffff80","kind":"DropShadow","offset_y":1.0,"radius":0.0}]} />
+          <Frame name="lane" id="3853a475-15fe-4396-9de0-14f3d1484cb5" x=14 w=34 h=170>
+            <Frame name="cap" id="1c517e68-4c2d-426d-81d7-3c9f2830c353" w=34 h=20>
+              <Rectangle name="cap body" id="363b4ea1-5716-43a4-98c7-c8b7cd508afc" w=34 h=20 radius=10 fill={[{"kind":{"LinearGradient":{"stops":[{"color":"#5a5456","position":0.0},{"color":"#2a2426","position":0.35},{"color":"#0d0a0b","position":1.0}],"transform":{"a":1.6653345369377348e-16,"b":-1.0,"c":1.0,"d":1.6653345369377348e-16,"tx":1.0,"ty":-1.942890293094024e-16}}}}]} effects={[{"color":"#000000a0","kind":"DropShadow","offset_x":1.0,"offset_y":4.0,"radius":5.0}]} />
+              <Rectangle name="cap sheen" id="4cf0961d-0142-4ab1-bf9d-567f70efa504" x=4 y=2 w=26 h=7 radius=4 fill="#ffffff24" />
+              <Rectangle name="index" id="4a59a30f-bacc-49c1-859f-4bd9272f42ae" x=5 y=8.8 w=24 h=2.4 radius=1.2 fill="#efe0c4" />
+            </Frame>
+          </Frame>
+        </Frame>
+        <Frame name="eq/g16k readout" id="4db2be7f-10b9-4b6b-bd8d-07b37a1194c9" x=838.2 y=26.5 w=70 h=17 control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Param":{"addr":"eq/g16k"}}},"format":{"decimals":1,"style":"Number"},"kind":"Readout","slots":[{"node":"4dc0299f-c018-4d7e-9648-258ce56025bc","role":"Value"}]}}>
+          <Text name="print" id="4dc0299f-c018-4d7e-9648-258ce56025bc" y=1.3599999999999994 w=70 h=15 fill="#1e1719" size=10.5 weight=700 text-align="center" />
+        </Frame>
+        <Text name="print" id="4dc720fc-3a2a-4923-93ed-b4ba8ff96079" x=840.0200000000001 y=230.86 w=66.36 h=15 fill="#1e1719" size=10.5 weight=700 text-align="center">16 kHz</Text>
+      </Frame>
     </Frame>
   </Page>
 </Document>

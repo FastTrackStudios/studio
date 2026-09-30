@@ -32,7 +32,7 @@
         "unit": "Percent",
         "steps": 101
       },
-      "default": 1.0,
+      "default": 0.5,
       "bipolar": false,
       "featured": true
     },
@@ -117,7 +117,7 @@
         "unit": "Percent",
         "steps": 101
       },
-      "default": 0.35,
+      "default": 0.5,
       "bipolar": false,
       "featured": true
     },
@@ -134,7 +134,7 @@
         "unit": "Percent",
         "steps": 101
       },
-      "default": 0.4,
+      "default": 0.5,
       "bipolar": false,
       "featured": true
     },
@@ -146,12 +146,12 @@
       "kind": "Continuous",
       "range": {
         "min": 40.0,
-        "max": 2000.0,
-        "scale": "Logarithmic",
+        "max": 3960.0,
+        "scale": "Linear",
         "unit": "Milliseconds",
         "steps": null
       },
-      "default": 1.0,
+      "default": 0.5,
       "bipolar": false,
       "featured": true
     },
@@ -168,7 +168,7 @@
         "unit": "Percent",
         "steps": 101
       },
-      "default": 0.25,
+      "default": 0.5,
       "bipolar": false,
       "featured": false
     },
@@ -270,7 +270,7 @@
         "unit": "Percent",
         "steps": 101
       },
-      "default": 1.0,
+      "default": 0.5,
       "bipolar": false,
       "featured": true
     },
@@ -299,12 +299,12 @@
       "kind": "Continuous",
       "range": {
         "min": -24.0,
-        "max": 12.0,
+        "max": 24.0,
         "scale": "Linear",
         "unit": "Db",
         "steps": null
       },
-      "default": 0.6666666666666666,
+      "default": 0.5,
       "bipolar": true,
       "featured": true
     },
@@ -338,7 +338,7 @@
         "unit": "Percent",
         "steps": 101
       },
-      "default": 0.5,
+      "default": 0.36,
       "bipolar": false,
       "featured": false
     },
@@ -355,7 +355,7 @@
         "unit": "Percent",
         "steps": 101
       },
-      "default": 0.4,
+      "default": 0.42,
       "bipolar": false,
       "featured": true
     },
@@ -372,7 +372,7 @@
         "unit": "Percent",
         "steps": 101
       },
-      "default": 0.3,
+      "default": 0.0,
       "bipolar": false,
       "featured": false
     },
@@ -1512,13 +1512,13 @@
       "group": null,
       "kind": "Continuous",
       "range": {
-        "min": 0.1,
-        "max": 10.0,
-        "scale": "Logarithmic",
+        "min": 0.05,
+        "max": 5.2,
+        "scale": "Linear",
         "unit": "Hz",
         "steps": null
       },
-      "default": 0.5880456295278406,
+      "default": 0.2815533980582524,
       "bipolar": false,
       "featured": false
     },
@@ -1529,13 +1529,13 @@
       "group": null,
       "kind": "Continuous",
       "range": {
-        "min": 0.1,
-        "max": 10.0,
-        "scale": "Logarithmic",
+        "min": 0.05,
+        "max": 5.2,
+        "scale": "Linear",
         "unit": "Hz",
         "steps": null
       },
-      "default": 0.8494850021680093,
+      "default": 0.9611650485436893,
       "bipolar": false,
       "featured": false
     },
@@ -1578,7 +1578,7 @@
         "unit": "None",
         "steps": 21
       },
-      "default": 0.8,
+      "default": 0.75,
       "bipolar": false,
       "featured": false
     },
@@ -1663,7 +1663,7 @@
         "unit": "Percent",
         "steps": 101
       },
-      "default": 0.35,
+      "default": 0.5,
       "bipolar": false,
       "featured": true
     },
@@ -1675,12 +1675,12 @@
       "kind": "Continuous",
       "range": {
         "min": 0.0,
-        "max": 110.0,
+        "max": 100.0,
         "scale": "Linear",
         "unit": "Percent",
-        "steps": 111
+        "steps": 101
       },
-      "default": 0.36363636363636365,
+      "default": 0.5,
       "bipolar": false,
       "featured": true
     },
@@ -1807,7 +1807,7 @@
         "unit": "Hz",
         "steps": null
       },
-      "default": 0.35436764027111584,
+      "default": 0.1036458905138235,
       "bipolar": false,
       "featured": false
     },
@@ -1824,7 +1824,7 @@
         "unit": "Percent",
         "steps": 101
       },
-      "default": 0.2,
+      "default": 0.5,
       "bipolar": false,
       "featured": false
     },
@@ -1841,7 +1841,7 @@
         "unit": "Percent",
         "steps": 101
       },
-      "default": 0.0,
+      "default": 0.5,
       "bipolar": false,
       "featured": false
     },
@@ -1858,7 +1858,7 @@
         "unit": "Hz",
         "steps": null
       },
-      "default": 0.6941346394792774,
+      "default": 0.8809389787307026,
       "bipolar": false,
       "featured": false
     },
@@ -1909,7 +1909,7 @@
         "unit": "Percent",
         "steps": 101
       },
-      "default": 0.3,
+      "default": 0.5,
       "bipolar": false,
       "featured": true
     },
@@ -1926,7 +1926,7 @@
         "unit": "Milliseconds",
         "steps": null
       },
-      "default": 0.48204685253034196,
+      "default": 0.5002827064268693,
       "bipolar": false,
       "featured": false
     },
@@ -1943,7 +1943,7 @@
         "unit": "Seconds",
         "steps": null
       },
-      "default": 0.5484550065040282,
+      "default": 0.5,
       "bipolar": false,
       "featured": true
     },
@@ -1960,7 +1960,7 @@
         "unit": "Hz",
         "steps": null
       },
-      "default": 0.41140808993222105,
+      "default": 0.49923725246867023,
       "bipolar": false,
       "featured": false
     },
@@ -1977,7 +1977,7 @@
         "unit": "Hz",
         "steps": null
       },
-      "default": 0.7334515826841693,
+      "default": 0.4998405304253203,
       "bipolar": false,
       "featured": false
     },
@@ -2142,7 +2142,7 @@
         "unit": "None",
         "steps": 2
       },
-      "default": 0.0,
+      "default": 1.0,
       "bipolar": false,
       "featured": false
     },

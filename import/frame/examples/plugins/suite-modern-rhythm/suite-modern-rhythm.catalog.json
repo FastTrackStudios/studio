@@ -1088,7 +1088,7 @@
     },
     {
       "addr": "mreq/b1",
-      "name": "Band 75 Hz Gain",
+      "name": "Band 1 Gain",
       "short_name": null,
       "group": null,
       "kind": "Continuous",
@@ -1099,13 +1099,13 @@
         "unit": "Db",
         "steps": null
       },
-      "default": 0.5,
+      "default": 0.0,
       "bipolar": true,
       "featured": true
     },
     {
       "addr": "mreq/b2",
-      "name": "Band 150 Hz Gain",
+      "name": "Band 2 Gain",
       "short_name": null,
       "group": null,
       "kind": "Continuous",
@@ -1122,7 +1122,7 @@
     },
     {
       "addr": "mreq/b3",
-      "name": "Band 250 Hz Gain",
+      "name": "Band 3 Gain",
       "short_name": null,
       "group": null,
       "kind": "Continuous",
@@ -1133,13 +1133,13 @@
         "unit": "Db",
         "steps": null
       },
-      "default": 0.5,
+      "default": 1.0,
       "bipolar": true,
       "featured": false
     },
     {
       "addr": "mreq/b4",
-      "name": "Band 400 Hz Gain",
+      "name": "Band 4 Gain",
       "short_name": null,
       "group": null,
       "kind": "Continuous",
@@ -1150,13 +1150,13 @@
         "unit": "Db",
         "steps": null
       },
-      "default": 0.5,
+      "default": 0.0,
       "bipolar": true,
       "featured": false
     },
     {
       "addr": "mreq/b5",
-      "name": "Band 800 Hz Gain",
+      "name": "Band 5 Gain",
       "short_name": null,
       "group": null,
       "kind": "Continuous",
@@ -1173,7 +1173,7 @@
     },
     {
       "addr": "mreq/b6",
-      "name": "Band 1.5 kHz Gain",
+      "name": "Band 6 Gain",
       "short_name": null,
       "group": null,
       "kind": "Continuous",
@@ -1184,13 +1184,13 @@
         "unit": "Db",
         "steps": null
       },
-      "default": 0.5,
+      "default": 1.0,
       "bipolar": true,
       "featured": false
     },
     {
       "addr": "mreq/b7",
-      "name": "Band 4.5 kHz Gain",
+      "name": "Band 7 Gain",
       "short_name": null,
       "group": null,
       "kind": "Continuous",
@@ -1201,13 +1201,13 @@
         "unit": "Db",
         "steps": null
       },
-      "default": 0.5,
+      "default": 0.0,
       "bipolar": true,
       "featured": false
     },
     {
       "addr": "mreq/b8",
-      "name": "Band 8 kHz Gain",
+      "name": "Band 8 Gain",
       "short_name": null,
       "group": null,
       "kind": "Continuous",
@@ -1224,7 +1224,7 @@
     },
     {
       "addr": "mreq/b9",
-      "name": "Band 12 kHz Gain",
+      "name": "Band 9 Gain",
       "short_name": null,
       "group": null,
       "kind": "Continuous",
@@ -1235,7 +1235,7 @@
         "unit": "Db",
         "steps": null
       },
-      "default": 0.5,
+      "default": 1.0,
       "bipolar": true,
       "featured": false
     },
@@ -1289,6 +1289,32 @@
       "default": 1.0,
       "bipolar": false,
       "featured": true
+    },
+    {
+      "addr": "mreq/finish",
+      "name": "Finish",
+      "short_name": null,
+      "group": null,
+      "kind": {
+        "Choice": {
+          "options": [
+            "Bronze",
+            "Ivory",
+            "Black",
+            "Silver"
+          ]
+        }
+      },
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 4
+      },
+      "default": 0.6666666666666666,
+      "bipolar": false,
+      "featured": false
     },
     {
       "addr": "mrdl2/mix",

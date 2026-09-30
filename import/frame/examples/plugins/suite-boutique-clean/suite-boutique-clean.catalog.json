@@ -15,7 +15,7 @@
         "unit": "Percent",
         "steps": null
       },
-      "default": 0.5,
+      "default": 0.07,
       "bipolar": false,
       "featured": true
     },
@@ -32,7 +32,7 @@
         "unit": "Percent",
         "steps": null
       },
-      "default": 0.5,
+      "default": 0.07,
       "bipolar": false,
       "featured": true
     },
@@ -49,7 +49,7 @@
         "unit": "Db",
         "steps": null
       },
-      "default": 0.5,
+      "default": 0.06999999999999999,
       "bipolar": true,
       "featured": true
     },
@@ -66,7 +66,7 @@
         "unit": "Percent",
         "steps": null
       },
-      "default": 0.6,
+      "default": 0.07,
       "bipolar": false,
       "featured": true
     },
@@ -100,7 +100,7 @@
         "unit": "Db",
         "steps": null
       },
-      "default": 0.5,
+      "default": 0.06999999999999999,
       "bipolar": true,
       "featured": true
     },
@@ -117,7 +117,7 @@
         "unit": "Percent",
         "steps": null
       },
-      "default": 0.35,
+      "default": 0.07,
       "bipolar": false,
       "featured": true
     },
@@ -134,7 +134,7 @@
         "unit": "Percent",
         "steps": null
       },
-      "default": 0.5,
+      "default": 0.07,
       "bipolar": false,
       "featured": true
     },
@@ -151,7 +151,7 @@
         "unit": "Percent",
         "steps": null
       },
-      "default": 0.4,
+      "default": 0.07,
       "bipolar": false,
       "featured": true
     },
@@ -185,7 +185,7 @@
         "unit": "Db",
         "steps": null
       },
-      "default": 0.5,
+      "default": 0.06999999999999999,
       "bipolar": true,
       "featured": true
     },
@@ -202,7 +202,7 @@
         "unit": "Percent",
         "steps": null
       },
-      "default": 0.55,
+      "default": 0.07,
       "bipolar": false,
       "featured": true
     },
@@ -219,7 +219,7 @@
         "unit": "Percent",
         "steps": null
       },
-      "default": 0.4,
+      "default": 0.07,
       "bipolar": false,
       "featured": true
     },
@@ -253,7 +253,7 @@
         "unit": "Hz",
         "steps": null
       },
-      "default": 0.7104340987720837,
+      "default": 0.07000000000000002,
       "bipolar": false,
       "featured": true
     },
@@ -270,7 +270,7 @@
         "unit": "Percent",
         "steps": null
       },
-      "default": 0.5,
+      "default": 0.07,
       "bipolar": false,
       "featured": true
     },
@@ -295,7 +295,7 @@
         "unit": "None",
         "steps": 3
       },
-      "default": 0.5,
+      "default": 0.0,
       "bipolar": false,
       "featured": true
     },
@@ -329,7 +329,7 @@
         "unit": "None",
         "steps": null
       },
-      "default": 0.5,
+      "default": 0.4,
       "bipolar": false,
       "featured": true
     },
@@ -346,7 +346,7 @@
         "unit": "None",
         "steps": null
       },
-      "default": 0.5,
+      "default": 0.22999999999999998,
       "bipolar": false,
       "featured": true
     },
@@ -363,7 +363,7 @@
         "unit": "None",
         "steps": null
       },
-      "default": 0.3,
+      "default": 0.08,
       "bipolar": false,
       "featured": true
     },
@@ -380,7 +380,7 @@
         "unit": "None",
         "steps": null
       },
-      "default": 0.6,
+      "default": 0.5700000000000001,
       "bipolar": false,
       "featured": true
     },
@@ -397,7 +397,7 @@
         "unit": "None",
         "steps": null
       },
-      "default": 0.6,
+      "default": 0.67,
       "bipolar": false,
       "featured": true
     },
@@ -439,7 +439,7 @@
         "unit": "None",
         "steps": 3
       },
-      "default": 0.5,
+      "default": 0.0,
       "bipolar": false,
       "featured": true
     },
@@ -456,7 +456,7 @@
         "unit": "None",
         "steps": null
       },
-      "default": 0.4,
+      "default": 0.45,
       "bipolar": false,
       "featured": true
     },
@@ -473,7 +473,7 @@
         "unit": "None",
         "steps": null
       },
-      "default": 0.5,
+      "default": 0.27,
       "bipolar": false,
       "featured": true
     },
@@ -490,7 +490,7 @@
         "unit": "None",
         "steps": null
       },
-      "default": 0.55,
+      "default": 0.43,
       "bipolar": false,
       "featured": true
     },
@@ -507,7 +507,7 @@
         "unit": "None",
         "steps": null
       },
-      "default": 0.6,
+      "default": 0.62,
       "bipolar": false,
       "featured": true
     },
@@ -524,7 +524,7 @@
         "unit": "None",
         "steps": null
       },
-      "default": 0.5,
+      "default": 0.53,
       "bipolar": false,
       "featured": true
     },
@@ -541,7 +541,7 @@
         "unit": "None",
         "steps": null
       },
-      "default": 0.6,
+      "default": 0.53,
       "bipolar": false,
       "featured": true
     },
@@ -558,7 +558,7 @@
         "unit": "None",
         "steps": null
       },
-      "default": 0.5,
+      "default": 0.55,
       "bipolar": false,
       "featured": true
     },
@@ -609,7 +609,7 @@
         "unit": "None",
         "steps": null
       },
-      "default": 0.6,
+      "default": 0.5,
       "bipolar": false,
       "featured": true
     },
@@ -660,7 +660,7 @@
         "unit": "None",
         "steps": null
       },
-      "default": 0.6,
+      "default": 0.5,
       "bipolar": false,
       "featured": true
     },
@@ -758,7 +758,7 @@
         "Choice": {
           "options": [
             "Cream 4x12",
-            "Brown 2x12",
+            "Brown 4x12",
             "Blush 2x10"
           ]
         }
@@ -827,9 +827,9 @@
       "kind": "Continuous",
       "range": {
         "min": 0.0,
-        "max": 100.0,
+        "max": 1.0,
         "scale": "Linear",
-        "unit": "Percent",
+        "unit": "None",
         "steps": null
       },
       "default": 0.45,
@@ -844,9 +844,9 @@
       "kind": "Continuous",
       "range": {
         "min": 0.0,
-        "max": 100.0,
+        "max": 1.0,
         "scale": "Linear",
-        "unit": "Percent",
+        "unit": "None",
         "steps": null
       },
       "default": 0.1,
@@ -957,9 +957,9 @@
       "kind": "Continuous",
       "range": {
         "min": 0.0,
-        "max": 100.0,
+        "max": 1.0,
         "scale": "Linear",
-        "unit": "Percent",
+        "unit": "None",
         "steps": null
       },
       "default": 0.6,
@@ -974,9 +974,9 @@
       "kind": "Continuous",
       "range": {
         "min": 0.0,
-        "max": 100.0,
+        "max": 1.0,
         "scale": "Linear",
-        "unit": "Percent",
+        "unit": "None",
         "steps": null
       },
       "default": 0.1,
@@ -1069,6 +1069,31 @@
       "featured": true
     },
     {
+      "addr": "eq/color",
+      "name": "Colour",
+      "short_name": null,
+      "group": null,
+      "kind": {
+        "Choice": {
+          "options": [
+            "Blush",
+            "Gold",
+            "Cream"
+          ]
+        }
+      },
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 3
+      },
+      "default": 0.0,
+      "bipolar": false,
+      "featured": true
+    },
+    {
       "addr": "eq/hpf",
       "name": "HPF",
       "short_name": null,
@@ -1132,7 +1157,7 @@
         "unit": "Db",
         "steps": null
       },
-      "default": 0.5,
+      "default": 1.0,
       "bipolar": true,
       "featured": true
     },
@@ -1166,7 +1191,7 @@
         "unit": "Db",
         "steps": null
       },
-      "default": 0.5,
+      "default": 0.0,
       "bipolar": true,
       "featured": true
     },
@@ -1183,7 +1208,7 @@
         "unit": "Db",
         "steps": null
       },
-      "default": 0.5,
+      "default": 1.0,
       "bipolar": true,
       "featured": true
     },
@@ -1217,7 +1242,7 @@
         "unit": "Db",
         "steps": null
       },
-      "default": 0.5,
+      "default": 0.0,
       "bipolar": true,
       "featured": true
     },
@@ -1234,7 +1259,7 @@
         "unit": "Db",
         "steps": null
       },
-      "default": 0.5,
+      "default": 1.0,
       "bipolar": true,
       "featured": true
     },
@@ -1268,7 +1293,7 @@
         "unit": "Db",
         "steps": null
       },
-      "default": 0.5,
+      "default": 0.0,
       "bipolar": true,
       "featured": true
     },
@@ -1315,7 +1340,7 @@
         "unit": "Percent",
         "steps": null
       },
-      "default": 0.35,
+      "default": 0.5,
       "bipolar": false,
       "featured": true
     },
@@ -1332,7 +1357,7 @@
         "unit": "Percent",
         "steps": null
       },
-      "default": 0.25,
+      "default": 0.5,
       "bipolar": false,
       "featured": true
     },
@@ -1349,7 +1374,7 @@
         "unit": "Percent",
         "steps": null
       },
-      "default": 0.3,
+      "default": 0.5,
       "bipolar": false,
       "featured": true
     },
@@ -1366,7 +1391,7 @@
         "unit": "Percent",
         "steps": null
       },
-      "default": 0.4,
+      "default": 0.5,
       "bipolar": false,
       "featured": true
     },
@@ -1417,7 +1442,7 @@
         "unit": "Percent",
         "steps": null
       },
-      "default": 0.6,
+      "default": 0.5,
       "bipolar": false,
       "featured": true
     },
