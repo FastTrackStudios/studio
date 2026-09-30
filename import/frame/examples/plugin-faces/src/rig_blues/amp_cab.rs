@@ -30,9 +30,15 @@ pub const CAB_H: f64 = 700.0;
 /// no controls of its own; the section's rail carries the mics' levels.
 #[must_use]
 pub fn cab() -> Face {
+    cab_sized(CAB_W, CAB_H)
+}
+
+/// The cab at `w × h` (a row sets it beside the head at the head's height).
+#[must_use]
+pub fn cab_sized(cab_w: f64, cab_h: f64) -> Face {
     let scene = canvas("Cab 2x12", |b, root| {
-        ui::fit_root(b, root, CAB_W, CAB_H);
-        let mut spec = CabinetSpec::new(Kind::Combo, CAB_W, CAB_H);
+        ui::fit_root(b, root, cab_w, cab_h);
+        let mut spec = CabinetSpec::new(Kind::Combo, cab_w, cab_h);
         spec.covering = Material::Tolex { grain: Grain::Bronco, color: "#1d1c1c".into(), scale: 1.0 };
         spec.grille = Material::GrilleCloth { cloth: Cloth::Black };
         spec.face_frac = 0.0;

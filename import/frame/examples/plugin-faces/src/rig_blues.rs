@@ -20,6 +20,7 @@ pub mod drives;
 
 use document_proto::{NodeId, TextAlign};
 use surface_kit::draw::{self, Lettering, family};
+use surface_proto::{ButtonMode, Control, ControlKind, SlotRole};
 use surface_widgets::Builder;
 
 use crate::face::{Face, canvas, embed, face_size};
@@ -359,10 +360,114 @@ pub fn module_drive_amp() -> Face {
     Face { file: "05-module-drive-amp", plugin: PLUGIN, scene, params, streams: Vec::new() }
 }
 
+// ── The Control view's pages (signal): a bar, and rows without bars ────
+
+/// What the section bar switches between: the Drive → Amp module (the
+/// two-row default), then each section.
+pub const VIEWS: [&str; 8] = ["Drive → Amp", "Input", "Drives", "Pre-FX", "Amp / Cab", "Post EQ · Comp", "Post-FX", "Time"];
+
+/// The Control view's section bar, `00-section-bar`: the module chip and
+/// an icon per section, each a select button on `rig/section` whose dot
+/// (and bright icon) shows while it is the one showing. 1400 × 52.
+#[must_use]
+pub fn section_bar_page() -> Face {
+    const W: f64 = 1400.0;
+    const H: f64 = 52.0;
+    let n = VIEWS.len() as u32;
+    let scene = canvas("Section bar", |b, root| {
+        page(b, root, W, H);
+        if let Some(r) = b.scene.node_mut(root) {
+            r.fills = vec![draw::linear(180.0, &[(0.0, "#1a1b20"), (1.0, "#131418")])];
+        }
+        b.add(root, draw::rect("rule", 0.0, H - 1.0, W, 1.0, draw::solid("#ffffff14")));
+        let select = |b: &mut Builder<'_>, cell: NodeId, lit: NodeId, i: u32| {
+            let mut c = Control::new(ControlKind::Button { mode: ButtonMode::Select { index: i, count: n } }).slot(SlotRole::Led, lit.0);
+            c.binding = Some(ui::bind("rig/section"));
+            b.controls.insert(cell, c);
+        };
+        // The module chip: its name in a pill, lit when chosen.
+        let head = Lettering::family(family::OSWALD).weight(600.0);
+        let (cw, ch) = (170.0, 32.0);
+        let cell = b.add(root, draw::frame("Drive → Amp", 16.0, (H - ch) / 2.0 - 3.0, cw, ch + 6.0));
+        b.add(cell, draw::stroked(draw::rounded(draw::rect("pill", 0.0, 0.0, cw, ch, draw::solid("#00000000")), ch / 2.0), "#ffffff30", 1.0));
+        let lit = b.add(cell, draw::frame("lit", 0.0, 0.0, cw, ch + 6.0));
+        b.add(lit, draw::rounded(draw::rect("fill", 0.0, 0.0, cw, ch, draw::solid("#ffffff1c")), ch / 2.0));
+        b.add(lit, draw::circle("dot", cw / 2.0, ch + 3.5, 2.6, draw::solid(INK)));
+        set(b, cell, "DRIVE → AMP", cw / 2.0, ch / 2.0, 13.0, INK, &head, 0.12);
+        select(b, cell, lit, 0);
+        // The sections.
+        let (s, gap) = (26.0, 40.0);
+        let x0 = 16.0 + cw + 48.0;
+        for (i, sec) in Section::ALL.iter().enumerate() {
+            let x = x0 + i as f64 * (s + gap);
+            let cell = b.add(root, draw::frame(sec.title(), x - gap / 2.0 + s / 2.0 - 22.0, 0.0, 44.0, H));
+            let ox = 22.0 - s / 2.0;
+            sec.icon(b, cell, (ox, 8.0, s), DIM);
+            let lit = b.add(cell, draw::frame("lit", 0.0, 0.0, 44.0, H));
+            sec.icon(b, lit, (ox, 8.0, s), INK);
+            b.add(lit, draw::circle("dot", 22.0, 8.0 + s + 8.0, 2.6, draw::solid(INK)));
+            select(b, cell, lit, i as u32 + 1);
+        }
+        let small = Lettering::family(family::INTER).weight(700.0);
+        set(b, root, "BLUES RIG", W - 70.0, H / 2.0, 11.0, "#ffffff70", &small, 0.2);
+    });
+    let params = vec![ui::choice("rig/section", "Section", &VIEWS, 0)];
+    Face { file: "00-section-bar", plugin: PLUGIN, scene, params, streams: Vec::new() }
+}
+
+/// A row of the Control view on a 14" laptop, width : height (1126 × 260).
+const ROW_ASPECT: f64 = 4.33;
+
+/// The Drives row: the four on a board, no bar, spread to the row's
+/// proportion so the pedals are as tall as the row allows.
+#[must_use]
+pub fn row_drives() -> Face {
+    let pedals = drives::all();
+    let h = 286.0 + 50.0;
+    let w = h * ROW_ASPECT;
+    let gap = (w - 80.0 - row_width(&pedals, 0.0, 1.0)) / (pedals.len() as f64 - 1.0);
+    let scene = canvas("Drives row", |b, root| {
+        page(b, root, w, h);
+        board(b, root, (10.0, 8.0, w - 20.0, h - 16.0));
+        row(b, root, &pedals, 40.0, h - 22.0, gap, 1.0);
+    });
+    let params = params_of(&pedals.iter().collect::<Vec<_>>());
+    Face { file: "31-row-drives", plugin: PLUGIN, scene, params, streams: Vec::new() }
+}
+
+/// The Amp/Cab row: the head on the left, the cab (at the head's height)
+/// on its right, the gate right of the cab, and the mics' rail after it —
+/// all on one floor.
+#[must_use]
+pub fn row_amp_cab() -> Face {
+    let ac = AmpCab::new();
+    let (hw, hh) = face_size(&ac.head);
+    let cab = amp_cab::cab_sized(1200.0, hh);
+    let (cw, ch) = face_size(&cab);
+    let (gw, gh) = face_size(&ac.gate);
+    let (m, gap, rail_w) = (24.0, 36.0, 230.0);
+    let w = m + hw + gap + cw + gap + gw + gap + rail_w + m;
+    let h = m + ch.max(hh) + m;
+    let scene = canvas("Amp / Cab row", |b, root| {
+        page(b, root, w, h);
+        let floor = h - m;
+        embed(b, root, &ac.head, (m, floor - hh, hw, hh));
+        let cx = m + hw + gap;
+        embed(b, root, &cab, (cx, floor - ch, cw, ch));
+        let gx = cx + cw + gap;
+        embed(b, root, &ac.gate, (gx, floor - gh, gw, gh));
+        amp_cab::cab_rail(b, root, (gx + gw + gap, m + 30.0, rail_w), 4);
+    });
+    let mut faces = ac.faces();
+    faces.push(&cab);
+    let params = params_of(&faces);
+    Face { file: "32-row-amp-cab", plugin: PLUGIN, scene, params, streams: Vec::new() }
+}
+
 /// Every blues-rig page, then the units.
 #[must_use]
 pub fn faces() -> Vec<Face> {
-    let mut v = vec![drives_page(), drives_phone(), amp_cab_page(), amp_cab_phone(), module_drive_amp()];
+    let mut v = vec![drives_page(), drives_phone(), amp_cab_page(), amp_cab_phone(), module_drive_amp(), section_bar_page(), row_drives(), row_amp_cab()];
     v.extend(drives::all());
     v.push(amp_cab::cab());
     v.push(amp_cab::gate());
