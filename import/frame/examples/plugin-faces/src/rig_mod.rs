@@ -22,15 +22,13 @@ use crate::reverb::ui;
 use crate::rig_time::kit;
 
 pub const W: f64 = 480.0;
-pub const H: f64 = 150.0;
+pub const H: f64 = 168.0;
 pub const MOD: &str = "mod";
 pub const MOTION: &str = "motion";
 /// Modulation light blue, Motion pink (Signal's group colours).
 pub const SKY: &str = "#7dd3fc";
 pub const PINK: &str = "#ec4899";
 use crate::rig_faces::PLUGIN;
-const INK: &str = "#e8eef6";
-const DIM: &str = "#7f8a9c";
 
 /// `chorus::EngineType` order.
 pub const MOD_ENGINES: [&str; 11] = ["Cubic", "BBD", "Tape", "Orbit", "Juno", "CE-2", "Dimension", "Clone", "Tri-Chorus", "SCF", "Julia"];
@@ -86,106 +84,159 @@ fn vibrato_params() -> Vec<ParamInfo> {
     ]
 }
 
-/// A panel's canvas: `build` draws into the root, already `W` × `H`.
-fn panel(name: &str, build: impl FnOnce(&mut Builder<'_>, NodeId)) -> document_proto::Scene {
-    canvas(name, |b, root| {
+/// How a face is finished: its panel, its picture's window, its inks and
+/// its knobs. Each effect has its own, so the chorus and the tremolo can't
+/// be mistaken for each other.
+struct Theme {
+    panel: [(f64, &'static str); 2],
+    edge: &'static str,
+    window: [(f64, &'static str); 2],
+    ink: &'static str,
+    dim: &'static str,
+    accent: &'static str,
+    knob: &'static str,
+    skirt: &'static str,
+    bypass: &'static str,
+}
+
+/// A face's canvas: `build` draws into the panel, already `W` × `H`. The
+/// top-right corner ([`CORNER`]) is left for Signal's switcher pill.
+fn panel(name: &str, t: &Theme, build: impl FnOnce(&mut Builder<'_>, NodeId)) -> document_proto::Scene {
+    let (fill, edge) = (t.panel, t.edge);
+    canvas(name, move |b, root| {
         ui::fit_root(b, root, W, H);
         let mut p = draw::frame("Panel", 0.0, 0.0, W, H);
-        p.fills = vec![draw::linear(180.0, &[(0.0, "#121821"), (1.0, "#0a0e14")])];
+        p.fills = vec![draw::linear(180.0, &fill)];
         p.corner_radii = document_proto::CornerRadii::uniform(8.0);
-        let p = b.add(root, draw::with_effects(draw::stroked(p, "#232c3a", 1.0), vec![draw::inner_shadow("#ffffff14", 0.0, 1.0, 0.0)]));
+        let p = b.add(root, draw::with_effects(draw::stroked(p, edge, 1.0), vec![draw::inner_shadow("#ffffff26", 0.0, 1.0, 0.0)]));
         build(b, p);
     })
 }
 
-/// The picture's window, (`x`, `y`, `w`, `h`), clipped.
-fn view(b: &mut Builder<'_>, parent: NodeId, (x, y, w, h): (f64, f64, f64, f64)) -> NodeId {
+/// The picture's window on the right, clipped.
+fn view(b: &mut Builder<'_>, parent: NodeId, t: &Theme) -> (NodeId, f64, f64) {
+    let (x, y, w, h) = (VIEW_X, 8.0, W - VIEW_X - 8.0, H - 16.0);
     let mut v = draw::frame("View", x, y, w, h);
-    v.fills = vec![draw::linear(180.0, &[(0.0, "#080c12"), (1.0, "#05080c")])];
+    v.fills = vec![draw::linear(180.0, &t.window)];
     v.clips_content = true;
     v.corner_radii = document_proto::CornerRadii::uniform(6.0);
-    v.effects = vec![draw::inner_shadow("#000000b0", 0.0, 2.0, 6.0)];
-    b.add(parent, v)
+    v.effects = vec![draw::inner_shadow("#00000080", 0.0, 2.0, 6.0)];
+    (b.add(parent, v), w, h)
 }
 
-/// The name, light, over its line of description, at (`x`, `y`).
-fn title(b: &mut Builder<'_>, parent: NodeId, name: &str, sub: &str, (x, y): (f64, f64), color: &str) {
+/// The picture's window starts here; left of it, the name and the knobs.
+const VIEW_X: f64 = 200.0;
+
+/// The left column: the name, light, its line of description, the On key
+/// beside the name, and the knobs in a row under them.
+fn column(b: &mut Builder<'_>, p: NodeId, t: &Theme, ns: &str, name: &str, sub: &str, list: &[(&str, &str)]) {
     let sans = draw::Lettering::family(draw::family::INTER).weight(300.0);
-    let w = name.chars().count() as f64 * 11.0;
-    crate::suite_studio_blues::parts::set(b, parent, name, x + w / 2.0, y, 20.0, INK, &sans, 0.02);
-    ui::silk_left(b, parent, sub, x, y + 17.0, 6.0, DIM, 700.0);
-    ui::rule(b, parent, x, y + 25.0, 150.0, 1.0, &ui::alpha(color, 0.55));
-}
-
-/// Knobs in a row from `x`, `step` apart, centred on `cy`.
-fn knobs(b: &mut Builder<'_>, parent: NodeId, ns: &str, list: &[(&str, &str)], (x, cy): (f64, f64), step: f64, color: &str) {
-    let pointer = format!("pointer={color}");
-    let opts = ["color=#1a2230", pointer.as_str(), "index=line", "index_w=0.1", "skirt=plain", "skirt_color=#0a0e14"];
+    let w = name.chars().count() as f64 * 11.5;
+    crate::suite_studio_blues::parts::set(b, p, name, 14.0 + w / 2.0, 30.0, 21.0, t.ink, &sans, 0.02);
+    ui::silk_left(b, p, sub, 14.0, 49.0, 6.0, t.dim, 700.0);
+    ui::rule(b, p, 14.0, 57.0, VIEW_X - 30.0, 1.0, &ui::alpha(t.accent, 0.6));
+    kit::bypass(b, p, ns, VIEW_X - 30.0, 30.0, 22.0, t.bypass, "On");
+    let pointer = format!("pointer={}", t.accent);
+    let color = format!("color={}", t.knob);
+    let skirt = format!("skirt_color={}", t.skirt);
+    let opts = [color.as_str(), pointer.as_str(), "index=line", "index_w=0.1", "skirt=plain", skirt.as_str()];
+    let step = ((VIEW_X - 30.0) / list.len() as f64).min(46.0);
     for (i, (id, legend)) in list.iter().enumerate() {
-        kit::knob3d(b, parent, &a(ns, id), legend, 28.0, (x + step * i as f64, cy), &opts, INK, DIM);
+        kit::knob3d(b, p, &a(ns, id), legend, 28.0, (14.0 + step * (i as f64 + 0.5), 100.0), &opts, t.ink, t.dim);
     }
-}
-
-/// The engine's name, lit, at (`x`, `cy`) — `ns/engine` or `ns/mode`.
-fn lit_name(b: &mut Builder<'_>, parent: NodeId, addr: &str, (x, cy, w): (f64, f64, f64), color: &str) -> NodeId {
-    crate::delay::parts::readout(b, parent, &format!("{addr} name"), ui::bind(addr), (x, cy, w), 8.0, color, document_proto::TextAlign::Left)
 }
 
 // ── Chorus ───────────────────────────────────────────────────────────────
 
-/// The chorus: the note's wave, bright, and its voices — copies of it,
-/// each drifting ahead and behind on the LFO (the depth how far, the rate
-/// how fast), spread apart with the width and as strong as the mix. The
-/// thickening you hear, as you see it.
+/// Light and airy: an ice-blue panel, a bright window.
+const CHORUS: Theme = Theme {
+    panel: [(0.0, "#eaf6fd"), (1.0, "#cfe6f4")],
+    edge: "#a9cde4",
+    window: [(0.0, "#fbfeff"), (1.0, "#e2f2fb")],
+    ink: "#12314a",
+    dim: "#5d7d96",
+    accent: "#0ea5e9",
+    knob: "#f8fbfd",
+    skirt: "#9cc3dc",
+    bypass: "blue",
+};
+
+/// The chorus: the note's wave, dark, and its voices — copies of it in
+/// blues, each drifting ahead and behind on the LFO (the depth how far,
+/// the rate how fast), spread apart with the width and as strong as the
+/// mix. The thickening you hear, as you see it: light through water.
 fn chorus() -> Face {
-    let scene = panel("Chorus", |b, p| {
-        let (vx, vy, vw, vh) = (10.0, 10.0, 270.0, H - 20.0);
-        let v = view(b, p, (vx, vy, vw, vh));
-        let mid = vh / 2.0;
-        let period = 64.0;
+    let t = &CHORUS;
+    let scene = panel("Chorus", t, |b, p| {
+        let (v, vw, vh) = view(b, p, t);
+        let mid = vh / 2.0 + 6.0;
+        let period = 70.0;
         let wave = |amp: f64| -> Vec<(f64, f64)> {
             (0..=160).map(|k| {
                 let x = -period + (vw + 2.0 * period) * f64::from(k) / 160.0;
                 (x, mid - amp * (x / period * std::f64::consts::TAU).sin())
             }).collect()
         };
-        // The voices, behind.
-        let voices = [(-1.0, 0.0), (1.0, 2.1), (-0.5, 4.2), (0.5, 1.3)];
-        for (i, (spread, phase)) in voices.iter().enumerate() {
+        // Soft caustics behind: light through water.
+        for i in 0..5 {
+            let f = f64::from(i);
+            let c = b.add(v, draw::circle("caustic", 40.0 + f * 58.0, mid + 18.0 * (f * 1.7).sin(), 38.0, draw::radial_at(0.5, 0.5, 0.5, &[(0.0, "#7dd3fc40"), (1.0, "#7dd3fc00")])));
+            motion::add(b, c, Motion::new(Target::X).input(format!("0.5 + 0.5 * sin(time * 0.4 + {f})")).range(-10.0, 10.0));
+        }
+        // The voices: each its own blue.
+        let voices = [(-1.0, 0.0, "#0ea5e9"), (1.0, 2.1, "#38bdf8"), (-0.5, 4.2, "#6366f1"), (0.5, 1.3, "#22d3ee")];
+        for (i, (spread, phase, color)) in voices.iter().enumerate() {
             let g = b.add(v, draw::frame(&format!("voice {i}"), 0.0, 0.0, vw, vh));
-            b.add(g, ui::glowing(ui::strokes("voice", &[wave(26.0)], 1.4, draw::solid(SKY)), SKY, 0.5, 4.0));
-            let drift = format!("0.5 + 0.5 * sin(6.2832 * time * param({MOD}/rate) + {phase}) ");
-            let reach = 4.0 + 12.0 * f64::from(u8::from(i < 4));
-            motion::add(b, g, Motion::new(Target::X).input(format!("{drift} * norm({MOD}/depth) + 0.5 * (1 - norm({MOD}/depth))")).range(-reach, reach));
-            motion::add(b, g, Motion::new(Target::Y).input(format!("0.5 + 0.5 * {spread} * norm({MOD}/width)")).range(-14.0, 14.0).dynamics(Dynamics::spring(200.0, 26.0)));
-            motion::add(b, g, Motion::new(Target::Opacity).input(format!("(0.25 + 0.75 * param({MOD}/mix)) * (0.2 + 0.8 * param({MOD}/on))")).range(0.0, 0.7));
+            b.add(g, ui::strokes("voice", &[wave(30.0)], 2.2, draw::solid(color)));
+            let drift = format!("0.5 + 0.5 * sin(6.2832 * time * param({MOD}/rate) + {phase})");
+            motion::add(b, g, Motion::new(Target::X).input(format!("{drift} * norm({MOD}/depth) + 0.5 * (1 - norm({MOD}/depth))")).range(-16.0, 16.0));
+            motion::add(b, g, Motion::new(Target::Y).input(format!("0.5 + 0.5 * {spread} * norm({MOD}/width)")).range(-16.0, 16.0).dynamics(Dynamics::spring(200.0, 26.0)));
+            motion::add(b, g, Motion::new(Target::Opacity).input(format!("(0.25 + 0.75 * param({MOD}/mix)) * (0.2 + 0.8 * param({MOD}/on))")).range(0.0, 0.75));
         }
         // The note, in front.
-        b.add(v, ui::strokes("dry", &[wave(26.0)], 1.8, draw::solid(INK)));
-        ui::silk_left(b, v, "Dry", 8.0, 10.0, 5.5, DIM, 800.0);
-        ui::silk_left(b, v, "Voices", 30.0, 10.0, 5.5, SKY, 800.0);
-
-        let x0 = 296.0;
-        title(b, p, "Chorus", "Voices · detune · width", (x0, 26.0), SKY);
-        lit_name(b, p, &a(MOD, "engine"), (x0 + 110.0, 26.0, 70.0), SKY);
-        knobs(b, p, MOD, &[("rate", "Rate"), ("depth", "Depth"), ("width", "Width"), ("mix", "Mix")], (x0 + 18.0, 88.0), 44.0, SKY);
+        b.add(v, ui::strokes("dry", &[wave(30.0)], 2.0, draw::solid(t.ink)));
+        ui::silk_left(b, v, "Dry", 10.0, 12.0, 5.5, t.ink, 800.0);
+        ui::silk_left(b, v, "Voices", 30.0, 12.0, 5.5, t.accent, 800.0);
+        column(b, p, t, MOD, "Chorus", "Voices · detune · width", &[("rate", "Rate"), ("depth", "Depth"), ("width", "Width"), ("mix", "Mix")]);
     });
     Face { file: "100-mod-chorus", plugin: PLUGIN, scene, params: chorus_params(), streams: Vec::new() }
 }
 
 // ── Tremolo ──────────────────────────────────────────────────────────────
 
-/// The tremolo: its lamp — the volume now, pulsing — and the volume's
-/// curve rolling past it, as deep as the depth and as fast as the rate.
-/// Stereo and Harmonic show the second side (or band) against it.
+/// A neon sign on black brick.
+const TREMOLO: Theme = Theme {
+    panel: [(0.0, "#1a0b14"), (1.0, "#0c0509")],
+    edge: "#3a1328",
+    window: [(0.0, "#12060d"), (1.0, "#070205")],
+    ink: "#ffe4f1",
+    dim: "#b07896",
+    accent: PINK,
+    knob: "#24121c",
+    skirt: "#0c0509",
+    bypass: "red",
+};
+
+/// The tremolo, as neon: a ring that brightens and fades with the volume
+/// now, and the volume's curve as a neon tube rolling out of it, as deep
+/// as the depth and as fast as the rate. Stereo and Harmonic light a
+/// second ring and tube against the first.
 fn tremolo() -> Face {
-    let scene = panel("Tremolo", |b, p| {
-        let (vx, vy, vw, vh) = (10.0, 10.0, 290.0, H - 20.0);
-        let v = view(b, p, (vx, vy, vw, vh));
-        let (lamp_x, top, bottom) = (40.0, 22.0, vh - 20.0);
-        let period = 60.0;
-        // The curve: the gain between 1 (top) and 1 − depth, one LFO cycle
-        // `period` wide, rolling left as the rate runs.
+    let t = &TREMOLO;
+    let scene = panel("Tremolo", t, |b, p| {
+        let (v, vw, vh) = view(b, p, t);
+        // Brick behind the sign, barely lit.
+        let mut rows: Vec<Vec<(f64, f64)>> = (1..8).map(|i| vec![(0.0, f64::from(i) * 19.0), (vw, f64::from(i) * 19.0)]).collect();
+        for r in 0..8 {
+            for k in 0..8 {
+                let x = f64::from(k) * 40.0 + if r % 2 == 0 { 0.0 } else { 20.0 };
+                rows.push(vec![(x, f64::from(r) * 19.0), (x, f64::from(r + 1) * 19.0)]);
+            }
+        }
+        b.add(v, ui::strokes("brick", &rows, 1.0, draw::solid("#ffffff0a")));
+        // Full volume sits under the corner pill's height, clear of it.
+        let (lamp_x, top, bottom) = (46.0, 44.0, vh - 18.0);
+        let period = 64.0;
         let span = vw - lamp_x;
         let curve = |phase: f64| -> Vec<(f64, f64)> {
             (0..=180).map(|k| {
@@ -194,49 +245,60 @@ fn tremolo() -> Face {
                 (x, top + (bottom - top) * (1.0 - g))
             }).collect()
         };
-        for (side, phase, color, label) in [(0_u8, 0.0, PINK, "L"), (1, 0.5, "#f9a8d4", "R")] {
-            let mut clip = draw::frame(&format!("curve {label} window"), lamp_x, 0.0, span, vh);
+        for (side, phase, color) in [(0_u8, 0.0, PINK), (1, 0.5, "#c084fc")] {
+            let mut clip = draw::frame("tube window", lamp_x, 0.0, span, vh);
             clip.clips_content = true;
             let clip = b.add(v, clip);
-            let roll = b.add(clip, draw::frame(&format!("curve {label}"), 0.0, 0.0, span + period, vh));
-            b.add(roll, ui::glowing(ui::strokes("gain", &[curve(phase)], 1.8, draw::solid(color)), color, 0.6, 4.0));
+            let roll = b.add(clip, draw::frame("tube", 0.0, 0.0, span + period, vh));
+            // The tube: a hot core in a wide glow.
+            b.add(roll, draw::emissive(ui::strokes("glow", &[curve(phase)], 5.0, draw::solid(&ui::alpha(color, 0.35))), draw::hex(color), 0.9, 10.0));
+            b.add(roll, ui::strokes("core", &[curve(phase)], 1.6, draw::solid("#fff0f7")));
             motion::add(b, roll, Motion::new(Target::X).input(format!("fract(time * param({MOTION}/rate) * param({MOTION}/on))")).range(0.0, -period));
             motion::add(b, roll, Motion::new(Target::StretchY).input(format!("norm({MOTION}/depth)")).range(0.02, 1.0).pivot(0.5, top / vh).dynamics(Dynamics::spring(220.0, 26.0)));
             if side == 1 {
-                // The second side shows in Stereo and Harmonic.
-                motion::add(b, roll, Motion::new(Target::Opacity).input(format!("clamp(param({MOTION}/mode), 0, 1)")).range(0.0, 0.8));
+                motion::add(b, clip, Motion::new(Target::Opacity).input(format!("clamp(param({MOTION}/mode), 0, 1)")).range(0.0, 0.9));
+            }
+            // The ring: this side's volume now.
+            let (ry, ph) = (vh / 2.0 + if side == 0 { -18.0 } else { 18.0 }, if side == 0 { 0.0 } else { 3.1416 });
+            let ring = b.add(v, draw::frame("ring", lamp_x - 22.0, ry - 22.0, 44.0, 44.0));
+            let mut c = draw::stroked(draw::circle("neon ring", 22.0, 22.0, 15.0, draw::solid("#00000000")), "#fff0f7", 2.2);
+            c.fills.clear();
+            b.add(ring, draw::emissive(c, draw::hex(color), 1.0, 14.0));
+            let now = format!("(1 - norm({MOTION}/depth) * (0.5 - 0.5 * cos(6.2832 * time * param({MOTION}/rate) + {ph}))) * param({MOTION}/on)");
+            motion::add(b, ring, Motion::new(Target::Opacity).input(now).range(0.08, 1.0));
+            if side == 1 {
+                motion::add(b, ring, Motion::new(Target::Opacity).input(format!("clamp(param({MOTION}/mode), 0, 1)")).range(0.0, 1.0));
             }
         }
-        // Full volume and the floor, faint.
-        b.add(v, ui::strokes("full", &[vec![(lamp_x, top), (vw, top)]], 0.8, draw::solid("#ffffff1a")));
-        ui::silk_left(b, v, "Volume", lamp_x + 4.0, top - 8.0, 5.5, DIM, 800.0);
-        // The lamp: the volume now.
-        let lamp = b.add(v, draw::frame("lamp", lamp_x - 20.0, vh / 2.0 - 20.0, 40.0, 40.0));
-        b.add(lamp, draw::emissive(draw::circle("glow", 20.0, 20.0, 11.0, draw::radial_at(0.45, 0.4, 0.7, &[(0.0, "#ffe4f2"), (0.6, PINK), (1.0, "#9d174d")])), draw::hex(PINK), 1.0, 14.0));
-        let now = format!("(1 - norm({MOTION}/depth) * (0.5 - 0.5 * cos(6.2832 * time * param({MOTION}/rate)))) * param({MOTION}/on)");
-        motion::add(b, lamp, Motion::new(Target::Opacity).input(now.clone()).range(0.12, 1.0));
-        motion::add(b, lamp, Motion::new(Target::Scale).input(now).range(0.75, 1.0));
-        b.add(v, ui::strokes("now", &[vec![(lamp_x, 8.0), (lamp_x, vh - 8.0)]], 0.8, draw::solid(&ui::alpha(PINK, 0.35))));
-
-        let x0 = 316.0;
-        title(b, p, "Tremolo", "Volume · rate · depth", (x0, 26.0), PINK);
-        lit_name(b, p, &a(MOTION, "mode"), (x0 + 110.0, 26.0, 50.0), PINK);
-        knobs(b, p, MOTION, &[("rate", "Rate"), ("depth", "Depth"), ("mix", "Mix")], (x0 + 22.0, 88.0), 52.0, PINK);
+        ui::silk_left(b, v, "Volume", lamp_x + 6.0, vh - 8.0, 5.5, t.dim, 800.0);
+        column(b, p, t, MOTION, "Tremolo", "Volume · rate · depth", &[("rate", "Rate"), ("depth", "Depth"), ("mix", "Mix")]);
     });
     Face { file: "101-motion-tremolo", plugin: PLUGIN, scene, params: trem_params(), streams: Vec::new() }
 }
 
 // ── Vibrato ──────────────────────────────────────────────────────────────
 
+/// A tuner's dark plum.
+const VIBRATO: Theme = Theme {
+    panel: [(0.0, "#1d1424"), (1.0, "#110b16")],
+    edge: "#33223f",
+    window: [(0.0, "#0d0911"), (1.0, "#07050a")],
+    ink: "#f5e8ff",
+    dim: "#9d86ad",
+    accent: PINK,
+    knob: "#241a2c",
+    skirt: "#0c0810",
+    bypass: "red",
+};
+
 /// The vibrato: pitch, as a tuner reads it — the needle swinging sharp and
 /// flat about the note, as far as the depth and as fast as the rate — over
 /// the wave it bends, its cycles crowding and spreading.
 fn vibrato() -> Face {
-    let scene = panel("Vibrato", |b, p| {
-        let (vx, vy, vw, vh) = (10.0, 10.0, 290.0, H - 20.0);
-        let v = view(b, p, (vx, vy, vw, vh));
-        // The tuner's scale: flat to sharp, the note at the top.
-        let (cx, cy, r) = (vw / 2.0, vh + 30.0, 120.0);
+    let t = &VIBRATO;
+    let scene = panel("Vibrato", t, |b, p| {
+        let (v, vw, vh) = view(b, p, t);
+        let (cx, cy, r) = (vw / 2.0, vh + 34.0, 130.0);
         let arc: Vec<(f64, f64)> = (0..=48).map(|i| draw::polar(cx, cy, r, -40.0 + 80.0 * f64::from(i) / 48.0)).collect();
         b.add(v, ui::strokes("scale", &[arc], 1.0, draw::solid("#ffffff33")));
         for i in -4..=4 {
@@ -244,27 +306,21 @@ fn vibrato() -> Face {
             let (len, col) = if i == 0 { (14.0, PINK) } else { (7.0, "#ffffff4d") };
             b.add(v, ui::strokes("tick", &[vec![draw::polar(cx, cy, r, ang), draw::polar(cx, cy, r - len, ang)]], 1.2, draw::solid(col)));
         }
-        ui::silk(b, v, "Flat", cx - r * 0.78, cy - r * 0.6, 6.0, DIM, 800.0);
-        ui::silk(b, v, "Sharp", cx + r * 0.78, cy - r * 0.6, 6.0, DIM, 800.0);
-        // The needle: swinging as the pitch does.
+        ui::silk(b, v, "Flat", cx - r * 0.72, cy - r * 0.6, 6.0, t.dim, 800.0);
+        ui::silk(b, v, "Sharp", cx + r * 0.72, cy - r * 0.6, 6.0, t.dim, 800.0);
         let side = 2.0 * (r + 6.0);
         let needle = b.add(v, draw::frame("needle", cx - side / 2.0, cy - side / 2.0, side, side));
-        b.add(needle, ui::glowing(draw::rect("blade", side / 2.0 - 1.0, side / 2.0 - r + 2.0, 2.0, r - 44.0, draw::solid(PINK)), PINK, 0.8, 5.0));
+        b.add(needle, ui::glowing(draw::rect("blade", side / 2.0 - 1.0, side / 2.0 - r + 2.0, 2.0, r - 48.0, draw::solid(PINK)), PINK, 0.8, 5.0));
         let swing = format!("0.5 + 0.5 * sin(6.2832 * time * param({MOTION}/rate)) * norm({MOTION}/depth) * param({MOTION}/on)");
         motion::add(b, needle, Motion::new(Target::Rotate).input(swing.clone()).range(-38.0, 38.0).pivot(0.5, 0.5));
-        // The wave it bends: squeezed and stretched with the pitch.
         let wave: Vec<(f64, f64)> = (0..=160).map(|k| {
             let x = vw * f64::from(k) / 160.0;
             (x, vh - 22.0 - 9.0 * (x / 18.0 * std::f64::consts::TAU).sin())
         }).collect();
         let w = b.add(v, draw::frame("wave", 0.0, 0.0, vw, vh));
-        b.add(w, ui::strokes("wave", &[wave], 1.4, draw::solid(&ui::alpha(INK, 0.7))));
+        b.add(w, ui::strokes("wave", &[wave], 1.4, draw::solid(&ui::alpha(t.ink, 0.7))));
         motion::add(b, w, Motion::new(Target::StretchX).input(swing).range(1.12, 0.88).pivot(0.0, 0.5));
-
-        let x0 = 316.0;
-        title(b, p, "Vibrato", "Pitch · rate · depth", (x0, 26.0), PINK);
-        lit_name(b, p, &a(MOTION, "engine"), (x0 + 110.0, 26.0, 50.0), PINK);
-        knobs(b, p, MOTION, &[("rate", "Rate"), ("depth", "Depth"), ("mix", "Mix")], (x0 + 22.0, 88.0), 52.0, PINK);
+        column(b, p, t, MOTION, "Vibrato", "Pitch · rate · depth", &[("rate", "Rate"), ("depth", "Depth"), ("mix", "Mix")]);
     });
     Face { file: "102-motion-vibrato", plugin: PLUGIN, scene, params: vibrato_params(), streams: Vec::new() }
 }
