@@ -225,7 +225,7 @@ fn tight_drive() -> Face {
         // The gate: a small translucent knob with a blue lamp under it.
         let glow = surface_kit::draw::circle("gate glow", 78.0, 88.5, 14.0, surface_kit::draw::radial(&[(0.0, "#8fd0ffcc"), (0.55, "#3f8fe066"), (1.0, "#3f8fe000")]));
         b.add(p, parts::emit(glow, "#6fb8ff", 0.8, 14.0));
-        let gate = super::knob("fluted", 21.0, "#ffffff", &["color=#e9f1ff", "pointer=#1a2a44", "ticks=none", "spec=1.6"]);
+        let gate = super::knob("fluted", 21.0, "#ffffff", &["color=#e9f1ff", "pointer=#1a2a44", "ticks=none", "ribs=9", "rib_depth=0.1", "cap_r=0.96", "height=0.6", "rough=0.3", "coat=0.5", "spec=1.4", "index=line", "index_in=0.3", "index_out=0.9"]);
         rk::knob_l(b, p, &gate, &a("gate"), "Gate", (78.0, 88.5), 71.0, lg);
         let title = name(9.6, ink).track(0.2);
         rk::letter(b, p, "TIGHT", (w / 2.0, 124.5), title);

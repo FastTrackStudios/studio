@@ -39,19 +39,25 @@ pub const BLUE: &str = "#1f5fa3";
 /// The lit blue of the pedals' status LEDs.
 pub const LED_BLUE: &str = "#7cc4ff";
 
-/// The component every knob of the suite is placed as. One line to switch
-/// the whole suite to another knob (the GPU `knob.3d` when it lands).
-pub const KNOB_ID: &str = "knob.render";
+/// The component every knob of the suite is placed as: the GPU-rendered
+/// `knob.3d` (its vector fallback is `knob.render`).
+pub const KNOB_ID: &str = "knob.3d";
 
-/// The pedals' knob: a glossy black fluted cap with a white index line,
-/// `d` across.
+/// The pedals' knob: a tall glossy black cap of seven deep flutes, a white
+/// index line from the middle of its top toward the edge, `d` across.
 #[must_use]
 pub const fn pedal_knob(d: f64) -> rk::KnobStyle<'static> {
-    rk::KnobStyle::new(KNOB_ID, "fluted", d, "#ffffff").opts(&["color=#141416", "pointer=#f4f4f2", "ticks=none", "spec=1.4", "bevel=1.2"])
+    rk::KnobStyle::new(KNOB_ID, "fluted", d, "#ffffff").opts(PEDAL_KNOB)
 }
 
-/// A knob of the suite in any cap, colour and extra options (`knob.render`
-/// options: `color=`, `skirt=`, `ticks=`, …).
+/// [`pedal_knob`]'s `knob.3d` options.
+pub const PEDAL_KNOB: &[&str] = &[
+    "color=#0b0b0c", "pointer=#f4f4f2", "ticks=none", "ribs=7", "rib_depth=0.11", "cap_r=0.97", "height=0.6", "dome=0.1", "edge=0.16",
+    "rough=0.3", "coat=0.45", "spec=1.0", "index=line", "index_w=0.09", "index_in=0.12", "index_out=0.72",
+];
+
+/// A knob of the suite in any `knob.3d` preset, colour and extra options
+/// (`color=`, `profile=`, `skirt=`, `index=`, `ticks=`, …).
 #[must_use]
 pub const fn knob(cap: &'static str, d: f64, ink: &'static str, opts: &'static [&'static str]) -> rk::KnobStyle<'static> {
     rk::KnobStyle::new(KNOB_ID, cap, d, ink).opts(opts)

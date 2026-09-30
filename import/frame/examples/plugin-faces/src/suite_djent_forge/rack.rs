@@ -28,6 +28,13 @@ const MICS: &[&str] = &["Dynamic A", "Dyn A Off-Axis", "Dynamic B", "Condenser A
 /// The chrome's ink on its light stage.
 const CHROME_INK: &str = "#23262c";
 
+/// The EQ's filter knobs (`knob.3d` `stepped_cream`): a white cylinder with
+/// a lower step round its top, an orange dot on the rim for the index.
+const CUP: &[&str] = &[
+    "color=#f3f3f2", "pointer=#ef6a2c", "ticks=none", "rough=0.42", "height=0.34", "step_r=0.72", "step_h=0.05", "edge=0.07", "index_w=0.075",
+    "index_in=0.87", "index_out=0.87", "shadow=0.8", "fallback=domed",
+];
+
 /// A drop-down that picks one of a choice param's options: a rounded box
 /// printing the choice, a chevron; a `Selector` (wheel / arrows step it).
 fn dropdown(b: &mut Builder<'_>, parent: NodeId, name: &str, addr: &str, (x, y, w, h): (f64, f64, f64, f64), options: &[&str], dark: bool) -> NodeId {
@@ -78,8 +85,11 @@ fn pill(b: &mut Builder<'_>, parent: NodeId, name: &str, addr: &str, (cx, cy): (
     root
 }
 
-fn ring(b: &mut Builder<'_>, parent: NodeId, addr: &str, legend: &str, (cx, cy): (f64, f64), d: f64) -> NodeId {
-    let p = Place::new(legend).size(d).variant("light").legend(legend).bind(rk::bind(addr)).touch(TOUCH_MIN);
+fn ring(b: &mut Builder<'_>, parent: NodeId, addr: &str, legend: &str, (cx, cy): (f64, f64), d: f64, f: Option<ValueFormat>) -> NodeId {
+    let mut p = Place::new(legend).size(d).variant("light").legend(legend).bind(rk::bind(addr)).touch(TOUCH_MIN);
+    if let Some(f) = f {
+        p = p.format(f);
+    }
     parts::put(b, parent, "knob.plugin_ring", &p, cx, cy)
 }
 
@@ -144,10 +154,11 @@ fn mic_column(b: &mut Builder<'_>, root: NodeId, ns: &str, which: &str, x: f64, 
     let arc: Vec<(f64, f64)> = (0..=24).map(|i| draw::polar(gx, gy, gr, 35.0 + 290.0 * f64::from(i) / 24.0)).collect();
     rk::line(b, on, &arc, 1.6, CHROME_INK);
     rk::line(b, on, &[(gx, gy - gr - 1.5), (gx, gy - 1.0)], 1.6, CHROME_INK);
-    ring(b, root, &a("position"), "Position", (x + 38.0, 262.0), 58.0);
-    ring(b, root, &a("distance"), "Distance", (x + 124.0, 262.0), 58.0);
-    ring(b, root, &a("level"), "Mic Level", (x + 38.0, 380.0), 58.0);
-    ring(b, root, &a("pan"), "Pan", (x + 124.0, 380.0), 58.0);
+    ring(b, root, &a("position"), "Position", (x + 38.0, 262.0), 58.0, None);
+    ring(b, root, &a("distance"), "Distance", (x + 124.0, 262.0), 58.0, None);
+    ring(b, root, &a("level"), "Mic Level", (x + 38.0, 380.0), 58.0, Some(ValueFormat::decimals(1).signed()));
+    // Pan reads C at the centre.
+    ring(b, root, &a("pan"), "Pan", (x + 124.0, 380.0), 58.0, Some(ValueFormat::decimals(0).mark(0.0, "C")));
     rk::line(b, root, &[(x, 470.0), (x + 162.0, 470.0)], 1.0, "#aab1c8");
     latch(b, root, &format!("{label} phase"), &a("phase"), (x + 36.0, 800.0, 90.0, 32.0), "PHASE Ø");
 }
@@ -197,7 +208,7 @@ fn cab() -> Face {
         mic_column(b, root, ns, "b", 716.0, false);
         rk::print(b, root, "Room Send", (w / 2.0 - 18.0, 70.0), Ink::new(13.0, CHROME_INK).weight(700.0).track(0.06));
         pill(b, root, "Room send", &a("room"), (w / 2.0 + 62.0, 70.0));
-        ring(b, root, &a("room_level"), "Level", (w / 2.0, 118.0), 40.0);
+        ring(b, root, &a("room_level"), "Level", (w / 2.0, 118.0), 40.0, Some(ValueFormat::decimals(1).signed()));
         // A room column echoes the level under mic B, as the page does.
         rk::print(b, root, "Cab", (w / 2.0, 885.0), Ink::new(9.0, "#6b7392").weight(600.0).track(0.3));
     });
@@ -251,14 +262,14 @@ fn eq() -> Face {
         }
         let ink = Ink::new(11.5, "#6b6e75").weight(500.0).track(0.0).plain();
         // HPF and LPF: cup knobs with a value readout over them.
-        let filt = [("hpf", "HPF", 160.0, "M -26 10 L -14 -2 L 26 -2"), ("lpf", "LPF", 840.0, "M -26 -2 L 14 -2 L 26 10")];
-        for (addr, name, x, glyph) in filt {
-            let p = Place::new(name).size(80.0).variant("white").legend("").bind(rk::bind(&a(addr))).touch(TOUCH_MIN);
-            let k = parts::put(b, root, "knob.cup", &p, x, 128.0);
+        // Each reads OFF at its stop (HPF all the way down, LPF all the way up).
+        let filt = [("hpf", "HPF", 160.0, "M -26 10 L -14 -2 L 26 -2", 20.0), ("lpf", "LPF", 840.0, "M -26 -2 L 14 -2 L 26 10", 20_000.0)];
+        for (addr, name, x, glyph, stop) in filt {
+            let p = Place::new(name).size(80.0).variant("stepped_cream").options(CUP).legend("").bind(rk::bind(&a(addr))).touch(TOUCH_MIN);
+            let k = parts::put(b, root, super::KNOB_ID, &p, x, 128.0);
             parts::strip_legend(b, k);
-            let v = parts::value_at(b, k, 45.0, ink);
-            let _ = v;
-            parts::format(b, k, ValueFormat::decimals(0));
+            parts::value_at(b, k, 45.0, ink);
+            parts::format(b, k, ValueFormat::decimals(0).mark(stop, "OFF"));
             // The response glyph: a dotted slope into a flat line.
             let pts: Vec<(f64, f64)> = glyph
                 .split(" L ")
@@ -273,7 +284,7 @@ fn eq() -> Face {
             let p = Place { options: Some(vec!["w=15".into()]), ..Place::new(*label).size(134.0).variant("pearl").bind(rk::bind(&a(addr))).touch(TOUCH_MIN) };
             let s = parts::put_at(b, root, "lever.eq_slider", &p, x - TOUCH_MIN / 2.0, 59.0);
             parts::value_at(b, s, 45.0, ink);
-            parts::format(b, s, ValueFormat::decimals(1).unit("dB"));
+            parts::format(b, s, ValueFormat::decimals(1).unit("dB").signed());
             rk::label(b, s, label, (x, 210.0), ink);
             if i < 8 {
                 let dots: Vec<Vec<(f64, f64)>> = (0..7).map(|j| {
