@@ -10,12 +10,12 @@
 //!   rack, 1200 × 200.
 
 use document_proto::{CornerRadii, NodeId};
-use surface_kit::boutique::letters::Hand;
 use surface_kit::{Place, TOUCH_MIN, draw};
 use surface_proto::{Binding, Range, Unit};
 use surface_widgets::Builder;
 
-use super::parts::{PLUGIN, letter_in, print, print_left, scaled_knob, toggle};
+use super::parts::{Cap, PLUGIN, knob_scaled, marker, print, print_left, toggle};
+use surface_kit::materials::{light, paint};
 use crate::face::{Face, canvas};
 use crate::reverb::ui;
 
@@ -29,11 +29,15 @@ fn plate(b: &mut Builder<'_>, root: NodeId, h: f64) -> NodeId {
         b.add(root, draw::rounded(draw::rect("foot", x, h - 10.0, 100.0, 24.0, draw::linear(90.0, &[(0.0, "#8a5234"), (0.3, "#e8a57a"), (0.55, "#f6c9a4"), (1.0, "#7a4228")])), 4.0));
     }
     let mut p = draw::frame("Plate", 0.0, 0.0, W, h);
-    p.fills = vec![draw::linear(180.0, &[(0.0, "#363949"), (0.5, "#2e3140"), (1.0, "#262834")])];
     p.corner_radii = CornerRadii::uniform(22.0);
-    p.stroke = document_proto::Stroke { paints: vec![draw::linear(90.0, &[(0.0, "#a8664a"), (0.5, "#4a3434"), (1.0, "#a8664a")])], weight: 2.5, ..document_proto::Stroke::default() };
-    p.effects = vec![draw::drop_shadow("#000000c0", 0.0, 6.0, 14.0), draw::inner_shadow("#ffffff2a", 0.0, 2.0, 2.0), draw::inner_shadow("#00000070", 0.0, -3.0, 8.0)];
+    p.stroke = document_proto::Stroke { paints: vec![draw::linear(90.0, &[(0.0, "#b8704e"), (0.5, "#4a3434"), (1.0, "#b8704e")])], weight: 2.5, ..document_proto::Stroke::default() };
+    p.effects = vec![draw::drop_shadow("#000000c0", 0.0, 6.0, 14.0)];
     let p = b.add(root, p);
+    // Navy powder-coat steel, its rolled edge lit from the upper left.
+    paint::fill(b, p, (0.0, 0.0, W, h), 22.0, &paint::Material::Powder { color: "#30334a".into(), coarse: false });
+    for e in light::edge("plate edge", (0.0, 0.0, W, h), 22.0, 5.0, 1.1, true) {
+        b.add(p, e);
+    }
     for (x, y) in [(29.0, 29.0), (W - 29.0, 29.0), (29.0, h - 29.0), (W - 29.0, h - 29.0)] {
         b.add(p, draw::with_effects(draw::circle("screw", x, y, 9.0, draw::radial_at(0.4, 0.35, 0.9, &[(0.0, "#5a5f70"), (1.0, "#15171f")])), vec![draw::inner_shadow("#00000090", 0.0, 1.0, 2.0)]));
         b.add(p, draw::circle("screw head", x, y, 5.5, draw::radial_at(0.4, 0.35, 0.9, &[(0.0, "#8a8f9c"), (1.0, "#2a2d36")])));
@@ -56,6 +60,15 @@ fn slope(b: &mut Builder<'_>, parent: NodeId, cx: f64, cy: f64, rising: bool) {
     b.add(parent, ui::strokes("slope", &[pts], 1.8, draw::solid(INK)));
 }
 
+/// The filter knobs' lit rim: a teal lamp ring round the cap's foot,
+/// glowing through the gap between knob and plate.
+fn rim(b: &mut Builder<'_>, parent: NodeId, cx: f64, cy: f64, d: f64) {
+    let r = d / 2.0;
+    b.add(parent, draw::circle("rim halo", cx, cy + 1.5, r * 1.22, draw::radial(&[(0.0, "#2fd8c000"), (0.8, "#2fd8c000"), (0.87, "#2fd8c066"), (1.0, "#2fd8c000")])));
+    let ring = draw::stroked(draw::circle("rim", cx, cy + 1.0, r * 1.04, draw::solid("#00000000")), "#7ff4e0", 2.2);
+    b.add(parent, ring);
+}
+
 /// A frequency knob: address, name, its printed marks, range, x.
 type Band = (&'static str, &'static str, [&'static str; 9], f64, f64, f64);
 
@@ -74,21 +87,25 @@ pub fn eq() -> Face {
         let p = plate(b, root, H);
         for (addr, name, cx, rising) in [("eq/hpf", "High-pass", 117.0, true), ("eq/lpf", "Low-pass", 1081.0, false)] {
             print(b, p, "OFF", cx, 22.0, 11.0, INK, 500.0, 0.14);
-            scaled_knob(b, p, "knob.knurled_dome", "black", addr, name, 66.0, cx, 76.0, &[], INK);
+            rim(b, p, cx, 76.0, 66.0);
+            knob_scaled(b, p, Cap::DeskKnurl, addr, name, 62.0, cx, 76.0, &[], INK);
             slope(b, p, cx, 136.0, rising);
         }
         for (addr, name, scale, _, _, cx) in FREQS {
-            scaled_knob(b, p, "knob.knurled_dome", "black", addr, name, 56.0, cx, 70.0, &scale, INK);
+            knob_scaled(b, p, Cap::DeskKnurl, addr, name, 58.0, cx, 70.0, &scale, INK);
         }
         for (addr, name, cx) in GAINS {
-            scaled_knob(b, p, "knob.knurled_dome", "black", addr, name, 80.0, cx, 212.0, &DB, INK);
+            knob_scaled(b, p, Cap::DeskKnurl, addr, name, 84.0, cx, 212.0, &DB, INK);
             print(b, p, name, cx, 284.0, 11.5, INK, 600.0, 0.14);
         }
         bypass(b, p, "eq/on", 1081.0, 196.0, 256.0);
         // The unit's name, and a strip of white tape saying which amp.
         print_left(b, p, "EQ", 68.0, 262.0, 36.0, "#efe6e0", 600.0, 0.02);
         b.add(p, draw::rotated(draw::with_effects(draw::rect("tape", 60.0, 170.0, 118.0, 44.0, draw::linear(180.0, &[(0.0, "#f4f2ee"), (1.0, "#dcd9d2")])), vec![draw::drop_shadow("#00000080", 0.0, 2.0, 3.0)]), -12.0));
-        letter_in(b, p, "AMP 1", 119.0, 192.0, &Hand { size: 20.0, weight: 0.15, slant: 0.1, wobble: 0.05, tracking: 0.05 }, "#111111");
+        let amp = marker(b, p, "Amp 1", 119.0, 188.0, 26.0, "#111111");
+        if let Some(n) = b.scene.node_mut(amp) {
+            *n = draw::rotated(n.clone(), -12.0);
+        }
     });
     let mut params = vec![
         ui::param("eq/hpf", "High-pass", Range::log(20.0, 800.0, Unit::Hz), 20.0),
@@ -122,6 +139,10 @@ pub fn comp() -> Face {
     let scene = canvas("Desk Compressor", |b, root| {
         let p = plate(b, root, H);
         print_left(b, p, "COMPRESSOR", 56.0, 58.0, 48.0, "#efe6e0", 600.0, 0.06);
+        // Each lamp sits in a black socket, so an unlit lamp reads dark.
+        for i in 0..LADDER.len() {
+            b.add(p, draw::circle("socket", 62.0 + 23.07 * i as f64, 118.0, 4.6, draw::radial_at(0.5, 0.4, 1.0, &[(0.0, "#050507"), (1.0, "#15161c")])));
+        }
         let ladder = Place::new("Gain Reduction").size(23.1 * LADDER.len() as f64).scale(LADDER).options(&["gr", LADDER_COLORS]).reversed().ink(surface_kit::Ink::Color(INK.into())).keep_case().bind(Binding::stream("comp/gr"));
         let lad = ui::put(b, p, "meter.led_ladder", &ladder, 235.0, 118.0);
         for id in b.scene.walk(lad) {
@@ -138,16 +159,28 @@ pub fn comp() -> Face {
         print(b, p, "GAIN REDUCTION", 247.0, 162.0, 11.5, INK, 600.0, 0.16);
         // The framed box round the two dials, gapped for their names.
         let (x0, y0, x1, y1) = (629.0, 14.0, 1137.0, 178.0);
-        let mut boxy = draw::frame("box", x0, y0, x1 - x0, y1 - y0);
-        boxy.stroke = document_proto::Stroke { paints: vec![draw::solid(INK)], weight: 1.6, ..document_proto::Stroke::default() };
-        boxy.corner_radii = CornerRadii::uniform(14.0);
-        b.add(p, boxy);
+        // The box's rule: rounded corners, broken under each dial's name.
+        let r = 14.0;
+        let arc = |cx: f64, cy: f64, from: f64| -> Vec<(f64, f64)> {
+            (0..=8).map(|i| {
+                let a = (from + 90.0 * f64::from(i) / 8.0).to_radians();
+                (cx + r * a.cos(), cy + r * a.sin())
+            }).collect()
+        };
+        let (g1, g2) = (714.0, 933.0);
+        let mut ring = vec![(g1 - 48.0, y1), (x0 + r, y1)];
+        ring.extend(arc(x0 + r, y1 - r, 90.0));
+        ring.push((x0, y0 + r));
+        ring.extend(arc(x0 + r, y0 + r, 180.0));
+        ring.push((x1 - r, y0));
+        ring.extend(arc(x1 - r, y0 + r, 270.0));
+        ring.push((x1, y1 - r));
+        ring.extend(arc(x1 - r, y1 - r, 0.0));
+        ring.push((g2 + 48.0, y1));
+        b.add(p, ui::strokes("box", &[ring, vec![(g1 + 48.0, y1), (g2 - 48.0, y1)]], 1.6, draw::solid(INK)));
         for (addr, name, cx) in [("comp/input", "INPUT", 714.0), ("comp/output", "OUTPUT", 933.0)] {
-            b.add(p, draw::rect("gap", cx - 48.0, y1 - 3.0, 96.0, 6.0, draw::solid("#2e3140")));
             b.add(p, draw::rect("tick", cx - 0.8, y0 - 3.0, 1.6, 10.0, draw::solid(INK)));
-            let dial = Place::new(name).size(118.0).variant("black").bind(Binding::param(addr)).legend("").touch(TOUCH_MIN);
-            let k = ui::put(b, p, "knob.dial", &dial, cx, 94.0);
-            ui::strip_legend(b, k);
+            let k = knob_scaled(b, p, Cap::GreyDial, addr, name, 118.0, cx, 94.0, &["0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10"], INK);
             // The dial prints its own index above; this one reads against the box's tick.
             for id in b.scene.walk(k) {
                 if let Some(n) = b.scene.node_mut(id)

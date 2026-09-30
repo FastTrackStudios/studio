@@ -1,56 +1,77 @@
-//! The three amps, drawn straight on with their faceplates as the control
-//! surface (the plugin shows the same controls on a floating strip; here
-//! they live where the amp has them).
+//! The three amps, drawn straight on as their product renders show them —
+//! a tolex box with lit edges, metal corners, a handle and feet, a
+//! faceplate standing proud and a grille sat back (`materials::cabinet`) —
+//! with their faceplates as the control surface.
 //!
-//! - `clean-head` — a boutique clean head: brushed steel faceplate, chrome
-//!   skirted knobs with dotted scales, red slide switches, a diamond-piped
-//!   grille. Head, 1200 × 540.
-//! - `lead-head` — a lead head: black faceplate, black chicken-heads under
-//!   mini toggles, a script logo, basketweave grille, brown sides. Head,
-//!   1200 × 540.
-//! - `silk-combo` — a two-channel '60s combo: black faceplate, numbered
-//!   skirted knobs, wheat grille. Combo, 1000 × 770.
+//! - `clean-head` — a boutique clean head: an aged brushed-steel
+//!   faceplate, chrome caps on ribbed skirts, red slide switches, a heavy
+//!   slab-serif logo, red-and-green piped diamond grille cloth, black
+//!   corners. Head, 1200 × 548.
+//! - `lead-head` — a lead head: black faceplate, black bakelite
+//!   chicken-heads under mini toggles, a script logo with its model in gold
+//!   marker, black basketweave behind gold piping, a black handle. Head,
+//!   1200 × 548.
+//! - `silk-combo` — a two-channel '60s combo in brown tolex: a black
+//!   faceplate in a silver frame, black skirted knobs numbered round the
+//!   dial, a script logo, wheat-and-oxblood cloth. Combo, 1000 × 753.
 
-use document_proto::{CornerRadii, NodeId};
-use surface_kit::boutique::letters::Hand;
-use surface_kit::{Place, TOUCH_MIN, draw};
+use document_proto::{Node, NodeId};
+use surface_kit::draw::{self, Lettering, family};
+use surface_kit::materials::cabinet::{self, CabinetSpec, Handle, Kind};
+use surface_kit::materials::light;
+use surface_kit::materials::paint::{Cloth, Dir, Grain, Material};
+use surface_kit::{Place, TOUCH_MIN};
 use surface_proto::{Binding, Range, Unit};
 use surface_widgets::Builder;
 
-use super::parts::{self, PLUGIN, knob, letter_in, print};
+use super::parts::{self, Cap, PLUGIN, knob, knob_scaled, print, set};
 use crate::face::{Face, canvas};
 use crate::reverb::ui;
 
-/// A cabinet `w × h` of `tolex` filling `root`.
-fn cabinet(b: &mut Builder<'_>, root: NodeId, w: f64, h: f64, tolex: &str) -> NodeId {
-    ui::fit_root(b, root, w, h);
-    let p = Place { options: Some(vec![format!("w={w}"), format!("h={h}"), "r=16".into()]), ..Place::new("Cabinet").variant(tolex) };
-    ui::put_at(b, root, "panel.amp_cabinet", &p, 0.0, 0.0)
-}
-
-/// A grille cloth `variant` at (`x`, `y`), `w × h`, framed by `trim`.
-#[allow(clippy::too_many_arguments)]
-fn grille(b: &mut Builder<'_>, parent: NodeId, variant: &str, x: f64, y: f64, w: f64, h: f64, trim: Option<&str>, extra: &[&str]) -> NodeId {
-    let mut opts = vec![format!("w={w}"), format!("h={h}")];
-    opts.extend(extra.iter().map(ToString::to_string));
-    let p = Place { options: Some(opts), ..Place::new("Grille").variant(variant) };
-    let g = ui::put_at(b, parent, "panel.amp_grille", &p, x, y);
-    if let Some(t) = trim {
-        b.add(parent, draw::stroked(draw::rounded(draw::rect("piping", x - 2.0, y - 2.0, w + 4.0, h + 4.0, draw::solid("#00000000")), 3.0), t, 2.5));
+/// Build `spec` into `root` (sized to it); returns the faceplate and the
+/// grille frames and the faceplate's size.
+fn build(b: &mut Builder<'_>, root: NodeId, spec: &CabinetSpec) -> (NodeId, NodeId, (f64, f64)) {
+    ui::fit_root(b, root, spec.w, spec.h);
+    let c = cabinet::cabinet(b, root, "Cabinet", spec);
+    // These heads' handle brackets are blackened steel, like their corners.
+    if spec.handle == Handle::Leather {
+        let hh = spec.h * 0.09;
+        let bs = hh * 0.55;
+        for cx in [spec.w * 0.38 + hh * 0.15, spec.w * 0.62 - hh * 0.15] {
+            let br = draw::rounded(draw::rect("bracket", cx - bs * 0.6, hh - bs * 0.55, bs * 1.2, bs * 0.9, draw::linear(light::sheen_angle(), &[(0.0, "#6a6c70"), (0.45, "#2a2b2e"), (1.0, "#111214")])), bs * 0.25);
+            b.add(c.root, br);
+        }
     }
-    g
+    let size = b.scene.node(c.faceplate).map_or((0.0, 0.0), |n| (n.size.width, n.size.height));
+    (c.faceplate, c.grille, size)
 }
 
-/// An input jack: a chrome ring round a black bore.
+/// A cloth (the kit's woven grille) over the whole of `grille`, recessed.
+fn cloth(b: &mut Builder<'_>, grille: NodeId, variant: &str, extra: &[&str]) {
+    let (w, h) = b.scene.node(grille).map_or((0.0, 0.0), |n| (n.size.width, n.size.height));
+    let mut opts = vec![format!("w={w}"), format!("h={h}"), "r=0".into()];
+    opts.extend(extra.iter().map(ToString::to_string));
+    let p = Place { options: Some(opts), ..Place::new("Cloth").variant(variant) };
+    let g = ui::put_at(b, grille, "panel.amp_grille", &p, 0.0, 0.0);
+    // The recess is lit as an edge, not an inner shadow (a big effect layer).
+    if let Some(n) = b.scene.node_mut(g) {
+        n.effects.clear();
+    }
+    for e in light::edge("cloth recess", (0.0, 0.0, w, h), 2.0, 10.0, 1.2, false) {
+        b.add(grille, e);
+    }
+}
+
+/// An input jack: a chrome nut round a black bore.
 fn jack(b: &mut Builder<'_>, parent: NodeId, cx: f64, cy: f64, r: f64) {
-    b.add(parent, draw::with_effects(draw::circle("jack nut", cx, cy, r, draw::conic(0.0, &[(0.0, "#f0f0ec"), (0.25, "#77787a"), (0.5, "#e2e2de"), (0.75, "#5c5d60"), (1.0, "#f0f0ec")])), vec![draw::drop_shadow("#00000080", 0.0, 1.0, 2.0)]));
+    let (hx, hy) = light::hotspot();
+    b.add(parent, draw::with_effects(draw::circle("jack nut", cx, cy, r, draw::radial_at(hx, hy, 0.9, &[(0.0, "#fafaf8"), (0.5, "#9a9b9e"), (1.0, "#3e3f42")])), light::stand(1.5, 1.0)));
     b.add(parent, draw::circle("jack bore", cx, cy, r * 0.55, draw::radial_at(0.5, 0.4, 0.8, &[(0.0, "#2a2a2c"), (1.0, "#000000")])));
 }
 
 /// A slotted screw head.
 fn screw(b: &mut Builder<'_>, parent: NodeId, cx: f64, cy: f64, r: f64) {
-    b.add(parent, draw::with_effects(draw::circle("screw", cx, cy, r, draw::radial_at(0.35, 0.3, 0.9, &[(0.0, "#f4f4f0"), (0.6, "#9a9a96"), (1.0, "#4a4a48")])), vec![draw::drop_shadow("#00000070", 0.0, 0.6, 1.0)]));
-    b.add(parent, draw::rotated(draw::rect("slot", cx - r * 0.7, cy - r * 0.12, r * 1.4, r * 0.24, draw::solid("#2a2a28")), 35.0));
+    surface_kit::materials::enclosure::screw(b, parent, cx, cy, r);
 }
 
 /// The pilot/bypass jewel: a kit jewel on `addr`, its lamp flickering a
@@ -73,102 +94,115 @@ fn slide(b: &mut Builder<'_>, parent: NodeId, addr: &str, name: &str, variant: &
     ui::put(b, parent, "switch.mini_slide", &p, cx, cy)
 }
 
-fn pct(ns: &str, id: &str, name: &str) -> surface_proto::ParamInfo {
-    ui::param(&format!("{ns}/{id}"), name, Range::linear(0.0, 10.0, Unit::None), 5.0)
+fn pct(ns: &str, id: &str, name: &str, default: f64) -> surface_proto::ParamInfo {
+    ui::param(&format!("{ns}/{id}"), name, Range::linear(0.0, 10.0, Unit::None), default)
 }
 
-/// The monoline capitals the boutique head's panel is printed in.
-const fn panel_hand(size: f64) -> Hand {
-    Hand { size, weight: 0.12, slant: 0.0, wobble: 0.004, tracking: 0.1 }
+
+fn with_shadow(n: Node, a: &str) -> Node {
+    draw::with_effects(n, vec![draw::drop_shadow(a, 0.0, 1.0, 1.0)])
 }
 
 /// The boutique clean head.
 pub fn clean_head() -> Face {
     const W: f64 = 1200.0;
-    const H: f64 = 540.0;
-    const INK: &str = "#161616";
+    const H: f64 = 548.0;
+    const INK: &str = "#141414";
     let scene = canvas("Clean Head", |b, root| {
-        let cab = cabinet(b, root, W, H, "black");
-        // The brushed steel faceplate, speckled with age.
-        let (px, py, pw, ph) = (40.0, 36.0, W - 80.0, 132.0);
-        let mut plate = draw::frame("Faceplate", px, py, pw, ph);
-        plate.fills = vec![draw::linear(180.0, &[(0.0, "#d9dadb"), (0.5, "#c3c4c6"), (1.0, "#a9aaad")]), draw::linear(90.0, &[(0.0, "#ffffff00"), (0.3, "#ffffff22"), (0.55, "#ffffff00"), (0.8, "#ffffff18"), (1.0, "#ffffff00")])];
-        plate.corner_radii = CornerRadii::uniform(3.0);
-        plate.effects = vec![draw::drop_shadow("#000000a0", 0.0, 2.0, 4.0), draw::inner_shadow("#ffffff80", 0.0, 1.0, 0.5)];
-        let plate = b.add(cab, plate);
+        let mut spec = CabinetSpec::new(Kind::Head, W, H);
+        spec.covering = Material::Tolex { grain: Grain::Bronco, color: "#1d1c1c".into(), scale: 1.0 };
+        spec.grille = Material::DiamondGrille { cloth: "#161314".into(), stripes: vec!["#b8324a".into(), "#e6e2d6".into(), "#5f9e86".into()], pitch: 96.0 };
+        spec.face = Material::Brushed { color: "#c3c4c6".into(), dir: Dir::Horizontal };
+        spec.face_frac = 0.29;
+        spec.piping = Some("#b9babc".into());
+        spec.corners = Some("black".into());
+        spec.handle = Handle::Leather;
+        spec.handle_color = "#1e1c1b".into();
+        let (plate, _grille, (pw, ph)) = build(b, root, &spec);
+        // Age: grime specks and a few rust spots on the steel.
         let mut rng = 7_u64;
+        let mut next = |m: f64| {
+            rng = rng.wrapping_mul(6_364_136_223_846_793_005).wrapping_add(1);
+            ((rng >> 20) as f64 % 10_000.0) / 10_000.0 * m
+        };
         let mut specks = Vec::new();
-        for _ in 0..260 {
-            rng = rng.wrapping_mul(6_364_136_223_846_793_005).wrapping_add(1);
-            let x = (rng >> 20) as f64 % pw;
-            rng = rng.wrapping_mul(6_364_136_223_846_793_005).wrapping_add(1);
-            let y = (rng >> 20) as f64 % ph;
+        for _ in 0..320 {
+            let (x, y) = (next(pw), next(ph));
             specks.push(vec![(x, y), (x + 0.8, y + 0.5)]);
         }
-        b.add(plate, draw::with_opacity(ui::strokes("age", &specks, 1.3, draw::solid("#5a2a2a")), 0.35));
-        let hand = panel_hand(8.0);
-        let ky = 70.0;
-        let ly = 116.0;
-        // FET input and the normal input under it.
-        print(b, plate, "FET", 52.0, 20.0, 10.0, INK, 700.0, 0.05);
-        jack(b, plate, 78.0, 22.0, 9.0);
-        jack(b, plate, 78.0, 100.0, 9.0);
+        let mut rust = Vec::new();
+        for _ in 0..40 {
+            let (x, y) = (next(pw), next(ph));
+            rust.push(vec![(x, y), (x + 1.4, y + 0.9)]);
+        }
+        b.add(plate, draw::with_opacity(ui::strokes("age", &specks, 1.2, draw::solid("#3a3434")), 0.3));
+        b.add(plate, draw::with_opacity(ui::strokes("rust", &rust, 2.2, draw::solid("#8a2a1c")), 0.45));
+        let sy = ph / 132.0;
+        let sx = pw / 1120.0;
+        let (x, y) = (|v: f64| v * sx, |v: f64| v * sy);
+        // The panel's legends: a quirky display face, hand-set.
+        let legend = Lettering::family(family::PIRATA_ONE);
+        let small = Lettering::family(family::INTER).weight(500.0);
+        let ky = y(66.0);
+        let ly = y(112.0);
+        print(b, plate, "FET", x(48.0), y(24.0), 11.0, INK, 700.0, 0.02);
+        jack(b, plate, x(78.0), y(26.0), 9.0);
+        jack(b, plate, x(78.0), y(100.0), 9.0);
         let dots: &[&str] = &["", "", "", "", "", "", "", "", "", "", ""];
         let chrome = |b: &mut Builder<'_>, addr: &str, name: &str, cx: f64| {
-            parts::scaled_knob(b, plate, "knob.chrome_skirt", "chrome", addr, name, 50.0, cx, ky, dots, INK);
-            letter_in(b, plate, name, cx, ly, &hand, INK);
+            knob_scaled(b, plate, Cap::ChromeSkirt, addr, name, 52.0, x(cx), ky, dots, INK);
+            set(b, plate, name, x(cx), ly, 15.0, INK, &legend, 0.04);
         };
-        chrome(b, "clean/volume", "VOLUME", 128.0);
-        for (addr, name, top, bottom, cx) in [("clean/bright", "Bright", "BRIGHT", "", 180.0), ("clean/deep", "Deep", "DEEP", "", 225.0), ("clean/voice", "Guitar", "GUITAR", "MIC", 270.0)] {
-            print(b, plate, top, cx, 20.0, 6.5, INK, 500.0, 0.02);
-            screw(b, plate, cx, 34.0, 3.2);
-            slide(b, plate, addr, name, "red", 26.0, cx, ky);
-            screw(b, plate, cx, 104.0, 3.2);
+        chrome(b, "clean/volume", "VOLUME", 129.0);
+        for (addr, name, top, bottom, cx) in [("clean/bright", "Bright", "BRIGHT", "", 181.0), ("clean/deep", "Deep", "DEEP", "", 227.0), ("clean/voice", "Guitar", "GUITAR", "MIC", 273.0)] {
+            set(b, plate, top, x(cx), y(18.0), 7.0, INK, &small, 0.02);
+            screw(b, plate, x(cx), y(33.0), 3.2);
+            slide(b, plate, addr, name, "red", 26.0, x(cx), ky);
+            screw(b, plate, x(cx), y(100.0), 3.2);
             if !bottom.is_empty() {
-                print(b, plate, bottom, cx, 118.0, 6.5, INK, 500.0, 0.02);
+                set(b, plate, bottom, x(cx), y(116.0), 7.0, INK, &small, 0.02);
             }
         }
-        for (addr, name, cx) in [("clean/treble", "TREBLE", 324.0), ("clean/middle", "MIDDLE", 395.0), ("clean/bass", "BASS", 466.0), ("clean/high", "HIGH", 538.0), ("clean/low", "LOW", 609.0)] {
+        for (addr, name, cx) in [("clean/treble", "TREBLE", 327.0), ("clean/middle", "MIDDLE", 395.0), ("clean/bass", "BASS", 466.0), ("clean/high", "HIGH", 538.0), ("clean/low", "LOW", 609.0)] {
             chrome(b, addr, name, cx);
         }
-        letter_in(b, plate, "FILTER", 573.0, 16.0, &hand, INK);
-        print(b, plate, "ON", 663.0, 22.0, 6.5, INK, 500.0, 0.02);
-        screw(b, plate, 663.0, 36.0, 3.2);
-        slide(b, plate, "clean/reverb_on", "Reverb on", "red", 26.0, 663.0, ky);
-        screw(b, plate, 663.0, 104.0, 3.2);
-        print(b, plate, "OFF", 663.0, 118.0, 6.5, INK, 500.0, 0.02);
-        letter_in(b, plate, "REVERB", 752.0, 16.0, &hand, INK);
+        set(b, plate, "FILTER", x(573.0), y(14.0), 14.0, INK, &legend, 0.04);
+        set(b, plate, "ON", x(663.0), y(20.0), 7.0, INK, &small, 0.02);
+        screw(b, plate, x(663.0), y(34.0), 3.2);
+        slide(b, plate, "clean/reverb_on", "Reverb on", "red", 26.0, x(663.0), ky);
+        screw(b, plate, x(663.0), y(100.0), 3.2);
+        set(b, plate, "OFF", x(663.0), y(116.0), 7.0, INK, &small, 0.02);
+        set(b, plate, "REVERB", x(752.0), y(14.0), 14.0, INK, &legend, 0.04);
         chrome(b, "clean/send", "SEND", 716.0);
         chrome(b, "clean/return", "RETURN", 789.0);
-        print(b, plate, "MID", 839.0, 22.0, 6.5, INK, 500.0, 0.02);
-        screw(b, plate, 839.0, 36.0, 3.2);
-        slide(b, plate, "clean/mid", "Mid", "red", 26.0, 839.0, ky);
-        screw(b, plate, 839.0, 104.0, 3.2);
-        chrome(b, "clean/level", "LEVEL", 888.0);
-        // The logo: heavy slab capitals, hand-inked.
-        let logo = Hand { size: 20.0, weight: 0.2, slant: 0.12, wobble: 0.01, tracking: 0.06 };
-        letter_in(b, plate, "OPEN", 1015.0, 42.0, &logo, "#0e0e0e");
-        letter_in(b, plate, "ROOM", 1015.0, 72.0, &logo, "#0e0e0e");
-        letter_in(b, plate, "HAND WIRED", 1015.0, 104.0, &Hand { size: 9.0, weight: 0.12, slant: 0.0, wobble: 0.01, tracking: 0.14 }, "#1a1a1a");
-        jewel(b, cab, "clean/on", "red", 30.0, 1128.0, 104.0);
-        grille(b, cab, "diamond", 48.0, 182.0, W - 96.0, H - 222.0, None, &["rows=4"]);
+        set(b, plate, "MID", x(839.0), y(20.0), 7.0, INK, &small, 0.02);
+        screw(b, plate, x(839.0), y(34.0), 3.2);
+        slide(b, plate, "clean/mid", "Mid", "red", 26.0, x(839.0), ky);
+        screw(b, plate, x(839.0), y(100.0), 3.2);
+        chrome(b, "clean/level", "LEVEL", 892.0);
+        // The logo: heavy slab capitals, a little italic, inked on.
+        let slab = Lettering::family(family::PLAYFAIR_DISPLAY).weight(900.0).italic();
+        set(b, plate, "OPEN", x(1010.0), y(40.0), 25.0, "#0e0e0e", &slab, 0.0);
+        set(b, plate, "ROOM", x(1010.0), y(72.0), 25.0, "#0e0e0e", &slab, 0.0);
+        set(b, plate, "hand wired", x(1010.0), y(104.0), 17.0, "#1a1a1a", &legend, 0.08);
+        jewel(b, plate, "clean/on", "red", 30.0, x(1088.0), y(70.0));
     });
     let ns = "clean";
     let params = vec![
-        pct(ns, "volume", "Volume").featured(),
-        ui::toggle("clean/bright", "Bright", false),
-        ui::toggle("clean/deep", "Deep", false),
+        pct(ns, "volume", "Volume", 4.0).featured(),
+        ui::toggle("clean/bright", "Bright", true),
+        ui::toggle("clean/deep", "Deep", true),
         ui::choice("clean/voice", "Voicing", &["Mic", "Guitar"], 1),
-        pct(ns, "treble", "Treble").featured(),
-        pct(ns, "middle", "Middle").featured(),
-        pct(ns, "bass", "Bass").featured(),
-        pct(ns, "high", "Filter high"),
-        pct(ns, "low", "Filter low"),
-        ui::toggle("clean/reverb_on", "Reverb", false),
-        pct(ns, "send", "Reverb send"),
-        pct(ns, "return", "Reverb return"),
-        ui::toggle("clean/mid", "Mid boost", false),
-        pct(ns, "level", "Level").featured(),
+        pct(ns, "treble", "Treble", 5.0).featured(),
+        pct(ns, "middle", "Middle", 5.0).featured(),
+        pct(ns, "bass", "Bass", 5.0).featured(),
+        pct(ns, "high", "Filter high", 5.0),
+        pct(ns, "low", "Filter low", 5.0),
+        ui::toggle("clean/reverb_on", "Reverb", true),
+        pct(ns, "send", "Reverb send", 5.0),
+        pct(ns, "return", "Reverb return", 5.0),
+        ui::toggle("clean/mid", "Mid boost", true),
+        pct(ns, "level", "Level", 5.0).featured(),
         ui::toggle("clean/on", "Power", true),
     ];
     Face { file: "07-amp-head-clean-head", plugin: PLUGIN, scene, params, streams: Vec::new() }
@@ -177,46 +211,52 @@ pub fn clean_head() -> Face {
 /// The lead head.
 pub fn lead_head() -> Face {
     const W: f64 = 1200.0;
-    const H: f64 = 540.0;
-    const INK: &str = "#e9e6df";
+    const H: f64 = 548.0;
+    const INK: &str = "#ebe7df";
     let scene = canvas("Lead Head", |b, root| {
-        let cab = cabinet(b, root, W, H, "black");
-        // Brown sides show at the ends.
-        for x in [0.0, W - 22.0] {
-            b.add(cab, draw::rect("side", x, 0.0, 22.0, H, draw::linear(90.0, &[(0.0, "#6a4630"), (1.0, "#3e281a")])));
-        }
-        let (px, py, pw, ph) = (40.0, 30.0, W - 80.0, 152.0);
-        let mut plate = draw::frame("Faceplate", px, py, pw, ph);
-        plate.fills = vec![draw::linear(180.0, &[(0.0, "#1e1c1d"), (1.0, "#121112")])];
-        plate.corner_radii = CornerRadii { top_left: 4.0, top_right: 30.0, bottom_right: 4.0, bottom_left: 4.0 };
-        plate.effects = vec![draw::inner_shadow("#ffffff26", 0.0, 1.0, 0.5), draw::drop_shadow("#00000090", 0.0, 2.0, 3.0)];
-        let plate = b.add(cab, plate);
-        print(b, plate, "INPUT", 71.0, 42.0, 9.5, INK, 400.0, 0.0);
-        jack(b, plate, 71.0, 74.0, 11.0);
+        let mut spec = CabinetSpec::new(Kind::Head, W, H);
+        spec.covering = Material::Tolex { grain: Grain::Bronco, color: "#1b1a1a".into(), scale: 0.8 };
+        spec.grille = Material::GrilleCloth { cloth: Cloth::Black };
+        spec.face = Material::Plastic { color: "#161415".into(), gloss: 0.35 };
+        spec.face_frac = 0.32;
+        spec.piping = Some("#a8997c".into());
+        spec.corners = Some("black".into());
+        spec.handle = Handle::Leather;
+        spec.handle_color = "#1c1b1c".into();
+        let (plate, grille, (pw, ph)) = build(b, root, &spec);
+        cloth(b, grille, "basket", &[]);
+        let sy = ph / 152.0;
+        let sx = pw / 1120.0;
+        let (x, y) = (|v: f64| v * sx, |v: f64| v * sy);
+        let sans = Lettering::family(family::INTER).weight(400.0);
+        print(b, plate, "INPUT", x(71.0), y(40.0), 11.0, INK, 400.0, 0.0);
+        jack(b, plate, x(71.0), y(80.0), 12.0);
         let toggles = [("lead/bright", "Bright", "BRIGHT", 138.0), ("lead/mid", "Mid", "MID", 218.0), ("lead/deep", "Deep", "DEEP", 299.0), ("lead/eq", "EQ", "EQ1", 379.0), ("lead/loop", "Loop bypass", "BYPASS", 540.0), ("lead/lead", "Lead", "LEAD", 622.0)];
         for (addr, name, legend, cx) in toggles {
-            print(b, plate, legend, cx, 12.0, 6.5, INK, 500.0, 0.0);
-            parts::toggle(b, plate, addr, name, 11.0, cx, 32.0);
+            set(b, plate, legend, x(cx), y(12.0), 7.5, INK, &sans, 0.0);
+            parts::toggle(b, plate, addr, name, 11.0, x(cx), y(32.0));
         }
-        print(b, plate, "EQ2", 379.0, 50.0, 6.5, INK, 500.0, 0.0);
+        set(b, plate, "EQ2", x(379.0), y(50.0), 7.5, INK, &sans, 0.0);
+        // Treble to presence: the reference's pointers sit near noon, a
+        // little either side.
         let knobs = [("lead/treble", "TREBLE", 138.0), ("lead/middle", "MIDDLE", 218.0), ("lead/bass", "BASS", 299.0), ("lead/gain", "GAIN", 379.0), ("lead/master", "MASTER", 460.0), ("lead/lead_gain", "LEAD GAIN", 540.0), ("lead/lead_master", "LEAD MASTER", 622.0), ("lead/reverb", "REVERB", 701.0), ("lead/presence", "PRESENCE", 780.0)];
         for (addr, name, cx) in knobs {
-            print(b, plate, name, cx, 62.0, 9.5, INK, 400.0, -0.02);
-            knob(b, plate, "knob.chicken_head", "black", addr, name, 46.0, cx, 106.0);
+            set(b, plate, name, x(cx), y(64.0), 12.0, INK, &sans, -0.01);
+            knob(b, plate, Cap::ChickenHead, addr, name, 60.0, x(cx), y(110.0));
         }
-        // The logo in a painted script, a model number under it in gold.
-        letter_in(b, plate, "STUDIO", 915.0, 70.0, &Hand::script(22.0), "#f4f1ea");
-        letter_in(b, plate, "LEAD", 950.0, 104.0, &Hand::script(18.0), "#d8b56a");
-        print(b, plate, "ON", 1012.0, 44.0, 9.0, INK, 400.0, 0.0);
-        parts::toggle(b, plate, "lead/on", "Standby", 13.0, 1012.0, 76.0);
-        print(b, plate, "STANDBY", 1012.0, 124.0, 9.0, INK, 400.0, 0.0);
+        // The logo in a painted script, a model number under it in gold marker.
+        let script = Lettering::family(family::DANCING_SCRIPT).weight(700.0);
+        b.add(plate, with_shadow(draw::styled_text("logo", "Studio", x(840.0), y(60.0) - 24.0, 180.0, 34.0, "#f4f1ea", document_proto::TextAlign::Center, &script), "#000000a0"));
+        parts::marker(b, plate, "Lead", x(955.0), y(100.0), 17.0, "#d9b76a");
+        set(b, plate, "BY THE SHOP", x(880.0), y(104.0), 7.0, INK, &Lettering::family(family::INTER).weight(700.0), 0.04);
+        print(b, plate, "ON", x(1028.0), y(38.0), 10.0, INK, 400.0, 0.0);
+        parts::toggle(b, plate, "lead/on", "Standby", 15.0, x(1028.0), y(76.0));
+        print(b, plate, "STANDBY", x(1028.0), y(128.0), 10.0, INK, 400.0, 0.0);
         // The pilot light, its filament wavering a little.
-        b.add(plate, draw::circle("pilot bezel", 1070.0, 76.0, 9.5, draw::linear(180.0, &[(0.0, "#2a2b2e"), (1.0, "#060607")])));
-        let lens = draw::circle("pilot", 1070.0, 76.0, 6.5, draw::radial_at(0.4, 0.35, 0.9, &[(0.0, "#ffe0e0"), (0.35, "#ff4a4a"), (1.0, "#8a0a0a")]));
+        b.add(plate, draw::circle("pilot bezel", x(1085.0), y(76.0), 10.0, draw::linear(180.0, &[(0.0, "#3a3b3e"), (1.0, "#060607")])));
+        let lens = draw::circle("pilot", x(1085.0), y(76.0), 7.0, draw::radial_at(0.4, 0.35, 0.9, &[(0.0, "#ffe0e0"), (0.35, "#ff4a4a"), (1.0, "#8a0a0a")]));
         let lens = b.add(plate, draw::emissive(lens, draw::hex("#ff2a2a"), 0.9, 18.0));
         surface_kit::motion::add(b, lens, surface_kit::motion::flicker(0.06));
-        // A tolex band, then the grille in its frame.
-        grille(b, cab, "basket", 52.0, 214.0, W - 104.0, H - 250.0, Some("#9a8a70"), &[]);
     });
     let ns = "lead";
     let params = vec![
@@ -226,15 +266,15 @@ pub fn lead_head() -> Face {
         ui::choice("lead/eq", "EQ", &["EQ2", "EQ1"], 1),
         ui::toggle("lead/loop", "Loop bypass", false),
         ui::toggle("lead/lead", "Lead channel", false),
-        pct(ns, "treble", "Treble").featured(),
-        pct(ns, "middle", "Middle").featured(),
-        pct(ns, "bass", "Bass").featured(),
-        pct(ns, "gain", "Gain").featured(),
-        pct(ns, "master", "Master").featured(),
-        pct(ns, "lead_gain", "Lead gain"),
-        pct(ns, "lead_master", "Lead master"),
-        pct(ns, "reverb", "Reverb"),
-        pct(ns, "presence", "Presence"),
+        pct(ns, "treble", "Treble", 5.5).featured(),
+        pct(ns, "middle", "Middle", 5.0).featured(),
+        pct(ns, "bass", "Bass", 5.0).featured(),
+        pct(ns, "gain", "Gain", 5.0).featured(),
+        pct(ns, "master", "Master", 5.0).featured(),
+        pct(ns, "lead_gain", "Lead gain", 5.0),
+        pct(ns, "lead_master", "Lead master", 4.5),
+        pct(ns, "reverb", "Reverb", 5.5),
+        pct(ns, "presence", "Presence", 4.5),
         ui::toggle("lead/on", "Standby", true),
     ];
     Face { file: "08-amp-head-lead-head", plugin: PLUGIN, scene, params, streams: Vec::new() }
@@ -243,64 +283,74 @@ pub fn lead_head() -> Face {
 /// The two-channel combo.
 pub fn silk_combo() -> Face {
     const W: f64 = 1000.0;
-    const H: f64 = 770.0;
+    const H: f64 = 753.0;
     const INK: &str = "#f1ece4";
     let scene = canvas("Silk Combo", |b, root| {
-        let cab = cabinet(b, root, W, H, "brown");
-        let (px, py, pw, ph) = (24.0, 20.0, W - 48.0, 76.0);
-        let mut plate = draw::frame("Faceplate", px, py, pw, ph);
-        plate.fills = vec![draw::linear(180.0, &[(0.0, "#1a1918"), (1.0, "#0e0d0d")])];
-        plate.stroke = document_proto::Stroke { paints: vec![draw::solid("#c9c3b8")], weight: 1.2, ..document_proto::Stroke::default() };
-        plate.effects = vec![draw::inner_shadow("#ffffff1c", 0.0, 1.0, 0.5)];
-        let plate = b.add(cab, plate);
-        let ky = 36.0;
-        let ly = 64.0;
-        // Normal channel.
-        print(b, plate, "1", 36.0, 10.0, 7.5, INK, 600.0, 0.0);
-        print(b, plate, "2", 71.0, 10.0, 7.5, INK, 600.0, 0.0);
-        jack(b, plate, 36.0, 30.0, 10.0);
-        jack(b, plate, 71.0, 30.0, 10.0);
-        print(b, plate, "NORMAL", 54.0, 56.0, 10.0, INK, 700.0, 0.02);
-        print(b, plate, "BRIGHT", 98.0, 10.0, 5.5, INK, 700.0, 0.0);
-        slide(b, plate, "combo/normal_bright", "Normal bright", "black", 22.0, 98.0, 30.0);
+        let mut spec = CabinetSpec::new(Kind::Combo, W, H);
+        spec.covering = Material::Tolex { grain: Grain::Levant, color: "#4c2c20".into(), scale: 1.0 };
+        spec.grille = Material::GrilleCloth { cloth: Cloth::Wheat };
+        spec.face = Material::Plastic { color: "#141313".into(), gloss: 0.3 };
+        spec.face_frac = 0.135;
+        spec.piping = Some("#d8cbb2".into());
+        spec.corners = None;
+        spec.handle = Handle::Strap;
+        spec.handle_color = "#2a1a14".into();
+        let (plate, grille, (pw, ph)) = build(b, root, &spec);
+        cloth(b, grille, "wheat", &[]);
+        // The silver frame round the black plate.
+        b.add(plate, draw::stroked(draw::rounded(draw::rect("frame", 3.0, 3.0, pw - 6.0, ph - 6.0, draw::solid("#00000000")), 2.0), "#cfc9be", 1.4));
+        let sy = ph / 76.0;
+        let sx = pw / 952.0;
+        let (x, y) = (|v: f64| v * sx, |v: f64| v * sy);
+        let sans = Lettering::family(family::INTER).weight(700.0);
+        let ky = y(34.0);
+        let ly = y(64.0);
         let numbered = |b: &mut Builder<'_>, addr: &str, name: &str, cx: f64| {
-            knob(b, plate, "knob.numbered_skirt", "black", addr, name, 42.0, cx, ky);
-            print(b, plate, name, cx, ly, 7.0, INK, 700.0, 0.02);
+            knob_scaled(b, plate, Cap::BlackSkirt, addr, name, 42.0, x(cx), ky, &["1", "2", "3", "4", "5", "6", "7", "8", "9", "10"], INK);
+            set(b, plate, name, x(cx), ly, 7.0, INK, &sans, 0.02);
         };
-        for (addr, name, cx) in [("combo/normal_volume", "VOLUME", 145.0), ("combo/normal_treble", "TREBLE", 191.0), ("combo/normal_bass", "BASS", 240.0)] {
+        // Normal channel.
+        for (label, cx) in [("1", 36.0), ("2", 71.0)] {
+            set(b, plate, label, x(cx), y(11.0), 8.0, INK, &sans, 0.0);
+            jack(b, plate, x(cx), y(32.0), 9.0);
+        }
+        set(b, plate, "NORMAL", x(54.0), y(56.0), 11.0, INK, &sans, 0.02);
+        set(b, plate, "BRIGHT", x(100.0), y(9.0), 5.5, INK, &sans, 0.0);
+        slide(b, plate, "combo/normal_bright", "Normal bright", "black", 20.0, x(100.0), y(32.0));
+        for (addr, name, cx) in [("combo/normal_volume", "VOLUME", 147.0), ("combo/normal_treble", "TREBLE", 195.0), ("combo/normal_bass", "BASS", 243.0)] {
             numbered(b, addr, name, cx);
         }
-        b.add(plate, draw::rect("divider", 272.0, 6.0, 1.2, ph - 12.0, draw::solid("#c9c3b8")));
+        b.add(plate, draw::rect("divider", x(273.0), 6.0, 1.2, ph - 12.0, draw::solid("#cfc9be")));
         // Vibrato channel.
-        print(b, plate, "1", 306.0, 10.0, 7.5, INK, 600.0, 0.0);
-        print(b, plate, "2", 342.0, 10.0, 7.5, INK, 600.0, 0.0);
-        jack(b, plate, 306.0, 30.0, 10.0);
-        jack(b, plate, 342.0, 30.0, 10.0);
-        print(b, plate, "VIBRATO", 324.0, 56.0, 10.0, INK, 700.0, 0.02);
-        print(b, plate, "BRIGHT", 364.0, 10.0, 5.5, INK, 700.0, 0.0);
-        slide(b, plate, "combo/bright", "Bright", "black", 22.0, 364.0, 30.0);
-        for (addr, name, cx) in [("combo/volume", "VOLUME", 410.0), ("combo/treble", "TREBLE", 455.0), ("combo/bass", "BASS", 505.0), ("combo/reverb", "REVERB", 553.0), ("combo/speed", "SPEED", 601.0), ("combo/intensity", "INTENSITY", 648.0)] {
+        for (label, cx) in [("1", 304.0), ("2", 340.0)] {
+            set(b, plate, label, x(cx), y(11.0), 8.0, INK, &sans, 0.0);
+            jack(b, plate, x(cx), y(32.0), 9.0);
+        }
+        set(b, plate, "VIBRATO", x(322.0), y(56.0), 11.0, INK, &sans, 0.02);
+        set(b, plate, "BRIGHT", x(366.0), y(9.0), 5.5, INK, &sans, 0.0);
+        slide(b, plate, "combo/bright", "Bright", "black", 20.0, x(366.0), y(32.0));
+        for (addr, name, cx) in [("combo/volume", "VOLUME", 412.0), ("combo/treble", "TREBLE", 458.0), ("combo/bass", "BASS", 504.0), ("combo/reverb", "REVERB", 550.0), ("combo/speed", "SPEED", 596.0), ("combo/intensity", "INTENSITY", 642.0)] {
             numbered(b, addr, name, cx);
         }
-        letter_in(b, plate, "SILK", 745.0, 26.0, &Hand::script(17.0), "#f2d9d4");
-        letter_in(b, plate, "TONE", 772.0, 50.0, &Hand::script(17.0), "#f2d9d4");
-        print(b, plate, "TWO CHANNEL", 795.0, 66.0, 6.0, INK, 700.0, 0.06);
-        jewel(b, plate, "combo/on", "red", 26.0, 910.0, 30.0);
-        grille(b, cab, "wheat", 34.0, 108.0, W - 68.0, H - 140.0, Some("#d8cbb2"), &[]);
+        let script = Lettering::family(family::DANCING_SCRIPT).weight(700.0);
+        b.add(plate, with_shadow(draw::styled_text("logo", "Silk", x(690.0), y(4.0), 140.0, 28.0, "#f2dcd6", document_proto::TextAlign::Center, &script), "#00000080"));
+        b.add(plate, with_shadow(draw::styled_text("logo", "Tone", x(735.0), y(30.0), 140.0, 28.0, "#f2dcd6", document_proto::TextAlign::Center, &script), "#00000080"));
+        set(b, plate, "TWO CHANNEL", x(840.0), y(62.0), 5.5, INK, &sans, 0.06);
+        jewel(b, plate, "combo/on", "red", 24.0, x(912.0), y(30.0));
     });
     let ns = "combo";
     let params = vec![
         ui::toggle("combo/normal_bright", "Normal bright", false),
-        pct(ns, "normal_volume", "Normal volume"),
-        pct(ns, "normal_treble", "Normal treble"),
-        pct(ns, "normal_bass", "Normal bass"),
-        ui::toggle("combo/bright", "Bright", false),
-        pct(ns, "volume", "Volume").featured(),
-        pct(ns, "treble", "Treble").featured(),
-        pct(ns, "bass", "Bass").featured(),
-        pct(ns, "reverb", "Reverb"),
-        pct(ns, "speed", "Vibrato speed"),
-        pct(ns, "intensity", "Vibrato intensity"),
+        pct(ns, "normal_volume", "Normal volume", 5.0),
+        pct(ns, "normal_treble", "Normal treble", 5.0),
+        pct(ns, "normal_bass", "Normal bass", 5.0),
+        ui::toggle("combo/bright", "Bright", true),
+        pct(ns, "volume", "Volume", 5.0).featured(),
+        pct(ns, "treble", "Treble", 5.0).featured(),
+        pct(ns, "bass", "Bass", 5.0).featured(),
+        pct(ns, "reverb", "Reverb", 5.0),
+        pct(ns, "speed", "Vibrato speed", 5.0),
+        pct(ns, "intensity", "Vibrato intensity", 5.0),
         ui::toggle("combo/on", "Power", true),
     ];
     Face { file: "09-amp-combo-silk-combo", plugin: PLUGIN, scene, params, streams: Vec::new() }

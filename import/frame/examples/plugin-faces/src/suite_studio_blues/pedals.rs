@@ -11,7 +11,7 @@
 
 use surface_proto::{Range, Unit};
 
-use super::parts::{self, PEDAL_H, PLUGIN, knob, letter, pedal, stomp, tape, toggle};
+use super::parts::{self, Cap, PEDAL_H, PLUGIN, knob, letter, pedal, stomp, tape, toggle};
 use crate::face::{Face, canvas};
 use crate::reverb::ui;
 
@@ -38,7 +38,7 @@ pub fn plain_boost() -> Face {
     const W: f64 = 92.0;
     let scene = canvas("Plain Boost", |b, root| {
         let lid = pedal(b, root, W, Some("#e8e8f0"));
-        knob(b, lid, "knob.fluted_white", "white", "boost/volume", "Volume", 50.0, W * 0.5, H * 0.135);
+        knob(b, lid, Cap::WhiteFluted, "boost/volume", "Volume", 50.0, W * 0.5, H * 0.135);
         letter(b, lid, "VOLUME", W * 0.5, H * 0.265, LEG);
         letter(b, lid, "BOOST", W * 0.5, H * 0.39, LEG);
         toggle(b, lid, "boost/boost", "Boost", 13.0, W * 0.5, H * 0.47);
@@ -61,7 +61,7 @@ pub fn peak_filter() -> Face {
     let scene = canvas("Peak Filter", |b, root| {
         let lid = pedal(b, root, W, Some("#ff4fa3"));
         for (addr, name, x) in [("filter/gain", "GAIN", 0.19), ("filter/peak", "PEAK", 0.81)] {
-            knob(b, lid, "knob.dome", "pink", addr, name, 40.0, W * x, H * 0.115);
+            knob(b, lid, Cap::PlumDome, addr, name, 40.0, W * x, H * 0.115);
             letter(b, lid, if name == "GAIN" { "GAiN" } else { name }, W * x, H * 0.255, LEG);
         }
         for (addr, name, up, down, x) in [("filter/direction", "Direction", "UP", "DOWN", 0.19), ("filter/speed", "Speed", "FAST", "SLOW", 0.5), ("filter/range", "Range", "Hi", "LO", 0.81)] {
@@ -90,7 +90,7 @@ pub fn mild_drive() -> Face {
     let scene = canvas("Mild Drive", |b, root| {
         let lid = pedal(b, root, W, None);
         for (addr, name, x, y, ly) in [("mild/gain", "GAiN", 0.23, 0.13, 0.265), ("mild/level", "LEVEL", 0.77, 0.13, 0.262), ("mild/treble", "TREBLE", 0.5, 0.37, 0.51)] {
-            knob(b, lid, "knob.knurled_dome", "brown", addr, name, 48.0, W * x, H * y);
+            knob(b, lid, Cap::BrownDome, addr, name, 48.0, W * x, H * y);
             letter(b, lid, name, W * x, H * ly, LEG);
         }
         tape(b, lid, "MILD DRIVE", W * 0.5, H * 0.64, W * 0.84, 16.0, "#dcdce6", 0.3);
@@ -106,14 +106,20 @@ pub fn teal_drive() -> Face {
     const W: f64 = STD;
     let scene = canvas("Teal Drive", |b, root| {
         let lid = pedal(b, root, W, Some("#3fe08a"));
+        // Two colourways: mint chevron caps on a mint strip, or black caps
+        // with blue pointers on a blue strip.
+        let mut art = Vec::new();
         for (addr, name, x, y, ly) in [("teal/gain", "GAiN", 0.17, 0.115, 0.245), ("teal/level", "LEVEL", 0.83, 0.115, 0.245), ("teal/tone", "TONE", 0.5, 0.36, 0.49)] {
-            knob(b, lid, "knob.chevron", "green", addr, name, 38.0, W * x, H * y);
+            art.push(parts::knob_pair(b, lid, [Cap::MintChevron, Cap::BluePointer], addr, name, 38.0, W * x, H * y).1);
             letter(b, lid, name, W * x, H * ly, LEG);
         }
         letter(b, lid, "BB", W * 0.5, H * 0.065, LEG);
         toggle(b, lid, "teal/voice", "Voice", 13.0, W * 0.5, H * 0.14);
         letter(b, lid, "TS", W * 0.5, H * 0.215, LEG);
-        tape(b, lid, "TEAL DRIVE", W * 0.5, H * 0.63, W * 0.88, 16.0, "#8fd9a4", -0.3);
+        let mint = tape(b, lid, "TEAL DRIVE", W * 0.5, H * 0.63, W * 0.88, 16.0, "#8fd9a4", -0.3);
+        let blue = tape(b, lid, "TEAL DRIVE", W * 0.5, H * 0.63, W * 0.88, 16.0, "#6f98e6", -0.3);
+        art.push([mint, blue]);
+        parts::colourway(b, lid, "teal/colour", &art);
         stomp(b, lid, "teal/on", "Bypass", STOMP_D, W * 0.5, STOMP_Y, "#ff3b2f", true);
     });
     let params = vec![
@@ -121,6 +127,7 @@ pub fn teal_drive() -> Face {
         level("teal", "level", "Level", 50.0).featured(),
         level("teal", "tone", "Tone", 50.0),
         ui::choice("teal/voice", "Voicing", &["TS", "BB"], 1),
+        ui::choice("teal/colour", "Colourway", &["Mint", "Midnight"], 0),
         on("teal"),
     ];
     Face { file: "04-pedal-standard-teal-drive", plugin: PLUGIN, scene, params, streams: Vec::new() }
@@ -132,10 +139,9 @@ pub fn short_delay() -> Face {
     const W: f64 = STD;
     let scene = canvas("Short Delay", |b, root| {
         let lid = pedal(b, root, W, Some("#4fd0e0"));
-        let disp = surface_kit::Place::new("Time display").size(W * 0.46).bind(ui::bind("short/time")).options(&["color=#d8e4f0", "digits=5", "h=19"]).format(surface_proto::ValueFormat::decimals(1).unit("MS"));
-        ui::put(b, lid, "meter.segment_display", &disp, W * 0.5, H * 0.095);
+        parts::segments(b, lid, "short/time", (W * 0.26, H * 0.058, W * 0.48, 21.0), 7, 11.0, "#dfe9f6", surface_proto::ValueFormat::decimals(1).unit("MS"), true);
         for (addr, name, x, y, ly) in [("short/time", "TiME", 0.19, 0.2, 0.32), ("short/feedback", "FEEDBACK", 0.8, 0.2, 0.32), ("short/blend", "BLEND", 0.5, 0.39, 0.505)] {
-            knob(b, lid, "knob.dome", "teal", addr, name, 40.0, W * x, H * y);
+            knob(b, lid, Cap::TealDome, addr, name, 40.0, W * x, H * y);
             letter(b, lid, name, W * x, H * ly, if name == "FEEDBACK" { LEG * 0.8 } else { LEG });
         }
         tape(b, lid, "SHORT DELAY", W * 0.5, H * 0.63, W * 0.86, 16.0, "#86b8e0", 0.3);
@@ -159,10 +165,8 @@ pub fn haze_delay() -> Face {
         let lid = pedal(b, root, W, Some("#ff5ad0"));
         // The display: time, and the tempo mode lamps beside it.
         let (dx, dy, dw, dh) = (W * 0.07, H * 0.07, W * 0.62, H * 0.15);
-        let win = b.add(lid, surface_kit::draw::with_effects(surface_kit::draw::rounded(surface_kit::draw::rect("display bezel", dx, dy, dw, dh, surface_kit::draw::solid("#0b0b0d")), 5.0), vec![surface_kit::draw::inner_shadow("#000000", 0.0, 1.5, 4.0), surface_kit::draw::drop_shadow("#e8a0ff40", 0.0, 0.0, 2.0)]));
-        let _ = win;
-        let disp = surface_kit::Place::new("Time display").size(dw * 0.62).bind(ui::bind("haze/time")).options(&["color=#ff4a3a", "digits=5", &format!("h={}", dh - 8.0)]).format(surface_proto::ValueFormat::decimals(0).unit(""));
-        ui::put(b, lid, "meter.segment_display", &disp, dx + dw * 0.33, dy + dh / 2.0);
+        b.add(lid, surface_kit::draw::rounded(surface_kit::draw::rect("display bezel", dx, dy, dw, dh, surface_kit::draw::solid("#0b0b0d")), 5.0));
+        parts::segments(b, lid, "haze/time", (dx + 5.0, dy + 5.0, dw * 0.66 - 5.0, dh - 10.0), 5, dh * 0.5, "#ff4636", surface_proto::ValueFormat::decimals(0).unit(""), true);
         for (i, (a, u)) in [("FREE", "MS"), ("APP", "BPM"), ("TAP", "BPM")].iter().enumerate() {
             let y = dy + dh * (0.25 + 0.25 * i as f64);
             parts::print_right(b, lid, a, dx + dw * 0.82, y, 6.5, "#e6e6ea", 600.0, 0.02);
@@ -176,7 +180,7 @@ pub fn haze_delay() -> Face {
         letter(b, lid, "PONG", W * 0.921, H * 0.09, LEG * 0.85);
         toggle(b, lid, "haze/pingpong", "Ping pong", 12.0, W * 0.921, H * 0.165);
         for (addr, name, x) in [("haze/mix", "MiX", 0.13), ("haze/hardness", "HARDNESS", 0.385), ("haze/feedback", "FEEDBACK", 0.64), ("haze/time", "TiME", 0.89)] {
-            knob(b, lid, "knob.bar_dome", "black", addr, name, 44.0, W * x, H * 0.35);
+            knob(b, lid, Cap::BlackBar, addr, name, 44.0, W * x, H * 0.35);
             letter(b, lid, name, W * x, H * 0.5, if name.len() > 5 { LEG * 0.85 } else { LEG });
         }
         letter(b, lid, "ACTiVE", W * 0.13, H * 0.672, LEG);
@@ -210,11 +214,11 @@ pub fn plate_verb() -> Face {
     let scene = canvas("Plate Verb", |b, root| {
         let lid = pedal(b, root, W, Some("#ff8a4a"));
         for (addr, name, x) in [("plate/mix", "MiX", 0.17), ("plate/predelay", "PRE-DELAY", 0.5), ("plate/decay", "DECAY", 0.83)] {
-            knob(b, lid, "knob.ring_insert", "coral", addr, name, 40.0, W * x, H * 0.135);
+            knob(b, lid, Cap::CoralRing, addr, name, 40.0, W * x, H * 0.135);
             letter(b, lid, name, W * x, H * 0.262, if name.len() > 5 { LEG * 0.8 } else { LEG });
         }
         for (addr, name, x) in [("plate/lowcut", "LOW", 0.17), ("plate/highcut", "HiGH", 0.83)] {
-            knob(b, lid, "knob.ring_insert", "coral", addr, name, 40.0, W * x, H * 0.37);
+            knob(b, lid, Cap::CoralRing, addr, name, 40.0, W * x, H * 0.37);
             letter(b, lid, name, W * x, H * 0.49, LEG);
             letter(b, lid, "CUT", W * x, H * 0.53, LEG);
         }

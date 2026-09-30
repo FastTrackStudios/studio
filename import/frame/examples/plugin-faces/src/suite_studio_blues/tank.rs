@@ -7,11 +7,12 @@
 
 use document_proto::motion::{Dynamics, Motion, Num, Target, Wave};
 use document_proto::{CornerRadii, NodeId};
+use surface_kit::materials::{light, paint};
 use surface_kit::{Place, draw, motion};
 use surface_proto::{Range, SlotRole, Unit, ValueFormat};
 use surface_widgets::Builder;
 
-use super::parts::{PLUGIN, knob, print, print_left, print_right, toggle};
+use super::parts::{self, Cap, PLUGIN, knob, print, print_left, print_right, toggle};
 use crate::face::{Face, canvas};
 use crate::reverb::ui;
 
@@ -42,11 +43,16 @@ pub fn spring_tank() -> Face {
             b.add(root, draw::rounded(foot, 6.0));
         }
         let mut case = draw::frame("Case", 0.0, 0.0, W, BODY_H);
-        case.fills = vec![draw::linear(180.0, &[(0.0, "#363949"), (0.5, "#2e3140"), (1.0, "#262834")]), draw::radial_at(0.5, 0.2, 1.0, &[(0.0, "#ffffff10"), (1.0, "#ffffff00")])];
         case.corner_radii = CornerRadii::uniform(32.0);
         case.stroke = document_proto::Stroke { paints: vec![draw::linear(90.0, &[(0.0, "#a8664a"), (0.5, "#5a3a34"), (1.0, "#a8664a")])], weight: 3.0, ..document_proto::Stroke::default() };
-        case.effects = vec![draw::drop_shadow("#000000c0", 0.0, 8.0, 20.0), draw::inner_shadow("#ffffff30", 0.0, 2.0, 2.0), draw::inner_shadow("#00000070", 0.0, -4.0, 10.0)];
+        case.effects = vec![draw::drop_shadow("#000000c0", 0.0, 8.0, 20.0)];
         let case = b.add(root, case);
+        // Navy powder-coat, its rolled edge lit from the upper left (edges,
+        // not inner shadows: a big effect layer can blank the page).
+        paint::fill(b, case, (0.0, 0.0, W, BODY_H), 32.0, &paint::Material::Powder { color: "#30334a".into(), coarse: false });
+        for e in light::edge("case edge", (0.0, 0.0, W, BODY_H), 32.0, 6.0, 1.1, true) {
+            b.add(case, e);
+        }
         for (x, y) in [(28.0, 31.0), (W - 28.0, 31.0), (28.0, BODY_H - 31.0), (W - 28.0, BODY_H - 31.0)] {
             screw(b, case, x, y);
         }
@@ -54,7 +60,13 @@ pub fn spring_tank() -> Face {
         let (mx, my, mw, mh) = (51.0, 50.0, W - 102.0, 110.0);
         b.add(case, draw::with_effects(draw::rounded(draw::rect("surround", mx - 5.0, my - 5.0, mw + 10.0, mh + 10.0, draw::linear(180.0, &[(0.0, "#f2c7a6"), (0.5, "#c98a66"), (1.0, "#f0c09c")])), 24.0), vec![draw::drop_shadow("#00000080", 0.0, 2.0, 4.0)]));
         let mesh = Place { options: Some(vec![format!("w={mw}"), format!("h={mh}"), "r=20".into()]), ..Place::new("Mesh").variant("mesh") };
-        ui::put_at(b, case, "panel.amp_grille", &mesh, mx, my);
+        let m = ui::put_at(b, case, "panel.amp_grille", &mesh, mx, my);
+        if let Some(n) = b.scene.node_mut(m) {
+            n.effects.clear();
+        }
+        for e in light::edge("mesh recess", (mx, my, mw, mh), 20.0, 6.0, 1.2, false) {
+            b.add(case, e);
+        }
 
         // The name and the two sections.
         print_left(b, case, "SPRING TANK", 40.0, 212.0, 40.0, INK, 600.0, 0.08);
@@ -76,18 +88,17 @@ pub fn spring_tank() -> Face {
             motion::add(b, glow, Motion::new(Target::Opacity).input("or(scalar(tank/lfo), motion(lfo))").dynamics(Dynamics::spring(900.0, 50.0)));
         }
         for (addr, name, cx) in [("tank/intensity", "INTENSITY", 266.0), ("tank/speed", "SPEED", 381.0)] {
-            knob(b, case, "knob.cream_cap", "cream", addr, name, 84.0, cx, row);
+            knob(b, case, Cap::Cream, addr, name, 84.0, cx, row);
             print(b, case, name, cx, label_y, 12.0, INK, 500.0, 0.12);
         }
-        let disp = Place::new("Division").size(72.0).bind(ui::bind("tank/division")).options(&["color=#b8c8ff", "digits=3", "h=38"]).format(ValueFormat::default());
-        ui::put(b, case, "meter.segment_display", &disp, 493.0, row);
+        parts::segments(b, case, "tank/division", (455.0, row - 19.0, 76.0, 38.0), 5, 15.0, "#c4d2ff", ValueFormat::default(), true);
         b.add(case, draw::rect("dash", 535.0, row - 0.8, 14.0, 1.6, draw::solid(DIM)));
         print(b, case, "SYNC", 577.0, 318.0, 12.0, INK, 500.0, 0.12);
         toggle(b, case, "tank/sync", "Sync", 24.0, 577.0, row);
         print(b, case, "FREE", 577.0, 394.0, 12.0, INK, 500.0, 0.12);
         // Reverb.
         for (addr, name, cx) in [("tank/mix", "MIX", 714.0), ("tank/tone", "TONE", 830.0), ("tank/decay", "DECAY", 942.0)] {
-            knob(b, case, "knob.cream_cap", "cream", addr, name, 84.0, cx, row);
+            knob(b, case, Cap::Cream, addr, name, 84.0, cx, row);
             print(b, case, name, cx, label_y, 12.0, INK, 500.0, 0.12);
         }
         let jewel = Place::new("Reverb lamp").size(30.0).variant("green").bind(ui::bind("tank/verb_on")).legend("").touch(surface_kit::TOUCH_MIN);
