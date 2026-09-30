@@ -435,35 +435,31 @@ pub fn row_drives() -> Face {
     Face { file: "31-row-drives", plugin: PLUGIN, scene, params, streams: Vec::new() }
 }
 
-/// The Amp/Cab row: the head on the left, the cab on its right with its
-/// box exactly the head's (the handle stands above, in the margin), and
-/// the gate right of the cab, as tall as the cab.
+/// The Amp/Cab row, sized to a row of the Control view: the amp as its
+/// panel over its cloth (no handle — the zoomed-in view has the whole
+/// head), the cab narrowed to its two speakers with a mic on each, and
+/// the gate, all the same height.
 #[must_use]
 pub fn row_amp_cab() -> Face {
-    let ac = AmpCab::new();
-    let (hw, hh) = face_size(&ac.head);
-    // The head's box: under its leather handle (9 % of its height), over
-    // its feet (3.5 %). The cab has no handle, so its height is that box
-    // plus its own feet.
-    let (handle, feet) = (hh * 0.09, hh * 0.035);
-    let head_box = hh - handle - feet;
-    let cab = amp_cab::cab_sized(1200.0, head_box / (1.0 - 0.035));
-    let (cw, ch) = face_size(&cab);
-    let (gw, gh) = face_size(&ac.gate);
-    let gs = ch / gh;
-    let (m, gap) = (20.0, 36.0);
-    let w = m + hw + gap + cw + gap + gw * gs + m;
-    let h = hh + m;
+    const BOX_H: f64 = 480.0;
+    let amp = amps::clean_head_row(BOX_H, 0.33, 60.0);
+    let cab = amp_cab::cab_sized(640.0, BOX_H);
+    let gate = amp_cab::gate();
+    let (aw, _) = face_size(&amp);
+    let (cw, _) = face_size(&cab);
+    let (gw, gh) = face_size(&gate);
+    let gs = BOX_H / gh;
+    let (m, gap) = (16.0, 28.0);
+    let w = m + aw + gap + cw + gap + gw * gs + m;
+    let h = m + BOX_H + m;
     let scene = canvas("Amp / Cab row", |b, root| {
         page(b, root, w, h);
-        embed(b, root, &ac.head, (m, 0.0, hw, hh));
-        let cx = m + hw + gap;
-        embed(b, root, &cab, (cx, handle, cw, ch));
-        embed(b, root, &ac.gate, (cx + cw + gap, handle, gw * gs, ch));
+        embed(b, root, &amp, (m, m, aw, BOX_H));
+        let cx = m + aw + gap;
+        embed(b, root, &cab, (cx, m, cw, BOX_H));
+        embed(b, root, &gate, (cx + cw + gap, m, gw * gs, BOX_H));
     });
-    let mut faces = ac.faces();
-    faces.push(&cab);
-    let params = params_of(&faces);
+    let params = params_of(&[&amp, &cab, &gate]);
     Face { file: "32-row-amp-cab", plugin: PLUGIN, scene, params, streams: Vec::new() }
 }
 

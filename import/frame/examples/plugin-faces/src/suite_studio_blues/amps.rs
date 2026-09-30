@@ -111,18 +111,29 @@ pub fn clean_head() -> Face {
 /// The clean head with `inside` building into its grille once the head is
 /// done (a rig page seats its drive pedals there).
 pub fn clean_head_with(inside: impl FnOnce(&mut Builder<'_>, NodeId)) -> Face {
+    clean_head_as(548.0, Handle::Leather, 0.29, 52.0, inside)
+}
+
+/// The clean head as a rig row shows it: `h` tall with no handle, the
+/// panel across the top (`face_frac` of the baffle), the diamond cloth
+/// under it, knobs `knob_d` across.
+pub fn clean_head_row(h: f64, face_frac: f64, knob_d: f64) -> Face {
+    clean_head_as(h, Handle::None, face_frac, knob_d, |_, _| {})
+}
+
+fn clean_head_as(h: f64, handle: Handle, face_frac: f64, knob_d: f64, inside: impl FnOnce(&mut Builder<'_>, NodeId)) -> Face {
     const W: f64 = 1200.0;
-    const H: f64 = 548.0;
     const INK: &str = "#141414";
+    let big = knob_d / 52.0;
     let scene = canvas("Clean Head", |b, root| {
-        let mut spec = CabinetSpec::new(Kind::Head, W, H);
+        let mut spec = CabinetSpec::new(Kind::Head, W, h);
         spec.covering = Material::Tolex { grain: Grain::Bronco, color: "#1d1c1c".into(), scale: 1.0 };
         spec.grille = Material::DiamondGrille { cloth: "#161314".into(), stripes: vec!["#b8324a".into(), "#e6e2d6".into(), "#5f9e86".into()], pitch: 96.0 };
         spec.face = Material::Brushed { color: "#c3c4c6".into(), dir: Dir::Horizontal };
-        spec.face_frac = 0.29;
+        spec.face_frac = face_frac;
         spec.piping = Some("#b9babc".into());
         spec.corners = Some("black".into());
-        spec.handle = Handle::Leather;
+        spec.handle = handle;
         spec.handle_color = "#1e1c1b".into();
         let (plate, grille, (pw, ph)) = build(b, root, &spec);
         // Age: grime specks and a few rust spots on the steel.
@@ -156,8 +167,8 @@ pub fn clean_head_with(inside: impl FnOnce(&mut Builder<'_>, NodeId)) -> Face {
         jack(b, plate, x(78.0), y(100.0), 9.0);
         let dots: &[&str] = &["", "", "", "", "", "", "", "", "", "", ""];
         let chrome = |b: &mut Builder<'_>, addr: &str, name: &str, cx: f64| {
-            knob_scaled(b, plate, Cap::ChromeSkirt, addr, name, 52.0, x(cx), ky, dots, INK);
-            set(b, plate, name, x(cx), ly, 15.0, INK, &legend, 0.04);
+            knob_scaled(b, plate, Cap::ChromeSkirt, addr, name, knob_d, x(cx), ky, dots, INK);
+            set(b, plate, name, x(cx), ly + (big - 1.0) * 12.0, 15.0 * big.sqrt(), INK, &legend, 0.04);
         };
         chrome(b, "clean/volume", "VOLUME", 129.0);
         for (addr, name, top, bottom, cx) in [("clean/bright", "Bright", "BRIGHT", "", 181.0), ("clean/deep", "Deep", "DEEP", "", 227.0), ("clean/voice", "Guitar", "GUITAR", "MIC", 273.0)] {
