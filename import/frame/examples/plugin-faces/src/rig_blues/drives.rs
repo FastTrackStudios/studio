@@ -34,7 +34,7 @@ pub const H: f64 = 286.0;
 /// The rendered enclosure, `w` wide, in `color` and `finish` (plus
 /// `extra` options), sized into `root`. Returns its lid (the parent for
 /// controls and print) and the lid's size.
-fn enclosure(b: &mut Builder<'_>, root: NodeId, w: f64, color: &str, finish: &str, extra: &[&str]) -> (NodeId, f64, f64) {
+pub(super) fn enclosure(b: &mut Builder<'_>, root: NodeId, w: f64, color: &str, finish: &str, extra: &[&str]) -> (NodeId, f64, f64) {
     ui::fit_root(b, root, w, H);
     let mut opts = vec![format!("w={w}"), format!("h={H}"), format!("color={color}"), format!("finish={finish}")];
     opts.extend(extra.iter().map(ToString::to_string));
@@ -48,14 +48,14 @@ fn enclosure(b: &mut Builder<'_>, root: NodeId, w: f64, color: &str, finish: &st
 /// A rendered knob: preset `variant` with `options` over it, `d` across,
 /// its shaft at (`cx`, `cy`), bound to `addr`. The face letters its own.
 #[allow(clippy::too_many_arguments)]
-fn knob(b: &mut Builder<'_>, parent: NodeId, variant: &str, options: &[&str], addr: &str, name: &str, d: f64, cx: f64, cy: f64) -> NodeId {
+pub(super) fn knob(b: &mut Builder<'_>, parent: NodeId, variant: &str, options: &[&str], addr: &str, name: &str, d: f64, cx: f64, cy: f64) -> NodeId {
     let mut opts = vec!["touch=44", "ticks=none"];
     opts.extend_from_slice(options);
     let p = Place::new(name).legend(" ").size(d).variant(variant).options(&opts).bind(ui::bind(addr));
     place::centred_at(b, parent, "knob.3d", &p, cx, cy)
 }
 
-fn inter(weight: f64) -> Lettering {
+pub(super) fn inter(weight: f64) -> Lettering {
     Lettering::family(family::INTER).weight(weight)
 }
 
@@ -74,19 +74,19 @@ pub fn level(ns: &str) -> surface_proto::ParamInfo {
     ui::param(&format!("{ns}/level"), "Output", Range::linear(-24.0, 12.0, Unit::Db), 0.0).featured()
 }
 
-fn on(ns: &str) -> surface_proto::ParamInfo {
+pub(super) fn on(ns: &str) -> surface_proto::ParamInfo {
     ui::toggle(&format!("{ns}/on"), "Bypass", true).featured()
 }
 
 /// The footswitch alone (its LED is where the pedal puts it: [`led`]),
 /// `d` across the nut, at (`cx`, `cy`).
-fn stomp(b: &mut Builder<'_>, parent: NodeId, ns: &str, d: f64, cx: f64, cy: f64) -> NodeId {
+pub(super) fn stomp(b: &mut Builder<'_>, parent: NodeId, ns: &str, d: f64, cx: f64, cy: f64) -> NodeId {
     let p = Place::new("Bypass").size(d).variant("none").legend("").bind(Binding::param(format!("{ns}/on"))).options(&["touch=44"]);
     place::centred_at(b, parent, "switch.stomp", &p, cx, cy)
 }
 
 /// The status LED at (`cx`, `cy`), `d` across, lit while `ns/on` is.
-fn led(b: &mut Builder<'_>, parent: NodeId, ns: &str, cx: f64, cy: f64, d: f64, color: &str) -> NodeId {
+pub(super) fn led(b: &mut Builder<'_>, parent: NodeId, ns: &str, cx: f64, cy: f64, d: f64, color: &str) -> NodeId {
     let r = d / 2.0;
     let f = b.add(parent, draw::frame("LED", cx - d, cy - d, 2.0 * d, 2.0 * d));
     b.add(f, draw::with_effects(draw::circle("bezel", d, d, r + (d * 0.16).max(1.2), draw::linear(180.0, &[(0.0, "#2a2b2e"), (1.0, "#060607")])), vec![draw::drop_shadow("#00000080", 0.0, 1.0, 2.0)]));

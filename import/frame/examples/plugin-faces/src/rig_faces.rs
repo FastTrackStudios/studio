@@ -245,7 +245,7 @@ fn pre_entries() -> Vec<Face> {
     let trem = tank_unit(&tank_bind(), TankHalf::Tremolo, "18-gravity-tank-trem", 360.0, 300.0);
     // The spring: frame's spring reverb, trimmed to a rig row.
     let spring = crate::reverb::spring::rig_face("19-spring-reverb", PLUGIN, 560.0, 330.0);
-    vec![d(drives::aqua_puss()), trem, spring]
+    vec![d(crate::rig_blues::filters::aqua_puss_unit()), trem, spring]
 }
 
 fn d_(f: Face) -> Face {
@@ -268,7 +268,7 @@ pub fn faces() -> Vec<Face> {
     v.push(eq());
     v.push(spring_viz());
     v.push(cab());
-    v.extend([d_(drives::cry_baby()), d_(drives::q_tron()), d_(drives::filter_viz()), d_(drives::pitch_voices())]);
+    v.extend([d_(crate::rig_blues::filters::wah_unit()), d_(crate::rig_blues::filters::q_tron_unit()), d_(crate::rig_blues::filters::postal_unit()), d_(drives::pitch_voices())]);
     v
 }
 
@@ -323,11 +323,13 @@ pub fn manifest() -> String {
         "cab": { "face": "54-cab-2x12", "ns": "cab", "size": size(&cab()) },
         // The input stage's units, by block type, and the filter's picture.
         "input": [
-            { "match": ["wah"], "face": "30-wah-cry-baby", "ns": "wah", "size": size(&drives::cry_baby()) },
-            { "match": ["filter"], "face": "31-filter-q-tron", "ns": "qtron", "size": size(&drives::q_tron()) },
+            { "match": ["wah"], "face": "30-wah-unit", "ns": "wah", "size": size(&crate::rig_blues::filters::wah_unit()) },
+            // The envelope filter by its preset: Cory Wong's postal box, or
+            // the John Mayer rig's Q-Tron (the default).
+            { "match": ["postal"], "face": "34-filter-postal", "ns": "env", "size": size(&crate::rig_blues::filters::postal_unit()) },
+            { "match": ["filter", "q-tron", "qtron"], "face": "31-filter-q-tron", "ns": "env", "size": size(&crate::rig_blues::filters::q_tron_unit()) },
             { "match": ["pitch"], "face": "33-pitch-voices", "ns": "pitch", "size": size(&drives::pitch_voices()) },
         ],
-        "filter_picture": { "face": "32-filter-viz", "ns": "qtron", "size": size(&drives::filter_viz()) },
         // Pictures of a block, beside its unit: a reverb's springs.
         "pictures": [ { "match": ["reverb"], "face": "53-spring-viz", "ns": "spring", "size": size(&spring_viz()) } ],
     });

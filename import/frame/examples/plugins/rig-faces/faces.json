@@ -1044,14 +1044,6 @@
       392.0
     ]
   },
-  "filter_picture": {
-    "face": "32-filter-viz",
-    "ns": "qtron",
-    "size": [
-      560.0,
-      286.0
-    ]
-  },
   "gate": {
     "face": "51-gate",
     "ns": "gate",
@@ -1062,24 +1054,37 @@
   },
   "input": [
     {
-      "face": "30-wah-cry-baby",
+      "face": "30-wah-unit",
       "match": [
         "wah"
       ],
       "ns": "wah",
       "size": [
-        150.0,
-        330.0
+        330.0,
+        286.0
+      ]
+    },
+    {
+      "face": "34-filter-postal",
+      "match": [
+        "postal"
+      ],
+      "ns": "env",
+      "size": [
+        600.0,
+        286.0
       ]
     },
     {
       "face": "31-filter-q-tron",
       "match": [
-        "filter"
+        "filter",
+        "q-tron",
+        "qtron"
       ],
-      "ns": "qtron",
+      "ns": "env",
       "size": [
-        340.0,
+        600.0,
         286.0
       ]
     },
@@ -1256,7 +1261,7 @@
       ],
       "ns": "aquapuss",
       "size": [
-        200.0,
+        560.0,
         286.0
       ]
     },

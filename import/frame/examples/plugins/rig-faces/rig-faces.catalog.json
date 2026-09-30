@@ -7425,7 +7425,7 @@
       "featured": true
     },
     {
-      "addr": "qtron/mode",
+      "addr": "env/mode",
       "name": "Mode",
       "short_name": null,
       "group": null,
@@ -7451,7 +7451,7 @@
       "featured": false
     },
     {
-      "addr": "qtron/response",
+      "addr": "env/response",
       "name": "Response",
       "short_name": null,
       "group": null,
@@ -7475,7 +7475,7 @@
       "featured": false
     },
     {
-      "addr": "qtron/range",
+      "addr": "env/range",
       "name": "Range",
       "short_name": null,
       "group": null,
@@ -7499,7 +7499,7 @@
       "featured": false
     },
     {
-      "addr": "qtron/peak",
+      "addr": "env/peak",
       "name": "Peak",
       "short_name": null,
       "group": null,
@@ -7516,7 +7516,7 @@
       "featured": true
     },
     {
-      "addr": "qtron/gain",
+      "addr": "env/gain",
       "name": "Gain",
       "short_name": null,
       "group": null,
@@ -7533,7 +7533,7 @@
       "featured": true
     },
     {
-      "addr": "qtron/boost",
+      "addr": "env/boost",
       "name": "Boost",
       "short_name": null,
       "group": null,
@@ -7557,7 +7557,7 @@
       "featured": false
     },
     {
-      "addr": "qtron/sweep",
+      "addr": "env/sweep",
       "name": "Sweep",
       "short_name": null,
       "group": null,
@@ -7581,7 +7581,7 @@
       "featured": false
     },
     {
-      "addr": "qtron/on",
+      "addr": "env/on",
       "name": "Bypass",
       "short_name": null,
       "group": null,
