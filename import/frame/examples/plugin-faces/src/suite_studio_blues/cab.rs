@@ -202,7 +202,7 @@ fn dynamic(b: &mut Builder<'_>, h: NodeId) {
 /// A mic's drag handle in `grille`: its area runs from the speaker's
 /// centre out to its edge (x = position, 0 at the centre) and down
 /// (y = distance); `left` mirrors the position axis.
-fn mic_handle(b: &mut Builder<'_>, grille: NodeId, n: u8, left: bool, (gw, gh): (f64, f64)) {
+pub fn mic_handle(b: &mut Builder<'_>, grille: NodeId, n: u8, left: bool, (gw, gh): (f64, f64)) {
     let ns = format!("cab/m{n}");
     let r = gh * 0.4;
     let (ax, aw) = if left { (gw / 2.0 - r, r) } else { (gw / 2.0, r) };

@@ -13,9 +13,9 @@
 //! Every unit binds its own namespace in the `suite-studio-blues` catalog.
 
 pub mod amps;
-mod cab;
+pub mod cab;
 mod desk;
-mod parts;
+pub mod parts;
 pub mod pedals;
 mod tank;
 

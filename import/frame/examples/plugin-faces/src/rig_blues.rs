@@ -1,37 +1,165 @@
-//! Rig pages: the blues rig, laid out as sections a player swipes between.
+//! Rig pages: the blues rig as sections a player swipes between
+//! (docs/rig-sections.md). Every page carries the section bar — one icon
+//! per section, a dot under the one showing — and is built from the
+//! units' own faces (`face::embed`), so every control on it is the unit's
+//! own, bound to the same params.
 //!
-//! The rig follows the blues amp-sim suite's chain: Pre (an envelope
-//! filter) → Amp-Drive → Verb & Trem → Cab → EQ & Comp → Time (delays and
-//! reverbs). Each section is one page; on a phone you swipe between them,
-//! on a wide screen several sit side by side or in rows, and any module on
-//! a page zooms to fill the screen.
+//! Sections, in signal order: Input, Drives, Pre-FX, Amp/Cab, Post EQ/Comp,
+//! Post-FX, Time. A **module** is a saved view of one or more sections the
+//! player configures, and saves presets for, as one unit.
 //!
-//! This file builds the **Amp-Drive** section: the amp head with its drive
-//! pedals seated in the grille, in chain order (boost, mild drive, teal
-//! drive), plus an open slot for a fourth. Pages are built from the suite's
-//! own faces (`face::embed`), so every knob on them is the pedal's or the
-//! amp's own, bound to the same params.
-//!
-//! - `01-amp-drive` — wide (desktop, tablet, phone landscape): the head at
-//!   its own size, pedals in the grille.
-//! - `02-amp-drive-phone` — phone portrait (390 wide): the amp's controls
-//!   as a touch-sized strip, then the pedals two by two (tap one to zoom).
+//! - `01-drives`, `02-drives-phone` — the four drives on a board.
+//! - `03-amp-cab`, `04-amp-cab-phone` — the head standing on its 2×12,
+//!   the gate in front, the cab's mic rail under it.
+//! - `05-module-drive-amp` — the Drive → Amp module: the drives' row, then
+//!   the Amp/Cab/Gate section, one unit with one preset.
+//! - `11…14`, `21`, `22` — the units themselves.
+
+pub mod amp_cab;
+pub mod drives;
 
 use document_proto::{NodeId, TextAlign};
-use surface_kit::{Place, draw};
+use surface_kit::draw::{self, Lettering, family};
 use surface_widgets::Builder;
 
 use crate::face::{Face, canvas, embed, face_size};
-use crate::comp_tube::ui as place;
 use crate::reverb::ui;
-use crate::suite_studio_blues::{amps, pedals};
+use crate::suite_studio_blues::amps;
+use crate::suite_studio_blues::parts::set;
 
 /// The plugin id every rig page's params are merged under.
 pub const PLUGIN: &str = "rig-blues";
 
-/// The drive pedals, in chain order.
-fn drives() -> Vec<Face> {
-    vec![pedals::plain_boost(), pedals::mild_drive(), pedals::teal_drive()]
+const BG: &str = "#0e0f12";
+const INK: &str = "#e8e6e1";
+const DIM: &str = "#ffffff45";
+/// The section bar's height.
+const BAR_H: f64 = 76.0;
+
+/// The rig's sections, in signal order.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Section {
+    Input,
+    Drives,
+    PreFx,
+    AmpCab,
+    PostEq,
+    PostFx,
+    Time,
+}
+
+impl Section {
+    pub const ALL: [Self; 7] = [Self::Input, Self::Drives, Self::PreFx, Self::AmpCab, Self::PostEq, Self::PostFx, Self::Time];
+
+    #[must_use]
+    pub fn title(self) -> &'static str {
+        match self {
+            Self::Input => "INPUT",
+            Self::Drives => "DRIVES",
+            Self::PreFx => "PRE-FX",
+            Self::AmpCab => "AMP / CAB",
+            Self::PostEq => "POST EQ · COMP",
+            Self::PostFx => "POST-FX",
+            Self::Time => "TIME",
+        }
+    }
+
+    /// The icon, drawn in a `s`-square box at (`x`, `y`) as strokes.
+    fn icon(self, b: &mut Builder<'_>, parent: NodeId, (x, y, s): (f64, f64, f64), color: &str) {
+        let p = |fx: f64, fy: f64| (x + fx * s, y + fy * s);
+        let arc = |cx: f64, cy: f64, r: f64, a0: f64, a1: f64| -> Vec<(f64, f64)> {
+            (0..=16).map(|i| {
+                let a = (a0 + (a1 - a0) * f64::from(i) / 16.0).to_radians();
+                p(cx + r * a.cos(), cy + r * a.sin())
+            }).collect()
+        };
+        let lines: Vec<Vec<(f64, f64)>> = match self {
+            // A jack plug: barrel, tip, cable.
+            Self::Input => vec![vec![p(0.1, 0.5), p(0.35, 0.5)], vec![p(0.35, 0.36), p(0.72, 0.36), p(0.72, 0.64), p(0.35, 0.64), p(0.35, 0.36)], vec![p(0.72, 0.5), p(0.92, 0.5)]],
+            // A stompbox: box, two knobs, the switch.
+            Self::Drives => vec![
+                vec![p(0.22, 0.08), p(0.78, 0.08), p(0.78, 0.92), p(0.22, 0.92), p(0.22, 0.08)],
+                arc(0.37, 0.28, 0.08, 0.0, 360.0),
+                arc(0.63, 0.28, 0.08, 0.0, 360.0),
+                arc(0.5, 0.7, 0.1, 0.0, 360.0),
+            ],
+            // A spring.
+            Self::PreFx => vec![(0..=40).map(|i| {
+                let t = f64::from(i) / 40.0;
+                p(0.08 + 0.84 * t, 0.5 + 0.22 * (t * std::f64::consts::TAU * 5.0).sin())
+            }).collect()],
+            // A head on a cab.
+            Self::AmpCab => vec![
+                vec![p(0.12, 0.08), p(0.88, 0.08), p(0.88, 0.36), p(0.12, 0.36), p(0.12, 0.08)],
+                vec![p(0.12, 0.42), p(0.88, 0.42), p(0.88, 0.92), p(0.12, 0.92), p(0.12, 0.42)],
+                arc(0.32, 0.67, 0.13, 0.0, 360.0),
+                arc(0.68, 0.67, 0.13, 0.0, 360.0),
+            ],
+            // Three faders.
+            Self::PostEq => {
+                let mut v = Vec::new();
+                for (fx, fy) in [(0.25, 0.3), (0.5, 0.65), (0.75, 0.45)] {
+                    v.push(vec![p(fx, 0.1), p(fx, 0.9)]);
+                    v.push(vec![p(fx - 0.09, fy), p(fx + 0.09, fy)]);
+                }
+                v
+            }
+            // A wave rising and falling in depth: modulation.
+            Self::PostFx => vec![(0..=40).map(|i| {
+                let t = f64::from(i) / 40.0;
+                p(0.06 + 0.88 * t, 0.5 + (0.1 + 0.25 * t) * (t * std::f64::consts::TAU * 2.0).sin())
+            }).collect()],
+            // A clock.
+            Self::Time => vec![arc(0.5, 0.5, 0.4, 0.0, 360.0), vec![p(0.5, 0.2), p(0.5, 0.5), p(0.72, 0.62)]],
+        };
+        b.add(parent, ui::strokes(self.title(), &lines, 2.0, draw::solid(color)));
+    }
+}
+
+/// The section bar across the top of a page `w` wide: the rig's name,
+/// the page's title, then an icon per section with a dot under each of
+/// `current`. Returns the bar's height.
+fn section_bar(b: &mut Builder<'_>, root: NodeId, w: f64, current: &[Section], title: &str) -> f64 {
+    let bar = b.add(root, draw::rect("Section bar", 0.0, 0.0, w, BAR_H, draw::linear(180.0, &[(0.0, "#1a1b20"), (1.0, "#131418")])));
+    b.add(bar, draw::rect("rule", 0.0, BAR_H - 1.0, w, 1.0, draw::solid("#ffffff14")));
+    let compact = w < 600.0;
+    // The icons: centred on a phone, right of the title on a wide page.
+    let (s, gap) = if compact { (26.0, 20.0) } else { (28.0, 30.0) };
+    let n = Section::ALL.len() as f64;
+    let span = n * s + (n - 1.0) * gap;
+    let (x0, iy) = if compact { ((w - span) / 2.0, 12.0) } else { (w - span - 28.0, 16.0) };
+    for (i, sec) in Section::ALL.iter().enumerate() {
+        let x = x0 + i as f64 * (s + gap);
+        let on = current.contains(sec);
+        sec.icon(b, bar, (x, iy, s), if on { INK } else { DIM });
+        if on {
+            b.add(bar, draw::circle("current", x + s / 2.0, iy + s + 11.0, 3.2, draw::solid(INK)));
+        }
+    }
+    let head = Lettering::family(family::OSWALD).weight(600.0);
+    if compact {
+        set(b, root, title, w / 2.0, BAR_H + 22.0, 15.0, INK, &head, 0.12);
+        BAR_H + 40.0
+    } else {
+        set(b, bar, "BLUES RIG", 28.0 + 50.0, BAR_H * 0.34, 11.0, "#ffffff80", &Lettering::family(family::INTER).weight(700.0), 0.2);
+        let t = set(b, bar, title, 28.0, BAR_H * 0.64, 20.0, INK, &head, 0.1);
+        if let Some(n) = b.scene.node_mut(t) {
+            if let document_proto::NodeKind::Text(d) = &mut n.kind {
+                d.align = TextAlign::Left;
+            }
+            n.transform.tx = 28.0;
+        }
+        BAR_H
+    }
+}
+
+/// A page `w × h` on the stage background.
+fn page(b: &mut Builder<'_>, root: NodeId, w: f64, h: f64) {
+    if let Some(n) = b.scene.node_mut(root) {
+        n.size = document_proto::Size { width: w, height: h };
+        n.fills = vec![draw::linear(180.0, &[(0.0, "#16171b"), (0.6, BG), (1.0, "#08090b")])];
+        n.clips_content = true;
+    }
 }
 
 /// The params of every face on a page.
@@ -47,133 +175,196 @@ fn params_of(faces: &[&Face]) -> Vec<surface_proto::ParamInfo> {
     out
 }
 
-/// An open pedal slot: a dashed outline the height of a pedal, "+ DRIVE".
-fn open_slot(b: &mut Builder<'_>, parent: NodeId, (x, y, w, h): (f64, f64, f64, f64)) -> NodeId {
-    let mut slot = draw::frame("open slot", x, y, w, h);
-    slot.stroke = document_proto::Stroke {
-        paints: vec![draw::solid("#ffffff3d")],
-        weight: 2.0,
-        align: document_proto::StrokeAlign::Inside,
-        dash_pattern: vec![8.0, 6.0],
-        ..document_proto::Stroke::default()
-    };
-    slot.fills = vec![draw::solid("#00000040")];
-    let slot = b.add(parent, draw::rounded(slot, 10.0));
-    b.add(slot, draw::text("plus", "+", 0.0, h / 2.0 - 34.0, w, 40.0, "#ffffff80", TextAlign::Center));
-    b.add(slot, draw::text("label", "DRIVE", 0.0, h / 2.0 + 14.0, w, 12.0, "#ffffff80", TextAlign::Center));
-    slot
-}
-
-/// Pedals `faces` (plus `open` empty slots) across `(x, y, w, h)` at
-/// `scale`, evenly spaced, bottoms aligned.
-fn pedal_row(b: &mut Builder<'_>, parent: NodeId, faces: &[Face], open: usize, (x, y, w, h): (f64, f64, f64, f64), scale: f64) {
-    let sizes: Vec<(f64, f64)> = faces.iter().map(face_size).chain(std::iter::repeat_n((156.0, 286.0), open)).collect();
-    let total: f64 = sizes.iter().map(|s| s.0 * scale).sum();
-    let gap = ((w - total) / (sizes.len() as f64 + 1.0)).max(0.0);
-    let mut cx = x + gap;
-    for (i, (pw, ph)) in sizes.iter().enumerate() {
-        let (sw, sh) = (pw * scale, ph * scale);
-        let rect = (cx, y + h - sh, sw, sh);
-        match faces.get(i) {
-            Some(f) => {
-                embed(b, parent, f, rect);
-            }
-            None => {
-                open_slot(b, parent, rect);
-            }
-        }
-        cx += sw + gap;
+/// A pedalboard at (`x`, `y`) `w × h`: black aluminium rails.
+fn board(b: &mut Builder<'_>, parent: NodeId, (x, y, w, h): (f64, f64, f64, f64)) {
+    let base = draw::rounded(draw::rect("board", x, y, w, h, draw::linear(180.0, &[(0.0, "#26272b"), (1.0, "#141518")])), 10.0);
+    b.add(parent, draw::with_effects(base, vec![draw::drop_shadow("#000000b0", 0.0, 10.0, 18.0)]));
+    let rails = ((h - 24.0) / 22.0) as usize;
+    for i in 0..rails {
+        let ry = y + 14.0 + i as f64 * 22.0;
+        b.add(parent, draw::rect("rail slot", x + 12.0, ry, w - 24.0, 8.0, draw::linear(180.0, &[(0.0, "#050506"), (1.0, "#1c1d20")])));
     }
 }
 
-/// The wide Amp-Drive page: the clean head, pedals in its grille.
-#[must_use]
-pub fn amp_drive() -> Face {
-    let drives = drives();
-    let amp = amps::clean_head_with(|b, grille| {
-        let (gw, gh) = b.scene.node(grille).map_or((0.0, 0.0), |n| (n.size.width, n.size.height));
-        // Pedals stand on the grille's floor, a little under full size.
-        let scale = ((gh - 36.0) / 286.0).min(1.0);
-        pedal_row(b, grille, &drives, 1, (0.0, 0.0, gw, gh - 16.0), scale);
-    });
-    let mut faces: Vec<&Face> = drives.iter().collect();
-    faces.push(&amp);
-    let params = params_of(&faces);
-    let Face { scene, .. } = amp;
-    Face { file: "01-amp-drive", plugin: PLUGIN, scene, params, streams: Vec::new() }
+/// `faces` in a row from `x`, bottoms on `floor`, `gap` apart at
+/// `scale`. Returns the row's right edge.
+fn row(b: &mut Builder<'_>, parent: NodeId, faces: &[Face], x: f64, floor: f64, gap: f64, scale: f64) -> f64 {
+    let mut cx = x;
+    for f in faces {
+        let (w, h) = face_size(f);
+        embed(b, parent, f, (cx, floor - h * scale, w * scale, h * scale));
+        cx += w * scale + gap;
+    }
+    cx - gap
 }
 
-/// Phone portrait: the amp's controls as a strip, the pedals two by two.
+fn row_width(faces: &[Face], gap: f64, scale: f64) -> f64 {
+    faces.iter().map(|f| face_size(f).0 * scale).sum::<f64>() + gap * (faces.len() as f64 - 1.0)
+}
+
+/// The Drives section: the four on a board.
 #[must_use]
-pub fn amp_drive_phone() -> Face {
+pub fn drives_page() -> Face {
+    let pedals = drives::all();
+    const GAP: f64 = 30.0;
+    let rw = row_width(&pedals, GAP, 1.0);
+    let (w, h) = (rw + 160.0, BAR_H + 460.0);
+    let scene = canvas("Drives", |b, root| {
+        page(b, root, w, h);
+        let top = section_bar(b, root, w, &[Section::Drives], "DRIVES");
+        let (bx, by, bw, bh) = (40.0, top + 50.0, w - 80.0, 360.0);
+        board(b, root, (bx, by, bw, bh));
+        row(b, root, &pedals, (w - rw) / 2.0, by + bh - 36.0, GAP, 1.0);
+    });
+    let params = params_of(&pedals.iter().collect::<Vec<_>>());
+    Face { file: "01-drives", plugin: PLUGIN, scene, params, streams: Vec::new() }
+}
+
+/// The Drives section on a phone: two by two, the wide gold one across.
+#[must_use]
+pub fn drives_phone() -> Face {
     const W: f64 = 390.0;
     const H: f64 = 844.0;
-    const INK: &str = "#141414";
-    let drives = drives();
-    let amp = amps::clean_head();
-    let scene = canvas("Amp-Drive (phone)", |b, root| {
-        if let Some(n) = b.scene.node_mut(root) {
-            n.size = document_proto::Size { width: W, height: H };
-            n.fills = vec![draw::solid("#0e0f12")];
+    let pedals = drives::all();
+    let scene = canvas("Drives (phone)", |b, root| {
+        page(b, root, W, H);
+        let top = section_bar(b, root, W, &[Section::Drives], "DRIVES");
+        // Row 1: the boost and the green one; row 2: the gold one alone;
+        // row 3: the British one. Each row scaled to fit 350 wide.
+        let rows: [&[usize]; 3] = [&[0, 3], &[1], &[2]];
+        let mut y = top + 12.0;
+        for r in rows {
+            let make: [fn() -> Face; 4] = [drives::blade, drives::pegasus, drives::british_blues, drives::tube_drive];
+            let faces: Vec<Face> = r.iter().map(|&i| make[i]()).collect();
+            let scale = (350.0 / row_width(&faces, 16.0, 1.0)).min(0.74);
+            let rw = row_width(&faces, 16.0, scale);
+            y += 286.0 * scale;
+            row(b, root, &faces, (W - rw) / 2.0, y, 16.0, scale);
+            y += 14.0;
         }
-        // Section header, as the rig shell shows it (dots = sections).
-        b.add(root, draw::text("section", "AMP · DRIVE", 20.0, 58.0, 250.0, 15.0, "#e8e6e1", TextAlign::Left));
-        for i in 0..6 {
-            let on = i == 1;
-            b.add(root, draw::circle("page dot", 300.0 + f64::from(i) * 13.0, 67.0, if on { 3.5 } else { 2.5 }, draw::solid(if on { "#e8e6e1" } else { "#ffffff40" })));
-        }
-        // The amp strip: the head's faceplate steel, its knobs touch-sized.
-        let plate = draw::rounded(draw::frame("amp strip", 12.0, 88.0, W - 24.0, 232.0), 8.0);
-        let mut plate = plate;
-        plate.fills = vec![draw::linear(180.0, &[(0.0, "#d0d1d3"), (1.0, "#aeafb2")])];
-        let plate = b.add(root, plate);
-        let slab = draw::Lettering::family(draw::family::PLAYFAIR_DISPLAY).weight(900.0).italic();
-        let legend = draw::Lettering::family(draw::family::PIRATA_ONE);
-        b.add(plate, draw::styled_text("logo", "OPEN ROOM", 14.0, 10.0, 200.0, 18.0, "#0e0e0e", TextAlign::Left, &slab));
-        let knob = |b: &mut Builder<'_>, addr: &str, name: &str, cx: f64, cy: f64, d: f64| {
-            let p = Place::new(name).legend(" ").size(d).variant("spun_metal").options(&["skirt=knurled", "touch=44"]).bind(ui::bind(addr));
-            place::centred_at(b, plate, "knob.3d", &p, cx, cy);
-            b.add(plate, draw::styled_text("legend", &name.to_uppercase(), cx - 36.0, cy + d / 2.0 + 4.0, 72.0, 11.0, INK, TextAlign::Center, &legend));
-        };
-        let row1 = ["Volume", "Treble", "Middle", "Bass", "Level"];
-        for (i, name) in row1.iter().enumerate() {
-            knob(b, &format!("clean/{}", name.to_lowercase()), name, 36.0 + f64::from(i as u32) * 73.0, 68.0, 50.0);
-        }
-        for (i, (addr, name)) in [("clean/high", "High"), ("clean/low", "Low"), ("clean/send", "Send"), ("clean/return", "Return")].iter().enumerate() {
-            knob(b, addr, name, 44.0 + f64::from(i as u32) * 64.0, 160.0, 40.0);
-        }
-        // The slide switches as pills.
-        for (i, (addr, name)) in [("clean/bright", "BRIGHT"), ("clean/mid", "MID"), ("clean/reverb_on", "VERB")].iter().enumerate() {
-            let p = Place::new(*name).size(26.0).variant("red").bind(ui::bind(addr));
-            let cy = 132.0 + f64::from(i as u32) * 30.0;
-            place::centred_at(b, plate, "switch.mini_slide", &p, 300.0, cy);
-            b.add(plate, draw::text("pill", name, 314.0, cy - 6.0, 44.0, 9.0, INK, TextAlign::Left));
-        }
-        // The drives, two by two: each the pedal itself (tap to zoom).
-        let scale = 0.82;
-        let (pw, ph) = (156.0 * scale, 286.0 * scale);
-        let cell = |i: usize| {
-            let (col, row) = (i % 2, i / 2);
-            let gap = (W - 2.0 * pw) / 3.0;
-            (gap + col as f64 * (pw + gap), 340.0 + row as f64 * (ph + 18.0))
-        };
-        for (i, f) in drives.iter().enumerate() {
-            let (x, y) = cell(i);
-            let (fw, fh) = face_size(f);
-            let s = (ph / fh).min(pw / fw);
-            embed(b, root, f, (x + (pw - fw * s) / 2.0, y, fw * s, fh * s));
-        }
-        let (x, y) = cell(3);
-        open_slot(b, root, (x, y, pw, ph));
     });
-    let mut faces: Vec<&Face> = drives.iter().collect();
-    faces.push(&amp);
-    let params = params_of(&faces);
-    Face { file: "02-amp-drive-phone", plugin: PLUGIN, scene, params, streams: Vec::new() }
+    let params = params_of(&pedals.iter().collect::<Vec<_>>());
+    Face { file: "02-drives-phone", plugin: PLUGIN, scene, params, streams: Vec::new() }
 }
 
-/// Every blues-rig page.
+/// The Amp/Cab section's parts at `scale` from (`x`, `y`): the gate
+/// (if `gate_x` is given, at that x on the floor), the head on its cab,
+/// the rail under. Returns the bottom.
+struct AmpCab {
+    head: Face,
+    cab: Face,
+    gate: Face,
+}
+
+impl AmpCab {
+    fn new() -> Self {
+        Self { head: amps::clean_head(), cab: amp_cab::cab(), gate: amp_cab::gate() }
+    }
+    fn faces(&self) -> Vec<&Face> {
+        vec![&self.gate, &self.head, &self.cab]
+    }
+    /// The stack at (`x`, `y`), `scale`: head on cab, rail under (in
+    /// `rows`). Returns the cab's floor line and the rail's bottom.
+    fn stack(&self, b: &mut Builder<'_>, parent: NodeId, (x, y): (f64, f64), scale: f64, rows: usize) -> (f64, f64) {
+        let (cw, _) = face_size(&self.cab);
+        self.stack_with_rail(b, parent, (x, y), scale, Some((x, cw * scale, rows)))
+    }
+    /// As [`Self::stack`], the rail (if any) at its own x, width and rows.
+    fn stack_with_rail(&self, b: &mut Builder<'_>, parent: NodeId, (x, y): (f64, f64), scale: f64, rail: Option<(f64, f64, usize)>) -> (f64, f64) {
+        let (hw, hh) = face_size(&self.head);
+        let (cw, ch) = face_size(&self.cab);
+        let cx = x + (cw - hw) * scale / 2.0;
+        embed(b, parent, &self.head, (cx, y, hw * scale, hh * scale));
+        let cy = y + hh * scale - 6.0 * scale;
+        embed(b, parent, &self.cab, (x, cy, cw * scale, ch * scale));
+        let floor = cy + ch * scale;
+        let Some((rx, rw, rows)) = rail else { return (floor, floor) };
+        let rail = amp_cab::cab_rail(b, parent, (rx, floor + 24.0, rw), rows);
+        let rh = b.scene.node(rail).map_or(0.0, |n| n.size.height);
+        (floor, floor + 24.0 + rh)
+    }
+}
+
+/// The Amp/Cab section: the head on its 2×12, the gate on the floor in
+/// front of it, the mics' rail under.
+#[must_use]
+pub fn amp_cab_page() -> Face {
+    let ac = AmpCab::new();
+    let (gw, _) = face_size(&ac.gate);
+    let (w, h) = (40.0 + gw + 40.0 + 1200.0 + 40.0, BAR_H + 40.0 + 548.0 + 700.0 + 24.0 + 108.0 + 40.0);
+    let scene = canvas("Amp / Cab", |b, root| {
+        page(b, root, w, h);
+        let top = section_bar(b, root, w, &[Section::AmpCab], "AMP / CAB · GATE");
+        let (floor, _) = ac.stack(b, root, (40.0 + gw + 40.0, top + 40.0), 1.0, 1);
+        row(b, root, std::slice::from_ref(&ac.gate), 40.0, floor, 0.0, 1.0);
+    });
+    let params = params_of(&ac.faces());
+    Face { file: "03-amp-cab", plugin: PLUGIN, scene, params, streams: Vec::new() }
+}
+
+/// The Amp/Cab section on a phone: the stack across the screen, the gate
+/// and the rail (in two rows) under it.
+#[must_use]
+pub fn amp_cab_phone() -> Face {
+    const W: f64 = 390.0;
+    const H: f64 = 844.0;
+    let ac = AmpCab::new();
+    let scene = canvas("Amp / Cab (phone)", |b, root| {
+        page(b, root, W, H);
+        let top = section_bar(b, root, W, &[Section::AmpCab], "AMP / CAB · GATE");
+        let scale = (W - 24.0) / 1200.0;
+        // The gate at the right, the cab's rail (two rows) beside it.
+        let gs = 0.75;
+        let (gw, gh) = face_size(&ac.gate);
+        let rail_w = W - 24.0 - gw * gs - 12.0;
+        let (floor, _) = ac.stack_with_rail(b, root, (12.0, top + 8.0), scale, Some((12.0, rail_w, 2)));
+        embed(b, root, &ac.gate, (W - 12.0 - gw * gs, floor + 24.0, gw * gs, gh * gs));
+    });
+    let params = params_of(&ac.faces());
+    Face { file: "04-amp-cab-phone", plugin: PLUGIN, scene, params, streams: Vec::new() }
+}
+
+/// The Drive → Amp module: one unit, saved and recalled as one preset —
+/// the drives' row on the floor, then the gate, then the head on its cab.
+#[must_use]
+pub fn module_drive_amp() -> Face {
+    const GAP: f64 = 28.0;
+    // The pedals a little over the amp's scale, so they read at a glance.
+    const PS: f64 = 1.35;
+    let pedals = drives::all();
+    let ac = AmpCab::new();
+    let rw = row_width(&pedals, GAP, PS);
+    let (gw, _) = face_size(&ac.gate);
+    let gw = gw * PS;
+    let stack_x = 40.0 + rw + 40.0 + gw + 60.0;
+    let (w, h) = (stack_x + 1200.0 + 40.0, BAR_H + 40.0 + 548.0 + 700.0 + 24.0 + 108.0 + 40.0);
+    let scene = canvas("Drive → Amp", |b, root| {
+        page(b, root, w, h);
+        let top = section_bar(b, root, w, &[Section::Drives, Section::AmpCab], "MODULE · DRIVE → AMP");
+        // The module's preset, saved and recalled as one.
+        let pill = draw::rounded(draw::rect("Preset", 330.0, 20.0, 300.0, 36.0, draw::solid("#00000088")), 18.0);
+        let pill = b.add(root, draw::stroked(pill, "#ffffff30", 1.0));
+        set(b, pill, "PRESET   Slow Hand Clean", 140.0, 18.0, 12.0, INK, &Lettering::family(family::INTER).weight(600.0), 0.04);
+        b.add(pill, ui::strokes("open", &[vec![(268.0, 15.0), (274.0, 21.0), (280.0, 15.0)]], 1.6, draw::solid(INK)));
+        let (floor, _) = ac.stack(b, root, (stack_x, top + 40.0), 1.0, 1);
+        let bh = 286.0 * PS + 70.0;
+        board(b, root, (24.0, floor - bh + 36.0, rw + 32.0 + 40.0 + gw, bh));
+        let end = row(b, root, &pedals, 40.0, floor, GAP, PS);
+        // The chain runs on past the drives: the gate, then the amp.
+        row(b, root, std::slice::from_ref(&ac.gate), end + 40.0, floor, 0.0, PS);
+    });
+    let mut faces: Vec<&Face> = pedals.iter().collect();
+    faces.extend(ac.faces());
+    let params = params_of(&faces);
+    Face { file: "05-module-drive-amp", plugin: PLUGIN, scene, params, streams: Vec::new() }
+}
+
+/// Every blues-rig page, then the units.
 #[must_use]
 pub fn faces() -> Vec<Face> {
-    vec![amp_drive(), amp_drive_phone()]
+    let mut v = vec![drives_page(), drives_phone(), amp_cab_page(), amp_cab_phone(), module_drive_amp()];
+    v.extend(drives::all());
+    v.push(amp_cab::cab());
+    v.push(amp_cab::gate());
+    v
 }
