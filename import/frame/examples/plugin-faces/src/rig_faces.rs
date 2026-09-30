@@ -18,7 +18,7 @@ use serde_json::json;
 use surface_kit::Place;
 use surface_proto::{Range, Unit};
 
-use crate::face::{Face, canvas};
+use crate::face::{Face, canvas, face_size};
 use crate::reverb::ui;
 use crate::rig_blues::drives;
 use crate::suite_studio_blues::amps::{self, AmpModel};
@@ -114,16 +114,23 @@ pub fn faces() -> Vec<Face> {
 /// `faces.json`: which face draws which block.
 #[must_use]
 pub fn manifest() -> String {
-    let drives: Vec<_> = drive_entries().into_iter().map(|(f, ns, m)| json!({ "match": m, "face": f.file, "ns": ns })).collect();
+    let size = |f: &Face| {
+        let (w, h) = face_size(f);
+        json!([w.round(), h.round()])
+    };
+    let drives: Vec<_> = drive_entries().into_iter().map(|(f, ns, m)| json!({ "match": m, "face": f.file, "ns": ns, "size": size(&f) })).collect();
     let amps: Vec<_> = AmpModel::EVERY
         .iter()
-        .map(|m| json!({ "match": amp_match(*m), "face": amp_face(*m).file, "ns": ns(*m), "name": m.short() }))
+        .map(|m| {
+            let f = amp_face(*m);
+            json!({ "match": amp_match(*m), "face": f.file, "ns": ns(*m), "name": m.short(), "size": size(&f) })
+        })
         .collect();
     let doc = json!({
         "drives": drives,
         "amps": amps,
-        "gate": { "face": "51-gate", "ns": "gate" },
-        "eq": { "face": "52-amp-eq", "ns": "eq" },
+        "gate": { "face": "51-gate", "ns": "gate", "size": size(&gate()) },
+        "eq": { "face": "52-amp-eq", "ns": "eq", "size": size(&eq()) },
     });
     serde_json::to_string_pretty(&doc).expect("json")
 }

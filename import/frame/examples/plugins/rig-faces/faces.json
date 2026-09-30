@@ -7,7 +7,11 @@
         "dumble sss"
       ],
       "name": "DUMBLE SSS",
-      "ns": "dumble_sss"
+      "ns": "dumble_sss",
+      "size": [
+        792.0,
+        392.0
+      ]
     },
     {
       "face": "21-amp-dumble-ods",
@@ -16,7 +20,11 @@
         "ods"
       ],
       "name": "DUMBLE ODS",
-      "ns": "dumble_ods"
+      "ns": "dumble_ods",
+      "size": [
+        792.0,
+        392.0
+      ]
     },
     {
       "face": "22-amp-vibroverb",
@@ -24,7 +32,11 @@
         "vibroverb"
       ],
       "name": "'64 VIBROVERB",
-      "ns": "vibroverb"
+      "ns": "vibroverb",
+      "size": [
+        792.0,
+        392.0
+      ]
     },
     {
       "face": "23-amp-tworock",
@@ -35,7 +47,11 @@
         "trck"
       ],
       "name": "TWO-ROCK",
-      "ns": "tworock"
+      "ns": "tworock",
+      "size": [
+        792.0,
+        392.0
+      ]
     },
     {
       "face": "24-amp-deluxe",
@@ -44,7 +60,11 @@
         "deluxe"
       ],
       "name": "DELUXE REVERB",
-      "ns": "deluxe"
+      "ns": "deluxe",
+      "size": [
+        792.0,
+        392.0
+      ]
     },
     {
       "face": "25-amp-twin",
@@ -53,7 +73,11 @@
         "twin"
       ],
       "name": "TWIN REVERB",
-      "ns": "twin"
+      "ns": "twin",
+      "size": [
+        792.0,
+        392.0
+      ]
     }
   ],
   "drives": [
@@ -62,21 +86,33 @@
       "match": [
         "king of tone"
       ],
-      "ns": "kingoftone"
+      "ns": "kingoftone",
+      "size": [
+        240.0,
+        286.0
+      ]
     },
     {
       "face": "16-drive-morning-glory",
       "match": [
         "morning glory"
       ],
-      "ns": "morningglory"
+      "ns": "morningglory",
+      "size": [
+        200.0,
+        286.0
+      ]
     },
     {
       "face": "11-drive-blade",
       "match": [
         "katana"
       ],
-      "ns": "katana"
+      "ns": "katana",
+      "size": [
+        172.0,
+        286.0
+      ]
     },
     {
       "face": "12-drive-pegasus",
@@ -84,7 +120,11 @@
         "klon",
         "centaur"
       ],
-      "ns": "klon"
+      "ns": "klon",
+      "size": [
+        400.0,
+        286.0
+      ]
     },
     {
       "face": "13-drive-british-blues",
@@ -92,7 +132,11 @@
         "bluesbreaker",
         "blues breaker"
       ],
-      "ns": "bluesbreaker"
+      "ns": "bluesbreaker",
+      "size": [
+        240.0,
+        286.0
+      ]
     },
     {
       "face": "14-drive-tube-drive",
@@ -104,15 +148,27 @@
         "ts808",
         "screamer"
       ],
-      "ns": "tubescreamer"
+      "ns": "tubescreamer",
+      "size": [
+        200.0,
+        286.0
+      ]
     }
   ],
   "eq": {
     "face": "52-amp-eq",
-    "ns": "eq"
+    "ns": "eq",
+    "size": [
+      792.0,
+      392.0
+    ]
   },
   "gate": {
     "face": "51-gate",
-    "ns": "gate"
+    "ns": "gate",
+    "size": [
+      250.0,
+      392.0
+    ]
   }
 }
