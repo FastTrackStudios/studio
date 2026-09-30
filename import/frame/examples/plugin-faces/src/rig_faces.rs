@@ -149,8 +149,12 @@ fn pre_entries() -> Vec<Face> {
     let d = |f: Face| Face { plugin: PLUGIN, ..f };
     // The rig row's tank: the suite's spring tank, compact, the knobs as big
     // as a row allows.
-    let tank = crate::suite_studio_blues::tank::spring_tank_compact(&tank_bind(), "18-pedal-gravity-tank", 760.0, 300.0);
-    vec![d(drives::aqua_puss()), tank]
+    // The Gravity Tank as two units, each loadable on its own: its
+    // harmonic tremolo on a motion block, its spring on a reverb block.
+    use crate::suite_studio_blues::tank::{TankHalf, tank_unit};
+    let trem = tank_unit(&tank_bind(), TankHalf::Tremolo, "18-gravity-tank-trem", 360.0, 300.0);
+    let spring = tank_unit(&tank_bind(), TankHalf::Spring, "19-gravity-tank-spring", 470.0, 300.0);
+    vec![d(drives::aqua_puss()), trem, spring]
 }
 
 /// Every face in the set.
@@ -184,9 +188,9 @@ pub fn manifest() -> String {
     let pre = pre_entries();
     let pre = vec![
         json!({ "match": ["aqua"], "face": pre[0].file, "ns": "aquapuss", "size": size(&pre[0]) }),
-        // One face over two blocks: `also` names the other block its
-        // `trem/` controls belong to.
-        json!({ "match": ["gravity"], "face": pre[1].file, "ns": "spring", "size": size(&pre[1]), "also": { "trem": "Pre Motion" } }),
+        // The Gravity Tank's two halves, each by its block preset's name.
+        json!({ "match": ["gravity tank trem", "harmonic trem"], "face": pre[1].file, "ns": "trem", "size": size(&pre[1]) }),
+        json!({ "match": ["gravity tank spring"], "face": pre[2].file, "ns": "spring", "size": size(&pre[2]) }),
     ];
     let doc = json!({
         "drives": drives,

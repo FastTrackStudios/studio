@@ -215,16 +215,25 @@
       ]
     },
     {
-      "also": {
-        "trem": "Pre Motion"
-      },
-      "face": "18-pedal-gravity-tank",
+      "face": "18-gravity-tank-trem",
       "match": [
-        "gravity"
+        "gravity tank trem",
+        "harmonic trem"
+      ],
+      "ns": "trem",
+      "size": [
+        360.0,
+        300.0
+      ]
+    },
+    {
+      "face": "19-gravity-tank-spring",
+      "match": [
+        "gravity tank spring"
       ],
       "ns": "spring",
       "size": [
-        760.0,
+        470.0,
         300.0
       ]
     }
