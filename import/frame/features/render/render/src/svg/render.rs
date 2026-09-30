@@ -39,7 +39,7 @@ pub fn run_cli<E: std::fmt::Display>(
     use document_proto::NodeKind;
     use svg::node::element::{
         ClipPath, Element, ForeignObject, Group, Image, Line, Mask,
-        Path as SvgPath, Pattern, Rectangle, Use,
+        Path as SvgPath, Rectangle,
     };
     use svg::Document;
 
@@ -511,32 +511,7 @@ pub fn run_cli<E: std::fmt::Display>(
                                     deferred_images.push(image);
                                     new_id
                                 };
-                                let mut pattern = Pattern::new()
-                                    .set("id", pattern_id.clone())
-                                    .set("patternContentUnits", "objectBoundingBox")
-                                    .set("width", "1")
-                                    .set("height", "1");
-                                let mut image_use = Use::new().set("xlink:href", format!("#{image_id}"));
-                                if let Some((a, b, c, d, e, f)) = svg_image_fill_transform(
-                                    *scale_mode,
-                                    image_transform.as_ref(),
-                                    rw,
-                                    rh,
-                                ) {
-                                    image_use = image_use.set(
-                                        "transform",
-                                        format!(
-                                            "matrix({} {} {} {} {} {})",
-                                            fmt_f64(a),
-                                            fmt_f64(b),
-                                            fmt_f64(c),
-                                            fmt_f64(d),
-                                            fmt_f64(e),
-                                            fmt_f64(f)
-                                        ),
-                                    );
-                                }
-                                pattern = pattern.add(image_use);
+                                let pattern = svg_image_pattern(&pattern_id, &image_id, *scale_mode, image_transform.as_ref(), rw, rh, data_base64);
                                 defs = defs.add(pattern);
                                 has_defs = true;
                                 has_xlink_namespace = true;
@@ -578,11 +553,13 @@ pub fn run_cli<E: std::fmt::Display>(
                         }
                     }
                     if let Some(stroke) = stroke.as_ref() {
-                        let (hex, opacity) = svg_color_paint_values(
-                            to_u8(stroke.color.r),
-                            to_u8(stroke.color.g),
-                            to_u8(stroke.color.b),
-                            stroke.color.a,
+                        let (hex, opacity) = svg_stroke_paint(
+                            stroke,
+                            (rx, ry, rw, rh),
+                            &mut gradient_count,
+                            &root_id_suffix,
+                            &mut deferred_gradients,
+                            &mut has_defs,
                         );
                         let mut stroke_rect = Rectangle::new()
                             .set("x", fmt_f64(rx))
@@ -913,32 +890,7 @@ pub fn run_cli<E: std::fmt::Display>(
                                     new_id
                                 };
 
-                                let mut pattern = Pattern::new()
-                                    .set("id", pattern_id.clone())
-                                    .set("patternContentUnits", "objectBoundingBox")
-                                    .set("width", "1")
-                                    .set("height", "1");
-                                let mut image_use = Use::new().set("xlink:href", format!("#{image_id}"));
-                                if let Some((a, b, c, d, e, f)) = svg_image_fill_transform(
-                                    *scale_mode,
-                                    image_transform.as_ref(),
-                                    rw,
-                                    rh,
-                                ) {
-                                    image_use = image_use.set(
-                                        "transform",
-                                        format!(
-                                            "matrix({} {} {} {} {} {})",
-                                            fmt_f64(a),
-                                            fmt_f64(b),
-                                            fmt_f64(c),
-                                            fmt_f64(d),
-                                            fmt_f64(e),
-                                            fmt_f64(f)
-                                        ),
-                                    );
-                                }
-                                pattern = pattern.add(image_use);
+                                let pattern = svg_image_pattern(&pattern_id, &image_id, *scale_mode, image_transform.as_ref(), rw, rh, data_base64);
                                 defs = defs.add(pattern);
                                 has_defs = true;
                                 has_xlink_namespace = true;
@@ -1305,32 +1257,7 @@ pub fn run_cli<E: std::fmt::Display>(
                                     new_id
                                 };
 
-                            let mut pattern = Pattern::new()
-                                .set("id", pattern_id.clone())
-                                .set("patternContentUnits", "objectBoundingBox")
-                                .set("width", "1")
-                                .set("height", "1");
-                            let mut image_use = Use::new().set("xlink:href", format!("#{image_id}"));
-                            if let Some((a, b, c, d, e, f)) = svg_image_fill_transform(
-                                *scale_mode,
-                                image_transform.as_ref(),
-                                rw,
-                                rh,
-                            ) {
-                                image_use = image_use.set(
-                                    "transform",
-                                    format!(
-                                        "matrix({} {} {} {} {} {})",
-                                        fmt_f64(a),
-                                        fmt_f64(b),
-                                        fmt_f64(c),
-                                        fmt_f64(d),
-                                        fmt_f64(e),
-                                        fmt_f64(f)
-                                    ),
-                                );
-                            }
-                            pattern = pattern.add(image_use);
+                            let pattern = svg_image_pattern(&pattern_id, &image_id, *scale_mode, image_transform.as_ref(), rw, rh, data_base64);
                             defs = defs.add(pattern);
                             has_defs = true;
                             has_xlink_namespace = true;
@@ -1512,6 +1439,10 @@ pub fn run_cli<E: std::fmt::Display>(
                 let kind = node.map(|n| &n.kind);
                 let is_rectangle_node = matches!(kind, Some(NodeKind::Rectangle));
                 let is_ellipse_node = matches!(kind, Some(NodeKind::Ellipse));
+                // A rectangle emits its node's own stroke paints (gradients
+                // included) as overlays; its primitive's gradient stroke
+                // would only move its geometry.
+                let stroke = if is_rectangle_node && stroke.as_ref().is_some_and(|s| s.gradient.is_some()) { None } else { stroke };
                 let is_line_node = matches!(kind, Some(NodeKind::Line));
                 if !text_outline && is_rectangle_node && svg_base64.is_none() {
                     let rotation_degrees = rotation.to_degrees();
@@ -1713,29 +1644,7 @@ pub fn run_cli<E: std::fmt::Display>(
                                     new_id
                                 };
 
-                                let mut pattern = Pattern::new()
-                                    .set("id", pattern_id.clone())
-                                    .set("patternContentUnits", "objectBoundingBox")
-                                    .set("width", "1")
-                                    .set("height", "1");
-                                let mut image_use = Use::new().set("xlink:href", format!("#{image_id}"));
-                                if let Some((a, b, c, d, e, f)) =
-                                    svg_image_fill_transform(*scale_mode, image_transform.as_ref(), rw, rh)
-                                {
-                                    image_use = image_use.set(
-                                        "transform",
-                                        format!(
-                                            "matrix({} {} {} {} {} {})",
-                                            fmt_f64(a),
-                                            fmt_f64(b),
-                                            fmt_f64(c),
-                                            fmt_f64(d),
-                                            fmt_f64(e),
-                                            fmt_f64(f)
-                                        ),
-                                    );
-                                }
-                                pattern = pattern.add(image_use);
+                                let pattern = svg_image_pattern(&pattern_id, &image_id, *scale_mode, image_transform.as_ref(), rw, rh, data_base64);
                                 defs = defs.add(pattern);
                                 has_defs = true;
                                 has_xlink_namespace = true;
@@ -2092,6 +2001,10 @@ pub fn run_cli<E: std::fmt::Display>(
                                     transform,
                                     stops,
                                 } => {
+                                    // The conic below is placed as Figma exports it: by the
+                                    // transform from the node's box to the gradient's space,
+                                    // the inverse of frame's.
+                                    let transform = transform.as_ref().and_then(|t| t.inverse());
                                     let gradient_id =
                                         format!("paint{gradient_count}_angular_{root_id_suffix}");
                                     gradient_count += 1;
@@ -2207,33 +2120,7 @@ pub fn run_cli<E: std::fmt::Display>(
                                         new_id
                                     };
 
-                                    let mut pattern = Pattern::new()
-                                        .set("id", pattern_id.clone())
-                                        .set("patternContentUnits", "objectBoundingBox")
-                                        .set("width", "1")
-                                        .set("height", "1");
-                                    let mut image_use =
-                                        Use::new().set("xlink:href", format!("#{image_id}"));
-                                    if let Some((a, b, c, d, e, f)) = svg_image_fill_transform(
-                                        *scale_mode,
-                                        image_transform.as_ref(),
-                                        r * 2.0,
-                                        r * 2.0,
-                                    ) {
-                                        image_use = image_use.set(
-                                            "transform",
-                                            format!(
-                                                "matrix({} {} {} {} {} {})",
-                                                fmt_f64(a),
-                                                fmt_f64(b),
-                                                fmt_f64(c),
-                                                fmt_f64(d),
-                                                fmt_f64(e),
-                                                fmt_f64(f)
-                                            ),
-                                        );
-                                    }
-                                    pattern = pattern.add(image_use);
+                                    let pattern = svg_image_pattern(&pattern_id, &image_id, *scale_mode, image_transform.as_ref(), r * 2.0, r * 2.0, data_base64);
                                     defs = defs.add(pattern);
                                     has_defs = true;
                                     has_xlink_namespace = true;
@@ -2257,11 +2144,13 @@ pub fn run_cli<E: std::fmt::Display>(
                         }
                     }
                     if let Some(stroke) = stroke.as_ref() {
-                        let (hex, opacity) = svg_color_paint_values(
-                            to_u8(stroke.color.r),
-                            to_u8(stroke.color.g),
-                            to_u8(stroke.color.b),
-                            stroke.color.a,
+                        let (hex, opacity) = svg_stroke_paint(
+                            stroke,
+                            (circle_cx - rx, circle_cy - ry, rx * 2.0, ry * 2.0),
+                            &mut gradient_count,
+                            &root_id_suffix,
+                            &mut deferred_gradients,
+                            &mut has_defs,
                         );
                         let mut stroke_circle = new_circle_or_ellipse(circle_cx, circle_cy, rx, ry)
                             .set("fill", "none")
@@ -2321,11 +2210,13 @@ pub fn run_cli<E: std::fmt::Display>(
                         .set("x2", fmt_f64(x2))
                         .set("y2", fmt_f64(y_mid));
                     if let Some(stroke) = stroke.as_ref() {
-                        let (hex, opacity) = svg_color_paint_values(
-                            to_u8(stroke.color.r),
-                            to_u8(stroke.color.g),
-                            to_u8(stroke.color.b),
-                            stroke.color.a,
+                        let (hex, opacity) = svg_stroke_paint(
+                            stroke,
+                            (x1, y_mid, x2 - x1, 0.0),
+                            &mut gradient_count,
+                            &root_id_suffix,
+                            &mut deferred_gradients,
+                            &mut has_defs,
                         );
                         line = line
                             .set("stroke", hex)
@@ -2626,32 +2517,7 @@ pub fn run_cli<E: std::fmt::Display>(
                                     new_id
                                 };
 
-                                let mut pattern = Pattern::new()
-                                    .set("id", pattern_id.clone())
-                                    .set("patternContentUnits", "objectBoundingBox")
-                                    .set("width", "1")
-                                    .set("height", "1");
-                                let mut image_use = Use::new().set("xlink:href", format!("#{image_id}"));
-                                if let Some((a, b, c, d, e, f)) = svg_image_fill_transform(
-                                    *scale_mode,
-                                    image_transform.as_ref(),
-                                    fill_w,
-                                    fill_h,
-                                ) {
-                                    image_use = image_use.set(
-                                        "transform",
-                                        format!(
-                                            "matrix({} {} {} {} {} {})",
-                                            fmt_f64(a),
-                                            fmt_f64(b),
-                                            fmt_f64(c),
-                                            fmt_f64(d),
-                                            fmt_f64(e),
-                                            fmt_f64(f)
-                                        ),
-                                    );
-                                }
-                                pattern = pattern.add(image_use);
+                                let pattern = svg_image_pattern(&pattern_id, &image_id, *scale_mode, image_transform.as_ref(), fill_w, fill_h, data_base64);
                                 defs = defs.add(pattern);
                                 has_defs = true;
                                 has_xlink_namespace = true;
@@ -2766,32 +2632,7 @@ pub fn run_cli<E: std::fmt::Display>(
                                         deferred_images.push(image);
                                         new_id
                                     };
-                                    let mut pattern = Pattern::new()
-                                        .set("id", pattern_id.clone())
-                                        .set("patternContentUnits", "objectBoundingBox")
-                                        .set("width", "1")
-                                        .set("height", "1");
-                                    let mut image_use = Use::new().set("xlink:href", format!("#{image_id}"));
-                                    if let Some((a, b, c, d, e, f)) = svg_image_fill_transform(
-                                        *scale_mode,
-                                        image_transform.as_ref(),
-                                        fill_w,
-                                        fill_h,
-                                    ) {
-                                        image_use = image_use.set(
-                                            "transform",
-                                            format!(
-                                                "matrix({} {} {} {} {} {})",
-                                                fmt_f64(a),
-                                                fmt_f64(b),
-                                                fmt_f64(c),
-                                                fmt_f64(d),
-                                                fmt_f64(e),
-                                                fmt_f64(f)
-                                            ),
-                                        );
-                                    }
-                                    pattern = pattern.add(image_use);
+                                    let pattern = svg_image_pattern(&pattern_id, &image_id, *scale_mode, image_transform.as_ref(), fill_w, fill_h, data_base64);
                                     defs = defs.add(pattern);
                                     has_defs = true;
                                     has_xlink_namespace = true;
@@ -2910,32 +2751,7 @@ pub fn run_cli<E: std::fmt::Display>(
                                         deferred_images.push(image);
                                         new_id
                                     };
-                                    let mut pattern = Pattern::new()
-                                        .set("id", pattern_id.clone())
-                                        .set("patternContentUnits", "objectBoundingBox")
-                                        .set("width", "1")
-                                        .set("height", "1");
-                                    let mut image_use = Use::new().set("xlink:href", format!("#{image_id}"));
-                                    if let Some((a, b, c, d, e, f)) = svg_image_fill_transform(
-                                        *scale_mode,
-                                        image_transform.as_ref(),
-                                        fill_w,
-                                        fill_h,
-                                    ) {
-                                        image_use = image_use.set(
-                                            "transform",
-                                            format!(
-                                                "matrix({} {} {} {} {} {})",
-                                                fmt_f64(a),
-                                                fmt_f64(b),
-                                                fmt_f64(c),
-                                                fmt_f64(d),
-                                                fmt_f64(e),
-                                                fmt_f64(f)
-                                            ),
-                                        );
-                                    }
-                                    pattern = pattern.add(image_use);
+                                    let pattern = svg_image_pattern(&pattern_id, &image_id, *scale_mode, image_transform.as_ref(), fill_w, fill_h, data_base64);
                                     defs = defs.add(pattern);
                                     has_defs = true;
                                     has_xlink_namespace = true;
@@ -2969,11 +2785,14 @@ pub fn run_cli<E: std::fmt::Display>(
                 }
 
                 if let Some(stroke) = stroke.as_ref() {
-                    let (hex, opacity) = svg_color_paint_values(
-                        to_u8(stroke.color.r),
-                        to_u8(stroke.color.g),
-                        to_u8(stroke.color.b),
-                        stroke.color.a,
+                    // Paths are node-local (translated into place).
+                    let (hex, opacity) = svg_stroke_paint(
+                        stroke,
+                        (0.0, 0.0, width, height),
+                        &mut gradient_count,
+                        &root_id_suffix,
+                        &mut deferred_gradients,
+                        &mut has_defs,
                     );
                     let stroke_source_paths = if let Some(paths) = &stroked_fill_paths {
                         paths
@@ -3576,6 +3395,42 @@ fn svg_local_rect_size_from_path(d: &str) -> Option<(f64, f64)> {
     Some(((max_x - min_x).max(0.0), (max_y - min_y).max(0.0)))
 }
 
+/// A stroke's SVG paint and opacity: its colour, or for a linear or radial
+/// gradient stroke a `url(#…)` to a gradient laid across `(x, y, w, h)` (in
+/// the stroked element's user space) as a fill's would be. A zero-width or
+/// zero-height box (a line) is widened to the stroke's width. Angular
+/// gradients keep their first stop's colour.
+#[cfg(feature = "svg_export")]
+fn svg_stroke_paint(
+    stroke: &crate::anyrender_renderer::StrokeStyle,
+    (x, y, w, h): (f64, f64, f64, f64),
+    gradient_count: &mut u64,
+    root_id_suffix: &str,
+    deferred_gradients: &mut Vec<Box<dyn svg::Node>>,
+    has_defs: &mut bool,
+) -> (String, Option<String>) {
+    use crate::anyrender_renderer::FillPaint;
+    let (x, y, w, h) = crate::anyrender_renderer::stroke_gradient_box(stroke, x, y, w, h);
+    let def: Option<(String, Box<dyn svg::Node>)> = match &stroke.gradient {
+        Some(FillPaint::GradientLinear { transform, stops }) => {
+            let id = format!("paint{gradient_count}_linear_{root_id_suffix}");
+            svg_linear_gradient_def(&id, x, y, w, h, transform.as_ref(), stops).map(|g| (id, Box::new(g) as Box<dyn svg::Node>))
+        }
+        Some(FillPaint::GradientRadial { transform, stops }) => {
+            let id = format!("paint{gradient_count}_radial_{root_id_suffix}");
+            svg_radial_gradient_def(&id, x, y, w, h, transform.as_ref(), stops).map(|g| (id, Box::new(g) as Box<dyn svg::Node>))
+        }
+        _ => None,
+    };
+    if let Some((id, def)) = def {
+        *gradient_count += 1;
+        deferred_gradients.push(def);
+        *has_defs = true;
+        return (format!("url(#{id})"), None);
+    }
+    svg_color_paint_values(to_u8(stroke.color.r), to_u8(stroke.color.g), to_u8(stroke.color.b), stroke.color.a)
+}
+
 #[cfg(feature = "svg_export")]
 fn svg_linear_gradient_def(
     id: &str,
@@ -4063,6 +3918,89 @@ fn svg_dasharray(pattern: &[f64]) -> String {
         .join(" ")
 }
 
+/// The `<pattern>` filling an element with an image (`image_id`, a 1×1
+/// `<image>` def) in `scale_mode`, in the element's bounding-box units
+/// (`width × height` px). A tile is the image at the size its transform
+/// gives it (image px → node px; identity = its own size), repeated from
+/// the box's top-left and offset by the transform's translation (its
+/// rotation and skew aren't exported); every other mode covers the box
+/// once.
+#[cfg(feature = "svg_export")]
+#[allow(clippy::too_many_arguments)]
+fn svg_image_pattern(
+    pattern_id: &str,
+    image_id: &str,
+    scale_mode: crate::anyrender_renderer::ImageScaleMode,
+    image_transform: Option<&crate::anyrender_renderer::AffineTransform2D>,
+    width: f64,
+    height: f64,
+    data_base64: &str,
+) -> svg::node::element::Pattern {
+    let pattern = svg::node::element::Pattern::new().set("id", pattern_id.to_string()).set("patternContentUnits", "objectBoundingBox");
+    let image_use = svg::node::element::Use::new().set("xlink:href", format!("#{image_id}"));
+    if scale_mode == crate::anyrender_renderer::ImageScaleMode::Tile
+        && width > 0.0
+        && height > 0.0
+        && let Some((iw, ih)) = image_pixel_size(data_base64)
+    {
+        let t = image_transform.copied().unwrap_or_else(crate::anyrender_renderer::AffineTransform2D::identity);
+        let tw = f64::from(iw) * t.a.hypot(t.c) / width;
+        let th = f64::from(ih) * t.b.hypot(t.d) / height;
+        if tw > 0.0 && th > 0.0 {
+            return pattern
+                .set("x", fmt_f64(t.tx / width))
+                .set("y", fmt_f64(t.ty / height))
+                .set("width", fmt_f64(tw))
+                .set("height", fmt_f64(th))
+                .add(image_use.set("transform", format!("scale({} {})", fmt_f64(tw), fmt_f64(th))));
+        }
+    }
+    let pattern = pattern.set("width", "1").set("height", "1");
+    let image_use = match svg_image_fill_transform(scale_mode, image_transform, width, height) {
+        Some((a, b, c, d, e, f)) => image_use.set(
+            "transform",
+            format!("matrix({} {} {} {} {} {})", fmt_f64(a), fmt_f64(b), fmt_f64(c), fmt_f64(d), fmt_f64(e), fmt_f64(f)),
+        ),
+        None => image_use,
+    };
+    pattern.add(image_use)
+}
+
+/// An encoded image's pixel size, read from its header (PNG, GIF, JPEG).
+#[cfg(feature = "svg_export")]
+fn image_pixel_size(data_base64: &str) -> Option<(u32, u32)> {
+    use base64::Engine as _;
+    let b64 = base64::engine::general_purpose::STANDARD;
+    let head = b64.decode(data_base64.get(..32)?).ok()?;
+    if head.starts_with(b"\x89PNG\r\n\x1a\n") && head.get(12..16) == Some(b"IHDR") {
+        let be = |i: usize| u32::from_be_bytes([head[i], head[i + 1], head[i + 2], head[i + 3]]);
+        return Some((be(16), be(20)));
+    }
+    if head.starts_with(b"GIF8") {
+        let le = |i: usize| u32::from(u16::from_le_bytes([head[i], head[i + 1]]));
+        return Some((le(6), le(8)));
+    }
+    if head.starts_with(&[0xff, 0xd8]) {
+        // Walk the segments to a start-of-frame.
+        let bytes = b64.decode(data_base64).ok()?;
+        let mut i = 2;
+        while i + 9 < bytes.len() {
+            if bytes[i] != 0xff {
+                return None;
+            }
+            let marker = bytes[i + 1];
+            let len = usize::from(u16::from_be_bytes([bytes[i + 2], bytes[i + 3]]));
+            if matches!(marker, 0xc0..=0xcf) && !matches!(marker, 0xc4 | 0xc8 | 0xcc) {
+                let h = u32::from(u16::from_be_bytes([bytes[i + 5], bytes[i + 6]]));
+                let w = u32::from(u16::from_be_bytes([bytes[i + 7], bytes[i + 8]]));
+                return Some((w, h));
+            }
+            i += 2 + len;
+        }
+    }
+    None
+}
+
 #[cfg(feature = "svg_export")]
 fn svg_image_fill_transform(
     scale_mode: crate::anyrender_renderer::ImageScaleMode,
@@ -4132,4 +4070,65 @@ fn fmt_translate_component(v: f64) -> String {
         fixed
     };
     fmt_f64(stable.to_num::<f64>())
+}
+
+#[cfg(all(test, feature = "svg_export"))]
+mod tests {
+    use super::*;
+    use crate::anyrender_renderer::{AffineTransform2D, FillPaint, GradientStop, ImageScaleMode, Rgba, StrokeAlign, StrokeCap, StrokeJoin, StrokeStyle};
+    use base64::Engine as _;
+
+    /// A minimal PNG header for a `w × h` image (enough for its size).
+    fn png_header_b64(w: u32, h: u32) -> String {
+        let mut b = b"\x89PNG\r\n\x1a\n\0\0\0\x0dIHDR".to_vec();
+        b.extend_from_slice(&w.to_be_bytes());
+        b.extend_from_slice(&h.to_be_bytes());
+        b.extend_from_slice(&[8, 6, 0, 0, 0, 0, 0, 0, 0]);
+        base64::engine::general_purpose::STANDARD.encode(b)
+    }
+
+    #[test]
+    fn a_tile_pattern_repeats_at_the_tile_size() {
+        let data = png_header_b64(10, 20);
+        assert_eq!(image_pixel_size(&data), Some((10, 20)));
+        let scale = AffineTransform2D::from([[2.0, 0.0, 5.0], [0.0, 2.0, 0.0]]);
+        let p = svg_image_pattern("p", "i", ImageScaleMode::Tile, Some(&scale), 100.0, 80.0, &data).to_string();
+        // 20 × 40 px tiles in a 100 × 80 box, offset 5 px.
+        assert!(p.contains(r#"width="0.2""#) && p.contains(r#"height="0.5""#), "{p}");
+        assert!(p.contains(r#"x="0.05""#) && p.contains("scale(0.2 0.5)"), "{p}");
+        // Other modes still cover the box once.
+        let fill = svg_image_pattern("p", "i", ImageScaleMode::Stretch, None, 100.0, 80.0, &data).to_string();
+        assert!(fill.contains(r#"width="1""#) && fill.contains(r#"height="1""#), "{fill}");
+    }
+
+    #[test]
+    fn a_gradient_stroke_exports_as_a_gradient_paint() {
+        let red = Rgba { r: 1.0, g: 0.0, b: 0.0, a: 1.0 };
+        let stroke = StrokeStyle {
+            color: red.clone(),
+            gradient: Some(FillPaint::GradientLinear {
+                transform: None,
+                stops: vec![GradientStop { offset: 0.0, color: red }, GradientStop { offset: 1.0, color: Rgba { r: 0.0, g: 0.0, b: 1.0, a: 1.0 } }],
+            }),
+            width: 4.0,
+            cap: StrokeCap::None,
+            join: StrokeJoin::Miter,
+            align: StrokeAlign::Center,
+            miter_limit: 4.0,
+            dash_pattern: Vec::new(),
+            dash_offset: 0.0,
+        };
+        let (mut count, mut defs, mut has_defs) = (0, Vec::new(), false);
+        // A horizontal line: no height, widened to the stroke.
+        let (paint, opacity) = svg_stroke_paint(&stroke, (10.0, 20.0, 100.0, 0.0), &mut count, "x", &mut defs, &mut has_defs);
+        assert_eq!(paint, "url(#paint0_linear_x)");
+        assert_eq!(opacity, None);
+        assert!(has_defs && defs.len() == 1 && count == 1);
+        let def = defs[0].to_string();
+        assert!(def.contains(r#"x1="10""#) && def.contains(r#"x2="110""#), "{def}");
+        // Solid strokes are unchanged.
+        let solid = StrokeStyle { gradient: None, ..stroke };
+        let (paint, _) = svg_stroke_paint(&solid, (0.0, 0.0, 1.0, 1.0), &mut count, "x", &mut defs, &mut has_defs);
+        assert!(paint.eq_ignore_ascii_case("#ff0000"), "{paint}");
+    }
 }

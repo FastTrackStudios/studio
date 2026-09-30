@@ -5,6 +5,7 @@
 //! authored values.
 
 use std::collections::HashMap;
+use std::sync::Arc;
 
 use base64::Engine as _;
 use document_proto::{self as doc, NodeId, NodeKind, Scene};
@@ -82,7 +83,7 @@ pub(crate) fn fill_paint(p: &doc::Paint, scene: &Scene) -> Option<FillPaint> {
         }
         doc::PaintKind::Image { asset, source_ref, scale_mode, transform } => FillPaint::Image {
             image_hash: source_ref.clone(),
-            data_base64: base64::engine::general_purpose::STANDARD.encode(scene.asset(asset).map(|a| a.bytes.as_slice()).unwrap_or_default()),
+            data_base64: asset_base64(scene, asset),
             alpha: clamp01(p.opacity),
             scale_mode: match scale_mode {
                 doc::ImageScaleMode::Fill => ImageScaleMode::Fill,
@@ -111,11 +112,21 @@ pub(super) fn first_color(fill: &FillPaint) -> Option<Rgba> {
     }
 }
 
-/// The drawn stroke: the first visible solid paint, when the weight is positive.
+/// The drawn stroke: the first visible solid or gradient paint, when the
+/// weight is positive. (Image strokes aren't drawn.)
 pub(super) fn stroke_style(s: &doc::Stroke, opacity: f64) -> Option<StrokeStyle> {
-    let color = s.paints.iter().filter(|p| p.visible).find_map(|p| match &p.kind {
-        doc::PaintKind::Solid { color } => Some(rgba(color, p.opacity)),
-        _ => None,
+    let (color, gradient) = s.paints.iter().filter(|p| p.visible).find_map(|p| match &p.kind {
+        doc::PaintKind::Solid { color } => Some((rgba(color, p.opacity), None)),
+        doc::PaintKind::LinearGradient { stops: s, transform } => {
+            gradient_stroke(FillPaint::GradientLinear { transform: transform.as_ref().map(affine), stops: stops(s, p.opacity) })
+        }
+        doc::PaintKind::RadialGradient { stops: s, transform } => {
+            gradient_stroke(FillPaint::GradientRadial { transform: transform.as_ref().map(affine), stops: stops(s, p.opacity) })
+        }
+        doc::PaintKind::AngularGradient { stops: s, transform } => {
+            gradient_stroke(FillPaint::GradientAngular { transform: transform.as_ref().map(affine), stops: stops(s, p.opacity) })
+        }
+        doc::PaintKind::Image { .. } => None,
     })?;
     let width = s.weight.max(0.0);
     if width <= 0.0 {
@@ -123,6 +134,7 @@ pub(super) fn stroke_style(s: &doc::Stroke, opacity: f64) -> Option<StrokeStyle>
     }
     Some(StrokeStyle {
         color: color.with_opacity(opacity),
+        gradient: gradient.map(|g| g.with_opacity(opacity)),
         width,
         cap: s.cap,
         join: s.join,
@@ -131,6 +143,12 @@ pub(super) fn stroke_style(s: &doc::Stroke, opacity: f64) -> Option<StrokeStyle>
         dash_pattern: s.dash_pattern.iter().copied().filter(|v| *v > 0.0).collect(),
         dash_offset: s.dash_offset,
     })
+}
+
+/// A gradient stroke paint with its first stop as the stroke's colour;
+/// `None` without stops.
+fn gradient_stroke(g: FillPaint) -> Option<(Rgba, Option<FillPaint>)> {
+    Some((first_color(&g)?, Some(g)))
 }
 
 pub(super) fn node_effects(effects: &[doc::Effect], opacity: f64) -> Vec<NodeEffect> {
@@ -215,9 +233,51 @@ fn text_outline_fills(text: &doc::TextData, scene: &Scene, opacity: f64) -> Vec<
     runs
 }
 
-fn snapshot_base64(node: &doc::Node, scene: &Scene) -> Option<String> {
-    let asset = scene.asset(node.svg_snapshot.as_ref()?)?;
-    Some(base64::engine::general_purpose::STANDARD.encode(&asset.bytes))
+fn snapshot_base64(node: &doc::Node, scene: &Scene) -> Option<Arc<str>> {
+    let id = node.svg_snapshot.as_ref()?;
+    scene.asset(id)?;
+    Some(asset_base64(scene, id))
+}
+
+/// Cached encodings kept before the cache is reset, in base64 bytes.
+const BASE64_CACHE_BYTES: usize = 256 << 20;
+
+/// An asset's bytes, base64-encoded, encoded once and shared across
+/// collects (and frames): images and snapshots are carried to the painters
+/// and the SVG exporter in base64, and encoding a large texture on every
+/// collect was most of a textured page's collect time. Keyed by the asset
+/// id with the bytes' length and a sample of them, so an id reused for
+/// other bytes re-encodes. A missing asset encodes as empty.
+pub(crate) fn asset_base64(scene: &Scene, id: &doc::AssetId) -> Arc<str> {
+    use std::hash::{Hash, Hasher};
+    use std::sync::{LazyLock, Mutex};
+    type Cache = (HashMap<(String, u64), Arc<str>>, usize);
+    static CACHE: LazyLock<Mutex<Cache>> = LazyLock::new(|| Mutex::new((HashMap::new(), 0)));
+
+    let bytes = scene.asset(id).map(|a| a.bytes.as_slice()).unwrap_or_default();
+    let fingerprint = {
+        let mut h = std::collections::hash_map::DefaultHasher::new();
+        bytes.len().hash(&mut h);
+        bytes[..bytes.len().min(256)].hash(&mut h);
+        bytes[bytes.len().saturating_sub(256)..].hash(&mut h);
+        h.finish()
+    };
+    let key = (id.0.clone(), fingerprint);
+    if let Some(hit) = CACHE.lock().ok().and_then(|c| c.0.get(&key).cloned()) {
+        return hit;
+    }
+    let encoded: Arc<str> = base64::engine::general_purpose::STANDARD.encode(bytes).into();
+    let Ok(mut c) = CACHE.lock() else { return encoded };
+    if let Some(raced) = c.0.get(&key) {
+        // Another thread encoded it meanwhile: share theirs.
+        return Arc::clone(raced);
+    }
+    if c.1 + encoded.len() > BASE64_CACHE_BYTES {
+        *c = (HashMap::new(), 0);
+    }
+    c.1 += encoded.len();
+    c.0.insert(key, Arc::clone(&encoded));
+    encoded
 }
 
 enum Class {
@@ -526,7 +586,7 @@ struct Cx<'a> {
 /// solid fill, strokes take the colour, effects and blends are dropped.
 fn recolor(p: &PaintPrimitive, color: &Rgba) -> Option<PaintPrimitive> {
     let solid = || vec![(FillPaint::Solid(color.clone()), BlendMix::Normal)];
-    let stroke_of = |s: &Option<StrokeStyle>| s.clone().map(|s| StrokeStyle { color: color.clone(), ..s });
+    let stroke_of = |s: &Option<StrokeStyle>| s.clone().map(|s| StrokeStyle { color: color.clone(), gradient: None, ..s });
     match p {
         PaintPrimitive::Rect { node_id, x, y, width, height, fills, stroke, corner_radii, rotation, authored, .. } => {
             (!fills.is_empty() || stroke.is_some()).then(|| PaintPrimitive::Rect {
@@ -751,7 +811,7 @@ impl Cx<'_> {
         }
 
         let mut atomic_svg = false;
-        let path = |x: f64, y: f64, normalize: bool, outline: bool, fp: Vec<String>, sp: Vec<String>, svg: Option<String>, fills: Vec<(FillPaint, BlendMix)>, stroke: Option<StrokeStyle>| PaintPrimitive::Path {
+        let path = |x: f64, y: f64, normalize: bool, outline: bool, fp: Vec<String>, sp: Vec<String>, svg: Option<Arc<str>>, fills: Vec<(FillPaint, BlendMix)>, stroke: Option<StrokeStyle>| PaintPrimitive::Path {
             node_id,
             x,
             y,

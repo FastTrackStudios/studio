@@ -18,8 +18,7 @@ fn run() -> Result<(), String> {
     use image::RgbaImage;
     use kurbo::Affine;
     use peniko::Color;
-    use vello::wgpu;
-    use vello::{AaConfig, RenderParams, Renderer, RendererOptions, Scene};
+    use vello::Scene;
 
     let mut args = std::env::args().skip(1);
     let input = args
@@ -122,135 +121,10 @@ fn run() -> Result<(), String> {
     // The bundled book: Inter (Figma's default) first, then frame's families.
     render::paint_scene_into(&mut scene, &doc, root, scene_transform, Some(render::FontBook::bundled()));
 
-    let instance = wgpu::Instance::new(wgpu::InstanceDescriptor::new_without_display_handle());
-    let adapter = pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions::default()))
-        .map_err(|e| format!("request_adapter failed: {e}"))?;
-
-    let (device, queue) = pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor {
-        label: Some("render_png-device"),
-        required_features: wgpu::Features::empty(),
-        required_limits: wgpu::Limits::default(),
-        experimental_features: wgpu::ExperimentalFeatures::disabled(),
-        memory_hints: wgpu::MemoryHints::Performance,
-        trace: wgpu::Trace::default(),
-    }))
-    .map_err(|e| format!("request_device failed: {e}"))?;
-
-    let mut renderer = Renderer::new(
-        &device,
-        RendererOptions {
-            use_cpu: false,
-            antialiasing_support: [AaConfig::Area, AaConfig::Msaa8].into_iter().collect(),
-            num_init_threads: None,
-            pipeline_cache: None,
-        },
-    )
-    .map_err(|e| format!("failed to create renderer: {e}"))?;
-
-    let texture = device.create_texture(&wgpu::TextureDescriptor {
-        label: Some("render_png-target"),
-        size: wgpu::Extent3d {
-            width,
-            height,
-            depth_or_array_layers: 1,
-        },
-        mip_level_count: 1,
-        sample_count: 1,
-        dimension: wgpu::TextureDimension::D2,
-        format: wgpu::TextureFormat::Rgba8Unorm,
-        usage: wgpu::TextureUsages::RENDER_ATTACHMENT
-            | wgpu::TextureUsages::COPY_SRC
-            | wgpu::TextureUsages::STORAGE_BINDING
-            | wgpu::TextureUsages::TEXTURE_BINDING,
-        view_formats: &[],
-    });
-    let target_view = texture.create_view(&wgpu::TextureViewDescriptor::default());
-
-    renderer
-        .render_to_texture(
-            &device,
-            &queue,
-            &scene,
-            &target_view,
-            &RenderParams {
-                base_color,
-                width,
-                height,
-                antialiasing_method: AaConfig::Msaa8,
-            },
-        )
-        .map_err(|e| format!("render_to_texture failed: {e}"))?;
-
-    let bytes_per_pixel = 4u32;
-    let unpadded_bytes_per_row = width * bytes_per_pixel;
-    let padded_bytes_per_row = unpadded_bytes_per_row.div_ceil(256) * 256;
-    let output_buffer_size = padded_bytes_per_row as u64 * height as u64;
-
-    let output_buffer = device.create_buffer(&wgpu::BufferDescriptor {
-        label: Some("render_png-readback"),
-        size: output_buffer_size,
-        usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
-        mapped_at_creation: false,
-    });
-
-    let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
-        label: Some("render_png-copy"),
-    });
-    encoder.copy_texture_to_buffer(
-        wgpu::TexelCopyTextureInfo {
-            texture: &texture,
-            mip_level: 0,
-            origin: wgpu::Origin3d::ZERO,
-            aspect: wgpu::TextureAspect::All,
-        },
-        wgpu::TexelCopyBufferInfo {
-            buffer: &output_buffer,
-            layout: wgpu::TexelCopyBufferLayout {
-                offset: 0,
-                bytes_per_row: Some(padded_bytes_per_row),
-                rows_per_image: Some(height),
-            },
-        },
-        wgpu::Extent3d {
-            width,
-            height,
-            depth_or_array_layers: 1,
-        },
-    );
-    queue.submit([encoder.finish()]);
-
-    let buffer_slice = output_buffer.slice(..);
-    let (tx, rx) = std::sync::mpsc::channel();
-    buffer_slice.map_async(wgpu::MapMode::Read, move |v| {
-        let _ = tx.send(v);
-    });
-    loop {
-        let _ = device.poll(wgpu::PollType::Poll);
-        match rx.try_recv() {
-            Ok(result) => {
-                result.map_err(|e| format!("map_async failed: {e}"))?;
-                break;
-            }
-            Err(std::sync::mpsc::TryRecvError::Empty) => {
-                std::thread::sleep(std::time::Duration::from_millis(1));
-            }
-            Err(std::sync::mpsc::TryRecvError::Disconnected) => {
-                return Err("map_async channel disconnected".to_string());
-            }
-        }
-    }
-
-    let mapped = buffer_slice.get_mapped_range();
-    let mut pixels = vec![0_u8; (width * height * bytes_per_pixel) as usize];
-    for row in 0..height as usize {
-        let src_offset = row * padded_bytes_per_row as usize;
-        let dst_offset = row * unpadded_bytes_per_row as usize;
-        let src = &mapped[src_offset..src_offset + unpadded_bytes_per_row as usize];
-        let dst = &mut pixels[dst_offset..dst_offset + unpadded_bytes_per_row as usize];
-        dst.copy_from_slice(src);
-    }
-    drop(mapped);
-    output_buffer.unmap();
+    // Offscreen renders like `Renderer::render_to_texture` (MSAA 8×), but
+    // re-renders in bands instead of coming back blank when the scene
+    // overflows vello's buffers.
+    let pixels = render::offscreen::Offscreen::new()?.render(&scene, width, height, base_color)?.rgba;
 
     let image = RgbaImage::from_raw(width, height, pixels)
         .ok_or_else(|| "failed to build image buffer from render output".to_string())?;

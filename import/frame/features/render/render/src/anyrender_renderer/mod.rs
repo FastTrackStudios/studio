@@ -19,6 +19,10 @@ pub(crate) mod subpaths;
 mod tests;
 #[cfg(all(test, feature = "anyrender"))]
 mod tests_authored;
+#[cfg(all(test, feature = "anyrender"))]
+mod tests_dense;
+#[cfg(all(test, feature = "anyrender"))]
+mod tests_images;
 
 pub use diagnostics::collect_render_diagnostics;
 pub use effects_plan::{flicker_level, EffectsPlan, EmissiveDraw, ShaderRegion};
@@ -31,7 +35,7 @@ pub(crate) use scene_collect::fill_paint;
 pub use transform::AffineTransform2D;
 pub use types::{
     BlendMix, EffectKind, FillPaint, GradientStop, ImageScaleMode, LayoutBox, NodeEffect,
-    PaintPrimitive, RenderDiagnostics, Rgba, StrokeAlign, StrokeCap, StrokeJoin, StrokeStyle,
+    PaintPrimitive, RenderDiagnostics, Rgba, stroke_gradient_box, StrokeAlign, StrokeCap, StrokeJoin, StrokeStyle,
     TextAlignment, TextCase, TextStyleRun,
 };
 

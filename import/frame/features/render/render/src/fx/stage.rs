@@ -4,7 +4,7 @@ use std::collections::{BTreeMap, HashMap};
 use std::ops::Range;
 
 use document_proto::{NodeId, Scene};
-use vello::{wgpu, AaConfig, RenderParams, Renderer};
+use vello::{wgpu, AaConfig, Renderer};
 
 use super::passes::{FxUniforms, Passes, LIGHT, TARGET};
 use super::{flicker_level, pack_params, EmissiveDraw, Mode, ShaderRegion};
@@ -313,6 +313,7 @@ impl Stage {
                 | wgpu::TextureUsages::TEXTURE_BINDING
                 | wgpu::TextureUsages::RENDER_ATTACHMENT
                 | wgpu::TextureUsages::COPY_SRC
+                | wgpu::TextureUsages::COPY_DST
         } else {
             wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::RENDER_ATTACHMENT
         };
@@ -360,16 +361,9 @@ fn vello_into(
     base: peniko::Color,
     antialiasing: AaConfig,
 ) -> Result<(), String> {
-    let view = target.create_view(&wgpu::TextureViewDescriptor::default());
-    renderer
-        .render_to_texture(
-            device,
-            queue,
-            scene,
-            &view,
-            &RenderParams { base_color: base, width: target.width(), height: target.height(), antialiasing_method: antialiasing },
-        )
-        .map_err(|e| format!("render_to_texture failed: {e}"))
+    // Banded when the scene overflows vello's buffers, never left blank
+    // (or holding the texture's previous frame).
+    crate::offscreen::render_checked(renderer, device, queue, scene, target, base, antialiasing).map(|_| ())
 }
 
 /// The uniform block for one shader region, and the region's box in target

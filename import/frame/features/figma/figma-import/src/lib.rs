@@ -159,6 +159,27 @@ fn style_f64(raw: &Value, top: &str, nested: &str) -> Option<f64> {
     f64_at(raw, top).or_else(|| raw.get("style").and_then(|s| f64_at(s, nested)))
 }
 
+/// A Figma `gradientTransform` as frame's gradient transform. Figma's maps
+/// the node's unit box *to* the gradient's own space (a linear gradient runs
+/// (0, ½) → (1, ½) there, a radial one is centred at (½, ½)); frame's maps
+/// the gradient's space into the node's box, where its handles are drawn.
+/// So it is the inverse (a singular one is kept as is).
+fn gradient_matrix(value: Option<&Value>) -> Option<Transform> {
+    let t = matrix(value)?;
+    let det = t.a * t.d - t.b * t.c;
+    if det.abs() < 1e-12 {
+        return Some(t);
+    }
+    Some(Transform {
+        a: t.d / det,
+        b: -t.b / det,
+        c: -t.c / det,
+        d: t.a / det,
+        tx: (t.b * t.ty - t.d * t.tx) / det,
+        ty: (t.c * t.tx - t.a * t.ty) / det,
+    })
+}
+
 fn matrix(value: Option<&Value>) -> Option<Transform> {
     let t = value?.as_array()?;
     if t.len() < 2 {
@@ -294,9 +315,9 @@ fn paint(node_raw: &Value, p: &Value, scene: &mut Scene) -> Option<Paint> {
     };
     let kind = match str_at(p, "type")? {
         "SOLID" => PaintKind::Solid { color: color(p.get("color")?)? },
-        "GRADIENT_LINEAR" => PaintKind::LinearGradient { stops: stops()?, transform: matrix(p.get("gradientTransform")) },
-        "GRADIENT_RADIAL" => PaintKind::RadialGradient { stops: stops()?, transform: matrix(p.get("gradientTransform")) },
-        "GRADIENT_ANGULAR" => PaintKind::AngularGradient { stops: stops()?, transform: matrix(p.get("gradientTransform")) },
+        "GRADIENT_LINEAR" => PaintKind::LinearGradient { stops: stops()?, transform: gradient_matrix(p.get("gradientTransform")) },
+        "GRADIENT_RADIAL" => PaintKind::RadialGradient { stops: stops()?, transform: gradient_matrix(p.get("gradientTransform")) },
+        "GRADIENT_ANGULAR" => PaintKind::AngularGradient { stops: stops()?, transform: gradient_matrix(p.get("gradientTransform")) },
         "IMAGE" => {
             let source_ref = str_at(p, "imageHash").map(ToString::to_string);
             let bytes = image_bytes(node_raw, source_ref.as_deref());
@@ -311,7 +332,13 @@ fn paint(node_raw: &Value, p: &Value, scene: &mut Scene) -> Option<Paint> {
                     Some("STRETCH") => ImageScaleMode::Stretch,
                     _ => ImageScaleMode::Fill,
                 },
-                transform: matrix(p.get("imageTransform")),
+                // A tile is placed by its scaling factor (image px → node
+                // px); the other modes by Figma's image transform.
+                transform: if str_at(p, "scaleMode") == Some("TILE") {
+                    f64_at(p, "scalingFactor").map(|s| Transform { a: s, b: 0.0, c: 0.0, d: s, tx: 0.0, ty: 0.0 })
+                } else {
+                    matrix(p.get("imageTransform"))
+                },
             }
         }
         _ => return None,

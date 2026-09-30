@@ -45,7 +45,10 @@ pub enum FillPaint {
     },
     Image {
         image_hash: Option<String>,
-        data_base64: String,
+        /// The image file, base64-encoded — shared: encoded once per asset
+        /// ([`asset_base64`](super::scene_collect::asset_base64)), so a
+        /// collect clones a pointer, and painters cache their decode by it.
+        data_base64: std::sync::Arc<str>,
         alpha: f64,
         scale_mode: ImageScaleMode,
         image_transform: Option<AffineTransform2D>,
@@ -137,9 +140,24 @@ pub struct NodeEffect {
 
 pub use document_proto::{StrokeAlign, StrokeCap, StrokeJoin};
 
+/// The box a gradient stroke is laid across: the node's `(x, y, w, h)`,
+/// with a side of zero length (a horizontal or vertical line) widened to
+/// the stroke's width about the line, so the gradient still has an extent.
+#[must_use]
+pub fn stroke_gradient_box(s: &StrokeStyle, x: f64, y: f64, w: f64, h: f64) -> (f64, f64, f64, f64) {
+    let grow = |at: f64, len: f64| if len > 1e-9 { (at, len) } else { (at - s.width * 0.5, s.width.max(1e-6)) };
+    let ((x, w), (y, h)) = (grow(x, w), grow(y, h));
+    (x, y, w, h)
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct StrokeStyle {
+    /// The stroke's colour; for a gradient stroke its first stop (what
+    /// effects and blurs that need one colour use).
     pub color: Rgba,
+    /// A gradient paint (linear, radial or angular) laid across the node's
+    /// box as a fill's would be; `None` for a solid stroke.
+    pub gradient: Option<FillPaint>,
     pub width: f64,
     pub cap: StrokeCap,
     pub join: StrokeJoin,
@@ -329,7 +347,8 @@ pub enum PaintPrimitive {
         text_outline: bool,
         fill_paths: Vec<String>,
         stroke_paths: Vec<String>,
-        svg_base64: Option<String>,
+        /// The node's SVG snapshot, base64-encoded (shared, like image data).
+        svg_base64: Option<std::sync::Arc<str>>,
         fills: Vec<(FillPaint, BlendMix)>,
         stroke: Option<StrokeStyle>,
         effects: Vec<NodeEffect>,

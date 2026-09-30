@@ -24,6 +24,25 @@ pub fn paint_scene_into(
     paint_primitives_into_scene_with(scene, &primitives, scene_transform, book.as_deref());
 }
 
+/// Draw one invisible late-bound resource (a transparent gradient on a pixel
+/// far outside any target) so vello never resolves this scene on its
+/// solid-paths-only fast path.
+///
+/// That path (vello 0.10's `Resolver::resolve` for a scene without images,
+/// gradients or glyphs) reports an empty image atlas, so the renderer drops
+/// its atlas texture for a 1×1 one — while the resolver still counts every
+/// image uploaded before as resident. The next scene with those images
+/// gets a fresh, blank atlas and uploads nothing: its textures draw as
+/// nothing. The effects stage renders several scenes a frame (segments,
+/// bloom passes of plain shapes), so from the second frame on every texture
+/// vanished; a reused `Offscreen` did the same after any plain scene.
+pub(super) fn keep_image_atlas(scene: &mut vello::Scene) {
+    let clear = peniko::Color::TRANSPARENT;
+    let gradient = peniko::Gradient::new_linear((0.0, 0.0), (1.0, 0.0)).with_stops([clear, clear].as_slice());
+    let far = kurbo::Rect::new(-1.0e6, -1.0e6, -1.0e6 + 1.0, -1.0e6 + 1.0);
+    scene.fill(peniko::Fill::NonZero, kurbo::Affine::IDENTITY, &gradient, None, &far);
+}
+
 /// A face's bytes as a vello font, cached by face so every frame (and
 /// vello's glyph cache) sees the same blob.
 fn font_data(face: &render_fonts::Face) -> peniko::FontData {
@@ -51,6 +70,8 @@ pub fn paint_primitives_into_scene_with(
     use peniko::{Blob, Fill, ImageBrush, ImageData, ImageSampler};
     use std::sync::Arc;
     use vello::Glyph;
+
+    keep_image_atlas(scene);
 
     // Mask buffering state: collect primitives between MaskDefStart..MaskDefEnd
     // so they can be replayed as a luminance mask when MaskApplyEnd is reached.
@@ -273,18 +294,13 @@ pub fn paint_primitives_into_scene_with(
                         }
                     }
                     if let Some(stroke) = stroke.as_ref() {
+                        let (brush, brush_transform) = stroke_brush(stroke, lx, ly, width, height);
                         if stroke.width > 0.0 && *authored && let Some(ring) = aligned_stroke_ring(rect, &corner_radii, stroke) {
-                            scene.fill(Fill::EvenOdd, node_transform, to_peniko(stroke.color.clone()), None, &ring);
+                            scene.fill(Fill::EvenOdd, node_transform, &brush, brush_transform, &ring);
                         } else if stroke.width > 0.0 {
                             let stroke_style = to_kurbo_stroke(stroke, 1.0);
                             let stroke_rr = RoundedRect::from_rect(stroke_rect, stroke_radius);
-                            scene.stroke(
-                                &stroke_style,
-                                node_transform,
-                                to_peniko(stroke.color.clone()),
-                                None,
-                                &stroke_rr,
-                            );
+                            scene.stroke(&stroke_style, node_transform, &brush, brush_transform, &stroke_rr);
                         }
                     }
                 } else {
@@ -308,18 +324,13 @@ pub fn paint_primitives_into_scene_with(
                         }
                     }
                     if let Some(stroke) = stroke.as_ref() {
+                        let (brush, brush_transform) = stroke_brush(stroke, lx, ly, width, height);
                         if stroke.width > 0.0 && *authored && let Some(ring) = aligned_stroke_ring(rect, &corner_radii, stroke) {
-                            scene.fill(Fill::EvenOdd, node_transform, to_peniko(stroke.color.clone()), None, &ring);
+                            scene.fill(Fill::EvenOdd, node_transform, &brush, brush_transform, &ring);
                         } else if stroke.width > 0.0 {
                             let stroke_style = to_kurbo_stroke(stroke, 1.0);
                             let stroke_rect = stroke_aligned_rect(rect, Some(stroke));
-                            scene.stroke(
-                                &stroke_style,
-                                node_transform,
-                                to_peniko(stroke.color.clone()),
-                                None,
-                                &stroke_rect,
-                            );
+                            scene.stroke(&stroke_style, node_transform, &brush, brush_transform, &stroke_rect);
                         }
                     }
                 }
@@ -513,17 +524,13 @@ pub fn paint_primitives_into_scene_with(
 
                     if let Some(stroke) = stroke.as_ref() {
                         if stroke.width > 0.0 {
+                            // Path space is node-local, as for the fills.
+                            let (brush, brush_transform) = stroke_brush(stroke, 0.0, 0.0, width, height);
                             for path_data in stroke_paths {
                                 if let Some(path) = cached_bez_path(path_data) {
                                     // Figma strokeGeometry is already the outlined stroke shape.
                                     // Fill it directly to avoid double-stroking artifacts.
-                                    scene.fill(
-                                        peniko::Fill::NonZero,
-                                        path_transform,
-                                        to_peniko(stroke.color.clone()),
-                                        None,
-                                        &*path,
-                                    );
+                                    scene.fill(peniko::Fill::NonZero, path_transform, &brush, brush_transform, &*path);
                                     had_any_path = true;
                                 }
                             }
@@ -555,13 +562,8 @@ pub fn paint_primitives_into_scene_with(
                     if let Some(stroke) = stroke.as_ref() {
                         if stroke.width > 0.0 {
                             let stroke_style = to_kurbo_stroke(stroke, 1.0);
-                            scene.stroke(
-                                &stroke_style,
-                                base_transform,
-                                to_peniko(stroke.color.clone()),
-                                None,
-                                &rect,
-                            );
+                            let (brush, brush_transform) = stroke_brush(stroke, lx, ly, width, height);
+                            scene.stroke(&stroke_style, base_transform, &brush, brush_transform, &rect);
                         }
                     }
                 }
@@ -899,13 +901,14 @@ pub fn paint_primitives_into_scene_with(
                 }
             }
             if let Some(s) = stroke {
+                let brush = stroke_brush(s, 0.0, 0.0, width, height);
                 if strokes_fill {
                     for path in &fill_geo {
-                        stroke_aligned_path(scene, transform, path, s);
+                        stroke_aligned_path(scene, transform, path, s, &brush);
                     }
                 } else {
                     for path in &stroke_geo {
-                        scene.fill(Fill::NonZero, transform, to_peniko(s.color.clone()), None, &**path);
+                        scene.fill(Fill::NonZero, transform, &brush.0, brush.1, &**path);
                     }
                 }
             }
@@ -926,13 +929,19 @@ pub fn paint_primitives_into_scene_with(
         }
     }
 
-    /// Stroke `path` with `s`, honouring its alignment on closed subpaths
-    /// (open ones are always centred).
-    fn stroke_aligned_path(scene: &mut vello::Scene, transform: kurbo::Affine, path: &BezPath, s: &StrokeStyle) {
+    /// Stroke `path` with `s` in `brush` (see [`stroke_brush`]), honouring
+    /// its alignment on closed subpaths (open ones are always centred).
+    fn stroke_aligned_path(
+        scene: &mut vello::Scene,
+        transform: kurbo::Affine,
+        path: &BezPath,
+        s: &StrokeStyle,
+        brush: &(peniko::Brush, Option<kurbo::Affine>),
+    ) {
         use kurbo::Shape;
-        let colour = to_peniko(s.color.clone());
+        let (colour, bt) = (&brush.0, brush.1);
         if matches!(s.align, StrokeAlign::Center) {
-            scene.stroke(&to_kurbo_stroke(s, 1.0), transform, colour, None, path);
+            scene.stroke(&to_kurbo_stroke(s, 1.0), transform, colour, bt, path);
             return;
         }
         let (closed, open) = split_open_closed(path);
@@ -941,12 +950,12 @@ pub fn paint_primitives_into_scene_with(
             let double = to_kurbo_stroke(&StrokeStyle { width: s.width * 2.0, ..s.clone() }, 1.0);
             if matches!(s.align, StrokeAlign::Inside) {
                 scene.push_clip_layer(Fill::NonZero, transform, &closed);
-                scene.stroke(&double, transform, colour, None, &closed);
+                scene.stroke(&double, transform, colour, bt, &closed);
                 scene.pop_layer();
             } else {
                 let reach = closed.bounding_box().inflate(s.width * 2.0 + 1.0, s.width * 2.0 + 1.0);
                 scene.push_layer(Fill::NonZero, peniko::Mix::Normal, 1.0, transform, &reach);
-                scene.stroke(&double, transform, colour, None, &closed);
+                scene.stroke(&double, transform, colour, bt, &closed);
                 scene.push_layer(Fill::NonZero, peniko::Compose::DestOut, 1.0, transform, &closed);
                 scene.fill(Fill::NonZero, transform, peniko::Color::BLACK, None, &closed);
                 scene.pop_layer();
@@ -954,7 +963,28 @@ pub fn paint_primitives_into_scene_with(
             }
         }
         if !open.elements().is_empty() {
-            scene.stroke(&to_kurbo_stroke(s, 1.0), transform, colour, None, &open);
+            scene.stroke(&to_kurbo_stroke(s, 1.0), transform, colour, bt, &open);
+        }
+    }
+
+    /// A stroke's brush: its gradient laid across the node's box
+    /// `(x, y, w, h)` exactly as a fill's (with the brush transform a radial
+    /// gradient needs), or its colour.
+    fn stroke_brush(s: &StrokeStyle, x: f64, y: f64, w: f64, h: f64) -> (peniko::Brush, Option<kurbo::Affine>) {
+        let (x, y, w, h) = super::types::stroke_gradient_box(s, x, y, w, h);
+        let gradient = match &s.gradient {
+            Some(FillPaint::GradientLinear { transform, stops }) => {
+                build_linear_gradient(x, y, w, h, transform.as_ref(), stops).map(|g| (g, None))
+            }
+            Some(FillPaint::GradientRadial { transform, stops }) => build_radial_gradient(x, y, w, h, transform.as_ref(), stops),
+            Some(FillPaint::GradientAngular { transform, stops }) => {
+                build_angular_gradient(x, y, w, h, transform.as_ref(), stops).map(|g| (g, None))
+            }
+            _ => None,
+        };
+        match gradient {
+            Some((g, t)) => (peniko::Brush::Gradient(g), t),
+            None => (peniko::Brush::Solid(to_peniko(s.color.clone())), None),
         }
     }
 
@@ -1014,7 +1044,7 @@ pub fn paint_primitives_into_scene_with(
                 scale_mode,
                 image_transform,
             } => {
-                if let Some(image_brush) = decode_image_brush(data_base64, *alpha, width, height) {
+                if let Some(image_brush) = decode_image_brush(data_base64, *alpha, *scale_mode, width, height) {
                     let iw = image_brush.image.width as f64;
                     let ih = image_brush.image.height as f64;
                     if iw > 0.0 && ih > 0.0 {
@@ -1069,52 +1099,7 @@ pub fn paint_primitives_into_scene_with(
                     (effect.radius * 0.5).max(0.0),
                 );
             }
-            EffectKind::InnerShadow => {
-                // Inner shadow: fill element with shadow color, then punch a
-                // blurred hole at the offset position using DestOut compositing.
-                // (Pattern from Blitz reference implementation.)
-                let rr = RoundedRect::from_rect(*base_rect, corner_radius);
-
-                // Layer 1: isolate inner shadow compositing group
-                scene.push_layer(Fill::NonZero, peniko::Mix::Normal, 1.0, scene_transform, &rr);
-
-                // Fill entire clipped area with shadow color
-                scene.fill(
-                    peniko::Fill::NonZero,
-                    scene_transform,
-                    to_peniko(effect.color.clone()),
-                    None,
-                    &rr,
-                );
-
-                // Layer 2: DestOut — punch a blurred hole at offset position
-                scene.push_layer(Fill::NonZero, peniko::Compose::DestOut, 1.0, scene_transform, &rr);
-
-                // Spread shrinks the hole (opposite of drop shadow)
-                let hole_rect = Rect::new(
-                    base_rect.x0 + effect.offset_x + effect.spread,
-                    base_rect.y0 + effect.offset_y + effect.spread,
-                    base_rect.x1 + effect.offset_x - effect.spread,
-                    base_rect.y1 + effect.offset_y - effect.spread,
-                );
-                let hole_corner = (corner_radius - effect.spread).max(0.0);
-                // Figma radius is CSS blur radius (≈ 2×sigma)
-                scene.draw_blurred_rounded_rect(
-                    scene_transform,
-                    hole_rect,
-                    to_peniko(Rgba {
-                        r: 1.0,
-                        g: 1.0,
-                        b: 1.0,
-                        a: 1.0,
-                    }),
-                    hole_corner,
-                    (effect.radius * 0.5).max(0.0),
-                );
-
-                scene.pop_layer(); // DestOut
-                scene.pop_layer(); // isolation
-            }
+            EffectKind::InnerShadow => paint_inner_shadow(scene, scene_transform, base_rect, corner_radius, effect),
             EffectKind::LayerBlur => {
                 // Single GPU-native Gaussian blur of the bounding rect.
                 let sigma = (effect.radius * 0.5).max(0.5);
@@ -1151,6 +1136,141 @@ pub fn paint_primitives_into_scene_with(
                 );
             }
         }
+    }
+
+    /// An inner shadow of `base` (a rect rounded by `corner`): the outline
+    /// filled with the shadow colour, minus a blurred hole at the offset
+    /// (a DestOut layer), in an isolating layer. (Pattern from the Blitz
+    /// reference implementation.)
+    ///
+    /// Over a large node the layers are bounded to the band along the edge
+    /// the shadow can reach ([`inner_shadow_cut`]): deeper inside, the hole
+    /// covers everything and whole-outline layers would only cost blend-stack
+    /// depth, per-tile commands and tile allocations over the node's full
+    /// area — enough, with a few large faces on a page, to overflow vello's
+    /// fixed buffers and blank the page. Under an axis-aligned transform the
+    /// band is drawn as up to four strips, each its own clip, so every draw's
+    /// tiles stay within its strip; otherwise as one even-odd band clip.
+    fn paint_inner_shadow(scene: &mut vello::Scene, transform: kurbo::Affine, base: &Rect, corner: f64, effect: &NodeEffect) {
+        let rr = RoundedRect::from_rect(*base, corner);
+        let whole = || (Fill::NonZero, kurbo::Shape::to_path(&rr, 0.1));
+        let device_area = base.area() * transform.determinant().abs();
+        let cut = if device_area >= BAND_MIN_DEVICE_AREA { inner_shadow_cut(base, corner, effect) } else { None };
+        let Some(cut) = cut else {
+            let (fill, clip) = whole();
+            inner_shadow_layers(scene, transform, &rr, (fill, &clip), effect);
+            return;
+        };
+        if let Some(strips) = band_strips(transform, base, &cut) {
+            let (fill, clip) = whole();
+            for strip in strips {
+                scene.push_clip_layer(Fill::NonZero, transform, &strip);
+                inner_shadow_layers(scene, transform, &rr, (fill, &clip), effect);
+                scene.pop_layer();
+            }
+            return;
+        }
+        let mut band = kurbo::Shape::to_path(&rr, 0.1);
+        band.extend(kurbo::Shape::to_path(&cut, 0.1));
+        inner_shadow_layers(scene, transform, &rr, (Fill::EvenOdd, &band), effect);
+    }
+
+    /// The inner shadow's layers, the outer one clipped to `clip`.
+    fn inner_shadow_layers(scene: &mut vello::Scene, transform: kurbo::Affine, rr: &RoundedRect, clip: (Fill, &BezPath), effect: &NodeEffect) {
+        // Layer 1: isolate inner shadow compositing group
+        scene.push_layer(clip.0, peniko::Mix::Normal, 1.0, transform, clip.1);
+        // Fill entire clipped area with shadow color
+        scene.fill(Fill::NonZero, transform, to_peniko(effect.color.clone()), None, rr);
+        // Layer 2: DestOut — punch a blurred hole at offset position.
+        // (Clipped to the whole outline: where the outer clip is partial the
+        // hole is complete, and clipping both would leave a faint seam.)
+        scene.push_layer(Fill::NonZero, peniko::Compose::DestOut, 1.0, transform, rr);
+        // Spread shrinks the hole (opposite of drop shadow)
+        let hole_corner = (rr.radii().top_left - effect.spread).max(0.0);
+        // Figma radius is CSS blur radius (≈ 2×sigma)
+        scene.draw_blurred_rounded_rect(
+            transform,
+            inner_shadow_hole(&rr.rect(), effect),
+            to_peniko(Rgba { r: 1.0, g: 1.0, b: 1.0, a: 1.0 }),
+            hole_corner,
+            (effect.radius * 0.5).max(0.0),
+        );
+        scene.pop_layer(); // DestOut
+        scene.pop_layer(); // isolation
+    }
+
+    /// The inner shadow's hole: `base` offset, shrunk by the spread.
+    fn inner_shadow_hole(base: &Rect, effect: &NodeEffect) -> Rect {
+        Rect::new(
+            base.x0 + effect.offset_x + effect.spread,
+            base.y0 + effect.offset_y + effect.spread,
+            base.x1 + effect.offset_x - effect.spread,
+            base.y1 + effect.offset_y - effect.spread,
+        )
+    }
+
+    /// Nodes smaller than this (device px², 1024 of vello's 16 px tiles)
+    /// keep whole-outline layers: they cost little, and bounding them would
+    /// only move where vello rounds the backdrop to 8 bits.
+    const BAND_MIN_DEVICE_AREA: f64 = 512.0 * 512.0;
+
+    /// The region inside `base` that an inner shadow's blurred hole covers
+    /// completely — nothing of the shadow shows there. `None` when that
+    /// region is small (a small node, a wide blur or a large offset).
+    ///
+    /// It keeps a margin of 4σ past the hole's edge (its rounded corners
+    /// included), where the blur's tail is under a thousandth — below one
+    /// 8-bit step at any shadow opacity — so the shadow comes out as over the
+    /// whole node. (What changes is only where vello rounds the backdrop to
+    /// 8 bits: inside the cut it no longer passes through the layer's blend
+    /// stack, so content drawn over it later can land one step apart.)
+    fn inner_shadow_cut(base: &Rect, corner: f64, effect: &NodeEffect) -> Option<Rect> {
+        let sigma = (effect.radius * 0.5).max(0.0);
+        let hole_corner = (corner - effect.spread).max(0.0);
+        let margin = 4.0 * sigma + hole_corner + 1.0;
+        let cut = inner_shadow_hole(base, effect).inset(-margin).intersect(*base);
+        // Not worth it unless it saves most of the node.
+        (cut.width() > 0.0 && cut.height() > 0.0 && cut.area() >= base.area() * 0.25).then_some(cut)
+    }
+
+    /// `base` minus `cut` as up to four rectangles (top and bottom full
+    /// width, left and right between them), when `transform` is
+    /// axis-aligned: their edges are moved to whole device tiles (16 px),
+    /// the cut only shrinking, so neighbouring strips meet on pixel
+    /// boundaries and no pixel is split between two of them. The outer
+    /// edges lie a tile outside `base`, so the node's own outline is
+    /// antialiased as without them. `None` under rotation or skew.
+    fn band_strips(transform: kurbo::Affine, base: &Rect, cut: &Rect) -> Option<Vec<Rect>> {
+        const TILE: f64 = 16.0;
+        let [a, b, c, d, _, _] = transform.as_coeffs();
+        if b.abs() > 1e-9 || c.abs() > 1e-9 || a.abs() < 1e-9 || d.abs() < 1e-9 {
+            return None;
+        }
+        let device = |r: &Rect| transform.transform_rect_bbox(*r);
+        let (outer, inner) = (device(base), device(cut));
+        let outer = Rect::new(
+            (outer.x0 / TILE).floor() * TILE - TILE,
+            (outer.y0 / TILE).floor() * TILE - TILE,
+            (outer.x1 / TILE).ceil() * TILE + TILE,
+            (outer.y1 / TILE).ceil() * TILE + TILE,
+        );
+        let inner = Rect::new(
+            (inner.x0 / TILE).ceil() * TILE,
+            (inner.y0 / TILE).ceil() * TILE,
+            (inner.x1 / TILE).floor() * TILE,
+            (inner.y1 / TILE).floor() * TILE,
+        );
+        if inner.width() <= 0.0 || inner.height() <= 0.0 {
+            return None;
+        }
+        let back = transform.inverse();
+        let strips = [
+            Rect::new(outer.x0, outer.y0, outer.x1, inner.y0),
+            Rect::new(outer.x0, inner.y1, outer.x1, outer.y1),
+            Rect::new(outer.x0, inner.y0, inner.x0, inner.y1),
+            Rect::new(inner.x1, inner.y0, outer.x1, inner.y1),
+        ];
+        Some(strips.iter().map(|s| back.transform_rect_bbox(*s)).collect())
     }
 
     fn paint_blurred_rect_content(
@@ -1351,7 +1471,7 @@ pub fn paint_primitives_into_scene_with(
                 scale_mode,
                 image_transform,
             } => {
-                if let Some(image_brush) = decode_image_brush(data_base64, *alpha, width, height) {
+                if let Some(image_brush) = decode_image_brush(data_base64, *alpha, *scale_mode, width, height) {
                     let iw = image_brush.image.width as f64;
                     let ih = image_brush.image.height as f64;
                     if iw > 0.0 && ih > 0.0 {
@@ -1448,8 +1568,10 @@ pub fn paint_primitives_into_scene_with(
                 }
             }
             ImageScaleMode::Tile => {
-                // Simple 1:1 tiling from the node origin (Vello Pad extend handles the rest)
-                kurbo::Affine::translate((x, y))
+                // One tile placed by the image transform (image px → the
+                // node's box, from its top-left; identity = the image at
+                // its own size), repeated by the brush's `Extend::Repeat`.
+                kurbo::Affine::translate((x, y)) * image_transform.as_ref().map_or(kurbo::Affine::IDENTITY, to_kurbo_affine)
             }
             ImageScaleMode::Stretch => {
                 // Non-uniform stretch to fill node exactly
@@ -1704,85 +1826,122 @@ pub fn paint_primitives_into_scene_with(
         }
     }
 
+    /// The image in `data_base64` as a brush at `alpha`, decoded once and
+    /// cached (see [`decoded_image`]). A tiled image repeats past its edges;
+    /// every other mode pads with its edge pixels.
     fn decode_image_brush(
-        data_base64: &str,
+        data_base64: &Arc<str>,
         alpha: f64,
+        scale_mode: ImageScaleMode,
         display_w: f64,
         display_h: f64,
     ) -> Option<ImageBrush> {
+        let tile = scale_mode == ImageScaleMode::Tile;
+        // A tile is drawn at its own size, not stretched over the node:
+        // keep every pixel.
+        let display = (!tile).then_some((display_w, display_h));
+        let image = decoded_image(data_base64, display)?;
+        let extend = if tile { peniko::Extend::Repeat } else { peniko::Extend::Pad };
+        Some(ImageBrush {
+            image,
+            sampler: ImageSampler { x_extend: extend, y_extend: extend, quality: peniko::ImageQuality::Medium, alpha: alpha as f32 },
+        })
+    }
+
+    /// Decoded images kept before the cache is reset, in RGBA bytes.
+    const DECODED_CACHE_BYTES: usize = 512 << 20;
+
+    /// The image in `data_base64`, decoded to RGBA and — for `display`
+    /// sizes much smaller than the image — downscaled to twice the display
+    /// size (in 64 px buckets), so a large photo shown small doesn't upload
+    /// megabytes of texture. Cached across frames: by the shared data's
+    /// address (collects share one encoding per asset, so a frame's lookup
+    /// is a pointer, not a hash of megabytes of text; the entry keeps the
+    /// data alive, so the address can't be reused), and on a miss by
+    /// content, so fresh copies of the same data don't decode again.
+    fn decoded_image(data_base64: &Arc<str>, display: Option<(f64, f64)>) -> Option<ImageData> {
         use std::collections::HashMap;
         use std::hash::{Hash, Hasher};
         use std::sync::{LazyLock, Mutex};
 
-        static CACHE: LazyLock<Mutex<HashMap<u64, ImageBrush>>> =
-            LazyLock::new(|| Mutex::new(HashMap::new()));
-
-        // Include display dimensions in cache key (rounded to nearest 64px to avoid
-        // excessive cache entries from sub-pixel differences)
-        let bucket_w = ((display_w / 64.0).ceil() as u32).max(1) * 64;
-        let bucket_h = ((display_h / 64.0).ceil() as u32).max(1) * 64;
-
-        let mut hasher = std::collections::hash_map::DefaultHasher::new();
-        data_base64.hash(&mut hasher);
-        alpha.to_bits().hash(&mut hasher);
-        bucket_w.hash(&mut hasher);
-        bucket_h.hash(&mut hasher);
-        let cache_key = hasher.finish();
-
-        if let Ok(cache) = CACHE.lock() {
-            if let Some(cached) = cache.get(&cache_key) {
-                return Some(cached.clone());
-            }
+        /// Display size bucket, px ((0, 0): full resolution).
+        type Bucket = (u32, u32);
+        struct Cache {
+            /// (data address, bucket) → (the data, its image).
+            by_ptr: HashMap<(usize, Bucket), (Arc<str>, ImageData)>,
+            /// (data hash, bucket) → image.
+            by_hash: HashMap<(u64, Bucket), ImageData>,
+            bytes: usize,
         }
+        static CACHE: LazyLock<Mutex<Cache>> =
+            LazyLock::new(|| Mutex::new(Cache { by_ptr: HashMap::new(), by_hash: HashMap::new(), bytes: 0 }));
 
-        let bytes = base64::engine::general_purpose::STANDARD
-            .decode(data_base64)
-            .ok()?;
+        // Display dimensions bucketed to 64 px, so sub-pixel size changes
+        // share an entry; (0, 0) for full resolution.
+        let bucket = display.map_or((0, 0), |(w, h)| {
+            (((w / 64.0).ceil() as u32).max(1) * 64, ((h / 64.0).ceil() as u32).max(1) * 64)
+        });
+        let ptr_key = (Arc::as_ptr(data_base64).cast::<u8>() as usize, bucket);
+        if let Ok(cache) = CACHE.lock()
+            && let Some((data, image)) = cache.by_ptr.get(&ptr_key)
+            && Arc::ptr_eq(data, data_base64)
+        {
+            return Some(image.clone());
+        }
+        let hash_key = {
+            let mut hasher = std::collections::hash_map::DefaultHasher::new();
+            data_base64.hash(&mut hasher);
+            (hasher.finish(), bucket)
+        };
+        let known = CACHE.lock().ok().and_then(|c| c.by_hash.get(&hash_key).cloned());
+        let image = match known {
+            Some(image) => image,
+            None => decode_rgba(data_base64, display)?,
+        };
+        if let Ok(mut cache) = CACHE.lock() {
+            let size = image.data.len();
+            if cache.bytes + size > DECODED_CACHE_BYTES {
+                cache.by_ptr.clear();
+                cache.by_hash.clear();
+                cache.bytes = 0;
+            }
+            cache.bytes += size;
+            cache.by_hash.insert(hash_key, image.clone());
+            cache.by_ptr.insert(ptr_key, (Arc::clone(data_base64), image.clone()));
+        }
+        Some(image)
+    }
+
+    /// Decode base64 image data to straight RGBA8, downscaled for
+    /// `display` (see [`decoded_image`]).
+    fn decode_rgba(data_base64: &str, display: Option<(f64, f64)>) -> Option<ImageData> {
+        let bytes = base64::engine::general_purpose::STANDARD.decode(data_base64).ok()?;
         let decoded = image::load_from_memory(&bytes).ok()?.into_rgba8();
         let (orig_w, orig_h) = (decoded.width(), decoded.height());
-
-        // Downscale to 2x display size (for retina quality) if the source image
-        // is significantly larger than the display area. This avoids uploading
-        // multi-megabyte textures to the GPU when only a fraction of pixels are visible.
-        let max_w = (display_w * 2.0).ceil() as u32;
-        let max_h = (display_h * 2.0).ceil() as u32;
-        let (final_img, width, height) = if orig_w > max_w.max(64) || orig_h > max_h.max(64) {
-            let scale = (max_w as f64 / orig_w as f64).min(max_h as f64 / orig_h as f64);
-            let new_w = ((orig_w as f64 * scale).round() as u32).max(1);
-            let new_h = ((orig_h as f64 * scale).round() as u32).max(1);
-            let resized = image::imageops::resize(
-                &decoded,
-                new_w,
-                new_h,
-                image::imageops::FilterType::Triangle,
-            );
-            let (w, h) = (resized.width(), resized.height());
-            (resized.into_vec(), w, h)
-        } else {
-            (decoded.into_vec(), orig_w, orig_h)
+        let (final_img, width, height) = match display {
+            Some((display_w, display_h))
+                if orig_w > ((display_w * 2.0).ceil() as u32).max(64) || orig_h > ((display_h * 2.0).ceil() as u32).max(64) =>
+            {
+                // Downscale to 2x display size (for retina quality) when the
+                // source is significantly larger than the display area.
+                let max_w = (display_w * 2.0).ceil() as u32;
+                let max_h = (display_h * 2.0).ceil() as u32;
+                let scale = (max_w as f64 / orig_w as f64).min(max_h as f64 / orig_h as f64);
+                let new_w = ((orig_w as f64 * scale).round() as u32).max(1);
+                let new_h = ((orig_h as f64 * scale).round() as u32).max(1);
+                let resized = image::imageops::resize(&decoded, new_w, new_h, image::imageops::FilterType::Triangle);
+                let (w, h) = (resized.width(), resized.height());
+                (resized.into_vec(), w, h)
+            }
+            _ => (decoded.into_vec(), orig_w, orig_h),
         };
-
-        let brush = ImageBrush {
-            image: ImageData {
-                data: Blob::new(Arc::new(final_img)),
-                format: peniko::ImageFormat::Rgba8,
-                alpha_type: peniko::ImageAlphaType::Alpha,
-                width,
-                height,
-            },
-            sampler: ImageSampler {
-                x_extend: peniko::Extend::Pad,
-                y_extend: peniko::Extend::Pad,
-                quality: peniko::ImageQuality::Medium,
-                alpha: alpha as f32,
-            },
-        };
-
-        if let Ok(mut cache) = CACHE.lock() {
-            cache.insert(cache_key, brush.clone());
-        }
-
-        Some(brush)
+        Some(ImageData {
+            data: Blob::new(Arc::new(final_img)),
+            format: peniko::ImageFormat::Rgba8,
+            alpha_type: peniko::ImageAlphaType::Alpha,
+            width,
+            height,
+        })
     }
 
     /// Render buffered mask-definition primitives into the scene.

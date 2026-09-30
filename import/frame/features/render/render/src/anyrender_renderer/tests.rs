@@ -72,7 +72,7 @@ fn image_fill_reads_asset_bytes() {
         panic!("expected image fill");
     };
     assert_eq!(image_hash.as_deref(), Some("abc123"));
-    assert_eq!(data_base64, "Zm9vYmFy");
+    assert_eq!(&*data_base64, "Zm9vYmFy");
     assert!((alpha - 0.5).abs() < 1e-9);
     assert_eq!(scale_mode, ImageScaleMode::Fill);
 }

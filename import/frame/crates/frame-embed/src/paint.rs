@@ -142,12 +142,7 @@ pub fn paint_filtered(
                             StrokeAlign::Center => 0.0,
                         },
                     );
-                    canvas.stroke(
-                        t,
-                        &kurbo_stroke(s),
-                        &Brush::Solid(color(&s.color)),
-                        &rounded(r, &radii).to_path(0.05),
-                    );
+                    stroke_shape(canvas, t, &rounded(r, &radii).to_path(0.05), rect, s);
                 }
             }
             PaintPrimitive::Path {
@@ -200,15 +195,15 @@ pub fn paint_filtered(
                     }
                 }
                 if let Some(s) = stroke {
-                    let brush = Brush::Solid(color(&s.color));
                     if stroke_geo.is_empty() {
-                        let style = kurbo_stroke(s);
                         for g in &fill_geo {
-                            canvas.stroke(t, &style, &brush, g);
+                            stroke_shape(canvas, t, g, box_rect, s);
                         }
                     } else {
+                        // Stroke geometry is the stroke's own outline.
+                        let paint = s.gradient.clone().unwrap_or_else(|| FillPaint::Solid(s.color.clone()));
                         for g in &stroke_geo {
-                            canvas.fill(t, Fill::NonZero, &brush, None, g);
+                            fill_paint(canvas, t, g, box_rect, &paint);
                         }
                     }
                 }
@@ -375,6 +370,19 @@ fn stops(s: &[GradientStop]) -> Vec<ColorStop> {
 
 fn uv(t: Option<&AffineTransform2D>, u: f64, v: f64) -> (f64, f64) {
     t.map_or((u, v), |t| t.transform_point(u, v))
+}
+
+/// Stroke `shape` with `s`: a solid stroke directly, a gradient one as its
+/// outline filled with the gradient laid across the node's box `b`.
+fn stroke_shape(canvas: &mut (impl Canvas + ?Sized), t: Affine, shape: &BezPath, b: Rect, s: &StrokeStyle) {
+    let style = kurbo_stroke(s);
+    match &s.gradient {
+        Some(g) => {
+            let outline = kurbo::stroke(shape.elements().iter().copied(), &style, &kurbo::StrokeOpts::default(), 0.05);
+            fill_paint(canvas, t, &outline, b, g);
+        }
+        None => canvas.stroke(t, &style, &Brush::Solid(color(&s.color)), shape),
+    }
 }
 
 fn fill_paint(

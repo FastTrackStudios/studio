@@ -1,6 +1,6 @@
 //! Pixel textures, generated in code: small tileable noise, cell and weave
-//! tiles encoded as PNG assets and laid over a surface as a grid of image
-//! rects. No photographs — every tile is a function of its parameters and
+//! tiles encoded as PNG assets and laid over a surface as one repeating
+//! image fill. No photographs — every tile is a function of its parameters and
 //! a seed, so a build is reproducible and an asset is stored once per
 //! document (assets are content-addressed).
 //!
@@ -13,22 +13,36 @@
 //! - **colour** ([`Weave`]): a periodic pattern in its own colours (grille
 //!   cloth, perforation, expanded mesh) that *is* the surface.
 //!
-//! The renderer paints an image `Tile` without repeating it, so a surface is
-//! covered by a clipped frame of `cols × rows` rects, one per tile (capped at
-//! [`MAX_TILES`]; past that the tile is drawn larger). Every rect shares one
-//! asset, which the renderer decodes once.
+//! A surface is covered by one rect whose image paint is a `Tile`, scaled to
+//! the tile's design size: the renderer repeats it ([`TileFill::Repeat`],
+//! the default). [`TileFill::Grid`] instead lays a clipped frame of
+//! `cols × rows` rects, one per tile (capped at [`MAX_TILES`]; past that the
+//! tile is drawn larger), for a renderer that can't repeat an image. Either
+//! way every tile shares one asset, which the renderer decodes once.
 
 use std::collections::HashMap;
 use std::sync::{LazyLock, Mutex};
 
-use document_proto::{Asset, AssetId, BlendMode, ImageScaleMode, NodeId, Op, Paint, PaintKind};
+use document_proto::{Asset, AssetId, BlendMode, ImageScaleMode, NodeId, Op, Paint, PaintKind, Transform};
 use surface_widgets::Builder;
 
 use crate::controls::parts::fixed;
 use crate::draw;
 
-/// Most image rects one textured surface may use.
+/// Most image rects one textured surface may use ([`TileFill::Grid`]).
 pub const MAX_TILES: usize = 48;
+
+/// How a texture tile covers a surface.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum TileFill {
+    /// One rect with a repeating (`Tile`) image fill: one node whatever the
+    /// size, and the tile always at its design size.
+    #[default]
+    Repeat,
+    /// A grid of rects, one per tile, for renderers that don't repeat
+    /// images (the tile grows past [`MAX_TILES`] rects).
+    Grid,
+}
 
 // ── deterministic randomness ────────────────────────────────────────────
 
@@ -607,10 +621,45 @@ pub fn image_paint(asset: AssetId, opacity: f64) -> Paint {
 }
 
 /// Cover `(x, y, w, h)` under `parent` with `asset` as tiles of `tile`
-/// design px (grown so no more than [`MAX_TILES`] are used), clipped to the
-/// box and rounded by `radius`. Returns the clipping frame.
-pub fn tiles(b: &mut Builder<'_>, parent: NodeId, (x, y, w, h): (f64, f64, f64, f64), radius: f64, asset: &AssetId, tile: f64, opacity: f64) -> NodeId {
-    let mut t = tile.max(8.0);
+/// design px, rounded by `radius` — as one repeating fill
+/// ([`TileFill::Repeat`]). Returns the textured node.
+pub fn tiles(b: &mut Builder<'_>, parent: NodeId, rect: (f64, f64, f64, f64), radius: f64, asset: &AssetId, tile: f64, opacity: f64) -> NodeId {
+    tiles_with(b, parent, rect, radius, asset, tile, opacity, TileFill::default())
+}
+
+/// [`tiles`], laid as `fill` says. [`TileFill::Grid`] grows the tile so no
+/// more than [`MAX_TILES`] rects are used and returns their clipping frame;
+/// an asset that isn't a PNG falls back to it.
+#[allow(clippy::too_many_arguments)]
+pub fn tiles_with(
+    b: &mut Builder<'_>,
+    parent: NodeId,
+    (x, y, w, h): (f64, f64, f64, f64),
+    radius: f64,
+    asset: &AssetId,
+    tile: f64,
+    opacity: f64,
+    fill: TileFill,
+) -> NodeId {
+    let t = tile.max(8.0);
+    let px = b.scene.asset(asset).and_then(|a| png_size(&a.bytes));
+    if let (TileFill::Repeat, Some((pw, ph))) = (fill, px) {
+        // The tile's pixels scaled to its design size, repeated.
+        let (sx, sy) = (t / f64::from(pw.max(1)), t / f64::from(ph.max(1)));
+        let paint = Paint {
+            kind: PaintKind::Image {
+                asset: asset.clone(),
+                source_ref: None,
+                scale_mode: ImageScaleMode::Tile,
+                transform: Some(Transform { a: sx, b: 0.0, c: 0.0, d: sy, tx: 0.0, ty: 0.0 }),
+            },
+            opacity,
+            blend: BlendMode::Normal,
+            visible: true,
+        };
+        return b.add(parent, fixed(draw::rounded(draw::rect("texture", x, y, w, h, paint), radius)));
+    }
+    let mut t = t;
     while ((w / t).ceil() * (h / t).ceil()) as usize > MAX_TILES {
         t *= 1.25;
     }
@@ -626,6 +675,12 @@ pub fn tiles(b: &mut Builder<'_>, parent: NodeId, (x, y, w, h): (f64, f64, f64, 
         }
     }
     clip
+}
+
+/// A PNG's pixel size, from its header.
+fn png_size(bytes: &[u8]) -> Option<(u32, u32)> {
+    let be = |i: usize| Some(u32::from_be_bytes(bytes.get(i..i + 4)?.try_into().ok()?));
+    (bytes.starts_with(b"\x89PNG\r\n\x1a\n") && bytes.get(12..16) == Some(b"IHDR")).then(|| Some((be(16)?, be(20)?)))?
 }
 
 /// [`tiles`] of a relief texture: `gain` its strength, `scale` its size.
@@ -661,6 +716,12 @@ mod tests {
         assert_eq!(&p[..8], &[0x89, b'P', b'N', b'G', 0x0d, 0x0a, 0x1a, 0x0a]);
         assert_eq!(&p[12..16], b"IHDR");
         assert_eq!(crc32(b"IEND"), 0xae42_6082);
+    }
+
+    #[test]
+    fn png_size_reads_the_header() {
+        assert_eq!(png_size(&png(3, 5, 2, &[0; 30])), Some((3, 5)));
+        assert_eq!(png_size(b"GIF89a"), None);
     }
 
     #[test]
