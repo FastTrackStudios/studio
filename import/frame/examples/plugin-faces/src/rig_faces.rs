@@ -315,6 +315,9 @@ pub fn manifest() -> String {
         "pre": pre,
         "amps": amps,
         "gate": { "face": "51-gate", "ns": "gate", "size": size(&gate()) },
+        // The Time module's units: a face per delay machine and reverb
+        // algorithm, by its name.
+        "time": crate::rig_time::manifest(),
         // The post compressor's unit. `maps`: face params that aren't the
         // block's own — `input` drives `threshold` (value × a + b), the
         // ratio lamps' index picks `ratio` from the table.

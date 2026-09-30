@@ -1247,5 +1247,319 @@
         330.0
       ]
     }
-  ]
+  ],
+  "time": {
+    "delay": [
+      {
+        "face": "60-dly-tape",
+        "match": [
+          "tape"
+        ],
+        "ns": "dly",
+        "size": [
+          960.0,
+          164.0
+        ]
+      },
+      {
+        "face": "61-dly-digital",
+        "match": [
+          "digital"
+        ],
+        "ns": "dly",
+        "size": [
+          960.0,
+          164.0
+        ]
+      },
+      {
+        "face": "62-dly-dbucket",
+        "match": [
+          "dbucket"
+        ],
+        "ns": "dly",
+        "size": [
+          960.0,
+          164.0
+        ]
+      },
+      {
+        "face": "63-dly-lo-fi",
+        "match": [
+          "lo-fi"
+        ],
+        "ns": "dly",
+        "size": [
+          960.0,
+          164.0
+        ]
+      },
+      {
+        "face": "64-dly-shimmer",
+        "match": [
+          "shimmer"
+        ],
+        "ns": "dly",
+        "size": [
+          960.0,
+          164.0
+        ]
+      },
+      {
+        "face": "65-dly-reverse",
+        "match": [
+          "reverse"
+        ],
+        "ns": "dly",
+        "size": [
+          960.0,
+          164.0
+        ]
+      },
+      {
+        "face": "66-dly-ice",
+        "match": [
+          "ice"
+        ],
+        "ns": "dly",
+        "size": [
+          960.0,
+          164.0
+        ]
+      },
+      {
+        "face": "67-dly-rhythm",
+        "match": [
+          "rhythm"
+        ],
+        "ns": "dly",
+        "size": [
+          960.0,
+          164.0
+        ]
+      },
+      {
+        "face": "68-dly-drum",
+        "match": [
+          "drum"
+        ],
+        "ns": "dly",
+        "size": [
+          960.0,
+          164.0
+        ]
+      },
+      {
+        "face": "69-dly-oil-can",
+        "match": [
+          "oil can"
+        ],
+        "ns": "dly",
+        "size": [
+          960.0,
+          164.0
+        ]
+      },
+      {
+        "face": "70-dly-multitap",
+        "match": [
+          "multitap"
+        ],
+        "ns": "dly",
+        "size": [
+          960.0,
+          164.0
+        ]
+      },
+      {
+        "face": "71-dly-spectral",
+        "match": [
+          "spectral"
+        ],
+        "ns": "dly",
+        "size": [
+          960.0,
+          164.0
+        ]
+      },
+      {
+        "face": "72-dly-filter",
+        "match": [
+          "filter"
+        ],
+        "ns": "dly",
+        "size": [
+          960.0,
+          164.0
+        ]
+      }
+    ],
+    "reverb": [
+      {
+        "face": "80-verb-room",
+        "match": [
+          "room"
+        ],
+        "ns": "verb",
+        "size": [
+          960.0,
+          164.0
+        ]
+      },
+      {
+        "face": "81-verb-hall",
+        "match": [
+          "hall"
+        ],
+        "ns": "verb",
+        "size": [
+          960.0,
+          164.0
+        ]
+      },
+      {
+        "face": "82-verb-plate",
+        "match": [
+          "plate"
+        ],
+        "ns": "verb",
+        "size": [
+          960.0,
+          164.0
+        ]
+      },
+      {
+        "face": "83-verb-spring",
+        "match": [
+          "spring"
+        ],
+        "ns": "verb",
+        "size": [
+          960.0,
+          164.0
+        ]
+      },
+      {
+        "face": "84-verb-cloud",
+        "match": [
+          "cloud"
+        ],
+        "ns": "verb",
+        "size": [
+          960.0,
+          164.0
+        ]
+      },
+      {
+        "face": "85-verb-bloom",
+        "match": [
+          "bloom"
+        ],
+        "ns": "verb",
+        "size": [
+          960.0,
+          164.0
+        ]
+      },
+      {
+        "face": "86-verb-shimmer",
+        "match": [
+          "shimmer"
+        ],
+        "ns": "verb",
+        "size": [
+          960.0,
+          164.0
+        ]
+      },
+      {
+        "face": "87-verb-chorale",
+        "match": [
+          "chorale"
+        ],
+        "ns": "verb",
+        "size": [
+          960.0,
+          164.0
+        ]
+      },
+      {
+        "face": "88-verb-magneto",
+        "match": [
+          "magneto"
+        ],
+        "ns": "verb",
+        "size": [
+          960.0,
+          164.0
+        ]
+      },
+      {
+        "face": "89-verb-nonlinear",
+        "match": [
+          "nonlinear"
+        ],
+        "ns": "verb",
+        "size": [
+          960.0,
+          164.0
+        ]
+      },
+      {
+        "face": "90-verb-swell",
+        "match": [
+          "swell"
+        ],
+        "ns": "verb",
+        "size": [
+          960.0,
+          164.0
+        ]
+      },
+      {
+        "face": "91-verb-reflections",
+        "match": [
+          "reflections"
+        ],
+        "ns": "verb",
+        "size": [
+          960.0,
+          164.0
+        ]
+      },
+      {
+        "face": "92-verb-velvet",
+        "match": [
+          "velvet"
+        ],
+        "ns": "verb",
+        "size": [
+          960.0,
+          164.0
+        ]
+      },
+      {
+        "face": "93-verb-freeverb",
+        "match": [
+          "freeverb"
+        ],
+        "ns": "verb",
+        "size": [
+          960.0,
+          164.0
+        ]
+      },
+      {
+        "face": "94-verb-convolution",
+        "match": [
+          "convolution"
+        ],
+        "ns": "verb",
+        "size": [
+          960.0,
+          164.0
+        ]
+      }
+    ]
+  }
 }

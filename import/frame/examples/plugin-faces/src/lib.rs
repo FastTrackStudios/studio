@@ -16,6 +16,7 @@ pub mod modulation;
 pub mod reverb;
 pub mod rig_blues;
 pub mod rig_faces;
+pub mod rig_time;
 pub mod saturate;
 pub mod suite_boutique_clean;
 pub mod suite_funk_rhythm;
@@ -45,6 +46,7 @@ pub fn all() -> Vec<Face> {
     v.extend(suite_poly_clean::faces());
     v.extend(rig_blues::faces());
     v.extend(rig_faces::faces());
+    v.extend(rig_time::faces());
     v.extend(suite_djent_forge::faces());
     v.extend(suite_modern_rhythm::faces());
     v.extend(suite_blackout_gain::faces());
@@ -61,8 +63,16 @@ pub fn all() -> Vec<Face> {
 /// # Panics
 /// On a write error.
 pub fn write_all(out: &std::path::Path) -> usize {
+    write_only(out, &[])
+}
+
+/// As [`write_all`], writing only the faces whose file starts with one of
+/// `only` (every face when empty) — the catalogs and manifest as ever.
+/// For designing one face without rewriting the rest.
+pub fn write_only(out: &std::path::Path, only: &[String]) -> usize {
     let faces = all();
-    for f in &faces {
+    let chosen = |file: &str| only.is_empty() || only.iter().any(|o| file.starts_with(o.as_str()));
+    for f in faces.iter().filter(|f| chosen(f.file)) {
         let path = out.join(f.plugin).join(format!("{}.fm", f.file));
         document_io::save_surface(&path, &f.scene).unwrap_or_else(|e| panic!("write face: {e}"));
     }
@@ -71,5 +81,5 @@ pub fn write_all(out: &std::path::Path) -> usize {
         std::fs::write(&path, serde_json::to_string_pretty(&catalog).expect("json")).expect("write catalog");
     }
     std::fs::write(out.join(rig_faces::PLUGIN).join("faces.json"), rig_faces::manifest()).expect("write faces.json");
-    faces.len()
+    faces.iter().filter(|f| chosen(f.file)).count()
 }
