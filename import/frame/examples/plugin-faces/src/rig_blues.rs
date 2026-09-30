@@ -20,7 +20,8 @@ pub mod drives;
 
 use document_proto::{NodeId, TextAlign};
 use surface_kit::draw::{self, Lettering, family};
-use surface_proto::{ButtonMode, Control, ControlKind, SlotRole};
+use surface_kit::Place;
+use surface_proto::{ButtonMode, Condition, Control, ControlKind, Range, SlotRole, Unit};
 use surface_widgets::Builder;
 
 use crate::face::{Face, canvas, embed, face_size};
@@ -435,38 +436,125 @@ pub fn row_drives() -> Face {
     Face { file: "31-row-drives", plugin: PLUGIN, scene, params, streams: Vec::new() }
 }
 
-/// The Amp/Cab row, sized to a row of the Control view: the amp as its
-/// panel of GAIN and LEVEL over its cloth (no handle, no tone
-/// stack — the zoomed-in view has the whole head), the cab narrowed to its two speakers with a mic on each, and
-/// the gate, all the same height.
+/// A layer of `parent` at `rect`, drawn only while choice `addr` is one
+/// of `which` (a readout of it, shown by condition).
+fn layer(b: &mut Builder<'_>, parent: NodeId, name: &str, (x, y, w, h): (f64, f64, f64, f64), addr: &str, which: &[f64]) -> NodeId {
+    let id = b.add(parent, draw::frame(name, x, y, w, h));
+    let mut t = draw::text("value", "", 0.0, 0.0, 20.0, 4.0, "#00000000", TextAlign::Left);
+    t.opacity = 0.0;
+    let value = b.add(id, t);
+    let c = Control::new(ControlKind::Readout).slot(SlotRole::Value, value.0).bound(ui::bind(addr)).shown_if(Condition::any_of(addr, which));
+    b.controls.insert(id, c);
+    id
+}
+
+/// A row of pills from (`x`, `y`), one per label, each a select button on
+/// choice `addr`, lit while chosen. Returns the right edge.
+fn pills(b: &mut Builder<'_>, parent: NodeId, addr: &str, labels: &[&str], (x, y): (f64, f64)) -> f64 {
+    const PH: f64 = 26.0;
+    let font = Lettering::family(family::INTER).weight(700.0);
+    let n = labels.len() as u32;
+    let mut cx = x;
+    for (i, l) in labels.iter().enumerate() {
+        let pw = l.chars().count() as f64 * 7.6 + 26.0;
+        let cell = b.add(parent, draw::frame(l, cx, y, pw, PH));
+        b.add(cell, draw::stroked(draw::rounded(draw::rect("pill", 0.0, 0.0, pw, PH, draw::solid("#00000055")), PH / 2.0), "#ffffff2a", 1.0));
+        let lit = b.add(cell, draw::frame("lit", 0.0, 0.0, pw, PH));
+        b.add(lit, draw::rounded(draw::rect("fill", 0.0, 0.0, pw, PH, draw::solid("#e8e6e1")), PH / 2.0));
+        set(b, lit, l, pw / 2.0, PH / 2.0, 11.0, "#141414", &font, 0.1);
+        set(b, cell, l, pw / 2.0, PH / 2.0, 11.0, "#ffffff9a", &font, 0.1);
+        // The lit face covers the dim print while chosen.
+        if let Some(c) = b.scene.node_mut(cell) {
+            let last = c.children.pop();
+            if let Some(last) = last {
+                c.children.insert(1, last);
+            }
+        }
+        let mut c = Control::new(ControlKind::Button { mode: ButtonMode::Select { index: i as u32, count: n } }).slot(SlotRole::Led, lit.0);
+        c.binding = Some(ui::bind(addr));
+        b.controls.insert(cell, c);
+        cx += pw + 6.0;
+    }
+    cx - 6.0
+}
+
+/// An amp slot at `rect`: its model's pills above, and one layer per
+/// model (`<prefix>/model` picks), each the compact amp on `<prefix>/*`.
+fn amp_slot(b: &mut Builder<'_>, parent: NodeId, prefix: &str, (x, y, w, h): (f64, f64, f64, f64), strip: f64) -> Vec<Face> {
+    let names: Vec<&str> = amps::AmpModel::ALL.iter().map(|m| m.short()).collect();
+    pills(b, parent, &format!("{prefix}/model"), &names, (x, y));
+    let mut faces = Vec::new();
+    for (i, m) in amps::AmpModel::ALL.iter().enumerate() {
+        let l = layer(b, parent, m.short(), (x, y + strip, w, h), &format!("{prefix}/model"), &[i as f64]);
+        let f = amps::amp_compact(*m, prefix, w, h);
+        embed(b, l, &f, (0.0, 0.0, w, h));
+        faces.push(f);
+    }
+    faces
+}
+
+/// The Amp row, sized to a row of the Control view. One amp: the amp, the
+/// Amp EQ's full graph beside it, the gate's picture. Stereo: the second
+/// amp takes the EQ's place (the EQ is in the zoomed-in view). 3-in-1:
+/// the three amps side by side across both places. `amp/layout` picks;
+/// each slot's pills pick its amp. The example: stereo, a '64 Vibroverb
+/// left and a Dumble SSS right.
 #[must_use]
-pub fn row_amp_cab() -> Face {
-    const BOX_H: f64 = 420.0;
-    let amp = amps::clean_head_compact(900.0, BOX_H);
-    let cab = amp_cab::cab_sized(720.0, BOX_H);
-    let gate = amp_cab::gate();
-    let (aw, _) = face_size(&amp);
-    let (cw, _) = face_size(&cab);
-    let (gw, gh) = face_size(&gate);
-    let gs = BOX_H / gh;
-    let (m, gap) = (16.0, 28.0);
-    let w = m + aw + gap + cw + gap + gw * gs + m;
-    let h = m + BOX_H + m;
-    let scene = canvas("Amp / Cab row", |b, root| {
-        page(b, root, w, h);
-        embed(b, root, &amp, (m, m, aw, BOX_H));
-        let cx = m + aw + gap;
-        embed(b, root, &cab, (cx, m, cw, BOX_H));
-        embed(b, root, &gate, (cx + cw + gap, m, gw * gs, BOX_H));
+pub fn row_amp() -> Face {
+    const H: f64 = 440.0;
+    const STRIP: f64 = 36.0;
+    let (m, gap, gate_w) = (12.0, 16.0, 250.0);
+    let w = H * ROW_ASPECT;
+    let slot = (w - 2.0 * m - 2.0 * gap - gate_w) / 2.0;
+    let box_h = H - m - STRIP - m;
+    let y = m;
+    let mut faces: Vec<Face> = Vec::new();
+    let scene = canvas("Amp row", |b, root| {
+        page(b, root, w, H);
+        let (x1, x2, xg) = (m, m + slot + gap, m + 2.0 * (slot + gap));
+        // The layout, over the gate.
+        pills(b, root, "amp/layout", &["ONE", "STEREO", "3-IN-1"], (xg, y));
+        // One amp: the amp, then the EQ.
+        let one = layer(b, root, "One amp", (0.0, 0.0, w, H), "amp/layout", &[0.0]);
+        faces.extend(amp_slot(b, one, "amp_l", (x1, y, slot, box_h), STRIP));
+        let eq = Place::new("Amp EQ").size(slot).options(&["ns=amp_eq", "bands=24", "f_max=24000", "no_range", &format!("h={box_h}")]);
+        ui::put_at(b, one, "viz.eq_graph", &eq, x2, y + STRIP);
+        // Stereo: amp L, amp R.
+        let stereo = layer(b, root, "Stereo", (0.0, 0.0, w, H), "amp/layout", &[1.0]);
+        faces.extend(amp_slot(b, stereo, "amp_l", (x1, y, slot, box_h), STRIP));
+        faces.extend(amp_slot(b, stereo, "amp_r", (x2, y, slot, box_h), STRIP));
+        // 3-in-1: the three, each on its own controls.
+        let trio = layer(b, root, "3-in-1", (0.0, 0.0, w, H), "amp/layout", &[2.0]);
+        let tw = (2.0 * slot + gap - 2.0 * gap) / 3.0;
+        for (i, (mdl, prefix)) in amps::AmpModel::ALL.iter().zip(["dumble", "vibroverb", "tworock"]).enumerate() {
+            let tx = x1 + i as f64 * (tw + gap);
+            let f = amps::amp_compact(*mdl, prefix, tw, box_h);
+            embed(b, trio, &f, (tx, y + STRIP, tw, box_h));
+            faces.push(f);
+        }
+        // The gate, on the right in every layout.
+        let gate = Place::new("Gate").size(gate_w).options(&["ns=gate", &format!("h={box_h}")]);
+        ui::put_at(b, root, "viz.gate", &gate, xg, y + STRIP);
     });
-    let params = params_of(&[&amp, &cab, &gate]);
+    let models: Vec<&str> = amps::AmpModel::ALL.iter().map(|m| m.short()).collect();
+    let mut params = vec![
+        ui::choice("amp/layout", "Amp layout", &["One", "Stereo", "3-in-1"], 1),
+        // The example: a '64 Vibroverb left, a Dumble SSS right.
+        ui::choice("amp_l/model", "Amp L", &models, 1),
+        ui::choice("amp_r/model", "Amp R", &models, 0),
+    ];
+    params.extend(params_of(&faces.iter().collect::<Vec<_>>()));
+    params.extend(surface_kit::viz::catalog::eq_params("amp_eq", 24));
+    params.extend(surface_kit::viz::catalog::eq_view_params("amp_eq"));
+    params.push(ui::param("gate/threshold", "Threshold", Range::linear(-90.0, 0.0, Unit::Db), -60.0).featured());
+    params.push(ui::toggle("gate/on", "Gate", true).featured());
     Face { file: "32-row-amp-cab", plugin: PLUGIN, scene, params, streams: Vec::new() }
 }
 
 /// Every blues-rig page, then the units.
 #[must_use]
 pub fn faces() -> Vec<Face> {
-    let mut v = vec![drives_page(), drives_phone(), amp_cab_page(), amp_cab_phone(), module_drive_amp(), section_bar_page(), row_drives(), row_amp_cab()];
+    let mut v = vec![drives_page(), drives_phone(), amp_cab_page(), amp_cab_phone(), module_drive_amp(), section_bar_page(), row_drives(), row_amp()];
     v.extend(drives::all());
     v.push(amp_cab::cab());
     v.push(amp_cab::gate());

@@ -114,43 +114,119 @@ pub fn clean_head_with(inside: impl FnOnce(&mut Builder<'_>, NodeId)) -> Face {
     clean_head_as(548.0, Handle::Leather, 0.29, 52.0, inside)
 }
 
-/// The clean head as a rig row shows it, `w × h`: no handle, and a panel
-/// carrying only what a player reaches for mid-set — GAIN (the head's
-/// volume is its preamp gain) and LEVEL on big chrome caps, the logo, the pilot jewel — over the diamond
-/// cloth. The tone stack and reverb are left to the rig's own EQ and
-/// effects; the whole head is the zoomed-in view.
-pub fn clean_head_compact(w: f64, h: f64) -> Face {
-    const INK: &str = "#141414";
-    let scene = canvas("Clean Head", |b, root| {
-        let mut spec = CabinetSpec::new(Kind::Head, w, h);
-        spec.covering = Material::Tolex { grain: Grain::Bronco, color: "#1d1c1c".into(), scale: 1.0 };
-        spec.grille = Material::DiamondGrille { cloth: "#161314".into(), stripes: vec!["#b8324a".into(), "#e6e2d6".into(), "#5f9e86".into()], pitch: 96.0 };
-        spec.face = Material::Brushed { color: "#c3c4c6".into(), dir: Dir::Horizontal };
-        spec.face_frac = 0.5;
-        spec.piping = Some("#b9babc".into());
-        spec.corners = Some("black".into());
-        spec.handle = Handle::None;
-        let (plate, _grille, (pw, ph)) = build(b, root, &spec);
-        let legend = Lettering::family(family::PIRATA_ONE);
-        let d = ph * 0.6;
-        let dots: &[&str] = &["", "", "", "", "", "", "", "", "", "", ""];
-        for (addr, name, fx) in [("clean/gain", "GAIN", 0.17), ("clean/level", "LEVEL", 0.42)] {
-            knob_scaled(b, plate, Cap::ChromeSkirt, addr, name, d, pw * fx, ph * 0.43, dots, INK);
-            set(b, plate, name, pw * fx, ph * 0.87, ph * 0.13, INK, &legend, 0.04);
+/// The three amps the blues rig's slots choose between, as the rig row
+/// draws them.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AmpModel {
+    /// Dumble Steel String Singer #002: the boutique clean head's brushed
+    /// steel panel, chrome caps, slab logo, diamond cloth.
+    SteelStringSinger,
+    /// 1964 Fender Vibroverb (blackface): black tolex, black panel with
+    /// white print, numbered black skirts, silver sparkle cloth.
+    Vibroverb,
+    /// The Two-Rock signature prototype: black panel, bakelite
+    /// chicken-heads, silver italic logo, black cloth behind gold piping.
+    TwoRock,
+}
+
+impl AmpModel {
+    pub const ALL: [Self; 3] = [Self::SteelStringSinger, Self::Vibroverb, Self::TwoRock];
+
+    /// Its short name, for pickers.
+    #[must_use]
+    pub fn short(self) -> &'static str {
+        match self {
+            Self::SteelStringSinger => "DUMBLE SSS",
+            Self::Vibroverb => "'64 VIBROVERB",
+            Self::TwoRock => "TWO-ROCK",
         }
-        let slab = Lettering::family(family::PLAYFAIR_DISPLAY).weight(900.0).italic();
-        let lx = pw * 0.72;
-        set(b, plate, "OPEN", lx, ph * 0.3, ph * 0.2, "#0e0e0e", &slab, 0.0);
-        set(b, plate, "ROOM", lx, ph * 0.55, ph * 0.2, "#0e0e0e", &slab, 0.0);
-        set(b, plate, "hand wired", lx, ph * 0.8, ph * 0.12, "#1a1a1a", &legend, 0.08);
-        jewel(b, plate, "clean/on", "red", ph * 0.24, pw * 0.93, ph * 0.5);
+    }
+}
+
+/// An amp as a rig row shows it, `w × h`: no handle, and a panel carrying
+/// only GAIN and LEVEL (on `<prefix>/gain`, `<prefix>/level`), the logo
+/// and the pilot jewel (`<prefix>/on`) over its cloth. The tone stack and
+/// effects are the rig's own EQ and effects; the whole amp is the
+/// zoomed-in view.
+#[must_use]
+pub fn amp_compact(model: AmpModel, prefix: &str, w: f64, h: f64) -> Face {
+    let scene = canvas(model.short(), |b, root| {
+        let mut spec = CabinetSpec::new(if model == AmpModel::Vibroverb { Kind::Combo } else { Kind::Head }, w, h);
+        spec.handle = Handle::None;
+        spec.face_frac = 0.48;
+        spec.corners = Some("black".into());
+        let (ink, cap, legend) = match model {
+            AmpModel::SteelStringSinger => {
+                spec.covering = Material::Tolex { grain: Grain::Bronco, color: "#1d1c1c".into(), scale: 1.0 };
+                spec.grille = Material::DiamondGrille { cloth: "#161314".into(), stripes: vec!["#b8324a".into(), "#e6e2d6".into(), "#5f9e86".into()], pitch: 96.0 };
+                spec.face = Material::Brushed { color: "#c3c4c6".into(), dir: Dir::Horizontal };
+                spec.piping = Some("#b9babc".into());
+                ("#141414", Cap::ChromeSkirt, Lettering::family(family::PIRATA_ONE))
+            }
+            AmpModel::Vibroverb => {
+                spec.covering = Material::Tolex { grain: Grain::Levant, color: "#161616".into(), scale: 0.8 };
+                spec.grille = Material::GrilleCloth { cloth: Cloth::Silver };
+                spec.face = Material::Plastic { color: "#121213".into(), gloss: 0.3 };
+                spec.piping = Some("#d8d8d8".into());
+                spec.corners = Some("chrome".into());
+                ("#f2f2f0", Cap::BlackSkirt, Lettering::family(family::INTER).weight(600.0))
+            }
+            AmpModel::TwoRock => {
+                spec.covering = Material::Tolex { grain: Grain::Bronco, color: "#1b1a1a".into(), scale: 0.8 };
+                spec.grille = Material::GrilleCloth { cloth: Cloth::Black };
+                spec.face = Material::Plastic { color: "#161415".into(), gloss: 0.35 };
+                spec.piping = Some("#a8997c".into());
+                ("#ebe7df", Cap::ChickenHead, Lettering::family(family::INTER).weight(500.0))
+            }
+        };
+        let (plate, _grille, (pw, ph)) = build(b, root, &spec);
+        let d = (ph * 0.58).min(pw * 0.2);
+        let numbered: &[&str] = &["1", "2", "3", "4", "5", "6", "7", "8", "9", "10"];
+        let dots: &[&str] = &["", "", "", "", "", "", "", "", "", "", ""];
+        for (id, name, fx) in [("gain", "GAIN", 0.16), ("level", "LEVEL", 0.4)] {
+            let addr = format!("{prefix}/{id}");
+            let (cx, cy) = (pw * fx, ph * 0.43);
+            match model {
+                AmpModel::Vibroverb => {
+                    knob_scaled(b, plate, cap, &addr, name, d * 0.9, cx, cy, numbered, ink);
+                }
+                AmpModel::SteelStringSinger => {
+                    knob_scaled(b, plate, cap, &addr, name, d, cx, cy, dots, ink);
+                }
+                AmpModel::TwoRock => {
+                    knob(b, plate, cap, &addr, name, d, cx, cy);
+                }
+            }
+            let size = (ph * 0.12).min(pw * 0.045);
+            set(b, plate, name, cx, ph * 0.88, size, ink, &legend, 0.08);
+        }
+        let lx = pw * 0.7;
+        let big = (ph * 0.2).min(pw * 0.075);
+        match model {
+            AmpModel::SteelStringSinger => {
+                let script = Lettering::family(family::DANCING_SCRIPT).weight(700.0);
+                set(b, plate, "Dumble", lx, ph * 0.38, big * 1.4, "#0e0e0e", &script, 0.0);
+                set(b, plate, "Steel String Singer", lx, ph * 0.72, big * 0.5, "#1a1a1a", &Lettering::family(family::PLAYFAIR_DISPLAY).weight(700.0).italic(), 0.04);
+            }
+            AmpModel::Vibroverb => {
+                let script = Lettering::family(family::DANCING_SCRIPT).weight(700.0);
+                set(b, plate, "Fender", lx, ph * 0.4, big * 1.3, "#f4f4f2", &script, 0.0);
+                set(b, plate, "VIBROVERB", lx, ph * 0.74, big * 0.5, "#e6e6e4", &Lettering::family(family::INTER).weight(700.0), 0.2);
+            }
+            AmpModel::TwoRock => {
+                let logo = Lettering::family(family::OSWALD).weight(700.0).italic();
+                set(b, plate, "TWO-ROCK", lx, ph * 0.42, big * 0.95, "#d9d9dc", &logo, 0.06);
+                set(b, plate, "Signature Prototype", lx, ph * 0.72, big * 0.45, "#c9a864", &Lettering::family(family::DANCING_SCRIPT).weight(700.0), 0.0);
+            }
+        }
+        jewel(b, plate, &format!("{prefix}/on"), "red", (ph * 0.22).min(pw * 0.06), pw * 0.93, ph * 0.45);
     });
     let params = vec![
-        pct("clean", "gain", "Gain", 5.0).featured(),
-        pct("clean", "level", "Level", 5.0).featured(),
-        ui::toggle("clean/on", "Power", true),
+        ui::param(&format!("{prefix}/gain"), "Gain", Range::linear(0.0, 10.0, Unit::None), 5.0).featured(),
+        ui::param(&format!("{prefix}/level"), "Level", Range::linear(0.0, 10.0, Unit::None), 5.0).featured(),
+        ui::toggle(&format!("{prefix}/on"), "Power", true),
     ];
-    Face { file: "07-amp-head-clean-head-compact", plugin: PLUGIN, scene, params, streams: Vec::new() }
+    Face { file: "07-amp-compact", plugin: PLUGIN, scene, params, streams: Vec::new() }
 }
 
 fn clean_head_as(h: f64, handle: Handle, face_frac: f64, knob_d: f64, inside: impl FnOnce(&mut Builder<'_>, NodeId)) -> Face {
