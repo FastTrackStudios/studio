@@ -481,44 +481,45 @@ pub fn cry_baby() -> Face {
     Face { file: "30-wah-cry-baby", plugin: PLUGIN, scene, params, streams: Vec::new() }
 }
 
-/// The Q-Tron: the silver box, GAIN and PEAK, the MODE (LP / BP / HP),
-/// RANGE and DRIVE switches, the name in heavy blue.
+/// The Q-Tron+: the black box, six knobs across the top — MODE (LP, BP,
+/// HP, MIX), RESPONSE (fast, slow), RANGE (hi, lo), PEAK, GAIN, BOOST —
+/// the SWEEP switch and the OVERLOAD lamp, the maker's script, and the
+/// name in a psychedelic magenta Q and orange TRON+.
 #[must_use]
 pub fn q_tron() -> Face {
-    const W: f64 = 240.0;
+    const W: f64 = 340.0;
     const NS: &str = "qtron";
-    const INK: &str = "#1a2a52";
-    let scene = canvas("Q-Tron", |b, root| {
-        let (lid, lw, lh) = enclosure(b, root, W, "#c9ccd1", "brushed", &["jack_inset=10"]);
-        led(b, lid, NS, lw * 0.5, 10.0, 5.0, "#e0281c");
-        for (i, (id, name)) in [("gain", "GAIN"), ("peak", "PEAK")].iter().enumerate() {
-            let cx = lw * (0.27 + 0.46 * i as f64);
-            knob(b, lid, "flat", &["color=#141416", "pointer=#f2f2f4", "index=line", "index_w=0.1", "skirt=plain", "skirt_color=#0c0c0d"], &format!("{NS}/{id}"), name, 60.0, cx, lh * 0.2);
-            parts::print(b, lid, name, cx, lh * 0.2 + 40.0, 9.0, INK, 800.0, 0.1);
+    const INK: &str = "#f4f4f2";
+    let scene = canvas("Q-Tron+", |b, root| {
+        let (lid, lw, lh) = enclosure(b, root, W, "#111113", "satin", &["jack_inset=10"]);
+        parts::print(b, lid, "24V", lw * 0.5, 9.0, 6.5, INK, 700.0, 0.06);
+        let row = lh * 0.19;
+        for (i, (id, name)) in [("mode", "MODE"), ("response", "RESPONSE"), ("range", "RANGE"), ("peak", "PEAK"), ("gain", "GAIN"), ("boost", "BOOST")].iter().enumerate() {
+            let cx = lw * (0.09 + 0.164 * i as f64);
+            knob(b, lid, "flat", &["color=#1a1a1c", "pointer=#f4f4f2", "index=line", "index_w=0.12", "skirt=plain", "skirt_color=#0a0a0b"], &format!("{NS}/{id}"), name, 42.0, cx, row);
+            parts::print(b, lid, name, cx, row + 30.0, 7.5, INK, 800.0, 0.04);
         }
-        for (i, (id, name)) in [("mode", "MODE"), ("range", "RANGE"), ("drive", "DRIVE")].iter().enumerate() {
-            let cx = lw * (0.2 + 0.3 * i as f64);
-            parts::print(b, lid, name, cx, lh * 0.4, 8.0, INK, 800.0, 0.08);
-            let id_full = format!("{NS}/{id}");
-            if *id == "mode" {
-                let t = Place::new("Mode").size(20.0).variant("chrome").bind(ui::bind(&id_full)).legend("").options(&["touch=44"]);
-                place::centred_at(b, lid, "switch.brass_toggle3", &t, cx, lh * 0.47);
-            } else {
-                parts::toggle(b, lid, &id_full, name, 12.0, cx, lh * 0.47);
-            }
-        }
-        let heavy = Lettering::family(family::OSWALD).weight(700.0);
-        set(b, lid, "Q-TRON", lw * 0.5, lh * 0.59, 32.0, INK, &heavy, 0.06);
-        parts::print(b, lid, "ENVELOPE CONTROLLED FILTER", lw * 0.5, lh * 0.69, 6.5, INK, 700.0, 0.1);
-        stomp(b, lid, NS, 32.0, lw * 0.5, lh * 0.8);
-        parts::print(b, lid, "electro-harmonix", lw * 0.5, lh * 0.93, 8.0, INK, 700.0, 0.06);
+        parts::print(b, lid, "SWEEP", lw * 0.2, lh * 0.385, 7.5, INK, 800.0, 0.06);
+        parts::toggle(b, lid, &format!("{NS}/sweep"), "Sweep", 11.0, lw * 0.3, lh * 0.385);
+        parts::print(b, lid, "OVERLOAD", lw * 0.67, lh * 0.385, 7.5, INK, 800.0, 0.06);
+        b.add(lid, draw::with_effects(draw::circle("overload", lw * 0.77, lh * 0.385, 4.0, draw::solid("#e0281c")), vec![draw::drop_shadow("#ff2a1890", 0.0, 0.0, 5.0)]));
+        set(b, lid, "electro-harmonix", lw * 0.66, lh * 0.48, 15.0, INK, &Lettering::family(family::PLAYFAIR_DISPLAY).weight(500.0), 0.0);
+        // The name: the big magenta Q, TRON in orange, the +.
+        let bubble = Lettering::family(family::KNEWAVE);
+        set(b, lid, "Q", lw * 0.21, lh * 0.66, 110.0, "#d6247f", &bubble, 0.0);
+        set(b, lid, "TRON", lw * 0.62, lh * 0.64, 62.0, "#f7811e", &bubble, 0.04);
+        set(b, lid, "+", lw * 0.9, lh * 0.8, 40.0, INK, &Lettering::family(family::INTER).weight(900.0), 0.0);
+        led(b, lid, NS, lw * 0.43, lh * 0.72, 5.0, "#e0281c");
+        stomp(b, lid, NS, 30.0, lw * 0.43, lh * 0.86);
     });
     let params = vec![
-        ui::param(&format!("{NS}/gain"), "Gain", Range::linear(0.0, 1.0, Unit::None), 0.5).featured(),
+        ui::choice(&format!("{NS}/mode"), "Mode", &["LP", "BP", "HP", "Mix"], 1),
+        ui::choice(&format!("{NS}/response"), "Response", &["Fast", "Slow"], 0),
+        ui::choice(&format!("{NS}/range"), "Range", &["Hi", "Lo"], 1),
         ui::param(&format!("{NS}/peak"), "Peak", Range::linear(0.0, 1.0, Unit::None), 0.6).featured(),
-        ui::choice(&format!("{NS}/mode"), "Mode", &["LP", "BP", "HP"], 1),
-        ui::toggle(&format!("{NS}/range"), "Range high", false),
-        ui::toggle(&format!("{NS}/drive"), "Drive up", true),
+        ui::param(&format!("{NS}/gain"), "Gain", Range::linear(0.0, 1.0, Unit::None), 0.5).featured(),
+        ui::choice(&format!("{NS}/boost"), "Boost", &["Off", "On"], 0),
+        ui::choice(&format!("{NS}/sweep"), "Sweep", &["Down", "Up"], 1),
         on(NS),
     ];
     Face { file: "31-filter-q-tron", plugin: PLUGIN, scene, params, streams: Vec::new() }
