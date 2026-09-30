@@ -90,17 +90,17 @@ pub fn blade() -> Face {
     const W: f64 = 172.0;
     const NS: &str = "blade";
     const INK: &str = "#e9e9ec";
-    let scene = canvas("Blade", |b, root| {
+    let scene = canvas("Katana", |b, root| {
         let (lid, lw, lh) = enclosure(b, root, W, "#111113", "gloss", &["jack_inset=10", "radius=14"]);
         b.add(lid, draw::stroked(draw::rounded(draw::rect("border", 6.0, 16.0, lw - 12.0, lh - 26.0, draw::solid("#00000000")), 9.0), INK, 1.4));
         led(b, lid, NS, lw * 0.5, 9.0, 5.0, "#3d6bff");
-        knob(b, lid, "knurled", &["color=#161618", "ribs=44", "index=line", "pointer=#f2f2f4", "index_w=0.08", "skirt=none"], &format!("{NS}/volume"), "Volume", 86.0, lw * 0.5, lh * 0.3);
-        parts::print(b, lid, "VOLUME", lw * 0.5, lh * 0.3 + 52.0, 9.0, INK, 650.0, 0.14);
-        set(b, lid, "BLADE", lw * 0.5, lh * 0.58, 25.0, "#f4f4f6", &inter(500.0).width(92.0), 0.04);
-        stomp(b, lid, NS, 34.0, lw * 0.5, lh * 0.76);
-        let (mx, my, ms) = (lw * 0.5 - 11.0, lh * 0.86, 22.0);
+        knob(b, lid, "knurled", &["color=#161618", "ribs=44", "index=line", "pointer=#f2f2f4", "index_w=0.08", "skirt=none"], &format!("{NS}/volume"), "Volume", 86.0, lw * 0.5, lh * 0.34);
+        parts::print(b, lid, "VOLUME", lw * 0.5, lh * 0.34 + 52.0, 9.0, INK, 650.0, 0.14);
+        set(b, lid, "KATANA", lw * 0.5, lh * 0.64, 24.0, "#f4f4f6", &inter(500.0).width(92.0), 0.04);
+        stomp(b, lid, NS, 34.0, lw * 0.5, lh * 0.79);
+        let (mx, my, ms) = (lw * 0.5 - 11.0, lh * 0.88, 20.0);
         b.add(lid, draw::stroked(draw::rounded(draw::rect("mark", mx, my, ms, ms, draw::solid("#00000000")), 3.0), INK, 1.4));
-        set(b, lid, "B", lw * 0.5, my + ms * 0.52, 14.0, INK, &inter(800.0).italic(), 0.0);
+        set(b, lid, "K", lw * 0.5, my + ms * 0.52, 14.0, INK, &inter(800.0).italic(), 0.0);
     });
     let params = vec![
         ui::param(&format!("{NS}/volume"), "Volume", Range::linear(0.0, 23.0, Unit::Db), 11.0).featured(),
@@ -118,18 +118,19 @@ pub fn pegasus() -> Face {
     const NS: &str = "pegasus";
     const INK: &str = "#2b1c08";
     let serif = Lettering::family(family::PLAYFAIR_DISPLAY).weight(700.0);
-    let scene = canvas("Pegasus", |b, root| {
+    let scene = canvas("Klon Centaur", |b, root| {
         let (lid, lw, lh) = enclosure(b, root, W, "#c99038", "satin", &["jack_inset=8"]);
         b.add(lid, draw::rect("sheen", 0.0, 0.0, lw, lh, draw::linear(115.0, &[(0.0, "#ffe2a02a"), (0.4, "#ffffff00"), (0.75, "#4a2c0620"), (1.0, "#ffe2a014")])));
         for (i, (id, name)) in [("gain", "GAIN"), ("treble", "TREBLE"), ("output", "OUTPUT")].iter().enumerate() {
             let cx = lw * (0.2 + 0.3 * i as f64);
-            knob(b, lid, "domed", &["color=#3a0f0c", "pointer=#e8d2b0", "index=line", "index_w=0.07", "skirt=plain", "skirt_color=#2a0a08", "dome=0.35", "coat=0.8"], &format!("{NS}/{id}"), name, 84.0, cx, lh * 0.24);
-            set(b, lid, name, cx, lh * 0.24 + 58.0, 15.0, INK, &serif, 0.12);
+            knob(b, lid, "domed", &["color=#3a0f0c", "pointer=#e8d2b0", "index=line", "index_w=0.07", "skirt=plain", "skirt_color=#2a0a08", "dome=0.35", "coat=0.8"], &format!("{NS}/{id}"), name, 84.0, cx, lh * 0.3);
+            set(b, lid, name, cx, lh * 0.3 + 58.0, 15.0, INK, &serif, 0.12);
         }
-        led(b, lid, NS, lw * 0.06, lh * 0.24, 6.0, "#d0261a");
-        stomp(b, lid, NS, 34.0, lw * 0.5, lh * 0.74);
-        set(b, lid, "ORO", lw * 0.22, lh * 0.74, 14.0, INK, &serif, 0.14);
-        set(b, lid, "PEGASUS", lw * 0.78, lh * 0.74, 14.0, INK, &serif, 0.14);
+        led(b, lid, NS, lw * 0.07, lh * 0.44, 6.0, "#d0261a");
+        centaur(b, lid, (lw * 0.36, lh * 0.78), 76.0, INK);
+        stomp(b, lid, NS, 34.0, lw * 0.64, lh * 0.8);
+        set(b, lid, "KLON", lw * 0.16, lh * 0.8, 15.0, INK, &serif, 0.16);
+        set(b, lid, "CENTAUR", lw * 0.84, lh * 0.8, 15.0, INK, &serif, 0.16);
     });
     let params = vec![
         ui::percent(&format!("{NS}/gain"), "Gain", 30.0).featured(),
@@ -149,7 +150,7 @@ pub fn british_blues() -> Face {
     const W: f64 = 240.0;
     const NS: &str = "british";
     const BLUE: &str = "#5cc4f0";
-    let scene = canvas("British Blues", |b, root| {
+    let scene = canvas("Blues Breaker", |b, root| {
         let (lid, lw, lh) = enclosure(b, root, W, "#1c1c1e", "hammertone", &["jack_inset=10"]);
         let ledge_h = lh * 0.33;
         let ledge = draw::rect("ledge", 0.0, 0.0, lw, ledge_h, draw::linear(180.0, &[(0.0, "#2c2c2f"), (0.8, "#1a1a1c"), (1.0, "#0a0a0b")]));
@@ -163,16 +164,16 @@ pub fn british_blues() -> Face {
         let logo = Lettering::family(family::OSWALD).weight(700.0).italic();
         let ly = lh * 0.47;
         b.add(lid, draw::rect("rule", 12.0, ly - 16.0, lw - 24.0, 1.6, draw::solid(BLUE)));
-        set(b, lid, "BRITISH BLUES", lw * 0.5, ly, 21.0, BLUE, &logo, 0.0);
+        set(b, lid, "BLUES BREAKER", lw * 0.5, ly, 21.0, BLUE, &logo, 0.0);
         b.add(lid, draw::rect("rule", 12.0, ly + 12.0, lw - 24.0, 1.6, draw::solid(BLUE)));
         led(b, lid, NS, lw * 0.5, lh * 0.58, 5.0, "#e0281c");
         stomp(b, lid, NS, 34.0, lw * 0.5, lh * 0.7);
         // The script, embossed: a lit edge above, a shadow below.
         let script = Lettering::family(family::DANCING_SCRIPT).weight(700.0);
         let sy = lh * 0.86;
-        set(b, lid, "Kingsway", lw * 0.5 - 0.8, sy - 0.9, 32.0, "#46464b", &script, 0.0);
-        set(b, lid, "Kingsway", lw * 0.5 + 0.8, sy + 0.9, 32.0, "#050506", &script, 0.0);
-        set(b, lid, "Kingsway", lw * 0.5, sy, 32.0, "#1e1e21", &script, 0.0);
+        set(b, lid, "Marshall", lw * 0.5 - 0.8, sy - 0.9, 32.0, "#46464b", &script, 0.0);
+        set(b, lid, "Marshall", lw * 0.5 + 0.8, sy + 0.9, 32.0, "#050506", &script, 0.0);
+        set(b, lid, "Marshall", lw * 0.5, sy, 32.0, "#1e1e21", &script, 0.0);
     });
     let params = vec![
         ui::percent(&format!("{NS}/gain"), "Gain", 40.0).featured(),
@@ -192,19 +193,19 @@ pub fn tube_drive() -> Face {
     const NS: &str = "tubedrive";
     const GREEN: &str = "#57c23f";
     const DARK: &str = "#0d2a08";
-    let scene = canvas("Tube Drive", |b, root| {
+    let scene = canvas("Tube Screamer", |b, root| {
         let (lid, lw, lh) = enclosure(b, root, W, GREEN, "gloss", &["jack_inset=6", "front=0", "radius=10"]);
         led(b, lid, NS, lw * 0.5, 8.0, 5.0, "#e01818");
         for (i, (id, name)) in [("drive", "DRIVE"), ("tone", "TONE"), ("level", "LEVEL")].iter().enumerate() {
             let cx = lw * (0.18 + 0.32 * i as f64);
-            let cy = lh * 0.2;
+            let cy = lh * 0.23;
             knob(b, lid, "flat", &["color=#101012", "pointer=#7ee8b4", "index=full", "index_w=0.42", "index_in=0", "index_out=0.95", "skirt=plain"], &format!("{NS}/{id}"), name, 54.0, cx, cy);
             parts::print(b, lid, name, cx, cy + 36.0, 8.5, DARK, 750.0, 0.08);
         }
         // The name band.
-        let (by, bh) = (lh * 0.38, lh * 0.1);
+        let (by, bh) = (lh * 0.41, lh * 0.1);
         b.add(lid, draw::rect("band", 0.0, by, lw, bh, draw::linear(180.0, &[(0.0, "#46494c"), (1.0, "#2a2c2f")])));
-        set(b, lid, "TUBE DRIVE", lw * 0.5, by + bh * 0.5, 16.0, "#f1f1ef", &inter(700.0).width(88.0), 0.02);
+        set(b, lid, "TUBE SCREAMER", lw * 0.5, by + bh * 0.5, 15.0, "#f1f1ef", &inter(700.0).width(88.0), 0.02);
         // The treadle: the whole of it is the switch.
         let (tx, ty) = (lw * 0.08, by + bh + 6.0);
         let (tw, th) = (lw * 0.84, lh - ty - 8.0);
@@ -228,7 +229,7 @@ pub fn tube_drive() -> Face {
         b.add(tread, ui::strokes("rib shadow", &dark, 2.4, draw::solid("#050506")));
         b.add(tread, ui::strokes("rib light", &lit, 1.0, draw::solid("#3a3a3e")));
         let brand = Lettering::family(family::DANCING_SCRIPT).weight(700.0).italic();
-        set(b, tread, "Kenzai", tw * 0.5, th * 0.9, 17.0, "#303034", &brand, 0.0);
+        set(b, tread, "Ibanez", tw * 0.5, th * 0.9, 17.0, "#303034", &brand, 0.0);
         b.controls.insert(tread, Control::new(ControlKind::Button { mode: ButtonMode::Toggle }).bound(Binding::param(format!("{NS}/on"))));
     });
     let params = vec![
@@ -238,6 +239,44 @@ pub fn tube_drive() -> Face {
         on(NS),
     ];
     Face { file: "14-drive-tube-drive", plugin: PLUGIN, scene, params, streams: Vec::new() }
+}
+
+/// The centaur of the gold overdrive's lid, drawn in its ink: a horse's
+/// body at a gallop, the archer's torso rising from its shoulders, the bow
+/// drawn forward. `size` across, centred on (`cx`, `cy`).
+fn centaur(b: &mut Builder<'_>, parent: NodeId, (cx, cy): (f64, f64), size: f64, ink: &str) {
+    let k = size / 100.0;
+    let (x0, y0) = (cx - 50.0 * k, cy - 50.0 * k);
+    let p = |pts: &[(f64, f64)]| draw::polygon(&pts.iter().map(|(x, y)| (x * k, y * k)).collect::<Vec<_>>());
+    let shapes = [
+        // The body, barrel-deep, the chest high.
+        p(&[(30.0, 50.0), (36.0, 43.0), (52.0, 41.0), (70.0, 42.0), (80.0, 47.0), (82.0, 56.0), (76.0, 64.0), (58.0, 67.0), (40.0, 66.0), (31.0, 60.0)]),
+        // Forelegs, one reaching, one tucked.
+        p(&[(33.0, 62.0), (39.0, 63.0), (28.0, 78.0), (20.0, 82.0), (19.0, 79.0), (25.0, 76.0)]),
+        p(&[(41.0, 64.0), (46.0, 65.0), (46.0, 80.0), (43.0, 90.0), (39.0, 90.0), (41.0, 80.0)]),
+        // Hind legs, driving.
+        p(&[(66.0, 62.0), (73.0, 61.0), (76.0, 76.0), (84.0, 88.0), (80.0, 90.0), (71.0, 78.0)]),
+        p(&[(72.0, 60.0), (79.0, 58.0), (88.0, 72.0), (92.0, 84.0), (88.0, 85.0), (82.0, 73.0)]),
+        // The tail, streaming.
+        p(&[(80.0, 47.0), (90.0, 44.0), (98.0, 50.0), (94.0, 51.0), (88.0, 50.0), (82.0, 53.0)]),
+        // The torso and the arm holding the bow.
+        p(&[(31.0, 50.0), (26.0, 36.0), (24.0, 22.0), (30.0, 17.0), (38.0, 19.0), (39.0, 32.0), (37.0, 46.0)]),
+        p(&[(26.0, 24.0), (12.0, 27.0), (12.0, 31.0), (26.0, 29.0)]),
+        p(&[(37.0, 21.0), (48.0, 25.0), (47.0, 29.0), (36.0, 25.0)]),
+        draw::regular(31.0 * k, 10.0 * k, 6.5 * k, 14, 0.0),
+    ];
+    let d = shapes.join(" ");
+    b.add(parent, draw::with_opacity(draw::path("centaur", x0, y0, size, size, d, draw::solid(ink)), 0.9));
+    // The bow and its string, drawn back to the archer's hand.
+    let bow: Vec<(f64, f64)> = (0..=16)
+        .map(|i| {
+            let t = f64::from(i) / 16.0;
+            let a = (-60.0 + 120.0 * t).to_radians();
+            (x0 + (20.0 - 12.0 * a.cos()) * k, y0 + (29.0 + 19.0 * a.sin()) * k)
+        })
+        .collect();
+    let (top, bottom) = (bow[0], bow[16]);
+    b.add(parent, ui::strokes("bow", &[bow, vec![top, (x0 + 47.0 * k, y0 + 27.0 * k), bottom]], 1.4, draw::solid(ink)));
 }
 
 /// The four, in chain order.
