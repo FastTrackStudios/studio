@@ -401,32 +401,78 @@ pub fn aqua_puss() -> Face {
     Face { file: "17-pedal-aqua-puss", plugin: PLUGIN, scene, params, streams: Vec::new() }
 }
 
-/// A Cry Baby wah: the black body, the chrome rocker with its ribbed
-/// rubber tread and script badge, the rocker's travel as a long fader down
-/// the tread (heel at the bottom, toe at the top), the toe switch.
+/// A Cry Baby wah seen from above, rocking: the black casting, the chrome
+/// rocker with its ribbed rubber tread and badge. The rocker tips about
+/// its axle with `wah/position` — the toe half foreshortening and falling
+/// into shadow as the toe goes down, the heel half rising toward you — and
+/// the tread is the control (drag toward the toe for treble). Pressing the
+/// toe engages it, its LED in the casting above.
 #[must_use]
 pub fn cry_baby() -> Face {
-    const W: f64 = 190.0;
+    const W: f64 = 150.0;
+    const H: f64 = 330.0;
     const NS: &str = "wah";
     let scene = canvas("Cry Baby", |b, root| {
-        let (lid, lw, lh) = enclosure(b, root, W, "#141416", "powder", &["jack_inset=8", "front=0", "radius=12"]);
-        led(b, lid, NS, lw * 0.5, 10.0, 5.0, "#e0281c");
-        // The rocker: chrome, the tread on it.
-        let (rx, ry, rw, rh) = (10.0, 22.0, lw - 20.0, lh - 34.0);
-        let rocker = draw::rounded(draw::rect("rocker", rx, ry, rw, rh, draw::linear(90.0, &[(0.0, "#6e7075"), (0.2, "#e6e8ea"), (0.5, "#a9acb0"), (0.8, "#eef0f2"), (1.0, "#6e7075")])), 10.0);
-        b.add(lid, draw::with_effects(rocker, vec![draw::drop_shadow("#000000b0", 0.0, 3.0, 6.0)]));
-        let tread = draw::rounded(draw::rect("tread", rx + 10.0, ry + 10.0, rw - 20.0, rh - 60.0, draw::linear(180.0, &[(0.0, "#26272a"), (1.0, "#101113")])), 6.0);
-        b.add(lid, tread);
-        let ribs: Vec<Vec<(f64, f64)>> = (0..14).map(|i| {
-            let y = ry + 18.0 + f64::from(i) * (rh - 76.0) / 13.0;
-            vec![(rx + 16.0, y), (rx + rw - 16.0, y)]
-        }).collect();
-        b.add(lid, ui::strokes("ribs", &ribs, 2.0, draw::solid("#34363a")));
-        let script = Lettering::family(family::PACIFICO);
-        set(b, lid, "cry baby", lw * 0.5, ry + rh - 26.0, 22.0, "#111", &script, 0.0);
-        // The rocker's travel: toe down is the top.
-        let p = Place::new("Position").size(rh - 90.0).variant("black").legend("").bind(ui::bind(&format!("{NS}/position"))).options(&["touch=44"]);
-        place::centred_at(b, lid, "lever.fader", &p, lw * 0.5, ry + 10.0 + (rh - 60.0) / 2.0);
+        ui::fit_root(b, root, W, H);
+        let pos = format!("norm({NS}/position)");
+        // The casting.
+        let base = draw::rounded(draw::rect("casting", 6.0, 0.0, W - 12.0, H, draw::linear(90.0, &[(0.0, "#0c0c0d"), (0.3, "#232326"), (0.7, "#1b1b1e"), (1.0, "#0a0a0b")])), 18.0);
+        b.add(root, draw::with_effects(base, vec![draw::drop_shadow("#000000a0", 0.0, 4.0, 10.0)]));
+        led(b, root, NS, W / 2.0, 12.0, 5.0, "#e0281c");
+        // The rocker, in two halves about the axle (62 % down).
+        let (rx, ry, rw, rh) = (12.0, 24.0, W - 24.0, H - 36.0);
+        let axle = ry + rh * 0.62;
+        let half = |b: &mut Builder<'_>, name: &str, y0: f64, y1: f64, toe: bool| {
+            let g = b.add(root, draw::frame(name, rx, y0, rw, y1 - y0));
+            let (gh, gw) = (y1 - y0, rw);
+            let chrome = draw::rect("chrome", 0.0, 0.0, gw, gh, draw::linear(90.0, &[(0.0, "#5e6166"), (0.18, "#e9ebed"), (0.5, "#a8abaf"), (0.82, "#f0f2f4"), (1.0, "#5e6166")]));
+            let mut chrome = chrome;
+            chrome.corner_radii = if toe {
+                document_proto::CornerRadii { top_left: 14.0, top_right: 14.0, bottom_right: 0.0, bottom_left: 0.0 }
+            } else {
+                document_proto::CornerRadii { top_left: 0.0, top_right: 0.0, bottom_right: 14.0, bottom_left: 14.0 }
+            };
+            b.add(g, chrome);
+            let (tx, tw) = (9.0, gw - 18.0);
+            let (ty, th) = if toe { (9.0, gh - 9.0) } else { (0.0, gh - 38.0) };
+            b.add(g, draw::rounded(draw::rect("tread", tx, ty, tw, th, draw::linear(180.0, &[(0.0, "#2a2b2e"), (1.0, "#121315")])), 5.0));
+            let ribs: Vec<Vec<(f64, f64)>> = (0..((th / 11.0) as usize)).map(|i| {
+                let y = ty + 6.0 + i as f64 * 11.0;
+                vec![(tx + 5.0, y), (tx + tw - 5.0, y)]
+            }).collect();
+            b.add(g, ui::strokes("ribs", &ribs, 2.2, draw::solid("#3a3b3f")));
+            if !toe {
+                let script = Lettering::family(family::PACIFICO);
+                set(b, g, "cry baby", gw / 2.0, gh - 20.0, 17.0, "#101012", &script, 0.0);
+            }
+            // The shade it falls into as it tips away.
+            let shade = draw::rect("shade", 0.0, 0.0, gw, gh, draw::solid(if toe { "#000000" } else { "#000000" }));
+            let shade = b.add(g, draw::with_opacity(shade, 0.0));
+            let tip = if toe { pos.clone() } else { format!("1 - {pos}") };
+            motion::add(b, shade, Motion::new(Target::Opacity).input(tip.clone()).range(0.0, 0.45).dynamics(Dynamics::spring(500.0, 40.0)));
+            // Foreshortening about the axle: this half stretches toward you
+            // as it rises and flattens as it falls.
+            let py = if toe { 1.0 } else { 0.0 };
+            motion::add(b, g, Motion::new(Target::StretchY).input(tip.clone()).range(1.06, 0.86).pivot(0.5, py).dynamics(Dynamics::spring(500.0, 40.0)));
+            motion::add(b, g, Motion::new(Target::StretchX).input(tip).range(1.04, 0.96).pivot(0.5, py).dynamics(Dynamics::spring(500.0, 40.0)));
+            g
+        };
+        half(b, "Toe", ry, axle, true);
+        half(b, "Heel", axle, ry + rh, false);
+        // The axle's line across.
+        b.add(root, draw::rect("axle", rx, axle - 1.0, rw, 2.0, draw::solid("#00000080")));
+        // The tread is the control: a light rides it toe-ward with the
+        // position.
+        let lane = b.add(root, draw::frame("lane", rx, ry + 10.0, rw, rh - 20.0));
+        let band_h = 70.0;
+        let band = b.add(lane, draw::frame("tilt", 0.0, 0.0, rw, band_h));
+        b.add(band, draw::rect("sheen", 0.0, 0.0, rw, band_h, draw::linear(180.0, &[(0.0, "#ffffff00"), (0.5, "#ffffff22"), (1.0, "#ffffff00")])));
+        let mut c = Control::new(ControlKind::Fader { orientation: surface_proto::Orientation::Vertical }).slot(SlotRole::Thumb, band.0);
+        c.binding = Some(ui::bind(&format!("{NS}/position")));
+        b.controls.insert(lane, c);
+        // The toe engages it.
+        let toe = b.add(root, draw::frame("Toe switch", rx + 20.0, ry, rw - 40.0, 16.0));
+        b.controls.insert(toe, Control::new(ControlKind::footswitch()).bound(Binding::param(format!("{NS}/on"))));
     });
     let params = vec![
         ui::param(&format!("{NS}/position"), "Position", Range::linear(0.0, 1.0, Unit::None), 0.5).featured(),

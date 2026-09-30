@@ -41,6 +41,8 @@ const DARK: peniko::Color = peniko::Color::from_rgba8(0, 0, 0, 0);
 #[derive(Debug, Clone, Copy, PartialEq)]
 struct View {
     scale: f64,
+    /// The vertical scale where it differs (a stretched picture).
+    scale_y: f64,
     tx: f64,
     ty: f64,
 }
@@ -48,22 +50,32 @@ struct View {
 impl View {
     fn fit(content: Bounds, width: f64, height: f64) -> Self {
         if content.width <= 0.0 || content.height <= 0.0 || width <= 0.0 || height <= 0.0 {
-            return Self { scale: 1.0, tx: -content.x, ty: -content.y };
+            return Self { scale: 1.0, scale_y: 1.0, tx: -content.x, ty: -content.y };
         }
         let scale = (width / content.width).min(height / content.height);
         Self {
             scale,
+            scale_y: scale,
             tx: (width - content.width * scale) / 2.0 - content.x * scale,
             ty: (height - content.height * scale) / 2.0 - content.y * scale,
         }
     }
 
+    /// Stretched to fill `width × height` exactly (a picture, not a unit).
+    fn fill(content: Bounds, width: f64, height: f64) -> Self {
+        if content.width <= 0.0 || content.height <= 0.0 || width <= 0.0 || height <= 0.0 {
+            return Self::fit(content, width, height);
+        }
+        let (sx, sy) = (width / content.width, height / content.height);
+        Self { scale: sx, scale_y: sy, tx: -content.x * sx, ty: -content.y * sy }
+    }
+
     fn to_surface(self, x: f64, y: f64) -> (f64, f64) {
-        ((x - self.tx) / self.scale, (y - self.ty) / self.scale)
+        ((x - self.tx) / self.scale, (y - self.ty) / self.scale_y)
     }
 
     fn affine(self) -> kurbo::Affine {
-        kurbo::Affine::new([self.scale, 0.0, 0.0, self.scale, self.tx, self.ty])
+        kurbo::Affine::new([self.scale, 0.0, 0.0, self.scale_y, self.tx, self.ty])
     }
 }
 
@@ -100,6 +112,8 @@ pub struct LiveSurface {
     dirty: bool,
     time_dependent: bool,
     error: Option<String>,
+    /// Fill the element exactly rather than fit it (pictures).
+    stretch: bool,
 }
 
 fn stamp(path: &Path) -> Option<u64> {
@@ -163,7 +177,8 @@ impl LiveSurface {
             mode: Mode::Gpu,
             gpu: None,
             born: Instant::now(),
-            view: View { scale: 1.0, tx: 0.0, ty: 0.0 },
+            view: View { scale: 1.0, scale_y: 1.0, tx: 0.0, ty: 0.0 },
+            stretch: false,
             cursor: None,
             last_press: None,
             dragging: None,
@@ -192,6 +207,14 @@ impl LiveSurface {
         self.rt = rt;
         self.dirty = true;
         Ok(())
+    }
+
+    /// Stretch to fill the element exactly instead of fitting it whole and
+    /// centred — for a picture (a filter's response, a visualiser), never
+    /// a unit whose proportions are its look.
+    pub fn set_stretch(&mut self, stretch: bool) {
+        self.stretch = stretch;
+        self.dirty = true;
     }
 
     /// The effects mode (GPU by default).
@@ -448,8 +471,8 @@ impl LiveSurface {
         self.rt.set_clock(t / 1000.0);
         let (w, h) = (width.max(1), height.max(1));
         let scale = if scale > 0.0 { scale } else { 1.0 };
-        let physical = View::fit(self.content, f64::from(w), f64::from(h));
-        self.view = View { scale: physical.scale / scale, tx: physical.tx / scale, ty: physical.ty / scale };
+        let physical = if self.stretch { View::fill(self.content, f64::from(w), f64::from(h)) } else { View::fit(self.content, f64::from(w), f64::from(h)) };
+        self.view = View { scale: physical.scale / scale, scale_y: physical.scale_y / scale, tx: physical.tx / scale, ty: physical.ty / scale };
         let doc = self.rt.frame(t);
         let values = self.rt.surface().controls.iter().map(|(id, c)| (*id, self.rt.position(*id, c))).collect();
         let inputs = self.rt.shader_inputs();
