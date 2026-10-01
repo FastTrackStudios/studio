@@ -78,20 +78,33 @@ fn repeats(b: &mut Builder<'_>, view: NodeId, w: f64, h: f64, ink: &str, dim: &s
 
 #[must_use]
 pub fn face(dark: bool) -> Face {
+    face_at(dark, kit::Tier::Desktop)
+}
+
+/// The face at `tier`: one design — the matte panel and its one line —
+/// laid out for the room. The smaller tiers give the line less width and
+/// the knobs more (Time, Repeats, Tone, Level). The nameplate is at the
+/// top right, the bypass at the Time faces' spot.
+#[must_use]
+pub fn face_at(dark: bool, tier: kit::Tier) -> Face {
     // Dark: midnight. Light: a pale blue-white panel, a bright window.
     let (ink, dim, fill, edge, window, grid, knob) = if dark {
         (INK, DIM, [(0.0, "#16223d"), (1.0, "#0c1426")], "#2a3d66", [(0.0, "#0a1122"), (1.0, "#070c19")], kit::BLUE_LIGHT, ["color=#1b2a4a", "pointer=#bcd6ff", "index=line", "index_w=0.1", "skirt=plain", "skirt_color=#0b1224"])
     } else {
         ("#12264a", "#62779f", [(0.0, "#f3f7fd"), (1.0, "#dde7f5")], "#b9cbe6", [(0.0, "#ffffff"), (1.0, "#eaf1fb")], kit::BLUE_DEEP, ["color=#f8fafd", "pointer=#1e3a8a", "index=line", "index_w=0.1", "skirt=plain", "skirt_color=#b9cbe6"])
     };
-    let scene = kit::lane("Analog", |b, root| {
-        let mut panel = draw::frame("Panel", 0.0, 0.0, kit::W, kit::H);
+    let small_room = matches!(tier, kit::Tier::Phone | kit::Tier::Strip);
+    let w = tier.lane_w();
+    let scene = kit::tier_lane("Analog", tier, |b, root| {
+        let mut panel = draw::frame("Panel", 0.0, 0.0, w, kit::H);
         panel.fills = vec![draw::linear(180.0, &fill)];
         panel.corner_radii = document_proto::CornerRadii::uniform(10.0);
         let panel = b.add(root, draw::with_effects(draw::stroked(panel, edge, 1.0), vec![draw::inner_shadow("#ffffff1c", 0.0, 1.0, 0.0)]));
 
         // ── The line ───────────────────────────────────────────────────
-        let (vx, vy, vw, vh) = (14.0, 14.0, 540.0, kit::H - 28.0);
+        // On a phone the controls come first: the line gives way.
+        let vw = if small_room { kit::PHONE_PICTURE_R - 14.0 } else { 540.0 };
+        let (vx, vy, vh) = (14.0, 14.0, kit::H - 28.0);
         let mut view = draw::frame("Repeats", vx, vy, vw, vh);
         view.fills = vec![draw::linear(180.0, &window)];
         view.clips_content = true;
@@ -100,19 +113,38 @@ pub fn face(dark: bool) -> Face {
         let view = b.add(panel, view);
         repeats(b, view, vw, vh, ink, dim, grid);
 
-        // ── Name and knobs ─────────────────────────────────────────────
-        let x0 = 578.0;
-        let sans = draw::Lettering::family(draw::family::INTER).weight(300.0);
-        crate::suite_studio_blues::parts::set(b, panel, "Analog", x0 + 44.0, 30.0, 26.0, ink, &sans, 0.02);
-        ui::silk_left(b, panel, "Bucket-brigade delay", x0 + 96.0, 31.0, 6.5, dim, 700.0);
-        ui::rule(b, panel, x0, 48.0, 214.0, 1.0, &ui::alpha(kit::BLUE, 0.5));
-        let knobs = [("time", "Time"), ("feedback", "Repeats"), ("high_cut", "Tone"), ("mod_depth", "Mod"), ("level", "Level")];
-        for (i, (id, legend)) in knobs.iter().enumerate() {
-            kit::knob3d(b, panel, &a(id), legend, 34.0, (x0 + 20.0 + 62.0 * i as f64, 92.0), &knob, ink, dim);
+        // ── The knobs ──────────────────────────────────────────────────
+        let x0 = vx + vw + 24.0;
+        let lit = ui::alpha(kit::BLUE, 0.5);
+        if small_room {
+            let (tx, ty, td) = kit::PHONE_TIME;
+            kit::time_knob(b, panel, DLY, (tx, ty, td), 11.0, (ink, dim, &lit), |b, p, addr| {
+                kit::knob3d_bare(b, p, addr, td, (tx, ty), &knob);
+            });
+            let (xs, ky, kd) = kit::PHONE_KNOBS;
+            for (i, (id, legend)) in [("feedback", "Repeats"), ("high_cut", "Tone"), ("level", "Level")].iter().enumerate() {
+                kit::knob3d(b, panel, &a(id), legend, kd, (xs[i], ky), &knob, ink, dim);
+            }
+        } else {
+            kit::time_knob(b, panel, DLY, (x0 + 28.0, 78.0, 42.0), 8.5, (ink, dim, &lit), |b, p, addr| {
+                kit::knob3d_bare(b, p, addr, 42.0, (x0 + 28.0, 78.0), &knob);
+            });
+            for (i, (id, legend)) in [("feedback", "Repeats"), ("high_cut", "Tone"), ("mod_depth", "Mod"), ("level", "Level")].iter().enumerate() {
+                kit::knob3d(b, panel, &a(id), legend, 34.0, (x0 + 96.0 + 58.0 * i as f64, 84.0), &knob, ink, dim);
+            }
         }
-        kit::bypass(b, panel, DLY, kit::W - 36.0, 92.0, 26.0, "blue", "On");
+        // The nameplate, top right: the preset, then the machine.
+        let (np_h, title_w, preset_w, size) = if small_room { (30.0, 92.0, 200.0, 12.0) } else { (28.0, 86.0, 190.0, 10.0) };
+        let sans = draw::Lettering::family(draw::family::INTER).weight(300.0);
+        kit::nameplate_top_right(b, panel, DLY, tier, (8.0, np_h), title_w, preset_w, size, (if dark { kit::BLUE_LIGHT } else { kit::BLUE_DEEP }, dim), |b, t| {
+            crate::suite_studio_blues::parts::set(b, t, "Analog", title_w / 2.0 - 8.0, np_h / 2.0, if small_room { 22.0 } else { 20.0 }, ink, &sans, 0.02);
+        });
+        kit::face_bypass(b, panel, DLY, tier, "blue", "On");
         // Responsive: the line takes the width.
         kit::responsive(b, panel, &[view]);
     });
-    kit::delay_face(kit::file("62-dly-analog", dark), scene)
+    let mut f = kit::delay_face(kit::tier_file("62-dly-analog", tier, dark), scene);
+    f.params.extend(kit::nameplate_params(DLY));
+    f.params.extend(kit::time_params(DLY));
+    f
 }

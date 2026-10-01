@@ -90,6 +90,18 @@ fn glow_key(b: &mut Builder<'_>, parent: NodeId, addr: &str, d: f64, at: (f64, f
 
 #[must_use]
 pub fn face(dark: bool) -> Face {
+    face_at(dark, kit::Tier::Desktop)
+}
+
+/// The face at `tier`: one design — the pale grey (or graphite) unit in
+/// its bays, the VU, the head lamps, the white dial, the knurled knobs —
+/// laid out for the room. The smaller tiers keep the VU and the lamps as
+/// the picture, the white dial as the Time knob and Repeats, Tape-Mod and
+/// Level, at a size a finger can use. The nameplate is at the top right,
+/// the power key at the Time faces' bypass spot.
+#[must_use]
+#[allow(clippy::too_many_lines)]
+pub fn face_at(dark: bool, tier: kit::Tier) -> Face {
     // Light: the original's pale grey. Dark: the same unit in graphite,
     // lettered in white.
     let (ink, grey, unit_fill) = if dark {
@@ -97,83 +109,127 @@ pub fn face(dark: bool) -> Face {
     } else {
         (INK, [(0.0, "#e6e7e8"), (1.0, "#cfd0d2")], [(0.0, "#bfc0c2"), (1.0, "#a9aaac")])
     };
-    let scene = kit::lane("Tape", |b, root| {
-        let (w, h) = (kit::W, kit::H);
+    let small_room = matches!(tier, kit::Tier::Phone | kit::Tier::Strip);
+    let w = tier.lane_w();
+    let scene = kit::tier_lane("Tape", tier, |b, root| {
+        let h = kit::H;
         let unit = bay(b, root, "Unit", (0.0, 0.0, w, h), &unit_fill);
-        let t = Type::new(8.0, ink, 500.0).track(0.08).upper();
         let (y, bh) = (6.0, h - 12.0);
-
-        // Bay 1: the letters, the VU, the display.
-        let bay1 = bay(b, unit, "Bay 1", (6.0, y, 330.0, bh), &grey);
-        for (i, ch) in "ECHO".chars().enumerate() {
-            parts::centred(b, bay1, &ch.to_string(), (30.0, 24.0 + 33.0 * i as f64), Type::new(30.0, ink, 300.0).family(draw::family::SAIRA).width(88.0));
-        }
-        vu(b, bay1, (194.0, 84.0), 54.0, ink);
-        let disp = ui::display(b, bay1, "Display", 76.0, 114.0, 236.0, 26.0, "#9aa0a8", "glass");
-        ui::lit_text(b, disp, "DELAY TIME", 8.0, 13.0, 70.0, 7.5, "#c9ccd2", TextAlign::Left, 500.0);
-        ui::lit_readout(b, disp, "Delay time", ui::bind(&a("time")), 74.0, 13.0, 56.0, 8.0, "#e8eaee", TextAlign::Left);
-        ui::lit_text(b, disp, "FEEDBACK", 136.0, 13.0, 50.0, 7.5, "#c9ccd2", TextAlign::Left, 500.0);
-        ui::lit_readout(b, disp, "Feedback", ui::bind(&a("feedback")), 186.0, 13.0, 44.0, 8.0, ORANGE, TextAlign::Right);
-        ui::glass(b, disp);
-        screws(b, bay1, &[(9.0, 9.0), (9.0, bh - 9.0)]);
-
-        // Bay 2: the heads and the big white dial.
-        let bw2 = 170.0;
-        let bay2 = bay(b, unit, "Bay 2", (338.0, y, bw2, bh), &grey);
-        let cx = bw2 / 2.0;
-        parts::centred(b, bay2, "Active Heads", (cx, 13.0), Type::new(6.5, ink, 500.0).track(0.08).upper());
-        parts::art(b, bay2, &[vec![(cx - 44.0, 22.0), (cx - 44.0, 13.0), (cx - 36.0, 13.0)], vec![(cx + 44.0, 22.0), (cx + 44.0, 13.0), (cx + 36.0, 13.0)]], 0.9, ink);
-        for (n, x) in [(1, cx - 36.0), (2, cx), (3, cx + 36.0)] {
-            // The lamp's socket, and the lamp flashing on its head's repeat.
-            b.add(bay2, draw::with_effects(draw::circle("lamp socket", x, 27.0, 4.8, draw::radial_at(0.4, 0.35, 0.8, &[(0.0, "#d8d9db"), (1.0, "#8e9094")])), vec![draw::inner_shadow("#00000060", 0.0, 1.0, 1.5)]));
-            let lamp = b.add(bay2, draw::emissive(draw::circle("head lamp", x, 27.0, 3.4, draw::solid(LAMP)), draw::hex(LAMP), 1.0, 7.0));
-            let flash = format!("pow(1 - fract(time * 1000 / ({n} * max(param({DLY}/time), 20))), 4) * pow(param({DLY}/feedback), {}) * param({DLY}/on)", n - 1);
-            motion::add(b, lamp, Motion::new(Target::Opacity).input(flash).range(0.05, 1.0));
-        }
-        let arc: Vec<(f64, f64)> = (0..=30).map(|i| draw::polar(cx, 90.0, 48.0, -135.0 + 270.0 * f64::from(i) / 30.0)).collect();
-        parts::art(b, bay2, &[arc], 1.0, ink);
-        for i in 0..5 {
-            let (x, y) = draw::polar(cx, 90.0, 54.0, -135.0 + 67.5 * f64::from(i));
-            b.add(bay2, draw::circle("detent", x, y, 2.2, draw::solid(ink)));
-        }
-        let dial = KnobLook { preset: "white_knurl", opts: &["color=#eeede9", "index=none", "diamond=0", "ribs=90", "knurl_band=0.5", "rib_depth=0.02", "cap_r=0.97", "height=0.5", "dome=0.03", "edge=0.1", "ticks=none", "fallback=knurled"] };
-        look::place_knob(b, bay2, &dial, &a("time"), "Delay Time", 80.0, (cx, 90.0), ink);
-        parts::centred(b, bay2, "Delay", (cx, 85.0), Type::new(6.5, "#3a3b3e", 600.0).track(0.08).upper());
-        parts::centred(b, bay2, "Time", (cx, 95.0), Type::new(6.5, "#3a3b3e", 600.0).track(0.08).upper());
-        // Its pointer: an orange index at the rim, turning with the time.
-        let turn = b.add(bay2, draw::frame("time index", cx - 40.0, 50.0, 80.0, 80.0));
-        b.add(turn, draw::circle("index", 40.0, 8.0, 3.0, draw::solid(ORANGE)));
-        motion::add(b, turn, Motion::new(Target::Rotate).input(format!("norm({DLY}/time)")).range(-135.0, 135.0).pivot(0.5, 0.5));
-
-        // Bay 3: the knobs.
-        let bw3 = 318.0;
-        let bay3 = bay(b, unit, "Bay 3", (510.0, y, bw3, bh), &grey);
         let black = KnobLook { preset: "knurled", opts: &["color=#1c1c1e", "pointer=#3b82f6", "index=dot", "cap_r=0.9", "height=0.6", "dome=0.08", "edge=0.1", "ribs=48", "rib_depth=0.03", "knurl_band=0.7", "index_w=0.09", "index_in=0.66", "index_out=0.66", "coat=0.5", "rough=0.25", "ticks=none"] };
         let orange = KnobLook { preset: "knurled", opts: &["color=#3b82f6", "pointer=#dbe8ff", "index=dot", "cap_r=0.9", "height=0.6", "dome=0.05", "edge=0.08", "ribs=24", "rib_depth=0.06", "knurl_band=1", "index_w=0.08", "index_in=0.66", "index_out=0.66", "coat=0.4", "rough=0.3", "ticks=none"] };
-        let knobs = [
-            ("feedback", "Feedback", false, 0, 0),
-            ("mod_depth", "Tape-Mod", false, 1, 0),
-            ("level", "Level", false, 2, 0),
-            ("mod_rate", "Wow Rate", false, 0, 1),
-            ("high_pass", "Bass", true, 1, 1),
-            ("high_cut", "Treble", true, 2, 1),
-        ];
-        for (id, legend, warm, col, row) in knobs {
-            let (x, cy) = (58.0 + 101.0 * f64::from(col), 38.0 + 64.0 * f64::from(row));
-            look::knob(b, bay3, if warm { &orange } else { &black }, &a(id), 32.0, (x, cy), 11, ink, false);
-            parts::centred(b, bay3, legend, (x, cy + 28.0), Type::new(7.0, ink, 500.0).track(0.08).upper());
-        }
+        let dial = KnobLook { preset: "white_knurl", opts: &["color=#eeede9", "index=none", "diamond=0", "ribs=90", "knurl_band=0.5", "rib_depth=0.02", "cap_r=0.97", "height=0.5", "dome=0.03", "edge=0.1", "ticks=none", "fallback=knurled"] };
+        let lit = ui::alpha(ORANGE, 0.45);
+        // The head lamps, each flashing on its head's repeat.
+        let lamps = |b: &mut Builder<'_>, parent: NodeId, xs: [f64; 3], ly: f64| {
+            for (n, x) in (1..=3).zip(xs) {
+                b.add(parent, draw::with_effects(draw::circle("lamp socket", x, ly, 4.8, draw::radial_at(0.4, 0.35, 0.8, &[(0.0, "#d8d9db"), (1.0, "#8e9094")])), vec![draw::inner_shadow("#00000060", 0.0, 1.0, 1.5)]));
+                let lamp = b.add(parent, draw::emissive(draw::circle("head lamp", x, ly, 3.4, draw::solid(LAMP)), draw::hex(LAMP), 1.0, 7.0));
+                let flash = format!("pow(1 - fract(time * 1000 / ({n} * max(param({DLY}/time), 20))), 4) * pow(param({DLY}/feedback), {}) * param({DLY}/on)", n - 1);
+                motion::add(b, lamp, Motion::new(Target::Opacity).input(flash).range(0.05, 1.0));
+            }
+        };
+        let picture;
+        if small_room {
+            // The picture: ECHO, the VU, the heads under it.
+            // A slim VU: the controls come first on a phone.
+            let bay1 = bay(b, unit, "Bay 1", (6.0, y, kit::PHONE_PICTURE_R - 40.0, bh), &grey);
+            for (i, ch) in "ECHO".chars().enumerate() {
+                parts::centred(b, bay1, &ch.to_string(), (16.0, 28.0 + 28.0 * i as f64), Type::new(18.0, ink, 300.0).family(draw::family::SAIRA).width(88.0));
+            }
+            vu(b, bay1, (88.0, 72.0), 32.0, ink);
+            lamps(b, bay1, [64.0, 88.0, 112.0], 134.0);
+            picture = bay1;
+            // The white dial: Time.
+            // The white dial: Time, at the phone's Time knob place.
+            let (b2x, b3x) = (kit::PHONE_PICTURE_R - 32.0, 340.0);
+            let bay2 = bay(b, unit, "Bay 2", (b2x, y, b3x - 2.0 - b2x, bh), &grey);
+            let (tx, ty, td) = kit::PHONE_TIME;
+            kit::time_knob(b, bay2, DLY, (tx - b2x, ty - y, td), 11.0, (ink, "#6b6e74", &lit), |b, p, addr| {
+                look::place_knob(b, p, &dial, addr, "", td, (tx - b2x, ty - y), ink);
+            });
+            // The knobs that matter on stage, in the phone's knob row.
+            let bay3 = bay(b, unit, "Bay 3", (b3x, y, w - 6.0 - b3x, bh), &grey);
+            let (xs, ky, kd) = kit::PHONE_KNOBS;
+            for (i, (id, legend, warm)) in [("feedback", "Repeats", false), ("mod_depth", "Tape-Mod", false), ("level", "Level", true)].into_iter().enumerate() {
+                let (x, cy) = (xs[i] - b3x, ky - y);
+                look::knob(b, bay3, if warm { &orange } else { &black }, &a(id), kd, (x, cy), 11, ink, false);
+                parts::centred(b, bay3, legend, (x, cy + kd / 2.0 + 18.0), Type::new(10.5, ink, 600.0).track(0.06).upper());
+            }
+        } else {
+            // Bay 1: the letters, the VU, the display.
+            let bay1 = bay(b, unit, "Bay 1", (6.0, y, 330.0, bh), &grey);
+            for (i, ch) in "ECHO".chars().enumerate() {
+                parts::centred(b, bay1, &ch.to_string(), (30.0, 24.0 + 33.0 * i as f64), Type::new(30.0, ink, 300.0).family(draw::family::SAIRA).width(88.0));
+            }
+            vu(b, bay1, (194.0, 84.0), 54.0, ink);
+            let disp = ui::display(b, bay1, "Display", 76.0, 114.0, 236.0, 26.0, "#9aa0a8", "glass");
+            ui::lit_text(b, disp, "TIME", 8.0, 13.0, 30.0, 7.5, "#c9ccd2", TextAlign::Left, 500.0);
+            ui::lit_readout(b, disp, "Delay time", ui::bind(&a("time_text")), 38.0, 13.0, 100.0, 8.0, "#e8eaee", TextAlign::Left);
+            ui::lit_text(b, disp, "FEEDBACK", 140.0, 13.0, 50.0, 7.5, "#c9ccd2", TextAlign::Left, 500.0);
+            ui::lit_readout(b, disp, "Feedback", ui::bind(&a("feedback")), 186.0, 13.0, 44.0, 8.0, ORANGE, TextAlign::Right);
+            ui::glass(b, disp);
+            screws(b, bay1, &[(9.0, 9.0), (9.0, bh - 9.0)]);
+            picture = bay1;
 
-        // Bay 4: the mark, the emblem, the power.
-        let bay4 = bay(b, unit, "Bay 4", (830.0, y, w - 836.0, bh), &grey);
-        let c4 = (w - 836.0) / 2.0;
-        look::brush_mark(b, bay4, (c4, 42.0), 16.0, "#8a8c90");
-        look::emblem(b, bay4, (c4, 74.0), 12.0, ink);
-        glow_key(b, bay4, &a("on"), 26.0, (c4, 108.0), ORANGE);
-        parts::centred(b, bay4, "Power", (c4, 136.0), t);
-        screws(b, bay4, &[(w - 836.0 - 9.0, bh - 9.0)]);
-        // Responsive: the knob bay takes the width.
-        kit::responsive(b, unit, &[bay3]);
+            // Bay 2: the heads and the big white dial — the Time knob.
+            let bw2 = 170.0;
+            let bay2 = bay(b, unit, "Bay 2", (338.0, y, bw2, bh), &grey);
+            let cx = bw2 / 2.0;
+            parts::centred(b, bay2, "Active Heads", (cx, 13.0), Type::new(6.5, ink, 500.0).track(0.08).upper());
+            parts::art(b, bay2, &[vec![(cx - 44.0, 22.0), (cx - 44.0, 13.0), (cx - 36.0, 13.0)], vec![(cx + 44.0, 22.0), (cx + 44.0, 13.0), (cx + 36.0, 13.0)]], 0.9, ink);
+            lamps(b, bay2, [cx - 36.0, cx, cx + 36.0], 27.0);
+            let dy = 76.0;
+            let arc: Vec<(f64, f64)> = (0..=30).map(|i| draw::polar(cx, dy, 42.0, -135.0 + 270.0 * f64::from(i) / 30.0)).collect();
+            parts::art(b, bay2, &[arc], 1.0, ink);
+            for i in 0..5 {
+                let (x, yy) = draw::polar(cx, dy, 47.0, -135.0 + 67.5 * f64::from(i));
+                b.add(bay2, draw::circle("detent", x, yy, 2.2, draw::solid(ink)));
+            }
+            kit::time_knob(b, bay2, DLY, (cx, dy, 68.0), 8.5, (ink, "#6b6e74", &lit), |b, p, addr| {
+                look::place_knob(b, p, &dial, addr, "", 68.0, (cx, dy), ink);
+            });
+            // Its pointer: an index at the rim, turning with the time.
+            let turn = b.add(bay2, draw::frame("time index", cx - 34.0, dy - 34.0, 68.0, 68.0));
+            b.add(turn, draw::circle("index", 34.0, 7.0, 3.0, draw::solid(ORANGE)));
+            motion::add(b, turn, Motion::new(Target::Rotate).input(format!("param({DLY}/time_knob)")).range(-135.0, 135.0).pivot(0.5, 0.5));
+
+            // Bay 3: the knobs, under the nameplate.
+            let bw3 = 318.0;
+            let bay3 = bay(b, unit, "Bay 3", (510.0, y, bw3, bh), &grey);
+            let knobs = [
+                ("feedback", "Feedback", false, 0, 0),
+                ("mod_depth", "Tape-Mod", false, 1, 0),
+                ("level", "Level", false, 2, 0),
+                ("mod_rate", "Wow Rate", false, 0, 1),
+                ("high_pass", "Bass", true, 1, 1),
+                ("high_cut", "Treble", true, 2, 1),
+            ];
+            for (id, legend, warm, col, row) in knobs {
+                let (x, cy) = (58.0 + 101.0 * f64::from(col), 58.0 + 56.0 * f64::from(row));
+                look::knob(b, bay3, if warm { &orange } else { &black }, &a(id), 30.0, (x, cy), 11, ink, false);
+                parts::centred(b, bay3, legend, (x, cy + 26.0), Type::new(7.0, ink, 500.0).track(0.08).upper());
+            }
+
+            // Bay 4: the mark and the emblem (the power key is at the
+            // bypass spot).
+            let bay4 = bay(b, unit, "Bay 4", (830.0, y, w - 836.0, bh), &grey);
+            look::brush_mark(b, bay4, (40.0, 70.0), 14.0, "#8a8c90");
+            look::emblem(b, bay4, (40.0, 116.0), 11.0, ink);
+            screws(b, bay4, &[(w - 836.0 - 9.0, bh - 9.0)]);
+        }
+        // The nameplate, top right: the preset, then the machine.
+        let (np_y, np_h, title_w, preset_w, size) = if small_room { (8.0, 30.0, 74.0, 210.0, 12.0) } else { (8.0, 26.0, 66.0, 196.0, 10.0) };
+        kit::nameplate_top_right(b, unit, DLY, tier, (np_y, np_h), title_w, preset_w, size, (if dark { kit::BLUE_LIGHT } else { kit::BLUE_DEEP }, "#6b6e74"), |b, t| {
+            parts::centred(b, t, "Tape", (title_w / 2.0 - 6.0, np_h / 2.0), Type::new(if small_room { 22.0 } else { 18.0 }, ink, 400.0).family(draw::family::SAIRA));
+        });
+        // The power key at the bypass spot.
+        let (bx, by, bd) = kit::bypass_spot(tier);
+        glow_key(b, unit, &a("on"), bd, (bx, by), ORANGE);
+        // Responsive: the picture takes the width.
+        kit::responsive(b, unit, &[picture]);
     });
-    kit::delay_face(kit::file("60-dly-tape", dark), scene)
+    let mut f = kit::delay_face(kit::tier_file("60-dly-tape", tier, dark), scene);
+    f.params.extend(kit::nameplate_params(DLY));
+    f.params.extend(kit::time_params(DLY));
+    f
 }

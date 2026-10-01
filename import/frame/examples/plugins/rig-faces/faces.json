@@ -1365,11 +1365,23 @@
         "match": [
           "tape"
         ],
+        "nameplate": true,
         "ns": "dly",
         "size": [
           960.0,
           164.0
-        ]
+        ],
+        "tiers": {
+          "phone": {
+            "dark": "60-dly-tape-phone-dark",
+            "face": "60-dly-tape-phone",
+            "size": [
+              760.0,
+              164.0
+            ]
+          }
+        },
+        "time_knob": true
       },
       {
         "dark": "61-dly-digital-dark",
@@ -1389,11 +1401,23 @@
         "match": [
           "analog"
         ],
+        "nameplate": true,
         "ns": "dly",
         "size": [
           960.0,
           164.0
-        ]
+        ],
+        "tiers": {
+          "phone": {
+            "dark": "62-dly-analog-phone-dark",
+            "face": "62-dly-analog-phone",
+            "size": [
+              760.0,
+              164.0
+            ]
+          }
+        },
+        "time_knob": true
       },
       {
         "dark": "63-dly-lo-fi-dark",

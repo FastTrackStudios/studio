@@ -144,7 +144,7 @@ pub fn face_at(dark: bool, tier: kit::Tier) -> Face {
 
         // ── The sky ────────────────────────────────────────────────────
         // On a phone the controls come first: the sky shrinks for them.
-        let sw = if small_room { 220.0 } else { 600.0 };
+        let sw = if small_room { kit::PHONE_PICTURE_R - 10.0 } else { 600.0 };
         let (sx, sy, sh) = (10.0, 10.0, kit::H - 20.0);
         let mut s = draw::frame("Sky", sx, sy, sw, sh);
         s.fills = vec![draw::linear(180.0, &l.sky)];
@@ -164,12 +164,13 @@ pub fn face_at(dark: bool, tier: kit::Tier) -> Face {
             });
             // Spread across the panel: Decay, Size, Level, On — each with
             // its value and name under it, inside the lane.
-            let span = w - 20.0 - x0;
-            kit::time_knob(b, panel, VERB, (x0 + span * 0.14, 68.0, 60.0), 11.0, (ink, dim, &ui::alpha(kit::PURPLE_LAMP, 0.55)), |b, p, addr| {
-                kit::knob3d_bare(b, p, addr, 60.0, (x0 + span * 0.14, 68.0), &pearl);
+            let (tx, ty, td) = kit::PHONE_TIME;
+            kit::time_knob(b, panel, VERB, (tx, ty, td), 11.0, (ink, dim, &ui::alpha(kit::PURPLE_LAMP, 0.55)), |b, p, addr| {
+                kit::knob3d_bare(b, p, addr, td, (tx, ty), &pearl);
             });
+            let (xs, ky, kd) = kit::PHONE_KNOBS;
             for (i, (id, legend)) in [("size", "Size"), ("level", "Level")].iter().enumerate() {
-                kit::knob3d(b, panel, &a(id), legend, 52.0, (x0 + span * (0.4 + 0.22 * i as f64), 72.0), &pearl, ink, dim);
+                kit::knob3d(b, panel, &a(id), legend, kd, (xs[i], ky), &pearl, ink, dim);
             }
         } else {
             kit::nameplate_top_right(b, panel, VERB, tier, (10.0, 28.0), 82.0, 200.0, 10.0, (if dark { kit::PURPLE_LAMP } else { "#6a3fc4" }, dim), |b, t| {

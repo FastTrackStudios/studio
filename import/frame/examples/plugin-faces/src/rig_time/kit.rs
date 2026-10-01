@@ -166,6 +166,14 @@ impl Tier {
     }
 }
 
+/// Where every Time face puts its controls on a phone, in lane
+/// coordinates, so paging from one to the next nothing moves: the picture
+/// keeps to the left of `PHONE_PICTURE_R`, the Time knob (centre, size),
+/// and up to three knobs in a row (centres, their line, size).
+pub const PHONE_PICTURE_R: f64 = 190.0;
+pub const PHONE_TIME: (f64, f64, f64) = (252.0, 64.0, 80.0);
+pub const PHONE_KNOBS: ([f64; 3], f64, f64) = ([392.0, 500.0, 608.0], 82.0, 58.0);
+
 /// A face's file at `tier`: `base` (`-dark`) at the base tier, else
 /// `base-<tier>` (`-dark`).
 #[must_use]
@@ -249,14 +257,15 @@ pub fn nameplate_top_right(b: &mut Builder<'_>, parent: NodeId, ns: &str, tier: 
 }
 
 /// The Time knob every Time face has, the same at every face: the face's
-/// own knob on `<ns>/time` (`knob` draws it, bare, at (`cx`, `cy`), `d`
+/// own knob on `<ns>/time_knob` (`knob` draws it, bare, at (`cx`, `cy`), `d`
 /// across), the time read out under it ("2.2 s", "1 bar · 2.0 s",
 /// "540 ms", "1/8. · 375 ms" — the host's `<ns>/time_text`), and for its
 /// legend the TIME | BEAT switch on `<ns>/sync`: free, or locked to the
-/// tempo. The host maps `time` onto the block either way.
+/// tempo. The host maps it onto the block either way (not the block's own `time`,
+/// which the pictures animate from).
 #[allow(clippy::too_many_arguments)]
 pub fn time_knob(b: &mut Builder<'_>, parent: NodeId, ns: &str, (cx, cy, d): (f64, f64, f64), size: f64, (ink, dim, lit): (&str, &str, &str), knob: impl FnOnce(&mut Builder<'_>, NodeId, &str)) {
-    knob(b, parent, &a(ns, "time"));
+    knob(b, parent, &a(ns, "time_knob"));
     // The time, under the knob.
     let (rw, rh) = (d + 70.0, (size * 1.35).ceil());
     let ry = cy + d / 2.0 + 3.0;
@@ -299,7 +308,7 @@ pub fn knob3d_bare(b: &mut Builder<'_>, parent: NodeId, addr: &str, d: f64, (cx,
 #[must_use]
 pub fn time_params(ns: &str) -> Vec<ParamInfo> {
     vec![
-        ui::param(&a(ns, "time"), "Time", Range::linear(0.0, 1.0, Unit::None), 0.5).featured(),
+        ui::param(&a(ns, "time_knob"), "Time", Range::linear(0.0, 1.0, Unit::None), 0.5).featured(),
         ui::toggle(&a(ns, "sync"), "Beat", false),
         ui::param(&a(ns, "time_text"), "Time", Range::linear(0.0, 1.0, Unit::None), 0.0).text(),
     ]
@@ -309,8 +318,17 @@ pub fn time_params(ns: &str) -> Vec<ParamInfo> {
 /// height, the same size at a tier (a finger's 44 points on a phone) —
 /// whatever the face, it is there to hit.
 pub fn face_bypass(b: &mut Builder<'_>, parent: NodeId, ns: &str, tier: Tier, variant: &str, legend: &str) -> NodeId {
+    let (cx, cy, d) = bypass_spot(tier);
+    bypass(b, parent, ns, cx, cy, d, variant, legend)
+}
+
+/// Where a Time face's bypass goes at `tier` — its centre and size — for
+/// a face whose own key sits there in its own style (the tape echo's
+/// power key).
+#[must_use]
+pub fn bypass_spot(tier: Tier) -> (f64, f64, f64) {
     let (d, inset) = if matches!(tier, Tier::Phone | Tier::Strip) { (44.0, 36.0) } else { (28.0, 26.0) };
-    bypass(b, parent, ns, tier.lane_w() - inset, H * 0.56, d, variant, legend)
+    (tier.lane_w() - inset, H * 0.56, d)
 }
 
 /// The params a [`nameplate`] binds: the preset's name (text the host

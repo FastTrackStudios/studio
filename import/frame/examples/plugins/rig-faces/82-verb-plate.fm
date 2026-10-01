@@ -61,7 +61,7 @@
           <Text name="print" id="ffc52634-1dec-5cff-a828-a686cf735055" x=-22.4 y=1.7599999999999998 w=100.8 h=25 fill="#202327" size=18 weight=800 text-align="center">Plate</Text>
           <Vector name="caret" id="9e6db1e7-1f1e-5e57-8f10-d0e7fc63f89e" x=66 y=11 w=8 h=4 stroke="#4e545b" stroke-weight=1.4 stroke-cap="round" stroke-join="round" geometry="M 0.000 0.000 L 4.000 4.000 L 8.000 0.000 " />
         </Frame>
-        <Frame name="Pointer" id="13383e12-0326-53b4-b076-09772ea89aad" x=614 y=56 w=56 h=56 resize-x="right" control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Param":{"addr":"verb/time"}}},"kind":{"Knob":{"sweep_degrees":300.0}},"slots":[{"node":"f8861780-16a1-5363-9b54-4649e7f9645f","role":"Needle"}]}}>
+        <Frame name="Pointer" id="13383e12-0326-53b4-b076-09772ea89aad" x=614 y=56 w=56 h=56 resize-x="right" control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Param":{"addr":"verb/time_knob"}}},"kind":{"Knob":{"sweep_degrees":300.0}},"slots":[{"node":"f8861780-16a1-5363-9b54-4649e7f9645f","role":"Needle"}]}}>
           <Frame name="knob" id="c9475f94-9c60-5bc2-8131-acfa70db95cd" x=-36.400000000000006 y=-36.400000000000006 w=128.8 h=128.8>
             <Ellipse name="body shadow" id="f795dc32-2f55-5c17-81e2-f6965e802726" x=36.400000000000006 y=37.80000000000001 w=56 h=56 fill={[{"kind":{"Solid":{"color":{"a":0.35,"b":0.0,"g":0.0,"r":0.0}}}}]} />
             <Ellipse name="tier 0 shadow" id="4718eafe-7933-544b-8abc-15dc9572ac94" x=36.400000000000006 y=37.80000000000001 w=56 h=56 fill={[{"kind":{"Solid":{"color":{"a":0.45,"b":0.0,"g":0.0,"r":0.0}}}}]} />

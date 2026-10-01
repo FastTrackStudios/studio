@@ -194,7 +194,7 @@ pub fn face_at(dark: bool, tier: kit::Tier) -> Face {
 
         // ── The plate, through its window ──────────────────────────────
         // On a phone the controls come first: the window shrinks for them.
-        let tw = if small_room { 220.0 } else { 560.0 };
+        let tw = if small_room { kit::PHONE_PICTURE_R - 12.0 } else { 560.0 };
         let (tx, ty, th) = (12.0, 12.0, kit::H - 24.0);
         let wl = draw::rounded(draw::rect("window", tx - 4.0, ty - 4.0, tw + 8.0, th + 8.0, draw::linear(180.0, &well)), 7.0);
         b.add(panel, draw::with_effects(wl, vec![draw::inner_shadow("#00000066", 0.0, 1.0, 1.0)]));
@@ -217,15 +217,16 @@ pub fn face_at(dark: bool, tier: kit::Tier) -> Face {
             kit::nameplate_top_right(b, panel, VERB, tier, (8.0, 30.0), 84.0, 220.0, 12.0, (if dark { kit::PURPLE_LAMP } else { "#6a3fc4" }, dim), |b, t| {
                 ui::plain(b, t, "Plate", 32.0, 15.0, 20.0, ink, 800.0);
             });
-            // Spread across the remote: Decay, Pre-Delay, Level, In.
-            let span = w - 20.0 - x0;
-            let big = Dial { value: false, legend: 0.0, ..Dial::new("knob.pointer", "black", 76.0, ink, dim) };
-            kit::time_knob(b, panel, VERB, (x0 + span * 0.14, 74.0, 76.0), 11.0, (ink, dim, &ui::alpha(kit::PURPLE_LAMP, 0.55)), |b, p, addr| {
-                ui::dial(b, p, addr, "", x0 + span * 0.14, 74.0, &big);
+            // The phone's places: Time, then Pre-Delay and Level.
+            let (tx, ty, td) = kit::PHONE_TIME;
+            let big = Dial { value: false, legend: 0.0, ..Dial::new("knob.pointer", "black", td, ink, dim) };
+            kit::time_knob(b, panel, VERB, (tx, ty, td), 11.0, (ink, dim, &ui::alpha(kit::PURPLE_LAMP, 0.55)), |b, p, addr| {
+                ui::dial(b, p, addr, "", tx, ty, &big);
             });
-            let small = Dial::new("knob.collet", "black", 56.0, ink, dim).legend(11.0);
+            let (xs, ky, kd) = kit::PHONE_KNOBS;
+            let small = Dial::new("knob.collet", "black", kd, ink, dim).legend(11.0);
             for (i, (id, legend)) in [("predelay", "Pre-Delay"), ("level", "Level")].iter().enumerate() {
-                ui::dial(b, panel, &a(id), legend, x0 + span * (0.4 + 0.22 * i as f64), 86.0, &small);
+                ui::dial(b, panel, &a(id), legend, xs[i], ky, &small);
             }
         } else {
             kit::nameplate_top_right(b, panel, VERB, tier, (12.0, 26.0), 76.0, 200.0, 10.0, (if dark { kit::PURPLE_LAMP } else { "#6a3fc4" }, dim), |b, t| {
