@@ -1,0 +1,312 @@
+//! A role at one size, ready to paint: its primitives split by when they
+//! change.
+//!
+//! - **Pictures**: runs of primitives no binding touches, recorded once.
+//! - **Units**: a bound node's primitives (with whatever structure
+//!   encloses them — groups, clips, layers), patched with an instance's
+//!   values and painted. A node bound only in paint (`fill`, `text`) is a
+//!   unit by itself; one bound in place (`visible`, `x`, `y`) takes its
+//!   whole subtree, which moves or vanishes with it.
+//!
+//! Record units read static data and are painted by [`Theme::record`]
+//! between the pictures, in paint order. Live units read live data and are
+//! painted by [`Theme::live`] over the recording.
+//!
+//! [`Theme::record`]: crate::Theme::record
+//! [`Theme::live`]: crate::Theme::live
+
+use std::collections::{HashMap, HashSet};
+
+use document_proto::{NodeId, Scene};
+use kurbo::{Affine, Rect};
+use render::{LayoutBox, PaintPrimitive};
+use render_canvas::{Font, Recording, paint_filtered};
+
+use crate::compile::{Class, Prop, Role};
+use crate::layout::lay_out;
+
+pub(crate) struct Plan {
+    /// Each node's pre-order span `[start, end)` within the role.
+    pub(crate) order: HashMap<NodeId, (u32, u32)>,
+    /// Each node's parent's laid-out size (`pw`, `ph`).
+    pub(crate) parents: HashMap<NodeId, (f64, f64)>,
+    /// Each node's laid-out box, instance-local.
+    pub(crate) boxes: HashMap<NodeId, LayoutBox>,
+    pub(crate) record: Vec<Seg>,
+    pub(crate) live: Vec<Unit>,
+    pub(crate) targets: Vec<Target>,
+}
+
+pub(crate) enum Seg {
+    Picture(Recording),
+    Unit(Unit),
+}
+
+pub(crate) struct Unit {
+    /// The unit's primitives, wrapped in the structure that encloses them.
+    pub(crate) prims: Vec<PaintPrimitive>,
+    /// Bindings on the unit's nodes (indices into the role's binds).
+    pub(crate) inner: Vec<usize>,
+    /// Bindings on its ancestors that hide or move it.
+    pub(crate) outer: Vec<usize>,
+}
+
+/// A hit target: a node named `@name`.
+pub(crate) struct Target {
+    pub(crate) name: String,
+    pub(crate) rect: Rect,
+    /// `visible`/`x`/`y` bindings on it or its ancestors.
+    pub(crate) movers: Vec<usize>,
+}
+
+impl Plan {
+    pub(crate) fn build(role: &Role, size: (f64, f64), font: &Font) -> Plan {
+        let mut scene: Scene = role.scene.clone();
+        let parents = lay_out(&mut scene, role.root, size, &role.binds);
+        let prims = render::build_scene_primitives(&scene, role.root);
+        let boxes = render::build_scene_layout_boxes(&scene, role.root);
+
+        // Pre-order spans.
+        let mut order = HashMap::new();
+        number(&scene, role.root, &mut 0, &mut order);
+        let span = |id: NodeId| order.get(&id).copied().unwrap_or((u32::MAX, u32::MAX));
+        let inside = |id: NodeId, of: NodeId| {
+            let (s, e) = span(of);
+            let (i, _) = span(id);
+            s <= i && i < e
+        };
+
+        // Which nodes are units, and of which kind. Pre-order, so an outer
+        // unit is chosen before anything inside it.
+        let binds = &role.binds;
+        let mut by_node: HashMap<NodeId, Vec<usize>> = HashMap::new();
+        for (i, b) in binds.iter().enumerate().filter(|(_, b)| b.class != Class::Size) {
+            by_node.entry(b.node).or_default().push(i);
+        }
+        let mut nodes_in_order: Vec<NodeId> = by_node.keys().copied().collect();
+        nodes_in_order.sort_by_key(|id| span(*id).0);
+
+        let mut live_roots: Vec<NodeId> = Vec::new();
+        for &id in &nodes_in_order {
+            if live_roots.iter().any(|r| inside(id, *r)) {
+                continue;
+            }
+            if by_node[&id].iter().any(|&i| binds[i].class == Class::Live) {
+                live_roots.push(id);
+            }
+        }
+        let in_live = |id: NodeId| live_roots.iter().any(|r| inside(id, *r));
+
+        // Record units: static-bound nodes outside the live subtrees.
+        let mut subtree_units: Vec<NodeId> = Vec::new();
+        let mut node_units: Vec<NodeId> = Vec::new();
+        for &id in &nodes_in_order {
+            if in_live(id) || subtree_units.iter().any(|r| inside(id, *r)) {
+                continue;
+            }
+            let places = by_node[&id].iter().any(|&i| matches!(binds[i].prop, Prop::Visible | Prop::X | Prop::Y));
+            if places {
+                // Absorbs any node-only units already chosen inside it.
+                node_units.retain(|n| !inside(*n, id));
+                subtree_units.push(id);
+            } else {
+                node_units.push(id);
+            }
+        }
+
+        let owner_span = |p: &PaintPrimitive| span(owner(p)).0;
+        let in_subtree = |p: &PaintPrimitive, root: NodeId| {
+            let (s, e) = span(root);
+            let i = owner_span(p);
+            s <= i && i < e
+        };
+        let binds_within = |root: NodeId, whole: bool, live: bool| -> Vec<usize> {
+            binds
+                .iter()
+                .enumerate()
+                .filter(|(_, b)| b.class != Class::Size)
+                .filter(|(_, b)| if whole { inside(b.node, root) } else { b.node == root })
+                .filter(|(_, b)| live || !in_live(b.node))
+                .map(|(i, _)| i)
+                .collect()
+        };
+        let movers_of = |node: NodeId, strict: bool| -> Vec<usize> {
+            binds
+                .iter()
+                .enumerate()
+                .filter(|(_, b)| b.class != Class::Size && matches!(b.prop, Prop::Visible | Prop::X | Prop::Y))
+                .filter(|(_, b)| inside(node, b.node) && !(strict && b.node == node))
+                .map(|(i, _)| i)
+                .collect()
+        };
+
+        // ── live units ──
+        let live = live_roots
+            .iter()
+            .map(|&root| {
+                let range = range_of(&prims, |p| in_subtree(p, root));
+                Unit {
+                    prims: wrap(&prims, range, |_| true),
+                    inner: binds_within(root, true, true),
+                    outer: movers_of(root, true),
+                }
+            })
+            .collect();
+
+        // ── the record pass, in paint order ──
+        let mut record = Vec::new();
+        let mut run: HashSet<NodeId> = HashSet::new();
+        let mut i = 0;
+        let flush = |run: &mut HashSet<NodeId>, record: &mut Vec<Seg>| {
+            if run.is_empty() {
+                return;
+            }
+            let mut rec = Recording::new();
+            let keep = std::mem::take(run);
+            paint_filtered(&mut rec, &prims, Affine::IDENTITY, font, &|id| keep.contains(&id));
+            record.push(Seg::Picture(rec));
+        };
+        while i < prims.len() {
+            let p = &prims[i];
+            let o = owner(p);
+            if !is_leaf(p) || in_live(o) {
+                i += 1;
+                continue;
+            }
+            if let Some(&root) = subtree_units.iter().find(|r| in_subtree(p, **r)) {
+                flush(&mut run, &mut record);
+                let range = range_of(&prims, |q| in_subtree(q, root));
+                record.push(Seg::Unit(Unit {
+                    prims: wrap(&prims, range.clone(), |q| !in_live(owner(q))),
+                    inner: binds_within(root, true, false),
+                    outer: movers_of(root, true),
+                }));
+                i = range.end;
+                continue;
+            }
+            if node_units.contains(&o) {
+                flush(&mut run, &mut record);
+                let range = range_of(&prims, |q| is_leaf(q) && owner(q) == o);
+                record.push(Seg::Unit(Unit {
+                    prims: wrap(&prims, range.clone(), |_| true),
+                    inner: binds_within(o, false, false),
+                    outer: movers_of(o, true),
+                }));
+                i = range.end;
+                continue;
+            }
+            run.insert(o);
+            i += 1;
+        }
+        flush(&mut run, &mut record);
+
+        // ── hit targets ──
+        let targets = scene
+            .walk(role.root)
+            .into_iter()
+            .filter_map(|id| {
+                let n = scene.node(id)?;
+                let name = n.name.strip_prefix('@')?;
+                // Hidden at this size, by itself or an ancestor.
+                let mut up = Some(id);
+                while let Some(a) = up.and_then(|a| scene.node(a)) {
+                    if !a.visible {
+                        return None;
+                    }
+                    up = a.parent;
+                }
+                let b = boxes.get(&id)?;
+                Some(Target {
+                    name: name.to_owned(),
+                    rect: Rect::new(b.x, b.y, b.x + b.width, b.y + b.height),
+                    movers: movers_of(id, false),
+                })
+            })
+            // Topmost first: what paints last is hit first.
+            .rev()
+            .collect();
+
+        Plan { order, parents, boxes, record, live, targets }
+    }
+}
+
+fn number(scene: &Scene, id: NodeId, next: &mut u32, out: &mut HashMap<NodeId, (u32, u32)>) {
+    let start = *next;
+    *next += 1;
+    if let Some(n) = scene.node(id) {
+        for &c in &n.children {
+            number(scene, c, next, out);
+        }
+    }
+    out.insert(id, (start, *next));
+}
+
+/// The node a primitive belongs to.
+pub(crate) fn owner(p: &PaintPrimitive) -> NodeId {
+    match p {
+        PaintPrimitive::GroupStart { node_id, .. }
+        | PaintPrimitive::GroupEnd { node_id }
+        | PaintPrimitive::LayerStart { node_id, .. }
+        | PaintPrimitive::LayerEnd { node_id }
+        | PaintPrimitive::ClipStart { node_id, .. }
+        | PaintPrimitive::ClipEnd { node_id }
+        | PaintPrimitive::MaskDefStart { node_id, .. }
+        | PaintPrimitive::MaskDefEnd { node_id }
+        | PaintPrimitive::MaskApplyStart { node_id, .. }
+        | PaintPrimitive::MaskApplyEnd { node_id }
+        | PaintPrimitive::Rect { node_id, .. }
+        | PaintPrimitive::Path { node_id, .. }
+        | PaintPrimitive::Text { node_id, .. } => *node_id,
+    }
+}
+
+pub(crate) fn is_leaf(p: &PaintPrimitive) -> bool {
+    matches!(p, PaintPrimitive::Rect { .. } | PaintPrimitive::Path { .. } | PaintPrimitive::Text { .. })
+}
+
+fn closer(p: &PaintPrimitive) -> Option<PaintPrimitive> {
+    Some(match p {
+        PaintPrimitive::GroupStart { node_id, .. } => PaintPrimitive::GroupEnd { node_id: *node_id },
+        PaintPrimitive::LayerStart { node_id, .. } => PaintPrimitive::LayerEnd { node_id: *node_id },
+        PaintPrimitive::ClipStart { node_id, .. } => PaintPrimitive::ClipEnd { node_id: *node_id },
+        PaintPrimitive::MaskDefStart { node_id, .. } => PaintPrimitive::MaskDefEnd { node_id: *node_id },
+        PaintPrimitive::MaskApplyStart { node_id, .. } => PaintPrimitive::MaskApplyEnd { node_id: *node_id },
+        _ => return None,
+    })
+}
+
+const fn is_close(p: &PaintPrimitive) -> bool {
+    matches!(
+        p,
+        PaintPrimitive::GroupEnd { .. }
+            | PaintPrimitive::LayerEnd { .. }
+            | PaintPrimitive::ClipEnd { .. }
+            | PaintPrimitive::MaskDefEnd { .. }
+            | PaintPrimitive::MaskApplyEnd { .. }
+    )
+}
+
+/// The smallest index range holding every primitive `pick` says yes to.
+fn range_of(prims: &[PaintPrimitive], pick: impl Fn(&PaintPrimitive) -> bool) -> std::ops::Range<usize> {
+    let first = prims.iter().position(&pick).unwrap_or(0);
+    let last = prims.iter().rposition(&pick).map_or(first, |i| i + 1);
+    first..last
+}
+
+/// `range`'s primitives (those `keep` says yes to), opened by the
+/// structure enclosing the range and closed after it.
+fn wrap(prims: &[PaintPrimitive], range: std::ops::Range<usize>, keep: impl Fn(&PaintPrimitive) -> bool) -> Vec<PaintPrimitive> {
+    let mut open: Vec<&PaintPrimitive> = Vec::new();
+    for p in &prims[..range.start] {
+        if closer(p).is_some() {
+            open.push(p);
+        } else if is_close(p) {
+            open.pop();
+        }
+    }
+    let mut out: Vec<PaintPrimitive> = open.iter().map(|p| (*p).clone()).collect();
+    out.extend(prims[range].iter().filter(|p| keep(p)).cloned());
+    out.extend(open.iter().rev().filter_map(|p| closer(p)));
+    out
+}
+

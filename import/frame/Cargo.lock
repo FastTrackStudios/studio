@@ -6291,6 +6291,19 @@ name = "theme-expr"
 version = "0.1.0"
 
 [[package]]
+name = "theme-runtime"
+version = "0.1.0"
+dependencies = [
+ "document-proto",
+ "document-text",
+ "kurbo 0.13.1",
+ "peniko",
+ "render",
+ "render-canvas",
+ "theme-expr",
+]
+
+[[package]]
 name = "thiserror"
 version = "1.0.69"
 source = "registry+https://github.com/rust-lang/crates.io-index"

@@ -51,6 +51,7 @@ members = [
     "features/surface/surface-kit",
     # ── theme: host views (a mixer strip, a track row) drawn from documents
     "features/theme/theme-expr",
+    "features/theme/theme-runtime",
     # ── examples ──────────────────────────────────────────────────────
     "examples/plugin-faces",
     # ── tooling ───────────────────────────────────────────────────────

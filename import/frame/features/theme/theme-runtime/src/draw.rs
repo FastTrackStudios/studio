@@ -1,0 +1,313 @@
+//! Painting an instance, and asking what is under the pointer.
+
+use std::sync::Arc;
+
+use document_proto::NodeId;
+use kurbo::{Affine, Point, Rect};
+use render::anyrender_renderer::{BlendMix, FillPaint};
+use render::{PaintPrimitive, Rgba as Prgba};
+use render_canvas::{Canvas, paint_filtered};
+use theme_expr::{Scope, Value};
+
+use crate::compile::{Bound, Prop, Role, Theme};
+use crate::plan::{Plan, Seg, Unit, owner};
+
+/// One instance's data: what each schema slot holds for it.
+pub trait Fields {
+    fn field(&self, slot: u32) -> Value;
+}
+
+impl Fields for [Value] {
+    fn field(&self, slot: u32) -> Value {
+        usize::try_from(slot).ok().and_then(|i| self.get(i)).cloned().unwrap_or(Value::Missing)
+    }
+}
+
+impl Fields for Vec<Value> {
+    fn field(&self, slot: u32) -> Value {
+        self.as_slice().field(slot)
+    }
+}
+
+struct InstanceScope<'a> {
+    size: (f64, f64),
+    parent: (f64, f64),
+    fields: &'a dyn Fields,
+}
+
+impl Scope for InstanceScope<'_> {
+    fn size(&self) -> (f64, f64) {
+        self.size
+    }
+
+    fn parent_size(&self) -> (f64, f64) {
+        self.parent
+    }
+
+    fn field(&self, slot: u32) -> Value {
+        self.fields.field(slot)
+    }
+}
+
+/// One instance being painted.
+#[derive(Clone, Copy)]
+struct Instance<'a> {
+    role: &'a Role,
+    plan: &'a Plan,
+    size: (f64, f64),
+    fields: &'a dyn Fields,
+}
+
+/// Quantize a size to the layout cache's key (a hundredth of a pixel).
+fn key(size: (f64, f64)) -> (u64, u64) {
+    let q = |v: f64| (v.max(0.0) * 100.0).round() as u64;
+    (q(size.0), q(size.1))
+}
+
+impl Theme {
+    fn plan(&self, role: &str, size: (f64, f64)) -> Option<(&Role, Arc<Plan>)> {
+        let r = self.roles.get(role)?;
+        let mut plans = r.plans.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+        let plan = plans.entry(key(size)).or_insert_with(|| Arc::new(Plan::build(r, size, &self.font))).clone();
+        drop(plans);
+        Some((r, plan))
+    }
+
+    /// Lay `role` out at `size` now, so the first [`Theme::record`] at that
+    /// size does not pay for it.
+    pub fn prepare(&self, role: &str, size: (f64, f64)) {
+        let _ = self.plan(role, size);
+    }
+
+    /// Forget every cached layout (they are rebuilt on use).
+    pub fn clear_layouts(&self) {
+        for r in self.roles.values() {
+            r.plans.lock().unwrap_or_else(std::sync::PoisonError::into_inner).clear();
+        }
+    }
+
+    /// Paint everything of one instance of `role` that does not read live
+    /// data — the picture a host records once and replays — into `canvas`
+    /// at `at` (canvas ← instance space). Returns false for an unknown role.
+    pub fn record(&self, role: &str, size: (f64, f64), fields: &dyn Fields, canvas: &mut dyn Canvas, at: Affine) -> bool {
+        let Some((r, plan)) = self.plan(role, size) else { return false };
+        for seg in &plan.record {
+            match seg {
+                Seg::Picture(rec) => rec.replay(canvas, at),
+                Seg::Unit(unit) => self.paint_unit(&Instance { role: r, plan: &plan, size, fields }, unit, canvas, at),
+            }
+        }
+        true
+    }
+
+    /// Paint the parts of one instance of `role` that read live data, over
+    /// its recording. Cheap when there are none ([`Theme::has_live`]).
+    pub fn live(&self, role: &str, size: (f64, f64), fields: &dyn Fields, canvas: &mut dyn Canvas, at: Affine) -> bool {
+        let Some((r, plan)) = self.plan(role, size) else { return false };
+        let instance = Instance { role: r, plan: &plan, size, fields };
+        for unit in &plan.live {
+            self.paint_unit(&instance, unit, canvas, at);
+        }
+        true
+    }
+
+    /// The hit target (a node named `@name`) under `point`, in instance
+    /// space: the topmost one shown there for this instance's data.
+    #[must_use]
+    pub fn hit(&self, role: &str, size: (f64, f64), fields: &dyn Fields, point: Point) -> Option<String> {
+        let (r, plan) = self.plan(role, size)?;
+        plan.targets
+            .iter()
+            .find(|t| moved(r, &plan, &t.movers, size, fields).is_some_and(|d| t.rect.contains(point - d)))
+            .map(|t| t.name.clone())
+    }
+
+    /// Where hit target `name` is for this instance (instance space), or
+    /// `None` when it is hidden or there is no such target.
+    #[must_use]
+    pub fn target_rect(&self, role: &str, size: (f64, f64), fields: &dyn Fields, name: &str) -> Option<Rect> {
+        let (r, plan) = self.plan(role, size)?;
+        let t = plan.targets.iter().find(|t| t.name == name)?;
+        let d = moved(r, &plan, &t.movers, size, fields)?;
+        Some(t.rect + d)
+    }
+
+    /// Every hit target's name, topmost first.
+    #[must_use]
+    pub fn targets(&self, role: &str, size: (f64, f64)) -> Vec<String> {
+        self.plan(role, size).map(|(_, p)| p.targets.iter().map(|t| t.name.clone()).collect()).unwrap_or_default()
+    }
+
+    fn paint_unit(&self, instance: &Instance<'_>, unit: &Unit, canvas: &mut dyn Canvas, at: Affine) {
+        let Instance { role: r, plan, size, fields } = *instance;
+        // Hidden or moved by an ancestor.
+        let Some(outer) = moved(r, plan, &unit.outer, size, fields) else { return };
+
+        let mut prims = unit.prims.clone();
+        let mut hidden: Vec<(u32, u32)> = Vec::new();
+        for &i in &unit.inner {
+            let b = &r.binds[i];
+            let parent = plan.parents.get(&b.node).copied().unwrap_or(size);
+            let v = b.expr.eval(&InstanceScope { size, parent, fields });
+            if v.is_missing() {
+                continue;
+            }
+            let span = plan.order.get(&b.node).copied().unwrap_or((0, 0));
+            match b.prop {
+                Prop::Visible => {
+                    if v.truthy() == Some(false) {
+                        hidden.push(span);
+                    }
+                }
+                Prop::X | Prop::Y => {
+                    let Some(to) = v.num() else { continue };
+                    let d = offset(r, plan, b, to);
+                    let (dx, dy) = if b.prop == Prop::X { (d, 0.0) } else { (0.0, d) };
+                    for p in &mut prims {
+                        if within(plan, owner(p), span) {
+                            shift(p, dx, dy);
+                        }
+                    }
+                }
+                _ => {
+                    for p in &mut prims {
+                        if owner(p) == b.node {
+                            patch(p, b, &v);
+                        }
+                    }
+                }
+            }
+        }
+        let keep = |id: NodeId| {
+            let i = plan.order.get(&id).map_or(0, |s| s.0);
+            !hidden.iter().any(|(s, e)| *s <= i && i < *e)
+        };
+        paint_filtered(canvas, &prims, at * Affine::translate(outer), &self.font, &keep);
+    }
+}
+
+/// The offset bindings on `node` and its ancestors (`movers`) give it for
+/// this instance, or `None` when one of them hides it.
+fn moved(r: &Role, plan: &Plan, movers: &[usize], size: (f64, f64), fields: &dyn Fields) -> Option<kurbo::Vec2> {
+    let mut d = kurbo::Vec2::ZERO;
+    for &i in movers {
+        let b = &r.binds[i];
+        let parent = plan.parents.get(&b.node).copied().unwrap_or(size);
+        let v = b.expr.eval(&InstanceScope { size, parent, fields });
+        match b.prop {
+            Prop::Visible if v.truthy() == Some(false) => return None,
+            Prop::X | Prop::Y => {
+                let Some(to) = v.num() else { continue };
+                let delta = offset(r, plan, b, to);
+                if b.prop == Prop::X {
+                    d.x += delta;
+                } else {
+                    d.y += delta;
+                }
+            }
+            _ => {}
+        }
+    }
+    Some(d)
+}
+
+/// How far an `x`/`y` binding to `to` (in the parent's space) moves its
+/// node from where the layout put it.
+fn offset(r: &Role, plan: &Plan, b: &Bound, to: f64) -> f64 {
+    let pick = |lb: &render::LayoutBox| if b.prop == Prop::X { lb.x } else { lb.y };
+    let laid = plan.boxes.get(&b.node).map_or(0.0, pick);
+    let origin = r.scene.node(b.node).and_then(|n| n.parent).and_then(|p| plan.boxes.get(&p)).map_or(0.0, pick);
+    origin + to - laid
+}
+
+fn within(plan: &Plan, id: NodeId, span: (u32, u32)) -> bool {
+    plan.order.get(&id).is_some_and(|(i, _)| span.0 <= *i && *i < span.1)
+}
+
+fn prgba(c: theme_expr::Rgba) -> Prgba {
+    Prgba { r: f64::from(c.r), g: f64::from(c.g), b: f64::from(c.b), a: f64::from(c.a) }
+}
+
+fn shift(p: &mut PaintPrimitive, dx: f64, dy: f64) {
+    match p {
+        PaintPrimitive::Rect { x, y, .. }
+        | PaintPrimitive::Path { x, y, .. }
+        | PaintPrimitive::Text { x, y, .. }
+        | PaintPrimitive::LayerStart { x, y, .. }
+        | PaintPrimitive::ClipStart { x, y, .. }
+        | PaintPrimitive::MaskDefStart { x, y, .. }
+        | PaintPrimitive::MaskApplyStart { x, y, .. } => {
+            *x += dx;
+            *y += dy;
+        }
+        PaintPrimitive::GroupStart { transform, .. } => {
+            transform.tx += dx;
+            transform.ty += dy;
+        }
+        _ => {}
+    }
+}
+
+/// Set one bound paint property on a node's own primitive.
+fn patch(p: &mut PaintPrimitive, b: &Bound, v: &Value) {
+    match (b.prop, p) {
+        (Prop::Fill, PaintPrimitive::Rect { fills, .. } | PaintPrimitive::Path { fills, .. }) => {
+            if let Some(c) = v.color() {
+                let blend = fills.first().map_or(BlendMix::Normal, |f| f.1.clone());
+                *fills = vec![(FillPaint::Solid(prgba(c)), blend)];
+            }
+        }
+        (Prop::Fill, PaintPrimitive::Text { color, .. }) => {
+            if let Some(c) = v.color() {
+                *color = prgba(c);
+            }
+        }
+        (Prop::Stroke, PaintPrimitive::Rect { stroke: Some(s), .. } | PaintPrimitive::Path { stroke: Some(s), .. }) => {
+            if let Some(c) = v.color() {
+                s.color = prgba(c);
+                s.gradient = None;
+            }
+        }
+        (Prop::Text, PaintPrimitive::Text { text, style_runs, .. }) => {
+            if let Some(t) = v.as_text() {
+                *text = t.to_string();
+                style_runs.clear();
+            }
+        }
+        (Prop::W, PaintPrimitive::Rect { width, .. } | PaintPrimitive::Text { width, .. }) => {
+            if let Some(n) = v.num() {
+                *width = n.max(0.0);
+            }
+        }
+        (Prop::H, PaintPrimitive::Rect { height, .. }) => {
+            if let Some(n) = v.num() {
+                *height = n.max(0.0);
+            }
+        }
+        (Prop::Radius, PaintPrimitive::Rect { corner_radii, .. }) => {
+            if let Some(n) = v.num() {
+                let r = n.max(0.0);
+                *corner_radii = document_proto::CornerRadii { top_left: r, top_right: r, bottom_right: r, bottom_left: r };
+            }
+        }
+        (Prop::Opacity, PaintPrimitive::Rect { fills, stroke, .. } | PaintPrimitive::Path { fills, stroke, .. }) => {
+            if let Some(k) = v.num() {
+                let k = k.clamp(0.0, 1.0);
+                for (f, _) in fills.iter_mut() {
+                    if let FillPaint::Solid(c) = f {
+                        c.a *= k;
+                    }
+                }
+                if let Some(s) = stroke {
+                    s.color.a *= k;
+                }
+            }
+        }
+        (Prop::Opacity, PaintPrimitive::Text { color, .. }) => {
+            if let Some(k) = v.num() {
+                color.a *= k.clamp(0.0, 1.0);
+            }
+        }
+        _ => {}
+    }
+}
