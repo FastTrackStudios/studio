@@ -1438,9 +1438,10 @@
           "back": "100-mod-chorus-back-phone",
           "face": "100-mod-chorus-phone",
           "size": [
-            400.0,
-            340.0
-          ]
+            760.0,
+            164.0
+          ],
+          "time_knob": true
         }
       }
     },
@@ -1460,9 +1461,10 @@
         "phone": {
           "face": "101-motion-tremolo-phone",
           "size": [
-            400.0,
-            340.0
-          ]
+            760.0,
+            164.0
+          ],
+          "time_knob": true
         }
       }
     },
@@ -1481,9 +1483,10 @@
         "phone": {
           "face": "102-motion-vibrato-phone",
           "size": [
-            400.0,
-            340.0
-          ]
+            760.0,
+            164.0
+          ],
+          "time_knob": true
         }
       }
     }
