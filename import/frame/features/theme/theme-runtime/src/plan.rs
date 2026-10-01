@@ -116,7 +116,11 @@ impl Plan {
                 extent.insert(id, r);
             }
         }
-        let overlaps = |a: &kurbo::Rect, b: &kurbo::Rect| a.x0 < b.x1 && b.x0 < a.x1 && a.y0 < b.y1 && b.y0 < a.y1;
+        // Within a pixel counts: two shapes sharing an edge share the
+        // antialiased pixels along it, and those blend in paint order too.
+        let overlaps = |a: &kurbo::Rect, b: &kurbo::Rect| {
+            a.x0 < b.x1 + 1.0 && b.x0 < a.x1 + 1.0 && a.y0 < b.y1 + 1.0 && b.y0 < a.y1 + 1.0
+        };
         loop {
             let mut grown = false;
             for parent in scene.walk(role.root) {

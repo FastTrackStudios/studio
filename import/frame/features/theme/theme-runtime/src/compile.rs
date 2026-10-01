@@ -43,6 +43,8 @@ pub(crate) enum Prop {
     /// Degrees clockwise, about the node's origin (a knob's pointer drawn
     /// out from its centre).
     Rotation,
+    /// The node and everything in it scaled about its origin.
+    Scale,
     Opacity,
     Radius,
     Fill,
@@ -63,8 +65,10 @@ pub(crate) enum Prop {
 }
 
 impl Prop {
+    /// Painted per instance whether constant or not: no document
+    /// property says it.
     pub(crate) const fn is_inset(self) -> bool {
-        matches!(self, Prop::InsetTop | Prop::InsetBottom | Prop::InsetLeft | Prop::InsetRight)
+        matches!(self, Prop::InsetTop | Prop::InsetBottom | Prop::InsetLeft | Prop::InsetRight | Prop::Scale)
     }
 
     fn named(name: &str) -> Option<Prop> {
@@ -75,6 +79,7 @@ impl Prop {
             "w" => Prop::W,
             "h" => Prop::H,
             "rotation" => Prop::Rotation,
+            "scale" => Prop::Scale,
             "opacity" => Prop::Opacity,
             "radius" => Prop::Radius,
             "fill" => Prop::Fill,
@@ -457,7 +462,7 @@ pub(crate) fn apply(node: &mut Node, prop: Prop, v: &Value) {
                 node.stroke.dash_pattern = vec![n.max(0.0), DASH_GAP];
             }
         }
-        Prop::InsetTop | Prop::InsetBottom | Prop::InsetLeft | Prop::InsetRight => {}
+        Prop::InsetTop | Prop::InsetBottom | Prop::InsetLeft | Prop::InsetRight | Prop::Scale => {}
         Prop::Geometry => {
             if let Some(path) = v.as_text() {
                 node.fill_geometry = vec![path.to_string()];

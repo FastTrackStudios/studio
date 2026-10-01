@@ -163,6 +163,9 @@ impl Theme {
 
         let mut prims = unit.prims.clone();
         let mut hidden: Vec<(u32, u32)> = Vec::new();
+        // The moves applied, by the span they moved: a scale pivots on
+        // where its node ended up, not where it was laid out.
+        let mut moves: Vec<((u32, u32), f64, f64)> = Vec::new();
         for &i in &unit.inner {
             let b = &r.binds[i];
             let parent = plan.parents.get(&b.node).copied().unwrap_or(size);
@@ -181,6 +184,7 @@ impl Theme {
                     let Some(to) = v.num() else { continue };
                     let d = offset(r, plan, b, to);
                     let (dx, dy) = if b.prop == Prop::X { (d, 0.0) } else { (0.0, d) };
+                    moves.push((span, dx, dy));
                     for p in &mut prims {
                         if within(plan, owner(p), span) {
                             shift(p, dx, dy);
@@ -195,6 +199,32 @@ impl Theme {
                     }
                 }
             }
+        }
+        // Scaled nodes: their primitives wrapped in a group that scales
+        // about the node's laid-out origin.
+        for &i in &unit.inner {
+            let b = &r.binds[i];
+            if b.prop != Prop::Scale {
+                continue;
+            }
+            let parent = plan.parents.get(&b.node).copied().unwrap_or(size);
+            let Some(k) = b.expr.eval(&InstanceScope { size, parent, fields }).num() else { continue };
+            let span = plan.order.get(&b.node).copied().unwrap_or((0, 0));
+            let (Some(first), Some(last)) = (
+                prims.iter().position(|p| within(plan, owner(p), span)),
+                prims.iter().rposition(|p| within(plan, owner(p), span)),
+            ) else {
+                continue;
+            };
+            let at = plan.order.get(&b.node).map_or(0, |o| o.0);
+            let (mx, my) = moves
+                .iter()
+                .filter(|((s, e), ..)| *s <= at && at < *e)
+                .fold((0.0, 0.0), |(x, y), (_, dx, dy)| (x + dx, y + dy));
+            let (ox, oy) = plan.boxes.get(&b.node).map_or((0.0, 0.0), |lb| (lb.x + mx, lb.y + my));
+            let transform = render::anyrender_renderer::AffineTransform2D::from([[k, 0.0, ox - k * ox], [0.0, k, oy - k * oy]]);
+            prims.insert(last + 1, PaintPrimitive::GroupEnd { node_id: b.node });
+            prims.insert(first, PaintPrimitive::GroupStart { node_id: b.node, transform });
         }
         let keep = |id: NodeId| {
             let i = plan.order.get(&id).map_or(0, |s| s.0);
@@ -361,11 +391,16 @@ fn patch(p: &mut PaintPrimitive, b: &Bound, v: &Value) {
 }
 
 /// Shrink a node's own box (its rect, its clip) from one side.
+///
+/// What it shows stays where it was: a gradient across a rect is kept on
+/// the box it was laid across, so a meter's lit part reveals the colours
+/// of its whole travel rather than squeezing them into the part lit.
 fn inset(p: &mut PaintPrimitive, side: Prop, by: f64) {
     let (PaintPrimitive::Rect { x, y, width, height, .. } | PaintPrimitive::ClipStart { x, y, width, height, .. }) = p
     else {
         return;
     };
+    let before = (*x, *y, *width, *height);
     match side {
         Prop::InsetTop => {
             let by = by.min(*height);
@@ -381,4 +416,32 @@ fn inset(p: &mut PaintPrimitive, side: Prop, by: f64) {
         Prop::InsetRight => *width = (*width - by).max(0.0),
         _ => {}
     }
+    let after = (*x, *y, *width, *height);
+    if let PaintPrimitive::Rect { fills, .. } = p {
+        for (fill, _) in fills.iter_mut() {
+            keep_gradient(fill, before, after);
+        }
+    }
+}
+
+/// Re-express a gradient laid across box `from` as one across box `to`
+/// that paints the same colours in the same places.
+fn keep_gradient(fill: &mut FillPaint, from: (f64, f64, f64, f64), to: (f64, f64, f64, f64)) {
+    let (FillPaint::GradientLinear { transform, .. }
+    | FillPaint::GradientRadial { transform, .. }
+    | FillPaint::GradientAngular { transform, .. }) = fill
+    else {
+        return;
+    };
+    let ((x, y, w, h), (x1, y1, w1, h1)) = (from, to);
+    if w1 <= 1e-9 || h1 <= 1e-9 {
+        return;
+    }
+    // Box units of `from` → box units of `to`, after the gradient's own.
+    let (ma, md, mx, my) = (w / w1, h / h1, (x - x1) / w1, (y - y1) / h1);
+    let t = transform.unwrap_or(render::anyrender_renderer::AffineTransform2D::from([[1.0, 0.0, 0.0], [0.0, 1.0, 0.0]]));
+    *transform = Some(render::anyrender_renderer::AffineTransform2D::from([
+        [ma * t.a, ma * t.b, ma.mul_add(t.tx, mx)],
+        [md * t.c, md * t.d, md.mul_add(t.ty, my)],
+    ]));
 }
