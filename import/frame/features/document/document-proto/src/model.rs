@@ -486,6 +486,25 @@ pub enum ResizeX {
     Scale,
 }
 
+/// How a node follows its parent's height changing — [`ResizeX`] on the
+/// other axis. A mixer strip is laid out for a height and lives at many:
+/// what hangs from the top stays, what sits on the floor follows it down,
+/// and the fader's travel takes the difference.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Facet)]
+#[repr(u8)]
+pub enum ResizeY {
+    /// Keeps its distance from the parent's top edge.
+    Top,
+    /// Keeps its distance from the parent's bottom edge.
+    Bottom,
+    /// Keeps its offset from the parent's centre.
+    Center,
+    /// Keeps both distances: its height takes the change.
+    Stretch,
+    /// Drawn in proportion (see [`ResizeX::Scale`]).
+    Scale,
+}
+
 /// How a node sits inside an auto-layout parent.
 #[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize, Facet)]
 pub struct LayoutChild {
@@ -503,6 +522,11 @@ pub struct LayoutChild {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[facet(default)]
     pub resize_x: Option<ResizeX>,
+    /// How it follows its parent's height changing ([`ResizeY`]). `None`:
+    /// the same default as `resize_x`, on the vertical axis.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[facet(default)]
+    pub resize_y: Option<ResizeY>,
 }
 
 // ── nodes ────────────────────────────────────────────────────────────────
@@ -653,8 +677,70 @@ pub struct Node {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     #[facet(default)]
     pub motion: Vec<motion_proto::Motion>,
+    /// Properties computed from expressions instead of stored: a theme's
+    /// tokens (`$strip.ground`), the box the node is laid out in (`w`,
+    /// `h`), and the host's data (`track.name`, `track.volume`). See
+    /// [`Bind`].
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    #[facet(default)]
+    pub bind: Vec<Bind>,
 
     pub source: Option<SourceRef>,
+}
+
+/// One property of a node computed from an expression.
+///
+/// The expression language and what each property accepts belong to the
+/// theme runtime (`theme-expr`); the document only carries the source, so
+/// a document with bindings still loads, prints and diffs everywhere. The
+/// stored property is what shows where nothing evaluates the binding (an
+/// editor, an SVG export): author it as the binding's typical value.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Facet)]
+pub struct Bind {
+    /// The property, by its markup attribute name: `fill`, `stroke`,
+    /// `opacity`, `visible`, `text`, `x`, `y`, `w`, `h`, `radius`.
+    pub prop: String,
+    /// The expression's source.
+    pub expr: String,
+}
+
+// ── variables ────────────────────────────────────────────────────────────
+
+/// A document's design tokens: named values a binding reads as `$name`,
+/// each with a value per mode. Switching mode is switching theme without
+/// touching a node.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, Facet)]
+pub struct Variables {
+    /// The modes, in order; the first is the default.
+    pub modes: Vec<String>,
+    /// Each variable, by name (`strip.ground`, `meter.hot`).
+    pub vars: BTreeMap<String, Variable>,
+}
+
+impl Variables {
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.modes.is_empty() && self.vars.is_empty()
+    }
+}
+
+/// One variable: an expression per mode, and one for modes that don't say.
+/// Values are expressions in the binding language, so one variable can
+/// alias another (`$accent`) or derive from it (`mix($ground, $ink, 0.2)`).
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, Facet)]
+pub struct Variable {
+    pub value: String,
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    #[facet(default)]
+    pub modes: BTreeMap<String, String>,
+}
+
+impl Variable {
+    /// The expression this variable has in `mode`.
+    #[must_use]
+    pub fn in_mode(&self, mode: &str) -> &str {
+        self.modes.get(mode).map_or(self.value.as_str(), String::as_str)
+    }
 }
 
 impl Node {
@@ -688,6 +774,7 @@ impl Node {
             emission: None,
             shader: None,
             motion: Vec::new(),
+            bind: Vec::new(),
             source: None,
         }
     }
@@ -724,6 +811,10 @@ pub struct Scene {
     pub root: NodeId,
     pub nodes: BTreeMap<NodeId, Node>,
     pub assets: BTreeMap<AssetId, Asset>,
+    /// The document's design tokens.
+    #[serde(default, skip_serializing_if = "Variables::is_empty")]
+    #[facet(default)]
+    pub variables: Variables,
 }
 
 impl Scene {
@@ -786,7 +877,7 @@ impl Scene {
         let mut nodes = BTreeMap::new();
         nodes.insert(root.id, root);
         nodes.insert(page.id, page);
-        Self { root: root_id, nodes, assets: BTreeMap::new() }
+        Self { root: root_id, nodes, assets: BTreeMap::new(), variables: Variables::default() }
     }
 
     #[must_use]

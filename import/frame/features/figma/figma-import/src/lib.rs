@@ -40,7 +40,7 @@ pub fn import_bytes(bytes: &[u8]) -> Result<Scene, ImportError> {
 /// Import an already-parsed Figma document.
 #[must_use]
 pub fn import_document(doc: &FrameDocument) -> Scene {
-    let mut scene = Scene { root: NodeId(doc.root.0), nodes: BTreeMap::new(), assets: BTreeMap::new() };
+    let mut scene = Scene { root: NodeId(doc.root.0), nodes: BTreeMap::new(), assets: BTreeMap::new(), variables: document_proto::Variables::default() };
     for id in doc.walk_subtree(doc.root) {
         let Some(fnode) = doc.get_node(id) else { continue };
         let node = import_node(doc, fnode, &mut scene);
@@ -531,6 +531,7 @@ fn layout(raw: &Value) -> (Option<AutoLayout>, LayoutChild) {
         max_width: al.max_width,
         max_height: al.max_height,
         resize_x: None,
+        resize_y: None,
     };
     (container, child)
 }

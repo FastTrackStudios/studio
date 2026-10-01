@@ -16,6 +16,32 @@ use crate::values::{
 pub fn print(scene: &Scene) -> String {
     let mut out = String::new();
     print_node(scene, scene.root, 0, &mut out);
+    if !scene.variables.is_empty() {
+        // The block is the first child of <Document>: after its opening
+        // line, before the pages.
+        let block = variables(&scene.variables);
+        match out.find(">\n") {
+            Some(i) if !out[..i].ends_with(" /") => out.insert_str(i + 2, &block),
+            _ => {
+                // A document with no pages printed self-closing.
+                let close = out.rfind(" />").unwrap_or(out.len());
+                out.replace_range(close.., &format!(">\n{block}</Document>\n"));
+            }
+        }
+    }
+    out
+}
+
+fn variables(v: &document_proto::Variables) -> String {
+    let mut out = format!("  <Variables modes={}>\n", quote(&v.modes.join(" ")));
+    for (name, var) in &v.vars {
+        out.push_str(&format!("    <Var name={} value={}", quote(name), quote(&var.value)));
+        for (mode, value) in &var.modes {
+            out.push_str(&format!(" {mode}={}", quote(value)));
+        }
+        out.push_str(" />\n");
+    }
+    out.push_str("  </Variables>\n");
     out
 }
 
@@ -196,6 +222,9 @@ fn attributes(n: &Node, has_children: bool) -> (Vec<(&'static str, String)>, Opt
     if let Some(r) = lc.resize_x {
         a.push(("resize-x", quote(&r.keyword())));
     }
+    if let Some(r) = lc.resize_y {
+        a.push(("resize-y", quote(&r.keyword())));
+    }
     for (k, v) in [("min-w", lc.min_width), ("min-h", lc.min_height), ("max-w", lc.max_width), ("max-h", lc.max_height)] {
         if let Some(v) = v {
             a.push((k, num(v)));
@@ -261,6 +290,12 @@ fn attributes(n: &Node, has_children: bool) -> (Vec<(&'static str, String)>, Opt
     }
     if let Some(s) = &n.source {
         a.push(("source", source(s)));
+    }
+    for name in crate::schema::BIND_ATTRS {
+        let prop = name.trim_start_matches("bind:");
+        for b in n.bind.iter().filter(|b| b.prop == prop) {
+            a.push((name, quote(&b.expr)));
+        }
     }
     (a, body)
 }

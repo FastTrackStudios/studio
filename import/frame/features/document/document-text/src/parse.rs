@@ -3,7 +3,7 @@
 
 use std::collections::{BTreeMap, HashMap};
 
-use document_proto::{ResizeX, 
+use document_proto::{Bind, ResizeX, ResizeY, Variable, Variables, 
     AlignSelf, Asset, AssetId, AutoLayout, BlendMode, BooleanOp, CornerRadii, CrossAxisAlign, LayoutDirection,
     MainAxisAlign, MaskKind, Node, NodeId, NodeKind, Scene, SourceRef, StrokeAlign, StrokeCap, StrokeJoin, TextAlign,
     TextCase, TextData,
@@ -11,7 +11,7 @@ use document_proto::{ResizeX,
 use serde_json::Value;
 
 use crate::error::ParseError;
-use crate::schema::{LAYOUT_ATTRS, TAGS, attrs_for, default_name, owner_of, suggest_attr, suggest_tag};
+use crate::schema::{BIND_ATTRS, LAYOUT_ATTRS, TAGS, VARIABLES_TAG, attrs_for, default_name, owner_of, suggest_attr, suggest_tag};
 use crate::values::{
     Keyword, effects_from_json, from_json, paints_from_json, parse_hex, rotation_matrix, runs_from_json,
     transform_from_json,
@@ -43,7 +43,7 @@ pub fn parse(src: &str, assets: BTreeMap<AssetId, Asset>) -> Result<Scene> {
     let mut b = Builder::new(src, false);
     let root = b.build(el, None)?;
     let nodes = b.nodes.into_iter().map(|n| (n.id, n)).collect();
-    Ok(Scene { root, nodes, assets })
+    Ok(Scene { root, nodes, assets, variables: b.variables })
 }
 
 /// Parse a fragment: one or more elements (no `<Document>`/`<Page>`), for
@@ -427,6 +427,7 @@ struct Builder<'a> {
     fragment: bool,
     nodes: Vec<Node>,
     seen: HashMap<NodeId, usize>,
+    variables: Variables,
 }
 
 /// One element's attributes, taken one by one; the conversion helpers
@@ -542,7 +543,7 @@ fn show(v: &AttrValue) -> String {
 
 impl<'a> Builder<'a> {
     fn new(src: &'a str, fragment: bool) -> Self {
-        Self { src, fragment, nodes: Vec::new(), seen: HashMap::new() }
+        Self { src, fragment, nodes: Vec::new(), seen: HashMap::new(), variables: Variables::default() }
     }
 
     fn err<T>(&self, at: usize, msg: impl Into<String>) -> Result<T> {
@@ -604,10 +605,70 @@ impl<'a> Builder<'a> {
         self.nodes.push(node);
         let mut children = Vec::with_capacity(el.children.len());
         for c in &el.children {
+            if c.tag == VARIABLES_TAG {
+                if tag != "Document" {
+                    return self.err(c.pos, format!("<{VARIABLES_TAG}> belongs directly inside <Document>, not <{tag}>"));
+                }
+                self.variables(c)?;
+                continue;
+            }
             children.push(self.build(c, Some(id))?);
         }
         self.nodes[index].children = children;
         Ok(id)
+    }
+
+    /// `<Variables modes="dark light">` and its `<Var name=… value=… dark=…>`
+    /// children: each attribute other than `name`/`value` is a mode's value.
+    fn variables(&mut self, el: &El) -> Result<()> {
+        if !self.variables.is_empty() {
+            return self.err(el.pos, format!("a document has one <{VARIABLES_TAG}> block"));
+        }
+        for a in &el.attrs {
+            match (a.name.as_str(), &a.value) {
+                ("modes", AttrValue::Bare(v) | AttrValue::Quoted(v)) => {
+                    self.variables.modes = v.split(|c: char| c.is_whitespace() || c == ',').filter(|m| !m.is_empty()).map(str::to_owned).collect();
+                }
+                (name, _) => return self.err(a.pos, format!("unknown attribute `{name}` on <{VARIABLES_TAG}> (it takes modes=\"…\")")),
+            }
+        }
+        for v in &el.children {
+            if v.tag != "Var" {
+                return self.err(v.pos, format!("<{VARIABLES_TAG}> holds <Var name=… value=…> elements, not <{}>", v.tag));
+            }
+            let mut name = None;
+            let mut var = Variable::default();
+            for a in &v.attrs {
+                let text = match &a.value {
+                    AttrValue::Bare(s) | AttrValue::Quoted(s) => s.clone(),
+                    AttrValue::Json(j) => j.to_string(),
+                    AttrValue::Flag => "true".to_owned(),
+                };
+                match a.name.as_str() {
+                    "name" => name = Some(text),
+                    "value" => var.value = text,
+                    mode if self.variables.modes.iter().any(|m| m == mode) => {
+                        var.modes.insert(mode.to_owned(), text);
+                    }
+                    other => {
+                        return self.err(a.pos, format!("`{other}` on <Var> is not a mode (modes: {})", self.variables.modes.join(", ")));
+                    }
+                }
+            }
+            let Some(name) = name else { return self.err(v.pos, "<Var> needs name=\"…\"") };
+            if var.value.is_empty() {
+                // The first mode's value stands in for modes that don't say.
+                if let Some(first) = self.variables.modes.first().and_then(|m| var.modes.get(m)) {
+                    var.value = first.clone();
+                } else {
+                    return self.err(v.pos, format!("<Var name=\"{name}\"> needs value=… or a value for each mode"));
+                }
+            }
+            if self.variables.vars.insert(name.clone(), var).is_some() {
+                return self.err(v.pos, format!("variable `{name}` defined twice"));
+            }
+        }
+        Ok(())
     }
 
     fn kind(&self, el: &El, at: &Attrs<'_>) -> Result<NodeKind> {
@@ -818,6 +879,13 @@ fn apply_common(at: &Attrs<'_>, n: &mut Node) -> Result<()> {
     lc.max_width = at.num("max-w")?;
     lc.max_height = at.num("max-h")?;
     lc.resize_x = at.keyword::<ResizeX>("resize-x")?;
+    lc.resize_y = at.keyword::<ResizeY>("resize-y")?;
+
+    for name in BIND_ATTRS {
+        if let Some(expr) = at.str(name)? {
+            n.bind.push(Bind { prop: name.trim_start_matches("bind:").to_owned(), expr });
+        }
+    }
 
     if let Some(v) = at.convert("geometry", geometry_value)? {
         n.fill_geometry = v;

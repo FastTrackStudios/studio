@@ -3,6 +3,10 @@
 use document_proto::NodeKind;
 
 /// Element tags, in `NodeKind` order.
+/// Not a node: a document's design tokens, the first child of
+/// `<Document>` (see [`document_proto::Variables`]).
+pub(crate) const VARIABLES_TAG: &str = "Variables";
+
 pub(crate) const TAGS: &[&str] = &[
     "Document",
     "Page",
@@ -89,6 +93,7 @@ pub(crate) const COMMON_ATTRS: &[&str] = &[
     "align",
     "grow",
     "resize-x",
+    "resize-y",
     "align-self",
     "absolute",
     "min-w",
@@ -105,6 +110,22 @@ pub(crate) const COMMON_ATTRS: &[&str] = &[
     "source",
 ];
 
+/// Bound properties, as attributes (`bind:fill="$strip.ground"`): the
+/// property's own attribute name behind `bind:`. Valid on every element,
+/// printed last, in this order.
+pub(crate) const BIND_ATTRS: &[&str] = &[
+    "bind:visible",
+    "bind:x",
+    "bind:y",
+    "bind:w",
+    "bind:h",
+    "bind:opacity",
+    "bind:radius",
+    "bind:fill",
+    "bind:stroke",
+    "bind:text",
+];
+
 pub(crate) const TEXT_ATTRS: &[&str] =
     &["text", "font", "size", "weight", "style", "stretch", "line-height", "letter-spacing", "case", "text-align", "runs"];
 
@@ -116,6 +137,7 @@ pub(crate) const LAYOUT_ATTRS: &[&str] = &["gap", "padding", "wrap", "justify", 
 
 pub(crate) fn attrs_for(tag: &str) -> Vec<&'static str> {
     let mut v: Vec<&'static str> = COMMON_ATTRS.to_vec();
+    v.extend_from_slice(BIND_ATTRS);
     if tag == "Text" {
         v.extend_from_slice(TEXT_ATTRS);
     }

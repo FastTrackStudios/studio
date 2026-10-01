@@ -472,7 +472,7 @@ fn prop_entry(prop: &Prop) -> (&'static str, Value) {
 
 /// A placeholder for a doc that holds no scene yet.
 fn empty_scene() -> Scene {
-    Scene { root: NodeId(Uuid::nil()), nodes: BTreeMap::new(), assets: BTreeMap::new() }
+    Scene { root: NodeId(Uuid::nil()), nodes: BTreeMap::new(), assets: BTreeMap::new(), variables: document_proto::Variables::default() }
 }
 
 /// Read the doc back into a `Scene`, plus the `NodeId → TreeID` index.

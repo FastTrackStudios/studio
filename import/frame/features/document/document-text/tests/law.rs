@@ -127,6 +127,7 @@ fn kitchen_sink() -> Scene {
         max_width: Some(100.5),
         max_height: None,
         resize_x: Some(ResizeX::Stretch),
+        resize_y: Some(ResizeY::Bottom),
     };
     let (a, b, c, d) = (30f64.to_radians().cos(), -(30f64.to_radians().sin()), 30f64.to_radians().sin(), 30f64.to_radians().cos());
     col.transform = Transform { a, b, tx: 5.0, c, d, ty: 6.0 };
