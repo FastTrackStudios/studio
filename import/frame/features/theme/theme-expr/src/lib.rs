@@ -226,10 +226,8 @@ impl Expr {
             Expr::Cond(c, a, b) => {
                 let c = c.fold();
                 // A constant condition picks its branch outright.
-                if let Expr::Lit(v) = &c {
-                    if let Some(t) = v.truthy() {
-                        return if t { a.fold() } else { b.fold() };
-                    }
+                if let Some(t) = c.constant().and_then(Value::truthy) {
+                    return if t { a.fold() } else { b.fold() };
                 }
                 Expr::Cond(Box::new(c), Box::new(a.fold()), Box::new(b.fold()))
             }
