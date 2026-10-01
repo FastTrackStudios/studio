@@ -21,6 +21,7 @@
 //! ink(bg[, dark, light])                               legible text on a ground
 //! upper(s) lower(s) fmt(x[, decimals]) len(s)          text (`+` joins text)
 //! if(c, a, b) or(a, b, …)                              choice
+//! arc(cx, cy, r, start, sweep)                         path data: an arc, degrees clockwise from twelve
 //! ```
 //!
 //! Evaluation never fails. A value the host doesn't have (a field it does

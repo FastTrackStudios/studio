@@ -143,3 +143,12 @@ fn precedence_is_conventional() {
     assert_eq!(s.eval("1 > 2 ? 10 : 2 > 1 ? 20 : 30"), Value::Num(20.0));
     assert_eq!(s.eval("1e-3 * 1000"), Value::Num(1.0));
 }
+
+#[test]
+fn arc_is_path_data_from_twelve_oclock() {
+    let s = Strip::new();
+    let Value::Text(path) = s.eval("arc(12, 12, 10, 0, 90)") else { panic!("text") };
+    // Starts at twelve o'clock, ends at three.
+    assert!(path.starts_with("M12,2"), "{path}");
+    assert!(path.ends_with("22,12"), "{path}");
+}

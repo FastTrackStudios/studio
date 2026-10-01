@@ -130,6 +130,7 @@ pub(crate) const BIND_ATTRS: &[&str] = &[
     "bind:inset-left",
     "bind:inset-right",
     "bind:size",
+    "bind:geometry",
     "bind:text",
 ];
 

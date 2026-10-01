@@ -6,6 +6,8 @@ edition.workspace = true
 publish = false
 
 [dependencies]
+# arc(): path data built the way a host builds its own arcs.
+kurbo = { workspace = true }
 
 [lints]
 workspace = true

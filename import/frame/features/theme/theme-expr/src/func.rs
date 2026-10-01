@@ -47,6 +47,7 @@ funcs! {
     Len = "len", 1, 1;
     If = "if", 3, 3;
     Or = "or", 1, usize::MAX;
+    Arc = "arc", 5, 5;
 }
 
 impl Func {
@@ -149,6 +150,13 @@ impl Func {
                 None => Value::Missing,
             },
             Func::Or => a.iter().find(|v| !v.is_missing()).cloned().unwrap_or(Value::Missing),
+            // Degrees clockwise from twelve o'clock, as knobs are drawn;
+            // flattened as finely as a 9 px ring needs.
+            Func::Arc => txt((|| {
+                use kurbo::Shape as _;
+                let arc = kurbo::Arc::new((n(0)?, n(1)?), (n(2)?, n(2)?), (n(3)? - 90.0).to_radians(), n(4)?.to_radians(), 0.0);
+                Some(arc.to_path(0.05).to_svg())
+            })()),
         }
     }
 }

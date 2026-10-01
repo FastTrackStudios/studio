@@ -322,6 +322,11 @@ fn patch(p: &mut PaintPrimitive, b: &Bound, v: &Value) {
                 inset(p, b.prop, n.max(0.0));
             }
         }
+        (Prop::Geometry, PaintPrimitive::Path { fill_paths, .. }) => {
+            if let Some(path) = v.as_text() {
+                *fill_paths = vec![path.to_string()];
+            }
+        }
         (Prop::Size, PaintPrimitive::Text { font_size, .. }) => {
             if let Some(n) = v.num() {
                 *font_size = n.max(0.0);

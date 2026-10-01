@@ -57,6 +57,8 @@ pub(crate) enum Prop {
     InsetRight,
     /// A text's font size.
     Size,
+    /// A vector's path data (`arc(…)`, or any text that is path data).
+    Geometry,
     Text,
 }
 
@@ -83,6 +85,7 @@ impl Prop {
             "inset-left" => Prop::InsetLeft,
             "inset-right" => Prop::InsetRight,
             "size" => Prop::Size,
+            "geometry" => Prop::Geometry,
             "text" => Prop::Text,
             _ => return None,
         })
@@ -455,6 +458,11 @@ pub(crate) fn apply(node: &mut Node, prop: Prop, v: &Value) {
             }
         }
         Prop::InsetTop | Prop::InsetBottom | Prop::InsetLeft | Prop::InsetRight => {}
+        Prop::Geometry => {
+            if let Some(path) = v.as_text() {
+                node.fill_geometry = vec![path.to_string()];
+            }
+        }
         Prop::Size => {
             if let (Some(n), NodeKind::Text(data)) = (v.num(), &mut node.kind) {
                 data.font_size = n.max(0.0);
