@@ -251,9 +251,6 @@ pub fn spring_back(tier: kit::Tier) -> Face {
 }
 
 const TREM: &str = "trem";
-const TREM_INK: &str = "#efe6cf";
-const TREM_DIM: &str = "#a9a7bd";
-const CREAM: [&str; 6] = ["color=#efe6cf", "pointer=#2a2d44", "index=dot", "index_w=0.12", "skirt=plain", "skirt_color=#cfc4a6"];
 
 /// The Gravity Tank's tremolo as a phone lane, in the Time faces' form
 /// and the unit's own parts: its powder-coat navy and copper edge, the

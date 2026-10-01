@@ -147,6 +147,17 @@ pub const POST_COMP: (f64, f64) = (960.0, 340.0);
 /// The proportions it is also laid out at (see `AMP_ASPECTS`).
 const POST_COMP_ASPECTS: [f64; 10] = [1.8, 2.1, 2.4, 2.7, 3.0, 3.3, 3.6, 4.0, 4.5, 5.0];
 
+/// The post compressor on a phone: its lane, and the lane's back.
+#[must_use]
+pub fn post_comp_phone(back: bool) -> Face {
+    use crate::comp_vca::character_comp as dist;
+    let scene = dist::unit_phone("dist", "Distressor", "dist/input", "dist/level", "dist/on", back);
+    let mut params = post_comp().params;
+    params.extend(crate::rig_time::kit::nameplate_params("dist"));
+    params.extend(crate::rig_time::kit::flip_params("dist"));
+    Face { file: if back { "55-post-comp-distressor-phone-back" } else { "55-post-comp-distressor-phone" }, plugin: PLUGIN, scene, params, streams: Vec::new() }
+}
+
 fn post_comp_as(aspect: f64, variant: bool) -> Face {
     use crate::comp_vca::character_comp as dist;
     let scene = dist::unit_box("dist", "Distressor", "dist/input", "dist/level", "dist/on", POST_COMP.1 * aspect, POST_COMP.1);
@@ -311,6 +322,8 @@ pub fn faces() -> Vec<Face> {
     v.push(Face { plugin: PLUGIN, ..crate::rig_blues::prefx::spring_at(crate::rig_time::kit::Tier::Phone) });
     v.push(trio());
     v.push(post_comp());
+    v.push(post_comp_phone(false));
+    v.push(post_comp_phone(true));
     v.extend(POST_COMP_ASPECTS.iter().map(|a| post_comp_as(*a, true)));
     v.extend(AmpModel::EVERY.iter().map(|m| amp_face(*m)));
     v.extend(AmpModel::EVERY.iter().map(|m| amp_face_phone(*m)));
@@ -375,7 +388,8 @@ pub fn manifest() -> String {
         "pre_comp_pedal": pre_comp_pedal,
         "pre": pre,
         "amps": amps,
-        "gate": { "face": "51-gate", "ns": "gate", "size": [crate::rig_amp::GATE.0, crate::rig_amp::GATE.1] },
+        "gate": { "face": "51-gate", "ns": "gate", "size": [crate::rig_amp::GATE.0, crate::rig_amp::GATE.1],
+            "tiers": { "phone": { "face": "51-gate-phone", "size": size(&crate::rig_amp::gate_phone(false)), "back": "51-gate-phone-back", "nameplate": true } } },
         "trim": { "face": "53-trim", "ns": "trim", "size": [crate::rig_amp::TRIM.0, crate::rig_amp::TRIM.1] },
         // The Time module's units: a face per delay machine and reverb
         // algorithm, by its name.
@@ -384,7 +398,8 @@ pub fn manifest() -> String {
         // The post compressor's unit. `maps`: face params that aren't the
         // block's own — `input` drives `threshold` (value × a + b), the
         // ratio lamps' index picks `ratio` from the table.
-        "post_comp": { "face": "55-post-comp-distressor", "ns": "dist", "size": size(&post_comp()), "variants": variants(POST_COMP_ASPECTS.iter().map(|a| post_comp_as(*a, true)).collect()), "maps": [
+        "post_comp": { "face": "55-post-comp-distressor", "ns": "dist", "size": size(&post_comp()), "variants": variants(POST_COMP_ASPECTS.iter().map(|a| post_comp_as(*a, true)).collect()),
+            "tiers": { "phone": { "face": "55-post-comp-distressor-phone", "size": size(&post_comp_phone(false)), "back": "55-post-comp-distressor-phone-back", "nameplate": true } }, "maps": [
             { "face": "input", "param": "threshold", "linear": [-6.0, 0.0] },
             { "face": "ratio", "param": "ratio", "table": [1.0, 2.0, 3.0, 4.0, 6.0, 10.0, 20.0, 20.0] },
         ] },

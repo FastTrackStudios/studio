@@ -464,3 +464,123 @@ pub fn unit_box(ns: &str, name: &str, input: &str, output: &str, on: &str, w: f6
         crate::reverb::ui::flush(b, root, w, h);
     })
 }
+
+/// The unit as a phone lane (`w` × `h`), in the Time faces' form and its
+/// own parts: a picture of its left end — the gain-reduction ladder with
+/// its numbers, the name, the ratio lamps (a 2 × 4 of them, each the
+/// switch) — then INPUT as the big dial, ATTACK, RELEASE and OUTPUT in the
+/// knob row, its IN key at the bypass spot and the More arrow. `back`:
+/// the switch section instead — the DETECTOR and AUDIO lamps, side by
+/// side. Addresses as [`unit`].
+#[allow(clippy::too_many_arguments)]
+pub fn unit_phone(ns: &str, name: &str, input: &str, output: &str, on: &str, back: bool) -> document_proto::Scene {
+    use crate::rig_time::kit;
+    use document_proto::ResizeX;
+    let a = |id: &str| format!("{ns}/{id}");
+    let tier = kit::Tier::Phone;
+    let (w, h) = (tier.lane_w(), kit::H);
+    canvas("Character Compressor", |b, root| {
+        ui::fit_root(b, root, w, h);
+        let panel = ui::panel(b, root, "panel.painted", "black", w, h, "none");
+        if let Some(n) = b.scene.node_mut(panel) {
+            n.fills = vec![draw::linear(178.0, &[(0.0, "#232427"), (0.5, "#1b1c1e"), (1.0, "#141517")])];
+            n.corner_radii = document_proto::CornerRadii::uniform(6.0);
+        }
+        // A wider picture than the Time faces': the ladder needs its room.
+        let (px, pw) = (12.0, 236.0);
+        let mut picture = None;
+        if back {
+            // The switch section, its lamp columns side by side.
+            ui::silk_left(b, panel, "Advanced", 16.0, 20.0, 10.0, INK, 800.0);
+            for (gi, (addr, opts, colors, legend)) in [
+                (a("detector"), ["HP", "Band", "Link"], ["#46e05a", "#f6d43c", "#ff8a24"], "Detector"),
+                (a("audio"), ["HP", "Dist 2", "Dist 3"], ["#46e05a", "#f6d43c", "#ff3b2f"], "Audio"),
+            ]
+            .iter()
+            .enumerate()
+            {
+                let x0 = 30.0 + 250.0 * gi as f64;
+                let (sx, sy, sw, sh) = (x0, 40.0, 230.0, h - 62.0);
+                ui::section(b, panel, sx, sy, sw, sh, LINE, 1.6);
+                header(b, panel, legend, sx + sw / 2.0, sy + sh, 11.0);
+                let step = sw / 3.0;
+                let cells: Vec<_> = (0..3)
+                    .map(|i| {
+                        let cx = sx + step * (i as f64 + 0.5);
+                        ((cx, sy + sh * 0.6), (cx, sy + sh * 0.3), (cx - step / 2.0, sy + 6.0, step, sh - 12.0))
+                    })
+                    .collect();
+                lamp_select(b, panel, addr, &opts[..], &colors[..], &cells, 12.0);
+            }
+        } else {
+            // The picture: the unit's left end, framed.
+            let (py, ph) = (14.0, h - 28.0);
+            let mut sec = draw::frame("Picture", px, py, pw, ph);
+            sec.layout_child.resize_x = Some(ResizeX::Stretch);
+            let sec = b.add(panel, sec);
+            picture = Some(sec);
+            let mut frame = draw::stroked(draw::rounded(draw::rect("section", 0.0, 0.0, pw, ph, draw::solid("#00000000")), 2.0), LINE, 1.6);
+            frame.fills.clear();
+            frame.layout_child.resize_x = Some(ResizeX::Stretch);
+            b.add(sec, frame);
+            // The ladder, its numbers above, lit right to left.
+            let (lx0, lx1) = (18.0, pw - 18.0);
+            let pitch = (lx1 - lx0) / LADDER.len() as f64;
+            let ladder = Place::new("Gain Reduction").size(lx1 - lx0).scale(LADDER).options(&["gr", LADDER_COLORS]).reversed().bind(Binding::stream(a("gr")));
+            let lad = ui::put(b, sec, "meter.led_ladder", &ladder, (lx0 + lx1) / 2.0, 30.0);
+            // Its own numbers, each over its lamp (the unit prints them
+            // above).
+            for id in b.scene.walk(lad) {
+                if let Some(n) = b.scene.node_mut(id)
+                    && n.name == "threshold"
+                {
+                    n.transform.ty -= 26.0;
+                }
+            }
+            // The name.
+            let script = logo::Style { size: 30.0, weight: 800.0, italic: true, tracking: -0.02 };
+            logo::mark(b, sec, name, 10.0, 54.0, pw - 20.0, script, "#f2f2f0", TextAlign::Left);
+            // The ratio lamps, two rows of four, the switch.
+            let (gx0, gy0) = (4.0, 72.0);
+            let (cw, chh) = ((pw - 8.0) / 4.0, (ph - gy0 - 4.0) / 2.0);
+            let cells: Vec<_> = (0..RATIOS.len())
+                .map(|i| {
+                    let (c, r) = ((i % 4) as f64, (i / 4) as f64);
+                    let (x, y) = (gx0 + cw * c, gy0 + chh * r);
+                    ((x + cw / 2.0, y + chh * 0.66), (x + cw / 2.0, y + chh * 0.28), (x, y, cw, chh))
+                })
+                .collect();
+            lamp_select(b, sec, &a("ratio"), RATIOS, RATIO_COLORS, &cells, 9.5);
+
+            // The four dials, one size, on their header line, as the unit
+            // has them: INPUT, ATTACK, RELEASE, OUTPUT.
+            let (bx, _, _) = kit::bypass_spot(tier);
+            let (dx0, dx1) = (px + pw + 14.0, bx - 44.0);
+            let line = 48.0;
+            let pitch = (dx1 - dx0) / 4.0;
+            let d = (pitch - 8.0).min(h - line - 18.0);
+            let cy = line + 8.0 + (h - line - 8.0) / 2.0;
+            ui::rule(b, panel, dx0, line - 0.8, dx1 - dx0, 1.6, LINE);
+            for (i, (addr, legend)) in [(input.to_string(), "Input"), (a("attack"), "Attack"), (a("release"), "Release"), (output.to_string(), "Output")].iter().enumerate() {
+                let cx = dx0 + pitch * (i as f64 + 0.5);
+                let format = if *legend == "Release" { None } else { Some(ValueFormat::decimals(1)) };
+                dial_at(b, panel, addr, legend, format, (cx, cy), d, line);
+            }
+        }
+        // Its IN key at the bypass spot, the lamp over it.
+        let (bx, by, _) = kit::bypass_spot(tier);
+        let key = grey_key(b, panel, bx, by + 8.0, 44.0, 22.0, true);
+        b.add(panel, key);
+        lamp_toggle(b, panel, on, bx - 16.0, bx - 6.0, by - 18.0);
+        ui::silk(b, panel, "By Pass", bx, by + 30.0, 8.0, INK, 800.0);
+        kit::flip_arrow(b, panel, ns, tier, back, (INK, "#ffffff14"));
+        kit::nameplate_top_right(b, panel, ns, tier, (8.0, 30.0), 150.0, 190.0, 12.0, ("#e8c547", "#9a9ca0"), |b, t| {
+            ui::silk(b, t, "Empirical Labs", 75.0, 15.0, 11.0, "#e8c547", 800.0);
+        });
+        // The picture takes a wider lane; on the back, the room between
+        // the switch section and the key.
+        let stretch = picture.unwrap_or_else(|| b.add(panel, draw::frame("room", 520.0, 0.0, kit::bypass_spot(tier).0 - 60.0 - 520.0, 1.0)));
+        kit::responsive(b, panel, &[stretch]);
+        crate::reverb::ui::flush(b, root, w, h);
+    })
+}

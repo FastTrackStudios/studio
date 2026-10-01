@@ -174,5 +174,121 @@ fn trim() -> Face {
 /// Both faces.
 #[must_use]
 pub fn faces() -> Vec<Face> {
-    vec![gate(), trim()]
+    vec![gate(), gate_phone(false), gate_phone(true), trim()]
+}
+
+/// The gate as a phone lane: the lane is its meter — the input's level
+/// across it, shaded shut under the threshold (hatched as a gate, fading
+/// as an expander), the threshold a handle you drag along it, its dB on
+/// the handle — with GATE | EXPANDER and OPEN / SHUT over it, the
+/// nameplate (the preset ‹ ›, GATE), the bypass and More. `back`: the
+/// deeper controls — Attack, Release, Hold, Hysteresis, Range.
+#[must_use]
+pub fn gate_phone(back: bool) -> Face {
+    use document_proto::ResizeX;
+    use surface_proto::ButtonMode;
+    let tier = kit::Tier::Phone;
+    let w = tier.lane_w();
+    let h = kit::H;
+    let knob = ["color=#1b1e23", "pointer=#86efac", "index=line", "index_w=0.1", "skirt=plain", "skirt_color=#0a0b0d"];
+    let scene = canvas("Gate", |b, root| {
+        ui::fit_root(b, root, w, h);
+        let p = panel(b, root, (w, h));
+        let (bx, _, _) = kit::bypass_spot(tier);
+        if back {
+            kit::back_knobs(b, p, tier, &[("attack", "Attack"), ("release", "Release"), ("hold", "Hold"), ("hysteresis", "Hysteresis"), ("range", "Range")], INK, |b, pp, id, legend, d, at| {
+                kit::knob3d(b, pp, &format!("gate/{id}"), legend, d, at, &knob, INK, DIM);
+            });
+        } else {
+            // GATE | EXPANDER: the type, over the meter at the left.
+            let (sx, sy, sw, sh) = (12.0, 8.0, 92.0, 30.0);
+            for (i, word) in ["Gate", "Expander"].iter().enumerate() {
+                let cell = b.add(p, draw::frame(&format!("gate/mode {word}"), sx + (sw + 4.0) * i as f64, sy, sw, sh));
+                b.add(cell, draw::stroked(draw::rounded(draw::rect("well", 0.0, 0.0, sw, sh, draw::solid("#0c0d0f")), 8.0), "#2a2d33", 1.0));
+                let lit = b.add(cell, draw::emissive(draw::rounded(draw::rect("lit", 1.0, 1.0, sw - 2.0, sh - 2.0, draw::solid(&ui::alpha(OPEN, 0.28))), 7.0), draw::hex(OPEN), 0.5, 6.0));
+                let t = b.add(cell, ui::text("legend", word, 0.0, sh / 2.0, sw, 11.0, INK, TextAlign::Center, 800.0, true));
+                let mut c = Control::new(ControlKind::Button { mode: ButtonMode::Select { index: i as u32, count: 2 } }).slot(SlotRole::Led, lit.0).slot(SlotRole::Label, t.0);
+                c.binding = Some(ui::bind("gate/mode"));
+                b.controls.insert(cell, c);
+            }
+            // OPEN and SHUT, lit as you play.
+            let open = "clamp((param(gate/in) - param(gate/threshold)) * 0.7 + 0.3, 0, 1) * param(gate/on) + (1 - param(gate/on))".to_string();
+            lamp(b, p, "OPEN", (sx + 2.0 * sw + 8.0 + 34.0, sy + sh / 2.0), OPEN, open.clone());
+            lamp(b, p, "SHUT", (sx + 2.0 * sw + 8.0 + 86.0, sy + sh / 2.0), SHUT, format!("1 - ({open})"));
+
+            // The meter: the lane's width to the bypass.
+            let (vx, vy) = (12.0, 46.0);
+            let (vw, vh) = (bx - 50.0 - vx, h - vy - 10.0);
+            let mut v = draw::frame("Meter window", vx, vy, vw, vh);
+            v.fills = vec![draw::linear(180.0, &[(0.0, "#0b0c0e"), (1.0, "#060708")])];
+            v.clips_content = true;
+            v.corner_radii = document_proto::CornerRadii::uniform(8.0);
+            v.effects = vec![draw::inner_shadow("#000000c0", 0.0, 2.0, 6.0)];
+            let v = b.add(p, v);
+            let (mx, my, mw, mh) = (14.0, 30.0, vw - 28.0, vh - 44.0);
+            let stretched = |mut n: document_proto::Node| {
+                n.layout_child.resize_x = Some(ResizeX::Stretch);
+                n
+            };
+            let mut track = draw::frame("Meter", mx, my, mw, mh);
+            track.fills = vec![draw::linear(180.0, &[(0.0, "#07080a"), (0.5, "#111317"), (1.0, "#07080a")])];
+            track.clips_content = true;
+            track.corner_radii = document_proto::CornerRadii::uniform(5.0);
+            track.effects = vec![draw::inner_shadow("#000000", 0.0, 2.0, 4.0)];
+            let track = b.add(v, stretched(track));
+            // The level, live, rising to the right.
+            let bar = b.add(track, stretched(draw::frame("level", 0.0, 6.0, mw, mh - 12.0)));
+            b.add(bar, stretched(draw::emissive(draw::rect("bar", 0.0, 0.0, mw, mh - 12.0, draw::linear(90.0, &[(0.0, "#16a34a"), (0.82, "#86efac"), (1.0, "#fde047")])), draw::hex(OPEN), 0.5, 6.0)));
+            motion::add(b, bar, Motion::new(Target::StretchX).input("clamp((param(gate/in) + 90) / 90, 0, 1)".to_string()).range(0.0, 1.0).pivot(0.0, 0.5).dynamics(Dynamics::spring(500.0, 40.0)));
+            // Under the threshold: shut — hatched as a gate, a fade as an
+            // expander (its level falls away, not off).
+            let shade = b.add(track, stretched(draw::frame("shut", 0.0, 0.0, mw, mh)));
+            let hard = b.add(shade, stretched(draw::frame("hard", 0.0, 0.0, mw, mh)));
+            b.add(hard, stretched(draw::rect("shade", 0.0, 0.0, mw, mh, draw::linear(90.0, &[(0.0, "#0b0506ee"), (1.0, "#1a0b0dd0")]))));
+            let hatch: Vec<Vec<(f64, f64)>> = (0..((mw * 1.6 / 10.0) as i32)).map(|i| {
+                let x = f64::from(i) * 10.0;
+                vec![(x, mh), (x + mh * 0.6, 0.0)]
+            }).collect();
+            b.add(hard, ui::strokes("hatch", &hatch, 1.0, draw::solid("#f8717120")));
+            motion::add(b, hard, Motion::new(Target::Opacity).input("1 - param(gate/mode)".to_string()).range(0.0, 1.0));
+            let soft = b.add(shade, stretched(draw::rect("soft", 0.0, 0.0, mw, mh, draw::linear(90.0, &[(0.0, "#0b0506f0"), (0.7, "#1a0b0d90"), (1.0, "#1a0b0d00")]))));
+            motion::add(b, soft, Motion::new(Target::Opacity).input("param(gate/mode)".to_string()).range(0.0, 1.0));
+            motion::add(b, shade, Motion::new(Target::StretchX).input("clamp((param(gate/threshold) + 90) / 90, 0, 1)".to_string()).range(0.0, 1.0).pivot(0.0, 0.5).dynamics(Dynamics::spring(400.0, 36.0)));
+            // The threshold: a handle along the meter, the whole window
+            // tall to grab, its dB on its tab.
+            let (cap_w, cap_h) = (64.0, vh);
+            let froot = b.add(v, stretched(draw::frame("gate/threshold fader", mx - cap_w / 2.0, 0.0, mw + cap_w, cap_h)));
+            let lane = b.add(froot, stretched(draw::frame("lane", 0.0, 0.0, mw + cap_w, cap_h)));
+            let c = b.add(lane, draw::frame("cap", 0.0, 0.0, cap_w, cap_h));
+            b.add(c, draw::with_effects(draw::rect("line", cap_w / 2.0 - 1.25, 22.0, 2.5, cap_h - 26.0, draw::solid("#fde68a")), vec![draw::drop_shadow("#fbbf2480", 0.0, 0.0, 4.0)]));
+            let tab = draw::rounded(draw::rect("tab", 2.0, 2.0, cap_w - 4.0, 22.0, draw::linear(180.0, &[(0.0, "#fef3c7"), (1.0, "#fbbf24")])), 6.0);
+            b.add(c, draw::with_effects(tab, vec![draw::drop_shadow("#000000a0", 0.0, 1.5, 3.0)]));
+            crate::delay::parts::readout(b, c, "Threshold value", ui::bind("gate/threshold"), (2.0, 13.0, cap_w - 4.0), 11.0, "#3a2a06", TextAlign::Center);
+            let ctl = Control::new(ControlKind::Fader { orientation: Orientation::Horizontal }).slot(SlotRole::Thumb, c.0).bound(ui::bind("gate/threshold"));
+            b.controls.insert(froot, ctl);
+            ui::silk_left(b, v, "Shut below · open above", 14.0, vh - 8.0, 7.0, DIM, 700.0);
+            kit::responsive(b, p, &[v]);
+        }
+        let head = draw::Lettering::family(draw::family::INTER).weight(700.0);
+        kit::nameplate_top_right(b, p, "gate", tier, (8.0, 30.0), 96.0, 210.0, 12.0, (OPEN, DIM), |b, t| {
+            crate::suite_studio_blues::parts::set(b, t, "GATE", 42.0, 15.0, 16.0, INK, &head, 0.2);
+        });
+        kit::face_bypass(b, p, "gate", tier, "green", "On");
+        kit::flip_arrow(b, p, "gate", tier, back, (INK, "#ffffff14"));
+        ui::flush(b, root, w, h);
+    });
+    let mut params = vec![
+        ui::param("gate/threshold", "Threshold", Range::linear(-90.0, 0.0, Unit::Db), -50.0).featured(),
+        ui::param("gate/attack", "Attack", Range::log(0.1, 50.0, Unit::Milliseconds), 1.0),
+        ui::param("gate/release", "Release", Range::log(5.0, 500.0, Unit::Milliseconds), 120.0),
+        ui::param("gate/hold", "Hold", Range::linear(0.0, 500.0, Unit::Milliseconds), 0.0),
+        ui::param("gate/hysteresis", "Hysteresis", Range::linear(0.0, 12.0, Unit::Db), 0.0),
+        ui::param("gate/range", "Range", Range::linear(0.0, 90.0, Unit::Db), 90.0),
+        ui::choice("gate/mode", "Type", &["Gate", "Expander"], 0),
+        ui::param("gate/in", "Input", Range::linear(-90.0, 0.0, Unit::Db), -90.0),
+        ui::toggle("gate/on", "Gate", true).featured(),
+    ];
+    params.extend(kit::nameplate_params("gate"));
+    params.extend(kit::flip_params("gate"));
+    Face { file: if back { "51-gate-phone-back" } else { "51-gate-phone" }, plugin: PLUGIN, scene, params, streams: Vec::new() }
 }

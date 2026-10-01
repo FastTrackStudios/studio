@@ -1337,7 +1337,18 @@
     "size": [
       250.0,
       392.0
-    ]
+    ],
+    "tiers": {
+      "phone": {
+        "back": "51-gate-phone-back",
+        "face": "51-gate-phone",
+        "nameplate": true,
+        "size": [
+          760.0,
+          164.0
+        ]
+      }
+    }
   },
   "input": [
     {
@@ -1535,6 +1546,17 @@
       960.0,
       340.0
     ],
+    "tiers": {
+      "phone": {
+        "back": "55-post-comp-distressor-phone-back",
+        "face": "55-post-comp-distressor-phone",
+        "nameplate": true,
+        "size": [
+          760.0,
+          164.0
+        ]
+      }
+    },
     "variants": [
       {
         "face": "55-post-comp-distressor@1.8",
