@@ -185,11 +185,46 @@ pub fn face_at(dark: bool, tier: kit::Tier) -> Face {
             }
         }
         kit::face_bypass(b, panel, VERB, tier, "purple", "On");
+        kit::flip_arrow(b, panel, VERB, tier, false, (ink, &ui::alpha(dim, 0.3)));
         // Responsive: the sky takes the width.
         kit::responsive(b, root, &[s]);
     });
     let mut f = kit::reverb_face(kit::tier_file("84-verb-cloud", tier, dark), scene);
     f.params.extend(kit::nameplate_params(VERB));
     f.params.extend(kit::time_params(VERB));
+    f.params.extend(kit::flip_params(VERB));
+    f
+}
+
+/// Its back at `tier`: the frosted panel, no sky — the advanced controls
+/// across it, the nameplate, the bypass and the arrow where they are on
+/// the front.
+#[must_use]
+pub fn back_at(dark: bool, tier: kit::Tier) -> Face {
+    let l = if dark { &DARK } else { &LIGHT };
+    let (ink, dim) = (l.ink, l.dim);
+    let small_room = matches!(tier, kit::Tier::Phone | kit::Tier::Strip);
+    let w = tier.lane_w();
+    let scene = kit::tier_lane("Cloud", tier, |b, root| {
+        let mut panel = draw::frame("Panel", 0.0, 0.0, w, kit::H);
+        panel.fills = vec![draw::linear(160.0, &l.panel)];
+        panel.corner_radii = document_proto::CornerRadii::uniform(10.0);
+        b.add(root, draw::with_effects(panel, vec![draw::inner_shadow("#ffffff1a", 0.0, 1.0, 0.0)]));
+        let pearl = l.knob;
+        let knobs = [("predelay", "Pre-Delay"), ("modulation", "Drift"), ("damping", "HF Damp"), ("low_cut", "Low Cut"), ("high_cut", "High Cut"), ("duck", "Duck"), ("tone", "Tone"), ("duck_threshold", "Duck Thr"), ("duck_release", "Duck Rel"), ("pan_a", "Pan")];
+        kit::back_knobs(b, root, tier, &knobs, ink, |b, p, id, legend, d, at| {
+            kit::knob3d(b, p, &a(id), legend, d, at, &pearl, ink, dim);
+        });
+        let (np_h, title_w, preset_w, size) = if small_room { (30.0, 86.0, 220.0, 12.0) } else { (28.0, 82.0, 200.0, 10.0) };
+        let serif = draw::Lettering::family(draw::family::PLAYFAIR_DISPLAY).weight(400.0);
+        kit::nameplate_top_right(b, root, VERB, tier, (if small_room { 6.0 } else { 10.0 }, np_h), title_w, preset_w, size, (if dark { kit::PURPLE_LAMP } else { "#6a3fc4" }, dim), |b, t| {
+            crate::suite_studio_blues::parts::set(b, t, "Cloud", 34.0, np_h / 2.0, 22.0, ink, &serif, 0.08);
+        });
+        kit::face_bypass(b, root, VERB, tier, "purple", "On");
+        kit::flip_arrow(b, root, VERB, tier, true, (ink, &ui::alpha(dim, 0.3)));
+    });
+    let mut f = kit::reverb_face(kit::tier_file("84-verb-cloud-back", tier, dark), scene);
+    f.params.extend(kit::nameplate_params(VERB));
+    f.params.extend(kit::flip_params(VERB));
     f
 }

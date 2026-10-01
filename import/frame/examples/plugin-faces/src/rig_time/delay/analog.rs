@@ -140,11 +140,48 @@ pub fn face_at(dark: bool, tier: kit::Tier) -> Face {
             crate::suite_studio_blues::parts::set(b, t, "Analog", title_w / 2.0 - 8.0, np_h / 2.0, if small_room { 22.0 } else { 20.0 }, ink, &sans, 0.02);
         });
         kit::face_bypass(b, panel, DLY, tier, "blue", "On");
+        kit::flip_arrow(b, panel, DLY, tier, false, (ink, &ui::alpha(dim, 0.3)));
         // Responsive: the line takes the width.
         kit::responsive(b, panel, &[view]);
     });
     let mut f = kit::delay_face(kit::tier_file("62-dly-analog", tier, dark), scene);
     f.params.extend(kit::nameplate_params(DLY));
     f.params.extend(kit::time_params(DLY));
+    f.params.extend(kit::flip_params(DLY));
+    f
+}
+
+/// Its back at `tier`: the matte panel, no line — the advanced controls
+/// across it, the nameplate, the bypass and the arrow where they are on
+/// the front.
+#[must_use]
+pub fn back_at(dark: bool, tier: kit::Tier) -> Face {
+    let (ink, dim, fill, edge, knob) = if dark {
+        (INK, DIM, [(0.0, "#16223d"), (1.0, "#0c1426")], "#2a3d66", ["color=#1b2a4a", "pointer=#bcd6ff", "index=line", "index_w=0.1", "skirt=plain", "skirt_color=#0b1224"])
+    } else {
+        ("#12264a", "#62779f", [(0.0, "#f3f7fd"), (1.0, "#dde7f5")], "#b9cbe6", ["color=#f8fafd", "pointer=#1e3a8a", "index=line", "index_w=0.1", "skirt=plain", "skirt_color=#b9cbe6"])
+    };
+    let small_room = matches!(tier, kit::Tier::Phone | kit::Tier::Strip);
+    let w = tier.lane_w();
+    let scene = kit::tier_lane("Analog", tier, |b, root| {
+        let mut panel = draw::frame("Panel", 0.0, 0.0, w, kit::H);
+        panel.fills = vec![draw::linear(180.0, &fill)];
+        panel.corner_radii = document_proto::CornerRadii::uniform(10.0);
+        let panel = b.add(root, draw::with_effects(draw::stroked(panel, edge, 1.0), vec![draw::inner_shadow("#ffffff1c", 0.0, 1.0, 0.0)]));
+        let knobs = [("mod_depth", "Mod"), ("mod_rate", "Mod Rate"), ("high_pass", "Low Cut"), ("duck_sens", "Duck"), ("duck_release", "Duck Rel"), ("pan", "Pan"), ("repeat_dyn", "Dynamics"), ("dry", "Dry")];
+        kit::back_knobs(b, panel, tier, &knobs, ink, |b, p, id, legend, d, at| {
+            kit::knob3d(b, p, &a(id), legend, d, at, &knob, ink, dim);
+        });
+        let (np_h, title_w, preset_w, size) = if small_room { (30.0, 92.0, 200.0, 12.0) } else { (28.0, 86.0, 190.0, 10.0) };
+        let sans = draw::Lettering::family(draw::family::INTER).weight(300.0);
+        kit::nameplate_top_right(b, panel, DLY, tier, (8.0, np_h), title_w, preset_w, size, (if dark { kit::BLUE_LIGHT } else { kit::BLUE_DEEP }, dim), |b, t| {
+            crate::suite_studio_blues::parts::set(b, t, "Analog", title_w / 2.0 - 8.0, np_h / 2.0, if small_room { 22.0 } else { 20.0 }, ink, &sans, 0.02);
+        });
+        kit::face_bypass(b, panel, DLY, tier, "blue", "On");
+        kit::flip_arrow(b, panel, DLY, tier, true, (ink, &ui::alpha(dim, 0.3)));
+    });
+    let mut f = kit::delay_face(kit::tier_file("62-dly-analog-back", tier, dark), scene);
+    f.params.extend(kit::nameplate_params(DLY));
+    f.params.extend(kit::flip_params(DLY));
     f
 }

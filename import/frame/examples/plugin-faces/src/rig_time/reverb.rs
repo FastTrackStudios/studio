@@ -26,6 +26,11 @@ pub fn phone_faces(dark: bool) -> Vec<(usize, Face)> {
     vec![(2, plate::face_at(dark, super::kit::Tier::Phone)), (4, cloud::face_at(dark, super::kit::Tier::Phone))]
 }
 
+/// The backs there are (the advanced controls), by algorithm, at `t`.
+pub fn back_faces(dark: bool, t: super::kit::Tier) -> Vec<(usize, Face)> {
+    vec![(2, plate::back_at(dark, t)), (4, cloud::back_at(dark, t))]
+}
+
 pub fn faces(dark: bool) -> Vec<Face> {
     vec![room::face(dark), hall::face(dark), plate::face(dark), spring::face(dark), cloud::face(dark), bloom::face(dark), shimmer::face(dark), chorale::face(dark), magneto::face(dark), nonlinear::face(dark), swell::face(dark), reflections::face(dark), velvet::face(dark), freeverb::face(dark), convolution::face(dark)]
 }

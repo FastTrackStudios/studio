@@ -8273,6 +8273,23 @@
       "featured": false
     },
     {
+      "addr": "dly/duck_release",
+      "name": "Duck Release",
+      "short_name": null,
+      "group": null,
+      "kind": "Continuous",
+      "range": {
+        "min": 0.05,
+        "max": 1.0,
+        "scale": "Logarithmic",
+        "unit": "Seconds",
+        "steps": null
+      },
+      "default": 0.46275642631951835,
+      "bipolar": false,
+      "featured": false
+    },
+    {
       "addr": "dly/mod_rate",
       "name": "Mod Rate",
       "short_name": null,
@@ -8545,6 +8562,23 @@
       "featured": false
     },
     {
+      "addr": "dly/flip",
+      "name": "More",
+      "short_name": null,
+      "group": null,
+      "kind": "Toggle",
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 2
+      },
+      "default": 0.0,
+      "bipolar": false,
+      "featured": false
+    },
+    {
       "addr": "verb/decay",
       "name": "Decay",
       "short_name": null,
@@ -8748,6 +8782,40 @@
         "steps": null
       },
       "default": 0.0,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "verb/duck_threshold",
+      "name": "Duck Threshold",
+      "short_name": null,
+      "group": null,
+      "kind": "Continuous",
+      "range": {
+        "min": -60.0,
+        "max": 0.0,
+        "scale": "Linear",
+        "unit": "Db",
+        "steps": null
+      },
+      "default": 0.6666666666666666,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "verb/duck_release",
+      "name": "Duck Release",
+      "short_name": null,
+      "group": null,
+      "kind": "Continuous",
+      "range": {
+        "min": 20.0,
+        "max": 2000.0,
+        "scale": "Logarithmic",
+        "unit": "Milliseconds",
+        "steps": null
+      },
+      "default": 0.38907562519182176,
       "bipolar": false,
       "featured": false
     },
@@ -8967,6 +9035,23 @@
         "scale": "Linear",
         "unit": "None",
         "steps": null
+      },
+      "default": 0.0,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "verb/flip",
+      "name": "More",
+      "short_name": null,
+      "group": null,
+      "kind": "Toggle",
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 2
       },
       "default": 0.0,
       "bipolar": false,

@@ -75,6 +75,7 @@ pub fn delay_params() -> Vec<ParamInfo> {
         ui::param(&a(n, "high_pass"), "Low Cut", Range::linear(0.0, 900.0, Unit::Hz), 0.0),
         ui::param(&a(n, "high_cut"), "High Cut", Range::log(500.0, 20_000.0, Unit::Hz), 8000.0),
         ui::param(&a(n, "duck_sens"), "Duck", Range::linear(0.0, 18.0, Unit::Db), 0.0),
+        ui::param(&a(n, "duck_release"), "Duck Release", Range::log(0.05, 1.0, Unit::Seconds), 0.2),
         ui::param(&a(n, "mod_rate"), "Mod Rate", Range::log(0.05, 8.0, Unit::Hz), 0.6),
         ui::param(&a(n, "mod_depth"), "Mod Depth", Range::linear(0.0, 1.0, Unit::None), 0.0),
         ui::param(&a(n, "pan"), "Pan", Range::linear(-1.0, 1.0, Unit::None), 0.0),
@@ -102,6 +103,8 @@ pub fn reverb_params() -> Vec<ParamInfo> {
         ui::param(&a(n, "low_cut"), "Low Cut", Range::log(20.0, 2000.0, Unit::Hz), 20.0),
         ui::param(&a(n, "high_cut"), "High Cut", Range::log(1000.0, 20_000.0, Unit::Hz), 20_000.0),
         ui::param(&a(n, "duck"), "Duck", Range::linear(0.0, 1.0, Unit::None), 0.0),
+        ui::param(&a(n, "duck_threshold"), "Duck Threshold", Range::linear(-60.0, 0.0, Unit::Db), -20.0),
+        ui::param(&a(n, "duck_release"), "Duck Release", Range::log(20.0, 2000.0, Unit::Milliseconds), 120.0),
         ui::param(&a(n, "pan_a"), "Pan", Range::linear(-1.0, 1.0, Unit::None), 0.0),
         ui::param(&a(n, "dry"), "Dry", Range::linear(0.0, 1.0, Unit::None), 1.0),
         ui::param(&a(n, "shim_shift1"), "Shift", Range::linear(-12.0, 12.0, Unit::None), 12.0),
@@ -329,6 +332,48 @@ pub fn face_bypass(b: &mut Builder<'_>, parent: NodeId, ns: &str, tier: Tier, va
 pub fn bypass_spot(tier: Tier) -> (f64, f64, f64) {
     let (d, inset) = if matches!(tier, Tier::Phone | Tier::Strip) { (44.0, 36.0) } else { (28.0, 26.0) };
     (tier.lane_w() - inset, H * 0.56, d)
+}
+
+/// The arrow that turns a Time face over: under the bypass, the same at
+/// every face — on the front "More" pointing down (its back carries the
+/// advanced controls), on the back "Back" pointing up. A press on
+/// `<ns>/flip`; the host shows the other side.
+pub fn flip_arrow(b: &mut Builder<'_>, parent: NodeId, ns: &str, tier: Tier, back: bool, (ink, well): (&str, &str)) -> NodeId {
+    let (bx, _, _) = bypass_spot(tier);
+    let small_room = matches!(tier, Tier::Phone | Tier::Strip);
+    let (w, h, size) = if small_room { (52.0, 22.0, 9.5) } else { (40.0, 16.0, 7.0) };
+    let g = b.add(parent, draw::frame("flip", bx - w / 2.0, H - h - 6.0, w, h));
+    b.add(g, draw::rounded(draw::rect("well", 0.0, 0.0, w, h, draw::solid(well)), h / 2.0));
+    ui::silk(b, g, if back { "Back" } else { "More" }, w / 2.0 - 5.0, h / 2.0, size, ink, 800.0);
+    let (cx, cy) = (w - 10.0, h / 2.0);
+    let dy = if back { -2.0 } else { 2.0 };
+    ui::line(b, g, "chevron", &[(cx - 3.5, cy - dy), (cx, cy + dy), (cx + 3.5, cy - dy)], 1.4, ink);
+    b.controls.insert(g, Control::new(ControlKind::Button { mode: ButtonMode::Momentary }).bound(ui::bind(&a(ns, "flip"))));
+    g
+}
+
+/// A face's back, in its own finish: "Advanced" at the top left, a row of
+/// `knobs` (id, legend) each drawn by `knob` at (cx, cy) `d` across — up to
+/// seven at a finger's size on a phone, as many as fit elsewhere — across
+/// the whole face (no picture on the back) up to the bypass spot. The caller adds the nameplate, the bypass and the flip
+/// arrow, so they sit where they do on the front.
+pub fn back_knobs(b: &mut Builder<'_>, parent: NodeId, tier: Tier, knobs: &[(&str, &str)], ink: &str, mut knob: impl FnMut(&mut Builder<'_>, NodeId, &str, &str, f64, (f64, f64))) {
+    let small_room = matches!(tier, Tier::Phone | Tier::Strip);
+    ui::silk_left(b, parent, "Advanced", 16.0, 20.0, if small_room { 10.0 } else { 7.5 }, ink, 800.0);
+    let (bx, _, bd) = bypass_spot(tier);
+    let (d, cy) = if small_room { (50.0, 84.0) } else { (36.0, 88.0) };
+    let shown = if small_room { knobs.len().min(7) } else { knobs.len() };
+    let (x0, x1) = (16.0 + d / 2.0 + 10.0, bx - bd / 2.0 - d / 2.0 - 18.0);
+    let step = if shown > 1 { (x1 - x0) / (shown - 1) as f64 } else { 0.0 };
+    for (i, (id, legend)) in knobs.iter().take(shown).enumerate() {
+        knob(b, parent, id, legend, d, (x0 + step * i as f64, cy));
+    }
+}
+
+/// The params a [`flip_arrow`] binds.
+#[must_use]
+pub fn flip_params(ns: &str) -> Vec<ParamInfo> {
+    vec![ui::toggle(&a(ns, "flip"), "More", false)]
 }
 
 /// The params a [`nameplate`] binds: the preset's name (text the host

@@ -251,6 +251,11 @@
             <Rectangle name="core" id="92dcc7cd-9f04-5b8a-a5e8-f0a1e0a4a455" x=6.16 y=6.16 w=15.680000000000001 h=15.680000000000001 radius=2.0999999999999996 fill={[{"kind":{"RadialGradient":{"stops":[{"color":"#ffffff","position":0.0},{"color":"#9dc1fb","position":1.0}],"transform":{"a":1.2,"b":0.0,"c":0.0,"d":1.2,"tx":-0.09999999999999998,"ty":-0.09999999999999998}}}}]} effects={[{"color":"#00000040","kind":"InnerShadow","offset_y":1.0,"radius":2.0}]} />
           </Frame>
         </Frame>
+        <Frame name="flip" id="0ddbb296-4106-5cda-930a-04a5d4a4d975" x=914 y=142 w=40 h=16 resize-x="right" control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Param":{"addr":"dly/flip"}}},"kind":{"Button":{"mode":"Momentary"}},"slots":[]}}>
+          <Rectangle name="well" id="4980af11-ff26-5f71-b6db-4715d56aac34" w=40 h=16 radius=8 fill="#00000022" />
+          <Text name="silk" id="7611d4c9-b3ce-53be-96e1-4a97d0e9d5ae" x=-2.0799999999999983 y=3.2399999999999993 w=34.16 h=10 fill="#e8e9eb" size=7 weight=800 letter-spacing=0.56 case="upper" text-align="center">More</Text>
+          <Vector name="chevron" id="ebca0cd5-29e4-5490-bbb9-d28480b0c4d0" x=26.5 y=6 w=7 h=4 stroke="#e8e9eb" stroke-weight=1.4 stroke-cap="round" stroke-join="round" geometry="M 0.000 0.000 L 3.500 4.000 L 7.000 0.000 " />
+        </Frame>
       </Frame>
     </Frame>
   </Page>

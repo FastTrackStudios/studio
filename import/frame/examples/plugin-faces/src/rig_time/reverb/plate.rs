@@ -242,6 +242,7 @@ pub fn face_at(dark: bool, tier: kit::Tier) -> Face {
             }
         }
         kit::face_bypass(b, panel, VERB, tier, "purple", "In");
+        kit::flip_arrow(b, panel, VERB, tier, false, (ink, &ui::alpha(dim, 0.25)));
         // Responsive: the plate's window takes the width; the remote pins right.
         let stretch = kit::with_sibling(b, panel, tank, -1);
         kit::responsive(b, panel, &stretch);
@@ -249,5 +250,34 @@ pub fn face_at(dark: bool, tier: kit::Tier) -> Face {
     let mut f = kit::reverb_face(kit::tier_file("82-verb-plate", tier, dark), scene);
     f.params.extend(kit::nameplate_params(VERB));
     f.params.extend(kit::time_params(VERB));
+    f.params.extend(kit::flip_params(VERB));
+    f
+}
+
+/// Its back at `tier`: the remote's paint and lettering, no plate — the
+/// advanced controls across it, the nameplate, the bypass and the arrow
+/// where they are on the front.
+#[must_use]
+pub fn back_at(dark: bool, tier: kit::Tier) -> Face {
+    let (paint, ink, dim) = if dark { ("charcoal", "#e6e8eb", "#9aa0a7") } else { ("api", INK, DIM) };
+    let small_room = matches!(tier, kit::Tier::Phone | kit::Tier::Strip);
+    let w = tier.lane_w();
+    let scene = kit::tier_lane("Plate", tier, |b, root| {
+        let panel = ui::panel(b, root, "panel.painted", paint, w, kit::H, "none");
+        let knobs = [("size", "Size"), ("damping", "HF Damp"), ("modulation", "Mod"), ("low_cut", "Low Cut"), ("high_cut", "High Cut"), ("duck", "Duck"), ("tone", "Tone"), ("duck_threshold", "Duck Thr"), ("duck_release", "Duck Rel"), ("pan_a", "Pan")];
+        kit::back_knobs(b, panel, tier, &knobs, ink, |b, p, id, legend, d, (cx, cy)| {
+            let k = Dial::new("knob.collet", "black", d, ink, dim).legend(if small_room { 10.5 } else { 7.5 });
+            ui::dial(b, p, &a(id), legend, cx, cy, &k);
+        });
+        let (np_h, title_w, preset_w, size) = if small_room { (30.0, 84.0, 220.0, 12.0) } else { (26.0, 76.0, 200.0, 10.0) };
+        kit::nameplate_top_right(b, panel, VERB, tier, (if small_room { 8.0 } else { 12.0 }, np_h), title_w, preset_w, size, (if dark { kit::PURPLE_LAMP } else { "#6a3fc4" }, dim), |b, t| {
+            ui::plain(b, t, "Plate", 30.0, np_h / 2.0, if small_room { 20.0 } else { 18.0 }, ink, 800.0);
+        });
+        kit::face_bypass(b, panel, VERB, tier, "purple", "In");
+        kit::flip_arrow(b, panel, VERB, tier, true, (ink, &ui::alpha(dim, 0.25)));
+    });
+    let mut f = kit::reverb_face(kit::tier_file("82-verb-plate-back", tier, dark), scene);
+    f.params.extend(kit::nameplate_params(VERB));
+    f.params.extend(kit::flip_params(VERB));
     f
 }

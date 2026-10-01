@@ -24,6 +24,11 @@ pub fn phone_faces(dark: bool) -> Vec<(usize, Face)> {
     vec![(0, tape::face_at(dark, super::kit::Tier::Phone)), (2, analog::face_at(dark, super::kit::Tier::Phone))]
 }
 
+/// The backs there are (the advanced controls), by algorithm, at `t`.
+pub fn back_faces(dark: bool, t: super::kit::Tier) -> Vec<(usize, Face)> {
+    vec![(0, tape::back_at(dark, t)), (2, analog::back_at(dark, t))]
+}
+
 pub fn faces(dark: bool) -> Vec<Face> {
     vec![tape::face(dark), digital::face(dark), analog::face(dark), lo_fi::face(dark), shimmer::face(dark), reverse::face(dark), ice::face(dark), rhythm::face(dark), drum::face(dark), oil_can::face(dark), multitap::face(dark), spectral::face(dark), filter::face(dark)]
 }

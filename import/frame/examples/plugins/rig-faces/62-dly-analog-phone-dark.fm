@@ -154,6 +154,11 @@
           <Rectangle name="pressed" id="a1fb8d9e-3bdf-50c4-b729-dbf571e0093a" x=6.470588235294118 y=6.470588235294118 w=44 h=44 radius=4.529411764705882 fill={[{"kind":{"LinearGradient":{"stops":[{"color":"#000000a6","position":0.0},{"color":"#00000033","position":0.28},{"color":"#00000000","position":0.8},{"color":"#ffffff1f","position":1.0}],"transform":{"a":1.6653345369377348e-16,"b":-1.0,"c":1.0,"d":1.6653345369377348e-16,"tx":1.0,"ty":-1.942890293094024e-16}}}}]} effects={[{"color":"#0000008c","kind":"InnerShadow","offset_y":1.9411764705882355,"radius":3.623529411764706},{"color":"#ffffff1a","kind":"InnerShadow","offset_y":-1.2941176470588236,"radius":0.0}]} />
           <Text name="legend" id="37fd750d-9049-526f-89c4-ab226cbc5e19" x=3.8823529411764706 y=20.946588235294115 w=49.1764705882353 h=15 fill="#1d1f22" size=11.064705882352943 weight=800 case="upper" text-align="center">On</Text>
         </Frame>
+        <Frame name="flip" id="3eb05ac2-1d04-529e-b6f4-941db5790b36" x=698 y=136 w=52 h=22 resize-x="right" control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Param":{"addr":"dly/flip"}}},"kind":{"Button":{"mode":"Momentary"}},"slots":[]}}>
+          <Rectangle name="well" id="a8251b60-36f7-5837-9854-34b91ff87565" w=52 h=22 radius=11 fill="#7f93bd4d" />
+          <Text name="silk" id="8bcf300c-79ab-5b77-a785-6a0da0d1072f" x=-2.1799999999999997 y=4.539999999999999 w=46.36 h=13 fill="#e6eeff" size=9.5 weight=800 letter-spacing=0.76 case="upper" text-align="center">More</Text>
+          <Vector name="chevron" id="bea58d99-1d96-5915-b654-4e03ea9f062b" x=38.5 y=9 w=7 h=4 stroke="#e6eeff" stroke-weight=1.4 stroke-cap="round" stroke-join="round" geometry="M 0.000 0.000 L 3.500 4.000 L 7.000 0.000 " />
+        </Frame>
       </Frame>
     </Frame>
   </Page>

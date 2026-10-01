@@ -152,8 +152,9 @@ pub fn face_at(dark: bool, tier: kit::Tier) -> Face {
             let (xs, ky, kd) = kit::PHONE_KNOBS;
             for (i, (id, legend, warm)) in [("feedback", "Repeats", false), ("mod_depth", "Tape-Mod", false), ("level", "Level", true)].into_iter().enumerate() {
                 let (x, cy) = (xs[i] - b3x, ky - y);
-                look::knob(b, bay3, if warm { &orange } else { &black }, &a(id), kd, (x, cy), 11, ink, false);
-                parts::centred(b, bay3, legend, (x, cy + kd / 2.0 + 18.0), Type::new(10.5, ink, 600.0).track(0.06).upper());
+                let k = look::knob(b, bay3, if warm { &orange } else { &black }, &a(id), kd, (x, cy), 11, ink, false);
+                ui::add_value(b, k, 10.0, "#6b6e74");
+                parts::centred(b, bay3, legend, (x, cy + kd / 2.0 + 30.0), Type::new(10.5, ink, 600.0).track(0.06).upper());
             }
         } else {
             // Bay 1: the letters, the VU, the display.
@@ -225,11 +226,52 @@ pub fn face_at(dark: bool, tier: kit::Tier) -> Face {
         // The power key at the bypass spot.
         let (bx, by, bd) = kit::bypass_spot(tier);
         glow_key(b, unit, &a("on"), bd, (bx, by), ORANGE);
+        kit::flip_arrow(b, unit, DLY, tier, false, (ink, "#00000022"));
         // Responsive: the picture takes the width.
         kit::responsive(b, unit, &[picture]);
     });
     let mut f = kit::delay_face(kit::tier_file("60-dly-tape", tier, dark), scene);
     f.params.extend(kit::nameplate_params(DLY));
     f.params.extend(kit::time_params(DLY));
+    f.params.extend(kit::flip_params(DLY));
+    f
+}
+
+/// Its back at `tier`: the grey unit in one bay, no VU or dial — the
+/// advanced controls across it in the unit's knurled knobs, the
+/// nameplate, the power key and the arrow where they are on the front.
+#[must_use]
+pub fn back_at(dark: bool, tier: kit::Tier) -> Face {
+    let (ink, grey, unit_fill) = if dark {
+        ("#e8e9eb", [(0.0, "#3a3c41"), (1.0, "#2b2d31")], [(0.0, "#1f2023"), (1.0, "#17181a")])
+    } else {
+        (INK, [(0.0, "#e6e7e8"), (1.0, "#cfd0d2")], [(0.0, "#bfc0c2"), (1.0, "#a9aaac")])
+    };
+    let small_room = matches!(tier, kit::Tier::Phone | kit::Tier::Strip);
+    let w = tier.lane_w();
+    let scene = kit::tier_lane("Tape", tier, |b, root| {
+        let h = kit::H;
+        let unit = bay(b, root, "Unit", (0.0, 0.0, w, h), &unit_fill);
+        let face = bay(b, unit, "Back", (6.0, 6.0, w - 12.0, h - 12.0), &grey);
+        let black = KnobLook { preset: "knurled", opts: &["color=#1c1c1e", "pointer=#3b82f6", "index=dot", "cap_r=0.9", "height=0.6", "dome=0.08", "edge=0.1", "ribs=48", "rib_depth=0.03", "knurl_band=0.7", "index_w=0.09", "index_in=0.66", "index_out=0.66", "coat=0.5", "rough=0.25", "ticks=none"] };
+        let knobs = [("mod_rate", "Wow Rate"), ("high_pass", "Bass"), ("high_cut", "Treble"), ("duck_sens", "Duck"), ("duck_release", "Duck Rel"), ("pan", "Pan"), ("repeat_dyn", "Dynamics"), ("dry", "Dry")];
+        let legend = if small_room { 10.5 } else { 7.0 };
+        kit::back_knobs(b, unit, tier, &knobs, ink, |b, p, id, name, d, (cx, cy)| {
+            let k = look::knob(b, p, &black, &a(id), d, (cx, cy), 11, ink, false);
+            ui::add_value(b, k, if small_room { 10.0 } else { 7.5 }, "#6b6e74");
+            parts::centred(b, p, name, (cx, cy + d / 2.0 + if small_room { 30.0 } else { 24.0 }), Type::new(legend, ink, 600.0).track(0.06).upper());
+        });
+        let _ = face;
+        let (np_y, np_h, title_w, preset_w, size) = if small_room { (8.0, 30.0, 74.0, 210.0, 12.0) } else { (8.0, 26.0, 66.0, 196.0, 10.0) };
+        kit::nameplate_top_right(b, unit, DLY, tier, (np_y, np_h), title_w, preset_w, size, (if dark { kit::BLUE_LIGHT } else { kit::BLUE_DEEP }, "#6b6e74"), |b, t| {
+            parts::centred(b, t, "Tape", (title_w / 2.0 - 6.0, np_h / 2.0), Type::new(if small_room { 22.0 } else { 18.0 }, ink, 400.0).family(draw::family::SAIRA));
+        });
+        let (bx, by, bd) = kit::bypass_spot(tier);
+        glow_key(b, unit, &a("on"), bd, (bx, by), ORANGE);
+        kit::flip_arrow(b, unit, DLY, tier, true, (ink, "#00000022"));
+    });
+    let mut f = kit::delay_face(kit::tier_file("60-dly-tape-back", tier, dark), scene);
+    f.params.extend(kit::nameplate_params(DLY));
+    f.params.extend(kit::flip_params(DLY));
     f
 }
