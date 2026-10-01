@@ -59,24 +59,33 @@ struct Instance<'a> {
 }
 
 /// Quantize a size to the layout cache's key (a hundredth of a pixel).
-fn key(size: (f64, f64)) -> (u64, u64) {
+fn key(size: (f64, f64), layout: &[(u32, Value)]) -> crate::plan::PlanKey {
     let q = |v: f64| (v.max(0.0) * 100.0).round() as u64;
-    (q(size.0), q(size.1))
+    let bits = |v: &Value| match v {
+        Value::Num(n) => n.to_bits(),
+        Value::Bool(b) => u64::from(*b),
+        _ => u64::MAX,
+    };
+    (q(size.0), q(size.1), layout.iter().map(|(_, v)| bits(v)).collect())
 }
 
 impl Theme {
-    fn plan(&self, role: &str, size: (f64, f64)) -> Option<(&Role, Arc<Plan>)> {
+    fn plan(&self, role: &str, size: (f64, f64), fields: &dyn Fields) -> Option<(&Role, Arc<Plan>)> {
         let r = self.roles.get(role)?;
+        let layout: Vec<(u32, Value)> = self.schema.layout_slots().map(|s| (s, fields.field(s))).collect();
         let mut plans = r.plans.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
-        let plan = plans.entry(key(size)).or_insert_with(|| Arc::new(Plan::build(r, size, &self.font))).clone();
+        let plan = plans
+            .entry(key(size, &layout))
+            .or_insert_with(|| Arc::new(Plan::build(r, size, &layout, &self.font)))
+            .clone();
         drop(plans);
         Some((r, plan))
     }
 
     /// Lay `role` out at `size` now, so the first [`Theme::record`] at that
     /// size does not pay for it.
-    pub fn prepare(&self, role: &str, size: (f64, f64)) {
-        let _ = self.plan(role, size);
+    pub fn prepare(&self, role: &str, size: (f64, f64), fields: &dyn Fields) {
+        let _ = self.plan(role, size, fields);
     }
 
     /// Forget every cached layout (they are rebuilt on use).
@@ -90,7 +99,7 @@ impl Theme {
     /// data — the picture a host records once and replays — into `canvas`
     /// at `at` (canvas ← instance space). Returns false for an unknown role.
     pub fn record(&self, role: &str, size: (f64, f64), fields: &dyn Fields, canvas: &mut dyn Canvas, at: Affine) -> bool {
-        let Some((r, plan)) = self.plan(role, size) else { return false };
+        let Some((r, plan)) = self.plan(role, size, fields) else { return false };
         for seg in &plan.record {
             match seg {
                 Seg::Picture(rec) => rec.replay(canvas, at),
@@ -103,7 +112,7 @@ impl Theme {
     /// Paint the parts of one instance of `role` that read live data, over
     /// its recording. Cheap when there are none ([`Theme::has_live`]).
     pub fn live(&self, role: &str, size: (f64, f64), fields: &dyn Fields, canvas: &mut dyn Canvas, at: Affine) -> bool {
-        let Some((r, plan)) = self.plan(role, size) else { return false };
+        let Some((r, plan)) = self.plan(role, size, fields) else { return false };
         let instance = Instance { role: r, plan: &plan, size, fields };
         for unit in &plan.live {
             self.paint_unit(&instance, unit, canvas, at);
@@ -115,7 +124,7 @@ impl Theme {
     /// space: the topmost one shown there for this instance's data.
     #[must_use]
     pub fn hit(&self, role: &str, size: (f64, f64), fields: &dyn Fields, point: Point) -> Option<String> {
-        let (r, plan) = self.plan(role, size)?;
+        let (r, plan) = self.plan(role, size, fields)?;
         plan.targets
             .iter()
             .find(|t| moved(r, &plan, &t.movers, size, fields).is_some_and(|d| t.rect.contains(point - d)))
@@ -126,7 +135,7 @@ impl Theme {
     /// `None` when it is hidden or there is no such target.
     #[must_use]
     pub fn target_rect(&self, role: &str, size: (f64, f64), fields: &dyn Fields, name: &str) -> Option<Rect> {
-        let (r, plan) = self.plan(role, size)?;
+        let (r, plan) = self.plan(role, size, fields)?;
         let t = plan.targets.iter().find(|t| t.name == name)?;
         let d = moved(r, &plan, &t.movers, size, fields)?;
         Some(t.rect + d)
@@ -134,12 +143,21 @@ impl Theme {
 
     /// Every hit target's name, topmost first.
     #[must_use]
-    pub fn targets(&self, role: &str, size: (f64, f64)) -> Vec<String> {
-        self.plan(role, size).map(|(_, p)| p.targets.iter().map(|t| t.name.clone()).collect()).unwrap_or_default()
+    pub fn targets(&self, role: &str, size: (f64, f64), fields: &dyn Fields) -> Vec<String> {
+        self.plan(role, size, fields).map(|(_, p)| p.targets.iter().map(|t| t.name.clone()).collect()).unwrap_or_default()
     }
 
     fn paint_unit(&self, instance: &Instance<'_>, unit: &Unit, canvas: &mut dyn Canvas, at: Affine) {
         let Instance { role: r, plan, size, fields } = *instance;
+        // A hidden unit (a state variant not in that state) costs only
+        // this.
+        for &i in &unit.gate {
+            let b = &r.binds[i];
+            let parent = plan.parents.get(&b.node).copied().unwrap_or(size);
+            if b.expr.eval(&InstanceScope { size, parent, fields }).truthy() == Some(false) {
+                return;
+            }
+        }
         // Hidden or moved by an ancestor.
         let Some(outer) = moved(r, plan, &unit.outer, size, fields) else { return };
 

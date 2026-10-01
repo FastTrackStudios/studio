@@ -25,12 +25,14 @@ use theme_expr::{Scope, Value};
 use crate::compile::{Bound, Class, Prop, apply};
 
 /// The box a size binding sees: the instance's, and the node's parent's.
-struct BoxScope {
+struct BoxScope<'a> {
     size: (f64, f64),
     parent: (f64, f64),
+    /// The layout fields' values, by slot.
+    layout: &'a [(u32, Value)],
 }
 
-impl Scope for BoxScope {
+impl Scope for BoxScope<'_> {
     fn size(&self) -> (f64, f64) {
         self.size
     }
@@ -39,21 +41,27 @@ impl Scope for BoxScope {
         self.parent
     }
 
-    fn field(&self, _: u32) -> Value {
-        Value::Missing
+    fn field(&self, slot: u32) -> Value {
+        self.layout.iter().find(|(s, _)| *s == slot).map_or(Value::Missing, |(_, v)| v.clone())
     }
 }
 
 /// Lay `scene` (a role's subtree, rooted at `root`) out at `size`.
 /// Returns each node's parent's laid-out size, which the later passes'
 /// `pw`/`ph` read.
-pub(crate) fn lay_out(scene: &mut Scene, root: NodeId, size: (f64, f64), binds: &[Bound]) -> HashMap<NodeId, (f64, f64)> {
+pub(crate) fn lay_out(
+    scene: &mut Scene,
+    root: NodeId,
+    size: (f64, f64),
+    layout: &[(u32, Value)],
+    binds: &[Bound],
+) -> HashMap<NodeId, (f64, f64)> {
     let mut by_node: HashMap<NodeId, Vec<&Bound>> = HashMap::new();
     for b in binds.iter().filter(|b| b.class == Class::Size) {
         by_node.entry(b.node).or_default().push(b);
     }
     let mut parents = HashMap::new();
-    let mut cx = Cx { scene, size, by_node, parents: &mut parents };
+    let mut cx = Cx { scene, size, layout, by_node, parents: &mut parents };
     // The root's box is the instance's, whatever it was drawn at.
     cx.place(root, size);
     parents.insert(root, size);
@@ -63,6 +71,7 @@ pub(crate) fn lay_out(scene: &mut Scene, root: NodeId, size: (f64, f64), binds: 
 struct Cx<'a, 'b> {
     scene: &'a mut Scene,
     size: (f64, f64),
+    layout: &'a [(u32, Value)],
     by_node: HashMap<NodeId, Vec<&'b Bound>>,
     parents: &'a mut HashMap<NodeId, (f64, f64)>,
 }
@@ -77,7 +86,7 @@ impl Cx<'_, '_> {
     /// Apply `id`'s size bindings, with `parent` as its parent's box.
     fn size_binds(&mut self, id: NodeId, parent: (f64, f64)) {
         let Some(binds) = self.by_node.get(&id) else { return };
-        let scope = BoxScope { size: self.size, parent };
+        let scope = BoxScope { size: self.size, parent, layout: self.layout };
         let values: Vec<(Prop, Value)> = binds.iter().map(|b| (b.prop, b.expr.eval(&scope))).collect();
         if let Some(n) = self.scene.node_mut(id) {
             for (prop, v) in &values {

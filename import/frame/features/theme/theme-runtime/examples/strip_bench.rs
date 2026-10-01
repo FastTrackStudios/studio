@@ -44,7 +44,7 @@ fn main() {
         vec![
             Value::text(&format!("Track {i}")),
             Value::Color(Rgba::from_hex("#3366cc").unwrap()),
-            Value::Bool(i % 3 == 0),
+            Value::Bool(i.is_multiple_of(3)),
             Value::Num((i % 10) as f64 / 10.0),
             Value::Num((i % 7) as f64 / 7.0),
         ]
@@ -53,7 +53,7 @@ fn main() {
     let size = (86.0, 400.0);
 
     let t = Instant::now();
-    theme.prepare("mcp.strip", size);
+    theme.prepare("mcp.strip", size, &fields(0));
     println!("layout, once per size:   {:>8.1} µs", t.elapsed().as_secs_f64() * 1e6);
 
     for pass in ["record", "live"] {

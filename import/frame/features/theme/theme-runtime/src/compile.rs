@@ -9,7 +9,7 @@ use document_proto::{Color, Node, NodeId, NodeKind, Paint, Scene};
 use render_canvas::Font;
 use theme_expr::{Expr, Value};
 
-use crate::plan::Plan;
+use crate::plan::{Plan, PlanKey};
 use crate::schema::Schema;
 
 /// Something wrong with a theme, located as far as it can be.
@@ -118,7 +118,7 @@ pub(crate) struct Role {
     /// Every binding that is not a constant.
     pub(crate) binds: Vec<Bound>,
     /// Layouts by size, built on first use.
-    pub(crate) plans: Mutex<HashMap<(u64, u64), Arc<Plan>>>,
+    pub(crate) plans: Mutex<HashMap<PlanKey, Arc<Plan>>>,
 }
 
 /// A compiled theme: one document, one mode, one host schema.
@@ -356,7 +356,7 @@ fn compile_role(
             let refs = expr.refs();
             let class = if refs.slots.iter().any(|s| schema.is_live(*s)) {
                 Class::Live
-            } else if refs.slots.is_empty() && !painted_only {
+            } else if refs.slots.iter().all(|s| schema.is_layout(*s)) && !painted_only {
                 Class::Size
             } else {
                 Class::Static

@@ -25,6 +25,10 @@ use render_canvas::{Font, Recording, paint_filtered};
 use crate::compile::{Class, Prop, Role};
 use crate::layout::lay_out;
 
+/// A layout's cache key: the box, and the layout fields' values (as bits:
+/// a layout is reused only for exactly the values it was built with).
+pub(crate) type PlanKey = (u64, u64, Vec<u64>);
+
 pub(crate) struct Plan {
     /// Each node's pre-order span `[start, end)` within the role.
     pub(crate) order: HashMap<NodeId, (u32, u32)>,
@@ -43,6 +47,9 @@ pub(crate) enum Seg {
 }
 
 pub(crate) struct Unit {
+    /// The root's own `visible` bindings: checked before anything is
+    /// cloned, so a hidden state variant costs one evaluation.
+    pub(crate) gate: Vec<usize>,
     /// The unit's primitives, wrapped in the structure that encloses them.
     pub(crate) prims: Vec<PaintPrimitive>,
     /// Bindings on the unit's nodes (indices into the role's binds).
@@ -60,9 +67,9 @@ pub(crate) struct Target {
 }
 
 impl Plan {
-    pub(crate) fn build(role: &Role, size: (f64, f64), font: &Font) -> Plan {
+    pub(crate) fn build(role: &Role, size: (f64, f64), layout: &[(u32, theme_expr::Value)], font: &Font) -> Plan {
         let mut scene: Scene = role.scene.clone();
-        let parents = lay_out(&mut scene, role.root, size, &role.binds);
+        let parents = lay_out(&mut scene, role.root, size, layout, &role.binds);
         let prims = render::build_scene_primitives(&scene, role.root);
         let boxes = render::build_scene_layout_boxes(&scene, role.root);
 
@@ -131,6 +138,14 @@ impl Plan {
                 .map(|(i, _)| i)
                 .collect()
         };
+        let gate_of = |root: NodeId| -> Vec<usize> {
+            binds
+                .iter()
+                .enumerate()
+                .filter(|(_, b)| b.node == root && b.prop == Prop::Visible && b.class != Class::Size)
+                .map(|(i, _)| i)
+                .collect()
+        };
         let movers_of = |node: NodeId, strict: bool| -> Vec<usize> {
             binds
                 .iter()
@@ -147,6 +162,7 @@ impl Plan {
             .map(|&root| {
                 let range = range_of(&prims, |p| in_subtree(p, root));
                 Unit {
+                    gate: gate_of(root),
                     prims: wrap(&prims, range, |_| true),
                     inner: binds_within(root, true, true),
                     outer: movers_of(root, true),
@@ -178,6 +194,7 @@ impl Plan {
                 flush(&mut run, &mut record);
                 let range = range_of(&prims, |q| in_subtree(q, root));
                 record.push(Seg::Unit(Unit {
+                    gate: gate_of(root),
                     prims: wrap(&prims, range.clone(), |q| !in_live(owner(q))),
                     inner: binds_within(root, true, false),
                     outer: movers_of(root, true),
@@ -189,6 +206,7 @@ impl Plan {
                 flush(&mut run, &mut record);
                 let range = range_of(&prims, |q| is_leaf(q) && owner(q) == o);
                 record.push(Seg::Unit(Unit {
+                    gate: gate_of(o),
                     prims: wrap(&prims, range.clone(), |_| true),
                     inner: binds_within(o, false, false),
                     outer: movers_of(o, true),

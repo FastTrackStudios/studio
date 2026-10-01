@@ -97,7 +97,7 @@ fn it_compiles_with_its_roles_and_targets() {
     assert_eq!(t.authored_size("mcp.strip"), Some((86.0, 300.0)));
     assert!(t.has_live("mcp.strip"));
     // Topmost first.
-    assert_eq!(t.targets("mcp.strip", (86.0, 300.0)), ["name", "fader", "arm", "solo", "mute"]);
+    assert_eq!(t.targets("mcp.strip", (86.0, 300.0), &track("Vox", false, 0.0, 0.0)), ["name", "fader", "arm", "solo", "mute"]);
 }
 
 #[test]
@@ -271,4 +271,22 @@ fn an_inset_reveals_a_fixed_picture_and_a_dash_draws_part_of_a_stroke() {
     assert_eq!(p.dashes.first().and_then(|d| d.first()).copied(), Some(2.5));
     // The host drew the text, at the bound size.
     assert_eq!(p.sizes, [5.0]);
+}
+
+#[test]
+fn a_layout_field_shapes_the_layout_like_the_box_does() {
+    let src = r##"<Document>
+  <Page name="strip">
+    <Frame name="Strip" w=86 h=300>
+      <Frame name="@pan" y=40 w=20 h=20 bind:visible="mixer.h >= 250" />
+    </Frame>
+  </Page>
+</Document>"##;
+    let t = Theme::from_markup(src, Schema::new().layout("mixer.h"), None).unwrap();
+    let pan = |mixer_h: f64| t.target_rect("strip", (86.0, 200.0), &vec![Value::Num(mixer_h)], "pan");
+    // The same box, laid out against two mixer heights.
+    assert!(pan(300.0).is_some());
+    assert!(pan(200.0).is_none());
+    // A layout binding is not a per-instance one: nothing reads it live.
+    assert!(!t.has_live("strip"));
 }
