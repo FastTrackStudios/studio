@@ -330,24 +330,28 @@ pub fn face_bypass(b: &mut Builder<'_>, parent: NodeId, ns: &str, tier: Tier, va
 /// power key).
 #[must_use]
 pub fn bypass_spot(tier: Tier) -> (f64, f64, f64) {
-    let (d, inset) = if matches!(tier, Tier::Phone | Tier::Strip) { (44.0, 36.0) } else { (28.0, 26.0) };
+    // In from the edge far enough for the flip arrow beside it.
+    let (d, inset) = if matches!(tier, Tier::Phone | Tier::Strip) { (44.0, 78.0) } else { (28.0, 56.0) };
     (tier.lane_w() - inset, H * 0.56, d)
 }
 
-/// The arrow that turns a Time face over: under the bypass, the same at
+/// The arrow that turns a Time face over: right of the bypass, the same at
 /// every face — on the front "More" pointing down (its back carries the
 /// advanced controls), on the back "Back" pointing up. A press on
 /// `<ns>/flip`; the host shows the other side.
 pub fn flip_arrow(b: &mut Builder<'_>, parent: NodeId, ns: &str, tier: Tier, back: bool, (ink, well): (&str, &str)) -> NodeId {
-    let (bx, _, _) = bypass_spot(tier);
+    let (bx, by, bd) = bypass_spot(tier);
     let small_room = matches!(tier, Tier::Phone | Tier::Strip);
-    let (w, h, size) = if small_room { (52.0, 22.0, 9.5) } else { (40.0, 16.0, 7.0) };
-    let g = b.add(parent, draw::frame("flip", bx - w / 2.0, H - h - 6.0, w, h));
-    b.add(g, draw::rounded(draw::rect("well", 0.0, 0.0, w, h, draw::solid(well)), h / 2.0));
-    ui::silk(b, g, if back { "Back" } else { "More" }, w / 2.0 - 5.0, h / 2.0, size, ink, 800.0);
-    let (cx, cy) = (w - 10.0, h / 2.0);
-    let dy = if back { -2.0 } else { 2.0 };
-    ui::line(b, g, "chevron", &[(cx - 3.5, cy - dy), (cx, cy + dy), (cx + 3.5, cy - dy)], 1.4, ink);
+    let size = if small_room { 9.0 } else { 6.5 };
+    // Right of the bypass, as tall: its word over a chevron.
+    let x = bx + bd / 2.0 + 6.0;
+    let (w, h) = (tier.lane_w() - 8.0 - x, bd);
+    let g = b.add(parent, draw::frame("flip", x, by - h / 2.0, w, h));
+    b.add(g, draw::rounded(draw::rect("well", 0.0, 0.0, w, h, draw::solid(well)), 6.0));
+    ui::silk(b, g, if back { "Back" } else { "More" }, w / 2.0, h * 0.34, size, ink, 800.0);
+    let (cx, cy) = (w / 2.0, h * 0.68);
+    let dy = if back { -2.5 } else { 2.5 };
+    ui::line(b, g, "chevron", &[(cx - 4.0, cy - dy), (cx, cy + dy), (cx + 4.0, cy - dy)], 1.5, ink);
     b.controls.insert(g, Control::new(ControlKind::Button { mode: ButtonMode::Momentary }).bound(ui::bind(&a(ns, "flip"))));
     g
 }

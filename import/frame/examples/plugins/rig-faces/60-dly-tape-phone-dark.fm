@@ -150,7 +150,7 @@
           <Text name="print" id="03bfad3f-0807-5d71-a966-0b75ed50e781" x=-22.68 y=0.03999999999999915 w=107.36 h=30 fill="#e8e9eb" font="Saira" size=22 weight=400 text-align="center">Tape</Text>
           <Vector name="caret" id="a1115de3-3583-5d6c-992a-1042727573aa" x=64 y=13 w=8 h=4 stroke="#6b6e74" stroke-weight=1.4 stroke-cap="round" stroke-join="round" geometry="M 0.000 0.000 L 4.000 4.000 L 8.000 0.000 " />
         </Frame>
-        <Frame name="dly/on" id="60c6a5c3-486b-584a-b46b-5d1456b5e300" x=695.4 y=63.24 w=57.2 h=57.2 resize-x="right" control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Param":{"addr":"dly/on"}}},"kind":{"Button":{"mode":"Toggle"}},"slots":[{"node":"1f9c1764-255e-5c53-be4b-f483672d5d16","role":"Led"}]}}>
+        <Frame name="dly/on" id="60c6a5c3-486b-584a-b46b-5d1456b5e300" x=653.4 y=63.24 w=57.2 h=57.2 resize-x="right" control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Param":{"addr":"dly/on"}}},"kind":{"Button":{"mode":"Toggle"}},"slots":[{"node":"1f9c1764-255e-5c53-be4b-f483672d5d16","role":"Led"}]}}>
           <Rectangle name="bezel" id="a07d2704-dd24-5814-ba6d-973b84fe1701" x=2.640000000000004 y=2.640000000000004 w=51.919999999999995 h=51.919999999999995 radius=7.700000000000001 fill={[{"kind":{"LinearGradient":{"stops":[{"color":"#fbfbf9","position":0.0},{"color":"#b9bab8","position":1.0}],"transform":{"a":0.4383715832837809,"b":-1.2044160264027588,"c":1.2044160264027588,"d":0.4383715832837809,"tx":0.883022221559489,"ty":-0.32139380484326985}}}}]} effects={[{"color":"#00000059","kind":"DropShadow","offset_y":2.2,"radius":4.4}]} />
           <Rectangle name="cap" id="0cd98331-e689-5068-a11b-4fa067447abf" x=6.600000000000001 y=6.600000000000001 w=44 h=44 radius=5.5 fill={[{"kind":{"RadialGradient":{"stops":[{"color":"#295bac","position":0.0},{"color":"#1b3a6f","position":1.0}],"transform":{"a":1.4,"b":0.0,"c":0.0,"d":1.4,"tx":-0.19999999999999996,"ty":-0.19999999999999996}}}}]} effects={[{"color":"#00000066","kind":"InnerShadow","offset_y":1.6500000000000001,"radius":3.3000000000000003}]} />
           <Frame name="lit" id="1f9c1764-255e-5c53-be4b-f483672d5d16" x=6.600000000000001 y=6.600000000000001 w=44 h=44 radius=5.5 emission={{"color":"#3b82f6","intensity":0.6,"radius":22.0}}>
@@ -158,10 +158,10 @@
             <Rectangle name="core" id="004cc885-8fa9-5c3b-a692-dab4de3bd598" x=9.68 y=9.68 w=24.64 h=24.64 radius=3.3000000000000003 fill={[{"kind":{"RadialGradient":{"stops":[{"color":"#ffffff","position":0.0},{"color":"#9dc1fb","position":1.0}],"transform":{"a":1.2,"b":0.0,"c":0.0,"d":1.2,"tx":-0.09999999999999998,"ty":-0.09999999999999998}}}}]} effects={[{"color":"#00000040","kind":"InnerShadow","offset_y":1.0,"radius":2.0}]} />
           </Frame>
         </Frame>
-        <Frame name="flip" id="0a5be6f1-ec22-5de6-b593-18b95198c795" x=698 y=136 w=52 h=22 resize-x="right" control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Param":{"addr":"dly/flip"}}},"kind":{"Button":{"mode":"Momentary"}},"slots":[]}}>
-          <Rectangle name="well" id="4995eead-4767-51b7-845c-c58bf6ca0a2b" w=52 h=22 radius=11 fill="#00000022" />
-          <Text name="silk" id="de692731-d3c4-5026-9ba2-05d4e4d76197" x=-2.1799999999999997 y=4.539999999999999 w=46.36 h=13 fill="#e8e9eb" size=9.5 weight=800 letter-spacing=0.76 case="upper" text-align="center">More</Text>
-          <Vector name="chevron" id="436e46ad-0d9d-5877-acaa-81a492179f62" x=38.5 y=9 w=7 h=4 stroke="#e8e9eb" stroke-weight=1.4 stroke-cap="round" stroke-join="round" geometry="M 0.000 0.000 L 3.500 4.000 L 7.000 0.000 " />
+        <Frame name="flip" id="0a5be6f1-ec22-5de6-b593-18b95198c795" x=710 y=69.84 w=42 h=44 resize-x="right" control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Param":{"addr":"dly/flip"}}},"kind":{"Button":{"mode":"Momentary"}},"slots":[]}}>
+          <Rectangle name="well" id="4995eead-4767-51b7-845c-c58bf6ca0a2b" w=42 h=44 radius=6 fill="#00000022" />
+          <Text name="silk" id="de692731-d3c4-5026-9ba2-05d4e4d76197" x=-0.9600000000000009 y=8.84 w=43.92 h=13 fill="#e8e9eb" size=9 weight=800 letter-spacing=0.72 case="upper" text-align="center">More</Text>
+          <Vector name="chevron" id="436e46ad-0d9d-5877-acaa-81a492179f62" x=17 y=27.42 w=8 h=5 stroke="#e8e9eb" stroke-weight=1.5 stroke-cap="round" stroke-join="round" geometry="M 0.000 0.000 L 4.000 5.000 L 8.000 0.000 " />
         </Frame>
       </Frame>
     </Frame>
