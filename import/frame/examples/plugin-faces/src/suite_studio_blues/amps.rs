@@ -170,6 +170,52 @@ impl AmpModel {
     }
 }
 
+/// An upright amp's panel (`pw × ph`): the maker's mark across the top,
+/// GAIN and LEVEL under it as big as the panel allows, their names under
+/// them, the pilot jewel at the top right — the same knobs, caps and
+/// lettering as the wide panel, stacked for a narrow one.
+#[allow(clippy::too_many_arguments)]
+fn upright_panel(b: &mut Builder<'_>, plate: NodeId, model: AmpModel, prefix: &str, (pw, ph): (f64, f64), ink: &str, cap: Cap, legend: &Lettering) {
+    let big = (pw * 0.16).min(ph * 0.14);
+    let (lx, ly) = (pw * 0.46, ph * 0.17);
+    match model {
+        AmpModel::SteelStringSinger | AmpModel::DumbleOds => {
+            let script = Lettering::family(family::DANCING_SCRIPT).weight(700.0);
+            set(b, plate, "Dumble", lx, ly, big * 1.3, "#0e0e0e", &script, 0.0);
+        }
+        AmpModel::Vibroverb | AmpModel::DeluxeReverb | AmpModel::TwinReverb => {
+            let script = Lettering::family(family::DANCING_SCRIPT).weight(700.0);
+            set(b, plate, "Fender", lx, ly, big * 1.3, "#f4f4f2", &script, 0.0);
+        }
+        AmpModel::Ac30 => {
+            set(b, plate, "VOX", lx, ly, big * 1.1, "#e8c36a", &Lettering::family(family::INTER).weight(900.0), 0.18);
+        }
+        AmpModel::TwoRock => {
+            set(b, plate, "TWO-ROCK", lx, ly, big * 0.8, "#d9d9dc", &Lettering::family(family::OSWALD).weight(700.0).italic(), 0.06);
+        }
+    }
+    jewel(b, plate, &format!("{prefix}/on"), "red", (pw * 0.07).min(ph * 0.08), pw * 0.9, ly);
+    let d = (pw * 0.34).min(ph * 0.42);
+    let numbered: &[&str] = &["1", "2", "3", "4", "5", "6", "7", "8", "9", "10"];
+    let dots: &[&str] = &["", "", "", "", "", "", "", "", "", "", ""];
+    for (i, (id, name)) in [("drive", "GAIN"), ("level", "LEVEL")].into_iter().enumerate() {
+        let addr = format!("{prefix}/{id}");
+        let (cx, cy) = (pw * (0.27 + 0.46 * i as f64), ph * 0.56);
+        match model {
+            AmpModel::Vibroverb | AmpModel::DeluxeReverb | AmpModel::TwinReverb => {
+                knob_scaled(b, plate, cap, &addr, name, d * 0.9, cx, cy, numbered, ink);
+            }
+            AmpModel::SteelStringSinger | AmpModel::DumbleOds => {
+                knob_scaled(b, plate, cap, &addr, name, d * 0.9, cx, cy, dots, ink);
+            }
+            AmpModel::TwoRock | AmpModel::Ac30 => {
+                knob(b, plate, cap, &addr, name, d, cx, cy);
+            }
+        }
+        set(b, plate, name, cx, ph * 0.9, (ph * 0.075).min(pw * 0.06), ink, legend, 0.08);
+    }
+}
+
 /// An amp as a rig row shows it, `w × h`: no handle, and a panel carrying
 /// only GAIN and LEVEL (on `<prefix>/gain`, `<prefix>/level`), the logo
 /// and the pilot jewel (`<prefix>/on`) over its cloth. The tone stack and
@@ -177,10 +223,21 @@ impl AmpModel {
 /// zoomed-in view.
 #[must_use]
 pub fn amp_compact(model: AmpModel, prefix: &str, w: f64, h: f64) -> Face {
+    amp_compact_for(model, prefix, w, h, false)
+}
+
+/// [`amp_compact`] for a phone (`phone`): the controls take two thirds of
+/// the amp whatever its proportion (the grille a strip), upright for a
+/// narrow box, the knobs no bigger than a hand needs.
+#[must_use]
+pub fn amp_compact_for(model: AmpModel, prefix: &str, w: f64, h: f64, phone: bool) -> Face {
     let scene = canvas(model.short(), |b, root| {
         let mut spec = CabinetSpec::new(if model.blackface() || model == AmpModel::Ac30 { Kind::Combo } else { Kind::Head }, w, h);
         spec.handle = Handle::None;
-        spec.face_frac = 0.48;
+        // Upright (a phone's three across): the controls take the most of
+        // it, the grille a strip under them.
+        let upright = w < h * 1.2;
+        spec.face_frac = if upright || phone { 0.66 } else { 0.48 };
         spec.corners = Some("black".into());
         let (ink, cap, legend) = match model {
             AmpModel::SteelStringSinger | AmpModel::DumbleOds => {
@@ -215,7 +272,11 @@ pub fn amp_compact(model: AmpModel, prefix: &str, w: f64, h: f64) -> Face {
             }
         };
         let (plate, _grille, (pw, ph)) = build(b, root, &spec);
-        let d = (ph * 0.58).min(pw * 0.2);
+        if upright {
+            upright_panel(b, plate, model, prefix, (pw, ph), ink, cap, &legend);
+            return;
+        }
+        let d = (ph * 0.58).min(pw * 0.2).min(if phone { 96.0 } else { f64::MAX });
         let numbered: &[&str] = &["1", "2", "3", "4", "5", "6", "7", "8", "9", "10"];
         let dots: &[&str] = &["", "", "", "", "", "", "", "", "", "", ""];
         // Laid out from the knobs' size, not the panel's width: a wider amp

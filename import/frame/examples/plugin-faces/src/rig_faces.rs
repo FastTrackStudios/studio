@@ -77,6 +77,40 @@ fn amp_face_as(model: AmpModel, aspect: f64, variant: bool) -> Face {
     Face { file, plugin: PLUGIN, ..f }
 }
 
+/// An amp upright, for a phone's three across.
+pub const AMP_PHONE: (f64, f64) = (250.0, 300.0);
+
+fn amp_face_phone(model: AmpModel) -> Face {
+    amp_face_phone_as(model, AMP_PHONE.0 / AMP_PHONE.1, false)
+}
+
+/// The phone's proportions, by how many amps share the row: three upright,
+/// two, one across it.
+const AMP_PHONE_ASPECTS: [f64; 3] = [250.0 / 300.0, 375.0 / 300.0, 760.0 / 300.0];
+
+fn amp_face_phone_as(model: AmpModel, aspect: f64, variant: bool) -> Face {
+    let f = amps::amp_compact_for(model, ns(model), AMP_PHONE.1 * aspect, AMP_PHONE.1, true);
+    let base = format!("2{}-amp-{}-phone", AmpModel::EVERY.iter().position(|m| *m == model).unwrap_or(0), ns(model).replace('_', "-"));
+    let file = if variant { format!("{base}@{aspect:.2}") } else { base };
+    Face { file: Box::leak(file.into_boxed_str()), plugin: PLUGIN, ..f }
+}
+
+/// The trio upright, three across a phone.
+fn trio_phone() -> Face {
+    let (aw, gap) = (AMP_PHONE.0, 5.0);
+    let w = 3.0 * aw + 2.0 * gap;
+    let models = [AmpModel::Vibroverb, AmpModel::SteelStringSinger, AmpModel::TwoRock];
+    let faces: Vec<Face> = models.iter().map(|m| amps::amp_compact(*m, "trio", aw, AMP_PHONE.1)).collect();
+    let scene = canvas("John Mayer trio", |b, root| {
+        ui::fit_root(b, root, w, AMP_PHONE.1);
+        for (i, f) in faces.iter().enumerate() {
+            crate::face::embed(b, root, f, (i as f64 * (aw + gap), 0.0, aw, AMP_PHONE.1));
+        }
+    });
+    let params = faces.into_iter().next().map(|f| f.params).unwrap_or_default();
+    Face { file: "27-amp-jm-trio-phone", plugin: PLUGIN, scene, params, streams: Vec::new() }
+}
+
 /// The John Mayer trio as one capture (the '64 Vibroverb, the Dumble
 /// Steel String Singer #002 and the Two-Rock prototype blended): the three
 /// side by side, their GAIN and LEVEL all the one capture's.
@@ -270,6 +304,9 @@ pub fn faces() -> Vec<Face> {
     v.push(post_comp());
     v.extend(POST_COMP_ASPECTS.iter().map(|a| post_comp_as(*a, true)));
     v.extend(AmpModel::EVERY.iter().map(|m| amp_face(*m)));
+    v.extend(AmpModel::EVERY.iter().map(|m| amp_face_phone(*m)));
+    v.extend(AmpModel::EVERY.iter().flat_map(|m| AMP_PHONE_ASPECTS.iter().map(move |a| amp_face_phone_as(*m, *a, true))));
+    v.push(trio_phone());
     v.extend(TRIO_ASPECTS.iter().map(|a| trio_as(*a, true)));
     v.extend(AmpModel::EVERY.iter().flat_map(|m| AMP_ASPECTS.iter().map(move |a| amp_face_as(*m, *a, true))));
     v.extend(crate::rig_amp::faces());
@@ -297,10 +334,12 @@ pub fn manifest() -> String {
     // (`a+b` = every word).
     let t = trio();
     let variants = |faces: Vec<Face>| -> Vec<serde_json::Value> { faces.iter().map(|f| json!({ "face": f.file, "size": size(f) })).collect() };
-    let mut amps = vec![json!({ "match": ["vibroverb+dumble+two-rock"], "face": t.file, "ns": "trio", "name": "JOHN MAYER TRIO", "size": size(&t), "variants": variants(TRIO_ASPECTS.iter().map(|a| trio_as(*a, true)).collect()) })];
+    let tp = trio_phone();
+    let mut amps = vec![json!({ "match": ["vibroverb+dumble+two-rock"], "face": t.file, "ns": "trio", "name": "JOHN MAYER TRIO", "size": size(&t), "variants": variants(TRIO_ASPECTS.iter().map(|a| trio_as(*a, true)).collect()), "tiers": { "phone": { "face": tp.file, "size": size(&tp) } } })];
     amps.extend(AmpModel::EVERY.iter().map(|m| {
         let f = amp_face(*m);
-        json!({ "match": amp_match(*m), "face": f.file, "ns": ns(*m), "name": m.short(), "size": size(&f), "variants": variants(AMP_ASPECTS.iter().map(|a| amp_face_as(*m, *a, true)).collect()) })
+        let p = amp_face_phone(*m);
+        json!({ "match": amp_match(*m), "face": f.file, "ns": ns(*m), "name": m.short(), "size": size(&f), "variants": variants(AMP_ASPECTS.iter().map(|a| amp_face_as(*m, *a, true)).collect()), "tiers": { "phone": { "face": p.file, "size": size(&p), "variants": variants(AMP_PHONE_ASPECTS.iter().map(|a| amp_face_phone_as(*m, *a, true)).collect()) } } })
     }));
     let pre = pre_entries();
     let pre = vec![

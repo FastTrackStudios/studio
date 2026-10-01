@@ -11,6 +11,15 @@
         1180.0,
         392.0
       ],
+      "tiers": {
+        "phone": {
+          "face": "27-amp-jm-trio-phone",
+          "size": [
+            760.0,
+            300.0
+          ]
+        }
+      },
       "variants": [
         {
           "face": "27-amp-jm-trio@2.4",
@@ -118,6 +127,38 @@
         792.0,
         392.0
       ],
+      "tiers": {
+        "phone": {
+          "face": "20-amp-dumble-sss-phone",
+          "size": [
+            250.0,
+            300.0
+          ],
+          "variants": [
+            {
+              "face": "20-amp-dumble-sss-phone@0.83",
+              "size": [
+                250.0,
+                300.0
+              ]
+            },
+            {
+              "face": "20-amp-dumble-sss-phone@1.25",
+              "size": [
+                375.0,
+                300.0
+              ]
+            },
+            {
+              "face": "20-amp-dumble-sss-phone@2.53",
+              "size": [
+                760.0,
+                300.0
+              ]
+            }
+          ]
+        }
+      },
       "variants": [
         {
           "face": "20-amp-dumble-sss@1.6",
@@ -238,6 +279,38 @@
         792.0,
         392.0
       ],
+      "tiers": {
+        "phone": {
+          "face": "21-amp-dumble-ods-phone",
+          "size": [
+            250.0,
+            300.0
+          ],
+          "variants": [
+            {
+              "face": "21-amp-dumble-ods-phone@0.83",
+              "size": [
+                250.0,
+                300.0
+              ]
+            },
+            {
+              "face": "21-amp-dumble-ods-phone@1.25",
+              "size": [
+                375.0,
+                300.0
+              ]
+            },
+            {
+              "face": "21-amp-dumble-ods-phone@2.53",
+              "size": [
+                760.0,
+                300.0
+              ]
+            }
+          ]
+        }
+      },
       "variants": [
         {
           "face": "21-amp-dumble-ods@1.6",
@@ -357,6 +430,38 @@
         792.0,
         392.0
       ],
+      "tiers": {
+        "phone": {
+          "face": "22-amp-vibroverb-phone",
+          "size": [
+            250.0,
+            300.0
+          ],
+          "variants": [
+            {
+              "face": "22-amp-vibroverb-phone@0.83",
+              "size": [
+                250.0,
+                300.0
+              ]
+            },
+            {
+              "face": "22-amp-vibroverb-phone@1.25",
+              "size": [
+                375.0,
+                300.0
+              ]
+            },
+            {
+              "face": "22-amp-vibroverb-phone@2.53",
+              "size": [
+                760.0,
+                300.0
+              ]
+            }
+          ]
+        }
+      },
       "variants": [
         {
           "face": "22-amp-vibroverb@1.6",
@@ -479,6 +584,38 @@
         792.0,
         392.0
       ],
+      "tiers": {
+        "phone": {
+          "face": "23-amp-tworock-phone",
+          "size": [
+            250.0,
+            300.0
+          ],
+          "variants": [
+            {
+              "face": "23-amp-tworock-phone@0.83",
+              "size": [
+                250.0,
+                300.0
+              ]
+            },
+            {
+              "face": "23-amp-tworock-phone@1.25",
+              "size": [
+                375.0,
+                300.0
+              ]
+            },
+            {
+              "face": "23-amp-tworock-phone@2.53",
+              "size": [
+                760.0,
+                300.0
+              ]
+            }
+          ]
+        }
+      },
       "variants": [
         {
           "face": "23-amp-tworock@1.6",
@@ -601,6 +738,38 @@
         792.0,
         392.0
       ],
+      "tiers": {
+        "phone": {
+          "face": "24-amp-deluxe-phone",
+          "size": [
+            250.0,
+            300.0
+          ],
+          "variants": [
+            {
+              "face": "24-amp-deluxe-phone@0.83",
+              "size": [
+                250.0,
+                300.0
+              ]
+            },
+            {
+              "face": "24-amp-deluxe-phone@1.25",
+              "size": [
+                375.0,
+                300.0
+              ]
+            },
+            {
+              "face": "24-amp-deluxe-phone@2.53",
+              "size": [
+                760.0,
+                300.0
+              ]
+            }
+          ]
+        }
+      },
       "variants": [
         {
           "face": "24-amp-deluxe@1.6",
@@ -721,6 +890,38 @@
         792.0,
         392.0
       ],
+      "tiers": {
+        "phone": {
+          "face": "25-amp-twin-phone",
+          "size": [
+            250.0,
+            300.0
+          ],
+          "variants": [
+            {
+              "face": "25-amp-twin-phone@0.83",
+              "size": [
+                250.0,
+                300.0
+              ]
+            },
+            {
+              "face": "25-amp-twin-phone@1.25",
+              "size": [
+                375.0,
+                300.0
+              ]
+            },
+            {
+              "face": "25-amp-twin-phone@2.53",
+              "size": [
+                760.0,
+                300.0
+              ]
+            }
+          ]
+        }
+      },
       "variants": [
         {
           "face": "25-amp-twin@1.6",
@@ -844,6 +1045,38 @@
         792.0,
         392.0
       ],
+      "tiers": {
+        "phone": {
+          "face": "26-amp-ac30-phone",
+          "size": [
+            250.0,
+            300.0
+          ],
+          "variants": [
+            {
+              "face": "26-amp-ac30-phone@0.83",
+              "size": [
+                250.0,
+                300.0
+              ]
+            },
+            {
+              "face": "26-amp-ac30-phone@1.25",
+              "size": [
+                375.0,
+                300.0
+              ]
+            },
+            {
+              "face": "26-amp-ac30-phone@2.53",
+              "size": [
+                760.0,
+                300.0
+              ]
+            }
+          ]
+        }
+      },
       "variants": [
         {
           "face": "26-amp-ac30@1.6",
