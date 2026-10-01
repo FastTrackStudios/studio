@@ -102,6 +102,44 @@ impl Plan {
                 live_roots.push(id);
             }
         }
+        // Paint order survives the split. The live pass paints over the
+        // recording, so a static node drawn AFTER a live one it overlaps
+        // — a knob's centre cap over its face that lights on hover — would
+        // end up under it. Such a node is painted live too, and so is
+        // whatever then follows it.
+        let mut extent: HashMap<NodeId, kurbo::Rect> = HashMap::new();
+        for id in scene.walk(role.root).into_iter().rev() {
+            let own = boxes.get(&id).map(|b| kurbo::Rect::new(b.x, b.y, b.x + b.width, b.y + b.height));
+            let kids = scene.node(id).map(|n| n.children.clone()).unwrap_or_default();
+            let all = kids.iter().filter_map(|k| extent.get(k)).copied().chain(own).reduce(|a, b| a.union(b));
+            if let Some(r) = all {
+                extent.insert(id, r);
+            }
+        }
+        let overlaps = |a: &kurbo::Rect, b: &kurbo::Rect| a.x0 < b.x1 && b.x0 < a.x1 && a.y0 < b.y1 && b.y0 < a.y1;
+        loop {
+            let mut grown = false;
+            for parent in scene.walk(role.root) {
+                let Some(kids) = scene.node(parent).map(|n| n.children.clone()) else { continue };
+                let mut lit: Vec<kurbo::Rect> = Vec::new();
+                for kid in kids {
+                    let Some(r) = extent.get(&kid).copied() else { continue };
+                    let holds_live = live_roots.iter().any(|l| inside(*l, kid) || inside(kid, *l));
+                    if holds_live {
+                        lit.push(r);
+                    } else if lit.iter().any(|l| overlaps(l, &r)) {
+                        live_roots.retain(|l| !inside(*l, kid));
+                        live_roots.push(kid);
+                        lit.push(r);
+                        grown = true;
+                    }
+                }
+            }
+            if !grown {
+                break;
+            }
+        }
+        live_roots.sort_by_key(|id| span(*id).0);
         let in_live = |id: NodeId| live_roots.iter().any(|r| inside(id, *r));
 
         // Record units: static-bound nodes outside the live subtrees.

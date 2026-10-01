@@ -290,3 +290,28 @@ fn a_layout_field_shapes_the_layout_like_the_box_does() {
     // A layout binding is not a per-instance one: nothing reads it live.
     assert!(!t.has_live("strip"));
 }
+
+#[test]
+fn a_static_node_over_a_live_one_stays_over_it() {
+    // The face lights on hover (live); the cap over it is static. Painted
+    // in two passes, the cap would end up under the face.
+    let src = r##"<Document>
+  <Page name="knob">
+    <Frame name="Knob" w=24 h=24>
+      <Ellipse name="Face" x=2 y=2 w=20 h=20 bind:fill="ui.hover ? #ff0000 : #00ff00" />
+      <Ellipse name="Cap" x=8 y=8 w=8 h=8 fill="#0000ff" />
+      <Rectangle name="Elsewhere" x=30 y=0 w=4 h=4 fill="#ffffff" />
+    </Frame>
+  </Page>
+</Document>"##;
+    let t = Theme::from_markup(src, Schema::new().live("ui.hover"), None).unwrap();
+    let fields = vec![Value::Bool(false)];
+    let (mut rec, mut live) = (Fills::default(), Fills::default());
+    t.record("knob", (40.0, 24.0), &fields, &mut rec, Affine::IDENTITY);
+    t.live("knob", (40.0, 24.0), &fields, &mut live, Affine::IDENTITY);
+    // The cap follows the face into the live pass, after it.
+    let order: Vec<&str> = live.0.iter().map(|(h, _)| h.as_str()).collect();
+    assert_eq!(order, ["#00ff00", "#0000ff"]);
+    // What does not overlap stays recorded.
+    assert!(rec.has("#ffffff") && !rec.has("#0000ff"));
+}
