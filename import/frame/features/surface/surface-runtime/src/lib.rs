@@ -15,6 +15,7 @@ pub mod gesture;
 pub mod meter;
 pub mod plot;
 pub mod runtime;
+#[cfg(feature = "rpc")]
 pub mod sync;
 pub mod visual;
 pub mod visual_ui;

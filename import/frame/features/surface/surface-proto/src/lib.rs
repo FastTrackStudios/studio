@@ -81,6 +81,7 @@ impl std::fmt::Display for SurfaceError {
 
 impl std::error::Error for SurfaceError {}
 
+#[cfg(feature = "rpc")]
 pub mod engine {
     //! The engine service. `SurfaceEngine` → `SurfaceEngineClient` /
     //! `SurfaceEngineService` / `surface_engine_serve`, plus the stream
@@ -137,4 +138,5 @@ pub mod engine {
     }
 }
 
+#[cfg(feature = "rpc")]
 pub use engine::*;

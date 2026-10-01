@@ -17,8 +17,10 @@ tokio = { workspace = true, optional = true }
 
 [features]
 default = ["vox"]
+# The async bridge to a `SurfaceEngine` (`sync`).
+rpc = ["surface-proto/rpc"]
 # The vox client as an `Engine` (remote engines).
-vox = ["surface-proto/vox"]
+vox = ["rpc", "surface-proto/vox"]
 # Connect to a remote engine over a WebSocket (`sync::connect_ws`,
 # `sync::connect_ws_stream`) and pump its streams (`sync::Telemetry`).
 remote = ["vox", "dep:architect", "architect/vox", "dep:vox-core", "dep:vox-websocket", "dep:tokio"]
