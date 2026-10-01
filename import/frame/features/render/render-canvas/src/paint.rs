@@ -22,7 +22,7 @@ use render::anyrender_renderer::{
 };
 use render::{PaintPrimitive, Rgba};
 
-use crate::canvas::Canvas;
+use crate::canvas::{Canvas, Recording, TextAlign, TextRun};
 use crate::text::Font;
 
 /// Paint `primitives` into `canvas` under `root` (canvas ← primitive space).
@@ -233,6 +233,31 @@ pub fn paint_filtered(
                 if !keep(*node_id) || text.is_empty() {
                     continue;
                 }
+                // One plain line: the host may draw it itself.
+                let run = (style_runs.is_empty() && !text.contains('\n')).then(|| TextRun {
+                    text: cased(text, text_case),
+                    left: x + 1.0,
+                    top: y + 1.0,
+                    width: *width,
+                    align: match align {
+                        TextAlignment::Left => TextAlign::Left,
+                        TextAlignment::Center => TextAlign::Center,
+                        TextAlignment::Right => TextAlign::Right,
+                    },
+                    size: *font_size,
+                    weight: spec.weight,
+                    family: spec.family.clone(),
+                    letter_spacing: *letter_spacing,
+                    color: color(c),
+                });
+                if let Some(run) = &run
+                    && canvas.handles_text()
+                    && canvas.text(t, run)
+                {
+                    continue;
+                }
+                let mut outlines = Recording::new();
+                let target: &mut dyn Canvas = &mut outlines;
                 let lh = line_height.unwrap_or(font_size * 1.2).max(1.0);
                 // Styled spans (the whole text as one without runs), each in
                 // its own family, weight, size and colour, split into lines.
@@ -276,8 +301,12 @@ pub fn paint_filtered(
                     };
                     let at = Affine::translate((x + 1.0 + dx, y + 1.0 + i as f64 * lh));
                     for (path, run_color) in pieces {
-                        canvas.fill(t * at, Fill::NonZero, &Brush::Solid(color(run_color)), None, path);
+                        target.fill(t * at, Fill::NonZero, &Brush::Solid(color(run_color)), None, path);
                     }
+                }
+                match &run {
+                    Some(run) => canvas.text_with_fallback(t, run, &outlines, Affine::IDENTITY),
+                    None => outlines.replay(canvas, Affine::IDENTITY),
                 }
             }
         }

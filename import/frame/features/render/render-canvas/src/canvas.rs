@@ -36,6 +36,56 @@ pub trait Canvas {
     /// clipped to `shape`.
     fn push_opacity(&mut self, transform: Affine, alpha: f32, shape: &BezPath);
     fn pop(&mut self);
+
+    /// Whether this canvas draws text itself ([`Canvas::text`]) — a host
+    /// with its own fonts and shaping, so text in a theme looks like the
+    /// host's text rather than frame's outlines of it.
+    fn handles_text(&self) -> bool {
+        false
+    }
+
+    /// Draw one line of text the host's way. False: not handled, and the
+    /// caller draws its outlines instead.
+    fn text(&mut self, transform: Affine, run: &TextRun) -> bool {
+        let _ = (transform, run);
+        false
+    }
+
+    /// Draw `run`, or `fallback` (its outlines, already under `transform`
+    /// … `fallback_at` is what to replay them under) when the canvas does
+    /// not draw text. A [`Recording`] keeps both, so a host that draws text
+    /// gets the run back when the recording is replayed into it.
+    fn text_with_fallback(&mut self, transform: Affine, run: &TextRun, fallback: &Recording, fallback_at: Affine) {
+        if !self.text(transform, run) {
+            fallback.replay(self, fallback_at);
+        }
+    }
+}
+
+/// One line of text, as a host that draws its own text needs it.
+#[derive(Debug, Clone, PartialEq)]
+pub struct TextRun {
+    pub text: String,
+    /// The box's left edge and top, in the canvas transform's space: a
+    /// host puts the baseline its own ascent below `top`.
+    pub left: f64,
+    pub top: f64,
+    /// The box's width, which `align` places the line within.
+    pub width: f64,
+    pub align: TextAlign,
+    pub size: f64,
+    pub weight: Option<f64>,
+    pub family: Option<String>,
+    pub letter_spacing: f64,
+    pub color: Color,
+}
+
+/// Where a line sits in its box.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TextAlign {
+    Left,
+    Center,
+    Right,
 }
 
 /// Convenience calls on any [`Canvas`].
@@ -92,6 +142,13 @@ pub enum Cmd {
         shape: BezPath,
     },
     Pop,
+    /// A line of text, and its outlines for a canvas that does not draw
+    /// text.
+    Text {
+        transform: Affine,
+        run: TextRun,
+        fallback: Recording,
+    },
 }
 
 /// A replayable list of canvas calls.
@@ -148,6 +205,9 @@ impl Recording {
                     shape,
                 } => canvas.push_opacity(transform * *t, *alpha, shape),
                 Cmd::Pop => canvas.pop(),
+                Cmd::Text { transform: t, run, fallback } => {
+                    canvas.text_with_fallback(transform * *t, run, fallback, transform);
+                }
             }
         }
     }
@@ -173,6 +233,7 @@ impl Recording {
                             .inflate(style.width / 2.0, style.width / 2.0),
                     ),
                 ),
+                Cmd::Text { fallback, .. } => fallback.bounds(),
                 _ => None,
             })
             .reduce(|a, b| a.union(b))
@@ -223,6 +284,14 @@ impl Canvas for Recording {
 
     fn pop(&mut self) {
         self.cmds.push(Cmd::Pop);
+    }
+
+    fn text_with_fallback(&mut self, transform: Affine, run: &TextRun, fallback: &Recording, fallback_at: Affine) {
+        // Kept in recording space: the outlines under `fallback_at`, the
+        // run under `transform`, both relative to this recording.
+        let mut outlines = Recording::new();
+        fallback.replay(&mut outlines, fallback_at);
+        self.cmds.push(Cmd::Text { transform, run: run.clone(), fallback: outlines });
     }
 }
 

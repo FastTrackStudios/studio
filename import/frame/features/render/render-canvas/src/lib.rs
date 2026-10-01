@@ -16,6 +16,6 @@ pub mod text;
 
 #[cfg(feature = "anyrender-0-11")]
 pub use canvas::AnyRender;
-pub use canvas::{Canvas, CanvasExt, Cmd, Recording, Tally};
+pub use canvas::{Canvas, CanvasExt, Cmd, Recording, Tally, TextAlign, TextRun};
 pub use paint::{node_of, paint_filtered, paint_primitives};
 pub use text::Font;
