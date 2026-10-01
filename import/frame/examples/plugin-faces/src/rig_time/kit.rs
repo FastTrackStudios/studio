@@ -184,8 +184,9 @@ impl Tier {
 /// keeps to the left of `PHONE_PICTURE_R`, the Time knob (centre, size),
 /// and up to three knobs in a row (centres, their line, size).
 pub const PHONE_PICTURE_R: f64 = 190.0;
-pub const PHONE_TIME: (f64, f64, f64) = (252.0, 58.0, 74.0);
-pub const PHONE_KNOBS: ([f64; 3], f64, f64) = ([392.0, 500.0, 608.0], 82.0, 58.0);
+/// The Time knob centred between the picture and the knob row.
+pub const PHONE_TIME: (f64, f64, f64) = (280.0, 58.0, 74.0);
+pub const PHONE_KNOBS: ([f64; 3], f64, f64) = ([400.0, 505.0, 610.0], 82.0, 58.0);
 
 /// A face's file at `tier`: `base` (`-dark`) at the base tier, else
 /// `base-<tier>` (`-dark`).

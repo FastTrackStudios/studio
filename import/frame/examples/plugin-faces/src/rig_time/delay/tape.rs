@@ -132,16 +132,18 @@ pub fn face_at(dark: bool, tier: kit::Tier) -> Face {
         if small_room {
             // The picture: ECHO, the VU, the heads under it.
             // A slim VU: the controls come first on a phone.
-            let bay1 = bay(b, unit, "Bay 1", (6.0, y, kit::PHONE_PICTURE_R - 40.0, bh), &grey);
+            let bay1 = bay(b, unit, "Bay 1", (6.0, y, kit::PHONE_PICTURE_R - 8.0, bh), &grey);
             for (i, ch) in "ECHO".chars().enumerate() {
-                parts::centred(b, bay1, &ch.to_string(), (16.0, 28.0 + 28.0 * i as f64), Type::new(18.0, ink, 300.0).family(draw::family::SAIRA).width(88.0));
+                parts::centred(b, bay1, &ch.to_string(), (18.0, 28.0 + 28.0 * i as f64), Type::new(18.0, ink, 300.0).family(draw::family::SAIRA).width(88.0));
             }
-            vu(b, bay1, (88.0, 72.0), 32.0, ink);
-            lamps(b, bay1, [64.0, 88.0, 112.0], 134.0);
+            vu(b, bay1, (104.0, 72.0), 34.0, ink);
+            lamps(b, bay1, [80.0, 104.0, 128.0], 134.0);
             picture = bay1;
             // The white dial: Time.
             // The white dial: Time, at the phone's Time knob place.
-            let (b2x, b3x) = (kit::PHONE_PICTURE_R - 32.0, 340.0);
+            // Its bay between the picture and the knob row (the knobs'
+            // tick rings clear of the bay's edge).
+            let (b2x, b3x) = (kit::PHONE_PICTURE_R, kit::PHONE_KNOBS.0[0] - 40.0);
             let bay2 = bay(b, unit, "Bay 2", (b2x, y, b3x - 2.0 - b2x, bh), &grey);
             let (tx, ty, td) = kit::PHONE_TIME;
             kit::time_knob(b, bay2, DLY, (tx - b2x, ty - y, td), 11.0, (ink, "#6b6e74", &lit), |b, p, addr| {
