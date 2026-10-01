@@ -174,7 +174,7 @@ impl Tier {
 /// keeps to the left of `PHONE_PICTURE_R`, the Time knob (centre, size),
 /// and up to three knobs in a row (centres, their line, size).
 pub const PHONE_PICTURE_R: f64 = 190.0;
-pub const PHONE_TIME: (f64, f64, f64) = (252.0, 64.0, 80.0);
+pub const PHONE_TIME: (f64, f64, f64) = (252.0, 58.0, 74.0);
 pub const PHONE_KNOBS: ([f64; 3], f64, f64) = ([392.0, 500.0, 608.0], 82.0, 58.0);
 
 /// A face's file at `tier`: `base` (`-dark`) at the base tier, else
@@ -280,19 +280,21 @@ pub fn time_knob(b: &mut Builder<'_>, parent: NodeId, ns: &str, (cx, cy, d): (f6
     }
     let t = b.add(field, t);
     b.controls.insert(field, Control::new(ControlKind::Readout).slot(SlotRole::Value, t.0).bound(ui::bind(&a(ns, "time_text"))));
-    // TIME | BEAT, the side it is on lit.
-    let (sw, sh) = ((size * 5.4).max(70.0), (size * 0.8 + 8.0).ceil());
+    // TIME | BEAT, the side it is on lit; each side its own target (a
+    // press picks it), at a finger's size where the face is for one.
+    let touch = size >= 10.0;
+    let (sw, sh) = if touch { (120.0, 28.0) } else { ((size * 5.4).max(70.0), (size * 0.8 + 8.0).ceil()) };
     let sy = ry + rh + 2.0;
     let pill = b.add(parent, draw::frame("time switch", cx - sw / 2.0, sy, sw, sh));
     b.add(pill, draw::rounded(draw::rect("well", 0.0, 0.0, sw, sh, draw::solid(&ui::alpha(dim, 0.22))), sh / 2.0));
     for (i, (word, on)) in [("TIME", format!("1 - param({ns}/sync)")), ("BEAT", format!("param({ns}/sync)"))].iter().enumerate() {
         let x = i as f64 * sw / 2.0;
         let half = b.add(pill, draw::frame(word, x, 0.0, sw / 2.0, sh));
-        let glow = b.add(half, draw::rounded(draw::rect("lit", 1.5, 1.5, sw / 2.0 - 3.0, sh - 3.0, draw::solid(lit)), (sh - 3.0) / 2.0));
+        let glow = b.add(half, draw::rounded(draw::rect("lit", 2.0, 2.0, sw / 2.0 - 4.0, sh - 4.0, draw::solid(lit)), (sh - 4.0) / 2.0));
         motion::add(b, glow, Motion::new(Target::Opacity).input(on.clone()).range(0.0, 1.0).dynamics(Dynamics::spring(400.0, 36.0)));
-        ui::silk(b, half, word, sw / 4.0, sh / 2.0, size * 0.8, ink, 800.0);
+        ui::silk(b, half, word, sw / 4.0, sh / 2.0, if touch { 10.5 } else { size * 0.8 }, ink, 800.0);
+        b.controls.insert(half, Control::new(ControlKind::Button { mode: ButtonMode::Select { index: i as u32, count: 2 } }).bound(ui::bind(&a(ns, "sync"))));
     }
-    b.controls.insert(pill, Control::new(ControlKind::Button { mode: ButtonMode::Toggle }).bound(ui::bind(&a(ns, "sync"))));
 }
 
 /// A `knob.3d` with no value or legend of its own (the [`time_knob`]

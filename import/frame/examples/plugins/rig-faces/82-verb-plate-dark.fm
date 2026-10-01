@@ -80,14 +80,14 @@
         <Frame name="time readout" id="f0d4f3da-5d2e-5506-9919-ac4f99b9eaf0" x=579 y=115 w=126 h=12 resize-x="right" control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Param":{"addr":"verb/time_text"}}},"kind":"Readout","slots":[{"node":"e5691347-3007-5f1e-9ec8-64cc720b83b1","role":"Value"}]}}>
           <Text name="value" id="e5691347-3007-5f1e-9ec8-64cc720b83b1" w=126 h=12 fill="#e6e8eb" font="Inter" size=8.5 weight=650 text-align="center" />
         </Frame>
-        <Frame name="time switch" id="0d0393b7-d52c-5f43-9162-f2a3f808ec0a" x=607 y=129 w=70 h=15 resize-x="right" control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Param":{"addr":"verb/sync"}}},"kind":{"Button":{"mode":"Toggle"}},"slots":[]}}>
+        <Frame name="time switch" id="0d0393b7-d52c-5f43-9162-f2a3f808ec0a" x=607 y=129 w=70 h=15 resize-x="right">
           <Rectangle name="well" id="2ad45f67-a020-5f1f-8344-193f26f16269" w=70 h=15 radius=7.5 fill="#9aa0a738" />
-          <Frame name="TIME" id="69f0cbb1-7a28-5e7b-a586-046fe774e7f7" w=35 h=15>
-            <Rectangle name="lit" id="f68780f9-610a-5859-bc68-cf6736f49a12" x=1.5 y=1.5 w=32 h=12 radius=6 fill="#b58cff8c" motion={[{"dynamics":{"spring":{"damping":36.0,"mass":1.0,"stiffness":400.0}},"input":"1 - param(verb/sync)","target":"opacity"}]} />
+          <Frame name="TIME" id="69f0cbb1-7a28-5e7b-a586-046fe774e7f7" w=35 h=15 control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Param":{"addr":"verb/sync"}}},"kind":{"Button":{"mode":{"Select":{"count":2,"index":0}}}},"slots":[]}}>
+            <Rectangle name="lit" id="f68780f9-610a-5859-bc68-cf6736f49a12" x=2 y=2 w=31 h=11 radius=5.5 fill="#b58cff8c" motion={[{"dynamics":{"spring":{"damping":36.0,"mass":1.0,"stiffness":400.0}},"input":"1 - param(verb/sync)","target":"opacity"}]} />
             <Text name="silk" id="138ed63b-b128-53fe-bb8b-43abfb44929a" x=0.9080000000000013 y=2.8759999999999994 w=33.184 h=10 fill="#e6e8eb" size=6.800000000000001 weight=800 letter-spacing=0.544 case="upper" text-align="center">TIME</Text>
           </Frame>
-          <Frame name="BEAT" id="b11727ab-5c39-549b-ae24-b28723f35125" x=35 w=35 h=15>
-            <Rectangle name="lit" id="1a1e8b38-76f0-5db5-be4f-0e0a9e79c09b" x=1.5 y=1.5 w=32 h=12 radius=6 fill="#b58cff8c" motion={[{"dynamics":{"spring":{"damping":36.0,"mass":1.0,"stiffness":400.0}},"input":"param(verb/sync)","target":"opacity"}]} />
+          <Frame name="BEAT" id="b11727ab-5c39-549b-ae24-b28723f35125" x=35 w=35 h=15 control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Param":{"addr":"verb/sync"}}},"kind":{"Button":{"mode":{"Select":{"count":2,"index":1}}}},"slots":[]}}>
+            <Rectangle name="lit" id="1a1e8b38-76f0-5db5-be4f-0e0a9e79c09b" x=2 y=2 w=31 h=11 radius=5.5 fill="#b58cff8c" motion={[{"dynamics":{"spring":{"damping":36.0,"mass":1.0,"stiffness":400.0}},"input":"param(verb/sync)","target":"opacity"}]} />
             <Text name="silk" id="70b83660-e8ad-5094-8e0c-289dcfe35b05" x=0.9080000000000013 y=2.8759999999999994 w=33.184 h=10 fill="#e6e8eb" size=6.800000000000001 weight=800 letter-spacing=0.544 case="upper" text-align="center">BEAT</Text>
           </Frame>
         </Frame>
