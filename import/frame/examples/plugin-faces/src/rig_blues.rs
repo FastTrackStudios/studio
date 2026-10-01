@@ -17,6 +17,12 @@
 
 pub mod amp_cab;
 pub mod drives;
+pub mod filters;
+pub mod pitch;
+pub mod doubler;
+pub mod prefx;
+pub mod transpose;
+pub mod premod;
 
 use document_proto::{NodeId, TextAlign};
 use surface_kit::draw::{self, Lettering, family};

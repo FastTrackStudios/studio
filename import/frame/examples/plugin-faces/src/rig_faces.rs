@@ -268,7 +268,7 @@ pub fn faces() -> Vec<Face> {
     v.push(eq());
     v.push(spring_viz());
     v.push(cab());
-    v.extend([d_(crate::rig_blues::filters::wah_unit()), d_(crate::rig_blues::filters::q_tron_unit()), d_(crate::rig_blues::filters::postal_unit()), d_(crate::rig_blues::pitch::pitch_unit()), d_(crate::rig_blues::doubler::doubler_unit())]);
+    v.extend([d_(crate::rig_blues::filters::wah_unit()), d_(crate::rig_blues::filters::q_tron_unit()), d_(crate::rig_blues::filters::postal_unit()), d_(crate::rig_blues::pitch::pitch_unit()), d_(crate::rig_blues::doubler::doubler_unit()), d_(crate::rig_blues::transpose::transpose_unit()), d_(crate::rig_blues::transpose::dive_unit()), d_(crate::rig_blues::premod::premod_unit())]);
     v
 }
 
@@ -297,6 +297,9 @@ pub fn manifest() -> String {
         // Any spring on a reverb block ("Gravity Tank Spring", "Fender
         // Spring"): frame's spring reverb.
         json!({ "match": ["spring"], "face": pre[2].file, "ns": "spring", "size": size(&pre[2]) }),
+        // Pre modulation: its unit for any preset on the block (and the
+        // block itself, by name).
+        json!({ "match": ["pre mod", "chorus", "vibe", "ce-2"], "face": "38-pre-mod", "ns": "premod", "size": [crate::rig_blues::premod::W, crate::rig_blues::premod::H] }),
     ];
     // The compressor at the head of the drive board: the Pre Comp block.
     let comp = Face { plugin: PLUGIN, ..drives::compressor() };
@@ -330,6 +333,10 @@ pub fn manifest() -> String {
             { "match": ["filter", "q-tron", "qtron"], "face": "31-filter-q-tron", "ns": "env", "size": size(&crate::rig_blues::filters::q_tron_unit()) },
             { "match": ["doubler"], "face": "35-doubler", "ns": "doubler", "size": size(&crate::rig_blues::doubler::doubler_unit()) },
             { "match": ["pitch"], "face": "33-pitch-voices", "ns": "pitch", "size": size(&crate::rig_blues::pitch::pitch_unit()) },
+            // The transposer and the dive bomb: pitch blocks of their own,
+            // by name.
+            { "match": ["transpose"], "face": "36-transpose", "ns": "transpose", "size": size(&crate::rig_blues::transpose::transpose_unit()) },
+            { "match": ["dive"], "face": "37-dive-bomb", "ns": "dive", "size": size(&crate::rig_blues::transpose::dive_unit()) },
         ],
         // Pictures of a block, beside its unit: a reverb's springs.
         "pictures": [ { "match": ["reverb"], "face": "53-spring-viz", "ns": "spring", "size": size(&spring_viz()) } ],

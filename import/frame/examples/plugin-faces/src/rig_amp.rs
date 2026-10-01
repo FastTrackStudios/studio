@@ -38,7 +38,7 @@ fn panel(b: &mut Builder<'_>, root: NodeId, (w, h): (f64, f64)) -> NodeId {
 /// A vertical fader on `addr`: a slot `len` long at (`cx`, `y`), its cap
 /// `cap` tall and `cap_w` wide. Returns the control's root.
 #[allow(clippy::too_many_arguments)]
-fn fader(b: &mut Builder<'_>, parent: NodeId, addr: &str, (cx, y): (f64, f64), len: f64, (cap_w, cap): (f64, f64), draw_cap: impl FnOnce(&mut Builder<'_>, NodeId, f64, f64)) -> NodeId {
+pub(crate) fn fader(b: &mut Builder<'_>, parent: NodeId, addr: &str, (cx, y): (f64, f64), len: f64, (cap_w, cap): (f64, f64), draw_cap: impl FnOnce(&mut Builder<'_>, NodeId, f64, f64)) -> NodeId {
     let bw = cap_w + 8.0;
     let root = b.add(parent, draw::frame(&format!("{addr} fader"), cx - bw / 2.0, y, bw, len));
     let lane = b.add(root, draw::frame("lane", (bw - cap_w) / 2.0, 0.0, cap_w, len));
