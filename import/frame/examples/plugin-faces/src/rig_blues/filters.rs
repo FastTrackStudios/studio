@@ -584,6 +584,22 @@ pub fn volume_phone() -> Face {
 }
 
 
+/// An interval by name, `s` semitones from the note: "+4 · 3rd",
+/// "−12 · Oct", "Unison" — a compound interval by its simple one ("+19 ·
+/// 5th"), two octaves as such.
+fn interval_name(s: i32) -> String {
+    const NAMES: [&str; 12] = ["Oct", "m2", "2nd", "m3", "3rd", "4th", "TT", "5th", "m6", "6th", "m7", "7th"];
+    let n = s.unsigned_abs();
+    if n == 0 {
+        return "Unison".into();
+    }
+    let name = match n {
+        24 => "2 Oct",
+        n => NAMES[(n % 12) as usize],
+    };
+    format!("{}{n} · {name}", if s > 0 { "+" } else { "−" })
+}
+
 /// The Pitch page on a phone: the octaver a third of it, the harmonizer
 /// the rest, both the page's height.
 pub const OCTAVER_PHONE_W: f64 = 250.0;
@@ -613,8 +629,10 @@ pub fn octaver_phone() -> Face {
         let p = pitch_panel(b, root, w, "#0f1d33", "#0a1322");
         let head = Lettering::family(family::INTER).weight(800.0);
         set(b, p, "OCTAVER", 52.0, 22.0, 14.0, INK, &head, 0.2);
-        crate::rig_time::kit::nameplate(b, p, NS, (110.0, 8.0, 28.0), 0.0, w - 122.0, 11.0, (INK, DIM), |_, _| {});
-        let (top, len) = (54.0, 186.0);
+        // The preset on a row of its own under the name: a third of the
+        // page is too narrow to share one.
+        crate::rig_time::kit::nameplate(b, p, NS, (8.0, 36.0, 26.0), 0.0, w - 16.0, 12.0, (INK, DIM), |_, _| {});
+        let (top, len) = (82.0, 160.0);
         for (i, (id, name, color)) in [("b_level", "SUB", "#38bdf8"), ("dry", "DRY", "#e2e8f0"), ("a_level", "UP", "#a78bfa")].iter().enumerate() {
             let x = w * (0.2 + 0.3 * i as f64);
             // The well, and its level lit up from the bottom.
@@ -696,8 +714,10 @@ pub fn harmonizer_phone() -> Face {
         crate::rig_time::kit::knob3d(b, p, &format!("{NS}/dry"), "Dry", 48.0, (w - 50.0, ky + 10.0), &o, INK, DIM);
     });
     let interval = |addr: &str, name: &str, d: f64| {
-        let mut p = ui::param(addr, name, Range::linear(-24.0, 24.0, Unit::None), d);
-        p.bipolar = true;
+        let labels: Vec<String> = (-24..=24).map(interval_name).collect();
+        let refs: Vec<&str> = labels.iter().map(String::as_str).collect();
+        let mut p = surface_proto::ParamInfo::new(addr, name, Range::linear(-24.0, 24.0, Unit::None)).choice(&refs);
+        p.default = (d + 24.0) / 48.0;
         p.featured = true;
         p
     };
