@@ -391,7 +391,8 @@ fn tremolo_picture(b: &mut Builder<'_>, v: NodeId, vw: f64, vh: f64, t: &Theme) 
     }
     b.add(v, ui::strokes("brick", &rows, 1.0, draw::solid("#ffffff0a")));
     // Full volume sits under the corner pill's height, clear of it.
-    let (lamp_x, top, bottom) = (46.0, 18.0, vh - 18.0);
+    // The tube swings about the window's middle, as deep as the depth.
+    let (lamp_x, top, bottom) = (46.0, vh * 0.14, vh * 0.86);
     let period = 64.0;
     let span = vw - lamp_x;
     let curve = |phase: f64| -> Vec<(f64, f64)> {
@@ -410,7 +411,7 @@ fn tremolo_picture(b: &mut Builder<'_>, v: NodeId, vw: f64, vh: f64, t: &Theme) 
         b.add(roll, draw::emissive(ui::strokes("glow", &[curve(phase)], 5.0, draw::solid(&ui::alpha(color, 0.35))), draw::hex(color), 0.9, 10.0));
         b.add(roll, ui::strokes("core", &[curve(phase)], 1.6, draw::solid("#fff0f7")));
         motion::add(b, roll, Motion::new(Target::X).input(format!("fract(time * param({MOTION}/rate) * param({MOTION}/on))")).range(0.0, -period));
-        motion::add(b, roll, Motion::new(Target::StretchY).input(format!("norm({MOTION}/depth)")).range(0.02, 1.0).pivot(0.5, top / vh).dynamics(Dynamics::spring(220.0, 26.0)));
+        motion::add(b, roll, Motion::new(Target::StretchY).input(format!("norm({MOTION}/depth)")).range(0.02, 1.0).pivot(0.5, 0.5).dynamics(Dynamics::spring(220.0, 26.0)));
         if side == 1 {
             motion::add(b, clip, Motion::new(Target::Opacity).input(format!("clamp(param({MOTION}/mode), 0, 1)")).range(0.0, 0.9));
         }
