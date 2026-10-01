@@ -488,6 +488,12 @@ fn child_style(scene: &Scene, id: NodeId) -> Style {
     if let Some(g) = lc.grow {
         style.flex_grow = g as f32;
     }
+    // A hidden child leaves the flow, as in Figma: the row closes up
+    // behind it. A theme hides a strip's pan section at narrow widths
+    // and the controls under it move up into the room.
+    if !node.visible {
+        style.display = Display::None;
+    }
     if lc.absolute {
         style.position = Position::Absolute;
         style.inset = taffy::Rect {
