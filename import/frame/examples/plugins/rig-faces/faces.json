@@ -1643,7 +1643,18 @@
       "size": [
         360.0,
         300.0
-      ]
+      ],
+      "tiers": {
+        "phone": {
+          "face": "18-gravity-tank-trem-phone",
+          "nameplate": true,
+          "size": [
+            760.0,
+            164.0
+          ],
+          "time_knob": true
+        }
+      }
     },
     {
       "back": "19-spring-reverb-back",
@@ -1681,7 +1692,19 @@
       "size": [
         400.0,
         300.0
-      ]
+      ],
+      "tiers": {
+        "phone": {
+          "back": "38-pre-mod-back-phone",
+          "face": "38-pre-mod-phone",
+          "nameplate": true,
+          "size": [
+            760.0,
+            164.0
+          ],
+          "time_knob": true
+        }
+      }
     }
   ],
   "pre_comp_pedal": {

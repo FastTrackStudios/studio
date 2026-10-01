@@ -12,6 +12,7 @@ use document_proto::motion::{Motion, Target};
 use document_proto::{CornerRadii, ResizeX};
 use surface_kit::draw::{self, Lettering, family};
 use surface_kit::motion;
+use surface_proto::{Range, Unit};
 
 use super::PLUGIN;
 use super::filters::repeats_screen;
@@ -247,4 +248,109 @@ pub fn spring_back(tier: kit::Tier) -> Face {
         spring_head(b, p, tier, &sp, true);
     });
     Face { file: kit::tier_file("19-spring-reverb-back", tier, false), plugin: PLUGIN, scene, params: spring_params(), streams: Vec::new() }
+}
+
+const TREM: &str = "trem";
+const TREM_INK: &str = "#efe6cf";
+const TREM_DIM: &str = "#a9a7bd";
+const CREAM: [&str; 6] = ["color=#efe6cf", "pointer=#2a2d44", "index=dot", "index_w=0.12", "skirt=plain", "skirt_color=#cfc4a6"];
+
+/// The Gravity Tank's tremolo as a phone lane, in the Time faces' form
+/// and the unit's own parts: its powder-coat navy and copper edge, the
+/// woven grille in its copper surround as the picture (a warm glow behind
+/// it, pulsing with the volume — as deep as the intensity, as fast as the
+/// speed), the cream knobs — the Speed as the Time knob (TIME | BEAT),
+/// Intensity and Mix — its ON / OFF toggle at the bypass spot, and its
+/// name in the unit's lettering on the nameplate.
+#[must_use]
+pub fn tank_trem_phone() -> Face {
+    use crate::suite_studio_blues::parts::{Cap, knob as cap_knob, print, toggle};
+    use surface_kit::materials::{light, paint};
+    const INK: &str = "#e2d2c6";
+    let tier = kit::Tier::Phone;
+    let w = tier.lane_w();
+    let h = LANE.1;
+    let scene = canvas("Gravity Tank", |b, root| {
+        ui::fit_root(b, root, w, h);
+        let mut case = draw::frame("Case", 0.0, 0.0, w, h);
+        case.corner_radii = CornerRadii::uniform(14.0);
+        case.stroke = document_proto::Stroke { paints: vec![draw::linear(90.0, &[(0.0, "#a8664a"), (0.5, "#5a3a34"), (1.0, "#a8664a")])], weight: 3.0, ..document_proto::Stroke::default() };
+        let case = b.add(root, case);
+        paint::fill(b, case, (0.0, 0.0, w, h), 14.0, &paint::Material::Powder { color: "#30334a".into(), coarse: false });
+        for e in light::edge("case edge", (0.0, 0.0, w, h), 14.0, 4.0, 1.1, true) {
+            b.add(case, e);
+        }
+        // The grille in its copper surround.
+        let (mx, my, mw, mh) = (14.0, 14.0, kit::PHONE_PICTURE_R - 18.0, h - 28.0);
+        let mut surround = draw::with_effects(draw::rounded(draw::rect("surround", mx - 4.0, my - 4.0, mw + 8.0, mh + 8.0, draw::linear(180.0, &[(0.0, "#f2c7a6"), (0.5, "#c98a66"), (1.0, "#f0c09c")])), 12.0), vec![draw::drop_shadow("#00000080", 0.0, 2.0, 4.0)]);
+        surround.layout_child.resize_x = Some(ResizeX::Stretch);
+        b.add(case, surround);
+        let mut win = draw::frame("Grille", mx, my, mw, mh);
+        win.clips_content = true;
+        win.corner_radii = CornerRadii::uniform(9.0);
+        win.layout_child.resize_x = Some(ResizeX::Stretch);
+        let win = b.add(case, win);
+        // The cloth wider than its window (the window clips it), so it fills
+        // the window however wide the lane is drawn.
+        let mesh = surface_kit::Place { options: Some(vec![format!("w={}", mw * 2.0), format!("h={mh}"), "r=9".into()]), ..surface_kit::Place::new("Mesh").variant("mesh") };
+        let m = ui::put_at(b, win, "panel.amp_grille", &mesh, 0.0, 0.0);
+        if let Some(n) = b.scene.node_mut(m) {
+            n.effects.clear();
+        }
+        // The valve's warm glow through the cloth, with the volume.
+        let mut glow = draw::frame("glow", 0.0, 0.0, mw, mh);
+        glow.layout_child.resize_x = Some(ResizeX::Stretch);
+        let glow = b.add(win, glow);
+        let lit = b.add(glow, draw::emissive(draw::circle("warmth", mw / 2.0, mh / 2.0, mh * 0.42, draw::radial_at(0.5, 0.5, 0.5, &[(0.0, "#ffcf8a90"), (0.7, "#e08a3c30"), (1.0, "#e08a3c00")])), draw::hex("#ffb060"), 0.8, 18.0));
+        let pulse = format!("(1 - norm({TREM}/depth) * (0.5 - 0.5 * cos(6.2832 * time * param({TREM}/rate)))) * param({TREM}/on)");
+        motion::add(b, lit, Motion::new(Target::Opacity).input(pulse.clone()).range(0.0, 1.0));
+        for mut e in light::edge("mesh recess", (mx, my, mw, mh), 9.0, 3.0, 1.2, false) {
+            e.layout_child.resize_x = Some(ResizeX::Stretch);
+            b.add(case, e);
+        }
+        // Speed: the Time knob, a cream cap.
+        let (tx, ty, td) = kit::PHONE_TIME;
+        kit::time_knob(b, case, TREM, (tx, ty, td), 11.0, (INK, "#a9a7bd", "#c98a6699"), |b, pp, addr| {
+            cap_knob(b, pp, Cap::Cream, addr, "SPEED", td * 0.92, tx, ty);
+        });
+        // The cream knobs, a little higher: the unit's bracket and name run
+        // under them.
+        let (xs, _, kd) = kit::PHONE_KNOBS;
+        let ky = 72.0;
+        for (i, (id, legend)) in [("depth", "INTENSITY"), ("mix", "MIX")].iter().enumerate() {
+            cap_knob(b, case, Cap::Cream, &format!("{TREM}/{id}"), legend, kd, xs[i], ky);
+            print(b, case, legend, xs[i], ky + kd / 2.0 + 15.0, 10.5, INK, 500.0, 0.12);
+        }
+        // Its ON / OFF toggle at the bypass spot, the lamp in its bezel
+        // beside it, pulsing with the volume.
+        let (bx, _, _) = kit::bypass_spot(tier);
+        let by = ky;
+        print(b, case, "ON", bx, by - 30.0, 10.0, INK, 500.0, 0.08);
+        toggle(b, case, &format!("{TREM}/on"), "Tremolo", 24.0, bx, by);
+        print(b, case, "OFF", bx, by + 30.0, 10.0, INK, 500.0, 0.08);
+        let (lx, lr) = (bx + 40.0, 8.0);
+        b.add(case, draw::with_effects(draw::circle("lamp bezel", lx, by, lr + 3.0, draw::linear(180.0, &[(0.0, "#d9d9de"), (0.5, "#7d7f88"), (1.0, "#3a3c44")])), vec![draw::drop_shadow("#00000090", 0.0, 1.5, 2.0)]));
+        b.add(case, draw::circle("lamp lens", lx, by, lr, draw::radial_at(0.4, 0.35, 0.9, &[(0.0, "#2a4a3a"), (1.0, "#0c1a12")])));
+        let lamp = b.add(case, draw::emissive(draw::circle("lamp", lx, by, lr, draw::radial_at(0.4, 0.35, 0.9, &[(0.0, "#e8fff4"), (0.4, "#3cf0a0"), (1.0, "#159060")])), draw::hex("#3cf0a0"), 1.0, 12.0));
+        motion::add(b, lamp, Motion::new(Target::Opacity).input(pulse).range(0.05, 1.0));
+        // The unit's bracket under its controls, and its name.
+        let (x0, x1, yb) = (xs[0] - 50.0, lx + 18.0, h - 26.0);
+        let line = vec![(x0, yb - 8.0), (x0, yb), (x1, yb), (x1, yb - 8.0)];
+        b.add(case, ui::strokes("bracket", &[line], 1.4, draw::solid(INK)));
+        print(b, case, "Harmonic Tremolo", (x0 + x1) / 2.0, h - 13.0, 12.5, INK, 500.0, 0.03);
+        // The nameplate: the preset, then the maker's name.
+        kit::nameplate_top_right(b, case, TREM, tier, (8.0, 30.0), 140.0, 190.0, 12.0, ("#f0c09c", "#a9a7bd"), |b, t| {
+            print(b, t, "GRAVITY TANK", 63.0, 15.0, 12.0, INK, 600.0, 0.16);
+        });
+        kit::responsive(b, case, &[win]);
+    });
+    let mut params = vec![
+        ui::param("trem/rate", "Speed", Range::log(0.05, 12.0, Unit::Hz), 4.0).featured(),
+        ui::param("trem/depth", "Intensity", Range::linear(0.0, 1.0, Unit::None), 0.5).featured(),
+        ui::param("trem/mix", "Mix", Range::linear(0.0, 1.0, Unit::None), 1.0),
+        ui::toggle("trem/on", "Tremolo", true),
+    ];
+    params.extend(kit::nameplate_params(TREM));
+    params.extend(kit::time_params(TREM));
+    Face { file: "18-gravity-tank-trem-phone", plugin: PLUGIN, scene, params, streams: Vec::new() }
 }

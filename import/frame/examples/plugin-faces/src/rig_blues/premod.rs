@@ -123,3 +123,130 @@ pub fn premod_unit() -> Face {
     ];
     Face { file: "38-pre-mod", plugin: PLUGIN, scene, params, streams: Vec::new() }
 }
+
+fn params() -> Vec<ParamInfo> {
+    let mut engine = ParamInfo::new(a("engine"), "Engine", Range::linear(0.0, (MOD_ENGINES.len() - 1) as f64, Unit::None)).choice(&MOD_ENGINES);
+    engine.default = 5.0 / (MOD_ENGINES.len() - 1) as f64;
+    let mut v = vec![
+        ui::param(&a("rate"), "Rate", Range::log(0.05, 10.0, Unit::Hz), 0.6).featured(),
+        ui::param(&a("depth"), "Depth", Range::linear(0.0, 1.0, Unit::None), 0.4).featured(),
+        ui::param(&a("mix"), "Mix", Range::linear(0.0, 1.0, Unit::None), 0.5),
+        ui::param(&a("width"), "Width", Range::linear(0.0, 1.0, Unit::None), 1.0),
+        ui::param(&a("color"), "Color", Range::linear(0.0, 1.0, Unit::None), 0.5),
+        ui::param(&a("feedback"), "Feedback", Range::linear(0.0, 1.0, Unit::None), 0.0),
+        engine,
+        ui::toggle(&a("on"), "Pre Mod", false),
+    ];
+    v.extend(kit::nameplate_params(NS));
+    v.extend(kit::flip_params(NS));
+    v
+}
+
+const KNOB: [&str; 6] = ["color=#16202a", "pointer=#7dd3fc", "index=line", "index_w=0.1", "skirt=plain", "skirt_color=#081018"];
+
+/// A phone lane's panel, the head where every Time face has it: the
+/// nameplate (the preset ‹ ›, PRE MOD, a press opening its engines), the
+/// bypass and the arrow.
+fn lane(back: bool, build: impl FnOnce(&mut Builder<'_>, document_proto::NodeId)) -> document_proto::Scene {
+    let tier = kit::Tier::Phone;
+    let w = tier.lane_w();
+    canvas("Pre Mod", move |b, root| {
+        ui::fit_root(b, root, w, kit::H);
+        let mut p = draw::frame("Panel", 0.0, 0.0, w, kit::H);
+        p.fills = vec![draw::linear(180.0, &[(0.0, "#121b23"), (1.0, "#0a1016")])];
+        let p = b.add(root, draw::with_effects(p, vec![draw::inner_shadow("#ffffff14", 0.0, 1.0, 0.0)]));
+        build(b, p);
+        let head = Lettering::family(family::INTER).weight(800.0);
+        kit::nameplate_top_right(b, p, NS, tier, (8.0, 30.0), 110.0, 210.0, 12.0, (SKY, DIM), |b, t| {
+            set(b, t, "PRE MOD", 48.0, 15.0, 15.0, SKY, &head, 0.25);
+        });
+        kit::face_bypass(b, p, NS, tier, "blue", "On");
+        kit::flip_arrow(b, p, NS, tier, back, (INK, "#ffffff18"));
+    })
+}
+
+/// The bucket line and the sweep in a window `vw × vh` (a phone lane's
+/// picture): the same machine as the unit's, smaller.
+fn picture(b: &mut Builder<'_>, v: document_proto::NodeId, vw: f64, vh: f64) {
+    let cells = 12;
+    let (bx, by, bw, bh) = (10.0, 12.0, vw - 20.0, 30.0);
+    let row = b.add(v, draw::frame("buckets", bx, by, bw, bh));
+    // The line and the sweep take the window's width as it widens.
+    if let Some(n) = b.scene.node_mut(row) {
+        n.layout_child.resize_x = Some(ResizeX::Stretch);
+    }
+    let cw = bw / f64::from(cells);
+    for i in 0..cells {
+        let x = f64::from(i) * cw;
+        b.add(row, draw::stroked(draw::rounded(draw::rect("bucket", x + 1.5, 0.0, cw - 3.0, bh, draw::solid("#0b1720")), 3.0), "#1b2c38", 1.0));
+        let lit = b.add(row, draw::frame("charge", x + 1.5, 0.0, cw - 3.0, bh));
+        b.add(lit, ui::glowing(draw::rounded(draw::rect("glow", 0.0, 0.0, cw - 3.0, bh, draw::solid(SKY)), 3.0), SKY, 0.8, 6.0));
+        let phase = f64::from(i) / f64::from(cells) * std::f64::consts::TAU;
+        let wave = format!("(0.5 + 0.5 * sin(time * 6.2832 * param({NS}/rate) - {phase:.3})) * (0.15 + 0.85 * norm({NS}/depth)) * param({NS}/on)");
+        motion::add(b, lit, Motion::new(Target::Opacity).input(wave).range(0.04, 0.95));
+    }
+    let (sy, sh) = (by + bh + 12.0, vh - (by + bh + 12.0) - 10.0);
+    let mut sweep = draw::frame("sweep", 10.0, sy, vw - 20.0, sh);
+    sweep.clips_content = true;
+    sweep.layout_child.resize_x = Some(ResizeX::Stretch);
+    let view = b.add(v, sweep);
+    let sw = vw - 20.0;
+    b.add(view, ui::strokes("centre", &[vec![(0.0, sh / 2.0), (sw, sh / 2.0)]], 1.0, draw::solid("#ffffff14")));
+    for (name, color, shift) in [("left", SKY, 0.0), ("right", "#c4b5fd", std::f64::consts::FRAC_PI_2)] {
+        let g = b.add(view, draw::frame(name, 0.0, 0.0, sw * 2.0, sh));
+        let pts: Vec<(f64, f64)> = (0..=120)
+            .map(|i| {
+                let t = f64::from(i) / 120.0;
+                (t * sw * 2.0, sh / 2.0 - (t * 4.0 * std::f64::consts::TAU / 2.0 + shift).sin() * (sh / 2.0 - 4.0))
+            })
+            .collect();
+        let wave = b.add(g, draw::frame("wave", 0.0, 0.0, sw * 2.0, sh));
+        b.add(wave, ui::glowing(ui::strokes("trace", &[pts], 1.6, draw::solid(color)), color, 0.7, 5.0));
+        motion::add(b, wave, Motion::new(Target::StretchY).input(format!("0.1 + 0.9 * norm({NS}/depth)")).range(0.0, 1.0).pivot(0.5, 0.5).dynamics(Dynamics::spring(260.0, 26.0)));
+        motion::add(b, g, Motion::new(Target::X).input(format!("fract(time * param({NS}/rate) * 0.5)")).range(0.0, -sw));
+    }
+}
+
+/// Pre Mod at `tier`: on a phone a lane in the Time faces' form — the
+/// machine at the left, the Rate as the Time knob (TIME | BEAT), Depth,
+/// Width and Mix in the knob row, the head at the right; elsewhere the
+/// unit.
+#[must_use]
+pub fn premod_at(tier: kit::Tier) -> Face {
+    if !matches!(tier, kit::Tier::Phone | kit::Tier::Strip) {
+        return premod_unit();
+    }
+    let scene = lane(false, |b, p| {
+        let (vx, vy, vw, vh) = (10.0, 10.0, kit::PHONE_PICTURE_R - 10.0, kit::H - 20.0);
+        let mut v = draw::frame("Line", vx, vy, vw, vh);
+        v.fills = vec![draw::linear(180.0, &[(0.0, "#071017"), (1.0, "#050a0f")])];
+        v.clips_content = true;
+        v.corner_radii = CornerRadii::uniform(6.0);
+        v.effects = vec![draw::inner_shadow("#000000c0", 0.0, 2.0, 6.0)];
+        let v = b.add(p, v);
+        picture(b, v, vw, vh);
+        let (tx, ty, td) = kit::PHONE_TIME;
+        kit::time_knob(b, p, NS, (tx, ty, td), 11.0, (INK, DIM, &ui::alpha(SKY, 0.45)), |b, pp, addr| {
+            kit::knob3d_bare(b, pp, addr, td, (tx, ty), &KNOB);
+        });
+        let (xs, ky, kd) = kit::PHONE_KNOBS;
+        for (i, (id, legend)) in [("depth", "Depth"), ("width", "Width"), ("mix", "Mix")].iter().enumerate() {
+            kit::knob3d(b, p, &a(id), legend, kd, (xs[i], ky), &KNOB, INK, DIM);
+        }
+        kit::responsive(b, p, &[v]);
+    });
+    let mut params = params();
+    params.extend(kit::time_params(NS));
+    Face { file: kit::tier_file("38-pre-mod", tier, false), plugin: PLUGIN, scene, params, streams: Vec::new() }
+}
+
+/// Pre Mod's back on a phone: Color and Feedback.
+#[must_use]
+pub fn premod_back(tier: kit::Tier) -> Face {
+    let scene = lane(true, |b, p| {
+        kit::back_knobs(b, p, kit::Tier::Phone, &[("color", "Color"), ("feedback", "Feedback")], INK, |b, pp, id, legend, d, at| {
+            kit::knob3d(b, pp, &a(id), legend, d, at, &KNOB, INK, DIM);
+        });
+    });
+    Face { file: kit::tier_file("38-pre-mod-back", tier, false), plugin: PLUGIN, scene, params: params(), streams: Vec::new() }
+}

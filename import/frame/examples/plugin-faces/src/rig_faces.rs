@@ -305,6 +305,9 @@ pub fn faces() -> Vec<Face> {
         v.push(Face { plugin: PLUGIN, ..crate::rig_blues::prefx::spring_back(t) });
     }
     v.push(Face { plugin: PLUGIN, ..crate::rig_blues::prefx::aqua_at(crate::rig_time::kit::Tier::Phone) });
+    v.push(Face { plugin: PLUGIN, ..crate::rig_blues::prefx::tank_trem_phone() });
+    v.push(Face { plugin: PLUGIN, ..crate::rig_blues::premod::premod_at(crate::rig_time::kit::Tier::Phone) });
+    v.push(Face { plugin: PLUGIN, ..crate::rig_blues::premod::premod_back(crate::rig_time::kit::Tier::Phone) });
     v.push(Face { plugin: PLUGIN, ..crate::rig_blues::prefx::spring_at(crate::rig_time::kit::Tier::Phone) });
     v.push(trio());
     v.push(post_comp());
@@ -353,14 +356,16 @@ pub fn manifest() -> String {
         json!({ "match": ["aqua"], "face": pre[0].file, "ns": "aquapuss", "size": size(&pre[0]), "nameplate": true, "time_knob": true, "back": crate::rig_blues::prefx::aqua_back(Desk).file,
             "tiers": { "phone": { "face": crate::rig_blues::prefx::aqua_at(Phone).file, "size": size(&crate::rig_blues::prefx::aqua_at(Phone)), "back": crate::rig_blues::prefx::aqua_back(Phone).file } } }),
         // The Gravity Tank's two halves, each by its block preset's name.
-        json!({ "match": ["gravity tank trem", "harmonic trem"], "face": pre[1].file, "ns": "trem", "size": size(&pre[1]) }),
+        json!({ "match": ["gravity tank trem", "harmonic trem"], "face": pre[1].file, "ns": "trem", "size": size(&pre[1]),
+            "tiers": { "phone": { "face": "18-gravity-tank-trem-phone", "size": size(&crate::rig_blues::prefx::tank_trem_phone()), "nameplate": true, "time_knob": true } } }),
         // Any spring on a reverb block ("Gravity Tank Spring", "Fender
         // Spring"): frame's spring reverb.
         json!({ "match": ["spring"], "face": pre[2].file, "ns": "spring", "size": size(&pre[2]), "nameplate": true, "time_knob": true, "back": crate::rig_blues::prefx::spring_back(Desk).file,
             "tiers": { "phone": { "face": crate::rig_blues::prefx::spring_at(Phone).file, "size": size(&crate::rig_blues::prefx::spring_at(Phone)), "back": crate::rig_blues::prefx::spring_back(Phone).file } } }),
         // Pre modulation: its unit for any preset on the block (and the
         // block itself, by name).
-        json!({ "match": ["pre mod", "chorus", "vibe", "ce-2"], "face": "38-pre-mod", "ns": "premod", "size": [crate::rig_blues::premod::W, crate::rig_blues::premod::H] }),
+        json!({ "match": ["pre mod", "chorus", "vibe", "ce-2"], "face": "38-pre-mod", "ns": "premod", "size": [crate::rig_blues::premod::W, crate::rig_blues::premod::H],
+            "tiers": { "phone": { "face": crate::rig_blues::premod::premod_at(Phone).file, "size": size(&crate::rig_blues::premod::premod_at(Phone)), "back": crate::rig_blues::premod::premod_back(Phone).file, "nameplate": true, "time_knob": true } } }),
     ];
     // The compressor at the head of the drive board: the Pre Comp block.
     let comp = Face { plugin: PLUGIN, ..drives::compressor() };
