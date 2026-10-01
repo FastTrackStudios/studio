@@ -583,30 +583,53 @@ pub fn volume_phone() -> Face {
     Face { file: "38-volume-phone", plugin: PLUGIN, scene, params, streams: Vec::new() }
 }
 
-/// The octaver on a phone, thin beside the envelope filter: three faders —
-/// SUB (the octave down), DRY, UP (the octave up) — the pitch block's
-/// voices B and A and its dry, and its stomp and LED.
+
+/// The Pitch page on a phone: the octaver a third of it, the harmonizer
+/// the rest, both the page's height.
+pub const OCTAVER_PHONE_W: f64 = 250.0;
+pub const HARMONY_PHONE_W: f64 = 505.0;
+
+/// A unit's panel on the Pitch page, `w` × the page's height, in `top` /
+/// `bottom`.
+fn pitch_panel(b: &mut Builder<'_>, root: NodeId, w: f64, top: &str, bottom: &str) -> NodeId {
+    ui::fit_root(b, root, w, PHONE_H);
+    let mut p = draw::frame("Panel", 0.0, 0.0, w, PHONE_H);
+    p.fills = vec![draw::linear(180.0, &[(0.0, top), (1.0, bottom)])];
+    p.corner_radii = CornerRadii::uniform(12.0);
+    b.add(root, draw::with_effects(p, vec![draw::inner_shadow("#ffffff16", 0.0, 1.0, 0.0)]))
+}
+
+/// The octaver on a phone, a third of the Pitch page: three long faders —
+/// SUB (the octave down), DRY, UP (the octave up), the pitch block's voices
+/// B and A and its dry — each lit to its level, with its value; the
+/// nameplate (the preset ‹ ›, OCTAVER) and its On.
 #[must_use]
 pub fn octaver_phone() -> Face {
     const NS: &str = "pitch";
-    const INK: &str = "#f1f5f9";
+    const INK: &str = "#e0f2fe";
+    const DIM: &str = "#7dd3fc";
     let w = OCTAVER_PHONE_W;
     let scene = canvas("Octaver", |b, root| {
-        let cast = casting(b, root, w, ("#1e3a8a", "#2563eb"));
-        crate::rig_time::kit::nameplate_right(b, cast, NS, w + 6.0, (6.0, 28.0), 0.0, w - 24.0, 11.0, ("#dbeafe", "#bfdbfe"), |_, _| {});
-        set(b, cast, "OCTAVER", w / 2.0, 50.0, 18.0, INK, &Lettering::family(family::INTER).weight(900.0), 0.16);
-        let (top, len) = (76.0, 150.0);
-        for (i, (id, name)) in [("b_level", "SUB"), ("dry", "DRY"), ("a_level", "UP")].iter().enumerate() {
+        let p = pitch_panel(b, root, w, "#0f1d33", "#0a1322");
+        let head = Lettering::family(family::INTER).weight(800.0);
+        set(b, p, "OCTAVER", 52.0, 22.0, 14.0, INK, &head, 0.2);
+        crate::rig_time::kit::nameplate(b, p, NS, (110.0, 8.0, 28.0), 0.0, w - 122.0, 11.0, (INK, DIM), |_, _| {});
+        let (top, len) = (54.0, 186.0);
+        for (i, (id, name, color)) in [("b_level", "SUB", "#38bdf8"), ("dry", "DRY", "#e2e8f0"), ("a_level", "UP", "#a78bfa")].iter().enumerate() {
             let x = w * (0.2 + 0.3 * i as f64);
-            b.add(cast, draw::rounded(draw::rect("slot", x - 3.0, top + 6.0, 6.0, len - 12.0, draw::solid("#0b1230")), 3.0));
-            crate::rig_amp::fader(b, cast, &format!("{NS}/{id}"), (x, top), len, (34.0, 22.0), |b, c, cw, ch| {
-                b.add(c, draw::with_effects(draw::rounded(draw::rect("cap", 0.0, 0.0, cw, ch, draw::linear(180.0, &[(0.0, "#f8fafc"), (1.0, "#cbd5e1")])), 4.0), vec![draw::drop_shadow("#000000a0", 0.0, 2.0, 3.0)]));
-                b.add(c, draw::rect("line", 4.0, ch / 2.0 - 1.0, cw - 8.0, 2.0, draw::solid("#1e3a8a")));
+            // The well, and its level lit up from the bottom.
+            b.add(p, draw::rounded(draw::rect("well", x - 9.0, top, 18.0, len, draw::solid("#060b14")), 9.0));
+            let lit = b.add(p, draw::frame("lit", x - 9.0, top, 18.0, len));
+            b.add(lit, ui::glowing(draw::rounded(draw::rect("level", 3.0, 3.0, 12.0, len - 6.0, draw::linear(0.0, &[(0.0, &ui::alpha(color, 0.35)), (1.0, color)])), 6.0), color, 0.6, 6.0));
+            motion::add(b, lit, Motion::new(Target::StretchY).input(format!("norm({NS}/{id})")).range(0.0, 1.0).pivot(0.5, 1.0).dynamics(Dynamics::spring(500.0, 40.0)));
+            crate::rig_amp::fader(b, p, &format!("{NS}/{id}"), (x, top - 14.0), len + 28.0, (56.0, 28.0), |b, c, cw, ch| {
+                b.add(c, draw::with_effects(draw::rounded(draw::rect("cap", 0.0, 0.0, cw, ch, draw::linear(180.0, &[(0.0, "#f8fafc"), (1.0, "#cbd5e1")])), 6.0), vec![draw::drop_shadow("#000000b0", 0.0, 2.0, 4.0)]));
+                b.add(c, draw::rect("line", 8.0, ch / 2.0 - 1.0, cw - 16.0, 2.0, draw::solid("#0f1d33")));
             });
-            parts::print(b, cast, name, x, top + len + 12.0, 10.0, INK, 800.0, 0.12);
+            parts::print(b, p, name, x, top + len + 22.0, 11.0, color, 800.0, 0.14);
+            crate::delay::parts::readout(b, p, &format!("{name} value"), ui::bind(&format!("{NS}/{id}")), (x - 36.0, top + len + 40.0, 72.0), 10.0, INK, TextAlign::Center);
         }
-        led(b, cast, NS, w / 2.0, 252.0, 6.0, "#e0281c");
-        stomp(b, cast, NS, 40.0, w / 2.0, 278.0);
+        crate::rig_time::kit::bypass(b, p, NS, w - 24.0, 22.0, 26.0, "blue", "On");
     });
     let mut params = vec![
         ui::param("pitch/a_level", "Octave Up", Range::linear(0.0, 1.0, Unit::None), 0.7).featured(),
@@ -618,61 +641,59 @@ pub fn octaver_phone() -> Face {
     Face { file: "32-octaver-phone", plugin: PLUGIN, scene, params, streams: Vec::new() }
 }
 
-/// The octaver beside the Q-Tron on the Special page.
-pub const OCTAVER_PHONE_W: f64 = 170.0;
-
-/// The harmonizer beside the octaver on the Pitch page.
-pub const HARMONY_PHONE_W: f64 = 300.0;
-
-/// The harmonizer as a pedal on a phone: two voices over the note — a
-/// window of the intervals (two octaves either way, the note at unison,
-/// each voice's bar where it sounds, as bright as its level) — and under
-/// it each voice's interval, its level, the dry; its stomp and LED; the
-/// nameplate (the preset ‹ ›).
+/// The harmonizer on a phone, two thirds of the Pitch page: its two voices
+/// over the note — a wide window of the intervals (two octaves either way,
+/// the note at unison, each voice's bar where it sounds, as bright as its
+/// level) — and under it each voice's interval, big, and its level, then
+/// the dry; the nameplate (the preset ‹ ›, HARMONIZER) and its On.
 #[must_use]
 pub fn harmonizer_phone() -> Face {
     const NS: &str = "harm";
     const INK: &str = "#f5f3ff";
-    const DIM: &str = "#ddd6fe";
+    const DIM: &str = "#a5a1c4";
     const VOICES: [(&str, &str, &str, &str); 2] = [("semitones", "a_level", "A", "#a78bfa"), ("b_semitones", "b_level", "B", "#22d3ee")];
     let w = HARMONY_PHONE_W;
     let scene = canvas("Harmonizer", |b, root| {
-        let cast = casting(b, root, w, ("#2e1065", "#5b21b6"));
-        crate::rig_time::kit::nameplate_right(b, cast, NS, w + 6.0, (6.0, 28.0), 0.0, w - 24.0, 11.0, (INK, DIM), |_, _| {});
-        // The window: −24…+24 across, the note, the voices.
-        let (lx, ly, lw, lh) = (16.0, 38.0, w - 32.0, 74.0);
+        let p = pitch_panel(b, root, w, "#1a1730", "#0e0c1c");
+        let head = Lettering::family(family::INTER).weight(800.0);
+        set(b, p, "HARMONIZER", 74.0, 22.0, 14.0, INK, &head, 0.2);
+        crate::rig_time::kit::nameplate(b, p, NS, (160.0, 8.0, 28.0), 0.0, w - 160.0 - 60.0, 11.0, (INK, DIM), |_, _| {});
+        crate::rig_time::kit::bypass(b, p, NS, w - 26.0, 22.0, 26.0, "purple", "On");
+        // The window.
+        let (lx, ly, lw, lh) = (14.0, 46.0, w - 28.0, 96.0);
         let mut l = draw::frame("Ladder", lx, ly, lw, lh);
         l.fills = vec![draw::linear(180.0, &[(0.0, "#0b0a16"), (1.0, "#07060e")])];
         l.clips_content = true;
         l.corner_radii = CornerRadii::uniform(8.0);
         l.effects = vec![draw::inner_shadow("#000000c0", 0.0, 2.0, 6.0)];
-        let l = b.add(cast, l);
-        let x_of = |s: f64| 12.0 + (s + 24.0) / 48.0 * (lw - 24.0);
-        for (s, label) in [(-24.0, "−2"), (-12.0, "−OCT"), (0.0, "UNI"), (7.0, "5th"), (12.0, "+OCT"), (24.0, "+2")] {
+        let l = b.add(p, l);
+        let x_of = |s: f64| 16.0 + (s + 24.0) / 48.0 * (lw - 32.0);
+        for (s, label) in [(-24.0, "−2 OCT"), (-12.0, "−OCT"), (-5.0, "−4th"), (0.0, "UNISON"), (4.0, "3rd"), (7.0, "5th"), (12.0, "+OCT"), (24.0, "+2 OCT")] {
             let x = x_of(s);
-            b.add(l, ui::strokes("rung", &[vec![(x, 6.0), (x, lh - 18.0)]], 1.0, draw::solid(if s == 0.0 { "#ffffff40" } else { "#ffffff16" })));
-            ui::silk(b, l, label, x, lh - 9.0, 6.5, "#a5a1c4", 800.0);
+            b.add(l, ui::strokes("rung", &[vec![(x, 8.0), (x, lh - 20.0)]], 1.0, draw::solid(if s == 0.0 { "#ffffff40" } else { "#ffffff16" })));
+            ui::silk(b, l, label, x, lh - 10.0, 7.0, DIM, 800.0);
         }
-        b.add(l, ui::glowing(draw::rounded(draw::rect("note", x_of(0.0) - 2.5, 10.0, 5.0, lh - 32.0, draw::solid("#f8fafc")), 2.5), "#ffffff", 0.5, 4.0));
+        b.add(l, ui::glowing(draw::rounded(draw::rect("note", x_of(0.0) - 3.0, 12.0, 6.0, lh - 38.0, draw::solid("#f8fafc")), 3.0), "#ffffff", 0.5, 4.0));
         for (semis, level, _, color) in VOICES {
-            let bar = b.add(l, draw::frame(semis, x_of(0.0) - 4.0, 12.0, 8.0, lh - 36.0));
-            b.add(bar, ui::glowing(draw::rounded(draw::rect("voice", 0.0, 0.0, 8.0, lh - 36.0, draw::solid(color)), 3.0), color, 0.9, 7.0));
-            motion::add(b, bar, Motion::new(Target::X).input(format!("clamp(param({NS}/{semis}) / 24, -1, 1) * 0.5 + 0.5")).range(-(lw - 24.0) / 2.0, (lw - 24.0) / 2.0).dynamics(Dynamics::spring(320.0, 30.0)));
+            let bar = b.add(l, draw::frame(semis, x_of(0.0) - 5.0, 16.0, 10.0, lh - 46.0));
+            b.add(bar, ui::glowing(draw::rounded(draw::rect("voice", 0.0, 0.0, 10.0, lh - 46.0, draw::solid(color)), 4.0), color, 0.9, 8.0));
+            motion::add(b, bar, Motion::new(Target::X).input(format!("clamp(param({NS}/{semis}) / 24, -1, 1) * 0.5 + 0.5")).range(-(lw - 32.0) / 2.0, (lw - 32.0) / 2.0).dynamics(Dynamics::spring(320.0, 30.0)));
             motion::add(b, bar, Motion::new(Target::Opacity).input(format!("(0.15 + 0.85 * param({NS}/{level})) * (0.4 + 0.6 * param({NS}/on))")).range(0.0, 1.0));
         }
-        // The knobs: the voices' intervals, then their levels and the dry.
-        let knob_opts = |c: &str| ["color=#1d1a30".to_string(), format!("pointer={c}"), "index=line".into(), "index_w=0.1".into(), "skirt=plain".into(), "skirt_color=#0b0a16".into()];
+        // Per voice: its interval, big, and its level; then the dry.
+        let ky = 206.0;
+        let opts = |c: &str| ["color=#1d1a30".to_string(), format!("pointer={c}"), "index=line".into(), "index_w=0.1".into(), "skirt=plain".into(), "skirt_color=#0b0a16".into()];
         for (i, (semis, level, name, color)) in VOICES.iter().enumerate() {
-            let o = knob_opts(color);
+            let o = opts(color);
             let o: Vec<&str> = o.iter().map(String::as_str).collect();
-            crate::rig_time::kit::knob3d(b, cast, &format!("{NS}/{semis}"), &format!("Voice {name}"), 56.0, (w * (0.28 + 0.44 * i as f64), 146.0), &o, INK, DIM);
-            crate::rig_time::kit::knob3d(b, cast, &format!("{NS}/{level}"), &format!("Level {name}"), 34.0, (w * (0.16 + 0.34 * i as f64), 214.0), &o, INK, DIM);
+            let x0 = 14.0 + 196.0 * i as f64;
+            parts::print(b, p, &format!("VOICE {name}"), x0 + 90.0, 160.0, 10.0, color, 800.0, 0.16);
+            crate::rig_time::kit::knob3d(b, p, &format!("{NS}/{semis}"), "Interval", 70.0, (x0 + 52.0, ky), &o, INK, DIM);
+            crate::rig_time::kit::knob3d(b, p, &format!("{NS}/{level}"), "Level", 48.0, (x0 + 140.0, ky + 10.0), &o, INK, DIM);
         }
-        let o = knob_opts("#f8fafc");
+        let o = opts("#f8fafc");
         let o: Vec<&str> = o.iter().map(String::as_str).collect();
-        crate::rig_time::kit::knob3d(b, cast, &format!("{NS}/dry"), "Dry", 34.0, (w * 0.84, 214.0), &o, INK, DIM);
-        led(b, cast, NS, w / 2.0 - 30.0, 278.0, 6.0, "#a78bfa");
-        stomp(b, cast, NS, 30.0, w / 2.0, 278.0);
+        crate::rig_time::kit::knob3d(b, p, &format!("{NS}/dry"), "Dry", 48.0, (w - 50.0, ky + 10.0), &o, INK, DIM);
     });
     let interval = |addr: &str, name: &str, d: f64| {
         let mut p = ui::param(addr, name, Range::linear(-24.0, 24.0, Unit::None), d);
