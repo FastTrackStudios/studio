@@ -284,6 +284,11 @@ fn patch(p: &mut PaintPrimitive, b: &Bound, v: &Value) {
                 *height = n.max(0.0);
             }
         }
+        (Prop::Rotation, PaintPrimitive::Rect { rotation, .. } | PaintPrimitive::Path { rotation, .. }) => {
+            if let Some(deg) = v.num() {
+                *rotation = deg.to_radians();
+            }
+        }
         (Prop::Radius, PaintPrimitive::Rect { corner_radii, .. }) => {
             if let Some(n) = v.num() {
                 let r = n.max(0.0);

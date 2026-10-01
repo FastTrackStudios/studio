@@ -199,3 +199,26 @@ fn problems_are_reported_by_where_they_are() {
     let errs = Theme::from_markup(&cyclic, schema(), None).unwrap_err();
     assert!(errs.iter().any(|e| e.message.contains("refers to itself")), "{errs:?}");
 }
+
+#[test]
+fn a_bound_rotation_turns_the_node_about_its_origin() {
+    let src = r##"<Document>
+  <Page name="knob">
+    <Frame name="Knob" w=24 h=24>
+      <Vector name="Pointer" x=12 y=12 w=1 h=1 fill="#ffffff" geometry="M -1 0 L 1 0 L 1 -10 L -1 -10 Z" bind:rotation="track.pan * 90" />
+    </Frame>
+  </Page>
+</Document>"##;
+    let t = Theme::from_markup(src, Schema::new().live("track.pan"), None).unwrap();
+    let pointer = |pan: f64| {
+        let mut c = Fills::default();
+        t.live("knob", (24.0, 24.0), &vec![Value::Num(pan)], &mut c, Affine::IDENTITY);
+        c.rect("#ffffff")
+    };
+    // Centre: straight up from the middle.
+    let up = pointer(0.0);
+    assert!((up.y0 - 2.0).abs() < 1e-6 && (up.x0 - 11.0).abs() < 1e-6, "{up:?}");
+    // Hard right: lying along the right-hand radius.
+    let right = pointer(1.0);
+    assert!((right.x1 - 22.0).abs() < 1e-6 && (right.y0 - 11.0).abs() < 1e-6, "{right:?}");
+}

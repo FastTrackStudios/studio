@@ -698,7 +698,8 @@ pub struct Node {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Facet)]
 pub struct Bind {
     /// The property, by its markup attribute name: `fill`, `stroke`,
-    /// `opacity`, `visible`, `text`, `x`, `y`, `w`, `h`, `radius`.
+    /// `opacity`, `visible`, `text`, `x`, `y`, `w`, `h`, `radius`,
+    /// `rotation` (degrees clockwise, about the node's origin).
     pub prop: String,
     /// The expression's source.
     pub expr: String,

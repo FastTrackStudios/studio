@@ -40,6 +40,9 @@ pub(crate) enum Prop {
     Y,
     W,
     H,
+    /// Degrees clockwise, about the node's origin (a knob's pointer drawn
+    /// out from its centre).
+    Rotation,
     Opacity,
     Radius,
     Fill,
@@ -55,6 +58,7 @@ impl Prop {
             "y" => Prop::Y,
             "w" => Prop::W,
             "h" => Prop::H,
+            "rotation" => Prop::Rotation,
             "opacity" => Prop::Opacity,
             "radius" => Prop::Radius,
             "fill" => Prop::Fill,
@@ -391,6 +395,12 @@ pub(crate) fn apply(node: &mut Node, prop: Prop, v: &Value) {
         Prop::H => {
             if let Some(n) = v.num() {
                 node.size.height = n.max(0.0);
+            }
+        }
+        Prop::Rotation => {
+            if let Some(deg) = v.num() {
+                let (sin, cos) = deg.to_radians().sin_cos();
+                (node.transform.a, node.transform.b, node.transform.c, node.transform.d) = (cos, -sin, sin, cos);
             }
         }
         Prop::Opacity => {

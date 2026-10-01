@@ -119,6 +119,7 @@ pub(crate) const BIND_ATTRS: &[&str] = &[
     "bind:y",
     "bind:w",
     "bind:h",
+    "bind:rotation",
     "bind:opacity",
     "bind:radius",
     "bind:fill",
