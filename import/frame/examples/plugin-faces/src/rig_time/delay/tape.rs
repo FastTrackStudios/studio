@@ -130,22 +130,25 @@ pub fn face_at(dark: bool, tier: kit::Tier) -> Face {
         };
         let picture;
         if small_room {
-            // The picture: ECHO, the VU, the heads under it.
-            // A slim VU: the controls come first on a phone.
-            let bay1 = bay(b, unit, "Bay 1", (6.0, y, kit::PHONE_PICTURE_R - 8.0, bh), &grey);
+            // The bays cut round the controls: the dial's centred on the
+            // Time knob, the VU's up to it, the knobs' clear of their tick
+            // rings.
+            let (tx, ty, td) = kit::PHONE_TIME;
+            let half = 78.0;
+            let (b2x, b3x) = (tx - half, tx + half + 2.0);
+            // The picture: ECHO, a slim VU, the heads under it — the
+            // controls come first on a phone.
+            let b1w = b2x - 2.0 - 6.0;
+            let bay1 = bay(b, unit, "Bay 1", (6.0, y, b1w, bh), &grey);
             for (i, ch) in "ECHO".chars().enumerate() {
                 parts::centred(b, bay1, &ch.to_string(), (18.0, 28.0 + 28.0 * i as f64), Type::new(18.0, ink, 300.0).family(draw::family::SAIRA).width(88.0));
             }
-            vu(b, bay1, (104.0, 72.0), 34.0, ink);
-            lamps(b, bay1, [80.0, 104.0, 128.0], 134.0);
+            let vx = 18.0 + (b1w - 18.0) / 2.0 + 4.0;
+            vu(b, bay1, (vx, 72.0), 34.0, ink);
+            lamps(b, bay1, [vx - 24.0, vx, vx + 24.0], 134.0);
             picture = bay1;
-            // The white dial: Time.
-            // The white dial: Time, at the phone's Time knob place.
-            // Its bay between the picture and the knob row (the knobs'
-            // tick rings clear of the bay's edge).
-            let (b2x, b3x) = (kit::PHONE_PICTURE_R, kit::PHONE_KNOBS.0[0] - 40.0);
+            // The white dial: Time, in its own bay.
             let bay2 = bay(b, unit, "Bay 2", (b2x, y, b3x - 2.0 - b2x, bh), &grey);
-            let (tx, ty, td) = kit::PHONE_TIME;
             kit::time_knob(b, bay2, DLY, (tx - b2x, ty - y, td), 11.0, (ink, "#6b6e74", &lit), |b, p, addr| {
                 look::place_knob(b, p, &dial, addr, "", td, (tx - b2x, ty - y), ink);
             });
