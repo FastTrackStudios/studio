@@ -1422,15 +1422,27 @@
   ],
   "modulation": [
     {
+      "back": "100-mod-chorus-back",
       "face": "100-mod-chorus",
       "match": [
         "chorus"
       ],
+      "nameplate": true,
       "ns": "mod",
       "size": [
         400.0,
         340.0
-      ]
+      ],
+      "tiers": {
+        "phone": {
+          "back": "100-mod-chorus-back-phone",
+          "face": "100-mod-chorus-phone",
+          "size": [
+            400.0,
+            340.0
+          ]
+        }
+      }
     },
     {
       "face": "101-motion-tremolo",
@@ -1438,22 +1450,42 @@
         "trem",
         "tremolo"
       ],
+      "nameplate": true,
       "ns": "motion",
       "size": [
         400.0,
         340.0
-      ]
+      ],
+      "tiers": {
+        "phone": {
+          "face": "101-motion-tremolo-phone",
+          "size": [
+            400.0,
+            340.0
+          ]
+        }
+      }
     },
     {
       "face": "102-motion-vibrato",
       "match": [
         "vibrato"
       ],
+      "nameplate": true,
       "ns": "motion",
       "size": [
         400.0,
         340.0
-      ]
+      ],
+      "tiers": {
+        "phone": {
+          "face": "102-motion-vibrato-phone",
+          "size": [
+            400.0,
+            340.0
+          ]
+        }
+      }
     }
   ],
   "pictures": [

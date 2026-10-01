@@ -114,9 +114,31 @@ fn panel(name: &str, t: &Theme, build: impl FnOnce(&mut Builder<'_>, NodeId)) ->
     })
 }
 
+/// How a face lays out at a tier: where its picture's window sits, and
+/// its knobs' size and line. A phone gives the picture less height and the
+/// knobs more.
+#[derive(Clone, Copy)]
+struct Lay {
+    view_y: f64,
+    view_h: f64,
+    knob_d: f64,
+    knob_y: f64,
+    small: bool,
+}
+
+impl Lay {
+    fn at(tier: kit::Tier) -> Self {
+        if matches!(tier, kit::Tier::Phone | kit::Tier::Strip) {
+            Self { view_y: 46.0, view_h: 150.0, knob_d: 52.0, knob_y: 246.0, small: true }
+        } else {
+            Self { view_y: 40.0, view_h: 206.0, knob_d: 34.0, knob_y: 280.0, small: false }
+        }
+    }
+}
+
 /// The picture's window across the middle, clipped.
-fn view(b: &mut Builder<'_>, parent: NodeId, t: &Theme) -> (NodeId, f64, f64) {
-    let (x, y, w, h) = (10.0, VIEW_Y, W - 20.0, 186.0);
+fn view(b: &mut Builder<'_>, parent: NodeId, t: &Theme, l: Lay) -> (NodeId, f64, f64) {
+    let (x, y, w, h) = (10.0, l.view_y, W - 20.0, l.view_h);
     let mut v = draw::frame("View", x, y, w, h);
     v.fills = vec![draw::linear(180.0, &t.window)];
     v.clips_content = true;
@@ -132,20 +154,59 @@ const VIEW_Y: f64 = 66.0;
 /// The face's frame of controls: its On key and name, light, across the
 /// top (the top-right corner is the host's, for the unit's preset), its
 /// line of description, and the knobs spread along the bottom.
-fn column(b: &mut Builder<'_>, p: NodeId, t: &Theme, ns: &str, name: &str, sub: &str, list: &[(&str, &str)]) {
-    let sans = draw::Lettering::family(draw::family::INTER).weight(300.0);
-    kit::bypass(b, p, ns, 25.0, 30.0, 22.0, t.bypass, "On");
-    let w = name.chars().count() as f64 * 11.5;
-    crate::suite_studio_blues::parts::set(b, p, name, 46.0 + w / 2.0, 30.0, 21.0, t.ink, &sans, 0.02);
-    ui::silk_left(b, p, sub, 14.0, 52.0, 6.0, t.dim, 700.0);
+fn column(b: &mut Builder<'_>, p: NodeId, t: &Theme, ns: &str, name: &str, l: Lay, back: Option<bool>, list: &[(&str, &str)]) {
+    header(b, p, t, ns, name, l, back);
     let pointer = format!("pointer={}", t.accent);
     let color = format!("color={}", t.knob);
     let skirt = format!("skirt_color={}", t.skirt);
     let opts = [color.as_str(), pointer.as_str(), "index=line", "index_w=0.1", "skirt=plain", skirt.as_str()];
     let step = (W - 20.0) / list.len() as f64;
     for (i, (id, legend)) in list.iter().enumerate() {
-        kit::knob3d(b, p, &a(ns, id), legend, 34.0, (10.0 + step * (i as f64 + 0.5), 280.0), &opts, t.ink, t.dim);
+        kit::knob3d(b, p, &a(ns, id), legend, l.knob_d, (10.0 + step * (i as f64 + 0.5), l.knob_y), &opts, t.ink, t.dim);
     }
+}
+
+/// Every modulation face's head, the same at each: its On key at the top
+/// left and, where it has a back, the arrow that turns it over beside it
+/// (`back`: on the back, `Some(true)`); the nameplate at the top right —
+/// the preset, stepped ‹ ›, then the effect's name in the face's hand, a
+/// press opening its engines (or modes).
+fn header(b: &mut Builder<'_>, p: NodeId, t: &Theme, ns: &str, name: &str, l: Lay, back: Option<bool>) {
+    let key = if l.small { 30.0 } else { 22.0 };
+    kit::bypass(b, p, ns, 12.0 + key / 2.0, 8.0 + key / 2.0, key, t.bypass, "On");
+    if let Some(on_back) = back {
+        let (x, w, h) = (12.0 + key + 6.0, if l.small { 50.0 } else { 44.0 }, key);
+        let g = b.add(p, draw::frame("flip", x, 8.0, w, h));
+        b.add(g, draw::rounded(draw::rect("well", 0.0, 0.0, w, h, draw::solid(&ui::alpha(t.dim, 0.25))), h / 2.0));
+        ui::silk(b, g, if on_back { "Back" } else { "More" }, w / 2.0 - 5.0, h / 2.0, if l.small { 9.0 } else { 7.0 }, t.ink, 800.0);
+        let (cx, cy, dy) = (w - 9.0, h / 2.0, if on_back { -2.0 } else { 2.0 });
+        ui::line(b, g, "chevron", &[(cx - 3.0, cy - dy), (cx, cy + dy), (cx + 3.0, cy - dy)], 1.4, t.ink);
+        b.controls.insert(g, surface_proto::Control::new(surface_proto::ControlKind::Button { mode: surface_proto::ButtonMode::Momentary }).bound(ui::bind(&a(ns, "flip"))));
+    }
+    let sans = draw::Lettering::family(draw::family::INTER).weight(300.0);
+    let (h, size) = if l.small { (30.0, 11.0) } else { (24.0, 9.0) };
+    let title_w = name.chars().count() as f64 * if l.small { 12.0 } else { 10.5 } + 18.0;
+    let preset_w = 150.0;
+    let x = W - 10.0 - preset_w - 6.0 - title_w;
+    let fs = if l.small { 21.0 } else { 18.0 };
+    kit::nameplate(b, p, ns, (x, 8.0, h), title_w, preset_w, size, (t.accent, t.dim), |b, tb| {
+        crate::suite_studio_blues::parts::set(b, tb, name, (title_w - 14.0) / 2.0, h / 2.0, fs, t.ink, &sans, 0.02);
+    });
+}
+
+/// A modulation face's file at `tier` (and its back's).
+fn file_at(base: &'static str, tier: kit::Tier) -> &'static str {
+    kit::tier_file(base, tier, false)
+}
+
+/// The params every modulation face adds to its effect's: the nameplate's
+/// and, where it has a back, the arrow's.
+fn chrome_params(ns: &str, flips: bool) -> Vec<ParamInfo> {
+    let mut v = kit::nameplate_params(ns);
+    if flips {
+        v.extend(kit::flip_params(ns));
+    }
+    v
 }
 
 // ── Chorus ───────────────────────────────────────────────────────────────
@@ -168,9 +229,14 @@ const CHORUS: Theme = Theme {
 /// the rate how fast), spread apart with the width and as strong as the
 /// mix. The thickening you hear, as you see it: light through water.
 fn chorus() -> Face {
+    chorus_at(kit::Tier::Desktop)
+}
+
+fn chorus_at(tier: kit::Tier) -> Face {
     let t = &CHORUS;
+    let l = Lay::at(tier);
     let scene = panel("Chorus", t, |b, p| {
-        let (v, vw, vh) = view(b, p, t);
+        let (v, vw, vh) = view(b, p, t, l);
         let mid = vh / 2.0 + 6.0;
         let period = 70.0;
         let wave = |amp: f64| -> Vec<(f64, f64)> {
@@ -199,11 +265,29 @@ fn chorus() -> Face {
         b.add(v, ui::strokes("dry", &[wave(30.0)], 2.0, draw::solid(t.ink)));
         ui::silk_left(b, v, "Dry", 10.0, 12.0, 5.5, t.ink, 800.0);
         ui::silk_left(b, v, "Voices", 30.0, 12.0, 5.5, t.accent, 800.0);
-        column(b, p, t, MOD, "Chorus", "Voices · detune · width", &[("rate", "Rate"), ("depth", "Depth"), ("width", "Width"), ("mix", "Mix")]);
+        let knobs: &[(&str, &str)] = if l.small { &[("rate", "Rate"), ("depth", "Depth"), ("mix", "Mix")] } else { &[("rate", "Rate"), ("depth", "Depth"), ("width", "Width"), ("mix", "Mix")] };
+        column(b, p, t, MOD, "Chorus", l, Some(false), knobs);
         // Responsive: the picture takes the width; the column pins left.
         kit::responsive(b, p, &[v]);
     });
-    Face { file: "100-mod-chorus", plugin: PLUGIN, scene, params: chorus_params(), streams: Vec::new() }
+    let mut params = chorus_params();
+    params.extend(chrome_params(MOD, true));
+    Face { file: file_at("100-mod-chorus", tier), plugin: PLUGIN, scene, params, streams: Vec::new() }
+}
+
+/// The chorus's back: its panel, no picture — Width, Color and Feedback
+/// across it, the head as on the front.
+fn chorus_back(tier: kit::Tier) -> Face {
+    let t = &CHORUS;
+    let l = Lay::at(tier);
+    let scene = panel("Chorus", t, |b, p| {
+        ui::silk_left(b, p, "Advanced", 14.0, l.view_y + 16.0, if l.small { 10.0 } else { 7.5 }, t.dim, 800.0);
+        let back = Lay { knob_y: l.view_y + (H - l.view_y) * 0.45, knob_d: l.knob_d * 1.15, ..l };
+        column(b, p, t, MOD, "Chorus", back, Some(true), &[("width", "Width"), ("color", "Color"), ("feedback", "Feedback")]);
+    });
+    let mut params = chorus_params();
+    params.extend(chrome_params(MOD, true));
+    Face { file: file_at("100-mod-chorus-back", tier), plugin: PLUGIN, scene, params, streams: Vec::new() }
 }
 
 // ── Tremolo ──────────────────────────────────────────────────────────────
@@ -226,9 +310,14 @@ const TREMOLO: Theme = Theme {
 /// as the depth and as fast as the rate. Stereo and Harmonic light a
 /// second ring and tube against the first.
 fn tremolo() -> Face {
+    tremolo_at(kit::Tier::Desktop)
+}
+
+fn tremolo_at(tier: kit::Tier) -> Face {
     let t = &TREMOLO;
+    let l = Lay::at(tier);
     let scene = panel("Tremolo", t, |b, p| {
-        let (v, vw, vh) = view(b, p, t);
+        let (v, vw, vh) = view(b, p, t, l);
         // Brick behind the sign, barely lit.
         let mut rows: Vec<Vec<(f64, f64)>> = (1..8).map(|i| vec![(0.0, f64::from(i) * 19.0), (vw, f64::from(i) * 19.0)]).collect();
         for r in 0..8 {
@@ -239,7 +328,7 @@ fn tremolo() -> Face {
         }
         b.add(v, ui::strokes("brick", &rows, 1.0, draw::solid("#ffffff0a")));
         // Full volume sits under the corner pill's height, clear of it.
-        let (lamp_x, top, bottom) = (46.0, 44.0, vh - 18.0);
+        let (lamp_x, top, bottom) = (46.0, 18.0, vh - 18.0);
         let period = 64.0;
         let span = vw - lamp_x;
         let curve = |phase: f64| -> Vec<(f64, f64)> {
@@ -275,11 +364,13 @@ fn tremolo() -> Face {
             }
         }
         ui::silk_left(b, v, "Volume", lamp_x + 6.0, vh - 8.0, 5.5, t.dim, 800.0);
-        column(b, p, t, MOTION, "Tremolo", "Volume · rate · depth", &[("rate", "Rate"), ("depth", "Depth"), ("mix", "Mix")]);
+        column(b, p, t, MOTION, "Tremolo", l, None, &[("rate", "Rate"), ("depth", "Depth"), ("mix", "Mix")]);
         // Responsive: the picture takes the width; the column pins left.
         kit::responsive(b, p, &[v]);
     });
-    Face { file: "101-motion-tremolo", plugin: PLUGIN, scene, params: trem_params(), streams: Vec::new() }
+    let mut params = trem_params();
+    params.extend(chrome_params(MOTION, false));
+    Face { file: file_at("101-motion-tremolo", tier), plugin: PLUGIN, scene, params, streams: Vec::new() }
 }
 
 // ── Vibrato ──────────────────────────────────────────────────────────────
@@ -301,9 +392,14 @@ const VIBRATO: Theme = Theme {
 /// flat about the note, as far as the depth and as fast as the rate — over
 /// the wave it bends, its cycles crowding and spreading.
 fn vibrato() -> Face {
+    vibrato_at(kit::Tier::Desktop)
+}
+
+fn vibrato_at(tier: kit::Tier) -> Face {
     let t = &VIBRATO;
+    let l = Lay::at(tier);
     let scene = panel("Vibrato", t, |b, p| {
-        let (v, vw, vh) = view(b, p, t);
+        let (v, vw, vh) = view(b, p, t, l);
         let (cx, cy, r) = (vw / 2.0, vh + 34.0, 130.0);
         let arc: Vec<(f64, f64)> = (0..=48).map(|i| draw::polar(cx, cy, r, -40.0 + 80.0 * f64::from(i) / 48.0)).collect();
         b.add(v, ui::strokes("scale", &[arc], 1.0, draw::solid("#ffffff33")));
@@ -326,26 +422,34 @@ fn vibrato() -> Face {
         let w = b.add(v, draw::frame("wave", 0.0, 0.0, vw, vh));
         b.add(w, ui::strokes("wave", &[wave], 1.4, draw::solid(&ui::alpha(t.ink, 0.7))));
         motion::add(b, w, Motion::new(Target::StretchX).input(swing).range(1.12, 0.88).pivot(0.0, 0.5));
-        column(b, p, t, MOTION, "Vibrato", "Pitch · rate · depth", &[("rate", "Rate"), ("depth", "Depth"), ("mix", "Mix")]);
+        column(b, p, t, MOTION, "Vibrato", l, None, &[("rate", "Rate"), ("depth", "Depth"), ("mix", "Mix")]);
         // Responsive: the picture takes the width; the column pins left.
         kit::responsive(b, p, &[v]);
     });
-    Face { file: "102-motion-vibrato", plugin: PLUGIN, scene, params: vibrato_params(), streams: Vec::new() }
+    let mut params = vibrato_params();
+    params.extend(chrome_params(MOTION, false));
+    Face { file: file_at("102-motion-vibrato", tier), plugin: PLUGIN, scene, params, streams: Vec::new() }
 }
 
 /// Every modulation face.
 #[must_use]
 pub fn faces() -> Vec<Face> {
-    vec![chorus(), tremolo(), vibrato()]
+    let p = kit::Tier::Phone;
+    vec![chorus(), tremolo(), vibrato(), chorus_at(p), tremolo_at(p), vibrato_at(p), chorus_back(kit::Tier::Desktop), chorus_back(p)]
 }
 
 /// `faces.json`'s `modulation` entry: each block type's face.
 #[must_use]
 pub fn manifest() -> serde_json::Value {
     let size = [W, H];
+    let p = kit::Tier::Phone;
+    // Each prints its own nameplate; the chorus turns over to its back.
     json!([
-        { "match": ["chorus"], "face": "100-mod-chorus", "ns": MOD, "size": size },
-        { "match": ["trem", "tremolo"], "face": "101-motion-tremolo", "ns": MOTION, "size": size },
-        { "match": ["vibrato"], "face": "102-motion-vibrato", "ns": MOTION, "size": size },
+        { "match": ["chorus"], "face": "100-mod-chorus", "ns": MOD, "size": size, "nameplate": true, "back": chorus_back(kit::Tier::Desktop).file,
+          "tiers": { "phone": { "face": chorus_at(p).file, "size": size, "back": chorus_back(p).file } } },
+        { "match": ["trem", "tremolo"], "face": "101-motion-tremolo", "ns": MOTION, "size": size, "nameplate": true,
+          "tiers": { "phone": { "face": tremolo_at(p).file, "size": size } } },
+        { "match": ["vibrato"], "face": "102-motion-vibrato", "ns": MOTION, "size": size, "nameplate": true,
+          "tiers": { "phone": { "face": vibrato_at(p).file, "size": size } } },
     ])
 }
