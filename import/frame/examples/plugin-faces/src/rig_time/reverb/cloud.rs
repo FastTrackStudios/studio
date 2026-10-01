@@ -121,18 +121,31 @@ fn sky(b: &mut Builder<'_>, sky: NodeId, w: f64, h: f64, l: &Look, dark: bool) {
 
 #[must_use]
 pub fn face(dark: bool) -> Face {
+    face_at(dark, kit::Tier::Desktop)
+}
+
+/// The face at `tier`: one design — the sky and the frosted panel in the
+/// same inks and lettering — laid out for the room. The smaller tiers
+/// give the sky less width and the panel larger knobs and type (Decay,
+/// Size, Level, On); the top right stays clear for the lane's preset bar.
+#[must_use]
+pub fn face_at(dark: bool, tier: kit::Tier) -> Face {
     let l = if dark { &DARK } else { &LIGHT };
     let (ink, dim) = (l.ink, l.dim);
-    let scene = kit::lane("Cloud", |b, root| {
+    let small_room = matches!(tier, kit::Tier::Phone | kit::Tier::Strip);
+    let w = tier.lane_w();
+    let scene = kit::tier_lane("Cloud", tier, |b, root| {
         // The frosted panel.
-        let mut panel = draw::frame("Panel", 0.0, 0.0, kit::W, kit::H);
+        let mut panel = draw::frame("Panel", 0.0, 0.0, w, kit::H);
         panel.fills = vec![draw::linear(160.0, &l.panel)];
         panel.corner_radii = document_proto::CornerRadii::uniform(10.0);
         b.add(root, draw::with_effects(panel, vec![draw::inner_shadow("#ffffff1a", 0.0, 1.0, 0.0)]));
         let panel = root;
 
         // ── The sky ────────────────────────────────────────────────────
-        let (sx, sy, sw, sh) = (10.0, 10.0, 600.0, kit::H - 20.0);
+        // On a phone the controls come first: the sky shrinks for them.
+        let sw = if small_room { 220.0 } else { 600.0 };
+        let (sx, sy, sh) = (10.0, 10.0, kit::H - 20.0);
         let mut s = draw::frame("Sky", sx, sy, sw, sh);
         s.fills = vec![draw::linear(180.0, &l.sky)];
         s.clips_content = true;
@@ -142,20 +155,32 @@ pub fn face(dark: bool) -> Face {
         sky(b, s, sw, sh, l, dark);
 
         // ── The panel ──────────────────────────────────────────────────
-        let x0 = 628.0;
+        let x0 = sx + sw + 18.0;
         let serif = draw::Lettering::family(draw::family::PLAYFAIR_DISPLAY).weight(400.0);
-        crate::suite_studio_blues::parts::set(b, panel, "Cloud", x0 + 34.0, 24.0, 22.0, ink, &serif, 0.08);
-        ui::silk_left(b, panel, "Ambient reverb", x0 + 76.0, 22.0, 6.5, dim, 700.0);
-        ui::silk_left(b, panel, "Diffuse · granular · endless", x0 + 76.0, 31.0, 5.5, dim, 600.0);
-        kit::bypass(b, panel, VERB, x0 + 16.0, 110.0, 26.0, "purple", "On");
         let pearl = l.knob;
-        kit::knob3d(b, panel, &a("decay"), "Decay", 50.0, (x0 + 76.0, 84.0), &pearl, ink, dim);
-        let small = [("size", "Size"), ("modulation", "Drift"), ("predelay", "Pre-Delay"), ("level", "Level")];
-        for (i, (id, legend)) in small.iter().enumerate() {
-            kit::knob3d(b, panel, &a(id), legend, 30.0, (x0 + 140.0 + 50.0 * i as f64, 92.0), &pearl, ink, dim);
+        if small_room {
+            crate::suite_studio_blues::parts::set(b, panel, "Cloud", x0 + 32.0, 20.0, 20.0, ink, &serif, 0.08);
+            // Spread across the panel: Decay, Size, Level, On — each with
+            // its value and name under it, inside the lane.
+            let span = w - 20.0 - x0;
+            kit::knob3d(b, panel, &a("decay"), "Decay", 62.0, (x0 + span * 0.14, 72.0), &pearl, ink, dim);
+            for (i, (id, legend)) in [("size", "Size"), ("level", "Level")].iter().enumerate() {
+                kit::knob3d(b, panel, &a(id), legend, 52.0, (x0 + span * (0.42 + 0.24 * i as f64), 72.0), &pearl, ink, dim);
+            }
+            kit::bypass(b, panel, VERB, x0 + span * 0.9, 80.0, 44.0, "purple", "On");
+        } else {
+            crate::suite_studio_blues::parts::set(b, panel, "Cloud", x0 + 34.0, 24.0, 22.0, ink, &serif, 0.08);
+            ui::silk_left(b, panel, "Ambient reverb", x0 + 76.0, 22.0, 6.5, dim, 700.0);
+            ui::silk_left(b, panel, "Diffuse · granular · endless", x0 + 76.0, 31.0, 5.5, dim, 600.0);
+            kit::bypass(b, panel, VERB, x0 + 16.0, 110.0, 26.0, "purple", "On");
+            kit::knob3d(b, panel, &a("decay"), "Decay", 50.0, (x0 + 76.0, 84.0), &pearl, ink, dim);
+            let small = [("size", "Size"), ("modulation", "Drift"), ("predelay", "Pre-Delay"), ("level", "Level")];
+            for (i, (id, legend)) in small.iter().enumerate() {
+                kit::knob3d(b, panel, &a(id), legend, 30.0, (x0 + 140.0 + 50.0 * i as f64, 92.0), &pearl, ink, dim);
+            }
         }
         // Responsive: the sky takes the width.
         kit::responsive(b, root, &[s]);
     });
-    kit::reverb_face(kit::file("84-verb-cloud", dark), scene)
+    kit::reverb_face(kit::tier_file("84-verb-cloud", tier, dark), scene)
 }

@@ -128,6 +128,66 @@ pub fn file(base: &'static str, dark: bool) -> &'static str {
     if dark { Box::leak(format!("{base}-dark").into_boxed_str()) } else { base }
 }
 
+/// The room a face is drawn in, smallest first: a face is one design
+/// (one builder, its look written once) laid out for each tier it has — the
+/// app draws the version for the room it is given, whatever the device.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum Tier {
+    /// A channel strip's width.
+    Strip,
+    /// A phone held sideways: a lane about 760 × 150 points.
+    Phone,
+    Ipad,
+    /// The base layout.
+    Desktop,
+    Fullscreen,
+}
+
+impl Tier {
+    /// Its name in the manifest's `tiers`.
+    #[must_use]
+    pub const fn name(self) -> &'static str {
+        match self {
+            Self::Strip => "strip",
+            Self::Phone => "phone",
+            Self::Ipad => "ipad",
+            Self::Desktop => "desktop",
+            Self::Fullscreen => "fullscreen",
+        }
+    }
+
+    /// A lane's width at this tier (its height is always `H`).
+    #[must_use]
+    pub const fn lane_w(self) -> f64 {
+        match self {
+            Self::Strip | Self::Phone => 760.0,
+            Self::Ipad | Self::Desktop | Self::Fullscreen => W,
+        }
+    }
+}
+
+/// A face's file at `tier`: `base` (`-dark`) at the base tier, else
+/// `base-<tier>` (`-dark`).
+#[must_use]
+pub fn tier_file(base: &'static str, tier: Tier, dark: bool) -> &'static str {
+    if tier == Tier::Desktop {
+        return file(base, dark);
+    }
+    let t = tier.name();
+    Box::leak(if dark { format!("{base}-{t}-dark") } else { format!("{base}-{t}") }.into_boxed_str())
+}
+
+/// A lane's canvas at `tier`: `build` draws into the root, already
+/// `tier.lane_w()` × `H`.
+pub fn tier_lane(name: &str, tier: Tier, build: impl FnOnce(&mut Builder<'_>, NodeId)) -> document_proto::Scene {
+    let w = tier.lane_w();
+    canvas(name, |b, root| {
+        ui::fit_root(b, root, w, H);
+        build(b, root);
+        ui::flush(b, root, w, H);
+    })
+}
+
 /// A lane's canvas: `build` draws into the root, already `W` × `H`.
 pub fn lane(name: &str, build: impl FnOnce(&mut Builder<'_>, NodeId)) -> document_proto::Scene {
     canvas(name, |b, root| {

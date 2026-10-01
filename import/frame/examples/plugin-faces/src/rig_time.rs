@@ -28,6 +28,8 @@ pub fn faces() -> Vec<Face> {
     v.extend(delay::faces(true));
     v.extend(reverb::faces(false));
     v.extend(reverb::faces(true));
+    v.extend(reverb::phone_faces(false).into_iter().map(|(_, f)| f));
+    v.extend(reverb::phone_faces(true).into_iter().map(|(_, f)| f));
     v
 }
 
@@ -43,7 +45,19 @@ pub fn manifest() -> serde_json::Value {
     let reverbs: Vec<_> = kit::VERB_ALGOS
         .iter()
         .zip(reverb::faces(false).into_iter().zip(reverb::faces(true)))
-        .map(|(name, (f, d))| json!({ "match": [name.to_lowercase()], "face": f.file, "dark": d.file, "ns": kit::VERB, "size": size }))
+        .enumerate()
+        .map(|(i, (name, (f, d)))| {
+            let mut e = json!({ "match": [name.to_lowercase()], "face": f.file, "dark": d.file, "ns": kit::VERB, "size": size });
+            // Its versions for other sizes (`tiers`: phone, ipad, desktop,
+            // fullscreen, strip), where it has them — the app draws the one
+            // for the room it is given, the base face otherwise.
+            let light = reverb::phone_faces(false).into_iter().find(|(at, _)| *at == i);
+            let dark = reverb::phone_faces(true).into_iter().find(|(at, _)| *at == i);
+            if let (Some((_, pl)), Some((_, pd))) = (light, dark) {
+                e["tiers"] = json!({ "phone": { "face": pl.file, "dark": pd.file, "size": [kit::Tier::Phone.lane_w(), kit::H] } });
+            }
+            e
+        })
         .collect();
     json!({ "delay": delays, "reverb": reverbs })
 }

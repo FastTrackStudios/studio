@@ -167,22 +167,37 @@ fn plate(b: &mut Builder<'_>, tank: NodeId, w: f64, h: f64) {
 
 #[must_use]
 pub fn face(dark: bool) -> Face {
+    face_at(dark, kit::Tier::Desktop)
+}
+
+/// The face at `tier`: one design — the plate, its window and the remote
+/// in the same paint and lettering — laid out for the room. The smaller
+/// tiers give the window less width and the remote larger knobs and
+/// type, keeping what matters on stage (Decay, Pre-Delay, Level, In; the
+/// plate's driver still sets size and tone); the top right stays clear
+/// for the lane's preset bar.
+#[must_use]
+pub fn face_at(dark: bool, tier: kit::Tier) -> Face {
     // Light: the painted grey remote. Dark: charcoal, lettered in white.
     let (paint, ink, dim, well, rule) = if dark {
         ("charcoal", "#e6e8eb", "#9aa0a7", [(0.0, "#0c0d0f"), (1.0, "#3a3e44")], ("#000000aa", "#ffffff1f"))
     } else {
         ("api", INK, DIM, [(0.0, "#6d7278"), (1.0, "#e2e5e8")], ("#00000033", "#ffffff66"))
     };
-    let scene = kit::lane("Plate", |b, root| {
-        let panel = ui::panel(b, root, "panel.painted", paint, kit::W, kit::H, "none");
+    let small_room = matches!(tier, kit::Tier::Phone | kit::Tier::Strip);
+    let w = tier.lane_w();
+    let scene = kit::tier_lane("Plate", tier, |b, root| {
+        let panel = ui::panel(b, root, "panel.painted", paint, w, kit::H, "none");
         if let Some(n) = b.scene.node_mut(panel) {
             n.corner_radii = document_proto::CornerRadii::uniform(6.0);
         }
 
         // ── The plate, through its window ──────────────────────────────
-        let (tx, ty, tw, th) = (12.0, 12.0, 560.0, kit::H - 24.0);
-        let well = draw::rounded(draw::rect("window", tx - 4.0, ty - 4.0, tw + 8.0, th + 8.0, draw::linear(180.0, &well)), 7.0);
-        b.add(panel, draw::with_effects(well, vec![draw::inner_shadow("#00000066", 0.0, 1.0, 1.0)]));
+        // On a phone the controls come first: the window shrinks for them.
+        let tw = if small_room { 220.0 } else { 560.0 };
+        let (tx, ty, th) = (12.0, 12.0, kit::H - 24.0);
+        let wl = draw::rounded(draw::rect("window", tx - 4.0, ty - 4.0, tw + 8.0, th + 8.0, draw::linear(180.0, &well)), 7.0);
+        b.add(panel, draw::with_effects(wl, vec![draw::inner_shadow("#00000066", 0.0, 1.0, 1.0)]));
         let mut tank = draw::frame("Plate", tx, ty, tw, th);
         tank.fills = vec![draw::linear(180.0, &[(0.0, "#1b1d20"), (1.0, "#2b2e32")])];
         tank.clips_content = true;
@@ -196,21 +211,34 @@ pub fn face(dark: bool) -> Face {
 
         // ── The remote ─────────────────────────────────────────────────
         let x0 = tx + tw + 20.0;
-        ui::plain(b, panel, "Plate", x0 + 28.0, 26.0, 18.0, ink, 800.0);
-        ui::silk_left(b, panel, "Steel plate", x0 + 62.0, 22.0, 7.0, ink, 800.0);
-        ui::silk_left(b, panel, "Reverberation unit", x0 + 62.0, 32.0, 6.0, dim, 700.0);
         ui::rule(b, panel, x0 - 10.0, 12.0, 1.0, kit::H - 24.0, rule.0);
         ui::rule(b, panel, x0 - 9.0, 12.0, 1.0, kit::H - 24.0, rule.1);
-        kit::bypass(b, panel, VERB, x0 + 20.0, 104.0, 30.0, "purple", "In");
-        let big = Dial::new("knob.pointer", "black", 60.0, ink, dim).legend(8.5);
-        ui::dial(b, panel, &a("decay"), "Decay Time", x0 + 96.0, 92.0, &big);
-        let small = Dial::new("knob.collet", "black", 36.0, ink, dim).legend(7.5);
-        for (i, (id, legend)) in [("predelay", "Pre-Delay"), ("damping", "HF Damp"), ("level", "Level")].iter().enumerate() {
-            ui::dial(b, panel, &a(id), legend, x0 + 176.0 + 64.0 * i as f64, 96.0, &small);
+        if small_room {
+            ui::plain(b, panel, "Plate", x0 + 30.0, 24.0, 20.0, ink, 800.0);
+            // Spread across the remote: Decay, Pre-Delay, Level, In.
+            let span = w - 20.0 - x0;
+            let big = Dial::new("knob.pointer", "black", 80.0, ink, dim).legend(11.0);
+            ui::dial(b, panel, &a("decay"), "Decay", x0 + span * 0.14, 80.0, &big);
+            let small = Dial::new("knob.collet", "black", 56.0, ink, dim).legend(11.0);
+            for (i, (id, legend)) in [("predelay", "Pre-Delay"), ("level", "Level")].iter().enumerate() {
+                ui::dial(b, panel, &a(id), legend, x0 + span * (0.42 + 0.24 * i as f64), 86.0, &small);
+            }
+            kit::bypass(b, panel, VERB, x0 + span * 0.9, 88.0, 44.0, "purple", "In");
+        } else {
+            ui::plain(b, panel, "Plate", x0 + 28.0, 26.0, 18.0, ink, 800.0);
+            ui::silk_left(b, panel, "Steel plate", x0 + 62.0, 22.0, 7.0, ink, 800.0);
+            ui::silk_left(b, panel, "Reverberation unit", x0 + 62.0, 32.0, 6.0, dim, 700.0);
+            kit::bypass(b, panel, VERB, x0 + 20.0, 104.0, 30.0, "purple", "In");
+            let big = Dial::new("knob.pointer", "black", 60.0, ink, dim).legend(8.5);
+            ui::dial(b, panel, &a("decay"), "Decay Time", x0 + 96.0, 92.0, &big);
+            let small = Dial::new("knob.collet", "black", 36.0, ink, dim).legend(7.5);
+            for (i, (id, legend)) in [("predelay", "Pre-Delay"), ("damping", "HF Damp"), ("level", "Level")].iter().enumerate() {
+                ui::dial(b, panel, &a(id), legend, x0 + 176.0 + 64.0 * i as f64, 96.0, &small);
+            }
         }
         // Responsive: the plate's window takes the width; the remote pins right.
         let stretch = kit::with_sibling(b, panel, tank, -1);
         kit::responsive(b, panel, &stretch);
     });
-    kit::reverb_face(kit::file("82-verb-plate", dark), scene)
+    kit::reverb_face(kit::tier_file("82-verb-plate", tier, dark), scene)
 }

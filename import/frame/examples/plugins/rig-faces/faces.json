@@ -1551,7 +1551,17 @@
         "size": [
           960.0,
           164.0
-        ]
+        ],
+        "tiers": {
+          "phone": {
+            "dark": "82-verb-plate-phone-dark",
+            "face": "82-verb-plate-phone",
+            "size": [
+              760.0,
+              164.0
+            ]
+          }
+        }
       },
       {
         "dark": "83-verb-spring-dark",
@@ -1575,7 +1585,17 @@
         "size": [
           960.0,
           164.0
-        ]
+        ],
+        "tiers": {
+          "phone": {
+            "dark": "84-verb-cloud-phone-dark",
+            "face": "84-verb-cloud-phone",
+            "size": [
+              760.0,
+              164.0
+            ]
+          }
+        }
       },
       {
         "dark": "85-verb-bloom-dark",

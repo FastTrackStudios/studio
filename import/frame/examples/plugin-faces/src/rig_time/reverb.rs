@@ -20,6 +20,12 @@ use crate::face::Face;
 
 /// Every reverb face, in `kit::VERB_ALGOS` order.
 #[must_use]
+/// The phone layouts there are, by algorithm (its index in
+/// `VERB_ALGOS`'s order, as [`faces`] lists them).
+pub fn phone_faces(dark: bool) -> Vec<(usize, Face)> {
+    vec![(2, plate::face_at(dark, super::kit::Tier::Phone)), (4, cloud::face_at(dark, super::kit::Tier::Phone))]
+}
+
 pub fn faces(dark: bool) -> Vec<Face> {
     vec![room::face(dark), hall::face(dark), plate::face(dark), spring::face(dark), cloud::face(dark), bloom::face(dark), shimmer::face(dark), chorale::face(dark), magneto::face(dark), nonlinear::face(dark), swell::face(dark), reflections::face(dark), velvet::face(dark), freeverb::face(dark), convolution::face(dark)]
 }
