@@ -199,33 +199,23 @@ pub fn lane(name: &str, build: impl FnOnce(&mut Builder<'_>, NodeId)) -> documen
 
 /// The nameplate every Time face carries in the same place — the top
 /// right, one row `h` tall, its right end 12 in from the face's edge, `y`
-/// down (see [`nameplate_top_right`]): the algorithm's name,
+/// down (see [`nameplate_top_right`]): at the right the algorithm's name,
 /// lettered as the face likes (`title` draws it into a `title_w` × `h`
-/// box), a press on it opening the algorithm menu; then the preset playing
-/// (`preset_w` wide), stepped ‹ ›, a press on its name opening the
-/// presets. The host fills `<ns>/preset` and answers the presses
+/// box), a press on it opening the algorithm menu; left of it the preset
+/// playing (`preset_w` wide: its name, then ‹ › to step it), a press on
+/// its name opening the presets. The host fills `<ns>/preset` and answers the presses
 /// ([`nameplate_params`]).
 #[allow(clippy::too_many_arguments)]
 pub fn nameplate(b: &mut Builder<'_>, parent: NodeId, ns: &str, (x, y, h): (f64, f64, f64), title_w: f64, preset_w: f64, size: f64, (accent, dim): (&str, &str), title: impl FnOnce(&mut Builder<'_>, NodeId)) {
     let press = |b: &mut Builder<'_>, node: NodeId, id: &str| {
         b.controls.insert(node, Control::new(ControlKind::Button { mode: ButtonMode::Momentary }).bound(ui::bind(&a(ns, id))));
     };
-    // The algorithm: its name, and a caret saying it opens.
-    let t = b.add(parent, draw::frame("algorithm", x, y, title_w, h));
-    title(b, t);
-    let (cx, cy) = (title_w - 6.0, h / 2.0);
-    ui::line(b, t, "caret", &[(cx - 4.0, cy - 2.0), (cx, cy + 2.0), (cx + 4.0, cy - 2.0)], 1.4, dim);
-    press(b, t, "algo_menu");
-    // The preset: ‹ name ›.
-    let px = x + title_w + 6.0;
+    // The preset first: its name, set against the arrows (names differ in
+    // length; the row stays together at the right), then ‹ ›.
     let arrow = size + 6.0;
-    let prev = b.add(parent, draw::frame("preset prev", px, y, arrow, h));
-    ui::line(b, prev, "chevron", &[(arrow / 2.0 + 2.0, h / 2.0 - 4.0), (arrow / 2.0 - 2.0, h / 2.0), (arrow / 2.0 + 2.0, h / 2.0 + 4.0)], 1.4, dim);
-    press(b, prev, "preset_prev");
-    let nx = px + arrow;
     let nw = preset_w - 2.0 * arrow;
-    let field = b.add(parent, draw::frame("preset", nx, y, nw, h));
-    let mut name = draw::text("value", "", 0.0, (h - size * 1.3) / 2.0, nw, size, accent, TextAlign::Left);
+    let field = b.add(parent, draw::frame("preset", x, y, nw, h));
+    let mut name = draw::text("value", "", 0.0, (h - size * 1.3) / 2.0, nw, size, accent, TextAlign::Right);
     if let document_proto::NodeKind::Text(d) = &mut name.kind {
         d.font_family = Some(draw::family::INTER.into());
         d.font_weight = Some(650.0);
@@ -233,11 +223,21 @@ pub fn nameplate(b: &mut Builder<'_>, parent: NodeId, ns: &str, (x, y, h): (f64,
     let name = b.add(field, name);
     b.controls.insert(field, Control::new(ControlKind::Readout).slot(SlotRole::Value, name.0).bound(ui::bind(&a(ns, "preset"))));
     // Over the name, a press opens the presets.
-    let open = b.add(parent, draw::frame("preset browse", nx, y, nw, h));
+    let open = b.add(parent, draw::frame("preset browse", x, y, nw, h));
     press(b, open, "preset_browse");
-    let next = b.add(parent, draw::frame("preset next", nx + nw, y, arrow, h));
+    let prev = b.add(parent, draw::frame("preset prev", x + nw, y, arrow, h));
+    ui::line(b, prev, "chevron", &[(arrow / 2.0 + 2.0, h / 2.0 - 4.0), (arrow / 2.0 - 2.0, h / 2.0), (arrow / 2.0 + 2.0, h / 2.0 + 4.0)], 1.4, dim);
+    press(b, prev, "preset_prev");
+    let next = b.add(parent, draw::frame("preset next", x + nw + arrow, y, arrow, h));
     ui::line(b, next, "chevron", &[(arrow / 2.0 - 2.0, h / 2.0 - 4.0), (arrow / 2.0 + 2.0, h / 2.0), (arrow / 2.0 - 2.0, h / 2.0 + 4.0)], 1.4, dim);
     press(b, next, "preset_next");
+    // Then the algorithm, at the right: its name, and a caret saying it
+    // opens.
+    let t = b.add(parent, draw::frame("algorithm", x + preset_w + 6.0, y, title_w, h));
+    title(b, t);
+    let (cx, cy) = (title_w - 6.0, h / 2.0);
+    ui::line(b, t, "caret", &[(cx - 4.0, cy - 2.0), (cx, cy + 2.0), (cx + 4.0, cy - 2.0)], 1.4, dim);
+    press(b, t, "algo_menu");
 }
 
 /// [`nameplate`] in its standard place: the top right of a face at

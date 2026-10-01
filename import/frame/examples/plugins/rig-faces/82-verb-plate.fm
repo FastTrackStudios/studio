@@ -47,19 +47,19 @@
         </Frame>
         <Rectangle name="rule" id="832d4bc4-18da-58fc-bd0d-aaccf1fcf510" x=582 y=12 w=1 h=140 fill="#00000033" resize-x="right" />
         <Rectangle name="rule" id="fbd2debb-ecb1-5f5d-96ca-171caa7a0ecf" x=583 y=12 w=1 h=140 fill="#ffffff66" resize-x="right" />
-        <Frame name="algorithm" id="917a9513-16c7-5057-a302-1da4e38bcc33" x=666 y=12 w=76 h=26 resize-x="right" control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Param":{"addr":"verb/algo_menu"}}},"kind":{"Button":{"mode":"Momentary"}},"slots":[]}}>
-          <Text name="print" id="ffc52634-1dec-5cff-a828-a686cf735055" x=-22.4 y=1.7599999999999998 w=100.8 h=25 fill="#202327" size=18 weight=800 text-align="center">Plate</Text>
-          <Vector name="caret" id="9e6db1e7-1f1e-5e57-8f10-d0e7fc63f89e" x=66 y=11 w=8 h=4 stroke="#4e545b" stroke-weight=1.4 stroke-cap="round" stroke-join="round" geometry="M 0.000 0.000 L 4.000 4.000 L 8.000 0.000 " />
+        <Frame name="preset" id="dd19d5f7-da34-529c-bc30-7f9f245e2e33" x=666 y=12 w=168 h=26 resize-x="right" control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Param":{"addr":"verb/preset"}}},"kind":"Readout","slots":[{"node":"8bc16afb-26f2-50a9-8b75-cdf283354927","role":"Value"}]}}>
+          <Text name="value" id="8bc16afb-26f2-50a9-8b75-cdf283354927" y=6.5 w=168 h=14 fill="#6a3fc4" font="Inter" size=10 weight=650 text-align="right" />
         </Frame>
-        <Frame name="preset prev" id="058a8af7-b58d-5fd1-a265-c662bae0fff3" x=748 y=12 w=16 h=26 resize-x="right" control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Param":{"addr":"verb/preset_prev"}}},"kind":{"Button":{"mode":"Momentary"}},"slots":[]}}>
+        <Frame name="preset browse" id="ca0a8f3c-da75-5ea7-b5de-63f8f932cbcb" x=666 y=12 w=168 h=26 resize-x="right" control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Param":{"addr":"verb/preset_browse"}}},"kind":{"Button":{"mode":"Momentary"}},"slots":[]}} />
+        <Frame name="preset prev" id="058a8af7-b58d-5fd1-a265-c662bae0fff3" x=834 y=12 w=16 h=26 resize-x="right" control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Param":{"addr":"verb/preset_prev"}}},"kind":{"Button":{"mode":"Momentary"}},"slots":[]}}>
           <Vector name="chevron" id="5c586de0-6a8c-501f-8505-f2381c556a27" x=6 y=9 w=4 h=8 stroke="#4e545b" stroke-weight=1.4 stroke-cap="round" stroke-join="round" geometry="M 4.000 0.000 L 0.000 4.000 L 4.000 8.000 " />
         </Frame>
-        <Frame name="preset" id="dd19d5f7-da34-529c-bc30-7f9f245e2e33" x=764 y=12 w=168 h=26 resize-x="right" control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Param":{"addr":"verb/preset"}}},"kind":"Readout","slots":[{"node":"8bc16afb-26f2-50a9-8b75-cdf283354927","role":"Value"}]}}>
-          <Text name="value" id="8bc16afb-26f2-50a9-8b75-cdf283354927" y=6.5 w=168 h=14 fill="#6a3fc4" font="Inter" size=10 weight=650 />
-        </Frame>
-        <Frame name="preset browse" id="ca0a8f3c-da75-5ea7-b5de-63f8f932cbcb" x=764 y=12 w=168 h=26 resize-x="right" control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Param":{"addr":"verb/preset_browse"}}},"kind":{"Button":{"mode":"Momentary"}},"slots":[]}} />
-        <Frame name="preset next" id="86d01574-ca34-5516-9642-e514cdbb0a1c" x=932 y=12 w=16 h=26 resize-x="right" control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Param":{"addr":"verb/preset_next"}}},"kind":{"Button":{"mode":"Momentary"}},"slots":[]}}>
+        <Frame name="preset next" id="86d01574-ca34-5516-9642-e514cdbb0a1c" x=850 y=12 w=16 h=26 resize-x="right" control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Param":{"addr":"verb/preset_next"}}},"kind":{"Button":{"mode":"Momentary"}},"slots":[]}}>
           <Vector name="chevron" id="2fd54944-02dd-5bda-a7f4-6a6c05daae87" x=6 y=9 w=4 h=8 stroke="#4e545b" stroke-weight=1.4 stroke-cap="round" stroke-join="round" geometry="M 0.000 0.000 L 4.000 4.000 L 0.000 8.000 " />
+        </Frame>
+        <Frame name="algorithm" id="917a9513-16c7-5057-a302-1da4e38bcc33" x=872 y=12 w=76 h=26 resize-x="right" control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Param":{"addr":"verb/algo_menu"}}},"kind":{"Button":{"mode":"Momentary"}},"slots":[]}}>
+          <Text name="print" id="ffc52634-1dec-5cff-a828-a686cf735055" x=-22.4 y=1.7599999999999998 w=100.8 h=25 fill="#202327" size=18 weight=800 text-align="center">Plate</Text>
+          <Vector name="caret" id="9e6db1e7-1f1e-5e57-8f10-d0e7fc63f89e" x=66 y=11 w=8 h=4 stroke="#4e545b" stroke-weight=1.4 stroke-cap="round" stroke-join="round" geometry="M 0.000 0.000 L 4.000 4.000 L 8.000 0.000 " />
         </Frame>
         <Frame name="Decay Time" id="ee752c41-a13c-5d59-aaf5-67efedac3f28" x=612 y=62 w=60 h=73 resize-x="right" control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Param":{"addr":"verb/decay"}}},"kind":{"Knob":{"sweep_degrees":300.0}},"slots":[{"node":"fdb5a93f-8fa6-581c-928f-1c775482176b","role":"Needle"},{"node":"06c261b3-2829-5fa4-87ce-dbc2c4c1c27e","role":"Value"}]}}>
           <Frame name="knob" id="25e18080-9cfa-56a3-89e6-2d2a231ac1d0" x=-39 y=-39 w=138 h=138>

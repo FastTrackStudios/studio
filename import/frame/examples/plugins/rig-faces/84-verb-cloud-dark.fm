@@ -143,19 +143,19 @@
         <Ellipse name="grain" id="1acd9ffb-ff4e-5c5e-9757-02ed39443e77" x=236.7 y=82.7 w=2.6 h=2.6 fill="#efe9ff" emission={{"color":"#c4b5fd","intensity":1.0,"radius":5.0}} motion={[{"input":"pow(0.5 + 0.5 * sin(time * 1.85 + 47.60), 12) * param(verb/on)","target":"opacity"}]} />
         <Ellipse name="grain" id="40bb7b47-f202-5e3c-a252-5085c6e45cfd" x=367.7 y=47.7 w=2.6 h=2.6 fill="#efe9ff" emission={{"color":"#c4b5fd","intensity":1.0,"radius":5.0}} motion={[{"input":"pow(0.5 + 0.5 * sin(time * 1.62 + 49.30), 12) * param(verb/on)","target":"opacity"}]} />
       </Frame>
-      <Frame name="algorithm" id="70532938-e6bc-5e16-ac3f-434fc0b07472" x=660 y=10 w=82 h=28 resize-x="right" control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Param":{"addr":"verb/algo_menu"}}},"kind":{"Button":{"mode":"Momentary"}},"slots":[]}}>
-        <Text name="print" id="0f5b3307-483f-579f-8fde-68fecd842336" x=-41.900000000000006 y=-0.9600000000000009 w=151.8 h=30 fill="#ece6ff" font="Playfair Display" size=22 weight=400 letter-spacing=1.76 text-align="center">Cloud</Text>
-        <Vector name="caret" id="0fc2ad5c-151c-5bea-8ccb-7aee48e32690" x=72 y=12 w=8 h=4 stroke="#8f86b8" stroke-weight=1.4 stroke-cap="round" stroke-join="round" geometry="M 0.000 0.000 L 4.000 4.000 L 8.000 0.000 " />
+      <Frame name="preset" id="ed65089f-f331-58ec-ab49-f408e64f544b" x=660 y=10 w=168 h=28 resize-x="right" control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Param":{"addr":"verb/preset"}}},"kind":"Readout","slots":[{"node":"fc0c05b2-bdbf-5df3-bf88-25641a5b1a2a","role":"Value"}]}}>
+        <Text name="value" id="fc0c05b2-bdbf-5df3-bf88-25641a5b1a2a" y=7.5 w=168 h=14 fill="#b58cff" font="Inter" size=10 weight=650 text-align="right" />
       </Frame>
-      <Frame name="preset prev" id="cbc6d1a0-89e3-5145-bd25-d18551daa0ec" x=748 y=10 w=16 h=28 resize-x="right" control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Param":{"addr":"verb/preset_prev"}}},"kind":{"Button":{"mode":"Momentary"}},"slots":[]}}>
+      <Frame name="preset browse" id="662dc8af-9a14-532f-ae9c-d90f4d96e702" x=660 y=10 w=168 h=28 resize-x="right" control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Param":{"addr":"verb/preset_browse"}}},"kind":{"Button":{"mode":"Momentary"}},"slots":[]}} />
+      <Frame name="preset prev" id="cbc6d1a0-89e3-5145-bd25-d18551daa0ec" x=828 y=10 w=16 h=28 resize-x="right" control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Param":{"addr":"verb/preset_prev"}}},"kind":{"Button":{"mode":"Momentary"}},"slots":[]}}>
         <Vector name="chevron" id="97175ae9-c095-54db-84b0-5af268c63c47" x=6 y=10 w=4 h=8 stroke="#8f86b8" stroke-weight=1.4 stroke-cap="round" stroke-join="round" geometry="M 4.000 0.000 L 0.000 4.000 L 4.000 8.000 " />
       </Frame>
-      <Frame name="preset" id="ed65089f-f331-58ec-ab49-f408e64f544b" x=764 y=10 w=168 h=28 resize-x="right" control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Param":{"addr":"verb/preset"}}},"kind":"Readout","slots":[{"node":"fc0c05b2-bdbf-5df3-bf88-25641a5b1a2a","role":"Value"}]}}>
-        <Text name="value" id="fc0c05b2-bdbf-5df3-bf88-25641a5b1a2a" y=7.5 w=168 h=14 fill="#b58cff" font="Inter" size=10 weight=650 />
-      </Frame>
-      <Frame name="preset browse" id="662dc8af-9a14-532f-ae9c-d90f4d96e702" x=764 y=10 w=168 h=28 resize-x="right" control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Param":{"addr":"verb/preset_browse"}}},"kind":{"Button":{"mode":"Momentary"}},"slots":[]}} />
-      <Frame name="preset next" id="0bac1b99-e5d2-50b1-a95d-4b21ec59339a" x=932 y=10 w=16 h=28 resize-x="right" control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Param":{"addr":"verb/preset_next"}}},"kind":{"Button":{"mode":"Momentary"}},"slots":[]}}>
+      <Frame name="preset next" id="0bac1b99-e5d2-50b1-a95d-4b21ec59339a" x=844 y=10 w=16 h=28 resize-x="right" control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Param":{"addr":"verb/preset_next"}}},"kind":{"Button":{"mode":"Momentary"}},"slots":[]}}>
         <Vector name="chevron" id="c39151d1-da3c-51ab-a6ea-11aae7c5e227" x=6 y=10 w=4 h=8 stroke="#8f86b8" stroke-weight=1.4 stroke-cap="round" stroke-join="round" geometry="M 0.000 0.000 L 4.000 4.000 L 0.000 8.000 " />
+      </Frame>
+      <Frame name="algorithm" id="70532938-e6bc-5e16-ac3f-434fc0b07472" x=866 y=10 w=82 h=28 resize-x="right" control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Param":{"addr":"verb/algo_menu"}}},"kind":{"Button":{"mode":"Momentary"}},"slots":[]}}>
+        <Text name="print" id="0f5b3307-483f-579f-8fde-68fecd842336" x=-41.900000000000006 y=-0.9600000000000009 w=151.8 h=30 fill="#ece6ff" font="Playfair Display" size=22 weight=400 letter-spacing=1.76 text-align="center">Cloud</Text>
+        <Vector name="caret" id="0fc2ad5c-151c-5bea-8ccb-7aee48e32690" x=72 y=12 w=8 h=4 stroke="#8f86b8" stroke-weight=1.4 stroke-cap="round" stroke-join="round" geometry="M 0.000 0.000 L 4.000 4.000 L 8.000 0.000 " />
       </Frame>
       <Frame name="Decay" id="6ba2b793-0995-5644-9e3f-7cdd00ef0611" x=623.9 y=45.9 w=76.2 h=107.2 resize-x="right" control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Param":{"addr":"verb/decay"}}},"kind":{"Knob":{"sweep_degrees":300.0}},"slots":[{"node":"89af4a28-3779-5e82-8186-bf3f7d578149","role":"Needle"},{"node":"506e6b57-616d-5806-84a7-57ee0b4d4e2f","role":"Value"}]}}>
         <Frame name="knob" id="b3e8245b-32f9-568f-a300-383763711e3d" w=76.2 h=76.2>
