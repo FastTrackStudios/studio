@@ -1360,7 +1360,17 @@
       "size": [
         330.0,
         286.0
-      ]
+      ],
+      "tiers": {
+        "phone": {
+          "face": "30-wah-phone",
+          "nameplate": true,
+          "size": [
+            230.0,
+            300.0
+          ]
+        }
+      }
     },
     {
       "face": "34-filter-postal",
@@ -1384,7 +1394,17 @@
       "size": [
         600.0,
         286.0
-      ]
+      ],
+      "tiers": {
+        "phone": {
+          "face": "31-filter-q-tron-phone",
+          "nameplate": true,
+          "size": [
+            590.0,
+            300.0
+          ]
+        }
+      }
     },
     {
       "face": "35-doubler",
@@ -1395,6 +1415,27 @@
       "size": [
         300.0,
         286.0
+      ],
+      "tiers": {
+        "phone": {
+          "face": "35-doubler-phone",
+          "nameplate": true,
+          "size": [
+            760.0,
+            164.0
+          ]
+        }
+      }
+    },
+    {
+      "face": "33-harmonizer-phone",
+      "match": [
+        "harmon"
+      ],
+      "ns": "harm",
+      "size": [
+        300.0,
+        300.0
       ]
     },
     {
@@ -1406,6 +1447,27 @@
       "size": [
         540.0,
         286.0
+      ],
+      "tiers": {
+        "phone": {
+          "face": "32-octaver-phone",
+          "nameplate": true,
+          "size": [
+            170.0,
+            300.0
+          ]
+        }
+      }
+    },
+    {
+      "face": "38-volume-phone",
+      "match": [
+        "volume"
+      ],
+      "ns": "volume",
+      "size": [
+        230.0,
+        300.0
       ]
     },
     {
@@ -1417,7 +1479,17 @@
       "size": [
         200.0,
         286.0
-      ]
+      ],
+      "tiers": {
+        "phone": {
+          "face": "36-transpose-phone",
+          "nameplate": true,
+          "size": [
+            760.0,
+            164.0
+          ]
+        }
+      }
     },
     {
       "face": "37-dive-bomb",
@@ -1428,7 +1500,17 @@
       "size": [
         240.0,
         286.0
-      ]
+      ],
+      "tiers": {
+        "phone": {
+          "face": "37-dive-pedal-phone",
+          "nameplate": true,
+          "size": [
+            300.0,
+            300.0
+          ]
+        }
+      }
     }
   ],
   "modulation": [

@@ -98,6 +98,81 @@ fn knob(b: &mut Builder<'_>, p: NodeId, addr: &str, legend: &str, d: f64, at: (f
     kit::knob3d(b, p, addr, legend, d, at, &opts, INK, DIM)
 }
 
+const TNS: &str = "transpose";
+const DNS: &str = "dive";
+
+/// The transposer's screen, `sw × sh` in `s`: the key it plays in, lit,
+/// over the chromatic strip. `k` scales its lettering.
+fn key_screen(b: &mut Builder<'_>, s: NodeId, sw: f64, sh: f64, k: f64) {
+    ui::silk(b, s, "PLAYS IN", sw / 2.0, 14.0 * k, 6.5 * k, DIM, 800.0);
+    name_readout(b, s, &format!("{TNS}/semitones"), (6.0, 40.0 * k, sw - 12.0), 21.0 * k, KEY);
+    // The chromatic strip, −12…+12: a cell a semitone, the naturals
+    // light, the sharps dark, the octaves and the open E marked.
+    let cells = 25.0;
+    let (kx, ky, kw, kh) = (10.0, sh - 56.0 * k, sw - 20.0, 30.0 * k);
+    let strip = b.add(s, draw::frame("strip", kx, ky, kw, kh));
+    if let Some(n) = b.scene.node_mut(strip) {
+        n.layout_child.resize_x = Some(ResizeX::Stretch);
+    }
+    let cw = kw / cells;
+    for i in 0..25 {
+        let semis = i - 12;
+        let sharp = matches!((semis as i32).rem_euclid(12), 2 | 4 | 7 | 9 | 11);
+        let fill = if sharp { "#1d1f24" } else { "#2c2f36" };
+        b.add(strip, draw::rounded(draw::rect("key", f64::from(i) * cw + 0.5, 0.0, cw - 1.0, kh, draw::solid(fill)), 2.0));
+    }
+    // The open E, where the strip starts from.
+    b.add(strip, draw::rect("open E", 12.0 * cw + cw / 2.0 - 0.75, -4.0, 1.5, kh + 8.0, draw::solid("#ffffff60")));
+    for (semis, label) in [(-12, "−OCT"), (0, "E"), (12, "+OCT")] {
+        ui::silk(b, s, label, kx + (f64::from(semis) + 12.5) * cw, ky + kh + 10.0 * k, 6.5 * k, DIM, 800.0);
+    }
+    // The light on the note it sounds: from the open E, a cell a step.
+    let light = b.add(strip, draw::frame("sounding", 12.0 * cw, 0.0, cw, kh));
+    b.add(light, ui::glowing(draw::rounded(draw::rect("lit", 0.5, 2.0, cw - 1.0, kh - 4.0, draw::solid(KEY)), 2.0), KEY, 0.9, 8.0));
+    motion::add(b, light, Motion::new(Target::X).input(format!("clamp(param({TNS}/semitones) / 12, -1, 1) * 0.5 + 0.5")).range(-12.0 * cw, 12.0 * cw).dynamics(Dynamics::spring(320.0, 30.0)));
+    motion::add(b, light, Motion::new(Target::Opacity).input(format!("0.35 + 0.65 * param({TNS}/on)")).range(0.0, 1.0));
+}
+
+/// The dive bomb's screen, `sw × sh` in `s`: a held note's line, bending
+/// as far as the treadle takes it, and where it is now. `k` scales its
+/// lettering.
+fn pitch_screen(b: &mut Builder<'_>, s: NodeId, sw: f64, sh: f64, k: f64) {
+    let mid = sh / 2.0;
+    let y_of = |semis: f64| mid - semis / 24.0 * (sh / 2.0 - 12.0);
+    for (semis, label) in [(24, "+2 OCT"), (12, "+OCT"), (0, "UNISON"), (-12, "−OCT"), (-24, "−2 OCT")] {
+        let y = y_of(f64::from(semis));
+        // Twice the screen long: it clips them, and a wider one stays ruled.
+        let mut line = ui::strokes("grid", &[vec![(0.0, y), (sw * 2.0, y)]], 1.0, draw::solid(if semis == 0 { "#ffffff30" } else { "#ffffff14" }));
+        line.layout_child.resize_x = Some(ResizeX::Stretch);
+        b.add(s, line);
+        ui::silk_left(b, s, label, 6.0, y - 6.0 * k, 6.0 * k, DIM, 800.0);
+    }
+    // The held note: flat for the first third, then a curve that
+    // bends to where the treadle is — drawn at a full dive, its depth
+    // following `semitones` (scaled about the unison line).
+    let x0 = sw * 0.32;
+    let full = y_of(-24.0) - mid;
+    let bend: Vec<(f64, f64)> = (0..=40)
+        .map(|i| {
+            let t = f64::from(i) / 40.0;
+            let ease = 1.0 - (1.0 - t).powi(3);
+            (x0 + t * (sw - x0 - 10.0), mid + ease * full)
+        })
+        .collect();
+    b.add(s, ui::glowing(ui::strokes("held", &[vec![(10.0, mid), (x0, mid)]], 2.4, draw::solid("#f7f5ef")), "#ffffff", 0.5, 4.0));
+    b.add(s, ui::strokes("unbent", &[vec![(x0, mid), (sw * 2.0, mid)]], 1.4, draw::solid("#ffffff30")));
+    let curve = b.add(s, draw::frame("bend", 0.0, 0.0, sw, sh));
+    if let Some(n) = b.scene.node_mut(curve) {
+        n.layout_child.resize_x = Some(ResizeX::Stretch);
+    }
+    b.add(curve, ui::glowing(ui::strokes("dive", &[bend], 2.4, draw::solid(DIVE)), DIVE, 0.9, 8.0));
+    // The depth: −24 is the curve as drawn, +24 its mirror.
+    motion::add(b, curve, Motion::new(Target::StretchY).input(format!("0.5 + 0.5 * clamp(-param({DNS}/semitones) / 24, -1, 1)")).range(-1.0, 1.0).pivot(0.5, mid / sh).dynamics(Dynamics::spring(300.0, 28.0)));
+    motion::add(b, curve, Motion::new(Target::Opacity).input(format!("0.3 + 0.7 * param({DNS}/on)")).range(0.0, 1.0));
+    // Where it is now, in semitones.
+    kit::seg_readout(b, s, &format!("{DNS}/semitones"), (sw - 74.0 * k, 22.0 * k, 64.0 * k), 20.0 * k, 3, 0, DIVE);
+}
+
 /// The transposer.
 #[must_use]
 pub fn transpose_unit() -> Face {
@@ -114,34 +189,7 @@ pub fn transpose_unit() -> Face {
         // ── The key: its readout, and the strip ─────────────────────────
         let (sx, sy, sw, sh) = (12.0, 32.0, W - 24.0, 126.0);
         let s = screen(b, p, "Key", (sx, sy, sw, sh));
-        // The key it plays in, by name ("D · −2"), lit.
-        ui::silk(b, s, "PLAYS IN", sw / 2.0, 14.0, 6.5, DIM, 800.0);
-        name_readout(b, s, &format!("{NS}/semitones"), (6.0, 40.0, sw - 12.0), 21.0, KEY);
-        // The chromatic strip, −12…+12: a cell a semitone, the naturals
-        // light, the sharps dark, the octaves and the open E marked.
-        let cells = 25.0;
-        let (kx, ky, kw, kh) = (10.0, 70.0, sw - 20.0, 30.0);
-        let strip = b.add(s, draw::frame("strip", kx, ky, kw, kh));
-        if let Some(n) = b.scene.node_mut(strip) {
-            n.layout_child.resize_x = Some(ResizeX::Stretch);
-        }
-        let cw = kw / cells;
-        for i in 0..25 {
-            let semis = i - 12;
-            let sharp = matches!((semis as i32).rem_euclid(12), 2 | 4 | 7 | 9 | 11);
-            let fill = if sharp { "#1d1f24" } else { "#2c2f36" };
-            b.add(strip, draw::rounded(draw::rect("key", f64::from(i) * cw + 0.5, 0.0, cw - 1.0, kh, draw::solid(fill)), 2.0));
-        }
-        // The open E, where the strip starts from.
-        b.add(strip, draw::rect("open E", 12.0 * cw + cw / 2.0 - 0.75, -4.0, 1.5, kh + 8.0, draw::solid("#ffffff60")));
-        for (semis, label) in [(-12, "−OCT"), (0, "E"), (12, "+OCT")] {
-            ui::silk(b, s, label, kx + (f64::from(semis) + 12.5) * cw, ky + kh + 10.0, 6.5, DIM, 800.0);
-        }
-        // The light on the note it sounds: from the open E, a cell a step.
-        let light = b.add(strip, draw::frame("sounding", 12.0 * cw, 0.0, cw, kh));
-        b.add(light, ui::glowing(draw::rounded(draw::rect("lit", 0.5, 2.0, cw - 1.0, kh - 4.0, draw::solid(KEY)), 2.0), KEY, 0.9, 8.0));
-        motion::add(b, light, Motion::new(Target::X).input(format!("clamp(param({NS}/semitones) / 12, -1, 1) * 0.5 + 0.5")).range(-12.0 * cw, 12.0 * cw).dynamics(Dynamics::spring(320.0, 30.0)));
-        motion::add(b, light, Motion::new(Target::Opacity).input(format!("0.35 + 0.65 * param({NS}/on)")).range(0.0, 1.0));
+        key_screen(b, s, sw, sh, 1.0);
 
         // ── Its knobs ───────────────────────────────────────────────────
         let k = knob(b, p, &format!("{NS}/semitones"), "Key", 46.0, (W * 0.3, 222.0), KEY);
@@ -175,39 +223,7 @@ pub fn dive_unit() -> Face {
         // full height.
         let (sx, sy, sw, sh) = (12.0, 32.0, W - 84.0, H - 44.0);
         let s = screen(b, p, "Pitch", (sx, sy, sw, sh));
-        let mid = sh / 2.0;
-        let y_of = |semis: f64| mid - semis / 24.0 * (sh / 2.0 - 12.0);
-        for (semis, label) in [(24, "+2 OCT"), (12, "+OCT"), (0, "UNISON"), (-12, "−OCT"), (-24, "−2 OCT")] {
-            let y = y_of(f64::from(semis));
-            let mut line = ui::strokes("grid", &[vec![(0.0, y), (sw, y)]], 1.0, draw::solid(if semis == 0 { "#ffffff30" } else { "#ffffff14" }));
-            line.layout_child.resize_x = Some(ResizeX::Stretch);
-            b.add(s, line);
-            ui::silk_left(b, s, label, 6.0, y - 6.0, 6.0, DIM, 800.0);
-        }
-        // The held note: flat for the first third, then a curve that
-        // bends to where the treadle is — drawn at a full dive, its depth
-        // following `semitones` (scaled about the unison line).
-        let x0 = sw * 0.32;
-        let full = y_of(-24.0) - mid;
-        let bend: Vec<(f64, f64)> = (0..=40)
-            .map(|i| {
-                let t = f64::from(i) / 40.0;
-                let ease = 1.0 - (1.0 - t).powi(3);
-                (x0 + t * (sw - x0 - 10.0), mid + ease * full)
-            })
-            .collect();
-        b.add(s, ui::glowing(ui::strokes("held", &[vec![(10.0, mid), (x0, mid)]], 2.4, draw::solid("#f7f5ef")), "#ffffff", 0.5, 4.0));
-        b.add(s, ui::strokes("unbent", &[vec![(x0, mid), (sw - 10.0, mid)]], 1.4, draw::solid("#ffffff30")));
-        let curve = b.add(s, draw::frame("bend", 0.0, 0.0, sw, sh));
-        if let Some(n) = b.scene.node_mut(curve) {
-            n.layout_child.resize_x = Some(ResizeX::Stretch);
-        }
-        b.add(curve, ui::glowing(ui::strokes("dive", &[bend], 2.4, draw::solid(DIVE)), DIVE, 0.9, 8.0));
-        // The depth: −24 is the curve as drawn, +24 its mirror.
-        motion::add(b, curve, Motion::new(Target::StretchY).input(format!("0.5 + 0.5 * clamp(-param({NS}/semitones) / 24, -1, 1)")).range(-1.0, 1.0).pivot(0.5, mid / sh).dynamics(Dynamics::spring(300.0, 28.0)));
-        motion::add(b, curve, Motion::new(Target::Opacity).input(format!("0.3 + 0.7 * param({NS}/on)")).range(0.0, 1.0));
-        // Where it is now, in semitones.
-        kit::seg_readout(b, s, &format!("{NS}/semitones"), (sw - 74.0, 22.0, 64.0), 20.0, 3, 0, DIVE);
+        pitch_screen(b, s, sw, sh, 1.0);
 
         // ── The treadle ─────────────────────────────────────────────────
         // Up is up: toe down dives, heel down rises — a fader the length
@@ -231,4 +247,81 @@ pub fn dive_unit() -> Face {
     bend.bipolar = true;
     let params = vec![bend, ui::param(&format!("{NS}/cents"), "Fine", Range::linear(-100.0, 100.0, Unit::None), 0.0), ui::toggle(&format!("{NS}/on"), "Dive Bomb", false)];
     Face { file: "37-dive-bomb", plugin: PLUGIN, scene, params, streams: Vec::new() }
+}
+
+/// A lane's panel on a phone.
+fn lane_panel(b: &mut Builder<'_>, root: NodeId, w: f64, top: &str, bottom: &str) -> NodeId {
+    let mut p = draw::frame("Panel", 0.0, 0.0, w, kit::H);
+    p.fills = vec![draw::linear(180.0, &[(0.0, top), (1.0, bottom)])];
+    b.add(root, draw::with_effects(p, vec![draw::inner_shadow("#ffffff14", 0.0, 1.0, 0.0)]))
+}
+
+/// The transposer as a phone lane: its screen wide — the key it plays in
+/// over the chromatic strip — then the Key, big, and Fine; the nameplate
+/// (the preset ‹ ›, TRANSPOSE) and its On.
+#[must_use]
+pub fn transpose_phone() -> Face {
+    let tier = kit::Tier::Phone;
+    let w = tier.lane_w();
+    let scene = canvas("Transpose", |b, root| {
+        ui::fit_root(b, root, w, kit::H);
+        let p = lane_panel(b, root, w, "#1b1a16", "#11100d");
+        let (sw, sh) = (330.0, kit::H - 20.0);
+        let s = screen(b, p, "Key", (10.0, 10.0, sw, sh));
+        key_screen(b, s, sw, sh, 1.35);
+        knob(b, p, &format!("{TNS}/semitones"), "Key", 80.0, (430.0, 72.0), KEY);
+        knob(b, p, &format!("{TNS}/cents"), "Fine", 54.0, (555.0, 84.0), "#f7f5ef");
+        let head = Lettering::family(family::INTER).weight(800.0);
+        kit::nameplate_top_right(b, p, TNS, tier, (8.0, 30.0), 150.0, 200.0, 12.0, (KEY, DIM), |b, t| {
+            set(b, t, "TRANSPOSE", 68.0, 15.0, 14.0, KEY, &head, 0.2);
+        });
+        kit::face_bypass(b, p, TNS, tier, "amber", "On");
+        kit::responsive(b, p, &[s]);
+    });
+    let mut params = vec![
+        step_param(&format!("{TNS}/semitones")),
+        ui::param(&format!("{TNS}/cents"), "Fine", Range::linear(-100.0, 100.0, Unit::None), 0.0),
+        ui::toggle(&format!("{TNS}/on"), "Transpose", false),
+    ];
+    params.extend(kit::nameplate_params(TNS));
+    Face { file: "36-transpose-phone", plugin: PLUGIN, scene, params, streams: Vec::new() }
+}
+
+/// The dive bomb as a phone lane: the pitch over time wide, the treadle
+/// stood beside it the lane's height (toe down dives), the nameplate (the
+/// preset ‹ ›, DIVE BOMB) and its On.
+#[must_use]
+pub fn dive_phone() -> Face {
+    let tier = kit::Tier::Phone;
+    let w = tier.lane_w();
+    let scene = canvas("Dive Bomb", |b, root| {
+        ui::fit_root(b, root, w, kit::H);
+        let p = lane_panel(b, root, w, "#1d1612", "#120d0a");
+        let (sw, sh) = (440.0, kit::H - 20.0);
+        let s = screen(b, p, "Pitch", (10.0, 10.0, sw, sh));
+        pitch_screen(b, s, sw, sh, 1.3);
+        // The treadle: up is up — a fader the lane's height.
+        let tx = 510.0;
+        let len = kit::H - 40.0;
+        ui::silk(b, p, "TREADLE", tx, 12.0, 8.0, DIM, 800.0);
+        b.add(p, draw::rounded(draw::rect("slot", tx - 4.0, 26.0, 8.0, len - 6.0, draw::solid("#07080a")), 4.0));
+        crate::rig_amp::fader(b, p, &format!("{DNS}/semitones"), (tx, 20.0), len + 4.0, (64.0, 32.0), |b, c, cw, ch| {
+            b.add(c, draw::stroked(draw::rounded(draw::rect("tread", 0.0, 0.0, cw, ch, draw::linear(180.0, &[(0.0, "#3a2c22"), (1.0, "#1b140f")])), 5.0), "#5b4434", 1.0));
+            for i in 0..5 {
+                b.add(c, draw::rect("rib", 8.0, 5.0 + f64::from(i) * 4.8, cw - 16.0, 1.6, draw::solid("#00000080")));
+            }
+            b.add(c, ui::glowing(draw::rect("edge", 5.0, ch - 3.5, cw - 10.0, 2.0, draw::solid(DIVE)), DIVE, 0.7, 4.0));
+        });
+        let head = Lettering::family(family::INTER).weight(800.0);
+        kit::nameplate_top_right(b, p, DNS, tier, (8.0, 30.0), 150.0, 170.0, 12.0, (DIVE, DIM), |b, t| {
+            set(b, t, "DIVE BOMB", 66.0, 15.0, 14.0, DIVE, &head, 0.2);
+        });
+        kit::face_bypass(b, p, DNS, tier, "amber", "On");
+        kit::responsive(b, p, &[s]);
+    });
+    let mut bend = ui::param(&format!("{DNS}/semitones"), "Dive", Range::linear(-24.0, 24.0, Unit::None), 0.0).featured();
+    bend.bipolar = true;
+    let mut params = vec![bend, ui::param(&format!("{DNS}/cents"), "Fine", Range::linear(-100.0, 100.0, Unit::None), 0.0), ui::toggle(&format!("{DNS}/on"), "Dive Bomb", false)];
+    params.extend(kit::nameplate_params(DNS));
+    Face { file: "37-dive-bomb-phone", plugin: PLUGIN, scene, params, streams: Vec::new() }
 }

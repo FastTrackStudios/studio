@@ -46,6 +46,32 @@ fn source(b: &mut Builder<'_>, parent: NodeId, name: &str, (cx, cy): (f64, f64),
     g
 }
 
+/// The field from above in `f` (`fw × fh`): the stage's arc, the
+/// listener, the note in the middle and the two takes out to the sides
+/// by the width, late by the delay, drifting with the detune.
+fn field(b: &mut Builder<'_>, f: NodeId, fw: f64, fh: f64) {
+    let (cx, cy) = (fw / 2.0, fh * 0.46);
+    // The stage's arc, L and R.
+    let arc: Vec<(f64, f64)> = (0..=40).map(|i| {
+        let t = std::f64::consts::PI * (1.0 + f64::from(i) / 40.0);
+        (cx + t.cos() * fw * 0.42, cy + 4.0 + t.sin() * -fh * 0.34)
+    }).collect();
+    b.add(f, ui::strokes("arc", &[arc], 1.0, draw::solid("#ffffff1a")));
+    ui::silk(b, f, "L", 14.0, cy + 6.0, 7.0, DIM, 800.0);
+    ui::silk(b, f, "R", fw - 14.0, cy + 6.0, 7.0, DIM, 800.0);
+    // The listener, below.
+    b.add(f, draw::circle("listener", cx, fh - 14.0, 5.0, draw::solid("#ffffff30")));
+    // The note, in the middle; the two takes, out to the sides by the
+    // width, late by the delay, drifting with the detune.
+    source(b, f, "note", (cx, cy), "#f4f2fa", "0");
+    for (side, drift) in [(-1.0, 0.0), (1.0, 3.14)] {
+        let t = source(b, f, "take", (cx, cy), TAKE, &format!("norm({NS}/delay) * 0.25"));
+        motion::add(b, t, Motion::new(Target::X).input(format!("norm({NS}/width)")).range(0.0, side * fw * 0.38).dynamics(Dynamics::spring(220.0, 26.0)));
+        motion::add(b, t, Motion::new(Target::Y).input(format!("0.5 + 0.5 * sin(time * (0.5 + 3 * norm({NS}/detune)) + {drift}) * norm({NS}/detune)")).range(-5.0, 5.0));
+        motion::add(b, t, Motion::new(Target::Opacity).input(format!("0.2 + 0.8 * param({NS}/mix)")).range(0.0, 1.0));
+    }
+}
+
 #[must_use]
 pub fn doubler_unit() -> Face {
     let scene = canvas("Doubler", |b, root| {
@@ -67,26 +93,7 @@ pub fn doubler_unit() -> Face {
         f.effects = vec![draw::inner_shadow("#000000c0", 0.0, 2.0, 6.0)];
         f.layout_child.resize_x = Some(ResizeX::Stretch);
         let f = b.add(p, f);
-        let (cx, cy) = (fw / 2.0, fh * 0.46);
-        // The stage's arc, L and R.
-        let arc: Vec<(f64, f64)> = (0..=40).map(|i| {
-            let t = std::f64::consts::PI * (1.0 + f64::from(i) / 40.0);
-            (cx + t.cos() * fw * 0.42, cy + 4.0 + t.sin() * -fh * 0.34)
-        }).collect();
-        b.add(f, ui::strokes("arc", &[arc], 1.0, draw::solid("#ffffff1a")));
-        ui::silk(b, f, "L", 14.0, cy + 6.0, 7.0, DIM, 800.0);
-        ui::silk(b, f, "R", fw - 14.0, cy + 6.0, 7.0, DIM, 800.0);
-        // The listener, below.
-        b.add(f, draw::circle("listener", cx, fh - 14.0, 5.0, draw::solid("#ffffff30")));
-        // The note, in the middle; the two takes, out to the sides by the
-        // width, late by the delay, drifting with the detune.
-        source(b, f, "note", (cx, cy), "#f4f2fa", "0");
-        for (side, drift) in [(-1.0, 0.0), (1.0, 3.14)] {
-            let t = source(b, f, "take", (cx, cy), TAKE, &format!("norm({NS}/delay) * 0.25"));
-            motion::add(b, t, Motion::new(Target::X).input(format!("norm({NS}/width)")).range(0.0, side * fw * 0.38).dynamics(Dynamics::spring(220.0, 26.0)));
-            motion::add(b, t, Motion::new(Target::Y).input(format!("0.5 + 0.5 * sin(time * (0.5 + 3 * norm({NS}/detune)) + {drift}) * norm({NS}/detune)")).range(-5.0, 5.0));
-            motion::add(b, t, Motion::new(Target::Opacity).input(format!("0.2 + 0.8 * param({NS}/mix)")).range(0.0, 1.0));
-        }
+        field(b, f, fw, fh);
 
         // ── Its knobs ───────────────────────────────────────────────────
         let knob = ["color=#1e1a2a", "pointer=#b69cff", "index=line", "index_w=0.1", "skirt=plain", "skirt_color=#0c0a12"];
@@ -103,4 +110,43 @@ pub fn doubler_unit() -> Face {
         ui::toggle(&a("on"), "Doubler", true),
     ];
     Face { file: "35-doubler", plugin: PLUGIN, scene, params, streams: Vec::new() }
+}
+
+/// The doubler as a phone lane, in the Time faces' form: the field as its
+/// picture, Detune as the big knob, Delay, Width and Mix in the knob row,
+/// the nameplate (the preset ‹ ›, DOUBLER) and its On.
+#[must_use]
+pub fn doubler_phone() -> Face {
+    let tier = kit::Tier::Phone;
+    let w = tier.lane_w();
+    let scene = canvas("Doubler", |b, root| {
+        ui::fit_root(b, root, w, kit::H);
+        let mut p = draw::frame("Panel", 0.0, 0.0, w, kit::H);
+        p.fills = vec![draw::linear(180.0, &[(0.0, "#1b1824"), (1.0, "#110f18")])];
+        let p = b.add(root, draw::with_effects(p, vec![draw::inner_shadow("#ffffff14", 0.0, 1.0, 0.0)]));
+        let (fx, fy, fw, fh) = (10.0, 10.0, kit::PHONE_PICTURE_R - 10.0, kit::H - 20.0);
+        let mut f = draw::frame("Field", fx, fy, fw, fh);
+        f.fills = vec![draw::linear(180.0, &[(0.0, "#0c0a12"), (1.0, "#08070d")])];
+        f.clips_content = true;
+        f.corner_radii = CornerRadii::uniform(6.0);
+        f.effects = vec![draw::inner_shadow("#000000c0", 0.0, 2.0, 6.0)];
+        let f = b.add(p, f);
+        field(b, f, fw, fh);
+        let knob = ["color=#1e1a2a", "pointer=#b69cff", "index=line", "index_w=0.1", "skirt=plain", "skirt_color=#0c0a12"];
+        let (tx, ty, td) = kit::PHONE_TIME;
+        kit::knob3d(b, p, &a("detune"), "Detune", td, (tx, ty), &knob, INK, DIM);
+        let (xs, ky, kd) = kit::PHONE_KNOBS;
+        for (i, (id, legend)) in [("delay", "Delay"), ("width", "Width"), ("mix", "Mix")].iter().enumerate() {
+            kit::knob3d(b, p, &a(id), legend, kd, (xs[i], ky), &knob, INK, DIM);
+        }
+        let head = Lettering::family(family::INTER).weight(800.0);
+        kit::nameplate_top_right(b, p, NS, tier, (8.0, 30.0), 130.0, 200.0, 12.0, (TAKE, DIM), |b, t| {
+            set(b, t, "DOUBLER", 58.0, 15.0, 14.0, TAKE, &head, 0.25);
+        });
+        kit::face_bypass(b, p, NS, tier, "purple", "On");
+        kit::responsive(b, p, &[f]);
+    });
+    let mut params = doubler_unit().params;
+    params.extend(kit::nameplate_params(NS));
+    Face { file: "35-doubler-phone", plugin: PLUGIN, scene, params, streams: Vec::new() }
 }

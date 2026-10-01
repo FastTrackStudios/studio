@@ -335,7 +335,7 @@ pub fn faces() -> Vec<Face> {
     v.push(eq());
     v.push(spring_viz());
     v.push(cab());
-    v.extend([d_(crate::rig_blues::filters::wah_unit()), d_(crate::rig_blues::filters::q_tron_unit()), d_(crate::rig_blues::filters::postal_unit()), d_(crate::rig_blues::pitch::pitch_unit()), d_(crate::rig_blues::doubler::doubler_unit()), d_(crate::rig_blues::transpose::transpose_unit()), d_(crate::rig_blues::transpose::dive_unit()), d_(crate::rig_blues::premod::premod_unit())]);
+    v.extend([d_(crate::rig_blues::filters::wah_unit()), d_(crate::rig_blues::filters::q_tron_unit()), d_(crate::rig_blues::filters::postal_unit()), d_(crate::rig_blues::pitch::pitch_unit()), d_(crate::rig_blues::doubler::doubler_unit()), d_(crate::rig_blues::transpose::transpose_unit()), d_(crate::rig_blues::transpose::dive_unit()), d_(crate::rig_blues::transpose::transpose_phone()), d_(crate::rig_blues::transpose::dive_phone()), d_(crate::rig_blues::filters::wah_phone()), d_(crate::rig_blues::filters::q_tron_phone()), d_(crate::rig_blues::filters::dive_pedal_phone()), d_(crate::rig_blues::filters::volume_phone()), d_(crate::rig_blues::filters::octaver_phone()), d_(crate::rig_blues::filters::harmonizer_phone()), d_(crate::rig_blues::doubler::doubler_phone()), d_(crate::rig_blues::premod::premod_unit())]);
     v
 }
 
@@ -407,17 +407,26 @@ pub fn manifest() -> String {
         "cab": { "face": "54-cab-2x12", "ns": "cab", "size": size(&cab()) },
         // The input stage's units, by block type, and the filter's picture.
         "input": [
-            { "match": ["wah"], "face": "30-wah-unit", "ns": "wah", "size": size(&crate::rig_blues::filters::wah_unit()) },
+            { "match": ["wah"], "face": "30-wah-unit", "ns": "wah", "size": size(&crate::rig_blues::filters::wah_unit()),
+                "tiers": { "phone": { "face": "30-wah-phone", "size": size(&crate::rig_blues::filters::wah_phone()), "nameplate": true } } },
             // The envelope filter by its preset: Cory Wong's postal box, or
             // the John Mayer rig's Q-Tron (the default).
             { "match": ["postal"], "face": "34-filter-postal", "ns": "env", "size": size(&crate::rig_blues::filters::postal_unit()) },
-            { "match": ["filter", "q-tron", "qtron"], "face": "31-filter-q-tron", "ns": "env", "size": size(&crate::rig_blues::filters::q_tron_unit()) },
-            { "match": ["doubler"], "face": "35-doubler", "ns": "doubler", "size": size(&crate::rig_blues::doubler::doubler_unit()) },
-            { "match": ["pitch"], "face": "33-pitch-voices", "ns": "pitch", "size": size(&crate::rig_blues::pitch::pitch_unit()) },
+            { "match": ["filter", "q-tron", "qtron"], "face": "31-filter-q-tron", "ns": "env", "size": size(&crate::rig_blues::filters::q_tron_unit()),
+                "tiers": { "phone": { "face": "31-filter-q-tron-phone", "size": size(&crate::rig_blues::filters::q_tron_phone()), "nameplate": true } } },
+            { "match": ["doubler"], "face": "35-doubler", "ns": "doubler", "size": size(&crate::rig_blues::doubler::doubler_unit()),
+                "tiers": { "phone": { "face": "35-doubler-phone", "size": size(&crate::rig_blues::doubler::doubler_phone()), "nameplate": true } } },
+            // The harmonizer before the octaver ("Pitch"): both are pitch blocks.
+            { "match": ["harmon"], "face": "33-harmonizer-phone", "ns": "harm", "size": size(&crate::rig_blues::filters::harmonizer_phone()) },
+            { "match": ["pitch"], "face": "33-pitch-voices", "ns": "pitch", "size": size(&crate::rig_blues::pitch::pitch_unit()),
+                "tiers": { "phone": { "face": "32-octaver-phone", "size": size(&crate::rig_blues::filters::octaver_phone()), "nameplate": true } } },
+            { "match": ["volume"], "face": "38-volume-phone", "ns": "volume", "size": size(&crate::rig_blues::filters::volume_phone()) },
             // The transposer and the dive bomb: pitch blocks of their own,
             // by name.
-            { "match": ["transpose"], "face": "36-transpose", "ns": "transpose", "size": size(&crate::rig_blues::transpose::transpose_unit()) },
-            { "match": ["dive"], "face": "37-dive-bomb", "ns": "dive", "size": size(&crate::rig_blues::transpose::dive_unit()) },
+            { "match": ["transpose"], "face": "36-transpose", "ns": "transpose", "size": size(&crate::rig_blues::transpose::transpose_unit()),
+                "tiers": { "phone": { "face": "36-transpose-phone", "size": size(&crate::rig_blues::transpose::transpose_phone()), "nameplate": true } } },
+            { "match": ["dive"], "face": "37-dive-bomb", "ns": "dive", "size": size(&crate::rig_blues::transpose::dive_unit()),
+                "tiers": { "phone": { "face": "37-dive-pedal-phone", "size": size(&crate::rig_blues::filters::dive_pedal_phone()), "nameplate": true } } },
         ],
         // Pictures of a block, beside its unit: a reverb's springs.
         "pictures": [ { "match": ["reverb"], "face": "53-spring-viz", "ns": "spring", "size": size(&spring_viz()) } ],

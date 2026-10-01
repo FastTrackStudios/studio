@@ -525,7 +525,6 @@ pub fn unit_phone(ns: &str, name: &str, input: &str, output: &str, on: &str, bac
             b.add(sec, frame);
             // The ladder, its numbers above, lit right to left.
             let (lx0, lx1) = (18.0, pw - 18.0);
-            let pitch = (lx1 - lx0) / LADDER.len() as f64;
             let ladder = Place::new("Gain Reduction").size(lx1 - lx0).scale(LADDER).options(&["gr", LADDER_COLORS]).reversed().bind(Binding::stream(a("gr")));
             let lad = ui::put(b, sec, "meter.led_ladder", &ladder, (lx0 + lx1) / 2.0, 30.0);
             // Its own numbers, each over its lamp (the unit prints them

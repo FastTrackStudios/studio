@@ -1,0 +1,143 @@
+<Document id="6008dd84-1d95-5a46-b105-4907a116fe5e">
+  <Page name="Surface" id="b053b241-2be0-5f6d-ab49-1fe38d0fd1de">
+    <Frame name="Volume" id="7198085b-2601-5b34-ae85-36cd0c945e03" w=230 h=300>
+      <Frame name="Casting" id="4e760bff-4dbc-5fe0-b5cd-55022b98d9af" w=230 h=300 radius=18 fill={[{"kind":{"LinearGradient":{"stops":[{"color":"#0e1013","position":0.0},{"color":"#22262c","position":0.3},{"color":"#22262c","position":0.7},{"color":"#0e1013","position":1.0}],"transform":{"a":1.0,"b":5.551115123125783e-17,"c":-5.551115123125783e-17,"d":1.0,"tx":-2.7755575615628914e-17,"ty":0.0}}}}]} effects={[{"color":"#ffffff14","kind":"InnerShadow","offset_y":1.0,"radius":0.0}]}>
+        <Ellipse name="crinkle" id="5c847819-4f27-5203-a9b8-548f9e327d49" x=-1.6 y=-1.6 w=3.2 h=3.2 fill="#ffffff06" />
+        <Ellipse name="crinkle" id="ce229c1c-21f2-51e4-8047-48326b3f3a8a" x=35.4 y=57.4 w=3.2 h=3.2 fill="#ffffff06" />
+        <Ellipse name="crinkle" id="d932bb66-b2fc-5a73-8000-19f1a7d46b2a" x=72.4 y=116.4 w=3.2 h=3.2 fill="#ffffff06" />
+        <Ellipse name="crinkle" id="f93caf6b-6ade-5ff5-8da9-0fee0602c833" x=109.4 y=175.4 w=3.2 h=3.2 fill="#ffffff06" />
+        <Ellipse name="crinkle" id="38b7a34c-9716-5e6b-9cc7-0018af51cac6" x=146.4 y=234.4 w=3.2 h=3.2 fill="#ffffff06" />
+        <Ellipse name="crinkle" id="603db0f5-c2fd-5d4d-8e5c-07bf4828510f" x=183.4 y=293.4 w=3.2 h=3.2 fill="#ffffff06" />
+        <Ellipse name="crinkle" id="82d7082c-4118-544c-9b36-a3288de2ff06" x=220.4 y=52.4 w=3.2 h=3.2 fill="#ffffff06" />
+        <Ellipse name="crinkle" id="b58e3006-c4e2-56b4-b2e6-2f5f0dd3181e" x=27.4 y=111.4 w=3.2 h=3.2 fill="#ffffff06" />
+        <Ellipse name="crinkle" id="97d8ca3a-e775-59a6-9f0b-0109236f6d9e" x=64.4 y=170.4 w=3.2 h=3.2 fill="#ffffff06" />
+        <Ellipse name="crinkle" id="8154584a-09c7-500e-9a4b-0820372f1f3b" x=101.4 y=229.4 w=3.2 h=3.2 fill="#ffffff06" />
+        <Ellipse name="crinkle" id="a2a93552-c6b9-5615-932b-838d7b5f1dde" x=138.4 y=288.4 w=3.2 h=3.2 fill="#ffffff06" />
+        <Ellipse name="crinkle" id="5384ec8a-6c52-5b0a-a596-b4bc02ddeb6b" x=175.4 y=47.4 w=3.2 h=3.2 fill="#ffffff06" />
+        <Ellipse name="crinkle" id="3aa825b4-7cbb-51ad-8e9d-110284cc64ae" x=212.4 y=106.4 w=3.2 h=3.2 fill="#ffffff06" />
+        <Ellipse name="crinkle" id="9471a656-8a27-55e5-a04b-c39e8f43359e" x=19.4 y=165.4 w=3.2 h=3.2 fill="#ffffff06" />
+        <Ellipse name="crinkle" id="72728730-f42b-5680-a7cb-51edff3245bc" x=56.4 y=224.4 w=3.2 h=3.2 fill="#ffffff06" />
+        <Ellipse name="crinkle" id="987f68c5-532d-5ae3-bade-aaaa6ae6a81f" x=93.4 y=283.4 w=3.2 h=3.2 fill="#ffffff06" />
+        <Ellipse name="crinkle" id="aa692c04-66cf-5c47-b008-aae42a89afdf" x=130.4 y=42.4 w=3.2 h=3.2 fill="#ffffff06" />
+        <Ellipse name="crinkle" id="b5ae17c2-0322-57a6-9443-2cddcc4956e8" x=167.4 y=101.4 w=3.2 h=3.2 fill="#ffffff06" />
+        <Ellipse name="crinkle" id="ee711487-d66d-5dc6-8bab-924312e3860d" x=204.4 y=160.4 w=3.2 h=3.2 fill="#ffffff06" />
+        <Ellipse name="crinkle" id="7af36446-a484-58b7-b827-0d909f8a3632" x=11.4 y=219.4 w=3.2 h=3.2 fill="#ffffff06" />
+        <Ellipse name="crinkle" id="cf12014f-0abc-539e-9197-9511bc78dc00" x=48.4 y=278.4 w=3.2 h=3.2 fill="#ffffff06" />
+        <Ellipse name="crinkle" id="f1fee086-e733-5fe7-86e5-a870dde072b9" x=85.4 y=37.4 w=3.2 h=3.2 fill="#ffffff06" />
+        <Ellipse name="crinkle" id="3ad7ed10-0b88-5a39-8367-3d38a2c92aa6" x=122.4 y=96.4 w=3.2 h=3.2 fill="#ffffff06" />
+        <Ellipse name="crinkle" id="3c7005c8-394b-5d46-8cca-ebea5f6a4552" x=159.4 y=155.4 w=3.2 h=3.2 fill="#ffffff06" />
+        <Ellipse name="crinkle" id="7acaf488-2170-5bdc-8d22-0ff6a3d095b7" x=196.4 y=214.4 w=3.2 h=3.2 fill="#ffffff06" />
+        <Ellipse name="crinkle" id="17069c46-56dc-5786-9215-b13d73d94ba0" x=3.4 y=273.4 w=3.2 h=3.2 fill="#ffffff06" />
+        <Ellipse name="crinkle" id="7c6f8c8c-6cad-5ddf-b688-221db7e425fa" x=40.4 y=32.4 w=3.2 h=3.2 fill="#ffffff06" />
+        <Ellipse name="crinkle" id="8951e42e-dd87-5919-9b3c-576dce8bbd4c" x=77.4 y=91.4 w=3.2 h=3.2 fill="#ffffff06" />
+        <Ellipse name="crinkle" id="c063e001-3def-5d5f-9a65-df68474d6d4e" x=114.4 y=150.4 w=3.2 h=3.2 fill="#ffffff06" />
+        <Ellipse name="crinkle" id="1c891b58-cf00-57f9-afde-f92d69b934df" x=151.4 y=209.4 w=3.2 h=3.2 fill="#ffffff06" />
+        <Ellipse name="crinkle" id="dcad0531-f78a-50ea-b85f-fb7b4bdf9dcb" x=188.4 y=268.4 w=3.2 h=3.2 fill="#ffffff06" />
+        <Ellipse name="crinkle" id="1bd0af0d-02e7-5fb8-96a9-ce61d9284e07" x=225.4 y=27.4 w=3.2 h=3.2 fill="#ffffff06" />
+        <Ellipse name="crinkle" id="84223f3d-5ec2-5445-a78b-49a213138611" x=32.4 y=86.4 w=3.2 h=3.2 fill="#ffffff06" />
+        <Ellipse name="crinkle" id="fe790707-2da0-5e7c-ae7e-c7515944e4ee" x=69.4 y=145.4 w=3.2 h=3.2 fill="#ffffff06" />
+        <Ellipse name="crinkle" id="ed7ea179-2df1-5ee6-ab36-e0f6c37590b3" x=106.4 y=204.4 w=3.2 h=3.2 fill="#ffffff06" />
+        <Ellipse name="crinkle" id="e9b076bc-b086-57a2-89ff-c9382b833524" x=143.4 y=263.4 w=3.2 h=3.2 fill="#ffffff06" />
+        <Ellipse name="crinkle" id="9e28262b-344c-52a3-b588-b81db2dc078b" x=180.4 y=22.4 w=3.2 h=3.2 fill="#ffffff06" />
+        <Ellipse name="crinkle" id="f24a75a8-6de8-5bd5-81ef-e8ff4c4cf89a" x=217.4 y=81.4 w=3.2 h=3.2 fill="#ffffff06" />
+        <Ellipse name="crinkle" id="fa152f7b-25d1-5ee6-a164-725450a17fa2" x=24.4 y=140.4 w=3.2 h=3.2 fill="#ffffff06" />
+        <Ellipse name="crinkle" id="c8ddedfa-917b-500f-89e1-45c8b90f2770" x=61.4 y=199.4 w=3.2 h=3.2 fill="#ffffff06" />
+        <Ellipse name="crinkle" id="23ebfd55-43bd-5575-848c-e8f543e349cc" x=98.4 y=258.4 w=3.2 h=3.2 fill="#ffffff06" />
+        <Ellipse name="crinkle" id="7d31ec0f-5da2-5ff8-8659-e5a38dd942e6" x=135.4 y=17.4 w=3.2 h=3.2 fill="#ffffff06" />
+        <Ellipse name="crinkle" id="8d07677a-4a22-56f1-8b6c-79a32035a115" x=172.4 y=76.4 w=3.2 h=3.2 fill="#ffffff06" />
+        <Ellipse name="crinkle" id="a527a8dd-0c2c-520e-81f0-6d8152fe826e" x=209.4 y=135.4 w=3.2 h=3.2 fill="#ffffff06" />
+        <Ellipse name="crinkle" id="68b472e5-9f48-57a9-b95e-50c237434f82" x=16.4 y=194.4 w=3.2 h=3.2 fill="#ffffff06" />
+        <Ellipse name="crinkle" id="28df1c8b-c7e9-5b37-8c46-2d2caaebcd19" x=53.4 y=253.4 w=3.2 h=3.2 fill="#ffffff06" />
+        <Ellipse name="crinkle" id="29aeb460-a331-5a19-b16b-7fcfb258effb" x=90.4 y=12.4 w=3.2 h=3.2 fill="#ffffff06" />
+        <Ellipse name="crinkle" id="0adecd2a-7c13-568d-9774-314dc37c101b" x=127.4 y=71.4 w=3.2 h=3.2 fill="#ffffff06" />
+        <Ellipse name="crinkle" id="b291e1f3-7507-5f45-89e3-99f38709afd8" x=164.4 y=130.4 w=3.2 h=3.2 fill="#ffffff06" />
+        <Ellipse name="crinkle" id="57a0cb6b-68a3-568f-bd26-5f7d2aac32ef" x=201.4 y=189.4 w=3.2 h=3.2 fill="#ffffff06" />
+        <Ellipse name="crinkle" id="d9b4613a-d8ee-55b3-90a9-20a4777b1375" x=8.4 y=248.4 w=3.2 h=3.2 fill="#ffffff06" />
+        <Ellipse name="crinkle" id="1ce5eee8-734f-5307-89ff-90b101697e52" x=45.4 y=7.4 w=3.2 h=3.2 fill="#ffffff06" />
+        <Ellipse name="crinkle" id="77cab31e-b9d2-5074-a33a-54008049ccf3" x=82.4 y=66.4 w=3.2 h=3.2 fill="#ffffff06" />
+        <Ellipse name="crinkle" id="52c1ab7b-4426-5b0b-8c8e-7ae3b75e8fd0" x=119.4 y=125.4 w=3.2 h=3.2 fill="#ffffff06" />
+        <Ellipse name="crinkle" id="4dab4e08-38d6-518a-8234-15c3cc6276b7" x=156.4 y=184.4 w=3.2 h=3.2 fill="#ffffff06" />
+        <Ellipse name="crinkle" id="96c4eaf6-6d5f-5c2c-aa56-881faeba59b0" x=193.4 y=243.4 w=3.2 h=3.2 fill="#ffffff06" />
+        <Ellipse name="crinkle" id="da362b07-b1b1-5a0d-a2ca-31c5559b0fa4" x=0.3999999999999999 y=2.4 w=3.2 h=3.2 fill="#ffffff06" />
+        <Ellipse name="crinkle" id="c43aadad-aa6e-5ea3-8910-396aa18bfacb" x=37.4 y=61.4 w=3.2 h=3.2 fill="#ffffff06" />
+        <Ellipse name="crinkle" id="4d55d9c4-58ee-54cf-b85f-245b91a96998" x=74.4 y=120.4 w=3.2 h=3.2 fill="#ffffff06" />
+        <Ellipse name="crinkle" id="8a6d53ce-a4a8-56d7-82ef-36d0173f2df2" x=111.4 y=179.4 w=3.2 h=3.2 fill="#ffffff06" />
+        <Ellipse name="crinkle" id="4fc7ddf5-05ad-5e03-acc4-ee4a28e498ee" x=148.4 y=238.4 w=3.2 h=3.2 fill="#ffffff06" />
+        <Ellipse name="crinkle" id="f09cd3c9-e852-503f-addb-404aeea152a8" x=185.4 y=297.4 w=3.2 h=3.2 fill="#ffffff06" />
+        <Ellipse name="crinkle" id="f87e2b55-2ed1-5e66-9f9f-c292b7038155" x=222.4 y=56.4 w=3.2 h=3.2 fill="#ffffff06" />
+        <Ellipse name="crinkle" id="4b55e115-9505-5945-ad40-5979e6979cf5" x=29.4 y=115.4 w=3.2 h=3.2 fill="#ffffff06" />
+        <Ellipse name="crinkle" id="8dd1e7a5-e953-57ca-a419-1c8719998a3e" x=66.4 y=174.4 w=3.2 h=3.2 fill="#ffffff06" />
+        <Ellipse name="crinkle" id="e2483f63-b2d9-5d6f-a1ba-0ef53ddcd022" x=103.4 y=233.4 w=3.2 h=3.2 fill="#ffffff06" />
+        <Ellipse name="crinkle" id="37393499-4394-5584-b21b-16e7b71d3459" x=140.4 y=292.4 w=3.2 h=3.2 fill="#ffffff06" />
+        <Ellipse name="crinkle" id="fc302d18-259e-53f7-9f84-a2f831e209b1" x=177.4 y=51.4 w=3.2 h=3.2 fill="#ffffff06" />
+        <Ellipse name="crinkle" id="abef6ed2-c18e-551d-8739-d9646bca425d" x=214.4 y=110.4 w=3.2 h=3.2 fill="#ffffff06" />
+        <Ellipse name="crinkle" id="176454bd-4a0b-5568-ac53-322b9f8fabfd" x=21.4 y=169.4 w=3.2 h=3.2 fill="#ffffff06" />
+        <Ellipse name="crinkle" id="09411045-ae6d-56e4-8baa-4fd19c2713fa" x=58.4 y=228.4 w=3.2 h=3.2 fill="#ffffff06" />
+        <Ellipse name="crinkle" id="52ea34a5-583f-50c7-bcc2-cf5a73d352a2" x=95.4 y=287.4 w=3.2 h=3.2 fill="#ffffff06" />
+        <Ellipse name="crinkle" id="57a92032-c7a6-5547-bef2-cafc45bcf628" x=132.4 y=46.4 w=3.2 h=3.2 fill="#ffffff06" />
+        <Ellipse name="crinkle" id="af7f7d1d-a0d3-57fc-8932-c6ae770b4249" x=169.4 y=105.4 w=3.2 h=3.2 fill="#ffffff06" />
+        <Ellipse name="crinkle" id="85742a50-b1a6-5099-abd6-8389ed976e07" x=206.4 y=164.4 w=3.2 h=3.2 fill="#ffffff06" />
+        <Ellipse name="crinkle" id="b9981c12-a4d9-55d0-b207-22b8a32d91db" x=13.4 y=223.4 w=3.2 h=3.2 fill="#ffffff06" />
+        <Ellipse name="crinkle" id="bed83500-a707-5cd8-b6cb-69fe5e77aac7" x=50.4 y=282.4 w=3.2 h=3.2 fill="#ffffff06" />
+        <Ellipse name="crinkle" id="25359882-be97-5e20-aab8-df12436abd37" x=87.4 y=41.4 w=3.2 h=3.2 fill="#ffffff06" />
+        <Ellipse name="crinkle" id="9b969dbc-0997-5a42-bd11-2cc28d5d9499" x=124.4 y=100.4 w=3.2 h=3.2 fill="#ffffff06" />
+        <Ellipse name="crinkle" id="ac6c4c5f-bc92-55fb-ad0a-9217b7339ea3" x=161.4 y=159.4 w=3.2 h=3.2 fill="#ffffff06" />
+        <Ellipse name="crinkle" id="0dc68f86-66f7-576a-a609-aa83bfe16805" x=198.4 y=218.4 w=3.2 h=3.2 fill="#ffffff06" />
+        <Ellipse name="crinkle" id="65258776-d659-5cb5-8487-72e0fddff81c" x=5.4 y=277.4 w=3.2 h=3.2 fill="#ffffff06" />
+        <Ellipse name="crinkle" id="f2b736a0-7f87-5520-bf74-5e7daf7005ae" x=42.4 y=36.4 w=3.2 h=3.2 fill="#ffffff06" />
+        <Ellipse name="crinkle" id="ae975005-6325-5a72-9f9a-cf4ed272439c" x=79.4 y=95.4 w=3.2 h=3.2 fill="#ffffff06" />
+        <Ellipse name="crinkle" id="7cc2803f-16e6-5623-b9a0-1a570086b6e0" x=116.4 y=154.4 w=3.2 h=3.2 fill="#ffffff06" />
+        <Ellipse name="crinkle" id="69ffee48-85be-5884-b283-7fa91f2ee25e" x=153.4 y=213.4 w=3.2 h=3.2 fill="#ffffff06" />
+        <Ellipse name="crinkle" id="dd2c89c1-a70e-57de-8ec4-d6e630b7c7a1" x=190.4 y=272.4 w=3.2 h=3.2 fill="#ffffff06" />
+        <Ellipse name="crinkle" id="3948fa2e-c61c-581d-ad6d-7ea21c7f39b0" x=227.4 y=31.4 w=3.2 h=3.2 fill="#ffffff06" />
+        <Ellipse name="crinkle" id="6e4b0d64-10f0-5568-8349-24485d4afa08" x=34.4 y=90.4 w=3.2 h=3.2 fill="#ffffff06" />
+        <Ellipse name="crinkle" id="f2b7fd29-5153-59c9-9fad-75c49f04674e" x=71.4 y=149.4 w=3.2 h=3.2 fill="#ffffff06" />
+        <Frame name="preset" id="dd39a4c6-fe71-5ec4-8353-3d77dbd4a99a" x=12 y=6 w=172 h=28 control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Param":{"addr":"volume/preset"}}},"kind":"Readout","slots":[{"node":"86ad22ab-68e3-5293-b429-60ca25fea2dd","role":"Value"}]}}>
+          <Text name="value" id="86ad22ab-68e3-5293-b429-60ca25fea2dd" y=6.85 w=172 h=15 fill="#cbd5e1" font="Inter" size=11 weight=650 text-align="right" />
+        </Frame>
+        <Frame name="preset browse" id="ce06a6f3-fe32-5b62-b0bf-dc93f4042396" x=12 y=6 w=172 h=28 control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Param":{"addr":"volume/preset_browse"}}},"kind":{"Button":{"mode":"Momentary"}},"slots":[]}} />
+        <Frame name="preset prev" id="f423a038-c873-5b98-8bf3-58e562a9887e" x=184 y=6 w=17 h=28 control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Param":{"addr":"volume/preset_prev"}}},"kind":{"Button":{"mode":"Momentary"}},"slots":[]}}>
+          <Vector name="chevron" id="9d3af613-ea6d-5aa7-a10e-adfcda82530b" x=6.5 y=10 w=4 h=8 stroke="#8a8c93" stroke-weight=1.4 stroke-cap="round" stroke-join="round" geometry="M 4.000 0.000 L 0.000 4.000 L 4.000 8.000 " />
+        </Frame>
+        <Frame name="preset next" id="2dc3a7e7-f295-5b11-8c98-5fe56a50a2de" x=201 y=6 w=17 h=28 control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Param":{"addr":"volume/preset_next"}}},"kind":{"Button":{"mode":"Momentary"}},"slots":[]}}>
+          <Vector name="chevron" id="7742f6c0-7b06-508b-a9e4-f97f006b6094" x=6.5 y=10 w=4 h=8 stroke="#8a8c93" stroke-weight=1.4 stroke-cap="round" stroke-join="round" geometry="M 0.000 0.000 L 4.000 4.000 L 0.000 8.000 " />
+        </Frame>
+        <Frame name="algorithm" id="80eeec54-8309-506c-9f88-467cc587ddea" x=224 y=6 h=28 control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Param":{"addr":"volume/algo_menu"}}},"kind":{"Button":{"mode":"Momentary"}},"slots":[]}}>
+          <Vector name="caret" id="9fe38398-eefe-5c08-afa8-b70fe2c18e8b" x=-10 y=12 w=8 h=4 stroke="#8a8c93" stroke-weight=1.4 stroke-cap="round" stroke-join="round" geometry="M 0.000 0.000 L 4.000 4.000 L 8.000 0.000 " />
+        </Frame>
+        <Rectangle name="well" id="fde32431-882b-5cde-8d1a-75929daafeee" x=24 y=46 w=182 h=10 radius=5 fill="#07080a" />
+        <Frame name="level" id="37f28a3f-3624-5b4b-abc8-19504db930dc" x=24 y=46 w=182 h=10 motion={[{"dynamics":{"spring":{"damping":40.0,"mass":1.0,"stiffness":500.0}},"input":"norm(volume/gain_db)","pivot":{"x":0.0,"y":0.5},"target":"stretch_x"}]}>
+          <Rectangle name="lit" id="e6666805-6c13-58f0-b254-276bdb125bd4" w=182 h=10 radius=5 fill={[{"kind":{"LinearGradient":{"stops":[{"color":"#38bdf8","position":0.0},{"color":"#e0f2fe","position":1.0}],"transform":{"a":1.0,"b":5.551115123125783e-17,"c":-5.551115123125783e-17,"d":1.0,"tx":-2.7755575615628914e-17,"ty":0.0}}}}]} emission={{"color":"#38bdf8","intensity":0.6,"radius":6.0}} />
+        </Frame>
+        <Frame name="Level" id="061a1e06-b921-5bee-9740-5c1d128d32da" x=24 y=64 w=182 h=20 control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Param":{"addr":"volume/gain_db"}}},"kind":"Readout","slots":[{"node":"c0944f1c-884f-5485-9ef9-3ba77e51a84a","role":"Value"}]}}>
+          <Text name="value" id="c0944f1c-884f-5485-9ef9-3ba77e51a84a" y=1.1600000000000001 w=182 h=18 fill="#e0f2fe" size=13 weight=600 letter-spacing=0.52 text-align="center" emission={{"color":"#e0f2fe","intensity":0.9,"radius":10.4}} />
+        </Frame>
+        <Frame name="LED" id="cf0dd28d-d336-5eda-a5c8-1f5cef4126f5" x=109 y=92 w=12 h=12 control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Param":{"addr":"volume/on"}}},"kind":"Readout","slots":[{"node":"7f9ae067-5f39-5ce5-909f-92169ef3d164","role":"Off"},{"node":"85cce03b-c76f-50b3-be21-5d3705949f6a","role":"On"}]}}>
+          <Ellipse name="bezel" id="e6c250ce-94cc-5573-9708-162d7a02665c" x=1.7999999999999998 y=1.7999999999999998 w=8.4 h=8.4 fill={[{"kind":{"LinearGradient":{"stops":[{"color":"#2a2b2e","position":0.0},{"color":"#060607","position":1.0}],"transform":{"a":1.6653345369377348e-16,"b":-1.0,"c":1.0,"d":1.6653345369377348e-16,"tx":1.0,"ty":-1.942890293094024e-16}}}}]} effects={[{"color":"#00000080","kind":"DropShadow","offset_y":1.0,"radius":2.0}]} />
+          <Ellipse name="lens" id="7f9ae067-5f39-5ce5-909f-92169ef3d164" x=3 y=3 w=6 h=6 fill={[{"kind":{"RadialGradient":{"stops":[{"color":"#ffffff30","position":0.0},{"color":"#000000d0","position":1.0}],"transform":{"a":1.8,"b":0.0,"c":0.0,"d":1.8,"tx":-0.5,"ty":-0.55}}}}]} />
+          <Ellipse name="lit" id="85cce03b-c76f-50b3-be21-5d3705949f6a" x=3 y=3 w=6 h=6 fill={[{"kind":{"RadialGradient":{"stops":[{"color":"#ffffff","position":0.0},{"color":"#38bdf8","position":0.35},{"color":"#38bdf8","position":1.0}],"transform":{"a":1.8,"b":0.0,"c":0.0,"d":1.8,"tx":-0.5,"ty":-0.55}}}}]} emission={{"color":"#38bdf8","intensity":0.9,"radius":15.0}} />
+        </Frame>
+        <Frame name="Toe" id="51dc0fa0-4302-59a0-b2ac-2545c9bfa600" x=20 y=108 w=190 h=111.6 motion={[{"dynamics":{"spring":{"damping":40.0,"mass":1.0,"stiffness":500.0}},"from":1.06,"input":"norm(volume/gain_db)","pivot":{"x":0.5,"y":1.0},"target":"stretch_y","to":0.86},{"dynamics":{"spring":{"damping":40.0,"mass":1.0,"stiffness":500.0}},"from":1.04,"input":"norm(volume/gain_db)","pivot":{"x":0.5,"y":1.0},"target":"stretch_x","to":0.96}]}>
+          <Rectangle name="chrome" id="a19bcf1f-2bf2-57f4-927a-fd8c7f4f75e3" w=190 h=111.6 radius="14 14 0 0" fill={[{"kind":{"LinearGradient":{"stops":[{"color":"#5e6166","position":0.0},{"color":"#e9ebed","position":0.18},{"color":"#a8abaf","position":0.5},{"color":"#f0f2f4","position":0.82},{"color":"#5e6166","position":1.0}],"transform":{"a":1.0,"b":5.551115123125783e-17,"c":-5.551115123125783e-17,"d":1.0,"tx":-2.7755575615628914e-17,"ty":0.0}}}}]} />
+          <Rectangle name="tread" id="a7377919-42e0-5005-8108-184d89c2ffbe" x=9 y=9 w=172 h=102.6 radius=5 fill={[{"kind":{"LinearGradient":{"stops":[{"color":"#2a2b2e","position":0.0},{"color":"#121315","position":1.0}],"transform":{"a":1.6653345369377348e-16,"b":-1.0,"c":1.0,"d":1.6653345369377348e-16,"tx":1.0,"ty":-1.942890293094024e-16}}}}]} />
+          <Vector name="ribs" id="1eb12b25-cb99-5cd7-a1a1-2972619199a7" x=14 y=15 w=162 h=88 stroke="#3a3b3f" stroke-weight=2.2 stroke-cap="round" stroke-join="round" geometry="M 0.000 0.000 L 162.000 0.000 M 0.000 11.000 L 162.000 11.000 M 0.000 22.000 L 162.000 22.000 M 0.000 33.000 L 162.000 33.000 M 0.000 44.000 L 162.000 44.000 M 0.000 55.000 L 162.000 55.000 M 0.000 66.000 L 162.000 66.000 M 0.000 77.000 L 162.000 77.000 M 0.000 88.000 L 162.000 88.000 " />
+          <Rectangle name="shade" id="1d299045-ed04-522b-b3ab-894419538069" w=190 h=111.6 opacity=0 fill="#000000" motion={[{"dynamics":{"spring":{"damping":40.0,"mass":1.0,"stiffness":500.0}},"input":"norm(volume/gain_db)","target":"opacity","to":0.45}]} />
+        </Frame>
+        <Frame name="Heel" id="e633e900-e2bb-5c51-b5c7-84a5a39ba783" x=20 y=219.6 w=190 h=68.4 motion={[{"dynamics":{"spring":{"damping":40.0,"mass":1.0,"stiffness":500.0}},"from":1.06,"input":"1 - norm(volume/gain_db)","pivot":{"x":0.5,"y":0.0},"target":"stretch_y","to":0.86},{"dynamics":{"spring":{"damping":40.0,"mass":1.0,"stiffness":500.0}},"from":1.04,"input":"1 - norm(volume/gain_db)","pivot":{"x":0.5,"y":0.0},"target":"stretch_x","to":0.96}]}>
+          <Rectangle name="chrome" id="1ef400bb-3792-535e-b419-bb9dcd815bcc" w=190 h=68.4 radius="0 0 14 14" fill={[{"kind":{"LinearGradient":{"stops":[{"color":"#5e6166","position":0.0},{"color":"#e9ebed","position":0.18},{"color":"#a8abaf","position":0.5},{"color":"#f0f2f4","position":0.82},{"color":"#5e6166","position":1.0}],"transform":{"a":1.0,"b":5.551115123125783e-17,"c":-5.551115123125783e-17,"d":1.0,"tx":-2.7755575615628914e-17,"ty":0.0}}}}]} />
+          <Rectangle name="tread" id="90be6d08-a7e2-515c-8b88-70c5cc55f5a8" x=9 w=172 h=30.400000000000006 radius=5 fill={[{"kind":{"LinearGradient":{"stops":[{"color":"#2a2b2e","position":0.0},{"color":"#121315","position":1.0}],"transform":{"a":1.6653345369377348e-16,"b":-1.0,"c":1.0,"d":1.6653345369377348e-16,"tx":1.0,"ty":-1.942890293094024e-16}}}}]} />
+          <Vector name="ribs" id="50145d5d-1496-502c-afd7-55346e1feed8" x=14 y=6 w=162 h=11 stroke="#3a3b3f" stroke-weight=2.2 stroke-cap="round" stroke-join="round" geometry="M 0.000 0.000 L 162.000 0.000 M 0.000 11.000 L 162.000 11.000 " />
+          <Text name="print" id="5319a2ed-e692-59d1-9a95-c540f4aa5406" x=39.5 y=38.2 w=111 h=21 fill="#0a0b0d" font="Inter" size=15 weight=900 text-align="center">VOLUME</Text>
+          <Rectangle name="shade" id="67970a73-0f36-54a1-8ffb-9300a50a6ab5" w=190 h=68.4 opacity=0 fill="#000000" motion={[{"dynamics":{"spring":{"damping":40.0,"mass":1.0,"stiffness":500.0}},"input":"1 - norm(volume/gain_db)","target":"opacity","to":0.45}]} />
+        </Frame>
+        <Rectangle name="axle" id="19696adf-54f0-59fa-8296-1a4444a334aa" x=20 y=218.6 w=190 h=2 fill="#00000080" />
+        <Frame name="lane" id="929f41b6-b7b6-575d-803e-cc6576d841b3" x=20 y=118 w=190 h=160 control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Param":{"addr":"volume/gain_db"}}},"kind":{"Fader":{"orientation":"Vertical"}},"slots":[{"node":"9383d217-f24e-552c-9487-33988593ec89","role":"Thumb"}]}}>
+          <Frame name="tilt" id="9383d217-f24e-552c-9487-33988593ec89" w=190 h=70>
+            <Rectangle name="sheen" id="cb3f70ee-6e2f-5ce2-904c-141e8c0e8dd4" w=190 h=70 fill={[{"kind":{"LinearGradient":{"stops":[{"color":"#ffffff00","position":0.0},{"color":"#ffffff22","position":0.5},{"color":"#ffffff00","position":1.0}],"transform":{"a":1.6653345369377348e-16,"b":-1.0,"c":1.0,"d":1.6653345369377348e-16,"tx":1.0,"ty":-1.942890293094024e-16}}}}]} />
+          </Frame>
+        </Frame>
+        <Frame name="Toe switch" id="3cb6dd9b-fcc4-5b41-9fab-549ab7f1192d" x=40 y=108 w=150 h=16 control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Param":{"addr":"volume/on"}}},"kind":{"Footswitch":{"hold_ms":500}},"slots":[]}} />
+      </Frame>
+    </Frame>
+  </Page>
+</Document>
