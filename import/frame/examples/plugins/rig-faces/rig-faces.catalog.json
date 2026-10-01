@@ -505,20 +505,20 @@
     },
     {
       "addr": "aquapuss/time",
-      "name": "Delay",
+      "name": "Time",
       "short_name": null,
       "group": null,
       "kind": "Continuous",
       "range": {
         "min": 20.0,
-        "max": 600.0,
+        "max": 2500.0,
         "scale": "Logarithmic",
         "unit": "Milliseconds",
         "steps": null
       },
-      "default": 0.5268025545616606,
+      "default": 0.5927951323495915,
       "bipolar": false,
-      "featured": true
+      "featured": false
     },
     {
       "addr": "aquapuss/feedback",
@@ -533,13 +533,13 @@
         "unit": "None",
         "steps": null
       },
-      "default": 0.15789473684210525,
+      "default": 0.3157894736842105,
       "bipolar": false,
-      "featured": true
+      "featured": false
     },
     {
       "addr": "aquapuss/level",
-      "name": "Blend",
+      "name": "Level",
       "short_name": null,
       "group": null,
       "kind": "Continuous",
@@ -552,7 +552,262 @@
       },
       "default": 0.6111111111111112,
       "bipolar": false,
-      "featured": true
+      "featured": false
+    },
+    {
+      "addr": "aquapuss/style",
+      "name": "Machine",
+      "short_name": null,
+      "group": null,
+      "kind": {
+        "Choice": {
+          "options": [
+            "Tape",
+            "Digital",
+            "Analog",
+            "Lo-Fi",
+            "Shimmer",
+            "Reverse",
+            "Ice",
+            "Rhythm",
+            "Drum",
+            "Oil Can",
+            "MultiTap",
+            "Spectral",
+            "Filter"
+          ]
+        }
+      },
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 13
+      },
+      "default": 0.08333333333333333,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "aquapuss/tap_div_l",
+      "name": "Division",
+      "short_name": null,
+      "group": null,
+      "kind": {
+        "Choice": {
+          "options": [
+            "1/4",
+            "1/8.",
+            "1/8",
+            "1/8T",
+            "1/16",
+            "Golden",
+            "Silver",
+            "Free",
+            "1/4.",
+            "1/2",
+            "1/4T"
+          ]
+        }
+      },
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 11
+      },
+      "default": 0.0,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "aquapuss/high_pass",
+      "name": "Low Cut",
+      "short_name": null,
+      "group": null,
+      "kind": "Continuous",
+      "range": {
+        "min": 0.0,
+        "max": 900.0,
+        "scale": "Linear",
+        "unit": "Hz",
+        "steps": null
+      },
+      "default": 0.0,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "aquapuss/high_cut",
+      "name": "High Cut",
+      "short_name": null,
+      "group": null,
+      "kind": "Continuous",
+      "range": {
+        "min": 500.0,
+        "max": 20000.0,
+        "scale": "Logarithmic",
+        "unit": "Hz",
+        "steps": null
+      },
+      "default": 0.7516072988364303,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "aquapuss/duck_sens",
+      "name": "Duck",
+      "short_name": null,
+      "group": null,
+      "kind": "Continuous",
+      "range": {
+        "min": 0.0,
+        "max": 18.0,
+        "scale": "Linear",
+        "unit": "Db",
+        "steps": null
+      },
+      "default": 0.0,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "aquapuss/duck_release",
+      "name": "Duck Release",
+      "short_name": null,
+      "group": null,
+      "kind": "Continuous",
+      "range": {
+        "min": 0.05,
+        "max": 1.0,
+        "scale": "Logarithmic",
+        "unit": "Seconds",
+        "steps": null
+      },
+      "default": 0.46275642631951835,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "aquapuss/mod_rate",
+      "name": "Mod Rate",
+      "short_name": null,
+      "group": null,
+      "kind": "Continuous",
+      "range": {
+        "min": 0.05,
+        "max": 8.0,
+        "scale": "Logarithmic",
+        "unit": "Hz",
+        "steps": null
+      },
+      "default": 0.4896200091372662,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "aquapuss/mod_depth",
+      "name": "Mod Depth",
+      "short_name": null,
+      "group": null,
+      "kind": "Continuous",
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": null
+      },
+      "default": 0.0,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "aquapuss/pan",
+      "name": "Pan",
+      "short_name": null,
+      "group": null,
+      "kind": "Continuous",
+      "range": {
+        "min": -1.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": null
+      },
+      "default": 0.5,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "aquapuss/dry",
+      "name": "Dry",
+      "short_name": null,
+      "group": null,
+      "kind": "Continuous",
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": null
+      },
+      "default": 1.0,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "aquapuss/repeat_dyn",
+      "name": "Repeat Dynamics",
+      "short_name": null,
+      "group": null,
+      "kind": "Continuous",
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": null
+      },
+      "default": 0.0,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "aquapuss/interval",
+      "name": "Interval",
+      "short_name": null,
+      "group": null,
+      "kind": "Continuous",
+      "range": {
+        "min": 0.0,
+        "max": 30.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": null
+      },
+      "default": 1.0,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "aquapuss/blend",
+      "name": "Blend",
+      "short_name": null,
+      "group": null,
+      "kind": "Continuous",
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": null
+      },
+      "default": 1.0,
+      "bipolar": false,
+      "featured": false
     },
     {
       "addr": "aquapuss/on",
@@ -569,7 +824,160 @@
       },
       "default": 1.0,
       "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "aquapuss/preset",
+      "name": "Preset",
+      "short_name": null,
+      "group": null,
+      "kind": "Text",
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": null
+      },
+      "default": 0.0,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "aquapuss/algo_menu",
+      "name": "Algorithm",
+      "short_name": null,
+      "group": null,
+      "kind": "Toggle",
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 2
+      },
+      "default": 0.0,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "aquapuss/preset_prev",
+      "name": "Previous preset",
+      "short_name": null,
+      "group": null,
+      "kind": "Toggle",
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 2
+      },
+      "default": 0.0,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "aquapuss/preset_next",
+      "name": "Next preset",
+      "short_name": null,
+      "group": null,
+      "kind": "Toggle",
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 2
+      },
+      "default": 0.0,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "aquapuss/preset_browse",
+      "name": "Presets",
+      "short_name": null,
+      "group": null,
+      "kind": "Toggle",
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 2
+      },
+      "default": 0.0,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "aquapuss/flip",
+      "name": "More",
+      "short_name": null,
+      "group": null,
+      "kind": "Toggle",
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 2
+      },
+      "default": 0.0,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "aquapuss/time_knob",
+      "name": "Time",
+      "short_name": null,
+      "group": null,
+      "kind": "Continuous",
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": null
+      },
+      "default": 0.5,
+      "bipolar": false,
       "featured": true
+    },
+    {
+      "addr": "aquapuss/sync",
+      "name": "Beat",
+      "short_name": null,
+      "group": null,
+      "kind": "Toggle",
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 2
+      },
+      "default": 0.0,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "aquapuss/time_text",
+      "name": "Time",
+      "short_name": null,
+      "group": null,
+      "kind": "Text",
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": null
+      },
+      "default": 0.0,
+      "bipolar": false,
+      "featured": false
     },
     {
       "addr": "trem/on",
@@ -681,7 +1089,7 @@
     },
     {
       "addr": "spring/decay",
-      "name": "Dwell",
+      "name": "Decay",
       "short_name": null,
       "group": null,
       "kind": "Continuous",
@@ -692,18 +1100,18 @@
         "unit": "None",
         "steps": null
       },
-      "default": 0.35,
+      "default": 0.4,
       "bipolar": false,
-      "featured": true
+      "featured": false
     },
     {
-      "addr": "spring/tone",
-      "name": "Tone",
+      "addr": "spring/size",
+      "name": "Size",
       "short_name": null,
       "group": null,
       "kind": "Continuous",
       "range": {
-        "min": -1.0,
+        "min": 0.0,
         "max": 1.0,
         "scale": "Linear",
         "unit": "None",
@@ -711,7 +1119,78 @@
       },
       "default": 0.5,
       "bipolar": false,
-      "featured": true
+      "featured": false
+    },
+    {
+      "addr": "spring/level",
+      "name": "Level",
+      "short_name": null,
+      "group": null,
+      "kind": "Continuous",
+      "range": {
+        "min": -60.0,
+        "max": 12.0,
+        "scale": "Linear",
+        "unit": "Db",
+        "steps": null
+      },
+      "default": 0.6111111111111112,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "spring/algorithm",
+      "name": "Algorithm",
+      "short_name": null,
+      "group": null,
+      "kind": {
+        "Choice": {
+          "options": [
+            "Room",
+            "Hall",
+            "Plate",
+            "Spring",
+            "Cloud",
+            "Bloom",
+            "Shimmer",
+            "Chorale",
+            "Magneto",
+            "NonLinear",
+            "Swell",
+            "Reflections",
+            "Velvet",
+            "FreeVerb",
+            "Convolution"
+          ]
+        }
+      },
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 15
+      },
+      "default": 0.07142857142857142,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "spring/predelay",
+      "name": "Pre-Delay",
+      "short_name": null,
+      "group": null,
+      "kind": "Continuous",
+      "range": {
+        "min": 0.0,
+        "max": 200.0,
+        "scale": "Linear",
+        "unit": "Milliseconds",
+        "steps": null
+      },
+      "default": 0.0,
+      "bipolar": false,
+      "featured": false
     },
     {
       "addr": "spring/damping",
@@ -731,30 +1210,13 @@
       "featured": false
     },
     {
-      "addr": "spring/level",
-      "name": "Mix",
+      "addr": "spring/tone",
+      "name": "Tone",
       "short_name": null,
       "group": null,
       "kind": "Continuous",
       "range": {
-        "min": -60.0,
-        "max": 12.0,
-        "scale": "Linear",
-        "unit": "Db",
-        "steps": null
-      },
-      "default": 0.6041666666666666,
-      "bipolar": false,
-      "featured": true
-    },
-    {
-      "addr": "spring/tension",
-      "name": "Tension",
-      "short_name": null,
-      "group": null,
-      "kind": "Continuous",
-      "range": {
-        "min": 0.0,
+        "min": -1.0,
         "max": 1.0,
         "scale": "Linear",
         "unit": "None",
@@ -766,7 +1228,7 @@
     },
     {
       "addr": "spring/modulation",
-      "name": "Drip",
+      "name": "Modulation",
       "short_name": null,
       "group": null,
       "kind": "Continuous",
@@ -782,8 +1244,161 @@
       "featured": false
     },
     {
+      "addr": "spring/low_cut",
+      "name": "Low Cut",
+      "short_name": null,
+      "group": null,
+      "kind": "Continuous",
+      "range": {
+        "min": 20.0,
+        "max": 2000.0,
+        "scale": "Logarithmic",
+        "unit": "Hz",
+        "steps": null
+      },
+      "default": 0.0,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "spring/high_cut",
+      "name": "High Cut",
+      "short_name": null,
+      "group": null,
+      "kind": "Continuous",
+      "range": {
+        "min": 1000.0,
+        "max": 20000.0,
+        "scale": "Logarithmic",
+        "unit": "Hz",
+        "steps": null
+      },
+      "default": 1.0,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "spring/duck",
+      "name": "Duck",
+      "short_name": null,
+      "group": null,
+      "kind": "Continuous",
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": null
+      },
+      "default": 0.0,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "spring/duck_threshold",
+      "name": "Duck Threshold",
+      "short_name": null,
+      "group": null,
+      "kind": "Continuous",
+      "range": {
+        "min": -60.0,
+        "max": 0.0,
+        "scale": "Linear",
+        "unit": "Db",
+        "steps": null
+      },
+      "default": 0.6666666666666666,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "spring/duck_release",
+      "name": "Duck Release",
+      "short_name": null,
+      "group": null,
+      "kind": "Continuous",
+      "range": {
+        "min": 20.0,
+        "max": 2000.0,
+        "scale": "Logarithmic",
+        "unit": "Milliseconds",
+        "steps": null
+      },
+      "default": 0.38907562519182176,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "spring/pan_a",
+      "name": "Pan",
+      "short_name": null,
+      "group": null,
+      "kind": "Continuous",
+      "range": {
+        "min": -1.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": null
+      },
+      "default": 0.5,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "spring/dry",
+      "name": "Dry",
+      "short_name": null,
+      "group": null,
+      "kind": "Continuous",
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": null
+      },
+      "default": 1.0,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "spring/shim_shift1",
+      "name": "Shift",
+      "short_name": null,
+      "group": null,
+      "kind": "Continuous",
+      "range": {
+        "min": -12.0,
+        "max": 12.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": null
+      },
+      "default": 1.0,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "spring/shim_amount",
+      "name": "Shimmer",
+      "short_name": null,
+      "group": null,
+      "kind": "Continuous",
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": null
+      },
+      "default": 0.35,
+      "bipolar": false,
+      "featured": false
+    },
+    {
       "addr": "spring/on",
-      "name": "Reverb",
+      "name": "Bypass",
       "short_name": null,
       "group": null,
       "kind": "Toggle",
@@ -795,6 +1410,159 @@
         "steps": 2
       },
       "default": 1.0,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "spring/preset",
+      "name": "Preset",
+      "short_name": null,
+      "group": null,
+      "kind": "Text",
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": null
+      },
+      "default": 0.0,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "spring/algo_menu",
+      "name": "Algorithm",
+      "short_name": null,
+      "group": null,
+      "kind": "Toggle",
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 2
+      },
+      "default": 0.0,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "spring/preset_prev",
+      "name": "Previous preset",
+      "short_name": null,
+      "group": null,
+      "kind": "Toggle",
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 2
+      },
+      "default": 0.0,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "spring/preset_next",
+      "name": "Next preset",
+      "short_name": null,
+      "group": null,
+      "kind": "Toggle",
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 2
+      },
+      "default": 0.0,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "spring/preset_browse",
+      "name": "Presets",
+      "short_name": null,
+      "group": null,
+      "kind": "Toggle",
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 2
+      },
+      "default": 0.0,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "spring/flip",
+      "name": "More",
+      "short_name": null,
+      "group": null,
+      "kind": "Toggle",
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 2
+      },
+      "default": 0.0,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "spring/time_knob",
+      "name": "Time",
+      "short_name": null,
+      "group": null,
+      "kind": "Continuous",
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": null
+      },
+      "default": 0.5,
+      "bipolar": false,
+      "featured": true
+    },
+    {
+      "addr": "spring/sync",
+      "name": "Beat",
+      "short_name": null,
+      "group": null,
+      "kind": "Toggle",
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 2
+      },
+      "default": 0.0,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "spring/time_text",
+      "name": "Time",
+      "short_name": null,
+      "group": null,
+      "kind": "Text",
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": null
+      },
+      "default": 0.0,
       "bipolar": false,
       "featured": false
     },
@@ -7042,39 +7810,19 @@
       "featured": false
     },
     {
-      "addr": "spring/algorithm",
-      "name": "Algorithm",
+      "addr": "spring/tension",
+      "name": "Tension",
       "short_name": null,
       "group": null,
-      "kind": {
-        "Choice": {
-          "options": [
-            "Room",
-            "Hall",
-            "Plate",
-            "Spring",
-            "Cloud",
-            "Bloom",
-            "Shimmer",
-            "Chorale",
-            "Magneto",
-            "NonLinear",
-            "Swell",
-            "Reflections",
-            "Velvet",
-            "FreeVerb",
-            "Convolution"
-          ]
-        }
-      },
+      "kind": "Continuous",
       "range": {
         "min": 0.0,
         "max": 1.0,
         "scale": "Linear",
         "unit": "None",
-        "steps": 15
+        "steps": null
       },
-      "default": 0.21428571428571427,
+      "default": 0.5,
       "bipolar": false,
       "featured": false
     },

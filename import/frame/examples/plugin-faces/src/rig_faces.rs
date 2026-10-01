@@ -300,6 +300,12 @@ pub fn faces() -> Vec<Face> {
     v.extend(drive_phone());
     v.push(Face { plugin: PLUGIN, ..drives::compressor() });
     v.extend(pre_entries());
+    for t in [crate::rig_time::kit::Tier::Desktop, crate::rig_time::kit::Tier::Phone] {
+        v.push(Face { plugin: PLUGIN, ..crate::rig_blues::prefx::aqua_back(t) });
+        v.push(Face { plugin: PLUGIN, ..crate::rig_blues::prefx::spring_back(t) });
+    }
+    v.push(Face { plugin: PLUGIN, ..crate::rig_blues::prefx::aqua_at(crate::rig_time::kit::Tier::Phone) });
+    v.push(Face { plugin: PLUGIN, ..crate::rig_blues::prefx::spring_at(crate::rig_time::kit::Tier::Phone) });
     v.push(trio());
     v.push(post_comp());
     v.extend(POST_COMP_ASPECTS.iter().map(|a| post_comp_as(*a, true)));
@@ -342,13 +348,16 @@ pub fn manifest() -> String {
         json!({ "match": amp_match(*m), "face": f.file, "ns": ns(*m), "name": m.short(), "size": size(&f), "variants": variants(AMP_ASPECTS.iter().map(|a| amp_face_as(*m, *a, true)).collect()), "tiers": { "phone": { "face": p.file, "size": size(&p), "variants": variants(AMP_PHONE_ASPECTS.iter().map(|a| amp_face_phone_as(*m, *a, true)).collect()) } } })
     }));
     let pre = pre_entries();
+    use crate::rig_time::kit::Tier::{Desktop as Desk, Phone};
     let pre = vec![
-        json!({ "match": ["aqua"], "face": pre[0].file, "ns": "aquapuss", "size": size(&pre[0]) }),
+        json!({ "match": ["aqua"], "face": pre[0].file, "ns": "aquapuss", "size": size(&pre[0]), "nameplate": true, "time_knob": true, "back": crate::rig_blues::prefx::aqua_back(Desk).file,
+            "tiers": { "phone": { "face": crate::rig_blues::prefx::aqua_at(Phone).file, "size": size(&crate::rig_blues::prefx::aqua_at(Phone)), "back": crate::rig_blues::prefx::aqua_back(Phone).file } } }),
         // The Gravity Tank's two halves, each by its block preset's name.
         json!({ "match": ["gravity tank trem", "harmonic trem"], "face": pre[1].file, "ns": "trem", "size": size(&pre[1]) }),
         // Any spring on a reverb block ("Gravity Tank Spring", "Fender
         // Spring"): frame's spring reverb.
-        json!({ "match": ["spring"], "face": pre[2].file, "ns": "spring", "size": size(&pre[2]) }),
+        json!({ "match": ["spring"], "face": pre[2].file, "ns": "spring", "size": size(&pre[2]), "nameplate": true, "time_knob": true, "back": crate::rig_blues::prefx::spring_back(Desk).file,
+            "tiers": { "phone": { "face": crate::rig_blues::prefx::spring_at(Phone).file, "size": size(&crate::rig_blues::prefx::spring_at(Phone)), "back": crate::rig_blues::prefx::spring_back(Phone).file } } }),
         // Pre modulation: its unit for any preset on the block (and the
         // block itself, by name).
         json!({ "match": ["pre mod", "chorus", "vibe", "ce-2"], "face": "38-pre-mod", "ns": "premod", "size": [crate::rig_blues::premod::W, crate::rig_blues::premod::H] }),

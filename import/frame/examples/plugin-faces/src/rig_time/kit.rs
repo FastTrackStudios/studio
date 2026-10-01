@@ -65,7 +65,12 @@ fn a(ns: &str, id: &str) -> String {
 /// The Delay block's params, as `dly/…`.
 #[must_use]
 pub fn delay_params() -> Vec<ParamInfo> {
-    let n = DLY;
+    delay_params_in(DLY)
+}
+
+/// The Delay block's params under `n` (a Pre FX lane's own namespace).
+#[must_use]
+pub fn delay_params_in(n: &str) -> Vec<ParamInfo> {
     vec![
         ui::param(&a(n, "time"), "Time", Range::log(20.0, 2500.0, Unit::Milliseconds), 350.0),
         ui::param(&a(n, "feedback"), "Feedback", Range::linear(0.0, 0.95, Unit::None), 0.3),
@@ -90,7 +95,12 @@ pub fn delay_params() -> Vec<ParamInfo> {
 /// The Reverb block's params, as `verb/…`.
 #[must_use]
 pub fn reverb_params() -> Vec<ParamInfo> {
-    let n = VERB;
+    reverb_params_in(VERB)
+}
+
+/// The Reverb block's params under `n` (a Pre FX lane's own namespace).
+#[must_use]
+pub fn reverb_params_in(n: &str) -> Vec<ParamInfo> {
     vec![
         ui::param(&a(n, "decay"), "Decay", Range::linear(0.0, 1.0, Unit::None), 0.4),
         ui::param(&a(n, "size"), "Size", Range::linear(0.0, 1.0, Unit::None), 0.5),
@@ -255,7 +265,13 @@ pub fn nameplate(b: &mut Builder<'_>, parent: NodeId, ns: &str, (x, y, h): (f64,
 /// `tier`, `y` down.
 #[allow(clippy::too_many_arguments)]
 pub fn nameplate_top_right(b: &mut Builder<'_>, parent: NodeId, ns: &str, tier: Tier, (y, h): (f64, f64), title_w: f64, preset_w: f64, size: f64, inks: (&str, &str), title: impl FnOnce(&mut Builder<'_>, NodeId)) {
-    let x = tier.lane_w() - 12.0 - preset_w - 6.0 - title_w;
+    nameplate_right(b, parent, ns, tier.lane_w(), (y, h), title_w, preset_w, size, inks, title);
+}
+
+/// [`nameplate_top_right`] on a lane `w` wide (a Pre FX lane's 720).
+#[allow(clippy::too_many_arguments)]
+pub fn nameplate_right(b: &mut Builder<'_>, parent: NodeId, ns: &str, w: f64, (y, h): (f64, f64), title_w: f64, preset_w: f64, size: f64, inks: (&str, &str), title: impl FnOnce(&mut Builder<'_>, NodeId)) {
+    let x = w - 12.0 - preset_w - 6.0 - title_w;
     nameplate(b, parent, ns, (x, y, h), title_w, preset_w, size, inks, title);
 }
 
@@ -323,7 +339,12 @@ pub fn time_params(ns: &str) -> Vec<ParamInfo> {
 /// height, the same size at a tier (a finger's 44 points on a phone) —
 /// whatever the face, it is there to hit.
 pub fn face_bypass(b: &mut Builder<'_>, parent: NodeId, ns: &str, tier: Tier, variant: &str, legend: &str) -> NodeId {
-    let (cx, cy, d) = bypass_spot(tier);
+    face_bypass_w(b, parent, ns, tier, tier.lane_w(), variant, legend)
+}
+
+/// [`face_bypass`] on a lane `w` wide.
+pub fn face_bypass_w(b: &mut Builder<'_>, parent: NodeId, ns: &str, tier: Tier, w: f64, variant: &str, legend: &str) -> NodeId {
+    let (cx, cy, d) = bypass_spot_w(tier, w);
     bypass(b, parent, ns, cx, cy, d, variant, legend)
 }
 
@@ -332,22 +353,33 @@ pub fn face_bypass(b: &mut Builder<'_>, parent: NodeId, ns: &str, tier: Tier, va
 /// power key).
 #[must_use]
 pub fn bypass_spot(tier: Tier) -> (f64, f64, f64) {
+    bypass_spot_w(tier, tier.lane_w())
+}
+
+/// [`bypass_spot`] on a lane `w` wide.
+#[must_use]
+pub fn bypass_spot_w(tier: Tier, w: f64) -> (f64, f64, f64) {
     // In from the edge far enough for the flip arrow beside it.
     let (d, inset) = if matches!(tier, Tier::Phone | Tier::Strip) { (44.0, 78.0) } else { (28.0, 56.0) };
-    (tier.lane_w() - inset, H * 0.56, d)
+    (w - inset, H * 0.56, d)
 }
 
 /// The arrow that turns a Time face over: right of the bypass, the same at
 /// every face — on the front "More" pointing down (its back carries the
 /// advanced controls), on the back "Back" pointing up. A press on
 /// `<ns>/flip`; the host shows the other side.
-pub fn flip_arrow(b: &mut Builder<'_>, parent: NodeId, ns: &str, tier: Tier, back: bool, (ink, well): (&str, &str)) -> NodeId {
-    let (bx, by, bd) = bypass_spot(tier);
+pub fn flip_arrow(b: &mut Builder<'_>, parent: NodeId, ns: &str, tier: Tier, back: bool, inks: (&str, &str)) -> NodeId {
+    flip_arrow_w(b, parent, ns, tier, tier.lane_w(), back, inks)
+}
+
+/// [`flip_arrow`] on a lane `lane_w` wide.
+pub fn flip_arrow_w(b: &mut Builder<'_>, parent: NodeId, ns: &str, tier: Tier, lane_w: f64, back: bool, (ink, well): (&str, &str)) -> NodeId {
+    let (bx, by, bd) = bypass_spot_w(tier, lane_w);
     let small_room = matches!(tier, Tier::Phone | Tier::Strip);
     let size = if small_room { 9.0 } else { 6.5 };
     // Right of the bypass, as tall: its word over a chevron.
     let x = bx + bd / 2.0 + 6.0;
-    let (w, h) = (tier.lane_w() - 8.0 - x, bd);
+    let (w, h) = (lane_w - 8.0 - x, bd);
     let g = b.add(parent, draw::frame("flip", x, by - h / 2.0, w, h));
     b.add(g, draw::rounded(draw::rect("well", 0.0, 0.0, w, h, draw::solid(well)), 6.0));
     ui::silk(b, g, if back { "Back" } else { "More" }, w / 2.0, h * 0.34, size, ink, 800.0);
@@ -363,10 +395,15 @@ pub fn flip_arrow(b: &mut Builder<'_>, parent: NodeId, ns: &str, tier: Tier, bac
 /// seven at a finger's size on a phone, as many as fit elsewhere — across
 /// the whole face (no picture on the back) up to the bypass spot. The caller adds the nameplate, the bypass and the flip
 /// arrow, so they sit where they do on the front.
-pub fn back_knobs(b: &mut Builder<'_>, parent: NodeId, tier: Tier, knobs: &[(&str, &str)], ink: &str, mut knob: impl FnMut(&mut Builder<'_>, NodeId, &str, &str, f64, (f64, f64))) {
+pub fn back_knobs(b: &mut Builder<'_>, parent: NodeId, tier: Tier, knobs: &[(&str, &str)], ink: &str, knob: impl FnMut(&mut Builder<'_>, NodeId, &str, &str, f64, (f64, f64))) {
+    back_knobs_w(b, parent, tier, tier.lane_w(), knobs, ink, knob);
+}
+
+/// [`back_knobs`] on a lane `w` wide.
+pub fn back_knobs_w(b: &mut Builder<'_>, parent: NodeId, tier: Tier, w: f64, knobs: &[(&str, &str)], ink: &str, mut knob: impl FnMut(&mut Builder<'_>, NodeId, &str, &str, f64, (f64, f64))) {
     let small_room = matches!(tier, Tier::Phone | Tier::Strip);
     ui::silk_left(b, parent, "Advanced", 16.0, 20.0, if small_room { 10.0 } else { 7.5 }, ink, 800.0);
-    let (bx, _, bd) = bypass_spot(tier);
+    let (bx, _, bd) = bypass_spot_w(tier, w);
     let (d, cy) = if small_room { (50.0, 84.0) } else { (36.0, 88.0) };
     let shown = if small_room { knobs.len().min(7) } else { knobs.len() };
     let (x0, x1) = (16.0 + d / 2.0 + 10.0, bx - bd / 2.0 - d / 2.0 - 18.0);

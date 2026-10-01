@@ -1610,15 +1610,28 @@
   },
   "pre": [
     {
+      "back": "17-pedal-aqua-puss-back",
       "face": "17-pedal-aqua-puss",
       "match": [
         "aqua"
       ],
+      "nameplate": true,
       "ns": "aquapuss",
       "size": [
         720.0,
         164.0
-      ]
+      ],
+      "tiers": {
+        "phone": {
+          "back": "17-pedal-aqua-puss-back-phone",
+          "face": "17-pedal-aqua-puss-phone",
+          "size": [
+            760.0,
+            164.0
+          ]
+        }
+      },
+      "time_knob": true
     },
     {
       "face": "18-gravity-tank-trem",
@@ -1633,15 +1646,28 @@
       ]
     },
     {
+      "back": "19-spring-reverb-back",
       "face": "19-spring-reverb",
       "match": [
         "spring"
       ],
+      "nameplate": true,
       "ns": "spring",
       "size": [
         720.0,
         164.0
-      ]
+      ],
+      "tiers": {
+        "phone": {
+          "back": "19-spring-reverb-back-phone",
+          "face": "19-spring-reverb-phone",
+          "size": [
+            760.0,
+            164.0
+          ]
+        }
+      },
+      "time_knob": true
     },
     {
       "face": "38-pre-mod",
