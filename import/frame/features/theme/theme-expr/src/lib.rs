@@ -8,7 +8,8 @@
 //!
 //! ```text
 //! 12  0.5  "Solo"  #ff8800  #ff880080  true  false     literals
-//! w  h                                                 the box the node is laid out in
+//! w  h                                                 the instance's box (the whole strip)
+//! pw  ph                                               the bound node's parent's box
 //! $strip.ground                                        a token (a document variable)
 //! track.name  track.volume  meter.peak                 the host's data
 //! + - * / %   == != < <= > >=   && || !   c ? a : b    operators
@@ -53,10 +54,15 @@ use std::collections::BTreeSet;
 #[derive(Debug, Clone, PartialEq)]
 pub enum Expr {
     Lit(Value),
-    /// The width of the box the node is laid out in.
+    /// The width of the instance's box (the strip, the row).
     W,
     /// Its height.
     H,
+    /// The width of the bound node's parent, as laid out: a fader cap's
+    /// travel, a meter's well.
+    PW,
+    /// Its height.
+    PH,
     /// A document variable, by name (without the `$`).
     Token(String),
     /// A host field.
@@ -102,7 +108,7 @@ pub enum BinOp {
 /// What an expression reads.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct Refs {
-    /// `w` or `h`: it depends on the box.
+    /// `w`, `h`, `pw` or `ph`: it depends on the layout.
     pub size: bool,
     pub tokens: BTreeSet<String>,
     /// Field names (unresolved fields only).
@@ -116,7 +122,7 @@ impl Expr {
     pub fn visit<'a>(&'a self, f: &mut impl FnMut(&'a Expr)) {
         f(self);
         match self {
-            Expr::Lit(_) | Expr::W | Expr::H | Expr::Token(_) | Expr::Field(_) => {}
+            Expr::Lit(_) | Expr::W | Expr::H | Expr::PW | Expr::PH | Expr::Token(_) | Expr::Field(_) => {}
             Expr::Unary(_, a) => a.visit(f),
             Expr::Binary(_, a, b) => {
                 a.visit(f);
@@ -134,7 +140,7 @@ impl Expr {
     fn visit_mut(&mut self, f: &mut impl FnMut(&mut Expr)) {
         f(self);
         match self {
-            Expr::Lit(_) | Expr::W | Expr::H | Expr::Token(_) | Expr::Field(_) => {}
+            Expr::Lit(_) | Expr::W | Expr::H | Expr::PW | Expr::PH | Expr::Token(_) | Expr::Field(_) => {}
             Expr::Unary(_, a) => a.visit_mut(f),
             Expr::Binary(_, a, b) => {
                 a.visit_mut(f);
@@ -154,7 +160,7 @@ impl Expr {
     pub fn refs(&self) -> Refs {
         let mut r = Refs::default();
         self.visit(&mut |e| match e {
-            Expr::W | Expr::H => r.size = true,
+            Expr::W | Expr::H | Expr::PW | Expr::PH => r.size = true,
             Expr::Token(t) => {
                 r.tokens.insert(t.clone());
             }

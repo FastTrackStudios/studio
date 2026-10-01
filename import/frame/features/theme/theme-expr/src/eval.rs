@@ -9,6 +9,11 @@ use crate::{BinOp, Expr, Field, Func, UnOp, Value};
 pub trait Scope {
     /// The width and height of the box the node is laid out in.
     fn size(&self) -> (f64, f64);
+    /// The width and height of the bound node's parent, as laid out.
+    /// Defaults to [`Scope::size`].
+    fn parent_size(&self) -> (f64, f64) {
+        self.size()
+    }
     /// A field's value; [`Value::Missing`] for one the host has no data for.
     fn field(&self, slot: u32) -> Value;
 }
@@ -34,6 +39,8 @@ impl Expr {
             Expr::Lit(v) => v.clone(),
             Expr::W => Value::Num(scope.size().0),
             Expr::H => Value::Num(scope.size().1),
+            Expr::PW => Value::Num(scope.parent_size().0),
+            Expr::PH => Value::Num(scope.parent_size().1),
             // Unresolved: the compiler inlines tokens and resolves fields
             // before anything is evaluated for real.
             Expr::Token(_) | Expr::Field(Field::Name(_)) => Value::Missing,

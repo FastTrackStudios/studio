@@ -237,6 +237,8 @@ impl Parser {
             Tok::Name(name) => match name.as_str() {
                 "w" => Expr::W,
                 "h" => Expr::H,
+                "pw" => Expr::PW,
+                "ph" => Expr::PH,
                 "true" => Expr::Lit(Value::Bool(true)),
                 "false" => Expr::Lit(Value::Bool(false)),
                 "missing" => Expr::Lit(Value::Missing),
