@@ -2128,6 +2128,7 @@ dependencies = [
  "nice-plug-core",
  "peniko",
  "render",
+ "render-canvas",
  "render-fonts",
  "serde",
  "skrifa 0.26.6",
@@ -5132,6 +5133,19 @@ dependencies = [
  "tokio",
  "vello",
  "winit",
+]
+
+[[package]]
+name = "render-canvas"
+version = "0.1.0"
+dependencies = [
+ "anyrender 0.11.1",
+ "document-proto",
+ "kurbo 0.13.1",
+ "peniko",
+ "render",
+ "render-fonts",
+ "skrifa 0.26.6",
 ]
 
 [[package]]

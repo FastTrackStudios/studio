@@ -36,7 +36,6 @@
 //! engine.send(out.calls);
 //! ```
 
-pub mod canvas;
 #[cfg(feature = "cpu")]
 pub mod cpu;
 pub mod curves;
@@ -46,9 +45,10 @@ pub mod fx_slot;
 pub mod generic;
 #[cfg(feature = "nice-plug")]
 pub mod nice_plug;
-pub mod paint;
-pub mod text;
 pub mod tone;
+
+// The painting seam, shared with the theme runtime.
+pub use render_canvas::{canvas, paint, text};
 
 #[cfg(feature = "anyrender-0-11")]
 pub use canvas::AnyRender;

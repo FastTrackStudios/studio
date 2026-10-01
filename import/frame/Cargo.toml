@@ -42,6 +42,7 @@ members = [
     # ── render ────────────────────────────────────────────────────────
     "features/render/render",
     "features/render/render-fonts",
+    "features/render/render-canvas",
     # ── surface: controls, bindings, engine contract, runtime ─────────
     "features/surface/surface-proto",
     "features/surface/surface-memory",
