@@ -53,7 +53,7 @@ pub use compile::{Diagnostic, Theme};
 pub use draw::Fields;
 pub use schema::Schema;
 
-pub use render_canvas::{Canvas, Font, Recording};
+pub use render_canvas::{Canvas, Font, Recording, TextAlign, TextRun};
 pub use theme_expr::{Rgba, Value};
 
 #[cfg(feature = "anyrender-0-11")]

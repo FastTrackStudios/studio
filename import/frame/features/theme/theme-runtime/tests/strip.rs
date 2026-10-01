@@ -222,3 +222,53 @@ fn a_bound_rotation_turns_the_node_about_its_origin() {
     let right = pointer(1.0);
     assert!((right.x1 - 22.0).abs() < 1e-6 && (right.y0 - 11.0).abs() < 1e-6, "{right:?}");
 }
+
+#[test]
+fn an_inset_reveals_a_fixed_picture_and_a_dash_draws_part_of_a_stroke() {
+    let src = r##"<Document>
+  <Page name="meter">
+    <Frame name="Meter" w=10 h=100>
+      <Frame name="Lit" w=10 h=100 clip=true bind:inset-top="100 * (1 - meter.level)">
+        <Rectangle name="Ramp" w=10 h=100 fill="#00ff00" />
+      </Frame>
+      <Vector name="Arc" x=0 y=0 w=10 h=10 stroke="#ff0000" stroke-weight=2 geometry="M 0 0 L 10 0" bind:dash="10 * meter.level" />
+      <Text name="Label" y=90 w=10 h=10 bind:size="4 + meter.level * 4" fill="#0000ff">x</Text>
+    </Frame>
+  </Page>
+</Document>"##;
+    let t = Theme::from_markup(src, Schema::new().live("meter.level"), None).unwrap();
+
+    /// What was clipped to, and what the stroke dash was.
+    #[derive(Default)]
+    struct Probe {
+        clips: Vec<Rect>,
+        dashes: Vec<Vec<f64>>,
+        sizes: Vec<f64>,
+    }
+    impl Canvas for Probe {
+        fn fill(&mut self, _: Affine, _: Fill, _: &Brush, _: Option<Affine>, _: &BezPath) {}
+        fn stroke(&mut self, _: Affine, style: &Stroke, _: &Brush, _: &BezPath) {
+            self.dashes.push(style.dash_pattern.to_vec());
+        }
+        fn push_clip(&mut self, t: Affine, shape: &BezPath) {
+            self.clips.push((t * shape.clone()).bounding_box());
+        }
+        fn push_opacity(&mut self, _: Affine, _: f32, _: &BezPath) {}
+        fn pop(&mut self) {}
+        fn handles_text(&self) -> bool {
+            true
+        }
+        fn text(&mut self, _: Affine, run: &theme_runtime::TextRun) -> bool {
+            self.sizes.push(run.size);
+            true
+        }
+    }
+    let mut p = Probe::default();
+    t.live("meter", (10.0, 100.0), &vec![Value::Num(0.25)], &mut p, Affine::IDENTITY);
+    let clip = p.clips.first().copied().expect("clipped");
+    // A quarter lit: the clip is the bottom quarter, the ramp unmoved.
+    assert_eq!((clip.y0, clip.y1), (75.0, 100.0));
+    assert_eq!(p.dashes.first().and_then(|d| d.first()).copied(), Some(2.5));
+    // The host drew the text, at the bound size.
+    assert_eq!(p.sizes, [5.0]);
+}

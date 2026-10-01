@@ -699,7 +699,11 @@ pub struct Node {
 pub struct Bind {
     /// The property, by its markup attribute name: `fill`, `stroke`,
     /// `opacity`, `visible`, `text`, `x`, `y`, `w`, `h`, `radius`,
-    /// `rotation` (degrees clockwise, about the node's origin).
+    /// `rotation` (degrees clockwise, about the node's origin), `dash`
+    /// (how much of the stroke is drawn, px from its start), `inset-top`
+    /// `-bottom` `-left` `-right` (the node's own box shrunk, its children
+    /// left where they are: a meter's lit part revealing a fixed
+    /// gradient), `size` (a text's font size).
     pub prop: String,
     /// The expression's source.
     pub expr: String,

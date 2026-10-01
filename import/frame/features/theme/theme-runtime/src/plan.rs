@@ -104,7 +104,8 @@ impl Plan {
             if in_live(id) || subtree_units.iter().any(|r| inside(id, *r)) {
                 continue;
             }
-            let places = by_node[&id].iter().any(|&i| matches!(binds[i].prop, Prop::Visible | Prop::X | Prop::Y));
+            // Placed (or, inset, a clip that reveals its children): the subtree.
+            let places = by_node[&id].iter().any(|&i| matches!(binds[i].prop, Prop::Visible | Prop::X | Prop::Y) || binds[i].prop.is_inset());
             if places {
                 // Absorbs any node-only units already chosen inside it.
                 node_units.retain(|n| !inside(*n, id));

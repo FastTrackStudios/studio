@@ -47,10 +47,24 @@ pub(crate) enum Prop {
     Radius,
     Fill,
     Stroke,
+    /// How much of the stroke is drawn, px from its start.
+    Dash,
+    /// The node's own box (its fill, its clip) shrunk from one side; its
+    /// children stay put.
+    InsetTop,
+    InsetBottom,
+    InsetLeft,
+    InsetRight,
+    /// A text's font size.
+    Size,
     Text,
 }
 
 impl Prop {
+    pub(crate) const fn is_inset(self) -> bool {
+        matches!(self, Prop::InsetTop | Prop::InsetBottom | Prop::InsetLeft | Prop::InsetRight)
+    }
+
     fn named(name: &str) -> Option<Prop> {
         Some(match name {
             "visible" => Prop::Visible,
@@ -63,6 +77,12 @@ impl Prop {
             "radius" => Prop::Radius,
             "fill" => Prop::Fill,
             "stroke" => Prop::Stroke,
+            "dash" => Prop::Dash,
+            "inset-top" => Prop::InsetTop,
+            "inset-bottom" => Prop::InsetBottom,
+            "inset-left" => Prop::InsetLeft,
+            "inset-right" => Prop::InsetRight,
+            "size" => Prop::Size,
             "text" => Prop::Text,
             _ => return None,
         })
@@ -326,14 +346,17 @@ fn compile_role(
                 continue;
             }
             let expr = expr.fold();
-            if let Some(v) = expr.constant() {
+            // An inset has no document equivalent: it is painted per
+            // instance, constant or not.
+            let painted_only = prop.is_inset();
+            if let (Some(v), false) = (expr.constant(), painted_only) {
                 apply(node, prop, v);
                 continue;
             }
             let refs = expr.refs();
             let class = if refs.slots.iter().any(|s| schema.is_live(*s)) {
                 Class::Live
-            } else if refs.slots.is_empty() {
+            } else if refs.slots.is_empty() && !painted_only {
                 Class::Size
             } else {
                 Class::Static
@@ -426,6 +449,17 @@ pub(crate) fn apply(node: &mut Node, prop: Prop, v: &Value) {
                 node.stroke.paints = vec![Paint::solid(doc_color(c))];
             }
         }
+        Prop::Dash => {
+            if let Some(n) = v.num() {
+                node.stroke.dash_pattern = vec![n.max(0.0), DASH_GAP];
+            }
+        }
+        Prop::InsetTop | Prop::InsetBottom | Prop::InsetLeft | Prop::InsetRight => {}
+        Prop::Size => {
+            if let (Some(n), NodeKind::Text(data)) = (v.num(), &mut node.kind) {
+                data.font_size = n.max(0.0);
+            }
+        }
         Prop::Text => {
             if let (Some(t), NodeKind::Text(data)) = (v.as_text(), &mut node.kind) {
                 data.characters = t.to_string();
@@ -434,6 +468,10 @@ pub(crate) fn apply(node: &mut Node, prop: Prop, v: &Value) {
         }
     }
 }
+
+/// The gap after a `dash`: longer than any stroke a theme draws, so the
+/// first dash is all that shows.
+pub(crate) const DASH_GAP: f64 = 1.0e5;
 
 pub(crate) fn doc_color(c: theme_expr::Rgba) -> Color {
     Color::rgba(f64::from(c.r), f64::from(c.g), f64::from(c.b), f64::from(c.a))

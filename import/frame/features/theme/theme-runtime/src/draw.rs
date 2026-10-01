@@ -9,7 +9,7 @@ use render::{PaintPrimitive, Rgba as Prgba};
 use render_canvas::{Canvas, paint_filtered};
 use theme_expr::{Scope, Value};
 
-use crate::compile::{Bound, Prop, Role, Theme};
+use crate::compile::{Bound, DASH_GAP, Prop, Role, Theme};
 use crate::plan::{Plan, Seg, Unit, owner};
 
 /// One instance's data: what each schema slot holds for it.
@@ -289,6 +289,26 @@ fn patch(p: &mut PaintPrimitive, b: &Bound, v: &Value) {
                 *rotation = deg.to_radians();
             }
         }
+        (Prop::Dash, PaintPrimitive::Rect { stroke: Some(s), .. } | PaintPrimitive::Path { stroke: Some(s), .. }) => {
+            if let Some(n) = v.num() {
+                if n <= 0.01 {
+                    // Nothing of it: a zero dash would still draw its caps.
+                    s.color.a = 0.0;
+                } else {
+                    s.dash_pattern = vec![n, DASH_GAP];
+                }
+            }
+        }
+        (Prop::InsetTop | Prop::InsetBottom | Prop::InsetLeft | Prop::InsetRight, p) => {
+            if let Some(n) = v.num() {
+                inset(p, b.prop, n.max(0.0));
+            }
+        }
+        (Prop::Size, PaintPrimitive::Text { font_size, .. }) => {
+            if let Some(n) = v.num() {
+                *font_size = n.max(0.0);
+            }
+        }
         (Prop::Radius, PaintPrimitive::Rect { corner_radii, .. }) => {
             if let Some(n) = v.num() {
                 let r = n.max(0.0);
@@ -313,6 +333,29 @@ fn patch(p: &mut PaintPrimitive, b: &Bound, v: &Value) {
                 color.a *= k.clamp(0.0, 1.0);
             }
         }
+        _ => {}
+    }
+}
+
+/// Shrink a node's own box (its rect, its clip) from one side.
+fn inset(p: &mut PaintPrimitive, side: Prop, by: f64) {
+    let (PaintPrimitive::Rect { x, y, width, height, .. } | PaintPrimitive::ClipStart { x, y, width, height, .. }) = p
+    else {
+        return;
+    };
+    match side {
+        Prop::InsetTop => {
+            let by = by.min(*height);
+            *y += by;
+            *height -= by;
+        }
+        Prop::InsetBottom => *height = (*height - by).max(0.0),
+        Prop::InsetLeft => {
+            let by = by.min(*width);
+            *x += by;
+            *width -= by;
+        }
+        Prop::InsetRight => *width = (*width - by).max(0.0),
         _ => {}
     }
 }

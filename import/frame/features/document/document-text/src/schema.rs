@@ -124,6 +124,12 @@ pub(crate) const BIND_ATTRS: &[&str] = &[
     "bind:radius",
     "bind:fill",
     "bind:stroke",
+    "bind:dash",
+    "bind:inset-top",
+    "bind:inset-bottom",
+    "bind:inset-left",
+    "bind:inset-right",
+    "bind:size",
     "bind:text",
 ];
 
