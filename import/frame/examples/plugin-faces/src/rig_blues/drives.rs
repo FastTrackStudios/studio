@@ -104,14 +104,23 @@ pub(super) fn led(b: &mut Builder<'_>, parent: NodeId, ns: &str, cx: f64, cy: f6
 /// side; here it is on the lid, big and centred, where a finger finds it.
 #[must_use]
 pub fn blade() -> Face {
-    const W: f64 = 172.0;
+    blade_at(crate::rig_time::kit::Tier::Desktop)
+}
+
+/// At `tier`: the same pedal, narrower where four share a phone's width
+/// (its knobs sized to the box).
+#[must_use]
+pub fn blade_at(tier: crate::rig_time::kit::Tier) -> Face {
+    let small = matches!(tier, crate::rig_time::kit::Tier::Phone | crate::rig_time::kit::Tier::Strip);
+    #[allow(non_snake_case)]
+    let W: f64 = if small { 165.0 } else { 172.0 };
     const NS: &str = "katana";
     const INK: &str = "#e9e9ec";
     let scene = canvas("Katana", |b, root| {
         let (lid, lw, lh) = enclosure(b, root, W, "#111113", "gloss", &["jack_inset=10", "radius=14"]);
         b.add(lid, draw::stroked(draw::rounded(draw::rect("border", 6.0, 16.0, lw - 12.0, lh - 26.0, draw::solid("#00000000")), 9.0), INK, 1.4));
         led(b, lid, NS, lw * 0.5, 9.0, 5.0, "#3d6bff");
-        knob(b, lid, "knurled", &["color=#161618", "ribs=44", "index=line", "pointer=#f2f2f4", "index_w=0.08", "skirt=none"], &format!("{NS}/drive"), "Volume", 86.0, lw * 0.5, lh * 0.34);
+        knob(b, lid, "knurled", &["color=#161618", "ribs=44", "index=line", "pointer=#f2f2f4", "index_w=0.08", "skirt=none"], &format!("{NS}/drive"), "Volume", if small { 78.0 } else { 86.0 }, lw * 0.5, lh * 0.34);
         parts::print(b, lid, "VOLUME", lw * 0.5, lh * 0.34 + 52.0, 9.0, INK, 650.0, 0.14);
         set(b, lid, "KATANA", lw * 0.5, lh * 0.64, 24.0, "#f4f4f6", &inter(500.0).width(92.0), 0.04);
         stomp(b, lid, NS, 34.0, lw * 0.5, lh * 0.79);
@@ -124,7 +133,7 @@ pub fn blade() -> Face {
         level(NS),
         on(NS),
     ];
-    Face { file: "11-drive-blade", plugin: PLUGIN, scene, params, streams: Vec::new() }
+    Face { file: crate::rig_time::kit::tier_file("11-drive-blade", tier, false), plugin: PLUGIN, scene, params, streams: Vec::new() }
 }
 
 /// The gold overdrive. Landscape, gold with the paint worn soft, three
@@ -132,13 +141,38 @@ pub fn blade() -> Face {
 /// by the gain, the name split round a small chrome stomp.
 #[must_use]
 pub fn pegasus() -> Face {
-    const W: f64 = 400.0;
+    pegasus_at(crate::rig_time::kit::Tier::Desktop)
+}
+
+/// At `tier`: on a phone the gold box stands upright — Gain big on top,
+/// Treble and Output under it, the centaur, the stomp, the name across the
+/// foot — the same paint, knobs and lettering.
+#[must_use]
+pub fn pegasus_at(tier: crate::rig_time::kit::Tier) -> Face {
+    let small = matches!(tier, crate::rig_time::kit::Tier::Phone | crate::rig_time::kit::Tier::Strip);
+    #[allow(non_snake_case)]
+    let W: f64 = if small { 165.0 } else { 400.0 };
     const NS: &str = "klon";
     const INK: &str = "#2b1c08";
     let serif = Lettering::family(family::PLAYFAIR_DISPLAY).weight(700.0);
     let scene = canvas("Klon Centaur", |b, root| {
         let (lid, lw, lh) = enclosure(b, root, W, "#c99038", "satin", &["jack_inset=8"]);
         b.add(lid, draw::rect("sheen", 0.0, 0.0, lw, lh, draw::linear(115.0, &[(0.0, "#ffe2a02a"), (0.4, "#ffffff00"), (0.75, "#4a2c0620"), (1.0, "#ffe2a014")])));
+        let dome = ["color=#3a0f0c", "pointer=#e8d2b0", "index=line", "index_w=0.07", "skirt=plain", "skirt_color=#2a0a08", "dome=0.35", "coat=0.8"];
+        if small {
+            knob(b, lid, "domed", &dome, &format!("{NS}/drive"), "GAIN", 56.0, lw * 0.5, lh * 0.19);
+            set(b, lid, "GAIN", lw * 0.5, lh * 0.19 + 38.0, 11.0, INK, &serif, 0.12);
+            for (i, (id, name)) in [("tone", "TREBLE"), ("level", "OUTPUT")].iter().enumerate() {
+                let cx = lw * (0.27 + 0.46 * i as f64);
+                knob(b, lid, "domed", &dome, &format!("{NS}/{id}"), name, 44.0, cx, lh * 0.46);
+                set(b, lid, name, cx, lh * 0.46 + 32.0, 10.0, INK, &serif, 0.1);
+            }
+            led(b, lid, NS, lw * 0.14, lh * 0.08, 5.0, "#d0261a");
+            centaur(b, lid, (lw * 0.5, lh * 0.68), 42.0, INK);
+            stomp(b, lid, NS, 36.0, lw * 0.5, lh * 0.83);
+            set(b, lid, "KLON CENTAUR", lw * 0.5, lh * 0.94, 11.0, INK, &serif, 0.14);
+            return;
+        }
         for (i, (id, name)) in [("drive", "GAIN"), ("tone", "TREBLE"), ("level", "OUTPUT")].iter().enumerate() {
             let cx = lw * (0.2 + 0.3 * i as f64);
             knob(b, lid, "domed", &["color=#3a0f0c", "pointer=#e8d2b0", "index=line", "index_w=0.07", "skirt=plain", "skirt_color=#2a0a08", "dome=0.35", "coat=0.8"], &format!("{NS}/{id}"), name, 84.0, cx, lh * 0.3);
@@ -156,7 +190,7 @@ pub fn pegasus() -> Face {
         level(NS),
         on(NS),
     ];
-    Face { file: "12-drive-pegasus", plugin: PLUGIN, scene, params, streams: Vec::new() }
+    Face { file: crate::rig_time::kit::tier_file("12-drive-pegasus", tier, false), plugin: PLUGIN, scene, params, streams: Vec::new() }
 }
 
 /// The 1991 British overdrive. Black crinkle; the knobs stand on a raised
@@ -165,7 +199,16 @@ pub fn pegasus() -> Face {
 /// low in the lid.
 #[must_use]
 pub fn british_blues() -> Face {
-    const W: f64 = 240.0;
+    british_blues_at(crate::rig_time::kit::Tier::Desktop)
+}
+
+/// At `tier`: the same pedal, narrower where four share a phone's width
+/// (its knobs sized to the box).
+#[must_use]
+pub fn british_blues_at(tier: crate::rig_time::kit::Tier) -> Face {
+    let small = matches!(tier, crate::rig_time::kit::Tier::Phone | crate::rig_time::kit::Tier::Strip);
+    #[allow(non_snake_case)]
+    let W: f64 = if small { 165.0 } else { 240.0 };
     const NS: &str = "bluesbreaker";
     const BLUE: &str = "#4fb8ea";
     const BODY: &str = "#2a2c30";
@@ -180,8 +223,9 @@ pub fn british_blues() -> Face {
         b.add(lid, draw::with_effects(draw::rect("ledge shadow", 0.0, ledge_h, lw, 5.0, draw::linear(180.0, &[(0.0, "#00000070"), (1.0, "#00000000")])), vec![]));
         for (i, (id, name)) in [("drive", "Gain"), ("tone", "Tone"), ("level", "Volume")].iter().enumerate() {
             let cx = lw * (0.18 + 0.32 * i as f64);
-            knob(b, lid, "knurled", &["color=#141416", &format!("pointer={BLUE}"), "index=line", "index_w=0.12", "ribs=36"], &format!("{NS}/{id}"), name, 56.0, cx, ledge_h * 0.52);
-            parts::print(b, lid, name, cx, ledge_h * 0.52 + 36.0, 9.0, "#d9dadd", 500.0, 0.02);
+            let kd = if small { 44.0 } else { 56.0 };
+            knob(b, lid, "knurled", &["color=#141416", &format!("pointer={BLUE}"), "index=line", "index_w=0.12", "ribs=36"], &format!("{NS}/{id}"), name, kd, cx, ledge_h * 0.5);
+            parts::print(b, lid, name, cx, ledge_h * 0.5 + kd * 0.5 + 10.0, if small { 9.5 } else { 9.0 }, "#d9dadd", 600.0, 0.02);
         }
         // The logo between two blue double rules.
         let logo = Lettering::family(family::OSWALD).weight(700.0).italic();
@@ -189,7 +233,7 @@ pub fn british_blues() -> Face {
         for dy in [-15.0, -12.0, 12.0, 15.0] {
             b.add(lid, draw::rect("rule", 10.0, ly + dy, lw - 20.0, 1.3, draw::solid(BLUE)));
         }
-        set(b, lid, "BLUES BREAKER", lw * 0.5, ly, 20.0, BLUE, &logo, 0.02);
+        set(b, lid, "BLUES BREAKER", lw * 0.5, ly, if small { 16.0 } else { 20.0 }, BLUE, &logo, 0.02);
         led(b, lid, NS, lw * 0.5, lh * 0.7, 5.0, "#e0281c");
         stomp(b, lid, NS, 32.0, lw * 0.5, lh * 0.8);
     });
@@ -199,7 +243,7 @@ pub fn british_blues() -> Face {
         level(NS),
         on(NS),
     ];
-    Face { file: "13-drive-british-blues", plugin: PLUGIN, scene, params, streams: Vec::new() }
+    Face { file: crate::rig_time::kit::tier_file("13-drive-british-blues", tier, false), plugin: PLUGIN, scene, params, streams: Vec::new() }
 }
 
 /// The green overdrive. Three black knobs with broad mint pointers, the
@@ -207,7 +251,16 @@ pub fn british_blues() -> Face {
 /// whole treadle is the switch.
 #[must_use]
 pub fn tube_drive() -> Face {
-    const W: f64 = 200.0;
+    tube_drive_at(crate::rig_time::kit::Tier::Desktop)
+}
+
+/// At `tier`: the same pedal, narrower where four share a phone's width
+/// (its knobs sized to the box).
+#[must_use]
+pub fn tube_drive_at(tier: crate::rig_time::kit::Tier) -> Face {
+    let small = matches!(tier, crate::rig_time::kit::Tier::Phone | crate::rig_time::kit::Tier::Strip);
+    #[allow(non_snake_case)]
+    let W: f64 = if small { 165.0 } else { 200.0 };
     const NS: &str = "tubescreamer";
     const GREEN: &str = "#57c23f";
     const DARK: &str = "#0d2a08";
@@ -217,13 +270,14 @@ pub fn tube_drive() -> Face {
         for (i, (id, name)) in [("drive", "DRIVE"), ("tone", "TONE"), ("level", "LEVEL")].iter().enumerate() {
             let cx = lw * (0.18 + 0.32 * i as f64);
             let cy = lh * 0.23;
-            knob(b, lid, "flat", &["color=#101012", "pointer=#7ee8b4", "index=full", "index_w=0.42", "index_in=0", "index_out=0.95", "skirt=plain"], &format!("{NS}/{id}"), name, 54.0, cx, cy);
-            parts::print(b, lid, name, cx, cy + 36.0, 8.5, DARK, 750.0, 0.08);
+            let kd = if small { 44.0 } else { 54.0 };
+            knob(b, lid, "flat", &["color=#101012", "pointer=#7ee8b4", "index=full", "index_w=0.42", "index_in=0", "index_out=0.95", "skirt=plain"], &format!("{NS}/{id}"), name, kd, cx, cy);
+            parts::print(b, lid, name, cx, cy + kd * 0.5 + 10.0, if small { 9.0 } else { 8.5 }, DARK, 750.0, 0.08);
         }
         // The name band.
         let (by, bh) = (lh * 0.41, lh * 0.1);
         b.add(lid, draw::rect("band", 0.0, by, lw, bh, draw::linear(180.0, &[(0.0, "#46494c"), (1.0, "#2a2c2f")])));
-        set(b, lid, "TUBE SCREAMER", lw * 0.5, by + bh * 0.5, 15.0, "#f1f1ef", &inter(700.0).width(88.0), 0.02);
+        set(b, lid, "TUBE SCREAMER", lw * 0.5, by + bh * 0.5, if small { 12.5 } else { 15.0 }, "#f1f1ef", &inter(700.0).width(88.0), 0.02);
         // The treadle: the whole of it is the switch.
         let (tx, ty) = (lw * 0.08, by + bh + 6.0);
         let (tw, th) = (lw * 0.84, lh - ty - 8.0);
@@ -256,7 +310,7 @@ pub fn tube_drive() -> Face {
         level(NS),
         on(NS),
     ];
-    Face { file: "14-drive-tube-drive", plugin: PLUGIN, scene, params, streams: Vec::new() }
+    Face { file: crate::rig_time::kit::tier_file("14-drive-tube-drive", tier, false), plugin: PLUGIN, scene, params, streams: Vec::new() }
 }
 
 /// The centaur of the gold overdrive's lid, drawn in its ink: a horse's
@@ -302,7 +356,16 @@ fn centaur(b: &mut Builder<'_>, parent: NodeId, (cx, cy): (f64, f64), size: f64,
 /// and the name in black serif, a red LED and a yellow one.
 #[must_use]
 pub fn king_of_tone() -> Face {
-    const W: f64 = 240.0;
+    king_of_tone_at(crate::rig_time::kit::Tier::Desktop)
+}
+
+/// At `tier`: the same pedal, narrower where four share a phone's width
+/// (its knobs sized to the box).
+#[must_use]
+pub fn king_of_tone_at(tier: crate::rig_time::kit::Tier) -> Face {
+    let small = matches!(tier, crate::rig_time::kit::Tier::Phone | crate::rig_time::kit::Tier::Strip);
+    #[allow(non_snake_case)]
+    let W: f64 = if small { 165.0 } else { 240.0 };
     const NS: &str = "kingoftone";
     const INK: &str = "#1b1714";
     let serif = Lettering::family(family::PLAYFAIR_DISPLAY).weight(800.0);
@@ -314,8 +377,9 @@ pub fn king_of_tone() -> Face {
         for (i, (id, name)) in [("level", "VOLUME"), ("drive", "DRIVE"), ("tone", "TONE")].iter().enumerate() {
             let cx = lw * (0.18 + 0.32 * i as f64);
             let cy = lh * 0.2;
-            knob(b, lid, "flat", &["color=#141414", "pointer=#f4f0e6", "index=line", "index_w=0.1", "skirt=plain", "skirt_color=#0c0c0c"], &format!("{NS}/{id}"), name, 56.0, cx, cy);
-            parts::print(b, lid, name, cx, cy + 38.0, 8.5, INK, 750.0, 0.08);
+            let kd = if small { 44.0 } else { 56.0 };
+            knob(b, lid, "flat", &["color=#141414", "pointer=#f4f0e6", "index=line", "index_w=0.1", "skirt=plain", "skirt_color=#0c0c0c"], &format!("{NS}/{id}"), name, kd, cx, cy);
+            parts::print(b, lid, name, cx, cy + kd * 0.5 + 10.0, 8.5, INK, 750.0, 0.08);
         }
         // The crown over the name.
         let (cx, cy, k) = (lw * 0.5, lh * 0.45, 1.3);
@@ -324,12 +388,12 @@ pub fn king_of_tone() -> Face {
             (cx + 9.0 * k, cy), (cx + 20.0 * k, cy - 8.0 * k), (cx + 18.0 * k, cy + 8.0 * k),
         ]);
         b.add(lid, draw::path("crown", 0.0, 0.0, lw, lh, crown, draw::solid("#b8201a")));
-        set(b, lid, "KING OF TONE", lw * 0.5, lh * 0.56, 19.0, INK, &serif, 0.04);
+        set(b, lid, "KING OF TONE", lw * 0.5, lh * 0.56, if small { 15.0 } else { 19.0 }, INK, &serif, 0.04);
         stomp(b, lid, NS, 34.0, lw * 0.5, lh * 0.76);
         parts::print(b, lid, "ANALOGMAN", lw * 0.5, lh * 0.92, 8.0, INK, 800.0, 0.2);
     });
     let params = vec![drive(NS, "Drive"), tone(NS, "Tone"), level(NS), on(NS)];
-    Face { file: "15-drive-king-of-tone", plugin: PLUGIN, scene, params, streams: Vec::new() }
+    Face { file: crate::rig_time::kit::tier_file("15-drive-king-of-tone", tier, false), plugin: PLUGIN, scene, params, streams: Vec::new() }
 }
 
 /// JHS Morning Glory: the blue box, VOLUME, DRIVE and TONE in black, the
@@ -337,7 +401,16 @@ pub fn king_of_tone() -> Face {
 /// white script.
 #[must_use]
 pub fn morning_glory() -> Face {
-    const W: f64 = 200.0;
+    morning_glory_at(crate::rig_time::kit::Tier::Desktop)
+}
+
+/// At `tier`: the same pedal, narrower where four share a phone's width
+/// (its knobs sized to the box).
+#[must_use]
+pub fn morning_glory_at(tier: crate::rig_time::kit::Tier) -> Face {
+    let small = matches!(tier, crate::rig_time::kit::Tier::Phone | crate::rig_time::kit::Tier::Strip);
+    #[allow(non_snake_case)]
+    let W: f64 = if small { 165.0 } else { 200.0 };
     const NS: &str = "morningglory";
     const INK: &str = "#f4f6fa";
     let scene = canvas("Morning Glory", |b, root| {
@@ -346,8 +419,9 @@ pub fn morning_glory() -> Face {
         for (i, (id, name)) in [("level", "VOLUME"), ("drive", "DRIVE"), ("tone", "TONE")].iter().enumerate() {
             let cx = lw * (0.19 + 0.31 * i as f64);
             let cy = lh * 0.21;
-            knob(b, lid, "flat", &["color=#131315", "pointer=#f4f6fa", "index=line", "index_w=0.1", "skirt=plain", "skirt_color=#0b0b0c"], &format!("{NS}/{id}"), name, 52.0, cx, cy);
-            parts::print(b, lid, name, cx, cy + 36.0, 8.5, INK, 750.0, 0.08);
+            let kd = if small { 44.0 } else { 52.0 };
+            knob(b, lid, "flat", &["color=#131315", "pointer=#f4f6fa", "index=line", "index_w=0.1", "skirt=plain", "skirt_color=#0b0b0c"], &format!("{NS}/{id}"), name, kd, cx, cy);
+            parts::print(b, lid, name, cx, cy + kd * 0.5 + 10.0, 8.5, INK, 750.0, 0.08);
         }
         // The gain switch: which capture plays.
         parts::print(b, lid, "GAIN", lw * 0.5, lh * 0.43, 8.0, INK, 750.0, 0.1);
@@ -365,7 +439,7 @@ pub fn morning_glory() -> Face {
         ui::choice(&format!("{NS}/option"), "Gain", &["Low Gain", "Medium Gain", "High Gain"], 1),
         on(NS),
     ];
-    Face { file: "16-drive-morning-glory", plugin: PLUGIN, scene, params, streams: Vec::new() }
+    Face { file: crate::rig_time::kit::tier_file("16-drive-morning-glory", tier, false), plugin: PLUGIN, scene, params, streams: Vec::new() }
 }
 
 /// The Aqua-Puss (analog-voiced slapback): the turquoise box, DELAY,

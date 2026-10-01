@@ -199,6 +199,13 @@ fn eq() -> Face {
 }
 
 /// The drives: (face, namespace, match words).
+/// The drives' phone versions, in [`drive_entries`]' order.
+fn drive_phone() -> Vec<Face> {
+    use crate::rig_time::kit::Tier::Phone;
+    let d = |f: Face| Face { plugin: PLUGIN, ..f };
+    vec![d(drives::king_of_tone_at(Phone)), d(drives::morning_glory_at(Phone)), d(drives::blade_at(Phone)), d(drives::pegasus_at(Phone)), d(drives::british_blues_at(Phone)), d(drives::tube_drive_at(Phone))]
+}
+
 fn drive_entries() -> Vec<(Face, &'static str, &'static [&'static str])> {
     let d = |f: Face| Face { plugin: PLUGIN, ..f };
     vec![
@@ -256,6 +263,7 @@ fn d_(f: Face) -> Face {
 #[must_use]
 pub fn faces() -> Vec<Face> {
     let mut v: Vec<Face> = drive_entries().into_iter().map(|(f, _, _)| f).collect();
+    v.extend(drive_phone());
     v.push(Face { plugin: PLUGIN, ..drives::compressor() });
     v.extend(pre_entries());
     v.push(trio());
@@ -279,7 +287,12 @@ pub fn manifest() -> String {
         let (w, h) = face_size(f);
         json!([w.round(), h.round()])
     };
-    let drives: Vec<_> = drive_entries().into_iter().map(|(f, ns, m)| json!({ "match": m, "face": f.file, "ns": ns, "size": size(&f) })).collect();
+    // Each with its phone version (four across a phone's width).
+    let drives: Vec<_> = drive_entries()
+        .into_iter()
+        .zip(drive_phone())
+        .map(|((f, ns, m), p)| json!({ "match": m, "face": f.file, "ns": ns, "size": size(&f), "tiers": { "phone": { "face": p.file, "size": size(&p) } } }))
+        .collect();
     // The trio first: its capture's name mentions all three amps
     // (`a+b` = every word).
     let t = trio();

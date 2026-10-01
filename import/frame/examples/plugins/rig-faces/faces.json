@@ -971,7 +971,16 @@
       "size": [
         240.0,
         286.0
-      ]
+      ],
+      "tiers": {
+        "phone": {
+          "face": "15-drive-king-of-tone-phone",
+          "size": [
+            165.0,
+            286.0
+          ]
+        }
+      }
     },
     {
       "face": "16-drive-morning-glory",
@@ -982,7 +991,16 @@
       "size": [
         200.0,
         286.0
-      ]
+      ],
+      "tiers": {
+        "phone": {
+          "face": "16-drive-morning-glory-phone",
+          "size": [
+            165.0,
+            286.0
+          ]
+        }
+      }
     },
     {
       "face": "11-drive-blade",
@@ -993,7 +1011,16 @@
       "size": [
         172.0,
         286.0
-      ]
+      ],
+      "tiers": {
+        "phone": {
+          "face": "11-drive-blade-phone",
+          "size": [
+            165.0,
+            286.0
+          ]
+        }
+      }
     },
     {
       "face": "12-drive-pegasus",
@@ -1005,7 +1032,16 @@
       "size": [
         400.0,
         286.0
-      ]
+      ],
+      "tiers": {
+        "phone": {
+          "face": "12-drive-pegasus-phone",
+          "size": [
+            165.0,
+            286.0
+          ]
+        }
+      }
     },
     {
       "face": "13-drive-british-blues",
@@ -1017,7 +1053,16 @@
       "size": [
         240.0,
         286.0
-      ]
+      ],
+      "tiers": {
+        "phone": {
+          "face": "13-drive-british-blues-phone",
+          "size": [
+            165.0,
+            286.0
+          ]
+        }
+      }
     },
     {
       "face": "14-drive-tube-drive",
@@ -1033,7 +1078,16 @@
       "size": [
         200.0,
         286.0
-      ]
+      ],
+      "tiers": {
+        "phone": {
+          "face": "14-drive-tube-drive-phone",
+          "size": [
+            165.0,
+            286.0
+          ]
+        }
+      }
     }
   ],
   "eq": {
