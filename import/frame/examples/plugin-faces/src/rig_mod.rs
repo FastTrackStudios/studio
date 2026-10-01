@@ -392,12 +392,12 @@ fn tremolo_picture(b: &mut Builder<'_>, v: NodeId, vw: f64, vh: f64, t: &Theme) 
     b.add(v, ui::strokes("brick", &rows, 1.0, draw::solid("#ffffff0a")));
     // Full volume sits under the corner pill's height, clear of it.
     // The tube swings about the window's middle, as deep as the depth.
-    let (lamp_x, top, bottom) = (46.0, vh * 0.14, vh * 0.86);
+    let (lamp_x, top, bottom) = (0.0, vh * 0.14, vh * 0.86);
     let period = 64.0;
     let span = vw - lamp_x;
     let curve = |phase: f64| -> Vec<(f64, f64)> {
-        (0..=180).map(|k| {
-            let x = (span + period) * f64::from(k) / 180.0;
+        (0..=360).map(|k| {
+            let x = (2.0 * span + period) * f64::from(k) / 360.0;
             let g = 0.5 + 0.5 * ((x / period + phase) * std::f64::consts::TAU).cos();
             (x, top + (bottom - top) * (1.0 - g))
         }).collect()
@@ -405,8 +405,10 @@ fn tremolo_picture(b: &mut Builder<'_>, v: NodeId, vw: f64, vh: f64, t: &Theme) 
     for (side, phase, color) in [(0_u8, 0.0, PINK), (1, 0.5, "#c084fc")] {
         let mut clip = draw::frame("tube window", lamp_x, 0.0, span, vh);
         clip.clips_content = true;
+        clip.layout_child.resize_x = Some(document_proto::ResizeX::Stretch);
         let clip = b.add(v, clip);
-        let roll = b.add(clip, draw::frame("tube", 0.0, 0.0, span + period, vh));
+        // Twice the window long, so a widened window stays full.
+        let roll = b.add(clip, draw::frame("tube", 0.0, 0.0, 2.0 * span + period, vh));
         // The tube: a hot core in a wide glow.
         b.add(roll, draw::emissive(ui::strokes("glow", &[curve(phase)], 5.0, draw::solid(&ui::alpha(color, 0.35))), draw::hex(color), 0.9, 10.0));
         b.add(roll, ui::strokes("core", &[curve(phase)], 1.6, draw::solid("#fff0f7")));
@@ -415,19 +417,8 @@ fn tremolo_picture(b: &mut Builder<'_>, v: NodeId, vw: f64, vh: f64, t: &Theme) 
         if side == 1 {
             motion::add(b, clip, Motion::new(Target::Opacity).input(format!("clamp(param({MOTION}/mode), 0, 1)")).range(0.0, 0.9));
         }
-        // The ring: this side's volume now.
-        let (ry, ph) = (vh / 2.0 + if side == 0 { -18.0 } else { 18.0 }, if side == 0 { 0.0 } else { 3.1416 });
-        let ring = b.add(v, draw::frame("ring", lamp_x - 22.0, ry - 22.0, 44.0, 44.0));
-        let mut c = draw::stroked(draw::circle("neon ring", 22.0, 22.0, 15.0, draw::solid("#00000000")), "#fff0f7", 2.2);
-        c.fills.clear();
-        b.add(ring, draw::emissive(c, draw::hex(color), 1.0, 14.0));
-        let now = format!("(1 - norm({MOTION}/depth) * (0.5 - 0.5 * cos(6.2832 * time * param({MOTION}/rate) + {ph}))) * param({MOTION}/on)");
-        motion::add(b, ring, Motion::new(Target::Opacity).input(now).range(0.08, 1.0));
-        if side == 1 {
-            motion::add(b, ring, Motion::new(Target::Opacity).input(format!("clamp(param({MOTION}/mode), 0, 1)")).range(0.0, 1.0));
-        }
     }
-    ui::silk_left(b, v, "Volume", lamp_x + 6.0, vh - 8.0, 5.5, t.dim, 800.0);
+    ui::silk_left(b, v, "Volume", 8.0, vh - 8.0, 5.5, t.dim, 800.0);
 }
 
 /// The vibrato's picture in its window `v` (`vw × vh`).
