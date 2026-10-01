@@ -219,8 +219,10 @@ pub fn face_at(dark: bool, tier: kit::Tier) -> Face {
             });
             // Spread across the remote: Decay, Pre-Delay, Level, In.
             let span = w - 20.0 - x0;
-            let big = Dial::new("knob.pointer", "black", 80.0, ink, dim).legend(11.0);
-            ui::dial(b, panel, &a("decay"), "Decay", x0 + span * 0.14, 80.0, &big);
+            let big = Dial { value: false, legend: 0.0, ..Dial::new("knob.pointer", "black", 76.0, ink, dim) };
+            kit::time_knob(b, panel, VERB, (x0 + span * 0.14, 74.0, 76.0), 11.0, (ink, dim, &ui::alpha(kit::PURPLE_LAMP, 0.55)), |b, p, addr| {
+                ui::dial(b, p, addr, "", x0 + span * 0.14, 74.0, &big);
+            });
             let small = Dial::new("knob.collet", "black", 56.0, ink, dim).legend(11.0);
             for (i, (id, legend)) in [("predelay", "Pre-Delay"), ("level", "Level")].iter().enumerate() {
                 ui::dial(b, panel, &a(id), legend, x0 + span * (0.4 + 0.22 * i as f64), 86.0, &small);
@@ -229,8 +231,10 @@ pub fn face_at(dark: bool, tier: kit::Tier) -> Face {
             kit::nameplate_top_right(b, panel, VERB, tier, (12.0, 26.0), 76.0, 200.0, 10.0, (if dark { kit::PURPLE_LAMP } else { "#6a3fc4" }, dim), |b, t| {
                 ui::plain(b, t, "Plate", 28.0, 14.0, 18.0, ink, 800.0);
             });
-            let big = Dial::new("knob.pointer", "black", 60.0, ink, dim).legend(8.5);
-            ui::dial(b, panel, &a("decay"), "Decay Time", x0 + 50.0, 92.0, &big);
+            let big = Dial { value: false, legend: 0.0, ..Dial::new("knob.pointer", "black", 56.0, ink, dim) };
+            kit::time_knob(b, panel, VERB, (x0 + 50.0, 84.0, 56.0), 8.5, (ink, dim, &ui::alpha(kit::PURPLE_LAMP, 0.55)), |b, p, addr| {
+                ui::dial(b, p, addr, "", x0 + 50.0, 84.0, &big);
+            });
             let small = Dial::new("knob.collet", "black", 36.0, ink, dim).legend(7.5);
             for (i, (id, legend)) in [("predelay", "Pre-Delay"), ("damping", "HF Damp"), ("level", "Level")].iter().enumerate() {
                 ui::dial(b, panel, &a(id), legend, x0 + 136.0 + 62.0 * i as f64, 96.0, &small);
@@ -243,5 +247,6 @@ pub fn face_at(dark: bool, tier: kit::Tier) -> Face {
     });
     let mut f = kit::reverb_face(kit::tier_file("82-verb-plate", tier, dark), scene);
     f.params.extend(kit::nameplate_params(VERB));
+    f.params.extend(kit::time_params(VERB));
     f
 }

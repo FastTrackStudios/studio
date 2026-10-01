@@ -165,7 +165,9 @@ pub fn face_at(dark: bool, tier: kit::Tier) -> Face {
             // Spread across the panel: Decay, Size, Level, On — each with
             // its value and name under it, inside the lane.
             let span = w - 20.0 - x0;
-            kit::knob3d(b, panel, &a("decay"), "Decay", 62.0, (x0 + span * 0.14, 72.0), &pearl, ink, dim);
+            kit::time_knob(b, panel, VERB, (x0 + span * 0.14, 68.0, 60.0), 11.0, (ink, dim, &ui::alpha(kit::PURPLE_LAMP, 0.55)), |b, p, addr| {
+                kit::knob3d_bare(b, p, addr, 60.0, (x0 + span * 0.14, 68.0), &pearl);
+            });
             for (i, (id, legend)) in [("size", "Size"), ("level", "Level")].iter().enumerate() {
                 kit::knob3d(b, panel, &a(id), legend, 52.0, (x0 + span * (0.4 + 0.22 * i as f64), 72.0), &pearl, ink, dim);
             }
@@ -173,7 +175,9 @@ pub fn face_at(dark: bool, tier: kit::Tier) -> Face {
             kit::nameplate_top_right(b, panel, VERB, tier, (10.0, 28.0), 82.0, 200.0, 10.0, (if dark { kit::PURPLE_LAMP } else { "#6a3fc4" }, dim), |b, t| {
                 crate::suite_studio_blues::parts::set(b, t, "Cloud", 34.0, 14.0, 22.0, ink, &serif, 0.08);
             });
-            kit::knob3d(b, panel, &a("decay"), "Decay", 50.0, (x0 + 34.0, 84.0), &pearl, ink, dim);
+            kit::time_knob(b, panel, VERB, (x0 + 34.0, 80.0, 48.0), 8.5, (ink, dim, &ui::alpha(kit::PURPLE_LAMP, 0.55)), |b, p, addr| {
+                kit::knob3d_bare(b, p, addr, 48.0, (x0 + 34.0, 80.0), &pearl);
+            });
             let small = [("size", "Size"), ("modulation", "Drift"), ("predelay", "Pre-Delay"), ("level", "Level")];
             for (i, (id, legend)) in small.iter().enumerate() {
                 kit::knob3d(b, panel, &a(id), legend, 30.0, (x0 + 96.0 + 50.0 * i as f64, 92.0), &pearl, ink, dim);
@@ -185,5 +189,6 @@ pub fn face_at(dark: bool, tier: kit::Tier) -> Face {
     });
     let mut f = kit::reverb_face(kit::tier_file("84-verb-cloud", tier, dark), scene);
     f.params.extend(kit::nameplate_params(VERB));
+    f.params.extend(kit::time_params(VERB));
     f
 }

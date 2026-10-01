@@ -53,6 +53,10 @@ pub fn manifest() -> serde_json::Value {
             if f.params.iter().any(|p| p.addr.to_string().ends_with("/preset_browse")) {
                 e["nameplate"] = json!(true);
             }
+            // Its Time knob (time, sync, time_text) for the host to map.
+            if f.params.iter().any(|p| p.addr.to_string().ends_with("/time_text")) {
+                e["time_knob"] = json!(true);
+            }
             // Its versions for other sizes (`tiers`: phone, ipad, desktop,
             // fullscreen, strip), where it has them — the app draws the one
             // for the room it is given, the base face otherwise.

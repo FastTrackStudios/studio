@@ -248,6 +248,63 @@ pub fn nameplate_top_right(b: &mut Builder<'_>, parent: NodeId, ns: &str, tier: 
     nameplate(b, parent, ns, (x, y, h), title_w, preset_w, size, inks, title);
 }
 
+/// The Time knob every Time face has, the same at every face: the face's
+/// own knob on `<ns>/time` (`knob` draws it, bare, at (`cx`, `cy`), `d`
+/// across), the time read out under it ("2.2 s", "1 bar · 2.0 s",
+/// "540 ms", "1/8. · 375 ms" — the host's `<ns>/time_text`), and for its
+/// legend the TIME | BEAT switch on `<ns>/sync`: free, or locked to the
+/// tempo. The host maps `time` onto the block either way.
+#[allow(clippy::too_many_arguments)]
+pub fn time_knob(b: &mut Builder<'_>, parent: NodeId, ns: &str, (cx, cy, d): (f64, f64, f64), size: f64, (ink, dim, lit): (&str, &str, &str), knob: impl FnOnce(&mut Builder<'_>, NodeId, &str)) {
+    knob(b, parent, &a(ns, "time"));
+    // The time, under the knob.
+    let (rw, rh) = (d + 70.0, (size * 1.35).ceil());
+    let ry = cy + d / 2.0 + 3.0;
+    let field = b.add(parent, draw::frame("time readout", cx - rw / 2.0, ry, rw, rh));
+    let mut t = draw::text("value", "", 0.0, 0.0, rw, size, ink, TextAlign::Center);
+    if let document_proto::NodeKind::Text(td) = &mut t.kind {
+        td.font_family = Some(draw::family::INTER.into());
+        td.font_weight = Some(650.0);
+    }
+    let t = b.add(field, t);
+    b.controls.insert(field, Control::new(ControlKind::Readout).slot(SlotRole::Value, t.0).bound(ui::bind(&a(ns, "time_text"))));
+    // TIME | BEAT, the side it is on lit.
+    let (sw, sh) = ((size * 5.4).max(70.0), (size * 0.8 + 8.0).ceil());
+    let sy = ry + rh + 2.0;
+    let pill = b.add(parent, draw::frame("time switch", cx - sw / 2.0, sy, sw, sh));
+    b.add(pill, draw::rounded(draw::rect("well", 0.0, 0.0, sw, sh, draw::solid(&ui::alpha(dim, 0.22))), sh / 2.0));
+    for (i, (word, on)) in [("TIME", format!("1 - param({ns}/sync)")), ("BEAT", format!("param({ns}/sync)"))].iter().enumerate() {
+        let x = i as f64 * sw / 2.0;
+        let half = b.add(pill, draw::frame(word, x, 0.0, sw / 2.0, sh));
+        let glow = b.add(half, draw::rounded(draw::rect("lit", 1.5, 1.5, sw / 2.0 - 3.0, sh - 3.0, draw::solid(lit)), (sh - 3.0) / 2.0));
+        motion::add(b, glow, Motion::new(Target::Opacity).input(on.clone()).range(0.0, 1.0).dynamics(Dynamics::spring(400.0, 36.0)));
+        ui::silk(b, half, word, sw / 4.0, sh / 2.0, size * 0.8, ink, 800.0);
+    }
+    b.controls.insert(pill, Control::new(ControlKind::Button { mode: ButtonMode::Toggle }).bound(ui::bind(&a(ns, "sync"))));
+}
+
+/// A `knob.3d` with no value or legend of its own (the [`time_knob`]
+/// prints them), in the kit's options.
+pub fn knob3d_bare(b: &mut Builder<'_>, parent: NodeId, addr: &str, d: f64, (cx, cy): (f64, f64), options: &[&str]) -> NodeId {
+    let mut opts = vec!["touch=44", "ticks=none"];
+    opts.extend_from_slice(options);
+    let p = Place::new("Time").legend(" ").size(d).variant("flat").options(&opts).bind(ui::bind(addr));
+    let k = ui::put(b, parent, "knob.3d", &p, cx, cy);
+    ui::strip_legend(b, k);
+    k
+}
+
+/// The params a [`time_knob`] binds: its position, the switch, and the
+/// time the host reads out.
+#[must_use]
+pub fn time_params(ns: &str) -> Vec<ParamInfo> {
+    vec![
+        ui::param(&a(ns, "time"), "Time", Range::linear(0.0, 1.0, Unit::None), 0.5).featured(),
+        ui::toggle(&a(ns, "sync"), "Beat", false),
+        ui::param(&a(ns, "time_text"), "Time", Range::linear(0.0, 1.0, Unit::None), 0.0).text(),
+    ]
+}
+
 /// Every Time face's bypass in the same place: on the right edge, at mid
 /// height, the same size at a tier (a finger's 44 points on a phone) —
 /// whatever the face, it is there to hit.
