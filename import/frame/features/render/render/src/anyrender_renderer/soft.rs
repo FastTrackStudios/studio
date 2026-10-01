@@ -48,7 +48,7 @@ struct Baked {
 /// Paint `soft` for the union of `shapes` (filled, non-zero), in `colour`,
 /// blurred by `radius` (a CSS/Figma blur radius, σ = radius / 2).
 /// `transform` maps shape space to the target.
-pub(super) fn paint(scene: &mut vello::Scene, transform: Affine, shapes: &[&BezPath], colour: &Rgba, radius: f64, soft: Soft) {
+pub(super) fn paint<S: super::target::PaintTarget>(scene: &mut S, transform: Affine, shapes: &[&BezPath], colour: &Rgba, radius: f64, soft: Soft) {
     if colour.a <= 0.0 || shapes.iter().all(|s| s.elements().is_empty()) {
         return;
     }

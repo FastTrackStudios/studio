@@ -15,6 +15,8 @@ pub use anyrender_renderer::{
 };
 #[cfg(feature = "anyrender")]
 pub use anyrender_renderer::{paint_primitives_into_scene_with, paint_scene_into};
+#[cfg(feature = "anyrender")]
+pub use anyrender_renderer::{GlyphRun, PaintTarget};
 
 pub mod fonts;
 pub use fonts::{book_for_scene, text_advance, FontBook, FontSpec};
