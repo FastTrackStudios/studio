@@ -10,7 +10,7 @@
 use document_proto::motion::{Dynamics, Motion, Target};
 use document_proto::{NodeId, TextAlign};
 use surface_kit::{Place, draw, motion};
-use surface_proto::{ParamInfo, Range, Unit};
+use surface_proto::{ButtonMode, Control, ControlKind, ParamInfo, Range, SlotRole, Unit};
 use surface_widgets::Builder;
 
 use crate::face::{Face, canvas};
@@ -195,6 +195,76 @@ pub fn lane(name: &str, build: impl FnOnce(&mut Builder<'_>, NodeId)) -> documen
         build(b, root);
         ui::flush(b, root, W, H);
     })
+}
+
+/// The nameplate every Time face carries in the same place — the top
+/// right, one row `h` tall, its right end 12 in from the face's edge, `y`
+/// down (see [`nameplate_top_right`]): the algorithm's name,
+/// lettered as the face likes (`title` draws it into a `title_w` × `h`
+/// box), a press on it opening the algorithm menu; then the preset playing
+/// (`preset_w` wide), stepped ‹ ›, a press on its name opening the
+/// presets. The host fills `<ns>/preset` and answers the presses
+/// ([`nameplate_params`]).
+#[allow(clippy::too_many_arguments)]
+pub fn nameplate(b: &mut Builder<'_>, parent: NodeId, ns: &str, (x, y, h): (f64, f64, f64), title_w: f64, preset_w: f64, size: f64, (accent, dim): (&str, &str), title: impl FnOnce(&mut Builder<'_>, NodeId)) {
+    let press = |b: &mut Builder<'_>, node: NodeId, id: &str| {
+        b.controls.insert(node, Control::new(ControlKind::Button { mode: ButtonMode::Momentary }).bound(ui::bind(&a(ns, id))));
+    };
+    // The algorithm: its name, and a caret saying it opens.
+    let t = b.add(parent, draw::frame("algorithm", x, y, title_w, h));
+    title(b, t);
+    let (cx, cy) = (title_w - 6.0, h / 2.0);
+    ui::line(b, t, "caret", &[(cx - 4.0, cy - 2.0), (cx, cy + 2.0), (cx + 4.0, cy - 2.0)], 1.4, dim);
+    press(b, t, "algo_menu");
+    // The preset: ‹ name ›.
+    let px = x + title_w + 6.0;
+    let arrow = size + 6.0;
+    let prev = b.add(parent, draw::frame("preset prev", px, y, arrow, h));
+    ui::line(b, prev, "chevron", &[(arrow / 2.0 + 2.0, h / 2.0 - 4.0), (arrow / 2.0 - 2.0, h / 2.0), (arrow / 2.0 + 2.0, h / 2.0 + 4.0)], 1.4, dim);
+    press(b, prev, "preset_prev");
+    let nx = px + arrow;
+    let nw = preset_w - 2.0 * arrow;
+    let field = b.add(parent, draw::frame("preset", nx, y, nw, h));
+    let mut name = draw::text("value", "", 0.0, (h - size * 1.3) / 2.0, nw, size, accent, TextAlign::Left);
+    if let document_proto::NodeKind::Text(d) = &mut name.kind {
+        d.font_family = Some(draw::family::INTER.into());
+        d.font_weight = Some(650.0);
+    }
+    let name = b.add(field, name);
+    b.controls.insert(field, Control::new(ControlKind::Readout).slot(SlotRole::Value, name.0).bound(ui::bind(&a(ns, "preset"))));
+    // Over the name, a press opens the presets.
+    let open = b.add(parent, draw::frame("preset browse", nx, y, nw, h));
+    press(b, open, "preset_browse");
+    let next = b.add(parent, draw::frame("preset next", nx + nw, y, arrow, h));
+    ui::line(b, next, "chevron", &[(arrow / 2.0 - 2.0, h / 2.0 - 4.0), (arrow / 2.0 + 2.0, h / 2.0), (arrow / 2.0 - 2.0, h / 2.0 + 4.0)], 1.4, dim);
+    press(b, next, "preset_next");
+}
+
+/// [`nameplate`] in its standard place: the top right of a face at
+/// `tier`, `y` down.
+#[allow(clippy::too_many_arguments)]
+pub fn nameplate_top_right(b: &mut Builder<'_>, parent: NodeId, ns: &str, tier: Tier, (y, h): (f64, f64), title_w: f64, preset_w: f64, size: f64, inks: (&str, &str), title: impl FnOnce(&mut Builder<'_>, NodeId)) {
+    let x = tier.lane_w() - 12.0 - preset_w - 6.0 - title_w;
+    nameplate(b, parent, ns, (x, y, h), title_w, preset_w, size, inks, title);
+}
+
+/// Every Time face's bypass in the same place: on the right edge, at mid
+/// height, the same size at a tier (a finger's 44 points on a phone) —
+/// whatever the face, it is there to hit.
+pub fn face_bypass(b: &mut Builder<'_>, parent: NodeId, ns: &str, tier: Tier, variant: &str, legend: &str) -> NodeId {
+    let (d, inset) = if matches!(tier, Tier::Phone | Tier::Strip) { (44.0, 36.0) } else { (28.0, 26.0) };
+    bypass(b, parent, ns, tier.lane_w() - inset, H * 0.56, d, variant, legend)
+}
+
+/// The params a [`nameplate`] binds: the preset's name (text the host
+/// fills) and the four presses.
+#[must_use]
+pub fn nameplate_params(ns: &str) -> Vec<ParamInfo> {
+    let mut v = vec![ui::param(&a(ns, "preset"), "Preset", Range::linear(0.0, 1.0, Unit::None), 0.0).text()];
+    for (id, name) in [("algo_menu", "Algorithm"), ("preset_prev", "Previous preset"), ("preset_next", "Next preset"), ("preset_browse", "Presets")] {
+        v.push(ui::toggle(&a(ns, id), name, false));
+    }
+    v
 }
 
 /// The machine selector: a rotary switch over the block's `style` (delay)

@@ -214,31 +214,34 @@ pub fn face_at(dark: bool, tier: kit::Tier) -> Face {
         ui::rule(b, panel, x0 - 10.0, 12.0, 1.0, kit::H - 24.0, rule.0);
         ui::rule(b, panel, x0 - 9.0, 12.0, 1.0, kit::H - 24.0, rule.1);
         if small_room {
-            ui::plain(b, panel, "Plate", x0 + 30.0, 24.0, 20.0, ink, 800.0);
+            kit::nameplate_top_right(b, panel, VERB, tier, (8.0, 30.0), 84.0, 220.0, 12.0, (if dark { kit::PURPLE_LAMP } else { "#6a3fc4" }, dim), |b, t| {
+                ui::plain(b, t, "Plate", 32.0, 15.0, 20.0, ink, 800.0);
+            });
             // Spread across the remote: Decay, Pre-Delay, Level, In.
             let span = w - 20.0 - x0;
             let big = Dial::new("knob.pointer", "black", 80.0, ink, dim).legend(11.0);
             ui::dial(b, panel, &a("decay"), "Decay", x0 + span * 0.14, 80.0, &big);
             let small = Dial::new("knob.collet", "black", 56.0, ink, dim).legend(11.0);
             for (i, (id, legend)) in [("predelay", "Pre-Delay"), ("level", "Level")].iter().enumerate() {
-                ui::dial(b, panel, &a(id), legend, x0 + span * (0.42 + 0.24 * i as f64), 86.0, &small);
+                ui::dial(b, panel, &a(id), legend, x0 + span * (0.4 + 0.22 * i as f64), 86.0, &small);
             }
-            kit::bypass(b, panel, VERB, x0 + span * 0.9, 88.0, 44.0, "purple", "In");
         } else {
-            ui::plain(b, panel, "Plate", x0 + 28.0, 26.0, 18.0, ink, 800.0);
-            ui::silk_left(b, panel, "Steel plate", x0 + 62.0, 22.0, 7.0, ink, 800.0);
-            ui::silk_left(b, panel, "Reverberation unit", x0 + 62.0, 32.0, 6.0, dim, 700.0);
-            kit::bypass(b, panel, VERB, x0 + 20.0, 104.0, 30.0, "purple", "In");
+            kit::nameplate_top_right(b, panel, VERB, tier, (12.0, 26.0), 76.0, 200.0, 10.0, (if dark { kit::PURPLE_LAMP } else { "#6a3fc4" }, dim), |b, t| {
+                ui::plain(b, t, "Plate", 28.0, 14.0, 18.0, ink, 800.0);
+            });
             let big = Dial::new("knob.pointer", "black", 60.0, ink, dim).legend(8.5);
-            ui::dial(b, panel, &a("decay"), "Decay Time", x0 + 96.0, 92.0, &big);
+            ui::dial(b, panel, &a("decay"), "Decay Time", x0 + 50.0, 92.0, &big);
             let small = Dial::new("knob.collet", "black", 36.0, ink, dim).legend(7.5);
             for (i, (id, legend)) in [("predelay", "Pre-Delay"), ("damping", "HF Damp"), ("level", "Level")].iter().enumerate() {
-                ui::dial(b, panel, &a(id), legend, x0 + 176.0 + 64.0 * i as f64, 96.0, &small);
+                ui::dial(b, panel, &a(id), legend, x0 + 136.0 + 62.0 * i as f64, 96.0, &small);
             }
         }
+        kit::face_bypass(b, panel, VERB, tier, "purple", "In");
         // Responsive: the plate's window takes the width; the remote pins right.
         let stretch = kit::with_sibling(b, panel, tank, -1);
         kit::responsive(b, panel, &stretch);
     });
-    kit::reverb_face(kit::tier_file("82-verb-plate", tier, dark), scene)
+    let mut f = kit::reverb_face(kit::tier_file("82-verb-plate", tier, dark), scene);
+    f.params.extend(kit::nameplate_params(VERB));
+    f
 }

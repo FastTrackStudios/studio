@@ -1547,6 +1547,7 @@
         "match": [
           "plate"
         ],
+        "nameplate": true,
         "ns": "verb",
         "size": [
           960.0,
@@ -1581,6 +1582,7 @@
         "match": [
           "cloud"
         ],
+        "nameplate": true,
         "ns": "verb",
         "size": [
           960.0,

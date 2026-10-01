@@ -48,6 +48,11 @@ pub fn manifest() -> serde_json::Value {
         .enumerate()
         .map(|(i, (name, (f, d)))| {
             let mut e = json!({ "match": [name.to_lowercase()], "face": f.file, "dark": d.file, "ns": kit::VERB, "size": size });
+            // A face with the nameplate prints its algorithm and preset
+            // itself: the host fills the preset and answers its presses.
+            if f.params.iter().any(|p| p.addr.to_string().ends_with("/preset_browse")) {
+                e["nameplate"] = json!(true);
+            }
             // Its versions for other sizes (`tiers`: phone, ipad, desktop,
             // fullscreen, strip), where it has them — the app draws the one
             // for the room it is given, the base face otherwise.

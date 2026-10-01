@@ -159,28 +159,31 @@ pub fn face_at(dark: bool, tier: kit::Tier) -> Face {
         let serif = draw::Lettering::family(draw::family::PLAYFAIR_DISPLAY).weight(400.0);
         let pearl = l.knob;
         if small_room {
-            crate::suite_studio_blues::parts::set(b, panel, "Cloud", x0 + 32.0, 20.0, 20.0, ink, &serif, 0.08);
+            kit::nameplate_top_right(b, panel, VERB, tier, (6.0, 30.0), 86.0, 220.0, 12.0, (if dark { kit::PURPLE_LAMP } else { "#6a3fc4" }, dim), |b, t| {
+                crate::suite_studio_blues::parts::set(b, t, "Cloud", 34.0, 15.0, 22.0, ink, &serif, 0.08);
+            });
             // Spread across the panel: Decay, Size, Level, On — each with
             // its value and name under it, inside the lane.
             let span = w - 20.0 - x0;
             kit::knob3d(b, panel, &a("decay"), "Decay", 62.0, (x0 + span * 0.14, 72.0), &pearl, ink, dim);
             for (i, (id, legend)) in [("size", "Size"), ("level", "Level")].iter().enumerate() {
-                kit::knob3d(b, panel, &a(id), legend, 52.0, (x0 + span * (0.42 + 0.24 * i as f64), 72.0), &pearl, ink, dim);
+                kit::knob3d(b, panel, &a(id), legend, 52.0, (x0 + span * (0.4 + 0.22 * i as f64), 72.0), &pearl, ink, dim);
             }
-            kit::bypass(b, panel, VERB, x0 + span * 0.9, 80.0, 44.0, "purple", "On");
         } else {
-            crate::suite_studio_blues::parts::set(b, panel, "Cloud", x0 + 34.0, 24.0, 22.0, ink, &serif, 0.08);
-            ui::silk_left(b, panel, "Ambient reverb", x0 + 76.0, 22.0, 6.5, dim, 700.0);
-            ui::silk_left(b, panel, "Diffuse · granular · endless", x0 + 76.0, 31.0, 5.5, dim, 600.0);
-            kit::bypass(b, panel, VERB, x0 + 16.0, 110.0, 26.0, "purple", "On");
-            kit::knob3d(b, panel, &a("decay"), "Decay", 50.0, (x0 + 76.0, 84.0), &pearl, ink, dim);
+            kit::nameplate_top_right(b, panel, VERB, tier, (10.0, 28.0), 82.0, 200.0, 10.0, (if dark { kit::PURPLE_LAMP } else { "#6a3fc4" }, dim), |b, t| {
+                crate::suite_studio_blues::parts::set(b, t, "Cloud", 34.0, 14.0, 22.0, ink, &serif, 0.08);
+            });
+            kit::knob3d(b, panel, &a("decay"), "Decay", 50.0, (x0 + 34.0, 84.0), &pearl, ink, dim);
             let small = [("size", "Size"), ("modulation", "Drift"), ("predelay", "Pre-Delay"), ("level", "Level")];
             for (i, (id, legend)) in small.iter().enumerate() {
-                kit::knob3d(b, panel, &a(id), legend, 30.0, (x0 + 140.0 + 50.0 * i as f64, 92.0), &pearl, ink, dim);
+                kit::knob3d(b, panel, &a(id), legend, 30.0, (x0 + 96.0 + 50.0 * i as f64, 92.0), &pearl, ink, dim);
             }
         }
+        kit::face_bypass(b, panel, VERB, tier, "purple", "On");
         // Responsive: the sky takes the width.
         kit::responsive(b, root, &[s]);
     });
-    kit::reverb_face(kit::tier_file("84-verb-cloud", tier, dark), scene)
+    let mut f = kit::reverb_face(kit::tier_file("84-verb-cloud", tier, dark), scene);
+    f.params.extend(kit::nameplate_params(VERB));
+    f
 }

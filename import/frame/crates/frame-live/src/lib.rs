@@ -19,7 +19,7 @@ use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
 use document_proto::{NodeId, PaintKind, Scene};
-use surface_proto::{Catalog, ParamAddr, ParamValue, Source as Binding};
+use surface_proto::{Catalog, ParamAddr, ParamValue, Source as Binding, TextValue};
 use surface_runtime::{Bounds, EngineCall, Input, Runtime, Surface};
 use vello::wgpu;
 use vello::{AaConfig, Renderer, RendererOptions};
@@ -391,6 +391,13 @@ impl LiveSurface {
     pub fn apply_values(&mut self, values: impl IntoIterator<Item = ParamValue>) {
         let dragging = self.dragging.clone();
         self.rt.apply_values(values.into_iter().filter(|v| dragging.as_ref() != Some(&v.addr)));
+        self.dirty = true;
+    }
+
+    /// Text values from the engine, by address (a preset's name on its
+    /// nameplate): whatever control is bound to the text param shows it.
+    pub fn apply_texts(&mut self, texts: impl IntoIterator<Item = (String, String)>) {
+        self.rt.apply_texts(texts.into_iter().map(|(addr, text)| TextValue { addr: ParamAddr::new(addr), text }));
         self.dirty = true;
     }
 
