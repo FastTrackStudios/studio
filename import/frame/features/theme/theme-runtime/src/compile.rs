@@ -159,6 +159,28 @@ impl Theme {
         Theme::compile(Arc::new(scene), schema, mode)
     }
 
+    /// Parse several documents and compile them as one, each over the
+    /// ones before it (see [`crate::layer`]): a base theme's files, then a
+    /// theme's own. `sources` are `(label, markup)`; a parse error names
+    /// its label.
+    ///
+    /// # Errors
+    /// Every source's parse error, or everything [`Theme::compile`] found.
+    pub fn from_sources(sources: &[(&str, &str)], schema: Schema, mode: Option<&str>) -> Result<Theme, Vec<Diagnostic>> {
+        let mut scenes = Vec::new();
+        let mut diags = Vec::new();
+        for (label, src) in sources {
+            match document_text::parse(src, BTreeMap::new()) {
+                Ok(s) => scenes.push(s),
+                Err(e) => diags.push(Diagnostic { role: None, node: None, message: format!("{label}: {e}") }),
+            }
+        }
+        if !diags.is_empty() {
+            return Err(diags);
+        }
+        Theme::compile(Arc::new(crate::layer::layer(&scenes)), schema, mode)
+    }
+
     /// Compile `scene` for `mode` (`None`: the document's first mode)
     /// against what the host offers.
     ///

@@ -26,6 +26,14 @@
 //!   when the theme compiles, so a component costs what drawing its parts
 //!   by hand would.
 //!
+//! # Layers
+//!
+//! A theme can be several documents, each over the ones before it
+//! ([`Theme::from_sources`], [`layer`]): pages replace pages by name,
+//! components replace components by name wherever they are defined,
+//! tokens replace tokens. A base theme is its files; a theme on it is the
+//! files it changes — one control, one view, one colour.
+//!
 //! # What the host gives
 //!
 //! A [`Schema`] — the fields it can bind (`track.name`, `track.volume`)
@@ -51,12 +59,14 @@
 mod compile;
 mod draw;
 mod expand;
+mod layer;
 mod layout;
 mod plan;
 mod schema;
 
 pub use compile::{Diagnostic, Theme};
 pub use draw::Fields;
+pub use layer::layer;
 pub use schema::Schema;
 
 pub use render_canvas::{Canvas, Font, Recording, TextAlign, TextRun};
