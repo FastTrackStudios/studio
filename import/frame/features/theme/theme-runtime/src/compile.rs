@@ -179,13 +179,23 @@ impl Theme {
             });
         }
         let tokens = resolve_tokens(&scene, &mode, &mut diags);
+        let expanded = crate::expand::expand(&scene, &mut diags);
 
         let mut roles = HashMap::new();
-        for &page in scene.pages() {
-            let Some(page_node) = scene.node(page) else { continue };
-            let Some(&root) = page_node.children.first() else { continue };
+        for &page in expanded.scene.pages() {
+            let Some(page_node) = expanded.scene.node(page) else { continue };
+            // A page's first frame is the role; a page of components alone
+            // draws nothing itself.
+            let Some(root) = page_node
+                .children
+                .iter()
+                .copied()
+                .find(|c| expanded.scene.node(*c).is_some_and(|n| n.kind != NodeKind::Component))
+            else {
+                continue;
+            };
             let name = page_node.name.clone();
-            if let Some(role) = compile_role(&scene, root, &name, &tokens, &schema, &mut diags)
+            if let Some(role) = compile_role(&expanded, root, &name, &tokens, &schema, &mut diags)
                 && roles.insert(name.clone(), role).is_some()
             {
                 diags.push(Diagnostic { role: Some(name), node: None, message: "two pages with this name".into() });
@@ -304,13 +314,14 @@ fn resolve_tokens(scene: &Scene, mode: &str, diags: &mut Vec<Diagnostic>) -> BTr
 }
 
 fn compile_role(
-    source: &Scene,
+    expanded: &crate::expand::Expanded,
     root: NodeId,
     role: &str,
     tokens: &BTreeMap<String, Value>,
     schema: &Schema,
     diags: &mut Vec<Diagnostic>,
 ) -> Option<Role> {
+    let source = &expanded.scene;
     // The component's subtree alone, its root at the origin.
     let mut nodes = std::collections::BTreeMap::new();
     for id in source.walk(root) {
@@ -329,8 +340,16 @@ fn compile_role(
     let ids: Vec<NodeId> = scene.walk(root);
     for id in ids {
         let Some(node) = scene.node_mut(id) else { continue };
-        let declared = std::mem::take(&mut node.bind);
-        for b in declared {
+        // Written here, or copied out of a component and parsed there.
+        let declared = std::mem::take(&mut node.bind).into_iter().map(|b| crate::expand::Parsed {
+            expr: theme_expr::parse(&b.expr).map_err(|e| e.to_string()),
+            prop: b.prop,
+        });
+        let copied = expanded.parsed.get(&id).into_iter().flatten().map(|p| crate::expand::Parsed {
+            prop: p.prop.clone(),
+            expr: p.expr.clone(),
+        });
+        for b in declared.chain(copied).collect::<Vec<_>>() {
             let mut err = |message: String| {
                 diags.push(Diagnostic { role: Some(role.to_owned()), node: Some(node.name.clone()), message });
             };
@@ -338,7 +357,7 @@ fn compile_role(
                 err(format!("`bind:{}` is not a bindable property", b.prop));
                 continue;
             };
-            let mut expr = match theme_expr::parse(&b.expr) {
+            let mut expr = match b.expr {
                 Ok(e) => e,
                 Err(e) => {
                     err(format!("bind:{}: {e}", b.prop));

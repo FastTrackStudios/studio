@@ -20,6 +20,11 @@
 //!   54×300 or 300×900 by the same rules.
 //! - **Hit targets** — a node named `@mute` is the `mute` control: the
 //!   host asks [`Theme::hit`] what is under the pointer and gets `mute`.
+//! - **Components** — a control drawn once (`<Component name="button"
+//!   arg:on="false">`, its parts reading `arg.on`) and placed by name
+//!   (`<Instance name="@mute" of="button" arg:on="track.mute">`). Placed
+//!   when the theme compiles, so a component costs what drawing its parts
+//!   by hand would.
 //!
 //! # What the host gives
 //!
@@ -45,6 +50,7 @@
 
 mod compile;
 mod draw;
+mod expand;
 mod layout;
 mod plan;
 mod schema;

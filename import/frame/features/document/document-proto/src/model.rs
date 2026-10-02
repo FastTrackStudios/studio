@@ -685,7 +685,30 @@ pub struct Node {
     #[facet(default)]
     pub bind: Vec<Bind>,
 
+    /// On an instance: the component it places, by name — resolved by
+    /// whatever expands instances (the theme runtime, across a theme's
+    /// files), not by id, so a theme can swap the component it names.
+    /// `None` for an instance that tracks its component by id alone.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[facet(default)]
+    pub of: Option<String>,
+
+    /// A component's arguments: on a component, each one it takes and its
+    /// default; on an instance, the value it is given. Expressions in the
+    /// theme language, read inside the component as `arg.<name>`.
+    /// See [`Arg`].
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    #[facet(default)]
+    pub args: Vec<Arg>,
+
     pub source: Option<SourceRef>,
+}
+
+/// One argument of a component (`arg:<name>="<expr>"` in markup).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Facet)]
+pub struct Arg {
+    pub name: String,
+    pub expr: String,
 }
 
 /// One property of a node computed from an expression.
@@ -780,6 +803,8 @@ impl Node {
             shader: None,
             motion: Vec::new(),
             bind: Vec::new(),
+            of: None,
+            args: Vec::new(),
             source: None,
         }
     }

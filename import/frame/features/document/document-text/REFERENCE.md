@@ -172,6 +172,28 @@ Optional paint keys:
 - `kind` is `DropShadow`, `InnerShadow`, `LayerBlur` or `BackgroundBlur`.
 - `kind`, `color` and `radius` are required. `offset_x`, `offset_y` and `spread` default to `0`, and `visible` defaults to `true`.
 
+## Components and instances (themes)
+
+A `<Component>` is a control drawn once; an `<Instance of="name">` places
+it. Arguments are `arg:<name>="<expr>"` — the defaults on the component,
+the values on an instance — and the component's bindings read them as
+`arg.<name>`:
+
+```
+<Component name="button" w=21 h=20 arg:on="false" arg:control="\"\"">
+  <Rectangle w=21 h=20 bind:fill="arg.on ? $mute : (ui.hover == arg.control ? $hover : $off)" />
+</Component>
+
+<Instance name="@mute" of="button" x=30 y=60 arg:on="track.mute" arg:control="\"mute\"" />
+```
+
+`of` names the component, not its id, so a theme can swap what an
+instance draws. The theme runtime replaces each instance by a copy of its
+component when the theme compiles: the copy keeps the instance's name
+(`@mute` stays a hit target), position, size and own `bind:*`. A page of
+components alone draws nothing itself. Instances may sit inside
+components; an argument's value is read where its instance is.
+
 ## Errors
 
 Parse errors look like `line:col: message`, e.g. `3:16: unknown attribute `colour` on <Rectangle> — did you mean `fill`?`. Fix the named spot and send the markup again.

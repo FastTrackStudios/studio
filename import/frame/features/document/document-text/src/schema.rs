@@ -139,7 +139,17 @@ pub(crate) const TEXT_ATTRS: &[&str] =
     &["text", "font", "size", "weight", "style", "stretch", "line-height", "letter-spacing", "case", "text-align", "runs"];
 
 /// Attributes only one element accepts: `(attr, tag)`.
-pub(crate) const KIND_ATTRS: &[(&str, &str)] = &[("component", "Instance"), ("op", "BooleanOperation"), ("tag", "Other")];
+pub(crate) const KIND_ATTRS: &[(&str, &str)] =
+    &[("component", "Instance"), ("of", "Instance"), ("op", "BooleanOperation"), ("tag", "Other")];
+
+/// A component's arguments, `arg:<name>="<expr>"`: the defaults on a
+/// <Component>, the values on an <Instance>.
+pub(crate) const ARG_PREFIX: &str = "arg:";
+
+/// Whether `tag` takes `arg:*` attributes.
+pub(crate) fn takes_args(tag: &str) -> bool {
+    matches!(tag, "Component" | "Instance")
+}
 
 /// Attributes that only mean something inside an auto-layout container.
 pub(crate) const LAYOUT_ATTRS: &[&str] = &["gap", "padding", "wrap", "justify", "align", "hug"];

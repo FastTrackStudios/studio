@@ -219,6 +219,35 @@ impl Expr {
         missing.map_or(Ok(()), Err)
     }
 
+    /// Replace each field named `name` that `with` answers for by the
+    /// expression it gives — a component's `arg.on` by the `track.mute`
+    /// its instance passes. Fields it answers `None` for are left as they
+    /// are.
+    ///
+    /// What it substitutes is not looked into again: an instance's
+    /// argument is already in its own scope.
+    pub fn substitute_fields(&mut self, with: &mut impl FnMut(&str) -> Option<Expr>) {
+        match self {
+            Expr::Field(Field::Name(name)) => {
+                if let Some(by) = with(name) {
+                    *self = by;
+                }
+            }
+            Expr::Lit(_) | Expr::W | Expr::H | Expr::PW | Expr::PH | Expr::Token(_) | Expr::Field(_) => {}
+            Expr::Unary(_, a) => a.substitute_fields(with),
+            Expr::Binary(_, a, b) => {
+                a.substitute_fields(with);
+                b.substitute_fields(with);
+            }
+            Expr::Cond(c, a, b) => {
+                c.substitute_fields(with);
+                a.substitute_fields(with);
+                b.substitute_fields(with);
+            }
+            Expr::Call(_, args) => args.iter_mut().for_each(|a| a.substitute_fields(with)),
+        }
+    }
+
     /// Evaluate every sub-expression that reads nothing (no box, no token,
     /// no field) down to its value.
     #[must_use]

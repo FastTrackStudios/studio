@@ -71,6 +71,17 @@ fn print_node(scene: &Scene, id: NodeId, depth: usize, out: &mut String) {
         out.push('=');
         out.push_str(v);
     }
+    if let Some(of) = &node.of {
+        out.push_str(" of=");
+        out.push_str(&quote(of));
+    }
+    for arg in &node.args {
+        out.push(' ');
+        out.push_str(crate::schema::ARG_PREFIX);
+        out.push_str(&arg.name);
+        out.push('=');
+        out.push_str(&quote(&arg.expr));
+    }
     if let Some(body) = body {
         out.push('>');
         out.push_str(&body);

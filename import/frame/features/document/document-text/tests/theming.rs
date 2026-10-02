@@ -64,3 +64,41 @@ fn an_unknown_binding_is_refused() {
     let src = r#"<Document><Page><Frame bind:colour="$x" /></Page></Document>"#;
     assert!(document_text::parse(src, BTreeMap::new()).is_err());
 }
+
+const COMPONENTS: &str = r##"<Document>
+  <Page name="controls">
+    <Component name="button" w=21 h=20 arg:on="false" arg:label="\"M\"" arg:control="\"\"">
+      <Rectangle w=21 h=20 bind:fill="arg.on ? $mute : $hardware" />
+    </Component>
+  </Page>
+  <Page name="mcp.strip">
+    <Frame name="Strip" w=86 h=400>
+      <Instance name="@mute" of="button" x=30 y=60 w=21 h=20 arg:on="track.mute" arg:control="\"mute\"" />
+    </Frame>
+  </Page>
+</Document>
+"##;
+
+#[test]
+fn components_take_arguments_and_instances_name_them() {
+    let s = document_text::parse(COMPONENTS, BTreeMap::new()).expect("parses");
+    let button = s.nodes.values().find(|n| n.name == "button").expect("button");
+    let args: Vec<(&str, &str)> = button.args.iter().map(|a| (a.name.as_str(), a.expr.as_str())).collect();
+    // As declared, defaults and all.
+    assert_eq!(args, [("on", "false"), ("label", "\"M\""), ("control", "\"\"")]);
+    let mute = s.nodes.values().find(|n| n.name == "@mute").expect("@mute");
+    assert_eq!(mute.of.as_deref(), Some("button"));
+    let args: Vec<(&str, &str)> = mute.args.iter().map(|a| (a.name.as_str(), a.expr.as_str())).collect();
+    assert_eq!(args, [("on", "track.mute"), ("control", "\"mute\"")]);
+
+    let printed = document_text::print(&s);
+    let again = document_text::parse(&printed, BTreeMap::new()).expect("reparses");
+    assert_eq!(s, again, "{printed}");
+}
+
+#[test]
+fn only_components_and_instances_take_arguments() {
+    let src = r#"<Document><Page><Frame arg:on="true" /></Page></Document>"#;
+    let err = document_text::parse(src, BTreeMap::new()).unwrap_err();
+    assert!(err.to_string().contains("only a <Component> or an <Instance> takes arguments"), "{err}");
+}

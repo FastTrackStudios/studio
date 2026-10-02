@@ -568,7 +568,11 @@ impl<'a> Builder<'a> {
         let mut map: HashMap<&str, &Attr> = HashMap::new();
         for a in &el.attrs {
             let name = a.name.as_str();
-            if !valid.contains(&name) {
+            let arg = name.strip_prefix(crate::schema::ARG_PREFIX);
+            if arg.is_some() && !crate::schema::takes_args(tag) {
+                return self.err(a.pos, format!("`{name}`: only a <Component> or an <Instance> takes arguments"));
+            }
+            if arg.is_none() && !valid.contains(&name) {
                 let msg = if let Some(owner) = owner_of(name) {
                     format!("attribute `{name}` is only valid on <{owner}>, not <{tag}>")
                 } else {
@@ -884,6 +888,19 @@ fn apply_common(at: &Attrs<'_>, n: &mut Node) -> Result<()> {
     for name in BIND_ATTRS {
         if let Some(expr) = at.str(name)? {
             n.bind.push(Bind { prop: name.trim_start_matches("bind:").to_owned(), expr });
+        }
+    }
+    n.of = at.str("of")?;
+    // In the order written: a component's arguments read best as declared.
+    let mut args: Vec<(&str, usize)> = at
+        .map
+        .iter()
+        .filter_map(|(k, a)| k.strip_prefix(crate::schema::ARG_PREFIX).map(|name| (name, a.pos)))
+        .collect();
+    args.sort_by_key(|(_, pos)| *pos);
+    for (name, _) in args {
+        if let Some(expr) = at.str(&format!("{}{name}", crate::schema::ARG_PREFIX))? {
+            n.args.push(document_proto::Arg { name: name.to_owned(), expr });
         }
     }
 
