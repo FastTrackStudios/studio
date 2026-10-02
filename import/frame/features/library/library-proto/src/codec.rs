@@ -1,4 +1,4 @@
-//! [`Content`] ⇄ [`Scene`]: markup text (plus its assets) or a `.framez` bundle.
+//! [`Content`] ⇄ [`Scene`]: markup text (plus its assets) or a `.frame` bundle.
 
 use document_proto::{Asset, Scene};
 
@@ -27,7 +27,7 @@ impl Content {
         Self { format: Format::Markup, bytes: text.into().into_bytes(), assets }
     }
 
-    /// `scene` as a `.framez` bundle titled `title`.
+    /// `scene` as a `.frame` bundle titled `title`.
     ///
     /// # Errors
     /// When the bundle can't be written (an asset without bytes).
@@ -52,7 +52,7 @@ impl Content {
         }
     }
 
-    /// The bundle's manifest title (`.framez` only).
+    /// The bundle's manifest title (`.frame` only).
     #[must_use]
     pub fn title(&self) -> Option<String> {
         match self.format {

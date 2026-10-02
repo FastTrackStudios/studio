@@ -15,7 +15,7 @@ pub enum Source {
     Generated { theme: Box<Theme> },
     /// frame markup text (`.frame`, or the legacy `.fm`, with its `.frame.assets/` textures and fonts).
     Markup(PathBuf),
-    /// A `.framez` bundle (or a legacy zip `.frame`).
+    /// A `.frame` bundle (a zip; told from markup by content).
     Bundle(PathBuf),
 }
 
@@ -202,10 +202,18 @@ mod tests {
     }
 
     #[test]
-    fn picks_loader_by_extension() {
-        assert!(matches!(Source::from_path("a/b.framez".into()), Source::Bundle(_)));
-        assert!(matches!(Source::from_path("a/b.frame".into()), Source::Markup(_)));
+    fn picks_loader_by_content() {
+        let dir = std::env::temp_dir().join(format!("frame-desktop-src-kind-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let bundle = dir.join("b.frame");
+        document_io::save_surface_as(&bundle, &placeholder().scene, document_io::Format::Bundle).unwrap();
+        assert!(matches!(Source::from_path(bundle), Source::Bundle(_)));
+        let text = dir.join("t.frame");
+        std::fs::write(&text, "<Document/>").unwrap();
+        assert!(matches!(Source::from_path(text), Source::Markup(_)));
+        assert!(matches!(Source::from_path("a/new.frame".into()), Source::Markup(_)), "not written yet: markup");
         assert!(matches!(Source::from_path("a/b.fm".into()), Source::Markup(_)));
+        std::fs::remove_dir_all(&dir).unwrap();
     }
 
     #[test]

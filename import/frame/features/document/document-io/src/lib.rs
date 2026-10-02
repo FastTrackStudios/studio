@@ -1,10 +1,10 @@
 //! Surfaces on disk: the one load/save API every host uses.
 //!
 //! A surface is frame markup (`.frame`; the older `.fm` is still read and
-//! written where it already exists) or a bundle (`.framez`: one zip with
-//! manifest, Loro snapshot and assets — see `document-bundle`). A `.frame`
-//! file that is a zip is the bundle this crate wrote before markup took
-//! the name, and still loads as one. Markup names
+//! written where it already exists) or a bundle (also `.frame`: one zip with
+//! manifest, Loro snapshot and assets — see `document-bundle`). The content
+//! decides which a `.frame` is: a zip (`PK\x03\x04`) is a bundle, anything
+//! else is markup. Markup names
 //! its image and font assets by id only, so their bytes live in a sidecar
 //! folder next to it:
 //!
@@ -48,14 +48,12 @@ use serde::{Deserialize, Serialize};
 pub const EXTENSION: &str = "frame";
 /// The extension frame markup used before it was `.frame`; still read.
 pub const LEGACY_EXTENSION: &str = "fm";
-/// The extension a new bundle is written with.
-pub const BUNDLE_EXTENSION: &str = "framez";
 
-/// Whether `path` names a frame document: `.frame`, the legacy `.fm`, or a
-/// `.framez` bundle.
+/// Whether `path` names a frame document: `.frame` (markup or a bundle) or
+/// the legacy `.fm`.
 #[must_use]
 pub fn is_frame_document(path: &Path) -> bool {
-    path.extension().and_then(|e| e.to_str()).is_some_and(|e| matches!(e, EXTENSION | LEGACY_EXTENSION | BUNDLE_EXTENSION))
+    path.extension().and_then(|e| e.to_str()).is_some_and(|e| matches!(e, EXTENSION | LEGACY_EXTENSION))
 }
 
 /// Appended to a markup file's name for its assets folder (`a.frame.assets`).
@@ -80,7 +78,7 @@ pub enum Error {
     MissingAsset { path: PathBuf, id: AssetId },
     #[error("{}: asset {id} doesn't match its content hash", path.display())]
     CorruptAsset { path: PathBuf, id: AssetId },
-    #[error("{}: not a surface file (.frame, .fm or .framez)", path.display())]
+    #[error("{}: not a surface file (.frame or .fm)", path.display())]
     UnknownFormat { path: PathBuf },
 }
 
@@ -88,35 +86,45 @@ fn io(path: &Path) -> impl FnOnce(std::io::Error) -> Error + '_ {
     move |source| Error::Io { path: path.to_owned(), source }
 }
 
-/// A surface file's format, by extension.
+/// A surface file's format. Markup and bundles share the `.frame`
+/// extension; the content decides (see [`Format::of`]).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Format {
-    /// `.frame` (or legacy `.fm`) markup (+ its `.frame.assets/` sidecar).
+    /// `.frame` (or legacy `.fm`) markup text (+ its `.frame.assets/` sidecar).
     Markup,
-    /// A `.framez` bundle, or a legacy `.frame` file that is a zip.
+    /// A `.frame` bundle: one zip.
     Bundle,
 }
 
 impl Format {
-    /// The format `path`'s extension names. A `.frame` that exists and is a
-    /// zip is a bundle from before markup took the extension; any other
-    /// `.frame` (including one not written yet) is markup.
+    /// The format of the surface file at `path`. A `.frame` that exists is
+    /// a bundle when it starts with the zip magic, markup otherwise; a
+    /// `.frame` not written yet is markup (see [`save_surface_as`] to pick).
+    /// `.fm` is always markup.
     #[must_use]
     pub fn of(path: &Path) -> Option<Self> {
         match path.extension()?.to_str()? {
             LEGACY_EXTENSION => Some(Self::Markup),
             EXTENSION => Some(if is_zip(path) { Self::Bundle } else { Self::Markup }),
-            BUNDLE_EXTENSION => Some(Self::Bundle),
             _ => None,
         }
     }
+}
+
+/// The zip local-file header every bundle starts with.
+const ZIP_MAGIC: &[u8; 4] = b"PK\x03\x04";
+
+/// Whether `bytes` is a bundle (a zip) rather than markup text.
+#[must_use]
+pub fn is_bundle_bytes(bytes: &[u8]) -> bool {
+    bytes.starts_with(ZIP_MAGIC)
 }
 
 /// Whether the file at `path` starts with a zip local-file header.
 fn is_zip(path: &Path) -> bool {
     use std::io::Read as _;
     let mut magic = [0u8; 4];
-    std::fs::File::open(path).and_then(|mut f| f.read_exact(&mut magic)).is_ok() && magic == *b"PK\x03\x04"
+    std::fs::File::open(path).and_then(|mut f| f.read_exact(&mut magic)).is_ok() && is_bundle_bytes(&magic)
 }
 
 /// Markup text and the assets it names, as stored.
@@ -145,9 +153,12 @@ pub fn load_surface(path: impl AsRef<Path>) -> Result<Scene, Error> {
     }
 }
 
-/// Save a surface by extension: `.frame` (or `.fm`) writes the markup plus
-/// its assets sidecar (removed when the scene has no assets); `.framez`
-/// (or an existing zip `.frame`) writes a bundle, keeping an existing bundle's identity (doc id, created).
+/// Save a surface in the format [`Format::of`] gives `path`: `.fm`, a new
+/// `.frame` or an existing text `.frame` writes the markup plus its assets
+/// sidecar (removed when the scene has no assets); an existing bundle
+/// `.frame` writes a bundle, keeping its identity (doc id, created). To
+/// write a bundle to a new path, use [`save_surface_as`].
+///
 /// Each file is written then renamed into place, assets before the markup,
 /// so a watcher never sees markup naming assets that aren't there yet.
 ///
@@ -155,9 +166,24 @@ pub fn load_surface(path: impl AsRef<Path>) -> Result<Scene, Error> {
 /// I/O, an unknown extension, or a bundle that can't be written.
 pub fn save_surface(path: impl AsRef<Path>, scene: &Scene) -> Result<(), Error> {
     let path = path.as_ref();
-    match Format::of(path) {
-        Some(Format::Markup) => write_markup(path, &document_text::print(scene), scene.assets.values()),
-        Some(Format::Bundle) => {
+    let format = Format::of(path).ok_or_else(|| Error::UnknownFormat { path: path.to_owned() })?;
+    save_surface_as(path, scene, format)
+}
+
+/// Save a surface to `path` (a `.frame` or `.fm`) in an explicit `format`.
+/// A bundle replaces a markup file's assets sidecar; markup replaces a
+/// bundle's bytes. Same atomicity as [`save_surface`].
+///
+/// # Errors
+/// I/O, an unknown extension, or a bundle that can't be written.
+pub fn save_surface_as(path: impl AsRef<Path>, scene: &Scene, format: Format) -> Result<(), Error> {
+    let path = path.as_ref();
+    if !is_frame_document(path) {
+        return Err(Error::UnknownFormat { path: path.to_owned() });
+    }
+    match format {
+        Format::Markup => write_markup(path, &document_text::print(scene), scene.assets.values()),
+        Format::Bundle => {
             let bundle = |error| Error::Bundle { path: path.to_owned(), error };
             let manifest = match document_bundle::load(path) {
                 Ok((mut m, _)) => {
@@ -167,9 +193,9 @@ pub fn save_surface(path: impl AsRef<Path>, scene: &Scene) -> Result<(), Error> 
                 Err(_) => document_bundle::Manifest::new(title_of(scene, path)),
             };
             let bytes = document_bundle::to_bytes(scene, &manifest).map_err(bundle)?;
-            write_atomic(path, &bytes)
+            write_atomic(path, &bytes)?;
+            prune_assets(path)
         }
-        None => Err(Error::UnknownFormat { path: path.to_owned() }),
     }
 }
 
@@ -375,6 +401,15 @@ fn put_assets(path: &Path, assets: &[&Asset]) -> Result<BTreeSet<String>, Error>
 /// Remove the sidecar's asset files not in `keep` (and the manifest and
 /// folder too when `keep` is empty). Only files named like assets are
 /// touched: anything else someone put there stays.
+/// Remove the assets sidecar of `path` (a bundle carries its own assets, so
+/// one left over from when the file was markup is stale).
+///
+/// # Errors
+/// I/O other than the files already being gone.
+pub fn prune_assets(path: &Path) -> Result<(), Error> {
+    prune(path, &BTreeSet::new())
+}
+
 fn prune(path: &Path, keep: &BTreeSet<String>) -> Result<(), Error> {
     let dir = assets_dir(path);
     let Ok(read) = std::fs::read_dir(&dir) else { return Ok(()) };

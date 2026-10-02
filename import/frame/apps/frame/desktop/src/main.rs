@@ -1,7 +1,7 @@
 //! `frame` — the desktop surface player.
 //!
 //! ```text
-//! frame [FILE.frame | FILE.fm | FILE.framez] [--theme stage-dark|daylight] [--stats] [--size WxH] [--no-fx | --fx gpu|fallback|off]
+//! frame [FILE.frame | FILE.fm] [--theme stage-dark|daylight] [--stats] [--size WxH] [--no-fx | --fx gpu|fallback|off]
 //! frame [FILE] --screenshot OUT.png [--frames N] [--script drag-first-knob|drag-first-handle]
 //! frame [FILE] --engine ws://127.0.0.1:4040/vox [--rig guitar] [...]
 //! frame DIR                        # gallery: ] / Tab next, [ / Shift-Tab previous
@@ -128,10 +128,10 @@ impl Script {
     const NAMES: &str = "drag-first-knob | drag-first-handle | open-selected | select-handle | add-on-canvas | rename-handle | marquee | context-handle";
 }
 
-const USAGE: &str = "usage: frame [FILE.frame|FILE.fm|FILE.framez] [--theme stage-dark|daylight] [--stats] [--size WxH] [--no-fx|--fx gpu|fallback|off]\n       \
+const USAGE: &str = "usage: frame [FILE.frame|FILE.fm] [--theme stage-dark|daylight] [--stats] [--size WxH] [--no-fx|--fx gpu|fallback|off]\n       \
                      frame [FILE] --screenshot OUT.png [--frames N] [--script drag-first-knob|drag-first-handle]\n       \
                      frame [FILE] --engine ws://HOST:PORT/vox [--rig NAME] [...]\n       \
-                     frame DIR   (gallery of every .frame/.fm/.framez in DIR; ] / Tab next, [ / Shift-Tab previous)\n       \
+                     frame DIR   (gallery of every .frame/.fm in DIR; ] / Tab next, [ / Shift-Tab previous)\n       \
                      frame --library ws://HOST:PORT/vox [--surface ID | --browse] [--engine …] [--install-dir DIR] [--screenshot OUT.png [--updates N]]";
 
 fn parse_args(args: impl IntoIterator<Item = String>) -> Result<Args, String> {
@@ -279,7 +279,7 @@ fn gallery(dir: &std::path::Path) -> Result<Vec<Source>, String> {
         .collect();
     paths.sort();
     if paths.is_empty() {
-        return Err(format!("{}: no .frame, .fm or .framez surfaces", dir.display()));
+        return Err(format!("{}: no .frame or .fm surfaces", dir.display()));
     }
     Ok(paths.into_iter().map(Source::from_path).collect())
 }
@@ -365,8 +365,8 @@ mod tests {
         assert!(matches!(a.source, Source::Markup(_)));
         assert!(a.stats);
         assert_eq!(a.size, (800, 600));
-        let a = args("--screenshot o.png --frames 5 --script drag-first-knob x.framez").unwrap();
-        assert!(matches!(a.source, Source::Bundle(_)));
+        let a = args("--screenshot o.png --frames 5 --script drag-first-knob x.frame").unwrap();
+        assert!(matches!(a.source, Source::Markup(_)));
         assert_eq!((a.frames, a.script), (5, Some(Script::DragFirstKnob)));
     }
 

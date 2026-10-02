@@ -195,7 +195,7 @@ fn main() {
         },
     };
     let mut session = match file.as_ref().filter(|p| p.exists()) {
-        // `.frame` (or legacy `.fm`) with its `.frame.assets/` textures and fonts, or a `.framez`.
+        // `.frame` (or legacy `.fm`) with its `.frame.assets/` textures and fonts, or a `.frame` bundle.
         Some(p) => match Session::open(p, catalog) {
             Ok(session) => session,
             Err(e) => {

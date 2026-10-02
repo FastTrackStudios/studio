@@ -13,7 +13,7 @@ apps/frame/desktop       `frame`: live surface player (hot reload, mock engine)
 apps/frame/mcp           `frame-mcp`: MCP server — let a model design surfaces
 apps/frame/cli           frame-cli: render_surface, export_markup, parity/diagnostic tools
 crates/frame             facade crate: what apps and consumers depend on
-features/document        model + ops/history (proto), Loro replica, .framez bundle, markup text
+features/document        model + ops/history (proto), Loro replica, .frame bundle (zip), .frame markup (text)
 features/figma           Figma import only (figma-import; figma-model/rest are its parsers)
 features/render          Scene → paint primitives → vello / SVG; tests/parity
 features/surface         catalog/controls/bindings (proto), mock engine, runtime, widgets

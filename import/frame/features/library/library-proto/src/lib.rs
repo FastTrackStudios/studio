@@ -191,30 +191,18 @@ fn collect(control: &Control, [params, actions, streams, collections]: &mut [BTr
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Facet, Serialize, Deserialize)]
 #[repr(u8)]
 pub enum Format {
-    /// A `.framez` bundle (zip: manifest, Loro snapshot, assets).
+    /// A `.frame` bundle (zip: manifest, Loro snapshot, assets).
     Frame,
     /// frame markup text (`.frame`, or the legacy `.fm`), UTF-8.
     Markup,
 }
 
 impl Format {
-    /// The file extension, without the dot.
+    /// The file extension, without the dot: `frame` for both formats (a
+    /// bundle is told from markup by its content, not its name).
     #[must_use]
     pub fn extension(self) -> &'static str {
-        match self {
-            Self::Frame => "framez",
-            Self::Markup => "frame",
-        }
-    }
-
-    /// The format a file extension names.
-    #[must_use]
-    pub fn from_extension(ext: &str) -> Option<Self> {
-        match ext {
-            "framez" => Some(Self::Frame),
-            "frame" | "fm" => Some(Self::Markup),
-            _ => None,
-        }
+        "frame"
     }
 }
 

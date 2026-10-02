@@ -334,3 +334,42 @@ fn a_frame_file_wins_over_a_legacy_fm_of_the_same_name() {
     assert_eq!(all.len(), 1);
     assert_eq!(all[0].name, "New");
 }
+
+#[test]
+fn a_frame_file_is_a_bundle_or_markup_by_its_content() {
+    let dir = Dir::new("sniff");
+    let scene = Content::markup_text(panel("Bundled")).decode().unwrap();
+    std::fs::write(dir.0.join("zipped.frame"), Content::frame(&scene, "Zipped").unwrap().bytes).unwrap();
+    std::fs::write(dir.0.join("text.frame"), panel("Text")).unwrap();
+    let lib = FsLibrary::open(&dir.0).unwrap();
+    assert_eq!(lib.get("zipped".into(), None).unwrap().content.format, Format::Frame);
+    assert_eq!(lib.get("text".into(), None).unwrap().content.format, Format::Markup);
+}
+
+#[test]
+fn republishing_in_another_format_rewrites_the_same_frame_path() {
+    let dir = Dir::new("reformat");
+    std::fs::write(dir.0.join("head.frame"), panel("Head")).unwrap();
+    let lib = FsLibrary::open(&dir.0).unwrap();
+    let scene = Content::markup_text(panel("Head")).decode().unwrap();
+    let meta = || PublishMeta { id: "head".into(), name: "Head".into(), ..PublishMeta::default() };
+    lib.publish(Content::frame(&scene, "Head").unwrap(), meta()).unwrap();
+    assert!(document_io::is_bundle_bytes(&std::fs::read(dir.0.join("head.frame")).unwrap()));
+    assert_eq!(lib.get("head".into(), None).unwrap().content.format, Format::Frame);
+    lib.publish(Content::markup_text(panel("Head")), meta()).unwrap();
+    assert!(!document_io::is_bundle_bytes(&std::fs::read(dir.0.join("head.frame")).unwrap()));
+    assert_eq!(lib.get("head".into(), None).unwrap().content.format, Format::Markup);
+    assert_eq!(lib.list(ListQuery::default()).len(), 1);
+}
+
+#[test]
+fn a_legacy_fm_becomes_frame_when_republished_as_a_bundle() {
+    let dir = Dir::new("fm-to-bundle");
+    std::fs::write(dir.0.join("head.fm"), panel("Head")).unwrap();
+    let lib = FsLibrary::open(&dir.0).unwrap();
+    let scene = Content::markup_text(panel("Head")).decode().unwrap();
+    lib.publish(Content::frame(&scene, "Head").unwrap(), PublishMeta { id: "head".into(), ..PublishMeta::default() }).unwrap();
+    assert!(dir.0.join("head.frame").exists());
+    assert!(!dir.0.join("head.fm").exists());
+    assert_eq!(lib.list(ListQuery::default()).len(), 1);
+}

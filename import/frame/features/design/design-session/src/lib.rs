@@ -73,7 +73,7 @@ impl Session {
     }
 
     /// Edit the surface at `path` (`.frame` with its `.frame.assets/` textures
-    /// and fonts, a legacy `.fm`, or a `.framez` bundle).
+    /// and fonts, a legacy `.fm`, or a `.frame` bundle).
     ///
     /// # Errors
     /// See [`document_io::load_surface`].
@@ -85,7 +85,7 @@ impl Session {
     /// [`document_io::save_surface`]).
     ///
     /// # Errors
-    /// I/O, or an extension that isn't `.frame` / `.fm` / `.framez`.
+    /// I/O, or an extension that isn't `.frame` / `.fm`.
     pub fn save(&self, path: impl AsRef<std::path::Path>) -> std::result::Result<(), document_io::Error> {
         document_io::save_surface(path, &self.scene)
     }

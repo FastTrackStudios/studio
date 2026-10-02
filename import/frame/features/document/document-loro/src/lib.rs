@@ -5,7 +5,7 @@
 //! [`LoroScene::transact`]) and return the same inverse ops; remote edits
 //! arrive as Loro update bytes ([`LoroScene::import`]) and merge. Reads
 //! materialize back into a plain [`Scene`] ([`LoroScene::scene`]), so
-//! everything downstream (render, tools, the `.framez` bundle) keeps reading
+//! everything downstream (render, tools, the `.frame` bundle) keeps reading
 //! only the model.
 //!
 //! # Schema (inside the `LoroDoc`)
@@ -37,7 +37,7 @@
 //! - [`AssetStorage::External`] (the default) keeps bytes in a local,
 //!   content-addressed blob store next to the doc. Assets are immutable
 //!   and named by their blake3, so they need no merging — keeping them out
-//!   of the CRDT keeps its history (and every snapshot) small. The `.framez`
+//!   of the CRDT keeps its history (and every snapshot) small. The `.frame`
 //!   bundle stores them as separate files. A replica that learns of an
 //!   asset whose bytes it doesn't hold lists it in
 //!   [`LoroScene::missing_assets`] and leaves it out of [`LoroScene::scene`]

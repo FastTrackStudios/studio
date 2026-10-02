@@ -147,15 +147,18 @@ fn fingerprint_follows_the_markup_and_its_assets() {
 #[test]
 fn bundles_load_and_save_through_the_same_api() {
     let dir = TempDir::new("bundle");
-    let path = dir.0.join("s.framez");
+    let path = dir.0.join("s.frame");
     let scene = scene_with(b"png one");
-    save_surface(&path, &scene).unwrap();
+    assert_eq!(Format::of(&path), Some(Format::Markup), "a new .frame defaults to markup");
+    save_surface_as(&path, &scene, Format::Bundle).unwrap();
+    assert_eq!(Format::of(&path), Some(Format::Bundle), "detected by content");
     assert!(!assets_dir(&path).exists(), "a bundle carries its own assets");
     assert_eq!(load_surface(&path).unwrap(), scene);
     let (first, _) = document_bundle::load(&path).unwrap();
     save_surface(&path, &scene).unwrap();
     let (again, _) = document_bundle::load(&path).unwrap();
     assert_eq!(first.doc_id, again.doc_id, "a re-save keeps the document's identity");
+    assert_eq!(Format::of(&path), Some(Format::Bundle), "a plain re-save stays a bundle");
     assert!(matches!(save_surface(dir.0.join("s.txt"), &scene), Err(Error::UnknownFormat { .. })));
 }
 
@@ -175,7 +178,6 @@ fn assets_dirs_are_recognised() {
     assert!(is_assets_dir(Path::new("a/b.frame.assets")));
     assert!(!is_assets_dir(Path::new("a/assets")));
     assert!(is_assets_dir(Path::new("a/b.fm.assets")), "the legacy name keeps working");
-    assert!(!is_assets_dir(Path::new("a/b.framez.assets")));
 }
 
 #[test]
@@ -190,23 +192,40 @@ fn legacy_fm_markup_still_loads_and_saves() {
 }
 
 #[test]
-fn a_zip_named_frame_is_still_a_bundle() {
-    let dir = TempDir::new("legacy-zip");
+fn a_frame_is_markup_or_a_bundle_by_content() {
+    let dir = TempDir::new("sniff");
     let scene = scene_with(b"png one");
-    let bundle = dir.0.join("s.framez");
-    save_surface(&bundle, &scene).unwrap();
-    let old = dir.0.join("old.frame");
-    std::fs::copy(&bundle, &old).unwrap();
-    assert_eq!(Format::of(&old), Some(Format::Bundle));
-    assert_eq!(load_surface(&old).unwrap(), scene);
-    save_surface(&old, &scene).unwrap();
-    assert_eq!(Format::of(&old), Some(Format::Bundle), "a re-save stays a bundle");
+    let text = dir.0.join("text.frame");
+    save_surface(&text, &scene).unwrap();
+    assert_eq!(Format::of(&text), Some(Format::Markup));
+    let zip = dir.0.join("zip.frame");
+    save_surface_as(&zip, &scene, Format::Bundle).unwrap();
+    assert!(std::fs::read(&zip).unwrap().starts_with(b"PK\x03\x04"));
+    assert_eq!(Format::of(&zip), Some(Format::Bundle));
+    assert_eq!(load_surface(&zip).unwrap(), scene);
     assert_eq!(Format::of(&dir.0.join("new.frame")), Some(Format::Markup), "a new .frame is markup");
+    assert_eq!(Format::of(&dir.0.join("new.fm")), Some(Format::Markup));
+    assert_eq!(Format::of(&dir.0.join("new.txt")), None);
+}
+
+#[test]
+fn saving_in_the_other_format_rewrites_the_same_path() {
+    let dir = TempDir::new("reformat");
+    let path = dir.0.join("s.frame");
+    let scene = scene_with(b"png one");
+    save_surface(&path, &scene).unwrap();
+    assert!(assets_dir(&path).exists());
+    save_surface_as(&path, &scene, Format::Bundle).unwrap();
+    assert_eq!(Format::of(&path), Some(Format::Bundle));
+    assert!(!assets_dir(&path).exists(), "the markup's sidecar is gone");
+    save_surface_as(&path, &scene, Format::Markup).unwrap();
+    assert_eq!(Format::of(&path), Some(Format::Markup));
+    assert_eq!(load_surface(&path).unwrap(), scene);
 }
 
 #[test]
 fn frame_documents_are_recognised_by_extension() {
-    for name in ["a.frame", "a.fm", "a.framez"] {
+    for name in ["a.frame", "a.fm"] {
         assert!(is_frame_document(Path::new(name)), "{name}");
     }
     for name in ["a.txt", "a", "a.frame.assets"] {

@@ -1,5 +1,5 @@
 //! A generated surface — design *and* controls — survives every storage
-//! path: frame markup, a Loro replica, and a `.framez` bundle.
+//! path: frame markup, a Loro replica, and a `.frame` bundle.
 
 use surface_memory::demo_catalog;
 use surface_runtime::Surface;

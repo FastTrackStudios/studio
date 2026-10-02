@@ -3,7 +3,7 @@
 //! A `Scene` is a tree of typed `Node`s plus a content-addressed asset table.
 //! This is frame's own model: importers (Figma REST, `.fig`) translate into
 //! it once, and everything downstream (render, surface runtime, AI tools,
-//! the `.framez` file) reads only this.
+//! the `.frame` bundle) reads only this.
 //!
 //! Values are stored *as authored* (paint opacity, stroke weight, node
 //! opacity…); resolution into draw calls (opacity inheritance, layers,

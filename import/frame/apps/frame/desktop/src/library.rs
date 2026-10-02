@@ -231,6 +231,7 @@ pub fn install(stored: &Stored, dir: &Path) -> Result<PathBuf, String> {
         }
         library_link::Format::Frame => {
             std::fs::write(&path, &stored.content.bytes).map_err(|e| format!("{}: {e}", path.display()))?;
+            document_io::prune_assets(&path).map_err(|e| e.to_string())?;
         }
     }
     Ok(path)
