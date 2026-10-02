@@ -1,4 +1,5 @@
-use super::cache::{cached_bez_path, cached_svg_decode, cached_svg_fit_transform, cached_svg_tree};
+use super::target::{GlyphRun, PaintTarget};
+use super::cache::{cached_bez_path, cached_svg_decode, cached_svg_fit_transform};
 use super::scene_collect::first_color;
 use super::geometry::{compute_path_fit_transform, extract_scale, to_peniko};
 use super::subpaths::split_open_closed;
@@ -12,8 +13,8 @@ const TEXT_ANCHOR_SHIFT_Y: f64 = 1.0;
 /// Paint a frame document (`root`'s subtree) into a vello scene. Text is
 /// set from `fonts` (the host's book) plus the fonts the document carries;
 /// without a book, text is drawn as baseline bars.
-pub fn paint_scene_into(
-    scene: &mut vello::Scene,
+pub fn paint_scene_into<S: PaintTarget>(
+    scene: &mut S,
     doc: &document_proto::Scene,
     root: document_proto::NodeId,
     scene_transform: kurbo::Affine,
@@ -59,8 +60,8 @@ fn font_data(face: &render_fonts::Face) -> peniko::FontData {
     data
 }
 
-pub fn paint_primitives_into_scene_with(
-    scene: &mut vello::Scene,
+pub fn paint_primitives_into_scene_with<S: PaintTarget>(
+    scene: &mut S,
     primitives: &[PaintPrimitive],
     root_transform: kurbo::Affine,
     fonts: Option<&FontBook>,
@@ -71,7 +72,7 @@ pub fn paint_primitives_into_scene_with(
     use std::sync::Arc;
     use vello::Glyph;
 
-    keep_image_atlas(scene);
+    scene.begin();
 
     // Mask buffering state: collect primitives between MaskDefStart..MaskDefEnd
     // so they can be replayed as a luminance mask when MaskApplyEnd is reached.
@@ -477,11 +478,7 @@ pub fn paint_primitives_into_scene_with(
                 if let Some(svg_text) = decoded_svg_text.as_deref() {
                     let svg_fit = cached_svg_fit_transform(svg_text, width, height);
                     let svg_transform = path_origin_transform * svg_fit;
-                    if let Some(tree) = cached_svg_tree(svg_text) {
-                        {
-                        let mut painter = anyrender_vello::VelloScenePainter::new(scene);
-                        anyrender_svg::render_svg_tree(&mut painter, &tree, svg_transform);
-                    }
+                    if scene.draw_svg(svg_text, svg_transform) {
                         had_any_path = true;
                     }
                 }
@@ -694,24 +691,25 @@ pub fn paint_primitives_into_scene_with(
                     }
                     for g in &placed {
                         let face = g.face;
-                        let mut run = scene
-                            .draw_glyphs(&font_data(&face.face))
-                            .font_size(g.size as f32)
-                            .hint(false)
-                            .normalized_coords(&face.coords)
-                            .brush(to_peniko(g.color.clone()))
-                            .brush_alpha(1.0)
-                            .transform(scene_transform * g.local);
-                        if face.synthetic_italic {
-                            // Glyph space is y-up: lean the tops right.
-                            run = run.glyph_transform(Some(kurbo::Affine::new([1.0, 0.0, render_fonts::SYNTHETIC_SKEW, 1.0, 0.0, 0.0])));
-                        }
                         let grow = face.embolden(g.size);
-                        if grow > 0.0 {
-                            run = run.font_embolden(vello::FontEmbolden::new(kurbo::Diagonal2::new(grow, grow * 0.5)));
-                        }
                         let dx = grow as f32;
-                        run.draw(Fill::NonZero, std::iter::once(Glyph { id: g.gid.to_u32(), x: dx, y: 0.0 }));
+                        let font = font_data(&face.face);
+                        let brush = to_peniko(g.color.clone());
+                        scene.draw_glyph_run(&GlyphRun {
+                            font: &font,
+                            font_size: g.size as f32,
+                            normalized_coords: &face.coords,
+                            brush: (&brush).into(),
+                            brush_alpha: 1.0,
+                            transform: scene_transform * g.local,
+                            // Glyph space is y-up: a synthetic italic leans the
+                            // tops right.
+                            glyph_transform: face
+                                .synthetic_italic
+                                .then(|| kurbo::Affine::new([1.0, 0.0, render_fonts::SYNTHETIC_SKEW, 1.0, 0.0, 0.0])),
+                            embolden: if grow > 0.0 { kurbo::Vec2::new(grow, grow * 0.5) } else { kurbo::Vec2::ZERO },
+                            glyphs: &[Glyph { id: g.gid.to_u32(), x: dx, y: 0.0 }],
+                        });
                     }
                     for effect in effects {
                         if let (Some(o), EffectKind::InnerShadow) = (&outline, &effect.kind) {
@@ -815,8 +813,8 @@ pub fn paint_primitives_into_scene_with(
     /// stroke geometry strokes the fill geometry (open subpaths as lines,
     /// never filled); effects follow the outline.
     #[allow(clippy::too_many_arguments)]
-    fn paint_authored_path(
-        scene: &mut vello::Scene,
+    fn paint_authored_path<S: PaintTarget>(
+        scene: &mut S,
         transform: kurbo::Affine,
         width: f64,
         height: f64,
@@ -931,8 +929,8 @@ pub fn paint_primitives_into_scene_with(
 
     /// Stroke `path` with `s` in `brush` (see [`stroke_brush`]), honouring
     /// its alignment on closed subpaths (open ones are always centred).
-    fn stroke_aligned_path(
-        scene: &mut vello::Scene,
+    fn stroke_aligned_path<S: PaintTarget>(
+        scene: &mut S,
         transform: kurbo::Affine,
         path: &BezPath,
         s: &StrokeStyle,
@@ -988,8 +986,8 @@ pub fn paint_primitives_into_scene_with(
         }
     }
 
-    fn fill_shape(
-        scene: &mut vello::Scene,
+    fn fill_shape<S: PaintTarget>(
+        scene: &mut S,
         scene_transform: kurbo::Affine,
         shape: &impl kurbo::Shape,
         x: f64,
@@ -1071,8 +1069,8 @@ pub fn paint_primitives_into_scene_with(
         }
     }
 
-    fn paint_effect(
-        scene: &mut vello::Scene,
+    fn paint_effect<S: PaintTarget>(
+        scene: &mut S,
         scene_transform: kurbo::Affine,
         base_rect: &Rect,
         corner_radius: f64,
@@ -1151,7 +1149,7 @@ pub fn paint_primitives_into_scene_with(
     /// fixed buffers and blank the page. Under an axis-aligned transform the
     /// band is drawn as up to four strips, each its own clip, so every draw's
     /// tiles stay within its strip; otherwise as one even-odd band clip.
-    fn paint_inner_shadow(scene: &mut vello::Scene, transform: kurbo::Affine, base: &Rect, corner: f64, effect: &NodeEffect) {
+    fn paint_inner_shadow<S: PaintTarget>(scene: &mut S, transform: kurbo::Affine, base: &Rect, corner: f64, effect: &NodeEffect) {
         let rr = RoundedRect::from_rect(*base, corner);
         let whole = || (Fill::NonZero, kurbo::Shape::to_path(&rr, 0.1));
         let device_area = base.area() * transform.determinant().abs();
@@ -1176,7 +1174,7 @@ pub fn paint_primitives_into_scene_with(
     }
 
     /// The inner shadow's layers, the outer one clipped to `clip`.
-    fn inner_shadow_layers(scene: &mut vello::Scene, transform: kurbo::Affine, rr: &RoundedRect, clip: (Fill, &BezPath), effect: &NodeEffect) {
+    fn inner_shadow_layers<S: PaintTarget>(scene: &mut S, transform: kurbo::Affine, rr: &RoundedRect, clip: (Fill, &BezPath), effect: &NodeEffect) {
         // Layer 1: isolate inner shadow compositing group
         scene.push_layer(clip.0, peniko::Mix::Normal, 1.0, transform, clip.1);
         // Fill entire clipped area with shadow color
@@ -1273,8 +1271,8 @@ pub fn paint_primitives_into_scene_with(
         Some(strips.iter().map(|s| back.transform_rect_bbox(*s)).collect())
     }
 
-    fn paint_blurred_rect_content(
-        scene: &mut vello::Scene,
+    fn paint_blurred_rect_content<S: PaintTarget>(
+        scene: &mut S,
         scene_transform: kurbo::Affine,
         x: f64,
         y: f64,
@@ -1334,8 +1332,8 @@ pub fn paint_primitives_into_scene_with(
         }
     }
 
-    fn paint_blurred_path_content(
-        scene: &mut vello::Scene,
+    fn paint_blurred_path_content<S: PaintTarget>(
+        scene: &mut S,
         path_transform: kurbo::Affine,
         fill_paths: &[String],
         stroke_paths: &[String],
@@ -1379,8 +1377,8 @@ pub fn paint_primitives_into_scene_with(
         }
     }
 
-    fn paint_blurred_svg_content(
-        scene: &mut vello::Scene,
+    fn paint_blurred_svg_content<S: PaintTarget>(
+        scene: &mut S,
         scene_transform: kurbo::Affine,
         svg_text: &str,
         x: f64,
@@ -1394,9 +1392,8 @@ pub fn paint_primitives_into_scene_with(
         let svg_fit = cached_svg_fit_transform(svg_text, width, height);
         // Cache the parsed SVG tree once — blur kernel loops would otherwise
         // re-parse the XML 6-20 times per blurred element per frame.
-        let Some(tree) = cached_svg_tree(svg_text) else {
-            return;
-        };
+        // Parsed once (each target caches its tree): the blur kernel loops
+        // would otherwise re-parse the XML 6-20 times per blurred element.
         for (dx, dy, weight) in layer_blur_kernel(radius) {
             let svg_transform =
                 scene_transform * kurbo::Affine::translate((x + dx, y + dy)) * svg_fit;
@@ -1410,16 +1407,13 @@ pub fn paint_primitives_into_scene_with(
                 scene_transform,
                 &clip_rect,
             );
-            {
-                let mut painter = anyrender_vello::VelloScenePainter::new(scene);
-                anyrender_svg::render_svg_tree(&mut painter, &tree, svg_transform);
-            }
+            scene.draw_svg(svg_text, svg_transform);
             scene.pop_layer();
         }
     }
 
-    fn fill_path_shape(
-        scene: &mut vello::Scene,
+    fn fill_path_shape<S: PaintTarget>(
+        scene: &mut S,
         path_transform: kurbo::Affine,
         path: &BezPath,
         _x: f64,
@@ -1946,8 +1940,8 @@ pub fn paint_primitives_into_scene_with(
 
     /// Render buffered mask-definition primitives into the scene.
     /// These are the shape primitives captured between MaskDefStart..MaskDefEnd.
-    fn render_mask_primitives(
-        scene: &mut vello::Scene,
+    fn render_mask_primitives<S: PaintTarget>(
+        scene: &mut S,
         prims: &[&PaintPrimitive],
         scene_transform: kurbo::Affine,
     ) {

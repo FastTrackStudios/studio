@@ -116,13 +116,13 @@ tokio = { version = "1.48", features = ["full"] }
 # architect stack — pinned to exactly what signal pins (signal depends on
 # frame's crates, and one graph can hold only one architect/facet/vox).
 # Bump together with signal's root Cargo.toml.
-architect = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.0.2" }
-crdt = { git = "https://github.com/FastTrackStudios/architect", rev = "5e4bb829674fe8b2d3527c3b65b9ab3a2b6baa86" }
+architect = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.9.2" }
+crdt = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.9.2" }
 chrono = { version = "0.4", default-features = false, features = ["clock", "std", "wasmbind", "serde"] }
-facet = { version = "0.50.0-rc.5", features = ["reflect", "chrono", "uuid"] }
-vox = { version = "0.10.0-rc.5", default-features = false, features = ["runtime"] }
-vox-core = { version = "0.10.0-rc.5" }
-vox-websocket = { version = "0.10.0-rc.5" }
+facet = { version = "0.50.0-rc.7", features = ["reflect", "chrono", "uuid"] }
+vox = { version = "0.10.0-rc.7", default-features = false, features = ["runtime"] }
+vox-core = { version = "0.10.0-rc.7" }
+vox-websocket = { version = "0.10.0-rc.7" }
 sea-orm = { version = "1", features = ["sqlx-sqlite", "sqlx-postgres", "runtime-tokio-rustls", "macros", "with-uuid", "with-chrono"] }
 
 # Rendering (behind features in features/render/render)
@@ -142,5 +142,7 @@ pollster = "0.4"
 # frame's crates, signal's table is the one in force — so frame must build
 # against exactly these.
 [patch.crates-io]
-phon = { git = "https://github.com/FastTrackStudios/vendor", tag = "v0.1.0" }
-phon-jit = { git = "https://github.com/FastTrackStudios/vendor", tag = "v0.1.0" }
+phon = { git = "https://github.com/FastTrackStudios/vendor", tag = "v0.4.0" }
+phon-jit = { git = "https://github.com/FastTrackStudios/vendor", tag = "v0.2.3" }
+facet-core = { git = "https://github.com/FastTrackStudios/vendor", tag = "v0.4.0" }
+vox-phon = { git = "https://github.com/FastTrackStudios/vendor", tag = "v0.3.0" }

@@ -15,6 +15,8 @@
 //! hand. A host with an engine feeds the engine's values in with
 //! [`LiveSurface::apply_values`].
 
+#[cfg(feature = "anyrender-0-11")]
+mod vectors;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
@@ -591,6 +593,40 @@ impl LiveSurface {
     #[must_use]
     pub fn has_gpu(&self) -> bool {
         self.gpu.is_some()
+    }
+
+    /// Paint the surface's vectors at `width × height` physical px
+    /// (`scale` physical px per element px) into `scene`, a host's anyrender
+    /// 0.11 scene — the path for a host whose renderer gives no Vello GPU to
+    /// [`render`](Self::render) with (vello-hybrid on the iOS simulator,
+    /// whose Metal has no indirect execution). The same frame as `render`,
+    /// painted by the same painter; the GPU effects stage is left out (a
+    /// glow is drawn as a soft copy, as frame's fallback mode draws it).
+    #[cfg(feature = "anyrender-0-11")]
+    pub fn paint_vectors<S: anyrender::PaintScene>(&mut self, scene: &mut S, width: u32, height: u32, scale: f64) {
+        if self.responsive {
+            self.respond(width, height);
+        }
+        self.rendered_at = Some(std::time::Instant::now());
+        if self.dirty {
+            self.settle_until = self.rendered_at.map(|at| at + SETTLE);
+        }
+        let t = self.t();
+        let calls = self.rt.poll(t);
+        self.dispatch(calls);
+        self.rt.set_clock(t / 1000.0);
+        let (w, h) = (width.max(1), height.max(1));
+        let scale = if scale > 0.0 { scale } else { 1.0 };
+        let physical = if self.stretch { View::fill(self.content, f64::from(w), f64::from(h)) } else { View::fit(self.content, f64::from(w), f64::from(h)) };
+        self.view = View { scale: physical.scale / scale, scale_y: physical.scale_y / scale, tx: physical.tx / scale, ty: physical.ty / scale };
+        let doc = self.rt.frame(t);
+        let mut target = vectors::AnyRender011(scene);
+        let bounds = kurbo::Rect::new(0.0, 0.0, f64::from(w), f64::from(h));
+        render::PaintTarget::fill(&mut target, peniko::Fill::NonZero, kurbo::Affine::IDENTITY, self.background, None, &bounds);
+        let prims = render::build_scene_primitives_with(&doc, self.page, render::CollectOptions { emission_glow: true });
+        render::paint_primitives_into_scene_with(&mut target, &prims, physical.affine(), Some(render::FontBook::bundled()));
+        self.time_dependent = false;
+        self.dirty = false;
     }
 
     /// Render at `width × height` physical px (`scale` physical px per
