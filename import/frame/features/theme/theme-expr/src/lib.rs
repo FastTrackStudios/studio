@@ -17,7 +17,7 @@
 //! smoothstep pow sqrt sin cos
 //! db(amp) amp(db)                                      gain
 //! rgb(r, g, b[, a]) mix(a, b, t) alpha(c, a)           colours (channels 0..1)
-//! fade(c, k) lighten(c, k) darken(c, k) luma(c)
+//! fade(c, k) lighten(c, k) darken(c, k) lift(c, k) luma(c)
 //! ink(bg[, dark, light])                               legible text on a ground
 //! upper(s) lower(s) fmt(x[, decimals]) len(s)          text (`+` joins text)
 //! if(c, a, b) or(a, b, …)                              choice

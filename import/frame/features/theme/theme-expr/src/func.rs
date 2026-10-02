@@ -39,6 +39,7 @@ funcs! {
     Fade = "fade", 2, 2;
     Lighten = "lighten", 2, 2;
     Darken = "darken", 2, 2;
+    Lift = "lift", 2, 2;
     Luma = "luma", 1, 1;
     Ink = "ink", 1, 3;
     Upper = "upper", 1, 1;
@@ -126,6 +127,14 @@ impl Func {
             Func::Darken => col((|| {
                 let base = c(0)?;
                 Some(Rgba { a: base.a, ..base.mix(Rgba::BLACK, n(1)?) })
+            })()),
+            // Each channel scaled up by `k` and clamped: a lit control's
+            // hover, red running into the ceiling while green and blue
+            // climb — brighter, not whiter, as `lighten` would make it.
+            Func::Lift => col((|| {
+                let (base, k) = (c(0)?, n(1)? as f32);
+                let up = |v: f32| (v * (1.0 + k)).clamp(0.0, 1.0);
+                Some(Rgba { r: up(base.r), g: up(base.g), b: up(base.b), a: base.a })
             })()),
             Func::Luma => num(c(0).map(Rgba::luma)),
             Func::Ink => col((|| {

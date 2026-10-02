@@ -72,6 +72,9 @@ fn colours_derive() {
     assert_eq!(s.eval("alpha(track.color, 0.5)").color().unwrap().to_hex(), "#3366cc80");
     assert_eq!(s.eval("ink($strip.ground)").color().unwrap().to_hex(), "#f2f2f2");
     assert_eq!(s.eval("ink(#ffffff)").color().unwrap().to_hex(), "#141414");
+    // A hover: channels scaled, the red clamped — not washed toward white.
+    assert_eq!(s.eval("lift(#ef4444, 0.25)").color().unwrap().to_hex(), "#ff5555");
+    assert_eq!(s.eval("lighten(#ef4444, 0.25)").color().unwrap().to_hex(), "#f37373");
 }
 
 #[test]
