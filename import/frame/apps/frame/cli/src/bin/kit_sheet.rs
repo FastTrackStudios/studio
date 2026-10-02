@@ -2,7 +2,7 @@
 //!
 //! ```text
 //! kit_sheet --out kit.png [--family knob|meter|button|switch|lever|panel|viz|material] [--scale 2] [--swatch]
-//!           [--only knob.render,panel.pedal_3d] [--fx gpu|fallback|off] [--save-markup sheet.fm]
+//!           [--only knob.render,panel.pedal_3d] [--fx gpu|fallback|off] [--save-markup sheet.frame]
 //! ```
 //! `--save-markup` also writes the sheet as markup, for
 //! `render_surface --markup` (its controls bind the demo catalog's params:

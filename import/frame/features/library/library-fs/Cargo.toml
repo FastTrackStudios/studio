@@ -3,7 +3,7 @@ name = "library-fs"
 version.workspace = true
 edition.workspace = true
 publish = false
-description = "Surface library backed by a folder of .frame bundles and .fm markup, watched for edits."
+description = "Surface library backed by a folder of `.frame` markup (legacy `.fm` too) and `.framez` bundles, watched for edits."
 
 [dependencies]
 architect = { workspace = true, features = ["vox", "local"] }

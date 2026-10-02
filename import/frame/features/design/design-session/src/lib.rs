@@ -72,8 +72,8 @@ impl Session {
         Self::new(Scene::new("Surface"), catalog)
     }
 
-    /// Edit the surface at `path` (`.fm` with its `.fm.assets/` textures
-    /// and fonts, or a `.frame`).
+    /// Edit the surface at `path` (`.frame` with its `.frame.assets/` textures
+    /// and fonts, a legacy `.fm`, or a `.framez` bundle).
     ///
     /// # Errors
     /// See [`document_io::load_surface`].
@@ -85,7 +85,7 @@ impl Session {
     /// [`document_io::save_surface`]).
     ///
     /// # Errors
-    /// I/O, or an extension that isn't `.fm` / `.frame`.
+    /// I/O, or an extension that isn't `.frame` / `.fm` / `.framez`.
     pub fn save(&self, path: impl AsRef<std::path::Path>) -> std::result::Result<(), document_io::Error> {
         document_io::save_surface(path, &self.scene)
     }
@@ -865,7 +865,7 @@ mod tests {
     #[test]
     fn a_textured_file_survives_open_edit_save() {
         let dir = std::env::temp_dir().join(format!("design-session-assets-{}", std::process::id()));
-        let path = dir.join("tex.fm");
+        let path = dir.join("tex.frame");
         let mut scene = document_text::parse(r#"<Document><Page><Frame name="Panel" w=100 h=50 /></Page></Document>"#, Default::default()).unwrap();
         let id = scene.add_asset("image/png", b"texture".to_vec());
         let fill = format!(r#"fill={{[{{"kind":{{"Image":{{"asset":"{id}","scale_mode":"Stretch"}}}}}}]}}"#);

@@ -14,7 +14,7 @@ use surface_runtime::Modifiers;
 use super::*;
 use crate::player::Backend;
 
-/// Real `.fm` files carry node ids, so an edit keeps them (and the
+/// Real `.frame` files carry node ids, so an edit keeps them (and the
 /// running state attached to them).
 const PANEL: &str = r##"<Document id="00000000-0000-4000-8000-000000000001"><Page id="00000000-0000-4000-8000-000000000002"><Frame name="Live" id="00000000-0000-4000-8000-000000000003" w=300 h=160 fill="#101010"><Frame name="Gain" id="00000000-0000-4000-8000-000000000004" x=20 y=20 w=80 h=80 control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Param":{"addr":"amp/gain"}}},"kind":{"Knob":{"sweep_degrees":270.0}},"slots":[]}} /></Frame></Page></Document>"##;
 
@@ -53,7 +53,7 @@ fn gain(player: &Player) -> f64 {
 #[test]
 fn edits_swap_in_place_and_bad_ones_are_refused() {
     let dir = Dir::new("live");
-    let file = dir.0.join("live.fm");
+    let file = dir.0.join("live.frame");
     std::fs::write(&file, PANEL).unwrap();
     let lib = FsLibrary::open(&dir.0).unwrap();
     let _watch = lib.watch_every(Duration::from_millis(20));
@@ -106,7 +106,7 @@ fn edits_swap_in_place_and_bad_ones_are_refused() {
 
     // Install copies it out; fork publishes a copy and previews that.
     view.install();
-    assert_eq!(std::fs::read_to_string(installs.join("live.fm")).unwrap(), PANEL.replace("\"Live\"", "\"Fixed\""));
+    assert_eq!(std::fs::read_to_string(installs.join("live.frame")).unwrap(), PANEL.replace("\"Live\"", "\"Fixed\""));
     view.fork(&mut player);
     assert_eq!(view.title(), format!("frame — fixed-fork — live from {} — B for the library", served.url));
     let fork = lib.get("fixed-fork".into(), None).unwrap();
@@ -124,8 +124,8 @@ fn edits_swap_in_place_and_bad_ones_are_refused() {
 fn browse_mode_opens_a_surface_by_click() {
     let dir = Dir::new("browse");
     std::fs::create_dir_all(dir.0.join("a")).unwrap();
-    std::fs::write(dir.0.join("a/one.fm"), PANEL.replace("\"Live\"", "\"One\"")).unwrap();
-    std::fs::write(dir.0.join("a/two.fm"), PANEL.replace("\"Live\"", "\"Two\"")).unwrap();
+    std::fs::write(dir.0.join("a/one.frame"), PANEL.replace("\"Live\"", "\"One\"")).unwrap();
+    std::fs::write(dir.0.join("a/two.frame"), PANEL.replace("\"Live\"", "\"Two\"")).unwrap();
     let lib = FsLibrary::open(&dir.0).unwrap();
     let served = Served::start(lib.into_router(), std::net::TcpListener::bind("127.0.0.1:0").unwrap()).unwrap();
     let mut view = LibraryView::start(&served.url, None, true, dir.0.join(".i")).unwrap();

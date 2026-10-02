@@ -24,7 +24,7 @@ Runtime tests are in `features/surface/surface-kit/tests/eq_graph.rs` (EQ) and
 `features/surface/surface-proto/tests/interact.rs` (validation). They drive the runtime the way a
 user would.
 
-**Screenshots** (headless player: `frame examples/surfaces/10-eq-graph.fm --script <name> --screenshot out.png`):
+**Screenshots** (headless player: `frame examples/surfaces/10-eq-graph.frame --script <name> --screenshot out.png`):
 
 - `select-handle`: the band panel and readout chip on a band.
 - `add-on-canvas`: a band added by double-click.

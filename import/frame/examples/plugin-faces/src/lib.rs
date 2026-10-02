@@ -1,7 +1,7 @@
 //! Hardware-style plugin faces built from `surface-kit`.
 //!
 //! Each module returns its [`Face`]s; [`all`] collects them and
-//! `cargo run -p plugin-faces -- OUT_DIR` writes `OUT_DIR/<plugin>/<file>.fm`
+//! `cargo run -p plugin-faces -- OUT_DIR` writes `OUT_DIR/<plugin>/<file>.frame`
 //! plus `OUT_DIR/<plugin>/<plugin>.catalog.json`, so `frame OUT_DIR/<plugin>`
 //! plays a plugin's faces as a gallery.
 
@@ -60,7 +60,7 @@ pub fn all() -> Vec<Face> {
     v
 }
 
-/// Write every face (`OUT/<plugin>/<file>.fm` and its sidecar) and each
+/// Write every face (`OUT/<plugin>/<file>.frame` and its sidecar) and each
 /// plugin's catalog under `out`; returns the number of faces.
 ///
 /// # Panics
@@ -76,7 +76,7 @@ pub fn write_only(out: &std::path::Path, only: &[String]) -> usize {
     let faces = all();
     let chosen = |file: &str| only.is_empty() || only.iter().any(|o| file.starts_with(o.as_str()));
     for f in faces.iter().filter(|f| chosen(f.file)) {
-        let path = out.join(f.plugin).join(format!("{}.fm", f.file));
+        let path = out.join(f.plugin).join(format!("{}.frame", f.file));
         document_io::save_surface(&path, &f.scene).unwrap_or_else(|e| panic!("write face: {e}"));
     }
     for (plugin, catalog) in catalogs(&faces) {

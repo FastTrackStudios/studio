@@ -1,4 +1,4 @@
-//! [`Content`] ⇄ [`Scene`]: markup text (plus its assets) or a `.frame` bundle.
+//! [`Content`] ⇄ [`Scene`]: markup text (plus its assets) or a `.framez` bundle.
 
 use document_proto::{Asset, Scene};
 
@@ -18,7 +18,7 @@ impl Content {
     }
 
     /// Markup text as content, unparsed, with the assets it names (as read
-    /// from a `.fm` and its `.fm.assets/` sidecar).
+    /// from a `.frame` and its `.frame.assets/` sidecar).
     #[must_use]
     pub fn markup_with(text: impl Into<String>, assets: impl IntoIterator<Item = Asset>) -> Self {
         let mut assets: Vec<Asset> = assets.into_iter().collect();
@@ -27,7 +27,7 @@ impl Content {
         Self { format: Format::Markup, bytes: text.into().into_bytes(), assets }
     }
 
-    /// `scene` as a `.frame` bundle titled `title`.
+    /// `scene` as a `.framez` bundle titled `title`.
     ///
     /// # Errors
     /// When the bundle can't be written (an asset without bytes).
@@ -52,7 +52,7 @@ impl Content {
         }
     }
 
-    /// The bundle's manifest title (`.frame` only).
+    /// The bundle's manifest title (`.framez` only).
     #[must_use]
     pub fn title(&self) -> Option<String> {
         match self.format {

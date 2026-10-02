@@ -11,7 +11,7 @@ facet.workspace = true
 serde.workspace = true
 surface-proto = { path = "../../surface/surface-proto", default-features = false }
 document-proto = { path = "../../document/document-proto", default-features = false }
-# `codec`: surface content ⇄ scene (markup text or a `.frame` bundle).
+# `codec`: surface content ⇄ scene (markup text or a `.framez` bundle).
 document-text = { path = "../../document/document-text", optional = true }
 document-bundle = { path = "../../document/document-bundle", optional = true }
 vox = { workspace = true, optional = true }

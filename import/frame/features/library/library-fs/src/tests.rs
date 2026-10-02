@@ -74,7 +74,7 @@ fn publish_list_get_round_trip() {
     };
     let p = lib.publish(content.clone(), meta.clone()).unwrap();
     assert_eq!(p, Published { id: "my-surface".into(), version: 1 });
-    assert!(dir.0.join("my-surface.fm").exists());
+    assert!(dir.0.join("my-surface.frame").exists());
     assert!(dir.0.join("my-surface.meta.json").exists());
 
     let listed = lib.list(ListQuery { tags: vec!["guitar".into()], ..ListQuery::default() });
@@ -115,7 +115,7 @@ fn publish_rejects_bad_content_and_ids() {
 #[test]
 fn edits_on_disk_become_versions() {
     let dir = Dir::new("edits");
-    let path = dir.0.join("s.fm");
+    let path = dir.0.join("s.frame");
     std::fs::write(&path, panel("One")).unwrap();
     let lib = FsLibrary::open(&dir.0).unwrap();
     assert_eq!(lib.rescan(), 0, "nothing changed");
@@ -149,7 +149,7 @@ async fn next<T: facet::Facet<'static>>(rx: &mut architect::vox::Rx<T>) -> T {
 #[tokio::test]
 async fn over_vox_with_a_watched_folder() {
     let dir = Dir::new("vox");
-    let path = dir.0.join("live.fm");
+    let path = dir.0.join("live.frame");
     std::fs::write(&path, panel("Live")).unwrap();
     let lib = FsLibrary::open(&dir.0).unwrap();
     let _watch = lib.watch_every(Duration::from_millis(20));
@@ -244,7 +244,7 @@ async fn published_markup_brings_its_assets() {
     client.publish(content.clone(), PublishMeta { id: "amp/tex".into(), ..PublishMeta::default() }).await.unwrap();
 
     // Stored as markup + sidecar…
-    let path = dir.0.join("amp/tex.fm");
+    let path = dir.0.join("amp/tex.frame");
     assert!(document_io::assets_dir(&path).join(document_io::MANIFEST).exists());
     assert_eq!(document_io::load_surface(&path).unwrap(), scene);
     // …served back whole, and each asset on its own (for downloads)…
@@ -269,7 +269,7 @@ async fn published_markup_brings_its_assets() {
 #[tokio::test]
 async fn an_asset_change_on_disk_is_pushed_live() {
     let dir = Dir::new("asset-live");
-    let path = dir.0.join("live.fm");
+    let path = dir.0.join("live.frame");
     let original = textured("Live", b"texture", b"font one");
     document_io::save_surface(&path, &original).unwrap();
     let lib = FsLibrary::open(&dir.0).unwrap();
@@ -301,11 +301,36 @@ async fn an_asset_change_on_disk_is_pushed_live() {
 #[test]
 fn lists_leave_previews_out_unless_asked_and_preview_fetches_one() {
     let dir = Dir::new("previews");
-    std::fs::write(dir.0.join("head.fm"), panel("Head")).unwrap();
+    std::fs::write(dir.0.join("head.frame"), panel("Head")).unwrap();
     let png: Previewer = Arc::new(|_: &Scene| Some(vec![0x89, b'P', b'N', b'G']));
     let lib = FsLibrary::open_with(&dir.0, Some(png)).unwrap();
     assert!(lib.list(ListQuery::default())[0].preview_png.is_empty(), "a list is metadata only");
     assert_eq!(lib.list(ListQuery { previews: true, ..ListQuery::default() })[0].preview_png, [0x89, b'P', b'N', b'G']);
     assert_eq!(lib.preview("head".into()), [0x89, b'P', b'N', b'G']);
     assert!(lib.preview("nope".into()).is_empty());
+}
+
+#[test]
+fn republishing_a_legacy_fm_keeps_its_file() {
+    let dir = Dir::new("legacy-fm");
+    std::fs::write(dir.0.join("head.fm"), panel("Head")).unwrap();
+    let lib = FsLibrary::open(&dir.0).unwrap();
+    let meta = PublishMeta { id: "head".into(), name: "Head Two".into(), ..PublishMeta::default() };
+    let p = lib.publish(Content::markup_text(panel("Head Two")), meta).unwrap();
+    assert_eq!(p.version, 2);
+    assert!(dir.0.join("head.fm").exists());
+    assert!(!dir.0.join("head.frame").exists(), "no duplicate beside the legacy file");
+    assert_eq!(lib.list(ListQuery::default()).len(), 1);
+    assert_eq!(lib.list(ListQuery::default())[0].name, "Head Two");
+}
+
+#[test]
+fn a_frame_file_wins_over_a_legacy_fm_of_the_same_name() {
+    let dir = Dir::new("both-ext");
+    std::fs::write(dir.0.join("head.fm"), panel("Old")).unwrap();
+    std::fs::write(dir.0.join("head.frame"), panel("New")).unwrap();
+    let lib = FsLibrary::open(&dir.0).unwrap();
+    let all = lib.list(ListQuery::default());
+    assert_eq!(all.len(), 1);
+    assert_eq!(all[0].name, "New");
 }

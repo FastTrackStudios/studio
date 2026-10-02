@@ -3,7 +3,7 @@
 //! ```text
 //! frame-library-server DIR [--host 127.0.0.1] [--port 4050] [--http PORT | --no-http] [--no-previews]
 //! ```
-//! Serves `DIR` (every `.frame` / `.fm` under it, `*.catalog.json` as the
+//! Serves `DIR` (every `.frame` / `.fm` / `.framez` under it, `*.catalog.json` as the
 //! engines they fit) through `library-fs`:
 //! - `ws://HOST:PORT/vox`: the `SurfaceStore` rpc — list, get, publish,
 //!   catalogs, and the `updates(id)` / `changes` streams. The folder is

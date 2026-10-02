@@ -13,7 +13,7 @@
 //!
 //! [`SurfaceUpdate`] carries the surface's full content with its version.
 //! A surface is small (tens of KB of markup or a zipped Loro snapshot), the
-//! main writers are external (an agent saving a `.fm`, a person's editor)
+//! main writers are external (an agent saving a `.frame`, a person's editor)
 //! and share no CRDT history with the subscribers, so a delta would first
 //! need a canonical replica per surface on the server to diff against. A
 //! snapshot is idempotent, needs no ordering or catch-up protocol (a late
@@ -191,9 +191,9 @@ fn collect(control: &Control, [params, actions, streams, collections]: &mut [BTr
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Facet, Serialize, Deserialize)]
 #[repr(u8)]
 pub enum Format {
-    /// A `.frame` bundle (zip: manifest, Loro snapshot, assets).
+    /// A `.framez` bundle (zip: manifest, Loro snapshot, assets).
     Frame,
-    /// frame markup text (`.fm`), UTF-8.
+    /// frame markup text (`.frame`, or the legacy `.fm`), UTF-8.
     Markup,
 }
 
@@ -202,8 +202,8 @@ impl Format {
     #[must_use]
     pub fn extension(self) -> &'static str {
         match self {
-            Self::Frame => "frame",
-            Self::Markup => "fm",
+            Self::Frame => "framez",
+            Self::Markup => "frame",
         }
     }
 
@@ -211,8 +211,8 @@ impl Format {
     #[must_use]
     pub fn from_extension(ext: &str) -> Option<Self> {
         match ext {
-            "frame" => Some(Self::Frame),
-            "fm" => Some(Self::Markup),
+            "framez" => Some(Self::Frame),
+            "frame" | "fm" => Some(Self::Markup),
             _ => None,
         }
     }
@@ -221,9 +221,9 @@ impl Format {
 /// A surface document, as stored.
 ///
 /// Markup names its images and fonts by id only, so a markup surface
-/// carries their bytes alongside (what `<name>.fm.assets/` holds on disk):
+/// carries their bytes alongside (what `<name>.frame.assets/` holds on disk):
 /// a surface shared through a library brings its textures and fonts. A
-/// `.frame` bundle holds its own; its `assets` stay empty.
+/// bundle holds its own; its `assets` stay empty.
 #[derive(Debug, Clone, PartialEq, Eq, Facet, Serialize, Deserialize)]
 pub struct Content {
     pub format: Format,

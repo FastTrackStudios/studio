@@ -4,19 +4,19 @@
 //! ```text
 //! make_lit_viz_examples [--out-dir examples/surfaces] [--bare DIR]
 //! ```
-//! `12-lit-comp.fm` (`viz.comp_scope`), `12-lit-delay.fm`
-//! (`viz.delay_taps`), `12-lit-reverb.fm` (`viz.reverb_space`),
-//! `12-lit-mod.fm` (`viz.mod_lfo`) and `12-lit-eq-glow.fm` (the
+//! `12-lit-comp.frame` (`viz.comp_scope`), `12-lit-delay.frame`
+//! (`viz.delay_taps`), `12-lit-reverb.frame` (`viz.reverb_space`),
+//! `12-lit-mod.frame` (`viz.mod_lfo`) and `12-lit-eq-glow.frame` (the
 //! `viz.eq_glow` layer under an EQ response curve), each with knobs and a
 //! `lit-*.catalog.json` beside it, so the desktop player's mock engine
 //! serves their params and feeds:
 //!
 //! ```text
-//! nix develop . -c cargo run -p frame-desktop -- examples/surfaces/12-lit-delay.fm
+//! nix develop . -c cargo run -p frame-desktop -- examples/surfaces/12-lit-delay.frame
 //! ```
 //!
 //! `--bare DIR` also writes each component alone, at its default size
-//! (`bare-<kind>.fm` + catalog) — what the side-by-side comparison with
+//! (`bare-<kind>.frame` + catalog) — what the side-by-side comparison with
 //! processor's own renders uses.
 
 use std::collections::BTreeMap;
@@ -106,7 +106,7 @@ pub fn bare_examples() -> Vec<Example> {
         let theme = Theme::stage_dark();
         let mut b = Builder { scene: &mut scene, controls: &mut controls, theme: &theme };
         surface_kit::place(&mut b, page, id, &place).unwrap_or_else(|e| panic!("{id}: {e}"));
-        let file: &'static str = Box::leak(format!("bare-{kind}.fm").into_boxed_str());
+        let file: &'static str = Box::leak(format!("bare-{kind}.frame").into_boxed_str());
         let catalog_file: &'static str = Box::leak(format!("bare-{kind}.catalog.json").into_boxed_str());
         Example { file, catalog_file, surface: Surface { scene, controls }, catalog: catalog(id, params, feeds) }
     })
@@ -186,7 +186,7 @@ fn comp() -> Example {
     d.place("viz.comp_scope", (20.0, 54.0), &Place::new("Compressor").size(620.0).options(&["ns=comp", "h=360", "len=128"]));
     d.knobs((20.0, 620.0), 432.0, &[("Threshold", "comp/threshold"), ("Ratio", "comp/ratio"), ("Knee", "comp/knee")]);
     let (params, feeds) = viz::lit_catalog::comp_scope("comp", 128);
-    Example { file: "12-lit-comp.fm", catalog_file: "lit-comp.catalog.json", surface: d.finish(18.0), catalog: catalog("viz.comp_scope", params, feeds) }
+    Example { file: "12-lit-comp.frame", catalog_file: "lit-comp.catalog.json", surface: d.finish(18.0), catalog: catalog("viz.comp_scope", params, feeds) }
 }
 
 fn delay() -> Example {
@@ -197,7 +197,7 @@ fn delay() -> Example {
         262.0,
         &[("Time", "delay/time"), ("Feedback", "delay/feedback"), ("Left", "delay/tap_div_l"), ("Right", "delay/tap_div_r"), ("Machine", "delay/family"), ("Tempo", "delay/bpm")],
     );
-    Example { file: "12-lit-delay.fm", catalog_file: "lit-delay.catalog.json", surface: d.finish(18.0), catalog: catalog("viz.delay_taps", viz::lit_catalog::delay_params("delay"), Vec::new()) }
+    Example { file: "12-lit-delay.frame", catalog_file: "lit-delay.catalog.json", surface: d.finish(18.0), catalog: catalog("viz.delay_taps", viz::lit_catalog::delay_params("delay"), Vec::new()) }
 }
 
 fn reverb() -> Example {
@@ -208,14 +208,14 @@ fn reverb() -> Example {
         262.0,
         &[("Decay", "reverb/decay"), ("Pre-delay", "reverb/predelay"), ("Density", "reverb/density"), ("Damping", "reverb/damp"), ("Space", "reverb/family"), ("Tempo", "reverb/bpm")],
     );
-    Example { file: "12-lit-reverb.fm", catalog_file: "lit-reverb.catalog.json", surface: d.finish(18.0), catalog: catalog("viz.reverb_space", viz::lit_catalog::reverb_params("reverb"), Vec::new()) }
+    Example { file: "12-lit-reverb.frame", catalog_file: "lit-reverb.catalog.json", surface: d.finish(18.0), catalog: catalog("viz.reverb_space", viz::lit_catalog::reverb_params("reverb"), Vec::new()) }
 }
 
 fn modulation() -> Example {
     let mut d = Doc::new("Lit Modulation", 800.0, "MODULATION", "viz.mod_lfo — processor's modulation panel: a picture per engine, moving at the LFO rate");
     d.place("viz.mod_lfo", (20.0, 54.0), &Place::new("Modulation").size(760.0).options(&["ns=mod", "h=220"]));
     d.knobs((20.0, 760.0), 292.0, &[("Rate", "mod/rate"), ("Depth", "mod/depth"), ("Mix", "mod/mix"), ("Engine", "mod/engine")]);
-    Example { file: "12-lit-mod.fm", catalog_file: "lit-mod.catalog.json", surface: d.finish(18.0), catalog: catalog("viz.mod_lfo", viz::lit_catalog::mod_params("mod"), Vec::new()) }
+    Example { file: "12-lit-mod.frame", catalog_file: "lit-mod.catalog.json", surface: d.finish(18.0), catalog: catalog("viz.mod_lfo", viz::lit_catalog::mod_params("mod"), Vec::new()) }
 }
 
 /// The glow layer, with the EQ's combined response drawn over it.
@@ -251,7 +251,7 @@ fn eq_glow() -> Example {
     let refs: Vec<(&str, &str)> = knobs.iter().map(|(a, b)| (a.as_str(), b.as_str())).collect();
     d.knobs((20.0, w), 54.0 + h + 18.0, &refs);
     let (params, feeds) = viz::lit_catalog::eq_glow("eq", BANDS, 128);
-    Example { file: "12-lit-eq-glow.fm", catalog_file: "lit-eq-glow.catalog.json", surface: d.finish(18.0), catalog: catalog("viz.eq_glow", params, feeds) }
+    Example { file: "12-lit-eq-glow.frame", catalog_file: "lit-eq-glow.catalog.json", surface: d.finish(18.0), catalog: catalog("viz.eq_glow", params, feeds) }
 }
 
 #[cfg(test)]

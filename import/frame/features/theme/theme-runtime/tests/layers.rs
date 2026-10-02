@@ -119,6 +119,6 @@ fn a_page_layered_over_replaces_that_role_and_keeps_the_controls() {
 
 #[test]
 fn a_parse_error_names_its_layer() {
-    let e = Theme::from_sources(&[("base.fm", BASE), ("broken.fm", "<Document><Frame")], schema(), None).unwrap_err();
-    assert!(e.iter().any(|d| d.message.starts_with("broken.fm:")), "{e:?}");
+    let e = Theme::from_sources(&[("base.frame", BASE), ("broken.frame", "<Document><Frame")], schema(), None).unwrap_err();
+    assert!(e.iter().any(|d| d.message.starts_with("broken.frame:")), "{e:?}");
 }

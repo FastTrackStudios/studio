@@ -1,7 +1,7 @@
 //! `frame-mcp` — an MCP server (stdio) for designing control surfaces.
 //!
 //! ```text
-//! frame-mcp [--file surface.fm] [--engine ws://127.0.0.1:4040/vox [--rig guitar]]
+//! frame-mcp [--file surface.frame] [--engine ws://127.0.0.1:4040/vox [--rig guitar]]
 //!           [--library ws://127.0.0.1:4050/vox [--surface ID]]
 //! ```
 //! Serves the `design-session` tool registry over MCP. With `--file`, the
@@ -23,7 +23,7 @@
 //! the engine's rig changes.
 //!
 //! Register with Claude Code:
-//! `claude mcp add frame -- /path/to/frame-mcp --file /path/to/surface.fm`
+//! `claude mcp add frame -- /path/to/frame-mcp --file /path/to/surface.frame`
 
 use std::io::{BufRead, Write};
 use std::path::PathBuf;
@@ -45,7 +45,7 @@ Dancing Script, Pacifico, Caveat Brush, Knewave, Playfair Display, DSEG7/DSEG14 
 UnifrakturCook, Pirata One); set them with `font`, `weight`, `style` and `stretch` on <Text>.";
 
 const USAGE: &str =
-    "usage: frame-mcp [--file surface.fm] [--engine ws://HOST:PORT/vox [--rig NAME]] [--library ws://HOST:PORT/vox [--surface ID]]";
+    "usage: frame-mcp [--file surface.frame] [--engine ws://HOST:PORT/vox [--rig NAME]] [--library ws://HOST:PORT/vox [--surface ID]]";
 
 /// Where edits are published (`--library`).
 struct Publish {
@@ -195,7 +195,7 @@ fn main() {
         },
     };
     let mut session = match file.as_ref().filter(|p| p.exists()) {
-        // `.fm` with its `.fm.assets/` textures and fonts, or a `.frame`.
+        // `.frame` (or legacy `.fm`) with its `.frame.assets/` textures and fonts, or a `.framez`.
         Some(p) => match Session::open(p, catalog) {
             Ok(session) => session,
             Err(e) => {
@@ -471,7 +471,7 @@ mod tests {
     fn edits_save_to_the_file() {
         let dir = std::env::temp_dir().join(format!("frame-mcp-test-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
-        let path = dir.join("s.fm");
+        let path = dir.join("s.frame");
         let mut s = Session::blank(surface_memory::demo_catalog());
         handle(&mut s, Sinks { file: Some(&path), library: None }, None, &json!({"jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": {"name": "generate", "arguments": {}}}));
         assert_eq!(document_io::load_surface(&path).unwrap(), *s.scene());
@@ -481,7 +481,7 @@ mod tests {
     #[test]
     fn a_textured_file_keeps_its_textures_across_edits() {
         let dir = std::env::temp_dir().join(format!("frame-mcp-assets-{}", std::process::id()));
-        let path = dir.join("tex.fm");
+        let path = dir.join("tex.frame");
         let mut scene = Session::blank(surface_memory::demo_catalog()).scene().clone();
         scene.add_asset("image/png", b"texture".to_vec());
         document_io::save_surface(&path, &scene).unwrap();

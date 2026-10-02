@@ -29,7 +29,7 @@ fn a_second_regeneration_is_byte_identical() {
     assert_eq!(plugin_faces::write_all(&b), n);
     let (fa, fb) = (files(&a), files(&b));
     let _ = std::fs::remove_dir_all(&tmp);
-    assert!(fa.keys().filter(|p| p.extension().is_some_and(|e| e == "fm")).count() == n, "one .fm per face");
+    assert!(fa.keys().filter(|p| p.extension().is_some_and(|e| e == "frame")).count() == n, "one .frame per face");
     assert_eq!(fa.keys().collect::<Vec<_>>(), fb.keys().collect::<Vec<_>>(), "same files");
     let differ: Vec<_> = fa.iter().filter(|(p, bytes)| fb.get(*p) != Some(*bytes)).map(|(p, _)| p.display().to_string()).collect();
     assert!(differ.is_empty(), "files differ between two regenerations: {differ:?}");

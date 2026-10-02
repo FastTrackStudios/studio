@@ -25,8 +25,8 @@ Reference clones (read-only) live in `/run/media/Development/research/`:
 
 **The design loop works end to end:**
 ```
-frame-mcp --file stage.fm  ⇄  model (catalog → write/add_control → lint → fix)
-frame stage.fm             ←  hot-reloads each edit; play it against the mock engine
+frame-mcp --file stage.frame  ⇄  model (catalog → write/add_control → lint → fix)
+frame stage.frame             ←  hot-reloads each edit; play it against the mock engine
 ```
 
 **Next:**

@@ -1,7 +1,7 @@
 //! Render a face through `LiveSurface` (the path a host takes, caches and
 //! all) at intervals, and write each frame out: what actually moves.
 //!
-//! `cargo run --release -p frame-live --example face_frames -- <face.fm> <out-dir> [w h frames every_ms] [addr=value…]`
+//! `cargo run --release -p frame-live --example face_frames -- <face.frame> <out-dir> [w h frames every_ms] [addr=value…]`
 //!
 //! Writes `<out-dir>/frame-NNN.ppm` and prints, per frame, how many pixels
 //! changed from the one before.
@@ -36,7 +36,7 @@ fn read(device: &wgpu::Device, queue: &wgpu::Queue, texture: &wgpu::Texture) -> 
 
 fn main() -> Result<(), String> {
     let mut args = std::env::args().skip(1);
-    let usage = "usage: face_frames <face.fm> <out-dir> [w h frames every_ms] [addr=value…]";
+    let usage = "usage: face_frames <face.frame> <out-dir> [w h frames every_ms] [addr=value…]";
     let markup = args.next().ok_or(usage)?;
     let out = std::path::PathBuf::from(args.next().ok_or(usage)?);
     let rest: Vec<String> = args.collect();

@@ -58,7 +58,7 @@ fn name_of(e: &Event) -> Option<String> {
 fn server_in_process_client_subscribes() {
     let dir = Dir::new("e2e");
     std::fs::create_dir_all(dir.0.join("fx")).unwrap();
-    let file = dir.0.join("fx/verb.fm");
+    let file = dir.0.join("fx/verb.frame");
     std::fs::write(&file, panel("Verb")).unwrap();
     let lib = FsLibrary::open(&dir.0).unwrap();
     let _watch = lib.watch_every(Duration::from_millis(20));

@@ -3,7 +3,7 @@ name = "document-io"
 version.workspace = true
 edition.workspace = true
 publish = false
-description = "Surfaces on disk: one load/save API over `.fm` markup (with its `.fm.assets/` sidecar) and `.frame` bundles."
+description = "Surfaces on disk: one load/save API over `.frame` markup (with its `.frame.assets/` sidecar; legacy `.fm` still read) and `.framez` bundles."
 
 [dependencies]
 document-proto = { path = "../document-proto", default-features = false }

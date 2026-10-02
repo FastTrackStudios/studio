@@ -1,5 +1,5 @@
-//! A kit face saved as `.fm` keeps its material textures and fonts: they
-//! ride in the `.fm.assets/` sidecar, come back byte-identical, and the
+//! A kit face saved as `.frame` keeps its material textures and fonts: they
+//! ride in the `.frame.assets/` sidecar, come back byte-identical, and the
 //! loaded face renders like the one built in memory.
 
 use std::path::PathBuf;
@@ -38,7 +38,7 @@ fn textured() -> Vec<Face> {
 fn textured_faces_round_trip_through_markup_on_disk() {
     let dir = TempDir::new("rt");
     for f in &textured() {
-        let path = dir.0.join(format!("{}.fm", f.file));
+        let path = dir.0.join(format!("{}.frame", f.file));
         document_io::save_surface(&path, &f.scene).unwrap();
         let back = document_io::load_surface(&path).unwrap();
         assert_eq!(back.assets, f.scene.assets, "{}: assets", f.file);
@@ -93,7 +93,7 @@ fn a_loaded_face_renders_like_the_one_in_memory() {
     let catalogs = plugin_faces::catalogs(&faces);
     let face = faces.iter().find(|f| f.file.contains("cab-room")).expect("the room cab");
     let catalog = &catalogs[face.plugin];
-    let path = dir.0.join("face.fm");
+    let path = dir.0.join("face.frame");
     document_io::save_surface(&path, &face.scene).unwrap();
     let loaded = document_io::load_surface(&path).unwrap();
 
@@ -110,7 +110,7 @@ fn a_loaded_face_renders_like_the_one_in_memory() {
     assert!(off * 1000 <= n, "{off} of {n} px differ between the in-memory and loaded face");
 
     // …and the textures are really in the picture: pointed at assets that
-    // aren't there (what loading `.fm` used to amount to), it draws flat.
+    // aren't there (what loading `.frame` used to amount to), it draws flat.
     let mut text = document_text::print(&face.scene);
     for id in face.scene.assets.keys() {
         text = text.replace(id.0.as_str(), &"0".repeat(64));

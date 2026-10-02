@@ -13,7 +13,7 @@ apps/frame/desktop       `frame`: live surface player (hot reload, mock engine)
 apps/frame/mcp           `frame-mcp`: MCP server — let a model design surfaces
 apps/frame/cli           frame-cli: render_surface, export_markup, parity/diagnostic tools
 crates/frame             facade crate: what apps and consumers depend on
-features/document        model + ops/history (proto), Loro replica, .frame bundle, markup text
+features/document        model + ops/history (proto), Loro replica, .framez bundle, markup text
 features/figma           Figma import only (figma-import; figma-model/rest are its parsers)
 features/render          Scene → paint primitives → vello / SVG; tests/parity
 features/surface         catalog/controls/bindings (proto), mock engine, runtime, widgets
@@ -31,6 +31,6 @@ just parity          # Figma parity suite (features/render/tests/parity)
 just scaffold-feature <name>
 
 cargo run --release -p frame-desktop                         # play the generated demo surface
-cargo run --release -p frame-desktop -- examples/surfaces/demo.fm   # hot-reloads on save
-claude mcp add frame -- $PWD/target/release/frame-mcp --file $PWD/stage.fm
+cargo run --release -p frame-desktop -- examples/surfaces/demo.frame   # hot-reloads on save
+claude mcp add frame -- $PWD/target/release/frame-mcp --file $PWD/stage.frame
 ```

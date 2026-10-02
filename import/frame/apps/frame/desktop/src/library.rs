@@ -213,7 +213,7 @@ pub fn accept(update: &SurfaceUpdate, current: &Scene, catalog: &Catalog) -> Res
     Ok((stored, Surface::from_scene(scene)))
 }
 
-/// Copy a surface into `dir` (`<dir>/<id>.<ext>`, plus `<id>.fm.assets/`
+/// Copy a surface into `dir` (`<dir>/<id>.<ext>`, plus `<id>.frame.assets/`
 /// for markup that carries textures or fonts), returning the path.
 ///
 /// # Errors
@@ -303,7 +303,7 @@ mod tests {
         let stored = update(GOOD).surface.unwrap();
         let stored = Stored { meta: SurfaceMeta { id: "comp/../x/y".into(), ..stored.meta }, ..stored };
         let path = install(&stored, &dir).unwrap();
-        assert_eq!(path, dir.join("comp/x/y.fm"));
+        assert_eq!(path, dir.join("comp/x/y.frame"));
         assert_eq!(std::fs::read_to_string(&path).unwrap(), GOOD);
         let _ = std::fs::remove_dir_all(dir);
     }

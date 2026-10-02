@@ -21,7 +21,7 @@ skrifa = "0.26"
 [dev-dependencies]
 design-lint = { path = "../../features/design/design-lint" }
 surface-runtime = { path = "../../features/surface/surface-runtime" }
-# `tests/fm_assets.rs`: a face loaded from disk renders like the one in memory.
+# `tests/frame_assets.rs`: a face loaded from disk renders like the one in memory.
 render = { path = "../../features/render/render", features = ["anyrender"] }
 kurbo = { workspace = true }
 

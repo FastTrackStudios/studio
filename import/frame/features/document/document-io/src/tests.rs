@@ -52,14 +52,14 @@ fn files(dir: &Path) -> Vec<String> {
 #[test]
 fn markup_round_trips_with_its_assets() {
     let dir = TempDir::new("rt");
-    let path = dir.0.join("s.fm");
+    let path = dir.0.join("s.frame");
     let scene = scene_with(b"png one");
     save_surface(&path, &scene).unwrap();
 
     let text = std::fs::read_to_string(&path).unwrap();
     assert_eq!(text, document_text::print(&scene), "the markup itself is unchanged: ids only, no bytes");
     let side = assets_dir(&path);
-    assert_eq!(side, dir.0.join("s.fm.assets"));
+    assert_eq!(side, dir.0.join("s.frame.assets"));
     let ids: Vec<String> = scene.assets.values().map(|a| format!("{}.{}", a.id, extension_for(&a.mime))).collect();
     let mut want: Vec<String> = ids.into_iter().chain([MANIFEST.to_owned()]).collect();
     want.sort();
@@ -71,7 +71,7 @@ fn markup_round_trips_with_its_assets() {
 #[test]
 fn stale_assets_are_pruned_and_an_assetless_scene_drops_the_sidecar() {
     let dir = TempDir::new("prune");
-    let path = dir.0.join("s.fm");
+    let path = dir.0.join("s.frame");
     save_surface(&path, &scene_with(b"png one")).unwrap();
     let second = scene_with(b"png two");
     save_surface(&path, &second).unwrap();
@@ -93,7 +93,7 @@ fn stale_assets_are_pruned_and_an_assetless_scene_drops_the_sidecar() {
 #[test]
 fn a_missing_or_tampered_asset_is_an_error() {
     let dir = TempDir::new("bad");
-    let path = dir.0.join("s.fm");
+    let path = dir.0.join("s.frame");
     let scene = scene_with(b"png one");
     save_surface(&path, &scene).unwrap();
     let png = scene.assets.values().find(|a| a.mime == "image/png").unwrap();
@@ -109,12 +109,12 @@ fn a_missing_or_tampered_asset_is_an_error() {
 #[test]
 fn manifest_files_must_stay_in_the_folder() {
     let dir = TempDir::new("escape");
-    let path = dir.0.join("s.fm");
+    let path = dir.0.join("s.frame");
     std::fs::write(&path, "<Document><Page /></Document>").unwrap();
     std::fs::create_dir_all(assets_dir(&path)).unwrap();
     std::fs::write(
         assets_dir(&path).join(MANIFEST),
-        r#"{"format":1,"assets":[{"id":"00","mime":"image/png","file":"../s.fm"}]}"#,
+        r#"{"format":1,"assets":[{"id":"00","mime":"image/png","file":"../s.frame"}]}"#,
     )
     .unwrap();
     assert!(matches!(read_assets(&path), Err(Error::Manifest { .. })));
@@ -123,7 +123,7 @@ fn manifest_files_must_stay_in_the_folder() {
 #[test]
 fn parse_errors_carry_path_line_and_col() {
     let dir = TempDir::new("parse");
-    let path = dir.0.join("bad.fm");
+    let path = dir.0.join("bad.frame");
     std::fs::write(&path, "<Document>\n  <Page>\n</Document>").unwrap();
     let err = load_surface(&path).unwrap_err().to_string();
     let rest = err.strip_prefix(&format!("{}:", path.display())).unwrap();
@@ -133,7 +133,7 @@ fn parse_errors_carry_path_line_and_col() {
 #[test]
 fn fingerprint_follows_the_markup_and_its_assets() {
     let dir = TempDir::new("fp");
-    let path = dir.0.join("s.fm");
+    let path = dir.0.join("s.frame");
     assert_eq!(fingerprint(&path), None);
     let scene = scene_with(b"png one");
     save_surface(&path, &scene).unwrap();
@@ -147,7 +147,7 @@ fn fingerprint_follows_the_markup_and_its_assets() {
 #[test]
 fn bundles_load_and_save_through_the_same_api() {
     let dir = TempDir::new("bundle");
-    let path = dir.0.join("s.frame");
+    let path = dir.0.join("s.framez");
     let scene = scene_with(b"png one");
     save_surface(&path, &scene).unwrap();
     assert!(!assets_dir(&path).exists(), "a bundle carries its own assets");
@@ -162,7 +162,7 @@ fn bundles_load_and_save_through_the_same_api() {
 #[test]
 fn remove_takes_the_sidecar_too() {
     let dir = TempDir::new("rm");
-    let path = dir.0.join("s.fm");
+    let path = dir.0.join("s.frame");
     save_surface(&path, &scene_with(b"png one")).unwrap();
     remove_surface(&path).unwrap();
     assert!(!path.exists());
@@ -172,7 +172,44 @@ fn remove_takes_the_sidecar_too() {
 
 #[test]
 fn assets_dirs_are_recognised() {
-    assert!(is_assets_dir(Path::new("a/b.fm.assets")));
+    assert!(is_assets_dir(Path::new("a/b.frame.assets")));
     assert!(!is_assets_dir(Path::new("a/assets")));
-    assert!(!is_assets_dir(Path::new("a/b.frame.assets")));
+    assert!(is_assets_dir(Path::new("a/b.fm.assets")), "the legacy name keeps working");
+    assert!(!is_assets_dir(Path::new("a/b.framez.assets")));
+}
+
+#[test]
+fn legacy_fm_markup_still_loads_and_saves() {
+    let dir = TempDir::new("legacy-fm");
+    let path = dir.0.join("old.fm");
+    let scene = scene_with(b"png one");
+    save_surface(&path, &scene).unwrap();
+    assert!(assets_dir(&path).ends_with("old.fm.assets"));
+    assert_eq!(load_surface(&path).unwrap(), scene);
+    assert_eq!(Format::of(&path), Some(Format::Markup));
+}
+
+#[test]
+fn a_zip_named_frame_is_still_a_bundle() {
+    let dir = TempDir::new("legacy-zip");
+    let scene = scene_with(b"png one");
+    let bundle = dir.0.join("s.framez");
+    save_surface(&bundle, &scene).unwrap();
+    let old = dir.0.join("old.frame");
+    std::fs::copy(&bundle, &old).unwrap();
+    assert_eq!(Format::of(&old), Some(Format::Bundle));
+    assert_eq!(load_surface(&old).unwrap(), scene);
+    save_surface(&old, &scene).unwrap();
+    assert_eq!(Format::of(&old), Some(Format::Bundle), "a re-save stays a bundle");
+    assert_eq!(Format::of(&dir.0.join("new.frame")), Some(Format::Markup), "a new .frame is markup");
+}
+
+#[test]
+fn frame_documents_are_recognised_by_extension() {
+    for name in ["a.frame", "a.fm", "a.framez"] {
+        assert!(is_frame_document(Path::new(name)), "{name}");
+    }
+    for name in ["a.txt", "a", "a.frame.assets"] {
+        assert!(!is_frame_document(Path::new(name)), "{name}");
+    }
 }

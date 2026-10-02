@@ -3,7 +3,7 @@ name = "document-bundle"
 version.workspace = true
 edition.workspace = true
 publish = false
-description = "The `.frame` file: a zip of a styx manifest, the Loro snapshot and content-addressed assets."
+description = "The `.framez` file: a zip of a styx manifest, the Loro snapshot and content-addressed assets."
 
 [dependencies]
 document-proto = { path = "../document-proto", default-features = false }

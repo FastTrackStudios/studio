@@ -1,11 +1,11 @@
-//! A [`SurfaceStore`] over a folder: every `.frame` bundle and `.fm` markup
-//! file under the root is a surface, `*.catalog.json` files are the engine
+//! A [`SurfaceStore`] over a folder: every `.frame` markup file (the older
+//! `.fm` too) and `.framez` bundle under the root is a surface, `*.catalog.json` files are the engine
 //! catalogs they were designed for.
 //!
 //! ```text
 //! root/
-//!   comp/07-vari-mu.fm            surface `comp/07-vari-mu`
-//!   comp/07-vari-mu.fm.assets/    its textures and fonts (see `document-io`)
+//!   comp/07-vari-mu.frame         surface `comp/07-vari-mu`
+//!   comp/07-vari-mu.frame.assets/ its textures and fonts (see `document-io`)
 //!   comp/07-vari-mu.meta.json     optional: author, description, tags, license, forked_from, version
 //!   comp/07-vari-mu.png           optional: the preview (else rendered by the previewer, if any)
 //!   comp/comp.catalog.json        a catalog (served by `catalogs()`, tags surfaces that fit it)
@@ -17,8 +17,10 @@
 //! poll rather than OS notifications: it needs no platform backend, sees
 //! atomic write-then-rename saves as one change, and a stat of a few
 //! hundred files every 200 ms costs nothing. A markup surface's stamp
-//! covers its `.fm.assets/` sidecar too, so replacing a texture is an edit
-//! like any other. A file's content hash (markup and asset ids) decides
+//! covers its `.frame.assets/` sidecar too, so replacing a texture is an edit
+//! like any other. A file keeps its extension when it is rewritten, so a
+//! library of `.fm` files stays `.fm` until a surface is republished under a
+//! different format. A file's content hash (markup and asset ids) decides
 //! whether it changed, so a publish (which writes the file) doesn't come
 //! back as a second update.
 
@@ -240,12 +242,15 @@ impl FsLibrary {
         let engines: Vec<(String, Signature)> =
             state.catalogs.values().map(|(_, c)| (c.id.clone(), Signature::of_catalog(c))).collect();
 
-        // Surface files by id; a `.frame` wins over a `.fm` of the same name.
+        // Surface files by id; a `.framez` bundle wins over `.frame` markup,
+        // which wins over a legacy `.fm` of the same name.
         let mut found: BTreeMap<SurfaceId, PathBuf> = BTreeMap::new();
         for path in &files {
-            let Some(format) = path.extension().and_then(|e| e.to_str()).and_then(Format::from_extension) else { continue };
+            if format_of(path).is_none() {
+                continue;
+            }
             let Some(id) = self.id_of(path) else { continue };
-            if format == Format::Frame || !found.contains_key(&id) {
+            if found.get(&id).is_none_or(|have| precedence(path) > precedence(have)) {
                 found.insert(id, path.clone());
             }
         }
@@ -267,7 +272,7 @@ impl FsLibrary {
             {
                 continue;
             }
-            let format = path.extension().and_then(|e| e.to_str()).and_then(Format::from_extension).unwrap_or(Format::Markup);
+            let format = format_of(&path).unwrap_or(Format::Markup);
             // Unreadable (or a sidecar mid-write): the next scan retries.
             let Some(content) = read_content(&path, format) else { continue };
             let h = content_hash(&content);
@@ -416,6 +421,25 @@ impl Drop for Watcher {
 
 fn is_catalog(p: &Path) -> bool {
     p.file_name().is_some_and(|n| n.to_string_lossy().ends_with(".catalog.json"))
+}
+
+/// A surface file's format: by extension, except that a `.frame` which is a
+/// zip is a bundle written before markup took the name.
+fn format_of(path: &Path) -> Option<Format> {
+    document_io::is_frame_document(path).then(|| match document_io::Format::of(path) {
+        Some(document_io::Format::Bundle) => Format::Frame,
+        _ => Format::Markup,
+    })
+}
+
+/// Which of two same-id surface files is the one served: a bundle over
+/// `.frame` markup over a legacy `.fm`.
+fn precedence(path: &Path) -> u8 {
+    match (format_of(path), path.extension().and_then(|e| e.to_str())) {
+        (Some(Format::Frame), _) => 2,
+        (_, Some(document_io::LEGACY_EXTENSION)) => 0,
+        _ => 1,
+    }
 }
 
 /// A surface file's content: a bundle's bytes, or markup text plus the
@@ -567,8 +591,13 @@ impl SurfaceStore for FsLibrary {
         } else {
             return Err(LibraryError::BadId(meta.id));
         };
-        let path = self.inner.root.join(format!("{id}.{}", content.format.extension()));
         let old = state.entries.remove(&id);
+        // Rewriting a surface keeps its file (a legacy `.fm` stays `.fm`,
+        // no duplicate beside it); only a change of format picks a new name.
+        let path = match &old {
+            Some(o) if format_of(&o.path) == Some(content.format) => o.path.clone(),
+            _ => self.inner.root.join(format!("{id}.{}", content.format.extension())),
+        };
         let io = |e: std::io::Error| LibraryError::Io(format!("{}: {e}", path.display()));
         let result = (|| {
             match content.format {

@@ -1,6 +1,6 @@
-//! The `.frame` file.
+//! The `.framez` file.
 //!
-//! A `.frame` bundle is a zip archive (deflate) with three kinds of entry:
+//! A `.framez` bundle is a zip archive (deflate) with three kinds of entry:
 //!
 //! ```text
 //! manifest.styx       Manifest — format version, doc id, title, timestamps,

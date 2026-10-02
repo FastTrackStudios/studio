@@ -354,7 +354,7 @@ is a page plus metadata:
 - **Stored alongside, not on nodes.** `Scene.views: Vec<View>` (serde-default empty). Each view
   points at its page. A document with no views has one implicit view: its first page, with the
   form inferred from its root frame's aspect (`FormFactor::infer`). The 1176 face at
-  1120 × 204 reads as `Rack { units: 2 }`. So every existing `.fm` keeps working.
+  1120 × 204 reads as `Rack { units: 2 }`. So every existing `.frame` keeps working.
 - **Markup:** view metadata goes on `<Page>` attributes, so the text IR round-trips it:
   ```xml
   <Page name="Rack 2U" view="rack" form="rack:2u" fit="letterbox">…</Page>
@@ -868,7 +868,7 @@ graph); a board only draws them.
   a round-trip law test).
 - Add the implicit view with `FormFactor::infer`, and the manifest views.
 - Desktop: `--view`, a `V` key to cycle views, and a letterbox fit per view.
-- **Done when:** a hand-written two-page `.fm` (Rack 2U + a hand-drawn Standard pedal of the
+- **Done when:** a hand-written two-page `.frame` (Rack 2U + a hand-drawn Standard pedal of the
   1176) plays both views, and every existing example is unchanged.
 
 **Phase B: the library knows forms.** Touches `library-proto`, `library-fs`,

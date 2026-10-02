@@ -1,13 +1,13 @@
 //! Render a face over and over, moving, and time it: what one animated
 //! face costs a host per frame.
 //!
-//! `cargo run --release -p frame-live --example face_bench -- <face.fm> [w h frames] [addr=value…]`
+//! `cargo run --release -p frame-live --example face_bench -- <face.frame> [w h frames] [addr=value…]`
 
 use std::time::Instant;
 
 fn main() -> Result<(), String> {
     let mut args = std::env::args().skip(1);
-    let markup = args.next().ok_or("usage: face_bench <face.fm> [w h frames] [addr=value…]")?;
+    let markup = args.next().ok_or("usage: face_bench <face.frame> [w h frames] [addr=value…]")?;
     let rest: Vec<String> = args.collect();
     let num = |i: usize, d: u32| rest.get(i).and_then(|v| v.parse().ok()).unwrap_or(d);
     let (w, h, frames) = (num(0, 600), num(1, 400), num(2, 480));

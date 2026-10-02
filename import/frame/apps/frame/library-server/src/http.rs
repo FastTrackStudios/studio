@@ -3,7 +3,7 @@
 //!
 //! A markup surface's textures and fonts are served by id at
 //! `assets/<id>`, and its index entry lists them, so a download of the
-//! `.fm` can be completed into `<name>.fm.assets/` (or fetched whole over
+//! `.frame` can be completed into `<name>.frame.assets/` (or fetched whole over
 //! the rpc, whose `Content` carries them).
 
 use std::borrow::Cow;
@@ -87,7 +87,7 @@ pub fn respond(lib: &FsLibrary, request: &str) -> Response {
             Ok(s) => {
                 let ext = s.content.format.extension();
                 let name = id.rsplit('/').next().unwrap_or(id);
-                let mime = if ext == "fm" { "text/plain; charset=utf-8" } else { "application/zip" };
+                let mime = if s.content.format == library_link::Format::Markup { "text/plain; charset=utf-8" } else { "application/zip" };
                 ("200 OK", mime.into(), format!("Content-Disposition: attachment; filename=\"{name}.{ext}\"\r\n"), s.content.bytes)
             }
             Err(_) => not_found(path),
@@ -123,7 +123,7 @@ mod tests {
     fn index_downloads_and_misses() {
         let dir = std::env::temp_dir().join(format!("frame-library-http-{}", std::process::id()));
         std::fs::create_dir_all(dir.join("a")).unwrap();
-        std::fs::write(dir.join("a/one two.fm"), r#"<Document><Page><Frame name="One" w=10 h=10 /></Page></Document>"#).unwrap();
+        std::fs::write(dir.join("a/one two.frame"), r#"<Document><Page><Frame name="One" w=10 h=10 /></Page></Document>"#).unwrap();
         let lib = FsLibrary::open(&dir).unwrap();
         let (status, mime, _, body) = respond(&lib, "GET / HTTP/1.1\r\n\r\n");
         assert_eq!((status, &*mime), ("200 OK", "application/json"));
@@ -132,7 +132,7 @@ mod tests {
         assert_eq!(index[0]["name"], "One");
         let (status, _, disposition, body) = respond(&lib, "GET /surfaces/a/one%20two HTTP/1.1\r\n\r\n");
         assert_eq!(status, "200 OK");
-        assert!(disposition.contains("one two.fm"), "{disposition}");
+        assert!(disposition.contains("one two.frame"), "{disposition}");
         assert!(String::from_utf8(body).unwrap().starts_with("<Document>"));
         assert_eq!(respond(&lib, "GET /previews/a/one%20two.png HTTP/1.1\r\n\r\n").0, "404 Not Found", "no GPU previewer here");
         assert_eq!(respond(&lib, "GET /nope HTTP/1.1\r\n\r\n").0, "404 Not Found");
@@ -148,7 +148,7 @@ mod tests {
             .decode()
             .unwrap();
         let id = scene.add_asset("image/png", b"texture".to_vec());
-        document_io::save_surface(dir.join("tex.fm"), &scene).unwrap();
+        document_io::save_surface(dir.join("tex.frame"), &scene).unwrap();
         let lib = FsLibrary::open(&dir).unwrap();
 
         let (_, _, _, body) = respond(&lib, "GET /index.json HTTP/1.1\r\n\r\n");

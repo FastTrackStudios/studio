@@ -6,7 +6,7 @@ jewel lamp and VU meter are drawn, then turned into controls by attaching
 `control` data whose slots point at the needle / lamp / readout nodes. Change
 any colour or shape by hand (or with a model) and it keeps working.
 
-Writes `07-fet-1176.fm` (the surface) and `fet.catalog.json` (the parameters
+Writes `07-fet-1176.frame` (the surface) and `fet.catalog.json` (the parameters
 it binds to — the compressor profile's macro slots: input, output, attack,
 release, ratio, meter — so the mock engine can play it).
 
@@ -180,7 +180,7 @@ markup = f'''<Document>
   </Page>
 </Document>
 '''
-(OUT / "07-fet-1176.fm").write_text(markup)
+(OUT / "07-fet-1176.frame").write_text(markup)
 
 
 def p(addr, name, kind, rng, default, featured=True, short=None):
@@ -211,4 +211,4 @@ catalog = {
     "collections": [],
 }
 (OUT / "fet.catalog.json").write_text(json.dumps(catalog, indent=2))
-print("wrote 07-fet-1176.fm and fet.catalog.json")
+print("wrote 07-fet-1176.frame and fet.catalog.json")

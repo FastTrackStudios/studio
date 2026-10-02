@@ -3,14 +3,14 @@
 //! ```text
 //! make_viz_examples [--out-dir examples/surfaces]
 //! ```
-//! `09-comp-viz.fm` (`viz.comp` and knobs), `10-eq-graph.fm`
-//! (`viz.eq_graph` and a readout column per band) and `11-adsr.fm`
+//! `09-comp-viz.frame` (`viz.comp` and knobs), `10-eq-graph.frame`
+//! (`viz.eq_graph` and a readout column per band) and `11-adsr.frame`
 //! (`viz.adsr` with voice playheads, and knobs), each with a
 //! `*.catalog.json` beside it, so the desktop player's mock engine serves
 //! their params and feeds:
 //!
 //! ```text
-//! nix develop . -c cargo run -p frame-desktop -- examples/surfaces/10-eq-graph.fm
+//! nix develop . -c cargo run -p frame-desktop -- examples/surfaces/10-eq-graph.frame
 //! ```
 
 use std::collections::BTreeMap;
@@ -139,7 +139,7 @@ fn comp() -> Example {
     d.place("viz.comp", (20.0, 54.0), &Place::new("Compressor").size(720.0).options(&["ns=comp"]));
     d.knobs((20.0, 720.0), 372.0, &[("Threshold", "comp/threshold"), ("Ratio", "comp/ratio"), ("Knee", "comp/knee"), ("Makeup", "comp/makeup")]);
     Example {
-        file: "09-comp-viz.fm",
+        file: "09-comp-viz.frame",
         catalog_file: "comp-viz.catalog.json",
         surface: d.finish(18.0),
         catalog: catalog("viz.comp", viz::catalog::comp_params("comp"), viz::catalog::comp_streams("comp", 300)),
@@ -159,7 +159,7 @@ fn eq() -> Example {
     let mut params = viz::catalog::eq_params("eq", BANDS);
     params.extend(viz::catalog::eq_view_params("eq"));
     Example {
-        file: "10-eq-graph.fm",
+        file: "10-eq-graph.frame",
         catalog_file: "eq-graph.catalog.json",
         surface: d.finish(20.0),
         catalog: catalog("viz.eq", params, viz::catalog::eq_streams("eq", 128)),
@@ -172,7 +172,7 @@ fn adsr() -> Example {
     d.place("viz.adsr", (20.0, 54.0), &p);
     d.knobs((20.0, 520.0), 54.0 + (520.0 * 0.46_f64).round() + 16.0, &[("Attack", "env/attack"), ("Decay", "env/decay"), ("Sustain", "env/sustain"), ("Release", "env/release")]);
     Example {
-        file: "11-adsr.fm",
+        file: "11-adsr.frame",
         catalog_file: "adsr.catalog.json",
         surface: d.finish(18.0),
         catalog: catalog("viz.adsr", viz::catalog::adsr_params("env"), vec![viz::catalog::adsr_stream("env", 4)]),

@@ -1,7 +1,7 @@
 //! A frame surface running live inside a host's renderer.
 //!
 //! [`LiveSurface`] is what a host with a GPU reaches for: it loads a page
-//! from `.fm` markup (plus its catalog), watches both files and swaps a new
+//! from `.frame` markup (plus its catalog), watches both files and swaps a new
 //! design in place when either changes — values and a drag in progress
 //! survive — runs the surface's controls, and renders through the effects
 //! stage on the host's own wgpu device into a texture the host composites.
@@ -210,7 +210,7 @@ fn solid_fill(scene: &Scene, id: NodeId) -> Option<peniko::Color> {
 }
 
 impl LiveSurface {
-    /// Open `markup` (a `.fm` file with its `.fm.assets/`) against the
+    /// Open `markup` (a `.frame` file with its `.frame.assets/`) against the
     /// catalog at `catalog` (its params' ranges and defaults).
     ///
     /// # Errors
@@ -660,11 +660,14 @@ impl LiveSurface {
     }
 }
 
-/// Where a design lives: `<dir>/<name>.fm` with `<dir>/<plugin>.catalog.json`
-/// beside it, as frame's plugin-faces generator writes them.
+/// Where a design lives: `<dir>/<name>.frame` with `<dir>/<plugin>.catalog.json`
+/// beside it, as frame's plugin-faces generator writes them (an older
+/// `<name>.fm` is used when there is no `.frame`).
 #[must_use]
 pub fn face_paths(dir: &Path, name: &str) -> (PathBuf, Option<PathBuf>) {
-    let markup = dir.join(format!("{name}.fm"));
+    let markup = dir.join(format!("{name}.{}", document_io::EXTENSION));
+    let legacy = dir.join(format!("{name}.{}", document_io::LEGACY_EXTENSION));
+    let markup = if !markup.exists() && legacy.exists() { legacy } else { markup };
     let catalog = std::fs::read_dir(dir)
         .ok()
         .and_then(|rd| rd.filter_map(Result::ok).map(|e| e.path()).find(|p| p.to_string_lossy().ends_with(".catalog.json")));

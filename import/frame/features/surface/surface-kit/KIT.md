@@ -216,9 +216,9 @@ these instead of hand-rolled gradients.
 ```sh
 nix develop . -c cargo run --release -p frame-cli --features anyrender --bin kit_sheet -- --family material --fx gpu --scale 2 --out materials.png
 nix develop . -c cargo run --release -p frame-cli --features anyrender --bin kit_sheet -- --only knob.render --fx gpu --scale 2 --out knobs.png
-nix develop . -c cargo run --release -p frame-cli --features anyrender --bin kit_sheet -- --only knob.3d --fx gpu --scale 2 --out knobs3d.png --save-markup knobs3d.fm
+nix develop . -c cargo run --release -p frame-cli --features anyrender --bin kit_sheet -- --only knob.3d --fx gpu --scale 2 --out knobs3d.png --save-markup knobs3d.frame
 # the ribs turn, the light stays: value 0 → 1 over five frames
-nix develop . -c cargo run --release -p frame-cli --features anyrender --bin render_surface -- --markup knobs3d.fm --fx gpu --scale 2 --frames 5 --fps 1 --columns 5 --set-at 0:delay/mix=0 --set-at 1:delay/mix=0.25 --set-at 2:delay/mix=0.5 --set-at 3:delay/mix=0.75 --set-at 4:delay/mix=1 --out turn.png
+nix develop . -c cargo run --release -p frame-cli --features anyrender --bin render_surface -- --markup knobs3d.frame --fx gpu --scale 2 --frames 5 --fps 1 --columns 5 --set-at 0:delay/mix=0 --set-at 1:delay/mix=0.25 --set-at 2:delay/mix=0.5 --set-at 3:delay/mix=0.75 --set-at 4:delay/mix=1 --out turn.png
 nix develop . -c cargo run --release -p frame-cli --features anyrender --bin kit_sheet -- --only panel.pedal_3d --fx gpu --scale 2 --out pedals.png
 nix develop . -c cargo run --release -p frame-cli --features anyrender --bin kit_sheet -- --only panel.amp_head,panel.amp_combo --fx gpu --scale 2 --out amps.png
 ```

@@ -156,7 +156,7 @@ The list is painted bottom to top. Each entry is one of the following:
 - `"#rrggbb"`: a plain solid color.
 - `{"kind":{"Solid":{"color":"#ff000080"}}, "opacity":0.5}`
 - `{"kind":{"LinearGradient":{"stops":[{"position":0,"color":"#ffffff"},{"position":1,"color":"#000000"}]}}}`. `RadialGradient` and `AngularGradient` take the same form. An optional `"transform":{…}` (a 2×3 matrix in unit space) re-orients the gradient; leave it out for the default orientation.
-- `{"kind":{"Image":{"asset":"<asset id>","scale_mode":"Fit"}}}`. `scale_mode` is `Fill`, `Fit`, `Crop`, `Tile` or `Stretch`. Markup names assets by id only; a `.fm` file's image and font bytes live next to it in `<file>.fm.assets/` (`<asset id>.<ext>` plus `manifest.json`), so keep an id you copy and don't invent one.
+- `{"kind":{"Image":{"asset":"<asset id>","scale_mode":"Fit"}}}`. `scale_mode` is `Fill`, `Fit`, `Crop`, `Tile` or `Stretch`. Markup names assets by id only; a `.frame` file's image and font bytes live next to it in `<file>.frame.assets/` (`<asset id>.<ext>` plus `manifest.json`), so keep an id you copy and don't invent one.
 
 Optional paint keys:
 - `"opacity"`: 0–1, default `1`.

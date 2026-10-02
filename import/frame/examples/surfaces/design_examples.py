@@ -2,7 +2,7 @@
 """Design the example surfaces through frame-mcp's tools — exactly the calls
 a model makes — against the demo guitar catalog.
 
-    python3 examples/surfaces/design_examples.py   # rewrites examples/surfaces/*.fm
+    python3 examples/surfaces/design_examples.py   # rewrites examples/surfaces/*.frame
 """
 import json, subprocess, sys, pathlib
 
@@ -41,7 +41,7 @@ def write(parent, markup):
 
 
 # 1 — a stage rig: big knobs, output strip, a row of footswitches.
-design("01-stage.fm", [
+design("01-stage.frame", [
     write("Surface", '''<Frame name="Stage" layout="column" gap=20 padding=24 fill="#101216" hug=true>
   <Text name="Title" w=460 h=30 size=22 fill="#f2f2f2">Sunday Set — Guitar Rig</Text>
   <Frame name="Main" layout="row" gap=20 hug=true>
@@ -74,10 +74,10 @@ for name, color, knobs, stomp in pedals:
     calls += [ctl(f"{name} knobs", "knob", f"param:{k}", "medium", name=k.split("/")[1].title()) for k in knobs]
     calls.append(ctl(f"{name} stomp", "footswitch", f"param:{stomp}", name=f"{name} On"))
 calls.append(("lint", {}))
-design("02-pedalboard.fm", calls)
+design("02-pedalboard.frame", calls)
 
 # 3 — an amp head, daylight theme: one long row of big knobs.
-design("03-amp-head.fm", [
+design("03-amp-head.frame", [
     ("set_theme", {"theme": "daylight"}),
     write("Surface", '''<Frame name="Amp" layout="column" gap=18 padding=28 fill="#e9e1cf" radius=18 hug=true>
   <Frame name="Badge" layout="row" gap=12 hug=true>
@@ -91,7 +91,7 @@ design("03-amp-head.fm", [
 ])
 
 # 4 — a mixer: input meter, amp master fader, main fader + stereo meters + pan.
-design("04-mixer.fm", [
+design("04-mixer.frame", [
     write("Surface", '''<Frame name="Mixer" layout="row" gap=14 padding=22 fill="#0e0f12" hug=true>
   <Frame name="Input" layout="column" gap=10 padding=16 fill="#17191e" radius=12 hug=true />
   <Frame name="Amp" layout="column" gap=10 padding=16 fill="#17191e" radius=12 hug=true />
@@ -108,5 +108,5 @@ design("04-mixer.fm", [
 ])
 
 # 5/6 — the generator's full surface, both themes.
-design("05-generated-dark.fm", [("generate", {"theme": "stage-dark"}), ("lint", {})])
-design("06-generated-daylight.fm", [("generate", {"theme": "daylight"}), ("lint", {})])
+design("05-generated-dark.frame", [("generate", {"theme": "stage-dark"}), ("lint", {})])
+design("06-generated-daylight.frame", [("generate", {"theme": "daylight"}), ("lint", {})])

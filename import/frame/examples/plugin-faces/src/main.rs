@@ -1,8 +1,8 @@
 //! `cargo run -p plugin-faces -- OUT_DIR [--only PREFIX…]` — write every
 //! face (or only those whose file starts with a PREFIX) + catalogs.
 //!
-//! Each face is `OUT_DIR/<plugin>/<file>.fm` plus, when it carries
-//! textures or fonts, its `<file>.fm.assets/` sidecar (see `document-io`).
+//! Each face is `OUT_DIR/<plugin>/<file>.frame` plus, when it carries
+//! textures or fonts, its `<file>.frame.assets/` sidecar (see `document-io`).
 //! Node ids are stable (see `face::stable_ids`), so regenerating without a
 //! source change rewrites every file byte for byte.
 

@@ -1,10 +1,10 @@
 //! Write the generated demo control surface as frame markup.
 //!
 //! ```text
-//! export_markup --out demo.fm [--theme stage-dark|daylight]
+//! export_markup --out demo.frame [--theme stage-dark|daylight]
 //! ```
 //! The output is a starting point for hand- or model-authored surfaces:
-//! open it in the desktop player (`frame demo.fm`) and edit — the window
+//! open it in the desktop player (`frame demo.frame`) and edit — the window
 //! hot-reloads on save.
 
 use surface_widgets::{Options, Theme, surface_for_catalog};
@@ -33,13 +33,13 @@ fn run() -> Result<(), String> {
             other => return Err(format!("unknown arg: {other}")),
         }
     }
-    let out = out.ok_or("--out <file.fm> is required")?;
+    let out = out.ok_or("--out <file.frame> is required")?;
 
     let catalog = surface_memory::demo_catalog();
     let surface = surface_for_catalog(&catalog, &Options { theme, ..Options::default() });
     let scene = surface.to_scene();
     let text = document_text::print(&scene);
-    // Markup plus its `.fm.assets/` sidecar when the scene carries any.
+    // Markup plus its `.frame.assets/` sidecar when the scene carries any.
     document_io::save_surface(&out, &scene).map_err(|e| format!("writing {e}"))?;
     println!("{{\"ok\":true,\"out\":\"{out}\",\"bytes\":{},\"controls\":{}}}", text.len(), surface.controls.len());
     Ok(())

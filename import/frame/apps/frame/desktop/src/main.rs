@@ -1,7 +1,7 @@
 //! `frame` — the desktop surface player.
 //!
 //! ```text
-//! frame [FILE.fm | FILE.frame] [--theme stage-dark|daylight] [--stats] [--size WxH] [--no-fx | --fx gpu|fallback|off]
+//! frame [FILE.frame | FILE.fm | FILE.framez] [--theme stage-dark|daylight] [--stats] [--size WxH] [--no-fx | --fx gpu|fallback|off]
 //! frame [FILE] --screenshot OUT.png [--frames N] [--script drag-first-knob|drag-first-handle]
 //! frame [FILE] --engine ws://127.0.0.1:4040/vox [--rig guitar] [...]
 //! frame DIR                        # gallery: ] / Tab next, [ / Shift-Tab previous
@@ -11,7 +11,7 @@
 //! (`surface_memory::Memory::demo()`): moving meters, knobs/faders/buttons
 //! driven by mouse and keyboard. With no file it plays the surface
 //! generated from the demo catalog (`--theme` picks its look). With a
-//! markup or bundle file it hot-reloads on save — edit the `.fm` (by hand
+//! markup or bundle file it hot-reloads on save — edit the `.frame` (by hand
 //! or with a model) and the window follows; a parse error keeps the last
 //! good surface and shows `line:col: message` in a red banner.
 //!
@@ -128,10 +128,10 @@ impl Script {
     const NAMES: &str = "drag-first-knob | drag-first-handle | open-selected | select-handle | add-on-canvas | rename-handle | marquee | context-handle";
 }
 
-const USAGE: &str = "usage: frame [FILE.fm|FILE.frame] [--theme stage-dark|daylight] [--stats] [--size WxH] [--no-fx|--fx gpu|fallback|off]\n       \
+const USAGE: &str = "usage: frame [FILE.frame|FILE.fm|FILE.framez] [--theme stage-dark|daylight] [--stats] [--size WxH] [--no-fx|--fx gpu|fallback|off]\n       \
                      frame [FILE] --screenshot OUT.png [--frames N] [--script drag-first-knob|drag-first-handle]\n       \
                      frame [FILE] --engine ws://HOST:PORT/vox [--rig NAME] [...]\n       \
-                     frame DIR   (gallery of every .fm/.frame in DIR; ] / Tab next, [ / Shift-Tab previous)\n       \
+                     frame DIR   (gallery of every .frame/.fm/.framez in DIR; ] / Tab next, [ / Shift-Tab previous)\n       \
                      frame --library ws://HOST:PORT/vox [--surface ID | --browse] [--engine …] [--install-dir DIR] [--screenshot OUT.png [--updates N]]";
 
 fn parse_args(args: impl IntoIterator<Item = String>) -> Result<Args, String> {
@@ -270,16 +270,16 @@ fn mock_engine(extra: &[PathBuf], served: Vec<surface_proto::Catalog>) -> Result
     Ok(surface_memory::Memory::new(catalog))
 }
 
-/// Every `.fm` / `.frame` in `dir`, sorted by name.
+/// Every frame document in `dir`, sorted by name.
 fn gallery(dir: &std::path::Path) -> Result<Vec<Source>, String> {
     let mut paths: Vec<PathBuf> = std::fs::read_dir(dir)
         .map_err(|e| format!("{}: {e}", dir.display()))?
         .filter_map(|e| e.ok().map(|e| e.path()))
-        .filter(|p| p.extension().is_some_and(|x| x == "fm" || x == "frame"))
+        .filter(|p| document_io::is_frame_document(p))
         .collect();
     paths.sort();
     if paths.is_empty() {
-        return Err(format!("{}: no .fm or .frame surfaces", dir.display()));
+        return Err(format!("{}: no .frame, .fm or .framez surfaces", dir.display()));
     }
     Ok(paths.into_iter().map(Source::from_path).collect())
 }
@@ -361,11 +361,11 @@ mod tests {
 
     #[test]
     fn files_and_flags() {
-        let a = args("s.fm --theme daylight --stats --size 800x600").unwrap();
+        let a = args("s.frame --theme daylight --stats --size 800x600").unwrap();
         assert!(matches!(a.source, Source::Markup(_)));
         assert!(a.stats);
         assert_eq!(a.size, (800, 600));
-        let a = args("--screenshot o.png --frames 5 --script drag-first-knob x.frame").unwrap();
+        let a = args("--screenshot o.png --frames 5 --script drag-first-knob x.framez").unwrap();
         assert!(matches!(a.source, Source::Bundle(_)));
         assert_eq!((a.frames, a.script), (5, Some(Script::DragFirstKnob)));
     }
@@ -373,9 +373,9 @@ mod tests {
     #[test]
     fn effects_default_to_gpu() {
         use render::fx::Mode;
-        assert_eq!(args("s.fm").unwrap().fx, Mode::Gpu);
-        assert_eq!(args("s.fm --no-fx").unwrap().fx, Mode::Fallback);
-        assert_eq!(args("--fx off s.fm").unwrap().fx, Mode::Off);
+        assert_eq!(args("s.frame").unwrap().fx, Mode::Gpu);
+        assert_eq!(args("s.frame --no-fx").unwrap().fx, Mode::Fallback);
+        assert_eq!(args("--fx off s.frame").unwrap().fx, Mode::Off);
         assert!(args("--fx neon").is_err());
     }
 
@@ -384,7 +384,7 @@ mod tests {
         let a = args("--engine ws://127.0.0.1:4040/vox --rig guitar").unwrap();
         assert!(matches!(a.source, Source::Generated { .. }), "no file → generated from the engine's catalog");
         assert_eq!(a.engine, Some(EngineArg { url: "ws://127.0.0.1:4040/vox".into(), rig: Some("guitar".into()) }));
-        let a = args("--rig keys s.fm --engine ws://h/vox").unwrap();
+        let a = args("--rig keys s.frame --engine ws://h/vox").unwrap();
         assert_eq!(a.engine.unwrap().rig.as_deref(), Some("keys"), "flag order doesn't matter");
         assert_eq!(args("--engine ws://h/vox").unwrap().engine.unwrap().rig, None);
         assert!(args("--rig guitar").is_err(), "--rig without --engine");
@@ -394,7 +394,7 @@ mod tests {
     #[test]
     fn rejects_junk() {
         assert!(args("--nope").is_err());
-        assert!(args("a.fm b.fm").is_err());
+        assert!(args("a.frame b.frame").is_err());
         assert!(args("--theme neon").is_err());
         assert!(args("--size 800").is_err());
     }

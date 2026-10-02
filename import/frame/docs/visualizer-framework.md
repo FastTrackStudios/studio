@@ -183,7 +183,7 @@ these) behind a slot table. The node's subtree is the vector fallback,
 built from `Plot` / `Curve` controls, so `--fx off` (and SVG) draw
 processor's `paint_*` picture. Components: `viz.comp_scope`,
 `viz.delay_taps`, `viz.reverb_space`, `viz.mod_lfo`, `viz.eq_glow`;
-examples `examples/surfaces/12-lit-*.fm`.
+examples `examples/surfaces/12-lit-*.frame`.
 
 New curve providers (`surface_runtime::viz_curves`) carry what signal and
 processor work out in their UI code, once for both paths: `delay.taps`
@@ -216,7 +216,7 @@ every edit. The Loro multi-editor merge below is not built yet.
 
 Nothing requires a relaunch. The document is the unit of change, and every
 host re-renders when it changes:
-- **Today:** the desktop player polls its `.fm` file and reloads it, and
+- **Today:** the desktop player polls its `.frame` file and reloads it, and
   `frame-mcp --file` autosaves after every tool call. So an agent editing
   through MCP updates the open window within about a frame.
 - **Push instead of poll:**

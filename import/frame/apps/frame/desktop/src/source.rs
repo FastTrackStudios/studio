@@ -13,16 +13,16 @@ pub enum Source {
     /// The surface generated from the engine's catalog (the demo engine's,
     /// or a live engine's with `--engine`).
     Generated { theme: Box<Theme> },
-    /// frame markup text (`.fm`, with its `.fm.assets/` textures and fonts).
+    /// frame markup text (`.frame`, or the legacy `.fm`, with its `.frame.assets/` textures and fonts).
     Markup(PathBuf),
-    /// A `.frame` bundle.
+    /// A `.framez` bundle (or a legacy zip `.frame`).
     Bundle(PathBuf),
 }
 
 impl Source {
     #[must_use]
     pub fn from_path(path: PathBuf) -> Self {
-        if path.extension().is_some_and(|e| e == "frame") { Self::Bundle(path) } else { Self::Markup(path) }
+        if document_io::Format::of(&path) == Some(document_io::Format::Bundle) { Self::Bundle(path) } else { Self::Markup(path) }
     }
 
     #[must_use]
@@ -164,7 +164,7 @@ mod tests {
     fn stamps_a_real_file() {
         let dir = std::env::temp_dir().join(format!("frame-desktop-watch-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
-        let f = dir.join("s.fm");
+        let f = dir.join("s.frame");
         assert_eq!(stamp(&f), None);
         std::fs::write(&f, "abc").unwrap();
         let first = stamp(&f);
@@ -178,7 +178,7 @@ mod tests {
     fn markup_loads_with_its_textures_and_an_asset_change_is_seen() {
         let dir = std::env::temp_dir().join(format!("frame-desktop-assets-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
-        let f = dir.join("tex.fm");
+        let f = dir.join("tex.frame");
         let mut scene = placeholder().scene;
         scene.add_asset("font/ttf", b"font one".to_vec());
         document_io::save_surface(&f, &scene).unwrap();
@@ -203,7 +203,8 @@ mod tests {
 
     #[test]
     fn picks_loader_by_extension() {
-        assert!(matches!(Source::from_path("a/b.frame".into()), Source::Bundle(_)));
+        assert!(matches!(Source::from_path("a/b.framez".into()), Source::Bundle(_)));
+        assert!(matches!(Source::from_path("a/b.frame".into()), Source::Markup(_)));
         assert!(matches!(Source::from_path("a/b.fm".into()), Source::Markup(_)));
     }
 
@@ -211,12 +212,12 @@ mod tests {
     fn markup_errors_carry_path_line_and_col() {
         let dir = std::env::temp_dir().join(format!("frame-desktop-src-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
-        let f = dir.join("bad.fm");
+        let f = dir.join("bad.frame");
         std::fs::write(&f, "<Document>\n  <Page>\n</Document>").unwrap();
         let err = Source::Markup(f.clone()).load(&surface_memory::demo_catalog()).unwrap_err();
         assert!(err.starts_with(&format!("{}:", f.display())), "{err}");
         assert!(err.split(':').nth(1).is_some_and(|l| l.parse::<usize>().is_ok()), "{err}");
-        assert!(Source::Markup(f).short_error(&err).starts_with("bad.fm:"), "{err}");
+        assert!(Source::Markup(f).short_error(&err).starts_with("bad.frame:"), "{err}");
         std::fs::remove_dir_all(&dir).unwrap();
     }
 }

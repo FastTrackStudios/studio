@@ -1,11 +1,11 @@
-//! Write `examples/surfaces/13-rig-panels.fm`: signal's guitar-rig control
+//! Write `examples/surfaces/13-rig-panels.frame`: signal's guitar-rig control
 //! row (compressor, EQ, modulation + motion, the two delays, the two
 //! reverbs) rebuilt from frame's lit visualizers at the rig's own pixel
 //! sizes, with the catalog and the feeds its design mode plays.
 //!
 //! ```text
 //! make_rig_panels [--out-dir examples/surfaces] [--time 1.28]
-//! render_surface --markup examples/surfaces/13-rig-panels.fm \
+//! render_surface --markup examples/surfaces/13-rig-panels.frame \
 //!     --catalog examples/surfaces/rig-panels.catalog.json \
 //!     --stream-file examples/surfaces/rig-panels.feeds --time 1.28 --out row.png
 //! ```
@@ -435,7 +435,7 @@ fn main() {
         }
         println!("{}", path.display());
     };
-    write("13-rig-panels.fm", text);
+    write("13-rig-panels.frame", text);
     write("rig-panels.catalog.json", json + "\n");
     write("rig-panels.feeds", lines.join("\n") + "\n");
 }
@@ -467,11 +467,11 @@ mod tests {
     /// and every lit shader's inputs resolve from the checked-in feeds.
     #[test]
     fn the_checked_in_row_plays_against_its_catalog_and_feeds() {
-        let text = std::fs::read_to_string(dir().join("13-rig-panels.fm")).expect("run make_rig_panels");
+        let text = std::fs::read_to_string(dir().join("13-rig-panels.frame")).expect("run make_rig_panels");
         let json = std::fs::read_to_string(dir().join("rig-panels.catalog.json")).unwrap();
         let catalog: Catalog = serde_json::from_str(&json).unwrap();
         let surface = Surface::from_scene(document_text::parse(&text, BTreeMap::new()).unwrap());
-        assert_eq!(surface.controls.len(), super::surface().controls.len(), "13-rig-panels.fm is stale: run make_rig_panels");
+        assert_eq!(surface.controls.len(), super::surface().controls.len(), "13-rig-panels.frame is stale: run make_rig_panels");
         for (id, c) in &surface.controls {
             let issues = c.validate(&catalog);
             assert!(issues.is_empty(), "{}: {issues:?}", surface.scene.node(*id).map_or("?", |n| n.name.as_str()));
