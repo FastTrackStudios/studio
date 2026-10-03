@@ -277,6 +277,23 @@ impl Theme {
             prims.insert(last + 1, PaintPrimitive::GroupEnd { node_id: b.node });
             prims.insert(first, PaintPrimitive::GroupStart { node_id: b.node, transform });
         }
+        // Scaled by an ancestor painted elsewhere (a knob's moving parts
+        // under the frame that sizes it): about that ancestor's origin,
+        // innermost applied first, so the outermost wraps everything.
+        for &i in unit.scalers.iter().rev() {
+            let b = &r.binds[i];
+            let parent = plan.parents.get(&b.node).copied().unwrap_or(size);
+            let Some(k) = b.expr.eval(&InstanceScope { size, parent, fields }).num() else { continue };
+            let (kx, ky) = match b.prop {
+                Prop::ScaleX => (k, 1.0),
+                Prop::ScaleY => (1.0, k),
+                _ => (k, k),
+            };
+            let (ox, oy) = plan.boxes.get(&b.node).map_or((0.0, 0.0), |lb| (lb.x, lb.y));
+            let transform = render::anyrender_renderer::AffineTransform2D::from([[kx, 0.0, ox - kx * ox], [0.0, ky, oy - ky * oy]]);
+            prims.insert(0, PaintPrimitive::GroupStart { node_id: b.node, transform });
+            prims.push(PaintPrimitive::GroupEnd { node_id: b.node });
+        }
         let keep = |id: NodeId| {
             let i = plan.order.get(&id).map_or(0, |s| s.0);
             !hidden.iter().any(|(s, e)| *s <= i && i < *e)

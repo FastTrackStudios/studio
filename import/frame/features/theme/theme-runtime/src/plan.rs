@@ -62,6 +62,9 @@ pub(crate) struct Unit {
     pub(crate) inner: Vec<usize>,
     /// Bindings on its ancestors that hide or move it.
     pub(crate) outer: Vec<usize>,
+    /// `scale` bindings on its ancestors, outermost first: they scale the
+    /// whole unit about each ancestor's origin.
+    pub(crate) scalers: Vec<usize>,
 }
 
 /// A hit target (a node named `@name`) or a host slot (`%name`).
@@ -208,6 +211,17 @@ impl Plan {
                 .collect()
         };
 
+        let scalers_of = |node: NodeId| -> Vec<usize> {
+            let mut found: Vec<usize> = binds
+                .iter()
+                .enumerate()
+                .filter(|(_, b)| matches!(b.prop, Prop::Scale | Prop::ScaleX | Prop::ScaleY))
+                .filter(|(_, b)| b.node != node && inside(node, b.node))
+                .map(|(i, _)| i)
+                .collect();
+            found.sort_by_key(|&i| span(binds[i].node).0);
+            found
+        };
         // ── live units ──
         let live = live_roots
             .iter()
@@ -218,6 +232,7 @@ impl Plan {
                     prims: wrap(&prims, range, |_| true),
                     inner: binds_within(root, true, true),
                     outer: movers_of(root, true),
+                    scalers: scalers_of(root),
                 }
             })
             .collect();
@@ -296,6 +311,7 @@ impl Plan {
                     prims: wrap(&prims, range.clone(), |q| !in_live(owner(q))),
                     inner: binds_within(root, true, false),
                     outer: movers_of(root, true),
+                    scalers: scalers_of(root),
                 }));
                 i = range.end;
                 continue;
@@ -308,6 +324,7 @@ impl Plan {
                     prims: wrap(&prims, range.clone(), |_| true),
                     inner: binds_within(o, false, false),
                     outer: movers_of(o, true),
+                    scalers: scalers_of(o),
                 }));
                 i = range.end;
                 continue;
