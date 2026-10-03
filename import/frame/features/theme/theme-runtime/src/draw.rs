@@ -132,9 +132,9 @@ impl Theme {
                 Seg::Unit(unit) => self.paint_unit(&Instance { role: r, plan: &plan, size, fields }, unit, canvas, at),
                 Seg::Slot(k) => {
                     if let Some(t) = plan.slots.get(*k)
-                        && let Some(d) = moved(r, &plan, &t.movers, size, fields)
+                        && let Some(at) = placed(r, &plan, t, size, fields)
                     {
-                        host(canvas, &t.name, t.rect + d);
+                        host(canvas, &t.name, at);
                     }
                 }
             }
@@ -160,7 +160,7 @@ impl Theme {
         let (r, plan) = self.plan(role, size, fields)?;
         plan.targets
             .iter()
-            .find(|t| moved(r, &plan, &t.movers, size, fields).is_some_and(|d| t.rect.contains(point - d)))
+            .find(|t| placed(r, &plan, t, size, fields).is_some_and(|at| at.contains(point)))
             .map(|t| t.name.clone())
     }
 
@@ -170,8 +170,7 @@ impl Theme {
     pub fn target_rect(&self, role: &str, size: (f64, f64), fields: &dyn Fields, name: &str) -> Option<Rect> {
         let (r, plan) = self.plan(role, size, fields)?;
         let t = plan.targets.iter().find(|t| t.name == name)?;
-        let d = moved(r, &plan, &t.movers, size, fields)?;
-        Some(t.rect + d)
+        placed(r, &plan, t, size, fields)
     }
 
     /// The host's slots for this instance — nodes named `%name`, each
@@ -184,7 +183,7 @@ impl Theme {
         let Some((r, plan)) = self.plan(role, size, fields) else { return Vec::new() };
         plan.slots
             .iter()
-            .filter_map(|t| moved(r, &plan, &t.movers, size, fields).map(|d| (t.name.clone(), t.rect + d)))
+            .filter_map(|t| placed(r, &plan, t, size, fields).map(|at| (t.name.clone(), at)))
             .collect()
     }
 
@@ -288,6 +287,23 @@ impl Theme {
 
 /// The offset bindings on `node` and its ancestors (`movers`) give it for
 /// this instance, or `None` when one of them hides it.
+/// Where a target or slot is for this instance: moved by its bindings and
+/// its ancestors', sized by its own — or `None` when hidden.
+fn placed(r: &Role, plan: &Plan, t: &crate::plan::Target, size: (f64, f64), fields: &dyn Fields) -> Option<Rect> {
+    let mut at = t.rect + moved(r, plan, &t.movers, size, fields)?;
+    for &i in &t.sizers {
+        let b = &r.binds[i];
+        let parent = plan.parents.get(&b.node).copied().unwrap_or(size);
+        let Some(v) = b.expr.eval(&InstanceScope { size, parent, fields }).num() else { continue };
+        if b.prop == Prop::W {
+            at.x1 = at.x0 + v.max(0.0);
+        } else {
+            at.y1 = at.y0 + v.max(0.0);
+        }
+    }
+    Some(at)
+}
+
 fn moved(r: &Role, plan: &Plan, movers: &[usize], size: (f64, f64), fields: &dyn Fields) -> Option<kurbo::Vec2> {
     let mut d = kurbo::Vec2::ZERO;
     for &i in movers {

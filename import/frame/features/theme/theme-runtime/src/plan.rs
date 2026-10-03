@@ -71,6 +71,9 @@ pub(crate) struct Target {
     pub(crate) rect: Rect,
     /// `visible`/`x`/`y` bindings on it or its ancestors.
     pub(crate) movers: Vec<usize>,
+    /// Its own `w`/`h` bindings that read host data (a size binding on
+    /// the box alone is in `rect` already).
+    pub(crate) sizers: Vec<usize>,
 }
 
 impl Plan {
@@ -239,6 +242,12 @@ impl Plan {
                     name: name.to_owned(),
                     rect: Rect::new(b.x, b.y, b.x + b.width, b.y + b.height),
                     movers: movers_of(id, false),
+                    sizers: binds
+                        .iter()
+                        .enumerate()
+                        .filter(|(_, b)| b.node == id && b.class != Class::Size && matches!(b.prop, Prop::W | Prop::H))
+                        .map(|(i, _)| i)
+                        .collect(),
                 })
             })
         };

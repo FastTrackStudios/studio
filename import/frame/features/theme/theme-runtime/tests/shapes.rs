@@ -58,3 +58,15 @@ fn one_corner_radius_rounds_that_corner_only() {
     assert!((area(0.5) - (square - 2.0 * quarter * 0.25)).abs() < 0.5, "{}", area(0.5));
     assert!((area(1.0) - (square - 2.0 * quarter)).abs() < 0.5, "{}", area(1.0));
 }
+
+/// A target sized by host data is hit and reported at that size.
+#[test]
+fn a_target_sized_by_host_data_is_that_size() {
+    let src = r##"<Document><Page name="row"><Frame name="Row" w=100 h=40>
+      <Frame name="@name" x=10 y=5 w=10 h=10 bind:w="v * 50" />
+    </Frame></Page></Document>"##;
+    let t = Theme::from_markup(src, Schema::new().field("v"), None).unwrap_or_else(|d| panic!("{d:?}"));
+    let f: &dyn Fields = &vec![Value::Num(1.0)];
+    assert_eq!(t.target_rect("row", (100.0, 40.0), f, "name"), Some(Rect::new(10.0, 5.0, 60.0, 15.0)));
+    assert_eq!(t.hit("row", (100.0, 40.0), f, kurbo::Point::new(55.0, 10.0)).as_deref(), Some("name"));
+}
