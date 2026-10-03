@@ -46,6 +46,10 @@ pub(crate) struct Plan {
 pub(crate) enum Seg {
     Picture(Recording),
     Unit(Unit),
+    /// Where a host slot falls in paint order (an index into
+    /// [`Plan::slots`]): the host draws there, and the theme goes on over
+    /// it.
+    Slot(usize),
 }
 
 pub(crate) struct Unit {
@@ -62,6 +66,7 @@ pub(crate) struct Unit {
 
 /// A hit target (a node named `@name`) or a host slot (`%name`).
 pub(crate) struct Target {
+    pub(crate) node: NodeId,
     pub(crate) name: String,
     pub(crate) rect: Rect,
     /// `visible`/`x`/`y` bindings on it or its ancestors.
@@ -214,7 +219,40 @@ impl Plan {
             })
             .collect();
 
+        // ── hit targets and slots ──
+        let (scene, boxes_ref) = (&scene, &boxes);
+        let named = |prefix: char| {
+            scene.walk(role.root).into_iter().filter_map(move |id| {
+                let n = scene.node(id)?;
+                let name = n.name.strip_prefix(prefix)?;
+                // Hidden at this size, by itself or an ancestor.
+                let mut up = Some(id);
+                while let Some(a) = up.and_then(|a| scene.node(a)) {
+                    if !a.visible {
+                        return None;
+                    }
+                    up = a.parent;
+                }
+                let b = boxes_ref.get(&id)?;
+                Some(Target {
+                    node: id,
+                    name: name.to_owned(),
+                    rect: Rect::new(b.x, b.y, b.x + b.width, b.y + b.height),
+                    movers: movers_of(id, false),
+                })
+            })
+        };
+        // Topmost first: what paints last is hit first.
+        let targets: Vec<Target> = named('@').collect::<Vec<_>>().into_iter().rev().collect();
+        let slots: Vec<Target> = named('%').collect();
+
         // ── the record pass, in paint order ──
+        // The slots, by where they start in paint order: each splits the
+        // recording there. One inside a unit (a placed subtree) falls
+        // after the whole unit.
+        let mut slot_at: Vec<(u32, usize)> = slots.iter().enumerate().map(|(k, t)| (span(t.node).0, k)).collect();
+        slot_at.sort_unstable();
+        let mut next_slot = 0;
         let mut record = Vec::new();
         let mut run: HashSet<NodeId> = HashSet::new();
         let mut i = 0;
@@ -230,6 +268,13 @@ impl Plan {
         while i < prims.len() {
             let p = &prims[i];
             let o = owner(p);
+            while let Some(&(start, k)) = slot_at.get(next_slot)
+                && start <= owner_span(p)
+            {
+                flush(&mut run, &mut record);
+                record.push(Seg::Slot(k));
+                next_slot += 1;
+            }
             if !is_leaf(p) || in_live(o) {
                 i += 1;
                 continue;
@@ -262,32 +307,9 @@ impl Plan {
             i += 1;
         }
         flush(&mut run, &mut record);
-
-        // ── hit targets and slots ──
-        let (scene, boxes_ref) = (&scene, &boxes);
-        let named = |prefix: char| {
-            scene.walk(role.root).into_iter().filter_map(move |id| {
-                let n = scene.node(id)?;
-                let name = n.name.strip_prefix(prefix)?;
-                // Hidden at this size, by itself or an ancestor.
-                let mut up = Some(id);
-                while let Some(a) = up.and_then(|a| scene.node(a)) {
-                    if !a.visible {
-                        return None;
-                    }
-                    up = a.parent;
-                }
-                let b = boxes_ref.get(&id)?;
-                Some(Target {
-                    name: name.to_owned(),
-                    rect: Rect::new(b.x, b.y, b.x + b.width, b.y + b.height),
-                    movers: movers_of(id, false),
-                })
-            })
-        };
-        // Topmost first: what paints last is hit first.
-        let targets = named('@').collect::<Vec<_>>().into_iter().rev().collect();
-        let slots = named('%').collect();
+        for &(_, k) in slot_at.get(next_slot..).unwrap_or_default() {
+            record.push(Seg::Slot(k));
+        }
 
         Plan { order, parents, boxes, record, live, targets, slots }
     }

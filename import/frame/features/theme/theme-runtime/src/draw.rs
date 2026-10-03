@@ -104,6 +104,39 @@ impl Theme {
             match seg {
                 Seg::Picture(rec) => rec.replay(canvas, at),
                 Seg::Unit(unit) => self.paint_unit(&Instance { role: r, plan: &plan, size, fields }, unit, canvas, at),
+                Seg::Slot(_) => {}
+            }
+        }
+        true
+    }
+
+    /// [`Theme::record`], handing the canvas to `host` at each shown slot
+    /// (a node named `%name`), in paint order: what the theme paints
+    /// before the slot is under what the host draws there, what it paints
+    /// after is over it — a panel's ground under a curve, its bypass scrim
+    /// over the curve, its title over the scrim. `host` gets the slot's
+    /// name and its box in instance space.
+    pub fn record_with<C: Canvas>(
+        &self,
+        role: &str,
+        size: (f64, f64),
+        fields: &dyn Fields,
+        canvas: &mut C,
+        at: Affine,
+        host: &mut dyn FnMut(&mut C, &str, Rect),
+    ) -> bool {
+        let Some((r, plan)) = self.plan(role, size, fields) else { return false };
+        for seg in &plan.record {
+            match seg {
+                Seg::Picture(rec) => rec.replay(canvas, at),
+                Seg::Unit(unit) => self.paint_unit(&Instance { role: r, plan: &plan, size, fields }, unit, canvas, at),
+                Seg::Slot(k) => {
+                    if let Some(t) = plan.slots.get(*k)
+                        && let Some(d) = moved(r, &plan, &t.movers, size, fields)
+                    {
+                        host(canvas, &t.name, t.rect + d);
+                    }
+                }
             }
         }
         true
@@ -459,3 +492,4 @@ fn keep_gradient(fill: &mut FillPaint, from: (f64, f64, f64, f64), to: (f64, f64
         [md * t.c, md * t.d, md.mul_add(t.ty, my)],
     ]));
 }
+
