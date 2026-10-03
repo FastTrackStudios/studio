@@ -251,11 +251,16 @@ impl Theme {
         // about the node's laid-out origin.
         for &i in &unit.inner {
             let b = &r.binds[i];
-            if b.prop != Prop::Scale {
+            if !matches!(b.prop, Prop::Scale | Prop::ScaleX | Prop::ScaleY) {
                 continue;
             }
             let parent = plan.parents.get(&b.node).copied().unwrap_or(size);
             let Some(k) = b.expr.eval(&InstanceScope { size, parent, fields }).num() else { continue };
+            let (kx, ky) = match b.prop {
+                Prop::ScaleX => (k, 1.0),
+                Prop::ScaleY => (1.0, k),
+                _ => (k, k),
+            };
             let span = plan.order.get(&b.node).copied().unwrap_or((0, 0));
             let (Some(first), Some(last)) = (
                 prims.iter().position(|p| within(plan, owner(p), span)),
@@ -269,7 +274,7 @@ impl Theme {
                 .filter(|((s, e), ..)| *s <= at && at < *e)
                 .fold((0.0, 0.0), |(x, y), (_, dx, dy)| (x + dx, y + dy));
             let (ox, oy) = plan.boxes.get(&b.node).map_or((0.0, 0.0), |lb| (lb.x + mx, lb.y + my));
-            let transform = render::anyrender_renderer::AffineTransform2D::from([[k, 0.0, ox - k * ox], [0.0, k, oy - k * oy]]);
+            let transform = render::anyrender_renderer::AffineTransform2D::from([[kx, 0.0, ox - kx * ox], [0.0, ky, oy - ky * oy]]);
             prims.insert(last + 1, PaintPrimitive::GroupEnd { node_id: b.node });
             prims.insert(first, PaintPrimitive::GroupStart { node_id: b.node, transform });
         }
@@ -407,6 +412,14 @@ fn patch(p: &mut PaintPrimitive, b: &Bound, v: &Value) {
         (Prop::Size, PaintPrimitive::Text { font_size, .. }) => {
             if let Some(n) = v.num() {
                 *font_size = n.max(0.0);
+            }
+        }
+        (
+            Prop::RadiusTopLeft | Prop::RadiusTopRight | Prop::RadiusBottomRight | Prop::RadiusBottomLeft,
+            PaintPrimitive::Rect { corner_radii, .. },
+        ) => {
+            if let Some(n) = v.num() {
+                crate::compile::set_corner(corner_radii, b.prop, n);
             }
         }
         (Prop::Radius, PaintPrimitive::Rect { corner_radii, .. }) => {

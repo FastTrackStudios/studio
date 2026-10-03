@@ -45,8 +45,17 @@ pub(crate) enum Prop {
     Rotation,
     /// The node and everything in it scaled about its origin.
     Scale,
+    /// The same along one axis: a control squashed to a row too short
+    /// for it, its width kept.
+    ScaleX,
+    ScaleY,
     Opacity,
     Radius,
+    /// One corner's radius: a pill rounded at one end.
+    RadiusTopLeft,
+    RadiusTopRight,
+    RadiusBottomRight,
+    RadiusBottomLeft,
     Fill,
     Stroke,
     /// How much of the stroke is drawn, px from its start.
@@ -68,7 +77,10 @@ impl Prop {
     /// Painted per instance whether constant or not: no document
     /// property says it.
     pub(crate) const fn is_inset(self) -> bool {
-        matches!(self, Prop::InsetTop | Prop::InsetBottom | Prop::InsetLeft | Prop::InsetRight | Prop::Scale)
+        matches!(
+            self,
+            Prop::InsetTop | Prop::InsetBottom | Prop::InsetLeft | Prop::InsetRight | Prop::Scale | Prop::ScaleX | Prop::ScaleY
+        )
     }
 
     fn named(name: &str) -> Option<Prop> {
@@ -80,8 +92,14 @@ impl Prop {
             "h" => Prop::H,
             "rotation" => Prop::Rotation,
             "scale" => Prop::Scale,
+            "scale-x" => Prop::ScaleX,
+            "scale-y" => Prop::ScaleY,
             "opacity" => Prop::Opacity,
             "radius" => Prop::Radius,
+            "radius-tl" => Prop::RadiusTopLeft,
+            "radius-tr" => Prop::RadiusTopRight,
+            "radius-br" => Prop::RadiusBottomRight,
+            "radius-bl" => Prop::RadiusBottomLeft,
             "fill" => Prop::Fill,
             "stroke" => Prop::Stroke,
             "dash" => Prop::Dash,
@@ -503,7 +521,12 @@ pub(crate) fn apply(node: &mut Node, prop: Prop, v: &Value) {
                 node.stroke.dash_pattern = vec![n.max(0.0), DASH_GAP];
             }
         }
-        Prop::InsetTop | Prop::InsetBottom | Prop::InsetLeft | Prop::InsetRight | Prop::Scale => {}
+        Prop::InsetTop | Prop::InsetBottom | Prop::InsetLeft | Prop::InsetRight | Prop::Scale | Prop::ScaleX | Prop::ScaleY => {}
+        Prop::RadiusTopLeft | Prop::RadiusTopRight | Prop::RadiusBottomRight | Prop::RadiusBottomLeft => {
+            if let Some(n) = v.num() {
+                set_corner(&mut node.corner_radii, prop, n);
+            }
+        }
         Prop::Geometry => {
             if let Some(path) = v.as_text() {
                 node.fill_geometry = vec![path.to_string()];
@@ -520,6 +543,18 @@ pub(crate) fn apply(node: &mut Node, prop: Prop, v: &Value) {
                 data.runs.clear();
             }
         }
+    }
+}
+
+/// Set one corner of `radii` (`prop` a corner radius) to `r`.
+pub(crate) fn set_corner(radii: &mut document_proto::CornerRadii, prop: Prop, r: f64) {
+    let r = r.max(0.0);
+    match prop {
+        Prop::RadiusTopLeft => radii.top_left = r,
+        Prop::RadiusTopRight => radii.top_right = r,
+        Prop::RadiusBottomRight => radii.bottom_right = r,
+        Prop::RadiusBottomLeft => radii.bottom_left = r,
+        _ => {}
     }
 }
 
