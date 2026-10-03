@@ -679,13 +679,102 @@ pub mod analysis {
         let mut h1 = 0.0f32;
         for (k, slot) in out.iter_mut().enumerate() {
             // Radians per sample for this harmonic.
-            let w = core::f32::consts::TAU * cycles * num::count_to_f32(k.saturating_add(1)) / length;
+            let w =
+                core::f32::consts::TAU * cycles * num::count_to_f32(k.saturating_add(1)) / length;
             let coeff = 2.0 * w.cos();
             // The Goertzel recurrence: one multiply-add per sample rather
             // than a sine and a cosine, which is what made the probe
             // cheap enough to run at several levels per settings change.
             let (mut s1, mut s2) = (0.0f32, 0.0f32);
             for &x in seg {
+                let s0 = coeff.mul_add(s1, x - s2);
+                s2 = s1;
+                s1 = s0;
+            }
+            let power = s1.mul_add(s1, s2.mul_add(s2, -coeff * s1 * s2));
+            let mag = power.max(0.0).sqrt();
+            if k == 0 {
+                h1 = mag.max(1.0e-12);
+            }
+            *slot = mag / h1.max(1.0e-12);
+        }
+    }
+
+    /// The tilt's pre-emphasis at `freq_hz`, in dB.
+    ///
+    /// This is the shelf `|H(e^jω)|` the stage runs before its knee: what
+    /// it does to the level reaching the shaper. Positive pushes that
+    /// frequency into the curve harder; the
+    /// de-emphasis takes it back out afterwards, so this is a statement about
+    /// *what distorts*, not about the output's tone.
+    #[must_use]
+    pub fn emphasis_db(pre: &ClassAPreamp, freq_hz: f32) -> f32 {
+        let c = pre.tilt;
+        let w =
+            core::f32::consts::TAU * freq_hz.clamp(1.0, pre.sample_rate * 0.5) / pre.sample_rate;
+        let (sin, cos) = w.sin_cos();
+        // H(e^jω) = (b0 + b1·e^−jω) / (1 + a1·e^−jω)
+        let num_re = c.b1.mul_add(cos, c.b0);
+        let num_im = -c.b1 * sin;
+        let den_re = c.a1.mul_add(cos, 1.0);
+        let den_im = -c.a1 * sin;
+        let num = num_re.mul_add(num_re, num_im * num_im);
+        let den = den_re.mul_add(den_re, den_im * den_im).max(1.0e-12);
+        10.0 * (num / den).max(1.0e-12).log10()
+    }
+
+    /// The harmonic spectrum of the CURRENT settings at a chosen frequency.
+    ///
+    /// [`harmonic_spectrum_at`] with the probe's frequency `freq_hz` chosen
+    /// rather than fixed, at `level_dbfs`.
+    ///
+    /// The fixed probe cannot see the tilt: a filter pair changes what the
+    /// stage does to a 40 Hz note and a 4 kHz one, and a single-frequency
+    /// measurement averages that away. This one runs the whole stage
+    /// (emphasis, sag, shaping, DC blocker, de-emphasis) on a state clone at
+    /// the asked frequency, rounded to a whole number of cycles over the
+    /// analysis window so each harmonic lands on a Goertzel bin. Harmonics
+    /// at or above Nyquist read zero rather than an alias.
+    ///
+    /// `out[k]` = linear magnitude of harmonic k+1, normalized so H1 = 1.
+    pub fn harmonic_spectrum_at_freq(
+        pre: &ClassAPreamp,
+        freq_hz: f32,
+        level_dbfs: f32,
+        out: &mut [f32],
+    ) {
+        const N: usize = 4096;
+        let mut probe = pre.clone();
+        probe.mix = 1.0;
+        probe.output_gain = 1.0;
+        probe.reset();
+        let amplitude = 10.0_f32.powf(level_dbfs.min(0.0) / 20.0);
+        let length = num::count_to_f32(N);
+        // Whole cycles over the window, at least one.
+        let cycles = (freq_hz.max(1.0) * length / probe.sample_rate.max(1.0))
+            .round()
+            .max(1.0);
+        // Two windows: the first settles the DC blocker and the sag, the
+        // second is measured.
+        let mut seg: vec::Vec<f32> = vec::Vec::with_capacity(N);
+        for i in 0..N.saturating_mul(2) {
+            let ph = core::f32::consts::TAU * cycles * num::count_to_f32(i) / length;
+            let y = probe.process(0, amplitude * ph.sin());
+            if i >= N {
+                seg.push(y);
+            }
+        }
+        let mut h1 = 0.0f32;
+        for (k, slot) in out.iter_mut().enumerate() {
+            let harmonic = cycles * num::count_to_f32(k.saturating_add(1));
+            if harmonic >= length * 0.5 {
+                *slot = 0.0;
+                continue;
+            }
+            let w = core::f32::consts::TAU * harmonic / length;
+            let coeff = 2.0 * w.cos();
+            let (mut s1, mut s2) = (0.0f32, 0.0f32);
+            for &x in &seg {
                 let s0 = coeff.mul_add(s1, x - s2);
                 s2 = s1;
                 s1 = s0;
@@ -746,6 +835,45 @@ mod tests {
             db(h[1])
         );
         assert!(db(h[3]) > -60.0, "4th follows: {} dB", db(h[3]));
+    }
+
+    /// The emphasis probe reads the shelf the stage actually runs: flat at
+    /// zero tilt, and at +6 dB the top pushed up and the bottom down by
+    /// about that much either side of the 700 Hz hinge.
+    #[test]
+    fn emphasis_db_reads_the_tilt_shelf() {
+        use super::analysis::emphasis_db;
+        let mut p = ClassAPreamp::new(48_000.0);
+        for f in [30.0, 700.0, 10_000.0] {
+            assert!(emphasis_db(&p, f).abs() < 0.01, "flat at {f} Hz");
+        }
+        p.set_tilt_db(6.0);
+        assert!((emphasis_db(&p, 15_000.0) - 6.0).abs() < 0.6, "top");
+        assert!((emphasis_db(&p, 25.0) + 6.0).abs() < 0.6, "bottom");
+        assert!(emphasis_db(&p, 700.0).abs() < 3.0, "hinge");
+    }
+
+    /// The frequency-chosen probe agrees with the fixed one at the fixed
+    /// one's frequency (64 cycles in 8192 samples, 375 Hz at 48 kHz).
+    #[test]
+    fn harmonic_probe_at_freq_matches_the_fixed_probe() {
+        use super::analysis::{harmonic_spectrum_at, harmonic_spectrum_at_freq};
+        let mut p = ClassAPreamp::new(48_000.0);
+        p.drive = 4.0;
+        p.positive = SideShaper::Tube;
+        p.negative = SideShaper::OpAmp;
+        let (mut fixed, mut chosen) = ([0.0f32; 5], [0.0f32; 5]);
+        harmonic_spectrum_at(&p, -6.0, &mut fixed);
+        harmonic_spectrum_at_freq(&p, 375.0, -6.0, &mut chosen);
+        for (k, (a, b)) in fixed.iter().zip(&chosen).enumerate() {
+            assert!(
+                (db(*a) - db(*b)).abs() < 1.0,
+                "H{}: {} vs {}",
+                k + 1,
+                db(*a),
+                db(*b)
+            );
+        }
     }
 
     #[test]

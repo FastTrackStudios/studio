@@ -208,7 +208,8 @@ pub static DIGITAL: SatDesign = SatDesign {
 #[must_use]
 pub fn design_for(profile_id: &str) -> &'static SatDesign {
     match saturate_profiles::category_of(profile_id)
-        .map(|(c, _)| saturate_profiles::CATEGORIES[c].id)
+        .and_then(|(c, _)| saturate_profiles::CATEGORIES.get(c))
+        .map(|category| category.id)
     {
         Some("tube") => &TUBE,
         Some("tape") => &TAPE,
@@ -221,7 +222,9 @@ pub fn design_for(profile_id: &str) -> &'static SatDesign {
 #[must_use]
 pub fn variant_lift(profile_id: &str) -> f64 {
     match saturate_profiles::category_of(profile_id) {
-        Some((_, index)) => (index as f64).mul_add(0.25, 1.0),
+        // A variant is at most the third of its family, so the u16 is never
+        // the limit; saturating keeps a fourth from wrapping anyway.
+        Some((_, index)) => f64::from(u16::try_from(index).unwrap_or(u16::MAX)).mul_add(0.25, 1.0),
         None => 1.0,
     }
 }
@@ -253,8 +256,12 @@ pub fn SatFace(
 ) -> Element {
     let _ = frame;
     let design = design_for(&profile_id);
-    let profile =
-        saturate_profiles::profile_by_id(&profile_id).unwrap_or(&saturate_profiles::PROFILES[0]);
+    // An unknown id draws the first profile; an empty table draws nothing.
+    let Some(profile) = saturate_profiles::profile_by_id(&profile_id)
+        .or_else(|| saturate_profiles::PROFILES.first())
+    else {
+        return rsx! {};
+    };
     // The rail's own width, from fts-audio-ui rather than from
     // `control_view` — the panels are drawn without the `native` feature too,
     // and reaching into a module that is not compiled there broke the crate
@@ -416,8 +423,12 @@ fn CurveView(
     let glow = drive.mul_add(0.5, 0.35).min(0.95) * lift.min(1.5);
     let body = accent;
 
-    let profile =
-        saturate_profiles::profile_by_id(&profile_id).unwrap_or(&saturate_profiles::PROFILES[0]);
+    // An unknown id draws the first profile; an empty table draws nothing.
+    let Some(profile) = saturate_profiles::profile_by_id(&profile_id)
+        .or_else(|| saturate_profiles::PROFILES.first())
+    else {
+        return rsx! {};
+    };
     let mut pre = saturate_dsp::preamp::ClassAPreamp::new(48_000.0);
     let mut quantiser = saturate_dsp::digital::DigitalStage::new();
     saturate_profiles::apply(profile, &controls, &mut pre, &mut quantiser);
@@ -437,7 +448,7 @@ fn CurveView(
     let samples = 200;
     for i in 0..=samples {
         let x = -1.0 + 2.0 * f64::from(i) / f64::from(samples);
-        let shaped = pre.transfer(x as f32) * makeup;
+        let shaped = pre.transfer(dsp_core::num::f64_to_f32(x)) * makeup;
         let y = f64::from(quantiser.process(0, shaped)).clamp(-1.0, 1.0);
         let (px, py) = ((x * half).mul_add(2.0, cx), cy - y * half);
         let _ = write!(
@@ -486,7 +497,7 @@ fn CurveView(
                     path {
                         d: "M {w - 82.0:.1} {cy + 18.0:.1} L {w - 74.0:.1} {cy - 14.0:.1} L {w - 66.0:.1} {cy + 18.0:.1}",
                         fill: "none", stroke: "{body}", stroke_width: "2.2",
-                        opacity: "{(0.35 + drive * 0.65):.3}",
+                        opacity: "{drive.mul_add(0.65, 0.35):.3}",
                     }
                 },
                 // Tape over a head.
@@ -502,13 +513,13 @@ fn CurveView(
                 Circuit::Core => rsx! {
                     rect { x: "{w - 104.0:.1}", y: "{cy - 34.0:.1}", width: "64", height: "68", rx: "3",
                         fill: "none", stroke: "{ink}", stroke_width: "1.6" }
-                    for i in 0..5 {
+                    for i in 0..5_u8 {
                         path {
                             key: "{i}",
-                            d: "M {w - 110.0:.1} {cy - 24.0 + i as f64 * 12.0:.1} \
+                            d: "M {w - 110.0:.1} {f64::from(i).mul_add(12.0, cy - 24.0):.1} \
                                 q 10 -8 20 0 q 10 8 20 0 q 10 -8 20 0",
                             fill: "none", stroke: "{body}", stroke_width: "1.6",
-                            opacity: "{glow * (1.0 - i as f64 * 0.12):.3}",
+                            opacity: "{glow * f64::from(i).mul_add(-0.12, 1.0):.3}",
                         }
                     }
                 },
@@ -517,22 +528,22 @@ fn CurveView(
                     for (i , sign) in [-1.0_f64, 1.0].into_iter().enumerate() {
                         circle {
                             key: "{i}",
-                            cx: "{cx + sign * (half * 2.0 / gain).min(half * 2.0):.1}",
-                            cy: "{cy - sign * half * 0.92:.1}",
+                            cx: "{sign.mul_add((half * 2.0 / gain).min(half * 2.0), cx):.1}",
+                            cy: "{(-sign * half).mul_add(0.92, cy):.1}",
                             r: "4", fill: "{body}", opacity: "{glow:.3}",
                         }
                     }
                 },
                 // The steps, counted out along the ceiling.
                 Circuit::Steps => rsx! {
-                    for i in 0..8 {
+                    for i in 0..8_u8 {
                         rect {
                             key: "{i}",
-                            x: "{w - 108.0 + i as f64 * 11.0:.1}",
-                            y: "{cy - 30.0 + i as f64 * 6.0:.1}",
+                            x: "{f64::from(i).mul_add(11.0, w - 108.0):.1}",
+                            y: "{f64::from(i).mul_add(6.0, cy - 30.0):.1}",
                             width: "9", height: "5",
                             fill: "{body}",
-                            opacity: "{glow * (1.0 - i as f64 * 0.09):.3}",
+                            opacity: "{glow * f64::from(i).mul_add(-0.09, 1.0):.3}",
                         }
                     }
                 },

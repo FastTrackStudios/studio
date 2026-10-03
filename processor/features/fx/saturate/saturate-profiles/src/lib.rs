@@ -468,22 +468,10 @@ fn trim(knob: f32, at_noon: f32, lo: f32, hi: f32) -> f32 {
 /// same: 0.5 is `at_noon`, the ends are `at_noon` times 2^∓`octaves`.
 fn trim_ratio(knob: f32, at_noon: f32, octaves: f32) -> f32 {
     let k = (knob.clamp(0.0, 1.0) - 0.5) * 2.0 * octaves;
-    // 2^k without `powf` — the caller is on the audio thread's setter path,
-    // but this crate is plain `std`-free arithmetic and it is cheap either way.
-    at_noon * libm_exp2(k)
-}
-
-/// 2^x for |x| ≤ ~8, integer part by exponent surgery and a cubic on the
-/// fraction (the same approach `saturate-dsp` uses; duplicated rather than
-/// exported so the DSP crate keeps its surface small).
-fn libm_exp2(x: f32) -> f32 {
-    let mut xi = x as i32;
-    if (xi as f32) > x {
-        xi -= 1;
-    }
-    let xf = x - xi as f32;
-    let frac = xf.mul_add(xf.mul_add(xf.mul_add(0.078_024, 0.226_174), 0.695_976), 1.0);
-    frac * f32::from_bits(((127 + xi.clamp(-126, 127)) as u32) << 23)
+    // This runs on the setter path, not per sample, and the crate links std,
+    // so the real `exp2` is the honest answer. (It was a hand-rolled cubic
+    // with exponent surgery — `as` casts the strict lints rightly refused.)
+    at_noon * k.exp2()
 }
 
 /// Point the engine at a profile.
@@ -630,13 +618,15 @@ pub fn rail_click_target(current_index: usize, clicked_category: usize) -> usize
     let Some(category) = CATEGORIES.get(clicked_category) else {
         return current_index;
     };
-    let next_id = match category_of(current_id) {
-        Some((ci, vi)) if ci == clicked_category => {
-            category.profiles[(vi + 1) % category.profiles.len()]
-        }
-        _ => category.profiles[0],
+    let next = match category_of(current_id) {
+        Some((ci, vi)) if ci == clicked_category => category
+            .profiles
+            .get(vi.saturating_add(1))
+            .or_else(|| category.profiles.first()),
+        _ => category.profiles.first(),
     };
-    profile_index(next_id).unwrap_or(current_index)
+    next.and_then(|id| profile_index(id))
+        .unwrap_or(current_index)
 }
 
 #[cfg(test)]

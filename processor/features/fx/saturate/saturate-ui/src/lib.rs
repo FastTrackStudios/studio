@@ -7,6 +7,9 @@
 
 pub mod faces;
 
+#[cfg(feature = "viz")]
+pub mod viz;
+
 #[cfg(feature = "native")]
 pub mod control_view;
 #[cfg(feature = "native")]
