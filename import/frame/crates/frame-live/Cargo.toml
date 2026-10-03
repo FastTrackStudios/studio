@@ -21,6 +21,15 @@ kurbo = { workspace = true }
 peniko = { workspace = true }
 vello = { workspace = true }
 
+# Paint a surface's vectors into a host's anyrender 0.11 scene
+# (`LiveSurface::paint_vectors`) — for a host whose renderer gives no Vello
+# GPU to render with: vello-hybrid on the iOS simulator.
+anyrender = { version = "0.11", optional = true }
+anyrender_svg = { version = "0.12", optional = true }
+
+[features]
+anyrender-0-11 = ["dep:anyrender", "dep:anyrender_svg"]
+
 [dev-dependencies]
 wgpu = "29"
 pollster = "0.4"

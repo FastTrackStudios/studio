@@ -12,6 +12,8 @@ mod geometry;
 mod paint;
 #[cfg(feature = "anyrender")]
 mod soft;
+#[cfg(feature = "anyrender")]
+pub mod target;
 #[cfg(feature = "svg_export")]
 pub(crate) mod subpaths;
 
@@ -41,3 +43,5 @@ pub use types::{
 
 #[cfg(feature = "anyrender")]
 pub use paint::{paint_primitives_into_scene_with, paint_scene_into};
+#[cfg(feature = "anyrender")]
+pub use target::{GlyphRun, PaintTarget};
