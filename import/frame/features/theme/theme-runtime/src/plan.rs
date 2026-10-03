@@ -39,6 +39,8 @@ pub(crate) struct Plan {
     pub(crate) record: Vec<Seg>,
     pub(crate) live: Vec<Unit>,
     pub(crate) targets: Vec<Target>,
+    /// The host's slots (nodes named `%name`), in paint order.
+    pub(crate) slots: Vec<Target>,
 }
 
 pub(crate) enum Seg {
@@ -58,7 +60,7 @@ pub(crate) struct Unit {
     pub(crate) outer: Vec<usize>,
 }
 
-/// A hit target: a node named `@name`.
+/// A hit target (a node named `@name`) or a host slot (`%name`).
 pub(crate) struct Target {
     pub(crate) name: String,
     pub(crate) rect: Rect,
@@ -261,13 +263,12 @@ impl Plan {
         }
         flush(&mut run, &mut record);
 
-        // ── hit targets ──
-        let targets = scene
-            .walk(role.root)
-            .into_iter()
-            .filter_map(|id| {
+        // ── hit targets and slots ──
+        let (scene, boxes_ref) = (&scene, &boxes);
+        let named = |prefix: char| {
+            scene.walk(role.root).into_iter().filter_map(move |id| {
                 let n = scene.node(id)?;
-                let name = n.name.strip_prefix('@')?;
+                let name = n.name.strip_prefix(prefix)?;
                 // Hidden at this size, by itself or an ancestor.
                 let mut up = Some(id);
                 while let Some(a) = up.and_then(|a| scene.node(a)) {
@@ -276,18 +277,19 @@ impl Plan {
                     }
                     up = a.parent;
                 }
-                let b = boxes.get(&id)?;
+                let b = boxes_ref.get(&id)?;
                 Some(Target {
                     name: name.to_owned(),
                     rect: Rect::new(b.x, b.y, b.x + b.width, b.y + b.height),
                     movers: movers_of(id, false),
                 })
             })
-            // Topmost first: what paints last is hit first.
-            .rev()
-            .collect();
+        };
+        // Topmost first: what paints last is hit first.
+        let targets = named('@').collect::<Vec<_>>().into_iter().rev().collect();
+        let slots = named('%').collect();
 
-        Plan { order, parents, boxes, record, live, targets }
+        Plan { order, parents, boxes, record, live, targets, slots }
     }
 }
 

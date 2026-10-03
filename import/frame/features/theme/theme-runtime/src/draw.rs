@@ -141,6 +141,20 @@ impl Theme {
         Some(t.rect + d)
     }
 
+    /// The host's slots for this instance — nodes named `%name`, each
+    /// where the theme put it and shown — in paint order: what the host
+    /// draws itself (an icon it holds, a curve it computes) in a place the
+    /// theme lays out. Drawn by the host after [`Theme::record`], so over
+    /// the theme's own picture.
+    #[must_use]
+    pub fn slots(&self, role: &str, size: (f64, f64), fields: &dyn Fields) -> Vec<(String, Rect)> {
+        let Some((r, plan)) = self.plan(role, size, fields) else { return Vec::new() };
+        plan.slots
+            .iter()
+            .filter_map(|t| moved(r, &plan, &t.movers, size, fields).map(|d| (t.name.clone(), t.rect + d)))
+            .collect()
+    }
+
     /// Every hit target's name, topmost first.
     #[must_use]
     pub fn targets(&self, role: &str, size: (f64, f64), fields: &dyn Fields) -> Vec<String> {

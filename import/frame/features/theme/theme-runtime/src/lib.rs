@@ -20,6 +20,9 @@
 //!   54×300 or 300×900 by the same rules.
 //! - **Hit targets** — a node named `@mute` is the `mute` control: the
 //!   host asks [`Theme::hit`] what is under the pointer and gets `mute`.
+//! - **Host slots** — a node named `%icon` is a place the host draws into
+//!   itself (an icon it holds, a curve it computes): [`Theme::slots`]
+//!   says where each shown one is, after the theme has laid it out.
 //! - **Components** — a control drawn once (`<Component name="button"
 //!   arg:on="false">`, its parts reading `arg.on`) and placed by name
 //!   (`<Instance name="@mute" of="button" arg:on="track.mute">`). Placed
