@@ -5,9 +5,10 @@
 //! sources: each first-order path off one wall bright, the second-order
 //! paths off two walls fainter, coming up with the decay. A wavefront
 //! leaves the source again and again and rings round the walls, slower to
-//! die the longer the decay; the whole room grows and shrinks with the
-//! size. Beside the plan, where there is room, the same reflections over
-//! time: the tap diagram, its taps spreading as the room grows.
+//! die the longer the decay. The plan keeps its size — the room's size is
+//! in time, not on the sheet: beside the plan, where there is room, the
+//! same reflections over time, the tap diagram, its taps spreading as the
+//! room grows.
 //!
 //! Two finishes: light, birch ply round a slate sheet; dark, charcoal
 //! felt.
@@ -22,6 +23,12 @@ use crate::reverb::ui;
 use crate::rig_time::kit::{self, VERB};
 
 const NAME: &str = "Room";
+/// The tall face's rows: a shorter sheet, bigger knobs under it.
+const ROWS: kit::TallRows = kit::TallRows {
+    split: 134.0,
+    main: (30.0, 50.0),
+    more: (126.0, 40.0),
+};
 /// The reflections' light: the section's purple.
 const RAY: &str = kit::PURPLE_LAMP;
 
@@ -325,8 +332,7 @@ fn walls(b: &mut Builder<'_>, room: NodeId, p: &Plan, l: &Look) {
     ui::line(b, room, "door swing", &swing, 0.6, &ui::alpha(l.wall, 0.4));
 }
 
-/// The room in plan in `sheet` (`w × h`): drawn at full size and scaled
-/// about its middle by the size.
+/// The room in plan in `sheet` (`w × h`), filling it.
 fn plan(b: &mut Builder<'_>, sheet: NodeId, (w, h): (f64, f64), l: &Look) {
     // The sheet's grid.
     let mut grid = Vec::new();
@@ -346,15 +352,6 @@ fn plan(b: &mut Builder<'_>, sheet: NodeId, (w, h): (f64, f64), l: &Look) {
     );
     let p = Plan::new(w, h);
     let room = b.add(sheet, draw::frame("Room", 0.0, 0.0, w, h));
-    motion::add(
-        b,
-        room,
-        Motion::new(Target::Scale)
-            .input(format!("norm({VERB}/size)"))
-            .range(0.66, 1.0)
-            .pivot(0.5, 0.5)
-            .dynamics(Dynamics::spring(160.0, 24.0)),
-    );
     wavefront(b, room, &p);
     // The paths: second order under, fainter, up with the decay.
     let second = b.add(
@@ -537,11 +534,13 @@ fn taps(
 }
 
 /// The picture in `at` (x, y, w, h) on `panel`: the sheet, the plan and,
-/// when it is wide, the taps beside it. Returns the sheet.
+/// when it is wide, the taps beside it, from `taps_top` down (below a
+/// nameplate over the sheet's top right). Returns the sheet.
 fn picture(
     b: &mut Builder<'_>,
     panel: NodeId,
     (x, y, w, h): (f64, f64, f64, f64),
+    taps_top: f64,
     l: &Look,
 ) -> NodeId {
     let mut sheet = draw::frame("Sheet", x, y, w, h);
@@ -558,7 +557,7 @@ fn picture(
         taps(
             b,
             sheet,
-            (pw + 16.0, 12.0, w - pw - 30.0, h - 18.0),
+            (pw + 16.0, taps_top, w - pw - 30.0, h - taps_top - 6.0),
             (pw, h),
             l,
         );
@@ -625,7 +624,7 @@ pub fn face_at(dark: bool, tier: kit::Tier) -> Face {
         } else {
             560.0
         };
-        let sheet = picture(b, panel, (10.0, 10.0, sw, kit::H - 20.0), l);
+        let sheet = picture(b, panel, (10.0, 10.0, sw, kit::H - 20.0), 12.0, l);
         let lit = ui::alpha(kit::PURPLE_LAMP, 0.55);
         if small_room {
             kit::nameplate_top_right(
@@ -771,14 +770,15 @@ pub fn back_at(dark: bool, tier: kit::Tier) -> Face {
     f
 }
 
-/// Its tall face: the sheet — the plan and the taps — the whole top row,
-/// every control below it.
+/// Its tall face: the sheet — the plan and the taps under the nameplate —
+/// across the top, shorter than half so the controls below it get big
+/// knobs.
 #[must_use]
 pub fn tall(dark: bool) -> Face {
     let l = if dark { &DARK } else { &LIGHT };
     let scene = kit::tall_lane(NAME, |b, root| {
         let panel = ground(b, root, (kit::TALL_W, kit::TALL_H), l);
-        picture(b, panel, kit::TALL_PICTURE, l);
+        picture(b, panel, (10.0, 10.0, kit::TALL_W - 20.0, ROWS.split - 16.0), 50.0, l);
         let t = kit::Tall {
             ns: VERB,
             main: &[
@@ -792,10 +792,11 @@ pub fn tall(dark: bool) -> Face {
             bypass: ("purple", "On"),
             title_w: 84.0,
         };
-        kit::tall_chrome(
+        kit::tall_chrome_rows(
             b,
             panel,
             &t,
+            ROWS,
             |b, p, addr, legend, d, at| {
                 kit::knob3d(b, p, addr, legend, d, at, &l.knob, l.ink, l.dim);
             },

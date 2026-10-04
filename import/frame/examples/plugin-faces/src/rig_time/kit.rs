@@ -750,6 +750,19 @@ pub fn tall_more<'a>(ns: &str, main: &[(&str, &str)]) -> Vec<(&'a str, &'a str)>
     all.iter().filter(|(id, _)| !main.iter().any(|(m, _)| m == id)).copied().collect()
 }
 
+/// Where a tall face's controls sit: the `split` they start below, and
+/// each line's centre (below the split) and knob diameter.
+#[derive(Clone, Copy)]
+pub struct TallRows {
+    pub split: f64,
+    pub main: (f64, f64),
+    pub more: (f64, f64),
+}
+
+/// The tall faces' rows: the picture the top half, the controls the
+/// bottom.
+pub const TALL_ROWS: TallRows = TallRows { split: H, main: (32.0, 40.0), more: (110.0, 30.0) };
+
 /// A tall face's chrome on its ground `p` (the picture already drawn in
 /// [`TALL_PICTURE`]): the nameplate over the picture's top right on its
 /// scrim (`title` letters the name), and across the bottom row the Time
@@ -757,7 +770,13 @@ pub fn tall_more<'a>(ns: &str, main: &[(&str, &str)]) -> Vec<(&'a str, &'a str)>
 /// across), the front's knobs on the first line and the advanced ones on
 /// the second (`knob` draws each, as a back's), and the bypass at the
 /// right.
-pub fn tall_chrome(b: &mut Builder<'_>, p: NodeId, t: &Tall<'_>, mut knob: impl FnMut(&mut Builder<'_>, NodeId, &str, &str, f64, (f64, f64)), time: impl FnOnce(&mut Builder<'_>, NodeId, &str, (f64, f64, f64)), title: impl FnOnce(&mut Builder<'_>, NodeId)) {
+pub fn tall_chrome(b: &mut Builder<'_>, p: NodeId, t: &Tall<'_>, knob: impl FnMut(&mut Builder<'_>, NodeId, &str, &str, f64, (f64, f64)), time: impl FnOnce(&mut Builder<'_>, NodeId, &str, (f64, f64, f64)), title: impl FnOnce(&mut Builder<'_>, NodeId)) {
+    tall_chrome_rows(b, p, t, TALL_ROWS, knob, time, title);
+}
+
+/// [`tall_chrome`] with its controls laid out by `rows`: a face whose
+/// picture needs less than the top half gives its knobs the rest.
+pub fn tall_chrome_rows(b: &mut Builder<'_>, p: NodeId, t: &Tall<'_>, rows: TallRows, mut knob: impl FnMut(&mut Builder<'_>, NodeId, &str, &str, f64, (f64, f64)), time: impl FnOnce(&mut Builder<'_>, NodeId, &str, (f64, f64, f64)), title: impl FnOnce(&mut Builder<'_>, NodeId)) {
     let (ink, dim, lit, accent) = t.inks;
     // The nameplate, on its scrim over the picture.
     let (np_y, np_h, preset_w) = (16.0, 30.0, 200.0);
@@ -766,17 +785,19 @@ pub fn tall_chrome(b: &mut Builder<'_>, p: NodeId, t: &Tall<'_>, mut knob: impl 
     b.add(p, draw::with_effects(draw::rounded(draw::rect("nameplate scrim", x - 10.0, np_y - 4.0, right - 4.0 - (x - 10.0), np_h + 8.0, draw::solid(t.scrim)), 8.0), vec![draw::drop_shadow("#00000040", 0.0, 2.0, 6.0)]));
     nameplate_right(b, p, t.ns, right, (np_y, np_h), t.title_w, preset_w, 12.0, (accent, dim), title);
     // The bottom row: the Time knob at the left…
-    let y0 = H;
-    let (tx, ty, td) = (78.0, y0 + 52.0, 64.0);
+    let y0 = rows.split;
+    let mid = (TALL_H - y0) / 2.0;
+    let (tx, ty, td) = (78.0, y0 + mid - 30.0, 64.0);
     time_knob(b, p, t.ns, (tx, ty, td), 11.0, (ink, dim, lit), |b, pp, addr| time(b, pp, addr, (tx, ty, td)));
-    ui::rule(b, p, 160.0, y0 + 14.0, 1.0, H - 28.0, &ui::alpha(dim, 0.35));
+    ui::rule(b, p, 160.0, y0 + 14.0, 1.0, TALL_H - y0 - 28.0, &ui::alpha(dim, 0.35));
     // …the bypass at the right…
-    let (bx, by, bd) = (TALL_W - 52.0, y0 + 56.0, 44.0);
+    let (bx, by, bd) = (TALL_W - 52.0, y0 + mid - 26.0, 44.0);
     bypass(b, p, t.ns, bx, by, bd, t.bypass.0, t.bypass.1);
     // …and between, the knobs: the front's above, the advanced below.
     let (x0, x1) = (182.0, bx - bd / 2.0 - 18.0);
     let more = tall_more(t.ns, t.main);
-    for (list, cy, d) in [(t.main, y0 + 32.0, 40.0), (more.as_slice(), y0 + 110.0, 30.0)] {
+    for (list, (cy, d)) in [(t.main, rows.main), (more.as_slice(), rows.more)] {
+        let cy = y0 + cy;
         let n = list.len().max(1) as f64;
         let step = ((x1 - x0) / n).min(92.0);
         let left = x0 + ((x1 - x0) - step * n) / 2.0;
