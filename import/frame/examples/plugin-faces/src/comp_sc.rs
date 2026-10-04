@@ -74,7 +74,7 @@ fn spot(file: &str) -> Option<((f64, f64), f64, &'static str)> {
         "08-bus-comp-lane" => ((465.0, 146.0), 30.0, "grey"),
         "08-bus-comp-tall" => ((530.0, 152.0), 40.0, "grey"),
         // VCA: rack 860 × 360.
-        "09-vca-comp" => ((500.0, 290.0), 40.0, "cream"),
+        "09-vca-comp" => ((514.0, 292.0), 40.0, "cream"),
         "09-vca-comp-lane" => ((478.0, 128.0), 36.0, "cream"),
         "09-vca-comp-tall" => ((480.0, 262.0), 40.0, "cream"),
         // Character: rack 1500 × 136.

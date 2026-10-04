@@ -82,8 +82,8 @@ fn look(file: &str) -> Look {
         "07" => Look { brushed: 1.0, plate: 0.36, band: 0.5, tint: COOL, dome: 0.3, ..base },
         // Painted grey, the meter amber-lit.
         "08" => Look { plate: 0.34, rough: 0.55, dome: 0.15, knob_rough: 0.3, backlight: 0.45, ..base },
-        // Gloss black between walnut cheeks.
-        "09" => Look { plate: 0.36, rough: 0.25, dome: 0.15, spun: 0.48, knob_rough: 0.25, backlight: 0.35, ..base },
+        // Gloss black in a dark anodised chassis; the meter lamp warm.
+        "09" => Look { plate: 0.36, rough: 0.25, dome: 0.15, spun: 0.48, knob_rough: 0.25, glass: 0.8, backlight: 0.55, ..base },
         // Satin black.
         _ => Look { plate: 0.32, rough: 0.45, dome: 0.3, knob_rough: 0.3, ..base },
     }
