@@ -1160,7 +1160,8 @@
             "Reflections",
             "Velvet",
             "FreeVerb",
-            "Convolution"
+            "Convolution",
+            "Random"
           ]
         }
       },
@@ -1169,9 +1170,9 @@
         "max": 1.0,
         "scale": "Linear",
         "unit": "None",
-        "steps": 15
+        "steps": 16
       },
-      "default": 0.07142857142857142,
+      "default": 0.06666666666666667,
       "bipolar": false,
       "featured": false
     },
@@ -10942,7 +10943,8 @@
             "Reflections",
             "Velvet",
             "FreeVerb",
-            "Convolution"
+            "Convolution",
+            "Random"
           ]
         }
       },
@@ -10951,9 +10953,9 @@
         "max": 1.0,
         "scale": "Linear",
         "unit": "None",
-        "steps": 15
+        "steps": 16
       },
-      "default": 0.07142857142857142,
+      "default": 0.06666666666666667,
       "bipolar": false,
       "featured": false
     },

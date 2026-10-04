@@ -177,8 +177,8 @@ fn post_comp_as(aspect: f64, variant: bool) -> Face {
 
 
 /// The reverb algorithms of the rig's reverb block, in its DSP's order.
-const VERB_ALGOS: [&str; 15] = [
-    "Room", "Hall", "Plate", "Spring", "Cloud", "Bloom", "Shimmer", "Chorale", "Magneto", "NonLinear", "Swell", "Reflections", "Velvet", "FreeVerb", "Convolution",
+const VERB_ALGOS: [&str; 16] = [
+    "Room", "Hall", "Plate", "Spring", "Cloud", "Bloom", "Shimmer", "Chorale", "Magneto", "NonLinear", "Swell", "Reflections", "Velvet", "FreeVerb", "Convolution", "Random",
 ];
 
 /// A spring reverb block's picture, tall and narrow for a panel beside its

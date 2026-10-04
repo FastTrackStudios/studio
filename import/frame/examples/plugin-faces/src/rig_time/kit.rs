@@ -52,8 +52,8 @@ pub const DELAY_ALGOS: [&str; 13] = [
     "Tape", "Digital", "Analog", "Lo-Fi", "Shimmer", "Reverse", "Ice", "Rhythm", "Drum", "Oil Can", "MultiTap", "Spectral", "Filter",
 ];
 /// The reverb's algorithms, in the block's `algorithm` order.
-pub const VERB_ALGOS: [&str; 15] = [
-    "Room", "Hall", "Plate", "Spring", "Cloud", "Bloom", "Shimmer", "Chorale", "Magneto", "NonLinear", "Swell", "Reflections", "Velvet", "FreeVerb", "Convolution",
+pub const VERB_ALGOS: [&str; 16] = [
+    "Room", "Hall", "Plate", "Spring", "Cloud", "Bloom", "Shimmer", "Chorale", "Magneto", "NonLinear", "Swell", "Reflections", "Velvet", "FreeVerb", "Convolution", "Random",
 ];
 /// A delay's tempo divisions, in the block's `tap_div_l` order.
 pub const DIVS: [&str; 11] = ["1/4", "1/8.", "1/8", "1/8T", "1/16", "Golden", "Silver", "Free", "1/4.", "1/2", "1/4T"];

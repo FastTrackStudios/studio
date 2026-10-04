@@ -2235,6 +2235,34 @@
           960.0,
           164.0
         ]
+      },
+      {
+        "back": "95-verb-random-back",
+        "back_dark": "95-verb-random-back-dark",
+        "dark": "95-verb-random-dark",
+        "face": "95-verb-random",
+        "match": [
+          "random"
+        ],
+        "nameplate": true,
+        "ns": "verb",
+        "size": [
+          960.0,
+          164.0
+        ],
+        "tiers": {
+          "phone": {
+            "back": "95-verb-random-back-phone",
+            "back_dark": "95-verb-random-back-phone-dark",
+            "dark": "95-verb-random-phone-dark",
+            "face": "95-verb-random-phone",
+            "size": [
+              760.0,
+              164.0
+            ]
+          }
+        },
+        "time_knob": true
       }
     ]
   },
