@@ -52,7 +52,10 @@ fn spot(file: &str) -> Option<((f64, f64), f64, &'static str)> {
         "02-fet-silver" => ((478.0, 170.0), 40.0, "black"),
         "03-fet-late" => ((472.0, 172.0), 40.0, "black"),
         "01-fet-black-lane" | "02-fet-silver-lane" | "03-fet-late-lane" => ((351.0, 19.0), 36.0, "black"),
-        "01-fet-black-tall" | "02-fet-silver-tall" | "03-fet-late-tall" => ((205.0, 128.0), 40.0, "black"),
+        // Clear of the ratio legends on the black one; the silver and the
+        // late have their power switch there.
+        "01-fet-black-tall" => ((150.0, 128.0), 40.0, "black"),
+        "02-fet-silver-tall" | "03-fet-late-tall" => ((199.0, 128.0), 40.0, "black"),
         // Opto leveler: rack 906 × 258.
         "04-opto-leveler" => ((438.0, 224.0), 40.0, "grey"),
         "04-opto-leveler-lane" => ((172.0, 100.0), 36.0, "grey"),
