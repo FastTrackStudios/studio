@@ -47,6 +47,42 @@ pub const PURPLE_LIGHT: &str = "#ddd0ff";
 pub const PURPLE_DEEP: &str = "#3b1d6e";
 pub const PURPLE_LAMP: &str = "#b58cff";
 
+// The section's light. Every Time face lights its picture the same way:
+// what sounds (a trace, a tap, a wavefront, an LED) gives off light, and
+// on the GPU it blooms; without the GPU it is a soft vector glow. Two
+// radii only, so a face's glows share the stage's bloom passes (one per
+// radius): a tight halo for a line or a point, a wide one for a source, a
+// lamp or a field. The light is in the picture only — never over the
+// whole panel.
+/// The tight halo: a trace, a tap, an LED.
+pub const GLOW: f64 = 6.0;
+/// The wide one: a source, a lamp, a field.
+pub const BLOOM: f64 = 16.0;
+
+/// A GPU effect (`name`, with its `params`) over `id` and what it holds:
+/// see the effect contract. Renderers without the stage draw it plainly.
+pub fn effect(b: &mut Builder<'_>, id: NodeId, name: &str, params: &[(&str, f64)]) {
+    if let Some(n) = b.scene.node_mut(id) {
+        n.shader = Some(document_proto::ShaderFx { shader: name.into(), params: params.iter().map(|(k, v)| ((*k).to_string(), *v)).collect(), inputs: Vec::new() });
+    }
+}
+
+/// The pane over a picture's well (`pane.wgsl`, the face's own effect):
+/// flat glass — a sheen at its left end, a rim, its edges shaded — the
+/// same over every Time face's picture. Flat, not a lens: a handle in the
+/// picture stays where it is drawn.
+pub fn glass(b: &mut Builder<'_>, well: NodeId) {
+    let pane = b.scene.add_asset("text/wgsl", include_bytes!("pane.wgsl").to_vec());
+    effect(b, well, &format!("asset:{}", pane.0), &[("strength", 0.6), ("amount", 0.5)]);
+}
+
+/// Brushed steel that catches the light (`steel.wgsl`) on `sheet`: its
+/// paint's light bands flare in streaks across the brushing.
+pub fn steel(b: &mut Builder<'_>, sheet: NodeId) {
+    let steel = b.scene.add_asset("text/wgsl", include_bytes!("steel.wgsl").to_vec());
+    effect(b, sheet, &format!("asset:{}", steel.0), &[("strength", 0.9), ("amount", 0.6)]);
+}
+
 /// The delay's machines, in the block's `style` order.
 pub const DELAY_ALGOS: [&str; 13] = [
     "Tape", "Digital", "Analog", "Lo-Fi", "Shimmer", "Reverse", "Ice", "Rhythm", "Drum", "Oil Can", "MultiTap", "Spectral", "Filter",
@@ -498,7 +534,7 @@ pub fn echo_train(b: &mut Builder<'_>, parent: NodeId, (x, y, w, h): (f64, f64, 
     ui::line(b, f, "dry", &[(2.0, h), (2.0, 0.0)], 2.0, &ui::alpha(color, 0.5));
     for i in 1..=taps {
         let bar = draw::rect(&format!("tap {i}"), 0.0, 0.0, 3.0, h, draw::solid(color));
-        let bar = b.add(f, ui::glowing(bar, color, 0.8, 4.0));
+        let bar = b.add(f, ui::glowing(bar, color, 1.1, GLOW));
         let at = format!("clamp({i} * param({DLY}/time) / {window_ms}, 0, 1)");
         motion::add(b, bar, Motion::new(Target::X).input(at).range(2.0, w - 3.0).dynamics(Dynamics::spring(300.0, 30.0)));
         let fall = format!("pow(param({DLY}/feedback), {})", i - 1);
@@ -527,7 +563,7 @@ pub fn decay(b: &mut Builder<'_>, parent: NodeId, (x, y, w, h): (f64, f64, f64, 
     d += &format!("L {w:.1} {h:.1} Z");
     let fill = draw::path("envelope", 0.0, 0.0, w, h, d, draw::linear(180.0, &[(0.0, &ui::alpha(color, 0.55)), (1.0, &ui::alpha(color, 0.05))]));
     b.add(g, fill);
-    ui::line(b, g, "edge", &pts, 1.6, color);
+    b.add(g, ui::glowing(ui::strokes("edge", &[pts], 1.6, draw::solid(color)), color, 0.9, GLOW));
     motion::add(b, g, Motion::new(Target::StretchX).input(format!("norm({VERB}/decay)")).range(0.15, 1.0).pivot(0.0, 0.5).dynamics(Dynamics::spring(300.0, 30.0)));
     f
 }
@@ -840,6 +876,7 @@ pub fn stub_tall(ns: &str, name: &str, base: &str, dark: bool) -> Face {
         } else {
             decay(b, well, (16.0, 44.0, pw - 32.0, ph - 56.0), color);
         }
+        glass(b, well);
         let opts = ["color=#2a2c31", "pointer=#ffffff", "index=line", "index_w=0.1", "skirt=plain", "skirt_color=#111215"];
         let t = Tall { ns, main, inks: (ink, dim, &ui::alpha(color, 0.55), color), scrim: if dark { "#1d1f24e6" } else { "#eceef1e6" }, bypass: (if ns == DLY { "blue" } else { "purple" }, "On"), title_w: name.chars().count() as f64 * 11.0 + 24.0 };
         tall_chrome(b, panel, &t, |b, p, addr, legend, d, at| {

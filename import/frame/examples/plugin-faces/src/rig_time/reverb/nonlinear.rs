@@ -277,7 +277,7 @@ fn hit(b: &mut Builder<'_>, win: NodeId, s: &Scope) {
         s.base - 6.0,
         draw::linear(180.0, &[(0.0, HIT), (1.0, &ui::alpha(HIT, 0.6))]),
     );
-    let spike = b.add(win, ui::glowing(spike, LED, 1.0, 6.0));
+    let spike = b.add(win, ui::glowing(spike, LED, 1.2, kit::GLOW));
     let flash =
         format!("(0.55 + 0.45 * pow(1 - fract(time * 0.8), 6)) * (0.3 + 0.7 * param({VERB}/on))");
     motion::add(
@@ -308,18 +308,25 @@ fn burst(b: &mut Builder<'_>, win: NodeId, s: &Scope) {
         wall,
         draw::frame("light", s.start(), s.top - 6.0, span, tall + 6.0),
     );
+    // It gives off light too, as far as the gate lets it: the wall glows
+    // (one emitter for the whole wall, not one per reflection).
     b.add(
         glow,
-        draw::rect(
-            "glow",
-            0.0,
-            0.0,
-            span,
-            tall + 6.0,
-            draw::linear(
-                180.0,
-                &[(0.0, &ui::alpha(LED, 0.0)), (1.0, &ui::alpha(LED, 0.26))],
+        ui::glowing(
+            draw::rect(
+                "glow",
+                0.0,
+                0.0,
+                span,
+                tall + 6.0,
+                draw::linear(
+                    180.0,
+                    &[(0.0, &ui::alpha(LED, 0.0)), (1.0, &ui::alpha(LED, 0.26))],
+                ),
             ),
+            LED,
+            0.22,
+            kit::BLOOM,
         ),
     );
     let open = format!(
@@ -436,7 +443,7 @@ fn ghost(b: &mut Builder<'_>, win: NodeId, s: &Scope) {
 /// burst's start to the gate, again and again while the reverb plays.
 fn trace(b: &mut Builder<'_>, win: NodeId, s: &Scope) {
     let dot = draw::circle("trace", 0.0, s.top - 1.0, 2.6, draw::solid(HIT));
-    let dot = b.add(win, ui::glowing(dot, LED, 1.0, 7.0));
+    let dot = b.add(win, ui::glowing(dot, LED, 1.3, kit::GLOW));
     let from = format!("({:.1} + {})", s.start(), s.pre_x());
     let run = format!(
         "{from} + fract(time * 0.8) * max({} - {from}, 0)",
@@ -473,13 +480,13 @@ fn gate(b: &mut Builder<'_>, win: NodeId, s: &Scope) {
         s.base - s.top + 4.0,
         draw::solid(HIT),
     );
-    b.add(g, ui::glowing(cliff, LED, 1.0, 8.0));
+    b.add(g, ui::glowing(cliff, LED, 1.1, kit::BLOOM));
     // The tab: a flag over the wall that says what it is.
     let tab = draw::rounded(
         draw::rect("tab", c - 11.0, 4.0, 22.0, 12.0, draw::solid(LED)),
         2.5,
     );
-    b.add(g, ui::glowing(tab, LED, 0.7, 5.0));
+    b.add(g, ui::glowing(tab, LED, 0.7, kit::GLOW));
     b.add(
         g,
         draw::path(

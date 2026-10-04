@@ -66,7 +66,9 @@ fn cloud(b: &mut Builder<'_>, parent: NodeId, name: &str, (x, y, w, h): (f64, f6
         let r = h * (0.28 + 0.2 * (std::f64::consts::PI * t).sin() + 0.06 * j);
         let (cx, cy) = (w * (0.12 + 0.76 * t), h * (0.62 - 0.22 * (std::f64::consts::PI * t).sin() + 0.05 * j));
         let puff = draw::circle("puff", cx, cy, r, draw::radial_at(0.45, 0.4, 0.75, &[(0.0, &ui::alpha(tint, 0.6)), (0.35, &ui::alpha(tint, 0.38)), (0.7, &ui::alpha(tint, 0.12)), (1.0, &ui::alpha(tint, 0.0))]));
-        b.add(g, puff);
+        // Lit from within: the big middle puff gives off the cloud's light
+        // (one emitter a cloud keeps the bloom cheap).
+        b.add(g, if i == puffs / 2 { ui::glowing(puff, tint, 0.3, kit::BLOOM) } else { puff });
     }
     g
 }
@@ -83,7 +85,7 @@ fn sky(b: &mut Builder<'_>, sky: NodeId, w: f64, h: f64, l: &Look, dark: bool) {
     if dark {
     // The moon, high on the right, and its halo.
     b.add(sky, draw::circle("halo", w * 0.78, h * 0.26, h * 0.62, draw::radial_at(0.5, 0.5, 0.5, &[(0.0, "#c4b5fd40"), (1.0, "#c4b5fd00")])));
-    b.add(sky, draw::emissive(draw::circle("moon", w * 0.78, h * 0.26, 11.0, draw::radial_at(0.4, 0.35, 0.8, &[(0.0, "#fbf8ff"), (1.0, "#d6ccf5")])), draw::hex("#e9e2ff"), 0.8, 12.0));
+    b.add(sky, draw::emissive(draw::circle("moon", w * 0.78, h * 0.26, 11.0, draw::radial_at(0.4, 0.35, 0.8, &[(0.0, "#fbf8ff"), (1.0, "#d6ccf5")])), draw::hex("#e9e2ff"), 0.8, kit::BLOOM));
     } else {
         // The glow low on the horizon.
         b.add(sky, draw::circle("afterglow", w * 0.3, h * 1.25, h * 0.9, draw::radial_at(0.5, 0.5, 0.5, &[(0.0, "#ffb38a99"), (1.0, "#ffb38a00")])));
@@ -113,10 +115,11 @@ fn sky(b: &mut Builder<'_>, sky: NodeId, w: f64, h: f64, l: &Look, dark: bool) {
     for i in 0..30 {
         let f = f64::from(i);
         let (x, y) = ((f * 131.0 + 40.0) % (w - 20.0) + 10.0, 30.0 + (f * 59.0) % (h - 50.0));
-        let g = b.add(sky, draw::emissive(draw::circle("grain", x, y, 1.3, draw::solid(l.grain.0)), draw::hex(l.grain.1), 1.0, 5.0));
+        let g = b.add(sky, draw::emissive(draw::circle("grain", x, y, 1.3, draw::solid(l.grain.0)), draw::hex(l.grain.1), 1.6, kit::BLOOM));
         let glint = format!("pow(0.5 + 0.5 * sin(time * {:.2} + {:.2}), 12) * param({VERB}/on)", 1.1 + 0.9 * crate::reverb::jitter(f).abs(), f * 1.7);
         motion::add(b, g, Motion::new(Target::Opacity).input(glint).range(0.0, 1.0));
     }
+    kit::glass(b, sky);
 }
 
 #[must_use]

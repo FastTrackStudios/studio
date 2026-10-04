@@ -123,7 +123,7 @@ pub fn face_at(dark: bool, tier: kit::Tier) -> Face {
         let lamps = |b: &mut Builder<'_>, parent: NodeId, xs: [f64; 3], ly: f64| {
             for (n, x) in (1..=3).zip(xs) {
                 b.add(parent, draw::with_effects(draw::circle("lamp socket", x, ly, 4.8, draw::radial_at(0.4, 0.35, 0.8, &[(0.0, "#d8d9db"), (1.0, "#8e9094")])), vec![draw::inner_shadow("#00000060", 0.0, 1.0, 1.5)]));
-                let lamp = b.add(parent, draw::emissive(draw::circle("head lamp", x, ly, 3.4, draw::solid(LAMP)), draw::hex(LAMP), 1.0, 7.0));
+                let lamp = b.add(parent, draw::emissive(draw::circle("head lamp", x, ly, 3.4, draw::solid(LAMP)), draw::hex(LAMP), 1.2, kit::BLOOM));
                 let flash = format!("pow(1 - fract(time * 1000 / ({n} * max(param({DLY}/time), 20))), 4) * pow(param({DLY}/feedback), {}) * param({DLY}/on)", n - 1);
                 motion::add(b, lamp, Motion::new(Target::Opacity).input(flash).range(0.05, 1.0));
             }
@@ -312,7 +312,7 @@ pub fn tall(dark: bool) -> Face {
         parts::centred(b, top, "Active Heads", (410.0, 108.0), Type::new(6.5, ink, 500.0).track(0.08).upper());
         for (n, x) in (1..=3).zip([370.0, 410.0, 450.0]) {
             b.add(top, draw::with_effects(draw::circle("lamp socket", x, 126.0, 4.8, draw::radial_at(0.4, 0.35, 0.8, &[(0.0, "#d8d9db"), (1.0, "#8e9094")])), vec![draw::inner_shadow("#00000060", 0.0, 1.0, 1.5)]));
-            let lamp = b.add(top, draw::emissive(draw::circle("head lamp", x, 126.0, 3.4, draw::solid(LAMP)), draw::hex(LAMP), 1.0, 7.0));
+            let lamp = b.add(top, draw::emissive(draw::circle("head lamp", x, 126.0, 3.4, draw::solid(LAMP)), draw::hex(LAMP), 1.2, kit::BLOOM));
             let flash = format!("pow(1 - fract(time * 1000 / ({n} * max(param({DLY}/time), 20))), 4) * pow(param({DLY}/feedback), {}) * param({DLY}/on)", n - 1);
             motion::add(b, lamp, Motion::new(Target::Opacity).input(flash).range(0.05, 1.0));
         }
