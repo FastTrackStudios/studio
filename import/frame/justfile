@@ -12,6 +12,14 @@ check:
 test:
     cargo test --workspace --all-features
 
+# The face library: every plugin face rendered with the GPU effects stage to
+# OUT/<set>/<face>.webp, indexed by kind in OUT/index.json (placeholders
+# marked). `just faces-gallery /tmp/gallery --only saturate` for a few.
+faces-gallery OUT *ARGS:
+    cargo build --release -p plugin-faces -p frame-cli --features frame-cli/anyrender --bin plugin-faces --bin render_surface
+    ./target/release/plugin-faces examples/plugins
+    python3 scripts/face_gallery.py {{OUT}} {{ARGS}}
+
 # Figma parity: import → render → pixel + SVG diff against Figma's own output.
 parity *ARGS="--all":
     cargo xtask parity_test {{ARGS}}
