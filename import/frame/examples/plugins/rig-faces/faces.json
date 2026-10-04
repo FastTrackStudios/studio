@@ -2275,11 +2275,14 @@
         "time_knob": true
       },
       {
+        "back": "83-verb-spring-back",
+        "back_dark": "83-verb-spring-back-dark",
         "dark": "83-verb-spring-dark",
         "face": "83-verb-spring",
         "match": [
           "spring"
         ],
+        "nameplate": true,
         "ns": "verb",
         "size": [
           960.0,
@@ -2290,7 +2293,20 @@
         "tall_size": [
           760.0,
           328.0
-        ]
+        ],
+        "tiers": {
+          "phone": {
+            "back": "83-verb-spring-back-phone",
+            "back_dark": "83-verb-spring-back-phone-dark",
+            "dark": "83-verb-spring-phone-dark",
+            "face": "83-verb-spring-phone",
+            "size": [
+              760.0,
+              164.0
+            ]
+          }
+        },
+        "time_knob": true
       },
       {
         "back": "84-verb-cloud-back",
@@ -2327,11 +2343,14 @@
         "time_knob": true
       },
       {
+        "back": "85-verb-bloom-back",
+        "back_dark": "85-verb-bloom-back-dark",
         "dark": "85-verb-bloom-dark",
         "face": "85-verb-bloom",
         "match": [
           "bloom"
         ],
+        "nameplate": true,
         "ns": "verb",
         "size": [
           960.0,
@@ -2342,14 +2361,30 @@
         "tall_size": [
           760.0,
           328.0
-        ]
+        ],
+        "tiers": {
+          "phone": {
+            "back": "85-verb-bloom-back-phone",
+            "back_dark": "85-verb-bloom-back-phone-dark",
+            "dark": "85-verb-bloom-phone-dark",
+            "face": "85-verb-bloom-phone",
+            "size": [
+              760.0,
+              164.0
+            ]
+          }
+        },
+        "time_knob": true
       },
       {
+        "back": "86-verb-shimmer-back",
+        "back_dark": "86-verb-shimmer-back-dark",
         "dark": "86-verb-shimmer-dark",
         "face": "86-verb-shimmer",
         "match": [
           "shimmer"
         ],
+        "nameplate": true,
         "ns": "verb",
         "size": [
           960.0,
@@ -2360,14 +2395,30 @@
         "tall_size": [
           760.0,
           328.0
-        ]
+        ],
+        "tiers": {
+          "phone": {
+            "back": "86-verb-shimmer-back-phone",
+            "back_dark": "86-verb-shimmer-back-phone-dark",
+            "dark": "86-verb-shimmer-phone-dark",
+            "face": "86-verb-shimmer-phone",
+            "size": [
+              760.0,
+              164.0
+            ]
+          }
+        },
+        "time_knob": true
       },
       {
+        "back": "87-verb-chorale-back",
+        "back_dark": "87-verb-chorale-back-dark",
         "dark": "87-verb-chorale-dark",
         "face": "87-verb-chorale",
         "match": [
           "chorale"
         ],
+        "nameplate": true,
         "ns": "verb",
         "size": [
           960.0,
@@ -2378,14 +2429,30 @@
         "tall_size": [
           760.0,
           328.0
-        ]
+        ],
+        "tiers": {
+          "phone": {
+            "back": "87-verb-chorale-back-phone",
+            "back_dark": "87-verb-chorale-back-phone-dark",
+            "dark": "87-verb-chorale-phone-dark",
+            "face": "87-verb-chorale-phone",
+            "size": [
+              760.0,
+              164.0
+            ]
+          }
+        },
+        "time_knob": true
       },
       {
+        "back": "88-verb-magneto-back",
+        "back_dark": "88-verb-magneto-back-dark",
         "dark": "88-verb-magneto-dark",
         "face": "88-verb-magneto",
         "match": [
           "magneto"
         ],
+        "nameplate": true,
         "ns": "verb",
         "size": [
           960.0,
@@ -2396,7 +2463,20 @@
         "tall_size": [
           760.0,
           328.0
-        ]
+        ],
+        "tiers": {
+          "phone": {
+            "back": "88-verb-magneto-back-phone",
+            "back_dark": "88-verb-magneto-back-phone-dark",
+            "dark": "88-verb-magneto-phone-dark",
+            "face": "88-verb-magneto-phone",
+            "size": [
+              760.0,
+              164.0
+            ]
+          }
+        },
+        "time_knob": true
       },
       {
         "back": "89-verb-nonlinear-back",
