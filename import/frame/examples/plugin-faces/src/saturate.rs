@@ -18,6 +18,7 @@
 //! Drive, mix and output sit in the same places on every face.
 
 mod digital;
+mod hw;
 mod tape;
 mod transformer;
 mod transistor;
