@@ -42,6 +42,22 @@ pub fn faces() -> Vec<Face> {
         v.extend(reverb::tall_faces(dark));
         v.extend(delay::tall_faces(dark));
     }
+    v.extend(machines());
+    v
+}
+
+/// The machines a reverb can wear whatever its algorithm (the 480), every
+/// shape and finish of each.
+fn machines() -> Vec<Face> {
+    use reverb::four80;
+    let mut v = Vec::new();
+    for dark in [false, true] {
+        for t in [kit::Tier::Desktop, kit::Tier::Phone] {
+            v.push(four80::face_at(dark, t));
+            v.push(four80::back_at(dark, t));
+        }
+        v.push(four80::tall(dark));
+    }
     v
 }
 
@@ -95,5 +111,14 @@ pub fn manifest() -> serde_json::Value {
         .enumerate()
         .map(|(i, (name, (f, d)))| entry(json!({ "match": [name.to_lowercase()], "face": f.file, "dark": d.file, "ns": kit::VERB, "size": size }), &f, (&rt[i], &rtd[i]), reverb::phone_faces(false).into_iter().find(|(at, _)| *at == i), reverb::phone_faces(true).into_iter().find(|(at, _)| *at == i), |dark, t| reverb::back_faces(dark, t).into_iter().find(|(at, _)| *at == i).map(|(_, f)| f)))
         .collect();
+    // Then the machines, by their own names: they replace no algorithm's
+    // entry (the host looks an algorithm up by its name).
+    let mut reverbs = reverbs;
+    {
+        use reverb::four80;
+        let (d, p) = (kit::Tier::Desktop, kit::Tier::Phone);
+        let backs = |dark: bool, t: kit::Tier| Some(four80::back_at(dark, t));
+        reverbs.push(entry(json!({ "match": ["480"], "face": four80::face(false).file, "dark": four80::face(true).file, "ns": kit::VERB, "size": size }), &four80::face_at(false, d), (&four80::tall(false), &four80::tall(true)), Some((0, four80::face_at(false, p))), Some((0, four80::face_at(true, p))), backs));
+    }
     json!({ "delay": delays, "reverb": reverbs })
 }

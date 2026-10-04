@@ -2875,6 +2875,40 @@
           }
         },
         "time_knob": true
+      },
+      {
+        "back": "96-verb-480-back",
+        "back_dark": "96-verb-480-back-dark",
+        "dark": "96-verb-480-dark",
+        "face": "96-verb-480",
+        "match": [
+          "480"
+        ],
+        "nameplate": true,
+        "ns": "verb",
+        "size": [
+          960.0,
+          164.0
+        ],
+        "tall": "96-verb-480-tall",
+        "tall_dark": "96-verb-480-tall-dark",
+        "tall_size": [
+          760.0,
+          328.0
+        ],
+        "tiers": {
+          "phone": {
+            "back": "96-verb-480-back-phone",
+            "back_dark": "96-verb-480-back-phone-dark",
+            "dark": "96-verb-480-phone-dark",
+            "face": "96-verb-480-phone",
+            "size": [
+              760.0,
+              164.0
+            ]
+          }
+        },
+        "time_knob": true
       }
     ]
   },

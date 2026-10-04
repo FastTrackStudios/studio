@@ -17,6 +17,8 @@ mod freeverb;
 mod convolution;
 mod random;
 mod shell;
+/// The 480: a machine, not an algorithm — on any reverb, by name.
+pub mod four80;
 
 use crate::face::Face;
 

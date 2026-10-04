@@ -3,6 +3,7 @@
 //! ```text
 //! render_surface --out surface.png [--theme stage-dark|daylight]
 //!                [--markup surface.frame] [--catalog catalog.json] [--set amp/gain=0.8 ...]
+//!                [--text verb/program="RANDOM HALL" ...]
 //!                [--stream ID=V[,V2…] ...] [--stream-file FILE] [--level -12] [--demo-feeds]
 //!                [--scale 2] [--fx gpu|fallback|off] [--time SECONDS]
 //!                [--frames N [--fps 30] [--columns 4] [--gif anim.gif] [--frames-dir DIR]]
@@ -47,13 +48,15 @@ fn main() {
 
 #[cfg(feature = "anyrender")]
 fn run() -> Result<(), String> {
-    use surface_proto::{EntryId, ParamAddr, ParamValue, StreamFrame};
+    use surface_proto::{EntryId, ParamAddr, ParamValue, StreamFrame, TextValue};
     use surface_runtime::Runtime;
     use surface_widgets::{Options, Theme, surface_for_catalog};
 
     let mut out = None;
     let mut theme = Theme::stage_dark();
     let mut sets = Vec::new();
+    // Text params' values (`--text addr=STRING`): a program name, a band's name.
+    let mut texts: Vec<TextValue> = Vec::new();
     let mut level = None;
     let mut demo_feeds = false;
     let mut streams: Vec<StreamFrame> = Vec::new();
@@ -95,6 +98,11 @@ fn run() -> Result<(), String> {
                 }
             }
             "--set" => sets.push(set(&args.next().ok_or("--set needs addr=value")?)?),
+            "--text" => {
+                let kv = args.next().ok_or("--text needs addr=text")?;
+                let (k, v) = kv.split_once('=').ok_or("--text needs addr=text")?;
+                texts.push(TextValue { addr: ParamAddr::new(k), text: v.to_string() });
+            }
             "--stream" => streams.push(stream(&args.next().ok_or("--stream needs id=v[,v2…]")?)?),
             "--stream-file" => {
                 let path = args.next().ok_or("--stream-file needs a file")?;
@@ -144,6 +152,7 @@ fn run() -> Result<(), String> {
     };
     let mut rt = Runtime::new(surface, catalog);
     rt.apply_values(sets);
+    rt.apply_texts(texts);
     for f in &streams {
         if rt.catalog().stream(&f.id).is_none() {
             eprintln!("render_surface: warning: no stream `{}` in the catalog", f.id.0);
