@@ -474,16 +474,18 @@ impl LiveSurface {
         self.dirty || (moving && (self.time_dependent || self.rt.animating()))
     }
 
-    /// Whether the host should render again: something changed, a control
-    /// is animating, or a shader reads the clock and a frame's time
-    /// (its [max fps](Self::set_max_fps)) has passed. A clock-driven face (an LFO lamp, an
-    /// idle sweep) is paced, not re-rendered at whatever rate the window
-    /// happens to redraw.
+    /// Whether the host should render again: something changed (an edit,
+    /// the pointer), or the face moves by itself — a shader reading the
+    /// clock, a motion running — and a frame's time (its
+    /// [max fps](Self::set_max_fps)) has passed. What moves by itself (an
+    /// LFO lamp, a reverb's wavefront, a scope) is paced, not re-rendered
+    /// at whatever rate the window happens to redraw; what the hand does is
+    /// not.
     #[must_use]
     pub fn needs_redraw(&self) -> bool {
-        let clock_due = self.time_dependent && self.rendered_at.is_none_or(|at| at.elapsed() >= self.clock_frame);
+        let due = self.rendered_at.is_none_or(|at| at.elapsed() >= self.clock_frame);
         let moving = self.animate || self.settle_until.is_some_and(|at| std::time::Instant::now() < at);
-        self.dirty || (moving && (clock_due || self.rt.animating()))
+        self.dirty || (moving && due && (self.time_dependent || self.rt.animating()))
     }
 
     fn t(&self) -> f64 {
