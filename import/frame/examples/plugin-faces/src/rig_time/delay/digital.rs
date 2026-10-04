@@ -30,7 +30,9 @@ fn window(b: &mut Builder<'_>, parent: NodeId, name: &str, (x, y, w, h): (f64, f
     win.clips_content = true;
     win.corner_radii = document_proto::CornerRadii::uniform(2.0);
     win.effects = vec![draw::inner_shadow("#000000e0", 0.0, 2.0, 5.0)];
-    b.add(parent, win)
+    let win = b.add(parent, win);
+    kit::glass(b, win);
+    win
 }
 
 /// A rack ear with its two slotted holes, `x` wide from `x0`.

@@ -69,7 +69,10 @@ fn plate(b: &mut Builder<'_>, tank: NodeId, w: f64, h: f64) {
     }
     // The sheet.
     let sheet = draw::rect("plate", px, py, pw, ph, draw::linear(100.0, &[(0.0, "#e4e7e9"), (0.3, "#b6bbc0"), (0.55, "#d5d9dc"), (0.8, "#a9afb4"), (1.0, "#c7ccd0")]));
-    b.add(tank, draw::with_effects(sheet, vec![draw::drop_shadow("#000000b0", 0.0, 3.0, 6.0), draw::inner_shadow("#ffffff80", 0.0, 1.0, 0.0)]));
+    let sheet = b.add(tank, draw::with_effects(sheet, vec![draw::drop_shadow("#000000b0", 0.0, 3.0, 6.0), draw::inner_shadow("#ffffff80", 0.0, 1.0, 0.0)]));
+    // (No pane over the window: an effect inside another's draws plainly,
+    // and the sheet's steel is the one that matters.)
+    kit::steel(b, sheet);
     let grain: Vec<Vec<(f64, f64)>> = (0..18)
         .map(|i| {
             let y = py + 3.0 + (ph - 6.0) * f64::from(i) / 17.0 + crate::reverb::jitter(f64::from(i)) * 1.6;
@@ -87,7 +90,8 @@ fn plate(b: &mut Builder<'_>, tank: NodeId, w: f64, h: f64) {
                 (px + 6.0 + (pw - 12.0) * u, y0 + (u * std::f64::consts::TAU * 3.0 + f64::from(i)).sin() * 2.6 * (1.0 - 0.6 * u))
             })
             .collect();
-        let m = ui::line(b, tank, "mode", &pts, 1.1, "#8a63e0");
+        // Each mode a line of light on the steel.
+        let m = b.add(tank, ui::glowing(ui::line_node("mode", &pts, 1.1, "#8a63e0"), kit::PURPLE_LAMP, 0.9, kit::GLOW));
         let swing = format!("0.5 + 0.5 * sin(time * (3 + 2 * norm({VERB}/tone)) + {i}) * param({VERB}/on)");
         motion::add(b, m, Motion::new(Target::Opacity).input(swing).range(0.15, 0.7).dynamics(Dynamics::spring(200.0, 24.0)));
     }
@@ -111,7 +115,7 @@ fn plate(b: &mut Builder<'_>, tank: NodeId, w: f64, h: f64) {
     b.add(d, draw::circle("coil", c, c, r * 0.62, draw::conic(0.0, &[(0.0, "#e0a064"), (0.25, "#8a4f22"), (0.5, "#d69457"), (0.75, "#7a4219"), (1.0, "#e0a064")])));
     b.add(d, draw::circle("pole", c, c, r * 0.24, draw::solid("#1b1b1d")));
     // Its lamp: lit while the plate is driven.
-    let lit = b.add(d, draw::emissive(draw::circle("drive lamp", c + r * 0.72, c - r * 0.72, 2.6, draw::solid(kit::PURPLE_LAMP)), draw::hex(kit::PURPLE_LAMP), 0.9, 6.0));
+    let lit = b.add(d, draw::emissive(draw::circle("drive lamp", c + r * 0.72, c - r * 0.72, 2.6, draw::solid(kit::PURPLE_LAMP)), draw::hex(kit::PURPLE_LAMP), 1.2, kit::GLOW));
     motion::add(b, lit, Motion::new(Target::Opacity).input(format!("param({VERB}/on)")).range(0.0, 1.0));
     let kind = ControlKind::Handle {
         x: Some(bind(&a("size"))),

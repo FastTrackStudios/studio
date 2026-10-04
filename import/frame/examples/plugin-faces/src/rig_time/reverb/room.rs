@@ -250,9 +250,14 @@ fn wavefront(b: &mut Builder<'_>, room: NodeId, p: &Plan) {
                 draw::solid("#00000000"),
             ),
             RAY,
-            1.4,
+            // Scaled with the ring: a hairline near the source that
+            // broadens as it spreads.
+            4.0,
         );
-        let ring = b.add(inside, ui::glowing(ring, RAY, 0.6, 5.0));
+        // A ring, not a disc: its light is its stroke's alone.
+        let mut ring = ring;
+        ring.fills.clear();
+        let ring = b.add(inside, ui::glowing(ring, RAY, 1.2, kit::BLOOM));
         let phase = format!("fract(time * 0.7 + {lag})");
         motion::add(
             b,
@@ -356,11 +361,16 @@ fn plan(b: &mut Builder<'_>, sheet: NodeId, (w, h): (f64, f64), l: &Look) {
     // The paths: second order under, fainter, up with the decay.
     let second = b.add(
         room,
-        ui::strokes(
-            "second order",
-            &p.second(),
-            0.9,
-            draw::solid(&ui::alpha(RAY, 0.55)),
+        ui::glowing(
+            ui::strokes(
+                "second order",
+                &p.second(),
+                0.9,
+                draw::solid(&ui::alpha(RAY, 0.55)),
+            ),
+            RAY,
+            0.45,
+            kit::GLOW,
         ),
     );
     motion::add(
@@ -378,15 +388,18 @@ fn plan(b: &mut Builder<'_>, sheet: NodeId, (w, h): (f64, f64), l: &Look) {
         ui::glowing(
             ui::strokes("first order", &p.first(), 1.3, draw::solid(RAY)),
             RAY,
-            0.7,
-            4.0,
+            1.1,
+            kit::GLOW,
         ),
     );
+    // Its light comes up with the decay: a live room rings brighter.
     motion::add(
         b,
         first,
         Motion::new(Target::Opacity)
-            .input(format!("0.35 + 0.65 * param({VERB}/on)"))
+            .input(format!(
+                "(0.35 + 0.65 * param({VERB}/on)) * (0.7 + 0.3 * norm({VERB}/decay))"
+            ))
             .range(0.0, 1.0),
     );
     ui::line(
@@ -404,22 +417,35 @@ fn plan(b: &mut Builder<'_>, sheet: NodeId, (w, h): (f64, f64), l: &Look) {
             ui::glowing(
                 draw::circle("bounce", x, y, 2.2, draw::solid(RAY)),
                 RAY,
-                0.9,
-                4.0,
+                1.3,
+                kit::GLOW,
             ),
         );
     }
     walls(b, room, &p, l);
     // The source and the listener.
-    b.add(
+    // The drum sounds: it is the room's light source.
+    let drum = b.add(
         room,
-        draw::circle(
-            "drum",
-            p.src.0,
-            p.src.1,
-            6.0,
-            draw::radial_at(0.4, 0.35, 0.8, &[(0.0, "#f3ecff"), (1.0, "#8b6fd1")]),
+        ui::glowing(
+            draw::circle(
+                "drum",
+                p.src.0,
+                p.src.1,
+                6.0,
+                draw::radial_at(0.4, 0.35, 0.8, &[(0.0, "#f3ecff"), (1.0, "#8b6fd1")]),
+            ),
+            RAY,
+            0.9,
+            kit::BLOOM,
         ),
+    );
+    motion::add(
+        b,
+        drum,
+        Motion::new(Target::Opacity)
+            .input(format!("0.55 + 0.45 * param({VERB}/on)"))
+            .range(0.0, 1.0),
     );
     b.add(
         room,
@@ -442,8 +468,8 @@ fn plan(b: &mut Builder<'_>, sheet: NodeId, (w, h): (f64, f64), l: &Look) {
         ui::glowing(
             draw::circle("mic", p.ear.0, p.ear.1, 3.2, draw::solid("#f3ecff")),
             RAY,
-            0.9,
-            6.0,
+            1.0,
+            kit::GLOW,
         ),
     );
 }
@@ -501,7 +527,7 @@ fn taps(
         b.add(
             bar,
             if *bright {
-                ui::glowing(line, RAY, 0.7, 3.0)
+                ui::glowing(line, RAY, 1.0, kit::GLOW)
             } else {
                 line
             },
@@ -563,6 +589,7 @@ fn picture(
         );
     }
     ui::silk_left(b, sheet, "Live room · plan", 8.0, 9.0, 5.5, l.wall, 800.0);
+    kit::glass(b, sheet);
     sheet
 }
 

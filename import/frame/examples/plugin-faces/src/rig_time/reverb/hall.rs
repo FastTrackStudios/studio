@@ -159,7 +159,7 @@ fn hall(b: &mut Builder<'_>, plan: NodeId, w: f64, h: f64, line: &str) {
         let ring = b.add(room, draw::frame(&format!("wavefront {i}"), lx - r_max, ly - r_max, 2.0 * r_max, 2.0 * r_max));
         let mut c = draw::stroked(draw::circle("front", r_max, r_max, r_max - 3.0, draw::solid("#00000000")), line, 5.0);
         c.fills.clear();
-        b.add(ring, ui::glowing(c, line, 0.6, 5.0));
+        b.add(ring, ui::glowing(c, line, 0.6, kit::GLOW));
         // Each front spreads from the source and fades; they come slower
         // and ring longer as the decay grows.
         let phase = format!("fract(time * lerp(0.55, 0.16, norm({VERB}/decay)) + {})", f64::from(i) / 5.0);
@@ -168,8 +168,19 @@ fn hall(b: &mut Builder<'_>, plan: NodeId, w: f64, h: f64, line: &str) {
         let fade = format!("(1 - {phase}) * param({VERB}/on)");
         motion::add(b, ring, Motion::new(Target::Opacity).input(fade).range(0.0, 1.0));
     }
+    // The sound field: a pool of the stage's light in the air, filling
+    // the hall as the decay grows (the air's clip keeps it inside the
+    // walls). Drawn, not emitted: a field this size has no outline to
+    // bloom from, and the vector path would halo it as a disc.
+    let pool = (len * 0.42, hh * 0.7);
+    let mut field = draw::circle("field", lx, ly, pool.1, draw::radial_at(0.5, 0.5, 0.5, &[(0.0, &ui::alpha(line, 0.42)), (0.45, &ui::alpha(line, 0.15)), (1.0, &ui::alpha(line, 0.0))]));
+    field.transform.tx = lx - pool.0;
+    field.size.width = 2.0 * pool.0;
+    let field = b.add(room, field);
+    motion::add(b, field, Motion::new(Target::Opacity).input(format!("(0.25 + 0.75 * norm({VERB}/decay)) * param({VERB}/on)")).range(0.0, 1.0).dynamics(Dynamics::spring(200.0, 26.0)));
+    motion::add(b, field, Motion::new(Target::StretchX).input(format!("norm({VERB}/decay)")).range(0.55, 1.0).pivot(0.0, 0.5).dynamics(Dynamics::spring(200.0, 26.0)));
     // The source.
-    let src = b.add(plan, draw::emissive(draw::circle("source", cx, cy, 4.5, draw::solid(GILT)), draw::hex(GILT), 1.0, 12.0));
+    let src = b.add(plan, draw::emissive(draw::circle("source", cx, cy, 4.5, draw::solid(GILT)), draw::hex(GILT), 1.3, kit::BLOOM));
     motion::add(b, src, Motion::new(Target::Opacity).input(format!("0.35 + 0.65 * param({VERB}/on)")).range(0.0, 1.0));
 
     // Title block, as a drawing has.
@@ -212,6 +223,7 @@ fn drawing(b: &mut Builder<'_>, panel: NodeId, (px, py, pw, ph): (f64, f64, f64,
     let sheet = b.add(panel, sheet);
     hall(b, sheet, pw, ph, l.line);
     kit::scale_children(b, sheet);
+    kit::glass(b, sheet);
     let mut rim = draw::rect("gilt", px - 2.0, py - 2.0, pw + 4.0, ph + 4.0, draw::solid("#00000000"));
     rim.fills.clear();
     rim.stroke = document_proto::Stroke { paints: vec![draw::linear(90.0, &[(0.0, GILT_DIM), (0.5, GILT), (1.0, GILT_DIM)])], weight: 2.0, ..document_proto::Stroke::default() };

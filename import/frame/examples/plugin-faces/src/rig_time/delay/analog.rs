@@ -36,8 +36,9 @@ fn swell(b: &mut Builder<'_>, parent: NodeId, name: &str, (cx, base): (f64, f64)
         d += &format!("L {x:.1} {y:.1} ");
     }
     d += &format!("L {w:.1} {h:.1} Z");
-    b.add(g, draw::path("glow", 0.0, 0.0, w, h, d, draw::linear(180.0, &[(0.0, &ui::alpha(color, 0.45)), (1.0, &ui::alpha(color, 0.0))])));
-    b.add(g, ui::glowing(ui::strokes("edge", &[pts], 1.6, draw::solid(color)), color, 0.6, 4.0));
+    // The swell gives off light, a soft halo round its body.
+    b.add(g, ui::glowing(draw::path("glow", 0.0, 0.0, w, h, d, draw::linear(180.0, &[(0.0, &ui::alpha(color, 0.45)), (1.0, &ui::alpha(color, 0.0))])), color, 0.6, kit::BLOOM));
+    b.add(g, ui::glowing(ui::strokes("edge", &[pts], 1.6, draw::solid(color)), color, 1.4, kit::GLOW));
     g
 }
 
@@ -58,7 +59,7 @@ fn repeats(b: &mut Builder<'_>, view: NodeId, w: f64, h: f64, ink: &str, dim: &s
     ui::silk(b, view, "2.5 s", lead + span - 6.0, base + 12.0, 5.5, dim, 700.0);
     // The note.
     let note = draw::rect("note", lead - 1.0, 10.0, 2.0, base - 10.0, draw::solid(ink));
-    b.add(view, ui::glowing(note, kit::BLUE_LIGHT, 0.9, 5.0));
+    b.add(view, ui::glowing(note, kit::BLUE_LIGHT, 1.3, kit::GLOW));
     // The repeats: each drawn at the left, slid to its time, shrunk by the
     // feedback, wider each time round.
     let spring = Dynamics::spring(260.0, 28.0);
@@ -74,6 +75,7 @@ fn repeats(b: &mut Builder<'_>, view: NodeId, w: f64, h: f64, ink: &str, dim: &s
         let wob = format!("sin(time * 6.2832 * param({DLY}/mod_rate) + {fi}) * norm({DLY}/mod_depth)");
         motion::add(b, s, Motion::new(Target::Y).input(format!("0.5 + 0.5 * {wob}")).range(-2.0 * fi.sqrt(), 2.0 * fi.sqrt()));
     }
+    kit::glass(b, view);
 }
 
 #[must_use]

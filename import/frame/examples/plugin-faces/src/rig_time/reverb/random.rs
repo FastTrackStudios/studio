@@ -272,7 +272,7 @@ fn segments(b: &mut Builder<'_>, parent: NodeId, s: &str, (x, cy, w): (f64, f64,
     );
     b.add(
         parent,
-        draw::emissive(digits("program", s, LED), draw::hex(LED), 0.9, size * 0.5),
+        draw::emissive(digits("program", s, LED), draw::hex(LED), 1.0, kit::GLOW),
     );
 }
 
@@ -289,7 +289,7 @@ fn dots(b: &mut Builder<'_>, parent: NodeId, s: &str, (x, cy, w): (f64, f64, f64
         TextAlign::Left,
         &draw::Lettering::family(draw::family::DOTO).weight(700.0),
     );
-    b.add(parent, ui::glowing(t, LED, 0.7, size * 0.35));
+    b.add(parent, ui::glowing(t, LED, 0.8, kit::GLOW));
 }
 
 /// The delay lines, `rows` of `cols` LEDs in (`x`, `y`, `w`, `h`): each
@@ -344,7 +344,7 @@ fn lines(
                 dh,
                 draw::solid(LED),
             );
-            let dot = b.add(g, ui::glowing(dot, LED, 0.9 * glow, 3.0));
+            let dot = b.add(g, ui::glowing(dot, LED, 1.2 * glow, kit::GLOW));
             let t = format!("(time - {lag})");
             let walk = format!(
                 "{mean:.3} + (0.1 + 0.3 * norm({VERB}/modulation)) * (0.6 * sin({t} * {w1:.2} + {p1:.2}) + 0.4 * sin({t} * {w2:.2} + {p2:.2}))"
@@ -492,8 +492,8 @@ fn program_keys(
             draw::emissive(
                 draw::circle("lamp", kw / 2.0, 4.0, 2.4, draw::solid(LED)),
                 draw::hex(LED),
-                0.9,
-                6.0,
+                1.1,
+                kit::GLOW,
             ),
         );
         let well = draw::rounded(
