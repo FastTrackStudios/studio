@@ -7,6 +7,7 @@
 
 pub mod animate;
 pub mod comp_fet;
+pub mod comp_look;
 pub mod comp_tube;
 pub mod comp_vca;
 pub mod delay;
@@ -58,6 +59,9 @@ pub fn all() -> Vec<Face> {
     v.extend(suite_modern_rhythm::faces());
     v.extend(suite_blackout_gain::faces());
     for f in &mut v {
+        if f.plugin == "comp" {
+            comp_look::apply(&mut f.scene, f.file);
+        }
         let scene = std::mem::replace(&mut f.scene, document_proto::Scene::new("Surface"));
         f.scene = face::stable_ids(scene, &format!("{}/{}", f.plugin, f.file));
     }

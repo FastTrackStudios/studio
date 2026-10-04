@@ -1,0 +1,20 @@
+{
+  "format": 1,
+  "assets": [
+    {
+      "id": "67bdc25c46843bc793f6cf4a2326be803f273e8868145665be5efd0a8b14a12b",
+      "mime": "text/wgsl",
+      "file": "67bdc25c46843bc793f6cf4a2326be803f273e8868145665be5efd0a8b14a12b.wgsl"
+    },
+    {
+      "id": "c699bc2b612983434a1d07f599ed470945b49a46a06a9ffcf9041e2aaa05338f",
+      "mime": "text/wgsl",
+      "file": "c699bc2b612983434a1d07f599ed470945b49a46a06a9ffcf9041e2aaa05338f.wgsl"
+    },
+    {
+      "id": "dab9989ca6c5423ceba07bfa3ebb448cc99158e22345fdce8e8edd711b64720a",
+      "mime": "text/wgsl",
+      "file": "dab9989ca6c5423ceba07bfa3ebb448cc99158e22345fdce8e8edd711b64720a.wgsl"
+    }
+  ]
+}
