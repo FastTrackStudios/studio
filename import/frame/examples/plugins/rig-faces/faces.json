@@ -2433,11 +2433,14 @@
         "time_knob": true
       },
       {
+        "back": "90-verb-swell-back",
+        "back_dark": "90-verb-swell-back-dark",
         "dark": "90-verb-swell-dark",
         "face": "90-verb-swell",
         "match": [
           "swell"
         ],
+        "nameplate": true,
         "ns": "verb",
         "size": [
           960.0,
@@ -2448,14 +2451,30 @@
         "tall_size": [
           760.0,
           328.0
-        ]
+        ],
+        "tiers": {
+          "phone": {
+            "back": "90-verb-swell-back-phone",
+            "back_dark": "90-verb-swell-back-phone-dark",
+            "dark": "90-verb-swell-phone-dark",
+            "face": "90-verb-swell-phone",
+            "size": [
+              760.0,
+              164.0
+            ]
+          }
+        },
+        "time_knob": true
       },
       {
+        "back": "91-verb-reflections-back",
+        "back_dark": "91-verb-reflections-back-dark",
         "dark": "91-verb-reflections-dark",
         "face": "91-verb-reflections",
         "match": [
           "reflections"
         ],
+        "nameplate": true,
         "ns": "verb",
         "size": [
           960.0,
@@ -2466,14 +2485,30 @@
         "tall_size": [
           760.0,
           328.0
-        ]
+        ],
+        "tiers": {
+          "phone": {
+            "back": "91-verb-reflections-back-phone",
+            "back_dark": "91-verb-reflections-back-phone-dark",
+            "dark": "91-verb-reflections-phone-dark",
+            "face": "91-verb-reflections-phone",
+            "size": [
+              760.0,
+              164.0
+            ]
+          }
+        },
+        "time_knob": true
       },
       {
+        "back": "92-verb-velvet-back",
+        "back_dark": "92-verb-velvet-back-dark",
         "dark": "92-verb-velvet-dark",
         "face": "92-verb-velvet",
         "match": [
           "velvet"
         ],
+        "nameplate": true,
         "ns": "verb",
         "size": [
           960.0,
@@ -2484,14 +2519,30 @@
         "tall_size": [
           760.0,
           328.0
-        ]
+        ],
+        "tiers": {
+          "phone": {
+            "back": "92-verb-velvet-back-phone",
+            "back_dark": "92-verb-velvet-back-phone-dark",
+            "dark": "92-verb-velvet-phone-dark",
+            "face": "92-verb-velvet-phone",
+            "size": [
+              760.0,
+              164.0
+            ]
+          }
+        },
+        "time_knob": true
       },
       {
+        "back": "93-verb-freeverb-back",
+        "back_dark": "93-verb-freeverb-back-dark",
         "dark": "93-verb-freeverb-dark",
         "face": "93-verb-freeverb",
         "match": [
           "freeverb"
         ],
+        "nameplate": true,
         "ns": "verb",
         "size": [
           960.0,
@@ -2502,14 +2553,30 @@
         "tall_size": [
           760.0,
           328.0
-        ]
+        ],
+        "tiers": {
+          "phone": {
+            "back": "93-verb-freeverb-back-phone",
+            "back_dark": "93-verb-freeverb-back-phone-dark",
+            "dark": "93-verb-freeverb-phone-dark",
+            "face": "93-verb-freeverb-phone",
+            "size": [
+              760.0,
+              164.0
+            ]
+          }
+        },
+        "time_knob": true
       },
       {
+        "back": "94-verb-convolution-back",
+        "back_dark": "94-verb-convolution-back-dark",
         "dark": "94-verb-convolution-dark",
         "face": "94-verb-convolution",
         "match": [
           "convolution"
         ],
+        "nameplate": true,
         "ns": "verb",
         "size": [
           960.0,
@@ -2520,7 +2587,20 @@
         "tall_size": [
           760.0,
           328.0
-        ]
+        ],
+        "tiers": {
+          "phone": {
+            "back": "94-verb-convolution-back-phone",
+            "back_dark": "94-verb-convolution-back-phone-dark",
+            "dark": "94-verb-convolution-phone-dark",
+            "face": "94-verb-convolution-phone",
+            "size": [
+              760.0,
+              164.0
+            ]
+          }
+        },
+        "time_knob": true
       },
       {
         "back": "95-verb-random-back",
