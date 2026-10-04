@@ -21,6 +21,8 @@ use super::logo;
 use super::ui::{self, bind};
 use crate::face::{Face, canvas};
 
+pub mod lane;
+
 const W: f64 = 1500.0;
 const H: f64 = 136.0;
 const INK: &str = "#eceef0";

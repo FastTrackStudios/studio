@@ -20,6 +20,8 @@ use super::logo;
 use super::ui::{self, bind};
 use crate::face::{Face, canvas};
 
+pub mod lane;
+
 const W: f64 = 1480.0;
 const H: f64 = 130.0;
 /// Silkscreen: black on the grey front.

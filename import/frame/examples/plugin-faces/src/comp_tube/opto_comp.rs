@@ -20,6 +20,8 @@ use surface_widgets::Builder;
 use super::ui::{self, Ink};
 use crate::face::{Face, canvas};
 
+pub mod lane;
+
 /// The photographed panel: 1925 × 520 px from (35, 38) in the photo.
 const W: f64 = 1000.0;
 const H: f64 = 270.0;

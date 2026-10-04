@@ -19,6 +19,8 @@ use surface_widgets::Builder;
 use super::ui::{self, Ink};
 use crate::face::{Face, canvas};
 
+pub mod lane;
+
 /// The photographed panel, 1920 px across its ears, at this width.
 const W: f64 = 906.0;
 const H: f64 = 258.0;
