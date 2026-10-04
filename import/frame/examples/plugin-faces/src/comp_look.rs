@@ -96,7 +96,67 @@ fn fx(shader: &str, params: &[(&str, f64)]) -> ShaderFx {
 
 /// Light `scene` (a comp face built from `file`).
 pub fn apply(scene: &mut Scene, file: &str) {
-    let l = look(file);
+    light(scene, &look(file));
+}
+
+/// The look for a redrawn saturator face, by its file (`03-transformer`
+/// …): `None` for those still drawn without the stage.
+fn saturator_look(file: &str) -> Option<Look> {
+    let base = Look {
+        brushed: 0.0,
+        plate: 0.36,
+        rough: 0.5,
+        band: 0.3,
+        grain: 1.0,
+        tint: NEUTRAL,
+        knob: 0.8,
+        dome: 0.35,
+        knob_rough: 0.3,
+        spun: 0.0,
+        glass: 0.7,
+        backlight: 0.55,
+    };
+    match file.get(..3).unwrap_or("") {
+        // Pultec blue-grey enamel, satin; the VU lamp-lit.
+        "03-" => Some(Look { plate: 0.34, rough: 0.5, ..base }),
+        // The deck's warm grey enamel; the VUs lamp-lit.
+        "02-" => Some(Look { plate: 0.32, rough: 0.55, backlight: 0.6, ..base }),
+        _ => None,
+    }
+}
+
+/// Light a redrawn saturator face (`file`) as the compressors are lit,
+/// and glaze its window into the unit (`Chassis window`, `Deck window`):
+/// the same curved glass as the meters, unlit from behind.
+pub fn apply_saturator(scene: &mut Scene, file: &str) {
+    let Some(l) = saturator_look(file) else { return };
+    light(scene, &l);
+    let glass_id = format!("asset:{}", scene.add_asset("text/wgsl", GLASS.as_bytes().to_vec()).0);
+    let windows: Vec<NodeId> = scene.walk(scene.root).into_iter().filter(|id| scene.node(*id).is_some_and(|n| matches!(n.name.as_str(), "Chassis window" | "Deck window"))).collect();
+    for id in windows {
+        if let Some(n) = scene.node_mut(id) {
+            n.shader = Some(fx(&glass_id, &[("strength", 0.42), ("p0", 0.0), ("p1", 0.4)]));
+        }
+    }
+    // Tape reels: the knob light on their spun flanges, from a frame that
+    // stays put while the flange turns under it (`reel lit`, the reel's
+    // radius 5 in from its sides).
+    let reels: Vec<NodeId> = scene.walk(scene.root).into_iter().filter(|id| scene.node(*id).is_some_and(|n| n.name == "reel lit")).collect();
+    if reels.is_empty() {
+        return;
+    }
+    let knob_id = format!("asset:{}", scene.add_asset("text/wgsl", KNOB.as_bytes().to_vec()).0);
+    for id in reels {
+        if let Some(n) = scene.node_mut(id) {
+            let side = n.size.width.max(1.0);
+            let radius = ((side - 10.0) / 2.0 / side).clamp(0.05, 0.5);
+            n.shader = Some(fx(&knob_id, &[("strength", 0.75), ("radius", radius), ("p0", 0.0), ("p1", 0.97), ("p2", 1.02), ("softness", 0.22)]));
+        }
+    }
+}
+
+fn light(scene: &mut Scene, l: &Look) {
+    let l = *l;
     let plate_id = format!("asset:{}", scene.add_asset("text/wgsl", PLATE.as_bytes().to_vec()).0);
     let knob_id = format!("asset:{}", scene.add_asset("text/wgsl", KNOB.as_bytes().to_vec()).0);
     let glass_id = format!("asset:{}", scene.add_asset("text/wgsl", GLASS.as_bytes().to_vec()).0);
@@ -173,6 +233,10 @@ fn knob_light(scene: &mut Scene, root: NodeId, shader: &str, l: &Look) {
     let Some(r) = scene.node(root) else { return };
     let Some(knob) = r.children.iter().copied().find(|c| scene.node(*c).is_some_and(|n| n.name == "knob")) else { return };
     let Some(k) = scene.node(knob) else { return };
+    // A knob the stage already draws (`knob.3d`) is lit by its own shader.
+    if scene.walk(knob).into_iter().any(|c| scene.node(c).is_some_and(|n| n.shader.is_some())) {
+        return;
+    }
     let side = k.size.width.min(k.size.height).max(1.0);
     // The body's diameter: its shadow's, the collar's, else the control's.
     let body = k

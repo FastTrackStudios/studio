@@ -65,6 +65,9 @@ pub fn all() -> Vec<Face> {
             comp_sc::add_key(f);
             comp_look::apply(&mut f.scene, f.file);
         }
+        if f.plugin == "saturate" {
+            comp_look::apply_saturator(&mut f.scene, f.file);
+        }
         let scene = std::mem::replace(&mut f.scene, document_proto::Scene::new("Surface"));
         f.scene = face::stable_ids(scene, &format!("{}/{}", f.plugin, f.file));
     }
