@@ -79,8 +79,10 @@ fn aqua_fill() -> document_proto::Paint {
 fn aqua_head(b: &mut surface_widgets::Builder<'_>, p: document_proto::NodeId, tier: kit::Tier, sp: &Spots, back: bool) {
     let (h, size, fs) = if sp.small { (30.0, 12.0, 22.0) } else { (26.0, 10.0, 19.0) };
     let tw = if sp.small { 140.0 } else { 120.0 };
-    kit::nameplate_right(b, p, AQUA, sp.w, (8.0, h), tw, if sp.small { 210.0 } else { 180.0 }, size, ("#06323d", "#0b4a58"), |b, t| {
-        set(b, t, "Aqua-Puss", (tw - 14.0) / 2.0, h / 2.0, fs, "#f4fbfd", &Lettering::family(family::KNEWAVE), 0.0);
+    kit::head(b, p, AQUA, back, |b, head| {
+        kit::nameplate_right(b, head, AQUA, sp.w, (8.0, h), tw, if sp.small { 210.0 } else { 180.0 }, size, ("#06323d", "#0b4a58"), |b, t| {
+            set(b, t, "Aqua-Puss", (tw - 14.0) / 2.0, h / 2.0, fs, "#f4fbfd", &Lettering::family(family::KNEWAVE), 0.0);
+        });
     });
     kit::face_bypass_w(b, p, AQUA, tier, sp.w, "blue", "On");
     kit::flip_arrow_w(b, p, AQUA, tier, sp.w, back, (AQUA_INK, "#ffffff40"));
@@ -188,8 +190,10 @@ fn spring_head(b: &mut surface_widgets::Builder<'_>, p: document_proto::NodeId, 
     let (h, size, fs) = if sp.small { (30.0, 12.0, 22.0) } else { (26.0, 10.0, 19.0) };
     let tw = if sp.small { 104.0 } else { 92.0 };
     let serif = Lettering::family(family::PLAYFAIR_DISPLAY).weight(700.0);
-    kit::nameplate_right(b, p, SPRING, sp.w, (8.0, h), tw, if sp.small { 210.0 } else { 180.0 }, size, (kit::PURPLE_LAMP, SPRING_DIM), |b, t| {
-        set(b, t, "Spring", (tw - 14.0) / 2.0, h / 2.0, fs, SPRING_INK, &serif, 0.02);
+    kit::head(b, p, SPRING, back, |b, head| {
+        kit::nameplate_right(b, head, SPRING, sp.w, (8.0, h), tw, if sp.small { 210.0 } else { 180.0 }, size, (kit::PURPLE_LAMP, SPRING_DIM), |b, t| {
+            set(b, t, "Spring", (tw - 14.0) / 2.0, h / 2.0, fs, SPRING_INK, &serif, 0.02);
+        });
     });
     kit::face_bypass_w(b, p, SPRING, tier, sp.w, "purple", "On");
     kit::flip_arrow_w(b, p, SPRING, tier, sp.w, back, (SPRING_INK, "#ffffff1c"));

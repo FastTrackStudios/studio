@@ -38,6 +38,10 @@ pub fn faces() -> Vec<Face> {
         }
     }
     v.extend(reverb::phone_faces(true).into_iter().map(|(_, f)| f));
+    for dark in [false, true] {
+        v.extend(reverb::tall_faces(dark));
+        v.extend(delay::tall_faces(dark));
+    }
     v
 }
 
@@ -47,7 +51,12 @@ pub fn faces() -> Vec<Face> {
 /// nameplate (the host fills the preset and answers its presses), the Time
 /// knob (time, sync, time_text, the host maps), and its versions for other
 /// rooms (`tiers`: the app draws the one for the room it is given).
-fn entry(mut e: serde_json::Value, f: &Face, phone: Option<(usize, Face)>, phone_dark: Option<(usize, Face)>, backs: impl Fn(bool, kit::Tier) -> Option<Face>) -> serde_json::Value {
+fn entry(mut e: serde_json::Value, f: &Face, (tall, tall_dark): (&Face, &Face), phone: Option<(usize, Face)>, phone_dark: Option<(usize, Face)>, backs: impl Fn(bool, kit::Tier) -> Option<Face>) -> serde_json::Value {
+    // Its tall face, for standing alone in a lane column: everything on
+    // it, two phone lanes high.
+    e["tall"] = json!(tall.file);
+    e["tall_dark"] = json!(tall_dark.file);
+    e["tall_size"] = json!([kit::TALL_W, kit::TALL_H]);
     if f.params.iter().any(|p| p.addr.to_string().ends_with("/preset_browse")) {
         e["nameplate"] = json!(true);
     }
@@ -73,17 +82,18 @@ fn entry(mut e: serde_json::Value, f: &Face, phone: Option<(usize, Face)>, phone
 
 pub fn manifest() -> serde_json::Value {
     let size = [kit::W, kit::H];
+    let (dt, dtd, rt, rtd) = (delay::tall_faces(false), delay::tall_faces(true), reverb::tall_faces(false), reverb::tall_faces(true));
     let delays: Vec<_> = kit::DELAY_ALGOS
         .iter()
         .zip(delay::faces(false).into_iter().zip(delay::faces(true)))
         .enumerate()
-        .map(|(i, (name, (f, d)))| entry(json!({ "match": [name.to_lowercase()], "face": f.file, "dark": d.file, "ns": kit::DLY, "size": size }), &f, delay::phone_faces(false).into_iter().find(|(at, _)| *at == i), delay::phone_faces(true).into_iter().find(|(at, _)| *at == i), |dark, t| delay::back_faces(dark, t).into_iter().find(|(at, _)| *at == i).map(|(_, f)| f)))
+        .map(|(i, (name, (f, d)))| entry(json!({ "match": [name.to_lowercase()], "face": f.file, "dark": d.file, "ns": kit::DLY, "size": size }), &f, (&dt[i], &dtd[i]), delay::phone_faces(false).into_iter().find(|(at, _)| *at == i), delay::phone_faces(true).into_iter().find(|(at, _)| *at == i), |dark, t| delay::back_faces(dark, t).into_iter().find(|(at, _)| *at == i).map(|(_, f)| f)))
         .collect();
     let reverbs: Vec<_> = kit::VERB_ALGOS
         .iter()
         .zip(reverb::faces(false).into_iter().zip(reverb::faces(true)))
         .enumerate()
-        .map(|(i, (name, (f, d)))| entry(json!({ "match": [name.to_lowercase()], "face": f.file, "dark": d.file, "ns": kit::VERB, "size": size }), &f, reverb::phone_faces(false).into_iter().find(|(at, _)| *at == i), reverb::phone_faces(true).into_iter().find(|(at, _)| *at == i), |dark, t| reverb::back_faces(dark, t).into_iter().find(|(at, _)| *at == i).map(|(_, f)| f)))
+        .map(|(i, (name, (f, d)))| entry(json!({ "match": [name.to_lowercase()], "face": f.file, "dark": d.file, "ns": kit::VERB, "size": size }), &f, (&rt[i], &rtd[i]), reverb::phone_faces(false).into_iter().find(|(at, _)| *at == i), reverb::phone_faces(true).into_iter().find(|(at, _)| *at == i), |dark, t| reverb::back_faces(dark, t).into_iter().find(|(at, _)| *at == i).map(|(_, f)| f)))
         .collect();
     json!({ "delay": delays, "reverb": reverbs })
 }

@@ -163,19 +163,22 @@
           <Text name="value" id="06eae1f5-ec33-5c51-860d-be8696dcd2f1" y=70.34400000000001 w=54.864000000000004 h=10 fill="#a898cc" size=7 weight=500 letter-spacing=0.14 text-align="center" />
         </Frame>
         <Text name="silk" id="37232f16-3431-5ff1-bf58-11bb94f32088" x=599.44 y=121.24 w=29.119999999999997 h=10 fill="#efe7ff" size=7 weight=800 letter-spacing=0.56 case="upper" text-align="center">Pan</Text>
-        <Frame name="preset" id="b7e44397-d167-5aaf-87bf-e4cf6dae1ef3" x=430 y=8 w=148 h=26 control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Param":{"addr":"spring/preset"}}},"kind":"Readout","slots":[{"node":"2dc76840-6d5c-5c55-9f37-2d222fcd2af8","role":"Value"}]}}>
-          <Text name="value" id="2dc76840-6d5c-5c55-9f37-2d222fcd2af8" y=6.5 w=148 h=14 fill="#b58cff" font="Inter" size=10 weight=650 text-align="right" />
-        </Frame>
-        <Frame name="preset browse" id="5319848c-017b-5cae-b407-ae61316ad178" x=430 y=8 w=148 h=26 control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Param":{"addr":"spring/preset_browse"}}},"kind":{"Button":{"mode":"Momentary"}},"slots":[]}} />
-        <Frame name="preset prev" id="18cc75c5-bb6f-534e-b537-d311f10d6786" x=578 y=8 w=16 h=26 control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Param":{"addr":"spring/preset_prev"}}},"kind":{"Button":{"mode":"Momentary"}},"slots":[]}}>
-          <Vector name="chevron" id="91a193f3-b56d-550f-8b8b-3b011ff21642" x=6 y=9 w=4 h=8 stroke="#a898cc" stroke-weight=1.4 stroke-cap="round" stroke-join="round" geometry="M 4.000 0.000 L 0.000 4.000 L 4.000 8.000 " />
-        </Frame>
-        <Frame name="preset next" id="10cf33d0-8398-5353-a5c1-b43aa6629e06" x=594 y=8 w=16 h=26 control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Param":{"addr":"spring/preset_next"}}},"kind":{"Button":{"mode":"Momentary"}},"slots":[]}}>
-          <Vector name="chevron" id="6bd4a17f-ead1-544b-a951-ef44a1a45dd9" x=6 y=9 w=4 h=8 stroke="#a898cc" stroke-weight=1.4 stroke-cap="round" stroke-join="round" geometry="M 0.000 0.000 L 4.000 4.000 L 0.000 8.000 " />
-        </Frame>
-        <Frame name="algorithm" id="83f3e78e-7825-5a5f-bf0b-60234c3ea105" x=616 y=8 w=92 h=26 control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Param":{"addr":"spring/algo_menu"}}},"kind":{"Button":{"mode":"Momentary"}},"slots":[]}}>
-          <Text name="print" id="449cef5f-bd5a-5c3d-a8bc-10f352cfca78" x=-32.44 y=0.0799999999999983 w=142.88 h=26 fill="#efe7ff" font="Playfair Display" size=19 weight=700 letter-spacing=0.38 text-align="center">Spring</Text>
-          <Vector name="caret" id="e346703d-83a7-5377-ab20-30bd373b2831" x=82 y=11 w=8 h=4 stroke="#a898cc" stroke-weight=1.4 stroke-cap="round" stroke-join="round" geometry="M 0.000 0.000 L 4.000 4.000 L 8.000 0.000 " />
+        <Frame name="standalone head" id="cc947d9c-da39-5680-8c0a-1a24380a956d" w=720 h=164 control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Param":{"addr":"spring/stacked"}}},"kind":"Readout","show_if":{"addr":"spring/stacked","any_of":[],"at_least":0.5,"not":true},"slots":[{"node":"f81ccfc7-778b-5475-9528-0397160da24d","role":"Value"}]}}>
+          <Text name="stacked" id="f81ccfc7-778b-5475-9528-0397160da24d" w=1 h=2 opacity=0 fill="#00000000" size=1 />
+          <Frame name="preset" id="c1ec8c01-f2fc-565d-99bb-acf5d4b4d6cd" x=430 y=8 w=148 h=26 control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Param":{"addr":"spring/preset"}}},"kind":"Readout","slots":[{"node":"27e854ea-7340-5cf9-bbd1-0865504cde64","role":"Value"}]}}>
+            <Text name="value" id="27e854ea-7340-5cf9-bbd1-0865504cde64" y=6.5 w=148 h=14 fill="#b58cff" font="Inter" size=10 weight=650 text-align="right" />
+          </Frame>
+          <Frame name="preset browse" id="e80daaaf-d429-5dff-8080-a51816b6f6f7" x=430 y=8 w=148 h=26 control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Param":{"addr":"spring/preset_browse"}}},"kind":{"Button":{"mode":"Momentary"}},"slots":[]}} />
+          <Frame name="preset prev" id="338c1527-d306-5dd6-9f1f-39945187007b" x=578 y=8 w=16 h=26 control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Param":{"addr":"spring/preset_prev"}}},"kind":{"Button":{"mode":"Momentary"}},"slots":[]}}>
+            <Vector name="chevron" id="4a70052b-94ec-5a1e-8044-bbb9303b817f" x=6 y=9 w=4 h=8 stroke="#a898cc" stroke-weight=1.4 stroke-cap="round" stroke-join="round" geometry="M 4.000 0.000 L 0.000 4.000 L 4.000 8.000 " />
+          </Frame>
+          <Frame name="preset next" id="118997f8-bb32-51be-8e9f-58be15c5257a" x=594 y=8 w=16 h=26 control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Param":{"addr":"spring/preset_next"}}},"kind":{"Button":{"mode":"Momentary"}},"slots":[]}}>
+            <Vector name="chevron" id="2b4591cc-6fee-5cc0-995d-1ad652c1a314" x=6 y=9 w=4 h=8 stroke="#a898cc" stroke-weight=1.4 stroke-cap="round" stroke-join="round" geometry="M 0.000 0.000 L 4.000 4.000 L 0.000 8.000 " />
+          </Frame>
+          <Frame name="algorithm" id="f9123adc-36fe-5620-a009-13f4db7508c4" x=616 y=8 w=92 h=26 control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Param":{"addr":"spring/algo_menu"}}},"kind":{"Button":{"mode":"Momentary"}},"slots":[]}}>
+            <Text name="print" id="6f94815d-1d99-51c3-a706-3fa5c384ec33" x=-32.44 y=0.0799999999999983 w=142.88 h=26 fill="#efe7ff" font="Playfair Display" size=19 weight=700 letter-spacing=0.38 text-align="center">Spring</Text>
+            <Vector name="caret" id="c0431545-682b-5680-b46c-66e222ba3fbc" x=82 y=11 w=8 h=4 stroke="#a898cc" stroke-weight=1.4 stroke-cap="round" stroke-join="round" geometry="M 0.000 0.000 L 4.000 4.000 L 8.000 0.000 " />
+          </Frame>
         </Frame>
         <Frame name="Bypass" id="7bbf384a-371d-502c-b5d1-607282eb417a" x=645.8823529411765 y=73.72235294117647 w=36.23529411764706 h=36.23529411764706 control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Param":{"addr":"spring/on"}}},"kind":{"Button":{"mode":"Toggle"}},"slots":[{"node":"ba288eef-8c72-5f52-a27f-508fe2d9990e","role":"Led"},{"node":"0255391f-5fe3-5039-9f30-0f3818d32f23","role":"Led"},{"node":"a98c8223-ab40-5a45-b025-416d0f211274","role":"Label"}]}}>
           <Rectangle name="surround" id="018a5a19-7565-59d6-8277-c927cfba24ff" w=36.23529411764706 h=36.23529411764706 radius=4.117647058823529 fill={[{"kind":{"LinearGradient":{"stops":[{"color":"#4a3524","position":0.0},{"color":"#2e2116","position":1.0}],"transform":{"a":1.6653345369377348e-16,"b":-1.0,"c":1.0,"d":1.6653345369377348e-16,"tx":1.0,"ty":-1.942890293094024e-16}}}}]} effects={[{"color":"#0000008c","kind":"InnerShadow","offset_y":0.8235294117647058,"radius":2.4705882352941178}]} />
@@ -184,7 +187,7 @@
           <Rectangle name="pressed" id="0255391f-5fe3-5039-9f30-0f3818d32f23" x=4.117647058823529 y=4.117647058823529 w=28 h=28 radius=2.8823529411764706 fill={[{"kind":{"LinearGradient":{"stops":[{"color":"#000000a6","position":0.0},{"color":"#00000033","position":0.28},{"color":"#00000000","position":0.8},{"color":"#ffffff1f","position":1.0}],"transform":{"a":1.6653345369377348e-16,"b":-1.0,"c":1.0,"d":1.6653345369377348e-16,"tx":1.0,"ty":-1.942890293094024e-16}}}}]} effects={[{"color":"#0000008c","kind":"InnerShadow","offset_y":1.2352941176470589,"radius":2.3058823529411763},{"color":"#ffffff1a","kind":"InnerShadow","offset_y":-0.8235294117647058,"radius":0.0}]} />
           <Text name="legend" id="a98c8223-ab40-5a45-b025-416d0f211274" x=2.4705882352941173 y=13.329647058823529 w=31.294117647058822 h=10 fill="#1d1f22" size=7.041176470588235 weight=800 case="upper" text-align="center">On</Text>
         </Frame>
-        <Frame name="flip" id="36580933-9726-5cb2-b886-0014928cd1f7" x=684 y=77.84 w=28 h=28 control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Param":{"addr":"spring/flip"}}},"kind":{"Button":{"mode":"Momentary"}},"slots":[]}}>
+        <Frame name="flip" id="36580933-9726-5cb2-b886-0014928cd1f7" x=684 y=77.84 w=28 h=28 control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Param":{"addr":"spring/flip"}}},"kind":{"Button":{"mode":"Momentary"}},"show_if":{"addr":"spring/stacked","any_of":[],"at_least":0.5,"not":true},"slots":[]}}>
           <Rectangle name="well" id="7829e0dd-8138-567c-98a9-4ca8d301488c" w=28 h=28 radius=6 fill="#ffffff1c" />
           <Text name="silk" id="06a3187d-e500-58fd-8edb-1eee1bf08684" x=-1.8599999999999994 y=5.100000000000001 w=31.72 h=9 fill="#efe7ff" size=6.5 weight=800 letter-spacing=0.52 case="upper" text-align="center">Back</Text>
           <Vector name="chevron" id="e28d4360-4705-58cb-bbe5-3e7309a8e5a8" x=10 y=16.540000000000003 w=8 h=5 stroke="#efe7ff" stroke-weight=1.5 stroke-cap="round" stroke-join="round" geometry="M 0.000 5.000 L 4.000 0.000 L 8.000 5.000 " />

@@ -929,6 +929,23 @@
       "featured": false
     },
     {
+      "addr": "aquapuss/stacked",
+      "name": "Stacked",
+      "short_name": null,
+      "group": null,
+      "kind": "Toggle",
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 2
+      },
+      "default": 0.0,
+      "bipolar": false,
+      "featured": false
+    },
+    {
       "addr": "aquapuss/time_knob",
       "name": "Time",
       "short_name": null,
@@ -1517,6 +1534,23 @@
       "featured": false
     },
     {
+      "addr": "spring/stacked",
+      "name": "Stacked",
+      "short_name": null,
+      "group": null,
+      "kind": "Toggle",
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 2
+      },
+      "default": 0.0,
+      "bipolar": false,
+      "featured": false
+    },
+    {
       "addr": "spring/time_knob",
       "name": "Time",
       "short_name": null,
@@ -1958,6 +1992,23 @@
       "featured": false
     },
     {
+      "addr": "premod/stacked",
+      "name": "Stacked",
+      "short_name": null,
+      "group": null,
+      "kind": "Toggle",
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 2
+      },
+      "default": 0.0,
+      "bipolar": false,
+      "featured": false
+    },
+    {
       "addr": "premod/time_knob",
       "name": "Time",
       "short_name": null,
@@ -2312,6 +2363,23 @@
     {
       "addr": "dist/flip",
       "name": "More",
+      "short_name": null,
+      "group": null,
+      "kind": "Toggle",
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 2
+      },
+      "default": 0.0,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "dist/stacked",
+      "name": "Stacked",
       "short_name": null,
       "group": null,
       "kind": "Toggle",
@@ -2931,6 +2999,23 @@
     {
       "addr": "gate/flip",
       "name": "More",
+      "short_name": null,
+      "group": null,
+      "kind": "Toggle",
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 2
+      },
+      "default": 0.0,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "gate/stacked",
+      "name": "Stacked",
       "short_name": null,
       "group": null,
       "kind": "Toggle",
@@ -10871,6 +10956,23 @@
       "featured": false
     },
     {
+      "addr": "dly/stacked",
+      "name": "Stacked",
+      "short_name": null,
+      "group": null,
+      "kind": "Toggle",
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 2
+      },
+      "default": 0.0,
+      "bipolar": false,
+      "featured": false
+    },
+    {
       "addr": "verb/decay",
       "name": "Decay",
       "short_name": null,
@@ -11351,6 +11453,23 @@
       "featured": false
     },
     {
+      "addr": "verb/stacked",
+      "name": "Stacked",
+      "short_name": null,
+      "group": null,
+      "kind": "Toggle",
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 2
+      },
+      "default": 0.0,
+      "bipolar": false,
+      "featured": false
+    },
+    {
       "addr": "mod/rate",
       "name": "Rate",
       "short_name": null,
@@ -11590,6 +11709,23 @@
     {
       "addr": "mod/flip",
       "name": "More",
+      "short_name": null,
+      "group": null,
+      "kind": "Toggle",
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 2
+      },
+      "default": 0.0,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "mod/stacked",
+      "name": "Stacked",
       "short_name": null,
       "group": null,
       "kind": "Toggle",
@@ -11914,6 +12050,57 @@
         "steps": null
       },
       "default": 0.0,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "motion/fast",
+      "name": "Fast",
+      "short_name": null,
+      "group": null,
+      "kind": "Toggle",
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 2
+      },
+      "default": 0.0,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "motion/drive",
+      "name": "Drive",
+      "short_name": null,
+      "group": null,
+      "kind": "Continuous",
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": null
+      },
+      "default": 0.2,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "motion/balance",
+      "name": "Balance",
+      "short_name": null,
+      "group": null,
+      "kind": "Continuous",
+      "range": {
+        "min": -1.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": null
+      },
+      "default": 0.5,
       "bipolar": false,
       "featured": false
     }

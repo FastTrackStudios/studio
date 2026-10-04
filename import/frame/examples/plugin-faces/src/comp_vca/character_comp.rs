@@ -573,8 +573,10 @@ pub fn unit_phone(ns: &str, name: &str, input: &str, output: &str, on: &str, bac
         lamp_toggle(b, panel, on, bx - 16.0, bx - 6.0, by - 18.0);
         ui::silk(b, panel, "By Pass", bx, by + 30.0, 8.0, INK, 800.0);
         kit::flip_arrow(b, panel, ns, tier, back, (INK, "#ffffff14"));
-        kit::nameplate_top_right(b, panel, ns, tier, (8.0, 30.0), 150.0, 190.0, 12.0, ("#e8c547", "#9a9ca0"), |b, t| {
-            ui::silk(b, t, "Empirical Labs", 75.0, 15.0, 11.0, "#e8c547", 800.0);
+        kit::head(b, panel, ns, back, |b, head| {
+            kit::nameplate_top_right(b, head, ns, tier, (8.0, 30.0), 150.0, 190.0, 12.0, ("#e8c547", "#9a9ca0"), |b, t| {
+                ui::silk(b, t, "Empirical Labs", 75.0, 15.0, 11.0, "#e8c547", 800.0);
+            });
         });
         // The picture takes a wider lane; on the back, the room between
         // the switch section and the key.

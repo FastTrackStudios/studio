@@ -268,15 +268,71 @@ pub fn back_at(dark: bool, tier: kit::Tier) -> Face {
         });
         let _ = face;
         let (np_y, np_h, title_w, preset_w, size) = if small_room { (8.0, 30.0, 74.0, 210.0, 12.0) } else { (8.0, 26.0, 66.0, 196.0, 10.0) };
-        kit::nameplate_top_right(b, unit, DLY, tier, (np_y, np_h), title_w, preset_w, size, (if dark { kit::BLUE_LIGHT } else { kit::BLUE_DEEP }, "#6b6e74"), |b, t| {
-            parts::centred(b, t, "Tape", (title_w / 2.0 - 6.0, np_h / 2.0), Type::new(if small_room { 22.0 } else { 18.0 }, ink, 400.0).family(draw::family::SAIRA));
+        kit::head(b, unit, DLY, true, |b, head| {
+            kit::nameplate_top_right(b, head, DLY, tier, (np_y, np_h), title_w, preset_w, size, (if dark { kit::BLUE_LIGHT } else { kit::BLUE_DEEP }, "#6b6e74"), |b, t| {
+                parts::centred(b, t, "Tape", (title_w / 2.0 - 6.0, np_h / 2.0), Type::new(if small_room { 22.0 } else { 18.0 }, ink, 400.0).family(draw::family::SAIRA));
+            });
+            let (bx, by, bd) = kit::bypass_spot(tier);
+            glow_key(b, head, &a("on"), bd, (bx, by), ORANGE);
         });
-        let (bx, by, bd) = kit::bypass_spot(tier);
-        glow_key(b, unit, &a("on"), bd, (bx, by), ORANGE);
         kit::flip_arrow(b, unit, DLY, tier, true, (ink, "#00000022"));
     });
     let mut f = kit::delay_face(kit::tier_file("60-dly-tape-back", tier, dark), scene);
     f.params.extend(kit::nameplate_params(DLY));
     f.params.extend(kit::flip_params(DLY));
+    f
+}
+
+/// Its tall face: the unit's picture bay — ECHO, the VU, the display and
+/// the heads' lamps — the whole top row, every control below it in the
+/// unit's knurled knobs round the big white Time dial.
+#[must_use]
+pub fn tall(dark: bool) -> Face {
+    let (ink, grey, unit_fill) = if dark {
+        ("#e8e9eb", [(0.0, "#3a3c41"), (1.0, "#2b2d31")], [(0.0, "#1f2023"), (1.0, "#17181a")])
+    } else {
+        (INK, [(0.0, "#e6e7e8"), (1.0, "#cfd0d2")], [(0.0, "#bfc0c2"), (1.0, "#a9aaac")])
+    };
+    let scene = kit::tall_lane("Tape", |b, root| {
+        let (w, h) = (kit::TALL_W, kit::TALL_H);
+        let unit = bay(b, root, "Unit", (0.0, 0.0, w, h), &unit_fill);
+        let top = bay(b, unit, "Picture", (6.0, 6.0, w - 12.0, kit::H - 8.0), &grey);
+        bay(b, unit, "Controls", (6.0, kit::H + 4.0, w - 12.0, kit::H - 10.0), &grey);
+        for (i, ch) in "ECHO".chars().enumerate() {
+            parts::centred(b, top, &ch.to_string(), (34.0, 26.0 + 34.0 * i as f64), Type::new(30.0, ink, 300.0).family(draw::family::SAIRA).width(88.0));
+        }
+        vu(b, top, (176.0, 92.0), 58.0, ink);
+        let disp = ui::display(b, top, "Display", 286.0, 56.0, 250.0, 30.0, "#9aa0a8", "glass");
+        ui::lit_text(b, disp, "TIME", 8.0, 15.0, 30.0, 7.5, "#c9ccd2", TextAlign::Left, 500.0);
+        ui::lit_readout(b, disp, "Delay time", ui::bind(&a("time_text")), 38.0, 15.0, 100.0, 8.0, "#e8eaee", TextAlign::Left);
+        ui::lit_text(b, disp, "FEEDBACK", 146.0, 15.0, 50.0, 7.5, "#c9ccd2", TextAlign::Left, 500.0);
+        ui::lit_readout(b, disp, "Feedback", ui::bind(&a("feedback")), 192.0, 15.0, 50.0, 8.0, ORANGE, TextAlign::Right);
+        ui::glass(b, disp);
+        // The heads, their lamps flashing on their repeats.
+        parts::centred(b, top, "Active Heads", (410.0, 108.0), Type::new(6.5, ink, 500.0).track(0.08).upper());
+        for (n, x) in (1..=3).zip([370.0, 410.0, 450.0]) {
+            b.add(top, draw::with_effects(draw::circle("lamp socket", x, 126.0, 4.8, draw::radial_at(0.4, 0.35, 0.8, &[(0.0, "#d8d9db"), (1.0, "#8e9094")])), vec![draw::inner_shadow("#00000060", 0.0, 1.0, 1.5)]));
+            let lamp = b.add(top, draw::emissive(draw::circle("head lamp", x, 126.0, 3.4, draw::solid(LAMP)), draw::hex(LAMP), 1.0, 7.0));
+            let flash = format!("pow(1 - fract(time * 1000 / ({n} * max(param({DLY}/time), 20))), 4) * pow(param({DLY}/feedback), {}) * param({DLY}/on)", n - 1);
+            motion::add(b, lamp, Motion::new(Target::Opacity).input(flash).range(0.05, 1.0));
+        }
+        look::brush_mark(b, top, (w - 110.0, 110.0), 14.0, "#8a8c90");
+        look::emblem(b, top, (w - 60.0, 110.0), 11.0, ink);
+        screws(b, top, &[(9.0, 9.0), (9.0, kit::H - 17.0)]);
+        let black = KnobLook { preset: "knurled", opts: &["color=#1c1c1e", "pointer=#3b82f6", "index=dot", "cap_r=0.9", "height=0.6", "dome=0.08", "edge=0.1", "ribs=48", "rib_depth=0.03", "knurl_band=0.7", "index_w=0.09", "index_in=0.66", "index_out=0.66", "coat=0.5", "rough=0.25", "ticks=none"] };
+        let dial = KnobLook { preset: "white_knurl", opts: &["color=#eeede9", "index=none", "diamond=0", "ribs=90", "knurl_band=0.5", "rib_depth=0.02", "cap_r=0.97", "height=0.5", "dome=0.03", "edge=0.1", "ticks=none", "fallback=knurled"] };
+        let t = kit::Tall { ns: DLY, main: &[("feedback", "Repeats"), ("mod_depth", "Tape-Mod"), ("level", "Level"), ("mod_rate", "Wow Rate")], inks: (ink, "#6b6e74", &ui::alpha(ORANGE, 0.45), if dark { kit::BLUE_LIGHT } else { kit::BLUE_DEEP }), scrim: if dark { "#2b2d31e6" } else { "#dcdddee6" }, bypass: ("blue", "On"), title_w: 74.0 };
+        kit::tall_chrome(b, unit, &t, |b, p, addr, legend, d, (cx, cy)| {
+            let k = look::knob(b, p, &black, addr, d, (cx, cy), 11, ink, false);
+            ui::add_value(b, k, if d > 34.0 { 8.0 } else { 7.0 }, "#6b6e74");
+            parts::centred(b, p, legend, (cx, cy + d / 2.0 + 20.0), Type::new(if d > 34.0 { 8.0 } else { 7.0 }, ink, 600.0).track(0.06).upper());
+        }, |b, p, addr, (cx, cy, d)| {
+            look::place_knob(b, p, &dial, addr, "", d, (cx, cy), ink);
+        }, |b, tn| {
+            parts::centred(b, tn, "Tape", (74.0 / 2.0 - 6.0, 15.0), Type::new(22.0, ink, 400.0).family(draw::family::SAIRA));
+        });
+    });
+    let mut f = kit::delay_face(kit::tall_file("60-dly-tape", dark), scene);
+    f.params.extend(kit::tall_params(DLY));
     f
 }

@@ -29,6 +29,21 @@ pub fn back_faces(dark: bool, t: super::kit::Tier) -> Vec<(usize, Face)> {
     vec![(0, tape::back_at(dark, t)), (2, analog::back_at(dark, t))]
 }
 
+/// Every delay's tall face (see `kit::tall_chrome`), in `DELAY_ALGOS`
+/// order: its own where it has one, else the placeholder's.
+#[must_use]
+pub fn tall_faces(dark: bool) -> Vec<Face> {
+    faces(false)
+        .into_iter()
+        .zip(super::kit::DELAY_ALGOS)
+        .map(|(f, name)| match name {
+            "Tape" => tape::tall(dark),
+            "Analog" => analog::tall(dark),
+            _ => super::kit::stub_tall(super::kit::DLY, name, f.file, dark),
+        })
+        .collect()
+}
+
 pub fn faces(dark: bool) -> Vec<Face> {
     vec![tape::face(dark), digital::face(dark), analog::face(dark), lo_fi::face(dark), shimmer::face(dark), reverse::face(dark), ice::face(dark), rhythm::face(dark), drum::face(dark), oil_can::face(dark), multitap::face(dark), spectral::face(dark), filter::face(dark)]
 }

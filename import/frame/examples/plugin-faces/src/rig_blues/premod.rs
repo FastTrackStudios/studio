@@ -157,8 +157,10 @@ fn lane(back: bool, build: impl FnOnce(&mut Builder<'_>, document_proto::NodeId)
         let p = b.add(root, draw::with_effects(p, vec![draw::inner_shadow("#ffffff14", 0.0, 1.0, 0.0)]));
         build(b, p);
         let head = Lettering::family(family::INTER).weight(800.0);
-        kit::nameplate_top_right(b, p, NS, tier, (8.0, 30.0), 110.0, 210.0, 12.0, (SKY, DIM), |b, t| {
-            set(b, t, "PRE MOD", 48.0, 15.0, 15.0, SKY, &head, 0.25);
+        kit::head(b, p, NS, back, |b, layer| {
+            kit::nameplate_top_right(b, layer, NS, tier, (8.0, 30.0), 110.0, 210.0, 12.0, (SKY, DIM), |b, t| {
+                set(b, t, "PRE MOD", 48.0, 15.0, 15.0, SKY, &head, 0.25);
+            });
         });
         kit::face_bypass(b, p, NS, tier, "blue", "On");
         kit::flip_arrow(b, p, NS, tier, back, (INK, "#ffffff18"));

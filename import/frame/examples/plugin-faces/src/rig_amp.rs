@@ -270,8 +270,10 @@ pub fn gate_phone(back: bool) -> Face {
             kit::responsive(b, p, &[v]);
         }
         let head = draw::Lettering::family(draw::family::INTER).weight(700.0);
-        kit::nameplate_top_right(b, p, "gate", tier, (8.0, 30.0), 96.0, 210.0, 12.0, (OPEN, DIM), |b, t| {
-            crate::suite_studio_blues::parts::set(b, t, "GATE", 42.0, 15.0, 16.0, INK, &head, 0.2);
+        kit::head(b, p, "gate", back, |b, layer| {
+            kit::nameplate_top_right(b, layer, "gate", tier, (8.0, 30.0), 96.0, 210.0, 12.0, (OPEN, DIM), |b, t| {
+                crate::suite_studio_blues::parts::set(b, t, "GATE", 42.0, 15.0, 16.0, INK, &head, 0.2);
+            });
         });
         kit::face_bypass(b, p, "gate", tier, "green", "On");
         kit::flip_arrow(b, p, "gate", tier, back, (INK, "#ffffff14"));

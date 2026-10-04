@@ -174,14 +174,53 @@ pub fn back_at(dark: bool, tier: kit::Tier) -> Face {
         });
         let (np_h, title_w, preset_w, size) = if small_room { (30.0, 92.0, 200.0, 12.0) } else { (28.0, 86.0, 190.0, 10.0) };
         let sans = draw::Lettering::family(draw::family::INTER).weight(300.0);
-        kit::nameplate_top_right(b, panel, DLY, tier, (8.0, np_h), title_w, preset_w, size, (if dark { kit::BLUE_LIGHT } else { kit::BLUE_DEEP }, dim), |b, t| {
-            crate::suite_studio_blues::parts::set(b, t, "Analog", title_w / 2.0 - 8.0, np_h / 2.0, if small_room { 22.0 } else { 20.0 }, ink, &sans, 0.02);
+        kit::head(b, panel, DLY, true, |b, head| {
+            kit::nameplate_top_right(b, head, DLY, tier, (8.0, np_h), title_w, preset_w, size, (if dark { kit::BLUE_LIGHT } else { kit::BLUE_DEEP }, dim), |b, t| {
+                crate::suite_studio_blues::parts::set(b, t, "Analog", title_w / 2.0 - 8.0, np_h / 2.0, if small_room { 22.0 } else { 20.0 }, ink, &sans, 0.02);
+            });
+            kit::face_bypass(b, head, DLY, tier, "blue", "On");
         });
-        kit::face_bypass(b, panel, DLY, tier, "blue", "On");
         kit::flip_arrow(b, panel, DLY, tier, true, (ink, &ui::alpha(dim, 0.3)));
     });
     let mut f = kit::delay_face(kit::tier_file("62-dly-analog-back", tier, dark), scene);
     f.params.extend(kit::nameplate_params(DLY));
     f.params.extend(kit::flip_params(DLY));
+    f
+}
+
+/// Its tall face: the line the whole top row, every control on the panel
+/// below it.
+#[must_use]
+pub fn tall(dark: bool) -> Face {
+    let (ink, dim, fill, edge, window, grid, knob) = if dark {
+        (INK, DIM, [(0.0, "#16223d"), (1.0, "#0c1426")], "#2a3d66", [(0.0, "#0a1122"), (1.0, "#070c19")], kit::BLUE_LIGHT, ["color=#1b2a4a", "pointer=#bcd6ff", "index=line", "index_w=0.1", "skirt=plain", "skirt_color=#0b1224"])
+    } else {
+        ("#12264a", "#62779f", [(0.0, "#f3f7fd"), (1.0, "#dde7f5")], "#b9cbe6", [(0.0, "#ffffff"), (1.0, "#eaf1fb")], kit::BLUE_DEEP, ["color=#f8fafd", "pointer=#1e3a8a", "index=line", "index_w=0.1", "skirt=plain", "skirt_color=#b9cbe6"])
+    };
+    let scene = kit::tall_lane("Analog", |b, root| {
+        let mut panel = draw::frame("Panel", 0.0, 0.0, kit::TALL_W, kit::TALL_H);
+        panel.fills = vec![draw::linear(180.0, &fill)];
+        panel.corner_radii = document_proto::CornerRadii::uniform(10.0);
+        let panel = b.add(root, draw::with_effects(draw::stroked(panel, edge, 1.0), vec![draw::inner_shadow("#ffffff1c", 0.0, 1.0, 0.0)]));
+        let (vx, vy, vw, vh) = kit::TALL_PICTURE;
+        let mut view = draw::frame("Repeats", vx, vy, vw, vh);
+        view.fills = vec![draw::linear(180.0, &window)];
+        view.clips_content = true;
+        view.corner_radii = document_proto::CornerRadii::uniform(7.0);
+        view.effects = vec![draw::inner_shadow("#000000b0", 0.0, 2.0, 6.0)];
+        let view = b.add(panel, view);
+        repeats(b, view, vw, vh, ink, dim, grid);
+        let sans = draw::Lettering::family(draw::family::INTER).weight(300.0);
+        let t = kit::Tall { ns: DLY, main: &[("feedback", "Repeats"), ("high_cut", "Tone"), ("mod_depth", "Mod"), ("level", "Level")], inks: (ink, dim, &ui::alpha(kit::BLUE, 0.5), if dark { kit::BLUE_LIGHT } else { kit::BLUE_DEEP }), scrim: if dark { "#16223de6" } else { "#f3f7fde6" }, bypass: ("blue", "On"), title_w: 92.0 };
+        kit::tall_chrome(b, panel, &t, |b, p, addr, legend, d, at| {
+            kit::knob3d(b, p, addr, legend, d, at, &knob, ink, dim);
+        }, |b, p, addr, (cx, cy, d)| {
+            kit::knob3d_bare(b, p, addr, d, (cx, cy), &knob);
+        }, |b, tn| {
+            crate::suite_studio_blues::parts::set(b, tn, "Analog", 92.0 / 2.0 - 8.0, 15.0, 22.0, ink, &sans, 0.02);
+        });
+    });
+    let mut f = kit::delay_face(kit::tall_file("62-dly-analog", dark), scene);
+    f.params.extend(kit::tall_params(DLY));
     f
 }

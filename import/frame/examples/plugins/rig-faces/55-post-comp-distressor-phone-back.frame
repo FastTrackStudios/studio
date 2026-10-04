@@ -54,24 +54,27 @@
           <Text name="legend" id="5fb9419b-9ed6-5fdd-9ebc-b36ab6baf637" x=18 y=14.86 w=40 h=15 fill="#eceef0" size=10.5 weight=800 letter-spacing=0.84 case="upper">In</Text>
         </Frame>
         <Text name="silk" id="565428c8-5a09-5ab8-9d5a-a497e21c9835" x=653.84 y=116.4 w=56.32 h=11 fill="#eceef0" resize-x="right" size=8 weight=800 letter-spacing=0.64 case="upper" text-align="center">By Pass</Text>
-        <Frame name="flip" id="c4f4ed28-2a84-5774-b7ad-9eb59605af8d" x=710 y=69.84 w=42 h=44 resize-x="right" control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Param":{"addr":"dist/flip"}}},"kind":{"Button":{"mode":"Momentary"}},"slots":[]}}>
+        <Frame name="flip" id="c4f4ed28-2a84-5774-b7ad-9eb59605af8d" x=710 y=69.84 w=42 h=44 resize-x="right" control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Param":{"addr":"dist/flip"}}},"kind":{"Button":{"mode":"Momentary"}},"show_if":{"addr":"dist/stacked","any_of":[],"at_least":0.5,"not":true},"slots":[]}}>
           <Rectangle name="well" id="78ae2497-1648-5959-b678-8ac8365a00a6" w=42 h=44 radius=6 fill="#ffffff14" />
           <Text name="silk" id="e12efeaa-90d7-54fb-b66c-a7e12969e640" x=-0.9600000000000009 y=8.84 w=43.92 h=13 fill="#eceef0" size=9 weight=800 letter-spacing=0.72 case="upper" text-align="center">Back</Text>
           <Vector name="chevron" id="6be9cd5d-ed5d-50e5-aab2-ce6465575ab9" x=17 y=27.42 w=8 h=5 stroke="#eceef0" stroke-weight=1.5 stroke-cap="round" stroke-join="round" geometry="M 0.000 5.000 L 4.000 0.000 L 8.000 5.000 " />
         </Frame>
-        <Frame name="preset" id="1450a0a6-233e-5a2e-a32b-737b553e4561" x=402 y=8 w=154 h=30 resize-x="left" control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Param":{"addr":"dist/preset"}}},"kind":"Readout","slots":[{"node":"aa2520d9-8212-5c06-bd63-fb5932e30691","role":"Value"}]}}>
-          <Text name="value" id="aa2520d9-8212-5c06-bd63-fb5932e30691" y=7.199999999999999 w=154 h=17 fill="#e8c547" font="Inter" size=12 weight=650 text-align="right" />
-        </Frame>
-        <Frame name="preset browse" id="637b6aaf-eb75-5b1f-89c7-3b096c51883f" x=402 y=8 w=154 h=30 resize-x="left" control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Param":{"addr":"dist/preset_browse"}}},"kind":{"Button":{"mode":"Momentary"}},"slots":[]}} />
-        <Frame name="preset prev" id="cf155efe-5b7e-53a3-8876-6c1afce8acd4" x=556 y=8 w=18 h=30 control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Param":{"addr":"dist/preset_prev"}}},"kind":{"Button":{"mode":"Momentary"}},"slots":[]}}>
-          <Vector name="chevron" id="8eef8313-075d-5bfe-90e6-a1e293c635a4" x=7 y=11 w=4 h=8 stroke="#9a9ca0" stroke-weight=1.4 stroke-cap="round" stroke-join="round" geometry="M 4.000 0.000 L 0.000 4.000 L 4.000 8.000 " />
-        </Frame>
-        <Frame name="preset next" id="0ca47c3a-4405-5b05-8065-b377ad7cf2db" x=574 y=8 w=18 h=30 control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Param":{"addr":"dist/preset_next"}}},"kind":{"Button":{"mode":"Momentary"}},"slots":[]}}>
-          <Vector name="chevron" id="04c3e8d0-25e3-529f-978d-9fe6d612707e" x=7 y=11 w=4 h=8 stroke="#9a9ca0" stroke-weight=1.4 stroke-cap="round" stroke-join="round" geometry="M 0.000 0.000 L 4.000 4.000 L 0.000 8.000 " />
-        </Frame>
-        <Frame name="algorithm" id="d1e2b89e-6883-5c76-8208-07a8b3c0d123" x=598 y=8 w=150 h=30 resize-x="right" control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Param":{"addr":"dist/algo_menu"}}},"kind":{"Button":{"mode":"Momentary"}},"slots":[]}}>
-          <Text name="silk" id="5ae55f2d-eb5e-5459-802d-b0154b927cfa" x=8.560000000000002 y=7.52 w=132.88 h=15 fill="#e8c547" size=11 weight=800 letter-spacing=0.88 case="upper" text-align="center">Empirical Labs</Text>
-          <Vector name="caret" id="2782f7ba-9b59-5f65-a325-4838527ce0a3" x=140 y=13 w=8 h=4 stroke="#9a9ca0" stroke-weight=1.4 stroke-cap="round" stroke-join="round" geometry="M 0.000 0.000 L 4.000 4.000 L 8.000 0.000 " />
+        <Frame name="standalone head" id="de2da82f-a9d2-545b-8a49-39e64d1dac77" w=760 h=164 control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Param":{"addr":"dist/stacked"}}},"kind":"Readout","show_if":{"addr":"dist/stacked","any_of":[],"at_least":0.5,"not":true},"slots":[{"node":"d9d09115-4563-5ef1-98dc-c12c9b08da9e","role":"Value"}]}}>
+          <Text name="stacked" id="d9d09115-4563-5ef1-98dc-c12c9b08da9e" w=1 h=2 opacity=0 fill="#00000000" size=1 />
+          <Frame name="preset" id="6203a372-13b2-599f-a4e6-8d3b82486e90" x=402 y=8 w=154 h=30 control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Param":{"addr":"dist/preset"}}},"kind":"Readout","slots":[{"node":"9f578e00-468d-5fc0-a192-f923542ea147","role":"Value"}]}}>
+            <Text name="value" id="9f578e00-468d-5fc0-a192-f923542ea147" y=7.199999999999999 w=154 h=17 fill="#e8c547" font="Inter" size=12 weight=650 text-align="right" />
+          </Frame>
+          <Frame name="preset browse" id="4864d6aa-2a9d-5ac4-96b2-2b3434a25f1a" x=402 y=8 w=154 h=30 control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Param":{"addr":"dist/preset_browse"}}},"kind":{"Button":{"mode":"Momentary"}},"slots":[]}} />
+          <Frame name="preset prev" id="4b468d33-504d-53c8-a4a2-4f888339e6da" x=556 y=8 w=18 h=30 control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Param":{"addr":"dist/preset_prev"}}},"kind":{"Button":{"mode":"Momentary"}},"slots":[]}}>
+            <Vector name="chevron" id="ed0336bc-3d81-595c-a661-49dbd642f73c" x=7 y=11 w=4 h=8 stroke="#9a9ca0" stroke-weight=1.4 stroke-cap="round" stroke-join="round" geometry="M 4.000 0.000 L 0.000 4.000 L 4.000 8.000 " />
+          </Frame>
+          <Frame name="preset next" id="d1c11efb-64a0-5d17-a3ff-b891aeec5e85" x=574 y=8 w=18 h=30 control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Param":{"addr":"dist/preset_next"}}},"kind":{"Button":{"mode":"Momentary"}},"slots":[]}}>
+            <Vector name="chevron" id="ae79387f-c012-5cbc-b579-e43d8453a306" x=7 y=11 w=4 h=8 stroke="#9a9ca0" stroke-weight=1.4 stroke-cap="round" stroke-join="round" geometry="M 0.000 0.000 L 4.000 4.000 L 0.000 8.000 " />
+          </Frame>
+          <Frame name="algorithm" id="7708be55-600b-501c-b9d3-db52fc534ce2" x=598 y=8 w=150 h=30 control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Param":{"addr":"dist/algo_menu"}}},"kind":{"Button":{"mode":"Momentary"}},"slots":[]}}>
+            <Text name="silk" id="01ac25c6-506c-560c-8741-dc2a151cd915" x=8.560000000000002 y=7.52 w=132.88 h=15 fill="#e8c547" size=11 weight=800 letter-spacing=0.88 case="upper" text-align="center">Empirical Labs</Text>
+            <Vector name="caret" id="440e4d15-c2b3-5f5d-bcde-b1406ee1734a" x=140 y=13 w=8 h=4 stroke="#9a9ca0" stroke-weight=1.4 stroke-cap="round" stroke-join="round" geometry="M 0.000 0.000 L 4.000 4.000 L 8.000 0.000 " />
+          </Frame>
         </Frame>
         <Frame name="room" id="20fbd344-e986-5525-a64a-bb76151b3d4f" x=520 w=102 h=1 resize-x="stretch" />
       </Frame>

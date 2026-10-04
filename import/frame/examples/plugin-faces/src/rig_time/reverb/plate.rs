@@ -270,14 +270,51 @@ pub fn back_at(dark: bool, tier: kit::Tier) -> Face {
             ui::dial(b, p, &a(id), legend, cx, cy, &k);
         });
         let (np_h, title_w, preset_w, size) = if small_room { (30.0, 84.0, 220.0, 12.0) } else { (26.0, 76.0, 200.0, 10.0) };
-        kit::nameplate_top_right(b, panel, VERB, tier, (if small_room { 8.0 } else { 12.0 }, np_h), title_w, preset_w, size, (if dark { kit::PURPLE_LAMP } else { "#6a3fc4" }, dim), |b, t| {
-            ui::plain(b, t, "Plate", 30.0, np_h / 2.0, if small_room { 20.0 } else { 18.0 }, ink, 800.0);
+        kit::head(b, panel, VERB, true, |b, head| {
+            kit::nameplate_top_right(b, head, VERB, tier, (if small_room { 8.0 } else { 12.0 }, np_h), title_w, preset_w, size, (if dark { kit::PURPLE_LAMP } else { "#6a3fc4" }, dim), |b, t| {
+                ui::plain(b, t, "Plate", 30.0, np_h / 2.0, if small_room { 20.0 } else { 18.0 }, ink, 800.0);
+            });
+            kit::face_bypass(b, head, VERB, tier, "purple", "In");
         });
-        kit::face_bypass(b, panel, VERB, tier, "purple", "In");
         kit::flip_arrow(b, panel, VERB, tier, true, (ink, &ui::alpha(dim, 0.25)));
     });
     let mut f = kit::reverb_face(kit::tier_file("82-verb-plate-back", tier, dark), scene);
     f.params.extend(kit::nameplate_params(VERB));
     f.params.extend(kit::flip_params(VERB));
+    f
+}
+
+/// Its tall face: the plate through a window the whole top row, every
+/// control on the remote's paint below it.
+#[must_use]
+pub fn tall(dark: bool) -> Face {
+    let (paint, ink, dim, well) = if dark { ("charcoal", "#e6e8eb", "#9aa0a7", [(0.0, "#0c0d0f"), (1.0, "#3a3e44")]) } else { ("api", INK, DIM, [(0.0, "#6d7278"), (1.0, "#e2e5e8")]) };
+    let scene = kit::tall_lane("Plate", |b, root| {
+        let panel = ui::panel(b, root, "panel.painted", paint, kit::TALL_W, kit::TALL_H, "none");
+        if let Some(n) = b.scene.node_mut(panel) {
+            n.corner_radii = document_proto::CornerRadii::uniform(6.0);
+        }
+        let (tx, ty, tw, th) = kit::TALL_PICTURE;
+        b.add(panel, draw::with_effects(draw::rounded(draw::rect("window", tx - 4.0, ty - 4.0, tw + 8.0, th + 8.0, draw::linear(180.0, &well)), 7.0), vec![draw::inner_shadow("#00000066", 0.0, 1.0, 1.0)]));
+        let mut tank = draw::frame("Plate", tx, ty, tw, th);
+        tank.fills = vec![draw::linear(180.0, &[(0.0, "#1b1d20"), (1.0, "#2b2e32")])];
+        tank.clips_content = true;
+        tank.corner_radii = document_proto::CornerRadii::uniform(5.0);
+        tank.effects = vec![draw::inner_shadow("#000000", 0.0, 3.0, 10.0)];
+        let tank = b.add(panel, tank);
+        plate(b, tank, tw, th);
+        b.add(tank, draw::rect("glass", 0.0, 0.0, tw, th, draw::linear(160.0, &[(0.0, "#ffffff14"), (0.3, "#ffffff06"), (0.31, "#ffffff00"), (1.0, "#ffffff00")])));
+        let accent = if dark { kit::PURPLE_LAMP } else { "#6a3fc4" };
+        let t = kit::Tall { ns: VERB, main: &[("predelay", "Pre-Delay"), ("damping", "HF Damp"), ("size", "Size"), ("level", "Level")], inks: (ink, dim, &ui::alpha(kit::PURPLE_LAMP, 0.55), accent), scrim: if dark { "#2a2d31e6" } else { "#d9dce0e6" }, bypass: ("purple", "In"), title_w: 84.0 };
+        kit::tall_chrome(b, panel, &t, |b, p, addr, legend, d, (cx, cy)| {
+            ui::dial(b, p, addr, legend, cx, cy, &Dial::new("knob.collet", "black", d, ink, dim).legend(if d > 34.0 { 9.0 } else { 7.5 }));
+        }, |b, p, addr, (cx, cy, d)| {
+            ui::dial(b, p, addr, "", cx, cy, &Dial { value: false, legend: 0.0, ..Dial::new("knob.pointer", "black", d, ink, dim) });
+        }, |b, tn| {
+            ui::plain(b, tn, "Plate", 32.0, 15.0, 20.0, ink, 800.0);
+        });
+    });
+    let mut f = kit::reverb_face(kit::tall_file("82-verb-plate", dark), scene);
+    f.params.extend(kit::tall_params(VERB));
     f
 }

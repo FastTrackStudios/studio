@@ -787,23 +787,103 @@ pub fn back_at(dark: bool, tier: kit::Tier) -> Face {
         } else {
             ((12.0, 26.0), 10.0, 11.0)
         };
-        kit::nameplate_top_right(
-            b,
-            plate,
-            VERB,
-            tier,
-            np,
-            if small_room { 92.0 } else { 88.0 },
-            if small_room { 220.0 } else { 200.0 },
-            size,
-            (l.accent, l.dim),
-            |b, t| title(b, t, np.1, title_size, l.ink),
-        );
-        kit::face_bypass(b, plate, VERB, tier, "purple", "In");
+        kit::head(b, plate, VERB, true, |b, head| {
+            kit::nameplate_top_right(
+                b,
+                head,
+                VERB,
+                tier,
+                np,
+                if small_room { 92.0 } else { 88.0 },
+                if small_room { 220.0 } else { 200.0 },
+                size,
+                (l.accent, l.dim),
+                |b, t| title(b, t, np.1, title_size, l.ink),
+            );
+            kit::face_bypass(b, head, VERB, tier, "purple", "In");
+        });
         kit::flip_arrow(b, plate, VERB, tier, true, (l.ink, &ui::alpha(l.dim, 0.25)));
     });
     let mut f = kit::reverb_face(kit::tier_file("95-verb-random-back", tier, dark), scene);
     f.params.extend(kit::nameplate_params(VERB));
     f.params.extend(kit::flip_params(VERB));
+    f
+}
+
+/// Its tall face: the display the whole top row, every control on the
+/// faceplate below it.
+#[must_use]
+pub fn tall(dark: bool) -> Face {
+    let l = if dark { &DARK } else { &LIGHT };
+    let scene = kit::tall_lane(NAME, |b, root| {
+        let mut plate = draw::frame("Faceplate", 0.0, 0.0, kit::TALL_W, kit::TALL_H);
+        plate.fills = vec![draw::linear(180.0, &l.plate)];
+        plate.corner_radii = document_proto::CornerRadii::uniform(4.0);
+        let plate = b.add(
+            root,
+            draw::with_effects(plate, vec![draw::inner_shadow("#ffffff26", 0.0, 1.0, 0.0)]),
+        );
+        let grain: Vec<Vec<(f64, f64)>> = (0..110)
+            .map(|i| {
+                vec![
+                    (0.0, 1.5 + f64::from(i) * 3.0),
+                    (kit::TALL_W, 1.5 + f64::from(i) * 3.0),
+                ]
+            })
+            .collect();
+        b.add(
+            plate,
+            ui::strokes("grain", &grain, 0.6, draw::solid(l.brush)),
+        );
+        for (i, c) in [kit::PURPLE_DEEP, kit::PURPLE, kit::PURPLE_LIGHT]
+            .iter()
+            .enumerate()
+        {
+            b.add(
+                plate,
+                draw::rect(
+                    "pinstripe",
+                    0.0,
+                    kit::H + 3.0 + 2.6 * i as f64,
+                    kit::TALL_W,
+                    1.5,
+                    draw::solid(c),
+                ),
+            );
+        }
+        let (dx, dy, dw, dh) = kit::TALL_PICTURE;
+        let (dx, dy, dw, dh) = (dx + 4.0, dy + 4.0, dw - 8.0, dh - 8.0);
+        let win = ui::display(b, plate, "Display", dx, dy, dw, dh, LED, "glass");
+        display(b, win, dw, dh, false);
+        ui::glass(b, win);
+        let t = kit::Tall {
+            ns: VERB,
+            main: &[
+                ("predelay", "Pre-Delay"),
+                ("size", "Size"),
+                ("damping", "HF Damp"),
+                ("modulation", "Drift"),
+                ("level", "Level"),
+            ],
+            inks: (l.ink, l.dim, &ui::alpha(kit::PURPLE_LAMP, 0.55), l.accent),
+            scrim: if dark { "#1f2024e6" } else { "#ded6c4e6" },
+            bypass: ("purple", "In"),
+            title_w: 92.0,
+        };
+        kit::tall_chrome(
+            b,
+            plate,
+            &t,
+            |b, p, addr, legend, d, at| {
+                kit::knob3d(b, p, addr, legend, d, at, &l.cap, l.ink, l.dim);
+            },
+            |b, p, addr, (cx, cy, d)| {
+                kit::knob3d_bare(b, p, addr, d, (cx, cy), &l.wheel);
+            },
+            |b, tn| title(b, tn, 30.0, 13.0, l.ink),
+        );
+    });
+    let mut f = kit::reverb_face(kit::tall_file("95-verb-random", dark), scene);
+    f.params.extend(kit::tall_params(VERB));
     f
 }

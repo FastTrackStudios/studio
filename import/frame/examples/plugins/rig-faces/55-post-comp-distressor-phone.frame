@@ -348,7 +348,7 @@
           <Text name="legend" id="4a0455ad-ee3e-58c5-9715-0f70c63cd4c6" x=18 y=14.86 w=40 h=15 fill="#eceef0" size=10.5 weight=800 letter-spacing=0.84 case="upper">In</Text>
         </Frame>
         <Text name="silk" id="0f3c0910-3ef4-513e-bf8d-06173e004c51" x=653.84 y=116.4 w=56.32 h=11 fill="#eceef0" resize-x="right" size=8 weight=800 letter-spacing=0.64 case="upper" text-align="center">By Pass</Text>
-        <Frame name="flip" id="5ca9b985-3ae8-52f5-8233-f2c27437c646" x=710 y=69.84 w=42 h=44 resize-x="right" control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Param":{"addr":"dist/flip"}}},"kind":{"Button":{"mode":"Momentary"}},"slots":[]}}>
+        <Frame name="flip" id="5ca9b985-3ae8-52f5-8233-f2c27437c646" x=710 y=69.84 w=42 h=44 resize-x="right" control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Param":{"addr":"dist/flip"}}},"kind":{"Button":{"mode":"Momentary"}},"show_if":{"addr":"dist/stacked","any_of":[],"at_least":0.5,"not":true},"slots":[]}}>
           <Rectangle name="well" id="123802ea-d6a4-5a7d-a4ac-b4211248490a" w=42 h=44 radius=6 fill="#ffffff14" />
           <Text name="silk" id="4c20ff7d-2bea-5681-ae4e-b6a0db42e13a" x=-0.9600000000000009 y=8.84 w=43.92 h=13 fill="#eceef0" size=9 weight=800 letter-spacing=0.72 case="upper" text-align="center">More</Text>
           <Vector name="chevron" id="f2999beb-cca3-5587-83bd-1fdd32c74c18" x=17 y=27.42 w=8 h=5 stroke="#eceef0" stroke-weight=1.5 stroke-cap="round" stroke-join="round" geometry="M 0.000 0.000 L 4.000 5.000 L 8.000 0.000 " />

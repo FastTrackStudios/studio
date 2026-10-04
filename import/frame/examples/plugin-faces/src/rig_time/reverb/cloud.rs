@@ -217,14 +217,51 @@ pub fn back_at(dark: bool, tier: kit::Tier) -> Face {
         });
         let (np_h, title_w, preset_w, size) = if small_room { (30.0, 86.0, 220.0, 12.0) } else { (28.0, 82.0, 200.0, 10.0) };
         let serif = draw::Lettering::family(draw::family::PLAYFAIR_DISPLAY).weight(400.0);
-        kit::nameplate_top_right(b, root, VERB, tier, (if small_room { 6.0 } else { 10.0 }, np_h), title_w, preset_w, size, (if dark { kit::PURPLE_LAMP } else { "#6a3fc4" }, dim), |b, t| {
-            crate::suite_studio_blues::parts::set(b, t, "Cloud", 34.0, np_h / 2.0, 22.0, ink, &serif, 0.08);
+        kit::head(b, root, VERB, true, |b, head| {
+            kit::nameplate_top_right(b, head, VERB, tier, (if small_room { 6.0 } else { 10.0 }, np_h), title_w, preset_w, size, (if dark { kit::PURPLE_LAMP } else { "#6a3fc4" }, dim), |b, t| {
+                crate::suite_studio_blues::parts::set(b, t, "Cloud", 34.0, np_h / 2.0, 22.0, ink, &serif, 0.08);
+            });
+            kit::face_bypass(b, head, VERB, tier, "purple", "On");
         });
-        kit::face_bypass(b, root, VERB, tier, "purple", "On");
         kit::flip_arrow(b, root, VERB, tier, true, (ink, &ui::alpha(dim, 0.3)));
     });
     let mut f = kit::reverb_face(kit::tier_file("84-verb-cloud-back", tier, dark), scene);
     f.params.extend(kit::nameplate_params(VERB));
     f.params.extend(kit::flip_params(VERB));
+    f
+}
+
+/// Its tall face: the sky the whole top row, every control on the frosted
+/// panel below it.
+#[must_use]
+pub fn tall(dark: bool) -> Face {
+    let l = if dark { &DARK } else { &LIGHT };
+    let (ink, dim) = (l.ink, l.dim);
+    let scene = kit::tall_lane("Cloud", |b, root| {
+        let mut panel = draw::frame("Panel", 0.0, 0.0, kit::TALL_W, kit::TALL_H);
+        panel.fills = vec![draw::linear(160.0, &l.panel)];
+        panel.corner_radii = document_proto::CornerRadii::uniform(10.0);
+        let panel = b.add(root, draw::with_effects(panel, vec![draw::inner_shadow("#ffffff1a", 0.0, 1.0, 0.0)]));
+        let (sx, sy, sw, sh) = kit::TALL_PICTURE;
+        let mut s = draw::frame("Sky", sx, sy, sw, sh);
+        s.fills = vec![draw::linear(180.0, &l.sky)];
+        s.clips_content = true;
+        s.corner_radii = document_proto::CornerRadii::uniform(8.0);
+        s.effects = vec![draw::inner_shadow("#00000066", 0.0, 2.0, 8.0)];
+        let s = b.add(panel, s);
+        sky(b, s, sw, sh, l, dark);
+        let pearl = l.knob;
+        let serif = draw::Lettering::family(draw::family::PLAYFAIR_DISPLAY).weight(400.0);
+        let t = kit::Tall { ns: VERB, main: &[("size", "Size"), ("modulation", "Drift"), ("predelay", "Pre-Delay"), ("level", "Level")], inks: (ink, dim, &ui::alpha(kit::PURPLE_LAMP, 0.55), if dark { kit::PURPLE_LAMP } else { "#6a3fc4" }), scrim: if dark { "#141027e0" } else { "#f4f0fbe0" }, bypass: ("purple", "On"), title_w: 86.0 };
+        kit::tall_chrome(b, panel, &t, |b, p, addr, legend, d, at| {
+            kit::knob3d(b, p, addr, legend, d, at, &pearl, ink, dim);
+        }, |b, p, addr, (cx, cy, d)| {
+            kit::knob3d_bare(b, p, addr, d, (cx, cy), &pearl);
+        }, |b, tn| {
+            crate::suite_studio_blues::parts::set(b, tn, "Cloud", 34.0, 15.0, 22.0, ink, &serif, 0.08);
+        });
+    });
+    let mut f = kit::reverb_face(kit::tall_file("84-verb-cloud", dark), scene);
+    f.params.extend(kit::tall_params(VERB));
     f
 }

@@ -10,7 +10,7 @@
 use document_proto::motion::{Dynamics, Motion, Target};
 use document_proto::{NodeId, TextAlign};
 use surface_kit::{Place, draw, motion};
-use surface_proto::{ButtonMode, Control, ControlKind, ParamInfo, Range, SlotRole, Unit};
+use surface_proto::{ButtonMode, Condition, Control, ControlKind, ParamInfo, Range, SlotRole, Unit};
 use surface_widgets::Builder;
 
 use crate::face::{Face, canvas};
@@ -387,8 +387,41 @@ pub fn flip_arrow_w(b: &mut Builder<'_>, parent: NodeId, ns: &str, tier: Tier, l
     let (cx, cy) = (w / 2.0, h * 0.68);
     let dy = if back { -2.5 } else { 2.5 };
     ui::line(b, g, "chevron", &[(cx - 4.0, cy - dy), (cx, cy + dy), (cx + 4.0, cy - dy)], 1.5, ink);
-    b.controls.insert(g, Control::new(ControlKind::Button { mode: ButtonMode::Momentary }).bound(ui::bind(&a(ns, "flip"))));
+    // Stacked, the host shows both sides at once: nothing to turn over.
+    b.controls.insert(g, Control::new(ControlKind::Button { mode: ButtonMode::Momentary }).bound(ui::bind(&a(ns, "flip"))).shown_if(standalone(ns)));
     g
+}
+
+/// While a face stands alone: `<ns>/stacked` below ½. The host sets it to 1
+/// when it shows the front with its back directly under it, in one column —
+/// then the front's More arrow and the back's head (nameplate, Back arrow)
+/// are not drawn and take no presses: the back is just its controls.
+#[must_use]
+pub fn standalone(ns: &str) -> Condition {
+    Condition::on(a(ns, "stacked")).negated()
+}
+
+/// A face's head — its nameplate and what sits with it (on a back, its
+/// bypass too: the front's is right above it) — built by `build` into
+/// `parent`; on a back (`back`) into a layer over the whole face that is
+/// shown only while the face stands alone ([`standalone`]), so stacked
+/// under its front the back does not repeat it. Returns where it was
+/// built.
+pub fn head(b: &mut Builder<'_>, parent: NodeId, ns: &str, back: bool, build: impl FnOnce(&mut Builder<'_>, NodeId)) -> NodeId {
+    if !back {
+        build(b, parent);
+        return parent;
+    }
+    let (w, h) = b.scene.node(parent).map_or((W, H), |n| (n.size.width, n.size.height));
+    let layer = b.add(parent, draw::frame("standalone head", 0.0, 0.0, w, h));
+    // A layer carries its condition on a control: a readout of the switch
+    // itself, its text never seen.
+    let mut seen = draw::text("stacked", "", 0.0, 0.0, 1.0, 1.0, "#00000000", TextAlign::Left);
+    seen.opacity = 0.0;
+    let seen = b.add(layer, seen);
+    b.controls.insert(layer, Control::new(ControlKind::Readout).slot(SlotRole::Value, seen.0).bound(ui::bind(&a(ns, "stacked"))).shown_if(standalone(ns)));
+    build(b, layer);
+    layer
 }
 
 /// A face's back, in its own finish: "Advanced" at the top left, a row of
@@ -414,10 +447,12 @@ pub fn back_knobs_w(b: &mut Builder<'_>, parent: NodeId, tier: Tier, w: f64, kno
     }
 }
 
-/// The params a [`flip_arrow`] binds.
+/// The params a [`flip_arrow`] binds: the press, and whether the host is
+/// showing the face stacked over its back ([`standalone`]; the host's to
+/// set, 0 = standing alone).
 #[must_use]
 pub fn flip_params(ns: &str) -> Vec<ParamInfo> {
-    vec![ui::toggle(&a(ns, "flip"), "More", false)]
+    vec![ui::toggle(&a(ns, "flip"), "More", false), ui::toggle(&a(ns, "stacked"), "Stacked", false)]
 }
 
 /// The params a [`nameplate`] binds: the preset's name (text the host
@@ -638,4 +673,164 @@ pub fn scale_children(b: &mut Builder<'_>, parent: NodeId) {
             n.layout_child.resize_x = Some(document_proto::ResizeX::Scale);
         }
     }
+}
+
+// ── The tall layout ─────────────────────────────────────────────────────
+
+/// A tall face: one Time face standing alone in a lane column, two phone
+/// lanes high — its picture the whole top row, every control it has (the
+/// front's and the back's) across the bottom row, one nameplate, no flip.
+pub const TALL_W: f64 = 760.0;
+pub const TALL_H: f64 = 2.0 * H;
+/// The picture's box in a tall face: the top row, inset.
+pub const TALL_PICTURE: (f64, f64, f64, f64) = (10.0, 10.0, TALL_W - 20.0, H - 16.0);
+
+/// The delay's advanced controls, as its backs print them.
+pub const DLY_MORE: [(&str, &str); 9] = [
+    ("high_pass", "Low Cut"),
+    ("high_cut", "High Cut"),
+    ("mod_rate", "Mod Rate"),
+    ("mod_depth", "Mod"),
+    ("duck_sens", "Duck"),
+    ("duck_release", "Duck Rel"),
+    ("pan", "Pan"),
+    ("repeat_dyn", "Dynamics"),
+    ("dry", "Dry"),
+];
+/// The reverb's.
+pub const VERB_MORE: [(&str, &str); 10] = [
+    ("predelay", "Pre-Delay"),
+    ("damping", "HF Damp"),
+    ("modulation", "Mod"),
+    ("low_cut", "Low Cut"),
+    ("high_cut", "High Cut"),
+    ("tone", "Tone"),
+    ("duck", "Duck"),
+    ("duck_threshold", "Duck Thr"),
+    ("duck_release", "Duck Rel"),
+    ("pan_a", "Pan"),
+];
+
+/// A tall face's file: `base-tall` (`-dark`).
+#[must_use]
+pub fn tall_file(base: &str, dark: bool) -> &'static str {
+    Box::leak(if dark { format!("{base}-tall-dark") } else { format!("{base}-tall") }.into_boxed_str())
+}
+
+/// A tall face's canvas: `build` draws into the root, already
+/// [`TALL_W`] × [`TALL_H`].
+pub fn tall_lane(name: &str, build: impl FnOnce(&mut Builder<'_>, NodeId)) -> document_proto::Scene {
+    canvas(name, |b, root| {
+        ui::fit_root(b, root, TALL_W, TALL_H);
+        build(b, root);
+        ui::flush(b, root, TALL_W, TALL_H);
+    })
+}
+
+/// What a tall face's chrome needs from its face: its namespace, the
+/// knobs of its first line (its front's; the advanced ones follow on the
+/// second, [`DLY_MORE`] / [`VERB_MORE`] less these), its inks (ink, dim,
+/// the TIME | BEAT light, the nameplate's accent), the scrim the nameplate
+/// sits on over the picture, its bypass (variant, legend) and its title's
+/// width.
+pub struct Tall<'a> {
+    pub ns: &'a str,
+    pub main: &'a [(&'a str, &'a str)],
+    pub inks: (&'a str, &'a str, &'a str, &'a str),
+    pub scrim: &'a str,
+    pub bypass: (&'a str, &'a str),
+    pub title_w: f64,
+}
+
+/// A tall face's advanced controls: the namespace's, less those `main`
+/// already has.
+#[must_use]
+pub fn tall_more<'a>(ns: &str, main: &[(&str, &str)]) -> Vec<(&'a str, &'a str)> {
+    let all: &[(&'a str, &'a str)] = if ns == DLY { &DLY_MORE } else { &VERB_MORE };
+    all.iter().filter(|(id, _)| !main.iter().any(|(m, _)| m == id)).copied().collect()
+}
+
+/// A tall face's chrome on its ground `p` (the picture already drawn in
+/// [`TALL_PICTURE`]): the nameplate over the picture's top right on its
+/// scrim (`title` letters the name), and across the bottom row the Time
+/// knob (`time` draws the knob, bare, on its address at (cx, cy) `d`
+/// across), the front's knobs on the first line and the advanced ones on
+/// the second (`knob` draws each, as a back's), and the bypass at the
+/// right.
+pub fn tall_chrome(b: &mut Builder<'_>, p: NodeId, t: &Tall<'_>, mut knob: impl FnMut(&mut Builder<'_>, NodeId, &str, &str, f64, (f64, f64)), time: impl FnOnce(&mut Builder<'_>, NodeId, &str, (f64, f64, f64)), title: impl FnOnce(&mut Builder<'_>, NodeId)) {
+    let (ink, dim, lit, accent) = t.inks;
+    // The nameplate, on its scrim over the picture.
+    let (np_y, np_h, preset_w) = (16.0, 30.0, 200.0);
+    let right = TALL_W - 10.0;
+    let x = right - 12.0 - preset_w - 6.0 - t.title_w;
+    b.add(p, draw::with_effects(draw::rounded(draw::rect("nameplate scrim", x - 10.0, np_y - 4.0, right - 4.0 - (x - 10.0), np_h + 8.0, draw::solid(t.scrim)), 8.0), vec![draw::drop_shadow("#00000040", 0.0, 2.0, 6.0)]));
+    nameplate_right(b, p, t.ns, right, (np_y, np_h), t.title_w, preset_w, 12.0, (accent, dim), title);
+    // The bottom row: the Time knob at the left…
+    let y0 = H;
+    let (tx, ty, td) = (78.0, y0 + 52.0, 64.0);
+    time_knob(b, p, t.ns, (tx, ty, td), 11.0, (ink, dim, lit), |b, pp, addr| time(b, pp, addr, (tx, ty, td)));
+    ui::rule(b, p, 160.0, y0 + 14.0, 1.0, H - 28.0, &ui::alpha(dim, 0.35));
+    // …the bypass at the right…
+    let (bx, by, bd) = (TALL_W - 52.0, y0 + 56.0, 44.0);
+    bypass(b, p, t.ns, bx, by, bd, t.bypass.0, t.bypass.1);
+    // …and between, the knobs: the front's above, the advanced below.
+    let (x0, x1) = (182.0, bx - bd / 2.0 - 18.0);
+    let more = tall_more(t.ns, t.main);
+    for (list, cy, d) in [(t.main, y0 + 32.0, 40.0), (more.as_slice(), y0 + 110.0, 30.0)] {
+        let n = list.len().max(1) as f64;
+        let step = ((x1 - x0) / n).min(92.0);
+        let left = x0 + ((x1 - x0) - step * n) / 2.0;
+        for (i, (id, legend)) in list.iter().enumerate() {
+            knob(b, p, &a(t.ns, id), legend, d, (left + step * (i as f64 + 0.5), cy));
+        }
+    }
+}
+
+/// The params a tall face binds besides its block's: its nameplate's and
+/// its Time knob's.
+#[must_use]
+pub fn tall_params(ns: &str) -> Vec<ParamInfo> {
+    let mut v = nameplate_params(ns);
+    v.extend(time_params(ns));
+    v
+}
+
+/// A placeholder's tall face, until its machine is drawn: its plain panel,
+/// the section's live picture (an echo train or a decay) as the top row,
+/// and the chrome; `base` its face's file.
+#[must_use]
+pub fn stub_tall(ns: &str, name: &str, base: &str, dark: bool) -> Face {
+    let (ink, dim, top, bottom) = if dark { ("#e8e6e1", "#8a8d94", "#1d1f24", "#121317") } else { ("#1d1f24", "#686c74", "#eceef1", "#d7dae0") };
+    let color = if ns == DLY { BLUE } else { PURPLE };
+    let main: &[(&str, &str)] = if ns == DLY { &[("feedback", "Feedback"), ("level", "Level")] } else { &[("size", "Size"), ("level", "Level")] };
+    let scene = tall_lane(name, |b, root| {
+        let mut panel = draw::frame("Panel", 0.0, 0.0, TALL_W, TALL_H);
+        panel.fills = vec![draw::linear(180.0, &[(0.0, top), (1.0, bottom)])];
+        panel.corner_radii = document_proto::CornerRadii::uniform(8.0);
+        let panel = b.add(root, panel);
+        let (px, py, pw, ph) = TALL_PICTURE;
+        let mut well = draw::frame("Picture", px, py, pw, ph);
+        well.fills = vec![draw::linear(180.0, &[(0.0, "#0c0d10"), (1.0, "#16181d")])];
+        well.corner_radii = document_proto::CornerRadii::uniform(6.0);
+        well.clips_content = true;
+        let well = b.add(panel, well);
+        if ns == DLY {
+            echo_train(b, well, (16.0, 44.0, pw - 32.0, ph - 56.0), 10, 2500.0, color);
+        } else {
+            decay(b, well, (16.0, 44.0, pw - 32.0, ph - 56.0), color);
+        }
+        let opts = ["color=#2a2c31", "pointer=#ffffff", "index=line", "index_w=0.1", "skirt=plain", "skirt_color=#111215"];
+        let t = Tall { ns, main, inks: (ink, dim, &ui::alpha(color, 0.55), color), scrim: if dark { "#1d1f24e6" } else { "#eceef1e6" }, bypass: (if ns == DLY { "blue" } else { "purple" }, "On"), title_w: name.chars().count() as f64 * 11.0 + 24.0 };
+        tall_chrome(b, panel, &t, |b, p, addr, legend, d, at| {
+            knob3d(b, p, addr, legend, d, at, &opts, ink, dim);
+        }, |b, p, addr, (cx, cy, d)| {
+            knob3d_bare(b, p, addr, d, (cx, cy), &opts);
+        }, |b, tn| {
+            ui::plain(b, tn, name, (name.chars().count() as f64 * 11.0 + 12.0) / 2.0, 15.0, 18.0, ink, 800.0);
+        });
+    });
+    let file = tall_file(base, dark);
+    let mut f = if ns == DLY { delay_face(file, scene) } else { reverb_face(file, scene) };
+    f.params.extend(tall_params(ns));
+    f
 }
