@@ -10,14 +10,23 @@
 //! gain-reduction stream (at rest on its card's 0) and declares a
 //! `<face>/out` output level.
 
-mod opto_comp;
-mod opto_leveler;
-mod twin_valve;
+pub mod opto_comp;
+pub mod opto_leveler;
+pub mod twin_valve;
 pub mod ui;
-mod varimu;
+pub mod varimu;
 
 use crate::face::Face;
 
 pub fn faces() -> Vec<Face> {
     vec![opto_leveler::face(), opto_comp::face(), twin_valve::face(), varimu::face()]
+}
+
+/// The tube compressors redrawn for a host's FX lane (see [`crate::lane`]).
+pub fn lane_faces() -> Vec<Face> {
+    let mut v = opto_leveler::lane::faces();
+    v.extend(opto_comp::lane::faces());
+    v.extend(twin_valve::lane::faces());
+    v.extend(varimu::lane::faces());
+    v
 }

@@ -40,6 +40,8 @@ use surface_widgets::Builder;
 
 use crate::face::{Face, canvas};
 
+pub mod lane;
+
 // ── the unit's controls ──────────────────────────────────────────────────
 
 /// The attenuation scale printed round INPUT and OUTPUT, ∞ at the stop.

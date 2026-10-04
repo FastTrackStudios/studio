@@ -12,6 +12,7 @@ pub mod comp_vca;
 pub mod delay;
 pub mod eq;
 pub mod face;
+pub mod lane;
 pub mod modulation;
 pub mod reverb;
 pub mod rig_blues;
@@ -37,6 +38,9 @@ pub fn all() -> Vec<Face> {
     v.extend(comp_fet::faces());
     v.extend(comp_tube::faces());
     v.extend(comp_vca::faces());
+    v.extend(comp_fet::lane::faces());
+    v.extend(comp_tube::lane_faces());
+    v.extend(comp_vca::lane_faces());
     v.extend(eq::faces());
     v.extend(delay::faces());
     v.extend(reverb::faces());

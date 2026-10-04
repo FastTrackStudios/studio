@@ -22,6 +22,8 @@ use super::logo;
 use super::ui::{self, bind};
 use crate::face::{Face, canvas};
 
+pub mod lane;
+
 const W: f64 = 860.0;
 const H: f64 = 360.0;
 /// The inside edge of the walnut cheek, and the width between the cheeks.

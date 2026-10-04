@@ -26,6 +26,8 @@ use surface_widgets::Builder;
 use super::ui::{self, Ink};
 use crate::face::{Face, canvas};
 
+pub mod lane;
+
 /// The cabinet front, and the black plate in it (at `PX`, `PY`).
 const W: f64 = 1060.0;
 const H: f64 = PY + PH + 45.0;
