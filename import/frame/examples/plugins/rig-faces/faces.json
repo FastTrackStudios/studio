@@ -2161,11 +2161,14 @@
         "time_knob": true
       },
       {
+        "back": "68-dly-drum-back",
+        "back_dark": "68-dly-drum-back-dark",
         "dark": "68-dly-drum-dark",
         "face": "68-dly-drum",
         "match": [
           "drum"
         ],
+        "nameplate": true,
         "ns": "dly",
         "size": [
           960.0,
@@ -2176,14 +2179,30 @@
         "tall_size": [
           760.0,
           328.0
-        ]
+        ],
+        "tiers": {
+          "phone": {
+            "back": "68-dly-drum-back-phone",
+            "back_dark": "68-dly-drum-back-phone-dark",
+            "dark": "68-dly-drum-phone-dark",
+            "face": "68-dly-drum-phone",
+            "size": [
+              760.0,
+              164.0
+            ]
+          }
+        },
+        "time_knob": true
       },
       {
+        "back": "69-dly-oil-can-back",
+        "back_dark": "69-dly-oil-can-back-dark",
         "dark": "69-dly-oil-can-dark",
         "face": "69-dly-oil-can",
         "match": [
           "oil can"
         ],
+        "nameplate": true,
         "ns": "dly",
         "size": [
           960.0,
@@ -2194,14 +2213,30 @@
         "tall_size": [
           760.0,
           328.0
-        ]
+        ],
+        "tiers": {
+          "phone": {
+            "back": "69-dly-oil-can-back-phone",
+            "back_dark": "69-dly-oil-can-back-phone-dark",
+            "dark": "69-dly-oil-can-phone-dark",
+            "face": "69-dly-oil-can-phone",
+            "size": [
+              760.0,
+              164.0
+            ]
+          }
+        },
+        "time_knob": true
       },
       {
+        "back": "70-dly-multitap-back",
+        "back_dark": "70-dly-multitap-back-dark",
         "dark": "70-dly-multitap-dark",
         "face": "70-dly-multitap",
         "match": [
           "multitap"
         ],
+        "nameplate": true,
         "ns": "dly",
         "size": [
           960.0,
@@ -2212,14 +2247,30 @@
         "tall_size": [
           760.0,
           328.0
-        ]
+        ],
+        "tiers": {
+          "phone": {
+            "back": "70-dly-multitap-back-phone",
+            "back_dark": "70-dly-multitap-back-phone-dark",
+            "dark": "70-dly-multitap-phone-dark",
+            "face": "70-dly-multitap-phone",
+            "size": [
+              760.0,
+              164.0
+            ]
+          }
+        },
+        "time_knob": true
       },
       {
+        "back": "71-dly-spectral-back",
+        "back_dark": "71-dly-spectral-back-dark",
         "dark": "71-dly-spectral-dark",
         "face": "71-dly-spectral",
         "match": [
           "spectral"
         ],
+        "nameplate": true,
         "ns": "dly",
         "size": [
           960.0,
@@ -2230,14 +2281,30 @@
         "tall_size": [
           760.0,
           328.0
-        ]
+        ],
+        "tiers": {
+          "phone": {
+            "back": "71-dly-spectral-back-phone",
+            "back_dark": "71-dly-spectral-back-phone-dark",
+            "dark": "71-dly-spectral-phone-dark",
+            "face": "71-dly-spectral-phone",
+            "size": [
+              760.0,
+              164.0
+            ]
+          }
+        },
+        "time_knob": true
       },
       {
+        "back": "72-dly-filter-back",
+        "back_dark": "72-dly-filter-back-dark",
         "dark": "72-dly-filter-dark",
         "face": "72-dly-filter",
         "match": [
           "filter"
         ],
+        "nameplate": true,
         "ns": "dly",
         "size": [
           960.0,
@@ -2248,7 +2315,20 @@
         "tall_size": [
           760.0,
           328.0
-        ]
+        ],
+        "tiers": {
+          "phone": {
+            "back": "72-dly-filter-back-phone",
+            "back_dark": "72-dly-filter-back-phone-dark",
+            "dark": "72-dly-filter-phone-dark",
+            "face": "72-dly-filter-phone",
+            "size": [
+              760.0,
+              164.0
+            ]
+          }
+        },
+        "time_knob": true
       }
     ],
     "reverb": [
