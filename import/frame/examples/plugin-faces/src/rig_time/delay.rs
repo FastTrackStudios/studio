@@ -13,6 +13,7 @@ mod oil_can;
 mod multitap;
 mod spectral;
 mod filter;
+mod shell;
 
 use crate::face::Face;
 
@@ -21,12 +22,12 @@ use crate::face::Face;
 /// The phone layouts there are, by machine (its index in `DELAY_ALGOS`'s
 /// order, as [`faces`] lists them).
 pub fn phone_faces(dark: bool) -> Vec<(usize, Face)> {
-    vec![(0, tape::face_at(dark, super::kit::Tier::Phone)), (2, analog::face_at(dark, super::kit::Tier::Phone))]
+    vec![(0, tape::face_at(dark, super::kit::Tier::Phone)), (2, analog::face_at(dark, super::kit::Tier::Phone)), (3, lo_fi::face_at(dark, super::kit::Tier::Phone)), (4, shimmer::face_at(dark, super::kit::Tier::Phone)), (5, reverse::face_at(dark, super::kit::Tier::Phone)), (6, ice::face_at(dark, super::kit::Tier::Phone)), (7, rhythm::face_at(dark, super::kit::Tier::Phone))]
 }
 
 /// The backs there are (the advanced controls), by algorithm, at `t`.
 pub fn back_faces(dark: bool, t: super::kit::Tier) -> Vec<(usize, Face)> {
-    vec![(0, tape::back_at(dark, t)), (2, analog::back_at(dark, t))]
+    vec![(0, tape::back_at(dark, t)), (2, analog::back_at(dark, t)), (3, lo_fi::back_at(dark, t)), (4, shimmer::back_at(dark, t)), (5, reverse::back_at(dark, t)), (6, ice::back_at(dark, t)), (7, rhythm::back_at(dark, t))]
 }
 
 /// Every delay's tall face (see `kit::tall_chrome`), in `DELAY_ALGOS`
@@ -39,6 +40,11 @@ pub fn tall_faces(dark: bool) -> Vec<Face> {
         .map(|(f, name)| match name {
             "Tape" => tape::tall(dark),
             "Analog" => analog::tall(dark),
+            "Lo-Fi" => lo_fi::tall(dark),
+            "Shimmer" => shimmer::tall(dark),
+            "Reverse" => reverse::tall(dark),
+            "Ice" => ice::tall(dark),
+            "Rhythm" => rhythm::tall(dark),
             _ => super::kit::stub_tall(super::kit::DLY, name, f.file, dark),
         })
         .collect()

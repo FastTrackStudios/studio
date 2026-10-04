@@ -1991,11 +1991,14 @@
         "time_knob": true
       },
       {
+        "back": "63-dly-lo-fi-back",
+        "back_dark": "63-dly-lo-fi-back-dark",
         "dark": "63-dly-lo-fi-dark",
         "face": "63-dly-lo-fi",
         "match": [
           "lo-fi"
         ],
+        "nameplate": true,
         "ns": "dly",
         "size": [
           960.0,
@@ -2006,14 +2009,30 @@
         "tall_size": [
           760.0,
           328.0
-        ]
+        ],
+        "tiers": {
+          "phone": {
+            "back": "63-dly-lo-fi-back-phone",
+            "back_dark": "63-dly-lo-fi-back-phone-dark",
+            "dark": "63-dly-lo-fi-phone-dark",
+            "face": "63-dly-lo-fi-phone",
+            "size": [
+              760.0,
+              164.0
+            ]
+          }
+        },
+        "time_knob": true
       },
       {
+        "back": "64-dly-shimmer-back",
+        "back_dark": "64-dly-shimmer-back-dark",
         "dark": "64-dly-shimmer-dark",
         "face": "64-dly-shimmer",
         "match": [
           "shimmer"
         ],
+        "nameplate": true,
         "ns": "dly",
         "size": [
           960.0,
@@ -2024,14 +2043,30 @@
         "tall_size": [
           760.0,
           328.0
-        ]
+        ],
+        "tiers": {
+          "phone": {
+            "back": "64-dly-shimmer-back-phone",
+            "back_dark": "64-dly-shimmer-back-phone-dark",
+            "dark": "64-dly-shimmer-phone-dark",
+            "face": "64-dly-shimmer-phone",
+            "size": [
+              760.0,
+              164.0
+            ]
+          }
+        },
+        "time_knob": true
       },
       {
+        "back": "65-dly-reverse-back",
+        "back_dark": "65-dly-reverse-back-dark",
         "dark": "65-dly-reverse-dark",
         "face": "65-dly-reverse",
         "match": [
           "reverse"
         ],
+        "nameplate": true,
         "ns": "dly",
         "size": [
           960.0,
@@ -2042,14 +2077,30 @@
         "tall_size": [
           760.0,
           328.0
-        ]
+        ],
+        "tiers": {
+          "phone": {
+            "back": "65-dly-reverse-back-phone",
+            "back_dark": "65-dly-reverse-back-phone-dark",
+            "dark": "65-dly-reverse-phone-dark",
+            "face": "65-dly-reverse-phone",
+            "size": [
+              760.0,
+              164.0
+            ]
+          }
+        },
+        "time_knob": true
       },
       {
+        "back": "66-dly-ice-back",
+        "back_dark": "66-dly-ice-back-dark",
         "dark": "66-dly-ice-dark",
         "face": "66-dly-ice",
         "match": [
           "ice"
         ],
+        "nameplate": true,
         "ns": "dly",
         "size": [
           960.0,
@@ -2060,14 +2111,30 @@
         "tall_size": [
           760.0,
           328.0
-        ]
+        ],
+        "tiers": {
+          "phone": {
+            "back": "66-dly-ice-back-phone",
+            "back_dark": "66-dly-ice-back-phone-dark",
+            "dark": "66-dly-ice-phone-dark",
+            "face": "66-dly-ice-phone",
+            "size": [
+              760.0,
+              164.0
+            ]
+          }
+        },
+        "time_knob": true
       },
       {
+        "back": "67-dly-rhythm-back",
+        "back_dark": "67-dly-rhythm-back-dark",
         "dark": "67-dly-rhythm-dark",
         "face": "67-dly-rhythm",
         "match": [
           "rhythm"
         ],
+        "nameplate": true,
         "ns": "dly",
         "size": [
           960.0,
@@ -2078,7 +2145,20 @@
         "tall_size": [
           760.0,
           328.0
-        ]
+        ],
+        "tiers": {
+          "phone": {
+            "back": "67-dly-rhythm-back-phone",
+            "back_dark": "67-dly-rhythm-back-phone-dark",
+            "dark": "67-dly-rhythm-phone-dark",
+            "face": "67-dly-rhythm-phone",
+            "size": [
+              760.0,
+              164.0
+            ]
+          }
+        },
+        "time_knob": true
       },
       {
         "dark": "68-dly-drum-dark",
