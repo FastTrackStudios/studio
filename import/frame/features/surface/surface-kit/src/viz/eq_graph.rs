@@ -25,6 +25,12 @@
 //!   placement submenus, reset gain, rename, delete);
 //! - a range switch (±3…±30 dB), pre / post / external analyser layers.
 //!
+//! Placed inside another unit — a saturator's emphasis EQ — it can be
+//! `fixed` (its bands its own: always there, always on, only frequency,
+//! gain, Q and shape; nothing to add, delete, bypass or rename), held to
+//! the first `shapes=` shapes, at a fixed `db_range=`, in one `tint=`
+//! colour, with `no_analyser`.
+//!
 //! It draws as the EQ in signal's guitar rig does — processor's
 //! `EqGraphWidget`: a full-bleed plot on `#0a0a0a`, the GPU glow
 //! (`eq.glow`, `viz::lit`) under processor's grid, band curves in each
@@ -163,9 +169,13 @@ impl Addrs {
     }
 }
 
-/// The inputs `eq.response` reads for one band (`n` literal or `{n}`).
-fn band_inputs(ad: &Addrs, n: &str) -> Vec<CurveInput> {
+/// The inputs `eq.response` reads for one band (`n` literal or `{n}`); a
+/// fixed band (`fixed`) has only its frequency, gain, Q and shape.
+fn band_inputs(ad: &Addrs, n: &str, fixed: bool) -> Vec<CurveInput> {
     let addr = |k: &str| format!("{}/b{n}_{k}", ad.ns);
+    if fixed {
+        return ["freq", "gain", "q", "shape"].iter().map(|k| CurveInput::param(format!("b{n}_{k}"), addr(k))).collect();
+    }
     let mut v: Vec<CurveInput> =
         ["freq", "gain", "q", "shape", "on", "used", "dyn_range"].iter().map(|k| CurveInput::param(format!("b{n}_{k}"), addr(k))).collect();
     v.push(CurveInput::param(format!("b{n}_slope_index"), addr("slope")));
@@ -197,9 +207,20 @@ fn eq_graph(b: &mut Builder<'_>, parent: NodeId, p: &Place) -> NodeId {
     } else {
         area(b, root, ax, ay, w - ax - right, h - ay - bottom)
     };
+    // `fixed`: the bands are the EQ's own, always there and always on —
+    // each only a frequency, gain, Q and shape (`shapes=` the first of
+    // [`SHAPES`] it may take); nothing to add, delete, bypass or rename.
+    let fixed = p.flag("fixed");
+    let shapes = (opt_f(p, "shapes", SHAPES.len() as f64) as usize).clamp(1, SHAPES.len());
+    // `db_range=`: a fixed ± dB span (no zoom, no range picker).
+    let db_range = p.opt("db_range").and_then(|v| v.parse::<f64>().ok());
+    let span = db_range.unwrap_or(12.0);
     let x = Axis::Log { f_min: f.0, f_max: f.1 };
-    let y = Axis::Linear { min: -12.0, max: 12.0 };
-    let tint = ramp_over(&x);
+    let y = Axis::Linear { min: -span, max: span };
+    // `tint=#hex`: one colour for every band, the sum and the glow, in place
+    // of the frequency ramp.
+    let tint_hex = p.opt("tint").map(ToString::to_string);
+    let tint = tint_hex.as_ref().map_or_else(|| ramp_over(&x), |c| vec![c.clone(), c.clone()]);
 
     // ── grid, printed scales ────────────────────────────────────────────
     const LINES: [f64; 27] = [
@@ -220,15 +241,17 @@ fn eq_graph(b: &mut Builder<'_>, parent: NodeId, p: &Place) -> NodeId {
     let glow_spec = super::lit::GlowSpec {
         ns: &ad.ns,
         bands: bands as usize,
-        used: true,
+        used: !fixed,
+        bypass: !fixed,
         spectrum: spectrum.clone(),
         f,
-        span: super::lit::GlowSpan::Param { addr: ad.view("range"), spans: RANGES.to_vec() },
+        span: db_range.map_or_else(|| super::lit::GlowSpan::Param { addr: ad.view("range"), spans: RANGES.to_vec() }, super::lit::GlowSpan::Fixed),
         floor,
+        tint: tint_hex.clone(),
     };
     let rig_glow = rig.then(|| super::lit::glow_light(b, a.area, (a.w, a.h), &glow_spec));
     if rig {
-        rig_grid(b, &a, &x, f, &ad);
+        rig_grid(b, &a, &x, f, &ad, db_range);
         // Glow, then grid, then the traces.
         if let Some(n) = b.scene.node_mut(a.area) {
             let clip = a.clip;
@@ -259,6 +282,11 @@ fn eq_graph(b: &mut Builder<'_>, parent: NodeId, p: &Place) -> NodeId {
     }
     // dB numerals follow the range: a readout of it, one label per span.
     for frac in [1.0, 0.5, 0.0, -0.5, -1.0_f64] {
+        // A fixed span prints its half-spans and zero only: the ends would
+        // crowd the top rim and sit on the 20k.
+        if db_range.is_some() && frac.abs() > 0.75 {
+            continue;
+        }
         let labels: Vec<String> = RANGES
             .iter()
             .map(|r| {
@@ -277,6 +305,15 @@ fn eq_graph(b: &mut Builder<'_>, parent: NodeId, p: &Place) -> NodeId {
             let holder = frame(b, root, "dB label", (ax + a.w + 3.0, (cy - 6.0).clamp(ay, ay + a.h - 12.0), 28.0, 12.0), None, 0.0);
             (holder, text(b, holder, "value", "", (0.0, 0.0, 28.0), 9.0, LABEL, TextAlign::Left, 500.0))
         };
+        if let Some(r) = db_range {
+            // A fixed span: its numerals printed.
+            let v = r * frac;
+            let s = if v.abs() < 1e-9 { "0".to_string() } else { format!("{v:+.0}") };
+            if let Some(NodeKind::Text(d)) = b.scene.node_mut(t).map(|n| &mut n.kind) {
+                d.characters = s;
+            }
+            continue;
+        }
         let refs: Vec<&str> = labels.iter().map(String::as_str).collect();
         let c = Control::new(ControlKind::Readout).bound(Binding::param(ad.view("range"))).slot(SlotRole::Value, t.0).formatted(ValueFormat::labels(&refs));
         b.controls.insert(holder, c);
@@ -307,6 +344,9 @@ fn eq_graph(b: &mut Builder<'_>, parent: NodeId, p: &Place) -> NodeId {
         Some(g) => (g, PlotRange::linear(-90.0, 0.0)),
         None => (a.clip, PlotRange::linear(floor, 6.0)),
     };
+    // `no_analyser`: an EQ with nothing to analyse draws no analyser layers
+    // (the glow then lights its bands alone).
+    let layers = if p.flag("no_analyser") { Vec::new() } else { layers.to_vec() };
     for (name, feed, toggle, fill, line) in layers {
         let holder = b.add(layer_parent, draw::frame(name, 0.0, 0.0, a.w, a.h));
         let mut slots = Vec::new();
@@ -324,8 +364,9 @@ fn eq_graph(b: &mut Builder<'_>, parent: NodeId, p: &Place) -> NodeId {
 
     // Each band's own curve, stem and dynamic range: a template.
     let curves = b.add(a.clip, draw::frame("band {n} curves", 0.0, 0.0, a.w, a.h));
-    b.controls.insert(curves, Control::new(ControlKind::Repeat { first: 1, count: bands, used: Some(ParamAddr::new(ad.band("used"))) }));
-    let mut own = band_inputs(&ad, "{n}");
+    let used = (!fixed).then(|| ParamAddr::new(ad.band("used")));
+    b.controls.insert(curves, Control::new(ControlKind::Repeat { first: 1, count: bands, used: used.clone() }));
+    let mut own = band_inputs(&ad, "{n}", fixed);
     own.push(CurveInput::param("tint", ad.band("freq")));
     let zoom = ad.zoom();
     let band_curve = |b: &mut Builder<'_>, name: &str, series: &str, style: PlotStyle, extra: Vec<CurveInput>, look: (Option<&str>, Option<(&str, f64, bool)>)| {
@@ -347,9 +388,9 @@ fn eq_graph(b: &mut Builder<'_>, parent: NodeId, p: &Place) -> NodeId {
             series: Some(series.into()),
             style,
             x: x.clone(),
-            y: PlotRange::linear(-12.0, 12.0),
+            y: PlotRange::linear(-span, span),
         });
-        c.zoom = Some(zoom.clone());
+        c.zoom = db_range.is_none().then(|| zoom.clone());
         c.tint = tint.clone();
         b.controls.insert(holder, with_slots(c, &slots));
     };
@@ -357,12 +398,15 @@ fn eq_graph(b: &mut Builder<'_>, parent: NodeId, p: &Place) -> NodeId {
     let band_fill = if rig { "#ffffff40" } else { "#ffffff38" };
     band_curve(b, "curve", "b{n}", PlotStyle::Area { baseline: 0.0 }, Vec::new(), (Some(band_fill), Some(("#ffffff99", 1.5, false))));
     band_curve(b, "stem", "b{n}_stem", PlotStyle::Line, vec![CurveInput::constant("stems", 1.0)], (None, Some(("#ffffff80", 1.5, false))));
-    band_curve(b, "dynamic range", "b{n}_dyn", PlotStyle::Line, Vec::new(), (None, Some(("#ffffffb0", 1.2, true))));
+    if !fixed {
+        band_curve(b, "dynamic range", "b{n}_dyn", PlotStyle::Line, Vec::new(), (None, Some(("#ffffffb0", 1.2, true))));
+    }
 
     // The combined response over every band.
     let sum = b.add(a.clip, draw::frame("response", 0.0, 0.0, a.w, a.h));
-    let fill = vector(b, sum, &a, "fill", Some("#d4a93214"), None);
-    let line = vector(b, sum, &a, "line", None, Some((GOLD, 2.0, false)));
+    let sum_ink = tint_hex.clone().unwrap_or_else(|| GOLD.to_string());
+    let fill = vector(b, sum, &a, "fill", Some(&format!("{sum_ink}14")), None);
+    let line = vector(b, sum, &a, "line", None, Some((&sum_ink, 2.0, false)));
     // A soft under-stroke instead of emitted light: light composites over
     // everything, and the band panel and menus float above this curve.
     let halo = vector(b, sum, &a, "halo", None, Some(("#ffc94d33", 6.0, false)));
@@ -376,21 +420,21 @@ fn eq_graph(b: &mut Builder<'_>, parent: NodeId, p: &Place) -> NodeId {
     if rig && let Some(n) = b.scene.node_mut(halo) {
         n.visible = false;
     }
-    let inputs: Vec<CurveInput> = (1..=bands).flat_map(|n| band_inputs(&ad, &n.to_string())).collect();
+    let inputs: Vec<CurveInput> = (1..=bands).flat_map(|n| band_inputs(&ad, &n.to_string(), fixed)).collect();
     let mut c = Control::new(ControlKind::Curve {
         provider: "eq.response".into(),
         inputs,
         series: Some("sum".into()),
         style: PlotStyle::Area { baseline: 0.0 },
         x: x.clone(),
-        y: PlotRange::linear(-12.0, 12.0),
+        y: PlotRange::linear(-span, span),
     });
-    c.zoom = Some(zoom.clone());
+    c.zoom = db_range.is_none().then(|| zoom.clone());
     b.controls.insert(sum, with_slots(c, &[(SlotRole::Area, fill), (SlotRole::Trace, halo), (SlotRole::Trace, line)]));
 
     // ── the band template: handle and name label ───────────────────────
     let band = b.add(a.area, draw::frame("band {n}", 0.0, 0.0, a.w, a.h));
-    b.controls.insert(band, Control::new(ControlKind::Repeat { first: 1, count: bands, used: Some(ParamAddr::new(ad.band("used"))) }));
+    b.controls.insert(band, Control::new(ControlKind::Repeat { first: 1, count: bands, used }));
     let handle = b.add(band, draw::frame("band {n} handle", (a.w - HANDLE) / 2.0, (a.h - HANDLE) / 2.0, HANDLE, HANDLE));
     let c0 = HANDLE / 2.0;
     let r = DISC / 2.0;
@@ -425,24 +469,23 @@ fn eq_graph(b: &mut Builder<'_>, parent: NodeId, p: &Place) -> NodeId {
         (lit, lit)
     };
     let grey = b.add(state, draw::circle("bypassed", c0, c0, DISC / 2.0, draw::solid("#555555")));
-    b.controls.insert(state, with_slots(Control::new(ControlKind::Readout).bound(Binding::param(ad.band("on"))), &[(SlotRole::On, lit_shown), (SlotRole::Off, grey)]));
-
-    // The name label riding above the handle; double-click renames.
-    let label_pop = b.add(band, draw::frame("band {n} label", 0.0, 0.0, 120.0, 16.0));
-    let field = b.add(label_pop, draw::frame("name", 0.0, 0.0, 120.0, 16.0));
-    let sel = frame(b, field, "selection", (0.0, 1.0, 1.0, 14.0), Some("#4dabf766"), 2.0);
-    let name_text = text(b, field, "value", "", (0.0, 1.0, 120.0), 10.0, INK, TextAlign::Center, 600.0);
-    if let Some(n) = b.scene.node_mut(name_text) {
-        n.effects = vec![draw::drop_shadow("#000000ff", 0.0, 1.0, 2.0)];
+    if fixed {
+        // Always on: the lit disc only.
+        if let Some(n) = b.scene.node_mut(grey) {
+            n.visible = false;
+        }
+    } else {
+        b.controls.insert(state, with_slots(Control::new(ControlKind::Readout).bound(Binding::param(ad.band("on"))), &[(SlotRole::On, lit_shown), (SlotRole::Off, grey)]));
     }
-    let caret = frame(b, field, "caret", (0.0, 1.0, 1.5, 14.0), Some(INK), 0.0);
-    let c = Control::new(ControlKind::TextField { click_to_edit: false, max_len: 32 }).bound(Binding::param(ad.band("name")));
-    b.controls.insert(field, with_slots(c, &[(SlotRole::Value, name_text), (SlotRole::Caret, caret), (SlotRole::TextSelection, sel)]));
-    b.controls.insert(label_pop, Control::new(ControlKind::Popover { anchor: Some(handle.0), placement: Placement::Above, gap: -7.0, show: Show::Always, context: None }));
+
+    // The name label riding above the handle; double-click renames (a
+    // fixed band has no name).
+    let field = if fixed { None } else { Some(name_label(b, band, handle, &ad)) };
+    let rename: Vec<Command> = field.map(|f| vec![Command::Edit { node: f.0 }]).unwrap_or_default();
 
     // ── the band menu, its submenus, the graph menu ─────────────────────
     let menus = b.add(root, draw::frame("menus", 0.0, 0.0, 0.0, 0.0));
-    let shape_sub = submenu(b, menus, "shape menu", &ad, band, &SHAPES, "shape", |i| {
+    let shape_sub = submenu(b, menus, "shape menu", &ad, band, &SHAPES[..shapes], "shape", |i| {
         let mut v = vec![Command::Set { addr: ParamAddr::new(ad.band("shape")), value: i as f64 }];
         if CUTS.contains(&(i as f64)) {
             v.push(Command::Set { addr: ParamAddr::new(ad.band("q")), value: 0.707 });
@@ -452,67 +495,105 @@ fn eq_graph(b: &mut Builder<'_>, parent: NodeId, p: &Place) -> NodeId {
         }
         v
     });
-    let slope_sub = submenu(b, menus, "slope menu", &ad, band, &SLOPES, "slope", |i| vec![Command::Set { addr: ParamAddr::new(ad.band("slope")), value: i as f64 }]);
-    let place_names = ["Stereo", "Left", "Right", "Mid", "Side"];
-    let place_sub = submenu(b, menus, "placement menu", &ad, band, &place_names, "placement", |i| {
-        vec![Command::Set { addr: ParamAddr::new(ad.band("placement")), value: i as f64 }]
-    });
-    let rows: Vec<Row> = vec![
-        Row::header("BAND {n} ·", Some(ad.band("freq"))),
-        Row::divider(),
-        Row::action("Bypass", vec![Command::Toggle { addr: ParamAddr::new(ad.band("on")) }]).checked(Condition::on(ad.band("on")).negated()),
-        Row::action("Focus", vec![Command::Toggle { addr: ParamAddr::new(ad.band("focus")) }]).checked(Condition::on(ad.band("focus"))),
-        Row::action("Invert Gain", vec![Command::Invert { addr: ParamAddr::new(ad.band("gain")) }]),
-        Row::divider(),
-        Row::sub("Shape", shape_sub, ad.band("shape")),
-        Row::sub("Slope", slope_sub, ad.band("slope")),
-        Row::sub("Stereo Placement", place_sub, ad.band("placement")),
-        Row::divider(),
-        Row::action("Reset Gain", vec![Command::Set { addr: ParamAddr::new(ad.band("gain")), value: 0.0 }]),
-        Row::action("Rename", vec![Command::Edit { node: field.0 }]),
-        Row::action("Delete Band", vec![Command::Remove]).danger(),
-    ];
+    let rows: Vec<Row> = if fixed {
+        vec![
+            Row::header("BAND {n} ·", Some(ad.band("freq"))),
+            Row::divider(),
+            Row::action("Invert Gain", vec![Command::Invert { addr: ParamAddr::new(ad.band("gain")) }]),
+            Row::sub("Shape", shape_sub, ad.band("shape")),
+            Row::divider(),
+            Row::action("Reset Gain", vec![Command::Set { addr: ParamAddr::new(ad.band("gain")), value: 0.0 }]),
+        ]
+    } else {
+        let slope_sub = submenu(b, menus, "slope menu", &ad, band, &SLOPES, "slope", |i| vec![Command::Set { addr: ParamAddr::new(ad.band("slope")), value: i as f64 }]);
+        let place_names = ["Stereo", "Left", "Right", "Mid", "Side"];
+        let place_sub = submenu(b, menus, "placement menu", &ad, band, &place_names, "placement", |i| {
+            vec![Command::Set { addr: ParamAddr::new(ad.band("placement")), value: i as f64 }]
+        });
+        vec![
+            Row::header("BAND {n} ·", Some(ad.band("freq"))),
+            Row::divider(),
+            Row::action("Bypass", vec![Command::Toggle { addr: ParamAddr::new(ad.band("on")) }]).checked(Condition::on(ad.band("on")).negated()),
+            Row::action("Focus", vec![Command::Toggle { addr: ParamAddr::new(ad.band("focus")) }]).checked(Condition::on(ad.band("focus"))),
+            Row::action("Invert Gain", vec![Command::Invert { addr: ParamAddr::new(ad.band("gain")) }]),
+            Row::divider(),
+            Row::sub("Shape", shape_sub, ad.band("shape")),
+            Row::sub("Slope", slope_sub, ad.band("slope")),
+            Row::sub("Stereo Placement", place_sub, ad.band("placement")),
+            Row::divider(),
+            Row::action("Reset Gain", vec![Command::Set { addr: ParamAddr::new(ad.band("gain")), value: 0.0 }]),
+            Row::action("Rename", rename.clone()),
+            Row::action("Delete Band", vec![Command::Remove]).danger(),
+        ]
+    };
     let band_menu = menu(b, menus, "band menu", MENU_W, &rows, Some(band));
     let graph_rows = vec![Row::header("GRAPH", None), Row::divider(), Row::action("Add Band Here", vec![Command::Add])];
-    let graph_menu = menu(b, menus, "graph menu", 150.0, &graph_rows, None);
+    let graph_menu = (!fixed).then(|| menu(b, menus, "graph menu", 150.0, &graph_rows, None));
 
     // ── the handle's control ────────────────────────────────────────────
     let q_per_notch = 1.15_f64.ln() / (40.0_f64 / 0.025).ln();
     let q_per_px = 2.0_f64.ln() / (40.0_f64 / 0.025).ln() / 60.0;
     let run = |cmds: Vec<Command>| ClickAction::Run { commands: cmds };
-    let interact = Interact {
-        selectable: true,
-        removable: true,
-        click: vec![
-            ClickRule { chord: Chord::OPTION_COMMAND, action: run(vec![Command::Cycle { addr: ParamAddr::new(ad.band("shape")) }]) },
-            ClickRule { chord: Chord::OPTION_SHIFT, action: run(vec![Command::Cycle { addr: ParamAddr::new(ad.band("slope")) }]) },
-            ClickRule { chord: Chord::OPTION, action: run(vec![Command::Toggle { addr: ParamAddr::new(ad.band("on")) }]) },
-            ClickRule { chord: Chord::COMMAND, action: ClickAction::ToggleSelection },
-            ClickRule { chord: Chord::COMMAND_SHIFT, action: ClickAction::ToggleSelection },
-            ClickRule { chord: Chord::SHIFT, action: ClickAction::RangeSelect },
-        ],
-        drag: vec![
-            DragRule { chord: Chord::COMMAND, mode: DragMode::Wheel { per_px: q_per_px }, when: None },
-            DragRule { chord: Chord::OPTION, mode: DragMode::XOnly, when: None },
-            // A cut, a notch, an all-pass has no gain: it slides across.
-            DragRule { chord: Chord::NONE, mode: DragMode::XOnly, when: Some(Condition::any_of(ad.band("shape"), &NO_GAIN)) },
-        ],
-        wheel: vec![
-            WheelRule { chord: Chord::OPTION_COMMAND, target: ParamAddr::new(ad.band("gain")), step: 1.0 / 60.0, when: None },
-            WheelRule { chord: Chord::OPTION, target: ParamAddr::new(ad.band("dyn_range")), step: 1.0 / 60.0, when: None },
-            WheelRule { chord: Chord::COMMAND, target: ParamAddr::new(ad.band("gain")), step: 1.0 / 60.0, when: None },
-            WheelRule { chord: Chord::NONE, target: ParamAddr::new(ad.band("slope")), step: 0.1, when: Some(Condition::any_of(ad.band("shape"), &CUTS)) },
-            WheelRule { chord: Chord::NONE, target: ParamAddr::new(ad.band("q")), step: q_per_notch, when: None },
-        ],
-        double_click: vec![Command::Edit { node: field.0 }],
-        // Placement keys (Dioxus: m / s / l / r / n) and focus.
-        keys: [("n", 0.0), ("l", 1.0), ("r", 2.0), ("m", 3.0), ("s", 4.0)]
-            .into_iter()
-            .map(|(k, v)| KeyRule { key: k.into(), commands: vec![Command::Set { addr: ParamAddr::new(ad.band("placement")), value: v }] })
-            .chain(std::iter::once(KeyRule { key: "f".into(), commands: vec![Command::Toggle { addr: ParamAddr::new(ad.band("focus")) }] }))
-            .collect(),
-        press: Vec::new(),
-        menu: Some(band_menu.0),
+    let interact = if fixed {
+        // The band's own: no bypass, slope, dynamic range, placement or name.
+        Interact {
+            selectable: true,
+            removable: false,
+            click: vec![
+                ClickRule { chord: Chord::OPTION_COMMAND, action: run(vec![Command::Cycle { addr: ParamAddr::new(ad.band("shape")) }]) },
+                ClickRule { chord: Chord::COMMAND, action: ClickAction::ToggleSelection },
+                ClickRule { chord: Chord::COMMAND_SHIFT, action: ClickAction::ToggleSelection },
+                ClickRule { chord: Chord::SHIFT, action: ClickAction::RangeSelect },
+            ],
+            drag: vec![
+                DragRule { chord: Chord::COMMAND, mode: DragMode::Wheel { per_px: q_per_px }, when: None },
+                DragRule { chord: Chord::OPTION, mode: DragMode::XOnly, when: None },
+            ],
+            wheel: vec![
+                WheelRule { chord: Chord::OPTION_COMMAND, target: ParamAddr::new(ad.band("gain")), step: 1.0 / 60.0, when: None },
+                WheelRule { chord: Chord::COMMAND, target: ParamAddr::new(ad.band("gain")), step: 1.0 / 60.0, when: None },
+                WheelRule { chord: Chord::NONE, target: ParamAddr::new(ad.band("q")), step: q_per_notch, when: None },
+            ],
+            double_click: Vec::new(),
+            keys: Vec::new(),
+            press: Vec::new(),
+            menu: Some(band_menu.0),
+        }
+    } else {
+        Interact {
+            selectable: true,
+            removable: true,
+            click: vec![
+                ClickRule { chord: Chord::OPTION_COMMAND, action: run(vec![Command::Cycle { addr: ParamAddr::new(ad.band("shape")) }]) },
+                ClickRule { chord: Chord::OPTION_SHIFT, action: run(vec![Command::Cycle { addr: ParamAddr::new(ad.band("slope")) }]) },
+                ClickRule { chord: Chord::OPTION, action: run(vec![Command::Toggle { addr: ParamAddr::new(ad.band("on")) }]) },
+                ClickRule { chord: Chord::COMMAND, action: ClickAction::ToggleSelection },
+                ClickRule { chord: Chord::COMMAND_SHIFT, action: ClickAction::ToggleSelection },
+                ClickRule { chord: Chord::SHIFT, action: ClickAction::RangeSelect },
+            ],
+            drag: vec![
+                DragRule { chord: Chord::COMMAND, mode: DragMode::Wheel { per_px: q_per_px }, when: None },
+                DragRule { chord: Chord::OPTION, mode: DragMode::XOnly, when: None },
+                // A cut, a notch, an all-pass has no gain: it slides across.
+                DragRule { chord: Chord::NONE, mode: DragMode::XOnly, when: Some(Condition::any_of(ad.band("shape"), &NO_GAIN)) },
+            ],
+            wheel: vec![
+                WheelRule { chord: Chord::OPTION_COMMAND, target: ParamAddr::new(ad.band("gain")), step: 1.0 / 60.0, when: None },
+                WheelRule { chord: Chord::OPTION, target: ParamAddr::new(ad.band("dyn_range")), step: 1.0 / 60.0, when: None },
+                WheelRule { chord: Chord::COMMAND, target: ParamAddr::new(ad.band("gain")), step: 1.0 / 60.0, when: None },
+                WheelRule { chord: Chord::NONE, target: ParamAddr::new(ad.band("slope")), step: 0.1, when: Some(Condition::any_of(ad.band("shape"), &CUTS)) },
+                WheelRule { chord: Chord::NONE, target: ParamAddr::new(ad.band("q")), step: q_per_notch, when: None },
+            ],
+            double_click: rename,
+            // Placement keys (Dioxus: m / s / l / r / n) and focus.
+            keys: [("n", 0.0), ("l", 1.0), ("r", 2.0), ("m", 3.0), ("s", 4.0)]
+                .into_iter()
+                .map(|(k, v)| KeyRule { key: k.into(), commands: vec![Command::Set { addr: ParamAddr::new(ad.band("placement")), value: v }] })
+                .chain(std::iter::once(KeyRule { key: "f".into(), commands: vec![Command::Toggle { addr: ParamAddr::new(ad.band("focus")) }] }))
+                .collect(),
+            press: Vec::new(),
+            menu: Some(band_menu.0),
+        }
     };
     let mut hc = Control::new(ControlKind::Handle {
         x: Some(Binding::param(ad.band("freq"))),
@@ -522,7 +603,7 @@ fn eq_graph(b: &mut Builder<'_>, parent: NodeId, p: &Place) -> NodeId {
         y_map: HandleAxis::new(y.clone()),
     })
     .interacting(interact);
-    hc.zoom = Some(zoom.clone());
+    hc.zoom = db_range.is_none().then(|| zoom.clone());
     hc.tint = tint.clone();
     let hc = with_slots(hc, &[(SlotRole::Hovered, hover), (SlotRole::Selected, ring), (SlotRole::Tint, lit), (SlotRole::Tint, ring)]);
     b.controls.insert(handle, hc);
@@ -557,14 +638,14 @@ fn eq_graph(b: &mut Builder<'_>, parent: NodeId, p: &Place) -> NodeId {
             zone(8000.0, 1e9, 0.0, 1.0, 2.0, true),
         ],
     };
-    let mut canvas = Control::new(ControlKind::Canvas { x: x.clone(), y: y.clone(), add: Some(add) })
-        .interacting(Interact { menu: Some(graph_menu.0), ..Interact::default() })
+    let mut canvas = Control::new(ControlKind::Canvas { x: x.clone(), y: y.clone(), add: (!fixed).then_some(add) })
+        .interacting(Interact { menu: graph_menu.map(|m| m.0), ..Interact::default() })
         .slot(SlotRole::Marquee, mq.0);
-    canvas.zoom = Some(zoom.clone());
+    canvas.zoom = db_range.is_none().then(|| zoom.clone());
     b.controls.insert(a.area, canvas);
 
     // ── the band panel and readout chip (follow the active band) ────────
-    band_panel(b, root, &ad, band, handle, a.h);
+    band_panel(b, root, &ad, (band, handle), a.h, (fixed, &tint));
     chip(b, root, &ad, band, handle);
 
     // ── toolbar: range, analyser layers ─────────────────────────────────
@@ -575,11 +656,14 @@ fn eq_graph(b: &mut Builder<'_>, parent: NodeId, p: &Place) -> NodeId {
         .slot(SlotRole::Value, rv.0)
         .slot(SlotRole::Label, rv.0)
         .interacting(Interact { double_click: vec![Command::Reset { addr: ParamAddr::new(ad.view("range")) }], ..Interact::default() });
-    b.controls.insert(range, rc);
+    // A fixed span has no range to pick: the picker is only drawn, hidden.
+    if db_range.is_none() {
+        b.controls.insert(range, rc);
+    }
     // `no_range`: signal's rig mounts the graph where Blitz draws its range
     // `<select>` as nothing (a 12 × 6 box, no text) — the rig shows no
     // picker, and a surface recreating the rig shows none either.
-    if p.flag("no_range")
+    if (p.flag("no_range") || db_range.is_some())
         && let Some(n) = b.scene.node_mut(range)
     {
         n.visible = false;
@@ -602,6 +686,23 @@ fn eq_graph(b: &mut Builder<'_>, parent: NodeId, p: &Place) -> NodeId {
     root
 }
 
+/// A band's name label riding above its handle: a text field of
+/// `b{n}_name`, renamed in place. Returns the field.
+fn name_label(b: &mut Builder<'_>, band: NodeId, handle: NodeId, ad: &Addrs) -> NodeId {
+    let label_pop = b.add(band, draw::frame("band {n} label", 0.0, 0.0, 120.0, 16.0));
+    let field = b.add(label_pop, draw::frame("name", 0.0, 0.0, 120.0, 16.0));
+    let sel = frame(b, field, "selection", (0.0, 1.0, 1.0, 14.0), Some("#4dabf766"), 2.0);
+    let name_text = text(b, field, "value", "", (0.0, 1.0, 120.0), 10.0, INK, TextAlign::Center, 600.0);
+    if let Some(n) = b.scene.node_mut(name_text) {
+        n.effects = vec![draw::drop_shadow("#000000ff", 0.0, 1.0, 2.0)];
+    }
+    let caret = frame(b, field, "caret", (0.0, 1.0, 1.5, 14.0), Some(INK), 0.0);
+    let c = Control::new(ControlKind::TextField { click_to_edit: false, max_len: 32 }).bound(Binding::param(ad.band("name")));
+    b.controls.insert(field, with_slots(c, &[(SlotRole::Value, name_text), (SlotRole::Caret, caret), (SlotRole::TextSelection, sel)]));
+    b.controls.insert(label_pop, Control::new(ControlKind::Popover { anchor: Some(handle.0), placement: Placement::Above, gap: -7.0, show: Show::Always, context: None }));
+    field
+}
+
 /// The rig look's ground (processor's `(10, 10, 10)`).
 const RIG_GROUND: &str = "#0a0a0a";
 /// processor's DOM frequency labels, `rgba(160,160,172,0.85)`.
@@ -621,7 +722,7 @@ fn ring_node(name: &str, c: f64, r: f64, weight: f64, color: &str) -> Node {
 /// processor's `paint_grid`: log frequency lines in three tiers (decades
 /// thickest, the 1-2-5 anchors medium, the rest thin) and dB lines every
 /// 2/3/6 dB by the current span (`eq.grid`), zero thickest.
-fn rig_grid(b: &mut Builder<'_>, a: &Area, x: &Axis, f: (f64, f64), ad: &Addrs) {
+fn rig_grid(b: &mut Builder<'_>, a: &Area, x: &Axis, f: (f64, f64), ad: &Addrs, db_range: Option<f64>) {
     const MINOR: &str = "#37373c5a";
     const MID: &str = "#46464b6e";
     const MAJOR: &str = "#5a5a5f8c";
@@ -646,8 +747,13 @@ fn rig_grid(b: &mut Builder<'_>, a: &Area, x: &Axis, f: (f64, f64), ad: &Addrs) 
         n.stroke = Stroke { paints: vec![draw::solid(color)], weight, align: StrokeAlign::Center, ..Stroke::default() };
         b.add(a.area, n);
     }
-    let mut inputs = vec![CurveInput::param("range", ad.view("range"))];
-    inputs.extend(RANGES.iter().enumerate().map(|(i, r)| CurveInput::constant(format!("span_{i}"), *r)));
+    let inputs = if let Some(r) = db_range {
+        vec![CurveInput::constant("db_range", r)]
+    } else {
+        let mut v = vec![CurveInput::param("range", ad.view("range"))];
+        v.extend(RANGES.iter().enumerate().map(|(i, r)| CurveInput::constant(format!("span_{i}"), *r)));
+        v
+    };
     for (series, color, weight) in [("minor", MINOR, 0.5), ("zero", MAJOR, 1.25)] {
         let holder = b.add(a.area, draw::frame(&format!("dB grid {series}"), 0.0, 0.0, a.w, a.h));
         let line = vector(b, holder, a, "line", None, Some((color, weight, false)));
@@ -800,7 +906,9 @@ fn button(b: &mut Builder<'_>, parent: NodeId, name: &str, r: (f64, f64, f64, f6
 /// only horizontally (Pro-Q style), so it never jumps while the band is
 /// dragged and its readouts stay where the eye is. It floats 18 px above
 /// the plot's floor, flush on a short plot where the gap would cost curve.
-fn band_panel(b: &mut Builder<'_>, root: NodeId, ad: &Addrs, band: NodeId, handle: NodeId, plot_h: f64) {
+/// A fixed band's panel (`fixed`) has its shape and FREQ / GAIN / Q only;
+/// `tint` colours its top edge.
+fn band_panel(b: &mut Builder<'_>, root: NodeId, ad: &Addrs, (band, handle): (NodeId, NodeId), plot_h: f64, (fixed, tint): (bool, &[String])) {
     let mut shell = draw::frame("band panel", 0.0, 0.0, PANEL_W, PANEL_H);
     shell.fills = vec![draw::solid(PANEL_BG)];
     let shell = draw::with_effects(draw::rounded(draw::stroked(shell, PANEL_RIM, 1.0), 10.0), vec![draw::drop_shadow("#0000008c", 0.0, 6.0, 18.0)]);
@@ -810,31 +918,35 @@ fn band_panel(b: &mut Builder<'_>, root: NodeId, ad: &Addrs, band: NodeId, handl
     let bar = frame(b, bar_holder, "bar", (0.0, 0.0, PANEL_W - 20.0, 2.0), Some("#ff6b6b"), 1.0);
     let mut bc = Control::new(ControlKind::Readout).bound(Binding::param(ad.band("freq"))).slot(SlotRole::Tint, bar.0);
     let freq_axis = Axis::Log { f_min: 10.0, f_max: 30_000.0 };
-    bc.tint = ramp_over(&freq_axis);
+    bc.tint = if tint.len() == 2 && tint[0] == tint[1] { tint.to_vec() } else { ramp_over(&freq_axis) };
     b.controls.insert(bar_holder, bc);
 
     // Row 1: bypass, shape, name, placement, focus, delete.
     let y = 9.0;
-    button(b, pop, "bypass", (8.0, y, 22.0, 22.0), ButtonMode::Toggle, Some(&ad.band("on")), Some("●"), INK);
-    let shape = button(b, pop, "shape", (34.0, y, 70.0, 22.0), ButtonMode::Cycle, Some(&ad.band("shape")), None, "#ffd43b");
-    let _ = shape;
-    let name = stroked_frame(b, pop, "name field", (108.0, y, 104.0, 22.0), "#0c0c10f5", PANEL_RIM, 4.0);
-    let sel = frame(b, name, "selection", (6.0, 4.0, 1.0, 14.0), Some("#4dabf766"), 2.0);
-    let hint = text(b, name, "placeholder", "Name…", (6.0, 5.0, 92.0), 10.0, "#6a6a76", TextAlign::Left, 500.0);
-    let value = text(b, name, "value", "", (6.0, 5.0, 92.0), 10.0, INK, TextAlign::Left, 600.0);
-    let caret = frame(b, name, "caret", (6.0, 4.0, 1.5, 14.0), Some(INK), 0.0);
-    let nc = Control::new(ControlKind::TextField { click_to_edit: true, max_len: 32 })
-        .bound(Binding::param(ad.band("name")))
-        .slot(SlotRole::Value, value.0)
-        .slot(SlotRole::Placeholder, hint.0)
-        .slot(SlotRole::Caret, caret.0)
-        .slot(SlotRole::TextSelection, sel.0);
-    b.controls.insert(name, nc);
-    button(b, pop, "placement", (216.0, y, 26.0, 22.0), ButtonMode::Cycle, Some(&ad.band("placement")), None, INK);
-    button(b, pop, "focus", (246.0, y, 22.0, 22.0), ButtonMode::Toggle, Some(&ad.band("focus")), Some("F"), INK);
-    let del = button(b, pop, "delete", (272.0, y, 22.0, 22.0), ButtonMode::Trigger, None, Some("×"), "#ff6e6e");
-    if let Some(c) = b.controls.get_mut(&del) {
-        c.interact = Some(Interact { press: vec![Command::Remove], ..Interact::default() });
+    if fixed {
+        button(b, pop, "shape", (8.0, y, PANEL_W - 16.0, 22.0), ButtonMode::Cycle, Some(&ad.band("shape")), None, "#ffd43b");
+    } else {
+        button(b, pop, "bypass", (8.0, y, 22.0, 22.0), ButtonMode::Toggle, Some(&ad.band("on")), Some("●"), INK);
+        let shape = button(b, pop, "shape", (34.0, y, 70.0, 22.0), ButtonMode::Cycle, Some(&ad.band("shape")), None, "#ffd43b");
+        let _ = shape;
+        let name = stroked_frame(b, pop, "name field", (108.0, y, 104.0, 22.0), "#0c0c10f5", PANEL_RIM, 4.0);
+        let sel = frame(b, name, "selection", (6.0, 4.0, 1.0, 14.0), Some("#4dabf766"), 2.0);
+        let hint = text(b, name, "placeholder", "Name…", (6.0, 5.0, 92.0), 10.0, "#6a6a76", TextAlign::Left, 500.0);
+        let value = text(b, name, "value", "", (6.0, 5.0, 92.0), 10.0, INK, TextAlign::Left, 600.0);
+        let caret = frame(b, name, "caret", (6.0, 4.0, 1.5, 14.0), Some(INK), 0.0);
+        let nc = Control::new(ControlKind::TextField { click_to_edit: true, max_len: 32 })
+            .bound(Binding::param(ad.band("name")))
+            .slot(SlotRole::Value, value.0)
+            .slot(SlotRole::Placeholder, hint.0)
+            .slot(SlotRole::Caret, caret.0)
+            .slot(SlotRole::TextSelection, sel.0);
+        b.controls.insert(name, nc);
+        button(b, pop, "placement", (216.0, y, 26.0, 22.0), ButtonMode::Cycle, Some(&ad.band("placement")), None, INK);
+        button(b, pop, "focus", (246.0, y, 22.0, 22.0), ButtonMode::Toggle, Some(&ad.band("focus")), Some("F"), INK);
+        let del = button(b, pop, "delete", (272.0, y, 22.0, 22.0), ButtonMode::Trigger, None, Some("×"), "#ff6e6e");
+        if let Some(c) = b.controls.get_mut(&del) {
+            c.interact = Some(Interact { press: vec![Command::Remove], ..Interact::default() });
+        }
     }
 
     // Row 2: FREQ, GAIN, Q (a cut: SLOPE), DYN.
@@ -844,8 +956,9 @@ fn band_panel(b: &mut Builder<'_>, root: NodeId, ad: &Addrs, band: NodeId, handl
         ("Q", "q", Some(Condition::any_of(ad.band("shape"), &CUTS).negated())),
         ("DYN", "dyn_range", Some(Condition::any_of(ad.band("shape"), &NO_GAIN).negated())),
     ];
-    let cw = (PANEL_W - 16.0) / 4.0;
-    for (i, (legend, k, when)) in knobs.into_iter().enumerate() {
+    let knobs = &knobs[..if fixed { 3 } else { 4 }];
+    let cw = (PANEL_W - 16.0) / knobs.len() as f64;
+    for (i, (legend, k, when)) in knobs.iter().cloned().enumerate() {
         let x0 = 8.0 + cw * i as f64;
         let cell = b.add(pop, draw::frame(&format!("{legend} cell"), x0, 36.0, cw, 64.0));
         let p = Place::new(legend).size(30.0).bind(Binding::param(ad.band(k))).legend(legend);
@@ -858,7 +971,7 @@ fn band_panel(b: &mut Builder<'_>, root: NodeId, ad: &Addrs, band: NodeId, handl
         if let (Some(c), Some(when)) = (b.controls.get_mut(&knob), when.clone()) {
             c.show_if = Some(when);
         }
-        if k == "q" {
+        if k == "q" && !fixed {
             // A cut shows its slope where the Q is.
             let slope = button(b, cell, "slope", ((cw - 64.0) / 2.0, 14.0, 64.0, 22.0), ButtonMode::Cycle, Some(&ad.band("slope")), None, INK);
             if let Some(c) = b.controls.get_mut(&slope) {
@@ -901,7 +1014,7 @@ pub(crate) fn defs() -> Vec<ComponentDef> {
         id: "viz.eq_graph",
         family: Family::Viz,
         title: "EQ graph",
-        description: "A full parametric EQ editor over an analyser: up to 24 bands (`<ns>/b{n}_{used,on,freq,gain,q,shape,slope,name,placement,focus,dyn_range}`, `bands=`), each a handle tinted by its frequency with its name riding above it. Double-click empty space to add a band (its shape from where you click), drag handles (Alt: frequency only, Cmd: resonance), marquee- and Cmd/Shift-click to select several and drag them together, drag one out of the graph (or press Delete) to remove it, double-click to rename, right-click for its menu. The active band gets a panel (bypass, shape, name, placement, focus, delete, FREQ/GAIN/Q/DYN knobs) and a readout chip. `<ns>/range` zooms ±3…±30 dB; `<ns>/show_{pre,post,ext}` show the `<ns>/spectrum_pre`, `<ns>/spectrum` (or the binding) and `<ns>/sidechain` analysers. Drawn as signal's rig EQ (processor's graph: full-bleed, the GPU glow — analyser as light, a bloom per band — under its grid, curves and node rings); variant `panel` is a lit panel with printed scales.",
+        description: "A full parametric EQ editor over an analyser: up to 24 bands (`<ns>/b{n}_{used,on,freq,gain,q,shape,slope,name,placement,focus,dyn_range}`, `bands=`), each a handle tinted by its frequency with its name riding above it. Double-click empty space to add a band (its shape from where you click), drag handles (Alt: frequency only, Cmd: resonance), marquee- and Cmd/Shift-click to select several and drag them together, drag one out of the graph (or press Delete) to remove it, double-click to rename, right-click for its menu. The active band gets a panel (bypass, shape, name, placement, focus, delete, FREQ/GAIN/Q/DYN knobs) and a readout chip. `<ns>/range` zooms ±3…±30 dB; `<ns>/show_{pre,post,ext}` show the `<ns>/spectrum_pre`, `<ns>/spectrum` (or the binding) and `<ns>/sidechain` analysers. Drawn as signal's rig EQ (processor's graph: full-bleed, the GPU glow — analyser as light, a bloom per band — under its grid, curves and node rings); variant `panel` is a lit panel with printed scales. An EQ inside another unit (a saturator's emphasis): `fixed` — its bands always there and on, each only `b{n}_{freq,gain,q,shape}`, nothing adds, deletes, bypasses or renames one; `shapes=N` — the first N shapes only; `db_range=` — a fixed ± dB span, no picker; `tint=#hex` — bands, sum and glow in one colour; `no_analyser` — no analyser layers.",
         variants: &["panel"],
         default_size: 820.0,
         binds: "params by namespace",

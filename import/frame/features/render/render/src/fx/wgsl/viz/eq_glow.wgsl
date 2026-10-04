@@ -86,7 +86,12 @@ fn spectrum_hue(x: f32, energy: f32) -> vec3<f32> {
     swept = mix(swept, high, clamp(k - 1.0, 0.0, 1.0));
     swept = mix(swept, air, clamp(k - 2.0, 0.0, 1.0));
 
-    // The neutral the sweep collapses towards.
+    // The neutral the sweep collapses towards: the panel's own colour when
+    // it sets one (`tint_r/g/b` — an EQ drawn in one hue), and then the
+    // whole analyser is that colour.
+    if (tinted()) {
+        return hotter(viz_tint(vec3<f32>(0.52, 0.80, 1.0)), 0.55 * energy * energy);
+    }
     let flat = vec3<f32>(0.52, 0.80, 1.0);
     let hue = mix(flat, swept, clamp(u.style.z, 0.0, 1.0));
     // Loud runs HOTTER, not whiter: a peak should look like more of its own
@@ -183,6 +188,11 @@ fn effect(uv: vec2<f32>) -> vec4<f32> {
     return viz_out(vec4<f32>(rgb * alpha, alpha));
 }
 
+// Whether the panel sets its own colour (`tint_r`), in place of the sweep.
+fn tinted() -> bool {
+    return param_or(P_TINT_R, -1.0) >= 0.0;
+}
+
 fn glow_load() {
     let n = min(input_len(IN_BANDS) / 2u, MAX_NODES);
     u.frame = vec4<f32>(node_px(), fx.time_s, f32(min(input_len(IN_SPECTRUM), MAX_BINS)));
@@ -213,6 +223,10 @@ fn glow_node(i: u32) -> vec4<f32> {
 // processor's `freq_to_color`: a band's colour by where it sits — hue red
 // (0°) → violet (290°) across 20 Hz–20 kHz, HSL s 0.68, l 0.58.
 fn glow_color(i: u32) -> vec4<f32> {
+    // A panel in one colour (`tint_r/g/b`): every band blooms in it.
+    if (tinted()) {
+        return vec4<f32>(viz_tint(vec3<f32>(1.0)), 1.0);
+    }
     let hz = max(input_raw(IN_BANDS, i * 2u), 1.0);
     let lo = log(20.0);
     let t = clamp((log(hz) - lo) / (log(20000.0) - lo), 0.0, 1.0);

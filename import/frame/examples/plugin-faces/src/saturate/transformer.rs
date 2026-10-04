@@ -15,19 +15,22 @@ use surface_widgets::Builder;
 use crate::delay::art;
 use crate::delay::parts::{self, Ink};
 use crate::face::{Face, canvas};
+use crate::lane::Shape;
 
 const W: f64 = 960.0;
 const H: f64 = 320.0;
 const INK: &str = "#e8edf3";
 const DIM: &str = "#94a0ad";
+/// The emphasis EQ's colour: the winding's copper, warm.
+const COPPER: &str = "#e8804a";
 
 fn a(s: &str) -> String {
     format!("transformer/{s}")
 }
 
 /// The chassis window: the transformer, its tags and leads.
-fn chassis(b: &mut Builder<'_>, panel: NodeId) {
-    let (x, y, w, h) = (236.0, 20.0, 392.0, 150.0);
+fn chassis(b: &mut Builder<'_>, panel: NodeId, (x, y): (f64, f64)) -> NodeId {
+    let (w, h) = (392.0, 150.0);
     let win = parts::well(b, panel, "Chassis", (x, y, w, h), draw::linear(180.0, &[(0.0, "#2a2e33"), (1.0, "#1a1d21")]), 6.0);
     // Pressed-steel chassis ribs.
     for i in 0..5 {
@@ -62,6 +65,7 @@ fn chassis(b: &mut Builder<'_>, panel: NodeId) {
     // Two mounting screws in the chassis.
     art::screw(b, win, (22.0, 22.0), 4.0, 30.0);
     art::screw(b, win, (w - 22.0, h - 22.0), 4.0, 70.0);
+    win
 }
 
 pub fn face() -> Face {
@@ -77,18 +81,20 @@ pub fn face() -> Face {
         parts::silk_left(b, panel, "Nickel · steel lamination", 50.0, 74.0, Ink::new(6.8, DIM).weight(700.0).track(0.18));
         parts::lamp(b, panel, (58.0, 118.0), 8.0, "#ff4a36", true);
         parts::silk_left(b, panel, "Power", 72.0, 118.0, Ink::new(6.5, DIM).weight(800.0).track(0.2));
+        super::emphasis_key(b, panel, "transformer", (156.0, 118.0), 60.0, "black", COPPER);
 
-        chassis(b, panel);
-
-        // ── Output meters ──────────────────────────────────────────────
+        // ── The chassis and the output meters; or the emphasis EQ ─────
+        let pic = super::picture(b, panel, "transformer", (W, H));
+        chassis(b, pic, (236.0, 20.0));
         let (mx, my) = (672.0, 26.0);
         for (i, x) in [mx, mx + 22.0].into_iter().enumerate() {
-            parts::led_column(b, panel, if i == 0 { "Out L" } else { "Out R" }, &a("out"), i as u8, (x, my, 14.0, 120.0), 16, (-30.0, 6.0));
+            parts::led_column(b, pic, if i == 0 { "Out L" } else { "Out R" }, &a("out"), i as u8, (x, my, 14.0, 120.0), 16, (-30.0, 6.0));
         }
         for (db, frac) in [("+6", 0.0), ("0", 6.0 / 36.0), ("-6", 12.0 / 36.0), ("-18", 24.0 / 36.0), ("-30", 1.0)] {
-            parts::silk_left(b, panel, db, mx + 42.0, my + 4.0 + frac * 112.0, Ink::new(6.0, DIM).weight(700.0).track(0.0));
+            parts::silk_left(b, pic, db, mx + 42.0, my + 4.0 + frac * 112.0, Ink::new(6.0, DIM).weight(700.0).track(0.0));
         }
-        parts::silk(b, panel, "Output", mx + 18.0, 160.0, Ink::new(6.5, DIM).weight(800.0).track(0.2));
+        parts::silk(b, pic, "Output", mx + 18.0, 160.0, Ink::new(6.5, DIM).weight(800.0).track(0.2));
+        super::emphasis_eq(b, panel, "transformer", (chassis_x(mx), 20.0, mx + 64.0 - chassis_x(mx), 150.0), COPPER);
 
         // ── Knob row ───────────────────────────────────────────────────
         parts::groove(b, panel, 40.0, W - 40.0, 182.0);
@@ -115,7 +121,11 @@ pub fn face() -> Face {
         parts::vgroove(b, panel, 636.0, 198.0, 312.0);
     });
 
-    let params = vec![
+    Face { file: "03-transformer", plugin: "saturate", scene, params: params(), streams: streams() }
+}
+
+fn params() -> Vec<surface_proto::ParamInfo> {
+    vec![
         parts::percent(&a("drive"), "Drive", 30.0).featured(),
         parts::trim(&a("core"), "Core").featured(),
         parts::trim(&a("bloom"), "Low Bloom"),
@@ -123,7 +133,80 @@ pub fn face() -> Face {
         parts::trim(&a("sag"), "Sag"),
         parts::percent(&a("mix"), "Mix", 100.0).featured(),
         super::output(&a("output")),
-    ];
-    let streams = vec![parts::level_stream(&a("out"), "Output Level", 2)];
-    Face { file: "03-transformer", plugin: "saturate", scene, params, streams }
+    ]
+    .into_iter()
+    .chain(super::emphasis_params("transformer"))
+    .collect()
+}
+
+/// Where the chassis window starts on a face whose meters start at `mx`:
+/// the window sits 436 left of them (the rack face: 236 / 672).
+fn chassis_x(mx: f64) -> f64 {
+    mx - 436.0
+}
+
+fn streams() -> Vec<surface_proto::StreamInfo> {
+    vec![parts::level_stream(&a("out"), "Output Level", 2)]
+}
+
+/// The transformer alone in a lane ([`Shape::Tall`], 760 × 328): nameplate,
+/// the chassis window and the LED meters across the top, the seven wing
+/// knobs below, bigger.
+pub fn tall_face() -> Face {
+    let (w, h) = Shape::Tall.size();
+    let scene = canvas("Transformer (tall)", |b, root| {
+        parts::fit_root(b, root, w, h);
+        let panel = parts::panel(b, root, "panel.brushed", "black", w, h, "none");
+        parts::repaint(b, panel, &[(0.0, "#434a53"), (0.5, "#323840"), (1.0, "#22272e")]);
+        for (x, y) in [(12.0, 12.0), (12.0, h - 12.0), (w - 12.0, 12.0), (w - 12.0, h - 12.0)] {
+            art::screw(b, panel, (x, y), 4.0, 30.0);
+        }
+
+        // ── Nameplate ──────────────────────────────────────────────────
+        parts::silk_left(b, panel, "Transformer", 30.0, 34.0, Ink::new(15.0, INK).weight(800.0).track(0.06));
+        parts::rule(b, panel, 30.0, 180.0, 47.0, 1.0, "#e8edf340");
+        parts::silk_left(b, panel, "Line output stage", 30.0, 60.0, Ink::new(6.8, DIM).weight(700.0).track(0.18));
+        parts::silk_left(b, panel, "Nickel · steel lamination", 30.0, 74.0, Ink::new(6.8, DIM).weight(700.0).track(0.18));
+        parts::lamp(b, panel, (38.0, 118.0), 8.0, "#ff4a36", true);
+        parts::silk_left(b, panel, "Power", 52.0, 118.0, Ink::new(6.5, DIM).weight(800.0).track(0.2));
+        super::emphasis_key(b, panel, "transformer", (138.0, 118.0), 60.0, "black", COPPER);
+
+        // ── The chassis and the output meters; or the emphasis EQ ─────
+        let pic = super::picture(b, panel, "transformer", (w, h));
+        chassis(b, pic, (206.0, 20.0));
+        let (mx, my) = (640.0, 26.0);
+        for (i, x) in [mx, mx + 22.0].into_iter().enumerate() {
+            parts::led_column(b, pic, if i == 0 { "Out L" } else { "Out R" }, &a("out"), i as u8, (x, my, 14.0, 120.0), 16, (-30.0, 6.0));
+        }
+        for (db, frac) in [("+6", 0.0), ("0", 6.0 / 36.0), ("-6", 12.0 / 36.0), ("-18", 24.0 / 36.0), ("-30", 1.0)] {
+            parts::silk_left(b, pic, db, mx + 42.0, my + 4.0 + frac * 112.0, Ink::new(6.0, DIM).weight(700.0).track(0.0));
+        }
+        parts::silk(b, pic, "Output", mx + 18.0, 160.0, Ink::new(6.5, DIM).weight(800.0).track(0.2));
+        super::emphasis_eq(b, panel, "transformer", (chassis_x(mx), 20.0, mx + 64.0 - chassis_x(mx), 150.0), COPPER);
+
+        // ── Knob row ───────────────────────────────────────────────────
+        parts::groove(b, panel, 24.0, w - 24.0, 186.0);
+        let row = 246.0;
+        let legend = Ink::new(8.0, INK).weight(800.0).track(0.14);
+        let value = Ink::new(7.5, DIM).weight(600.0).track(0.02).plain();
+        let scale = Ink::new(6.5, DIM).weight(700.0).track(0.0).plain();
+        let knobs: [(&str, &str, &str, f64, f64, &[(f64, &str)]); 7] = [
+            ("drive", "Drive", "red", 72.0, 64.0, parts::PCT_MARKS),
+            ("core", "Core", "grey", 174.0, 60.0, super::TRIM_MARKS),
+            ("bloom", "Low Bloom", "blue", 272.0, 54.0, super::TRIM_MARKS),
+            ("hysteresis", "Hysteresis", "blue", 364.0, 54.0, super::TRIM_MARKS),
+            ("sag", "Sag", "grey", 456.0, 54.0, super::TRIM_MARKS),
+            ("mix", "Mix", "grey", 572.0, 56.0, parts::PCT_MARKS),
+            ("output", "Output", "red", 682.0, 60.0, super::OUT_MARKS),
+        ];
+        for (addr, name, variant, x, d, marks) in knobs {
+            let k = parts::knob(b, panel, "knob.marconi", variant, &a(addr), name, (x, row), d);
+            let sweep = parts::sweep_of(b, k);
+            parts::marks(b, panel, (x, row), d / 2.0 + 7.0, sweep, marks, 21, scale);
+            parts::legend_at(b, k, name, 302.0, legend);
+            parts::value_at(b, k, 316.0, value);
+        }
+        parts::vgroove(b, panel, 514.0, 202.0, 314.0);
+    });
+    Face { file: Shape::Tall.file("03-transformer"), plugin: "saturate", scene, params: params(), streams: streams() }
 }

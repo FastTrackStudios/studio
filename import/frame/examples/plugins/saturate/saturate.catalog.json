@@ -163,6 +163,479 @@
       "featured": false
     },
     {
+      "addr": "tube/emphasis_view",
+      "name": "Emphasis View",
+      "short_name": "Emphasis",
+      "group": null,
+      "kind": "Toggle",
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 2
+      },
+      "default": 0.0,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "tube/emph/b1_shape",
+      "name": "Emph 1 Shape",
+      "short_name": "Shape",
+      "group": "Emphasis 1",
+      "kind": {
+        "Choice": {
+          "options": [
+            "Bell",
+            "Low Shelf",
+            "High Shelf"
+          ]
+        }
+      },
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 3
+      },
+      "default": 0.0,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "tube/emph/b1_freq",
+      "name": "Emph 1 Freq",
+      "short_name": "Freq",
+      "group": "Emphasis 1",
+      "kind": "Continuous",
+      "range": {
+        "min": 20.0,
+        "max": 20000.0,
+        "scale": "Logarithmic",
+        "unit": "Hz",
+        "steps": null
+      },
+      "default": 0.20068666377598746,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "tube/emph/b1_gain",
+      "name": "Emph 1 Gain",
+      "short_name": "Gain",
+      "group": "Emphasis 1",
+      "kind": "Continuous",
+      "range": {
+        "min": -12.0,
+        "max": 12.0,
+        "scale": "Linear",
+        "unit": "Db",
+        "steps": null
+      },
+      "default": 0.5,
+      "bipolar": true,
+      "featured": false
+    },
+    {
+      "addr": "tube/emph/b1_q",
+      "name": "Emph 1 Q",
+      "short_name": "Q",
+      "group": "Emphasis 1",
+      "kind": "Continuous",
+      "range": {
+        "min": 0.1,
+        "max": 18.0,
+        "scale": "Logarithmic",
+        "unit": "None",
+        "steps": null
+      },
+      "default": 0.3766371522176609,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "tube/emph/b2_shape",
+      "name": "Emph 2 Shape",
+      "short_name": "Shape",
+      "group": "Emphasis 2",
+      "kind": {
+        "Choice": {
+          "options": [
+            "Bell",
+            "Low Shelf",
+            "High Shelf"
+          ]
+        }
+      },
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 3
+      },
+      "default": 0.0,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "tube/emph/b2_freq",
+      "name": "Emph 2 Freq",
+      "short_name": "Freq",
+      "group": "Emphasis 2",
+      "kind": "Continuous",
+      "range": {
+        "min": 20.0,
+        "max": 20000.0,
+        "scale": "Logarithmic",
+        "unit": "Hz",
+        "steps": null
+      },
+      "default": 0.3656366710026855,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "tube/emph/b2_gain",
+      "name": "Emph 2 Gain",
+      "short_name": "Gain",
+      "group": "Emphasis 2",
+      "kind": "Continuous",
+      "range": {
+        "min": -12.0,
+        "max": 12.0,
+        "scale": "Linear",
+        "unit": "Db",
+        "steps": null
+      },
+      "default": 0.5,
+      "bipolar": true,
+      "featured": false
+    },
+    {
+      "addr": "tube/emph/b2_q",
+      "name": "Emph 2 Q",
+      "short_name": "Q",
+      "group": "Emphasis 2",
+      "kind": "Continuous",
+      "range": {
+        "min": 0.1,
+        "max": 18.0,
+        "scale": "Logarithmic",
+        "unit": "None",
+        "steps": null
+      },
+      "default": 0.3766371522176609,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "tube/emph/b3_shape",
+      "name": "Emph 3 Shape",
+      "short_name": "Shape",
+      "group": "Emphasis 3",
+      "kind": {
+        "Choice": {
+          "options": [
+            "Bell",
+            "Low Shelf",
+            "High Shelf"
+          ]
+        }
+      },
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 3
+      },
+      "default": 0.0,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "tube/emph/b3_freq",
+      "name": "Emph 3 Freq",
+      "short_name": "Freq",
+      "group": "Emphasis 3",
+      "kind": "Continuous",
+      "range": {
+        "min": 20.0,
+        "max": 20000.0,
+        "scale": "Logarithmic",
+        "unit": "Hz",
+        "steps": null
+      },
+      "default": 0.5146893481167586,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "tube/emph/b3_gain",
+      "name": "Emph 3 Gain",
+      "short_name": "Gain",
+      "group": "Emphasis 3",
+      "kind": "Continuous",
+      "range": {
+        "min": -12.0,
+        "max": 12.0,
+        "scale": "Linear",
+        "unit": "Db",
+        "steps": null
+      },
+      "default": 0.5,
+      "bipolar": true,
+      "featured": false
+    },
+    {
+      "addr": "tube/emph/b3_q",
+      "name": "Emph 3 Q",
+      "short_name": "Q",
+      "group": "Emphasis 3",
+      "kind": "Continuous",
+      "range": {
+        "min": 0.1,
+        "max": 18.0,
+        "scale": "Logarithmic",
+        "unit": "None",
+        "steps": null
+      },
+      "default": 0.3766371522176609,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "tube/emph/b4_shape",
+      "name": "Emph 4 Shape",
+      "short_name": "Shape",
+      "group": "Emphasis 4",
+      "kind": {
+        "Choice": {
+          "options": [
+            "Bell",
+            "Low Shelf",
+            "High Shelf"
+          ]
+        }
+      },
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 3
+      },
+      "default": 0.0,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "tube/emph/b4_freq",
+      "name": "Emph 4 Freq",
+      "short_name": "Freq",
+      "group": "Emphasis 4",
+      "kind": "Continuous",
+      "range": {
+        "min": 20.0,
+        "max": 20000.0,
+        "scale": "Logarithmic",
+        "unit": "Hz",
+        "steps": null
+      },
+      "default": 0.6514141698131083,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "tube/emph/b4_gain",
+      "name": "Emph 4 Gain",
+      "short_name": "Gain",
+      "group": "Emphasis 4",
+      "kind": "Continuous",
+      "range": {
+        "min": -12.0,
+        "max": 12.0,
+        "scale": "Linear",
+        "unit": "Db",
+        "steps": null
+      },
+      "default": 0.5,
+      "bipolar": true,
+      "featured": false
+    },
+    {
+      "addr": "tube/emph/b4_q",
+      "name": "Emph 4 Q",
+      "short_name": "Q",
+      "group": "Emphasis 4",
+      "kind": "Continuous",
+      "range": {
+        "min": 0.1,
+        "max": 18.0,
+        "scale": "Logarithmic",
+        "unit": "None",
+        "steps": null
+      },
+      "default": 0.3766371522176609,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "tube/emph/b5_shape",
+      "name": "Emph 5 Shape",
+      "short_name": "Shape",
+      "group": "Emphasis 5",
+      "kind": {
+        "Choice": {
+          "options": [
+            "Bell",
+            "Low Shelf",
+            "High Shelf"
+          ]
+        }
+      },
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 3
+      },
+      "default": 0.0,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "tube/emph/b5_freq",
+      "name": "Emph 5 Freq",
+      "short_name": "Freq",
+      "group": "Emphasis 5",
+      "kind": "Continuous",
+      "range": {
+        "min": 20.0,
+        "max": 20000.0,
+        "scale": "Logarithmic",
+        "unit": "Hz",
+        "steps": null
+      },
+      "default": 0.7840608393704542,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "tube/emph/b5_gain",
+      "name": "Emph 5 Gain",
+      "short_name": "Gain",
+      "group": "Emphasis 5",
+      "kind": "Continuous",
+      "range": {
+        "min": -12.0,
+        "max": 12.0,
+        "scale": "Linear",
+        "unit": "Db",
+        "steps": null
+      },
+      "default": 0.5,
+      "bipolar": true,
+      "featured": false
+    },
+    {
+      "addr": "tube/emph/b5_q",
+      "name": "Emph 5 Q",
+      "short_name": "Q",
+      "group": "Emphasis 5",
+      "kind": "Continuous",
+      "range": {
+        "min": 0.1,
+        "max": 18.0,
+        "scale": "Logarithmic",
+        "unit": "None",
+        "steps": null
+      },
+      "default": 0.3766371522176609,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "tube/emph/b6_shape",
+      "name": "Emph 6 Shape",
+      "short_name": "Shape",
+      "group": "Emphasis 6",
+      "kind": {
+        "Choice": {
+          "options": [
+            "Bell",
+            "Low Shelf",
+            "High Shelf"
+          ]
+        }
+      },
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 3
+      },
+      "default": 0.0,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "tube/emph/b6_freq",
+      "name": "Emph 6 Freq",
+      "short_name": "Freq",
+      "group": "Emphasis 6",
+      "kind": "Continuous",
+      "range": {
+        "min": 20.0,
+        "max": 20000.0,
+        "scale": "Logarithmic",
+        "unit": "Hz",
+        "steps": null
+      },
+      "default": 0.8996566681120063,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "tube/emph/b6_gain",
+      "name": "Emph 6 Gain",
+      "short_name": "Gain",
+      "group": "Emphasis 6",
+      "kind": "Continuous",
+      "range": {
+        "min": -12.0,
+        "max": 12.0,
+        "scale": "Linear",
+        "unit": "Db",
+        "steps": null
+      },
+      "default": 0.5,
+      "bipolar": true,
+      "featured": false
+    },
+    {
+      "addr": "tube/emph/b6_q",
+      "name": "Emph 6 Q",
+      "short_name": "Q",
+      "group": "Emphasis 6",
+      "kind": "Continuous",
+      "range": {
+        "min": 0.1,
+        "max": 18.0,
+        "scale": "Logarithmic",
+        "unit": "None",
+        "steps": null
+      },
+      "default": 0.3766371522176609,
+      "bipolar": false,
+      "featured": false
+    },
+    {
       "addr": "tape_sat/drive",
       "name": "Record Level",
       "short_name": null,
@@ -314,6 +787,479 @@
       "featured": false
     },
     {
+      "addr": "tape_sat/emphasis_view",
+      "name": "Emphasis View",
+      "short_name": "Emphasis",
+      "group": null,
+      "kind": "Toggle",
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 2
+      },
+      "default": 0.0,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "tape_sat/emph/b1_shape",
+      "name": "Emph 1 Shape",
+      "short_name": "Shape",
+      "group": "Emphasis 1",
+      "kind": {
+        "Choice": {
+          "options": [
+            "Bell",
+            "Low Shelf",
+            "High Shelf"
+          ]
+        }
+      },
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 3
+      },
+      "default": 0.0,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "tape_sat/emph/b1_freq",
+      "name": "Emph 1 Freq",
+      "short_name": "Freq",
+      "group": "Emphasis 1",
+      "kind": "Continuous",
+      "range": {
+        "min": 20.0,
+        "max": 20000.0,
+        "scale": "Logarithmic",
+        "unit": "Hz",
+        "steps": null
+      },
+      "default": 0.20068666377598746,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "tape_sat/emph/b1_gain",
+      "name": "Emph 1 Gain",
+      "short_name": "Gain",
+      "group": "Emphasis 1",
+      "kind": "Continuous",
+      "range": {
+        "min": -12.0,
+        "max": 12.0,
+        "scale": "Linear",
+        "unit": "Db",
+        "steps": null
+      },
+      "default": 0.5,
+      "bipolar": true,
+      "featured": false
+    },
+    {
+      "addr": "tape_sat/emph/b1_q",
+      "name": "Emph 1 Q",
+      "short_name": "Q",
+      "group": "Emphasis 1",
+      "kind": "Continuous",
+      "range": {
+        "min": 0.1,
+        "max": 18.0,
+        "scale": "Logarithmic",
+        "unit": "None",
+        "steps": null
+      },
+      "default": 0.3766371522176609,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "tape_sat/emph/b2_shape",
+      "name": "Emph 2 Shape",
+      "short_name": "Shape",
+      "group": "Emphasis 2",
+      "kind": {
+        "Choice": {
+          "options": [
+            "Bell",
+            "Low Shelf",
+            "High Shelf"
+          ]
+        }
+      },
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 3
+      },
+      "default": 0.0,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "tape_sat/emph/b2_freq",
+      "name": "Emph 2 Freq",
+      "short_name": "Freq",
+      "group": "Emphasis 2",
+      "kind": "Continuous",
+      "range": {
+        "min": 20.0,
+        "max": 20000.0,
+        "scale": "Logarithmic",
+        "unit": "Hz",
+        "steps": null
+      },
+      "default": 0.3656366710026855,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "tape_sat/emph/b2_gain",
+      "name": "Emph 2 Gain",
+      "short_name": "Gain",
+      "group": "Emphasis 2",
+      "kind": "Continuous",
+      "range": {
+        "min": -12.0,
+        "max": 12.0,
+        "scale": "Linear",
+        "unit": "Db",
+        "steps": null
+      },
+      "default": 0.5,
+      "bipolar": true,
+      "featured": false
+    },
+    {
+      "addr": "tape_sat/emph/b2_q",
+      "name": "Emph 2 Q",
+      "short_name": "Q",
+      "group": "Emphasis 2",
+      "kind": "Continuous",
+      "range": {
+        "min": 0.1,
+        "max": 18.0,
+        "scale": "Logarithmic",
+        "unit": "None",
+        "steps": null
+      },
+      "default": 0.3766371522176609,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "tape_sat/emph/b3_shape",
+      "name": "Emph 3 Shape",
+      "short_name": "Shape",
+      "group": "Emphasis 3",
+      "kind": {
+        "Choice": {
+          "options": [
+            "Bell",
+            "Low Shelf",
+            "High Shelf"
+          ]
+        }
+      },
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 3
+      },
+      "default": 0.0,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "tape_sat/emph/b3_freq",
+      "name": "Emph 3 Freq",
+      "short_name": "Freq",
+      "group": "Emphasis 3",
+      "kind": "Continuous",
+      "range": {
+        "min": 20.0,
+        "max": 20000.0,
+        "scale": "Logarithmic",
+        "unit": "Hz",
+        "steps": null
+      },
+      "default": 0.5146893481167586,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "tape_sat/emph/b3_gain",
+      "name": "Emph 3 Gain",
+      "short_name": "Gain",
+      "group": "Emphasis 3",
+      "kind": "Continuous",
+      "range": {
+        "min": -12.0,
+        "max": 12.0,
+        "scale": "Linear",
+        "unit": "Db",
+        "steps": null
+      },
+      "default": 0.5,
+      "bipolar": true,
+      "featured": false
+    },
+    {
+      "addr": "tape_sat/emph/b3_q",
+      "name": "Emph 3 Q",
+      "short_name": "Q",
+      "group": "Emphasis 3",
+      "kind": "Continuous",
+      "range": {
+        "min": 0.1,
+        "max": 18.0,
+        "scale": "Logarithmic",
+        "unit": "None",
+        "steps": null
+      },
+      "default": 0.3766371522176609,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "tape_sat/emph/b4_shape",
+      "name": "Emph 4 Shape",
+      "short_name": "Shape",
+      "group": "Emphasis 4",
+      "kind": {
+        "Choice": {
+          "options": [
+            "Bell",
+            "Low Shelf",
+            "High Shelf"
+          ]
+        }
+      },
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 3
+      },
+      "default": 0.0,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "tape_sat/emph/b4_freq",
+      "name": "Emph 4 Freq",
+      "short_name": "Freq",
+      "group": "Emphasis 4",
+      "kind": "Continuous",
+      "range": {
+        "min": 20.0,
+        "max": 20000.0,
+        "scale": "Logarithmic",
+        "unit": "Hz",
+        "steps": null
+      },
+      "default": 0.6514141698131083,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "tape_sat/emph/b4_gain",
+      "name": "Emph 4 Gain",
+      "short_name": "Gain",
+      "group": "Emphasis 4",
+      "kind": "Continuous",
+      "range": {
+        "min": -12.0,
+        "max": 12.0,
+        "scale": "Linear",
+        "unit": "Db",
+        "steps": null
+      },
+      "default": 0.5,
+      "bipolar": true,
+      "featured": false
+    },
+    {
+      "addr": "tape_sat/emph/b4_q",
+      "name": "Emph 4 Q",
+      "short_name": "Q",
+      "group": "Emphasis 4",
+      "kind": "Continuous",
+      "range": {
+        "min": 0.1,
+        "max": 18.0,
+        "scale": "Logarithmic",
+        "unit": "None",
+        "steps": null
+      },
+      "default": 0.3766371522176609,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "tape_sat/emph/b5_shape",
+      "name": "Emph 5 Shape",
+      "short_name": "Shape",
+      "group": "Emphasis 5",
+      "kind": {
+        "Choice": {
+          "options": [
+            "Bell",
+            "Low Shelf",
+            "High Shelf"
+          ]
+        }
+      },
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 3
+      },
+      "default": 0.0,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "tape_sat/emph/b5_freq",
+      "name": "Emph 5 Freq",
+      "short_name": "Freq",
+      "group": "Emphasis 5",
+      "kind": "Continuous",
+      "range": {
+        "min": 20.0,
+        "max": 20000.0,
+        "scale": "Logarithmic",
+        "unit": "Hz",
+        "steps": null
+      },
+      "default": 0.7840608393704542,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "tape_sat/emph/b5_gain",
+      "name": "Emph 5 Gain",
+      "short_name": "Gain",
+      "group": "Emphasis 5",
+      "kind": "Continuous",
+      "range": {
+        "min": -12.0,
+        "max": 12.0,
+        "scale": "Linear",
+        "unit": "Db",
+        "steps": null
+      },
+      "default": 0.5,
+      "bipolar": true,
+      "featured": false
+    },
+    {
+      "addr": "tape_sat/emph/b5_q",
+      "name": "Emph 5 Q",
+      "short_name": "Q",
+      "group": "Emphasis 5",
+      "kind": "Continuous",
+      "range": {
+        "min": 0.1,
+        "max": 18.0,
+        "scale": "Logarithmic",
+        "unit": "None",
+        "steps": null
+      },
+      "default": 0.3766371522176609,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "tape_sat/emph/b6_shape",
+      "name": "Emph 6 Shape",
+      "short_name": "Shape",
+      "group": "Emphasis 6",
+      "kind": {
+        "Choice": {
+          "options": [
+            "Bell",
+            "Low Shelf",
+            "High Shelf"
+          ]
+        }
+      },
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 3
+      },
+      "default": 0.0,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "tape_sat/emph/b6_freq",
+      "name": "Emph 6 Freq",
+      "short_name": "Freq",
+      "group": "Emphasis 6",
+      "kind": "Continuous",
+      "range": {
+        "min": 20.0,
+        "max": 20000.0,
+        "scale": "Logarithmic",
+        "unit": "Hz",
+        "steps": null
+      },
+      "default": 0.8996566681120063,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "tape_sat/emph/b6_gain",
+      "name": "Emph 6 Gain",
+      "short_name": "Gain",
+      "group": "Emphasis 6",
+      "kind": "Continuous",
+      "range": {
+        "min": -12.0,
+        "max": 12.0,
+        "scale": "Linear",
+        "unit": "Db",
+        "steps": null
+      },
+      "default": 0.5,
+      "bipolar": true,
+      "featured": false
+    },
+    {
+      "addr": "tape_sat/emph/b6_q",
+      "name": "Emph 6 Q",
+      "short_name": "Q",
+      "group": "Emphasis 6",
+      "kind": "Continuous",
+      "range": {
+        "min": 0.1,
+        "max": 18.0,
+        "scale": "Logarithmic",
+        "unit": "None",
+        "steps": null
+      },
+      "default": 0.3766371522176609,
+      "bipolar": false,
+      "featured": false
+    },
+    {
       "addr": "transformer/drive",
       "name": "Drive",
       "short_name": null,
@@ -431,6 +1377,479 @@
       "default": 0.6666666666666666,
       "bipolar": true,
       "featured": true
+    },
+    {
+      "addr": "transformer/emphasis_view",
+      "name": "Emphasis View",
+      "short_name": "Emphasis",
+      "group": null,
+      "kind": "Toggle",
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 2
+      },
+      "default": 0.0,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "transformer/emph/b1_shape",
+      "name": "Emph 1 Shape",
+      "short_name": "Shape",
+      "group": "Emphasis 1",
+      "kind": {
+        "Choice": {
+          "options": [
+            "Bell",
+            "Low Shelf",
+            "High Shelf"
+          ]
+        }
+      },
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 3
+      },
+      "default": 0.0,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "transformer/emph/b1_freq",
+      "name": "Emph 1 Freq",
+      "short_name": "Freq",
+      "group": "Emphasis 1",
+      "kind": "Continuous",
+      "range": {
+        "min": 20.0,
+        "max": 20000.0,
+        "scale": "Logarithmic",
+        "unit": "Hz",
+        "steps": null
+      },
+      "default": 0.20068666377598746,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "transformer/emph/b1_gain",
+      "name": "Emph 1 Gain",
+      "short_name": "Gain",
+      "group": "Emphasis 1",
+      "kind": "Continuous",
+      "range": {
+        "min": -12.0,
+        "max": 12.0,
+        "scale": "Linear",
+        "unit": "Db",
+        "steps": null
+      },
+      "default": 0.5,
+      "bipolar": true,
+      "featured": false
+    },
+    {
+      "addr": "transformer/emph/b1_q",
+      "name": "Emph 1 Q",
+      "short_name": "Q",
+      "group": "Emphasis 1",
+      "kind": "Continuous",
+      "range": {
+        "min": 0.1,
+        "max": 18.0,
+        "scale": "Logarithmic",
+        "unit": "None",
+        "steps": null
+      },
+      "default": 0.3766371522176609,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "transformer/emph/b2_shape",
+      "name": "Emph 2 Shape",
+      "short_name": "Shape",
+      "group": "Emphasis 2",
+      "kind": {
+        "Choice": {
+          "options": [
+            "Bell",
+            "Low Shelf",
+            "High Shelf"
+          ]
+        }
+      },
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 3
+      },
+      "default": 0.0,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "transformer/emph/b2_freq",
+      "name": "Emph 2 Freq",
+      "short_name": "Freq",
+      "group": "Emphasis 2",
+      "kind": "Continuous",
+      "range": {
+        "min": 20.0,
+        "max": 20000.0,
+        "scale": "Logarithmic",
+        "unit": "Hz",
+        "steps": null
+      },
+      "default": 0.3656366710026855,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "transformer/emph/b2_gain",
+      "name": "Emph 2 Gain",
+      "short_name": "Gain",
+      "group": "Emphasis 2",
+      "kind": "Continuous",
+      "range": {
+        "min": -12.0,
+        "max": 12.0,
+        "scale": "Linear",
+        "unit": "Db",
+        "steps": null
+      },
+      "default": 0.5,
+      "bipolar": true,
+      "featured": false
+    },
+    {
+      "addr": "transformer/emph/b2_q",
+      "name": "Emph 2 Q",
+      "short_name": "Q",
+      "group": "Emphasis 2",
+      "kind": "Continuous",
+      "range": {
+        "min": 0.1,
+        "max": 18.0,
+        "scale": "Logarithmic",
+        "unit": "None",
+        "steps": null
+      },
+      "default": 0.3766371522176609,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "transformer/emph/b3_shape",
+      "name": "Emph 3 Shape",
+      "short_name": "Shape",
+      "group": "Emphasis 3",
+      "kind": {
+        "Choice": {
+          "options": [
+            "Bell",
+            "Low Shelf",
+            "High Shelf"
+          ]
+        }
+      },
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 3
+      },
+      "default": 0.0,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "transformer/emph/b3_freq",
+      "name": "Emph 3 Freq",
+      "short_name": "Freq",
+      "group": "Emphasis 3",
+      "kind": "Continuous",
+      "range": {
+        "min": 20.0,
+        "max": 20000.0,
+        "scale": "Logarithmic",
+        "unit": "Hz",
+        "steps": null
+      },
+      "default": 0.5146893481167586,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "transformer/emph/b3_gain",
+      "name": "Emph 3 Gain",
+      "short_name": "Gain",
+      "group": "Emphasis 3",
+      "kind": "Continuous",
+      "range": {
+        "min": -12.0,
+        "max": 12.0,
+        "scale": "Linear",
+        "unit": "Db",
+        "steps": null
+      },
+      "default": 0.5,
+      "bipolar": true,
+      "featured": false
+    },
+    {
+      "addr": "transformer/emph/b3_q",
+      "name": "Emph 3 Q",
+      "short_name": "Q",
+      "group": "Emphasis 3",
+      "kind": "Continuous",
+      "range": {
+        "min": 0.1,
+        "max": 18.0,
+        "scale": "Logarithmic",
+        "unit": "None",
+        "steps": null
+      },
+      "default": 0.3766371522176609,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "transformer/emph/b4_shape",
+      "name": "Emph 4 Shape",
+      "short_name": "Shape",
+      "group": "Emphasis 4",
+      "kind": {
+        "Choice": {
+          "options": [
+            "Bell",
+            "Low Shelf",
+            "High Shelf"
+          ]
+        }
+      },
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 3
+      },
+      "default": 0.0,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "transformer/emph/b4_freq",
+      "name": "Emph 4 Freq",
+      "short_name": "Freq",
+      "group": "Emphasis 4",
+      "kind": "Continuous",
+      "range": {
+        "min": 20.0,
+        "max": 20000.0,
+        "scale": "Logarithmic",
+        "unit": "Hz",
+        "steps": null
+      },
+      "default": 0.6514141698131083,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "transformer/emph/b4_gain",
+      "name": "Emph 4 Gain",
+      "short_name": "Gain",
+      "group": "Emphasis 4",
+      "kind": "Continuous",
+      "range": {
+        "min": -12.0,
+        "max": 12.0,
+        "scale": "Linear",
+        "unit": "Db",
+        "steps": null
+      },
+      "default": 0.5,
+      "bipolar": true,
+      "featured": false
+    },
+    {
+      "addr": "transformer/emph/b4_q",
+      "name": "Emph 4 Q",
+      "short_name": "Q",
+      "group": "Emphasis 4",
+      "kind": "Continuous",
+      "range": {
+        "min": 0.1,
+        "max": 18.0,
+        "scale": "Logarithmic",
+        "unit": "None",
+        "steps": null
+      },
+      "default": 0.3766371522176609,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "transformer/emph/b5_shape",
+      "name": "Emph 5 Shape",
+      "short_name": "Shape",
+      "group": "Emphasis 5",
+      "kind": {
+        "Choice": {
+          "options": [
+            "Bell",
+            "Low Shelf",
+            "High Shelf"
+          ]
+        }
+      },
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 3
+      },
+      "default": 0.0,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "transformer/emph/b5_freq",
+      "name": "Emph 5 Freq",
+      "short_name": "Freq",
+      "group": "Emphasis 5",
+      "kind": "Continuous",
+      "range": {
+        "min": 20.0,
+        "max": 20000.0,
+        "scale": "Logarithmic",
+        "unit": "Hz",
+        "steps": null
+      },
+      "default": 0.7840608393704542,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "transformer/emph/b5_gain",
+      "name": "Emph 5 Gain",
+      "short_name": "Gain",
+      "group": "Emphasis 5",
+      "kind": "Continuous",
+      "range": {
+        "min": -12.0,
+        "max": 12.0,
+        "scale": "Linear",
+        "unit": "Db",
+        "steps": null
+      },
+      "default": 0.5,
+      "bipolar": true,
+      "featured": false
+    },
+    {
+      "addr": "transformer/emph/b5_q",
+      "name": "Emph 5 Q",
+      "short_name": "Q",
+      "group": "Emphasis 5",
+      "kind": "Continuous",
+      "range": {
+        "min": 0.1,
+        "max": 18.0,
+        "scale": "Logarithmic",
+        "unit": "None",
+        "steps": null
+      },
+      "default": 0.3766371522176609,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "transformer/emph/b6_shape",
+      "name": "Emph 6 Shape",
+      "short_name": "Shape",
+      "group": "Emphasis 6",
+      "kind": {
+        "Choice": {
+          "options": [
+            "Bell",
+            "Low Shelf",
+            "High Shelf"
+          ]
+        }
+      },
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 3
+      },
+      "default": 0.0,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "transformer/emph/b6_freq",
+      "name": "Emph 6 Freq",
+      "short_name": "Freq",
+      "group": "Emphasis 6",
+      "kind": "Continuous",
+      "range": {
+        "min": 20.0,
+        "max": 20000.0,
+        "scale": "Logarithmic",
+        "unit": "Hz",
+        "steps": null
+      },
+      "default": 0.8996566681120063,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "transformer/emph/b6_gain",
+      "name": "Emph 6 Gain",
+      "short_name": "Gain",
+      "group": "Emphasis 6",
+      "kind": "Continuous",
+      "range": {
+        "min": -12.0,
+        "max": 12.0,
+        "scale": "Linear",
+        "unit": "Db",
+        "steps": null
+      },
+      "default": 0.5,
+      "bipolar": true,
+      "featured": false
+    },
+    {
+      "addr": "transformer/emph/b6_q",
+      "name": "Emph 6 Q",
+      "short_name": "Q",
+      "group": "Emphasis 6",
+      "kind": "Continuous",
+      "range": {
+        "min": 0.1,
+        "max": 18.0,
+        "scale": "Logarithmic",
+        "unit": "None",
+        "steps": null
+      },
+      "default": 0.3766371522176609,
+      "bipolar": false,
+      "featured": false
     },
     {
       "addr": "transistor/drive",
@@ -584,6 +2003,479 @@
       "default": 1.0,
       "bipolar": false,
       "featured": true
+    },
+    {
+      "addr": "transistor/emphasis_view",
+      "name": "Emphasis View",
+      "short_name": "Emphasis",
+      "group": null,
+      "kind": "Toggle",
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 2
+      },
+      "default": 0.0,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "transistor/emph/b1_shape",
+      "name": "Emph 1 Shape",
+      "short_name": "Shape",
+      "group": "Emphasis 1",
+      "kind": {
+        "Choice": {
+          "options": [
+            "Bell",
+            "Low Shelf",
+            "High Shelf"
+          ]
+        }
+      },
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 3
+      },
+      "default": 0.0,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "transistor/emph/b1_freq",
+      "name": "Emph 1 Freq",
+      "short_name": "Freq",
+      "group": "Emphasis 1",
+      "kind": "Continuous",
+      "range": {
+        "min": 20.0,
+        "max": 20000.0,
+        "scale": "Logarithmic",
+        "unit": "Hz",
+        "steps": null
+      },
+      "default": 0.20068666377598746,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "transistor/emph/b1_gain",
+      "name": "Emph 1 Gain",
+      "short_name": "Gain",
+      "group": "Emphasis 1",
+      "kind": "Continuous",
+      "range": {
+        "min": -12.0,
+        "max": 12.0,
+        "scale": "Linear",
+        "unit": "Db",
+        "steps": null
+      },
+      "default": 0.5,
+      "bipolar": true,
+      "featured": false
+    },
+    {
+      "addr": "transistor/emph/b1_q",
+      "name": "Emph 1 Q",
+      "short_name": "Q",
+      "group": "Emphasis 1",
+      "kind": "Continuous",
+      "range": {
+        "min": 0.1,
+        "max": 18.0,
+        "scale": "Logarithmic",
+        "unit": "None",
+        "steps": null
+      },
+      "default": 0.3766371522176609,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "transistor/emph/b2_shape",
+      "name": "Emph 2 Shape",
+      "short_name": "Shape",
+      "group": "Emphasis 2",
+      "kind": {
+        "Choice": {
+          "options": [
+            "Bell",
+            "Low Shelf",
+            "High Shelf"
+          ]
+        }
+      },
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 3
+      },
+      "default": 0.0,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "transistor/emph/b2_freq",
+      "name": "Emph 2 Freq",
+      "short_name": "Freq",
+      "group": "Emphasis 2",
+      "kind": "Continuous",
+      "range": {
+        "min": 20.0,
+        "max": 20000.0,
+        "scale": "Logarithmic",
+        "unit": "Hz",
+        "steps": null
+      },
+      "default": 0.3656366710026855,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "transistor/emph/b2_gain",
+      "name": "Emph 2 Gain",
+      "short_name": "Gain",
+      "group": "Emphasis 2",
+      "kind": "Continuous",
+      "range": {
+        "min": -12.0,
+        "max": 12.0,
+        "scale": "Linear",
+        "unit": "Db",
+        "steps": null
+      },
+      "default": 0.5,
+      "bipolar": true,
+      "featured": false
+    },
+    {
+      "addr": "transistor/emph/b2_q",
+      "name": "Emph 2 Q",
+      "short_name": "Q",
+      "group": "Emphasis 2",
+      "kind": "Continuous",
+      "range": {
+        "min": 0.1,
+        "max": 18.0,
+        "scale": "Logarithmic",
+        "unit": "None",
+        "steps": null
+      },
+      "default": 0.3766371522176609,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "transistor/emph/b3_shape",
+      "name": "Emph 3 Shape",
+      "short_name": "Shape",
+      "group": "Emphasis 3",
+      "kind": {
+        "Choice": {
+          "options": [
+            "Bell",
+            "Low Shelf",
+            "High Shelf"
+          ]
+        }
+      },
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 3
+      },
+      "default": 0.0,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "transistor/emph/b3_freq",
+      "name": "Emph 3 Freq",
+      "short_name": "Freq",
+      "group": "Emphasis 3",
+      "kind": "Continuous",
+      "range": {
+        "min": 20.0,
+        "max": 20000.0,
+        "scale": "Logarithmic",
+        "unit": "Hz",
+        "steps": null
+      },
+      "default": 0.5146893481167586,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "transistor/emph/b3_gain",
+      "name": "Emph 3 Gain",
+      "short_name": "Gain",
+      "group": "Emphasis 3",
+      "kind": "Continuous",
+      "range": {
+        "min": -12.0,
+        "max": 12.0,
+        "scale": "Linear",
+        "unit": "Db",
+        "steps": null
+      },
+      "default": 0.5,
+      "bipolar": true,
+      "featured": false
+    },
+    {
+      "addr": "transistor/emph/b3_q",
+      "name": "Emph 3 Q",
+      "short_name": "Q",
+      "group": "Emphasis 3",
+      "kind": "Continuous",
+      "range": {
+        "min": 0.1,
+        "max": 18.0,
+        "scale": "Logarithmic",
+        "unit": "None",
+        "steps": null
+      },
+      "default": 0.3766371522176609,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "transistor/emph/b4_shape",
+      "name": "Emph 4 Shape",
+      "short_name": "Shape",
+      "group": "Emphasis 4",
+      "kind": {
+        "Choice": {
+          "options": [
+            "Bell",
+            "Low Shelf",
+            "High Shelf"
+          ]
+        }
+      },
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 3
+      },
+      "default": 0.0,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "transistor/emph/b4_freq",
+      "name": "Emph 4 Freq",
+      "short_name": "Freq",
+      "group": "Emphasis 4",
+      "kind": "Continuous",
+      "range": {
+        "min": 20.0,
+        "max": 20000.0,
+        "scale": "Logarithmic",
+        "unit": "Hz",
+        "steps": null
+      },
+      "default": 0.6514141698131083,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "transistor/emph/b4_gain",
+      "name": "Emph 4 Gain",
+      "short_name": "Gain",
+      "group": "Emphasis 4",
+      "kind": "Continuous",
+      "range": {
+        "min": -12.0,
+        "max": 12.0,
+        "scale": "Linear",
+        "unit": "Db",
+        "steps": null
+      },
+      "default": 0.5,
+      "bipolar": true,
+      "featured": false
+    },
+    {
+      "addr": "transistor/emph/b4_q",
+      "name": "Emph 4 Q",
+      "short_name": "Q",
+      "group": "Emphasis 4",
+      "kind": "Continuous",
+      "range": {
+        "min": 0.1,
+        "max": 18.0,
+        "scale": "Logarithmic",
+        "unit": "None",
+        "steps": null
+      },
+      "default": 0.3766371522176609,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "transistor/emph/b5_shape",
+      "name": "Emph 5 Shape",
+      "short_name": "Shape",
+      "group": "Emphasis 5",
+      "kind": {
+        "Choice": {
+          "options": [
+            "Bell",
+            "Low Shelf",
+            "High Shelf"
+          ]
+        }
+      },
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 3
+      },
+      "default": 0.0,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "transistor/emph/b5_freq",
+      "name": "Emph 5 Freq",
+      "short_name": "Freq",
+      "group": "Emphasis 5",
+      "kind": "Continuous",
+      "range": {
+        "min": 20.0,
+        "max": 20000.0,
+        "scale": "Logarithmic",
+        "unit": "Hz",
+        "steps": null
+      },
+      "default": 0.7840608393704542,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "transistor/emph/b5_gain",
+      "name": "Emph 5 Gain",
+      "short_name": "Gain",
+      "group": "Emphasis 5",
+      "kind": "Continuous",
+      "range": {
+        "min": -12.0,
+        "max": 12.0,
+        "scale": "Linear",
+        "unit": "Db",
+        "steps": null
+      },
+      "default": 0.5,
+      "bipolar": true,
+      "featured": false
+    },
+    {
+      "addr": "transistor/emph/b5_q",
+      "name": "Emph 5 Q",
+      "short_name": "Q",
+      "group": "Emphasis 5",
+      "kind": "Continuous",
+      "range": {
+        "min": 0.1,
+        "max": 18.0,
+        "scale": "Logarithmic",
+        "unit": "None",
+        "steps": null
+      },
+      "default": 0.3766371522176609,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "transistor/emph/b6_shape",
+      "name": "Emph 6 Shape",
+      "short_name": "Shape",
+      "group": "Emphasis 6",
+      "kind": {
+        "Choice": {
+          "options": [
+            "Bell",
+            "Low Shelf",
+            "High Shelf"
+          ]
+        }
+      },
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 3
+      },
+      "default": 0.0,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "transistor/emph/b6_freq",
+      "name": "Emph 6 Freq",
+      "short_name": "Freq",
+      "group": "Emphasis 6",
+      "kind": "Continuous",
+      "range": {
+        "min": 20.0,
+        "max": 20000.0,
+        "scale": "Logarithmic",
+        "unit": "Hz",
+        "steps": null
+      },
+      "default": 0.8996566681120063,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "transistor/emph/b6_gain",
+      "name": "Emph 6 Gain",
+      "short_name": "Gain",
+      "group": "Emphasis 6",
+      "kind": "Continuous",
+      "range": {
+        "min": -12.0,
+        "max": 12.0,
+        "scale": "Linear",
+        "unit": "Db",
+        "steps": null
+      },
+      "default": 0.5,
+      "bipolar": true,
+      "featured": false
+    },
+    {
+      "addr": "transistor/emph/b6_q",
+      "name": "Emph 6 Q",
+      "short_name": "Q",
+      "group": "Emphasis 6",
+      "kind": "Continuous",
+      "range": {
+        "min": 0.1,
+        "max": 18.0,
+        "scale": "Logarithmic",
+        "unit": "None",
+        "steps": null
+      },
+      "default": 0.3766371522176609,
+      "bipolar": false,
+      "featured": false
     },
     {
       "addr": "digital_sat/drive",
@@ -763,6 +2655,479 @@
         "steps": 2
       },
       "default": 0.0,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "digital_sat/emphasis_view",
+      "name": "Emphasis View",
+      "short_name": "Emphasis",
+      "group": null,
+      "kind": "Toggle",
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 2
+      },
+      "default": 0.0,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "digital_sat/emph/b1_shape",
+      "name": "Emph 1 Shape",
+      "short_name": "Shape",
+      "group": "Emphasis 1",
+      "kind": {
+        "Choice": {
+          "options": [
+            "Bell",
+            "Low Shelf",
+            "High Shelf"
+          ]
+        }
+      },
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 3
+      },
+      "default": 0.0,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "digital_sat/emph/b1_freq",
+      "name": "Emph 1 Freq",
+      "short_name": "Freq",
+      "group": "Emphasis 1",
+      "kind": "Continuous",
+      "range": {
+        "min": 20.0,
+        "max": 20000.0,
+        "scale": "Logarithmic",
+        "unit": "Hz",
+        "steps": null
+      },
+      "default": 0.20068666377598746,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "digital_sat/emph/b1_gain",
+      "name": "Emph 1 Gain",
+      "short_name": "Gain",
+      "group": "Emphasis 1",
+      "kind": "Continuous",
+      "range": {
+        "min": -12.0,
+        "max": 12.0,
+        "scale": "Linear",
+        "unit": "Db",
+        "steps": null
+      },
+      "default": 0.5,
+      "bipolar": true,
+      "featured": false
+    },
+    {
+      "addr": "digital_sat/emph/b1_q",
+      "name": "Emph 1 Q",
+      "short_name": "Q",
+      "group": "Emphasis 1",
+      "kind": "Continuous",
+      "range": {
+        "min": 0.1,
+        "max": 18.0,
+        "scale": "Logarithmic",
+        "unit": "None",
+        "steps": null
+      },
+      "default": 0.3766371522176609,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "digital_sat/emph/b2_shape",
+      "name": "Emph 2 Shape",
+      "short_name": "Shape",
+      "group": "Emphasis 2",
+      "kind": {
+        "Choice": {
+          "options": [
+            "Bell",
+            "Low Shelf",
+            "High Shelf"
+          ]
+        }
+      },
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 3
+      },
+      "default": 0.0,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "digital_sat/emph/b2_freq",
+      "name": "Emph 2 Freq",
+      "short_name": "Freq",
+      "group": "Emphasis 2",
+      "kind": "Continuous",
+      "range": {
+        "min": 20.0,
+        "max": 20000.0,
+        "scale": "Logarithmic",
+        "unit": "Hz",
+        "steps": null
+      },
+      "default": 0.3656366710026855,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "digital_sat/emph/b2_gain",
+      "name": "Emph 2 Gain",
+      "short_name": "Gain",
+      "group": "Emphasis 2",
+      "kind": "Continuous",
+      "range": {
+        "min": -12.0,
+        "max": 12.0,
+        "scale": "Linear",
+        "unit": "Db",
+        "steps": null
+      },
+      "default": 0.5,
+      "bipolar": true,
+      "featured": false
+    },
+    {
+      "addr": "digital_sat/emph/b2_q",
+      "name": "Emph 2 Q",
+      "short_name": "Q",
+      "group": "Emphasis 2",
+      "kind": "Continuous",
+      "range": {
+        "min": 0.1,
+        "max": 18.0,
+        "scale": "Logarithmic",
+        "unit": "None",
+        "steps": null
+      },
+      "default": 0.3766371522176609,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "digital_sat/emph/b3_shape",
+      "name": "Emph 3 Shape",
+      "short_name": "Shape",
+      "group": "Emphasis 3",
+      "kind": {
+        "Choice": {
+          "options": [
+            "Bell",
+            "Low Shelf",
+            "High Shelf"
+          ]
+        }
+      },
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 3
+      },
+      "default": 0.0,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "digital_sat/emph/b3_freq",
+      "name": "Emph 3 Freq",
+      "short_name": "Freq",
+      "group": "Emphasis 3",
+      "kind": "Continuous",
+      "range": {
+        "min": 20.0,
+        "max": 20000.0,
+        "scale": "Logarithmic",
+        "unit": "Hz",
+        "steps": null
+      },
+      "default": 0.5146893481167586,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "digital_sat/emph/b3_gain",
+      "name": "Emph 3 Gain",
+      "short_name": "Gain",
+      "group": "Emphasis 3",
+      "kind": "Continuous",
+      "range": {
+        "min": -12.0,
+        "max": 12.0,
+        "scale": "Linear",
+        "unit": "Db",
+        "steps": null
+      },
+      "default": 0.5,
+      "bipolar": true,
+      "featured": false
+    },
+    {
+      "addr": "digital_sat/emph/b3_q",
+      "name": "Emph 3 Q",
+      "short_name": "Q",
+      "group": "Emphasis 3",
+      "kind": "Continuous",
+      "range": {
+        "min": 0.1,
+        "max": 18.0,
+        "scale": "Logarithmic",
+        "unit": "None",
+        "steps": null
+      },
+      "default": 0.3766371522176609,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "digital_sat/emph/b4_shape",
+      "name": "Emph 4 Shape",
+      "short_name": "Shape",
+      "group": "Emphasis 4",
+      "kind": {
+        "Choice": {
+          "options": [
+            "Bell",
+            "Low Shelf",
+            "High Shelf"
+          ]
+        }
+      },
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 3
+      },
+      "default": 0.0,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "digital_sat/emph/b4_freq",
+      "name": "Emph 4 Freq",
+      "short_name": "Freq",
+      "group": "Emphasis 4",
+      "kind": "Continuous",
+      "range": {
+        "min": 20.0,
+        "max": 20000.0,
+        "scale": "Logarithmic",
+        "unit": "Hz",
+        "steps": null
+      },
+      "default": 0.6514141698131083,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "digital_sat/emph/b4_gain",
+      "name": "Emph 4 Gain",
+      "short_name": "Gain",
+      "group": "Emphasis 4",
+      "kind": "Continuous",
+      "range": {
+        "min": -12.0,
+        "max": 12.0,
+        "scale": "Linear",
+        "unit": "Db",
+        "steps": null
+      },
+      "default": 0.5,
+      "bipolar": true,
+      "featured": false
+    },
+    {
+      "addr": "digital_sat/emph/b4_q",
+      "name": "Emph 4 Q",
+      "short_name": "Q",
+      "group": "Emphasis 4",
+      "kind": "Continuous",
+      "range": {
+        "min": 0.1,
+        "max": 18.0,
+        "scale": "Logarithmic",
+        "unit": "None",
+        "steps": null
+      },
+      "default": 0.3766371522176609,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "digital_sat/emph/b5_shape",
+      "name": "Emph 5 Shape",
+      "short_name": "Shape",
+      "group": "Emphasis 5",
+      "kind": {
+        "Choice": {
+          "options": [
+            "Bell",
+            "Low Shelf",
+            "High Shelf"
+          ]
+        }
+      },
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 3
+      },
+      "default": 0.0,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "digital_sat/emph/b5_freq",
+      "name": "Emph 5 Freq",
+      "short_name": "Freq",
+      "group": "Emphasis 5",
+      "kind": "Continuous",
+      "range": {
+        "min": 20.0,
+        "max": 20000.0,
+        "scale": "Logarithmic",
+        "unit": "Hz",
+        "steps": null
+      },
+      "default": 0.7840608393704542,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "digital_sat/emph/b5_gain",
+      "name": "Emph 5 Gain",
+      "short_name": "Gain",
+      "group": "Emphasis 5",
+      "kind": "Continuous",
+      "range": {
+        "min": -12.0,
+        "max": 12.0,
+        "scale": "Linear",
+        "unit": "Db",
+        "steps": null
+      },
+      "default": 0.5,
+      "bipolar": true,
+      "featured": false
+    },
+    {
+      "addr": "digital_sat/emph/b5_q",
+      "name": "Emph 5 Q",
+      "short_name": "Q",
+      "group": "Emphasis 5",
+      "kind": "Continuous",
+      "range": {
+        "min": 0.1,
+        "max": 18.0,
+        "scale": "Logarithmic",
+        "unit": "None",
+        "steps": null
+      },
+      "default": 0.3766371522176609,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "digital_sat/emph/b6_shape",
+      "name": "Emph 6 Shape",
+      "short_name": "Shape",
+      "group": "Emphasis 6",
+      "kind": {
+        "Choice": {
+          "options": [
+            "Bell",
+            "Low Shelf",
+            "High Shelf"
+          ]
+        }
+      },
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 3
+      },
+      "default": 0.0,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "digital_sat/emph/b6_freq",
+      "name": "Emph 6 Freq",
+      "short_name": "Freq",
+      "group": "Emphasis 6",
+      "kind": "Continuous",
+      "range": {
+        "min": 20.0,
+        "max": 20000.0,
+        "scale": "Logarithmic",
+        "unit": "Hz",
+        "steps": null
+      },
+      "default": 0.8996566681120063,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "digital_sat/emph/b6_gain",
+      "name": "Emph 6 Gain",
+      "short_name": "Gain",
+      "group": "Emphasis 6",
+      "kind": "Continuous",
+      "range": {
+        "min": -12.0,
+        "max": 12.0,
+        "scale": "Linear",
+        "unit": "Db",
+        "steps": null
+      },
+      "default": 0.5,
+      "bipolar": true,
+      "featured": false
+    },
+    {
+      "addr": "digital_sat/emph/b6_q",
+      "name": "Emph 6 Q",
+      "short_name": "Q",
+      "group": "Emphasis 6",
+      "kind": "Continuous",
+      "range": {
+        "min": 0.1,
+        "max": 18.0,
+        "scale": "Logarithmic",
+        "unit": "None",
+        "steps": null
+      },
+      "default": 0.3766371522176609,
       "bipolar": false,
       "featured": false
     }

@@ -6,7 +6,26 @@ use design_lint::{Config, Severity, lint};
 use surface_proto::{ParamKind, Source};
 
 const DELAY: &[&str] = &["01-digital", "02-tape", "03-analog", "04-pitch", "05-rhythmic", "06-special"];
-const SATURATE: &[&str] = &["01-tube", "02-tape", "03-transformer", "04-transistor", "05-digital"];
+const SATURATE: &[&str] = &[
+    "01-tube",
+    "02-tape",
+    "03-transformer",
+    "04-transistor",
+    "05-digital",
+    "01-tube-tall",
+    "02-tape-tall",
+    "03-transformer-tall",
+    "04-transistor-tall",
+    "05-digital-tall",
+];
+
+/// The nodes under each emphasis EQ (`viz.eq_graph`, its own tests cover
+/// it): its structural controls bind nothing, its bands bind templated
+/// `<ns>/emph/b{n}_*` addresses.
+fn in_emphasis_eq(f: &plugin_faces::Face) -> Vec<document_proto::NodeId> {
+    let roots = f.scene.walk(f.scene.root).into_iter().filter(|id| f.scene.node(*id).is_some_and(|n| n.name == "Emphasis"));
+    roots.flat_map(|r| f.scene.walk(r)).collect()
+}
 
 fn faces() -> Vec<plugin_faces::Face> {
     let mut v = plugin_faces::delay::faces();
@@ -40,7 +59,8 @@ fn every_face_lints_without_errors() {
 fn every_binding_resolves_to_the_faces_own_entries() {
     for f in faces() {
         let mut bound = 0;
-        for id in f.scene.walk(f.scene.root) {
+        let eq = in_emphasis_eq(&f);
+        for id in f.scene.walk(f.scene.root).into_iter().filter(|id| !eq.contains(id)) {
             let Some(c) = f.scene.node(id).and_then(|n| n.control.as_ref()) else { continue };
             let Some(b) = &c.binding else { panic!("{}: control {id} is unbound", f.file) };
             bound += 1;
@@ -69,6 +89,10 @@ fn every_param_and_stream_is_bound_by_its_face() {
             }
         }
         for p in &f.params {
+            // The emphasis bands are the EQ graph's (`b{n}` templated).
+            if p.addr.0.contains("/emph/") {
+                continue;
+            }
             assert!(addrs.contains(&p.addr.0), "{}: param {} has no control", f.file, p.addr.0);
         }
         for s in &f.streams {
@@ -87,6 +111,11 @@ fn each_face_keeps_to_its_own_namespace() {
         }
         for s in &f.streams {
             assert!(s.id.0.starts_with(&format!("{ns}/")), "{}: stream {} is outside {ns}/", f.file, s.id.0);
+        }
+        // A tall face is its rack face redrawn: the same namespace.
+        if let Some(front) = f.file.strip_suffix("-tall") {
+            assert!(seen.iter().any(|(n, file)| *n == ns && *file == front), "{}: not {front}'s namespace {ns}", f.file);
+            continue;
         }
         assert!(!seen.iter().any(|(n, _)| *n == ns), "{}: namespace {ns} is shared", f.file);
         seen.push((ns, f.file));
@@ -133,5 +162,44 @@ fn faces_are_sized_to_their_panels() {
         let root = f.scene.node(page).and_then(|p| p.children.first().copied()).expect("root");
         let n = f.scene.node(root).expect("root node");
         assert!(n.size.width >= 700.0 && n.size.height >= 280.0, "{}: root is {}×{}", f.file, n.size.width, n.size.height);
+    }
+}
+
+/// Every saturator (rack and tall) has the EMPHASIS key on
+/// `<ns>/emphasis_view` and six emphasis bands of Bell / Low Shelf / High
+/// Shelf over 20 Hz–20 kHz, ±12 dB, Q 0.1–18, drawn by a fixed six-band EQ
+/// graph — and the rack and tall faces bind the same params.
+#[test]
+fn saturators_have_an_emphasis_eq() {
+    let faces = plugin_faces::saturate::faces();
+    for f in &faces {
+        let ns = f.params[0].addr.0.split('/').next().unwrap_or_default().to_string();
+        let view = format!("{ns}/emphasis_view");
+        assert!(f.params.iter().any(|p| p.addr.0 == view), "{}: no {view}", f.file);
+        for n in 1..=6 {
+            for (k, min, max) in [("freq", 20.0, 20_000.0), ("gain", -12.0, 12.0), ("q", 0.1, 18.0)] {
+                let addr = format!("{ns}/emph/b{n}_{k}");
+                let p = f.params.iter().find(|p| p.addr.0 == addr).unwrap_or_else(|| panic!("{}: no {addr}", f.file));
+                assert!((p.range.min - min).abs() < 1e-9 && (p.range.max - max).abs() < 1e-9, "{}: {addr} range", f.file);
+            }
+            let shape = f.params.iter().find(|p| p.addr.0 == format!("{ns}/emph/b{n}_shape")).expect("shape");
+            let ParamKind::Choice { options } = &shape.kind else { panic!("{}: shape is not a choice", f.file) };
+            assert_eq!(options, &["Bell", "Low Shelf", "High Shelf"]);
+        }
+        let key_bound = f.scene.walk(f.scene.root).into_iter().filter_map(|id| f.scene.node(id).and_then(|n| n.control.as_ref())).any(|c| {
+            matches!(c.kind, surface_proto::ControlKind::Button { .. }) && c.binding.as_ref().is_some_and(|b| matches!(&b.source, Source::Param { addr } if addr.0 == view))
+        });
+        assert!(key_bound, "{}: no EMPHASIS key", f.file);
+        assert!(!in_emphasis_eq(f).is_empty(), "{}: no emphasis EQ", f.file);
+    }
+    for tall in faces.iter().filter(|f| f.file.ends_with("-tall")) {
+        let front = faces.iter().find(|f| Some(f.file) == tall.file.strip_suffix("-tall")).expect("its rack face");
+        let addrs = |f: &plugin_faces::Face| f.params.iter().map(|p| p.addr.0.clone()).collect::<Vec<_>>();
+        assert_eq!(addrs(tall), addrs(front), "{}: binds other params than {}", tall.file, front.file);
+        let (w, h) = plugin_faces::lane::Shape::Tall.size();
+        let page = tall.scene.pages()[0];
+        let root = tall.scene.node(page).and_then(|p| p.children.first().copied()).expect("root");
+        let n = tall.scene.node(root).expect("root node");
+        assert!((n.size.width - w).abs() < 1e-9 && (n.size.height - h).abs() < 1e-9, "{}: {}x{}", tall.file, n.size.width, n.size.height);
     }
 }

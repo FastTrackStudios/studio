@@ -506,3 +506,43 @@ fn box_of(rt: &Runtime, id: NodeId) -> Bounds {
 fn library_proto_sig(scene: &Scene) -> Vec<String> {
     library_proto::Signature::of_scene(scene).params
 }
+
+/// A fixed EQ (`fixed`, `shapes=3`, `db_range=12`, `tint=`): its bands are
+/// always there — nothing adds, removes, bypasses or renames one — and it
+/// draws in one colour at a fixed ±12 dB with no range picker.
+#[test]
+fn a_fixed_eq_has_its_bands_and_nothing_to_add_or_remove() {
+    let mut scene = Scene::new("eq");
+    let page = scene.pages()[0];
+    let mut controls = BTreeMap::new();
+    let theme = Theme::stage_dark();
+    {
+        let mut b = Builder { scene: &mut scene, controls: &mut controls, theme: &theme };
+        let p = Place::new("EQ").size(480.0).options(&["ns=sat/emph", "bands=6", "fixed", "shapes=3", "db_range=12", "tint=#ff9a3c", "h=150"]);
+        place(&mut b, page, "viz.eq_graph", &p).unwrap();
+    }
+    let named = |name: &str| scene.walk(page).into_iter().find(|id| scene.node(*id).is_some_and(|n| n.name == name));
+    for c in controls.values() {
+        match &c.kind {
+            ControlKind::Repeat { count, used, .. } => {
+                assert_eq!(*count, 6);
+                assert!(used.is_none(), "a fixed band is always used");
+            }
+            ControlKind::Canvas { add, .. } => assert!(add.is_none(), "nothing adds a band"),
+            ControlKind::Handle { .. } => {
+                let i = c.interact.as_ref().unwrap();
+                assert!(!i.removable, "nothing removes a band");
+                assert!(c.zoom.is_none(), "a fixed span does not zoom");
+                assert_eq!(c.tint, vec!["#ff9a3c".to_string(); 2]);
+            }
+            _ => {}
+        }
+        if let Some(b) = &c.binding {
+            let addr = format!("{b:?}");
+            assert!(!["_used", "_on", "_name", "_slope", "_placement", "_focus", "_dyn_range", "/range"].iter().any(|k| addr.contains(k)), "binds {addr}");
+        }
+    }
+    assert!(named("graph menu").is_none() && named("band {n} label").is_none());
+    let range = named("range").unwrap();
+    assert!(!scene.node(range).unwrap().visible, "no range picker");
+}

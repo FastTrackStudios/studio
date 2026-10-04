@@ -22,6 +22,7 @@ use surface_widgets::Builder;
 use crate::delay::art;
 use crate::delay::parts::{self, Ink, bind};
 use crate::face::{Face, canvas};
+use crate::lane::Shape;
 
 const W: f64 = 760.0;
 const H: f64 = 520.0;
@@ -185,6 +186,18 @@ fn wave_panel(b: &mut Builder<'_>, scope: NodeId, (x, y, w, h): (f64, f64, f64, 
     parts::silk(b, p, "Out", 52.0, 10.0, Ink::new(5.5, TRACE).weight(800.0).track(0.0));
 }
 
+/// The scope window at `(sx, sy, sw, sh)` of the lid (`size`), in the
+/// picture layer; the emphasis EQ in its place while that shows.
+fn scope(b: &mut Builder<'_>, lid: NodeId, (sx, sy, sw, sh): (f64, f64, f64, f64), size: (f64, f64)) {
+    let pic = super::picture(b, lid, "transistor", size);
+    let scope = crate::reverb::ui::display(b, pic, "Scope", sx, sy, sw, sh, TRACE, "crt");
+    curve_panel(b, scope, (8.0, 6.0, sh - 12.0, sh - 12.0));
+    b.add(scope, parts::lines_node("divider", &[vec![(sh + 2.0, 8.0), (sh + 2.0, sh - 8.0)]], 0.8, "#ffb34733"));
+    wave_panel(b, scope, (sh + 10.0, 6.0, sw - sh - 18.0, sh - 12.0));
+    crate::reverb::ui::glass(b, scope);
+    super::emphasis_eq(b, lid, "transistor", (sx, sy, sw, sh), TRACE);
+}
+
 pub fn face() -> Face {
     let scene = canvas("Transistor", |b, root| {
         parts::fit_root(b, root, W, H);
@@ -194,13 +207,9 @@ pub fn face() -> Face {
         parts::silk(b, lid, "Transistor", W / 2.0 - 4.0, 36.0, Ink::new(22.0, INK).weight(900.0).track(0.12));
         parts::silk(b, lid, "Fuzz · Germanium PNP", W / 2.0 - 4.0, 58.0, Ink::new(7.0, DIM).weight(800.0).track(0.3));
 
-        // ── The scope ──────────────────────────────────────────────────
-        let (sx, sy, sw, sh) = (56.0, 74.0, W - 112.0, 128.0);
-        let scope = crate::reverb::ui::display(b, lid, "Scope", sx, sy, sw, sh, TRACE, "crt");
-        curve_panel(b, scope, (8.0, 6.0, sh - 12.0, sh - 12.0));
-        b.add(scope, parts::lines_node("divider", &[vec![(sh + 2.0, 8.0), (sh + 2.0, sh - 8.0)]], 0.8, "#ffb34733"));
-        wave_panel(b, scope, (sh + 10.0, 6.0, sw - sh - 18.0, sh - 12.0));
-        crate::reverb::ui::glass(b, scope);
+        // ── The scope; or the emphasis EQ ──────────────────────────────
+        scope(b, lid, (56.0, 74.0, W - 112.0, 128.0), (W, H));
+        super::emphasis_key(b, lid, "transistor", (646.0, 36.0), 64.0, "black", TRACE);
 
         let scale = Ink::new(7.0, DIM).weight(800.0).track(0.0).plain();
         let legend = Ink::new(10.5, INK).weight(900.0).track(0.18);
@@ -239,7 +248,11 @@ pub fn face() -> Face {
         symbol(b, lid, (650.0, fy - 12.0), 20.0, INK);
     });
 
-    let params = vec![
+    Face { file: "04-transistor", plugin: "saturate", scene, params: params(), streams: Vec::new() }
+}
+
+fn params() -> Vec<surface_proto::ParamInfo> {
+    vec![
         parts::percent(&a("drive"), "Gain", 60.0).featured(),
         parts::trim(&a("tone"), "Tone").featured(),
         super::output(&a("output")),
@@ -249,6 +262,62 @@ pub fn face() -> Face {
         parts::percent(&a("mix"), "Mix", 100.0),
         parts::toggle(&a("fuzz"), "Fuzz", true),
         parts::toggle(&a("on"), "Bypass", true).featured(),
-    ];
-    Face { file: "04-transistor", plugin: "saturate", scene, params, streams: Vec::new() }
+    ]
+    .into_iter()
+    .chain(super::emphasis_params("transistor"))
+    .collect()
+}
+
+/// The pedal alone in a lane ([`Shape::Tall`], 760 × 328): the name, the
+/// mode toggle and the stomp switch at the left, the scope across the top
+/// with the emphasis key and the part's symbol beside it, and the seven
+/// knobs in one row below — the three every fuzz has, then the trims.
+pub fn tall_face() -> Face {
+    let (w, h) = Shape::Tall.size();
+    let scene = canvas("Transistor (tall)", |b, root| {
+        parts::fit_root(b, root, w, h);
+        let lid = art::enclosure(b, root, (w, h), &[(0.0, "#d6dbe0"), (0.5, "#b4bbc2"), (1.0, "#8c949c")], (0.03, 0.05));
+        let (lw, lh) = (w - 8.0, h - 12.0);
+
+        // ── Title, mode, stomp ─────────────────────────────────────────
+        parts::silk_left(b, lid, "Transistor", 30.0, 32.0, Ink::new(18.0, INK).weight(900.0).track(0.12));
+        parts::silk_left(b, lid, "Fuzz · Germanium PNP", 30.0, 52.0, Ink::new(6.5, DIM).weight(800.0).track(0.3));
+        let mode = Place::new("Mode").size(30.0).variant("chrome").legend("Mode").options(&["Fuzz", "Drive"]).bind(bind(&a("fuzz"))).ink(KitInk::Color(INK.into()));
+        let sw = parts::put(b, lid, "switch.toggle_bat", &mode, 70.0, 112.0);
+        parts::caption_style(b, sw, Ink::new(7.0, INK).weight(900.0).track(0.18));
+        let bypass = Place::new("Bypass").size(30.0).variant("red").bind(bind(&a("on")));
+        let on = parts::footswitch(b, lid, &bypass, (150.0, 118.0));
+        parts::label_at(b, on, "On", (174.0, 86.0), Ink::new(7.0, DIM).weight(900.0).track(0.2));
+
+        // ── The scope; or the emphasis EQ ──────────────────────────────
+        scope(b, lid, (204.0, 18.0, 458.0, 136.0), (lw, lh));
+        super::emphasis_key(b, lid, "transistor", (704.0, 46.0), 52.0, "black", TRACE);
+        symbol(b, lid, (712.0, 122.0), 15.0, INK);
+
+        // ── The knobs ──────────────────────────────────────────────────
+        let row = 238.0;
+        let scale = Ink::new(7.0, DIM).weight(800.0).track(0.0).plain();
+        let legend = Ink::new(9.5, INK).weight(900.0).track(0.18);
+        let value = Ink::new(7.5, DIM).weight(700.0).track(0.02).plain();
+        let knobs: [(&str, &str, f64, f64, &[(f64, &str)]); 7] = [
+            ("drive", "Gain", 70.0, 62.0, parts::PCT_MARKS),
+            ("tone", "Tone", 172.0, 62.0, super::TRIM_MARKS),
+            ("output", "Level", 274.0, 62.0, super::OUT_MARKS),
+            ("edge", "Edge", 380.0, 52.0, super::TRIM_MARKS),
+            ("gate", "Gate", 468.0, 52.0, super::TRIM_MARKS),
+            ("sag", "Sag", 556.0, 52.0, super::TRIM_MARKS),
+            ("mix", "Mix", 666.0, 52.0, parts::PCT_MARKS),
+        ];
+        for (addr, name, x, d, marks) in knobs {
+            let k = parts::knob(b, lid, "knob.bakelite", "black", &a(addr), name, (x, row), d);
+            let sweep = parts::sweep_of(b, k);
+            parts::marks(b, lid, (x, row), d / 2.0 + 7.0, sweep, marks, 11, scale);
+            parts::legend_at(b, k, name, row + 50.0, legend);
+            parts::value_at(b, k, row + 64.0, value);
+        }
+        parts::rule(b, lid, 24.0, lw - 24.0, 168.0, 1.0, "#17181a30");
+        parts::vrule(b, lid, 327.0, row - 46.0, row + 66.0, 1.0, "#17181a40");
+        parts::vrule(b, lid, 611.0, row - 46.0, row + 66.0, 1.0, "#17181a40");
+    });
+    Face { file: Shape::Tall.file("04-transistor"), plugin: "saturate", scene, params: params(), streams: Vec::new() }
 }

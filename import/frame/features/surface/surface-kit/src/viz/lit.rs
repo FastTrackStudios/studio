@@ -441,10 +441,15 @@ pub(crate) struct GlowSpec<'a> {
     pub bands: usize,
     /// Bind `b{n}_used` too (signal's wire family has it).
     pub used: bool,
+    /// Bind `b{n}_on` (a band that can be bypassed).
+    pub bypass: bool,
     pub spectrum: String,
     pub f: (f64, f64),
     pub span: GlowSpan,
     pub floor: f64,
+    /// One colour (`#rrggbb`) for every band's bloom and the analyser, in
+    /// place of the frequency sweep: the shader's `tint_r/g/b`.
+    pub tint: Option<String>,
 }
 
 /// A `w × h` light running `eq.glow` fed by an EQ's spectrum feed and band
@@ -452,7 +457,12 @@ pub(crate) struct GlowSpec<'a> {
 /// EQ graph puts its analyser there — the glow draws the analyser as light,
 /// as processor's graph does).
 pub(crate) fn glow_light(b: &mut Builder<'_>, parent: NodeId, (w, h): (f64, f64), spec: &GlowSpec<'_>) -> NodeId {
-    let keys: &[&str] = if spec.used { &["freq", "gain", "on", "used"] } else { &["freq", "gain", "on"] };
+    let keys: &[&str] = match (spec.used, spec.bypass) {
+        (true, true) => &["freq", "gain", "on", "used"],
+        (true, false) => &["freq", "gain", "used"],
+        (false, true) => &["freq", "gain", "on"],
+        (false, false) => &["freq", "gain"],
+    };
     let band_inputs: Vec<CurveInput> =
         (1..=spec.bands.min(GLOW_BANDS)).flat_map(|n| keys.iter().map(move |k| CurveInput::param(format!("b{n}_{k}"), format!("{}/b{n}_{k}", spec.ns)))).collect();
     let mut inputs = vec![
@@ -467,8 +477,20 @@ pub(crate) fn glow_light(b: &mut Builder<'_>, parent: NodeId, (w, h): (f64, f64)
             inputs.push(ShaderInput::constant("ranges", spans.clone()));
         }
     }
-    let params = [("p0", spec.f.0), ("p1", spec.f.1)].into_iter().map(|(k, v)| (k.to_string(), v)).collect();
+    let mut params: std::collections::BTreeMap<String, f64> = [("p0", spec.f.0), ("p1", spec.f.1)].into_iter().map(|(k, v)| (k.to_string(), v)).collect();
+    if let Some(rgb) = spec.tint.as_deref().and_then(hex_rgb) {
+        for (k, v) in ["tint_r", "tint_g", "tint_b"].into_iter().zip(rgb) {
+            params.insert(k.to_string(), v);
+        }
+    }
     light(b, parent, w, h, "eq.glow", params, inputs)
+}
+
+/// `#rrggbb` as 0..1 channels.
+fn hex_rgb(hex: &str) -> Option<[f64; 3]> {
+    let h = hex.trim_start_matches('#');
+    let c = |i: usize| h.get(i..i + 2).and_then(|s| u8::from_str_radix(s, 16).ok()).map(|v| f64::from(v) / 255.0);
+    Some([c(0)?, c(2)?, c(4)?])
 }
 
 fn eq_glow(b: &mut Builder<'_>, parent: NodeId, p: &Place) -> NodeId {
@@ -491,10 +513,12 @@ fn eq_glow(b: &mut Builder<'_>, parent: NodeId, p: &Place) -> NodeId {
         ns: &ns,
         bands,
         used: !p.flag("no_used"),
+        bypass: true,
         spectrum: spectrum.clone(),
         f: (f_min, f_max),
         span: GlowSpan::Fixed(range),
         floor: opt_f(p, "floor", -90.0),
+        tint: None,
     };
     let light = glow_light(b, root, (w, h), &spec);
 
