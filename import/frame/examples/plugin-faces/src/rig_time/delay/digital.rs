@@ -147,7 +147,7 @@ pub fn face_at(dark: bool, tier: kit::Tier) -> Face {
         // ── The picture: the time on the LEDs, the echoes under it ──────
         let px = 12.0;
         let pw = kit::picture_r(tier) - px - 10.0;
-        let (dh, digits) = if pane { (46.0, 22.0) } else { (58.0, 32.0) };
+        let (dh, digits) = if pane { (54.0, 26.0) } else { (58.0, 32.0) };
         let disp = window(b, plate, "Display", (px, 14.0, pw, dh), ("#030a1c", "#01050e"));
         kit::seg_readout(b, disp, &a("time"), (4.0, dh / 2.0 + 4.0, pw - 22.0), digits, 4, 0, LED);
         ui::silk_left(b, disp, "ms", pw - 16.0, dh - 10.0, 7.0, LED, 800.0);

@@ -190,15 +190,18 @@ impl Tier {
     }
 }
 
-/// A desktop pane's lane width (`Tier::Ipad`): about 3.2 : 1 at `H`, the
-/// shape of a lane in a MacBook's grid.
-pub const PANE_W: f64 = 520.0;
+/// A desktop pane's lane width (`Tier::Ipad`): 3.1 : 1 at `H`, a MacBook
+/// grid's lane — drawn at the room's own shape, since a face laid out in a
+/// squarer box than it was drawn for gives the difference to its picture.
+/// The picture's room comes from a mouse-sized TIME | BEAT and smaller
+/// knobs.
+pub const PANE_W: f64 = 510.0;
 
 /// [`PHONE_TIME`] at `tier`: the Time knob's centre and size.
 #[must_use]
 pub const fn time_spot(tier: Tier) -> (f64, f64, f64) {
     match tier {
-        Tier::Ipad => (170.0, 58.0, 66.0),
+        Tier::Ipad => (186.0, 54.0, 58.0),
         _ => PHONE_TIME,
     }
 }
@@ -208,7 +211,7 @@ pub const fn time_spot(tier: Tier) -> (f64, f64, f64) {
 #[must_use]
 pub const fn knob_row(tier: Tier) -> ([f64; 3], f64, f64) {
     match tier {
-        Tier::Ipad => ([278.0, 335.0, 392.0], 80.0, 46.0),
+        Tier::Ipad => ([258.0, 312.0, 366.0], 80.0, 44.0),
         _ => PHONE_KNOBS,
     }
 }
@@ -217,7 +220,7 @@ pub const fn knob_row(tier: Tier) -> ([f64; 3], f64, f64) {
 #[must_use]
 pub const fn picture_r(tier: Tier) -> f64 {
     match tier {
-        Tier::Ipad => 100.0,
+        Tier::Ipad => 144.0,
         _ => PHONE_PICTURE_R,
     }
 }
@@ -226,7 +229,7 @@ pub const fn picture_r(tier: Tier) -> f64 {
 #[must_use]
 pub const fn legend_size(tier: Tier) -> f64 {
     match tier {
-        Tier::Ipad => 9.0,
+        Tier::Ipad => 8.5,
         _ => 10.5,
     }
 }
@@ -235,7 +238,7 @@ pub const fn legend_size(tier: Tier) -> f64 {
 #[must_use]
 pub const fn small_nameplate(tier: Tier) -> (f64, f64, f64, f64, f64) {
     match tier {
-        Tier::Ipad => (8.0, 26.0, 66.0, 150.0, 11.0),
+        Tier::Ipad => (8.0, 24.0, 62.0, 136.0, 10.5),
         _ => (8.0, 30.0, 74.0, 210.0, 12.0),
     }
 }
@@ -360,7 +363,8 @@ pub fn time_knob(b: &mut Builder<'_>, parent: NodeId, ns: &str, (cx, cy, d): (f6
     b.controls.insert(field, Control::new(ControlKind::Readout).slot(SlotRole::Value, t.0).bound(ui::bind(&a(ns, "time_text"))));
     // TIME | BEAT, the side it is on lit; each side its own target (a
     // press picks it), at a finger's size where the face is for one.
-    let touch = size >= 10.0;
+    // A finger's size from 10.5 up (a phone); a desktop pane's is a mouse's.
+    let touch = size >= 10.5;
     let (sw, sh) = if touch { (120.0, 28.0) } else { ((size * 5.4).max(70.0), (size * 0.8 + 8.0).ceil()) };
     let sy = ry + rh + 2.0;
     let pill = b.add(parent, draw::frame("time switch", cx - sw / 2.0, sy, sw, sh));
@@ -424,7 +428,7 @@ pub fn bypass_spot_w(tier: Tier, w: f64) -> (f64, f64, f64) {
     // In from the edge far enough for the flip arrow beside it.
     let (d, inset) = match tier {
         Tier::Phone | Tier::Strip => (44.0, 78.0),
-        Tier::Ipad => (40.0, 70.0),
+        Tier::Ipad => (36.0, 64.0),
         _ => (28.0, 56.0),
     };
     (w - inset, H * 0.56, d)
@@ -609,6 +613,55 @@ pub fn stub(ns: &str, name: &str, color: &str, dark: bool) -> document_proto::Sc
                 knob(b, panel, "knob.3d", "flat", &a(&ns, id), l, 46.0, 670.0 + 100.0 * i as f64, 70.0, ink, dim);
             }
         }
+    })
+}
+
+/// [`stub`] in a small room (a phone's lane, a desktop pane's): the Time
+/// faces' layout — the echoes (a delay) or the decay (a reverb) as the
+/// picture, the Time knob (the delay time, or the decay), three knobs in
+/// the row, the nameplate top right, the bypass at its spot.
+#[must_use]
+pub fn stub_small(ns: &str, name: &str, dark: bool, tier: Tier) -> document_proto::Scene {
+    let ns = ns.to_string();
+    let name = name.to_string();
+    let color = if ns == DLY { BLUE } else { PURPLE }.to_string();
+    let w = tier.lane_w();
+    tier_lane(&name.clone(), tier, move |b, root| {
+        let (ink, dim, top, bottom, well) = if dark { ("#e8e6e1", "#8a8d94", "#1d1f24", "#121317", ("#0b0c0f", "#060708")) } else { ("#1d1f24", "#686c74", "#eceef1", "#d7dae0", ("#14161a", "#0b0c0f")) };
+        let mut panel = draw::frame("Panel", 0.0, 0.0, w, H);
+        panel.fills = vec![draw::linear(180.0, &[(0.0, top), (1.0, bottom)])];
+        panel.corner_radii = document_proto::CornerRadii::uniform(8.0);
+        let panel = b.add(root, panel);
+        // The picture, in its window.
+        let (vx, vy, vw, vh) = (10.0, 10.0, picture_r(tier) - 18.0, H - 20.0);
+        let mut v = draw::frame("View", vx, vy, vw, vh);
+        v.fills = vec![draw::linear(180.0, &[(0.0, well.0), (1.0, well.1)])];
+        v.clips_content = true;
+        v.corner_radii = document_proto::CornerRadii::uniform(6.0);
+        v.effects = vec![draw::inner_shadow("#000000c0", 0.0, 2.0, 6.0)];
+        let v = b.add(panel, v);
+        if ns == DLY {
+            echo_train(b, v, (4.0, 8.0, vw - 8.0, vh - 16.0), 6, 2000.0, &color);
+        } else {
+            decay(b, v, (4.0, 8.0, vw - 8.0, vh - 16.0), &color);
+        }
+        let opts = ["color=#2a2d31", "pointer=#e9ecef", "index=line", "index_w=0.1", "skirt=plain", "skirt_color=#3a3e44"];
+        let (tx, ty, td) = time_spot(tier);
+        time_knob(b, panel, &ns, (tx, ty, td), if tier == Tier::Ipad { 10.0 } else { 11.0 }, (ink, dim, &ui::alpha(&color, 0.45)), |b, p, addr| {
+            knob3d_bare(b, p, addr, td, (tx, ty), &opts);
+        });
+        let (xs, ky, kd) = knob_row(tier);
+        let knobs: [(&str, &str); 3] = if ns == DLY { [("feedback", "Feedback"), ("high_cut", "Hi Cut"), ("level", "Level")] } else { [("size", "Size"), ("predelay", "Pre-Delay"), ("level", "Level")] };
+        for (i, (id, legend)) in knobs.iter().enumerate() {
+            knob3d(b, panel, &a(&ns, id), legend, kd, (xs[i], ky), &opts, ink, dim);
+        }
+        let (np_y, np_h, title_w, preset_w, size) = small_nameplate(tier);
+        let title_w = title_w.max(name.chars().count() as f64 * (size * 0.75) + 22.0);
+        nameplate_top_right(b, panel, &ns, tier, (np_y, np_h), title_w, preset_w, size, (&color, dim), |b, t| {
+            ui::plain(b, t, &name, (title_w - 14.0) / 2.0, np_h / 2.0, size + 5.0, ink, 800.0);
+        });
+        face_bypass(b, panel, &ns, tier, if ns == DLY { "blue" } else { "purple" }, "On");
+        responsive(b, panel, &[v]);
     })
 }
 

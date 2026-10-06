@@ -184,7 +184,7 @@ pub fn face_at(dark: bool, tier: kit::Tier) -> Face {
     } else {
         ("api", INK, DIM, [(0.0, "#6d7278"), (1.0, "#e2e5e8")], ("#00000033", "#ffffff66"))
     };
-    let small_room = matches!(tier, kit::Tier::Phone | kit::Tier::Strip);
+    let small_room = tier.small();
     let w = tier.lane_w();
     let scene = kit::tier_lane("Plate", tier, |b, root| {
         let panel = ui::panel(b, root, "panel.painted", paint, w, kit::H, "none");
@@ -194,7 +194,7 @@ pub fn face_at(dark: bool, tier: kit::Tier) -> Face {
 
         // ── The plate, through its window ──────────────────────────────
         // On a phone the controls come first: the window shrinks for them.
-        let tw = if small_room { kit::PHONE_PICTURE_R - 12.0 } else { 560.0 };
+        let tw = if small_room { kit::picture_r(tier) - 12.0 } else { 560.0 };
         let (tx, ty, th) = (12.0, 12.0, kit::H - 24.0);
         let wl = draw::rounded(draw::rect("window", tx - 4.0, ty - 4.0, tw + 8.0, th + 8.0, draw::linear(180.0, &well)), 7.0);
         b.add(panel, draw::with_effects(wl, vec![draw::inner_shadow("#00000066", 0.0, 1.0, 1.0)]));
@@ -214,19 +214,22 @@ pub fn face_at(dark: bool, tier: kit::Tier) -> Face {
         ui::rule(b, panel, x0 - 10.0, 12.0, 1.0, kit::H - 24.0, rule.0);
         ui::rule(b, panel, x0 - 9.0, 12.0, 1.0, kit::H - 24.0, rule.1);
         if small_room {
-            kit::nameplate_top_right(b, panel, VERB, tier, (8.0, 30.0), 84.0, 220.0, 12.0, (if dark { kit::PURPLE_LAMP } else { "#6a3fc4" }, dim), |b, t| {
+            kit::nameplate_top_right(b, panel, VERB, tier, (8.0, 30.0), 84.0, if tier == kit::Tier::Ipad { 150.0 } else { 220.0 }, 12.0, (if dark { kit::PURPLE_LAMP } else { "#6a3fc4" }, dim), |b, t| {
                 ui::plain(b, t, "Plate", 32.0, 15.0, 20.0, ink, 800.0);
             });
             // The phone's places: Time, then Pre-Delay and Level.
-            let (tx, ty, td) = kit::PHONE_TIME;
+            let (tx, ty, td) = kit::time_spot(tier);
             let big = Dial { value: false, legend: 0.0, ..Dial::new("knob.pointer", "black", td, ink, dim) };
-            kit::time_knob(b, panel, VERB, (tx, ty, td), 11.0, (ink, dim, &ui::alpha(kit::PURPLE_LAMP, 0.55)), |b, p, addr| {
+            kit::time_knob(b, panel, VERB, (tx, ty, td), if tier == kit::Tier::Ipad { 10.0 } else { 11.0 }, (ink, dim, &ui::alpha(kit::PURPLE_LAMP, 0.55)), |b, p, addr| {
                 ui::dial(b, p, addr, "", tx, ty, &big);
             });
-            let (xs, ky, kd) = kit::PHONE_KNOBS;
+            let (xs, ky, kd) = kit::knob_row(tier);
             let small = Dial::new("knob.collet", "black", kd, ink, dim).legend(11.0);
             for (i, (id, legend)) in [("predelay", "Pre-Delay"), ("level", "Level")].iter().enumerate() {
-                ui::dial(b, panel, &a(id), legend, xs[i], ky, &small);
+                // On a pane's narrower lane, the outer places: the legends
+                // clear of each other.
+                let x = if tier == kit::Tier::Ipad { xs[i * 2] } else { xs[i] };
+                ui::dial(b, panel, &a(id), legend, x, ky, &small);
             }
         } else {
             kit::nameplate_top_right(b, panel, VERB, tier, (12.0, 26.0), 76.0, 200.0, 10.0, (if dark { kit::PURPLE_LAMP } else { "#6a3fc4" }, dim), |b, t| {
@@ -260,7 +263,7 @@ pub fn face_at(dark: bool, tier: kit::Tier) -> Face {
 #[must_use]
 pub fn back_at(dark: bool, tier: kit::Tier) -> Face {
     let (paint, ink, dim) = if dark { ("charcoal", "#e6e8eb", "#9aa0a7") } else { ("api", INK, DIM) };
-    let small_room = matches!(tier, kit::Tier::Phone | kit::Tier::Strip);
+    let small_room = tier.small();
     let w = tier.lane_w();
     let scene = kit::tier_lane("Plate", tier, |b, root| {
         let panel = ui::panel(b, root, "panel.painted", paint, w, kit::H, "none");
@@ -269,7 +272,7 @@ pub fn back_at(dark: bool, tier: kit::Tier) -> Face {
             let k = Dial::new("knob.collet", "black", d, ink, dim).legend(if small_room { 10.5 } else { 7.5 });
             ui::dial(b, p, &a(id), legend, cx, cy, &k);
         });
-        let (np_h, title_w, preset_w, size) = if small_room { (30.0, 84.0, 220.0, 12.0) } else { (26.0, 76.0, 200.0, 10.0) };
+        let (np_h, title_w, preset_w, size) = if small_room { (30.0, 84.0, if tier == kit::Tier::Ipad { 150.0 } else { 220.0 }, 12.0) } else { (26.0, 76.0, 200.0, 10.0) };
         kit::nameplate_top_right(b, panel, VERB, tier, (if small_room { 8.0 } else { 12.0 }, np_h), title_w, preset_w, size, (if dark { kit::PURPLE_LAMP } else { "#6a3fc4" }, dim), |b, t| {
             ui::plain(b, t, "Plate", 30.0, np_h / 2.0, if small_room { 20.0 } else { 18.0 }, ink, 800.0);
         });

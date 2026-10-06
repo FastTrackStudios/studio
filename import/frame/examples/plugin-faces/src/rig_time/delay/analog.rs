@@ -118,7 +118,7 @@ pub fn face_at(dark: bool, tier: kit::Tier) -> Face {
         let lit = ui::alpha(kit::BLUE, 0.5);
         if small_room {
             let (tx, ty, td) = kit::time_spot(tier);
-            kit::time_knob(b, panel, DLY, (tx, ty, td), 11.0, (ink, dim, &lit), |b, p, addr| {
+            kit::time_knob(b, panel, DLY, (tx, ty, td), if tier == kit::Tier::Ipad { 10.0 } else { 11.0 }, (ink, dim, &lit), |b, p, addr| {
                 kit::knob3d_bare(b, p, addr, td, (tx, ty), &knob);
             });
             let (xs, ky, kd) = kit::knob_row(tier);

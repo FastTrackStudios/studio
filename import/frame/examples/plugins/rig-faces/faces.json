@@ -1540,7 +1540,7 @@
           "back": "100-mod-chorus-back-ipad",
           "face": "100-mod-chorus-ipad",
           "size": [
-            520.0,
+            510.0,
             164.0
           ],
           "time_knob": true
@@ -1572,7 +1572,7 @@
         "ipad": {
           "face": "101-motion-tremolo-ipad",
           "size": [
-            520.0,
+            510.0,
             164.0
           ],
           "time_knob": true
@@ -1602,7 +1602,7 @@
         "ipad": {
           "face": "102-motion-vibrato-ipad",
           "size": [
-            520.0,
+            510.0,
             164.0
           ],
           "time_knob": true
@@ -1890,7 +1890,7 @@
             "face": "60-dly-tape-ipad",
             "nameplate": true,
             "size": [
-              520.0,
+              510.0,
               164.0
             ],
             "time_knob": true
@@ -1931,7 +1931,7 @@
             "face": "61-dly-digital-ipad",
             "nameplate": true,
             "size": [
-              520.0,
+              510.0,
               164.0
             ],
             "time_knob": true
@@ -1972,7 +1972,7 @@
             "face": "62-dly-analog-ipad",
             "nameplate": true,
             "size": [
-              520.0,
+              510.0,
               164.0
             ],
             "time_knob": true
@@ -2002,7 +2002,29 @@
         "size": [
           960.0,
           164.0
-        ]
+        ],
+        "tiers": {
+          "ipad": {
+            "dark": "63-dly-lo-fi-ipad-dark",
+            "face": "63-dly-lo-fi-ipad",
+            "nameplate": true,
+            "size": [
+              510.0,
+              164.0
+            ],
+            "time_knob": true
+          },
+          "phone": {
+            "dark": "63-dly-lo-fi-phone-dark",
+            "face": "63-dly-lo-fi-phone",
+            "nameplate": true,
+            "size": [
+              760.0,
+              164.0
+            ],
+            "time_knob": true
+          }
+        }
       },
       {
         "dark": "64-dly-shimmer-dark",
@@ -2014,7 +2036,29 @@
         "size": [
           960.0,
           164.0
-        ]
+        ],
+        "tiers": {
+          "ipad": {
+            "dark": "64-dly-shimmer-ipad-dark",
+            "face": "64-dly-shimmer-ipad",
+            "nameplate": true,
+            "size": [
+              510.0,
+              164.0
+            ],
+            "time_knob": true
+          },
+          "phone": {
+            "dark": "64-dly-shimmer-phone-dark",
+            "face": "64-dly-shimmer-phone",
+            "nameplate": true,
+            "size": [
+              760.0,
+              164.0
+            ],
+            "time_knob": true
+          }
+        }
       },
       {
         "dark": "65-dly-reverse-dark",
@@ -2026,7 +2070,29 @@
         "size": [
           960.0,
           164.0
-        ]
+        ],
+        "tiers": {
+          "ipad": {
+            "dark": "65-dly-reverse-ipad-dark",
+            "face": "65-dly-reverse-ipad",
+            "nameplate": true,
+            "size": [
+              510.0,
+              164.0
+            ],
+            "time_knob": true
+          },
+          "phone": {
+            "dark": "65-dly-reverse-phone-dark",
+            "face": "65-dly-reverse-phone",
+            "nameplate": true,
+            "size": [
+              760.0,
+              164.0
+            ],
+            "time_knob": true
+          }
+        }
       },
       {
         "dark": "66-dly-ice-dark",
@@ -2038,7 +2104,29 @@
         "size": [
           960.0,
           164.0
-        ]
+        ],
+        "tiers": {
+          "ipad": {
+            "dark": "66-dly-ice-ipad-dark",
+            "face": "66-dly-ice-ipad",
+            "nameplate": true,
+            "size": [
+              510.0,
+              164.0
+            ],
+            "time_knob": true
+          },
+          "phone": {
+            "dark": "66-dly-ice-phone-dark",
+            "face": "66-dly-ice-phone",
+            "nameplate": true,
+            "size": [
+              760.0,
+              164.0
+            ],
+            "time_knob": true
+          }
+        }
       },
       {
         "dark": "67-dly-rhythm-dark",
@@ -2050,7 +2138,29 @@
         "size": [
           960.0,
           164.0
-        ]
+        ],
+        "tiers": {
+          "ipad": {
+            "dark": "67-dly-rhythm-ipad-dark",
+            "face": "67-dly-rhythm-ipad",
+            "nameplate": true,
+            "size": [
+              510.0,
+              164.0
+            ],
+            "time_knob": true
+          },
+          "phone": {
+            "dark": "67-dly-rhythm-phone-dark",
+            "face": "67-dly-rhythm-phone",
+            "nameplate": true,
+            "size": [
+              760.0,
+              164.0
+            ],
+            "time_knob": true
+          }
+        }
       },
       {
         "dark": "68-dly-drum-dark",
@@ -2062,7 +2172,29 @@
         "size": [
           960.0,
           164.0
-        ]
+        ],
+        "tiers": {
+          "ipad": {
+            "dark": "68-dly-drum-ipad-dark",
+            "face": "68-dly-drum-ipad",
+            "nameplate": true,
+            "size": [
+              510.0,
+              164.0
+            ],
+            "time_knob": true
+          },
+          "phone": {
+            "dark": "68-dly-drum-phone-dark",
+            "face": "68-dly-drum-phone",
+            "nameplate": true,
+            "size": [
+              760.0,
+              164.0
+            ],
+            "time_knob": true
+          }
+        }
       },
       {
         "dark": "69-dly-oil-can-dark",
@@ -2074,7 +2206,29 @@
         "size": [
           960.0,
           164.0
-        ]
+        ],
+        "tiers": {
+          "ipad": {
+            "dark": "69-dly-oil-can-ipad-dark",
+            "face": "69-dly-oil-can-ipad",
+            "nameplate": true,
+            "size": [
+              510.0,
+              164.0
+            ],
+            "time_knob": true
+          },
+          "phone": {
+            "dark": "69-dly-oil-can-phone-dark",
+            "face": "69-dly-oil-can-phone",
+            "nameplate": true,
+            "size": [
+              760.0,
+              164.0
+            ],
+            "time_knob": true
+          }
+        }
       },
       {
         "dark": "70-dly-multitap-dark",
@@ -2086,7 +2240,29 @@
         "size": [
           960.0,
           164.0
-        ]
+        ],
+        "tiers": {
+          "ipad": {
+            "dark": "70-dly-multitap-ipad-dark",
+            "face": "70-dly-multitap-ipad",
+            "nameplate": true,
+            "size": [
+              510.0,
+              164.0
+            ],
+            "time_knob": true
+          },
+          "phone": {
+            "dark": "70-dly-multitap-phone-dark",
+            "face": "70-dly-multitap-phone",
+            "nameplate": true,
+            "size": [
+              760.0,
+              164.0
+            ],
+            "time_knob": true
+          }
+        }
       },
       {
         "dark": "71-dly-spectral-dark",
@@ -2098,7 +2274,29 @@
         "size": [
           960.0,
           164.0
-        ]
+        ],
+        "tiers": {
+          "ipad": {
+            "dark": "71-dly-spectral-ipad-dark",
+            "face": "71-dly-spectral-ipad",
+            "nameplate": true,
+            "size": [
+              510.0,
+              164.0
+            ],
+            "time_knob": true
+          },
+          "phone": {
+            "dark": "71-dly-spectral-phone-dark",
+            "face": "71-dly-spectral-phone",
+            "nameplate": true,
+            "size": [
+              760.0,
+              164.0
+            ],
+            "time_knob": true
+          }
+        }
       },
       {
         "dark": "72-dly-filter-dark",
@@ -2110,7 +2308,29 @@
         "size": [
           960.0,
           164.0
-        ]
+        ],
+        "tiers": {
+          "ipad": {
+            "dark": "72-dly-filter-ipad-dark",
+            "face": "72-dly-filter-ipad",
+            "nameplate": true,
+            "size": [
+              510.0,
+              164.0
+            ],
+            "time_knob": true
+          },
+          "phone": {
+            "dark": "72-dly-filter-phone-dark",
+            "face": "72-dly-filter-phone",
+            "nameplate": true,
+            "size": [
+              760.0,
+              164.0
+            ],
+            "time_knob": true
+          }
+        }
       }
     ],
     "reverb": [
@@ -2124,7 +2344,29 @@
         "size": [
           960.0,
           164.0
-        ]
+        ],
+        "tiers": {
+          "ipad": {
+            "dark": "80-verb-room-ipad-dark",
+            "face": "80-verb-room-ipad",
+            "nameplate": true,
+            "size": [
+              510.0,
+              164.0
+            ],
+            "time_knob": true
+          },
+          "phone": {
+            "dark": "80-verb-room-phone-dark",
+            "face": "80-verb-room-phone",
+            "nameplate": true,
+            "size": [
+              760.0,
+              164.0
+            ],
+            "time_knob": true
+          }
+        }
       },
       {
         "back": "81-verb-hall-back",
@@ -2147,7 +2389,7 @@
             "face": "81-verb-hall-ipad",
             "nameplate": true,
             "size": [
-              520.0,
+              510.0,
               164.0
             ],
             "time_knob": true
@@ -2181,6 +2423,18 @@
           164.0
         ],
         "tiers": {
+          "ipad": {
+            "back": "82-verb-plate-back-ipad",
+            "back_dark": "82-verb-plate-back-ipad-dark",
+            "dark": "82-verb-plate-ipad-dark",
+            "face": "82-verb-plate-ipad",
+            "nameplate": true,
+            "size": [
+              510.0,
+              164.0
+            ],
+            "time_knob": true
+          },
           "phone": {
             "back": "82-verb-plate-back-phone",
             "back_dark": "82-verb-plate-back-phone-dark",
@@ -2206,7 +2460,29 @@
         "size": [
           960.0,
           164.0
-        ]
+        ],
+        "tiers": {
+          "ipad": {
+            "dark": "83-verb-spring-ipad-dark",
+            "face": "83-verb-spring-ipad",
+            "nameplate": true,
+            "size": [
+              510.0,
+              164.0
+            ],
+            "time_knob": true
+          },
+          "phone": {
+            "dark": "83-verb-spring-phone-dark",
+            "face": "83-verb-spring-phone",
+            "nameplate": true,
+            "size": [
+              760.0,
+              164.0
+            ],
+            "time_knob": true
+          }
+        }
       },
       {
         "back": "84-verb-cloud-back",
@@ -2223,6 +2499,18 @@
           164.0
         ],
         "tiers": {
+          "ipad": {
+            "back": "84-verb-cloud-back-ipad",
+            "back_dark": "84-verb-cloud-back-ipad-dark",
+            "dark": "84-verb-cloud-ipad-dark",
+            "face": "84-verb-cloud-ipad",
+            "nameplate": true,
+            "size": [
+              510.0,
+              164.0
+            ],
+            "time_knob": true
+          },
           "phone": {
             "back": "84-verb-cloud-back-phone",
             "back_dark": "84-verb-cloud-back-phone-dark",
@@ -2248,7 +2536,29 @@
         "size": [
           960.0,
           164.0
-        ]
+        ],
+        "tiers": {
+          "ipad": {
+            "dark": "85-verb-bloom-ipad-dark",
+            "face": "85-verb-bloom-ipad",
+            "nameplate": true,
+            "size": [
+              510.0,
+              164.0
+            ],
+            "time_knob": true
+          },
+          "phone": {
+            "dark": "85-verb-bloom-phone-dark",
+            "face": "85-verb-bloom-phone",
+            "nameplate": true,
+            "size": [
+              760.0,
+              164.0
+            ],
+            "time_knob": true
+          }
+        }
       },
       {
         "dark": "86-verb-shimmer-dark",
@@ -2260,7 +2570,29 @@
         "size": [
           960.0,
           164.0
-        ]
+        ],
+        "tiers": {
+          "ipad": {
+            "dark": "86-verb-shimmer-ipad-dark",
+            "face": "86-verb-shimmer-ipad",
+            "nameplate": true,
+            "size": [
+              510.0,
+              164.0
+            ],
+            "time_knob": true
+          },
+          "phone": {
+            "dark": "86-verb-shimmer-phone-dark",
+            "face": "86-verb-shimmer-phone",
+            "nameplate": true,
+            "size": [
+              760.0,
+              164.0
+            ],
+            "time_knob": true
+          }
+        }
       },
       {
         "dark": "87-verb-chorale-dark",
@@ -2272,7 +2604,29 @@
         "size": [
           960.0,
           164.0
-        ]
+        ],
+        "tiers": {
+          "ipad": {
+            "dark": "87-verb-chorale-ipad-dark",
+            "face": "87-verb-chorale-ipad",
+            "nameplate": true,
+            "size": [
+              510.0,
+              164.0
+            ],
+            "time_knob": true
+          },
+          "phone": {
+            "dark": "87-verb-chorale-phone-dark",
+            "face": "87-verb-chorale-phone",
+            "nameplate": true,
+            "size": [
+              760.0,
+              164.0
+            ],
+            "time_knob": true
+          }
+        }
       },
       {
         "dark": "88-verb-magneto-dark",
@@ -2284,7 +2638,29 @@
         "size": [
           960.0,
           164.0
-        ]
+        ],
+        "tiers": {
+          "ipad": {
+            "dark": "88-verb-magneto-ipad-dark",
+            "face": "88-verb-magneto-ipad",
+            "nameplate": true,
+            "size": [
+              510.0,
+              164.0
+            ],
+            "time_knob": true
+          },
+          "phone": {
+            "dark": "88-verb-magneto-phone-dark",
+            "face": "88-verb-magneto-phone",
+            "nameplate": true,
+            "size": [
+              760.0,
+              164.0
+            ],
+            "time_knob": true
+          }
+        }
       },
       {
         "dark": "89-verb-nonlinear-dark",
@@ -2296,7 +2672,29 @@
         "size": [
           960.0,
           164.0
-        ]
+        ],
+        "tiers": {
+          "ipad": {
+            "dark": "89-verb-nonlinear-ipad-dark",
+            "face": "89-verb-nonlinear-ipad",
+            "nameplate": true,
+            "size": [
+              510.0,
+              164.0
+            ],
+            "time_knob": true
+          },
+          "phone": {
+            "dark": "89-verb-nonlinear-phone-dark",
+            "face": "89-verb-nonlinear-phone",
+            "nameplate": true,
+            "size": [
+              760.0,
+              164.0
+            ],
+            "time_knob": true
+          }
+        }
       },
       {
         "dark": "90-verb-swell-dark",
@@ -2308,7 +2706,29 @@
         "size": [
           960.0,
           164.0
-        ]
+        ],
+        "tiers": {
+          "ipad": {
+            "dark": "90-verb-swell-ipad-dark",
+            "face": "90-verb-swell-ipad",
+            "nameplate": true,
+            "size": [
+              510.0,
+              164.0
+            ],
+            "time_knob": true
+          },
+          "phone": {
+            "dark": "90-verb-swell-phone-dark",
+            "face": "90-verb-swell-phone",
+            "nameplate": true,
+            "size": [
+              760.0,
+              164.0
+            ],
+            "time_knob": true
+          }
+        }
       },
       {
         "dark": "91-verb-reflections-dark",
@@ -2320,7 +2740,29 @@
         "size": [
           960.0,
           164.0
-        ]
+        ],
+        "tiers": {
+          "ipad": {
+            "dark": "91-verb-reflections-ipad-dark",
+            "face": "91-verb-reflections-ipad",
+            "nameplate": true,
+            "size": [
+              510.0,
+              164.0
+            ],
+            "time_knob": true
+          },
+          "phone": {
+            "dark": "91-verb-reflections-phone-dark",
+            "face": "91-verb-reflections-phone",
+            "nameplate": true,
+            "size": [
+              760.0,
+              164.0
+            ],
+            "time_knob": true
+          }
+        }
       },
       {
         "dark": "92-verb-velvet-dark",
@@ -2332,7 +2774,29 @@
         "size": [
           960.0,
           164.0
-        ]
+        ],
+        "tiers": {
+          "ipad": {
+            "dark": "92-verb-velvet-ipad-dark",
+            "face": "92-verb-velvet-ipad",
+            "nameplate": true,
+            "size": [
+              510.0,
+              164.0
+            ],
+            "time_knob": true
+          },
+          "phone": {
+            "dark": "92-verb-velvet-phone-dark",
+            "face": "92-verb-velvet-phone",
+            "nameplate": true,
+            "size": [
+              760.0,
+              164.0
+            ],
+            "time_knob": true
+          }
+        }
       },
       {
         "dark": "93-verb-freeverb-dark",
@@ -2344,7 +2808,29 @@
         "size": [
           960.0,
           164.0
-        ]
+        ],
+        "tiers": {
+          "ipad": {
+            "dark": "93-verb-freeverb-ipad-dark",
+            "face": "93-verb-freeverb-ipad",
+            "nameplate": true,
+            "size": [
+              510.0,
+              164.0
+            ],
+            "time_knob": true
+          },
+          "phone": {
+            "dark": "93-verb-freeverb-phone-dark",
+            "face": "93-verb-freeverb-phone",
+            "nameplate": true,
+            "size": [
+              760.0,
+              164.0
+            ],
+            "time_knob": true
+          }
+        }
       },
       {
         "dark": "94-verb-convolution-dark",
@@ -2356,7 +2842,29 @@
         "size": [
           960.0,
           164.0
-        ]
+        ],
+        "tiers": {
+          "ipad": {
+            "dark": "94-verb-convolution-ipad-dark",
+            "face": "94-verb-convolution-ipad",
+            "nameplate": true,
+            "size": [
+              510.0,
+              164.0
+            ],
+            "time_knob": true
+          },
+          "phone": {
+            "dark": "94-verb-convolution-phone-dark",
+            "face": "94-verb-convolution-phone",
+            "nameplate": true,
+            "size": [
+              760.0,
+              164.0
+            ],
+            "time_knob": true
+          }
+        }
       }
     ]
   },

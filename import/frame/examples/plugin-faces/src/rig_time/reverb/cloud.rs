@@ -132,7 +132,7 @@ pub fn face(dark: bool) -> Face {
 pub fn face_at(dark: bool, tier: kit::Tier) -> Face {
     let l = if dark { &DARK } else { &LIGHT };
     let (ink, dim) = (l.ink, l.dim);
-    let small_room = matches!(tier, kit::Tier::Phone | kit::Tier::Strip);
+    let small_room = tier.small();
     let w = tier.lane_w();
     let scene = kit::tier_lane("Cloud", tier, |b, root| {
         // The frosted panel.
@@ -144,7 +144,7 @@ pub fn face_at(dark: bool, tier: kit::Tier) -> Face {
 
         // ── The sky ────────────────────────────────────────────────────
         // On a phone the controls come first: the sky shrinks for them.
-        let sw = if small_room { kit::PHONE_PICTURE_R - 10.0 } else { 600.0 };
+        let sw = if small_room { kit::picture_r(tier) - 10.0 } else { 600.0 };
         let (sx, sy, sh) = (10.0, 10.0, kit::H - 20.0);
         let mut s = draw::frame("Sky", sx, sy, sw, sh);
         s.fills = vec![draw::linear(180.0, &l.sky)];
@@ -159,16 +159,16 @@ pub fn face_at(dark: bool, tier: kit::Tier) -> Face {
         let serif = draw::Lettering::family(draw::family::PLAYFAIR_DISPLAY).weight(400.0);
         let pearl = l.knob;
         if small_room {
-            kit::nameplate_top_right(b, panel, VERB, tier, (6.0, 30.0), 86.0, 220.0, 12.0, (if dark { kit::PURPLE_LAMP } else { "#6a3fc4" }, dim), |b, t| {
+            kit::nameplate_top_right(b, panel, VERB, tier, (6.0, 30.0), 86.0, if tier == kit::Tier::Ipad { 150.0 } else { 220.0 }, 12.0, (if dark { kit::PURPLE_LAMP } else { "#6a3fc4" }, dim), |b, t| {
                 crate::suite_studio_blues::parts::set(b, t, "Cloud", 34.0, 15.0, 22.0, ink, &serif, 0.08);
             });
             // Spread across the panel: Decay, Size, Level, On — each with
             // its value and name under it, inside the lane.
-            let (tx, ty, td) = kit::PHONE_TIME;
-            kit::time_knob(b, panel, VERB, (tx, ty, td), 11.0, (ink, dim, &ui::alpha(kit::PURPLE_LAMP, 0.55)), |b, p, addr| {
+            let (tx, ty, td) = kit::time_spot(tier);
+            kit::time_knob(b, panel, VERB, (tx, ty, td), if tier == kit::Tier::Ipad { 10.0 } else { 11.0 }, (ink, dim, &ui::alpha(kit::PURPLE_LAMP, 0.55)), |b, p, addr| {
                 kit::knob3d_bare(b, p, addr, td, (tx, ty), &pearl);
             });
-            let (xs, ky, kd) = kit::PHONE_KNOBS;
+            let (xs, ky, kd) = kit::knob_row(tier);
             for (i, (id, legend)) in [("size", "Size"), ("level", "Level")].iter().enumerate() {
                 kit::knob3d(b, panel, &a(id), legend, kd, (xs[i], ky), &pearl, ink, dim);
             }
@@ -203,7 +203,7 @@ pub fn face_at(dark: bool, tier: kit::Tier) -> Face {
 pub fn back_at(dark: bool, tier: kit::Tier) -> Face {
     let l = if dark { &DARK } else { &LIGHT };
     let (ink, dim) = (l.ink, l.dim);
-    let small_room = matches!(tier, kit::Tier::Phone | kit::Tier::Strip);
+    let small_room = tier.small();
     let w = tier.lane_w();
     let scene = kit::tier_lane("Cloud", tier, |b, root| {
         let mut panel = draw::frame("Panel", 0.0, 0.0, w, kit::H);
@@ -215,7 +215,7 @@ pub fn back_at(dark: bool, tier: kit::Tier) -> Face {
         kit::back_knobs(b, root, tier, &knobs, ink, |b, p, id, legend, d, at| {
             kit::knob3d(b, p, &a(id), legend, d, at, &pearl, ink, dim);
         });
-        let (np_h, title_w, preset_w, size) = if small_room { (30.0, 86.0, 220.0, 12.0) } else { (28.0, 82.0, 200.0, 10.0) };
+        let (np_h, title_w, preset_w, size) = if small_room { (30.0, 86.0, if tier == kit::Tier::Ipad { 150.0 } else { 220.0 }, 12.0) } else { (28.0, 82.0, 200.0, 10.0) };
         let serif = draw::Lettering::family(draw::family::PLAYFAIR_DISPLAY).weight(400.0);
         kit::nameplate_top_right(b, root, VERB, tier, (if small_room { 6.0 } else { 10.0 }, np_h), title_w, preset_w, size, (if dark { kit::PURPLE_LAMP } else { "#6a3fc4" }, dim), |b, t| {
             crate::suite_studio_blues::parts::set(b, t, "Cloud", 34.0, np_h / 2.0, 22.0, ink, &serif, 0.08);

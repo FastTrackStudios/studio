@@ -136,14 +136,14 @@ pub fn face_at(dark: bool, tier: kit::Tier) -> Face {
             let (tx, ty, td) = kit::time_spot(tier);
             // The dial's bay: the TIME | BEAT pill under the knob its width.
             let pane = tier == kit::Tier::Ipad;
-            let half = if pane { 64.0 } else { 78.0 };
+            let half = if pane { 42.0 } else { 78.0 };
             let (b2x, b3x) = (tx - half, tx + half + 2.0);
             // The picture: ECHO, a slim VU, the heads under it — the
             // controls come first on a phone.
             let b1w = b2x - 2.0 - 6.0;
             let bay1 = bay(b, unit, "Bay 1", (6.0, y, b1w, bh), &grey);
             // On a pane: the letters smaller, the VU and its lamps closer.
-            let (letter, lx, top, step, vr, lamp_dx) = if pane { (15.0, 15.0, 30.0, 26.0, 26.0, 18.0) } else { (18.0, 18.0, 28.0, 28.0, 34.0, 24.0) };
+            let (letter, lx, top, step, vr, lamp_dx) = if pane { (16.0, 16.0, 30.0, 26.0, 28.0, 20.0) } else { (18.0, 18.0, 28.0, 28.0, 34.0, 24.0) };
             for (i, ch) in "ECHO".chars().enumerate() {
                 parts::centred(b, bay1, &ch.to_string(), (lx, top + step * i as f64), Type::new(letter, ink, 300.0).family(draw::family::SAIRA).width(88.0));
             }
@@ -153,7 +153,7 @@ pub fn face_at(dark: bool, tier: kit::Tier) -> Face {
             picture = bay1;
             // The white dial: Time, in its own bay.
             let bay2 = bay(b, unit, "Bay 2", (b2x, y, b3x - 2.0 - b2x, bh), &grey);
-            kit::time_knob(b, bay2, DLY, (tx - b2x, ty - y, td), 11.0, (ink, "#6b6e74", &lit), |b, p, addr| {
+            kit::time_knob(b, bay2, DLY, (tx - b2x, ty - y, td), if tier == kit::Tier::Ipad { 10.0 } else { 11.0 }, (ink, "#6b6e74", &lit), |b, p, addr| {
                 look::place_knob(b, p, &dial, addr, "", td, (tx - b2x, ty - y), ink);
             });
             // The knobs that matter on stage, in the phone's knob row.
@@ -164,7 +164,7 @@ pub fn face_at(dark: bool, tier: kit::Tier) -> Face {
                 let (x, cy) = (xs[i] - b3x, ky - y);
                 let k = look::knob(b, bay3, if warm { &orange } else { &black }, &a(id), kd, (x, cy), 11, ink, false);
                 ui::add_value(b, k, ls - 0.5, "#6b6e74");
-                parts::centred(b, bay3, legend, (x, cy + kd / 2.0 + if pane { 24.0 } else { 30.0 }), Type::new(ls, ink, 600.0).track(0.06).upper());
+                parts::centred(b, bay3, legend, (x, cy + kd / 2.0 + if pane { 22.0 } else { 30.0 }), Type::new(ls, ink, 600.0).track(0.06).upper());
             }
         } else {
             // Bay 1: the letters, the VU, the display.
