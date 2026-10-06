@@ -35,6 +35,8 @@ pub fn faces() -> Vec<Face> {
     v.extend(delay::small_faces(true, kit::Tier::Ipad).into_iter().map(|(_, f)| f));
     for dark in [false, true] {
         v.extend(delay::back_faces(dark, kit::Tier::Ipad).into_iter().map(|(_, f)| f));
+        v.extend(reverb::pane_faces(dark).into_iter().map(|(_, f)| f));
+        v.extend(reverb::back_faces(dark, kit::Tier::Ipad).into_iter().map(|(_, f)| f));
     }
     for t in [kit::Tier::Desktop, kit::Tier::Phone] {
         for dark in [false, true] {
@@ -111,7 +113,7 @@ pub fn manifest() -> serde_json::Value {
         .iter()
         .zip(reverb::faces(false).into_iter().zip(reverb::faces(true)))
         .enumerate()
-        .map(|(i, (name, (f, d)))| entry(json!({ "match": [name.to_lowercase()], "face": f.file, "dark": d.file, "ns": kit::VERB, "size": size }), &f, reverb::phone_faces(false).into_iter().find(|(at, _)| *at == i), reverb::phone_faces(true).into_iter().find(|(at, _)| *at == i), None, |dark, t| reverb::back_faces(dark, t).into_iter().find(|(at, _)| *at == i).map(|(_, f)| f)))
+        .map(|(i, (name, (f, d)))| entry(json!({ "match": [name.to_lowercase()], "face": f.file, "dark": d.file, "ns": kit::VERB, "size": size }), &f, reverb::phone_faces(false).into_iter().find(|(at, _)| *at == i), reverb::phone_faces(true).into_iter().find(|(at, _)| *at == i), reverb::pane_faces(false).into_iter().find(|(at, _)| *at == i).map(|(_, f)| f).zip(reverb::pane_faces(true).into_iter().find(|(at, _)| *at == i).map(|(_, f)| f)), |dark, t| reverb::back_faces(dark, t).into_iter().find(|(at, _)| *at == i).map(|(_, f)| f)))
         .collect();
     json!({ "delay": delays, "reverb": reverbs })
 }

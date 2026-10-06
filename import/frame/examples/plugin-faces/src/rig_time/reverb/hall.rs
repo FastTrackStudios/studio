@@ -172,7 +172,10 @@ fn hall(b: &mut Builder<'_>, plan: NodeId, w: f64, h: f64, line: &str) {
     let src = b.add(plan, draw::emissive(draw::circle("source", cx, cy, 4.5, draw::solid(GILT)), draw::hex(GILT), 1.0, 12.0));
     motion::add(b, src, Motion::new(Target::Opacity).input(format!("0.35 + 0.65 * param({VERB}/on)")).range(0.0, 1.0));
 
-    // Title block, as a drawing has.
+    // Title block, as a drawing has — where the sheet is wide enough.
+    if w < 260.0 {
+        return;
+    }
     let (tx, ty) = (w - 212.0, h - 28.0);
     let mut tb = draw::rect("title block", tx, ty, 194.0, 20.0, draw::solid("#00000000"));
     tb.stroke = document_proto::Stroke { paints: vec![draw::solid(&ui::alpha(line, 0.6))], weight: 0.8, ..document_proto::Stroke::default() };
@@ -236,4 +239,104 @@ pub fn face(dark: bool) -> Face {
         kit::responsive(b, panel, &stretch);
     });
     kit::reverb_face(kit::file("81-verb-hall", dark), scene)
+}
+
+/// The house: velvet in a gilt frame, `w` wide.
+fn house(b: &mut Builder<'_>, root: NodeId, l: &Look, w: f64) -> NodeId {
+    let mut panel = draw::frame("House", 0.0, 0.0, w, kit::H);
+    panel.fills = vec![draw::linear(180.0, &l.house)];
+    panel.corner_radii = document_proto::CornerRadii::uniform(6.0);
+    panel.stroke = document_proto::Stroke { paints: vec![draw::solid(GILT_DIM)], weight: 2.0, ..document_proto::Stroke::default() };
+    b.add(root, panel)
+}
+
+/// The nameplate in the house's lettering, top right, for a small room.
+fn small_nameplate(b: &mut Builder<'_>, panel: NodeId, l: &Look, tier: kit::Tier) {
+    let (np_y, np_h, title_w, preset_w, size) = kit::small_nameplate(tier);
+    let serif = draw::Lettering::family(draw::family::PLAYFAIR_DISPLAY).weight(700.0);
+    kit::nameplate_top_right(b, panel, VERB, tier, (np_y, np_h), title_w, preset_w, size, (if l.title == GILT { GILT } else { "#4c2a85" }, l.dim), |b, t| {
+        crate::suite_studio_blues::parts::set(b, t, "Hall", title_w / 2.0 - 8.0, np_h / 2.0, size + 7.0, l.title, &serif, 0.06);
+    });
+}
+
+/// The face at `tier`: the house at full size on the desktop ([`face`]);
+/// in a small room (a phone's lane, a desktop pane's) the controls come
+/// first — the plan, slim, as the picture, the Time knob (the decay),
+/// Size, Pre-Delay and Level in the knob row, the nameplate top right, In
+/// at the Time faces' bypass spot.
+#[must_use]
+pub fn face_at(dark: bool, tier: kit::Tier) -> Face {
+    if !tier.small() {
+        return face(dark);
+    }
+    let l = if dark { &DARK } else { &LIGHT };
+    let w = tier.lane_w();
+    let scene = kit::tier_lane("Hall", tier, |b, root| {
+        let panel = house(b, root, l, w);
+        // ── The drawing, slim ──────────────────────────────────────────
+        let (px, py, pw, ph) = (10.0, 10.0, kit::picture_r(tier) - 22.0, kit::H - 20.0);
+        let mut sheet = draw::frame("Blueprint", px, py, pw, ph);
+        sheet.fills = vec![draw::linear(160.0, &[(0.0, l.paper.0), (1.0, l.paper.1)])];
+        sheet.clips_content = true;
+        sheet.corner_radii = document_proto::CornerRadii::uniform(3.0);
+        sheet.effects = vec![draw::inner_shadow(l.sheet_shadow, 0.0, 2.0, 8.0)];
+        let sheet = b.add(panel, sheet);
+        hall(b, sheet, pw, ph, l.line);
+        kit::scale_children(b, sheet);
+        let mut rim = draw::rect("gilt", px - 2.0, py - 2.0, pw + 4.0, ph + 4.0, draw::solid("#00000000"));
+        rim.fills.clear();
+        rim.stroke = document_proto::Stroke { paints: vec![draw::linear(90.0, &[(0.0, GILT_DIM), (0.5, GILT), (1.0, GILT_DIM)])], weight: 2.0, ..document_proto::Stroke::default() };
+        b.add(panel, rim);
+        // ── The controls ────────────────────────────────────────────────
+        let (ink, dim) = (l.ink, l.dim);
+        let brass = ["color=#c9a45c", "pointer=#2a1a0c", "index=line", "index_w=0.1", "skirt=plain", "skirt_color=#6e5428"];
+        let (tx, ty, td) = kit::time_spot(tier);
+        let ts = if tier == kit::Tier::Ipad { 10.0 } else { 11.0 };
+        kit::time_knob(b, panel, VERB, (tx, ty, td), ts, (ink, dim, &ui::alpha(GILT, 0.5)), |b, p, addr| {
+            kit::knob3d_bare(b, p, addr, td, (tx, ty), &brass);
+        });
+        let (xs, ky, kd) = kit::knob_row(tier);
+        for (i, (id, legend)) in [("size", "Size"), ("predelay", "Pre-Delay"), ("level", "Level")].iter().enumerate() {
+            kit::knob3d(b, panel, &a(id), legend, kd, (xs[i], ky), &l.small, ink, dim);
+        }
+        small_nameplate(b, panel, l, tier);
+        kit::face_bypass(b, panel, VERB, tier, "purple", "In");
+        kit::flip_arrow(b, panel, VERB, tier, false, (ink, &ui::alpha(dim, 0.25)));
+        let stretch = kit::with_sibling(b, panel, sheet, 1);
+        kit::responsive(b, panel, &stretch);
+    });
+    let mut f = kit::reverb_face(kit::tier_file("81-verb-hall", tier, dark), scene);
+    f.params.extend(kit::nameplate_params(VERB));
+    f.params.extend(kit::time_params(VERB));
+    f.params.extend(kit::flip_params(VERB));
+    f
+}
+
+/// Its back at `tier`: the house, no drawing — the advanced controls
+/// across it, the nameplate, In and the arrow where they are on the front.
+#[must_use]
+pub fn back_at(dark: bool, tier: kit::Tier) -> Face {
+    let l = if dark { &DARK } else { &LIGHT };
+    let w = tier.lane_w();
+    let scene = kit::tier_lane("Hall", tier, |b, root| {
+        let panel = house(b, root, l, w);
+        let knobs = [("damping", "Damp"), ("modulation", "Mod"), ("low_cut", "Low Cut"), ("high_cut", "High Cut"), ("tone", "Tone"), ("duck", "Duck"), ("pan_a", "Pan")];
+        kit::back_knobs(b, panel, tier, &knobs, l.ink, |b, p, id, legend, d, at| {
+            kit::knob3d(b, p, &a(id), legend, d, at, &l.small, l.ink, l.dim);
+        });
+        if tier.small() {
+            small_nameplate(b, panel, l, tier);
+        } else {
+            kit::nameplate_top_right(b, panel, VERB, tier, (12.0, 26.0), 76.0, 200.0, 10.0, (GILT, l.dim), |b, t| {
+                let serif = draw::Lettering::family(draw::family::PLAYFAIR_DISPLAY).weight(700.0);
+                crate::suite_studio_blues::parts::set(b, t, "Hall", 30.0, 13.0, 18.0, l.title, &serif, 0.06);
+            });
+        }
+        kit::face_bypass(b, panel, VERB, tier, "purple", "In");
+        kit::flip_arrow(b, panel, VERB, tier, true, (l.ink, &ui::alpha(l.dim, 0.25)));
+    });
+    let mut f = kit::reverb_face(kit::tier_file("81-verb-hall-back", tier, dark), scene);
+    f.params.extend(kit::nameplate_params(VERB));
+    f.params.extend(kit::flip_params(VERB));
+    f
 }

@@ -23,12 +23,21 @@ use crate::face::Face;
 /// The phone layouts there are, by algorithm (its index in
 /// `VERB_ALGOS`'s order, as [`faces`] lists them).
 pub fn phone_faces(dark: bool) -> Vec<(usize, Face)> {
-    vec![(2, plate::face_at(dark, super::kit::Tier::Phone)), (4, cloud::face_at(dark, super::kit::Tier::Phone))]
+    vec![(1, hall::face_at(dark, super::kit::Tier::Phone)), (2, plate::face_at(dark, super::kit::Tier::Phone)), (4, cloud::face_at(dark, super::kit::Tier::Phone))]
+}
+
+/// The layouts there are for a desktop pane's lane, by algorithm.
+pub fn pane_faces(dark: bool) -> Vec<(usize, Face)> {
+    vec![(1, hall::face_at(dark, super::kit::Tier::Ipad))]
 }
 
 /// The backs there are (the advanced controls), by algorithm, at `t`.
 pub fn back_faces(dark: bool, t: super::kit::Tier) -> Vec<(usize, Face)> {
-    vec![(2, plate::back_at(dark, t)), (4, cloud::back_at(dark, t))]
+    let mut v = vec![(1, hall::back_at(dark, t))];
+    if t != super::kit::Tier::Ipad {
+        v.extend([(2, plate::back_at(dark, t)), (4, cloud::back_at(dark, t))]);
+    }
+    v
 }
 
 pub fn faces(dark: bool) -> Vec<Face> {

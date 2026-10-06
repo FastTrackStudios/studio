@@ -2127,6 +2127,8 @@
         ]
       },
       {
+        "back": "81-verb-hall-back",
+        "back_dark": "81-verb-hall-back-dark",
         "dark": "81-verb-hall-dark",
         "face": "81-verb-hall",
         "match": [
@@ -2136,7 +2138,33 @@
         "size": [
           960.0,
           164.0
-        ]
+        ],
+        "tiers": {
+          "ipad": {
+            "back": "81-verb-hall-back-ipad",
+            "back_dark": "81-verb-hall-back-ipad-dark",
+            "dark": "81-verb-hall-ipad-dark",
+            "face": "81-verb-hall-ipad",
+            "nameplate": true,
+            "size": [
+              520.0,
+              164.0
+            ],
+            "time_knob": true
+          },
+          "phone": {
+            "back": "81-verb-hall-back-phone",
+            "back_dark": "81-verb-hall-back-phone-dark",
+            "dark": "81-verb-hall-phone-dark",
+            "face": "81-verb-hall-phone",
+            "nameplate": true,
+            "size": [
+              760.0,
+              164.0
+            ],
+            "time_knob": true
+          }
+        }
       },
       {
         "back": "82-verb-plate-back",
