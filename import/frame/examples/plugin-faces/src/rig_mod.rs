@@ -230,8 +230,8 @@ fn chorus() -> Face {
 }
 
 fn chorus_at(tier: kit::Tier) -> Face {
-    if matches!(tier, kit::Tier::Phone | kit::Tier::Strip) {
-        return lane("Chorus", &CHORUS, MOD, chorus_picture, &[("depth", "Depth"), ("width", "Width"), ("mix", "Mix")], true, file_at("100-mod-chorus", tier), chorus_params());
+    if tier.small() {
+        return lane(tier, "Chorus", &CHORUS, MOD, chorus_picture, &[("depth", "Depth"), ("width", "Width"), ("mix", "Mix")], true, file_at("100-mod-chorus", tier), chorus_params());
     }
     let t = &CHORUS;
     let l = Lay::at(tier);
@@ -251,8 +251,8 @@ fn chorus_at(tier: kit::Tier) -> Face {
 /// The chorus's back: its panel, no picture — Width, Color and Feedback
 /// across it, the head as on the front.
 fn chorus_back(tier: kit::Tier) -> Face {
-    if matches!(tier, kit::Tier::Phone | kit::Tier::Strip) {
-        return lane_back("Chorus", &CHORUS, MOD, &[("color", "Color"), ("feedback", "Feedback"), ("width", "Width")], file_at("100-mod-chorus-back", tier), chorus_params());
+    if tier.small() {
+        return lane_back(tier, "Chorus", &CHORUS, MOD, &[("color", "Color"), ("feedback", "Feedback"), ("width", "Width")], file_at("100-mod-chorus-back", tier), chorus_params());
     }
     let t = &CHORUS;
     let l = Lay::at(tier);
@@ -290,8 +290,8 @@ fn tremolo() -> Face {
 }
 
 fn tremolo_at(tier: kit::Tier) -> Face {
-    if matches!(tier, kit::Tier::Phone | kit::Tier::Strip) {
-        return lane("Tremolo", &TREMOLO, MOTION, tremolo_picture, &[("depth", "Depth"), ("mix", "Mix")], false, file_at("101-motion-tremolo", tier), trem_params());
+    if tier.small() {
+        return lane(tier, "Tremolo", &TREMOLO, MOTION, tremolo_picture, &[("depth", "Depth"), ("mix", "Mix")], false, file_at("101-motion-tremolo", tier), trem_params());
     }
     let t = &TREMOLO;
     let l = Lay::at(tier);
@@ -330,8 +330,8 @@ fn vibrato() -> Face {
 }
 
 fn vibrato_at(tier: kit::Tier) -> Face {
-    if matches!(tier, kit::Tier::Phone | kit::Tier::Strip) {
-        return lane("Vibrato", &VIBRATO, MOTION, vibrato_picture, &[("depth", "Depth"), ("mix", "Mix")], false, file_at("102-motion-vibrato", tier), vibrato_params());
+    if tier.small() {
+        return lane(tier, "Vibrato", &VIBRATO, MOTION, vibrato_picture, &[("depth", "Depth"), ("mix", "Mix")], false, file_at("102-motion-vibrato", tier), vibrato_params());
     }
     let t = &VIBRATO;
     let l = Lay::at(tier);
@@ -459,13 +459,12 @@ fn knob_opts(t: &Theme) -> Vec<String> {
 /// the knob row, the bypass and (`flips`) More at the right, the nameplate
 /// at the top right. Its theme, its picture, its name.
 #[allow(clippy::too_many_arguments)]
-fn lane(name: &'static str, t: &'static Theme, ns: &'static str, picture: fn(&mut Builder<'_>, NodeId, f64, f64, &Theme), knobs: &[(&str, &str)], flips: bool, file: &'static str, mut params: Vec<ParamInfo>) -> Face {
-    let tier = kit::Tier::Phone;
+fn lane(tier: kit::Tier, name: &'static str, t: &'static Theme, ns: &'static str, picture: fn(&mut Builder<'_>, NodeId, f64, f64, &Theme), knobs: &[(&str, &str)], flips: bool, file: &'static str, mut params: Vec<ParamInfo>) -> Face {
     let w = tier.lane_w();
     let opts = knob_opts(t);
     let scene = kit::tier_lane(name, tier, |b, root| {
         let p = lane_panel(b, root, t, w);
-        let (vx, vy, vw, vh) = (10.0, 10.0, kit::PHONE_PICTURE_R - 10.0, kit::H - 20.0);
+        let (vx, vy, vw, vh) = (10.0, 10.0, kit::picture_r(tier) - 10.0, kit::H - 20.0);
         let mut v = draw::frame("View", vx, vy, vw, vh);
         v.fills = vec![draw::linear(180.0, &t.window)];
         v.clips_content = true;
@@ -474,15 +473,16 @@ fn lane(name: &'static str, t: &'static Theme, ns: &'static str, picture: fn(&mu
         let v = b.add(p, v);
         picture(b, v, vw, vh, t);
         let o: Vec<&str> = opts.iter().map(String::as_str).collect();
-        let (tx, ty, td) = kit::PHONE_TIME;
-        kit::time_knob(b, p, ns, (tx, ty, td), 11.0, (t.ink, t.dim, &ui::alpha(t.accent, 0.45)), |b, pp, addr| {
+        let (tx, ty, td) = kit::time_spot(tier);
+        let ts = if tier == kit::Tier::Ipad { 10.0 } else { 11.0 };
+        kit::time_knob(b, p, ns, (tx, ty, td), ts, (t.ink, t.dim, &ui::alpha(t.accent, 0.45)), |b, pp, addr| {
             kit::knob3d_bare(b, pp, addr, td, (tx, ty), &o);
         });
-        let (xs, ky, kd) = kit::PHONE_KNOBS;
+        let (xs, ky, kd) = kit::knob_row(tier);
         for (i, (id, legend)) in knobs.iter().enumerate().take(3) {
             kit::knob3d(b, p, &a(ns, id), legend, kd, (xs[i], ky), &o, t.ink, t.dim);
         }
-        lane_head(b, p, t, ns, name, flips, false);
+        lane_head(b, p, tier, t, ns, name, flips, false);
         kit::responsive(b, p, &[v]);
     });
     params.extend(chrome_params(ns, flips));
@@ -500,12 +500,14 @@ fn lane_panel(b: &mut Builder<'_>, root: NodeId, t: &Theme, w: f64) -> NodeId {
 
 /// A phone lane's nameplate, bypass and (`flips`) arrow, where every Time
 /// face has them.
-fn lane_head(b: &mut Builder<'_>, p: NodeId, t: &Theme, ns: &str, name: &str, flips: bool, back: bool) {
-    let tier = kit::Tier::Phone;
+#[allow(clippy::too_many_arguments)]
+fn lane_head(b: &mut Builder<'_>, p: NodeId, tier: kit::Tier, t: &Theme, ns: &str, name: &str, flips: bool, back: bool) {
     let sans = draw::Lettering::family(draw::family::INTER).weight(300.0);
-    let title_w = name.chars().count() as f64 * 12.5 + 20.0;
-    kit::nameplate_top_right(b, p, ns, tier, (8.0, 30.0), title_w, 210.0, 12.0, (t.accent, t.dim), |b, tb| {
-        crate::suite_studio_blues::parts::set(b, tb, name, (title_w - 14.0) / 2.0, 15.0, 22.0, t.ink, &sans, 0.02);
+    // On a pane: the nameplate smaller, as the knobs are closer.
+    let (np_h, per_char, preset_w, size, title) = if tier == kit::Tier::Ipad { (26.0, 10.0, 150.0, 11.0, 18.0) } else { (30.0, 12.5, 210.0, 12.0, 22.0) };
+    let title_w = name.chars().count() as f64 * per_char + 20.0;
+    kit::nameplate_top_right(b, p, ns, tier, (8.0, np_h), title_w, preset_w, size, (t.accent, t.dim), |b, tb| {
+        crate::suite_studio_blues::parts::set(b, tb, name, (title_w - 14.0) / 2.0, np_h / 2.0, title, t.ink, &sans, 0.02);
     });
     kit::face_bypass(b, p, ns, tier, t.bypass, "On");
     if flips {
@@ -515,8 +517,7 @@ fn lane_head(b: &mut Builder<'_>, p: NodeId, t: &Theme, ns: &str, name: &str, fl
 
 /// A modulation lane's back on a phone: its panel, no picture — `knobs`
 /// across it, the head as on the front.
-fn lane_back(name: &'static str, t: &'static Theme, ns: &'static str, knobs: &[(&str, &str)], file: &'static str, mut params: Vec<ParamInfo>) -> Face {
-    let tier = kit::Tier::Phone;
+fn lane_back(tier: kit::Tier, name: &'static str, t: &'static Theme, ns: &'static str, knobs: &[(&str, &str)], file: &'static str, mut params: Vec<ParamInfo>) -> Face {
     let opts = knob_opts(t);
     let scene = kit::tier_lane(name, tier, |b, root| {
         let p = lane_panel(b, root, t, tier.lane_w());
@@ -524,7 +525,7 @@ fn lane_back(name: &'static str, t: &'static Theme, ns: &'static str, knobs: &[(
         kit::back_knobs(b, p, tier, knobs, t.ink, |b, pp, id, legend, d, at| {
             kit::knob3d(b, pp, &a(ns, id), legend, d, at, &o, t.ink, t.dim);
         });
-        lane_head(b, p, t, ns, name, true, true);
+        lane_head(b, p, tier, t, ns, name, true, true);
     });
     params.extend(chrome_params(ns, true));
     Face { file, plugin: PLUGIN, scene, params, streams: Vec::new() }
@@ -534,7 +535,8 @@ fn lane_back(name: &'static str, t: &'static Theme, ns: &'static str, knobs: &[(
 #[must_use]
 pub fn faces() -> Vec<Face> {
     let p = kit::Tier::Phone;
-    vec![chorus(), tremolo(), vibrato(), chorus_at(p), tremolo_at(p), vibrato_at(p), chorus_back(kit::Tier::Desktop), chorus_back(p)]
+    let pane = kit::Tier::Ipad;
+    vec![chorus(), tremolo(), vibrato(), chorus_at(p), tremolo_at(p), vibrato_at(p), chorus_back(kit::Tier::Desktop), chorus_back(p), chorus_at(pane), tremolo_at(pane), vibrato_at(pane), chorus_back(pane)]
 }
 
 /// `faces.json`'s `modulation` entry: each block type's face.
@@ -542,15 +544,21 @@ pub fn faces() -> Vec<Face> {
 pub fn manifest() -> serde_json::Value {
     let size = [W, H];
     let p = kit::Tier::Phone;
-    // On a phone each is a lane (the Time faces' form).
+    // On a phone each is a lane (the Time faces' form); on a desktop pane,
+    // a shorter one.
     let lane = [p.lane_w(), kit::H];
+    let q = kit::Tier::Ipad;
+    let pane = [q.lane_w(), kit::H];
     // Each prints its own nameplate; the chorus turns over to its back.
     json!([
         { "match": ["chorus"], "face": "100-mod-chorus", "ns": MOD, "size": size, "nameplate": true, "back": chorus_back(kit::Tier::Desktop).file,
-          "tiers": { "phone": { "face": chorus_at(p).file, "size": lane, "back": chorus_back(p).file, "time_knob": true } } },
+          "tiers": { "phone": { "face": chorus_at(p).file, "size": lane, "back": chorus_back(p).file, "time_knob": true },
+                     "ipad": { "face": chorus_at(q).file, "size": pane, "back": chorus_back(q).file, "time_knob": true } } },
         { "match": ["trem", "tremolo"], "face": "101-motion-tremolo", "ns": MOTION, "size": size, "nameplate": true,
-          "tiers": { "phone": { "face": tremolo_at(p).file, "size": lane, "time_knob": true } } },
+          "tiers": { "phone": { "face": tremolo_at(p).file, "size": lane, "time_knob": true },
+                     "ipad": { "face": tremolo_at(q).file, "size": pane, "time_knob": true } } },
         { "match": ["vibrato"], "face": "102-motion-vibrato", "ns": MOTION, "size": size, "nameplate": true,
-          "tiers": { "phone": { "face": vibrato_at(p).file, "size": lane, "time_knob": true } } },
+          "tiers": { "phone": { "face": vibrato_at(p).file, "size": lane, "time_knob": true },
+                     "ipad": { "face": vibrato_at(q).file, "size": pane, "time_knob": true } } },
     ])
 }

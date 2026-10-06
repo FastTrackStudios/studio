@@ -1339,6 +1339,15 @@
       392.0
     ],
     "tiers": {
+      "ipad": {
+        "back": "51-gate-pane-back",
+        "face": "51-gate-pane",
+        "nameplate": true,
+        "size": [
+          330.0,
+          200.0
+        ]
+      },
       "phone": {
         "back": "51-gate-phone-back",
         "face": "51-gate-phone",
@@ -1527,6 +1536,15 @@
         340.0
       ],
       "tiers": {
+        "ipad": {
+          "back": "100-mod-chorus-back-ipad",
+          "face": "100-mod-chorus-ipad",
+          "size": [
+            520.0,
+            164.0
+          ],
+          "time_knob": true
+        },
         "phone": {
           "back": "100-mod-chorus-back-phone",
           "face": "100-mod-chorus-phone",
@@ -1551,6 +1569,14 @@
         340.0
       ],
       "tiers": {
+        "ipad": {
+          "face": "101-motion-tremolo-ipad",
+          "size": [
+            520.0,
+            164.0
+          ],
+          "time_knob": true
+        },
         "phone": {
           "face": "101-motion-tremolo-phone",
           "size": [
@@ -1573,6 +1599,14 @@
         340.0
       ],
       "tiers": {
+        "ipad": {
+          "face": "102-motion-vibrato-ipad",
+          "size": [
+            520.0,
+            164.0
+          ],
+          "time_knob": true
+        },
         "phone": {
           "face": "102-motion-vibrato-phone",
           "size": [
@@ -1849,20 +1883,36 @@
           164.0
         ],
         "tiers": {
+          "ipad": {
+            "back": "60-dly-tape-back-ipad",
+            "back_dark": "60-dly-tape-back-ipad-dark",
+            "dark": "60-dly-tape-ipad-dark",
+            "face": "60-dly-tape-ipad",
+            "nameplate": true,
+            "size": [
+              520.0,
+              164.0
+            ],
+            "time_knob": true
+          },
           "phone": {
             "back": "60-dly-tape-back-phone",
             "back_dark": "60-dly-tape-back-phone-dark",
             "dark": "60-dly-tape-phone-dark",
             "face": "60-dly-tape-phone",
+            "nameplate": true,
             "size": [
               760.0,
               164.0
-            ]
+            ],
+            "time_knob": true
           }
         },
         "time_knob": true
       },
       {
+        "back": "61-dly-digital-back",
+        "back_dark": "61-dly-digital-back-dark",
         "dark": "61-dly-digital-dark",
         "face": "61-dly-digital",
         "match": [
@@ -1872,7 +1922,33 @@
         "size": [
           960.0,
           164.0
-        ]
+        ],
+        "tiers": {
+          "ipad": {
+            "back": "61-dly-digital-back-ipad",
+            "back_dark": "61-dly-digital-back-ipad-dark",
+            "dark": "61-dly-digital-ipad-dark",
+            "face": "61-dly-digital-ipad",
+            "nameplate": true,
+            "size": [
+              520.0,
+              164.0
+            ],
+            "time_knob": true
+          },
+          "phone": {
+            "back": "61-dly-digital-back-phone",
+            "back_dark": "61-dly-digital-back-phone-dark",
+            "dark": "61-dly-digital-phone-dark",
+            "face": "61-dly-digital-phone",
+            "nameplate": true,
+            "size": [
+              760.0,
+              164.0
+            ],
+            "time_knob": true
+          }
+        }
       },
       {
         "back": "62-dly-analog-back",
@@ -1889,15 +1965,29 @@
           164.0
         ],
         "tiers": {
+          "ipad": {
+            "back": "62-dly-analog-back-ipad",
+            "back_dark": "62-dly-analog-back-ipad-dark",
+            "dark": "62-dly-analog-ipad-dark",
+            "face": "62-dly-analog-ipad",
+            "nameplate": true,
+            "size": [
+              520.0,
+              164.0
+            ],
+            "time_knob": true
+          },
           "phone": {
             "back": "62-dly-analog-back-phone",
             "back_dark": "62-dly-analog-back-phone-dark",
             "dark": "62-dly-analog-phone-dark",
             "face": "62-dly-analog-phone",
+            "nameplate": true,
             "size": [
               760.0,
               164.0
-            ]
+            ],
+            "time_knob": true
           }
         },
         "time_knob": true
@@ -2068,10 +2158,12 @@
             "back_dark": "82-verb-plate-back-phone-dark",
             "dark": "82-verb-plate-phone-dark",
             "face": "82-verb-plate-phone",
+            "nameplate": true,
             "size": [
               760.0,
               164.0
-            ]
+            ],
+            "time_knob": true
           }
         },
         "time_knob": true
@@ -2108,10 +2200,12 @@
             "back_dark": "84-verb-cloud-back-phone-dark",
             "dark": "84-verb-cloud-phone-dark",
             "face": "84-verb-cloud-phone",
+            "nameplate": true,
             "size": [
               760.0,
               164.0
-            ]
+            ],
+            "time_knob": true
           }
         },
         "time_knob": true

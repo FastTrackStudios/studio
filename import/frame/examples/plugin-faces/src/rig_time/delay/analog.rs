@@ -93,7 +93,7 @@ pub fn face_at(dark: bool, tier: kit::Tier) -> Face {
     } else {
         ("#12264a", "#62779f", [(0.0, "#f3f7fd"), (1.0, "#dde7f5")], "#b9cbe6", [(0.0, "#ffffff"), (1.0, "#eaf1fb")], kit::BLUE_DEEP, ["color=#f8fafd", "pointer=#1e3a8a", "index=line", "index_w=0.1", "skirt=plain", "skirt_color=#b9cbe6"])
     };
-    let small_room = matches!(tier, kit::Tier::Phone | kit::Tier::Strip);
+    let small_room = tier.small();
     let w = tier.lane_w();
     let scene = kit::tier_lane("Analog", tier, |b, root| {
         let mut panel = draw::frame("Panel", 0.0, 0.0, w, kit::H);
@@ -103,7 +103,7 @@ pub fn face_at(dark: bool, tier: kit::Tier) -> Face {
 
         // ── The line ───────────────────────────────────────────────────
         // On a phone the controls come first: the line gives way.
-        let vw = if small_room { kit::PHONE_PICTURE_R - 14.0 } else { 540.0 };
+        let vw = if small_room { kit::picture_r(tier) - 14.0 } else { 540.0 };
         let (vx, vy, vh) = (14.0, 14.0, kit::H - 28.0);
         let mut view = draw::frame("Repeats", vx, vy, vw, vh);
         view.fills = vec![draw::linear(180.0, &window)];
@@ -117,11 +117,11 @@ pub fn face_at(dark: bool, tier: kit::Tier) -> Face {
         let x0 = vx + vw + 24.0;
         let lit = ui::alpha(kit::BLUE, 0.5);
         if small_room {
-            let (tx, ty, td) = kit::PHONE_TIME;
+            let (tx, ty, td) = kit::time_spot(tier);
             kit::time_knob(b, panel, DLY, (tx, ty, td), 11.0, (ink, dim, &lit), |b, p, addr| {
                 kit::knob3d_bare(b, p, addr, td, (tx, ty), &knob);
             });
-            let (xs, ky, kd) = kit::PHONE_KNOBS;
+            let (xs, ky, kd) = kit::knob_row(tier);
             for (i, (id, legend)) in [("feedback", "Repeats"), ("high_cut", "Tone"), ("level", "Level")].iter().enumerate() {
                 kit::knob3d(b, panel, &a(id), legend, kd, (xs[i], ky), &knob, ink, dim);
             }
@@ -134,10 +134,10 @@ pub fn face_at(dark: bool, tier: kit::Tier) -> Face {
             }
         }
         // The nameplate, top right: the preset, then the machine.
-        let (np_h, title_w, preset_w, size) = if small_room { (30.0, 92.0, 200.0, 12.0) } else { (28.0, 86.0, 190.0, 10.0) };
+        let (np_h, title_w, preset_w, size) = if tier == kit::Tier::Ipad { (26.0, 76.0, 150.0, 11.0) } else if small_room { (30.0, 92.0, 200.0, 12.0) } else { (28.0, 86.0, 190.0, 10.0) };
         let sans = draw::Lettering::family(draw::family::INTER).weight(300.0);
         kit::nameplate_top_right(b, panel, DLY, tier, (8.0, np_h), title_w, preset_w, size, (if dark { kit::BLUE_LIGHT } else { kit::BLUE_DEEP }, dim), |b, t| {
-            crate::suite_studio_blues::parts::set(b, t, "Analog", title_w / 2.0 - 8.0, np_h / 2.0, if small_room { 22.0 } else { 20.0 }, ink, &sans, 0.02);
+            crate::suite_studio_blues::parts::set(b, t, "Analog", title_w / 2.0 - 8.0, np_h / 2.0, if tier == kit::Tier::Ipad { 18.0 } else if small_room { 22.0 } else { 20.0 }, ink, &sans, 0.02);
         });
         kit::face_bypass(b, panel, DLY, tier, "blue", "On");
         kit::flip_arrow(b, panel, DLY, tier, false, (ink, &ui::alpha(dim, 0.3)));
@@ -161,7 +161,7 @@ pub fn back_at(dark: bool, tier: kit::Tier) -> Face {
     } else {
         ("#12264a", "#62779f", [(0.0, "#f3f7fd"), (1.0, "#dde7f5")], "#b9cbe6", ["color=#f8fafd", "pointer=#1e3a8a", "index=line", "index_w=0.1", "skirt=plain", "skirt_color=#b9cbe6"])
     };
-    let small_room = matches!(tier, kit::Tier::Phone | kit::Tier::Strip);
+    let small_room = tier.small();
     let w = tier.lane_w();
     let scene = kit::tier_lane("Analog", tier, |b, root| {
         let mut panel = draw::frame("Panel", 0.0, 0.0, w, kit::H);
@@ -172,10 +172,10 @@ pub fn back_at(dark: bool, tier: kit::Tier) -> Face {
         kit::back_knobs(b, panel, tier, &knobs, ink, |b, p, id, legend, d, at| {
             kit::knob3d(b, p, &a(id), legend, d, at, &knob, ink, dim);
         });
-        let (np_h, title_w, preset_w, size) = if small_room { (30.0, 92.0, 200.0, 12.0) } else { (28.0, 86.0, 190.0, 10.0) };
+        let (np_h, title_w, preset_w, size) = if tier == kit::Tier::Ipad { (26.0, 76.0, 150.0, 11.0) } else if small_room { (30.0, 92.0, 200.0, 12.0) } else { (28.0, 86.0, 190.0, 10.0) };
         let sans = draw::Lettering::family(draw::family::INTER).weight(300.0);
         kit::nameplate_top_right(b, panel, DLY, tier, (8.0, np_h), title_w, preset_w, size, (if dark { kit::BLUE_LIGHT } else { kit::BLUE_DEEP }, dim), |b, t| {
-            crate::suite_studio_blues::parts::set(b, t, "Analog", title_w / 2.0 - 8.0, np_h / 2.0, if small_room { 22.0 } else { 20.0 }, ink, &sans, 0.02);
+            crate::suite_studio_blues::parts::set(b, t, "Analog", title_w / 2.0 - 8.0, np_h / 2.0, if tier == kit::Tier::Ipad { 18.0 } else if small_room { 22.0 } else { 20.0 }, ink, &sans, 0.02);
         });
         kit::face_bypass(b, panel, DLY, tier, "blue", "On");
         kit::flip_arrow(b, panel, DLY, tier, true, (ink, &ui::alpha(dim, 0.3)));

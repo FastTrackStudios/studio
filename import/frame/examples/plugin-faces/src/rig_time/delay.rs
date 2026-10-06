@@ -21,12 +21,18 @@ use crate::face::Face;
 /// The phone layouts there are, by machine (its index in `DELAY_ALGOS`'s
 /// order, as [`faces`] lists them).
 pub fn phone_faces(dark: bool) -> Vec<(usize, Face)> {
-    vec![(0, tape::face_at(dark, super::kit::Tier::Phone)), (2, analog::face_at(dark, super::kit::Tier::Phone))]
+    small_faces(dark, super::kit::Tier::Phone)
+}
+
+/// The small-room layouts at `t` (a phone's lane, a desktop pane's), by
+/// machine.
+pub fn small_faces(dark: bool, t: super::kit::Tier) -> Vec<(usize, Face)> {
+    vec![(0, tape::face_at(dark, t)), (1, digital::face_at(dark, t)), (2, analog::face_at(dark, t))]
 }
 
 /// The backs there are (the advanced controls), by algorithm, at `t`.
 pub fn back_faces(dark: bool, t: super::kit::Tier) -> Vec<(usize, Face)> {
-    vec![(0, tape::back_at(dark, t)), (2, analog::back_at(dark, t))]
+    vec![(0, tape::back_at(dark, t)), (1, digital::back_at(dark, t)), (2, analog::back_at(dark, t))]
 }
 
 pub fn faces(dark: bool) -> Vec<Face> {

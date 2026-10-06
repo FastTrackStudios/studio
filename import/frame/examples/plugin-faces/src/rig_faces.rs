@@ -389,7 +389,8 @@ pub fn manifest() -> String {
         "pre": pre,
         "amps": amps,
         "gate": { "face": "51-gate", "ns": "gate", "size": [crate::rig_amp::GATE.0, crate::rig_amp::GATE.1],
-            "tiers": { "phone": { "face": "51-gate-phone", "size": size(&crate::rig_amp::gate_phone(false)), "back": "51-gate-phone-back", "nameplate": true } } },
+            "tiers": { "phone": { "face": "51-gate-phone", "size": size(&crate::rig_amp::gate_phone(false)), "back": "51-gate-phone-back", "nameplate": true },
+                       "ipad": { "face": "51-gate-pane", "size": size(&crate::rig_amp::gate_pane(false)), "back": "51-gate-pane-back", "nameplate": true } } },
         "trim": { "face": "53-trim", "ns": "trim", "size": [crate::rig_amp::TRIM.0, crate::rig_amp::TRIM.1] },
         // The Time module's units: a face per delay machine and reverb
         // algorithm, by its name.
