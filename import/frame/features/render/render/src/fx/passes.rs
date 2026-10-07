@@ -106,6 +106,12 @@ impl Blend {
     }
 }
 
+/// A compiled effect: its pipeline, the input slots its source reads, and
+/// whether it generates (never reads its source); `None` = failed.
+type Compiled = Option<(wgpu::RenderPipeline, Vec<String>, bool)>;
+
+/// Clones share one cache of compiled effects: see `SharedPasses`.
+#[derive(Clone)]
 pub(super) struct Passes {
     layout: wgpu::BindGroupLayout,
     pipeline_layout: wgpu::PipelineLayout,
@@ -124,6 +130,8 @@ pub(super) struct Passes {
     empty_data: wgpu::Buffer,
     /// Shader ids whose failure was already reported.
     reported: HashSet<String>,
+    /// The effects compiled by this and every clone of it, by shader id.
+    compiled: std::sync::Arc<std::sync::Mutex<HashMap<String, Compiled>>>,
 }
 
 impl Passes {
@@ -219,6 +227,7 @@ impl Passes {
             generators: HashSet::new(),
             empty_data,
             reported: HashSet::new(),
+            compiled: std::sync::Arc::default(),
         }
     }
 
@@ -232,15 +241,32 @@ impl Passes {
                 return None;
             };
             // Built-in and asset ids (content hashes) name fixed sources, so
-            // the result — pipeline or failure — is cached for good.
-            let compiled = compile(device, &self.pipeline_layout, &super::effect_module(&body));
-            let entry = compiled.map_err(|e| self.report(id, &e)).ok().map(|p| (p, super::effect_inputs(&body)));
-            if entry.is_some() && super::generates(&body) {
+            // the result — pipeline or failure — is cached for good, and
+            // shared with the stages this one's passes are shared with.
+            let known = self.compiled.lock().ok().and_then(|c| c.get(id).cloned());
+            let entry = match known {
+                Some(entry) => entry,
+                None => {
+                    let compiled = compile(device, &self.pipeline_layout, &super::effect_module(&body));
+                    let entry = compiled.map_err(|e| self.report(id, &e)).ok().map(|p| (p, super::effect_inputs(&body), super::generates(&body)));
+                    if let Ok(mut c) = self.compiled.lock() {
+                        c.insert(id.to_string(), entry.clone());
+                    }
+                    entry
+                }
+            };
+            if entry.as_ref().is_some_and(|(_, _, generates)| *generates) {
                 self.generators.insert(id.to_string());
             }
-            self.effects.insert(id.to_string(), entry);
+            self.effects.insert(id.to_string(), entry.map(|(p, slots, _)| (p, slots)));
         }
         self.cached_effect(id)
+    }
+
+    /// Whether `id` was compiled by this or a clone of it.
+    #[cfg(test)]
+    pub fn has_compiled(&self, id: &str) -> bool {
+        self.compiled.lock().is_ok_and(|c| c.get(id).is_some_and(Option::is_some))
     }
 
     /// The effect for `id` if it's already compiled.

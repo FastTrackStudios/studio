@@ -541,3 +541,22 @@ fn kept_renders_match_fresh_ones_frame_after_frame() {
         assert!(worst <= 2, "layer at {fade}: kept render differs by {worst}");
     }
 }
+
+/// Stages made from one `SharedPasses` share their compiled effects: one
+/// compiles, the rest find it compiled — and a stage made on its own does
+/// not see them.
+#[test]
+fn stages_on_shared_passes_compile_an_effect_once() {
+    use super::passes::Passes;
+    use vello::wgpu;
+    let instance = wgpu::Instance::new(wgpu::InstanceDescriptor::new_without_display_handle());
+    let Ok(adapter) = pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions::default())) else { return };
+    let Ok((device, _queue)) = pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor::default())) else { return };
+    let (scene, _) = shaded("glass");
+    let mut first = Passes::new(&device);
+    let second = first.clone();
+    let alone = Passes::new(&device);
+    assert!(first.effect(&device, &scene, "glass").is_some(), "glass compiles");
+    assert!(second.has_compiled("glass"), "compiled by the first, known to the second");
+    assert!(!alone.has_compiled("glass"), "a stage of its own compiles its own");
+}

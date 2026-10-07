@@ -145,3 +145,22 @@ fn a_page_too_dense_for_one_pass_is_rendered_in_bands() {
     assert!(bands > 1, "needed bands: {bands}");
     assert_drawn(&p, 3, 3, 2.0);
 }
+
+/// A deferred check reads the same answer the waited-for one does: a page
+/// that fits comes back clean, the page that overflows vello's buffers
+/// comes back overflowed — the host then renders it again, banded.
+#[test]
+fn a_deferred_check_tells_an_overflow_from_a_page_that_fits() {
+    let Ok(mut o) = Offscreen::new() else {
+        eprintln!("skipping: no GPU adapter");
+        return;
+    };
+    let mut overflowed = |cols: usize, rows: usize| {
+        let (scene, page, w, h) = dense_page(cols, rows, 1000.0, 770.0);
+        let mut vs = vello::Scene::new();
+        paint_scene_into(&mut vs, &scene, page, kurbo::Affine::scale(2.0), None);
+        o.deferred_overflow(&vs, w * 2, h * 2)
+    };
+    assert!(!overflowed(2, 2), "four faces fit one pass");
+    assert!(overflowed(3, 3), "nine overflow it");
+}

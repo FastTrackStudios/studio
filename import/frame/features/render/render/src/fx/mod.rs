@@ -18,7 +18,7 @@ mod stage;
 use std::collections::{BTreeMap, HashMap};
 
 pub use crate::anyrender_renderer::{flicker_level, EffectsPlan, EmissiveDraw, ShaderRegion};
-pub use stage::{Frame, Stage};
+pub use stage::{Check, Frame, SharedPasses, Stage};
 
 /// Live shader data for one frame: per shader node, each input's values by
 /// input name (see `document_proto::ShaderInput`; hosts resolve them —

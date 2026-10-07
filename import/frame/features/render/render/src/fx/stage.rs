@@ -43,6 +43,9 @@ pub struct Frame<'a> {
     /// small surface every frame turns it off once the surface has drawn
     /// whole.
     pub checked: bool,
+    /// With `checked`, don't wait for the check: start it, and read it
+    /// with [`Stage::check`] on a later frame.
+    pub deferred: bool,
 }
 
 impl<'a> Frame<'a> {
@@ -65,6 +68,7 @@ impl<'a> Frame<'a> {
             overlay: None,
             antialiasing: AaConfig::Area,
             checked: true,
+            deferred: false,
         }
     }
 }
@@ -80,6 +84,21 @@ pub struct Stage {
     /// by name, with what it drew: a frame drawing the same again reuses
     /// the texture instead of rendering it.
     renders: HashMap<String, CachedRender>,
+    /// Deferred checks of the vello renders of a frame, not read yet.
+    pending: Vec<crate::offscreen::PendingCheck>,
+}
+
+/// What the deferred checks of a frame (see [`Frame::deferred`]) said.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum Check {
+    /// None outstanding, none overflowed.
+    Clean,
+    /// Still on the GPU.
+    Pending,
+    /// A render overflowed vello's buffers (or its check failed): it drew
+    /// nothing, and the frame is to be rendered again checked and waited
+    /// for, which bands it.
+    Overflowed,
 }
 
 /// A vello render kept: what went into it and the texture it made.
@@ -97,10 +116,65 @@ enum RenderKey {
     Emit { draws: Vec<(EmissiveDraw, f64)>, transform: kurbo::Affine, size: (u32, u32) },
 }
 
+/// One device's effect pipelines, for several stages to share: built once,
+/// and each effect compiled once by whichever stage needs it first. A host
+/// drawing many surfaces on one device (a rack of plugin faces) keeps one
+/// beside its renderer — sixteen faces each compiling the same shaders
+/// paid 3–5 ms a face on its first frame.
+#[derive(Clone)]
+pub struct SharedPasses(Passes);
+
+impl SharedPasses {
+    #[must_use]
+    pub fn new(device: &wgpu::Device) -> Self {
+        Self(Passes::new(device))
+    }
+}
+
 impl Stage {
     #[must_use]
     pub fn new(device: &wgpu::Device) -> Self {
-        Self { passes: Passes::new(device), textures: HashMap::new(), scene: vello::Scene::new(), time_dependent: false, renders: HashMap::new() }
+        Self::with_passes(&SharedPasses::new(device))
+    }
+
+    /// A stage on `passes`' device, sharing its pipelines and compiled
+    /// effects with every other stage made from them.
+    #[must_use]
+    pub fn with_passes(passes: &SharedPasses) -> Self {
+        Self { passes: passes.0.clone(), textures: HashMap::new(), scene: vello::Scene::new(), time_dependent: false, renders: HashMap::new(), pending: Vec::new() }
+    }
+
+    /// Read the deferred checks the GPU has finished; never waits. On an
+    /// overflow the kept renders are dropped, so the next frame renders
+    /// them again rather than reusing what drew nothing.
+    pub fn check(&mut self, device: &wgpu::Device) -> Check {
+        let mut overflowed = false;
+        self.pending.retain(|check| match check.poll(device) {
+            None => true,
+            Some(Ok(drew_nothing)) => {
+                overflowed |= drew_nothing;
+                false
+            }
+            Some(Err(_)) => {
+                overflowed = true;
+                false
+            }
+        });
+        if overflowed {
+            self.pending.clear();
+            self.renders.clear();
+            Check::Overflowed
+        } else if self.pending.is_empty() {
+            Check::Clean
+        } else {
+            Check::Pending
+        }
+    }
+
+    /// Whether deferred checks are still out: the host draws again.
+    #[must_use]
+    pub fn checking(&self) -> bool {
+        !self.pending.is_empty()
     }
 
     /// Whether the last frame rendered had a time-dependent effect (a
@@ -318,7 +392,7 @@ impl Stage {
                 }
                 scene.pop_layer();
             }
-            vello_into(frame.checked, renderer, device, queue, scene, emit, peniko::Color::TRANSPARENT, frame.antialiasing)?;
+            vello_into(Checking::of(frame, &mut self.pending), renderer, device, queue, scene, emit, peniko::Color::TRANSPARENT, frame.antialiasing)?;
         }
         Ok(())
     }
@@ -427,7 +501,7 @@ impl Stage {
         let texture = self.kept_texture(device, name, w, h);
         let RenderKey::Prims { prims, .. } = &key else { unreachable!() };
         paint(scene, prims, frame, overlay);
-        vello_into(frame.checked, renderer, device, queue, scene, &texture, base, frame.antialiasing)?;
+        vello_into(Checking::of(frame, &mut self.pending), renderer, device, queue, scene, &texture, base, frame.antialiasing)?;
         if overlay.is_none() {
             self.renders.insert(name.to_string(), CachedRender { key, texture: texture.clone() });
         } else {
@@ -460,7 +534,7 @@ impl Stage {
         let texture = self.kept_texture(device, name, w, h);
         let RenderKey::Prims { prims, .. } = &key else { unreachable!() };
         paint(scene, prims, frame, None);
-        vello_into(frame.checked, renderer, device, queue, scene, &texture, base, frame.antialiasing)?;
+        vello_into(Checking::of(frame, &mut self.pending), renderer, device, queue, scene, &texture, base, frame.antialiasing)?;
         self.renders.insert(name.to_string(), CachedRender { key, texture: texture.clone() });
         Ok(texture)
     }
@@ -580,8 +654,28 @@ fn paint(scene: &mut vello::Scene, prims: &[PaintPrimitive], frame: &Frame<'_>, 
     }
 }
 
+/// How a vello render is checked for overflow.
+enum Checking<'a> {
+    /// Not at all: the surface drew whole at this size before.
+    Off,
+    /// Waited for, and banded on an overflow.
+    Wait,
+    /// Started, and read later (see [`Frame::deferred`]).
+    Defer(&'a mut Vec<crate::offscreen::PendingCheck>),
+}
+
+impl<'a> Checking<'a> {
+    fn of(frame: &Frame<'_>, pending: &'a mut Vec<crate::offscreen::PendingCheck>) -> Self {
+        match (frame.checked, frame.deferred) {
+            (false, _) => Self::Off,
+            (true, false) => Self::Wait,
+            (true, true) => Self::Defer(pending),
+        }
+    }
+}
+
 fn vello_into(
-    checked: bool,
+    checking: Checking<'_>,
     renderer: &mut Renderer,
     device: &wgpu::Device,
     queue: &wgpu::Queue,
@@ -592,8 +686,15 @@ fn vello_into(
 ) -> Result<(), String> {
     // Banded when the scene overflows vello's buffers, never left blank
     // (or holding the texture's previous frame).
-    if checked {
-        return crate::offscreen::render_checked(renderer, device, queue, scene, target, base, antialiasing).map(|_| ());
+    match checking {
+        Checking::Off => {}
+        Checking::Wait => {
+            return crate::offscreen::render_checked(renderer, device, queue, scene, target, base, antialiasing).map(|_| ());
+        }
+        Checking::Defer(pending) => {
+            pending.push(crate::offscreen::render_deferred(renderer, device, queue, scene, target, base, antialiasing)?);
+            return Ok(());
+        }
     }
     let view = target.create_view(&wgpu::TextureViewDescriptor::default());
     renderer

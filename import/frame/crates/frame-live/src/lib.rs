@@ -85,17 +85,21 @@ thread_local! {
     /// One vello renderer per device for every surface on this thread: its
     /// pipelines and buffers are the heavy part, and a host drawing twenty
     /// faces needs them once, not twenty times.
-    static SHARED: std::cell::RefCell<Option<(wgpu::Device, std::rc::Rc<std::cell::RefCell<Renderer>>)>> = const { std::cell::RefCell::new(None) };
+    static SHARED: std::cell::RefCell<Option<(wgpu::Device, Shared)>> = const { std::cell::RefCell::new(None) };
 }
 
-/// This thread's renderer for `device`, made on first use.
-fn shared_renderer(device: &wgpu::Device) -> Result<std::rc::Rc<std::cell::RefCell<Renderer>>, String> {
+/// A device's renderer, and its effects stages' shared pipelines (each
+/// effect compiled once, not once a face).
+type Shared = (std::rc::Rc<std::cell::RefCell<Renderer>>, render::fx::SharedPasses);
+
+/// This thread's [`Shared`] for `device`, made on first use.
+fn shared_renderer(device: &wgpu::Device) -> Result<Shared, String> {
     SHARED.with(|slot| {
         let mut slot = slot.borrow_mut();
-        if let Some((d, r)) = slot.as_ref()
+        if let Some((d, (r, passes))) = slot.as_ref()
             && d == device
         {
-            return Ok(std::rc::Rc::clone(r));
+            return Ok((std::rc::Rc::clone(r), passes.clone()));
         }
         let renderer = Renderer::new(
             device,
@@ -103,8 +107,9 @@ fn shared_renderer(device: &wgpu::Device) -> Result<std::rc::Rc<std::cell::RefCe
         )
         .map_err(|e| format!("renderer: {e}"))?;
         let r = std::rc::Rc::new(std::cell::RefCell::new(renderer));
-        *slot = Some((device.clone(), std::rc::Rc::clone(&r)));
-        Ok(r)
+        let passes = render::fx::SharedPasses::new(device);
+        *slot = Some((device.clone(), (std::rc::Rc::clone(&r), passes.clone())));
+        Ok((r, passes))
     })
 }
 
@@ -116,6 +121,9 @@ struct Gpu {
     /// The next frame checks vello's buffers (the first, and after a
     /// resize or a reload); the rest render straight through.
     check_next: bool,
+    /// A deferred check found an overflow: checks wait (and band) from
+    /// then on, since the surface will overflow again at that size.
+    banded: bool,
     stage: render::fx::Stage,
     /// The host's texture, which the frame is copied into.
     target: Option<(wgpu::Texture, (u32, u32))>,
@@ -485,7 +493,9 @@ impl LiveSurface {
     pub fn needs_redraw(&self) -> bool {
         let due = self.rendered_at.is_none_or(|at| at.elapsed() >= self.clock_frame);
         let moving = self.animate || self.settle_until.is_some_and(|at| std::time::Instant::now() < at);
-        self.dirty || (moving && due && (self.time_dependent || self.rt.animating()))
+        // A deferred check still out is read by the next render.
+        let checking = self.gpu.as_ref().is_some_and(|g| g.stage.checking());
+        self.dirty || checking || (moving && due && (self.time_dependent || self.rt.animating()))
     }
 
     fn t(&self) -> f64 {
@@ -579,9 +589,9 @@ impl LiveSurface {
     /// # Errors
     /// When vello cannot build its pipelines on it.
     pub fn attach_gpu(&mut self, device: wgpu::Device, queue: wgpu::Queue) -> Result<(), String> {
-        let renderer = shared_renderer(&device)?;
-        let stage = render::fx::Stage::new(&device);
-        self.gpu = Some(Gpu { device, queue, renderer, check_next: true, stage, target: None });
+        let (renderer, passes) = shared_renderer(&device)?;
+        let stage = render::fx::Stage::with_passes(&passes);
+        self.gpu = Some(Gpu { device, queue, renderer, check_next: true, banded: false, stage, target: None });
         self.dirty = true;
         Ok(())
     }
@@ -659,6 +669,13 @@ impl LiveSurface {
         let values = self.rt.surface().controls.iter().map(|(id, c)| (*id, self.rt.position(*id, c))).collect();
         let inputs = self.rt.shader_inputs();
         let gpu = self.gpu.as_mut().ok_or("no GPU attached")?;
+        // The last check, deferred so a first frame does not wait on the
+        // GPU: an overflow drew nothing, so this frame renders again,
+        // checked and waited for, which bands it.
+        if gpu.stage.check(&gpu.device) == render::fx::Check::Overflowed {
+            gpu.banded = true;
+            gpu.check_next = true;
+        }
         let frame = render::fx::Frame {
             transform: physical.affine(),
             base: self.background,
@@ -670,6 +687,7 @@ impl LiveSurface {
             overlay: None,
             antialiasing: AaConfig::Area,
             checked: gpu.check_next || gpu.target.as_ref().is_none_or(|(_, size)| *size != (w, h)),
+            deferred: !gpu.banded,
             ..render::fx::Frame::new(&doc, self.page, w, h)
         };
         let rendered = gpu.stage.render(&gpu.device, &gpu.queue, &mut gpu.renderer.borrow_mut(), &frame)?;

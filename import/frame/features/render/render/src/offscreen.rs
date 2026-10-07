@@ -167,55 +167,124 @@ fn clear_to_sentinel(device: &wgpu::Device, queue: &wgpu::Queue, view: &wgpu::Te
     queue.submit([encoder.finish()]);
 }
 
-/// Copy rows `top..top + rows` of an `Rgba8Unorm` texture back to the CPU
-/// (straight RGBA8, no padding).
-fn read_rows(device: &wgpu::Device, queue: &wgpu::Queue, texture: &wgpu::Texture, top: u32, rows: u32) -> Result<Vec<u8>, String> {
-    let width = texture.width();
-    let unpadded = width * 4;
-    let padded = unpadded.div_ceil(256) * 256;
-    let buffer = device.create_buffer(&wgpu::BufferDescriptor {
-        label: Some("frame-offscreen-readback"),
-        size: u64::from(padded) * u64::from(rows),
-        usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
-        mapped_at_creation: false,
-    });
-    let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: Some("frame-offscreen-copy") });
-    encoder.copy_texture_to_buffer(
-        wgpu::TexelCopyTextureInfo { texture, mip_level: 0, origin: wgpu::Origin3d { x: 0, y: top, z: 0 }, aspect: wgpu::TextureAspect::All },
-        wgpu::TexelCopyBufferInfo {
-            buffer: &buffer,
-            layout: wgpu::TexelCopyBufferLayout { offset: 0, bytes_per_row: Some(padded), rows_per_image: Some(rows) },
-        },
-        wgpu::Extent3d { width, height: rows, depth_or_array_layers: 1 },
-    );
-    queue.submit([encoder.finish()]);
+/// Render `scene` into `target` as [`render_checked`] renders a frame
+/// that fits, without waiting for the check: the target's top row is read
+/// back behind the render, and [`PendingCheck::poll`] says later whether
+/// vello overflowed — `render_checked` again then, banded.
+///
+/// For a host drawing every frame, where waiting on the GPU for one row
+/// cost a surface's first frame 3–28 ms (the wait is for everything
+/// queued ahead of it, not for the row).
+///
+/// # Errors
+/// On GPU failures.
+pub fn render_deferred(
+    renderer: &mut vello::Renderer,
+    device: &wgpu::Device,
+    queue: &wgpu::Queue,
+    scene: &vello::Scene,
+    target: &wgpu::Texture,
+    base: peniko::Color,
+    antialiasing: AaConfig,
+) -> Result<PendingCheck, String> {
+    let view = target.create_view(&wgpu::TextureViewDescriptor::default());
+    clear_to_sentinel(device, queue, &view);
+    renderer
+        .render_to_texture(
+            device,
+            queue,
+            scene,
+            &view,
+            &RenderParams { base_color: base, width: target.width(), height: target.height(), antialiasing_method: antialiasing },
+        )
+        .map_err(|e| format!("render_to_texture failed: {e}"))?;
+    Ok(PendingCheck(Readback::start(device, queue, target, 0, 1)))
+}
 
-    let slice = buffer.slice(..);
-    let (tx, rx) = std::sync::mpsc::channel();
-    slice.map_async(wgpu::MapMode::Read, move |v| {
-        let _ = tx.send(v);
-    });
+/// A render's overflow check, read back behind it: see [`render_deferred`].
+pub struct PendingCheck(Readback);
+
+impl PendingCheck {
+    /// `None` while the GPU is still at it; then whether the render
+    /// overflowed (drew nothing). Never waits.
+    ///
+    /// # Errors
+    /// When the readback failed.
+    pub fn poll(&self, device: &wgpu::Device) -> Option<Result<bool, String>> {
+        let _ = device.poll(wgpu::PollType::Poll);
+        self.0.try_take().map(|rows| rows.map(|rgba| is_untouched(&rgba)))
+    }
+}
+
+/// Rows of an `Rgba8Unorm` texture on their way back to the CPU.
+struct Readback {
+    buffer: wgpu::Buffer,
+    mapped: std::sync::mpsc::Receiver<Result<(), wgpu::BufferAsyncError>>,
+    unpadded: u32,
+    padded: u32,
+    rows: u32,
+}
+
+impl Readback {
+    /// Copy rows `top..top + rows` of `texture` out and ask for them mapped.
+    fn start(device: &wgpu::Device, queue: &wgpu::Queue, texture: &wgpu::Texture, top: u32, rows: u32) -> Self {
+        let width = texture.width();
+        let unpadded = width * 4;
+        let padded = unpadded.div_ceil(256) * 256;
+        let buffer = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("frame-offscreen-readback"),
+            size: u64::from(padded) * u64::from(rows),
+            usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
+            mapped_at_creation: false,
+        });
+        let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: Some("frame-offscreen-copy") });
+        encoder.copy_texture_to_buffer(
+            wgpu::TexelCopyTextureInfo { texture, mip_level: 0, origin: wgpu::Origin3d { x: 0, y: top, z: 0 }, aspect: wgpu::TextureAspect::All },
+            wgpu::TexelCopyBufferInfo {
+                buffer: &buffer,
+                layout: wgpu::TexelCopyBufferLayout { offset: 0, bytes_per_row: Some(padded), rows_per_image: Some(rows) },
+            },
+            wgpu::Extent3d { width, height: rows, depth_or_array_layers: 1 },
+        );
+        queue.submit([encoder.finish()]);
+        let (tx, mapped) = std::sync::mpsc::channel();
+        buffer.slice(..).map_async(wgpu::MapMode::Read, move |v| {
+            let _ = tx.send(v);
+        });
+        Self { buffer, mapped, unpadded, padded, rows }
+    }
+
+    /// The rows (straight RGBA8, no padding) once mapped; `None` before.
+    fn try_take(&self) -> Option<Result<Vec<u8>, String>> {
+        match self.mapped.try_recv() {
+            Ok(Ok(())) => {}
+            Ok(Err(e)) => return Some(Err(format!("map_async failed: {e}"))),
+            Err(std::sync::mpsc::TryRecvError::Empty) => return None,
+            Err(std::sync::mpsc::TryRecvError::Disconnected) => return Some(Err("map_async channel disconnected".into())),
+        }
+        let mapped = self.buffer.slice(..).get_mapped_range();
+        let (unpadded, padded) = (self.unpadded as usize, self.padded as usize);
+        let mut rgba = vec![0_u8; unpadded * self.rows as usize];
+        for row in 0..self.rows as usize {
+            rgba[row * unpadded..(row + 1) * unpadded].copy_from_slice(&mapped[row * padded..row * padded + unpadded]);
+        }
+        drop(mapped);
+        self.buffer.unmap();
+        Some(Ok(rgba))
+    }
+}
+
+/// Copy rows `top..top + rows` of an `Rgba8Unorm` texture back to the CPU
+/// (straight RGBA8, no padding), waiting for them.
+fn read_rows(device: &wgpu::Device, queue: &wgpu::Queue, texture: &wgpu::Texture, top: u32, rows: u32) -> Result<Vec<u8>, String> {
+    let readback = Readback::start(device, queue, texture, top, rows);
     loop {
         let _ = device.poll(wgpu::PollType::Poll);
-        match rx.try_recv() {
-            Ok(result) => {
-                result.map_err(|e| format!("map_async failed: {e}"))?;
-                break;
-            }
-            Err(std::sync::mpsc::TryRecvError::Empty) => std::thread::sleep(std::time::Duration::from_millis(1)),
-            Err(std::sync::mpsc::TryRecvError::Disconnected) => return Err("map_async channel disconnected".into()),
+        match readback.try_take() {
+            Some(rows) => return rows,
+            None => std::thread::sleep(std::time::Duration::from_millis(1)),
         }
     }
-    let mapped = slice.get_mapped_range();
-    let mut rgba = vec![0_u8; (unpadded * rows) as usize];
-    for row in 0..rows as usize {
-        let src = row * padded as usize;
-        let dst = row * unpadded as usize;
-        rgba[dst..dst + unpadded as usize].copy_from_slice(&mapped[src..src + unpadded as usize]);
-    }
-    drop(mapped);
-    buffer.unmap();
-    Ok(rgba)
 }
 
 /// Straight RGBA8 pixels, row-major, no padding.
@@ -276,6 +345,30 @@ impl Offscreen {
         });
         self.last_bands = render_checked(&mut self.renderer, &self.device, &self.queue, scene, &texture, base, AaConfig::Msaa8)?;
         self.read_back(&texture)
+    }
+
+    /// Render `scene` with a deferred check ([`render_deferred`]) and
+    /// poll it until the GPU answers: whether it overflowed.
+    #[cfg(test)]
+    pub(crate) fn deferred_overflow(&mut self, scene: &vello::Scene, width: u32, height: u32) -> bool {
+        let texture = self.device.create_texture(&wgpu::TextureDescriptor {
+            label: Some("frame-offscreen-target"),
+            size: wgpu::Extent3d { width, height, depth_or_array_layers: 1 },
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: wgpu::TextureFormat::Rgba8Unorm,
+            usage: CHECKED_TARGET_USAGES,
+            view_formats: &[],
+        });
+        let base = peniko::Color::from_rgba8(255, 255, 255, 255);
+        let check = render_deferred(&mut self.renderer, &self.device, &self.queue, scene, &texture, base, AaConfig::Area).expect("render");
+        loop {
+            if let Some(answer) = check.poll(&self.device) {
+                return answer.expect("readback");
+            }
+            std::thread::sleep(std::time::Duration::from_millis(1));
+        }
     }
 
     /// How many bands the last [`Self::render`] drew (1 when the frame fit
