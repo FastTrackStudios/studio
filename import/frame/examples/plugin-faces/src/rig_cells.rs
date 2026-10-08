@@ -157,6 +157,8 @@ pub fn faces() -> Vec<Face> {
     let mut v = vec![
         crate::rig_time::delay::tape::block(),
         crate::rig_time::delay::digital::block(),
+        crate::rig_time::delay::analog::block(),
+        crate::rig_time::reverb::plate::block(),
         crate::rig_time::reverb::hall::block(),
         crate::rig_time::reverb::cloud::block(),
         flanger(),
@@ -181,8 +183,10 @@ pub fn manifest() -> serde_json::Value {
     json!([
         e(&["delay:tape"], "60-dly-tape-block", "dly"),
         e(&["delay:digital"], "61-dly-digital-block", "dly"),
+        e(&["delay:analog"], "62-dly-analog-block", "dly"),
         e(&["delay"], "69-dly-block", "dly"),
         e(&["reverb:hall"], "81-verb-hall-block", "verb"),
+        e(&["reverb:plate"], "82-verb-plate-block", "verb"),
         e(&["reverb:cloud"], "84-verb-cloud-block", "verb"),
         e(&["reverb"], "89-verb-block", "verb"),
         e(&["chorus"], "100-mod-chorus-block", "mod"),

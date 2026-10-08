@@ -2,7 +2,7 @@
 
 pub(crate) mod tape;
 pub(crate) mod digital;
-mod analog;
+pub(crate) mod analog;
 mod lo_fi;
 mod shimmer;
 mod reverse;

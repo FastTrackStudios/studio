@@ -1205,6 +1205,14 @@
     },
     {
       "bleed": 0.17391304347826086,
+      "face": "62-dly-analog-block",
+      "match": [
+        "delay:analog"
+      ],
+      "ns": "dly"
+    },
+    {
+      "bleed": 0.17391304347826086,
       "face": "69-dly-block",
       "match": [
         "delay"
@@ -1216,6 +1224,14 @@
       "face": "81-verb-hall-block",
       "match": [
         "reverb:hall"
+      ],
+      "ns": "verb"
+    },
+    {
+      "bleed": 0.17391304347826086,
+      "face": "82-verb-plate-block",
+      "match": [
+        "reverb:plate"
       ],
       "ns": "verb"
     },

@@ -5,7 +5,7 @@
 //!
 //! Each fills the body of its panel (under the panel's own header, which
 //! keeps the power, the ‹ › rotation and the engine picker): [`W`] × [`H`].
-//! Colour, as Signal draws the groups: Modulation light blue, Motion pink.
+//! Colour, as Signal draws the groups: Modulation light blue, Motion green.
 //!
 //! Binding: the chorus's params are `mod/<block param>`, the tremolo's and
 //! the vibrato's `motion/<block param>`; `<ns>/on` is the block's bypass.
@@ -25,9 +25,11 @@ pub const W: f64 = 400.0;
 pub const H: f64 = 340.0;
 pub const MOD: &str = "mod";
 pub const MOTION: &str = "motion";
-/// Modulation light blue, Motion pink (Signal's group colours).
+/// Modulation light blue, Motion green (Signal's group colours).
 pub const SKY: &str = "#7dd3fc";
-pub const PINK: &str = "#ec4899";
+pub const GREEN: &str = "#34d399";
+/// The second voice in Motion's pictures (a stereo tremolo's other side).
+pub const LIME: &str = "#a3e635";
 use crate::rig_faces::PLUGIN;
 
 /// `chorus::EngineType` order.
@@ -270,15 +272,15 @@ fn chorus_back(tier: kit::Tier) -> Face {
 
 /// A neon sign on black brick.
 const TREMOLO: Theme = Theme {
-    panel: [(0.0, "#1a0b14"), (1.0, "#0c0509")],
-    edge: "#3a1328",
-    window: [(0.0, "#12060d"), (1.0, "#070205")],
-    ink: "#ffe4f1",
-    dim: "#b07896",
-    accent: PINK,
-    knob: "#24121c",
-    skirt: "#0c0509",
-    bypass: "red",
+    panel: [(0.0, "#0a1a13"), (1.0, "#040c08")],
+    edge: "#13382a",
+    window: [(0.0, "#05120c"), (1.0, "#020704")],
+    ink: "#e2fff1",
+    dim: "#76ad93",
+    accent: GREEN,
+    knob: "#11241b",
+    skirt: "#040c08",
+    bypass: "green",
 };
 
 /// The tremolo, as neon: a ring that brightens and fades with the volume
@@ -309,17 +311,17 @@ fn tremolo_at(tier: kit::Tier) -> Face {
 
 // ── Vibrato ──────────────────────────────────────────────────────────────
 
-/// A tuner's dark plum.
+/// A tuner's dark green.
 const VIBRATO: Theme = Theme {
-    panel: [(0.0, "#1d1424"), (1.0, "#110b16")],
-    edge: "#33223f",
-    window: [(0.0, "#0d0911"), (1.0, "#07050a")],
-    ink: "#f5e8ff",
-    dim: "#9d86ad",
-    accent: PINK,
-    knob: "#241a2c",
-    skirt: "#0c0810",
-    bypass: "red",
+    panel: [(0.0, "#0f1d17"), (1.0, "#08110d")],
+    edge: "#1f3a2e",
+    window: [(0.0, "#08100c"), (1.0, "#040806")],
+    ink: "#e6fff3",
+    dim: "#86ad9b",
+    accent: GREEN,
+    knob: "#162a21",
+    skirt: "#08100b",
+    bypass: "green",
 };
 
 /// The vibrato: pitch, as a tuner reads it — the needle swinging sharp and
@@ -402,7 +404,7 @@ fn tremolo_picture(b: &mut Builder<'_>, v: NodeId, vw: f64, vh: f64, t: &Theme) 
             (x, top + (bottom - top) * (1.0 - g))
         }).collect()
     };
-    for (side, phase, color) in [(0_u8, 0.0, PINK), (1, 0.5, "#c084fc")] {
+    for (side, phase, color) in [(0_u8, 0.0, GREEN), (1, 0.5, LIME)] {
         let mut clip = draw::frame("tube window", lamp_x, 0.0, span, vh);
         clip.clips_content = true;
         clip.layout_child.resize_x = Some(document_proto::ResizeX::Stretch);
@@ -411,7 +413,7 @@ fn tremolo_picture(b: &mut Builder<'_>, v: NodeId, vw: f64, vh: f64, t: &Theme) 
         let roll = b.add(clip, draw::frame("tube", 0.0, 0.0, 2.0 * span + period, vh));
         // The tube: a hot core in a wide glow.
         b.add(roll, draw::emissive(ui::strokes("glow", &[curve(phase)], 5.0, draw::solid(&ui::alpha(color, 0.35))), draw::hex(color), 0.9, 10.0));
-        b.add(roll, ui::strokes("core", &[curve(phase)], 1.6, draw::solid("#fff0f7")));
+        b.add(roll, ui::strokes("core", &[curve(phase)], 1.6, draw::solid("#ecfdf5")));
         motion::add(b, roll, Motion::new(Target::X).input(format!("fract(time * param({MOTION}/rate) * param({MOTION}/on))")).range(0.0, -period));
         motion::add(b, roll, Motion::new(Target::StretchY).input(format!("norm({MOTION}/depth)")).range(0.02, 1.0).pivot(0.5, 0.5).dynamics(Dynamics::spring(220.0, 26.0)));
         if side == 1 {
@@ -429,14 +431,14 @@ fn vibrato_picture(b: &mut Builder<'_>, v: NodeId, vw: f64, vh: f64, t: &Theme) 
     b.add(v, ui::strokes("scale", &[arc], 1.0, draw::solid("#ffffff33")));
     for i in -4..=4 {
         let ang = 10.0 * f64::from(i);
-        let (len, col) = if i == 0 { (14.0, PINK) } else { (7.0, "#ffffff4d") };
+        let (len, col) = if i == 0 { (14.0, GREEN) } else { (7.0, "#ffffff4d") };
         b.add(v, ui::strokes("tick", &[vec![draw::polar(cx, cy, r, ang), draw::polar(cx, cy, r - len, ang)]], 1.2, draw::solid(col)));
     }
     ui::silk(b, v, "Flat", cx - r * 0.72, cy - r * 0.6, 6.0, t.dim, 800.0);
     ui::silk(b, v, "Sharp", cx + r * 0.72, cy - r * 0.6, 6.0, t.dim, 800.0);
     let side = 2.0 * (r + 6.0);
     let needle = b.add(v, draw::frame("needle", cx - side / 2.0, cy - side / 2.0, side, side));
-    b.add(needle, ui::glowing(draw::rect("blade", side / 2.0 - 1.0, side / 2.0 - r + 2.0, 2.0, r - 48.0, draw::solid(PINK)), PINK, 0.8, 5.0));
+    b.add(needle, ui::glowing(draw::rect("blade", side / 2.0 - 1.0, side / 2.0 - r + 2.0, 2.0, r - 48.0, draw::solid(GREEN)), GREEN, 0.8, 5.0));
     let swing = format!("0.5 + 0.5 * sin(6.2832 * time * param({MOTION}/rate)) * norm({MOTION}/depth) * param({MOTION}/on)");
     motion::add(b, needle, Motion::new(Target::Rotate).input(swing.clone()).range(-38.0, 38.0).pivot(0.5, 0.5));
     let wave: Vec<(f64, f64)> = (0..=160).map(|k| {

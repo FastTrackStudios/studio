@@ -284,3 +284,15 @@ pub fn back_at(dark: bool, tier: kit::Tier) -> Face {
     f.params.extend(kit::flip_params(VERB));
     f
 }
+
+/// The routing grid's block: the steel plate through its window, its
+/// standing waves shimmering.
+#[must_use]
+pub fn block() -> Face {
+    use crate::rig_cells::S;
+    let scene = crate::rig_cells::block("Plate", &[(0.0, "#1b1d20"), (1.0, "#2b2e32")], |b, v, _| {
+        plate(b, v, S, S);
+        b.add(v, draw::rect("glass", 0.0, 0.0, S, S, draw::linear(160.0, &[(0.0, "#ffffff14"), (0.3, "#ffffff06"), (0.31, "#ffffff00"), (1.0, "#ffffff00")])));
+    });
+    kit::reverb_face("82-verb-plate-block", scene)
+}

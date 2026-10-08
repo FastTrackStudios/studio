@@ -185,3 +185,14 @@ pub fn back_at(dark: bool, tier: kit::Tier) -> Face {
     f.params.extend(kit::flip_params(DLY));
     f
 }
+
+/// The routing grid's block: the line, the note's spike and its repeats
+/// swelling and smearing along it.
+#[must_use]
+pub fn block() -> Face {
+    use crate::rig_cells::S;
+    let scene = crate::rig_cells::block("Analog", &[(0.0, "#0a1122"), (1.0, "#070c19")], |b, v, _| {
+        repeats(b, v, S, S, INK, DIM, kit::BLUE_LIGHT);
+    });
+    kit::delay_face("62-dly-analog-block", scene)
+}

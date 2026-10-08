@@ -2,7 +2,7 @@
 
 mod room;
 pub(crate) mod hall;
-mod plate;
+pub(crate) mod plate;
 mod spring;
 pub(crate) mod cloud;
 mod bloom;
