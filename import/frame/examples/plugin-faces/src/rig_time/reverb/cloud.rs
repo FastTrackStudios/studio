@@ -228,3 +228,15 @@ pub fn back_at(dark: bool, tier: kit::Tier) -> Face {
     f.params.extend(kit::flip_params(VERB));
     f
 }
+
+/// The routing grid's block: the night sky, its clouds drifting.
+#[must_use]
+pub fn block() -> Face {
+    use crate::rig_cells::S;
+    let l = &DARK;
+    let sky_fill: Vec<(f64, &str)> = l.sky.to_vec();
+    let scene = crate::rig_cells::block("Cloud", &sky_fill, |b, v, _| {
+        sky(b, v, S, S, l, true);
+    });
+    kit::reverb_face("84-verb-cloud-block", scene)
+}

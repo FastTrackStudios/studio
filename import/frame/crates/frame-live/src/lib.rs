@@ -629,6 +629,32 @@ impl LiveSurface {
         self.dirty = false;
     }
 
+    /// Paint the surface's vectors fitted to a `width × height` box placed
+    /// by `transform` (the box's units to the scene's, as an affine's six
+    /// coefficients) into a host's scene, with nothing behind it — a face
+    /// drawn over a host's own picture, as one block of its grid, its
+    /// transparent margin showing what is under it. The same frame as
+    /// [`paint_vectors`](Self::paint_vectors), by the same painter.
+    #[cfg(feature = "anyrender-0-11")]
+    pub fn paint_vectors_at<S: anyrender::PaintScene>(&mut self, scene: &mut S, width: f64, height: f64, transform: [f64; 6]) {
+        self.rendered_at = Some(std::time::Instant::now());
+        if self.dirty {
+            self.settle_until = self.rendered_at.map(|at| at + SETTLE);
+        }
+        let t = self.t();
+        let calls = self.rt.poll(t);
+        self.dispatch(calls);
+        self.rt.set_clock(t / 1000.0);
+        let view = View::fit(self.content, width.max(1.0), height.max(1.0));
+        self.view = view;
+        let doc = self.rt.frame(t);
+        let mut target = vectors::AnyRender011(scene);
+        let prims = render::build_scene_primitives_with(&doc, self.page, render::CollectOptions { emission_glow: true });
+        render::paint_primitives_into_scene_with(&mut target, &prims, kurbo::Affine::new(transform) * view.affine(), Some(render::FontBook::bundled()));
+        self.time_dependent = false;
+        self.dirty = false;
+    }
+
     /// Render at `width × height` physical px (`scale` physical px per
     /// element px) into the texture this keeps for the host, and return
     /// it with whether it was (re)made — a new texture must be registered

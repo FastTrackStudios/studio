@@ -285,3 +285,21 @@ pub fn back_at(dark: bool, tier: kit::Tier) -> Face {
     f.params.extend(kit::flip_params(DLY));
     f
 }
+
+/// The routing grid's block: the VU kicking on the repeats under the head
+/// lamps flashing on theirs, on the graphite unit.
+#[must_use]
+pub fn block() -> Face {
+    use crate::rig_cells::S;
+    let ink = "#e8e9eb";
+    let scene = crate::rig_cells::block("Tape", &[(0.0, "#3a3c41"), (1.0, "#1f2023")], |b, v, _| {
+        vu(b, v, (S / 2.0, S * 0.6), S * 0.29, ink);
+        for (n, x) in (1..=3).zip([S / 2.0 - 26.0, S / 2.0, S / 2.0 + 26.0]) {
+            b.add(v, draw::circle("lamp socket", x, 26.0, 6.0, draw::radial_at(0.4, 0.35, 0.8, &[(0.0, "#d8d9db"), (1.0, "#8e9094")])));
+            let lamp = b.add(v, draw::emissive(draw::circle("head lamp", x, 26.0, 4.4, draw::solid(LAMP)), draw::hex(LAMP), 1.0, 9.0));
+            let flash = format!("pow(1 - fract(time * 1000 / ({n} * max(param({DLY}/time), 20))), 4) * pow(param({DLY}/feedback), {}) * param({DLY}/on)", n - 1);
+            motion::add(b, lamp, Motion::new(Target::Opacity).input(flash).range(0.05, 1.0));
+        }
+    });
+    kit::delay_face("60-dly-tape-block", scene)
+}

@@ -562,3 +562,19 @@ pub fn manifest() -> serde_json::Value {
                      "ipad": { "face": vibrato_at(q).file, "size": pane, "time_knob": true } } },
     ])
 }
+
+/// The routing grid's blocks: the chorus's voices, the tremolo's tube, the
+/// vibrato's needle, each filling its block.
+#[must_use]
+pub(crate) fn blocks() -> Vec<Face> {
+    use crate::rig_cells::S;
+    let cell = |name: &str, t: &'static Theme, picture: fn(&mut Builder<'_>, NodeId, f64, f64, &Theme), file: &'static str, params: Vec<ParamInfo>| {
+        let scene = crate::rig_cells::block(name, &t.window, |b, v, _| picture(b, v, S, S, t));
+        Face { file, plugin: PLUGIN, scene, params, streams: Vec::new() }
+    };
+    vec![
+        cell("Chorus", &CHORUS, chorus_picture, "100-mod-chorus-block", chorus_params()),
+        cell("Tremolo", &TREMOLO, tremolo_picture, "101-motion-tremolo-block", trem_params()),
+        cell("Vibrato", &VIBRATO, vibrato_picture, "102-motion-vibrato-block", vibrato_params()),
+    ]
+}

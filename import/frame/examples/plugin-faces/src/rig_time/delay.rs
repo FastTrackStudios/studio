@@ -1,7 +1,7 @@
 //! The delay machines' faces, in the block's `style` order.
 
-mod tape;
-mod digital;
+pub(crate) mod tape;
+pub(crate) mod digital;
 mod analog;
 mod lo_fi;
 mod shimmer;

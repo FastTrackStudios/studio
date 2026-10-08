@@ -1,0 +1,27 @@
+<Document id="29cbeb39-1ed0-524c-9fdc-8fc1e047ad81">
+  <Page name="Surface" id="d8d689de-0c96-505a-b462-23487bdefd61">
+    <Frame name="Compressor" id="3dc43f89-2d17-5800-b5e3-57208590b9d9" w=248 h=248>
+      <Frame name="Window" id="772c795a-f0ae-56c6-bef6-1fc4a05676ff" x=32 y=32 w=184 h=184 radius=18 clip=true fill={[{"kind":{"LinearGradient":{"stops":[{"color":"#0c0d10","position":0.0},{"color":"#08090b","position":1.0}],"transform":{"a":1.6653345369377348e-16,"b":-1.0,"c":1.0,"d":1.6653345369377348e-16,"tx":1.0,"ty":-1.942890293094024e-16}}}}]}>
+        <Frame name="Compressor" id="e4444ab6-ecc7-5c0d-93f3-35c665965a04" w=184 h=184 clip=true fill="#080808">
+          <Frame name="light" id="a023f7b3-5abb-5a4b-99ad-3367191b6eb9" w=184 h=184 shader={{"inputs":[{"name":"threshold","source":{"Param":{"addr":"comp/threshold"}}},{"name":"ratio","source":{"Param":{"addr":"comp/ratio"}}},{"name":"knee","source":{"Param":{"addr":"comp/knee"}}},{"name":"in_db","source":{"Stream":{"id":"comp/in"}}},{"map":{"hi":-1.0,"lo":0.0,"unclamped":true},"name":"gr_db","source":{"Stream":{"id":"comp/gr"}}},{"len":128,"map":{"hi":0.0,"lo":-60.0},"name":"input","source":{"Stream":{"id":"comp/in_history"}}},{"len":128,"map":{"hi":-60.0,"lo":0.0},"name":"gr","source":{"Stream":{"id":"comp/gr_history"}}}],"params":{"p0":60.0,"tint_b":0.9058823529411765,"tint_g":0.8941176470588236,"tint_r":0.8941176470588236},"shader":"viz.comp"}}>
+            <Frame name="input" id="52111478-1a8b-53ed-a308-3d84953f1d23" w=184 h=184 control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Stream":{"id":"comp/in_history"}}},"kind":{"Plot":{"style":{"Area":{"baseline":-60.0}},"x":{"Time":{"len":300}},"y":{"curve":"Linear","max":0.0,"min":-60.0}}},"slots":[{"node":"7794851a-5f7c-56f5-800c-602ca468f113","role":"Area"}]}}>
+              <Vector name="fill" id="7794851a-5f7c-56f5-800c-602ca468f113" w=184 h=184 fill="#e4e4e738" />
+            </Frame>
+            <Frame name="gain reduction" id="198f234e-ed0d-5363-9933-2820f68b7018" w=184 h=184 control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Stream":{"id":"comp/gr_history"}}},"kind":{"Plot":{"style":{"Area":{"baseline":0.0}},"x":{"Time":{"len":300}},"y":{"curve":"Linear","max":0.0,"min":-60.0}}},"slots":[{"node":"249f60b4-d582-5443-a1fb-d76d7ca2d743","role":"Area"}]}}>
+              <Vector name="fill" id="249f60b4-d582-5443-a1fb-d76d7ca2d743" w=184 h=184 fill="#ef44444d" />
+            </Frame>
+            <Frame name="transfer" id="625950df-12c2-5e61-a352-d1d7b640209c" w=184 h=184 control={{"kind":{"Curve":{"inputs":[{"name":"threshold","source":{"Param":{"addr":"comp/threshold"}}},{"name":"ratio","source":{"Param":{"addr":"comp/ratio"}}},{"name":"knee","source":{"Param":{"addr":"comp/knee"}}},{"name":"makeup","source":{"Const":{"value":0.0}}},{"name":"marker","source":{"Stream":{"id":"comp/in"}}}],"provider":"comp.transfer","series":"transfer","style":"Line","x":{"Linear":{"max":0.0,"min":-60.0}},"y":{"curve":"Linear","max":0.0,"min":-60.0}}},"slots":[{"node":"cd26a79e-3fbf-52a4-b1c7-6475e5fe88c7","role":"Trace"},{"node":"958ea658-f52b-51ce-8a5f-c55f85af0163","role":"Marker"}]}}>
+              <Vector name="line" id="cd26a79e-3fbf-52a4-b1c7-6475e5fe88c7" w=184 h=184 stroke="#f2f2f4e6" stroke-weight=1.5 stroke-join="round" />
+              <Frame name="ball" id="958ea658-f52b-51ce-8a5f-c55f85af0163" x=89 y=89 w=6 h=6>
+                <Ellipse name="dot" id="b5d3bd11-66f5-5f3e-8ee9-9d1ef5f6f171" w=6 h=6 fill="#f2f2f4f2" />
+              </Frame>
+            </Frame>
+          </Frame>
+          <Frame name="threshold" id="7c8e98ef-0482-5d7c-a07f-871d15f26aa7" w=184 h=44 control={{"kind":{"Handle":{"wheel":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Param":{"addr":"comp/ratio"}}},"x_map":{"after":[],"axis":{"Linear":{"max":1.0,"min":0.0}},"shift":0.0},"y":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Param":{"addr":"comp/threshold"}}},"y_map":{"after":[],"axis":{"Linear":{"max":0.0,"min":-60.0}},"shift":0.0}}},"slots":[]}}>
+            <Vector name="line" id="7fb18f22-d384-5ec1-9667-5522961ea0a7" w=184 h=44 stroke="#e4e4e78c" geometry="M 0 22.0 H 184.0" />
+          </Frame>
+        </Frame>
+      </Frame>
+    </Frame>
+  </Page>
+</Document>

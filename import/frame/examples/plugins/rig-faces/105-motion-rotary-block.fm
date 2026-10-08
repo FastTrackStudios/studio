@@ -1,0 +1,17 @@
+<Document id="ece77fba-1136-58f9-a53c-fc7e401a9763">
+  <Page name="Surface" id="bdd34385-c3ae-502f-8277-05e21d92ac23">
+    <Frame name="Rotary" id="ffd15226-eba5-5504-9891-6ebb85ee363a" w=248 h=248>
+      <Frame name="Window" id="9214152a-67bc-52b1-b4cf-14ad09eef734" x=32 y=32 w=184 h=184 radius=18 clip=true fill={[{"kind":{"LinearGradient":{"stops":[{"color":"#0b2a20","position":0.0},{"color":"#06150f","position":1.0}],"transform":{"a":1.6653345369377348e-16,"b":-1.0,"c":1.0,"d":1.6653345369377348e-16,"tx":1.0,"ty":-1.942890293094024e-16}}}}]}>
+        <Frame name="drum" id="c4cf9ebe-03d4-552b-a9ea-01dc5b067aee" x=30 y=30 w=124 h=124 motion={[{"input":"fract(time * param(motion/rate) * 0.18 * param(motion/on))","pivot":{"x":0.5,"y":0.5},"target":"rotate","to":360.0}]}>
+          <Vector name="louvres" id="f745fccb-8ee8-5bb6-91c0-9d3db0461414" x=2 y=2 w=120 h=120 stroke="#34d39940" stroke-weight=1.6 stroke-cap="round" stroke-join="round" geometry="M 60.000 40.000 L 60.000 0.000 M 70.000 42.679 L 90.000 8.038 M 77.321 50.000 L 111.962 30.000 M 80.000 60.000 L 120.000 60.000 M 77.321 70.000 L 111.962 90.000 M 70.000 77.321 L 90.000 111.962 M 60.000 80.000 L 60.000 120.000 M 50.000 77.321 L 30.000 111.962 M 42.679 70.000 L 8.038 90.000 M 40.000 60.000 L 0.000 60.000 M 42.679 50.000 L 8.038 30.000 M 50.000 42.679 L 30.000 8.038 " />
+        </Frame>
+        <Frame name="horn" id="c31703f2-bd8e-5521-8d35-bacee45123ab" x=22 y=22 w=140 h=140 motion={[{"input":"fract(time * param(motion/rate) * 0.35 * param(motion/on))","pivot":{"x":0.5,"y":0.5},"target":"rotate","to":360.0}]}>
+          <Rectangle name="bar" id="37773177-3637-591a-b200-c89712ccf7b3" x=22 y=66 w=96 h=8 radius=4 fill="#a7f3d0" />
+          <Ellipse name="bell" id="b8b2142f-5746-51fe-9646-9587c3944ca3" y=56 w=28 h=28 fill={[{"kind":{"RadialGradient":{"stops":[{"color":"#ecfdf5","position":0.0},{"color":"#34d399","position":1.0}],"transform":{"a":1.0,"b":0.0,"c":0.0,"d":1.0,"tx":0.0,"ty":0.0}}}}]} emission={{"color":"#34d399","intensity":0.8,"radius":10.0}} />
+          <Ellipse name="bell" id="e6757533-886f-57ac-acd1-19e610b3ac5d" x=112 y=56 w=28 h=28 fill={[{"kind":{"RadialGradient":{"stops":[{"color":"#ecfdf5","position":0.0},{"color":"#34d399","position":1.0}],"transform":{"a":1.0,"b":0.0,"c":0.0,"d":1.0,"tx":0.0,"ty":0.0}}}}]} emission={{"color":"#34d399","intensity":0.8,"radius":10.0}} />
+        </Frame>
+        <Ellipse name="hub" id="70b997d4-8670-57f5-bf10-dae237288ace" x=85 y=85 w=14 h=14 fill="#064e3b" />
+      </Frame>
+    </Frame>
+  </Page>
+</Document>

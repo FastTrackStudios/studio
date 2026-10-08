@@ -223,3 +223,17 @@ pub fn back_at(dark: bool, tier: kit::Tier) -> Face {
     f.params.extend(kit::flip_params(DLY));
     f
 }
+
+/// The routing grid's block: the scope, the echoes falling across it.
+#[must_use]
+pub fn block() -> Face {
+    use crate::rig_cells::S;
+    let scene = crate::rig_cells::block("Digital", &[(0.0, "#03101f"), (1.0, "#010710")], |b, v, _| {
+        let grid: Vec<Vec<(f64, f64)>> = (1..6).map(|i| vec![(S * f64::from(i) / 6.0, 0.0), (S * f64::from(i) / 6.0, S)])
+            .chain((1..6).map(|i| vec![(0.0, S * f64::from(i) / 6.0), (S, S * f64::from(i) / 6.0)]))
+            .collect();
+        b.add(v, ui::strokes("graticule", &grid, 0.6, draw::solid(&ui::alpha(PHOSPHOR, 0.12))));
+        kit::echo_train(b, v, (12.0, 28.0, S - 24.0, S - 76.0), 8, 2500.0, PHOSPHOR);
+    });
+    kit::delay_face("61-dly-digital-block", scene)
+}

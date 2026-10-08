@@ -431,6 +431,8 @@ pub fn manifest() -> String {
         ],
         // Pictures of a block, beside its unit: a reverb's springs.
         "pictures": [ { "match": ["reverb"], "face": "53-spring-viz", "ns": "spring", "size": size(&spring_viz()) } ],
+        // Each block of the routing grid, by what it is (see `rig_cells`).
+        "blocks": crate::rig_cells::manifest(),
     });
     serde_json::to_string_pretty(&doc).expect("json")
 }

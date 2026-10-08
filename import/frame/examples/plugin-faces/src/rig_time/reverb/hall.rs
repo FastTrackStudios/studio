@@ -340,3 +340,14 @@ pub fn back_at(dark: bool, tier: kit::Tier) -> Face {
     f.params.extend(kit::flip_params(VERB));
     f
 }
+
+/// The routing grid's block: the hall's plan, its wavefronts going out.
+#[must_use]
+pub fn block() -> Face {
+    use crate::rig_cells::S;
+    let l = &DARK;
+    let scene = crate::rig_cells::block("Hall", &[(0.0, l.paper.0), (1.0, l.paper.1)], |b, v, _| {
+        hall(b, v, S, S, l.line);
+    });
+    kit::reverb_face("81-verb-hall-block", scene)
+}

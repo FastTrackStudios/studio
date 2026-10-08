@@ -1,10 +1,10 @@
 //! The reverb algorithms' faces, in the block's `algorithm` order.
 
 mod room;
-mod hall;
+pub(crate) mod hall;
 mod plate;
 mod spring;
-mod cloud;
+pub(crate) mod cloud;
 mod bloom;
 mod shimmer;
 mod chorale;
