@@ -1,7 +1,7 @@
 <Document id="ece77fba-1136-58f9-a53c-fc7e401a9763">
   <Page name="Surface" id="bdd34385-c3ae-502f-8277-05e21d92ac23">
-    <Frame name="Rotary" id="ffd15226-eba5-5504-9891-6ebb85ee363a" w=248 h=248>
-      <Frame name="Window" id="9214152a-67bc-52b1-b4cf-14ad09eef734" x=32 y=32 w=184 h=184 radius=18 clip=true fill={[{"kind":{"LinearGradient":{"stops":[{"color":"#0b2a20","position":0.0},{"color":"#06150f","position":1.0}],"transform":{"a":1.6653345369377348e-16,"b":-1.0,"c":1.0,"d":1.6653345369377348e-16,"tx":1.0,"ty":-1.942890293094024e-16}}}}]}>
+    <Frame name="Rotary" id="ffd15226-eba5-5504-9891-6ebb85ee363a" w=216 h=216>
+      <Frame name="Window" id="9214152a-67bc-52b1-b4cf-14ad09eef734" x=16 y=16 w=184 h=184 radius=18 clip=true fill={[{"kind":{"LinearGradient":{"stops":[{"color":"#0b2a20","position":0.0},{"color":"#06150f","position":1.0}],"transform":{"a":1.6653345369377348e-16,"b":-1.0,"c":1.0,"d":1.6653345369377348e-16,"tx":1.0,"ty":-1.942890293094024e-16}}}}]}>
         <Frame name="drum" id="c4cf9ebe-03d4-552b-a9ea-01dc5b067aee" x=30 y=30 w=124 h=124 motion={[{"input":"fract(time * param(motion/rate) * 0.18 * param(motion/on))","pivot":{"x":0.5,"y":0.5},"target":"rotate","to":360.0}]}>
           <Vector name="louvres" id="f745fccb-8ee8-5bb6-91c0-9d3db0461414" x=2 y=2 w=120 h=120 stroke="#34d39940" stroke-weight=1.6 stroke-cap="round" stroke-join="round" geometry="M 60.000 40.000 L 60.000 0.000 M 70.000 42.679 L 90.000 8.038 M 77.321 50.000 L 111.962 30.000 M 80.000 60.000 L 120.000 60.000 M 77.321 70.000 L 111.962 90.000 M 70.000 77.321 L 90.000 111.962 M 60.000 80.000 L 60.000 120.000 M 50.000 77.321 L 30.000 111.962 M 42.679 70.000 L 8.038 90.000 M 40.000 60.000 L 0.000 60.000 M 42.679 50.000 L 8.038 30.000 M 50.000 42.679 L 30.000 8.038 " />
         </Frame>

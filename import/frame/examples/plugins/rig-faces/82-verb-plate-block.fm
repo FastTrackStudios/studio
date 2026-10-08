@@ -1,7 +1,7 @@
 <Document id="694b4020-6f2e-5bf2-8fc0-8793700f7976">
   <Page name="Surface" id="3aaadcaf-cfd2-5648-8ab0-f02376fee378">
-    <Frame name="Plate" id="dba7dfb7-b26f-5be7-a7c9-bfe52e4cb00e" w=248 h=248>
-      <Frame name="Window" id="79a68c48-bb2b-538e-92b6-6b7412608d00" x=32 y=32 w=184 h=184 radius=18 clip=true fill={[{"kind":{"LinearGradient":{"stops":[{"color":"#1b1d20","position":0.0},{"color":"#2b2e32","position":1.0}],"transform":{"a":1.6653345369377348e-16,"b":-1.0,"c":1.0,"d":1.6653345369377348e-16,"tx":1.0,"ty":-1.942890293094024e-16}}}}]}>
+    <Frame name="Plate" id="dba7dfb7-b26f-5be7-a7c9-bfe52e4cb00e" w=216 h=216>
+      <Frame name="Window" id="79a68c48-bb2b-538e-92b6-6b7412608d00" x=16 y=16 w=184 h=184 radius=18 clip=true fill={[{"kind":{"LinearGradient":{"stops":[{"color":"#1b1d20","position":0.0},{"color":"#2b2e32","position":1.0}],"transform":{"a":1.6653345369377348e-16,"b":-1.0,"c":1.0,"d":1.6653345369377348e-16,"tx":1.0,"ty":-1.942890293094024e-16}}}}]}>
         <Frame name="frame tube" id="e799587b-04f6-58a0-b223-e5163d8a3dd6" x=8 y=7 w=168 h=170 radius=7 stroke="#7b8187" stroke-weight=4 stroke-align="inside" effects={[{"color":"#00000099","kind":"DropShadow","offset_y":2.0,"radius":3.0}]} />
         <Frame name="tube light" id="7ae18415-ea14-56c1-8025-27e48df7f4ad" x=9.5 y=8 w=165 h=168 radius=6 stroke="#c9ced333" stroke-align="inside" />
         <Vector name="spring" id="175e0e43-e4cb-56ad-942d-2a0166d40730" x=39.944 y=10.5 w=4.400000000000006 h=11.5 stroke="#aab0b6" stroke-weight=1.2 stroke-cap="round" stroke-join="round" geometry="M 2.200 0.000 L 4.400 3.067 L 0.000 4.408 L 4.400 5.750 L 0.000 7.092 L 4.400 8.433 L 2.200 11.500 " />

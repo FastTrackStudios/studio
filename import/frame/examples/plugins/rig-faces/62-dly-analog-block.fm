@@ -1,7 +1,7 @@
 <Document id="a58cc8f2-5552-50ab-a0a9-b4f60c7840f8">
   <Page name="Surface" id="9f6860ee-d45d-5029-9fbe-867bedd78b3a">
-    <Frame name="Analog" id="7d7210a5-4d06-5f34-8623-700afcd94c08" w=248 h=248>
-      <Frame name="Window" id="d495540f-12ca-54ec-aab1-37fcbc07cd45" x=32 y=32 w=184 h=184 radius=18 clip=true fill={[{"kind":{"LinearGradient":{"stops":[{"color":"#0a1122","position":0.0},{"color":"#070c19","position":1.0}],"transform":{"a":1.6653345369377348e-16,"b":-1.0,"c":1.0,"d":1.6653345369377348e-16,"tx":1.0,"ty":-1.942890293094024e-16}}}}]}>
+    <Frame name="Analog" id="7d7210a5-4d06-5f34-8623-700afcd94c08" w=216 h=216>
+      <Frame name="Window" id="d495540f-12ca-54ec-aab1-37fcbc07cd45" x=16 y=16 w=184 h=184 radius=18 clip=true fill={[{"kind":{"LinearGradient":{"stops":[{"color":"#0a1122","position":0.0},{"color":"#070c19","position":1.0}],"transform":{"a":1.6653345369377348e-16,"b":-1.0,"c":1.0,"d":1.6653345369377348e-16,"tx":1.0,"ty":-1.942890293094024e-16}}}}]}>
         <Vector name="baseline" id="99f32b23-2808-5808-9426-f3b5cb3e6551" y=166 w=184 h=1 stroke="#bcd6ff59" stroke-cap="round" stroke-join="round" geometry="M 0.000 0.000 L 184.000 0.000 " />
         <Vector name="ticks" id="1f037d71-8315-53cd-bdf6-87882d64fe69" x=20 y=169 w=148 h=4 stroke="#bcd6ff4d" stroke-cap="round" stroke-join="round" geometry="M 0.000 0.000 L 0.000 4.000 M 14.800 0.000 L 14.800 4.000 M 29.600 0.000 L 29.600 4.000 M 44.400 0.000 L 44.400 4.000 M 59.200 0.000 L 59.200 4.000 M 74.000 0.000 L 74.000 4.000 M 88.800 0.000 L 88.800 4.000 M 103.600 0.000 L 103.600 4.000 M 118.400 0.000 L 118.400 4.000 M 133.200 0.000 L 133.200 4.000 M 148.000 0.000 L 148.000 4.000 " />
         <Text name="silk" id="21ba13a2-77cf-5973-8957-67934d73d4af" x=18 y=174.26 w=14.96 h=8 fill="#7f93bd" size=5.5 weight=700 letter-spacing=0.44 case="upper">0</Text>

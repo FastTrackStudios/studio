@@ -1,7 +1,7 @@
 <Document id="8fc1b88b-1e61-5dcb-aa38-f3297e6f3f55">
   <Page name="Surface" id="d63137fd-8c72-5adb-b9e1-f8c5f3930c75">
-    <Frame name="Cloud" id="c84411aa-8b39-589b-b05c-704378692ce0" w=248 h=248>
-      <Frame name="Window" id="322d40cc-1801-57c2-ac10-face26e46b62" x=32 y=32 w=184 h=184 radius=18 clip=true fill={[{"kind":{"LinearGradient":{"stops":[{"color":"#07061a","position":0.0},{"color":"#15113a","position":0.5},{"color":"#2a1f5c","position":0.85},{"color":"#3b2a72","position":1.0}],"transform":{"a":1.6653345369377348e-16,"b":-1.0,"c":1.0,"d":1.6653345369377348e-16,"tx":1.0,"ty":-1.942890293094024e-16}}}}]}>
+    <Frame name="Cloud" id="c84411aa-8b39-589b-b05c-704378692ce0" w=216 h=216>
+      <Frame name="Window" id="322d40cc-1801-57c2-ac10-face26e46b62" x=16 y=16 w=184 h=184 radius=18 clip=true fill={[{"kind":{"LinearGradient":{"stops":[{"color":"#07061a","position":0.0},{"color":"#15113a","position":0.5},{"color":"#2a1f5c","position":0.85},{"color":"#3b2a72","position":1.0}],"transform":{"a":1.6653345369377348e-16,"b":-1.0,"c":1.0,"d":1.6653345369377348e-16,"tx":1.0,"ty":-1.942890293094024e-16}}}}]}>
         <Ellipse name="star" id="8f0fd39e-9bb8-572f-9e14-03a17a3f1081" x=16.2 y=5.2 w=1.6 h=1.6 fill="#f4f0ff" motion={[{"from":0.15,"input":"0.5 + 0.5 * sin(time * 0.40 + 0)","target":"opacity","to":0.9}]} />
         <Ellipse name="star" id="988dd912-a8a2-5b30-a1de-e59d68d87ce5" x=98.73915480509204 y=45.73915480509204 w=2.5216903898159218 h=2.5216903898159218 fill="#f4f0ff" motion={[{"from":0.15,"input":"0.5 + 0.5 * sin(time * 0.57 + 1)","target":"opacity","to":0.9}]} />
         <Ellipse name="star" id="e0abab5c-978f-54a9-93a4-2329e007824e" x=182.17139091532516 y=87.17139091532518 w=1.6572181693496533 h=1.6572181693496533 fill="#f4f0ff" motion={[{"from":0.15,"input":"0.5 + 0.5 * sin(time * 0.59 + 2)","target":"opacity","to":0.9}]} />

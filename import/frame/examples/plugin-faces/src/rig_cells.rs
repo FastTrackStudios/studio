@@ -27,8 +27,8 @@ use crate::rig_faces::PLUGIN;
 /// The block, in face units: twice the grid's 92 pt cell.
 pub const S: f64 = 184.0;
 /// How far a block's face reaches past the block, each side: into the
-/// padding between blocks (16 pt at the grid's scale).
-pub const BLEED: f64 = 32.0;
+/// padding between blocks — half the grid's 16 pt gap.
+pub const BLEED: f64 = 16.0;
 
 /// A block face's scene: the margin round the block, transparent, and the
 /// block's window, clipped and rounded, filled with `window` (a top-down

@@ -1188,7 +1188,7 @@
   ],
   "blocks": [
     {
-      "bleed": 0.17391304347826086,
+      "bleed": 0.08695652173913043,
       "face": "60-dly-tape-block",
       "match": [
         "delay:tape"
@@ -1196,7 +1196,7 @@
       "ns": "dly"
     },
     {
-      "bleed": 0.17391304347826086,
+      "bleed": 0.08695652173913043,
       "face": "61-dly-digital-block",
       "match": [
         "delay:digital"
@@ -1204,7 +1204,7 @@
       "ns": "dly"
     },
     {
-      "bleed": 0.17391304347826086,
+      "bleed": 0.08695652173913043,
       "face": "62-dly-analog-block",
       "match": [
         "delay:analog"
@@ -1212,7 +1212,7 @@
       "ns": "dly"
     },
     {
-      "bleed": 0.17391304347826086,
+      "bleed": 0.08695652173913043,
       "face": "69-dly-block",
       "match": [
         "delay"
@@ -1220,7 +1220,7 @@
       "ns": "dly"
     },
     {
-      "bleed": 0.17391304347826086,
+      "bleed": 0.08695652173913043,
       "face": "81-verb-hall-block",
       "match": [
         "reverb:hall"
@@ -1228,7 +1228,7 @@
       "ns": "verb"
     },
     {
-      "bleed": 0.17391304347826086,
+      "bleed": 0.08695652173913043,
       "face": "82-verb-plate-block",
       "match": [
         "reverb:plate"
@@ -1236,7 +1236,7 @@
       "ns": "verb"
     },
     {
-      "bleed": 0.17391304347826086,
+      "bleed": 0.08695652173913043,
       "face": "84-verb-cloud-block",
       "match": [
         "reverb:cloud"
@@ -1244,7 +1244,7 @@
       "ns": "verb"
     },
     {
-      "bleed": 0.17391304347826086,
+      "bleed": 0.08695652173913043,
       "face": "89-verb-block",
       "match": [
         "reverb"
@@ -1252,7 +1252,7 @@
       "ns": "verb"
     },
     {
-      "bleed": 0.17391304347826086,
+      "bleed": 0.08695652173913043,
       "face": "100-mod-chorus-block",
       "match": [
         "chorus"
@@ -1260,7 +1260,7 @@
       "ns": "mod"
     },
     {
-      "bleed": 0.17391304347826086,
+      "bleed": 0.08695652173913043,
       "face": "103-mod-flanger-block",
       "match": [
         "flanger"
@@ -1268,7 +1268,7 @@
       "ns": "mod"
     },
     {
-      "bleed": 0.17391304347826086,
+      "bleed": 0.08695652173913043,
       "face": "104-mod-phaser-block",
       "match": [
         "phaser"
@@ -1276,7 +1276,7 @@
       "ns": "mod"
     },
     {
-      "bleed": 0.17391304347826086,
+      "bleed": 0.08695652173913043,
       "face": "101-motion-tremolo-block",
       "match": [
         "trem",
@@ -1285,7 +1285,7 @@
       "ns": "motion"
     },
     {
-      "bleed": 0.17391304347826086,
+      "bleed": 0.08695652173913043,
       "face": "102-motion-vibrato-block",
       "match": [
         "vibrato"
@@ -1293,7 +1293,7 @@
       "ns": "motion"
     },
     {
-      "bleed": 0.17391304347826086,
+      "bleed": 0.08695652173913043,
       "face": "105-motion-rotary-block",
       "match": [
         "rotary"
@@ -1301,7 +1301,7 @@
       "ns": "motion"
     },
     {
-      "bleed": 0.17391304347826086,
+      "bleed": 0.08695652173913043,
       "face": "52-amp-eq-block",
       "match": [
         "eq"
@@ -1309,7 +1309,7 @@
       "ns": "eq"
     },
     {
-      "bleed": 0.17391304347826086,
+      "bleed": 0.08695652173913043,
       "face": "55-comp-block",
       "match": [
         "compressor"

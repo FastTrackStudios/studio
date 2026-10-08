@@ -1,7 +1,7 @@
 <Document id="5ac24904-e7d2-5037-a12f-085c294771fb">
   <Page name="Surface" id="5306ede2-780f-5be5-afef-12f141441656">
-    <Frame name="Phaser" id="f5fd763c-1845-5d71-a50c-9efddb147a6c" w=248 h=248>
-      <Frame name="Window" id="e25b7ffc-aab4-5cd7-bf10-e87b68e102a7" x=32 y=32 w=184 h=184 radius=18 clip=true fill={[{"kind":{"LinearGradient":{"stops":[{"color":"#08202e","position":0.0},{"color":"#04101a","position":1.0}],"transform":{"a":1.6653345369377348e-16,"b":-1.0,"c":1.0,"d":1.6653345369377348e-16,"tx":1.0,"ty":-1.942890293094024e-16}}}}]}>
+    <Frame name="Phaser" id="f5fd763c-1845-5d71-a50c-9efddb147a6c" w=216 h=216>
+      <Frame name="Window" id="e25b7ffc-aab4-5cd7-bf10-e87b68e102a7" x=16 y=16 w=184 h=184 radius=18 clip=true fill={[{"kind":{"LinearGradient":{"stops":[{"color":"#08202e","position":0.0},{"color":"#04101a","position":1.0}],"transform":{"a":1.6653345369377348e-16,"b":-1.0,"c":1.0,"d":1.6653345369377348e-16,"tx":1.0,"ty":-1.942890293094024e-16}}}}]}>
         <Ellipse name="stage" id="6d844fef-eb71-56a5-8e74-b5498fb3e153" x=22 y=22 w=140 h=140 stroke="#22d3ee40" stroke-weight=1.4 stroke-align="inside" />
         <Frame name="notch" id="c607b8a3-32bd-5f8e-9aab-37aaa2370435" x=22 y=22 w=140 h=140 motion={[{"input":"fract(time * param(mod/rate) * 0.5 * param(mod/on))","pivot":{"x":0.5,"y":0.5},"target":"rotate","to":360.0},{"input":"0.35 + 0.65 * norm(mod/depth)","target":"opacity"}]}>
           <Ellipse name="dot" id="28926354-990a-53b7-87a3-afcdf0e10e14" x=65 y=-5 w=10 h=10 fill="#a5f3fc" emission={{"color":"#22d3ee","intensity":1.0,"radius":8.0}} />
