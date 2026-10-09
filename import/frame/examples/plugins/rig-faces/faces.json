@@ -1226,20 +1226,12 @@
     },
     {
       "bleed": 0.08695652173913043,
-      "face": "44-unit-chorus-block",
-      "match": [
-        "pre:chorus"
-      ],
-      "ns": "unit"
-    },
-    {
-      "bleed": 0.08695652173913043,
       "face": "45-unit-spring-block",
       "match": [
         "pre:reverb",
         "reverb:spring"
       ],
-      "ns": "unit"
+      "ns": "spring"
     },
     {
       "bleed": 0.08695652173913043,

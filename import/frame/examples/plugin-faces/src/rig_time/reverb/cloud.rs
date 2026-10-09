@@ -229,14 +229,48 @@ pub fn back_at(dark: bool, tier: kit::Tier) -> Face {
     f
 }
 
+/// The night sky laid out for a block (`s` square): the moon high, the
+/// clouds — each a fraction of the block — drifting through its middle,
+/// where the block's labels leave it clear; stars and grains as on the
+/// face, the same motions.
+fn block_sky(b: &mut Builder<'_>, v: NodeId, s: f64, l: &Look) {
+    for i in 0..18 {
+        let f = f64::from(i);
+        let (x, y) = ((f * 67.0 + 11.0) % s, s * 0.22 + (f * 37.0) % (s * 0.56));
+        let st = b.add(v, draw::circle("star", x, y, 0.9 + 0.4 * crate::reverb::jitter(f).abs(), draw::solid(l.star)));
+        motion::add(b, st, Motion::new(Target::Opacity).input(format!("0.5 + 0.5 * sin(time * {:.2} + {f})", 0.4 + 0.3 * crate::reverb::jitter(f * 3.0).abs())).range(0.15, 0.9));
+    }
+    b.add(v, draw::circle("halo", s * 0.74, s * 0.34, s * 0.22, draw::radial_at(0.5, 0.5, 0.5, &[(0.0, "#c4b5fd40"), (1.0, "#c4b5fd00")])));
+    b.add(v, draw::emissive(draw::circle("moon", s * 0.74, s * 0.34, 8.0, draw::radial_at(0.4, 0.35, 0.8, &[(0.0, "#fbf8ff"), (1.0, "#d6ccf5")])), draw::hex("#e9e2ff"), 0.8, 10.0));
+    let layers = [("far", 0.42, 0.012), ("mid", 0.55, 0.02), ("near", 0.68, 0.032)];
+    for (li, (name, cy, speed)) in layers.iter().enumerate() {
+        let (tint, alpha) = l.clouds[li];
+        for k in 0..2 {
+            let cw = s * (0.5 + 0.12 * li as f64);
+            let ch = cw * 0.34;
+            let c = cloud(b, v, name, (0.0, s * cy - ch / 2.0, cw, ch), tint, f64::from(li as u32 * 7 + k));
+            let offset = f64::from(k) / 2.0 + 0.13 * li as f64;
+            let drift = format!("fract(time * {speed} * 2.4 * (0.4 + 1.6 * norm({VERB}/modulation)) + {offset})");
+            motion::add(b, c, Motion::new(Target::X).input(drift).range(-cw, s));
+            motion::add(b, c, Motion::new(Target::Scale).input(format!("norm({VERB}/size)")).range(0.75, 1.1).dynamics(Dynamics::spring(160.0, 22.0)));
+            motion::add(b, c, Motion::new(Target::Opacity).input(format!("(0.35 + 0.65 * norm({VERB}/decay)) * (0.35 + 0.65 * param({VERB}/on))")).range(0.0, alpha));
+        }
+    }
+    for i in 0..16 {
+        let f = f64::from(i);
+        let (x, y) = ((f * 53.0 + 17.0) % (s - 20.0) + 10.0, s * 0.3 + (f * 29.0) % (s * 0.45));
+        let g = b.add(v, draw::emissive(draw::circle("grain", x, y, 1.2, draw::solid(l.grain.0)), draw::hex(l.grain.1), 1.0, 5.0));
+        let glint = format!("pow(0.5 + 0.5 * sin(time * {:.2} + {:.2}), 12) * param({VERB}/on)", 1.1 + 0.9 * crate::reverb::jitter(f).abs(), f * 1.7);
+        motion::add(b, g, Motion::new(Target::Opacity).input(glint).range(0.0, 1.0));
+    }
+}
+
 /// The routing grid's block: the night sky, its clouds drifting.
 #[must_use]
 pub fn block() -> Face {
     use crate::rig_cells::S;
     let l = &DARK;
     let sky_fill: Vec<(f64, &str)> = l.sky.to_vec();
-    let scene = crate::rig_cells::block("Cloud", &sky_fill, |b, v, _| {
-        sky(b, v, S, S, l, true);
-    });
+    let scene = crate::rig_cells::block("Cloud", &sky_fill, |b, v, _| block_sky(b, v, S, l));
     kit::reverb_face("84-verb-cloud-block", scene)
 }
