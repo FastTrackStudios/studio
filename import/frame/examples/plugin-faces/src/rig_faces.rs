@@ -413,7 +413,7 @@ pub fn faces() -> Vec<Face> {
     v.push(eq_row());
     v.push(spring_viz());
     v.push(cab());
-    v.extend([d_(crate::rig_blues::filters::wah_unit()), d_(crate::rig_blues::filters::q_tron_unit()), d_(crate::rig_blues::filters::postal_unit()), d_(crate::rig_blues::pitch::pitch_unit()), d_(crate::rig_blues::doubler::doubler_unit()), d_(crate::rig_blues::transpose::transpose_unit()), d_(crate::rig_blues::transpose::dive_unit()), d_(crate::rig_blues::transpose::transpose_phone()), d_(crate::rig_blues::transpose::dive_phone()), d_(crate::rig_blues::filters::wah_phone()), d_(crate::rig_blues::filters::q_tron_phone()), d_(crate::rig_blues::filters::dive_pedal_phone()), d_(crate::rig_blues::filters::volume_phone()), d_(crate::rig_blues::filters::volume_row()), d_(crate::rig_blues::filters::octaver_phone()), d_(crate::rig_blues::filters::harmonizer_phone()), d_(crate::rig_blues::doubler::doubler_phone()), d_(crate::rig_blues::premod::premod_unit())]);
+    v.extend([d_(crate::rig_blues::filters::wah_unit()), d_(crate::rig_blues::filters::q_tron_unit()), d_(crate::rig_blues::filters::postal_unit()), d_(crate::rig_blues::pitch::pitch_unit()), d_(crate::rig_blues::doubler::doubler_unit()), d_(crate::rig_blues::transpose::transpose_unit()), d_(crate::rig_blues::transpose::dive_unit()), d_(crate::rig_blues::transpose::transpose_phone()), d_(crate::rig_blues::transpose::dive_phone()), d_(crate::rig_blues::filters::wah_phone()), d_(crate::rig_blues::filters::q_tron_phone()), d_(crate::rig_blues::filters::dive_pedal_phone()), d_(crate::rig_blues::filters::volume_phone()), d_(crate::rig_blues::filters::volume_row()), d_(crate::rig_blues::filters::wah_row()), d_(crate::rig_blues::filters::octaver_phone()), d_(crate::rig_blues::filters::harmonizer_phone()), d_(crate::rig_blues::doubler::doubler_phone()), d_(crate::rig_blues::premod::premod_unit())]);
     v
 }
 
@@ -498,7 +498,8 @@ pub fn manifest() -> String {
         // The input stage's units, by block type, and the filter's picture.
         "input": [
             { "match": ["wah"], "face": "30-wah-unit", "ns": "wah", "size": size(&crate::rig_blues::filters::wah_unit()),
-                "tiers": { "phone": { "face": "30-wah-phone", "size": size(&crate::rig_blues::filters::wah_phone()), "nameplate": true } } },
+                "tiers": { "phone": { "face": "30-wah-phone", "size": size(&crate::rig_blues::filters::wah_phone()), "nameplate": true } },
+                "row": { "face": "30-wah-row", "size": [860.0, 254.0] } },
             // The envelope filter by its preset: Cory Wong's postal box, or
             // the John Mayer rig's Q-Tron (the default).
             { "match": ["postal"], "face": "34-filter-postal", "ns": "env", "size": size(&crate::rig_blues::filters::postal_unit()) },
