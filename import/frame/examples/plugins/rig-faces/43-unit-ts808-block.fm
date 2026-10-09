@@ -1,0 +1,20 @@
+<Document id="649eb790-c7f6-567b-987e-ede3508abee2">
+  <Page name="Surface" id="9d38e063-fb47-512b-a426-70311a576fc2">
+    <Frame name="TS808" id="d61deacd-9b1e-5d71-ad79-0aa7b7c0c7dc" w=216 h=216>
+      <Frame name="Window" id="89128ca9-c0aa-506d-8a92-297e8e885bc9" x=16 y=16 w=184 h=184 radius=18 clip=true fill={[{"kind":{"LinearGradient":{"stops":[{"color":"#5aa84f","position":0.0},{"color":"#2e6a2a","position":1.0}],"transform":{"a":1.6653345369377348e-16,"b":-1.0,"c":1.0,"d":1.6653345369377348e-16,"tx":1.0,"ty":-1.942890293094024e-16}}}}]}>
+        <Ellipse name="knob" id="440f0b4e-53e4-5f35-b5cd-6cc45ce7e293" x=41 y=49 w=26 h=26 fill={[{"kind":{"RadialGradient":{"stops":[{"color":"#3a3a3c","position":0.0},{"color":"#0d0d0e","position":1.0}],"transform":{"a":1.8,"b":0.0,"c":0.0,"d":1.8,"tx":-0.52,"ty":-0.5800000000000001}}}}]} effects={[{"color":"#00000080","kind":"DropShadow","offset_y":2.0,"radius":3.0}]} />
+        <Vector name="pointer" id="e2f9bdd6-82ce-5bec-8124-17755fd0f206" x=45.8339662363517 y=64.08905973148126 w=5.676389323511621 h=4.763056187777252 stroke="#e9eef0" stroke-weight=1.8200000000000003 stroke-cap="round" stroke-join="round" geometry="M 5.676 0.000 L 0.000 4.763 " />
+        <Ellipse name="knob" id="d50d7073-1c82-542c-8229-f5e7913b770b" x=83.5 y=49.5 w=17 h=17 fill={[{"kind":{"RadialGradient":{"stops":[{"color":"#3a3a3c","position":0.0},{"color":"#0d0d0e","position":1.0}],"transform":{"a":1.8,"b":0.0,"c":0.0,"d":1.8,"tx":-0.52,"ty":-0.5800000000000001}}}}]} effects={[{"color":"#00000080","kind":"DropShadow","offset_y":2.0,"radius":3.0}]} />
+        <Vector name="pointer" id="50ea040b-5e48-5c6a-92a0-e8f4d448f84c" x=92 y=60.125 w=1 h=4.844999999999999 stroke="#e9eef0" stroke-weight=1.6 stroke-cap="round" stroke-join="round" geometry="M 0.000 0.000 L 0.000 4.845 " />
+        <Ellipse name="knob" id="9bfcca78-cf64-5aaa-b99f-483ddd450900" x=117 y=49 w=26 h=26 fill={[{"kind":{"RadialGradient":{"stops":[{"color":"#3a3a3c","position":0.0},{"color":"#0d0d0e","position":1.0}],"transform":{"a":1.8,"b":0.0,"c":0.0,"d":1.8,"tx":-0.52,"ty":-0.5800000000000001}}}}]} effects={[{"color":"#00000080","kind":"DropShadow","offset_y":2.0,"radius":3.0}]} />
+        <Vector name="pointer" id="81cace2f-d9ab-5847-b43a-63d86ffcbbdd" x=124.67 y=64.81458256229942 w=3.7049999999999983 h=6.417248242042689 stroke="#e9eef0" stroke-weight=1.8200000000000003 stroke-cap="round" stroke-join="round" geometry="M 3.705 0.000 L 0.000 6.417 " />
+        <Rectangle name="plate" id="d650f050-9dbc-5931-9173-c28a303e8964" x=14 y=84 w=156 h=20 fill={[{"kind":{"LinearGradient":{"stops":[{"color":"#eef0f2","position":0.0},{"color":"#b9bdc2","position":1.0}],"transform":{"a":1.6653345369377348e-16,"b":-1.0,"c":1.0,"d":1.6653345369377348e-16,"tx":1.0,"ty":-1.942890293094024e-16}}}}]}>
+          <Text name="model" id="7f59d612-d553-51c9-ad7f-89232eaca1c9" y=4 w=156 h=13 fill="#1a1c1e" font="Inter" size=9 weight=800 text-align="center">TS808 OVERDRIVE PRO</Text>
+        </Rectangle>
+        <Rectangle name="switch" id="e8e18acc-5c82-5a2e-95fe-81ff4129da97" x=40 y=112 w=104 h=26 radius=4 fill={[{"kind":{"LinearGradient":{"stops":[{"color":"#e2e4e6","position":0.0},{"color":"#9a9ea3","position":1.0}],"transform":{"a":1.6653345369377348e-16,"b":-1.0,"c":1.0,"d":1.6653345369377348e-16,"tx":1.0,"ty":-1.942890293094024e-16}}}}]} effects={[{"color":"#00000070","kind":"DropShadow","offset_y":2.0,"radius":3.0}]} />
+        <Ellipse name="lamp ring" id="a9f45e69-0700-5f85-8231-f111fb3267ea" x=86.5 y=66.5 w=11 h=11 fill="#0b0b0c" />
+        <Ellipse name="lamp" id="3e8eee16-faf2-530a-b90f-3455374cc0b9" x=88.4 y=68.4 w=7.2 h=7.2 fill="#ef4444" emission={{"color":"#ef4444","intensity":1.0,"radius":9.0}} motion={[{"from":0.12,"input":"param(unit/on)","target":"opacity"}]} />
+      </Frame>
+    </Frame>
+  </Page>
+</Document>

@@ -19,6 +19,7 @@ pub mod rig_faces;
 pub mod rig_amp;
 pub mod rig_mod;
 pub mod rig_cells;
+pub mod rig_units;
 pub mod rig_time;
 pub mod saturate;
 pub mod suite_boutique_clean;

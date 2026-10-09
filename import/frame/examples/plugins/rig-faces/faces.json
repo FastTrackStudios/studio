@@ -1189,6 +1189,68 @@
   "blocks": [
     {
       "bleed": 0.08695652173913043,
+      "face": "40-unit-katana-block",
+      "match": [
+        "drive:keeley katana",
+        "drive:katana"
+      ],
+      "ns": "unit"
+    },
+    {
+      "bleed": 0.08695652173913043,
+      "face": "41-unit-klon-block",
+      "match": [
+        "drive:klon centaur",
+        "drive:klon"
+      ],
+      "ns": "unit"
+    },
+    {
+      "bleed": 0.08695652173913043,
+      "face": "42-unit-bluesbreaker-block",
+      "match": [
+        "drive:marshall bluesbreaker",
+        "drive:bluesbreaker"
+      ],
+      "ns": "unit"
+    },
+    {
+      "bleed": 0.08695652173913043,
+      "face": "43-unit-ts808-block",
+      "match": [
+        "drive:ibanez ts808",
+        "drive:ts808",
+        "drive:tube screamer"
+      ],
+      "ns": "unit"
+    },
+    {
+      "bleed": 0.08695652173913043,
+      "face": "44-unit-chorus-block",
+      "match": [
+        "pre:chorus"
+      ],
+      "ns": "unit"
+    },
+    {
+      "bleed": 0.08695652173913043,
+      "face": "45-unit-spring-block",
+      "match": [
+        "pre:reverb",
+        "reverb:spring"
+      ],
+      "ns": "unit"
+    },
+    {
+      "bleed": 0.08695652173913043,
+      "face": "55-post-comp-distressor-block",
+      "match": [
+        "post comp"
+      ],
+      "ns": "dist"
+    },
+    {
+      "bleed": 0.08695652173913043,
       "face": "60-dly-tape-block",
       "match": [
         "delay:tape"

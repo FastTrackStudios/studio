@@ -1,0 +1,17 @@
+<Document id="c4346396-6755-56c9-86fb-b7a60f3608ed">
+  <Page name="Surface" id="e1fe29d3-378b-5409-8ac7-96021da5e1a1">
+    <Frame name="Klon" id="44d5304e-1a0e-5e3f-a6f3-780693da8059" w=216 h=216>
+      <Frame name="Window" id="4b9735f6-7736-5180-8711-d21d2d003583" x=16 y=16 w=184 h=184 radius=18 clip=true fill={[{"kind":{"LinearGradient":{"stops":[{"color":"#ecd08a","position":0.0},{"color":"#d3ac55","position":0.55},{"color":"#a77f2c","position":1.0}],"transform":{"a":1.6653345369377348e-16,"b":-1.0,"c":1.0,"d":1.6653345369377348e-16,"tx":1.0,"ty":-1.942890293094024e-16}}}}]}>
+        <Ellipse name="knob" id="50f33398-8a08-5694-ac8b-35d62813150d" x=39 y=61 w=26 h=26 fill={[{"kind":{"RadialGradient":{"stops":[{"color":"#3a3a3c","position":0.0},{"color":"#0d0d0e","position":1.0}],"transform":{"a":1.8,"b":0.0,"c":0.0,"d":1.8,"tx":-0.52,"ty":-0.5800000000000001}}}}]} effects={[{"color":"#00000080","kind":"DropShadow","offset_y":2.0,"radius":3.0}]} />
+        <Vector name="pointer" id="abe5ae27-73b0-56d4-b5dc-cdbcc594407f" x=41.982876662422214 y=75.11156546580843 w=6.9631223200235866 h=2.5343692620431995 stroke="#f3e6c4" stroke-weight=1.8200000000000003 stroke-cap="round" stroke-join="round" geometry="M 6.963 0.000 L 0.000 2.534 " />
+        <Ellipse name="knob" id="b8e89548-907c-5227-bb74-a0ff78c37d1c" x=79 y=61 w=26 h=26 fill={[{"kind":{"RadialGradient":{"stops":[{"color":"#3a3a3c","position":0.0},{"color":"#0d0d0e","position":1.0}],"transform":{"a":1.8,"b":0.0,"c":0.0,"d":1.8,"tx":-0.52,"ty":-0.5800000000000001}}}}]} effects={[{"color":"#00000080","kind":"DropShadow","offset_y":2.0,"radius":3.0}]} />
+        <Vector name="pointer" id="0a08aa12-a4ac-5c8d-b841-a645fa91bfb5" x=90.14891042607051 y=77.20062519728968 w=1.286732996511958 h=7.297425449820452 stroke="#f3e6c4" stroke-weight=1.8200000000000003 stroke-cap="round" stroke-join="round" geometry="M 1.287 0.000 L 0.000 7.297 " />
+        <Ellipse name="knob" id="c496fd92-1b3d-5638-a1d5-045b4055a33b" x=119 y=61 w=26 h=26 fill={[{"kind":{"RadialGradient":{"stops":[{"color":"#3a3a3c","position":0.0},{"color":"#0d0d0e","position":1.0}],"transform":{"a":1.8,"b":0.0,"c":0.0,"d":1.8,"tx":-0.52,"ty":-0.5800000000000001}}}}]} effects={[{"color":"#00000080","kind":"DropShadow","offset_y":2.0,"radius":3.0}]} />
+        <Vector name="pointer" id="b9304611-a669-5e58-a993-9c1e5b715128" x=123.8339662363517 y=76.08905973148126 w=5.676389323511614 h=4.763056187777252 stroke="#f3e6c4" stroke-weight=1.8200000000000003 stroke-cap="round" stroke-join="round" geometry="M 5.676 0.000 L 0.000 4.763 " />
+        <Text name="legend" id="d65fc517-de41-513a-a561-2fd29ec0c7b1" y=97.8 w=184 h=36 fill="#3b2610" font="Dancing Script" size=26 weight=700 text-align="center">Centaur</Text>
+        <Ellipse name="lamp ring" id="cc59410f-82f2-5405-beb0-90c75f0fb0b4" x=86.5 y=134.5 w=11 h=11 fill="#0b0b0c" />
+        <Ellipse name="lamp" id="894d2995-378b-518d-bc5d-efac15537a25" x=88.4 y=136.4 w=7.2 h=7.2 fill="#ef4444" emission={{"color":"#ef4444","intensity":1.0,"radius":9.0}} motion={[{"from":0.12,"input":"param(unit/on)","target":"opacity"}]} />
+      </Frame>
+    </Frame>
+  </Page>
+</Document>

@@ -1,0 +1,13 @@
+<Document id="b0e83f19-0517-557b-8f22-f2bd667f93b5">
+  <Page name="Surface" id="e0ec613a-b10f-57b7-82b7-67e4d35f8843">
+    <Frame name="Katana" id="d50192e8-b986-575e-ae87-5b28e6bb9ae4" w=216 h=216>
+      <Frame name="Window" id="2ca66b1e-8bfc-51ca-bd4e-a7bf55ede417" x=16 y=16 w=184 h=184 radius=18 clip=true fill={[{"kind":{"LinearGradient":{"stops":[{"color":"#2c2c30","position":0.0},{"color":"#111113","position":1.0}],"transform":{"a":1.6653345369377348e-16,"b":-1.0,"c":1.0,"d":1.6653345369377348e-16,"tx":1.0,"ty":-1.942890293094024e-16}}}}]}>
+        <Ellipse name="knob" id="438a177b-5245-59d4-bf87-a3864ca9a8d0" x=62 y=62 w=60 h=60 fill={[{"kind":{"RadialGradient":{"stops":[{"color":"#f4f5f7","position":0.0},{"color":"#7d8188","position":1.0}],"transform":{"a":1.8,"b":0.0,"c":0.0,"d":1.8,"tx":-0.52,"ty":-0.5800000000000001}}}}]} effects={[{"color":"#00000080","kind":"DropShadow","offset_y":2.0,"radius":3.0}]} />
+        <Vector name="pointer" id="d54b7b3c-d716-524f-bc0c-88f7a0202bf1" x=74.60517318281093 y=97.3033008588991 w=12.091525958289964 h=12.091525958289964 stroke="#141416" stroke-weight=4.2 stroke-cap="round" stroke-join="round" geometry="M 12.092 0.000 L 0.000 12.092 " />
+        <Ellipse name="lamp ring" id="5f2dc674-cb2d-59c4-9d3d-e237af05615a" x=144.5 y=54.5 w=11 h=11 fill="#0b0b0c" />
+        <Ellipse name="lamp" id="00aa617b-094e-5a14-9d90-d3bc36d53a6b" x=146.4 y=56.4 w=7.2 h=7.2 fill="#3b82f6" emission={{"color":"#3b82f6","intensity":1.0,"radius":9.0}} motion={[{"from":0.12,"input":"param(unit/on)","target":"opacity"}]} />
+        <Text name="legend" id="276701e0-8865-59a1-8cde-cd055f5ae44b" y=130.9 w=184 h=18 fill="#d4d6da" font="Michroma" size=13 weight=400 text-align="center">KATANA</Text>
+      </Frame>
+    </Frame>
+  </Page>
+</Document>

@@ -1,0 +1,17 @@
+<Document id="911ba43f-69bb-5edb-8d19-df90570b9480">
+  <Page name="Surface" id="aac7d6b2-aec7-56fe-8dde-f00af8f71c6f">
+    <Frame name="Bluesbreaker" id="0d27c4ea-5d51-5bd8-bfea-86a7f0cc1155" w=216 h=216>
+      <Frame name="Window" id="2989233c-e220-515c-b983-b63daaaa422c" x=16 y=16 w=184 h=184 radius=18 clip=true fill={[{"kind":{"LinearGradient":{"stops":[{"color":"#232325","position":0.0},{"color":"#0e0e0f","position":1.0}],"transform":{"a":1.6653345369377348e-16,"b":-1.0,"c":1.0,"d":1.6653345369377348e-16,"tx":1.0,"ty":-1.942890293094024e-16}}}}]}>
+        <Rectangle name="plate" id="8a2c9d77-74a2-5a71-b45f-a31c5dc438fd" x=22 y=58 w=140 h=34 radius=5 fill={[{"kind":{"LinearGradient":{"stops":[{"color":"#f1e6c8","position":0.0},{"color":"#d8c99e","position":1.0}],"transform":{"a":1.6653345369377348e-16,"b":-1.0,"c":1.0,"d":1.6653345369377348e-16,"tx":1.0,"ty":-1.942890293094024e-16}}}}]} effects={[{"color":"#00000080","kind":"DropShadow","offset_y":2.0,"radius":3.0}]}>
+          <Text name="logo" id="ce2e1e53-5876-5302-bed8-c5dcfea20708" y=6 w=140 h=27 fill="#1b1712" font="Dancing Script" size=20 weight=700 text-align="center">Bluesbreaker</Text>
+        </Rectangle>
+        <Ellipse name="knob" id="c3fe52b3-6bc3-5bf4-9ddd-ba05c0b289d6" x=45 y=107 w=22 h=22 fill={[{"kind":{"RadialGradient":{"stops":[{"color":"#f0d98a","position":0.0},{"color":"#a8822c","position":1.0}],"transform":{"a":1.8,"b":0.0,"c":0.0,"d":1.8,"tx":-0.52,"ty":-0.5800000000000001}}}}]} effects={[{"color":"#00000080","kind":"DropShadow","offset_y":2.0,"radius":3.0}]} />
+        <Vector name="pointer" id="7c7bf9f2-f5bd-52b8-8160-7df82a656919" x=49.62189683369734 y=119.94454364826301 w=4.433559518039651 h=4.433559518039658 stroke="#1b1712" stroke-weight=1.6 stroke-cap="round" stroke-join="round" geometry="M 4.434 0.000 L 0.000 4.434 " />
+        <Ellipse name="knob" id="23121b08-df33-5a91-9f17-f08790f94b4b" x=81 y=107 w=22 h=22 fill={[{"kind":{"RadialGradient":{"stops":[{"color":"#f0d98a","position":0.0},{"color":"#a8822c","position":1.0}],"transform":{"a":1.8,"b":0.0,"c":0.0,"d":1.8,"tx":-0.52,"ty":-0.5800000000000001}}}}]} effects={[{"color":"#00000080","kind":"DropShadow","offset_y":2.0,"radius":3.0}]} />
+        <Vector name="pointer" id="5480e3e0-c9c4-5e42-b83d-ad9ed884e93b" x=85.62189683369735 y=119.94454364826301 w=4.433559518039644 h=4.433559518039658 stroke="#1b1712" stroke-weight=1.6 stroke-cap="round" stroke-join="round" geometry="M 4.434 0.000 L 0.000 4.434 " />
+        <Ellipse name="knob" id="ed0714b7-ba30-5f72-a63a-4a90bd33b6ff" x=117 y=107 w=22 h=22 fill={[{"kind":{"RadialGradient":{"stops":[{"color":"#f0d98a","position":0.0},{"color":"#a8822c","position":1.0}],"transform":{"a":1.8,"b":0.0,"c":0.0,"d":1.8,"tx":-0.52,"ty":-0.5800000000000001}}}}]} effects={[{"color":"#00000080","kind":"DropShadow","offset_y":2.0,"radius":3.0}]} />
+        <Vector name="pointer" id="1160cdcc-0263-5e33-8e1d-9298ec0fabc9" x=121.62189683369735 y=119.94454364826301 w=4.433559518039644 h=4.433559518039658 stroke="#1b1712" stroke-weight=1.6 stroke-cap="round" stroke-join="round" geometry="M 4.434 0.000 L 0.000 4.434 " />
+      </Frame>
+    </Frame>
+  </Page>
+</Document>

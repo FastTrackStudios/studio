@@ -207,7 +207,7 @@ pub fn faces() -> Vec<Face> {
     ];
     v.extend(crate::rig_mod::blocks());
     v.extend(crate::rig_faces::amp_blocks());
-    v.push(crate::rig_faces::post_comp_block());
+    v.extend(crate::rig_units::faces());
     v.push(crate::rig_blues::drives::filter_block());
     v.push(pitch());
     v.push(viz(
@@ -228,7 +228,8 @@ pub fn faces() -> Vec<Face> {
 pub fn manifest() -> serde_json::Value {
     let bleed = BLEED / S;
     let e = |m: &[&str], face: &str, ns: &str| json!({ "match": m, "face": face, "ns": ns, "bleed": bleed });
-    json!([
+    let mut all = crate::rig_units::manifest();
+    all.extend([
         e(&["delay:tape"], "60-dly-tape-block", "dly"),
         e(&["delay:digital"], "61-dly-digital-block", "dly"),
         e(&["delay:analog"], "62-dly-analog-block", "dly"),
@@ -248,5 +249,6 @@ pub fn manifest() -> serde_json::Value {
         e(&["gate"], "51-gate-block", "gate"),
         e(&["filter"], "32-filter-viz-block", "qtron"),
         e(&["pitch"], "33-pitch-block", "pitch"),
-    ])
+    ]);
+    serde_json::Value::Array(all)
 }
