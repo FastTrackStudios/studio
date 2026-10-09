@@ -535,10 +535,96 @@ fn lane_back(tier: kit::Tier, name: &'static str, t: &'static Theme, ns: &'stati
 
 /// Every modulation face.
 #[must_use]
+// ── Flanger, Phaser, Rotary ──────────────────────────────────────────────
+
+fn sweep_params(ns: &str, rate: f64) -> Vec<ParamInfo> {
+    vec![
+        ui::param(&a(ns, "rate"), "Rate", Range::log(0.05, 12.0, Unit::Hz), rate),
+        ui::param(&a(ns, "depth"), "Depth", Range::linear(0.0, 1.0, Unit::None), 0.5),
+        ui::param(&a(ns, "feedback"), "Feedback", Range::linear(0.0, 1.0, Unit::None), 0.3),
+        ui::param(&a(ns, "mix"), "Mix", Range::linear(0.0, 1.0, Unit::None), 0.5),
+        ui::toggle(&a(ns, "on"), "Bypass", true),
+    ]
+}
+
+/// The flanger: a comb of notches sweeping, the jet's line riding it.
+fn flanger_picture(b: &mut Builder<'_>, v: NodeId, vw: f64, vh: f64, t: &Theme) {
+    let sweep = format!("0.5 + 0.5 * sin(6.2832 * time * param({MOD}/rate)) * norm({MOD}/depth) * param({MOD}/on)");
+    let comb = b.add(v, draw::frame("comb", 0.0, 0.0, vw, vh));
+    let n = (vw / 12.0).floor().max(6.0) as u32;
+    let teeth: Vec<Vec<(f64, f64)>> = (0..n).map(|i| {
+        let x = 6.0 + f64::from(i) * (vw - 12.0) / f64::from(n - 1);
+        vec![(x, vh * 0.2), (x, vh * 0.8)]
+    }).collect();
+    b.add(comb, draw::emissive(ui::strokes("teeth", &teeth, 2.0, draw::solid(&ui::alpha(t.accent, 0.55))), draw::hex(t.accent), 0.5, 6.0));
+    motion::add(b, comb, Motion::new(Target::StretchX).input(sweep.clone()).range(0.55, 1.35).pivot(0.0, 0.5));
+    let jet: Vec<(f64, f64)> = (0..=80).map(|k| {
+        let x = vw * f64::from(k) / 80.0;
+        (x, vh / 2.0 - vh * 0.16 * (x / vw * std::f64::consts::TAU * 1.5).sin())
+    }).collect();
+    let j = b.add(v, draw::frame("jet", 0.0, 0.0, vw, vh));
+    b.add(j, draw::emissive(ui::strokes("jet", &[jet], 2.6, draw::solid(t.ink)), draw::hex(t.accent), 0.7, 8.0));
+    motion::add(b, j, Motion::new(Target::Y).input(sweep).range(-vh * 0.13, vh * 0.13));
+}
+
+/// The phaser: its stages as rings, a notch going round each.
+fn phaser_picture(b: &mut Builder<'_>, v: NodeId, vw: f64, vh: f64, t: &Theme) {
+    let (cx, cy) = (vw / 2.0, vh / 2.0);
+    let top = (vh / 2.0 - 8.0).min(vw / 2.0 - 8.0);
+    for (i, k) in [1.0, 0.77, 0.54, 0.31].into_iter().enumerate() {
+        let r = top * k;
+        let mut ring = draw::stroked(draw::circle("stage", cx, cy, r, draw::solid("#00000000")), &ui::alpha(t.accent, 0.4), 1.4);
+        ring.fills.clear();
+        b.add(v, ring);
+        let spin = b.add(v, draw::frame("notch", cx - r, cy - r, 2.0 * r, 2.0 * r));
+        b.add(spin, draw::emissive(draw::circle("dot", r, 0.0, 5.5, draw::solid(t.ink)), draw::hex(t.accent), 0.8, 8.0));
+        let turn = format!("fract(time * param({MOD}/rate) * {} * param({MOD}/on))", 0.5 + 0.35 * i as f64);
+        motion::add(b, spin, Motion::new(Target::Rotate).input(turn).range(0.0, 360.0).pivot(0.5, 0.5));
+        motion::add(b, spin, Motion::new(Target::Opacity).input(format!("0.35 + 0.65 * norm({MOD}/depth)")).range(0.0, 1.0));
+    }
+}
+
+/// The rotary: the Leslie's horn going round over its drum.
+fn rotary_picture(b: &mut Builder<'_>, v: NodeId, vw: f64, vh: f64, _t: &Theme) {
+    let (cx, cy) = (vw / 2.0, vh / 2.0);
+    let r = (vh / 2.0 - 6.0).min(vw / 2.0 - 6.0);
+    let drum = b.add(v, draw::frame("drum", cx - r, cy - r, 2.0 * r, 2.0 * r));
+    let louvres: Vec<Vec<(f64, f64)>> = (0..12).map(|i| {
+        let deg = 30.0 * f64::from(i);
+        vec![draw::polar(r, r, r * 0.3, deg), draw::polar(r, r, r * 0.95, deg)]
+    }).collect();
+    b.add(drum, ui::strokes("louvres", &louvres, 1.6, draw::solid("#34d39940")));
+    motion::add(b, drum, Motion::new(Target::Rotate).input(format!("fract(time * param({MOTION}/rate) * 0.18 * param({MOTION}/on))")).range(0.0, 360.0).pivot(0.5, 0.5));
+    let hr = r * 1.05;
+    let horn = b.add(v, draw::frame("horn", cx - hr, cy - hr, 2.0 * hr, 2.0 * hr));
+    b.add(horn, draw::rounded(draw::rect("bar", hr * 0.3, hr - 4.0, hr * 1.4, 8.0, draw::solid("#a7f3d0")), 4.0));
+    for x in [hr * 0.2, hr * 1.8] {
+        b.add(horn, draw::emissive(draw::circle("bell", x, hr, hr * 0.2, draw::radial_at(0.5, 0.5, 0.5, &[(0.0, "#ecfdf5"), (1.0, "#34d399")])), draw::hex("#34d399"), 0.8, 10.0));
+    }
+    motion::add(b, horn, Motion::new(Target::Rotate).input(format!("fract(time * param({MOTION}/rate) * 0.35 * param({MOTION}/on))")).range(0.0, 360.0).pivot(0.5, 0.5));
+    b.add(v, draw::circle("hub", cx, cy, 7.0, draw::solid("#064e3b")));
+}
+
+fn flanger_at(tier: kit::Tier) -> Face {
+    lane(tier, "Flanger", &CHORUS, MOD, flanger_picture, &[("depth", "Depth"), ("feedback", "Feedback"), ("mix", "Mix")], false, file_at("103-mod-flanger", tier), sweep_params(MOD, 0.3))
+}
+
+fn phaser_at(tier: kit::Tier) -> Face {
+    lane(tier, "Phaser", &CHORUS, MOD, phaser_picture, &[("depth", "Depth"), ("feedback", "Feedback"), ("mix", "Mix")], false, file_at("104-mod-phaser", tier), sweep_params(MOD, 0.5))
+}
+
+fn rotary_at(tier: kit::Tier) -> Face {
+    lane(tier, "Rotary", &TREMOLO, MOTION, rotary_picture, &[("depth", "Depth"), ("mix", "Mix")], false, file_at("105-motion-rotary", tier), sweep_params(MOTION, 1.0))
+}
+
 pub fn faces() -> Vec<Face> {
     let p = kit::Tier::Phone;
     let pane = kit::Tier::Ipad;
-    vec![chorus(), tremolo(), vibrato(), chorus_at(p), tremolo_at(p), vibrato_at(p), chorus_back(kit::Tier::Desktop), chorus_back(p), chorus_at(pane), tremolo_at(pane), vibrato_at(pane), chorus_back(pane)]
+    let mut v = vec![chorus(), tremolo(), vibrato(), chorus_at(p), tremolo_at(p), vibrato_at(p), chorus_back(kit::Tier::Desktop), chorus_back(p), chorus_at(pane), tremolo_at(pane), vibrato_at(pane), chorus_back(pane)];
+    for t in [p, pane] {
+        v.extend([flanger_at(t), phaser_at(t), rotary_at(t)]);
+    }
+    v
 }
 
 /// `faces.json`'s `modulation` entry: each block type's face.
@@ -562,6 +648,13 @@ pub fn manifest() -> serde_json::Value {
         { "match": ["vibrato"], "face": "102-motion-vibrato", "ns": MOTION, "size": size, "nameplate": true,
           "tiers": { "phone": { "face": vibrato_at(p).file, "size": lane, "time_knob": true },
                      "ipad": { "face": vibrato_at(q).file, "size": pane, "time_knob": true } } },
+        // Lanes only: the phone's, its base, and a pane's.
+        { "match": ["flanger"], "face": flanger_at(p).file, "ns": MOD, "size": lane, "nameplate": true, "time_knob": true,
+          "tiers": { "ipad": { "face": flanger_at(q).file, "size": pane, "time_knob": true } } },
+        { "match": ["phaser"], "face": phaser_at(p).file, "ns": MOD, "size": lane, "nameplate": true, "time_knob": true,
+          "tiers": { "ipad": { "face": phaser_at(q).file, "size": pane, "time_knob": true } } },
+        { "match": ["rotary"], "face": rotary_at(p).file, "ns": MOTION, "size": lane, "nameplate": true, "time_knob": true,
+          "tiers": { "ipad": { "face": rotary_at(q).file, "size": pane, "time_knob": true } } },
     ])
 }
 

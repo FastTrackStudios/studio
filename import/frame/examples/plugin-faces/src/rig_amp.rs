@@ -127,7 +127,7 @@ fn gate() -> Face {
         ui::param("gate/in", "Input", Range::linear(-90.0, 0.0, Unit::Db), -90.0),
         ui::toggle("gate/on", "Gate", true).featured(),
     ];
-    Face { file: "51-gate", plugin: PLUGIN, scene, params, streams: Vec::new() }
+    Face { file: "51-gate", plugin: PLUGIN, scene, params, streams: surface_kit::viz::catalog::comp_streams("gate", 240) }
 }
 
 fn trim() -> Face {
@@ -297,8 +297,40 @@ pub fn gate_pane(back: bool) -> Face {
 
 /// Both faces.
 #[must_use]
+/// The FX row's box on an iPad: the gate made for it.
+pub const ROW: (f64, f64) = (860.0, 254.0);
+
+/// The gate for the iPad's FX row: its picture across most of the row —
+/// the level scrolling past the threshold, the attenuation hanging from the
+/// top while it is shut, the threshold a line to drag — and Attack and
+/// Release at a finger's size beside it.
+#[must_use]
+pub fn gate_row() -> Face {
+    let (w, h) = ROW;
+    let side = 200.0;
+    let scene = canvas("Gate", move |b, root| {
+        ui::fit_root(b, root, w, h);
+        let mut p = draw::frame("Panel", 0.0, 0.0, w, h);
+        p.fills = vec![draw::linear(180.0, &[(0.0, "#14181e"), (1.0, "#0c0f13")])];
+        let p = b.add(root, p);
+        let place = surface_kit::Place::new("Gate").size(w - side).options(&["ns=gate", &format!("h={h}"), "len=240"]);
+        ui::put_at(b, p, "viz.gate", &place, 0.0, 0.0);
+        let knob = ["color=#1b1e23", "pointer=#86efac", "index=line", "index_w=0.1", "skirt=plain", "skirt_color=#0a0b0d"];
+        let cx = w - side / 2.0;
+        kit::knob3d(b, p, "gate/attack", "Attack", 52.0, (cx - 46.0, h / 2.0 + 6.0), &knob, INK, DIM);
+        kit::knob3d(b, p, "gate/release", "Release", 52.0, (cx + 46.0, h / 2.0 + 6.0), &knob, INK, DIM);
+    });
+    let params = vec![
+        ui::param("gate/threshold", "Threshold", Range::linear(-90.0, 0.0, Unit::Db), -50.0).featured(),
+        ui::param("gate/attack", "Attack", Range::log(0.1, 50.0, Unit::Milliseconds), 1.0),
+        ui::param("gate/release", "Release", Range::log(5.0, 500.0, Unit::Milliseconds), 120.0),
+        ui::toggle("gate/on", "Gate", true).featured(),
+    ];
+    Face { file: "51-gate-row", plugin: PLUGIN, scene, params, streams: surface_kit::viz::catalog::comp_streams("gate", 240) }
+}
+
 pub fn faces() -> Vec<Face> {
-    vec![gate(), gate_phone(false), gate_phone(true), gate_pane(false), gate_pane(true), trim()]
+    vec![gate(), gate_phone(false), gate_phone(true), gate_pane(false), gate_pane(true), gate_row(), trim()]
 }
 
 /// The gate as a phone lane: the lane is its meter — the input's level
@@ -349,5 +381,5 @@ pub fn gate_phone(back: bool) -> Face {
     ];
     params.extend(kit::nameplate_params("gate"));
     params.extend(kit::flip_params("gate"));
-    Face { file: if back { "51-gate-phone-back" } else { "51-gate-phone" }, plugin: PLUGIN, scene, params, streams: Vec::new() }
+    Face { file: if back { "51-gate-phone-back" } else { "51-gate-phone" }, plugin: PLUGIN, scene, params, streams: surface_kit::viz::catalog::comp_streams("gate", 240) }
 }

@@ -1406,6 +1406,13 @@
   "comp": {
     "face": "56-comp-scope",
     "ns": "comp",
+    "row": {
+      "face": "56-comp-scope-ipad",
+      "size": [
+        860.0,
+        254.0
+      ]
+    },
     "size": [
       750.0,
       254.0
@@ -1560,6 +1567,13 @@
   "gate": {
     "face": "51-gate",
     "ns": "gate",
+    "row": {
+      "face": "51-gate-row",
+      "size": [
+        860.0,
+        254.0
+      ]
+    },
     "size": [
       250.0,
       392.0
@@ -1842,6 +1856,75 @@
           "time_knob": true
         }
       }
+    },
+    {
+      "face": "103-mod-flanger-phone",
+      "match": [
+        "flanger"
+      ],
+      "nameplate": true,
+      "ns": "mod",
+      "size": [
+        760.0,
+        164.0
+      ],
+      "tiers": {
+        "ipad": {
+          "face": "103-mod-flanger-ipad",
+          "size": [
+            510.0,
+            164.0
+          ],
+          "time_knob": true
+        }
+      },
+      "time_knob": true
+    },
+    {
+      "face": "104-mod-phaser-phone",
+      "match": [
+        "phaser"
+      ],
+      "nameplate": true,
+      "ns": "mod",
+      "size": [
+        760.0,
+        164.0
+      ],
+      "tiers": {
+        "ipad": {
+          "face": "104-mod-phaser-ipad",
+          "size": [
+            510.0,
+            164.0
+          ],
+          "time_knob": true
+        }
+      },
+      "time_knob": true
+    },
+    {
+      "face": "105-motion-rotary-phone",
+      "match": [
+        "rotary"
+      ],
+      "nameplate": true,
+      "ns": "motion",
+      "size": [
+        760.0,
+        164.0
+      ],
+      "tiers": {
+        "ipad": {
+          "face": "105-motion-rotary-ipad",
+          "size": [
+            510.0,
+            164.0
+          ],
+          "time_knob": true
+        }
+      },
+      "time_knob": true
     }
   ],
   "pictures": [
@@ -1986,6 +2069,13 @@
         164.0
       ],
       "tiers": {
+        "ipad": {
+          "face": "17-pedal-aqua-puss-ipad",
+          "size": [
+            510.0,
+            164.0
+          ]
+        },
         "phone": {
           "back": "17-pedal-aqua-puss-back-phone",
           "face": "17-pedal-aqua-puss-phone",
@@ -2033,6 +2123,13 @@
         164.0
       ],
       "tiers": {
+        "ipad": {
+          "face": "19-spring-reverb-ipad",
+          "size": [
+            510.0,
+            164.0
+          ]
+        },
         "phone": {
           "back": "19-spring-reverb-back-phone",
           "face": "19-spring-reverb-phone",
@@ -2058,6 +2155,15 @@
         300.0
       ],
       "tiers": {
+        "ipad": {
+          "face": "38-pre-mod-ipad",
+          "nameplate": true,
+          "size": [
+            510.0,
+            164.0
+          ],
+          "time_knob": true
+        },
         "phone": {
           "back": "38-pre-mod-back-phone",
           "face": "38-pre-mod-phone",

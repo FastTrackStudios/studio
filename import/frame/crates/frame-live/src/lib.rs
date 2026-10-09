@@ -424,6 +424,17 @@ impl LiveSurface {
         self.apply_values(normalized);
     }
 
+    /// Live readings from the engine, by stream id (`<ns>/spectrum`, a
+    /// level's `<ns>/in`, a gain reduction's `<ns>/gr`, a trace's
+    /// `<ns>/in_history`): the plots, meters and lamps bound to them move.
+    /// A history the catalog calls a series is taken whole; any other
+    /// reading is pushed onto its plot's ring.
+    pub fn apply_stream(&mut self, id: &str, values: Vec<f64>) {
+        let t = self.t();
+        self.rt.apply_frame(surface_proto::StreamFrame { id: surface_proto::EntryId::new(id), values }, t);
+        self.dirty = true;
+    }
+
     /// The param edits made since the last take, as (address, value in the
     /// param's own units) — the catalog's range turns the surface's
     /// normalized value back into Hz, dB, 0..1…

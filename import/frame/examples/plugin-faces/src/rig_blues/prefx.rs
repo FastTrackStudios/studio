@@ -53,6 +53,9 @@ impl Spots {
     fn at(tier: kit::Tier) -> Self {
         if matches!(tier, kit::Tier::Phone | kit::Tier::Strip) {
             Self { w: tier.lane_w(), picture_r: kit::PHONE_PICTURE_R, time: kit::PHONE_TIME, knobs: kit::PHONE_KNOBS, text: 11.0, small: true }
+        } else if tier == kit::Tier::Ipad {
+            // A pane (an iPad's FX row): the phone's lane, closer together.
+            Self { w: tier.lane_w(), picture_r: kit::picture_r(tier), time: kit::time_spot(tier), knobs: kit::knob_row(tier), text: 10.0, small: true }
         } else {
             Self { w: LANE.0, picture_r: 300.0, time: (350.0, 70.0, 56.0), knobs: ([440.0, 516.0, 592.0], 82.0, 40.0), text: 8.5, small: false }
         }

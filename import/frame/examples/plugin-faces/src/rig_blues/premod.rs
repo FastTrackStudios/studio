@@ -147,8 +147,7 @@ const KNOB: [&str; 6] = ["color=#16202a", "pointer=#7dd3fc", "index=line", "inde
 /// A phone lane's panel, the head where every Time face has it: the
 /// nameplate (the preset ‹ ›, PRE MOD, a press opening its engines), the
 /// bypass and the arrow.
-fn lane(back: bool, build: impl FnOnce(&mut Builder<'_>, document_proto::NodeId)) -> document_proto::Scene {
-    let tier = kit::Tier::Phone;
+fn lane(tier: kit::Tier, back: bool, build: impl FnOnce(&mut Builder<'_>, document_proto::NodeId)) -> document_proto::Scene {
     let w = tier.lane_w();
     canvas("Pre Mod", move |b, root| {
         ui::fit_root(b, root, w, kit::H);
@@ -157,7 +156,8 @@ fn lane(back: bool, build: impl FnOnce(&mut Builder<'_>, document_proto::NodeId)
         let p = b.add(root, draw::with_effects(p, vec![draw::inner_shadow("#ffffff14", 0.0, 1.0, 0.0)]));
         build(b, p);
         let head = Lettering::family(family::INTER).weight(800.0);
-        kit::nameplate_top_right(b, p, NS, tier, (8.0, 30.0), 110.0, 210.0, 12.0, (SKY, DIM), |b, t| {
+        let preset_w = if tier == kit::Tier::Ipad { 150.0 } else { 210.0 };
+        kit::nameplate_top_right(b, p, NS, tier, (8.0, 30.0), 110.0, preset_w, 12.0, (SKY, DIM), |b, t| {
             set(b, t, "PRE MOD", 48.0, 15.0, 15.0, SKY, &head, 0.25);
         });
         kit::face_bypass(b, p, NS, tier, "blue", "On");
@@ -213,11 +213,11 @@ fn picture(b: &mut Builder<'_>, v: document_proto::NodeId, vw: f64, vh: f64) {
 /// unit.
 #[must_use]
 pub fn premod_at(tier: kit::Tier) -> Face {
-    if !matches!(tier, kit::Tier::Phone | kit::Tier::Strip) {
+    if !matches!(tier, kit::Tier::Phone | kit::Tier::Strip | kit::Tier::Ipad) {
         return premod_unit();
     }
-    let scene = lane(false, |b, p| {
-        let (vx, vy, vw, vh) = (10.0, 10.0, kit::PHONE_PICTURE_R - 10.0, kit::H - 20.0);
+    let scene = lane(tier, false, |b, p| {
+        let (vx, vy, vw, vh) = (10.0, 10.0, kit::picture_r(tier) - 10.0, kit::H - 20.0);
         let mut v = draw::frame("Line", vx, vy, vw, vh);
         v.fills = vec![draw::linear(180.0, &[(0.0, "#071017"), (1.0, "#050a0f")])];
         v.clips_content = true;
@@ -225,11 +225,12 @@ pub fn premod_at(tier: kit::Tier) -> Face {
         v.effects = vec![draw::inner_shadow("#000000c0", 0.0, 2.0, 6.0)];
         let v = b.add(p, v);
         picture(b, v, vw, vh);
-        let (tx, ty, td) = kit::PHONE_TIME;
-        kit::time_knob(b, p, NS, (tx, ty, td), 11.0, (INK, DIM, &ui::alpha(SKY, 0.45)), |b, pp, addr| {
+        let (tx, ty, td) = kit::time_spot(tier);
+        let ts = if tier == kit::Tier::Ipad { 10.0 } else { 11.0 };
+        kit::time_knob(b, p, NS, (tx, ty, td), ts, (INK, DIM, &ui::alpha(SKY, 0.45)), |b, pp, addr| {
             kit::knob3d_bare(b, pp, addr, td, (tx, ty), &KNOB);
         });
-        let (xs, ky, kd) = kit::PHONE_KNOBS;
+        let (xs, ky, kd) = kit::knob_row(tier);
         for (i, (id, legend)) in [("depth", "Depth"), ("width", "Width"), ("mix", "Mix")].iter().enumerate() {
             kit::knob3d(b, p, &a(id), legend, kd, (xs[i], ky), &KNOB, INK, DIM);
         }
@@ -243,7 +244,7 @@ pub fn premod_at(tier: kit::Tier) -> Face {
 /// Pre Mod's back on a phone: Color and Feedback.
 #[must_use]
 pub fn premod_back(tier: kit::Tier) -> Face {
-    let scene = lane(true, |b, p| {
+    let scene = lane(tier, true, |b, p| {
         kit::back_knobs(b, p, kit::Tier::Phone, &[("color", "Color"), ("feedback", "Feedback")], INK, |b, pp, id, legend, d, at| {
             kit::knob3d(b, pp, &a(id), legend, d, at, &KNOB, INK, DIM);
         });
