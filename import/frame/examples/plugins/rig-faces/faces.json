@@ -1409,7 +1409,16 @@
     "size": [
       750.0,
       254.0
-    ]
+    ],
+    "tiers": {
+      "ipad": {
+        "face": "56-comp-scope-ipad",
+        "size": [
+          860.0,
+          254.0
+        ]
+      }
+    }
   },
   "drives": [
     {

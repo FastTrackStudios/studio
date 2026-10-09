@@ -1,0 +1,27 @@
+<Document id="dd75da13-36fc-542d-ad93-9abac120121b">
+  <Page name="Surface" id="d7cd1137-19b0-52a9-b254-7bd5137b40b4">
+    <Frame name="Compressor" id="901e9994-ccda-5ed0-bb4a-1dc52c5b13ec" w=860 h=254>
+      <Frame name="Window" id="163ff070-b1cf-51ed-a028-d8bd17f5ae1f" w=860 h=254 clip=true fill={[{"kind":{"LinearGradient":{"stops":[{"color":"#0c0d10","position":0.0},{"color":"#08090b","position":1.0}],"transform":{"a":1.6653345369377348e-16,"b":-1.0,"c":1.0,"d":1.6653345369377348e-16,"tx":1.0,"ty":-1.942890293094024e-16}}}}]}>
+        <Frame name="Compressor" id="283c7c07-53ac-5018-a0ff-824d9819f41c" w=860 h=254 clip=true fill="#080808">
+          <Frame name="light" id="b57ed23d-ebd4-548b-9666-62ba6f31c2cc" w=860 h=254 shader={{"inputs":[{"name":"threshold","source":{"Param":{"addr":"comp/threshold"}}},{"name":"ratio","source":{"Param":{"addr":"comp/ratio"}}},{"name":"knee","source":{"Param":{"addr":"comp/knee"}}},{"name":"in_db","source":{"Stream":{"id":"comp/in"}}},{"map":{"hi":-1.0,"lo":0.0,"unclamped":true},"name":"gr_db","source":{"Stream":{"id":"comp/gr"}}},{"len":128,"map":{"hi":0.0,"lo":-60.0},"name":"input","source":{"Stream":{"id":"comp/in_history"}}},{"len":128,"map":{"hi":-60.0,"lo":0.0},"name":"gr","source":{"Stream":{"id":"comp/gr_history"}}}],"params":{"p0":60.0,"tint_b":0.9058823529411765,"tint_g":0.8941176470588236,"tint_r":0.8941176470588236},"shader":"viz.comp"}}>
+            <Frame name="input" id="7331dd34-d282-5dc7-8abc-89847f3b112e" w=860 h=254 control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Stream":{"id":"comp/in_history"}}},"kind":{"Plot":{"style":{"Area":{"baseline":-60.0}},"x":{"Time":{"len":300}},"y":{"curve":"Linear","max":0.0,"min":-60.0}}},"slots":[{"node":"400f37be-37c3-5905-b84c-8bc8ebe5d81a","role":"Area"}]}}>
+              <Vector name="fill" id="400f37be-37c3-5905-b84c-8bc8ebe5d81a" w=860 h=254 fill="#e4e4e738" />
+            </Frame>
+            <Frame name="gain reduction" id="e2ec208e-1c06-5198-9cd8-c826d1219d56" w=860 h=254 control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Stream":{"id":"comp/gr_history"}}},"kind":{"Plot":{"style":{"Area":{"baseline":0.0}},"x":{"Time":{"len":300}},"y":{"curve":"Linear","max":0.0,"min":-60.0}}},"slots":[{"node":"c5deff37-d9d8-5e9b-af28-2b66e859ffe5","role":"Area"}]}}>
+              <Vector name="fill" id="c5deff37-d9d8-5e9b-af28-2b66e859ffe5" w=860 h=254 fill="#ef44444d" />
+            </Frame>
+            <Frame name="transfer" id="dd22c549-6ff1-5625-96fd-7cd7dcc7f0b4" w=860 h=254 control={{"kind":{"Curve":{"inputs":[{"name":"threshold","source":{"Param":{"addr":"comp/threshold"}}},{"name":"ratio","source":{"Param":{"addr":"comp/ratio"}}},{"name":"knee","source":{"Param":{"addr":"comp/knee"}}},{"name":"makeup","source":{"Const":{"value":0.0}}},{"name":"marker","source":{"Stream":{"id":"comp/in"}}}],"provider":"comp.transfer","series":"transfer","style":"Line","x":{"Linear":{"max":0.0,"min":-60.0}},"y":{"curve":"Linear","max":0.0,"min":-60.0}}},"slots":[{"node":"2ff927d4-e917-5572-a4ba-aaf0dae9c229","role":"Trace"},{"node":"16f0ca77-f0d2-525e-965c-6f8621c05489","role":"Marker"}]}}>
+              <Vector name="line" id="2ff927d4-e917-5572-a4ba-aaf0dae9c229" w=860 h=254 stroke="#f2f2f4e6" stroke-weight=1.5 stroke-join="round" />
+              <Frame name="ball" id="16f0ca77-f0d2-525e-965c-6f8621c05489" x=427 y=124 w=6 h=6>
+                <Ellipse name="dot" id="7dd8f9e9-23f9-5ab7-89b7-f5119b475fdc" w=6 h=6 fill="#f2f2f4f2" />
+              </Frame>
+            </Frame>
+          </Frame>
+          <Frame name="threshold" id="b145d6c4-0ece-51a0-afef-a179b9b749a4" w=860 h=44 control={{"kind":{"Handle":{"wheel":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Param":{"addr":"comp/ratio"}}},"x_map":{"after":[],"axis":{"Linear":{"max":1.0,"min":0.0}},"shift":0.0},"y":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Param":{"addr":"comp/threshold"}}},"y_map":{"after":[],"axis":{"Linear":{"max":0.0,"min":-60.0}},"shift":0.0}}},"slots":[]}}>
+            <Vector name="line" id="3a17f6b6-41f2-57ae-89b8-5a3dc94e4add" w=860 h=44 stroke="#e4e4e78c" geometry="M 0 22.0 H 860.0" />
+          </Frame>
+        </Frame>
+      </Frame>
+    </Frame>
+  </Page>
+</Document>

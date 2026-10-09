@@ -325,10 +325,16 @@ fn d_(f: Face) -> Face {
 /// 254 box): the Pre Comp block, the whole row its own — the same picture
 /// its block in the routing grid wears, its curve and its gain reduction.
 pub const COMP_SCOPE: (f64, f64) = (750.0, 254.0);
+/// … and at an iPad's (its FX row beside the sidebar), so its threshold
+/// rule and curve are drawn at the width they show at.
+pub const COMP_SCOPE_IPAD: (f64, f64) = (860.0, 254.0);
 
 fn comp_scope() -> Face {
+    comp_scope_at("56-comp-scope", COMP_SCOPE)
+}
+
+fn comp_scope_at(file: &'static str, (w, h): (f64, f64)) -> Face {
     use surface_kit::viz::lit_catalog;
-    let (w, h) = COMP_SCOPE;
     let scene = canvas("Compressor", move |b, root| {
         ui::fit_root(b, root, w, h);
         let mut v = surface_kit::draw::frame("Window", 0.0, 0.0, w, h);
@@ -340,12 +346,13 @@ fn comp_scope() -> Face {
     });
     let mut params = lit_catalog::comp_scope("comp", 128).0;
     params.push(ui::toggle("comp/on", "Bypass", true));
-    Face { file: "56-comp-scope", plugin: PLUGIN, scene, params, streams: Vec::new() }
+    Face { file, plugin: PLUGIN, scene, params, streams: Vec::new() }
 }
 
 pub fn faces() -> Vec<Face> {
     let mut v: Vec<Face> = drive_entries().into_iter().map(|(f, _, _)| f).collect();
     v.push(comp_scope());
+    v.push(comp_scope_at("56-comp-scope-ipad", COMP_SCOPE_IPAD));
     v.extend(drive_phone());
     v.push(Face { plugin: PLUGIN, ..drives::compressor() });
     v.extend(pre_entries());
@@ -425,7 +432,8 @@ pub fn manifest() -> String {
         "drives": drives,
         "pre_comp_pedal": pre_comp_pedal,
         // The Pre Comp's FX-row face: the compressor's scope, the row its own.
-        "comp": { "face": "56-comp-scope", "ns": "comp", "size": [COMP_SCOPE.0, COMP_SCOPE.1] },
+        "comp": { "face": "56-comp-scope", "ns": "comp", "size": [COMP_SCOPE.0, COMP_SCOPE.1],
+            "tiers": { "ipad": { "face": "56-comp-scope-ipad", "size": [COMP_SCOPE_IPAD.0, COMP_SCOPE_IPAD.1] } } },
         "pre": pre,
         "amps": amps,
         "gate": { "face": "51-gate", "ns": "gate", "size": [crate::rig_amp::GATE.0, crate::rig_amp::GATE.1],
