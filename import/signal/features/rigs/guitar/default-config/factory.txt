@@ -245,3 +245,26 @@ metal.styx	Metal	d1bdd84c7265ec00
 rock.styx	Rock	83abedeeeebbd20a
 test.styx	Test	e8a17c5d3acff4ab
 worship.styx	Worship	f19984b81a62dfdc
+modules.styx	Amp :: Vibroverb + Dumble	219fa715bd9c47a7
+modules.styx	Amp :: Vibroverb 1964	6a0a5a6f00a96b22
+modules.styx	Amp :: Dumble SSS	80101529a55d223d
+modules.styx	Amp :: Two-Rock John Mayer	4d8a9fe03dcb2dcb
+modules.styx	Amp :: Fender Deluxe Reverb	db28000605f54056
+modules.styx	Amp :: Fender Twin Reverb	7e7ddaa488462098
+modules.styx	Amp :: Fender Bassman	6ea62fb0552c872b
+modules.styx	Amp :: Vox AC30	c0fb0f0ddc70ba6e
+modules.styx	Amp :: Dumble ODS	c99882412bbca224
+modules.styx	Amp :: Marshall Plexi	e0962c0631840d47
+modules.styx	Amp :: Marshall JCM800	63e8235836600e0b
+modules.styx	Amp :: Friedman BE-100	83776c17601705ad
+modules.styx	Amp :: Mesa Dual Rectifier	9c5dc11791f3bfb0
+modules.styx	Amp :: Mesa Mark IIC+	d676e270c4b2fb41
+modules.styx	Amp :: Peavey 5150/6505	be930ec2069b4a43
+modules.styx	Amp :: Bogner Uberschall	7963223db269ae0e
+modules.styx	Amp :: Diezel VH4	7ca5ce2eefb5e56f
+modules.styx	Amp :: Hiwatt DR103	c62b0e7df1781575
+modules.styx	Amp :: Deluxe + AC30	155b1a0ae8408f3b
+blocks.styx	compressor :: Swell Sustain	9aa139822296cae2
+presets.styx	Fender Bassman	39c38b43210aca20
+metal.styx	Metal	804b8cdb8ca8d71a
+rock.styx	Rock	2fba3c06e197d856
