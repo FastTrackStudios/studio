@@ -135,6 +135,42 @@ fn rotary() -> Face {
     face("105-motion-rotary-block", scene, mod_params(MOTION))
 }
 
+/// The pitch block — an octaver, a harmonizer — as the voices it plays:
+/// the note you play a white line across the middle, each voice a glowing
+/// wave above or below it by its interval (a shelf a semitone), denser the
+/// higher it sits, as bright as its level.
+fn pitch() -> Face {
+    let scene = block("Pitch", &[(0.0, "#10121c"), (1.0, "#07080e")], |b, v, _| {
+        // Octave shelves: the note's, an octave and two either side.
+        let mid = S / 2.0;
+        let per = S * 0.4 / 24.0;
+        let shelves: Vec<Vec<(f64, f64)>> = [-24.0, -12.0, 12.0, 24.0].iter().map(|o| vec![(0.0, mid - o * per), (S, mid - o * per)]).collect();
+        b.add(v, ui::strokes("octaves", &shelves, 0.8, draw::solid("#ffffff14")));
+        let wave = |cycles: f64, amp: f64| -> Vec<(f64, f64)> {
+            (0..=120).map(|k| {
+                let x = -S + 3.0 * S * f64::from(k) / 120.0;
+                (x, amp * (x / S * cycles * std::f64::consts::TAU).sin())
+            }).collect()
+        };
+        // The dry note.
+        let dry = b.add(v, draw::frame("dry", 0.0, mid, S, 0.0));
+        b.add(dry, ui::strokes("dry", &[wave(3.0, 5.0)], 1.6, draw::solid("#e4e4e7")));
+        motion::add(b, dry, Motion::new(Target::Opacity).input("0.25 + 0.75 * norm(pitch/dry)").range(0.0, 1.0));
+        // The voices.
+        for (id, semis, level, colour) in [("a", "semitones", "a_level", "#a78bfa"), ("b", "b_semitones", "b_level", "#f0abfc")] {
+            let g = b.add(v, draw::frame(&format!("voice {id}"), 0.0, mid, S, 0.0));
+            b.add(g, draw::emissive(ui::strokes("voice", &[wave(3.0, 7.0)], 2.2, draw::solid(colour)), draw::hex(colour), 0.8, 8.0));
+            motion::add(b, g, Motion::new(Target::Y).input(format!("param(pitch/{semis})")).range(-24.0 * -per, 24.0 * -per));
+            motion::add(b, g, Motion::new(Target::StretchX).input(format!("pow(2, -param(pitch/{semis}) / 12)")).range(0.0, 1.0).pivot(0.5, 0.5));
+            motion::add(b, g, Motion::new(Target::X).input(format!("fract(time * 0.5 * pow(2, param(pitch/{semis}) / 12))")).range(0.0, -S / 3.0));
+            motion::add(b, g, Motion::new(Target::Opacity).input(format!("norm(pitch/{level}) * param(pitch/on)")).range(0.0, 1.0));
+        }
+    });
+    let semis = |id: &str, name: &str, d: f64| ui::param(&format!("pitch/{id}"), name, Range::linear(-24.0, 24.0, Unit::None), d);
+    let level = |id: &str, name: &str, d: f64| ui::param(&format!("pitch/{id}"), name, Range::linear(0.0, 1.0, Unit::None), d);
+    face("33-pitch-block", scene, vec![semis("semitones", "Voice A", 12.0), semis("b_semitones", "Voice B", 0.0), level("a_level", "A Level", 1.0), level("b_level", "B Level", 0.0), level("dry", "Dry", 1.0), ui::toggle("pitch/on", "Bypass", true)])
+}
+
 /// One of the kit's visualizers filling the block: a delay's taps, a
 /// reverb's space, an EQ's curve, a compressor's scope.
 fn viz(file: &'static str, name: &str, id: &str, ns: &str, window: &[(f64, &str)], params: Vec<ParamInfo>) -> Face {
@@ -172,6 +208,8 @@ pub fn faces() -> Vec<Face> {
     v.extend(crate::rig_mod::blocks());
     v.extend(crate::rig_faces::amp_blocks());
     v.push(crate::rig_faces::post_comp_block());
+    v.push(crate::rig_blues::drives::filter_block());
+    v.push(pitch());
     v.push(viz(
         "51-gate-block",
         "Gate",
@@ -208,5 +246,7 @@ pub fn manifest() -> serde_json::Value {
         e(&["eq"], "52-amp-eq-block", "eq"),
         e(&["compressor"], "55-comp-block", "comp"),
         e(&["gate"], "51-gate-block", "gate"),
+        e(&["filter"], "32-filter-viz-block", "qtron"),
+        e(&["pitch"], "33-pitch-block", "pitch"),
     ])
 }

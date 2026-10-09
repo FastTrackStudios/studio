@@ -1323,6 +1323,22 @@
         "gate"
       ],
       "ns": "gate"
+    },
+    {
+      "bleed": 0.08695652173913043,
+      "face": "32-filter-viz-block",
+      "match": [
+        "filter"
+      ],
+      "ns": "qtron"
+    },
+    {
+      "bleed": 0.08695652173913043,
+      "face": "33-pitch-block",
+      "match": [
+        "pitch"
+      ],
+      "ns": "pitch"
     }
   ],
   "cab": {

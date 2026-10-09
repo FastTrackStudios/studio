@@ -12209,6 +12209,74 @@
       "default": 1.0,
       "bipolar": false,
       "featured": false
+    },
+    {
+      "addr": "qtron/gain",
+      "name": "Gain",
+      "short_name": null,
+      "group": null,
+      "kind": "Continuous",
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": null
+      },
+      "default": 0.5,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "qtron/peak",
+      "name": "Peak",
+      "short_name": null,
+      "group": null,
+      "kind": "Continuous",
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": null
+      },
+      "default": 0.6,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "qtron/range",
+      "name": "Range high",
+      "short_name": null,
+      "group": null,
+      "kind": "Toggle",
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 2
+      },
+      "default": 0.0,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "qtron/on",
+      "name": "Bypass",
+      "short_name": null,
+      "group": null,
+      "kind": "Toggle",
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "scale": "Linear",
+        "unit": "None",
+        "steps": 2
+      },
+      "default": 1.0,
+      "bipolar": false,
+      "featured": false
     }
   ],
   "actions": [],
