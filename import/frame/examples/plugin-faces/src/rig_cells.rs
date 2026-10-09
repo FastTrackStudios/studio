@@ -170,6 +170,7 @@ pub fn faces() -> Vec<Face> {
         viz("55-comp-block", "Compressor", "viz.comp_scope", "comp", &dark, comp),
     ];
     v.extend(crate::rig_mod::blocks());
+    v.extend(crate::rig_faces::amp_blocks());
     v
 }
 

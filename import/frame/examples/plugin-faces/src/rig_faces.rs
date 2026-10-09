@@ -77,6 +77,21 @@ fn amp_face_as(model: AmpModel, aspect: f64, variant: bool) -> Face {
     Face { file, plugin: PLUGIN, ..f }
 }
 
+/// Each amp composed for a block of Signal's routing grid: the amp itself,
+/// upright and square — its controls over its grille, in its own tolex and
+/// badge — named after its full face (`24-amp-deluxe-block`).
+pub(crate) fn amp_blocks() -> Vec<Face> {
+    let s = crate::rig_cells::S;
+    AmpModel::EVERY
+        .iter()
+        .map(|m| {
+            let f = amps::amp_block(*m, ns(*m), s);
+            let base = format!("2{}-amp-{}-block", AmpModel::EVERY.iter().position(|x| x == m).unwrap_or(0), ns(*m).replace('_', "-"));
+            Face { file: Box::leak(base.into_boxed_str()), plugin: PLUGIN, ..f }
+        })
+        .collect()
+}
+
 /// An amp upright, for a phone's three across.
 pub const AMP_PHONE: (f64, f64) = (250.0, 300.0);
 
