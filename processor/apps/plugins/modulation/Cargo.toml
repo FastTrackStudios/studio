@@ -33,3 +33,11 @@ modulation.workspace = true
 
 # The `Processor` trait + `AudioConfig` the modulation chains implement.
 audiocore-dsp.workspace = true
+
+[features]
+default = ["export"]
+# The CLAP / VST3 entry points. A host linking this plugin in-process
+# (the session engine's built-in FX) turns it off: every plugin exports
+# the same `clap_entry` / `GetPluginFactory` symbols, and two in one
+# binary collide.
+export = []

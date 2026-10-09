@@ -400,5 +400,7 @@ impl Vst3Plugin for FtsTrigger {
         &[Vst3SubCategory::Fx, Vst3SubCategory::Tools];
 }
 
+#[cfg(feature = "export")]
 nice_export_clap!(FtsTrigger);
+#[cfg(feature = "export")]
 nice_export_vst3!(FtsTrigger);

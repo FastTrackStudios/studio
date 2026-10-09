@@ -32,3 +32,11 @@ reverb-profiles.workspace = true
 audiocore-core = { workspace = true }
 # The IR hand-off channel: the editor's worker sends, the chain receives.
 crossbeam-channel = { workspace = true }
+
+[features]
+default = ["export"]
+# The CLAP / VST3 entry points. A host linking this plugin in-process
+# (the session engine's built-in FX) turns it off: every plugin exports
+# the same `clap_entry` / `GetPluginFactory` symbols, and two in one
+# binary collide.
+export = []

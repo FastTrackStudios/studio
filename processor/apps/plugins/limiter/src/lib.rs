@@ -286,5 +286,7 @@ impl Vst3Plugin for FtsLimiter {
         &[Vst3SubCategory::Fx, Vst3SubCategory::Dynamics];
 }
 
+#[cfg(feature = "export")]
 nice_export_clap!(FtsLimiter);
+#[cfg(feature = "export")]
 nice_export_vst3!(FtsLimiter);

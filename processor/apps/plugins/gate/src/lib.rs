@@ -249,7 +249,9 @@ impl Vst3Plugin for FtsGate {
         &[Vst3SubCategory::Fx, Vst3SubCategory::Dynamics];
 }
 
+#[cfg(feature = "export")]
 nice_export_clap!(FtsGate);
+#[cfg(feature = "export")]
 nice_export_vst3!(FtsGate);
 
 // ── Tests ─────────────────────────────────────────────────────────────────

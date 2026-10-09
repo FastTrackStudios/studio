@@ -30,3 +30,11 @@ delay.workspace = true
 # `audiocore_dsp::Processor` and is driven via `AudioConfig`, and the
 # facade does not re-export those items — the trait must be in scope here.
 audiocore-dsp.workspace = true
+
+[features]
+default = ["export"]
+# The CLAP / VST3 entry points. A host linking this plugin in-process
+# (the session engine's built-in FX) turns it off: every plugin exports
+# the same `clap_entry` / `GetPluginFactory` symbols, and two in one
+# binary collide.
+export = []

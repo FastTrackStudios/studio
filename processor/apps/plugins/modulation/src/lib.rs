@@ -274,7 +274,9 @@ impl Vst3Plugin for FtsModulation {
         &[Vst3SubCategory::Fx, Vst3SubCategory::Modulation];
 }
 
+#[cfg(feature = "export")]
 nice_export_clap!(FtsModulation);
+#[cfg(feature = "export")]
 nice_export_vst3!(FtsModulation);
 
 #[cfg(test)]

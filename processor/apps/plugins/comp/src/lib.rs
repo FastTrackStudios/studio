@@ -444,5 +444,7 @@ impl Vst3Plugin for FtsComp {
         &[Vst3SubCategory::Fx, Vst3SubCategory::Dynamics];
 }
 
+#[cfg(feature = "export")]
 nice_export_clap!(FtsComp);
+#[cfg(feature = "export")]
 nice_export_vst3!(FtsComp);

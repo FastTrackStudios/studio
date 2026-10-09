@@ -26,3 +26,11 @@ trigger.workspace = true
 trigger-ui = { workspace = true, features = ["native"] }
 # For the editor glue (DioxusState + create_dioxus_editor_with_state).
 nice-plug-dioxus.workspace = true
+
+[features]
+default = ["export"]
+# The CLAP / VST3 entry points. A host linking this plugin in-process
+# (the session engine's built-in FX) turns it off: every plugin exports
+# the same `clap_entry` / `GetPluginFactory` symbols, and two in one
+# binary collide.
+export = []

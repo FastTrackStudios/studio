@@ -19,7 +19,7 @@ use eq_ui::params::{EqUiState, FtsEqParams, NUM_BANDS, SPECTRUM_BINS};
 
 // ── Plugin ──────────────────────────────────────────────────────────
 
-struct FtsEqPlugin {
+pub struct FtsEqPlugin {
     params: Arc<FtsEqParams>,
     ui_state: Arc<EqUiState>,
     editor_state: Arc<DioxusState>,
@@ -527,5 +527,7 @@ impl Vst3Plugin for FtsEqPlugin {
         &[Vst3SubCategory::Fx, Vst3SubCategory::Eq];
 }
 
+#[cfg(feature = "export")]
 nice_export_clap!(FtsEqPlugin);
+#[cfg(feature = "export")]
 nice_export_vst3!(FtsEqPlugin);

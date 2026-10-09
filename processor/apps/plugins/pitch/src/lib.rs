@@ -232,5 +232,7 @@ impl Vst3Plugin for FtsPitch {
         &[Vst3SubCategory::Fx, Vst3SubCategory::PitchShift];
 }
 
+#[cfg(feature = "export")]
 nice_export_clap!(FtsPitch);
+#[cfg(feature = "export")]
 nice_export_vst3!(FtsPitch);

@@ -268,5 +268,7 @@ impl Vst3Plugin for FtsReverb {
         &[Vst3SubCategory::Fx, Vst3SubCategory::Reverb];
 }
 
+#[cfg(feature = "export")]
 nice_export_clap!(FtsReverb);
+#[cfg(feature = "export")]
 nice_export_vst3!(FtsReverb);

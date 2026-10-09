@@ -282,5 +282,7 @@ impl Vst3Plugin for FtsTune {
         &[Vst3SubCategory::Fx, Vst3SubCategory::PitchShift];
 }
 
+#[cfg(feature = "export")]
 nice_export_clap!(FtsTune);
+#[cfg(feature = "export")]
 nice_export_vst3!(FtsTune);

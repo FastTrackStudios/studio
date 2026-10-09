@@ -253,7 +253,9 @@ impl Vst3Plugin for FtsSaturate {
         &[Vst3SubCategory::Fx, Vst3SubCategory::Distortion];
 }
 
+#[cfg(feature = "export")]
 nice_export_clap!(FtsSaturate);
+#[cfg(feature = "export")]
 nice_export_vst3!(FtsSaturate);
 
 #[cfg(test)]

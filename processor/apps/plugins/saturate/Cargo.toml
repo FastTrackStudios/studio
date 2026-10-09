@@ -29,3 +29,11 @@ saturate-profiles.workspace = true
 saturate-ui = { workspace = true, features = ["native"] }
 # The meters the editor reads.
 atomic_float = { workspace = true }
+
+[features]
+default = ["export"]
+# The CLAP / VST3 entry points. A host linking this plugin in-process
+# (the session engine's built-in FX) turns it off: every plugin exports
+# the same `clap_entry` / `GetPluginFactory` symbols, and two in one
+# binary collide.
+export = []

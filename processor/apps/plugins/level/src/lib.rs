@@ -226,5 +226,7 @@ impl Vst3Plugin for FtsLevel {
         &[Vst3SubCategory::Fx, Vst3SubCategory::Dynamics];
 }
 
+#[cfg(feature = "export")]
 nice_export_clap!(FtsLevel);
+#[cfg(feature = "export")]
 nice_export_vst3!(FtsLevel);

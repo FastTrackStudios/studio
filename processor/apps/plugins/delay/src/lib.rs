@@ -243,5 +243,7 @@ impl Vst3Plugin for FtsDelay {
         &[Vst3SubCategory::Fx, Vst3SubCategory::Delay];
 }
 
+#[cfg(feature = "export")]
 nice_export_clap!(FtsDelay);
+#[cfg(feature = "export")]
 nice_export_vst3!(FtsDelay);

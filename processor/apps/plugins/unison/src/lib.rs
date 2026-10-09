@@ -234,5 +234,7 @@ impl Vst3Plugin for FtsUnison {
         &[Vst3SubCategory::Fx, Vst3SubCategory::Modulation];
 }
 
+#[cfg(feature = "export")]
 nice_export_clap!(FtsUnison);
+#[cfg(feature = "export")]
 nice_export_vst3!(FtsUnison);

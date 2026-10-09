@@ -28,3 +28,11 @@ fx-stack.workspace = true
 # The full Dioxus plugin editor (control view, params, GR meter) —
 # `native` pulls nice-plug-dioxus/Blitz.
 comp-ui = { workspace = true, features = ["native"] }
+
+[features]
+default = ["export"]
+# The CLAP / VST3 entry points. A host linking this plugin in-process
+# (the session engine's built-in FX) turns it off: every plugin exports
+# the same `clap_entry` / `GetPluginFactory` symbols, and two in one
+# binary collide.
+export = []
