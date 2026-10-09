@@ -1403,6 +1403,14 @@
       392.0
     ]
   },
+  "comp": {
+    "face": "56-comp-scope",
+    "ns": "comp",
+    "size": [
+      750.0,
+      254.0
+    ]
+  },
   "drives": [
     {
       "face": "15-drive-king-of-tone",
