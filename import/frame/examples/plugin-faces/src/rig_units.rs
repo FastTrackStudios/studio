@@ -16,6 +16,7 @@ use surface_widgets::Builder;
 
 use crate::face::Face;
 use crate::reverb::ui;
+use crate::suite_studio_blues::parts::set;
 use crate::rig_cells::{BLEED, S, block, face};
 
 /// Each unit's params: on (its bypass).
@@ -44,50 +45,69 @@ fn words(b: &mut Builder<'_>, p: NodeId, s: &str, cy: f64, size: f64, colour: &s
     b.add(p, draw::styled_text("legend", s, 0.0, cy - size * 0.7, S, size, colour, TextAlign::Center, l));
 }
 
-/// The Keeley Katana: a black box and its one big chrome knob.
+/// The Keeley Katana: its name, wide and white, in the inset line on the
+/// black lid, the blade's K under it.
 fn katana() -> Face {
-    let scene = block("Katana", &[(0.0, "#2c2c30"), (1.0, "#111113")], |b, v, _| {
-        knob(b, v, (S / 2.0, 92.0), 30.0, ("#f4f5f7", "#7d8188"), "#141416", 225.0);
-        lamp(b, v, (150.0, 60.0), "#3b82f6");
-        words(b, v, "KATANA", 140.0, 13.0, "#d4d6da", &Lettering::family(family::MICHROMA).weight(400.0));
+    let scene = block("Katana", &[(0.0, "#1a1a1d"), (1.0, "#0a0a0b")], |b, v, _| {
+        let ink = "#ececef";
+        b.add(v, draw::stroked(draw::rounded(draw::rect("border", 12.0, 50.0, S - 24.0, 86.0, draw::solid("#00000000")), 10.0), ink, 1.6));
+        set(b, v, "KATANA", S / 2.0, 80.0, 30.0, ink, &Lettering::family(family::INTER).weight(500.0).width(92.0), 0.04);
+        b.add(v, draw::stroked(draw::rounded(draw::rect("mark", S / 2.0 - 11.0, 104.0, 22.0, 22.0, draw::solid("#00000000")), 3.0), ink, 1.5));
+        set(b, v, "K", S / 2.0, 115.5, 15.0, ink, &Lettering::family(family::INTER).weight(800.0).italic(), 0.0);
     });
     face("40-unit-katana-block", scene, on())
 }
 
-/// The Klon Centaur: gold, three small knobs, the Centaur.
+/// The Klon Centaur: its gold, and the centaur at a gallop across it.
 fn klon() -> Face {
-    let scene = block("Klon", &[(0.0, "#ecd08a"), (0.55, "#d3ac55"), (1.0, "#a77f2c")], |b, v, _| {
-        for (i, x) in [52.0, 92.0, 132.0].into_iter().enumerate() {
-            knob(b, v, (x, 74.0), 13.0, ("#3a3a3c", "#0d0d0e"), "#f3e6c4", [250.0, 190.0, 230.0][i]);
-        }
-        words(b, v, "Centaur", 116.0, 26.0, "#3b2610", &Lettering::family(family::DANCING_SCRIPT).weight(700.0));
-        lamp(b, v, (S / 2.0, 140.0), "#ef4444");
+    let scene = block("Klon", &[(0.0, "#e2b25a"), (0.55, "#c99038"), (1.0, "#9c6a22")], |b, v, _| {
+        b.add(v, draw::rect("sheen", 0.0, 0.0, S, S, draw::linear(115.0, &[(0.0, "#ffe2a03a"), (0.4, "#ffffff00"), (0.75, "#4a2c0628"), (1.0, "#ffe2a01a")])));
+        crate::rig_blues::drives::centaur(b, v, (S / 2.0, 94.0), 128.0, "#2b1c08");
     });
     face("41-unit-klon-block", scene, on())
 }
 
-/// The Marshall Bluesbreaker: black, its cream script plate, gold knobs.
+/// The Marshall Bluesbreaker: its charcoal, and the blue italic name
+/// between two double rules, as on the original.
 fn bluesbreaker() -> Face {
-    let scene = block("Bluesbreaker", &[(0.0, "#232325"), (1.0, "#0e0e0f")], |b, v, _| {
-        let plate = b.add(v, draw::with_effects(draw::rounded(draw::rect("plate", 22.0, 58.0, S - 44.0, 34.0, draw::linear(180.0, &[(0.0, "#f1e6c8"), (1.0, "#d8c99e")])), 5.0), vec![draw::drop_shadow("#00000080", 0.0, 2.0, 3.0)]));
-        b.add(plate, draw::styled_text("logo", "Bluesbreaker", 0.0, 6.0, S - 44.0, 20.0, "#1b1712", TextAlign::Center, &Lettering::family(family::DANCING_SCRIPT).weight(700.0)));
-        for x in [56.0, 92.0, 128.0] {
-            knob(b, v, (x, 118.0), 11.0, ("#f0d98a", "#a8822c"), "#1b1712", 225.0);
+    let scene = block("Bluesbreaker", &[(0.0, "#34363b"), (0.3, "#2c2e33"), (0.32, "#1d1e21"), (1.0, "#2a2c30")], |b, v, _| {
+        let blue = "#4fb8ea";
+        let ly = 92.0;
+        for dy in [-21.0, -17.0, 17.0, 21.0] {
+            b.add(v, draw::rect("rule", 10.0, ly + dy, S - 20.0, 1.8, draw::solid(blue)));
         }
+        set(b, v, "BLUES BREAKER", S / 2.0, ly, 21.0, blue, &Lettering::family(family::OSWALD).weight(700.0).italic(), 0.02);
+        lamp(b, v, (S / 2.0, 126.0), "#e0281c");
     });
     face("42-unit-bluesbreaker-block", scene, on())
 }
 
-/// The Ibanez TS808: green, its silver plate, its big switch.
+/// The Ibanez TS808: its green, the grey name band, and the black treadle
+/// ribbed in chevrons with the maker's script.
 fn ts808() -> Face {
-    let scene = block("TS808", &[(0.0, "#5aa84f"), (1.0, "#2e6a2a")], |b, v, _| {
-        knob(b, v, (54.0, 62.0), 13.0, ("#3a3a3c", "#0d0d0e"), "#e9eef0", 230.0);
-        knob(b, v, (S / 2.0, 58.0), 8.5, ("#3a3a3c", "#0d0d0e"), "#e9eef0", 180.0);
-        knob(b, v, (130.0, 62.0), 13.0, ("#3a3a3c", "#0d0d0e"), "#e9eef0", 210.0);
-        let plate = b.add(v, draw::rect("plate", 14.0, 84.0, S - 28.0, 20.0, draw::linear(180.0, &[(0.0, "#eef0f2"), (1.0, "#b9bdc2")])));
-        b.add(plate, draw::styled_text("model", "TS808 OVERDRIVE PRO", 0.0, 4.0, S - 28.0, 9.0, "#1a1c1e", TextAlign::Center, &Lettering::family(family::INTER).weight(800.0)));
-        b.add(v, draw::with_effects(draw::rounded(draw::rect("switch", 40.0, 112.0, S - 80.0, 26.0, draw::linear(180.0, &[(0.0, "#e2e4e6"), (1.0, "#9a9ea3")])), 4.0), vec![draw::drop_shadow("#00000070", 0.0, 2.0, 3.0)]));
-        lamp(b, v, (S / 2.0, 72.0), "#ef4444");
+    let scene = block("TS808", &[(0.0, "#6fd257"), (1.0, "#46a630")], |b, v, _| {
+        let (by, bh) = (50.0, 24.0);
+        b.add(v, draw::rect("band", 0.0, by, S, bh, draw::linear(180.0, &[(0.0, "#46494c"), (1.0, "#2a2c2f")])));
+        set(b, v, "TUBE SCREAMER", S / 2.0, by + bh / 2.0, 15.0, "#f1f1ef", &Lettering::family(family::INTER).weight(700.0).width(88.0), 0.02);
+        let (tx, ty, tw, th) = (16.0, by + bh + 8.0, S - 32.0, 62.0);
+        let mut tread = draw::frame("treadle", tx, ty, tw, th);
+        tread.fills = vec![draw::linear(180.0, &[(0.0, "#2c2c2e"), (0.08, "#18181a"), (1.0, "#0c0c0d")])];
+        tread.corner_radii = document_proto::CornerRadii::uniform(6.0);
+        tread.clips_content = true;
+        let tread = b.add(v, tread);
+        let (mut lit, mut dark) = (Vec::new(), Vec::new());
+        for r in 0..6 {
+            let y = 6.0 + f64::from(r) * 9.0;
+            for k in 0..3 {
+                let (x0, x1) = (tw * (0.06 + 0.3 * f64::from(k)), tw * (0.3 + 0.3 * f64::from(k)));
+                let xm = (x0 + x1) / 2.0;
+                dark.push(vec![(x0, y + 4.0), (xm, y), (x1, y + 4.0)]);
+                lit.push(vec![(x0, y + 5.2), (xm, y + 1.2), (x1, y + 5.2)]);
+            }
+        }
+        b.add(tread, ui::strokes("rib shadow", &dark, 2.0, draw::solid("#050506")));
+        b.add(tread, ui::strokes("rib light", &lit, 0.9, draw::solid("#3a3a3e")));
+        set(b, tread, "Ibanez", tw / 2.0, th * 0.55, 20.0, "#4a4a50", &Lettering::family(family::DANCING_SCRIPT).weight(700.0).italic(), 0.0);
     });
     face("43-unit-ts808-block", scene, on())
 }

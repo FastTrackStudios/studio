@@ -619,8 +619,22 @@ pub fn amp_block(model: AmpModel, prefix: &str, s: f64) -> Face {
             AmpModel::TwoRock => ("Signature", Some(("TWO-ROCK", "#d9d9dc", Lettering::family(family::OSWALD).weight(700.0).italic(), 0.06))),
         };
         set(b, plate, name, pw / 2.0, ph * 0.52, (ph * 0.42).min(pw * 0.07), ink, &legend, 0.12);
+        // A blackface's silver cloth, its weave drawn large enough to read
+        // at a block's size: dark threads across, light threads over them.
+        if matches!(model, AmpModel::Vibroverb | AmpModel::DeluxeReverb | AmpModel::TwinReverb) {
+            let pitch = 6.0;
+            let n = ((gw + gh) / pitch) as i32;
+            let threads = |shift: f64, up: bool| -> Vec<Vec<(f64, f64)>> {
+                (0..n).map(|i| {
+                    let x = f64::from(i) * pitch - gh + shift;
+                    if up { vec![(x, gh), (x + gh, 0.0)] } else { vec![(x, 0.0), (x + gh, gh)] }
+                }).collect()
+            };
+            b.add(grille, ui::strokes("weave dark", &threads(0.0, true), 1.6, draw::solid("#1c1e2299")));
+            b.add(grille, ui::strokes("weave light", &threads(pitch / 2.0, false), 1.0, draw::solid("#f4f6f566")));
+        }
         if let Some((word, colour, l, track)) = brand {
-            set(b, grille, word, gw / 2.0, gh * 0.2, (gh * 0.17).min(gw * 0.2), colour, &l, track);
+            set(b, grille, word, gw / 2.0, gh * 0.24, (gh * 0.24).min(gw * 0.24), colour, &l, track);
         }
     });
     let params = vec![ui::toggle(&format!("{prefix}/on"), "Power", true)];

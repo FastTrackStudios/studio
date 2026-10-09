@@ -316,7 +316,7 @@ pub fn tube_drive_at(tier: crate::rig_time::kit::Tier) -> Face {
 /// The centaur of the gold overdrive's lid, drawn in its ink: a horse's
 /// body at a gallop, the archer's torso rising from its shoulders, the bow
 /// drawn forward. `size` across, centred on (`cx`, `cy`).
-fn centaur(b: &mut Builder<'_>, parent: NodeId, (cx, cy): (f64, f64), size: f64, ink: &str) {
+pub(crate) fn centaur(b: &mut Builder<'_>, parent: NodeId, (cx, cy): (f64, f64), size: f64, ink: &str) {
     let k = size / 100.0;
     let (x0, y0) = (cx - 50.0 * k, cy - 50.0 * k);
     let p = |pts: &[(f64, f64)]| draw::polygon(&pts.iter().map(|(x, y)| (x * k, y * k)).collect::<Vec<_>>());
