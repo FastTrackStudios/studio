@@ -526,6 +526,36 @@ fn casting(b: &mut Builder<'_>, root: NodeId, w: f64, colors: (&str, &str)) -> N
     cast
 }
 
+/// The volume pedal made for the iPad's FX row: the treadle at the left,
+/// and the level across the rest of the row — a long bar on a dB scale and
+/// its value large.
+#[must_use]
+pub fn volume_row() -> Face {
+    const NS: &str = "volume";
+    let (w, h) = (860.0, 254.0);
+    let scene = canvas("Volume", move |b, root| {
+        ui::fit_root(b, root, w, h);
+        let mut cast = draw::frame("Casting", 0.0, 0.0, w, h);
+        cast.fills = vec![draw::linear(180.0, &[(0.0, "#1a1d22"), (1.0, "#0c0e11")])];
+        let cast = b.add(root, cast);
+        treadle(b, cast, (24.0, 12.0, 220.0, h - 24.0), NS, &format!("{NS}/gain_db"), ("VOLUME", "#0a0b0d", &Lettering::family(family::INTER).weight(900.0), 15.0));
+        // The level: a long bar, −24 dB at the left, unity at the right.
+        let (bx, by, bw, bh) = (300.0, h / 2.0 + 6.0, w - 300.0 - 40.0, 18.0);
+        b.add(cast, draw::rounded(draw::rect("well", bx, by, bw, bh, draw::solid("#07080a")), 9.0));
+        let lvl = b.add(cast, draw::frame("level", bx, by, bw, bh));
+        b.add(lvl, ui::glowing(draw::rounded(draw::rect("lit", 0.0, 0.0, bw, bh, draw::linear(90.0, &[(0.0, "#38bdf8"), (1.0, "#e0f2fe")])), 9.0), "#38bdf8", 0.6, 8.0));
+        motion::add(b, lvl, Motion::new(Target::StretchX).input(format!("norm({NS}/gain_db)")).range(0.0, 1.0).pivot(0.0, 0.5).dynamics(Dynamics::spring(500.0, 40.0)));
+        for (db, label) in [(-24.0, "-24"), (-18.0, "-18"), (-12.0, "-12"), (-6.0, "-6"), (0.0, "0")] {
+            let x = bx + bw * (db + 24.0) / 24.0;
+            b.add(cast, ui::text("db", label, x - 20.0, by + bh + 18.0, 40.0, 10.0, "#8a8c93", TextAlign::Center, 700.0, false));
+        }
+        crate::delay::parts::readout(b, cast, "Level", ui::bind(&format!("{NS}/gain_db")), (bx, by - 40.0, 200.0), 30.0, "#e0f2fe", TextAlign::Left);
+        led(b, cast, NS, bx + bw - 8.0, by - 26.0, 7.0, "#38bdf8");
+    });
+    let params = vec![ui::param(&format!("{NS}/gain_db"), "Volume", Range::linear(-24.0, 0.0, Unit::Db), 0.0).featured(), on(NS)];
+    Face { file: "38-volume-row", plugin: PLUGIN, scene, params, streams: Vec::new() }
+}
+
 /// The dive bomb as a pedal on a phone: an orange whammy, its window over
 /// the treadle reading the interval it is at (in semitones, lit), the
 /// treadle the interval — the middle unison, the toe up two octaves, the

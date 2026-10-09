@@ -413,7 +413,7 @@ pub fn faces() -> Vec<Face> {
     v.push(eq_row());
     v.push(spring_viz());
     v.push(cab());
-    v.extend([d_(crate::rig_blues::filters::wah_unit()), d_(crate::rig_blues::filters::q_tron_unit()), d_(crate::rig_blues::filters::postal_unit()), d_(crate::rig_blues::pitch::pitch_unit()), d_(crate::rig_blues::doubler::doubler_unit()), d_(crate::rig_blues::transpose::transpose_unit()), d_(crate::rig_blues::transpose::dive_unit()), d_(crate::rig_blues::transpose::transpose_phone()), d_(crate::rig_blues::transpose::dive_phone()), d_(crate::rig_blues::filters::wah_phone()), d_(crate::rig_blues::filters::q_tron_phone()), d_(crate::rig_blues::filters::dive_pedal_phone()), d_(crate::rig_blues::filters::volume_phone()), d_(crate::rig_blues::filters::octaver_phone()), d_(crate::rig_blues::filters::harmonizer_phone()), d_(crate::rig_blues::doubler::doubler_phone()), d_(crate::rig_blues::premod::premod_unit())]);
+    v.extend([d_(crate::rig_blues::filters::wah_unit()), d_(crate::rig_blues::filters::q_tron_unit()), d_(crate::rig_blues::filters::postal_unit()), d_(crate::rig_blues::pitch::pitch_unit()), d_(crate::rig_blues::doubler::doubler_unit()), d_(crate::rig_blues::transpose::transpose_unit()), d_(crate::rig_blues::transpose::dive_unit()), d_(crate::rig_blues::transpose::transpose_phone()), d_(crate::rig_blues::transpose::dive_phone()), d_(crate::rig_blues::filters::wah_phone()), d_(crate::rig_blues::filters::q_tron_phone()), d_(crate::rig_blues::filters::dive_pedal_phone()), d_(crate::rig_blues::filters::volume_phone()), d_(crate::rig_blues::filters::volume_row()), d_(crate::rig_blues::filters::octaver_phone()), d_(crate::rig_blues::filters::harmonizer_phone()), d_(crate::rig_blues::doubler::doubler_phone()), d_(crate::rig_blues::premod::premod_unit())]);
     v
 }
 
@@ -510,7 +510,8 @@ pub fn manifest() -> String {
             { "match": ["harmon"], "face": "33-harmonizer-phone", "ns": "harm", "size": size(&crate::rig_blues::filters::harmonizer_phone()) },
             { "match": ["pitch"], "face": "33-pitch-voices", "ns": "pitch", "size": size(&crate::rig_blues::pitch::pitch_unit()),
                 "tiers": { "phone": { "face": "32-octaver-phone", "size": size(&crate::rig_blues::filters::octaver_phone()), "nameplate": true } } },
-            { "match": ["volume"], "face": "38-volume-phone", "ns": "volume", "size": size(&crate::rig_blues::filters::volume_phone()) },
+            { "match": ["volume"], "face": "38-volume-phone", "ns": "volume", "size": size(&crate::rig_blues::filters::volume_phone()),
+              "row": { "face": "38-volume-row", "size": [860.0, 254.0] } },
             // The transposer and the dive bomb: pitch blocks of their own,
             // by name.
             { "match": ["transpose"], "face": "36-transpose", "ns": "transpose", "size": size(&crate::rig_blues::transpose::transpose_unit()),
