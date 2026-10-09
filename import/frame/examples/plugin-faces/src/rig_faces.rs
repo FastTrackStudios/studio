@@ -344,21 +344,34 @@ pub const COMP_SCOPE: (f64, f64) = (750.0, 254.0);
 pub const COMP_SCOPE_IPAD: (f64, f64) = (860.0, 254.0);
 
 fn comp_scope() -> Face {
-    comp_scope_at("56-comp-scope", COMP_SCOPE)
+    comp_scope_at("56-comp-scope", COMP_SCOPE, false)
 }
 
-fn comp_scope_at(file: &'static str, (w, h): (f64, f64)) -> Face {
+/// The compressor scope `w` × `h`; `dials`: Threshold, Ratio, Attack and
+/// Release at a finger's size beside it (the iPad's FX row).
+fn comp_scope_at(file: &'static str, (w, h): (f64, f64), dials: bool) -> Face {
     use surface_kit::viz::lit_catalog;
+    let side = if dials { 250.0 } else { 0.0 };
     let scene = canvas("Compressor", move |b, root| {
         ui::fit_root(b, root, w, h);
         let mut v = surface_kit::draw::frame("Window", 0.0, 0.0, w, h);
         v.fills = vec![surface_kit::draw::linear(180.0, &[(0.0, "#0c0d10"), (1.0, "#08090b")])];
         v.clips_content = true;
         let v = b.add(root, v);
-        let p = Place::new("Compressor").size(w).options(&["ns=comp", &format!("h={h}"), "no_range"]);
+        let p = Place::new("Compressor").size(w - side).options(&["ns=comp", &format!("h={h}"), "no_range"]);
         ui::put_at(b, v, "viz.comp_scope", &p, 0.0, 0.0);
+        if dials {
+            let knob = ["color=#1b1e23", "pointer=#fbbf24", "index=line", "index_w=0.1", "skirt=plain", "skirt_color=#0a0b0d"];
+            let (x0, x1) = (w - side + side * 0.28, w - side + side * 0.72);
+            let (y0, y1) = (h * 0.38, h * 0.78);
+            for (addr, legend, at) in [("comp/threshold", "Threshold", (x0, y0)), ("comp/ratio", "Ratio", (x1, y0)), ("comp/attack", "Attack", (x0, y1)), ("comp/release", "Release", (x1, y1))] {
+                crate::rig_time::kit::knob3d(b, v, addr, legend, 44.0, at, &knob, "#e6e9ee", "#8a8f99");
+            }
+        }
     });
     let mut params = lit_catalog::comp_scope("comp", 128).0;
+    params.push(ui::param("comp/attack", "Attack", Range::log(0.1, 200.0, Unit::Milliseconds), 20.0));
+    params.push(ui::param("comp/release", "Release", Range::log(5.0, 2000.0, Unit::Milliseconds), 200.0));
     params.push(ui::toggle("comp/on", "Bypass", true));
     Face { file, plugin: PLUGIN, scene, params, streams: lit_catalog::comp_scope("comp", 128).1 }
 }
@@ -366,7 +379,7 @@ fn comp_scope_at(file: &'static str, (w, h): (f64, f64)) -> Face {
 pub fn faces() -> Vec<Face> {
     let mut v: Vec<Face> = drive_entries().into_iter().map(|(f, _, _)| f).collect();
     v.push(comp_scope());
-    v.push(comp_scope_at("56-comp-scope-ipad", COMP_SCOPE_IPAD));
+    v.push(comp_scope_at("56-comp-scope-ipad", COMP_SCOPE_IPAD, true));
     v.extend(drive_phone());
     v.push(Face { plugin: PLUGIN, ..drives::compressor() });
     v.extend(pre_entries());
@@ -465,7 +478,8 @@ pub fn manifest() -> String {
                        "ipad": { "face": "51-gate-pane", "size": size(&crate::rig_amp::gate_pane(false)), "back": "51-gate-pane-back", "nameplate": true } },
             // Made for the iPad's FX row.
             "row": { "face": "51-gate-row", "size": [crate::rig_amp::ROW.0, crate::rig_amp::ROW.1] } },
-        "trim": { "face": "53-trim", "ns": "trim", "size": [crate::rig_amp::TRIM.0, crate::rig_amp::TRIM.1] },
+        "trim": { "face": "53-trim", "ns": "trim", "size": [crate::rig_amp::TRIM.0, crate::rig_amp::TRIM.1],
+            "row": { "face": "53-trim-row", "size": [crate::rig_amp::ROW.0, crate::rig_amp::ROW.1] } },
         // The Time module's units: a face per delay machine and reverb
         // algorithm, by its name.
         "time": crate::rig_time::manifest(),

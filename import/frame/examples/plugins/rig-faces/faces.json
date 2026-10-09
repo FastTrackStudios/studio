@@ -3210,6 +3210,13 @@
   "trim": {
     "face": "53-trim",
     "ns": "trim",
+    "row": {
+      "face": "53-trim-row",
+      "size": [
+        860.0,
+        254.0
+      ]
+    },
     "size": [
       92.0,
       340.0

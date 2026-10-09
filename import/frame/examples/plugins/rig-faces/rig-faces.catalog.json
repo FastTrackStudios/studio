@@ -504,6 +504,40 @@
       "featured": false
     },
     {
+      "addr": "comp/attack",
+      "name": "Attack",
+      "short_name": null,
+      "group": null,
+      "kind": "Continuous",
+      "range": {
+        "min": 0.1,
+        "max": 200.0,
+        "scale": "Logarithmic",
+        "unit": "Milliseconds",
+        "steps": null
+      },
+      "default": 0.6970642492453764,
+      "bipolar": false,
+      "featured": false
+    },
+    {
+      "addr": "comp/release",
+      "name": "Release",
+      "short_name": null,
+      "group": null,
+      "kind": "Continuous",
+      "range": {
+        "min": 5.0,
+        "max": 2000.0,
+        "scale": "Logarithmic",
+        "unit": "Milliseconds",
+        "steps": null
+      },
+      "default": 0.6156891065798796,
+      "bipolar": false,
+      "featured": false
+    },
+    {
       "addr": "precomp/sustain",
       "name": "Sustain",
       "short_name": null,

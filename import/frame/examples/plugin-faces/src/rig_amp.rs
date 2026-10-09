@@ -329,8 +329,52 @@ pub fn gate_row() -> Face {
     Face { file: "51-gate-row", plugin: PLUGIN, scene, params, streams: surface_kit::viz::catalog::comp_streams("gate", 240) }
 }
 
+/// The patch's level for the iPad's FX row: its dB large at the left, a
+/// long-throw fader across the row on a dB scale, and the pan dial.
+#[must_use]
+pub fn trim_row() -> Face {
+    let (w, h) = ROW;
+    let scene = canvas("Level", move |b, root| {
+        ui::fit_root(b, root, w, h);
+        let mut p = draw::frame("Panel", 0.0, 0.0, w, h);
+        p.fills = vec![draw::linear(180.0, &[(0.0, "#16181c"), (1.0, "#0c0d10")])];
+        let p = b.add(root, p);
+        let sans = draw::Lettering::family(draw::family::INTER).weight(700.0);
+        crate::suite_studio_blues::parts::set(b, p, "LEVEL", 80.0, 40.0, 13.0, DIM, &sans, 0.2);
+        crate::delay::parts::readout(b, p, "Level value", ui::bind("trim/gain_db"), (10.0, h / 2.0 - 4.0, 140.0), 30.0, INK, TextAlign::Center);
+        // The fader: across, −24 at the left, +24 at the right.
+        let (fx, flen, fy) = (170.0, w - 170.0 - 170.0, h / 2.0 - 30.0);
+        let (cap_w, cap_h) = (36.0, 60.0);
+        let travel = flen - cap_w;
+        for (db, label) in [(-24.0, "-24"), (-12.0, "-12"), (-6.0, "-6"), (0.0, "0"), (6.0, "+6"), (12.0, "+12"), (24.0, "+24")] {
+            let x = fx + cap_w / 2.0 + travel * (db + 24.0) / 48.0;
+            let col = if db == 0.0 { INK } else { "#ffffff38" };
+            b.add(p, ui::strokes("tick", &[vec![(x, fy + cap_h + 8.0), (x, fy + cap_h + 16.0)]], 1.2, draw::solid(col)));
+            b.add(p, ui::text("db", label, x - 20.0, fy + cap_h + 28.0, 40.0, 10.0, if db == 0.0 { INK } else { DIM }, TextAlign::Center, 700.0, false));
+        }
+        let slot = draw::rounded(draw::rect("slot", fx + cap_w / 2.0, fy + cap_h / 2.0 - 3.0, travel, 6.0, draw::solid("#050506")), 3.0);
+        b.add(p, draw::with_effects(slot, vec![draw::inner_shadow("#000000", 0.0, 1.0, 2.0), draw::drop_shadow("#ffffff14", 0.0, 1.0, 0.0)]));
+        let root_f = b.add(p, draw::frame("trim/gain_db fader", fx, fy, flen, cap_h));
+        let lane = b.add(root_f, draw::frame("lane", 0.0, 0.0, flen, cap_h));
+        let c = b.add(lane, draw::frame("cap", 0.0, 0.0, cap_w, cap_h));
+        let body = draw::rounded(draw::rect("cap", 0.0, 0.0, cap_w, cap_h, draw::linear(90.0, &[(0.0, "#5b5f66"), (0.45, "#2c2f34"), (0.55, "#1c1e22"), (1.0, "#3b3e44")])), 5.0);
+        b.add(c, draw::with_effects(body, vec![draw::drop_shadow("#000000c0", 0.0, 3.0, 6.0)]));
+        b.add(c, draw::rect("line", cap_w / 2.0 - 1.0, 4.0, 2.0, cap_h - 8.0, draw::solid("#f4f4f5")));
+        let ctl = Control::new(ControlKind::Fader { orientation: Orientation::Horizontal }).slot(SlotRole::Thumb, c.0).bound(ui::bind("trim/gain_db"));
+        b.controls.insert(root_f, ctl);
+        // Pan.
+        let knob = ["color=#1b1e23", "pointer=#e6e9ee", "index=line", "index_w=0.1", "skirt=plain", "skirt_color=#0a0b0d"];
+        kit::knob3d(b, p, "trim/pan", "Pan", 56.0, (w - 85.0, h / 2.0 - 4.0), &knob, INK, DIM);
+    });
+    let params = vec![
+        ui::param("trim/gain_db", "Level", Range::linear(-24.0, 24.0, Unit::Db), 0.0).featured(),
+        ui::param("trim/pan", "Pan", Range::linear(-1.0, 1.0, Unit::None), 0.0).featured(),
+    ];
+    Face { file: "53-trim-row", plugin: PLUGIN, scene, params, streams: Vec::new() }
+}
+
 pub fn faces() -> Vec<Face> {
-    vec![gate(), gate_phone(false), gate_phone(true), gate_pane(false), gate_pane(true), gate_row(), trim()]
+    vec![gate(), gate_phone(false), gate_phone(true), gate_pane(false), gate_pane(true), gate_row(), trim(), trim_row()]
 }
 
 /// The gate as a phone lane: the lane is its meter — the input's level
