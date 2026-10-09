@@ -1315,6 +1315,14 @@
         "compressor"
       ],
       "ns": "comp"
+    },
+    {
+      "bleed": 0.08695652173913043,
+      "face": "51-gate-block",
+      "match": [
+        "gate"
+      ],
+      "ns": "gate"
     }
   ],
   "cab": {

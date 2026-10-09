@@ -173,6 +173,15 @@ pub fn post_comp_phone(back: bool) -> Face {
     Face { file: if back { "55-post-comp-distressor-phone-back" } else { "55-post-comp-distressor-phone" }, plugin: PLUGIN, scene, params, streams: Vec::new() }
 }
 
+/// The post compressor composed for a block of Signal's routing grid: the
+/// Distressor, square.
+pub(crate) fn post_comp_block() -> Face {
+    use crate::comp_vca::character_comp as dist;
+    let s = crate::rig_cells::S;
+    let scene = dist::unit_box("dist", "Distressor", "dist/input", "dist/level", "dist/on", s, s);
+    Face { file: "55-post-comp-distressor-block", plugin: PLUGIN, scene, params: post_comp().params, streams: Vec::new() }
+}
+
 fn post_comp_as(aspect: f64, variant: bool) -> Face {
     use crate::comp_vca::character_comp as dist;
     let scene = dist::unit_box("dist", "Distressor", "dist/input", "dist/level", "dist/on", POST_COMP.1 * aspect, POST_COMP.1);

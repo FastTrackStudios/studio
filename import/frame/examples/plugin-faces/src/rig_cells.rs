@@ -171,6 +171,15 @@ pub fn faces() -> Vec<Face> {
     ];
     v.extend(crate::rig_mod::blocks());
     v.extend(crate::rig_faces::amp_blocks());
+    v.push(crate::rig_faces::post_comp_block());
+    v.push(viz(
+        "51-gate-block",
+        "Gate",
+        "viz.gate",
+        "gate",
+        &dark,
+        vec![ui::param("gate/threshold", "Threshold", Range::linear(-90.0, 0.0, Unit::Db), -50.0), ui::toggle("gate/on", "Bypass", true)],
+    ));
     v
 }
 
@@ -198,5 +207,6 @@ pub fn manifest() -> serde_json::Value {
         e(&["rotary"], "105-motion-rotary-block", "motion"),
         e(&["eq"], "52-amp-eq-block", "eq"),
         e(&["compressor"], "55-comp-block", "comp"),
+        e(&["gate"], "51-gate-block", "gate"),
     ])
 }
