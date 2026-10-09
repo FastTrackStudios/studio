@@ -144,8 +144,10 @@ fn plate(b: &mut Builder<'_>, tank: NodeId, w: f64, h: f64) {
     }
     b.add(dm, ui::area("felt pores", holes, mw, ph + 16.0, draw::solid("#8a7d6c66")));
     ui::silk(b, dm, "Damper", mw / 2.0, 11.0, 6.5, "#d8cbb8", 800.0);
-    // The crank rod out to the motor, riding with it.
-    ui::line(b, dm, "crank rod", &[(mw, (ph + 16.0) / 2.0), (mw + 200.0, (ph + 16.0) / 2.0)], 3.0, "#8d9399");
+    // The crank rod out to the motor, riding with it — as long as the
+    // tank allows (a block's is narrow, and a control is not clipped).
+    let rod = (w * 0.36).min(200.0);
+    ui::line(b, dm, "crank rod", &[(mw, (ph + 16.0) / 2.0), (mw + rod, (ph + 16.0) / 2.0)], 3.0, "#8d9399");
     let kind = ControlKind::Handle {
         x: Some(bind(&a("decay"))),
         y: None,
