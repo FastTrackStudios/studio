@@ -258,6 +258,20 @@ fn eq() -> Face {
     Face { file: "52-amp-eq", plugin: PLUGIN, scene, params, streams: surface_kit::viz::catalog::eq_streams("eq", 256) }
 }
 
+/// The EQ made for the iPad's FX row: the graph over the analyser, and the
+/// active band's panel pinned beside it at a finger's size.
+fn eq_row() -> Face {
+    let (w, h) = crate::rig_amp::ROW;
+    let scene = canvas("Amp EQ", move |b, root| {
+        ui::fit_root(b, root, w, h);
+        let p = Place::new("Amp EQ").size(w).options(&["ns=eq", "bands=24", "f_max=24000", "no_range", "touch", &format!("h={h}")]);
+        ui::put_at(b, root, "viz.eq_graph", &p, 0.0, 0.0);
+    });
+    let mut params = surface_kit::viz::catalog::eq_params("eq", 24);
+    params.extend(surface_kit::viz::catalog::eq_view_params("eq"));
+    Face { file: "52-amp-eq-row", plugin: PLUGIN, scene, params, streams: surface_kit::viz::catalog::eq_streams("eq", 256) }
+}
+
 /// The drives: (face, namespace, match words).
 /// The drives' phone versions, in [`drive_entries`]' order.
 fn drive_phone() -> Vec<Face> {
@@ -383,6 +397,7 @@ pub fn faces() -> Vec<Face> {
     v.extend(AmpModel::EVERY.iter().flat_map(|m| AMP_ASPECTS.iter().map(move |a| amp_face_as(*m, *a, true))));
     v.extend(crate::rig_amp::faces());
     v.push(eq());
+    v.push(eq_row());
     v.push(spring_viz());
     v.push(cab());
     v.extend([d_(crate::rig_blues::filters::wah_unit()), d_(crate::rig_blues::filters::q_tron_unit()), d_(crate::rig_blues::filters::postal_unit()), d_(crate::rig_blues::pitch::pitch_unit()), d_(crate::rig_blues::doubler::doubler_unit()), d_(crate::rig_blues::transpose::transpose_unit()), d_(crate::rig_blues::transpose::dive_unit()), d_(crate::rig_blues::transpose::transpose_phone()), d_(crate::rig_blues::transpose::dive_phone()), d_(crate::rig_blues::filters::wah_phone()), d_(crate::rig_blues::filters::q_tron_phone()), d_(crate::rig_blues::filters::dive_pedal_phone()), d_(crate::rig_blues::filters::volume_phone()), d_(crate::rig_blues::filters::octaver_phone()), d_(crate::rig_blues::filters::harmonizer_phone()), d_(crate::rig_blues::doubler::doubler_phone()), d_(crate::rig_blues::premod::premod_unit())]);
@@ -463,7 +478,8 @@ pub fn manifest() -> String {
             { "face": "input", "param": "threshold", "linear": [-6.0, 0.0] },
             { "face": "ratio", "param": "ratio", "table": [1.0, 2.0, 3.0, 4.0, 6.0, 10.0, 20.0, 20.0] },
         ] },
-        "eq": { "face": "52-amp-eq", "ns": "eq", "size": size(&eq()) },
+        "eq": { "face": "52-amp-eq", "ns": "eq", "size": size(&eq()),
+            "row": { "face": "52-amp-eq-row", "size": [crate::rig_amp::ROW.0, crate::rig_amp::ROW.1] } },
         "cab": { "face": "54-cab-2x12", "ns": "cab", "size": size(&cab()) },
         // The input stage's units, by block type, and the filter's picture.
         "input": [

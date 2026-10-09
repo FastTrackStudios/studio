@@ -413,6 +413,10 @@ pub enum Placement {
     DockBottom,
     /// As [`Placement::DockBottom`], docked to the top edge.
     DockTop,
+    /// Where it is drawn, never moving: a band panel pinned beside its plot
+    /// (a touchscreen's, where a panel following the band would sit under
+    /// the finger). Up while its context is (the active band).
+    Pinned,
 }
 
 /// When a popover is up.
