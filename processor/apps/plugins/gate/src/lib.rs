@@ -28,6 +28,11 @@ const PLUGIN_NAME: &str = "FTS Gate";
 
 #[derive(Params)]
 pub struct GateParams {
+    /// What the detector listens to: the track itself, or the sidechain
+    /// input — a drum's recorded trigger, so the close mic opens on the
+    /// hit and not on the cymbals bleeding into it.
+    #[id = "key"]
+    pub key: EnumParam<Key>,
     /// Open threshold, dBFS.
     #[id = "threshold"]
     pub threshold_db: FloatParam,
@@ -51,6 +56,7 @@ pub struct GateParams {
 impl Default for GateParams {
     fn default() -> Self {
         Self {
+            key: EnumParam::new("Key", Key::Input),
             threshold_db: FloatParam::new(
                 "Threshold",
                 -40.0,
@@ -117,6 +123,15 @@ impl Default for GateParams {
     }
 }
 
+/// The gate's key: what opens it.
+#[derive(Enum, Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Key {
+    /// The signal being gated.
+    Input,
+    /// The sidechain input (the host's aux port), linked across its channels.
+    Sidechain,
+}
+
 // ── Plugin ────────────────────────────────────────────────────────────────
 
 pub struct FtsGate {
@@ -167,10 +182,12 @@ impl Plugin for FtsGate {
     const EMAIL: &'static str = "";
     const VERSION: &'static str = env!("CARGO_PKG_VERSION");
 
-    /// Audio effect: stereo in, stereo out.
+    /// Audio effect: stereo in, stereo out, and a stereo sidechain to key
+    /// it from ([`Key::Sidechain`]).
     const AUDIO_IO_LAYOUTS: &'static [AudioIOLayout] = &[AudioIOLayout {
         main_input_channels: NonZeroU32::new(2),
         main_output_channels: NonZeroU32::new(2),
+        aux_input_ports: &[new_nonzero_u32(2)],
         ..AudioIOLayout::const_default()
     }];
 
@@ -204,19 +221,33 @@ impl Plugin for FtsGate {
     fn process(
         &mut self,
         buffer: &mut Buffer,
-        _aux: &mut AuxiliaryBuffers,
+        aux: &mut AuxiliaryBuffers,
         _context: &mut impl ProcessContext<Self>,
     ) -> ProcessStatus {
         self.sync_params();
         let Some(gate) = &mut self.gate else {
             return ProcessStatus::Normal;
         };
+        let sidechain = match self.params.key.value() {
+            Key::Sidechain => aux.inputs.first().map(Buffer::as_slice_immutable),
+            Key::Input => None,
+        };
 
-        for mut frame in buffer.iter_samples() {
-            // Linked detection: key on the loudest channel of the frame.
+        for (index, mut frame) in buffer.iter_samples().enumerate() {
+            // Linked detection: key on the loudest channel of the frame —
+            // the sidechain's when it keys the gate, else the input's.
             let mut key = 0.0f32;
-            for sample in frame.iter_mut() {
-                key = key.max(sample.abs());
+            match sidechain {
+                Some(channels) => {
+                    for channel in channels {
+                        key = key.max(channel.get(index).map_or(0.0, |s| s.abs()));
+                    }
+                }
+                None => {
+                    for sample in frame.iter_mut() {
+                        key = key.max(sample.abs());
+                    }
+                }
             }
             // Advance detector + envelope once per frame, then apply the one
             // resulting gain to every channel.
