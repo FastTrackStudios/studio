@@ -97,6 +97,14 @@ impl FtsReverb {
         let bass = f64::from(self.params.bass.value());
         self.chain.params.low_decay_mult = bass;
         self.chain.params.high_decay_mult = (2.0 - bass).clamp(0.0, 2.0);
+        // A time-set tail: the engine's own setting for that time in this
+        // space at this size — after the tilt, which the conversion
+        // compensates for. `%` keeps the position as it is.
+        if let Some(seconds) = self.params.decay_seconds(tempo)
+            && let Some(decay) = self.chain.decay_for_seconds(seconds)
+        {
+            self.chain.params.decay = decay;
+        }
         // The engine's own two controls. What they mean is the algorithm's
         // business — the panel is what names them.
         self.chain.params.extra_a = f64::from(self.params.character_a.value());

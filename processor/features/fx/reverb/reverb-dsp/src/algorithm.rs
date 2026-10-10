@@ -39,33 +39,35 @@ impl AlgorithmType {
     /// together. Unity is an arbitrary but fixed anchor; matching an outside
     /// reference is then a single global offset rather than sixteen.
     ///
-    /// Re-derive with `cargo run -p signal-analyzer --example wet_level`,
-    /// which prints the measurement these come from.
+    /// Re-derive with `cargo run --release -p reverb-dsp --example wet_level`,
+    /// which prints the measurement these come from and the constant each
+    /// wants. Measured through the time conversion, so the calibration
+    /// tables (`calibration`) changing moves them too.
     /// `algorithms_share_one_output_level` in `tests/stability.rs` fails if a
     /// change to an engine invalidates its constant.
     #[must_use]
     pub const fn wet_calibration_db(self) -> f64 {
         match self {
-            Self::Room => -3.03,
-            Self::Hall => 0.47,
-            Self::Plate => 8.82,
-            Self::Spring => 4.40,
-            Self::Cloud => 10.02,
-            Self::Bloom => 22.84,
-            Self::Shimmer => -0.58,
-            Self::Chorale => -0.50,
-            Self::Magneto => 6.36,
-            Self::NonLinear => 16.72,
+            Self::Room => -3.54,
+            Self::Hall => 0.18,
+            Self::Plate => 8.27,
+            Self::Spring => 4.11,
+            Self::Cloud => 13.55,
+            Self::Bloom => 22.88,
+            Self::Shimmer => -3.61,
+            Self::Chorale => -3.13,
+            Self::Magneto => 8.39,
+            Self::NonLinear => 16.67,
             // Swell renders silence at every setting — a defect of its own,
             // which a trim cannot repair and should not paper over.
             Self::Swell => 0.0,
-            Self::Reflections => 5.81,
-            Self::Velvet => -24.23,
-            Self::FreeVerb => 5.62,
+            Self::Reflections => 5.20,
+            Self::Velvet => -24.85,
+            Self::FreeVerb => 4.70,
             // Convolution's level is whatever the loaded IR carries; the
             // constant is the measurement for the built-in default.
             Self::Convolution => -4.92,
-            Self::Random => -3.91,
+            Self::Random => -4.64,
         }
     }
 

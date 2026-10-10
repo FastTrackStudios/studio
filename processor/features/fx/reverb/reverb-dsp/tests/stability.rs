@@ -288,7 +288,7 @@ fn algorithms_share_one_output_level() {
             error_db.abs() <= TOLERANCE_DB,
             "{algo:?}: {error_db:+.2} dB from the shared level at T60 \
              {REFERENCE_T60}s — its `wet_calibration_db` is stale. Re-derive \
-             with `cargo run -p signal-analyzer --example wet_level`.",
+             with `cargo run --release -p reverb-dsp --example wet_level`.",
         );
     }
 

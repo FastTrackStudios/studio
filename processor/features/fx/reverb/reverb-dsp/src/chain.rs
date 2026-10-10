@@ -686,6 +686,25 @@ impl ReverbChain {
     /// A time outside the engine's reach saturates at the nearest end rather
     /// than being refused.
     pub fn set_decay_seconds(&mut self, t60_s: f64) -> Option<f64> {
+        let decay = self.decay_for_seconds(t60_s)?;
+        self.params.decay = decay;
+        self.update_params();
+        Some(decay)
+    }
+
+    /// The normalized decay that gives a tail `t60_s` long on the active
+    /// engine, without applying it — what [`Self::set_decay_seconds`] sets,
+    /// for a caller that pushes its params in one go and updates once.
+    ///
+    /// The time is the engine's RT60 across its own range, compensated for
+    /// the decay tilt. `None` for an engine with no time model: a
+    /// convolution's tail is its IR's; Magneto's heads, Reflections and
+    /// Freeverb set a feedback; Non-Linear's decay is its envelope window,
+    /// but its tail does not end there (a 0.1 s window rings ~0.43 s, a 2 s
+    /// one past 3 s), so it has no time to promise yet. A time outside the
+    /// engine's reach saturates at the nearest end.
+    #[must_use]
+    pub fn decay_for_seconds(&self, t60_s: f64) -> Option<f64> {
         let (lo, hi) = self.algorithm_type.t60_range(self.variant)?;
         // A decay tilt moves the midband, so ask the engine for a
         // correspondingly longer (or shorter) time to land on the requested
@@ -698,10 +717,24 @@ impl ReverbChain {
         };
         let compensated =
             t60_s / crate::algorithm::tilt_midband_factor(low, self.params.high_decay_mult);
-        let decay = crate::algorithm::t60_to_decay(compensated, lo, hi);
-        self.params.decay = decay;
-        self.update_params();
-        Some(decay)
+        // Never the freeze: a time asks for a tail that ends, and every
+        // engine holds forever from `FREEZE_DECAY` up — the longest time a
+        // space reaches is its range's top, not Infinite.
+        Some(
+            crate::algorithm::t60_to_decay(compensated, lo, hi)
+                .min(crate::algorithm::FREEZE_DECAY - 1e-3),
+        )
+    }
+
+    /// The times the active engine can ring at its current size, s — what
+    /// a time-set decay is held to. `None` for an engine with no time
+    /// model.
+    #[must_use]
+    pub fn decay_reach(&self) -> Option<(f64, f64)> {
+        match crate::calibration::table(self.algorithm_type, self.variant) {
+            Some(t) => Some(t.reach(self.params.size)),
+            None => self.algorithm_type.t60_range(self.variant),
+        }
     }
 
     /// The reverberation-time range the active engine's `decay` spans.
@@ -865,8 +898,14 @@ impl ReverbChain {
             // measured span, log-spaced like the calibrated ones. Engines
             // with their own feedback law get the setting that measured to
             // that time.
-            let (lo, hi) = t.range();
-            p.decay = t.engine_decay(crate::algorithm::decay_to_t60(p.decay, lo, hi));
+            // The engine's nominal span (its own for the engines that
+            // convert time themselves), then the setting that rang that
+            // time at this size.
+            let (lo, hi) = self
+                .algorithm_type
+                .t60_range(self.variant)
+                .unwrap_or_else(|| t.range());
+            p.decay = t.engine_decay(crate::algorithm::decay_to_t60(p.decay, lo, hi), p.size);
         }
         // Engines without a per-frequency feedback path collapse the Decay
         // Rate EQ onto the legacy low/high multiplier pair. Engines that DO
@@ -2139,6 +2178,24 @@ mod tests {
             |c| c.output_tilt_db = -12.0,
             |c| c.output_tilt_db = 12.0,
         );
+    }
+
+    /// Every space with a time model takes one; the timeless ones say so.
+    #[test]
+    fn a_time_is_taken_where_the_space_has_one() {
+        let mut c = ReverbChain::new();
+        for (algorithm, variant) in [
+            (AlgorithmType::Room, 0),
+            (AlgorithmType::Hall, 0),
+            (AlgorithmType::Plate, 0),
+        ] {
+            c.set_algorithm_variant(algorithm, variant);
+            assert!(c.decay_for_seconds(1.0).is_some(), "{algorithm:?}");
+        }
+        for algorithm in [AlgorithmType::Convolution, AlgorithmType::NonLinear] {
+            c.set_algorithm_variant(algorithm, 0);
+            assert!(c.decay_for_seconds(1.0).is_none(), "{algorithm:?}");
+        }
     }
 
     #[test]

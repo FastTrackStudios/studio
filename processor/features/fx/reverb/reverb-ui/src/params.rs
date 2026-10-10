@@ -260,7 +260,38 @@ pub struct ReverbParams {
     /// multipliers over frequency, ×0.25…×4. Ids `dshape_1`…`dq_6`.
     #[nested(array, group = "Decay EQ")]
     pub decay_eq: [DecayBandParams; reverb_dsp::algorithm::DECAY_BANDS],
+
+    /// How the tail is set ([`DECAY_MODE_LABELS`]): `%` — a position on the
+    /// space's own span, what every preset made before times saved and
+    /// still opens as — a **Time** in seconds, or a note value against the
+    /// host's tempo (**Sync**). A time is the RT60 the space rings, at any
+    /// size (`reverb_dsp::calibration`).
+    #[id = "decay_mode"]
+    pub decay_mode: IntParam,
+    /// The tail in seconds, while Decay Mode is Time — and Sync's, with no
+    /// tempo to read a note against.
+    #[id = "decay_time"]
+    pub decay_time: FloatParam,
+    /// The note value the tail lasts, while Decay Mode is Sync.
+    #[id = "decay_div"]
+    pub decay_div: IntParam,
 }
+
+/// Decay Mode's choices, by index.
+pub const DECAY_MODE_LABELS: &[&str] = &["%", "Time", "Sync"];
+
+/// What a time-set decay can ask for, seconds: from a slap of a room to a
+/// cloud's longest. A space that cannot reach a time holds to the nearest
+/// it can.
+pub const MIN_DECAY_S: f64 = 0.1;
+pub const MAX_DECAY_S: f64 = 120.0;
+
+/// The note a synced tail lasts until someone picks another: a half note,
+/// gone before the next backbeat.
+pub const DECAY_DEFAULT_DIV: musical_time::MusicalTime = musical_time::MusicalTime::new(
+    musical_time::NoteValue::Half,
+    musical_time::Flavour::Straight,
+);
 
 /// One Post EQ band (`fx.embed-eq.band-params`).
 #[derive(Params)]
@@ -577,6 +608,39 @@ impl Default for ReverbParams {
             decay_eq: std::array::from_fn(|i| {
                 DecayBandParams::new(eq_default_freq(i, reverb_dsp::algorithm::DECAY_BANDS))
             }),
+
+            // `%` until asked: a session saved before times opens as it was.
+            decay_mode: IntParam::new(
+                "Decay Mode",
+                0,
+                IntRange::Linear {
+                    min: 0,
+                    max: (DECAY_MODE_LABELS.len() - 1) as i32,
+                },
+            )
+            .with_value_to_string(Arc::new(|v| {
+                DECAY_MODE_LABELS
+                    .get(v.max(0) as usize)
+                    .map_or_else(|| "—".to_string(), |l| (*l).to_string())
+            }))
+            .with_string_to_value(Arc::new(|s| {
+                DECAY_MODE_LABELS
+                    .iter()
+                    .position(|l| l.eq_ignore_ascii_case(s.trim()))
+                    .map(|i| i as i32)
+            })),
+            decay_time: FloatParam::new(
+                "Decay Time",
+                2.0,
+                FloatRange::Skewed {
+                    min: MIN_DECAY_S as f32,
+                    max: MAX_DECAY_S as f32,
+                    factor: FloatRange::skew_factor(-2.0),
+                },
+            )
+            .with_unit(" s")
+            .with_value_to_string(formatters::v2s_f32_rounded(2)),
+            decay_div: musical_time::params::division_param("Decay Div", DECAY_DEFAULT_DIV),
         }
     }
 }
@@ -597,6 +661,27 @@ pub const PREDELAY_DEFAULT_DIV: musical_time::MusicalTime = musical_time::Musica
 );
 
 impl ReverbParams {
+    /// The tail the audio thread should ask the engine for, in seconds —
+    /// `None` while Decay Mode is `%` (the position is used as it is). A
+    /// synced tail reads its note against `tempo`; with none, the free time.
+    #[must_use]
+    pub fn decay_seconds(&self, tempo: Option<f64>) -> Option<f64> {
+        let free_s = f64::from(self.decay_time.value());
+        match self.decay_mode.value() {
+            1 => Some(free_s),
+            2 => Some(
+                musical_time::SyncedTime {
+                    mode: musical_time::TimeMode::Synced,
+                    free_ms: free_s * 1000.0,
+                    division: musical_time::MusicalTime::from_param(self.decay_div.value()),
+                }
+                .resolve_ms(tempo)
+                    / 1000.0,
+            ),
+            _ => None,
+        }
+    }
+
     /// The pre-delay as the audio thread should read it: milliseconds, with
     /// the note value already resolved against `tempo` if Sync is on.
     ///
