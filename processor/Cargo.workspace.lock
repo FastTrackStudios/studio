@@ -6657,6 +6657,7 @@ dependencies = [
  "approx",
  "dsp-core",
  "dsp-golden",
+ "libm",
 ]
 
 [[package]]

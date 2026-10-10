@@ -14,14 +14,14 @@
 //! ways no post-EQ reproduces, and those positions carry their own set of
 //! anchors.
 //!
-//! Asset format (`.micm`, little-endian), version 5:
+//! Asset format (`.micm`, little-endian), version 6 — every field present:
 //!
 //! ```text
-//! b"MICM" u32 version=5 u32 sample_rate u32 taps u32 patterns=9 u32 axes=5
+//! b"MICM" u32 version=6 u32 sample_rate u32 taps u32 patterns=9 u32 axes=5
 //! f64 low_cut_hz[4]          built-in corner, then the three switch positions
 //! f64 proximity_f0[9]        the mic's own gradient corner at each pattern step
 //! u32 proximity_law          0 = Corner, 1 = Shelf, 2 = Dynamic
-//! f64 proximity_params[4]    Corner: lo hi · Shelf: lo hi k · Dynamic: up down cap
+//! f64 proximity_params[4]    Corner: lo hi · Shelf: lo hi · Dynamic: up down cap
 //! 4 × output stage, one per low-cut position:
 //!   u32 present (0: use position 0's)
 //!   u32 poly_len, f64 poly[]  the curve: s + poly[0] s² + poly[1] s³ + …
@@ -29,17 +29,31 @@
 //!                             kind 0 high-pass (p0 = Hz), 1 peak (Hz, Q, dB),
 //!                             2 second-order high-pass (Hz, Q),
 //!                             3 the curve's input clamp (p0, not a filter)
+//!                             (the measured response, curve's high-passes
+//!                             included; the engine derives the curve's input)
 //! u32 kernel_sets            bit k: low-cut position k has its own anchor set
 //!                            (bit 0, the switch off, is always set)
-//! for each set bit k, ascending: patterns × axes × ([P; taps] [G; taps]) f32
-//! f64 delay                  (optional) the model's own fractional delay
-//! f64 shelf_k[9]             (optional, Shelf law only) its k at each pattern step
-//! f64 dual_weight[9]         (optional) the weight dual mode gives this model's
-//!                            proximity filter when crossfading it with another's
-//! f64 dual_pressure_hz       (optional) the pressure path's high-pass corner dual
-//!                            mode crossfades (same weight; 0 = none, default 10)
-//!                            (the measured response, curve's high-passes
-//!                            included; the engine derives the curve's input)
+//! for each set bit k, ascending:
+//!   u32 head, u32 modes, modes × (f64 re, f64 im)   the tail's modes z
+//!   u32 groups, groups × (u32 start, f64 pole_hz, u32 count)   Laguerre functions
+//!   patterns × axes × (P, G), each: f32 head[head], modes × (f64 re, f64 im) c,
+//!                             f64 laguerre[Σ count]
+//!                             kernel = head (to `head`) + Re Σ c·zᵐ (after it,
+//!                             m from the head's end) + Σ laguerre·φ (all taps)
+//! f64 delay                  the model's own fractional delay (samples)
+//! f64 shelf_k[9]             the Shelf law's k at each pattern step (1 otherwise)
+//! f64 dual_weight[9]         the weight dual mode gives this model's blocks when
+//!                            crossfading them with another's (a 180 backward
+//!                            model: the share v of its own gradient block
+//!                            against mic 1's)
+//! 4 × block                  the low end at each low-cut position
+//! 9 × block                  the pressure block at each pattern step
+//! u32 has_gradient, [block]  dual mode's gradient block where it is not the
+//!                            proximity law's base
+//!
+//! block: f64 gain, u32 n ≤ 3, n × (u32 kind, f64 p[3]) — kind 0 high-pass
+//!        (Hz), 1 second-order high-pass (Hz, Q), 2 first-order shelf (zero Hz,
+//!        pole Hz), 3 peak (Hz, Q, gain)
 //! ```
 
 /// Pattern steps, Omni (0) to Figure-8 (8).
@@ -80,34 +94,6 @@ pub enum ProximityLaw {
 pub type Move = (f64, f64);
 
 impl ProximityLaw {
-    /// The corner moves for a proximity setting in percent, with the law
-    /// evaluated around a `centre` corner and at `law_pattern`'s shelf
-    /// depth, while what is cancelled is the kernel's own base (`pattern`'s
-    /// corner and depth). Dual mode shares one centre between two mics; the
-    /// 180 variant's backward mic takes the forward mic's pattern.
-    #[must_use]
-    pub fn moves_around(self, percent: f64, pattern: usize, centre: f64, law_pattern: usize) -> [Option<Move>; 2] {
-        let own = self.f0(pattern);
-        let k_at = |p: usize| match self {
-            Self::Shelf { k, .. } => k.get(p).copied().unwrap_or(1.0),
-            _ => 1.0,
-        };
-        let (k_own, k_law) = (k_at(pattern), k_at(law_pattern));
-        let shifted = match self {
-            Self::Corner { lo, hi, .. } => Self::Corner { f0: [centre; PATTERNS], lo, hi },
-            Self::Shelf { lo, hi, .. } => Self::Shelf { f0: [centre; PATTERNS], lo, hi, k: [k_law; PATTERNS] },
-            Self::Dynamic { up, down, cap, .. } => Self::Dynamic { f0: [centre; PATTERNS], up, down, cap },
-        };
-        shifted.moves(percent, law_pattern).map(|step| {
-            step.map(|(zero, pole)| {
-                // replace the base where it cancels the kernel's own
-                let z = if (zero - centre).abs() < 1e-9 { own } else { zero };
-                let p = if matches!(self, Self::Shelf { .. }) && k_law.mul_add(-centre, pole).abs() < 1e-9 { k_own * own } else { pole };
-                (z, p)
-            })
-        })
-    }
-
     /// The whole gradient-path proximity filter at a setting, base
     /// included, as `(zero, pole)` sections: a high-pass at the corner
     /// (Corner), a shelf at it (Shelf), or only the moves (Dynamic, whose
@@ -124,18 +110,6 @@ impl ProximityLaw {
                 [Some((k * c, c)), None]
             }
             Self::Dynamic { .. } => self.moves(percent, pattern),
-        }
-    }
-
-    /// The section that undoes the base the kernels carry at a pattern step
-    /// (`leak` Hz stands in for a pole at DC under a high-pass's zero).
-    #[must_use]
-    pub fn base_inverse(self, pattern: usize, leak: f64) -> Option<Move> {
-        let f0 = self.f0(pattern);
-        match self {
-            Self::Corner { .. } => Some((f0, leak)),
-            Self::Shelf { k, .. } => Some((f0, k.get(pattern).copied().unwrap_or(1.0) * f0)),
-            Self::Dynamic { .. } => None,
         }
     }
 
@@ -182,6 +156,46 @@ impl ProximityLaw {
     }
 }
 
+/// One section of a low-end block, an analog prototype (bilinear,
+/// prewarped to its corners).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum LowSection {
+    /// `s / (s + ω)`.
+    HighPass(f64),
+    /// `s² / (s² + s ω/q + ω²)`.
+    HighPass2 { hz: f64, q: f64 },
+    /// `(s + ω_zero) / (s + ω_pole)`: unity at the top, `zero/pole` at DC.
+    Shelf { zero: f64, pole: f64 },
+    /// `(s² + s·√g·ω/q + ω²) / (s² + s·ω/(√g·q) + ω²)`: `gain` (linear) at
+    /// `hz`, unity away from it.
+    Peak { hz: f64, q: f64, gain: f64 },
+}
+
+/// Most sections in a low-end block.
+pub const MAX_LOW: usize = 3;
+
+/// The low end a response carries at one low-cut position.
+///
+/// Dual mode crossfades it plainly, both paths alike, after the curve. It
+/// is the built-in high-pass for a model whose switch is a corner move,
+/// the switch's own filter for one measured at every position.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct LowEnd {
+    pub gain: f64,
+    pub sections: [Option<LowSection>; MAX_LOW],
+}
+
+impl LowEnd {
+    /// No filter.
+    pub const FLAT: Self = Self { gain: 1.0, sections: [None; MAX_LOW] };
+
+    /// A first-order high-pass at `hz`.
+    #[must_use]
+    pub const fn high_pass(hz: f64) -> Self {
+        Self { gain: 1.0, sections: [Some(LowSection::HighPass(hz)), None, None] }
+    }
+}
+
 /// One modelled mic.
 #[derive(Clone, Debug)]
 pub struct MicModel {
@@ -202,9 +216,13 @@ pub struct MicModel {
     /// Dual mode's weight on this model's proximity filter, per pattern
     /// step (relative to Sphere Linear's; 1 when the file gives none).
     pub dual_weight: [f64; PATTERNS],
-    /// Dual mode's pressure-path block: a high-pass at this corner (0: none)
-    /// crossfaded with the same weights (Sphere Linear's is 10 Hz).
-    pub dual_pressure_hz: f64,
+    /// The low-end block at each low-cut position.
+    low_ends: [LowEnd; LOW_CUTS],
+    /// Dual mode's pressure block at each pattern step.
+    pressure_blocks: [LowEnd; PATTERNS],
+    /// Dual mode's gradient block, where it is not the proximity law's
+    /// base (the dynamics': a shelf).
+    pub dual_gradient: Option<LowEnd>,
 }
 
 /// One section after the output curve.
@@ -229,8 +247,8 @@ pub struct OutputStage {
     pub clamp: f64,
 }
 
-/// The fractional delay nearly every model carries (samples).
-pub const MODEL_DELAY: f64 = 0.146_03;
+/// The asset format version this reads.
+pub const VERSION: u32 = 6;
 
 /// Highest curve coefficient stored (`s⁷`).
 pub const MAX_POLY: usize = 6;
@@ -250,6 +268,7 @@ pub enum ModelError {
 struct Reader<'a> {
     bytes: &'a [u8],
     at: usize,
+    sample_rate: f64,
 }
 
 impl Reader<'_> {
@@ -279,6 +298,127 @@ impl Reader<'_> {
     }
 }
 
+/// One block: a gain and up to [`MAX_LOW`] sections.
+fn read_block(r: &mut Reader<'_>) -> Result<LowEnd, ModelError> {
+    let gain = r.f64()?;
+    let n = dsp_core::u32_to_index(r.u32()?);
+    if n > MAX_LOW {
+        return Err(ModelError::BadShape);
+    }
+    let mut sections = [None; MAX_LOW];
+    for section in sections.iter_mut().take(n) {
+        let kind = r.u32()?;
+        let (first, second, third) = (r.f64()?, r.f64()?, r.f64()?);
+        *section = Some(match kind {
+            0 => LowSection::HighPass(first),
+            1 => LowSection::HighPass2 { hz: first, q: second },
+            2 => LowSection::Shelf { zero: first, pole: second },
+            3 => LowSection::Peak { hz: first, q: second, gain: third },
+            _ => return Err(ModelError::BadShape),
+        });
+    }
+    Ok(LowEnd { gain, sections })
+}
+
+/// Most tail modes a kernel set may carry.
+const MAX_MODES: usize = 256;
+
+/// Most Laguerre functions a kernel set may carry.
+const MAX_LAGUERRE: usize = 64;
+
+/// One kernel set, expanded to `kernels × taps`: each kernel is stored as
+/// its first `head` taps, a tail `Re Σ c_k z_kᵐ` over modes the set shares
+/// (`m` counted from the end of the head), and a sum of discrete Laguerre
+/// functions over the whole kernel (the low-end correction, exact).
+fn read_set(r: &mut Reader<'_>, taps: usize, kernels: usize) -> Result<Vec<f32>, ModelError> {
+    let head = dsp_core::u32_to_index(r.u32()?);
+    let modes = dsp_core::u32_to_index(r.u32()?);
+    if head > taps || modes > MAX_MODES {
+        return Err(ModelError::BadShape);
+    }
+    let mut z = Vec::with_capacity(modes);
+    for _ in 0..modes {
+        z.push((r.f64()?, r.f64()?));
+    }
+    let basis = read_laguerre(r, taps)?;
+    let mut out = Vec::with_capacity(kernels.checked_mul(taps).ok_or(ModelError::BadShape)?);
+    let mut c = Vec::with_capacity(modes);
+    let mut kernel = vec![0.0f64; taps];
+    for _ in 0..kernels {
+        for (k, v) in kernel.iter_mut().zip(r.f32s(head)?) {
+            *k = f64::from(v);
+        }
+        c.clear();
+        for _ in 0..modes {
+            c.push((r.f64()?, r.f64()?));
+        }
+        // w_k = c_k z_kᵐ, stepped one sample at a time
+        let mut w = c.clone();
+        for k in kernel.iter_mut().skip(head) {
+            let mut sum = 0.0;
+            for (wk, &(zr, zi)) in w.iter_mut().zip(&z) {
+                sum += wk.0;
+                *wk = (wk.0.mul_add(zr, -(wk.1 * zi)), wk.0.mul_add(zi, wk.1 * zr));
+            }
+            *k = sum;
+        }
+        for phi in &basis {
+            let weight = r.f64()?;
+            for (k, p) in kernel.iter_mut().zip(phi) {
+                *k = weight.mul_add(*p, *k);
+            }
+        }
+        #[expect(clippy::cast_possible_truncation, clippy::as_conversions, reason = "kernels are stored as f32")]
+        out.extend(kernel.iter().map(|&v| v as f32));
+    }
+    Ok(out)
+}
+
+/// The set's Laguerre functions: groups of (start sample, pole Hz, count),
+/// each `√(1 − a²) aⁿ` from `start` then repeated all-passes
+/// `(−a + z⁻¹)/(1 − a z⁻¹)`, `a = e^(−2π·pole/fs)` — the functions the
+/// low-end correction was fitted with.
+fn read_laguerre(r: &mut Reader<'_>, taps: usize) -> Result<Vec<Vec<f64>>, ModelError> {
+    let groups = dsp_core::u32_to_index(r.u32()?);
+    let mut basis = Vec::new();
+    for _ in 0..groups {
+        let start = dsp_core::u32_to_index(r.u32()?);
+        let pole_hz = r.f64()?;
+        let count = dsp_core::u32_to_index(r.u32()?);
+        if start > taps || basis.len().saturating_add(count) > MAX_LAGUERRE {
+            return Err(ModelError::BadShape);
+        }
+        let a = (-core::f64::consts::TAU * pole_hz / r.sample_rate).exp();
+        let mut v = vec![0.0; taps];
+        let mut g = a.mul_add(-a, 1.0).sqrt();
+        for x in v.iter_mut().skip(start) {
+            *x = g;
+            g *= a;
+        }
+        for _ in 0..count {
+            let mut next = vec![0.0; taps];
+            let (mut x1, mut y1) = (0.0, 0.0);
+            for (y, &x) in next.iter_mut().zip(&v) {
+                let out = a.mul_add(y1, (-a).mul_add(x, x1));
+                *y = out;
+                x1 = x;
+                y1 = out;
+            }
+            basis.push(core::mem::replace(&mut v, next));
+        }
+    }
+    Ok(basis)
+}
+
+/// Nine values, one per pattern step.
+fn read_table(r: &mut Reader<'_>) -> Result<[f64; PATTERNS], ModelError> {
+    let mut table = [0.0; PATTERNS];
+    for v in &mut table {
+        *v = r.f64()?;
+    }
+    Ok(table)
+}
+
 impl MicModel {
     /// Parse a `.micm` asset.
     ///
@@ -286,14 +426,15 @@ impl MicModel {
     /// The asset is not version 5 of the format, does not have the
     /// 9 × 5 layout, or is shorter than its header says.
     pub fn from_bytes(bytes: &[u8]) -> Result<Self, ModelError> {
-        let mut r = Reader { bytes, at: 0 };
+        let mut r = Reader { bytes, at: 0, sample_rate: 48_000.0 };
         if r.take::<4>()? != *b"MICM" {
             return Err(ModelError::BadMagic);
         }
-        if r.u32()? != 5 {
+        if r.u32()? != VERSION {
             return Err(ModelError::BadVersion);
         }
         let sample_rate = f64::from(r.u32()?);
+        r.sample_rate = sample_rate;
         let taps = dsp_core::u32_to_index(r.u32()?);
         if dsp_core::u32_to_index(r.u32()?) != PATTERNS || dsp_core::u32_to_index(r.u32()?) != AXES {
             return Err(ModelError::BadShape);
@@ -314,7 +455,7 @@ impl MicModel {
         let [first, second, third, _] = params;
         let proximity = match law {
             0 => ProximityLaw::Corner { f0, lo: first, hi: second },
-            1 => ProximityLaw::Shelf { f0, lo: first, hi: second, k: [third; PATTERNS] },
+            1 => ProximityLaw::Shelf { f0, lo: first, hi: second, k: [1.0; PATTERNS] },
             2 => ProximityLaw::Dynamic { f0, up: first, down: second, cap: third },
             _ => return Err(ModelError::BadShape),
         };
@@ -359,29 +500,32 @@ impl MicModel {
             .and_then(|n| n.checked_mul(2))
             .and_then(|n| n.checked_mul(taps))
             .ok_or(ModelError::BadShape)?;
+        let kernels = count.checked_div(taps).unwrap_or(0);
         let mut sets: [Option<Vec<f32>>; LOW_CUTS] = Default::default();
         let mut bit = 1u32;
         for set in &mut sets {
             if mask & bit != 0 {
-                *set = Some(r.f32s(count)?);
+                *set = Some(read_set(&mut r, taps, kernels)?);
             }
             bit = bit.wrapping_shl(1);
         }
-        let delay = r.f64().unwrap_or(MODEL_DELAY);
+        let delay = r.f64()?;
+        let shelf_k = read_table(&mut r)?;
         let mut proximity = proximity;
         if let ProximityLaw::Shelf { k, .. } = &mut proximity {
-            let mut table = *k;
-            if table.iter_mut().try_for_each(|v| r.f64().map(|x| *v = x)).is_ok() {
-                *k = table;
-            }
+            *k = shelf_k;
         }
-        let mut dual_weight = [1.0; PATTERNS];
-        let mut table = dual_weight;
-        if table.iter_mut().try_for_each(|v| r.f64().map(|x| *v = x)).is_ok() {
-            dual_weight = table;
+        let dual_weight = read_table(&mut r)?;
+        let mut low_ends = [LowEnd::FLAT; LOW_CUTS];
+        for block in &mut low_ends {
+            *block = read_block(&mut r)?;
         }
-        let dual_pressure_hz = r.f64().unwrap_or(10.0);
-        Ok(Self { sample_rate, taps, sets, low_cut_hz, proximity, stages, delay, dual_weight, dual_pressure_hz })
+        let mut pressure_blocks = [LowEnd::FLAT; PATTERNS];
+        for block in &mut pressure_blocks {
+            *block = read_block(&mut r)?;
+        }
+        let dual_gradient = if r.u32()? != 0 { Some(read_block(&mut r)?) } else { None };
+        Ok(Self { sample_rate, taps, sets, low_cut_hz, proximity, stages, delay, dual_weight, low_ends, pressure_blocks, dual_gradient })
     }
 
     /// The output stage at a low-cut position.
@@ -397,14 +541,23 @@ impl MicModel {
         self.sets.get(low_cut).is_some_and(Option::is_some)
     }
 
-    /// The high-pass the response carries at a low-cut position, as dual
-    /// mode crossfades it: the built-in corner (moved by the switch) for a
-    /// model whose low cut is a corner move, 10 Hz for one measured with its
-    /// own kernels at every position.
+    /// The low-end block at a low-cut position, as dual mode crossfades it.
     #[must_use]
-    pub fn low_end_corner(&self, position: usize) -> f64 {
-        let measured = (1..LOW_CUTS).any(|k| self.has_set(k));
-        if measured { 10.0 } else { self.low_cut_hz.get(position).copied().unwrap_or(10.0).max(1.0) }
+    pub fn low_end(&self, position: usize) -> LowEnd {
+        self.low_ends.get(position).copied().unwrap_or(LowEnd::FLAT)
+    }
+
+    /// Dual mode's pressure block at a pattern step.
+    #[must_use]
+    pub fn dual_pressure(&self, pattern: usize) -> LowEnd {
+        self.pressure_blocks.get(pattern).copied().unwrap_or(LowEnd::FLAT)
+    }
+
+    /// The low-end block the kernels at a low-cut position carry: the
+    /// position's own where it has anchors, else the off set's.
+    #[must_use]
+    pub fn carried_low_end(&self, position: usize) -> LowEnd {
+        self.low_end(if self.has_set(position) { position } else { 0 })
     }
 
     /// The `(P, G)` kernels at one low-cut position, pattern step and axis

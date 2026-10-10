@@ -22,9 +22,9 @@
 //! because its rear path looks ahead by that much.
 
 use crate::conv::Convolver;
-use crate::model::{AXES, AXIS_STEP_DEG, MicModel, PATTERNS};
+use crate::model::{AXES, AXIS_STEP_DEG, MicModel, PATTERNS, ProximityLaw};
 use crate::model::{MAX_POLY, MAX_POST, PostSection};
-use crate::model::Move;
+use crate::model::{LowEnd, LowSection, MAX_LOW, Move};
 use crate::section::{Biquad, CornerShift};
 
 
@@ -87,8 +87,13 @@ struct Path {
     /// Dual mode: the other mic's proximity filter over this kernel's own
     /// base, and the weights the two branches are crossfaded with.
     cross: [CornerShift; 3],
-    /// … and the pressure path's: its high-pass moved to the other mic's.
-    pressure_cross: CornerShift,
+    /// … the gradient blocks run with those moves where a model's dual
+    /// gradient block is not its law's base …
+    gradient_own: LowChain,
+    gradient_cross: LowChain,
+    /// … and the pressure path's blocks, this mic's and the other's.
+    pressure_own: LowChain,
+    pressure_cross: LowChain,
     weights: Option<[f64; 2]>,
 }
 
@@ -99,7 +104,10 @@ impl Path {
             conv_g: Convolver::new(taps),
             proximity: [CornerShift::identity(); 3],
             cross: [CornerShift::identity(); 3],
-            pressure_cross: CornerShift::identity(),
+            gradient_own: LowChain::identity(),
+            gradient_cross: LowChain::identity(),
+            pressure_own: LowChain::identity(),
+            pressure_cross: LowChain::identity(),
             weights: None,
         }
     }
@@ -110,8 +118,10 @@ impl Path {
         let p = self.conv_p.process(sum);
         match self.weights {
             Some([a, b]) => {
-                let gradient = a.mul_add(own, b * self.cross.iter_mut().fold(g, |x, sec| sec.process(x)));
-                a.mul_add(p, b * self.pressure_cross.process(p)) + gradient
+                let own = self.gradient_own.process(own);
+                let cross = self.gradient_cross.process(self.cross.iter_mut().fold(g, |x, sec| sec.process(x)));
+                let gradient = a.mul_add(own, b * cross);
+                a.mul_add(self.pressure_own.process(p), b * self.pressure_cross.process(p)) + gradient
             }
             None => p + own,
         }
@@ -122,7 +132,69 @@ impl Path {
         self.conv_g.reset();
         self.proximity.iter_mut().for_each(CornerShift::reset);
         self.cross.iter_mut().for_each(CornerShift::reset);
+        self.gradient_own.reset();
+        self.gradient_cross.reset();
+        self.pressure_own.reset();
         self.pressure_cross.reset();
+    }
+}
+
+/// A low-end block running.
+#[derive(Clone, Copy, Debug)]
+struct LowChain {
+    gain: f64,
+    sections: [Biquad; MAX_LOW],
+}
+
+impl LowChain {
+    const fn identity() -> Self {
+        Self { gain: 1.0, sections: [Biquad::identity(); MAX_LOW] }
+    }
+
+    fn design(block: LowEnd, sample_rate: f64) -> Self {
+        let mut sections = [Biquad::identity(); MAX_LOW];
+        for (out, section) in sections.iter_mut().zip(block.sections) {
+            *out = match section {
+                Some(LowSection::HighPass(hz)) => Biquad::high_pass(hz, sample_rate),
+                Some(LowSection::HighPass2 { hz, q }) => Biquad::high_pass2(hz, q, sample_rate),
+                Some(LowSection::Shelf { zero, pole }) => Biquad::shelf(zero, pole, sample_rate),
+                Some(LowSection::Peak { hz, q, gain }) => Biquad::peak_analog(hz, q, gain, sample_rate),
+                None => Biquad::identity(),
+            };
+        }
+        Self { gain: block.gain, sections }
+    }
+
+    /// New coefficients, state kept.
+    fn retune(&mut self, to: Self) {
+        self.gain = to.gain;
+        for (section, new) in self.sections.iter_mut().zip(to.sections) {
+            section.retune(new);
+        }
+    }
+
+    /// The inverse, a high-pass's zeros at DC leaked to `leak`.
+    fn inverse(self, leak: f64) -> Self {
+        Self { gain: 1.0 / self.gain, sections: self.sections.map(|s| s.inverse(leak)) }
+    }
+
+    /// Divide an impulse response by the block, in place.
+    fn divide(&self, h: &mut [f64]) {
+        for section in &self.sections {
+            section.divide(h);
+        }
+        let inv = 1.0 / self.gain;
+        for v in h.iter_mut() {
+            *v *= inv;
+        }
+    }
+
+    fn process(&mut self, x: f64) -> f64 {
+        self.sections.iter_mut().fold(x * self.gain, |y, s| s.process(y))
+    }
+
+    fn reset(&mut self) {
+        self.sections.iter_mut().for_each(Biquad::reset);
     }
 }
 
@@ -131,23 +203,6 @@ fn design(section: PostSection, sample_rate: f64) -> Biquad {
         PostSection::HighPass(hz) => Biquad::high_pass(hz, sample_rate),
         PostSection::Peak { hz, q, db } => Biquad::peak(hz, q, db, sample_rate),
         PostSection::HighPass2 { hz, q } => Biquad::high_pass2(hz, q, sample_rate),
-    }
-}
-
-/// Where a cancelled proximity high-pass's zero at DC goes (Hz).
-const BASE_LEAK_HZ: f64 = 0.05;
-
-/// Where the pressure block's missing high-pass goes when the other mic has
-/// none (Hz): one pole, so far lower than [`BASE_LEAK_HZ`] is safe.
-const PRESSURE_LEAK_HZ: f64 = 0.005;
-
-/// A base's inverse followed by another filter, with a leaked DC pole and a
-/// following high-pass's zero at DC cancelled exactly: Corner to Corner is
-/// then one clean corner move (the leak alone costs −52 dB at 20 Hz).
-fn merge(inverse: Option<Move>, [a, b]: [Option<Move>; 2]) -> [Option<Move>; 3] {
-    match (inverse, a) {
-        (Some((zero, pole)), Some((0.0, next))) if (pole - BASE_LEAK_HZ).abs() < 1e-12 => [Some((zero, next)), b, None],
-        _ => [inverse, a, b],
     }
 }
 
@@ -172,8 +227,15 @@ pub struct MicChain {
     settings: Settings,
     linear: Path,
     low_cut: CornerShift,
-    /// Dual mode: this response's low end moved to the other mic's.
-    low_cross: CornerShift,
+    /// Dual mode: the kernels run without their low end (see
+    /// [`DualAdjust::cross_low`]); this mic's block and the other's, which
+    /// the mix crossfades, …
+    low_own: LowChain,
+    low_other: LowChain,
+    /// … and the block the kernels carried, put back for the curve's input
+    /// and taken out of its distortion terms.
+    carried: LowChain,
+    carried_inv: LowChain,
     /// The sections after the curve, on the distortion terms.
     post: [Biquad; MAX_POST],
     /// Their inverses, run on the linear output: the curve's input.
@@ -197,10 +259,10 @@ pub struct MicChain {
 ///
 /// Each model carries its own fractional delay (linear interpolation;
 /// 0.146 samples for all but Sphere Diffuse), and in dual mode both are
-/// re-timed to the mix-weighted delay;
-/// Align moves one mic by distance / 340 m/s with a near-ideal fractional
-/// delay; and both share one proximity corner, the mix-weighted mean of
-/// their own.
+/// re-timed to the mix-weighted delay; Align moves one mic by
+/// distance / 340 m/s with a near-ideal fractional delay; and the blocks
+/// (low end, pressure, gradient) are divided out of the kernels and
+/// crossfaded with the other mic's.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct DualAdjust {
     /// The model's own delay, samples (what the kernels carry).
@@ -209,27 +271,23 @@ pub struct DualAdjust {
     pub delay: f64,
     /// Extra delay (Align), samples, ≥ 0.
     pub align: f64,
-    /// Shared proximity corner, if any.
-    pub centre: Option<f64>,
-    /// The pattern step whose proximity base (corner, shelf depth) the mic
-    /// takes, if not its own.
-    pub law_pattern: Option<usize>,
-    /// Another mic's proximity filter (law and pattern step) run in place
-    /// of this mic's own: the 180 variant's backward mic runs mic 1's.
-    pub foreign: Option<(crate::model::ProximityLaw, usize)>,
     /// Dual mode: the other mic's proximity filter (law, step) crossfaded
     /// with this mic's own, with weights `[own, other]`.
     pub cross: Option<(crate::model::ProximityLaw, usize, [f64; 2])>,
-    /// Dual mode: the other mic's low-end corner at its low-cut position.
-    pub cross_low: Option<f64>,
-    /// Dual mode: the other mic's pressure-path corner.
-    pub cross_pressure: Option<f64>,
+    /// Dual mode: the other mic's low-end block at its low-cut position.
+    /// The kernels then run with their own low end divided out, and the
+    /// mix crossfades the two blocks.
+    pub cross_low: Option<LowEnd>,
+    /// Dual mode: the other mic's pressure-path block …
+    pub cross_pressure: Option<LowEnd>,
+    /// … and its gradient block, where that is not its law's base.
+    pub cross_gradient: Option<LowEnd>,
 }
 
 impl DualAdjust {
     #[must_use]
     pub const fn none(own_delay: f64) -> Self {
-        Self { own_delay, delay: own_delay, align: 0.0, centre: None, law_pattern: None, foreign: None, cross: None, cross_low: None, cross_pressure: None }
+        Self { own_delay, delay: own_delay, align: 0.0, cross: None, cross_low: None, cross_pressure: None, cross_gradient: None }
     }
 }
 
@@ -299,7 +357,10 @@ impl MicChain {
             linear: Path::new(taps),
             inverse: [Biquad::identity(); MAX_POST],
             low_cut: CornerShift::identity(),
-            low_cross: CornerShift::identity(),
+            low_own: LowChain::identity(),
+            low_other: LowChain::identity(),
+            carried: LowChain::identity(),
+            carried_inv: LowChain::identity(),
             post: [Biquad::identity(); MAX_POST],
             poly: [0.0; MAX_POLY],
             clamp: f64::INFINITY,
@@ -354,17 +415,11 @@ impl MicChain {
         }
         let sr = self.model.sample_rate;
         let law = self.model.proximity;
-        let law_pattern = self.dual.law_pattern.unwrap_or(s.pattern);
         let pad = |[a, b]: [Option<Move>; 2]| [a, b, None];
-        let moves = match (self.dual.foreign, self.dual.centre) {
-            (Some((other, pattern)), _) => {
-                // the kernels' own base out, the other mic's whole filter in
-                merge(law.base_inverse(s.pattern, BASE_LEAK_HZ), other.filter(s.proximity, pattern))
-            }
-            (None, Some(centre)) => pad(law.moves_around(s.proximity, s.pattern, centre, law_pattern)),
-            (None, None) if law_pattern != s.pattern => pad(law.moves_around(s.proximity, s.pattern, law.f0(law_pattern), law_pattern)),
-            (None, None) => pad(law.moves(s.proximity, s.pattern)),
-        };
+        // In dual mode the kernels run without their proximity base, so this
+        // is the mic's whole filter (its moves alone where a dual gradient
+        // block runs beside them); otherwise the moves from the base.
+        let moves = pad(if self.dual.cross.is_some() && self.model.dual_gradient.is_none() { law.filter(s.proximity, s.pattern) } else { law.moves(s.proximity, s.pattern) });
         let path = &mut self.linear;
         for (section, step) in path.proximity.iter_mut().zip(moves) {
             match step {
@@ -373,14 +428,19 @@ impl MicChain {
             }
         }
         path.weights = self.dual.cross.map(|(_, _, w)| w);
-        match self.dual.cross_pressure {
-            // a flat block's missing high-pass is a pole at DC: leaked
-            Some(target) => path.pressure_cross.set(self.model.dual_pressure_hz, target.max(PRESSURE_LEAK_HZ), sr),
-            None => path.pressure_cross.make_identity(),
-        }
+        // dual mode: the pressure path's and the gradient path's blocks,
+        // this mic's and the other's (the kernels run without theirs)
+        let flat = LowChain::identity();
+        let crossed = self.dual.cross.is_some();
+        let pick = |block: Option<LowEnd>| if crossed { block.map_or(flat, |b| LowChain::design(b, sr)) } else { flat };
+        path.pressure_own.retune(pick(Some(self.model.dual_pressure(s.pattern))));
+        path.pressure_cross.retune(pick(self.dual.cross_pressure));
+        path.gradient_own.retune(pick(self.model.dual_gradient));
+        path.gradient_cross.retune(pick(self.dual.cross_gradient));
         if let Some((other, pattern, _)) = self.dual.cross {
-            // this kernel's own base out, the other mic's whole filter in
-            let steps = merge(law.base_inverse(s.pattern, BASE_LEAK_HZ), other.filter(s.proximity, pattern));
+            // the kernels run without their base: the other mic's whole
+            // filter (its moves, where its gradient block runs alongside)
+            let steps = pad(if self.dual.cross_gradient.is_some() { other.moves(s.proximity, pattern) } else { other.filter(s.proximity, pattern) });
             for (section, step) in path.cross.iter_mut().zip(steps) {
                 match step {
                     Some((zero, pole)) => section.set(zero, pole, sr),
@@ -397,16 +457,20 @@ impl MicChain {
         } else {
             self.low_cut.set(off, cut.get(s.low_cut).copied().unwrap_or(off), sr);
         }
-        // dual mode: from the low end this response carries to the other mic's
-        match self.dual.cross_low {
-            Some(target) => self.low_cross.set(self.model.low_end_corner(0), target, sr),
-            None => self.low_cross.make_identity(),
+        let leak = core::f64::consts::TAU * LEAK_HZ / sr;
+        // dual mode: this mic's low end and the other's, crossfaded after
+        // the kernels (which run without theirs)
+        if let Some(other) = self.dual.cross_low {
+            self.low_own.retune(LowChain::design(self.model.low_end(s.low_cut), sr));
+            self.low_other.retune(LowChain::design(other, sr));
+            let carried = LowChain::design(self.model.carried_low_end(s.low_cut), sr);
+            self.carried.retune(carried);
+            self.carried_inv.retune(carried.inverse(leak));
         }
         // By reference: this runs on the audio thread when a control moves.
         let stage = self.model.stage(s.low_cut);
         self.poly = stage.map_or([0.0; MAX_POLY], |st| st.poly);
         self.clamp = stage.map_or(f64::INFINITY, |st| st.clamp);
-        let leak = core::f64::consts::TAU * LEAK_HZ / sr;
         for (i, (section, inverse)) in self.post.iter_mut().zip(&mut self.inverse).enumerate() {
             *section = stage.and_then(|st| st.post.get(i)).map_or_else(Biquad::identity, |&p| design(p, sr));
             *inverse = section.inverse(leak);
@@ -437,6 +501,31 @@ impl MicChain {
             shift(&mut self.kernel_p, &mut self.scratch, self.dual.align);
             shift(&mut self.kernel_g, &mut self.scratch, self.dual.align);
         }
+        let sr = self.model.sample_rate;
+        if self.dual.cross_low.is_some() {
+            // the low end comes back as a crossfaded block after the curve
+            let carried = LowChain::design(self.model.carried_low_end(cut), sr);
+            carried.divide(&mut self.kernel_p);
+            carried.divide(&mut self.kernel_g);
+        }
+        if self.dual.cross.is_some() {
+            // so do the proximity base and the pressure block, crossfaded
+            // with weights in the paths
+            let base = match (self.model.dual_gradient, self.model.proximity) {
+                (Some(block), _) => Some(LowChain::design(block, sr)),
+                (None, ProximityLaw::Corner { .. }) => Some(LowChain::design(LowEnd::high_pass(self.model.proximity.f0(pattern)), sr)),
+                (None, ProximityLaw::Shelf { k, .. }) => {
+                    let f0 = self.model.proximity.f0(pattern);
+                    let zero = k.get(pattern).copied().unwrap_or(1.0) * f0;
+                    Some(LowChain::design(LowEnd { gain: 1.0, sections: [Some(LowSection::Shelf { zero, pole: f0 }), None, None] }, sr))
+                }
+                (None, ProximityLaw::Dynamic { .. }) => None,
+            };
+            if let Some(base) = base {
+                base.divide(&mut self.kernel_g);
+            }
+            LowChain::design(self.model.dual_pressure(pattern), sr).divide(&mut self.kernel_p);
+        }
         self.linear.conv_p.set_kernel(&self.kernel_p);
         self.linear.conv_g.set_kernel(&self.kernel_g);
     }
@@ -445,6 +534,10 @@ impl MicChain {
         self.linear.reset();
         self.inverse.iter_mut().for_each(Biquad::reset);
         self.low_cut.reset();
+        self.low_own.reset();
+        self.low_other.reset();
+        self.carried.reset();
+        self.carried_inv.reset();
         self.post.iter_mut().for_each(Biquad::reset);
     }
 
@@ -465,12 +558,17 @@ impl MicChain {
             // (`K/B`), as a running filter: a kernel truncated to the
             // measured window got its sub-audio gain wrong, and program
             // material's content below 5 Hz then cost dynamics 30 dB.
-            let level = self.inverse.iter_mut().fold(y, |x, sec| sec.process(x)).clamp(-self.clamp, self.clamp);
+            // In dual mode the kernels ran without their low end: put it
+            // back for the level, and take it out of the terms.
+            let divided = self.dual.cross_low.is_some();
+            let full = if divided { self.carried.process(y) } else { y };
+            let level = self.inverse.iter_mut().fold(full, |x, sec| sec.process(x)).clamp(-self.clamp, self.clamp);
             // a₂s² + a₃s³ + … by Horner, through the high-passes after
             // the curve.
             let higher = self.poly.iter().rev().fold(0.0_f64, |acc, &a| acc.mul_add(level, a));
             let terms = level * level * higher;
-            y += self.post.iter_mut().fold(terms, |x, sec| sec.process(x));
+            let terms = self.post.iter_mut().fold(terms, |x, sec| sec.process(x));
+            y += if divided { self.carried_inv.process(terms) } else { terms };
         }
         y
     }
@@ -530,20 +628,20 @@ impl DualMic {
             let g1 = (1.0 - m) * self.mic1.model().dual_weight.get(p1).copied().unwrap_or(1.0);
             let g2 = m * self.mic2.model().dual_weight.get(p2).copied().unwrap_or(1.0);
             let total = g1 + g2;
-            let (b1, b2) = if total > 0.0 { (g1 / total, g2 / total) } else { (1.0 - m, m) };
-            // Validated between Corner and Shelf models; a Dynamic one (flat
-            // base) needs a leaky inverse that blows up the kernels' residual
-            // low end, and its dual block is not identified yet.
-            let dynamic = |l: crate::model::ProximityLaw| matches!(l, crate::model::ProximityLaw::Dynamic { .. });
-            let same = (law1 == law2 && p1 == p2) || dynamic(law1) || dynamic(law2);
+            let [b1, b2] = if total > 0.0 { [g1 / total, g2 / total] } else { [1.0 - m, m] };
+            // identical blocks crossfade to themselves (the law and step fix
+            // the gradient block; the pressure blocks can still differ)
+            let (m1, m2) = (self.mic1.model(), self.mic2.model());
+            let same = law1 == law2 && p1 == p2 && m1.dual_pressure(p1) == m2.dual_pressure(p1) && m1.dual_gradient == m2.dual_gradient;
             let cross1 = (!same).then_some((law2, p2, [b1, b2]));
             let cross2 = (!same).then_some((law1, p1, [b2, b1]));
-            let (pr1, pr2) = (self.mic1.model().dual_pressure_hz, self.mic2.model().dual_pressure_hz);
-            let end_1 = self.mic1.model().low_end_corner(self.mic1.settings().low_cut);
-            let end_2 = self.mic2.model().low_end_corner(self.mic2.settings().low_cut);
+            let (pr1, pr2) = (self.mic1.model().dual_pressure(p1), self.mic2.model().dual_pressure(p2));
+            let (gr1, gr2) = (self.mic1.model().dual_gradient, self.mic2.model().dual_gradient);
+            let end_1 = self.mic1.model().low_end(self.mic1.settings().low_cut);
+            let end_2 = self.mic2.model().low_end(self.mic2.settings().low_cut);
             let align = s.align_cm / 100.0 / 340.0 * sr;
-            self.mic1.set_dual(DualAdjust { delay, align: (-align).max(0.0), cross: cross1, cross_low: Some(end_2), cross_pressure: (!same).then_some(pr2), ..DualAdjust::none(d1) });
-            self.mic2.set_dual(DualAdjust { delay, align: align.max(0.0), cross: cross2, cross_low: Some(end_1), cross_pressure: (!same).then_some(pr1), ..DualAdjust::none(d2) });
+            self.mic1.set_dual(DualAdjust { delay, align: (-align).max(0.0), cross: cross1, cross_low: Some(end_2), cross_pressure: (!same).then_some(pr2), cross_gradient: gr2.filter(|_| !same), ..DualAdjust::none(d1) });
+            self.mic2.set_dual(DualAdjust { delay, align: align.max(0.0), cross: cross2, cross_low: Some(end_1), cross_pressure: (!same).then_some(pr1), cross_gradient: gr1.filter(|_| !same), ..DualAdjust::none(d2) });
         } else {
             self.mic1.set_dual(DualAdjust::none(d1));
             self.mic2.set_dual(DualAdjust::none(d2));
@@ -562,8 +660,8 @@ impl DualMic {
                 let w = self.mix;
                 let a = self.mic1.process_uncut(front, rear);
                 let b = self.mic2.process_uncut(front, rear);
-                let a = (1.0 - w).mul_add(self.mic1.low_cut.process(a), w * self.mic1.low_cross.process(a));
-                let b = w.mul_add(self.mic2.low_cut.process(b), (1.0 - w) * self.mic2.low_cross.process(b));
+                let a = (1.0 - w).mul_add(self.mic1.low_own.process(a), w * self.mic1.low_other.process(a));
+                let b = w.mul_add(self.mic2.low_own.process(b), (1.0 - w) * self.mic2.low_other.process(b));
                 (1.0 - w).mul_add(a, w * b) * self.mic1.out_gain
             }
         }
@@ -603,19 +701,21 @@ impl StereoMic {
     }
 
     /// Apply the 180 controls; call it again after changing either mic's
-    /// settings (the backward mic takes the forward mic's proximity base).
+    /// settings (the backward mic's gradient block follows mic 1's).
     pub fn set(&mut self, s: StereoSettings) {
         let own = self.backward.model().delay;
-        let forward = self.forward.settings().pattern;
-        // the backward mic runs the forward mic's proximity filter (measured:
-        // its gradient low end follows mic 1's model, law and pattern)
-        let law = self.forward.model().proximity;
-        let adjust = if law == self.backward.model().proximity {
-            // one model: its own law at mic 1's step, nothing to cancel
-            DualAdjust { law_pattern: Some(forward), ..DualAdjust::none(own) }
-        } else {
-            // two models: −20..−50 dB; the coupling is not fully identified
-            DualAdjust { foreign: Some((law, forward)), ..DualAdjust::none(own) }
+        let (front, back) = (self.forward.model(), self.backward.model());
+        let (p1, p2) = (self.forward.settings().pattern, self.backward.settings().pattern);
+        // The backward mic's gradient block is a fixed blend of its own and
+        // mic 1's — (1 − v)·F₁ + v·F₂, no model weights — with v per backward
+        // model and pattern step (≈ ½ at figure-8, its file's dual weights);
+        // the pressure path keeps its own block.
+        let v = back.dual_weight.get(p2).copied().unwrap_or(1.0);
+        let adjust = DualAdjust {
+            cross: Some((front.proximity, p1, [v, 1.0 - v])),
+            cross_pressure: Some(back.dual_pressure(p2)),
+            cross_gradient: front.dual_gradient,
+            ..DualAdjust::none(own)
         };
         self.backward.set_dual(adjust);
         let p = s.pan.clamp(-1.0, 1.0);

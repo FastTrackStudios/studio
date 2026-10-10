@@ -19,10 +19,17 @@
 // even though they are allowed workspace-wide off the audio thread.
 #![deny(clippy::disallowed_methods)]
 
+extern crate alloc;
+
 use dsp_core::num;
 
+pub mod bluebox;
+pub mod curve_table;
+pub mod deluxe;
 pub mod digital;
 pub mod emphasis;
+pub mod halfband;
+pub mod oversample;
 pub mod preamp;
 
 /// Saturation transfer-curve family.
