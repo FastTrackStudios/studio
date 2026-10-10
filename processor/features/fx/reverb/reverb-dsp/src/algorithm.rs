@@ -57,7 +57,7 @@ impl AlgorithmType {
             Self::Shimmer => -3.61,
             Self::Chorale => -3.13,
             Self::Magneto => 8.39,
-            Self::NonLinear => 16.67,
+            Self::NonLinear => 2.73,
             // Swell renders silence at every setting — a defect of its own,
             // which a trim cannot repair and should not paper over.
             Self::Swell => 0.0,

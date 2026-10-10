@@ -697,14 +697,18 @@ impl ReverbChain {
     /// for a caller that pushes its params in one go and updates once.
     ///
     /// The time is the engine's RT60 across its own range, compensated for
-    /// the decay tilt. `None` for an engine with no time model: a
-    /// convolution's tail is its IR's; Magneto's heads, Reflections and
-    /// Freeverb set a feedback; Non-Linear's decay is its envelope window,
-    /// but its tail does not end there (a 0.1 s window rings ~0.43 s, a 2 s
-    /// one past 3 s), so it has no time to promise yet. A time outside the
-    /// engine's reach saturates at the nearest end.
+    /// the decay tilt; for Non-Linear, the window each hit opens — where
+    /// its gate shuts ([`crate::algorithms::nonlinear::WINDOW_S`]). `None`
+    /// for an engine with no time model: a convolution's tail is its IR's;
+    /// Magneto's heads, Reflections and Freeverb set a feedback. A time
+    /// outside the engine's reach saturates at the nearest end.
     #[must_use]
     pub fn decay_for_seconds(&self, t60_s: f64) -> Option<f64> {
+        if self.algorithm_type == AlgorithmType::NonLinear {
+            // Its time is the window a hit opens: the gate shuts there.
+            let (shortest, span) = crate::algorithms::nonlinear::WINDOW_S;
+            return Some(((t60_s - shortest) / span).clamp(0.0, 1.0));
+        }
         let (lo, hi) = self.algorithm_type.t60_range(self.variant)?;
         // A decay tilt moves the midband, so ask the engine for a
         // correspondingly longer (or shorter) time to land on the requested
@@ -2180,6 +2184,52 @@ mod tests {
         );
     }
 
+    /// A gated Non-Linear set to a time shuts there, stays shut, and opens
+    /// again on the next hit.
+    #[test]
+    fn a_gated_nonlinear_shuts_at_its_time_and_opens_on_each_hit() {
+        let render = |seconds: f64, hits: &[f64], total_s: f64| -> Vec<f64> {
+            let mut c = ReverbChain::new();
+            c.set_algorithm_variant(AlgorithmType::NonLinear, 0);
+            c.nonlinear.shape = Some(crate::algorithm::NlShape::Gate);
+            c.mix = 1.0;
+            c.predelay_ms = 0.0;
+            c.update(config());
+            assert!(c.set_decay_seconds(seconds).is_some(), "Non-Linear takes a time");
+            let total = num::f64_to_index(SR * total_s);
+            let mut l = vec![0.0; total];
+            for &h in hits {
+                if let Some(s) = l.get_mut(num::f64_to_index(SR * h)) {
+                    *s = 1.0;
+                }
+            }
+            let mut r = l.clone();
+            c.process(&mut l, &mut r);
+            l
+        };
+        // Where the burst after `from` falls under −40 dB of its peak for good.
+        let ends = |out: &[f64], from: f64, to: f64| -> f64 {
+            let (a, b) = (num::f64_to_index(SR * from), num::f64_to_index(SR * to));
+            let span = out.get(a..b).unwrap_or(&[]);
+            let peak = span.iter().fold(0.0_f64, |m, v| m.max(v.abs()));
+            let last = span.iter().rposition(|v| v.abs() > peak * 0.01).unwrap_or(0);
+            from + num::count_to_f64(last) / SR
+        };
+        for seconds in [0.15, 0.3, 0.6, 1.2, 1.9] {
+            let out = render(seconds, &[0.0], seconds + 1.5);
+            let end = ends(&out, 0.0, seconds + 1.5);
+            assert!((end / seconds - 1.0).abs() < 0.05, "{seconds} s shut at {end} s");
+        }
+        // Two hits a second apart: two bursts, silence between.
+        let out = render(0.3, &[0.0, 1.0], 2.0);
+        assert!((ends(&out, 0.0, 0.9) - 0.3).abs() < 0.02, "the first burst");
+        assert!((ends(&out, 1.0, 2.0) - 1.3).abs() < 0.02, "the second burst");
+        let gap = out
+            .get(num::f64_to_index(SR * 0.4)..num::f64_to_index(SR * 0.95))
+            .unwrap_or(&[]);
+        assert!(gap.iter().all(|v| v.abs() < 1e-6), "shut between hits");
+    }
+
     /// Every space with a time model takes one; the timeless ones say so.
     #[test]
     fn a_time_is_taken_where_the_space_has_one() {
@@ -2192,10 +2242,10 @@ mod tests {
             c.set_algorithm_variant(algorithm, variant);
             assert!(c.decay_for_seconds(1.0).is_some(), "{algorithm:?}");
         }
-        for algorithm in [AlgorithmType::Convolution, AlgorithmType::NonLinear] {
-            c.set_algorithm_variant(algorithm, 0);
-            assert!(c.decay_for_seconds(1.0).is_none(), "{algorithm:?}");
-        }
+        c.set_algorithm_variant(AlgorithmType::NonLinear, 0);
+        assert!(c.decay_for_seconds(1.0).is_some(), "Non-Linear's window");
+        c.set_algorithm_variant(AlgorithmType::Convolution, 0);
+        assert!(c.decay_for_seconds(1.0).is_none());
     }
 
     #[test]

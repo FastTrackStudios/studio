@@ -17,6 +17,29 @@ use audiocore_dsp::delay_line::DelayLine;
 /// the loop is contractive rather than merely marginal.
 const REGEN_MARGIN: f64 = 0.9;
 
+/// How much longer the tank rings than the window it fills: ×4 is 15 dB
+/// across the window, even enough to read as a gate's flat burst.
+const TANK_OVER_WINDOW: f64 = 4.0;
+/// The tank's shortest line at 48 kHz ([`NonLinear::make_fdn`]).
+const SHORTEST_LINE: u16 = 743;
+
+/// The window a hit opens, s: `decay` 0 is the first, and the full decay
+/// adds the second — `0.1 + 1.9 × decay`. The time the effect lasts, as a
+/// time-set decay reads it (`ReverbChain::decay_for_seconds`).
+pub const WINDOW_S: (f64, f64) = (0.1, 1.9);
+
+/// A hit: the input's fast level jumping this far over its slow level
+/// (×4, +12 dB) …
+const ONSET_RATIO: f64 = 4.0;
+/// … and over this floor (−60 dBFS), so noise does not open the gate.
+const ONSET_FLOOR: f64 = 1e-3;
+/// The fast and slow followers' release times, s.
+const ONSET_FAST_S: f64 = 0.005;
+const ONSET_SLOW_S: f64 = 0.15;
+/// How long after a hit another may open a window, s: a flam's second
+/// stroke does, a hit's own ring does not.
+const ONSET_HOLDOFF_S: f64 = 0.03;
+
 /// Envelope shape for the reverb tail.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum EnvelopeShape {
@@ -43,7 +66,16 @@ pub struct NonLinear {
     env_buffer_l: DelayLine,
     env_buffer_r: DelayLine,
     env_length: usize,
-    env_write_count: usize,
+    /// Where in the window the envelope is, samples since the hit that
+    /// opened it; `None` between windows, when the gate is shut.
+    env_position: Option<usize>,
+    /// The input's level, followed fast and slow: a hit is the fast one
+    /// jumping over the slow one ([`ONSET_RATIO`]).
+    onset_fast: f64,
+    onset_slow: f64,
+    /// Samples until another hit may open a window (a hit's own ring
+    /// must not retrigger it).
+    onset_holdoff: usize,
     // Shape
     shape: EnvelopeShape,
     // BigSky MX extras: Chop (amplitude mod on the decay), explicit
@@ -83,7 +115,10 @@ impl NonLinear {
             env_buffer_l: DelayLine::new(max_env.saturating_add(1)),
             env_buffer_r: DelayLine::new(max_env.saturating_add(1)),
             env_length: num::f64_to_index(sample_rate * 0.5),
-            env_write_count: 0,
+            env_position: None,
+            onset_fast: 0.0,
+            onset_slow: 0.0,
+            onset_holdoff: 0,
             shape: EnvelopeShape::Reverse,
             mx: NonLinearParams::default(),
             chop_phase: 0.0,
@@ -205,7 +240,10 @@ impl ReverbAlgorithm for NonLinear {
         self.diffuser_r.reset();
         self.env_buffer_l.clear();
         self.env_buffer_r.clear();
-        self.env_write_count = 0;
+        self.env_position = None;
+        self.onset_fast = 0.0;
+        self.onset_slow = 0.0;
+        self.onset_holdoff = 0;
         self.chop_phase = 0.0;
         self.late_fdn.reset();
         self.late_env = 0.0;
@@ -223,7 +261,8 @@ impl ReverbAlgorithm for NonLinear {
     fn set_params(&mut self, params: &AlgorithmParams) {
         // Knob remap (manual): DECAY sets the time of the NONLINEAR
         // portion (the shaped-envelope window).
-        self.env_length = num::f64_to_index(params.decay.mul_add(1.9, 0.1) * self.sample_rate);
+        self.env_length =
+            num::f64_to_index(params.decay.mul_add(WINDOW_S.1, WINDOW_S.0) * self.sample_rate);
 
         // Shape: the named selector wins; without it fall back to the
         // legacy extra_a thresholds.
@@ -260,9 +299,18 @@ impl ReverbAlgorithm for NonLinear {
         let damp_coeff = params.damping * 0.5;
         self.fdn.set_damping_coeff(damp_coeff);
 
-        // Decay (internal reverb)
-        self.fdn_decay = params.decay.mul_add(0.28, 0.7);
-        self.fdn.set_decay(self.fdn_decay);
+        // The tank rings on through the window — the envelope shapes it,
+        // and the gate, not the tank, ends it. A tank whose own decay
+        // was a coefficient (0.7 + 0.28 × decay) died under −40 dB before
+        // a mid-length window shut, so a gate set to 0.6 s rang 0.55 s.
+        // Losing 15 dB across the window keeps it even.
+        let window_s = params.decay.mul_add(WINDOW_S.1, WINDOW_S.0);
+        let tank_t60 = window_s * TANK_OVER_WINDOW;
+        self.fdn.set_t60(tank_t60, tank_t60, self.sample_rate);
+        // What the regeneration bound reads: the shortest line's loop gain,
+        // the largest.
+        // (Its length scales with the rate, so the rate cancels.)
+        self.fdn_decay = 10.0f64.powf(-3.0 * f64::from(SHORTEST_LINE) / (48_000.0 * tank_t60));
     }
 
     fn set_nonlinear_params(&mut self, params: &NonLinearParams) -> bool {
@@ -289,11 +337,40 @@ impl ReverbAlgorithm for NonLinear {
         self.env_buffer_l.write(reverbed);
         self.env_buffer_r.write(self.diffuser_r.tick(reverbed));
 
+        // A hit opens the window: the envelope runs from the hit, once,
+        // and the gate stays shut after it until the next — a gated
+        // reverb's shape on every hit, and silence between them. (It ran
+        // free before, wrapping every window: its phase against a hit was
+        // chance, and after the window it opened again on the tank's long
+        // ring, so the time it was set to bounded nothing.) Heard on the
+        // input only, never the regeneration fed back into it.
+        let level = (left.abs() + right.abs()) * 0.5;
+        let follow = |state: &mut f64, release_s: f64, sr: f64| {
+            if level > *state {
+                *state = level;
+            } else {
+                *state *= (-1.0 / (release_s * sr)).exp();
+            }
+        };
+        let was_slow = self.onset_slow;
+        follow(&mut self.onset_fast, ONSET_FAST_S, self.sample_rate);
+        follow(&mut self.onset_slow, ONSET_SLOW_S, self.sample_rate);
+        self.onset_holdoff = self.onset_holdoff.saturating_sub(1);
+        if self.onset_holdoff == 0
+            && self.onset_fast > ONSET_FLOOR
+            && self.onset_fast > was_slow * ONSET_RATIO
+        {
+            self.env_position = Some(0);
+            self.onset_holdoff = num::f64_to_index(ONSET_HOLDOFF_S * self.sample_rate);
+        }
+
         // Read back with envelope shaping
         let env_len = self.env_length.max(1);
-        let position = num::count_to_f64(self.env_write_count.checked_rem(env_len).unwrap_or(0))
-            / num::count_to_f64(env_len);
-        let gain = self.envelope_gain(position);
+        let position = self
+            .env_position
+            .filter(|&at| at < env_len)
+            .map(|at| num::count_to_f64(at) / num::count_to_f64(env_len));
+        let gain = position.map_or(0.0, |p| self.envelope_gain(p));
 
         let mut out_l = self.env_buffer_l.read(1) * gain;
         let mut out_r = self.env_buffer_r.read(1) * gain;
@@ -302,7 +379,7 @@ impl ReverbAlgorithm for NonLinear {
         if self.shape == EnvelopeShape::Swoosh {
             if self.swoosh_countdown == 0 {
                 self.swoosh_countdown = 64;
-                let cutoff = 400.0 * (8000.0f64 / 400.0).powf(position.clamp(0.0, 1.0));
+                let cutoff = 400.0 * (8000.0f64 / 400.0).powf(position.unwrap_or(1.0).clamp(0.0, 1.0));
                 self.swoosh_lp.set_freq(cutoff, self.sample_rate);
             }
             self.swoosh_countdown = self.swoosh_countdown.saturating_sub(1);
@@ -345,7 +422,10 @@ impl ReverbAlgorithm for NonLinear {
             out_r += late * late_level;
         }
 
-        self.env_write_count = self.env_write_count.wrapping_add(1);
+        self.env_position = match self.env_position {
+            Some(at) if at.saturating_add(1) < env_len => Some(at.saturating_add(1)),
+            _ => None,
+        };
         // A safety net against denormal/NaN pathology, NOT the thing that
         // keeps the loop bounded — `regeneration_gain` does that. A clamp
         // reached in normal operation would mean the bound is wrong.
