@@ -305,5 +305,7 @@ impl Vst3Plugin for FtsMic {
     const VST3_SUBCATEGORIES: &'static [Vst3SubCategory] = &[Vst3SubCategory::Fx, Vst3SubCategory::Tools];
 }
 
+#[cfg(feature = "export")]
 nice_export_clap!(FtsMic);
+#[cfg(feature = "export")]
 nice_export_vst3!(FtsMic);
