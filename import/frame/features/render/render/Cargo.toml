@@ -9,7 +9,6 @@ document-proto = { path = "../../document/document-proto", default-features = fa
 render-fonts = { path = "../render-fonts" }
 serde = { workspace = true }
 serde_json = { workspace = true }
-tokio = { workspace = true, features = ["time"] }
 roxmltree = "0.20"
 
 anyrender = { workspace = true, optional = true }

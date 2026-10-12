@@ -5060,7 +5060,6 @@ dependencies = [
  "skrifa 0.26.6",
  "svg",
  "taffy",
- "tokio",
  "vello",
  "winit",
 ]
