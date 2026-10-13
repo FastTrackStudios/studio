@@ -39,7 +39,9 @@ base64 = "0.22.1"
 # `import-<format>` feature so a specialized build (e.g. a Pro-Tools-only
 # converter) compiles only the parsers it needs. `default = import-all`
 # preserves the historical "all formats" behaviour for the facade + tests.
-formats = { workspace = true, optional = true, features = ["aaf", "ableton", "dawproject", "protools"] }
+protools = { workspace = true, optional = true }
+ableton = { workspace = true, optional = true }
+interchange = { workspace = true, optional = true }
 
 # REAPER bindings for actual DAW control
 reaper-high.workspace = true
@@ -66,7 +68,7 @@ swell-ui.workspace = true
 display-info = "0.5"
 
 [dev-dependencies]
-expression-editor = { workspace = true, features = ["daw", "ops"] }
+editor = { workspace = true, features = ["daw", "ops"] }
 
 daw-control = { workspace = true }
 daw-proto = { workspace = true }
@@ -89,10 +91,10 @@ all-formats = ["protools", "ableton", "aaf", "dawproject"]
 # Each flag gates that format's conversion support. `protools` covers both
 # directions (import + the RPP→PT `project_export` path + the PT plugin-state
 # bridge); the others are import-only today.
-protools = ["dep:formats", "formats?/protools"]
-ableton = ["dep:formats", "formats?/ableton"]
-aaf = ["dep:formats", "formats?/aaf"]
-dawproject = ["dep:formats", "formats?/dawproject"]
+protools = ["dep:protools"]
+ableton = ["dep:ableton"]
+aaf = ["dep:interchange", "interchange?/aaf"]
+dawproject = ["dep:interchange", "interchange?/dawproject"]
 
 [lints]
 workspace = true

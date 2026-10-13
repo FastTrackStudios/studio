@@ -11,12 +11,12 @@ use std::ffi::{CStr, CString};
 use std::os::raw::{c_char, c_int};
 use std::sync::OnceLock;
 
+#[cfg(feature = "ableton")]
+use ableton::devices::BuiltinParams;
+#[cfg(feature = "ableton")]
+use ableton::{Device, DeviceFormat};
 use dawfile_reaper::RppSerialize;
 use dawfile_reaper::builder::{ItemBuilder, ReaperProjectBuilder, TrackBuilder};
-#[cfg(feature = "ableton")]
-use formats::ableton::devices::BuiltinParams;
-#[cfg(feature = "ableton")]
-use formats::ableton::{Device, DeviceFormat};
 use reaper_medium::{OwnedProjectImportRegister, ReaperFunctionError, ReaperSession};
 
 // ============================================================================
@@ -270,7 +270,7 @@ fn emit_rpp_to_context(
 
 #[cfg(feature = "ableton")]
 fn import_ableton(path: &str) -> Result<String, Box<dyn std::error::Error>> {
-    let set = formats::ableton::read_live_set(path)?;
+    let set = ableton::read_live_set(path)?;
 
     let mut builder = ReaperProjectBuilder::new();
     builder = builder.tempo_with_time_sig(
@@ -373,10 +373,7 @@ fn deterministic_guid(seed: &str) -> String {
 }
 
 #[cfg(feature = "ableton")]
-fn apply_common_track_props(
-    t: TrackBuilder,
-    common: &formats::ableton::TrackCommon,
-) -> TrackBuilder {
+fn apply_common_track_props(t: TrackBuilder, common: &ableton::TrackCommon) -> TrackBuilder {
     let mut t = t.volume(common.mixer.volume).pan(common.mixer.pan);
 
     if common.color != 0 {
@@ -391,7 +388,7 @@ fn apply_common_track_props(
 }
 
 #[cfg(feature = "ableton")]
-fn build_audio_track(t: TrackBuilder, track: &formats::ableton::AudioTrack) -> TrackBuilder {
+fn build_audio_track(t: TrackBuilder, track: &ableton::AudioTrack) -> TrackBuilder {
     let mut t = apply_common_track_props(t, &track.common);
 
     // Arrangement clips → items
@@ -415,7 +412,7 @@ fn build_audio_track(t: TrackBuilder, track: &formats::ableton::AudioTrack) -> T
 }
 
 #[cfg(feature = "ableton")]
-fn build_audio_item(item: ItemBuilder, clip: &formats::ableton::AudioClip) -> ItemBuilder {
+fn build_audio_item(item: ItemBuilder, clip: &ableton::AudioClip) -> ItemBuilder {
     let mut item = item.name(&clip.common.name);
 
     // Audio source
@@ -450,7 +447,7 @@ fn build_audio_item(item: ItemBuilder, clip: &formats::ableton::AudioClip) -> It
 }
 
 #[cfg(feature = "ableton")]
-fn build_midi_track(t: TrackBuilder, track: &formats::ableton::MidiTrack) -> TrackBuilder {
+fn build_midi_track(t: TrackBuilder, track: &ableton::MidiTrack) -> TrackBuilder {
     let mut t = apply_common_track_props(t, &track.common);
 
     // Arrangement MIDI clips
@@ -474,7 +471,7 @@ fn build_midi_track(t: TrackBuilder, track: &formats::ableton::MidiTrack) -> Tra
 }
 
 #[cfg(feature = "ableton")]
-fn build_midi_item(item: ItemBuilder, clip: &formats::ableton::MidiClip) -> ItemBuilder {
+fn build_midi_item(item: ItemBuilder, clip: &ableton::MidiClip) -> ItemBuilder {
     let item = item.name(&clip.common.name);
 
     // Build MIDI source from key tracks
@@ -588,7 +585,7 @@ fn default_fixed_lanes() -> dawfile_reaper::types::track::FixedLanesSettings {
 /// lanes 1..N are the alternates in order. Call only when
 /// `track.has_alternate_playlists()`.
 #[cfg(feature = "protools")]
-fn apply_fixed_lane_settings(t: TrackBuilder, track: &formats::protools::Track) -> TrackBuilder {
+fn apply_fixed_lane_settings(t: TrackBuilder, track: &protools::Track) -> TrackBuilder {
     let lane_count = track.playlist_count() as i32;
     let mut lane_names: Vec<String> = Vec::with_capacity(lane_count as usize);
     let active_name = if track.playlist_name.is_empty() {
@@ -629,10 +626,10 @@ fn apply_fixed_lane_settings(t: TrackBuilder, track: &formats::protools::Track) 
 #[allow(clippy::too_many_arguments)]
 fn emit_audio_playlist(
     mut t: TrackBuilder,
-    regions: &[formats::protools::TrackRegion],
+    regions: &[protools::TrackRegion],
     lane: Option<i32>,
-    track: &formats::protools::Track,
-    session: &formats::protools::ProToolsSession,
+    track: &protools::Track,
+    session: &protools::ProToolsSession,
     sample_rate: f64,
     resolve_audio_path: &dyn Fn(&str) -> String,
 ) -> TrackBuilder {
@@ -779,9 +776,9 @@ fn emit_audio_playlist(
 #[cfg(feature = "protools")]
 fn emit_midi_playlist(
     mut t: TrackBuilder,
-    regions: &[formats::protools::TrackRegion],
+    regions: &[protools::TrackRegion],
     lane: Option<i32>,
-    session: &formats::protools::ProToolsSession,
+    session: &protools::ProToolsSession,
     sample_rate: f64,
 ) -> TrackBuilder {
     for tr in regions {
@@ -893,7 +890,7 @@ fn import_protools(
     path: &str,
     audio_base: Option<&str>,
 ) -> Result<String, Box<dyn std::error::Error>> {
-    let session = formats::protools::read_session(path, 48000)?;
+    let session = protools::read_session(path, 48000)?;
     let sample_rate = session.session_sample_rate as f64;
 
     // Pro Tools stores audio files in `Audio Files/` next to the .ptx.
@@ -1461,7 +1458,7 @@ fn import_protools(
 
 #[cfg(feature = "aaf")]
 fn import_aaf(path: &str) -> Result<String, Box<dyn std::error::Error>> {
-    let session = formats::aaf::read_session(path)?;
+    let session = interchange::aaf::read_session(path)?;
 
     let mut builder = ReaperProjectBuilder::new();
     builder = builder.sample_rate(session.session_sample_rate as i32);
@@ -1476,7 +1473,7 @@ fn import_aaf(path: &str) -> Result<String, Box<dyn std::error::Error>> {
     for track in &session.tracks {
         // Skip non-audio/midi tracks
         match track.kind {
-            formats::aaf::TrackKind::Audio | formats::aaf::TrackKind::Midi => {}
+            interchange::aaf::TrackKind::Audio | interchange::aaf::TrackKind::Midi => {}
             _ => continue,
         }
 
@@ -1491,7 +1488,7 @@ fn import_aaf(path: &str) -> Result<String, Box<dyn std::error::Error>> {
                 }
 
                 match &clip.kind {
-                    formats::aaf::ClipKind::SourceClip {
+                    interchange::aaf::ClipKind::SourceClip {
                         source_file,
                         source_start,
                         ..
@@ -1517,7 +1514,7 @@ fn import_aaf(path: &str) -> Result<String, Box<dyn std::error::Error>> {
                             item
                         });
                     }
-                    formats::aaf::ClipKind::Filler => {
+                    interchange::aaf::ClipKind::Filler => {
                         // Silence gap — skip
                     }
                     _ => {
@@ -1539,7 +1536,7 @@ fn import_aaf(path: &str) -> Result<String, Box<dyn std::error::Error>> {
 
 #[cfg(feature = "dawproject")]
 fn import_dawproject(path: &str) -> Result<String, Box<dyn std::error::Error>> {
-    let project = formats::dawproject::read_project(path)?;
+    let project = interchange::dawproject::read_project(path)?;
 
     let mut builder = ReaperProjectBuilder::new();
     builder = builder.tempo_with_time_sig(
@@ -1576,8 +1573,8 @@ fn import_dawproject(path: &str) -> Result<String, Box<dyn std::error::Error>> {
 #[cfg(feature = "dawproject")]
 fn add_dawproject_tracks(
     builder: &mut ReaperProjectBuilder,
-    tracks: &[formats::dawproject::Track],
-    arrangement: Option<&formats::dawproject::Arrangement>,
+    tracks: &[interchange::dawproject::Track],
+    arrangement: Option<&interchange::dawproject::Arrangement>,
 ) {
     for track in tracks {
         let is_folder = !track.children.is_empty();
@@ -1604,13 +1601,13 @@ fn add_dawproject_tracks(
                         continue;
                     }
                     match dev.format {
-                        formats::dawproject::DeviceFormat::Vst2 => {
+                        interchange::dawproject::DeviceFormat::Vst2 => {
                             t = t.vst(&dev.name, "");
                         }
-                        formats::dawproject::DeviceFormat::Vst3 => {
+                        interchange::dawproject::DeviceFormat::Vst3 => {
                             t = t.vst3(&dev.name, "");
                         }
-                        formats::dawproject::DeviceFormat::Clap => {
+                        interchange::dawproject::DeviceFormat::Clap => {
                             t = t.clap(&dev.name, "");
                         }
                         _ => {}
@@ -1635,7 +1632,7 @@ fn add_dawproject_tracks(
                     if lane.track != track_id {
                         continue;
                     }
-                    if let formats::dawproject::LaneContent::Clips(clips) = &lane.content {
+                    if let interchange::dawproject::LaneContent::Clips(clips) = &lane.content {
                         for clip in clips {
                             if !clip.enabled {
                                 continue;
@@ -1653,12 +1650,12 @@ fn add_dawproject_tracks(
                                 }
 
                                 match &clip.content {
-                                    formats::dawproject::ClipContent::Audio(audio) => {
+                                    interchange::dawproject::ClipContent::Audio(audio) => {
                                         if let Some(ref file_ref) = audio.file {
                                             item = item.source_wave(&file_ref.path);
                                         }
                                     }
-                                    formats::dawproject::ClipContent::Notes(notes) => {
+                                    interchange::dawproject::ClipContent::Notes(notes) => {
                                         item = item.source_midi().midi(|midi| {
                                             let mut midi = midi;
                                             for note in notes {
@@ -2048,7 +2045,7 @@ fn ableton_color_to_rgb(color_index: i32) -> u32 {
 /// `ReaperProject::to_rpp_string()` to get loadable .rpp text.
 #[cfg(feature = "protools")]
 pub fn build_demo_playlist_project() -> dawfile_reaper::ReaperProject {
-    use formats::protools::{
+    use protools::{
         AudioFile, AudioRegion, Playlist, ProToolsSession, Track, TrackKind, TrackRegion,
     };
 
@@ -2243,7 +2240,7 @@ mod folder_tests {
     /// Authored: two independent sibling folders F1{leafA,leafB} F2{leafC,leafD}
     /// plus a top-level leaf. Each folder closes one level on its last child.
     // ── Pro Tools alternate playlists → REAPER fixed lanes ──────────────────
-    use formats::protools::{
+    use protools::{
         AudioFile, AudioRegion, Playlist, ProToolsSession, Track, TrackKind, TrackRegion,
     };
 
@@ -2336,7 +2333,7 @@ mod folder_tests {
     // `apply_fixed_lane_settings`, mirroring the `Src::Midi` arm in
     // `import_protools`), then assert on the emitted RPP.
 
-    use formats::protools::{MidiEvent, MidiRegion};
+    use protools::{MidiEvent, MidiRegion};
 
     /// A single-note MIDI region. `clip_lo_ticks = 0` / `note_trim_ticks =
     /// u64::MAX` on the referencing placement keep the note (see `mk_placement`).

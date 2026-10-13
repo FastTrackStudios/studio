@@ -2,7 +2,7 @@
 //! PT-converter feature roadmap).
 //!
 //! Builds a tiny RPP via the `dawfile-reaper` builder, runs it through
-//! the converter via `formats::protools::write::rpp_to_ptx_via_converter`,
+//! the converter via `protools::write::rpp_to_ptx_via_converter`,
 //! and verifies the resulting PTX parses back with the expected
 //! single track.
 //!
@@ -11,7 +11,7 @@
 
 use dawfile_reaper::RppSerialize;
 use dawfile_reaper::builder::ReaperProjectBuilder;
-use formats::protools::write;
+use protools::write;
 
 #[test]
 fn rpp_to_ptx_writer_smoke() {
@@ -33,7 +33,7 @@ fn rpp_to_ptx_writer_smoke() {
 
     write::rpp_to_ptx_via_converter(&rpp_path, &ptx_path).expect("convert failed");
 
-    let session = formats::protools::read_session(ptx_path.to_str().unwrap(), 48000).unwrap();
+    let session = protools::read_session(ptx_path.to_str().unwrap(), 48000).unwrap();
     let total_tracks = session.audio_tracks.len() + session.midi_tracks.len();
     assert!(
         total_tracks >= 1,
