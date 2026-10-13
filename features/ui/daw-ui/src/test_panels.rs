@@ -9,7 +9,7 @@
 //!   in `UiTestPanel` is on `architect-ui`, not the renderer.
 //!
 //! Designed to live in this repo so any REAPER extension that hosts
-//! `daw-reaper-dioxus` can mount the demo by calling `panel_defs()` +
+//! `reaper-dioxus` can mount the demo by calling `panel_defs()` +
 //! `action_defs()`. Originally lived in `fts-extensions`; promoted here so
 //! the demo is a first-class part of the daw API surface.
 //!
@@ -30,7 +30,7 @@
 //! away for revival if requirements change.
 
 use daw_module::{ActionDef, DockPosition, PanelComponent, PanelDef, PanelRenderer};
-use daw_reaper_dioxus::prelude::*;
+use reaper_dioxus::prelude::*;
 
 const TAILWIND_CSS: &str = include_str!("../assets/tailwind.css");
 const FTS_THEME_CSS: &str = architect_ui::THEME_CSS;
@@ -179,11 +179,11 @@ pub fn panel_defs() -> [PanelDef; 3] {
 pub fn action_defs() -> [ActionDef; 3] {
     [
         ActionDef::new(FTS_UI_NATIVE_ACTION_ID, "FTS: UI Native", || {
-            daw_reaper_dioxus::dock::toggle_panel(FTS_UI_NATIVE_PANEL_ID);
+            reaper_dioxus::dock::toggle_panel(FTS_UI_NATIVE_PANEL_ID);
         })
         .in_menu(),
         ActionDef::new(FTS_DEMO_NATIVE_ACTION_ID, "FTS: Demo Native", || {
-            daw_reaper_dioxus::dock::toggle_panel(FTS_DEMO_NATIVE_PANEL_ID);
+            reaper_dioxus::dock::toggle_panel(FTS_DEMO_NATIVE_PANEL_ID);
         })
         .in_menu(),
         ActionDef::new(FTS_MIXER_ACTION_ID, "FTS: Mixer", || {
@@ -192,7 +192,7 @@ pub fn action_defs() -> [ActionDef; 3] {
             // did not open" needs to distinguish "the handler never ran"
             // from "the handler ran and the window did not appear".
             tracing::info!("mixer panel toggle requested");
-            daw_reaper_dioxus::dock::toggle_panel(FTS_MIXER_PANEL_ID);
+            reaper_dioxus::dock::toggle_panel(FTS_MIXER_PANEL_ID);
             tracing::info!("mixer panel toggle returned");
         })
         .in_menu(),

@@ -10,7 +10,7 @@ specs (
         name fts
         include (
             docs/spec/**/*.md
-            features/expression-editor/spec/**/*.md
+            features/editor/spec/**/*.md
             features/rigs/*/spec/**/*.md
         )
         impls (

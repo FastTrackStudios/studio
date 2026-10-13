@@ -19,6 +19,21 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "366ffbaa4442f4684d91e2cd7c5ea7c4ed8add41959a31447066e279e432b618"
 
 [[package]]
+name = "ableton"
+version = "0.1.0"
+dependencies = [
+ "daw-proto",
+ "dawfile-reaper",
+ "flate2",
+ "loro",
+ "quick-xml 0.37.5",
+ "roxmltree 0.20.0",
+ "tempfile",
+ "thiserror 2.0.20",
+ "uuid",
+]
+
+[[package]]
 name = "accesskit"
 version = "0.24.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2592,21 +2607,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "chords"
-version = "0.1.0"
-dependencies = [
- "architect-ui",
- "chords",
- "daw",
- "daw-proto",
- "dioxus",
- "eyre",
- "keyflow",
- "studio",
- "tracing",
-]
-
-[[package]]
 name = "chrono"
 version = "0.4.45"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4130,18 +4130,20 @@ dependencies = [
 name = "daw-bridge"
 version = "0.1.0"
 dependencies = [
+ "ableton",
  "architect",
  "crossbeam-channel",
  "daw",
  "daw-allocator",
  "daw-audio-sync",
  "daw-proto",
- "daw-reaper-dioxus",
  "daw-sync",
  "dawfile-reaper",
  "eyre",
- "formats",
  "fragile",
+ "interchange",
+ "protools",
+ "reaper-dioxus",
  "reaper-high",
  "reaper-low",
  "reaper-macros",
@@ -4240,6 +4242,7 @@ dependencies = [
 name = "daw-reaper"
 version = "0.1.0"
 dependencies = [
+ "ableton",
  "architect",
  "base64 0.22.1",
  "camino",
@@ -4251,12 +4254,13 @@ dependencies = [
  "daw-transport-sync",
  "dawfile-reaper",
  "display-info",
+ "editor",
  "enumflags2",
- "expression-editor",
  "eyre",
  "facet-json",
- "formats",
+ "interchange",
  "libloading 0.8.9",
+ "protools",
  "reaper-high",
  "reaper-low",
  "reaper-medium",
@@ -4270,38 +4274,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "daw-reaper-dioxus"
-version = "0.1.0"
-dependencies = [
- "anyrender_vello 0.12.0",
- "architect",
- "blitz-dom",
- "blitz-paint",
- "blitz-traits",
- "cocoa 0.26.1",
- "crossbeam",
- "daw-module",
- "daw-proto",
- "daw-reaper-embed",
- "dioxus-devtools",
- "dioxus-native",
- "futures-util",
- "keyboard-types 0.7.0",
- "libc",
- "objc",
- "raw-window-handle 0.6.2",
- "reaper-high",
- "reaper-low",
- "reaper-medium",
- "tempfile",
- "thiserror 2.0.20",
- "tokio",
- "tracing",
- "vello 0.9.0",
- "x11-dl",
-]
-
-[[package]]
 name = "daw-reaper-dioxus-ext"
 version = "0.1.0"
 dependencies = [
@@ -4309,10 +4281,10 @@ dependencies = [
  "daw",
  "daw-extension-runtime",
  "daw-module",
- "daw-reaper-dioxus",
  "daw-ui",
  "eyre",
  "fragile",
+ "reaper-dioxus",
  "reaper-high",
  "reaper-low",
  "reaper-macros",
@@ -4328,27 +4300,11 @@ name = "daw-reaper-dioxus-ext-test"
 version = "0.1.0"
 dependencies = [
  "daw-module",
- "daw-reaper-dioxus",
+ "reaper-dioxus",
  "reaper-high",
  "reaper-low",
  "reaper-macros",
  "tracing",
-]
-
-[[package]]
-name = "daw-reaper-embed"
-version = "0.1.0"
-dependencies = [
- "cocoa 0.26.1",
- "objc",
- "pollster",
- "raw-window-handle 0.6.2",
- "skrifa 0.37.0",
- "thiserror 2.0.20",
- "tracing",
- "vello 0.9.0",
- "wgpu",
- "x11-dl",
 ]
 
 [[package]]
@@ -4375,7 +4331,6 @@ dependencies = [
  "daw-transport-sync",
  "dawfile-reaper",
  "eyre",
- "formats",
  "fts-sample",
  "futures",
  "gloo-timers",
@@ -4385,6 +4340,7 @@ dependencies = [
  "pitch",
  "raw-window-handle 0.6.2",
  "rtrb",
+ "session-format",
  "tempfile",
  "thiserror 2.0.20",
  "tokio",
@@ -4439,7 +4395,6 @@ dependencies = [
  "daw-control",
  "daw-module",
  "daw-proto",
- "daw-reaper-dioxus",
  "daw-ui",
  "dioxus",
  "dioxus-native",
@@ -4452,6 +4407,7 @@ dependencies = [
  "futures-timer",
  "image",
  "input",
+ "reaper-dioxus",
  "resvg",
  "thiserror 2.0.20",
  "tokio",
@@ -5972,6 +5928,65 @@ name = "editing"
 version = "0.1.0"
 
 [[package]]
+name = "editor"
+version = "0.1.0"
+dependencies = [
+ "align-dsp",
+ "anyrender 0.11.1",
+ "anyrender_vello_cpu",
+ "architect",
+ "architect-action-derive",
+ "architect-ui",
+ "base64 0.22.1",
+ "blitz-dom",
+ "blitz-traits",
+ "clap",
+ "daw",
+ "daw-control",
+ "daw-proto",
+ "daw-test-macro",
+ "daw-ui",
+ "dawfile-reaper",
+ "dioxus",
+ "dioxus-mcp-probe",
+ "dioxus-native",
+ "dioxus-native-dom",
+ "dioxus-ssr",
+ "dioxus-test",
+ "editing",
+ "editor",
+ "eyre",
+ "facet",
+ "facet-styx",
+ "fts-sample",
+ "futures-timer",
+ "guitarpro",
+ "hound",
+ "image",
+ "input",
+ "keyflow",
+ "keyflow-proto 0.1.0 (git+https://github.com/FastTrackStudios/keyflow?tag=v0.2.4)",
+ "kurbo 0.13.1",
+ "level",
+ "midly",
+ "parley 0.10.0",
+ "peniko 0.6.1",
+ "png 0.17.16",
+ "rand 0.8.8",
+ "realfft",
+ "regex",
+ "serde_json",
+ "session-format",
+ "sha2 0.10.9",
+ "studio",
+ "tempfile",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+ "tune",
+]
+
+[[package]]
 name = "editor-crdt"
 version = "0.1.0"
 source = "git+https://github.com/FastTrackStudios/editor?tag=v0.1.21#01cb65d0e2c293e1e019762a235a8708d306f105"
@@ -6408,63 +6423,6 @@ checksum = "8be9f3dfaaffdae2972880079a491a1a8bb7cbed0b8dd7a347f668b4150a3b93"
 dependencies = [
  "event-listener 5.4.2",
  "pin-project-lite",
-]
-
-[[package]]
-name = "expression-editor"
-version = "0.1.0"
-dependencies = [
- "align-dsp",
- "anyrender 0.11.1",
- "anyrender_vello_cpu",
- "architect",
- "architect-action-derive",
- "base64 0.22.1",
- "blitz-dom",
- "blitz-traits",
- "clap",
- "daw",
- "daw-control",
- "daw-proto",
- "daw-test-macro",
- "daw-ui",
- "dawfile-reaper",
- "dioxus",
- "dioxus-mcp-probe",
- "dioxus-native",
- "dioxus-native-dom",
- "dioxus-ssr",
- "dioxus-test",
- "editing",
- "expression-editor",
- "eyre",
- "facet",
- "facet-styx",
- "formats",
- "fts-sample",
- "futures-timer",
- "guitarpro",
- "hound",
- "image",
- "input",
- "keyflow-proto 0.1.0 (git+https://github.com/FastTrackStudios/keyflow?tag=v0.2.4)",
- "kurbo 0.13.1",
- "level",
- "midly",
- "parley 0.10.0",
- "peniko 0.6.1",
- "png 0.17.16",
- "rand 0.8.8",
- "realfft",
- "regex",
- "serde_json",
- "sha2 0.10.9",
- "studio",
- "tempfile",
- "tokio",
- "tracing",
- "tracing-subscriber",
- "tune",
 ]
 
 [[package]]
@@ -7215,32 +7173,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cb4cb245038516f5f85277875cdaa4f7d2c9a0fa0468de06ed190163b1581fcf"
 dependencies = [
  "percent-encoding",
-]
-
-[[package]]
-name = "formats"
-version = "0.1.0"
-dependencies = [
- "cfb 0.10.0",
- "daw-proto",
- "dawfile-reaper",
- "facet",
- "facet-styx",
- "flate2",
- "formats",
- "loro",
- "plist",
- "pollster",
- "quick-xml 0.37.5",
- "roxmltree 0.20.0",
- "sha2 0.10.9",
- "styx-format",
- "tempfile",
- "thiserror 2.0.20",
- "turso",
- "uuid",
- "zip 2.4.2",
- "zstd",
 ]
 
 [[package]]
@@ -9545,6 +9477,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "interchange"
+version = "0.1.0"
+dependencies = [
+ "cfb 0.10.0",
+ "daw-proto",
+ "dawfile-reaper",
+ "interchange",
+ "loro",
+ "roxmltree 0.20.0",
+ "tempfile",
+ "thiserror 2.0.20",
+ "uuid",
+ "zip 2.4.2",
+]
+
+[[package]]
 name = "interpolate_name"
 version = "0.2.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -10804,6 +10752,19 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f9f8bd3e56ce4dfc153cf470fffbfa98c7620958b312ca5c3a4b8d5181fd13c6"
 dependencies = [
  "value-bag",
+]
+
+[[package]]
+name = "logic"
+version = "0.1.0"
+dependencies = [
+ "daw-proto",
+ "dawfile-reaper",
+ "loro",
+ "plist",
+ "tempfile",
+ "thiserror 2.0.20",
+ "uuid",
 ]
 
 [[package]]
@@ -14845,6 +14806,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "protools"
+version = "0.1.0"
+dependencies = [
+ "daw-proto",
+ "dawfile-reaper",
+ "loro",
+ "tempfile",
+ "thiserror 2.0.20",
+ "uuid",
+]
+
+[[package]]
 name = "psl-types"
 version = "2.0.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -15504,12 +15477,14 @@ name = "reaper-dioxus"
 version = "0.1.0"
 dependencies = [
  "anyrender_vello 0.12.0",
+ "architect",
  "blitz-dom",
  "blitz-paint",
  "blitz-traits",
  "cocoa 0.26.1",
  "crossbeam",
- "daw",
+ "daw-module",
+ "daw-proto",
  "dioxus-devtools",
  "dioxus-native",
  "futures-util",
@@ -15521,9 +15496,11 @@ dependencies = [
  "reaper-high",
  "reaper-low",
  "reaper-medium",
+ "tempfile",
+ "thiserror 2.0.20",
+ "tokio",
  "tracing",
  "vello 0.9.0",
- "wgpu",
  "x11-dl",
 ]
 
@@ -17091,7 +17068,6 @@ dependencies = [
  "facet-postcard",
  "files-client",
  "files-proto",
- "formats",
  "fts-sample",
  "futures",
  "futures-util",
@@ -17113,6 +17089,7 @@ dependencies = [
  "serde",
  "serde_json",
  "session",
+ "session-format",
  "sha2 0.10.9",
  "smallvec 1.16.0",
  "studio",
@@ -17165,16 +17142,15 @@ dependencies = [
  "dsp-core",
  "dynamic-template",
  "editing",
+ "editor",
  "editor-crdt",
  "editor-keyflow-lang",
  "editor-state",
  "editor-view",
  "eq",
- "expression-editor",
  "eyre",
  "facet",
  "facet-json",
- "formats",
  "frame",
  "fts-audio-ui",
  "fts-sample",
@@ -17203,6 +17179,7 @@ dependencies = [
  "saturate",
  "serde_json",
  "session",
+ "session-format",
  "signal-fx",
  "skrifa 0.42.1",
  "studio",
@@ -17327,6 +17304,27 @@ version = "0.1.0"
 dependencies = [
  "daw",
  "studio",
+]
+
+[[package]]
+name = "session-format"
+version = "0.1.0"
+dependencies = [
+ "daw-proto",
+ "dawfile-reaper",
+ "facet",
+ "facet-styx",
+ "interchange",
+ "loro",
+ "pollster",
+ "session-format",
+ "sha2 0.10.9",
+ "styx-format",
+ "tempfile",
+ "thiserror 2.0.20",
+ "turso",
+ "uuid",
+ "zstd",
 ]
 
 [[package]]
@@ -18972,6 +18970,7 @@ dependencies = [
 name = "studio"
 version = "0.1.0"
 dependencies = [
+ "ableton",
  "architect",
  "clap",
  "control-surfaces",
@@ -18979,7 +18978,6 @@ dependencies = [
  "daw-control",
  "daw-proto",
  "daw-reaper",
- "daw-reaper-dioxus",
  "daw-standalone",
  "daw-test-macro",
  "daw-ui",
@@ -18987,8 +18985,11 @@ dependencies = [
  "eyre",
  "facet",
  "facet-json",
- "formats",
+ "interchange",
  "libc",
+ "logic",
+ "protools",
+ "reaper-dioxus",
  "reaper-launcher",
  "serde_json",
  "tokio",

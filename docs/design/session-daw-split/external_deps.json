@@ -1,0 +1,1449 @@
+{
+ "per_crate": {
+  "core": [
+   "anyrender",
+   "anyrender_vello_cpu",
+   "blitz-traits",
+   "cursor-icon",
+   "daw",
+   "daw-control",
+   "daw-proto",
+   "daw-ui",
+   "dioxus",
+   "dioxus-native",
+   "dirs",
+   "dynamic-template",
+   "editor",
+   "eyre",
+   "gloo-timers",
+   "image",
+   "num-traits",
+   "session",
+   "skrifa",
+   "tracing",
+   "vello",
+   "wasm-bindgen-futures",
+   "web-sys",
+   "web-time",
+   "winit"
+  ],
+  "timeline": [
+   "anyrender",
+   "architect",
+   "cursor-icon",
+   "daw",
+   "daw-control",
+   "daw-proto",
+   "daw-ui",
+   "dioxus",
+   "dirs",
+   "dynamic-template",
+   "editing",
+   "editor",
+   "facet",
+   "facet-json",
+   "futures-util",
+   "input",
+   "lucide-dioxus",
+   "num-traits",
+   "rayon",
+   "serde_json",
+   "tracing",
+   "vello",
+   "web-sys",
+   "web-time"
+  ],
+  "skin": [
+   "anyrender",
+   "daw-proto",
+   "daw-ui",
+   "editor",
+   "frame",
+   "tracing",
+   "vello"
+  ],
+  "fx_rack": [
+   "anyrender",
+   "architect",
+   "blitz-dom",
+   "blitz-traits",
+   "builtin",
+   "comp",
+   "daw",
+   "daw-proto",
+   "daw-standalone",
+   "daw-ui",
+   "delay",
+   "dioxus",
+   "dioxus-native",
+   "dioxus-native-dom",
+   "dynamic-template",
+   "eq",
+   "facet",
+   "frame",
+   "fts-audio-ui",
+   "lucide-dioxus",
+   "modulation",
+   "num-traits",
+   "reverb",
+   "saturate",
+   "serde_json",
+   "session",
+   "tracing",
+   "vello",
+   "web-time",
+   "wgpu-context-07",
+   "winit"
+  ],
+  "automation": [
+   "anyrender",
+   "architect",
+   "builtin",
+   "daw",
+   "daw-control",
+   "daw-proto",
+   "facet",
+   "level",
+   "num-traits",
+   "tracing",
+   "vello"
+  ],
+  "vocals": [
+   "architect",
+   "daw",
+   "daw-proto",
+   "editor",
+   "facet",
+   "facet-json",
+   "level",
+   "num-traits",
+   "tracing",
+   "wasm-bindgen-futures"
+  ],
+  "drum": [
+   "anyrender",
+   "architect",
+   "daw",
+   "daw-proto",
+   "daw-standalone",
+   "daw-ui",
+   "dioxus",
+   "dirs",
+   "dynamic-template",
+   "editor",
+   "facet",
+   "facet-json",
+   "hits",
+   "level",
+   "num-traits",
+   "realfft",
+   "serde_json",
+   "session",
+   "tracing",
+   "uuid",
+   "vello"
+  ],
+  "mixer": [
+   "anyrender",
+   "blitz-dom",
+   "blitz-traits",
+   "builtin",
+   "daw",
+   "daw-control",
+   "daw-proto",
+   "daw-standalone",
+   "daw-ui",
+   "dawfile-reaper",
+   "dioxus",
+   "dioxus-native",
+   "dioxus-native-dom",
+   "dsp-core",
+   "dynamic-template",
+   "eq",
+   "eyre",
+   "frame",
+   "session",
+   "vello",
+   "web-sys",
+   "web-time",
+   "winit"
+  ],
+  "session": [
+   "architect",
+   "builtin",
+   "daw",
+   "daw-control",
+   "daw-proto",
+   "daw-standalone",
+   "daw-ui",
+   "dioxus",
+   "dirs",
+   "dynamic-template",
+   "eyre",
+   "facet",
+   "fts-sample",
+   "lucide-dioxus",
+   "serde_json",
+   "session",
+   "session-format",
+   "signal-fx",
+   "studio",
+   "tokio",
+   "tracing",
+   "uuid",
+   "web-sys"
+  ],
+  "collab": [
+   "anyrender",
+   "architect",
+   "crdt",
+   "daw",
+   "daw-control",
+   "daw-proto",
+   "daw-transport-sync",
+   "dioxus",
+   "dioxus-native",
+   "eyre",
+   "futures-timer",
+   "live-proto",
+   "session",
+   "task-dial",
+   "tokio",
+   "tracing",
+   "uuid",
+   "vello",
+   "vox",
+   "vox-core",
+   "web-sys",
+   "web-time",
+   "winit"
+  ],
+  "chart": [
+   "anyrender",
+   "blitz-dom",
+   "blitz-traits",
+   "daw",
+   "daw-proto",
+   "daw-ui",
+   "dioxus",
+   "dioxus-native",
+   "dioxus-native-dom",
+   "dirs",
+   "editor-crdt",
+   "editor-state",
+   "editor-view",
+   "eyre",
+   "futures-channel",
+   "futures-timer",
+   "futures-util",
+   "gloo-timers",
+   "keyflow",
+   "keyflow-editor-lang",
+   "session",
+   "tokio",
+   "tracing",
+   "wasm-bindgen-futures",
+   "web-time",
+   "winit"
+  ],
+  "stream": [
+   "architect",
+   "auth-client",
+   "daw",
+   "daw-transport-sync",
+   "dawfile-reaper",
+   "dirs",
+   "eyre",
+   "fts-sample",
+   "futures-util",
+   "js-sys",
+   "live-proto",
+   "reqwest",
+   "serde_json",
+   "session",
+   "task-dial",
+   "tokio",
+   "tracing",
+   "wasm-bindgen",
+   "wasm-bindgen-futures",
+   "web-sys"
+  ],
+  "arrangement": [
+   "anyrender",
+   "architect",
+   "blitz-dom",
+   "blitz-traits",
+   "cursor-icon",
+   "daw",
+   "daw-control",
+   "daw-proto",
+   "daw-ui",
+   "dynamic-template",
+   "editing",
+   "editor",
+   "facet",
+   "input",
+   "keyflow",
+   "num-traits",
+   "serde_json",
+   "session",
+   "tracing",
+   "vello",
+   "wasm-bindgen-futures",
+   "web-time"
+  ],
+  "elsewhere": [
+   "anyrender",
+   "anyrender_vello",
+   "blitz-dom",
+   "blitz-traits",
+   "cursor-icon",
+   "daw",
+   "daw-proto",
+   "daw-ui",
+   "dioxus",
+   "dioxus-native-dom",
+   "editing",
+   "editor",
+   "frame",
+   "input",
+   "patch-list",
+   "tokio",
+   "tracing",
+   "vello"
+  ],
+  "removed": [
+   "architect",
+   "daw",
+   "daw-proto",
+   "facet",
+   "num-traits",
+   "serde_json",
+   "signal-fx"
+  ],
+  "app": [
+   "anyrender",
+   "anyrender_vello",
+   "anyrender_vello_hybrid",
+   "architect",
+   "architect-mcp",
+   "blitz-traits",
+   "daw",
+   "daw-control",
+   "daw-proto",
+   "daw-standalone",
+   "daw-ui",
+   "dioxus",
+   "dioxus-native",
+   "dioxus-native-dom",
+   "dirs",
+   "dynamic-template",
+   "editing",
+   "editor",
+   "eyre",
+   "facet",
+   "facet-json",
+   "fts-sample",
+   "futures-timer",
+   "futures-util",
+   "gloo-timers",
+   "input",
+   "js-sys",
+   "keyflow",
+   "live-proto",
+   "lucide-dioxus",
+   "num-traits",
+   "pollster",
+   "rustc-hash",
+   "serde_json",
+   "session",
+   "task-dial",
+   "tokio",
+   "tracing",
+   "vello",
+   "vello_common",
+   "vello_hybrid",
+   "vox",
+   "wasm-bindgen",
+   "wasm-bindgen-futures",
+   "web-sys",
+   "web-time",
+   "wgpu",
+   "winit"
+  ]
+ },
+ "per_module": {
+  "actions": [
+   "architect",
+   "daw",
+   "daw-proto",
+   "daw-ui",
+   "dynamic-template",
+   "facet",
+   "facet-json",
+   "num-traits",
+   "serde_json",
+   "session",
+   "tracing"
+  ],
+  "animate": [
+   "daw-proto"
+  ],
+  "arrange_edit": [
+   "daw-proto",
+   "daw-ui",
+   "editing",
+   "input",
+   "num-traits",
+   "tracing",
+   "web-time"
+  ],
+  "arrangement": [
+   "anyrender",
+   "daw-proto",
+   "daw-ui",
+   "editing",
+   "editor",
+   "keyflow",
+   "num-traits",
+   "session",
+   "vello"
+  ],
+  "art": [
+   "anyrender",
+   "daw-ui",
+   "vello"
+  ],
+  "audio_mode": [
+   "session",
+   "tracing"
+  ],
+  "automation": [
+   "builtin",
+   "daw",
+   "daw-control",
+   "daw-proto",
+   "level"
+  ],
+  "automation_actions": [
+   "architect",
+   "daw",
+   "daw-proto",
+   "facet"
+  ],
+  "automation_draw": [
+   "anyrender",
+   "daw-proto",
+   "num-traits",
+   "vello"
+  ],
+  "automation_edit": [
+   "daw-proto",
+   "level",
+   "num-traits"
+  ],
+  "automation_menu": [
+   "daw",
+   "daw-proto",
+   "tracing"
+  ],
+  "balance": [
+   "daw-proto",
+   "daw-ui"
+  ],
+  "bar_step": [
+   "architect",
+   "daw",
+   "dioxus",
+   "dynamic-template",
+   "facet",
+   "num-traits",
+   "serde_json",
+   "tracing"
+  ],
+  "bass_rig": [
+   "daw",
+   "daw-proto",
+   "serde_json",
+   "signal-fx"
+  ],
+  "browser": [
+   "architect",
+   "daw",
+   "dioxus",
+   "serde_json",
+   "tracing"
+  ],
+  "chart_editor": [
+   "dioxus",
+   "editor-crdt",
+   "editor-state",
+   "editor-view",
+   "eyre",
+   "futures-channel",
+   "futures-timer",
+   "futures-util",
+   "keyflow",
+   "keyflow-editor-lang",
+   "session",
+   "tracing"
+  ],
+  "chart_panel": [
+   "anyrender",
+   "blitz-dom",
+   "blitz-traits",
+   "daw-ui",
+   "dioxus",
+   "dioxus-native",
+   "dioxus-native-dom",
+   "dirs",
+   "keyflow",
+   "tracing",
+   "web-time",
+   "winit"
+  ],
+  "closeup": [
+   "anyrender",
+   "blitz-dom",
+   "blitz-traits",
+   "daw-ui",
+   "dioxus",
+   "dioxus-native",
+   "dioxus-native-dom",
+   "eq",
+   "lucide-dioxus",
+   "session",
+   "vello",
+   "web-time",
+   "winit"
+  ],
+  "collab": [
+   "architect",
+   "crdt",
+   "daw",
+   "daw-control",
+   "daw-proto",
+   "daw-transport-sync",
+   "eyre",
+   "live-proto",
+   "session",
+   "task-dial",
+   "tokio",
+   "tracing",
+   "uuid",
+   "vox",
+   "vox-core",
+   "web-time"
+  ],
+  "collab_bar": [
+   "architect",
+   "dioxus",
+   "tracing",
+   "web-sys"
+  ],
+  "collab_pointers": [
+   "dioxus",
+   "dioxus-native",
+   "futures-timer",
+   "winit"
+  ],
+  "comp": [
+   "architect",
+   "daw",
+   "daw-proto",
+   "facet"
+  ],
+  "compact": [
+   "dioxus",
+   "lucide-dioxus",
+   "session"
+  ],
+  "cursor": [
+   "anyrender",
+   "vello",
+   "web-time"
+  ],
+  "device_audio": [
+   "dioxus"
+  ],
+  "drum_edit": [
+   "daw-proto",
+   "daw-ui",
+   "num-traits"
+  ],
+  "drum_group": [
+   "daw",
+   "daw-proto"
+  ],
+  "drum_lanes": [
+   "daw",
+   "daw-proto"
+  ],
+  "drum_level": [
+   "daw",
+   "daw-proto",
+   "facet",
+   "level"
+  ],
+  "drum_reference": [
+   "daw",
+   "daw-proto",
+   "daw-ui",
+   "dynamic-template"
+  ],
+  "drum_samples": [
+   "daw",
+   "daw-proto",
+   "num-traits",
+   "serde_json",
+   "signal-fx"
+  ],
+  "drum_settings": [
+   "dirs",
+   "facet",
+   "facet-json",
+   "tracing"
+  ],
+  "editor_view": [
+   "anyrender",
+   "blitz-dom",
+   "blitz-traits",
+   "cursor-icon",
+   "daw",
+   "daw-proto",
+   "daw-ui",
+   "dioxus",
+   "dioxus-native-dom",
+   "editor",
+   "tokio",
+   "tracing",
+   "vello"
+  ],
+  "engine": [
+   "daw",
+   "daw-control",
+   "daw-proto",
+   "daw-ui",
+   "gloo-timers",
+   "tracing",
+   "wasm-bindgen-futures"
+  ],
+  "expression": [
+   "anyrender",
+   "daw",
+   "daw-ui",
+   "editing",
+   "editor",
+   "frame",
+   "input",
+   "tracing",
+   "vello"
+  ],
+  "faces": [
+   "anyrender",
+   "delay",
+   "frame",
+   "modulation",
+   "reverb",
+   "saturate",
+   "tracing",
+   "vello",
+   "web-time",
+   "wgpu-context-07"
+  ],
+  "folder": [
+   "daw",
+   "eyre"
+  ],
+  "folder_item": [
+   "anyrender",
+   "daw-control",
+   "daw-proto",
+   "daw-ui",
+   "editor",
+   "tracing",
+   "vello"
+  ],
+  "folds": [
+   "daw-proto",
+   "dynamic-template"
+  ],
+  "fps": [
+   "anyrender",
+   "vello"
+  ],
+  "fundamental": [
+   "daw",
+   "daw-proto",
+   "daw-standalone",
+   "daw-ui",
+   "num-traits",
+   "realfft"
+  ],
+  "fx_actions": [
+   "architect",
+   "builtin",
+   "daw",
+   "daw-proto",
+   "daw-standalone",
+   "facet",
+   "num-traits"
+  ],
+  "fx_view": [
+   "anyrender",
+   "blitz-dom",
+   "blitz-traits",
+   "daw-proto",
+   "daw-ui",
+   "dioxus",
+   "dioxus-native-dom",
+   "frame",
+   "session",
+   "vello"
+  ],
+  "gain_stage": [
+   "daw",
+   "daw-control",
+   "daw-proto",
+   "daw-standalone",
+   "daw-ui",
+   "dsp-core",
+   "dynamic-template",
+   "eyre"
+  ],
+  "gesture": [
+   "input",
+   "web-time"
+  ],
+  "ghosts": [
+   "anyrender",
+   "daw-proto",
+   "dioxus",
+   "session",
+   "vello",
+   "web-time"
+  ],
+  "grid_in_force": [
+   "num-traits"
+  ],
+  "grow": [
+   "architect",
+   "daw",
+   "daw-proto",
+   "facet"
+  ],
+  "guide_instrument": [
+   "builtin",
+   "daw-proto",
+   "daw-standalone",
+   "fts-sample",
+   "session",
+   "signal-fx"
+  ],
+  "headless": [
+   "anyrender",
+   "anyrender_vello",
+   "eyre",
+   "pollster",
+   "tracing",
+   "vello",
+   "web-time",
+   "wgpu"
+  ],
+  "hit": [
+   "daw-ui",
+   "input"
+  ],
+  "hits": [
+   "architect",
+   "daw",
+   "daw-proto",
+   "daw-ui",
+   "dirs",
+   "dynamic-template",
+   "facet",
+   "facet-json",
+   "hits",
+   "num-traits",
+   "session",
+   "tracing",
+   "uuid"
+  ],
+  "icons": [
+   "daw-ui",
+   "dirs",
+   "image",
+   "vello"
+  ],
+  "instrument_tracks": [
+   "architect",
+   "daw",
+   "daw-proto",
+   "dioxus",
+   "dynamic-template",
+   "facet",
+   "tracing"
+  ],
+  "keys": [
+   "dioxus",
+   "dioxus-native",
+   "editor",
+   "input",
+   "winit"
+  ],
+  "kit_gate": [
+   "editor"
+  ],
+  "lanes": [
+   "daw-proto"
+  ],
+  "layout": [
+   "daw-proto"
+  ],
+  "leveler": [
+   "level"
+  ],
+  "live": [
+   "reverb",
+   "saturate"
+  ],
+  "loading": [
+   "dioxus"
+  ],
+  "lyrics_panel": [
+   "dioxus",
+   "futures-channel",
+   "futures-util",
+   "gloo-timers",
+   "session",
+   "wasm-bindgen-futures",
+   "web-time"
+  ],
+  "macros": [
+   "anyrender",
+   "eq",
+   "frame",
+   "session",
+   "vello"
+  ],
+  "marks_strip": [
+   "anyrender",
+   "vello"
+  ],
+  "mcp": [
+   "anyrender",
+   "daw-proto",
+   "daw-ui",
+   "frame",
+   "vello",
+   "web-time"
+  ],
+  "mcp_server": [
+   "architect-mcp",
+   "dirs",
+   "serde_json",
+   "tokio",
+   "tracing"
+  ],
+  "midi": [
+   "daw",
+   "daw-control",
+   "daw-proto",
+   "futures-util",
+   "num-traits"
+  ],
+  "mix_chains": [
+   "builtin",
+   "daw",
+   "daw-proto",
+   "daw-standalone",
+   "daw-ui",
+   "dynamic-template",
+   "eyre"
+  ],
+  "mix_export": [
+   "daw",
+   "daw-standalone",
+   "dawfile-reaper",
+   "dynamic-template",
+   "eyre"
+  ],
+  "mix_guide": [
+   "daw-proto",
+   "dioxus",
+   "session",
+   "tracing"
+  ],
+  "mixer_panel": [
+   "anyrender",
+   "blitz-dom",
+   "blitz-traits",
+   "daw-proto",
+   "daw-ui",
+   "dioxus",
+   "dioxus-native",
+   "dioxus-native-dom",
+   "dynamic-template",
+   "eq",
+   "frame",
+   "session",
+   "vello",
+   "web-sys",
+   "web-time",
+   "winit"
+  ],
+  "mousemap": [
+   "input"
+  ],
+  "navigator": [
+   "dioxus",
+   "session"
+  ],
+  "notice": [
+   "anyrender",
+   "daw-proto",
+   "vello",
+   "web-time"
+  ],
+  "open": [
+   "daw",
+   "dirs",
+   "eyre",
+   "session",
+   "studio",
+   "tokio",
+   "tracing"
+  ],
+  "open_core": [
+   "daw",
+   "eyre",
+   "session-format",
+   "tracing"
+  ],
+  "options": [
+   "daw"
+  ],
+  "organize": [
+   "daw",
+   "daw-control",
+   "dioxus",
+   "eyre",
+   "session",
+   "tracing"
+  ],
+  "overlay": [
+   "anyrender",
+   "daw-proto",
+   "daw-ui",
+   "session",
+   "vello"
+  ],
+  "panel": [
+   "daw-ui",
+   "dioxus",
+   "dioxus-native-dom",
+   "editing",
+   "session",
+   "web-time"
+  ],
+  "patch_list": [
+   "anyrender",
+   "anyrender_vello",
+   "daw-ui",
+   "patch-list",
+   "tracing",
+   "vello"
+  ],
+  "plan": [
+   "daw",
+   "daw-proto",
+   "dynamic-template"
+  ],
+  "play_return": [
+   "dirs",
+   "tracing",
+   "web-sys"
+  ],
+  "plugin_faces": [
+   "eq",
+   "modulation",
+   "saturate"
+  ],
+  "poi": [
+   "anyrender",
+   "architect",
+   "daw",
+   "daw-proto",
+   "facet",
+   "facet-json",
+   "vello"
+  ],
+  "pointer": [
+   "daw-ui"
+  ],
+  "popup": [
+   "anyrender",
+   "num-traits",
+   "vello"
+  ],
+  "prepare": [
+   "daw",
+   "daw-proto",
+   "daw-standalone",
+   "dynamic-template",
+   "eyre",
+   "session",
+   "tracing"
+  ],
+  "profile": [
+   "web-time"
+  ],
+  "progress": [
+   "dioxus",
+   "dioxus-native",
+   "gloo-timers",
+   "session",
+   "winit"
+  ],
+  "project_file": [
+   "daw",
+   "daw-control",
+   "daw-proto",
+   "session",
+   "session-format",
+   "tokio",
+   "tracing",
+   "uuid"
+  ],
+  "project_new": [
+   "architect",
+   "daw",
+   "eyre",
+   "facet",
+   "session",
+   "tracing"
+  ],
+  "projects": [
+   "daw",
+   "dirs",
+   "session",
+   "session-format",
+   "tracing"
+  ],
+  "quantize_panel": [
+   "dioxus",
+   "num-traits",
+   "serde_json",
+   "tracing"
+  ],
+  "rails": [
+   "anyrender",
+   "daw-ui",
+   "dynamic-template",
+   "frame",
+   "session",
+   "vello"
+  ],
+  "record": [
+   "architect",
+   "daw",
+   "daw-proto",
+   "facet",
+   "tracing"
+  ],
+  "record_view": [
+   "architect",
+   "daw",
+   "daw-proto",
+   "daw-ui",
+   "dioxus",
+   "lucide-dioxus",
+   "session"
+  ],
+  "reference": [
+   "daw",
+   "dawfile-reaper",
+   "eyre",
+   "fts-sample",
+   "tracing"
+  ],
+  "reference_play": [
+   "daw",
+   "fts-sample",
+   "tracing"
+  ],
+  "rename": [
+   "anyrender",
+   "vello"
+  ],
+  "rig": [
+   "reverb",
+   "serde_json",
+   "tracing",
+   "vello"
+  ],
+  "rig_actions": [
+   "architect",
+   "daw",
+   "daw-proto",
+   "facet",
+   "serde_json",
+   "signal-fx"
+  ],
+  "routes": [
+   "daw",
+   "daw-control",
+   "daw-proto"
+  ],
+  "row": [
+   "daw-ui",
+   "vello"
+  ],
+  "ruler": [
+   "anyrender",
+   "daw-ui",
+   "editing",
+   "num-traits",
+   "vello"
+  ],
+  "section_colors": [
+   "daw",
+   "daw-proto",
+   "session",
+   "tokio"
+  ],
+  "session_file": [
+   "daw",
+   "tracing"
+  ],
+  "setlist": [
+   "daw-ui",
+   "eyre",
+   "tracing"
+  ],
+  "settings": [
+   "dynamic-template"
+  ],
+  "setup": [
+   "dioxus",
+   "lucide-dioxus",
+   "session"
+  ],
+  "shell": [
+   "architect",
+   "dioxus",
+   "futures-timer",
+   "lucide-dioxus",
+   "num-traits",
+   "session"
+  ],
+  "simulate": [
+   "daw-proto"
+  ],
+  "skin": [
+   "anyrender",
+   "daw-proto",
+   "daw-ui",
+   "editor",
+   "frame",
+   "tracing",
+   "vello"
+  ],
+  "song_bars": [
+   "daw"
+  ],
+  "song_chart": [
+   "daw",
+   "daw-proto",
+   "keyflow",
+   "session",
+   "tokio"
+  ],
+  "song_modes": [
+   "dioxus",
+   "dirs",
+   "session",
+   "tracing",
+   "web-sys"
+  ],
+  "song_stream": [
+   "architect",
+   "daw",
+   "eyre",
+   "fts-sample",
+   "futures-util",
+   "js-sys",
+   "reqwest",
+   "serde_json",
+   "session",
+   "tokio",
+   "tracing",
+   "wasm-bindgen",
+   "wasm-bindgen-futures",
+   "web-sys"
+  ],
+  "stream_in": [
+   "daw",
+   "daw-transport-sync",
+   "eyre",
+   "session",
+   "tokio",
+   "tracing"
+  ],
+  "stream_set": [
+   "daw",
+   "daw-transport-sync",
+   "dirs",
+   "eyre",
+   "session",
+   "tokio",
+   "tracing"
+  ],
+  "strip": [
+   "daw-ui",
+   "vello"
+  ],
+  "studio": [
+   "daw",
+   "daw-control",
+   "daw-proto",
+   "daw-ui",
+   "dioxus",
+   "dioxus-native",
+   "dioxus-native-dom",
+   "dynamic-template",
+   "eyre",
+   "keyflow",
+   "tokio",
+   "tracing",
+   "winit"
+  ],
+  "swipe": [
+   "anyrender",
+   "daw-proto",
+   "serde_json",
+   "vello"
+  ],
+  "take_rating": [
+   "daw",
+   "daw-proto",
+   "tracing",
+   "wasm-bindgen-futures"
+  ],
+  "take_window": [
+   "daw-ui"
+  ],
+  "task_account": [
+   "architect",
+   "auth-client",
+   "dirs",
+   "eyre",
+   "reqwest",
+   "serde_json",
+   "session",
+   "tracing"
+  ],
+  "task_set": [
+   "architect",
+   "eyre",
+   "live-proto",
+   "task-dial",
+   "tracing"
+  ],
+  "tcp": [
+   "anyrender",
+   "daw-proto",
+   "daw-ui",
+   "vello"
+  ],
+  "text": [
+   "anyrender",
+   "eyre",
+   "skrifa",
+   "vello"
+  ],
+  "timeline_actions": [
+   "architect",
+   "daw",
+   "daw-proto",
+   "facet",
+   "session",
+   "tracing"
+  ],
+  "tone": [
+   "anyrender",
+   "comp",
+   "daw",
+   "daw-proto",
+   "daw-ui",
+   "delay",
+   "dynamic-template",
+   "eq",
+   "frame",
+   "fts-audio-ui",
+   "modulation",
+   "reverb",
+   "saturate",
+   "session",
+   "vello",
+   "web-time"
+  ],
+  "tone_bind": [
+   "builtin",
+   "daw-proto",
+   "delay",
+   "eq",
+   "modulation",
+   "reverb",
+   "saturate"
+  ],
+  "tone_read": [
+   "builtin",
+   "daw",
+   "daw-proto",
+   "daw-standalone",
+   "delay",
+   "eq",
+   "modulation",
+   "reverb",
+   "saturate"
+  ],
+  "tool": [
+   "cursor-icon",
+   "editor",
+   "input"
+  ],
+  "toolbar": [
+   "dioxus",
+   "lucide-dioxus"
+  ],
+  "touch": [
+   "blitz-traits",
+   "dioxus",
+   "web-sys",
+   "web-time",
+   "winit"
+  ],
+  "track_icon": [
+   "anyrender",
+   "vello"
+  ],
+  "track_regions": [
+   "architect",
+   "daw",
+   "facet",
+   "facet-json"
+  ],
+  "transport_bar": [
+   "dioxus",
+   "dioxus-native",
+   "gloo-timers",
+   "session",
+   "winit"
+  ],
+  "versions": [
+   "dioxus",
+   "lucide-dioxus",
+   "serde_json",
+   "tokio"
+  ],
+  "vocal_level": [
+   "architect",
+   "daw",
+   "daw-proto",
+   "editor",
+   "facet",
+   "facet-json",
+   "level",
+   "num-traits"
+  ],
+  "wave_detail": [
+   "daw",
+   "daw-proto",
+   "num-traits"
+  ],
+  "wave_pool": [
+   "rayon"
+  ],
+  "web_audio": [
+   "daw-proto",
+   "daw-standalone",
+   "fts-sample",
+   "gloo-timers",
+   "js-sys",
+   "tracing",
+   "wasm-bindgen",
+   "wasm-bindgen-futures",
+   "web-sys",
+   "web-time"
+  ],
+  "web_engine": [
+   "architect",
+   "daw",
+   "daw-standalone",
+   "eyre",
+   "futures-util",
+   "gloo-timers",
+   "js-sys",
+   "live-proto",
+   "session",
+   "task-dial",
+   "tokio",
+   "tracing",
+   "vox",
+   "wasm-bindgen",
+   "wasm-bindgen-futures",
+   "web-sys",
+   "web-time"
+  ],
+  "web_host": [
+   "anyrender",
+   "anyrender_vello_hybrid",
+   "blitz-traits",
+   "daw-ui",
+   "dioxus",
+   "gloo-timers",
+   "rustc-hash",
+   "session",
+   "tracing",
+   "vello",
+   "vello_common",
+   "vello_hybrid",
+   "wasm-bindgen",
+   "web-sys"
+  ],
+  "which_key": [
+   "daw-ui",
+   "dioxus"
+  ],
+  "widget": [
+   "anyrender",
+   "blitz-dom",
+   "blitz-traits",
+   "cursor-icon",
+   "daw",
+   "daw-proto",
+   "daw-ui",
+   "dynamic-template",
+   "editing",
+   "editor",
+   "input",
+   "num-traits",
+   "serde_json",
+   "tracing",
+   "vello",
+   "wasm-bindgen-futures",
+   "web-time"
+  ],
+  "window_cursor": [
+   "anyrender",
+   "anyrender_vello_cpu",
+   "cursor-icon",
+   "dioxus",
+   "dioxus-native",
+   "editor",
+   "vello",
+   "winit"
+  ]
+ }
+}

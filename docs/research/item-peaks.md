@@ -11,10 +11,10 @@ written `daw:` for brevity.
 ## Summary
 
 1. Both backends already serve waveform peaks over one RPC, `Peaks::take_peaks` (`daw:crates/daw/proto/src/peak/service.rs:17-23`), and `daw_control::Take::peaks` wraps it (`daw:crates/daw/control/src/items.rs:723-735`) — the session window simply never calls it: items are flat rectangles (`apps/session/daw/src/arrangement.rs:449-468`) and the studio's "waveforms stream in behind them" is a placeholder string with no module behind it (`features/ui/daw-ui/daw-ui/src/studio/mod.rs:388-389`, `studio/project.rs:83-86`).
-2. Standalone is the mature side: mmap'd WAV / decoded PCM (`daw:features/standalone/daw-standalone/src/audio_engine/source.rs:24-30`), min/max per block in **take time** (`take_reader.rs:228-270`), a revision-keyed in-memory cache (`peak.rs:60-69`) and a REAPER-compatible `.reapeaks` sidecar mipmap at 160/2400/48000 samples-per-peak (`peak_store.rs`, `daw:features/formats/dawfile-reaper/src/reapeaks.rs:11-25`).
+2. Standalone is the mature side: mmap'd WAV / decoded PCM (`daw:features/standalone/daw-standalone/src/audio_engine/source.rs:24-30`), min/max per block in **take time** (`take_reader.rs:228-270`), a revision-keyed in-memory cache (`peak.rs:60-69`) and a REAPER-compatible `.reapeaks` sidecar mipmap at 160/2400/48000 samples-per-peak (`peak_store.rs`, `daw:features/adapters/reaper/dawfile-reaper/src/reapeaks.rs:11-25`).
 3. REAPER's impl is a thin, buggy shim over `PCM_Source_GetPeaks`: it hardcodes 44.1 kHz and 2 channels, reads from source time 0 for the item length (ignoring `start_offset`/`play_rate`), and sizes the buffer for one block when the SDK writes two (max block, then min block) — so its layout does not match the `[min,max]`-pair layout the proto documents and standalone emits (`daw:features/adapters/reaper/daw-reaper/src/peak.rs:69-98` vs `reaper_plugin_functions.h:5416`).
 4. A MIDI preview reads `Midi::notes` (`daw:crates/daw/proto/src/midi/service.rs:307`) — `MidiNote{pitch, velocity, start_ppq, length_ppq}` in quarter notes from the item start — and maps PPQ to seconds through the tempo map exactly as standalone's renderer does (`daw:features/standalone/daw-standalone/src/audio_engine/render/snapshot.rs:481-492`); REAPER can also render a MIDI take through the peak API itself (`PEAKTRANSFER_MIDI_NOTE_MODE`, `reaper_plugin.h:472-476`).
-5. Recommendation: one wire type, `ItemPeaks` — per-channel `(min,max)` pairs in linear −1..1, at a caller-chosen samples-per-peak, in take (item-local) time, quantised to i16 like `.reapeaks` — served by both backends from their existing paths; a folder item folds children per column with `min(min)`/`max(max)`, not a mean (the editor's mean is a drum-mic special case, `features/expression-editor/spec/drum-mode.md:101-107`).
+5. Recommendation: one wire type, `ItemPeaks` — per-channel `(min,max)` pairs in linear −1..1, at a caller-chosen samples-per-peak, in take (item-local) time, quantised to i16 like `.reapeaks` — served by both backends from their existing paths; a folder item folds children per column with `min(min)`/`max(max)`, not a mean (the editor's mean is a drum-mic special case, `features/editor/spec/drum-mode.md:101-107`).
 
 ## What the session window draws today
 
@@ -138,7 +138,7 @@ The second half is stale — see below.
   or the stretch-marker map when markers exist (`take_reader.rs:192-205`),
   then writes `out[c*2] = min(≤0)`, `out[c*2+1] = max(≥0)` per channel
   (`take_reader.rs:228-270`). Spec: `r[drums.open.peaks]`
-  (`features/expression-editor/spec/drum-mode.md:65-69`).
+  (`features/editor/spec/drum-mode.md:65-69`).
 - **`take_peaks`.** Blocks are `block_size / source_rate` seconds of
   take time; the whole take is emitted as `blocks × channels × 2`
   doubles (`peak.rs:96-111`); missing media → empty `TakePeakData`
@@ -204,7 +204,7 @@ lists.
 
 - `ExpressionDoc.peaks: Vec<f32>` — "the take's own amplitude, 0..1,
   sampled uniformly across `[start, end]`", drawn as a backdrop
-  (`features/expression-editor/expression-editor-core/src/doc.rs:761-769`).
+  (`features/editor/expression-editor-core/src/doc.rs:761-769`).
   It is **mono, absolute, max-only**: one value per 512-sample hop,
   `max(|v|)` over the hop (`expression-editor-host/src/analysis.rs:2,96-102`),
   persisted in the `FTSDRUM` analysis cache beside the `.rpp`
@@ -221,7 +221,7 @@ lists.
   is the **mean across members**, then the lane is normalised so its
   loudest column is 1.0. Spec `r[drums.lanes.summed]` justifies the mean
   because "members are phase-aligned mics of one source"
-  (`features/expression-editor/spec/drum-mode.md:101-107`); triggers are
+  (`features/editor/spec/drum-mode.md:101-107`); triggers are
   excluded so their silence does not pull the mean down
   (`drum-mode.md:118-124`).
 

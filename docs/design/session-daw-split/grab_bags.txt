@@ -1,0 +1,47 @@
+GRAB-BAG MODULES (high fan-out) and how to split them
+
+actions.rs (6350 lines, 45 prod deps; every feature group + app)
+  1-535    ActionList static, WINDOW queue, take_window/window_pending/through_list/id_and_args (key Action -> action id)
+           -> core::action_kit holds the ActionList registry + WINDOW queue; through_list/id_and_args stay in app
+              (it needs every crate's ids); widget's call to through_list becomes a core dispatch hook.
+  236      meta(), 2767 song(), 2775 resolve(), sections(), queue(), request_mode()
+           -> core::action_kit (used by ~25 modules in 10 groups; these are the reason everything depends on actions).
+  535-2742 register_window/view/phase/mode (app), register_data/undo/save/remove/style/items/tracks (session/arrangement),
+           register_reference/reference_map/reference_notes/compare/fundamental/level/review/copy_to_lane/restore_midi/lanes (drum),
+           register_bass_rig/samples (removed), register_verbs (arrangement editing), register_track_set (mixer)
+           -> each moves beside its feature as that crate's `pub fn register(list: &ActionList)`.
+  2965-5609 kit(), beats, find_fills, weights, moments, grid_line, targets, lock_*, detect, groove_*, quantize_span, stretch_edits (~2600 lines + tests)
+           -> this is the drum quantize engine: belongs in the drum crate (quantize.rs), not in actions.
+  5609-6350 register_stretch/revert/place/requantize/quantize/drum_settings/peaks -> drum crate.
+  Result: app's actions.rs = list() that calls core::action_kit::new() then each crate's register(); ~600 lines.
+  Already half-done: 16 feature modules expose `register` (automation_actions, bar_step, comp, fx_actions, grow, hits,
+  instrument_tracks, poi, project_new, record, rig_actions, timeline_actions, track_regions, vocal_level, ...).
+
+engine.rs (3428 lines; used by 11 groups) -> core. Its 13 upward calls are notifications:
+  midi::mark_stale, wave_detail::engine_changed, hit_overlay::refresh, studio::request_resync -> engine::on_change hook list
+  collab::transport_pressed -> engine::hooks::on_transport_pressed;  record::toggle_through_the_list, web_audio::latency_seconds -> hooks set by app
+  Types carried in Edit: automation::target_key, routes::At, mcp::Control, play_return::{Step,...} -> move those small
+  types (play_return whole: 265 lines, no deps) into core::engine.
+
+widget.rs (6076 lines, 55 deps) — the arrangement's composition root (automation lanes, drum overlays, quantize panel,
+  ghosts, overlay controls, popups, notices). Fine at the TOP of the arrangement crate. Longer term: a LaneFeature trait
+  (paint/hit/press) registered by automation/drum/collab would let arrangement drop its feature deps, which is what a
+  shared `timeline` crate reused by the expression editor will need anyway.
+
+web_host.rs (949, 29 deps), shell.rs (1723, 14 deps), studio.rs (984, 17), panel.rs (1154, 19), compact.rs: app composition.
+  Extract from them only the shared bits features read: shell's colour constants + Pins/MixerToggle (core::chrome),
+  studio's request_resync/StudioSession/Planner/Edits (core::resync + timeline::session_view), panel's Button/PanelEvent/BAR,
+  web_host's Hosted/HostedRef/WidgetCanvas/ElementSlot (core::host).
+
+mixer_panel.rs (2707, 28 deps): DawPanels/WebDawPanels (arrangement + mixer docked; uses studio::Arrangement,
+  web_host::WebArrangement, web_engine::EngineRef) are app composition -> move to app; the rest stays in mixer.
+
+open.rs (session, used by 12 groups): split the facade (runtime, current_song, local_engine, with_local_engine, LocalOnly,
+  switch_song, is_session, request_mode, mode) into core::open — it is exactly the shape of the web stub already in lib.rs —
+  with session's native open installing the implementation. open -> mcp_server::start / stream_in::start /
+  reference_play::renderer become hooks.
+
+tone.rs (13742 lines, 13 deps): not a coupling problem (only 3 groups use it) but the biggest file; split inside fx_rack
+  (rack model / panels / analyser / draw) when moving.
+
+lib.rs: only `pub mod` lines plus the web `open` stub (`pub use crate::open_core::*`). No other re-exports.

@@ -737,7 +737,7 @@ fn get_arrange_bounds() -> Option<(i32, i32, u32, u32)> {
     let height = height.saturating_sub(16);
 
     // Always return Win32-style top-left-origin coordinates. The
-    // platform window layer (daw-reaper-embed::TransparentWindow on
+    // platform window layer (reaper-embed::TransparentWindow on
     // macOS) already does the Cocoa flip internally — flipping here
     // too lands the overlay at the bottom of the screen instead of the
     // bottom of the arrange view.

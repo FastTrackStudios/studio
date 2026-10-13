@@ -1,0 +1,1120 @@
+{
+ "actions": [
+  "arrange_edit",
+  "automation_actions",
+  "bar_step",
+  "bass_rig",
+  "browser",
+  "comp",
+  "drum_edit",
+  "drum_group",
+  "drum_lanes",
+  "drum_level",
+  "drum_reference",
+  "drum_samples",
+  "drum_settings",
+  "folds",
+  "fundamental",
+  "fx_actions",
+  "gain_stage",
+  "groove",
+  "grow",
+  "hit_overlay",
+  "hits",
+  "instrument_tracks",
+  "jobs",
+  "keys",
+  "marks_strip",
+  "mix_chains",
+  "open",
+  "options",
+  "play_return",
+  "poi",
+  "project_file",
+  "project_new",
+  "projects",
+  "quantize_panel",
+  "record",
+  "rig_actions",
+  "session_file",
+  "song_bars",
+  "studio",
+  "timeline_actions",
+  "track_regions",
+  "versions",
+  "vocal_level",
+  "written",
+  "zoom"
+ ],
+ "animate": [
+  "mcp",
+  "num"
+ ],
+ "arrange_edit": [
+  "arrangement",
+  "cursor",
+  "drum_edit",
+  "engine",
+  "gesture",
+  "hit",
+  "keys",
+  "layout",
+  "midi",
+  "mousemap",
+  "options",
+  "plan",
+  "rails",
+  "ruler",
+  "tcp",
+  "text"
+ ],
+ "arrangement": [
+  "arrange_edit",
+  "automation",
+  "folds",
+  "hit_overlay",
+  "kit_gate",
+  "lanes",
+  "layout",
+  "midi",
+  "num",
+  "options",
+  "profile",
+  "row",
+  "ruler",
+  "skin",
+  "tcp",
+  "text",
+  "track_icon",
+  "wave_detail"
+ ],
+ "art": [
+  "tcp",
+  "text"
+ ],
+ "audio_mode": [],
+ "automation": [
+  "folds",
+  "leveler",
+  "open",
+  "vocal_level"
+ ],
+ "automation_actions": [
+  "actions",
+  "automation",
+  "automation_menu",
+  "fx_actions",
+  "gain_stage",
+  "studio",
+  "vocal_level"
+ ],
+ "automation_draw": [
+  "arrangement",
+  "automation",
+  "leveler",
+  "num",
+  "tcp",
+  "text",
+  "tone"
+ ],
+ "automation_edit": [
+  "actions",
+  "arrangement",
+  "automation",
+  "automation_draw",
+  "engine",
+  "leveler",
+  "studio",
+  "vocal_level"
+ ],
+ "automation_menu": [
+  "actions",
+  "automation",
+  "automation_actions",
+  "popup",
+  "studio",
+  "vocal_level"
+ ],
+ "balance": [
+  "engine",
+  "num"
+ ],
+ "bar_step": [
+  "actions",
+  "cursor",
+  "engine",
+  "grid_in_force",
+  "keys",
+  "open",
+  "organize",
+  "shell",
+  "song_bars",
+  "track_regions"
+ ],
+ "bass_rig": [
+  "actions",
+  "gain_stage",
+  "studio"
+ ],
+ "beats": [],
+ "browser": [
+  "actions",
+  "engine",
+  "open",
+  "rig_actions",
+  "shell"
+ ],
+ "chart_editor": [
+  "chart_panel",
+  "collab",
+  "keys",
+  "open",
+  "prepare",
+  "session_file",
+  "shell",
+  "studio"
+ ],
+ "chart_panel": [
+  "engine",
+  "ghosts",
+  "open",
+  "panel",
+  "studio",
+  "touch",
+  "web_host"
+ ],
+ "closeup": [
+  "arrangement",
+  "engine",
+  "gesture",
+  "live",
+  "text",
+  "tone",
+  "touch",
+  "web_host"
+ ],
+ "collab": [
+  "chart_editor",
+  "cursor",
+  "engine",
+  "ghosts",
+  "open",
+  "prepare",
+  "project_file",
+  "studio"
+ ],
+ "collab_bar": [
+  "audio_mode",
+  "collab",
+  "engine",
+  "ghosts",
+  "keys",
+  "open",
+  "setlist",
+  "shell"
+ ],
+ "collab_pointers": [
+  "collab",
+  "ghosts"
+ ],
+ "comp": [
+  "actions",
+  "arrange_edit",
+  "gain_stage",
+  "lanes",
+  "studio"
+ ],
+ "compact": [
+  "navigator",
+  "progress",
+  "record_view",
+  "setlist",
+  "setup",
+  "shell"
+ ],
+ "cursor": [
+  "arrangement",
+  "num"
+ ],
+ "device_audio": [],
+ "drum_edit": [],
+ "drum_group": [
+  "gain_stage"
+ ],
+ "drum_lanes": [
+  "actions",
+  "gain_stage",
+  "hits",
+  "studio"
+ ],
+ "drum_level": [
+  "drum_lanes",
+  "hits",
+  "midi",
+  "studio"
+ ],
+ "drum_reference": [
+  "gain_stage",
+  "open_core"
+ ],
+ "drum_samples": [
+  "actions",
+  "drum_reference",
+  "gain_stage",
+  "hits",
+  "studio"
+ ],
+ "drum_settings": [],
+ "editor_view": [
+  "arrangement",
+  "engine",
+  "expression",
+  "mousemap",
+  "open",
+  "shell",
+  "skin",
+  "studio",
+  "tcp",
+  "text",
+  "tool",
+  "widget",
+  "window_cursor"
+ ],
+ "engine": [
+  "actions",
+  "automation",
+  "collab",
+  "hit_overlay",
+  "mcp",
+  "midi",
+  "open",
+  "play_return",
+  "record",
+  "routes",
+  "studio",
+  "wave_detail",
+  "web_audio"
+ ],
+ "expression": [
+  "arrangement",
+  "mousemap",
+  "open",
+  "skin",
+  "text",
+  "tool",
+  "window_cursor"
+ ],
+ "faces": [
+  "arrangement",
+  "beats",
+  "macros",
+  "num",
+  "plugin_faces",
+  "rig",
+  "tcp",
+  "text",
+  "tone"
+ ],
+ "folder": [],
+ "folder_item": [
+  "arrangement",
+  "num"
+ ],
+ "folds": [],
+ "fps": [
+  "tcp",
+  "text"
+ ],
+ "fundamental": [
+  "drum_edit"
+ ],
+ "fx_actions": [
+  "actions",
+  "song_bars"
+ ],
+ "fx_view": [
+  "arrangement",
+  "closeup",
+  "engine",
+  "faces",
+  "gesture",
+  "layout",
+  "live",
+  "macros",
+  "mcp",
+  "mixer_panel",
+  "num",
+  "options",
+  "overlay",
+  "plan",
+  "plugin_faces",
+  "pointer",
+  "rig",
+  "settings",
+  "skin",
+  "studio",
+  "tcp",
+  "text",
+  "tone",
+  "web_host"
+ ],
+ "gain_stage": [
+  "midi"
+ ],
+ "gesture": [
+  "hit"
+ ],
+ "ghosts": [
+  "arrangement",
+  "ruler",
+  "tcp",
+  "text"
+ ],
+ "grid_in_force": [
+  "ruler"
+ ],
+ "groove": [],
+ "grow": [
+  "actions",
+  "studio"
+ ],
+ "guide_instrument": [],
+ "headless": [],
+ "hit": [
+  "arrangement",
+  "num",
+  "rails",
+  "ruler"
+ ],
+ "hit_overlay": [
+  "actions",
+  "hits",
+  "open",
+  "wave_detail"
+ ],
+ "hits": [
+  "actions",
+  "drum_edit",
+  "drum_lanes",
+  "drum_reference",
+  "gain_stage",
+  "hit_overlay",
+  "jobs",
+  "song_bars",
+  "track_regions"
+ ],
+ "hook_rules": [],
+ "icons": [],
+ "instrument_tracks": [
+  "actions",
+  "folds",
+  "shell",
+  "studio"
+ ],
+ "jobs": [],
+ "keys": [
+  "engine",
+  "shell",
+  "tool",
+  "which_key",
+  "zoom"
+ ],
+ "kit_gate": [
+  "hit_overlay"
+ ],
+ "lanes": [
+  "folds",
+  "options"
+ ],
+ "layout": [
+  "automation",
+  "tcp"
+ ],
+ "leveler": [
+  "automation",
+  "num"
+ ],
+ "live": [
+  "mcp",
+  "num"
+ ],
+ "loading": [],
+ "lyrics_panel": [
+  "progress",
+  "ruler",
+  "shell",
+  "studio"
+ ],
+ "macros": [
+  "arrangement",
+  "num",
+  "skin",
+  "tcp",
+  "text",
+  "tone"
+ ],
+ "marks_strip": [
+  "actions",
+  "arrangement",
+  "open",
+  "ruler",
+  "tcp",
+  "text",
+  "track_regions"
+ ],
+ "mcp": [
+  "arrangement",
+  "layout",
+  "num",
+  "profile",
+  "settings",
+  "skin",
+  "strip",
+  "tcp",
+  "text",
+  "tone"
+ ],
+ "mcp_server": [
+  "actions",
+  "open"
+ ],
+ "midi": [
+  "jobs",
+  "num",
+  "open",
+  "wave_pool"
+ ],
+ "mix_chains": [
+  "fundamental",
+  "gain_stage",
+  "midi"
+ ],
+ "mix_export": [],
+ "mix_guide": [
+  "engine",
+  "setlist",
+  "widget"
+ ],
+ "mixer_panel": [
+  "arrangement",
+  "closeup",
+  "compact",
+  "engine",
+  "folds",
+  "gesture",
+  "ghosts",
+  "icons",
+  "layout",
+  "mcp",
+  "options",
+  "overlay",
+  "panel",
+  "plan",
+  "pointer",
+  "quantize_panel",
+  "rails",
+  "settings",
+  "shell",
+  "simulate",
+  "skin",
+  "studio",
+  "tcp",
+  "text",
+  "tone",
+  "touch",
+  "web_engine",
+  "web_host"
+ ],
+ "mousemap": [
+  "options"
+ ],
+ "navigator": [
+  "engine",
+  "progress",
+  "setlist",
+  "shell"
+ ],
+ "notice": [
+  "arrangement",
+  "num",
+  "ruler",
+  "tcp",
+  "text"
+ ],
+ "num": [],
+ "open": [
+  "audio_mode",
+  "guide_instrument",
+  "mcp_server",
+  "open_core",
+  "project_file",
+  "reference_play",
+  "session_file",
+  "stream_in"
+ ],
+ "open_core": [
+  "folder",
+  "prepare",
+  "project_file",
+  "section_colors",
+  "session_file"
+ ],
+ "options": [],
+ "organize": [
+  "actions",
+  "cursor",
+  "open",
+  "prepare",
+  "shell",
+  "studio"
+ ],
+ "overlay": [
+  "arrangement",
+  "art",
+  "engine",
+  "folds",
+  "lanes",
+  "layout",
+  "live",
+  "mcp",
+  "midi",
+  "plan",
+  "pointer",
+  "profile",
+  "row",
+  "settings",
+  "skin",
+  "strip",
+  "tcp",
+  "text",
+  "tone"
+ ],
+ "panel": [
+  "bar_step",
+  "compact",
+  "engine",
+  "folds",
+  "ghosts",
+  "layout",
+  "mixer_panel",
+  "mousemap",
+  "quantize_panel",
+  "ruler",
+  "shell",
+  "studio",
+  "tcp",
+  "tool",
+  "toolbar",
+  "touch",
+  "which_key",
+  "widget",
+  "zoom"
+ ],
+ "patch_list": [
+  "arrangement",
+  "tcp",
+  "text"
+ ],
+ "plan": [
+  "layout",
+  "num",
+  "open",
+  "settings",
+  "tone"
+ ],
+ "play_return": [],
+ "plugin_faces": [
+  "faces",
+  "macros",
+  "num",
+  "tone"
+ ],
+ "poi": [
+  "actions",
+  "arrangement",
+  "bar_step",
+  "cursor",
+  "engine",
+  "open",
+  "organize",
+  "ruler",
+  "tcp",
+  "text",
+  "track_regions"
+ ],
+ "pointer": [
+  "mcp",
+  "row"
+ ],
+ "popup": [
+  "arrangement",
+  "tcp",
+  "text"
+ ],
+ "prepare": [
+  "folder",
+  "gain_stage",
+  "mix_chains",
+  "open",
+  "session_file"
+ ],
+ "profile": [],
+ "progress": [
+  "engine",
+  "ghosts",
+  "record_view",
+  "ruler",
+  "setlist",
+  "studio"
+ ],
+ "project_file": [
+  "actions",
+  "jobs",
+  "open",
+  "open_core"
+ ],
+ "project_new": [
+  "actions",
+  "cursor",
+  "open",
+  "prepare",
+  "projects",
+  "setlist",
+  "studio"
+ ],
+ "projects": [
+  "project_file"
+ ],
+ "quantize_panel": [
+  "actions",
+  "cursor",
+  "open"
+ ],
+ "rails": [
+  "arrangement",
+  "icons",
+  "num",
+  "ruler",
+  "settings",
+  "skin",
+  "tcp",
+  "text"
+ ],
+ "record": [
+  "actions",
+  "studio"
+ ],
+ "record_view": [
+  "compact",
+  "engine",
+  "mixer_panel",
+  "navigator",
+  "progress",
+  "ruler",
+  "setlist",
+  "studio",
+  "take_rating",
+  "touch"
+ ],
+ "reference": [
+  "open",
+  "open_core",
+  "prepare"
+ ],
+ "reference_play": [
+  "reference",
+  "song_stream",
+  "stream_set"
+ ],
+ "rename": [
+  "arrangement",
+  "tcp",
+  "text"
+ ],
+ "rig": [
+  "beats",
+  "faces",
+  "num"
+ ],
+ "rig_actions": [
+  "actions",
+  "studio"
+ ],
+ "routes": [
+  "open"
+ ],
+ "row": [
+  "tcp"
+ ],
+ "ruler": [
+  "arrangement",
+  "grid_in_force",
+  "num",
+  "options",
+  "tcp",
+  "text",
+  "track_regions"
+ ],
+ "section_colors": [],
+ "session_file": [
+  "project_file"
+ ],
+ "setlist": [
+  "collab",
+  "midi",
+  "open",
+  "prepare",
+  "reference_play",
+  "song_stream",
+  "stream_set",
+  "studio"
+ ],
+ "settings": [
+  "rails",
+  "tone"
+ ],
+ "setup": [
+  "arrangement",
+  "audio_mode",
+  "device_audio",
+  "reference_play",
+  "setlist",
+  "shell",
+  "song_modes",
+  "touch",
+  "transport_bar"
+ ],
+ "shell": [
+  "audio_mode",
+  "chart_panel",
+  "collab_bar",
+  "folds",
+  "ghosts",
+  "jobs",
+  "navigator",
+  "open",
+  "options",
+  "progress",
+  "setlist",
+  "studio",
+  "touch",
+  "versions"
+ ],
+ "simulate": [
+  "live",
+  "mcp",
+  "num",
+  "tone"
+ ],
+ "skin": [
+  "arrangement",
+  "art",
+  "engine",
+  "expression",
+  "mcp",
+  "num",
+  "overlay",
+  "row",
+  "strip",
+  "tcp",
+  "text"
+ ],
+ "song_bars": [
+  "ruler"
+ ],
+ "song_chart": [],
+ "song_modes": [
+  "setlist"
+ ],
+ "song_stream": [
+  "folder",
+  "open",
+  "prepare",
+  "reference",
+  "setlist",
+  "web_audio"
+ ],
+ "stream_in": [
+  "collab",
+  "open",
+  "prepare",
+  "setlist",
+  "song_stream"
+ ],
+ "stream_set": [
+  "collab",
+  "engine",
+  "loading",
+  "open",
+  "reference",
+  "reference_play",
+  "setlist",
+  "song_stream",
+  "task_account",
+  "task_set"
+ ],
+ "strip": [
+  "mcp",
+  "tcp",
+  "tone"
+ ],
+ "studio": [
+  "automation",
+  "engine",
+  "folder",
+  "folds",
+  "lanes",
+  "midi",
+  "mousemap",
+  "open",
+  "panel",
+  "plan",
+  "prepare",
+  "projects",
+  "settings",
+  "song_chart",
+  "tool",
+  "wave_pool",
+  "window_cursor"
+ ],
+ "swipe": [
+  "arrange_edit",
+  "arrangement",
+  "lanes",
+  "num",
+  "ruler",
+  "tcp",
+  "text"
+ ],
+ "take_rating": [
+  "open"
+ ],
+ "take_window": [
+  "arrangement",
+  "ruler"
+ ],
+ "task_account": [
+  "open"
+ ],
+ "task_set": [],
+ "tcp": [
+  "arrangement",
+  "art",
+  "layout",
+  "num",
+  "row",
+  "text",
+  "track_icon"
+ ],
+ "text": [],
+ "timeline_actions": [
+  "actions",
+  "cursor",
+  "fx_actions",
+  "gain_stage",
+  "hits",
+  "organize",
+  "prepare",
+  "studio",
+  "track_regions"
+ ],
+ "tone": [
+  "arrangement",
+  "engine",
+  "faces",
+  "live",
+  "mcp",
+  "num",
+  "open",
+  "plugin_faces",
+  "simulate",
+  "skin",
+  "tcp",
+  "text",
+  "tone_bind",
+  "tone_read"
+ ],
+ "tone_bind": [
+  "beats",
+  "engine",
+  "plugin_faces",
+  "tone"
+ ],
+ "tone_read": [
+  "beats",
+  "num",
+  "open",
+  "plugin_faces",
+  "tone",
+  "tone_bind"
+ ],
+ "tool": [
+  "mousemap",
+  "window_cursor"
+ ],
+ "toolbar": [
+  "engine",
+  "options",
+  "shell",
+  "studio"
+ ],
+ "touch": [
+  "mcp"
+ ],
+ "track_icon": [],
+ "track_regions": [
+  "actions",
+  "drum_reference",
+  "fx_actions",
+  "hits",
+  "marks_strip",
+  "song_bars"
+ ],
+ "transport_bar": [
+  "arrangement",
+  "bar_step",
+  "engine",
+  "play_return",
+  "ruler",
+  "shell",
+  "studio"
+ ],
+ "versions": [
+  "actions",
+  "projects",
+  "shell"
+ ],
+ "vocal_level": [
+  "actions",
+  "automation",
+  "drum_level",
+  "gain_stage",
+  "leveler",
+  "midi",
+  "studio"
+ ],
+ "wave_detail": [
+  "engine",
+  "num",
+  "open",
+  "wave_pool"
+ ],
+ "wave_pool": [],
+ "web_audio": [
+  "reference"
+ ],
+ "web_engine": [
+  "collab",
+  "engine",
+  "folder",
+  "guide_instrument",
+  "loading",
+  "midi",
+  "open",
+  "open_core",
+  "prepare",
+  "reference",
+  "setlist",
+  "song_stream",
+  "studio",
+  "task_set",
+  "web_audio"
+ ],
+ "web_host": [
+  "chart_panel",
+  "closeup",
+  "collab",
+  "collab_bar",
+  "compact",
+  "editor_view",
+  "engine",
+  "fx_view",
+  "loading",
+  "lyrics_panel",
+  "mix_guide",
+  "mixer_panel",
+  "mousemap",
+  "open",
+  "panel",
+  "progress",
+  "record_view",
+  "setlist",
+  "setup",
+  "shell",
+  "song_modes",
+  "studio",
+  "tool",
+  "touch",
+  "transport_bar",
+  "web_audio",
+  "web_engine",
+  "widget",
+  "window_cursor"
+ ],
+ "which_key": [
+  "shell"
+ ],
+ "widget": [
+  "actions",
+  "arrange_edit",
+  "arrangement",
+  "automation",
+  "automation_draw",
+  "automation_edit",
+  "automation_menu",
+  "comp",
+  "cursor",
+  "drum_settings",
+  "editor_view",
+  "engine",
+  "folds",
+  "fps",
+  "gain_stage",
+  "gesture",
+  "ghosts",
+  "grid_in_force",
+  "hit",
+  "hit_overlay",
+  "jobs",
+  "keys",
+  "lanes",
+  "layout",
+  "marks_strip",
+  "mcp",
+  "midi",
+  "mixer_panel",
+  "mousemap",
+  "notice",
+  "open",
+  "options",
+  "overlay",
+  "panel",
+  "plan",
+  "poi",
+  "pointer",
+  "popup",
+  "profile",
+  "quantize_panel",
+  "rails",
+  "rename",
+  "row",
+  "ruler",
+  "skin",
+  "studio",
+  "swipe",
+  "tcp",
+  "text",
+  "tool",
+  "touch",
+  "wave_detail",
+  "wave_pool",
+  "which_key",
+  "window_cursor",
+  "zoom"
+ ],
+ "window_cursor": [
+  "num"
+ ],
+ "written": [],
+ "zoom": []
+}

@@ -48,7 +48,7 @@ chmod +x "$app/Contents/MacOS/Signal"
 
 # The rig's faces (`just faces` generates them — what
 # `frame_surface::design_dir` finds in a dev build).
-faces=features/faces/generated/rig-faces
+faces=features/ui/plugin-faces/generated/rig-faces
 if [ -d "$faces" ]; then
     mkdir -p "$app/Contents/Resources/faces"
     cp -R "$faces" "$app/Contents/Resources/faces/"

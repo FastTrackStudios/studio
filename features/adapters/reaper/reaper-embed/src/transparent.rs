@@ -136,7 +136,11 @@ impl TransparentWindow {
         // Make click-through by default
         set_native_click_through(hwnd, true);
 
-        let gpu = GpuState::new(&handle_wrapper, width, height)?;
+        // GPU surface needs **physical** pixels — on a Retina display 100
+        // logical points is 200 backing pixels. NSWindow/WindowRect uses
+        // points, so multiply by the display backing scale here.
+        let (gpu_w, gpu_h) = scale_to_backing(width, height);
+        let gpu = GpuState::new(&handle_wrapper, gpu_w, gpu_h)?;
 
         Ok(Self {
             hwnd: Some(hwnd),
@@ -174,7 +178,8 @@ impl TransparentWindow {
         }
 
         if let Some(ref mut gpu) = self.gpu {
-            gpu.resize(width, height);
+            let (gpu_w, gpu_h) = scale_to_backing(width, height);
+            gpu.resize(gpu_w, gpu_h);
         }
     }
 
@@ -706,3 +711,18 @@ fn close_native_window(_hwnd: RawHwnd) {}
 
 #[cfg(not(any(target_os = "macos", target_os = "linux")))]
 fn set_native_click_through(_hwnd: RawHwnd, _click_through: bool) {}
+
+/// Convert logical (point) dimensions to physical (backing-pixel)
+/// dimensions for GPU surface configuration.
+///
+/// On macOS Retina (`backingScaleFactor` = 2.0) a 130-point window has a
+/// 260-pixel backing store; the wgpu surface and Vello scene need to be
+/// sized in those physical pixels or the rendered content gets squashed
+/// into a sub-grid and then upscaled by AppKit, producing the "way too
+/// large" appearance for the FTS which-key overlay.
+fn scale_to_backing(width: u32, height: u32) -> (u32, u32) {
+    let scale = crate::platform::display_scale_factor().max(1.0);
+    let w = ((width as f64) * scale).ceil() as u32;
+    let h = ((height as f64) * scale).ceil() as u32;
+    (w.max(1), h.max(1))
+}

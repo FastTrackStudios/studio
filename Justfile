@@ -250,12 +250,12 @@ guitar-switch-bench SWITCHES="12":
         --example switch_bench -- {{SWITCHES}}
 
 # Stage the browser keys rig's AudioWorklet bundle (W4 of
-# features/rigs/core/docs/browser-keys-rig.md) into the web bundle:
+# features/signal/docs/browser-keys-rig.md) into the web bundle:
 # a RELEASE wasm build of web-audio-worklet --features keys (KeysWorklet =
 # WebRenderer + headless KeysRig), wasm-bindgen'd `--target web`, plus
 # the keys-specific processor + worklet polyfill (AudioWorkletGlobalScope
 # has no dynamic import(), TextDecoder, crypto, or performance — see
-# features/audio/worklet/js/). The page (src/web_keys_rig.rs) expects:
+# features/adapters/web/worklet/js/). The page (src/web_keys_rig.rs) expects:
 #   /worklet/keys_processor.js
 #   /worklet/signal_keys_worklet.js
 #   /worklet/signal_keys_worklet_bg.wasm
@@ -278,10 +278,10 @@ keys-worklet-wasm out='apps/signal/desktop/web-dist/worklet':
     wasm-bindgen --target web --out-dir {{out}} \
         --out-name signal_keys_worklet \
         target/wasm32-unknown-unknown/release/web_audio_worklet.wasm
-    cp features/audio/worklet/js/keys_processor.js {{out}}/keys_processor.js
-    cp features/audio/worklet/js/worklet_polyfill.js {{out}}/worklet_polyfill.js
-    cp features/audio/worklet/js/keys_decoder_worker.js {{out}}/keys_decoder_worker.js
-    cp features/audio/worklet/js/keys_streamer_worker.js {{out}}/keys_streamer_worker.js
+    cp features/adapters/web/worklet/js/keys_processor.js {{out}}/keys_processor.js
+    cp features/adapters/web/worklet/js/worklet_polyfill.js {{out}}/worklet_polyfill.js
+    cp features/adapters/web/worklet/js/keys_decoder_worker.js {{out}}/keys_decoder_worker.js
+    cp features/adapters/web/worklet/js/keys_streamer_worker.js {{out}}/keys_streamer_worker.js
 
 # W13: the SHARED-MEMORY worklet build — wasm threads.
 #
@@ -325,12 +325,12 @@ keys-worklet-wasm-threads out='apps/signal/desktop/web-dist/worklet':
     wasm-bindgen --target web --out-dir {{out}} \
         --out-name signal_keys_worklet \
         target/wasm32-unknown-unknown/release/web_audio_worklet.wasm
-    cp features/audio/worklet/js/keys_processor.js {{out}}/keys_processor.js
-    cp features/audio/worklet/js/worklet_polyfill.js {{out}}/worklet_polyfill.js
-    cp features/audio/worklet/js/keys_decoder_worker.js {{out}}/keys_decoder_worker.js
-    cp features/audio/worklet/js/keys_streamer_worker.js {{out}}/keys_streamer_worker.js
+    cp features/adapters/web/worklet/js/keys_processor.js {{out}}/keys_processor.js
+    cp features/adapters/web/worklet/js/worklet_polyfill.js {{out}}/worklet_polyfill.js
+    cp features/adapters/web/worklet/js/keys_decoder_worker.js {{out}}/keys_decoder_worker.js
+    cp features/adapters/web/worklet/js/keys_streamer_worker.js {{out}}/keys_streamer_worker.js
 
-# Stage the browser guitar rig (features/rigs/core/docs/browser-guitar-rig.md):
+# Stage the browser guitar rig (features/signal/docs/browser-guitar-rig.md):
 # one wasm module with two entry points — GuitarWorklet on the AudioWorklet
 # thread, NamWorker on each NAM Web Worker — plus the processor, the worker,
 # the page-side orchestrator and the worklet polyfill (shared with keys).
@@ -346,10 +346,10 @@ guitar-worklet-wasm out='apps/signal/desktop/web-dist/worklet/guitar':
     wasm-bindgen --target web --out-dir {{out}} \
         --out-name signal_guitar_worklet \
         target/wasm32-unknown-unknown/release/web_audio_worklet.wasm
-    cp features/audio/worklet/js/guitar_processor.js {{out}}/
-    cp features/audio/worklet/js/nam_worker.js {{out}}/
-    cp features/audio/worklet/js/guitar_rig.js {{out}}/
-    cp features/audio/worklet/js/worklet_polyfill.js {{out}}/
+    cp features/adapters/web/worklet/js/guitar_processor.js {{out}}/
+    cp features/adapters/web/worklet/js/nam_worker.js {{out}}/
+    cp features/adapters/web/worklet/js/guitar_rig.js {{out}}/
+    cp features/adapters/web/worklet/js/worklet_polyfill.js {{out}}/
 
 # Try the browser guitar rig locally: stage the worklet bundle, export the
 # rig (XDG_CONFIG_HOME picks the config), copy the reference DI, and serve
@@ -359,7 +359,7 @@ guitar-worklet-wasm out='apps/signal/desktop/web-dist/worklet/guitar':
 guitar-web-harness dir='target/guitar-web' port='8765':
     just guitar-worklet-wasm {{dir}}
     cargo run -q -p signal-desktop --features cli --bin signal -- rig web-bundle {{dir}}/rig
-    cp features/audio/worklet/harness/index.html features/audio/worklet/harness/serve.py features/audio/worklet/harness/profile.mjs {{dir}}/
+    cp features/adapters/web/worklet/harness/index.html features/adapters/web/worklet/harness/serve.py features/adapters/web/worklet/harness/profile.mjs {{dir}}/
     cp "${XDG_CONFIG_HOME:-$HOME/.config}/signal/calibration/di-reference.wav" {{dir}}/ || echo "no di-reference.wav — the demo input needs one"
     python3 {{dir}}/serve.py {{port}}
 
@@ -919,7 +919,7 @@ css-ab *ARGS:
     cargo build -p fts-cli --bin fts
     # Score the binary we just BUILT. score.py defaults to ./target/debug/fts,
     # so under a CARGO_TARGET_DIR override it would silently score a stale one.
-    python3 features/rigs/sampler/tests/css-ab/score.py \
+    python3 features/sampler/tests/css-ab/score.py \
         --fts "${CARGO_TARGET_DIR:-target}/debug/fts" \
         --pack {{quote(css_pack)}} --json scratch/css-ab/score.json {{ARGS}}
 
@@ -954,18 +954,18 @@ css-ab-sections SECTIONS:
 # is only shape. To rule it out entirely: `just ee-serve --hot-reload
 # false`, or `just ee` for a one-shot window.
 ee-serve *ARGS:
-    dx serve -p expression-editor --features standalone,ui --example serve \
+    dx serve -p editor --features standalone,ui --example serve \
         --platform desktop --renderer native {{ARGS}}
 
 # One-shot window on a file (no hot reload, no chooser).
 ee SOURCE="phrase" *ARGS:
-    cargo run -p expression-editor --features standalone,ui --example editor -- {{SOURCE}} {{ARGS}}
+    cargo run -p editor --features standalone,ui --example editor -- {{SOURCE}} {{ARGS}}
 
 # The workstation: arrangement + TCP over the drum-mode editor, mixer
 # down the right, audio out the default output. Defaults to the drum-
 # mode reference session; pass any .rpp to open something else.
 workstation SOURCE="/run/media/AudioHaven/Project/02 LORD OF THE FIGHT/02 LORD OF THE FIGHT.RPP" *ARGS:
-    cargo run --release -p expression-editor --features standalone --example workstation -- \
+    cargo run --release -p editor --features standalone --example workstation -- \
         "{{SOURCE}}" --drums --size 1920x1080 {{ARGS}}
 
 # Repaint the visual-inspection PNGs into target/gui-shots/expression-editor.
@@ -976,7 +976,7 @@ workstation SOURCE="/run/media/AudioHaven/Project/02 LORD OF THE FIGHT/02 LORD O
 # of the suite into timing out. Single-threaded on purpose: they are all
 # CPU rasterization, so running them in parallel only makes each slower.
 ee-shots *ARGS:
-    cargo test -p expression-editor --features guitarpro,ui --test screenshots \
+    cargo test -p editor --features guitarpro,ui --test screenshots \
         -- --ignored --test-threads 1 {{ARGS}}
 
 # ── apps/session/web (session.fasttrackstudio.app) ────────────────────────────────
@@ -1073,7 +1073,7 @@ ee-practice $SONG="set-in-stone" $FRESH="false":
     # record as recorded.
     staging=(--cached)
     if [[ "$FRESH" == "true" ]]; then staging=(); fi
-    project=$(cargo run -p expression-editor --features standalone --example practice -- "${staging[@]}" "$SONG")
+    project=$(cargo run -p editor --features standalone --example practice -- "${staging[@]}" "$SONG")
     # Served, so `rsx!` edits hot-reload into the running window. `dx`
     # owns argv — it has --cargo-args and --rustc-args but nothing that
     # reaches the app — so the project goes through the environment
@@ -1083,7 +1083,7 @@ ee-practice $SONG="set-in-stone" $FRESH="false":
     # it. `tee` keeps it on screen too.
     mkdir -p target
     EXPRESSION_EDITOR_ARGS="'$project' --drums --size 1600x900" \
-        dx serve -p expression-editor --features standalone --example workstation \
+        dx serve -p editor --features standalone --example workstation \
         --platform desktop --renderer native 2>&1 | tee target/ee-practice.log
 
 # The same workstation in a WRY WebView (dioxus-desktop) instead of Blitz.
@@ -1116,7 +1116,7 @@ ee-webview $SONG="set-in-stone" $FRESH="false" $PROBE="0":
     fi
     staging=(--cached)
     if [[ "$FRESH" == "true" ]]; then staging=(); fi
-    project=$(cargo run -p expression-editor --features standalone --example practice -- "${staging[@]}" "$SONG")
+    project=$(cargo run -p editor --features standalone --example practice -- "${staging[@]}" "$SONG")
     # Served too, and this is the one where it pays most: a WebView has
     # devtools, so a hot-reloaded `rsx!` edit can be inspected as it
     # lands.
@@ -1125,7 +1125,7 @@ ee-webview $SONG="set-in-stone" $FRESH="false" $PROBE="0":
     RUST_LOG="${RUST_LOG:-warn,expression_editor_ui::frame_meter=info}" \
     ${WEBKIT_DISABLE_COMPOSITING_MODE:+WEBKIT_DISABLE_COMPOSITING_MODE="$WEBKIT_DISABLE_COMPOSITING_MODE"} \
     EXPRESSION_EDITOR_ARGS="'$project' --drums --size 1600x900" \
-        dx serve -p expression-editor --example webview \
+        dx serve -p editor --example webview \
         --platform desktop --features standalone,webview 2>&1 | tee target/ee-webview.log
 
 # Drive the WebView window on a private display and measure a scroll.
@@ -1173,11 +1173,11 @@ ee-practice-prepare $SONG="both" $FRESH="false":
     set -euo pipefail
     staging=(--cached)
     if [[ "$FRESH" == "true" ]]; then staging=(); fi
-    cargo run -p expression-editor --features standalone --example practice -- "${staging[@]}" "$SONG"
+    cargo run -p editor --features standalone --example practice -- "${staging[@]}" "$SONG"
 
 # Real-song regression: copy, load, split, undo/redo, save/reopen, verify originals.
 ee-practice-test:
-    cargo test -p expression-editor --features audio,standalone --test practice_real -- --ignored --nocapture --test-threads=1
+    cargo test -p editor --features audio,standalone --test practice_real -- --ignored --nocapture --test-threads=1
 
 # Fast iteration loop: the SAME cached song/audio staging every run, fewer
 # frames, optionally one phase. Prints the report directory for compare.py.
@@ -1191,7 +1191,7 @@ ee-bench $SONG="set-in-stone" $FRAMES="120" $PHASE="all_panels" $PROFILE="releas
     #!/usr/bin/env bash
     set -euo pipefail
     if [[ "$SONG" == "both" ]]; then echo 'Run one song per benchmark: set-in-stone or unbreakable' >&2; exit 2; fi
-    cargo build -p expression-editor --features standalone --example stress --example practice --profile "$PROFILE"
+    cargo build -p editor --features standalone --example stress --example practice --profile "$PROFILE"
     artifact_root="${CARGO_TARGET_DIR:-target}"
     artifact_profile="$PROFILE"
     if [[ "$PROFILE" == "dev" ]]; then artifact_profile=debug; fi
@@ -1232,7 +1232,7 @@ ee-stress $SONG="set-in-stone" $FRAMES="120" $PROFILE="dev" $ENFORCE="false":
     #!/usr/bin/env bash
     set -euo pipefail
     if [[ "$SONG" == "both" ]]; then echo 'Run one song per benchmark: set-in-stone or unbreakable' >&2; exit 2; fi
-    cargo build -p expression-editor --features standalone --example stress --example practice --profile "$PROFILE"
+    cargo build -p editor --features standalone --example stress --example practice --profile "$PROFILE"
     artifact_root="${CARGO_TARGET_DIR:-target}"
     artifact_profile="$PROFILE"
     if [[ "$PROFILE" == "dev" ]]; then artifact_profile=debug; fi
@@ -2078,12 +2078,12 @@ assets:
     done < assets.txt
     echo "linked $n assets from ${#fetched[@]} repos"
 
-# Generate frame's plugin faces (features/faces/generated: every `.frame`, the
-# catalogs and rig-faces/faces.json) from features/faces/plugin-faces. They are
+# Generate frame's plugin faces (features/ui/plugin-faces/generated: every `.frame`, the
+# catalogs and rig-faces/faces.json) from features/ui/plugin-faces. They are
 # not kept in git; session-daw and signal read them from here at runtime.
 # Deterministic: unchanged sources rewrite every file byte for byte.
 faces *ONLY:
-    cargo run -q --release -p plugin-faces -- features/faces/generated {{ if ONLY != "" { "--only " + ONLY } else { "" } }}
+    cargo run -q --release -p plugin-faces -- features/ui/plugin-faces/generated {{ if ONLY != "" { "--only " + ONLY } else { "" } }}
 
 # The face library: every plugin face rendered with frame's GPU effects
 # stage to OUT/<set>/<face>.webp, indexed by kind in OUT/index.json

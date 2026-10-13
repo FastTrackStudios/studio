@@ -503,16 +503,16 @@ a green report. Reduce the reproduction, fix the underlying behavior, and rerun 
 
 ## Code map and regression commands
 
-- [Harness entry point](../../features/expression-editor/expression-editor-standalone/examples/stress.rs):
+- [Harness entry point](../../features/editor/examples/stress.rs):
   load/stage, readiness, validation, measurement and raw output.
-- [Input workload](../../features/expression-editor/expression-editor-standalone/examples/stress_support/input.rs):
+- [Input workload](../../features/editor/examples/stress_support/input.rs):
   pane coordinates, DOM input and phase assertions.
 - [Report tool](run.py): distributions and strict budget gate; never sends input.
-- [Workstation](../../features/expression-editor/expression-editor-standalone/src/workstation.rs):
+- [Workstation](../../features/editor/src/standalone/workstation.rs):
   the production root shared by the window and headless test.
-- [Mixer](../../features/expression-editor/expression-editor-standalone/src/workstation/mixer.rs):
+- [Mixer](../../features/editor/src/standalone/workstation/mixer.rs):
   viewport-based strip mounting and scroll subscription.
-- [Practice workflow](../../features/expression-editor/expression-editor-standalone/PRACTICE.md):
+- [Practice workflow](../../features/editor/PRACTICE.md):
   safe copies and the opt-in audio/project preservation regression.
 
 ```sh

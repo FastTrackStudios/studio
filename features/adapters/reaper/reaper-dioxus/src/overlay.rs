@@ -111,7 +111,8 @@ pub struct OverlayConfig {
     pub interactive: bool,
     /// Whether to auto-fit the window size to the DOM content after initial build.
     pub auto_fit: bool,
-    /// Whether to hide the window after the initial render for later instant display.
+    /// Whether to render once and then hide the window, so a later show is
+    /// instant (the which-key popup).
     pub start_hidden: bool,
 }
 
@@ -218,14 +219,8 @@ impl DioxusOverlay {
         let width = width.max(1);
         let height = height.max(1);
 
-        let t_start = std::time::Instant::now();
-        tracing::debug!(x, y, width, height, "DioxusOverlay build: begin");
-
         // Create the transparent window (platform-specific: macOS Cocoa, Linux X11)
-        let t = std::time::Instant::now();
         let mut window = TransparentWindow::open(x, y, width, height)?;
-        let t_window_open = t.elapsed();
-        tracing::debug!("DioxusOverlay build: transparent window opened");
 
         // Set click-through based on config
         if !config.interactive {
@@ -236,20 +231,28 @@ impl DioxusOverlay {
         }
 
         window.show();
-        tracing::debug!("DioxusOverlay build: window shown");
 
         // Query HiDPI scale factor
         let scale_factor = reaper_embed::display_scale_factor() as f32;
-        tracing::debug!(scale_factor, "DioxusOverlay build: display scale");
 
         // Set up document::Style message channel
         let (doc_tx, doc_rx) = unbounded();
         let doc_proxy = Rc::new(DocumentProxy::new(doc_tx));
 
-        // Create the Dioxus virtual DOM and document
-        let t = std::time::Instant::now();
+        // Create the Dioxus virtual DOM and document.
+        //
+        // `Viewport::new(physical_w, physical_h, hidpi)` expects **physical**
+        // pixels for the first two args. The `width`/`height` we received
+        // from `open()` are logical points (NSWindow units on macOS), so
+        // multiply by the backing scale to get the physical canvas size
+        // Blitz lays out into. Without this, Blitz treats 260 points as
+        // 260 physical pixels → CSS sees a 130-pixel-wide canvas after
+        // dividing by hidpi, so 13px text occupies ~10% of the viewport
+        // and renders ~2× larger than intended.
+        let physical_w = ((width as f32) * scale_factor) as u32;
+        let physical_h = ((height as f32) * scale_factor) as u32;
         let vdom = VirtualDom::new(app);
-        let viewport = Viewport::new(width, height, scale_factor, ColorScheme::Dark);
+        let viewport = Viewport::new(physical_w, physical_h, scale_factor, ColorScheme::Dark);
 
         let mut doc = DioxusDocument::new(
             vdom,
@@ -258,8 +261,6 @@ impl DioxusOverlay {
                 ..Default::default()
             },
         );
-        let t_doc_create = t.elapsed();
-        tracing::debug!("DioxusOverlay build: document created");
 
         // Inject contexts into the root scope before initial build
         doc.vdom.in_scope(ScopeId::ROOT, || {
@@ -271,16 +272,11 @@ impl DioxusOverlay {
                 ctx_fn();
             }
         });
-        tracing::debug!("DioxusOverlay build: contexts injected");
 
         // Initial DOM build — this may queue document::Style messages
-        let t = std::time::Instant::now();
         doc.initial_build();
-        let t_initial_build = t.elapsed();
-        tracing::debug!("DioxusOverlay build: initial DOM built");
 
         // Process any document::Style messages before first layout
-        let t = std::time::Instant::now();
         while let Ok(msg) = doc_rx.try_recv() {
             match msg {
                 DocumentMessage::CreateHeadElement {
@@ -292,24 +288,25 @@ impl DioxusOverlay {
                 }
             }
         }
-        let t_head_msgs = t.elapsed();
-        tracing::debug!("DioxusOverlay build: head messages processed");
 
         // Resolve Taffy layout
-        let t = std::time::Instant::now();
         doc.inner_mut().resolve(0.0);
-        let t_layout = t.elapsed();
-        tracing::debug!("DioxusOverlay build: layout resolved");
 
-        // Auto-fit: query the root element's layout size and resize window to fit
+        // Auto-fit: query the root element's CSS layout size and resize
+        // the window to fit. `query_root_content_size` returns CSS px
+        // (= logical points); pass straight to TransparentWindow::set_frame
+        // and re-derive the physical-pixel viewport for Blitz.
         if config.auto_fit
             && let Some((content_w, content_h)) = query_root_content_size(&doc)
         {
-            let fit_w = (content_w * scale_factor as f64).ceil() as u32;
-            let fit_h = (content_h * scale_factor as f64).ceil() as u32;
-            if fit_w > 0 && fit_h > 0 {
-                window.set_frame(x, y, fit_w, fit_h);
-                let viewport = Viewport::new(fit_w, fit_h, scale_factor, ColorScheme::Dark);
+            let logical_w = content_w.ceil() as u32;
+            let logical_h = content_h.ceil() as u32;
+            if logical_w > 0 && logical_h > 0 {
+                window.set_frame(x, y, logical_w, logical_h);
+                let physical_w = ((logical_w as f32) * scale_factor) as u32;
+                let physical_h = ((logical_h as f32) * scale_factor) as u32;
+                let viewport =
+                    Viewport::new(physical_w, physical_h, scale_factor, ColorScheme::Dark);
                 doc.inner_mut().set_viewport(viewport);
                 doc.inner_mut().resolve(0.0);
             }
@@ -318,7 +315,6 @@ impl DioxusOverlay {
         // Create waker (sets a flag when async tasks need attention)
         let needs_redraw = Arc::new(AtomicBool::new(true));
         let waker = futures_util::task::waker(Arc::new(OverlayWaker(needs_redraw.clone())));
-        tracing::debug!("DioxusOverlay build: initial render");
 
         let mut overlay = Self {
             window,
@@ -333,24 +329,11 @@ impl DioxusOverlay {
             height,
             interactive: config.interactive,
         };
-        let t = std::time::Instant::now();
-        overlay.update();
-        let t_first_update = t.elapsed();
         if config.start_hidden {
+            // Rendered once while visible, so the first show has a frame.
+            overlay.update();
             overlay.hide();
         }
-
-        tracing::info!(
-            window_open_ms = t_window_open.as_millis(),
-            doc_create_ms = t_doc_create.as_millis(),
-            initial_build_ms = t_initial_build.as_millis(),
-            head_msgs_ms = t_head_msgs.as_millis(),
-            layout_ms = t_layout.as_millis(),
-            first_update_ms = t_first_update.as_millis(),
-            total_ms = t_start.elapsed().as_millis(),
-            "DioxusOverlay build timing"
-        );
-
         Ok(overlay)
     }
 
@@ -381,14 +364,18 @@ impl DioxusOverlay {
         // Resolve Taffy layout
         self.doc.inner_mut().resolve(animation_time);
 
-        // Paint the DOM tree to a Vello scene
+        // Paint the DOM tree to a Vello scene. `paint_scene` expects the
+        // canvas dimensions in **physical** pixels — must match the GPU
+        // surface, which we sized as `logical_points * backing_scale`.
+        let physical_w = ((self.width as f32) * self.scale_factor) as u32;
+        let physical_h = ((self.height as f32) * self.scale_factor) as u32;
         self.scene.reset();
         paint_scene(
             &mut VelloScenePainter::new(&mut self.scene),
             &mut self.doc.inner_mut(),
             self.scale_factor as f64,
-            self.width,
-            self.height,
+            physical_w,
+            physical_h,
             0,
             0,
         );
@@ -401,7 +388,8 @@ impl DioxusOverlay {
         self.needs_redraw.store(false, Ordering::Relaxed);
     }
 
-    /// Reposition and resize the overlay window.
+    /// Reposition and resize the overlay window. `width`/`height` are in
+    /// logical points (the same units `TransparentWindow` accepts).
     pub fn set_frame(&mut self, x: i32, y: i32, width: u32, height: u32) {
         let width = width.max(1);
         let height = height.max(1);
@@ -411,19 +399,25 @@ impl DioxusOverlay {
             self.width = width;
             self.height = height;
 
-            // Update the viewport so Taffy re-layouts at the new size
-            let viewport = Viewport::new(width, height, self.scale_factor, ColorScheme::Dark);
+            // Viewport expects physical pixels — multiply logical points
+            // by the backing scale (see comment in `new_inner`).
+            let physical_w = ((width as f32) * self.scale_factor) as u32;
+            let physical_h = ((height as f32) * self.scale_factor) as u32;
+            let viewport =
+                Viewport::new(physical_w, physical_h, self.scale_factor, ColorScheme::Dark);
             self.doc.inner_mut().set_viewport(viewport);
         }
     }
 
-    /// Auto-fit the window to the current DOM content size.
-    /// Returns the new (width, height) if resized, or None if content size
-    /// couldn't be determined.
+    /// Auto-fit the window to the current DOM content size. The returned
+    /// `(width, height)` is in **logical points** to match `set_frame`.
     pub fn fit_to_content(&mut self) -> Option<(u32, u32)> {
         if let Some((content_w, content_h)) = query_root_content_size(&self.doc) {
-            let fit_w = (content_w * self.scale_factor as f64).ceil() as u32;
-            let fit_h = (content_h * self.scale_factor as f64).ceil() as u32;
+            // `query_root_content_size` returns CSS px (= logical points).
+            // Pass straight through to `set_frame`, which handles the
+            // physical-pixel conversion internally for the viewport/GPU.
+            let fit_w = content_w.ceil() as u32;
+            let fit_h = content_h.ceil() as u32;
             if fit_w > 0 && fit_h > 0 {
                 let bounds = self.window.bounds();
                 self.set_frame(bounds.x, bounds.y, fit_w, fit_h);

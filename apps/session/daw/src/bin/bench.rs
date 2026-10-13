@@ -709,7 +709,7 @@ fn expression_shot(palette: &Palette, out: &std::path::Path, width: u32, height:
         out.display(),
         view.editor.doc.notes.len(),
         match &view.editor.row_space {
-            expression_editor::RowSpace::Drums(map) => map.lanes.len(),
+            editor::RowSpace::Drums(map) => map.lanes.len(),
             _ => 0,
         }
     );
@@ -783,7 +783,7 @@ fn editor_shot(palette: &Palette, out: &std::path::Path, width: u32, height: u32
             e.editor.doc.end,
             e.editor.tracks.len()
         );
-        for l in expression_editor::paint::stack::geometry::lanes(&e.editor, 1.8, 0.0) {
+        for l in editor::paint::stack::geometry::lanes(&e.editor, 1.8, 0.0) {
             println!(
                 "  lane {} {:?} y {:.0} h {:.0} notes {} active {}",
                 l.track,
@@ -2398,7 +2398,7 @@ fn faces_bench(which: &str) {
     let dir = std::env::var_os("FTS_FRAME_DIR").map_or_else(
         || {
             std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-                .join("../../../features/faces/generated")
+                .join("../../../features/ui/plugin-faces/generated")
         },
         Into::into,
     );

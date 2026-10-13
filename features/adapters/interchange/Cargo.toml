@@ -1,0 +1,31 @@
+[package]
+name = "interchange"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Interchange formats no one host owns: AAF and DAWproject"
+
+[lints]
+workspace = true
+
+[features]
+aaf = ["dep:cfb"]
+dawproject = ["dep:roxmltree", "dep:zip"]
+
+[dependencies]
+cfb = { version = "0.10", optional = true }
+daw-proto = { workspace = true }
+roxmltree = { version = "0.20", optional = true }
+thiserror = { workspace = true }
+zip = { version = "2", default-features = false, features = ["deflate"], optional = true }
+
+[dev-dependencies]
+interchange = { path = ".", features = ["aaf", "dawproject"] }
+# required-features): a plain `cargo test` of the workspace builds them all.
+daw-proto = { workspace = true }
+dawfile-reaper = { workspace = true }
+loro = { workspace = true }
+tempfile = { workspace = true }
+uuid = { workspace = true }

@@ -4,7 +4,7 @@ version.workspace = true
 edition.workspace = true
 authors.workspace = true
 license.workspace = true
-description = "REAPER extension providing daw-reaper-dioxus rendering as a service (cdylib loaded into REAPER as `reaper_daw_dioxus.so`)"
+description = "REAPER extension providing reaper-dioxus rendering as a service (cdylib loaded into REAPER as `reaper_daw_dioxus.so`)"
 
 [package.metadata]
 
@@ -21,7 +21,7 @@ daw = { workspace = true }
 studio = { workspace = true, features = ["reaper", "reaper-ui"] }
 daw-extension-runtime.workspace = true
 daw-module = { workspace = true }
-daw-reaper-dioxus = { workspace = true }
+reaper-dioxus = { workspace = true }
 daw-ui = { workspace = true, features = ["reaper-test-panels"] }
 crossbeam-channel = "0.5"
 eyre = "0.6"

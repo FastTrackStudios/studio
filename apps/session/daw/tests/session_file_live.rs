@@ -46,8 +46,8 @@ fn a_saved_session_opens_as_it_was_saved() {
     Tracks::add(&opened.daw, song.clone(), "Pad", None).expect("a track");
     daw::service::Projects::end_undo_block(&opened.daw, song.clone(), "Add Pad", None);
     let steps = || -> Vec<String> {
-        formats::store::Store::open(&saved)
-            .and_then(|store| store.steps(formats::store::MAIN))
+        session_format::store::Store::open(&saved)
+            .and_then(|store| store.steps(session_format::store::MAIN))
             .map(|steps| steps.into_iter().map(|s| s.label).collect())
             .unwrap_or_default()
     };
@@ -96,7 +96,7 @@ fn a_saved_session_opens_as_it_was_saved() {
         session_daw::guide_instrument::Library::Folder(session_daw::guide_instrument::samples_dir()),
     );
     let loaded =
-        session_daw::project_file::load(&again, "Saved Song", &saved, formats::store::MAIN)
+        session_daw::project_file::load(&again, "Saved Song", &saved, session_format::store::MAIN)
             .expect("load");
     let after = snapshot(&again, &ProjectContext::Project(loaded));
 

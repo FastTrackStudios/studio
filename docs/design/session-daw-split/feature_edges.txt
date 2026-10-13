@@ -1,0 +1,278 @@
+== arrangement -> timeline
+  arrange_edit -> cursor: (module), Edit
+  arrange_edit -> gesture: SLOP
+  arrange_edit -> hit: Hit, Target
+  arrange_edit -> mousemap: Gesture, Mods, self
+  arrange_edit -> options: AUTO_CROSSFADE, GROUPING, LOCKING
+  arrangement -> lanes: expanded, folder_view, playing, shown_on, speaks_for
+  arrangement -> layout: Layout
+  arrangement -> midi: Child, Note, Previews, Wave, fold_notes, fold_waves
+  arrangement -> options: OUTLINED
+  arrangement -> row: Control, Row
+  arrangement -> wave_detail: Source, get
+  comp -> lanes: called, lane_called, opened_by, set_expanded, shown_on
+  ruler -> grid_in_force: current
+  ruler -> options: GRID
+  swipe -> lanes: called
+  tcp -> layout: Layout
+  tcp -> row: Control, automation_button
+  widget -> cursor: Edit, Look, Span, Trail, paint, paint_edit, publish, take_asked
+  widget -> gesture: DOUBLE, FINE, drag_fraction
+  widget -> grid_in_force: InForce, set
+  widget -> hit: Hit, Target, arrangement
+  widget -> lanes: called, grouped_tracks, label, mask_named, opened, opened_by, set_expanded, speaks_for, stepped
+  widget -> layout: CONTROL_ROW, Layout
+  widget -> midi: Previews, Wave, take_stale
+  widget -> mousemap: Action, Gesture, Mods, resolve
+  widget -> options: LOCKING, OUTLINED
+  widget -> pointer: Pointer, RowSpot
+  widget -> row: Control, Row, automation_button
+  widget -> tool: Edge, Over, Pointing, Shared
+  widget -> wave_detail: generation
+  widget -> wave_pool: spawn
+  widget -> zoom: Command, Request, Requests
+== arrangement -> mixer
+  arrangement -> skin: ROW, RowShown, canvas, loaded, row_control, row_fields, row_hit_fields
+  arrangement -> track_icon: Icon, paint
+  comp -> gain_stage: path_of
+  tcp -> track_icon: Icon, paint
+  widget -> gain_stage: clear_live, stage_live
+  widget -> mcp: Control
+  widget -> mixer_panel: Key
+  widget -> skin: from_env, palette, poll, version
+== arrangement -> automation
+  arrangement -> automation: lanes_height
+  widget -> automation: adopt_remote, read_remote, set_take_curve, take_curve, with_point, without_point
+  widget -> automation_draw: Hit, Lit, Spot, TakeHit, bodies, headers, hit, leveler_lines, on_screen, take_gain_at, take_hit, take_lines
+  widget -> automation_edit: Keys, LaneDrag, drag, press, release
+  widget -> automation_menu: Pick, act, modes, top
+== arrangement -> drum
+  arrange_edit -> drum_edit: is_edited
+  arrangement -> hit_overlay: Edited, Mark, Overlay, Stretch, Who
+  arrangement -> kit_gate: Gate, of, version
+  track_regions -> drum_reference: find_track, notes, pieces
+  track_regions -> hits: kit
+  widget -> drum_settings: current
+  widget -> hit_overlay: Overlay, current, refresh, version
+  widget -> poi: paint, version
+  widget -> quantize_panel: again_over, asked, last
+== arrangement -> fx_rack
+  track_regions -> fx_actions: moment
+== arrangement -> chart
+  track_regions -> song_bars: musical
+== arrangement -> collab
+  widget -> ghosts: active, local_pointer, local_selection, local_shown, local_tcp_pointer, paint
+== arrangement -> session
+  marks_strip -> open: runtime
+  widget -> open: runtime
+== arrangement -> elsewhere
+  widget -> editor_view: picked
+== mixer -> arrangement
+  mcp -> arrangement: Palette, submit_command
+  mcp -> tcp: caret, folder_band, glyphs, record_input, row_tint, track_color
+  mix_guide -> widget: edit_song
+  mixer_panel -> arrangement: Palette
+  mixer_panel -> folds: generation, toggle
+  mixer_panel -> tcp: glyphs, track_color
+  skin -> arrangement: Palette
+  skin -> tcp: Density, Tcp, band, folder_band, lit, mute_lit, rail_layout, record_input, row_tint, solo_lit, to_theme, track_color, volume_fraction
+  strip -> tcp: volume_fraction
+== mixer -> timeline
+  gain_stage -> midi: ANALYSIS_BLOCK, Wave
+  mcp -> layout: Layout, Wash, rack_fill, strip_edge, strip_fill
+  mix_chains -> midi: ANALYSIS_BLOCK, Wave
+  mixer_panel -> gesture: DOUBLE, drag_fraction
+  mixer_panel -> layout: Layout
+  mixer_panel -> options: LOCKING
+  mixer_panel -> pointer: Pointer, Spot
+  skin -> row: Control
+== mixer -> drum
+  mix_chains -> fundamental: KICK, SNARE, TOM, find
+  mixer_panel -> quantize_panel: QuantizePanel
+== mixer -> fx_rack
+  mcp -> tone: Folded, LEGIBLE, Panel, Rack, Store, Tone, Which, record
+  mixer_panel -> tone: Analyser, Fold, Grip, Levels, Panel, Shared, WORKING, Which, dot_click, drag, grip_at, panels_for, reset, scroll_span, toggle
+  strip -> tone: FOCUSED
+== mixer -> collab
+  mixer_panel -> ghosts: Anchor, region_mounted, register_anchor
+== mixer -> session
+  mix_guide -> setlist: Setlist
+  routes -> open: runtime
+== mixer -> elsewhere
+  skin -> expression: base_look, look_fields
+== automation -> arrangement
+  automation -> folds: touch
+  automation_draw -> arrangement: Arrangement, Palette, Viewport
+  automation_draw -> tcp: glyphs
+  automation_edit -> arrangement: Viewport
+== automation -> mixer
+  automation_actions -> gain_stage: path_of
+== automation -> vocals
+  automation -> leveler: Leveled, Stage, adopt
+  automation -> vocal_level: has_lanes, lane_shown, leveled
+  automation_actions -> vocal_level: playing, show_lane
+  automation_draw -> leveler: AMOUNT_MAX, Stage, any, item_y, trace, with_item
+  automation_edit -> leveler: Dial, Stage, set_dial, stages_of, update, with_item
+  automation_edit -> vocal_level: relevel, set_stages, show_lane
+  automation_menu -> vocal_level: has_lanes, lane_shown, show_lane
+== automation -> fx_rack
+  automation_actions -> fx_actions: mode_of, moment, param_of, shape_of, target, value_of
+  automation_draw -> tone: knob_arc
+== automation -> session
+  automation -> open: current_song, local_engine
+== drum -> arrangement
+  hits -> track_regions: Origin, RegionKind, TrackRegion, add, change, fresh_id, kit_folder, kit_marks, parse_grid
+  poi -> arrangement: Palette, Viewport
+  poi -> ruler: LANE_H, MARKS_ROW, lane_shown, row_top
+  poi -> tcp: glyphs
+  poi -> track_regions: bar_of, fresh_id, moment
+== drum -> timeline
+  drum_level -> midi: mark_stale
+  hit_overlay -> wave_detail: engine_changed
+  poi -> bar_step: STEP_ACTION
+  poi -> cursor: Edit, ask, current
+  quantize_panel -> cursor: current
+== drum -> mixer
+  drum_group -> gain_stage: path_of
+  drum_lanes -> gain_stage: path_of
+  drum_reference -> gain_stage: path_of
+  hits -> gain_stage: path_of
+== drum -> chart
+  hits -> song_bars: musical
+== drum -> session
+  drum_reference -> open_core: Media, load_into_with
+  hit_overlay -> open: runtime
+  poi -> open: runtime
+  poi -> organize: engine_edit
+  quantize_panel -> open: runtime
+== vocals -> arrangement
+  record_view -> ruler: Timeline
+== vocals -> timeline
+  vocal_level -> midi: mark_stale
+== vocals -> mixer
+  record_view -> mixer_panel: Links, Mixer, WebMixer
+  vocal_level -> gain_stage: path_of
+== vocals -> automation
+  leveler -> automation: db_at, update_leveled
+  vocal_level -> automation: Leveled
+== vocals -> drum
+  vocal_level -> drum_level: write_curve
+== vocals -> session
+  record_view -> setlist: Setlist
+  take_rating -> open: runtime
+== fx_rack -> arrangement
+  faces -> arrangement: Palette
+  faces -> tcp: glyphs
+  fx_view -> arrangement: Palette
+  fx_view -> tcp: glyphs
+  macros -> arrangement: Palette
+  macros -> tcp: glyphs
+  tone -> arrangement: Palette
+  tone -> tcp: glyphs
+== fx_rack -> timeline
+  fx_view -> gesture: drag_fraction
+  fx_view -> layout: Layout
+  fx_view -> options: LOCKING
+  fx_view -> pointer: Pointer
+== fx_rack -> mixer
+  fx_view -> mcp: Control, Mixer, control_in
+  fx_view -> mixer_panel: predict
+  fx_view -> skin: canvas, loaded, palette, values, version
+  live -> mcp: f64_to_f32
+  macros -> skin: canvas, loaded, values
+  tone -> mcp: f64_to_f32
+  tone -> skin: canvas, loaded, values
+== fx_rack -> chart
+  fx_actions -> song_bars: measure, musical
+== fx_rack -> session
+  tone -> open: current_song, local_engine
+  tone_read -> open: current_song, local_engine
+== fx_rack -> removed
+  faces -> rig: DELAY_ALGOS, FaceEntry, design_of, faces, pick_design
+  fx_view -> rig: Block, FaceEntry, Faces, Rig, Section, face_of, for_track, pick_design, section_of
+== chart -> arrangement
+  lyrics_panel -> ruler: SECTIONS_ROW
+== chart -> collab
+  chart_editor -> collab: chart_context, local_chart, take_remote_chart
+  chart_panel -> ghosts: Anchor, register_anchor
+== chart -> session
+  chart_editor -> open: LocalOnly, current_song, is_session, with_local_engine
+  chart_editor -> prepare: apply_chart
+  chart_editor -> session_file: save_session_behind
+  chart_panel -> open: current_song
+== collab -> arrangement
+  ghosts -> arrangement: Arrangement, Palette, Viewport, submit_command
+  ghosts -> ruler: ruler_h
+  ghosts -> tcp: glyphs
+== collab -> timeline
+  collab -> cursor: current
+== collab -> chart
+  collab -> chart_editor: local_caret
+== collab -> session
+  collab -> open: LocalOnly, current_song, local_engine, runtime, with_local_engine
+  collab -> prepare: chart_beside
+  collab -> project_file: doc_of
+  collab_bar -> open: current_song, switch_song
+  collab_bar -> setlist: Setlist
+== stream -> collab
+  stream_in -> collab: env_set
+  stream_set -> collab: TaskSet, join_task_in_background
+== stream -> session
+  reference -> open: equip
+  reference -> open_core: is_session, open_song_into
+  reference -> prepare: Prepare
+  song_stream -> folder: Disk, Folder, Memory
+  song_stream -> open: Media, open_song_into_with, runtime
+  song_stream -> prepare: Prepare
+  song_stream -> setlist: song_in
+  stream_in -> open: Media, begin_asset_load, cue_engine, current_song, mode, open_song_into_with, runtime, set_assets_progress, set_cue_ready, switch_to
+  stream_in -> prepare: Prepare
+  stream_in -> setlist: read_setlist
+  stream_set -> open: engine_runtime, local_engine
+  stream_set -> setlist: Arrival, Opening, Setlist
+  task_account -> open: engine_runtime
+== session -> arrangement
+  instrument_tracks -> folds: toggle
+== session -> timeline
+  organize -> cursor: Edit, Span, ask, current
+  project_new -> cursor: Edit, ask
+== session -> mixer
+  prepare -> gain_stage: kit_headroom, stage
+  prepare -> mix_chains: add
+== session -> chart
+  open_core -> section_colors: apply, pending
+== session -> collab
+  setlist -> collab: song_opened
+== session -> stream
+  open -> reference_play: renderer
+  open -> stream_in: start
+  setlist -> reference_play: hear_local
+  setlist -> song_stream: StreamedSong
+  setlist -> stream_set: stream
+== removed -> mixer
+  bass_rig -> gain_stage: path_of
+  drum_samples -> gain_stage: path_of
+== removed -> drum
+  drum_samples -> drum_reference: notes, pieces, qn_between
+  drum_samples -> hits: playback
+== removed -> fx_rack
+  rig -> beats: BPM, DELAY, FREE_DIV, MOD, REVERB, beat, nearest_delay, nearest_mod, nearest_reverb, seconds_text
+  rig -> faces: FrameFace, design_dir
+== elsewhere -> arrangement
+  editor_view -> arrangement: Palette
+  editor_view -> tcp: glyphs
+  editor_view -> widget: mods
+  expression -> arrangement: Palette
+  patch_list -> arrangement: Palette
+  patch_list -> tcp: glyphs
+== elsewhere -> timeline
+  editor_view -> mousemap: Mods
+  editor_view -> tool: zoom_held
+  expression -> mousemap: Mods
+  expression -> tool: zoom_held
+== elsewhere -> mixer
+  editor_view -> skin: palette, version
+  expression -> skin: canvas, loaded, values
+== elsewhere -> session
+  editor_view -> open: local_engine, runtime
+  expression -> open: runtime

@@ -28,11 +28,23 @@ crates/     daw/*      the DAW alone: the domain core (`daw`), proto, control,
                        desktop, mcp, library-server)
             keyflow/   keyflow-proto, keyflow-syntax (the rest of keyflow is a
                        git dep)
-features/   one crate per feature, sub-folders allowed: dsp/* (the effects),
-            rigs/* (Signal's rigs; rigs/core/* is the signal domain), audio,
-            midi, session, song, chords, formats, editing, expression-editor,
-            input, sync, ui/*, faces, control-surfaces, patchbay,
-            adapters/reaper/*, dynamic-template, …
+features/   one crate per feature, sub-folders allowed. Name a feature for what
+            it is; anything host-specific goes under adapters/<host>.
+            signal/      Signal's domain: rigs, presets, scenes, its browser,
+                         storage, controller, grid, macros (facade at the root)
+            rigs/        the instruments — guitar, keys, drums, ekit, synth,
+                         orchestra — plus host/ (rigs on the one engine) and
+                         proto/ (the shared RigCore service)
+            dsp/*        the effects and their engines (+ nam, analyzer, …)
+            editor/      the editor: piano roll, drum lanes, curves
+            editing/     the editing engine the arrangement and the editor
+                         share (becoming `timeline`)
+            session/, song/, sampler/, plugin-host/, audio/, midi/, input/,
+            sync/, chords/, formats/, patchbay/, control-surfaces/,
+            dynamic-template/, patch-list/, preset-browser/, …
+            ui/*         shared UI: daw-ui, dock, plugin-core, plugin-faces, …
+            app/         shell (log ring, crash log, update check), launcher
+            adapters/    reaper/ (everything REAPER), web/ (the AudioWorklet)
 vendor/     patched third-party crates (each with UPSTREAM.md or FTS-PATCH.md)
 xtask/      devtools, frame (Figma parity), plugins (the bundler), session-reaper
 docs/       design/ (one-engine.md), per-domain notes (daw, signal, frame,
@@ -44,7 +56,7 @@ scripts/    helper scripts the Justfile calls
 
 Some features carry their own `AGENTS.md` / `README.md`
 (`features/input`, `features/dynamic-template`,
-`features/expression-editor`, …) — read it before working there.
+`features/editor`, …) — read it before working there.
 
 ## The model
 
@@ -60,14 +72,14 @@ Some features carry their own `AGENTS.md` / `README.md`
   **`docs/design/one-engine.md`** before touching rigs, engines, meters or
   MIDI.
 - **The apps share their shell**: the log ring / crash log / flight log
-  and the update check are `features/app-shell`; prefs are `utils::prefs`.
+  and the update check are `features/app/shell`; prefs are `utils::prefs`.
   Session and Signal do not keep copies.
 - **The apps share their shell**: the log ring / crash log / flight log
-  and the update check are `features/app-shell`; prefs are `utils::prefs`.
+  and the update check are `features/app/shell`; prefs are `utils::prefs`.
   Session and Signal do not keep copies.
 - **Faces are frame documents.** Control surfaces and plugin faces are
   `.frame` documents rendered by `crates/frame`. `just faces` generates the
-  plugin faces into `features/faces/generated` (not kept in git; the apps
+  plugin faces into `features/ui/plugin-faces/generated` (not kept in git; the apps
   read them at runtime).
 
 ## Crate rules
@@ -194,8 +206,8 @@ other way.
 ## Signal, plugin and DSP rules
 
 Signal is the live-rig domain: `features/rigs/*` (the domain core in
-`features/rigs/core/*` — proto, live, storage, controller, rig-host, grid,
-tone3000, …; docs in `features/rigs/core/docs/`), the effects in
+`features/signal/*` — proto, live, storage, controller, rig-host, grid,
+tone3000, …; docs in `features/signal/docs/`), the effects in
 `features/dsp/*`, `features/adapters/reaper/signal-*` and `apps/signal/*`.
 `docs/signal/domain-model.md` explains the rig model.
 

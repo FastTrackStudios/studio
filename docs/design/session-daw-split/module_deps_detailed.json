@@ -1,0 +1,6140 @@
+{
+ "reexports_in_lib": [
+  "open_core"
+ ],
+ "lines": {
+  "actions": 6350,
+  "animate": 201,
+  "arrange_edit": 5683,
+  "arrangement": 4860,
+  "art": 208,
+  "audio_mode": 673,
+  "automation": 1022,
+  "automation_actions": 1206,
+  "automation_draw": 1133,
+  "automation_edit": 797,
+  "automation_menu": 315,
+  "balance": 295,
+  "bar_step": 471,
+  "bass_rig": 232,
+  "beats": 122,
+  "browser": 254,
+  "chart_editor": 404,
+  "chart_panel": 981,
+  "closeup": 556,
+  "collab": 1809,
+  "collab_bar": 586,
+  "collab_pointers": 116,
+  "comp": 484,
+  "compact": 706,
+  "cursor": 926,
+  "device_audio": 42,
+  "drum_edit": 444,
+  "drum_group": 110,
+  "drum_lanes": 395,
+  "drum_level": 325,
+  "drum_reference": 586,
+  "drum_samples": 495,
+  "drum_settings": 304,
+  "editor_view": 1046,
+  "engine": 3428,
+  "expression": 2549,
+  "faces": 1265,
+  "folder": 237,
+  "folder_item": 2326,
+  "folds": 516,
+  "fps": 317,
+  "fundamental": 559,
+  "fx_actions": 814,
+  "fx_view": 2468,
+  "gain_stage": 878,
+  "gesture": 337,
+  "ghosts": 668,
+  "grid_in_force": 149,
+  "groove": 589,
+  "grow": 1064,
+  "guide_instrument": 427,
+  "headless": 210,
+  "hit": 193,
+  "hit_overlay": 262,
+  "hits": 2849,
+  "hook_rules": 104,
+  "icons": 213,
+  "instrument_tracks": 552,
+  "jobs": 91,
+  "keys": 999,
+  "kit_gate": 160,
+  "lanes": 443,
+  "layout": 317,
+  "leveler": 865,
+  "live": 517,
+  "loading": 105,
+  "lyrics_panel": 950,
+  "macros": 308,
+  "marks_strip": 235,
+  "mcp": 2378,
+  "mcp_server": 130,
+  "midi": 849,
+  "mix_chains": 1228,
+  "mix_export": 213,
+  "mix_guide": 138,
+  "mixer_panel": 2707,
+  "mousemap": 429,
+  "navigator": 205,
+  "notice": 265,
+  "num": 126,
+  "open": 1084,
+  "open_core": 433,
+  "options": 82,
+  "organize": 412,
+  "overlay": 2322,
+  "panel": 1154,
+  "patch_list": 807,
+  "plan": 597,
+  "play_return": 265,
+  "plugin_faces": 976,
+  "poi": 441,
+  "pointer": 194,
+  "popup": 247,
+  "prepare": 803,
+  "profile": 214,
+  "progress": 362,
+  "project_file": 753,
+  "project_new": 193,
+  "projects": 342,
+  "quantize_panel": 834,
+  "rails": 756,
+  "record": 190,
+  "record_view": 641,
+  "reference": 286,
+  "reference_play": 145,
+  "rename": 324,
+  "rig": 824,
+  "rig_actions": 346,
+  "routes": 510,
+  "row": 580,
+  "ruler": 1794,
+  "section_colors": 114,
+  "session_file": 49,
+  "setlist": 862,
+  "settings": 150,
+  "setup": 541,
+  "shell": 1723,
+  "simulate": 708,
+  "skin": 3543,
+  "song_bars": 91,
+  "song_chart": 138,
+  "song_modes": 147,
+  "song_stream": 1742,
+  "stream_in": 585,
+  "stream_set": 734,
+  "strip": 908,
+  "studio": 984,
+  "swipe": 288,
+  "take_rating": 315,
+  "take_window": 208,
+  "task_account": 237,
+  "task_set": 86,
+  "tcp": 1069,
+  "text": 251,
+  "timeline_actions": 597,
+  "tone": 13742,
+  "tone_bind": 358,
+  "tone_read": 710,
+  "tool": 387,
+  "toolbar": 373,
+  "touch": 348,
+  "track_icon": 293,
+  "track_regions": 1184,
+  "transport_bar": 424,
+  "versions": 272,
+  "vocal_level": 1021,
+  "wave_detail": 502,
+  "wave_pool": 44,
+  "web_audio": 854,
+  "web_engine": 979,
+  "web_host": 949,
+  "which_key": 102,
+  "widget": 6076,
+  "window_cursor": 309,
+  "written": 298,
+  "zoom": 346
+ },
+ "deps": {
+  "actions": {
+   "arrange_edit": {
+    "prod": [
+     "Warped",
+     "stretch_around"
+    ]
+   },
+   "automation_actions": {
+    "prod": [
+     "register"
+    ]
+   },
+   "bar_step": {
+    "prod": [
+     "STEP_ACTION",
+     "register"
+    ]
+   },
+   "bass_rig": {
+    "prod": [
+     "Setup",
+     "set_up"
+    ]
+   },
+   "browser": {
+    "prod": [
+     "BROWSER",
+     "request_toggle"
+    ]
+   },
+   "comp": {
+    "prod": [
+     "register"
+    ]
+   },
+   "drum_edit": {
+    "prod": [
+     "Beat",
+     "Fill",
+     "KitHit",
+     "Piece",
+     "fills",
+     "grid_scan",
+     "is_edited"
+    ]
+   },
+   "drum_group": {
+    "prod": [
+     "group"
+    ]
+   },
+   "drum_lanes": {
+    "prod": [
+     "kit_tracks",
+     "play",
+     "reset_edit",
+     "set_up"
+    ]
+   },
+   "drum_level": {
+    "prod": [
+     "Knobs",
+     "level"
+    ]
+   },
+   "drum_reference": {
+    "prod": [
+     "Mapped",
+     "RefNote",
+     "compare",
+     "find_track",
+     "learn_map",
+     "notes",
+     "pieces",
+     "restore",
+     "share"
+    ]
+   },
+   "drum_samples": {
+    "prod": [
+     "follow",
+     "resync",
+     "set_up"
+    ]
+   },
+   "drum_settings": {
+    "prod": [
+     "Fills",
+     "Patch",
+     "Settings",
+     "Target",
+     "current",
+     "reset",
+     "set"
+    ],
+    "test": [
+     "Settings"
+    ]
+   },
+   "folds": {
+    "prod": [
+     "apply",
+     "shut",
+     "toggle"
+    ]
+   },
+   "fundamental": {
+    "prod": [
+     "KICK",
+     "SNARE",
+     "TOM",
+     "envelope",
+     "find",
+     "hits_of"
+    ]
+   },
+   "fx_actions": {
+    "prod": [
+     "register"
+    ]
+   },
+   "gain_stage": {
+    "prod": [
+     "path_of"
+    ]
+   },
+   "groove": {
+    "prod": [
+     "Groove",
+     "Hit",
+     "Slot",
+     "count"
+    ]
+   },
+   "grow": {
+    "prod": [
+     "register"
+    ]
+   },
+   "hit_overlay": {
+    "prod": [
+     "refresh"
+    ]
+   },
+   "hits": {
+    "prod": [
+     "Check",
+     "HitRow",
+     "Played",
+     "Zone",
+     "ZoneKind",
+     "ZoneOrigin",
+     "add_zone",
+     "check",
+     "find_zones",
+     "gaps",
+     "hits",
+     "kit_from_markers",
+     "mark_placed",
+     "placed",
+     "playback",
+     "register",
+     "zone_holds",
+     "zones"
+    ]
+   },
+   "instrument_tracks": {
+    "prod": [
+     "register"
+    ]
+   },
+   "jobs": {
+    "prod": [
+     "running"
+    ]
+   },
+   "keys": {
+    "prod": [
+     "Action",
+     "Visibility"
+    ],
+    "test": [
+     "Action",
+     "Visibility",
+     "action_of"
+    ]
+   },
+   "marks_strip": {
+    "prod": [
+     "refresh"
+    ]
+   },
+   "mix_chains": {
+    "prod": [
+     "drum_returns"
+    ]
+   },
+   "open": {
+    "prod": [
+     "current_song",
+     "local_engine"
+    ]
+   },
+   "options": {
+    "prod": [
+     "OUTLINED"
+    ]
+   },
+   "play_return": {
+    "prod": [
+     "Stop",
+     "get",
+     "set"
+    ]
+   },
+   "poi": {
+    "prod": [
+     "STEP",
+     "TOGGLE",
+     "register"
+    ]
+   },
+   "project_file": {
+    "prod": [
+     "Undone",
+     "check",
+     "fork",
+     "redo",
+     "undo"
+    ]
+   },
+   "project_new": {
+    "prod": [
+     "named",
+     "register",
+     "untitled"
+    ]
+   },
+   "projects": {
+    "prod": [
+     "ago",
+     "alternative_name",
+     "alternatives",
+     "base_of",
+     "main_of",
+     "mark_saved",
+     "open_from_outside",
+     "recent",
+     "unsaved"
+    ]
+   },
+   "quantize_panel": {
+    "prod": [
+     "ask"
+    ]
+   },
+   "record": {
+    "prod": [
+     "register"
+    ]
+   },
+   "rig_actions": {
+    "prod": [
+     "register"
+    ]
+   },
+   "session_file": {
+    "prod": [
+     "save_session"
+    ]
+   },
+   "song_bars": {
+    "prod": [
+     "measure",
+     "musical",
+     "time"
+    ]
+   },
+   "studio": {
+    "prod": [
+     "request_resync"
+    ]
+   },
+   "timeline_actions": {
+    "prod": [
+     "register"
+    ]
+   },
+   "track_regions": {
+    "prod": [
+     "PartGrids",
+     "TrackRegion",
+     "figure_at",
+     "kit_folder",
+     "kit_regions",
+     "register"
+    ]
+   },
+   "versions": {
+    "prod": [
+     "Version"
+    ]
+   },
+   "vocal_level": {
+    "prod": [
+     "register"
+    ]
+   },
+   "written": {
+    "prod": [
+     "align",
+     "feel_at",
+     "plain"
+    ]
+   },
+   "zoom": {
+    "prod": [
+     "Command"
+    ],
+    "test": [
+     "Command"
+    ]
+   }
+  },
+  "animate": {
+   "mcp": {
+    "prod": [
+     "f64_to_f32"
+    ]
+   },
+   "num": {
+    "prod": [
+     "coord"
+    ]
+   }
+  },
+  "arrange_edit": {
+   "arrangement": {
+    "prod": [
+     "Arrangement",
+     "Fades",
+     "ItemBox",
+     "ItemZone",
+     "Viewport"
+    ],
+    "test": [
+     "Palette",
+     "TCP_WIDTH",
+     "Viewport"
+    ]
+   },
+   "cursor": {
+    "prod": [
+     "(module)",
+     "Edit"
+    ]
+   },
+   "drum_edit": {
+    "prod": [
+     "is_edited"
+    ]
+   },
+   "engine": {
+    "prod": [
+     "Edit",
+     "Move"
+    ]
+   },
+   "gesture": {
+    "prod": [
+     "SLOP"
+    ]
+   },
+   "hit": {
+    "prod": [
+     "Hit",
+     "Target"
+    ],
+    "test": [
+     "Hit",
+     "Target",
+     "arrangement"
+    ]
+   },
+   "keys": {
+    "prod": [
+     "Action",
+     "window_has_transport"
+    ],
+    "test": [
+     "Action"
+    ]
+   },
+   "layout": {
+    "test": [
+     "Layout"
+    ]
+   },
+   "midi": {
+    "test": [
+     "Previews"
+    ]
+   },
+   "mousemap": {
+    "prod": [
+     "Gesture",
+     "Mods",
+     "self"
+    ],
+    "test": [
+     "Mods"
+    ]
+   },
+   "options": {
+    "prod": [
+     "AUTO_CROSSFADE",
+     "GROUPING",
+     "LOCKING"
+    ],
+    "test": [
+     "GROUPING"
+    ]
+   },
+   "plan": {
+    "prod": [
+     "Rows"
+    ],
+    "test": [
+     "Rows"
+    ]
+   },
+   "rails": {
+    "prod": [
+     "SIDE",
+     "TOP"
+    ],
+    "test": [
+     "SIDE",
+     "TOP"
+    ]
+   },
+   "ruler": {
+    "prod": [
+     "MARKS_ROW",
+     "MarkEdge",
+     "On",
+     "Zone",
+     "lane_of"
+    ],
+    "test": [
+     "MARKS_ROW",
+     "On",
+     "SECTIONS_ROW",
+     "Zone",
+     "lane_of",
+     "ruler_h"
+    ]
+   },
+   "tcp": {
+    "test": [
+     "Tcp"
+    ]
+   },
+   "text": {
+    "test": [
+     "Font"
+    ]
+   }
+  },
+  "arrangement": {
+   "arrange_edit": {
+    "prod": [
+     "STRETCH_LEAST_RATE"
+    ]
+   },
+   "automation": {
+    "prod": [
+     "lanes_height"
+    ]
+   },
+   "folds": {
+    "prod": [
+     "shut"
+    ]
+   },
+   "hit_overlay": {
+    "prod": [
+     "Edited",
+     "Mark",
+     "Overlay",
+     "Stretch",
+     "Who"
+    ]
+   },
+   "kit_gate": {
+    "prod": [
+     "Gate",
+     "of",
+     "version"
+    ]
+   },
+   "lanes": {
+    "prod": [
+     "expanded",
+     "folder_view",
+     "playing",
+     "shown_on",
+     "speaks_for"
+    ]
+   },
+   "layout": {
+    "prod": [
+     "Layout"
+    ]
+   },
+   "midi": {
+    "prod": [
+     "Child",
+     "Note",
+     "Previews",
+     "Wave",
+     "fold_notes",
+     "fold_waves"
+    ],
+    "test": [
+     "Previews",
+     "Wave"
+    ]
+   },
+   "num": {
+    "prod": [
+     "coord",
+     "index"
+    ]
+   },
+   "options": {
+    "prod": [
+     "OUTLINED"
+    ]
+   },
+   "profile": {
+    "prod": [
+     "Counts"
+    ]
+   },
+   "row": {
+    "prod": [
+     "Control",
+     "Row"
+    ]
+   },
+   "ruler": {
+    "prod": [
+     "MarkEdge",
+     "On",
+     "ruler_h",
+     "song_start_of"
+    ]
+   },
+   "skin": {
+    "prod": [
+     "ROW",
+     "RowShown",
+     "canvas",
+     "loaded",
+     "row_control",
+     "row_fields",
+     "row_hit_fields"
+    ]
+   },
+   "tcp": {
+    "prod": [
+     "BAND_BELOW",
+     "Tcp",
+     "automation_button",
+     "draw_row",
+     "folder_band",
+     "folder_steps",
+     "glyphs",
+     "ink_on",
+     "mix",
+     "row_tint",
+     "track_color"
+    ]
+   },
+   "text": {
+    "prod": [
+     "Font"
+    ]
+   },
+   "track_icon": {
+    "prod": [
+     "Icon",
+     "paint"
+    ]
+   },
+   "wave_detail": {
+    "prod": [
+     "Source",
+     "get"
+    ],
+    "test": [
+     "Source",
+     "hold",
+     "reduce"
+    ]
+   }
+  },
+  "art": {
+   "tcp": {
+    "prod": [
+     "glyphs"
+    ]
+   },
+   "text": {
+    "prod": [
+     "Font"
+    ]
+   }
+  },
+  "audio_mode": {},
+  "automation": {
+   "folds": {
+    "prod": [
+     "touch"
+    ]
+   },
+   "leveler": {
+    "prod": [
+     "Leveled",
+     "Stage",
+     "adopt"
+    ]
+   },
+   "open": {
+    "prod": [
+     "current_song",
+     "local_engine"
+    ]
+   },
+   "vocal_level": {
+    "prod": [
+     "has_lanes",
+     "lane_shown",
+     "leveled"
+    ]
+   }
+  },
+  "automation_actions": {
+   "actions": {
+    "prod": [
+     "meta",
+     "resolve",
+     "sections",
+     "song"
+    ]
+   },
+   "automation": {
+    "prod": [
+     "Kind",
+     "LEVELER",
+     "choice_at",
+     "neutral",
+     "say"
+    ]
+   },
+   "automation_menu": {
+    "prod": [
+     "show_takes"
+    ]
+   },
+   "fx_actions": {
+    "prod": [
+     "mode_of",
+     "moment",
+     "param_of",
+     "shape_of",
+     "target",
+     "value_of"
+    ]
+   },
+   "gain_stage": {
+    "prod": [
+     "path_of"
+    ]
+   },
+   "studio": {
+    "prod": [
+     "request_resync"
+    ]
+   },
+   "vocal_level": {
+    "prod": [
+     "playing",
+     "show_lane"
+    ]
+   }
+  },
+  "automation_draw": {
+   "arrangement": {
+    "prod": [
+     "Arrangement",
+     "Palette",
+     "Viewport"
+    ]
+   },
+   "automation": {
+    "prod": [
+     "Kind",
+     "Lane",
+     "TakeCurve",
+     "any_take_curves",
+     "lanes_of",
+     "neutral",
+     "take_curve",
+     "take_gain",
+     "take_y"
+    ]
+   },
+   "leveler": {
+    "prod": [
+     "AMOUNT_MAX",
+     "Stage",
+     "any",
+     "item_y",
+     "trace",
+     "with_item"
+    ]
+   },
+   "num": {
+    "prod": [
+     "coord",
+     "index"
+    ]
+   },
+   "tcp": {
+    "prod": [
+     "glyphs"
+    ]
+   },
+   "text": {
+    "prod": [
+     "Font"
+    ]
+   },
+   "tone": {
+    "prod": [
+     "knob_arc"
+    ]
+   }
+  },
+  "automation_edit": {
+   "actions": {
+    "prod": [
+     "song"
+    ]
+   },
+   "arrangement": {
+    "prod": [
+     "Viewport"
+    ]
+   },
+   "automation": {
+    "prod": [
+     "Kind",
+     "self"
+    ]
+   },
+   "automation_draw": {
+    "prod": [
+     "Hit",
+     "Spot",
+     "self"
+    ]
+   },
+   "engine": {
+    "prod": [
+     "Edit"
+    ]
+   },
+   "leveler": {
+    "prod": [
+     "Dial",
+     "Stage",
+     "set_dial",
+     "stages_of",
+     "update",
+     "with_item"
+    ]
+   },
+   "studio": {
+    "prod": [
+     "request_resync"
+    ]
+   },
+   "vocal_level": {
+    "prod": [
+     "relevel",
+     "set_stages",
+     "show_lane"
+    ]
+   }
+  },
+  "automation_menu": {
+   "actions": {
+    "prod": [
+     "song"
+    ]
+   },
+   "automation": {
+    "prod": [
+     "LEVELER",
+     "TAKE_LINES_KEY"
+    ]
+   },
+   "automation_actions": {
+    "prod": [
+     "find",
+     "show"
+    ]
+   },
+   "popup": {
+    "prod": [
+     "Choice"
+    ]
+   },
+   "studio": {
+    "prod": [
+     "request_resync"
+    ]
+   },
+   "vocal_level": {
+    "prod": [
+     "has_lanes",
+     "lane_shown",
+     "show_lane"
+    ]
+   }
+  },
+  "balance": {
+   "engine": {
+    "prod": [
+     "Edit",
+     "db_to_gain"
+    ]
+   },
+   "num": {
+    "prod": [
+     "coord"
+    ]
+   }
+  },
+  "bar_step": {
+   "actions": {
+    "prod": [
+     "list",
+     "meta",
+     "queue",
+     "song"
+    ]
+   },
+   "cursor": {
+    "prod": [
+     "Edit",
+     "ask",
+     "current"
+    ]
+   },
+   "engine": {
+    "prod": [
+     "Transport"
+    ]
+   },
+   "grid_in_force": {
+    "prod": [
+     "current"
+    ]
+   },
+   "keys": {
+    "prod": [
+     "Action"
+    ]
+   },
+   "open": {
+    "prod": [
+     "runtime"
+    ]
+   },
+   "organize": {
+    "prod": [
+     "engine_edit"
+    ]
+   },
+   "shell": {
+    "prod": [
+     "DIM",
+     "RULE",
+     "SCRIM",
+     "TEXT"
+    ]
+   },
+   "song_bars": {
+    "prod": [
+     "musical",
+     "time"
+    ]
+   },
+   "track_regions": {
+    "prod": [
+     "grid_name"
+    ]
+   }
+  },
+  "bass_rig": {
+   "actions": {
+    "prod": [
+     "list"
+    ]
+   },
+   "gain_stage": {
+    "prod": [
+     "path_of"
+    ]
+   },
+   "studio": {
+    "prod": [
+     "request_resync"
+    ]
+   }
+  },
+  "beats": {},
+  "browser": {
+   "actions": {
+    "prod": [
+     "list",
+     "meta",
+     "song"
+    ]
+   },
+   "engine": {
+    "prod": [
+     "Transport"
+    ]
+   },
+   "open": {
+    "prod": [
+     "runtime"
+    ]
+   },
+   "rig_actions": {
+    "prod": [
+     "RigView",
+     "browse"
+    ]
+   },
+   "shell": {
+    "prod": [
+     "BAR_BG",
+     "DIM",
+     "Pins",
+     "RULE"
+    ]
+   }
+  },
+  "chart_editor": {
+   "chart_panel": {
+    "prod": [
+     "publish_live"
+    ]
+   },
+   "collab": {
+    "prod": [
+     "chart_context",
+     "local_chart",
+     "take_remote_chart"
+    ]
+   },
+   "keys": {
+    "prod": [
+     "set_editing"
+    ]
+   },
+   "open": {
+    "prod": [
+     "LocalOnly",
+     "current_song",
+     "is_session",
+     "with_local_engine"
+    ]
+   },
+   "prepare": {
+    "prod": [
+     "apply_chart"
+    ]
+   },
+   "session_file": {
+    "prod": [
+     "save_session_behind"
+    ]
+   },
+   "shell": {
+    "prod": [
+     "ACCENT",
+     "DIM",
+     "RULE",
+     "TEXT"
+    ]
+   },
+   "studio": {
+    "prod": [
+     "StudioSession",
+     "request_resync"
+    ]
+   }
+  },
+  "chart_panel": {
+   "engine": {
+    "prod": [
+     "Transport",
+     "moving"
+    ]
+   },
+   "ghosts": {
+    "prod": [
+     "Anchor",
+     "register_anchor"
+    ]
+   },
+   "open": {
+    "prod": [
+     "current_song"
+    ]
+   },
+   "panel": {
+    "prod": [
+     "Button",
+     "PanelEvent"
+    ]
+   },
+   "studio": {
+    "prod": [
+     "StudioSession"
+    ]
+   },
+   "touch": {
+    "prod": [
+     "Fingers"
+    ]
+   },
+   "web_host": {
+    "prod": [
+     "Hosted",
+     "HostedRef",
+     "WidgetCanvas"
+    ]
+   }
+  },
+  "closeup": {
+   "arrangement": {
+    "prod": [
+     "Palette"
+    ]
+   },
+   "engine": {
+    "prod": [
+     "moving"
+    ]
+   },
+   "gesture": {
+    "prod": [
+     "DOUBLE"
+    ]
+   },
+   "live": {
+    "prod": [
+     "Meters"
+    ]
+   },
+   "text": {
+    "prod": [
+     "Font"
+    ]
+   },
+   "tone": {
+    "prod": [
+     "Folded",
+     "Grip",
+     "Panel",
+     "Shared",
+     "Which",
+     "dot_click",
+     "drag",
+     "draw",
+     "grip_at",
+     "panels_for",
+     "reset",
+     "toggle"
+    ]
+   },
+   "touch": {
+    "prod": [
+     "ZOOM",
+     "use_touch"
+    ]
+   },
+   "web_host": {
+    "prod": [
+     "Hosted",
+     "HostedRef",
+     "WidgetCanvas"
+    ]
+   }
+  },
+  "collab": {
+   "chart_editor": {
+    "prod": [
+     "local_caret"
+    ]
+   },
+   "cursor": {
+    "prod": [
+     "current"
+    ]
+   },
+   "engine": {
+    "prod": [
+     "Move",
+     "Transport",
+     "transport_following"
+    ]
+   },
+   "ghosts": {
+    "prod": [
+     "Person",
+     "local",
+     "local_item_guids",
+     "local_rows",
+     "local_track_name",
+     "now_ms",
+     "publish",
+     "publish_everyone"
+    ]
+   },
+   "open": {
+    "prod": [
+     "LocalOnly",
+     "current_song",
+     "local_engine",
+     "runtime",
+     "with_local_engine"
+    ]
+   },
+   "prepare": {
+    "prod": [
+     "chart_beside"
+    ]
+   },
+   "project_file": {
+    "prod": [
+     "doc_of"
+    ]
+   },
+   "studio": {
+    "prod": [
+     "request_resync"
+    ]
+   }
+  },
+  "collab_bar": {
+   "audio_mode": {
+    "prod": [
+     "owns_project"
+    ]
+   },
+   "collab": {
+    "prod": [
+     "TaskSet",
+     "env_set",
+     "host",
+     "host_in_background",
+     "join",
+     "join_in_background",
+     "join_task",
+     "joining",
+     "key_of",
+     "last_error",
+     "leave",
+     "open_local",
+     "set_shared_transport",
+     "status",
+     "take_song_request"
+    ]
+   },
+   "engine": {
+    "prod": [
+     "Transport"
+    ]
+   },
+   "ghosts": {
+    "prod": [
+     "everyone",
+     "on_song"
+    ]
+   },
+   "keys": {
+    "prod": [
+     "set_editing"
+    ]
+   },
+   "open": {
+    "prod": [
+     "current_song",
+     "switch_song"
+    ]
+   },
+   "setlist": {
+    "prod": [
+     "Setlist"
+    ]
+   },
+   "shell": {
+    "prod": [
+     "ACCENT",
+     "BAR_BG",
+     "DIM",
+     "Density",
+     "RULE",
+     "TEXT",
+     "use_density"
+    ]
+   }
+  },
+  "collab_pointers": {
+   "collab": {
+    "prod": [
+     "env_set"
+    ]
+   },
+   "ghosts": {
+    "prod": [
+     "local_window_left",
+     "local_window_pointer",
+     "measure_regions",
+     "now_ms",
+     "window_pointers"
+    ]
+   }
+  },
+  "comp": {
+   "actions": {
+    "prod": [
+     "list",
+     "meta",
+     "resolve",
+     "song"
+    ]
+   },
+   "arrange_edit": {
+    "prod": [
+     "comp_lane"
+    ]
+   },
+   "gain_stage": {
+    "prod": [
+     "path_of"
+    ]
+   },
+   "lanes": {
+    "prod": [
+     "called",
+     "lane_called",
+     "opened_by",
+     "set_expanded",
+     "shown_on"
+    ]
+   },
+   "studio": {
+    "prod": [
+     "request_resync"
+    ]
+   }
+  },
+  "compact": {
+   "navigator": {
+    "prod": [
+     "Navigator"
+    ]
+   },
+   "progress": {
+    "prod": [
+     "ProgressBar",
+     "TransportButtons"
+    ]
+   },
+   "record_view": {
+    "prod": [
+     "PickSong",
+     "RecordView"
+    ]
+   },
+   "setlist": {
+    "prod": [
+     "Setlist"
+    ]
+   },
+   "setup": {
+    "prod": [
+     "SetupView"
+    ]
+   },
+   "shell": {
+    "prod": [
+     "BAR_BG",
+     "ChartPages",
+     "DIM",
+     "EditorComing",
+     "FolderSwitch",
+     "LockButton",
+     "Pins",
+     "RAISED",
+     "RULE",
+     "TEXT",
+     "WithSong",
+     "ink"
+    ]
+   }
+  },
+  "cursor": {
+   "arrangement": {
+    "prod": [
+     "Palette",
+     "Viewport"
+    ]
+   },
+   "num": {
+    "prod": [
+     "coord"
+    ]
+   }
+  },
+  "device_audio": {},
+  "drum_edit": {},
+  "drum_group": {
+   "gain_stage": {
+    "prod": [
+     "path_of"
+    ]
+   }
+  },
+  "drum_lanes": {
+   "actions": {
+    "prod": [
+     "list"
+    ]
+   },
+   "gain_stage": {
+    "prod": [
+     "path_of"
+    ]
+   },
+   "hits": {
+    "prod": [
+     "forget_placed"
+    ]
+   },
+   "studio": {
+    "prod": [
+     "request_resync"
+    ]
+   }
+  },
+  "drum_level": {
+   "drum_lanes": {
+    "prod": [
+     "COMP",
+     "EDIT",
+     "lane_named"
+    ]
+   },
+   "hits": {
+    "prod": [
+     "kit"
+    ]
+   },
+   "midi": {
+    "prod": [
+     "mark_stale"
+    ]
+   },
+   "studio": {
+    "prod": [
+     "request_resync"
+    ]
+   }
+  },
+  "drum_reference": {
+   "gain_stage": {
+    "prod": [
+     "path_of"
+    ]
+   },
+   "open_core": {
+    "prod": [
+     "Media",
+     "load_into_with"
+    ]
+   }
+  },
+  "drum_samples": {
+   "actions": {
+    "prod": [
+     "list"
+    ]
+   },
+   "drum_reference": {
+    "prod": [
+     "notes",
+     "pieces",
+     "qn_between"
+    ]
+   },
+   "gain_stage": {
+    "prod": [
+     "path_of"
+    ]
+   },
+   "hits": {
+    "prod": [
+     "playback"
+    ]
+   },
+   "studio": {
+    "prod": [
+     "request_resync"
+    ]
+   }
+  },
+  "drum_settings": {},
+  "editor_view": {
+   "arrangement": {
+    "prod": [
+     "Palette"
+    ]
+   },
+   "engine": {
+    "prod": [
+     "Transport",
+     "Watch",
+     "apply_event",
+     "moving"
+    ]
+   },
+   "expression": {
+    "prod": [
+     "Expression",
+     "is_drum_track",
+     "look_of",
+     "read_take",
+     "write_take"
+    ]
+   },
+   "mousemap": {
+    "prod": [
+     "Mods"
+    ]
+   },
+   "open": {
+    "prod": [
+     "local_engine",
+     "runtime"
+    ]
+   },
+   "shell": {
+    "prod": [
+     "EditorComing"
+    ]
+   },
+   "skin": {
+    "prod": [
+     "palette",
+     "version"
+    ]
+   },
+   "studio": {
+    "prod": [
+     "StudioSession"
+    ]
+   },
+   "tcp": {
+    "prod": [
+     "glyphs"
+    ]
+   },
+   "text": {
+    "prod": [
+     "Font"
+    ]
+   },
+   "tool": {
+    "prod": [
+     "zoom_held"
+    ]
+   },
+   "widget": {
+    "prod": [
+     "mods"
+    ]
+   },
+   "window_cursor": {
+    "prod": [
+     "Glyph",
+     "Shape",
+     "Sink",
+     "use_cursor_sink"
+    ]
+   }
+  },
+  "engine": {
+   "actions": {
+    "prod": [
+     "list"
+    ]
+   },
+   "automation": {
+    "prod": [
+     "target_key"
+    ]
+   },
+   "collab": {
+    "prod": [
+     "transport_pressed"
+    ]
+   },
+   "hit_overlay": {
+    "prod": [
+     "refresh"
+    ]
+   },
+   "mcp": {
+    "prod": [
+     "Control"
+    ],
+    "test": [
+     "Control"
+    ]
+   },
+   "midi": {
+    "prod": [
+     "mark_stale"
+    ]
+   },
+   "open": {
+    "prod": [
+     "current_song",
+     "local_engine",
+     "runtime"
+    ]
+   },
+   "play_return": {
+    "prod": [
+     "Step",
+     "get",
+     "with_locate"
+    ]
+   },
+   "record": {
+    "prod": [
+     "toggle_through_the_list"
+    ]
+   },
+   "routes": {
+    "prod": [
+     "At"
+    ],
+    "test": [
+     "At"
+    ]
+   },
+   "studio": {
+    "prod": [
+     "request_resync"
+    ]
+   },
+   "wave_detail": {
+    "prod": [
+     "engine_changed"
+    ]
+   },
+   "web_audio": {
+    "prod": [
+     "latency_seconds"
+    ]
+   }
+  },
+  "expression": {
+   "arrangement": {
+    "prod": [
+     "Palette"
+    ],
+    "test": [
+     "Palette"
+    ]
+   },
+   "mousemap": {
+    "prod": [
+     "Mods"
+    ]
+   },
+   "open": {
+    "prod": [
+     "runtime"
+    ]
+   },
+   "skin": {
+    "prod": [
+     "canvas",
+     "loaded",
+     "values"
+    ],
+    "test": [
+     "schema",
+     "set"
+    ]
+   },
+   "text": {
+    "prod": [
+     "Font"
+    ],
+    "test": [
+     "Font"
+    ]
+   },
+   "tool": {
+    "prod": [
+     "zoom_held"
+    ],
+    "test": [
+     "set_zoom_held"
+    ]
+   },
+   "window_cursor": {
+    "prod": [
+     "Glyph"
+    ],
+    "test": [
+     "Glyph"
+    ]
+   }
+  },
+  "faces": {
+   "arrangement": {
+    "prod": [
+     "Palette"
+    ]
+   },
+   "beats": {
+    "prod": [
+     "BPM",
+     "DELAY",
+     "REVERB",
+     "beat",
+     "nearest_delay",
+     "nearest_reverb",
+     "seconds_text"
+    ]
+   },
+   "macros": {
+    "prod": [
+     "CELL_H",
+     "Macro",
+     "frac",
+     "span"
+    ]
+   },
+   "num": {
+    "prod": [
+     "coord",
+     "index",
+     "narrow"
+    ]
+   },
+   "plugin_faces": {
+    "prod": [
+     "edit",
+     "face",
+     "face_after",
+     "is_shaped"
+    ]
+   },
+   "rig": {
+    "prod": [
+     "DELAY_ALGOS",
+     "FaceEntry",
+     "design_of",
+     "faces",
+     "pick_design"
+    ]
+   },
+   "tcp": {
+    "prod": [
+     "glyphs"
+    ]
+   },
+   "text": {
+    "prod": [
+     "Font"
+    ]
+   },
+   "tone": {
+    "prod": [
+     "Panel",
+     "Room",
+     "Tone",
+     "Which"
+    ]
+   }
+  },
+  "folder": {},
+  "folder_item": {
+   "arrangement": {
+    "prod": [
+     "submit_command"
+    ]
+   },
+   "num": {
+    "prod": [
+     "coord",
+     "index",
+     "narrow"
+    ],
+    "test": [
+     "quantise"
+    ]
+   }
+  },
+  "folds": {},
+  "fps": {
+   "tcp": {
+    "prod": [
+     "glyphs"
+    ]
+   },
+   "text": {
+    "prod": [
+     "Font"
+    ]
+   }
+  },
+  "fundamental": {
+   "drum_edit": {
+    "prod": [
+     "is_edited"
+    ]
+   }
+  },
+  "fx_actions": {
+   "actions": {
+    "prod": [
+     "list",
+     "meta",
+     "resolve",
+     "sections",
+     "song"
+    ]
+   },
+   "song_bars": {
+    "prod": [
+     "measure",
+     "musical"
+    ]
+   }
+  },
+  "fx_view": {
+   "arrangement": {
+    "prod": [
+     "Palette"
+    ]
+   },
+   "closeup": {
+    "prod": [
+     "Closeups",
+     "mods_of"
+    ]
+   },
+   "engine": {
+    "prod": [
+     "Applier",
+     "Edit",
+     "FxWatch",
+     "Watch",
+     "apply_event",
+     "click",
+     "continuous_for",
+     "drag"
+    ]
+   },
+   "faces": {
+    "prod": [
+     "Painters",
+     "Picture",
+     "aspect",
+     "chrome",
+     "controls",
+     "edit",
+     "of",
+     "picture_at",
+     "shared"
+    ]
+   },
+   "gesture": {
+    "prod": [
+     "drag_fraction"
+    ]
+   },
+   "layout": {
+    "prod": [
+     "Layout"
+    ]
+   },
+   "live": {
+    "prod": [
+     "Meters"
+    ]
+   },
+   "macros": {
+    "prod": [
+     "CELL_W",
+     "Knob",
+     "Macro",
+     "cells",
+     "draw",
+     "of"
+    ]
+   },
+   "mcp": {
+    "prod": [
+     "Control",
+     "Mixer",
+     "control_in"
+    ],
+    "test": [
+     "Control"
+    ]
+   },
+   "mixer_panel": {
+    "prod": [
+     "predict"
+    ]
+   },
+   "num": {
+    "prod": [
+     "coord",
+     "index"
+    ],
+    "test": [
+     "index"
+    ]
+   },
+   "options": {
+    "prod": [
+     "LOCKING"
+    ]
+   },
+   "overlay": {
+    "prod": [
+     "Clips",
+     "Racks",
+     "controls"
+    ]
+   },
+   "plan": {
+    "prod": [
+     "Rows"
+    ]
+   },
+   "plugin_faces": {
+    "prod": [
+     "title"
+    ]
+   },
+   "pointer": {
+    "prod": [
+     "Pointer"
+    ]
+   },
+   "rig": {
+    "prod": [
+     "Block",
+     "FaceEntry",
+     "Faces",
+     "Rig",
+     "Section",
+     "face_of",
+     "for_track",
+     "pick_design",
+     "section_of"
+    ]
+   },
+   "settings": {
+    "prod": [
+     "Settings"
+    ]
+   },
+   "skin": {
+    "prod": [
+     "canvas",
+     "loaded",
+     "palette",
+     "values",
+     "version"
+    ]
+   },
+   "studio": {
+    "prod": [
+     "StudioSession"
+    ]
+   },
+   "tcp": {
+    "prod": [
+     "glyphs"
+    ]
+   },
+   "text": {
+    "prod": [
+     "Font"
+    ],
+    "test": [
+     "Font"
+    ]
+   },
+   "tone": {
+    "prod": [
+     "Folded",
+     "Grip",
+     "Panel",
+     "RACK_PHASES",
+     "Role",
+     "Shared",
+     "Store",
+     "Tone",
+     "Which",
+     "drag",
+     "draw",
+     "grip_at",
+     "panels_for",
+     "phase_tint",
+     "toggle"
+    ]
+   },
+   "web_host": {
+    "prod": [
+     "Hosted",
+     "HostedRef",
+     "WidgetCanvas"
+    ]
+   }
+  },
+  "gain_stage": {
+   "midi": {
+    "prod": [
+     "ANALYSIS_BLOCK",
+     "Wave"
+    ],
+    "test": [
+     "Wave"
+    ]
+   }
+  },
+  "gesture": {
+   "hit": {
+    "prod": [
+     "Hit"
+    ],
+    "test": [
+     "Hit",
+     "Target"
+    ]
+   }
+  },
+  "ghosts": {
+   "arrangement": {
+    "prod": [
+     "Arrangement",
+     "Palette",
+     "Viewport",
+     "submit_command"
+    ]
+   },
+   "ruler": {
+    "prod": [
+     "ruler_h"
+    ]
+   },
+   "tcp": {
+    "prod": [
+     "glyphs"
+    ]
+   },
+   "text": {
+    "prod": [
+     "Font"
+    ]
+   }
+  },
+  "grid_in_force": {
+   "ruler": {
+    "prod": [
+     "GridRegion"
+    ]
+   }
+  },
+  "groove": {},
+  "grow": {
+   "actions": {
+    "prod": [
+     "list",
+     "meta",
+     "resolve",
+     "song"
+    ]
+   },
+   "studio": {
+    "prod": [
+     "request_resync"
+    ]
+   }
+  },
+  "guide_instrument": {},
+  "headless": {},
+  "hit": {
+   "arrangement": {
+    "prod": [
+     "Arrangement",
+     "ItemZone",
+     "TCP_WIDTH",
+     "Viewport"
+    ]
+   },
+   "num": {
+    "prod": [
+     "coord",
+     "index"
+    ]
+   },
+   "rails": {
+    "prod": [
+     "SIDE",
+     "TOP"
+    ]
+   },
+   "ruler": {
+    "prod": [
+     "On",
+     "on",
+     "ruler_h"
+    ]
+   }
+  },
+  "hit_overlay": {
+   "actions": {
+    "prod": [
+     "song"
+    ]
+   },
+   "hits": {
+    "prod": [
+     "overlay"
+    ]
+   },
+   "open": {
+    "prod": [
+     "runtime"
+    ]
+   },
+   "wave_detail": {
+    "prod": [
+     "engine_changed"
+    ]
+   }
+  },
+  "hits": {
+   "actions": {
+    "prod": [
+     "KitPiece",
+     "meta",
+     "song"
+    ]
+   },
+   "drum_edit": {
+    "prod": [
+     "Fill",
+     "KitHit",
+     "Piece",
+     "SLOTS",
+     "is_edited"
+    ]
+   },
+   "drum_lanes": {
+    "prod": [
+     "EDIT"
+    ]
+   },
+   "drum_reference": {
+    "prod": [
+     "find_track",
+     "learn_map",
+     "notes",
+     "pieces"
+    ]
+   },
+   "gain_stage": {
+    "prod": [
+     "path_of"
+    ]
+   },
+   "hit_overlay": {
+    "prod": [
+     "Edited",
+     "Mark",
+     "Overlay",
+     "Shade",
+     "Stretch",
+     "Who"
+    ]
+   },
+   "jobs": {
+    "prod": [
+     "start"
+    ]
+   },
+   "song_bars": {
+    "prod": [
+     "musical"
+    ]
+   },
+   "track_regions": {
+    "prod": [
+     "Origin",
+     "RegionKind",
+     "TrackRegion",
+     "add",
+     "change",
+     "fresh_id",
+     "kit_folder",
+     "kit_marks",
+     "parse_grid"
+    ]
+   }
+  },
+  "hook_rules": {},
+  "icons": {},
+  "instrument_tracks": {
+   "actions": {
+    "prod": [
+     "list",
+     "meta",
+     "resolve",
+     "song"
+    ]
+   },
+   "folds": {
+    "prod": [
+     "toggle"
+    ]
+   },
+   "shell": {
+    "prod": [
+     "DIM",
+     "RULE",
+     "TEXT"
+    ]
+   },
+   "studio": {
+    "prod": [
+     "request_resync"
+    ]
+   }
+  },
+  "jobs": {},
+  "keys": {
+   "engine": {
+    "prod": [
+     "Move",
+     "transport"
+    ]
+   },
+   "shell": {
+    "prod": [
+     "EditorPane",
+     "FxToggle",
+     "MixerToggle",
+     "Pins"
+    ]
+   },
+   "tool": {
+    "prod": [
+     "set_zoom_held"
+    ]
+   },
+   "which_key": {
+    "prod": [
+     "Entry",
+     "WhichKey"
+    ]
+   },
+   "zoom": {
+    "prod": [
+     "Command"
+    ],
+    "test": [
+     "Command"
+    ]
+   }
+  },
+  "kit_gate": {
+   "hit_overlay": {
+    "prod": [
+     "current",
+     "refresh",
+     "version"
+    ]
+   }
+  },
+  "lanes": {
+   "folds": {
+    "prod": [
+     "touch"
+    ]
+   },
+   "options": {
+    "prod": [
+     "GROUPING"
+    ]
+   }
+  },
+  "layout": {
+   "automation": {
+    "prod": [
+     "lanes_height"
+    ]
+   },
+   "tcp": {
+    "test": [
+     "BAND_BELOW"
+    ]
+   }
+  },
+  "leveler": {
+   "automation": {
+    "prod": [
+     "db_at",
+     "update_leveled"
+    ],
+    "test": [
+     "db_at"
+    ]
+   },
+   "num": {
+    "prod": [
+     "coord"
+    ]
+   }
+  },
+  "live": {
+   "mcp": {
+    "prod": [
+     "f64_to_f32"
+    ]
+   },
+   "num": {
+    "prod": [
+     "coord",
+     "quantise"
+    ]
+   }
+  },
+  "loading": {},
+  "lyrics_panel": {
+   "progress": {
+    "prod": [
+     "use_reading"
+    ]
+   },
+   "ruler": {
+    "prod": [
+     "SECTIONS_ROW"
+    ]
+   },
+   "shell": {
+    "prod": [
+     "ACCENT",
+     "BAR_H",
+     "BOTTOM_H",
+     "DIM",
+     "RULE",
+     "TEXT",
+     "WindowSize"
+    ]
+   },
+   "studio": {
+    "prod": [
+     "StudioSession"
+    ]
+   }
+  },
+  "macros": {
+   "arrangement": {
+    "prod": [
+     "Palette"
+    ]
+   },
+   "num": {
+    "prod": [
+     "coord",
+     "index",
+     "narrow"
+    ]
+   },
+   "skin": {
+    "prod": [
+     "canvas",
+     "loaded",
+     "values"
+    ]
+   },
+   "tcp": {
+    "prod": [
+     "glyphs"
+    ]
+   },
+   "text": {
+    "prod": [
+     "Font"
+    ]
+   },
+   "tone": {
+    "prod": [
+     "Panel",
+     "Tone",
+     "phase_tint"
+    ]
+   }
+  },
+  "marks_strip": {
+   "actions": {
+    "prod": [
+     "song"
+    ]
+   },
+   "arrangement": {
+    "prod": [
+     "Palette",
+     "Viewport"
+    ]
+   },
+   "open": {
+    "prod": [
+     "runtime"
+    ]
+   },
+   "ruler": {
+    "prod": [
+     "GridRegion",
+     "LANE_H",
+     "MARKS_ROW",
+     "lane_shown",
+     "row_top"
+    ]
+   },
+   "tcp": {
+    "prod": [
+     "glyphs"
+    ]
+   },
+   "text": {
+    "prod": [
+     "Font"
+    ]
+   },
+   "track_regions": {
+    "prod": [
+     "Marks",
+     "Origin",
+     "RegionKind",
+     "all"
+    ]
+   }
+  },
+  "mcp": {
+   "arrangement": {
+    "prod": [
+     "Palette",
+     "submit_command"
+    ]
+   },
+   "layout": {
+    "prod": [
+     "Layout",
+     "Wash",
+     "rack_fill",
+     "strip_edge",
+     "strip_fill"
+    ],
+    "test": [
+     "Layout"
+    ]
+   },
+   "num": {
+    "prod": [
+     "coord"
+    ]
+   },
+   "profile": {
+    "prod": [
+     "Counts"
+    ]
+   },
+   "settings": {
+    "prod": [
+     "Settings"
+    ],
+    "test": [
+     "Settings"
+    ]
+   },
+   "skin": {
+    "prod": [
+     "RACKBACK",
+     "STEP",
+     "STRIP",
+     "Shown",
+     "canvas",
+     "control",
+     "current",
+     "fields",
+     "from_env",
+     "step_fields",
+     "version"
+    ]
+   },
+   "strip": {
+    "prod": [
+     "Layout",
+     "Strip",
+     "fx_section",
+     "shape_for"
+    ]
+   },
+   "tcp": {
+    "prod": [
+     "caret",
+     "folder_band",
+     "glyphs",
+     "record_input",
+     "row_tint",
+     "track_color"
+    ]
+   },
+   "text": {
+    "prod": [
+     "Font"
+    ]
+   },
+   "tone": {
+    "prod": [
+     "Folded",
+     "LEGIBLE",
+     "Panel",
+     "Rack",
+     "Store",
+     "Tone",
+     "Which",
+     "record"
+    ],
+    "test": [
+     "LEGIBLE",
+     "Rack",
+     "Store",
+     "WORKING"
+    ]
+   }
+  },
+  "mcp_server": {
+   "actions": {
+    "prod": [
+     "list"
+    ]
+   },
+   "open": {
+    "prod": [
+     "runtime"
+    ]
+   }
+  },
+  "midi": {
+   "jobs": {
+    "prod": [
+     "start"
+    ]
+   },
+   "num": {
+    "prod": [
+     "coord",
+     "index",
+     "narrow"
+    ],
+    "test": [
+     "coord",
+     "index"
+    ]
+   },
+   "open": {
+    "prod": [
+     "current_song",
+     "local_engine",
+     "runtime"
+    ]
+   },
+   "wave_pool": {
+    "prod": [
+     "map"
+    ]
+   }
+  },
+  "mix_chains": {
+   "fundamental": {
+    "prod": [
+     "KICK",
+     "SNARE",
+     "TOM",
+     "find"
+    ]
+   },
+   "gain_stage": {
+    "prod": [
+     "level",
+     "path_of"
+    ]
+   },
+   "midi": {
+    "prod": [
+     "ANALYSIS_BLOCK",
+     "Wave"
+    ]
+   }
+  },
+  "mix_export": {},
+  "mix_guide": {
+   "engine": {
+    "prod": [
+     "Applier",
+     "Edit"
+    ]
+   },
+   "setlist": {
+    "prod": [
+     "Setlist"
+    ]
+   },
+   "widget": {
+    "prod": [
+     "edit_song"
+    ]
+   }
+  },
+  "mixer_panel": {
+   "arrangement": {
+    "prod": [
+     "Palette"
+    ],
+    "test": [
+     "Palette"
+    ]
+   },
+   "closeup": {
+    "prod": [
+     "Closeup",
+     "Closeups",
+     "mods_of"
+    ]
+   },
+   "compact": {
+    "prod": [
+     "use_sides"
+    ]
+   },
+   "engine": {
+    "prod": [
+     "Applier",
+     "Edit",
+     "Meters",
+     "Touched",
+     "Watch",
+     "apply_event",
+     "click",
+     "continuous_for",
+     "drag",
+     "meter_fraction",
+     "moving"
+    ]
+   },
+   "folds": {
+    "prod": [
+     "generation",
+     "toggle"
+    ]
+   },
+   "gesture": {
+    "prod": [
+     "DOUBLE",
+     "drag_fraction"
+    ]
+   },
+   "ghosts": {
+    "prod": [
+     "Anchor",
+     "region_mounted",
+     "register_anchor"
+    ]
+   },
+   "icons": {
+    "prod": [
+     "Icons"
+    ]
+   },
+   "layout": {
+    "prod": [
+     "Layout"
+    ]
+   },
+   "mcp": {
+    "prod": [
+     "Control",
+     "DEFAULT_HEIGHT",
+     "Mixer",
+     "STRIP_GAP",
+     "STRIP_W",
+     "control_at",
+     "control_in"
+    ]
+   },
+   "options": {
+    "prod": [
+     "LOCKING"
+    ]
+   },
+   "overlay": {
+    "prod": [
+     "Clips",
+     "Racks",
+     "controls"
+    ]
+   },
+   "panel": {
+    "prod": [
+     "PanelEvent"
+    ]
+   },
+   "plan": {
+    "prod": [
+     "Rows"
+    ]
+   },
+   "pointer": {
+    "prod": [
+     "Pointer",
+     "Spot"
+    ]
+   },
+   "quantize_panel": {
+    "prod": [
+     "QuantizePanel"
+    ]
+   },
+   "rails": {
+    "prod": [
+     "Action",
+     "Frame",
+     "Item",
+     "Profile",
+     "SIDE",
+     "Surface",
+     "TOP",
+     "draw",
+     "profile"
+    ],
+    "test": [
+     "Action"
+    ]
+   },
+   "settings": {
+    "prod": [
+     "Settings"
+    ]
+   },
+   "shell": {
+    "prod": [
+     "MixerToggle",
+     "Pins"
+    ]
+   },
+   "simulate": {
+    "prod": [
+     "Feed"
+    ]
+   },
+   "skin": {
+    "prod": [
+     "palette",
+     "poll",
+     "version"
+    ],
+    "test": [
+     "STRIP",
+     "export",
+     "fields",
+     "schema",
+     "set"
+    ]
+   },
+   "studio": {
+    "prod": [
+     "Arrangement",
+     "Planner",
+     "StudioSession",
+     "css_delta",
+     "css_point"
+    ]
+   },
+   "tcp": {
+    "prod": [
+     "glyphs",
+     "track_color"
+    ]
+   },
+   "text": {
+    "prod": [
+     "Font"
+    ]
+   },
+   "tone": {
+    "prod": [
+     "Analyser",
+     "Fold",
+     "Grip",
+     "Levels",
+     "Panel",
+     "Shared",
+     "WORKING",
+     "Which",
+     "dot_click",
+     "drag",
+     "grip_at",
+     "panels_for",
+     "reset",
+     "scroll_span",
+     "toggle"
+    ]
+   },
+   "touch": {
+    "prod": [
+     "Fling",
+     "SLOP",
+     "Speed",
+     "mixer_zoom",
+     "redraw_hook",
+     "use_touch"
+    ]
+   },
+   "web_engine": {
+    "prod": [
+     "EngineRef"
+    ]
+   },
+   "web_host": {
+    "prod": [
+     "ElementSlot",
+     "Hosted",
+     "HostedRef",
+     "WebArrangement",
+     "WidgetCanvas"
+    ]
+   }
+  },
+  "mousemap": {
+   "options": {
+    "prod": [
+     "SNAP"
+    ]
+   }
+  },
+  "navigator": {
+   "engine": {
+    "prod": [
+     "Move",
+     "transport"
+    ]
+   },
+   "progress": {
+    "prod": [
+     "Song",
+     "use_reading"
+    ]
+   },
+   "setlist": {
+    "prod": [
+     "Setlist",
+     "Song"
+    ]
+   },
+   "shell": {
+    "prod": [
+     "DIM",
+     "RULE"
+    ]
+   }
+  },
+  "notice": {
+   "arrangement": {
+    "prod": [
+     "Arrangement",
+     "Palette",
+     "Viewport",
+     "submit_command"
+    ]
+   },
+   "num": {
+    "prod": [
+     "coord",
+     "narrow"
+    ]
+   },
+   "ruler": {
+    "prod": [
+     "ruler_h"
+    ]
+   },
+   "tcp": {
+    "prod": [
+     "glyphs"
+    ]
+   },
+   "text": {
+    "prod": [
+     "Font"
+    ],
+    "test": [
+     "Font"
+    ]
+   }
+  },
+  "num": {},
+  "open": {
+   "audio_mode": {
+    "prod": [
+     "Assets",
+     "AudioMode",
+     "ModeState",
+     "REAPER_ENV",
+     "RemoteTarget",
+     "SOCKET_ENV",
+     "begin_asset_load",
+     "from_launch",
+     "owns_project",
+     "set",
+     "set_assets_progress",
+     "set_cue_ready",
+     "state",
+     "update_requested"
+    ]
+   },
+   "guide_instrument": {
+    "prod": [
+     "Library",
+     "install",
+     "samples_dir"
+    ]
+   },
+   "mcp_server": {
+    "prod": [
+     "start"
+    ]
+   },
+   "open_core": {
+    "prod": [
+     "*"
+    ]
+   },
+   "project_file": {
+    "prod": [
+     "record_steps"
+    ]
+   },
+   "reference_play": {
+    "prod": [
+     "renderer"
+    ]
+   },
+   "session_file": {
+    "prod": [
+     "save_session_behind"
+    ]
+   },
+   "stream_in": {
+    "prod": [
+     "start"
+    ]
+   }
+  },
+  "open_core": {
+   "folder": {
+    "prod": [
+     "Folder",
+     "disk"
+    ]
+   },
+   "prepare": {
+    "prod": [
+     "Prepare"
+    ]
+   },
+   "project_file": {
+    "prod": [
+     "file_and_branch",
+     "load"
+    ]
+   },
+   "section_colors": {
+    "prod": [
+     "apply",
+     "pending"
+    ]
+   },
+   "session_file": {
+    "prod": [
+     "save_session"
+    ]
+   }
+  },
+  "options": {},
+  "organize": {
+   "actions": {
+    "prod": [
+     "sections"
+    ]
+   },
+   "cursor": {
+    "prod": [
+     "Edit",
+     "Span",
+     "ask",
+     "current"
+    ]
+   },
+   "open": {
+    "prod": [
+     "block_on_engine",
+     "local_engine"
+    ]
+   },
+   "prepare": {
+    "prod": [
+     "GUIDE_INSTRUMENT"
+    ]
+   },
+   "shell": {
+    "prod": [
+     "DIM",
+     "RULE",
+     "TEXT"
+    ]
+   },
+   "studio": {
+    "prod": [
+     "request_resync"
+    ]
+   }
+  },
+  "overlay": {
+   "arrangement": {
+    "prod": [
+     "Arrangement",
+     "Palette",
+     "Viewport",
+     "submit_command"
+    ],
+    "test": [
+     "Arrangement",
+     "TCP_WIDTH",
+     "Viewport"
+    ]
+   },
+   "art": {
+    "prod": [
+     "place",
+     "scaled",
+     "squashed"
+    ],
+    "test": [
+     "place"
+    ]
+   },
+   "engine": {
+    "prod": [
+     "meter_fraction"
+    ]
+   },
+   "folds": {
+    "prod": [
+     "shut"
+    ]
+   },
+   "lanes": {
+    "prod": [
+     "label_of",
+     "opened",
+     "speaks_for"
+    ]
+   },
+   "layout": {
+    "prod": [
+     "dim_unselected"
+    ],
+    "test": [
+     "Layout"
+    ]
+   },
+   "live": {
+    "prod": [
+     "Meters"
+    ]
+   },
+   "mcp": {
+    "prod": [
+     "Control",
+     "Mixer",
+     "rack_ground",
+     "strip_ground"
+    ]
+   },
+   "midi": {
+    "test": [
+     "Previews"
+    ]
+   },
+   "plan": {
+    "prod": [
+     "Rows"
+    ],
+    "test": [
+     "Rows"
+    ]
+   },
+   "pointer": {
+    "prod": [
+     "Pointer",
+     "RowSpot",
+     "Spot"
+    ],
+    "test": [
+     "Pointer",
+     "RowSpot",
+     "Spot"
+    ]
+   },
+   "profile": {
+    "prod": [
+     "Counts"
+    ]
+   },
+   "row": {
+    "prod": [
+     "Control",
+     "Indicator",
+     "Row"
+    ],
+    "test": [
+     "Control"
+    ]
+   },
+   "settings": {
+    "test": [
+     "Settings"
+    ]
+   },
+   "skin": {
+    "prod": [
+     "ROW",
+     "RowShown",
+     "STRIP",
+     "Shown",
+     "canvas",
+     "fields",
+     "loaded",
+     "row_fields"
+    ]
+   },
+   "strip": {
+    "prod": [
+     "Strip"
+    ],
+    "test": [
+     "Strip"
+    ]
+   },
+   "tcp": {
+    "prod": [
+     "BUTTON",
+     "Density",
+     "glyphs",
+     "lit",
+     "mute_lit",
+     "solo_lit",
+     "to_theme",
+     "volume_fraction"
+    ],
+    "test": [
+     "Tcp"
+    ]
+   },
+   "text": {
+    "prod": [
+     "Font"
+    ]
+   },
+   "tone": {
+    "prod": [
+     "Analyser",
+     "Fold",
+     "Folded",
+     "Grip",
+     "Levels",
+     "Panel",
+     "Rack",
+     "Store",
+     "Tone",
+     "Which",
+     "draw",
+     "levels"
+    ],
+    "test": [
+     "Fold",
+     "Levels",
+     "Store",
+     "Which",
+     "panels_for"
+    ]
+   }
+  },
+  "panel": {
+   "bar_step": {
+    "prod": [
+     "Page",
+     "page",
+     "turn_to"
+    ]
+   },
+   "compact": {
+    "prod": [
+     "use_form"
+    ]
+   },
+   "engine": {
+    "prod": [
+     "Edit",
+     "moving"
+    ]
+   },
+   "folds": {
+    "prod": [
+     "show_cuts"
+    ]
+   },
+   "ghosts": {
+    "prod": [
+     "ARRANGEMENT",
+     "region_mounted"
+    ]
+   },
+   "layout": {
+    "prod": [
+     "Layout"
+    ]
+   },
+   "mixer_panel": {
+    "prod": [
+     "Links"
+    ]
+   },
+   "mousemap": {
+    "prod": [
+     "Mods"
+    ]
+   },
+   "quantize_panel": {
+    "prod": [
+     "take_asked"
+    ]
+   },
+   "ruler": {
+    "prod": [
+     "LABEL_W",
+     "ruler_h",
+     "set_slim"
+    ]
+   },
+   "shell": {
+    "prod": [
+     "Pins"
+    ]
+   },
+   "studio": {
+    "prod": [
+     "Edits",
+     "PPS",
+     "ScrollBar",
+     "StudioSession"
+    ]
+   },
+   "tcp": {
+    "prod": [
+     "Tcp"
+    ]
+   },
+   "tool": {
+    "prod": [
+     "Pointing",
+     "Shared",
+     "Sink",
+     "Tool"
+    ]
+   },
+   "toolbar": {
+    "prod": [
+     "MainToolbar"
+    ]
+   },
+   "touch": {
+    "prod": [
+     "arrange_zoom",
+     "redraw_hook",
+     "use_touch"
+    ]
+   },
+   "which_key": {
+    "prod": [
+     "Panel",
+     "Shared",
+     "WhichKey"
+    ]
+   },
+   "widget": {
+    "prod": [
+     "ArrangementWidget",
+     "MixerLinks",
+     "Shared",
+     "View",
+     "rows_as_left"
+    ]
+   },
+   "zoom": {
+    "prod": [
+     "Frame",
+     "History",
+     "Request",
+     "Requests",
+     "Target",
+     "frame"
+    ]
+   }
+  },
+  "patch_list": {
+   "arrangement": {
+    "prod": [
+     "Palette"
+    ]
+   },
+   "tcp": {
+    "prod": [
+     "glyphs"
+    ]
+   },
+   "text": {
+    "prod": [
+     "Font"
+    ]
+   }
+  },
+  "plan": {
+   "layout": {
+    "test": [
+     "CONTROL_ROW",
+     "NAME_LEGIBLE",
+     "STRIP_NARROW",
+     "STRIP_WIDE"
+    ]
+   },
+   "num": {
+    "prod": [
+     "index"
+    ]
+   },
+   "open": {
+    "prod": [
+     "current_song",
+     "local_engine"
+    ]
+   },
+   "settings": {
+    "prod": [
+     "Settings"
+    ],
+    "test": [
+     "Settings"
+    ]
+   },
+   "tone": {
+    "test": [
+     "WORKING"
+    ]
+   }
+  },
+  "play_return": {},
+  "plugin_faces": {
+   "faces": {
+    "prod": [
+     "FrameFace",
+     "design_dir"
+    ],
+    "test": [
+     "of"
+    ]
+   },
+   "macros": {
+    "prod": [
+     "frac",
+     "span"
+    ]
+   },
+   "num": {
+    "prod": [
+     "coord",
+     "index",
+     "narrow"
+    ]
+   },
+   "tone": {
+    "prod": [
+     "Comp",
+     "Sidechain",
+     "Tone",
+     "Which"
+    ],
+    "test": [
+     "ReverbMachine",
+     "Role",
+     "Sidechain",
+     "Which",
+     "placeholder",
+     "placeholder_for"
+    ]
+   }
+  },
+  "poi": {
+   "actions": {
+    "prod": [
+     "list",
+     "meta",
+     "song"
+    ]
+   },
+   "arrangement": {
+    "prod": [
+     "Palette",
+     "Viewport"
+    ]
+   },
+   "bar_step": {
+    "prod": [
+     "STEP_ACTION"
+    ]
+   },
+   "cursor": {
+    "prod": [
+     "Edit",
+     "ask",
+     "current"
+    ]
+   },
+   "engine": {
+    "prod": [
+     "Transport"
+    ]
+   },
+   "open": {
+    "prod": [
+     "runtime"
+    ]
+   },
+   "organize": {
+    "prod": [
+     "engine_edit"
+    ]
+   },
+   "ruler": {
+    "prod": [
+     "LANE_H",
+     "MARKS_ROW",
+     "lane_shown",
+     "row_top"
+    ]
+   },
+   "tcp": {
+    "prod": [
+     "glyphs"
+    ]
+   },
+   "text": {
+    "prod": [
+     "Font"
+    ]
+   },
+   "track_regions": {
+    "prod": [
+     "bar_of",
+     "fresh_id",
+     "moment"
+    ]
+   }
+  },
+  "pointer": {
+   "mcp": {
+    "prod": [
+     "Control"
+    ]
+   },
+   "row": {
+    "prod": [
+     "Control"
+    ]
+   }
+  },
+  "popup": {
+   "arrangement": {
+    "prod": [
+     "Palette"
+    ]
+   },
+   "tcp": {
+    "prod": [
+     "glyphs"
+    ]
+   },
+   "text": {
+    "prod": [
+     "Font"
+    ]
+   }
+  },
+  "prepare": {
+   "folder": {
+    "prod": [
+     "Disk",
+     "Folder",
+     "disk"
+    ]
+   },
+   "gain_stage": {
+    "prod": [
+     "kit_headroom",
+     "stage"
+    ]
+   },
+   "mix_chains": {
+    "prod": [
+     "add"
+    ]
+   },
+   "open": {
+    "prod": [
+     "Opened",
+     "open_silent",
+     "runtime"
+    ]
+   },
+   "session_file": {
+    "prod": [
+     "save_session"
+    ]
+   }
+  },
+  "profile": {},
+  "progress": {
+   "engine": {
+    "prod": [
+     "Move",
+     "Reading",
+     "Transport",
+     "transport"
+    ]
+   },
+   "ghosts": {
+    "prod": [
+     "Anchor",
+     "register_anchor"
+    ]
+   },
+   "record_view": {
+    "prod": [
+     "PickSong"
+    ]
+   },
+   "ruler": {
+    "prod": [
+     "SECTIONS_ROW"
+    ]
+   },
+   "setlist": {
+    "prod": [
+     "Setlist"
+    ]
+   },
+   "studio": {
+    "prod": [
+     "StudioSession"
+    ]
+   }
+  },
+  "project_file": {
+   "actions": {
+    "prod": [
+     "samples_follow"
+    ]
+   },
+   "jobs": {
+    "prod": [
+     "start"
+    ]
+   },
+   "open": {
+    "prod": [
+     "local_engine"
+    ]
+   },
+   "open_core": {
+    "prod": [
+     "is_session"
+    ]
+   }
+  },
+  "project_new": {
+   "actions": {
+    "prod": [
+     "list",
+     "meta",
+     "request_mode"
+    ]
+   },
+   "cursor": {
+    "prod": [
+     "Edit",
+     "ask"
+    ]
+   },
+   "open": {
+    "prod": [
+     "engine_runtime",
+     "open_untitled"
+    ]
+   },
+   "prepare": {
+    "prod": [
+     "GUIDE_INSTRUMENT"
+    ]
+   },
+   "projects": {
+    "prod": [
+     "go_back"
+    ]
+   },
+   "setlist": {
+    "prod": [
+     "Setlist",
+     "Song"
+    ]
+   },
+   "studio": {
+    "prod": [
+     "StudioSession",
+     "request_resync"
+    ]
+   }
+  },
+  "projects": {
+   "project_file": {
+    "prod": [
+     "branches",
+     "file_and_branch",
+     "is_project_file"
+    ]
+   }
+  },
+  "quantize_panel": {
+   "actions": {
+    "prod": [
+     "list"
+    ]
+   },
+   "cursor": {
+    "prod": [
+     "current"
+    ]
+   },
+   "open": {
+    "prod": [
+     "runtime"
+    ]
+   }
+  },
+  "rails": {
+   "arrangement": {
+    "prod": [
+     "Palette",
+     "TCP_WIDTH"
+    ]
+   },
+   "icons": {
+    "prod": [
+     "Icons"
+    ]
+   },
+   "num": {
+    "prod": [
+     "coord"
+    ]
+   },
+   "ruler": {
+    "prod": [
+     "ruler_h"
+    ]
+   },
+   "settings": {
+    "prod": [
+     "Settings"
+    ]
+   },
+   "skin": {
+    "prod": [
+     "canvas",
+     "loaded",
+     "values"
+    ]
+   },
+   "tcp": {
+    "prod": [
+     "glyphs",
+     "ink_on"
+    ]
+   },
+   "text": {
+    "prod": [
+     "Font"
+    ]
+   }
+  },
+  "record": {
+   "actions": {
+    "prod": [
+     "list",
+     "meta",
+     "resolve",
+     "song"
+    ]
+   },
+   "studio": {
+    "prod": [
+     "request_resync"
+    ]
+   }
+  },
+  "record_view": {
+   "compact": {
+    "prod": [
+     "Form",
+     "use_form"
+    ]
+   },
+   "engine": {
+    "prod": [
+     "Move",
+     "transport"
+    ]
+   },
+   "mixer_panel": {
+    "prod": [
+     "Links",
+     "Mixer",
+     "WebMixer"
+    ]
+   },
+   "navigator": {
+    "prod": [
+     "Navigator"
+    ]
+   },
+   "progress": {
+    "prod": [
+     "ProgressBar",
+     "Song",
+     "TransportButtons",
+     "use_reading"
+    ]
+   },
+   "ruler": {
+    "prod": [
+     "Timeline"
+    ]
+   },
+   "setlist": {
+    "prod": [
+     "Setlist"
+    ]
+   },
+   "studio": {
+    "prod": [
+     "StudioSession"
+    ]
+   },
+   "take_rating": {
+    "prod": [
+     "MAX_STARS",
+     "Scope",
+     "Stars",
+     "miss",
+     "star"
+    ]
+   },
+   "touch": {
+    "prod": [
+     "Touch"
+    ]
+   }
+  },
+  "reference": {
+   "open": {
+    "prod": [
+     "equip"
+    ]
+   },
+   "open_core": {
+    "prod": [
+     "is_session",
+     "open_song_into"
+    ]
+   },
+   "prepare": {
+    "prod": [
+     "Prepare"
+    ]
+   }
+  },
+  "reference_play": {
+   "reference": {
+    "prod": [
+     "mix"
+    ]
+   },
+   "song_stream": {
+    "prod": [
+     "REFERENCE_ONLY"
+    ]
+   },
+   "stream_set": {
+    "prod": [
+     "hear_stems"
+    ]
+   }
+  },
+  "rename": {
+   "arrangement": {
+    "prod": [
+     "Palette",
+     "submit_command"
+    ]
+   },
+   "tcp": {
+    "prod": [
+     "glyphs"
+    ]
+   },
+   "text": {
+    "prod": [
+     "Font"
+    ]
+   }
+  },
+  "rig": {
+   "beats": {
+    "prod": [
+     "BPM",
+     "DELAY",
+     "FREE_DIV",
+     "MOD",
+     "REVERB",
+     "beat",
+     "nearest_delay",
+     "nearest_mod",
+     "nearest_reverb",
+     "seconds_text"
+    ]
+   },
+   "faces": {
+    "prod": [
+     "FrameFace",
+     "design_dir"
+    ]
+   },
+   "num": {
+    "prod": [
+     "coord",
+     "index"
+    ]
+   }
+  },
+  "rig_actions": {
+   "actions": {
+    "prod": [
+     "list",
+     "meta",
+     "resolve",
+     "song"
+    ]
+   },
+   "studio": {
+    "prod": [
+     "request_resync"
+    ]
+   }
+  },
+  "routes": {
+   "open": {
+    "prod": [
+     "runtime"
+    ]
+   }
+  },
+  "row": {
+   "tcp": {
+    "prod": [
+     "BUTTON",
+     "BUTTON_GAP",
+     "Density",
+     "KNOB_LEGIBLE",
+     "Tcp",
+     "band"
+    ],
+    "test": [
+     "Tcp"
+    ]
+   }
+  },
+  "ruler": {
+   "arrangement": {
+    "prod": [
+     "ChartMarks",
+     "Lettering",
+     "Palette",
+     "TCP_WIDTH",
+     "Viewport"
+    ],
+    "test": [
+     "TCP_WIDTH",
+     "Viewport"
+    ]
+   },
+   "grid_in_force": {
+    "prod": [
+     "current"
+    ]
+   },
+   "num": {
+    "prod": [
+     "coord"
+    ]
+   },
+   "options": {
+    "prod": [
+     "GRID"
+    ]
+   },
+   "tcp": {
+    "prod": [
+     "glyphs"
+    ]
+   },
+   "text": {
+    "prod": [
+     "Font"
+    ]
+   },
+   "track_regions": {
+    "prod": [
+     "grid_name"
+    ]
+   }
+  },
+  "section_colors": {},
+  "session_file": {
+   "project_file": {
+    "prod": [
+     "save",
+     "save_target"
+    ]
+   }
+  },
+  "setlist": {
+   "collab": {
+    "prod": [
+     "song_opened"
+    ]
+   },
+   "midi": {
+    "test": [
+     "Previews"
+    ]
+   },
+   "open": {
+    "prod": [
+     "Media",
+     "RemoteTarget",
+     "attach",
+     "engine_runtime",
+     "facade_blocking",
+     "is_session",
+     "local_engine",
+     "open_song_into_with",
+     "project_text",
+     "set_song_color",
+     "switch_song"
+    ]
+   },
+   "prepare": {
+    "prod": [
+     "Prepare",
+     "chart_beside"
+    ]
+   },
+   "reference_play": {
+    "prod": [
+     "hear_local"
+    ]
+   },
+   "song_stream": {
+    "prod": [
+     "StreamedSong"
+    ]
+   },
+   "stream_set": {
+    "prod": [
+     "stream"
+    ]
+   },
+   "studio": {
+    "prod": [
+     "StudioSession"
+    ],
+    "test": [
+     "Planner"
+    ]
+   }
+  },
+  "settings": {
+   "rails": {
+    "test": [
+     "SIDE"
+    ]
+   },
+   "tone": {
+    "test": [
+     "LEGIBLE"
+    ]
+   }
+  },
+  "setup": {
+   "arrangement": {
+    "prod": [
+     "key_at"
+    ]
+   },
+   "audio_mode": {
+    "prod": [
+     "AudioMode",
+     "state"
+    ]
+   },
+   "device_audio": {
+    "prod": [
+     "Change",
+     "DeviceAudio"
+    ]
+   },
+   "reference_play": {
+    "prod": [
+     "any",
+     "load_multitracks",
+     "multitracks"
+    ]
+   },
+   "setlist": {
+    "prod": [
+     "Setlist"
+    ]
+   },
+   "shell": {
+    "prod": [
+     "Back",
+     "DIM",
+     "Pins",
+     "RAISED",
+     "RULE",
+     "TEXT",
+     "WindowSize",
+     "pick_audio_mode"
+    ]
+   },
+   "song_modes": {
+    "prod": [
+     "of"
+    ]
+   },
+   "touch": {
+    "prod": [
+     "Touch"
+    ]
+   },
+   "transport_bar": {
+    "prod": [
+     "short_key",
+     "tempo_text"
+    ]
+   }
+  },
+  "shell": {
+   "audio_mode": {
+    "prod": [
+     "AudioMode",
+     "RemoteTarget",
+     "revision",
+     "state"
+    ]
+   },
+   "chart_panel": {
+    "prod": [
+     "FITTED_WIDTH_OVER_HEIGHT",
+     "Fit",
+     "Turn",
+     "set_fit",
+     "shown_fit",
+     "turn"
+    ]
+   },
+   "collab_bar": {
+    "prod": [
+     "PeerDots"
+    ]
+   },
+   "folds": {
+    "prod": [
+     "set_tops",
+     "tops"
+    ]
+   },
+   "ghosts": {
+    "prod": [
+     "region_mounted"
+    ]
+   },
+   "jobs": {
+    "prod": [
+     "running"
+    ]
+   },
+   "navigator": {
+    "prod": [
+     "Navigator"
+    ]
+   },
+   "open": {
+    "prod": [
+     "request_mode"
+    ]
+   },
+   "options": {
+    "prod": [
+     "LOCKING"
+    ]
+   },
+   "progress": {
+    "prod": [
+     "ProgressBar",
+     "TransportButtons",
+     "use_reading"
+    ]
+   },
+   "setlist": {
+    "prod": [
+     "COLORS",
+     "Setlist"
+    ]
+   },
+   "studio": {
+    "prod": [
+     "StudioSession"
+    ]
+   },
+   "touch": {
+    "prod": [
+     "detected",
+     "use_touch"
+    ]
+   },
+   "versions": {
+    "prod": [
+     "Versions"
+    ]
+   }
+  },
+  "simulate": {
+   "live": {
+    "prod": [
+     "Meters"
+    ]
+   },
+   "mcp": {
+    "prod": [
+     "f64_to_f32"
+    ]
+   },
+   "num": {
+    "prod": [
+     "coord",
+     "index"
+    ],
+    "test": [
+     "coord"
+    ]
+   },
+   "tone": {
+    "prod": [
+     "Analyser",
+     "HISTORY",
+     "Levels",
+     "PUBLISH_HZ",
+     "Store",
+     "Suppress",
+     "Tone"
+    ],
+    "test": [
+     "Store",
+     "Suppress",
+     "placeholder"
+    ]
+   }
+  },
+  "skin": {
+   "arrangement": {
+    "prod": [
+     "Palette"
+    ],
+    "test": [
+     "Palette"
+    ]
+   },
+   "art": {
+    "prod": [
+     "path_of"
+    ]
+   },
+   "engine": {
+    "prod": [
+     "meter_fraction"
+    ]
+   },
+   "expression": {
+    "prod": [
+     "base_look",
+     "look_fields"
+    ]
+   },
+   "mcp": {
+    "prod": [
+     "Control",
+     "FOLD_W",
+     "INDENT_STEP",
+     "f64_to_f32",
+     "strip_edge",
+     "strip_ground"
+    ],
+    "test": [
+     "Control",
+     "INDENT_STEP"
+    ]
+   },
+   "num": {
+    "prod": [
+     "coord"
+    ],
+    "test": [
+     "coord"
+    ]
+   },
+   "overlay": {
+    "prod": [
+     "route_ink",
+     "volume_label"
+    ]
+   },
+   "row": {
+    "prod": [
+     "Control"
+    ],
+    "test": [
+     "Control",
+     "Row"
+    ]
+   },
+   "strip": {
+    "prod": [
+     "shape"
+    ],
+    "test": [
+     "Strip",
+     "fx_section",
+     "shape"
+    ]
+   },
+   "tcp": {
+    "prod": [
+     "Density",
+     "Tcp",
+     "band",
+     "folder_band",
+     "lit",
+     "mute_lit",
+     "rail_layout",
+     "record_input",
+     "row_tint",
+     "solo_lit",
+     "to_theme",
+     "track_color",
+     "volume_fraction"
+    ],
+    "test": [
+     "Tcp"
+    ]
+   },
+   "text": {
+    "prod": [
+     "Font"
+    ]
+   }
+  },
+  "song_bars": {
+   "ruler": {
+    "test": [
+     "from_song"
+    ]
+   }
+  },
+  "song_chart": {},
+  "song_modes": {
+   "setlist": {
+    "prod": [
+     "Setlist"
+    ]
+   }
+  },
+  "song_stream": {
+   "folder": {
+    "prod": [
+     "Disk",
+     "Folder",
+     "Memory"
+    ]
+   },
+   "open": {
+    "prod": [
+     "Media",
+     "open_song_into_with",
+     "runtime"
+    ]
+   },
+   "prepare": {
+    "prod": [
+     "Prepare"
+    ]
+   },
+   "reference": {
+    "prod": [
+     "PREVIEW_STEM",
+     "STEM",
+     "left_out"
+    ]
+   },
+   "setlist": {
+    "prod": [
+     "song_in"
+    ]
+   },
+   "web_audio": {
+    "prod": [
+     "adopt"
+    ]
+   }
+  },
+  "stream_in": {
+   "collab": {
+    "prod": [
+     "env_set"
+    ]
+   },
+   "open": {
+    "prod": [
+     "Media",
+     "begin_asset_load",
+     "cue_engine",
+     "current_song",
+     "mode",
+     "open_song_into_with",
+     "runtime",
+     "set_assets_progress",
+     "set_cue_ready",
+     "switch_to"
+    ]
+   },
+   "prepare": {
+    "prod": [
+     "Prepare"
+    ]
+   },
+   "setlist": {
+    "prod": [
+     "read_setlist"
+    ]
+   },
+   "song_stream": {
+    "prod": [
+     "FetchGuard",
+     "Keep",
+     "PeerSource",
+     "ShareSource",
+     "SongSource",
+     "StreamedSong",
+     "TaskSource",
+     "arrived",
+     "mirror"
+    ]
+   }
+  },
+  "stream_set": {
+   "collab": {
+    "prod": [
+     "TaskSet",
+     "join_task_in_background"
+    ]
+   },
+   "engine": {
+    "prod": [
+     "Transport"
+    ]
+   },
+   "loading": {
+    "prod": [
+     "Progress"
+    ]
+   },
+   "open": {
+    "prod": [
+     "engine_runtime",
+     "local_engine"
+    ]
+   },
+   "reference": {
+    "prod": [
+     "left_out"
+    ]
+   },
+   "reference_play": {
+    "prod": [
+     "hear",
+     "multitracks",
+     "stop"
+    ],
+    "test": [
+     "any",
+     "hear_local",
+     "stop"
+    ]
+   },
+   "setlist": {
+    "prod": [
+     "Arrival",
+     "Opening",
+     "Setlist"
+    ],
+    "test": [
+     "song_in"
+    ]
+   },
+   "song_stream": {
+    "prod": [
+     "FetchGuard",
+     "Keep",
+     "Offline",
+     "Reference",
+     "ShareSource",
+     "SongSource",
+     "StreamedSong",
+     "TaskSource",
+     "download",
+     "mirror"
+    ],
+    "test": [
+     "Offline",
+     "REFERENCE_ONLY"
+    ]
+   },
+   "task_account": {
+    "test": [
+     "orgs",
+     "signed_in"
+    ]
+   },
+   "task_set": {
+    "prod": [
+     "join",
+     "until_ok"
+    ]
+   }
+  },
+  "strip": {
+   "mcp": {
+    "prod": [
+     "Columns",
+     "Control",
+     "FOLD_W",
+     "INDENT_STEP",
+     "Squeeze",
+     "f64_to_f32"
+    ]
+   },
+   "tcp": {
+    "prod": [
+     "volume_fraction"
+    ]
+   },
+   "tone": {
+    "prod": [
+     "FOCUSED"
+    ]
+   }
+  },
+  "studio": {
+   "automation": {
+    "prod": [
+     "adopt_remote",
+     "read_remote",
+     "refresh",
+     "refresh_in"
+    ]
+   },
+   "engine": {
+    "prod": [
+     "Applier",
+     "Edit",
+     "Transport"
+    ]
+   },
+   "folder": {
+    "prod": [
+     "disk"
+    ]
+   },
+   "folds": {
+    "prod": [
+     "apply",
+     "cuts_shown"
+    ],
+    "test": [
+     "toggle"
+    ]
+   },
+   "lanes": {
+    "prod": [
+     "folder_view"
+    ]
+   },
+   "midi": {
+    "prod": [
+     "Previews"
+    ]
+   },
+   "mousemap": {
+    "prod": [
+     "Mods"
+    ]
+   },
+   "open": {
+    "prod": [
+     "Media",
+     "SongPlan",
+     "current_song",
+     "local_engine",
+     "open_another_with",
+     "open_first_with",
+     "prepare_and_save",
+     "project_text",
+     "song_plan",
+     "song_plan_with",
+     "switch_to"
+    ]
+   },
+   "panel": {
+    "prod": [
+     "BAR",
+     "Button",
+     "Engine",
+     "PanelChrome",
+     "PanelEvent",
+     "WHEEL_LINE",
+     "use_arrangement_panel"
+    ]
+   },
+   "plan": {
+    "prod": [
+     "Kinds",
+     "Panel",
+     "Surface",
+     "apply_scene"
+    ],
+    "test": [
+     "Kinds"
+    ]
+   },
+   "prepare": {
+    "prod": [
+     "Prepare"
+    ]
+   },
+   "projects": {
+    "prod": [
+     "mark_saved"
+    ]
+   },
+   "settings": {
+    "prod": [
+     "Settings"
+    ],
+    "test": [
+     "Settings"
+    ]
+   },
+   "song_chart": {
+    "prod": [
+     "of_song"
+    ]
+   },
+   "tool": {
+    "prod": [
+     "Sink"
+    ]
+   },
+   "wave_pool": {
+    "prod": [
+     "spawn"
+    ]
+   },
+   "window_cursor": {
+    "prod": [
+     "use_cursor_sink"
+    ]
+   }
+  },
+  "swipe": {
+   "arrange_edit": {
+    "prod": [
+     "comp_lane"
+    ]
+   },
+   "arrangement": {
+    "prod": [
+     "Arrangement",
+     "Palette",
+     "Viewport",
+     "slot_band"
+    ],
+    "test": [
+     "lane_slots",
+     "slot_band"
+    ]
+   },
+   "lanes": {
+    "prod": [
+     "called"
+    ]
+   },
+   "num": {
+    "prod": [
+     "coord",
+     "index"
+    ]
+   },
+   "ruler": {
+    "prod": [
+     "ruler_h"
+    ]
+   },
+   "tcp": {
+    "prod": [
+     "glyphs"
+    ]
+   },
+   "text": {
+    "prod": [
+     "Font"
+    ]
+   }
+  },
+  "take_rating": {
+   "open": {
+    "prod": [
+     "runtime"
+    ]
+   }
+  },
+  "take_window": {
+   "arrangement": {
+    "prod": [
+     "TCP_WIDTH",
+     "Viewport"
+    ],
+    "test": [
+     "TCP_WIDTH"
+    ]
+   },
+   "ruler": {
+    "prod": [
+     "Bars"
+    ]
+   }
+  },
+  "task_account": {
+   "open": {
+    "prod": [
+     "engine_runtime"
+    ]
+   }
+  },
+  "task_set": {},
+  "tcp": {
+   "arrangement": {
+    "prod": [
+     "Palette"
+    ]
+   },
+   "art": {
+    "prod": [
+     "scaled"
+    ]
+   },
+   "layout": {
+    "prod": [
+     "Layout"
+    ]
+   },
+   "num": {
+    "prod": [
+     "coord"
+    ]
+   },
+   "row": {
+    "prod": [
+     "Control",
+     "automation_button"
+    ]
+   },
+   "text": {
+    "prod": [
+     "Font"
+    ]
+   },
+   "track_icon": {
+    "prod": [
+     "Icon",
+     "paint"
+    ]
+   }
+  },
+  "text": {},
+  "timeline_actions": {
+   "actions": {
+    "prod": [
+     "list",
+     "meta",
+     "sections",
+     "song"
+    ]
+   },
+   "cursor": {
+    "prod": [
+     "Edit",
+     "Span",
+     "ask",
+     "current"
+    ]
+   },
+   "fx_actions": {
+    "prod": [
+     "moment"
+    ]
+   },
+   "gain_stage": {
+    "prod": [
+     "path_of"
+    ]
+   },
+   "hits": {
+    "prod": [
+     "playback"
+    ]
+   },
+   "organize": {
+    "prod": [
+     "Button",
+     "engine_edit",
+     "insert"
+    ]
+   },
+   "prepare": {
+    "prod": [
+     "GUIDE_INSTRUMENT"
+    ]
+   },
+   "studio": {
+    "prod": [
+     "request_resync"
+    ]
+   },
+   "track_regions": {
+    "prod": [
+     "all",
+     "bar_of"
+    ]
+   }
+  },
+  "tone": {
+   "arrangement": {
+    "prod": [
+     "Palette"
+    ],
+    "test": [
+     "Palette"
+    ]
+   },
+   "engine": {
+    "prod": [
+     "Applier",
+     "Edit"
+    ]
+   },
+   "faces": {
+    "prod": [
+     "paint_mod_in"
+    ]
+   },
+   "live": {
+    "prod": [
+     "Meters",
+     "RUNGS",
+     "RoomKey",
+     "TAIL_BINS",
+     "ladder",
+     "render_tail_now",
+     "tail"
+    ],
+    "test": [
+     "Meters"
+    ]
+   },
+   "mcp": {
+    "prod": [
+     "f64_to_f32"
+    ]
+   },
+   "num": {
+    "prod": [
+     "coord",
+     "index",
+     "quantise"
+    ]
+   },
+   "open": {
+    "prod": [
+     "current_song",
+     "local_engine"
+    ]
+   },
+   "plugin_faces": {
+    "prod": [
+     "CompFace",
+     "is_drum",
+     "is_named"
+    ]
+   },
+   "simulate": {
+    "test": [
+     "frame",
+     "meters"
+    ]
+   },
+   "skin": {
+    "prod": [
+     "canvas",
+     "loaded",
+     "values"
+    ],
+    "test": [
+     "schema",
+     "set"
+    ]
+   },
+   "tcp": {
+    "prod": [
+     "glyphs"
+    ]
+   },
+   "text": {
+    "prod": [
+     "Font"
+    ],
+    "test": [
+     "Font"
+    ]
+   },
+   "tone_bind": {
+    "prod": [
+     "stages"
+    ]
+   },
+   "tone_read": {
+    "prod": [
+     "EngineFx",
+     "apply",
+     "chain",
+     "devices",
+     "others"
+    ]
+   }
+  },
+  "tone_bind": {
+   "beats": {
+    "prod": [
+     "DELAY",
+     "REVERB"
+    ]
+   },
+   "engine": {
+    "test": [
+     "Edit"
+    ]
+   },
+   "plugin_faces": {
+    "prod": [
+     "CompFace"
+    ]
+   },
+   "tone": {
+    "prod": [
+     "Tone"
+    ],
+    "test": [
+     "Store"
+    ]
+   }
+  },
+  "tone_read": {
+   "beats": {
+    "prod": [
+     "DELAY",
+     "REVERB"
+    ]
+   },
+   "num": {
+    "prod": [
+     "narrow"
+    ]
+   },
+   "open": {
+    "prod": [
+     "current_song",
+     "local_engine"
+    ]
+   },
+   "plugin_faces": {
+    "prod": [
+     "CompFace"
+    ],
+    "test": [
+     "CompFace"
+    ]
+   },
+   "tone": {
+    "prod": [
+     "Tone",
+     "Which"
+    ],
+    "test": [
+     "placeholder"
+    ]
+   },
+   "tone_bind": {
+    "test": [
+     "stages"
+    ]
+   }
+  },
+  "tool": {
+   "mousemap": {
+    "prod": [
+     "Action",
+     "Gesture",
+     "Mods",
+     "self"
+    ]
+   },
+   "window_cursor": {
+    "prod": [
+     "Glyph",
+     "Shape",
+     "Sink"
+    ]
+   }
+  },
+  "toolbar": {
+   "engine": {
+    "prod": [
+     "Edit"
+    ]
+   },
+   "options": {
+    "prod": [
+     "(module)",
+     "AUTO_CROSSFADE",
+     "GRID",
+     "GROUPING",
+     "LOCKING",
+     "Option",
+     "RIPPLE",
+     "SNAP",
+     "grouping_changed"
+    ]
+   },
+   "shell": {
+    "prod": [
+     "MixerToggle",
+     "Pins"
+    ]
+   },
+   "studio": {
+    "prod": [
+     "Edits"
+    ]
+   }
+  },
+  "touch": {
+   "mcp": {
+    "prod": [
+     "STRIP_GAP",
+     "STRIP_W"
+    ]
+   }
+  },
+  "track_icon": {},
+  "track_regions": {
+   "actions": {
+    "prod": [
+     "list",
+     "meta",
+     "resolve",
+     "song"
+    ]
+   },
+   "drum_reference": {
+    "prod": [
+     "find_track",
+     "notes",
+     "pieces"
+    ]
+   },
+   "fx_actions": {
+    "prod": [
+     "moment"
+    ]
+   },
+   "hits": {
+    "prod": [
+     "kit"
+    ]
+   },
+   "marks_strip": {
+    "prod": [
+     "refresh"
+    ]
+   },
+   "song_bars": {
+    "prod": [
+     "musical"
+    ]
+   }
+  },
+  "transport_bar": {
+   "arrangement": {
+    "prod": [
+     "key_at"
+    ]
+   },
+   "bar_step": {
+    "prod": [
+     "Stepper"
+    ]
+   },
+   "engine": {
+    "prod": [
+     "Move",
+     "Reading",
+     "Transport",
+     "transport"
+    ]
+   },
+   "play_return": {
+    "prod": [
+     "Stop",
+     "get",
+     "set"
+    ]
+   },
+   "ruler": {
+    "prod": [
+     "song_bar_beat",
+     "song_start_of"
+    ]
+   },
+   "shell": {
+    "prod": [
+     "Density",
+     "use_density"
+    ]
+   },
+   "studio": {
+    "prod": [
+     "StudioSession"
+    ]
+   }
+  },
+  "versions": {
+   "actions": {
+    "prod": [
+     "list",
+     "open_song_unsaved",
+     "open_song_versions"
+    ]
+   },
+   "projects": {
+    "prod": [
+     "open_next"
+    ]
+   },
+   "shell": {
+    "prod": [
+     "BAR_BG",
+     "BAR_H",
+     "Back",
+     "DIM",
+     "RAISED",
+     "RULE",
+     "TEXT"
+    ]
+   }
+  },
+  "vocal_level": {
+   "actions": {
+    "prod": [
+     "meta",
+     "resolve",
+     "sections",
+     "song"
+    ]
+   },
+   "automation": {
+    "prod": [
+     "Leveled"
+    ]
+   },
+   "drum_level": {
+    "prod": [
+     "write_curve"
+    ]
+   },
+   "gain_stage": {
+    "prod": [
+     "path_of"
+    ]
+   },
+   "leveler": {
+    "prod": [
+     "ANCHOR_KEY",
+     "Anchor",
+     "Dial",
+     "STAGES_KEY",
+     "Stage",
+     "Stages",
+     "covering",
+     "extent",
+     "on_item"
+    ]
+   },
+   "midi": {
+    "prod": [
+     "mark_stale"
+    ]
+   },
+   "studio": {
+    "prod": [
+     "request_resync"
+    ]
+   }
+  },
+  "wave_detail": {
+   "engine": {
+    "prod": [
+     "made"
+    ]
+   },
+   "num": {
+    "prod": [
+     "coord",
+     "index"
+    ]
+   },
+   "open": {
+    "prod": [
+     "current_song",
+     "local_engine"
+    ]
+   },
+   "wave_pool": {
+    "prod": [
+     "spawn"
+    ]
+   }
+  },
+  "wave_pool": {},
+  "web_audio": {
+   "reference": {
+    "prod": [
+     "left_out",
+     "mix"
+    ]
+   }
+  },
+  "web_engine": {
+   "collab": {
+    "prod": [
+     "TaskSet",
+     "join_task",
+     "remember_chart",
+     "song_opened"
+    ]
+   },
+   "engine": {
+    "prod": [
+     "Applier",
+     "Edit",
+     "Transport"
+    ]
+   },
+   "folder": {
+    "prod": [
+     "Folder",
+     "Memory"
+    ]
+   },
+   "guide_instrument": {
+    "prod": [
+     "CLICK",
+     "Library",
+     "VOICE",
+     "install"
+    ]
+   },
+   "loading": {
+    "prod": [
+     "Progress"
+    ]
+   },
+   "midi": {
+    "prod": [
+     "Previews",
+     "WAVE_BLOCK"
+    ]
+   },
+   "open": {
+    "prod": [
+     "current_song",
+     "set_current_song"
+    ]
+   },
+   "open_core": {
+    "prod": [
+     "Media",
+     "open_song_in",
+     "project_text_in"
+    ]
+   },
+   "prepare": {
+    "prod": [
+     "Prepare"
+    ]
+   },
+   "reference": {
+    "prod": [
+     "left_out"
+    ]
+   },
+   "setlist": {
+    "prod": [
+     "Arrival",
+     "Setlist",
+     "Song"
+    ]
+   },
+   "song_stream": {
+    "prod": [
+     "Heard",
+     "Keep",
+     "Reference",
+     "ShareSource",
+     "StreamedSong",
+     "mirror"
+    ]
+   },
+   "studio": {
+    "prod": [
+     "StudioSession"
+    ]
+   },
+   "task_set": {
+    "prod": [
+     "join",
+     "until_ok"
+    ]
+   },
+   "web_audio": {
+    "prod": [
+     "MeterTake",
+     "install",
+     "multitracks",
+     "peak_meters",
+     "reference",
+     "switch"
+    ]
+   }
+  },
+  "web_host": {
+   "chart_panel": {
+    "prod": [
+     "WebChart"
+    ]
+   },
+   "closeup": {
+    "prod": [
+     "CloseupLayer",
+     "Closeups"
+    ]
+   },
+   "collab": {
+    "prod": [
+     "transport_pressed"
+    ]
+   },
+   "collab_bar": {
+    "prod": [
+     "CollabBar",
+     "use_follow_song"
+    ]
+   },
+   "compact": {
+    "prod": [
+     "CompactShell",
+     "Form",
+     "PhoneView"
+    ]
+   },
+   "editor_view": {
+    "prod": [
+     "EditorPanel"
+    ]
+   },
+   "engine": {
+    "prod": [
+     "Transport"
+    ]
+   },
+   "fx_view": {
+    "prod": [
+     "FxPanel"
+    ]
+   },
+   "loading": {
+    "prod": [
+     "Loading",
+     "LoadingFrame"
+    ]
+   },
+   "lyrics_panel": {
+    "prod": [
+     "LyricsChoice",
+     "LyricsPanel"
+    ]
+   },
+   "mix_guide": {
+    "prod": [
+     "use_mix_guide"
+    ]
+   },
+   "mixer_panel": {
+    "prod": [
+     "WebDawPanels"
+    ]
+   },
+   "mousemap": {
+    "prod": [
+     "Mods"
+    ]
+   },
+   "open": {
+    "prod": [
+     "switch_song"
+    ]
+   },
+   "panel": {
+    "prod": [
+     "Button",
+     "Engine",
+     "PanelChrome",
+     "PanelEvent",
+     "WHEEL_LINE",
+     "use_arrangement_panel"
+    ]
+   },
+   "progress": {
+    "prod": [
+     "ProgressBar",
+     "TransportButtons"
+    ]
+   },
+   "record_view": {
+    "prod": [
+     "PickSong",
+     "RecordView"
+    ]
+   },
+   "setlist": {
+    "prod": [
+     "Setlist"
+    ]
+   },
+   "setup": {
+    "prod": [
+     "SetupView"
+    ]
+   },
+   "shell": {
+    "prod": [
+     "ACCENT",
+     "AudioBadge",
+     "BAR_BG",
+     "BottomBar",
+     "DIM",
+     "Density",
+     "NavigatorColumn",
+     "OverviewLayout",
+     "PinnedProgress",
+     "PinnedTransport",
+     "RULE",
+     "SAFE_AREA",
+     "TEXT",
+     "TopBar",
+     "View",
+     "WindowSize",
+     "use_pins"
+    ]
+   },
+   "song_modes": {
+    "prod": [
+     "use_song_modes"
+    ]
+   },
+   "studio": {
+    "prod": [
+     "StudioSession"
+    ]
+   },
+   "tool": {
+    "prod": [
+     "Sink",
+     "set_zoom_held"
+    ]
+   },
+   "touch": {
+    "prod": [
+     "Touch"
+    ]
+   },
+   "transport_bar": {
+    "prod": [
+     "WebTransportBar"
+    ]
+   },
+   "web_audio": {
+    "prod": [
+     "unlock_on_first_gesture"
+    ]
+   },
+   "web_engine": {
+    "prod": [
+     "EngineRef",
+     "Listening",
+     "Notice",
+     "Progress",
+     "WebSource",
+     "listening",
+     "load_multitracks",
+     "notices",
+     "open",
+     "take_arrivals"
+    ]
+   },
+   "widget": {
+    "prod": [
+     "ArrangementWidget"
+    ]
+   },
+   "window_cursor": {
+    "prod": [
+     "Shape"
+    ]
+   }
+  },
+  "which_key": {
+   "shell": {
+    "prod": [
+     "BOTTOM_H"
+    ]
+   }
+  },
+  "widget": {
+   "actions": {
+    "prod": [
+     "list",
+     "take_window",
+     "through_list",
+     "window_pending"
+    ]
+   },
+   "arrange_edit": {
+    "prod": [
+     "Editor",
+     "Effect",
+     "SlipCut",
+     "Warped",
+     "kit_items",
+     "seconds_of"
+    ]
+   },
+   "arrangement": {
+    "prod": [
+     "Arrangement",
+     "ItemZone",
+     "Palette",
+     "Viewport",
+     "cut_to_screen",
+     "cuts_overlay",
+     "fade_overlay",
+     "gaps_overlay",
+     "hit_drag_overlay",
+     "hit_marquee_overlay",
+     "hits_overlay",
+     "marquee_overlay",
+     "outlines_overlay",
+     "razor_overlay",
+     "selection_overlay",
+     "slip_overlay",
+     "titles",
+     "volume_overlay"
+    ],
+    "test": [
+     "Arrangement",
+     "ItemZone",
+     "Palette",
+     "TCP_WIDTH"
+    ]
+   },
+   "automation": {
+    "prod": [
+     "adopt_remote",
+     "read_remote",
+     "set_take_curve",
+     "take_curve",
+     "with_point",
+     "without_point"
+    ],
+    "test": [
+     "Kind",
+     "Lane",
+     "TakeCurve",
+     "lanes_of",
+     "put_take_curve",
+     "replace",
+     "take_curve",
+     "take_y"
+    ]
+   },
+   "automation_draw": {
+    "prod": [
+     "Hit",
+     "Lit",
+     "Spot",
+     "TakeHit",
+     "bodies",
+     "headers",
+     "hit",
+     "leveler_lines",
+     "on_screen",
+     "take_gain_at",
+     "take_hit",
+     "take_lines"
+    ],
+    "test": [
+     "on_screen"
+    ]
+   },
+   "automation_edit": {
+    "prod": [
+     "Keys",
+     "LaneDrag",
+     "drag",
+     "press",
+     "release"
+    ]
+   },
+   "automation_menu": {
+    "prod": [
+     "Pick",
+     "act",
+     "modes",
+     "top"
+    ]
+   },
+   "comp": {
+    "prod": [
+     "SWIPE_COMP"
+    ]
+   },
+   "cursor": {
+    "prod": [
+     "Edit",
+     "Look",
+     "Span",
+     "Trail",
+     "paint",
+     "paint_edit",
+     "publish",
+     "take_asked"
+    ]
+   },
+   "drum_settings": {
+    "prod": [
+     "current"
+    ]
+   },
+   "editor_view": {
+    "prod": [
+     "picked"
+    ]
+   },
+   "engine": {
+    "prod": [
+     "Edit",
+     "Meters",
+     "Move",
+     "Touched",
+     "Transport",
+     "drag",
+     "moving",
+     "transport"
+    ],
+    "test": [
+     "Edit"
+    ]
+   },
+   "folds": {
+    "prod": [
+     "cuts_shown",
+     "generation",
+     "shut",
+     "toggle"
+    ],
+    "test": [
+     "set_tops",
+     "toggle"
+    ]
+   },
+   "fps": {
+    "prod": [
+     "Stats",
+     "draw"
+    ]
+   },
+   "gain_stage": {
+    "prod": [
+     "clear_live",
+     "stage_live"
+    ]
+   },
+   "gesture": {
+    "prod": [
+     "DOUBLE",
+     "FINE",
+     "drag_fraction"
+    ]
+   },
+   "ghosts": {
+    "prod": [
+     "active",
+     "local_pointer",
+     "local_selection",
+     "local_shown",
+     "local_tcp_pointer",
+     "paint"
+    ]
+   },
+   "grid_in_force": {
+    "prod": [
+     "InForce",
+     "set"
+    ]
+   },
+   "hit": {
+    "prod": [
+     "Hit",
+     "Target",
+     "arrangement"
+    ],
+    "test": [
+     "Target"
+    ]
+   },
+   "hit_overlay": {
+    "prod": [
+     "Overlay",
+     "current",
+     "refresh",
+     "version"
+    ],
+    "test": [
+     "Edited",
+     "Mark",
+     "Overlay",
+     "Who",
+     "publish"
+    ]
+   },
+   "jobs": {
+    "prod": [
+     "start"
+    ]
+   },
+   "keys": {
+    "prod": [
+     "Action",
+     "Keys",
+     "Visibility",
+     "key_code",
+     "set_editing",
+     "set_typing"
+    ],
+    "test": [
+     "Visibility"
+    ]
+   },
+   "lanes": {
+    "prod": [
+     "called",
+     "grouped_tracks",
+     "label",
+     "mask_named",
+     "opened",
+     "opened_by",
+     "set_expanded",
+     "speaks_for",
+     "stepped"
+    ],
+    "test": [
+     "set_expanded"
+    ]
+   },
+   "layout": {
+    "prod": [
+     "CONTROL_ROW",
+     "Layout"
+    ],
+    "test": [
+     "Layout"
+    ]
+   },
+   "marks_strip": {
+    "prod": [
+     "current",
+     "grid_regions",
+     "paint",
+     "quantize_regions",
+     "refresh",
+     "spans_at",
+     "version"
+    ]
+   },
+   "mcp": {
+    "prod": [
+     "Control"
+    ]
+   },
+   "midi": {
+    "prod": [
+     "Previews",
+     "Wave",
+     "take_stale"
+    ],
+    "test": [
+     "Previews"
+    ]
+   },
+   "mixer_panel": {
+    "prod": [
+     "Key"
+    ]
+   },
+   "mousemap": {
+    "prod": [
+     "Action",
+     "Gesture",
+     "Mods",
+     "resolve"
+    ]
+   },
+   "notice": {
+    "prod": [
+     "Notice",
+     "area",
+     "paint"
+    ]
+   },
+   "open": {
+    "prod": [
+     "runtime"
+    ]
+   },
+   "options": {
+    "prod": [
+     "LOCKING",
+     "OUTLINED"
+    ]
+   },
+   "overlay": {
+    "prod": [
+     "Controls",
+     "hovered_row",
+     "panel_controls",
+     "record_controls",
+     "row_meters"
+    ]
+   },
+   "panel": {
+    "prod": [
+     "BAR"
+    ]
+   },
+   "plan": {
+    "prod": [
+     "Rows"
+    ],
+    "test": [
+     "Kinds"
+    ]
+   },
+   "poi": {
+    "prod": [
+     "paint",
+     "version"
+    ]
+   },
+   "pointer": {
+    "prod": [
+     "Pointer",
+     "RowSpot"
+    ]
+   },
+   "popup": {
+    "prod": [
+     "Popup"
+    ]
+   },
+   "profile": {
+    "prod": [
+     "Counts"
+    ]
+   },
+   "quantize_panel": {
+    "prod": [
+     "again_over",
+     "asked",
+     "last"
+    ]
+   },
+   "rails": {
+    "prod": [
+     "SIDE",
+     "TOP"
+    ]
+   },
+   "rename": {
+    "prod": [
+     "Rename",
+     "Surface",
+     "What",
+     "paint"
+    ]
+   },
+   "row": {
+    "prod": [
+     "Control",
+     "Row",
+     "automation_button"
+    ],
+    "test": [
+     "Control",
+     "Row"
+    ]
+   },
+   "ruler": {
+    "prod": [
+     "Bars",
+     "self"
+    ],
+    "test": [
+     "ruler_h"
+    ]
+   },
+   "skin": {
+    "prod": [
+     "from_env",
+     "palette",
+     "poll",
+     "version"
+    ]
+   },
+   "studio": {
+    "prod": [
+     "PPS",
+     "Planner",
+     "fetch",
+     "resync_pending",
+     "take_resync"
+    ],
+    "test": [
+     "Planner"
+    ]
+   },
+   "swipe": {
+    "prod": [
+     "Swipe",
+     "labels",
+     "lane_at",
+     "overlay",
+     "starts_on"
+    ]
+   },
+   "tcp": {
+    "prod": [
+     "Tcp",
+     "fit_names"
+    ],
+    "test": [
+     "Tcp"
+    ]
+   },
+   "text": {
+    "prod": [
+     "Font"
+    ],
+    "test": [
+     "Font"
+    ]
+   },
+   "tool": {
+    "prod": [
+     "Edge",
+     "Over",
+     "Pointing",
+     "Shared"
+    ],
+    "test": [
+     "Over",
+     "Tool"
+    ]
+   },
+   "touch": {
+    "prod": [
+     "Fling",
+     "SLOP",
+     "Speed",
+     "pinch_step"
+    ]
+   },
+   "wave_detail": {
+    "prod": [
+     "generation"
+    ]
+   },
+   "wave_pool": {
+    "prod": [
+     "spawn"
+    ]
+   },
+   "which_key": {
+    "prod": [
+     "Shared"
+    ]
+   },
+   "window_cursor": {
+    "test": [
+     "Glyph",
+     "Shape"
+    ]
+   },
+   "zoom": {
+    "prod": [
+     "Command",
+     "Request",
+     "Requests"
+    ],
+    "test": [
+     "Request"
+    ]
+   }
+  },
+  "window_cursor": {
+   "num": {
+    "prod": [
+     "index"
+    ]
+   }
+  },
+  "written": {},
+  "zoom": {}
+ }
+}

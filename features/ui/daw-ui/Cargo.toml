@@ -13,7 +13,7 @@ default = ["render", "web"]
 hierarchy = ["web", "audio-controls/hierarchy"]
 native = ["dep:dioxus-native", "audio-controls/native"]
 playground = ["dioxus/launch", "dioxus/web", "reaper-theme", "web"]
-reaper-test-panels = ["dep:architect-ui", "dep:daw-module", "dep:daw-reaper-dioxus", "web"]
+reaper-test-panels = ["dep:architect-ui", "dep:daw-module", "dep:reaper-dioxus", "web"]
 reaper-theme = ["dep:image", "dep:thiserror"]
 render = ["dep:dioxus-ssr", "dep:image", "dep:resvg"]
 studio = ["web"]
@@ -28,7 +28,7 @@ architect-ui = { workspace = true, optional = true }
 daw-control = { workspace = true }
 daw-module = { workspace = true, optional = true }
 daw-proto = { workspace = true }
-daw-reaper-dioxus = { workspace = true, optional = true }
+reaper-dioxus = { workspace = true, optional = true }
 dioxus = { workspace = true, features = ["lib"] }
 dioxus-native = { workspace = true, optional = true }
 dioxus-ssr = { git = "https://github.com/DioxusLabs/dioxus", rev = "f717a8e184a522d078b70bb4b4d62a5f9a99ddfc", default-features = false, optional = true }

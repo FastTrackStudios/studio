@@ -53,7 +53,7 @@ modeller app, where the GUI is the process, cannot make that claim.
 
 ## Capabilities and Constraints
 
-- **Vocabulary** (see `domain-model.md` and `features/rigs/core/docs/DOMAIN.md`):
+- **Vocabulary** (see `domain-model.md` and `features/signal/docs/DOMAIN.md`):
   Block, Module, Layer, Engine, Preset; Rig; Snapshot (variant); Profile and
   Patch; Song and Scene; Setlist. Modules in the guitar rig include Core
   (comp, gate, drives, amp, EQ) and Time (delays and reverbs).
@@ -75,7 +75,7 @@ modeller app, where the GUI is the process, cannot make that claim.
 
 ## Evidence on Hand
 
-- Web-remote screenshots: `features/rigs/core/docs/web-remote-*.png` (perform,
+- Web-remote screenshots: `features/signal/docs/web-remote-*.png` (perform,
   control, edit, EQ, graph, tuner).
 - A real worship profile and setlists in the private `signal-rig-config`
   repo, played at live services.

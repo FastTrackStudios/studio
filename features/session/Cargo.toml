@@ -88,7 +88,7 @@ daw-sync = { workspace = true }
 dioxus-test = { workspace = true }
 eyre = { workspace = true }
 facet-postcard = { workspace = true }
-formats = { workspace = true, features = ["store"] }
+session-format = { workspace = true, features = ["store"] }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread", "time"] }

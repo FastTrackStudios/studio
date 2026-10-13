@@ -316,13 +316,10 @@ impl Gen<'_> {
             .map(|(name, c)| (format!("editor.{name}"), hex(to_theme(*c))))
             .collect();
         vars.push(("sheen".to_owned(), "#ffffff12".to_owned()));
-        for (i, c) in expression_editor::paint::theme::PITCH_CLASS
-            .iter()
-            .enumerate()
-        {
+        for (i, c) in editor::paint::theme::PITCH_CLASS.iter().enumerate() {
             vars.push((format!("editor.pitch_{i}"), (*c).to_owned()));
         }
-        use expression_editor::rows as kit;
+        use editor::rows as kit;
         for (name, c) in [
             ("kick", kit::DRUM_KICK_COLOR),
             ("snare", kit::DRUM_SNARE_COLOR),

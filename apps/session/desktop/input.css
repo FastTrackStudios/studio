@@ -13,7 +13,7 @@
 @source "../../../features/rigs/**/*.rs";
 @source "../../../features/session/src/**/*.rs";
 @source "../../../features/ui/**/*.rs";
-@source "../../../features/chords/src/**/*.rs";
+@source "../../../features/editor/src/harmony/**/*.rs";
 @source "../../../features/input/src/**/*.rs";
 /* architect-ui's components (a git dep: a symlink to the resolved
    checkout, refreshed by `just tailwind`). */

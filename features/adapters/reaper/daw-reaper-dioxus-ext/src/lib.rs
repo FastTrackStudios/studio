@@ -7,11 +7,11 @@
 //!    main-thread task queue, in-process daw service).
 //! 3. Registers the FTS UI Native + Desktop demo actions and panels shipped
 //!    from `daw_ui::test_panels`.
-//! 4. Drives `daw_reaper_dioxus::service::tick()` from the REAPER timer.
+//! 4. Drives `reaper_dioxus::service::tick()` from the REAPER timer.
 //! 5. Bumps REAPER's misc timer (id 666) to 60Hz so the renderer cadence
 //!    matches a typical UI frame budget. See issue #17 / #11.
 //!
-//! Other extensions can also call `daw_reaper_dioxus::service::*` once we're
+//! Other extensions can also call `reaper_dioxus::service::*` once we're
 //! loaded — but for the demo path everything we need is in this binary.
 //!
 //! ## Installation
@@ -104,10 +104,10 @@ impl App {
 
         // Init dock + mount both panels. dock::init needs the low-level
         // globals, which the caller (plugin_main) already installed.
-        daw_reaper_dioxus::service::init();
-        daw_reaper_dioxus::dock::init(LowReaper::get(), Swell::get());
+        reaper_dioxus::service::init();
+        reaper_dioxus::dock::init(LowReaper::get(), Swell::get());
         for panel in daw_ui::test_panels::panel_defs() {
-            daw_reaper_dioxus::dock::register_panel_from_service(&panel);
+            reaper_dioxus::dock::register_panel_from_service(&panel);
         }
         // Auto-restoring previously-open panels is disabled while the
         // WebKit2GTK + SWELL embedding is still flaky — reopening multiple
@@ -141,7 +141,7 @@ impl App {
                 tracing::trace!(%command_name, "no handler for command");
             }
         }
-        daw_reaper_dioxus::service::tick();
+        reaper_dioxus::service::tick();
     }
 }
 

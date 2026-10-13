@@ -109,6 +109,9 @@ struct NSRange {
 
 unsafe impl Encode for NSRange {
     fn encode() -> Encoding {
+        // NSRange is `struct _NSRange { NSUInteger location; NSUInteger length; }`.
+        // Hand-roll the Objective-C type encoding since cocoa 0.x's NSRange
+        // doesn't implement `objc::Encode`.
         let s = format!("{{_NSRange={0}{0}}}", NSUInteger::encode().as_str());
         unsafe { Encoding::from_str(&s) }
     }
@@ -313,11 +316,18 @@ fn forward_button(
     let ev = blitz_traits::events::BlitzPointerEvent {
         id: blitz_traits::events::BlitzPointerId::Mouse,
         is_primary: true,
-        coords: pointer_coords(x, y),
+        coords: blitz_traits::events::PointerCoords {
+            page_x: x,
+            page_y: y,
+            screen_x: x,
+            screen_y: y,
+            client_x: x,
+            client_y: y,
+        },
         button,
         buttons,
         mods,
-        details: Default::default(),
+        details: blitz_traits::events::PointerDetails::default(),
         element: blitz_traits::events::Point { x, y },
         active_pointers: Default::default(),
     };
@@ -327,17 +337,6 @@ fn forward_button(
         blitz_traits::events::UiEvent::PointerUp(ev)
     };
     crate::dock::forward_keyboard_event(hwnd, ui_event);
-}
-
-fn pointer_coords(x: f32, y: f32) -> blitz_traits::events::PointerCoords {
-    blitz_traits::events::PointerCoords {
-        page_x: x,
-        page_y: y,
-        screen_x: x,
-        screen_y: y,
-        client_x: x,
-        client_y: y,
-    }
 }
 
 extern "C" fn mouse_down(this: &Object, _sel: Sel, event: id) {
@@ -413,11 +412,18 @@ extern "C" fn mouse_dragged(this: &Object, _sel: Sel, event: id) {
     let ev = blitz_traits::events::BlitzPointerEvent {
         id: blitz_traits::events::BlitzPointerId::Mouse,
         is_primary: true,
-        coords: pointer_coords(x, y),
+        coords: blitz_traits::events::PointerCoords {
+            page_x: x,
+            page_y: y,
+            screen_x: x,
+            screen_y: y,
+            client_x: x,
+            client_y: y,
+        },
         button: blitz_traits::events::MouseEventButton::Main,
         buttons: blitz_traits::events::MouseEventButtons::Primary,
         mods,
-        details: Default::default(),
+        details: blitz_traits::events::PointerDetails::default(),
         element: blitz_traits::events::Point { x, y },
         active_pointers: Default::default(),
     };
@@ -444,7 +450,14 @@ extern "C" fn scroll_wheel(this: &Object, _sel: Sel, event: id) {
         };
         let ev = blitz_traits::events::BlitzWheelEvent {
             delta: blitz_traits::events::BlitzWheelDelta::Pixels(dx * mult_x, dy * mult_y),
-            coords: pointer_coords(x, y),
+            coords: blitz_traits::events::PointerCoords {
+                page_x: x,
+                page_y: y,
+                screen_x: x,
+                screen_y: y,
+                client_x: x,
+                client_y: y,
+            },
             buttons: blitz_traits::events::MouseEventButtons::empty(),
             mods,
             element: blitz_traits::events::Point { x, y },

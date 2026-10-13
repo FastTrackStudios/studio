@@ -1,0 +1,24 @@
+[package]
+name = "logic"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Logic Pro projects (.logicx): reading them into the daw's project model"
+
+[lints]
+workspace = true
+
+[dependencies]
+daw-proto = { workspace = true }
+plist = { version = "1" }
+thiserror = { workspace = true }
+
+[dev-dependencies]
+# required-features): a plain `cargo test` of the workspace builds them all.
+daw-proto = { workspace = true }
+dawfile-reaper = { workspace = true }
+loro = { workspace = true }
+tempfile = { workspace = true }
+uuid = { workspace = true }

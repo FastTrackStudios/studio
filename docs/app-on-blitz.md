@@ -66,7 +66,7 @@ each one was found).
 | ProgressBar | `session-ui` `SongProgressBar` / `SegmentedProgressBar` | done — `apps/session/desktop/src/native/progress.rs`, click-to-seek |
 | Arrangement | `session-daw` `ArrangementWidget` + ruler + scrollbars + main toolbar | done — `session_daw::studio`, `session_daw::toolbar` |
 | Mixer | `session-daw` (`mcp::Mixer`, `tone.rs`) | not yet wired into a panel |
-| Editor | expression editor (`features/expression-editor`) | not yet wired into a panel |
+| Editor | expression editor (`features/editor`) | not yet wired into a panel |
 | Chart | keyflow engraver, painted live (`ChartView`), paginated, pannable | done — `session_daw::chart_panel` |
 | Lyrics | lyric sync + an editor mode (`lyric_sync_view.rs`) | not yet wired into a panel |
 | Settings | the app's settings panel | button only, no content yet |

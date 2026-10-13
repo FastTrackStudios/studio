@@ -67,7 +67,7 @@ stop() {
 
 project() {
     # The reused staging, not a fresh 5.6 GB copy.
-    cargo run --quiet -p expression-editor-standalone --example practice -- \
+    cargo run --quiet -p editor-standalone --example practice -- \
         --cached "${FTS_WEBVIEW_SONG:-set-in-stone}"
 }
 

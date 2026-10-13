@@ -1,4 +1,4 @@
-use formats::protools::raw_block::RawBlock;
+use protools::raw_block::RawBlock;
 fn find_containing(
     blocks: &[RawBlock],
     offset: usize,
@@ -14,7 +14,7 @@ fn find_containing(
     false
 }
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let s = formats::protools::parse_raw(std::fs::read(std::env::args().nth(1).unwrap())?)?;
+    let s = protools::parse_raw(std::fs::read(std::env::args().nth(1).unwrap())?)?;
     for arg in std::env::args().skip(2) {
         let off = usize::from_str_radix(arg.trim_start_matches("0x"), 16)?;
         let mut path = Vec::new();

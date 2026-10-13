@@ -14,7 +14,7 @@ async fn summarize_project_returns_track_count(ctx: &ReaperTestContext) -> eyre:
     // Use a known fixture from dawfile-reaper's resources directory
     // (features/dawfile/dawfile-reaper in the monorepo layout).
     let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../../../formats/dawfile-reaper/resources")
+        .join("../dawfile-reaper/resources")
         .join("Basic Template (Tracks Only) .RPP")
         .canonicalize()
         .expect("dawfile-reaper fixture RPP should exist");

@@ -34,18 +34,16 @@
 //! drawn as buttons, so a press on one is one call back into it.
 
 use anyrender::PaintScene;
-use expression_editor::mouse::{Action, Context, Gesture};
-use expression_editor::paint::chrome::{
-    self, Button, Choice, Control, Menu, Pending, STATUS_H, TOOLBAR_H,
-};
-use expression_editor::paint::interaction::{self, Drag};
-use expression_editor::paint::paint::{self, Look, Overlay};
-use expression_editor::paint::stack::{self, HitGesture, Stack, interact::ViewKey};
-use expression_editor::paint::text::Labeller;
-use expression_editor::paint::{canvas, demo, keys};
-use expression_editor::rows::DrumMap;
-use expression_editor::tools::{self, Hit};
-use expression_editor::{Edit, Editor, Mode, RowSpace, StripLane, Tool, Viewport, memagic};
+use editor::mouse::{Action, Context, Gesture};
+use editor::paint::chrome::{self, Button, Choice, Control, Menu, Pending, STATUS_H, TOOLBAR_H};
+use editor::paint::interaction::{self, Drag};
+use editor::paint::paint::{self, Look, Overlay};
+use editor::paint::stack::{self, HitGesture, Stack, interact::ViewKey};
+use editor::paint::text::Labeller;
+use editor::paint::{canvas, demo, keys};
+use editor::rows::DrumMap;
+use editor::tools::{self, Hit};
+use editor::{Edit, Editor, Mode, RowSpace, StripLane, Tool, Viewport, memagic};
 use input::InputCommand;
 use vello::kurbo::Affine;
 
@@ -63,7 +61,7 @@ pub struct Expression {
     pub item: Option<String>,
     /// Where the roll was pressed and the note under it, so a release
     /// that never moved can be a click.
-    pressed: Option<((f64, f64), Option<expression_editor::doc::NoteId>)>,
+    pressed: Option<((f64, f64), Option<editor::doc::NoteId>)>,
     /// A value drag over the velocity strip.
     strip_drag: bool,
     /// A middle-drag pan over the strip: the last pointer x.
@@ -100,9 +98,9 @@ pub struct Expression {
     font: Option<crate::text::Font>,
     /// A take's notes the editor does not show (a drum take's notes on
     /// no lane of the kit), kept to write back as they were.
-    aside: Vec<expression_editor::Note>,
+    aside: Vec<editor::Note>,
     /// The document as last loaded or saved: what "unsaved" is against.
-    saved: expression_editor::ExpressionDoc,
+    saved: editor::ExpressionDoc,
     /// The stacked view's gestures, for a workspace of several tracks
     /// — the audio drum workflow's surface.
     stack: Stack,
@@ -152,7 +150,7 @@ impl Expression {
         size: (f64, f64),
     ) -> Self {
         let vp = viewport_for(size, DEFAULT_STRIP);
-        let mut doc = expression_editor::daw::to_doc(snapshot, 48.0);
+        let mut doc = editor::daw::to_doc(snapshot, 48.0);
         let mut aside = Vec::new();
         if drums {
             let map = kit_for(&doc);
@@ -194,7 +192,7 @@ impl Expression {
         this
     }
 
-    /// An audio take, analysed (`expression_editor::audio::AudioSession`),
+    /// An audio take, analysed (`editor::audio::AudioSession`),
     /// as the editor shows it: on its own, one track. It writes nothing
     /// back — the audio write path (a resynthesis) is not this view's.
     #[must_use]
@@ -236,7 +234,7 @@ impl Expression {
         }
         doc.notes.extend(self.aside.iter().cloned());
         self.saved = self.editor.doc.clone();
-        expression_editor::daw::to_content(&doc)
+        editor::daw::to_content(&doc)
     }
 
     fn hold(editor: Editor, item: Option<String>, origin: (f64, f64), size: (f64, f64)) -> Self {
@@ -786,7 +784,7 @@ impl Expression {
     }
 
     /// The map's answer to a click on a note.
-    fn click(&mut self, under: expression_editor::doc::NoteId, mods: Mods) {
+    fn click(&mut self, under: editor::doc::NoteId, mods: Mods) {
         let ed = &mut self.editor;
         let action = ed
             .mouse
@@ -831,7 +829,7 @@ impl Expression {
     }
 
     /// The pointer's glyph: what a press here would do
-    /// (`expression_editor::paint::cursor::cursor_at` — `[` and `]` on a
+    /// (`editor::paint::cursor::cursor_at` — `[` and `]` on a
     /// note's ends, the magnifier with `z` held, the hand…), the closed
     /// hand while a pan is under way, `][` on the end two butted notes
     /// share, and `None` off the roll, where the window keeps its own
@@ -839,7 +837,7 @@ impl Expression {
     #[must_use]
     pub fn pointer(&self, mods: Mods) -> Option<crate::window_cursor::Glyph> {
         use crate::window_cursor::Glyph;
-        use expression_editor::cursor::Cursor;
+        use editor::cursor::Cursor;
         if matches!(self.drag, Drag::Pan { .. }) {
             return Some(Glyph::Editor(Cursor::HandClosed));
         }
@@ -858,8 +856,7 @@ impl Expression {
                 Cursor::Arrow
             }));
         }
-        let cursor =
-            expression_editor::paint::cursor::cursor_at(&self.editor, x, y, mods_of(mods), false);
+        let cursor = editor::paint::cursor::cursor_at(&self.editor, x, y, mods_of(mods), false);
         if matches!(cursor, Cursor::EdgeLeft | Cursor::EdgeRight) && self.on_a_seam(x, y) {
             return Some(Glyph::Seam);
         }
@@ -1627,7 +1624,7 @@ fn themed(look: &mut Look) {
     // The notes' palettes: each pitch class, each piece of the kit. Two
     // tables, not one: C's colour and the kick's are the same red, and
     // the editor shows one row space at a time ([`note_palette`]).
-    use expression_editor::rows as kit;
+    use editor::rows as kit;
     let table = |names: &mut dyn Iterator<Item = (String, &'static str)>| {
         let mut t = std::collections::HashMap::new();
         for (name, hex) in names {
@@ -1638,7 +1635,7 @@ fn themed(look: &mut Look) {
         t
     };
     let pitches = table(
-        &mut expression_editor::paint::theme::PITCH_CLASS
+        &mut editor::paint::theme::PITCH_CLASS
             .iter()
             .enumerate()
             .map(|(i, hex)| (format!("pitch_{i}"), *hex)),
@@ -1710,7 +1707,7 @@ fn palette_for(
 /// Hand the painter the theme's palette for what `space` shows: the
 /// kit's for drum lanes, the pitch classes' otherwise.
 fn note_palette(space: &RowSpace) {
-    expression_editor::paint::paint::set_recolour(palette_for(space));
+    editor::paint::paint::set_recolour(palette_for(space));
 }
 
 /// How far a press may travel and still be a click, in pixels.
@@ -1740,7 +1737,7 @@ fn viewport_for(size: (f64, f64), strip_h: f64) -> Viewport {
 ///
 /// The FTS map first, since that is what the templates play; General
 /// MIDI when the take clearly is not one of ours.
-fn kit_for(doc: &expression_editor::ExpressionDoc) -> DrumMap {
+fn kit_for(doc: &editor::ExpressionDoc) -> DrumMap {
     let fts = DrumMap::fts();
     let gm = DrumMap::general_midi();
     let covered = |map: &DrumMap| {
@@ -1837,7 +1834,7 @@ mod tests {
     #[test]
     fn the_pointer_shows_the_edge_the_seam_and_the_tool() {
         use crate::window_cursor::Glyph;
-        use expression_editor::cursor::Cursor;
+        use editor::cursor::Cursor;
         let ed = demo::editor(demo::Scene::Phrase, viewport_for(SIZE, DEFAULT_STRIP));
         let mut v = Expression::from_audio(ed, ORIGIN, SIZE);
         let note = v.editor.doc.notes.first().expect("a note").clone();
@@ -1856,7 +1853,7 @@ mod tests {
         assert_eq!(v.pointer(plain()), Some(Glyph::Editor(Cursor::EdgeRight)));
         // Another note begins where this one ends: the seam.
         let mut next = note.clone();
-        next.id = expression_editor::NoteId(9_999);
+        next.id = editor::NoteId(9_999);
         next.start = note.end;
         next.end = note.end + (note.end - note.start);
         v.editor.doc.notes.push(next);
@@ -1926,11 +1923,7 @@ mod tests {
         let (x, y) = at_note(&v, 1);
         assert!(v.press(x, y, plain(), 0));
         assert!(v.release(x, y, plain()));
-        assert!(
-            v.editor
-                .selection
-                .contains(expression_editor::doc::NoteId(1))
-        );
+        assert!(v.editor.selection.contains(editor::doc::NoteId(1)));
         assert!(!v.dragging());
     }
 
@@ -2078,7 +2071,7 @@ mod tests {
         let delete = menu
             .items
             .iter()
-            .position(|i| i.command == expression_editor::menu::Command::Delete)
+            .position(|i| i.command == editor::menu::Command::Delete)
             .expect("delete on the menu");
         let (rx, ry) = {
             let r = menu.item_rect(delete);
@@ -2428,7 +2421,7 @@ mod theme_tests {
     /// every kick, and with no theme the kit is its own colours again.
     #[test]
     fn the_theme_recolours_the_notes() {
-        use expression_editor::rows::DRUM_KICK_COLOR;
+        use editor::rows::DRUM_KICK_COLOR;
         let palette = crate::arrangement::Palette::from_theme(&daw_ui::theming::Theme::dark());
         let tokens = include_str!("../themes/console/tokens.frame").replace(
             "</Variables>",

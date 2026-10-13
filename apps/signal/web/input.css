@@ -20,6 +20,6 @@
 @source "./src/**/*.rs";
 @source "../../../features/rigs/guitar/src/**/*.rs";
 @source "../../../features/rigs/keys/src/**/*.rs";
-@source "../../../features/rigs/core/widgets/src/**/*.rs";
+@source "../../../features/signal/widgets/src/**/*.rs";
 @source "../../../features/ui/**/*.rs";
 @source "../../../features/ui/.architect-ui/src/**/*.rs";

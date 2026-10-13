@@ -1,0 +1,1130 @@
+{
+ "app -> arrangement": {
+  "module_edges": 31,
+  "symbols": 64,
+  "refs": [
+   "actions -> arrange_edit: Warped, stretch_around",
+   "actions -> comp: register",
+   "actions -> folds: apply, shut, toggle",
+   "actions -> marks_strip: refresh",
+   "actions -> track_regions: PartGrids, TrackRegion, figure_at, kit_folder, kit_regions, register",
+   "art -> tcp: glyphs",
+   "closeup -> arrangement: Palette",
+   "fps -> tcp: glyphs",
+   "notice -> arrangement: Arrangement, Palette, Viewport, submit_command",
+   "notice -> ruler: ruler_h",
+   "notice -> tcp: glyphs",
+   "overlay -> arrangement: Arrangement, Palette, Viewport, submit_command",
+   "overlay -> folds: shut",
+   "overlay -> tcp: BUTTON, Density, glyphs, lit, mute_lit, solo_lit, to_theme, volume_fraction",
+   "panel -> folds: show_cuts",
+   "panel -> ruler: LABEL_W, ruler_h, set_slim",
+   "panel -> tcp: Tcp",
+   "panel -> widget: ArrangementWidget, MixerLinks, Shared, View, rows_as_left",
+   "popup -> arrangement: Palette",
+   "popup -> tcp: glyphs",
+   "progress -> ruler: SECTIONS_ROW",
+   "rails -> arrangement: Palette, TCP_WIDTH",
+   "rails -> ruler: ruler_h",
+   "rails -> tcp: glyphs, ink_on",
+   "setup -> arrangement: key_at",
+   "shell -> folds: set_tops, tops",
+   "studio -> folds: apply, cuts_shown",
+   "timeline_actions -> track_regions: all, bar_of",
+   "transport_bar -> arrangement: key_at",
+   "transport_bar -> ruler: song_bar_beat, song_start_of",
+   "web_host -> widget: ArrangementWidget"
+  ]
+ },
+ "app -> automation": {
+  "module_edges": 3,
+  "symbols": 6,
+  "refs": [
+   "actions -> automation_actions: register",
+   "engine -> automation: target_key",
+   "studio -> automation: adopt_remote, read_remote, refresh, refresh_in"
+  ]
+ },
+ "app -> chart": {
+  "module_edges": 5,
+  "symbols": 13,
+  "refs": [
+   "actions -> song_bars: measure, musical, time",
+   "shell -> chart_panel: FITTED_WIDTH_OVER_HEIGHT, Fit, Turn, set_fit, shown_fit, turn",
+   "studio -> song_chart: of_song",
+   "web_host -> chart_panel: WebChart",
+   "web_host -> lyrics_panel: LyricsChoice, LyricsPanel"
+  ]
+ },
+ "app -> collab": {
+  "module_edges": 8,
+  "symbols": 14,
+  "refs": [
+   "engine -> collab: transport_pressed",
+   "panel -> ghosts: ARRANGEMENT, region_mounted",
+   "progress -> ghosts: Anchor, register_anchor",
+   "shell -> collab_bar: PeerDots",
+   "shell -> ghosts: region_mounted",
+   "web_engine -> collab: TaskSet, join_task, remember_chart, song_opened",
+   "web_host -> collab: transport_pressed",
+   "web_host -> collab_bar: CollabBar, use_follow_song"
+  ]
+ },
+ "app -> drum": {
+  "module_edges": 16,
+  "symbols": 69,
+  "refs": [
+   "actions -> drum_edit: Beat, Fill, KitHit, Piece, fills, grid_scan, is_edited",
+   "actions -> drum_group: group",
+   "actions -> drum_lanes: kit_tracks, play, reset_edit, set_up",
+   "actions -> drum_level: Knobs, level",
+   "actions -> drum_reference: Mapped, RefNote, compare, find_track, learn_map, notes, pieces, restore, share",
+   "actions -> drum_settings: Fills, Patch, Settings, Target, current, reset, set",
+   "actions -> fundamental: KICK, SNARE, TOM, envelope, find, hits_of",
+   "actions -> groove: Groove, Hit, Slot, count",
+   "actions -> hit_overlay: refresh",
+   "actions -> hits: Check, HitRow, Played, Zone, ZoneKind, ZoneOrigin, add_zone, check, find_zones, gaps, hits, kit_from_markers, mark_placed, placed, playback, register, zone_holds, zones",
+   "actions -> poi: STEP, TOGGLE, register",
+   "actions -> quantize_panel: ask",
+   "actions -> written: align, feel_at, plain",
+   "engine -> hit_overlay: refresh",
+   "panel -> quantize_panel: take_asked",
+   "timeline_actions -> hits: playback"
+  ]
+ },
+ "app -> elsewhere": {
+  "module_edges": 1,
+  "symbols": 1,
+  "refs": [
+   "web_host -> editor_view: EditorPanel"
+  ]
+ },
+ "app -> fx_rack": {
+  "module_edges": 9,
+  "symbols": 37,
+  "refs": [
+   "actions -> fx_actions: register",
+   "closeup -> live: Meters",
+   "closeup -> tone: Folded, Grip, Panel, Shared, Which, dot_click, drag, draw, grip_at, panels_for, reset, toggle",
+   "overlay -> live: Meters",
+   "overlay -> tone: Analyser, Fold, Folded, Grip, Levels, Panel, Rack, Store, Tone, Which, draw, levels",
+   "simulate -> live: Meters",
+   "simulate -> tone: Analyser, HISTORY, Levels, PUBLISH_HZ, Store, Suppress, Tone",
+   "timeline_actions -> fx_actions: moment",
+   "web_host -> fx_view: FxPanel"
+  ]
+ },
+ "app -> mixer": {
+  "module_edges": 15,
+  "symbols": 28,
+  "refs": [
+   "actions -> gain_stage: path_of",
+   "actions -> mix_chains: drum_returns",
+   "animate -> mcp: f64_to_f32",
+   "engine -> mcp: Control",
+   "engine -> routes: At",
+   "overlay -> mcp: Control, Mixer, rack_ground, strip_ground",
+   "overlay -> skin: ROW, RowShown, STRIP, Shown, canvas, fields, loaded, row_fields",
+   "overlay -> strip: Strip",
+   "panel -> mixer_panel: Links",
+   "rails -> skin: canvas, loaded, values",
+   "simulate -> mcp: f64_to_f32",
+   "timeline_actions -> gain_stage: path_of",
+   "touch -> mcp: STRIP_GAP, STRIP_W",
+   "web_host -> mix_guide: use_mix_guide",
+   "web_host -> mixer_panel: WebDawPanels"
+  ]
+ },
+ "app -> removed": {
+  "module_edges": 4,
+  "symbols": 8,
+  "refs": [
+   "actions -> bass_rig: Setup, set_up",
+   "actions -> drum_samples: follow, resync, set_up",
+   "actions -> rig_actions: register",
+   "browser -> rig_actions: RigView, browse"
+  ]
+ },
+ "app -> session": {
+  "module_edges": 35,
+  "symbols": 76,
+  "refs": [
+   "actions -> grow: register",
+   "actions -> instrument_tracks: register",
+   "actions -> open: current_song, local_engine",
+   "actions -> project_file: Undone, check, fork, redo, undo",
+   "actions -> project_new: named, register, untitled",
+   "actions -> projects: ago, alternative_name, alternatives, base_of, main_of, mark_saved, open_from_outside, recent, unsaved",
+   "actions -> session_file: save_session",
+   "actions -> versions: Version",
+   "browser -> open: runtime",
+   "compact -> setlist: Setlist",
+   "engine -> open: current_song, local_engine, runtime",
+   "mcp_server -> open: runtime",
+   "navigator -> setlist: Setlist, Song",
+   "plan -> open: current_song, local_engine",
+   "progress -> setlist: Setlist",
+   "setup -> setlist: Setlist",
+   "setup -> song_modes: of",
+   "shell -> open: request_mode",
+   "shell -> setlist: COLORS, Setlist",
+   "shell -> versions: Versions",
+   "studio -> folder: disk",
+   "studio -> open: Media, SongPlan, current_song, local_engine, open_another_with, open_first_with, prepare_and_save, project_text, song_plan, song_plan_with, switch_to",
+   "studio -> prepare: Prepare",
+   "studio -> projects: mark_saved",
+   "timeline_actions -> organize: Button, engine_edit, insert",
+   "timeline_actions -> prepare: GUIDE_INSTRUMENT",
+   "web_engine -> folder: Folder, Memory",
+   "web_engine -> guide_instrument: CLICK, Library, VOICE, install",
+   "web_engine -> open: current_song, set_current_song",
+   "web_engine -> open_core: Media, open_song_in, project_text_in",
+   "web_engine -> prepare: Prepare",
+   "web_engine -> setlist: Arrival, Setlist, Song",
+   "web_host -> open: switch_song",
+   "web_host -> setlist: Setlist",
+   "web_host -> song_modes: use_song_modes"
+  ]
+ },
+ "app -> stream": {
+  "module_edges": 5,
+  "symbols": 14,
+  "refs": [
+   "setup -> reference_play: any, load_multitracks, multitracks",
+   "web_audio -> reference: left_out, mix",
+   "web_engine -> reference: left_out",
+   "web_engine -> song_stream: Heard, Keep, Reference, ShareSource, StreamedSong, mirror",
+   "web_engine -> task_set: join, until_ok"
+  ]
+ },
+ "app -> timeline": {
+  "module_edges": 32,
+  "symbols": 60,
+  "refs": [
+   "actions -> bar_step: STEP_ACTION, register",
+   "actions -> options: OUTLINED",
+   "actions -> play_return: Stop, get, set",
+   "actions -> zoom: Command",
+   "closeup -> gesture: DOUBLE",
+   "engine -> midi: mark_stale",
+   "engine -> play_return: Step, get, with_locate",
+   "engine -> wave_detail: engine_changed",
+   "keys -> tool: set_zoom_held",
+   "keys -> zoom: Command",
+   "overlay -> lanes: label_of, opened, speaks_for",
+   "overlay -> layout: dim_unselected",
+   "overlay -> pointer: Pointer, RowSpot, Spot",
+   "overlay -> row: Control, Indicator, Row",
+   "panel -> bar_step: Page, page, turn_to",
+   "panel -> layout: Layout",
+   "panel -> mousemap: Mods",
+   "panel -> tool: Pointing, Shared, Sink, Tool",
+   "panel -> toolbar: MainToolbar",
+   "panel -> zoom: Frame, History, Request, Requests, Target, frame",
+   "shell -> options: LOCKING",
+   "studio -> lanes: folder_view",
+   "studio -> midi: Previews",
+   "studio -> mousemap: Mods",
+   "studio -> tool: Sink",
+   "studio -> wave_pool: spawn",
+   "timeline_actions -> cursor: Edit, Span, ask, current",
+   "transport_bar -> bar_step: Stepper",
+   "transport_bar -> play_return: Stop, get, set",
+   "web_engine -> midi: Previews, WAVE_BLOCK",
+   "web_host -> mousemap: Mods",
+   "web_host -> tool: Sink, set_zoom_held"
+  ]
+ },
+ "app -> vocals": {
+  "module_edges": 4,
+  "symbols": 6,
+  "refs": [
+   "actions -> vocal_level: register",
+   "compact -> record_view: PickSong, RecordView",
+   "progress -> record_view: PickSong",
+   "web_host -> record_view: PickSong, RecordView"
+  ]
+ },
+ "arrangement -> app": {
+  "module_edges": 37,
+  "symbols": 80,
+  "refs": [
+   "arrange_edit -> engine: Edit, Move",
+   "arrange_edit -> keys: Action, window_has_transport",
+   "arrange_edit -> plan: Rows",
+   "arrange_edit -> rails: SIDE, TOP",
+   "arrangement -> num: coord, index",
+   "arrangement -> profile: Counts",
+   "arrangement -> text: Font",
+   "comp -> actions: list, meta, resolve, song",
+   "comp -> studio: request_resync",
+   "folder_item -> num: coord, index, narrow",
+   "marks_strip -> actions: song",
+   "marks_strip -> text: Font",
+   "rename -> text: Font",
+   "ruler -> num: coord",
+   "ruler -> text: Font",
+   "swipe -> num: coord, index",
+   "swipe -> text: Font",
+   "tcp -> art: scaled",
+   "tcp -> num: coord",
+   "tcp -> text: Font",
+   "track_regions -> actions: list, meta, resolve, song",
+   "widget -> actions: list, take_window, through_list, window_pending",
+   "widget -> engine: Edit, Meters, Move, Touched, Transport, drag, moving, transport",
+   "widget -> fps: Stats, draw",
+   "widget -> jobs: start",
+   "widget -> keys: Action, Keys, Visibility, key_code, set_editing, set_typing",
+   "widget -> notice: Notice, area, paint",
+   "widget -> overlay: Controls, hovered_row, panel_controls, record_controls, row_meters",
+   "widget -> panel: BAR",
+   "widget -> plan: Rows",
+   "widget -> popup: Popup",
+   "widget -> profile: Counts",
+   "widget -> rails: SIDE, TOP",
+   "widget -> studio: PPS, Planner, fetch, resync_pending, take_resync",
+   "widget -> text: Font",
+   "widget -> touch: Fling, SLOP, Speed, pinch_step",
+   "widget -> which_key: Shared"
+  ]
+ },
+ "arrangement -> automation": {
+  "module_edges": 5,
+  "symbols": 28,
+  "refs": [
+   "arrangement -> automation: lanes_height",
+   "widget -> automation: adopt_remote, read_remote, set_take_curve, take_curve, with_point, without_point",
+   "widget -> automation_draw: Hit, Lit, Spot, TakeHit, bodies, headers, hit, leveler_lines, on_screen, take_gain_at, take_hit, take_lines",
+   "widget -> automation_edit: Keys, LaneDrag, drag, press, release",
+   "widget -> automation_menu: Pick, act, modes, top"
+  ]
+ },
+ "arrangement -> chart": {
+  "module_edges": 1,
+  "symbols": 1,
+  "refs": [
+   "track_regions -> song_bars: musical"
+  ]
+ },
+ "arrangement -> collab": {
+  "module_edges": 1,
+  "symbols": 6,
+  "refs": [
+   "widget -> ghosts: active, local_pointer, local_selection, local_shown, local_tcp_pointer, paint"
+  ]
+ },
+ "arrangement -> drum": {
+  "module_edges": 9,
+  "symbols": 23,
+  "refs": [
+   "arrange_edit -> drum_edit: is_edited",
+   "arrangement -> hit_overlay: Edited, Mark, Overlay, Stretch, Who",
+   "arrangement -> kit_gate: Gate, of, version",
+   "track_regions -> drum_reference: find_track, notes, pieces",
+   "track_regions -> hits: kit",
+   "widget -> drum_settings: current",
+   "widget -> hit_overlay: Overlay, current, refresh, version",
+   "widget -> poi: paint, version",
+   "widget -> quantize_panel: again_over, asked, last"
+  ]
+ },
+ "arrangement -> elsewhere": {
+  "module_edges": 1,
+  "symbols": 1,
+  "refs": [
+   "widget -> editor_view: picked"
+  ]
+ },
+ "arrangement -> fx_rack": {
+  "module_edges": 1,
+  "symbols": 1,
+  "refs": [
+   "track_regions -> fx_actions: moment"
+  ]
+ },
+ "arrangement -> mixer": {
+  "module_edges": 8,
+  "symbols": 20,
+  "refs": [
+   "arrangement -> skin: ROW, RowShown, canvas, loaded, row_control, row_fields, row_hit_fields",
+   "arrangement -> track_icon: Icon, paint",
+   "comp -> gain_stage: path_of",
+   "tcp -> track_icon: Icon, paint",
+   "widget -> gain_stage: clear_live, stage_live",
+   "widget -> mcp: Control",
+   "widget -> mixer_panel: Key",
+   "widget -> skin: from_env, palette, poll, version"
+  ]
+ },
+ "arrangement -> session": {
+  "module_edges": 2,
+  "symbols": 2,
+  "refs": [
+   "marks_strip -> open: runtime",
+   "widget -> open: runtime"
+  ]
+ },
+ "arrangement -> timeline": {
+  "module_edges": 32,
+  "symbols": 89,
+  "refs": [
+   "arrange_edit -> cursor: (module), Edit",
+   "arrange_edit -> gesture: SLOP",
+   "arrange_edit -> hit: Hit, Target",
+   "arrange_edit -> mousemap: Gesture, Mods, self",
+   "arrange_edit -> options: AUTO_CROSSFADE, GROUPING, LOCKING",
+   "arrangement -> lanes: expanded, folder_view, playing, shown_on, speaks_for",
+   "arrangement -> layout: Layout",
+   "arrangement -> midi: Child, Note, Previews, Wave, fold_notes, fold_waves",
+   "arrangement -> options: OUTLINED",
+   "arrangement -> row: Control, Row",
+   "arrangement -> wave_detail: Source, get",
+   "comp -> lanes: called, lane_called, opened_by, set_expanded, shown_on",
+   "ruler -> grid_in_force: current",
+   "ruler -> options: GRID",
+   "swipe -> lanes: called",
+   "tcp -> layout: Layout",
+   "tcp -> row: Control, automation_button",
+   "widget -> cursor: Edit, Look, Span, Trail, paint, paint_edit, publish, take_asked",
+   "widget -> gesture: DOUBLE, FINE, drag_fraction",
+   "widget -> grid_in_force: InForce, set",
+   "widget -> hit: Hit, Target, arrangement",
+   "widget -> lanes: called, grouped_tracks, label, mask_named, opened, opened_by, set_expanded, speaks_for, stepped",
+   "widget -> layout: CONTROL_ROW, Layout",
+   "widget -> midi: Previews, Wave, take_stale",
+   "widget -> mousemap: Action, Gesture, Mods, resolve",
+   "widget -> options: LOCKING, OUTLINED",
+   "widget -> pointer: Pointer, RowSpot",
+   "widget -> row: Control, Row, automation_button",
+   "widget -> tool: Edge, Over, Pointing, Shared",
+   "widget -> wave_detail: generation",
+   "widget -> wave_pool: spawn",
+   "widget -> zoom: Command, Request, Requests"
+  ]
+ },
+ "automation -> app": {
+  "module_edges": 10,
+  "symbols": 14,
+  "refs": [
+   "automation_actions -> actions: meta, resolve, sections, song",
+   "automation_actions -> studio: request_resync",
+   "automation_draw -> num: coord, index",
+   "automation_draw -> text: Font",
+   "automation_edit -> actions: song",
+   "automation_edit -> engine: Edit",
+   "automation_edit -> studio: request_resync",
+   "automation_menu -> actions: song",
+   "automation_menu -> popup: Choice",
+   "automation_menu -> studio: request_resync"
+  ]
+ },
+ "automation -> arrangement": {
+  "module_edges": 4,
+  "symbols": 6,
+  "refs": [
+   "automation -> folds: touch",
+   "automation_draw -> arrangement: Arrangement, Palette, Viewport",
+   "automation_draw -> tcp: glyphs",
+   "automation_edit -> arrangement: Viewport"
+  ]
+ },
+ "automation -> fx_rack": {
+  "module_edges": 2,
+  "symbols": 7,
+  "refs": [
+   "automation_actions -> fx_actions: mode_of, moment, param_of, shape_of, target, value_of",
+   "automation_draw -> tone: knob_arc"
+  ]
+ },
+ "automation -> mixer": {
+  "module_edges": 1,
+  "symbols": 1,
+  "refs": [
+   "automation_actions -> gain_stage: path_of"
+  ]
+ },
+ "automation -> session": {
+  "module_edges": 1,
+  "symbols": 2,
+  "refs": [
+   "automation -> open: current_song, local_engine"
+  ]
+ },
+ "automation -> vocals": {
+  "module_edges": 7,
+  "symbols": 26,
+  "refs": [
+   "automation -> leveler: Leveled, Stage, adopt",
+   "automation -> vocal_level: has_lanes, lane_shown, leveled",
+   "automation_actions -> vocal_level: playing, show_lane",
+   "automation_draw -> leveler: AMOUNT_MAX, Stage, any, item_y, trace, with_item",
+   "automation_edit -> leveler: Dial, Stage, set_dial, stages_of, update, with_item",
+   "automation_edit -> vocal_level: relevel, set_stages, show_lane",
+   "automation_menu -> vocal_level: has_lanes, lane_shown, show_lane"
+  ]
+ },
+ "chart -> app": {
+  "module_edges": 11,
+  "symbols": 25,
+  "refs": [
+   "chart_editor -> keys: set_editing",
+   "chart_editor -> shell: ACCENT, DIM, RULE, TEXT",
+   "chart_editor -> studio: StudioSession, request_resync",
+   "chart_panel -> engine: Transport, moving",
+   "chart_panel -> panel: Button, PanelEvent",
+   "chart_panel -> studio: StudioSession",
+   "chart_panel -> touch: Fingers",
+   "chart_panel -> web_host: Hosted, HostedRef, WidgetCanvas",
+   "lyrics_panel -> progress: use_reading",
+   "lyrics_panel -> shell: ACCENT, BAR_H, BOTTOM_H, DIM, RULE, TEXT, WindowSize",
+   "lyrics_panel -> studio: StudioSession"
+  ]
+ },
+ "chart -> arrangement": {
+  "module_edges": 1,
+  "symbols": 1,
+  "refs": [
+   "lyrics_panel -> ruler: SECTIONS_ROW"
+  ]
+ },
+ "chart -> collab": {
+  "module_edges": 2,
+  "symbols": 5,
+  "refs": [
+   "chart_editor -> collab: chart_context, local_chart, take_remote_chart",
+   "chart_panel -> ghosts: Anchor, register_anchor"
+  ]
+ },
+ "chart -> session": {
+  "module_edges": 4,
+  "symbols": 7,
+  "refs": [
+   "chart_editor -> open: LocalOnly, current_song, is_session, with_local_engine",
+   "chart_editor -> prepare: apply_chart",
+   "chart_editor -> session_file: save_session_behind",
+   "chart_panel -> open: current_song"
+  ]
+ },
+ "collab -> app": {
+  "module_edges": 7,
+  "symbols": 15,
+  "refs": [
+   "collab -> engine: Move, Transport, transport_following",
+   "collab -> studio: request_resync",
+   "collab_bar -> audio_mode: owns_project",
+   "collab_bar -> engine: Transport",
+   "collab_bar -> keys: set_editing",
+   "collab_bar -> shell: ACCENT, BAR_BG, DIM, Density, RULE, TEXT, use_density",
+   "ghosts -> text: Font"
+  ]
+ },
+ "collab -> arrangement": {
+  "module_edges": 3,
+  "symbols": 6,
+  "refs": [
+   "ghosts -> arrangement: Arrangement, Palette, Viewport, submit_command",
+   "ghosts -> ruler: ruler_h",
+   "ghosts -> tcp: glyphs"
+  ]
+ },
+ "collab -> chart": {
+  "module_edges": 1,
+  "symbols": 1,
+  "refs": [
+   "collab -> chart_editor: local_caret"
+  ]
+ },
+ "collab -> session": {
+  "module_edges": 5,
+  "symbols": 10,
+  "refs": [
+   "collab -> open: LocalOnly, current_song, local_engine, runtime, with_local_engine",
+   "collab -> prepare: chart_beside",
+   "collab -> project_file: doc_of",
+   "collab_bar -> open: current_song, switch_song",
+   "collab_bar -> setlist: Setlist"
+  ]
+ },
+ "collab -> timeline": {
+  "module_edges": 1,
+  "symbols": 1,
+  "refs": [
+   "collab -> cursor: current"
+  ]
+ },
+ "drum -> app": {
+  "module_edges": 10,
+  "symbols": 14,
+  "refs": [
+   "drum_lanes -> actions: list",
+   "drum_lanes -> studio: request_resync",
+   "drum_level -> studio: request_resync",
+   "hit_overlay -> actions: song",
+   "hits -> actions: KitPiece, meta, song",
+   "hits -> jobs: start",
+   "poi -> actions: list, meta, song",
+   "poi -> engine: Transport",
+   "poi -> text: Font",
+   "quantize_panel -> actions: list"
+  ]
+ },
+ "drum -> arrangement": {
+  "module_edges": 5,
+  "symbols": 19,
+  "refs": [
+   "hits -> track_regions: Origin, RegionKind, TrackRegion, add, change, fresh_id, kit_folder, kit_marks, parse_grid",
+   "poi -> arrangement: Palette, Viewport",
+   "poi -> ruler: LANE_H, MARKS_ROW, lane_shown, row_top",
+   "poi -> tcp: glyphs",
+   "poi -> track_regions: bar_of, fresh_id, moment"
+  ]
+ },
+ "drum -> chart": {
+  "module_edges": 1,
+  "symbols": 1,
+  "refs": [
+   "hits -> song_bars: musical"
+  ]
+ },
+ "drum -> mixer": {
+  "module_edges": 4,
+  "symbols": 4,
+  "refs": [
+   "drum_group -> gain_stage: path_of",
+   "drum_lanes -> gain_stage: path_of",
+   "drum_reference -> gain_stage: path_of",
+   "hits -> gain_stage: path_of"
+  ]
+ },
+ "drum -> session": {
+  "module_edges": 5,
+  "symbols": 6,
+  "refs": [
+   "drum_reference -> open_core: Media, load_into_with",
+   "hit_overlay -> open: runtime",
+   "poi -> open: runtime",
+   "poi -> organize: engine_edit",
+   "quantize_panel -> open: runtime"
+  ]
+ },
+ "drum -> timeline": {
+  "module_edges": 5,
+  "symbols": 7,
+  "refs": [
+   "drum_level -> midi: mark_stale",
+   "hit_overlay -> wave_detail: engine_changed",
+   "poi -> bar_step: STEP_ACTION",
+   "poi -> cursor: Edit, ask, current",
+   "quantize_panel -> cursor: current"
+  ]
+ },
+ "elsewhere -> app": {
+  "module_edges": 8,
+  "symbols": 14,
+  "refs": [
+   "editor_view -> engine: Transport, Watch, apply_event, moving",
+   "editor_view -> shell: EditorComing",
+   "editor_view -> studio: StudioSession",
+   "editor_view -> text: Font",
+   "editor_view -> window_cursor: Glyph, Shape, Sink, use_cursor_sink",
+   "expression -> text: Font",
+   "expression -> window_cursor: Glyph",
+   "patch_list -> text: Font"
+  ]
+ },
+ "elsewhere -> arrangement": {
+  "module_edges": 6,
+  "symbols": 6,
+  "refs": [
+   "editor_view -> arrangement: Palette",
+   "editor_view -> tcp: glyphs",
+   "editor_view -> widget: mods",
+   "expression -> arrangement: Palette",
+   "patch_list -> arrangement: Palette",
+   "patch_list -> tcp: glyphs"
+  ]
+ },
+ "elsewhere -> mixer": {
+  "module_edges": 2,
+  "symbols": 5,
+  "refs": [
+   "editor_view -> skin: palette, version",
+   "expression -> skin: canvas, loaded, values"
+  ]
+ },
+ "elsewhere -> session": {
+  "module_edges": 2,
+  "symbols": 3,
+  "refs": [
+   "editor_view -> open: local_engine, runtime",
+   "expression -> open: runtime"
+  ]
+ },
+ "elsewhere -> timeline": {
+  "module_edges": 4,
+  "symbols": 4,
+  "refs": [
+   "editor_view -> mousemap: Mods",
+   "editor_view -> tool: zoom_held",
+   "expression -> mousemap: Mods",
+   "expression -> tool: zoom_held"
+  ]
+ },
+ "fx_rack -> app": {
+  "module_edges": 20,
+  "symbols": 47,
+  "refs": [
+   "faces -> num: coord, index, narrow",
+   "faces -> text: Font",
+   "fx_actions -> actions: list, meta, resolve, sections, song",
+   "fx_view -> closeup: Closeups, mods_of",
+   "fx_view -> engine: Applier, Edit, FxWatch, Watch, apply_event, click, continuous_for, drag",
+   "fx_view -> num: coord, index",
+   "fx_view -> overlay: Clips, Racks, controls",
+   "fx_view -> plan: Rows",
+   "fx_view -> settings: Settings",
+   "fx_view -> studio: StudioSession",
+   "fx_view -> text: Font",
+   "fx_view -> web_host: Hosted, HostedRef, WidgetCanvas",
+   "live -> num: coord, quantise",
+   "macros -> num: coord, index, narrow",
+   "macros -> text: Font",
+   "plugin_faces -> num: coord, index, narrow",
+   "tone -> engine: Applier, Edit",
+   "tone -> num: coord, index, quantise",
+   "tone -> text: Font",
+   "tone_read -> num: narrow"
+  ]
+ },
+ "fx_rack -> arrangement": {
+  "module_edges": 8,
+  "symbols": 8,
+  "refs": [
+   "faces -> arrangement: Palette",
+   "faces -> tcp: glyphs",
+   "fx_view -> arrangement: Palette",
+   "fx_view -> tcp: glyphs",
+   "macros -> arrangement: Palette",
+   "macros -> tcp: glyphs",
+   "tone -> arrangement: Palette",
+   "tone -> tcp: glyphs"
+  ]
+ },
+ "fx_rack -> chart": {
+  "module_edges": 1,
+  "symbols": 2,
+  "refs": [
+   "fx_actions -> song_bars: measure, musical"
+  ]
+ },
+ "fx_rack -> mixer": {
+  "module_edges": 7,
+  "symbols": 17,
+  "refs": [
+   "fx_view -> mcp: Control, Mixer, control_in",
+   "fx_view -> mixer_panel: predict",
+   "fx_view -> skin: canvas, loaded, palette, values, version",
+   "live -> mcp: f64_to_f32",
+   "macros -> skin: canvas, loaded, values",
+   "tone -> mcp: f64_to_f32",
+   "tone -> skin: canvas, loaded, values"
+  ]
+ },
+ "fx_rack -> removed": {
+  "module_edges": 2,
+  "symbols": 14,
+  "refs": [
+   "faces -> rig: DELAY_ALGOS, FaceEntry, design_of, faces, pick_design",
+   "fx_view -> rig: Block, FaceEntry, Faces, Rig, Section, face_of, for_track, pick_design, section_of"
+  ]
+ },
+ "fx_rack -> session": {
+  "module_edges": 2,
+  "symbols": 4,
+  "refs": [
+   "tone -> open: current_song, local_engine",
+   "tone_read -> open: current_song, local_engine"
+  ]
+ },
+ "fx_rack -> timeline": {
+  "module_edges": 4,
+  "symbols": 4,
+  "refs": [
+   "fx_view -> gesture: drag_fraction",
+   "fx_view -> layout: Layout",
+   "fx_view -> options: LOCKING",
+   "fx_view -> pointer: Pointer"
+  ]
+ },
+ "mixer -> app": {
+  "module_edges": 28,
+  "symbols": 67,
+  "refs": [
+   "balance -> engine: Edit, db_to_gain",
+   "balance -> num: coord",
+   "mcp -> num: coord",
+   "mcp -> profile: Counts",
+   "mcp -> settings: Settings",
+   "mcp -> text: Font",
+   "mix_guide -> engine: Applier, Edit",
+   "mixer_panel -> closeup: Closeup, Closeups, mods_of",
+   "mixer_panel -> compact: use_sides",
+   "mixer_panel -> engine: Applier, Edit, Meters, Touched, Watch, apply_event, click, continuous_for, drag, meter_fraction, moving",
+   "mixer_panel -> icons: Icons",
+   "mixer_panel -> overlay: Clips, Racks, controls",
+   "mixer_panel -> panel: PanelEvent",
+   "mixer_panel -> plan: Rows",
+   "mixer_panel -> rails: Action, Frame, Item, Profile, SIDE, Surface, TOP, draw, profile",
+   "mixer_panel -> settings: Settings",
+   "mixer_panel -> shell: MixerToggle, Pins",
+   "mixer_panel -> simulate: Feed",
+   "mixer_panel -> studio: Arrangement, Planner, StudioSession, css_delta, css_point",
+   "mixer_panel -> text: Font",
+   "mixer_panel -> touch: Fling, SLOP, Speed, mixer_zoom, redraw_hook, use_touch",
+   "mixer_panel -> web_engine: EngineRef",
+   "mixer_panel -> web_host: ElementSlot, Hosted, HostedRef, WebArrangement, WidgetCanvas",
+   "skin -> art: path_of",
+   "skin -> engine: meter_fraction",
+   "skin -> num: coord",
+   "skin -> overlay: route_ink, volume_label",
+   "skin -> text: Font"
+  ]
+ },
+ "mixer -> arrangement": {
+  "module_edges": 9,
+  "symbols": 29,
+  "refs": [
+   "mcp -> arrangement: Palette, submit_command",
+   "mcp -> tcp: caret, folder_band, glyphs, record_input, row_tint, track_color",
+   "mix_guide -> widget: edit_song",
+   "mixer_panel -> arrangement: Palette",
+   "mixer_panel -> folds: generation, toggle",
+   "mixer_panel -> tcp: glyphs, track_color",
+   "skin -> arrangement: Palette",
+   "skin -> tcp: Density, Tcp, band, folder_band, lit, mute_lit, rail_layout, record_input, row_tint, solo_lit, to_theme, track_color, volume_fraction",
+   "strip -> tcp: volume_fraction"
+  ]
+ },
+ "mixer -> collab": {
+  "module_edges": 1,
+  "symbols": 3,
+  "refs": [
+   "mixer_panel -> ghosts: Anchor, region_mounted, register_anchor"
+  ]
+ },
+ "mixer -> drum": {
+  "module_edges": 2,
+  "symbols": 5,
+  "refs": [
+   "mix_chains -> fundamental: KICK, SNARE, TOM, find",
+   "mixer_panel -> quantize_panel: QuantizePanel"
+  ]
+ },
+ "mixer -> elsewhere": {
+  "module_edges": 1,
+  "symbols": 2,
+  "refs": [
+   "skin -> expression: base_look, look_fields"
+  ]
+ },
+ "mixer -> fx_rack": {
+  "module_edges": 3,
+  "symbols": 24,
+  "refs": [
+   "mcp -> tone: Folded, LEGIBLE, Panel, Rack, Store, Tone, Which, record",
+   "mixer_panel -> tone: Analyser, Fold, Grip, Levels, Panel, Shared, WORKING, Which, dot_click, drag, grip_at, panels_for, reset, scroll_span, toggle",
+   "strip -> tone: FOCUSED"
+  ]
+ },
+ "mixer -> session": {
+  "module_edges": 2,
+  "symbols": 2,
+  "refs": [
+   "mix_guide -> setlist: Setlist",
+   "routes -> open: runtime"
+  ]
+ },
+ "mixer -> timeline": {
+  "module_edges": 8,
+  "symbols": 16,
+  "refs": [
+   "gain_stage -> midi: ANALYSIS_BLOCK, Wave",
+   "mcp -> layout: Layout, Wash, rack_fill, strip_edge, strip_fill",
+   "mix_chains -> midi: ANALYSIS_BLOCK, Wave",
+   "mixer_panel -> gesture: DOUBLE, drag_fraction",
+   "mixer_panel -> layout: Layout",
+   "mixer_panel -> options: LOCKING",
+   "mixer_panel -> pointer: Pointer, Spot",
+   "skin -> row: Control"
+  ]
+ },
+ "removed -> app": {
+  "module_edges": 7,
+  "symbols": 11,
+  "refs": [
+   "bass_rig -> actions: list",
+   "bass_rig -> studio: request_resync",
+   "drum_samples -> actions: list",
+   "drum_samples -> studio: request_resync",
+   "rig -> num: coord, index",
+   "rig_actions -> actions: list, meta, resolve, song",
+   "rig_actions -> studio: request_resync"
+  ]
+ },
+ "removed -> drum": {
+  "module_edges": 2,
+  "symbols": 4,
+  "refs": [
+   "drum_samples -> drum_reference: notes, pieces, qn_between",
+   "drum_samples -> hits: playback"
+  ]
+ },
+ "removed -> fx_rack": {
+  "module_edges": 2,
+  "symbols": 12,
+  "refs": [
+   "rig -> beats: BPM, DELAY, FREE_DIV, MOD, REVERB, beat, nearest_delay, nearest_mod, nearest_reverb, seconds_text",
+   "rig -> faces: FrameFace, design_dir"
+  ]
+ },
+ "removed -> mixer": {
+  "module_edges": 2,
+  "symbols": 2,
+  "refs": [
+   "bass_rig -> gain_stage: path_of",
+   "drum_samples -> gain_stage: path_of"
+  ]
+ },
+ "session -> app": {
+  "module_edges": 17,
+  "symbols": 51,
+  "refs": [
+   "grow -> actions: list, meta, resolve, song",
+   "grow -> studio: request_resync",
+   "instrument_tracks -> actions: list, meta, resolve, song",
+   "instrument_tracks -> shell: DIM, RULE, TEXT",
+   "instrument_tracks -> studio: request_resync",
+   "open -> audio_mode: Assets, AudioMode, ModeState, REAPER_ENV, RemoteTarget, SOCKET_ENV, begin_asset_load, from_launch, owns_project, set, set_assets_progress, set_cue_ready, state, update_requested",
+   "open -> mcp_server: start",
+   "organize -> actions: sections",
+   "organize -> shell: DIM, RULE, TEXT",
+   "organize -> studio: request_resync",
+   "project_file -> actions: samples_follow",
+   "project_file -> jobs: start",
+   "project_new -> actions: list, meta, request_mode",
+   "project_new -> studio: StudioSession, request_resync",
+   "setlist -> studio: StudioSession",
+   "versions -> actions: list, open_song_unsaved, open_song_versions",
+   "versions -> shell: BAR_BG, BAR_H, Back, DIM, RAISED, RULE, TEXT"
+  ]
+ },
+ "session -> arrangement": {
+  "module_edges": 1,
+  "symbols": 1,
+  "refs": [
+   "instrument_tracks -> folds: toggle"
+  ]
+ },
+ "session -> chart": {
+  "module_edges": 1,
+  "symbols": 2,
+  "refs": [
+   "open_core -> section_colors: apply, pending"
+  ]
+ },
+ "session -> collab": {
+  "module_edges": 1,
+  "symbols": 1,
+  "refs": [
+   "setlist -> collab: song_opened"
+  ]
+ },
+ "session -> mixer": {
+  "module_edges": 2,
+  "symbols": 3,
+  "refs": [
+   "prepare -> gain_stage: kit_headroom, stage",
+   "prepare -> mix_chains: add"
+  ]
+ },
+ "session -> stream": {
+  "module_edges": 5,
+  "symbols": 5,
+  "refs": [
+   "open -> reference_play: renderer",
+   "open -> stream_in: start",
+   "setlist -> reference_play: hear_local",
+   "setlist -> song_stream: StreamedSong",
+   "setlist -> stream_set: stream"
+  ]
+ },
+ "session -> timeline": {
+  "module_edges": 2,
+  "symbols": 6,
+  "refs": [
+   "organize -> cursor: Edit, Span, ask, current",
+   "project_new -> cursor: Edit, ask"
+  ]
+ },
+ "stream -> app": {
+  "module_edges": 3,
+  "symbols": 3,
+  "refs": [
+   "song_stream -> web_audio: adopt",
+   "stream_set -> engine: Transport",
+   "stream_set -> loading: Progress"
+  ]
+ },
+ "stream -> collab": {
+  "module_edges": 2,
+  "symbols": 3,
+  "refs": [
+   "stream_in -> collab: env_set",
+   "stream_set -> collab: TaskSet, join_task_in_background"
+  ]
+ },
+ "stream -> session": {
+  "module_edges": 13,
+  "symbols": 30,
+  "refs": [
+   "reference -> open: equip",
+   "reference -> open_core: is_session, open_song_into",
+   "reference -> prepare: Prepare",
+   "song_stream -> folder: Disk, Folder, Memory",
+   "song_stream -> open: Media, open_song_into_with, runtime",
+   "song_stream -> prepare: Prepare",
+   "song_stream -> setlist: song_in",
+   "stream_in -> open: Media, begin_asset_load, cue_engine, current_song, mode, open_song_into_with, runtime, set_assets_progress, set_cue_ready, switch_to",
+   "stream_in -> prepare: Prepare",
+   "stream_in -> setlist: read_setlist",
+   "stream_set -> open: engine_runtime, local_engine",
+   "stream_set -> setlist: Arrival, Opening, Setlist",
+   "task_account -> open: engine_runtime"
+  ]
+ },
+ "timeline -> app": {
+  "module_edges": 15,
+  "symbols": 29,
+  "refs": [
+   "bar_step -> actions: list, meta, queue, song",
+   "bar_step -> engine: Transport",
+   "bar_step -> keys: Action",
+   "bar_step -> shell: DIM, RULE, SCRIM, TEXT",
+   "cursor -> num: coord",
+   "hit -> num: coord, index",
+   "hit -> rails: SIDE, TOP",
+   "midi -> jobs: start",
+   "midi -> num: coord, index, narrow",
+   "tool -> window_cursor: Glyph, Shape, Sink",
+   "toolbar -> engine: Edit",
+   "toolbar -> shell: MixerToggle, Pins",
+   "toolbar -> studio: Edits",
+   "wave_detail -> engine: made",
+   "wave_detail -> num: coord, index"
+  ]
+ },
+ "timeline -> arrangement": {
+  "module_edges": 7,
+  "symbols": 18,
+  "refs": [
+   "bar_step -> track_regions: grid_name",
+   "cursor -> arrangement: Palette, Viewport",
+   "grid_in_force -> ruler: GridRegion",
+   "hit -> arrangement: Arrangement, ItemZone, TCP_WIDTH, Viewport",
+   "hit -> ruler: On, on, ruler_h",
+   "lanes -> folds: touch",
+   "row -> tcp: BUTTON, BUTTON_GAP, Density, KNOB_LEGIBLE, Tcp, band"
+  ]
+ },
+ "timeline -> automation": {
+  "module_edges": 1,
+  "symbols": 1,
+  "refs": [
+   "layout -> automation: lanes_height"
+  ]
+ },
+ "timeline -> chart": {
+  "module_edges": 1,
+  "symbols": 2,
+  "refs": [
+   "bar_step -> song_bars: musical, time"
+  ]
+ },
+ "timeline -> mixer": {
+  "module_edges": 1,
+  "symbols": 1,
+  "refs": [
+   "pointer -> mcp: Control"
+  ]
+ },
+ "timeline -> session": {
+  "module_edges": 4,
+  "symbols": 7,
+  "refs": [
+   "bar_step -> open: runtime",
+   "bar_step -> organize: engine_edit",
+   "midi -> open: current_song, local_engine, runtime",
+   "wave_detail -> open: current_song, local_engine"
+  ]
+ },
+ "vocals -> app": {
+  "module_edges": 9,
+  "symbols": 17,
+  "refs": [
+   "leveler -> num: coord",
+   "record_view -> compact: Form, use_form",
+   "record_view -> engine: Move, transport",
+   "record_view -> navigator: Navigator",
+   "record_view -> progress: ProgressBar, Song, TransportButtons, use_reading",
+   "record_view -> studio: StudioSession",
+   "record_view -> touch: Touch",
+   "vocal_level -> actions: meta, resolve, sections, song",
+   "vocal_level -> studio: request_resync"
+  ]
+ },
+ "vocals -> arrangement": {
+  "module_edges": 1,
+  "symbols": 1,
+  "refs": [
+   "record_view -> ruler: Timeline"
+  ]
+ },
+ "vocals -> automation": {
+  "module_edges": 2,
+  "symbols": 3,
+  "refs": [
+   "leveler -> automation: db_at, update_leveled",
+   "vocal_level -> automation: Leveled"
+  ]
+ },
+ "vocals -> drum": {
+  "module_edges": 1,
+  "symbols": 1,
+  "refs": [
+   "vocal_level -> drum_level: write_curve"
+  ]
+ },
+ "vocals -> mixer": {
+  "module_edges": 2,
+  "symbols": 4,
+  "refs": [
+   "record_view -> mixer_panel: Links, Mixer, WebMixer",
+   "vocal_level -> gain_stage: path_of"
+  ]
+ },
+ "vocals -> session": {
+  "module_edges": 2,
+  "symbols": 2,
+  "refs": [
+   "record_view -> setlist: Setlist",
+   "take_rating -> open: runtime"
+  ]
+ },
+ "vocals -> timeline": {
+  "module_edges": 1,
+  "symbols": 1,
+  "refs": [
+   "vocal_level -> midi: mark_stale"
+  ]
+ }
+}

@@ -312,7 +312,7 @@ pub struct EditorView {
     pending: std::cell::RefCell<Vec<daw_proto::track::TrackEvent>>,
     target: Option<Target>,
     view: Option<Expression>,
-    look: expression_editor::paint::paint::Look,
+    look: editor::paint::paint::Look,
     /// The theme the look was taken from: a new one (a saved edit to the
     /// theme file) and the look is taken again.
     skin: u64,
@@ -358,7 +358,7 @@ type Slot = std::sync::Arc<std::sync::Mutex<Option<Read>>>;
 #[cfg(feature = "native")]
 enum Read {
     Midi(Option<daw::service::midi::MidiTakeSnapshot>),
-    Audio(Option<(Box<expression_editor::Editor>, Vec<Take>)>),
+    Audio(Option<(Box<editor::Editor>, Vec<Take>)>),
 }
 
 /// One take of a stack, as aligning it needs it: its item, where the item
@@ -368,17 +368,16 @@ enum Read {
 struct Take {
     item: String,
     start: f64,
-    analysis: std::sync::Arc<expression_editor::audio::Analysis>,
+    analysis: std::sync::Arc<editor::audio::Analysis>,
 }
 
 /// The editor action that lines a stack's takes up on its first.
-pub const ALIGN_TAKES: &str = expression_editor::actions::takes::ALIGN.id;
+pub const ALIGN_TAKES: &str = editor::actions::takes::ALIGN.id;
 
 /// An alignment in flight: each take aligned, by item, when it lands.
 #[cfg(feature = "native")]
-type Aligning = std::sync::Arc<
-    std::sync::Mutex<Option<Vec<(String, f64, expression_editor::audio::Alignment)>>>,
->;
+type Aligning =
+    std::sync::Arc<std::sync::Mutex<Option<Vec<(String, f64, editor::audio::Alignment)>>>>;
 #[cfg(feature = "native")]
 type Content = daw::service::midi::MidiTakeContent;
 
@@ -387,34 +386,26 @@ type Content = daw::service::midi::MidiTakeContent;
 /// take with no samples.
 #[cfg(feature = "native")]
 #[must_use]
-pub fn analysis(
-    item: &str,
-    length: f64,
-    volume: f64,
-) -> Option<expression_editor::audio::Analysis> {
+pub fn analysis(item: &str, length: f64, volume: f64) -> Option<editor::audio::Analysis> {
     session(item.to_owned(), length, volume).map(|s| s.analysis().clone())
 }
 
 /// One audio take loaded and analysed through the in-process engine:
 /// `None` with no engine, or a take with no samples.
 #[cfg(feature = "native")]
-fn session(
-    item: String,
-    length: f64,
-    volume: f64,
-) -> Option<expression_editor::audio::AudioSession> {
+fn session(item: String, length: f64, volume: f64) -> Option<editor::audio::AudioSession> {
     let daw = crate::open::local_engine()?;
-    expression_editor::audio::AudioSession::load(
+    editor::audio::AudioSession::load(
         daw,
-        expression_editor::audio::AudioTakeLocation {
+        editor::audio::AudioTakeLocation {
             project: daw::service::ProjectContext::Current,
             item: daw::service::ItemRef::Guid(item),
             take: daw::service::TakeRef::Active,
         },
         length,
         volume,
-        expression_editor::Viewport::new(1000.0, 500.0),
-        expression_editor::audio::TakeConfig::default(),
+        editor::Viewport::new(1000.0, 500.0),
+        editor::audio::TakeConfig::default(),
     )
 }
 
@@ -425,7 +416,7 @@ fn session(
 fn stacked(
     (item, length, volume, start, name): (String, f64, f64, f64, String),
     takes: &[Target],
-) -> Option<(Box<expression_editor::Editor>, Vec<Take>)> {
+) -> Option<(Box<editor::Editor>, Vec<Take>)> {
     let first = session(item.clone(), length, volume)?;
     let mut aligned = vec![Take {
         item: item.clone(),
@@ -686,7 +677,7 @@ impl EditorView {
         quiet: bool,
     ) {
         use crate::window_cursor::{Glyph, Shape};
-        use expression_editor::cursor::Cursor;
+        use editor::cursor::Cursor;
         let pointer = view.pointer(mods);
         if quiet && pointer.is_none() {
             return;
@@ -749,8 +740,7 @@ impl EditorView {
         for (item, start, alignment) in &done {
             let delta = (start - reference.start) * ups;
             let warp = |u: f64| {
-                expression_editor::audio::align::warped(alignment, (u - delta) / ups)
-                    .mul_add(ups, delta)
+                editor::audio::align::warped(alignment, (u - delta) / ups).mul_add(ups, delta)
             };
             let active = editor
                 .tracks
@@ -938,7 +928,7 @@ impl EditorView {
 /// The editor's colours from the loaded theme: the window's palette, and
 /// the theme's `editor.*` tokens over it.
 #[cfg(feature = "native")]
-fn look() -> expression_editor::paint::paint::Look {
+fn look() -> editor::paint::paint::Look {
     crate::expression::look_of(&crate::skin::palette(
         &crate::arrangement::Palette::from_theme(&daw_ui::theming::Theme::dark()),
     ))
@@ -955,30 +945,27 @@ fn frame_item(view: &mut Expression) {
     if view.stacked() {
         return;
     }
-    use expression_editor::actions;
+    use editor::actions;
     actions::run(&mut view.editor, actions::view::FIT_ITEM.id);
 }
 
 /// Each of `dubs` aligned to `reference` and its markers written: the
 /// takes that aligned, each with its item's start and its alignment.
 #[cfg(feature = "native")]
-fn align_all(
-    reference: &Take,
-    dubs: &[Take],
-) -> Vec<(String, f64, expression_editor::audio::Alignment)> {
+fn align_all(reference: &Take, dubs: &[Take]) -> Vec<(String, f64, editor::audio::Alignment)> {
     let Some(daw) = crate::open::local_engine() else {
         return Vec::new();
     };
     dubs.iter()
         .filter_map(|dub| {
-            let alignment = expression_editor::audio::align_placed(
+            let alignment = editor::audio::align_placed(
                 &reference.analysis,
                 reference.start,
                 &dub.analysis,
                 dub.start,
-                expression_editor::audio::AlignConfig::default(),
+                editor::audio::AlignConfig::default(),
             )?;
-            if let Err(error) = expression_editor::audio::apply_quantize::apply_warp(
+            if let Err(error) = editor::audio::apply_quantize::apply_warp(
                 daw,
                 daw::service::ProjectContext::Current,
                 &[daw::service::ItemRef::Guid(dub.item.clone())],
@@ -995,8 +982,8 @@ fn align_all(
 /// Every note of `doc` moved by `warp` (a unit to a unit): its start and
 /// end, its curves stretched between them.
 #[cfg(feature = "native")]
-fn warp_doc(doc: &mut expression_editor::ExpressionDoc, warp: impl Fn(f64) -> f64) {
-    use expression_editor::doc::Dimension;
+fn warp_doc(doc: &mut editor::ExpressionDoc, warp: impl Fn(f64) -> f64) {
+    use editor::doc::Dimension;
     for n in &mut doc.notes {
         let (s, e) = (n.start, n.end);
         let (s2, e2) = (warp(s), warp(e));

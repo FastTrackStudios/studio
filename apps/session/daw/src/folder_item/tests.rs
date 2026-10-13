@@ -8,7 +8,7 @@
 
 use anyrender::Paint;
 use anyrender::recording::RenderCommand;
-use expression_editor::kit::LaneRole;
+use editor::kit::LaneRole;
 use vello::peniko::Color;
 
 use super::fold::{Child, ChildTake, Grid, GroupBy, Placement, Side, TakePeaks, fold};

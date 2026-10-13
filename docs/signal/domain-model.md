@@ -3,8 +3,8 @@
 How a rig is modelled — levels, collections and variants, overrides,
 selection — from the Signal repo's README, kept when Signal was folded
 into studio. The crates it names live under `features/rigs/` (the domain
-core is `features/rigs/core/*`; `signal-proto` is
-`features/rigs/core/proto`). Under the one-engine model
+core is `features/signal/*`; `signal-proto` is
+`features/signal/proto`). Under the one-engine model
 (`docs/design/one-engine.md`) a rig is a folder of tracks in the one daw
 engine; this model describes what those tracks and their patches mean.
 
@@ -456,6 +456,6 @@ The `Collection`/`Variant` traits are wired for Engine, Layer, Rig,
 Profile, Song and Setlist; the Block and Module levels have the types but
 not yet the trait.
 
-**`features/rigs/core/docs/DOMAIN.md` is the source of truth for that gap** —
+**`features/signal/docs/DOMAIN.md` is the source of truth for that gap** —
 it carries the full canonical ↔ code table and the open renames. Align
 deliberately; do not assume a name means what it says.

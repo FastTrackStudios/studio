@@ -20,7 +20,7 @@ mkdir -p "$OUT"
 echo "── expression editor ──"
 # Scenes come from the same demo module the runnable example mounts, so
 # these pictures can't drift from what the app actually launches.
-FTS_SHOTS_DIR="$SHOTS" cargo test -q -p expression-editor-ui --test screenshots 2>&1 | tail -1
+FTS_SHOTS_DIR="$SHOTS" cargo test -q -p editor-ui --test screenshots 2>&1 | tail -1
 
 echo "── REAPER ──"
 cargo run -q -p fts-themer --bin fts-themer -- \

@@ -115,7 +115,7 @@ components:
 
 # Design System: Signal Touch
 
-These tokens mirror `features/rigs/core/widgets/src/theme.rs` (greys, states, PRESSED) and `features/rigs/guitar/src/ui/perform.rs` `folder_color` (stack colours), so the Dioxus port and the prototype share one system.
+These tokens mirror `features/signal/widgets/src/theme.rs` (greys, states, PRESSED) and `features/rigs/guitar/src/ui/perform.rs` `folder_color` (stack colours), so the Dioxus port and the prototype share one system.
 
 ## Overview
 

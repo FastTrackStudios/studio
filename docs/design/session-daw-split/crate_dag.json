@@ -1,0 +1,186 @@
+{
+ "direct": {
+  "core": [],
+  "timeline": [
+   "core"
+  ],
+  "skin": [
+   "core",
+   "timeline"
+  ],
+  "fx_rack": [
+   "core",
+   "timeline",
+   "skin"
+  ],
+  "automation": [
+   "core",
+   "timeline",
+   "fx_rack"
+  ],
+  "vocals": [
+   "core",
+   "timeline",
+   "automation"
+  ],
+  "drum": [
+   "core",
+   "timeline"
+  ],
+  "mixer": [
+   "core",
+   "timeline",
+   "skin",
+   "fx_rack",
+   "drum"
+  ],
+  "session": [
+   "core",
+   "timeline",
+   "mixer"
+  ],
+  "collab": [
+   "core",
+   "timeline",
+   "session"
+  ],
+  "chart": [
+   "core",
+   "timeline",
+   "session",
+   "collab"
+  ],
+  "stream": [
+   "core",
+   "session",
+   "collab"
+  ],
+  "arrangement": [
+   "core",
+   "timeline",
+   "skin",
+   "automation",
+   "drum",
+   "mixer",
+   "collab"
+  ],
+  "elsewhere": [
+   "core",
+   "timeline",
+   "skin",
+   "arrangement"
+  ],
+  "removed": [
+   "core",
+   "drum"
+  ],
+  "app": [
+   "core",
+   "timeline",
+   "fx_rack",
+   "automation",
+   "vocals",
+   "drum",
+   "mixer",
+   "session",
+   "collab",
+   "chart",
+   "stream",
+   "arrangement",
+   "elsewhere",
+   "removed"
+  ]
+ },
+ "transitive_reduction": {
+  "core": [],
+  "timeline": [
+   "core"
+  ],
+  "skin": [
+   "timeline"
+  ],
+  "fx_rack": [
+   "skin"
+  ],
+  "automation": [
+   "fx_rack"
+  ],
+  "vocals": [
+   "automation"
+  ],
+  "drum": [
+   "timeline"
+  ],
+  "mixer": [
+   "fx_rack",
+   "drum"
+  ],
+  "session": [
+   "mixer"
+  ],
+  "collab": [
+   "session"
+  ],
+  "chart": [
+   "collab"
+  ],
+  "stream": [
+   "collab"
+  ],
+  "arrangement": [
+   "automation",
+   "collab"
+  ],
+  "elsewhere": [
+   "arrangement"
+  ],
+  "removed": [
+   "drum"
+  ],
+  "app": [
+   "vocals",
+   "chart",
+   "stream",
+   "elsewhere",
+   "removed"
+  ]
+ },
+ "pub_crate_to_widen": [
+  "actions::KitPiece",
+  "actions::meta",
+  "actions::queue",
+  "actions::request_mode",
+  "actions::resolve",
+  "actions::samples_follow",
+  "actions::sections",
+  "art::path_of",
+  "automation_actions::register",
+  "comp::register",
+  "drum_level::write_curve",
+  "engine::made",
+  "fx_actions::mode_of",
+  "fx_actions::moment",
+  "fx_actions::param_of",
+  "fx_actions::register",
+  "fx_actions::shape_of",
+  "fx_actions::target",
+  "fx_actions::value_of",
+  "gain_stage::path_of",
+  "ghosts::local_shown",
+  "grow::register",
+  "hits::add_zone",
+  "open::cue_engine",
+  "open::engine_runtime",
+  "progress::Song",
+  "progress::use_reading",
+  "rig_actions::register",
+  "tcp::automation_button",
+  "tcp::mix",
+  "tone::knob_arc",
+  "track_regions::bar_of",
+  "track_regions::moment",
+  "vocal_level::register",
+  "widget::edit_song",
+  "widget::mods"
+ ]
+}

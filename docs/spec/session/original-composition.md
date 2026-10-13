@@ -408,7 +408,7 @@ pick one by hand.
 
 - **Today: MISSING.**
   - Signal keeps per-rig audio settings: `RigManager`
-    (`signal:features/rigs/sampler/signal-sampler/src/rig_manager.rs:1-16`,
+    (`signal:features/sampler/signal-sampler/src/rig_manager.rs:1-16`,
     saved at `$XDG_CONFIG_HOME/signal/rigs/<slug>.styx`) and
     `RigAudioPrefs` (`rig_prefs.rs:13-40`).
   - Session can only draw the record input (`tcp.rs:709-716`).
@@ -699,7 +699,7 @@ with snare and hi-hat on beat 4.
 
 - **Today: MISSING as an action.**
   - The expression editor has a pencil (`Tool::NoteDraw`,
-    `daw:features/expression-editor/expression-editor-core/src/tools.rs:15-27`).
+    `daw:features/editor/expression-editor-core/src/tools.rs:15-27`).
     Its notes reach the engine only when the editor saves
     (`apps/session/daw/src/editor_view.rs:772-791`).
   - The engine API exists: `create_midi_item`

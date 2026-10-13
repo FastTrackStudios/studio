@@ -1,5 +1,5 @@
 // Map decrypted PTX offsets back to (CT, offset-within-block).
-use formats::protools::raw_block::RawBlock;
+use protools::raw_block::RawBlock;
 
 fn find(blocks: &[RawBlock], target: usize, out: &mut Vec<(u16, usize, usize, usize)>) {
     for b in blocks {
@@ -13,7 +13,7 @@ fn find(blocks: &[RawBlock], target: usize, out: &mut Vec<(u16, usize, usize, us
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let path = std::env::args().nth(1).unwrap();
-    let s = formats::protools::parse_raw(std::fs::read(&path)?)?;
+    let s = protools::parse_raw(std::fs::read(&path)?)?;
     for arg in std::env::args().skip(2) {
         let target: usize = arg.parse()?;
         print!("offset {} (0x{:x}): ", target, target);
