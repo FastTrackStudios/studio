@@ -147,7 +147,7 @@ async fn register_daw_dispatcher() {
     studio::reaper::init_take_broadcaster();
     info!("Surviving broadcasters initialized");
 
-    let dock_host = daw_reaper_dioxus::ReaperDockHost::new();
+    let dock_host = reaper_dioxus::ReaperDockHost::new();
 
     // Reaper's canonical service surface (impl Services for Reaper),
     // plus the dock-host bolt-on (different backend, so it ships
