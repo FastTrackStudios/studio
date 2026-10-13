@@ -32,7 +32,6 @@ use std::sync::{Arc, Mutex, Weak};
 use std::time::{Duration, SystemTime};
 
 use architect::dispatch::CurrentThreadDispatcher;
-use architect::vox::Tx;
 use architect::{HasDispatcher, PubSub};
 use document_proto::Scene;
 pub use library_proto::*;
@@ -661,7 +660,7 @@ impl SurfaceStore for FsLibrary {
 }
 
 impl SurfaceStoreStreamSource for FsLibrary {
-    fn updates_attach(&self, id: String, sink: Tx<SurfaceUpdate>) {
+    fn updates_attach(&self, id: String, sink: architect::EventSink<SurfaceUpdate>) {
         let hub = lock(&self.inner.hubs).entry(id.clone()).or_insert_with(|| PubSub::sliding(8)).clone();
         // Buffer from now, snapshot, then open the tap: nothing is lost
         // between the snapshot and the first live update.

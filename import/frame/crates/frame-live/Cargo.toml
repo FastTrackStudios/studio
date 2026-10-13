@@ -19,8 +19,7 @@ surface-runtime = { path = "../../features/surface/surface-runtime", default-fea
 serde_json = { workspace = true }
 kurbo = { workspace = true }
 peniko = { workspace = true }
-vello = { workspace = true }
-
+vello = { version = "0.10.0" }  # frame's own version (not the workspace's)
 # Paint a surface's vectors into a host's anyrender 0.11 scene
 # (`LiveSurface::paint_vectors`) — for a host whose renderer gives no Vello
 # GPU to render with: vello-hybrid on the iOS simulator.

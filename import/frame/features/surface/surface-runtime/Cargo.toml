@@ -33,7 +33,7 @@ surface-proto = { path = "../surface-proto" }
 surface-memory = { path = "../surface-memory" }
 tokio.workspace = true
 render = { path = "../../render/render", features = ["anyrender"] }
-vello.workspace = true
+vello = { version = "0.10.0" }  # frame's own version (not the workspace's)
 kurbo.workspace = true
 peniko.workspace = true
 

@@ -12,7 +12,7 @@ facet.workspace = true
 facet-styx = "5.0.0-rc.7"
 zip = { version = "2", default-features = false, features = ["deflate"] }
 blake3 = "1"
-chrono.workspace = true
+chrono = { version = "0.4", default-features = false, features = ["clock", "std", "wasmbind", "serde"] }  # frame's own version (not the workspace's)
 thiserror.workspace = true
 uuid.workspace = true
 

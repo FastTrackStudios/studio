@@ -24,10 +24,10 @@ design-lint = { path = "../../../features/design/design-lint" }
 serde_json = { workspace = true }
 kurbo = { workspace = true }
 peniko = { workspace = true }
-vello = { workspace = true }
+vello = { version = "0.10.0" }  # frame's own version (not the workspace's)
 winit = { workspace = true }
 pollster = { workspace = true }
-image = { workspace = true }
+image = { version = "0.25" }  # frame's own version (not the workspace's)
 # `--engine`: the background runtime that owns the remote engine link.
 tokio = { workspace = true }
 architect = { workspace = true, features = ["platform"] }

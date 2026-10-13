@@ -20,7 +20,6 @@ tokio = { workspace = true }
 serde_json = { workspace = true }
 kurbo = { workspace = true }
 peniko = { workspace = true }
-image = { workspace = true }
-
+image = { version = "0.25" }  # frame's own version (not the workspace's)
 [lints]
 workspace = true
