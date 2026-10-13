@@ -3,8 +3,8 @@
 
     scripts/face_gallery.py OUT_DIR [--only SUBSTR] [--dark] [--jobs N]
 
-Walks examples/plugins/<set>/*.frame — each device's faces in the shapes a
-host shows (rack, -lane, -tall, -stacked), not the scaled (@x), phone, back
+Walks features/faces/generated/<set>/*.frame (written by `just faces`) —
+each device's faces in the shapes a host shows (rack, -lane, -tall, -stacked), not the scaled (@x), phone, back
 or dark variants (dark with --dark) — and renders each with frame's GPU
 effects stage (render_surface --fx gpu, demo feeds, t = 1.3 s) to
 OUT_DIR/<set>/<face>.webp. OUT_DIR/index.json lists them by kind (reverb,
@@ -25,8 +25,8 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-PLUGINS = ROOT / "examples" / "plugins"
-SOURCES = ROOT / "examples" / "plugin-faces" / "src"
+PLUGINS = ROOT / "features" / "faces" / "generated"
+SOURCES = ROOT / "features" / "faces" / "plugin-faces" / "src"
 RENDER = ROOT / "target" / "release" / "render_surface"
 
 # Filename words → kind, first match wins.
