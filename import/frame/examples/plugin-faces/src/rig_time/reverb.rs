@@ -1,10 +1,10 @@
 //! The reverb algorithms' faces, in the block's `algorithm` order.
 
 mod room;
-mod hall;
-mod plate;
+pub(crate) mod hall;
+pub(crate) mod plate;
 mod spring;
-mod cloud;
+pub(crate) mod cloud;
 mod bloom;
 mod shimmer;
 mod chorale;
@@ -27,7 +27,18 @@ use crate::face::Face;
 /// The phone layouts there are, by algorithm (its index in
 /// `VERB_ALGOS`'s order, as [`faces`] lists them).
 pub fn phone_faces(dark: bool) -> Vec<(usize, Face)> {
-    vec![(0, room::face_at(dark, super::kit::Tier::Phone)), (1, hall::face_at(dark, super::kit::Tier::Phone)), (2, plate::face_at(dark, super::kit::Tier::Phone)), (3, spring::face_at(dark, super::kit::Tier::Phone)), (4, cloud::face_at(dark, super::kit::Tier::Phone)), (5, bloom::face_at(dark, super::kit::Tier::Phone)), (6, shimmer::face_at(dark, super::kit::Tier::Phone)), (7, chorale::face_at(dark, super::kit::Tier::Phone)), (8, magneto::face_at(dark, super::kit::Tier::Phone)), (9, nonlinear::face_at(dark, super::kit::Tier::Phone)), (10, swell::face_at(dark, super::kit::Tier::Phone)), (11, reflections::face_at(dark, super::kit::Tier::Phone)), (12, velvet::face_at(dark, super::kit::Tier::Phone)), (13, freeverb::face_at(dark, super::kit::Tier::Phone)), (14, convolution::face_at(dark, super::kit::Tier::Phone)), (15, random::face_at(dark, super::kit::Tier::Phone))]
+    small_faces(dark, super::kit::Tier::Phone)
+}
+
+/// The layouts there are for a desktop pane's lane, by algorithm.
+pub fn pane_faces(dark: bool) -> Vec<(usize, Face)> {
+    small_faces(dark, super::kit::Tier::Ipad)
+}
+
+/// The small-room layouts at `t` (a phone's lane, a desktop pane's), by
+/// algorithm: every machine has its own now.
+pub fn small_faces(dark: bool, t: super::kit::Tier) -> Vec<(usize, Face)> {
+    vec![(0, room::face_at(dark, t)), (1, hall::face_at(dark, t)), (2, plate::face_at(dark, t)), (3, spring::face_at(dark, t)), (4, cloud::face_at(dark, t)), (5, bloom::face_at(dark, t)), (6, shimmer::face_at(dark, t)), (7, chorale::face_at(dark, t)), (8, magneto::face_at(dark, t)), (9, nonlinear::face_at(dark, t)), (10, swell::face_at(dark, t)), (11, reflections::face_at(dark, t)), (12, velvet::face_at(dark, t)), (13, freeverb::face_at(dark, t)), (14, convolution::face_at(dark, t)), (15, random::face_at(dark, t))]
 }
 
 /// The backs there are (the advanced controls), by algorithm, at `t`.

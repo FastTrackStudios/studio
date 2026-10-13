@@ -239,38 +239,7 @@ pub fn amp_compact_for(model: AmpModel, prefix: &str, w: f64, h: f64, phone: boo
         let upright = w < h * 1.2;
         spec.face_frac = if upright || phone { 0.66 } else { 0.48 };
         spec.corners = Some("black".into());
-        let (ink, cap, legend) = match model {
-            AmpModel::SteelStringSinger | AmpModel::DumbleOds => {
-                spec.covering = Material::Tolex { grain: Grain::Bronco, color: "#1d1c1c".into(), scale: 1.0 };
-                spec.grille = Material::DiamondGrille { cloth: "#161314".into(), stripes: vec!["#b8324a".into(), "#e6e2d6".into(), "#5f9e86".into()], pitch: 96.0 };
-                spec.face = Material::Brushed { color: "#c3c4c6".into(), dir: Dir::Horizontal };
-                spec.piping = Some("#b9babc".into());
-                ("#141414", Cap::ChromeSkirt, Lettering::family(family::PIRATA_ONE))
-            }
-            AmpModel::Vibroverb | AmpModel::DeluxeReverb | AmpModel::TwinReverb => {
-                spec.covering = Material::Tolex { grain: Grain::Levant, color: "#161616".into(), scale: 0.8 };
-                spec.grille = Material::GrilleCloth { cloth: Cloth::Silver };
-                spec.face = Material::Plastic { color: "#121213".into(), gloss: 0.3 };
-                spec.piping = Some("#d8d8d8".into());
-                spec.corners = Some("chrome".into());
-                ("#f2f2f0", Cap::BlackSkirt, Lettering::family(family::INTER).weight(600.0))
-            }
-            AmpModel::Ac30 => {
-                spec.covering = Material::Tolex { grain: Grain::Levant, color: "#141313".into(), scale: 0.8 };
-                spec.grille = Material::DiamondGrille { cloth: "#5a3e26".into(), stripes: vec!["#caa272".into(), "#2e1e10".into()], pitch: 44.0 };
-                spec.face = Material::Brushed { color: "#b8703e".into(), dir: Dir::Horizontal };
-                spec.piping = Some("#d8c7a0".into());
-                spec.corners = Some("chrome".into());
-                ("#1c1208", Cap::Cream, Lettering::family(family::INTER).weight(700.0))
-            }
-            AmpModel::TwoRock => {
-                spec.covering = Material::Tolex { grain: Grain::Bronco, color: "#1b1a1a".into(), scale: 0.8 };
-                spec.grille = Material::GrilleCloth { cloth: Cloth::Black };
-                spec.face = Material::Plastic { color: "#161415".into(), gloss: 0.35 };
-                spec.piping = Some("#a8997c".into());
-                ("#ebe7df", Cap::ChickenHead, Lettering::family(family::INTER).weight(500.0))
-            }
-        };
+        let (ink, cap, legend) = dress(model, &mut spec);
         let (plate, _grille, (pw, ph)) = build(b, root, &spec);
         if upright {
             upright_panel(b, plate, model, prefix, (pw, ph), ink, cap, &legend);
@@ -588,4 +557,86 @@ pub fn silk_combo() -> Face {
         ui::toggle("combo/on", "Power", true),
     ];
     Face { file: "09-amp-combo-silk-combo", plugin: PLUGIN, scene, params, streams: Vec::new() }
+}
+
+/// An amp's dress: its covering, grille cloth, faceplate, piping and
+/// corners on `spec`, and its panel's ink, knob caps and lettering.
+fn dress(model: AmpModel, spec: &mut CabinetSpec) -> (&'static str, Cap, Lettering) {
+match model {
+        AmpModel::SteelStringSinger | AmpModel::DumbleOds => {
+            spec.covering = Material::Tolex { grain: Grain::Bronco, color: "#1d1c1c".into(), scale: 1.0 };
+            spec.grille = Material::DiamondGrille { cloth: "#161314".into(), stripes: vec!["#b8324a".into(), "#e6e2d6".into(), "#5f9e86".into()], pitch: 96.0 };
+            spec.face = Material::Brushed { color: "#c3c4c6".into(), dir: Dir::Horizontal };
+            spec.piping = Some("#b9babc".into());
+            ("#141414", Cap::ChromeSkirt, Lettering::family(family::PIRATA_ONE))
+        }
+        AmpModel::Vibroverb | AmpModel::DeluxeReverb | AmpModel::TwinReverb => {
+            spec.covering = Material::Tolex { grain: Grain::Levant, color: "#161616".into(), scale: 0.8 };
+            spec.grille = Material::GrilleCloth { cloth: Cloth::Silver };
+            spec.face = Material::Plastic { color: "#121213".into(), gloss: 0.3 };
+            spec.piping = Some("#d8d8d8".into());
+            spec.corners = Some("chrome".into());
+            ("#f2f2f0", Cap::BlackSkirt, Lettering::family(family::INTER).weight(600.0))
+        }
+        AmpModel::Ac30 => {
+            spec.covering = Material::Tolex { grain: Grain::Levant, color: "#141313".into(), scale: 0.8 };
+            spec.grille = Material::DiamondGrille { cloth: "#5a3e26".into(), stripes: vec!["#caa272".into(), "#2e1e10".into()], pitch: 44.0 };
+            spec.face = Material::Brushed { color: "#b8703e".into(), dir: Dir::Horizontal };
+            spec.piping = Some("#d8c7a0".into());
+            spec.corners = Some("chrome".into());
+            ("#1c1208", Cap::Cream, Lettering::family(family::INTER).weight(700.0))
+        }
+        AmpModel::TwoRock => {
+            spec.covering = Material::Tolex { grain: Grain::Bronco, color: "#1b1a1a".into(), scale: 0.8 };
+            spec.grille = Material::GrilleCloth { cloth: Cloth::Black };
+            spec.face = Material::Plastic { color: "#161415".into(), gloss: 0.35 };
+            spec.piping = Some("#a8997c".into());
+            ("#ebe7df", Cap::ChickenHead, Lettering::family(family::INTER).weight(500.0))
+        }
+    }
+}
+
+/// An amp composed for a block of Signal's routing grid (`s` square): its
+/// front as much as the block allows — covering, grille cloth and a thin
+/// panel bearing its name, its maker's badge on the grille — and no knobs.
+#[must_use]
+pub fn amp_block(model: AmpModel, prefix: &str, s: f64) -> Face {
+    let scene = canvas(model.short(), |b, root| {
+        let mut spec = CabinetSpec::new(Kind::Combo, s, s);
+        spec.handle = Handle::None;
+        spec.feet = false;
+        spec.corners = Some("black".into());
+        let (ink, _, legend) = dress(model, &mut spec);
+        spec.face_frac = 0.2;
+        let (plate, grille, (pw, ph)) = build(b, root, &spec);
+        let (gw, gh) = b.scene.node(grille).map_or((0.0, 0.0), |n| (n.size.width, n.size.height));
+        let script = Lettering::family(family::DANCING_SCRIPT).weight(700.0);
+        let (name, brand): (&str, Option<(&str, &str, Lettering, f64)>) = match model {
+            AmpModel::Vibroverb | AmpModel::DeluxeReverb | AmpModel::TwinReverb => (model.fender_name(), Some(("Fender", "#f4f4f2", script, 0.0))),
+            AmpModel::Ac30 => ("AC30", Some(("VOX", "#e8c36a", Lettering::family(family::INTER).weight(900.0), 0.18))),
+            AmpModel::SteelStringSinger => ("Steel String Singer", Some(("Dumble", "#e8e2d2", script, 0.0))),
+            AmpModel::DumbleOds => ("Overdrive Special", Some(("Dumble", "#e8e2d2", script, 0.0))),
+            AmpModel::TwoRock => ("Signature", Some(("TWO-ROCK", "#d9d9dc", Lettering::family(family::OSWALD).weight(700.0).italic(), 0.06))),
+        };
+        set(b, plate, name, pw / 2.0, ph * 0.52, (ph * 0.42).min(pw * 0.07), ink, &legend, 0.12);
+        // A blackface's silver cloth, its weave drawn large enough to read
+        // at a block's size: dark threads across, light threads over them.
+        if matches!(model, AmpModel::Vibroverb | AmpModel::DeluxeReverb | AmpModel::TwinReverb) {
+            let pitch = 6.0;
+            let n = ((gw + gh) / pitch) as i32;
+            let threads = |shift: f64, up: bool| -> Vec<Vec<(f64, f64)>> {
+                (0..n).map(|i| {
+                    let x = f64::from(i) * pitch - gh + shift;
+                    if up { vec![(x, gh), (x + gh, 0.0)] } else { vec![(x, 0.0), (x + gh, gh)] }
+                }).collect()
+            };
+            b.add(grille, ui::strokes("weave dark", &threads(0.0, true), 1.6, draw::solid("#1c1e2299")));
+            b.add(grille, ui::strokes("weave light", &threads(pitch / 2.0, false), 1.0, draw::solid("#f4f6f566")));
+        }
+        if let Some((word, colour, l, track)) = brand {
+            set(b, grille, word, gw / 2.0, gh * 0.24, (gh * 0.24).min(gw * 0.24), colour, &l, track);
+        }
+    });
+    let params = vec![ui::toggle(&format!("{prefix}/on"), "Power", true)];
+    Face { file: "07-amp-block", plugin: PLUGIN, scene, params, streams: Vec::new() }
 }

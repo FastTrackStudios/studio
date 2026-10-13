@@ -91,47 +91,58 @@ fn rocker(b: &mut Builder<'_>, root: NodeId, rect: (f64, f64, f64, f64), ns: &st
     treadle(b, root, rect, ns, &format!("{ns}/position"), ("cry baby", "#101012", &Lettering::family(family::PACIFICO), 17.0));
 }
 
-/// A rocker on any param: `pos_addr` the treadle (toe down its top), its
-/// toe switch `ns/on`, the heel's casting lettered `label` (word, ink,
-/// face, size).
+/// A rocker on any param, seen from the side: the cast base on the floor,
+/// and one treadle on its axle tilting with `pos_addr` — heel down at the
+/// bottom of its range, toe (the right end) down at the top. Dragged
+/// sideways, as a foot rocks it; the nub at the toe is its switch
+/// (`ns/on`). The base is lettered `label` (word, _, face, size).
 pub(super) fn treadle(b: &mut Builder<'_>, root: NodeId, (rx, ry, rw, rh): (f64, f64, f64, f64), ns: &str, pos_addr: &str, label: (&str, &str, &Lettering, f64)) {
     let pos = format!("norm({pos_addr})");
-    let axle = ry + rh * 0.62;
-    let half = |b: &mut Builder<'_>, name: &str, y0: f64, y1: f64, toe: bool| {
-        let g = b.add(root, draw::frame(name, rx, y0, rw, y1 - y0));
-        let (gh, gw) = (y1 - y0, rw);
-        let mut chrome = draw::rect("chrome", 0.0, 0.0, gw, gh, draw::linear(90.0, &[(0.0, "#5e6166"), (0.18, "#e9ebed"), (0.5, "#a8abaf"), (0.82, "#f0f2f4"), (1.0, "#5e6166")]));
-        chrome.corner_radii = if toe { CornerRadii { top_left: 14.0, top_right: 14.0, bottom_right: 0.0, bottom_left: 0.0 } } else { CornerRadii { top_left: 0.0, top_right: 0.0, bottom_right: 14.0, bottom_left: 14.0 } };
-        b.add(g, chrome);
-        let (tx, tw) = (9.0, gw - 18.0);
-        let (ty, th) = if toe { (9.0, gh - 9.0) } else { (0.0, gh - 38.0) };
-        b.add(g, draw::rounded(draw::rect("tread", tx, ty, tw, th, draw::linear(180.0, &[(0.0, "#2a2b2e"), (1.0, "#121315")])), 5.0));
-        let ribs: Vec<Vec<(f64, f64)>> = (0..((th / 11.0) as usize)).map(|i| {
-            let y = ty + 6.0 + i as f64 * 11.0;
-            vec![(tx + 5.0, y), (tx + tw - 5.0, y)]
-        }).collect();
-        b.add(g, ui::strokes("ribs", &ribs, 2.2, draw::solid("#3a3b3f")));
-        if !toe {
-            set(b, g, label.0, gw / 2.0, gh - 20.0, label.3, label.1, label.2, 0.0);
-        }
-        let shade = b.add(g, draw::with_opacity(draw::rect("shade", 0.0, 0.0, gw, gh, draw::solid("#000000")), 0.0));
-        let tip = if toe { pos.clone() } else { format!("1 - {pos}") };
-        motion::add(b, shade, Motion::new(Target::Opacity).input(tip.clone()).range(0.0, 0.45).dynamics(Dynamics::spring(500.0, 40.0)));
-        let py = if toe { 1.0 } else { 0.0 };
-        motion::add(b, g, Motion::new(Target::StretchY).input(tip.clone()).range(1.06, 0.86).pivot(0.5, py).dynamics(Dynamics::spring(500.0, 40.0)));
-        motion::add(b, g, Motion::new(Target::StretchX).input(tip).range(1.04, 0.96).pivot(0.5, py).dynamics(Dynamics::spring(500.0, 40.0)));
-    };
-    half(b, "Toe", ry, axle, true);
-    half(b, "Heel", axle, ry + rh, false);
-    b.add(root, draw::rect("axle", rx, axle - 1.0, rw, 2.0, draw::solid("#00000080")));
-    let lane = b.add(root, draw::frame("lane", rx, ry + 10.0, rw, rh - 20.0));
-    let band = b.add(lane, draw::frame("tilt", 0.0, 0.0, rw, 70.0));
-    b.add(band, draw::rect("sheen", 0.0, 0.0, rw, 70.0, draw::linear(180.0, &[(0.0, "#ffffff00"), (0.5, "#ffffff22"), (1.0, "#ffffff00")])));
-    let mut c = Control::new(ControlKind::Fader { orientation: surface_proto::Orientation::Vertical }).slot(SlotRole::Thumb, band.0);
+    let spring = Dynamics::spring(500.0, 40.0);
+    // The floor's shadow.
+    b.add(root, draw::with_opacity(draw::rounded(draw::rect("shadow", rx + rw * 0.06, ry + rh - 14.0, rw * 0.88, 14.0, draw::radial_at(0.5, 0.5, 0.5, &[(0.0, "#000000"), (1.0, "#00000000")])), 7.0), 0.6));
+    // The base: a low casting, wider at the floor.
+    let (bx, by, bw, bh) = (rx + rw * 0.05, ry + rh * 0.44, rw * 0.9, rh * 0.44);
+    // Rubber feet.
+    for fx in [bx + bw * 0.08, bx + bw * 0.8] {
+        b.add(root, draw::rounded(draw::rect("foot", fx, by + bh - 4.0, bw * 0.12, 10.0, draw::solid("#0a0a0b")), 4.0));
+    }
+    let mut base = draw::rect("base", bx, by, bw, bh, draw::linear(180.0, &[(0.0, "#3a3d42"), (0.12, "#26282c"), (1.0, "#0d0e10")]));
+    base.corner_radii = CornerRadii { top_left: 12.0, top_right: 12.0, bottom_right: 8.0, bottom_left: 8.0 };
+    b.add(root, draw::with_effects(base, vec![draw::inner_shadow("#ffffff22", 0.0, 1.5, 0.0), draw::drop_shadow("#000000a0", 0.0, 4.0, 8.0)]));
+    // The chrome trim along its top, and the nameplate let into its side.
+    b.add(root, draw::rounded(draw::rect("trim", bx + 6.0, by + 6.0, bw - 12.0, 3.0, draw::linear(90.0, &[(0.0, "#55585d"), (0.5, "#e8eaec"), (1.0, "#55585d")])), 1.5));
+    let (px, py, pw, ph) = (bx + bw * 0.16, by + bh * 0.34, bw * 0.68, bh * 0.44);
+    b.add(root, draw::with_effects(draw::rounded(draw::rect("plate", px, py, pw, ph, draw::linear(180.0, &[(0.0, "#0b0c0e"), (1.0, "#16171a")])), 6.0), vec![draw::inner_shadow("#000000", 0.0, 1.5, 3.0), draw::drop_shadow("#ffffff12", 0.0, 1.0, 0.0)]));
+    set(b, root, label.0, px + pw / 2.0, py + ph / 2.0, label.3, "#e4e4e7", label.2, 0.12);
+    // The axle, and the treadle on it.
+    let axle = (rx + rw * 0.42, by - 4.0);
+    let (tw, th) = (rw * 0.96, (rh * 0.14).clamp(18.0, 34.0));
+    let plank = b.add(root, draw::frame("treadle", rx + rw * 0.02, axle.1 - th / 2.0, tw, th));
+    let mut chrome = draw::rect("chrome", 0.0, 0.0, tw, th, draw::linear(180.0, &[(0.0, "#f4f5f6"), (0.35, "#b9bcc0"), (0.7, "#6d7075"), (1.0, "#3a3c40")]));
+    chrome.corner_radii = CornerRadii::uniform(th * 0.45);
+    b.add(plank, draw::with_effects(chrome, vec![draw::drop_shadow("#00000090", 0.0, 3.0, 6.0)]));
+    // The rubber on top, ribbed.
+    let pad_h = th * 0.42;
+    b.add(plank, draw::rounded(draw::rect("rubber", th * 0.5, -pad_h * 0.35, tw - th, pad_h, draw::linear(180.0, &[(0.0, "#2e2f33"), (1.0, "#141517")])), pad_h / 2.0));
+    let ribs: Vec<Vec<(f64, f64)>> = (0..((tw - th) / 9.0) as usize).map(|i| {
+        let x = th * 0.5 + 5.0 + i as f64 * 9.0;
+        vec![(x, -pad_h * 0.35 + 2.0), (x, -pad_h * 0.35 + pad_h - 2.0)]
+    }).collect();
+    b.add(plank, ui::strokes("ribs", &ribs, 1.6, draw::solid("#46484d")));
+    let pivot_x = (axle.0 - (rx + rw * 0.02)) / tw;
+    motion::add(b, plank, Motion::new(Target::Rotate).input(pos.clone()).range(-13.0, 13.0).pivot(pivot_x, 0.5).dynamics(spring));
+    b.add(root, draw::circle("axle", axle.0, axle.1, (th * 0.22).max(4.0), draw::radial_at(0.4, 0.35, 0.6, &[(0.0, "#e5e7ea"), (1.0, "#4a4d52")])));
+    // The toe switch: a chrome nub under the toe.
+    let nub = b.add(root, draw::frame("Toe switch", bx + bw - 44.0, by - 10.0, 40.0, 22.0));
+    b.add(nub, draw::rounded(draw::rect("nub", 8.0, 6.0, 24.0, 10.0, draw::linear(180.0, &[(0.0, "#d9dbde"), (1.0, "#6a6d72")])), 5.0));
+    b.controls.insert(nub, Control::new(ControlKind::footswitch()).bound(Binding::param(format!("{ns}/on"))));
+    // Dragged across: right presses the toe.
+    let lane = b.add(root, draw::frame("lane", rx, ry, rw - 50.0, rh));
+    let thumb = b.add(lane, draw::with_opacity(draw::rect("thumb", 0.0, 0.0, 40.0, rh, draw::solid("#ffffff")), 0.0));
+    let mut c = Control::new(ControlKind::Fader { orientation: surface_proto::Orientation::Horizontal }).slot(SlotRole::Thumb, thumb.0);
     c.binding = Some(ui::bind(pos_addr));
     b.controls.insert(lane, c);
-    let toe = b.add(root, draw::frame("Toe switch", rx + 20.0, ry, rw - 40.0, 16.0));
-    b.controls.insert(toe, Control::new(ControlKind::footswitch()).bound(Binding::param(format!("{ns}/on"))));
 }
 
 /// The wah as one unit: its casting holds the rocker and, beside it, a
@@ -524,6 +535,60 @@ fn casting(b: &mut Builder<'_>, root: NodeId, w: f64, colors: (&str, &str)) -> N
         b.add(cast, draw::circle("crinkle", (f * 37.0) % w, (f * 59.0) % h, 1.6, draw::solid("#ffffff06")));
     }
     cast
+}
+
+/// The wah made for the iPad's FX row: the pedal at the left, rocked
+/// sideways, and its sweep across the rest — where it is voicing, heel to
+/// toe.
+#[must_use]
+pub fn wah_row() -> Face {
+    const NS: &str = "wah";
+    let (w, h) = (860.0, 254.0);
+    let scene = canvas("Wah", move |b, root| {
+        ui::fit_root(b, root, w, h);
+        let mut cast = draw::frame("Casting", 0.0, 0.0, w, h);
+        cast.fills = vec![draw::linear(180.0, &[(0.0, "#1c1c1f"), (1.0, "#0c0c0d")])];
+        let cast = b.add(root, cast);
+        rocker(b, cast, (20.0, 24.0, 300.0, h - 30.0), NS);
+        let (sx, sy, sw, sh) = (350.0, 34.0, w - 350.0 - 24.0, h - 92.0);
+        parts::print(b, cast, "SWEEP", sx + 26.0, 20.0, 9.0, "#9a9ca3", 800.0, 0.14);
+        sweep_screen(b, cast, (sx, sy, sw, sh), &format!("norm({NS}/position)"), &format!("0.65 * param({NS}/on) + 0.2"), "#ff5a3c", ("#140806", "#0a0403"), &["350", "700", "1.4k", "2.2k"]);
+        parts::print(b, cast, "HEEL", sx + 20.0, sy + sh + 16.0, 9.0, "#7a7c83", 800.0, 0.12);
+        parts::print(b, cast, "TOE", sx + sw - 16.0, sy + sh + 16.0, 9.0, "#7a7c83", 800.0, 0.12);
+        led(b, cast, NS, sx + sw - 10.0, 20.0, 6.0, "#e0281c");
+    });
+    let params = vec![ui::param(&format!("{NS}/position"), "Position", Range::linear(0.0, 1.0, Unit::None), 0.5).featured(), on(NS)];
+    Face { file: "30-wah-row", plugin: PLUGIN, scene, params, streams: Vec::new() }
+}
+
+/// The volume pedal made for the iPad's FX row: the treadle at the left,
+/// and the level across the rest of the row — a long bar on a dB scale and
+/// its value large.
+#[must_use]
+pub fn volume_row() -> Face {
+    const NS: &str = "volume";
+    let (w, h) = (860.0, 254.0);
+    let scene = canvas("Volume", move |b, root| {
+        ui::fit_root(b, root, w, h);
+        let mut cast = draw::frame("Casting", 0.0, 0.0, w, h);
+        cast.fills = vec![draw::linear(180.0, &[(0.0, "#1a1d22"), (1.0, "#0c0e11")])];
+        let cast = b.add(root, cast);
+        treadle(b, cast, (20.0, 24.0, 300.0, h - 30.0), NS, &format!("{NS}/gain_db"), ("VOLUME", "#0a0b0d", &Lettering::family(family::INTER).weight(900.0), 18.0));
+        // The level: a long bar, −24 dB at the left, unity at the right.
+        let (bx, by, bw, bh) = (360.0, h / 2.0 + 6.0, w - 360.0 - 40.0, 18.0);
+        b.add(cast, draw::rounded(draw::rect("well", bx, by, bw, bh, draw::solid("#07080a")), 9.0));
+        let lvl = b.add(cast, draw::frame("level", bx, by, bw, bh));
+        b.add(lvl, ui::glowing(draw::rounded(draw::rect("lit", 0.0, 0.0, bw, bh, draw::linear(90.0, &[(0.0, "#38bdf8"), (1.0, "#e0f2fe")])), 9.0), "#38bdf8", 0.6, 8.0));
+        motion::add(b, lvl, Motion::new(Target::StretchX).input(format!("norm({NS}/gain_db)")).range(0.0, 1.0).pivot(0.0, 0.5).dynamics(Dynamics::spring(500.0, 40.0)));
+        for (db, label) in [(-24.0, "-24"), (-18.0, "-18"), (-12.0, "-12"), (-6.0, "-6"), (0.0, "0")] {
+            let x = bx + bw * (db + 24.0) / 24.0;
+            b.add(cast, ui::text("db", label, x - 20.0, by + bh + 18.0, 40.0, 10.0, "#8a8c93", TextAlign::Center, 700.0, false));
+        }
+        crate::delay::parts::readout(b, cast, "Level", ui::bind(&format!("{NS}/gain_db")), (bx, by - 40.0, 200.0), 30.0, "#e0f2fe", TextAlign::Left);
+        led(b, cast, NS, bx + bw - 8.0, by - 26.0, 7.0, "#38bdf8");
+    });
+    let params = vec![ui::param(&format!("{NS}/gain_db"), "Volume", Range::linear(-24.0, 0.0, Unit::Db), 0.0).featured(), on(NS)];
+    Face { file: "38-volume-row", plugin: PLUGIN, scene, params, streams: Vec::new() }
 }
 
 /// The dive bomb as a pedal on a phone: an orange whammy, its window over

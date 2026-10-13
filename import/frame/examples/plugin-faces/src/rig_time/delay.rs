@@ -1,8 +1,8 @@
 //! The delay machines' faces, in the block's `style` order.
 
-mod tape;
-mod digital;
-mod analog;
+pub(crate) mod tape;
+pub(crate) mod digital;
+pub(crate) mod analog;
 mod lo_fi;
 mod shimmer;
 mod reverse;
@@ -23,12 +23,18 @@ use crate::face::Face;
 /// The phone layouts there are, by machine (its index in `DELAY_ALGOS`'s
 /// order, as [`faces`] lists them).
 pub fn phone_faces(dark: bool) -> Vec<(usize, Face)> {
-    vec![(0, tape::face_at(dark, super::kit::Tier::Phone)), (2, analog::face_at(dark, super::kit::Tier::Phone)), (3, lo_fi::face_at(dark, super::kit::Tier::Phone)), (4, shimmer::face_at(dark, super::kit::Tier::Phone)), (5, reverse::face_at(dark, super::kit::Tier::Phone)), (6, ice::face_at(dark, super::kit::Tier::Phone)), (7, rhythm::face_at(dark, super::kit::Tier::Phone)), (8, drum::face_at(dark, super::kit::Tier::Phone)), (9, oil_can::face_at(dark, super::kit::Tier::Phone)), (10, multitap::face_at(dark, super::kit::Tier::Phone)), (11, spectral::face_at(dark, super::kit::Tier::Phone)), (12, filter::face_at(dark, super::kit::Tier::Phone))]
+    small_faces(dark, super::kit::Tier::Phone)
+}
+
+/// The small-room layouts at `t` (a phone's lane, a desktop pane's), by
+/// machine: every machine has its own now.
+pub fn small_faces(dark: bool, t: super::kit::Tier) -> Vec<(usize, Face)> {
+    vec![(0, tape::face_at(dark, t)), (1, digital::face_at(dark, t)), (2, analog::face_at(dark, t)), (3, lo_fi::face_at(dark, t)), (4, shimmer::face_at(dark, t)), (5, reverse::face_at(dark, t)), (6, ice::face_at(dark, t)), (7, rhythm::face_at(dark, t)), (8, drum::face_at(dark, t)), (9, oil_can::face_at(dark, t)), (10, multitap::face_at(dark, t)), (11, spectral::face_at(dark, t)), (12, filter::face_at(dark, t))]
 }
 
 /// The backs there are (the advanced controls), by algorithm, at `t`.
 pub fn back_faces(dark: bool, t: super::kit::Tier) -> Vec<(usize, Face)> {
-    vec![(0, tape::back_at(dark, t)), (2, analog::back_at(dark, t)), (3, lo_fi::back_at(dark, t)), (4, shimmer::back_at(dark, t)), (5, reverse::back_at(dark, t)), (6, ice::back_at(dark, t)), (7, rhythm::back_at(dark, t)), (8, drum::back_at(dark, t)), (9, oil_can::back_at(dark, t)), (10, multitap::back_at(dark, t)), (11, spectral::back_at(dark, t)), (12, filter::back_at(dark, t))]
+    vec![(0, tape::back_at(dark, t)), (1, digital::back_at(dark, t)), (2, analog::back_at(dark, t)), (3, lo_fi::back_at(dark, t)), (4, shimmer::back_at(dark, t)), (5, reverse::back_at(dark, t)), (6, ice::back_at(dark, t)), (7, rhythm::back_at(dark, t)), (8, drum::back_at(dark, t)), (9, oil_can::back_at(dark, t)), (10, multitap::back_at(dark, t)), (11, spectral::back_at(dark, t)), (12, filter::back_at(dark, t))]
 }
 
 /// Every delay's tall face (see `kit::tall_chrome`), in `DELAY_ALGOS`

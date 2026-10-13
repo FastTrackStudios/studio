@@ -1,0 +1,41 @@
+<Document id="dd52e123-e9a8-5c8f-818e-92352c99e12c">
+  <Page name="Surface" id="e1eedfd8-1e41-5e48-821f-971610358dd5">
+    <Frame name="Gate" id="e72d9891-00cf-535a-8845-c67a76d07167" w=216 h=216>
+      <Frame name="Window" id="46211845-7a00-5e35-b2b7-1f0c447af9f3" x=16 y=16 w=184 h=184 radius=18 clip=true fill={[{"kind":{"LinearGradient":{"stops":[{"color":"#0c0d10","position":0.0},{"color":"#08090b","position":1.0}],"transform":{"a":1.6653345369377348e-16,"b":-1.0,"c":1.0,"d":1.6653345369377348e-16,"tx":1.0,"ty":-1.942890293094024e-16}}}}]}>
+        <Frame name="Gate" id="54405f0c-fe02-59f7-b1ec-11dc59fd4628" w=184 h=184 radius=10 fill="#101319" stroke="#232a35" stroke-align="inside" effects={[{"color":"#00000073","kind":"DropShadow","offset_y":6.0,"radius":18.0},{"color":"#ffffff0a","kind":"InnerShadow","offset_y":1.0,"radius":0.0}]}>
+          <Text name="title" id="27313674-e1f5-5d6c-8ed7-8c7953cb97ff" x=12 y=9 w=80 h=18 fill="#e6ebf2" size=13 weight=700 letter-spacing=2>GATE</Text>
+          <Text name="threshold" id="d22c1763-bcfc-5fef-81cd-e6109306d6e9" x=42 y=10 w=90 h=17 fill="#69db7c" size=12 weight=600 text-align="right" control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Param":{"addr":"gate/threshold"}}},"format":{"decimals":0,"style":"Number","unit":"dB"},"kind":"Readout","slots":[{"node":"d22c1763-bcfc-5fef-81cd-e6109306d6e9","role":"Value"}]}}>-60 dB</Text>
+          <Frame name="power" id="030e5f09-c785-5a07-b82a-4d96bc1047e1" x=142 y=3 w=30 h=28 control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Param":{"addr":"gate/on"}}},"kind":{"Button":{"mode":"Toggle"}},"slots":[{"node":"ff4710e5-1b5a-5672-90f0-04f9595feafb","role":"Led"}]}}>
+            <Ellipse name="ring" id="a1944088-61fc-5154-95e8-2fd45ceba693" x=6 y=5 w=18 h=18 fill="#0c0f14" stroke="#3a4250" stroke-weight=1.4 stroke-align="inside" />
+            <Ellipse name="lit" id="ff4710e5-1b5a-5672-90f0-04f9595feafb" x=6 y=5 w=18 h=18 fill="#69db7c40" stroke="#69db7c" stroke-weight=1.6 stroke-align="inside" emission={{"color":"#69db7c","intensity":0.6,"radius":8.0}} />
+          </Frame>
+          <Frame name="well" id="dc65f75b-18b2-5be7-a7bd-9e5258d27ea2" x=30 y=38 w=144 h=134 radius=5 fill={[{"kind":{"LinearGradient":{"stops":[{"color":"#161b24","position":0.0},{"color":"#0c0f14","position":1.0}],"transform":{"a":1.6653345369377348e-16,"b":-1.0,"c":1.0,"d":1.6653345369377348e-16,"tx":1.0,"ty":-1.942890293094024e-16}}}},{"kind":{"RadialGradient":{"stops":[{"color":"#2a3448","position":0.0},{"color":"#2a344800","position":1.0}],"transform":{"a":1.6,"b":0.0,"c":0.0,"d":1.6,"tx":-0.30000000000000004,"ty":-0.45000000000000007}}}}]} stroke="#ffffff0d" stroke-align="inside" effects={[{"color":"#000000b3","kind":"InnerShadow","offset_y":2.0,"radius":10.0}]} />
+          <Frame name="plot area" id="6792fa06-4021-56fd-a464-758114993ce7" x=30 y=38 w=144 h=134>
+            <Frame name="traces" id="32992134-fd5a-5cae-b8c6-5fa7ada80ac1" w=144 h=134 clip=true>
+              <Frame name="input level" id="16086484-d321-555e-8603-5e56e295ebd6" w=144 h=134 control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Stream":{"id":"gate/in_history"}}},"kind":{"Plot":{"style":"Line","x":{"Time":{"len":240}},"y":{"curve":"Linear","max":0.0,"min":-90.0}}},"slots":[{"node":"d1e04c3f-e06c-5ef5-bb03-97b110cddf37","role":"Area"},{"node":"bbe3253c-db22-5f76-a68a-942c4d57b55c","role":"Trace"}]}}>
+                <Vector name="fill" id="d1e04c3f-e06c-5ef5-bb03-97b110cddf37" w=144 h=134 fill={[{"kind":{"LinearGradient":{"stops":[{"color":"#69db7c52","position":0.0},{"color":"#69db7c08","position":1.0}],"transform":{"a":1.6653345369377348e-16,"b":-1.0,"c":1.0,"d":1.6653345369377348e-16,"tx":1.0,"ty":-1.942890293094024e-16}}}}]} />
+                <Vector name="line" id="bbe3253c-db22-5f76-a68a-942c4d57b55c" w=144 h=134 stroke="#69db7ce6" stroke-weight=1.4 stroke-cap="round" stroke-join="round" emission={{"color":"#69db7c","intensity":0.4,"radius":5.0}} />
+              </Frame>
+              <Frame name="gain reduction" id="9b9fc31a-5e9f-5f23-81e7-4c61bb0de530" w=144 h=134 control={{"binding":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Stream":{"id":"gate/gr_history"}}},"kind":{"Plot":{"style":{"Area":{"baseline":0.0}},"x":{"Time":{"len":240}},"y":{"curve":"Linear","max":0.0,"min":-60.0}}},"slots":[{"node":"1f4a24a3-6806-511c-83de-c1801557ef88","role":"Area"},{"node":"54b889d8-63e0-5c03-8d98-4a1ecc7fd6dd","role":"Trace"}]}}>
+                <Vector name="fill" id="1f4a24a3-6806-511c-83de-c1801557ef88" w=144 h=134 fill={[{"kind":{"LinearGradient":{"stops":[{"color":"#ff6b6b5c","position":0.0},{"color":"#ff6b6b0a","position":1.0}],"transform":{"a":1.6653345369377348e-16,"b":-1.0,"c":1.0,"d":1.6653345369377348e-16,"tx":1.0,"ty":-1.942890293094024e-16}}}}]} />
+                <Vector name="line" id="54b889d8-63e0-5c03-8d98-4a1ecc7fd6dd" w=144 h=134 stroke="#ff6b6b" stroke-weight=1.6 stroke-cap="round" stroke-join="round" emission={{"color":"#ff6b6b","intensity":0.6,"radius":6.0}} />
+              </Frame>
+            </Frame>
+            <Vector name="grid" id="ae9e2921-b531-56c9-a1bc-2ab5bcba4723" w=144 h=134 stroke="#ffffff0f" geometry="M 24.5 0 V 134.0 M 48.5 0 V 134.0 M 72.5 0 V 134.0 M 96.5 0 V 134.0 M 120.5 0 V 134.0 M 0 107.5 H 144.0 M 0 80.5 H 144.0 M 0 54.5 H 144.0 M 0 27.5 H 144.0" />
+            <Frame name="threshold" id="5c0ea865-0f5b-55ad-b3b2-137bdf6e6370" y=45 w=144 h=44 control={{"kind":{"Handle":{"wheel":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Param":{"addr":"gate/threshold"}}},"x_map":{"after":[],"axis":{"Linear":{"max":1.0,"min":0.0}},"shift":0.0},"y":{"curve":"Linear","max":1.0,"min":0.0,"source":{"Param":{"addr":"gate/threshold"}}},"y_map":{"after":[],"axis":{"Linear":{"max":0.0,"min":-90.0}},"shift":0.0}}},"slots":[]}}>
+              <Vector name="line" id="61725b14-1d91-5d5a-9085-3c7fddc3acbf" w=144 h=44 stroke="#ffd43bcc" stroke-weight=1.4 stroke-dash="5 4" geometry="M 0 22.0 H 144.0" />
+              <Frame name="chip" id="d3b8ff09-c424-5941-818e-ee4adff66bc9" x=104 y=14 w=36 h=16 radius=8 fill="#ffd43b" emission={{"color":"#ffd43b","intensity":0.45,"radius":8.0}}>
+                <Text name="legend" id="7004abf5-26ae-52d0-b382-854789db3bcc" y=3 w=36 h=12 fill="#1f1a00" size=8.5 weight=800 letter-spacing=0.8 text-align="center">THR</Text>
+              </Frame>
+            </Frame>
+            <Text name="label" id="49c40531-7365-5bea-8b09-059876291533" x=6 y=118.88 w=32.480000000000004 h=13 fill="#8e98a8" size=9 weight=500 letter-spacing=0.2>SHUT</Text>
+          </Frame>
+          <Text name="label" id="b70c21b3-af5b-5733-beaa-429d92cf8a34" x=1.3400000000000034 y=139.07999999999998 w=23.659999999999997 h=13 fill="#8e98a8" size=9 weight=500 letter-spacing=0.2 text-align="right">-72</Text>
+          <Text name="label" id="385f603d-09d7-5981-92ae-9e38f55b05b8" x=1.3400000000000034 y=112.27999999999999 w=23.659999999999997 h=13 fill="#8e98a8" size=9 weight=500 letter-spacing=0.2 text-align="right">-54</Text>
+          <Text name="label" id="ed94e9fc-8ea2-5a04-a06d-627914e8a7ab" x=1.3400000000000034 y=85.47999999999999 w=23.659999999999997 h=13 fill="#8e98a8" size=9 weight=500 letter-spacing=0.2 text-align="right">-36</Text>
+          <Text name="label" id="0611d447-20ea-5b0d-9dcf-abf78b9d5a70" x=1.3400000000000034 y=58.68 w=23.659999999999997 h=13 fill="#8e98a8" size=9 weight=500 letter-spacing=0.2 text-align="right">-18</Text>
+        </Frame>
+      </Frame>
+    </Frame>
+  </Page>
+</Document>

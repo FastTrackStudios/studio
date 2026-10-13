@@ -316,7 +316,7 @@ pub fn tube_drive_at(tier: crate::rig_time::kit::Tier) -> Face {
 /// The centaur of the gold overdrive's lid, drawn in its ink: a horse's
 /// body at a gallop, the archer's torso rising from its shoulders, the bow
 /// drawn forward. `size` across, centred on (`cx`, `cy`).
-fn centaur(b: &mut Builder<'_>, parent: NodeId, (cx, cy): (f64, f64), size: f64, ink: &str) {
+pub(crate) fn centaur(b: &mut Builder<'_>, parent: NodeId, (cx, cy): (f64, f64), size: f64, ink: &str) {
     let k = size / 100.0;
     let (x0, y0) = (cx - 50.0 * k, cy - 50.0 * k);
     let p = |pts: &[(f64, f64)]| draw::polygon(&pts.iter().map(|(x, y)| (x * k, y * k)).collect::<Vec<_>>());
@@ -672,45 +672,7 @@ pub fn filter_viz() -> Face {
         screen.clips_content = true;
         screen.corner_radii = CornerRadii::uniform(8.0);
         let screen = b.add(root, screen);
-        // The grid: octaves across, levels up.
-        let mut grid = Vec::new();
-        for i in 1..10 {
-            let x = W * f64::from(i) / 10.0;
-            grid.push(vec![(x, 12.0), (x, H - 22.0)]);
-        }
-        for i in 1..4 {
-            let y = 12.0 + (H - 34.0) * f64::from(i) / 4.0;
-            grid.push(vec![(0.0, y), (W, y)]);
-        }
-        b.add(screen, ui::strokes("grid", &grid, 1.0, draw::solid("#ffffff10")));
-        for (i, l) in ["100", "300", "1k", "3k"].iter().enumerate() {
-            b.add(screen, draw::text("freq", l, W * (0.12 + 0.22 * i as f64), H - 18.0, 30.0, 8.0, "#6b7a99", document_proto::TextAlign::Left));
-        }
-        // The response: a band-pass bump, drawn once across twice the
-        // screen and slid under it by the sweep.
-        let (floor, base) = (H - 30.0, H * 0.55);
-        let pts: Vec<(f64, f64)> = (0..=120)
-            .map(|i| {
-                let x = -W * 0.5 + 2.0 * W * f64::from(i) / 120.0;
-                let d = (x - W * 0.5) / (W * 0.12);
-                let y = floor - (floor - base) * 0.2 - (floor - 30.0) * 0.8 / (1.0 + d * d);
-                (x, y)
-            })
-            .collect();
-        let curve = b.add(screen, draw::frame("Response", 0.0, 0.0, W, H));
-        let mut fill = pts.clone();
-        fill.push((1.5 * W, floor));
-        fill.push((-0.5 * W, floor));
-        b.add(curve, draw::path("area", 0.0, 0.0, W, H, draw::polygon(&fill), draw::linear(180.0, &[(0.0, "#4dd0ff55"), (1.0, "#4dd0ff05")])));
-        b.add(curve, draw::emissive(ui::strokes("line", &[pts], 2.2, draw::solid("#8fe3ff")), draw::hex("#4dd0ff"), 0.6, 8.0));
-        // The sweep: the envelope, or a slow idle sweep with no input.
-        // The idle sweep runs only while the filter is on (its input is
-        // the on switch): off, the picture holds still.
-        motion::add(b, curve, Motion::new(Target::None).named("idle").input("param(qtron/on)").dynamics(Dynamics::Lfo { rate: Num::Value(0.35), shape: Wave::Sine, phase: 0.0 }));
-        let sweep = format!("({span}) * (0.15*norm(qtron/range) + or(level(qtron/in) * (0.3 + norm(qtron/gain)), 0.5 + 0.35*motion(idle))) - {half}", span = W * 0.8, half = W * 0.4);
-        motion::add(b, curve, Motion::new(Target::X).input(sweep).dynamics(Dynamics::spring(400.0, 30.0)));
-        motion::add(b, curve, Motion::new(Target::StretchY).input("0.6 + 0.7*norm(qtron/peak)").dynamics(Dynamics::spring(400.0, 30.0)));
-        b.add(screen, draw::text("title", "FILTER", 10.0, 8.0, 80.0, 9.0, "#8fa3c8", document_proto::TextAlign::Left));
+        filter_screen(b, screen, W, H);
     });
     let params = vec![
         ui::param("qtron/gain", "Gain", Range::linear(0.0, 1.0, Unit::None), 0.5),
@@ -718,6 +680,60 @@ pub fn filter_viz() -> Face {
         ui::toggle("qtron/range", "Range high", false),
     ];
     Face { file: "32-filter-viz", plugin: PLUGIN, scene, params, streams: Vec::new() }
+}
+
+/// The Q-Tron's picture on `screen` (`W × H`): the grid, the resonant
+/// peak riding it with the envelope, the title.
+fn filter_screen(b: &mut Builder<'_>, screen: NodeId, w: f64, h: f64) {
+    // The grid: octaves across, levels up.
+    let mut grid = Vec::new();
+    for i in 1..10 {
+        let x = w * f64::from(i) / 10.0;
+        grid.push(vec![(x, 12.0), (x, h - 22.0)]);
+    }
+    for i in 1..4 {
+        let y = 12.0 + (h - 34.0) * f64::from(i) / 4.0;
+        grid.push(vec![(0.0, y), (w, y)]);
+    }
+    b.add(screen, ui::strokes("grid", &grid, 1.0, draw::solid("#ffffff10")));
+    for (i, l) in ["100", "300", "1k", "3k"].iter().enumerate() {
+        b.add(screen, draw::text("freq", l, w * (0.12 + 0.22 * i as f64), h - 18.0, 30.0, 8.0, "#6b7a99", document_proto::TextAlign::Left));
+    }
+    // The response: a band-pass bump, drawn once across twice the
+    // screen and slid under it by the sweep.
+    let (floor, base) = (h - 30.0, h * 0.55);
+    let pts: Vec<(f64, f64)> = (0..=120)
+        .map(|i| {
+            let x = -w * 0.5 + 2.0 * w * f64::from(i) / 120.0;
+            let d = (x - w * 0.5) / (w * 0.12);
+            let y = floor - (floor - base) * 0.2 - (floor - 30.0) * 0.8 / (1.0 + d * d);
+            (x, y)
+        })
+        .collect();
+    let curve = b.add(screen, draw::frame("Response", 0.0, 0.0, w, h));
+    let mut fill = pts.clone();
+    fill.push((1.5 * w, floor));
+    fill.push((-0.5 * w, floor));
+    b.add(curve, draw::path("area", 0.0, 0.0, w, h, draw::polygon(&fill), draw::linear(180.0, &[(0.0, "#4dd0ff55"), (1.0, "#4dd0ff05")])));
+    b.add(curve, draw::emissive(ui::strokes("line", &[pts], 2.2, draw::solid("#8fe3ff")), draw::hex("#4dd0ff"), 0.6, 8.0));
+    // The sweep: the envelope, or a slow idle sweep with no input.
+    // The idle sweep runs only while the filter is on (its input is
+    // the on switch): off, the picture holds still.
+    motion::add(b, curve, Motion::new(Target::None).named("idle").input("param(qtron/on)").dynamics(Dynamics::Lfo { rate: Num::Value(0.35), shape: Wave::Sine, phase: 0.0 }));
+    let sweep = format!("({span}) * (0.15*norm(qtron/range) + or(level(qtron/in) * (0.3 + norm(qtron/gain)), 0.5 + 0.35*motion(idle))) - {half}", span = w * 0.8, half = w * 0.4);
+    motion::add(b, curve, Motion::new(Target::X).input(sweep).dynamics(Dynamics::spring(400.0, 30.0)));
+    motion::add(b, curve, Motion::new(Target::StretchY).input("0.6 + 0.7*norm(qtron/peak)").dynamics(Dynamics::spring(400.0, 30.0)));
+    b.add(screen, draw::text("title", "FILTER", 10.0, 8.0, 80.0, 9.0, "#8fa3c8", document_proto::TextAlign::Left));
+}
+
+/// The Q-Tron's picture composed for a block of Signal's routing grid.
+#[must_use]
+pub fn filter_block() -> Face {
+    let s = crate::rig_cells::S;
+    let scene = crate::rig_cells::block("Filter", &[(0.0, "#0c1220"), (1.0, "#060a12")], |b, v, _| filter_screen(b, v, s, s));
+    let mut f = filter_viz();
+    f.params.push(ui::toggle("qtron/on", "Bypass", true));
+    Face { file: "32-filter-viz-block", plugin: crate::rig_faces::PLUGIN, scene, ..f }
 }
 
 /// The four, in chain order.

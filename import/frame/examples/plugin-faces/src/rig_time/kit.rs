@@ -186,6 +186,9 @@ pub enum Tier {
     Strip,
     /// A phone held sideways: a lane about 760 × 150 points.
     Phone,
+    /// A pane of the desktop's grid (a MacBook's, the module sidebar
+    /// open): a lane about 450 × 145 points — the phone's controls, closer
+    /// together, on a lane [`PANE_W`] wide.
     Ipad,
     /// The base layout.
     Desktop,
@@ -210,8 +213,69 @@ impl Tier {
     pub const fn lane_w(self) -> f64 {
         match self {
             Self::Strip | Self::Phone => 760.0,
-            Self::Ipad | Self::Desktop | Self::Fullscreen => W,
+            Self::Ipad => PANE_W,
+            Self::Desktop | Self::Fullscreen => W,
         }
+    }
+
+    /// A small room: the controls at a finger's size, the picture slim
+    /// (a phone's lane, a desktop pane's).
+    #[must_use]
+    pub const fn small(self) -> bool {
+        matches!(self, Self::Strip | Self::Phone | Self::Ipad)
+    }
+}
+
+/// A desktop pane's lane width (`Tier::Ipad`): 3.1 : 1 at `H`, a MacBook
+/// grid's lane — drawn at the room's own shape, since a face laid out in a
+/// squarer box than it was drawn for gives the difference to its picture.
+/// The picture's room comes from a mouse-sized TIME | BEAT and smaller
+/// knobs.
+pub const PANE_W: f64 = 510.0;
+
+/// [`PHONE_TIME`] at `tier`: the Time knob's centre and size.
+#[must_use]
+pub const fn time_spot(tier: Tier) -> (f64, f64, f64) {
+    match tier {
+        Tier::Ipad => (186.0, 54.0, 58.0),
+        _ => PHONE_TIME,
+    }
+}
+
+/// [`PHONE_KNOBS`] at `tier`: up to three knobs in a row (centres, their
+/// line, size).
+#[must_use]
+pub const fn knob_row(tier: Tier) -> ([f64; 3], f64, f64) {
+    match tier {
+        Tier::Ipad => ([258.0, 312.0, 366.0], 80.0, 44.0),
+        _ => PHONE_KNOBS,
+    }
+}
+
+/// [`PHONE_PICTURE_R`] at `tier`: where the picture stops.
+#[must_use]
+pub const fn picture_r(tier: Tier) -> f64 {
+    match tier {
+        Tier::Ipad => 144.0,
+        _ => PHONE_PICTURE_R,
+    }
+}
+
+/// The knob legends' size at a small `tier`.
+#[must_use]
+pub const fn legend_size(tier: Tier) -> f64 {
+    match tier {
+        Tier::Ipad => 8.5,
+        _ => 10.5,
+    }
+}
+
+/// The nameplate's (y, h, title_w, preset_w, size) in a small room.
+#[must_use]
+pub const fn small_nameplate(tier: Tier) -> (f64, f64, f64, f64, f64) {
+    match tier {
+        Tier::Ipad => (8.0, 24.0, 62.0, 136.0, 10.5),
+        _ => (8.0, 30.0, 74.0, 210.0, 12.0),
     }
 }
 
@@ -335,7 +399,8 @@ pub fn time_knob(b: &mut Builder<'_>, parent: NodeId, ns: &str, (cx, cy, d): (f6
     b.controls.insert(field, Control::new(ControlKind::Readout).slot(SlotRole::Value, t.0).bound(ui::bind(&a(ns, "time_text"))));
     // TIME | BEAT, the side it is on lit; each side its own target (a
     // press picks it), at a finger's size where the face is for one.
-    let touch = size >= 10.0;
+    // A finger's size from 10.5 up (a phone); a desktop pane's is a mouse's.
+    let touch = size >= 10.5;
     let (sw, sh) = if touch { (120.0, 28.0) } else { ((size * 5.4).max(70.0), (size * 0.8 + 8.0).ceil()) };
     let sy = ry + rh + 2.0;
     let pill = b.add(parent, draw::frame("time switch", cx - sw / 2.0, sy, sw, sh));
@@ -397,7 +462,11 @@ pub fn bypass_spot(tier: Tier) -> (f64, f64, f64) {
 #[must_use]
 pub fn bypass_spot_w(tier: Tier, w: f64) -> (f64, f64, f64) {
     // In from the edge far enough for the flip arrow beside it.
-    let (d, inset) = if matches!(tier, Tier::Phone | Tier::Strip) { (44.0, 78.0) } else { (28.0, 56.0) };
+    let (d, inset) = match tier {
+        Tier::Phone | Tier::Strip => (44.0, 78.0),
+        Tier::Ipad => (36.0, 64.0),
+        _ => (28.0, 56.0),
+    };
     (w - inset, H * 0.56, d)
 }
 
@@ -410,14 +479,20 @@ pub fn flip_arrow(b: &mut Builder<'_>, parent: NodeId, ns: &str, tier: Tier, bac
 }
 
 /// [`flip_arrow`] on a lane `lane_w` wide.
-pub fn flip_arrow_w(b: &mut Builder<'_>, parent: NodeId, ns: &str, tier: Tier, lane_w: f64, back: bool, (ink, well): (&str, &str)) -> NodeId {
+pub fn flip_arrow_w(b: &mut Builder<'_>, parent: NodeId, ns: &str, tier: Tier, lane_w: f64, back: bool, inks: (&str, &str)) -> NodeId {
     let (bx, by, bd) = bypass_spot_w(tier, lane_w);
-    let small_room = matches!(tier, Tier::Phone | Tier::Strip);
+    let small_room = tier.small();
     let size = if small_room { 9.0 } else { 6.5 };
     // Right of the bypass, as tall: its word over a chevron.
     let x = bx + bd / 2.0 + 6.0;
-    let (w, h) = (lane_w - 8.0 - x, bd);
-    let g = b.add(parent, draw::frame("flip", x, by - h / 2.0, w, h));
+    flip_arrow_at(b, parent, ns, (x, by - bd / 2.0, lane_w - 8.0 - x, bd), back, size, inks)
+}
+
+/// The flip arrow in a box of its own (`x`, `y`, `w`, `h`), lettered at
+/// `size` — for a face whose room is not a lane (the gate's pane).
+#[allow(clippy::too_many_arguments)]
+pub fn flip_arrow_at(b: &mut Builder<'_>, parent: NodeId, ns: &str, (x, y, w, h): (f64, f64, f64, f64), back: bool, size: f64, (ink, well): (&str, &str)) -> NodeId {
+    let g = b.add(parent, draw::frame("flip", x, y, w, h));
     b.add(g, draw::rounded(draw::rect("well", 0.0, 0.0, w, h, draw::solid(well)), 6.0));
     ui::silk(b, g, if back { "Back" } else { "More" }, w / 2.0, h * 0.34, size, ink, 800.0);
     let (cx, cy) = (w / 2.0, h * 0.68);
@@ -471,11 +546,19 @@ pub fn back_knobs(b: &mut Builder<'_>, parent: NodeId, tier: Tier, knobs: &[(&st
 
 /// [`back_knobs`] on a lane `w` wide.
 pub fn back_knobs_w(b: &mut Builder<'_>, parent: NodeId, tier: Tier, w: f64, knobs: &[(&str, &str)], ink: &str, mut knob: impl FnMut(&mut Builder<'_>, NodeId, &str, &str, f64, (f64, f64))) {
-    let small_room = matches!(tier, Tier::Phone | Tier::Strip);
+    let small_room = tier.small();
     ui::silk_left(b, parent, "Advanced", 16.0, 20.0, if small_room { 10.0 } else { 7.5 }, ink, 800.0);
     let (bx, _, bd) = bypass_spot_w(tier, w);
-    let (d, cy) = if small_room { (50.0, 84.0) } else { (36.0, 88.0) };
-    let shown = if small_room { knobs.len().min(7) } else { knobs.len() };
+    let (d, cy) = match tier {
+        Tier::Ipad => (42.0, 84.0),
+        _ if small_room => (50.0, 84.0),
+        _ => (36.0, 88.0),
+    };
+    let shown = match tier {
+        Tier::Ipad => knobs.len().min(5),
+        _ if small_room => knobs.len().min(7),
+        _ => knobs.len(),
+    };
     let (x0, x1) = (16.0 + d / 2.0 + 10.0, bx - bd / 2.0 - d / 2.0 - 18.0);
     let step = if shown > 1 { (x1 - x0) / (shown - 1) as f64 } else { 0.0 };
     for (i, (id, legend)) in knobs.iter().take(shown).enumerate() {
@@ -601,6 +684,55 @@ pub fn stub(ns: &str, name: &str, color: &str, dark: bool) -> document_proto::Sc
                 knob(b, panel, "knob.3d", "flat", &a(&ns, id), l, 46.0, 670.0 + 100.0 * i as f64, 70.0, ink, dim);
             }
         }
+    })
+}
+
+/// [`stub`] in a small room (a phone's lane, a desktop pane's): the Time
+/// faces' layout — the echoes (a delay) or the decay (a reverb) as the
+/// picture, the Time knob (the delay time, or the decay), three knobs in
+/// the row, the nameplate top right, the bypass at its spot.
+#[must_use]
+pub fn stub_small(ns: &str, name: &str, dark: bool, tier: Tier) -> document_proto::Scene {
+    let ns = ns.to_string();
+    let name = name.to_string();
+    let color = if ns == DLY { BLUE } else { PURPLE }.to_string();
+    let w = tier.lane_w();
+    tier_lane(&name.clone(), tier, move |b, root| {
+        let (ink, dim, top, bottom, well) = if dark { ("#e8e6e1", "#8a8d94", "#1d1f24", "#121317", ("#0b0c0f", "#060708")) } else { ("#1d1f24", "#686c74", "#eceef1", "#d7dae0", ("#14161a", "#0b0c0f")) };
+        let mut panel = draw::frame("Panel", 0.0, 0.0, w, H);
+        panel.fills = vec![draw::linear(180.0, &[(0.0, top), (1.0, bottom)])];
+        panel.corner_radii = document_proto::CornerRadii::uniform(8.0);
+        let panel = b.add(root, panel);
+        // The picture, in its window.
+        let (vx, vy, vw, vh) = (10.0, 10.0, picture_r(tier) - 18.0, H - 20.0);
+        let mut v = draw::frame("View", vx, vy, vw, vh);
+        v.fills = vec![draw::linear(180.0, &[(0.0, well.0), (1.0, well.1)])];
+        v.clips_content = true;
+        v.corner_radii = document_proto::CornerRadii::uniform(6.0);
+        v.effects = vec![draw::inner_shadow("#000000c0", 0.0, 2.0, 6.0)];
+        let v = b.add(panel, v);
+        if ns == DLY {
+            echo_train(b, v, (4.0, 8.0, vw - 8.0, vh - 16.0), 6, 2000.0, &color);
+        } else {
+            decay(b, v, (4.0, 8.0, vw - 8.0, vh - 16.0), &color);
+        }
+        let opts = ["color=#2a2d31", "pointer=#e9ecef", "index=line", "index_w=0.1", "skirt=plain", "skirt_color=#3a3e44"];
+        let (tx, ty, td) = time_spot(tier);
+        time_knob(b, panel, &ns, (tx, ty, td), if tier == Tier::Ipad { 10.0 } else { 11.0 }, (ink, dim, &ui::alpha(&color, 0.45)), |b, p, addr| {
+            knob3d_bare(b, p, addr, td, (tx, ty), &opts);
+        });
+        let (xs, ky, kd) = knob_row(tier);
+        let knobs: [(&str, &str); 3] = if ns == DLY { [("feedback", "Feedback"), ("high_cut", "Hi Cut"), ("level", "Level")] } else { [("size", "Size"), ("predelay", "Pre-Delay"), ("level", "Level")] };
+        for (i, (id, legend)) in knobs.iter().enumerate() {
+            knob3d(b, panel, &a(&ns, id), legend, kd, (xs[i], ky), &opts, ink, dim);
+        }
+        let (np_y, np_h, title_w, preset_w, size) = small_nameplate(tier);
+        let title_w = title_w.max(name.chars().count() as f64 * (size * 0.75) + 22.0);
+        nameplate_top_right(b, panel, &ns, tier, (np_y, np_h), title_w, preset_w, size, (&color, dim), |b, t| {
+            ui::plain(b, t, &name, (title_w - 14.0) / 2.0, np_h / 2.0, size + 5.0, ink, 800.0);
+        });
+        face_bypass(b, panel, &ns, tier, if ns == DLY { "blue" } else { "purple" }, "On");
+        responsive(b, panel, &[v]);
     })
 }
 

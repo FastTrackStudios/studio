@@ -198,12 +198,16 @@ fn eq_graph(b: &mut Builder<'_>, parent: NodeId, p: &Place) -> NodeId {
     } else {
         (panel(b, parent, &p.name, w, h), (12.0, 30.0, 34.0, 22.0))
     };
+    // A touchscreen's (`touch`): the plot narrower, the band panel pinned
+    // beside it at a finger's size.
+    let touch = rig && p.flag("touch");
+    let pw = if touch { w - TOUCH_PANEL_W } else { w };
     let a = if rig {
-        let area = b.add(root, draw::frame("plot area", 0.0, 0.0, w, h));
-        let mut clip = draw::frame("traces", 0.0, 0.0, w, h);
+        let area = b.add(root, draw::frame("plot area", 0.0, 0.0, pw, h));
+        let mut clip = draw::frame("traces", 0.0, 0.0, pw, h);
         clip.clips_content = true;
         let clip = b.add(area, clip);
-        Area { area, clip, w, h }
+        Area { area, clip, w: pw, h }
     } else {
         area(b, root, ax, ay, w - ax - right, h - ay - bottom)
     };
@@ -645,7 +649,11 @@ fn eq_graph(b: &mut Builder<'_>, parent: NodeId, p: &Place) -> NodeId {
     b.controls.insert(a.area, canvas);
 
     // ── the band panel and readout chip (follow the active band) ────────
-    band_panel(b, root, &ad, (band, handle), a.h, (fixed, &tint));
+    if touch {
+        band_panel_touch(b, root, &ad, band, handle, (pw, 0.0, TOUCH_PANEL_W, h));
+    } else {
+        band_panel(b, root, &ad, (band, handle), a.h, (fixed, &tint));
+    }
     chip(b, root, &ad, band, handle);
 
     // ── toolbar: range, analyser layers ─────────────────────────────────
@@ -982,6 +990,73 @@ fn band_panel(b: &mut Builder<'_>, root: NodeId, ad: &Addrs, (band, handle): (No
     }
     let gap = if plot_h < 420.0 { 0.0 } else { 18.0 };
     let c = Control::new(ControlKind::Popover { anchor: Some(handle.0), placement: Placement::DockBottom, gap, show: Show::Active, context: Some(band.0) });
+    b.controls.insert(pop, c);
+}
+
+/// The touch band panel's width.
+const TOUCH_PANEL_W: f64 = 300.0;
+
+/// The band panel at a finger's size, pinned beside the plot (`touch`):
+/// bypass, shape (or a cut's slope), placement, focus and delete on a row
+/// of buttons 40 tall; FREQ, GAIN, Q and DYN dials under them. Its ground
+/// is always there; its controls are up while a band is active.
+fn band_panel_touch(b: &mut Builder<'_>, root: NodeId, ad: &Addrs, band: NodeId, handle: NodeId, (x, y, w, h): (f64, f64, f64, f64)) {
+    // The ground, always drawn.
+    let mut ground = draw::frame("band panel ground", x, y, w, h);
+    ground.fills = vec![draw::solid(PANEL_BG)];
+    let ground = draw::stroked(ground, PANEL_RIM, 1.0);
+    b.add(root, ground);
+    let mut shell = draw::frame("band panel", x, y, w, h);
+    shell.fills = vec![draw::solid(PANEL_BG)];
+    let pop = b.add(root, shell);
+    // The band's colour along the top edge.
+    let bar_holder = b.add(pop, draw::frame("band colour", 0.0, 0.0, w, 3.0));
+    let bar = frame(b, bar_holder, "bar", (0.0, 0.0, w, 3.0), Some("#ff6b6b"), 0.0);
+    let mut bc = Control::new(ControlKind::Readout).bound(Binding::param(ad.band("freq"))).slot(SlotRole::Tint, bar.0);
+    bc.tint = ramp_over(&Axis::Log { f_min: 10.0, f_max: 30_000.0 });
+    b.controls.insert(bar_holder, bc);
+
+    // Row 1: bypass, shape (a cut: its slope beside) — the corner beyond
+    // is the host's (its preset stepper).
+    let (y1, bh) = (12.0, 40.0);
+    button(b, pop, "bypass", (10.0, y1, 40.0, bh), ButtonMode::Toggle, Some(&ad.band("on")), Some("●"), INK);
+    button(b, pop, "shape", (56.0, y1, 92.0, bh), ButtonMode::Cycle, Some(&ad.band("shape")), None, "#ffd43b");
+    let slope = button(b, pop, "slope", (154.0, y1, 54.0, bh), ButtonMode::Cycle, Some(&ad.band("slope")), None, INK);
+    if let Some(c) = b.controls.get_mut(&slope) {
+        c.show_if = Some(Condition::any_of(ad.band("shape"), &CUTS));
+    }
+    // Row 2: FREQ, GAIN, Q, DYN — dials a finger turns.
+    let knobs: [(&str, &str, Option<Condition>); 4] = [
+        ("FREQ", "freq", None),
+        ("GAIN", "gain", Some(Condition::any_of(ad.band("shape"), &NO_GAIN).negated())),
+        ("Q", "q", Some(Condition::any_of(ad.band("shape"), &CUTS).negated())),
+        ("DYN", "dyn_range", Some(Condition::any_of(ad.band("shape"), &NO_GAIN).negated())),
+    ];
+    let cw = (w - 12.0) / 4.0;
+    for (i, (legend, k, when)) in knobs.into_iter().enumerate() {
+        let cell = b.add(pop, draw::frame(&format!("{legend} cell"), 6.0 + cw * i as f64, y1 + bh + 14.0, cw, 110.0));
+        let place = Place::new(legend).size(52.0).bind(Binding::param(ad.band(k))).legend(legend);
+        let Ok(knob) = crate::place_in_cell(b, cell, "knob.soft_pointer", &place) else { continue };
+        let holder = b.scene.node(knob).and_then(|n| n.parent).unwrap_or(knob);
+        let hw = b.scene.node(holder).map_or(0.0, |n| n.size.width);
+        if let Some(n) = b.scene.node_mut(holder) {
+            n.transform = document_proto::Transform::translate((cw - hw) / 2.0, 0.0);
+        }
+        if let (Some(c), Some(when)) = (b.controls.get_mut(&knob), when) {
+            c.show_if = Some(when);
+        }
+    }
+
+    // Row 3: where it plays (L/R/M/S), focus, delete.
+    let y3 = h - bh - 12.0;
+    button(b, pop, "placement", (10.0, y3, 70.0, bh), ButtonMode::Cycle, Some(&ad.band("placement")), None, INK);
+    button(b, pop, "focus", (86.0, y3, 70.0, bh), ButtonMode::Toggle, Some(&ad.band("focus")), Some("Focus"), INK);
+    // Delete, at the far corner from the dials.
+    let del = button(b, pop, "delete", (w - 50.0, y3, 40.0, bh), ButtonMode::Trigger, None, Some("×"), "#ff6e6e");
+    if let Some(c) = b.controls.get_mut(&del) {
+        c.interact = Some(Interact { press: vec![Command::Remove], ..Interact::default() });
+    }
+    let c = Control::new(ControlKind::Popover { anchor: Some(handle.0), placement: Placement::Pinned, gap: 0.0, show: Show::Active, context: Some(band.0) });
     b.controls.insert(pop, c);
 }
 

@@ -109,7 +109,7 @@ pub fn face_at(dark: bool, tier: kit::Tier) -> Face {
     } else {
         (INK, [(0.0, "#e6e7e8"), (1.0, "#cfd0d2")], [(0.0, "#bfc0c2"), (1.0, "#a9aaac")])
     };
-    let small_room = matches!(tier, kit::Tier::Phone | kit::Tier::Strip);
+    let small_room = tier.small();
     let w = tier.lane_w();
     let scene = kit::tier_lane("Tape", tier, |b, root| {
         let h = kit::H;
@@ -133,33 +133,38 @@ pub fn face_at(dark: bool, tier: kit::Tier) -> Face {
             // The bays cut round the controls: the dial's centred on the
             // Time knob, the VU's up to it, the knobs' clear of their tick
             // rings.
-            let (tx, ty, td) = kit::PHONE_TIME;
-            let half = 78.0;
+            let (tx, ty, td) = kit::time_spot(tier);
+            // The dial's bay: the TIME | BEAT pill under the knob its width.
+            let pane = tier == kit::Tier::Ipad;
+            let half = if pane { 42.0 } else { 78.0 };
             let (b2x, b3x) = (tx - half, tx + half + 2.0);
             // The picture: ECHO, a slim VU, the heads under it — the
             // controls come first on a phone.
             let b1w = b2x - 2.0 - 6.0;
             let bay1 = bay(b, unit, "Bay 1", (6.0, y, b1w, bh), &grey);
+            // On a pane: the letters smaller, the VU and its lamps closer.
+            let (letter, lx, top, step, vr, lamp_dx) = if pane { (16.0, 16.0, 30.0, 26.0, 28.0, 20.0) } else { (18.0, 18.0, 28.0, 28.0, 34.0, 24.0) };
             for (i, ch) in "ECHO".chars().enumerate() {
-                parts::centred(b, bay1, &ch.to_string(), (18.0, 28.0 + 28.0 * i as f64), Type::new(18.0, ink, 300.0).family(draw::family::SAIRA).width(88.0));
+                parts::centred(b, bay1, &ch.to_string(), (lx, top + step * i as f64), Type::new(letter, ink, 300.0).family(draw::family::SAIRA).width(88.0));
             }
-            let vx = 18.0 + (b1w - 18.0) / 2.0 + 4.0;
-            vu(b, bay1, (vx, 72.0), 34.0, ink);
-            lamps(b, bay1, [vx - 24.0, vx, vx + 24.0], 134.0);
+            let vx = lx + (b1w - lx) / 2.0 + 4.0;
+            vu(b, bay1, (vx, 72.0), vr, ink);
+            lamps(b, bay1, [vx - lamp_dx, vx, vx + lamp_dx], 134.0);
             picture = bay1;
             // The white dial: Time, in its own bay.
             let bay2 = bay(b, unit, "Bay 2", (b2x, y, b3x - 2.0 - b2x, bh), &grey);
-            kit::time_knob(b, bay2, DLY, (tx - b2x, ty - y, td), 11.0, (ink, "#6b6e74", &lit), |b, p, addr| {
+            kit::time_knob(b, bay2, DLY, (tx - b2x, ty - y, td), if tier == kit::Tier::Ipad { 10.0 } else { 11.0 }, (ink, "#6b6e74", &lit), |b, p, addr| {
                 look::place_knob(b, p, &dial, addr, "", td, (tx - b2x, ty - y), ink);
             });
             // The knobs that matter on stage, in the phone's knob row.
             let bay3 = bay(b, unit, "Bay 3", (b3x, y, w - 6.0 - b3x, bh), &grey);
-            let (xs, ky, kd) = kit::PHONE_KNOBS;
+            let (xs, ky, kd) = kit::knob_row(tier);
+            let ls = kit::legend_size(tier);
             for (i, (id, legend, warm)) in [("feedback", "Repeats", false), ("mod_depth", "Tape-Mod", false), ("level", "Level", true)].into_iter().enumerate() {
                 let (x, cy) = (xs[i] - b3x, ky - y);
                 let k = look::knob(b, bay3, if warm { &orange } else { &black }, &a(id), kd, (x, cy), 11, ink, false);
-                ui::add_value(b, k, 10.0, "#6b6e74");
-                parts::centred(b, bay3, legend, (x, cy + kd / 2.0 + 30.0), Type::new(10.5, ink, 600.0).track(0.06).upper());
+                ui::add_value(b, k, ls - 0.5, "#6b6e74");
+                parts::centred(b, bay3, legend, (x, cy + kd / 2.0 + if pane { 22.0 } else { 30.0 }), Type::new(ls, ink, 600.0).track(0.06).upper());
             }
         } else {
             // Bay 1: the letters, the VU, the display.
@@ -224,9 +229,9 @@ pub fn face_at(dark: bool, tier: kit::Tier) -> Face {
             screws(b, bay4, &[(w - 836.0 - 9.0, bh - 9.0)]);
         }
         // The nameplate, top right: the preset, then the machine.
-        let (np_y, np_h, title_w, preset_w, size) = if small_room { (8.0, 30.0, 74.0, 210.0, 12.0) } else { (8.0, 26.0, 66.0, 196.0, 10.0) };
+        let (np_y, np_h, title_w, preset_w, size) = if small_room { kit::small_nameplate(tier) } else { (8.0, 26.0, 66.0, 196.0, 10.0) };
         kit::nameplate_top_right(b, unit, DLY, tier, (np_y, np_h), title_w, preset_w, size, (if dark { kit::BLUE_LIGHT } else { kit::BLUE_DEEP }, "#6b6e74"), |b, t| {
-            parts::centred(b, t, "Tape", (title_w / 2.0 - 6.0, np_h / 2.0), Type::new(if small_room { 22.0 } else { 18.0 }, ink, 400.0).family(draw::family::SAIRA));
+            parts::centred(b, t, "Tape", (title_w / 2.0 - 6.0, np_h / 2.0), Type::new(if tier == kit::Tier::Ipad { 18.0 } else if small_room { 22.0 } else { 18.0 }, ink, 400.0).family(draw::family::SAIRA));
         });
         // The power key at the bypass spot.
         let (bx, by, bd) = kit::bypass_spot(tier);
@@ -252,7 +257,7 @@ pub fn back_at(dark: bool, tier: kit::Tier) -> Face {
     } else {
         (INK, [(0.0, "#e6e7e8"), (1.0, "#cfd0d2")], [(0.0, "#bfc0c2"), (1.0, "#a9aaac")])
     };
-    let small_room = matches!(tier, kit::Tier::Phone | kit::Tier::Strip);
+    let small_room = tier.small();
     let w = tier.lane_w();
     let scene = kit::tier_lane("Tape", tier, |b, root| {
         let h = kit::H;
@@ -260,17 +265,17 @@ pub fn back_at(dark: bool, tier: kit::Tier) -> Face {
         let face = bay(b, unit, "Back", (6.0, 6.0, w - 12.0, h - 12.0), &grey);
         let black = KnobLook { preset: "knurled", opts: &["color=#1c1c1e", "pointer=#3b82f6", "index=dot", "cap_r=0.9", "height=0.6", "dome=0.08", "edge=0.1", "ribs=48", "rib_depth=0.03", "knurl_band=0.7", "index_w=0.09", "index_in=0.66", "index_out=0.66", "coat=0.5", "rough=0.25", "ticks=none"] };
         let knobs = [("mod_rate", "Wow Rate"), ("high_pass", "Bass"), ("high_cut", "Treble"), ("duck_sens", "Duck"), ("duck_release", "Duck Rel"), ("pan", "Pan"), ("repeat_dyn", "Dynamics"), ("dry", "Dry")];
-        let legend = if small_room { 10.5 } else { 7.0 };
+        let legend = if small_room { kit::legend_size(tier) } else { 7.0 };
         kit::back_knobs(b, unit, tier, &knobs, ink, |b, p, id, name, d, (cx, cy)| {
             let k = look::knob(b, p, &black, &a(id), d, (cx, cy), 11, ink, false);
-            ui::add_value(b, k, if small_room { 10.0 } else { 7.5 }, "#6b6e74");
-            parts::centred(b, p, name, (cx, cy + d / 2.0 + if small_room { 30.0 } else { 24.0 }), Type::new(legend, ink, 600.0).track(0.06).upper());
+            ui::add_value(b, k, if small_room { legend - 0.5 } else { 7.5 }, "#6b6e74");
+            parts::centred(b, p, name, (cx, cy + d / 2.0 + if tier == kit::Tier::Ipad { 24.0 } else if small_room { 30.0 } else { 24.0 }), Type::new(legend, ink, 600.0).track(0.06).upper());
         });
         let _ = face;
-        let (np_y, np_h, title_w, preset_w, size) = if small_room { (8.0, 30.0, 74.0, 210.0, 12.0) } else { (8.0, 26.0, 66.0, 196.0, 10.0) };
+        let (np_y, np_h, title_w, preset_w, size) = if small_room { kit::small_nameplate(tier) } else { (8.0, 26.0, 66.0, 196.0, 10.0) };
         kit::head(b, unit, DLY, true, |b, head| {
             kit::nameplate_top_right(b, head, DLY, tier, (np_y, np_h), title_w, preset_w, size, (if dark { kit::BLUE_LIGHT } else { kit::BLUE_DEEP }, "#6b6e74"), |b, t| {
-                parts::centred(b, t, "Tape", (title_w / 2.0 - 6.0, np_h / 2.0), Type::new(if small_room { 22.0 } else { 18.0 }, ink, 400.0).family(draw::family::SAIRA));
+                parts::centred(b, t, "Tape", (title_w / 2.0 - 6.0, np_h / 2.0), Type::new(if tier == kit::Tier::Ipad { 18.0 } else if small_room { 22.0 } else { 18.0 }, ink, 400.0).family(draw::family::SAIRA));
             });
             let (bx, by, bd) = kit::bypass_spot(tier);
             glow_key(b, head, &a("on"), bd, (bx, by), ORANGE);
@@ -335,4 +340,22 @@ pub fn tall(dark: bool) -> Face {
     let mut f = kit::delay_face(kit::tall_file("60-dly-tape", dark), scene);
     f.params.extend(kit::tall_params(DLY));
     f
+}
+
+/// The routing grid's block: the VU kicking on the repeats under the head
+/// lamps flashing on theirs, on the graphite unit.
+#[must_use]
+pub fn block() -> Face {
+    use crate::rig_cells::S;
+    let ink = "#e8e9eb";
+    let scene = crate::rig_cells::block("Tape", &[(0.0, "#3a3c41"), (1.0, "#1f2023")], |b, v, _| {
+        vu(b, v, (S / 2.0, S * 0.6), S * 0.29, ink);
+        for (n, x) in (1..=3).zip([S / 2.0 - 26.0, S / 2.0, S / 2.0 + 26.0]) {
+            b.add(v, draw::circle("lamp socket", x, 26.0, 6.0, draw::radial_at(0.4, 0.35, 0.8, &[(0.0, "#d8d9db"), (1.0, "#8e9094")])));
+            let lamp = b.add(v, draw::emissive(draw::circle("head lamp", x, 26.0, 4.4, draw::solid(LAMP)), draw::hex(LAMP), 1.0, 9.0));
+            let flash = format!("pow(1 - fract(time * 1000 / ({n} * max(param({DLY}/time), 20))), 4) * pow(param({DLY}/feedback), {}) * param({DLY}/on)", n - 1);
+            motion::add(b, lamp, Motion::new(Target::Opacity).input(flash).range(0.05, 1.0));
+        }
+    });
+    kit::delay_face("60-dly-tape-block", scene)
 }

@@ -183,7 +183,10 @@ fn hall(b: &mut Builder<'_>, plan: NodeId, w: f64, h: f64, line: &str) {
     let src = b.add(plan, draw::emissive(draw::circle("source", cx, cy, 4.5, draw::solid(GILT)), draw::hex(GILT), 1.3, kit::BLOOM));
     motion::add(b, src, Motion::new(Target::Opacity).input(format!("0.35 + 0.65 * param({VERB}/on)")).range(0.0, 1.0));
 
-    // Title block, as a drawing has.
+    // Title block, as a drawing has — where the sheet is wide enough.
+    if w < 260.0 {
+        return;
+    }
     let (tx, ty) = (w - 212.0, h - 28.0);
     let mut tb = draw::rect("title block", tx, ty, 194.0, 20.0, draw::solid("#00000000"));
     tb.stroke = document_proto::Stroke { paints: vec![draw::solid(&ui::alpha(line, 0.6))], weight: 0.8, ..document_proto::Stroke::default() };
@@ -343,4 +346,15 @@ pub fn tall(dark: bool) -> Face {
     let mut f = kit::reverb_face(kit::tall_file("81-verb-hall", dark), scene);
     f.params.extend(kit::tall_params(VERB));
     f
+}
+
+/// The routing grid's block: the hall's plan, its wavefronts going out.
+#[must_use]
+pub fn block() -> Face {
+    use crate::rig_cells::S;
+    let l = &DARK;
+    let scene = crate::rig_cells::block("Hall", &[(0.0, l.paper.0), (1.0, l.paper.1)], |b, v, _| {
+        hall(b, v, S, S, l.line);
+    });
+    kit::reverb_face("81-verb-hall-block", scene)
 }

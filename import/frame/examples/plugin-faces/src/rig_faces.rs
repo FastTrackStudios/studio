@@ -77,6 +77,21 @@ fn amp_face_as(model: AmpModel, aspect: f64, variant: bool) -> Face {
     Face { file, plugin: PLUGIN, ..f }
 }
 
+/// Each amp composed for a block of Signal's routing grid: the amp itself,
+/// upright and square — its controls over its grille, in its own tolex and
+/// badge — named after its full face (`24-amp-deluxe-block`).
+pub(crate) fn amp_blocks() -> Vec<Face> {
+    let s = crate::rig_cells::S;
+    AmpModel::EVERY
+        .iter()
+        .map(|m| {
+            let f = amps::amp_block(*m, ns(*m), s);
+            let base = format!("2{}-amp-{}-block", AmpModel::EVERY.iter().position(|x| x == m).unwrap_or(0), ns(*m).replace('_', "-"));
+            Face { file: Box::leak(base.into_boxed_str()), plugin: PLUGIN, ..f }
+        })
+        .collect()
+}
+
 /// An amp upright, for a phone's three across.
 pub const AMP_PHONE: (f64, f64) = (250.0, 300.0);
 
@@ -155,7 +170,7 @@ pub fn post_comp_phone(back: bool) -> Face {
     let mut params = post_comp().params;
     params.extend(crate::rig_time::kit::nameplate_params("dist"));
     params.extend(crate::rig_time::kit::flip_params("dist"));
-    Face { file: if back { "55-post-comp-distressor-phone-back" } else { "55-post-comp-distressor-phone" }, plugin: PLUGIN, scene, params, streams: Vec::new() }
+    Face { file: if back { "55-post-comp-distressor-phone-back" } else { "55-post-comp-distressor-phone" }, plugin: PLUGIN, scene, params, streams: vec![crate::comp_vca::ui::gr_stream("dist/gr", "Gain Reduction")] }
 }
 
 fn post_comp_as(aspect: f64, variant: bool) -> Face {
@@ -172,7 +187,7 @@ fn post_comp_as(aspect: f64, variant: bool) -> Face {
         ui::toggle("dist/on", "In", true).featured(),
     ];
     let file: &'static str = if variant { Box::leak(format!("55-post-comp-distressor@{aspect:.1}").into_boxed_str()) } else { "55-post-comp-distressor" };
-    Face { file, plugin: PLUGIN, scene, params, streams: Vec::new() }
+    Face { file, plugin: PLUGIN, scene, params, streams: vec![crate::comp_vca::ui::gr_stream("dist/gr", "Gain Reduction")] }
 }
 
 
@@ -240,7 +255,21 @@ fn eq() -> Face {
     });
     let mut params = surface_kit::viz::catalog::eq_params("eq", 24);
     params.extend(surface_kit::viz::catalog::eq_view_params("eq"));
-    Face { file: "52-amp-eq", plugin: PLUGIN, scene, params, streams: Vec::new() }
+    Face { file: "52-amp-eq", plugin: PLUGIN, scene, params, streams: surface_kit::viz::catalog::eq_streams("eq", 256) }
+}
+
+/// The EQ made for the iPad's FX row: the graph over the analyser, and the
+/// active band's panel pinned beside it at a finger's size.
+fn eq_row() -> Face {
+    let (w, h) = crate::rig_amp::ROW;
+    let scene = canvas("Amp EQ", move |b, root| {
+        ui::fit_root(b, root, w, h);
+        let p = Place::new("Amp EQ").size(w).options(&["ns=eq", "bands=24", "f_max=24000", "no_range", "touch", &format!("h={h}")]);
+        ui::put_at(b, root, "viz.eq_graph", &p, 0.0, 0.0);
+    });
+    let mut params = surface_kit::viz::catalog::eq_params("eq", 24);
+    params.extend(surface_kit::viz::catalog::eq_view_params("eq"));
+    Face { file: "52-amp-eq-row", plugin: PLUGIN, scene, params, streams: surface_kit::viz::catalog::eq_streams("eq", 256) }
 }
 
 /// The drives: (face, namespace, match words).
@@ -306,8 +335,51 @@ fn d_(f: Face) -> Face {
 
 /// Every face in the set.
 #[must_use]
+/// The compressor's scope at the FX row's size (a landscape phone's 750 ×
+/// 254 box): the Pre Comp block, the whole row its own — the same picture
+/// its block in the routing grid wears, its curve and its gain reduction.
+pub const COMP_SCOPE: (f64, f64) = (750.0, 254.0);
+/// … and at an iPad's (its FX row beside the sidebar), so its threshold
+/// rule and curve are drawn at the width they show at.
+pub const COMP_SCOPE_IPAD: (f64, f64) = (860.0, 254.0);
+
+fn comp_scope() -> Face {
+    comp_scope_at("56-comp-scope", COMP_SCOPE, false)
+}
+
+/// The compressor scope `w` × `h`; `dials`: Threshold, Ratio, Attack and
+/// Release at a finger's size beside it (the iPad's FX row).
+fn comp_scope_at(file: &'static str, (w, h): (f64, f64), dials: bool) -> Face {
+    use surface_kit::viz::lit_catalog;
+    let side = if dials { 250.0 } else { 0.0 };
+    let scene = canvas("Compressor", move |b, root| {
+        ui::fit_root(b, root, w, h);
+        let mut v = surface_kit::draw::frame("Window", 0.0, 0.0, w, h);
+        v.fills = vec![surface_kit::draw::linear(180.0, &[(0.0, "#0c0d10"), (1.0, "#08090b")])];
+        v.clips_content = true;
+        let v = b.add(root, v);
+        let p = Place::new("Compressor").size(w - side).options(&["ns=comp", &format!("h={h}"), "no_range"]);
+        ui::put_at(b, v, "viz.comp_scope", &p, 0.0, 0.0);
+        if dials {
+            let knob = ["color=#1b1e23", "pointer=#fbbf24", "index=line", "index_w=0.1", "skirt=plain", "skirt_color=#0a0b0d"];
+            let (x0, x1) = (w - side + side * 0.28, w - side + side * 0.72);
+            let (y0, y1) = (h * 0.38, h * 0.78);
+            for (addr, legend, at) in [("comp/threshold", "Threshold", (x0, y0)), ("comp/ratio", "Ratio", (x1, y0)), ("comp/attack", "Attack", (x0, y1)), ("comp/release", "Release", (x1, y1))] {
+                crate::rig_time::kit::knob3d(b, v, addr, legend, 44.0, at, &knob, "#e6e9ee", "#8a8f99");
+            }
+        }
+    });
+    let mut params = lit_catalog::comp_scope("comp", 128).0;
+    params.push(ui::param("comp/attack", "Attack", Range::log(0.1, 200.0, Unit::Milliseconds), 20.0));
+    params.push(ui::param("comp/release", "Release", Range::log(5.0, 2000.0, Unit::Milliseconds), 200.0));
+    params.push(ui::toggle("comp/on", "Bypass", true));
+    Face { file, plugin: PLUGIN, scene, params, streams: lit_catalog::comp_scope("comp", 128).1 }
+}
+
 pub fn faces() -> Vec<Face> {
     let mut v: Vec<Face> = drive_entries().into_iter().map(|(f, _, _)| f).collect();
+    v.push(comp_scope());
+    v.push(comp_scope_at("56-comp-scope-ipad", COMP_SCOPE_IPAD, true));
     v.extend(drive_phone());
     v.push(Face { plugin: PLUGIN, ..drives::compressor() });
     v.extend(pre_entries());
@@ -320,6 +392,11 @@ pub fn faces() -> Vec<Face> {
     v.push(Face { plugin: PLUGIN, ..crate::rig_blues::premod::premod_at(crate::rig_time::kit::Tier::Phone) });
     v.push(Face { plugin: PLUGIN, ..crate::rig_blues::premod::premod_back(crate::rig_time::kit::Tier::Phone) });
     v.push(Face { plugin: PLUGIN, ..crate::rig_blues::prefx::spring_at(crate::rig_time::kit::Tier::Phone) });
+    for t in [crate::rig_time::kit::Tier::Ipad] {
+        v.push(Face { plugin: PLUGIN, ..crate::rig_blues::prefx::aqua_at(t) });
+        v.push(Face { plugin: PLUGIN, ..crate::rig_blues::prefx::spring_at(t) });
+        v.push(Face { plugin: PLUGIN, ..crate::rig_blues::premod::premod_at(t) });
+    }
     v.push(trio());
     v.push(post_comp());
     v.push(post_comp_phone(false));
@@ -333,9 +410,10 @@ pub fn faces() -> Vec<Face> {
     v.extend(AmpModel::EVERY.iter().flat_map(|m| AMP_ASPECTS.iter().map(move |a| amp_face_as(*m, *a, true))));
     v.extend(crate::rig_amp::faces());
     v.push(eq());
+    v.push(eq_row());
     v.push(spring_viz());
     v.push(cab());
-    v.extend([d_(crate::rig_blues::filters::wah_unit()), d_(crate::rig_blues::filters::q_tron_unit()), d_(crate::rig_blues::filters::postal_unit()), d_(crate::rig_blues::pitch::pitch_unit()), d_(crate::rig_blues::doubler::doubler_unit()), d_(crate::rig_blues::transpose::transpose_unit()), d_(crate::rig_blues::transpose::dive_unit()), d_(crate::rig_blues::transpose::transpose_phone()), d_(crate::rig_blues::transpose::dive_phone()), d_(crate::rig_blues::filters::wah_phone()), d_(crate::rig_blues::filters::q_tron_phone()), d_(crate::rig_blues::filters::dive_pedal_phone()), d_(crate::rig_blues::filters::volume_phone()), d_(crate::rig_blues::filters::octaver_phone()), d_(crate::rig_blues::filters::harmonizer_phone()), d_(crate::rig_blues::doubler::doubler_phone()), d_(crate::rig_blues::premod::premod_unit())]);
+    v.extend([d_(crate::rig_blues::filters::wah_unit()), d_(crate::rig_blues::filters::q_tron_unit()), d_(crate::rig_blues::filters::postal_unit()), d_(crate::rig_blues::pitch::pitch_unit()), d_(crate::rig_blues::doubler::doubler_unit()), d_(crate::rig_blues::transpose::transpose_unit()), d_(crate::rig_blues::transpose::dive_unit()), d_(crate::rig_blues::transpose::transpose_phone()), d_(crate::rig_blues::transpose::dive_phone()), d_(crate::rig_blues::filters::wah_phone()), d_(crate::rig_blues::filters::q_tron_phone()), d_(crate::rig_blues::filters::dive_pedal_phone()), d_(crate::rig_blues::filters::volume_phone()), d_(crate::rig_blues::filters::volume_row()), d_(crate::rig_blues::filters::wah_row()), d_(crate::rig_blues::filters::octaver_phone()), d_(crate::rig_blues::filters::harmonizer_phone()), d_(crate::rig_blues::doubler::doubler_phone()), d_(crate::rig_blues::premod::premod_unit())]);
     v
 }
 
@@ -364,21 +442,24 @@ pub fn manifest() -> String {
         json!({ "match": amp_match(*m), "face": f.file, "ns": ns(*m), "name": m.short(), "size": size(&f), "variants": variants(AMP_ASPECTS.iter().map(|a| amp_face_as(*m, *a, true)).collect()), "tiers": { "phone": { "face": p.file, "size": size(&p), "variants": variants(AMP_PHONE_ASPECTS.iter().map(|a| amp_face_phone_as(*m, *a, true)).collect()) } } })
     }));
     let pre = pre_entries();
-    use crate::rig_time::kit::Tier::{Desktop as Desk, Phone};
+    use crate::rig_time::kit::Tier::{Desktop as Desk, Ipad, Phone};
     let pre = vec![
         json!({ "match": ["aqua"], "face": pre[0].file, "ns": "aquapuss", "size": size(&pre[0]), "nameplate": true, "time_knob": true, "back": crate::rig_blues::prefx::aqua_back(Desk).file,
-            "tiers": { "phone": { "face": crate::rig_blues::prefx::aqua_at(Phone).file, "size": size(&crate::rig_blues::prefx::aqua_at(Phone)), "back": crate::rig_blues::prefx::aqua_back(Phone).file } } }),
+            "tiers": { "phone": { "face": crate::rig_blues::prefx::aqua_at(Phone).file, "size": size(&crate::rig_blues::prefx::aqua_at(Phone)), "back": crate::rig_blues::prefx::aqua_back(Phone).file },
+                       "ipad": { "face": crate::rig_blues::prefx::aqua_at(Ipad).file, "size": size(&crate::rig_blues::prefx::aqua_at(Ipad)) } } }),
         // The Gravity Tank's two halves, each by its block preset's name.
         json!({ "match": ["gravity tank trem", "harmonic trem"], "face": pre[1].file, "ns": "trem", "size": size(&pre[1]),
             "tiers": { "phone": { "face": "18-gravity-tank-trem-phone", "size": size(&crate::rig_blues::prefx::tank_trem_phone()), "nameplate": true, "time_knob": true } } }),
         // Any spring on a reverb block ("Gravity Tank Spring", "Fender
         // Spring"): frame's spring reverb.
         json!({ "match": ["spring"], "face": pre[2].file, "ns": "spring", "size": size(&pre[2]), "nameplate": true, "time_knob": true, "back": crate::rig_blues::prefx::spring_back(Desk).file,
-            "tiers": { "phone": { "face": crate::rig_blues::prefx::spring_at(Phone).file, "size": size(&crate::rig_blues::prefx::spring_at(Phone)), "back": crate::rig_blues::prefx::spring_back(Phone).file } } }),
+            "tiers": { "phone": { "face": crate::rig_blues::prefx::spring_at(Phone).file, "size": size(&crate::rig_blues::prefx::spring_at(Phone)), "back": crate::rig_blues::prefx::spring_back(Phone).file },
+                       "ipad": { "face": crate::rig_blues::prefx::spring_at(Ipad).file, "size": size(&crate::rig_blues::prefx::spring_at(Ipad)) } } }),
         // Pre modulation: its unit for any preset on the block (and the
         // block itself, by name).
         json!({ "match": ["pre mod", "chorus", "vibe", "ce-2"], "face": "38-pre-mod", "ns": "premod", "size": [crate::rig_blues::premod::W, crate::rig_blues::premod::H],
-            "tiers": { "phone": { "face": crate::rig_blues::premod::premod_at(Phone).file, "size": size(&crate::rig_blues::premod::premod_at(Phone)), "back": crate::rig_blues::premod::premod_back(Phone).file, "nameplate": true, "time_knob": true } } }),
+            "tiers": { "phone": { "face": crate::rig_blues::premod::premod_at(Phone).file, "size": size(&crate::rig_blues::premod::premod_at(Phone)), "back": crate::rig_blues::premod::premod_back(Phone).file, "nameplate": true, "time_knob": true },
+                       "ipad": { "face": crate::rig_blues::premod::premod_at(Ipad).file, "size": size(&crate::rig_blues::premod::premod_at(Ipad)), "nameplate": true, "time_knob": true } } }),
     ];
     // The compressor at the head of the drive board: the Pre Comp block.
     let comp = Face { plugin: PLUGIN, ..drives::compressor() };
@@ -386,11 +467,19 @@ pub fn manifest() -> String {
     let doc = json!({
         "drives": drives,
         "pre_comp_pedal": pre_comp_pedal,
+        // The Pre Comp's FX-row face: the compressor's scope, the row its own.
+        "comp": { "face": "56-comp-scope", "ns": "comp", "size": [COMP_SCOPE.0, COMP_SCOPE.1],
+            "tiers": { "ipad": { "face": "56-comp-scope-ipad", "size": [COMP_SCOPE_IPAD.0, COMP_SCOPE_IPAD.1] } },
+            "row": { "face": "56-comp-scope-ipad", "size": [COMP_SCOPE_IPAD.0, COMP_SCOPE_IPAD.1] } },
         "pre": pre,
         "amps": amps,
         "gate": { "face": "51-gate", "ns": "gate", "size": [crate::rig_amp::GATE.0, crate::rig_amp::GATE.1],
-            "tiers": { "phone": { "face": "51-gate-phone", "size": size(&crate::rig_amp::gate_phone(false)), "back": "51-gate-phone-back", "nameplate": true } } },
-        "trim": { "face": "53-trim", "ns": "trim", "size": [crate::rig_amp::TRIM.0, crate::rig_amp::TRIM.1] },
+            "tiers": { "phone": { "face": "51-gate-phone", "size": size(&crate::rig_amp::gate_phone(false)), "back": "51-gate-phone-back", "nameplate": true },
+                       "ipad": { "face": "51-gate-pane", "size": size(&crate::rig_amp::gate_pane(false)), "back": "51-gate-pane-back", "nameplate": true } },
+            // Made for the iPad's FX row.
+            "row": { "face": "51-gate-row", "size": [crate::rig_amp::ROW.0, crate::rig_amp::ROW.1] } },
+        "trim": { "face": "53-trim", "ns": "trim", "size": [crate::rig_amp::TRIM.0, crate::rig_amp::TRIM.1],
+            "row": { "face": "53-trim-row", "size": [crate::rig_amp::ROW.0, crate::rig_amp::ROW.1] } },
         // The Time module's units: a face per delay machine and reverb
         // algorithm, by its name.
         "time": crate::rig_time::manifest(),
@@ -403,12 +492,14 @@ pub fn manifest() -> String {
             { "face": "input", "param": "threshold", "linear": [-6.0, 0.0] },
             { "face": "ratio", "param": "ratio", "table": [1.0, 2.0, 3.0, 4.0, 6.0, 10.0, 20.0, 20.0] },
         ] },
-        "eq": { "face": "52-amp-eq", "ns": "eq", "size": size(&eq()) },
+        "eq": { "face": "52-amp-eq", "ns": "eq", "size": size(&eq()),
+            "row": { "face": "52-amp-eq-row", "size": [crate::rig_amp::ROW.0, crate::rig_amp::ROW.1] } },
         "cab": { "face": "54-cab-2x12", "ns": "cab", "size": size(&cab()) },
         // The input stage's units, by block type, and the filter's picture.
         "input": [
             { "match": ["wah"], "face": "30-wah-unit", "ns": "wah", "size": size(&crate::rig_blues::filters::wah_unit()),
-                "tiers": { "phone": { "face": "30-wah-phone", "size": size(&crate::rig_blues::filters::wah_phone()), "nameplate": true } } },
+                "tiers": { "phone": { "face": "30-wah-phone", "size": size(&crate::rig_blues::filters::wah_phone()), "nameplate": true } },
+                "row": { "face": "30-wah-row", "size": [860.0, 254.0] } },
             // The envelope filter by its preset: Cory Wong's postal box, or
             // the John Mayer rig's Q-Tron (the default).
             { "match": ["postal"], "face": "34-filter-postal", "ns": "env", "size": size(&crate::rig_blues::filters::postal_unit()) },
@@ -420,7 +511,8 @@ pub fn manifest() -> String {
             { "match": ["harmon"], "face": "33-harmonizer-phone", "ns": "harm", "size": size(&crate::rig_blues::filters::harmonizer_phone()) },
             { "match": ["pitch"], "face": "33-pitch-voices", "ns": "pitch", "size": size(&crate::rig_blues::pitch::pitch_unit()),
                 "tiers": { "phone": { "face": "32-octaver-phone", "size": size(&crate::rig_blues::filters::octaver_phone()), "nameplate": true } } },
-            { "match": ["volume"], "face": "38-volume-phone", "ns": "volume", "size": size(&crate::rig_blues::filters::volume_phone()) },
+            { "match": ["volume"], "face": "38-volume-phone", "ns": "volume", "size": size(&crate::rig_blues::filters::volume_phone()),
+              "row": { "face": "38-volume-row", "size": [860.0, 254.0] } },
             // The transposer and the dive bomb: pitch blocks of their own,
             // by name.
             { "match": ["transpose"], "face": "36-transpose", "ns": "transpose", "size": size(&crate::rig_blues::transpose::transpose_unit()),
@@ -430,6 +522,8 @@ pub fn manifest() -> String {
         ],
         // Pictures of a block, beside its unit: a reverb's springs.
         "pictures": [ { "match": ["reverb"], "face": "53-spring-viz", "ns": "spring", "size": size(&spring_viz()) } ],
+        // Each block of the routing grid, by what it is (see `rig_cells`).
+        "blocks": crate::rig_cells::manifest(),
     });
     serde_json::to_string_pretty(&doc).expect("json")
 }

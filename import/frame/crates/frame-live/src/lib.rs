@@ -432,6 +432,17 @@ impl LiveSurface {
         self.apply_values(normalized);
     }
 
+    /// Live readings from the engine, by stream id (`<ns>/spectrum`, a
+    /// level's `<ns>/in`, a gain reduction's `<ns>/gr`, a trace's
+    /// `<ns>/in_history`): the plots, meters and lamps bound to them move.
+    /// A history the catalog calls a series is taken whole; any other
+    /// reading is pushed onto its plot's ring.
+    pub fn apply_stream(&mut self, id: &str, values: Vec<f64>) {
+        let t = self.t();
+        self.rt.apply_frame(surface_proto::StreamFrame { id: surface_proto::EntryId::new(id), values }, t);
+        self.dirty = true;
+    }
+
     /// The param edits made since the last take, as (address, value in the
     /// param's own units) — the catalog's range turns the surface's
     /// normalized value back into Hz, dB, 0..1…
@@ -637,6 +648,32 @@ impl LiveSurface {
         render::PaintTarget::fill(&mut target, peniko::Fill::NonZero, kurbo::Affine::IDENTITY, self.background, None, &bounds);
         let prims = render::build_scene_primitives_with(&doc, self.page, render::CollectOptions { emission_glow: true });
         render::paint_primitives_into_scene_with(&mut target, &prims, physical.affine(), Some(render::FontBook::bundled()));
+        self.time_dependent = false;
+        self.dirty = false;
+    }
+
+    /// Paint the surface's vectors fitted to a `width × height` box placed
+    /// by `transform` (the box's units to the scene's, as an affine's six
+    /// coefficients) into a host's scene, with nothing behind it — a face
+    /// drawn over a host's own picture, as one block of its grid, its
+    /// transparent margin showing what is under it. The same frame as
+    /// [`paint_vectors`](Self::paint_vectors), by the same painter.
+    #[cfg(feature = "anyrender-0-11")]
+    pub fn paint_vectors_at<S: anyrender::PaintScene>(&mut self, scene: &mut S, width: f64, height: f64, transform: [f64; 6]) {
+        self.rendered_at = Some(std::time::Instant::now());
+        if self.dirty {
+            self.settle_until = self.rendered_at.map(|at| at + SETTLE);
+        }
+        let t = self.t();
+        let calls = self.rt.poll(t);
+        self.dispatch(calls);
+        self.rt.set_clock(t / 1000.0);
+        let view = View::fit(self.content, width.max(1.0), height.max(1.0));
+        self.view = view;
+        let doc = self.rt.frame(t);
+        let mut target = vectors::AnyRender011(scene);
+        let prims = render::build_scene_primitives_with(&doc, self.page, render::CollectOptions { emission_glow: true });
+        render::paint_primitives_into_scene_with(&mut target, &prims, kurbo::Affine::new(transform) * view.affine(), Some(render::FontBook::bundled()));
         self.time_dependent = false;
         self.dirty = false;
     }

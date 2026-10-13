@@ -135,7 +135,7 @@ pub fn face(dark: bool) -> Face {
 pub fn face_at(dark: bool, tier: kit::Tier) -> Face {
     let l = if dark { &DARK } else { &LIGHT };
     let (ink, dim) = (l.ink, l.dim);
-    let small_room = matches!(tier, kit::Tier::Phone | kit::Tier::Strip);
+    let small_room = tier.small();
     let w = tier.lane_w();
     let scene = kit::tier_lane("Cloud", tier, |b, root| {
         // The frosted panel.
@@ -147,7 +147,7 @@ pub fn face_at(dark: bool, tier: kit::Tier) -> Face {
 
         // ── The sky ────────────────────────────────────────────────────
         // On a phone the controls come first: the sky shrinks for them.
-        let sw = if small_room { kit::PHONE_PICTURE_R - 10.0 } else { 600.0 };
+        let sw = if small_room { kit::picture_r(tier) - 10.0 } else { 600.0 };
         let (sx, sy, sh) = (10.0, 10.0, kit::H - 20.0);
         let mut s = draw::frame("Sky", sx, sy, sw, sh);
         s.fills = vec![draw::linear(180.0, &l.sky)];
@@ -162,16 +162,16 @@ pub fn face_at(dark: bool, tier: kit::Tier) -> Face {
         let serif = draw::Lettering::family(draw::family::PLAYFAIR_DISPLAY).weight(400.0);
         let pearl = l.knob;
         if small_room {
-            kit::nameplate_top_right(b, panel, VERB, tier, (6.0, 30.0), 86.0, 220.0, 12.0, (if dark { kit::PURPLE_LAMP } else { "#6a3fc4" }, dim), |b, t| {
+            kit::nameplate_top_right(b, panel, VERB, tier, (6.0, 30.0), 86.0, if tier == kit::Tier::Ipad { 150.0 } else { 220.0 }, 12.0, (if dark { kit::PURPLE_LAMP } else { "#6a3fc4" }, dim), |b, t| {
                 crate::suite_studio_blues::parts::set(b, t, "Cloud", 34.0, 15.0, 22.0, ink, &serif, 0.08);
             });
             // Spread across the panel: Decay, Size, Level, On — each with
             // its value and name under it, inside the lane.
-            let (tx, ty, td) = kit::PHONE_TIME;
-            kit::time_knob(b, panel, VERB, (tx, ty, td), 11.0, (ink, dim, &ui::alpha(kit::PURPLE_LAMP, 0.55)), |b, p, addr| {
+            let (tx, ty, td) = kit::time_spot(tier);
+            kit::time_knob(b, panel, VERB, (tx, ty, td), if tier == kit::Tier::Ipad { 10.0 } else { 11.0 }, (ink, dim, &ui::alpha(kit::PURPLE_LAMP, 0.55)), |b, p, addr| {
                 kit::knob3d_bare(b, p, addr, td, (tx, ty), &pearl);
             });
-            let (xs, ky, kd) = kit::PHONE_KNOBS;
+            let (xs, ky, kd) = kit::knob_row(tier);
             for (i, (id, legend)) in [("size", "Size"), ("level", "Level")].iter().enumerate() {
                 kit::knob3d(b, panel, &a(id), legend, kd, (xs[i], ky), &pearl, ink, dim);
             }
@@ -206,7 +206,7 @@ pub fn face_at(dark: bool, tier: kit::Tier) -> Face {
 pub fn back_at(dark: bool, tier: kit::Tier) -> Face {
     let l = if dark { &DARK } else { &LIGHT };
     let (ink, dim) = (l.ink, l.dim);
-    let small_room = matches!(tier, kit::Tier::Phone | kit::Tier::Strip);
+    let small_room = tier.small();
     let w = tier.lane_w();
     let scene = kit::tier_lane("Cloud", tier, |b, root| {
         let mut panel = draw::frame("Panel", 0.0, 0.0, w, kit::H);
@@ -218,7 +218,7 @@ pub fn back_at(dark: bool, tier: kit::Tier) -> Face {
         kit::back_knobs(b, root, tier, &knobs, ink, |b, p, id, legend, d, at| {
             kit::knob3d(b, p, &a(id), legend, d, at, &pearl, ink, dim);
         });
-        let (np_h, title_w, preset_w, size) = if small_room { (30.0, 86.0, 220.0, 12.0) } else { (28.0, 82.0, 200.0, 10.0) };
+        let (np_h, title_w, preset_w, size) = if small_room { (30.0, 86.0, if tier == kit::Tier::Ipad { 150.0 } else { 220.0 }, 12.0) } else { (28.0, 82.0, 200.0, 10.0) };
         let serif = draw::Lettering::family(draw::family::PLAYFAIR_DISPLAY).weight(400.0);
         kit::head(b, root, VERB, true, |b, head| {
             kit::nameplate_top_right(b, head, VERB, tier, (if small_room { 6.0 } else { 10.0 }, np_h), title_w, preset_w, size, (if dark { kit::PURPLE_LAMP } else { "#6a3fc4" }, dim), |b, t| {
@@ -267,4 +267,50 @@ pub fn tall(dark: bool) -> Face {
     let mut f = kit::reverb_face(kit::tall_file("84-verb-cloud", dark), scene);
     f.params.extend(kit::tall_params(VERB));
     f
+}
+
+/// The night sky laid out for a block (`s` square): the moon high, the
+/// clouds — each a fraction of the block — drifting through its middle,
+/// where the block's labels leave it clear; stars and grains as on the
+/// face, the same motions.
+fn block_sky(b: &mut Builder<'_>, v: NodeId, s: f64, l: &Look) {
+    for i in 0..18 {
+        let f = f64::from(i);
+        let (x, y) = ((f * 67.0 + 11.0) % s, s * 0.22 + (f * 37.0) % (s * 0.56));
+        let st = b.add(v, draw::circle("star", x, y, 0.9 + 0.4 * crate::reverb::jitter(f).abs(), draw::solid(l.star)));
+        motion::add(b, st, Motion::new(Target::Opacity).input(format!("0.5 + 0.5 * sin(time * {:.2} + {f})", 0.4 + 0.3 * crate::reverb::jitter(f * 3.0).abs())).range(0.15, 0.9));
+    }
+    b.add(v, draw::circle("halo", s * 0.74, s * 0.34, s * 0.22, draw::radial_at(0.5, 0.5, 0.5, &[(0.0, "#c4b5fd40"), (1.0, "#c4b5fd00")])));
+    b.add(v, draw::emissive(draw::circle("moon", s * 0.74, s * 0.34, 8.0, draw::radial_at(0.4, 0.35, 0.8, &[(0.0, "#fbf8ff"), (1.0, "#d6ccf5")])), draw::hex("#e9e2ff"), 0.8, 10.0));
+    let layers = [("far", 0.42, 0.012), ("mid", 0.55, 0.02), ("near", 0.68, 0.032)];
+    for (li, (name, cy, speed)) in layers.iter().enumerate() {
+        let (tint, alpha) = l.clouds[li];
+        for k in 0..2 {
+            let cw = s * (0.5 + 0.12 * li as f64);
+            let ch = cw * 0.34;
+            let c = cloud(b, v, name, (0.0, s * cy - ch / 2.0, cw, ch), tint, f64::from(li as u32 * 7 + k));
+            let offset = f64::from(k) / 2.0 + 0.13 * li as f64;
+            let drift = format!("fract(time * {speed} * 2.4 * (0.4 + 1.6 * norm({VERB}/modulation)) + {offset})");
+            motion::add(b, c, Motion::new(Target::X).input(drift).range(-cw, s));
+            motion::add(b, c, Motion::new(Target::Scale).input(format!("norm({VERB}/size)")).range(0.75, 1.1).dynamics(Dynamics::spring(160.0, 22.0)));
+            motion::add(b, c, Motion::new(Target::Opacity).input(format!("(0.35 + 0.65 * norm({VERB}/decay)) * (0.35 + 0.65 * param({VERB}/on))")).range(0.0, alpha));
+        }
+    }
+    for i in 0..16 {
+        let f = f64::from(i);
+        let (x, y) = ((f * 53.0 + 17.0) % (s - 20.0) + 10.0, s * 0.3 + (f * 29.0) % (s * 0.45));
+        let g = b.add(v, draw::emissive(draw::circle("grain", x, y, 1.2, draw::solid(l.grain.0)), draw::hex(l.grain.1), 1.0, 5.0));
+        let glint = format!("pow(0.5 + 0.5 * sin(time * {:.2} + {:.2}), 12) * param({VERB}/on)", 1.1 + 0.9 * crate::reverb::jitter(f).abs(), f * 1.7);
+        motion::add(b, g, Motion::new(Target::Opacity).input(glint).range(0.0, 1.0));
+    }
+}
+
+/// The routing grid's block: the night sky, its clouds drifting.
+#[must_use]
+pub fn block() -> Face {
+    use crate::rig_cells::S;
+    let l = &DARK;
+    let sky_fill: Vec<(f64, &str)> = l.sky.to_vec();
+    let scene = crate::rig_cells::block("Cloud", &sky_fill, |b, v, _| block_sky(b, v, S, l));
+    kit::reverb_face("84-verb-cloud-block", scene)
 }

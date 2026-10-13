@@ -61,7 +61,9 @@ fn every_face_lints_without_errors() {
 fn it_binds_what_the_reverb_faces_bind_and_its_program() {
     let all = plugin_faces::all();
     let mut theirs: BTreeSet<String> = BTreeSet::new();
-    for f in all.iter().filter(|f| f.plugin == "rig-faces" && f.file.contains("-verb-") && !is_480(f.file)) {
+    // The algorithms' faces — not the routing grid's block cells, which are
+    // pictures of a block, not a face for one.
+    for f in all.iter().filter(|f| f.plugin == "rig-faces" && f.file.contains("-verb-") && !f.file.ends_with("-block") && !is_480(f.file)) {
         theirs.extend(bound(f));
     }
     theirs.insert("verb/program".into());

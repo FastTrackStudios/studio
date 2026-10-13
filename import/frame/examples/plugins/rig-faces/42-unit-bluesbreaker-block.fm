@@ -1,0 +1,15 @@
+<Document id="911ba43f-69bb-5edb-8d19-df90570b9480">
+  <Page name="Surface" id="aac7d6b2-aec7-56fe-8dde-f00af8f71c6f">
+    <Frame name="Bluesbreaker" id="0d27c4ea-5d51-5bd8-bfea-86a7f0cc1155" w=216 h=216>
+      <Frame name="Window" id="2989233c-e220-515c-b983-b63daaaa422c" x=16 y=16 w=184 h=184 radius=18 clip=true fill={[{"kind":{"LinearGradient":{"stops":[{"color":"#34363b","position":0.0},{"color":"#2c2e33","position":0.3},{"color":"#1d1e21","position":0.32},{"color":"#2a2c30","position":1.0}],"transform":{"a":1.6653345369377348e-16,"b":-1.0,"c":1.0,"d":1.6653345369377348e-16,"tx":1.0,"ty":-1.942890293094024e-16}}}}]}>
+        <Rectangle name="rule" id="7b6bb4d4-c966-5da9-8335-ed64b93e0c67" x=10 y=71 w=164 h=1.8 fill="#4fb8ea" />
+        <Rectangle name="rule" id="2d338b7e-25c1-52a9-a098-7e1ccab2fddb" x=10 y=75 w=164 h=1.8 fill="#4fb8ea" />
+        <Rectangle name="rule" id="8a4d85ab-a5fe-51dc-b0f5-4d0ebb772bbe" x=10 y=109 w=164 h=1.8 fill="#4fb8ea" />
+        <Rectangle name="rule" id="eebb815b-4b55-5e9f-af55-d147b26dfc3e" x=10 y=113 w=164 h=1.8 fill="#4fb8ea" />
+        <Text name="print" id="e84a15a2-bba1-527b-a67a-c51b51e3a99d" x=-54.58000000000001 y=77.72 w=293.16 h=29 fill="#4fb8ea" font="Oswald" size=21 weight=700 style="italic" letter-spacing=0.42 text-align="center">BLUES BREAKER</Text>
+        <Ellipse name="lamp ring" id="44a10f70-6992-503c-a154-9d7c0d5f50f0" x=86.5 y=120.5 w=11 h=11 fill="#0b0b0c" />
+        <Ellipse name="lamp" id="8d80d759-3106-5955-9f04-16151df2d6f2" x=88.4 y=122.4 w=7.2 h=7.2 fill="#e0281c" emission={{"color":"#e0281c","intensity":1.0,"radius":9.0}} motion={[{"from":0.12,"input":"param(unit/on)","target":"opacity"}]} />
+      </Frame>
+    </Frame>
+  </Page>
+</Document>

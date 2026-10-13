@@ -347,6 +347,10 @@ impl Runtime {
         if !self.popover_up(id, *show, anchor) {
             return None;
         }
+        if *placement == Placement::Pinned {
+            let t = self.surface.scene.node(id)?.transform;
+            return Some((t.tx, t.ty));
+        }
         let a = self.anchor_box(anchor)?;
         let size = self.surface.scene.node(id)?.size;
         let stage = self.stage_of(id).unwrap_or(Bounds { x: f64::MIN / 4.0, y: f64::MIN / 4.0, width: f64::MAX / 2.0, height: f64::MAX / 2.0 });
@@ -1391,6 +1395,8 @@ pub fn place(a: Bounds, (w, h): (f64, f64), side: Placement, gap: f64, stage: Bo
         }
         Placement::DockBottom => (cx - w / 2.0, sy1 - h - gap),
         Placement::DockTop => (cx - w / 2.0, sy0 + gap),
+        // Not placed: it stays where it is drawn (see `popover_origin`).
+        Placement::Pinned => (a.x, a.y),
         Placement::Left | Placement::Right => {
             let left = a.x - gap - w;
             let right = a.x + a.width + gap;
