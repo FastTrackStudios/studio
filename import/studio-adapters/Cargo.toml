@@ -20,7 +20,7 @@ architect.workspace = true
 # can opt into formats one at a time.
 daw-reaper = { workspace = true, optional = true, default-features = false }
 # REAPER + Dioxus UI host (`reaper-ui`).
-daw-reaper-dioxus = { workspace = true, optional = true }
+reaper-dioxus = { workspace = true, optional = true }
 # The RPP project file (`file`).
 dawfile-reaper = { workspace = true, optional = true }
 # The reusable, vector-themeable UI component library (`ui`).
@@ -29,7 +29,10 @@ daw-ui = { workspace = true, optional = true }
 control-surfaces = { workspace = true, optional = true }
 # Source-format parsers, each under `studio::<format>`. None pulls in REAPER;
 # the RPP conversion is `convert`.
-formats = { workspace = true, optional = true, features = ["aaf", "ableton", "dawproject", "logic", "protools"] }
+protools = { workspace = true, optional = true }
+ableton = { workspace = true, optional = true }
+interchange = { workspace = true, optional = true }
+logic = { workspace = true, optional = true }
 
 # The CLI's and the test harness's own.
 vox-stream = { workspace = true, optional = true }
@@ -60,7 +63,7 @@ convert-protools = ["file", "reaper", "daw-reaper/protools"]
 convert-ableton = ["file", "reaper", "daw-reaper/ableton"]
 convert-aaf = ["file", "reaper", "daw-reaper/aaf"]
 convert-dawproject = ["file", "reaper", "daw-reaper/dawproject"]
-reaper-ui = ["dep:daw-reaper-dioxus"]
+reaper-ui = ["dep:reaper-dioxus"]
 # The `daw` command line (`studio::cli`) and its thin binary.
 cli = [
     "file",
@@ -74,11 +77,11 @@ cli = [
 ]
 # Control surfaces (`studio::csi`) — Mackie Control / Behringer X-Touch.
 csi = ["dep:control-surfaces"]
-protools = ["dep:formats", "formats?/protools"]
-ableton = ["dep:formats", "formats?/ableton"]
-logic = ["dep:formats", "formats?/logic"]
-aaf = ["dep:formats", "formats?/aaf"]
-dawproject = ["dep:formats", "formats?/dawproject"]
+protools = ["dep:protools"]
+ableton = ["dep:ableton"]
+logic = ["dep:logic"]
+aaf = ["dep:interchange", "interchange?/aaf"]
+dawproject = ["dep:interchange", "interchange?/dawproject"]
 formats = ["protools", "ableton", "logic", "aaf", "dawproject"]
 # Integration-test harness: drives daw-reaper over the daw RPC surface,
 # generalized over `DawBackend` (impl `ReaperBackend`).
@@ -102,7 +105,7 @@ path = "src/bin/daw.rs"
 required-features = ["cli"]
 
 [dev-dependencies]
-formats = { workspace = true, features = ["ableton"] }
+ableton = { workspace = true }
 dawfile-reaper = { workspace = true }
 # CLI integration tests: the in-process standalone backend over a real vox
 # memory link + local wire probes.

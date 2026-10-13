@@ -160,31 +160,31 @@ pub mod file {
 /// Pro Tools session parser (`.ptx` / `.ptf` / `.pts`).
 #[cfg(feature = "protools")]
 pub mod protools {
-    pub use formats::protools::*;
+    pub use protools::*;
 }
 
 /// Ableton Live Set parser (`.als`).
 #[cfg(feature = "ableton")]
 pub mod ableton {
-    pub use formats::ableton::*;
+    pub use ableton::*;
 }
 
 /// Logic Pro session parser (`.logicx`).
 #[cfg(feature = "logic")]
 pub mod logic {
-    pub use formats::logic::*;
+    pub use logic::*;
 }
 
 /// Advanced Authoring Format parser (`.aaf`).
 #[cfg(feature = "aaf")]
 pub mod aaf {
-    pub use formats::aaf::*;
+    pub use interchange::aaf::*;
 }
 
 /// DAWproject parser (`.dawproject`).
 #[cfg(feature = "dawproject")]
 pub mod dawproject {
-    pub use formats::dawproject::*;
+    pub use interchange::dawproject::*;
 }
 
 // ── Integration-test harness ────────────────────────────────────────────────
@@ -213,7 +213,7 @@ pub mod cli;
 // ── UI host (REAPER + Dioxus) ──────────────────────────────────────────────
 //
 // Enabled via `features = ["reaper-ui"]`. Re-exports the curated public
-// surface of `daw-reaper-dioxus` so apps depend only on the daw facade.
+// surface of `reaper-dioxus` so apps depend only on the daw facade.
 // Audio-graph / WASM / embedded targets get nothing pulled in — the GPU
 // / blitz / dioxus-native stack only enters the dependency graph when the
 // feature is on.
@@ -225,13 +225,13 @@ pub mod cli;
 pub mod reaper_ui {
     /// Dock host implementation backed by REAPER's docker + Dioxus.
     pub mod dock {
-        pub use daw_reaper_dioxus::dock::{
+        pub use reaper_dioxus::dock::{
             DockablePanelConfig, hide_panel, init as init_dock, is_panel_hwnd, is_panel_visible,
             panel_element_size, prewarm_panel, register_panel, register_panel_from_service,
             remount_panel, restore_dock_state, save_dock_state, set_panel_focus_on_click,
             show_panel, toggle_panel, unregister_all_panels, update_panels,
         };
-        pub use daw_reaper_dioxus::service::{init as init_service, register_panel_from_def};
+        pub use reaper_dioxus::service::{init as init_service, register_panel_from_def};
     }
 
     /// The `DockHosting` backend, for hosts that publish their own
@@ -241,26 +241,26 @@ pub mod reaper_ui {
     /// host (fts-extensions, via `host-hooks`) has to mount it too, or
     /// `DockHost` calls arrive at a router with no such service and fail
     /// to decode rather than failing cleanly.
-    pub use daw_reaper_dioxus::ReaperDockHost;
+    pub use reaper_dioxus::ReaperDockHost;
 
     /// Embedded Dioxus view inside an existing REAPER HWND.
-    pub use daw_reaper_dioxus::EmbeddedView;
+    pub use reaper_dioxus::EmbeddedView;
     /// Transparent floating overlay (HUDs, popups).
-    pub use daw_reaper_dioxus::{DioxusOverlay, DioxusOverlayBuilder, OverlayConfig};
+    pub use reaper_dioxus::{DioxusOverlay, DioxusOverlayBuilder, OverlayConfig};
 
     /// Pixel snapshot helpers — render a Dioxus root component to an
     /// off-screen GPU surface and assert against a golden byte file.
     /// Useful for component-level visual regression tests in
     /// fts-extensions or any other consumer.
     pub mod snapshot {
-        pub use daw_reaper_dioxus::snapshot::{
+        pub use reaper_dioxus::snapshot::{
             SnapshotError, compare_to_golden, render_panel_offscreen,
         };
     }
 
     /// Dioxus prelude — re-exported for component authors so they don't have
     /// to depend on `dioxus-native` directly.
-    pub use daw_reaper_dioxus::prelude;
+    pub use reaper_dioxus::prelude;
 }
 
 // ── UI components (portable, vector-themeable) ─────────────────────────────
