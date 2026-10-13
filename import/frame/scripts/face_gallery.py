@@ -3,7 +3,7 @@
 
     scripts/face_gallery.py OUT_DIR [--only SUBSTR] [--dark] [--jobs N]
 
-Walks features/faces/generated/<set>/*.frame (written by `just faces`) —
+Walks features/ui/plugin-faces/generated/<set>/*.frame (written by `just faces`) —
 each device's faces in the shapes a host shows (rack, -lane, -tall, -stacked), not the scaled (@x), phone, back
 or dark variants (dark with --dark) — and renders each with frame's GPU
 effects stage (render_surface --fx gpu, demo feeds, t = 1.3 s) to
