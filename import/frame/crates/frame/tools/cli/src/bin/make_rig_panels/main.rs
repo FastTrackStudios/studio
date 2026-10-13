@@ -410,7 +410,7 @@ pub fn surface() -> Surface {
 }
 
 fn main() {
-    let mut dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../../crates/frame/examples/surfaces");
+    let mut dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../examples/surfaces");
     let mut t = T;
     let mut args = std::env::args().skip(1);
     while let Some(a) = args.next() {
@@ -445,7 +445,7 @@ mod tests {
     use super::*;
 
     fn dir() -> PathBuf {
-        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../../crates/frame/examples/surfaces")
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../examples/surfaces")
     }
 
     /// Every visualizer the rig mounts has its place, and the surface

@@ -10,11 +10,11 @@ name = "frame-library-server"
 path = "src/main.rs"
 
 [dependencies]
-library-fs = { path = "../../../crates/frame/library/library-fs" }
-library-link = { path = "../../../crates/frame/library/library-link" }
-document-io = { path = "../../../crates/frame/document/document-io" }
-document-proto = { path = "../../../crates/frame/document/document-proto", default-features = false }
-render = { path = "../../../crates/frame/render/render", features = ["anyrender"] }
+library-fs = { path = "../../library/library-fs" }
+library-link = { path = "../../library/library-link" }
+document-io = { path = "../../document/document-io" }
+document-proto = { path = "../../document/document-proto", default-features = false }
+render = { path = "../../render/render", features = ["anyrender"] }
 architect = { workspace = true, features = ["vox"] }
 tokio = { workspace = true }
 serde_json = { workspace = true }
