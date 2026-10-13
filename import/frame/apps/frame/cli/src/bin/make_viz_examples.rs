@@ -36,7 +36,7 @@ pub struct Example {
 }
 
 fn main() {
-    let mut dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../../examples/surfaces");
+    let mut dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../../crates/frame/examples/surfaces");
     let mut args = std::env::args().skip(1);
     while let Some(a) = args.next() {
         match a.as_str() {
@@ -184,7 +184,7 @@ mod tests {
     use super::*;
 
     fn dir() -> PathBuf {
-        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../../examples/surfaces")
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../../crates/frame/examples/surfaces")
     }
 
     #[test]

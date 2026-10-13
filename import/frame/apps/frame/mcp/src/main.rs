@@ -33,7 +33,7 @@ use serde_json::{Value, json};
 use surface_proto::{Catalog, SurfaceEngineClient};
 use surface_runtime::sync;
 
-const REFERENCE: &str = include_str!("../../../../features/document/document-text/REFERENCE.md");
+const REFERENCE: &str = include_str!("../../../../crates/frame/document/document-text/REFERENCE.md");
 
 const INSTRUCTIONS: &str = "frame designs live-performance control surfaces (knobs, faders, footswitches, meters) \
 that are bound to an audio engine's parameters. Workflow: `catalog` to see what can be controlled → `describe` \

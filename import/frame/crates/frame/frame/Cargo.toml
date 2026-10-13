@@ -5,9 +5,9 @@ version.workspace = true
 edition.workspace = true
 
 [dependencies]
-figma-model = { path = "../../features/figma/figma-model" }
-figma-rest = { path = "../../features/figma/figma-rest" }
-render = { path = "../../features/render/render" }
+figma-model = { path = "../figma/figma-model" }
+figma-rest = { path = "../figma/figma-rest" }
+render = { path = "../render/render" }
 
 [features]
 vello = ["render/anyrender"]

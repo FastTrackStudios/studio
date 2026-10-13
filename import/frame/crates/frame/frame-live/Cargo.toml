@@ -11,11 +11,11 @@ publish = false
 # calls where it likes and feeds values back.
 
 [dependencies]
-render = { path = "../../features/render/render", features = ["anyrender"] }
-document-proto = { path = "../../features/document/document-proto", default-features = false }
-document-io = { path = "../../features/document/document-io" }
-surface-proto = { path = "../../features/surface/surface-proto", default-features = false }
-surface-runtime = { path = "../../features/surface/surface-runtime", default-features = false }
+render = { path = "../render/render", features = ["anyrender"] }
+document-proto = { path = "../document/document-proto", default-features = false }
+document-io = { path = "../document/document-io" }
+surface-proto = { path = "../surface/surface-proto", default-features = false }
+surface-runtime = { path = "../surface/surface-runtime", default-features = false }
 serde_json = { workspace = true }
 kurbo = { workspace = true }
 peniko = { workspace = true }

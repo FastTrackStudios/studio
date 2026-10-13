@@ -6,20 +6,20 @@ edition.workspace = true
 publish = false
 
 [dependencies]
-figma-rest = { path = "../../../features/figma/figma-rest" }
-figma-import = { path = "../../../features/figma/figma-import" }
-render = { path = "../../../features/render/render" }
-document-proto = { path = "../../../features/document/document-proto", default-features = false }
-document-text = { path = "../../../features/document/document-text" }
-document-io = { path = "../../../features/document/document-io" }
-surface-proto = { path = "../../../features/surface/surface-proto" }
-surface-runtime = { path = "../../../features/surface/surface-runtime", features = ["remote"] }
+figma-rest = { path = "../../../crates/frame/figma/figma-rest" }
+figma-import = { path = "../../../crates/frame/figma/figma-import" }
+render = { path = "../../../crates/frame/render/render" }
+document-proto = { path = "../../../crates/frame/document/document-proto", default-features = false }
+document-text = { path = "../../../crates/frame/document/document-text" }
+document-io = { path = "../../../crates/frame/document/document-io" }
+surface-proto = { path = "../../../crates/frame/surface/surface-proto" }
+surface-runtime = { path = "../../../crates/frame/surface/surface-runtime", features = ["remote"] }
 tokio = { workspace = true }
 architect = { workspace = true, features = ["vox"] }
-surface-kit = { path = "../../../features/surface/surface-kit" }
-surface-widgets = { path = "../../../features/surface/surface-widgets" }
-surface-memory = { path = "../../../features/surface/surface-memory" }
-feed-memory = { path = "../../../features/feed/feed-memory" }
+surface-kit = { path = "../../../crates/frame/surface/surface-kit" }
+surface-widgets = { path = "../../../crates/frame/surface/surface-widgets" }
+surface-memory = { path = "../../../crates/frame/surface/surface-memory" }
+feed-memory = { path = "../../../crates/frame/feed/feed-memory" }
 serde = { workspace = true }
 serde_json = { workspace = true }
 roxmltree = "0.20"
@@ -37,7 +37,7 @@ svg_export = ["render/svg_export"]
 anyrender = ["render/anyrender", "dep:kurbo", "dep:peniko", "dep:skrifa", "dep:vello", "dep:winit", "dep:image", "dep:pollster", "svg_export"]
 
 [dev-dependencies]
-design-lint = { path = "../../../features/design/design-lint" }
+design-lint = { path = "../../../crates/frame/design/design-lint" }
 
 [lints]
 workspace = true

@@ -43,7 +43,7 @@ fn rack(units: &[Which], width: f64, index: usize) -> Embed {
 
 fn main() {
     let mut args = std::env::args().skip(1);
-    let mut out = PathBuf::from(concat!(env!("CARGO_MANIFEST_DIR"), "/../../examples/embed"));
+    let mut out = PathBuf::from(concat!(env!("CARGO_MANIFEST_DIR"), "/../examples/embed"));
     let mut compare: Option<PathBuf> = None;
     while let Some(a) = args.next() {
         if a == "--compare" {

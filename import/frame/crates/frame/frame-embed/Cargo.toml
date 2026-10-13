@@ -11,15 +11,15 @@ publish = false
 # API. It has no wire contract or backends of its own.
 
 [dependencies]
-surface-proto = { path = "../../features/surface/surface-proto", default-features = false }
-surface-runtime = { path = "../../features/surface/surface-runtime", default-features = false }
-surface-widgets = { path = "../../features/surface/surface-widgets" }
-surface-kit = { path = "../../features/surface/surface-kit" }
-document-proto = { path = "../../features/document/document-proto", default-features = false }
+surface-proto = { path = "../surface/surface-proto", default-features = false }
+surface-runtime = { path = "../surface/surface-runtime", default-features = false }
+surface-widgets = { path = "../surface/surface-widgets" }
+surface-kit = { path = "../surface/surface-kit" }
+document-proto = { path = "../document/document-proto", default-features = false }
 # Only the primitive collector: no GPU backend is pulled in.
-render = { path = "../../features/render/render", default-features = false }
-render-fonts = { path = "../../features/render/render-fonts" }
-render-canvas = { path = "../../features/render/render-canvas" }
+render = { path = "../render/render", default-features = false }
+render-fonts = { path = "../render/render-fonts" }
+render-canvas = { path = "../render/render-canvas" }
 
 kurbo = { workspace = true }
 peniko = { workspace = true }
@@ -45,7 +45,7 @@ anyrender-0-11 = ["dep:anyrender_0_11", "render-canvas/anyrender-0-11"]
 nice-plug = ["cpu", "dep:nice-plug-core"]
 
 [dev-dependencies]
-surface-memory = { path = "../../features/surface/surface-memory" }
+surface-memory = { path = "../surface/surface-memory" }
 
 [[example]]
 name = "strips"
