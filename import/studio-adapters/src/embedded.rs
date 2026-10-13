@@ -32,6 +32,14 @@ use crate::overlay::{DocumentMessage, DocumentProxy};
 /// is enabled. Run `dx serve` to connect.
 pub struct EmbeddedView {
     doc: DioxusDocument,
+    /// Kept so the view can be [remounted](EmbeddedView::remount) — a
+    /// panel that is closed and opened again should come back bound to
+    /// whatever is selected *now*, not to whatever was selected the
+    /// first time it opened.
+    app: fn() -> Element,
+    /// Same, and why these are `Fn` rather than `FnOnce`: a remount has
+    /// to be able to inject them a second time.
+    contexts: Vec<Rc<dyn Fn()>>,
     doc_message_rx: Receiver<DocumentMessage>,
     gpu: GpuState,
     scene: Scene,
@@ -64,7 +72,7 @@ impl EmbeddedView {
         window: &W,
         width: u32,
         height: u32,
-        contexts: Vec<Box<dyn FnOnce()>>,
+        contexts: Vec<Rc<dyn Fn()>>,
     ) -> Result<Self, GpuError>
     where
         W: raw_window_handle::HasWindowHandle + raw_window_handle::HasDisplayHandle,
@@ -95,7 +103,7 @@ impl EmbeddedView {
         // Inject contexts
         doc.vdom.in_scope(ScopeId::ROOT, || {
             provide_context(doc_proxy as Rc<dyn document::Document>);
-            for ctx_fn in contexts {
+            for ctx_fn in &contexts {
                 ctx_fn();
             }
         });
@@ -127,6 +135,8 @@ impl EmbeddedView {
 
         Ok(Self {
             doc,
+            app,
+            contexts,
             doc_message_rx: doc_rx,
             gpu,
             scene: Scene::new(),
@@ -151,7 +161,7 @@ impl EmbeddedView {
         app: fn() -> Element,
         width: u32,
         height: u32,
-        contexts: Vec<Box<dyn FnOnce()>>,
+        contexts: Vec<Rc<dyn Fn()>>,
     ) -> Result<Self, GpuError> {
         let width = width.max(1);
         let height = height.max(1);
@@ -175,7 +185,7 @@ impl EmbeddedView {
 
         doc.vdom.in_scope(ScopeId::ROOT, || {
             provide_context(doc_proxy as Rc<dyn document::Document>);
-            for ctx_fn in contexts {
+            for ctx_fn in &contexts {
                 ctx_fn();
             }
         });
@@ -202,6 +212,8 @@ impl EmbeddedView {
 
         Ok(Self {
             doc,
+            app,
+            contexts,
             doc_message_rx: doc_rx,
             gpu,
             scene: Scene::new(),
@@ -215,6 +227,66 @@ impl EmbeddedView {
             readback: Vec::new(),
             needs_blit: false,
         })
+    }
+
+    /// Rebuild the component tree from scratch, keeping the window, the
+    /// GPU surface and the size.
+    ///
+    /// A panel's view outlives its visibility — hiding only takes the
+    /// HWND off screen, because throwing the GPU state away and building
+    /// it again costs a fifth of a second on every dock toggle. The
+    /// component tree, though, is not a resource: it is a *binding*. A
+    /// tool panel resolves "the take I am editing" once, when it mounts,
+    /// so a view that survives hiding goes on editing the take that was
+    /// selected the first time it ever opened, however many items the
+    /// user has clicked since. Reopening a tool is exactly when you mean
+    /// "target what I have selected now" — so showing a hidden panel
+    /// remounts it.
+    ///
+    /// Cheap: a fresh `VirtualDom` and one build, no GPU work.
+    pub fn remount(&mut self) {
+        let (doc_tx, doc_rx) = unbounded();
+        let doc_proxy = Rc::new(DocumentProxy::new(doc_tx));
+
+        let viewport = Viewport::new(
+            self.width,
+            self.height,
+            self.scale_factor,
+            ColorScheme::Dark,
+        );
+        let mut doc = DioxusDocument::new(
+            VirtualDom::new(self.app),
+            DocumentConfig {
+                viewport: Some(viewport),
+                ..Default::default()
+            },
+        );
+
+        let contexts = self.contexts.clone();
+        doc.vdom.in_scope(ScopeId::ROOT, || {
+            provide_context(doc_proxy as Rc<dyn document::Document>);
+            for ctx_fn in &contexts {
+                ctx_fn();
+            }
+        });
+
+        doc.initial_build();
+        while let Ok(msg) = doc_rx.try_recv() {
+            match msg {
+                DocumentMessage::CreateHeadElement {
+                    name,
+                    attributes,
+                    contents,
+                } => {
+                    doc.create_head_element(&name, &attributes, &contents);
+                }
+            }
+        }
+        doc.inner_mut().resolve(0.0);
+
+        self.doc = doc;
+        self.doc_message_rx = doc_rx;
+        self.needs_redraw.store(true, Ordering::Relaxed);
     }
 
     /// Tick: poll vdom, resolve layout, render to GPU surface.
@@ -323,6 +395,43 @@ impl EmbeddedView {
 
     pub fn size(&self) -> (u32, u32) {
         (self.width, self.height)
+    }
+
+    /// The HiDPI scale this view lays out at — the divisor between the
+    /// physical client pixels REAPER reports and the CSS pixels Blitz
+    /// hit-tests in.
+    pub fn scale_factor(&self) -> f32 {
+        self.scale_factor
+    }
+
+    /// Layout size (CSS px) of the first element carrying `attr="value"`.
+    ///
+    /// The substitute for element resize events, which dioxus-native
+    /// does not deliver (`convert_resize_data` is unimplemented): a
+    /// host that needs to know how big one of its component's elements
+    /// came out — the expression editor's roll, sized by flex — polls
+    /// this from its own tick and pushes the answer back into app
+    /// state. Read-only against the laid-out document, so it must be
+    /// called from the UI thread, outside event dispatch.
+    pub fn element_size_by_attr(&self, attr: &str, value: &str) -> Option<(f64, f64)> {
+        let doc = self.doc.inner();
+        let mut stack = vec![doc.root_element().id];
+        while let Some(id) = stack.pop() {
+            let Some(node) = doc.get_node(id) else {
+                continue;
+            };
+            if let Some(el) = node.data.downcast_element()
+                && el
+                    .attrs()
+                    .iter()
+                    .any(|a| a.name.local.as_ref() == attr && a.value == value)
+            {
+                let rect = doc.get_client_bounding_rect(id)?;
+                return Some((rect.width, rect.height));
+            }
+            stack.extend(node.children.iter().copied());
+        }
+        None
     }
 
     /// Forward a UI event (mouse, keyboard) to the Blitz document.

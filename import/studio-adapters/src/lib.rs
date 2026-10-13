@@ -23,17 +23,21 @@
 //! All rendering is timer-driven (~30 Hz from REAPER's main thread).
 
 pub mod dock;
+pub mod dock_host;
 pub mod embedded;
 pub mod hot_reload;
 #[cfg(target_os = "macos")]
 pub mod macos_input;
 pub mod overlay;
 pub mod service;
+pub mod snapshot;
 
 pub use dock::{
-    DockablePanelConfig, hide_panel, is_panel_visible, register_panel, restore_dock_state,
-    save_dock_state, show_panel, toggle_panel, unregister_all_panels, update_panels,
+    DockablePanelConfig, hide_panel, is_panel_visible, prewarm_panel, register_panel,
+    restore_dock_state, save_dock_state, show_panel, toggle_panel, unregister_all_panels,
+    update_panels,
 };
+pub use dock_host::ReaperDockHost;
 pub use embedded::EmbeddedView;
 pub use overlay::{DioxusOverlay, DioxusOverlayBuilder, OverlayConfig};
 

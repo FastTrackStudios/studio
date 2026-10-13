@@ -1,23 +1,35 @@
 [package]
 name = "reaper-dioxus"
-version = "0.1.0"
-edition = "2024"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
 license.workspace = true
-description = "Dioxus-native overlay rendering for REAPER extensions"
+description = "Dioxus-native overlay rendering for REAPER extensions (internal — access via daw facade with reaper-ui feature)"
+
+[package.metadata]
+
+[package.metadata."docs.rs"]
+rustdoc-args = ["--html-in-header", "arborium-header.html"]
 
 [dependencies]
-reaper-embed = { path = "../reaper-embed" }
+reaper-embed = { workspace = true }
 
-# DAW module system (for PanelDef type)
-daw.workspace = true
+# Module-system primitives (PanelDef, DockPosition). Leaf crate — does NOT
+# pull in the daw facade, avoiding the daw <-> reaper-dioxus cycle.
+daw-module = { workspace = true }
+
+# DockHostService trait + DockHandle/DockEvent types
+daw-proto = { workspace = true }
+architect = { workspace = true }
+tokio = { workspace = true, features = ["sync"] }
+thiserror.workspace = true
 
 # REAPER API access
 reaper-low.workspace = true
 reaper-medium.workspace = true
 reaper-high.workspace = true
 
-# Dioxus-native with blitz rendering — workspace-pinned rev (one blitz
-# tree-wide; `links = servo_style_crate` forbids a second rev).
+# Dioxus-native with blitz rendering
 dioxus-native.workspace = true
 blitz-dom.workspace = true
 blitz-paint.workspace = true
@@ -26,7 +38,6 @@ blitz-traits.workspace = true
 # Rendering pipeline
 anyrender_vello.workspace = true
 vello.workspace = true
-wgpu.workspace = true
 
 # Hot reload (enabled by default for dev, disable for release)
 dioxus-devtools = { workspace = true, optional = true }
@@ -39,9 +50,6 @@ futures-util = "0.3"
 crossbeam = "0.8"
 raw-window-handle = "0.6"
 tracing.workspace = true
-# The upstream `desktop-renderer` feature (dioxus-embedded + gtk) is
-# dropped in the vendored copy: it hung off dioxus-embedded.git (dead
-# starcommand URL) and nothing in-tree consumes it.
 
 [features]
 default = ["hot-reload"]
@@ -55,5 +63,12 @@ x11-dl = "2.21"
 cocoa.workspace = true
 objc.workspace = true
 
-[lints]
-workspace = true
+[dev-dependencies]
+tempfile = "3"
+
+[lints.rust]
+unsafe_code = "allow"
+
+
+[lints.rustdoc]
+broken_intra_doc_links = "allow"

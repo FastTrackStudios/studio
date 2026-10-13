@@ -24,6 +24,118 @@ use std::ptr;
 
 use crate::embedded::EmbeddedView;
 
+/// The keyboard modifiers held right now, polled from SWELL.
+///
+/// SWELL's mouse and key messages reach our wndproc without usable
+/// modifier state, and a modifier pressed while another window had
+/// focus never produces a WM_KEYDOWN here at all — so the only honest
+/// source is a poll at event time. Without this every event carried
+/// `Modifiers::empty()` and no Ctrl/Shift/Alt mouse gesture (e.g. the
+/// expression editor's Ctrl-drag draw-notes modifier) could ever fire
+/// inside a panel.
+fn current_modifiers() -> keyboard_types::Modifiers {
+    use keyboard_types::Modifiers;
+    const VK_SHIFT: c_int = 0x10;
+    const VK_CONTROL: c_int = 0x11;
+    const VK_MENU: c_int = 0x12;
+    const VK_LWIN: c_int = 0x5B;
+
+    if !is_initialized() {
+        return Modifiers::empty();
+    }
+    let swell = swell();
+    let down = |vk: c_int| (swell.GetAsyncKeyState(vk) as u16 & 0x8000) != 0;
+    let mut mods = Modifiers::empty();
+    if down(VK_SHIFT) {
+        mods |= Modifiers::SHIFT;
+    }
+    if down(VK_CONTROL) {
+        mods |= Modifiers::CONTROL;
+    }
+    if down(VK_MENU) {
+        mods |= Modifiers::ALT;
+    }
+    if down(VK_LWIN) {
+        mods |= Modifiers::META;
+    }
+    mods
+}
+
+thread_local! {
+    /// Latest unforwarded pointer position per panel window.
+    ///
+    /// X11 delivers WM_MOUSEMOVE at hundreds per second, and every
+    /// forwarded move runs a full Dioxus dispatch + style/layout pass
+    /// synchronously — which is what made dragging in a dense panel
+    /// (the expression editor's roll) crawl. Moves are coalesced here
+    /// and flushed once per update tick, and immediately before any
+    /// event whose meaning depends on the pointer position (buttons,
+    /// wheel).
+    static PENDING_MOVES: RefCell<HashMap<usize, (f32, f32)>> =
+        RefCell::new(HashMap::new());
+}
+
+/// Flush the coalesced pointer move for `hwnd`, if any.
+fn flush_pending_move(hwnd: raw::HWND) {
+    let pending = PENDING_MOVES.with(|m| m.borrow_mut().remove(&(hwnd as usize)));
+    if let Some((x, y)) = pending {
+        forward_mouse_event(
+            hwnd,
+            blitz_traits::events::UiEvent::PointerMove(mouse_pointer_event(
+                x,
+                y,
+                blitz_traits::events::MouseEventButton::Main,
+                blitz_traits::events::MouseEventButtons::empty(),
+            )),
+        );
+    }
+}
+
+/// The HiDPI scale of the panel living at `hwnd`, 1.0 before init.
+fn panel_scale(hwnd: raw::HWND) -> f32 {
+    PANELS.with(|panels| {
+        panels
+            .borrow()
+            .values()
+            .find(|p| p.hwnd == hwnd)
+            .and_then(|p| p.view.as_ref())
+            .map(|v| v.scale_factor())
+            .unwrap_or(1.0)
+    })
+}
+
+/// Client-area mouse coordinates from `lparam`, converted to the CSS
+/// pixels Blitz lays out in.
+///
+/// Blitz's hit testing compares event coordinates against Taffy's
+/// layout, which is in CSS px — physical px divided by the HiDPI
+/// scale. Forwarding raw client pixels meant that at any scale other
+/// than 1.0 every hit drifted by `(scale - 1) × position`: barely
+/// visible on the header buttons near the origin, badly wrong deep
+/// inside the editor's roll.
+fn client_css_coords(hwnd: raw::HWND, lparam: isize) -> (f32, f32) {
+    let x = (lparam & 0xFFFF) as i16 as f32;
+    let y = ((lparam >> 16) & 0xFFFF) as i16 as f32;
+    let scale = panel_scale(hwnd);
+    (x / scale, y / scale)
+}
+
+/// Same, for `WM_MOUSEWHEEL`, whose `lparam` is in screen coordinates.
+fn wheel_css_coords(hwnd: raw::HWND, lparam: isize) -> (f32, f32) {
+    let mut pt = raw::POINT {
+        x: (lparam & 0xFFFF) as i16 as i32,
+        y: ((lparam >> 16) & 0xFFFF) as i16 as i32,
+    };
+    unsafe {
+        swell().ScreenToClient(hwnd, &mut pt);
+    }
+    let scale = panel_scale(hwnd);
+    (pt.x as f32 / scale, pt.y as f32 / scale)
+}
+
+/// Build a `BlitzPointerEvent` for a mouse pointer at window-local (x, y).
+/// All coord fields are filled with the same value because we don't track
+/// page/screen offsets inside REAPER's docker windows.
 fn mouse_pointer_event(
     x: f32,
     y: f32,
@@ -44,11 +156,10 @@ fn mouse_pointer_event(
         button,
         buttons,
         // Same value as every other coord field — no page/screen
-        // offsets inside REAPER docker windows (blitz alpha.6 drift fix,
-        // mirrors daw-reaper-dioxus).
+        // offsets inside REAPER docker windows.
         element: blitz_traits::events::Point { x, y },
         active_pointers: Default::default(),
-        mods: keyboard_types::Modifiers::empty(),
+        mods: current_modifiers(),
         details: blitz_traits::events::PointerDetails::default(),
     }
 }
@@ -70,6 +181,37 @@ pub struct DockablePanelConfig {
     pub default_width: u32,
     pub default_height: u32,
     pub show_on_first_launch: bool,
+    /// Take keyboard focus on any click, not only on text inputs.
+    ///
+    /// For panels that are input surfaces in their own right (the
+    /// expression editor): focus is what routes keys to the panel's own
+    /// input context instead of REAPER's. Off by default because a
+    /// focus-stealing panel with no such context locks REAPER's
+    /// keyboard out — see the guard at the WM_LBUTTONDOWN handler.
+    /// Set after registration via [`set_panel_focus_on_click`].
+    pub focus_on_click: bool,
+}
+
+/// Opt a registered panel into taking keyboard focus on any click.
+pub fn set_panel_focus_on_click(id: PanelId, on: bool) {
+    PANELS.with(|panels| {
+        if let Some(panel) = panels.borrow_mut().get_mut(id) {
+            panel.config.focus_on_click = on;
+        }
+    });
+}
+
+/// Whether `hwnd` is the window of the panel registered under `id`.
+///
+/// For host-side context probes (reaper-input asks "whose window is
+/// this keystroke headed for?").
+pub fn is_panel_hwnd(id: PanelId, hwnd: *mut std::ffi::c_void) -> bool {
+    PANELS.with(|panels| {
+        panels
+            .borrow()
+            .get(id)
+            .is_some_and(|p| std::ptr::eq(p.hwnd as *const std::ffi::c_void, hwnd))
+    })
 }
 
 /// A live dockable panel registered with REAPER's docker system.
@@ -78,7 +220,7 @@ struct LivePanel {
     hwnd: raw::HWND,
     view: Option<EmbeddedView>,
     visible: bool,
-    contexts: Vec<Box<dyn FnOnce()>>,
+    contexts: Vec<std::rc::Rc<dyn Fn()>>,
     /// Track failed init attempts to avoid infinite retry spam.
     init_attempts: u32,
     /// Last polled IsWindowVisible state (to log changes only).
@@ -110,7 +252,12 @@ const DEFAULT_CLASS: &str = "FTSDioxusPanel\0";
 // ---------------------------------------------------------------------------
 
 thread_local! {
-    static PANELS: RefCell<HashMap<PanelId, LivePanel>> = RefCell::new(HashMap::new());
+    // REAPER may tear the extension down while native/Dioxus state is still
+    // connected to SWELL/GDK. Let explicit unregister paths clean this up, but
+    // do not run `VirtualDom` destructors from TLS shutdown where a panic aborts
+    // the whole host.
+    static PANELS: &'static RefCell<HashMap<PanelId, LivePanel>> =
+        Box::leak(Box::new(RefCell::new(HashMap::new())));
 }
 
 static REAPER_API: std::sync::OnceLock<&'static Reaper> = std::sync::OnceLock::new();
@@ -271,10 +418,14 @@ impl reaper_medium::HwndInfo for DockPanelHwndInfo {
 }
 
 fn reaper() -> &'static Reaper {
-    REAPER_API.get().expect("dock::init() must be called first")
+    REAPER_API.get().copied().unwrap_or_else(Reaper::get)
 }
 fn swell() -> &'static Swell {
-    SWELL_API.get().expect("dock::init() must be called first")
+    SWELL_API.get().copied().unwrap_or_else(Swell::get)
+}
+
+fn is_initialized() -> bool {
+    true
 }
 
 /// Assert we're on the main thread (debug builds only).
@@ -310,7 +461,7 @@ impl HasWindowHandle for RenderSurface {
             use raw_window_handle::AppKitWindowHandle;
             use std::ptr::NonNull;
             let handle = AppKitWindowHandle::new(
-                NonNull::new(self.hwnd as *mut c_void).ok_or(HandleError::Unavailable)?,
+                NonNull::new(self.hwnd as *mut std::ffi::c_void).ok_or(HandleError::Unavailable)?,
             );
             Ok(unsafe { WindowHandle::borrow_raw(RawWindowHandle::AppKit(handle)) })
         }
@@ -354,7 +505,7 @@ impl HasDisplayHandle for RenderSurface {
 /// Fires on WM_CONTEXTMENU — on Linux SWELL this is any right-click in the
 /// panel HWND (tab + content). Minimal options: Dock/Undock + Close.
 fn show_dock_context_menu(hwnd: raw::HWND, screen_x: i32, screen_y: i32) {
-    use std::os::raw::{c_int, c_void};
+    use std::os::raw::c_int;
     const TPM_RETURNCMD: c_int = 0x0100;
     const TPM_NONOTIFY: c_int = 0x0080;
     const CMD_CLOSE: u32 = 1;
@@ -417,12 +568,7 @@ fn show_dock_context_menu(hwnd: raw::HWND, screen_x: i32, screen_y: i32) {
 
     match cmd as u32 {
         CMD_CLOSE => {
-            PANELS.with(|panels| {
-                let mut panels = panels.borrow_mut();
-                if let Some(panel) = panels.values_mut().find(|p| p.hwnd == hwnd) {
-                    hide_panel_inner(panel);
-                }
-            });
+            hide_panel_by_hwnd(hwnd);
         }
         CMD_TOGGLE_DOCK => {
             PANELS.with(|panels| {
@@ -448,11 +594,13 @@ unsafe fn insert_menu_item(menu: raw::HMENU, id: u32, label: &str) {
     let swell = Swell::get();
     let mut label_buf: Vec<u8> = label.as_bytes().to_vec();
     label_buf.push(0);
-    let mut mi = raw::MENUITEMINFO {
-        fMask: raw::MIIM_TYPE | raw::MIIM_DATA | raw::MIIM_ID,
-        wID: id,
-        dwTypeData: label_buf.as_mut_ptr() as *mut _,
-        ..unsafe { std::mem::zeroed() }
+    let mut mi = unsafe {
+        raw::MENUITEMINFO {
+            fMask: raw::MIIM_TYPE | raw::MIIM_DATA | raw::MIIM_ID,
+            wID: id,
+            dwTypeData: label_buf.as_mut_ptr() as *mut _,
+            ..std::mem::zeroed()
+        }
     };
     unsafe {
         swell.InsertMenuItem(menu, -1, 1, &mut mi);
@@ -471,7 +619,7 @@ unsafe fn insert_menu_item(menu: raw::HMENU, id: u32, label: &str) {
 
 pub fn register_panel(
     config: DockablePanelConfig,
-    contexts: Vec<Box<dyn FnOnce()>>,
+    contexts: Vec<std::rc::Rc<dyn Fn()>>,
     reaper: &'static Reaper,
     swell: &'static Swell,
 ) {
@@ -486,6 +634,10 @@ pub fn register_panel(
     if hwnd.is_null() {
         tracing::error!("Failed to create dock panel window for '{}'", config.title);
         return;
+    }
+    #[cfg(target_os = "linux")]
+    if config.default_dock_position == -1 {
+        apply_floating_window_hints(hwnd, &config, swell, reaper);
     }
 
     // Dock registration order (matches reaimgui docker.cpp:404-420):
@@ -511,7 +663,7 @@ pub fn register_panel(
                 .to_bytes()
                 .is_empty()
     };
-    if first_launch && config.default_dock_position >= 0 {
+    if config.default_dock_position == -1 || (first_launch && config.default_dock_position >= 0) {
         unsafe { reaper.Dock_UpdateDockID(ident.as_ptr(), config.default_dock_position) };
     }
     if first_launch {
@@ -525,12 +677,27 @@ pub fn register_panel(
 
     let title_c = CString::new(config.title).unwrap();
     unsafe {
-        reaper.DockWindowAddEx(
-            hwnd,
-            title_c.as_ptr(),
-            ident.as_ptr(),
-            config.show_on_first_launch,
-        );
+        if config.default_dock_position >= 0 {
+            reaper.DockWindowAddEx(
+                hwnd,
+                title_c.as_ptr(),
+                ident.as_ptr(),
+                config.show_on_first_launch,
+            );
+        } else if config.show_on_first_launch {
+            swell.SetWindowPos(
+                hwnd,
+                ptr::null_mut(),
+                200,
+                200,
+                config.default_width as c_int,
+                config.default_height as c_int,
+                (raw::SWP_NOZORDER | raw::SWP_SHOWWINDOW) as c_int,
+            );
+            swell.ShowWindow(hwnd, raw::SW_SHOW as c_int);
+            #[cfg(target_os = "linux")]
+            apply_floating_window_hints(hwnd, &config, swell, reaper);
+        }
     }
 
     // Register a screenset callback so REAPER can restore dock tab focus
@@ -570,8 +737,16 @@ pub fn register_panel(
 }
 
 /// Register a panel from a DawModule PanelDef (service API).
-pub fn register_panel_from_service(def: &daw::module::PanelDef) {
+pub fn register_panel_from_service(def: &daw_module::PanelDef) {
     use dioxus_native::prelude::Element;
+
+    if !is_initialized() {
+        tracing::warn!(
+            panel = def.id,
+            "Ignoring panel registration before dock::init"
+        );
+        return;
+    }
 
     let reaper = reaper();
     let swell = swell();
@@ -580,40 +755,39 @@ pub fn register_panel_from_service(def: &daw::module::PanelDef) {
     let component: fn() -> Element = unsafe { std::mem::transmute(def.component.as_ptr()) };
 
     let dock_pos = match def.default_dock {
-        daw::module::DockPosition::Bottom => 0,
-        daw::module::DockPosition::Left => 1,
-        daw::module::DockPosition::Top => 2,
-        daw::module::DockPosition::Right => 3,
-        daw::module::DockPosition::Floating => -1,
+        daw_module::DockPosition::Bottom => 0,
+        daw_module::DockPosition::Left => 1,
+        daw_module::DockPosition::Top => 2,
+        daw_module::DockPosition::Right => 3,
+        daw_module::DockPosition::Floating => -1,
     };
 
-    register_panel(
-        DockablePanelConfig {
-            id: def.id,
-            title: def.title,
-            default_dock_position: dock_pos,
-            app: component,
-            default_width: def.default_size.0 as u32,
-            default_height: def.default_size.1 as u32,
-            show_on_first_launch: false,
-        },
-        Vec::new(),
-        reaper,
-        swell,
-    );
+    let config = DockablePanelConfig {
+        id: def.id,
+        title: def.title,
+        default_dock_position: dock_pos,
+        app: component,
+        default_width: def.default_size.0 as u32,
+        default_height: def.default_size.1 as u32,
+        show_on_first_launch: false,
+        focus_on_click: false,
+    };
+
+    register_panel(config, Vec::new(), reaper, swell);
 }
 
 pub fn toggle_panel(id: PanelId) {
     #[cfg(debug_assertions)]
     assert_main_thread();
-    PANELS.with(|panels| {
-        let mut panels = panels.borrow_mut();
-        if let Some(panel) = panels.get_mut(id) {
-            if panel.visible {
-                hide_panel_inner(panel);
-            } else {
-                show_panel_inner(panel);
-            }
+    if !is_initialized() {
+        tracing::warn!(panel = id, "Ignoring toggle_panel before dock::init");
+        return;
+    }
+    with_panel_removed(id, |panel| {
+        if panel.visible {
+            hide_panel_inner(panel);
+        } else {
+            show_panel_inner(panel);
         }
     });
 }
@@ -621,12 +795,54 @@ pub fn toggle_panel(id: PanelId) {
 pub fn show_panel(id: PanelId) {
     #[cfg(debug_assertions)]
     assert_main_thread();
-    PANELS.with(|panels| {
-        let mut panels = panels.borrow_mut();
-        if let Some(panel) = panels.get_mut(id)
-            && !panel.visible
-        {
+    if !is_initialized() {
+        tracing::warn!(panel = id, "Ignoring show_panel before dock::init");
+        return;
+    }
+    with_panel_removed(id, |panel| {
+        if !panel.visible {
             show_panel_inner(panel);
+        } else {
+            focus_panel_inner(panel);
+        }
+    });
+}
+
+/// Layout size (CSS px) of the first element carrying `attr="value"`
+/// inside a panel's document. `None` when the panel has no live view or
+/// no such element. See [`EmbeddedView::element_size_by_attr`].
+pub fn panel_element_size(id: PanelId, attr: &str, value: &str) -> Option<(f64, f64)> {
+    #[cfg(debug_assertions)]
+    assert_main_thread();
+    PANELS.with(|panels| {
+        let panels = panels.borrow();
+        panels
+            .get(id)?
+            .view
+            .as_ref()?
+            .element_size_by_attr(attr, value)
+    })
+}
+
+/// Remount a panel's component tree so its root component re-reads
+/// whatever external state it captures at mount.
+///
+/// `show_panel` remounts only on the hidden→visible transition; an
+/// action that loads new state into an *already open* panel needs this
+/// to make the panel pick it up (e.g. the expression editor's
+/// open-on-selected-item action, fired while the editor is docked and
+/// showing a previous item).
+pub fn remount_panel(id: PanelId) {
+    #[cfg(debug_assertions)]
+    assert_main_thread();
+    if !is_initialized() {
+        tracing::warn!(panel = id, "Ignoring remount_panel before dock::init");
+        return;
+    }
+    with_panel_removed(id, |panel| {
+        if let Some(view) = &mut panel.view {
+            view.remount();
+            view.mark_dirty();
         }
     });
 }
@@ -634,11 +850,12 @@ pub fn show_panel(id: PanelId) {
 pub fn hide_panel(id: PanelId) {
     #[cfg(debug_assertions)]
     assert_main_thread();
-    PANELS.with(|panels| {
-        let mut panels = panels.borrow_mut();
-        if let Some(panel) = panels.get_mut(id)
-            && panel.visible
-        {
+    if !is_initialized() {
+        tracing::warn!(panel = id, "Ignoring hide_panel before dock::init");
+        return;
+    }
+    with_panel_removed(id, |panel| {
+        if panel.visible {
             hide_panel_inner(panel);
         }
     });
@@ -646,6 +863,90 @@ pub fn hide_panel(id: PanelId) {
 
 pub fn is_panel_visible(id: PanelId) -> bool {
     PANELS.with(|panels| panels.borrow().get(id).is_some_and(|p| p.visible))
+}
+
+fn with_panel_removed(id: PanelId, f: impl FnOnce(&mut LivePanel)) {
+    let Some(mut panel) = PANELS.with(|panels| panels.borrow_mut().remove(id)) else {
+        return;
+    };
+    f(&mut panel);
+    PANELS.with(|panels| {
+        panels.borrow_mut().insert(id, panel);
+    });
+}
+
+fn hide_panel_by_hwnd(hwnd: raw::HWND) {
+    let id = PANELS.with(|panels| {
+        panels
+            .borrow()
+            .values()
+            .find(|panel| panel.hwnd == hwnd)
+            .map(|panel| panel.config.id)
+    });
+    if let Some(id) = id {
+        hide_panel(id);
+    }
+}
+
+/// Create a panel's Dioxus view while leaving the native window hidden.
+///
+/// This pays the renderer/component startup cost during extension startup so
+/// latency-sensitive panels can appear immediately when shown later.
+pub fn prewarm_panel(id: PanelId) {
+    #[cfg(debug_assertions)]
+    assert_main_thread();
+    if !is_initialized() {
+        tracing::warn!(panel = id, "Ignoring prewarm_panel before dock::init");
+        return;
+    }
+    PANELS.with(|panels| {
+        let mut panels = panels.borrow_mut();
+        if let Some(panel) = panels.get_mut(id) {
+            try_init_embedded_view(panel, InitVisibility::HiddenPrewarm);
+            if let Some(view) = panel.view.as_mut() {
+                view.update();
+                view.mark_dirty();
+            }
+        }
+    });
+}
+
+/// Dispatch a synthetic UI event to a panel's EmbeddedView.
+/// Used by `DockHostService::inject_ui_event` to drive interaction
+/// tests without a real window-system event.
+///
+/// Returns `true` if the panel was found and the event was queued.
+pub fn dispatch_event_to_panel(id: PanelId, event: blitz_traits::events::UiEvent) -> bool {
+    PANELS.with(|panels| {
+        let mut panels = panels.borrow_mut();
+        let Some(panel) = panels.get_mut(id) else {
+            tracing::warn!(panel = id, "inject: no such panel");
+            return false;
+        };
+        let Some(view) = panel.view.as_mut() else {
+            tracing::warn!(panel = id, "inject: panel has no view");
+            return false;
+        };
+        view.handle_event(event);
+        true
+    })
+}
+
+/// Capture the current rendered pixels of a panel by id.
+///
+/// Returns `(width, height, bgra)` if the panel is registered AND has
+/// completed at least one offscreen render tick (its readback buffer is
+/// non-empty). Used by the visual e2e test path through
+/// `DockHostService::capture_panel_pixels`.
+pub fn capture_panel_pixels(id: PanelId) -> Option<(u32, u32, Vec<u8>)> {
+    PANELS.with(|panels| {
+        let panels = panels.borrow();
+        let panel = panels.get(id)?;
+        let view = panel.view.as_ref()?;
+        let bgra = view.bgra_pixels()?.to_vec();
+        let (w, h) = view.size();
+        Some((w, h, bgra))
+    })
 }
 
 thread_local! {
@@ -734,7 +1035,23 @@ pub fn update_panels() {
 
             // Deferred renderer init (max 30 retries ≈ 1 second)
             if panel_needs_init(panel) && panel.init_attempts < 30 {
-                try_init_embedded_view(panel);
+                try_init_embedded_view(panel, InitVisibility::Visible);
+            }
+
+            // Deliver the coalesced pointer move for this tick — one
+            // dispatch per frame instead of one per X11 motion event.
+            let pending = PENDING_MOVES.with(|m| m.borrow_mut().remove(&(panel.hwnd as usize)));
+            if let Some((x, y)) = pending
+                && let Some(view) = &mut panel.view
+            {
+                view.handle_event(blitz_traits::events::UiEvent::PointerMove(
+                    mouse_pointer_event(
+                        x,
+                        y,
+                        blitz_traits::events::MouseEventButton::Main,
+                        blitz_traits::events::MouseEventButtons::empty(),
+                    ),
+                ));
             }
 
             let mut rect = raw::RECT {
@@ -749,47 +1066,48 @@ pub fn update_panels() {
             let w = (rect.right - rect.left).unsigned_abs();
             let h = (rect.bottom - rect.top).unsigned_abs();
 
-            if w > 0 && h > 0 {
-                if let Some(view) = &mut panel.view {
-                    let (cur_w, cur_h) = view.size();
-                    if w != cur_w || h != cur_h {
-                        view.resize(w, h);
+            if w > 0
+                && h > 0
+                && let Some(view) = &mut panel.view
+            {
+                let (cur_w, cur_h) = view.size();
+                if w != cur_w || h != cur_h {
+                    view.resize(w, h);
+                }
+
+                // Cursor polling hack removed — WM_MOUSEMOVE reaches our
+                // wndproc directly now that we render offscreen instead
+                // of via an X11 child that absorbed events.
+
+                // Belt-and-braces for REAPER <6.29 (pre-hwnd_info): swap
+                // the SWELL class to TEXT_INPUT_CLASS while a text field
+                // has focus so REAPER suppresses global hotkeys. The
+                // hwnd_info hook already does this on 6.29+; this is
+                // extra insurance for older versions.
+                let wants = view.focused_is_text_input();
+                if wants != panel.wants_text_input {
+                    panel.wants_text_input = wants;
+                    let class = if wants {
+                        TEXT_INPUT_CLASS
+                    } else {
+                        DEFAULT_CLASS
+                    };
+                    unsafe {
+                        swell.SWELL_SetClassName(
+                            panel.hwnd,
+                            class.as_ptr() as *const std::os::raw::c_char,
+                        );
                     }
+                    tracing::trace!(panel = panel.config.id, wants, "SWELL class swap");
+                }
 
-                    // Cursor polling hack removed — WM_MOUSEMOVE reaches our
-                    // wndproc directly now that we render offscreen instead
-                    // of via an X11 child that absorbed events.
+                view.update();
 
-                    // Belt-and-braces for REAPER <6.29 (pre-hwnd_info): swap
-                    // the SWELL class to TEXT_INPUT_CLASS while a text field
-                    // has focus so REAPER suppresses global hotkeys. The
-                    // hwnd_info hook already does this on 6.29+; this is
-                    // extra insurance for older versions.
-                    let wants = view.focused_is_text_input();
-                    if wants != panel.wants_text_input {
-                        panel.wants_text_input = wants;
-                        let class = if wants {
-                            TEXT_INPUT_CLASS
-                        } else {
-                            DEFAULT_CLASS
-                        };
-                        unsafe {
-                            swell.SWELL_SetClassName(
-                                panel.hwnd,
-                                class.as_ptr() as *const std::os::raw::c_char,
-                            );
-                        }
-                        tracing::trace!(panel = panel.config.id, wants, "SWELL class swap");
-                    }
-
-                    view.update();
-
-                    // In offscreen mode, a completed frame means new pixels
-                    // are ready; tell SWELL to post WM_PAINT so we can blit.
-                    if view.take_needs_blit() {
-                        unsafe {
-                            swell.InvalidateRect(panel.hwnd, std::ptr::null(), 0);
-                        }
+                // In offscreen mode, a completed frame means new pixels
+                // are ready; tell SWELL to post WM_PAINT so we can blit.
+                if view.take_needs_blit() {
+                    unsafe {
+                        swell.InvalidateRect(panel.hwnd, std::ptr::null(), 0);
                     }
                 }
             }
@@ -825,11 +1143,13 @@ pub fn unregister_all_panels() {
 fn save_panel_state(panel: &LivePanel) {
     let reaper = reaper();
     let id = panel.config.id;
-    let section = CString::new(id).unwrap();
-    let vis_key = CString::new("visible").unwrap();
-    let vis_val = CString::new(if panel.visible { "1" } else { "0" }).unwrap();
-    unsafe {
-        reaper.SetExtState(section.as_ptr(), vis_key.as_ptr(), vis_val.as_ptr(), true);
+    save_panel_visibility(id, panel.visible);
+
+    // Floating panels are not registered with REAPER's docker while hidden.
+    // Querying their dock state during startup restore can block inside SWELL,
+    // so only docked panels persist a dock id here.
+    if panel.config.default_dock_position == -1 {
+        return;
     }
 
     // Persist dock position via REAPER's authoritative API.
@@ -838,6 +1158,16 @@ fn save_panel_state(panel: &LivePanel) {
     if dock_id >= 0 {
         let ident = CString::new(id).unwrap();
         unsafe { reaper.Dock_UpdateDockID(ident.as_ptr(), dock_id) };
+    }
+}
+
+fn save_panel_visibility(id: PanelId, visible: bool) {
+    let reaper = reaper();
+    let section = CString::new(id).unwrap();
+    let vis_key = CString::new("visible").unwrap();
+    let vis_val = CString::new(if visible { "1" } else { "0" }).unwrap();
+    unsafe {
+        reaper.SetExtState(section.as_ptr(), vis_key.as_ptr(), vis_val.as_ptr(), true);
     }
 }
 
@@ -853,6 +1183,12 @@ pub fn save_dock_state() {
 }
 
 pub fn restore_dock_state() {
+    #[cfg(debug_assertions)]
+    assert_main_thread();
+    if !is_initialized() {
+        tracing::warn!("Ignoring restore_dock_state before dock::init");
+        return;
+    }
     PANELS.with(|panels| {
         let mut panels = panels.borrow_mut();
         let reaper = reaper();
@@ -863,6 +1199,15 @@ pub fn restore_dock_state() {
             if !vis_ptr.is_null() {
                 let vis_str = unsafe { std::ffi::CStr::from_ptr(vis_ptr) }.to_string_lossy();
                 if vis_str == "1" {
+                    if panel.config.default_dock_position == -1 {
+                        tracing::info!(
+                            panel = panel.config.id,
+                            "Skipping startup restore for floating panel"
+                        );
+                        panel.visible = false;
+                        save_panel_visibility(panel.config.id, false);
+                        continue;
+                    }
                     show_panel_inner(panel);
                 }
             }
@@ -876,6 +1221,7 @@ pub fn restore_dock_state() {
 
 fn show_panel_inner(panel: &mut LivePanel) {
     let reaper = reaper();
+    let swell = swell();
 
     // Re-register with docker (removed on hide) so the tab reappears.
     // allowShow=true makes REAPER show the window; no separate ShowWindow needed
@@ -883,8 +1229,33 @@ fn show_panel_inner(panel: &mut LivePanel) {
     let ident = CString::new(panel.config.id).unwrap();
     let title = CString::new(panel.config.title).unwrap();
     unsafe {
-        reaper.DockWindowAddEx(panel.hwnd, title.as_ptr(), ident.as_ptr(), true);
-        reaper.DockWindowActivate(panel.hwnd);
+        if panel.config.default_dock_position == -1 {
+            reaper.Dock_UpdateDockID(ident.as_ptr(), panel.config.default_dock_position);
+            reaper.DockWindowRemove(panel.hwnd);
+            tracing::info!(
+                panel = panel.config.id,
+                width = panel.config.default_width,
+                height = panel.config.default_height,
+                "Showing floating panel outside REAPER docker"
+            );
+            swell.SetWindowPos(
+                panel.hwnd,
+                ptr::null_mut(),
+                200,
+                200,
+                panel.config.default_width as c_int,
+                panel.config.default_height as c_int,
+                (raw::SWP_NOZORDER | raw::SWP_SHOWWINDOW) as c_int,
+            );
+            swell.ShowWindow(panel.hwnd, raw::SW_SHOW as c_int);
+            #[cfg(target_os = "linux")]
+            apply_floating_window_hints(panel.hwnd, &panel.config, swell, reaper);
+            swell.SetFocus(panel.hwnd);
+        } else {
+            reaper.DockWindowAddEx(panel.hwnd, title.as_ptr(), ident.as_ptr(), true);
+            reaper.DockWindowActivate(panel.hwnd);
+            swell.SetFocus(panel.hwnd);
+        }
     }
 
     #[cfg(target_os = "macos")]
@@ -893,14 +1264,35 @@ fn show_panel_inner(panel: &mut LivePanel) {
     panel.visible = true;
     panel.init_attempts = 0;
 
-    // Mark dirty so the view renders on the next tick
-    if let Some(view) = &panel.view {
+    // Remount so the panel comes back bound to the project as it is
+    // *now*. The view survives hiding (see `hide_panel_inner`), and with
+    // it the component tree — which for a tool panel holds the take it
+    // resolved when it first mounted. Without this, opening the velocity
+    // tool on one item and later reopening it on another writes to the
+    // first one. See [`EmbeddedView::remount`].
+    if let Some(view) = &mut panel.view {
+        view.remount();
         view.mark_dirty();
     }
 
     // Caller holds PANELS borrow — use the per-panel variant to avoid
     // a reentrant borrow that would RefCell-panic inside extern "C" wndproc.
     save_panel_state(panel);
+}
+
+fn focus_panel_inner(panel: &mut LivePanel) {
+    let reaper = reaper();
+    let swell = swell();
+    unsafe {
+        if panel.config.default_dock_position == -1 {
+            swell.ShowWindow(panel.hwnd, raw::SW_SHOW as c_int);
+            #[cfg(target_os = "linux")]
+            apply_floating_window_hints(panel.hwnd, &panel.config, swell, reaper);
+        } else {
+            reaper.DockWindowActivate(panel.hwnd);
+        }
+        swell.SetFocus(panel.hwnd);
+    }
 }
 
 fn hide_panel_inner(panel: &mut LivePanel) {
@@ -919,14 +1311,21 @@ fn hide_panel_inner(panel: &mut LivePanel) {
     save_panel_state(panel);
 }
 
-fn try_init_embedded_view(panel: &mut LivePanel) {
-    if !panel_needs_init(panel) || !panel.visible {
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum InitVisibility {
+    Visible,
+    HiddenPrewarm,
+}
+
+fn try_init_embedded_view(panel: &mut LivePanel, visibility: InitVisibility) {
+    if !panel_needs_init(panel) || (visibility == InitVisibility::Visible && !panel.visible) {
         return;
     }
     panel.init_attempts += 1;
     tracing::info!(
         panel = panel.config.id,
         attempt = panel.init_attempts,
+        ?visibility,
         "Attempting to init EmbeddedView"
     );
 
@@ -948,7 +1347,7 @@ fn try_init_embedded_view(panel: &mut LivePanel) {
         .max(panel.config.default_height);
     tracing::info!(w, h, "Panel '{}' client rect", panel.config.id);
 
-    let contexts = std::mem::take(&mut panel.contexts);
+    let contexts = panel.contexts.clone();
 
     // On Linux, SWELL docked panels don't own a GDK window we can render
     // into directly via wgpu — so we render offscreen and blit via
@@ -981,6 +1380,11 @@ fn try_init_embedded_view(panel: &mut LivePanel) {
             view.mark_dirty(); // Ensure first frame renders
             panel.view = Some(view);
             tracing::info!("Created EmbeddedView for panel '{}'", panel.config.id);
+            if visibility == InitVisibility::Visible {
+                unsafe {
+                    swell.SetFocus(panel.hwnd);
+                }
+            }
 
             // Attach the macOS InputView so keyDown: / insertText: reach the
             // Blitz document even when the SWELL HWND isn't firstResponder.
@@ -1015,6 +1419,28 @@ fn try_init_embedded_view(panel: &mut LivePanel) {
 fn panel_needs_init(panel: &LivePanel) -> bool {
     panel.view.is_none()
 }
+
+/// Pull a fresh BGRA frame from the desktop renderer's offscreen
+/// GtkOffscreenWindow into the panel's `desktop_readback` buffer.
+///
+/// Returns `true` if a fresh frame was copied (and the caller should
+/// call `InvalidateRect` to schedule a `WM_PAINT`). Returns `false` if
+/// no surface is available yet (early in init), the panel isn't using
+/// the offscreen path, or the readback target dimensions are zero.
+///
+/// We allocate a fresh `cairo::ImageSurface` per call sized to the
+/// current panel rect, paint the offscreen window's surface into it
+/// (handles arbitrary cairo formats / strides), then copy the tightly-
+/// packed pixel rows into `desktop_readback`. Cairo `ARgb32` is
+/// little-endian native, which on x86_64 is BGRA byte order in memory
+/// — exactly what SWELL `StretchBltFromMem` expects, no swizzle.
+
+/// Set the `_XEMBED_INFO` property on the given X11 window so wry's
+/// `GtkPlug` child mode treats this window as an XEMBED-capable socket.
+///
+/// Reuses the X display already opened by GTK (via `XOpenDisplay(NULL)`)
+/// — opening a second display would not see the same property writes
+/// from GTK's perspective.
 
 #[cfg(not(target_os = "linux"))]
 fn create_render_surface(
@@ -1165,8 +1591,165 @@ fn create_panel_window(config: &DockablePanelConfig, swell: &Swell) -> raw::HWND
                 config.default_height as c_int,
                 0x0006, // SWP_NOZORDER | SWP_NOMOVE
             );
+            #[cfg(target_family = "unix")]
+            swell.SWELL_SetWindowWantRaiseAmt(hwnd, 1);
         }
         hwnd
+    }
+}
+
+#[cfg(target_os = "linux")]
+fn apply_floating_window_hints(
+    hwnd: raw::HWND,
+    config: &DockablePanelConfig,
+    swell: &Swell,
+    reaper: &Reaper,
+) {
+    let Some((display, window)) = x11_window_from_swell(hwnd, swell) else {
+        tracing::warn!(
+            panel = config.id,
+            "Could not resolve X11 window for floating hints"
+        );
+        return;
+    };
+    let parent = x11_window_from_swell(reaper.GetMainHwnd(), swell).map(|(_, window)| window);
+    let Ok(xlib) = x11_dl::xlib::Xlib::open() else {
+        tracing::warn!(panel = config.id, "Could not open Xlib for floating hints");
+        return;
+    };
+
+    unsafe {
+        let atom = |name: &str| {
+            let c = CString::new(name).unwrap();
+            (xlib.XInternAtom)(display, c.as_ptr(), x11_dl::xlib::False)
+        };
+
+        let wm_type = atom("_NET_WM_WINDOW_TYPE");
+        let wm_type_dialog = atom("_NET_WM_WINDOW_TYPE_DIALOG");
+        let wm_type_utility = atom("_NET_WM_WINDOW_TYPE_UTILITY");
+        let wm_types = [wm_type_dialog, wm_type_utility];
+        (xlib.XChangeProperty)(
+            display,
+            window,
+            wm_type,
+            x11_dl::xlib::XA_ATOM,
+            32,
+            x11_dl::xlib::PropModeReplace,
+            wm_types.as_ptr() as *const u8,
+            wm_types.len() as c_int,
+        );
+
+        let wm_state = atom("_NET_WM_STATE");
+        let wm_skip_taskbar = atom("_NET_WM_STATE_SKIP_TASKBAR");
+        let wm_skip_pager = atom("_NET_WM_STATE_SKIP_PAGER");
+        let wm_state_above = atom("_NET_WM_STATE_ABOVE");
+        let states = [wm_skip_taskbar, wm_skip_pager, wm_state_above];
+        (xlib.XChangeProperty)(
+            display,
+            window,
+            wm_state,
+            x11_dl::xlib::XA_ATOM,
+            32,
+            x11_dl::xlib::PropModeReplace,
+            states.as_ptr() as *const u8,
+            states.len() as c_int,
+        );
+
+        let mut hints: x11_dl::xlib::XSizeHints = std::mem::zeroed();
+        hints.flags = x11_dl::xlib::PSize | x11_dl::xlib::PMinSize | x11_dl::xlib::PBaseSize;
+        hints.width = config.default_width as c_int;
+        hints.height = config.default_height as c_int;
+        hints.min_width = config.default_width as c_int;
+        hints.min_height = config.default_height as c_int;
+        hints.base_width = config.default_width as c_int;
+        hints.base_height = config.default_height as c_int;
+        (xlib.XSetWMNormalHints)(display, window, &mut hints);
+
+        if let Some(parent) = parent {
+            (xlib.XSetTransientForHint)(display, window, parent);
+        }
+        (xlib.XFlush)(display);
+    }
+    tracing::info!(
+        panel = config.id,
+        xid = window,
+        parent_xid = parent.unwrap_or(0),
+        width = config.default_width,
+        height = config.default_height,
+        "Applied floating X11 window hints"
+    );
+}
+
+#[cfg(target_os = "linux")]
+fn x11_window_from_swell(
+    hwnd: raw::HWND,
+    swell: &Swell,
+) -> Option<(*mut x11_dl::xlib::Display, x11_dl::xlib::Window)> {
+    if hwnd.is_null() {
+        return None;
+    }
+    let gdk_window_type = CString::new("GdkWindow").ok()?;
+    let gdk_window = unsafe { swell.SWELL_GetOSWindow(hwnd, gdk_window_type.as_ptr()) };
+    if gdk_window.is_null() {
+        tracing::warn!("SWELL_GetOSWindow returned null GdkWindow");
+        return None;
+    }
+    let gdk = GdkX11Fns::load()?;
+    unsafe {
+        let gdk_display = (gdk.gdk_window_get_display)(gdk_window);
+        if gdk_display.is_null() {
+            return None;
+        }
+        let display = (gdk.gdk_x11_display_get_xdisplay)(gdk_display);
+        let window = (gdk.gdk_x11_window_get_xid)(gdk_window);
+        if display.is_null() || window == 0 {
+            return None;
+        }
+        Some((display as *mut x11_dl::xlib::Display, window))
+    }
+}
+
+#[cfg(target_os = "linux")]
+struct GdkX11Fns {
+    _gdk: *mut c_void,
+    _gdk_x11: *mut c_void,
+    gdk_window_get_display: unsafe extern "C" fn(*mut c_void) -> *mut c_void,
+    gdk_x11_display_get_xdisplay: unsafe extern "C" fn(*mut c_void) -> *mut c_void,
+    gdk_x11_window_get_xid: unsafe extern "C" fn(*mut c_void) -> x11_dl::xlib::Window,
+}
+
+#[cfg(target_os = "linux")]
+impl GdkX11Fns {
+    fn load() -> Option<Self> {
+        unsafe {
+            let gdk = dlopen("libgdk-3.so.0")?;
+            let gdk_x11 = dlopen("libgdk-3.so.0")?;
+            Some(Self {
+                _gdk: gdk,
+                _gdk_x11: gdk_x11,
+                gdk_window_get_display: dlsym(gdk, "gdk_window_get_display")?,
+                gdk_x11_display_get_xdisplay: dlsym(gdk_x11, "gdk_x11_display_get_xdisplay")?,
+                gdk_x11_window_get_xid: dlsym(gdk_x11, "gdk_x11_window_get_xid")?,
+            })
+        }
+    }
+}
+
+#[cfg(target_os = "linux")]
+unsafe fn dlopen(name: &str) -> Option<*mut c_void> {
+    let name = CString::new(name).ok()?;
+    let handle = unsafe { libc::dlopen(name.as_ptr(), libc::RTLD_LAZY | libc::RTLD_LOCAL) };
+    if handle.is_null() { None } else { Some(handle) }
+}
+
+#[cfg(target_os = "linux")]
+unsafe fn dlsym<T>(handle: *mut c_void, symbol: &str) -> Option<T> {
+    let symbol = CString::new(symbol).ok()?;
+    let ptr = unsafe { libc::dlsym(handle, symbol.as_ptr()) };
+    if ptr.is_null() {
+        None
+    } else {
+        Some(unsafe { std::mem::transmute_copy(&ptr) })
     }
 }
 
@@ -1176,7 +1759,21 @@ unsafe extern "C" fn panel_wndproc(
     wparam: raw::WPARAM,
     lparam: raw::LPARAM,
 ) -> raw::LRESULT {
-    panel_wndproc_inner(hwnd, msg, wparam, lparam)
+    match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        panel_wndproc_inner(hwnd, msg, wparam, lparam)
+    })) {
+        Ok(result) => result,
+        Err(_) => {
+            tracing::error!(
+                ?hwnd,
+                msg,
+                wparam,
+                lparam,
+                "panic in Dioxus panel window procedure"
+            );
+            unsafe { swell().DefWindowProc(hwnd, msg, wparam, lparam) }
+        }
+    }
 }
 
 fn panel_wndproc_inner(
@@ -1223,6 +1820,9 @@ fn panel_wndproc_inner(
             }
 
             // Pull view dims + pixel bytes under PANELS borrow, then blit.
+            // Native (Blitz) panels read from `EmbeddedView`'s readback;
+            // desktop-renderer panels read from `desktop_readback` populated
+            // earlier this tick by `read_desktop_offscreen_surface`.
             let blit_info = PANELS.with(|panels| {
                 let panels = panels.borrow();
                 let panel = panels.values().find(|p| p.hwnd == hwnd)?;
@@ -1273,31 +1873,25 @@ fn panel_wndproc_inner(
         }
         // ── Mouse events ────────────────────────────────────────────
         WM_MOUSEMOVE => {
-            let x = (lparam & 0xFFFF) as i16 as f32;
-            let y = ((lparam >> 16) & 0xFFFF) as i16 as f32;
-            forward_mouse_event(
-                hwnd,
-                blitz_traits::events::UiEvent::PointerMove(mouse_pointer_event(
-                    x,
-                    y,
-                    blitz_traits::events::MouseEventButton::Main,
-                    blitz_traits::events::MouseEventButtons::empty(),
-                )),
-            );
+            let (x, y) = client_css_coords(hwnd, lparam);
+            // Coalesced: the newest position wins, forwarded once per
+            // update tick (see PENDING_MOVES).
+            PENDING_MOVES.with(|m| m.borrow_mut().insert(hwnd as usize, (x, y)));
             0
         }
         WM_LBUTTONDOWN | WM_MBUTTONDOWN => {
-            let x = (lparam & 0xFFFF) as i16 as f32;
-            let y = ((lparam >> 16) & 0xFFFF) as i16 as f32;
+            flush_pending_move(hwnd);
+            let (x, y) = client_css_coords(hwnd, lparam);
             let button = match msg {
                 WM_LBUTTONDOWN => blitz_traits::events::MouseEventButton::Main,
                 WM_MBUTTONDOWN => blitz_traits::events::MouseEventButton::Auxiliary,
                 _ => blitz_traits::events::MouseEventButton::Main,
             };
-            // Capture mouse for drag support + take keyboard focus
+            // Capture mouse for drag support — released on WM_LBUTTONUP so
+            // REAPER's normal click-routing keeps working when the pointer
+            // moves outside the panel.
             unsafe {
                 swell().SetCapture(hwnd);
-                swell().SetFocus(hwnd);
             }
             forward_mouse_event(
                 hwnd,
@@ -1308,14 +1902,41 @@ fn panel_wndproc_inner(
                     blitz_traits::events::MouseEventButtons::Primary,
                 )),
             );
+            // Only steal keyboard focus when the click landed on a
+            // focusable element (text input, contenteditable). Without
+            // this guard, clicking any button or empty area would lock
+            // keyboard input to the panel until something forced focus
+            // elsewhere — on Linux SWELL there's no Win32-style
+            // MA_ACTIVATE auto-restore, so REAPER's main UI would never
+            // get focus back from a normal click. Now non-input clicks
+            // leave focus where REAPER had it.
+            let needs_focus = PANELS.with(|panels| {
+                let panels = panels.borrow();
+                let Some(p) = panels.values().find(|p| p.hwnd == hwnd) else {
+                    return false;
+                };
+                // Input-surface panels (focus_on_click) take focus on
+                // every click: focus is what routes the keyboard to
+                // their own input context.
+                p.config.focus_on_click
+                    || p.view
+                        .as_ref()
+                        .map(|v| v.focused_is_text_input())
+                        .unwrap_or(false)
+            });
+            if needs_focus {
+                unsafe {
+                    swell().SetFocus(hwnd);
+                }
+            }
             0
         }
         // Right-click: forward to Blitz AND fall through to DefWindowProc so
         // SWELL/REAPER can synthesise WM_CONTEXTMENU, which the docker uses
         // to open the dock/undock/options menu on tab right-click.
         WM_RBUTTONDOWN => {
-            let x = (lparam & 0xFFFF) as i16 as f32;
-            let y = ((lparam >> 16) & 0xFFFF) as i16 as f32;
+            flush_pending_move(hwnd);
+            let (x, y) = client_css_coords(hwnd, lparam);
             forward_mouse_event(
                 hwnd,
                 blitz_traits::events::UiEvent::PointerDown(mouse_pointer_event(
@@ -1329,13 +1950,16 @@ fn panel_wndproc_inner(
             unsafe { swell.DefWindowProc(hwnd, msg, wparam, lparam) }
         }
         WM_LBUTTONUP | WM_MBUTTONUP => {
-            let x = (lparam & 0xFFFF) as i16 as f32;
-            let y = ((lparam >> 16) & 0xFFFF) as i16 as f32;
+            flush_pending_move(hwnd);
+            let (x, y) = client_css_coords(hwnd, lparam);
             let button = match msg {
                 WM_LBUTTONUP => blitz_traits::events::MouseEventButton::Main,
                 WM_MBUTTONUP => blitz_traits::events::MouseEventButton::Auxiliary,
                 _ => blitz_traits::events::MouseEventButton::Main,
             };
+            // Release the drag-capture taken on LBUTTONDOWN so REAPER's
+            // global click routing resumes for the next event.
+            swell().ReleaseCapture();
             forward_mouse_event(
                 hwnd,
                 blitz_traits::events::UiEvent::PointerUp(mouse_pointer_event(
@@ -1348,8 +1972,8 @@ fn panel_wndproc_inner(
             0
         }
         WM_RBUTTONUP => {
-            let x = (lparam & 0xFFFF) as i16 as f32;
-            let y = ((lparam >> 16) & 0xFFFF) as i16 as f32;
+            flush_pending_move(hwnd);
+            let (x, y) = client_css_coords(hwnd, lparam);
             forward_mouse_event(
                 hwnd,
                 blitz_traits::events::UiEvent::PointerUp(mouse_pointer_event(
@@ -1363,9 +1987,11 @@ fn panel_wndproc_inner(
             unsafe { swell.DefWindowProc(hwnd, msg, wparam, lparam) }
         }
         WM_MOUSEWHEEL => {
+            flush_pending_move(hwnd);
             let delta = ((wparam >> 16) & 0xFFFF) as i16 as f64 / 120.0;
-            let x = (lparam & 0xFFFF) as i16 as f32;
-            let y = ((lparam >> 16) & 0xFFFF) as i16 as f32;
+            // Wheel messages carry SCREEN coordinates (Win32 semantics,
+            // which SWELL mirrors) — unlike every other mouse message.
+            let (x, y) = wheel_css_coords(hwnd, lparam);
             forward_mouse_event(
                 hwnd,
                 blitz_traits::events::UiEvent::Wheel(blitz_traits::events::BlitzWheelEvent {
@@ -1379,7 +2005,7 @@ fn panel_wndproc_inner(
                         client_y: y,
                     },
                     buttons: blitz_traits::events::MouseEventButtons::empty(),
-                    mods: keyboard_types::Modifiers::empty(),
+                    mods: current_modifiers(),
                     element: blitz_traits::events::Point { x, y },
                 }),
             );
@@ -1392,7 +2018,7 @@ fn panel_wndproc_inner(
             let event = blitz_traits::events::BlitzKeyEvent {
                 key,
                 code,
-                modifiers: keyboard_types::Modifiers::empty(),
+                modifiers: current_modifiers(),
                 location: keyboard_types::Location::Standard,
                 is_auto_repeating: false,
                 is_composing: false,
@@ -1427,23 +2053,13 @@ fn panel_wndproc_inner(
         }
         // ── Docker close button ─────────────────────────────────────
         WM_COMMAND if (wparam & 0xFFFF) as u32 == IDCANCEL => {
-            PANELS.with(|panels| {
-                let mut panels = panels.borrow_mut();
-                if let Some(panel) = panels.values_mut().find(|p| p.hwnd == hwnd) {
-                    tracing::info!(panel = panel.config.id, "Docker close button");
-                    hide_panel_inner(panel);
-                }
-            });
+            tracing::info!("Docker close button");
+            hide_panel_by_hwnd(hwnd);
             0
         }
         WM_CLOSE => {
-            PANELS.with(|panels| {
-                let mut panels = panels.borrow_mut();
-                if let Some(panel) = panels.values_mut().find(|p| p.hwnd == hwnd) {
-                    tracing::info!(panel = panel.config.id, "WM_CLOSE");
-                    hide_panel_inner(panel);
-                }
-            });
+            tracing::info!("WM_CLOSE");
+            hide_panel_by_hwnd(hwnd);
             0
         }
         // Tell the dialog manager we want every key — prevents Tab/Enter/Escape
@@ -1477,7 +2093,6 @@ fn panel_wndproc_inner(
                 && pt.y < client.bottom;
             if in_client {
                 // Content right-click — let Blitz/SWELL handle it normally.
-                let swell = swell;
                 unsafe { swell.DefWindowProc(hwnd, msg, wparam, lparam) }
             } else {
                 // Tab / non-client right-click — show our dock menu.
@@ -1522,7 +2137,8 @@ fn panel_wndproc_inner(
                     .map(|(id, _)| *id);
                 id.and_then(|id| panels.remove(id).map(|p| (id, p)))
             });
-            if let Some((_id, mut panel)) = taken {
+            if let Some((_id, panel)) = taken {
+                let mut panel = panel;
                 panel.view = None;
                 let reaper = reaper();
                 // Unregister screenset callback before destroying the HWND —
@@ -1551,12 +2167,17 @@ fn panel_wndproc_inner(
                 && msg != 0x0084 /*WM_NCHITTEST*/
                 && msg != 0x0083 /*WM_NCCALCSIZE — fires constantly*/
                 && msg != 0x0085 /*WM_NCPAINT*/
+                && msg != 0x0024 /*WM_GETMINMAXINFO*/
                 && msg != 0x0046 /*WM_WINDOWPOSCHANGING*/
                 && msg != 0x0047 /*WM_WINDOWPOSCHANGED*/
                 && msg != 0x0215
             /*WM_CAPTURECHANGED*/
             {
-                tracing::info!(
+                // `debug`, not `info`: WM_MOVE (0x0003) alone fires per
+                // frame while a panel is dragged, and this line produced
+                // ~5 MB of log in a single session — enough to bury the
+                // messages you actually need when a panel misbehaves.
+                tracing::debug!(
                     msg = format!("0x{msg:04X}"),
                     wparam,
                     lparam,

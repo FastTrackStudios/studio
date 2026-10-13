@@ -30,7 +30,7 @@
 
 use std::sync::OnceLock;
 
-use daw::module::PanelDef;
+use daw_module::PanelDef;
 
 /// The global service instance. Set once by the reaper-dioxus extension.
 static SERVICE: OnceLock<ServiceState> = OnceLock::new();
@@ -58,7 +58,7 @@ pub fn init() -> bool {
 /// Register a panel from a DawModule PanelDef.
 ///
 /// This is the primary API for modules. Call it from the host extension
-/// after collecting panels via `daw::module::collect_panels()`.
+/// after collecting panels via `daw_module::collect_panels()`.
 pub fn register_panel_from_def(def: &PanelDef) {
     if !is_available() {
         tracing::warn!(
