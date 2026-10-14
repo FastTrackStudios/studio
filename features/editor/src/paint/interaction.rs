@@ -11,7 +11,6 @@ use crate::menu::Command;
 use crate::mouse::{Action, Context, Gesture};
 use crate::razor::{RazorArea, RazorAxis};
 use crate::tools::{self, Hit, Mods};
-use crate::zoom::ZoomModes;
 use crate::{Editor, Mode, Shape, Tool};
 
 /// What the pointer is currently doing. `None` between gestures.
@@ -2773,11 +2772,11 @@ pub fn key_down(ed: &mut Editor, drag: &Drag, key: &str, mods: Mods) -> bool {
             let anchor = ed.playhead.unwrap_or(mouse_t);
             let row = ed.camera.vertical.center;
             let modes = if shift {
-                ZoomModes::KEYS
+                crate::memagic::Modes::WHOLE
             } else {
-                ZoomModes::NOTE_AREA
+                crate::memagic::Modes::PASSAGE
             };
-            ed.smart_zoom(modes, anchor, row);
+            ed.contextual_zoom(modes, anchor, row);
             true
         }
         // Ctrl+X/C/V go through the same command path the context menu

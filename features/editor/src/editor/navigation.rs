@@ -540,48 +540,16 @@ impl Editor {
         .delta(timeline::snap::SnapRule::Relative, self.doc.start, raw)
     }
 
-    /// Notes reduced to what zoom cares about.
-    pub fn zoom_spans(&self) -> Vec<zoom::Span> {
-        self.doc
-            .notes
-            .iter()
-            .map(|n| zoom::Span {
-                start: n.start,
-                end: n.end,
-                row: n.row,
-            })
-            .collect()
-    }
-
-    /// Contextual zoom: one gesture, and where the pointer is decides
-    /// what "zoom" means. See [`zoom`].
-    pub fn smart_zoom(&mut self, modes: ZoomModes, anchor_t: f64, anchor_row: f64) {
-        let spans = self.zoom_spans();
-        let content = self.content();
-        let bar = self.units_per_bar();
-        self.camera = zoom::apply_horizontal(
-            self.camera,
-            modes.horizontal,
-            &spans,
-            anchor_t,
-            content,
-            self.viewport,
-            bar,
-            self.smart_zoom,
+    /// Contextual zoom from a key or a button: `modes` (MeMagic's mode
+    /// pair) about `anchor_t` and `anchor_row`, with the default tuning.
+    pub fn contextual_zoom(&mut self, modes: memagic::Modes, anchor_t: f64, anchor_row: f64) {
+        self.memagic_with(
+            modes,
+            memagic::Anchor {
+                t: anchor_t,
+                row: Some(anchor_row),
+            },
+            &memagic::Config::default(),
         );
-        // Vertical runs against the *new* horizontal span, so
-        // "notes in view" means notes in the view we just produced —
-        // not the one we started from.
-        let view = self.camera.time_span(self.viewport);
-        self.camera = zoom::apply_vertical(
-            self.camera,
-            modes.vertical,
-            &spans,
-            anchor_row,
-            self.viewport,
-            view,
-            self.smart_zoom,
-        );
-        self.settle_camera();
     }
 }

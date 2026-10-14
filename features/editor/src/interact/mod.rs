@@ -9,4 +9,3 @@ pub mod mouse;
 pub mod multitool;
 pub mod razor;
 pub mod tools;
-pub mod zoom;

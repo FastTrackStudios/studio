@@ -15,7 +15,6 @@
 use crate::doc::{Dimension, NoteId};
 use crate::menu::{self, Command, MenuItem};
 use crate::razor::RazorAxis;
-use crate::zoom::ZoomModes;
 use crate::{Edit, Editor, Mode, Shape, StripLane, Tool, tuning};
 use anyrender::{PaintScene, Scene};
 use kurbo::{Affine, Line, Point, Rect};
@@ -427,7 +426,7 @@ pub fn activate(ed: &mut Editor, drag: &Drag, control: Control) -> bool {
                 .playhead
                 .unwrap_or_else(|| ed.camera.t_at(ed.viewport.w * 0.5));
             let row = ed.camera.vertical.center;
-            ed.smart_zoom(ZoomModes::NOTE_AREA, t, row);
+            ed.contextual_zoom(crate::memagic::Modes::PASSAGE, t, row);
             true
         }
         Control::Fit => {

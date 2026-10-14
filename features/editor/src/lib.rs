@@ -33,7 +33,7 @@
 //! - [`drums`] — drum lanes: `drum`, `kit`, `fills`, `flam`.
 //! - [`harmony`] — chords and the ChordGun degree model: `chord`, plus
 //!   the chord-firing panel in `harmony::chords` (feature `chords`).
-//! - [`interact`] — the interaction model: `camera`, `zoom`, `memagic`,
+//! - [`interact`] — the interaction model: `camera`, `memagic`,
 //!   `cursor`, `mouse`, `handles`, `tools`, `multitool`, `razor`,
 //!   `menu`, `mode`, `actions`.
 //!
@@ -73,7 +73,7 @@ pub mod pitch;
 pub use drums::{drum, fills, flam, kit};
 pub use harmony::chord;
 pub use interact::{
-    actions, camera, cursor, handles, memagic, menu, mode, mouse, multitool, razor, tools, zoom,
+    actions, camera, cursor, handles, memagic, menu, mode, mouse, multitool, razor, tools,
 };
 pub use model::{cc, clipboard, doc, edit, rows, timing, tracks};
 pub use pitch::{blob, draft, modulation, reference, shape, tuning};
@@ -99,7 +99,6 @@ pub use timing::{Separator, StretchLaw};
 pub use tools::{Grid, Hit, Mods, Selection, Tool};
 pub use tracks::{RefColor, Track, Workspace};
 pub use tuning::{Temperament, Tuning};
-pub use zoom::{HorizontalMode, SmartZoom, VerticalMode, ZoomModes};
 
 mod editor;
 pub use editor::{CUSHION, Editor, PAD, StripLane, content_of};

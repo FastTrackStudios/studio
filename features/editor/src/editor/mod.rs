@@ -1,7 +1,7 @@
 //! Editor state and initialization. Behavior is organized by responsibility below.
 use crate::{
     blob, camera, cc, chord, clipboard, doc, draft, edit, flam, handles, harmony, memagic, menu,
-    mode, mouse, reference, rows, shape, tools, tracks, tuning, zoom,
+    mode, mouse, reference, rows, shape, tools, tracks, tuning,
 };
 use camera::{Bounds, Camera, Content, Viewport};
 use cc::CcDisplay;
@@ -17,7 +17,6 @@ use timeline::razor::{RazorArea, RazorSet};
 use tools::{Grid, Hit, Mods, Selection, Tool};
 use tracks::Workspace;
 use tuning::Tuning;
-use zoom::{SmartZoom, ZoomModes};
 
 mod commands;
 mod gestures;
@@ -109,8 +108,6 @@ pub struct Editor {
     /// Tempo used to place the grid; a real tempo map lives in the
     /// host adapter.
     pub bpm: f64,
-    /// Contextual-zoom tuning.
-    pub smart_zoom: SmartZoom,
     /// Beats per bar, for the ruler's bar numbering.
     pub beats_per_bar: f64,
     /// Transport position, when the host supplies one.
@@ -257,7 +254,6 @@ impl Editor {
             grid: Grid::default(),
             shape: Shape::Linear,
             bpm: 120.0,
-            smart_zoom: SmartZoom::default(),
             beats_per_bar: 4.0,
             playhead: None,
             clipboard: clipboard::Clipboard::default(),

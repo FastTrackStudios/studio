@@ -272,21 +272,19 @@ async fn shoot_modulation_drawer() {
 #[tokio::test(flavor = "current_thread")]
 #[ignore = "picture generator, not an assertion — `just ee-shots`"]
 async fn shoot_smart_zoom() {
-    use editor::zoom::ZoomModes;
-
     let vp = Viewport::new(W as f64, CANVAS_H);
     let ed = demo::editor(Scene::Density, vp);
 
     let mut dense = ed.clone();
-    dense.smart_zoom(ZoomModes::NOTE_AREA, demo::PPQ * 1.0, 62.0);
+    dense.contextual_zoom(editor::memagic::Modes::PASSAGE, demo::PPQ * 1.0, 62.0);
     shoot(dense, "13-smart-zoom-dense").await;
 
     let mut sparse = ed.clone();
-    sparse.smart_zoom(ZoomModes::NOTE_AREA, demo::PPQ * 22.0, 62.0);
+    sparse.contextual_zoom(editor::memagic::Modes::PASSAGE, demo::PPQ * 22.0, 62.0);
     shoot(sparse, "14-smart-zoom-sparse").await;
 
     let mut whole = ed;
-    whole.smart_zoom(ZoomModes::KEYS, demo::PPQ * 1.0, 62.0);
+    whole.contextual_zoom(editor::memagic::Modes::WHOLE, demo::PPQ * 1.0, 62.0);
     shoot(whole, "15-smart-zoom-item").await;
 }
 

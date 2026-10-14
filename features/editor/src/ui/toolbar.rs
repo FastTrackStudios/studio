@@ -511,8 +511,8 @@ pub fn Toolbar(
                                     ed.camera.vertical.center,
                                 )
                             };
-                            editor.write().smart_zoom(
-                                crate::ZoomModes::NOTE_AREA,
+                            editor.write().contextual_zoom(
+                                crate::memagic::Modes::PASSAGE,
                                 t,
                                 row,
                             );
