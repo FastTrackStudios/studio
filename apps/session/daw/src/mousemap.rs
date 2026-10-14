@@ -31,11 +31,12 @@ pub use timeline::mouse::Gesture;
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Bound {
     pub action: Action,
-    /// Whether the result lands on the grid. Off is the fine gesture:
-    /// REAPER spells it "ignoring snap" and puts it on Shift for
-    /// everything that can be dragged, which is the one convention
-    /// worth keeping wholesale — a modifier that means different
-    /// things on different objects is a modifier nobody learns.
+    /// Whether the result lands on the grid: the toolbar's snapping,
+    /// flipped by Shift. Shift means "the other way" on everything that
+    /// can be dragged — off when snapping is on, on when it is off — the
+    /// one convention worth keeping wholesale, because a modifier that
+    /// means different things on different objects is a modifier nobody
+    /// learns.
     pub snap: bool,
 }
 
@@ -107,11 +108,10 @@ pub const RAZOR_EDGE: Context = Context::Custom("razor-edge");
 pub fn resolve(context: Context, gesture: Gesture, mods: Mods) -> Bound {
     Bound {
         action: verb(context, gesture, mods),
-        // Shift is the fine gesture everywhere something can be
-        // dragged. On a click there is nothing to snap, so the answer
+        // Shift flips the toolbar's snapping, everywhere something can
+        // be dragged. On a click there is nothing to snap, so the answer
         // is the harmless one.
-        // And never while the toolbar has snapping off.
-        snap: !mods.shift && crate::options::SNAP.get(),
+        snap: crate::options::SNAP.get() != mods.shift,
     }
 }
 
@@ -557,5 +557,24 @@ mod tests {
             resolve(Context::MixerStrip, Gesture::Drag, Mods::default()).action,
             Action::Nothing
         );
+    }
+
+    /// Shift flips the toolbar's snapping, both ways: off when it is on,
+    /// on when it is off.
+    #[test]
+    fn shift_flips_the_snap() {
+        let drag = |shift| {
+            resolve(
+                Context::MediaItemBottomHalf,
+                Gesture::Drag,
+                with(shift, false, false),
+            )
+            .snap
+        };
+        crate::options::SNAP.set(true);
+        assert!(drag(false) && !drag(true));
+        crate::options::SNAP.set(false);
+        assert!(!drag(false) && drag(true));
+        crate::options::SNAP.set(true);
     }
 }

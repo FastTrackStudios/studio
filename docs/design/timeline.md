@@ -1557,7 +1557,7 @@ pins A's behaviour. Keep it or change it on purpose.
     `the_razor_help_matches_the_razor_keys`,
     `the_razor_menu_and_the_razor_keys_agree`.
 
-**Progress (2026-10-14).** Steps 1–11 are done. Where the code differs
+**Progress (2026-10-14).** Steps 1–11 are done; 12 in part. Where the code differs
 from the plan above:
 
 - **3:** one `Mods` type for both surfaces (`timeline::input::Mods`; the
@@ -1614,6 +1614,15 @@ from the plan above:
   view) and `f` (contextual over items). Contextual now takes spans, so
   this is a key binding and an items adapter away; it is new behaviour,
   so it waits for a decision on the keys.
+- **12:** `timeline::mouse` is the shared table (`Gesture`,
+  `Binding<C, A>`, the exact-then-plain lookup, `MouseMap<C, A>`,
+  `ToolClaims`). The Editor's map uses it; the arrangement's `match` is a
+  table, checked chord for chord against the old one. Shift flips snap on
+  the arrangement (Q3 revised). Item edges keep the Ctrl razor; razor
+  areas keep their drags on both surfaces. **Q1 on the arrangement is on
+  hold:** it has no Razor tool, so without Ctrl on a body a razor over
+  densely packed items has nowhere to start. `common()` rows and the
+  arrangement's `Quasi` wait on that.
 - **11:** `timeline::cursor` holds the arrangement's `Playhead`,
   `TimeSpan`, `EditCursor`, `StopMode`, `TransportStep` and `Locate`, with
   their tests. The arrangement aliases its old names, and keeps the
@@ -1644,10 +1653,11 @@ longer contain camera, zoom, grid, cursor, marquee or razor code.
    A's body-Ctrl razor goes.
 2. **Move snap:** per-surface defaults. Items use `AnchorStart` and notes
    use `Relative`, and a surface can change its own.
-3. **Shift on a body:** Shift+click adds to the selection and Shift+drag
-   locks to one axis, on both surfaces. A body move bypasses snap with
-   Ctrl+Alt (`MoveNoteNoSnap`). Everywhere else Shift still means "no
-   snap".
+3. **Shift on a body** (revised 2026-10-14): Shift flips snapping —
+   off when it is on, on when it is off — on everything that can be
+   dragged. Done on the arrangement (step 12b). The Editor's Shift+drag on
+   a note is still its one-axis move; whether it becomes the snap flip
+   too is open.
 4. **Zoom drag:** down zooms in (REAPER). `ZoomDrag` and its tests flip.
 5. **Editor undo in Session:** the embedded Editor pushes its steps into
    Session's per-peer Loro undo, so `SESSION_UNDO` covers note edits. The
