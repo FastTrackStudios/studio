@@ -1557,6 +1557,26 @@ pins A's behaviour. Keep it or change it on purpose.
     `the_razor_help_matches_the_razor_keys`,
     `the_razor_menu_and_the_razor_keys_agree`.
 
+**Progress (2026-10-14).** Steps 1–6 are done. Where the code differs
+from the plan above:
+
+- **3:** one `Mods` type for both surfaces (`timeline::input::Mods`; the
+  two copies were the same struct), not a `From<ModKey>` wrapper.
+  `ModKey` converts both ways.
+- **4:** the Editor gets `Editor::time_map()` (a `ConstantTempo`). A
+  `TempoMap` from `doc.bars` waits for the host to send tempo and
+  signature along with the bar lines. Two tempo points at the same time:
+  the first wins. That is what the beat walk did; `Bars::at_time` took
+  the last.
+- **5:** `Grid` has no `visible`; `options::SNAP`/`GRID` are still the
+  arrangement's globals. `GridRegions` keeps whole-note divisions
+  (`u32`) and takes a `quantum` for comparing edges.
+  `grid::lines`/`grid::bars` return times rather than `GridLine`s, and
+  the surfaces pick the weights.
+- **6:** the arrangement snaps to the grid it draws (its `Grid` fitted to
+  the zoom, the lane tempo map, the quantize grid while editing). Its
+  tests pin quarter notes (`arrange_edit::on_quarters`).
+
 After step 13 the two `Editor` structs (`arrange_edit::Editor` and
 `editor::Editor`) each hold one `timeline::Interaction<Self>`, and they no
 longer contain camera, zoom, grid, cursor, marquee or razor code.
