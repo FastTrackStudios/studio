@@ -20029,6 +20029,9 @@ dependencies = [
 [[package]]
 name = "timeline"
 version = "0.1.0"
+dependencies = [
+ "web-time",
+]
 
 [[package]]
 name = "tiny-skia"

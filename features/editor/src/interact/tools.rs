@@ -155,14 +155,7 @@ impl Tool {
     }
 }
 
-/// Modifier keys, normalized across platforms (`cmd` on macOS is
-/// reported as `ctrl`).
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub struct Mods {
-    pub ctrl: bool,
-    pub shift: bool,
-    pub alt: bool,
-}
+pub use timeline::input::Mods;
 
 /// What the pointer is over.
 #[derive(Clone, Copy, Debug, PartialEq)]

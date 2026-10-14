@@ -4,4 +4,5 @@
 
 pub mod gestures;
 pub mod grid;
+pub mod input;
 pub mod razor;

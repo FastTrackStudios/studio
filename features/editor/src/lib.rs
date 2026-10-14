@@ -87,7 +87,6 @@ pub use doc::{
 };
 pub use draft::PitchDraft;
 pub use edit::{Edit, History};
-pub use timeline::razor::{RazorArea, RazorSet};
 pub use handles::{Handle, Scope};
 pub use mode::{Mode, ModeFamily};
 pub use mouse::{Action, MouseMap};
@@ -95,6 +94,7 @@ pub use multitool::{Bend, Steepness, Zone};
 pub use reference::{MidiReference, RefNote, SnapSource};
 pub use rows::{Articulation, DrumMap, NoteShape, RowSpace, StringTuning};
 pub use shape::Shape;
+pub use timeline::razor::{RazorArea, RazorSet};
 pub use timing::{Separator, StretchLaw};
 pub use tools::{Grid, Hit, Mods, Selection, Tool};
 pub use tracks::{RefColor, Track, Workspace};

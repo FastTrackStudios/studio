@@ -15,13 +15,8 @@
 
 use input::proto::MouseModifierContext as Context;
 
-/// The keys held during a gesture.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub struct Mods {
-    pub shift: bool,
-    pub ctrl: bool,
-    pub alt: bool,
-}
+/// The keys held during a gesture: the Editor's too.
+pub use timeline::input::Mods;
 
 /// The gesture itself.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

@@ -1094,7 +1094,8 @@ fn marquee_selects_the_notes_it_covers() {
     assert_eq!(sel.notes, vec![third], "toggled, only the third is left");
 
     // Add keeps what was there.
-    let mut add = timeline::gestures::Marquee::press((x0, y0), timeline::gestures::MarqueeMode::Add);
+    let mut add =
+        timeline::gestures::Marquee::press((x0, y0), timeline::gestures::MarqueeMode::Add);
     add.moved((x1, y1));
     sel.marquee(&ed.doc, &ed.camera, ed.viewport, &add, &[third]);
     assert_eq!(sel.notes.len(), 3, "the two, and the third kept");

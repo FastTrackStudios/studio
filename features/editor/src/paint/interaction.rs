@@ -333,46 +333,7 @@ pub enum Drag {
 /// four did the same thing — which meant Shift on a note claimed to lock
 /// an axis and did not, and the Riffer preset's primary gesture
 /// (`MoveNoteVertically`, its plain note drag) moved in time as well.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub enum Axis {
-    #[default]
-    Both,
-    Horizontal,
-    Vertical,
-    /// Free until the drag commits, then locked to whichever axis it
-    /// travelled furthest along first. REAPER's Shift-drag, and the
-    /// reason it is not simply "the larger delta each frame": a gesture
-    /// that re-decides every frame flickers between axes at the corner.
-    Commit(Option<bool>),
-}
-
-impl Axis {
-    /// Resolve against a drag delta, committing if this is the first
-    /// movement worth deciding on. Returns `(horizontal, vertical)`.
-    fn allows(&mut self, dx: f64, dy: f64) -> (bool, bool) {
-        match self {
-            Axis::Both => (true, true),
-            Axis::Horizontal => (true, false),
-            Axis::Vertical => (false, true),
-            Axis::Commit(decided) => {
-                if decided.is_none() {
-                    // A threshold, not a first-pixel decision: the first
-                    // pixel of a drag is noise, and committing on it
-                    // locks half of them to the wrong axis.
-                    const DEAD_PX: f64 = 4.0;
-                    if dx.abs().max(dy.abs()) >= DEAD_PX {
-                        *decided = Some(dx.abs() >= dy.abs());
-                    }
-                }
-                match decided {
-                    Some(true) => (true, false),
-                    Some(false) => (false, true),
-                    None => (false, false),
-                }
-            }
-        }
-    }
-}
+pub use timeline::input::AxisLock as Axis;
 
 impl Drag {
     pub fn is_active(&self) -> bool {

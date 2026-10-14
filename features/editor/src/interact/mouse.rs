@@ -323,61 +323,7 @@ impl Action {
     }
 }
 
-/// A modifier combination. Cmd is normalized to Ctrl upstream.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
-pub struct ModKey(u8);
-
-impl ModKey {
-    pub const NONE: ModKey = ModKey(0);
-    pub const SHIFT: ModKey = ModKey(1);
-    pub const CTRL: ModKey = ModKey(2);
-    pub const ALT: ModKey = ModKey(4);
-
-    pub fn of(m: Mods) -> Self {
-        let mut bits = 0;
-        if m.shift {
-            bits |= 1;
-        }
-        if m.ctrl {
-            bits |= 2;
-        }
-        if m.alt {
-            bits |= 4;
-        }
-        ModKey(bits)
-    }
-
-    pub const fn bits(self) -> u8 {
-        self.0
-    }
-
-    /// From REAPER's mouse-modifier index bits (bit0=Shift, bit1=Ctrl,
-    /// bit2=Alt) — the same layout this type uses, kept as an explicit
-    /// constructor so a host loading `reaper-mouse.ini` states the
-    /// correspondence instead of relying on it silently.
-    pub const fn from_bits(bits: u8) -> Self {
-        ModKey(bits & 0b111)
-    }
-
-    /// REAPER's `<S-C-A->` notation.
-    pub fn notation(self) -> String {
-        if self.0 == 0 {
-            return String::new();
-        }
-        let mut s = String::from("<");
-        if self.0 & 1 != 0 {
-            s.push_str("S-");
-        }
-        if self.0 & 2 != 0 {
-            s.push_str("C-");
-        }
-        if self.0 & 4 != 0 {
-            s.push_str("A-");
-        }
-        s.push('>');
-        s
-    }
-}
+pub use timeline::input::ModKey;
 
 /// One binding.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -531,10 +477,10 @@ impl MouseMap {
         const S: ModKey = ModKey::SHIFT;
         const CT: ModKey = ModKey::CTRL;
         const AL: ModKey = ModKey::ALT;
-        const SC: ModKey = ModKey(3);
-        const CA: ModKey = ModKey(6);
-        const SA: ModKey = ModKey(5);
-        const ALL3: ModKey = ModKey(7);
+        const SC: ModKey = ModKey::from_bits(3);
+        const CA: ModKey = ModKey::from_bits(6);
+        const SA: ModKey = ModKey::from_bits(5);
+        const ALL3: ModKey = ModKey::from_bits(7);
 
         let b = |context, gesture, mods, action| Binding {
             context,
@@ -747,10 +693,10 @@ impl MouseMap {
         const S: ModKey = ModKey::SHIFT;
         const CT: ModKey = ModKey::CTRL;
         const AL: ModKey = ModKey::ALT;
-        const SC: ModKey = ModKey(3);
-        const CA: ModKey = ModKey(6);
-        const SA: ModKey = ModKey(5);
-        const ALL3: ModKey = ModKey(7);
+        const SC: ModKey = ModKey::from_bits(3);
+        const CA: ModKey = ModKey::from_bits(6);
+        const SA: ModKey = ModKey::from_bits(5);
+        const ALL3: ModKey = ModKey::from_bits(7);
 
         let b = |context, gesture, mods, action| Binding {
             context,
