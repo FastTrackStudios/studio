@@ -106,12 +106,41 @@ pub const RAZOR_EDGE: Context = Context::Custom("razor-edge");
 /// these rather than a branch somewhere in the window.
 #[must_use]
 pub fn resolve(context: Context, gesture: Gesture, mods: Mods) -> Bound {
+    // The armed Razor takes the plain drags it claims, ahead of the
+    // table — the Editor's tools' rule (`timeline::mouse::ToolClaims`).
+    let armed = crate::options::RAZOR.get()
+        && timeline::input::ModKey::of(mods) == timeline::input::ModKey::NONE
+        && timeline::mouse::ToolClaims::claims(&RazorTool, &context, gesture);
     Bound {
-        action: verb(context, gesture, mods),
+        action: if armed {
+            Action::RazorArea
+        } else {
+            verb(context, gesture, mods)
+        },
         // Shift flips the toolbar's snapping, everywhere something can
         // be dragged. On a click there is nothing to snap, so the answer
         // is the harmless one.
         snap: crate::options::SNAP.get() != mods.shift,
+    }
+}
+
+/// The arrangement's Razor tool ([`crate::options::RAZOR`]): it claims a
+/// plain drag over the lanes — empty ground, an item's body, its edges,
+/// its fade handles. Not the ruler, which selects time, and not a razor
+/// area or its edge, which already answer a drag by moving or resizing.
+pub struct RazorTool;
+
+impl timeline::mouse::ToolClaims<Context> for RazorTool {
+    fn claims(&self, context: &Context, gesture: Gesture) -> bool {
+        gesture == Gesture::Drag
+            && matches!(
+                context,
+                Context::ArrangeView
+                    | Context::MediaItemBottomHalf
+                    | Context::MediaItemLeftEdge
+                    | Context::MediaItemRightEdge
+                    | Context::MediaItemFade
+            )
     }
 }
 
@@ -576,5 +605,54 @@ mod tests {
         crate::options::SNAP.set(false);
         assert!(!drag(false) && drag(true));
         crate::options::SNAP.set(true);
+    }
+
+    /// The armed Razor takes a plain drag anywhere over the lanes, and
+    /// leaves the rest alone: modified drags, clicks, the ruler, and the
+    /// areas already drawn.
+    #[test]
+    fn the_armed_razor_takes_plain_drags_over_the_lanes() {
+        let plain = Mods::default();
+        let action = |context, gesture, mods| resolve(context, gesture, mods).action;
+        crate::options::RAZOR.set(true);
+        for context in [
+            Context::ArrangeView,
+            Context::MediaItemBottomHalf,
+            Context::MediaItemLeftEdge,
+            Context::MediaItemRightEdge,
+            Context::MediaItemFade,
+        ] {
+            assert_eq!(
+                action(context, Gesture::Drag, plain),
+                Action::RazorArea,
+                "{context:?}"
+            );
+        }
+        assert_eq!(
+            action(
+                Context::MediaItemBottomHalf,
+                Gesture::Drag,
+                with(false, false, true)
+            ),
+            Action::CopyItem,
+            "Alt still copies"
+        );
+        assert_eq!(
+            action(Context::MediaItemBottomHalf, Gesture::Click, plain),
+            Action::SelectItem
+        );
+        assert_eq!(
+            action(Context::Ruler, Gesture::Drag, plain),
+            Action::TimeSelection
+        );
+        assert_eq!(
+            action(RAZOR_AREA, Gesture::Drag, plain),
+            Action::MoveRazorArea
+        );
+        crate::options::RAZOR.set(false);
+        assert_eq!(
+            action(Context::MediaItemBottomHalf, Gesture::Drag, plain),
+            Action::MoveItem
+        );
     }
 }

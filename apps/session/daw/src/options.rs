@@ -41,7 +41,13 @@ impl Option {
     }
 }
 
-/// Edits land on the grid. Shift still frees a drag.
+/// The Razor tool is armed: a plain drag over the lanes — empty ground,
+/// an item's body, its edges, its fade handles — draws a razor area, as
+/// the Editor's Razor does over notes. Modified drags, clicks, the ruler
+/// and the areas already drawn keep their bindings
+/// (`mousemap::resolve`).
+pub static RAZOR: Option = Option::new(false);
+/// Edits land on the grid. Shift flips it for one drag.
 pub static SNAP: Option = Option::new(true);
 /// The grid is drawn through the lanes.
 pub static GRID: Option = Option::new(true);

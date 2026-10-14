@@ -34,6 +34,7 @@ enum Toggle {
     Grid,
     Snap,
     Lock,
+    Razor,
 }
 
 impl Toggle {
@@ -47,6 +48,7 @@ impl Toggle {
         &[
             Self::Grid,
             Self::Snap,
+            Self::Razor,
             Self::Lock,
             Self::Follow,
             Self::Compact,
@@ -62,6 +64,7 @@ impl Toggle {
             Self::Grid => "Grid lines",
             Self::Snap => "Snapping",
             Self::Lock => "Locking",
+            Self::Razor => "Razor tool — a drag over the lanes draws a razor area",
             Self::Compact => "Compact track panel — more room for the arrangement",
             Self::Mixer => "The mixer (x)",
             Self::Follow => "Follow the play cursor — page the view to wherever it goes",
@@ -78,6 +81,7 @@ impl Toggle {
             Self::Grid => "Grid lines",
             Self::Snap => "Snap",
             Self::Lock => "Lock",
+            Self::Razor => "Razor tool",
             Self::Follow => "Follow the play cursor",
             Self::Compact => "Compact track panel",
             Self::Mixer => "Mixer",
@@ -94,6 +98,7 @@ impl Toggle {
             Self::Grid => Some(&options::GRID),
             Self::Snap => Some(&options::SNAP),
             Self::Lock => Some(&options::LOCKING),
+            Self::Razor => Some(&options::RAZOR),
         }
     }
 
@@ -130,6 +135,16 @@ impl Toggle {
                 "M6 8 H10",
                 "M14 8 H18",
                 "M10 4 V11 A2 2 0 0 0 14 11 V4",
+            ],
+            // A razor area: its box, dashed, and the cut through it.
+            Self::Razor => &[
+                "M5 6 H8",
+                "M11 6 H13",
+                "M16 6 H19",
+                "M5 18 H8",
+                "M11 18 H13",
+                "M16 18 H19",
+                "M12 3 V21",
             ],
             // A padlock.
             Self::Lock => &["M6 11 H18 V20 H6 Z", "M8.5 11 V8 A3.5 3.5 0 0 1 15.5 8 V11"],
