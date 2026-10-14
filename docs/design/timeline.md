@@ -1556,6 +1556,25 @@ longer contain camera, zoom, grid, cursor, marquee or razor code.
 
 ## 5. Open questions
 
+**Decided 2026-10-13** (the questions are kept below for the reasoning):
+
+1. **Ctrl on a body:** the razor is Ctrl on empty ground (plus the Razor
+   tool) on both surfaces. Ctrl-click on a body toggles selection, and
+   Ctrl-drag on a body is left to each surface (velocity in the Editor).
+   A's body-Ctrl razor goes.
+2. **Move snap:** per-surface defaults. Items use `AnchorStart` and notes
+   use `Relative`, and a surface can change its own.
+3. **Shift on a body:** Shift+click adds to the selection and Shift+drag
+   locks to one axis, on both surfaces. A body move bypasses snap with
+   Ctrl+Alt (`MoveNoteNoSnap`). Everywhere else Shift still means "no
+   snap".
+4. **Zoom drag:** down zooms in (REAPER). `ZoomDrag` and its tests flip.
+5. **Editor undo in Session:** the embedded Editor pushes its steps into
+   Session's per-peer Loro undo, so `SESSION_UNDO` covers note edits. The
+   standalone Editor keeps snapshots.
+6. **Standalone wheel:** `timeline::wheel` is the one implementation. The
+   `input` `ScrollBindingTable` stays only as an optional override.
+
 1. **Ctrl on a body.** A uses it for razor, and Ctrl-click still toggles
    selection. E uses it for velocity, with Ctrl-click toggling. Both
    presets put the razor on Ctrl over empty ground. Should A's

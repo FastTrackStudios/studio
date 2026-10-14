@@ -38,7 +38,10 @@ is 4/4 at one tempo; the editor's `Grid::refit` only agrees with
 bindings are dead); two zoom drags zoom opposite ways; razor/gesture ops
 push empty undo steps; `interact/zoom.rs` SmartZoom duplicates MeMagic.
 
-**Decisions needed first** (§5 of the doc):
+**Decided 2026-10-13** (§5 of the doc records the answers): empty-ground
+Ctrl razor; per-surface move snap; Shift+click adds and Shift+drag is
+one-axis; down zooms in; the embedded Editor undoes through Loro;
+`timeline::wheel` with an optional table override. The questions were:
 1. Ctrl-drag on an item/note body: razor (arrangement) or velocity (editor)?
 2. Moving an item: snap its start, or snap the move distance?
 3. Shift on a body: one-axis, add to selection, or ignore snap?
