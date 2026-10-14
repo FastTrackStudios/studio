@@ -17,6 +17,7 @@ use std::collections::{HashMap, HashSet};
 use daw_proto::Track;
 use daw_ui::studio::project::Project;
 use timeline::razor::RazorArea;
+use timeline::select::Selection;
 use timeline::snap::Snapper;
 
 use crate::arrangement::{Arrangement, Fades, ItemZone, Viewport};
@@ -131,7 +132,7 @@ pub struct Editor {
     /// A marquee across empty lanes, while the button is down.
     marquee: Option<MarqueeDrag>,
     /// The selected items, by guid.
-    pub selected: HashSet<String>,
+    pub selected: Selection<String>,
     /// The edit cursor and the time selection.
     pub cursor: cursor::Edit,
     /// A time selection being dragged out, from this time.
@@ -445,7 +446,7 @@ impl Editor {
                         from: (seconds, y),
                         to: (seconds, y),
                         mode,
-                        base: self.selected.clone(),
+                        base: self.selected.as_set().clone(),
                     });
                     return true;
                 }
@@ -630,7 +631,7 @@ impl Editor {
         let chosen = timeline::gestures::combine(drag.mode, &drag.base, hits, click);
         // Nothing to say when nothing changed — a click on empty lanes
         // with nothing selected is only the cursor.
-        if chosen != self.selected {
+        if chosen != *self.selected.as_set() {
             self.set_selection(&chosen, project, effects);
         }
         if click {
@@ -652,7 +653,7 @@ impl Editor {
             .iter()
             .flat_map(|guid| targets(project, guid, false, effects).unwrap_or_default())
             .collect();
-        self.selected.clone_from(chosen);
+        self.selected.assign(chosen);
         for item in project.items.values_mut().flatten() {
             item.selected = real.contains(&item.guid) || chosen.contains(&item.guid);
         }
@@ -1128,7 +1129,7 @@ impl Editor {
             }
             return;
         }
-        self.selected.insert(guid.to_owned());
+        self.selected.add(guid.to_owned());
         let selected = &self.selected;
         for item in project.items.values_mut().flatten() {
             item.selected = selected.contains(&item.guid) || real.contains(&item.guid);
@@ -1203,7 +1204,7 @@ impl Editor {
                     }
                     return true;
                 }
-                let doomed: Vec<String> = self.selected.drain().collect();
+                let doomed: Vec<String> = self.selected.drain();
                 if doomed.is_empty() {
                     return true;
                 }
@@ -1236,7 +1237,7 @@ impl Editor {
                 self.selected.clear();
                 for item in project.items.values_mut().flatten() {
                     item.selected = true;
-                    self.selected.insert(item.guid.clone());
+                    self.selected.add(item.guid.clone());
                 }
                 effects.push(Effect::Send(Edit::SelectAllItems(String::new())));
             }
@@ -4535,7 +4536,7 @@ mod tests {
             .clone();
         // The selection names the folder whose kit is read, and the span.
         let mut editor = Editor::default();
-        editor.selected.insert(row.clone());
+        editor.selected.add(row.clone());
         let folds = editor.selected_folds(&project);
         assert_eq!(folds.len(), 1);
         assert_eq!((folds[0].2, folds[0].3), (2.0, 6.0));
@@ -5263,7 +5264,7 @@ mod ruler_tests {
             id: 9,
             zone: Zone::Body,
         });
-        editor.selected.insert("an-item".into());
+        editor.selected.add("an-item".into());
         let mut project = super::tests::project();
         let rows: Vec<(super::Track, u32)> =
             project.tracks.iter().cloned().map(|t| (t, 0)).collect();

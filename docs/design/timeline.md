@@ -1557,7 +1557,7 @@ pins A's behaviour. Keep it or change it on purpose.
     `the_razor_help_matches_the_razor_keys`,
     `the_razor_menu_and_the_razor_keys_agree`.
 
-**Progress (2026-10-14).** Steps 1–10 are done. Where the code differs
+**Progress (2026-10-14).** Steps 1–11 are done. Where the code differs
 from the plan above:
 
 - **3:** one `Mods` type for both surfaces (`timeline::input::Mods`; the
@@ -1614,6 +1614,19 @@ from the plan above:
   view) and `f` (contextual over items). Contextual now takes spans, so
   this is a key binding and an items adapter away; it is new behaviour,
   so it waits for a decision on the keys.
+- **11:** `timeline::cursor` holds the arrangement's `Playhead`,
+  `TimeSpan`, `EditCursor`, `StopMode`, `TransportStep` and `Locate`, with
+  their tests. The arrangement aliases its old names, and keeps the
+  painting and the globals. `timeline::select::Selection<Id>` is an
+  insertion-ordered set (with `targets` and `as_set`); the arrangement's
+  `selected` is one. **The Editor is unchanged here.** Its `playhead` is
+  both the edit cursor (ruler clicks, hjkl) and Session's transport
+  (`expression.rs` writes it every frame), so splitting it decides whether
+  the roll draws one line or two, which is a design question. Its
+  `selection.notes` stays a `Vec<NoteId>` (about 80 call sites assign or
+  clone it into edits). Its "the selection if any, else the note under
+  the pointer" differs from `targets`' "the selection if the note is in
+  it".
 
 After step 13 the two `Editor` structs (`arrange_edit::Editor` and
 `editor::Editor`) each hold one `timeline::Interaction<Self>`, and they no

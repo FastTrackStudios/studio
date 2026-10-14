@@ -3,11 +3,13 @@
 //! Editor share ([`gestures`]).
 
 pub mod camera;
+pub mod cursor;
 pub mod gestures;
 pub mod grid;
 pub mod input;
 pub mod razor;
 pub mod rows;
+pub mod select;
 pub mod snap;
 pub mod time;
 pub mod zoom;

@@ -4167,7 +4167,7 @@ impl ArrangementWidget {
             self.editor.cursor = asked;
         }
         crate::cursor::publish(self.editor.cursor);
-        crate::ghosts::local_selection(&self.editor.selected, &self.rows);
+        crate::ghosts::local_selection(self.editor.selected.as_set(), &self.rows);
         crate::ghosts::local_shown(&self.rows, &self.scene);
         // The engine changed the session under us (a toolbar insert, an
         // edited chart): read it back before drawing it.
@@ -4320,7 +4320,7 @@ impl ArrangementWidget {
             &self.scene,
             view,
             lanes_at,
-            &self.editor.selected,
+            self.editor.selected.as_set(),
             self.editor.ghost(),
         );
         // Every item's outline, its cuts with it; without outlines, in
