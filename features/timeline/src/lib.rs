@@ -4,6 +4,7 @@
 
 pub mod camera;
 pub mod cursor;
+pub mod drag;
 pub mod gestures;
 pub mod grid;
 pub mod hit;

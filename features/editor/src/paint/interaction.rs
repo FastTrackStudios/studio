@@ -1828,11 +1828,8 @@ pub fn pointer_move(ed: &mut Editor, drag: &mut Drag, x: f64, y: f64, mods: Mods
             } else {
                 raw
             };
-            let (start, end) = if *start_edge {
-                (t.min(original.1 - 1.0), original.1)
-            } else {
-                (original.0, t.max(original.0 + 1.0))
-            };
+            let (start, end) =
+                timeline::drag::trim(*original, *start_edge, t, 1.0, f64::NEG_INFINITY);
             ed.apply_live(&Edit::Resize {
                 note: *note,
                 start,
@@ -2085,8 +2082,14 @@ pub fn pointer_move(ed: &mut Editor, drag: &mut Drag, x: f64, y: f64, mods: Mods
                 // Pinned where it is; the drag is its length. A note
                 // cannot be dragged shorter than nothing, and one that
                 // inverted would read as a note starting after it ends.
-                let end = ed.snap_time(base.1 + dt);
-                let end = end.max(base.0 + ed.grid.step(ed.units_per_beat()) * 0.25);
+                let min = ed.grid.step(ed.units_per_beat()) * 0.25;
+                let (_, end) = timeline::drag::trim(
+                    *base,
+                    false,
+                    ed.snap_time(base.1 + dt),
+                    min,
+                    f64::NEG_INFINITY,
+                );
                 ed.apply_live(&Edit::Resize {
                     note: *note,
                     start: base.0,

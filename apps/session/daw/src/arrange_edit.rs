@@ -715,10 +715,28 @@ impl Editor {
             // left edge, so the offset goes down as `dx` goes up.
             press.ghost = Some(match press.zone {
                 _ if press.slip.is_some() => (press.x0, press.x1),
-                ItemZone::LeftEdge => (snap(press.x0 + dx).clamp(0.0, press.x1 - 0.01), press.x1),
-                ItemZone::RightEdge => (press.x0, snap(press.x1 + dx).max(press.x0 + 0.01)),
+                // The trimmed edge lands where the snap says, a hundredth
+                // of a second short of the other at least, and never
+                // before the song (`timeline::drag::trim`).
+                ItemZone::LeftEdge => {
+                    timeline::drag::trim((press.x0, press.x1), true, snap(press.x0 + dx), 0.01, 0.0)
+                }
+                ItemZone::RightEdge => timeline::drag::trim(
+                    (press.x0, press.x1),
+                    false,
+                    snap(press.x1 + dx),
+                    0.01,
+                    0.0,
+                ),
+                // The start lands on a line whatever the grab offset
+                // (`SnapRule::AnchorStart`), never before the song.
                 _ => {
-                    let x0 = snap(press.x0 + dx).max(0.0);
+                    let dt = if on_grid {
+                        grid.delta(timeline::snap::SnapRule::AnchorStart, press.x0, dx)
+                    } else {
+                        dx
+                    };
+                    let x0 = (press.x0 + dt).max(0.0);
                     (x0, x0 + (press.x1 - press.x0))
                 }
             });
