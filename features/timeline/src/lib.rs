@@ -6,3 +6,4 @@ pub mod gestures;
 pub mod grid;
 pub mod input;
 pub mod razor;
+pub mod time;

@@ -496,6 +496,17 @@ impl Editor {
         self.units_per_beat() * self.beats_per_bar.max(1.0)
     }
 
+    /// The document's time as musical time: one tempo and one signature
+    /// from the document's start.
+    pub fn time_map(&self) -> timeline::time::ConstantTempo {
+        timeline::time::ConstantTempo {
+            units_per_beat: self.units_per_beat(),
+            beats_per_bar: self.beats_per_bar.max(1.0),
+            origin: self.doc.start,
+            units_per_second: self.doc.time_base.units_per_second(self.bpm),
+        }
+    }
+
     /// `(bar, beat)` at `t`, both 1-based — what the ruler prints.
     pub fn bar_beat(&self, t: f64) -> (i64, i64) {
         let beats = (t - self.doc.start) / self.units_per_beat();

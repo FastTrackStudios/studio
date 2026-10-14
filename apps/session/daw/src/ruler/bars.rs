@@ -42,14 +42,12 @@ impl Bars {
     /// tempo map means.
     #[must_use]
     pub fn at_time(tempo: &[daw_ui::studio::project::TempoChange], seconds: f64) -> Self {
-        tempo
-            .iter()
-            .take_while(|change| change.at <= seconds + 1e-9)
-            .last()
-            .map_or_else(
-                || Self::at(120.0),
-                |change| Self::in_time(change.bpm, change.beats_per_bar),
-            )
+        // Before the first change (or with none), the default.
+        if tempo.first().is_none_or(|first| seconds + 1e-9 < first.at) {
+            return Self::at(120.0);
+        }
+        let point = Timeline::new(tempo).map().point_at(seconds);
+        Self::in_time(point.bpm, point.beats_per_bar)
     }
 
     #[must_use]
@@ -252,12 +250,12 @@ pub fn ruler(
         if beat.at > to {
             break;
         }
-        if beat.at + beat.secs_per_beat < from {
+        if beat.at + beat.units_per_beat < from {
             continue;
         }
         if let Some(n) = subs {
             for k in 1..n {
-                let t = (f64::from(k) / f64::from(n)).mul_add(beat.secs_per_beat, beat.at);
+                let t = (f64::from(k) / f64::from(n)).mul_add(beat.units_per_beat, beat.at);
                 let x = x_of(t);
                 if shown(x) && !in_grid_region(&regions, t) {
                     tick(
@@ -340,7 +338,7 @@ pub fn ruler(
             let Some(beat) = at.checked_sub(1).and_then(|i| beats.get(i)) else {
                 continue;
             };
-            let fraction = (t - beat.at) / beat.secs_per_beat.max(f64::EPSILON);
+            let fraction = (t - beat.at) / beat.units_per_beat.max(f64::EPSILON);
             let on_the_bar = beat.beat == 1 && fraction < 1e-3;
             if step * view.pps >= REGION_NUMBER_ROOM && !on_the_bar {
                 crate::tcp::glyphs(
