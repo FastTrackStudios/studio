@@ -26,38 +26,6 @@ use crate::hit::{Hit, Target};
 use crate::keys::Action;
 use crate::mousemap::{self, Gesture, Mods};
 
-/// The zoom tool's drag: the expression editor's gesture, on the
-/// arrangement.
-///
-/// Hold `z`, press, and drag — sideways zooms time, up zooms the
-/// rows, both exponential and both anchored so what was under the
-/// press stays under it. Alt sweeps a box to frame instead.
-///
-/// The gains are the roll's: two hundred pixels of travel is one
-/// e-fold, eight hundred with Shift for the fine control.
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub struct ZoomTool {
-    /// The drag itself, in window pixels — the Editor's too
-    /// (`timeline::gestures::ZoomDrag`): how far a drag zooms, which way, and
-    /// when a sweep is still a click.
-    drag: timeline::gestures::ZoomDrag,
-    /// The second under the press, and the content row under it at a
-    /// vertical zoom of one.
-    anchor_t: f64,
-    anchor_y: f64,
-    base_pps: f64,
-    base_zoom_y: f64,
-}
-
-/// Where the lanes start in the window: the rails' corner plus the
-/// panel's width and the ruler's height.
-pub type LanesOrigin = (f64, f64);
-
-/// The least and most the arrangement zooms to, in pixels a second
-/// and in row scale.
-pub const PPS_RANGE: (f64, f64) = (2.0, 48_000.0 * 20.0);
-pub const ZOOM_Y_RANGE: (f64, f64) = (0.1, 40.0);
-
 /// What an interaction asks the window to do beyond the picture.
 #[derive(Clone, Debug, PartialEq)]
 pub enum Effect {
@@ -157,8 +125,6 @@ const RAZOR_MIN_SECS: f64 = 0.01;
 /// The arrangement's editing state.
 #[derive(Debug, Default)]
 pub struct Editor {
-    /// The zoom tool's drag, while `z` is held and the button is down.
-    pub zoom: Option<ZoomTool>,
     /// Pixels a second, as the window last drew: what tells a razor
     /// area's edge from its body. Zero until drawn — no edges then.
     pub pps: f64,
@@ -1074,101 +1040,12 @@ impl Editor {
         false
     }
 
-    /// The zoom tool takes hold at a window point. `true` when it did
-    /// — it only takes a press on the lanes.
-    pub fn zoom_press(
-        &mut self,
-        at: (f64, f64),
-        view: &Viewport,
-        lanes: LanesOrigin,
-        keys: Mods,
-    ) -> bool {
-        let (x, y) = at;
-        if x < lanes.0 || y < lanes.1 {
-            return false;
-        }
-        let zoom_y = if view.zoom_y > 0.0 { view.zoom_y } else { 1.0 };
-        self.zoom = Some(ZoomTool {
-            drag: timeline::gestures::ZoomDrag::press(at, keys.alt),
-            anchor_t: (x - lanes.0 + view.scroll_x) / view.pps.max(f64::EPSILON),
-            anchor_y: (y - lanes.1 + view.scroll_y) / zoom_y,
-            base_pps: view.pps,
-            base_zoom_y: zoom_y,
-        });
-        true
-    }
-
-    /// The zoom tool's drag: the view the arrangement should now show,
-    /// or `None` when no zoom is in flight or a sweep is still being
-    /// drawn. The scroll comes back unclamped; the window clamps it to
-    /// its spans as it does every scroll.
-    pub fn zoom_move(
-        &mut self,
-        at: (f64, f64),
-        view: &Viewport,
-        lanes: LanesOrigin,
-        keys: Mods,
-    ) -> Option<Viewport> {
-        let z = self.zoom.as_mut()?;
-        z.drag.moved(at);
-        let (time, rows) = z.drag.factors(keys.shift)?;
-        let pps = (z.base_pps * time).clamp(PPS_RANGE.0, PPS_RANGE.1);
-        let zoom_y = (z.base_zoom_y * rows).clamp(ZOOM_Y_RANGE.0, ZOOM_Y_RANGE.1);
-        // Put what was under the press back under it, on both axes.
-        let origin = z.drag.origin;
-        let scroll_x = z.anchor_t.mul_add(pps, lanes.0 - origin.0);
-        let scroll_y = z.anchor_y.mul_add(zoom_y, lanes.1 - origin.1);
-        Some(Viewport {
-            scroll_x,
-            scroll_y,
-            pps,
-            zoom_y,
-            width: view.width,
-            height: view.height,
-            panel_w: view.panel_w,
-        })
-    }
-
-    /// The zoom tool lets go. An Alt sweep frames its box now; the
-    /// continuous drag already zoomed on the way. Returns the view to
-    /// show, if the release changes it.
-    pub fn zoom_release(&mut self, view: &Viewport, lanes: LanesOrigin) -> Option<Viewport> {
-        let z = self.zoom.take()?;
-        // A sweep that went somewhere; a click frames nothing.
-        let ((x0, y0), (x1, y1)) = z.drag.release()?;
-        let zoom_y = if view.zoom_y > 0.0 { view.zoom_y } else { 1.0 };
-        let t0 = (x0 - lanes.0 + view.scroll_x) / view.pps.max(f64::EPSILON);
-        let t1 = (x1 - lanes.0 + view.scroll_x) / view.pps.max(f64::EPSILON);
-        let r0 = (y0 - lanes.1 + view.scroll_y) / zoom_y;
-        let r1 = (y1 - lanes.1 + view.scroll_y) / zoom_y;
-        let lanes_w = (view.width - (lanes.0 - crate::rails::SIDE)).max(1.0);
-        let lanes_h = (view.height - (lanes.1 - crate::rails::TOP)).max(1.0);
-        let pps = (lanes_w / (t1 - t0).max(1e-6)).clamp(PPS_RANGE.0, PPS_RANGE.1);
-        let zoom = (lanes_h / (r1 - r0).max(1e-6)).clamp(ZOOM_Y_RANGE.0, ZOOM_Y_RANGE.1);
-        Some(Viewport {
-            scroll_x: t0 * pps,
-            scroll_y: r0 * zoom,
-            pps,
-            zoom_y: zoom,
-            width: view.width,
-            height: view.height,
-            panel_w: view.panel_w,
-        })
-    }
-
-    /// The Alt sweep's box, in window pixels, while one is being drawn.
-    #[must_use]
-    pub fn zoom_marquee(&self) -> Option<((f64, f64), (f64, f64))> {
-        self.zoom.and_then(|z| z.drag.sweep_box())
-    }
-
     /// Whether a drag is in flight — what the edge autoscroll asks.
     #[must_use]
     pub fn dragging(&self) -> bool {
         self.item_press.as_ref().is_some_and(|p| p.ghost.is_some())
             || self.fade_drag.is_some()
             || self.time_drag.is_some()
-            || self.zoom.is_some()
     }
 
     /// The ghost of an item being moved or trimmed: its index and span.
@@ -3128,111 +3005,6 @@ fn edit_item(project: &mut Project, guid: &str, change: impl FnOnce(&mut daw_pro
         .find(|i| i.guid == guid)
     {
         change(item);
-    }
-}
-
-#[cfg(test)]
-mod zoom_tests {
-    use super::*;
-
-    fn view() -> Viewport {
-        Viewport {
-            scroll_x: 100.0,
-            scroll_y: 40.0,
-            pps: 40.0,
-            zoom_y: 1.0,
-            width: 2000.0,
-            height: 1000.0,
-            panel_w: crate::arrangement::TCP_WIDTH,
-        }
-    }
-    const LANES: LanesOrigin = (387.0, 103.0);
-
-    #[test]
-    fn a_sideways_drag_zooms_time_about_the_press() {
-        let mut ed = Editor::default();
-        let v = view();
-        let at = (887.0, 400.0);
-        assert!(ed.zoom_press(at, &v, LANES, Mods::default()));
-        let t_under = (at.0 - LANES.0 + v.scroll_x) / v.pps;
-        let next = ed
-            .zoom_move((1087.0, 400.0), &v, LANES, Mods::default())
-            .expect("a zoom");
-        assert!(
-            (next.pps / v.pps - std::f64::consts::E).abs() < 1e-9,
-            "200px is one e-fold"
-        );
-        assert!(
-            (next.zoom_y - 1.0).abs() < 1e-12,
-            "no vertical travel, no vertical zoom"
-        );
-        // The second under the press is still under it.
-        let t_after = (at.0 - LANES.0 + next.scroll_x) / next.pps;
-        assert!((t_after - t_under).abs() < 1e-9);
-    }
-
-    #[test]
-    fn an_upward_drag_zooms_the_rows() {
-        let mut ed = Editor::default();
-        let v = view();
-        let at = (887.0, 400.0);
-        ed.zoom_press(at, &v, LANES, Mods::default());
-        let row_under = (at.1 - LANES.1 + v.scroll_y) / v.zoom_y;
-        let next = ed
-            .zoom_move((887.0, 200.0), &v, LANES, Mods::default())
-            .expect("a zoom");
-        assert!((next.zoom_y - std::f64::consts::E).abs() < 1e-9);
-        assert!((next.pps - v.pps).abs() < 1e-12);
-        let row_after = (at.1 - LANES.1 + next.scroll_y) / next.zoom_y;
-        assert!((row_after - row_under).abs() < 1e-9);
-    }
-
-    #[test]
-    fn shift_is_the_fine_control_and_the_press_must_be_on_the_lanes() {
-        let mut ed = Editor::default();
-        let v = view();
-        assert!(
-            !ed.zoom_press((10.0, 400.0), &v, LANES, Mods::default()),
-            "the panel is not the lanes"
-        );
-        ed.zoom_press((887.0, 400.0), &v, LANES, Mods::default());
-        let shift = Mods {
-            shift: true,
-            ..Mods::default()
-        };
-        let next = ed
-            .zoom_move((1087.0, 400.0), &v, LANES, shift)
-            .expect("a zoom");
-        assert!((next.pps / v.pps - (0.25f64).exp()).abs() < 1e-9);
-        assert!(
-            ed.zoom_release(&v, LANES).is_none(),
-            "a drag zoomed on the way; the release adds nothing"
-        );
-        assert!(!ed.dragging());
-    }
-
-    #[test]
-    fn an_alt_sweep_frames_its_box_on_release() {
-        let mut ed = Editor::default();
-        let v = view();
-        let alt = Mods {
-            alt: true,
-            ..Mods::default()
-        };
-        ed.zoom_press((587.0, 203.0), &v, LANES, alt);
-        assert!(
-            ed.zoom_move((987.0, 403.0), &v, LANES, alt).is_none(),
-            "a sweep moves nothing until release"
-        );
-        assert_eq!(ed.zoom_marquee(), Some(((587.0, 203.0), (987.0, 403.0))));
-        let next = ed.zoom_release(&v, LANES).expect("the box framed");
-        // Four hundred pixels of sweep at 40 px/s is ten seconds; the
-        // lanes are 2000 - 343 wide, so the frame is ~165 px/s.
-        let lanes_w = v.width - crate::arrangement::TCP_WIDTH;
-        assert!((next.pps - lanes_w / 10.0).abs() < 1e-6);
-        // And the sweep's left edge is the new left edge.
-        let t0 = (587.0 - LANES.0 + v.scroll_x) / v.pps;
-        assert!((next.scroll_x / next.pps - t0).abs() < 1e-9);
     }
 }
 

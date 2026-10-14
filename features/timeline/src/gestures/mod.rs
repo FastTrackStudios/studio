@@ -23,7 +23,7 @@ use std::hash::{BuildHasher, Hash};
 /// line between "I clicked" and "I meant to drag a box".
 pub const SLOP: f64 = 3.0;
 
-/// Pixels of zoom-drag travel that zoom by `e`: right or up zooms in.
+/// Pixels of zoom-drag travel that zoom by `e`: right or down zooms in.
 pub const ZOOM_GAIN: f64 = 200.0;
 /// The same with Shift, for the fine control: a quarter as fast, so a
 /// drag that overshot can be repeated slowly rather than undone.
@@ -40,7 +40,9 @@ pub fn zoom_factor(pixels: f64) -> f64 {
 ///
 /// Sideways zooms time, up and down zooms the rows, both exponential and
 /// both about the press — the surface keeps what was under the press
-/// under it. With Alt it is a sweep instead: a box, framed on release.
+/// under it. Right zooms time in and down zooms the rows in, as REAPER's
+/// zoom tool does: the rows come toward you as you pull. With Alt it is a
+/// sweep instead: a box, framed on release.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct ZoomDrag {
     /// Where the press was.
@@ -71,8 +73,7 @@ impl ZoomDrag {
     /// axis: `(time, rows)` factors, above one zooming in. `None` while
     /// sweeping, when nothing moves until release.
     ///
-    /// Right zooms time in and up zooms the rows in — the directions the
-    /// content grows in.
+    /// Right zooms time in and down zooms the rows in.
     #[must_use]
     pub fn factors(&self, fine: bool) -> Option<(f64, f64)> {
         if self.sweep {
@@ -80,8 +81,27 @@ impl ZoomDrag {
         }
         let gain = if fine { ZOOM_GAIN_FINE } else { ZOOM_GAIN };
         let dx = self.current.0 - self.origin.0;
-        let dy = self.origin.1 - self.current.1;
+        let dy = self.current.1 - self.origin.1;
         Some(((dx / gain).exp(), (dy / gain).exp()))
+    }
+
+    /// The surface held the zoom at `applied` (factors from the press, as
+    /// [`ZoomDrag::factors`] gives them) because a limit stopped it: drop
+    /// the travel past the limit, so the drag turns back the moment the
+    /// pointer does rather than first unwinding the overshoot. The press
+    /// point the surface anchors on is unchanged; only where the travel
+    /// is measured from moves.
+    pub fn rebase(&mut self, applied: (f64, f64), fine: bool) {
+        if self.sweep {
+            return;
+        }
+        let gain = if fine { ZOOM_GAIN_FINE } else { ZOOM_GAIN };
+        if applied.0 > 0.0 {
+            self.origin.0 = self.current.0 - gain * applied.0.ln();
+        }
+        if applied.1 > 0.0 {
+            self.origin.1 = self.current.1 - gain * applied.1.ln();
+        }
     }
 
     /// The box being swept, while it is one: `(top-left, bottom-right)`.
@@ -263,23 +283,37 @@ fn travel(a: (f64, f64), b: (f64, f64)) -> f64 {
 mod tests {
     use super::*;
 
-    /// Right and up zoom in, by `e` every two hundred pixels; a quarter as
-    /// fast with Shift; nothing while sweeping.
+    /// Right and down zoom in, by `e` every two hundred pixels; a quarter
+    /// as fast with Shift; nothing while sweeping.
     #[test]
-    fn a_zoom_drag_zooms_right_and_up() {
+    fn a_zoom_drag_zooms_right_and_down() {
         let mut z = ZoomDrag::press((100.0, 100.0), false);
-        z.moved((300.0, -100.0));
+        z.moved((300.0, 300.0));
         let (t, r) = z.factors(false).expect("a zoom");
         assert!((t - 1.0_f64.exp()).abs() < 1e-12 && (r - 1.0_f64.exp()).abs() < 1e-12);
         let (t, _) = z.factors(true).expect("a zoom");
         assert!((t - 0.25_f64.exp()).abs() < 1e-12);
-        z.moved((0.0, 200.0));
+        z.moved((0.0, 0.0));
         let (t, r) = z.factors(false).expect("a zoom");
-        assert!(t < 1.0 && r < 1.0, "left and down zoom out");
+        assert!(t < 1.0 && r < 1.0, "left and up zoom out");
         let mut sweep = ZoomDrag::press((10.0, 10.0), true);
         sweep.moved((50.0, 5.0));
         assert_eq!(sweep.factors(false), None);
         assert_eq!(sweep.sweep_box(), Some(((10.0, 5.0), (50.0, 10.0))));
+    }
+
+    /// Held at a limit, the drag drops the overshoot: turning back zooms
+    /// back at once.
+    #[test]
+    fn a_rebased_drag_turns_back_at_once() {
+        let mut z = ZoomDrag::press((0.0, 0.0), false);
+        z.moved((0.0, 2_000.0));
+        // The surface could only zoom the rows by 2.
+        z.rebase((1.0, 2.0), false);
+        assert!((z.factors(false).expect("a zoom").1 - 2.0).abs() < 1e-12);
+        z.moved((0.0, 1_990.0));
+        let (_, r) = z.factors(false).expect("a zoom");
+        assert!((r - 2.0 * (-10.0 / ZOOM_GAIN).exp()).abs() < 1e-12);
     }
 
     /// A sweep frames its box; a sweep that never moved is a click.

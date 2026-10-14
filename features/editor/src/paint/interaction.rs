@@ -2024,7 +2024,7 @@ pub fn pointer_move(ed: &mut Editor, drag: &mut Drag, x: f64, y: f64, mods: Mods
         } => {
             *current = (x, y);
             // The arrangement's drag too (`timeline::gestures::ZoomDrag`):
-            // direction is the axis, right and up zoom in, Shift is the
+            // direction is the axis, right and down zoom in, Shift is the
             // fine control; a sweep moves nothing until release.
             let drag = timeline::gestures::ZoomDrag {
                 origin: *origin,

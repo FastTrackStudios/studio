@@ -7,7 +7,7 @@
 //! is the arithmetic, so it can be tested without a window.
 
 use timeline::camera::{Align, Bounds, Camera, RowView, RowsFloor, TimeView, Viewport, ZoomOut};
-use timeline::gestures::{self, Wheel};
+use timeline::gestures::{self, Wheel, ZoomDrag};
 
 use crate::studio::PPS;
 
@@ -17,6 +17,15 @@ use crate::studio::PPS;
 /// view, as framing a track does in REAPER (a row is 32 pixels unzoomed
 /// at its least).
 pub const ZOOM_IN: (f64, f64) = (48_000.0 * 20.0 / PPS, 40.0);
+
+/// A held-`z` drag in flight: the shared drag, where it was pressed (what
+/// it zooms about), and the zoom it started from.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct ZoomGesture {
+    drag: ZoomDrag,
+    anchor: (f64, f64),
+    base: (f64, f64),
+}
 
 /// The view of the lanes.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -178,19 +187,31 @@ impl ArrangeCamera {
         self.clamp();
     }
 
-    /// One move of the held-`z` drag: each move zooms by its own travel
-    /// (right zooms time in, down zooms rows in, as REAPER's zoom tool),
-    /// about where the press was (`anchor`, frame pixels).
-    pub fn zoom_drag(&mut self, moved: (f64, f64), anchor: (f64, f64)) {
-        let (zx, zy) = self.zoom;
+    /// The held-`z` drag takes hold at `at` (frame pixels).
+    #[must_use]
+    pub const fn zoom_press(&self, at: (f64, f64)) -> ZoomGesture {
+        ZoomGesture {
+            drag: ZoomDrag::press(at, false),
+            anchor: at,
+            base: self.zoom,
+        }
+    }
+
+    /// The held-`z` drag, its pointer at `at` (frame pixels): right zooms
+    /// time in, down zooms the rows in (as REAPER's zoom tool), measured
+    /// from the press and about the press. At a limit the travel past it
+    /// is dropped ([`ZoomDrag::rebase`]), so turning back zooms back at
+    /// once.
+    pub fn zoom_to(&mut self, gesture: &mut ZoomGesture, at: (f64, f64)) {
+        gesture.drag.moved(at);
+        let Some((fx, fy)) = gesture.drag.factors(false) else {
+            return;
+        };
         let ((x0, x1), (y0, y1)) = self.limits();
-        self.rezoom(
-            (
-                (zx * gestures::zoom_factor(moved.0)).clamp(x0, x1),
-                (zy * gestures::zoom_factor(moved.1)).clamp(y0, y1),
-            ),
-            anchor,
-        );
+        let base = gesture.base;
+        let to = ((base.0 * fx).clamp(x0, x1), (base.1 * fy).clamp(y0, y1));
+        self.rezoom(to, gesture.anchor);
+        gesture.drag.rebase((to.0 / base.0, to.1 / base.1), false);
     }
 
     /// The session point (unzoomed pixels) at a frame position.
@@ -217,6 +238,17 @@ mod tests {
     /// a 1000 × 600 frame.
     fn session() -> ArrangeCamera {
         ArrangeCamera::new((1000.0, 600.0), (600.0 * 40.0, 40.0 * 32.0))
+    }
+
+    /// A held-`z` drag pressed at `at` and moved by each of `moves` in
+    /// turn.
+    fn zoom_drag(cam: &mut ArrangeCamera, at: (f64, f64), moves: &[(f64, f64)]) {
+        let mut gesture = cam.zoom_press(at);
+        let mut pointer = at;
+        for m in moves {
+            pointer = (pointer.0 + m.0, pointer.1 + m.1);
+            cam.zoom_to(&mut gesture, pointer);
+        }
     }
 
     // ── limits and extent ──────────────────────────────────────────────────
@@ -397,23 +429,22 @@ mod tests {
 
     #[test]
     fn the_z_drag_right_zooms_time_in_and_down_zooms_rows_in() {
-        // Q4 (decided): down zooms in, as REAPER does. `ZoomDrag` is up-in
-        // today and flips in step 10; this is the side that already agrees.
+        // Q4 (decided): down zooms in, as REAPER does.
         let mut cam = session();
-        cam.zoom_drag((50.0, 0.0), (500.0, 300.0));
+        zoom_drag(&mut cam, (500.0, 300.0), &[(50.0, 0.0)]);
         assert!(cam.zoom.0 > 1.0 && cam.zoom.1 == 1.0, "{:?}", cam.zoom);
         let mut cam = session();
-        cam.zoom_drag((0.0, 50.0), (500.0, 300.0));
+        zoom_drag(&mut cam, (500.0, 300.0), &[(0.0, 50.0)]);
         assert!(cam.zoom.1 > 1.0 && cam.zoom.0 == 1.0, "{:?}", cam.zoom);
         let mut cam = session();
-        cam.zoom_drag((-50.0, -50.0), (500.0, 300.0));
+        zoom_drag(&mut cam, (500.0, 300.0), &[(-50.0, -50.0)]);
         assert!(cam.zoom.0 < 1.0 && cam.zoom.1 < 1.0, "{:?}", cam.zoom);
     }
 
     #[test]
     fn the_z_drag_zooms_by_the_shared_gain() {
         let mut cam = session();
-        cam.zoom_drag((gestures::ZOOM_GAIN, 0.0), (0.0, 0.0));
+        zoom_drag(&mut cam, (0.0, 0.0), &[(gestures::ZOOM_GAIN, 0.0)]);
         assert!(close(cam.zoom.0, std::f64::consts::E));
     }
 
@@ -425,9 +456,7 @@ mod tests {
         let press = (400.0, 300.0);
         let before = cam.point_at(press);
         // The pointer travels; the zoom is about where the press was.
-        for _ in 0..5 {
-            cam.zoom_drag((20.0, 10.0), press);
-        }
+        zoom_drag(&mut cam, press, &[(20.0, 10.0); 5]);
         let after = cam.point_at(press);
         assert!(
             close(before.0, after.0) && close(before.1, after.1),
@@ -438,25 +467,27 @@ mod tests {
     #[test]
     fn the_z_drag_is_a_sum_of_moves_so_the_path_does_not_matter_inside_the_limits() {
         let mut one = session();
-        one.zoom_drag((90.0, 30.0), (500.0, 300.0));
+        zoom_drag(&mut one, (500.0, 300.0), &[(90.0, 30.0)]);
         let mut many = session();
-        for _ in 0..3 {
-            many.zoom_drag((30.0, 10.0), (500.0, 300.0));
-        }
+        zoom_drag(
+            &mut many,
+            (500.0, 300.0),
+            &[(30.0, 10.0), (50.0, -5.0), (10.0, 25.0)],
+        );
         assert!(close(one.zoom.0, many.zoom.0) && close(one.zoom.1, many.zoom.1));
     }
 
     #[test]
     fn the_z_drag_turns_back_at_once_after_hitting_a_limit() {
-        // Each move zooms from where the last one left off, clamped: travel
-        // past a limit is lost, so reversing zooms back out immediately. A
-        // drag measured from the press (`ZoomDrag`) would first have to
-        // unwind the overshoot. Step 10 picks one; this pins A today.
+        // Travel past a limit is dropped (`ZoomDrag::rebase`), so in one
+        // drag reversing zooms back out immediately rather than first
+        // unwinding the overshoot.
         let mut cam = session();
         let anchor = (500.0, 300.0);
-        cam.zoom_drag((0.0, 2_000.0), anchor); // far past the row cap
+        let mut gesture = cam.zoom_press(anchor);
+        cam.zoom_to(&mut gesture, (500.0, 2_300.0)); // far past the row cap
         assert_eq!(cam.zoom.1, ZOOM_IN.1);
-        cam.zoom_drag((0.0, -10.0), anchor);
+        cam.zoom_to(&mut gesture, (500.0, 2_290.0));
         assert!(cam.zoom.1 < ZOOM_IN.1);
         assert!(close(cam.zoom.1, ZOOM_IN.1 * gestures::zoom_factor(-10.0)));
     }

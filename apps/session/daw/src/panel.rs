@@ -80,9 +80,6 @@ struct Input {
     shift: bool,
     pointer: (f64, f64),
     drag: Option<Drag>,
-    /// Where a zoom-drag started, which it zooms about: the pointer moves
-    /// while it zooms, and a view that chased it would slide as it grew.
-    anchor: (f64, f64),
     /// The middle button, held down over this panel: the hand, whether
     /// or not the pointer has moved yet.
     panning: bool,
@@ -103,12 +100,14 @@ impl Input {
 }
 
 /// A drag in flight.
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq)]
 enum Drag {
     /// The hand: the session moves under the pointer.
     Pan,
-    /// The zoom tool, sprung from a held `z`.
-    Zoom,
+    /// The zoom tool, sprung from a held `z`: it zooms about where it was
+    /// pressed, since the pointer moves while it zooms and a view that
+    /// chased it would slide as it grew.
+    Zoom(crate::arrange_camera::ZoomGesture),
 }
 
 /// The scroll that keeps the point under the pointer where it is across a
@@ -638,18 +637,19 @@ impl ArrangementPanel {
                 let mut input = self.input.borrow_mut();
                 let moved = (at.0 - input.pointer.0, at.1 - input.pointer.1);
                 input.pointer = at;
-                match input.drag {
+                let frame_at = self.in_frame(r, at);
+                match input.drag.as_mut() {
                     Some(Drag::Pan) => {
                         let mut camera = self.camera(r);
                         camera.pan(moved);
                         self.put(camera);
                     }
-                    Some(Drag::Zoom) => {
+                    Some(Drag::Zoom(gesture)) => {
                         self.pointing.borrow_mut().tool_used = true;
                         // Down zooms in: the rows come toward you as you
                         // pull, as in REAPER's zoom tool.
                         let mut camera = self.camera(r);
-                        camera.zoom_drag(moved, self.in_frame(r, input.anchor));
+                        camera.zoom_to(gesture, frame_at);
                         self.put(camera);
                     }
                     None => {}
@@ -670,10 +670,9 @@ impl ArrangementPanel {
                 // button comes up.
                 input.drag = match (pressed, button) {
                     (true, Button::Middle) if over => Some(Drag::Pan),
-                    (true, Button::Left) if input.zooming && over => {
-                        input.anchor = input.pointer;
-                        Some(Drag::Zoom)
-                    }
+                    (true, Button::Left) if input.zooming && over => Some(Drag::Zoom(
+                        self.camera(r).zoom_press(self.in_frame(r, input.pointer)),
+                    )),
                     _ => None,
                 };
                 self.reshape(&input);

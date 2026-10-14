@@ -539,14 +539,14 @@ fn a_zoom_holds_the_point_it_was_started_on() {
         let want_t = ed.camera.t_at(x);
         let want_row = ed.camera.pitch_at(y, ed.viewport);
 
-        // Up and to the right: zoom in on both axes at once, so neither
+        // Down and to the right: zoom in on both axes at once, so neither
         // can be right by accident of the other not having moved.
         let mut d = interaction::pointer_down(&mut ed, x, y, plain(), 0);
         assert!(
             matches!(d, Drag::ZoomTool { .. }),
             "the zoom tool did not claim the drag at height {grab}",
         );
-        interaction::pointer_move(&mut ed, &mut d, x + 120.0, y - 90.0, plain());
+        interaction::pointer_move(&mut ed, &mut d, x + 120.0, y + 90.0, plain());
 
         let got_t = ed.camera.t_at(x);
         let got_row = ed.camera.pitch_at(y, ed.viewport);
