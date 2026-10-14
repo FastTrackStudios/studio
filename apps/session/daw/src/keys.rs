@@ -97,6 +97,10 @@ pub enum Action {
     CompTake(u32),
     DeleteSelectedItems,
     SelectAllItems,
+    /// The selected items onto the arrangement's clipboard.
+    CopyItems,
+    /// The clipboard's items at the edit cursor, each on its own track.
+    PasteItems,
     /// Escape: no time selection, nothing selected.
     ClearSelection,
     /// The edit cursor by a bar, or by a beat.
@@ -181,6 +185,8 @@ pub fn action_of(id: &str) -> Action {
             .map_or_else(|_| Action::Unbound(comp.to_owned()), Action::CompTake),
         "40006" | "40697" => Action::DeleteSelectedItems,
         "40035" | "40182" => Action::SelectAllItems,
+        "40057" | "40698" => Action::CopyItems,
+        "40058" | "42398" => Action::PasteItems,
         "40020" => Action::ClearSelection,
         "40838" => Action::CursorBar(-1),
         "40837" => Action::CursorBar(1),

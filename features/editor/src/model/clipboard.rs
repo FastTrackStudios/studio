@@ -8,7 +8,8 @@
 
 use crate::doc::{ExpressionDoc, Note, NoteId};
 
-/// Notes lifted out of a document, normalized to their own origin.
+/// Notes lifted out of a document, normalized to their own origin: the
+/// shared [`timeline::clipboard::Clipboard`] over notes.
 ///
 /// Deliberately not tied to the system clipboard: this surface runs as
 /// a plugin editor inside hosts that route keyboard and clipboard
@@ -16,68 +17,58 @@ use crate::doc::{ExpressionDoc, Note, NoteId};
 /// is worse than one that only ever sees notes. The host adapter can
 /// bridge to the OS clipboard where it makes sense.
 #[derive(Clone, Debug, Default, PartialEq)]
-pub struct Clipboard {
-    /// Notes with `start` rebased so the earliest sits at 0, and `row`
-    /// rebased so the lowest sits at 0.
-    notes: Vec<Note>,
-    /// Row of the lowest captured note, so a paste that does not
-    /// specify a row can put the phrase back at its own pitch.
-    origin_row: i32,
+pub struct Clipboard(timeline::clipboard::Clipboard<Note>);
+
+/// A note is a clip: its span, its row, moved whole (curves, splits,
+/// articulations, lyrics ride along).
+impl timeline::clipboard::Clip for Note {
+    fn start(&self) -> f64 {
+        self.start
+    }
+    fn end(&self) -> f64 {
+        self.end
+    }
+    fn row(&self) -> i32 {
+        self.row
+    }
+    fn shifted(&self, dt: f64, drows: i32) -> Self {
+        let mut n = self.clone();
+        n.shift_time(dt);
+        n.row = (n.row + drows).clamp(0, 127);
+        n
+    }
 }
 
 impl Clipboard {
     pub fn is_empty(&self) -> bool {
-        self.notes.is_empty()
+        self.0.is_empty()
     }
 
     pub fn len(&self) -> usize {
-        self.notes.len()
+        self.0.len()
     }
 
     /// The row the phrase was copied from.
     pub fn origin_row(&self) -> i32 {
-        self.origin_row
+        self.0.origin_row()
     }
 
     /// The phrase's own duration — how much room a paste needs.
     pub fn span(&self) -> f64 {
-        self.notes
-            .iter()
-            .map(|n| n.end)
-            .fold(0.0_f64, |a, b| a.max(b))
+        self.0.span()
     }
 
     /// Capture `ids` from `doc`. Ids that no longer exist are skipped;
     /// capturing nothing leaves the previous contents alone, so a
     /// mis-aimed copy does not destroy what you had.
     pub fn copy_from(&mut self, doc: &ExpressionDoc, ids: &[NoteId]) -> bool {
-        let mut notes: Vec<Note> = ids.iter().filter_map(|id| doc.note(*id).cloned()).collect();
-        if notes.is_empty() {
-            return false;
-        }
-        let t0 = notes.iter().map(|n| n.start).fold(f64::MAX, f64::min);
-        let row0 = notes.iter().map(|n| n.row).min().unwrap_or(0);
-        for n in &mut notes {
-            n.shift_time(-t0);
-            n.row -= row0;
-        }
-        notes.sort_by(|a, b| a.start.total_cmp(&b.start));
-        self.notes = notes;
-        self.origin_row = row0;
-        true
+        self.0
+            .copy(ids.iter().filter_map(|id| doc.note(*id).cloned()))
     }
 
     /// The notes a paste at `(t, row)` would produce, with placeholder
     /// ids — [`crate::edit::Edit::PasteNotes`] mints the real ones.
     pub fn placed(&self, t: f64, row: i32) -> Vec<Note> {
-        self.notes
-            .iter()
-            .map(|n| {
-                let mut c = n.clone();
-                c.shift_time(t);
-                c.row = (c.row + row).clamp(0, 127);
-                c
-            })
-            .collect()
+        self.0.placed(t, row)
     }
 }

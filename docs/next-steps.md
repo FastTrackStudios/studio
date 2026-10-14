@@ -25,11 +25,11 @@ comes next, in order. The design docs this points at are in `docs/design/`.
 
 ## Step 2 — one editing engine: `timeline`
 
-*In progress:* migration steps 1–14 of 17 are done (rename, camera
+*In progress:* migration steps 1–15 of 17 are done (rename, camera
 characterisation tests, input, time, grid, snap, the shared camera in
 both surfaces, rows, zoom, cursor/selection, the mouse map, hit testing and clicks; the one `Interaction<S>`
-engine is not built, see §4; undo is the song's Loro doc). Next is 15, the
-clipboard. `docs/design/timeline.md` §4 records where the code differs
+engine is not built, see §4; undo is the song's Loro doc; one clipboard). Next is 16, scroll
+and touch. `docs/design/timeline.md` §4 records where the code differs
 from the plan.
 
 The arrangement and the editor must share the SAME mouse handling, zoom,

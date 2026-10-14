@@ -132,6 +132,10 @@ pub struct Editor {
     marquee: Option<MarqueeDrag>,
     /// The selected items, by guid.
     pub selected: Selection<String>,
+    /// Items copied (`Action::CopyItems`), for a paste at the edit cursor.
+    pub clipboard: timeline::clipboard::Clipboard<ItemClip>,
+    /// Pastes made, so each one's copies have guids of their own.
+    pastes: u32,
     /// The edit cursor and the time selection.
     pub cursor: cursor::Edit,
     /// A time selection being dragged out, from this time.
@@ -1254,6 +1258,43 @@ impl Editor {
                     effects.push(Effect::Send(Edit::DeleteItem(guid)));
                 }
                 as_one_step("Delete items", from, effects);
+                effects.push(Effect::ReRecord);
+            }
+            Action::CopyItems => {
+                // The selected items, a folded row's standing for the
+                // mics under it, kept relative to the earliest.
+                let mut clips = Vec::new();
+                for guid in self.selected.iter() {
+                    let Some(real) = targets(project, guid, false, effects) else {
+                        continue;
+                    };
+                    clips.extend(real.iter().filter_map(|g| ItemClip::of(project, g)));
+                }
+                return self.clipboard.copy(clips);
+            }
+            Action::PasteItems => {
+                if self.clipboard.is_empty() {
+                    return false;
+                }
+                // At the edit cursor, each copy on its source's track and
+                // as far after the cursor as it was after the earliest.
+                self.pastes += 1;
+                let n = self.pastes;
+                let places: Vec<(String, f64)> = self
+                    .clipboard
+                    .placed(self.cursor.at, 0)
+                    .into_iter()
+                    .map(|c| (c.guid, c.start))
+                    .collect();
+                if !copy_items_to(
+                    project,
+                    &places,
+                    "Paste items",
+                    |guid, at| format!("{guid}-paste{n}@{at:.3}"),
+                    effects,
+                ) {
+                    return false;
+                }
                 effects.push(Effect::ReRecord);
             }
             Action::SelectAllItems => {
@@ -2955,21 +2996,39 @@ fn spread_item_copy(project: &mut Project, guid: &str, at: f64, effects: &mut Ve
     let Some(targets) = targets(project, guid, true, effects) else {
         return false;
     };
-    let wanted: std::collections::HashSet<&String> = targets.iter().collect();
+    let places: Vec<(String, f64)> = targets.into_iter().map(|g| (g, at)).collect();
+    copy_items_to(
+        project,
+        &places,
+        "Copy item",
+        |guid, at| format!("{guid}-copy@{at:.3}"),
+        effects,
+    )
+}
+
+/// Copy each `(guid, at)` item to `at` on its own track, as one step
+/// named `label`, the copies named by `name(guid, at)`. `false` if none
+/// of them was there to copy.
+fn copy_items_to(
+    project: &mut Project,
+    places: &[(String, f64)],
+    label: &str,
+    name: impl Fn(&str, f64) -> String,
+    effects: &mut Vec<Effect>,
+) -> bool {
     let from = effects.len();
     let mut made = Vec::new();
     for lane in project.items.values_mut() {
         let mut copies = Vec::new();
         for item in lane.iter() {
-            if !wanted.contains(&item.guid) {
-                continue;
+            for (_, at) in places.iter().filter(|(g, _)| *g == item.guid) {
+                let mut copy = item.clone();
+                copy.guid = name(&item.guid, *at);
+                copy.position = daw_proto::primitives::PositionInSeconds::from_seconds(*at);
+                copy.selected = false;
+                made.push(Edit::CopyItem(item.guid.clone(), *at, copy.guid.clone()));
+                copies.push(copy);
             }
-            let mut copy = item.clone();
-            copy.guid = format!("{}-copy@{at:.3}", item.guid);
-            copy.position = daw_proto::primitives::PositionInSeconds::from_seconds(at);
-            copy.selected = false;
-            made.push(Edit::CopyItem(item.guid.clone(), at, copy.guid.clone()));
-            copies.push(copy);
         }
         if copies.is_empty() {
             continue;
@@ -2989,8 +3048,50 @@ fn spread_item_copy(project: &mut Project, guid: &str, at: f64, effects: &mut Ve
     for edit in made {
         effects.push(Effect::Send(edit));
     }
-    as_one_step("Copy item", from, effects);
+    as_one_step(label, from, effects);
     true
+}
+
+/// An item on the arrangement's clipboard: which item, and where it was.
+/// Pasted, it is copied from its source, so it lands on its own track.
+#[derive(Clone, Debug, PartialEq)]
+pub struct ItemClip {
+    pub guid: String,
+    pub start: f64,
+    pub end: f64,
+}
+
+impl ItemClip {
+    fn of(project: &Project, guid: &str) -> Option<Self> {
+        let item = project.items.values().flatten().find(|i| i.guid == guid)?;
+        let start = item.position.as_seconds();
+        Some(Self {
+            guid: guid.to_owned(),
+            start,
+            end: start + item.length.as_seconds(),
+        })
+    }
+}
+
+impl timeline::clipboard::Clip for ItemClip {
+    fn start(&self) -> f64 {
+        self.start
+    }
+    fn end(&self) -> f64 {
+        self.end
+    }
+    /// The track is the source's: a paste does not move items between
+    /// tracks.
+    fn row(&self) -> i32 {
+        0
+    }
+    fn shifted(&self, dt: f64, _drows: i32) -> Self {
+        Self {
+            start: self.start + dt,
+            end: self.end + dt,
+            ..self.clone()
+        }
+    }
 }
 
 /// Make one item edit, on every item it really belongs to.
@@ -4811,6 +4912,70 @@ mod tests {
         assert_eq!(guid, "k1");
         assert!((len - 4.0).abs() < 1e-9);
         assert!((s.item("k1").fade_in_length.as_seconds() - 4.0).abs() < 1e-9);
+    }
+
+    /// Copy, then paste at the cursor: each copy on its source's track,
+    /// as far after the cursor as it was after the earliest, as one step.
+    #[test]
+    fn copied_items_paste_at_the_cursor_keeping_their_spacing() {
+        let mut s = Stage::new();
+        s.editor.selected.add("k1".to_owned());
+        s.editor.selected.add("s1".to_owned());
+        let (copied, _) = s.key(Action::CopyItems);
+        assert!(copied);
+        s.editor.cursor.click(20.0);
+        let (handled, effects) = s.key(Action::PasteItems);
+        assert!(handled);
+        let copies: Vec<(String, f64)> = sends(&effects)
+            .into_iter()
+            .filter_map(|e| match e {
+                Edit::CopyItem(from, at, _) => Some((from.clone(), *at)),
+                _ => None,
+            })
+            .collect();
+        // k1 starts at 2, s1 at 4: two seconds apart, from the cursor.
+        assert_eq!(copies.len(), 2, "{copies:?}");
+        assert!(copies.contains(&("k1".to_owned(), 20.0)), "{copies:?}");
+        assert!(copies.contains(&("s1".to_owned(), 22.0)), "{copies:?}");
+        let opens = sends(&effects)
+            .into_iter()
+            .filter(|e| matches!(e, Edit::BeginUndo(l) if l == "Paste items"))
+            .count();
+        assert_eq!(opens, 1, "one step");
+        // In the window's copy of the project too, on their own tracks.
+        let kick = s.project.items.get("kick").expect("the kick lane");
+        assert!(
+            kick.iter()
+                .any(|i| (i.position.as_seconds() - 20.0).abs() < 1e-9)
+        );
+        let snare = s.project.items.get("snare").expect("the snare lane");
+        assert!(
+            snare
+                .iter()
+                .any(|i| (i.position.as_seconds() - 22.0).abs() < 1e-9)
+        );
+        // A second paste makes copies with guids of their own.
+        s.editor.cursor.click(30.0);
+        let (_, again) = s.key(Action::PasteItems);
+        let guids: Vec<&str> = sends(&effects)
+            .into_iter()
+            .chain(sends(&again))
+            .filter_map(|e| match e {
+                Edit::CopyItem(_, _, guid) => Some(guid.as_str()),
+                _ => None,
+            })
+            .collect();
+        let unique: std::collections::HashSet<&str> = guids.iter().copied().collect();
+        assert_eq!(unique.len(), guids.len(), "{guids:?}");
+    }
+
+    /// Nothing copied, nothing pasted.
+    #[test]
+    fn an_empty_clipboard_pastes_nothing() {
+        let mut s = Stage::new();
+        let (handled, effects) = s.key(Action::PasteItems);
+        assert!(!handled);
+        assert!(sends(&effects).is_empty());
     }
 
     /// The split key: nothing selected splits every item under the

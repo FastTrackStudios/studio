@@ -1557,7 +1557,7 @@ pins A's behaviour. Keep it or change it on purpose.
     `the_razor_help_matches_the_razor_keys`,
     `the_razor_menu_and_the_razor_keys_agree`.
 
-**Progress (2026-10-14).** Steps 1–14 are done. Where the code differs
+**Progress (2026-10-14).** Steps 1–15 are done. Where the code differs
 from the plan above:
 
 - **3:** one `Mods` type for both surfaces (`timeline::input::Mods`; the
@@ -1661,6 +1661,16 @@ from the plan above:
   two stores are Loro (through engine undo blocks) and the standalone
   snapshot history, and neither needs a trait to meet the protocol. The
   standalone Editor has no Loro doc to undo into.
+- **15:** `timeline::clipboard` (`Clip`, `Clipboard<T>`). The Editor's
+  clipboard is it over notes. The arrangement has one too, over items
+  (`ItemClip`): Copy items (40057/40698, the FTS profile's Ctrl+C) and
+  Paste items (40058/42398, Ctrl+V and `p`). A paste copies each source
+  item onto its own track at the edit cursor plus its offset, as one
+  "Paste items" step, through `Edit::CopyItem` (Alt-drag copy's edit,
+  now the shared `copy_items_to`). **Not added:** cut. A paste copies
+  from the source items, so a cut that deleted them would leave nothing
+  to paste. Cut needs the clipboard to hold the items' content, not
+  their guids.
 - **11:** `timeline::cursor` holds the arrangement's `Playhead`,
   `TimeSpan`, `EditCursor`, `StopMode`, `TransportStep` and `Locate`, with
   their tests. The arrangement aliases its old names, and keeps the

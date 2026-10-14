@@ -3,6 +3,7 @@
 //! Editor share ([`gestures`]).
 
 pub mod camera;
+pub mod clipboard;
 pub mod cursor;
 pub mod drag;
 pub mod gestures;
