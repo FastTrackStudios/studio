@@ -1557,7 +1557,7 @@ pins A's behaviour. Keep it or change it on purpose.
     `the_razor_help_matches_the_razor_keys`,
     `the_razor_menu_and_the_razor_keys_agree`.
 
-**Progress (2026-10-14).** Steps 1–13 are done. Where the code differs
+**Progress (2026-10-14).** Steps 1–14 are done. Where the code differs
 from the plan above:
 
 - **3:** one `Mods` type for both surfaces (`timeline::input::Mods`; the
@@ -1644,6 +1644,23 @@ from the plan above:
   into one engine is a rewrite of both dispatchers (about 8k lines),
   and it should be done with the app running and `golden_scenes`
   green, not blind.
+- **14:** undo is the song's Loro doc (Q5). The Editor's write-back of
+  its take is one engine undo block, "Edit notes" (`expression::write_take`),
+  so one step in the doc. Before, a write-back was no step at all and was
+  folded into whatever was recorded next. In Session, the Editor's Undo
+  and Redo (key or button) ask the host (`Editor::host_undo`,
+  `take_undo_ask`). The view writes back what is pending, waits for the
+  saver, runs `SESSION_UNDO`/`SESSION_REDO` behind the window, and reads
+  the take again once it is done (`actions::undone`), also after an
+  undo from the arrangement. The Editor's own snapshot history (the
+  standalone Editor's undo) opens a gesture's step at its first change,
+  not at the press (`History::begin_gesture` arms, `settle` records),
+  so a press that changes nothing leaves no empty step.
+  `editor_undo_live` pins the Loro steps against the real engine.
+  **Not added:** `UndoSink`/`SnapshotHistory` as `timeline` types. The
+  two stores are Loro (through engine undo blocks) and the standalone
+  snapshot history, and neither needs a trait to meet the protocol. The
+  standalone Editor has no Loro doc to undo into.
 - **11:** `timeline::cursor` holds the arrangement's `Playhead`,
   `TimeSpan`, `EditCursor`, `StopMode`, `TransportStep` and `Locate`, with
   their tests. The arrangement aliases its old names, and keeps the

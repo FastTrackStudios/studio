@@ -1089,6 +1089,11 @@ pub struct History {
     /// Snapshots pushed, ever: what tells a caller whether a step was
     /// recorded since it last looked, the depth being capped.
     pushes: u64,
+    /// The document as an open gesture found it, until the gesture first
+    /// changes it: the step is recorded then, not at the press, so a
+    /// gesture that changes nothing (a click, a razor that cut nothing)
+    /// leaves no empty step behind.
+    armed: Option<ExpressionDoc>,
 }
 
 impl History {
@@ -1098,6 +1103,7 @@ impl History {
             future: Vec::new(),
             limit: limit.max(1),
             pushes: 0,
+            armed: None,
         }
     }
 
@@ -1111,7 +1117,9 @@ impl History {
     /// back as it found it: for a press that turned out to be a click,
     /// which must leave neither an edit nor an empty undo step behind.
     pub fn abandon_gesture(&mut self, doc: &mut ExpressionDoc) {
-        if let Some(base) = self.past.pop() {
+        if let Some(base) = self.armed.take() {
+            *doc = base;
+        } else if let Some(base) = self.past.pop() {
             *doc = base;
         }
     }
@@ -1119,6 +1127,7 @@ impl History {
     /// Apply `edit`, recording an undo step only if it changed
     /// anything.
     pub fn apply(&mut self, doc: &mut ExpressionDoc, edit: &Edit) -> bool {
+        self.settle(doc);
         let snapshot = doc.clone();
         if !edit.apply(doc) {
             return false;
@@ -1130,7 +1139,34 @@ impl History {
     /// Record the pre-gesture state directly — for drags that stream
     /// many edits but should collapse into one undo step.
     pub fn begin_gesture(&mut self, doc: &ExpressionDoc) {
-        self.push_snapshot(doc.clone());
+        self.settle(doc);
+        self.armed = Some(doc.clone());
+    }
+
+    /// Record an armed gesture whose document differs from how it found
+    /// it, however the change was made (an edit through `apply_live`
+    /// records at once; a direct one — a razor carving `doc.notes` — is
+    /// caught here), and disarm it.
+    pub fn settle(&mut self, doc: &ExpressionDoc) {
+        if let Some(base) = self.armed.take()
+            && base != *doc
+        {
+            self.push_snapshot(base);
+        }
+    }
+
+    /// The open gesture changed the document: its step is recorded now,
+    /// once.
+    pub fn changed(&mut self) {
+        if let Some(base) = self.armed.take() {
+            self.push_snapshot(base);
+        }
+    }
+
+    /// The gesture is over: recorded if it changed anything, else
+    /// nothing is.
+    pub fn end_gesture(&mut self, doc: &ExpressionDoc) {
+        self.settle(doc);
     }
 
     /// The document as the open gesture found it.
@@ -1141,7 +1177,7 @@ impl History {
     /// from it every frame instead of accumulating damage. Nothing is
     /// popped — undo is unaffected.
     pub fn gesture_base(&self) -> Option<&ExpressionDoc> {
-        self.past.last()
+        self.armed.as_ref().or_else(|| self.past.last())
     }
 
     fn push_snapshot(&mut self, snapshot: ExpressionDoc) {
@@ -1154,6 +1190,7 @@ impl History {
     }
 
     pub fn undo(&mut self, doc: &mut ExpressionDoc) -> bool {
+        self.settle(doc);
         let Some(prev) = self.past.pop() else {
             return false;
         };
@@ -1162,6 +1199,7 @@ impl History {
     }
 
     pub fn redo(&mut self, doc: &mut ExpressionDoc) -> bool {
+        self.settle(doc);
         let Some(next) = self.future.pop() else {
             return false;
         };

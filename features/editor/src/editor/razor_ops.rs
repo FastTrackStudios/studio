@@ -31,6 +31,7 @@ impl Editor {
         for area in areas {
             ok |= op(&mut self.doc, area);
         }
+        self.end_gesture();
         ok
     }
 

@@ -336,6 +336,14 @@ pub struct EditorView {
     stale: bool,
     /// The last item click followed ([`picked`]'s count).
     picked_seen: u64,
+    /// The Session undos and redos already read ([`crate::actions::undone`]):
+    /// one since, and the take is read again, as the doc now has it.
+    undone_seen: u64,
+    /// An Undo or Redo asked of Session and not yet done: the view is a
+    /// picture until the take is read again (an edit made now would write
+    /// the old take back over the undo). Since when, so a refused one
+    /// does not freeze it.
+    awaiting_undo: Option<web_time::Instant>,
     /// The stack's takes, first the one the others line up on.
     takes: Vec<Take>,
     /// An alignment on the engine's runtime, landing on a later frame.
@@ -454,6 +462,21 @@ fn stacked(
     Some((Box::new(editor), aligned))
 }
 
+/// Write-backs sent to the saver and not yet written: what an undo waits
+/// on, so it undoes the last edit and not the one before it.
+#[cfg(feature = "native")]
+static SAVING: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+
+/// Wait, briefly, for the saver to write what it was sent.
+#[cfg(feature = "native")]
+fn saved() {
+    let until = web_time::Instant::now() + std::time::Duration::from_secs(2);
+    while SAVING.load(std::sync::atomic::Ordering::Acquire) > 0 && web_time::Instant::now() < until
+    {
+        std::thread::sleep(std::time::Duration::from_millis(1));
+    }
+}
+
 /// Start the saver on the engine's runtime: each take sent is written
 /// back in turn. `None` with no engine.
 #[cfg(feature = "native")]
@@ -465,6 +488,7 @@ fn saver() -> Option<tokio::sync::mpsc::UnboundedSender<(String, Content)>> {
             if !crate::expression::write_take(item.clone(), content).await {
                 tracing::warn!(editor.item = %item, "the editor's take could not be written back");
             }
+            SAVING.fetch_sub(1, std::sync::atomic::Ordering::AcqRel);
         }
     });
     Some(tx)
@@ -492,6 +516,8 @@ impl EditorView {
             saver: saver(),
             dirty: true,
             picked_seen: picked_count(),
+            undone_seen: crate::actions::undone(),
+            awaiting_undo: None,
             stale: false,
             takes: Vec::new(),
             aligning: None,
@@ -639,6 +665,38 @@ impl EditorView {
         if matches!(event, UiEvent::PointerUp(_) | UiEvent::KeyDown(_)) {
             self.save();
         }
+        // The Editor's Undo and Redo are Session's, in the song's Loro
+        // doc: what it has written lands first, then the step is undone
+        // behind the window, and the take is read again when it has been
+        // ([`Self::reread_after_undo`]).
+        if let Some(ask) = self.view.as_mut().and_then(|v| v.editor.take_undo_ask()) {
+            saved();
+            self.awaiting_undo = Some(web_time::Instant::now());
+            self.stale = self.view.is_some();
+            crate::actions::undo_behind(ask == editor::UndoAsk::Undo);
+        }
+    }
+
+    /// A Session undo or redo since the take was read (the Editor's own,
+    /// or one from the arrangement): read it again, as the doc has it now,
+    /// without writing the old one back. A refused undo that never counts
+    /// is given up on after two seconds.
+    fn reread_after_undo(&mut self) {
+        let undone = crate::actions::undone();
+        let gave_up = self
+            .awaiting_undo
+            .is_some_and(|since| since.elapsed() > std::time::Duration::from_secs(2));
+        if undone == self.undone_seen && !gave_up {
+            return;
+        }
+        self.undone_seen = undone;
+        self.awaiting_undo = None;
+        if self.target.is_some() {
+            self.stale = self.view.is_some();
+            self.loading = None;
+            self.tried = false;
+            self.dirty = true;
+        }
     }
 
     /// Point the pointer's shape at `sink` (the window's cursor).
@@ -775,10 +833,14 @@ impl EditorView {
             return;
         };
         let content = view.take_content();
+        SAVING.fetch_add(1, std::sync::atomic::Ordering::AcqRel);
         let sent = self
             .saver
             .as_ref()
             .is_some_and(|tx| tx.send((item.clone(), content)).is_ok());
+        if !sent {
+            SAVING.fetch_sub(1, std::sync::atomic::Ordering::AcqRel);
+        }
         if !sent {
             tracing::warn!(editor.item = %item, "the editor has no engine to write its take back to");
         }
@@ -855,6 +917,9 @@ impl EditorView {
         if picked_count() != self.picked_seen {
             return true;
         }
+        if crate::actions::undone() != self.undone_seen || self.awaiting_undo.is_some() {
+            return true;
+        }
         let Some(watch) = &self.watch else {
             return false;
         };
@@ -864,6 +929,7 @@ impl EditorView {
     }
 
     fn paint_scene(&mut self, width: u32, height: u32, scale: f64) -> Scene {
+        self.reread_after_undo();
         self.follow();
         let scale = scale.max(f64::EPSILON);
         let size = (f64::from(width) / scale, f64::from(height) / scale);

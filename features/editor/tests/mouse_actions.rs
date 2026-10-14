@@ -1832,3 +1832,37 @@ fn a_press_that_travels_is_a_drag_not_a_click() {
         "the notes did not move"
     );
 }
+
+// ── undo steps open on the first change ─────────────────────────────
+
+/// A razor operation over nothing changes nothing, and records nothing:
+/// the step used to be opened before the operation looked.
+#[test]
+fn a_razor_op_that_cuts_nothing_records_no_undo_step() {
+    let mut ed = four_notes();
+    // Empty roll: far below the notes' row.
+    ed.razor
+        .add(RazorArea::new(0.0, PPQ * 4.0, ROW - 20, ROW - 10));
+    let before = ed.doc.clone();
+    ed.razor_delete_contents();
+    assert_eq!(ed.doc, before);
+    assert!(!ed.undo(), "an empty undo step was recorded");
+}
+
+/// A drag that moves a note is exactly one step, however many frames it
+/// took.
+#[test]
+fn a_drag_that_moves_a_note_is_one_undo_step() {
+    let mut ed = four_notes();
+    let start = span(&ed, NoteId(2));
+    let (x, y) = at(&ed, PPQ * 1.25);
+    let mut d = interaction::pointer_down(&mut ed, x, y, plain(), 0);
+    for step in 1..=10 {
+        interaction::pointer_move(&mut ed, &mut d, x + f64::from(step) * 8.0, y, plain());
+    }
+    interaction::pointer_up(&mut ed, d, x + 80.0, y, plain());
+    assert_ne!(span(&ed, NoteId(2)), start, "the note did not move");
+    assert!(ed.undo());
+    assert_eq!(span(&ed, NoteId(2)), start, "one undo put it back");
+    assert!(!ed.undo(), "the drag left more than one step");
+}

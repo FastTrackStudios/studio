@@ -61,6 +61,12 @@ pub struct Editor {
     pub lanes_visible: u8,
     pub viewport: Viewport,
     pub tool: Tool,
+    /// The host keeps the undo (Session's Loro doc): Undo and Redo, by key
+    /// or button, ask it ([`Editor::take_undo_ask`]) rather than rewinding
+    /// this editor's own snapshots. Off for the standalone Editor.
+    pub host_undo: bool,
+    /// An Undo or Redo asked of the host, not yet taken.
+    pub(crate) undo_ask: Option<UndoAsk>,
     /// The roll's press, until it is decided: a drag once it travels, a
     /// click (or a double) if it is let go where it was pressed.
     pub(crate) roll_press: Option<RollPress>,
@@ -261,6 +267,8 @@ impl Editor {
             bpm: 120.0,
             beats_per_bar: 4.0,
             playhead: None,
+            host_undo: false,
+            undo_ask: None,
             roll_press: None,
             clicks: timeline::input::Clicks::default(),
             clipboard: clipboard::Clipboard::default(),
@@ -302,6 +310,14 @@ impl Editor {
         lanes.push(self.dimension);
         lanes
     }
+}
+
+/// An Undo or a Redo the Editor asks its host for, when the host keeps
+/// the undo ([`Editor::host_undo`]).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum UndoAsk {
+    Undo,
+    Redo,
 }
 
 /// What the roll remembers of a press until it is decided: where it

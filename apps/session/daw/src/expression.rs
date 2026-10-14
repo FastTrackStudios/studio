@@ -182,6 +182,9 @@ impl Expression {
             doc.row_space = RowSpace::Drums(map);
         }
         let mut editor = Editor::new(doc, vp);
+        // Session keeps the undo, in the song's Loro doc: the Editor's
+        // Undo and Redo ask for it ([`Editor::take_undo_ask`]).
+        editor.host_undo = true;
         if drums {
             editor.set_mode(Mode::Drums);
         }
@@ -1160,6 +1163,9 @@ fn to_quarters(
     content
 }
 
+/// The undo step a write-back is, in the engine and so in the song's doc.
+pub const EDIT_NOTES: &str = "Edit notes";
+
 /// Write `content` back to an item's active take, replacing it, as one
 /// undo point. `false` when there is no engine or the write failed.
 pub fn save_take(item_guid: &str, content: daw::service::midi::MidiTakeContent) -> bool {
@@ -1181,11 +1187,19 @@ pub async fn write_take(item_guid: String, content: daw::service::midi::MidiTake
         let Ok(Some(item)) = project.items().by_guid(item_guid).await else {
             return false;
         };
-        item.active_take()
+        // One engine undo block, so one step in the song's doc (the
+        // block's end records it: `project_file::record_steps`). The
+        // replace deletes and adds every note; bare, it was no step at
+        // all, folded into whatever was recorded next.
+        let _ = project.begin_undo_block(EDIT_NOTES).await;
+        let written = item
+            .active_take()
             .midi()
             .write_take(content, daw::service::midi::WriteMode::Replace)
             .await
-            .is_ok()
+            .is_ok();
+        let _ = project.end_undo_block(EDIT_NOTES).await;
+        written
     }
 }
 

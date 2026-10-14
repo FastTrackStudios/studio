@@ -26,7 +26,17 @@ impl Editor {
     /// Apply without recording — for the streaming edits inside a
     /// gesture already opened with [`Editor::begin_gesture`].
     pub fn apply_live(&mut self, edit: &Edit) -> bool {
-        edit.apply(&mut self.doc)
+        let changed = edit.apply(&mut self.doc);
+        if changed {
+            self.history.changed();
+        }
+        changed
+    }
+
+    /// The gesture is over: a step it armed and never needed is dropped
+    /// ([`crate::edit::History::begin_gesture`]).
+    pub(crate) fn end_gesture(&mut self) {
+        self.history.end_gesture(&self.doc);
     }
 
     /// Put the document back to how the open gesture found it.
@@ -55,13 +65,26 @@ impl Editor {
         true
     }
 
+    /// An Undo the host asked for, if one is waiting: taken.
+    pub fn take_undo_ask(&mut self) -> Option<UndoAsk> {
+        self.undo_ask.take()
+    }
+
     pub fn undo(&mut self) -> bool {
+        if self.host_undo {
+            self.undo_ask = Some(UndoAsk::Undo);
+            return true;
+        }
         let ok = self.history.undo(&mut self.doc);
         self.resync_row_space(ok);
         ok
     }
 
     pub fn redo(&mut self) -> bool {
+        if self.host_undo {
+            self.undo_ask = Some(UndoAsk::Redo);
+            return true;
+        }
         let ok = self.history.redo(&mut self.doc);
         self.resync_row_space(ok);
         ok

@@ -2297,12 +2297,17 @@ pub fn pointer_up(ed: &mut Editor, drag: Drag, x: f64, y: f64, mods: Mods) -> Dr
             ed.abandon_gesture();
         }
         ed.selection = p.selection;
-        return match run_action(ed, action, p.at.0, p.at.1, p.mods) {
+        let next = match run_action(ed, action, p.at.0, p.at.1, p.mods) {
             Some(next) => release(ed, next, x, y, mods),
             None => Drag::None,
         };
+        ed.end_gesture();
+        return next;
     }
-    release(ed, drag, x, y, mods)
+    let next = release(ed, drag, x, y, mods);
+    // A gesture that changed nothing records nothing.
+    ed.end_gesture();
+    next
 }
 
 /// Let go of `drag`: what its gesture leaves behind.

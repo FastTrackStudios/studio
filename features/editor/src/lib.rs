@@ -101,4 +101,4 @@ pub use tracks::{RefColor, Track, Workspace};
 pub use tuning::{Temperament, Tuning};
 
 mod editor;
-pub use editor::{CUSHION, Editor, PAD, StripLane, content_of};
+pub use editor::{CUSHION, Editor, PAD, StripLane, UndoAsk, content_of};

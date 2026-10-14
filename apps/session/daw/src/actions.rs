@@ -2021,8 +2021,10 @@ fn register_undo(list: &ActionList) {
         }
         let label = daw::service::Projects::last_undo_label(daw, project.clone());
         if !daw::service::Projects::undo(daw, project.clone()) {
+            stepped();
             return Ok("nothing to undo".to_owned());
         }
+        stepped();
         samples_follow(daw, &project);
         crate::marks_strip::refresh();
         crate::studio::request_resync();
@@ -2039,8 +2041,10 @@ fn register_undo(list: &ActionList) {
         }
         let label = daw::service::Projects::last_redo_label(daw, project.clone());
         if !daw::service::Projects::redo(daw, project.clone()) {
+            stepped();
             return Ok("nothing to redo".to_owned());
         }
+        stepped();
         samples_follow(daw, &project);
         crate::marks_strip::refresh();
         crate::studio::request_resync();
@@ -2068,6 +2072,28 @@ pub(crate) fn samples_follow(
     let _ = (daw, project);
 }
 
+/// Session undos and redos run, ever (one that found nothing counts): what
+/// a view holding a copy of the song (the Editor's take) watches to read
+/// it again.
+static UNDONE: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
+/// How many Session undos and redos have been done.
+#[must_use]
+pub fn undone() -> u64 {
+    UNDONE.load(std::sync::atomic::Ordering::Acquire)
+}
+
+fn stepped() {
+    UNDONE.fetch_add(1, std::sync::atomic::Ordering::AcqRel);
+}
+
+/// Run `SESSION_UNDO` (`back`) or `SESSION_REDO` behind the window, as
+/// the keys do: for a view whose own Undo is Session's.
+#[cfg(feature = "native")]
+pub fn undo_behind(back: bool) {
+    off_the_window(if back { UNDO.id } else { REDO.id }, String::new());
+}
+
 /// Undo (`back`) or redo through the song's doc, when it is open from its
 /// project file: what to say, or `None` for the engine's own undo.
 #[cfg(feature = "native")]
@@ -2092,8 +2118,12 @@ fn undo_through_doc(
     };
     Ok(match done {
         Undone::NotOpen => None,
-        Undone::Nothing => Some(none.to_owned()),
+        Undone::Nothing => {
+            stepped();
+            Some(none.to_owned())
+        }
         Undone::Step(name) => {
+            stepped();
             samples_follow(daw, project);
             crate::marks_strip::refresh();
             crate::studio::request_resync();
