@@ -517,9 +517,27 @@ impl Editor {
         (bar as i64 + 1, (beats - bar * bpb).floor() as i64 + 1)
     }
 
-    /// Snap a time to the local grid.
+    /// Snap a time to the local grid: the moved point lands on a line.
     pub fn snap_time(&self, t: f64) -> f64 {
-        self.grid.snap(t, self.doc.start, self.units_per_beat())
+        let map = self.time_map();
+        timeline::snap::Snapper {
+            grid: &self.grid,
+            regions: None,
+            map: &map,
+        }
+        .snap(t)
+    }
+
+    /// Snap a move of `raw` units: a whole number of grid steps, so a
+    /// note off the grid keeps its offset (`SnapRule::Relative`).
+    pub fn snap_move(&self, raw: f64) -> f64 {
+        let map = self.time_map();
+        timeline::snap::Snapper {
+            grid: &self.grid,
+            regions: None,
+            map: &map,
+        }
+        .delta(timeline::snap::SnapRule::Relative, self.doc.start, raw)
     }
 
     /// Notes reduced to what zoom cares about.

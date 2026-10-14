@@ -1775,12 +1775,7 @@ pub fn pointer_move(ed: &mut Editor, drag: &mut Drag, x: f64, y: f64, mods: Mods
             } else {
                 *applied_time
             };
-            let delta = if ed.grid.enabled && !mods.shift {
-                let step = ed.grid.step(ed.units_per_beat());
-                (raw / step).round() * step
-            } else {
-                raw
-            };
+            let delta = if mods.shift { raw } else { ed.snap_move(raw) };
             if (delta - *applied_time).abs() > 1e-9 {
                 ed.apply_live(&Edit::MoveTime {
                     notes: notes.clone(),
@@ -1894,12 +1889,7 @@ pub fn pointer_move(ed: &mut Editor, drag: &mut Drag, x: f64, y: f64, mods: Mods
             } else {
                 0.0
             };
-            let dt = if ed.grid.enabled && !mods.shift {
-                let step = ed.grid.step(ed.units_per_beat());
-                (raw / step).round() * step
-            } else {
-                raw
-            };
+            let dt = if mods.shift { raw } else { ed.snap_move(raw) };
             let rows = if free_y {
                 (ed.camera.pitch_at(y, ed.viewport) - ed.camera.pitch_at(origin.1, ed.viewport))
                     .round() as i32

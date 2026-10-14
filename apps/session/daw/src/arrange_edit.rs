@@ -17,6 +17,7 @@ use std::collections::{HashMap, HashSet};
 use daw_proto::Track;
 use daw_ui::studio::project::Project;
 use timeline::razor::RazorArea;
+use timeline::snap::Snapper;
 
 use crate::arrangement::{Arrangement, Fades, ItemZone, Viewport};
 use crate::cursor;
@@ -607,20 +608,13 @@ impl Editor {
     /// Takes the row as well as the time, which is why it is not folded
     /// into [`Self::moved`]: every other drag here is along one axis
     /// and a razor is the only one that is a rectangle.
-    pub fn razor_moved(&mut self, at: f64, row: usize, bpm: f64) -> bool {
+    pub fn razor_moved(&mut self, at: f64, row: usize, grid: &Snapper<'_>) -> bool {
         let Some(drag) = self.razor_drag.as_mut() else {
             return false;
         };
         let row = i32::try_from(row).unwrap_or(i32::MAX);
-        let beat = 60.0 / bpm.max(1.0);
         let on_grid = drag.snap;
-        let snapped = |t: f64| {
-            if on_grid {
-                (t / beat).round() * beat
-            } else {
-                t
-            }
-        };
+        let snapped = |t: f64| if on_grid { grid.snap(t) } else { t };
         drag.gesture.moved(at, row, snapped)
     }
 
@@ -724,7 +718,7 @@ impl Editor {
 
     /// The pointer moved to the time `at` (if it is over the timeline).
     /// `true` when the picture changed.
-    pub fn moved(&mut self, at: Option<f64>, pps: f64, bpm: f64, keys: Mods) -> bool {
+    pub fn moved(&mut self, at: Option<f64>, pps: f64, grid: &Snapper<'_>, keys: Mods) -> bool {
         let Some(at) = at else { return false };
         if let Some(press) = self.item_press.as_mut() {
             // Locked: the press still selects when it lets go, but a drag
@@ -738,15 +732,10 @@ impl Editor {
             if !moved {
                 return false;
             }
-            let beat = 60.0 / bpm.max(1.0);
+            // The item's start snaps (`SnapRule::AnchorStart`), its trimmed
+            // edges land on a line: both are a snap of the moved point.
             let on_grid = press.snap;
-            let snap = |t: f64| {
-                if on_grid {
-                    (t / beat).round() * beat
-                } else {
-                    t
-                }
-            };
+            let snap = |t: f64| if on_grid { grid.snap(t) } else { t };
             // A slip does not move the item, so its ghost is the item's
             // own span: what changes is which part of the source is
             // under it, and that is carried in `slip` rather than here.
@@ -785,19 +774,12 @@ impl Editor {
             if !moved {
                 return false;
             }
-            let beat = 60.0 / bpm.max(1.0);
             // Off the grid means "exactly here", the same as it does
             // for an item, and it is the map that says so. A section
             // boundary that is a hair off the bar is one REAPER will
             // draw a hair off the bar forever.
             let on_grid = press.snap;
-            let snap = |t: f64| {
-                if on_grid {
-                    ((t / beat).round() * beat).max(0.0)
-                } else {
-                    t.max(0.0)
-                }
-            };
+            let snap = |t: f64| if on_grid { grid.snap(t) } else { t }.max(0.0);
             let (was0, was1) = press.was;
             press.ghost = Some(match press.on {
                 On::Marker { .. } => {
@@ -3521,8 +3503,10 @@ mod tests {
         }
 
         fn drag_to(&mut self, x: f64, keys: Mods) -> bool {
-            self.editor
-                .moved(Some(self.at(x)), PPS, self.project.bpm, keys)
+            let at = self.at(x);
+            on_quarters(self.project.bpm, |grid| {
+                self.editor.moved(Some(at), PPS, grid, keys)
+            })
         }
 
         fn release(&mut self, x: f64, keys: Mods) -> Vec<Effect> {
@@ -3578,7 +3562,9 @@ mod tests {
                 "the press at {from:?} started {:?}, not a razor",
                 self.hit(x, y).context
             );
-            self.editor.razor_moved(to.1, to.0, self.project.bpm);
+            on_quarters(self.project.bpm, |grid| {
+                self.editor.razor_moved(to.1, to.0, grid)
+            });
             let mut effects = Vec::new();
             self.editor
                 .release(Some(to.1), ctrl, &mut self.project, &mut effects);
@@ -3949,7 +3935,7 @@ mod tests {
         let (x, y) = s.point(0, 4.0, 15.0);
         assert_eq!(s.editor.context_at(s.hit(x, y)), mousemap::RAZOR_EDGE);
         assert!(s.press(x, y, Mods::default()).0);
-        s.editor.razor_moved(6.0, 0, s.project.bpm);
+        on_quarters(s.project.bpm, |grid| s.editor.razor_moved(6.0, 0, grid));
         let mut effects = Vec::new();
         s.editor
             .release(Some(6.0), Mods::default(), &mut s.project, &mut effects);
@@ -4079,7 +4065,7 @@ mod tests {
             s.press(x, y, Mods::default()).0,
             "the area did not take the press"
         );
-        s.editor.razor_moved(6.0, 0, s.project.bpm);
+        on_quarters(s.project.bpm, |grid| s.editor.razor_moved(6.0, 0, grid));
         let mut effects = Vec::new();
         s.editor
             .release(Some(6.0), Mods::default(), &mut s.project, &mut effects);
@@ -5193,7 +5179,9 @@ mod ruler_tests {
         editor.press(Some(hit), Mods::default(), &scene, &mut effects);
         if let Some(to) = to {
             // A pixel scale coarse enough that any move clears the slop.
-            editor.moved(Some(to), 100.0, 120.0, Mods::default());
+            super::on_quarters(120.0, |grid| {
+                editor.moved(Some(to), 100.0, grid, Mods::default())
+            });
         }
         let mut project = project.clone();
         effects.clear();
@@ -5680,4 +5668,22 @@ mod comp_tests {
         assert_eq!(comp_lane(&track), Some(2), "the playing lane");
         assert_eq!(comp_lane(&daw_proto::Track::default()), None);
     }
+}
+
+/// Snap to quarter notes at `bpm`, as the arrangement's tests expect:
+/// the grid their fixtures were written against.
+#[cfg(test)]
+pub(crate) fn on_quarters<R>(bpm: f64, f: impl FnOnce(&Snapper<'_>) -> R) -> R {
+    let grid = timeline::grid::Grid::new(0.25);
+    let map = timeline::time::ConstantTempo {
+        units_per_beat: 60.0 / bpm.max(1.0),
+        beats_per_bar: 4.0,
+        origin: 0.0,
+        units_per_second: 1.0,
+    };
+    f(&Snapper {
+        grid: &grid,
+        regions: None,
+        map: &map,
+    })
 }

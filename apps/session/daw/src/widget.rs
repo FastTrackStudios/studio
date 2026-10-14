@@ -2588,6 +2588,21 @@ impl ArrangementWidget {
     }
 
     /// The time under an x in the widget's coordinates.
+    /// The grid a drag snaps to: the arrangement's setting fitted to the
+    /// zoom where the view starts, and the lane grid's tempo map.
+    fn snap_grid(&self, view: Viewport) -> (timeline::grid::Grid, timeline::time::TempoMap) {
+        let tempo = self.scene.tempo();
+        let (from, _) = view.secs();
+        let bars = if tempo.is_empty() {
+            self.bars
+        } else {
+            Bars::at_time(tempo, from.max(0.0))
+        };
+        let mut grid = self.grid;
+        grid.refit(bars.secs_per_beat * 4.0 * view.pps);
+        (grid, ruler::lane_map(bars, tempo))
+    }
+
     fn seconds_at(&self, x: f64, view: Viewport) -> f64 {
         ((x - self.scene.tcp.width() + view.scroll_x) / view.pps.max(f64::EPSILON)).max(0.0)
     }
@@ -3885,7 +3900,16 @@ impl ArrangementWidget {
                 if self.holding {
                     let view = self.viewport(self.size.0, self.size.1);
                     let seconds = self.seconds_at(x, view);
-                    let bpm = self.scene.bpm;
+                    // Snapping is to the grid that is drawn: the setting
+                    // fitted to this zoom, through the tempo map, the
+                    // quantize's grid where it is in force while editing.
+                    let (grid, map) = self.snap_grid(view);
+                    let regions = crate::grid_in_force::current();
+                    let snapper = timeline::snap::Snapper {
+                        grid: &grid,
+                        regions: regions.as_ref(),
+                        map: &map,
+                    };
                     // A razor is the one drag here that is a rectangle,
                     // so it is the one that needs the row as well as
                     // the time.
@@ -3901,11 +3925,11 @@ impl ArrangementWidget {
                             .scene
                             .row_at_screen(y - ruler::ruler_h() + view.scroll_y, view)
                             .unwrap_or(0);
-                        return self.editor.razor_moved(seconds, row, bpm);
+                        return self.editor.razor_moved(seconds, row, &snapper);
                     }
                     return self
                         .editor
-                        .moved(Some(seconds), view.pps, bpm, mods(e.mods));
+                        .moved(Some(seconds), view.pps, &snapper, mods(e.mods));
                 }
                 if let Some(turn) = self.item_turn.as_mut() {
                     turn.turn(y, e.mods.contains(Modifiers::CONTROL));
