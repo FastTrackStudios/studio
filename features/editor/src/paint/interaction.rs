@@ -2817,9 +2817,8 @@ pub fn key_down(ed: &mut Editor, drag: &Drag, key: &str, mods: Mods) -> bool {
         ("d", false, _) => set_tool(ed, Tool::NoteDraw),
         ("e", false, _) => set_tool(ed, Tool::NoteErase),
         ("p", false, _) => set_tool(ed, Tool::Pen),
-        // `x` for the razor: `r` is the momentary reference key and `k`
-        // is the razor which-key prefix, so neither was available.
-        ("x", false, _) => set_tool(ed, Tool::Razor),
+        // No key for the razor: Ctrl (Cmd on macOS) is the razor, held,
+        // over the roll, a note or its edge — as over the arrangement.
         ("1", false, _) => {
             ed.grid.coarser();
             true

@@ -988,9 +988,10 @@ fn razor_help_rows(ed: &Editor) -> Vec<keys::Continuation> {
         })
         .collect();
     // The way out of the long spelling, since the panel is the only
-    // place that would ever mention it.
+    // place that would ever mention it: the toolbar's Razor (its glyph),
+    // armed, makes the verbs single keys.
     rows.push(keys::Continuation {
-        key: "x".to_string(),
+        key: "⌗".to_string(),
         label: "Razor tool — then single keys".to_string(),
         is_group: false,
     });

@@ -674,11 +674,19 @@ impl MouseMap {
 
         let mut map = Self::reaper_like();
         map.name = "FTS";
-        // Only the empty-canvas drags differ. Everything the REAPER map
-        // says about notes, edges, handles and the strip is right, and
-        // rewriting it would be change for its own sake.
+        // The empty-canvas drags differ, and Ctrl on a note or its edge:
+        // Ctrl (Cmd on macOS) is the razor everywhere it can start, as it
+        // is over the arrangement's items — a modifier that means the
+        // razor on empty roll and velocity a pixel away, on a note, is
+        // one nobody learns. Velocity is the Velocity tool's. Everything
+        // else the REAPER map says about notes, edges, handles and the
+        // strip is right.
         map.bindings
             .retain(|x| !(x.context == C::PianoRoll && x.gesture == G::Drag));
+        for context in [C::Note, C::NoteEdge] {
+            map.set(context, G::Drag, CT, Action::RazorCreate);
+            map.set(context, G::Drag, SC, Action::RazorAddArea);
+        }
         map.bindings.extend([
             // Select.
             b(C::PianoRoll, G::Drag, N, Action::MarqueeSelect),

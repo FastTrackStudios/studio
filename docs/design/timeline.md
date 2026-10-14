@@ -1557,7 +1557,7 @@ pins A's behaviour. Keep it or change it on purpose.
     `the_razor_help_matches_the_razor_keys`,
     `the_razor_menu_and_the_razor_keys_agree`.
 
-**Progress (2026-10-14).** Steps 1–11 are done; 12 in part. Where the code differs
+**Progress (2026-10-14).** Steps 1–12 are done. Where the code differs
 from the plan above:
 
 - **3:** one `Mods` type for both surfaces (`timeline::input::Mods`; the
@@ -1618,11 +1618,13 @@ from the plan above:
   `Binding<C, A>`, the exact-then-plain lookup, `MouseMap<C, A>`,
   `ToolClaims`). The Editor's map uses it; the arrangement's `match` is a
   table, checked chord for chord against the old one. Shift flips snap on
-  the arrangement (Q3 revised). Item edges keep the Ctrl razor; razor
-  areas keep their drags on both surfaces. **Q1 on the arrangement is on
-  hold:** it has no Razor tool, so without Ctrl on a body a razor over
-  densely packed items has nowhere to start. `common()` rows and the
-  arrangement's `Quasi` wait on that.
+  the arrangement (Q3 revised). Q1 revised: Ctrl is the razor on bodies
+  and edges as well as empty ground, on both surfaces, and the
+  arrangement has an armed Razor tool like the Editor's. Razor areas keep
+  their drags on both. `common()` rows are not written as a shared table:
+  the two presets now agree on Ctrl, Alt and the razor rows directly, and
+  the Editor's Shift+drag on a note (one axis) is still open against the
+  arrangement's Shift (flip snap).
 - **11:** `timeline::cursor` holds the arrangement's `Playhead`,
   `TimeSpan`, `EditCursor`, `StopMode`, `TransportStep` and `Locate`, with
   their tests. The arrangement aliases its old names, and keeps the
@@ -1647,10 +1649,12 @@ longer contain camera, zoom, grid, cursor, marquee or razor code.
 
 **Decided 2026-10-13** (the questions are kept below for the reasoning):
 
-1. **Ctrl on a body:** the razor is Ctrl on empty ground (plus the Razor
-   tool) on both surfaces. Ctrl-click on a body toggles selection, and
-   Ctrl-drag on a body is left to each surface (velocity in the Editor).
-   A's body-Ctrl razor goes.
+1. **Ctrl on a body** (revised 2026-10-14): Ctrl (Cmd on macOS) is the
+   razor on both surfaces, wherever a drag can start — empty ground, a
+   body, an edge — and both have an armed Razor tool too (the
+   arrangement's on its main toolbar, the Editor's ⌗; no letter key, `x`
+   is gone). Ctrl-click on a body still toggles selection. The Editor's
+   Ctrl+drag on a note was velocity; velocity is the Velocity tool's.
 2. **Move snap:** per-surface defaults. Items use `AnchorStart` and notes
    use `Relative`, and a surface can change its own.
 3. **Shift on a body** (revised 2026-10-14): Shift flips snapping —

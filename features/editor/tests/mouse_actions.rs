@@ -608,6 +608,41 @@ fn the_razor_tool_sweeps_an_area_on_a_plain_drag() {
     );
 }
 
+/// Ctrl (Cmd on macOS) is the razor on a note and its edge too, as over
+/// empty roll and over the arrangement's items: no tool to arm, and the
+/// note under the press is cut around, not moved or re-velocitied.
+#[test]
+fn ctrl_razors_from_a_note_and_its_edge() {
+    let ctrl = Mods {
+        ctrl: true,
+        ..Mods::default()
+    };
+    for start in [PPQ * 1.25, PPQ * 1.0] {
+        let mut ed = four_notes();
+        let before = ed.doc.clone();
+        let (x0, y) = at(&ed, start);
+        let (x1, _) = at(&ed, PPQ * 3.0);
+        let mut d = interaction::pointer_down(&mut ed, x0, y, ctrl, 0);
+        assert!(
+            matches!(d, Drag::RazorCreate { .. }),
+            "Ctrl+drag from {} beats did not start a razor",
+            start / PPQ,
+        );
+        interaction::pointer_move(&mut ed, &mut d, x1, y, ctrl);
+        interaction::pointer_up(&mut ed, d, x1, y, ctrl);
+        assert_eq!(
+            ed.razor.areas.len(),
+            1,
+            "no area from {} beats",
+            start / PPQ
+        );
+        assert_eq!(
+            ed.doc.notes, before.notes,
+            "the razor moved or edited a note"
+        );
+    }
+}
+
 /// A razor drag that starts *on* a note cuts rather than picking it up.
 ///
 /// The whole point of the tool is sweeping across material. If a drag
