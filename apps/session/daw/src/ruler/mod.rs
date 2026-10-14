@@ -23,7 +23,7 @@
 //! file would have invented.
 
 use anyrender::PaintScene;
-use editing::grid::Adaptive;
+use ::timeline::grid::Adaptive;
 use vello::kurbo::{Affine, Rect};
 use vello::peniko::{Color, Fill};
 

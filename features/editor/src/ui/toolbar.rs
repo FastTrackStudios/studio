@@ -663,13 +663,13 @@ pub fn StatusBar(editor: Signal<Editor>) -> Element {
     drop(ed);
 
     let density_short = match density {
-        editing::grid::Density::Widest => "WIDE+",
-        editing::grid::Density::Wide => "WIDE",
-        editing::grid::Density::Medium => "MED",
-        editing::grid::Density::Narrow => "NARR",
-        editing::grid::Density::Narrowest => "NARR-",
-        editing::grid::Density::Custom(_) => "CUST",
-        editing::grid::Density::Fixed => "AUTO",
+        timeline::grid::Density::Widest => "WIDE+",
+        timeline::grid::Density::Wide => "WIDE",
+        timeline::grid::Density::Medium => "MED",
+        timeline::grid::Density::Narrow => "NARR",
+        timeline::grid::Density::Narrowest => "NARR-",
+        timeline::grid::Density::Custom(_) => "CUST",
+        timeline::grid::Density::Fixed => "AUTO",
     };
 
     rsx! {
@@ -887,8 +887,8 @@ pub fn StatusBar(editor: Signal<Editor>) -> Element {
 /// A cycle rather than a menu because there are only six states and the
 /// interesting move is "a bit more/less room", which a menu makes into
 /// two clicks and a decision.
-fn next_density(current: editing::grid::Density) -> editing::grid::Density {
-    use editing::grid::Density as D;
+fn next_density(current: timeline::grid::Density) -> timeline::grid::Density {
+    use timeline::grid::Density as D;
     match current {
         D::Fixed => D::Widest,
         D::Widest => D::Wide,

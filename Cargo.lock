@@ -5924,10 +5924,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "editing"
-version = "0.1.0"
-
-[[package]]
 name = "editor"
 version = "0.1.0"
 dependencies = [
@@ -5953,7 +5949,6 @@ dependencies = [
  "dioxus-native-dom",
  "dioxus-ssr",
  "dioxus-test",
- "editing",
  "editor",
  "eyre",
  "facet",
@@ -5980,6 +5975,7 @@ dependencies = [
  "sha2 0.10.9",
  "studio",
  "tempfile",
+ "timeline",
  "tokio",
  "tracing",
  "tracing-subscriber",
@@ -17141,7 +17137,6 @@ dependencies = [
  "dirs",
  "dsp-core",
  "dynamic-template",
- "editing",
  "editor",
  "editor-crdt",
  "editor-keyflow-lang",
@@ -17185,6 +17180,7 @@ dependencies = [
  "studio",
  "task-dial",
  "tempfile",
+ "timeline",
  "tokio",
  "tracing",
  "tracing-subscriber",
@@ -20029,6 +20025,10 @@ dependencies = [
  "num-conv",
  "time-core",
 ]
+
+[[package]]
+name = "timeline"
+version = "0.1.0"
 
 [[package]]
 name = "tiny-skia"

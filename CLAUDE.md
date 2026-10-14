@@ -37,8 +37,8 @@ features/   one crate per feature, sub-folders allowed. Name a feature for what
                          proto/ (the shared RigCore service)
             dsp/*        the effects and their engines (+ nam, analyzer, …)
             editor/      the editor: piano roll, drum lanes, curves
-            editing/     the editing engine the arrangement and the editor
-                         share (becoming `timeline`)
+            timeline/    the editing engine the arrangement and the editor
+                         share (docs/design/timeline.md)
             session/, song/, sampler/, plugin-host/, audio/, midi/, input/,
             sync/, chords/, formats/, patchbay/, control-surfaces/,
             dynamic-template/, patch-list/, preset-browser/, …

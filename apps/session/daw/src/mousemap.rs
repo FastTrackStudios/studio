@@ -79,7 +79,7 @@ pub enum Action {
     ToggleItemSelection,
     /// Sweep a box over empty lanes, selecting the items it touches —
     /// the Editor's marquee over notes, with the same rules
-    /// (`editing::gestures::Marquee`).
+    /// (`timeline::gestures::Marquee`).
     MarqueeSelect,
     /// The same, adding to the selection.
     MarqueeAdd,

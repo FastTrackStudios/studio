@@ -1,5 +1,5 @@
 [package]
-name = "editing"
+name = "timeline"
 version.workspace = true
 edition.workspace = true
 authors.workspace = true

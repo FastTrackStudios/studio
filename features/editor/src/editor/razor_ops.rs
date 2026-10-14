@@ -4,7 +4,7 @@ use super::*;
 impl Editor {
     // ── razor operations ─────────────────────────────────────────────
     //
-    // The razor's *operations* have existed in `editing::razor::` since it was
+    // The razor's *operations* have existed in `timeline::razor::` since it was
     // written; what was missing was any way to reach them. They took a
     // single area and a document, which is the right shape for the
     // algorithm and the wrong one for a command: every caller then had

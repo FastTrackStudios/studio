@@ -1076,7 +1076,7 @@ fn marquee_selects_the_notes_it_covers() {
     let y0 = ed.camera.y(70.0, ed.viewport);
     let y1 = ed.camera.y(58.0, ed.viewport);
     let mut box_ =
-        editing::gestures::Marquee::press((x0, y0), editing::gestures::MarqueeMode::Replace);
+        timeline::gestures::Marquee::press((x0, y0), timeline::gestures::MarqueeMode::Replace);
     box_.moved((x1, y1));
     sel.marquee(&ed.doc, &ed.camera, ed.viewport, &box_, &[]);
     assert_eq!(sel.notes.len(), 2, "the first two notes only");
@@ -1086,7 +1086,7 @@ fn marquee_selects_the_notes_it_covers() {
     // press: the first two come out, a third goes in.
     let third = ed.doc.notes.get(2).expect("a third note").id;
     let mut toggle =
-        editing::gestures::Marquee::press((x0, y0), editing::gestures::MarqueeMode::Toggle);
+        timeline::gestures::Marquee::press((x0, y0), timeline::gestures::MarqueeMode::Toggle);
     toggle.moved((x1, y1));
     let mut base = first_two.clone();
     base.push(third);
@@ -1094,7 +1094,7 @@ fn marquee_selects_the_notes_it_covers() {
     assert_eq!(sel.notes, vec![third], "toggled, only the third is left");
 
     // Add keeps what was there.
-    let mut add = editing::gestures::Marquee::press((x0, y0), editing::gestures::MarqueeMode::Add);
+    let mut add = timeline::gestures::Marquee::press((x0, y0), timeline::gestures::MarqueeMode::Add);
     add.moved((x1, y1));
     sel.marquee(&ed.doc, &ed.camera, ed.viewport, &add, &[third]);
     assert_eq!(sel.notes.len(), 3, "the two, and the third kept");
@@ -4771,7 +4771,7 @@ fn a_band_split_cannot_be_pushed_past_its_neighbour() {
 #[test]
 fn an_adaptive_grid_coarsens_as_the_view_zooms_out() {
     let mut ed = grid_editor();
-    ed.grid.adaptive.density = editing::grid::Density::Medium;
+    ed.grid.adaptive.density = timeline::grid::Density::Medium;
 
     // Fit the whole take, then keep zooming out.
     ed.reset_view();
@@ -4791,7 +4791,7 @@ fn an_adaptive_grid_coarsens_as_the_view_zooms_out() {
 /// And a fixed grid stays exactly where it was put.
 #[test]
 fn a_fixed_grid_ignores_the_zoom() {
-    use editing::grid::Density;
+    use timeline::grid::Density;
 
     let mut ed = grid_editor();
     // Said out loud, not inherited. This passed by accident while
@@ -4812,7 +4812,7 @@ fn a_fixed_grid_ignores_the_zoom() {
 #[test]
 fn an_adaptive_grid_keeps_its_triplets() {
     let mut ed = grid_editor();
-    ed.grid.adaptive.density = editing::grid::Density::Medium;
+    ed.grid.adaptive.density = timeline::grid::Density::Medium;
     ed.grid.triplet = true;
     ed.grid.division = 1.0 / 16.0;
     for _ in 0..6 {
