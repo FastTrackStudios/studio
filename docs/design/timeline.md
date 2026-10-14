@@ -1557,7 +1557,7 @@ pins A's behaviour. Keep it or change it on purpose.
     `the_razor_help_matches_the_razor_keys`,
     `the_razor_menu_and_the_razor_keys_agree`.
 
-**Progress (2026-10-14).** Steps 1–9 are done. Where the code differs
+**Progress (2026-10-14).** Steps 1–10 are done. Where the code differs
 from the plan above:
 
 - **3:** one `Mods` type for both surfaces (`timeline::input::Mods`; the
@@ -1597,6 +1597,23 @@ from the plan above:
   single roll still maps rows through its `VerticalCamera`, which already
   holds the fold; a `RowLayout::uniform` there would add nothing until
   the hit testing moves (step 13).
+- **10:** one zoom drag. `ZoomDrag` zooms rows in when dragged down
+  (Q4) and gains `rebase`, which drops travel past a limit. The
+  arrangement's live drag is a `ZoomDrag` rebased at its limits, which
+  keeps its turn-back-at-once feel; the dead `arrange_edit` zoom tool
+  (and its unused Alt sweep) is gone. `ZoomHistory<V>` is generic over
+  the surface's view (the arrangement's `Target`). MeMagic is
+  `timeline::zoom::contextual` over spans; SmartZoom is deleted, and
+  `f`/`Shift+f`/Zoom keep their mode pairs (`Modes::PASSAGE`, `WHOLE`).
+  **Not moved:** the Editor's magnets (`blend`, `edge_magnet`, …) stay
+  in `interact/camera.rs`. They blend the centre-based vertical camera
+  linearly in its centre, and over `timeline::Camera` the same blend
+  would run in the top row, which is a different average while the
+  row height changes. They move when the Editor's camera stores a
+  `timeline::Camera`. **Not added yet:** the arrangement's `V` (reset
+  view) and `f` (contextual over items). Contextual now takes spans, so
+  this is a key binding and an items adapter away; it is new behaviour,
+  so it waits for a decision on the keys.
 
 After step 13 the two `Editor` structs (`arrange_edit::Editor` and
 `editor::Editor`) each hold one `timeline::Interaction<Self>`, and they no
