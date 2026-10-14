@@ -188,15 +188,10 @@ pub fn frame(now: Target, at: Frame, time: Option<(f64, f64)>, rows: Option<(f64
     to
 }
 
-/// The zooms already been to, for `z u` / `z r` and the toggles.
+/// The zooms already been to, for `z u` / `z r` and the toggles:
+/// [`timeline::zoom::ZoomHistory`] over the panel's [`Target`]s.
 #[derive(Debug, Default)]
-pub struct History {
-    back: Vec<Target>,
-    forward: Vec<Target>,
-    /// What the last toggle framed, so pressing it again while still
-    /// there goes back instead.
-    toggled: Option<Target>,
-}
+pub struct History(timeline::zoom::ZoomHistory<Target>);
 
 impl History {
     /// Where to go for `request` from `now`, remembering where it was.
@@ -208,51 +203,16 @@ impl History {
         framed: impl Fn() -> Target,
     ) -> Option<Target> {
         match request {
-            Request::Back => {
-                let to = self.back.pop()?;
-                self.forward.push(now);
-                self.toggled = None;
-                Some(to)
-            }
-            Request::Forward => {
-                let to = self.forward.pop()?;
-                self.back.push(now);
-                self.toggled = None;
-                Some(to)
-            }
-            Request::Frame { toggle: true, .. } if self.toggled.is_some_and(|t| t.near(&now)) => {
-                self.toggled = None;
-                let to = self.back.pop()?;
-                self.forward.push(now);
-                Some(to)
-            }
-            Request::Frame { toggle, .. } => {
-                let to = framed();
-                self.toggled = toggle.then_some(to);
-                self.visit(now);
-                Some(to)
-            }
+            Request::Back => self.0.back(now),
+            Request::Forward => self.0.forward(now),
+            Request::Frame { toggle, .. } => self.0.frame(now, toggle, |t| t.near(&now), framed),
             Request::ScrollBy { .. } | Request::Shape { .. } | Request::Pinch { .. } => {
                 Some(framed())
             }
-            Request::Open { .. } => {
-                self.toggled = None;
+            Request::Open { .. } | Request::Scale { .. } => {
+                self.0.forget_toggle();
                 Some(framed())
             }
-            Request::Scale { .. } => {
-                self.toggled = None;
-                Some(framed())
-            }
-        }
-    }
-
-    fn visit(&mut self, now: Target) {
-        self.back.push(now);
-        self.forward.clear();
-        // A long session of zooming is not a history anyone walks back
-        // through all of.
-        if self.back.len() > 64 {
-            self.back.remove(0);
         }
     }
 }

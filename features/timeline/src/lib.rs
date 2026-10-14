@@ -10,3 +10,4 @@ pub mod razor;
 pub mod rows;
 pub mod snap;
 pub mod time;
+pub mod zoom;
