@@ -582,3 +582,26 @@ fn splitting_a_piece_unfolds_exactly_that_piece() {
     // ...and the kick, untouched, still has one.
     assert_eq!(after.slot(kl as f64), after.slot(kl as f64 + 1.0));
 }
+
+/// A folded kit cannot scroll past its top lane. The clamp counted the
+/// rows the fold hides as if they were still lanes, so the view could
+/// scroll up by one empty lane per folded piece: the empty space the
+/// clamp exists to rule out.
+#[test]
+fn a_folded_kit_shows_no_empty_lanes_above_the_top() {
+    let mut ed = drum_editor();
+    ed.refresh_fold();
+    let fold = ed.camera.fold;
+    assert!(fold.hidden_count() > 0, "the kit should fold");
+    let (row_min, row_max) = ed.doc.row_space.bounds();
+    let (_, top_slot) = fold.slot_bounds((row_min, row_max));
+    // Zoom in so there is somewhere to scroll, then push the view up.
+    ed.camera.vertical.px_per_row = 60.0;
+    ed.camera.vertical.center = 1e6;
+    ed.settle_camera();
+    let (_, high) = ed.camera.slot_span(ed.viewport);
+    assert!(
+        high <= f64::from(top_slot) + 1.0 + 1e-9,
+        "the view reaches slot {high}, past the top lane's {top_slot}",
+    );
+}

@@ -16,20 +16,7 @@
 use crate::shape::{smoothstep, smoothstep_between};
 
 /// Canvas size in pixels.
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub struct Viewport {
-    pub w: f64,
-    pub h: f64,
-}
-
-impl Viewport {
-    pub fn new(w: f64, h: f64) -> Self {
-        Self {
-            w: w.max(1.0),
-            h: h.max(1.0),
-        }
-    }
-}
+pub use timeline::camera::Viewport;
 
 /// The vertical half of a camera, owned by one lane.
 ///
@@ -78,6 +65,26 @@ impl VerticalCamera {
         (self.center - half, self.center + half)
     }
 
+    /// As a top-down [`timeline::camera::RowView`] over a view `h` tall,
+    /// in rows counted down from the top: row `r` (a slot, bottom-up)
+    /// is `-r` there.
+    pub fn row_view(&self, h: f64) -> timeline::camera::RowView {
+        let half = h / (2.0 * self.px_per_row.max(1e-6));
+        timeline::camera::RowView {
+            y0: -(self.center + half),
+            px_per_unit: self.px_per_row,
+        }
+    }
+
+    /// Back from [`VerticalCamera::row_view`].
+    pub fn from_row_view(view: timeline::camera::RowView, h: f64) -> Self {
+        let half = h / (2.0 * view.px_per_unit.max(1e-6));
+        Self {
+            center: -view.y0 - half,
+            px_per_row: view.px_per_unit,
+        }
+    }
+
     /// Zoom about a fixed row, so the row under the cursor stays put.
     pub fn zoom_about(&mut self, anchor_row: f64, factor: f64) {
         let f = factor.max(1e-6);
@@ -119,112 +126,7 @@ pub struct Camera {
     pub fold: RowFold,
 }
 
-/// A monotonic row -> slot map: hidden rows collapse onto the visible
-/// row above them, and everything higher shifts down to close the gap.
-///
-/// Empty is the identity, which is every mode but drums.
-/// A fold holds one hidden row per two-handed piece. The FTS map has
-/// five (kick and four toms); the cap is generous and fixed so that
-/// `Camera` stays `Copy`, which it is at every call site.
-pub const MAX_FOLD: usize = 32;
-
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub struct RowFold {
-    /// Hidden model rows, ascending, `len` of them meaningful.
-    hidden: [i32; MAX_FOLD],
-    len: usize,
-}
-
-impl Default for RowFold {
-    fn default() -> Self {
-        Self {
-            hidden: [0; MAX_FOLD],
-            len: 0,
-        }
-    }
-}
-
-impl RowFold {
-    /// `hidden` need not be sorted or unique. Rows past `MAX_FOLD` are
-    /// dropped: showing an extra lane beats refusing to draw the roll.
-    pub fn new(mut hidden: Vec<i32>) -> Self {
-        hidden.sort_unstable();
-        hidden.dedup();
-        hidden.truncate(MAX_FOLD);
-        let mut rows = [0; MAX_FOLD];
-        rows[..hidden.len()].copy_from_slice(&hidden);
-        Self {
-            hidden: rows,
-            len: hidden.len(),
-        }
-    }
-
-    fn rows(&self) -> &[i32] {
-        &self.hidden[..self.len]
-    }
-
-    pub fn is_identity(&self) -> bool {
-        self.len == 0
-    }
-
-    /// How many rows this fold hides — the difference between the row
-    /// range and the number of lanes actually drawn.
-    pub fn hidden_count(&self) -> usize {
-        self.len
-    }
-
-    fn is_hidden(&self, row: i32) -> bool {
-        self.rows().binary_search(&row).is_ok()
-    }
-
-    /// Hidden rows strictly below `row`.
-    fn below(&self, row: i32) -> i32 {
-        self.rows().partition_point(|&h| h < row) as i32
-    }
-
-    /// Display slot for a model row. Fractional parts survive, so a
-    /// note bent a quarter-row sharp still draws a quarter-row up.
-    pub fn slot(&self, row: f64) -> f64 {
-        if self.len == 0 {
-            return row;
-        }
-        let base = row.floor();
-        let frac = row - base;
-        let mut r = base as i32;
-        // A hidden row shares the slot of the first visible row above
-        // it — the fold only ever hides a left hand, which sits
-        // directly below its right.
-        while self.is_hidden(r) {
-            r += 1;
-        }
-        (r - self.below(r)) as f64 + frac
-    }
-
-    /// The model row occupying a display slot — the inverse of `slot`
-    /// for visible rows, and the reason a click on a collapsed piece
-    /// lands on the hand that stands for it.
-    pub fn row(&self, slot: f64) -> f64 {
-        if self.len == 0 {
-            return slot;
-        }
-        let base = slot.floor();
-        let frac = slot - base;
-        let mut r = base as i32;
-        for &h in self.rows() {
-            if h <= r {
-                r += 1;
-            } else {
-                break;
-            }
-        }
-        r as f64 + frac
-    }
-
-    /// A row-space range expressed in slots.
-    pub fn slot_bounds(&self, (lo, hi): (i32, i32)) -> (i32, i32) {
-        (self.slot(lo as f64) as i32, self.slot(hi as f64) as i32)
-    }
-}
+pub use timeline::rows::{MAX_FOLD, RowFold};
 
 /// Hard limits applied after every navigation. These are clamps, not
 /// magnets: hitting one discards the requested move, which is why they
@@ -268,12 +170,25 @@ impl Default for Bounds {
 }
 
 impl Camera {
+    /// The horizontal half as the shared [`timeline::camera::TimeView`].
+    pub fn time(&self) -> timeline::camera::TimeView {
+        timeline::camera::TimeView {
+            t0: self.t0,
+            units_per_px: self.units_per_px,
+        }
+    }
+
+    fn set_time(&mut self, time: timeline::camera::TimeView) {
+        self.t0 = time.t0;
+        self.units_per_px = time.units_per_px;
+    }
+
     pub fn x(&self, t: f64) -> f64 {
-        (t - self.t0) / self.units_per_px
+        self.time().x(t)
     }
 
     pub fn t_at(&self, x: f64) -> f64 {
-        self.t0 + x * self.units_per_px
+        self.time().t_at(x)
     }
 
     /// Takes a *model* row; the fold is applied here.
@@ -297,7 +212,7 @@ impl Camera {
 
     /// `(t_left, t_right)`.
     pub fn time_span(&self, vp: Viewport) -> (f64, f64) {
-        (self.t0, self.t0 + vp.w * self.units_per_px)
+        self.time().span(vp.w)
     }
 
     /// `(pitch_low, pitch_high)`.
@@ -309,9 +224,9 @@ impl Camera {
     /// Zoom time by `factor` (>1 zooms in) keeping `anchor_t` pinned to
     /// its current pixel.
     pub fn zoom_time_about(&mut self, anchor_t: f64, factor: f64) {
-        let x = self.x(anchor_t);
-        self.units_per_px /= factor.max(1e-6);
-        self.t0 = anchor_t - x * self.units_per_px;
+        let mut time = self.time();
+        time.zoom_about(anchor_t, factor);
+        self.set_time(time);
     }
 
     /// Zoom pitch by `factor` keeping `anchor_pitch` pinned.
@@ -322,7 +237,9 @@ impl Camera {
     }
 
     pub fn pan_px(&mut self, dx: f64, dy: f64) {
-        self.t0 -= dx * self.units_per_px;
+        let mut time = self.time();
+        time.pan_px(dx);
+        self.set_time(time);
         self.vertical.center += dy / self.vertical.px_per_row;
     }
 
@@ -337,46 +254,41 @@ impl Camera {
     /// nothing above the top key or below the bottom one to look at, so
     /// the roll is fitted to them and never shows empty space.
     pub fn constrain(&mut self, bounds: Bounds, vp: Viewport) {
-        // ── time: free, within reason ────────────────────────────────
-        let span = (bounds.t_max - bounds.t_min).max(1e-9);
-        // Zooming out used to stop at exactly the cushioned item, which
-        // made it impossible to see past either end of the take.
-        let max_upp = span * bounds.max_zoom_out / vp.w.max(1.0);
-        if max_upp > 0.0 {
-            self.units_per_px = self.units_per_px.min(max_upp).max(1e-9);
-        }
-        let visible = vp.w * self.units_per_px;
-        // A whole screen of slack each side, not a fifth of one: the
-        // point is to be able to look *off* the item.
-        let slack = visible.max(span * bounds.edge_whitespace);
-        let lo = bounds.t_min - slack;
-        let hi = (bounds.t_max + slack - visible).max(lo);
-        self.t0 = self.t0.clamp(lo, hi);
-
-        // ── pitch: fitted to the keys ────────────────────────────────
-        // The rows the roll actually draws: the mode's range, less
-        // whatever the fold collapses away.
-        let rows =
-            ((bounds.row_max - bounds.row_min + 1.0) - self.fold.hidden_count() as f64).max(1.0);
-        // Tall enough that `rows` of them always cover the lane. This is
-        // the floor that stops a zoom-out leaving empty space where
-        // there are no keys.
-        let fit = vp.h / rows;
-        let min_ppr = fit.max(bounds.min_px_per_semitone.min(fit));
-        let max_ppr = bounds.max_px_per_semitone.max(min_ppr);
-        self.vertical.px_per_row = self.vertical.px_per_row.clamp(min_ppr, max_ppr);
-
-        // And centred so the window stays over real rows. When the whole
-        // range is on screen there is only one legal centre, so the
-        // clamp collapses to it rather than inverting.
-        let half = (vp.h * 0.5) / self.vertical.px_per_row.max(1e-9);
-        let c_lo = bounds.row_min + half;
-        let c_hi = bounds.row_max + 1.0 - half;
-        self.vertical.center = if c_lo <= c_hi {
-            self.vertical.center.clamp(c_lo, c_hi)
-        } else {
-            (bounds.row_min + bounds.row_max + 1.0) / 2.0
+        use timeline::camera::{Align, RowsFloor, ZoomOut};
+        // Rows in the slots the roll draws (the fold closes the gaps),
+        // flipped top-down for the shared clamp: slot `s` is `-s`.
+        let (s_lo, s_hi) = self
+            .fold
+            .slot_bounds((bounds.row_min as i32, bounds.row_max as i32));
+        let shared = timeline::camera::Bounds {
+            t_min: bounds.t_min,
+            t_max: bounds.t_max,
+            // A whole screen of slack each side, not a fifth of one: the
+            // point is to be able to look *off* the item.
+            time_slack_screens: 1.0,
+            edge_whitespace: bounds.edge_whitespace,
+            min_units_per_px: 1e-9,
+            // Zooming out used to stop at exactly the cushioned item,
+            // which made it impossible to see past either end of the take.
+            max_zoom_out: ZoomOut::Times(bounds.max_zoom_out),
+            r_min: -(f64::from(s_hi) + 1.0),
+            r_max: -f64::from(s_lo),
+            // Tall enough that the rows always cover the lane: the floor
+            // that stops a zoom-out leaving empty space where there are
+            // no keys.
+            rows_floor: RowsFloor::Fit,
+            max_px_per_unit: bounds.max_px_per_semitone,
+            // When the whole range is on screen there is only one legal
+            // centre.
+            align: Align::Center,
         };
+        let mut camera = timeline::camera::Camera {
+            time: self.time(),
+            rows: self.vertical.row_view(vp.h),
+        };
+        camera.constrain(&shared, vp);
+        self.set_time(camera.time);
+        self.vertical = VerticalCamera::from_row_view(camera.rows, vp.h);
     }
 }
 
