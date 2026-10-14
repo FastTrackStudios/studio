@@ -25,9 +25,9 @@ comes next, in order. The design docs this points at are in `docs/design/`.
 
 ## Step 2 — one editing engine: `timeline`
 
-*In progress:* migration steps 1–8 of 17 are done (rename, camera
+*In progress:* migration steps 1–9 of 17 are done (rename, camera
 characterisation tests, input, time, grid, snap, the shared camera in
-both surfaces). Next is 9, rows. `docs/design/timeline.md` §4 records where the code differs
+both surfaces, rows). Next is 10, zoom. `docs/design/timeline.md` §4 records where the code differs
 from the plan.
 
 The arrangement and the editor must share the SAME mouse handling, zoom,

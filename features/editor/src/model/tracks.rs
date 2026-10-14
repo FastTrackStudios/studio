@@ -866,83 +866,33 @@ impl Workspace {
                 (i, weight.max(0.01) * boost.max(0.01))
             })
             .collect();
-        if rows.is_empty() || height <= 0.0 {
-            return Vec::new();
-        }
-
-        let min_row = min_row.max(0.0);
-        let n = rows.len() as f32;
-
-        // When the floor wants more room than there is, lay the lanes
-        // out **at the floor and overflow** — the caller scrolls.
-        //
-        // This used to fall back to an even split, reasoning that if
-        // nothing fits well then every lane should be equally bad. That
-        // is right for four tracks and wrong for an orchestra: twenty
-        // lanes on a 1000px screen is twenty unreadable strips, and a
-        // lane you cannot read serves the feature no better than one you
-        // cannot see. A floor that is actually honoured is the point.
-        if min_row * n > height && min_row <= height {
-            let total: f32 = rows.iter().map(|(_, w)| w).sum::<f32>().max(1e-6);
-            let mut y = 0.0;
-            return rows
-                .iter()
-                .map(|&(lane, w)| {
-                    // Weight still counts above the floor, so a kit stays
-                    // taller than a MIDI guide even while scrolling.
-                    let h = (min_row * n * (w / total)).max(min_row);
-                    let row = StackRow { lane, y, height: h };
-                    y += h;
-                    row
-                })
-                .collect();
-        }
-
-        // The true last resort: a viewport too small for even one
-        // floored lane. Nothing can be readable, so be uniformly wrong
-        // rather than arbitrarily so.
-        if min_row * n >= height {
-            let each = height / n;
-            let mut y = 0.0;
-            return rows
-                .iter()
-                .map(|&(track, _)| {
-                    let row = StackRow {
-                        lane: track,
-                        y,
-                        height: each,
-                    };
-                    y += each;
-                    row
-                })
-                .collect();
-        }
-
-        // Hand every dimension its floor first, then share what is left by
-        // weight. Sharing the whole height by weight and clamping
-        // afterwards would overflow by however much the clamping added.
-        let spare = height - min_row * n;
-        let total: f32 = rows.iter().map(|(_, w)| w).sum();
-        let mut y = 0.0;
-        rows.iter()
-            .map(|&(track, w)| {
-                let h = min_row + spare * (w / total);
-                let row = StackRow {
-                    lane: track,
-                    y,
-                    height: h,
-                };
-                y += h;
-                row
+        // When the floor wants more room than there is, the lanes are laid
+        // out **at the floor and overflow** — the caller scrolls. An even
+        // split instead is right for four tracks and wrong for an
+        // orchestra: twenty lanes on a 1000px screen is twenty unreadable
+        // strips. A floor that is actually honoured is the point.
+        let weights: Vec<f64> = rows.iter().map(|&(_, w)| f64::from(w)).collect();
+        timeline::rows::stack(&weights, f64::from(height), f64::from(min_row))
+            .into_iter()
+            .zip(&rows)
+            .map(|(lane, &(index, _))| StackRow {
+                lane: index,
+                y: lane.y as f32,
+                height: lane.height as f32,
             })
             .collect()
     }
 
     /// Which lane a y coordinate falls in.
     pub fn row_at(rows: &[StackRow], y: f32) -> Option<usize> {
-        rows.iter()
-            .find(|r| y >= r.y && y < r.y + r.height)
-            .map(|r| r.lane)
+        let lanes: Vec<_> = rows
+            .iter()
+            .map(|r| timeline::rows::StackLane {
+                y: f64::from(r.y),
+                height: f64::from(r.height),
+            })
+            .collect();
+        timeline::rows::lane_at(&lanes, f64::from(y)).map(|i| rows[i].lane)
     }
 
     /// Parked tracks marked as references, with their indices.

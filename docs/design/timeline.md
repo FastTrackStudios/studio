@@ -1557,7 +1557,7 @@ pins A's behaviour. Keep it or change it on purpose.
     `the_razor_help_matches_the_razor_keys`,
     `the_razor_menu_and_the_razor_keys_agree`.
 
-**Progress (2026-10-14).** Steps 1–8 are done. Where the code differs
+**Progress (2026-10-14).** Steps 1–9 are done. Where the code differs
 from the plan above:
 
 - **3:** one `Mods` type for both surfaces (`timeline::input::Mods`; the
@@ -1589,6 +1589,14 @@ from the plan above:
   `widget::View` and `arrangement::Viewport` are unchanged, so the
   painters are too. Pinch, scale and history targets still compute in
   zoom/scroll (`panel::zoom_about`) until step 10 moves the history.
+- **9:** `timeline::rows` has `RowLayout` (cumulative tops,
+  `TopDown`/`BottomUp`, `uniform`, `build` from a `RowModel`) and the
+  Editor's weighted `stack`/`lane_at`, ported as they were. The
+  arrangement's `offsets` are a `RowLayout`; `Workspace::stack`/`row_at`
+  call `stack`/`lane_at` (the Editor stays `f32` at its edges). The
+  single roll still maps rows through its `VerticalCamera`, which already
+  holds the fold; a `RowLayout::uniform` there would add nothing until
+  the hit testing moves (step 13).
 
 After step 13 the two `Editor` structs (`arrange_edit::Editor` and
 `editor::Editor`) each hold one `timeline::Interaction<Self>`, and they no

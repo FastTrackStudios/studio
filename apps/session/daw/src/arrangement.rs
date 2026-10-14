@@ -26,6 +26,7 @@ use vello::kurbo::{Affine, BezPath, Rect};
 use vello::peniko::{Color, Fill};
 
 use daw_ui::studio::{ProjectRef, RowsRef};
+use timeline::rows::RowLayout;
 
 use crate::profile::Counts;
 
@@ -238,16 +239,13 @@ pub struct Arrangement {
     /// Where each row's commands live, so a replay can skip the rows
     /// that are not on screen. See [`Index`].
     pub index: Index,
-    /// The top of every row, plus the bottom of the last — so row `i`
-    /// occupies `offsets[i]..offsets[i + 1]` and there are `rows + 1`
-    /// entries.
-    ///
-    /// Cumulative rather than a list of heights, because what a scroll
-    /// actually asks is "which row is at this y", and a running sum
-    /// answers it with a binary search where heights would need a walk.
-    offsets: Vec<f64>,
+    /// Where every row is, its track and its automation lanes both:
+    /// cumulative tops, because what a scroll actually asks is "which row
+    /// is at this y", and a running sum answers it with a binary search
+    /// where heights would need a walk.
+    rows_at: RowLayout,
     /// Each row's track, without the automation lanes under it — what its
-    /// items and its panel controls sit in. `offsets` spans both.
+    /// items and its panel controls sit in. `rows_at` spans both.
     track_h: Vec<f64>,
     /// Each row's tracks its lane line speaks for, as the song had them
     /// when recorded ([`crate::lanes::shown_on`] over every track, not only
@@ -719,10 +717,16 @@ fn fine(lane: &LaneWave, left: f64, right: f64, pps: f64, transform: Affine) -> 
 }
 
 impl Arrangement {
+    /// Row `row`'s slot — its track and its automation lanes — as `(top,
+    /// height)` in content pixels.
+    fn slot_of(&self, row: usize) -> Option<(f64, f64)> {
+        self.rows_at.extent(i32::try_from(row).ok()?)
+    }
+
     /// How tall the whole session is, in content pixels.
     #[must_use]
     pub fn content_height(&self) -> f64 {
-        self.offsets.last().copied().unwrap_or(0.0)
+        self.rows_at.total()
     }
 
     /// How tall row `i`'s track is (its automation lanes not counted), in
@@ -732,13 +736,7 @@ impl Arrangement {
         if let Some(h) = self.track_h.get(row) {
             return *h;
         }
-        let top = self.offsets.get(row).copied().unwrap_or(0.0);
-        let bottom = self
-            .offsets
-            .get(row.saturating_add(1))
-            .copied()
-            .unwrap_or(top);
-        bottom - top
+        self.slot_of(row).map_or(0.0, |(_, height)| height)
     }
 
     /// A row's top and height, for laying its controls out.
@@ -748,8 +746,8 @@ impl Arrangement {
     /// live has to be told where the recorded thing is.
     #[must_use]
     pub fn row_box(&self, row: usize) -> Option<(f64, f64)> {
-        let top = *self.offsets.get(row)?;
-        let bottom = *self.offsets.get(row.checked_add(1)?)?;
+        let (top, slot) = self.slot_of(row)?;
+        let bottom = top + slot;
         let track = self.track_h.get(row).copied().unwrap_or(bottom - top);
         Some((top, (track.min(bottom - top) - DIVIDER).max(0.5)))
     }
@@ -780,8 +778,8 @@ impl Arrangement {
     /// bottom of its slot. `None` for a row with none.
     #[must_use]
     pub fn lanes_box(&self, row: usize) -> Option<(f64, f64)> {
-        let top = *self.offsets.get(row)?;
-        let bottom = *self.offsets.get(row.checked_add(1)?)?;
+        let (top, slot) = self.slot_of(row)?;
+        let bottom = top + slot;
         let track = self.track_h.get(row).copied()?;
         (bottom - top - track > 0.5).then_some((top + track, bottom - top - track))
     }
@@ -827,18 +825,15 @@ impl Arrangement {
     /// which does it for you.
     ///
     /// The same binary search `visible_rows` uses, over the same
-    /// cumulative offsets — so a hit and a draw cannot disagree about
-    /// which row a pixel belongs to unless the offsets themselves are
+    /// cumulative tops — so a hit and a draw cannot disagree about
+    /// which row a pixel belongs to unless the tops themselves are
     /// wrong.
     #[must_use]
     pub fn row_at(&self, content_y: f64) -> Option<usize> {
         if content_y < 0.0 || self.rows == 0 {
             return None;
         }
-        let row = self
-            .offsets
-            .partition_point(|&y| y <= content_y)
-            .checked_sub(1)?;
+        let row = usize::try_from(self.rows_at.row_at(content_y)?).ok()?;
         (row < self.rows).then_some(row)
     }
 
@@ -846,7 +841,7 @@ impl Arrangement {
     /// of the lanes.
     ///
     /// The pair to [`Self::row_band`], and the reason both exist: a
-    /// hit arrives in screen pixels and the offsets are in session
+    /// hit arrives in screen pixels and the rows are in session
     /// units, so something has to divide — and for a while nothing
     /// did, which meant that at any zoom but 1 the pointer reported a
     /// row it was not over.
@@ -914,7 +909,7 @@ impl Arrangement {
 
     /// The rows that intersect `view`, clamped to what exists.
     ///
-    /// A binary search over [`Arrangement::offsets`] rather than a
+    /// A binary search over the rows' tops rather than a
     /// division by a row pitch: there is no pitch any more. Rows are
     /// whatever height the project says, so "which row is at this y" is
     /// a lookup, not arithmetic.
@@ -931,14 +926,8 @@ impl Arrangement {
         let zoom = if view.zoom_y > 0.0 { view.zoom_y } else { 1.0 };
         let top = view.scroll_y / zoom;
         let bottom = (view.scroll_y + view.height) / zoom;
-        // `partition_point` gives the first row whose TOP is past the
-        // edge; the row before it is the one the edge falls inside.
-        let first = self
-            .offsets
-            .partition_point(|&y| y <= top)
-            .saturating_sub(1);
-        let last = self.offsets.partition_point(|&y| y < bottom);
-        first.min(rows)..last.min(rows)
+        let range = self.rows_at.between(top, bottom);
+        range.start.min(rows)..range.end.min(rows)
     }
 }
 
@@ -1139,7 +1128,7 @@ impl Arrangement {
         let mut index = Index::default();
         let mut titles = Vec::with_capacity(project.item_count);
         let mut boxes = Vec::with_capacity(project.item_count);
-        let mut offsets = Vec::with_capacity(rows.len().saturating_add(1));
+        let mut slot_h = Vec::with_capacity(rows.len());
         let mut track_h = Vec::with_capacity(rows.len());
         let mut lane_tracks = Vec::with_capacity(rows.len());
         let mut laned_rows = Vec::with_capacity(rows.len());
@@ -1170,7 +1159,6 @@ impl Arrangement {
             // Saturating rather than wrapping, because a wrapped index
             // would cull the wrong rows rather than fail.
             let lanes_from = command_index(&lanes);
-            offsets.push(y);
             // The track's own height, or the user's default, floored at
             // something far below REAPER's minimum — see `layout`. The
             // divider lives INSIDE the row, so a 24 track is 24 tall.
@@ -1456,10 +1444,10 @@ impl Arrangement {
             );
             laned_rows.push(opened);
             row_slots.push(slots);
-            y += h + crate::automation::lanes_height(&track.guid);
+            let slot = h + crate::automation::lanes_height(&track.guid);
+            slot_h.push(slot);
+            y += slot;
         }
-        // The bottom of the last row, so every row has a `..end`.
-        offsets.push(y);
 
         debug_assert_eq!(
             index.x.len(),
@@ -1480,7 +1468,7 @@ impl Arrangement {
             panel_bar: cut.bar,
             panel_zoom: cut.zoom,
             index,
-            offsets,
+            rows_at: RowLayout::from_heights(0, slot_h),
             track_h,
             lane_tracks,
             laned: laned_rows,
