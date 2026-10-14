@@ -195,7 +195,7 @@ pub struct HitConfig {
 impl Default for HitConfig {
     fn default() -> Self {
         Self {
-            edge_px: 6.0,
+            edge_px: timeline::hit::EDGE_PX,
             split_px: 8.0,
             point_px: 5.0,
         }
@@ -236,17 +236,21 @@ pub fn hit_test(
         if n.row != row {
             continue;
         }
-        if (camera.x(n.start) - x).abs() <= cfg.edge_px {
-            return Hit::NoteEdge {
-                id: n.id,
-                start_edge: true,
-            };
-        }
-        if (camera.x(n.end) - x).abs() <= cfg.edge_px {
-            return Hit::NoteEdge {
-                id: n.id,
-                start_edge: false,
-            };
+        // The shared edge rule (`timeline::hit::part`), the start first.
+        match timeline::hit::part(x, camera.x(n.start), camera.x(n.end), cfg.edge_px) {
+            Some(timeline::hit::Part::Start) => {
+                return Hit::NoteEdge {
+                    id: n.id,
+                    start_edge: true,
+                };
+            }
+            Some(timeline::hit::Part::End) => {
+                return Hit::NoteEdge {
+                    id: n.id,
+                    start_edge: false,
+                };
+            }
+            _ => {}
         }
     }
 

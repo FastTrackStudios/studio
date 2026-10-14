@@ -1545,12 +1545,14 @@ impl Arrangement {
                 ItemZone::FadeIn
             } else if in_handle_band && (x - fade_out_x).abs() <= GRAB {
                 ItemZone::FadeOut
-            } else if (x - x0).abs() <= EDGE {
-                ItemZone::LeftEdge
-            } else if (x - x1).abs() <= EDGE {
-                ItemZone::RightEdge
             } else {
-                ItemZone::Body
+                // The shared edge rule (`timeline::hit::part`), the start
+                // first.
+                match timeline::hit::part(x, x0, x1, timeline::hit::EDGE_PX) {
+                    Some(timeline::hit::Part::Start) => ItemZone::LeftEdge,
+                    Some(timeline::hit::Part::End) => ItemZone::RightEdge,
+                    _ => ItemZone::Body,
+                }
             };
             let _ = height;
             found = Some((index, zone));
@@ -1715,9 +1717,6 @@ impl Arrangement {
 
 /// How far from a fade handle or an item edge a hit still takes it.
 const GRAB: f64 = 6.0;
-
-/// How far from an item's end a hit is the edge rather than the body.
-const EDGE: f64 = 5.0;
 
 /// How deep the band along an item's top is where the fade handles
 /// live, in pixels at zoom 1.

@@ -119,7 +119,6 @@ struct MarqueeDrag {
 }
 
 /// How near an area's edge, on screen, a press takes the edge.
-const RAZOR_EDGE_PX: f64 = 6.0;
 /// The narrowest an edge drag leaves an area, in seconds.
 const RAZOR_MIN_SECS: f64 = 0.01;
 
@@ -279,20 +278,26 @@ impl Editor {
         let Some((at, row)) = Self::where_in_lanes(hit.target) else {
             return hit.context;
         };
-        match self.razor.at(at, row) {
-            // Within a few pixels of either end: the edge, as the
-            // Editor's razor has one.
-            Some((_, area)) if self.on_razor_edge(area, at) => mousemap::RAZOR_EDGE,
-            Some(_) => mousemap::RAZOR_AREA,
+        // Within a few pixels of either end: the edge, as the Editor's
+        // razor has one (`timeline::hit::razor_hit`). Before the window
+        // has drawn there is no scale, and so no edge.
+        let edge_px = if self.pps > 0.0 {
+            timeline::hit::RAZOR_EDGE_PX
+        } else {
+            -1.0
+        };
+        match timeline::hit::razor_hit(
+            &self.razor,
+            at,
+            row,
+            at * self.pps,
+            |t| t * self.pps,
+            edge_px,
+        ) {
+            Some(timeline::hit::RazorHit::Edge { .. }) => mousemap::RAZOR_EDGE,
+            Some(timeline::hit::RazorHit::Area(_)) => mousemap::RAZOR_AREA,
             None => hit.context,
         }
-    }
-
-    /// Whether `at` is within reach of either edge of `area`, on screen.
-    fn on_razor_edge(&self, area: RazorArea, at: f64) -> bool {
-        self.pps > 0.0
-            && ((at - area.t0).abs() * self.pps <= RAZOR_EDGE_PX
-                || (at - area.t1).abs() * self.pps <= RAZOR_EDGE_PX)
     }
 
     /// The pointer went down on `hit`, with `keys` held. `true` if the

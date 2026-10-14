@@ -413,14 +413,17 @@ pub fn context_at(ed: &Editor, x: f64, y: f64) -> Context {
         };
     }
 
-    if let Some((_, area)) = ed.razor.at(t, row) {
-        let edge_px = 6.0;
-        if (ed.camera.x(area.t0) - x).abs() <= edge_px
-            || (ed.camera.x(area.t1) - x).abs() <= edge_px
-        {
-            return Context::RazorEdge;
-        }
-        return Context::RazorArea;
+    match timeline::hit::razor_hit(
+        &ed.razor,
+        t,
+        row,
+        x,
+        |t| ed.camera.x(t),
+        timeline::hit::RAZOR_EDGE_PX,
+    ) {
+        Some(timeline::hit::RazorHit::Edge { .. }) => return Context::RazorEdge,
+        Some(timeline::hit::RazorHit::Area(_)) => return Context::RazorArea,
+        None => {}
     }
     match ed.hit_test(x, y) {
         Hit::ZoneSplit { .. } => Context::ZoneSplit,
