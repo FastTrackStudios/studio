@@ -1086,6 +1086,9 @@ pub struct History {
     past: Vec<ExpressionDoc>,
     future: Vec<ExpressionDoc>,
     limit: usize,
+    /// Snapshots pushed, ever: what tells a caller whether a step was
+    /// recorded since it last looked, the depth being capped.
+    pushes: u64,
 }
 
 impl History {
@@ -1094,6 +1097,22 @@ impl History {
             past: Vec::new(),
             future: Vec::new(),
             limit: limit.max(1),
+            pushes: 0,
+        }
+    }
+
+    /// How many snapshots have ever been pushed.
+    #[must_use]
+    pub const fn pushes(&self) -> u64 {
+        self.pushes
+    }
+
+    /// Take back the step the open gesture pushed, putting the document
+    /// back as it found it: for a press that turned out to be a click,
+    /// which must leave neither an edit nor an empty undo step behind.
+    pub fn abandon_gesture(&mut self, doc: &mut ExpressionDoc) {
+        if let Some(base) = self.past.pop() {
+            *doc = base;
         }
     }
 
@@ -1126,6 +1145,7 @@ impl History {
     }
 
     fn push_snapshot(&mut self, snapshot: ExpressionDoc) {
+        self.pushes += 1;
         self.past.push(snapshot);
         if self.past.len() > self.limit {
             self.past.remove(0);

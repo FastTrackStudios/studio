@@ -15,7 +15,8 @@
 //! ([`Clicks`]).
 
 use std::time::Duration;
-use web_time::Instant;
+/// The clock clicks are timed by (the browser's on wasm).
+pub use web_time::Instant;
 
 pub use crate::gestures::SLOP;
 
@@ -126,7 +127,7 @@ pub enum ClickEvent<H> {
 
 /// The pointer's state between events: clicks decided on release, a
 /// double within [`DOUBLE`] and [`SLOP`], a drag once past [`SLOP`].
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Clicks<H> {
     press: Option<Press<H>>,
     last_click: Option<(Instant, (f64, f64))>,
@@ -141,7 +142,7 @@ impl<H> Default for Clicks<H> {
     }
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 struct Press<H> {
     hit: H,
     at: (f64, f64),

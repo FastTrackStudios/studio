@@ -410,6 +410,13 @@ impl MouseMap {
         self.resolve(context, gesture, mods)
     }
 
+    /// The binding for exactly this chord, without the fall back to the
+    /// plain gesture: what a click is decided by, so a chord nobody bound
+    /// a click to (Shift on empty roll) is not taken for the plain click.
+    pub fn exact(&self, context: Context, gesture: Gesture, mods: Mods) -> Option<Action> {
+        timeline::mouse::find(&self.bindings, &context, gesture, ModKey::of(mods))
+    }
+
     pub fn bindings(&self) -> &[Binding] {
         &self.bindings
     }

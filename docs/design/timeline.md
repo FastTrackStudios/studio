@@ -1557,7 +1557,7 @@ pins A's behaviour. Keep it or change it on purpose.
     `the_razor_help_matches_the_razor_keys`,
     `the_razor_menu_and_the_razor_keys_agree`.
 
-**Progress (2026-10-14).** Steps 1–12 are done. Where the code differs
+**Progress (2026-10-14).** Steps 1–13 are done. Where the code differs
 from the plan above:
 
 - **3:** one `Mods` type for both surfaces (`timeline::input::Mods`; the
@@ -1625,6 +1625,25 @@ from the plan above:
   the two presets now agree on Ctrl, Alt and the razor rows directly, and
   the Editor's Shift+drag on a note (one axis) is still open against the
   arrangement's Shift (flip snap).
+- **13:** done as three shared layers rather than one `Interaction<S>`
+  engine. **13a** `timeline::hit` (`part`: an edge within 6 px, the start
+  first, else the body; `razor_hit`) under both surfaces' context and hit
+  tests, and the arrangement's item edges went from 5 to 6 px. **13b**
+  `timeline::drag` (`Phase`, `DragGate`, `trim`) under the arrangement's
+  trims and the Editor's resizes, and the arrangement's item move is
+  `SnapRule::AnchorStart`. **13c** the Editor's roll decides clicks on
+  release (`Clicks`). A press that is let go where it was pressed runs
+  the Click/DoubleClick binding for exactly that chord, after putting
+  back what its drag did at press (the selection, and an undo step it
+  opened). Shift+click adds, a click picks a note out of a selection,
+  and double-click inserts or erases, as the map always said. **Not
+  built:** `Interaction<S>` and `Intent`, one object that owns camera,
+  grid, cursor, selection, razor and the drag for a `Surface`. Both
+  surfaces still own their drag state machines (`arrange_edit::Editor`,
+  `paint/interaction.rs` `Drag`) over the shared pieces. Folding them
+  into one engine is a rewrite of both dispatchers (about 8k lines),
+  and it should be done with the app running and `golden_scenes`
+  green, not blind.
 - **11:** `timeline::cursor` holds the arrangement's `Playhead`,
   `TimeSpan`, `EditCursor`, `StopMode`, `TransportStep` and `Locate`, with
   their tests. The arrangement aliases its old names, and keeps the

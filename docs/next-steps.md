@@ -25,9 +25,10 @@ comes next, in order. The design docs this points at are in `docs/design/`.
 
 ## Step 2 — one editing engine: `timeline`
 
-*In progress:* migration steps 1–12 of 17 are done (rename, camera
+*In progress:* migration steps 1–13 of 17 are done (rename, camera
 characterisation tests, input, time, grid, snap, the shared camera in
-both surfaces, rows, zoom, cursor/selection, the mouse map). Next is 13, hit testing and the drag engine. `docs/design/timeline.md` §4 records where the code differs
+both surfaces, rows, zoom, cursor/selection, the mouse map, hit testing and clicks; the one `Interaction<S>`
+engine is not built, see §4). Next is 14, the undo protocol. `docs/design/timeline.md` §4 records where the code differs
 from the plan.
 
 The arrangement and the editor must share the SAME mouse handling, zoom,

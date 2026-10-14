@@ -1749,3 +1749,86 @@ fn the_readout_shows_the_division_in_use_not_the_one_asked_for() {
         "the ceiling is what the user asked for and should not move",
     );
 }
+
+// ── clicks on the roll, decided on release ──────────────────────────
+
+fn click(ed: &mut Editor, x: f64, y: f64, mods: Mods) {
+    let d = interaction::pointer_down(ed, x, y, mods, 0);
+    interaction::pointer_up(ed, d, x, y, mods);
+}
+
+fn shift() -> Mods {
+    Mods {
+        shift: true,
+        ..Mods::default()
+    }
+}
+
+/// Shift+click adds a note to the selection (§5 Q3). The press's own
+/// drag used to select the note alone on the way down, so the roll had
+/// no Shift+click at all.
+#[test]
+fn shift_click_adds_a_note_to_the_selection() {
+    let mut ed = four_notes();
+    ed.selection.set_single(NoteId(1));
+    let (x, y) = at(&ed, PPQ * 2.25);
+    click(&mut ed, x, y, shift());
+    let mut got = ed.selection.notes.clone();
+    got.sort_by_key(|n| n.0);
+    assert_eq!(got, vec![NoteId(1), NoteId(3)]);
+}
+
+/// A plain click on a note inside a selection picks that note out; a
+/// drag from it would still have moved them all.
+#[test]
+fn a_click_picks_one_note_out_of_a_selection_and_records_nothing() {
+    let mut ed = four_notes();
+    ed.selection.notes = vec![NoteId(1), NoteId(2), NoteId(3)];
+    let (x, y) = at(&ed, PPQ * 1.25);
+    click(&mut ed, x, y, plain());
+    assert_eq!(ed.selection.notes, vec![NoteId(2)]);
+    assert!(!ed.undo(), "a click left an undo step behind");
+}
+
+/// The map's double-click on empty roll reaches it now: it inserts.
+#[test]
+fn a_double_click_on_empty_roll_inserts_a_note() {
+    let mut ed = four_notes();
+    let before = ed.doc.notes.len();
+    // Between the first two notes, on their row: empty roll.
+    let (x, y) = at(&ed, PPQ * 0.75);
+    click(&mut ed, x, y, plain());
+    click(&mut ed, x, y, plain());
+    assert_eq!(ed.doc.notes.len(), before + 1, "no note was inserted");
+}
+
+/// A chord the map binds no click to is not taken for the plain click:
+/// Shift+click on empty roll leaves the selection alone.
+#[test]
+fn shift_click_on_empty_roll_keeps_the_selection() {
+    let mut ed = four_notes();
+    ed.selection.notes = vec![NoteId(1), NoteId(2)];
+    let (x, y) = at(&ed, PPQ * 0.75);
+    click(&mut ed, x, y, shift());
+    assert_eq!(ed.selection.notes, vec![NoteId(1), NoteId(2)]);
+}
+
+/// A press that travels is a drag, however it started: no click.
+#[test]
+fn a_press_that_travels_is_a_drag_not_a_click() {
+    let mut ed = four_notes();
+    ed.selection.notes = vec![NoteId(1), NoteId(2)];
+    let (x, y) = at(&ed, PPQ * 1.25);
+    let mut d = interaction::pointer_down(&mut ed, x, y, plain(), 0);
+    interaction::pointer_move(&mut ed, &mut d, x + 40.0, y, plain());
+    interaction::pointer_up(&mut ed, d, x + 40.0, y, plain());
+    assert_eq!(
+        ed.selection.notes,
+        vec![NoteId(1), NoteId(2)],
+        "the drag became a click"
+    );
+    assert!(
+        span(&ed, NoteId(2)).0 > PPQ * 1.01,
+        "the notes did not move"
+    );
+}

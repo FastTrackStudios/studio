@@ -61,6 +61,11 @@ pub struct Editor {
     pub lanes_visible: u8,
     pub viewport: Viewport,
     pub tool: Tool,
+    /// The roll's press, until it is decided: a drag once it travels, a
+    /// click (or a double) if it is let go where it was pressed.
+    pub(crate) roll_press: Option<RollPress>,
+    /// Tells a click from a double, across presses.
+    pub(crate) clicks: timeline::input::Clicks<mouse::Context>,
     /// The dimension being edited. Others may still be drawn as overlays.
     pub dimension: Dimension,
     /// Lanes drawn behind the active one.
@@ -256,6 +261,8 @@ impl Editor {
             bpm: 120.0,
             beats_per_bar: 4.0,
             playhead: None,
+            roll_press: None,
+            clicks: timeline::input::Clicks::default(),
             clipboard: clipboard::Clipboard::default(),
             refs_to_front: false,
             snap_pitch: true,
@@ -295,6 +302,20 @@ impl Editor {
         lanes.push(self.dimension);
         lanes
     }
+}
+
+/// What the roll remembers of a press until it is decided: where it
+/// was, the chord, the context, and the selection before the press's own
+/// drag changed it (a click acts on the selection as it was).
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct RollPress {
+    pub at: (f64, f64),
+    pub mods: Mods,
+    pub context: mouse::Context,
+    pub selection: Selection,
+    /// [`History::pushes`] at the press: whether the drag opened an undo
+    /// step a click must take back.
+    pub pushes: u64,
 }
 
 /// Horizontal cushion around the item, as a fraction of its span.

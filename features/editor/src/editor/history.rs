@@ -13,6 +13,16 @@ impl Editor {
         self.history.begin_gesture(&self.doc);
     }
 
+    /// Undo steps pushed so far ([`crate::edit::History::pushes`]).
+    pub(crate) fn history_pushes(&self) -> u64 {
+        self.history.pushes()
+    }
+
+    /// Take back the step the open gesture pushed, and its edits.
+    pub(crate) fn abandon_gesture(&mut self) {
+        self.history.abandon_gesture(&mut self.doc);
+    }
+
     /// Apply without recording — for the streaming edits inside a
     /// gesture already opened with [`Editor::begin_gesture`].
     pub fn apply_live(&mut self, edit: &Edit) -> bool {

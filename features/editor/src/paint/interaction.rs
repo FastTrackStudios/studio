@@ -468,6 +468,23 @@ pub fn pointer_down(ed: &mut Editor, x: f64, y: f64, mods: Mods, button: u16) ->
     }
 
     let context = context_at(ed, x, y);
+    // A left press is a drag until it is let go where it was pressed,
+    // when it is a click (or a double) — decided on release, as the
+    // arrangement decides (`timeline::input::Clicks`); see
+    // [`pointer_up`].
+    if button == 0 {
+        ed.roll_press = Some(crate::editor::RollPress {
+            at: (x, y),
+            mods,
+            context,
+            selection: ed.selection.clone(),
+            pushes: ed.history_pushes(),
+        });
+        ed.clicks.press(context, x, y);
+    } else {
+        ed.roll_press = None;
+        ed.clicks.cancel();
+    }
     let action = ed.mouse.resolve_for(context, gesture, mods, ed.tool);
     if action != Action::None
         && let Some(drag) = run_action(ed, action, x, y, mods)
@@ -1661,6 +1678,8 @@ fn begin_new_note(ed: &mut Editor, x: f64, y: f64, mods: Mods) -> Drag {
 
 /// Continue a gesture.
 pub fn pointer_move(ed: &mut Editor, drag: &mut Drag, x: f64, y: f64, mods: Mods) {
+    // Past the slop, the press is a drag for good.
+    let _ = ed.clicks.moved(x, y, 1.0);
     match drag {
         // Not a drag; the menu is already open and owns the pointer.
         Drag::None | Drag::ContextMenu { .. } => {}
@@ -2257,6 +2276,37 @@ pub fn pointer_move(ed: &mut Editor, drag: &mut Drag, x: f64, y: f64, mods: Mods
 /// Finish a gesture. Returns the drag to keep live (Curve stays
 /// selected so the shape buttons can restyle it).
 pub fn pointer_up(ed: &mut Editor, drag: Drag, x: f64, y: f64, mods: Mods) -> Drag {
+    use timeline::input::ClickEvent;
+    let press = ed.roll_press.take();
+    let decided = ed.clicks.release(x, y, timeline::input::Instant::now());
+    // Let go where it was pressed: a click, or the second of two — when
+    // the map binds one for exactly this chord here. What the press's own
+    // drag did on the way down (selecting the note it grabbed, opening an
+    // undo step) is put back first: the click acts on the selection as it
+    // was, so Shift+click adds to it rather than to the note alone.
+    if let Some(p) = press
+        && let Some(gesture) = match decided {
+            Some(ClickEvent::Click(_)) => Some(Gesture::Click),
+            Some(ClickEvent::DoubleClick(_)) => Some(Gesture::DoubleClick),
+            _ => None,
+        }
+        && let Some(action) = ed.mouse.exact(p.context, gesture, p.mods)
+        && action != Action::None
+    {
+        if ed.history_pushes() != p.pushes {
+            ed.abandon_gesture();
+        }
+        ed.selection = p.selection;
+        return match run_action(ed, action, p.at.0, p.at.1, p.mods) {
+            Some(next) => release(ed, next, x, y, mods),
+            None => Drag::None,
+        };
+    }
+    release(ed, drag, x, y, mods)
+}
+
+/// Let go of `drag`: what its gesture leaves behind.
+fn release(ed: &mut Editor, drag: Drag, x: f64, y: f64, mods: Mods) -> Drag {
     match drag {
         Drag::ZoomTool {
             origin,
