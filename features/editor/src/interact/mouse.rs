@@ -56,14 +56,7 @@ pub enum Context {
 }
 
 /// How the press arrived.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub enum Gesture {
-    Click,
-    DoubleClick,
-    Drag,
-    RightClick,
-    MiddleClick,
-}
+pub use timeline::mouse::Gesture;
 
 /// What a resolved binding does.
 ///
@@ -325,14 +318,8 @@ impl Action {
 
 pub use timeline::input::ModKey;
 
-/// One binding.
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub struct Binding {
-    pub context: Context,
-    pub gesture: Gesture,
-    pub mods: ModKey,
-    pub action: Action,
-}
+/// One binding: the shared row over this surface's contexts and actions.
+pub type Binding = timeline::mouse::Binding<Context, Action>;
 
 /// The full table.
 #[derive(Clone, Debug, PartialEq)]
@@ -384,9 +371,7 @@ impl MouseMap {
     /// combination becomes dead, and a user who happens to be holding
     /// Shift gets nothing instead of the obvious thing.
     pub fn resolve(&self, context: Context, gesture: Gesture, mods: Mods) -> Action {
-        let key = ModKey::of(mods);
-        self.find(context, gesture, key)
-            .or_else(|| self.find(context, gesture, ModKey::NONE))
+        timeline::mouse::lookup(&self.bindings, &context, gesture, ModKey::of(mods))
             .unwrap_or(Action::None)
     }
 
@@ -414,29 +399,15 @@ impl MouseMap {
         mods: Mods,
         tool: crate::Tool,
     ) -> Action {
-        if ModKey::of(mods) == ModKey::NONE && tool.claims().contains(&(context, gesture)) {
-            // `run_action` declines this one so the gesture reaches the
-            // tool-driven path. The map says *whose* gesture it is; the
-            // tool says what it does.
+        // `run_action` declines `ActiveTool` so the gesture reaches the
+        // tool-driven path. The map says *whose* gesture it is; the tool
+        // says what it does.
+        if ModKey::of(mods) == ModKey::NONE
+            && timeline::mouse::ToolClaims::claims(&tool, &context, gesture)
+        {
             return Action::ActiveTool;
         }
         self.resolve(context, gesture, mods)
-    }
-
-    fn find(&self, context: Context, gesture: Gesture, mods: ModKey) -> Option<Action> {
-        Self::find_in(&self.bindings, context, gesture, mods)
-    }
-
-    fn find_in(
-        bindings: &[Binding],
-        context: Context,
-        gesture: Gesture,
-        mods: ModKey,
-    ) -> Option<Action> {
-        bindings
-            .iter()
-            .find(|b| b.context == context && b.gesture == gesture && b.mods == mods)
-            .map(|b| b.action)
     }
 
     pub fn bindings(&self) -> &[Binding] {
@@ -445,19 +416,15 @@ impl MouseMap {
 
     /// Add or replace one binding.
     pub fn set(&mut self, context: Context, gesture: Gesture, mods: ModKey, action: Action) {
-        match self
-            .bindings
-            .iter_mut()
-            .find(|b| b.context == context && b.gesture == gesture && b.mods == mods)
-        {
-            Some(b) => b.action = action,
-            None => self.bindings.push(Binding {
+        timeline::mouse::bind(
+            &mut self.bindings,
+            Binding {
                 context,
                 gesture,
                 mods,
                 action,
-            }),
-        }
+            },
+        );
     }
 
     /// Every binding for one context, for a cheat-sheet UI.

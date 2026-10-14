@@ -19,12 +19,7 @@ use input::proto::MouseModifierContext as Context;
 pub use timeline::input::Mods;
 
 /// The gesture itself.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Gesture {
-    Click,
-    DoubleClick,
-    Drag,
-}
+pub use timeline::mouse::Gesture;
 
 /// What a gesture does, and whether the grid applies to it.
 ///
@@ -120,95 +115,237 @@ pub fn resolve(context: Context, gesture: Gesture, mods: Mods) -> Bound {
     }
 }
 
-/// What the gesture means, before the question of precision.
+/// What the gesture means, before the question of precision: a row of
+/// [`table`] for the exact chord, else the plain gesture's.
 fn verb(context: Context, gesture: Gesture, mods: Mods) -> Action {
+    timeline::mouse::lookup(&TABLE, &context, gesture, timeline::input::ModKey::of(mods))
+        .unwrap_or(Action::Nothing)
+}
+
+static TABLE: std::sync::LazyLock<Vec<Binding>> = std::sync::LazyLock::new(table);
+
+/// One row of the arrangement's map.
+pub type Binding = timeline::mouse::Binding<Context, Action>;
+
+/// The FTS default, row by row. A chord not listed does what the plain
+/// gesture does ([`timeline::mouse::lookup`]).
+///
+/// The razor is on Ctrl over empty ground and over an item's body and
+/// edges: a razor with a dead zone at every item boundary would be one
+/// that depends on where items begin and end, which is the one thing it
+/// is defined as not doing. Not the plain drag (a marquee over empty
+/// lanes, as on the Editor's empty roll — time is selected on the
+/// ruler), and not Alt (the zoom tool's sweep while `z` is held). The
+/// fade handles are the exception, knowingly: Ctrl there is the fade's
+/// SHAPE, as REAPER puts the curve on Ctrl, and Shift stays "ignore the
+/// grid" as on every other draggable thing.
+///
+/// Copy is on Alt, not on Ctrl as in REAPER: Ctrl is the razor, which
+/// has the better claim — it has to start anywhere over the lanes,
+/// including on an item's edges, where copy only needs the body. Slip
+/// (REAPER's plain Alt-drag) takes Ctrl+Alt, what is left.
+///
+/// An area already drawn answers for itself: drag moves it, click takes
+/// it out; its edge resizes it.
+#[must_use]
+pub fn table() -> Vec<Binding> {
+    use Action as A;
+    use Context as C;
     use Gesture as G;
-    match (context, gesture) {
-        // The razor, on Ctrl, and first in the table because a
-        // modifier that has to beat an unguarded default has to be
-        // asked about before it.
-        //
-        // Not the plain drag, which is a time selection and is worth
-        // keeping: the two gestures are the same shape and the razor is
-        // the rarer one. Not Alt either — that is the zoom tool's sweep
-        // in this window, and a modifier meaning two things depending
-        // on what else is held is what the table exists to prevent.
-        //
-        // Over an item's body and its edges as much as over empty
-        // ground. A razor with a dead zone at every item boundary would
-        // be one that depends on where items begin and end, which is
-        // the one thing it is defined as not doing.
-        //
-        // The fade handles are the exception, knowingly: Ctrl there is
-        // already the fade's SHAPE, bound below for a reason worth
-        // keeping. A handle is a small corner and a razor can start a
-        // pixel away from one, where a whole edge could not be worked
-        // around.
-        // Slip on Ctrl+Alt, which is what is left.
-        //
-        // REAPER slips on plain Alt-drag. Alt is copy here and Ctrl is
-        // the razor, both deliberate and both confirmed, so slip takes
-        // the pair. It has to be tested before either of them: a guard
-        // that checks one modifier matches a chord containing it, and
-        // the more specific row has to be asked first or it is
-        // unreachable.
-        (Context::MediaItemBottomHalf, G::Drag) if mods.ctrl && mods.alt => Action::SlipItem,
-        (Context::ArrangeView, G::Drag) if mods.ctrl => Action::RazorArea,
-        (Context::MediaItemBottomHalf, G::Drag) if mods.ctrl => Action::RazorArea,
-        (Context::MediaItemLeftEdge, G::Drag) if mods.ctrl => Action::RazorArea,
-        (Context::MediaItemRightEdge, G::Drag) if mods.ctrl => Action::RazorArea,
-        // An area already drawn answers for itself: drag moves it,
-        // click takes it out. No modifier on either — by the time the
-        // pointer is over an area there is nothing else it could mean.
-        (RAZOR_AREA, G::Drag) => Action::MoveRazorArea,
-        // Its edge resizes it, the other edge staying put.
-        (RAZOR_EDGE, G::Drag) => Action::ResizeRazorArea,
-        // A click on either takes the area out.
-        (RAZOR_AREA | RAZOR_EDGE, G::Click) => Action::RemoveRazorArea,
+    use timeline::input::ModKey;
+    const N: ModKey = ModKey::NONE;
+    const S: ModKey = ModKey::SHIFT;
+    const SA: ModKey = ModKey::from_bits(5);
+    // Every chord with Ctrl in it, and those with Ctrl and Alt.
+    const CTRL: [ModKey; 4] = [
+        ModKey::CTRL,
+        ModKey::from_bits(3),
+        ModKey::from_bits(6),
+        ModKey::from_bits(7),
+    ];
+    const CTRL_ALT: [ModKey; 2] = [ModKey::from_bits(6), ModKey::from_bits(7)];
+    const CTRL_NOT_ALT: [ModKey; 2] = [ModKey::CTRL, ModKey::from_bits(3)];
+    const ALT: [ModKey; 2] = [ModKey::ALT, ModKey::from_bits(5)];
+
+    let b = |context, gesture, mods, action| Binding {
+        context,
+        gesture,
+        mods,
+        action,
+    };
+    let mut rows = vec![
+        // The empty arrange area: click places the cursor, drag is a
+        // marquee, Shift adds to it.
+        b(C::ArrangeView, G::Click, N, A::SetEditCursor),
+        b(C::ArrangeView, G::Drag, N, A::MarqueeSelect),
+        b(C::ArrangeView, G::Drag, S, A::MarqueeAdd),
+        b(C::ArrangeView, G::Drag, SA, A::MarqueeAdd),
         // The ruler: a click places the cursor, a drag selects time.
-        (Context::Ruler, G::Click) => Action::SetEditCursor,
-        (Context::Ruler, G::Drag) => Action::TimeSelection,
-        // The empty arrange area: a click places the cursor, as on the
-        // ruler; a drag is a marquee, as on the Editor's empty roll —
-        // Shift adds to the selection, Ctrl (above) cuts a razor. Time
-        // is selected on the ruler, in both.
-        (Context::ArrangeView, G::Click) => Action::SetEditCursor,
-        (Context::ArrangeView, G::Drag) if mods.shift => Action::MarqueeAdd,
-        (Context::ArrangeView, G::Drag) => Action::MarqueeSelect,
-        // A fade's handle: drag its length; with Ctrl, its shape.
-        //
-        // Ctrl and not Shift, which is where this started: Shift is
-        // "ignore the grid" on every other draggable thing, and a
-        // modifier that means one thing on six objects and something
-        // else on the seventh is a modifier nobody learns. REAPER puts
-        // the curve on Ctrl for the same reason.
-        (Context::MediaItemFade, G::Drag) if mods.ctrl => Action::FadeShape,
-        (Context::MediaItemFade, G::Drag) => Action::FadeIn,
-        // An item (REAPER calls the body its bottom half): click selects,
-        // drag moves, its edges trim. The
-        // moves and trims are bound here and not yet built — the
-        // window says so rather than doing something else.
-        (Context::MediaItemBottomHalf, G::Click) if mods.ctrl => Action::ToggleItemSelection,
-        (Context::MediaItemBottomHalf, G::Click) => Action::SelectItem,
-        // Copy on Alt, not on Ctrl.
-        //
-        // REAPER copies on Ctrl-drag; here Ctrl is the razor, and the
-        // razor has the better claim on it — it is the gesture that
-        // needs to start anywhere over the lanes, including on an
-        // item's edges, where copy only ever needs the body. Alt is
-        // free on an item: the zoom tool's Alt sweep only exists while
-        // `z` is held, which is a mode and not a modifier.
-        (Context::MediaItemBottomHalf, G::Drag) if mods.alt => Action::CopyItem,
-        (Context::MediaItemBottomHalf, G::Drag) => Action::MoveItem,
-        (Context::MediaItemLeftEdge, G::Drag) => Action::TrimLeft,
-        (Context::MediaItemRightEdge, G::Drag) => Action::TrimRight,
-        _ => Action::Nothing,
+        b(C::Ruler, G::Click, N, A::SetEditCursor),
+        b(C::Ruler, G::Drag, N, A::TimeSelection),
+        // A razor area and its edges.
+        b(RAZOR_AREA, G::Drag, N, A::MoveRazorArea),
+        b(RAZOR_EDGE, G::Drag, N, A::ResizeRazorArea),
+        b(RAZOR_AREA, G::Click, N, A::RemoveRazorArea),
+        b(RAZOR_EDGE, G::Click, N, A::RemoveRazorArea),
+        // A fade's handle: its length, with Ctrl its shape.
+        b(C::MediaItemFade, G::Drag, N, A::FadeIn),
+        // An item: click selects, drag moves, its edges trim.
+        b(C::MediaItemBottomHalf, G::Click, N, A::SelectItem),
+        b(C::MediaItemBottomHalf, G::Drag, N, A::MoveItem),
+        b(C::MediaItemLeftEdge, G::Drag, N, A::TrimLeft),
+        b(C::MediaItemRightEdge, G::Drag, N, A::TrimRight),
+    ];
+    for m in CTRL {
+        rows.push(b(C::ArrangeView, G::Drag, m, A::RazorArea));
+        rows.push(b(C::MediaItemLeftEdge, G::Drag, m, A::RazorArea));
+        rows.push(b(C::MediaItemRightEdge, G::Drag, m, A::RazorArea));
+        rows.push(b(C::MediaItemFade, G::Drag, m, A::FadeShape));
+        rows.push(b(
+            C::MediaItemBottomHalf,
+            G::Click,
+            m,
+            A::ToggleItemSelection,
+        ));
     }
+    for m in CTRL_NOT_ALT {
+        rows.push(b(C::MediaItemBottomHalf, G::Drag, m, A::RazorArea));
+    }
+    for m in CTRL_ALT {
+        rows.push(b(C::MediaItemBottomHalf, G::Drag, m, A::SlipItem));
+    }
+    for m in ALT {
+        rows.push(b(C::MediaItemBottomHalf, G::Drag, m, A::CopyItem));
+    }
+    rows
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The arrangement's map as it was a `match` (before the table), kept
+    /// to prove the table says the same.
+    fn old_verb(context: Context, gesture: Gesture, mods: Mods) -> Action {
+        use Gesture as G;
+        match (context, gesture) {
+            // The razor, on Ctrl, and first in the table because a
+            // modifier that has to beat an unguarded default has to be
+            // asked about before it.
+            //
+            // Not the plain drag, which is a time selection and is worth
+            // keeping: the two gestures are the same shape and the razor is
+            // the rarer one. Not Alt either — that is the zoom tool's sweep
+            // in this window, and a modifier meaning two things depending
+            // on what else is held is what the table exists to prevent.
+            //
+            // Over an item's body and its edges as much as over empty
+            // ground. A razor with a dead zone at every item boundary would
+            // be one that depends on where items begin and end, which is
+            // the one thing it is defined as not doing.
+            //
+            // The fade handles are the exception, knowingly: Ctrl there is
+            // already the fade's SHAPE, bound below for a reason worth
+            // keeping. A handle is a small corner and a razor can start a
+            // pixel away from one, where a whole edge could not be worked
+            // around.
+            // Slip on Ctrl+Alt, which is what is left.
+            //
+            // REAPER slips on plain Alt-drag. Alt is copy here and Ctrl is
+            // the razor, both deliberate and both confirmed, so slip takes
+            // the pair. It has to be tested before either of them: a guard
+            // that checks one modifier matches a chord containing it, and
+            // the more specific row has to be asked first or it is
+            // unreachable.
+            (Context::MediaItemBottomHalf, G::Drag) if mods.ctrl && mods.alt => Action::SlipItem,
+            (Context::ArrangeView, G::Drag) if mods.ctrl => Action::RazorArea,
+            (Context::MediaItemBottomHalf, G::Drag) if mods.ctrl => Action::RazorArea,
+            (Context::MediaItemLeftEdge, G::Drag) if mods.ctrl => Action::RazorArea,
+            (Context::MediaItemRightEdge, G::Drag) if mods.ctrl => Action::RazorArea,
+            // An area already drawn answers for itself: drag moves it,
+            // click takes it out. No modifier on either — by the time the
+            // pointer is over an area there is nothing else it could mean.
+            (RAZOR_AREA, G::Drag) => Action::MoveRazorArea,
+            // Its edge resizes it, the other edge staying put.
+            (RAZOR_EDGE, G::Drag) => Action::ResizeRazorArea,
+            // A click on either takes the area out.
+            (RAZOR_AREA | RAZOR_EDGE, G::Click) => Action::RemoveRazorArea,
+            // The ruler: a click places the cursor, a drag selects time.
+            (Context::Ruler, G::Click) => Action::SetEditCursor,
+            (Context::Ruler, G::Drag) => Action::TimeSelection,
+            // The empty arrange area: a click places the cursor, as on the
+            // ruler; a drag is a marquee, as on the Editor's empty roll —
+            // Shift adds to the selection, Ctrl (above) cuts a razor. Time
+            // is selected on the ruler, in both.
+            (Context::ArrangeView, G::Click) => Action::SetEditCursor,
+            (Context::ArrangeView, G::Drag) if mods.shift => Action::MarqueeAdd,
+            (Context::ArrangeView, G::Drag) => Action::MarqueeSelect,
+            // A fade's handle: drag its length; with Ctrl, its shape.
+            //
+            // Ctrl and not Shift, which is where this started: Shift is
+            // "ignore the grid" on every other draggable thing, and a
+            // modifier that means one thing on six objects and something
+            // else on the seventh is a modifier nobody learns. REAPER puts
+            // the curve on Ctrl for the same reason.
+            (Context::MediaItemFade, G::Drag) if mods.ctrl => Action::FadeShape,
+            (Context::MediaItemFade, G::Drag) => Action::FadeIn,
+            // An item (REAPER calls the body its bottom half): click selects,
+            // drag moves, its edges trim. The
+            // moves and trims are bound here and not yet built — the
+            // window says so rather than doing something else.
+            (Context::MediaItemBottomHalf, G::Click) if mods.ctrl => Action::ToggleItemSelection,
+            (Context::MediaItemBottomHalf, G::Click) => Action::SelectItem,
+            // Copy on Alt, not on Ctrl.
+            //
+            // REAPER copies on Ctrl-drag; here Ctrl is the razor, and the
+            // razor has the better claim on it — it is the gesture that
+            // needs to start anywhere over the lanes, including on an
+            // item's edges, where copy only ever needs the body. Alt is
+            // free on an item: the zoom tool's Alt sweep only exists while
+            // `z` is held, which is a mode and not a modifier.
+            (Context::MediaItemBottomHalf, G::Drag) if mods.alt => Action::CopyItem,
+            (Context::MediaItemBottomHalf, G::Drag) => Action::MoveItem,
+            (Context::MediaItemLeftEdge, G::Drag) => Action::TrimLeft,
+            (Context::MediaItemRightEdge, G::Drag) => Action::TrimRight,
+            _ => Action::Nothing,
+        }
+    }
+
+    /// The table is the old `match`, chord for chord, everywhere it
+    /// could be asked.
+    #[test]
+    fn the_table_says_what_the_match_said() {
+        let contexts = [
+            Context::ArrangeView,
+            Context::Ruler,
+            Context::MediaItemBottomHalf,
+            Context::MediaItemLeftEdge,
+            Context::MediaItemRightEdge,
+            Context::MediaItemFade,
+            RAZOR_AREA,
+            RAZOR_EDGE,
+            Context::default(),
+        ];
+        let gestures = [
+            Gesture::Click,
+            Gesture::DoubleClick,
+            Gesture::Drag,
+            Gesture::RightClick,
+            Gesture::MiddleClick,
+        ];
+        for context in contexts {
+            for gesture in gestures {
+                for bits in 0..8 {
+                    let mods: Mods = timeline::input::ModKey::from_bits(bits).into();
+                    assert_eq!(
+                        verb(context, gesture, mods),
+                        old_verb(context, gesture, mods),
+                        "{context:?} {gesture:?} {mods:?}",
+                    );
+                }
+            }
+        }
+    }
 
     fn with(shift: bool, ctrl: bool, alt: bool) -> Mods {
         Mods { shift, ctrl, alt }

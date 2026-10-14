@@ -155,6 +155,14 @@ impl Tool {
     }
 }
 
+/// A tool takes the plain gestures it lists ([`Tool::claims`]) ahead of
+/// the mouse map.
+impl timeline::mouse::ToolClaims<crate::mouse::Context> for Tool {
+    fn claims(&self, context: &crate::mouse::Context, gesture: crate::mouse::Gesture) -> bool {
+        Tool::claims(*self).contains(&(*context, gesture))
+    }
+}
+
 pub use timeline::input::Mods;
 
 /// What the pointer is over.

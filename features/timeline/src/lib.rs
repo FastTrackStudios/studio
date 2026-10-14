@@ -7,6 +7,7 @@ pub mod cursor;
 pub mod gestures;
 pub mod grid;
 pub mod input;
+pub mod mouse;
 pub mod razor;
 pub mod rows;
 pub mod select;
