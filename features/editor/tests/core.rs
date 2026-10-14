@@ -1139,9 +1139,9 @@ fn gestures_clamp_directionally_when_they_start_outside_the_span() {
 fn the_local_grid_reads_out_as_musical_fractions() {
     let mut g = Grid::default();
     assert_eq!(g.label(), "1/16");
-    g.triplet = true;
+    g.set_triplet(true);
     assert_eq!(g.label(), "1/16T");
-    g.triplet = false;
+    g.set_triplet(false);
     g.coarser();
     assert_eq!(g.label(), "1/8");
     g.finer();
@@ -4814,12 +4814,12 @@ fn a_fixed_grid_ignores_the_zoom() {
 fn an_adaptive_grid_keeps_its_triplets() {
     let mut ed = grid_editor();
     ed.grid.adaptive.density = timeline::grid::Density::Medium;
-    ed.grid.triplet = true;
+    ed.grid.set_triplet(true);
     ed.grid.division = 1.0 / 16.0;
     for _ in 0..6 {
         ed.zoom_time_at(ed.viewport.w * 0.5, 0.5);
     }
-    assert!(ed.grid.triplet, "the triplet flag was lost");
+    assert!(ed.grid.triplet(), "the triplet flag was lost");
     let ratio = (ed.grid.effective() / (1.0 / 16.0)).log2();
     assert!(
         (ratio - ratio.round()).abs() < 1e-9,

@@ -1,4 +1,4 @@
-use super::{Bars, Timeline, bars_between_numbers, subdivisions};
+use super::{Bars, Timeline, bars_between_numbers, lane_map, subdivisions};
 use daw_ui::studio::project::TempoChange;
 
 fn at(at: f64, bpm: f64, per_bar: u32) -> TempoChange {
@@ -169,4 +169,32 @@ fn bars_reads_the_map_at_a_time() {
     assert!((Bars::at_time(&map, 0.0).secs_per_bar() - 2.0).abs() < 1e-9);
     assert!((Bars::at_time(&map, 9.9).secs_per_bar() - 2.0).abs() < 1e-9);
     assert!((Bars::at_time(&map, 10.0).secs_per_bar() - 3.0).abs() < 1e-9);
+}
+
+/// The lane grid's beats follow the tempo map, as the ruler's numbers do:
+/// it used to multiply out the project's one tempo, so after a change
+/// every beat line sat somewhere the beat was not.
+#[test]
+fn the_lane_grid_follows_a_tempo_change() {
+    let tempo = [at(0.0, 120.0, 4), at(2.0, 60.0, 4)];
+    let map = lane_map(Bars::at(120.0), &tempo);
+    assert_eq!(
+        ::timeline::grid::lines(&map, 1.0, 5.0, 1.0, 100),
+        vec![1.0, 1.5, 2.0, 3.0, 4.0, 5.0]
+    );
+    assert_eq!(
+        ::timeline::grid::bars(&map, 0.0, 7.0, 100),
+        vec![0.0, 2.0, 6.0]
+    );
+}
+
+/// With no tempo map the lane grid is the project's one tempo and
+/// signature.
+#[test]
+fn the_lane_grid_without_a_map_is_the_one_tempo() {
+    let map = lane_map(Bars::in_time(90.0, 3), &[]);
+    assert_eq!(
+        ::timeline::grid::bars(&map, 0.0, 4.0, 100),
+        vec![0.0, 2.0, 4.0]
+    );
 }

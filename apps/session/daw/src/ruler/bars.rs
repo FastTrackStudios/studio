@@ -2,6 +2,7 @@
 //! which divisions a zoom shows, and how a measure is written.
 
 use super::*;
+use ::timeline::time::{TempoMap, TempoPoint};
 
 /// The project's bar grid.
 ///
@@ -62,25 +63,36 @@ impl Bars {
 /// would mean splitting the recorded scene into a layer below the items
 /// and one above, and a grid that reads THROUGH an item is what REAPER's
 /// looks like anyway.
+///
+/// The lines are counted through the project's tempo map (`tempo`;
+/// `bars`, the project's one tempo, when it has none), as the ruler's
+/// numbers are: after a tempo change a beat line sits on the beat. How
+/// fine the grid is goes by the bars where the view starts.
 pub fn grid(
     painter: &mut impl PaintScene,
     palette: &Palette,
     view: Viewport,
     bars: Bars,
-    adaptive: &Adaptive,
-    finest: f64,
+    tempo: &[daw_ui::studio::project::TempoChange],
+    setting: &::timeline::grid::Grid,
     origin: (f64, f64),
 ) {
     // The main toolbar's grid-lines switch.
     if !crate::options::GRID.get() {
         return;
     }
+    let (from, to) = view.secs();
+    let from = from.max(0.0);
+    let bars = if tempo.is_empty() {
+        bars
+    } else {
+        Bars::at_time(tempo, from)
+    };
     let measure_px = bars.secs_per_bar() * view.pps;
     if measure_px <= 0.0 {
         return;
     }
-    let (from, to) = view.secs();
-    let from = from.max(0.0);
+    let map = lane_map(bars, tempo);
 
     // Three weights, so a bar's start, its beats and what is between them
     // each read for what they are: the subdivisions faint, the beats
@@ -89,30 +101,34 @@ pub fn grid(
     // A Grid region's stretch is drawn on its own grid: its lines, at a
     // beat's weight, in place of the beats and the subdivisions there.
     let regions = grid_regions();
+    // A division (of a whole note) as a step in beats.
+    let beats_of = |division: u32| 4.0 / f64::from(division.max(1));
     if let Some(in_force) = crate::grid_in_force::current() {
         // Editing: the quantize's grid where it is in force, not what the
         // zoom fits — four bars across fit 32nds no part plays.
         for (start, end, division) in in_force.between(from, to) {
-            let step = bars.secs_per_beat * 4.0 / f64::from(division.max(1));
-            if step < bars.secs_per_beat - 1e-9 && step * view.pps >= GRID_SUB_ROOM {
+            let step = beats_of(division);
+            if step < 1.0 - 1e-9 && step * beat_px >= GRID_SUB_ROOM {
                 line_every(
                     painter,
                     view,
-                    (step, start, end),
+                    &::timeline::grid::lines(&map, start, end, step, LINES_MAX),
                     (palette.grid_sub, 1.0),
                     origin,
                     &regions,
                 );
             }
         }
-    } else if let Some(division) = adaptive.fit(finest, measure_px) {
-        let step = division * 4.0 * bars.secs_per_beat;
+    } else if let Some(division) = setting.adaptive.fit(setting.division, beat_px * 4.0) {
+        // Fitted against a whole note: a division is a fraction of one,
+        // and a bar is one only in 4/4.
+        let step = division * 4.0 * setting.feel.scale();
         // Finer than a beat: its own lines, under the beats'.
-        if step > 0.0 && step < bars.secs_per_beat - 1e-9 {
+        if step > 0.0 && step < 1.0 - 1e-9 {
             line_every(
                 painter,
                 view,
-                (step, from, to),
+                &::timeline::grid::lines(&map, from, to, step, LINES_MAX),
                 (palette.grid_sub, 1.0),
                 origin,
                 &regions,
@@ -123,19 +139,19 @@ pub fn grid(
         line_every(
             painter,
             view,
-            (bars.secs_per_beat, from, to),
+            &::timeline::grid::lines(&map, from, to, 1.0, LINES_MAX),
             (palette.grid_beat, 1.0),
             origin,
             &regions,
         );
     }
     for &(start, end, division) in &regions {
-        let step = bars.secs_per_beat * 4.0 / f64::from(division.max(1));
-        if step * view.pps >= GRID_BEAT_ROOM / 2.0 {
+        let step = beats_of(division);
+        if step * beat_px >= GRID_BEAT_ROOM / 2.0 {
             line_every(
                 painter,
                 view,
-                (step, from.max(start), to.min(end)),
+                &::timeline::grid::lines(&map, from.max(start), to.min(end), step, LINES_MAX),
                 (palette.grid_beat, 1.0),
                 origin,
                 &[],
@@ -152,12 +168,36 @@ pub fn grid(
     line_every(
         painter,
         view,
-        (bars.secs_per_bar(), from, to),
+        &::timeline::grid::bars(&map, from, to, LINES_MAX),
         (palette.grid, bar_width),
         origin,
         &[],
     );
 }
+
+/// The map the lane grid is counted through: the project's tempo map, or
+/// its one tempo (`bars`) when it has none.
+#[must_use]
+pub fn lane_map(bars: Bars, tempo: &[daw_ui::studio::project::TempoChange]) -> TempoMap {
+    if tempo.is_empty() {
+        TempoMap::new(
+            [TempoPoint {
+                at: 0.0,
+                bpm: 60.0 / bars.secs_per_beat,
+                beats_per_bar: num_traits::ToPrimitive::to_u32(&bars.beats_per_bar).unwrap_or(4),
+                beat_unit: 4,
+            }],
+            1.0,
+        )
+    } else {
+        Timeline::new(tempo).map()
+    }
+}
+
+/// A screen of lines is the most that can ever be visible; anything
+/// beyond that is a division that should have coarsened, and drawing it
+/// would cost a frame to produce a grey band.
+const LINES_MAX: usize = 2048;
 
 /// How far apart beats must be for the grid to draw their lines, px.
 const GRID_BEAT_ROOM: f64 = 6.0;

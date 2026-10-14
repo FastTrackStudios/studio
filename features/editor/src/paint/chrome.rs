@@ -250,7 +250,7 @@ pub fn status(ed: &Editor, width: f64, labels: &mut Labeller) -> Vec<Button> {
         ed.grid.adaptive.is_adaptive(),
         true,
     );
-    row.push(Control::Triplet, "T", ed.grid.triplet, true);
+    row.push(Control::Triplet, "T", ed.grid.triplet(), true);
     row.gap();
     row.push(
         Control::Key,
@@ -467,7 +467,7 @@ fn activate_status(ed: &mut Editor, control: Control) -> bool {
             true
         }
         Control::Triplet => {
-            let on = ed.grid.triplet;
+            let on = ed.grid.triplet();
             ed.set_grid_triplet(!on);
             true
         }

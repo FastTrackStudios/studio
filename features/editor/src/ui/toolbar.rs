@@ -618,7 +618,7 @@ pub fn StatusBar(editor: Signal<Editor>) -> Element {
     let ed = editor.read();
     let grid_label = ed.grid.label();
     let grid_on = ed.grid.enabled;
-    let triplet = ed.grid.triplet;
+    let triplet = ed.grid.triplet();
     let temperament = ed.tuning.temperament.name;
     let key_pc = ed.tuning.key_pc;
     let snap_12tet = ed.tuning.snap_12tet;
@@ -774,8 +774,8 @@ pub fn StatusBar(editor: Signal<Editor>) -> Element {
                     active: triplet,
                     title: "Triplet grid (T)".to_string(),
                     onclick: move |_| {
-                        let on = editor.read().grid.triplet;
-                        editor.write().grid.triplet = !on;
+                        let on = editor.read().grid.triplet();
+                        editor.write().grid.set_triplet(!on);
                     },
                     "T"
                 }

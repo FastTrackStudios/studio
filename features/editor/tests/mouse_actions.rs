@@ -1516,6 +1516,36 @@ fn the_zoom_tool_moves_the_adaptive_grid() {
     );
 }
 
+/// The grid fits against a whole note, not a bar: a division is a
+/// fraction of a whole note, and a bar is one only in 4/4. At the same
+/// zoom a bar of three and a bar of four show the same grid. Fitted
+/// against the bar, 3/4 came out a step finer wherever the boundary fell
+/// between a three-beat bar and a four-beat one.
+#[test]
+fn the_adaptive_grid_ignores_the_signature() {
+    use timeline::grid::Density;
+
+    // A sweep, so some zooms fall between where a three-beat and a
+    // four-beat bar would each change grid.
+    for step in 1..200 {
+        let units_per_px = f64::from(step) * 0.5;
+        let fitted = |beats_per_bar: f64| {
+            let mut ed = four_notes();
+            ed.beats_per_bar = beats_per_bar;
+            ed.grid.division = 1.0 / 64.0;
+            ed.set_grid_density(Density::Medium);
+            ed.camera.units_per_px = units_per_px;
+            ed.settle_camera();
+            ed.grid.effective()
+        };
+        assert_eq!(
+            fitted(3.0),
+            fitted(4.0),
+            "at {units_per_px} ticks a pixel, 3/4 and 4/4 fit different grids",
+        );
+    }
+}
+
 /// A fixed grid stays put, however far the tool zooms.
 #[test]
 fn the_zoom_tool_leaves_a_fixed_grid_alone() {
@@ -1604,7 +1634,7 @@ fn dotted_and_triplet_scale_the_step_and_clear_each_other() {
     let plainly = ed.grid.step(ed.units_per_beat());
 
     assert!(grid_key(&mut ed, "d"), "`g d` did nothing");
-    assert!(ed.grid.dotted);
+    assert!(ed.grid.dotted());
     assert!(
         (ed.grid.step(ed.units_per_beat()) - plainly * 1.5).abs() < 1e-6,
         "a dotted step is not half again as long",
@@ -1612,8 +1642,8 @@ fn dotted_and_triplet_scale_the_step_and_clear_each_other() {
     assert_eq!(ed.grid.label(), "1/4.", "the readout does not show the dot");
 
     assert!(grid_key(&mut ed, "t"), "`g t` did nothing");
-    assert!(ed.grid.triplet);
-    assert!(!ed.grid.dotted, "triplet did not clear dotted");
+    assert!(ed.grid.triplet());
+    assert!(!ed.grid.dotted(), "triplet did not clear dotted");
     assert!(
         (ed.grid.step(ed.units_per_beat()) - plainly * 2.0 / 3.0).abs() < 1e-6,
         "a triplet step is not two thirds",

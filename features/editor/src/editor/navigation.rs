@@ -304,8 +304,10 @@ impl Editor {
     /// `camera` ends here.
     pub fn settle_camera(&mut self) {
         self.camera.constrain(self.bounds(), self.viewport);
-        let bar_px = self.units_per_bar() / self.camera.units_per_px;
-        self.grid.refit(bar_px);
+        // A whole note, not a bar: a division is a fraction of one, and
+        // a bar is one only in 4/4.
+        let whole_px = self.units_per_beat() * 4.0 / self.camera.units_per_px;
+        self.grid.refit(whole_px);
     }
 
     /// Move the grid's ceiling, and refit to the view at once.

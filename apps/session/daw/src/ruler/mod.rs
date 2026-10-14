@@ -22,7 +22,6 @@
 //! refines the way a REAPER user expects it to rather than the way this
 //! file would have invented.
 
-use ::timeline::grid::Adaptive;
 use anyrender::PaintScene;
 use vello::kurbo::{Affine, Rect};
 use vello::peniko::{Color, Fill};
@@ -257,28 +256,19 @@ fn fill(painter: &mut impl PaintScene, color: Color, rect: Rect) {
     painter.fill(Fill::NonZero, Affine::IDENTITY, color, None, &rect);
 }
 
-/// Vertical lines every `step` seconds across the lane area.
+/// Draw a vertical line down the lanes at each of `times` (seconds),
+/// leaving out those inside `skip`.
 fn line_every(
     painter: &mut impl PaintScene,
     view: Viewport,
-    (step, from, to): (f64, f64, f64),
+    times: &[f64],
     (color, width): (Color, f64),
     origin: (f64, f64),
     skip: &[GridRegion],
 ) {
     let (ox, oy) = origin;
-    // A screen of lines is the most that can ever be visible; anything
-    // beyond that is a division that should have coarsened, and drawing
-    // it would cost a frame to produce a grey band.
-    const MAX: usize = 2048;
-
-    let first = (from / step).floor();
-    for n in counts(MAX) {
-        let t = (first + n) * step;
-        if t > to {
-            break;
-        }
-        if t < from - 1e-9 || in_grid_region(skip, t) {
+    for &t in times {
+        if in_grid_region(skip, t) {
             continue;
         }
         let x = t.mul_add(view.pps, view.panel_w - view.scroll_x);

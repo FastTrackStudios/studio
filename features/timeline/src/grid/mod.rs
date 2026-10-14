@@ -14,19 +14,20 @@
 //!
 //! ## Where the numbers come from
 //!
-//! Everything is expressed against **one measure**, because that is the
-//! unit a division is a fraction of:
+//! Everything is expressed against **one whole note**, because that is
+//! the unit a division is a fraction of:
 //!
-//! - `measure_px` — how wide one measure is on screen, which is the only
-//!   thing the caller has to know how to compute. It carries the zoom,
-//!   the tempo map and the time signature all at once, so this crate
-//!   needs none of them.
+//! - `whole_px` — how wide a whole note (four beats) is on screen where
+//!   the grid is drawn. It carries the zoom and the tempo, so this
+//!   module needs neither. Not a measure: in 3/4 a measure is three
+//!   quarters of it, and counting a division against a measure there
+//!   would fit a grid a third too fine.
 //! - [`Density::spacing`] — the closest two gridlines may sit, in
 //!   pixels.
 //!
-//! The finest grid that fits is then `measure_px / spacing` lines per
-//! measure, and [`Adaptive::fit`] snaps the *current* grid up or down to
-//! it in whole steps of [`Adaptive::factor`].
+//! The finest grid that fits is then `whole_px / spacing` lines per
+//! whole note, and [`Adaptive::fit`] snaps the *current* grid up or down
+//! to it in whole steps of [`Adaptive::factor`].
 //!
 //! ## Why it snaps by a factor rather than choosing outright
 //!
@@ -38,6 +39,14 @@
 //! every grid the first time the user zoomed.
 
 #![forbid(unsafe_code)]
+
+mod lines;
+mod regions;
+mod setting;
+
+pub use lines::{bars, lines};
+pub use regions::GridRegions;
+pub use setting::{Feel, Grid};
 
 /// How much room the grid is asked to leave between lines.
 ///
@@ -171,12 +180,12 @@ impl Adaptive {
     }
 
     /// The division to use, given the finest the user wants and how wide
-    /// a measure is on screen.
+    /// a whole note is on screen.
     ///
     /// `finest` and the result are fractions of a whole note: `0.25` is
     /// a quarter note, `1.0/16.0` a sixteenth. Returns `None` when the
     /// grid is fixed, or when the view is too degenerate to say anything
-    /// about — a zero-width measure has no answer, and guessing one
+    /// about — a zero-width view has no answer, and guessing one
     /// would move the user's grid for no reason.
     ///
     /// ## The setting is a ceiling
@@ -202,9 +211,9 @@ impl Adaptive {
     /// type from the division itself — 1/6 being a triplet eighth — that
     /// is free here, because a caller holding `triplet` as its own flag
     /// never encoded the type in the number to begin with.
-    pub fn fit(&self, finest: f64, measure_px: f64) -> Option<f64> {
+    pub fn fit(&self, finest: f64, whole_px: f64) -> Option<f64> {
         let spacing = self.density.spacing(self.min_px)?;
-        if !(measure_px.is_finite() && measure_px > 0.0)
+        if !(whole_px.is_finite() && whole_px > 0.0)
             || !(finest.is_finite() && finest > 0.0)
             || !(spacing > 0.0)
             || self.factor <= 1.0
@@ -212,10 +221,10 @@ impl Adaptive {
             return None;
         }
 
-        // Lines per measure: the most that fit, and how many the user
+        // Lines per whole note: the most that fit, and how many the user
         // asked for. A division is a fraction of a whole note, so its
         // reciprocal is how many of it make one.
-        let most = measure_px / spacing;
+        let most = whole_px / spacing;
         let wanted = 1.0 / finest;
         if most <= 0.0 {
             return None;

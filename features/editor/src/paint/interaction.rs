@@ -2840,7 +2840,8 @@ pub fn key_down(ed: &mut Editor, drag: &Drag, key: &str, mods: Mods) -> bool {
             true
         }
         ("t", false, _) => {
-            ed.grid.triplet = !ed.grid.triplet;
+            let on = !ed.grid.triplet();
+            ed.grid.set_triplet(on);
             true
         }
         ("q", false, _) => {

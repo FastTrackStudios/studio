@@ -672,12 +672,12 @@ pub fn run(ed: &mut Editor, id: &str) -> bool {
         return true;
     }
     if id == grid::DOTTED.id {
-        let on = !ed.grid.dotted;
+        let on = !ed.grid.dotted();
         ed.set_grid_dotted(on);
         return true;
     }
     if id == grid::TRIPLET.id {
-        let on = !ed.grid.triplet;
+        let on = !ed.grid.triplet();
         ed.set_grid_triplet(on);
         return true;
     }

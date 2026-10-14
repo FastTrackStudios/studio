@@ -435,7 +435,7 @@ pub struct ArrangementWidget {
     skin_seen: u64,
     font: crate::text::Font,
     bars: Bars,
-    grid: timeline::grid::Adaptive,
+    grid: timeline::grid::Grid,
     /// Pixels per second before the zoom — the base the view scales.
     pps: f64,
     /// What the panel's live controls are drawn from.
@@ -722,7 +722,7 @@ impl ArrangementWidget {
             skin_seen: crate::skin::version(),
             font,
             bars: Bars::at(bpm),
-            grid: timeline::grid::Adaptive::default(),
+            grid: timeline::grid::Grid::new(FINEST),
             pps,
             rows,
             tracks,
@@ -4441,7 +4441,7 @@ impl ArrangementWidget {
         // Editing, the grid lines are the quantize's grid where they are:
         // the kit's default, a part's, a fill's.
         crate::grid_in_force::set(self.editing.get().then(|| {
-            crate::grid_in_force::InForce::new(
+            crate::grid_in_force::in_force(
                 crate::drum_settings::current().grid,
                 &crate::marks_strip::quantize_regions(&edited),
             )
@@ -4451,8 +4451,8 @@ impl ArrangementWidget {
             &self.palette,
             view,
             self.bars,
+            self.scene.tempo(),
             &self.grid,
-            FINEST,
             (0.0, 0.0),
         );
         ruler::ruler(
