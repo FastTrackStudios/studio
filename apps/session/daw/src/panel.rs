@@ -19,6 +19,7 @@ use std::rc::Rc;
 
 use dioxus::prelude::*;
 
+use crate::arrange_camera::ArrangeCamera;
 use crate::studio::{PPS, StudioSession};
 
 /// The scrollbar's thickness: a hairline that says where the view is,
@@ -27,13 +28,6 @@ use crate::studio::{PPS, StudioSession};
 pub const BAR: f64 = 5.0;
 /// One wheel notch, for a wheel that counts in lines.
 pub const WHEEL_LINE: f64 = 40.0;
-/// How far in each zoom may go: across, to twenty pixels a sample at
-/// 48 kHz ([`crate::studio::PPS`] a second unzoomed) — an edit is placed
-/// on the sample, and the waveform is drawn down to them
-/// ([`crate::wave_detail`]); down, until one row fills the view, as
-/// framing a track does in REAPER (a row is 32 pixels unzoomed at its
-/// least).
-const ZOOM_IN: (f64, f64) = (48_000.0 * 20.0 / crate::studio::PPS, 40.0);
 
 /// A mouse button, as the panel cares about it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -550,32 +544,45 @@ impl ArrangementPanel {
         )
     }
 
-    /// How far the view can scroll, at a zoom.
-    #[must_use]
-    pub fn extent(&self, r: (f64, f64, f64, f64), zx: f64, zy: f64) -> (f64, f64) {
-        let (fw, fh) = self.frame(r);
-        let span_y = *self.span_y.peek();
+    /// The view as the arrangement's camera, in the panel's rectangle.
+    fn camera(&self, r: (f64, f64, f64, f64)) -> ArrangeCamera {
+        ArrangeCamera {
+            frame: self.frame(r),
+            span: (self.span_x, *self.span_y.peek()),
+            zoom: *self.zoom.peek(),
+            scroll: *self.scroll.peek(),
+            down: *self.down.peek(),
+        }
+    }
+
+    /// Put the view where `camera` is.
+    fn put(&self, camera: ArrangeCamera) {
+        let (mut zoom, mut scroll, mut down) = (self.zoom, self.scroll, self.down);
+        if *zoom.peek() != camera.zoom {
+            zoom.set(camera.zoom);
+        }
+        scroll.set(camera.scroll);
+        down.set(camera.down);
+    }
+
+    /// A window point in the lanes' frame.
+    fn in_frame(&self, r: (f64, f64, f64, f64), at: (f64, f64)) -> (f64, f64) {
         (
-            (self.span_x * zx - fw).max(0.0),
-            (span_y * zy - fh).max(0.0),
+            at.0 - r.0 - self.tcp().width(),
+            at.1 - r.1 - crate::ruler::ruler_h(),
         )
     }
 
+    /// How far the view can scroll, at a zoom.
+    #[must_use]
+    pub fn extent(&self, r: (f64, f64, f64, f64), zx: f64, zy: f64) -> (f64, f64) {
+        self.camera(r).extent(zx, zy)
+    }
+
     /// Out no further than the whole session filling the frame, and never
-    /// above [`ZOOM_IN`].
+    /// above [`crate::arrange_camera::ZOOM_IN`].
     fn limits(&self, r: (f64, f64, f64, f64)) -> ((f64, f64), (f64, f64)) {
-        let (fw, fh) = self.frame(r);
-        let floor = |f: f64, s: f64| {
-            if s > 0.0 && f > 0.0 {
-                (f / s).min(1.0)
-            } else {
-                1.0
-            }
-        };
-        (
-            (floor(fw, self.span_x), ZOOM_IN.0),
-            (floor(fh, *self.span_y.peek()), ZOOM_IN.1),
-        )
+        self.camera(r).limits()
     }
 
     /// Whether a window point is inside the panel.
@@ -594,23 +601,6 @@ impl ArrangementPanel {
         pointing.apply();
     }
 
-    /// Set the zoom, keeping the session point under `about` (a window
-    /// position) where it is on screen.
-    fn rezoom(&self, to: (f64, f64), about: (f64, f64)) {
-        let r = self.units();
-        let (mut zoom, mut scroll, mut down) = (self.zoom, self.scroll, self.down);
-        let (was_x, was_y) = *zoom.peek();
-        let (fw, fh) = self.frame(r);
-        let ax = (about.0 - r.0 - self.tcp().width()).clamp(0.0, fw);
-        let ay = (about.1 - r.1 - crate::ruler::ruler_h()).clamp(0.0, fh);
-        let (ex, ey) = self.extent(r, to.0, to.1);
-        let across = zoom_about(ax, *scroll.peek(), was_x, to.0);
-        let deep = zoom_about(ay, *down.peek(), was_y, to.1);
-        zoom.set(to);
-        scroll.set(across.clamp(0.0, ex));
-        down.set(deep.clamp(0.0, ey));
-    }
-
     /// One event from the host.
     pub fn handle(&self, event: PanelEvent) {
         let r = self.units();
@@ -627,7 +617,6 @@ impl ArrangementPanel {
             },
             other => other,
         };
-        let (mut scroll, mut down) = (self.scroll, self.down);
         match event {
             PanelEvent::ZKey { pressed, repeat } => {
                 let mut input = self.input.borrow_mut();
@@ -649,27 +638,19 @@ impl ArrangementPanel {
                 let mut input = self.input.borrow_mut();
                 let moved = (at.0 - input.pointer.0, at.1 - input.pointer.1);
                 input.pointer = at;
-                let (zx, zy) = *self.zoom.peek();
                 match input.drag {
                     Some(Drag::Pan) => {
-                        let (ex, ey) = self.extent(r, zx, zy);
-                        let across = *scroll.peek();
-                        scroll.set((across - moved.0).clamp(0.0, ex));
-                        let deep = *down.peek();
-                        down.set((deep - moved.1).clamp(0.0, ey));
+                        let mut camera = self.camera(r);
+                        camera.pan(moved);
+                        self.put(camera);
                     }
                     Some(Drag::Zoom) => {
                         self.pointing.borrow_mut().tool_used = true;
-                        let ((x0, x1), (y0, y1)) = self.limits(r);
-                        self.rezoom(
-                            (
-                                (zx * factor(moved.0)).clamp(x0, x1),
-                                // Down zooms in: the rows come toward you as
-                                // you pull, as in REAPER's zoom tool.
-                                (zy * factor(moved.1)).clamp(y0, y1),
-                            ),
-                            input.anchor,
-                        );
+                        // Down zooms in: the rows come toward you as you
+                        // pull, as in REAPER's zoom tool.
+                        let mut camera = self.camera(r);
+                        camera.zoom_drag(moved, self.in_frame(r, input.anchor));
+                        self.put(camera);
                     }
                     None => {}
                 }
@@ -704,18 +685,15 @@ impl ArrangementPanel {
                 if !self.inside(input.pointer) {
                     return;
                 }
-                let (zx, zy) = *self.zoom.peek();
-                let ((x0, x1), _) = self.limits(r);
-                let to = ((zx * (1.0 + by).max(0.1)).clamp(x0, x1), zy);
-                self.rezoom(to, input.pointer);
+                let mut camera = self.camera(r);
+                camera.pinch(by, self.in_frame(r, input.pointer));
+                self.put(camera);
             }
             PanelEvent::Wheel { dx, dy } => {
                 let input = self.input.borrow();
                 if !self.inside(input.pointer) {
                     return;
                 }
-                let (zx, zy) = *self.zoom.peek();
-                let ((x0, x1), (y0, y1)) = self.limits(r);
                 if input.zooming {
                     self.pointing.borrow_mut().tool_used = true;
                 }
@@ -723,21 +701,15 @@ impl ArrangementPanel {
                 // axis of the wheel counts for a zoom: macOS turns a
                 // shifted wheel sideways, so the notch arrives in `dx`.
                 // winit's deltas are the other way round to a browser's.
-                match timeline::gestures::wheel(-dx, -dy, input.zooming, input.shift) {
-                    timeline::gestures::Wheel::ZoomTime(by) => {
-                        self.rezoom(((zx * by).clamp(x0, x1), zy), input.pointer);
-                    }
-                    timeline::gestures::Wheel::ZoomRows(by) => {
-                        self.rezoom((zx, (zy * by).clamp(y0, y1)), input.pointer);
-                    }
-                    timeline::gestures::Wheel::Scroll(sx, sy) => {
-                        let (ex, ey) = self.extent(r, zx, zy);
-                        let across = *scroll.peek();
-                        scroll.set((across + sx).clamp(0.0, ex));
-                        let deep = *down.peek();
-                        down.set((deep + sy).clamp(0.0, ey));
-                    }
-                }
+                let mut camera = self.camera(r);
+                camera.wheel(
+                    dx,
+                    dy,
+                    input.zooming,
+                    input.shift,
+                    self.in_frame(r, input.pointer),
+                );
+                self.put(camera);
             }
             PanelEvent::Frame { play_at } => self.frame_tick(play_at),
         }
@@ -747,7 +719,7 @@ impl ArrangementPanel {
     /// popup, the edits each way, and the panel's rectangle.
     fn frame_tick(&self, play_at: f64) {
         let r = self.units();
-        let (mut scroll, mut down, mut zoom) = (self.scroll, self.down, self.zoom);
+        let (scroll, down, zoom) = (self.scroll, self.down, self.zoom);
         self.follow_cursor(r, play_at);
         // Four numbers, written every time because a missed write is a
         // frame drawn in the wrong place.
@@ -840,10 +812,12 @@ impl ArrangementPanel {
             let Some(to) = self.history.borrow_mut().go(now, request, framed) else {
                 continue;
             };
-            let (ex, ey) = self.extent(r, to.zoom_x, to.zoom_y);
-            zoom.set((to.zoom_x, to.zoom_y));
-            scroll.set(to.scroll_x.clamp(0.0, ex));
-            down.set(to.scroll_y.clamp(0.0, ey));
+            let mut camera = self.camera(r);
+            camera.zoom = (to.zoom_x, to.zoom_y);
+            camera.scroll = to.scroll_x;
+            camera.down = to.scroll_y;
+            camera.clamp();
+            self.put(camera);
             // And to the widget now, for the paint this frame is about to
             // make: written only at the top, a zoom asked for without an
             // event (a model's) waited for a frame nothing asked for.

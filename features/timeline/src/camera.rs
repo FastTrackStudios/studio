@@ -159,6 +159,33 @@ pub struct Bounds {
     pub align: Align,
 }
 
+impl Bounds {
+    /// The least and most time a pixel may be, across a view `vp` wide.
+    #[must_use]
+    pub fn time_scale(&self, vp: Viewport) -> (f64, f64) {
+        let span = (self.t_max - self.t_min).max(1e-9);
+        let w = vp.w.max(1.0);
+        let most = match self.max_zoom_out {
+            ZoomOut::Times(k) => span * k / w,
+            ZoomOut::Fit { at_least } => (span / w).max(at_least),
+        };
+        let least = self.min_units_per_px.max(1e-9);
+        (least, most.max(least))
+    }
+
+    /// The least and most pixels a row unit may be, down a view `vp`
+    /// tall.
+    #[must_use]
+    pub fn row_scale(&self, vp: Viewport) -> (f64, f64) {
+        let fit = vp.h.max(1.0) / (self.r_max - self.r_min).max(1e-9);
+        let floor = match self.rows_floor {
+            RowsFloor::Fit => fit,
+            RowsFloor::FitAtMost(px) => fit.min(px),
+        };
+        (floor, self.max_px_per_unit.max(floor))
+    }
+}
+
 impl Camera {
     /// Hold the camera inside `b`.
     ///
@@ -169,19 +196,10 @@ impl Camera {
     pub fn constrain(&mut self, b: &Bounds, vp: Viewport) {
         // ── time ─────────────────────────────────────────────────────
         let span = (b.t_max - b.t_min).max(1e-9);
-        let w = vp.w.max(1.0);
-        let max_upp = match b.max_zoom_out {
-            ZoomOut::Times(k) => span * k / w,
-            ZoomOut::Fit { at_least } => (span / w).max(at_least),
-        };
+        let (least, most) = b.time_scale(vp);
         let t = &mut self.time;
-        if max_upp > 0.0 {
-            t.units_per_px = t
-                .units_per_px
-                .min(max_upp)
-                .max(b.min_units_per_px.max(1e-9));
-        }
-        let visible = w * t.units_per_px;
+        t.units_per_px = t.units_per_px.clamp(least, most);
+        let visible = vp.w.max(1.0) * t.units_per_px;
         let slack = (visible * b.time_slack_screens).max(span * b.edge_whitespace);
         let lo = b.t_min - slack;
         let hi = (b.t_max + slack - visible).max(lo);
@@ -189,15 +207,10 @@ impl Camera {
 
         // ── rows ─────────────────────────────────────────────────────
         let rows = (b.r_max - b.r_min).max(1e-9);
-        let h = vp.h.max(1.0);
-        let fit = h / rows;
-        let floor = match b.rows_floor {
-            RowsFloor::Fit => fit,
-            RowsFloor::FitAtMost(px) => fit.min(px),
-        };
+        let (floor, ceiling) = b.row_scale(vp);
         let r = &mut self.rows;
-        r.px_per_unit = r.px_per_unit.clamp(floor, b.max_px_per_unit.max(floor));
-        let visible = h / r.px_per_unit.max(1e-12);
+        r.px_per_unit = r.px_per_unit.clamp(floor, ceiling);
+        let visible = vp.h.max(1.0) / r.px_per_unit.max(1e-12);
         r.y0 = if visible <= rows {
             r.y0.clamp(b.r_min, b.r_max - visible)
         } else {

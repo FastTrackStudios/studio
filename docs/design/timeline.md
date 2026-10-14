@@ -1557,7 +1557,7 @@ pins A's behaviour. Keep it or change it on purpose.
     `the_razor_help_matches_the_razor_keys`,
     `the_razor_menu_and_the_razor_keys_agree`.
 
-**Progress (2026-10-14).** Steps 1–6 are done. Where the code differs
+**Progress (2026-10-14).** Steps 1–8 are done. Where the code differs
 from the plan above:
 
 - **3:** one `Mods` type for both surfaces (`timeline::input::Mods`; the
@@ -1576,6 +1576,19 @@ from the plan above:
 - **6:** the arrangement snaps to the grid it draws (its `Grid` fitted to
   the zoom, the lane tempo map, the quantize grid while editing). Its
   tests pin quarter notes (`arrange_edit::on_quarters`).
+- **7:** the Editor's `Camera` keeps its fields (t0, units_per_px,
+  vertical, fold; about 200 call sites). Its time maths and `constrain`
+  delegate to `timeline::camera`, and `VerticalCamera::row_view`
+  converts its centred, bottom-up rows. The clamp now works in folded
+  slots, which fixes a folded kit scrolling past its top lane.
+- **8:** the arrangement's camera is `session-daw`'s `ArrangeCamera`
+  (zoom, scroll, down in the panel's terms), whose every move goes
+  through `timeline::Camera` and the arrangement's closed `Bounds`. The
+  panel's signals stay its storage. The step-2 tests moved there
+  (`arrange_camera::tests`) and run against the real code, not a copy.
+  `widget::View` and `arrangement::Viewport` are unchanged, so the
+  painters are too. Pinch, scale and history targets still compute in
+  zoom/scroll (`panel::zoom_about`) until step 10 moves the history.
 
 After step 13 the two `Editor` structs (`arrange_edit::Editor` and
 `editor::Editor`) each hold one `timeline::Interaction<Self>`, and they no

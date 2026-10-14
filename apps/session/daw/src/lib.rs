@@ -8,6 +8,7 @@
 //! screenshot is a picture of the window rather than of a copy of it.
 
 pub mod animate;
+pub mod arrange_camera;
 pub mod arrange_edit;
 pub mod arrangement;
 pub mod art;
