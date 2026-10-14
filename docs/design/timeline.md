@@ -1335,10 +1335,19 @@ touch editing verbs (§4 steps 11–14).
 
 **What is missing today.** Write these first, in `timeline`, as
 characterisation tests for the arrangement's camera:
-- A has no test that the wheel zooms about the pointer, since
-  `panel.rs:130 zoom_about` is untested.
+- A has no test that the wheel zooms about the pointer. `panel.rs`
+  `zoom_about` has two unit tests of its own, but nothing tests it
+  composed with the clamps in `rezoom`.
 - A has no test of `limits`/`extent`.
 - A has no test of the live `Drag::Zoom` direction.
+
+*Done (step 2):* `timeline/tests/arrangement_camera.rs` has 20 tests over
+a line-for-line copy of the panel's camera arithmetic. One finding for
+step 10: A's live `Drag::Zoom` is incremental (each move zooms from the
+last, clamped), so travel past a limit is lost and reversing zooms back
+at once. `ZoomDrag` measures from the press, so it would first unwind
+the overshoot. `the_z_drag_turns_back_at_once_after_hitting_a_limit`
+pins A's behaviour. Keep it or change it on purpose.
 
 ### Steps
 
