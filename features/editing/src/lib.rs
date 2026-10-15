@@ -12,6 +12,7 @@
 //! - [`written`]: a played part matched to the part as written.
 //! - [`settings`]: a quantize's settings and a call's patch over them.
 //! - [`scope`]: what is selected, and the profile it is edited with.
+//! - [`comp`]: the takes ranked for a stretch — which plays a fill best.
 //! - [`drums`]: the kit's profile — pieces, the grid scan, fills, moments.
 //!
 //! Nothing here reads or writes a project: times are seconds (or beats,
@@ -19,6 +20,7 @@
 
 #![forbid(unsafe_code)]
 
+pub mod comp;
 pub mod drums;
 pub mod groove;
 pub mod level;
