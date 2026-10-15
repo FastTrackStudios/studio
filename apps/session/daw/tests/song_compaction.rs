@@ -58,6 +58,18 @@ fn a_long_history_is_folded_into_a_snapshot() {
         }
     }
     assert!(compacted, "the branch was compacted");
+    // The last step recorded too (steps that finish together are recorded
+    // as one commit, named for them all) before the file is read back.
+    let last = format!("T{}", STEPS - 1);
+    let began = std::time::Instant::now();
+    while !steps().iter().any(|l| l.contains(&last)) {
+        assert!(
+            began.elapsed().as_secs() < 20,
+            "{last} recorded: {:?}",
+            steps()
+        );
+        std::thread::sleep(std::time::Duration::from_millis(10));
+    }
     // Compacted on the way: the updates kept are the ones since.
     let kept = steps();
     assert!(

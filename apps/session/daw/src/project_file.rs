@@ -523,7 +523,9 @@ async fn step_back(open: &mut Open, pending: &str, back: bool) -> Result<Undone,
 pub fn load(daw: &Standalone, name: &str, path: &Path, branch: &str) -> Result<String, String> {
     let _job = crate::jobs::start("Opening", 0);
     record_steps();
+    let mut stages = architect_telemetry::timing::Stages::start();
     let (store, loaded, uncompacted) = open_branch(path, branch)?;
+    stages.mark("load.store_ms");
     let doc = SessionDoc::from_loro(loaded);
     let saved = doc.version();
     let guid = uuid::Uuid::new_v4().to_string();
@@ -559,6 +561,7 @@ pub fn load(daw: &Standalone, name: &str, path: &Path, branch: &str) -> Result<S
         );
         Ok::<(), String>(())
     })??;
+    stages.mark("load.rebuild_ms");
     Ok(guid)
 }
 

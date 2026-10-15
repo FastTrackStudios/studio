@@ -206,27 +206,19 @@ pub async fn fetch_of(project: daw_control::Project) -> Option<Project> {
     let mut items: HashMap<String, Vec<Item>> = HashMap::new();
     let mut names: HashMap<String, String> = HashMap::with_capacity(item_count);
     let mut midi: HashSet<String> = HashSet::new();
+    // Each item's title is its active take's name, and whether it is MIDI
+    // its take's too — read in one call for the whole song (three calls an
+    // item was 81 000 for a sliced kit, most of reading a song back).
+    for take in project.items().active_takes().await.unwrap_or_default() {
+        if !take.name.is_empty() {
+            names.insert(take.item_guid.clone(), take.name.clone());
+        }
+        if take.is_midi {
+            midi.insert(take.item_guid);
+        }
+    }
     for item in all_items {
         length = length.max(item.position.as_seconds() + item.length.as_seconds());
-        // The title is the active take's name — two calls per item,
-        // in-process, once per open.
-        if let Ok(Some(handle)) = project.items().by_guid(&item.guid).await {
-            let take = handle.active_take();
-            if let Ok(name) = take.name().await
-                && !name.is_empty()
-            {
-                names.insert(item.guid.clone(), name);
-            }
-            // Whether it is MIDI, from the same take the name came
-            // from. The call was already being paid for and the answer
-            // thrown away — and without it an item drawn from its
-            // content has no way to know WHICH content it has.
-            if let Ok(info) = take.info().await
-                && info.is_midi
-            {
-                midi.insert(item.guid.clone());
-            }
-        }
         items.entry(item.track_guid.clone()).or_default().push(item);
     }
     // Sorted, and sorted TOTALLY — position alone is not enough.

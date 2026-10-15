@@ -347,10 +347,10 @@ fn load_project_file(
     } else {
         branch.to_owned()
     };
-    let began = std::time::Instant::now();
+    let mut stages = architect_telemetry::timing::Stages::start();
     let project_guid = crate::project_file::load(daw, &name, file, branch)
         .map_err(|e| eyre::eyre!("{} did not open: {e}", path.display()))?;
-    let built = began.elapsed();
+    let build_ms = stages.mark("load.build_ms");
     daw::standalone::project_loader::anchor_media(daw, &project_guid, &media_dir);
     if media == Media::All {
         let audio =
@@ -364,6 +364,7 @@ fn load_project_file(
             );
         }
     }
+    let media_ms = stages.mark("load.media_ms");
     let track_count = daw::service::Tracks::all(
         daw,
         daw::service::ProjectContext::Project(project_guid.clone()),
@@ -372,8 +373,8 @@ fn load_project_file(
     tracing::info!(
         load.name = %name,
         load.tracks = track_count,
-        load.build_ms = built.as_millis(),
-        load.media_ms = began.elapsed().saturating_sub(built).as_millis(),
+        load.build_ms = build_ms,
+        load.media_ms = media_ms,
         "project file opened"
     );
     Ok(Opened {

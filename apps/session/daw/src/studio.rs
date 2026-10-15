@@ -286,7 +286,11 @@ impl StudioSession {
         first: Option<bool>,
         media: crate::open::Media,
     ) -> eyre::Result<(Self, String)> {
-        let began = std::time::Instant::now();
+        // A song's opening, its own unit of work: where the time went,
+        // stage by stage (`PERF_RECENT`).
+        let span = tracing::info_span!("song.open", song.tracks = tracing::field::Empty);
+        let _in = span.enter();
+        let mut stages = architect_telemetry::timing::Stages::start();
         let plan = crate::open::song_plan(path, prepare);
         let opened = if let Some(audio) = first {
             crate::open::open_first_with(&plan.open, audio, media)?
@@ -295,22 +299,24 @@ impl StudioSession {
             crate::open::switch_to(&opened.daw, &opened.project_guid, false);
             opened
         };
-        let engine = began.elapsed();
+        let engine_ms = stages.mark("open.engine_ms");
         crate::open::prepare_and_save(crate::folder::disk(), &opened, &plan, prepare);
         // The song as opened (and prepared): what "unsaved changes" is
         // measured from.
         #[cfg(feature = "native")]
         crate::projects::mark_saved(&opened.daw, &opened.project_guid);
-        let prepared = began.elapsed();
+        let prepare_ms = stages.mark("open.prepare_ms");
         let session = Self::read_current(Some(plan.open.as_path()), prepare.chart.clone())?;
+        let read_ms = stages.mark("open.read_ms");
+        span.record("song.tracks", session.project.0.tracks.len());
         // One line per song: where its opening went.
         tracing::info!(
             song.name = %opened.name,
             song.tracks = session.project.0.tracks.len(),
-            open.engine_ms = engine.as_millis(),
-            open.prepare_ms = (prepared - engine).as_millis(),
-            open.read_ms = (began.elapsed() - prepared).as_millis(),
-            open.total_ms = began.elapsed().as_millis(),
+            open.engine_ms = engine_ms,
+            open.prepare_ms = prepare_ms,
+            open.read_ms = read_ms,
+            open.total_ms = stages.total_ms(),
             "song opened"
         );
         Ok((session, opened.project_guid))

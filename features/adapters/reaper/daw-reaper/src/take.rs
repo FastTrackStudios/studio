@@ -74,20 +74,18 @@ impl Takes for crate::Reaper {
         ReaperTake::media_take_to_take(item_ptr, take_ptr, index)
     }
 
+    fn get_all_active_takes(&self, _project: ProjectContext) -> Vec<Take> {
+        let medium = ReaperHigh::get().medium_reaper();
+        let count = medium.count_media_items(ReaperProjectContext::CurrentProject);
+        (0..count)
+            .filter_map(|i| medium.get_media_item(ReaperProjectContext::CurrentProject, i))
+            .filter_map(active_take_of)
+            .collect()
+    }
+
     fn get_active_take(&self, _project: ProjectContext, item: ItemRef) -> Option<Take> {
         let item_ptr = ReaperItem::resolve_item(&item, ReaperProjectContext::CurrentProject)?;
-        let medium = ReaperHigh::get().medium_reaper();
-        let low = medium.low();
-        let take_ptr = item_sw::get_active_take(medium, item_ptr)?;
-        let mut index = 0u32;
-        let count = item_sw::count_takes(low, item_ptr);
-        for i in 0..count {
-            if item_sw::get_take(low, item_ptr, i) == Some(take_ptr) {
-                index = i as u32;
-                break;
-            }
-        }
-        ReaperTake::media_take_to_take(item_ptr, take_ptr, index)
+        active_take_of(item_ptr)
     }
 
     fn take_count(&self, _project: ProjectContext, item: ItemRef) -> u32 {
@@ -548,4 +546,21 @@ impl Takes for crate::Reaper {
         }
         Ok(())
     }
+}
+
+/// The active take of the item at `item_ptr`, with its index among the
+/// item's takes.
+fn active_take_of(item_ptr: reaper_medium::MediaItem) -> Option<Take> {
+    let medium = ReaperHigh::get().medium_reaper();
+    let low = medium.low();
+    let take_ptr = item_sw::get_active_take(medium, item_ptr)?;
+    let mut index = 0u32;
+    let count = item_sw::count_takes(low, item_ptr);
+    for i in 0..count {
+        if item_sw::get_take(low, item_ptr, i) == Some(take_ptr) {
+            index = i as u32;
+            break;
+        }
+    }
+    ReaperTake::media_take_to_take(item_ptr, take_ptr, index)
 }
