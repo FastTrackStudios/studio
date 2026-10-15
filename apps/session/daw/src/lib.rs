@@ -213,6 +213,7 @@ pub mod overlay;
 pub mod panel;
 #[cfg(feature = "native")]
 pub mod patch_list;
+pub mod perf;
 pub mod plan;
 pub mod poi;
 pub mod pointer;

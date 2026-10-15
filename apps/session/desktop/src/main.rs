@@ -117,20 +117,32 @@ fn main() {
         }
         // What is logged without RUST_LOG — and what is exported.
         const LOG_DEFAULT: &str = "info,vox_core=warn,schema_deser=off";
+        use architect_telemetry::timing;
+        use tracing_subscriber::Layer as _;
+        // Stage marks are trace-level: let them through to the recorder,
+        // and keep them out of the logs (`timing::no_marks`).
+        let filter = tracing_subscriber::EnvFilter::try_from_default_env()
+            .unwrap_or_else(|_| LOG_DEFAULT.into())
+            .add_directive(
+                timing::DIRECTIVE
+                    .parse()
+                    .expect("the timing directive parses"),
+            );
         let registry = tracing_subscriber::registry()
-            .with(
-                tracing_subscriber::EnvFilter::try_from_default_env()
-                    .unwrap_or_else(|_| LOG_DEFAULT.into()),
-            )
-            .with(tracing_subscriber::fmt::layer())
+            .with(filter)
+            .with(tracing_subscriber::fmt::layer().with_filter(timing::no_marks()))
             // And every run's log in a file of its own, to read afterwards:
             // `/tmp/fts-session/latest.log` (or `FTS_LOG_DIR`).
             .with(run_log().map(|file| {
                 tracing_subscriber::fmt::layer()
                     .with_ansi(false)
                     .with_writer(std::sync::Mutex::new(file))
+                    .with_filter(timing::no_marks())
             }))
-            .with(app_shell::log_ring::RingLayer::new())
+            .with(app_shell::log_ring::RingLayer::new().with_filter(timing::no_marks()))
+            // Where each action's time went, kept to read back
+            // (`PERF_RECENT`).
+            .with(timing::Recorder::default())
             .with(architect_telemetry::tracing_layer());
         match architect_telemetry::otel::init("session", LOG_DEFAULT) {
             Some((otel_guard, layers)) => {

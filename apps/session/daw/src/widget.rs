@@ -1851,7 +1851,16 @@ impl ArrangementWidget {
             return false;
         }
         let moves = crate::arrange_edit::seconds_of(moves);
-        let started = std::time::Instant::now();
+        // The window's part of a slip, its own unit of work: where the
+        // frame it costs goes (`PERF_RECENT`).
+        let span = tracing::info_span!(
+            "window.slip",
+            slip.takes = items.len(),
+            slip.moves = moves.len(),
+            slip.edits = tracing::field::Empty
+        );
+        let _in = span.enter();
+        let mut stages = architect_telemetry::timing::Stages::start();
         // Where in its source each take started, before it is cut: every
         // slice of it shows its own part of the take's waveform.
         let taken: std::collections::HashSet<&str> = items.iter().map(String::as_str).collect();
@@ -1901,21 +1910,14 @@ impl ArrangementWidget {
             })
             .collect();
         draw_slices(&self.previews, items.clone(), slices);
-        let (kit_takes, edits, cut_ms) = (items.len(), effects.len(), started.elapsed());
+        span.record("slip.edits", effects.len());
+        stages.mark("window.slip_ms");
         self.settle(effects);
-        let drawn_at = started.elapsed();
+        stages.mark("window.settle_ms");
         // The kit's row folded again from the slices, so every cut is on
         // it (in Edit mode; elsewhere the seams are joined).
         self.replan_rows();
-        tracing::info!(
-            slip.takes = kit_takes,
-            slip.moves = moves.len(),
-            slip.edits = edits,
-            slip.ms = cut_ms.as_millis(),
-            slip.settle_ms = drawn_at.saturating_sub(cut_ms).as_millis(),
-            slip.replan_ms = started.elapsed().saturating_sub(drawn_at).as_millis(),
-            "drums slip-edited"
-        );
+        stages.mark("window.replan_ms");
         // The hits have moved: what was detected is not where they are.
         crate::hit_overlay::refresh();
         self.dirty.set(true);

@@ -103,6 +103,20 @@ fn run(path: &Path, id: &'static str, args: serde_json::Value) -> serde_json::Va
 
 #[test]
 fn backspace_takes_off_the_automated_edit_then_the_hand_placements() {
+    // The recorder, as the app installs it: where each action's time went.
+    {
+        use tracing_subscriber::layer::SubscriberExt as _;
+        let filter = tracing_subscriber::EnvFilter::new("info").add_directive(
+            architect_telemetry::timing::DIRECTIVE
+                .parse()
+                .expect("parses"),
+        );
+        let _ = tracing::subscriber::set_global_default(
+            tracing_subscriber::registry()
+                .with(filter)
+                .with(architect_telemetry::timing::Recorder::default()),
+        );
+    }
     let path = Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../../../features/dynamic-template/fixtures/golden/template.rpp");
     dynamic_template::golden_session::write_media(path.parent().expect("the fixtures"))
@@ -210,4 +224,32 @@ fn backspace_takes_off_the_automated_edit_then_the_hand_placements() {
         !session_daw::hits::placed(daw, &project).contains(&hit.id),
         "no longer a hand placement"
     );
+
+    // Each edit's time, stage by stage, read back as a model reads it.
+    let timed = run(
+        &path,
+        "PERF_RECENT",
+        serde_json::json!({ "action": "EDIT_QUANTIZE", "limit": 1 }),
+    );
+    let stages: Vec<&str> = timed[0]["stages"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter_map(|s| s["key"].as_str())
+        .collect();
+    for stage in [
+        "edit.read_ms",
+        "edit.plan_ms",
+        "edit.slip_ms",
+        "edit.land_ms",
+        "edit.check_ms",
+    ] {
+        assert!(stages.contains(&stage), "{stage} timed: {timed}");
+    }
+    let reverts = run(
+        &path,
+        "PERF_RECENT",
+        serde_json::json!({ "action": "EDIT_REVERT" }),
+    );
+    assert_eq!(reverts.as_array().map(Vec::len), Some(2), "{reverts}");
 }

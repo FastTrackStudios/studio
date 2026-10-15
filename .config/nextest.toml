@@ -9,6 +9,14 @@ slow-timeout = { period = "30s", terminate-after = 1 }
 filter = 'test(=shoot_every_scene)'
 slow-timeout = { period = "60s", terminate-after = 10 }
 
+# A drum slip on a real song, held to a budget (`perf_slip`, run only
+# with FTS_PERF_SESSION): opening Unbreakable alone is ~17 s of real work
+# (its song document read in full) before the stages it times. Slow
+# because the song is big; a hang is still caught.
+[[profile.default.overrides]]
+filter = 'test(=a_slip_on_a_real_song)'
+slow-timeout = { period = "60s", terminate-after = 5 }
+
 # The fill detector's album check decodes six real drum sessions and
 # runs detection over each — 55 s measured on a loaded 32-core box — so
 # it is slow for the same reason: it does real work, and it finishes.

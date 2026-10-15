@@ -334,6 +334,7 @@ fn quantize(a: QuantizeArg) -> Result<Quantized, String> {
 /// `EDIT_REVERT`: see its description.
 fn revert(a: RevertArg) -> Result<Reverted, String> {
     let (daw, project) = crate::actions::song()?;
+    let mut stages = architect_telemetry::timing::Stages::start();
     let on = target(daw, &project, &a.on)?;
     match on.profile {
         Profile::Drums => {
@@ -369,6 +370,7 @@ fn revert(a: RevertArg) -> Result<Reverted, String> {
                 .filter(|h| inside(h.time) && h.now.is_some())
                 .map(|h| h.id)
                 .collect();
+            stages.mark("edit.read_ms");
             let mut restored = true;
             for &(from, to) in &spans {
                 let us = |t: f64| num_traits::ToPrimitive::to_i64(&(t * 1e6).round()).unwrap_or(0);
@@ -378,8 +380,11 @@ fn revert(a: RevertArg) -> Result<Reverted, String> {
                     to_us: us(to),
                     ticket,
                 });
+                stages.mark("edit.slip_ms");
                 crate::actions::landed(ticket);
+                stages.mark("edit.land_ms");
                 restored &= as_recorded(daw, &project, (from, to), &playing);
+                stages.mark("edit.check_ms");
                 if a.hold.unwrap_or(true) {
                     crate::hits::add_zone(
                         daw,
@@ -409,6 +414,7 @@ fn revert(a: RevertArg) -> Result<Reverted, String> {
                 crate::hits::forget_placed_ids(daw, &project, &ids);
                 forgotten = u32::try_from(ids.len()).unwrap_or(u32::MAX);
             }
+            stages.mark("edit.place_back_ms");
             crate::hit_overlay::refresh();
             Ok(Reverted {
                 on: on.said(),

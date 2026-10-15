@@ -1084,6 +1084,7 @@ fn register_data(list: &ActionList) {
     crate::instrument_tracks::register(list);
     crate::timeline_actions::register(list);
     crate::edit_actions::register(list);
+    crate::perf::register(list);
     crate::bar_step::register(list);
     crate::poi::register(list);
     crate::track_regions::register(list);
@@ -4594,9 +4595,9 @@ fn register_revert(list: &ActionList) {
 fn register_place(list: &ActionList) {
     list.register(&PLACE, Effect::Mutating, |a: PlaceArg| {
         let (daw, project) = song()?;
-        let began = std::time::Instant::now();
+        let mut stages = architect_telemetry::timing::Stages::start();
         let before = crate::hits::playback(daw, &project);
-        let read_ms = began.elapsed().as_millis();
+        stages.mark("edit.read_ms");
         let ids: Vec<String> = a.id.iter().cloned().chain(a.ids.iter().cloned()).collect();
         let chosen: Vec<f64> = before
             .iter()
@@ -4646,30 +4647,21 @@ fn register_place(list: &ActionList) {
             .flatten()
             .filter_map(|i| times.get(i).copied())
             .collect();
-        let kit_ms = began.elapsed().as_millis();
+        stages.mark("edit.kit_ms");
         let (result, cuts) = judge(daw, &project, &settings, (&pairs, &neighbours), false);
-        let judge_ms = began.elapsed().as_millis();
-        let mut slip_ms = judge_ms;
+        stages.mark("edit.judge_ms");
         let span = (earliest.min(to) - 1.0, (latest + shift).max(latest) + 1.0);
         if result.applied {
             for id in &ids {
                 crate::hits::mark_placed(daw, &project, id);
             }
             let ticket = slip_now(daw, &project, &settings, cuts);
-            slip_ms = began.elapsed().as_millis();
+            stages.mark("edit.slip_ms");
             landed(ticket);
+            stages.mark("edit.land_ms");
         }
-        let wait_ms = began.elapsed().as_millis();
         let out = checked(daw, &project, (&settings, &pairs), &before, span);
-        tracing::info!(
-            place.read_ms = read_ms,
-            place.kit_ms = kit_ms,
-            place.judge_ms = judge_ms,
-            place.slip_ms = slip_ms,
-            place.wait_ms = wait_ms,
-            place.total_ms = began.elapsed().as_millis(),
-            "a hit placed"
-        );
+        stages.mark("edit.check_ms");
         Ok(out)
     });
 }
@@ -4785,6 +4777,7 @@ fn register_requantize(list: &ActionList) {
 /// No hit markers, a section that is not there, or no engine.
 pub(crate) fn quantize(a: QuantizeArg) -> Result<Vec<QuantizeSpan>, String> {
     let (daw, project) = song()?;
+    let mut stages = architect_telemetry::timing::Stages::start();
     if crate::hits::kit_from_markers(daw, &project).is_none() {
         return Err("no hit markers: find the hits first (HITS_DETECT)".to_owned());
     }
@@ -4811,6 +4804,7 @@ pub(crate) fn quantize(a: QuantizeArg) -> Result<Vec<QuantizeSpan>, String> {
             .collect::<Result<_, String>>()?
     };
     let before = crate::hits::playback(daw, &project);
+    stages.mark("edit.read_ms");
     let mut out: Vec<QuantizeSpan> = Vec::new();
     let mut cuts: Vec<(i64, i64)> = Vec::new();
     let mut sent: Vec<(f64, Option<f64>)> = Vec::new();
@@ -4827,12 +4821,16 @@ pub(crate) fn quantize(a: QuantizeArg) -> Result<Vec<QuantizeSpan>, String> {
             out.push(span);
         }
     }
+    stages.mark("edit.plan_ms");
     if !dry && cuts.iter().any(|c| c.1 != 0) {
         let ticket = slip_now(daw, &project, &base, cuts);
+        stages.mark("edit.slip_ms");
         landed(ticket);
+        stages.mark("edit.land_ms");
         // One edit, one check: every hit sent, held up to where it
         // was sent; none outside the edit moved.
         let check = checked(daw, &project, (&base, &sent), &before, whole);
+        stages.mark("edit.check_ms");
         if let Some(last) = out.last_mut() {
             last.check = Some(check);
         }
