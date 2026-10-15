@@ -7,8 +7,10 @@
 // `<A-t>` (Option/Alt + t) opens the management menu. `case_insensitive`
 // lets the user keep Alt held while picking children.
 bindings (
-    {keys t,      action 42482, desc "Track lanes: Play only next lane"}
-    {keys "<S-t>",  action 42481, desc "Track lanes: Play only previous lane"}
+    {keys t,      action "FTS_COMP_NEXT", desc "Comp the selection from the next-best take",
+     mnemonic "T for Take",
+     why "Comping is choosing, stretch by stretch, the take it was played best in: the takes ranked from their hits, T walks down the list, the kit comped as one."}
+    {keys "<S-t>",  action "FTS_COMP_PREV", desc "Comp the selection from the take before"}
 )
 
 which_key (
