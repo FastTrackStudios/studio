@@ -121,13 +121,15 @@ fn main() {
         use tracing_subscriber::Layer as _;
         // Stage marks are trace-level: let them through to the recorder,
         // and keep them out of the logs (`timing::no_marks`).
-        let filter = tracing_subscriber::EnvFilter::try_from_default_env()
-            .unwrap_or_else(|_| LOG_DEFAULT.into())
-            .add_directive(
-                timing::DIRECTIVE
-                    .parse()
-                    .expect("the timing directive parses"),
-            );
+        // And the Action List's span, whatever the log level: every action
+        // is timed (`PERF_RECENT`) even under RUST_LOG=warn.
+        let filter = timing::DIRECTIVES.iter().fold(
+            tracing_subscriber::EnvFilter::try_from_default_env()
+                .unwrap_or_else(|_| LOG_DEFAULT.into()),
+            |filter, directive| {
+                filter.add_directive(directive.parse().expect("the timing directives parse"))
+            },
+        );
         let registry = tracing_subscriber::registry()
             .with(filter)
             .with(tracing_subscriber::fmt::layer().with_filter(timing::no_marks()))
