@@ -529,8 +529,8 @@ fn resolve_razor(
     // gesture on the surface. The geometry is the arrangement's razor
     // too (`timeline::razor::RazorGesture`).
     let snap = |t: f64| {
-        if ed.grid.enabled && !mods.shift {
-            ed.snap_time(t)
+        if ed.snaps(mods.shift) {
+            ed.snap_line(t)
         } else {
             t
         }
@@ -914,7 +914,11 @@ fn run_action(ed: &mut Editor, action: Action, x: f64, y: f64, mods: Mods) -> Op
         // Click to place, drag to select: the press is a click on the
         // ruler until the pointer moves.
         Action::TimeSelect => {
-            let from = if mods.shift { t } else { ed.snap_time(t) };
+            let from = if ed.snaps(mods.shift) {
+                ed.snap_line(t)
+            } else {
+                t
+            };
             ed.playhead = Some(from);
             ed.time_selection = None;
             Some(Drag::TimeSelect { from })
@@ -1270,13 +1274,13 @@ fn cc_mean(ed: &Editor, number: u8, t0: f64, t1: f64) -> f64 {
 /// resampled through the toolbar shape, so switching shape after
 /// release restyles the ramp without redrawing it.
 fn cc_line(ed: &mut Editor, number: u8, start: (f64, f64), current: (f64, f64), mods: Mods) {
-    let snap = ed.grid.enabled && !mods.shift;
+    let snap = ed.snaps(mods.shift);
     let raw0 = ed.camera.t_at(start.0);
     let raw1 = ed.camera.t_at(current.0);
     let (mut t0, mut t1) = (raw0, raw1);
     if snap {
-        t0 = ed.snap_time(t0);
-        t1 = ed.snap_time(t1);
+        t0 = ed.snap_line(t0);
+        t1 = ed.snap_line(t1);
     }
     let v0 = crate::cc::cc_value(start.1, ed.viewport.h);
     let v1 = crate::cc::cc_value(current.1, ed.viewport.h);
@@ -1640,10 +1644,10 @@ fn legacy_pointer_down(ed: &mut Editor, x: f64, y: f64, mods: Mods, button: u16)
 fn begin_new_note(ed: &mut Editor, x: f64, y: f64, mods: Mods) -> Drag {
     let raw_t = ed.camera.t_at(x);
     let row = ed.camera.pitch_at(y, ed.viewport).round() as i32;
-    let snap = ed.grid.enabled && !mods.shift;
+    let snap = ed.snaps(mods.shift);
     let (start, end) = if snap {
         let step = ed.grid.step(ed.units_per_beat());
-        let cell = ed.snap_time(raw_t - step * 0.5);
+        let cell = ed.snap_line(raw_t - step * 0.5);
         (cell, cell + step)
     } else {
         (raw_t, raw_t + ed.units_per_beat() * 0.25)
@@ -1690,7 +1694,11 @@ pub fn pointer_move(ed: &mut Editor, drag: &mut Drag, x: f64, y: f64, mods: Mods
         Drag::Marquee { current, .. } => *current = (x, y),
         Drag::TimeSelect { from } => {
             let t = ed.camera.t_at(x);
-            let to = if mods.shift { t } else { ed.snap_time(t) };
+            let to = if ed.snaps(mods.shift) {
+                ed.snap_line(t)
+            } else {
+                t
+            };
             ed.time_selection = ((to - *from).abs() > f64::EPSILON).then(|| {
                 if *from <= to {
                     (*from, to)
@@ -1796,7 +1804,11 @@ pub fn pointer_move(ed: &mut Editor, drag: &mut Drag, x: f64, y: f64, mods: Mods
             } else {
                 *applied_time
             };
-            let delta = if mods.shift { raw } else { ed.snap_move(raw) };
+            let delta = if ed.snaps(mods.shift) {
+                ed.snap_move_line(raw)
+            } else {
+                raw
+            };
             if (delta - *applied_time).abs() > 1e-9 {
                 ed.apply_live(&Edit::MoveTime {
                     notes: notes.clone(),
@@ -1842,8 +1854,8 @@ pub fn pointer_move(ed: &mut Editor, drag: &mut Drag, x: f64, y: f64, mods: Mods
             original,
         } => {
             let raw = ed.camera.t_at(x);
-            let t = if ed.grid.enabled && !mods.shift {
-                ed.snap_time(raw)
+            let t = if ed.snaps(mods.shift) {
+                ed.snap_line(raw)
             } else {
                 raw
             };
@@ -1907,7 +1919,11 @@ pub fn pointer_move(ed: &mut Editor, drag: &mut Drag, x: f64, y: f64, mods: Mods
             } else {
                 0.0
             };
-            let dt = if mods.shift { raw } else { ed.snap_move(raw) };
+            let dt = if ed.snaps(mods.shift) {
+                ed.snap_move_line(raw)
+            } else {
+                raw
+            };
             let rows = if free_y {
                 (ed.camera.pitch_at(y, ed.viewport) - ed.camera.pitch_at(origin.1, ed.viewport))
                     .round() as i32
@@ -1955,8 +1971,8 @@ pub fn pointer_move(ed: &mut Editor, drag: &mut Drag, x: f64, y: f64, mods: Mods
             // The arrangement's razor edge too (`timeline::razor::RazorGesture`):
             // the dragged edge, never across the fixed one.
             let snap = |t: f64| {
-                if ed.grid.enabled && !mods.shift {
-                    ed.snap_time(t)
+                if ed.snaps(mods.shift) {
+                    ed.snap_line(t)
                 } else {
                     t
                 }
@@ -1983,8 +1999,8 @@ pub fn pointer_move(ed: &mut Editor, drag: &mut Drag, x: f64, y: f64, mods: Mods
             positions,
         } => {
             let raw = ed.camera.t_at(x);
-            let t = if ed.grid.enabled && !mods.shift {
-                ed.snap_time(raw)
+            let t = if ed.snaps(mods.shift) {
+                ed.snap_line(raw)
             } else {
                 raw
             };
@@ -2146,8 +2162,8 @@ pub fn pointer_move(ed: &mut Editor, drag: &mut Drag, x: f64, y: f64, mods: Mods
             // Rebuilt from the separator captured at press, so the
             // stretch is computed from the original layout every frame
             // rather than compounding on the last one.
-            let to = if ed.grid.enabled && !mods.shift {
-                ed.snap_time(ed.camera.t_at(x))
+            let to = if ed.snaps(mods.shift) {
+                ed.snap_line(ed.camera.t_at(x))
             } else {
                 ed.camera.t_at(x)
             };

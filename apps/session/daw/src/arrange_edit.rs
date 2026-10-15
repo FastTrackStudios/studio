@@ -18,7 +18,7 @@ use daw_proto::Track;
 use daw_ui::studio::project::Project;
 use timeline::razor::RazorArea;
 use timeline::select::Selection;
-use timeline::snap::Snapper;
+use timeline::snap::Snap;
 
 use crate::arrangement::{Arrangement, Fades, ItemZone, Viewport};
 use crate::cursor;
@@ -103,6 +103,9 @@ pub struct FadeDrag {
     pub x0: f64,
     pub x1: f64,
     pub fades: Fades,
+    /// Whether the fade's edge snaps, as the mouse map resolved it when
+    /// the press landed.
+    pub snap: bool,
 }
 
 /// A marquee across empty lanes: the Editor's marquee over notes, over
@@ -140,6 +143,10 @@ pub struct Editor {
     pub cursor: cursor::Edit,
     /// A time selection being dragged out, from this time.
     time_drag: Option<f64>,
+    /// Whether the time selection being swept snaps, and where its end
+    /// was last snapped to.
+    time_snap: bool,
+    time_to: Option<f64>,
     item_press: Option<ItemPress>,
     fade_drag: Option<FadeDrag>,
     /// A press on the ruler, until it becomes a drag or a click.
@@ -271,6 +278,11 @@ struct RulerPress {
     /// takes its neighbours' boundaries nowhere, and one that dragged
     /// them would make a timeline impossible to rearrange.
     joined: Vec<crate::ruler::MarkEdge>,
+    /// Where the press landed, snapped if it snaps: what a click makes a
+    /// marker or region at.
+    at: f64,
+    /// A bar's length there, through the tempo map: a clicked region's.
+    bar: f64,
 }
 
 impl Editor {
@@ -310,7 +322,7 @@ impl Editor {
         &mut self,
         hit: Option<Hit>,
         keys: Mods,
-        scene: &Arrangement,
+        (scene, grid): (&Arrangement, &Snap<'_>),
         effects: &mut Vec<Effect>,
     ) -> bool {
         // A new press ends any refused ghost still travelling: `ghost`
@@ -347,6 +359,7 @@ impl Editor {
                             x0: item.x0,
                             x1: item.x1,
                             fades: item.fades,
+                            snap: bound.snap,
                         });
                         true
                     }
@@ -420,7 +433,17 @@ impl Editor {
                     }
                     On::Marker { .. } => scene.marks_at(seconds, Some(on)),
                 };
+                let snaps = mousemap::resolve(hit.context, Gesture::Drag, keys).snap;
+                let landed = if snaps { grid.at(seconds) } else { seconds };
+                let beats = grid.grid.map.beats_at(landed);
+                let bar = grid.grid.map.time_at_beats(beats + 4.0) - landed;
                 self.ruler_press = Some(RulerPress {
+                    at: landed,
+                    bar: if bar.is_finite() && bar > 0.0 {
+                        bar
+                    } else {
+                        2.0
+                    },
                     on,
                     from: seconds,
                     was,
@@ -434,9 +457,11 @@ impl Editor {
                 // making or moving something, and moving the cursor as
                 // well would seek every time you reached for a band.
                 if matches!(on, On::Bars) {
-                    self.time_drag = Some(seconds);
-                    self.cursor.click(seconds);
-                    effects.push(Effect::Transport(Move::Seek, seconds));
+                    self.time_drag = Some(landed);
+                    self.time_snap = snaps;
+                    self.time_to = None;
+                    self.cursor.click(landed);
+                    effects.push(Effect::Transport(Move::Seek, landed));
                 }
                 true
             }
@@ -459,18 +484,25 @@ impl Editor {
                     });
                     return true;
                 }
-                if mousemap::resolve(hit.context, Gesture::Click, keys).action
-                    != mousemap::Action::SetEditCursor
-                {
+                let click = mousemap::resolve(hit.context, Gesture::Click, keys);
+                if click.action != mousemap::Action::SetEditCursor {
                     return false;
                 }
                 // A press moves the cursor at once — the click is what
                 // you meant — and the transport goes there, because the
                 // edit cursor and the play position are one thing until
-                // a time selection separates them.
-                self.time_drag = Some(seconds);
-                self.cursor.click(seconds);
-                effects.push(Effect::Transport(Move::Seek, seconds));
+                // a time selection separates them. On the grid, as every
+                // gesture is (the toggle; Shift flips it).
+                let landed = if click.snap {
+                    grid.at(seconds)
+                } else {
+                    seconds
+                };
+                self.time_drag = Some(landed);
+                self.time_snap = click.snap;
+                self.time_to = None;
+                self.cursor.click(landed);
+                effects.push(Effect::Transport(Move::Seek, landed));
                 true
             }
             _ => false,
@@ -584,13 +616,13 @@ impl Editor {
     /// Takes the row as well as the time, which is why it is not folded
     /// into [`Self::moved`]: every other drag here is along one axis
     /// and a razor is the only one that is a rectangle.
-    pub fn razor_moved(&mut self, at: f64, row: usize, grid: &Snapper<'_>) -> bool {
+    pub fn razor_moved(&mut self, at: f64, row: usize, grid: &Snap<'_>) -> bool {
         let Some(drag) = self.razor_drag.as_mut() else {
             return false;
         };
         let row = i32::try_from(row).unwrap_or(i32::MAX);
         let on_grid = drag.snap;
-        let snapped = |t: f64| if on_grid { grid.snap(t) } else { t };
+        let snapped = |t: f64| if on_grid { grid.at(t) } else { t };
         drag.gesture.moved(at, row, snapped)
     }
 
@@ -694,7 +726,7 @@ impl Editor {
 
     /// The pointer moved to the time `at` (if it is over the timeline).
     /// `true` when the picture changed.
-    pub fn moved(&mut self, at: Option<f64>, pps: f64, grid: &Snapper<'_>, keys: Mods) -> bool {
+    pub fn moved(&mut self, at: Option<f64>, pps: f64, grid: &Snap<'_>, keys: Mods) -> bool {
         let Some(at) = at else { return false };
         if let Some(press) = self.item_press.as_mut() {
             // Locked: the press still selects when it lets go, but a drag
@@ -711,7 +743,7 @@ impl Editor {
             // The item's start snaps (`SnapRule::AnchorStart`), its trimmed
             // edges land on a line: both are a snap of the moved point.
             let on_grid = press.snap;
-            let snap = |t: f64| if on_grid { grid.snap(t) } else { t };
+            let snap = |t: f64| if on_grid { grid.at(t) } else { t };
             // A slip does not move the item, so its ghost is the item's
             // own span: what changes is which part of the source is
             // under it, and that is carried in `slip` rather than here.
@@ -759,7 +791,9 @@ impl Editor {
                 .as_ref()
                 .map(|p| matches!(p.on, crate::ruler::On::Bars)),
         ) {
-            self.cursor.drag(from, at);
+            let to = if self.time_snap { grid.at(at) } else { at };
+            self.time_to = Some(to);
+            self.cursor.drag(from, to);
         }
         if let Some(press) = self.ruler_press.as_mut() {
             use crate::ruler::{On, Zone};
@@ -773,7 +807,7 @@ impl Editor {
             // boundary that is a hair off the bar is one REAPER will
             // draw a hair off the bar forever.
             let on_grid = press.snap;
-            let snap = |t: f64| if on_grid { grid.snap(t) } else { t }.max(0.0);
+            let snap = |t: f64| if on_grid { grid.at(t) } else { t }.max(0.0);
             let (was0, was1) = press.was;
             press.ghost = Some(match press.on {
                 On::Marker { .. } => {
@@ -795,6 +829,7 @@ impl Editor {
             return true;
         }
         if let Some(drag) = self.fade_drag.as_mut() {
+            let at = if drag.snap { grid.at(at) } else { at };
             let span = (drag.x1 - drag.x0).max(0.0);
             match drag.zone {
                 ItemZone::FadeIn => drag.fades.fade_in = (at - drag.x0).clamp(0.0, span),
@@ -804,7 +839,9 @@ impl Editor {
             return true;
         }
         if let Some(from) = self.time_drag {
-            self.cursor.drag(from, at);
+            let to = if self.time_snap { grid.at(at) } else { at };
+            self.time_to = Some(to);
+            self.cursor.drag(from, to);
             return true;
         }
         false
@@ -845,7 +882,7 @@ impl Editor {
             // the cursor, which the press already placed.
             if let Some(from) = self.time_drag.take()
                 && matches!(press.on, crate::ruler::On::Bars)
-                && let Some(to) = at
+                && let Some(to) = self.time_to.take().or(at)
             {
                 self.cursor.drag(from, to);
             }
@@ -856,14 +893,16 @@ impl Editor {
                 // on empty lane it is a request for a new one, at a
                 // single point.
                 (On::Lane { row }, None) => {
+                    // Where the press landed, snapped as the press was.
+                    let at = press.at;
                     let edit = if row == MARKS_ROW {
-                        Edit::AddMarker(String::new(), press.from, lane_of(row))
+                        Edit::AddMarker(String::new(), at, lane_of(row))
                     } else {
-                        // A region needs a length to exist. One bar,
-                        // so a click makes something you can see and
-                        // then drag, rather than something invisible.
-                        let bar = 4.0 * 60.0 / 120.0;
-                        Edit::AddRegion(String::new(), press.from, press.from + bar, lane_of(row))
+                        // A region needs a length to exist. One bar —
+                        // the bar there, through the tempo map — so a
+                        // click makes something you can see and then
+                        // drag, rather than something invisible.
+                        Edit::AddRegion(String::new(), at, at + press.bar, lane_of(row))
                     };
                     effects.push(Effect::Send(edit));
                 }
@@ -3446,9 +3485,12 @@ mod tests {
 
         fn press(&mut self, x: f64, y: f64, keys: Mods) -> (bool, Vec<Effect>) {
             let mut effects = Vec::new();
-            let taken = self
-                .editor
-                .press(Some(self.hit(x, y)), keys, &self.scene, &mut effects);
+            let taken = self.editor.press(
+                Some(self.hit(x, y)),
+                keys,
+                (&self.scene, &no_snap()),
+                &mut effects,
+            );
             (taken, effects)
         }
 
@@ -5123,8 +5165,12 @@ mod tests {
             context: input::proto::MouseModifierContext::Ruler,
         };
         let mut effects = Vec::new();
-        s.editor
-            .press(Some(hit), Mods::default(), &s.scene, &mut effects);
+        s.editor.press(
+            Some(hit),
+            Mods::default(),
+            (&s.scene, &no_snap()),
+            &mut effects,
+        );
         s.drag_to(x + 3.0 * PPS, Mods::default());
         s.release(x + 3.0 * PPS, Mods::default());
         let span = s.editor.cursor.selection.expect("a time selection");
@@ -5201,7 +5247,12 @@ mod ruler_tests {
         let rows: Vec<(super::Track, u32)> =
             project.tracks.iter().cloned().map(|t| (t, 0)).collect();
         let scene = super::tests::record(project, &rows);
-        editor.press(Some(hit), Mods::default(), &scene, &mut effects);
+        editor.press(
+            Some(hit),
+            Mods::default(),
+            (&scene, &super::no_snap()),
+            &mut effects,
+        );
         if let Some(to) = to {
             // A pixel scale coarse enough that any move clears the slop.
             super::on_quarters(120.0, |grid| {
@@ -5695,10 +5746,34 @@ mod comp_tests {
     }
 }
 
+/// A press's snap in a test: snapping off, so a press lands where it is
+/// (what the tests' fixtures were written against).
+#[cfg(test)]
+pub(crate) fn no_snap() -> Snap<'static> {
+    static GRID: std::sync::LazyLock<timeline::grid::Grid> =
+        std::sync::LazyLock::new(|| timeline::grid::Grid::new(0.25));
+    static MAP: timeline::time::ConstantTempo = timeline::time::ConstantTempo {
+        units_per_beat: 0.5,
+        beats_per_bar: 4.0,
+        origin: 0.0,
+        units_per_second: 1.0,
+    };
+    Snap {
+        grid: timeline::snap::Snapper {
+            grid: &GRID,
+            regions: None,
+            map: &MAP,
+        },
+        on: false,
+        magnets: &[],
+        reach: 0.0,
+    }
+}
+
 /// Snap to quarter notes at `bpm`, as the arrangement's tests expect:
 /// the grid their fixtures were written against.
 #[cfg(test)]
-pub(crate) fn on_quarters<R>(bpm: f64, f: impl FnOnce(&Snapper<'_>) -> R) -> R {
+pub(crate) fn on_quarters<R>(bpm: f64, f: impl FnOnce(&Snap<'_>) -> R) -> R {
     let grid = timeline::grid::Grid::new(0.25);
     let map = timeline::time::ConstantTempo {
         units_per_beat: 60.0 / bpm.max(1.0),
@@ -5706,9 +5781,14 @@ pub(crate) fn on_quarters<R>(bpm: f64, f: impl FnOnce(&Snapper<'_>) -> R) -> R {
         origin: 0.0,
         units_per_second: 1.0,
     };
-    f(&Snapper {
-        grid: &grid,
-        regions: None,
-        map: &map,
+    f(&Snap {
+        grid: timeline::snap::Snapper {
+            grid: &grid,
+            regions: None,
+            map: &map,
+        },
+        on: true,
+        magnets: &[],
+        reach: 0.0,
     })
 }

@@ -528,6 +528,44 @@ impl Editor {
         .snap(t)
     }
 
+    /// Whether a gesture snaps: the grid's toggle, flipped while Shift is
+    /// held — the rule the arrangement shares
+    /// ([`timeline::snap::Snap::resolve`]), so Shift with the grid off
+    /// snaps, as it does there.
+    #[must_use]
+    pub const fn snaps(&self, shift: bool) -> bool {
+        timeline::snap::Snap::resolve(self.grid.enabled, shift)
+    }
+
+    /// [`Self::snap_time`] whatever the toggle says: for a gesture that
+    /// has decided it snaps ([`Self::snaps`]).
+    #[must_use]
+    pub fn snap_line(&self, t: f64) -> f64 {
+        let mut grid = self.grid;
+        grid.enabled = true;
+        let map = self.time_map();
+        timeline::snap::Snapper {
+            grid: &grid,
+            regions: None,
+            map: &map,
+        }
+        .snap(t)
+    }
+
+    /// [`Self::snap_move`] whatever the toggle says.
+    #[must_use]
+    pub fn snap_move_line(&self, raw: f64) -> f64 {
+        let mut grid = self.grid;
+        grid.enabled = true;
+        let map = self.time_map();
+        timeline::snap::Snapper {
+            grid: &grid,
+            regions: None,
+            map: &map,
+        }
+        .delta(timeline::snap::SnapRule::Relative, self.doc.start, raw)
+    }
+
     /// Snap a move of `raw` units: a whole number of grid steps, so a
     /// note off the grid keeps its offset (`SnapRule::Relative`).
     pub fn snap_move(&self, raw: f64) -> f64 {

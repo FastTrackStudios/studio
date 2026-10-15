@@ -92,6 +92,9 @@ pub struct LaneDrag {
     /// The lane's top and height on screen at the press.
     top: f64,
     height: f64,
+    /// Whether it snaps: the snap toggle, flipped while Shift is held —
+    /// but not for a new automation item, which Shift starts.
+    snap: bool,
 }
 
 impl LaneDrag {
@@ -142,6 +145,7 @@ pub fn press(hit: &Hit, y: f64, keys: Keys) -> (Option<LaneDrag>, Vec<Edit>) {
         grab: Grab::Point(0),
         top: hit.placed.top,
         height: hit.placed.height,
+        snap: timeline::snap::Snap::resolve(crate::options::SNAP.get(), keys.shift),
     };
     let begin = Edit::BeginUndo(LABEL.to_owned());
     match &hit.spot {
@@ -236,6 +240,7 @@ pub fn press(hit: &Hit, y: f64, keys: Keys) -> (Option<LaneDrag>, Vec<Edit>) {
             ..
         } if keys.shift && !lane.kind.is_leveler() => {
             drag.grab = Grab::Make { from: *t, to: *t };
+            drag.snap = crate::options::SNAP.get();
             (Some(drag), vec![begin])
         }
         Spot::Body {
@@ -492,9 +497,18 @@ fn dials_done(track: &str) {
 /// The drag moved to `(x, y)`: the lane changed to follow it, and the edit
 /// that says so.
 #[must_use]
-pub fn drag(drag: &mut LaneDrag, view: Viewport, x: f64, y: f64) -> Vec<Edit> {
+/// `snap` puts a time on the grid or a magnet, as every drag snaps
+/// (`timeline::snap::Snap`); the drag uses it when it snaps.
+pub fn drag(
+    drag: &mut LaneDrag,
+    view: Viewport,
+    (x, y): (f64, f64),
+    snap: &dyn Fn(f64) -> f64,
+) -> Vec<Edit> {
     let zoom = if view.zoom_y > 0.0 { view.zoom_y } else { 1.0 };
-    let t = seconds(view, x);
+    let raw = seconds(view, x);
+    let t = if drag.snap { snap(raw).max(0.0) } else { raw };
+    let snaps = drag.snap;
     let value = drag.value_at(y.clamp(drag.top, drag.top + drag.height));
     let lanes = automation::lanes_of(&drag.track);
     let Some(lane) = lanes
@@ -558,6 +572,10 @@ pub fn drag(drag: &mut LaneDrag, view: Viewport, x: f64, y: f64) -> Vec<Edit> {
             vec![Edit::MoveAutomationItem(track, target, id, to)]
         }
         Grab::Make { from, to } => {
+            // Where it was pressed lands on the grid as its other end does.
+            if snaps {
+                *from = snap(*from).max(0.0);
+            }
             *to = t;
             let (start, end) = (from.min(t), from.max(t));
             let stand_in = daw_proto::automation::AutomationItem {

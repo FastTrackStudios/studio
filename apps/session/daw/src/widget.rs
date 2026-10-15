@@ -189,6 +189,11 @@ fn paint_handle(out: &mut Scene, rect: vello::kurbo::Rect) {
 /// before it is a swipe that expands or folds it.
 const SWIPE: f64 = 36.0;
 
+/// How near a magnet — an item's edge, a marker, a hit — pulls a snapped
+/// drag, in pixels: near enough to land on it on purpose, not so near the
+/// grid lines between are out of reach.
+const MAGNET_PX: f64 = 6.0;
+
 /// How short a row may open on a finger's screen, to fit every row shown
 /// (the folders folded) down the lanes: a name still read.
 const OPEN_ROW_TOUCH: f64 = 22.0;
@@ -254,6 +259,7 @@ const FLAG_REACH: f64 = 5.0;
 const FLAG_SLOP: f64 = 2.0;
 
 /// A hit marker being dragged by its flag.
+#[derive(Clone)]
 struct HitDrag {
     id: String,
     /// Every hit dragged: the selection the flag taken is in, else it.
@@ -267,6 +273,15 @@ struct HitDrag {
     /// Taken by its foot: the hit moved by stretching the audio either
     /// side of it (`HITS_STRETCH`), not slipping it.
     stretch: bool,
+    /// Whether it snaps: the snap toggle (Shift on a flag approves the
+    /// hit, so it does not flip it here).
+    snap: bool,
+    /// Where the grabbed hit plays, seconds: what lands on the grid.
+    time: f64,
+    /// What it snaps to besides the grid, the dragged hits left out.
+    magnets: Vec<f64>,
+    /// How far it moves the hits so far, seconds, snapped.
+    dt: f64,
 }
 
 /// What is under the pointer in a piece row's flag strip.
@@ -523,6 +538,10 @@ pub struct ArrangementWidget {
     /// What Backspace last put back, and when: pressed again on the same
     /// selection, it takes the hand placements off too.
     backspaced: std::cell::RefCell<Option<(editing::scope::Scope, web_time::Instant)>>,
+    /// What a drag snaps to besides the grid, gathered at its press
+    /// ([`Self::gather_magnets`]): item edges, markers, sections, hits,
+    /// the cursor — sorted.
+    magnets: Vec<f64>,
     /// The drum detection's version last drawn.
     detection_seen: Cell<u64>,
     /// The fine waveforms' generation last drawn ([`crate::wave_detail`]).
@@ -751,6 +770,7 @@ impl ArrangementWidget {
             mixing: Rc::new(Cell::new(false)),
             editing: Rc::new(Cell::new(false)),
             backspaced: std::cell::RefCell::new(None),
+            magnets: Vec::new(),
             detection_seen: Cell::new(0),
             detail_seen: Cell::new(0),
             marks_seen: Cell::new(0),
@@ -1209,6 +1229,20 @@ impl ArrangementWidget {
                         }
                         let mut ids: Vec<String> = self.hit_selected.iter().cloned().collect();
                         ids.sort();
+                        let marks = crate::hit_overlay::current();
+                        let dragged: Vec<f64> = marks.as_ref().map_or_else(Vec::new, |hits| {
+                            hits.marks
+                                .iter()
+                                .filter(|m| ids.contains(&m.id))
+                                .map(|m| m.time)
+                                .collect()
+                        });
+                        let time = marks
+                            .as_ref()
+                            .and_then(|hits| hits.marks.iter().find(|m| m.id == id))
+                            .map_or(spot.time, |m| m.time);
+                        let mut magnets = self.gather_magnets();
+                        magnets.retain(|t| dragged.iter().all(|d| (d - t).abs() > 1e-6));
                         self.hit_drag = Some(HitDrag {
                             id,
                             ids,
@@ -1216,6 +1250,10 @@ impl ArrangementWidget {
                             x,
                             marker_only: held.ctrl,
                             stretch: spot.foot && !held.ctrl,
+                            snap: crate::options::SNAP.get(),
+                            time,
+                            magnets,
+                            dt: 0.0,
                         });
                         true
                     }
@@ -1246,10 +1284,14 @@ impl ArrangementWidget {
                     *to = at;
                     return true;
                 }
-                let Some(drag) = self.hit_drag.as_mut() else {
+                let Some(drag) = self.hit_drag.as_ref() else {
                     return false;
                 };
-                drag.x = at.0;
+                let dt = self.hit_drag_dt(drag, at.0);
+                if let Some(drag) = self.hit_drag.as_mut() {
+                    drag.x = at.0;
+                    drag.dt = dt;
+                }
                 true
             }
             UiEvent::PointerUp(e) | UiEvent::PointerCancel(e) => {
@@ -1271,11 +1313,8 @@ impl ArrangementWidget {
                     drag.from_x
                 };
                 if (x - drag.from_x).abs() >= FLAG_SLOP {
-                    let pps = self
-                        .viewport(self.size.0, self.size.1)
-                        .pps
-                        .max(f64::EPSILON);
-                    let ms = (x - drag.from_x) / pps * 1_000.0;
+                    // Where it was seen to go: snapped as it was dragged.
+                    let ms = self.hit_drag_dt(&drag, x) * 1_000.0;
                     if drag.stretch {
                         // By its foot: stretched there, its neighbours kept.
                         run_hit_action(
@@ -1295,7 +1334,13 @@ impl ArrangementWidget {
                         } else {
                             "HITS_PLACE"
                         };
-                        run_hit_action(id, format!(r#"{{"id":"{}","by_ms":{ms}}}"#, drag.id));
+                        // Snapped here already: placed exactly there.
+                        let snap = if drag.marker_only {
+                            ""
+                        } else {
+                            r#","snap":false"#
+                        };
+                        run_hit_action(id, format!(r#"{{"id":"{}","by_ms":{ms}{snap}}}"#, drag.id));
                     }
                 }
                 true
@@ -2798,6 +2843,64 @@ impl ArrangementWidget {
     /// The time under an x in the widget's coordinates.
     /// The grid a drag snaps to: the arrangement's setting fitted to the
     /// zoom where the view starts, and the lane grid's tempo map.
+    /// How far the hit drag `drag` moves its hits with the pointer at `x`,
+    /// seconds: the grabbed hit onto the grid or a magnet when it snaps
+    /// ([`timeline::snap::Snap`]), as every drag does.
+    fn hit_drag_dt(&self, drag: &HitDrag, x: f64) -> f64 {
+        let view = self.viewport(self.size.0, self.size.1);
+        let pps = view.pps.max(f64::EPSILON);
+        let raw = (x - drag.from_x) / pps;
+        if !drag.snap {
+            return raw;
+        }
+        let (grid, map) = self.snap_grid(view);
+        let regions = crate::grid_in_force::current();
+        let snap = timeline::snap::Snap {
+            grid: timeline::snap::Snapper {
+                grid: &grid,
+                regions: regions.as_ref(),
+                map: &map,
+            },
+            on: true,
+            magnets: &drag.magnets,
+            reach: MAGNET_PX / pps,
+        };
+        snap.delta(timeline::snap::SnapRule::Absolute, drag.time, raw)
+    }
+
+    /// What a drag snaps to besides the grid: every item's edges but the
+    /// selected ones' (what is being dragged), the markers, the sections'
+    /// bounds, the hits where they play (editing), the edit cursor and
+    /// the time selection's ends. Sorted.
+    fn gather_magnets(&self) -> Vec<f64> {
+        let mut out: Vec<f64> = self
+            .project
+            .items
+            .values()
+            .flatten()
+            .filter(|i| !self.editor.selected.contains(&i.guid))
+            .flat_map(|i| {
+                let at = i.position.as_seconds();
+                [at, at + i.length.as_seconds()]
+            })
+            .collect();
+        out.extend(self.project.markers.iter().map(|m| m.at));
+        out.extend(self.project.sections.iter().flat_map(|s| [s.start, s.end]));
+        if self.editing.get()
+            && let Some(hits) = crate::hit_overlay::current()
+        {
+            out.extend(hits.marks.iter().map(|m| m.time));
+        }
+        out.push(self.editor.cursor.at);
+        if let Some(sel) = self.editor.cursor.selection {
+            out.extend([sel.start, sel.end]);
+        }
+        out.retain(|t| t.is_finite());
+        out.sort_by(f64::total_cmp);
+        out.dedup_by(|a, b| (*a - *b).abs() < 1e-9);
+        out
+    }
+
     fn snap_grid(&self, view: Viewport) -> (timeline::grid::Grid, timeline::time::TempoMap) {
         let tempo = self.scene.tempo();
         let (from, _) = view.secs();
@@ -2821,10 +2924,17 @@ impl ArrangementWidget {
         // is in force while editing.
         let (grid, map) = self.snap_grid(view);
         let regions = crate::grid_in_force::current();
-        let snapper = timeline::snap::Snapper {
-            grid: &grid,
-            regions: regions.as_ref(),
-            map: &map,
+        let snapper = timeline::snap::Snap {
+            grid: timeline::snap::Snapper {
+                grid: &grid,
+                regions: regions.as_ref(),
+                map: &map,
+            },
+            // Whether this gesture snaps is its press's (the toggle,
+            // Shift flipping it); this is what it snaps to.
+            on: true,
+            magnets: &self.magnets,
+            reach: MAGNET_PX / view.pps.max(1e-9),
         };
         // A marquee spans heights, not rows: rows are not one height, and
         // the box follows the pointer exactly.
@@ -4211,8 +4321,23 @@ impl ArrangementWidget {
                     return true;
                 }
                 let view = self.viewport(self.size.0, self.size.1);
-                if let Some(drag) = self.lane_drag.as_mut() {
-                    let edits = crate::automation_edit::drag(drag, view, x, y);
+                if self.lane_drag.is_some() {
+                    let (grid, map) = self.snap_grid(view);
+                    let regions = crate::grid_in_force::current();
+                    let snap = timeline::snap::Snap {
+                        grid: timeline::snap::Snapper {
+                            grid: &grid,
+                            regions: regions.as_ref(),
+                            map: &map,
+                        },
+                        on: true,
+                        magnets: &self.magnets,
+                        reach: MAGNET_PX / view.pps.max(1e-9),
+                    };
+                    let Some(drag) = self.lane_drag.as_mut() else {
+                        return false;
+                    };
+                    let edits = crate::automation_edit::drag(drag, view, (x, y), &|t| snap.at(t));
                     self.edits.borrow_mut().extend(edits);
                     self.dirty.set(true);
                     return true;
@@ -4278,6 +4403,7 @@ impl ArrangementWidget {
                         self.dirty.set(true);
                         return true;
                     }
+                    self.magnets = self.gather_magnets();
                     let (drag, edits) = crate::automation_edit::press(
                         &hit,
                         y,
@@ -4322,9 +4448,23 @@ impl ArrangementWidget {
                         return true;
                     }
                     let mut effects = Vec::new();
-                    let took = self
-                        .editor
-                        .press(hit, mods(e.mods), &self.scene, &mut effects);
+                    self.magnets = self.gather_magnets();
+                    let view = self.viewport(self.size.0, self.size.1);
+                    let (grid, map) = self.snap_grid(view);
+                    let regions = crate::grid_in_force::current();
+                    let snap = timeline::snap::Snap {
+                        grid: timeline::snap::Snapper {
+                            grid: &grid,
+                            regions: regions.as_ref(),
+                            map: &map,
+                        },
+                        on: true,
+                        magnets: &self.magnets,
+                        reach: MAGNET_PX / view.pps.max(1e-9),
+                    };
+                    let took =
+                        self.editor
+                            .press(hit, mods(e.mods), (&self.scene, &snap), &mut effects);
                     self.settle(effects);
                     if took {
                         self.holding = true;
@@ -4680,8 +4820,9 @@ impl ArrangementWidget {
                 None => crate::hit_overlay::refresh(),
             }
             if let Some(drag) = &self.hit_drag {
-                // Every hit dragged, where it will go.
-                let dx = drag.x - drag.from_x;
+                // Every hit dragged, where it will go: snapped, as it is
+                // dropped.
+                let dx = drag.dt * view.pps;
                 let marks = crate::hit_overlay::current();
                 let xs: Vec<f64> = marks.map_or_else(
                     || vec![drag.x],
@@ -5330,6 +5471,40 @@ mod tests {
         );
         widget.handle_event(&UiEvent::PointerUp(pointer(edge, y)));
         assert!(!widget.edge_scroll(), "let go, it stops");
+    }
+
+    /// A hit dragged by its flag lands on the grid, as every drag does —
+    /// the hit, not the pointer — and with snapping off, exactly where it
+    /// is dropped.
+    #[test]
+    fn a_dragged_hit_lands_on_the_grid() {
+        let mut widget = kit_widget();
+        let (x, y) = flag(&widget, 2, 2.0);
+        widget.handle_event(&UiEvent::PointerDown(pointer(x, y)));
+        let drag = widget.hit_drag.as_ref().expect("taken");
+        let time = drag.time;
+        let view = widget.viewport(widget.size.0, widget.size.1);
+        let (grid, map) = widget.snap_grid(view);
+        let snapper = timeline::snap::Snapper {
+            grid: &grid,
+            regions: None,
+            map: &map,
+        };
+        let moved = widget.hit_drag_dt(drag, x + 37.0);
+        let landed = time + moved;
+        assert!(
+            (snapper.snap(landed) - landed).abs() < 1e-9
+                || drag.magnets.iter().any(|m| (m - landed).abs() < 1e-9),
+            "{landed} on a line or a magnet"
+        );
+        let mut off = widget.hit_drag.clone().expect("taken");
+        off.snap = false;
+        let raw = widget.hit_drag_dt(&off, x + 37.0);
+        assert!(
+            (raw - 37.0 / view.pps).abs() < 1e-9,
+            "unsnapped: as dropped"
+        );
+        widget.handle_event(&UiEvent::PointerUp(pointer(x, y)));
     }
 
     /// A hit's flag, on the kick's rows, is the hit's: pressed, it is
