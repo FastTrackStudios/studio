@@ -341,18 +341,27 @@ fn laned_fold(folder: &daw_proto::Track, laned: Vec<(u32, Span)>) -> Fold {
 #[must_use]
 pub fn join(spans: &[Span]) -> Vec<Span> {
     let mut out: Vec<Span> = Vec::new();
+    // What the last span is already folded from, to ask in one step: a
+    // take cut into slices joins into one span from every slice, and a
+    // scan of `from` for each was quadratic — 26 000 slices of a kit,
+    // three seconds a replan.
+    let mut has: std::collections::HashSet<&str> = std::collections::HashSet::new();
     for span in spans {
         match out.last_mut() {
             Some(last) if span.start <= last.end + GRAIN => {
                 last.end = last.end.max(span.end);
                 for guid in &span.from {
-                    if !last.from.contains(guid) {
+                    if has.insert(guid.as_str()) {
                         last.from.push(guid.clone());
                     }
                 }
                 last.whole = false;
             }
-            _ => out.push(span.clone()),
+            _ => {
+                has.clear();
+                has.extend(span.from.iter().map(String::as_str));
+                out.push(span.clone());
+            }
         }
     }
     out
@@ -574,7 +583,7 @@ pub fn wave(children: &[&[f32]]) -> Vec<f32> {
 
 #[cfg(test)]
 mod tests {
-    use super::{Span, lane, parse_guid, spans};
+    use super::{Span, join, lane, parse_guid, spans};
     use daw_proto::{Duration, Item, PositionInSeconds};
 
     fn item(guid: &str, at: f64, len: f64) -> Item {
@@ -584,6 +593,29 @@ mod tests {
             length: Duration::from_seconds(len),
             ..Item::default()
         }
+    }
+
+    /// Touching spans are one, folded from each guid once, in the order
+    /// first met; a gap parts them and the next starts its own list.
+    #[test]
+    fn joined_spans_name_each_child_once() {
+        let span = |start: f64, end: f64, from: &[&str]| Span {
+            start,
+            end,
+            from: from.iter().map(|g| (*g).to_owned()).collect(),
+            whole: true,
+        };
+        let joined = join(&[
+            span(0.0, 1.0, &["a", "b"]),
+            span(1.0, 2.0, &["b", "c"]),
+            span(1.5, 3.0, &["a", "d"]),
+            span(5.0, 6.0, &["a"]),
+        ]);
+        assert_eq!(joined.len(), 2);
+        assert_eq!(joined[0].from, ["a", "b", "c", "d"]);
+        assert!((joined[0].end - 3.0).abs() < 1e-12 && !joined[0].whole);
+        assert_eq!(joined[1].from, ["a"]);
+        assert!(joined[1].whole);
     }
 
     /// A take slip-edited into slices, crossfaded at each seam, is one
