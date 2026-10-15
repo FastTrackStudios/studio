@@ -520,6 +520,9 @@ pub struct ArrangementWidget {
     mixing: Rc<Cell<bool>>,
     /// The panel's Edit-mode flag: the drum detection drawn over the kit.
     editing: Rc<Cell<bool>>,
+    /// What Backspace last put back, and when: pressed again on the same
+    /// selection, it takes the hand placements off too.
+    backspaced: std::cell::RefCell<Option<(editing::scope::Scope, web_time::Instant)>>,
     /// The drum detection's version last drawn.
     detection_seen: Cell<u64>,
     /// The fine waveforms' generation last drawn ([`crate::wave_detail`]).
@@ -747,6 +750,7 @@ impl ArrangementWidget {
             recording: Rc::new(Cell::new(true)),
             mixing: Rc::new(Cell::new(false)),
             editing: Rc::new(Cell::new(false)),
+            backspaced: std::cell::RefCell::new(None),
             detection_seen: Cell::new(0),
             detail_seen: Cell::new(0),
             marks_seen: Cell::new(0),
@@ -1539,14 +1543,32 @@ impl ArrangementWidget {
         })
     }
 
-    /// Alt+Q: put what is selected back as played (`EDIT_REVERT`) — for
-    /// the drums the whole kit over the selection's stretches, the hit
-    /// markers kept to edit by hand — off the frame, as
-    /// [`Self::quantize_drums`] does. `hold`: a no-quantize zone over it
-    /// (Alt+Q), so a quantize leaves it as played; without (Backspace), Q
-    /// quantizes it again — to compare.
+    /// Alt+Q: put what is selected back as recorded (`EDIT_REVERT`) — for
+    /// the drums every mic of the kit over the selection's stretches, its
+    /// EDIT lanes made its COMP lanes again there, hand placements and all
+    /// — off the frame, as [`Self::quantize_drums`] does. `hold`: a
+    /// no-quantize zone over it (Alt+Q), so a quantize leaves it as played.
     fn revert_drums(&self, hold: bool) -> bool {
-        self.revert_scope(self.scope(), hold)
+        self.revert_scope(self.scope(), hold, false)
+    }
+
+    /// Backspace in Edit mode over `scope`: the automated edit taken off —
+    /// the kit as recorded, the hits a hand placed put back where it put
+    /// them — and pressed again on the same selection within a few
+    /// seconds, the hand placements too.
+    fn backspace(&self, scope: editing::scope::Scope) -> bool {
+        /// How soon a second press counts as a second press.
+        const AGAIN: std::time::Duration = std::time::Duration::from_secs(8);
+        let now = web_time::Instant::now();
+        let again = self
+            .backspaced
+            .borrow()
+            .as_ref()
+            .is_some_and(|(was, when)| {
+                *was == scope && now.saturating_duration_since(*when) <= AGAIN
+            });
+        *self.backspaced.borrow_mut() = (!again).then(|| (scope.clone(), now));
+        self.revert_scope(scope, false, !again)
     }
 
     /// The stretch the selected hit markers span, as they play now (a
@@ -1567,18 +1589,16 @@ impl ArrangementWidget {
     }
 
     /// [`Self::revert_drums`] over the stretch `from`..`to`.
-    fn revert_span(&self, (from, to): (f64, f64), hold: bool) -> bool {
-        self.revert_scope(
-            editing::scope::Scope {
-                tracks: Vec::new(),
-                spans: vec![editing::scope::Span::between(from, to)],
-            },
-            hold,
-        )
+    fn revert_span(&self, (from, to): (f64, f64)) -> bool {
+        self.backspace(editing::scope::Scope {
+            tracks: Vec::new(),
+            spans: vec![editing::scope::Span::between(from, to)],
+        })
     }
 
-    /// [`Self::revert_drums`] over `scope`.
-    fn revert_scope(&self, scope: editing::scope::Scope, hold: bool) -> bool {
+    /// [`Self::revert_drums`] over `scope`; `keep_manual`, the hits a hand
+    /// placed put back where it placed them.
+    fn revert_scope(&self, scope: editing::scope::Scope, hold: bool, keep_manual: bool) -> bool {
         if scope.merged().is_empty() {
             *self
                 .staged
@@ -1605,13 +1625,18 @@ impl ArrangementWidget {
                     "tracks": scope.tracks,
                     "spans": scope.merged().iter().map(|s| serde_json::json!({"from": s.from, "to": s.to})).collect::<Vec<_>>(),
                     "hold": hold,
+                    "keep_manual": keep_manual,
                 });
                 let out = crate::actions::list().run_json("EDIT_REVERT", args.to_string().as_bytes());
                 let text = match &out {
-                    Ok(json) if String::from_utf8_lossy(json).contains(r#""ok":false"#) => {
-                        "put back as played — the check found a problem (DRUMS_REVIEW)"
+                    Ok(json) if String::from_utf8_lossy(json).contains(r#""restored":false"#) => {
+                        "put back — but not every hit plays where it was recorded yet (DRUMS_REVIEW)"
                     }
-                    Ok(_) => "put back as played — the hit markers are there to edit",
+                    Ok(json) if keep_manual && !String::from_utf8_lossy(json).contains(r#""placed_back":0"#) => {
+                        "automated edits cleared, your hand placements kept — Backspace again clears them too"
+                    }
+                    Ok(_) if keep_manual => "automated edits cleared — as recorded",
+                    Ok(_) => "as recorded — every edit cleared, hand placements too",
                     Err(e) => {
                         tracing::warn!(revert.error = %e, "edit: putting back was refused");
                         "the selection could not be put back — see the log"
@@ -1625,7 +1650,7 @@ impl ArrangementWidget {
         }
         #[cfg(not(feature = "native"))]
         {
-            let _ = (scope, hold);
+            let _ = (scope, hold, keep_manual);
             false
         }
     }
@@ -1787,6 +1812,31 @@ impl ArrangementWidget {
             remove.edits = effects.len(),
             "drums: a stretch removed"
         );
+        self.settle(effects);
+        self.replan_rows();
+        crate::hit_overlay::refresh();
+        self.dirty.set(true);
+        true
+    }
+
+    /// The kit as recorded over `from..to`
+    /// ([`crate::arrange_edit::Editor::restore`]): every mic's EDIT lane
+    /// made its COMP lane again there. False with no kit folder here.
+    fn restore_drums(&mut self, (from, to): (f64, f64)) -> bool {
+        let Some(folder) = self
+            .project
+            .tracks
+            .iter()
+            .find(|t| t.parent_guid.is_none() && t.name.trim().eq_ignore_ascii_case("drums"))
+            .map(|t| t.guid.clone())
+        else {
+            return false;
+        };
+        let mut effects = Vec::new();
+        crate::arrange_edit::Editor::restore(&mut self.project, &folder, from, to, &mut effects);
+        if effects.is_empty() {
+            return false;
+        }
         self.settle(effects);
         self.replan_rows();
         crate::hit_overlay::refresh();
@@ -2957,7 +3007,7 @@ impl ArrangementWidget {
                 && self.editing.get()
                 && let Some(span) = self.selected_hits_span()
             {
-                handled |= self.revert_span(span, false);
+                handled |= self.revert_span(span);
                 self.hit_selected.clear();
                 continue;
             }
@@ -2968,7 +3018,7 @@ impl ArrangementWidget {
                 && self.editing.get()
                 && self.editor.cursor.selection.is_some()
             {
-                handled |= self.revert_drums(false);
+                handled |= self.backspace(self.scope());
                 continue;
             }
             if let crate::keys::Action::Frame { time, tracks } = &action {
@@ -3007,6 +3057,11 @@ impl ArrangementWidget {
                     attacks: attacks_us.iter().map(|us| seconds(*us)).collect(),
                 };
                 handled |= self.slip_drums(moves, cut);
+                continue;
+            }
+            if let crate::keys::Action::RestoreDrums { from_us, to_us } = &action {
+                let seconds = |us: i64| num_traits::ToPrimitive::to_f64(&us).unwrap_or(0.0) / 1e6;
+                handled |= self.restore_drums((seconds(*from_us), seconds(*to_us)));
                 continue;
             }
             if let crate::keys::Action::StretchDrums { edits } = &action {

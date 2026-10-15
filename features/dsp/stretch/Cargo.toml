@@ -12,3 +12,7 @@ workspace = true
 [dependencies]
 dsp-core = { workspace = true }
 realfft = { workspace = true }
+
+[dev-dependencies]
+hound = { version = "3.5" }
+pitch = { workspace = true }

@@ -1741,6 +1741,32 @@ pub fn mark_placed(daw: &daw::standalone::Standalone, project: &ProjectContext, 
     }
 }
 
+/// Forget that a hand placed `ids`: they are where they were recorded
+/// again.
+pub fn forget_placed_ids(
+    daw: &daw::standalone::Standalone,
+    project: &ProjectContext,
+    ids: &[String],
+) {
+    let Some(folder) = crate::track_regions::kit_folder(daw, project) else {
+        return;
+    };
+    let mut kept: Vec<String> = placed(daw, project)
+        .into_iter()
+        .filter(|id| !ids.contains(id))
+        .collect();
+    kept.sort();
+    if let Err(e) = Tracks::set_ext_state(
+        daw,
+        project.clone(),
+        TrackRef::Guid(folder),
+        PLACED_KEY,
+        &kept.join(","),
+    ) {
+        tracing::warn!(hits.error = %e, "placed hits could not be forgotten");
+    }
+}
+
 /// Forget which hits a hand placed: the edit started over.
 pub fn forget_placed(daw: &daw::standalone::Standalone, project: &ProjectContext) {
     let Some(folder) = crate::track_regions::kit_folder(daw, project) else {

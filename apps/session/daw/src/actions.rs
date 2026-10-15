@@ -199,6 +199,7 @@ fn id_and_args(action: &Action) -> Option<(&'static str, String)> {
         // window does not do: straight to the window.
         Action::Unbound(_)
         | Action::SlipDrums { .. }
+        | Action::RestoreDrums { .. }
         | Action::StretchDrums { .. }
         | Action::Frame { .. }
         | Action::RemoveRange { .. } => {
@@ -3960,7 +3961,7 @@ fn quantize_spans(
 
 /// The stretches `sections` name (by name, from the SECTIONS lane), or
 /// else the one from `from` to `to` (the song's start, its end).
-fn spans(
+pub(crate) fn spans(
     daw: &daw::standalone::Standalone,
     project: &ProjectContext,
     sections: &[String],

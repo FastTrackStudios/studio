@@ -59,7 +59,7 @@ static REVERT: ActionMeta = crate::actions::meta(
     "EDIT_REVERT",
     "edit_revert",
     "Put the selection back as played",
-    "Put what is selected back as played — the selection, or the call's `tracks`, `spans` / `from`/`to` or `sections` — with the profile its tracks are edited with. Drums: the whole kit over each stretch, as DRUMS_REVERT does: the hit markers kept to edit by hand, and (`hold`, on unless false) a no-quantize zone over it so a later quantize leaves it. A stretch of time is needed: the whole song is not put back by accident.",
+    "Put what is selected back as recorded — the selection, or the call's `tracks`, `spans` / `from`/`to` or `sections` — with the profile its tracks are edited with. Drums: every mic of the kit over each stretch made what it was recorded as (its EDIT lanes made its COMP lanes again there: every slip, stretch and hand placement gone), the hit markers kept. `keep_manual`: the hits a hand placed (HITS_PLACE) put back where it placed them — only the automated edit taken off; otherwise they are forgotten there. `hold` (on unless false): a no-quantize zone over it, so a later quantize leaves it. A stretch of time is needed: the whole song is not put back by accident.",
     "Edit",
     "",
 );
@@ -214,7 +214,24 @@ struct Quantized {
 struct RevertArg {
     #[facet(flatten, default)]
     on: On,
+    /// A no-quantize zone over it, so a later quantize leaves it (on
+    /// unless false).
     hold: Option<bool>,
+    /// The hits a hand placed (`HITS_PLACE`) put back where it placed
+    /// them: only the automated edit taken off (off unless true).
+    keep_manual: Option<bool>,
+}
+
+/// What putting a stretch back did.
+#[derive(Facet)]
+struct Reverted {
+    on: Said,
+    /// Whether the kit plays as recorded there now (before any hand
+    /// placement is put back).
+    restored: bool,
+    /// Hand placements put back (`keep_manual`), and forgotten.
+    placed_back: u32,
+    forgotten: u32,
 }
 
 #[derive(Facet)]
@@ -315,42 +332,114 @@ fn quantize(a: QuantizeArg) -> Result<Quantized, String> {
 }
 
 /// `EDIT_REVERT`: see its description.
-fn revert(a: RevertArg) -> Result<Quantized, String> {
+fn revert(a: RevertArg) -> Result<Reverted, String> {
     let (daw, project) = crate::actions::song()?;
     let on = target(daw, &project, &a.on)?;
     match on.profile {
         Profile::Drums => {
-            if on.sections.is_empty() && on.scope.merged().is_empty() {
+            let spans: Vec<(f64, f64)> = if on.sections.is_empty() {
+                on.scope.merged().iter().map(|s| (s.from, s.to)).collect()
+            } else {
+                crate::actions::spans(daw, &project, &on.sections, (None, None))?
+                    .into_iter()
+                    .map(|(_, from, to)| (from, to))
+                    .collect()
+            };
+            if spans.is_empty() {
                 return Err(
                     "select a stretch of time, or rows, to put back as played: the whole song is not put back"
                         .to_owned(),
                 );
             }
-            let mut spans = Vec::new();
-            let stretches: Vec<(Vec<String>, Option<f64>, Option<f64>)> = if on.sections.is_empty()
-            {
-                on.scope
-                    .merged()
-                    .iter()
-                    .map(|s| (Vec::new(), Some(s.from), Some(s.to)))
-                    .collect()
-            } else {
-                vec![(on.sections.clone(), None, None)]
-            };
-            for (sections, from, to) in stretches {
-                spans.extend(crate::actions::revert(crate::actions::RevertArg {
-                    sections,
-                    from,
-                    to,
-                    hold: a.hold,
-                })?);
+            let keep_manual = a.keep_manual.unwrap_or(false);
+            let placed = crate::hits::placed(daw, &project);
+            let inside = |t: f64| spans.iter().any(|&(from, to)| t >= from && t < to);
+            // Where the hands put the hits they placed here, before the
+            // restore takes them off.
+            let hand: Vec<(String, f64)> = crate::hits::playback(daw, &project)
+                .into_iter()
+                .filter(|p| placed.contains(&p.id) && inside(p.time))
+                .map(|p| (p.id, p.time))
+                .collect();
+            // The hits that play here now: each must play where it was
+            // recorded once the restore lands (one in a stretch the comp
+            // has no audio for plays nowhere, before and after).
+            let playing: Vec<String> = crate::hits::hits(daw, &project, &[])
+                .into_iter()
+                .filter(|h| inside(h.time) && h.now.is_some())
+                .map(|h| h.id)
+                .collect();
+            let mut restored = true;
+            for &(from, to) in &spans {
+                let us = |t: f64| num_traits::ToPrimitive::to_i64(&(t * 1e6).round()).unwrap_or(0);
+                crate::actions::queue(crate::keys::Action::RestoreDrums {
+                    from_us: us(from),
+                    to_us: us(to),
+                });
+                restored &= as_recorded(daw, &project, (from, to), &playing);
+                if a.hold.unwrap_or(true) {
+                    crate::hits::add_zone(
+                        daw,
+                        &project,
+                        (from, to),
+                        (
+                            crate::hits::ZoneKind::Exception,
+                            crate::hits::ZoneOrigin::Manual,
+                            "put back as played: edit by hand",
+                        ),
+                    )?;
+                }
             }
-            Ok(Quantized {
+            let (mut placed_back, mut forgotten) = (0_u32, 0_u32);
+            if keep_manual {
+                for (id, to) in &hand {
+                    let args = serde_json::json!({ "id": id, "to": to, "snap": false }).to_string();
+                    if crate::actions::list()
+                        .run_json("HITS_PLACE", args.as_bytes())
+                        .is_ok()
+                    {
+                        placed_back = placed_back.saturating_add(1);
+                    }
+                }
+            } else {
+                let ids: Vec<String> = hand.iter().map(|(id, _)| id.clone()).collect();
+                crate::hits::forget_placed_ids(daw, &project, &ids);
+                forgotten = u32::try_from(ids.len()).unwrap_or(u32::MAX);
+            }
+            crate::hit_overlay::refresh();
+            Ok(Reverted {
                 on: on.said(),
-                spans,
+                restored,
+                placed_back,
+                forgotten,
             })
         }
     }
+}
+
+/// Wait for the window's restore of `from..to` to reach the engine: until
+/// every hit recorded there plays where it was recorded. At most a few
+/// seconds; false when it did not.
+fn as_recorded(
+    daw: &daw::standalone::Standalone,
+    project: &ProjectContext,
+    (from, to): (f64, f64),
+    playing: &[String],
+) -> bool {
+    /// How near its recording a hit counts as played there, seconds.
+    const THERE: f64 = 0.001;
+    let started = std::time::Instant::now();
+    while started.elapsed() < std::time::Duration::from_secs(10) {
+        let done = crate::hits::hits(daw, project, &[])
+            .iter()
+            .filter(|h| h.time >= from && h.time < to && playing.contains(&h.id))
+            .all(|h| h.now.is_some_and(|now| (now - h.time).abs() <= THERE));
+        if done && !crate::actions::window_pending() {
+            return true;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(20));
+    }
+    false
 }
 
 /// `EDIT_LEVEL`: see its description.

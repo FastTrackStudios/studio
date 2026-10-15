@@ -90,6 +90,13 @@ pub enum Action {
         /// reaches back over one.
         attacks_us: Vec<i64>,
     },
+    /// The kit as recorded over `from..to` (µs): its EDIT lanes made its
+    /// COMP lanes again there (`arrange_edit::Editor::restore`). What
+    /// `EDIT_REVERT` queues for the window.
+    RestoreDrums {
+        from_us: i64,
+        to_us: i64,
+    },
     /// Gain stage the session (Shift+G), or with `clear` (Alt+G) put every
     /// staged item back at an item volume of 1 (`crate::gain_stage`).
     GainStage {

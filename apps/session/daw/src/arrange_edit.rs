@@ -1387,6 +1387,7 @@ impl Editor {
             | Action::LevelDrums
             | Action::QuantizePanel
             | Action::SlipDrums { .. }
+            | Action::RestoreDrums { .. }
             | Action::StretchDrums { .. }
             | Action::Frame { .. }
             | Action::RemoveRange { .. }
@@ -2171,6 +2172,55 @@ impl Editor {
         to: f64,
         effects: &mut Vec<Effect>,
     ) {
+        Self::copy_lanes(
+            project,
+            folder,
+            |track| {
+                let take = take_lane(track, take);
+                comp_lane(track)
+                    .filter(|comp| *comp != take)
+                    .map(|comp| (take, comp))
+            },
+            (from, to),
+            ("Comp", "comp"),
+            effects,
+        );
+    }
+
+    /// Backspace: the kit's `EDIT` lanes over `from..to` made its `COMP`
+    /// lanes again — every edit there gone, slips, stretches and hand
+    /// placements alike: the kit as recorded, every mic at once. What
+    /// either side of the stretch stays; the pieces meet with a short
+    /// crossfade. One undo step.
+    pub fn restore(
+        project: &mut Project,
+        folder: &str,
+        from: f64,
+        to: f64,
+        effects: &mut Vec<Effect>,
+    ) {
+        use crate::drum_lanes::{COMP, EDIT, lane_named};
+        Self::copy_lanes(
+            project,
+            folder,
+            |track| Some((lane_named(track, COMP)?, lane_named(track, EDIT)?)),
+            (from, to),
+            ("Restore the drums as recorded", "restore"),
+            effects,
+        );
+    }
+
+    /// Every track under `folder` with lanes `(from, onto)` ([`Self::comp`],
+    /// [`Self::restore`]): `onto` cleared over `from..to` and `from`'s audio
+    /// there copied onto it. `label` names the undo step; `tag` the pieces.
+    fn copy_lanes(
+        project: &mut Project,
+        folder: &str,
+        lanes: impl Fn(&Track) -> Option<(u32, u32)>,
+        (from, to): (f64, f64),
+        (label, tag): (&str, &str),
+        effects: &mut Vec<Effect>,
+    ) {
         const JOIN: f64 = 0.005;
         if to <= from {
             return;
@@ -2182,14 +2232,13 @@ impl Editor {
             let Some(track) = project.tracks.iter().find(|t| t.guid == guid).cloned() else {
                 continue;
             };
-            let take = take_lane(&track, take);
-            let Some(comp) = comp_lane(&track).filter(|comp| *comp != take) else {
+            let Some((take, comp)) = lanes(&track) else {
                 continue;
             };
             let on = |item: &daw_proto::Item, lane: u32| {
                 let start = item.position.as_seconds();
                 let end = start + item.length.as_seconds();
-                item.fixed_lane == Some(lane) && end > from && start < to
+                item.fixed_lane.unwrap_or(0) == lane && end > from && start < to
             };
             // The comp lane cleared over the range: cut at its edges, and
             // the pieces inside gone. Gathered again for each edge: the
@@ -2230,7 +2279,7 @@ impl Editor {
                 let piece_from = from.max(begin);
                 let piece_to = to.min(begin + source.length.as_seconds());
                 let mut piece = source.clone();
-                piece.guid = format!("{}-comp@{piece_from:.3}", source.guid);
+                piece.guid = format!("{}-{tag}@{piece_from:.3}", source.guid);
                 piece.fixed_lane = Some(comp);
                 piece.position = at(piece_from);
                 piece.length = secs(piece_to - piece_from);
@@ -2260,7 +2309,7 @@ impl Editor {
         }
         if effects.len() > start {
             project.item_count = project.items.values().map(Vec::len).sum();
-            as_one_step("Comp", start, effects);
+            as_one_step(label, start, effects);
             effects.push(Effect::ReRecord);
         }
     }
