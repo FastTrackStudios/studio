@@ -3,9 +3,9 @@ bindings (
     {keys s,       action 40757, desc "Split items at cursor"}
     {keys d,       action 40006, desc "Delete selected items"}
 
-    // Drum quantize: `q` quantizes the kit over the folded kit rows
-    // selected (or the time selection) with the settings the Quantize
-    // panel last applied (every mic cut before each hit and moved
+    // Drum quantize: `q` quantizes what is selected — the kit's folded
+    // rows, a razor, the kit's tracks, a stretch of time — with the
+    // settings the Quantize panel last applied (every mic cut before each hit and moved
     // together, the kit kept in phase); Shift+Q opens the panel — a
     // section, its groove, the settings, Preview and Apply. A profile
     // binding `q` has it over macro recording.
@@ -15,6 +15,9 @@ bindings (
     {keys "<A-q>", action "FTS_REVERT_DRUMS", desc "Put the drums back as played (the edit undone, the hit markers kept)",
      mnemonic "Alt+Q to un-quantize",
      why "A fill the quantize made worse goes back to how it was played, its hit markers left to drag into place by hand."}
+    {keys "<A-l>", action "FTS_LEVEL_DRUMS", desc "Level what is selected (Edit mode): each drum's strokes brought together",
+     mnemonic "Alt+L for Level",
+     why "Even strokes before the edit and the mix: select the kit, a piece or a stretch, and its strokes come together as clip gain, the rest of the curve kept."}
     {keys "<S-q>", action "FTS_QUANTIZE_PANEL", desc "The Quantize panel: a section on its grid, by its groove",
      mnemonic "Shift+Q for the Quantize settings",
      why "Quantizing drums is judged section by section, so the panel shows the section's groove and previews before anything moves."}
