@@ -454,6 +454,117 @@ pub fn kit_takes(daw: &daw::standalone::Standalone, project: &ProjectContext) ->
         .collect()
 }
 
+/// One take of the kit's version of a stretch: what comping it in would
+/// play there.
+#[derive(Clone, Debug)]
+pub struct TakeVersion {
+    /// Its recording pass.
+    pub pass: String,
+    /// The lane it is on (its name), what a comp takes it from.
+    pub lane: Option<String>,
+    /// Its recordings' files, by track GUID: what tells whether it is the
+    /// one the comp plays somewhere.
+    pub files: Vec<(String, String)>,
+    /// Its hits in the stretch: `(piece, song seconds)`, by time.
+    pub hits: Vec<(String, f64)>,
+    /// Whether its recordings carry hit markers at all — a take never
+    /// detected has none anywhere, which says nothing of how it plays.
+    pub detected: bool,
+}
+
+/// Every take of the kit's version of `from..to`: each take's hits there,
+/// read off its recordings' hit markers — on the piece's trigger, else
+/// its first close mic — in song time (every take is recorded from the
+/// same place).
+#[must_use]
+pub fn takes_over(
+    daw: &daw::standalone::Standalone,
+    project: &ProjectContext,
+    (from, to): (f64, f64),
+) -> Vec<TakeVersion> {
+    let (pieces, extras) = kit(daw, project);
+    let tracks: Vec<&String> = pieces
+        .iter()
+        .flat_map(KitPiece::tracks)
+        .chain(&extras)
+        .collect();
+    let all = Tracks::all(daw, project.clone());
+    // A recording's own lane: the take lane an item playing its file sits
+    // on — not COMP or EDIT, which play pieces of every take.
+    let lane_name = |track: &str, path: &str| -> Option<String> {
+        let t = all.iter().find(|t| t.guid == track)?;
+        let shared = |lane: u32| {
+            t.lane_names
+                .get(usize::try_from(lane).unwrap_or(usize::MAX))
+                .is_some_and(|n| {
+                    let n = n.trim();
+                    n.eq_ignore_ascii_case(crate::drum_lanes::COMP)
+                        || n.eq_ignore_ascii_case(crate::drum_lanes::EDIT)
+                })
+        };
+        daw.get_items(project.clone(), TrackRef::Guid(track.to_owned()))
+            .into_iter()
+            .filter(|i| !shared(i.fixed_lane.unwrap_or(0)))
+            .find(|i| {
+                daw.get_active_take(project.clone(), ItemRef::Guid(i.guid.clone()))
+                    .and_then(|take| take.source_file_path)
+                    .is_some_and(|p| p == path)
+            })
+            .map(|i| {
+                let lane = i.fixed_lane.unwrap_or(0);
+                t.lane_names
+                    .get(usize::try_from(lane).unwrap_or(usize::MAX))
+                    .cloned()
+                    .unwrap_or_else(|| lane.saturating_add(1).to_string())
+            })
+    };
+    takes(daw, project, &tracks)
+        .into_iter()
+        .map(|take| {
+            let mut hits: Vec<(String, f64)> = Vec::new();
+            let mut detected = false;
+            for piece in &pieces {
+                let Some(r) = std::iter::once(&piece.trigger)
+                    .chain(&piece.mics)
+                    .find_map(|t| take.by_track.get(t))
+                else {
+                    continue;
+                };
+                for m in daw.get_take_markers(
+                    project.clone(),
+                    ItemRef::Guid(r.item.clone()),
+                    TakeRef::Active,
+                ) {
+                    let Some(h) = m.hit.as_ref().filter(|h| h.piece == piece.name) else {
+                        continue;
+                    };
+                    detected = true;
+                    let t = r.origin + m.source_position_seconds;
+                    if t >= from && t < to {
+                        hits.push((h.piece.clone(), t));
+                    }
+                }
+            }
+            hits.sort_by(|a, b| a.1.total_cmp(&b.1));
+            let lane = take
+                .by_track
+                .iter()
+                .find_map(|(track, r)| lane_name(track, &r.path));
+            TakeVersion {
+                pass: take.pass.clone(),
+                lane,
+                files: take
+                    .by_track
+                    .iter()
+                    .map(|(track, r)| (track.clone(), r.path.clone()))
+                    .collect(),
+                hits,
+                detected,
+            }
+        })
+        .collect()
+}
+
 /// A recording read whole: mono (its channels averaged) at its own rate.
 fn decode(path: &str) -> Option<(Vec<f32>, f64)> {
     let bytes = std::fs::read(path).ok()?;

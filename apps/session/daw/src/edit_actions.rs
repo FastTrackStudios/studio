@@ -79,13 +79,13 @@ static LEVEL: ActionMeta = crate::actions::meta(
 pub(crate) struct On {
     /// Tracks by name, path or guid; a folder stands for what is under it.
     #[facet(default)]
-    tracks: Vec<String>,
+    pub(crate) tracks: Vec<String>,
     #[facet(default)]
-    spans: Vec<Span>,
-    from: Option<f64>,
-    to: Option<f64>,
+    pub(crate) spans: Vec<Span>,
+    pub(crate) from: Option<f64>,
+    pub(crate) to: Option<f64>,
     #[facet(default)]
-    sections: Vec<String>,
+    pub(crate) sections: Vec<String>,
 }
 
 impl On {
@@ -179,6 +179,34 @@ fn target(
         sections,
         tracks,
     })
+}
+
+/// The stretches `on` names — its sections, its spans, or the
+/// arrangement's selection — merged, in song seconds; refused when there
+/// are none (the whole song is not what a comp or a revert acts on).
+pub(crate) fn stretches(
+    daw: &daw::standalone::Standalone,
+    project: &ProjectContext,
+    on: &On,
+) -> Result<Vec<(f64, f64)>, String> {
+    let target = target(daw, project, on)?;
+    let spans: Vec<(f64, f64)> = if target.sections.is_empty() {
+        target
+            .scope
+            .merged()
+            .iter()
+            .map(|s| (s.from, s.to))
+            .collect()
+    } else {
+        crate::actions::spans(daw, project, &target.sections, (None, None))?
+            .into_iter()
+            .map(|(_, from, to)| (from, to))
+            .collect()
+    };
+    if spans.is_empty() {
+        return Err("select a stretch of time — a fill's hits, rows, a razor — or say `from`/`to` or `sections`".to_owned());
+    }
+    Ok(spans)
 }
 
 /// What an edit acted on.

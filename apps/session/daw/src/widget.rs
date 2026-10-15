@@ -1755,6 +1755,59 @@ impl ArrangementWidget {
         }
     }
 
+    /// T / Shift+T: comp the selection from the next (`by` 1) or previous
+    /// take in its ranking (`COMP_CYCLE`) — the selected hit markers' span
+    /// (a fill picked by its hits) first, else the selection — off the
+    /// frame, the kit comped as one.
+    fn comp_cycle(&self, by: i32) -> bool {
+        let scope = self.selected_hits_span().map_or_else(
+            || self.scope(),
+            |(from, to)| editing::scope::Scope {
+                tracks: Vec::new(),
+                spans: vec![editing::scope::Span::between(from, to)],
+            },
+        );
+        if scope.merged().is_empty() {
+            *self
+                .staged
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner) =
+                Some("select a fill's hits, rows, a razor or a stretch of time to comp");
+            return true;
+        }
+        #[cfg(feature = "native")]
+        {
+            let Some(runtime) = crate::open::runtime() else {
+                return false;
+            };
+            let said = std::sync::Arc::clone(&self.staged);
+            runtime.spawn_blocking(move || {
+                let args = serde_json::json!({
+                    "spans": scope.merged().iter().map(|s| serde_json::json!({"from": s.from, "to": s.to})).collect::<Vec<_>>(),
+                    "by": by,
+                });
+                let out = crate::actions::list().run_json("COMP_CYCLE", args.to_string().as_bytes());
+                let text = match &out {
+                    Ok(_) if by < 0 => "comped from the take before",
+                    Ok(_) => "comped from the next take",
+                    Err(e) => {
+                        tracing::warn!(comp.error = %e, "comp: the take could not be comped");
+                        "no other take plays this stretch"
+                    }
+                };
+                *said
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(text);
+            });
+            true
+        }
+        #[cfg(not(feature = "native"))]
+        {
+            let _ = (scope, by);
+            false
+        }
+    }
+
     /// `q`: quantize what is selected (`EDIT_QUANTIZE`) — for the drums
     /// the whole kit over the selection's stretches (the whole song with
     /// tracks and no stretch), from its hit markers, with the settings
@@ -3110,6 +3163,10 @@ impl ArrangementWidget {
             }
             if action == crate::keys::Action::LevelDrums {
                 handled |= self.level_drums();
+                continue;
+            }
+            if let crate::keys::Action::CompCycle(by) = action {
+                handled |= self.comp_cycle(by);
                 continue;
             }
             // Editing, Backspace or Delete with hit markers selected puts

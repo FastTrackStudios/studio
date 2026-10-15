@@ -35,6 +35,7 @@ pub mod collab_bar;
 pub mod collab_pointers;
 #[cfg(feature = "native")]
 pub mod comp;
+pub mod comp_rank;
 pub mod compact;
 pub mod cursor;
 #[cfg(feature = "native")]

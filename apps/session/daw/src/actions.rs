@@ -125,6 +125,8 @@ fn id_and_args(action: &Action) -> Option<(&'static str, String)> {
         Action::QuantizeDrums => (QUANTIZE_DRUMS.id, String::new()),
         Action::RevertDrums => (REVERT_DRUMS.id, String::new()),
         Action::LevelDrums => (LEVEL_DRUMS.id, String::new()),
+        Action::CompCycle(by) if *by < 0 => (COMP_PREV.id, String::new()),
+        Action::CompCycle(_) => (COMP_NEXT.id, String::new()),
         Action::QuantizePanel => (QUANTIZE_PANEL.id, String::new()),
         Action::GainStage { clear: false } => (GAIN_STAGE.id, String::new()),
         Action::GainStage { clear: true } => (GAIN_STAGE_CLEAR.id, String::new()),
@@ -324,6 +326,22 @@ static LEVEL_DRUMS: ActionMeta = meta(
     "In Edit mode, EDIT_LEVEL over the selection: each selected piece's strokes (every piece when only time is selected) brought toward one another, each drum's own ride; over a time selection, razor or folded rows only the strokes there, the curve elsewhere kept. The window says how it came out.",
     "Drums",
     "Alt+L",
+);
+static COMP_NEXT: ActionMeta = meta(
+    "SESSION_COMP_NEXT",
+    "comp_next",
+    "Comp the next take",
+    "COMP_CYCLE over the selection — a fill's hit markers, rows, a razor, a time selection — the next take in its ranking comped onto the kit.",
+    "Edit",
+    "T",
+);
+static COMP_PREV: ActionMeta = meta(
+    "SESSION_COMP_PREV",
+    "comp_prev",
+    "Comp the take before",
+    "COMP_CYCLE over the selection, by -1: the take before in its ranking comped onto the kit.",
+    "Edit",
+    "Shift+T",
 );
 static REVERT_DRUMS: ActionMeta = meta(
     "SESSION_REVERT_DRUMS",
@@ -559,7 +577,7 @@ fn register_window(list: &ActionList) {
         crate::quantize_panel::ask();
         Ok("the Quantize panel shown, or hidden if it was".to_owned())
     });
-    let plain: [(&'static ActionMeta, Effect, Action); 18] = [
+    let plain: [(&'static ActionMeta, Effect, Action); 20] = [
         (&PLAY_STOP, Effect::Mutating, Action::PlayStop),
         (&PLAY_PAUSE, Effect::Mutating, Action::PlayPause),
         (&GO_TO_START, Effect::Mutating, Action::GoToStart),
@@ -568,6 +586,8 @@ fn register_window(list: &ActionList) {
         (&QUANTIZE_DRUMS, Effect::Mutating, Action::QuantizeDrums),
         (&REVERT_DRUMS, Effect::Mutating, Action::RevertDrums),
         (&LEVEL_DRUMS, Effect::Mutating, Action::LevelDrums),
+        (&COMP_NEXT, Effect::Mutating, Action::CompCycle(1)),
+        (&COMP_PREV, Effect::Mutating, Action::CompCycle(-1)),
         (
             &GAIN_STAGE,
             Effect::Mutating,
@@ -1085,6 +1105,7 @@ fn register_data(list: &ActionList) {
     crate::timeline_actions::register(list);
     crate::edit_actions::register(list);
     crate::perf::register(list);
+    crate::comp_rank::register(list);
     crate::bar_step::register(list);
     crate::poi::register(list);
     crate::track_regions::register(list);
@@ -3029,7 +3050,7 @@ fn find_fills(
 }
 
 /// The grid line nearest `h`, at `division` of a whole note.
-fn grid_line(
+pub(crate) fn grid_line(
     daw: &daw::standalone::Standalone,
     project: &ProjectContext,
     h: f64,
