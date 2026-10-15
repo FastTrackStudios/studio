@@ -2,7 +2,7 @@
 //! on a copy of it.
 //!
 //! ```sh
-//! FTS_PERF_SESSION=/path/to/a/copy/of/Unbreakable.session FTS_COMP_SPAN=100,104 \
+//! FTS_PERF_SESSION=/path/to/a/copy/of/Unbreakable.session FTS_COMP_SPAN=100,104 [FTS_COMP_DETECT=1] \
 //!   cargo nextest run --cargo-profile release-fast -p session-daw --features signal \
 //!   --test comp_real --run-ignored all
 //! ```
@@ -23,6 +23,18 @@ fn a_real_songs_takes_are_ranked() {
         })
         .unwrap_or((100.0, 104.0));
     session_daw::open::open_silent(&path).expect("the session opens");
+    // FTS_COMP_DETECT: the hits found on every take over the stretch first
+    // (HITS_DETECT with all_takes), so every take can be judged.
+    if std::env::var_os("FTS_COMP_DETECT").is_some() {
+        session_daw::actions::list()
+            .run_json(
+                "HITS_DETECT",
+                serde_json::json!({ "from": from, "to": to, "all_takes": true })
+                    .to_string()
+                    .as_bytes(),
+            )
+            .expect("detected");
+    }
     let said = session_daw::actions::list()
         .run_json(
             "COMP_CANDIDATES",
@@ -47,4 +59,11 @@ fn a_real_songs_takes_are_ranked() {
         judged.windows(2).all(|w| w[0] >= w[1]),
         "the judged best first: {ranked}"
     );
+    if std::env::var_os("FTS_COMP_DETECT").is_some() {
+        assert!(
+            judged.len() >= 2,
+            "every take judged once detected: {ranked}"
+        );
+        assert!(std::env::var_os("FTS_COMP_SHOW").is_none(), "{ranked:#}");
+    }
 }

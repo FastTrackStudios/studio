@@ -2636,7 +2636,8 @@ struct DetectArg {
     to: Option<f64>,
     #[facet(default)]
     pieces: Vec<String>,
-    #[facet(flatten)]
+    /// Settings for this run alone: none given is none changed.
+    #[facet(flatten, default)]
     settings: HitPatch,
 }
 
