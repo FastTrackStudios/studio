@@ -1557,7 +1557,7 @@ pins A's behaviour. Keep it or change it on purpose.
     `the_razor_help_matches_the_razor_keys`,
     `the_razor_menu_and_the_razor_keys_agree`.
 
-**Progress (2026-10-14).** Steps 1–15 are done. Where the code differs
+**Progress (2026-10-14).** Steps 1–16 are done. Where the code differs
 from the plan above:
 
 - **3:** one `Mods` type for both surfaces (`timeline::input::Mods`; the
@@ -1671,6 +1671,19 @@ from the plan above:
   from the source items, so a cut that deleted them would leave nothing
   to paste. Cut needs the clipboard to hold the items' content, not
   their guids.
+- **16:** `timeline::scroll` holds the arrangement's `Fling`, `Speed`,
+  `pinch_step` and the follow page turn (`page_to`), with their tests,
+  plus `edge_scroll`, which is new. The arrangement's widget scrolls the
+  lanes while a drag is held near their edge (faster nearer it, held at
+  the edge past it) and re-runs the drag at the same pointer, so what is
+  dragged follows. `Editor::dragging` is what it asks. The standalone
+  roll's wheel is `timeline::gestures::wheel` (Q6): z zooms time,
+  z+Shift the rows, a notch is 40 px, as in the arrangement and in the
+  Editor in Session. The user's own keymap scroll bindings override it.
+  The shipped defaults no longer apply there, so Ctrl+Shift+wheel nudge
+  is only there if bound. **Not added:** pinch and follow on the
+  Editor's stack (new behaviour in the stack's UI), and the Editor's
+  stack wheel, which keeps its binding table for its hit gestures.
 - **11:** `timeline::cursor` holds the arrangement's `Playhead`,
   `TimeSpan`, `EditCursor`, `StopMode`, `TransportStep` and `Locate`, with
   their tests. The arrangement aliases its old names, and keeps the

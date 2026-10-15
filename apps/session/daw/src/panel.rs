@@ -1098,30 +1098,6 @@ mod tests {
     }
 }
 
-/// Where to page the view to keep `x` (the play cursor, in lane pixels)
-/// in sight, or `None` while it is. The cursor lands a twentieth of the
-/// view in from the left; the view turns just before the cursor reaches
-/// the right edge, and at once when it is behind the left one.
-fn page_to(x: f64, scroll: f64, width: f64, travel: f64) -> Option<f64> {
-    let lead = width * 0.05;
-    let visible = x >= scroll && x <= scroll + width - lead;
-    (!visible).then(|| (x - lead).clamp(0.0, travel.max(0.0)))
-}
-
-#[cfg(test)]
-mod follow_tests {
-    use super::page_to;
-
-    #[test]
-    fn the_view_pages_rather_than_slides() {
-        // In view: nothing.
-        assert_eq!(page_to(500.0, 0.0, 1000.0, 10_000.0), None);
-        // At the right edge: a page on, the cursor near the left.
-        assert_eq!(page_to(960.0, 0.0, 1000.0, 10_000.0), Some(910.0));
-        // Jumped behind the view: back to it.
-        assert_eq!(page_to(100.0, 5000.0, 1000.0, 10_000.0), Some(50.0));
-        // Never past the end, never before the start.
-        assert_eq!(page_to(9_990.0, 0.0, 1000.0, 9_500.0), Some(9_500.0));
-        assert_eq!(page_to(10.0, 500.0, 1000.0, 10_000.0), Some(0.0));
-    }
-}
+/// Where to page the view to keep the play cursor in sight
+/// ([`timeline::scroll::page_to`]).
+use timeline::scroll::page_to;

@@ -398,6 +398,9 @@ pub struct ArrangementWidget {
     finger: Option<Finger>,
     /// The view still moving after a finger threw it.
     fling: Option<crate::touch::Fling>,
+    /// Where a held drag's pointer last was, with the keys and when: what
+    /// the edge scroll carries on from while it sits near an edge.
+    held_at: Option<((f64, f64), crate::mousemap::Mods, web_time::Instant)>,
     /// Ask the host for another frame, for a fling: see
     /// [`crate::touch::redraw_hook`].
     redraw: Option<Rc<dyn Fn()>>,
@@ -705,6 +708,7 @@ impl ArrangementWidget {
             fit_on_open: true,
             finger: None,
             fling: None,
+            held_at: None,
             redraw: None,
             touch: false,
             handle: Cell::new(None),
@@ -2603,6 +2607,88 @@ impl ArrangementWidget {
         (grid, ruler::lane_map(bars, tempo))
     }
 
+    /// The editor's drag, its pointer at `(x, y)`: what an item, a trim,
+    /// a razor or a marquee does as the hand moves.
+    fn held_drag(&mut self, x: f64, y: f64, keys: crate::mousemap::Mods) -> bool {
+        let view = self.viewport(self.size.0, self.size.1);
+        let seconds = self.seconds_at(x, view);
+        // Snapping is to the grid that is drawn: the setting fitted to
+        // this zoom, through the tempo map, the quantize's grid where it
+        // is in force while editing.
+        let (grid, map) = self.snap_grid(view);
+        let regions = crate::grid_in_force::current();
+        let snapper = timeline::snap::Snapper {
+            grid: &grid,
+            regions: regions.as_ref(),
+            map: &map,
+        };
+        // A marquee spans heights, not rows: rows are not one height, and
+        // the box follows the pointer exactly.
+        if self.editor.marquee_in_flight().is_some() {
+            let zoom = if view.zoom_y > 0.0 { view.zoom_y } else { 1.0 };
+            let content_y = (y - ruler::ruler_h() + view.scroll_y) / zoom;
+            return self.editor.marquee_moved(seconds, content_y);
+        }
+        // A razor is the one drag here that is a rectangle, so it is the
+        // one that needs the row as well as the time.
+        if self.editor.razor_in_flight().is_some() {
+            let row = self
+                .scene
+                .row_at_screen(y - ruler::ruler_h() + view.scroll_y, view)
+                .unwrap_or(0);
+            return self.editor.razor_moved(seconds, row, &snapper);
+        }
+        self.editor.moved(Some(seconds), view.pps, &snapper, keys)
+    }
+
+    /// Whether a drag is held where the edge scroll would move the view.
+    fn at_edge(&self) -> bool {
+        let Some((at, ..)) = self.held_at else {
+            return false;
+        };
+        if !(self.holding && self.editor.dragging()) {
+            return false;
+        }
+        let (lx, ly) = (self.scene.tcp.width(), ruler::ruler_h());
+        timeline::scroll::edge_scroll((at.0 - lx, at.1 - ly), (self.size.0 - lx, self.size.1 - ly))
+            != (0.0, 0.0)
+    }
+
+    /// A drag held near an edge of the lanes scrolls them, faster the
+    /// nearer (`timeline::scroll::edge_scroll`), and the drag goes on at
+    /// the same pointer, so what is dragged follows the scroll. `true`
+    /// while it is scrolling.
+    fn edge_scroll(&mut self) -> bool {
+        let Some((at, keys, since)) = self.held_at else {
+            return false;
+        };
+        if !(self.holding && self.editor.dragging()) {
+            self.held_at = None;
+            return false;
+        }
+        let lanes_x = self.scene.tcp.width();
+        let lanes_y = ruler::ruler_h();
+        let (vx, vy) = timeline::scroll::edge_scroll(
+            (at.0 - lanes_x, at.1 - lanes_y),
+            (self.size.0 - lanes_x, self.size.1 - lanes_y),
+        );
+        let now = web_time::Instant::now();
+        // A frame's worth at most: a stall must not jump the view.
+        let dt = now.saturating_duration_since(since).as_secs_f64().min(0.05);
+        self.held_at = Some((at, keys, now));
+        if vx == 0.0 && vy == 0.0 {
+            return false;
+        }
+        self.zooms
+            .borrow_mut()
+            .push(crate::zoom::Request::ScrollBy {
+                dx: vx * dt,
+                dy: vy * dt,
+            });
+        self.held_drag(at.0, at.1, keys);
+        true
+    }
+
     fn seconds_at(&self, x: f64, view: Viewport) -> f64 {
         ((x - self.scene.tcp.width() + view.scroll_x) / view.pps.max(f64::EPSILON)).max(0.0)
     }
@@ -3316,6 +3402,8 @@ impl Widget for ArrangementWidget {
             // A throw still carrying the view, and zooms queued for the
             // next frame.
             || self.fling.is_some()
+            // A drag held at an edge, scrolling.
+            || self.at_edge()
             || !self.zooms.borrow().is_empty()
             // Previews and folds that changed off the UI thread: the next
             // paint re-cuts the rows for them.
@@ -3468,6 +3556,13 @@ impl ArrangementWidget {
                 }
             } else {
                 self.fling = None;
+            }
+        }
+        // A drag held at an edge carries the view on, a frame at a time.
+        if self.edge_scroll() {
+            self.dirty.set(true);
+            if let Some(redraw) = &self.redraw {
+                redraw();
             }
         }
         let drawn = self.draw(css_w, css_h, scale);
@@ -3898,38 +3993,8 @@ impl ArrangementWidget {
                 // press: an item being dragged follows the pointer off
                 // the lane it started on, which is what dragging is.
                 if self.holding {
-                    let view = self.viewport(self.size.0, self.size.1);
-                    let seconds = self.seconds_at(x, view);
-                    // Snapping is to the grid that is drawn: the setting
-                    // fitted to this zoom, through the tempo map, the
-                    // quantize's grid where it is in force while editing.
-                    let (grid, map) = self.snap_grid(view);
-                    let regions = crate::grid_in_force::current();
-                    let snapper = timeline::snap::Snapper {
-                        grid: &grid,
-                        regions: regions.as_ref(),
-                        map: &map,
-                    };
-                    // A razor is the one drag here that is a rectangle,
-                    // so it is the one that needs the row as well as
-                    // the time.
-                    // A marquee spans heights, not rows: rows are not one
-                    // height, and the box follows the pointer exactly.
-                    if self.editor.marquee_in_flight().is_some() {
-                        let zoom = if view.zoom_y > 0.0 { view.zoom_y } else { 1.0 };
-                        let content_y = (y - ruler::ruler_h() + view.scroll_y) / zoom;
-                        return self.editor.marquee_moved(seconds, content_y);
-                    }
-                    if self.editor.razor_in_flight().is_some() {
-                        let row = self
-                            .scene
-                            .row_at_screen(y - ruler::ruler_h() + view.scroll_y, view)
-                            .unwrap_or(0);
-                        return self.editor.razor_moved(seconds, row, &snapper);
-                    }
-                    return self
-                        .editor
-                        .moved(Some(seconds), view.pps, &snapper, mods(e.mods));
+                    self.held_at = Some(((x, y), mods(e.mods), web_time::Instant::now()));
+                    return self.held_drag(x, y, mods(e.mods));
                 }
                 if let Some(turn) = self.item_turn.as_mut() {
                     turn.turn(y, e.mods.contains(Modifiers::CONTROL));
@@ -5007,6 +5072,35 @@ mod tests {
             time.mul_add(view.pps, widget.scene.tcp.width() - view.scroll_x),
             top.mul_add(view.zoom_y, crate::ruler::ruler_h() - view.scroll_y) + 3.0,
         )
+    }
+
+    /// An item dragged to the lanes' right edge carries the view on: the
+    /// frame asks the panel to scroll right. Away from the edge, nothing.
+    #[test]
+    fn a_drag_held_at_the_edge_scrolls_the_lanes() {
+        let mut widget = widget_with("edge", &[(0, "it", 2.0, 4.0)]);
+        let view = widget.viewport(widget.size.0, widget.size.1);
+        let (top, height) = widget.scene.row_box(0).expect("a row");
+        let x = 3.0_f64.mul_add(view.pps, widget.scene.tcp.width() - view.scroll_x);
+        let y = (top + height / 2.0).mul_add(view.zoom_y, crate::ruler::ruler_h() - view.scroll_y);
+        widget.handle_event(&UiEvent::PointerDown(pointer(x, y)));
+        widget.handle_event(&UiEvent::PointerMove(pointer(x + 40.0, y)));
+        assert!(widget.editor.dragging(), "the item was not taken");
+        widget.zooms.borrow_mut().clear();
+        assert!(!widget.edge_scroll(), "scrolled away from the edge");
+        let edge = widget.size.0 - 2.0;
+        widget.handle_event(&UiEvent::PointerMove(pointer(edge, y)));
+        std::thread::sleep(std::time::Duration::from_millis(5));
+        assert!(widget.edge_scroll(), "no scroll at the edge");
+        let asked = widget.zooms.borrow().clone();
+        assert!(
+            asked
+                .iter()
+                .any(|r| matches!(r, crate::zoom::Request::ScrollBy { dx, .. } if *dx > 0.0)),
+            "{asked:?}"
+        );
+        widget.handle_event(&UiEvent::PointerUp(pointer(edge, y)));
+        assert!(!widget.edge_scroll(), "let go, it stops");
     }
 
     /// A hit's flag, on the kick's rows, is the hit's: pressed, it is

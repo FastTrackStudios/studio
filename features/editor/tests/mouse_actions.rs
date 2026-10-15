@@ -1866,3 +1866,29 @@ fn a_drag_that_moves_a_note_is_one_undo_step() {
     assert_eq!(span(&ed, NoteId(2)), start, "one undo put it back");
     assert!(!ed.undo(), "the drag left more than one step");
 }
+
+// ── the wheel is the shared wheel (§5 Q6) ───────────────────────────
+
+/// A plain wheel scrolls the rows, Shift scrolls time: the arrangement's
+/// wheel (`timeline::gestures::wheel`), a notch a line of 40 px.
+#[test]
+fn the_rolls_wheel_is_the_shared_wheel() {
+    let mut ed = four_notes();
+    ed.camera.vertical.px_per_row = 10.0;
+    ed.camera.vertical.center = f64::from(ROW);
+    ed.settle_camera();
+    let before = ed.camera;
+    interaction::wheel(&mut ed, 400.0, 200.0, 0.0, 1.0, plain());
+    assert_eq!(ed.camera.t0, before.t0, "a plain wheel moved time");
+    assert!(
+        (ed.camera.vertical.center - before.vertical.center).abs() > 1e-9,
+        "a plain wheel did not scroll the rows"
+    );
+    let before = ed.camera;
+    interaction::wheel(&mut ed, 400.0, 200.0, 0.0, 1.0, shift());
+    assert!(
+        (ed.camera.t0 - before.t0).abs() > 1e-9,
+        "Shift+wheel did not scroll time"
+    );
+    assert_eq!(ed.camera.units_per_px, before.units_per_px, "it zoomed");
+}

@@ -2591,6 +2591,9 @@ pub const PAN_GAIN: f64 = 140.0;
 /// is single digits, not hundreds.
 pub const ZOOM_DIVISOR: f64 = 3.0;
 
+/// Pixels in a wheel notch (a line): what the shared wheel counts in.
+pub const NOTCH_PX: f64 = 40.0;
+
 /// Wheel/trackpad routing. `(dx, dy)` are the raw deltas.
 ///
 /// Which gesture means what is **not decided here** — it comes from the
@@ -2601,30 +2604,23 @@ pub const ZOOM_DIVISOR: f64 = 3.0;
 /// The binding resolves the gesture; the delta still supplies direction
 /// and amount, because the binding table drops it.
 pub fn wheel(ed: &mut Editor, x: f64, y: f64, dx: f64, dy: f64, mods: Mods) {
-    // `Z` is the zoom key, for the wheel as much as for the drag.
-    //
-    // Alt used to zoom here, which made Alt mean "create" on a drag and
-    // "zoom" on a wheel — the exact overloading the FTS map exists to
-    // remove. A modifier meaning two things depending on which *device*
-    // you moved is no more derivable than one meaning two things
-    // depending on which other key is held.
-    //
-    // The wheel zooms both axes together and the tool zooms them
-    // separately, which is the right division of labour: a wheel is a
-    // quick uniform zoom, a drag is the one where you aim.
-    if crate::paint::keys::zoom_prefix_held() {
-        let travel = if dx.abs() > dy.abs() { dx } else { dy };
-        let factor = (travel.abs() / ZOOM_DIVISOR).exp();
-        let factor = if travel < 0.0 { factor } else { 1.0 / factor };
-        ed.zoom_time_at(x, factor);
-        ed.zoom_pitch_at(y, factor);
-        return;
-    }
-
-    let Some(action) = crate::paint::scroll::action_for(dx, dy, mods) else {
-        // Deliberately nothing. An unbound gesture that still moved the
-        // view is how the editor drifted away from the DAW's scheme in
-        // the first place.
+    // The user's own wheel bindings, where they made any, win; everything
+    // else is the shared wheel, the arrangement's and the Editor's in
+    // Session (§5 Q6).
+    let Some(action) = crate::paint::scroll::override_for(dx, dy, mods) else {
+        // In notches here, in pixels there: a notch is a line.
+        match timeline::gestures::wheel(
+            dx * NOTCH_PX,
+            dy * NOTCH_PX,
+            crate::paint::keys::zoom_prefix_held(),
+            mods.shift,
+        ) {
+            // `z` zooms time, `z`+Shift the rows; about the pointer.
+            timeline::gestures::Wheel::ZoomTime(by) => ed.zoom_time_at(x, by),
+            timeline::gestures::Wheel::ZoomRows(by) => ed.zoom_pitch_at(y, by),
+            // A wheel scrolls, sideways with Shift.
+            timeline::gestures::Wheel::Scroll(sx, sy) => ed.pan_px(-sx, -sy),
+        }
         return;
     };
 

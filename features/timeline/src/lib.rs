@@ -13,6 +13,7 @@ pub mod input;
 pub mod mouse;
 pub mod razor;
 pub mod rows;
+pub mod scroll;
 pub mod select;
 pub mod snap;
 pub mod time;

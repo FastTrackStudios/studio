@@ -60,6 +60,37 @@ fn table() -> &'static ScrollBindingTable {
     TABLE.get_or_init(build)
 }
 
+/// The user's own wheel bindings for this surface, and only those: what
+/// overrides the shared wheel (`timeline::gestures::wheel`) on the roll.
+static USER: std::sync::OnceLock<Option<ScrollBindingTable>> = std::sync::OnceLock::new();
+
+fn user_table() -> Option<&'static ScrollBindingTable> {
+    USER.get_or_init(|| {
+        #[cfg(not(target_arch = "wasm32"))]
+        if let Ok(Some(user)) = input::config::load_user_config() {
+            return input::table_for_surface(&user, SURFACE).ok();
+        }
+        None
+    })
+    .as_ref()
+}
+
+/// What the user's own keymap binds this gesture to on the roll, if
+/// anything: the override of the shared wheel.
+pub fn override_for(dx: f64, dy: f64, mods: Mods) -> Option<ActionId> {
+    let event = ScrollEvent {
+        delta_x: dx,
+        delta_y: dy,
+        modifiers: input::Modifiers {
+            ctrl: mods.ctrl,
+            alt: mods.alt,
+            shift: mods.shift,
+            ..Default::default()
+        },
+    };
+    user_table()?.match_event(&event, &ActionContext::new())
+}
+
 /// One wheel notch, in pixels.
 ///
 /// The conversion a touchpad needs. A mouse reports scroll in *lines* —
@@ -94,60 +125,37 @@ pub fn action_for(dx: f64, dy: f64, mods: Mods) -> Option<ActionId> {
     table().match_event(&event, &ActionContext::new())
 }
 
-/// A one-line summary of the wheel gestures, built from the bindings.
-///
-/// The empty roll used to state them as literal text, which went stale
-/// the moment the config changed. Describing the table instead means the
-/// hint cannot disagree with what the wheel actually does.
+/// A one-line summary of what the roll's wheel does: the shared wheel
+/// (`timeline::gestures::wheel`), where the user's keymap does not say
+/// otherwise.
 pub fn hint() -> String {
     let mut parts = Vec::new();
-    for (label, mods) in [
-        (
-            "scroll",
-            Mods {
-                ctrl: false,
-                alt: false,
-                shift: false,
-            },
-        ),
+    for (label, mods, shared) in [
+        ("scroll", Mods::default(), "scrolls"),
         (
             "shift",
             Mods {
-                ctrl: false,
-                alt: false,
                 shift: true,
+                ..Mods::default()
             },
-        ),
-        (
-            "alt",
-            Mods {
-                ctrl: false,
-                alt: true,
-                shift: false,
-            },
-        ),
-        (
-            "alt+shift",
-            Mods {
-                ctrl: false,
-                alt: true,
-                shift: true,
-            },
+            "scrolls sideways",
         ),
     ] {
-        let Some(action) = action_for(0.0, 1.0, mods) else {
-            continue;
-        };
-        let what = match action.0.as_str() {
-            "view.vscroll" => "scrolls",
-            "view.hscroll" => "scrolls sideways",
-            "view.zoom_v" => "zooms pitch",
-            "view.zoom_h" => "zooms time",
-            "view.zoom_both" => "zooms",
-            other => other,
-        };
+        let what = override_for(0.0, 1.0, mods).map_or(shared.to_owned(), |action| {
+            match action.0.as_str() {
+                "view.vscroll" => "scrolls",
+                "view.hscroll" => "scrolls sideways",
+                "view.zoom_v" => "zooms pitch",
+                "view.zoom_h" => "zooms time",
+                "view.zoom_both" => "zooms",
+                other => other,
+            }
+            .to_owned()
+        });
         parts.push(format!("{label} {what}"));
     }
+    parts.push("z zooms time".to_owned());
+    parts.push("z+shift zooms pitch".to_owned());
     parts.join(" \u{b7} ")
 }
 
