@@ -25,13 +25,14 @@ fn be_the_window(path: &Path) {
         let mut project = (*session.project.0).clone();
         let seconds = |us: i64| num_traits::ToPrimitive::to_f64(&us).unwrap_or(0.0) / 1_000_000.0;
         let mut effects = Vec::new();
-        match action {
+        let ticket = match action {
             Action::SlipDrums {
                 moves,
                 pre_roll_us,
                 crossfade_us,
                 stretch_over_us,
                 attacks_us,
+                ticket,
             } => {
                 let items = kit_items(&project, &[]);
                 let cut = SlipCut {
@@ -47,8 +48,13 @@ fn be_the_window(path: &Path) {
                     ("Slip edit drums", cut),
                     &mut effects,
                 );
+                ticket
             }
-            Action::RestoreDrums { from_us, to_us } => {
+            Action::RestoreDrums {
+                from_us,
+                to_us,
+                ticket,
+            } => {
                 let folder = project
                     .tracks
                     .iter()
@@ -62,14 +68,18 @@ fn be_the_window(path: &Path) {
                     seconds(to_us),
                     &mut effects,
                 );
+                ticket
             }
             _ => continue,
-        }
+        };
         for effect in effects {
             if let Effect::Send(edit) = effect {
                 assert!(session_daw::engine::apply_now(&edit), "{edit:?} applies");
             }
         }
+        assert!(session_daw::engine::apply_now(
+            &session_daw::engine::Edit::Done(ticket)
+        ));
     }
 }
 

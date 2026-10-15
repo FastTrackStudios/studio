@@ -78,6 +78,8 @@ pub enum Action {
     /// [(played, source)])`.
     StretchDrums {
         edits: Vec<StretchEdit>,
+        /// Sent back as [`crate::engine::Edit::Done`] once the edits are.
+        ticket: u64,
     },
     SlipDrums {
         moves: Vec<(i64, i64)>,
@@ -89,6 +91,8 @@ pub enum Action {
         /// Every hit of the kit where it plays now, µs, by time: no seam
         /// reaches back over one.
         attacks_us: Vec<i64>,
+        /// Sent back as [`crate::engine::Edit::Done`] once the edits are.
+        ticket: u64,
     },
     /// The kit as recorded over `from..to` (µs): its EDIT lanes made its
     /// COMP lanes again there (`arrange_edit::Editor::restore`). What
@@ -96,6 +100,8 @@ pub enum Action {
     RestoreDrums {
         from_us: i64,
         to_us: i64,
+        /// Sent back as [`crate::engine::Edit::Done`] once the edits are.
+        ticket: u64,
     },
     /// Gain stage the session (Shift+G), or with `clear` (Alt+G) put every
     /// staged item back at an item volume of 1 (`crate::gain_stage`).

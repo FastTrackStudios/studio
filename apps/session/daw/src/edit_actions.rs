@@ -372,10 +372,13 @@ fn revert(a: RevertArg) -> Result<Reverted, String> {
             let mut restored = true;
             for &(from, to) in &spans {
                 let us = |t: f64| num_traits::ToPrimitive::to_i64(&(t * 1e6).round()).unwrap_or(0);
+                let ticket = crate::engine::ticket();
                 crate::actions::queue(crate::keys::Action::RestoreDrums {
                     from_us: us(from),
                     to_us: us(to),
+                    ticket,
                 });
+                crate::actions::landed(ticket);
                 restored &= as_recorded(daw, &project, (from, to), &playing);
                 if a.hold.unwrap_or(true) {
                     crate::hits::add_zone(
@@ -417,9 +420,8 @@ fn revert(a: RevertArg) -> Result<Reverted, String> {
     }
 }
 
-/// Wait for the window's restore of `from..to` to reach the engine: until
-/// every hit recorded there plays where it was recorded. At most a few
-/// seconds; false when it did not.
+/// Whether each of the hits `playing` recorded in `from..to` plays where
+/// it was recorded — after a restore has landed.
 fn as_recorded(
     daw: &daw::standalone::Standalone,
     project: &ProjectContext,
@@ -428,18 +430,10 @@ fn as_recorded(
 ) -> bool {
     /// How near its recording a hit counts as played there, seconds.
     const THERE: f64 = 0.001;
-    let started = std::time::Instant::now();
-    while started.elapsed() < std::time::Duration::from_secs(10) {
-        let done = crate::hits::hits(daw, project, &[])
-            .iter()
-            .filter(|h| h.time >= from && h.time < to && playing.contains(&h.id))
-            .all(|h| h.now.is_some_and(|now| (now - h.time).abs() <= THERE));
-        if done && !crate::actions::window_pending() {
-            return true;
-        }
-        std::thread::sleep(std::time::Duration::from_millis(20));
-    }
-    false
+    crate::hits::hits(daw, project, &[])
+        .iter()
+        .filter(|h| h.time >= from && h.time < to && playing.contains(&h.id))
+        .all(|h| h.now.is_some_and(|now| (now - h.time).abs() <= THERE))
 }
 
 /// `EDIT_LEVEL`: see its description.

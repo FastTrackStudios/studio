@@ -3047,6 +3047,7 @@ impl ArrangementWidget {
                 crossfade_us,
                 stretch_over_us,
                 attacks_us,
+                ticket,
             } = &action
             {
                 let seconds = |us: i64| num_traits::ToPrimitive::to_f64(&us).unwrap_or(0.0) / 1e6;
@@ -3057,14 +3058,25 @@ impl ArrangementWidget {
                     attacks: attacks_us.iter().map(|us| seconds(*us)).collect(),
                 };
                 handled |= self.slip_drums(moves, cut);
+                self.edits
+                    .borrow_mut()
+                    .push(crate::engine::Edit::Done(*ticket));
                 continue;
             }
-            if let crate::keys::Action::RestoreDrums { from_us, to_us } = &action {
+            if let crate::keys::Action::RestoreDrums {
+                from_us,
+                to_us,
+                ticket,
+            } = &action
+            {
                 let seconds = |us: i64| num_traits::ToPrimitive::to_f64(&us).unwrap_or(0.0) / 1e6;
                 handled |= self.restore_drums((seconds(*from_us), seconds(*to_us)));
+                self.edits
+                    .borrow_mut()
+                    .push(crate::engine::Edit::Done(*ticket));
                 continue;
             }
-            if let crate::keys::Action::StretchDrums { edits } = &action {
+            if let crate::keys::Action::StretchDrums { edits, ticket } = &action {
                 let seconds = |us: i64| num_traits::ToPrimitive::to_f64(&us).unwrap_or(0.0) / 1e6;
                 let edits: Vec<(String, crate::arrange_edit::Warped)> = edits
                     .iter()
@@ -3090,6 +3102,9 @@ impl ArrangementWidget {
                     &mut effects,
                 );
                 self.settle(effects);
+                self.edits
+                    .borrow_mut()
+                    .push(crate::engine::Edit::Done(*ticket));
                 handled = true;
                 continue;
             }

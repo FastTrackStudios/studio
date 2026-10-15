@@ -38,6 +38,7 @@ fn be_the_window(path: &Path) {
             crossfade_us,
             stretch_over_us,
             attacks_us,
+            ticket,
         } = action
         else {
             continue;
@@ -66,6 +67,9 @@ fn be_the_window(path: &Path) {
                 assert!(session_daw::engine::apply_now(&edit), "{edit:?} applies");
             }
         }
+        assert!(session_daw::engine::apply_now(
+            &session_daw::engine::Edit::Done(ticket)
+        ));
     }
 }
 

@@ -4001,83 +4001,19 @@ pub(crate) fn spans(
         .collect()
 }
 
-/// Wait for a queued slip to reach the engine: until the kit's hits play
-/// somewhere other than `before`, then a moment more for the rest of its
-/// steps. At most a few seconds.
-/// The longest a slip is waited for, seconds.
+/// The longest an edit queued for the window is waited for, seconds: a
+/// whole song's slip (thousands of edits) included.
 const SLIP_LANDS: u64 = 30;
 
-/// How near its target a moved hit is to have landed, seconds (the
-/// check's own "off target").
-const LANDED: f64 = 0.002;
-
-/// A hit this near its target is not moved, seconds: past the
-/// quantize's tolerance.
-const STAYS: f64 = 0.004;
-
-fn wait_for_slip(
-    daw: &daw::standalone::Standalone,
-    project: &ProjectContext,
-    (before, sent): (&[crate::hits::Played], &[(f64, Option<f64>)]),
-    span: (f64, f64),
-) {
-    let print = |p: &[crate::hits::Played]| -> Vec<(String, i64)> {
-        p.iter()
-            .map(|h| {
-                (
-                    h.id.clone(),
-                    num_traits::ToPrimitive::to_i64(&(h.time * 1e6).round()).unwrap_or(0),
-                )
-            })
-            .collect()
-    };
-    // Where the hits that move were sent (those already within the
-    // quantize's tolerance stay): the slip has landed when a hit plays at
-    // each of them.
-    let targets: Vec<f64> = sent
-        .iter()
-        .filter_map(|(h, t)| t.filter(|t| (t - h).abs() > STAYS))
-        .collect();
-    let landed = |now: &[crate::hits::Played]| {
-        let mut times: Vec<f64> = now.iter().map(|p| p.time).collect();
-        times.sort_by(f64::total_cmp);
-        targets.iter().all(|t| {
-            let at = times.partition_point(|x| *x < t - LANDED);
-            times.get(at).is_some_and(|x| (x - t).abs() <= LANDED)
-        })
-    };
-    let was = print(before);
-    let started = std::time::Instant::now();
-    let mut last = was.clone();
-    let mut steady_since: Option<std::time::Instant> = None;
-    // Long enough for a whole song's slip (thousands of edits, each
-    // slice's volume curve carried with it) to land. Done when every hit
-    // is where it was sent — or, short of that, when nothing has changed
-    // for a while (the check then says what did not land).
-    while started.elapsed() < std::time::Duration::from_secs(SLIP_LANDS) {
-        std::thread::sleep(std::time::Duration::from_millis(100));
-        let played = crate::hits::playback(daw, project);
-        let now = print(&played);
-        if now == was {
-            continue;
-        }
-        if now == last {
-            let quiet =
-                steady_since.is_some_and(|t| t.elapsed() >= std::time::Duration::from_millis(300));
-            let gave_up =
-                steady_since.is_some_and(|t| t.elapsed() >= std::time::Duration::from_secs(3));
-            // Landed, and its seams closed: the moves go first, the
-            // trims and reaches that close the seams after them.
-            if (quiet && landed(&played) && crate::hits::gaps(daw, project, span).is_empty())
-                || gave_up
-            {
-                return;
-            }
-            steady_since.get_or_insert_with(std::time::Instant::now);
-        } else {
-            steady_since = None;
-            last = now;
-        }
+/// Wait until the window has made the edit `ticket` was queued with and
+/// the engine has applied every edit of it ([`crate::engine::Edit::Done`]).
+/// No polling: woken the moment it lands.
+pub(crate) fn landed(ticket: u64) {
+    if !crate::engine::wait_done(ticket, std::time::Duration::from_secs(SLIP_LANDS)) {
+        tracing::warn!(
+            edit.ticket = ticket,
+            "an edit queued for the window did not land in time"
+        );
     }
 }
 
@@ -4513,7 +4449,9 @@ fn register_stretch(list: &ActionList) {
         crate::hits::mark_placed(daw, &project, &a.id);
         let us = |s: f64| num_traits::ToPrimitive::to_i64(&(s * 1_000_000.0).round()).unwrap_or(0);
         let slices = u32::try_from(edits.len()).unwrap_or(u32::MAX);
+        let ticket = crate::engine::ticket();
         queue(Action::StretchDrums {
+            ticket,
             edits: edits
                 .into_iter()
                 .map(|(guid, w)| {
@@ -4522,17 +4460,7 @@ fn register_stretch(list: &ActionList) {
                 })
                 .collect(),
         });
-        // Until the engine has it: the hit where it was sent.
-        for _ in 0..60 {
-            let now = crate::hits::playback(daw, &project)
-                .into_iter()
-                .find(|p| p.id == a.id)
-                .map(|p| p.time);
-            if now.is_some_and(|t| (t - to).abs() < 0.001) {
-                return Ok(Stretched { at: to, slices });
-            }
-            std::thread::sleep(std::time::Duration::from_millis(50));
-        }
+        landed(ticket);
         Ok(Stretched { at: to, slices })
     });
 }
@@ -4643,8 +4571,8 @@ pub(crate) fn revert(a: RevertArg) -> Result<Vec<QuantizeSpan>, String> {
         });
     }
     if cuts.iter().any(|c| c.1 != 0) {
-        slip_now(daw, &project, &settings, cuts);
-        wait_for_slip(daw, &project, (&before, &sent), whole);
+        let ticket = slip_now(daw, &project, &settings, cuts);
+        landed(ticket);
         let check = checked(daw, &project, (&settings, &sent), &before, whole);
         if let Some(last) = out.last_mut() {
             last.check = Some(check);
@@ -4727,9 +4655,9 @@ fn register_place(list: &ActionList) {
             for id in &ids {
                 crate::hits::mark_placed(daw, &project, id);
             }
-            slip_now(daw, &project, &settings, cuts);
+            let ticket = slip_now(daw, &project, &settings, cuts);
             slip_ms = began.elapsed().as_millis();
-            wait_for_slip(daw, &project, (&before, &pairs), span);
+            landed(ticket);
         }
         let wait_ms = began.elapsed().as_millis();
         let out = checked(daw, &project, (&settings, &pairs), &before, span);
@@ -4900,8 +4828,8 @@ pub(crate) fn quantize(a: QuantizeArg) -> Result<Vec<QuantizeSpan>, String> {
         }
     }
     if !dry && cuts.iter().any(|c| c.1 != 0) {
-        slip_now(daw, &project, &base, cuts);
-        wait_for_slip(daw, &project, (&before, &sent), whole);
+        let ticket = slip_now(daw, &project, &base, cuts);
+        landed(ticket);
         // One edit, one check: every hit sent, held up to where it
         // was sent; none outside the edit moved.
         let check = checked(daw, &project, (&base, &sent), &before, whole);
@@ -5072,7 +5000,7 @@ fn slip_now(
     project: &ProjectContext,
     settings: &crate::drum_settings::Settings,
     mut cuts: Vec<(i64, i64)>,
-) {
+) -> u64 {
     let us = |s: f64| num_traits::ToPrimitive::to_i64(&(s * 1_000_000.0).round()).unwrap_or(0);
     cuts.sort_unstable();
     // A hit two spans both cut is moved where either moves it.
@@ -5109,13 +5037,16 @@ fn slip_now(
         .map(|p| us(p.time))
         .collect();
     attacks_us.sort_unstable();
+    let ticket = crate::engine::ticket();
     queue(Action::SlipDrums {
+        ticket,
         attacks_us,
         moves: cuts,
         pre_roll_us: us(settings.lead_ms / 1_000.0),
         crossfade_us: us(settings.xfade_ms / 1_000.0),
         stretch_over_us: settings.stretch_gaps_ms.map_or(0, |ms| us(ms / 1_000.0)),
     });
+    ticket
 }
 
 /// Which audio.

@@ -28,6 +28,10 @@ use std::collections::VecDeque;
 /// Something the user did that the engine needs to know about.
 #[derive(Clone, PartialEq, Debug)]
 pub enum Edit {
+    /// A barrier: when it is applied, every edit sent before it has been
+    /// ([`ticket`], [`wait_done`]) — what an action that queued an edit
+    /// for the window waits on, instead of watching the song for it.
+    Done(u64),
     ToggleMute(String),
     ToggleSolo(String),
     ToggleArm(String),
@@ -337,6 +341,7 @@ impl Edit {
     #[must_use]
     pub fn guid(&self) -> &str {
         match self {
+            Self::Done(_) => "",
             Self::ToggleMute(g)
             | Self::ToggleSolo(g)
             | Self::ToggleArm(g)
@@ -1696,6 +1701,54 @@ fn take_volume_locally(
     crate::studio::request_resync();
 }
 
+/// The latest ticket handed out ([`ticket`]).
+static ISSUED: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
+/// The latest [`Edit::Done`] applied, and who waits on it.
+static DONE: (std::sync::Mutex<u64>, std::sync::Condvar) =
+    (std::sync::Mutex::new(0), std::sync::Condvar::new());
+
+/// A ticket for an edit queued for the window: the window sends
+/// [`Edit::Done`] with it after the edit's own edits, and [`wait_done`]
+/// returns once the engine has applied them all.
+#[must_use]
+pub fn ticket() -> u64 {
+    ISSUED
+        .fetch_add(1, std::sync::atomic::Ordering::AcqRel)
+        .saturating_add(1)
+}
+
+/// Wait until [`Edit::Done`] with `ticket` (or a later one) has been
+/// applied — at most `within`. False if it was not.
+pub fn wait_done(ticket: u64, within: std::time::Duration) -> bool {
+    let (lock, signal) = &DONE;
+    let started = std::time::Instant::now();
+    let mut applied = lock
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    while *applied < ticket {
+        let Some(left) = within.checked_sub(started.elapsed()) else {
+            return false;
+        };
+        applied = signal
+            .wait_timeout(applied, left)
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .0;
+    }
+    true
+}
+
+/// [`Edit::Done`] with `ticket` applied: everyone waiting on it or an
+/// earlier one woken.
+fn done(ticket: u64) {
+    let (lock, signal) = &DONE;
+    let mut applied = lock
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    *applied = (*applied).max(ticket);
+    signal.notify_all();
+}
+
 /// One edit, against the engine, waited for: what a test or a tool that
 /// needs the result before going on does instead of the queue. False when
 /// there is no runtime to run it on.
@@ -1714,7 +1767,7 @@ pub fn apply_now(edit: &Edit) -> bool {
 async fn apply_reported(edit: &Edit) {
     apply(edit).await;
     #[cfg(feature = "native")]
-    if !matches!(edit, Edit::BeginUndo(_) | Edit::EndUndo(_)) {
+    if !matches!(edit, Edit::BeginUndo(_) | Edit::EndUndo(_) | Edit::Done(_)) {
         let topic = if edit.is_ruler() {
             "markers"
         } else if edit.is_item() {
@@ -1746,6 +1799,10 @@ async fn apply(edit: &Edit) {
     // anything in the session, so they belong to neither the item path
     // nor the track one.
     match edit {
+        Edit::Done(ticket) => {
+            done(*ticket);
+            return;
+        }
         Edit::BeginUndo(label) => {
             if let Err(error) = project.begin_undo_block(label).await {
                 tracing::warn!(error = %error, "the engine refused to open an undo step");
@@ -2028,7 +2085,8 @@ async fn apply(edit: &Edit) {
         | Edit::SetTempo(..)
         // Already handled above, where they needed no track either.
         | Edit::BeginUndo(_)
-        | Edit::EndUndo(_) => Ok(()),
+        | Edit::EndUndo(_)
+        | Edit::Done(_) => Ok(()),
     };
     if let Err(error) = outcome {
         // One line, because a failed edit is a thing the user did that
