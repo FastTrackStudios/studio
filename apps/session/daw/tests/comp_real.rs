@@ -25,8 +25,9 @@ fn a_real_songs_takes_are_ranked() {
     session_daw::open::open_silent(&path).expect("the session opens");
     // FTS_COMP_DETECT: the hits found on every take over the stretch first
     // (HITS_DETECT with all_takes), so every take can be judged.
+    let mut detected = serde_json::Value::Null;
     if std::env::var_os("FTS_COMP_DETECT").is_some() {
-        session_daw::actions::list()
+        let said = session_daw::actions::list()
             .run_json(
                 "HITS_DETECT",
                 serde_json::json!({ "from": from, "to": to, "all_takes": true })
@@ -34,6 +35,7 @@ fn a_real_songs_takes_are_ranked() {
                     .as_bytes(),
             )
             .expect("detected");
+        detected = serde_json::from_slice(&said).unwrap_or_default();
     }
     let said = session_daw::actions::list()
         .run_json(
@@ -64,6 +66,11 @@ fn a_real_songs_takes_are_ranked() {
             judged.len() >= 2,
             "every take judged once detected: {ranked}"
         );
-        assert!(std::env::var_os("FTS_COMP_SHOW").is_none(), "{ranked:#}");
+        assert!(
+            std::env::var_os("FTS_COMP_SHOW").is_none(),
+            "detected: {} takes in {} s\n{ranked:#}",
+            detected["takes"],
+            detected["seconds"]
+        );
     }
 }

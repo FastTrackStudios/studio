@@ -568,6 +568,12 @@ pub fn takes_over(
 /// A recording read whole: mono (its channels averaged) at its own rate.
 fn decode(path: &str) -> Option<(Vec<f32>, f64)> {
     let bytes = std::fs::read(path).ok()?;
+    // A plain WAV — what a session records — straight to mono in one
+    // pass: through the general decoder it was copied three times (decoded,
+    // interleaved, averaged), most of a detection run.
+    if let Some(mono) = pcm_wav_mono(&bytes) {
+        return Some(mono);
+    }
     let extension = std::path::Path::new(path)
         .extension()
         .and_then(|e| e.to_str())
@@ -581,6 +587,63 @@ fn decode(path: &str) -> Option<(Vec<f32>, f64)> {
         .map(|c| c.iter().sum::<f32>() * scale)
         .collect();
     Some((mono, f64::from(audio.sample_rate)))
+}
+
+/// A PCM (16, 24 or 32-bit integer) or 32-bit float WAV as mono samples
+/// (channels averaged) and its rate; `None` for anything else, which the
+/// general decoder reads.
+fn pcm_wav_mono(bytes: &[u8]) -> Option<(Vec<f32>, f64)> {
+    if bytes.get(0..4)? != b"RIFF" || bytes.get(8..12)? != b"WAVE" {
+        return None;
+    }
+    let u16_at = |at: usize| Some(u16::from_le_bytes(bytes.get(at..at + 2)?.try_into().ok()?));
+    let u32_at = |at: usize| Some(u32::from_le_bytes(bytes.get(at..at + 4)?.try_into().ok()?));
+    let (mut format, mut channels, mut rate, mut bits) = (None, 0usize, 0u32, 0u16);
+    let mut at = 12usize;
+    while at + 8 <= bytes.len() {
+        let id = bytes.get(at..at + 4)?;
+        let len = usize::try_from(u32_at(at + 4)?).ok()?;
+        let body = at + 8;
+        if id == b"fmt " {
+            let mut tag = u16_at(body)?;
+            channels = usize::from(u16_at(body + 2)?);
+            rate = u32_at(body + 4)?;
+            bits = u16_at(body + 14)?;
+            // WAVE_FORMAT_EXTENSIBLE: the real format in its sub-format.
+            if tag == 0xFFFE && len >= 26 {
+                tag = u16_at(body + 24)?;
+            }
+            format = Some(tag);
+        } else if id == b"data" {
+            let data = bytes.get(body..body.saturating_add(len).min(bytes.len()))?;
+            let (tag, n) = (format?, channels.max(1));
+            let width = usize::from(bits / 8);
+            if width == 0 || rate == 0 {
+                return None;
+            }
+            let frame = width * n;
+            let scale = 1.0 / n as f32;
+            let sample: fn(&[u8]) -> f32 = match (tag, bits) {
+                (1, 16) => |b| f32::from(i16::from_le_bytes([b[0], b[1]])) / 32_768.0,
+                (1, 24) => {
+                    |b| (i32::from_le_bytes([0, b[0], b[1], b[2]]) >> 8) as f32 / 8_388_608.0
+                }
+                (1, 32) => {
+                    |b| i32::from_le_bytes([b[0], b[1], b[2], b[3]]) as f32 / 2_147_483_648.0
+                }
+                (3, 32) => |b| f32::from_le_bytes([b[0], b[1], b[2], b[3]]),
+                _ => return None,
+            };
+            let mono: Vec<f32> = data
+                .chunks_exact(frame)
+                .map(|f| f.chunks_exact(width).map(sample).sum::<f32>() * scale)
+                .collect();
+            return Some((mono, f64::from(rate)));
+        }
+        // Chunks are word-aligned.
+        at = body.saturating_add(len).saturating_add(len & 1);
+    }
+    None
 }
 
 /// Every one of `paths` read whole, in parallel; those that would not
@@ -848,11 +911,19 @@ pub fn detect(
     // Each take's hits of each piece, before they are written.
     let mut placed: Vec<(KitTake, usize, Vec<Found>)> = Vec::new();
 
-    for take in takes(daw, project, &tracks)
+    let chosen: Vec<KitTake> = takes(daw, project, &tracks)
         .into_iter()
         .filter(|t| all_takes || t.in_use())
-    {
-        let found = match detect_take(&take, &pieces, &extras, settings) {
+        .collect();
+    let mut stages = architect_telemetry::timing::Stages::start();
+    // The takes are found at once, a few in flight: each is its files read
+    // whole (a gigabyte a long take across a kit) and its pieces' detection
+    // spread across cores inside `drum_hits`. In order, so a run is the
+    // same run every time.
+    let founds = found_in_parallel(&chosen, &pieces, &extras, settings);
+    stages.mark("hits.detect_ms");
+    for (take, found) in chosen.into_iter().zip(founds) {
+        let found = match found {
             Ok(Some(found)) => found,
             Ok(None) => continue,
             Err(why) => {
@@ -899,6 +970,7 @@ pub fn detect(
     }
 
     finish(&mut report, seen);
+    stages.mark("hits.judge_ms");
     let names: BTreeSet<String> = pieces.iter().map(|p| p.name.clone()).collect();
     Projects::begin_undo_block(daw, project.clone(), "Detect drum hits");
     for (item, hits) in written.into_values() {
@@ -909,8 +981,50 @@ pub fn detect(
         }
     }
     Projects::end_undo_block(daw, project.clone(), "Detect drum hits", None);
+    stages.mark("hits.write_ms");
     report.seconds = started.elapsed().as_secs_f64();
     Ok(report)
+}
+
+/// How many takes are found at once: each holds its files decoded whole.
+const TAKES_IN_FLIGHT: usize = 8;
+
+/// [`detect_take`] for every one of `takes`, [`TAKES_IN_FLIGHT`] at once,
+/// in their order.
+fn found_in_parallel(
+    takes: &[KitTake],
+    pieces: &[KitPiece],
+    extras: &[String],
+    settings: &HitSettings,
+) -> Vec<Result<Option<TakeFound>, String>> {
+    let next = std::sync::atomic::AtomicUsize::new(0);
+    let mut out: Vec<Option<Result<Option<TakeFound>, String>>> =
+        (0..takes.len()).map(|_| None).collect();
+    let slots: Vec<std::sync::Mutex<Option<Result<Option<TakeFound>, String>>>> = (0..takes.len())
+        .map(|_| std::sync::Mutex::new(None))
+        .collect();
+    std::thread::scope(|scope| {
+        for _ in 0..TAKES_IN_FLIGHT.min(takes.len()) {
+            scope.spawn(|| {
+                loop {
+                    let i = next.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                    let Some(take) = takes.get(i) else { break };
+                    let found = detect_take(take, pieces, extras, settings);
+                    if let Some(slot) = slots.get(i)
+                        && let Ok(mut slot) = slot.lock()
+                    {
+                        *slot = Some(found);
+                    }
+                }
+            });
+        }
+    });
+    for (o, slot) in out.iter_mut().zip(slots) {
+        *o = slot.into_inner().ok().flatten();
+    }
+    out.into_iter()
+        .map(|o| o.unwrap_or_else(|| Err("a take's detection did not finish".to_owned())))
+        .collect()
 }
 
 /// What was learned of each piece over the takes, into its report line.
@@ -2984,4 +3098,42 @@ fn register_edits(list: &ActionList) {
             true
         }))
     });
+}
+
+#[cfg(test)]
+mod wav_tests {
+    /// A 24-bit stereo WAV, as a session records one, read straight to
+    /// mono: its two channels averaged, its rate kept.
+    #[test]
+    fn a_plain_wav_is_read_to_mono_in_one_pass() {
+        let mut wav: Vec<u8> = Vec::new();
+        let frames: [(i32, i32); 3] = [(0, 0), (4_194_304, -4_194_304), (8_388_607, 8_388_607)];
+        let data_len = u32::try_from(frames.len() * 6).expect("small");
+        wav.extend_from_slice(b"RIFF");
+        wav.extend_from_slice(&(36 + data_len).to_le_bytes());
+        wav.extend_from_slice(b"WAVEfmt ");
+        wav.extend_from_slice(&16u32.to_le_bytes());
+        wav.extend_from_slice(&1u16.to_le_bytes());
+        wav.extend_from_slice(&2u16.to_le_bytes());
+        wav.extend_from_slice(&48_000u32.to_le_bytes());
+        wav.extend_from_slice(&(48_000u32 * 6).to_le_bytes());
+        wav.extend_from_slice(&6u16.to_le_bytes());
+        wav.extend_from_slice(&24u16.to_le_bytes());
+        wav.extend_from_slice(b"data");
+        wav.extend_from_slice(&data_len.to_le_bytes());
+        for (l, r) in frames {
+            wav.extend_from_slice(&l.to_le_bytes()[..3]);
+            wav.extend_from_slice(&r.to_le_bytes()[..3]);
+        }
+        let (mono, rate) = super::pcm_wav_mono(&wav).expect("read");
+        assert!((rate - 48_000.0).abs() < f64::EPSILON);
+        assert_eq!(mono.len(), 3);
+        assert!(mono[0].abs() < 1e-6, "silence");
+        assert!(mono[1].abs() < 1e-6, "opposites cancel");
+        assert!((mono[2] - 1.0).abs() < 1e-3, "full scale");
+        assert!(
+            super::pcm_wav_mono(b"OggS....").is_none(),
+            "not a WAV: the decoder's"
+        );
+    }
 }
