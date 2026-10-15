@@ -143,7 +143,7 @@ image = { workspace = true }
 # Finding REAPER's resource path, for the toolbar icons it installs.
 dirs = { version = "6", optional = true }
 skrifa = "0.42"
-timeline = { workspace = true }
+timeline = { workspace = true, features = ["actions"] }
 # Razor areas, the same ones the expression editor uses — see the
 # `razor` crate for why the rectangle is shared and the operations on
 # its contents are not.

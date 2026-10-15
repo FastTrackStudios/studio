@@ -1892,3 +1892,59 @@ fn the_rolls_wheel_is_the_shared_wheel() {
     );
     assert_eq!(ed.camera.units_per_px, before.units_per_px, "it zoomed");
 }
+
+// ── the shared verbs reach the Editor (timeline::actions) ───────────
+
+/// Every TIMELINE_* id runs here, as this editor's own command of that
+/// name or directly — but the ones it has nothing for: contextual zoom is
+/// anchored on the pointer, run by the UI (as `FTS_EDITOR_VIEW_MEMAGIC`
+/// is), and the Editor keeps no zoom history to go back or forward in.
+#[test]
+fn the_shared_verbs_reach_the_editor() {
+    use timeline::actions::{cursor, grid, razor, view};
+    let ids = [
+        grid::MEASURE.id,
+        grid::HALF.id,
+        grid::QUARTER.id,
+        grid::EIGHTH.id,
+        grid::SIXTEENTH.id,
+        grid::FINER.id,
+        grid::COARSER.id,
+        grid::TOGGLE.id,
+        grid::DOTTED.id,
+        grid::TRIPLET.id,
+        grid::ADAPTIVE.id,
+        cursor::LEFT_MEASURE.id,
+        cursor::RIGHT_MEASURE.id,
+        cursor::LEFT_GRID.id,
+        cursor::RIGHT_GRID.id,
+        view::ZOOM_IN.id,
+        view::ZOOM_OUT.id,
+        view::ROWS_IN.id,
+        view::ROWS_OUT.id,
+        view::FIT.id,
+        view::RESET.id,
+        razor::CLEAR.id,
+        razor::DELETE_CONTENTS.id,
+        razor::DUPLICATE.id,
+        razor::SPLIT.id,
+    ];
+    for id in ids {
+        let mut ed = four_notes();
+        ed.razor
+            .add(RazorArea::new(PPQ * 0.25, PPQ * 1.25, ROW - 1, ROW + 1));
+        assert!(editor::actions::run(&mut ed, id), "{id} did nothing here");
+    }
+    let unreachable = [view::CONTEXTUAL.id, view::BACK.id, view::FORWARD.id];
+    for id in unreachable {
+        assert!(
+            !editor::actions::run(&mut four_notes(), id),
+            "{id} is not the editor's to run"
+        );
+    }
+    // An alias is the same command as the editor's own.
+    assert_eq!(
+        editor::actions::alias(grid::TOGGLE.id),
+        Some(editor::actions::grid::TOGGLE.id)
+    );
+}

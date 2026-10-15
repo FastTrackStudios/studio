@@ -9,6 +9,12 @@ description = "Editing time by rows — the grid that follows the zoom, razor ar
 
 [dependencies]
 web-time.workspace = true
+architect = { workspace = true, optional = true }
+architect-action-derive = { workspace = true, optional = true }
+
+[features]
+# The TIMELINE_* action group (`actions`), for the surfaces that bind it.
+actions = ["dep:architect", "dep:architect-action-derive"]
 
 [lints]
 workspace = true

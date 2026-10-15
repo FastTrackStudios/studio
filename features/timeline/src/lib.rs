@@ -2,6 +2,8 @@
 //! edit areas ([`razor`]) and the view gestures the arrangement and the
 //! Editor share ([`gestures`]).
 
+#[cfg(feature = "actions")]
+pub mod actions;
 pub mod camera;
 pub mod clipboard;
 pub mod cursor;

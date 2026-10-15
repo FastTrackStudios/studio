@@ -97,6 +97,8 @@ pub enum Action {
     CompTake(u32),
     DeleteSelectedItems,
     SelectAllItems,
+    /// Snapping on or off: the main toolbar's switch.
+    ToggleSnap,
     /// The selected items onto the arrangement's clipboard.
     CopyItems,
     /// The clipboard's items at the edit cursor, each on its own track.
@@ -165,6 +167,32 @@ pub enum Visibility {
     HideAll,
 }
 
+/// The arrangement's action for a verb every timeline shares
+/// (`timeline::actions`), where it has one: the view's zooms and history,
+/// the cursor's steps, snapping. The grid's division and the razor verbs
+/// are the Editor's; here they stay unbound.
+fn shared(id: &str) -> Option<Action> {
+    use crate::zoom::Command as Z;
+    use timeline::actions::{cursor, grid, view};
+    let step = |vertical, inward| Action::View(Z::Step { vertical, inward });
+    Some(match id {
+        _ if id == view::ZOOM_IN.id => step(false, true),
+        _ if id == view::ZOOM_OUT.id => step(false, false),
+        _ if id == view::ROWS_IN.id => step(true, true),
+        _ if id == view::ROWS_OUT.id => step(true, false),
+        _ if id == view::BACK.id => Action::View(Z::Back),
+        _ if id == view::FORWARD.id => Action::View(Z::Forward),
+        _ if id == view::FIT.id => Action::View(Z::Project),
+        _ if id == cursor::LEFT_MEASURE.id => Action::CursorBar(-1),
+        _ if id == cursor::RIGHT_MEASURE.id => Action::CursorBar(1),
+        // A beat is the arrangement's step: its grid is not set by key.
+        _ if id == cursor::LEFT_GRID.id => Action::CursorBeat(-1),
+        _ if id == cursor::RIGHT_GRID.id => Action::CursorBeat(1),
+        _ if id == grid::TOGGLE.id => Action::ToggleSnap,
+        _ => return None,
+    })
+}
+
 /// REAPER's action ids, as the profile binds them, to what this window
 /// does about them.
 #[must_use]
@@ -188,6 +216,7 @@ pub fn action_of(id: &str) -> Action {
         "40057" | "40698" => Action::CopyItems,
         "40058" | "42398" => Action::PasteItems,
         "40020" => Action::ClearSelection,
+        "1157" => Action::ToggleSnap,
         "40838" => Action::CursorBar(-1),
         "40837" => Action::CursorBar(1),
         "40646" => Action::CursorBeat(-1),
@@ -239,6 +268,9 @@ pub fn action_of(id: &str) -> Action {
         "FTS_VISIBILITY_MANAGER_SHOW_ALL" => Action::Visibility(Visibility::ShowAll),
         "FTS_VISIBILITY_MANAGER_HIDE_ALL" => Action::Visibility(Visibility::HideAll),
         other => {
+            if let Some(shared) = shared(other) {
+                return shared;
+            }
             if let Some(group) = other.strip_prefix("FTS_VISIBILITY_MANAGER_TOGGLE_") {
                 return Action::Visibility(Visibility::Toggle(group.to_owned()));
             }
@@ -532,6 +564,29 @@ const BUILTIN: &str = r#"{
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The verbs every timeline shares reach the arrangement's actions,
+    /// and the grid's switch is snapping (as is REAPER's 1157, Alt+S).
+    #[test]
+    fn the_shared_verbs_reach_the_arrangement() {
+        use crate::zoom::Command as Z;
+        use timeline::actions::{cursor, grid, razor, view};
+        assert_eq!(action_of(grid::TOGGLE.id), Action::ToggleSnap);
+        assert_eq!(action_of("1157"), Action::ToggleSnap);
+        assert_eq!(
+            action_of(view::ZOOM_IN.id),
+            Action::View(Z::Step {
+                vertical: false,
+                inward: true
+            })
+        );
+        assert_eq!(action_of(view::BACK.id), Action::View(Z::Back));
+        assert_eq!(action_of(view::FIT.id), Action::View(Z::Project));
+        assert_eq!(action_of(cursor::RIGHT_MEASURE.id), Action::CursorBar(1));
+        // Not the arrangement's: left unbound, not guessed.
+        assert!(matches!(action_of(razor::SPLIT.id), Action::Unbound(_)));
+        assert!(matches!(action_of(grid::EIGHTH.id), Action::Unbound(_)));
+    }
 
     /// `Alt` and a number puts the window in a mode, and `Alt+m` then a
     /// letter does too.

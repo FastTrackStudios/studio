@@ -630,6 +630,39 @@ pub mod takes {
     }
 }
 
+/// This editor's own command for a shared one (`timeline::actions`) of
+/// the same meaning, where it has one.
+#[must_use]
+pub fn alias(id: &str) -> Option<&'static str> {
+    use timeline::actions::{cursor as tc, grid as tg, razor as tr, view as tv};
+    let pairs: [(&str, &'static str); 20] = [
+        (tg::MEASURE.id, grid::MEASURE.id),
+        (tg::HALF.id, grid::HALF.id),
+        (tg::QUARTER.id, grid::QUARTER.id),
+        (tg::EIGHTH.id, grid::EIGHTH.id),
+        (tg::SIXTEENTH.id, grid::SIXTEENTH.id),
+        (tg::TOGGLE.id, grid::TOGGLE.id),
+        (tg::DOTTED.id, grid::DOTTED.id),
+        (tg::TRIPLET.id, grid::TRIPLET.id),
+        (tg::ADAPTIVE.id, grid::ADAPTIVE.id),
+        (tc::LEFT_MEASURE.id, cursor::LEFT_MEASURE.id),
+        (tc::RIGHT_MEASURE.id, cursor::RIGHT_MEASURE.id),
+        (tc::LEFT_GRID.id, cursor::LEFT_GRID.id),
+        (tc::RIGHT_GRID.id, cursor::RIGHT_GRID.id),
+        (tv::RESET.id, view::RESET.id),
+        (tv::FIT.id, view::FIT_ITEM.id),
+        (tv::CONTEXTUAL.id, view::MEMAGIC.id),
+        (tr::CLEAR.id, razor::CLEAR.id),
+        (tr::DELETE_CONTENTS.id, razor::DELETE_CONTENTS.id),
+        (tr::DUPLICATE.id, razor::DUPLICATE.id),
+        (tr::SPLIT.id, razor::SPLIT.id),
+    ];
+    pairs
+        .iter()
+        .find(|(shared, _)| *shared == id)
+        .map(|(_, own)| *own)
+}
+
 /// Run an action against an editor, by its architect id.
 ///
 /// The seam between the declarations above and a surface holding an
@@ -645,6 +678,31 @@ pub mod takes {
 /// docs), and the caller falls through to whatever else it knows about.
 pub fn run(ed: &mut Editor, id: &str) -> bool {
     use timeline::grid::Density;
+
+    // ── the shared verbs (`timeline::actions`) ───────────────────────
+    // An id a keymap binds once for every timeline: the same command as
+    // this editor's own of that name, or run here where there is none.
+    if let Some(own) = alias(id) {
+        return run(ed, own);
+    }
+    {
+        use timeline::actions::{grid as tg, view as tv};
+        // A notch of the wheel's zoom, about the middle of the view.
+        let step = (40.0 * 2.0 / timeline::gestures::ZOOM_GAIN).exp();
+        let (mid_x, mid_y) = (ed.viewport.w * 0.5, ed.viewport.h * 0.5);
+        let done = match id {
+            _ if id == tg::FINER.id => Some(ed.grid_finer()),
+            _ if id == tg::COARSER.id => Some(ed.grid_coarser()),
+            _ if id == tv::ZOOM_IN.id => Some(ed.zoom_time_at(mid_x, step)),
+            _ if id == tv::ZOOM_OUT.id => Some(ed.zoom_time_at(mid_x, 1.0 / step)),
+            _ if id == tv::ROWS_IN.id => Some(ed.zoom_pitch_at(mid_y, step)),
+            _ if id == tv::ROWS_OUT.id => Some(ed.zoom_pitch_at(mid_y, 1.0 / step)),
+            _ => None,
+        };
+        if done.is_some() {
+            return true;
+        }
+    }
 
     // ── grid ─────────────────────────────────────────────────────────
     if id == grid::MEASURE.id {

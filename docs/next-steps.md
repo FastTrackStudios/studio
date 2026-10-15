@@ -25,11 +25,16 @@ comes next, in order. The design docs this points at are in `docs/design/`.
 
 ## Step 2 — one editing engine: `timeline`
 
-*In progress:* migration steps 1–16 of 17 are done (rename, camera
+*In progress:* all 17 migration steps are done (some in part) (rename, camera
 characterisation tests, input, time, grid, snap, the shared camera in
 both surfaces, rows, zoom, cursor/selection, the mouse map, hit testing and clicks; the one `Interaction<S>`
-engine is not built, see §4; undo is the song's Loro doc; one clipboard; scroll, touch, edge scroll). Next is
-17, the shared actions. `docs/design/timeline.md` §4 records where the code differs
+engine is not built, see §4; undo is the song's Loro doc; one clipboard; scroll, touch, edge scroll; shared
+actions). What is left of step 2 is listed in
+`docs/design/timeline.md` §4 "Progress": the one `Interaction<S>`
+engine, the Editor's playhead/edit-cursor split, its magnets on
+`timeline::Camera`, the arrangement's `V`/`f` and cut, the stack's
+pinch/follow, and the Editor's Shift+drag against the arrangement's
+Shift. `docs/design/timeline.md` §4 records where the code differs
 from the plan.
 
 The arrangement and the editor must share the SAME mouse handling, zoom,

@@ -1557,7 +1557,7 @@ pins A's behaviour. Keep it or change it on purpose.
     `the_razor_help_matches_the_razor_keys`,
     `the_razor_menu_and_the_razor_keys_agree`.
 
-**Progress (2026-10-14).** Steps 1–16 are done. Where the code differs
+**Progress (2026-10-14).** All 17 steps are done, some in part; this list says where. Where the code differs
 from the plan above:
 
 - **3:** one `Mods` type for both surfaces (`timeline::input::Mods`; the
@@ -1684,6 +1684,20 @@ from the plan above:
   is only there if bound. **Not added:** pinch and follow on the
   Editor's stack (new behaviour in the stack's UI), and the Editor's
   stack wheel, which keeps its binding table for its hit gestures.
+- **17:** `timeline::actions` (feature `actions`) is the `TIMELINE_*`
+  group: grid (divisions, finer/coarser, toggle, dotted, triplet,
+  adaptive), cursor steps, view (zooms, back/forward, fit, reset,
+  contextual), and razor (clear, delete contents, duplicate, split). They
+  are aliases, not replacements: the surfaces keep their own ids, which
+  users' keymaps hold. The Editor runs each through its own command of
+  the same name (`actions::alias`), or directly for finer/coarser and the
+  zooms. Contextual, back and forward are not its to run. The
+  arrangement maps the view's zooms and history, the cursor steps, and
+  the grid toggle, which is now `ToggleSnap`, the toolbar's snapping,
+  and so is REAPER's 1157 (the FTS profile's Alt+S, unbound until now).
+  The grid's divisions and the razor verbs stay unbound there.
+  **Not done:** "generic over an `Interaction` accessor trait"; there is
+  no `Interaction` (see 13).
 - **11:** `timeline::cursor` holds the arrangement's `Playhead`,
   `TimeSpan`, `EditCursor`, `StopMode`, `TransportStep` and `Locate`, with
   their tests. The arrangement aliases its old names, and keeps the

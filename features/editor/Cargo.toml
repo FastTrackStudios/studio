@@ -31,7 +31,7 @@ ui-webview = ["dep:anyrender_vello_cpu", "dep:base64", "dep:futures-timer", "dep
 webview = ["dioxus/desktop", "dioxus/launch", "ui", "ui-webview"]
 
 [dependencies]
-timeline = { workspace = true }
+timeline = { workspace = true, features = ["actions"] }
 align-dsp = { workspace = true, optional = true }
 anyrender = { workspace = true, optional = true }
 anyrender_vello_cpu = { workspace = true, optional = true }

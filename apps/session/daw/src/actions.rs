@@ -139,7 +139,7 @@ fn id_and_args(action: &Action) -> Option<(&'static str, String)> {
         #[cfg(not(feature = "native"))]
         Action::Undo | Action::Redo => return None,
         // The window's own: its clipboard is the arrangement's.
-        Action::CopyItems | Action::PasteItems => return None,
+        Action::CopyItems | Action::PasteItems | Action::ToggleSnap => return None,
         Action::ToggleEditor => (TOGGLE_EDITOR.id, String::new()),
         Action::ToggleFx => (TOGGLE_FX.id, String::new()),
         Action::ToggleBrowser => (crate::browser::BROWSER.id, String::new()),

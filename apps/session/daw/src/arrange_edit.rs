@@ -1260,6 +1260,9 @@ impl Editor {
                 as_one_step("Delete items", from, effects);
                 effects.push(Effect::ReRecord);
             }
+            Action::ToggleSnap => {
+                crate::options::SNAP.toggle();
+            }
             Action::CopyItems => {
                 // The selected items, a folded row's standing for the
                 // mics under it, kept relative to the earliest.
@@ -4967,6 +4970,17 @@ mod tests {
             .collect();
         let unique: std::collections::HashSet<&str> = guids.iter().copied().collect();
         assert_eq!(unique.len(), guids.len(), "{guids:?}");
+    }
+
+    /// The grid's switch is the toolbar's snapping.
+    #[test]
+    fn toggle_snap_flips_the_toolbar_switch() {
+        let mut s = Stage::new();
+        crate::options::SNAP.set(true);
+        assert!(s.key(Action::ToggleSnap).0);
+        assert!(!crate::options::SNAP.get());
+        s.key(Action::ToggleSnap);
+        assert!(crate::options::SNAP.get());
     }
 
     /// Nothing copied, nothing pasted.
