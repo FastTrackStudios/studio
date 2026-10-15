@@ -1,0 +1,19 @@
+[package]
+name = "editing"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Editing a recorded performance — timing and dynamics, one engine with a profile per material (drums first)"
+
+[dependencies]
+facet.workspace = true
+level.workspace = true
+num-traits.workspace = true
+
+[dev-dependencies]
+facet-json.workspace = true
+
+[lints]
+workspace = true

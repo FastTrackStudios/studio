@@ -62,6 +62,15 @@ pub fn quantize_args(choices: &Choices, dry_run: bool) -> Option<String> {
         }
         (None, None) => return None,
     }
+    args.extend(settings_args(choices));
+    args.insert("dry_run".into(), Value::from(dry_run));
+    args.insert("brief".into(), Value::from(true));
+    Some(Value::Object(args).to_string())
+}
+
+/// `choices`' settings as `QUANTIZE` arguments, without a span.
+fn settings_args(choices: &Choices) -> serde_json::Map<String, Value> {
+    let mut args = serde_json::Map::new();
     args.insert("grid".into(), Value::from(choices.grid));
     args.insert(
         "strength".into(),
@@ -73,9 +82,16 @@ pub fn quantize_args(choices: &Choices, dry_run: bool) -> Option<String> {
     } else {
         args.insert("target".into(), Value::from(choices.target));
     }
-    args.insert("dry_run".into(), Value::from(dry_run));
+    args
+}
+
+/// What `q` quantizes with, as arguments without a span: the choices
+/// Apply last used, else nothing (the sticky settings as they stand).
+#[must_use]
+pub fn again(last: Option<&Choices>) -> serde_json::Map<String, Value> {
+    let mut args = last.map(settings_args).unwrap_or_default();
     args.insert("brief".into(), Value::from(true));
-    Some(Value::Object(args).to_string())
+    args
 }
 
 /// The choices Apply last used: what `q` quantizes with.

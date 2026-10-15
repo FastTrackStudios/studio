@@ -42,9 +42,12 @@ pub enum Action {
     /// Split the selected items at the edit cursor — or, with nothing
     /// selected, every item under it.
     SplitAtCursor,
-    /// QUANTIZE over the selected folded rows' span: the kit edited
-    /// from its hit markers.
+    /// Quantize what is selected (`EDIT_QUANTIZE`): for the drums the
+    /// kit, edited from its hit markers.
     QuantizeDrums,
+    /// Level what is selected (`EDIT_LEVEL`), in Edit mode: for the drums
+    /// each selected piece's strokes brought toward one another.
+    LevelDrums,
     /// Put the drums back as played over the selected folded rows' span
     /// or the time selection (`DRUMS_REVERT`): the edit undone there, the
     /// hit markers kept.
@@ -204,6 +207,7 @@ pub fn action_of(id: &str) -> Action {
         "40757" | "40012" => Action::SplitAtCursor,
         "FTS_QUANTIZE_DRUMS" => Action::QuantizeDrums,
         "FTS_REVERT_DRUMS" => Action::RevertDrums,
+        "FTS_LEVEL_DRUMS" => Action::LevelDrums,
         "FTS_QUANTIZE_PANEL" => Action::QuantizePanel,
         "FTS_GAIN_STAGE" => Action::GainStage { clear: false },
         "FTS_GAIN_STAGE_CLEAR" => Action::GainStage { clear: true },
@@ -538,6 +542,7 @@ const BUILTIN: &str = r#"{
       "q": "FTS_QUANTIZE_DRUMS",
       "Shift+q": "FTS_QUANTIZE_PANEL",
       "Alt+q": "FTS_REVERT_DRUMS",
+      "Alt+l": "FTS_LEVEL_DRUMS",
       "Delete": "40697",
       "Backspace": "40697",
       "Escape": "40020",
@@ -825,6 +830,10 @@ mod tests {
         assert_eq!(
             keys.press(KeyCode::Character("q".into()), alt),
             vec![Action::RevertDrums]
+        );
+        assert_eq!(
+            keys.press(KeyCode::Character("l".into()), alt),
+            vec![Action::LevelDrums]
         );
     }
 

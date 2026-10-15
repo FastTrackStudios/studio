@@ -5924,6 +5924,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "editing"
+version = "0.1.0"
+dependencies = [
+ "facet",
+ "facet-json",
+ "level",
+ "num-traits",
+]
+
+[[package]]
 name = "editor"
 version = "0.1.0"
 dependencies = [
@@ -17137,6 +17147,7 @@ dependencies = [
  "dirs",
  "dsp-core",
  "dynamic-template",
+ "editing",
  "editor",
  "editor-crdt",
  "editor-keyflow-lang",

@@ -194,10 +194,11 @@ pub mod drum_reference;
 #[cfg(feature = "signal")]
 pub mod drum_samples;
 pub mod drum_settings;
+pub mod edit_actions;
 pub mod fundamental;
 pub mod gain_stage;
 pub mod grid_in_force;
-pub mod groove;
+pub use editing::groove;
 pub mod hit_overlay;
 #[cfg(feature = "native")]
 pub mod hits;
@@ -270,5 +271,5 @@ pub mod web_host;
 pub mod which_key;
 pub mod widget;
 pub mod window_cursor;
-pub mod written;
+pub use editing::written;
 pub mod zoom;

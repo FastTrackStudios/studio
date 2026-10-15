@@ -60,6 +60,14 @@ fn the_kits_own_regions_say_how_a_stretch_is_edited() {
         .find(|s| s.start >= 8 && s.end > s.start.saturating_add(5))
         .expect("a section past the intro");
     let (from, to) = (f64::from(section.start) * bar, f64::from(section.end) * bar);
+    // A bar of half-note triplets in the middle of the section: a figure,
+    // its hits on its grid whatever the MIDI says. The drummer plays it
+    // there — a Grid region is drawn over a figure that was played, not
+    // over straight eighths (three strokes a triplet line: one keeps it,
+    // the rest are moved between, `one_stroke_a_line`).
+    let (grid_from, grid_to) = (from + bar, from + 2.0 * bar);
+    let half_triplet = bar / 3.0;
+
     // The kick and snare marked where the drummer played them.
     for (on, piece, _) in perform::groove(&song) {
         let name = match piece {
@@ -67,7 +75,7 @@ fn the_kits_own_regions_say_how_a_stretch_is_edited() {
             perform::Piece::Snare => "Snare",
             _ => continue,
         };
-        if on < from - bar || on > to + bar {
+        if on < from - bar || on > to + bar || (on >= grid_from - 0.05 && on < grid_to) {
             continue;
         }
         let played = perform::kit_played(on, piece, song.bpm);
@@ -77,9 +85,16 @@ fn the_kits_own_regions_say_how_a_stretch_is_edited() {
         );
     }
 
-    // A bar of half-note triplets in the middle of the section: a figure,
-    // its hits on its grid whatever the MIDI says.
-    let (grid_from, grid_to) = (from + bar, from + 2.0 * bar);
+    // The figure, each stroke a little off its line, as played.
+    for (k, late) in [0.012, -0.009, 0.015].into_iter().enumerate() {
+        let on = grid_from + half_triplet * f64::from(u8::try_from(k).expect("three"));
+        let piece = if k == 1 { "Snare" } else { "Kick" };
+        run(
+            "HITS_ADD",
+            &serde_json::json!({ "piece": piece, "time": on + late, "snap": false }),
+        );
+    }
+
     let id = run(
         "TRACK_REGION_ADD",
         &serde_json::json!({
@@ -105,12 +120,12 @@ fn the_kits_own_regions_say_how_a_stretch_is_edited() {
     };
     let said = quantize(from, to);
     let sent = moves(&said);
-    let (half_triplet, sixteenth) = (bar / 3.0, bar / 16.0);
+    let sixteenth = bar / 16.0;
     let inside: Vec<&(f64, f64)> = sent
         .iter()
         .filter(|(h, _)| *h >= grid_from && *h < grid_to)
         .collect();
-    assert!(!inside.is_empty(), "hits in the region were moved: {said}");
+    assert_eq!(inside.len(), 3, "the figure's strokes were moved: {said}");
     for (h, t) in &inside {
         assert!(
             on_line(*t, half_triplet),

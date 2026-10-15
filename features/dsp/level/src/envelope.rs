@@ -409,8 +409,7 @@ pub fn phrase_ride(
                 .flatten()
                 .filter(|_| analysis.is_sung(i))
             {
-                held = ((target_db - level) * amount.clamp(0.0, 1.0))
-                    .clamp(-max_cut_db.abs(), max_gain_db.abs());
+                held = crate::events::law(level, target_db, amount, (max_gain_db, max_cut_db));
             }
             EnvPoint {
                 t_s: analysis.time_of(i),

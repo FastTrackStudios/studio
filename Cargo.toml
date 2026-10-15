@@ -12,6 +12,7 @@ members = [
     "features/signal/tone3000",
     "features/ui/fts-audio-ui",
     "features/timeline",
+    "features/editing",
     "features/ui/plugin-core",
     "features/ui/dock",
     "features/sync",
@@ -194,6 +195,7 @@ signal-space = { path = "features/signal/space" }
 signal-tone3000 = { path = "features/signal/tone3000" }
 fts-audio-ui = { path = "features/ui/fts-audio-ui" }
 timeline = { path = "features/timeline" }
+editing = { path = "features/editing" }
 plugin-core = { path = "features/ui/plugin-core" }
 dock = { path = "features/ui/dock" }
 daw-sync = { path = "features/sync" }

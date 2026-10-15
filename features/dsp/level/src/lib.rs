@@ -28,6 +28,7 @@ pub mod debreath;
 pub mod deess;
 pub mod drums;
 pub mod envelope;
+pub mod events;
 pub mod filter;
 pub mod gate;
 pub mod rider;

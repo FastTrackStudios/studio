@@ -39,6 +39,9 @@ features/   one crate per feature, sub-folders allowed. Name a feature for what
             editor/      the editor: piano roll, drum lanes, curves
             timeline/    the editing engine the arrangement and the editor
                          share (docs/design/timeline.md)
+            editing/     editing a recorded performance — quantize, groove,
+                         leveling — with a profile per material, drums
+                         first (docs/design/editing.md)
             session/, song/, sampler/, plugin-host/, audio/, midi/, input/,
             sync/, chords/, formats/, patchbay/, control-surfaces/,
             dynamic-template/, patch-list/, preset-browser/, …

@@ -1465,32 +1465,88 @@ impl ArrangementWidget {
     /// Lay the rows out as `slug` (an overview); pressed again, or the
     /// other overview's key pressed in this one's, go back to the scene
     /// before. `false` with no planner.
-    /// The stretch a drum key works on: the selected folded rows' span,
-    /// else the time selection.
-    fn drum_span(&self) -> Option<(f64, f64)> {
-        let span = self.editor.selected_folds(&self.project).iter().fold(
-            None,
-            |span: Option<(f64, f64)>, (_, _, a, b)| {
-                Some(span.map_or((*a, *b), |(f, t)| (f.min(*a), t.max(*b))))
-            },
-        );
-        span.or_else(|| {
-            self.editor
-                .cursor
-                .selection
-                .filter(|s| s.is_meaningful())
-                .map(|s| (s.start, s.end))
+    /// What an edit key acts on here ([`editing::scope::Scope`]): the
+    /// selected folded rows — their folders over their spans — else the
+    /// razor areas — their rows' tracks over theirs — else the selected
+    /// tracks over the time selection (the whole song with none).
+    fn scope(&self) -> editing::scope::Scope {
+        use editing::scope::{Scope, Span};
+        let mut tracks: Vec<String> = Vec::new();
+        let mut add = |guid: &str| {
+            if !tracks.iter().any(|t| t == guid) {
+                tracks.push(guid.to_owned());
+            }
+        };
+        let folds = self.editor.selected_folds(&self.project);
+        if !folds.is_empty() {
+            for (_, folder, _, _) in &folds {
+                add(folder);
+            }
+            let spans = folds
+                .iter()
+                .map(|(_, _, a, b)| Span::between(*a, *b))
+                .collect();
+            return Scope { tracks, spans };
+        }
+        if !self.editor.razor.is_empty() {
+            for area in &self.editor.razor.areas {
+                for row in area.row_lo..=area.row_hi {
+                    if let Some((track, _)) =
+                        usize::try_from(row).ok().and_then(|r| self.rows.get(r))
+                    {
+                        add(&track.guid);
+                    }
+                }
+            }
+            let spans = self
+                .editor
+                .razor
+                .areas
+                .iter()
+                .map(|a| Span::between(a.t0, a.t1))
+                .collect();
+            return Scope { tracks, spans };
+        }
+        for (track, _) in self.rows.iter().filter(|(t, _)| t.selected) {
+            add(&track.guid);
+        }
+        let spans = self
+            .editor
+            .cursor
+            .selection
+            .filter(|s| s.is_meaningful())
+            .map(|s| Span::between(s.start, s.end))
+            .into_iter()
+            .collect();
+        Scope { tracks, spans }
+    }
+
+    /// Why `scope` cannot be edited here, if it cannot: its tracks have no
+    /// editing profile, or more than one.
+    fn refused(&self, scope: &editing::scope::Scope) -> Option<&'static str> {
+        let tree: Vec<editing::scope::Node<'_>> = self
+            .project
+            .tracks
+            .iter()
+            .map(|t| editing::scope::Node {
+                guid: &t.guid,
+                name: &t.name,
+                parent: t.parent_guid.as_deref(),
+            })
+            .collect();
+        editing::scope::profile_of(&tree, scope).err().map(|_| {
+            "only the drums are edited this way so far — select the kit, its rows or a stretch of time"
         })
     }
 
-    /// Alt+Q: put the drums back as played over the selected folded rows'
-    /// span or the time selection (`DRUMS_REVERT`) — the edit undone
-    /// there, the hit markers kept to edit by hand, a no-quantize zone
-    /// over it — off the frame, as [`Self::quantize_drums`] does.
-    /// `hold`: a no-quantize zone over it (Alt+Q), so a quantize leaves it
-    /// as played; without (Backspace), Q quantizes it again — to compare.
+    /// Alt+Q: put what is selected back as played (`EDIT_REVERT`) — for
+    /// the drums the whole kit over the selection's stretches, the hit
+    /// markers kept to edit by hand — off the frame, as
+    /// [`Self::quantize_drums`] does. `hold`: a no-quantize zone over it
+    /// (Alt+Q), so a quantize leaves it as played; without (Backspace), Q
+    /// quantizes it again — to compare.
     fn revert_drums(&self, hold: bool) -> bool {
-        self.revert_span(self.drum_span(), hold)
+        self.revert_scope(self.scope(), hold)
     }
 
     /// The stretch the selected hit markers span, as they play now (a
@@ -1510,16 +1566,34 @@ impl ArrangementWidget {
             .map(|(a, b)| (a - AROUND, b + AROUND))
     }
 
-    /// [`Self::revert_drums`] over `span`.
-    fn revert_span(&self, span: Option<(f64, f64)>, hold: bool) -> bool {
-        let Some((from, to)) = span else {
+    /// [`Self::revert_drums`] over the stretch `from`..`to`.
+    fn revert_span(&self, (from, to): (f64, f64), hold: bool) -> bool {
+        self.revert_scope(
+            editing::scope::Scope {
+                tracks: Vec::new(),
+                spans: vec![editing::scope::Span::between(from, to)],
+            },
+            hold,
+        )
+    }
+
+    /// [`Self::revert_drums`] over `scope`.
+    fn revert_scope(&self, scope: editing::scope::Scope, hold: bool) -> bool {
+        if scope.merged().is_empty() {
             *self
                 .staged
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner) =
-                Some("select the kit's folded rows, or a stretch of time, to put back as played");
+                Some("select rows, a razor or a stretch of time to put back as played");
             return true;
-        };
+        }
+        if let Some(why) = self.refused(&scope) {
+            *self
+                .staged
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(why);
+            return true;
+        }
         #[cfg(feature = "native")]
         {
             let Some(runtime) = crate::open::runtime() else {
@@ -1527,16 +1601,20 @@ impl ArrangementWidget {
             };
             let said = std::sync::Arc::clone(&self.staged);
             runtime.spawn_blocking(move || {
-                let args = format!(r#"{{"from":{from},"to":{to},"hold":{hold}}}"#);
-                let out = crate::actions::list().run_json("DRUMS_REVERT", args.as_bytes());
+                let args = serde_json::json!({
+                    "tracks": scope.tracks,
+                    "spans": scope.merged().iter().map(|s| serde_json::json!({"from": s.from, "to": s.to})).collect::<Vec<_>>(),
+                    "hold": hold,
+                });
+                let out = crate::actions::list().run_json("EDIT_REVERT", args.to_string().as_bytes());
                 let text = match &out {
                     Ok(json) if String::from_utf8_lossy(json).contains(r#""ok":false"#) => {
-                        "drums put back as played — the check found a problem (DRUMS_REVIEW)"
+                        "put back as played — the check found a problem (DRUMS_REVIEW)"
                     }
-                    Ok(_) => "drums put back as played — the hit markers are there to edit",
+                    Ok(_) => "put back as played — the hit markers are there to edit",
                     Err(e) => {
-                        tracing::warn!(revert.error = %e, "drums: putting back was refused");
-                        "the drums could not be put back"
+                        tracing::warn!(revert.error = %e, "edit: putting back was refused");
+                        "the selection could not be put back — see the log"
                     }
                 };
                 *said
@@ -1547,27 +1625,91 @@ impl ArrangementWidget {
         }
         #[cfg(not(feature = "native"))]
         {
-            let _ = (from, to);
+            let _ = (scope, hold);
             false
         }
     }
 
-    /// `q`: QUANTIZE the kit over the selected folded rows' span, or the
-    /// time selection — from its hit markers, with the settings the
-    /// Quantize panel last applied (else the sticky ones) — off the
+    /// Alt+L, in Edit mode: level what is selected (`EDIT_LEVEL`) — for
+    /// the drums each selected piece (every piece with only time
+    /// selected), over the selection's stretches (the whole song with
+    /// none), each drum's own ride — off the frame, as
+    /// [`Self::quantize_drums`] does.
+    fn level_drums(&self) -> bool {
+        let say = |text: &'static str| {
+            *self
+                .staged
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(text);
+            true
+        };
+        if !self.editing.get() {
+            return say("leveling is an Edit-mode key (Alt+5)");
+        }
+        let scope = self.scope();
+        if scope.is_empty() {
+            return say("select pieces, rows, a razor or a stretch of time to level");
+        }
+        if let Some(why) = self.refused(&scope) {
+            return say(why);
+        }
+        #[cfg(feature = "native")]
+        {
+            let Some(runtime) = crate::open::runtime() else {
+                return false;
+            };
+            let said = std::sync::Arc::clone(&self.staged);
+            runtime.spawn_blocking(move || {
+                let args = serde_json::json!({
+                    "tracks": scope.tracks,
+                    "spans": scope.merged().iter().map(|s| serde_json::json!({"from": s.from, "to": s.to})).collect::<Vec<_>>(),
+                });
+                let out = crate::actions::list().run_json("EDIT_LEVEL", args.to_string().as_bytes());
+                let text = match &out {
+                    Ok(_) => "leveled — each stroke brought toward the drum's level",
+                    Err(e) => {
+                        tracing::warn!(level.error = %e, "edit: the leveling was refused");
+                        "the selection could not be leveled — find the hits first"
+                    }
+                };
+                *said
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(text);
+            });
+            true
+        }
+        #[cfg(not(feature = "native"))]
+        {
+            let _ = scope;
+            false
+        }
+    }
+
+    /// `q`: quantize what is selected (`EDIT_QUANTIZE`) — for the drums
+    /// the whole kit over the selection's stretches (the whole song with
+    /// tracks and no stretch), from its hit markers, with the settings
+    /// the Quantize panel last applied (else the sticky ones) — off the
     /// frame; the slip it queues is applied here like any, and
     /// [`Self::settle_stage`] says how its check came out. With nothing
-    /// to quantize over it says so. False in a page (no engine of its own
-    /// to read the markers from).
+    /// selected it says so. False in a page (no engine of its own to
+    /// read the markers from).
     fn quantize_drums(&self) -> bool {
-        let Some((from, to)) = self.drum_span() else {
+        let scope = self.scope();
+        if scope.is_empty() {
             *self
                 .staged
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner) =
-                Some("select the kit's folded rows, or a stretch of time, to quantize");
+                Some("select tracks, rows, a razor or a stretch of time to quantize");
             return true;
-        };
+        }
+        if let Some(why) = self.refused(&scope) {
+            *self
+                .staged
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(why);
+            return true;
+        }
         #[cfg(feature = "native")]
         {
             let Some(runtime) = crate::open::runtime() else {
@@ -1576,16 +1718,26 @@ impl ArrangementWidget {
             let said = std::sync::Arc::clone(&self.staged);
             let last = crate::quantize_panel::last();
             runtime.spawn_blocking(move || {
-                let args = crate::quantize_panel::again_over(last.as_ref(), (from, to));
-                let out = crate::actions::list().run_json("QUANTIZE", args.as_bytes());
+                let mut args = crate::quantize_panel::again(last.as_ref());
+                args.insert("tracks".into(), serde_json::json!(scope.tracks));
+                args.insert(
+                    "spans".into(),
+                    scope
+                        .merged()
+                        .iter()
+                        .map(|s| serde_json::json!({"from": s.from, "to": s.to}))
+                        .collect(),
+                );
+                let args = serde_json::Value::Object(args).to_string();
+                let out = crate::actions::list().run_json("EDIT_QUANTIZE", args.as_bytes());
                 let text = match &out {
                     Ok(json) if String::from_utf8_lossy(json).contains(r#""ok":false"#) => {
-                        "drums quantized — the check found hits lost or doubled (HITS_AUDIT)"
+                        "quantized — the check found hits lost or doubled (HITS_AUDIT)"
                     }
-                    Ok(_) => "drums quantized — the check is clean",
+                    Ok(_) => "quantized — the check is clean",
                     Err(e) => {
-                        tracing::warn!(quantize.error = %e, "drums: the quantize was refused");
-                        "the drums could not be quantized — find the hits first"
+                        tracing::warn!(quantize.error = %e, "edit: the quantize was refused");
+                        "the selection could not be quantized — see the log"
                     }
                 };
                 *said
@@ -1596,7 +1748,7 @@ impl ArrangementWidget {
         }
         #[cfg(not(feature = "native"))]
         {
-            let _ = (from, to);
+            let _ = scope;
             false
         }
     }
@@ -2794,6 +2946,10 @@ impl ArrangementWidget {
                 handled |= self.revert_drums(true);
                 continue;
             }
+            if action == crate::keys::Action::LevelDrums {
+                handled |= self.level_drums();
+                continue;
+            }
             // Editing, Backspace or Delete with hit markers selected puts
             // them back as played — the stretch from the first to the last,
             // nothing held: Q over them puts the quantize back, to compare.
@@ -2801,7 +2957,7 @@ impl ArrangementWidget {
                 && self.editing.get()
                 && let Some(span) = self.selected_hits_span()
             {
-                handled |= self.revert_span(Some(span), false);
+                handled |= self.revert_span(span, false);
                 self.hit_selected.clear();
                 continue;
             }
@@ -4232,6 +4388,7 @@ impl ArrangementWidget {
             self.editor.cursor = asked;
         }
         crate::cursor::publish(self.editor.cursor);
+        crate::edit_actions::publish(self.scope());
         crate::ghosts::local_selection(self.editor.selected.as_set(), &self.rows);
         crate::ghosts::local_shown(&self.rows, &self.scene);
         // The engine changed the session under us (a toolbar insert, an

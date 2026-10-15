@@ -1384,6 +1384,7 @@ impl Editor {
             | Action::ToggleScene(_)
             | Action::QuantizeDrums
             | Action::RevertDrums
+            | Action::LevelDrums
             | Action::QuantizePanel
             | Action::SlipDrums { .. }
             | Action::StretchDrums { .. }

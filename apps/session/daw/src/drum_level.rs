@@ -4,7 +4,7 @@
 //! An engineer evens a kick out before mixing it — clip gain stroke by
 //! stroke, or a compressor — so the compressor later shapes a steady
 //! drum rather than chasing an uneven one. Here it is the leveler's drum
-//! ride ([`level::drums`]): one gain a stroke, read off its hit
+//! ride ([`level::drums`] on [`level::events`]): one gain a stroke, read off its hit
 //! marker's level, set a few milliseconds before the attack and held
 //! through the ring. A ghost note, bleed or a flam's grace is no stroke
 //! and rides under the stroke before it.
@@ -77,7 +77,7 @@ fn hits_on(
             Some(level::drums::Hit {
                 t_s: m.source_position_seconds - from,
                 level_db: h.peak_db,
-                stroke: !(h.ghost || h.bleed || grace),
+                rides: !(h.ghost || h.bleed || grace),
             })
         })
         .collect();
@@ -102,22 +102,8 @@ pub struct Knobs {
 }
 
 /// The ride for a drum by its name, turned by `knobs`.
-fn ride_for(piece: &str, knobs: &Knobs) -> level::drums::DrumRide {
-    let name = piece.to_lowercase();
-    let ride = if name.contains("kick") {
-        level::drums::DrumRide::KICK
-    } else if name.contains("snare") {
-        level::drums::DrumRide::SNARE
-    } else {
-        level::drums::DrumRide::TOM
-    };
-    let range = knobs.range_db.map(f64::abs);
-    level::drums::DrumRide {
-        amount: knobs.consistency.map_or(ride.amount, |c| c.clamp(0.0, 1.0)),
-        max_gain_db: range.unwrap_or(ride.max_gain_db),
-        max_cut_db: range.unwrap_or(ride.max_cut_db),
-        ..ride
-    }
+fn ride_for(piece: &str, knobs: &Knobs) -> level::events::Ride {
+    level::drums::ride_of(piece).turned(knobs.consistency, knobs.range_db)
 }
 
 /// The items a drum's mic plays its comp from: its COMP lane's, once the
@@ -158,8 +144,12 @@ fn leveled_items(
     items
 }
 
-/// Level `pieces` (every drum of the kit when empty): see the module.
-/// `knobs` turn each drum's own ride; `dry` only says.
+/// Level `pieces` (every drum of the kit when empty) over `spans` (project
+/// seconds; the whole song when empty): see the module. Over spans only
+/// the strokes in them are leveled — each held up to the playing around
+/// it as ever — and each take's curve outside them is kept as it was
+/// ([`editing::level`]). `knobs` turn each drum's own ride; `dry` only
+/// says.
 ///
 /// # Errors
 ///
@@ -167,7 +157,7 @@ fn leveled_items(
 pub fn level(
     daw: &daw::standalone::Standalone,
     project: &ProjectContext,
-    pieces: &[String],
+    (pieces, spans): (&[String], &[(f64, f64)]),
     (knobs, dry): (&Knobs, bool),
 ) -> Result<Vec<Leveled>, String> {
     let (kit, _) = crate::hits::kit(daw, project);
@@ -204,7 +194,7 @@ pub fn level(
             })
             .collect();
         all.sort_by(|a, b| a.t_s.total_cmp(&b.t_s));
-        let Some(target) = level::drums::target(&all) else {
+        let Some(target) = level::events::target(&all) else {
             continue;
         };
         let around = |t: f64| {
@@ -214,34 +204,44 @@ pub fn level(
                 level::drums::target_at(&all, t).unwrap_or(target)
             }
         };
+        let counted: Vec<level::drums::Hit> = if spans.is_empty() {
+            all.clone()
+        } else {
+            all.iter()
+                .filter(|h| editing::level::within(spans, h.t_s))
+                .copied()
+                .collect()
+        };
+        if !spans.is_empty() && !counted.iter().any(|h| h.rides) {
+            continue;
+        }
+        let moved = level::events::moved(&counted, around, &ride);
         let mut said = Leveled {
             piece: piece.name.clone(),
             target_db: Some(target),
+            strokes: moved.riding,
+            raised: moved.raised,
+            lowered: moved.lowered,
+            most_db: moved.most_db,
             ..Leveled::default()
         };
-        for hit in all.iter().filter(|h| h.stroke) {
-            let g = level::drums::gain(hit.level_db, around(hit.t_s), &ride);
-            said.strokes = said.strokes.saturating_add(1);
-            if g > ride.least_db {
-                said.raised = said.raised.saturating_add(1);
-            } else if g < -ride.least_db {
-                said.lowered = said.lowered.saturating_add(1);
-            }
-            said.most_db = if g.abs() > said.most_db.abs() {
-                g
-            } else {
-                said.most_db
-            };
-        }
         if !dry {
             for mic in &piece.mics {
                 for item in leveled_items(daw, project, mic) {
                     let at = item.position.as_seconds();
-                    let curve = level::drums::ride(
-                        &hits_on(daw, project, &item, &piece.name),
-                        |t| around(t + at),
-                        &ride,
-                    );
+                    let hits = hits_on(daw, project, &item, &piece.name);
+                    let mut curve = level::events::ride(&hits, |t| around(t + at), &ride);
+                    if !spans.is_empty() {
+                        // In the take's own time; the rest of its curve kept.
+                        let here: Vec<(f64, f64)> =
+                            spans.iter().map(|(a, b)| (a - at, b - at)).collect();
+                        let owned = editing::level::owned(&hits, &here, &ride);
+                        if owned.is_empty() {
+                            continue;
+                        }
+                        let old = read_curve(daw, project, &item);
+                        curve = editing::level::splice(&old, &curve, &owned, ride.ramp_s);
+                    }
                     if write_curve(daw, project, &item, &curve) {
                         said.takes = said.takes.saturating_add(1);
                         crate::midi::mark_stale([item.guid.clone()]);
@@ -256,6 +256,32 @@ pub fn level(
         crate::studio::request_resync();
     }
     Ok(out)
+}
+
+/// The item's take volume envelope as a curve: dB, seconds from the
+/// item's start. Empty with no take or no points.
+fn read_curve(
+    daw: &daw::standalone::Standalone,
+    project: &ProjectContext,
+    item: &daw_proto::Item,
+) -> Vec<level::envelope::EnvPoint> {
+    let Some(take) = daw.get_active_take(project.clone(), ItemRef::Guid(item.guid.clone())) else {
+        return Vec::new();
+    };
+    let location = EnvelopeLocation {
+        track: TrackRef::Index(0),
+        envelope: EnvelopeRef::Take {
+            item_guid: item.guid.clone(),
+            take_guid: take.guid,
+            kind: TakeEnvelopeKind::Volume,
+        },
+    };
+    daw.points(project.clone(), location)
+        .iter()
+        .map(|p| {
+            level::envelope::EnvPoint::new(p.time.as_seconds(), 20.0 * p.value.max(1e-6).log10())
+        })
+        .collect()
 }
 
 /// Write `curve` (dB, seconds from the item's start) as the item's take
@@ -308,9 +334,9 @@ mod tests {
     #[test]
     fn each_drum_has_its_own_ride() {
         let none = Knobs::default();
-        assert_eq!(ride_for("Kick", &none), level::drums::DrumRide::KICK);
-        assert_eq!(ride_for("Snare", &none), level::drums::DrumRide::SNARE);
-        assert_eq!(ride_for("Tom 3", &none), level::drums::DrumRide::TOM);
+        assert_eq!(ride_for("Kick", &none), level::drums::KICK);
+        assert_eq!(ride_for("Snare", &none), level::drums::SNARE);
+        assert_eq!(ride_for("Tom 3", &none), level::drums::TOM);
         let all_one = Knobs {
             consistency: Some(1.0),
             range_db: Some(24.0),
@@ -320,6 +346,6 @@ mod tests {
         assert!((ride.amount - 1.0).abs() < 1e-12);
         assert!((ride.max_gain_db - 24.0).abs() < 1e-12 && (ride.max_cut_db - 24.0).abs() < 1e-12);
         // At 100% a stroke lands on the target, as far as the range allows.
-        assert!((level::drums::gain(-30.0, -20.0, &ride) - 10.0).abs() < 1e-12);
+        assert!((level::events::gain(-30.0, -20.0, &ride) - 10.0).abs() < 1e-12);
     }
 }
