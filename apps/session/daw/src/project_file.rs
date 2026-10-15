@@ -71,15 +71,22 @@ impl Blobs for StoreBlobs {
 }
 
 /// The project file at `path`, shared, and `branch`'s doc from it.
+/// And how many updates the branch holds since its last compaction.
 fn open_branch(
     path: &Path,
     branch: &str,
-) -> Result<(Arc<Mutex<Store>>, session::sync::loro::LoroDoc), String> {
+) -> Result<(Arc<Mutex<Store>>, session::sync::loro::LoroDoc, usize), String> {
     let store = Arc::new(Mutex::new(
         Store::open(path).map_err(|e| format!("{}: {e}", path.display()))?,
     ));
     let doc = with_store(&store, |s| s.load(branch).map_err(|e| e.to_string()))?;
-    Ok((store, doc))
+    let uncompacted = with_store(&store, |s| {
+        s.steps(branch)
+            .map(|steps| steps.len())
+            .map_err(|e| e.to_string())
+    })
+    .unwrap_or(0);
+    Ok((store, doc, uncompacted))
 }
 
 /// `work` on the store, its lock held for that call only.
@@ -100,7 +107,16 @@ struct Open {
     /// The doc's version at the last save: what the next one appends
     /// from.
     saved: session::sync::loro::VersionVector,
+    /// Updates on the branch since its last compaction: past
+    /// [`COMPACT_AFTER`], the next save folds them into a snapshot.
+    uncompacted: usize,
 }
+
+/// How many updates a branch keeps before a save folds them into one
+/// snapshot ([`Store::compact`]). An open replays every update since the
+/// last snapshot, working the song out again from each: Unbreakable's 377
+/// took 16 s to open, its snapshot 0.2 s.
+const COMPACT_AFTER: usize = 64;
 
 /// The open songs, by the engine's project guid.
 fn open_songs() -> &'static tokio::sync::Mutex<HashMap<String, Open>> {
@@ -274,7 +290,7 @@ pub fn save(
 /// branch's history so far, a bridge reading the song over it.
 async fn begin(daw: &Standalone, guid: &str, path: &Path, branch: &str) -> Result<Open, String> {
     record_steps();
-    let (store, loaded) = open_branch(path, branch)?;
+    let (store, loaded, uncompacted) = open_branch(path, branch)?;
     let doc = SessionDoc::from_loro(loaded);
     let saved = doc.version();
     let chart = doc.read().chart;
@@ -294,6 +310,7 @@ async fn begin(daw: &Standalone, guid: &str, path: &Path, branch: &str) -> Resul
         store,
         bridge,
         saved,
+        uncompacted,
     })
 }
 
@@ -318,6 +335,21 @@ fn append(open: &mut Open, label: &str) -> Result<(), String> {
                 .map_err(|e| e.to_string())
         })?;
         open.saved = doc.version();
+        open.uncompacted = open.uncompacted.saturating_add(1);
+    }
+    // Folded into a snapshot once there are enough to slow an open. Safe
+    // here: the doc holds every update appended (it is at or past
+    // `saved`), and nothing appends while this `Open` is held — whatever
+    // the snapshot holds beyond them is appended again and merged as the
+    // same operations.
+    if open.uncompacted >= COMPACT_AFTER {
+        let mut stages = architect_telemetry::timing::Stages::start();
+        with_store(&open.store, |s| {
+            s.compact(&open.branch, doc.loro())
+                .map_err(|e| e.to_string())
+        })?;
+        stages.mark("song.compact_ms");
+        open.uncompacted = 0;
     }
     Ok(())
 }
@@ -491,7 +523,7 @@ async fn step_back(open: &mut Open, pending: &str, back: bool) -> Result<Undone,
 pub fn load(daw: &Standalone, name: &str, path: &Path, branch: &str) -> Result<String, String> {
     let _job = crate::jobs::start("Opening", 0);
     record_steps();
-    let (store, loaded) = open_branch(path, branch)?;
+    let (store, loaded, uncompacted) = open_branch(path, branch)?;
     let doc = SessionDoc::from_loro(loaded);
     let saved = doc.version();
     let guid = uuid::Uuid::new_v4().to_string();
@@ -522,6 +554,7 @@ pub fn load(daw: &Standalone, name: &str, path: &Path, branch: &str) -> Result<S
                 store,
                 bridge,
                 saved,
+                uncompacted,
             },
         );
         Ok::<(), String>(())
