@@ -349,11 +349,69 @@ pub const ANALYSIS_BLOCK: u32 = 1024;
 /// How many items' peaks are read at once.
 const WAVE_READS: usize = 16;
 
+/// A stretch of a recording's waveform: source seconds `from..to`.
+#[derive(Clone)]
+struct SourceWave {
+    from: f64,
+    to: f64,
+    wave: Arc<Wave>,
+}
+
+/// What a waveform is drawn from: an item's recording, the stretch of it
+/// the item starts on, and how the item plays it.
+#[cfg(feature = "native")]
+struct Cut {
+    path: String,
+    /// Source seconds at the item's start.
+    offset: f64,
+    /// Item seconds.
+    length: f64,
+    /// The take's stretch markers, `(take time, source time)`.
+    markers: Vec<(f64, f64)>,
+}
+
+/// `guid`'s recording and how it plays it — `None` for a take played
+/// faster or slower than recorded (varispeed is read, not derived).
+#[cfg(feature = "native")]
+fn cut_of(
+    daw: &daw::standalone::Standalone,
+    project: &daw::service::ProjectContext,
+    guid: &str,
+) -> Option<Cut> {
+    use daw::service::{ItemRef, Items as _, TakeRef, Takes as _};
+    let item = daw.get_item(project.clone(), ItemRef::Guid(guid.to_owned()))?;
+    let take = daw.get_active_take(project.clone(), ItemRef::Guid(guid.to_owned()))?;
+    if (take.play_rate - 1.0).abs() > 1e-9 && take.play_rate > 0.0 {
+        return None;
+    }
+    let markers = daw_proto::StretchMarkers::get_stretch_markers(
+        daw,
+        project.clone(),
+        ItemRef::Guid(guid.to_owned()),
+        TakeRef::Active,
+    )
+    .into_iter()
+    .map(|m| (m.position, m.source_position))
+    .collect();
+    Some(Cut {
+        path: take.source_file_path?,
+        offset: take.start_offset.as_seconds(),
+        length: item.length.as_seconds(),
+        markers,
+    })
+}
+
 #[derive(Clone, Default)]
 pub struct Previews {
     known: Arc<Mutex<HashMap<String, Vec<Note>>>>,
     /// The audio items' waveforms, by item GUID.
     waves: Arc<Mutex<HashMap<String, Arc<Wave>>>>,
+    /// The recordings' waveforms as read, by file: each the stretch of the
+    /// source an item read covered (`from..to`, source seconds), before
+    /// any volume curve. An item cut from a recording — a slice, a comp's
+    /// piece, the edit's copy — is its stretch of one of these, and is
+    /// never read again ([`Self::derive`]).
+    sources: Arc<Mutex<HashMap<String, Vec<SourceWave>>>>,
     /// Bumped whenever notes or waveforms arrive — so a picture recorded
     /// before they did (a browser's waveforms come after the song opens)
     /// knows to record itself again.
@@ -426,13 +484,65 @@ impl Previews {
     /// parallel on the waveform pool; `false` with no engine here.
     #[cfg(feature = "native")]
     fn fill_waves_local(&self, guids: &[String]) -> bool {
-        use daw::service::{ItemRef, ProjectContext, TakeRef};
-        use daw_proto::Peaks as _;
+        use daw::service::ProjectContext;
         let (Some(daw), Some(song)) = (crate::open::local_engine(), crate::open::current_song())
         else {
             return false;
         };
         let project = ProjectContext::Project(song);
+        // One timed unit (`PERF_RECENT {name: "waves.fill"}`).
+        let span = tracing::info_span!(
+            "waves.fill",
+            waves.asked = guids.len(),
+            waves.read = tracing::field::Empty
+        );
+        let _entered = span.enter();
+        // Cut from a recording already drawn: no read at all.
+        let left = self.derive(daw, &project, guids);
+        if left.is_empty() {
+            span.record("waves.read", 0);
+            return true;
+        }
+        // Of the rest, one item a recording first — the longest that plays
+        // it unstretched — and the others cut from it: a sliced kit is a
+        // few dozen reads, not thousands.
+        let cuts = crate::wave_pool::map(&left, |guid| cut_of(daw, &project, guid));
+        let mut longest: HashMap<&str, (usize, f64)> = HashMap::new();
+        for (i, cut) in cuts.iter().enumerate() {
+            let Some(cut) = cut.as_ref().filter(|c| c.markers.len() < 2) else {
+                continue;
+            };
+            let best = longest.entry(cut.path.as_str()).or_insert((i, cut.length));
+            if cut.length > best.1 {
+                *best = (i, cut.length);
+            }
+        }
+        let first: Vec<String> = longest
+            .values()
+            .filter_map(|(i, _)| left.get(*i).cloned())
+            .collect();
+        self.read_waves(daw, &project, &first);
+        let rest: Vec<String> = left.into_iter().filter(|g| !first.contains(g)).collect();
+        let rest = self.derive(daw, &project, &rest);
+        self.read_waves(daw, &project, &rest);
+        span.record("waves.read", first.len() + rest.len());
+        true
+    }
+
+    /// Read `guids`' peaks from the engine, in parallel, each kept by its
+    /// recording too.
+    #[cfg(feature = "native")]
+    fn read_waves(
+        &self,
+        daw: &daw::standalone::Standalone,
+        project: &daw::service::ProjectContext,
+        guids: &[String],
+    ) {
+        use daw::service::{ItemRef, TakeRef};
+        use daw_proto::Peaks as _;
+        if guids.is_empty() {
+            return;
+        }
         let job = crate::jobs::start("Waveforms", guids.len());
         let read = crate::wave_pool::map(guids, |guid| {
             job.advance(1);
@@ -442,18 +552,94 @@ impl Previews {
                 TakeRef::Active,
                 WAVE_BLOCK,
             );
+            let raw = Wave::from_peaks(&peaks)?;
+            // Kept by its recording, before its volume curve, for every
+            // item cut from it after (an unstretched one: its points are
+            // the source's own).
+            let cut = cut_of(daw, project, guid).filter(|c| c.markers.len() < 2);
             // Drawn as it plays: through its take's volume envelope (a
             // leveled drum's strokes even, as they sound).
-            let curve = take_volume(daw, &project, guid);
-            Wave::from_peaks(&peaks).map(|wave| (guid.clone(), wave.through(&curve)))
+            let curve = take_volume(daw, project, guid);
+            Some((
+                guid.clone(),
+                raw.clone().through(&curve),
+                cut.map(|c| (c, raw)),
+            ))
         });
-        if let Ok(mut waves) = self.waves.lock() {
-            for (guid, wave) in read.into_iter().flatten() {
+        if let (Ok(mut waves), Ok(mut sources)) = (self.waves.lock(), self.sources.lock()) {
+            for (guid, wave, source) in read.into_iter().flatten() {
                 waves.insert(guid, Arc::new(wave));
+                if let Some((cut, raw)) = source {
+                    sources.entry(cut.path).or_default().push(SourceWave {
+                        from: cut.offset,
+                        to: cut.offset + cut.length,
+                        wave: Arc::new(raw),
+                    });
+                }
             }
         }
         self.arrived();
-        true
+    }
+
+    /// Every one of `guids` cut from a recording whose waveform is here —
+    /// its stretch of it (through its stretch markers), through its own
+    /// volume curve — put in without a read. The ones that are not, back.
+    #[cfg(feature = "native")]
+    fn derive(
+        &self,
+        daw: &daw::standalone::Standalone,
+        project: &daw::service::ProjectContext,
+        guids: &[String],
+    ) -> Vec<String> {
+        let Ok(sources) = self.sources.lock().map(|s| s.clone()) else {
+            return guids.to_vec();
+        };
+        if sources.is_empty() {
+            return guids.to_vec();
+        }
+        let mut stages = architect_telemetry::timing::Stages::start();
+        let cuts = crate::wave_pool::map(guids, |guid| cut_of(daw, project, guid));
+        stages.mark("waves.cut_of_ms");
+        let jobs: Vec<(&String, Option<Cut>)> = guids.iter().zip(cuts).collect();
+        let cut = crate::wave_pool::map(&jobs, |(guid, cut)| {
+            let cut = cut.as_ref()?;
+            // The source it plays: its markers' reach, else its own span.
+            let (lo, hi) = if cut.markers.len() >= 2 {
+                let (a, b) = cut
+                    .markers
+                    .iter()
+                    .fold((f64::INFINITY, f64::NEG_INFINITY), |(a, b), (_, s)| {
+                        (a.min(*s), b.max(*s))
+                    });
+                (a.min(cut.offset), b)
+            } else {
+                (cut.offset, cut.offset + cut.length)
+            };
+            let held = sources
+                .get(&cut.path)?
+                .iter()
+                .find(|w| w.from <= lo + 1e-6 && hi <= w.to + 1e-6)?;
+            let wave = if cut.markers.len() >= 2 {
+                held.wave.warped(held.from, cut.length, &cut.markers)
+            } else {
+                held.wave.slice(cut.offset - held.from, cut.length)
+            };
+            let curve = take_volume(daw, project, guid);
+            Some(((*guid).clone(), wave.through(&curve)))
+        });
+        stages.mark("waves.derive_ms");
+        let mut left = Vec::new();
+        let mut made = Vec::new();
+        for (guid, wave) in guids.iter().zip(cut) {
+            match wave {
+                Some(w) => made.push(w),
+                None => left.push(guid.clone()),
+            }
+        }
+        if !made.is_empty() {
+            self.put_waves(made);
+        }
+        left
     }
 
     /// Read the peaks, awaited — the web build's way in.
