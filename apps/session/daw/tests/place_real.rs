@@ -60,13 +60,6 @@ fn edit_lanes(
         .collect()
 }
 
-fn run(id: &'static str, args: serde_json::Value) -> serde_json::Value {
-    let said = session_daw::actions::list()
-        .run_json(id, args.to_string().as_bytes())
-        .unwrap_or_else(|e| panic!("{id}: {e}"));
-    serde_json::from_slice(&said).unwrap_or_default()
-}
-
 /// Where a lane plays recording time `source` at `t`: the item there, its
 /// offset into its recording, unstretched.
 fn plays(lane: &[(f64, f64, f64, bool)], t: f64) -> Option<f64> {
@@ -211,5 +204,10 @@ fn a_snare_moved_and_moved_back_plays_as_before() {
         drawn(&after) <= drawn(&before),
         "nothing left drawn out: {said}"
     );
+    assert!(
+        doubled_after.is_subset(&doubled_before),
+        "no hit plays twice that did not: {said}"
+    );
+    assert_eq!(after, again, "a second round trip changes nothing: {said}");
     assert!(std::env::var_os("FTS_PLACE_SHOW").is_none(), "{said}");
 }
