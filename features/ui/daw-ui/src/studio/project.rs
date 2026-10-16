@@ -189,6 +189,29 @@ impl Project {
 /// in afterwards ([`super::waveform`]) against a window that is already
 /// standing. A spinner in front of an arrangement we could already draw
 /// is a self-inflicted wait.
+/// A track's items in the order a lane draws them: sorted, and sorted
+/// TOTALLY — position alone is not enough.
+///
+/// Items on a lane can overlap, and a lane draws them in order, so
+/// whichever comes last is the one you see where they cross. Ordering
+/// by position alone leaves ties to be broken by whatever order the
+/// facade happened to return, which is not stable between opens: the
+/// same project drew a different picture on the second run, with one
+/// take covering another that had been on top a moment before. The
+/// item's index within its track is REAPER's own answer to "which of
+/// these is on top", so that is the tiebreak, with the guid behind it
+/// so the order is total no matter what.
+pub fn sort_lane(lane: &mut [Item]) {
+    lane.sort_by(|a, b| {
+        a.position
+            .as_seconds()
+            .partial_cmp(&b.position.as_seconds())
+            .unwrap_or(std::cmp::Ordering::Equal)
+            .then(a.index.cmp(&b.index))
+            .then_with(|| a.guid.cmp(&b.guid))
+    });
+}
+
 pub async fn fetch() -> Option<Project> {
     let daw = daw_control::Daw::try_get()?;
     fetch_of(daw.current_project().await.ok()?).await
@@ -221,26 +244,8 @@ pub async fn fetch_of(project: daw_control::Project) -> Option<Project> {
         length = length.max(item.position.as_seconds() + item.length.as_seconds());
         items.entry(item.track_guid.clone()).or_default().push(item);
     }
-    // Sorted, and sorted TOTALLY — position alone is not enough.
-    //
-    // Items on a lane can overlap, and a lane draws them in order, so
-    // whichever comes last is the one you see where they cross. Ordering
-    // by position alone leaves ties to be broken by whatever order the
-    // facade happened to return, which is not stable between opens: the
-    // same project drew a different picture on the second run, with one
-    // take covering another that had been on top a moment before. The
-    // item's index within its track is REAPER's own answer to "which of
-    // these is on top", so that is the tiebreak, with the guid behind it
-    // so the order is total no matter what.
     for lane in items.values_mut() {
-        lane.sort_by(|a, b| {
-            a.position
-                .as_seconds()
-                .partial_cmp(&b.position.as_seconds())
-                .unwrap_or(std::cmp::Ordering::Equal)
-                .then(a.index.cmp(&b.index))
-                .then_with(|| a.guid.cmp(&b.guid))
-        });
+        sort_lane(lane);
     }
 
     let sections = project

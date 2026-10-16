@@ -411,15 +411,44 @@ pub fn read_back(
 /// over the song — so the arrangement reads it back on its next frame.
 static RESYNC: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 
-/// Ask the arrangement to read the session back from the engine.
+/// Whether the read-back asked for must cover everything (the engine
+/// changed something nobody named) or only items (the engine's journal
+/// says which).
+static ALL: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+/// Where the window has read the engine's journal up to
+/// ([`daw::standalone::journal::now`] when it last read the song).
+#[cfg(feature = "native")]
+static SEEN: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
+/// What a read-back must cover.
+#[derive(Debug)]
+pub enum Resync {
+    /// The whole song: something changed that nobody named.
+    All,
+    /// Only items: those the engine's journal says changed.
+    Items,
+}
+
+/// Ask the arrangement to read the session back from the engine — all of
+/// it: the safe ask, for a change that does not say what it touched.
 pub fn request_resync() {
-    RESYNC.store(true, std::sync::atomic::Ordering::Relaxed);
+    ALL.store(true, std::sync::atomic::Ordering::Release);
+    RESYNC.store(true, std::sync::atomic::Ordering::Release);
+}
+
+/// Ask for the items that changed to be read back: an edit that changed
+/// only items (moved, cut, made, removed, re-laned, their takes) and
+/// nothing else of the song — not the tracks, not the ruler. Which items,
+/// the engine's journal says.
+pub fn request_resync_items() {
+    RESYNC.store(true, std::sync::atomic::Ordering::Release);
 }
 
 /// Whether a read-back is asked for; asking clears it.
 #[must_use]
 pub fn take_resync() -> bool {
-    RESYNC.swap(false, std::sync::atomic::Ordering::Relaxed)
+    take_resync_scope().is_some()
 }
 
 /// Whether one is waiting, without taking it — what a panel's
@@ -427,6 +456,101 @@ pub fn take_resync() -> bool {
 #[must_use]
 pub fn resync_pending() -> bool {
     RESYNC.load(std::sync::atomic::Ordering::Relaxed)
+}
+
+/// The read-back asked for, if one is; asking clears it.
+#[must_use]
+pub fn take_resync_scope() -> Option<Resync> {
+    if !RESYNC.swap(false, std::sync::atomic::Ordering::AcqRel) {
+        return None;
+    }
+    if ALL.swap(false, std::sync::atomic::Ordering::AcqRel) {
+        Some(Resync::All)
+    } else {
+        Some(Resync::Items)
+    }
+}
+
+/// The window has read the whole song as of now: the journal from here.
+/// Taken BEFORE the read, so a write during it is read again next time.
+#[cfg(feature = "native")]
+pub fn mark_seen() {
+    SEEN.store(
+        daw::standalone::journal::now(),
+        std::sync::atomic::Ordering::Release,
+    );
+}
+
+/// The items the engine's journal says changed since the window last
+/// read, read again into `raw` in place: each where it now is (or gone),
+/// its lane in order, its take's name and whether it is MIDI. The guids
+/// of those still in the song, or `None` when the journal cannot say or
+/// there is no engine here (read the whole song back instead).
+#[cfg(feature = "native")]
+#[must_use]
+pub fn patch_items(raw: &mut daw_ui::studio::project::Project) -> Option<Vec<String>> {
+    use daw::service::{ItemRef, Items as _, Takes as _};
+    let (daw, song) = (crate::open::local_engine()?, crate::open::current_song()?);
+    let seen = SEEN.load(std::sync::atomic::Ordering::Acquire);
+    // Never read whole yet: nowhere to read on from.
+    if seen == 0 {
+        return None;
+    }
+    let changes = daw.item_changes_since(&song, seen)?;
+    let changed = changes.items?;
+    SEEN.store(changes.cursor, std::sync::atomic::Ordering::Release);
+    if changed.is_empty() {
+        return Some(Vec::new());
+    }
+    let project = daw::service::ProjectContext::Project(song);
+    // Each where it was, taken out; then each where it is, put back.
+    let mut lanes: std::collections::HashSet<String> = std::collections::HashSet::new();
+    for (track, items) in &mut raw.items {
+        let before = items.len();
+        items.retain(|i| !changed.contains(&i.guid));
+        if items.len() != before {
+            lanes.insert(track.clone());
+        }
+    }
+    let mut now = Vec::new();
+    for guid in &changed {
+        raw.names.remove(guid);
+        raw.midi.remove(guid);
+        let Some(item) = daw.get_item(project.clone(), ItemRef::Guid(guid.clone())) else {
+            continue;
+        };
+        if let Some(take) = daw.get_active_take(project.clone(), ItemRef::Guid(guid.clone())) {
+            if !take.name.is_empty() {
+                raw.names.insert(guid.clone(), take.name);
+            }
+            if take.is_midi {
+                raw.midi.insert(guid.clone());
+            }
+        }
+        lanes.insert(item.track_guid.clone());
+        raw.items
+            .entry(item.track_guid.clone())
+            .or_default()
+            .push(item);
+        now.push(guid.clone());
+    }
+    for track in &lanes {
+        if let Some(items) = raw.items.get_mut(track) {
+            daw_ui::studio::project::sort_lane(items);
+            if items.is_empty() {
+                raw.items.remove(track);
+            }
+        }
+    }
+    raw.item_count = raw.items.values().map(Vec::len).sum();
+    let reach = raw
+        .items
+        .values()
+        .flatten()
+        .map(|i| i.position.as_seconds() + i.length.as_seconds())
+        .fold(0.0_f64, f64::max);
+    raw.length_secs = reach.max(60.0);
+    Some(now)
 }
 
 /// The open project, as the engine has it.
@@ -438,6 +562,7 @@ pub fn fetch() -> Option<daw_ui::studio::project::Project> {
         .build()
         .ok()?;
     let mut stages = architect_telemetry::timing::Stages::start();
+    mark_seen();
     let project = rt.block_on(daw_ui::studio::project::fetch())?;
     stages.mark("fetch.read_ms");
     if crate::open::local_engine().is_some() {

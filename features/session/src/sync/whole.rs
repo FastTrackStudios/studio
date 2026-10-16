@@ -964,7 +964,7 @@ fn write_take_data(p: &mut ProjectState, item: &str, take: &str, doc: &TakeState
 }
 
 /// `value` under `key`, or nothing there when it is empty.
-fn put<T>(map: &mut HashMap<String, Vec<T>>, key: &str, value: Vec<T>) {
+fn put<T>(map: &mut daw_standalone::journal::Journaled<String, Vec<T>>, key: &str, value: Vec<T>) {
     if value.is_empty() {
         map.remove(key);
     } else {

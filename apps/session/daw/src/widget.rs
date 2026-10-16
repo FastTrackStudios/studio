@@ -2195,6 +2195,80 @@ impl ArrangementWidget {
         true
     }
 
+    /// Read back what the engine changed, as far as it says: only the
+    /// tracks an edit names ([`crate::studio::request_resync_of`]) — their
+    /// items read again in place, the rest of the song kept as the window
+    /// holds it — else the whole song ([`Self::resync`]).
+    #[cfg(feature = "native")]
+    fn resync_as(&mut self, scope: crate::studio::Resync) {
+        if matches!(scope, crate::studio::Resync::All) {
+            self.resync();
+            return;
+        }
+        // One timed unit (`PERF_RECENT {name: "window.resync"}`).
+        let span = tracing::info_span!("window.resync", resync.items = tracing::field::Empty);
+        let _entered = span.enter();
+        let mut stages = architect_telemetry::timing::Stages::start();
+        let patched = self
+            .replan
+            .as_ref()
+            .and_then(|(_, raw)| crate::studio::patch_items(&mut raw.borrow_mut()));
+        let Some(now) = patched else {
+            drop(_entered);
+            self.resync();
+            return;
+        };
+        span.record("resync.items", now.len());
+        if now.is_empty() && !crate::midi::stale_pending() {
+            return;
+        }
+        stages.mark("resync.fetch_ms");
+        // The changed items the window has not drawn: a MIDI item's notes
+        // read now, an audio item's waveform cut from its recording's
+        // behind the window.
+        let now: std::collections::HashSet<String> = now.into_iter().collect();
+        let (notes, mut waves) = {
+            let Some((_, raw)) = self.replan.as_ref() else {
+                return;
+            };
+            let raw = raw.borrow();
+            let mut notes = Vec::new();
+            let mut waves = Vec::new();
+            for item in raw.items.values().flatten() {
+                if !now.contains(&item.guid) {
+                    continue;
+                }
+                if raw.is_midi(&item.guid) {
+                    if self.previews.get(&item.guid).is_none() {
+                        notes.push((item.guid.clone(), item.length.as_seconds()));
+                    }
+                } else {
+                    // Cut again even if drawn: a slipped take keeps its
+                    // guid and plays other audio.
+                    waves.push(item.guid.clone());
+                }
+            }
+            (notes, waves)
+        };
+        if !notes.is_empty() {
+            self.previews.fill_blocking(notes);
+        }
+        waves.extend(crate::midi::take_stale());
+        if !waves.is_empty() {
+            let previews = self.previews.clone();
+            crate::wave_pool::spawn(move || previews.fill_waves_blocking(waves));
+        }
+        stages.mark("resync.previews_ms");
+        self.replanned();
+        stages.mark("resync.adopt_ms");
+    }
+
+    /// [`Self::resync_as`] in a page: the whole song, always.
+    #[cfg(not(feature = "native"))]
+    fn resync_as(&mut self, _scope: crate::studio::Resync) {
+        self.resync();
+    }
+
     /// Read the session back from the engine and draw that: what a change
     /// made there rather than here (a toolbar insert, an edited chart laid
     /// over the song) needs. MIDI items the arrangement has not seen — a
@@ -2258,10 +2332,19 @@ impl ArrangementWidget {
     /// Draw a session read back from the engine: its rows planned again,
     /// and everything they are drawn from.
     fn adopt(&mut self, fresh: daw_ui::studio::project::Project) {
-        let Some((planner, raw)) = self.replan.as_mut() else {
+        let Some((_, raw)) = self.replan.as_mut() else {
             return;
         };
         *raw.borrow_mut() = fresh;
+        self.replanned();
+    }
+
+    /// The rows planned again from the session as the window now holds it,
+    /// and everything they are drawn from.
+    fn replanned(&mut self) {
+        let Some((planner, raw)) = self.replan.as_mut() else {
+            return;
+        };
         let mut stages = architect_telemetry::timing::Stages::start();
         let (project, rows) = planner.plan(&raw.borrow());
         stages.mark("adopt.plan_ms");
@@ -3911,8 +3994,8 @@ impl ArrangementWidget {
             // What the engine changed first (a lane set up from the Action
             // List): an action carried out on the session as it was would
             // edit takes that are no longer there.
-            if crate::studio::take_resync() {
-                self.resync();
+            if let Some(scope) = crate::studio::take_resync_scope() {
+                self.resync_as(scope);
             }
             let _ = self.apply_actions(crate::actions::take_window());
         }
@@ -4680,8 +4763,8 @@ impl ArrangementWidget {
         crate::ghosts::local_shown(&self.rows, &self.scene);
         // The engine changed the session under us (a toolbar insert, an
         // edited chart): read it back before drawing it.
-        if crate::studio::take_resync() {
-            self.resync();
+        if let Some(scope) = crate::studio::take_resync_scope() {
+            self.resync_as(scope);
         }
         // A page's read-back, once it has arrived.
         #[cfg(not(feature = "native"))]

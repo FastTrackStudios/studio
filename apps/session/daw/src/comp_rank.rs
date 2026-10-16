@@ -292,7 +292,9 @@ fn comp_in(
     daw::service::Projects::end_undo_block(daw, project.clone(), &label, None);
     comped?;
     let edited = edited?.is_some_and(|n| n > 0);
-    crate::studio::request_resync();
+    // Only the mics' items changed (their comp and edit lanes): the window
+    // reads back those, as the engine's journal names them.
+    crate::studio::request_resync_items();
     crate::hit_overlay::refresh();
     Ok(edited)
 }

@@ -151,11 +151,17 @@ fn t_comps_every_mic_from_its_own_lane() {
         .and_then(|t| t.iter().find(|t| t["current"] == true))
         .map(|t| t["take"].clone());
 
+    let song = session_daw::open::current_song().expect("song");
+    let cursor = daw::standalone::journal::now();
     let first = run(
         &path,
         "COMP_CYCLE",
         serde_json::json!({ "from": from, "to": to, "by": 1 }),
     );
+    let changed = daw
+        .item_changes_since(&song, cursor)
+        .and_then(|c| c.items)
+        .map(|i| i.len());
     let took = first[0]["take"].clone();
     assert_ne!(Some(&took), was.as_ref(), "a different take: {first}");
     assert!(gaps().is_empty(), "no mic blank after T: {:?}", gaps());
@@ -192,5 +198,8 @@ fn t_comps_every_mic_from_its_own_lane() {
         .iter()
         .map(|t| format!("{:.0} ms {:?}", t.total_ms, t.stages))
         .collect();
-    assert!(std::env::var_os("FTS_COMP_SHOW").is_none(), "{shown:#?}");
+    assert!(
+        std::env::var_os("FTS_COMP_SHOW").is_none(),
+        "{shown:#?}\nitems a press wrote: {changed:?}"
+    );
 }

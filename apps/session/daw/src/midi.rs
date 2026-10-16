@@ -71,6 +71,12 @@ pub fn mark_stale(items: impl IntoIterator<Item = String>) {
     }
 }
 
+/// Whether any item has been said stale since last asked.
+#[must_use]
+pub fn stale_pending() -> bool {
+    STALE.lock().is_ok_and(|s| !s.is_empty())
+}
+
 /// The items said stale since last asked.
 #[must_use]
 pub fn take_stale() -> Vec<String> {
