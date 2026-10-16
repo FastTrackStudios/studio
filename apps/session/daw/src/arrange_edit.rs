@@ -2751,6 +2751,11 @@ fn draw_out_between(item: &mut daw_proto::Item, to: f64) -> Option<Vec<(f64, f64
 /// the rest slowed to reach — the markers that say so, `(take time,
 /// source time)`, and the item lengthened. `None`, and the item left, when
 /// that would slow it below [`STRETCH_LEAST_RATE`].
+/// [`draw_out`] for the engine's own placement ([`crate::hit_place`]).
+pub(crate) fn draw_out_markers(item: &mut daw_proto::Item, to: f64) -> Option<Vec<(f64, f64)>> {
+    draw_out(item, to)
+}
+
 fn draw_out(item: &mut daw_proto::Item, to: f64) -> Option<Vec<(f64, f64)>> {
     draw_out_to(item, to, STRETCH_LEAST_RATE)
 }

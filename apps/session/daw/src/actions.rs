@@ -4676,10 +4676,33 @@ fn register_place(list: &ActionList) {
             for id in &ids {
                 crate::hits::mark_placed(daw, &project, id);
             }
-            let ticket = slip_now(daw, &project, &settings, cuts);
-            stages.mark("edit.slip_ms");
-            landed(ticket);
-            stages.mark("edit.land_ms");
+            // Placed again from the recording, on the engine: a hit moved
+            // back is the recording again, and nothing is drawn out
+            // unless nothing else can fill a gap. A kit without its
+            // recording kept on lanes is slipped where it plays.
+            if !crate::hit_place::ready(daw, &project) {
+                let ticket = slip_now(daw, &project, &settings, cuts);
+                stages.mark("edit.slip_ms");
+                landed(ticket);
+                stages.mark("edit.land_ms");
+                let out = checked(daw, &project, (&settings, &pairs), &before, span);
+                stages.mark("edit.check_ms");
+                return Ok(out);
+            }
+            follow_samples(daw, &project, &settings, &cuts);
+            let seconds = |us: i64| num_traits::ToPrimitive::to_f64(&us).unwrap_or(0.0) / 1e6;
+            let moves: Vec<(f64, f64)> = cuts
+                .iter()
+                .map(|&(h, by)| (seconds(h), seconds(by)))
+                .collect();
+            let joins = crate::hit_place::Joins {
+                lead: settings.lead_ms / 1_000.0,
+                crossfade: settings.xfade_ms / 1_000.0,
+            };
+            crate::hit_place::place(daw, &project, &moves, joins)?;
+            stages.mark("edit.place_ms");
+            crate::studio::request_resync_items();
+            crate::hit_overlay::refresh();
         }
         let out = checked(daw, &project, (&settings, &pairs), &before, span);
         stages.mark("edit.check_ms");
@@ -5012,6 +5035,33 @@ fn judge(
     (result, cuts)
 }
 
+/// The drum samples moved with `cuts` (`(hit, shift)`, microseconds):
+/// each hit's sample where its slice is going.
+fn follow_samples(
+    daw: &daw::standalone::Standalone,
+    project: &ProjectContext,
+    settings: &crate::drum_settings::Settings,
+    cuts: &[(i64, i64)],
+) {
+    #[cfg(feature = "signal")]
+    {
+        let lead = settings.lead_ms / 1_000.0;
+        let seconds = |us: i64| num_traits::ToPrimitive::to_f64(&us).unwrap_or(0.0) / 1_000_000.0;
+        let slices: Vec<(f64, f64)> = cuts
+            .iter()
+            .map(|c| (seconds(c.0) - lead, seconds(c.1)))
+            .collect();
+        let goes_to = |t: f64| t + shift_at(&slices, t);
+        match crate::drum_samples::follow(daw, project, goes_to) {
+            Ok(0) => {}
+            Ok(n) => tracing::info!(samples.tracks = n, "drums: the samples follow the slip"),
+            Err(why) => tracing::warn!(why, "drums: the samples could not follow the slip"),
+        }
+    }
+    #[cfg(not(feature = "signal"))]
+    let _ = (daw, project, settings, cuts);
+}
+
 /// Carry out `cuts` (`(hit, shift)`, microseconds, by hit): the window
 /// slips the kit by them, as one step, the drum samples following.
 fn slip_now(
@@ -5034,23 +5084,7 @@ fn slip_now(
     });
     // The samples first, so they and the recording move in the one step
     // the slip makes: each hit where its slice is going.
-    #[cfg(feature = "signal")]
-    {
-        let lead = settings.lead_ms / 1_000.0;
-        let seconds = |us: i64| num_traits::ToPrimitive::to_f64(&us).unwrap_or(0.0) / 1_000_000.0;
-        let slices: Vec<(f64, f64)> = cuts
-            .iter()
-            .map(|c| (seconds(c.0) - lead, seconds(c.1)))
-            .collect();
-        let goes_to = |t: f64| t + shift_at(&slices, t);
-        match crate::drum_samples::follow(daw, project, goes_to) {
-            Ok(0) => {}
-            Ok(n) => tracing::info!(samples.tracks = n, "drums: the samples follow the slip"),
-            Err(why) => tracing::warn!(why, "drums: the samples could not follow the slip"),
-        }
-    }
-    #[cfg(not(feature = "signal"))]
-    let _ = (daw, project);
+    follow_samples(daw, project, settings, &cuts);
     let mut attacks_us: Vec<i64> = crate::hits::playback(daw, project)
         .iter()
         .map(|p| us(p.time))

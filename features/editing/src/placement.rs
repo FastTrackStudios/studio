@@ -8,12 +8,16 @@
 //! recording again, uncut, and the same placement always renders the
 //! same pieces.
 //!
-//! Each seam is put where both sides play natural audio: the piece before
-//! runs on through its own decay up to just before the next hit's
-//! recorded attack, and the piece after reaches back into its own lead-in
-//! — never back over the hit before it. Only where neither can cover the
-//! gap a move left (a hit sent later than its neighbour is from it) is
-//! the decay before drawn out, over what is left: [`Piece::drawn_to`].
+//! Pieces follow one another in the order the hits now play; how far a
+//! piece may run on or reach back goes by the recording — the attacks
+//! either side of it as recorded, wherever those now play. Each seam is
+//! put where both sides play natural audio: the piece before runs on
+//! through its own decay up to just before the next attack in its
+//! recording, the piece after reaches back into its own lead-in — never
+//! back over the attack before it. A hit moved past others (a snare a beat
+//! later, over the hats between) plays there, and the hole it left is
+//! filled the same way. Only what neither side covers is drawn out, the
+//! decay before over what is left: [`Piece::drawn_to`].
 
 /// How a placement cuts.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -71,12 +75,10 @@ impl Piece {
 const SAME: f64 = 1e-6;
 
 /// The pieces that play the recording over `start..end` (timeline) with
-/// `hits` moved — `hits` sorted by `at`, and still in that order once
-/// moved (a move past another hit reorders the performance, which no
-/// seam can play: the caller keeps the order, as a quantize does).
-/// The first piece starts at `start` and the last ends at `end`, each with
-/// the shift of the hits nearest it, so a span re-placed inside a longer
-/// edit meets what is either side of it unchanged.
+/// `hits` moved — `hits` sorted by `at`. The first piece starts at
+/// `start` and the last ends at `end`, each with the shift of the hit
+/// nearest it, so a span re-placed inside a longer edit meets what is
+/// either side of it unchanged.
 #[must_use]
 pub fn place(hits: &[Hit], (start, end): (f64, f64), cut: Cut) -> Vec<Piece> {
     let runs = runs(hits);
@@ -114,28 +116,48 @@ pub fn place(hits: &[Hit], (start, end): (f64, f64), cut: Cut) -> Vec<Piece> {
     pieces
 }
 
-/// Hits in a row with one shift: one unbroken piece of the recording.
+/// Hits one after another both as recorded and as they play, with one
+/// shift: one unbroken piece of the recording.
 #[derive(Clone, Copy, Debug)]
 struct Run {
-    /// Its first hit's attack and its last's, recording time.
+    /// Its first hit's attack, recording time.
     first: f64,
-    last: f64,
     shift: f64,
+    /// The recorded attacks either side of it — whoever plays where now:
+    /// how far it may reach back and run on.
+    before: Option<f64>,
+    after: Option<f64>,
 }
 
+/// `hits` (by `at`) as runs, in the order they now play.
 fn runs(hits: &[Hit]) -> Vec<Run> {
-    let mut runs: Vec<Run> = Vec::new();
-    for hit in hits {
+    let mut order: Vec<usize> = (0..hits.len()).collect();
+    order.sort_by(|&a, &b| {
+        let plays = |i: usize| hits[i].at + hits[i].shift;
+        plays(a).total_cmp(&plays(b)).then(a.cmp(&b))
+    });
+    let at = |i: Option<usize>| i.and_then(|i| hits.get(i)).map(|h| h.at);
+    let mut runs: Vec<(Run, usize)> = Vec::new();
+    for i in order {
+        let hit = hits[i];
         match runs.last_mut() {
-            Some(run) if (run.shift - hit.shift).abs() < SAME => run.last = hit.at,
-            _ => runs.push(Run {
-                first: hit.at,
-                last: hit.at,
-                shift: hit.shift,
-            }),
+            // The next as recorded, with the same shift: the same piece.
+            Some((run, last)) if *last + 1 == i && (run.shift - hit.shift).abs() < SAME => {
+                *last = i;
+                run.after = at(Some(i + 1));
+            }
+            _ => runs.push((
+                Run {
+                    first: hit.at,
+                    shift: hit.shift,
+                    before: at(i.checked_sub(1)),
+                    after: at(Some(i + 1)),
+                },
+                i,
+            )),
         }
     }
-    runs
+    runs.into_iter().map(|(run, _)| run).collect()
 }
 
 /// Where the piece before a seam stops and the one after starts, and how
@@ -146,22 +168,25 @@ struct Seam {
     drawn_to: Option<f64>,
 }
 
-/// The seam between two runs. The piece after starts at its lead — or,
-/// moved later than the piece before, as early as its own recording
-/// allows, reaching back into its lead-in; the piece before runs on to
-/// meet it, through its own decay, up to just before the next hit's
-/// recorded attack. What neither covers is the gap the decay is drawn
-/// over.
+/// The seam between two runs, in the order they play. The piece after
+/// starts at its lead — or as early as its own recording allows, reaching
+/// back into its lead-in, to meet the piece before; that one runs on
+/// through its own decay up to just before the next attack in its
+/// recording. What neither covers is the gap the decay is drawn over.
 fn seam(before: &Run, after: &Run, cut: Cut) -> Seam {
     let lead = after.first + after.shift - cut.lead;
     // The latest the piece before may play to: its recording, up to the
-    // lead into the hit after.
-    let runs_to = after.first - cut.lead + before.shift;
+    // lead into the next attack recorded after it.
+    let runs_to = before
+        .after
+        .map_or(f64::INFINITY, |next| next - cut.lead + before.shift);
     // The earliest the piece after may start: its recording, from just
-    // past the hit before it — and never after its own lead.
-    let reaches_to = (before.last + cut.guard + after.shift).min(lead);
-    // Moved earlier (or the same), the piece after starts at its lead
-    // and the one before is trimmed to it.
+    // past the attack recorded before it — and never after its own lead.
+    let reaches_to = after
+        .before
+        .map_or(f64::NEG_INFINITY, |prev| prev + cut.guard + after.shift)
+        .min(lead);
+    // The piece before reaches the lead: it is trimmed to it.
     if lead <= runs_to {
         return Seam {
             ends: lead,
@@ -169,21 +194,19 @@ fn seam(before: &Run, after: &Run, cut: Cut) -> Seam {
             drawn_to: None,
         };
     }
-    // Moved later: the piece before runs on as far as it naturally can,
-    // the piece after reaches back to meet it.
-    let starts = reaches_to.max(runs_to);
-    if starts <= runs_to {
+    // It stops short: the piece after reaches back to meet it.
+    if reaches_to <= runs_to {
         return Seam {
-            ends: runs_to.min(lead),
-            starts: runs_to.min(lead),
+            ends: runs_to,
+            starts: runs_to,
             drawn_to: None,
         };
     }
     // Neither reaches: the decay before is drawn out over what is left.
     Seam {
         ends: runs_to,
-        starts,
-        drawn_to: Some(starts),
+        starts: reaches_to,
+        drawn_to: Some(reaches_to),
     }
 }
 
@@ -279,6 +302,38 @@ mod tests {
             "drawn out over the leftover only, {drawn_over} s: {pieces:?}"
         );
         assert_gapless(&pieces);
+    }
+
+    #[test]
+    fn a_snare_moved_past_the_hits_after_it_plays_there_and_back_is_uncut() {
+        // Eighths; the snare on the fourth sent 0.55 s later, past two
+        // hits: it plays there, every other hit plays where it did, and
+        // the hole it left is filled by the decay before and the reach
+        // back after, drawn out over no more than what is left.
+        let mut shifts = [0.0; 10];
+        shifts[3] = 0.55;
+        let hits = eighths(&shifts);
+        let pieces = place(&hits, (0.0, 5.0), CUT);
+        assert_gapless(&pieces);
+        for hit in &hits {
+            let plays = hit.at + hit.shift;
+            let piece = pieces
+                .iter()
+                .find(|p| p.start <= plays && plays < p.end)
+                .unwrap_or_else(|| panic!("{hit:?} plays nowhere: {pieces:?}"));
+            assert!(
+                (piece.shift - hit.shift).abs() < 1e-9,
+                "{hit:?} played by {piece:?}"
+            );
+        }
+        let drawn: f64 = pieces.iter().map(|p| p.reach() - p.end).sum();
+        assert!(drawn < 0.03, "drawn out over {drawn} s: {pieces:?}");
+        shifts[3] = 0.0;
+        assert_eq!(
+            place(&eighths(&shifts), (0.0, 5.0), CUT).len(),
+            1,
+            "moved back: the recording, uncut"
+        );
     }
 
     #[test]

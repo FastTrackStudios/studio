@@ -246,7 +246,7 @@ fn span(item: &daw_proto::Item) -> (f64, f64) {
 /// either side kept — the right one playing on from where it was cut, as
 /// a split does — with no fade of their own at the cut, the swiped piece's
 /// crossfade covering it; wholly inside, it goes.
-fn clear(
+pub(crate) fn clear(
     daw: &daw::standalone::Standalone,
     project: &ProjectContext,
     item: &daw_proto::Item,

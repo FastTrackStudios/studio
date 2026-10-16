@@ -201,6 +201,7 @@ pub mod gain_stage;
 pub mod grid_in_force;
 pub use editing::groove;
 pub mod hit_overlay;
+pub mod hit_place;
 #[cfg(feature = "native")]
 pub mod hits;
 #[cfg(test)]
