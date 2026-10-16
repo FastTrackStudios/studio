@@ -4604,8 +4604,7 @@ pub(crate) fn revert(a: RevertArg) -> Result<Vec<QuantizeSpan>, String> {
         });
     }
     if cuts.iter().any(|c| c.1 != 0) {
-        let ticket = slip_now(daw, &project, &settings, cuts);
-        landed(ticket);
+        apply_cuts(daw, &project, &settings, cuts)?;
         let check = checked(daw, &project, (&settings, &sent), &before, whole);
         if let Some(last) = out.last_mut() {
             last.check = Some(check);
@@ -4687,34 +4686,8 @@ fn register_place(list: &ActionList) {
             for id in &ids {
                 crate::hits::mark_placed(daw, &project, id);
             }
-            // Placed again from the recording, on the engine: a hit moved
-            // back is the recording again, and nothing is drawn out
-            // unless nothing else can fill a gap. A kit without its
-            // recording kept on lanes is slipped where it plays.
-            let song = crate::song::Song::current()?;
-            if !crate::hit_place::ready(&song) {
-                let ticket = slip_now(daw, &project, &settings, cuts);
-                stages.mark("edit.slip_ms");
-                landed(ticket);
-                stages.mark("edit.land_ms");
-                let out = checked(daw, &project, (&settings, &pairs), &before, span);
-                stages.mark("edit.check_ms");
-                return Ok(out);
-            }
-            follow_samples(daw, &project, &settings, &cuts);
-            let seconds = |us: i64| num_traits::ToPrimitive::to_f64(&us).unwrap_or(0.0) / 1e6;
-            let moves: Vec<(f64, f64)> = cuts
-                .iter()
-                .map(|&(h, by)| (seconds(h), seconds(by)))
-                .collect();
-            let joins = crate::hit_place::Joins {
-                lead: settings.lead_ms / 1_000.0,
-                crossfade: settings.xfade_ms / 1_000.0,
-            };
-            crate::hit_place::place(&song, &moves, joins)?;
+            apply_cuts(daw, &project, &settings, cuts)?;
             stages.mark("edit.place_ms");
-            crate::studio::request_resync_items();
-            crate::hit_overlay::refresh();
         }
         let out = checked(daw, &project, (&settings, &pairs), &before, span);
         stages.mark("edit.check_ms");
@@ -4879,10 +4852,8 @@ pub(crate) fn quantize(a: QuantizeArg) -> Result<Vec<QuantizeSpan>, String> {
     }
     stages.mark("edit.plan_ms");
     if !dry && cuts.iter().any(|c| c.1 != 0) {
-        let ticket = slip_now(daw, &project, &base, cuts);
-        stages.mark("edit.slip_ms");
-        landed(ticket);
-        stages.mark("edit.land_ms");
+        apply_cuts(daw, &project, &base, cuts)?;
+        stages.mark("edit.place_ms");
         // One edit, one check: every hit sent, held up to where it
         // was sent; none outside the edit moved.
         let check = checked(daw, &project, (&base, &sent), &before, whole);
@@ -5045,6 +5016,38 @@ fn judge(
         to_check,
     };
     (result, cuts)
+}
+
+/// Carry out `cuts` (`(hit, shift)`, microseconds, by hit) as one step,
+/// the drum samples following: placed again from the recording on the
+/// engine — a hit moved back is the recording again, nothing drawn out
+/// unless nothing else fills a gap — or, for a kit without its recording
+/// kept on lanes, slipped where it plays by the window.
+fn apply_cuts(
+    daw: &'static daw::standalone::Standalone,
+    project: &ProjectContext,
+    settings: &crate::drum_settings::Settings,
+    cuts: Vec<(i64, i64)>,
+) -> Result<(), String> {
+    let song = crate::song::Song::current()?;
+    if !crate::hit_place::ready(&song) {
+        landed(slip_now(daw, project, settings, cuts));
+        return Ok(());
+    }
+    follow_samples(daw, project, settings, &cuts);
+    let seconds = |us: i64| num_traits::ToPrimitive::to_f64(&us).unwrap_or(0.0) / 1e6;
+    let moves: Vec<(f64, f64)> = cuts
+        .iter()
+        .map(|&(hit, by)| (seconds(hit), seconds(by)))
+        .collect();
+    let joins = crate::hit_place::Joins {
+        lead: settings.lead_ms / 1_000.0,
+        crossfade: settings.xfade_ms / 1_000.0,
+    };
+    crate::hit_place::place(&song, &moves, joins)?;
+    crate::studio::request_resync_items();
+    crate::hit_overlay::refresh();
+    Ok(())
 }
 
 /// The drum samples moved with `cuts` (`(hit, shift)`, microseconds):

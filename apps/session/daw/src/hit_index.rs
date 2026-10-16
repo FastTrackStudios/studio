@@ -59,6 +59,24 @@ pub fn between(song: &Song, from: f64, to: f64) -> Vec<Played> {
     .unwrap_or_default()
 }
 
+/// Which slices play hit `id`, and where: more than one is a hit heard
+/// twice.
+#[must_use]
+pub fn players(song: &Song, id: &str) -> Vec<(String, f64)> {
+    with_index(song, |index| {
+        index
+            .by_item
+            .iter()
+            .flat_map(|(item, hits)| {
+                hits.iter()
+                    .filter(|h| h.id == id)
+                    .map(|h| (item.clone(), h.time))
+            })
+            .collect()
+    })
+    .unwrap_or_default()
+}
+
 /// `look` at `song`'s index, brought up to date first.
 fn with_index<R>(song: &Song, look: impl FnOnce(&Index) -> R) -> Option<R> {
     // The kit as the tracks say it is: read before the state's lock (the

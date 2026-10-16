@@ -122,6 +122,29 @@ fn run(path: &Path, id: &'static str, args: serde_json::Value) -> (serde_json::V
     (serde_json::from_slice(&said).unwrap_or_default(), window)
 }
 
+/// The hits that play twice within 100 ms of themselves — a flam an edit
+/// made: a seam that left one attack in two pieces. (A hit heard twice far
+/// apart is a recording used twice in the song, as it was played.)
+fn flams() -> Vec<String> {
+    let (daw, project) = session_daw::actions::song().expect("the song");
+    let mut by_id: std::collections::HashMap<String, Vec<f64>> = std::collections::HashMap::new();
+    for h in session_daw::hits::playback(daw, &project) {
+        by_id.entry(h.id).or_default().push(h.time);
+    }
+    let mut out: Vec<String> = by_id
+        .into_iter()
+        .filter_map(|(id, mut times)| {
+            times.sort_by(f64::total_cmp);
+            times
+                .windows(2)
+                .any(|w| w[1] - w[0] < 0.1)
+                .then(|| format!("{id} at {times:.3?}"))
+        })
+        .collect();
+    out.sort();
+    out
+}
+
 /// One step of the edit, timed.
 #[derive(Default, Debug)]
 struct Step {
@@ -175,6 +198,8 @@ fn the_whole_drum_edit_of_a_real_song() {
         calls: 1,
         ..Step::default()
     });
+
+    let flams_opened = flams();
 
     if std::env::var_os("FTS_BENCH_DETECT").is_some() {
         let at = Instant::now();
@@ -287,6 +312,8 @@ fn the_whole_drum_edit_of_a_real_song() {
         first.unwrap_or_default()
     );
 
+    let flams_comped = flams();
+
     // The quantize: the whole song, from scratch.
     let at = Instant::now();
     let (said, window) = run(&path, "DRUMS_REQUANTIZE", serde_json::json!({}));
@@ -297,6 +324,8 @@ fn the_whole_drum_edit_of_a_real_song() {
         calls: 1,
         note: said.to_string().chars().take(160).collect(),
     });
+
+    let flams_quantized = flams();
 
     // A hand's touch-ups: snare hits across the song, each dragged a little.
     let (daw, project) = session_daw::actions::song().expect("the song");
@@ -324,6 +353,8 @@ fn the_whole_drum_edit_of_a_real_song() {
         calls: dragged,
         note: format!("{dragged} snare hits by {DRAG_MS} ms"),
     });
+
+    let flams_dragged = flams();
 
     // What a window then reads back to draw it all (a full read and plan).
     let at = Instant::now();
@@ -362,12 +393,36 @@ fn the_whole_drum_edit_of_a_real_song() {
         "edit_ms": round(edit_ms),
         "steps": steps.iter().map(Step::json).collect::<Vec<_>>(),
         "slowest": slowest,
+    "flams": {
+            "opened": flams_opened, "comped": flams_comped,
+            "quantized": flams_quantized, "dragged": flams_dragged,
+        },
     });
     if let Some(out) = std::env::var_os("FTS_BENCH_OUT") {
         std::fs::write(&out, serde_json::to_string_pretty(&report).expect("json"))
             .expect("report written");
     }
     let said = serde_json::to_string_pretty(&report).expect("json");
+    // No step leaves a hit playing twice that the step before did not.
+    let new = |before: &[String], after: &[String]| -> Vec<String> {
+        after
+            .iter()
+            .filter(|f| !before.contains(f))
+            .cloned()
+            .collect()
+    };
+    for (step, before, after) in [
+        ("comp", &flams_opened, &flams_comped),
+        ("quantize", &flams_comped, &flams_quantized),
+        ("drags", &flams_quantized, &flams_dragged),
+    ] {
+        let made = new(before, after);
+        assert!(
+            made.is_empty(),
+            "the {step} left {} hits playing twice: {made:#?}\n{said}",
+            made.len()
+        );
+    }
     if let Some(budget) = std::env::var("FTS_BENCH_BUDGET_MS")
         .ok()
         .and_then(|b| b.parse::<f64>().ok())

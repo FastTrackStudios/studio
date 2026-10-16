@@ -200,7 +200,18 @@ fn backspace_takes_off_the_automated_edit_then_the_hand_placements() {
     );
     assert_eq!(first["restored"], true, "{first}");
     assert_eq!(first["placed_back"], 1, "{first}");
-    assert!(as_recorded(Some(&hit.id)), "the rest as recorded: {first}");
+    let off: Vec<String> = session_daw::hits::hits(daw, &project, &[])
+        .iter()
+        .filter(|h| inside(h.time) && playing.contains(&h.id) && h.id != hit.id)
+        .filter(|h| !h.now.is_some_and(|n| (n - h.time).abs() < 0.001))
+        .map(|h| format!("{} recorded {:.4} plays {:?}", h.id, h.time, h.now))
+        .collect();
+    assert!(
+        as_recorded(Some(&hit.id)),
+        "the rest as recorded: {first}\nthe placed hit {} recorded {:.4}; off: {off:#?}",
+        hit.id,
+        hit.time
+    );
     let kept = session_daw::hits::playback(daw, &project)
         .into_iter()
         .find(|p| p.id == hit.id)
@@ -237,11 +248,12 @@ fn backspace_takes_off_the_automated_edit_then_the_hand_placements() {
         .flatten()
         .filter_map(|s| s["key"].as_str())
         .collect();
+    // Placed again from the recording on the engine: no slip handed to a
+    // window and waited for.
     for stage in [
         "edit.read_ms",
         "edit.plan_ms",
-        "edit.slip_ms",
-        "edit.land_ms",
+        "edit.place_ms",
         "edit.check_ms",
     ] {
         assert!(stages.contains(&stage), "{stage} timed: {timed}");

@@ -181,13 +181,17 @@ pub fn reset_edit(
         // not make is one it cannot close.
         let mut fresh = fresh;
         fresh.sort_by(|a, b| a.position.as_seconds().total_cmp(&b.position.as_seconds()));
-        let spans: Vec<(f64, f64, f64)> = fresh
+        let spans: Vec<(f64, f64, f64, Option<String>)> = fresh
             .iter()
             .map(|i| {
+                let file = daw
+                    .get_active_take(project.clone(), ItemRef::Guid(i.guid.clone()))
+                    .and_then(|t| t.source_file_path);
                 (
                     i.position.as_seconds(),
                     i.length.as_seconds(),
                     i.start_offset.as_seconds(),
+                    file,
                 )
             })
             .collect();
@@ -304,18 +308,25 @@ fn join_curves(
 /// source, to be one recording running on, seconds.
 const RUNS_ON: f64 = 0.001;
 
-/// Comp items (`(position, length, source offset)`, by position) as the
-/// runs to copy: each run's first item and the length it covers.
+/// Comp items (`(position, length, source offset, recording)`, by
+/// position) as the runs to copy: each run's first item and the length it
+/// covers.
 ///
 /// Items that meet where the one before ends, on the timeline and in the
-/// source, are one.
+/// source, of the same recording, are one. Every take of a song is
+/// recorded from the same place, so two takes meet "in the source" at a
+/// comp seam too: without the recording, the seam was glued over and the
+/// comp's next take silently replaced by the one before.
 #[must_use]
-pub fn glued(items: &[(f64, f64, f64)]) -> Vec<(usize, f64)> {
+pub fn glued(items: &[(f64, f64, f64, Option<String>)]) -> Vec<(usize, f64)> {
     let mut runs: Vec<(usize, f64)> = Vec::new();
-    let mut last: Option<(f64, f64)> = None;
-    for (k, &(at, length, from)) in items.iter().enumerate() {
-        let joins = last.is_some_and(|(end, source_end)| {
-            (at - end).abs() <= RUNS_ON && (from - source_end).abs() <= RUNS_ON
+    let mut last: Option<(f64, f64, Option<&str>)> = None;
+    for (k, (at, length, from, file)) in items.iter().enumerate() {
+        let (at, length, from) = (*at, *length, *from);
+        let joins = last.is_some_and(|(end, source_end, last_file)| {
+            (at - end).abs() <= RUNS_ON
+                && (from - source_end).abs() <= RUNS_ON
+                && last_file == file.as_deref()
         });
         match runs.last_mut() {
             Some((first, run)) if joins => {
@@ -324,7 +335,7 @@ pub fn glued(items: &[(f64, f64, f64)]) -> Vec<(usize, f64)> {
             }
             _ => runs.push((k, length)),
         }
-        last = Some((at + length, from + length));
+        last = Some((at + length, from + length, file.as_deref()));
     }
     runs
 }
@@ -387,9 +398,25 @@ mod glue_tests {
     /// item; a real comp seam — another take's audio — stays two.
     #[test]
     fn a_stray_split_copies_as_one() {
-        let take = [(0.0, 2.0, 1.5), (2.0, 17.5, 3.5), (19.5, 250.0, 21.0)];
+        let a = || Some("a.wav".to_owned());
+        let take = [
+            (0.0, 2.0, 1.5, a()),
+            (2.0, 17.5, 3.5, a()),
+            (19.5, 250.0, 21.0, a()),
+        ];
         assert_eq!(glued(&take), [(0, 269.5)]);
-        let comped = [(0.0, 2.0, 1.5), (2.0, 17.5, 40.0)];
+        let comped = [(0.0, 2.0, 1.5, a()), (2.0, 17.5, 40.0, a())];
         assert_eq!(glued(&comped), [(0, 2.0), (1, 17.5)]);
+    }
+
+    /// Two takes recorded from the same place meet in the source at a comp
+    /// seam too: they stay two, each playing its own recording.
+    #[test]
+    fn a_seam_between_two_takes_stays_a_seam() {
+        let comped = [
+            (0.0, 6.0, 1.5, Some("take-1754.wav".to_owned())),
+            (6.0, 6.0, 7.5, Some("take-1808.wav".to_owned())),
+        ];
+        assert_eq!(glued(&comped), [(0, 6.0), (1, 6.0)]);
     }
 }

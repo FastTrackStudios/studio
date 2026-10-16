@@ -80,8 +80,29 @@ const SAME: f64 = 1e-6;
 /// nearest it, so a span re-placed inside a longer edit meets what is
 /// either side of it unchanged.
 #[must_use]
-pub fn place(hits: &[Hit], (start, end): (f64, f64), cut: Cut) -> Vec<Piece> {
-    let runs = runs(hits);
+pub fn place(hits: &[Hit], span: (f64, f64), cut: Cut) -> Vec<Piece> {
+    place_within(hits, span, cut, (None, None))
+}
+
+/// [`place`] for a span cut out of a longer edit: `outside` are the
+/// recorded attacks just before the first of `hits` and just after the
+/// last, which the pieces at the span's ends may not play either — the
+/// last piece stops short of the next attack (drawn out to the span's end
+/// if it must), as a seam inside would.
+#[must_use]
+pub fn place_within(
+    hits: &[Hit],
+    (start, end): (f64, f64),
+    cut: Cut,
+    outside: (Option<f64>, Option<f64>),
+) -> Vec<Piece> {
+    let mut runs = runs(hits);
+    if let Some(first) = runs.first_mut() {
+        first.before = first.before.or(outside.0);
+    }
+    if let Some(last) = runs.last_mut() {
+        last.after = last.after.or(outside.1);
+    }
     let Some(first) = runs.first() else {
         return vec![Piece {
             start,
@@ -112,6 +133,17 @@ pub fn place(hits: &[Hit], (start, end): (f64, f64), cut: Cut) -> Vec<Piece> {
             shift: after.shift,
             drawn_to: None,
         });
+    }
+    // The last piece stops before the next attack in its recording, as a
+    // seam would stop it; what is left to the span's end is drawn out.
+    if let (Some(last), Some(run)) = (pieces.last_mut(), runs.last())
+        && let Some(next) = run.after
+    {
+        let runs_to = next - cut.lead + run.shift;
+        if runs_to < last.end && runs_to > last.start {
+            last.drawn_to = Some(last.end);
+            last.end = runs_to;
+        }
     }
     pieces
 }
@@ -334,6 +366,29 @@ mod tests {
             1,
             "moved back: the recording, uncut"
         );
+    }
+
+    #[test]
+    fn a_span_never_plays_the_attack_just_outside_it() {
+        // A span re-placed inside a longer edit, its last hit sent earlier:
+        // the last piece would run on to the span's end over the next
+        // recorded attack (outside the span); it stops before it.
+        let hits = [
+            Hit {
+                at: 1.0,
+                shift: 0.0,
+            },
+            Hit {
+                at: 1.25,
+                shift: -0.06,
+            },
+        ];
+        let next = 1.5;
+        let pieces = super::place_within(&hits, (0.9, 1.5), CUT, (None, Some(next)));
+        let last = pieces.last().expect("a piece");
+        let plays_to = last.end - last.shift;
+        assert!(plays_to <= next - CUT.lead + 1e-9, "{pieces:?}");
+        assert_eq!(last.reach(), 1.5, "drawn out to the span's end: {pieces:?}");
     }
 
     #[test]

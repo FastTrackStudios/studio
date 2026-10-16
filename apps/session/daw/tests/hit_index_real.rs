@@ -92,5 +92,7 @@ fn the_index_is_every_slice_read_again() {
         );
         check("after a comp");
     }
+    session_daw::drum_lanes::reset_edit(daw, &project, false).expect("reset");
+    check("after the EDIT lanes are reset from COMP");
     assert!(std::env::var_os("FTS_INDEX_SHOW").is_none(), "{said:#?}");
 }

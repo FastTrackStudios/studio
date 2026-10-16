@@ -94,7 +94,25 @@ pub fn place(
     joins: Joins,
 ) -> Result<usize, String> {
     let mut stages = architect_telemetry::timing::Stages::start();
-    let moved: Vec<(f64, f64)> = moves.iter().copied().filter(|m| m.1.abs() > 1e-6).collect();
+    // Every moment the call names — moved or held where it is — by time,
+    // and those it moves.
+    let mut named: Vec<(f64, f64)> = moves.to_vec();
+    named.sort_by(|a, b| a.0.total_cmp(&b.0));
+    let moved: Vec<(f64, f64)> = named.iter().copied().filter(|m| m.1.abs() > 1e-6).collect();
+    // The move of the hit at `t`: its moment's — the named moment nearest
+    // it within a moment's width, so every hit struck together goes
+    // together (a hit a few ms off its moment's time kept its old place,
+    // and a seam between the two left one attack in both pieces: a flam).
+    let move_of = |t: f64| {
+        let i = named.partition_point(|m| m.0 < t);
+        [i.checked_sub(1), Some(i)]
+            .into_iter()
+            .flatten()
+            .filter_map(|i| named.get(i))
+            .filter(|m| (m.0 - t).abs() <= editing::drums::KIT_MERGE)
+            .min_by(|a, b| (a.0 - t).abs().total_cmp(&(b.0 - t).abs()))
+            .map(|m| m.1)
+    };
     if moved.is_empty() {
         return Ok(0);
     }
@@ -142,30 +160,34 @@ pub fn place(
     // beside the moved ones with no EDIT slice under it (where the lane
     // has nothing: a gap, the song's edge) has nothing there to keep, and
     // is left out; a moved one must be on a slice.
-    let mut placed: Vec<Hit> = Vec::with_capacity(around.len());
+    let mut placed: Vec<(Hit, bool)> = Vec::with_capacity(around.len());
     for &t in around {
-        let by = moved
-            .iter()
-            .find(|m| (m.0 - t).abs() < SAME_HIT)
-            .map(|m| m.1);
+        let by = move_of(t);
         // Every mic moves together: the first with a slice there says it
         // (a trigger's lane holds only its hits).
         let Some(shift) = kit
             .iter()
             .find_map(|lanes| shift_at(&lanes.edit, &lanes.comp, t))
         else {
-            if by.is_some() {
+            if by.is_some_and(|by| by.abs() > 1e-6) {
                 return Err(format!("the hit at {t:.3} s is not on an EDIT slice"));
             }
             continue;
         };
-        placed.push(Hit {
-            at: t - shift,
-            shift: shift + by.unwrap_or(0.0),
-        });
+        placed.push((
+            Hit {
+                at: t - shift,
+                shift: shift + by.unwrap_or(0.0),
+            },
+            by.is_some_and(|by| by.abs() > 1e-6),
+        ));
     }
     // The span: from the start of the first hit's slice to the end of the
-    // last's, so the pieces at its ends meet what is either side unchanged.
+    // last's, so the pieces at its ends meet what is either side unchanged
+    // — but no further than the hits it places: a slice that plays on past
+    // the next hit (one long item over a section never edited) is cut just
+    // before it, the rest of it left as it plays. Cut where one recording
+    // runs on at one alignment, the join is seamless.
     let holding = |t: f64| {
         kit.iter().find_map(|lanes| {
             lanes
@@ -175,10 +197,19 @@ pub fn place(
                 .find(|s| s.start() <= t + 1e-9 && t < s.end())
         })
     };
-    let span = (
-        holding(near).map_or(near, Slice::start),
-        holding(far).map_or(far, Slice::end),
-    );
+    let before = from.checked_sub(1).and_then(|i| hits.get(i)).copied();
+    let after = hits.get(to + 1).copied();
+    let start = holding(near).map_or(near, Slice::start);
+    let start = match before {
+        Some(prev) if start <= prev => (near - joins.lead - joins.crossfade).max(prev + 1e-3),
+        _ => start,
+    };
+    let end = holding(far).map_or(far, Slice::end);
+    let end = match after {
+        Some(next) if end > next - joins.lead => (next - joins.lead).max(far + 1e-3),
+        _ => end,
+    };
+    let span = (start, end);
     // The later side of each seam reaches back by the crossfade too, so
     // the hit before is guarded by that much more.
     let cut = placement::Cut {
@@ -186,15 +217,28 @@ pub fn place(
         guard: placement::Cut::default().guard + joins.crossfade,
     };
     // Read in the order they play; placed in the order they were played.
-    // Two at one recorded moment: a shift read off the wrong slice.
-    placed.sort_by(|a, b| a.at.total_cmp(&b.at));
+    // One recorded hit heard twice (a flam an earlier edit left: two
+    // slices that both play its attack) is placed once — the one a move
+    // names, else the first — and the stretch played again heals it.
+    placed.sort_by(|a, b| a.0.at.total_cmp(&b.0.at).then(b.1.cmp(&a.1)));
+    placed.dedup_by(|later, earlier| (later.0.at - earlier.0.at).abs() < 1e-6);
+    let placed: Vec<Hit> = placed.into_iter().map(|(hit, _)| hit).collect();
     if !placed.windows(2).all(|w| w[0].at < w[1].at - 1e-9) {
         return Err(format!(
             "the hits as recorded are out of order: {:?}; moves {moved:?}; hits there {around:?}",
             placed.iter().map(|h| (h.at, h.shift)).collect::<Vec<_>>()
         ));
     }
-    let pieces = placement::place(&placed, span, cut);
+    // The attacks just outside the hits placed again, as recorded: the
+    // pieces at the span's ends may not play them either.
+    let recorded = |i: Option<usize>| {
+        let t = *hits.get(i?)?;
+        kit.iter()
+            .find_map(|lanes| shift_at(&lanes.edit, &lanes.comp, t))
+            .map(|shift| t - shift)
+    };
+    let outside = (recorded(from.checked_sub(1)), recorded(Some(to + 1)));
+    let pieces = placement::place_within(&placed, span, cut, outside);
     if let Some(bad) = pieces.iter().find(|p| p.end <= p.start) {
         return Err(format!(
             "a piece would end before it starts ({bad:?}) placing {:?} over {:.3}..{:.3}",
@@ -313,11 +357,17 @@ fn shift_at(edit: &[Slice], comp: &[Slice], t: f64) -> Option<f64> {
         .rev()
         .find(|s| s.start() <= t + 1e-9 && t < s.end())?;
     let source = slice.source_at(t);
-    let recorded = comp.iter().find_map(|c| {
-        let from = c.item.start_offset.as_seconds();
-        let inside = source >= from - 1e-9 && source < from + c.item.length.as_seconds();
-        (c.file == slice.file && inside).then(|| c.start() + (source - from))
-    })?;
+    // Where the COMP lane plays that moment of the recording — the nearest
+    // of them: a comp can play one recording in more than one place (a
+    // phrase used twice), and the far one is a shift of a bar.
+    let recorded = comp
+        .iter()
+        .filter_map(|c| {
+            let from = c.item.start_offset.as_seconds();
+            let inside = source >= from - 1e-9 && source < from + c.item.length.as_seconds();
+            (c.file == slice.file && inside).then(|| c.start() + (source - from))
+        })
+        .min_by(|a, b| (t - a).abs().total_cmp(&(t - b).abs()))?;
     Some(t - recorded)
 }
 

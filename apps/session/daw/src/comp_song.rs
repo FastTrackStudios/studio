@@ -85,6 +85,18 @@ pub fn comp_best(song: &Song, phrases: &[(f64, f64)], dry: bool) -> Result<Compe
     let playing = Playing::read(song, &versions, span);
     let audio = Audio::read(song, &versions, span);
     stages.mark("comp.read_ms");
+    // Each seam between phrases just before the hits there, in every take:
+    // a seam on the beat cut between two takes that do not hit it at the
+    // same instant, and both attacks played — a flam.
+    let attacks: Vec<f64> = {
+        let mut all: Vec<f64> = versions
+            .iter()
+            .flat_map(|v| v.hits.iter().map(|h| h.1))
+            .collect();
+        all.sort_by(f64::total_cmp);
+        all
+    };
+    let phrases: Vec<(f64, f64)> = clear_of_hits(phrases, &attacks);
 
     let line_of = |t: f64| crate::actions::grid_line(daw, &project, t, 16);
     let choices: Vec<Choice> = phrases
@@ -138,6 +150,36 @@ pub fn comp_best(song: &Song, phrases: &[(f64, f64)], dry: bool) -> Result<Compe
         choices,
         ops,
     })
+}
+
+/// How far either side of a phrase's edge its seam looks for the hits it
+/// must not cut through, seconds: more than any two takes of one beat are
+/// apart.
+const SEAM_REACH: f64 = 0.06;
+
+/// How far before the earliest of those hits a seam is put, seconds: the
+/// stick's approach is in the recording just before the transient.
+const SEAM_LEAD: f64 = 0.010;
+
+/// `phrases` (in order, meeting end to start) with each seam between two
+/// moved to just before the earliest of `attacks` (sorted, every take's)
+/// within [`SEAM_REACH`] of it.
+fn clear_of_hits(phrases: &[(f64, f64)], attacks: &[f64]) -> Vec<(f64, f64)> {
+    let mut out: Vec<(f64, f64)> = phrases.to_vec();
+    for k in 1..out.len() {
+        let seam = out[k].0;
+        if (out[k - 1].1 - seam).abs() > 1e-6 {
+            continue;
+        }
+        let first = attacks.partition_point(|t| *t < seam - SEAM_REACH);
+        let Some(&earliest) = attacks.get(first).filter(|t| **t <= seam + SEAM_REACH) else {
+            continue;
+        };
+        let moved = (earliest - SEAM_LEAD).max(out[k - 1].0 + 1e-3);
+        out[k - 1].1 = moved;
+        out[k].0 = moved;
+    }
+    out
 }
 
 /// `versions` with only their hits over `from..to`.
@@ -553,4 +595,22 @@ fn stretches(song: &Song, a: &BestArg) -> Vec<(f64, f64)> {
         out.push((first.start, last.end));
     }
     union(out.into_iter())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{SEAM_LEAD, clear_of_hits};
+
+    /// A seam on the downbeat moves to just before the earliest take's hit
+    /// there; one with no hit near it stays.
+    #[test]
+    fn a_seam_is_cut_before_the_hits_at_it() {
+        let phrases = [(0.0, 4.0), (4.0, 8.0), (8.0, 12.0)];
+        // Two takes' downbeat kicks at 4 s: one 12 ms early, one 20 ms late.
+        let attacks = [3.988, 4.020, 6.0];
+        let cut = clear_of_hits(&phrases, &attacks);
+        assert!((cut[0].1 - (3.988 - SEAM_LEAD)).abs() < 1e-9, "{cut:?}");
+        assert_eq!(cut[0].1, cut[1].0, "phrases still meet: {cut:?}");
+        assert!((cut[1].1 - 8.0).abs() < 1e-9, "no hit near 8 s: {cut:?}");
+    }
 }
