@@ -117,15 +117,17 @@ pub fn place(
         return Ok(0);
     }
     let mics = mics(song);
+    stages.mark("place.mics_ms");
     if mics.is_empty() {
         return Err("no mic of the kit has COMP and EDIT lanes".to_owned());
     }
-    let mut hits: Vec<f64> = crate::hits::playback(song.daw(), &song.context())
+    let mut hits: Vec<f64> = crate::hit_index::playback(song)
         .iter()
         .map(|p| p.time)
         .collect();
     hits.sort_by(f64::total_cmp);
     hits.dedup_by(|a, b| (*a - *b).abs() < SAME_HIT);
+    stages.mark("place.hits_ms");
 
     // The hits placed again: from where the moved ones were to where they
     // land, and a couple either side.

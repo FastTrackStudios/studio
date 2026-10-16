@@ -15,7 +15,7 @@
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
-use daw::service::{ProjectContext, Tracks as _};
+use daw::service::ProjectContext;
 use daw::standalone::sync::ProjectState;
 
 use crate::hits::Played;
@@ -79,17 +79,14 @@ pub fn players(song: &Song, id: &str) -> Vec<(String, f64)> {
 
 /// `look` at `song`'s index, brought up to date first.
 fn with_index<R>(song: &Song, look: impl FnOnce(&Index) -> R) -> Option<R> {
-    // The kit as the tracks say it is: read before the state's lock (the
-    // tracks have their own call); compared with what the index was built
-    // for under it.
-    let tracks = song.daw().all(song.context());
-    let pieces = crate::drum_reference::pieces(song.daw(), &song.context());
     let mut indexes = INDEXES.lock().ok()?;
     let index = indexes
         .get_or_insert_with(HashMap::new)
         .entry(song.id().to_string())
         .or_default();
-    song.read(|p| index.update(p, &tracks, pieces))?;
+    // The kit as the song's own tracks say it is, under the one lock:
+    // nothing copied out of the engine to work it out.
+    song.read(|p| index.update(p, &p.tracks, crate::drum_reference::pieces_of(&p.tracks)))?;
     Some(look(index))
 }
 
@@ -103,6 +100,7 @@ impl Index {
         tracks: &[daw_proto::Track],
         pieces: Vec<(String, String)>,
     ) {
+        let mut stages = architect_telemetry::timing::Stages::start();
         let has_items = |guid: &str| p.items_by_track.get(guid).is_some_and(|v| !v.is_empty());
         let (kit, _) = crate::hits::kit_from(tracks, pieces, &has_items);
         // Each piece's hits are read off its first close mic.
@@ -110,13 +108,32 @@ impl Index {
             .iter()
             .filter_map(|piece| Some((piece.mics.first()?.clone(), piece.name.clone())))
             .collect();
+        stages.mark("index.kit_ms");
         let changes = p.item_changes_since(self.cursor);
-        let markers_moved = p
+        stages.mark("index.changes_ms");
+        // Hit markers rewritten (a hand placing one marks it placed; a
+        // detection rewrites them all): the slices playing those
+        // recordings worked out again, not the kit — unless the journal
+        // cannot say which.
+        let marked: Option<std::collections::HashSet<&String>> = p
             .take_markers
             .written_since(self.cursor)
-            .is_none_or(|mut keys| keys.next().is_some());
-        let whole = self.cursor == 0 || first_mics != self.kit || markers_moved;
-        match changes.items {
+            .map(Iterator::collect);
+        let whole = self.cursor == 0 || first_mics != self.kit || marked.is_none();
+        if self.cursor == 0 {
+            stages.mark("index.whole.first_ms");
+        } else if first_mics != self.kit {
+            stages.mark("index.whole.kit_ms");
+        } else if marked.is_none() {
+            stages.mark("index.whole.markers_ms");
+        }
+        let items = changes.items.map(|mut items| {
+            if let Some(recordings) = marked.as_ref().filter(|r| !r.is_empty()) {
+                items.extend(playing(p, &first_mics, recordings));
+            }
+            items
+        });
+        match items {
             Some(items) if !whole => {
                 if items.is_empty() {
                     self.cursor = changes.cursor;
@@ -128,7 +145,13 @@ impl Index {
                         self.by_item.insert(item.clone(), hits);
                     }
                 }
+                stages.mark("index.items_ms");
+                architect_telemetry::wide::set(
+                    "index.changed",
+                    i64::try_from(items.len()).unwrap_or(i64::MAX),
+                );
                 self.splice(&items);
+                stages.mark("index.splice_ms");
             }
             _ => {
                 self.by_item = first_mics
@@ -139,6 +162,7 @@ impl Index {
                     })
                     .collect();
                 self.rebuild();
+                stages.mark("index.rebuild_ms");
             }
         }
         self.kit = first_mics;
@@ -179,6 +203,29 @@ impl Index {
             }
         }
     }
+}
+
+/// The first mics' slices that play any of `recordings` (by the key their
+/// hit markers are kept under: the take's file, else its guid).
+fn playing(
+    p: &ProjectState,
+    first_mics: &[(String, String)],
+    recordings: &std::collections::HashSet<&String>,
+) -> Vec<String> {
+    first_mics
+        .iter()
+        .flat_map(|(mic, _)| p.items_by_track.get(mic).into_iter().flatten())
+        .filter(|item| {
+            p.takes
+                .get(*item)
+                .and_then(|list| list.takes.get(usize::try_from(list.active_idx).ok()?))
+                .is_some_and(|take| {
+                    let key = take.source_file_path.as_ref().unwrap_or(&take.guid);
+                    recordings.contains(key)
+                })
+        })
+        .cloned()
+        .collect()
 }
 
 /// The hits slice `item` plays, where it plays them — `None` when it is

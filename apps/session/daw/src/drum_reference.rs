@@ -370,7 +370,13 @@ pub fn pieces(
     daw: &daw::standalone::Standalone,
     project: &ProjectContext,
 ) -> Vec<(String, String)> {
-    let tracks = Tracks::all(daw, project.clone());
+    pieces_of(&Tracks::all(daw, project.clone()))
+}
+
+/// [`pieces`] of `tracks`, as given: each drum piece's name and its
+/// trigger track — honest, for a reader already holding the song's state.
+#[must_use]
+pub fn pieces_of(tracks: &[daw_proto::Track]) -> Vec<(String, String)> {
     let by_guid: std::collections::HashMap<&str, &daw_proto::Track> =
         tracks.iter().map(|t| (t.guid.as_str(), t)).collect();
     let mut out: Vec<(String, String)> = Vec::new();
