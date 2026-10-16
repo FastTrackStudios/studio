@@ -3095,11 +3095,12 @@ fn targets(
     settings: &crate::drum_settings::Settings,
     (kit, moments): (&[KitPiece], &[Moment]),
     span: (f64, f64),
+    prepared: &Prepared,
 ) -> Result<Vec<(f64, Option<f64>, Placed)>, String> {
     use crate::drum_settings::Target;
     // A part's own grid (a Grid region longer than a bar over it) in
     // place of the setting: what a stroke nothing else places goes to.
-    let parts = crate::track_regions::PartGrids::of(daw, project);
+    let parts = &prepared.parts;
     let grid_of = |m: &Moment| {
         parts
             .grid(&m.pieces, m.time, sixteenth(daw, project, m.time))
@@ -3119,14 +3120,11 @@ fn targets(
     }
     // The drum MIDI, and which of its notes are which piece — learned
     // against these hits.
-    let midi = crate::drum_reference::find_track(daw, project)
+    let (notes, map) = prepared
+        .written
+        .as_ref()
         .ok_or("no drum MIDI track to guide by — use `target: Grid`")?;
-    let notes = crate::drum_reference::notes(daw, project, &midi);
-    let named: Vec<(String, Vec<f64>)> = kit
-        .iter()
-        .map(|(n, _, h)| (n.clone(), h.iter().map(|h| h.time).collect()))
-        .collect();
-    let map = crate::drum_reference::learn_map(&notes, &named, NOTE_WINDOW);
+    let _ = kit;
     let step = sixteenth(daw, project, span.0);
     let (lo, hi) = (span.0 - edge(daw, project, span.0), span.1);
     // Each piece's hits in the span and the note each is.
@@ -3332,6 +3330,44 @@ struct Overrides {
     zones: Vec<crate::hits::Zone>,
 }
 
+/// What a quantize reads once, for every span it edits: the kit's hits, its
+/// parts' grids, the regions and zones that put a hit on a line of their
+/// own, and the drum MIDI with which pitch is which piece — learned once
+/// against the kit. Read per span, a whole song's quantize read the song
+/// twenty times over.
+struct Prepared {
+    kit: Vec<KitPiece>,
+    parts: crate::track_regions::PartGrids,
+    overrides: Overrides,
+    zones: Vec<crate::hits::Zone>,
+    written: Option<(
+        Vec<crate::drum_reference::RefNote>,
+        Vec<crate::drum_reference::Mapped>,
+    )>,
+}
+
+impl Prepared {
+    fn read(daw: &daw::standalone::Standalone, project: &ProjectContext) -> Self {
+        let kit = kit(daw, project);
+        let written = crate::drum_reference::find_track(daw, project).map(|midi| {
+            let notes = crate::drum_reference::notes(daw, project, &midi);
+            let named: Vec<(String, Vec<f64>)> = kit
+                .iter()
+                .map(|(n, _, h)| (n.clone(), h.iter().map(|h| h.time).collect()))
+                .collect();
+            let map = crate::drum_reference::learn_map(&notes, &named, NOTE_WINDOW);
+            (notes, map)
+        });
+        Self {
+            parts: crate::track_regions::PartGrids::of(daw, project),
+            overrides: Overrides::of(daw, project),
+            zones: crate::hits::zones(daw, project),
+            kit,
+            written,
+        }
+    }
+}
+
 impl Overrides {
     fn of(daw: &daw::standalone::Standalone, project: &ProjectContext) -> Self {
         Self {
@@ -3432,16 +3468,21 @@ fn detect(
     project: &ProjectContext,
     settings: &crate::drum_settings::Settings,
     span: (f64, f64),
+    prepared: &Prepared,
 ) -> Result<Detected, String> {
-    let kit = kit(daw, project);
+    let mut stages = architect_telemetry::timing::Stages::start();
+    let kit = &prepared.kit;
+    stages.mark("detect.kit_ms");
     let line_of = |h: f64| grid_line(daw, project, h, settings.grid);
     let by_line: &dyn Fn(f64) -> f64 = &line_of;
     let tolerance = settings
         .grid_tolerance_ms
         .map_or(f64::INFINITY, |ms| ms / 1_000.0);
-    let moments = moments(&kit, settings.grid_scan.then_some((by_line, tolerance)));
+    let moments = moments(kit, settings.grid_scan.then_some((by_line, tolerance)));
     let loudness = weights(&moments, settings);
-    let by = targets(daw, project, settings, (&kit, &moments), span)?;
+    stages.mark("detect.moments_ms");
+    let by = targets(daw, project, settings, (kit, &moments), span, prepared)?;
+    stages.mark("detect.targets_ms");
     let mut placed: Vec<(f64, Option<f64>)> = by.iter().map(|(h, t, _)| (*h, *t)).collect();
     let mut by_groove = Vec::new();
     let mut by_written = Vec::new();
@@ -3453,10 +3494,11 @@ fn detect(
             }
         }
     }
+    stages.mark("detect.written_ms");
     let lo = span.0 - edge(daw, project, span.0);
     let hi = span.1 - edge(daw, project, span.1);
     if settings.target == crate::drum_settings::Target::Pattern
-        && let Some(groove) = groove_of(daw, project, (&kit, settings.grid.is_multiple_of(3)), span)
+        && let Some(groove) = groove_of(daw, project, (kit, settings.grid.is_multiple_of(3)), span)
     {
         for ((moment, (h, to)), (_, _, b)) in moments.iter().zip(placed.iter_mut()).zip(&by) {
             // What the drum MIDI places, it places: the groove is for
@@ -3493,13 +3535,14 @@ fn detect(
             *to = None;
         }
     }
+    stages.mark("detect.groove_ms");
     let mut by_kind: Vec<Placed> = by.iter().map(|(_, _, b)| *b).collect();
     // A figure, or a fill quantized on a grid of its own, puts its hits on
     // its grid — before strokes sent to one line are settled and gestures
     // held together, so two strokes of a fast fill sent to one sixteenth
     // are not two slices on top of each other. What it places is placed
     // as surely as a written note.
-    let overrides = Overrides::of(daw, project);
+    let overrides = &prepared.overrides;
     for ((h, to), kind) in placed.iter_mut().zip(by_kind.iter_mut()) {
         if let Some(division) = overrides.division(daw, project, *h) {
             *to = Some(grid_line(daw, project, *h, division));
@@ -3509,7 +3552,9 @@ fn detect(
     // Strokes sent to one line take the lines either side of it, in order,
     // where they can: a double kick played into the snare on 2 is the "&"
     // and the "a" before it, not one stroke between the others.
-    let parts = crate::track_regions::PartGrids::of(daw, project);
+    stages.mark("detect.overrides_ms");
+    let parts = &prepared.parts;
+    stages.mark("detect.parts_ms");
     // Only on a grid of sixteenths or finer: a double is two sixteenths.
     // On eighths (strokes played between them, two sent to one) the lines
     // either side are an eighth away — the strokes shoved 200 ms, a bar's
@@ -3560,7 +3605,7 @@ fn detect(
     let targets = hold_gestures_by(&placed, &loudness, apart);
     let fills = find_fills(daw, project, &kit, span);
     Ok(Detected {
-        kit,
+        kit: kit.clone(),
         moments,
         targets,
         fills,
@@ -4161,9 +4206,13 @@ fn quantize_span(
     settings: &crate::drum_settings::Settings,
     (name, from, to): (&str, f64, f64),
     (lock, dry): (Option<&str>, bool),
+    prepared: &Prepared,
 ) -> Result<(QuantizeSpan, Planned), String> {
-    let zones = crate::hits::zones(daw, project);
-    let found = detect(daw, project, settings, (from, to))?;
+    let mut stages = architect_telemetry::timing::Stages::start();
+    let zones = &prepared.zones;
+    stages.mark("span.zones_ms");
+    let found = detect(daw, project, settings, (from, to), prepared)?;
+    stages.mark("span.detect_ms");
     // A hit half a sixteenth before the downbeat is this section's pushed
     // first hit; one that close before the end is the next's.
     let (lo, hi) = (from - edge(daw, project, from), to - edge(daw, project, to));
@@ -4225,7 +4274,7 @@ fn quantize_span(
                 && h < z.end - edge(daw, project, z.end)
         })
     };
-    let overrides = Overrides::of(daw, project);
+    let overrides = &prepared.overrides;
     let held = |h: f64| {
         excepted(h)
             || match settings.fills {
@@ -4243,6 +4292,7 @@ fn quantize_span(
         Some(piece) => locked_targets(daw, project, settings, &found, (piece, (from, to)))?,
         None => found.targets.clone(),
     };
+    stages.mark("span.targets_ms");
     // In a written fill, a hit the chart does not have stays as played.
     if settings.fills == crate::drum_settings::Fills::Skip {
         for ((h, to), by) in targets.iter_mut().zip(&found.placed_by) {
@@ -4270,7 +4320,9 @@ fn quantize_span(
     if let Some(after) = found.targets.iter().map(|(h, _)| *h).find(|h| *h >= hi) {
         left_out.push(after);
     }
+    stages.mark("span.held_ms");
     let (mut result, cuts) = judge(daw, project, settings, (&pairs, &left_out), dry);
+    stages.mark("span.judge_ms");
     if settings.fills == crate::drum_settings::Fills::Skip {
         result.in_fills = in_fills;
     }
@@ -4833,6 +4885,7 @@ pub(crate) fn quantize(a: QuantizeArg) -> Result<Vec<QuantizeSpan>, String> {
             .collect::<Result<_, String>>()?
     };
     let before = crate::hits::playback(daw, &project);
+    let prepared = Prepared::read(daw, &project);
     stages.mark("edit.read_ms");
     let mut out: Vec<QuantizeSpan> = Vec::new();
     let mut cuts: Vec<(i64, i64)> = Vec::new();
@@ -4840,8 +4893,14 @@ pub(crate) fn quantize(a: QuantizeArg) -> Result<Vec<QuantizeSpan>, String> {
     let mut whole = (f64::INFINITY, f64::NEG_INFINITY);
     for (settings, spans, lock) in &steps {
         for (name, from, to) in spans {
-            let (span, planned) =
-                quantize_span(daw, &project, settings, (name, *from, *to), (*lock, dry))?;
+            let (span, planned) = quantize_span(
+                daw,
+                &project,
+                settings,
+                (name, *from, *to),
+                (*lock, dry),
+                &prepared,
+            )?;
             if !dry {
                 cuts.extend(planned.cuts);
                 sent.extend(planned.sent);
