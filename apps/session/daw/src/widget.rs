@@ -5633,6 +5633,7 @@ mod tests {
             }],
             zones: Vec::new(),
             stretches: Vec::new(),
+            comps: Vec::new(),
         });
         widget
     }

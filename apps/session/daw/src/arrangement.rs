@@ -2378,10 +2378,18 @@ pub fn hits_overlay(
             .filter(|(r, _)| *r == row)
             .map(|(_, p)| *p)
             .collect();
+        // Along the very foot, which take the comp plays where; the
+        // stretches just above it.
+        let comps_drawn = comp_strip(painter, font, (y0, y1), (&x_of, (from, to)), &overlay.comps);
+        let foot = if comps_drawn {
+            y1 - COMP_STRIP - 1.0
+        } else {
+            y1
+        };
         stretch_strip(
             painter,
             font,
-            (y0, y1),
+            (y0, foot),
             (x_of, (from, to)),
             overlay
                 .stretches
@@ -2492,6 +2500,81 @@ fn stretch_tint(rate: f64) -> Color {
 /// says its slowest rate just above them, in that rate's colour
 /// (`0.12×`), where there is room before the next. The same stretch on
 /// several pieces' slices drawn once.
+/// The comp strip's height, pixels.
+const COMP_STRIP: f64 = 4.0;
+
+/// Which take the comp plays where, along a row's foot: each take's span
+/// in its colour ([`take_color`], the mics' shared name of it), each seam
+/// between two takes a dark tick, the take's name over a span with room
+/// for it. Whether the row had room for the strip.
+fn comp_strip(
+    painter: &mut impl PaintScene,
+    font: &crate::text::Font,
+    (y0, y1): (f64, f64),
+    (x_of, (from, to)): (&impl Fn(f64) -> f64, (f64, f64)),
+    comps: &[crate::hit_overlay::CompSpan],
+) -> bool {
+    /// The name's size, and the room a span needs to carry it, pixels.
+    const SIZE: f32 = 8.0;
+    const ROOM: f64 = 70.0;
+    if comps.is_empty() || y1 - y0 < COMP_STRIP * 6.0 {
+        return false;
+    }
+    let (top, base) = (y1 - COMP_STRIP, y1);
+    let seam_ink = Color::from_rgba8(0x10, 0x10, 0x12, 0xe0);
+    let first = comps.partition_point(|c| c.end < from);
+    let mut last_take: Option<&str> = None;
+    for span in comps
+        .get(first..)
+        .unwrap_or_default()
+        .iter()
+        .take_while(|c| c.start <= to)
+    {
+        let (x0, x1) = (x_of(span.start), x_of(span.end).max(x_of(span.start) + 1.0));
+        let ink = take_color(&span.take);
+        painter.fill(
+            Fill::NonZero,
+            Affine::IDENTITY,
+            ink.multiply_alpha(0.85),
+            None,
+            &Rect::new(x0, top, x1, base),
+        );
+        // A seam: another take begins here.
+        if last_take.is_some_and(|t| t != span.take) {
+            painter.fill(
+                Fill::NonZero,
+                Affine::IDENTITY,
+                seam_ink,
+                None,
+                &Rect::new(x0 - 1.0, top - 2.0, x0 + 1.0, base),
+            );
+        }
+        last_take = Some(span.take.as_str());
+        if x1 - x0 >= ROOM {
+            crate::tcp::glyphs(
+                painter,
+                font,
+                ink,
+                short_take(&span.take),
+                x0 + 3.0,
+                top - 2.0,
+                SIZE,
+            );
+        }
+    }
+    true
+}
+
+/// A take's name with the mic's number and name set aside
+/// (`65-In-260907_1321-01` → `260907_1321-01`): what every mic of the take
+/// shares, and what a comp's take is told by.
+fn short_take(name: &str) -> &str {
+    name.split_once('-')
+        .filter(|(n, _)| !n.is_empty() && n.chars().all(|c| c.is_ascii_digit()))
+        .and_then(|(_, rest)| rest.split_once('-'))
+        .map_or(name, |(_, take)| take)
+}
+
 fn stretch_strip<'a>(
     painter: &mut impl PaintScene,
     font: &crate::text::Font,
@@ -4695,6 +4778,24 @@ mod lane_wave_tests {
             .map(|p| p.y)
             .fold(f64::MAX, f64::min);
         assert!(top < 5.0, "the spike survives the fold: top at {top}");
+    }
+}
+
+#[cfg(test)]
+mod comp_strip_tests {
+    use super::{short_take, take_color};
+
+    /// A take is told by what its mics share: the comp strip names and
+    /// colours `65-In-…` and `66-Out-…` of one take alike.
+    #[test]
+    fn a_takes_mics_share_its_name_and_colour() {
+        assert_eq!(short_take("65-In-260907_1321-01"), "260907_1321-01");
+        assert_eq!(short_take("66-Out-260907_1321-01"), "260907_1321-01");
+        assert_eq!(short_take("Guide"), "Guide");
+        assert_eq!(
+            take_color("65-In-260907_1321-01"),
+            take_color("66-Out-260907_1321-01")
+        );
     }
 }
 

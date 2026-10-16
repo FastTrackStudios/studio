@@ -1785,17 +1785,80 @@ pub fn overlay(
         })
         .collect();
     let stretches = stretches(daw, project, &kit);
+    let comps = comps(daw, project, &kit);
     crate::hit_overlay::Overlay {
         pieces,
         tracks,
         marks,
         zones,
         stretches,
+        comps,
     }
 }
 
 /// Played this near its recorded speed, a stretch is not drawn.
 const AT_SPEED: f64 = 0.005;
+
+/// Which take the comp plays where: the kit's first mic's COMP lane read
+/// once, its items in order, a take's pieces that meet joined into one —
+/// so where one span ends and another begins is a seam between two takes.
+fn comps(
+    daw: &daw::standalone::Standalone,
+    project: &ProjectContext,
+    kit: &[KitPiece],
+) -> Vec<crate::hit_overlay::CompSpan> {
+    /// Pieces of one take this close end to start are one span, seconds.
+    const MEETS: f64 = 0.02;
+    let ProjectContext::Project(song) = project else {
+        return Vec::new();
+    };
+    let Some(mic) = kit.iter().find_map(|p| p.mics.first()) else {
+        return Vec::new();
+    };
+    let tracks = Tracks::all(daw, project.clone());
+    let Some(comp) = tracks
+        .iter()
+        .find(|t| t.guid == *mic)
+        .and_then(|t| crate::drum_lanes::lane_named(t, crate::drum_lanes::COMP))
+    else {
+        return Vec::new();
+    };
+    let mut pieces: Vec<(f64, f64, String)> = daw
+        .read_project(song, |p| {
+            crate::hit_place::lane_of(p, mic, comp, (f64::NEG_INFINITY, f64::INFINITY))
+                .into_iter()
+                .map(|s| {
+                    let take = p
+                        .takes
+                        .get(&s.item.guid)
+                        .and_then(|l| l.takes.get(usize::try_from(l.active_idx).ok()?))
+                        .map(|t| t.name.clone())
+                        .filter(|n| !n.is_empty())
+                        .or_else(|| {
+                            s.file.as_deref().and_then(|f| {
+                                std::path::Path::new(f)
+                                    .file_stem()
+                                    .map(|n| n.to_string_lossy().into_owned())
+                            })
+                        })
+                        .unwrap_or_default();
+                    (s.start(), s.end(), take)
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+    pieces.sort_by(|a, b| a.0.total_cmp(&b.0));
+    let mut out: Vec<crate::hit_overlay::CompSpan> = Vec::new();
+    for (start, end, take) in pieces {
+        match out.last_mut() {
+            Some(last) if last.take == take && start <= last.end + MEETS => {
+                last.end = last.end.max(end);
+            }
+            _ => out.push(crate::hit_overlay::CompSpan { start, end, take }),
+        }
+    }
+    out
+}
 
 /// Each piece's stretched stretches where they play now — its first mic's
 /// slices, between each pair of stretch markers played slower or faster

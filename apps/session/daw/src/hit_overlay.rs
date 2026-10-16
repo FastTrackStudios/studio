@@ -89,6 +89,20 @@ pub struct Overlay {
     pub zones: Vec<Shade>,
     /// Each piece's stretched stretches, in time order.
     pub stretches: Vec<Stretch>,
+    /// Which take the comp plays where, in time order: the takes stitched
+    /// together and the seams between them.
+    pub comps: Vec<CompSpan>,
+}
+
+/// A stretch of the song the comp plays from one take.
+#[derive(Clone, Debug, PartialEq)]
+pub struct CompSpan {
+    /// Project seconds.
+    pub start: f64,
+    pub end: f64,
+    /// The take's name, as its recording is called on the kit's first mic:
+    /// what its colour comes from ([`crate::arrangement::take_color`]).
+    pub take: String,
 }
 
 impl Overlay {
@@ -220,6 +234,7 @@ mod tests {
             marks: vec![mark(0, 1.0), mark(0, 2.0), mark(0, 3.0), mark(0, 4.0)],
             zones: Vec::new(),
             stretches: Vec::new(),
+            comps: Vec::new(),
         };
         let times: Vec<f64> = overlay.between(1.5, 3.0).iter().map(|m| m.time).collect();
         assert_eq!(times, [2.0, 3.0]);
