@@ -1157,6 +1157,14 @@ impl Arrangement {
         stages.mark("build.by_guid_ms");
         let loudest = folder_loudest(project, &by_guid, previews);
         stages.mark("build.loudest_ms");
+        // Tracks hidden from the panel: left out of a folder's picture.
+        let hidden: std::collections::HashSet<&str> = project
+            .tracks
+            .iter()
+            .filter(|t| !t.visible_in_tcp)
+            .map(|t| t.guid.as_str())
+            .collect();
+        let mixes = Mixes::last();
         for (row, (track, depth)) in rows.iter().enumerate() {
             // A folder closes simply by the next row being shallower,
             // so the truncate IS the close.
@@ -1306,8 +1314,12 @@ impl Arrangement {
                 //
                 // A shut folder's item holds what is under it: the
                 // children's audio as one envelope, their notes over it.
-                let folded =
-                    folded_contents(project, (&by_guid, &roles, &versions), previews, &item.guid);
+                let folded = folded_contents(
+                    project,
+                    (&by_guid, &roles, &versions, &hidden, &mixes),
+                    previews,
+                    &item.guid,
+                );
                 let is_folder = folded.is_some();
                 // An item that plays is read as its track plays: one read
                 // of the track for all its items, kept through an edit.
@@ -1461,6 +1473,7 @@ impl Arrangement {
             "one x extent per lane command"
         );
 
+        mixes.keep();
         stages.mark("build.rows_ms");
         // The panel, cut at zoom 1 to start with. `repanel` re-cuts it
         // whenever the vertical zoom moves.
@@ -3378,47 +3391,77 @@ fn remembered_loudest(folder: &str, read: f64) -> f64 {
 }
 
 /// What a shut folder's row looks its children up in: every item by guid,
-/// each track's drum, each track's items' version.
+/// each track's drum, each track's items' version, the tracks hidden from
+/// the panel, and the spans as last mixed.
 type Lookups<'m, 'k> = (
     &'m std::collections::HashMap<&'k str, &'k daw_proto::Item>,
     &'m std::collections::HashMap<&'k str, LaneRole>,
     &'m std::collections::HashMap<&'k str, u64>,
+    &'m std::collections::HashSet<&'k str>,
+    &'m Mixes,
 );
+
+/// A shut folder's span as mixed: a fingerprint of what it was mixed from
+/// and the picture — its notes, its envelope, a kit's layers.
+#[derive(Clone)]
+struct Mixed {
+    from: u64,
+    notes: Option<Vec<crate::midi::Note>>,
+    wave: Option<std::sync::Arc<crate::midi::Wave>>,
+    layers: Vec<(LaneRole, std::sync::Arc<crate::midi::Wave>)>,
+}
+
+/// The spans as the last scene mixed them (`kept`) and as this one does
+/// (`made`), by folder and span. A span whose children, their waveforms
+/// and notes are as they were is not mixed again: an edit re-mixes the
+/// few spans it touched, not the kit's three thousand (108 ms on
+/// Unbreakable, every edit).
+#[derive(Default)]
+pub(crate) struct Mixes {
+    kept: std::collections::HashMap<(String, u64, u64), Mixed>,
+    made: std::cell::RefCell<std::collections::HashMap<(String, u64, u64), Mixed>>,
+}
+
+thread_local! {
+    /// The last scene's mixes, for the next to keep.
+    static MIXED: std::cell::RefCell<std::collections::HashMap<(String, u64, u64), Mixed>> =
+        std::cell::RefCell::default();
+}
+
+impl Mixes {
+    /// The last scene's, to keep from.
+    fn last() -> Self {
+        Self {
+            kept: MIXED.with(std::cell::RefCell::take),
+            made: std::cell::RefCell::default(),
+        }
+    }
+
+    /// Kept for the next scene: only what this one used.
+    fn keep(self) {
+        MIXED.with(|m| *m.borrow_mut() = self.made.into_inner());
+    }
+}
 
 /// What a shut folder's item `guid` holds — the notes and the envelope of
 /// the children under its span — or `None` when `guid` is not one.
 fn folded_contents(
     project: &ProjectRef,
-    (by_guid, roles, versions): Lookups<'_, '_>,
+    (by_guid, roles, versions, hidden, mixes): Lookups<'_, '_>,
     previews: &crate::midi::Previews,
     guid: &str,
 ) -> Option<Held> {
+    use std::hash::{Hash as _, Hasher as _};
     let (folder, index) = daw_ui::studio::folded::parse_guid(guid)?;
     let span = project.folds.get(folder)?.spans.get(index)?;
     // A track hidden from the panel (a DI kept to reamp from) is left out
     // of the picture; its items still go with an edit to the span.
-    let shown = |item: &&&daw_proto::Item| {
-        project
-            .tracks
-            .iter()
-            .find(|t| t.guid == item.track_guid)
-            .is_none_or(|t| t.visible_in_tcp)
-    };
     let held: Vec<_> = span
         .from
         .iter()
         .filter_map(|child| by_guid.get(child.as_str()))
-        .filter(shown)
+        .filter(|item| !hidden.contains(item.track_guid.as_str()))
         .map(|item| (item, previews.wave(&item.guid), previews.get(&item.guid)))
-        .collect();
-    let children: Vec<crate::midi::Child<'_>> = held
-        .iter()
-        .map(|(item, wave, notes)| crate::midi::Child {
-            at: item.position.as_seconds(),
-            length: item.length.as_seconds(),
-            wave: wave.as_deref(),
-            notes: notes.as_deref(),
-        })
         .collect();
     let role_of = |item: &daw_proto::Item| {
         roles
@@ -3430,41 +3473,91 @@ fn folded_contents(
     let kit = held
         .iter()
         .any(|(item, ..)| role_of(item) != LaneRole::Other);
-    let layers = if kit {
-        KIT_LAYERS
-            .iter()
-            .filter_map(|role| {
-                let these: Vec<crate::midi::Child<'_>> = held
-                    .iter()
-                    .zip(&children)
-                    .filter(|((item, ..), _)| role_of(item) == *role)
-                    .map(|(_, child)| crate::midi::Child { ..*child })
-                    .collect();
-                // Its tracks, each read once over the span as it plays —
-                // not its slices one by one.
-                let sources = tracks_over(
-                    held.iter()
-                        .filter(|(item, ..)| role_of(item) == *role)
-                        .map(|(item, ..)| item.track_guid.as_str()),
-                    (span.start, span.end),
-                    versions,
-                );
-                crate::midi::fold_waves(span.start, span.end, &these)
-                    .map(|wave| (*role, std::sync::Arc::new(wave), sources))
-            })
-            .collect()
-    } else {
-        Vec::new()
-    };
-    Some(Held {
-        notes: crate::midi::fold_notes(span.start, span.end, &children),
-        wave: crate::midi::fold_waves(span.start, span.end, &children).map(std::sync::Arc::new),
-        layers,
-        sources: tracks_over(
-            held.iter().map(|(item, ..)| item.track_guid.as_str()),
+    // Each track read once over the span as it plays, for the detail.
+    let sources_of = |role: Option<LaneRole>| {
+        tracks_over(
+            held.iter()
+                .filter(|(item, ..)| role.is_none_or(|r| role_of(item) == r))
+                .map(|(item, ..)| item.track_guid.as_str()),
             (span.start, span.end),
             versions,
-        ),
+        )
+    };
+    // What the span is mixed from: each child where it is, the waveform
+    // and notes it has now, its drum.
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    for (item, wave, notes) in &held {
+        item.guid.hash(&mut hasher);
+        item.position.as_seconds().to_bits().hash(&mut hasher);
+        item.length.as_seconds().to_bits().hash(&mut hasher);
+        wave.as_ref()
+            .map_or(0, |w| std::sync::Arc::as_ptr(w) as usize)
+            .hash(&mut hasher);
+        for note in notes.iter().flatten() {
+            (
+                note.at.to_bits(),
+                note.len.to_bits(),
+                note.pitch,
+                note.velocity,
+            )
+                .hash(&mut hasher);
+        }
+        notes.as_ref().map(Vec::len).hash(&mut hasher);
+        KIT_LAYERS
+            .iter()
+            .position(|r| *r == role_of(item))
+            .hash(&mut hasher);
+    }
+    let from = hasher.finish();
+    let key = (folder.to_owned(), span.start.to_bits(), span.end.to_bits());
+    let mixed = match mixes.kept.get(&key).filter(|m| m.from == from) {
+        Some(kept) => kept.clone(),
+        None => {
+            let children: Vec<crate::midi::Child<'_>> = held
+                .iter()
+                .map(|(item, wave, notes)| crate::midi::Child {
+                    at: item.position.as_seconds(),
+                    length: item.length.as_seconds(),
+                    wave: wave.as_deref(),
+                    notes: notes.as_deref(),
+                })
+                .collect();
+            let layers = if kit {
+                KIT_LAYERS
+                    .iter()
+                    .filter_map(|role| {
+                        let these: Vec<crate::midi::Child<'_>> = held
+                            .iter()
+                            .zip(&children)
+                            .filter(|((item, ..), _)| role_of(item) == *role)
+                            .map(|(_, child)| crate::midi::Child { ..*child })
+                            .collect();
+                        crate::midi::fold_waves(span.start, span.end, &these)
+                            .map(|wave| (*role, std::sync::Arc::new(wave)))
+                    })
+                    .collect()
+            } else {
+                Vec::new()
+            };
+            Mixed {
+                from,
+                notes: crate::midi::fold_notes(span.start, span.end, &children),
+                wave: crate::midi::fold_waves(span.start, span.end, &children)
+                    .map(std::sync::Arc::new),
+                layers,
+            }
+        }
+    };
+    mixes.made.borrow_mut().insert(key, mixed.clone());
+    Some(Held {
+        notes: mixed.notes,
+        wave: mixed.wave,
+        layers: mixed
+            .layers
+            .into_iter()
+            .map(|(role, wave)| (role, wave, sources_of(Some(role))))
+            .collect(),
+        sources: sources_of(None),
     })
 }
 
@@ -4608,6 +4701,7 @@ mod lane_wave_tests {
 #[cfg(test)]
 mod kit_layer_tests {
     use super::{LaneRole, folded_contents, kit_roles};
+
     use daw_proto::{Duration, Item, PositionInSeconds, Track};
     use daw_ui::studio::{ProjectRef, folded, project::Project};
 
@@ -4689,7 +4783,13 @@ mod kit_layer_tests {
 
         let kit = folded_contents(
             &project,
-            (&by_guid, &roles, &std::collections::HashMap::new()),
+            (
+                &by_guid,
+                &roles,
+                &std::collections::HashMap::new(),
+                &std::collections::HashSet::new(),
+                &super::Mixes::default(),
+            ),
             &previews,
             &folded::guid_of("drums", 0),
         )
@@ -4699,7 +4799,13 @@ mod kit_layer_tests {
 
         let guitars = folded_contents(
             &project,
-            (&by_guid, &roles, &std::collections::HashMap::new()),
+            (
+                &by_guid,
+                &roles,
+                &std::collections::HashMap::new(),
+                &std::collections::HashSet::new(),
+                &super::Mixes::default(),
+            ),
             &previews,
             &folded::guid_of("gtrs", 0),
         )
