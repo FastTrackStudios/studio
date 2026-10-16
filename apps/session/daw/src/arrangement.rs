@@ -2822,8 +2822,9 @@ pub fn cuts_overlay(
     }
 }
 
-/// Every gap under a shut folder's row (Edit mode): where a track under
-/// it plays nothing between one of its slices and the next, shaded.
+/// Every gap under a shut folder of the drum kit (Edit mode): where a
+/// track under it plays nothing between one of its slices and the next,
+/// shaded.
 ///
 /// The row folds every track under it into one: a mic dropping out for
 /// 20 ms between two slices hides under the others still playing, and is
@@ -2831,6 +2832,10 @@ pub fn cuts_overlay(
 /// strokes apart. A slice's crossfade into the next is no gap, and not
 /// drawn; a gap is shaded at least a couple of pixels wide, so it shows at
 /// any zoom.
+///
+/// Only the kit's rows, and only a gap an edit could have made (under
+/// [`EDIT_GAP`]): under a vocal or a guitar folder, the silence between
+/// two parts is the arrangement, and shading it painted half the song red.
 pub fn gaps_overlay(
     painter: &mut impl PaintScene,
     scene: &Arrangement,
@@ -2854,6 +2859,9 @@ pub fn gaps_overlay(
         let Some(fold) = project.folds.get(&track.guid) else {
             continue;
         };
+        if !in_kit(project, &track.guid) {
+            continue;
+        }
         let Some((top, h)) = scene.row_box(index) else {
             continue;
         };
@@ -2884,7 +2892,7 @@ pub fn gaps_overlay(
             mine.sort_by(|a, b| a.0.total_cmp(&b.0));
             let mut reach = f64::NEG_INFINITY;
             for (start, end) in mine {
-                if start > reach + TOUCH && reach.is_finite() {
+                if start > reach + TOUCH && start - reach < EDIT_GAP && reach.is_finite() {
                     let (x0, x1) = (reach.mul_add(pps, ox), start.mul_add(pps, ox));
                     let mid = f64::midpoint(x0, x1);
                     let half = ((x1 - x0) / 2.0).max(LEAST / 2.0);
@@ -2901,6 +2909,27 @@ pub fn gaps_overlay(
         }
     }
 }
+
+/// Whether the track `guid` is the drum kit's: under (or) the top-level
+/// folder named Drums.
+fn in_kit(project: &daw_ui::studio::project::Project, guid: &str) -> bool {
+    let mut at = guid;
+    // A tree is no deeper than it is long.
+    for _ in 0..=project.tracks.len() {
+        let Some(t) = project.tracks.iter().find(|t| t.guid == at) else {
+            return false;
+        };
+        match t.parent_guid.as_deref() {
+            Some(up) => at = up,
+            None => return t.name.trim().eq_ignore_ascii_case("drums"),
+        }
+    }
+    false
+}
+
+/// The longest silence on a kit track an edit could have left, seconds:
+/// longer is the part not playing, not a slice that came apart.
+pub const EDIT_GAP: f64 = 1.0;
 
 pub fn selection_overlay(
     painter: &mut impl PaintScene,
