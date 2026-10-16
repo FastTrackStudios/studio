@@ -460,8 +460,13 @@ pub fn kit_takes(daw: &daw::standalone::Standalone, project: &ProjectContext) ->
 pub struct TakeVersion {
     /// Its recording pass.
     pub pass: String,
-    /// The lane it is on (its name), what a comp takes it from.
+    /// The lane it is on (its name, on the first mic that has it): what
+    /// to call it.
     pub lane: Option<String>,
+    /// Each mic's lane holding its recording of this take: `(track GUID,
+    /// lane index)` — what a comp takes it from, mic by mic (the mics'
+    /// lanes need not be numbered alike).
+    pub lanes: Vec<(String, u32)>,
     /// Its recordings' files, by track GUID: what tells whether it is the
     /// one the comp plays somewhere.
     pub files: Vec<(String, String)>,
@@ -489,10 +494,13 @@ pub fn takes_over(
         .chain(&extras)
         .collect();
     let all = Tracks::all(daw, project.clone());
-    // A recording's own lane: the take lane an item playing its file sits
-    // on — not COMP or EDIT, which play pieces of every take.
-    let lane_name = |track: &str, path: &str| -> Option<String> {
-        let t = all.iter().find(|t| t.guid == track)?;
+    // Each mic's take lanes by the file they play: one pass over its items
+    // (COMP and EDIT left out — they play pieces of every take).
+    let mut lane_of: HashMap<(String, String), u32> = HashMap::new();
+    for track in &tracks {
+        let Some(t) = all.iter().find(|t| &t.guid == *track) else {
+            continue;
+        };
         let shared = |lane: u32| {
             t.lane_names
                 .get(usize::try_from(lane).unwrap_or(usize::MAX))
@@ -502,21 +510,25 @@ pub fn takes_over(
                         || n.eq_ignore_ascii_case(crate::drum_lanes::EDIT)
                 })
         };
-        daw.get_items(project.clone(), TrackRef::Guid(track.to_owned()))
-            .into_iter()
-            .filter(|i| !shared(i.fixed_lane.unwrap_or(0)))
-            .find(|i| {
-                daw.get_active_take(project.clone(), ItemRef::Guid(i.guid.clone()))
-                    .and_then(|take| take.source_file_path)
-                    .is_some_and(|p| p == path)
-            })
-            .map(|i| {
-                let lane = i.fixed_lane.unwrap_or(0);
-                t.lane_names
-                    .get(usize::try_from(lane).unwrap_or(usize::MAX))
-                    .cloned()
-                    .unwrap_or_else(|| lane.saturating_add(1).to_string())
-            })
+        for i in daw.get_items(project.clone(), TrackRef::Guid((*track).clone())) {
+            let lane = i.fixed_lane.unwrap_or(0);
+            if shared(lane) {
+                continue;
+            }
+            if let Some(path) = daw
+                .get_active_take(project.clone(), ItemRef::Guid(i.guid.clone()))
+                .and_then(|take| take.source_file_path)
+            {
+                lane_of.entry(((*track).clone(), path)).or_insert(lane);
+            }
+        }
+    }
+    let lane_name = |track: &str, lane: u32| {
+        all.iter()
+            .find(|t| t.guid == track)
+            .and_then(|t| t.lane_names.get(usize::try_from(lane).ok()?).cloned())
+            .filter(|n| !n.trim().is_empty())
+            .unwrap_or_else(|| lane.saturating_add(1).to_string())
     };
     takes(daw, project, &tracks)
         .into_iter()
@@ -546,13 +558,20 @@ pub fn takes_over(
                 }
             }
             hits.sort_by(|a, b| a.1.total_cmp(&b.1));
-            let lane = take
+            let lanes: Vec<(String, u32)> = take
                 .by_track
                 .iter()
-                .find_map(|(track, r)| lane_name(track, &r.path));
+                .filter_map(|(track, r)| {
+                    lane_of
+                        .get(&(track.clone(), r.path.clone()))
+                        .map(|lane| (track.clone(), *lane))
+                })
+                .collect();
+            let lane = lanes.first().map(|(track, lane)| lane_name(track, *lane));
             TakeVersion {
                 pass: take.pass.clone(),
                 lane,
+                lanes,
                 files: take
                     .by_track
                     .iter()

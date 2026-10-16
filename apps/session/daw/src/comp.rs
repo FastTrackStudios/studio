@@ -125,6 +125,73 @@ pub fn swipe(
     refused.map_or(Ok(said), Err)
 }
 
+/// [`swipe`] with each track's own source lane: `plans` is `(track GUID,
+/// lane index)` — a take found on each mic by its recording, not by a
+/// lane name the mics need not share. A track whose lane is its comp is
+/// left. In the caller's undo step (`label` names the comp).
+///
+/// # Errors
+///
+/// Nothing to comp, a track gone, or the engine refusing an edit.
+pub fn swipe_lanes(
+    daw: &daw::standalone::Standalone,
+    project: &ProjectContext,
+    plans: &[(String, u32)],
+    (from, to): (f64, f64),
+    label: &str,
+) -> Result<usize, String> {
+    if !(from.is_finite() && to.is_finite() && to - from > GRAIN) {
+        return Err(format!("nothing to comp between {from} and {to} s"));
+    }
+    let all = Tracks::all(daw, project.clone());
+    let plans: Vec<(&daw_proto::Track, u32, u32)> = plans
+        .iter()
+        .filter_map(|(guid, source)| {
+            let t = all.iter().find(|t| &t.guid == guid)?;
+            let comp = comp_lane_of(daw, project, t).filter(|c| c != source)?;
+            Some((t, *source, comp))
+        })
+        .collect();
+    if plans.is_empty() {
+        return Err("no mic has this take on a lane of its own".to_owned());
+    }
+    let _ = label;
+    let mut done = 0usize;
+    for (target, source, comp) in plans {
+        comp_track(daw, project, target, (source, comp), (from, to))
+            .map_err(|e| format!("{}: {e}", target.name))?;
+        done = done.saturating_add(1);
+    }
+    Ok(done)
+}
+
+/// Each of `tracks` with `COMP` and `EDIT` lanes: its `EDIT` lane over
+/// `from..to` made its `COMP` lane there — the edit taken off, the comp as
+/// recorded — straight on the engine, as a swipe is. How many tracks.
+///
+/// # Errors
+///
+/// The engine refusing an edit.
+pub fn edit_from_comp(
+    daw: &daw::standalone::Standalone,
+    project: &ProjectContext,
+    tracks: &[String],
+    (from, to): (f64, f64),
+) -> Result<usize, String> {
+    use crate::drum_lanes::{COMP, EDIT, lane_named};
+    let all = Tracks::all(daw, project.clone());
+    let mut done = 0usize;
+    for t in all.iter().filter(|t| tracks.contains(&t.guid)) {
+        let (Some(comp), Some(edit)) = (lane_named(t, COMP), lane_named(t, EDIT)) else {
+            continue;
+        };
+        comp_track(daw, project, t, (comp, edit), (from, to))
+            .map_err(|e| format!("{}: {e}", t.name))?;
+        done = done.saturating_add(1);
+    }
+    Ok(done)
+}
+
 /// [`swipe`] on one track: lane `source` over `from..to` onto lane `comp`.
 /// How many pieces it copied.
 fn comp_track(

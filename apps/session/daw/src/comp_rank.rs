@@ -71,9 +71,11 @@ struct ChooseArg {
 /// One take, as ranked for a stretch.
 #[derive(Facet, Clone, Debug)]
 pub(crate) struct TakeRank {
-    /// Its lane's name: what COMP_CHOOSE takes.
+    /// Which take: its recording pass, what COMP_CHOOSE takes.
     pub(crate) take: String,
     pub(crate) pass: String,
+    /// Its lane's name on the first mic that has it: what to call it.
+    pub(crate) lane: String,
     pub(crate) score: f64,
     pub(crate) hits: u32,
     pub(crate) coverage: f64,
@@ -176,7 +178,7 @@ fn current(
                     .is_some_and(|p| p == *path)
                 })
         });
-        hit.then(|| v.lane.clone()).flatten()
+        hit.then(|| v.pass.clone())
     })
 }
 
@@ -185,20 +187,20 @@ fn ranking(
     daw: &daw::standalone::Standalone,
     project: &ProjectContext,
     (from, to): (f64, f64),
-) -> Vec<TakeRank> {
-    // One candidate a take lane: a comp from a lane takes whatever of its
-    // recordings plays there (a lane can hold several, recorded from
-    // different places in the song).
+) -> (Vec<TakeRank>, Vec<crate::hits::TakeVersion>) {
+    // One candidate a take — its recording pass. A pass recorded from more
+    // than one place in the song is one take: its recordings' hits merged,
+    // each mic's lanes with them.
     let mut versions: Vec<crate::hits::TakeVersion> = Vec::new();
     for v in crate::hits::takes_over(daw, project, (from, to)) {
-        let Some(lane) = v.lane.clone() else { continue };
-        match versions
-            .iter_mut()
-            .find(|w| w.lane.as_deref() == Some(lane.as_str()))
-        {
+        if v.lanes.is_empty() {
+            continue;
+        }
+        match versions.iter_mut().find(|w| w.pass == v.pass) {
             Some(w) => {
                 w.hits.extend(v.hits);
                 w.files.extend(v.files);
+                w.lanes.extend(v.lanes);
                 w.detected |= v.detected;
             }
             None => versions.push(v),
@@ -212,7 +214,7 @@ fn ranking(
         .iter()
         .filter_map(|v| {
             Some(Candidate {
-                take: v.lane.clone()?,
+                take: v.pass.clone(),
                 hits: v
                     .hits
                     .iter()
@@ -226,16 +228,17 @@ fn ranking(
         .collect();
     let written = written(daw, project, (from, to));
     let line_of = |t: f64| crate::actions::grid_line(daw, project, t, 16);
-    let pass_of = |take: &str| {
+    let lane_of = |pass: &str| {
         versions
             .iter()
-            .find(|v| v.lane.as_deref() == Some(take))
-            .map_or_else(String::new, |v| v.pass.clone())
+            .find(|v| v.pass == pass)
+            .and_then(|v| v.lane.clone())
+            .unwrap_or_default()
     };
-    let undetected = |take: &str| {
+    let undetected = |pass: &str| {
         versions
             .iter()
-            .find(|v| v.lane.as_deref() == Some(take))
+            .find(|v| v.pass == pass)
             .is_some_and(|v| !v.detected)
     };
     let mut out: Vec<TakeRank> = editing::comp::rank(&candidates, &written, &line_of)
@@ -244,7 +247,8 @@ fn ranking(
             let never = undetected(&r.take);
             TakeRank {
                 current: now.as_deref() == Some(r.take.as_str()),
-                pass: pass_of(&r.take),
+                lane: lane_of(&r.take),
+                pass: r.take.clone(),
                 // Not found is not empty: unjudged, still to listen to.
                 empty: r.empty && !never,
                 undetected: never,
@@ -259,41 +263,94 @@ fn ranking(
         .collect();
     // The judged first, best first; then the unjudged; the empty last.
     out.sort_by_key(|t| u8::from(t.undetected) + 2 * u8::from(t.empty));
-    out
+    (out, versions)
 }
 
-/// Comp the kit from `take` over `from..to`, and where it is edited, its
-/// edit there made the new comp as recorded. Whether the edit was.
+/// Comp the kit from `take` over `from..to` — each mic from its own lane
+/// holding its recording of the take — and where it is edited, its edit
+/// there made the new comp as recorded. Whether the edit was.
 fn comp_in(
     daw: &daw::standalone::Standalone,
     project: &ProjectContext,
-    take: &str,
+    take: &crate::hits::TakeVersion,
     (from, to): (f64, f64),
 ) -> Result<bool, String> {
-    let folder = kit_folder(daw, project)?;
-    crate::comp::swipe(
-        daw,
-        project,
-        std::slice::from_ref(&folder),
-        take,
-        (from, to),
-    )?;
-    let edited = Tracks::all(daw, project.clone())
-        .iter()
-        .any(|t| crate::drum_lanes::lane_named(t, crate::drum_lanes::EDIT).is_some());
-    if edited {
-        let us = |t: f64| num_traits::ToPrimitive::to_i64(&(t * 1e6).round()).unwrap_or(0);
-        let ticket = crate::engine::ticket();
-        crate::actions::queue(crate::keys::Action::RestoreDrums {
-            from_us: us(from),
-            to_us: us(to),
-            ticket,
-        });
-        crate::actions::landed(ticket);
-    }
+    let mut stages = architect_telemetry::timing::Stages::start();
+    let label = format!("Comp from take {}", take.pass);
+    daw::service::Projects::begin_undo_block(daw, project.clone(), &label);
+    let comped = crate::comp::swipe_lanes(daw, project, &take.lanes, (from, to), &label);
+    stages.mark("comp.swipe_ms");
+    // Where the kit is edited, its edit over the stretch made the new comp
+    // as recorded — on the engine, in the same undo step, every mic.
+    let tracks: Vec<String> = take.lanes.iter().map(|(t, _)| t.clone()).collect();
+    let edited = comped
+        .as_ref()
+        .ok()
+        .map(|_| crate::comp::edit_from_comp(daw, project, &tracks, (from, to)))
+        .transpose();
+    stages.mark("comp.restore_ms");
+    daw::service::Projects::end_undo_block(daw, project.clone(), &label, None);
+    comped?;
+    let edited = edited?.is_some_and(|n| n > 0);
     crate::studio::request_resync();
     crate::hit_overlay::refresh();
     Ok(edited)
+}
+
+/// The last stretch ranked, its ranking, its takes, and the take last
+/// comped there: T pressed again on the same stretch steps from it at
+/// once, rather than ranking every take again.
+struct Kept {
+    span: (f64, f64),
+    takes: Vec<TakeRank>,
+    versions: Vec<crate::hits::TakeVersion>,
+    current: Option<String>,
+}
+
+static LAST: std::sync::Mutex<Option<Kept>> = std::sync::Mutex::new(None);
+
+/// The stretch's ranking: the one kept when it is the same stretch, else
+/// ranked now (and kept).
+fn ranked_for(
+    daw: &daw::standalone::Standalone,
+    project: &ProjectContext,
+    span: (f64, f64),
+) -> (Vec<TakeRank>, Vec<crate::hits::TakeVersion>, Option<String>) {
+    let same = |s: (f64, f64)| (s.0 - span.0).abs() < 1e-3 && (s.1 - span.1).abs() < 1e-3;
+    if let Ok(last) = LAST.lock()
+        && let Some(kept) = last.as_ref().filter(|k| same(k.span))
+    {
+        return (
+            kept.takes.clone(),
+            kept.versions.clone(),
+            kept.current.clone(),
+        );
+    }
+    let (takes, versions) = ranking(daw, project, span);
+    let current = takes.iter().find(|t| t.current).map(|t| t.take.clone());
+    if let Ok(mut last) = LAST.lock() {
+        *last = Some(Kept {
+            span,
+            takes: takes.clone(),
+            versions: versions.clone(),
+            current: current.clone(),
+        });
+    }
+    (takes, versions, current)
+}
+
+/// The take comped last on `span`, kept for the next press.
+fn now_comped(span: (f64, f64), take: &str) {
+    if let Ok(mut last) = LAST.lock()
+        && let Some(kept) = last.as_mut()
+        && (kept.span.0 - span.0).abs() < 1e-3
+        && (kept.span.1 - span.1).abs() < 1e-3
+    {
+        kept.current = Some(take.to_owned());
+        for t in &mut kept.takes {
+            t.current = t.take == take;
+        }
+    }
 }
 
 pub fn register(list: &ActionList) {
@@ -302,7 +359,7 @@ pub fn register(list: &ActionList) {
         Ok(crate::edit_actions::stretches(daw, &project, &a.on)?
             .into_iter()
             .map(|(from, to)| {
-                let takes = ranking(daw, &project, (from, to));
+                let (takes, _) = ranking(daw, &project, (from, to));
                 let unjudged = takes.iter().filter(|t| t.undetected).count();
                 Ranking {
                     from,
@@ -323,9 +380,8 @@ pub fn register(list: &ActionList) {
         let mut stages = architect_telemetry::timing::Stages::start();
         let mut out = Vec::new();
         for (from, to) in crate::edit_actions::stretches(daw, &project, &a.on)? {
-            let takes = ranking(daw, &project, (from, to));
+            let (takes, versions, now) = ranked_for(daw, &project, (from, to));
             stages.mark("comp.rank_ms");
-            let now = takes.iter().find(|t| t.current).map(|t| t.take.clone());
             let ranked: Vec<Ranked> = takes
                 .iter()
                 .map(|t| Ranked {
@@ -343,7 +399,12 @@ pub fn register(list: &ActionList) {
                 .ok_or("no take plays this stretch")?
                 .take
                 .clone();
-            let edit_restored = comp_in(daw, &project, &next, (from, to))?;
+            let version = versions
+                .iter()
+                .find(|v| v.pass == next)
+                .ok_or("the take went")?;
+            let edit_restored = comp_in(daw, &project, version, (from, to))?;
+            now_comped((from, to), &next);
             stages.mark("comp.comp_ms");
             out.push(Comped {
                 from,
@@ -359,12 +420,19 @@ pub fn register(list: &ActionList) {
         let (daw, project) = crate::actions::song()?;
         let mut out = Vec::new();
         for (from, to) in crate::edit_actions::stretches(daw, &project, &a.on)? {
-            let edit_restored = comp_in(daw, &project, &a.take, (from, to))?;
+            let (takes, versions, _) = ranked_for(daw, &project, (from, to));
+            // By its pass, or its lane's name as COMP_CANDIDATES says it.
+            let version = versions
+                .iter()
+                .find(|v| v.pass == a.take || v.lane.as_deref() == Some(a.take.as_str()))
+                .ok_or_else(|| format!("no take {} plays here", a.take))?;
+            let edit_restored = comp_in(daw, &project, version, (from, to))?;
+            now_comped((from, to), &version.pass);
             out.push(Comped {
                 from,
                 to,
-                take: a.take.clone(),
-                takes: ranking(daw, &project, (from, to)),
+                take: version.pass.clone(),
+                takes,
                 edit_restored,
             });
         }
