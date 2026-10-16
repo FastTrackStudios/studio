@@ -113,10 +113,69 @@ struct Open {
 }
 
 /// How many updates a branch keeps before a save folds them into one
-/// snapshot ([`Store::compact`]). An open replays every update since the
-/// last snapshot, working the song out again from each: Unbreakable's 377
-/// took 16 s to open, its snapshot 0.2 s.
+/// snapshot ([`Store::compact`]) whatever else happens. An open replays
+/// every update since the last snapshot, working the song out again from
+/// each: Unbreakable's 377 took 16 s to open, its snapshot 0.2 s.
 const COMPACT_AFTER: usize = 64;
+
+/// How long the song is left alone before what it has done since its
+/// snapshot is folded into a new one ([`compact_when_idle`]). Even a few
+/// updates on a snapshot make an open read the whole history (36 on
+/// Unbreakable's: 7.9 s, against 0.2 s for the snapshot alone).
+const IDLE: std::time::Duration = std::time::Duration::from_secs(10);
+
+/// When a song's file was last written to.
+static LAST_WRITE: Mutex<Option<std::time::Instant>> = Mutex::new(None);
+
+/// Fold every open song's updates into a snapshot once the songs have been
+/// left alone for [`IDLE`] — in the background, under each song's lock (so
+/// no step is appended while it folds), shown in the bottom bar while it
+/// works. Started once, with the step recorder.
+fn compact_when_idle() {
+    static STARTED: std::sync::Once = std::sync::Once::new();
+    STARTED.call_once(|| {
+        let spawned = std::thread::Builder::new()
+            .name("song-compact".into())
+            .spawn(|| {
+                loop {
+                    std::thread::sleep(std::time::Duration::from_secs(1));
+                    let quiet = LAST_WRITE
+                        .lock()
+                        .ok()
+                        .and_then(|at| *at)
+                        .is_some_and(|at| at.elapsed() >= IDLE);
+                    if !quiet {
+                        continue;
+                    }
+                    if let Ok(mut at) = LAST_WRITE.lock() {
+                        *at = None;
+                    }
+                    let folded = run(async {
+                        let mut songs = open_songs().lock().await;
+                        for open in songs.values_mut().filter(|o| o.uncompacted > 0) {
+                            let _job = crate::jobs::start("Saving the song's history", 0);
+                            let mut stages = architect_telemetry::timing::Stages::start();
+                            let doc = open.bridge.doc();
+                            if let Err(e) = with_store(&open.store, |s| {
+                                s.compact(&open.branch, doc.loro()).map_err(|e| e.to_string())
+                            }) {
+                                tracing::warn!(song.error = %e, "the song's history could not be folded");
+                                continue;
+                            }
+                            stages.mark("song.compact_ms");
+                            open.uncompacted = 0;
+                        }
+                    });
+                    if let Err(e) = folded {
+                        tracing::warn!(song.error = %e, "folding the songs' history did not run");
+                    }
+                }
+            });
+        if let Err(e) = spawned {
+            tracing::warn!(song.error = %e, "no thread to fold the songs' history on");
+        }
+    });
+}
 
 /// The open songs, by the engine's project guid.
 fn open_songs() -> &'static tokio::sync::Mutex<HashMap<String, Open>> {
@@ -336,6 +395,9 @@ fn append(open: &mut Open, label: &str) -> Result<(), String> {
         })?;
         open.saved = doc.version();
         open.uncompacted = open.uncompacted.saturating_add(1);
+        if let Ok(mut at) = LAST_WRITE.lock() {
+            *at = Some(std::time::Instant::now());
+        }
     }
     // Folded into a snapshot once there are enough to slow an open. Safe
     // here: the doc holds every update appended (it is at or past
@@ -362,6 +424,7 @@ fn append(open: &mut Open, label: &str) -> Result<(), String> {
 static PENDING: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
 
 pub(crate) fn record_steps() {
+    compact_when_idle();
     static LISTENING: std::sync::Once = std::sync::Once::new();
     LISTENING.call_once(|| {
         let (tx, rx) = std::sync::mpsc::channel::<(String, String)>();
@@ -526,6 +589,12 @@ pub fn load(daw: &Standalone, name: &str, path: &Path, branch: &str) -> Result<S
     let mut stages = architect_telemetry::timing::Stages::start();
     let (store, loaded, uncompacted) = open_branch(path, branch)?;
     stages.mark("load.store_ms");
+    // A backlog on the snapshot is folded once the song is left alone.
+    if uncompacted > 0
+        && let Ok(mut at) = LAST_WRITE.lock()
+    {
+        *at = Some(std::time::Instant::now());
+    }
     let doc = SessionDoc::from_loro(loaded);
     let saved = doc.version();
     let guid = uuid::Uuid::new_v4().to_string();
