@@ -261,6 +261,12 @@ pub struct Arrangement {
     /// and the lane that plays are — all of it on a row showing what
     /// plays, the top of a row showing its lanes.
     head_h: Vec<f64>,
+    /// Each row's takes, numbered and coloured ([`crate::take_colors`]):
+    /// a row showing its lanes, and a top folder (a kit), whose comp strip
+    /// is in its takes' colours. Empty for the rest.
+    takes: Vec<std::sync::Arc<crate::take_colors::TakeColors>>,
+    /// Each row showing its lanes: each lane holding one take, and which.
+    lane_takes: Vec<Vec<(u32, usize)>>,
 }
 
 /// Which commands belong to which row, and how wide each one is.
@@ -787,6 +793,26 @@ impl Arrangement {
             .map_or(&[], crate::lane_stack::Stack::lanes)
     }
 
+    /// Row `row`'s takes, numbered and coloured: empty on a row neither
+    /// showing its lanes nor a top folder.
+    #[must_use]
+    pub fn takes(&self, row: usize) -> &crate::take_colors::TakeColors {
+        static NONE: std::sync::LazyLock<crate::take_colors::TakeColors> =
+            std::sync::LazyLock::new(crate::take_colors::TakeColors::default);
+        self.takes.get(row).map_or(&*NONE, |t| t)
+    }
+
+    /// The take lane `lane` of row `row` holds (its number), when it
+    /// holds one take.
+    #[must_use]
+    pub fn lane_take(&self, row: usize, lane: u32) -> Option<usize> {
+        self.lane_takes
+            .get(row)?
+            .iter()
+            .find(|(l, _)| *l == lane)
+            .map(|(_, take)| *take)
+    }
+
     /// How row `row` stacks its lanes, when it shows them all.
     #[must_use]
     pub fn lane_stack(&self, row: usize) -> Option<&crate::lane_stack::Stack> {
@@ -1233,6 +1259,8 @@ impl Arrangement {
         let mut laned_rows = Vec::with_capacity(rows.len());
         let mut row_stacks = Vec::with_capacity(rows.len());
         let mut head_h = Vec::with_capacity(rows.len());
+        let mut row_takes = Vec::with_capacity(rows.len());
+        let mut row_lane_takes = Vec::with_capacity(rows.len());
         let mut y = 0.0_f64;
         let mut stages = architect_telemetry::timing::Stages::start();
         let keys = keys_of(project);
@@ -1306,6 +1334,13 @@ impl Arrangement {
                 crate::lane_stack::Stack::default()
             };
             let h = if lanes_shown { stack.height() } else { head };
+            // Its takes, each its colour: on its lanes, a kit's comp strip.
+            let colors = if lanes_shown || (track.is_folder && *depth == 0) {
+                std::sync::Arc::new(takes_under(project, track))
+            } else {
+                std::sync::Arc::default()
+            };
+            let mut lane_take: Vec<(u32, Option<usize>)> = Vec::new();
             let body = (h - DIVIDER).max(0.5);
             let stripe = if row % 2 == 0 {
                 palette.row_a
@@ -1374,7 +1409,17 @@ impl Arrangement {
                 // everything that has not been slipped, which is why
                 // adding it moves no picture that was right before.
                 let slip = item.start_offset.as_seconds();
-                let color = item_color(item, track_color, tcp.mixing);
+                let take = take_name(project, item);
+                let numbered = take.and_then(|t| colors.index_of(t));
+                if lanes_shown {
+                    note_lane_take(&mut lane_take, item.fixed_lane.unwrap_or(0), numbered);
+                }
+                // On a row showing its lanes, each take in its own colour:
+                // "the blue take".
+                let color = match numbered {
+                    Some(i) if lanes_shown => crate::take_colors::swatch(i).1,
+                    _ => item_color(item, track_color, tcp.mixing),
+                };
                 // A lane that does not play is there to be chosen from,
                 // not heard: drawn faint.
                 let color = if plays {
@@ -1490,7 +1535,12 @@ impl Arrangement {
                         held.layers
                             .into_iter()
                             .map(|(role, wave, sources)| {
-                                lane(wave, kit_color(role).unwrap_or(color), sources, Some(role))
+                                // A take's lane in its take's colour, every
+                                // layer: which take it is, not which drum.
+                                let ink = kit_color(role)
+                                    .filter(|_| !(lanes_shown && numbered.is_some()))
+                                    .unwrap_or(color);
+                                lane(wave, ink, sources, Some(role))
                             })
                             .collect()
                     };
@@ -1540,7 +1590,10 @@ impl Arrangement {
                     // item volume to show or turn.
                     volume: (!is_folder).then_some(item.volume),
                     band,
-                    outline: project.title(item).map_or(color, take_color),
+                    outline: numbered.map_or_else(
+                        || project.title(item).map_or(color, take_color),
+                        |i| crate::take_colors::swatch(i).1,
+                    ),
                 });
                 if let Some(name) = project.title(item) {
                     titles.push(Title {
@@ -1564,6 +1617,13 @@ impl Arrangement {
             laned_rows.push(opened);
             row_stacks.push(stack);
             head_h.push(head);
+            row_takes.push(colors);
+            row_lane_takes.push(
+                lane_take
+                    .into_iter()
+                    .filter_map(|(lane, take)| Some((lane, take?)))
+                    .collect(),
+            );
             let slot = h + crate::automation::lanes_height(&track.guid);
             slot_h.push(slot);
             y += slot;
@@ -1601,6 +1661,8 @@ impl Arrangement {
             laned: laned_rows,
             stacks: row_stacks,
             head_h,
+            takes: row_takes,
+            lane_takes: row_lane_takes,
             rows: rows.len(),
             length_secs: project.length_secs,
             bpm: project.bpm,
@@ -2416,6 +2478,8 @@ pub fn hits_overlay(
     const CLEAR: f64 = 6.0;
     let (ox, oy) = origin;
     let top = crate::ruler::ruler_h();
+    // The kit's takes, numbered on its top row: the comp strip's colours.
+    let takes = scene.takes(kit.start);
     let y_span = |row: usize| {
         let (y, h) = scene.row_box(row)?;
         let y0 = y.mul_add(view.zoom_y, oy).max(top);
@@ -2486,7 +2550,13 @@ pub fn hits_overlay(
             .collect();
         // Along the very foot, which take the comp plays where; the
         // stretches just above it.
-        let comps_drawn = comp_strip(painter, font, (y0, y1), (&x_of, (from, to)), &overlay.comps);
+        let comps_drawn = comp_strip(
+            painter,
+            font,
+            (y0, y1),
+            (&x_of, (from, to)),
+            (&overlay.comps, takes),
+        );
         let foot = if comps_drawn {
             y1 - COMP_STRIP - 1.0
         } else {
@@ -2618,7 +2688,10 @@ fn comp_strip(
     font: &crate::text::Font,
     (y0, y1): (f64, f64),
     (x_of, (from, to)): (&impl Fn(f64) -> f64, (f64, f64)),
-    comps: &[crate::hit_overlay::CompSpan],
+    (comps, takes): (
+        &[crate::hit_overlay::CompSpan],
+        &crate::take_colors::TakeColors,
+    ),
 ) -> bool {
     /// The name's size, and the room a span needs to carry it, pixels.
     const SIZE: f32 = 8.0;
@@ -2637,7 +2710,9 @@ fn comp_strip(
         .take_while(|c| c.start <= to)
     {
         let (x0, x1) = (x_of(span.start), x_of(span.end).max(x_of(span.start) + 1.0));
-        let ink = take_color(&span.take);
+        let ink = takes
+            .color_of(&span.take)
+            .unwrap_or_else(|| take_color(&span.take));
         painter.fill(
             Fill::NonZero,
             Affine::IDENTITY,
@@ -2657,15 +2732,11 @@ fn comp_strip(
         }
         last_take = Some(span.take.as_str());
         if x1 - x0 >= ROOM {
-            crate::tcp::glyphs(
-                painter,
-                font,
-                ink,
-                short_take(&span.take),
-                x0 + 3.0,
-                top - 2.0,
-                SIZE,
+            let called = takes.name_of(&span.take).map_or_else(
+                || short_take(&span.take).to_owned(),
+                |color| format!("{color} · {}", short_take(&span.take)),
             );
+            crate::tcp::glyphs(painter, font, ink, &called, x0 + 3.0, top - 2.0, SIZE);
         }
     }
     true
@@ -5105,6 +5176,57 @@ mod dial_tests {
             (dial_angle(-96.0) + 135_f64.to_radians()).abs() < 1e-12,
             "the stop"
         );
+    }
+}
+
+/// The take `item` plays: its own take's name, or — a shut folder's — the
+/// first of its children's that names a recording pass.
+fn take_name<'a>(
+    project: &'a daw_ui::studio::project::Project,
+    item: &'a daw_proto::Item,
+) -> Option<&'a str> {
+    let Some((folder, index)) = daw_ui::studio::folded::parse_guid(&item.guid) else {
+        return project.title(item);
+    };
+    project
+        .folds
+        .get(folder)?
+        .spans
+        .get(index)?
+        .from
+        .iter()
+        .filter_map(|child| project.names.get(child).map(String::as_str))
+        .find(|name| crate::take_colors::stamp(name).is_some())
+}
+
+/// The takes recorded on `track` and every track under it, numbered.
+fn takes_under(
+    project: &daw_ui::studio::project::Project,
+    track: &daw_proto::Track,
+) -> crate::take_colors::TakeColors {
+    let under = daw_ui::studio::folded::under(&project.tracks, &track.guid);
+    // Each name once, at its longest: a sliced kit names its takes
+    // thousands of times.
+    let mut longest: std::collections::HashMap<&str, f64> = std::collections::HashMap::new();
+    for item in std::iter::once(track)
+        .chain(under)
+        .flat_map(|t| project.items.get(&t.guid).into_iter().flatten())
+    {
+        if let Some(name) = project.names.get(&item.guid) {
+            let at = longest.entry(name.as_str()).or_insert(0.0);
+            *at = at.max(item.length.as_seconds());
+        }
+    }
+    crate::take_colors::TakeColors::of(longest)
+}
+
+/// Lane `lane` holds an item of take `take`: a lane holding one take keeps
+/// its number, one holding several (a comp, an edit) none.
+fn note_lane_take(seen: &mut Vec<(u32, Option<usize>)>, lane: u32, take: Option<usize>) {
+    match seen.iter_mut().find(|(l, _)| *l == lane) {
+        Some((_, held)) if *held != take => *held = None,
+        Some(_) => {}
+        None => seen.push((lane, take)),
     }
 }
 

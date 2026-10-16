@@ -107,6 +107,7 @@ pub mod stream_in;
 #[cfg(feature = "native")]
 pub mod stream_set;
 #[cfg(feature = "native")]
+pub mod take_colors;
 pub mod task_account;
 #[cfg(any(feature = "native", feature = "web"))]
 pub mod task_set;

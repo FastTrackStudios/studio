@@ -322,26 +322,8 @@ struct Recording {
 /// recorded together are the same length, and two passes from the same
 /// place almost never are.
 fn pass_of(path: &str, length: Option<f64>) -> String {
-    let stem = std::path::Path::new(path)
-        .file_stem()
-        .and_then(|s| s.to_str())
-        .unwrap_or_default();
-    // `YYMMDD_HHMM`, then any `-NN` take counters.
-    let parts: Vec<&str> = stem.rsplit('-').collect();
-    let stamp = parts.iter().position(|p| {
-        let b = p.as_bytes();
-        b.len() == 11
-            && b.get(6) == Some(&b'_')
-            && b.iter()
-                .enumerate()
-                .all(|(i, c)| i == 6 || c.is_ascii_digit())
-    });
-    if let Some(at) = stamp {
-        let mut kept: Vec<&str> = parts.iter().take(at.saturating_add(1)).copied().collect();
-        kept.reverse();
-        return kept.join("-");
-    }
-    length.map_or_else(String::new, |l| format!("{l:.3}s"))
+    crate::take_colors::stamp(path)
+        .unwrap_or_else(|| length.map_or_else(String::new, |l| format!("{l:.3}s")))
 }
 
 /// A track's recordings, each placed where most of its items put it — a

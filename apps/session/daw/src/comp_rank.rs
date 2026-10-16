@@ -22,7 +22,7 @@ static CANDIDATES: ActionMeta = crate::actions::meta(
     "COMP_CANDIDATES",
     "comp_candidates",
     "Rank the takes for a stretch",
-    "Every take of the kit ranked for a stretch — the selection (a fill's hit markers, rows, a razor, a time selection) or `from`/`to` / `sections` — from its hit markers: whether it plays the stretch at all, how much of the drum MIDI there it plays (`coverage`; with no MIDI, how near its count of hits is to the takes' usual), how tight it is with its own feel taken out (`spread_ms`, `feel_ms`), into one `score`, best first; `current` marks the take the comp plays there now. Read-only: what COMP_CYCLE steps through and COMP_CHOOSE takes from.",
+    "Every take of the kit ranked for a stretch — the selection (a fill's hit markers, rows, a razor, a time selection) or `from`/`to` / `sections` — from its hit markers: whether it plays the stretch at all, how much of the drum MIDI there it plays (`coverage`; with no MIDI, how near its count of hits is to the takes' usual), how tight it is with its own feel taken out (`spread_ms`, `feel_ms`), into one `score`, best first; `current` marks the take the comp plays there now; `color` is the take's colour as the window paints its lane and comp pieces (`Blue`, `Light Green`). Read-only: what COMP_CYCLE steps through and COMP_CHOOSE takes from.",
     "Edit",
     "",
 );
@@ -40,7 +40,7 @@ static CHOOSE: ActionMeta = crate::actions::meta(
     "COMP_CHOOSE",
     "comp_choose",
     "Comp a take",
-    "Over a stretch (the selection, or `from`/`to` / `sections`), comp the kit from take `take` — its lane's name, as COMP_CANDIDATES says it — every mic from it; where the kit is edited, the edit over the stretch made the new comp as recorded. What a model nominates as the best version of a fill.",
+    "Over a stretch (the selection, or `from`/`to` / `sections`), comp the kit from take `take` — its pass, its lane's name or its colour (`blue`, `light green`), as COMP_CANDIDATES says them — every mic from it; where the kit is edited, the edit over the stretch made the new comp as recorded. What a model nominates as the best version of a fill.",
     "Edit",
     "",
 );
@@ -87,6 +87,10 @@ pub(crate) struct TakeRank {
     pub(crate) undetected: bool,
     /// The comp plays this take there now.
     pub(crate) current: bool,
+    /// Its colour's name, as the window paints its lane and its comp
+    /// pieces ([`crate::take_colors`]): "the blue take". What COMP_CHOOSE
+    /// takes as well as its pass.
+    pub(crate) color: Option<String>,
 }
 
 /// A stretch's ranking.
@@ -205,8 +209,63 @@ fn ranking(
     let now = current(daw, project, &versions, (from, to));
     let written = written(daw, project, (from, to), &versions);
     let line_of = |t: f64| crate::actions::grid_line(daw, project, t, 16);
-    let out = rank_versions(&versions, &written, now.as_deref(), &line_of);
+    let mut out = rank_versions(&versions, &written, now.as_deref(), &line_of);
+    name_colors(&mut out, &kit_takes(project));
     (out, versions)
+}
+
+/// Each take ranked given its colour's name.
+fn name_colors(ranked: &mut [TakeRank], takes: &crate::take_colors::TakeColors) {
+    for take in ranked {
+        take.color = takes.name_of(&take.pass);
+    }
+}
+
+/// The kit's takes, numbered as the window numbers them: every take named
+/// on the kit's folder and the tracks under it.
+fn kit_takes(project: &ProjectContext) -> crate::take_colors::TakeColors {
+    let Some(song) = crate::hit_index::song_of(project) else {
+        return crate::take_colors::TakeColors::default();
+    };
+    song.read(|p| {
+        let tracks = &p.tracks;
+        // The top folder over the kit's first piece, as `kit_folder` finds it.
+        let (_, piece) = crate::drum_reference::pieces_of(tracks)
+            .into_iter()
+            .next()?;
+        let mut folder = tracks.iter().find(|t| t.guid == piece)?;
+        while let Some(parent) = folder
+            .parent_guid
+            .as_deref()
+            .and_then(|g| tracks.iter().find(|t| t.guid == g))
+        {
+            folder = parent;
+        }
+        let under = daw_ui::studio::folded::under(tracks, &folder.guid);
+        // As the window counts them: each item's take name and length.
+        let mut longest: std::collections::HashMap<&str, f64> = std::collections::HashMap::new();
+        for guid in std::iter::once(folder)
+            .chain(under)
+            .flat_map(|t| p.items_by_track.get(&t.guid).into_iter().flatten())
+        {
+            let Some(list) = p.takes.get(guid) else {
+                continue;
+            };
+            let (Some(take), Some(item)) = (
+                usize::try_from(list.active_idx)
+                    .ok()
+                    .and_then(|i| list.takes.get(i)),
+                p.items.get(guid),
+            ) else {
+                continue;
+            };
+            let at = longest.entry(take.name.as_str()).or_insert(0.0);
+            *at = at.max(item.item.length.as_seconds());
+        }
+        Some(crate::take_colors::TakeColors::of(longest))
+    })
+    .flatten()
+    .unwrap_or_default()
 }
 
 /// `versions` (each with its hits over the stretch) ranked against the
@@ -262,6 +321,7 @@ pub(crate) fn rank_versions(
                 coverage: r.coverage,
                 spread_ms: r.spread_ms,
                 feel_ms: r.feel_ms,
+                color: None,
             }
         })
         .collect();
@@ -462,10 +522,16 @@ pub fn register(list: &ActionList) {
         let mut out = Vec::new();
         for (from, to) in crate::edit_actions::stretches(daw, &project, &a.on)? {
             let (takes, versions, _) = ranked_for(daw, &project, (from, to));
-            // By its pass, or its lane's name as COMP_CANDIDATES says it.
+            // By its pass, its lane's name or its colour's, as
+            // COMP_CANDIDATES says them.
+            let colored = kit_takes(&project).pass_named(&a.take).map(str::to_owned);
             let version = versions
                 .iter()
-                .find(|v| v.pass == a.take || v.lane.as_deref() == Some(a.take.as_str()))
+                .find(|v| {
+                    v.pass == a.take
+                        || v.lane.as_deref() == Some(a.take.as_str())
+                        || colored.as_deref() == Some(v.pass.as_str())
+                })
                 .ok_or_else(|| format!("no take {} plays here", a.take))?;
             let edit_restored = comp_in(daw, &project, version, (from, to))?;
             now_comped((from, to), &version.pass);

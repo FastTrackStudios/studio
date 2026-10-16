@@ -173,10 +173,18 @@ pub fn labels(
             let plays = 1_u64
                 .checked_shl(lane)
                 .is_some_and(|bit| laned.lane_play_mask & bit != 0);
-            let name = crate::lanes::called(laned, lane);
+            // A take's lane says its colour by name, a swatch before it:
+            // "the blue take".
+            let take = scene.lane_take(row, lane).map(crate::take_colors::swatch);
+            let called = crate::lanes::called(laned, lane);
+            let name = take.as_ref().map_or_else(
+                || called.clone(),
+                |(color, _)| format!("{called} · {color}"),
+            );
             let mark = if plays { size } else { 0.0 };
+            let chip = if take.is_some() { size + 2.0 } else { 0.0 };
             let x = view.panel_w + PAD;
-            let w = font.width(&name, SIZE) + mark;
+            let w = font.width(&name, SIZE) + mark + chip;
             painter.fill(
                 Fill::NonZero,
                 Affine::IDENTITY,
@@ -199,12 +207,30 @@ pub fn labels(
                     &arrow,
                 );
             }
+            if let Some((_, color)) = take {
+                let at = x + mark;
+                painter.fill(
+                    Fill::NonZero,
+                    Affine::IDENTITY,
+                    color,
+                    None,
+                    &vello::kurbo::RoundedRect::new(at, y0 + 2.5, at + size, y0 + 2.5 + size, 2.0),
+                );
+            }
             let ink = if plays {
                 palette.text
             } else {
                 palette.text_dim
             };
-            crate::tcp::glyphs(painter, font, ink, &name, x + mark, y0 + size + 1.0, SIZE);
+            crate::tcp::glyphs(
+                painter,
+                font,
+                ink,
+                &name,
+                x + mark + chip,
+                y0 + size + 1.0,
+                SIZE,
+            );
         }
     }
 }
