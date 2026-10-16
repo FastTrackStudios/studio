@@ -10,9 +10,10 @@
 //! lane and placed again from its COMP lane, piece by piece. A hit moved
 //! back is the recording again, uncut.
 
-use daw::service::{ItemRef, Items as _, ProjectContext, Takes as _, TrackRef, Tracks as _};
-use daw_proto::primitives::{Duration, PositionInSeconds};
-use daw_proto::{StretchMarker, StretchMarkers as _, StretchTakeRef, TakeRef};
+use daw::service::{ProjectContext, Tracks as _};
+use daw::standalone::item_ops::ItemOp;
+use daw_proto::StretchMarker;
+use daw_proto::id::{ItemId, ProjectId};
 use editing::placement::{self, Hit, Piece};
 
 use crate::drum_lanes::{COMP, EDIT, lane_named};
@@ -38,6 +39,14 @@ struct Mic {
     track: String,
     comp: u32,
     edit: u32,
+}
+
+/// A mic's two lanes around a placement, as they are: what it reads its
+/// shifts from and places again.
+struct Lanes {
+    edit_lane: u32,
+    edit: Vec<Slice>,
+    comp: Vec<Slice>,
 }
 
 /// An item on a lane and the recording it plays.
@@ -90,10 +99,14 @@ pub fn place(
     if moved.is_empty() {
         return Ok(0);
     }
+    let ProjectContext::Project(song) = project else {
+        return Err("a placement needs its song named".to_owned());
+    };
+    let song = ProjectId::from(song.as_str());
     let mics = mics(daw, project);
-    let reference = mics
-        .first()
-        .ok_or("no mic of the kit has COMP and EDIT lanes")?;
+    if mics.is_empty() {
+        return Err("no mic of the kit has COMP and EDIT lanes".to_owned());
+    }
     let mut hits: Vec<f64> = crate::hits::playback(daw, project)
         .iter()
         .map(|p| p.time)
@@ -117,13 +130,21 @@ pub fn place(
     let from = first.saturating_sub(CONTEXT);
     let to = (last + CONTEXT).min(hits.len().saturating_sub(1));
     let around = hits.get(from..=to).ok_or("no hit where a move was asked")?;
+    let (Some(&near), Some(&far)) = (around.first(), around.last()) else {
+        return Ok(0);
+    };
+
+    // Every mic's lanes around it, read at once: a slice reached from as
+    // far as a move goes, either side.
+    let reach = moved.iter().map(|m| m.1.abs()).fold(0.0, f64::max) + READ_MARGIN;
+    let kit = read_kit(daw, &song, &mics, (near - reach, far + reach));
+    let reference = kit.first().ok_or("the kit could not be read")?;
+    stages.mark("place.read_ms");
 
     // Each hit as recorded and shifted, read on the reference mic.
-    let edit = slices(daw, project, reference, reference.edit);
-    let comp = slices(daw, project, reference, reference.comp);
     let mut placed: Vec<Hit> = Vec::with_capacity(around.len());
     for &t in around {
-        let shift = shift_at(&edit, &comp, t)
+        let shift = shift_at(&reference.edit, &reference.comp, t)
             .ok_or_else(|| format!("the hit at {t:.3} s is not on an EDIT slice"))?;
         let by = moved
             .iter()
@@ -137,17 +158,16 @@ pub fn place(
     // The span: from the start of the first hit's slice to the end of the
     // last's, so the pieces at its ends meet what is either side unchanged.
     let holding = |t: f64| {
-        edit.iter()
+        reference
+            .edit
+            .iter()
             .rev()
             .find(|s| s.start() <= t + 1e-9 && t < s.end())
     };
-    let (start, end) = match (around.first(), around.last()) {
-        (Some(&a), Some(&b)) => (
-            holding(a).map_or(a, Slice::start),
-            holding(b).map_or(b, Slice::end),
-        ),
-        _ => return Ok(0),
-    };
+    let span = (
+        holding(near).map_or(near, Slice::start),
+        holding(far).map_or(far, Slice::end),
+    );
     // The later side of each seam reaches back by the crossfade too, so
     // the hit before is guarded by that much more.
     let cut = placement::Cut {
@@ -163,26 +183,32 @@ pub fn place(
             placed.iter().map(|h| (h.at, h.shift)).collect::<Vec<_>>()
         ));
     }
-    let pieces = placement::place(&placed, (start, end), cut);
+    let pieces = placement::place(&placed, span, cut);
     if let Some(bad) = pieces.iter().find(|p| p.end <= p.start) {
         return Err(format!(
-            "a piece would end before it starts ({bad:?}) placing {:?} over {start:.3}..{end:.3}",
-            placed.iter().map(|h| (h.at, h.shift)).collect::<Vec<_>>()
+            "a piece would end before it starts ({bad:?}) placing {:?} over {:.3}..{:.3}",
+            placed.iter().map(|h| (h.at, h.shift)).collect::<Vec<_>>(),
+            span.0,
+            span.1
         ));
     }
-
-    stages.mark("place.plan_ms");
-    daw::service::Projects::begin_undo_block(daw, project.clone(), "Place a drum hit");
-    stages.mark("place.undo_begin_ms");
-    let rendered = mics
+    let ops: Vec<ItemOp> = kit
         .iter()
-        .map(|mic| render(daw, project, mic, &pieces, (start, end), joins))
-        .sum::<Result<usize, daw_proto::DawError>>();
-    stages.mark("place.render_ms");
+        .flat_map(|lanes| render_ops(lanes, &pieces, span, joins))
+        .collect();
+    stages.mark("place.plan_ms");
+
+    daw::service::Projects::begin_undo_block(daw, project.clone(), "Place a drum hit");
+    let applied = daw.apply_items(&song, &ops);
     daw::service::Projects::end_undo_block(daw, project.clone(), "Place a drum hit", None);
-    stages.mark("place.undo_end_ms");
-    rendered.map_err(|e| e.to_string())
+    stages.mark("place.apply_ms");
+    applied.map_err(|e| e.to_string())?;
+    Ok(ops.len())
 }
+
+/// How far past the hits around a move its lanes are read, seconds: a
+/// slice holding one of them reaches no further than this before or after.
+const READ_MARGIN: f64 = 4.0;
 
 /// Whether the kit can be placed from its recording: some mic has both a
 /// COMP and an EDIT lane. A kit edited on the items it plays, without the
@@ -206,27 +232,64 @@ fn mics(daw: &daw::standalone::Standalone, project: &ProjectContext) -> Vec<Mic>
         .collect()
 }
 
-/// `mic`'s items on `lane`, by start, each with its recording.
-fn slices(
+/// Every mic's EDIT and COMP lanes over `from..to`, each slice with the
+/// recording it plays — read in one look at the engine, nothing copied but
+/// the slices there.
+fn read_kit(
     daw: &daw::standalone::Standalone,
-    project: &ProjectContext,
+    song: &ProjectId,
+    mics: &[Mic],
+    (from, to): (f64, f64),
+) -> Vec<Lanes> {
+    daw.read_project(song.as_str(), |p| {
+        mics.iter()
+            .map(|mic| Lanes {
+                edit_lane: mic.edit,
+                edit: lane_of(p, mic, mic.edit, (from, to)),
+                comp: lane_of(p, mic, mic.comp, (from, to)),
+            })
+            .collect()
+    })
+    .unwrap_or_default()
+}
+
+/// `mic`'s items on `lane` over `from..to`, by start.
+fn lane_of(
+    p: &daw::standalone::sync::ProjectState,
     mic: &Mic,
     lane: u32,
+    (from, to): (f64, f64),
 ) -> Vec<Slice> {
-    let mut out: Vec<Slice> = daw
-        .get_items(project.clone(), TrackRef::Guid(mic.track.clone()))
+    let mut out: Vec<Slice> = p
+        .items_by_track
+        .get(&mic.track)
         .into_iter()
-        .filter(|i| i.fixed_lane.unwrap_or(0) == lane)
+        .flatten()
+        .filter_map(|guid| p.items.get(guid))
+        .map(|entry| &entry.item)
+        .filter(|item| item.fixed_lane.unwrap_or(0) == lane)
+        .filter(|item| {
+            let at = item.position.as_seconds();
+            at < to && at + item.length.as_seconds() > from
+        })
         .map(|item| {
-            let at = ItemRef::Guid(item.guid.clone());
-            let file = daw
-                .get_active_take(project.clone(), at.clone())
-                .and_then(|t| t.source_file_path);
-            let markers = daw.get_stretch_markers(project.clone(), at, TakeRef::Active);
+            let take = p
+                .takes
+                .get(&item.guid)
+                .and_then(|list| list.takes.get(usize::try_from(list.active_idx).ok()?));
+            let mut item = item.clone();
+            // The engine keeps where a take starts in its source on the
+            // take; a slice is read with it, as `get_item` gives it.
+            if let Some(take) = take {
+                item.start_offset = take.start_offset;
+            }
             Slice {
+                file: take.and_then(|t| t.source_file_path.clone()),
+                markers: take
+                    .and_then(|t| p.stretch_markers.get(&t.guid))
+                    .cloned()
+                    .unwrap_or_default(),
                 item,
-                file,
-                markers,
             }
         })
         .collect();
@@ -252,45 +315,39 @@ fn shift_at(edit: &[Slice], comp: &[Slice], t: f64) -> Option<f64> {
     Some(t - recorded)
 }
 
-/// `mic`'s EDIT lane over `start..end` made `pieces` of its COMP lane: what
-/// was there cleared, each piece copied from the COMP items under it,
-/// shifted, crossfaded into the one before. How many items it made.
-fn render(
-    daw: &daw::standalone::Standalone,
-    project: &ProjectContext,
-    mic: &Mic,
+/// What makes one mic's EDIT lane over `start..end` the `pieces` of its
+/// COMP lane: what starts there cleared (one slice over the whole span cut
+/// either side of it), each piece copied from the COMP items under it,
+/// shifted, crossfaded into the one before; the span's ends keep the fades
+/// they had, so its seams with what is outside stay as they were.
+fn render_ops(
+    lanes: &Lanes,
     pieces: &[Piece],
     (start, end): (f64, f64),
     joins: Joins,
-) -> Result<usize, daw_proto::DawError> {
+) -> Vec<ItemOp> {
     const EDGE: f64 = 1e-6;
-    let edit = slices(daw, project, mic, mic.edit);
-    // The span's own ends keep the fades they had: the seams either side
-    // of it, with what is outside, stay as they were.
-    let edge_fade_in = edit
+    let edge_fade_in = lanes
+        .edit
         .iter()
         .find(|s| (s.start() - start).abs() < EDGE)
         .map_or(0.0, |s| s.item.fade_in_length.as_seconds());
-    let edge_fade_out = edit
+    let edge_fade_out = lanes
+        .edit
         .iter()
         .find(|s| (s.end() - end).abs() < EDGE)
         .map_or(0.0, |s| s.item.fade_out_length.as_seconds());
-    // What starts in the span is made again; a slice from before that
-    // only crossfades into it, or one after that crossfades in from its
-    // end, is left alone. One unedited item over the whole span is cut
-    // either side of it.
-    for slice in edit.iter().filter(|s| {
+    let mut ops = Vec::new();
+    // A slice from before that only crossfades into the span, or one after
+    // that crossfades in from its end, is left alone.
+    for slice in lanes.edit.iter().filter(|s| {
         let starts_in = s.start() >= start - EDGE && s.start() < end - joins.crossfade - EDGE;
         let spans = s.start() < start - EDGE && s.end() > start + joins.crossfade + EDGE;
         starts_in || spans
     }) {
-        crate::comp::clear(daw, project, &slice.item, (start, end))?;
+        clear_ops(&slice.item, (start, end), &mut ops);
     }
-    let comp = slices(daw, project, mic, mic.comp);
-    let mut made = 0usize;
     for (k, piece) in pieces.iter().enumerate() {
-        // Into the piece before by the crossfade; the span's first and
-        // last as the slices there were.
         let fade_in = if k == 0 {
             edge_fade_in
         } else {
@@ -302,37 +359,22 @@ fn render(
             joins.crossfade
         };
         let reach_back = if k == 0 { 0.0 } else { fade_in };
-        let (from, to) = (piece.start - reach_back, piece.end);
-        let under: Vec<&Slice> = comp
+        let (from, to) = (
+            piece.start - reach_back - piece.shift,
+            piece.end - piece.shift,
+        );
+        let under: Vec<&Slice> = lanes
+            .comp
             .iter()
-            .filter(|c| c.end() > from - piece.shift && c.start() < to - piece.shift)
+            .filter(|c| c.end() > from && c.start() < to)
             .collect();
         for (n, source) in under.iter().enumerate() {
-            let a = source.start().max(from - piece.shift);
-            let b = source.end().min(to - piece.shift);
-            let copy = daw
-                .duplicate_item(project.clone(), ItemRef::Guid(source.item.guid.clone()))
-                .ok_or_else(|| daw_proto::DawError::not_found("Item", &source.item.guid))?;
-            let at = ItemRef::Guid(copy);
-            daw.set_fixed_lane(project.clone(), at.clone(), mic.edit)?;
-            daw.set_position(
-                project.clone(),
-                at.clone(),
-                PositionInSeconds::from_seconds(a + piece.shift),
-            )?;
-            daw.set_length(project.clone(), at.clone(), Duration::from_seconds(b - a))?;
-            daw.set_start_offset(
-                project.clone(),
-                at.clone(),
-                TakeRef::Active,
-                Duration::from_seconds(
-                    source.item.start_offset.as_seconds() + (a - source.start()),
-                ),
-            )?;
-            // The piece's own ends crossfade; a join between two COMP
-            // items inside it keeps the COMP lane's own fades.
-            let first = n == 0;
-            let last = n + 1 == under.len();
+            let (a, b) = (source.start().max(from), source.end().min(to));
+            let copy = ItemId::new();
+            let offset = source.item.start_offset.as_seconds() + (a - source.start());
+            // The piece's own ends crossfade; a join between two COMP items
+            // inside it keeps the COMP lane's own fades.
+            let (first, last) = (n == 0, n + 1 == under.len());
             let fin = if first {
                 fade_in
             } else {
@@ -343,48 +385,97 @@ fn render(
             } else {
                 source.item.fade_out_length.as_seconds()
             };
-            daw.set_fade_in(
-                project.clone(),
-                at.clone(),
-                Duration::from_seconds(fin),
-                source.item.fade_in_shape,
-            )?;
-            daw.set_fade_out(
-                project.clone(),
-                at.clone(),
-                Duration::from_seconds(fout),
-                source.item.fade_out_shape,
-            )?;
+            let mut length = b - a;
+            let mut markers = Vec::new();
             // The last resort: the decay drawn out to meet the next piece.
             if last && let Some(reach) = piece.drawn_to {
-                draw_out(daw, project, &at, reach)?;
+                let mut shape = source.item.clone();
+                shape.position = daw_proto::PositionInSeconds::from_seconds(a + piece.shift);
+                shape.length = daw_proto::Duration::from_seconds(length);
+                shape.start_offset = daw_proto::Duration::from_seconds(offset);
+                if let Some(drawn) = crate::arrange_edit::draw_out_markers(&mut shape, reach) {
+                    length = shape.length.as_seconds();
+                    markers = drawn
+                        .into_iter()
+                        .map(|(t, s)| StretchMarker::new(t, s))
+                        .collect();
+                }
             }
-            made += 1;
+            ops.push(ItemOp::Copy {
+                item: ItemId::from(source.item.guid.as_str()),
+                into: copy.clone(),
+            });
+            ops.push(ItemOp::Lane {
+                item: copy.clone(),
+                lane: lanes.edit_lane,
+            });
+            ops.push(ItemOp::Place {
+                item: copy.clone(),
+                at: a + piece.shift,
+                length,
+                offset,
+            });
+            ops.push(ItemOp::Fades {
+                item: copy.clone(),
+                fade_in: fin,
+                fade_out: fout,
+            });
+            if !markers.is_empty() {
+                ops.push(ItemOp::Stretch {
+                    item: copy,
+                    markers,
+                });
+            }
         }
     }
-    Ok(made)
+    ops
 }
 
-/// The item at `at` drawn out to end at `reach`: its attack kept, the rest
-/// stretched over the longer span.
-fn draw_out(
-    daw: &daw::standalone::Standalone,
-    project: &ProjectContext,
-    at: &ItemRef,
-    reach: f64,
-) -> Result<(), daw_proto::DawError> {
-    let Some(mut item) = daw.get_item(project.clone(), at.clone()) else {
-        return Ok(());
-    };
-    let Some(markers) = crate::arrange_edit::draw_out_markers(&mut item, reach) else {
-        return Ok(());
-    };
-    daw.set_length(project.clone(), at.clone(), item.length)?;
-    daw.set_stretch_markers(
-        StretchTakeRef::new(project.clone(), at.clone(), TakeRef::Active),
-        markers
-            .into_iter()
-            .map(|(take, source)| StretchMarker::new(take, source))
-            .collect(),
-    )
+/// What takes `start..end` out of `item`: gone if it lies inside, else
+/// trimmed to what is either side — a copy keeping the part after.
+fn clear_ops(item: &daw_proto::Item, (start, end): (f64, f64), ops: &mut Vec<ItemOp>) {
+    const GRAIN: f64 = 1e-6;
+    let at = item.position.as_seconds();
+    let till = at + item.length.as_seconds();
+    let offset = item.start_offset.as_seconds();
+    let id = ItemId::from(item.guid.as_str());
+    let (head, tail) = (at < start - GRAIN, till > end + GRAIN);
+    if tail {
+        let rest = if head {
+            let copy = ItemId::new();
+            ops.push(ItemOp::Copy {
+                item: id.clone(),
+                into: copy.clone(),
+            });
+            copy
+        } else {
+            id.clone()
+        };
+        ops.push(ItemOp::Place {
+            item: rest.clone(),
+            at: end,
+            length: till - end,
+            offset: offset + (end - at),
+        });
+        ops.push(ItemOp::Fades {
+            item: rest,
+            fade_in: 0.0,
+            fade_out: item.fade_out_length.as_seconds(),
+        });
+    }
+    if head {
+        ops.push(ItemOp::Place {
+            item: id.clone(),
+            at,
+            length: start - at,
+            offset,
+        });
+        ops.push(ItemOp::Fades {
+            item: id,
+            fade_in: item.fade_in_length.as_seconds(),
+            fade_out: 0.0,
+        });
+    } else if !tail {
+        ops.push(ItemOp::Delete { item: id });
+    }
 }
