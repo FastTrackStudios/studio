@@ -2,7 +2,7 @@
 //! which divisions a zoom shows, and how a measure is written.
 
 use super::*;
-use ::timeline::time::{TempoMap, TempoPoint};
+use ::timeline::time::{TempoMap, TempoPoint, TimeMap as _};
 
 /// The project's bar grid.
 ///
@@ -140,7 +140,7 @@ pub fn grid(
             painter,
             view,
             &::timeline::grid::lines(&map, from, to, 1.0, LINES_MAX),
-            (palette.grid_beat, 1.0),
+            (crowded(palette.grid_beat, beat_px, GRID_CLEAR), 1.0),
             origin,
             &regions,
         );
@@ -165,14 +165,41 @@ pub fn grid(
     } else {
         1.0
     };
+    // Zoomed out, not every bar: every second, fourth, eighth… so they are
+    // never closer than GRID_BAR_ROOM — as the ruler counts them — and
+    // fainter the closer they still are.
+    let every = [1usize, 2, 4, 8, 16, 32, 64]
+        .into_iter()
+        .find(|n| measure_px * *n as f64 >= GRID_BAR_ROOM)
+        .unwrap_or(64);
+    let all_bars = ::timeline::grid::bars(&map, from, to, LINES_MAX * every);
+    let shown: Vec<f64> = all_bars
+        .iter()
+        .copied()
+        .filter(|t| {
+            let bar = (map.beats_at(*t) / bars.beats_per_bar).round();
+            (bar as i64).rem_euclid(every as i64) == 0
+        })
+        .collect();
     line_every(
         painter,
         view,
-        &::timeline::grid::bars(&map, from, to, LINES_MAX),
-        (palette.grid, bar_width),
+        &shown,
+        (
+            crowded(palette.grid, measure_px * every as f64, GRID_CLEAR),
+            bar_width,
+        ),
         origin,
         &[],
     );
+}
+
+/// `ink` fainter the nearer its lines are: full once they are `clear`
+/// pixels apart, a quarter at the closest — a screen of lines a few pixels
+/// apart read as a grey wash over the song.
+fn crowded(ink: Color, spacing_px: f64, clear: f64) -> Color {
+    let share = (spacing_px / clear).clamp(0.25, 1.0);
+    ink.multiply_alpha(num_traits::ToPrimitive::to_f32(&share).unwrap_or(1.0))
 }
 
 /// The map the lane grid is counted through: the project's tempo map, or
@@ -200,7 +227,14 @@ pub fn lane_map(bars: Bars, tempo: &[daw_ui::studio::project::TempoChange]) -> T
 const LINES_MAX: usize = 2048;
 
 /// How far apart beats must be for the grid to draw their lines, px.
-const GRID_BEAT_ROOM: f64 = 6.0;
+const GRID_BEAT_ROOM: f64 = 12.0;
+
+/// How close bar lines may be before only every second (fourth, …) is
+/// drawn, px.
+const GRID_BAR_ROOM: f64 = 16.0;
+
+/// How far apart lines must be to be drawn at full strength, px.
+const GRID_CLEAR: f64 = 48.0;
 
 /// How wide a bar must be for its line to be drawn two pixels wide, px.
 const GRID_WIDE_BAR: f64 = 80.0;
