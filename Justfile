@@ -1344,6 +1344,35 @@ daw-folder-item-sheet OUT="/tmp/fts-folder-items.png" PROJECT="" WINDOW="" SIZE=
     FTS_BENCH_FOLDER_ITEMS="{{OUT}}" FTS_BENCH_SIZE="{{SIZE}}" \
         ./target/debug/bench "$project" 2>&1 | grep -viE 'vulkan|objects:|WARN|Fontconfig'
 
+# The whole drum edit of a real song, timed (tests/drums_full_real.rs): a
+# consistent copy of SONG (SQLite's online backup, safe while Session has it
+# open), the kit comped phrase by phrase from its best takes, quantized over
+# the whole song, a hand's drags — each step timed, the report kept in
+# target/drums-bench/<when>.json to compare runs. DETECT=1 times hit
+# detection too; BUDGET=2000 fails the run over that many ms of editing.
+drums-bench SONG DETECT="" BUDGET="":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    dir="$PWD/target/drums-bench"
+    mkdir -p "$dir"
+    copy="$dir/song.session"
+    rm -f "$copy" "$copy-wal" "$copy-shm" "$copy-tshm"
+    python3 -I -c 'import sqlite3, sys; s = sqlite3.connect(f"file:{sys.argv[1]}?mode=ro", uri=True); d = sqlite3.connect(sys.argv[2]); s.backup(d); d.close(); s.close()' "{{SONG}}" "$copy"
+    out="$dir/$(date +%Y%m%d-%H%M%S).json"
+    export FTS_PERF_SESSION="$copy" FTS_BENCH_OUT="$out"
+    [ -n "{{DETECT}}" ] && export FTS_BENCH_DETECT=1
+    [ -n "{{BUDGET}}" ] && export FTS_BENCH_BUDGET_MS="{{BUDGET}}"
+    cargo nextest run --cargo-profile release-fast -p session-daw --features signal \
+      --test drums_full_real --run-ignored all --no-capture
+    python3 -I - "$out" <<'PY'
+    import json, sys
+    r = json.load(open(sys.argv[1]))
+    print(f"edit (comp + quantize + drags): {r['edit_ms']:.0f} ms")
+    for s in r["steps"]:
+        print(f"  {s['step']:<9}{s['ms']:>9.0f} ms  window {s['window_ms']:>7.0f} ms  {s['note']}")
+    PY
+    echo "report: $out"
+
 # Benchmark the arrangement HEADLESSLY: no window, no surface, no vsync.
 #
 # Sweeps both axes hard and reports percentiles. This is the number that

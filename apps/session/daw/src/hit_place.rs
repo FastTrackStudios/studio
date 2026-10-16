@@ -133,31 +133,47 @@ pub fn place(
     // far as a move goes, either side.
     let reach = moved.iter().map(|m| m.1.abs()).fold(0.0, f64::max) + READ_MARGIN;
     let kit = read_kit(song, &mics, (near - reach, far + reach));
-    let reference = kit.first().ok_or("the kit could not be read")?;
+    if kit.is_empty() {
+        return Err("the kit could not be read".to_owned());
+    }
     stages.mark("place.read_ms");
 
-    // Each hit as recorded and shifted, read on the reference mic.
+    // Each hit as recorded and shifted, read on the reference mic. A hit
+    // beside the moved ones with no EDIT slice under it (where the lane
+    // has nothing: a gap, the song's edge) has nothing there to keep, and
+    // is left out; a moved one must be on a slice.
     let mut placed: Vec<Hit> = Vec::with_capacity(around.len());
     for &t in around {
-        let shift = shift_at(&reference.edit, &reference.comp, t)
-            .ok_or_else(|| format!("the hit at {t:.3} s is not on an EDIT slice"))?;
         let by = moved
             .iter()
             .find(|m| (m.0 - t).abs() < SAME_HIT)
-            .map_or(0.0, |m| m.1);
+            .map(|m| m.1);
+        // Every mic moves together: the first with a slice there says it
+        // (a trigger's lane holds only its hits).
+        let Some(shift) = kit
+            .iter()
+            .find_map(|lanes| shift_at(&lanes.edit, &lanes.comp, t))
+        else {
+            if by.is_some() {
+                return Err(format!("the hit at {t:.3} s is not on an EDIT slice"));
+            }
+            continue;
+        };
         placed.push(Hit {
             at: t - shift,
-            shift: shift + by,
+            shift: shift + by.unwrap_or(0.0),
         });
     }
     // The span: from the start of the first hit's slice to the end of the
     // last's, so the pieces at its ends meet what is either side unchanged.
     let holding = |t: f64| {
-        reference
-            .edit
-            .iter()
-            .rev()
-            .find(|s| s.start() <= t + 1e-9 && t < s.end())
+        kit.iter().find_map(|lanes| {
+            lanes
+                .edit
+                .iter()
+                .rev()
+                .find(|s| s.start() <= t + 1e-9 && t < s.end())
+        })
     };
     let span = (
         holding(near).map_or(near, Slice::start),
