@@ -1560,7 +1560,7 @@ pub fn row_meters(
         let Some(level) = usize::try_from(live.index).ok().and_then(|i| levels.get(i)) else {
             continue;
         };
-        let Some((top, height)) = scene.row_band(index, view) else {
+        let Some((top, height)) = scene.panel_band(index, view) else {
             continue;
         };
         let row = Row::new(
@@ -1745,7 +1745,7 @@ fn control_row(
     // The band on SCREEN, not in the session: these are drawn
     // under a translate so that the art keeps its own size, which
     // leaves the placing to `row_band`. See it for why.
-    let Some((top, height)) = scene.row_band(index, view) else {
+    let Some((top, height)) = scene.panel_band(index, view) else {
         return;
     };
     let row = Row::new(

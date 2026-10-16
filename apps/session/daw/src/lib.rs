@@ -64,6 +64,7 @@ pub mod icons;
 pub mod instrument_tracks;
 pub mod jobs;
 pub mod keys;
+pub mod lane_stack;
 pub mod lanes;
 pub mod layout;
 pub mod leveler;

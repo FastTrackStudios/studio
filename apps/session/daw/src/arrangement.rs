@@ -254,9 +254,13 @@ pub struct Arrangement {
     /// The lanes each row shows, when it shows them all ([`row_lanes`]):
     /// what its strips are named by and swiped on.
     laned: Vec<Option<daw_proto::Track>>,
-    /// Which of those lanes has a strip, top to bottom ([`lane_slots`]):
-    /// empty for a row showing what plays.
-    slots: Vec<Vec<u32>>,
+    /// Which of those lanes has a strip, top to bottom, and how tall each
+    /// is ([`crate::lane_stack::Stack`]): empty for a row showing what plays.
+    stacks: Vec<crate::lane_stack::Stack>,
+    /// Each row's head: the track's own height, where its panel controls
+    /// and the lane that plays are — all of it on a row showing what
+    /// plays, the top of a row showing its lanes.
+    head_h: Vec<f64>,
 }
 
 /// Which commands belong to which row, and how wide each one is.
@@ -729,6 +733,14 @@ impl Arrangement {
         self.rows_at.total()
     }
 
+    /// How tall row `row`'s head is — its panel controls' room — in
+    /// content pixels: the whole track, but on a row showing its lanes.
+    fn head_height(&self, row: usize) -> f64 {
+        self.head_h
+            .get(row)
+            .map_or_else(|| self.row_height(row), |h| h.min(self.row_height(row)))
+    }
+
     /// How tall row `i`'s track is (its automation lanes not counted), in
     /// content pixels.
     #[must_use]
@@ -766,11 +778,56 @@ impl Arrangement {
         self.laned.get(row).and_then(Option::as_ref)
     }
 
-    /// The lanes row `row` gives a strip, top to bottom ([`lane_slots`]);
-    /// empty when it shows what plays.
+    /// The lanes row `row` gives a strip, top to bottom
+    /// ([`crate::lane_stack::Stack::lanes`]); empty when it shows what plays.
     #[must_use]
     pub fn lane_slots(&self, row: usize) -> &[u32] {
-        self.slots.get(row).map_or(&[], Vec::as_slice)
+        self.stacks
+            .get(row)
+            .map_or(&[], crate::lane_stack::Stack::lanes)
+    }
+
+    /// How row `row` stacks its lanes, when it shows them all.
+    #[must_use]
+    pub fn lane_stack(&self, row: usize) -> Option<&crate::lane_stack::Stack> {
+        self.stacks.get(row).filter(|stack| !stack.is_empty())
+    }
+
+    /// Row `row`'s head ON SCREEN: where its panel controls sit — the
+    /// whole row, or the top of a row showing its lanes. `(top, height)`
+    /// after the vertical zoom, as [`Self::row_band`].
+    #[must_use]
+    pub fn panel_band(&self, row: usize, view: Viewport) -> Option<(f64, f64)> {
+        let (top, height) = self.row_band(row, view)?;
+        let zoom = if view.zoom_y > 0.0 { view.zoom_y } else { 1.0 };
+        let head = self
+            .head_h
+            .get(row)
+            .map_or(height, |h| ((h - DIVIDER).max(0.5) * zoom).min(height));
+        Some((top, head))
+    }
+
+    /// The row drawn pinned in `view`: the row at its top, when it shows
+    /// its lanes and is scrolled part way through them — its head kept at
+    /// the top of the lanes while its takes scroll under it.
+    #[must_use]
+    pub fn pin(&self, view: Viewport) -> Option<Pin> {
+        let zoom = if view.zoom_y > 0.0 { view.zoom_y } else { 1.0 };
+        let view_top = view.scroll_y / zoom;
+        let row = self.visible_rows(view).next()?;
+        let pinned = self.lane_stack(row)?.pinned();
+        let (top, _) = self.slot_of(row)?;
+        let by = crate::lane_stack::pinned_by(top, self.row_height(row), pinned, view_top)?;
+        let ruler = crate::ruler::ruler_h();
+        Some(Pin {
+            row,
+            view: Viewport {
+                scroll_y: (view_top - by) * zoom,
+                height: pinned.mul_add(zoom, ruler),
+                ..view
+            },
+            band: (ruler, pinned.mul_add(zoom, ruler)),
+        })
     }
 
     /// Where row `row`'s automation lanes start and how much room they
@@ -873,7 +930,7 @@ impl Arrangement {
             return None;
         }
         let index = self.row_at_screen(y, view)?;
-        let (top, height) = self.row_band(index, view)?;
+        let (top, height) = self.panel_band(index, view)?;
         let (track, depth) = rows.get(index)?;
         let depth = i32::try_from(*depth).unwrap_or(0);
         // The lane steps, drawn over a theme's row as over the built-in
@@ -928,6 +985,27 @@ impl Arrangement {
         let bottom = (view.scroll_y + view.height) / zoom;
         let range = self.rows_at.between(top, bottom);
         range.start.min(rows)..range.end.min(rows)
+    }
+}
+
+/// A row drawn pinned: its head at the top of the lanes while the view
+/// scrolls through its takes ([`Arrangement::pins`]).
+#[derive(Clone, Copy)]
+pub struct Pin {
+    pub row: usize,
+    /// The view that draws the row's head where it is pinned: scrolled to
+    /// the row's top, as tall as the head — every pass drawn with it lands
+    /// the head in [`Self::band`].
+    pub view: Viewport,
+    /// Where the head is on screen, top to bottom.
+    pub band: (f64, f64),
+}
+
+impl Pin {
+    /// Whether screen `y` is on the pinned head.
+    #[must_use]
+    pub fn holds(&self, y: f64) -> bool {
+        y >= self.band.0 && y < self.band.1
     }
 }
 
@@ -996,7 +1074,7 @@ fn record_panel(
     palette: &Palette,
     font: &crate::text::Font,
     rows: &[(daw_proto::Track, u32)],
-    layout: crate::layout::Layout,
+    heights: Heights<'_>,
     zoom: f64,
     tcp: crate::tcp::Tcp,
 ) -> Panels {
@@ -1018,8 +1096,12 @@ fn record_panel(
 
         let from = command_index(&panel);
         let bar_from = command_index(&bar);
-        let h = layout.height_of(track.height) * zoom;
-        let body = (h - DIVIDER).max(0.5);
+        let h = heights.track.get(index).copied().unwrap_or(0.0) * zoom;
+        // The controls in the row's head; a row showing its lanes is
+        // its tint under them, down past its takes.
+        let head = heights.head.get(index).map_or(h, |head| head * zoom).min(h);
+        let below = (h - head).max(0.0);
+        let body = (head - if below > 0.0 { 0.0 } else { DIVIDER }).max(0.5);
 
         let depth = i32::try_from(*depth).unwrap_or(0);
         if let Some(theme) = theme.as_deref() {
@@ -1063,12 +1145,21 @@ fn record_panel(
                 &mut panel, palette, font, track, depth, y, body, &ancestors, tcp,
             );
         }
+        if below > 0.0 {
+            panel.fill(
+                Fill::NonZero,
+                Affine::IDENTITY,
+                crate::tcp::row_tint(palette, track),
+                None,
+                &Rect::new(0.0, y + head, tcp.width(), y + h - DIVIDER),
+            );
+        }
         panel.fill(
             Fill::NonZero,
             Affine::IDENTITY,
             palette.divider,
             None,
-            &Rect::new(0.0, y + body, tcp.width(), y + h),
+            &Rect::new(0.0, y + h - DIVIDER, tcp.width(), y + h),
         );
 
         // The same row as a band, for when it is too short on screen to
@@ -1078,14 +1169,14 @@ fn record_panel(
             Affine::IDENTITY,
             crate::tcp::row_tint(palette, track),
             None,
-            &Rect::new(0.0, y, tcp.width(), y + body),
+            &Rect::new(0.0, y, tcp.width(), y + h - DIVIDER),
         );
         bar.fill(
             Fill::NonZero,
             Affine::IDENTITY,
             palette.divider,
             None,
-            &Rect::new(0.0, y + body, tcp.width(), y + h),
+            &Rect::new(0.0, y + h - DIVIDER, tcp.width(), y + h),
         );
 
         spans.push(from..command_index(&panel));
@@ -1101,6 +1192,14 @@ fn record_panel(
         bar_spans,
         zoom,
     }
+}
+
+/// How tall each row of the panel is, in session units: the whole track
+/// ([`Arrangement::row_box`]'s) and its head, where the controls are.
+#[derive(Clone, Copy)]
+struct Heights<'a> {
+    track: &'a [f64],
+    head: &'a [f64],
 }
 
 /// One cut of the panel, at one zoom.
@@ -1132,7 +1231,8 @@ impl Arrangement {
         let mut track_h = Vec::with_capacity(rows.len());
         let mut lane_tracks = Vec::with_capacity(rows.len());
         let mut laned_rows = Vec::with_capacity(rows.len());
-        let mut row_slots = Vec::with_capacity(rows.len());
+        let mut row_stacks = Vec::with_capacity(rows.len());
+        let mut head_h = Vec::with_capacity(rows.len());
         let mut y = 0.0_f64;
         let mut stages = architect_telemetry::timing::Stages::start();
         let keys = keys_of(project);
@@ -1173,10 +1273,39 @@ impl Arrangement {
             // Saturating rather than wrapping, because a wrapped index
             // would cull the wrong rows rather than fail.
             let lanes_from = command_index(&lanes);
+            // A track showing its fixed lanes (REAPER 7's, as REAPER draws
+            // them): every lane's items, each in its lane's strip, the
+            // lanes that do not play dimmed — the takes, the comp and the
+            // edit side by side. A shut folder's row is a summary — of
+            // every lane of the tracks under it, lane by lane, once its
+            // `+` has opened them — and a track showing one lane shows the
+            // lane that plays.
+            let opened = row_lanes(project, track);
+            let lanes_shown = opened.is_some();
+            let lane_track = opened.as_ref().unwrap_or(track);
+            let row_items: Vec<&daw_proto::Item> = if lanes_shown {
+                project.lane(&track.guid).iter().collect()
+            } else {
+                project.sounding(track)
+            };
             // The track's own height, or the user's default, floored at
             // something far below REAPER's minimum — see `layout`. The
             // divider lives INSIDE the row, so a 24 track is 24 tall.
-            let h = layout.height_of(track.height);
+            let head = layout.height_of(track.height);
+            // A strip each for the lanes holding something and the one
+            // that plays — not one for every lane number the song has
+            // used, most of them empty — the one that plays at the
+            // track's height and each take a lane tall under it.
+            let stack = if lanes_shown {
+                crate::lane_stack::Stack::new(
+                    lane_track,
+                    row_items.iter().map(|i| i.fixed_lane.unwrap_or(0)),
+                    head,
+                )
+            } else {
+                crate::lane_stack::Stack::default()
+            };
+            let h = if lanes_shown { stack.height() } else { head };
             let body = (h - DIVIDER).max(0.5);
             let stripe = if row % 2 == 0 {
                 palette.row_a
@@ -1218,49 +1347,21 @@ impl Arrangement {
             // row shrinks, so a collapsed session still shows its items
             // as bands rather than as empty lanes.
             let inset = (body * 0.05).clamp(0.0, 2.0);
-            // A track showing its fixed lanes (REAPER 7's, as REAPER draws
-            // them): every lane's items, each in its lane's strip, the
-            // lanes that do not play dimmed — the takes, the comp and the
-            // edit side by side. A shut folder's row is a summary — of
-            // every lane of the tracks under it, lane by lane, once its
-            // `+` has opened them — and a track showing one lane shows the
-            // lane that plays.
-            let opened = row_lanes(project, track);
-            let lanes_shown = opened.is_some();
-            let lane_track = opened.as_ref().unwrap_or(track);
-            let row_items: Vec<&daw_proto::Item> = if lanes_shown {
-                project.lane(&track.guid).iter().collect()
-            } else {
-                project.sounding(track)
-            };
-            // A strip each for the lanes holding something and the one
-            // that plays — not one for every lane number the song has
-            // used, most of them empty.
-            let slots = if lanes_shown {
-                lane_slots(
-                    lane_track,
-                    row_items.iter().map(|i| i.fixed_lane.unwrap_or(0)),
-                )
-            } else {
-                Vec::new()
-            };
-            if lanes_shown {
-                for strip in 1..slots.len() {
-                    let at = crate::num::coord(strip) / crate::num::coord(slots.len());
-                    let line = at.mul_add(body, y);
-                    lanes.fill(
-                        Fill::NonZero,
-                        Affine::IDENTITY,
-                        palette.divider.multiply_alpha(0.6),
-                        None,
-                        &Rect::new(0.0, line - 0.25, project.length_secs.max(1.0), line + 0.25),
-                    );
-                    index.x.push((f64::MIN, f64::MAX));
-                }
+            // The lines between the strips.
+            for at in stack.seams() {
+                let line = at.mul_add(body, y);
+                lanes.fill(
+                    Fill::NonZero,
+                    Affine::IDENTITY,
+                    palette.divider.multiply_alpha(0.6),
+                    None,
+                    &Rect::new(0.0, line - 0.25, project.length_secs.max(1.0), line + 0.25),
+                );
+                index.x.push((f64::MIN, f64::MAX));
             }
             for item in row_items {
                 let band = if lanes_shown {
-                    slot_band(item.fixed_lane.unwrap_or(0), &slots)
+                    stack.band(item.fixed_lane.unwrap_or(0))
                 } else {
                     (0.0, 1.0)
                 };
@@ -1461,7 +1562,8 @@ impl Arrangement {
                     .collect(),
             );
             laned_rows.push(opened);
-            row_slots.push(slots);
+            row_stacks.push(stack);
+            head_h.push(head);
             let slot = h + crate::automation::lanes_height(&track.guid);
             slot_h.push(slot);
             y += slot;
@@ -1477,7 +1579,11 @@ impl Arrangement {
         stages.mark("build.rows_ms");
         // The panel, cut at zoom 1 to start with. `repanel` re-cuts it
         // whenever the vertical zoom moves.
-        let cut = record_panel(palette, font, rows.as_slice(), layout, 1.0, tcp);
+        let heights = Heights {
+            track: &track_h,
+            head: &head_h,
+        };
+        let cut = record_panel(palette, font, rows.as_slice(), heights, 1.0, tcp);
         index.panel = cut.spans;
         index.panel_bar = cut.bar_spans;
         stages.mark("build.panel_ms");
@@ -1493,7 +1599,8 @@ impl Arrangement {
             track_h,
             lane_tracks,
             laned: laned_rows,
-            slots: row_slots,
+            stacks: row_stacks,
+            head_h,
             rows: rows.len(),
             length_secs: project.length_secs,
             bpm: project.bpm,
@@ -2351,13 +2458,12 @@ pub fn hits_overlay(
     // A row showing its lanes: the hits are where they play, on the lane
     // that plays — its strip, not every take's.
     let marks_span = |row: usize| {
-        let slots = scene.lane_slots(row);
         let playing = scene.lanes_shown(row).and_then(crate::lanes::playing);
-        let (Some(lane), false) = (playing, slots.is_empty()) else {
+        let (Some(lane), Some(stack)) = (playing, scene.lane_stack(row)) else {
             return y_span(row);
         };
         let (y, h) = scene.row_box(row)?;
-        let (b0, b1) = slot_band(lane, slots);
+        let (b0, b1) = stack.band(lane);
         let y0 = b0.mul_add(h, y).mul_add(view.zoom_y, oy).max(top);
         let y1 = b1.mul_add(h, y).mul_add(view.zoom_y, oy).min(view.height);
         (y1 > y0).then_some((y0, y1))
@@ -2856,15 +2962,10 @@ pub fn cuts_overlay(
         // A folder showing its lanes: each lane's cuts in its own strip,
         // between its own items — every lane's are by start, not all of
         // them together.
-        let slots = scene.lane_slots(index);
-        let laned = !slots.is_empty();
+        let stack = scene.lane_stack(index);
         let whole = [0_u32];
-        for &lane in if laned { slots } else { &whole } {
-            let band = if laned {
-                slot_band(lane, slots)
-            } else {
-                (0.0, 1.0)
-            };
+        for &lane in stack.map_or(&whole[..], crate::lane_stack::Stack::lanes) {
+            let band = stack.map_or((0.0, 1.0), |stack| stack.band(lane));
             let y0 = band
                 .0
                 .mul_add(h, top)
@@ -2879,7 +2980,7 @@ pub fn cuts_overlay(
                 continue;
             }
             let owned: Vec<daw_proto::Item>;
-            let items: &[daw_proto::Item] = if laned {
+            let items: &[daw_proto::Item] = if stack.is_some() {
                 owned = fold
                     .items
                     .iter()
@@ -4012,14 +4113,17 @@ impl Arrangement {
         palette: &Palette,
         font: &crate::text::Font,
         rows: &[(daw_proto::Track, u32)],
-        layout: crate::layout::Layout,
         zoom: f64,
     ) -> bool {
         let zoom = if zoom > 0.0 { zoom } else { 1.0 };
         if (zoom - self.panel_zoom).abs() < f64::EPSILON {
             return false;
         }
-        let cut = record_panel(palette, font, rows, layout, zoom, self.tcp);
+        let heights = Heights {
+            track: &self.track_h,
+            head: &self.head_h,
+        };
+        let cut = record_panel(palette, font, rows, heights, zoom, self.tcp);
         self.panel = cut.panel;
         self.panel_bar = cut.bar;
         self.index.panel = cut.spans;
@@ -4061,7 +4165,7 @@ impl Arrangement {
             // whether its controls are worth drawing. A row at its full
             // height under a zoom that shrinks it to a fifth of a pixel
             // is a band, whatever the project says about it.
-            let on_screen = self.row_height(row) * zoom;
+            let on_screen = self.head_height(row) * zoom;
             let (scene, index) = if on_screen >= crate::tcp::BAND_BELOW {
                 (&self.panel, &self.index.panel)
             } else {
@@ -4155,7 +4259,7 @@ impl Arrangement {
         let zoom = if view.zoom_y > 0.0 { view.zoom_y } else { 1.0 };
         let mut counts = Counts::default();
         for row in 0..self.index.panel.len() {
-            let on_screen = self.row_height(row) * zoom;
+            let on_screen = self.head_height(row) * zoom;
             let (scene, index) = if on_screen >= crate::tcp::BAND_BELOW {
                 (&self.panel, &self.index.panel)
             } else {
@@ -5035,35 +5139,6 @@ pub fn row_lanes(
             }
         },
     )
-}
-
-/// The lanes a row showing its lanes gives a strip, top to bottom: those
-/// `lanes` holds something on (each item's lane), and the one that plays.
-///
-/// A kit's EDIT lane is lane 35 of a take recorded over and over: a strip
-/// for every lane number was 36 strips, each a sliver.
-#[must_use]
-pub fn lane_slots(track: &daw_proto::Track, lanes: impl Iterator<Item = u32>) -> Vec<u32> {
-    let mut held: Vec<u32> = lanes.chain(crate::lanes::playing(track)).collect();
-    held.sort_unstable();
-    held.dedup();
-    if held.is_empty() {
-        held.push(0);
-    }
-    held
-}
-
-/// Lane `lane`'s strip of a row showing `slots` ([`lane_slots`]), as
-/// fractions of the row; the last strip for a lane it gives none.
-#[must_use]
-pub fn slot_band(lane: u32, slots: &[u32]) -> (f64, f64) {
-    let strip = slots
-        .iter()
-        .position(|s| *s == lane)
-        .unwrap_or_else(|| slots.len().saturating_sub(1));
-    let count = crate::num::coord(slots.len().max(1));
-    let at = crate::num::coord(strip);
-    (at / count, (at + 1.0) / count)
 }
 
 /// Lane `lane` of `count`'s strip of its row, top to bottom, as
