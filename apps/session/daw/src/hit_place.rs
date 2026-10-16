@@ -50,18 +50,18 @@ struct Lanes {
 }
 
 /// An item on a lane and the recording it plays.
-struct Slice {
-    item: daw_proto::Item,
-    file: Option<String>,
-    markers: Vec<StretchMarker>,
+pub(crate) struct Slice {
+    pub(crate) item: daw_proto::Item,
+    pub(crate) file: Option<String>,
+    pub(crate) markers: Vec<StretchMarker>,
 }
 
 impl Slice {
-    fn start(&self) -> f64 {
+    pub(crate) fn start(&self) -> f64 {
         self.item.position.as_seconds()
     }
 
-    fn end(&self) -> f64 {
+    pub(crate) fn end(&self) -> f64 {
         self.start() + self.item.length.as_seconds()
     }
 
@@ -250,24 +250,25 @@ fn read_kit(song: &crate::song::Song, mics: &[Mic], (from, to): (f64, f64)) -> V
         mics.iter()
             .map(|mic| Lanes {
                 edit_lane: mic.edit,
-                edit: lane_of(p, mic, mic.edit, (from, to)),
-                comp: lane_of(p, mic, mic.comp, (from, to)),
+                edit: lane_of(p, &mic.track, mic.edit, (from, to)),
+                comp: lane_of(p, &mic.track, mic.comp, (from, to)),
             })
             .collect()
     })
     .unwrap_or_default()
 }
 
-/// `mic`'s items on `lane` over `from..to`, by start.
-fn lane_of(
+/// `track`'s items on `lane` over `from..to`, by start, each with the
+/// recording it plays — read off the state, nothing asked of the engine.
+pub(crate) fn lane_of(
     p: &daw::standalone::sync::ProjectState,
-    mic: &Mic,
+    track: &str,
     lane: u32,
     (from, to): (f64, f64),
 ) -> Vec<Slice> {
     let mut out: Vec<Slice> = p
         .items_by_track
-        .get(&mic.track)
+        .get(track)
         .into_iter()
         .flatten()
         .filter_map(|guid| p.items.get(guid))

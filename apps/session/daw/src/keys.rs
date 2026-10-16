@@ -49,6 +49,9 @@ pub enum Action {
     /// time selection — from the next (1) or previous (-1) take in its
     /// ranking (`COMP_CYCLE`).
     CompCycle(i32),
+    /// Ctrl+T: comp the selection — or, with none, the whole song — from
+    /// each phrase's best take, as one edit (`COMP_BEST`).
+    CompBest,
     /// Level what is selected (`EDIT_LEVEL`), in Edit mode: for the drums
     /// each selected piece's strokes brought toward one another.
     LevelDrums,
@@ -227,6 +230,7 @@ pub fn action_of(id: &str) -> Action {
         "FTS_LEVEL_DRUMS" => Action::LevelDrums,
         "FTS_COMP_NEXT" => Action::CompCycle(1),
         "FTS_COMP_PREV" => Action::CompCycle(-1),
+        "FTS_COMP_BEST" => Action::CompBest,
         "FTS_QUANTIZE_PANEL" => Action::QuantizePanel,
         "FTS_GAIN_STAGE" => Action::GainStage { clear: false },
         "FTS_GAIN_STAGE_CLEAR" => Action::GainStage { clear: true },
@@ -564,6 +568,7 @@ const BUILTIN: &str = r#"{
       "Alt+l": "FTS_LEVEL_DRUMS",
       "t": "FTS_COMP_NEXT",
       "Shift+t": "FTS_COMP_PREV",
+      "Ctrl+t": "FTS_COMP_BEST",
       "Delete": "40697",
       "Backspace": "40697",
       "Escape": "40020",
@@ -806,6 +811,13 @@ mod tests {
         }
     }
 
+    fn ctrl() -> Modifiers {
+        Modifiers {
+            ctrl: true,
+            ..Modifiers::NONE
+        }
+    }
+
     /// The profile the app ships toggles the Editor on `e`.
     #[test]
     fn the_shipped_profile_toggles_the_editor_on_e() {
@@ -863,6 +875,10 @@ mod tests {
         assert_eq!(
             keys.press(KeyCode::Character("t".into()), shift()),
             vec![Action::CompCycle(-1)]
+        );
+        assert_eq!(
+            keys.press(KeyCode::Character("t".into()), ctrl()),
+            vec![Action::CompBest]
         );
     }
 

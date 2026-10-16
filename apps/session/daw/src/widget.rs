@@ -1759,6 +1759,47 @@ impl ArrangementWidget {
     /// take in its ranking (`COMP_CYCLE`) — the selected hit markers' span
     /// (a fill picked by its hits) first, else the selection — off the
     /// frame, the kit comped as one.
+    /// Ctrl+T: the selection — or, with nothing selected, the whole song —
+    /// comped from each phrase's best take, as one edit, behind the window;
+    /// what it did said in the bottom bar.
+    fn comp_best(&self) -> bool {
+        let spans: Vec<serde_json::Value> = self
+            .scope()
+            .merged()
+            .iter()
+            .map(|s| serde_json::json!({"from": s.from, "to": s.to}))
+            .collect();
+        #[cfg(feature = "native")]
+        {
+            let Some(runtime) = crate::open::runtime() else {
+                return false;
+            };
+            let said = std::sync::Arc::clone(&self.staged);
+            runtime.spawn_blocking(move || {
+                let job = crate::jobs::start("Comping the best takes", 0);
+                let args = serde_json::json!({ "spans": spans });
+                let out = crate::actions::list().run_json("COMP_BEST", args.to_string().as_bytes());
+                drop(job);
+                let text = match &out {
+                    Ok(_) => "comped from the best takes",
+                    Err(e) => {
+                        tracing::warn!(comp.error = %e, "comp: the best takes could not be comped");
+                        "the best takes could not be comped"
+                    }
+                };
+                *said
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(text);
+            });
+            true
+        }
+        #[cfg(not(feature = "native"))]
+        {
+            let _ = spans;
+            false
+        }
+    }
+
     fn comp_cycle(&self, by: i32) -> bool {
         let scope = self.selected_hits_span().map_or_else(
             || self.scope(),
@@ -3265,6 +3306,10 @@ impl ArrangementWidget {
             }
             if let crate::keys::Action::CompCycle(by) = action {
                 handled |= self.comp_cycle(by);
+                continue;
+            }
+            if action == crate::keys::Action::CompBest {
+                handled |= self.comp_best();
                 continue;
             }
             // Editing, Backspace or Delete with hit markers selected puts

@@ -1,5 +1,5 @@
 //! The whole drum edit of a real song, timed end to end: the kit comped
-//! from its best takes phrase by phrase, quantized over the whole song,
+//! from its best takes phrase by phrase in one edit, quantized over the whole song,
 //! then a hand's worth of hits dragged — on a copy of the song, through the
 //! Action List as a model drives it over MCP. Each step's time is reported,
 //! and the edit (comp + quantize + drags) is held to `FTS_BENCH_BUDGET_MS`
@@ -27,9 +27,6 @@ use session_daw::actions::{list, take_window, window_pending};
 use session_daw::arrange_edit::{Editor, Effect, SlipCut, kit_items, seconds_of};
 use session_daw::keys::Action;
 use session_daw::studio::StudioSession;
-
-/// How many bars a comp stretch spans: a phrase.
-const PHRASE_BARS: f64 = 4.0;
 
 /// How many hits a hand drags after the quantize.
 const DRAGS: usize = 20;
@@ -149,49 +146,6 @@ fn round(ms: f64) -> f64 {
     (ms * 10.0).round() / 10.0
 }
 
-/// The song's phrases: each section cut into stretches of about
-/// [`PHRASE_BARS`] bars.
-fn phrases(path: &Path) -> Vec<(String, f64, f64)> {
-    let (sections, _) = run(path, "SESSION_SECTIONS", serde_json::json!({}));
-    let sections = sections
-        .get("sections")
-        .cloned()
-        .unwrap_or(sections)
-        .as_array()
-        .cloned()
-        .unwrap_or_default();
-    let mut out = Vec::new();
-    for s in sections {
-        let (Some(start), Some(end)) = (s["start"].as_f64(), s["end"].as_f64()) else {
-            continue;
-        };
-        let bars = match (s["first_bar"].as_f64(), s["last_bar"].as_f64()) {
-            (Some(a), Some(b)) => (b - a + 1.0).max(1.0),
-            _ => 4.0,
-        };
-        let parts = (bars / PHRASE_BARS).ceil().max(1.0);
-        let step = (end - start) / parts;
-        let name = s["name"].as_str().unwrap_or("?").to_owned();
-        let count = num_traits::ToPrimitive::to_usize(&parts).unwrap_or(1);
-        for k in 0..count {
-            let k = num_traits::ToPrimitive::to_f64(&k).unwrap_or(0.0);
-            out.push((name.clone(), start + k * step, start + (k + 1.0) * step));
-        }
-    }
-    out
-}
-
-/// The best judged take for a stretch, when it is not the one playing.
-fn best_other(ranked: &serde_json::Value) -> Option<String> {
-    let takes = ranked[0]["takes"].as_array()?;
-    let best = takes
-        .iter()
-        .find(|t| t["undetected"] == false && t["empty"] == false)?;
-    (best["current"] != true)
-        .then(|| best["take"].as_str().map(str::to_owned))
-        .flatten()
-}
-
 #[test]
 #[ignore = "edits a real session; set FTS_PERF_SESSION to a copy"]
 fn the_whole_drum_edit_of_a_real_song() {
@@ -238,39 +192,100 @@ fn the_whole_drum_edit_of_a_real_song() {
         });
     }
 
-    // The comp: every phrase from its best judged take.
-    let phrases = phrases(&path);
+    // The comp: every phrase from its best judged take, as one edit (what
+    // Ctrl+T does over the whole song).
     let at = Instant::now();
-    let (mut window, mut calls, mut comped) = (Duration::ZERO, 0usize, 0usize);
-    for (_, from, to) in &phrases {
-        let (ranked, w) = run(
-            &path,
-            "COMP_CANDIDATES",
-            serde_json::json!({ "from": from, "to": to }),
-        );
-        window += w;
-        calls += 1;
-        if let Some(take) = best_other(&ranked) {
-            let (_, w) = run(
-                &path,
-                "COMP_CHOOSE",
-                serde_json::json!({ "from": from, "to": to, "take": take }),
-            );
-            window += w;
-            calls += 1;
-            comped += 1;
-        }
-    }
+    let (said, window) = run(&path, "COMP_BEST", serde_json::json!({}));
+    let comped = said["comped"].as_array().map_or(0, Vec::len);
     steps.push(Step {
         name: "comp",
         ms: at.elapsed().as_secs_f64() * 1e3,
         window_ms: window.as_secs_f64() * 1e3,
-        calls,
+        calls: 1,
         note: format!(
-            "{} phrases, {comped} comped from another take",
-            phrases.len()
+            "{} phrases, {comped} comped from another take, {} item edits",
+            said["phrases"], said["ops"]
         ),
     });
+    // Comped, every phrase plays its best take: nothing left to comp.
+    let (again, _) = run(&path, "COMP_BEST", serde_json::json!({ "dry_run": true }));
+    let left = again["comped"].as_array().cloned().unwrap_or_default();
+    let first = left.first().map(|c| {
+        let (ranked, _) = run(
+            &path,
+            "COMP_CANDIDATES",
+            serde_json::json!({ "from": c["from"], "to": c["to"] }),
+        );
+        let (daw, project) = session_daw::actions::song().expect("the song");
+        let (from, to) = (
+            c["from"].as_f64().unwrap_or(0.0),
+            c["to"].as_f64().unwrap_or(0.0),
+        );
+        let versions = session_daw::hits::takes_over(daw, &project, (from, to));
+        let files: Vec<(String, Vec<String>)> = versions
+            .iter()
+            .map(|v| {
+                (
+                    v.pass.clone(),
+                    v.files.iter().map(|(_, f)| f.clone()).collect(),
+                )
+            })
+            .collect();
+        let chosen = said["comped"]
+            .as_array()
+            .and_then(|all| all.iter().find(|d| d["from"] == c["from"]))
+            .cloned();
+        let _ = files;
+        // What each mic's COMP lane plays at the phrase's middle.
+        let mid = f64::midpoint(from, to);
+        let comp_now: Vec<String> = daw::service::Tracks::all(daw, project.clone())
+            .into_iter()
+            .filter_map(|t| {
+                let comp = session_daw::drum_lanes::lane_named(&t, session_daw::drum_lanes::COMP)?;
+                let there: Vec<String> = daw::service::Items::get_items(
+                    daw,
+                    project.clone(),
+                    daw::service::TrackRef::Guid(t.guid.clone()),
+                )
+                .into_iter()
+                .filter(|i| {
+                    let a = i.position.as_seconds();
+                    a <= mid && mid < a + i.length.as_seconds()
+                })
+                .map(|i| {
+                    let file = daw::service::Takes::get_active_take(
+                        daw,
+                        project.clone(),
+                        daw::service::ItemRef::Guid(i.guid.clone()),
+                    )
+                    .and_then(|t| t.source_file_path)
+                    .and_then(|f| f.rsplit('/').next().map(str::to_owned))
+                    .unwrap_or_default();
+                    format!("lane {:?} {file}", i.fixed_lane)
+                })
+                .collect();
+                let comping = daw::service::Tracks::comping(
+                    daw,
+                    project.clone(),
+                    daw::service::TrackRef::Guid(t.guid.clone()),
+                )
+                .ok()
+                .and_then(|c| c.comp_lane);
+                Some(format!(
+                    "{} (lane named COMP {comp}, comping says {comping:?}): {there:?}",
+                    t.name
+                ))
+            })
+            .take(4)
+            .collect();
+        format!("{c}\nthe first call chose there: {chosen:?}\nthe COMP lanes there: {comp_now:#?}")
+    });
+    assert!(
+        left.is_empty(),
+        "comped, the best takes play; {} phrases still want comping, the first: {}",
+        left.len(),
+        first.unwrap_or_default()
+    );
 
     // The quantize: the whole song, from scratch.
     let at = Instant::now();

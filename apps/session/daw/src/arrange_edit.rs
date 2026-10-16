@@ -1425,6 +1425,7 @@ impl Editor {
             | Action::RevertDrums
             | Action::LevelDrums
             | Action::CompCycle(_)
+            | Action::CompBest
             | Action::QuantizePanel
             | Action::SlipDrums { .. }
             | Action::RestoreDrums { .. }

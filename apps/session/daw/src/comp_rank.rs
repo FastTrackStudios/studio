@@ -121,18 +121,31 @@ fn kit_folder(
 
 /// The drum MIDI over `from..to` as strikes on the kit's pieces (its
 /// pitches learned against the hits); none without a drum MIDI track.
-fn written(
+///
+/// Which pitch is which piece is learned against the takes' own hits as
+/// recorded (`versions`) — never against where the comp plays them now,
+/// which would rank a take differently once the comp around it changed.
+pub(crate) fn written(
     daw: &daw::standalone::Standalone,
     project: &ProjectContext,
     (from, to): (f64, f64),
+    versions: &[crate::hits::TakeVersion],
 ) -> Vec<Strike> {
     let Some(midi) = crate::drum_reference::find_track(daw, project) else {
         return Vec::new();
     };
     let notes = crate::drum_reference::notes(daw, project, &midi);
-    let named: Vec<(String, Vec<f64>)> = crate::actions::kit(daw, project)
-        .iter()
-        .map(|(n, _, h)| (n.clone(), h.iter().map(|h| h.time).collect()))
+    let mut by_piece: std::collections::BTreeMap<&str, Vec<f64>> =
+        std::collections::BTreeMap::new();
+    for (piece, t) in versions.iter().flat_map(|v| v.hits.iter()) {
+        by_piece.entry(piece.as_str()).or_default().push(*t);
+    }
+    let named: Vec<(String, Vec<f64>)> = by_piece
+        .into_iter()
+        .map(|(piece, mut times)| {
+            times.sort_by(f64::total_cmp);
+            (piece.to_owned(), times)
+        })
         .collect();
     let map = crate::drum_reference::learn_map(&notes, &named, 0.030);
     notes
@@ -188,9 +201,82 @@ fn ranking(
     project: &ProjectContext,
     (from, to): (f64, f64),
 ) -> (Vec<TakeRank>, Vec<crate::hits::TakeVersion>) {
-    // One candidate a take — its recording pass. A pass recorded from more
-    // than one place in the song is one take: its recordings' hits merged,
-    // each mic's lanes with them.
+    let versions = versions_over(daw, project, (from, to));
+    let now = current(daw, project, &versions, (from, to));
+    let written = written(daw, project, (from, to), &versions);
+    let line_of = |t: f64| crate::actions::grid_line(daw, project, t, 16);
+    let out = rank_versions(&versions, &written, now.as_deref(), &line_of);
+    (out, versions)
+}
+
+/// `versions` (each with its hits over the stretch) ranked against the
+/// part as `written` there: the judged first, best first; then the
+/// unjudged; the empty last. `now` is the take the comp plays there.
+pub(crate) fn rank_versions(
+    versions: &[crate::hits::TakeVersion],
+    written: &[Strike],
+    now: Option<&str>,
+    line_of: &dyn Fn(f64) -> f64,
+) -> Vec<TakeRank> {
+    let candidates: Vec<Candidate> = versions
+        .iter()
+        .map(|v| Candidate {
+            take: v.pass.clone(),
+            hits: v
+                .hits
+                .iter()
+                .map(|(piece, t)| Strike {
+                    piece: piece.clone(),
+                    t: *t,
+                })
+                .collect(),
+        })
+        .collect();
+    let lane_of = |pass: &str| {
+        versions
+            .iter()
+            .find(|v| v.pass == pass)
+            .and_then(|v| v.lane.clone())
+            .unwrap_or_default()
+    };
+    let undetected = |pass: &str| {
+        versions
+            .iter()
+            .find(|v| v.pass == pass)
+            .is_some_and(|v| !v.detected)
+    };
+    let mut out: Vec<TakeRank> = editing::comp::rank(&candidates, written, line_of)
+        .into_iter()
+        .map(|r: Ranked| {
+            let never = undetected(&r.take);
+            TakeRank {
+                current: now == Some(r.take.as_str()),
+                lane: lane_of(&r.take),
+                pass: r.take.clone(),
+                // Not found is not empty: unjudged, still to listen to.
+                empty: r.empty && !never,
+                undetected: never,
+                take: r.take,
+                score: r.score,
+                hits: u32::try_from(r.hits).unwrap_or(u32::MAX),
+                coverage: r.coverage,
+                spread_ms: r.spread_ms,
+                feel_ms: r.feel_ms,
+            }
+        })
+        .collect();
+    out.sort_by_key(|t| u8::from(t.undetected) + 2 * u8::from(t.empty));
+    out
+}
+
+/// Every take of the kit over `from..to`, one a recording pass: a pass
+/// recorded from more than one place in the song is one take, its
+/// recordings' hits merged (by time), each mic's lanes with them.
+pub(crate) fn versions_over(
+    daw: &daw::standalone::Standalone,
+    project: &ProjectContext,
+    (from, to): (f64, f64),
+) -> Vec<crate::hits::TakeVersion> {
     let mut versions: Vec<crate::hits::TakeVersion> = Vec::new();
     for v in crate::hits::takes_over(daw, project, (from, to)) {
         if v.lanes.is_empty() {
@@ -209,61 +295,14 @@ fn ranking(
     for v in &mut versions {
         v.hits.sort_by(|a, b| a.1.total_cmp(&b.1));
     }
-    let now = current(daw, project, &versions, (from, to));
-    let candidates: Vec<Candidate> = versions
-        .iter()
-        .filter_map(|v| {
-            Some(Candidate {
-                take: v.pass.clone(),
-                hits: v
-                    .hits
-                    .iter()
-                    .map(|(piece, t)| Strike {
-                        piece: piece.clone(),
-                        t: *t,
-                    })
-                    .collect(),
-            })
-        })
-        .collect();
-    let written = written(daw, project, (from, to));
-    let line_of = |t: f64| crate::actions::grid_line(daw, project, t, 16);
-    let lane_of = |pass: &str| {
-        versions
-            .iter()
-            .find(|v| v.pass == pass)
-            .and_then(|v| v.lane.clone())
-            .unwrap_or_default()
-    };
-    let undetected = |pass: &str| {
-        versions
-            .iter()
-            .find(|v| v.pass == pass)
-            .is_some_and(|v| !v.detected)
-    };
-    let mut out: Vec<TakeRank> = editing::comp::rank(&candidates, &written, &line_of)
-        .into_iter()
-        .map(|r: Ranked| {
-            let never = undetected(&r.take);
-            TakeRank {
-                current: now.as_deref() == Some(r.take.as_str()),
-                lane: lane_of(&r.take),
-                pass: r.take.clone(),
-                // Not found is not empty: unjudged, still to listen to.
-                empty: r.empty && !never,
-                undetected: never,
-                take: r.take,
-                score: r.score,
-                hits: u32::try_from(r.hits).unwrap_or(u32::MAX),
-                coverage: r.coverage,
-                spread_ms: r.spread_ms,
-                feel_ms: r.feel_ms,
-            }
-        })
-        .collect();
-    // The judged first, best first; then the unjudged; the empty last.
-    out.sort_by_key(|t| u8::from(t.undetected) + 2 * u8::from(t.empty));
-    (out, versions)
+    versions
+}
+
+/// The kept ranking forgotten: the comp changed under it.
+pub(crate) fn forget() {
+    if let Ok(mut last) = LAST.lock() {
+        *last = None;
+    }
 }
 
 /// Comp the kit from `take` over `from..to` — each mic from its own lane

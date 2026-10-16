@@ -127,6 +127,7 @@ fn id_and_args(action: &Action) -> Option<(&'static str, String)> {
         Action::LevelDrums => (LEVEL_DRUMS.id, String::new()),
         Action::CompCycle(by) if *by < 0 => (COMP_PREV.id, String::new()),
         Action::CompCycle(_) => (COMP_NEXT.id, String::new()),
+        Action::CompBest => (COMP_BEST_KEY.id, String::new()),
         Action::QuantizePanel => (QUANTIZE_PANEL.id, String::new()),
         Action::GainStage { clear: false } => (GAIN_STAGE.id, String::new()),
         Action::GainStage { clear: true } => (GAIN_STAGE_CLEAR.id, String::new()),
@@ -334,6 +335,14 @@ static COMP_NEXT: ActionMeta = meta(
     "COMP_CYCLE over the selection — a fill's hit markers, rows, a razor, a time selection — the next take in its ranking comped onto the kit.",
     "Edit",
     "T",
+);
+static COMP_BEST_KEY: ActionMeta = meta(
+    "SESSION_COMP_BEST",
+    "comp_best_selection",
+    "Comp the best takes",
+    "COMP_BEST over the selection — or the whole song with nothing selected: each phrase comped from its best take, as one edit.",
+    "Edit",
+    "Ctrl+T",
 );
 static COMP_PREV: ActionMeta = meta(
     "SESSION_COMP_PREV",
@@ -577,7 +586,7 @@ fn register_window(list: &ActionList) {
         crate::quantize_panel::ask();
         Ok("the Quantize panel shown, or hidden if it was".to_owned())
     });
-    let plain: [(&'static ActionMeta, Effect, Action); 20] = [
+    let plain: [(&'static ActionMeta, Effect, Action); 21] = [
         (&PLAY_STOP, Effect::Mutating, Action::PlayStop),
         (&PLAY_PAUSE, Effect::Mutating, Action::PlayPause),
         (&GO_TO_START, Effect::Mutating, Action::GoToStart),
@@ -588,6 +597,7 @@ fn register_window(list: &ActionList) {
         (&LEVEL_DRUMS, Effect::Mutating, Action::LevelDrums),
         (&COMP_NEXT, Effect::Mutating, Action::CompCycle(1)),
         (&COMP_PREV, Effect::Mutating, Action::CompCycle(-1)),
+        (&COMP_BEST_KEY, Effect::Mutating, Action::CompBest),
         (
             &GAIN_STAGE,
             Effect::Mutating,
@@ -918,8 +928,8 @@ pub(crate) struct SectionOut {
     pub(crate) name: String,
     pub(crate) start: f64,
     pub(crate) end: f64,
-    first_bar: i32,
-    last_bar: i32,
+    pub(crate) first_bar: i32,
+    pub(crate) last_bar: i32,
 }
 
 /// The song's sections, in order.
@@ -1106,6 +1116,7 @@ fn register_data(list: &ActionList) {
     crate::edit_actions::register(list);
     crate::perf::register(list);
     crate::comp_rank::register(list);
+    crate::comp_song::register(list);
     crate::bar_step::register(list);
     crate::poi::register(list);
     crate::track_regions::register(list);
