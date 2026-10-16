@@ -437,9 +437,12 @@ pub fn fetch() -> Option<daw_ui::studio::project::Project> {
         .enable_all()
         .build()
         .ok()?;
+    let mut stages = architect_telemetry::timing::Stages::start();
     let project = rt.block_on(daw_ui::studio::project::fetch())?;
+    stages.mark("fetch.read_ms");
     if crate::open::local_engine().is_some() {
         crate::automation::refresh(&project.tracks);
+        stages.mark("fetch.automation_ms");
     } else {
         // The engine is elsewhere: its lanes through the facade.
         let (lanes, takes) = rt.block_on(crate::automation::read_remote(&project.tracks));
@@ -497,7 +500,9 @@ pub fn plan_rows_with(
     scene: Option<&str>,
     kinds: &crate::plan::Kinds,
 ) -> (ProjectRef, RowsRef) {
+    let mut stages = architect_telemetry::timing::Stages::start();
     let project = ProjectRef(Arc::new(raw.clone()));
+    stages.mark("plan.clone_ms");
     let (visible, depths) =
         daw_ui::components::folders::FolderState::default().visible(&project.tracks);
     let mut planned: Vec<(daw_proto::Track, u32)> = visible.into_iter().zip(depths).collect();
@@ -523,6 +528,7 @@ pub fn plan_rows_with(
     }
     // And the folders the window shut (`crate::folds`), over the scene's.
     planned = crate::folds::apply(planned);
+    stages.mark("plan.rows_ms");
     // A folder the scene shut keeps its row and gets its children's items,
     // folded: the mix happens on the folder, so its name, fader and colour
     // stay, and so does what is in it.
@@ -538,9 +544,11 @@ pub fn plan_rows_with(
             settings.folded_takes,
             &|tracks, folder| crate::lanes::folder_view(tracks, folder).is_some(),
         );
+        stages.mark("plan.refold_ms");
         if !crate::folds::cuts_shown() {
             daw_ui::studio::folded::join_seams(folded);
         }
+        stages.mark("plan.join_ms");
     }
     (project, RowsRef(Arc::new(planned)))
 }

@@ -133,38 +133,42 @@ pub fn spans(children: &[&[Item]]) -> Vec<Span> {
     edges.sort_by(f64::total_cmp);
     edges.dedup_by(|a, b| (*a - *b).abs() < GRAIN);
 
-    let mut out: Vec<Span> = Vec::new();
-    for pair in edges.windows(2) {
-        let (start, end) = (pair[0], pair[1]);
-        if end - start < GRAIN {
-            continue;
-        }
-        // Who covers the MIDDLE, not who touches an edge: an item that
-        // ends exactly where this span starts is not sounding in it.
-        let middle = f64::midpoint(start, end);
-        let mut from = Vec::new();
-        let mut whole = true;
-        for lane in children {
-            for item in *lane {
-                let at = item.position.as_seconds();
-                let to = at + item.length.as_seconds();
-                if at < middle && middle < to {
-                    whole &= (at - start).abs() < GRAIN && (to - end).abs() < GRAIN;
-                    from.push(item.guid.clone());
-                }
+    // Who covers each span's MIDDLE, not who touches an edge: an item
+    // that ends exactly where a span starts is not sounding in it. Each
+    // item finds the spans it covers by their middles, sorted as the edges
+    // are: a sweep, not every item asked about every span (the kit's 27k
+    // items took 220 ms that way).
+    let middles: Vec<f64> = edges
+        .windows(2)
+        .map(|pair| f64::midpoint(pair[0], pair[1]))
+        .collect();
+    let mut from: Vec<Vec<String>> = vec![Vec::new(); middles.len()];
+    let mut whole: Vec<bool> = vec![true; middles.len()];
+    for lane in children {
+        for item in *lane {
+            let at = item.position.as_seconds();
+            let to = at + item.length.as_seconds();
+            let first = middles.partition_point(|m| *m <= at);
+            let past = middles.partition_point(|m| *m < to);
+            for k in first..past {
+                let (start, end) = (edges[k], edges[k + 1]);
+                whole[k] &= (at - start).abs() < GRAIN && (to - end).abs() < GRAIN;
+                from[k].push(item.guid.clone());
             }
         }
-        if from.is_empty() {
-            continue;
-        }
-        out.push(Span {
-            start,
-            end,
+    }
+    edges
+        .windows(2)
+        .zip(from)
+        .zip(whole)
+        .filter(|((pair, from), _)| pair[1] - pair[0] >= GRAIN && !from.is_empty())
+        .map(|((pair, from), whole)| Span {
+            start: pair[0],
+            end: pair[1],
             from,
             whole,
-        });
-    }
-    out
+        })
+        .collect()
 }
 
 /// The folded spans as items on the folder's own row.
@@ -593,6 +597,74 @@ mod tests {
             length: Duration::from_seconds(len),
             ..Item::default()
         }
+    }
+
+    /// The sweep answers as asking every item about every span did: on
+    /// lanes of slices that overlap, abut and leave gaps, the same spans,
+    /// folded from the same items in the same order.
+    #[test]
+    fn the_sweep_is_the_scan() {
+        let scan = |children: &[&[Item]]| -> Vec<Span> {
+            let mut edges: Vec<f64> = children
+                .iter()
+                .flat_map(|lane| lane.iter())
+                .flat_map(|i| {
+                    let at = i.position.as_seconds();
+                    [at, at + i.length.as_seconds()]
+                })
+                .collect();
+            edges.sort_by(f64::total_cmp);
+            edges.dedup_by(|a, b| (*a - *b).abs() < super::GRAIN);
+            edges
+                .windows(2)
+                .filter(|p| p[1] - p[0] >= super::GRAIN)
+                .filter_map(|p| {
+                    let (start, end) = (p[0], p[1]);
+                    let middle = f64::midpoint(start, end);
+                    let mut from = Vec::new();
+                    let mut whole = true;
+                    for i in children.iter().flat_map(|lane| lane.iter()) {
+                        let at = i.position.as_seconds();
+                        let to = at + i.length.as_seconds();
+                        if at < middle && middle < to {
+                            whole &= (at - start).abs() < super::GRAIN
+                                && (to - end).abs() < super::GRAIN;
+                            from.push(i.guid.clone());
+                        }
+                    }
+                    (!from.is_empty()).then_some(Span {
+                        start,
+                        end,
+                        from,
+                        whole,
+                    })
+                })
+                .collect()
+        };
+        // A few mics' worth of slices, cut at pseudo-random places.
+        let mut seed = 0x2545_f491_u64;
+        let mut next = move || {
+            seed ^= seed << 13;
+            seed ^= seed >> 7;
+            seed ^= seed << 17;
+            (seed % 1000) as f64 / 1000.0
+        };
+        let lanes: Vec<Vec<Item>> = (0..6)
+            .map(|mic| {
+                let mut at = 0.0;
+                (0..500)
+                    .map(|n| {
+                        let len = 0.05 + next() * 0.4;
+                        let slice = item(&format!("{mic}-{n}"), at, len);
+                        // Overlap (a crossfade), abut, or leave a gap.
+                        at += len + (next() - 0.3) * 0.05;
+                        slice
+                    })
+                    .collect()
+            })
+            .collect();
+        let children: Vec<&[Item]> = lanes.iter().map(Vec::as_slice).collect();
+        assert_eq!(spans(&children), scan(&children));
     }
 
     /// Touching spans are one, folded from each guid once, in the order

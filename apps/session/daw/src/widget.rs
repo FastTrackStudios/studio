@@ -2202,10 +2202,15 @@ impl ArrangementWidget {
     /// filled rather than empty.
     #[cfg(feature = "native")]
     fn resync(&mut self) {
+        // One timed unit (`PERF_RECENT {name: "window.resync"}`).
+        let span = tracing::info_span!("window.resync");
+        let _entered = span.enter();
+        let mut stages = architect_telemetry::timing::Stages::start();
         let Some(fresh) = crate::studio::fetch() else {
             tracing::warn!("the session could not be read back from the engine");
             return;
         };
+        stages.mark("resync.fetch_ms");
         let unread = unread_midi(&fresh, &self.previews);
         if !unread.is_empty() {
             self.previews.fill_blocking(unread);
@@ -2221,7 +2226,9 @@ impl ArrangementWidget {
             let previews = self.previews.clone();
             crate::wave_pool::spawn(move || previews.fill_waves_blocking(waves));
         }
+        stages.mark("resync.previews_ms");
         self.adopt(fresh);
+        stages.mark("resync.adopt_ms");
     }
 
     /// [`Self::resync`] in a page, which cannot block on the engine: the
@@ -2255,8 +2262,11 @@ impl ArrangementWidget {
             return;
         };
         *raw.borrow_mut() = fresh;
+        let mut stages = architect_telemetry::timing::Stages::start();
         let (project, rows) = planner.plan(&raw.borrow());
+        stages.mark("adopt.plan_ms");
         self.restructure((*project.0).clone(), rows.as_slice().to_vec());
+        stages.mark("adopt.restructure_ms");
         // The engine changed the session: a slice moved is a hit moved.
         crate::hit_overlay::refresh();
     }
@@ -2277,7 +2287,9 @@ impl ArrangementWidget {
         project: daw_ui::studio::project::Project,
         rows: Vec<(daw_proto::Track, u32)>,
     ) {
+        let mut stages = architect_telemetry::timing::Stages::start();
         crate::tcp::fit_names(&self.font, &rows, self.layout);
+        stages.mark("restructure.names_ms");
         self.tracks = rows.iter().map(|(t, _)| t.clone()).collect();
         self.map = crate::plan::Rows::of(&rows, &self.tracks);
         self.content_h.set(
@@ -2290,8 +2302,11 @@ impl ArrangementWidget {
         self.hovered_item = None;
         self.turning = None;
         self.pointer = crate::pointer::Pointer::default();
+        stages.mark("restructure.rows_ms");
         self.recut();
+        stages.mark("restructure.recut_ms");
         self.publish_rows();
+        stages.mark("restructure.publish_ms");
     }
 
     /// Link to a docked mixer: the rows go to it (now, and on every
@@ -3359,6 +3374,8 @@ impl ArrangementWidget {
         let project = daw_ui::studio::ProjectRef(std::sync::Arc::new(self.project.clone()));
         // A view setting, not the session's: an edit must not reset it.
         let lettering = self.scene.lettering;
+        let mut stages = architect_telemetry::timing::Stages::start();
+        stages.mark("recut.clone_ms");
         self.scene = Arrangement::build(
             &self.palette,
             &self.font,
@@ -3372,6 +3389,7 @@ impl ArrangementWidget {
                 mixing: self.mixing.get(),
             },
         );
+        stages.mark("recut.build_ms");
         self.scene.lettering = lettering;
         self.sections = self.project.sections.clone();
         self.markers = self.project.markers.clone();

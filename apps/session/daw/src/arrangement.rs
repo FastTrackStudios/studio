@@ -1134,9 +1134,13 @@ impl Arrangement {
         let mut laned_rows = Vec::with_capacity(rows.len());
         let mut row_slots = Vec::with_capacity(rows.len());
         let mut y = 0.0_f64;
+        let mut stages = architect_telemetry::timing::Stages::start();
         let keys = keys_of(project);
+        stages.mark("build.keys_ms");
         let roles = kit_roles(project);
+        stages.mark("build.roles_ms");
         let versions = track_versions(project);
+        stages.mark("build.versions_ms");
         // Every item by guid, for the shut folders' rows to find what is
         // under them — built only when some folder is shut.
         let by_guid: std::collections::HashMap<&str, &daw_proto::Item> = if project.folds.is_empty()
@@ -1150,7 +1154,9 @@ impl Arrangement {
                 .map(|item| (item.guid.as_str(), item))
                 .collect()
         };
+        stages.mark("build.by_guid_ms");
         let loudest = folder_loudest(project, &by_guid, previews);
+        stages.mark("build.loudest_ms");
         for (row, (track, depth)) in rows.iter().enumerate() {
             // A folder closes simply by the next row being shallower,
             // so the truncate IS the close.
@@ -1455,11 +1461,13 @@ impl Arrangement {
             "one x extent per lane command"
         );
 
+        stages.mark("build.rows_ms");
         // The panel, cut at zoom 1 to start with. `repanel` re-cuts it
         // whenever the vertical zoom moves.
         let cut = record_panel(palette, font, rows.as_slice(), layout, 1.0, tcp);
         index.panel = cut.spans;
         index.panel_bar = cut.bar_spans;
+        stages.mark("build.panel_ms");
 
         Self {
             tcp,
