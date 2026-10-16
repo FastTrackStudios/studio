@@ -8,6 +8,8 @@
 //! - [`quantize`]: which line a played event goes to, what moves together,
 //!   how a run keeps its order, and how a slip moves what is in it.
 //! - [`level`]: leveling a stretch of a part, the curve kept outside it.
+//! - [`placement`]: where the recording plays once its hits are moved —
+//!   cut only where a shift changes, natural audio before any stretch.
 //! - [`groove`]: a section's groove learned from its own bars.
 //! - [`written`]: a played part matched to the part as written.
 //! - [`settings`]: a quantize's settings and a call's patch over them.
@@ -24,6 +26,7 @@ pub mod comp;
 pub mod drums;
 pub mod groove;
 pub mod level;
+pub mod placement;
 pub mod quantize;
 pub mod scope;
 pub mod settings;
