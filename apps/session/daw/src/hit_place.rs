@@ -85,6 +85,7 @@ pub fn place(
     moves: &[(f64, f64)],
     joins: Joins,
 ) -> Result<usize, String> {
+    let mut stages = architect_telemetry::timing::Stages::start();
     let moved: Vec<(f64, f64)> = moves.iter().copied().filter(|m| m.1.abs() > 1e-6).collect();
     if moved.is_empty() {
         return Ok(0);
@@ -170,12 +171,16 @@ pub fn place(
         ));
     }
 
+    stages.mark("place.plan_ms");
     daw::service::Projects::begin_undo_block(daw, project.clone(), "Place a drum hit");
+    stages.mark("place.undo_begin_ms");
     let rendered = mics
         .iter()
         .map(|mic| render(daw, project, mic, &pieces, (start, end), joins))
         .sum::<Result<usize, daw_proto::DawError>>();
+    stages.mark("place.render_ms");
     daw::service::Projects::end_undo_block(daw, project.clone(), "Place a drum hit", None);
+    stages.mark("place.undo_end_ms");
     rendered.map_err(|e| e.to_string())
 }
 
