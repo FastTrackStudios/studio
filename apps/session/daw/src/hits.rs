@@ -212,11 +212,40 @@ pub fn kit(
     project: &ProjectContext,
 ) -> (Vec<KitPiece>, Vec<String>) {
     let tracks = Tracks::all(daw, project.clone());
-    let has_items = |guid: &str| {
-        !daw.get_items(project.clone(), TrackRef::Guid(guid.to_owned()))
-            .is_empty()
+    let pieces = crate::drum_reference::pieces(daw, project);
+    // Which tracks hold items: one look, not every track's items copied.
+    let filled: Option<std::collections::HashSet<String>> = match project {
+        ProjectContext::Project(guid) => daw.read_project(guid, |p| {
+            p.items_by_track
+                .iter()
+                .filter(|(_, items)| !items.is_empty())
+                .map(|(track, _)| track.clone())
+                .collect()
+        }),
+        ProjectContext::Current => None,
     };
-    let pieces: Vec<KitPiece> = crate::drum_reference::pieces(daw, project)
+    let has_items = |guid: &str| {
+        filled.as_ref().map_or_else(
+            || {
+                !daw.get_items(project.clone(), TrackRef::Guid(guid.to_owned()))
+                    .is_empty()
+            },
+            |filled| filled.contains(guid),
+        )
+    };
+    kit_from(&tracks, pieces, &has_items)
+}
+
+/// The kit of `tracks`: each of `pieces` (name, trigger track) with its
+/// close mics that hold items (`has_items`), and the hats and rides in the
+/// Drums folder no piece claims.
+#[must_use]
+pub fn kit_from(
+    tracks: &[daw_proto::Track],
+    pieces: Vec<(String, String)>,
+    has_items: &dyn Fn(&str) -> bool,
+) -> (Vec<KitPiece>, Vec<String>) {
+    let pieces: Vec<KitPiece> = pieces
         .into_iter()
         .filter_map(|(name, trigger)| {
             let parent = tracks
@@ -1819,7 +1848,7 @@ fn stretches(
 
 /// Where in its take `source` plays, through `markers` (by position): `None`
 /// with fewer than two, or outside them.
-fn stretched(markers: &[daw_proto::StretchMarker], source: f64) -> Option<f64> {
+pub(crate) fn stretched(markers: &[daw_proto::StretchMarker], source: f64) -> Option<f64> {
     markers.windows(2).find_map(|pair| {
         let [a, b] = pair else { return None };
         let span = b.source_position - a.source_position;
@@ -1833,6 +1862,20 @@ fn stretched(markers: &[daw_proto::StretchMarker], source: f64) -> Option<f64> {
 /// that both play it is here twice, one cut away is not here at all.
 #[must_use]
 pub fn playback(daw: &daw::standalone::Standalone, project: &ProjectContext) -> Vec<Played> {
+    // The song's index, kept up to date from the journal — when the song is
+    // this process's engine's (`daw` is the one engine a process runs).
+    if let Some(song) = crate::hit_index::song_of(project)
+        && std::ptr::eq(song.daw(), daw)
+    {
+        return crate::hit_index::playback(&song).as_ref().clone();
+    }
+    playback_scan(daw, project)
+}
+
+/// [`playback`] read item by item from the engine: every slice of the kit
+/// looked at again — what the index is checked against.
+#[must_use]
+pub fn playback_scan(daw: &daw::standalone::Standalone, project: &ProjectContext) -> Vec<Played> {
     let (pieces, _) = kit(daw, project);
     let mut out = Vec::new();
     for piece in &pieces {
