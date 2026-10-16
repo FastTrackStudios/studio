@@ -10,10 +10,10 @@
 //! lane and placed again from its COMP lane, piece by piece. A hit moved
 //! back is the recording again, uncut.
 
-use daw::service::{ProjectContext, Tracks as _};
+use daw::service::Tracks as _;
 use daw::standalone::item_ops::ItemOp;
 use daw_proto::StretchMarker;
-use daw_proto::id::{ItemId, ProjectId};
+use daw_proto::id::ItemId;
 use editing::placement::{self, Hit, Piece};
 
 use crate::drum_lanes::{COMP, EDIT, lane_named};
@@ -89,8 +89,7 @@ impl Slice {
 /// When the kit has no mic with both lanes, a hit is not on an EDIT
 /// slice, or the engine refuses an edit.
 pub fn place(
-    daw: &daw::standalone::Standalone,
-    project: &ProjectContext,
+    song: &crate::song::Song,
     moves: &[(f64, f64)],
     joins: Joins,
 ) -> Result<usize, String> {
@@ -99,15 +98,11 @@ pub fn place(
     if moved.is_empty() {
         return Ok(0);
     }
-    let ProjectContext::Project(song) = project else {
-        return Err("a placement needs its song named".to_owned());
-    };
-    let song = ProjectId::from(song.as_str());
-    let mics = mics(daw, project);
+    let mics = mics(song);
     if mics.is_empty() {
         return Err("no mic of the kit has COMP and EDIT lanes".to_owned());
     }
-    let mut hits: Vec<f64> = crate::hits::playback(daw, project)
+    let mut hits: Vec<f64> = crate::hits::playback(song.daw(), &song.context())
         .iter()
         .map(|p| p.time)
         .collect();
@@ -137,7 +132,7 @@ pub fn place(
     // Every mic's lanes around it, read at once: a slice reached from as
     // far as a move goes, either side.
     let reach = moved.iter().map(|m| m.1.abs()).fold(0.0, f64::max) + READ_MARGIN;
-    let kit = read_kit(daw, &song, &mics, (near - reach, far + reach));
+    let kit = read_kit(song, &mics, (near - reach, far + reach));
     let reference = kit.first().ok_or("the kit could not be read")?;
     stages.mark("place.read_ms");
 
@@ -198,11 +193,9 @@ pub fn place(
         .collect();
     stages.mark("place.plan_ms");
 
-    daw::service::Projects::begin_undo_block(daw, project.clone(), "Place a drum hit");
-    let applied = daw.apply_items(&song, &ops);
-    daw::service::Projects::end_undo_block(daw, project.clone(), "Place a drum hit", None);
+    song.undo_step("Place a drum hit", |song| song.apply(&ops))
+        .map_err(|e| e.to_string())?;
     stages.mark("place.apply_ms");
-    applied.map_err(|e| e.to_string())?;
     Ok(ops.len())
 }
 
@@ -214,13 +207,14 @@ const READ_MARGIN: f64 = 4.0;
 /// COMP and an EDIT lane. A kit edited on the items it plays, without the
 /// lanes, has no recording kept to place from.
 #[must_use]
-pub fn ready(daw: &daw::standalone::Standalone, project: &ProjectContext) -> bool {
-    !mics(daw, project).is_empty()
+pub fn ready(song: &crate::song::Song) -> bool {
+    !mics(song).is_empty()
 }
 
 /// Every track with both a COMP and an EDIT lane: the kit's mics.
-fn mics(daw: &daw::standalone::Standalone, project: &ProjectContext) -> Vec<Mic> {
-    daw.all(project.clone())
+fn mics(song: &crate::song::Song) -> Vec<Mic> {
+    song.daw()
+        .all(song.context())
         .into_iter()
         .filter_map(|t| {
             Some(Mic {
@@ -235,13 +229,8 @@ fn mics(daw: &daw::standalone::Standalone, project: &ProjectContext) -> Vec<Mic>
 /// Every mic's EDIT and COMP lanes over `from..to`, each slice with the
 /// recording it plays — read in one look at the engine, nothing copied but
 /// the slices there.
-fn read_kit(
-    daw: &daw::standalone::Standalone,
-    song: &ProjectId,
-    mics: &[Mic],
-    (from, to): (f64, f64),
-) -> Vec<Lanes> {
-    daw.read_project(song.as_str(), |p| {
+fn read_kit(song: &crate::song::Song, mics: &[Mic], (from, to): (f64, f64)) -> Vec<Lanes> {
+    song.read(|p| {
         mics.iter()
             .map(|mic| Lanes {
                 edit_lane: mic.edit,

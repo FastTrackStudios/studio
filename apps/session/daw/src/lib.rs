@@ -244,6 +244,7 @@ pub mod setup;
 pub mod shell;
 pub mod simulate;
 pub mod skin;
+pub mod song;
 pub mod song_bars;
 pub mod song_chart;
 pub mod strip;

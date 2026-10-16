@@ -2839,11 +2839,11 @@ fn register_track_set(list: &ActionList) {
     });
 }
 
-/// The engine and the open song.
+/// The engine and the open song, as a pair — for the call sites not yet
+/// on [`crate::song::Song`], which new code takes instead.
 pub fn song() -> Result<(&'static daw::standalone::Standalone, ProjectContext), String> {
-    let daw = crate::open::local_engine().ok_or("no song open in this window's engine")?;
-    let guid = crate::open::current_song().ok_or("no song open")?;
-    Ok((daw, ProjectContext::Project(guid)))
+    let song = crate::song::Song::current()?;
+    Ok((song.daw(), song.context()))
 }
 
 /// A track by its GUID, its path (`Kick/Sum/Trig`, any tail of it) or its
@@ -4680,7 +4680,8 @@ fn register_place(list: &ActionList) {
             // back is the recording again, and nothing is drawn out
             // unless nothing else can fill a gap. A kit without its
             // recording kept on lanes is slipped where it plays.
-            if !crate::hit_place::ready(daw, &project) {
+            let song = crate::song::Song::current()?;
+            if !crate::hit_place::ready(&song) {
                 let ticket = slip_now(daw, &project, &settings, cuts);
                 stages.mark("edit.slip_ms");
                 landed(ticket);
@@ -4699,7 +4700,7 @@ fn register_place(list: &ActionList) {
                 lead: settings.lead_ms / 1_000.0,
                 crossfade: settings.xfade_ms / 1_000.0,
             };
-            crate::hit_place::place(daw, &project, &moves, joins)?;
+            crate::hit_place::place(&song, &moves, joins)?;
             stages.mark("edit.place_ms");
             crate::studio::request_resync_items();
             crate::hit_overlay::refresh();
