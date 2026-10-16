@@ -1414,26 +1414,28 @@ impl Arrangement {
                 if lanes_shown {
                     note_lane_take(&mut lane_take, item.fixed_lane.unwrap_or(0), numbered);
                 }
-                // On a row showing its lanes, each take in its own colour:
-                // "the blue take".
-                let color = match numbered {
-                    Some(i) if lanes_shown => crate::take_colors::swatch(i).1,
-                    _ => item_color(item, track_color, tcp.mixing),
-                };
+                // On a row showing its lanes, each take's body in its own
+                // colour — "the blue take" — and its waveform as ever, the
+                // kick red and the snare blue in every take.
+                let ink = item_color(item, track_color, tcp.mixing);
+                let take_body = numbered
+                    .filter(|_| lanes_shown)
+                    .map(|i| crate::take_colors::swatch(i).1);
+                let color = take_body.unwrap_or(ink);
                 // A lane that does not play is there to be chosen from,
                 // not heard: drawn faint.
-                let color = if plays {
-                    color
-                } else {
-                    color.multiply_alpha(0.45)
-                };
+                let faint = |c: Color| if plays { c } else { c.multiply_alpha(0.45) };
+                let (color, ink) = (faint(color), faint(ink));
                 // The body, dimmed, and the waveform over it in the
                 // full colour: the item is read by its waveform, and a
                 // solid block of colour was a waveform you could not
                 // see through.
                 // A shut folder's body fainter still: its waveform is a
                 // summary of every track under it, read against the lane.
-                let alpha = if daw_ui::studio::folded::parse_guid(&item.guid).is_some() {
+                // A take's body stronger: its colour is how it is named.
+                let alpha = if take_body.is_some() {
+                    TAKE_BODY
+                } else if daw_ui::studio::folded::parse_guid(&item.guid).is_some() {
                     body_alpha() * FOLDER_BODY
                 } else {
                     body_alpha()
@@ -1530,17 +1532,12 @@ impl Arrangement {
                         color,
                     };
                     let drawn: Vec<LaneWave> = if held.layers.is_empty() {
-                        vec![lane(whole, color, held.sources, None)]
+                        vec![lane(whole, ink, held.sources, None)]
                     } else {
                         held.layers
                             .into_iter()
                             .map(|(role, wave, sources)| {
-                                // A take's lane in its take's colour, every
-                                // layer: which take it is, not which drum.
-                                let ink = kit_color(role)
-                                    .filter(|_| !(lanes_shown && numbered.is_some()))
-                                    .unwrap_or(color);
-                                lane(wave, ink, sources, Some(role))
+                                lane(wave, kit_color(role).unwrap_or(ink), sources, Some(role))
                             })
                             .collect()
                     };
@@ -2884,6 +2881,10 @@ pub fn hit_drag_overlay(painter: &mut impl PaintScene, palette: &Palette, view: 
 /// ([`crate::options::OUTLINED`]), so the waveform carries the colour.
 /// How much of an item's body alpha a shut folder's item has.
 const FOLDER_BODY: f32 = 0.4;
+
+/// How strong a take's body is on a row showing its lanes: enough to say
+/// its colour, not so much the waveform drowns in it.
+const TAKE_BODY: f32 = 0.38;
 
 fn body_alpha() -> f32 {
     if crate::options::OUTLINED.get() {

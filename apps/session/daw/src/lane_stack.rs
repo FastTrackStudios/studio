@@ -4,7 +4,7 @@
 //! The lane that plays comes first, at the row's own height, then the
 //! comp (when another lane plays), then every take at [`LANE_H`] — so the
 //! row grows with its takes rather than squeezing them into slivers, and
-//! what is heard is always at its top: the part a scroll down through the
+//! what is heard is always at its top: the lane a scroll down through the
 //! takes keeps pinned ([`Stack::pinned`]).
 //!
 //! ```ignore
@@ -24,8 +24,6 @@ pub struct Stack {
     /// Where each strip starts, from the row's top, and the row's height
     /// last: one more than `lanes`.
     tops: Vec<f64>,
-    /// How many strips from the top stay in sight while the row scrolls.
-    pinned: usize,
 }
 
 impl Stack {
@@ -49,18 +47,13 @@ impl Stack {
         if lanes.is_empty() {
             lanes.push(0);
         }
-        let pinned = (1 + usize::from(comp.is_some())).min(lanes.len());
         let tops = std::iter::once(0.0)
             .chain(lanes.iter().enumerate().scan(0.0, |at, (i, _)| {
                 *at += if i == 0 { head.max(LANE_H) } else { LANE_H };
                 Some(*at)
             }))
             .collect();
-        Self {
-            lanes,
-            tops,
-            pinned,
-        }
+        Self { lanes, tops }
     }
 
     /// The lanes with a strip, top to bottom; empty for a row showing
@@ -82,11 +75,11 @@ impl Stack {
         self.tops.last().copied().unwrap_or(0.0)
     }
 
-    /// How tall the strips kept in sight are: the playing lane, and the
-    /// comp under it when another lane plays.
+    /// How tall the strip kept in sight is: the top one, the lane that
+    /// plays.
     #[must_use]
     pub fn pinned(&self) -> f64 {
-        self.tops.get(self.pinned).copied().unwrap_or(0.0)
+        self.tops.get(1).copied().unwrap_or(0.0)
     }
 
     /// Lane `lane`'s strip, as fractions of the row from its top; the
@@ -163,7 +156,7 @@ mod tests {
         let stack = Stack::new(&kit(), [0, 1, 4, 1, 35], 48.0);
         assert_eq!(stack.lanes(), [35, 0, 1, 4]);
         assert!((stack.height() - (48.0 + 3.0 * LANE_H)).abs() < 1e-9);
-        assert!((stack.pinned() - (48.0 + LANE_H)).abs() < 1e-9);
+        assert!((stack.pinned() - 48.0).abs() < 1e-9, "EDIT alone");
         let (top, bottom) = stack.band(0);
         assert!((top * stack.height() - 48.0).abs() < 1e-9);
         assert!((bottom * stack.height() - (48.0 + LANE_H)).abs() < 1e-9);
@@ -174,7 +167,7 @@ mod tests {
         assert_eq!(stack.seams().count(), 3);
     }
 
-    /// The comp playing is the head; nothing else is pinned.
+    /// The comp playing is the head, pinned.
     #[test]
     fn the_comp_playing_is_the_head_alone() {
         let mut track = kit();
