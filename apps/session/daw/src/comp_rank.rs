@@ -4,8 +4,8 @@
 //! The kit's basics are quantized; what is left is choosing, fill by fill,
 //! the take the drummer played it best in. Each take's version of the
 //! stretch — the selection, a fill's hits, a section — is ranked
-//! ([`editing::comp::rank`]): whether it plays it, how much of the drum
-//! MIDI it plays, how tight it is. T and Shift+T step through them, best
+//! ([`editing::comp::rank`]): whether it plays it and how tight it is —
+//! the drum MIDI says where a hit belongs, not which fill to play. T and Shift+T step through them, best
 //! first (`COMP_CYCLE`); a model reads the ranking (`COMP_CANDIDATES`) and
 //! nominates one (`COMP_CHOOSE`). A take is comped onto the kit as one —
 //! every mic from the same take ([`crate::comp::swipe`] on the Drums
@@ -22,7 +22,7 @@ static CANDIDATES: ActionMeta = crate::actions::meta(
     "COMP_CANDIDATES",
     "comp_candidates",
     "Rank the takes for a stretch",
-    "Every take of the kit ranked for a stretch — the selection (a fill's hit markers, rows, a razor, a time selection) or `from`/`to` / `sections` — from its hit markers: whether it plays the stretch at all, how much of the drum MIDI there it plays (`coverage`; with no MIDI, how near its count of hits is to the takes' usual), how tight it is with its own feel taken out (`spread_ms`, `feel_ms`), into one `score`, best first; `current` marks the take the comp plays there now; `color` is the take's colour as the window paints its lane and comp pieces (`Blue`, `Light Green`); `unplayable` marks a take whose lanes hold no audio over all of the stretch (a punch-in's pre-roll, recorded but cut away), ranked last and not comped from. Read-only: what COMP_CYCLE steps through and COMP_CHOOSE takes from.",
+    "Every take of the kit ranked for a stretch — the selection (a fill's hit markers, rows, a razor, a time selection) or `from`/`to` / `sections` — from its hit markers: whether it plays the stretch at all and how tight it is with its own feel taken out (`spread_ms`, `feel_ms`, against the drum MIDI's notes where they are near, else the grid) make its `score`, best first — what it plays is the drummer's choice, so how much of the drum MIDI there it plays (`coverage`; with no MIDI, how near its count of hits is to the takes' usual) is reported, not scored; `current` marks the take the comp plays there now; `color` is the take's colour as the window paints its lane and comp pieces (`Blue`, `Light Green`); `unplayable` marks a take whose lanes hold no audio over all of the stretch (a punch-in's pre-roll, recorded but cut away), ranked last and not comped from. Read-only: what COMP_CYCLE steps through and COMP_CHOOSE takes from.",
     "Edit",
     "",
 );

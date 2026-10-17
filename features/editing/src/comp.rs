@@ -3,19 +3,19 @@
 //!
 //! The basics of a kit are quantized; what is left is choosing, fill by
 //! fill, the take the drummer played it best in. Each take's version of
-//! the stretch is held up to what it should be — the part as written
-//! (the drum MIDI) when there is one, else the other takes — and scored:
+//! the stretch is held up to where its hits belong — the part as written
+//! (the drum MIDI) when there is one, else the grid — and scored:
 //!
 //! - **plays it**: a take with no hits there is empty there (a drummer
 //!   stopping, a take that ends early) and goes last;
-//! - **covers it**: how much of what is written it plays — each note met
-//!   by a hit of its own piece near it — or, with nothing written, how
-//!   near its count of hits is to the takes' usual count (a dropped stroke
-//!   or a stray one counts against it);
 //! - **tight**: how far its hits sit from where they belong once its own
 //!   feel is taken out — a take pushed 20 ms all through is in time with
-//!   itself; one that rushes and drags is not;
-//! - **costs the edit little**: how far the quantize would move its hits.
+//!   itself; one that rushes and drags is not.
+//!
+//! What it plays is the drummer's choice, not a fault: a busier fill, a
+//! tom fill where the part has none, is judged on how well it is played.
+//! The part as written only says where a hit belongs. How much of it a
+//! take plays (`coverage`) is reported beside the score, never in it.
 //!
 //! Times are seconds, in the song's time: every take of a song is
 //! recorded from the same place.
@@ -58,11 +58,6 @@ const MEETS: f64 = 0.060;
 
 /// A spread this wide is as loose as it counts, ms.
 const LOOSE_MS: f64 = 25.0;
-
-/// How much of a take's score is what it plays (the rest is how tight):
-/// a fill missing two strokes is worse than one played loose, which the
-/// quantize puts right.
-const COVERAGE: f64 = 0.75;
 
 fn median(mut v: Vec<f64>) -> Option<f64> {
     v.sort_by(f64::total_cmp);
@@ -155,13 +150,7 @@ pub fn rank(
             let spread = median(offs.iter().map(|o| (o - feel).abs()).collect()).unwrap_or(0.0);
             let spread_ms = spread * 1e3;
             let tight = 1.0 - (spread_ms / LOOSE_MS).clamp(0.0, 1.0);
-            // What is played counts most: the edit can put a stroke in
-            // time, not play one the drummer left out.
-            let score = if empty {
-                0.0
-            } else {
-                COVERAGE.mul_add(coverage, (1.0 - COVERAGE) * tight)
-            };
+            let score = if empty { 0.0 } else { tight };
             Ranked {
                 take: c.take.clone(),
                 score,
@@ -222,8 +211,11 @@ mod tests {
         ]
     }
 
+    /// Tight beats loose; a take playing less of what is written is not
+    /// marked down for it (a simpler fill is the drummer's choice), only
+    /// one playing nothing.
     #[test]
-    fn the_take_that_plays_it_tight_wins() {
+    fn the_take_that_plays_it_tight_wins_whatever_it_plays() {
         let tight = Candidate {
             take: "2".into(),
             hits: written().iter().map(|n| s(&n.piece, n.t + 0.004)).collect(),
@@ -246,10 +238,13 @@ mod tests {
         };
         let ranked = rank(&[loose, dropped, tight, empty], &written(), &line);
         let order: Vec<&str> = ranked.iter().map(|r| r.take.as_str()).collect();
-        assert_eq!(order, ["2", "1", "3", "4"], "{ranked:#?}");
+        assert_eq!(order, ["2", "3", "1", "4"], "{ranked:#?}");
         assert!(ranked[3].empty);
         assert!((ranked[0].coverage - 1.0).abs() < 1e-9);
-        assert!((ranked[2].coverage - 0.6).abs() < 1e-9);
+        assert!(
+            (ranked[1].coverage - 0.6).abs() < 1e-9,
+            "reported, not scored"
+        );
     }
 
     /// A take pushed late all through is in time with itself: its feel is
