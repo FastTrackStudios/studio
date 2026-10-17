@@ -207,12 +207,12 @@ fn strikes_within(written: &[Strike], (from, to): (f64, f64)) -> Vec<Strike> {
 
 /// Where each take's lanes hold audio, by `(track, lane)`: spans merged,
 /// by start.
-struct Audio {
+pub(crate) struct Audio {
     by_lane: HashMap<(String, u32), Vec<(f64, f64)>>,
 }
 
 impl Audio {
-    fn read(song: &Song, versions: &[TakeVersion], (from, to): (f64, f64)) -> Self {
+    pub(crate) fn read(song: &Song, versions: &[TakeVersion], (from, to): (f64, f64)) -> Self {
         let wanted: std::collections::BTreeSet<(String, u32)> = versions
             .iter()
             .flat_map(|v| v.lanes.iter().cloned())
@@ -235,7 +235,7 @@ impl Audio {
     }
 
     /// Whether every lane of `version` holds audio over all of `from..to`.
-    fn covers(&self, version: &TakeVersion, (from, to): (f64, f64)) -> bool {
+    pub(crate) fn covers(&self, version: &TakeVersion, (from, to): (f64, f64)) -> bool {
         const SLACK: f64 = 0.002;
         !version.lanes.is_empty()
             && version.lanes.iter().all(|key| {
@@ -313,17 +313,17 @@ impl Edit {
         use crate::drum_lanes::{EDIT, lane_named};
         let tracks: Vec<daw_proto::Track> = song.daw().all(song.context());
         // Each mic and the phrases it is comped over, with the lane each is
-        // comped from.
-        let mut per_track: BTreeMap<String, Vec<(&Choice, u32)>> = BTreeMap::new();
+        // comped from — none for a mic the take never recorded: silent
+        // there, not another take's recording under this one's.
+        let mut per_track: BTreeMap<String, Vec<(&Choice, Option<u32>)>> = BTreeMap::new();
         for choice in choices {
             let Some(version) = versions.iter().find(|v| v.pass == choice.take) else {
                 continue;
             };
-            for (track, source) in &version.lanes {
-                per_track
-                    .entry(track.clone())
-                    .or_default()
-                    .push((choice, *source));
+            let sources = version.lanes.iter().map(|(t, l)| (t.clone(), Some(*l)));
+            let silent = version.unrecorded(versions).into_iter().map(|t| (t, None));
+            for (track, source) in sources.chain(silent) {
+                per_track.entry(track).or_default().push((choice, source));
             }
         }
         let mut ops = Vec::new();
@@ -342,9 +342,8 @@ impl Edit {
                 let lane = |n: u32| crate::hit_place::lane_of(p, guid, n, reach);
                 let sources: BTreeMap<u32, Vec<daw_proto::Item>> = phrases
                     .iter()
-                    .map(|(_, source)| {
-                        (*source, lane(*source).into_iter().map(|s| s.item).collect())
-                    })
+                    .filter_map(|(_, source)| *source)
+                    .map(|source| (source, lane(source).into_iter().map(|s| s.item).collect()))
                     .collect();
                 (
                     lane(comp).into_iter().map(|s| s.item).collect::<Vec<_>>(),
@@ -362,6 +361,9 @@ impl Edit {
                 subtract_ops(item, &spans, &mut ops);
             }
             for (choice, source) in phrases {
+                let Some(source) = source else {
+                    continue;
+                };
                 for item in sources.get(source).into_iter().flatten() {
                     for lane in std::iter::once(comp).chain(edit) {
                         copy_ops(item, (choice.from, choice.to), lane, &mut ops);
@@ -373,13 +375,13 @@ impl Edit {
                 .comping(song.context(), TrackRef::Guid(guid.clone()))
                 .map(|c| c.areas)
                 .unwrap_or_default();
-            for (choice, source) in phrases {
+            for (choice, source) in phrases.iter().filter_map(|(c, s)| Some((c, (*s)?))) {
                 kept = crate::comp::with_area(
                     &kept,
                     daw_proto::CompArea {
                         start: daw_proto::PositionInSeconds::from_seconds(choice.from),
                         end: daw_proto::PositionInSeconds::from_seconds(choice.to),
-                        source_lane: *source,
+                        source_lane: source,
                         comp_lane: comp,
                         fade_in: daw_proto::Duration::from_seconds(crate::comp::JOIN),
                         fade_out: daw_proto::Duration::from_seconds(crate::comp::JOIN),

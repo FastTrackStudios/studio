@@ -216,15 +216,35 @@ impl Row {
         })
     }
 
-    /// The `+` beside the lane line, at its left: the tint's last pixels
-    /// before the gutter, clear of the record-input combo an armed row
-    /// draws there.
+    /// The lanes button: a labelled pill under the lane line, from the
+    /// tint's last pixels to the line's end, on a row with room under it —
+    /// what shows every lane or only the one that plays, plain to see. A
+    /// row without the room keeps a `+` beside the line, at its left.
     fn lane_show(&self) -> Option<Rect> {
-        /// Its width.
+        /// The `+`'s width, and how far left of the line the pill starts.
         const SHOW_W: f64 = 10.0;
+        /// The pill's height, and its gap to the line and to polarity.
+        const PILL_H: f64 = 16.0;
+        const GAP: f64 = 3.0;
         let line = self.lane_line()?;
-        let x1 = line.x0 - 1.0;
-        Some(Rect::new(x1 - SHOW_W, line.y0, x1, line.y1))
+        let x0 = line.x0 - 1.0 - SHOW_W;
+        let floor = self
+            .rect(Control::Phase)
+            .map_or(self.y + self.height, |phase| phase.y0);
+        let top = line.y1 + GAP;
+        Some(if top + PILL_H + GAP <= floor {
+            Rect::new(x0, top, line.x1, top + PILL_H)
+        } else {
+            Rect::new(x0, line.y0, line.x0 - 1.0, line.y1)
+        })
+    }
+
+    /// Whether the lanes button is the labelled pill, not the `+`.
+    #[must_use]
+    pub fn lane_show_is_pill(&self) -> bool {
+        self.lane_line()
+            .zip(self.lane_show())
+            .is_some_and(|(line, show)| show.y0 >= line.y1)
     }
 
     /// Where a control is, or `None` if this row does not show it.
@@ -545,13 +565,29 @@ mod tests {
         assert_eq!(flat.rect(Control::Volume), deep.rect(Control::Volume));
     }
 
-    /// A track with lanes has its `+` beside the lane line, hit where it is
-    /// drawn and clear of the steps; a track without lanes has neither.
+    /// A track with lanes has its lanes button: a pill under the lane line
+    /// on a tall row, a `+` beside it on a short one — hit where it is
+    /// drawn, clear of the steps; a track without lanes has neither.
     #[test]
     fn the_lanes_plus_sits_beside_the_lane_line() {
-        let laned = Row::new(100.0, 70.0, 0, false, Tcp::FULL).with_lanes(true);
+        let tall = Row::new(100.0, 200.0, 0, false, Tcp::FULL).with_lanes(true);
+        let line = tall.lane_line().expect("a lane line");
+        let pill = tall.rect(Control::LaneShow).expect("the pill");
+        assert!(tall.lane_show_is_pill());
+        assert!(pill.y0 > line.y1 && pill.x1 >= line.x1, "{pill:?} {line:?}");
+        assert!(pill.width() > 40.0, "wide enough to say Lanes: {pill:?}");
+        assert_eq!(
+            tall.control_at(pill.center().x, pill.center().y),
+            Some(Control::LaneShow)
+        );
+        // The shortest row with a lane line has no room for the pill.
+        let laned = (20..200)
+            .map(|h| Row::new(100.0, f64::from(h), 0, false, Tcp::FULL).with_lanes(true))
+            .find(|row| row.lane_line().is_some())
+            .expect("a row with a lane line");
         let line = laned.lane_line().expect("a lane line");
         let plus = laned.rect(Control::LaneShow).expect("the plus");
+        assert!(!laned.lane_show_is_pill());
         assert!(plus.x1 <= line.x0, "left of the line: {plus:?} {line:?}");
         assert!((plus.y0 - line.y0).abs() < 1e-9 && (plus.y1 - line.y1).abs() < 1e-9);
         assert_eq!(

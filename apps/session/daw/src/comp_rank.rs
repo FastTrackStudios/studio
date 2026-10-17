@@ -22,7 +22,7 @@ static CANDIDATES: ActionMeta = crate::actions::meta(
     "COMP_CANDIDATES",
     "comp_candidates",
     "Rank the takes for a stretch",
-    "Every take of the kit ranked for a stretch — the selection (a fill's hit markers, rows, a razor, a time selection) or `from`/`to` / `sections` — from its hit markers: whether it plays the stretch at all, how much of the drum MIDI there it plays (`coverage`; with no MIDI, how near its count of hits is to the takes' usual), how tight it is with its own feel taken out (`spread_ms`, `feel_ms`), into one `score`, best first; `current` marks the take the comp plays there now; `color` is the take's colour as the window paints its lane and comp pieces (`Blue`, `Light Green`). Read-only: what COMP_CYCLE steps through and COMP_CHOOSE takes from.",
+    "Every take of the kit ranked for a stretch — the selection (a fill's hit markers, rows, a razor, a time selection) or `from`/`to` / `sections` — from its hit markers: whether it plays the stretch at all, how much of the drum MIDI there it plays (`coverage`; with no MIDI, how near its count of hits is to the takes' usual), how tight it is with its own feel taken out (`spread_ms`, `feel_ms`), into one `score`, best first; `current` marks the take the comp plays there now; `color` is the take's colour as the window paints its lane and comp pieces (`Blue`, `Light Green`); `unplayable` marks a take whose lanes hold no audio over all of the stretch (a punch-in's pre-roll, recorded but cut away), ranked last and not comped from. Read-only: what COMP_CYCLE steps through and COMP_CHOOSE takes from.",
     "Edit",
     "",
 );
@@ -87,6 +87,10 @@ pub(crate) struct TakeRank {
     pub(crate) undetected: bool,
     /// The comp plays this take there now.
     pub(crate) current: bool,
+    /// Its lanes hold no audio over all of the stretch — a punch-in's
+    /// pre-roll, recorded but cut away: its hits are heard nowhere, and a
+    /// comp from it would leave a hole. Ranked last; COMP_CHOOSE refuses it.
+    pub(crate) unplayable: bool,
     /// Its colour's name, as the window paints its lane and its comp
     /// pieces ([`crate::take_colors`]): "the blue take". What COMP_CHOOSE
     /// takes as well as its pass.
@@ -199,6 +203,27 @@ fn current(
     })
 }
 
+/// Each take in `out` whose lanes hold no audio over all of `from..to`
+/// marked so, and put last.
+fn mark_unplayable(
+    out: &mut [TakeRank],
+    project: &ProjectContext,
+    versions: &[crate::hits::TakeVersion],
+    span: (f64, f64),
+) {
+    let Some(song) = crate::hit_index::song_of(project) else {
+        return;
+    };
+    let audio = crate::comp_song::Audio::read(&song, versions, span);
+    for take in out.iter_mut() {
+        take.unplayable = versions
+            .iter()
+            .find(|v| v.pass == take.pass)
+            .is_some_and(|v| !audio.covers(v, span));
+    }
+    out.sort_by_key(|t| u8::from(t.unplayable));
+}
+
 /// The takes ranked over `from..to`, and which the comp plays there.
 fn ranking(
     daw: &daw::standalone::Standalone,
@@ -210,6 +235,7 @@ fn ranking(
     let written = written(daw, project, (from, to), &versions);
     let line_of = |t: f64| crate::actions::grid_line(daw, project, t, 16);
     let mut out = rank_versions(&versions, &written, now.as_deref(), &line_of);
+    mark_unplayable(&mut out, project, &versions, (from, to));
     name_colors(&mut out, &kit_takes(project));
     (out, versions)
 }
@@ -322,6 +348,7 @@ pub(crate) fn rank_versions(
                 spread_ms: r.spread_ms,
                 feel_ms: r.feel_ms,
                 color: None,
+                unplayable: false,
             }
         })
         .collect();
@@ -366,18 +393,24 @@ pub(crate) fn forget() {
 }
 
 /// Comp the kit from `take` over `from..to` — each mic from its own lane
-/// holding its recording of the take — and where it is edited, its edit
-/// there made the new comp as recorded. Whether the edit was.
+/// holding its recording of the take, the mics it never recorded (of
+/// `versions`) silent there — and where it is edited, its edit there made
+/// the new comp as recorded. Whether the edit was.
 fn comp_in(
     daw: &daw::standalone::Standalone,
     project: &ProjectContext,
-    take: &crate::hits::TakeVersion,
+    (take, versions): (&crate::hits::TakeVersion, &[crate::hits::TakeVersion]),
     (from, to): (f64, f64),
 ) -> Result<bool, String> {
     let mut stages = architect_telemetry::timing::Stages::start();
     let label = format!("Comp from take {}", take.pass);
     daw::service::Projects::begin_undo_block(daw, project.clone(), &label);
-    let comped = crate::comp::swipe_lanes(daw, project, &take.lanes, (from, to), &label);
+    let comped =
+        crate::comp::swipe_lanes(daw, project, &take.lanes, (from, to), &label).and_then(|n| {
+            crate::comp::silence(daw, project, &take.unrecorded(versions), (from, to))
+                .map(|_| n)
+                .map_err(|e| e.to_string())
+        });
     stages.mark("comp.swipe_ms");
     // Where the kit is edited, its edit over the stretch made the new comp
     // as recorded — on the engine, in the same undo step, every mic.
@@ -492,8 +525,9 @@ pub fn register(list: &ActionList) {
                     coverage: t.coverage,
                     spread_ms: t.spread_ms,
                     feel_ms: t.feel_ms,
-                    // An unjudged take is still one to step to.
-                    empty: t.empty,
+                    // An unjudged take is still one to step to; one with
+                    // no audio there is not.
+                    empty: t.empty || t.unplayable,
                 })
                 .collect();
             let next = editing::comp::step(&ranked, now.as_deref(), a.by.unwrap_or(1))
@@ -504,7 +538,7 @@ pub fn register(list: &ActionList) {
                 .iter()
                 .find(|v| v.pass == next)
                 .ok_or("the take went")?;
-            let edit_restored = comp_in(daw, &project, version, (from, to))?;
+            let edit_restored = comp_in(daw, &project, (version, &versions), (from, to))?;
             now_comped((from, to), &next);
             stages.mark("comp.comp_ms");
             out.push(Comped {
@@ -533,7 +567,14 @@ pub fn register(list: &ActionList) {
                         || colored.as_deref() == Some(v.pass.as_str())
                 })
                 .ok_or_else(|| format!("no take {} plays here", a.take))?;
-            let edit_restored = comp_in(daw, &project, version, (from, to))?;
+            if takes.iter().any(|t| t.pass == version.pass && t.unplayable) {
+                return Err(format!(
+                    "take {} holds no audio over all of {from:.2}–{to:.2} s: a comp from it \
+                     would leave a hole",
+                    version.pass
+                ));
+            }
+            let edit_restored = comp_in(daw, &project, (version, &versions), (from, to))?;
             now_comped((from, to), &version.pass);
             out.push(Comped {
                 from,

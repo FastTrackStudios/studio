@@ -192,6 +192,43 @@ pub fn edit_from_comp(
     Ok(done)
 }
 
+/// Each of `tracks` silent over `from..to`: what its `COMP` and `EDIT`
+/// lanes hold there taken away, what they hold either side kept. How many
+/// items it cut.
+///
+/// # Errors
+///
+/// The engine refusing an edit.
+pub fn silence(
+    daw: &daw::standalone::Standalone,
+    project: &ProjectContext,
+    tracks: &[String],
+    (from, to): (f64, f64),
+) -> Result<usize, daw_proto::DawError> {
+    use crate::drum_lanes::{EDIT, lane_named};
+    let all = Tracks::all(daw, project.clone());
+    let mut cut = 0_usize;
+    for t in all.iter().filter(|t| tracks.contains(&t.guid)) {
+        let lanes: Vec<u32> = comp_lane_of(daw, project, t)
+            .into_iter()
+            .chain(lane_named(t, EDIT))
+            .collect();
+        for item in daw
+            .get_items(project.clone(), TrackRef::Guid(t.guid.clone()))
+            .iter()
+            .filter(|i| lanes.contains(&i.fixed_lane.unwrap_or(0)))
+            .filter(|i| {
+                let (start, end) = span(i);
+                end > from + GRAIN && start < to - GRAIN
+            })
+        {
+            clear(daw, project, item, (from, to))?;
+            cut = cut.saturating_add(1);
+        }
+    }
+    Ok(cut)
+}
+
 /// [`swipe`] on one track: lane `source` over `from..to` onto lane `comp`.
 /// How many pieces it copied.
 fn comp_track(

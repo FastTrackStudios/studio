@@ -1777,7 +1777,7 @@ fn control_row(
         let under = crate::lanes::speaks_for(tracks, live, scene.lane_tracks(index));
         let label = crate::lanes::label_of(&under);
         lane_line(out, palette, font, &label, &row, band, &look);
-        lanes_plus(out, palette, &row, crate::lanes::opened(live), &look);
+        lanes_plus(out, palette, font, &row, crate::lanes::opened(live), &look);
     }
 
     // A theme's row draws its own live part — every value and the
@@ -2206,12 +2206,68 @@ mod panel_tests {
     }
 }
 
+/// The lanes button as a pill: `Lanes ▾` while the track shows the lane
+/// that plays (press to show them all), `Lanes ▴` lit in the accent while
+/// it shows them all (press to fold them back to that one).
+fn lanes_pill(
+    out: &mut anyrender::Scene,
+    palette: &Palette,
+    font: &Font,
+    r: vello::kurbo::Rect,
+    open: bool,
+    look: Interaction,
+) {
+    use vello::kurbo::{BezPath, RoundedRect};
+    use vello::peniko::Fill;
+    const SIZE: f32 = 9.0;
+    /// The chevron's half width and half height, and its room at the end.
+    const W: f64 = 3.0;
+    const H: f64 = 1.8;
+    const ROOM: f64 = 12.0;
+    let lit = !matches!(look, Interaction::Normal);
+    let well = match (open, lit) {
+        (true, _) => palette.accent.multiply_alpha(0.75),
+        (false, true) => palette.divider,
+        (false, false) => palette.divider.multiply_alpha(0.6),
+    };
+    let pill = RoundedRect::from_rect(r, 4.0);
+    out.fill(Fill::NonZero, Affine::IDENTITY, well, None, &pill);
+    out.stroke(
+        &vello::kurbo::Stroke::new(1.0),
+        Affine::IDENTITY,
+        palette.accent.multiply_alpha(if open { 1.0 } else { 0.5 }),
+        None,
+        &pill,
+    );
+    let room = (r.width() - ROOM - 4.0).max(0.0);
+    let label = font.elide("Lanes", SIZE, room);
+    let width = font.width(&label, SIZE);
+    let x = r.x0 + 4.0 + (room - width).max(0.0) / 2.0;
+    let y = f64::from(SIZE).mul_add(0.35, r.center().y);
+    crate::tcp::glyphs(out, font, palette.text, &label, x, y, SIZE);
+    // Down: there are more to show; up: fold them back.
+    let (cx, cy) = (r.x1 - ROOM / 2.0 - 1.0, r.center().y);
+    let dir = if open { -1.0 } else { 1.0 };
+    let mut chevron = BezPath::new();
+    chevron.move_to((cx - W, cy - H * dir));
+    chevron.line_to((cx, cy + H * dir));
+    chevron.line_to((cx + W, cy - H * dir));
+    out.stroke(
+        &vello::kurbo::Stroke::new(1.4),
+        Affine::IDENTITY,
+        palette.text,
+        None,
+        &chevron,
+    );
+}
+
 /// The `+` beside the lane line ([`crate::row::Control::LaneShow`]): a
 /// well with a plus while the track shows the lane that plays, a minus
 /// while it shows them all — lit under the pointer, accented open.
 fn lanes_plus(
     out: &mut anyrender::Scene,
     palette: &Palette,
+    font: &Font,
     row: &crate::row::Row,
     open: bool,
     look: &dyn Fn(crate::row::Control) -> Interaction,
@@ -2225,6 +2281,10 @@ fn lanes_plus(
     let Some(r) = row.rect(C::LaneShow) else {
         return;
     };
+    if row.lane_show_is_pill() {
+        lanes_pill(out, palette, font, r, open, look(C::LaneShow));
+        return;
+    }
     let well = if open {
         palette.accent.multiply_alpha(0.35)
     } else {

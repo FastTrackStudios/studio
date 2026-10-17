@@ -514,6 +514,21 @@ pub struct TakeVersion {
     pub detected: bool,
 }
 
+impl TakeVersion {
+    /// The kit's mics that `others` recorded and this take did not (a
+    /// trigger added after it was played): what a comp from it leaves
+    /// silent, not playing another take's recording under this one's.
+    #[must_use]
+    pub fn unrecorded<'a>(&self, others: impl IntoIterator<Item = &'a Self>) -> Vec<String> {
+        let mine: BTreeSet<&String> = self.lanes.iter().map(|(track, _)| track).collect();
+        let theirs: BTreeSet<&String> = others
+            .into_iter()
+            .flat_map(|v| v.lanes.iter().map(|(track, _)| track))
+            .collect();
+        theirs.difference(&mine).map(|t| (*t).clone()).collect()
+    }
+}
+
 /// Every take of the kit's version of `from..to`: each take's hits there,
 /// read off its recordings' hit markers — on the piece's trigger, else
 /// its first close mic — in song time (every take is recorded from the
@@ -3304,5 +3319,32 @@ mod room_mic_tests {
         let claimed = std::iter::once(&kick_in).collect();
         assert_eq!(room_mics(&tracks, &claimed, &|_| true), ["oh", "rm"]);
         assert_eq!(room_mics(&tracks, &claimed, &|g| g == "oh"), ["oh"]);
+    }
+}
+
+#[cfg(test)]
+mod unrecorded_tests {
+    use super::TakeVersion;
+
+    fn take(pass: &str, tracks: &[&str]) -> TakeVersion {
+        TakeVersion {
+            pass: pass.to_owned(),
+            lane: None,
+            lanes: tracks.iter().map(|t| ((*t).to_owned(), 1)).collect(),
+            files: Vec::new(),
+            hits: Vec::new(),
+            detected: true,
+        }
+    }
+
+    /// A take played before the toms' triggers were wired leaves them
+    /// silent; a take with every mic leaves none.
+    #[test]
+    fn a_take_without_the_triggers_leaves_them_silent() {
+        let early = take("260906_1744", &["t1", "oh"]);
+        let late = take("260907_1321", &["t1", "t1 trig", "oh"]);
+        let all = [early.clone(), late.clone()];
+        assert_eq!(early.unrecorded(&all), ["t1 trig"]);
+        assert!(late.unrecorded(&all).is_empty());
     }
 }
