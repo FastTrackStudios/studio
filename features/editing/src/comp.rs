@@ -10,7 +10,9 @@
 //!   stopping, a take that ends early) and goes last;
 //! - **tight**: how far its hits sit from where they belong once its own
 //!   feel is taken out — a take pushed 20 ms all through is in time with
-//!   itself; one that rushes and drags is not.
+//!   itself; one that rushes and drags is not. A few hits prove little:
+//!   one hit is never off from itself, so a spread counts as it is only
+//!   once a take plays enough of them.
 //!
 //! What it plays is the drummer's choice, not a fault: a busier fill, a
 //! tom fill where the part has none, is judged on how well it is played.
@@ -58,6 +60,18 @@ const MEETS: f64 = 0.060;
 
 /// A spread this wide is as loose as it counts, ms.
 const LOOSE_MS: f64 = 25.0;
+
+/// How many hits' worth of doubt a take's spread starts from: until it
+/// plays more than a few, its spread is taken as half way to loose — a
+/// take with one hit has no spread to speak of and proves nothing.
+const DOUBT_HITS: f64 = 3.0;
+
+/// A spread measured over `hits` hits, as judged: drawn toward half way
+/// to loose by [`DOUBT_HITS`] hits' worth, ms.
+fn judged_ms(spread_ms: f64, hits: usize) -> f64 {
+    let n = hits as f64;
+    n.mul_add(spread_ms, DOUBT_HITS * LOOSE_MS / 2.0) / (n + DOUBT_HITS)
+}
 
 fn median(mut v: Vec<f64>) -> Option<f64> {
     v.sort_by(f64::total_cmp);
@@ -149,7 +163,7 @@ pub fn rank(
             let feel = median(offs.clone()).unwrap_or(0.0);
             let spread = median(offs.iter().map(|o| (o - feel).abs()).collect()).unwrap_or(0.0);
             let spread_ms = spread * 1e3;
-            let tight = 1.0 - (spread_ms / LOOSE_MS).clamp(0.0, 1.0);
+            let tight = 1.0 - (judged_ms(spread_ms, c.hits.len()) / LOOSE_MS).clamp(0.0, 1.0);
             let score = if empty { 0.0 } else { tight };
             Ranked {
                 take: c.take.clone(),
@@ -285,6 +299,33 @@ mod tests {
             ranked.last().map(|r| r.take.as_str()),
             Some("3"),
             "{ranked:#?}"
+        );
+    }
+
+    /// One hit dead on proves less than a fill of eight played tight: a
+    /// near-empty take does not win for having nothing to be off by.
+    #[test]
+    fn a_lone_hit_does_not_beat_a_tight_fill() {
+        let lone = Candidate {
+            take: "1".into(),
+            hits: vec![s("Snare", 1.0)],
+        };
+        let fill = Candidate {
+            take: "2".into(),
+            hits: (0..8)
+                .map(|i| {
+                    s(
+                        "Tom 1",
+                        f64::from(i).mul_add(0.125, if i % 2 == 0 { 0.003 } else { -0.003 }),
+                    )
+                })
+                .collect(),
+        };
+        let ranked = rank(&[lone, fill], &[], &line);
+        assert_eq!(ranked[0].take, "2", "{ranked:#?}");
+        assert!(
+            ranked[1].spread_ms < 0.5,
+            "its spread is still reported as measured"
         );
     }
 
