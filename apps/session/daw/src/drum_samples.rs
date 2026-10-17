@@ -12,7 +12,10 @@
 //!   **overhead** mics on 3/4 and its **room** mics on 5/6;
 //! - the Sample track sending its 3/4 into the recorded overheads and its
 //!   5/6 into the rooms, so the sample's ambience is processed and faded
-//!   with theirs — sends, not tracks of their own.
+//!   with theirs — sends, not tracks of their own;
+//! - the Sample track's polarity set to pull with the piece's close mic
+//!   as the mix plays it ([`measure`], [`crate::sample_align`]), so the
+//!   blend adds to the recorded low end instead of cancelling it.
 //!
 //! One instrument plays all of a piece's mics from the same notes, so each
 //! hit is the same sample on every one. The notes are the hits as MIDI
@@ -125,10 +128,124 @@ pub fn set_up(
         ));
     }
     if !dry {
+        let measured = measure(daw, project, preset);
+        report.tracks.extend(set_polarity(daw, project, &measured)?);
         crate::studio::request_resync();
         crate::actions::list().changed("drums.samples", "the kit's samples were set up");
     }
     Ok(report)
+}
+
+/// How many of a piece's hits its sample is measured against.
+const MEASURED_HITS: usize = 64;
+/// How firmly a sample's note is played to hear its attack.
+const MEASURED_VELOCITY: u8 = 100;
+
+/// Fewer hits than this, or fewer of them agreeing than [`SURE`], and a
+/// sample's polarity is left as it is.
+const SURE_HITS: usize = 8;
+/// The share of the hits that must agree on a sample's polarity.
+const SURE: f64 = 0.65;
+
+/// One piece's sample against its close mic.
+#[derive(Debug)]
+pub struct Measured {
+    pub piece: String,
+    /// The kit's piece that plays it (`kick`, `rtom-a`).
+    pub sample: String,
+    /// Its Sample track.
+    pub track: Option<daw_proto::Track>,
+    /// `None`: no recording or no sound to measure.
+    pub alignment: Option<crate::sample_align::Alignment>,
+    /// Whether the Sample track must be flipped to pull with the close
+    /// mic as the mix plays it (the mic track's own flip counted); `None`
+    /// when the measure is too unsure to say.
+    pub flip: Option<bool>,
+}
+
+/// How each piece's sample in `preset` sits against its close mic
+/// ([`crate::sample_align`]).
+#[must_use]
+pub fn measure(
+    daw: &daw::standalone::Standalone,
+    project: &ProjectContext,
+    preset: &std::path::Path,
+) -> Vec<Measured> {
+    let tracks = Tracks::all(daw, project.clone());
+    let flipped = |guid: &str| tracks.iter().any(|t| t.guid == guid && t.phase_inverted);
+    crate::drum_reference::pieces_of(&tracks)
+        .into_iter()
+        .filter_map(|(name, trigger)| {
+            let note = note_for(&name)?;
+            let sample = signal_fx::kit::piece_for_note(preset, note)?;
+            let heard = crate::hits::heard_hits(daw, project, &name, MEASURED_HITS);
+            let alignment = heard.as_ref().and_then(|heard| {
+                let sound = hit_sound(preset, &sample, note, heard.rate);
+                crate::sample_align::align(&heard.audio, &heard.at, &sound, heard.rate)
+            });
+            let flip = heard.zip(alignment).and_then(|(heard, a)| {
+                (a.hits >= SURE_HITS && a.consistent >= SURE)
+                    .then(|| a.inverted != flipped(&heard.mic))
+            });
+            Some(Measured {
+                piece: name,
+                sample,
+                track: sample_track(&tracks, &trigger).cloned(),
+                alignment,
+                flip,
+            })
+        })
+        .collect()
+}
+
+/// Each measured Sample track's polarity set as [`Measured::flip`] says;
+/// one line a piece.
+///
+/// # Errors
+///
+/// The engine refusing a write.
+pub fn set_polarity(
+    daw: &daw::standalone::Standalone,
+    project: &ProjectContext,
+    measured: &[Measured],
+) -> Result<Vec<String>, String> {
+    measured
+        .iter()
+        .map(|m| {
+            let Some(track) = &m.track else {
+                return Ok(format!("{}: no Sample track", m.piece));
+            };
+            let Some(flip) = m.flip else {
+                return Ok(format!(
+                    "{} ({}): too unsure to say, left as it is",
+                    m.piece, track.name
+                ));
+            };
+            if flip != track.phase_inverted {
+                daw.set_phase_inverted(project.clone(), TrackRef::Guid(track.guid.clone()), flip)
+                    .map_err(|e| e.to_string())?;
+            }
+            Ok(format!(
+                "{} ({}): {}",
+                m.piece,
+                track.name,
+                if flip { "flipped" } else { "as it plays" }
+            ))
+        })
+        .collect()
+}
+
+/// `piece` of the kit `preset` struck on `note`, its close mics as a Kit
+/// Mic plays them, 100 ms at `rate`.
+fn hit_sound(preset: &std::path::Path, piece: &str, note: u8, rate: f64) -> Vec<f32> {
+    use daw_standalone::plugin::PluginInstance as _;
+    let state = serde_json::json!({ "preset": preset, "pieces": [piece], "mics": ["close"] });
+    let mut kit = signal_fx::kit::KitMic::new(rate);
+    if kit.load_state(state.to_string().as_bytes()).is_err() || kit.prepare(rate, 512).is_err() {
+        return Vec::new();
+    }
+    let frames = num_traits::ToPrimitive::to_usize(&(rate * 0.1)).unwrap_or(4_800);
+    kit.hit_sound(note, MEASURED_VELOCITY, frames)
 }
 
 /// The recorded mics' track a sample bus sends into: the first of

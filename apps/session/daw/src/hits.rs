@@ -1512,6 +1512,78 @@ pub fn played_at(
     Some((path, origin + source / rate))
 }
 
+/// A piece's hits as its first close mic recorded them: one recording
+/// the song plays, mono at its own rate, and where each of its clean
+/// hits starts in it.
+#[derive(Clone, Debug)]
+pub struct HeardHits {
+    /// The mic's track.
+    pub mic: String,
+    pub audio: Vec<f32>,
+    pub rate: f64,
+    /// Each hit's sample in `audio`, in order.
+    pub at: Vec<usize>,
+}
+
+/// `piece`'s hits as heard on its first close mic, at most `most` of
+/// them: the clean ones (found on the mic, neither bleed nor ghost) of
+/// the recording the song plays most of. `None` with no such recording.
+#[must_use]
+pub fn heard_hits(
+    daw: &daw::standalone::Standalone,
+    project: &ProjectContext,
+    piece: &str,
+    most: usize,
+) -> Option<HeardHits> {
+    let (pieces, _) = kit(daw, project);
+    let mic = pieces
+        .iter()
+        .find(|p| p.name.eq_ignore_ascii_case(piece))?
+        .mics
+        .first()?
+        .clone();
+    let clean = |m: &TakeMarker| {
+        m.hit.as_ref().is_some_and(|h| {
+            h.piece.eq_ignore_ascii_case(piece)
+                && h.from_mic
+                && !h.bleed
+                && !h.ghost
+                && h.origin != MarkOrigin::Manual
+        })
+    };
+    let (recording, markers) = recordings(daw, project, &mic)
+        .into_iter()
+        .filter(|r| r.in_use)
+        .map(|r| {
+            let markers = daw.get_take_markers(
+                project.clone(),
+                ItemRef::Guid(r.item.clone()),
+                TakeRef::Active,
+            );
+            let clean: Vec<f64> = markers
+                .iter()
+                .filter(|m| clean(m))
+                .map(|m| m.source_position_seconds)
+                .collect();
+            (r, clean)
+        })
+        .max_by_key(|(_, clean)| clean.len())?;
+    let (audio, rate) = decode(&recording.path)?;
+    let every = markers.len().div_ceil(most.max(1)).max(1);
+    let at = markers
+        .iter()
+        .step_by(every)
+        .filter_map(|s| num_traits::ToPrimitive::to_usize(&(s * rate).round()))
+        .filter(|&i| i < audio.len())
+        .collect();
+    Some(HeardHits {
+        mic,
+        audio,
+        rate,
+        at,
+    })
+}
+
 /// The pass a hit's recording is of — what, with its id, tells it from
 /// the same id on another take recorded from the same place.
 #[must_use]

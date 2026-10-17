@@ -241,6 +241,8 @@ pub mod rename;
 pub mod routes;
 pub mod row;
 pub mod ruler;
+#[cfg(feature = "native")]
+pub mod sample_align;
 pub mod section_colors;
 #[cfg(feature = "native")]
 pub mod session_file;

@@ -739,6 +739,8 @@ struct TrackRow {
     folder: bool,
     muted: bool,
     soloed: bool,
+    /// Its polarity is flipped.
+    inverted: bool,
     volume_db: f64,
     pan: f64,
     items: u32,
@@ -1292,6 +1294,8 @@ fn reference(
 fn register_reference(list: &ActionList) {
     #[cfg(feature = "signal")]
     register_samples(list);
+    #[cfg(feature = "signal")]
+    register_samples_align(list);
     #[cfg(feature = "signal")]
     register_bass_rig(list);
     register_items(list);
@@ -2412,7 +2416,7 @@ static SAMPLES: ActionMeta = meta(
     "DRUMS_SAMPLES",
     "drums_samples",
     "Drum samples under the kit",
-    "Blend signal's sampled kit under the recorded drums, from the hits the triggers caught (the drum-edit detector, on the EDIT lane once there is one): each piece's hits written as notes on its Sample track (the kit's GM note, velocity from the hit's level) with an FTS Kit Mic there playing that piece's close mics; an OH Sample and a Room Sample track playing every piece's overhead and room mics, sent into the recorded overheads and rooms. A piece's voices get the same notes, so each hit is one sample on all of them. `preset` (a `.signalpreset`; GGD Modern and Massive 2's Heavy Thwacky unless given), `dry_run`.",
+    "Blend signal's sampled kit under the recorded drums, from the hits the triggers caught (the drum-edit detector, on the EDIT lane once there is one): each piece's hits written as notes on its Sample track (the kit's GM note, velocity from the hit's level) with an FTS Kit Mic there playing that piece's mics — its close mics on the track, its overheads and rooms on 3/4 and 5/6, sent into the recorded overheads and rooms. A piece's voices get the same notes, so each hit is one sample on all of them. Each Sample track's polarity is then set to pull with its close mic (DRUMS_SAMPLES_ALIGN). One undo step. `preset` (a `.signalpreset`; GGD Modern and Massive 2's Heavy Thwacky unless given), `dry_run`.",
     "Drums",
     "",
 );
@@ -2467,6 +2471,82 @@ fn register_bass_rig(list: &ActionList) {
             crate::bass_rig::Setup::Profile(a.profile.unwrap_or_else(|| "Metal".to_owned()))
         };
         crate::bass_rig::set_up(daw, &project, &setup, a.dry_run.unwrap_or(false))
+    });
+}
+
+#[cfg(feature = "signal")]
+static SAMPLES_ALIGN: ActionMeta = meta(
+    "DRUMS_SAMPLES_ALIGN",
+    "drums_samples_align",
+    "Line the drum samples up with the close mics",
+    "Measure each piece's sample against its close mic and set its Sample track's polarity to pull with the mic as the mix plays it. The kit's sample for the piece is struck once, as its Kit Mic plays it, and measured against the piece's clean hits on its first close mic (the recording the song plays most of). Per piece: `delay_ms`, how much later than its note the sample must start for its attack to land on the recorded one (negative: earlier; reported, not applied — the samples start at their attack); `inverted`, whether it pulls the opposite way to the recording as recorded; `agreement` 0..1, how alike the lined-up attacks are; `consistent` 0..1, the share of hits that alone say the same; `flip`, what the Sample track's polarity is set to (none: too unsure, left as it is). One undo step. `preset` as DRUMS_SAMPLES, `dry_run`.",
+    "Drums",
+    "",
+);
+
+/// One piece's measure.
+#[cfg(feature = "signal")]
+#[derive(Facet)]
+struct AlignedPiece {
+    piece: String,
+    sample: String,
+    delay_ms: Option<f64>,
+    inverted: Option<bool>,
+    agreement: Option<f64>,
+    consistent: Option<f64>,
+    hits: u32,
+    flip: Option<bool>,
+}
+
+/// What lining the samples up found, and did.
+#[cfg(feature = "signal")]
+#[derive(Facet)]
+struct AlignOut {
+    pieces: Vec<AlignedPiece>,
+    tracks: Vec<String>,
+    applied: bool,
+}
+
+#[cfg(feature = "signal")]
+fn register_samples_align(list: &ActionList) {
+    list.register(&SAMPLES_ALIGN, Effect::Mutating, |a: SamplesArg| {
+        let (daw, project) = song()?;
+        let preset = std::path::PathBuf::from(a.preset.as_deref().unwrap_or(DEFAULT_KIT));
+        if !preset.exists() {
+            return Err(format!("no kit preset at {}", preset.display()));
+        }
+        let measured = crate::drum_samples::measure(daw, &project, &preset);
+        let dry = a.dry_run.unwrap_or(false);
+        let tracks = if dry {
+            Vec::new()
+        } else {
+            let label = "Line the drum samples up";
+            daw::service::Projects::begin_undo_block(daw, project.clone(), label);
+            let set = crate::drum_samples::set_polarity(daw, &project, &measured);
+            daw::service::Projects::end_undo_block(daw, project.clone(), label, None);
+            set?
+        };
+        let round = |v: f64, places: f64| (v * places).round() / places;
+        let pieces = measured
+            .into_iter()
+            .map(|m| AlignedPiece {
+                delay_ms: m.alignment.map(|a| round(a.delay * 1_000.0, 10.0)),
+                inverted: m.alignment.map(|a| a.inverted),
+                agreement: m.alignment.map(|a| round(a.agreement, 100.0)),
+                consistent: m.alignment.map(|a| round(a.consistent, 100.0)),
+                hits: m
+                    .alignment
+                    .map_or(0, |a| u32::try_from(a.hits).unwrap_or(u32::MAX)),
+                flip: m.flip,
+                piece: m.piece,
+                sample: m.sample,
+            })
+            .collect();
+        Ok(AlignOut {
+            pieces,
+            tracks,
+            applied: !dry,
+        })
     });
 }
 
@@ -2808,6 +2888,7 @@ fn register_tracks(list: &ActionList) {
                 folder: t.is_folder,
                 muted: t.muted,
                 soloed: t.soloed,
+                inverted: t.phase_inverted,
                 volume_db: 20.0 * t.volume.max(1e-9).log10(),
                 pan: t.pan,
                 items: u32::try_from(items.len()).unwrap_or(u32::MAX),
