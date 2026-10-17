@@ -155,7 +155,7 @@ pub fn comp_best(song: &Song, phrases: &[(f64, f64)], dry: bool) -> Result<Compe
 /// How far either side of a phrase's edge its seam looks for the hits it
 /// must not cut through, seconds: more than any two takes of one beat are
 /// apart.
-const SEAM_REACH: f64 = 0.06;
+pub(crate) const SEAM_REACH: f64 = 0.06;
 
 /// How far before the earliest of those hits a seam is put, seconds: the
 /// stick's approach is in the recording just before the transient.
@@ -171,15 +171,25 @@ fn clear_of_hits(phrases: &[(f64, f64)], attacks: &[f64]) -> Vec<(f64, f64)> {
         if (out[k - 1].1 - seam).abs() > 1e-6 {
             continue;
         }
-        let first = attacks.partition_point(|t| *t < seam - SEAM_REACH);
-        let Some(&earliest) = attacks.get(first).filter(|t| **t <= seam + SEAM_REACH) else {
-            continue;
-        };
-        let moved = (earliest - SEAM_LEAD).max(out[k - 1].0 + 1e-3);
+        let moved = clear_seam(seam, attacks).max(out[k - 1].0 + 1e-3);
         out[k - 1].1 = moved;
         out[k].0 = moved;
     }
     out
+}
+
+/// A seam at `seam` moved to just before the earliest of `attacks`
+/// (sorted, every take's) within [`SEAM_REACH`] of it; where none is, left.
+/// Cut on the beat between two takes that do not hit it at the same
+/// instant, both attacks would play — a flam — or the edit would find two
+/// hits for one line and push one a sixteenth on.
+#[must_use]
+pub(crate) fn clear_seam(seam: f64, attacks: &[f64]) -> f64 {
+    let first = attacks.partition_point(|t| *t < seam - SEAM_REACH);
+    attacks
+        .get(first)
+        .filter(|t| **t <= seam + SEAM_REACH)
+        .map_or(seam, |earliest| earliest - SEAM_LEAD)
 }
 
 /// `versions` with only their hits over `from..to`.
@@ -601,7 +611,7 @@ fn stretches(song: &Song, a: &BestArg) -> Vec<(f64, f64)> {
 
 #[cfg(test)]
 mod tests {
-    use super::{SEAM_LEAD, clear_of_hits};
+    use super::{SEAM_LEAD, clear_of_hits, clear_seam};
 
     /// A seam on the downbeat moves to just before the earliest take's hit
     /// there; one with no hit near it stays.
@@ -614,5 +624,13 @@ mod tests {
         assert!((cut[0].1 - (3.988 - SEAM_LEAD)).abs() < 1e-9, "{cut:?}");
         assert_eq!(cut[0].1, cut[1].0, "phrases still meet: {cut:?}");
         assert!((cut[1].1 - 8.0).abs() < 1e-9, "no hit near 8 s: {cut:?}");
+    }
+
+    /// A fill's own end, alone: before both takes' downbeats, or left.
+    #[test]
+    fn a_fills_end_is_cut_before_both_downbeats() {
+        let attacks = [217.492, 217.521];
+        assert!((clear_seam(217.5, &attacks) - (217.492 - SEAM_LEAD)).abs() < 1e-9);
+        assert!((clear_seam(219.0, &attacks) - 219.0).abs() < 1e-9);
     }
 }

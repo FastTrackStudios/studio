@@ -23,7 +23,7 @@ use facet::Facet;
 pub const JOIN: f64 = 0.005;
 
 /// Shorter than this is no stretch at all, seconds.
-const GRAIN: f64 = 1e-4;
+pub(crate) const GRAIN: f64 = 1e-4;
 
 /// The comp lane of `track`: the engine's comping lane (REAPER's
 /// `LANEREC`), else the one the window comps onto

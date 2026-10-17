@@ -385,6 +385,32 @@ pub(crate) fn versions_over(
     versions
 }
 
+/// `from..to` with each end moved to just before the hits at it, every
+/// take's ([`crate::comp_song::clear_seam`]): a fill's end on the downbeat
+/// cut before both takes' attacks there, not between them.
+fn clear_of_hits(
+    daw: &daw::standalone::Standalone,
+    project: &ProjectContext,
+    (from, to): (f64, f64),
+) -> (f64, f64) {
+    let reach = crate::comp_song::SEAM_REACH;
+    let attacks = |at: f64| {
+        let mut all: Vec<f64> = versions_over(daw, project, (at - reach, at + reach))
+            .into_iter()
+            .flat_map(|v| v.hits.into_iter().map(|h| h.1))
+            .collect();
+        all.sort_by(f64::total_cmp);
+        all
+    };
+    let start = crate::comp_song::clear_seam(from, &attacks(from));
+    let end = crate::comp_song::clear_seam(to, &attacks(to));
+    if end - start > crate::comp::GRAIN {
+        (start, end)
+    } else {
+        (from, to)
+    }
+}
+
 /// The kept ranking forgotten: the comp changed under it.
 pub(crate) fn forget() {
     if let Ok(mut last) = LAST.lock() {
@@ -403,6 +429,7 @@ fn comp_in(
     (from, to): (f64, f64),
 ) -> Result<bool, String> {
     let mut stages = architect_telemetry::timing::Stages::start();
+    let (from, to) = clear_of_hits(daw, project, (from, to));
     let label = format!("Comp from take {}", take.pass);
     daw::service::Projects::begin_undo_block(daw, project.clone(), &label);
     let comped =
