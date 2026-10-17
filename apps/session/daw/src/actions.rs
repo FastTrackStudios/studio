@@ -28,7 +28,6 @@ use facet::Facet;
 use crate::keys::Action;
 pub(crate) use editing::drums::KitPiece;
 use editing::drums::{KIT_MERGE, Moment, moments, weights};
-#[cfg(feature = "signal")]
 use editing::quantize::shift_at;
 use editing::quantize::{
     DOUBLE_STROKE, FURTHEST_PAST, GESTURE, NEAR_WRITTEN, ON_ITS_LINE, PLAYED_ON_A_LINE, Placed,
@@ -1099,6 +1098,7 @@ fn register_data(list: &ActionList) {
     register_tracks(list);
     register_fundamental(list);
     crate::hits::register(list);
+    crate::hits_midi::register(list);
     register_track_set(list);
     register_reference(list);
     #[cfg(feature = "native")]
@@ -2082,7 +2082,7 @@ fn register_undo(list: &ActionList) {
             return Ok("nothing to undo".to_owned());
         }
         stepped();
-        samples_follow(daw, &project);
+        samples_follow(daw, &project, crate::hits_midi::Mode::Follow);
         crate::marks_strip::refresh();
         crate::studio::request_resync();
         crate::actions::list().changed("items", "undo");
@@ -2102,7 +2102,7 @@ fn register_undo(list: &ActionList) {
             return Ok("nothing to redo".to_owned());
         }
         stepped();
-        samples_follow(daw, &project);
+        samples_follow(daw, &project, crate::hits_midi::Mode::Follow);
         crate::marks_strip::refresh();
         crate::studio::request_resync();
         crate::actions::list().changed("items", "redo");
@@ -2113,20 +2113,34 @@ fn register_undo(list: &ActionList) {
     });
 }
 
-/// The kit's samples brought back onto its hits where they play now —
-/// after an undo, a redo or a stretch taken out, which move the recording
-/// and not the notes made from it. A Sample track already there is left.
+/// The kit's hits as MIDI (and so its samples) made to agree with the
+/// hits after an edit step (`Reconcile`: a view edited in that step is
+/// carried over to the hits), an undo or a redo (`Follow`: the views
+/// written from the hits put back).
 #[cfg(feature = "native")]
 pub(crate) fn samples_follow(
     daw: &daw::standalone::Standalone,
     project: &daw::service::ProjectContext,
+    mode: crate::hits_midi::Mode,
 ) {
-    #[cfg(feature = "signal")]
-    if let Err(e) = crate::drum_samples::resync(daw, project) {
-        tracing::warn!(samples.error = %e, "drums: the samples could not follow");
+    match crate::hits_midi::sync(daw, project, mode, &|t| t) {
+        Ok(synced) => {
+            if let Some(applied) = synced.applied {
+                tracing::info!(
+                    hits_midi.removed = applied.removed,
+                    hits_midi.moved = applied.moved,
+                    hits_midi.velocities = applied.velocities,
+                    hits_midi.added = applied.added,
+                    hits_midi.unplaced = applied.unplaced,
+                    hits_midi.written = synced.written,
+                    "drums: hits edited in the MIDI"
+                );
+                crate::hit_overlay::refresh();
+                crate::studio::request_resync_items();
+            }
+        }
+        Err(e) => tracing::warn!(hits_midi.error = %e, "drums: the hits' MIDI could not follow"),
     }
-    #[cfg(not(feature = "signal"))]
-    let _ = (daw, project);
 }
 
 /// Session undos and redos run, ever (one that found nothing counts): what
@@ -2181,7 +2195,7 @@ fn undo_through_doc(
         }
         Undone::Step(name) => {
             stepped();
-            samples_follow(daw, project);
+            samples_follow(daw, project, crate::hits_midi::Mode::Follow);
             crate::marks_strip::refresh();
             crate::studio::request_resync();
             crate::actions::list().changed("items", if back { "undo" } else { "redo" });
@@ -2482,62 +2496,7 @@ fn register_samples(list: &ActionList) {
             applied: !dry,
         })
     });
-    list.register(&SAMPLES_CHECK, Effect::ReadOnly, |a: SamplesCheckArg| {
-        let (daw, project) = song()?;
-        let span = (
-            a.from.unwrap_or(f64::NEG_INFINITY),
-            a.to.unwrap_or(f64::INFINITY),
-        );
-        let count = |n: usize| u32::try_from(n).unwrap_or(u32::MAX);
-        Ok(crate::drum_samples::check(daw, &project, span)
-            .into_iter()
-            .map(|s| SamplesStanding {
-                in_step: s.unplayed.is_empty() && s.stray.is_empty(),
-                hits: count(s.hits),
-                notes: count(s.notes),
-                unplayed: s.unplayed.into_iter().take(SAMPLES_CHECK_SHOWN).collect(),
-                stray: s.stray.into_iter().take(SAMPLES_CHECK_SHOWN).collect(),
-                piece: s.piece,
-                track: s.track,
-            })
-            .collect::<Vec<_>>())
-    });
 }
-
-#[cfg(feature = "signal")]
-static SAMPLES_CHECK: ActionMeta = meta(
-    "DRUMS_SAMPLES_CHECK",
-    "drums_samples_check",
-    "Drum samples in step",
-    "Whether each Sample track plays its piece's hits where they play now: per piece, the hits playing and the notes written (`from`/`to`, seconds, narrow it), `in_step`, and the first few hits with no note (`unplayed`) and notes with no hit (`stray`). What DRUMS_SAMPLES and every edit after it keep true.",
-    "Drums",
-    "",
-);
-
-/// Over when.
-#[cfg(feature = "signal")]
-#[derive(Facet)]
-struct SamplesCheckArg {
-    from: Option<f64>,
-    to: Option<f64>,
-}
-
-/// One piece's samples against its hits.
-#[cfg(feature = "signal")]
-#[derive(Facet)]
-struct SamplesStanding {
-    piece: String,
-    track: String,
-    hits: u32,
-    notes: u32,
-    in_step: bool,
-    unplayed: Vec<f64>,
-    stray: Vec<f64>,
-}
-
-/// How many of the hits or notes out of step a check names.
-#[cfg(feature = "signal")]
-const SAMPLES_CHECK_SHOWN: usize = 20;
 
 static ITEMS: ActionMeta = meta(
     "TRACK_ITEMS",
@@ -4586,14 +4545,16 @@ fn register_stretch(list: &ActionList) {
             return Err("no kit track to stretch".to_owned());
         }
         // The samples move with the hit, as they do with a slip.
-        #[cfg(feature = "signal")]
-        if let Err(why) = crate::drum_samples::follow(daw, &project, |t| {
+        let moved = |t: f64| {
             if (t - hit).abs() <= OWN_SLICE {
                 t + by
             } else {
                 t
             }
-        }) {
+        };
+        if let Err(why) =
+            crate::hits_midi::sync(daw, &project, crate::hits_midi::Mode::Follow, &moved)
+        {
             tracing::warn!(why, "drums: the samples could not follow the stretch");
         }
         crate::hits::mark_placed(daw, &project, &a.id);
@@ -5182,23 +5143,23 @@ fn follow_samples(
     settings: &crate::drum_settings::Settings,
     cuts: &[(i64, i64)],
 ) {
-    #[cfg(feature = "signal")]
-    {
-        let lead = settings.lead_ms / 1_000.0;
-        let seconds = |us: i64| num_traits::ToPrimitive::to_f64(&us).unwrap_or(0.0) / 1_000_000.0;
-        let slices: Vec<(f64, f64)> = cuts
-            .iter()
-            .map(|c| (seconds(c.0) - lead, seconds(c.1)))
-            .collect();
-        let goes_to = |t: f64| t + shift_at(&slices, t);
-        match crate::drum_samples::follow(daw, project, goes_to) {
-            Ok(0) => {}
-            Ok(n) => tracing::info!(samples.tracks = n, "drums: the samples follow the slip"),
-            Err(why) => tracing::warn!(why, "drums: the samples could not follow the slip"),
+    let lead = settings.lead_ms / 1_000.0;
+    let seconds = |us: i64| num_traits::ToPrimitive::to_f64(&us).unwrap_or(0.0) / 1_000_000.0;
+    let slices: Vec<(f64, f64)> = cuts
+        .iter()
+        .map(|c| (seconds(c.0) - lead, seconds(c.1)))
+        .collect();
+    let goes_to = |t: f64| t + shift_at(&slices, t);
+    match crate::hits_midi::sync(daw, project, crate::hits_midi::Mode::Follow, &goes_to) {
+        Ok(s) if s.written > 0 => {
+            tracing::info!(
+                samples.tracks = s.written,
+                "drums: the samples follow the slip"
+            );
         }
+        Ok(_) => {}
+        Err(why) => tracing::warn!(why, "drums: the samples could not follow the slip"),
     }
-    #[cfg(not(feature = "signal"))]
-    let _ = (daw, project, settings, cuts);
 }
 
 /// Carry out `cuts` (`(hit, shift)`, microseconds, by hit): the window

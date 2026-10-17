@@ -15,7 +15,7 @@
 //! take_markers: Map "<source>#<id>" → Map { source, id, at, name, color,
 //!                hit, hit.piece, hit.origin, hit.run, hit.peak_db,
 //!                hit.confidence, hit.from_trigger, hit.from_mic,
-//!                hit.ghost, hit.bleed, hit.flam_with, hit.note }
+//!                hit.ghost, hit.bleed, hit.flam_with, hit.note, hit.velocity }
 //! fx     : Map   fx id → Map { track, index, plugin, name, enabled,
 //!                offline, state }  (state: a blob's name in the store)
 //! sends  : Map   "<track>#<n>" → Map { track, index, dest, mode, volume,
@@ -2097,6 +2097,11 @@ fn take_marker_fields(m: &TakeMarkerState) -> Fields {
         ("hit.bleed", LoroValue::Bool(h.bleed)),
         ("hit.flam_with", opt_str(h.flam_with.as_deref())),
         ("hit.note", LoroValue::from(h.note.as_str())),
+        (
+            "hit.velocity",
+            h.velocity
+                .map_or(LoroValue::Null, |v| LoroValue::I64(i64::from(v))),
+        ),
     ]);
     fields
 }
@@ -2123,6 +2128,9 @@ fn read_take_marker(fields: &HashMap<String, LoroValue>) -> TakeMarkerState {
             bleed: g.bool("hit.bleed", false),
             flam_with: g.opt_string("hit.flam_with"),
             note: g.string("hit.note"),
+            velocity: u8::try_from(g.i64("hit.velocity", 0))
+                .ok()
+                .filter(|v| *v > 0),
         }),
     }
 }

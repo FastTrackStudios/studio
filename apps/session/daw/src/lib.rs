@@ -208,6 +208,8 @@ pub mod hit_overlay;
 pub mod hit_place;
 #[cfg(feature = "native")]
 pub mod hits;
+#[cfg(feature = "native")]
+pub mod hits_midi;
 #[cfg(test)]
 mod hook_rules;
 pub mod kit_gate;

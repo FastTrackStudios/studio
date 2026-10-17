@@ -223,6 +223,7 @@ async fn round_trip(
                     origin: daw_proto::MarkOrigin::Manual,
                     ghost: true,
                     note: "a ghost the trigger missed".into(),
+                    velocity: Some(40),
                     ..daw_proto::HitMark::default()
                 }),
                 ..daw_proto::TakeMarker::default()
@@ -310,6 +311,7 @@ async fn round_trip(
         .expect("the hand-placed hit");
     assert_eq!(manual.origin, "manual");
     assert!(manual.ghost);
+    assert_eq!(manual.velocity, Some(40), "a velocity set by hand");
     assert_eq!(
         built.take_markers, rebuilt.take_markers,
         "hits rebuilt the same (direct: {direct})"

@@ -423,6 +423,20 @@ fn append(open: &mut Open, label: &str) -> Result<(), String> {
 /// Steps the engine finished that the recorder has not recorded yet.
 static PENDING: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
 
+/// How the kit's MIDI agrees with its hits after `labels` (the steps
+/// recorded together): an undo or a redo puts both back, so the views are
+/// written from the hits; any other step may be an edit of a view.
+fn sync_mode(labels: &[String]) -> crate::hits_midi::Mode {
+    if labels
+        .iter()
+        .any(|l| l.starts_with("Undo ") || l.starts_with("Redo "))
+    {
+        crate::hits_midi::Mode::Follow
+    } else {
+        crate::hits_midi::Mode::Reconcile
+    }
+}
+
 pub(crate) fn record_steps() {
     compact_when_idle();
     static LISTENING: std::sync::Once = std::sync::Once::new();
@@ -458,6 +472,7 @@ pub(crate) fn record_steps() {
                             crate::actions::samples_follow(
                                 daw,
                                 &daw::service::ProjectContext::Project(project.clone()),
+                                sync_mode(&labels),
                             );
                         }
                         let followed = started.elapsed();

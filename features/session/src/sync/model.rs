@@ -667,4 +667,6 @@ pub struct HitState {
     /// The other stroke of a flam: that marker's id.
     pub flam_with: Option<String>,
     pub note: String,
+    /// Its velocity as set by hand, 1..=127.
+    pub velocity: Option<u8>,
 }

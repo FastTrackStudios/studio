@@ -886,6 +886,7 @@ fn take_hits(
                 bleed: f.method == hits::Method::MicAlone && h.confidence < UNSURE,
                 flam_with: h.flam_with.and_then(|n| ids.get(n)).map(|o| at_take(o)),
                 note: String::new(),
+                velocity: None,
             },
         })
         .filter(|h| h.at >= span.0 && h.at <= span.1)
@@ -1468,6 +1469,18 @@ pub fn recorded_at(
     piece: &str,
     now: f64,
 ) -> Option<f64> {
+    played_at(daw, project, piece, now).map(|(_, recorded)| recorded)
+}
+
+/// What `piece` plays at `now`: the recording its first mic's slice there
+/// is cut from, and when in it (project seconds, as recorded).
+#[must_use]
+pub fn played_at(
+    daw: &daw::standalone::Standalone,
+    project: &ProjectContext,
+    piece: &str,
+    now: f64,
+) -> Option<(String, f64)> {
     let (pieces, _) = kit(daw, project);
     let mic = pieces
         .iter()
@@ -1496,7 +1509,189 @@ pub fn recorded_at(
         .into_iter()
         .find(|r| r.path == path)?
         .origin;
-    Some(origin + source / rate)
+    Some((path, origin + source / rate))
+}
+
+/// The pass a hit's recording is of — what, with its id, tells it from
+/// the same id on another take recorded from the same place.
+#[must_use]
+pub fn pass_key(path: &str) -> String {
+    crate::take_colors::stamp(path).unwrap_or_else(|| path.to_owned())
+}
+
+/// One hit, told from every other: its recording's pass ([`pass_key`])
+/// and its marker id.
+pub type HitKey = (String, String);
+
+/// What an edit of a hit's note does to the hit.
+#[derive(Clone, Debug, PartialEq)]
+pub enum HitChange {
+    /// The note was deleted.
+    Remove,
+    /// The note was moved: the hit plays at this time now (project
+    /// seconds, after any edit).
+    MoveTo(f64),
+    /// The note's velocity was changed.
+    Velocity(u8),
+}
+
+/// A hit drawn as a note: its piece, where it plays (project seconds,
+/// after any edit) and its velocity.
+#[derive(Clone, Debug, PartialEq)]
+pub struct NewHit {
+    pub piece: String,
+    pub now: f64,
+    pub velocity: u8,
+}
+
+/// What [`apply_midi`] did.
+#[derive(Debug, Default, PartialEq, Eq)]
+pub struct Applied {
+    pub removed: usize,
+    pub moved: usize,
+    pub velocities: usize,
+    pub added: usize,
+    /// Notes drawn where no slice of the piece plays: nothing to put a
+    /// hit on.
+    pub unplaced: usize,
+}
+
+/// Carry edits of the kit's MIDI over to its hits: `changes` to hits
+/// there are, `added` hits drawn as new notes — each on the recording of
+/// the pass the song plays there, on every one of its piece's tracks.
+/// Hand-made (`manual`) hits, written as one undo step.
+pub(crate) fn apply_midi(
+    daw: &daw::standalone::Standalone,
+    project: &ProjectContext,
+    changes: &[(HitKey, HitChange)],
+    added: &[NewHit],
+) -> Applied {
+    let mut applied = Applied::default();
+    // A move onto another take's slice is that take's hit now: the old
+    // one goes and a new one is placed.
+    let mut changes: Vec<(HitKey, HitChange)> = changes.to_vec();
+    let mut added: Vec<NewHit> = added.to_vec();
+    let mut landing: HashMap<HitKey, (String, f64)> = HashMap::new();
+    let (pieces, _) = kit(daw, project);
+    let piece_of = |key: &HitKey| -> Option<String> {
+        playback(daw, project)
+            .into_iter()
+            .find(|p| pass_key(&p.source) == key.0 && p.id == key.1)
+            .map(|p| p.piece)
+    };
+    for (key, change) in &mut changes {
+        let HitChange::MoveTo(now) = *change else {
+            continue;
+        };
+        let Some(piece) = piece_of(key) else { continue };
+        match played_at(daw, project, &piece, now) {
+            Some((path, recorded)) if pass_key(&path) == key.0 => {
+                landing.insert(key.clone(), (path, recorded));
+            }
+            _ => {
+                added.push(NewHit {
+                    piece,
+                    now,
+                    velocity: 0,
+                });
+                *change = HitChange::Remove;
+            }
+        }
+    }
+    let placed: Vec<(NewHit, String, f64)> = added
+        .into_iter()
+        .filter_map(|h| {
+            let at = played_at(daw, project, &h.piece, h.now);
+            if at.is_none() {
+                applied.unplaced = applied.unplaced.saturating_add(1);
+            }
+            at.map(|(path, recorded)| (h, path, recorded))
+        })
+        .collect();
+    let by_key: HashMap<&HitKey, &HitChange> = changes.iter().map(|(k, c)| (k, c)).collect();
+    let label = "Edit the drum hits from the MIDI";
+    Projects::begin_undo_block(daw, project.clone(), label);
+    for piece in &pieces {
+        for track in piece.tracks() {
+            for r in recordings(daw, project, track) {
+                let pass = pass_key(&r.path);
+                let item = ItemRef::Guid(r.item.clone());
+                let mut markers =
+                    daw.get_take_markers(project.clone(), item.clone(), TakeRef::Active);
+                let before = markers.clone();
+                markers.retain_mut(|m| {
+                    let key = (pass.clone(), m.id.clone());
+                    let Some(change) = by_key.get(&key) else {
+                        return true;
+                    };
+                    if m.hit.as_ref().is_none_or(|h| h.piece != piece.name) {
+                        return true;
+                    }
+                    match change {
+                        HitChange::Remove => return false,
+                        HitChange::MoveTo(_) => {
+                            if let Some((_, recorded)) = landing.get(&key) {
+                                m.source_position_seconds = recorded - r.origin;
+                                if let Some(h) = m.hit.as_mut() {
+                                    h.origin = MarkOrigin::Manual;
+                                }
+                            }
+                        }
+                        HitChange::Velocity(v) => {
+                            if let Some(h) = m.hit.as_mut() {
+                                h.velocity = Some(*v);
+                            }
+                        }
+                    }
+                    true
+                });
+                for (h, path, recorded) in &placed {
+                    if h.piece != piece.name || pass_key(path) != pass {
+                        continue;
+                    }
+                    markers.push(TakeMarker {
+                        id: midi_hit_id(&h.piece, *recorded),
+                        source_position_seconds: recorded - r.origin,
+                        hit: Some(HitMark {
+                            piece: piece.name.clone(),
+                            origin: MarkOrigin::Manual,
+                            confidence: 1.0,
+                            note: "drawn in the MIDI".to_owned(),
+                            velocity: (h.velocity > 0).then_some(h.velocity),
+                            ..HitMark::default()
+                        }),
+                        ..TakeMarker::default()
+                    });
+                }
+                if markers == before {
+                    continue;
+                }
+                if let Err(e) =
+                    daw.set_take_markers(project.clone(), item, TakeRef::Active, markers)
+                {
+                    tracing::warn!(hits.write_error = %e, "a hit edited in the MIDI could not be written");
+                }
+            }
+        }
+    }
+    Projects::end_undo_block(daw, project.clone(), label, None);
+    for (_, change) in &changes {
+        match change {
+            HitChange::Remove => applied.removed = applied.removed.saturating_add(1),
+            HitChange::MoveTo(_) => applied.moved = applied.moved.saturating_add(1),
+            HitChange::Velocity(_) => applied.velocities = applied.velocities.saturating_add(1),
+        }
+    }
+    applied.added = placed.len();
+    applied
+}
+
+/// A hit drawn in the MIDI's id: its piece and where it was recorded, to
+/// the tenth of a millisecond — the same on every mic of its take, and
+/// not one a detector run makes.
+fn midi_hit_id(piece: &str, recorded: f64) -> String {
+    let at = num_traits::ToPrimitive::to_i64(&(recorded * 10_000.0).round()).unwrap_or(0);
+    format!("midi.{}.{at}", slug(piece))
 }
 
 /// Place a hit of `piece` by hand at `time` (project seconds, as

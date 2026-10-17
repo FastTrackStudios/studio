@@ -327,6 +327,7 @@ pub(crate) fn take_marker_state(source: &str, m: daw_proto::TakeMarker) -> TakeM
             bleed: h.bleed,
             flam_with: h.flam_with,
             note: h.note,
+            velocity: h.velocity,
         }),
     }
 }
@@ -355,6 +356,7 @@ pub(crate) fn proto_take_marker(m: &TakeMarkerState) -> daw_proto::TakeMarker {
             bleed: h.bleed,
             flam_with: h.flam_with.clone(),
             note: h.note.clone(),
+            velocity: h.velocity,
         }),
     }
 }
