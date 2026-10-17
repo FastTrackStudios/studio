@@ -119,14 +119,6 @@ struct Comped {
     edit_restored: bool,
 }
 
-/// The kit's top folder: what a comp of the whole kit is swiped on.
-fn kit_folder(
-    daw: &daw::standalone::Standalone,
-    project: &ProjectContext,
-) -> Result<String, String> {
-    crate::track_regions::kit_folder(daw, project).ok_or_else(|| "no Drums folder".to_owned())
-}
-
 /// The drum MIDI over `from..to` as strikes on the kit's pieces (its
 /// pitches learned against the hits); none without a drum MIDI track.
 ///
@@ -255,7 +247,7 @@ fn kit_takes(project: &ProjectContext) -> crate::take_colors::TakeColors {
     };
     song.read(|p| {
         let tracks = &p.tracks;
-        // The top folder over the kit's first piece, as `kit_folder` finds it.
+        // The top folder over the kit's first piece, as `track_regions::kit_folder` finds it.
         let (_, piece) = crate::drum_reference::pieces_of(tracks)
             .into_iter()
             .next()?;

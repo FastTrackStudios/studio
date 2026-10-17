@@ -2465,14 +2465,79 @@ fn register_samples(list: &ActionList) {
             return Err(format!("no kit preset at {}", preset.display()));
         }
         let dry = a.dry_run.unwrap_or(false);
-        let report = crate::drum_samples::set_up(daw, &project, &preset, dry)?;
+        // A step of its own: undoing the next edit never takes the
+        // samples' set-up with it.
+        let label = "Set up the drum samples";
+        if !dry {
+            daw::service::Projects::begin_undo_block(daw, project.clone(), label);
+        }
+        let report = crate::drum_samples::set_up(daw, &project, &preset, dry);
+        if !dry {
+            daw::service::Projects::end_undo_block(daw, project.clone(), label, None);
+        }
+        let report = report?;
         Ok(SamplesOut {
             tracks: report.tracks,
             notes: u32::try_from(report.notes).unwrap_or(u32::MAX),
             applied: !dry,
         })
     });
+    list.register(&SAMPLES_CHECK, Effect::ReadOnly, |a: SamplesCheckArg| {
+        let (daw, project) = song()?;
+        let span = (
+            a.from.unwrap_or(f64::NEG_INFINITY),
+            a.to.unwrap_or(f64::INFINITY),
+        );
+        let count = |n: usize| u32::try_from(n).unwrap_or(u32::MAX);
+        Ok(crate::drum_samples::check(daw, &project, span)
+            .into_iter()
+            .map(|s| SamplesStanding {
+                in_step: s.unplayed.is_empty() && s.stray.is_empty(),
+                hits: count(s.hits),
+                notes: count(s.notes),
+                unplayed: s.unplayed.into_iter().take(SAMPLES_CHECK_SHOWN).collect(),
+                stray: s.stray.into_iter().take(SAMPLES_CHECK_SHOWN).collect(),
+                piece: s.piece,
+                track: s.track,
+            })
+            .collect::<Vec<_>>())
+    });
 }
+
+#[cfg(feature = "signal")]
+static SAMPLES_CHECK: ActionMeta = meta(
+    "DRUMS_SAMPLES_CHECK",
+    "drums_samples_check",
+    "Drum samples in step",
+    "Whether each Sample track plays its piece's hits where they play now: per piece, the hits playing and the notes written (`from`/`to`, seconds, narrow it), `in_step`, and the first few hits with no note (`unplayed`) and notes with no hit (`stray`). What DRUMS_SAMPLES and every edit after it keep true.",
+    "Drums",
+    "",
+);
+
+/// Over when.
+#[cfg(feature = "signal")]
+#[derive(Facet)]
+struct SamplesCheckArg {
+    from: Option<f64>,
+    to: Option<f64>,
+}
+
+/// One piece's samples against its hits.
+#[cfg(feature = "signal")]
+#[derive(Facet)]
+struct SamplesStanding {
+    piece: String,
+    track: String,
+    hits: u32,
+    notes: u32,
+    in_step: bool,
+    unplayed: Vec<f64>,
+    stray: Vec<f64>,
+}
+
+/// How many of the hits or notes out of step a check names.
+#[cfg(feature = "signal")]
+const SAMPLES_CHECK_SHOWN: usize = 20;
 
 static ITEMS: ActionMeta = meta(
     "TRACK_ITEMS",

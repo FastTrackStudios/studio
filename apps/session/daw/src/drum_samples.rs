@@ -262,6 +262,82 @@ pub fn follow(
     Ok(written)
 }
 
+/// How one piece's Sample track stands against where its hits play now.
+#[derive(Debug)]
+pub struct Standing {
+    pub piece: String,
+    pub track: String,
+    /// The piece's hits playing in the span asked about.
+    pub hits: usize,
+    /// The track's notes of the piece in it.
+    pub notes: usize,
+    /// Where a hit plays with no note on it, seconds.
+    pub unplayed: Vec<f64>,
+    /// Where a note plays with no hit under it, seconds.
+    pub stray: Vec<f64>,
+}
+
+/// Each Sample track already set up, against its piece's hits where they
+/// play now over `span` (seconds): whether the samples follow the edit.
+#[must_use]
+pub fn check(
+    daw: &daw::standalone::Standalone,
+    project: &ProjectContext,
+    span: (f64, f64),
+) -> Vec<Standing> {
+    let tracks = Tracks::all(daw, project.clone());
+    let triggers = crate::drum_reference::pieces(daw, project);
+    let inside = |t: &f64| *t >= span.0 && *t < span.1;
+    played(daw, project)
+        .into_iter()
+        .filter_map(|(piece, hits)| {
+            let note = note_for(&piece)?;
+            let sample = triggers
+                .iter()
+                .find(|(n, _)| *n == piece)
+                .and_then(|(_, trigger)| sample_track(&tracks, trigger))?;
+            let hits: Vec<f64> = hits.iter().map(|h| h.0).filter(inside).collect();
+            let notes: Vec<f64> = crate::drum_reference::notes(daw, project, &sample.guid)
+                .into_iter()
+                .filter(|n| n.pitch == note)
+                .map(|n| n.time)
+                .filter(inside)
+                .collect();
+            let (unplayed, stray) = unmatched(&hits, &notes);
+            Some(Standing {
+                track: sample.name.clone(),
+                hits: hits.len(),
+                notes: notes.len(),
+                unplayed,
+                stray,
+                piece,
+            })
+        })
+        .collect()
+}
+
+/// How near a note must be to its hit to play it, seconds: half a MIDI
+/// tick at any tempo a kit is played at, with room to spare.
+const ON_THE_HIT: f64 = 0.001;
+
+/// The hits with no note on them and the notes with no hit under them,
+/// each matched once; both sorted.
+fn unmatched(hits: &[f64], notes: &[f64]) -> (Vec<f64>, Vec<f64>) {
+    let mut free: Vec<f64> = notes.to_vec();
+    free.sort_by(f64::total_cmp);
+    let mut unplayed = Vec::new();
+    for &hit in hits {
+        match free.iter().position(|n| (n - hit).abs() <= ON_THE_HIT) {
+            Some(at) => {
+                free.remove(at);
+            }
+            None => unplayed.push(hit),
+        }
+    }
+    unplayed.sort_by(f64::total_cmp);
+    (unplayed, free)
+}
+
 /// How near a written note must be to where it goes to be left, seconds:
 /// a MIDI tick at any tempo a kit is played at.
 const SAME_NOTE: f64 = 0.0005;
@@ -473,6 +549,16 @@ mod tests {
     }
 
     use super::*;
+
+    /// A note a tick off its hit plays it; a hit without one, and a note
+    /// left where a hit was, are each named.
+    #[test]
+    fn the_check_names_hits_without_notes_and_notes_without_hits() {
+        let (unplayed, stray) = unmatched(&[1.0, 2.0, 2.0004, 3.0], &[1.0003, 2.0, 2.0, 4.0]);
+        assert_eq!(unplayed, vec![3.0]);
+        assert_eq!(stray, vec![4.0]);
+        assert_eq!(unmatched(&[], &[]), (vec![], vec![]));
+    }
 
     #[test]
     fn pieces_take_the_kits_notes() {
