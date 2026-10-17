@@ -300,6 +300,32 @@ pub fn kit_from(
     (pieces, extras)
 }
 
+/// The kit's other mics — overheads, rooms, anything recorded under the
+/// Drums folder that no piece or extra claims (`claimed`): bleed of every
+/// piece, so a comp takes them from the same take as the close mics, or a
+/// fill's toms come from one take and the overheads' from another.
+#[must_use]
+pub fn room_mics(
+    tracks: &[daw_proto::Track],
+    claimed: &BTreeSet<&String>,
+    has_items: &dyn Fn(&str) -> bool,
+) -> Vec<String> {
+    let by_guid: HashMap<&str, &daw_proto::Track> =
+        tracks.iter().map(|t| (t.guid.as_str(), t)).collect();
+    tracks
+        .iter()
+        .filter(|t| {
+            !t.is_folder
+                && !claimed.contains(&t.guid)
+                && crate::gain_stage::path_of(t, &by_guid)
+                    .first()
+                    .is_some_and(|p| p.trim().eq_ignore_ascii_case("drums"))
+                && has_items(&t.guid)
+        })
+        .map(|t| t.guid.clone())
+        .collect()
+}
+
 // ── recordings and takes ──────────────────────────────────────────────
 
 /// A recording on a track: its file, where its first sample sounds as
@@ -499,12 +525,15 @@ pub fn takes_over(
     (from, to): (f64, f64),
 ) -> Vec<TakeVersion> {
     let (pieces, extras) = kit(daw, project);
-    let tracks: Vec<&String> = pieces
+    let all = Tracks::all(daw, project.clone());
+    let kit_tracks: Vec<&String> = pieces
         .iter()
         .flat_map(KitPiece::tracks)
         .chain(&extras)
         .collect();
-    let all = Tracks::all(daw, project.clone());
+    // Tracks with no take lanes (a sample's MIDI) find none below: no harm.
+    let rooms = room_mics(&all, &kit_tracks.iter().copied().collect(), &|_| true);
+    let tracks: Vec<&String> = kit_tracks.into_iter().chain(&rooms).collect();
     // Each mic's take lanes by the file they play: one pass over its items
     // (COMP and EDIT left out — they play pieces of every take).
     let mut lane_of: HashMap<(String, String), u32> = HashMap::new();
@@ -3242,5 +3271,38 @@ mod wav_tests {
             super::pcm_wav_mono(b"OggS....").is_none(),
             "not a WAV: the decoder's"
         );
+    }
+}
+
+#[cfg(test)]
+mod room_mic_tests {
+    use super::room_mics;
+
+    fn track(guid: &str, name: &str, parent: Option<&str>, folder: bool) -> daw_proto::Track {
+        daw_proto::Track {
+            guid: guid.to_owned(),
+            name: name.to_owned(),
+            parent_guid: parent.map(str::to_owned),
+            is_folder: folder,
+            ..daw_proto::Track::default()
+        }
+    }
+
+    /// The overheads and rooms come with the kit's comp; a piece's mic
+    /// already claimed, a folder and a track outside the Drums do not.
+    #[test]
+    fn the_overheads_and_rooms_are_comped_with_the_kit() {
+        let tracks = [
+            track("d", "Drums", None, true),
+            track("k", "Kick", Some("d"), true),
+            track("in", "In", Some("k"), false),
+            track("oh", "OHs", Some("d"), false),
+            track("rm", "Rooms", Some("d"), false),
+            track("bass", "Bass", None, false),
+        ];
+        let kick_in = "in".to_owned();
+        let claimed = std::iter::once(&kick_in).collect();
+        assert_eq!(room_mics(&tracks, &claimed, &|_| true), ["oh", "rm"]);
+        assert_eq!(room_mics(&tracks, &claimed, &|g| g == "oh"), ["oh"]);
     }
 }
