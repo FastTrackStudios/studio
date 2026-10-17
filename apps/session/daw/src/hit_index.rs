@@ -281,6 +281,7 @@ fn item_hits(
                 let inside = m.source_position_seconds >= from && m.source_position_seconds < to;
                 (hit.piece == *piece && inside).then(|| Played {
                     id: m.id.clone(),
+                    source: key.clone(),
                     piece: hit.piece.clone(),
                     time: at(m.source_position_seconds),
                     peak_db: hit.peak_db,

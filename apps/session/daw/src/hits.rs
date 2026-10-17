@@ -1739,11 +1739,22 @@ pub fn explain(
 #[derive(Clone, Debug)]
 pub struct Played {
     pub id: String,
+    /// The recording it is a hit of: a marker's id is unique within its
+    /// recording only — takes recorded from the same place share them.
+    pub source: String,
     pub piece: String,
     /// Project seconds, as it plays now.
     pub time: f64,
     pub peak_db: f64,
     pub mark: HitMark,
+}
+
+impl Played {
+    /// What tells it from every other hit: its recording and its id.
+    #[must_use]
+    pub fn key(&self) -> (&str, &str) {
+        (&self.source, &self.id)
+    }
 }
 
 /// What the arrangement draws over the kit in Edit mode: every hit where
@@ -2013,7 +2024,7 @@ pub fn playback_scan(daw: &daw::standalone::Standalone, project: &ProjectContext
                     |t| item.position.as_seconds() + t,
                 )
             };
-            let markers = by_source.entry(path).or_insert_with(|| {
+            let markers = by_source.entry(path.clone()).or_insert_with(|| {
                 daw.get_take_markers(
                     project.clone(),
                     ItemRef::Guid(item.guid.clone()),
@@ -2030,6 +2041,7 @@ pub fn playback_scan(daw: &daw::standalone::Standalone, project: &ProjectContext
                 }
                 out.push(Played {
                     id: m.id.clone(),
+                    source: path.clone(),
                     piece: h.piece.clone(),
                     time: at(m.source_position_seconds),
                     peak_db: h.peak_db,
@@ -2262,15 +2274,17 @@ pub fn check(
 ) -> Check {
     let after = playback(daw, project);
     let inside = |t: f64| t >= span.0 && t <= span.1;
-    let mut count: HashMap<&str, Vec<f64>> = HashMap::new();
+    // By recording and id: one id is a hit of each take recorded from
+    // the same place, and a comp of two of them plays both.
+    let mut count: HashMap<(&str, &str), Vec<f64>> = HashMap::new();
     for p in &after {
-        count.entry(p.id.as_str()).or_default().push(p.time);
+        count.entry(p.key()).or_default().push(p.time);
     }
     let mut out = Check {
         hits: u32::try_from(after.iter().filter(|p| inside(p.time)).count()).unwrap_or(u32::MAX),
         ..Check::default()
     };
-    for (id, times) in &count {
+    for ((_, id), times) in &count {
         if times.len() > 1 && times.iter().any(|t| inside(*t)) {
             out.doubled = out.doubled.saturating_add(1);
             if out.problems.len() < 20 {
@@ -2282,7 +2296,7 @@ pub fn check(
     // cut away with its slice, nothing is missed (as `audit` counts).
     let stroke = |b: &&Played| !(b.mark.bleed && b.mark.origin == MarkOrigin::Auto);
     for b in before.iter().filter(|b| inside(b.time)).filter(stroke) {
-        if !count.contains_key(b.id.as_str()) {
+        if !count.contains_key(&b.key()) {
             out.lost = out.lost.saturating_add(1);
             if out.problems.len() < 20 {
                 out.problems.push(format!(
@@ -2316,7 +2330,7 @@ pub fn check(
     // just past it along, nothing further.
     let near = |t: f64| t >= span.0 - STRAY_MARGIN && t <= span.1 + STRAY_MARGIN;
     for b in before.iter().filter(|b| !near(b.time)) {
-        let now = count.get(b.id.as_str());
+        let now = count.get(&b.key());
         if now.is_some_and(|times| !times.iter().any(|t| (t - b.time).abs() < 0.001)) {
             out.strayed = out.strayed.saturating_add(1);
             if out.problems.len() < 20 {
