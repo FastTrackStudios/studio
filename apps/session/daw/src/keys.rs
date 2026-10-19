@@ -55,6 +55,15 @@ pub enum Action {
     /// Ctrl+Shift+T: keep the take comped over the selection (`COMP_KEEP`),
     /// or let a kept stretch go again.
     CompKeep,
+    /// Rank a take up (`by` 1) or down (-1) by hand (`TAKES_RANK`): the
+    /// take under the mouse first (`mouse`, buttons 4 and 5), else the
+    /// selected takes — the last recording's once it ends — else the
+    /// mouse's (Up and Down); while recording, the take being recorded
+    /// from where the press falls.
+    RankTake {
+        by: i8,
+        mouse: bool,
+    },
     /// Level what is selected (`EDIT_LEVEL`), in Edit mode: for the drums
     /// each selected piece's strokes brought toward one another.
     LevelDrums,
@@ -235,6 +244,19 @@ pub fn action_of(id: &str) -> Action {
         "FTS_COMP_PREV" => Action::CompCycle(-1),
         "FTS_COMP_BEST" => Action::CompBest,
         "FTS_COMP_KEEP" => Action::CompKeep,
+        "FTS_TAKE_UPRANK" => Action::RankTake {
+            by: 1,
+            mouse: false,
+        },
+        "FTS_TAKE_DOWNRANK" => Action::RankTake {
+            by: -1,
+            mouse: false,
+        },
+        "FTS_TAKE_UPRANK_MOUSE" => Action::RankTake { by: 1, mouse: true },
+        "FTS_TAKE_DOWNRANK_MOUSE" => Action::RankTake {
+            by: -1,
+            mouse: true,
+        },
         "FTS_QUANTIZE_PANEL" => Action::QuantizePanel,
         "FTS_GAIN_STAGE" => Action::GainStage { clear: false },
         "FTS_GAIN_STAGE_CLEAR" => Action::GainStage { clear: true },
@@ -584,8 +606,8 @@ const BUILTIN: &str = r#"{
       "l": "40837",
       "Ctrl+h": "40646",
       "Ctrl+l": "40647",
-      "ArrowUp": "40286",
-      "ArrowDown": "40285",
+      "ArrowUp": "FTS_TAKE_UPRANK",
+      "ArrowDown": "FTS_TAKE_DOWNRANK",
       "j": "40285",
       "k": "40286",
       "Shift+j": "40421",

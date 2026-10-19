@@ -266,6 +266,8 @@ pub mod song_chart;
 pub mod strip;
 pub mod studio;
 pub mod swipe;
+#[cfg(feature = "native")]
+pub mod take_rank;
 pub mod take_rating;
 pub mod take_window;
 pub mod tcp;

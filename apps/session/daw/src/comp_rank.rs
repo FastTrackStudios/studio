@@ -96,6 +96,8 @@ pub(crate) struct TakeRank {
     pub(crate) kept: bool,
     /// It is the kit's main take (COMP_MAIN).
     pub(crate) main: bool,
+    /// Its rank by hand there (TAKES_RANK): 1..=3 up, -1 down, 0 none.
+    pub(crate) rating: i32,
     /// Its lanes hold no audio over all of the stretch — a punch-in's
     /// pre-roll, recorded but cut away: its hits are heard nowhere, and a
     /// comp from it would leave a hole. Ranked last; COMP_CHOOSE refuses it.
@@ -270,14 +272,48 @@ fn ranking(
         (now.as_deref(), held.as_deref()),
         &line_of,
     );
+    let mid = f64::midpoint(from, to);
     for take in &mut out {
         take.kept = kept.as_deref() == Some(take.pass.as_str());
         take.main = main.as_deref() == Some(take.pass.as_str());
+        take.rating = versions
+            .iter()
+            .find(|v| v.pass == take.pass)
+            .and_then(|v| v.files.first())
+            .map_or(0, |(track, path)| {
+                i32::from(crate::take_rank::level_of_take(
+                    daw,
+                    project,
+                    (track, path),
+                    mid,
+                ))
+            });
+        if take.rating > 0 {
+            take.score += RANKED_UP * f64::from(take.rating);
+        }
     }
+    // Down-ranked last of all, even the held take; then the held one; then
+    // the up-ranked, most first; then by score.
+    out.sort_by(|a, b| {
+        let key = |t: &TakeRank| {
+            (
+                t.rating < 0,
+                !(t.kept || t.main),
+                t.undetected,
+                t.empty,
+                std::cmp::Reverse(t.rating),
+            )
+        };
+        key(a).cmp(&key(b)).then(b.score.total_cmp(&a.score))
+    });
     mark_unplayable(&mut out, project, &versions, (from, to));
     name_colors(&mut out, &kit_takes(project));
     (out, versions)
 }
+
+/// What an up-rank level adds to a take's score: a take ranked up by hand
+/// comes before those alike to it.
+const RANKED_UP: f64 = 0.2;
 
 /// The pass of the take `name` names among `versions` — by its pass, its
 /// lane's name or its colour's, as COMP_CANDIDATES says them.
@@ -418,6 +454,7 @@ pub(crate) fn rank_versions(
             current: now == Some(r.take.as_str()),
             kept: kept == Some(r.take.as_str()),
             main: false,
+            rating: 0,
             played: played_by(&r.take),
             lane: lane_of(&r.take),
             pass: r.take.clone(),
@@ -723,7 +760,7 @@ pub fn register(list: &ActionList) {
                     feel_ms: t.feel_ms,
                     // An unjudged take is still one to step to; one with
                     // no audio there is not.
-                    empty: t.empty || t.unplayable,
+                    empty: t.empty || t.unplayable || t.rating < 0,
                 })
                 .collect();
             let next = editing::comp::step(&ranked, now.as_deref(), a.by.unwrap_or(1))

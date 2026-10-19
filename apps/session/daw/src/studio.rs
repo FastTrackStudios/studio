@@ -856,6 +856,25 @@ pub fn Arrangement() -> Element {
                 // one lifted.
                 let (x, y) = css_point(&*win, position.x, position.y);
                 panel.handle(PanelEvent::Pointer { x, y });
+                // Mouse buttons 4 and 5: the take under the mouse ranked up
+                // and down (the window reads where the mouse is).
+                let rank = match button {
+                    winit::event::ButtonSource::Mouse(winit::event::MouseButton::Back) => {
+                        Some("SESSION_TAKE_UPRANK_MOUSE")
+                    }
+                    winit::event::ButtonSource::Mouse(winit::event::MouseButton::Forward) => {
+                        Some("SESSION_TAKE_DOWNRANK_MOUSE")
+                    }
+                    _ => None,
+                };
+                if let Some(id) = rank {
+                    if state.is_pressed()
+                        && let Err(e) = crate::actions::list().run_json(id, b"")
+                    {
+                        tracing::warn!(rank.error = %e, "mouse button: the take could not be ranked");
+                    }
+                    return;
+                }
                 let button = match button {
                     winit::event::ButtonSource::Mouse(winit::event::MouseButton::Middle) => {
                         Button::Middle

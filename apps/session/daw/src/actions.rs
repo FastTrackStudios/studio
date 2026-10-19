@@ -128,6 +128,15 @@ fn id_and_args(action: &Action) -> Option<(&'static str, String)> {
         Action::CompCycle(_) => (COMP_NEXT.id, String::new()),
         Action::CompBest => (COMP_BEST_KEY.id, String::new()),
         Action::CompKeep => (COMP_KEEP_KEY.id, String::new()),
+        Action::RankTake { by, mouse } => (
+            match (*by > 0, *mouse) {
+                (true, false) => TAKE_UP.id,
+                (false, false) => TAKE_DOWN.id,
+                (true, true) => TAKE_UP_MOUSE.id,
+                (false, true) => TAKE_DOWN_MOUSE.id,
+            },
+            String::new(),
+        ),
         Action::QuantizePanel => (QUANTIZE_PANEL.id, String::new()),
         Action::GainStage { clear: false } => (GAIN_STAGE.id, String::new()),
         Action::GainStage { clear: true } => (GAIN_STAGE_CLEAR.id, String::new()),
@@ -351,6 +360,38 @@ static COMP_KEEP_KEY: ActionMeta = meta(
     "COMP_KEEP over the selection — the comp strip's picked spans, the selected hits, items, or the rest of it: the take comped there kept, or a kept stretch let go again.",
     "Edit",
     "Ctrl+Shift+T",
+);
+static TAKE_UP: ActionMeta = meta(
+    "SESSION_TAKE_UPRANK",
+    "take_uprank",
+    "Up-rank the take",
+    "Up-rank the selected takes (the last recording's, once it ends), else the take under the mouse; while recording, the take being recorded from now on (TAKES_RANK).",
+    "Edit",
+    "Up",
+);
+static TAKE_DOWN: ActionMeta = meta(
+    "SESSION_TAKE_DOWNRANK",
+    "take_downrank",
+    "Down-rank the take",
+    "Down-rank the selected takes (the last recording's, once it ends), else the take under the mouse; while recording, the take being recorded from now on (TAKES_RANK).",
+    "Edit",
+    "Down",
+);
+static TAKE_UP_MOUSE: ActionMeta = meta(
+    "SESSION_TAKE_UPRANK_MOUSE",
+    "take_uprank_mouse",
+    "Up-rank the take under the mouse",
+    "Up-rank the take under the mouse — a lane's item, the comp strip's span, the folded kit's take there — else as SESSION_TAKE_UPRANK. Mouse button 4.",
+    "Edit",
+    "Mouse 4",
+);
+static TAKE_DOWN_MOUSE: ActionMeta = meta(
+    "SESSION_TAKE_DOWNRANK_MOUSE",
+    "take_downrank_mouse",
+    "Down-rank the take under the mouse",
+    "Down-rank the take under the mouse — a lane's item, the comp strip's span, the folded kit's take there — else as SESSION_TAKE_DOWNRANK. Mouse button 5.",
+    "Edit",
+    "Mouse 5",
 );
 static COMP_PREV: ActionMeta = meta(
     "SESSION_COMP_PREV",
@@ -594,7 +635,7 @@ fn register_window(list: &ActionList) {
         crate::quantize_panel::ask();
         Ok("the Quantize panel shown, or hidden if it was".to_owned())
     });
-    let plain: [(&'static ActionMeta, Effect, Action); 22] = [
+    let plain: [(&'static ActionMeta, Effect, Action); 26] = [
         (&PLAY_STOP, Effect::Mutating, Action::PlayStop),
         (&PLAY_PAUSE, Effect::Mutating, Action::PlayPause),
         (&GO_TO_START, Effect::Mutating, Action::GoToStart),
@@ -607,6 +648,35 @@ fn register_window(list: &ActionList) {
         (&COMP_PREV, Effect::Mutating, Action::CompCycle(-1)),
         (&COMP_BEST_KEY, Effect::Mutating, Action::CompBest),
         (&COMP_KEEP_KEY, Effect::Mutating, Action::CompKeep),
+        (
+            &TAKE_UP,
+            Effect::Mutating,
+            Action::RankTake {
+                by: 1,
+                mouse: false,
+            },
+        ),
+        (
+            &TAKE_DOWN,
+            Effect::Mutating,
+            Action::RankTake {
+                by: -1,
+                mouse: false,
+            },
+        ),
+        (
+            &TAKE_UP_MOUSE,
+            Effect::Mutating,
+            Action::RankTake { by: 1, mouse: true },
+        ),
+        (
+            &TAKE_DOWN_MOUSE,
+            Effect::Mutating,
+            Action::RankTake {
+                by: -1,
+                mouse: true,
+            },
+        ),
         (
             &GAIN_STAGE,
             Effect::Mutating,
@@ -1115,6 +1185,7 @@ fn register_data(list: &ActionList) {
     crate::comp_keep::register(list);
     crate::comp_keep::register_main(list);
     crate::item_actions::register(list);
+    crate::take_rank::register(list);
     register_track_set(list);
     register_reference(list);
     #[cfg(feature = "native")]

@@ -106,9 +106,16 @@ pub fn comp_best(song: &Song, phrases: &[(f64, f64)], dry: bool) -> Result<Compe
             // Only a take with audio on its lanes over the whole phrase can
             // be comped from there: its hits may be marked on a recording
             // its lane plays only part of.
+            // Nor one ranked down by hand there.
+            let mid = f64::midpoint(from, to);
             let usable: Vec<TakeVersion> = versions
                 .iter()
                 .filter(|v| audio.covers(v, (from, to)))
+                .filter(|v| {
+                    v.files.first().is_none_or(|(track, path)| {
+                        crate::take_rank::level_of_take(daw, &project, (track, path), mid) >= 0
+                    })
+                })
                 .cloned()
                 .collect();
             let here = within(&usable, (from, to));
@@ -673,6 +680,7 @@ mod tests {
             current: false,
             kept: false,
             main: false,
+            rating: 0,
             unplayable: false,
             color: None,
         }

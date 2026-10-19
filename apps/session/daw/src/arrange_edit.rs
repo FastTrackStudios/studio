@@ -1427,6 +1427,7 @@ impl Editor {
             | Action::CompCycle(_)
             | Action::CompBest
             | Action::CompKeep
+            | Action::RankTake { .. }
             | Action::QuantizePanel
             | Action::SlipDrums { .. }
             | Action::RestoreDrums { .. }

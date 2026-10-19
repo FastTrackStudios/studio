@@ -238,6 +238,14 @@ impl View {
 }
 
 /// Blitz's modifier set, as the mouse map's.
+/// A take to rank: by an item playing it, or the kit's take by its pass
+/// where it plays.
+#[derive(Clone, Debug)]
+enum RankOn {
+    Item(String),
+    Take { pass: String, near: f64 },
+}
+
 /// `a` and `b` as one list of stretches in time order, those that meet or
 /// overlap joined.
 fn joined(a: &[(f64, f64)], b: &[(f64, f64)]) -> Vec<(f64, f64)> {
@@ -628,6 +636,9 @@ pub struct ArrangementWidget {
     /// The stretches of the comp picked on its strip (Edit mode): what T
     /// and Shift+T comp from another take, seconds, in time order.
     comp_picked: Vec<(f64, f64)>,
+    /// Where the mouse was last, in the widget's coordinates: what the
+    /// take under it is read at (mouse buttons 4 and 5).
+    mouse_at: Option<(f64, f64)>,
     /// The band on the ruler last clicked and when: the first half of the
     /// double-click that selects its time.
     last_band: Option<((f64, f64), web_time::Instant)>,
@@ -818,6 +829,7 @@ impl ArrangementWidget {
             hit_selected: std::collections::HashSet::new(),
             hit_marquee: None,
             comp_picked: Vec::new(),
+            mouse_at: None,
             last_band: None,
             swipe: None,
             reading_pinned: Cell::new(None),
@@ -1924,6 +1936,133 @@ impl ArrangementWidget {
             spans(items)
         } else {
             self.scope()
+        }
+    }
+
+    /// The kit's take the comp plays at `t`, by its pass.
+    fn comp_take_at(t: f64) -> Option<RankOn> {
+        let hits = crate::hit_overlay::current()?;
+        let span = hits.comps.iter().find(|c| t >= c.start && t < c.end)?;
+        Some(RankOn::Take {
+            pass: crate::take_colors::stamp(&span.take).unwrap_or_else(|| span.take.clone()),
+            near: t,
+        })
+    }
+
+    /// The take under `(x, y)`: the comp strip's span, an item on a lane,
+    /// or — on the folded kit — the take the comp plays there.
+    fn take_under(&self, x: f64, y: f64) -> Option<RankOn> {
+        let view = self.viewport(self.size.0, self.size.1);
+        let t = self.seconds_at(x, view);
+        if self.editing.get() && self.on_comp_strip((x, y), (x, y)) {
+            return Self::comp_take_at(t);
+        }
+        let crate::hit::Target::Item { index, seconds, .. } = self.hit(x, y)?.target else {
+            return None;
+        };
+        let item = self.scene.item_boxes().get(index)?;
+        if item.guid.starts_with("folded:") {
+            return Self::comp_take_at(seconds);
+        }
+        Some(RankOn::Item(item.guid.clone()))
+    }
+
+    /// The takes selected: the comp's spans picked on its strip, the
+    /// selected items — each mic's, or the folded kit's take there.
+    fn selected_takes(&self) -> Vec<RankOn> {
+        let mut out: Vec<RankOn> = self
+            .comp_picked
+            .iter()
+            .filter_map(|(a, b)| Self::comp_take_at(f64::midpoint(*a, *b)))
+            .collect();
+        out.extend(
+            self.editor
+                .selected_folds(&self.project)
+                .iter()
+                .filter_map(|(_, _, a, b)| Self::comp_take_at(f64::midpoint(*a, *b))),
+        );
+        out.extend(
+            self.editor
+                .selected
+                .iter()
+                .filter(|g| !g.starts_with("folded:"))
+                .map(|g| RankOn::Item(g.clone())),
+        );
+        out
+    }
+
+    /// Up / Down, mouse buttons 4 / 5: rank a take by hand (`TAKES_RANK`)
+    /// — with `mouse`, the take under it first, else the selected takes;
+    /// without, the selected first (the last recording's once it ends),
+    /// else the one under the mouse. While recording, the take being
+    /// recorded, from where the press falls. Off the frame; what it did
+    /// said in the bottom bar.
+    fn rank_take(&self, by: i8, mouse: bool) -> bool {
+        let under = || {
+            self.mouse_at
+                .and_then(|(x, y)| self.take_under(x, y))
+                .into_iter()
+                .collect()
+        };
+        let selected = self.selected_takes();
+        let targets: Vec<RankOn> = match (mouse, selected.is_empty()) {
+            (true, _) => {
+                let u: Vec<RankOn> = under();
+                if u.is_empty() { selected } else { u }
+            }
+            (false, false) => selected,
+            (false, true) => under(),
+        };
+        #[cfg(feature = "native")]
+        {
+            let Some(runtime) = crate::open::runtime() else {
+                return false;
+            };
+            let said = std::sync::Arc::clone(&self.staged);
+            runtime.spawn_blocking(move || {
+                let run = |args: serde_json::Value| {
+                    crate::actions::list().run_json("TAKES_RANK", args.to_string().as_bytes())
+                };
+                let outs: Vec<_> = if targets.is_empty() {
+                    // Nothing to rank but, maybe, what is recording.
+                    vec![run(serde_json::json!({ "by": by }))]
+                } else {
+                    targets
+                        .iter()
+                        .map(|t| match t {
+                            RankOn::Item(guid) => {
+                                run(serde_json::json!({ "items": [guid], "by": by }))
+                            }
+                            RankOn::Take { pass, near } => {
+                                run(serde_json::json!({ "take": pass, "near": near, "by": by }))
+                            }
+                        })
+                        .collect()
+                };
+                let text = match outs.iter().find_map(|o| o.as_ref().err()) {
+                    Some(e) => {
+                        tracing::warn!(rank.error = %e, "the take could not be ranked");
+                        "no take here to rank"
+                    }
+                    None if outs
+                        .iter()
+                        .any(|o| o.as_ref().is_ok_and(|j| j.as_slice() == b"[]")) =>
+                    {
+                        "ranked where the recording is: written when it stops"
+                    }
+                    None if by > 0 => "ranked up",
+                    None => "ranked down",
+                };
+                *said
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(text);
+            });
+            true
+        }
+        #[cfg(not(feature = "native"))]
+        {
+            let _ = targets;
+            false
         }
     }
 
@@ -3477,6 +3616,10 @@ impl ArrangementWidget {
                 handled |= self.comp_cycle(by);
                 continue;
             }
+            if let crate::keys::Action::RankTake { by, mouse } = action {
+                handled |= self.rank_take(by, mouse);
+                continue;
+            }
             if action == crate::keys::Action::CompKeep {
                 handled |= self.comp_keep();
                 continue;
@@ -4336,6 +4479,11 @@ impl ArrangementWidget {
     /// One input event, in the widget's units, read at the scroll
     /// [`Self::read_pinned_at`] chose.
     fn handle(&mut self, event: &UiEvent) {
+        if let UiEvent::PointerMove(e) | UiEvent::PointerDown(e) = event
+            && !e.is_finger()
+        {
+            self.mouse_at = Some((f64::from(e.coords.client_x), f64::from(e.coords.client_y)));
+        }
         // The zoom the event is read at: what tells a razor area's edge
         // from its body (`arrange_edit::Editor::pps`).
         self.editor.pps = self.viewport(self.size.0, self.size.1).pps;
@@ -4386,6 +4534,10 @@ impl ArrangementWidget {
     /// The picture at `width` x `height`: what Blitz's `Widget::paint`
     /// returns, and what the web host draws into its canvas.
     pub fn paint_scene(&mut self, width: u32, height: u32, scale: f64) -> Scene {
+        // A recording pass just ended: its takes selected, the ranks
+        // pressed while it ran written on them.
+        #[cfg(feature = "native")]
+        crate::take_rank::settle_open();
         // What was run on the Action List for the window, from elsewhere
         // than a key (a model, a menu): done before the picture is.
         #[cfg(feature = "native")]

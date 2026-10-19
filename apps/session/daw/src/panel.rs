@@ -330,10 +330,14 @@ pub fn use_arrangement_panel<H: Clone + 'static>(
     // And Mix mode: every item in its track's colour.
     let mixing = use_hook(|| Rc::new(Cell::new(false)));
     mixing.set(mode == Some(session::modes::Mode::Mix));
-    // And Edit mode: every cut on a folder's row, and what the drum
-    // detection found drawn over the kit.
+    // And Edit mode — and Record mode, where takes are comped as they
+    // come in: every cut on a folder's row, what the drum detection found
+    // drawn over the kit, and the comp strip to pick takes on.
     let editing = use_hook(|| Rc::new(Cell::new(false)));
-    editing.set(mode == Some(session::modes::Mode::Edit));
+    editing.set(matches!(
+        mode,
+        Some(session::modes::Mode::Edit | session::modes::Mode::Record)
+    ));
     crate::folds::show_cuts(editing.get());
     let ui = use_hook(|| Rc::new(Cell::new(crate::touch::arrange_zoom(touch, 0.0))));
     crate::ruler::set_slim(touch);
