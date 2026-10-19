@@ -30,7 +30,9 @@
 //!   the mixer docked and the panel compact. `FTS_BLITZ_FPS=1` puts the
 //!   widget's frame-time graph over it.
 //!
-//! `FTS_BLITZ_OPEN=Drums,Kick` (or `*`) opens those folders first.
+//! `FTS_BLITZ_OPEN=Drums,Kick` (or `*`) opens those folders first;
+//! `FTS_BLITZ_LANES=Drums` shows every lane of those tracks;
+//! `FTS_BLITZ_MODE=edit` opens it in Edit mode.
 //!
 //! The session is laid out by `FTS_BLITZ_SCENE` (`drum-mixing` by
 //! default, the app's), and prepared first if `FTS_BLITZ_ORGANIZE`,
@@ -370,6 +372,20 @@ fn open(path: &std::path::Path, audio: bool) -> StudioSession {
             }
         }
     }
+    // `FTS_BLITZ_LANES=Drums` (or `*`): those tracks showing every lane,
+    // as the lanes button would — the comp lanes, to measure.
+    if let Ok(names) = std::env::var("FTS_BLITZ_LANES") {
+        let names: Vec<&str> = names.split(',').map(str::trim).collect();
+        let guids: Vec<String> = raw
+            .tracks
+            .iter()
+            .filter(|t| {
+                names.contains(&"*") || names.iter().any(|n| n.eq_ignore_ascii_case(t.name.trim()))
+            })
+            .map(|t| t.guid.clone())
+            .collect();
+        let _ = session_daw::lanes::set_expanded(&guids, Some(true));
+    }
     let planner = session_daw::studio::Planner {
         raw: Arc::new(raw),
         scene: Some(scene),
@@ -437,6 +453,20 @@ struct StillProps {
 fn Still(props: StillProps) -> Element {
     use_context_provider(|| props.session.clone());
     use_context_provider(|| props.slot.clone());
+    // `FTS_BLITZ_MODE=edit` (or `record`, `mix`): the window's mode, as
+    // its mode switch sets it — Edit mode draws the hits, the cuts and
+    // the comp strip over the kit.
+    if let Some(mode) = std::env::var("FTS_BLITZ_MODE").ok().and_then(|m| {
+        use session::modes::Mode;
+        match m.to_ascii_lowercase().as_str() {
+            "edit" => Some(Mode::Edit),
+            "record" => Some(Mode::Record),
+            "mix" => Some(Mode::Mix),
+            _ => None,
+        }
+    }) {
+        use_context_provider(|| Signal::new(mode));
+    }
     let (width, height) = props.size;
     rsx! {
         Ground {}

@@ -259,7 +259,14 @@ pub fn refold_lanes(
     let tracks = std::mem::take(&mut project.tracks);
     for folder in shut(&tracks, shown) {
         if laned(&tracks, folder) {
-            if let Some(fold) = fold_lanes(project, &tracks, folder) {
+            if let Some(mut fold) = fold_lanes(project, &tracks, folder) {
+                let children = under(&tracks, &folder.guid);
+                fold.gaps = gaps(
+                    children
+                        .iter()
+                        .filter(|t| !t.is_folder && t.lane_count > 1)
+                        .map(|child| project.lane(&child.guid).iter()),
+                );
                 project.folds.insert(folder.guid.clone(), fold);
             }
             continue;
@@ -283,9 +290,10 @@ pub fn refold_lanes(
             continue;
         }
         let items = lane(folder, &spans);
+        let gaps = gaps(playing.iter().map(|child| child.iter()));
         project
             .folds
-            .insert(folder.guid.clone(), Fold { items, spans });
+            .insert(folder.guid.clone(), Fold { items, spans, gaps });
     }
     project.tracks = tracks;
 }
@@ -330,7 +338,11 @@ fn laned_fold(folder: &daw_proto::Track, laned: Vec<(u32, Span)>) -> Fold {
     for (item, at) in items.iter_mut().zip(lanes) {
         item.fixed_lane = Some(at);
     }
-    Fold { items, spans }
+    Fold {
+        items,
+        spans,
+        gaps: Vec::new(),
+    }
 }
 
 /// `spans` with the seams joined.
@@ -397,7 +409,9 @@ pub fn join_seams(project: &mut super::project::Project) {
                     .into_iter()
                     .flat_map(|(at, spans)| join(&spans).into_iter().map(move |span| (at, span)))
                     .collect();
+                let gaps = std::mem::take(&mut fold.gaps);
                 *fold = laned_fold(&folder, laned);
+                fold.gaps = gaps;
                 continue;
             }
             let spans = join(&fold.spans);
@@ -440,6 +454,58 @@ pub struct Fold {
     pub items: Vec<Item>,
     /// What each of them was folded from, in the same order.
     pub spans: Vec<Span>,
+    /// Where a track under the row goes silent between two of its items
+    /// on one lane, by start: what an edit may have torn, worked out
+    /// once when the row is folded rather than every frame.
+    pub gaps: Vec<Gap>,
+}
+
+/// Silence between two items one after another on one lane of one
+/// track under a folded row.
+#[derive(Clone, Copy, PartialEq, Debug)]
+pub struct Gap {
+    /// The lane (`fixed_lane`) it is on.
+    pub lane: u32,
+    /// Where the item before ends, and the next starts, seconds.
+    pub start: f64,
+    pub end: f64,
+}
+
+/// The gaps in `children` (each one track's items): between two items one
+/// after another on the same lane, ends a millisecond or less apart
+/// meeting. By start.
+#[must_use]
+pub fn gaps<'a>(children: impl IntoIterator<Item = impl Iterator<Item = &'a Item>>) -> Vec<Gap> {
+    /// Ends this close are one edge.
+    const TOUCH: f64 = 1e-3;
+    let mut out = Vec::new();
+    for items in children {
+        let mut by_lane: std::collections::BTreeMap<u32, Vec<(f64, f64)>> =
+            std::collections::BTreeMap::new();
+        for i in items {
+            let at = i.position.as_seconds();
+            by_lane
+                .entry(i.fixed_lane.unwrap_or(0))
+                .or_default()
+                .push((at, at + i.length.as_seconds()));
+        }
+        for (lane, mut spans) in by_lane {
+            spans.sort_by(|a, b| a.0.total_cmp(&b.0));
+            let mut reach = f64::NEG_INFINITY;
+            for (start, end) in spans {
+                if reach.is_finite() && start > reach + TOUCH {
+                    out.push(Gap {
+                        lane,
+                        start: reach,
+                        end: start,
+                    });
+                }
+                reach = reach.max(end);
+            }
+        }
+    }
+    out.sort_by(|a, b| a.start.total_cmp(&b.start));
+    out
 }
 
 /// What an edit aimed at an item on a folded row really is.
@@ -871,6 +937,7 @@ mod tests {
             super::Fold {
                 items: lane(&folder, &spans),
                 spans,
+                gaps: Vec::new(),
             },
         );
         out
@@ -1054,5 +1121,23 @@ mod lane_fold_tests {
             "only what plays, as one row"
         );
         assert_eq!(fold.items.len(), 2);
+    }
+
+    /// Two slices of one take apart by 20 ms on a lane: a gap; a slice
+    /// meeting the next, or on another lane, none.
+    #[test]
+    fn a_torn_slice_is_a_gap_and_a_seam_is_not() {
+        let item = |at: f64, len: f64, lane: u32| Item {
+            position: daw_proto::PositionInSeconds::from_seconds(at),
+            length: daw_proto::Duration::from_seconds(len),
+            fixed_lane: Some(lane),
+            ..Item::default()
+        };
+        let kick = [item(0.0, 1.0, 2), item(1.02, 1.0, 2), item(2.02, 1.0, 2)];
+        let snare = [item(0.0, 1.0, 3), item(1.5, 1.0, 4)];
+        let found = super::gaps([kick.iter(), snare.iter()]);
+        assert_eq!(found.len(), 1, "{found:?}");
+        assert_eq!(found[0].lane, 2);
+        assert!((found[0].start - 1.0).abs() < 1e-9 && (found[0].end - 1.02).abs() < 1e-9);
     }
 }

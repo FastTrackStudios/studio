@@ -529,6 +529,11 @@ pub struct ArrangementWidget {
     /// The previews' generation the recording was cut at: when notes or
     /// waveforms arrive after it (a browser's), it is cut again.
     previews_seen: u64,
+    /// When the recording was last cut again, and how many times since
+    /// the last frame was logged ([`crate::frames`]): waveforms arriving
+    /// one by one re-cut it at most every [`RECUT_EVERY`].
+    recut_at: Option<web_time::Instant>,
+    rebuilds: u64,
     /// The folds the rows were planned at ([`crate::folds::generation`]).
     folds_seen: u64,
     /// The outside edits the rows were planned at ([`edit_song`]).
@@ -721,6 +726,10 @@ pub struct ArrangementWidget {
     spent: Passes,
 }
 
+/// The least time between two cuts of the recording for previews that
+/// arrived ([`ArrangementWidget::recut_due`]).
+const RECUT_EVERY: std::time::Duration = std::time::Duration::from_millis(150);
+
 /// What one paint spent, pass by pass.
 ///
 /// The frame graph says a frame costs ten milliseconds; this says which
@@ -816,6 +825,8 @@ impl ArrangementWidget {
             markers: project.markers.clone(),
             project,
             previews_seen: previews.generation(),
+            recut_at: None,
+            rebuilds: 0,
             folds_seen: crate::folds::generation(),
             edited_seen: EDITED.with(Cell::get),
             previews,
@@ -1483,19 +1494,20 @@ impl ArrangementWidget {
         }
     }
 
-    /// The swipe a press at a point starts: on a lane of a row showing its
-    /// lanes, not its comp, with nothing else there first — a panel
+    /// The swipe a press at a point starts: on a take's body, on a lane of
+    /// a row showing its lanes, not its comp, with nothing else there first — a panel
     /// control, an automation lane, an item's edge, fade or volume dial.
     fn swipe_at(&self, x: f64, y: f64) -> Option<crate::swipe::Swipe> {
         if self.spot_at(x, y).is_some() || self.lane_hit(x, y).is_some() {
             return None;
         }
-        let (crate::hit::Target::Item {
+        // On a take's body only: a press on a lane's empty stretch is the
+        // editor's, a marquee of the items there.
+        let crate::hit::Target::Item {
             row,
             zone: crate::arrangement::ItemZone::Body,
             ..
-        }
-        | crate::hit::Target::Lane { row, .. }) = self.hit(x, y)?.target
+        } = self.hit(x, y)?.target
         else {
             return None;
         };
@@ -1960,25 +1972,39 @@ impl ArrangementWidget {
         };
         let item = self.scene.item_boxes().get(index)?;
         if item.guid.starts_with("folded:") {
-            return Self::comp_take_at(seconds);
+            return self
+                .folded_from(&item.guid)
+                .first()
+                .map(|real| RankOn::Item(real.clone()))
+                .or_else(|| Self::comp_take_at(seconds));
         }
         Some(RankOn::Item(item.guid.clone()))
     }
 
+    /// The real items a folded item on a shut folder's row stands for:
+    /// each mic's, of the take its lane shows. Empty for any other item.
+    fn folded_from(&self, guid: &str) -> &[String] {
+        daw_ui::studio::folded::parse_guid(guid)
+            .and_then(|(folder, index)| self.project.folds.get(folder)?.spans.get(index))
+            .map_or(&[], |span| span.from.as_slice())
+    }
+
     /// The takes selected: the comp's spans picked on its strip, the
-    /// selected items — each mic's, or the folded kit's take there.
+    /// selected items — each mic's, or the take a folded item shows.
     fn selected_takes(&self) -> Vec<RankOn> {
         let mut out: Vec<RankOn> = self
             .comp_picked
             .iter()
             .filter_map(|(a, b)| Self::comp_take_at(f64::midpoint(*a, *b)))
             .collect();
-        out.extend(
-            self.editor
-                .selected_folds(&self.project)
-                .iter()
-                .filter_map(|(_, _, a, b)| Self::comp_take_at(f64::midpoint(*a, *b))),
-        );
+        out.extend(self.editor.selected_folds(&self.project).iter().filter_map(
+            |(guid, _, a, b)| {
+                self.folded_from(guid)
+                    .first()
+                    .map(|real| RankOn::Item(real.clone()))
+                    .or_else(|| Self::comp_take_at(f64::midpoint(*a, *b)))
+            },
+        ));
         out.extend(
             self.editor
                 .selected
@@ -2036,20 +2062,28 @@ impl ArrangementWidget {
                     place(&mut args);
                     crate::actions::list().run_json("TAKES_RANK", args.to_string().as_bytes())
                 };
+                // The items as one call, so a take selected on every mic
+                // is ranked once (`TAKES_RANK` takes each take once).
+                let items: Vec<&String> = targets
+                    .iter()
+                    .filter_map(|t| match t {
+                        RankOn::Item(guid) => Some(guid),
+                        RankOn::Take { .. } => None,
+                    })
+                    .collect();
                 let outs: Vec<_> = if targets.is_empty() {
                     // Nothing to rank but, maybe, what is recording.
                     vec![run(serde_json::json!({ "by": by }))]
                 } else {
-                    targets
-                        .iter()
-                        .map(|t| match t {
-                            RankOn::Item(guid) => {
-                                run(serde_json::json!({ "items": [guid], "by": by }))
-                            }
-                            RankOn::Take { pass, near } => {
-                                run(serde_json::json!({ "take": pass, "near": near, "by": by }))
-                            }
-                        })
+                    (!items.is_empty())
+                        .then(|| run(serde_json::json!({ "items": items, "by": by })))
+                        .into_iter()
+                        .chain(targets.iter().filter_map(|t| match t {
+                            RankOn::Item(_) => None,
+                            RankOn::Take { pass, near } => Some(run(
+                                serde_json::json!({ "take": pass, "near": near, "by": by }),
+                            )),
+                        }))
                         .collect()
                 };
                 let text = match outs.iter().find_map(|o| o.as_ref().err()) {
@@ -3829,6 +3863,8 @@ impl ArrangementWidget {
 
     /// Cut the whole recording again, from the widget's own project.
     fn recut(&mut self) {
+        self.recut_at = Some(web_time::Instant::now());
+        self.rebuilds = self.rebuilds.saturating_add(1);
         let rows = daw_ui::studio::RowsRef(std::sync::Arc::new(self.rows.clone()));
         let project = daw_ui::studio::ProjectRef(std::sync::Arc::new(self.project.clone()));
         // A view setting, not the session's: an edit must not reset it.
@@ -3853,6 +3889,18 @@ impl ArrangementWidget {
         self.sections = self.project.sections.clone();
         self.markers = self.project.markers.clone();
         self.controls = None;
+    }
+
+    /// Whether arrivals may cut the recording again now: not within
+    /// [`RECUT_EVERY`] of the last cut — a burst of waveforms is one cut,
+    /// not one a waveform, each a copy of the song. Not yet, the frame
+    /// after is asked for, so the last of a burst is still drawn.
+    fn recut_due(&self) -> bool {
+        let due = self.recut_at.is_none_or(|at| at.elapsed() >= RECUT_EVERY);
+        if !due && let Some(redraw) = &self.redraw {
+            redraw();
+        }
+        due
     }
 
     /// A key came back up: the processor's held-key state (auto-repeat,
@@ -4368,7 +4416,7 @@ impl ArrangementWidget {
                 &self.scene,
                 view,
                 lanes_at,
-                &hits.takes,
+                (&hits.takes, &|guid| self.folded_from(guid)),
             ),
             None if !self.editing.get() => crate::hit_overlay::refresh(),
             None => {}
@@ -4562,6 +4610,7 @@ impl ArrangementWidget {
     /// The picture at `width` x `height`: what Blitz's `Widget::paint`
     /// returns, and what the web host draws into its canvas.
     pub fn paint_scene(&mut self, width: u32, height: u32, scale: f64) -> Scene {
+        let began = web_time::Instant::now();
         // A recording pass just ended: its takes selected, the ranks
         // pressed while it ran written on them.
         #[cfg(feature = "native")]
@@ -4583,7 +4632,7 @@ impl ArrangementWidget {
         self.settle_stage();
         self.dirty.set(false);
         let generation = self.previews.generation();
-        if generation != self.previews_seen {
+        if generation != self.previews_seen && self.recut_due() {
             self.previews_seen = generation;
             self.recut();
         }
@@ -4662,6 +4711,8 @@ impl ArrangementWidget {
                 floor: self.opening_floor(),
             });
         }
+        let drawn = *self.drawn.borrow();
+        record_frame(began, self.spent, drawn, std::mem::take(&mut self.rebuilds));
         scene
     }
 
@@ -5960,6 +6011,29 @@ impl ArrangementWidget {
     }
 }
 
+/// This paint, for `SESSION_FRAMES` ([`crate::frames`]): what all of it
+/// cost from `began` and pass by pass, and what the shell said the frame
+/// before cost.
+fn record_frame(began: web_time::Instant, spent: Passes, drawn: Drawn, rebuilds: u64) {
+    use core::sync::atomic::Ordering::Relaxed;
+    let us = |micros: u128| u64::try_from(micros).unwrap_or(u64::MAX);
+    crate::frames::record(crate::frames::Frame {
+        paint: us(began.elapsed().as_micros()),
+        lanes: us(spent.lanes),
+        titles: us(spent.titles),
+        panel: us(spent.panel),
+        ruler: us(spent.ruler),
+        controls: us(spent.controls),
+        shell: blitz_traits::LAST_FRAME_MICROS.load(Relaxed),
+        encode: blitz_traits::LAST_ENCODE_MICROS.load(Relaxed),
+        present: blitz_traits::LAST_PRESENT_MICROS.load(Relaxed),
+        replayed: drawn.replayed,
+        submitted: drawn.submitted,
+        rebuilds,
+        ..crate::frames::Frame::default()
+    });
+}
+
 /// Microseconds as milliseconds, for the readout's lines.
 fn ms(micros: u128) -> f64 {
     u32::try_from(micros).map_or(f64::from(u32::MAX), f64::from) / 1000.0
@@ -7127,6 +7201,13 @@ mod tests {
         let (x, y) = place(&widget, 0, 4.0);
         widget.handle_event(&UiEvent::PointerDown(pointer(x, y)));
         assert!(widget.swipe.is_none(), "the comp is swiped onto, not from");
+        widget.handle_event(&UiEvent::PointerUp(pointer(x, y)));
+
+        // Past take 2's end, on its lane: nothing there to swipe from — the
+        // editor's press, a marquee.
+        let (x, y) = place(&widget, 2, 45.0);
+        widget.handle_event(&UiEvent::PointerDown(pointer(x, y)));
+        assert!(widget.swipe.is_none(), "an empty stretch of a lane");
         widget.handle_event(&UiEvent::PointerUp(pointer(x, y)));
 
         let _ = crate::lanes::set_expanded(&["vox".to_owned()], Some(false));

@@ -2908,13 +2908,16 @@ fn take_mark(
 /// Every item's take ranks and notes on it ([`crate::take_rank`]): a
 /// marker's stars or X (and note) where it is, along the item's top; a
 /// take region tinted from its start to its end.
-pub fn take_marks_overlay(
+pub fn take_marks_overlay<'a>(
     painter: &mut impl PaintScene,
     font: &crate::text::Font,
     scene: &Arrangement,
     view: Viewport,
     (ox, oy): (f64, f64),
-    marks: &crate::hit_overlay::TakeMarks,
+    (marks, folded_from): (
+        &'a crate::hit_overlay::TakeMarks,
+        &dyn Fn(&str) -> &'a [String],
+    ),
 ) {
     if marks.by_item.is_empty() {
         return;
@@ -2927,7 +2930,12 @@ pub fn take_marks_overlay(
         if item.x1 < from || item.x0 > to {
             continue;
         }
-        let Some(list) = marks.by_item.get(&item.guid) else {
+        // A folded item wears the marks of the take it stands for.
+        let Some(list) = marks.by_item.get(&item.guid).or_else(|| {
+            folded_from(&item.guid)
+                .iter()
+                .find_map(|real| marks.by_item.get(real))
+        }) else {
             continue;
         };
         let Some((y, h)) = scene.item_box(item) else {
@@ -3337,8 +3345,12 @@ pub fn cuts_overlay(
 /// 20 ms between two slices hides under the others still playing, and is
 /// heard — the kick's close mic cutting out where a quantize pulled two
 /// strokes apart. A slice's crossfade into the next is no gap, and not
-/// drawn; a gap is shaded at least a couple of pixels wide, so it shows at
-/// any zoom.
+/// drawn.
+///
+/// A gap is marked, not flooded: a light tint over it, a sharp line at
+/// each edge, and a notch at the top of its strip that finds it at any
+/// zoom (one line, where it is narrower than the notch). On a row showing
+/// its lanes, each in the strip of the lane it is on.
 ///
 /// Only the kit's rows, and only a gap an edit could have made (under
 /// [`EDIT_GAP`]): under a vocal or a guitar folder, the silence between
@@ -3351,14 +3363,9 @@ pub fn gaps_overlay(
     rows: &[(daw_proto::Track, u32)],
     project: &daw_ui::studio::project::Project,
 ) {
-    /// Ends this close are one edge.
-    const TOUCH: f64 = 1e-3;
-    /// The least a gap is drawn, pixels.
-    const LEAST: f64 = 2.0;
-    let ink = Color::from_rgba8(0xef, 0x44, 0x44, 0x8c);
     let (ox, oy) = origin;
     let pps = view.pps.max(f64::EPSILON);
-    let (from, to) = ((view.panel_w - ox) / pps, (view.width - ox) / pps);
+    let seen = ((view.panel_w - ox) / pps, (view.width - ox) / pps);
     for index in scene.visible_rows(view) {
         let Some((track, _)) = rows.get(index) else {
             continue;
@@ -3372,49 +3379,55 @@ pub fn gaps_overlay(
         let Some((top, h)) = scene.row_box(index) else {
             continue;
         };
-        let y0 = top.mul_add(view.zoom_y, oy).max(crate::ruler::ruler_h());
-        let y1 = (top + h).mul_add(view.zoom_y, oy).min(view.height);
-        if y1 <= y0 {
-            continue;
-        }
-        // What the row is folded from, where it is on screen.
-        let children: std::collections::HashSet<&str> = fold
-            .spans
+        let stack = scene.lane_stack(index).filter(|s| !s.is_empty());
+        let strip = |lane: u32| {
+            let (b0, b1) = stack.map_or((0.0, 1.0), |s| s.band(lane));
+            let y0 = b0.mul_add(h, top).mul_add(view.zoom_y, oy);
+            let y1 = b1.mul_add(h, top).mul_add(view.zoom_y, oy);
+            (y0.max(crate::ruler::ruler_h()), y1.min(view.height))
+        };
+        // By start, so only those in sight are read.
+        let first = fold.gaps.partition_point(|g| g.start < seen.0 - EDIT_GAP);
+        for gap in fold.gaps[first..]
             .iter()
-            .filter(|s| s.end >= from && s.start <= to)
-            .flat_map(|s| s.from.iter().map(String::as_str))
-            .collect();
-        if children.is_empty() {
-            continue;
-        }
-        for items in project.items.values() {
-            let mut mine: Vec<(f64, f64)> = items
-                .iter()
-                .filter(|i| children.contains(i.guid.as_str()))
-                .map(|i| {
-                    let at = i.position.as_seconds();
-                    (at, at + i.length.as_seconds())
-                })
-                .collect();
-            mine.sort_by(|a, b| a.0.total_cmp(&b.0));
-            let mut reach = f64::NEG_INFINITY;
-            for (start, end) in mine {
-                if start > reach + TOUCH && start - reach < EDIT_GAP && reach.is_finite() {
-                    let (x0, x1) = (reach.mul_add(pps, ox), start.mul_add(pps, ox));
-                    let mid = f64::midpoint(x0, x1);
-                    let half = ((x1 - x0) / 2.0).max(LEAST / 2.0);
-                    painter.fill(
-                        Fill::NonZero,
-                        Affine::IDENTITY,
-                        ink,
-                        None,
-                        &Rect::new(mid - half, y0, mid + half, y1),
-                    );
-                }
-                reach = reach.max(end);
+            .take_while(|g| g.start <= seen.1)
+            .filter(|g| g.end >= seen.0 && g.end - g.start < EDIT_GAP)
+        {
+            let (y0, y1) = strip(gap.lane);
+            if y1 > y0 {
+                gap_mark(
+                    painter,
+                    (gap.start.mul_add(pps, ox), gap.end.mul_add(pps, ox)),
+                    (y0, y1),
+                );
             }
         }
     }
+}
+
+/// One gap marked over `(x0, x1)` on screen, in a strip `(y0, y1)`.
+fn gap_mark(painter: &mut impl PaintScene, (x0, x1): (f64, f64), (y0, y1): (f64, f64)) {
+    /// The notch's half width and its depth, pixels.
+    const NOTCH: f64 = 4.0;
+    let ink = Color::from_rgb8(0xff, 0x5a, 0x5a);
+    let mut fill = |color: Color, shape: &BezPath| {
+        painter.fill(Fill::NonZero, Affine::IDENTITY, color, None, shape);
+    };
+    let rect = |x0: f64, x1: f64| vello::kurbo::Shape::to_path(&Rect::new(x0, y0, x1, y1), 0.1);
+    let mid = f64::midpoint(x0, x1);
+    if x1 - x0 < 2.0 * NOTCH {
+        fill(ink, &rect(mid - 0.75, mid + 0.75));
+    } else {
+        fill(ink.multiply_alpha(0.14), &rect(x0, x1));
+        fill(ink, &rect(x0, x0 + 1.0));
+        fill(ink, &rect(x1 - 1.0, x1));
+    }
+    let mut notch = BezPath::new();
+    notch.move_to((mid - NOTCH, y0));
+    notch.line_to((mid + NOTCH, y0));
+    notch.line_to((mid, y0 + NOTCH * 1.5));
+    notch.close_path();
+    fill(ink, &notch);
 }
 
 /// Whether the track `guid` is the drum kit's: under (or) the top-level

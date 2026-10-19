@@ -3427,7 +3427,11 @@ mod tests {
         let items = daw_ui::studio::folded::lane(&folder, &spans);
         project.folds.insert(
             folder.guid.clone(),
-            daw_ui::studio::folded::Fold { items, spans },
+            daw_ui::studio::folded::Fold {
+                items,
+                spans,
+                gaps: Vec::new(),
+            },
         );
         project.item_count = project.items.values().map(Vec::len).sum();
         project
@@ -3802,7 +3806,11 @@ mod tests {
         let items = daw_ui::studio::folded::lane(&folder, &spans);
         s.project.folds.insert(
             folder.guid.clone(),
-            daw_ui::studio::folded::Fold { items, spans },
+            daw_ui::studio::folded::Fold {
+                items,
+                spans,
+                gaps: Vec::new(),
+            },
         );
         s.scene = record(&s.project, &s.rows);
 
@@ -3849,7 +3857,11 @@ mod tests {
         let items = daw_ui::studio::folded::lane(&folder, &spans);
         s.project.folds.insert(
             folder.guid.clone(),
-            daw_ui::studio::folded::Fold { items, spans },
+            daw_ui::studio::folded::Fold {
+                items,
+                spans,
+                gaps: Vec::new(),
+            },
         );
         s.scene = record(&s.project, &s.rows);
 

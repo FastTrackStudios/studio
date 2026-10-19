@@ -48,6 +48,7 @@ pub mod folder;
 pub mod folder_item;
 pub mod folds;
 pub mod fps;
+pub mod frames;
 #[cfg(feature = "native")]
 pub mod fx_actions;
 pub mod fx_view;

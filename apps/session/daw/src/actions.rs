@@ -1202,6 +1202,7 @@ fn register_data(list: &ActionList) {
     crate::timeline_actions::register(list);
     crate::edit_actions::register(list);
     crate::perf::register(list);
+    crate::frames::register(list);
     crate::comp_rank::register(list);
     crate::comp_song::register(list);
     crate::bar_step::register(list);

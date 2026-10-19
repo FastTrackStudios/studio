@@ -578,10 +578,30 @@ fn targets_of(
     near: Option<f64>,
 ) -> Result<Vec<String>, String> {
     if !items.is_empty() {
-        return Ok(items.to_vec());
+        return Ok(one_per_take(daw, project, items));
     }
     let name = take.ok_or("say which takes: `items` or `take`")?;
     Ok(vec![item_of_take(daw, project, name, near)?])
+}
+
+/// `items`, one for each take they play: a take selected on every mic
+/// is ranked once, not once a mic. An item playing no recording is kept,
+/// to be refused for it.
+fn one_per_take(
+    daw: &daw::standalone::Standalone,
+    project: &ProjectContext,
+    items: &[String],
+) -> Vec<String> {
+    let mut seen = std::collections::HashSet::new();
+    items
+        .iter()
+        .filter(|guid| {
+            daw.get_active_take(project.clone(), ItemRef::Guid((*guid).clone()))
+                .and_then(|t| t.source_file_path)
+                .is_none_or(|path| seen.insert(crate::hits::pass_key(&path)))
+        })
+        .cloned()
+        .collect()
 }
 
 /// An item playing the kit's take `name` (around `at`, else anywhere).
