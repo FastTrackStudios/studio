@@ -1101,6 +1101,7 @@ fn register_data(list: &ActionList) {
     register_fundamental(list);
     crate::hits::register(list);
     crate::hits_midi::register(list);
+    crate::seams::register(list);
     register_track_set(list);
     register_reference(list);
     #[cfg(feature = "native")]

@@ -159,8 +159,9 @@ pub(crate) fn written(
 }
 
 /// The take the comp plays over the middle of `from..to`: the one whose
-/// recording a COMP lane item there plays.
-fn current(
+/// recordings the most mics' COMP lane items there play — a take missing
+/// a mic leaves that mic another's (or silent), which never names it.
+pub(crate) fn current(
     daw: &daw::standalone::Standalone,
     project: &ProjectContext,
     versions: &[crate::hits::TakeVersion],
@@ -168,31 +169,49 @@ fn current(
 ) -> Option<String> {
     let mid = (from + to) / 2.0;
     let tracks = Tracks::all(daw, project.clone());
-    versions.iter().find_map(|v| {
-        let hit = v.files.iter().any(|(track, path)| {
-            let Some(t) = tracks.iter().find(|t| t.guid == *track) else {
-                return false;
-            };
-            let comp = crate::drum_lanes::lane_named(t, crate::drum_lanes::COMP).unwrap_or(0);
-            daw.get_items(project.clone(), daw::service::TrackRef::Guid(track.clone()))
+    // What each mic's COMP lane plays at the middle, by track.
+    let mut playing: std::collections::HashMap<&str, Option<String>> =
+        std::collections::HashMap::new();
+    let mut plays = |track: &str| -> Option<String> {
+        let t = tracks.iter().find(|t| t.guid == track)?;
+        playing
+            .entry(t.guid.as_str())
+            .or_insert_with(|| {
+                let comp = crate::drum_lanes::lane_named(t, crate::drum_lanes::COMP).unwrap_or(0);
+                daw.get_items(
+                    project.clone(),
+                    daw::service::TrackRef::Guid(t.guid.clone()),
+                )
                 .into_iter()
                 .filter(|i| i.fixed_lane.unwrap_or(0) == comp)
                 .filter(|i| {
                     let at = i.position.as_seconds();
                     mid >= at && mid < at + i.length.as_seconds()
                 })
-                .any(|i| {
+                .find_map(|i| {
                     daw::service::Takes::get_active_take(
                         daw,
                         project.clone(),
                         daw::service::ItemRef::Guid(i.guid),
-                    )
-                    .and_then(|take| take.source_file_path)
-                    .is_some_and(|p| p == *path)
+                    )?
+                    .source_file_path
                 })
-        });
-        hit.then(|| v.pass.clone())
-    })
+            })
+            .clone()
+    };
+    versions
+        .iter()
+        .map(|v| {
+            let n = v
+                .files
+                .iter()
+                .filter(|(track, path)| plays(track).is_some_and(|p| p == *path))
+                .count();
+            (v, n)
+        })
+        .filter(|(_, n)| *n > 0)
+        .max_by_key(|(_, n)| *n)
+        .map(|(v, _)| v.pass.clone())
 }
 
 /// Each take in `out` whose lanes hold no audio over all of `from..to`
@@ -403,6 +422,86 @@ fn clear_of_hits(
     }
 }
 
+/// `from..to` comped from `take` with each end where its seam is heard
+/// least ([`crate::seams`]): just before an attack of any take near it,
+/// the one that covers the switch best — the start no later and the end
+/// no earlier than clear of the hits there ([`clear_of_hits`]), so the
+/// stretch keeps every hit it was asked for. Where the audio does not
+/// read, clear of the hits.
+fn seamed(
+    daw: &daw::standalone::Standalone,
+    project: &ProjectContext,
+    take: &crate::hits::TakeVersion,
+    (from, to): (f64, f64),
+) -> (f64, f64) {
+    use crate::seams::SEARCH;
+    let (start, end) = clear_of_hits(daw, project, (from, to));
+    let Some(song) = crate::hit_index::song_of(project) else {
+        return (start, end);
+    };
+    let cuts = |(a, b): (f64, f64)| -> Vec<f64> {
+        versions_over(daw, project, (a, b))
+            .into_iter()
+            .flat_map(|v| {
+                v.hits
+                    .into_iter()
+                    .map(|h| h.1 - crate::comp_song::SEAM_LEAD)
+            })
+            .collect()
+    };
+    let lead = crate::comp_song::SEAM_LEAD;
+    let (into, out_of) = (
+        crate::seams::pairs(daw, project, &take.lanes, true),
+        crate::seams::pairs(daw, project, &take.lanes, false),
+    );
+    let (before, after) = (
+        cuts((start - SEARCH, start + lead)),
+        cuts((end, end + SEARCH + lead)),
+    );
+    let placed = song
+        .read(|p| {
+            (
+                crate::seams::place(p, &into, &before, (start, (start - SEARCH, start))),
+                crate::seams::place(p, &out_of, &after, (end, (end, end + SEARCH))),
+            )
+        })
+        .unwrap_or((None, None));
+    let wide = |keys: [&'static str; 3], placed: Option<crate::seams::Placed>, was: f64| {
+        if let Some(s) = placed {
+            architect_telemetry::wide::set(keys[0], (s.at - was) * 1_000.0);
+            architect_telemetry::wide::set(keys[1], s.heard);
+            architect_telemetry::wide::set(keys[2], s.heard_there);
+        }
+    };
+    wide(
+        [
+            "comp.seam_start_moved_ms",
+            "comp.seam_start_heard",
+            "comp.seam_start_heard_there",
+        ],
+        placed.0,
+        start,
+    );
+    wide(
+        [
+            "comp.seam_end_moved_ms",
+            "comp.seam_end_heard",
+            "comp.seam_end_heard_there",
+        ],
+        placed.1,
+        end,
+    );
+    let (a, b) = (
+        placed.0.map_or(start, |s| s.at),
+        placed.1.map_or(end, |s| s.at),
+    );
+    if b - a > crate::comp::GRAIN {
+        (a, b)
+    } else {
+        (start, end)
+    }
+}
+
 /// The kept ranking forgotten: the comp changed under it.
 pub(crate) fn forget() {
     if let Ok(mut last) = LAST.lock() {
@@ -421,7 +520,8 @@ fn comp_in(
     (from, to): (f64, f64),
 ) -> Result<bool, String> {
     let mut stages = architect_telemetry::timing::Stages::start();
-    let (from, to) = clear_of_hits(daw, project, (from, to));
+    let (from, to) = seamed(daw, project, take, (from, to));
+    stages.mark("comp.seams_ms");
     let label = format!("Comp from take {}", take.pass);
     daw::service::Projects::begin_undo_block(daw, project.clone(), &label);
     let comped =

@@ -15,6 +15,7 @@
 //! - [`settings`]: a quantize's settings and a call's patch over them.
 //! - [`scope`]: what is selected, and the profile it is edited with.
 //! - [`comp`]: the takes ranked for a stretch — which plays a fill best.
+//! - [`seam`]: where two takes of a kit meet — the cut heard least.
 //! - [`drums`]: the kit's profile — pieces, the grid scan, fills, moments.
 //!
 //! Nothing here reads or writes a project: times are seconds (or beats,
@@ -29,5 +30,6 @@ pub mod level;
 pub mod placement;
 pub mod quantize;
 pub mod scope;
+pub mod seam;
 pub mod settings;
 pub mod written;

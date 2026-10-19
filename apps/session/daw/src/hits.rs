@@ -2106,7 +2106,7 @@ const AT_SPEED: f64 = 0.005;
 /// Which take the comp plays where: the kit's first mic's COMP lane read
 /// once, its items in order, a take's pieces that meet joined into one —
 /// so where one span ends and another begins is a seam between two takes.
-fn comps(
+pub(crate) fn comps(
     daw: &daw::standalone::Standalone,
     project: &ProjectContext,
     kit: &[KitPiece],

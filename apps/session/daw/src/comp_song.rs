@@ -159,7 +159,7 @@ pub(crate) const SEAM_REACH: f64 = 0.06;
 
 /// How far before the earliest of those hits a seam is put, seconds: the
 /// stick's approach is in the recording just before the transient.
-const SEAM_LEAD: f64 = 0.010;
+pub(crate) const SEAM_LEAD: f64 = 0.010;
 
 /// `phrases` (in order, meeting end to start) with each seam between two
 /// moved to just before the earliest of `attacks` (sorted, every take's)

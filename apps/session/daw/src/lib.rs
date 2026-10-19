@@ -202,6 +202,8 @@ pub mod fundamental;
 pub mod gain_stage;
 pub mod grid_in_force;
 pub use editing::groove;
+#[cfg(feature = "native")]
+pub mod audio_window;
 pub mod comp_song;
 pub mod hit_index;
 pub mod hit_overlay;
@@ -243,6 +245,8 @@ pub mod row;
 pub mod ruler;
 #[cfg(feature = "native")]
 pub mod sample_align;
+#[cfg(feature = "native")]
+pub mod seams;
 pub mod section_colors;
 #[cfg(feature = "native")]
 pub mod session_file;

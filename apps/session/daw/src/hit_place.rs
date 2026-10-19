@@ -66,7 +66,7 @@ impl Slice {
     }
 
     /// Where in its recording it plays at `t` (timeline seconds).
-    fn source_at(&self, t: f64) -> f64 {
+    pub(crate) fn source_at(&self, t: f64) -> f64 {
         let take = t - self.start();
         let segment = self.markers.windows(2).find(|w| take <= w[1].position);
         match segment.or_else(|| self.markers.windows(2).last()) {
