@@ -1902,7 +1902,11 @@ impl ArrangementWidget {
         }
     }
 
-    fn comp_cycle(&self, by: i32) -> bool {
+    /// What T, Shift+T and Ctrl+Shift+T comp over: the comp's spans
+    /// picked on its strip, else the selected hits' stretch, else the
+    /// selected items (each mic's, or the folded kit's), else what else
+    /// is selected.
+    fn comp_scope(&self) -> editing::scope::Scope {
         let spans = |spans: Vec<(f64, f64)>| editing::scope::Scope {
             tracks: Vec::new(),
             spans: spans
@@ -1910,12 +1914,9 @@ impl ArrangementWidget {
                 .map(|(from, to)| editing::scope::Span::between(from, to))
                 .collect(),
         };
-        // The comp's spans picked on its strip, else the selected hits'
-        // stretch, else the selected items (each mic's, or the folded
-        // kit's), else what else is selected.
         let picked = self.comp_picked.clone();
         let items = self.selected_item_spans();
-        let scope = if !picked.is_empty() {
+        if !picked.is_empty() {
             spans(picked)
         } else if let Some(hits) = self.selected_hits_span() {
             spans(vec![hits])
@@ -1923,7 +1924,59 @@ impl ArrangementWidget {
             spans(items)
         } else {
             self.scope()
-        };
+        }
+    }
+
+    /// Ctrl+Shift+T: the take comped over [`Self::comp_scope`] kept
+    /// (`COMP_KEEP`), or a kept stretch there let go — off the frame; what
+    /// it did said in the bottom bar.
+    fn comp_keep(&self) -> bool {
+        let scope = self.comp_scope();
+        if scope.merged().is_empty() {
+            *self
+                .staged
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner) =
+                Some("pick the comp's spans, a fill's hits or items to keep");
+            return true;
+        }
+        #[cfg(feature = "native")]
+        {
+            let Some(runtime) = crate::open::runtime() else {
+                return false;
+            };
+            let said = std::sync::Arc::clone(&self.staged);
+            runtime.spawn_blocking(move || {
+                let args = serde_json::json!({
+                    "spans": scope.merged().iter().map(|s| serde_json::json!({"from": s.from, "to": s.to})).collect::<Vec<_>>(),
+                    "toggle": true,
+                });
+                let out = crate::actions::list().run_json("COMP_KEEP", args.to_string().as_bytes());
+                let text = match &out {
+                    Ok(json) if String::from_utf8_lossy(json).contains("released") => {
+                        "let go: the takes may be chosen here again"
+                    }
+                    Ok(_) => "kept: this take stays comped here",
+                    Err(e) => {
+                        tracing::warn!(comp.error = %e, "comp: the take could not be kept");
+                        "the take here could not be kept"
+                    }
+                };
+                *said
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(text);
+            });
+            true
+        }
+        #[cfg(not(feature = "native"))]
+        {
+            let _ = scope;
+            false
+        }
+    }
+
+    fn comp_cycle(&self, by: i32) -> bool {
+        let scope = self.comp_scope();
         if scope.merged().is_empty() {
             *self
                 .staged
@@ -3422,6 +3475,10 @@ impl ArrangementWidget {
             }
             if let crate::keys::Action::CompCycle(by) = action {
                 handled |= self.comp_cycle(by);
+                continue;
+            }
+            if action == crate::keys::Action::CompKeep {
+                handled |= self.comp_keep();
                 continue;
             }
             if action == crate::keys::Action::CompBest {
@@ -5890,6 +5947,7 @@ mod tests {
             zones: Vec::new(),
             stretches: Vec::new(),
             comps: Vec::new(),
+            kept: Vec::new(),
         });
         widget
     }

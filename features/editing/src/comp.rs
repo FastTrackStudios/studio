@@ -210,20 +210,42 @@ fn shared_strokes(hits: &[Strike], reference: &[Strike], by: f64) -> usize {
     shared
 }
 
-/// What the takes are held up to: `before`'s hits (the take the comp
-/// played) when it plays the part, else the part ([`typical`]); `None`
-/// when there is no part to hold them to.
-fn reference(candidates: &[Candidate], before: Option<&str>) -> Option<Vec<Strike>> {
+/// What the takes of a stretch are held up to.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Reference<'a> {
+    /// The part as the takes play it ([`typical`]).
+    Part,
+    /// The take the comp played there, when it plays the part — else
+    /// the part: a practice take comped by mistake is no reference.
+    Before(&'a str),
+    /// The take chosen for the stretch by ear, whatever the others play.
+    Chosen(&'a str),
+}
+
+/// The hits `wanted` holds the takes up to; `None` when there is nothing
+/// to hold them to (no part, and no chosen take with hits).
+fn reference(candidates: &[Candidate], wanted: Reference<'_>) -> Option<Vec<Strike>> {
+    let hits_of = |take: &str| {
+        candidates
+            .iter()
+            .find(|c| c.take == take && !c.hits.is_empty())
+            .map(|c| c.hits.clone())
+    };
+    if let Reference::Chosen(take) = wanted
+        && let Some(hits) = hits_of(take)
+    {
+        return Some(hits);
+    }
     let part = typical(candidates)?.hits.clone();
-    let before = before
-        .and_then(|b| candidates.iter().find(|c| c.take == b))
-        .filter(|c| !c.hits.is_empty() && similarity(&c.hits, &part) >= PLAYS_PART);
-    Some(before.map_or(part, |c| c.hits.clone()))
+    let before = match wanted {
+        Reference::Before(take) => hits_of(take).filter(|h| similarity(h, &part) >= PLAYS_PART),
+        Reference::Part | Reference::Chosen(_) => None,
+    };
+    Some(before.unwrap_or(part))
 }
 
 /// The takes ranked for a stretch, best first: by how alike each is to
-/// the reference ([`reference`]: `before`, the take the comp played
-/// there, when it plays the part) and, among the alike, how tight.
+/// the reference ([`Reference`]) and, among the alike, how tight.
 /// `written` is the part as written there (empty when there is none);
 /// `line_of` gives a time's nearest grid line, for hits with no note to
 /// belong to.
@@ -232,9 +254,9 @@ pub fn rank(
     candidates: &[Candidate],
     written: &[Strike],
     line_of: &dyn Fn(f64) -> f64,
-    before: Option<&str>,
+    held_to: Reference<'_>,
 ) -> Vec<Ranked> {
-    let reference = reference(candidates, before);
+    let reference = reference(candidates, held_to);
     let usual = median(
         candidates
             .iter()
@@ -358,7 +380,12 @@ mod tests {
             take: "4".into(),
             hits: Vec::new(),
         };
-        let ranked = rank(&[loose, dropped, tight, empty], &written(), &line, None);
+        let ranked = rank(
+            &[loose, dropped, tight, empty],
+            &written(),
+            &line,
+            Reference::Part,
+        );
         let order: Vec<&str> = ranked.iter().map(|r| r.take.as_str()).collect();
         assert_eq!(order, ["2", "1", "3", "4"], "{ranked:#?}");
         assert!(ranked[3].empty);
@@ -374,7 +401,7 @@ mod tests {
             take: "1".into(),
             hits: written().iter().map(|n| s(&n.piece, n.t + 0.030)).collect(),
         };
-        let ranked = rank(&[pushed], &written(), &line, None);
+        let ranked = rank(&[pushed], &written(), &line, Reference::Part);
         assert!(ranked[0].spread_ms < 0.5, "{ranked:?}");
         assert!((ranked[0].feel_ms - 30.0).abs() < 0.5);
     }
@@ -399,7 +426,7 @@ mod tests {
             take: "3".into(),
             hits: (0..12).map(|i| s("Snare", f64::from(i) * 0.09)).collect(),
         };
-        let ranked = rank(&[extra, on, same], &[], &line, None);
+        let ranked = rank(&[extra, on, same], &[], &line, Reference::Part);
         assert_eq!(
             ranked.last().map(|r| r.take.as_str()),
             Some("3"),
@@ -426,7 +453,7 @@ mod tests {
                 })
                 .collect(),
         };
-        let ranked = rank(&[lone, fill], &[], &line, None);
+        let ranked = rank(&[lone, fill], &[], &line, Reference::Part);
         assert_eq!(ranked[0].take, "2", "{ranked:#?}");
         assert!(
             ranked[1].spread_ms < 0.5,
@@ -461,7 +488,7 @@ mod tests {
             practice("q"),
             groove("d", 0.008),
         ];
-        let ranked = rank(&candidates, &[], &line, Some("a"));
+        let ranked = rank(&candidates, &[], &line, Reference::Before("a"));
         let order: Vec<&str> = ranked.iter().map(|r| r.take.as_str()).collect();
         assert_eq!(&order[4..], ["p", "q"], "{ranked:#?}");
         assert!(ranked.iter().take(4).all(|r| r.similar > 0.99));
@@ -482,12 +509,35 @@ mod tests {
             (0..12).map(|i| s("Tom 2", f64::from(i) * 0.08)).collect(),
         );
         let candidates = [take("a", part.clone()), take("b", part.clone()), odd];
-        let ranked = rank(&candidates, &[], &line, Some("odd"));
+        let ranked = rank(&candidates, &[], &line, Reference::Before("odd"));
         assert_eq!(
             ranked.last().map(|r| r.take.as_str()),
             Some("odd"),
             "{ranked:#?}"
         );
+    }
+
+    /// A take chosen by ear is the reference however unlike the others
+    /// it is: the takes most like it come next.
+    #[test]
+    fn a_chosen_take_is_the_reference_whatever_the_others_play() {
+        let part: Vec<Strike> = (0..4).map(|i| s("Snare", f64::from(i) * 0.25)).collect();
+        let fill: Vec<Strike> = (0..12).map(|i| s("Tom 2", f64::from(i) * 0.08)).collect();
+        let take = |name: &str, hits: Vec<Strike>| Candidate {
+            take: name.into(),
+            hits,
+        };
+        let mut near = fill.clone();
+        near.pop();
+        let candidates = [
+            take("a", part.clone()),
+            take("b", part),
+            take("chosen", fill),
+            take("near", near),
+        ];
+        let ranked = rank(&candidates, &[], &line, Reference::Chosen("chosen"));
+        let order: Vec<&str> = ranked.iter().map(|r| r.take.as_str()).collect();
+        assert_eq!(&order[..2], ["chosen", "near"], "{ranked:#?}");
     }
 
     #[test]

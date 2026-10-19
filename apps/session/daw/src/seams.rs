@@ -196,10 +196,16 @@ pub(crate) fn survey(
         .map(|w| w[1].start)
         .filter(|s| *s >= from && *s <= to)
         .collect();
+    // A fill's seams, and a kept stretch's, move only out of it.
     let fills: Vec<(f64, f64)> = crate::hits::zones(daw, project)
         .into_iter()
         .filter(|z| z.kind == crate::hits::ZoneKind::Fill)
         .map(|z| (z.start, z.end))
+        .chain(
+            crate::comp_keep::kept(daw, project)
+                .into_iter()
+                .map(|k| (k.from, k.to)),
+        )
         .collect();
     let Some(song) = crate::hit_index::song_of(project) else {
         return Vec::new();

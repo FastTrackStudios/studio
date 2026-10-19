@@ -204,6 +204,8 @@ pub mod grid_in_force;
 pub use editing::groove;
 #[cfg(feature = "native")]
 pub mod audio_window;
+#[cfg(feature = "native")]
+pub mod comp_keep;
 pub mod comp_song;
 pub mod hit_index;
 pub mod hit_overlay;

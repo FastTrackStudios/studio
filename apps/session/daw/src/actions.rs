@@ -127,6 +127,7 @@ fn id_and_args(action: &Action) -> Option<(&'static str, String)> {
         Action::CompCycle(by) if *by < 0 => (COMP_PREV.id, String::new()),
         Action::CompCycle(_) => (COMP_NEXT.id, String::new()),
         Action::CompBest => (COMP_BEST_KEY.id, String::new()),
+        Action::CompKeep => (COMP_KEEP_KEY.id, String::new()),
         Action::QuantizePanel => (QUANTIZE_PANEL.id, String::new()),
         Action::GainStage { clear: false } => (GAIN_STAGE.id, String::new()),
         Action::GainStage { clear: true } => (GAIN_STAGE_CLEAR.id, String::new()),
@@ -342,6 +343,14 @@ static COMP_BEST_KEY: ActionMeta = meta(
     "COMP_BEST over the selection — or the whole song with nothing selected: each phrase comped from its best take, as one edit.",
     "Edit",
     "Ctrl+T",
+);
+static COMP_KEEP_KEY: ActionMeta = meta(
+    "SESSION_COMP_KEEP",
+    "comp_keep_selection",
+    "Keep the take comped here",
+    "COMP_KEEP over the selection — the comp strip's picked spans, the selected hits, items, or the rest of it: the take comped there kept, or a kept stretch let go again.",
+    "Edit",
+    "Ctrl+Shift+T",
 );
 static COMP_PREV: ActionMeta = meta(
     "SESSION_COMP_PREV",
@@ -585,7 +594,7 @@ fn register_window(list: &ActionList) {
         crate::quantize_panel::ask();
         Ok("the Quantize panel shown, or hidden if it was".to_owned())
     });
-    let plain: [(&'static ActionMeta, Effect, Action); 21] = [
+    let plain: [(&'static ActionMeta, Effect, Action); 22] = [
         (&PLAY_STOP, Effect::Mutating, Action::PlayStop),
         (&PLAY_PAUSE, Effect::Mutating, Action::PlayPause),
         (&GO_TO_START, Effect::Mutating, Action::GoToStart),
@@ -597,6 +606,7 @@ fn register_window(list: &ActionList) {
         (&COMP_NEXT, Effect::Mutating, Action::CompCycle(1)),
         (&COMP_PREV, Effect::Mutating, Action::CompCycle(-1)),
         (&COMP_BEST_KEY, Effect::Mutating, Action::CompBest),
+        (&COMP_KEEP_KEY, Effect::Mutating, Action::CompKeep),
         (
             &GAIN_STAGE,
             Effect::Mutating,
@@ -1102,6 +1112,7 @@ fn register_data(list: &ActionList) {
     crate::hits::register(list);
     crate::hits_midi::register(list);
     crate::seams::register(list);
+    crate::comp_keep::register(list);
     register_track_set(list);
     register_reference(list);
     #[cfg(feature = "native")]

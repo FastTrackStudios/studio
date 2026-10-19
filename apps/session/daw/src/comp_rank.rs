@@ -15,7 +15,7 @@
 
 use architect::action::{ActionList, ActionMeta, Effect};
 use daw::service::{Items as _, ProjectContext, Tracks};
-use editing::comp::{Candidate, Ranked, Strike};
+use editing::comp::{Candidate, Ranked, Reference, Strike};
 use facet::Facet;
 
 static CANDIDATES: ActionMeta = crate::actions::meta(
@@ -92,6 +92,8 @@ pub(crate) struct TakeRank {
     pub(crate) undetected: bool,
     /// The comp plays this take there now.
     pub(crate) current: bool,
+    /// The stretch is kept comped from this take (COMP_KEEP).
+    pub(crate) kept: bool,
     /// Its lanes hold no audio over all of the stretch — a punch-in's
     /// pre-roll, recorded but cut away: its hits are heard nowhere, and a
     /// comp from it would leave a hole. Ranked last; COMP_CHOOSE refuses it.
@@ -253,7 +255,15 @@ fn ranking(
     let now = current(daw, project, &versions, (from, to));
     let written = written(daw, project, (from, to), &versions);
     let line_of = |t: f64| crate::actions::grid_line(daw, project, t, 16);
-    let mut out = rank_versions(&versions, &written, now.as_deref(), &line_of);
+    // A stretch kept as comped holds the takes up to its take, first.
+    let kept = crate::comp_keep::holding(&crate::comp_keep::kept(daw, project), (from, to))
+        .map(|k| k.pass.clone());
+    let mut out = rank_versions(
+        &versions,
+        &written,
+        (now.as_deref(), kept.as_deref()),
+        &line_of,
+    );
     mark_unplayable(&mut out, project, &versions, (from, to));
     name_colors(&mut out, &kit_takes(project));
     (out, versions)
@@ -334,10 +344,12 @@ fn candidates_of(versions: &[crate::hits::TakeVersion]) -> Vec<Candidate> {
         .collect()
 }
 
+/// `versions` ranked: held up to `kept` (the take a kept stretch is
+/// comped from, ranked first) else to what plays `now`.
 pub(crate) fn rank_versions(
     versions: &[crate::hits::TakeVersion],
     written: &[Strike],
-    now: Option<&str>,
+    (now, kept): (Option<&str>, Option<&str>),
     line_of: &dyn Fn(f64) -> f64,
 ) -> Vec<TakeRank> {
     let candidates = candidates_of(versions);
@@ -361,31 +373,40 @@ pub(crate) fn rank_versions(
             .find(|v| v.pass == pass)
             .is_some_and(|v| !v.detected)
     };
-    let mut out: Vec<TakeRank> = editing::comp::rank(&candidates, written, line_of, now)
-        .into_iter()
-        .map(|r: Ranked| {
-            let never = undetected(&r.take);
-            TakeRank {
-                current: now == Some(r.take.as_str()),
-                played: played_by(&r.take),
-                lane: lane_of(&r.take),
-                pass: r.take.clone(),
-                // Not found is not empty: unjudged, still to listen to.
-                empty: r.empty && !never,
-                undetected: never,
-                take: r.take,
-                score: r.score,
-                hits: u32::try_from(r.hits).unwrap_or(u32::MAX),
-                coverage: r.coverage,
-                similar: r.similar,
-                spread_ms: r.spread_ms,
-                feel_ms: r.feel_ms,
-                color: None,
-                unplayable: false,
-            }
-        })
-        .collect();
-    out.sort_by_key(|t| u8::from(t.undetected) + 2 * u8::from(t.empty));
+    let mut out: Vec<TakeRank> = editing::comp::rank(
+        &candidates,
+        written,
+        line_of,
+        kept.map_or_else(
+            || now.map_or(Reference::Part, Reference::Before),
+            Reference::Chosen,
+        ),
+    )
+    .into_iter()
+    .map(|r: Ranked| {
+        let never = undetected(&r.take);
+        TakeRank {
+            current: now == Some(r.take.as_str()),
+            kept: kept == Some(r.take.as_str()),
+            played: played_by(&r.take),
+            lane: lane_of(&r.take),
+            pass: r.take.clone(),
+            // Not found is not empty: unjudged, still to listen to.
+            empty: r.empty && !never,
+            undetected: never,
+            take: r.take,
+            score: r.score,
+            hits: u32::try_from(r.hits).unwrap_or(u32::MAX),
+            coverage: r.coverage,
+            similar: r.similar,
+            spread_ms: r.spread_ms,
+            feel_ms: r.feel_ms,
+            color: None,
+            unplayable: false,
+        }
+    })
+    .collect();
+    out.sort_by_key(|t| u8::from(!t.kept) + 2 * u8::from(t.undetected) + 4 * u8::from(t.empty));
     out
 }
 

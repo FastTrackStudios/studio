@@ -2097,6 +2097,10 @@ pub fn overlay(
         zones,
         stretches,
         comps,
+        kept: crate::comp_keep::kept(daw, project)
+            .into_iter()
+            .map(|k| (k.from, k.to))
+            .collect(),
     }
 }
 

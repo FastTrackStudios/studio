@@ -112,7 +112,7 @@ pub fn comp_best(song: &Song, phrases: &[(f64, f64)], dry: bool) -> Result<Compe
                 .collect();
             let here = within(&usable, (from, to));
             let notes = strikes_within(&written, (from, to));
-            let ranked = crate::comp_rank::rank_versions(&here, &notes, None, &line_of);
+            let ranked = crate::comp_rank::rank_versions(&here, &notes, (None, None), &line_of);
             let best = ranked.iter().find(|t| !t.undetected && !t.empty)?;
             // Already playing: its own recordings are what the comp plays
             // there (a recording two passes share says nothing of which).
@@ -525,7 +525,7 @@ static BEST: ActionMeta = crate::actions::meta(
     "COMP_BEST",
     "comp_best",
     "Comp the best takes",
-    "Comp the kit from its best takes over a stretch — `from`/`to`, `spans` or `sections`; none: the whole song — as one edit: each section cut into phrases of `phrase_bars` bars (4), every phrase ranked from the takes' hits against the part as written (COMP_CANDIDATES's ranking), and those whose best judged take is not the one playing comped from it — every mic from its own lane, the EDIT lane there the new comp as recorded — in one undo step. `dry_run` says what it would comp. What Ctrl+T does over the selection, or the whole song with none.",
+    "Comp the kit from its best takes over a stretch — `from`/`to`, `spans` or `sections`; none: the whole song — as one edit: each section cut into phrases of `phrase_bars` bars (4) — the stretches kept as comped (COMP_KEEP) left out — every phrase ranked from the takes' hits against the part as written (COMP_CANDIDATES's ranking), and those whose best judged take is not the one playing comped from it — every mic from its own lane, the EDIT lane there the new comp as recorded — in one undo step. `dry_run` says what it would comp. What Ctrl+T does over the selection, or the whole song with none.",
     "Edit",
     "",
 );
@@ -568,6 +568,9 @@ pub(crate) fn register(list: &ActionList) {
             .into_iter()
             .flat_map(|span| phrases(&song, span, bars))
             .collect();
+        // What is kept as comped is not chosen again.
+        let kept = crate::comp_keep::kept(song.daw(), &song.context());
+        let phrases = crate::comp_keep::outside(&phrases, &kept);
         let done = comp_best(&song, &phrases, a.dry_run.unwrap_or(false))?;
         let count = |n: usize| u32::try_from(n).unwrap_or(u32::MAX);
         Ok(BestOut {

@@ -2542,6 +2542,7 @@ pub fn hits_overlay(
             (y0, y1),
             (&x_of, (from, to)),
             (&overlay.comps, takes, picked),
+            &overlay.kept,
         );
         let foot = if comps_drawn {
             y1 - COMP_STRIP - 1.0
@@ -2694,7 +2695,8 @@ pub fn comp_band(scene: &Arrangement, view: Viewport, oy: f64, row: usize) -> Op
 /// in its colour ([`take_color`], the mics' shared name of it), each seam
 /// between two takes a dark tick, the take's name over a span with room
 /// for it; the stretches `picked` (selected to comp, T / Shift+T) ringed
-/// in white. Whether the row had room for the strip.
+/// in white, those `kept` (COMP_KEEP) barred in gold along its top.
+/// Whether the row had room for the strip.
 fn comp_strip(
     painter: &mut impl PaintScene,
     font: &crate::text::Font,
@@ -2705,6 +2707,7 @@ fn comp_strip(
         &crate::take_colors::TakeColors,
         &[(f64, f64)],
     ),
+    kept: &[(f64, f64)],
 ) -> bool {
     /// The name's size, and the room a span needs to carry it, pixels.
     const SIZE: f32 = 8.0;
@@ -2751,6 +2754,17 @@ fn comp_strip(
             );
             crate::tcp::glyphs(painter, font, ink, &called, x0 + 3.0, top - 2.0, SIZE);
         }
+    }
+    // A stretch kept as comped: a gold bar along the strip's top.
+    let gold = Color::from_rgba8(0xf2, 0xc1, 0x4e, 0xff);
+    for &(a, b) in kept.iter().filter(|(a, b)| *b >= from && *a <= to) {
+        painter.fill(
+            Fill::NonZero,
+            Affine::IDENTITY,
+            gold,
+            None,
+            &Rect::new(x_of(a), top - 3.0, x_of(b).max(x_of(a) + 2.0), top - 1.0),
+        );
     }
     let ring = vello::kurbo::Stroke::new(1.5);
     for &(a, b) in picked.iter().filter(|(a, b)| *b >= from && *a <= to) {

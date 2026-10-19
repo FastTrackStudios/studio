@@ -52,6 +52,9 @@ pub enum Action {
     /// Ctrl+T: comp the selection — or, with none, the whole song — from
     /// each phrase's best take, as one edit (`COMP_BEST`).
     CompBest,
+    /// Ctrl+Shift+T: keep the take comped over the selection (`COMP_KEEP`),
+    /// or let a kept stretch go again.
+    CompKeep,
     /// Level what is selected (`EDIT_LEVEL`), in Edit mode: for the drums
     /// each selected piece's strokes brought toward one another.
     LevelDrums,
@@ -231,6 +234,7 @@ pub fn action_of(id: &str) -> Action {
         "FTS_COMP_NEXT" => Action::CompCycle(1),
         "FTS_COMP_PREV" => Action::CompCycle(-1),
         "FTS_COMP_BEST" => Action::CompBest,
+        "FTS_COMP_KEEP" => Action::CompKeep,
         "FTS_QUANTIZE_PANEL" => Action::QuantizePanel,
         "FTS_GAIN_STAGE" => Action::GainStage { clear: false },
         "FTS_GAIN_STAGE_CLEAR" => Action::GainStage { clear: true },
@@ -569,6 +573,7 @@ const BUILTIN: &str = r#"{
       "t": "FTS_COMP_NEXT",
       "Shift+t": "FTS_COMP_PREV",
       "Ctrl+t": "FTS_COMP_BEST",
+      "Ctrl+Shift+t": "FTS_COMP_KEEP",
       "Delete": "40697",
       "Backspace": "40697",
       "Escape": "40020",
@@ -879,6 +884,15 @@ mod tests {
         assert_eq!(
             keys.press(KeyCode::Character("t".into()), ctrl()),
             vec![Action::CompBest]
+        );
+        let ctrl_shift = Modifiers {
+            ctrl: true,
+            shift: true,
+            ..Modifiers::NONE
+        };
+        assert_eq!(
+            keys.press(KeyCode::Character("t".into()), ctrl_shift),
+            vec![Action::CompKeep]
         );
     }
 

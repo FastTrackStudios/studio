@@ -92,6 +92,8 @@ pub struct Overlay {
     /// Which take the comp plays where, in time order: the takes stitched
     /// together and the seams between them.
     pub comps: Vec<CompSpan>,
+    /// The stretches kept as comped (`COMP_KEEP`), in time order, seconds.
+    pub kept: Vec<(f64, f64)>,
 }
 
 /// A stretch of the song the comp plays from one take.
@@ -279,6 +281,7 @@ mod tests {
             zones: Vec::new(),
             stretches: Vec::new(),
             comps: Vec::new(),
+            kept: Vec::new(),
         };
         let times: Vec<f64> = overlay.between(1.5, 3.0).iter().map(|m| m.time).collect();
         assert_eq!(times, [2.0, 3.0]);
