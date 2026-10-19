@@ -238,6 +238,20 @@ impl View {
 }
 
 /// Blitz's modifier set, as the mouse map's.
+/// `a` and `b` as one list of stretches in time order, those that meet or
+/// overlap joined.
+fn joined(a: &[(f64, f64)], b: &[(f64, f64)]) -> Vec<(f64, f64)> {
+    let mut all: Vec<(f64, f64)> = a.iter().chain(b).copied().collect();
+    all.sort_by(|x, y| x.0.total_cmp(&y.0));
+    all.into_iter().fold(Vec::new(), |mut out, (from, to)| {
+        match out.last_mut() {
+            Some(last) if from <= last.1 + 1e-9 => last.1 = last.1.max(to),
+            _ => out.push((from, to)),
+        }
+        out
+    })
+}
+
 pub(crate) fn mods(from: Modifiers) -> crate::mousemap::Mods {
     crate::mousemap::Mods {
         shift: from.contains(Modifiers::SHIFT),
@@ -611,6 +625,9 @@ pub struct ArrangementWidget {
     /// A marquee being drawn over the kit's rows: where it began and where
     /// the pointer is now, in the widget's coordinates.
     hit_marquee: Option<((f64, f64), (f64, f64))>,
+    /// The stretches of the comp picked on its strip (Edit mode): what T
+    /// and Shift+T comp from another take, seconds, in time order.
+    comp_picked: Vec<(f64, f64)>,
     /// The band on the ruler last clicked and when: the first half of the
     /// double-click that selects its time.
     last_band: Option<((f64, f64), web_time::Instant)>,
@@ -800,6 +817,7 @@ impl ArrangementWidget {
             hit_drag: None,
             hit_selected: std::collections::HashSet::new(),
             hit_marquee: None,
+            comp_picked: Vec::new(),
             last_band: None,
             swipe: None,
             reading_pinned: Cell::new(None),
@@ -1158,6 +1176,38 @@ impl ArrangementWidget {
         })
     }
 
+    /// Whether a box from `a` to `b` (a click: the same point) reaches the
+    /// comp strip along a kit row's foot, editing.
+    fn on_comp_strip(&self, a: (f64, f64), b: (f64, f64)) -> bool {
+        let (Some(hits), Some(kit)) = (crate::hit_overlay::current(), self.kit_rows()) else {
+            return false;
+        };
+        let view = self.viewport(self.size.0, self.size.1);
+        if a.0.max(b.0) < view.panel_w {
+            return false;
+        }
+        let oy = ruler::ruler_h() - view.scroll_y;
+        let (y0, y1) = (a.1.min(b.1), a.1.max(b.1));
+        self.piece_rows(kit, &hits).iter().any(|(row, _)| {
+            crate::arrangement::comp_band(&self.scene, view, oy, *row)
+                .is_some_and(|(top, base)| y0 <= base && y1 >= top)
+        })
+    }
+
+    /// The comp's spans a box from `a` to `b` picks on the strip: each it
+    /// touches, whole; none where the box is off the strip.
+    fn comps_within(&self, a: (f64, f64), b: (f64, f64)) -> Vec<(f64, f64)> {
+        if !self.on_comp_strip(a, b) {
+            return Vec::new();
+        }
+        let Some(hits) = crate::hit_overlay::current() else {
+            return Vec::new();
+        };
+        let view = self.viewport(self.size.0, self.size.1);
+        let (x, y) = (self.seconds_at(a.0, view), self.seconds_at(b.0, view));
+        hits.comps_over(x.min(y), x.max(y))
+    }
+
     /// The hits a marquee from `a` to `b` covers: on the kit's piece rows
     /// it crosses, between the times its sides are at. A marquee too small
     /// to be one (a click) covers none — it clears the selection.
@@ -1209,6 +1259,12 @@ impl ArrangementWidget {
                 if e.button == MouseEventButton::Main && !self.pointing.borrow().tool_active() =>
             {
                 let (x, y) = (f64::from(e.coords.client_x), f64::from(e.coords.client_y));
+                // On the comp strip: a take's span picked, or a marquee
+                // over several — never a hit's line that runs down to it.
+                if self.editing.get() && self.on_comp_strip((x, y), (x, y)) {
+                    self.hit_marquee = Some(((x, y), (x, y)));
+                    return true;
+                }
                 let Some(spot) = self.flag_at(x, y) else {
                     // Editing, the kit's items are not moved by hand: a
                     // press on its rows draws a marquee over its hits.
@@ -1307,10 +1363,21 @@ impl ArrangementWidget {
             UiEvent::PointerUp(e) | UiEvent::PointerCancel(e) => {
                 if let Some((from, _)) = self.hit_marquee.take() {
                     let to = (f64::from(e.coords.client_x), f64::from(e.coords.client_y));
-                    self.hit_selected = if matches!(event, UiEvent::PointerUp(_)) {
+                    let up = matches!(event, UiEvent::PointerUp(_));
+                    self.hit_selected = if up {
                         self.hits_within(from, to)
                     } else {
                         std::collections::HashSet::new()
+                    };
+                    let picked = if up {
+                        self.comps_within(from, to)
+                    } else {
+                        Vec::new()
+                    };
+                    self.comp_picked = if mods(e.mods).shift {
+                        joined(&self.comp_picked, &picked)
+                    } else {
+                        picked
                     };
                     return true;
                 }
@@ -1626,6 +1693,31 @@ impl ArrangementWidget {
         self.revert_scope(scope, false, !again)
     }
 
+    /// The selected items' stretches, the folded kit's and each mic's
+    /// alike, joined where they meet: what T comps over when no strip
+    /// span or hit is picked.
+    fn selected_item_spans(&self) -> Vec<(f64, f64)> {
+        let selected = &self.editor.selected;
+        if selected.is_empty() {
+            return Vec::new();
+        }
+        let span = |i: &daw_proto::Item| {
+            let start = i.position.as_seconds();
+            (start, start + i.length.as_seconds())
+        };
+        let mut all: Vec<(f64, f64)> = self
+            .project
+            .items
+            .values()
+            .chain(self.project.folds.values().map(|f| &f.items))
+            .flatten()
+            .filter(|i| selected.contains(&i.guid))
+            .map(span)
+            .collect();
+        all.sort_by(|a, b| a.0.total_cmp(&b.0));
+        joined(&[], &all)
+    }
+
     /// The stretch the selected hit markers span, as they play now (a
     /// hair either side, so the first and last are in it); `None` with
     /// none selected.
@@ -1811,13 +1903,27 @@ impl ArrangementWidget {
     }
 
     fn comp_cycle(&self, by: i32) -> bool {
-        let scope = self.selected_hits_span().map_or_else(
-            || self.scope(),
-            |(from, to)| editing::scope::Scope {
-                tracks: Vec::new(),
-                spans: vec![editing::scope::Span::between(from, to)],
-            },
-        );
+        let spans = |spans: Vec<(f64, f64)>| editing::scope::Scope {
+            tracks: Vec::new(),
+            spans: spans
+                .into_iter()
+                .map(|(from, to)| editing::scope::Span::between(from, to))
+                .collect(),
+        };
+        // The comp's spans picked on its strip, else the selected hits'
+        // stretch, else the selected items (each mic's, or the folded
+        // kit's), else what else is selected.
+        let picked = self.comp_picked.clone();
+        let items = self.selected_item_spans();
+        let scope = if !picked.is_empty() {
+            spans(picked)
+        } else if let Some(hits) = self.selected_hits_span() {
+            spans(vec![hits])
+        } else if !items.is_empty() {
+            spans(items)
+        } else {
+            self.scope()
+        };
         if scope.merged().is_empty() {
             *self
                 .staged
@@ -4052,7 +4158,7 @@ impl ArrangementWidget {
                         view,
                         lanes_at,
                         (kit, &rows),
-                        (&hits, &self.hit_selected),
+                        (&hits, &self.hit_selected, &self.comp_picked),
                     );
                 }
                 // Not read yet since the window opened.

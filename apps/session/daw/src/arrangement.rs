@@ -2465,9 +2465,10 @@ pub fn hits_overlay(
     view: Viewport,
     origin: (f64, f64),
     (kit, rows): (std::ops::Range<usize>, &[(usize, usize)]),
-    (overlay, selected): (
+    (overlay, selected, picked): (
         &crate::hit_overlay::Overlay,
         &std::collections::HashSet<String, impl std::hash::BuildHasher>,
+        &[(f64, f64)],
     ),
 ) {
     use crate::hit_overlay::Who;
@@ -2516,19 +2517,7 @@ pub fn hits_overlay(
     let marks = overlay.between(from, to);
     let thin = vello::kurbo::Stroke::new(1.0);
     let heavy = vello::kurbo::Stroke::new(1.75);
-    // A row showing its lanes: the hits are where they play, on the lane
-    // that plays — its strip, not every take's.
-    let marks_span = |row: usize| {
-        let playing = scene.lanes_shown(row).and_then(crate::lanes::playing);
-        let (Some(lane), Some(stack)) = (playing, scene.lane_stack(row)) else {
-            return y_span(row);
-        };
-        let (y, h) = scene.row_box(row)?;
-        let (b0, b1) = stack.band(lane);
-        let y0 = b0.mul_add(h, y).mul_add(view.zoom_y, oy).max(top);
-        let y1 = b1.mul_add(h, y).mul_add(view.zoom_y, oy).min(view.height);
-        (y1 > y0).then_some((y0, y1))
-    };
+    let marks_span = |row: usize| marks_span(scene, view, oy, row);
     // Each row's stretched stretches along its foot, once a row: a shut
     // kit's row is every piece's, and their slices are stretched as one.
     let mut shown_rows: Vec<usize> = Vec::new();
@@ -2552,7 +2541,7 @@ pub fn hits_overlay(
             font,
             (y0, y1),
             (&x_of, (from, to)),
-            (&overlay.comps, takes),
+            (&overlay.comps, takes, picked),
         );
         let foot = if comps_drawn {
             y1 - COMP_STRIP - 1.0
@@ -2673,21 +2662,48 @@ fn stretch_tint(rate: f64) -> Color {
 /// says its slowest rate just above them, in that rate's colour
 /// (`0.12×`), where there is room before the next. The same stretch on
 /// several pieces' slices drawn once.
-/// The comp strip's height, pixels.
-const COMP_STRIP: f64 = 4.0;
+/// The comp strip's height, pixels: tall enough to pick a take's span
+/// on it.
+const COMP_STRIP: f64 = 10.0;
+
+/// Where a kit row's hits are drawn, top to bottom on screen (`oy`: the
+/// lanes' content top): the whole row, or — a row showing its lanes — the
+/// lane that plays.
+fn marks_span(scene: &Arrangement, view: Viewport, oy: f64, row: usize) -> Option<(f64, f64)> {
+    let top = crate::ruler::ruler_h();
+    let (y, h) = scene.row_box(row)?;
+    let (b0, b1) = scene
+        .lanes_shown(row)
+        .and_then(crate::lanes::playing)
+        .zip(scene.lane_stack(row))
+        .map_or((0.0, 1.0), |(lane, stack)| stack.band(lane));
+    let y0 = b0.mul_add(h, y).mul_add(view.zoom_y, oy).max(top);
+    let y1 = b1.mul_add(h, y).mul_add(view.zoom_y, oy).min(view.height);
+    (y1 > y0).then_some((y0, y1))
+}
+
+/// Where a kit row's comp strip is on screen, top to bottom (`oy`: the
+/// lanes' content top); `None` for a row too short to show one.
+#[must_use]
+pub fn comp_band(scene: &Arrangement, view: Viewport, oy: f64, row: usize) -> Option<(f64, f64)> {
+    let (y0, y1) = marks_span(scene, view, oy, row)?;
+    (y1 - y0 >= COMP_STRIP * 6.0).then_some((y1 - COMP_STRIP, y1))
+}
 
 /// Which take the comp plays where, along a row's foot: each take's span
 /// in its colour ([`take_color`], the mics' shared name of it), each seam
 /// between two takes a dark tick, the take's name over a span with room
-/// for it. Whether the row had room for the strip.
+/// for it; the stretches `picked` (selected to comp, T / Shift+T) ringed
+/// in white. Whether the row had room for the strip.
 fn comp_strip(
     painter: &mut impl PaintScene,
     font: &crate::text::Font,
     (y0, y1): (f64, f64),
     (x_of, (from, to)): (&impl Fn(f64) -> f64, (f64, f64)),
-    (comps, takes): (
+    (comps, takes, picked): (
         &[crate::hit_overlay::CompSpan],
         &crate::take_colors::TakeColors,
+        &[(f64, f64)],
     ),
 ) -> bool {
     /// The name's size, and the room a span needs to carry it, pixels.
@@ -2735,6 +2751,18 @@ fn comp_strip(
             );
             crate::tcp::glyphs(painter, font, ink, &called, x0 + 3.0, top - 2.0, SIZE);
         }
+    }
+    let ring = vello::kurbo::Stroke::new(1.5);
+    for &(a, b) in picked.iter().filter(|(a, b)| *b >= from && *a <= to) {
+        let r = Rect::new(x_of(a), top - 0.75, x_of(b).max(x_of(a) + 2.0), base - 0.75);
+        painter.fill(
+            Fill::NonZero,
+            Affine::IDENTITY,
+            Color::WHITE.multiply_alpha(0.25),
+            None,
+            &r,
+        );
+        painter.stroke(&ring, Affine::IDENTITY, Color::WHITE, None, &r);
     }
     true
 }

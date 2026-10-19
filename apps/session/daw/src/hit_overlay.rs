@@ -106,6 +106,22 @@ pub struct CompSpan {
 }
 
 impl Overlay {
+    /// The comp's spans `from..to` touches, each whole — a click
+    /// (`from == to`) the one it is in: the stretches a T or Shift+T
+    /// comps from another take.
+    #[must_use]
+    pub fn comps_over(&self, from: f64, to: f64) -> Vec<(f64, f64)> {
+        let first = self.comps.partition_point(|c| c.end < from);
+        self.comps
+            .get(first..)
+            .unwrap_or_default()
+            .iter()
+            .take_while(|c| c.start <= to)
+            .filter(|c| c.end > from || (from - to).abs() < f64::EPSILON && c.end >= from)
+            .map(|c| (c.start, c.end))
+            .collect()
+    }
+
     /// The marks between `from` and `to` seconds.
     #[must_use]
     pub fn between(&self, from: f64, to: f64) -> &[Mark] {
@@ -212,6 +228,34 @@ pub fn refresh() {
 
 #[cfg(test)]
 mod tests {
+
+    fn comps(spans: &[(f64, f64, &str)]) -> Overlay {
+        Overlay {
+            comps: spans
+                .iter()
+                .map(|&(start, end, take)| CompSpan {
+                    start,
+                    end,
+                    take: take.to_owned(),
+                })
+                .collect(),
+            ..Overlay::default()
+        }
+    }
+
+    /// A click picks the take's span it is on; a marquee every span it
+    /// touches, each whole.
+    #[test]
+    fn a_click_or_a_marquee_picks_whole_spans_of_the_comp() {
+        let o = comps(&[(0.0, 4.0, "a"), (4.0, 6.5, "b"), (6.5, 9.0, "a")]);
+        assert_eq!(o.comps_over(5.0, 5.0), vec![(4.0, 6.5)]);
+        assert_eq!(
+            o.comps_over(3.0, 7.0),
+            vec![(0.0, 4.0), (4.0, 6.5), (6.5, 9.0)]
+        );
+        assert_eq!(o.comps_over(4.5, 6.0), vec![(4.0, 6.5)]);
+        assert!(o.comps_over(10.0, 11.0).is_empty());
+    }
     use super::*;
 
     fn mark(piece: usize, time: f64) -> Mark {
