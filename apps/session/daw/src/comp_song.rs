@@ -99,6 +99,7 @@ pub fn comp_best(song: &Song, phrases: &[(f64, f64)], dry: bool) -> Result<Compe
     let phrases: Vec<(f64, f64)> = clear_of_hits(phrases, &attacks);
 
     let line_of = |t: f64| crate::actions::grid_line(daw, &project, t, 16);
+    let main = crate::comp_keep::main_take(daw, &project);
     let choices: Vec<Choice> = phrases
         .iter()
         .filter_map(|&(from, to)| {
@@ -112,8 +113,17 @@ pub fn comp_best(song: &Song, phrases: &[(f64, f64)], dry: bool) -> Result<Compe
                 .collect();
             let here = within(&usable, (from, to));
             let notes = strikes_within(&written, (from, to));
-            let ranked = crate::comp_rank::rank_versions(&here, &notes, (None, None), &line_of);
-            let best = ranked.iter().find(|t| !t.undetected && !t.empty)?;
+            // With a main take that plays the phrase: held up to it, and
+            // left only for a take alike to it that plays clearly better.
+            let main_here = main
+                .as_deref()
+                .filter(|m| here.iter().any(|v| v.pass == *m && !v.hits.is_empty()));
+            let ranked =
+                crate::comp_rank::rank_versions(&here, &notes, (None, main_here), &line_of);
+            let best = match main_here {
+                Some(m) => stay_or_leave(&ranked, m)?,
+                None => ranked.iter().find(|t| !t.undetected && !t.empty)?,
+            };
             // Already playing: its own recordings are what the comp plays
             // there (a recording two passes share says nothing of which).
             let version = versions.iter().find(|v| v.pass == best.take)?;
@@ -149,6 +159,35 @@ pub fn comp_best(song: &Song, phrases: &[(f64, f64)], dry: bool) -> Result<Compe
         phrases: phrases.len(),
         choices,
         ops,
+    })
+}
+
+/// How much better (in score) a take must play a phrase than the main
+/// take to be comped there instead.
+const CLEARLY_BETTER: f64 = 0.25;
+/// How alike to the main take's version a take must be to stand in for
+/// it: the same part, played better — not another part.
+const STANDS_IN: f64 = 0.8;
+
+/// Of `ranked` (held up to the main take `main`), the take to comp: the
+/// main take, unless a take alike to it ([`STANDS_IN`]) scores
+/// [`CLEARLY_BETTER`]. `None` when nothing plays.
+fn stay_or_leave<'a>(
+    ranked: &'a [crate::comp_rank::TakeRank],
+    main: &str,
+) -> Option<&'a crate::comp_rank::TakeRank> {
+    let judged = |t: &&crate::comp_rank::TakeRank| !t.undetected && !t.empty;
+    let Some(stay) = ranked.iter().filter(judged).find(|t| t.pass == main) else {
+        return ranked.iter().find(judged);
+    };
+    let leave = ranked
+        .iter()
+        .filter(judged)
+        .filter(|t| t.pass != main && t.similar >= STANDS_IN)
+        .max_by(|a, b| a.score.total_cmp(&b.score));
+    Some(match leave {
+        Some(t) if t.score >= stay.score + CLEARLY_BETTER => t,
+        _ => stay,
     })
 }
 
@@ -525,7 +564,7 @@ static BEST: ActionMeta = crate::actions::meta(
     "COMP_BEST",
     "comp_best",
     "Comp the best takes",
-    "Comp the kit from its best takes over a stretch — `from`/`to`, `spans` or `sections`; none: the whole song — as one edit: each section cut into phrases of `phrase_bars` bars (4) — the stretches kept as comped (COMP_KEEP) left out — every phrase ranked from the takes' hits against the part as written (COMP_CANDIDATES's ranking), and those whose best judged take is not the one playing comped from it — every mic from its own lane, the EDIT lane there the new comp as recorded — in one undo step. `dry_run` says what it would comp. What Ctrl+T does over the selection, or the whole song with none.",
+    "Comp the kit from its best takes over a stretch — `from`/`to`, `spans` or `sections`; none: the whole song — as one edit: each section cut into phrases of `phrase_bars` bars (4) — the stretches kept as comped (COMP_KEEP) left out; with a main take (COMP_MAIN) a phrase stays on it unless a take alike to it scores 0.25 better — every phrase ranked from the takes' hits against the part as written (COMP_CANDIDATES's ranking), and those whose best judged take is not the one playing comped from it — every mic from its own lane, the EDIT lane there the new comp as recorded — in one undo step. `dry_run` says what it would comp. What Ctrl+T does over the selection, or the whole song with none.",
     "Edit",
     "",
 );
@@ -614,7 +653,56 @@ fn stretches(song: &Song, a: &BestArg) -> Vec<(f64, f64)> {
 
 #[cfg(test)]
 mod tests {
-    use super::{SEAM_LEAD, clear_of_hits, clear_seam};
+    use super::{SEAM_LEAD, clear_of_hits, clear_seam, stay_or_leave};
+    use crate::comp_rank::TakeRank;
+
+    fn take(pass: &str, score: f64, similar: f64) -> TakeRank {
+        TakeRank {
+            take: pass.into(),
+            pass: pass.into(),
+            lane: String::new(),
+            score,
+            hits: 8,
+            coverage: 1.0,
+            similar,
+            played: Vec::new(),
+            spread_ms: 0.0,
+            feel_ms: 0.0,
+            empty: false,
+            undetected: false,
+            current: false,
+            kept: false,
+            main: false,
+            unplayable: false,
+            color: None,
+        }
+    }
+
+    /// The main take stays unless a take alike to it plays clearly
+    /// better; a better take playing another part never replaces it.
+    #[test]
+    fn the_main_take_stays_unless_clearly_beaten() {
+        let ranked = [
+            take("main", 0.6, 1.0),
+            take("near", 0.75, 0.95),
+            take("other", 0.95, 0.4),
+        ];
+        assert_eq!(
+            stay_or_leave(&ranked, "main").map(|t| t.pass.as_str()),
+            Some("main")
+        );
+        let ranked = [take("main", 0.5, 1.0), take("near", 0.8, 0.95)];
+        assert_eq!(
+            stay_or_leave(&ranked, "main").map(|t| t.pass.as_str()),
+            Some("near")
+        );
+        let ranked = [take("a", 0.5, 1.0)];
+        assert_eq!(
+            stay_or_leave(&ranked, "gone").map(|t| t.pass.as_str()),
+            Some("a"),
+            "no main here: the best"
+        );
+    }
 
     /// A seam on the downbeat moves to just before the earliest take's hit
     /// there; one with no hit near it stays.

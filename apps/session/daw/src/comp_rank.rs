@@ -94,6 +94,8 @@ pub(crate) struct TakeRank {
     pub(crate) current: bool,
     /// The stretch is kept comped from this take (COMP_KEEP).
     pub(crate) kept: bool,
+    /// It is the kit's main take (COMP_MAIN).
+    pub(crate) main: bool,
     /// Its lanes hold no audio over all of the stretch — a punch-in's
     /// pre-roll, recorded but cut away: its hits are heard nowhere, and a
     /// comp from it would leave a hole. Ranked last; COMP_CHOOSE refuses it.
@@ -256,17 +258,43 @@ fn ranking(
     let written = written(daw, project, (from, to), &versions);
     let line_of = |t: f64| crate::actions::grid_line(daw, project, t, 16);
     // A stretch kept as comped holds the takes up to its take, first.
+    // Else the kit's main take, when it plays here.
     let kept = crate::comp_keep::holding(&crate::comp_keep::kept(daw, project), (from, to))
         .map(|k| k.pass.clone());
+    let main = crate::comp_keep::main_take(daw, project)
+        .filter(|m| versions.iter().any(|v| v.pass == *m && !v.hits.is_empty()));
+    let held = kept.clone().or_else(|| main.clone());
     let mut out = rank_versions(
         &versions,
         &written,
-        (now.as_deref(), kept.as_deref()),
+        (now.as_deref(), held.as_deref()),
         &line_of,
     );
+    for take in &mut out {
+        take.kept = kept.as_deref() == Some(take.pass.as_str());
+        take.main = main.as_deref() == Some(take.pass.as_str());
+    }
     mark_unplayable(&mut out, project, &versions, (from, to));
     name_colors(&mut out, &kit_takes(project));
     (out, versions)
+}
+
+/// The pass of the take `name` names among `versions` — by its pass, its
+/// lane's name or its colour's, as COMP_CANDIDATES says them.
+pub(crate) fn pass_named(
+    project: &ProjectContext,
+    versions: &[crate::hits::TakeVersion],
+    name: &str,
+) -> Option<String> {
+    let colored = kit_takes(project).pass_named(name).map(str::to_owned);
+    versions
+        .iter()
+        .find(|v| {
+            v.pass == name
+                || v.lane.as_deref() == Some(name)
+                || colored.as_deref() == Some(v.pass.as_str())
+        })
+        .map(|v| v.pass.clone())
 }
 
 /// Each take ranked given its colour's name.
@@ -345,7 +373,8 @@ fn candidates_of(versions: &[crate::hits::TakeVersion]) -> Vec<Candidate> {
 }
 
 /// `versions` ranked: held up to `kept` (the take a kept stretch is
-/// comped from, ranked first) else to what plays `now`.
+/// comped from, or the kit's main take — ranked first) else to what
+/// plays `now`.
 pub(crate) fn rank_versions(
     versions: &[crate::hits::TakeVersion],
     written: &[Strike],
@@ -388,6 +417,7 @@ pub(crate) fn rank_versions(
         TakeRank {
             current: now == Some(r.take.as_str()),
             kept: kept == Some(r.take.as_str()),
+            main: false,
             played: played_by(&r.take),
             lane: lane_of(&r.take),
             pass: r.take.clone(),
