@@ -504,6 +504,38 @@ impl Keys {
     }
 }
 
+impl Keys {
+    /// Every binding of the normal mode that asks for one action: the
+    /// keys pressed, in order, and what they ask for. In no set order.
+    #[must_use]
+    pub fn bindings(&self) -> Vec<(Vec<KeyChord>, Action)> {
+        let mut found = Vec::new();
+        if let Some(KeyTrie::Node(root)) = self.processor.keymaps().get(&ModeId::new("normal")) {
+            collect_bindings(root, &mut Vec::new(), &mut found);
+        }
+        found
+    }
+}
+
+/// [`Keys::bindings`] under `node`, reached by `path`.
+fn collect_bindings(
+    node: &input::trie::TrieNode,
+    path: &mut Vec<KeyChord>,
+    found: &mut Vec<(Vec<KeyChord>, Action)>,
+) {
+    for (chord, child) in &node.children {
+        path.push(chord.clone());
+        match child {
+            KeyTrie::Leaf(input::trie::LeafAction::Action(id)) => {
+                found.push((path.clone(), action_of(id.as_str())));
+            }
+            KeyTrie::Node(next) => collect_bindings(next, path, found),
+            KeyTrie::Leaf(_) => {}
+        }
+        path.pop();
+    }
+}
+
 /// How a chord reads in the popup: `t`, `Shift+t`, `Ctrl+Up`.
 fn chord_label(chord: &KeyChord) -> String {
     let mut s = String::new();

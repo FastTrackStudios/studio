@@ -111,6 +111,13 @@ pub fn through_list(actions: Vec<Action>) -> Vec<Action> {
     take_window()
 }
 
+/// The list's id for a window action that takes nothing — what a key
+/// bound to it runs, and what a menu item for it runs.
+#[must_use]
+pub(crate) fn plain_id(action: &Action) -> Option<&'static str> {
+    id_and_args(action).and_then(|(id, args)| args.is_empty().then_some(id))
+}
+
 /// An action's id in the list and its arguments, as a key produced it.
 fn id_and_args(action: &Action) -> Option<(&'static str, String)> {
     use crate::zoom::Command as Z;
@@ -342,7 +349,7 @@ static COMP_NEXT: ActionMeta = meta(
     "comp_next",
     "Comp the next take",
     "COMP_CYCLE over the selection — a fill's hit markers, rows, a razor, a time selection — the next take in its ranking comped onto the kit.",
-    "Edit",
+    "Comp",
     "T",
 );
 static COMP_BEST_KEY: ActionMeta = meta(
@@ -350,7 +357,7 @@ static COMP_BEST_KEY: ActionMeta = meta(
     "comp_best_selection",
     "Comp the best takes",
     "COMP_BEST over the selection — or the whole song with nothing selected: each phrase comped from its best take, as one edit.",
-    "Edit",
+    "Comp",
     "Ctrl+T",
 );
 static COMP_KEEP_KEY: ActionMeta = meta(
@@ -358,7 +365,7 @@ static COMP_KEEP_KEY: ActionMeta = meta(
     "comp_keep_selection",
     "Keep the take comped here",
     "COMP_KEEP over the selection — the comp strip's picked spans, the selected hits, items, or the rest of it: the take comped there kept, or a kept stretch let go again.",
-    "Edit",
+    "Comp",
     "Ctrl+Shift+T",
 );
 static TAKE_UP: ActionMeta = meta(
@@ -366,7 +373,7 @@ static TAKE_UP: ActionMeta = meta(
     "take_uprank",
     "Up-rank the take",
     "Up-rank the selected takes (the last recording's, once it ends), else the take under the mouse; while recording, the take being recorded from now on (TAKES_RANK).",
-    "Edit",
+    "Comp",
     "Up",
 );
 static TAKE_DOWN: ActionMeta = meta(
@@ -374,7 +381,7 @@ static TAKE_DOWN: ActionMeta = meta(
     "take_downrank",
     "Down-rank the take",
     "Down-rank the selected takes (the last recording's, once it ends), else the take under the mouse; while recording, the take being recorded from now on (TAKES_RANK).",
-    "Edit",
+    "Comp",
     "Down",
 );
 static TAKE_UP_MOUSE: ActionMeta = meta(
@@ -382,7 +389,7 @@ static TAKE_UP_MOUSE: ActionMeta = meta(
     "take_uprank_mouse",
     "Up-rank the take under the mouse",
     "Up-rank the take under the mouse — a lane's item, the comp strip's span, the folded kit's take there — else as SESSION_TAKE_UPRANK. Mouse button 5 (forward).",
-    "Edit",
+    "Comp",
     "Mouse 5",
 );
 static TAKE_DOWN_MOUSE: ActionMeta = meta(
@@ -390,7 +397,7 @@ static TAKE_DOWN_MOUSE: ActionMeta = meta(
     "take_downrank_mouse",
     "Down-rank the take under the mouse",
     "Down-rank the take under the mouse — a lane's item, the comp strip's span, the folded kit's take there — else as SESSION_TAKE_DOWNRANK. Mouse button 4 (back).",
-    "Edit",
+    "Comp",
     "Mouse 4",
 );
 static COMP_PREV: ActionMeta = meta(
@@ -398,7 +405,7 @@ static COMP_PREV: ActionMeta = meta(
     "comp_prev",
     "Comp the take before",
     "COMP_CYCLE over the selection, by -1: the take before in its ranking comped onto the kit.",
-    "Edit",
+    "Comp",
     "Shift+T",
 );
 static REVERT_DRUMS: ActionMeta = meta(
@@ -430,7 +437,7 @@ static COMP_TAKE: ActionMeta = meta(
     "comp_take",
     "Comp from take",
     "Comp the razor areas from take N — on a folded row, every mic in the folder at once.",
-    "Edit",
+    "Comp",
     "Ctrl+N",
 );
 static DELETE_ITEMS: ActionMeta = meta(

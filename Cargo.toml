@@ -707,6 +707,9 @@ anyrender_vello_cpu = "0.14"
 # ── Platform UI bindings ──────────────────────────────────────────────
 cocoa = "0.26"
 objc = "0.2.7"
+# The session bus, for Session's global app menu (com.canonical.dbusmenu,
+# what the Loft top bar reads). On tokio, the runtime the app already runs.
+zbus = { version = "5.19", default-features = false, features = ["tokio"] }
 
 # ── Async runtime ─────────────────────────────────────────────────────
 tokio = { version = "1.48", features = ["full"] }

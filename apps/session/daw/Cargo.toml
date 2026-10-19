@@ -238,6 +238,11 @@ serde_json = { workspace = true }
 # The browser's tokio: channels and `select!` for the live session's loop
 # (collab.rs), no runtime — tasks and timers there are the page's
 # (`architect::platform`).
+# The global app menu (`app_menu`): served on the session bus, which is
+# Linux's. Behind `native`.
+[target.'cfg(target_os = "linux")'.dependencies]
+zbus = { workspace = true, optional = true }
+
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 tokio = { version = "1.48", default-features = false, features = ["sync", "macros"] }
 
@@ -248,7 +253,7 @@ default = ["native"]
 signal = ["native", "dep:signal-fx"]
 # The desktop app: dioxus-native (Blitz) hosts for the panels, the
 # in-process engine with its audio device, threads, the plugin-UI graph.
-native = ["dep:dioxus-native", "dep:realfft", "dep:architect-mcp", "dep:anyrender_vello", "dep:wgpu", "dep:wgpu-context-07", "dep:pollster", "dep:dirs", "dep:winit", "dep:tokio", "dep:tracing-subscriber", "eq/native", "daw/standalone-rpp", "daw/standalone-bootstrap", "daw-standalone/reapeaks", "daw-standalone/stream-ogg", "daw/standalone-session-file", "studio/cli", "dynamic-template/reaper", "dep:patch-list", "dep:editor-view", "editor-view/native", "dep:editor-state", "dep:keyflow-editor-lang", "dep:futures-channel", "dep:rayon", "dep:hits", "dep:session-format", "dep:futures-util", "session/collab", "dep:architect", "architect/iroh", "dep:crdt", "dep:vox-core", "dep:uuid", "dep:editor-crdt", "dep:futures-timer", "dep:daw-transport-sync", "dep:fts-sample", "fts-sample/engine-native", "fts-sample/write", "dep:dawfile-reaper", "dep:builtin", "builtin?/engine", "dawfile-reaper/peaks-wav", "dawfile-reaper/peaks-ogg", "session/library", "dep:auth-client", "dep:live-proto", "dep:task-dial", "dep:reqwest"]
+native = ["dep:dioxus-native", "dep:zbus", "dep:realfft", "dep:architect-mcp", "dep:anyrender_vello", "dep:wgpu", "dep:wgpu-context-07", "dep:pollster", "dep:dirs", "dep:winit", "dep:tokio", "dep:tracing-subscriber", "eq/native", "daw/standalone-rpp", "daw/standalone-bootstrap", "daw-standalone/reapeaks", "daw-standalone/stream-ogg", "daw/standalone-session-file", "studio/cli", "dynamic-template/reaper", "dep:patch-list", "dep:editor-view", "editor-view/native", "dep:editor-state", "dep:keyflow-editor-lang", "dep:futures-channel", "dep:rayon", "dep:hits", "dep:session-format", "dep:futures-util", "session/collab", "dep:architect", "architect/iroh", "dep:crdt", "dep:vox-core", "dep:uuid", "dep:editor-crdt", "dep:futures-timer", "dep:daw-transport-sync", "dep:fts-sample", "fts-sample/engine-native", "fts-sample/write", "dep:dawfile-reaper", "dep:builtin", "builtin?/engine", "dawfile-reaper/peaks-wav", "dawfile-reaper/peaks-ogg", "session/library", "dep:auth-client", "dep:live-proto", "dep:task-dial", "dep:reqwest"]
 # The browser: the same widgets, hosted in <canvas> elements under
 # dioxus-web and drawn with vello_hybrid's WebGL renderer (keyflow-ui's
 # `wasm-graphics` pattern). See `web_host`.
@@ -313,6 +318,8 @@ required-features = ["native"]
 
 [dev-dependencies]
 builtin = { workspace = true, features = ["engine"] }
+# The app menu's test serves it over a socket pair, not a bus.
+zbus = { workspace = true, features = ["p2p"] }
 # Temp project trees for the Patch List view's discovery tests, and the
 # scratch directory the golden scene renders (`tests/golden_scenes.rs`)
 # draw into before comparing with the committed pictures.

@@ -188,6 +188,10 @@ fn remember(project: &Path) {
 /// before there is a window to say so. With nothing chosen, or when it
 /// does not open, the start screen stays.
 pub fn launch() {
+    // The global app menu (File, Edit, View, …) for the desktop shell's
+    // top bar, on the session bus — on a thread of its own.
+    #[cfg(target_os = "linux")]
+    session_daw::app_menu::start();
     // How this app dials a Session engine (Remote on another Session): the
     // connector lives with the app's iroh identity (`crate::remote`).
     #[cfg(feature = "session-domain")]
@@ -318,5 +322,21 @@ fn window_attributes() -> winit::window::WindowAttributes {
             .with_fullsize_content_view(true)
             .with_title_hidden(true),
     ));
+    // The app id a desktop knows the window by (`session`): what a window
+    // rule matches to put it on its workspace, on Wayland and X11 alike.
+    #[cfg(any(target_os = "linux", target_os = "freebsd"))]
+    let attributes = if std::env::var_os("WAYLAND_DISPLAY").is_some() {
+        attributes.with_platform_attributes(Box::new(
+            winit::platform::wayland::WindowAttributesWayland::default().with_name(APP_ID, APP_ID),
+        ))
+    } else {
+        attributes.with_platform_attributes(Box::new(
+            winit::platform::x11::WindowAttributesX11::default().with_name(APP_ID, APP_ID),
+        ))
+    };
     attributes
 }
+
+/// The window's app id on Linux (Wayland's `app_id`, X11's `WM_CLASS`).
+#[cfg(any(target_os = "linux", target_os = "freebsd"))]
+const APP_ID: &str = "session";

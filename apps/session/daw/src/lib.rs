@@ -8,6 +8,8 @@
 //! screenshot is a picture of the window rather than of a copy of it.
 
 pub mod animate;
+#[cfg(all(feature = "native", target_os = "linux"))]
+pub mod app_menu;
 pub mod arrange_camera;
 pub mod arrange_edit;
 pub mod arrangement;
