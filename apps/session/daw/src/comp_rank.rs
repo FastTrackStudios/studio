@@ -22,7 +22,7 @@ static CANDIDATES: ActionMeta = crate::actions::meta(
     "COMP_CANDIDATES",
     "comp_candidates",
     "Rank the takes for a stretch",
-    "Every take of the kit ranked for a stretch — the selection (a fill's hit markers, rows, a razor, a time selection) or `from`/`to` / `sections` — from its hit markers: whether it plays the stretch at all and how tight it is with its own feel taken out (`spread_ms`, `feel_ms`, against the drum MIDI's notes where they are near, else the grid) make its `score`, best first — what it plays is the drummer's choice, so how much of the drum MIDI there it plays (`coverage`; with no MIDI, how near its count of hits is to the takes' usual) is reported, not scored; `current` marks the take the comp plays there now; `color` is the take's colour as the window paints its lane and comp pieces (`Blue`, `Light Green`); `unplayable` marks a take whose lanes hold no audio over all of the stretch (a punch-in's pre-roll, recorded but cut away), ranked last and not comped from. Read-only: what COMP_CYCLE steps through and COMP_CHOOSE takes from.",
+    "Every take of the kit ranked for a stretch — the selection (a fill's hit markers, rows, a razor, a time selection) or `from`/`to` / `sections` — from its hit markers: how alike its hits are to the reference (`similar`, 0..1: the take the comp plays there when it plays the part the takes agree on, else that part — a take of the drummer practising something else is not alike however tight) and, among the alike, how tight it is with its own feel taken out (`spread_ms`, `feel_ms`, against the drum MIDI's notes where they are near, else the grid) make its `score`, best first; how much of the drum MIDI there it plays (`coverage`; with no MIDI, how near its count of hits is to the takes' usual) is reported, not scored; `current` marks the take the comp plays there now; `color` is the take's colour as the window paints its lane and comp pieces (`Blue`, `Light Green`); `unplayable` marks a take whose lanes hold no audio over all of the stretch (a punch-in's pre-roll, recorded but cut away), ranked last and not comped from. Read-only: what COMP_CYCLE steps through and COMP_CHOOSE takes from.",
     "Edit",
     "",
 );
@@ -79,6 +79,11 @@ pub(crate) struct TakeRank {
     pub(crate) score: f64,
     pub(crate) hits: u32,
     pub(crate) coverage: f64,
+    /// How alike its hits are to the reference — the take the comp played
+    /// when it plays the part the takes agree on, else that part — 0..1.
+    pub(crate) similar: f64,
+    /// Its hits in the stretch, `piece@seconds`.
+    pub(crate) played: Vec<String>,
     pub(crate) spread_ms: f64,
     pub(crate) feel_ms: f64,
     pub(crate) empty: bool,
@@ -102,6 +107,9 @@ pub(crate) struct TakeRank {
 struct Ranking {
     from: f64,
     to: f64,
+    /// The part as the takes play it there, `piece@seconds`: the hits of
+    /// the take most alike to all the others.
+    part: Vec<String>,
     takes: Vec<TakeRank>,
     /// What to do before the ranking can judge every take, if anything.
     note: Option<String>,
@@ -308,13 +316,9 @@ fn kit_takes(project: &ProjectContext) -> crate::take_colors::TakeColors {
 /// `versions` (each with its hits over the stretch) ranked against the
 /// part as `written` there: the judged first, best first; then the
 /// unjudged; the empty last. `now` is the take the comp plays there.
-pub(crate) fn rank_versions(
-    versions: &[crate::hits::TakeVersion],
-    written: &[Strike],
-    now: Option<&str>,
-    line_of: &dyn Fn(f64) -> f64,
-) -> Vec<TakeRank> {
-    let candidates: Vec<Candidate> = versions
+/// Each take's version as the ranking reads it.
+fn candidates_of(versions: &[crate::hits::TakeVersion]) -> Vec<Candidate> {
+    versions
         .iter()
         .map(|v| Candidate {
             take: v.pass.clone(),
@@ -327,12 +331,28 @@ pub(crate) fn rank_versions(
                 })
                 .collect(),
         })
-        .collect();
+        .collect()
+}
+
+pub(crate) fn rank_versions(
+    versions: &[crate::hits::TakeVersion],
+    written: &[Strike],
+    now: Option<&str>,
+    line_of: &dyn Fn(f64) -> f64,
+) -> Vec<TakeRank> {
+    let candidates = candidates_of(versions);
     let lane_of = |pass: &str| {
         versions
             .iter()
             .find(|v| v.pass == pass)
             .and_then(|v| v.lane.clone())
+            .unwrap_or_default()
+    };
+    let played_by = |pass: &str| -> Vec<String> {
+        versions
+            .iter()
+            .find(|v| v.pass == pass)
+            .map(|v| v.hits.iter().map(|(p, t)| format!("{p}@{t:.3}")).collect())
             .unwrap_or_default()
     };
     let undetected = |pass: &str| {
@@ -341,12 +361,13 @@ pub(crate) fn rank_versions(
             .find(|v| v.pass == pass)
             .is_some_and(|v| !v.detected)
     };
-    let mut out: Vec<TakeRank> = editing::comp::rank(&candidates, written, line_of)
+    let mut out: Vec<TakeRank> = editing::comp::rank(&candidates, written, line_of, now)
         .into_iter()
         .map(|r: Ranked| {
             let never = undetected(&r.take);
             TakeRank {
                 current: now == Some(r.take.as_str()),
+                played: played_by(&r.take),
                 lane: lane_of(&r.take),
                 pass: r.take.clone(),
                 // Not found is not empty: unjudged, still to listen to.
@@ -356,6 +377,7 @@ pub(crate) fn rank_versions(
                 score: r.score,
                 hits: u32::try_from(r.hits).unwrap_or(u32::MAX),
                 coverage: r.coverage,
+                similar: r.similar,
                 spread_ms: r.spread_ms,
                 feel_ms: r.feel_ms,
                 color: None,
@@ -612,11 +634,14 @@ pub fn register(list: &ActionList) {
         Ok(crate::edit_actions::stretches(daw, &project, &a.on)?
             .into_iter()
             .map(|(from, to)| {
-                let (takes, _) = ranking(daw, &project, (from, to));
+                let (takes, versions) = ranking(daw, &project, (from, to));
                 let unjudged = takes.iter().filter(|t| t.undetected).count();
                 Ranking {
                     from,
                     to,
+                    part: editing::comp::typical(&candidates_of(&versions))
+                        .map(|c| c.hits.iter().map(|s| format!("{}@{:.3}", s.piece, s.t)).collect())
+                        .unwrap_or_default(),
                     note: (unjudged > 0).then(|| {
                         format!(
                             "{unjudged} of {} takes have no hit markers: HITS_DETECT with `all_takes` finds them, once, so they can be judged",
@@ -642,6 +667,7 @@ pub fn register(list: &ActionList) {
                     score: t.score,
                     hits: usize::try_from(t.hits).unwrap_or(0),
                     coverage: t.coverage,
+                    similar: t.similar,
                     spread_ms: t.spread_ms,
                     feel_ms: t.feel_ms,
                     // An unjudged take is still one to step to; one with

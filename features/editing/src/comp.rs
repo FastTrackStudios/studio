@@ -14,10 +14,17 @@
 //!   one hit is never off from itself, so a spread counts as it is only
 //!   once a take plays enough of them.
 //!
-//! What it plays is the drummer's choice, not a fault: a busier fill, a
-//! tom fill where the part has none, is judged on how well it is played.
-//! The part as written only says where a hit belongs. How much of it a
-//! take plays (`coverage`) is reported beside the score, never in it.
+//! - **plays the part**: how alike its hits are to the reference — what
+//!   the comp played there before (`before`), when that is the part the
+//!   takes agree on, else the part itself: the hits most takes play
+//!   ([`typical`]: the take most alike to all the others). A take where the drummer is trying something else,
+//!   practising, playing twice as much, is not the part however tight it
+//!   is; one close to it reaches in where the reference is not good
+//!   enough.
+//!
+//! The part as written (the drum MIDI) only says where a hit belongs, not
+//! what a take should play: how much of it a take plays (`coverage`) is
+//! reported beside the score, never in it.
 //!
 //! Times are seconds, in the song's time: every take of a song is
 //! recorded from the same place.
@@ -47,6 +54,8 @@ pub struct Ranked {
     pub hits: usize,
     /// Share of what is written it plays (or of the usual count), 0..1.
     pub coverage: f64,
+    /// How alike its hits are to the reference, 0..1 ([`similarity`]).
+    pub similar: f64,
     /// Median distance from where its hits belong, its feel taken out, ms.
     pub spread_ms: f64,
     /// Its feel: the median offset of its hits, ms (late positive).
@@ -125,15 +134,107 @@ fn coverage_of(hits: &[Strike], written: &[Strike]) -> f64 {
     met as f64 / written.len() as f64
 }
 
-/// The takes ranked for a stretch, best first. `written` is the part as
-/// written there (empty when there is none); `line_of` gives a time's
-/// nearest grid line, for hits with no note to belong to.
+/// How near two takes' hits of one piece must be to be one stroke of the
+/// part, seconds, once the takes are lined up: nearer than one take's
+/// hits wander from another's, further than a flam's two strokes are apart.
+const SAME_STROKE: f64 = 0.035;
+
+/// How far one take may sit from another all through and still be lined
+/// up with it, seconds: a take played behind or ahead of another.
+const LINE_UP: f64 = 0.05;
+/// The step its lining up is tried in, seconds.
+const LINE_UP_STEP: f64 = 0.005;
+
+/// A take this alike to the part plays it: what the comp played before
+/// is the reference only when it is at least this alike.
+const PLAYS_PART: f64 = 0.6;
+
+/// The part as the takes play it: the most typical take — the one most
+/// alike to all the others ([`similarity`]), among those with hits here.
+/// `None` when no two takes play anything alike: there is no part.
+#[must_use]
+pub fn typical(candidates: &[Candidate]) -> Option<&Candidate> {
+    let playing: Vec<&Candidate> = candidates.iter().filter(|c| !c.hits.is_empty()).collect();
+    playing
+        .iter()
+        .map(|c| {
+            let alike: f64 = playing
+                .iter()
+                .filter(|o| o.take != c.take)
+                .map(|o| similarity(&c.hits, &o.hits))
+                .sum();
+            (*c, alike)
+        })
+        .filter(|(_, alike)| *alike > 0.0)
+        .max_by(|a, b| a.1.total_cmp(&b.1).then_with(|| b.0.take.cmp(&a.0.take)))
+        .map(|(c, _)| c)
+}
+
+/// How alike `hits` are to `reference`, 0..1, lined up first (the best of
+/// sitting up to [`LINE_UP`] behind or ahead of it all through): the
+/// strokes they share — a hit of the same piece within [`SAME_STROKE`],
+/// each met once — over all the strokes of both, so a hit missing and a
+/// hit extra cost alike. Both empty: alike.
+#[must_use]
+pub fn similarity(hits: &[Strike], reference: &[Strike]) -> f64 {
+    if hits.is_empty() && reference.is_empty() {
+        return 1.0;
+    }
+    let steps = (LINE_UP / LINE_UP_STEP).round() as i32;
+    let shared = (-steps..=steps)
+        .map(|k| shared_strokes(hits, reference, f64::from(k) * LINE_UP_STEP))
+        .max()
+        .unwrap_or(0);
+    2.0 * shared as f64 / (hits.len() + reference.len()) as f64
+}
+
+/// How many of `reference`'s strokes `hits`, moved by `by`, play.
+fn shared_strokes(hits: &[Strike], reference: &[Strike], by: f64) -> usize {
+    let mut used = vec![false; hits.len()];
+    let mut shared = 0usize;
+    for r in reference {
+        let best = hits
+            .iter()
+            .enumerate()
+            .filter(|(i, h)| h.piece == r.piece && !used.get(*i).copied().unwrap_or(true))
+            .map(|(i, h)| (i, (h.t + by - r.t).abs()))
+            .filter(|(_, d)| *d <= SAME_STROKE)
+            .min_by(|a, b| a.1.total_cmp(&b.1));
+        if let Some((i, _)) = best {
+            if let Some(slot) = used.get_mut(i) {
+                *slot = true;
+            }
+            shared = shared.saturating_add(1);
+        }
+    }
+    shared
+}
+
+/// What the takes are held up to: `before`'s hits (the take the comp
+/// played) when it plays the part, else the part ([`typical`]); `None`
+/// when there is no part to hold them to.
+fn reference(candidates: &[Candidate], before: Option<&str>) -> Option<Vec<Strike>> {
+    let part = typical(candidates)?.hits.clone();
+    let before = before
+        .and_then(|b| candidates.iter().find(|c| c.take == b))
+        .filter(|c| !c.hits.is_empty() && similarity(&c.hits, &part) >= PLAYS_PART);
+    Some(before.map_or(part, |c| c.hits.clone()))
+}
+
+/// The takes ranked for a stretch, best first: by how alike each is to
+/// the reference ([`reference`]: `before`, the take the comp played
+/// there, when it plays the part) and, among the alike, how tight.
+/// `written` is the part as written there (empty when there is none);
+/// `line_of` gives a time's nearest grid line, for hits with no note to
+/// belong to.
 #[must_use]
 pub fn rank(
     candidates: &[Candidate],
     written: &[Strike],
     line_of: &dyn Fn(f64) -> f64,
+    before: Option<&str>,
 ) -> Vec<Ranked> {
+    let reference = reference(candidates, before);
     let usual = median(
         candidates
             .iter()
@@ -164,12 +265,20 @@ pub fn rank(
             let spread = median(offs.iter().map(|o| (o - feel).abs()).collect()).unwrap_or(0.0);
             let spread_ms = spread * 1e3;
             let tight = 1.0 - (judged_ms(spread_ms, c.hits.len()) / LOOSE_MS).clamp(0.0, 1.0);
-            let score = if empty { 0.0 } else { tight };
+            // No part: every take alike, judged on how it plays.
+            let similar = reference.as_deref().map_or(1.0, |r| similarity(&c.hits, r));
+            // Alike first: half alike is a quarter as good; then tight.
+            let score = if empty {
+                0.0
+            } else {
+                similar * similar * tight.mul_add(0.5, 0.5)
+            };
             Ranked {
                 take: c.take.clone(),
                 score,
                 hits: c.hits.len(),
                 coverage,
+                similar,
                 spread_ms,
                 feel_ms: feel * 1e3,
                 empty,
@@ -225,11 +334,10 @@ mod tests {
         ]
     }
 
-    /// Tight beats loose; a take playing less of what is written is not
-    /// marked down for it (a simpler fill is the drummer's choice), only
-    /// one playing nothing.
+    /// Tight beats loose among takes playing the part; one playing only
+    /// half of it is less alike, whatever the chart says it should play.
     #[test]
-    fn the_take_that_plays_it_tight_wins_whatever_it_plays() {
+    fn the_take_that_plays_the_part_tight_wins() {
         let tight = Candidate {
             take: "2".into(),
             hits: written().iter().map(|n| s(&n.piece, n.t + 0.004)).collect(),
@@ -250,15 +358,12 @@ mod tests {
             take: "4".into(),
             hits: Vec::new(),
         };
-        let ranked = rank(&[loose, dropped, tight, empty], &written(), &line);
+        let ranked = rank(&[loose, dropped, tight, empty], &written(), &line, None);
         let order: Vec<&str> = ranked.iter().map(|r| r.take.as_str()).collect();
-        assert_eq!(order, ["2", "3", "1", "4"], "{ranked:#?}");
+        assert_eq!(order, ["2", "1", "3", "4"], "{ranked:#?}");
         assert!(ranked[3].empty);
         assert!((ranked[0].coverage - 1.0).abs() < 1e-9);
-        assert!(
-            (ranked[1].coverage - 0.6).abs() < 1e-9,
-            "reported, not scored"
-        );
+        assert!((ranked[2].coverage - 0.6).abs() < 1e-9, "reported");
     }
 
     /// A take pushed late all through is in time with itself: its feel is
@@ -269,7 +374,7 @@ mod tests {
             take: "1".into(),
             hits: written().iter().map(|n| s(&n.piece, n.t + 0.030)).collect(),
         };
-        let ranked = rank(&[pushed], &written(), &line);
+        let ranked = rank(&[pushed], &written(), &line, None);
         assert!(ranked[0].spread_ms < 0.5, "{ranked:?}");
         assert!((ranked[0].feel_ms - 30.0).abs() < 0.5);
     }
@@ -294,7 +399,7 @@ mod tests {
             take: "3".into(),
             hits: (0..12).map(|i| s("Snare", f64::from(i) * 0.09)).collect(),
         };
-        let ranked = rank(&[extra, on, same], &[], &line);
+        let ranked = rank(&[extra, on, same], &[], &line, None);
         assert_eq!(
             ranked.last().map(|r| r.take.as_str()),
             Some("3"),
@@ -321,11 +426,87 @@ mod tests {
                 })
                 .collect(),
         };
-        let ranked = rank(&[lone, fill], &[], &line);
+        let ranked = rank(&[lone, fill], &[], &line, None);
         assert_eq!(ranked[0].take, "2", "{ranked:#?}");
         assert!(
             ranked[1].spread_ms < 0.5,
             "its spread is still reported as measured"
+        );
+    }
+
+    /// Five takes of a groove and two of the drummer trying things — busy,
+    /// different, dead tight: the tight practice takes go last, and from
+    /// what the comp played the next is the take most like it.
+    #[test]
+    fn a_take_practising_something_else_is_not_the_part() {
+        let groove = |take: &str, jitter: f64| Candidate {
+            take: take.into(),
+            hits: (0..8)
+                .map(|i| {
+                    let t = f64::from(i) * 0.125;
+                    let off = if i % 2 == 0 { jitter } else { -jitter };
+                    s(if i % 2 == 0 { "Kick" } else { "Snare" }, t + off)
+                })
+                .collect(),
+        };
+        let practice = |take: &str| Candidate {
+            take: take.into(),
+            hits: (0..16).map(|i| s("Tom 1", f64::from(i) * 0.0625)).collect(),
+        };
+        let candidates = [
+            groove("a", 0.012),
+            groove("b", 0.010),
+            practice("p"),
+            groove("c", 0.015),
+            practice("q"),
+            groove("d", 0.008),
+        ];
+        let ranked = rank(&candidates, &[], &line, Some("a"));
+        let order: Vec<&str> = ranked.iter().map(|r| r.take.as_str()).collect();
+        assert_eq!(&order[4..], ["p", "q"], "{ranked:#?}");
+        assert!(ranked.iter().take(4).all(|r| r.similar > 0.99));
+        assert!(ranked[4].similar < 0.01);
+    }
+
+    /// What the comp played is the reference only when it plays the part:
+    /// a practice take comped by mistake is not what the others are held to.
+    #[test]
+    fn a_comped_take_off_the_part_is_no_reference() {
+        let part: Vec<Strike> = (0..4).map(|i| s("Snare", f64::from(i) * 0.25)).collect();
+        let take = |name: &str, hits: Vec<Strike>| Candidate {
+            take: name.into(),
+            hits,
+        };
+        let odd = take(
+            "odd",
+            (0..12).map(|i| s("Tom 2", f64::from(i) * 0.08)).collect(),
+        );
+        let candidates = [take("a", part.clone()), take("b", part.clone()), odd];
+        let ranked = rank(&candidates, &[], &line, Some("odd"));
+        assert_eq!(
+            ranked.last().map(|r| r.take.as_str()),
+            Some("odd"),
+            "{ranked:#?}"
+        );
+    }
+
+    #[test]
+    fn similarity_counts_missing_and_extra_alike() {
+        let part: Vec<Strike> = (0..4).map(|i| s("Snare", f64::from(i) * 0.25)).collect();
+        assert!((similarity(&part, &part) - 1.0).abs() < 1e-9);
+        assert!((similarity(&part[..2], &part) - 2.0 * 2.0 / 6.0).abs() < 1e-9);
+        let mut more = part.clone();
+        more.extend((0..4).map(|i| s("Tom 1", f64::from(i) * 0.25 + 0.1)));
+        assert!((similarity(&more, &part) - 2.0 * 4.0 / 12.0).abs() < 1e-9);
+        let behind: Vec<Strike> = part.iter().map(|h| s("Snare", h.t + 0.04)).collect();
+        assert!(
+            (similarity(&behind, &part) - 1.0).abs() < 1e-9,
+            "lined up first"
+        );
+        let between: Vec<Strike> = part.iter().map(|h| s("Snare", h.t + 0.125)).collect();
+        assert!(
+            similarity(&between, &part) < 1e-9,
+            "the off-beats are not the beats"
         );
     }
 
@@ -336,6 +517,7 @@ mod tests {
             score,
             hits: 1,
             coverage: score,
+            similar: 1.0,
             spread_ms: 0.0,
             feel_ms: 0.0,
             empty,
