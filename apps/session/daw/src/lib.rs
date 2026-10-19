@@ -216,6 +216,8 @@ pub mod hits;
 pub mod hits_midi;
 #[cfg(test)]
 mod hook_rules;
+#[cfg(feature = "native")]
+pub mod item_actions;
 pub mod kit_gate;
 #[cfg(feature = "native")]
 pub mod mcp_server;

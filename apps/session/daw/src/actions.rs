@@ -1113,6 +1113,8 @@ fn register_data(list: &ActionList) {
     crate::hits_midi::register(list);
     crate::seams::register(list);
     crate::comp_keep::register(list);
+    crate::comp_keep::register_main(list);
+    crate::item_actions::register(list);
     register_track_set(list);
     register_reference(list);
     #[cfg(feature = "native")]
