@@ -2,8 +2,8 @@ bindings (
     // Standard arrow-key navigation
     {keys "<left>",  action 40838, desc "Move edit cursor to current/previous measure (no seek)"}
     {keys "<right>", action 40837, desc "Move edit cursor to next measure (no seek)"}
-    {keys "<up>",    action 40286, desc "Select previous track"}
-    {keys "<down>",  action 40285, desc "Select next track"}
+    {keys "<up>",    action "FTS_TAKE_UPRANK", desc "Up-rank the selected take (the last recording's), else the one under the mouse"}
+    {keys "<down>",  action "FTS_TAKE_DOWNRANK", desc "Down-rank the selected take (the last recording's), else the one under the mouse"}
 
     // Vim-style cursor movement
     {keys h,       action 40838, desc "Move edit cursor to current/previous measure (no seek)"}
