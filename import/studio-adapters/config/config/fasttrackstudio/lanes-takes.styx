@@ -12,6 +12,8 @@ bindings (
      why "Comping is choosing, stretch by stretch, the take it was played best in: the takes ranked from their hits, T walks down the list, the kit comped as one."}
     {keys "<S-t>",  action "FTS_COMP_PREV", desc "Comp the selection from the take before"}
     {keys "<C-t>",  action "FTS_COMP_BEST", desc "Comp the selection — or the whole song — from each phrase's best take, as one edit"}
+    {keys "<C-S-t>", action "FTS_COMP_KEEP", desc "Keep the take comped over the selection — or let a kept stretch go",
+     why "A fill chosen by ear stays: T holds the takes up to it, the seams never move into it, Ctrl+T leaves it out."}
 )
 
 which_key (
