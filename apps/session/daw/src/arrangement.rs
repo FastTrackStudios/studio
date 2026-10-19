@@ -1249,6 +1249,31 @@ impl Arrangement {
         previews: &crate::midi::Previews,
         tcp: crate::tcp::Tcp,
     ) -> Self {
+        Self::build_hiding(
+            palette,
+            font,
+            (project, rows),
+            layout,
+            previews,
+            tcp,
+            &std::collections::HashSet::new(),
+        )
+    }
+
+    /// [`Arrangement::build`], the items in `out_of_sight` (guids, folded ones
+    /// too) left off the rows showing their lanes — but never off the lane
+    /// that plays or the comp: Edit mode's takes marked bad, out of sight.
+    /// A lane left holding nothing gets no strip.
+    #[must_use]
+    pub fn build_hiding(
+        palette: &Palette,
+        font: &crate::text::Font,
+        (project, rows): (&ProjectRef, &RowsRef),
+        layout: crate::layout::Layout,
+        previews: &crate::midi::Previews,
+        tcp: crate::tcp::Tcp,
+        out_of_sight: &std::collections::HashSet<String>,
+    ) -> Self {
         let mut lanes = Scene::new();
         let mut index = Index::default();
         let mut titles = Vec::with_capacity(project.item_count);
@@ -1312,7 +1337,18 @@ impl Arrangement {
             let lanes_shown = opened.is_some();
             let lane_track = opened.as_ref().unwrap_or(track);
             let row_items: Vec<&daw_proto::Item> = if lanes_shown {
-                project.lane(&track.guid).iter().collect()
+                let heard = [
+                    crate::lanes::playing(lane_track),
+                    crate::arrange_edit::comp_lane(lane_track),
+                ];
+                project
+                    .lane(&track.guid)
+                    .iter()
+                    .filter(|i| {
+                        !out_of_sight.contains(&i.guid)
+                            || heard.contains(&Some(i.fixed_lane.unwrap_or(0)))
+                    })
+                    .collect()
             } else {
                 project.sounding(track)
             };

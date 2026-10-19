@@ -109,6 +109,34 @@ pub struct TakeMark {
     pub note: String,
 }
 
+/// Whether `marks` (one take's) mark it bad — a red X — over the whole
+/// of `(start, end)`, song seconds: down-ranked where it starts, and
+/// nothing in it ranking it otherwise; or inside one down-ranked region.
+#[must_use]
+pub fn rejected(marks: &[TakeMark], (start, end): (f64, f64)) -> bool {
+    /// A marker this near the start stands at it.
+    const NEAR: f64 = 1e-6;
+    let ranks = || marks.iter().filter(|m| m.level != 0);
+    let in_region = ranks().any(|m| {
+        m.level < 0
+            && m.to
+                .is_some_and(|to| m.from <= start + NEAR && to >= end - NEAR)
+    });
+    if in_region {
+        return true;
+    }
+    let standing = ranks()
+        .filter(|m| m.to.is_none() && m.from <= start + NEAR)
+        .max_by(|a, b| a.from.total_cmp(&b.from))
+        .is_some_and(|m| m.level < 0);
+    // Ranked up again partway in, at a point or over a region.
+    let raised = ranks().filter(|m| m.level > 0).any(|m| match m.to {
+        None => m.from > start + NEAR && m.from < end,
+        Some(to) => m.from < end && to > start,
+    });
+    standing && !raised
+}
+
 /// Every take's ranks and notes: by item, and by the kit's take (pass).
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct TakeMarks {
@@ -341,5 +369,33 @@ mod tests {
         assert_eq!(overlay.pieces_under("toms", parent_of), [1, 2]);
         assert_eq!(overlay.pieces_under("drums", parent_of), [0, 1, 2]);
         assert!(overlay.pieces_under("ohs", parent_of).is_empty());
+    }
+
+    fn ranked(from: f64, to: Option<f64>, level: i8) -> super::TakeMark {
+        super::TakeMark {
+            from,
+            to,
+            level,
+            note: String::new(),
+        }
+    }
+
+    /// X'd from the take's start: rejected everywhere; up-ranked again
+    /// partway, not over an item reaching past that; an X'd region over
+    /// the item, rejected; a note alone, nothing.
+    #[test]
+    fn a_take_x_d_over_an_item_is_rejected_there() {
+        let x = [ranked(0.0, None, -1)];
+        assert!(super::rejected(&x, (10.0, 20.0)));
+        let back = [ranked(0.0, None, -1), ranked(15.0, None, 2)];
+        assert!(!super::rejected(&back, (10.0, 20.0)));
+        assert!(super::rejected(&back, (10.0, 14.0)));
+        let region = [ranked(5.0, Some(25.0), -1)];
+        assert!(super::rejected(&region, (10.0, 20.0)));
+        assert!(!super::rejected(&region, (0.0, 20.0)));
+        let note = [ranked(0.0, None, 0)];
+        assert!(!super::rejected(&note, (10.0, 20.0)));
+        let starred = [ranked(0.0, None, 1)];
+        assert!(!super::rejected(&starred, (10.0, 20.0)));
     }
 }

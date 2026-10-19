@@ -534,6 +534,10 @@ pub struct ArrangementWidget {
     /// one by one re-cut it at most every [`RECUT_EVERY`].
     recut_at: Option<web_time::Instant>,
     rebuilds: u64,
+    /// The takes left out of sight, Edit mode's marked bad (a red X), and
+    /// the overlay's version and mode they were found at.
+    hidden: std::collections::HashSet<String>,
+    hidden_seen: Option<(u64, bool)>,
     /// The folds the rows were planned at ([`crate::folds::generation`]).
     folds_seen: u64,
     /// The outside edits the rows were planned at ([`edit_song`]).
@@ -785,9 +789,7 @@ impl ArrangementWidget {
             #[cfg(not(feature = "native"))]
             read_back: Rc::default(),
             mixer: None,
-            content_h: Rc::new(std::cell::Cell::new(
-                rows.iter().map(|(track, _)| layout.slot_of(track)).sum(),
-            )),
+            content_h: Rc::new(std::cell::Cell::new(scene.content_height())),
             scene,
             palette,
             skin_seen: crate::skin::version(),
@@ -827,6 +829,8 @@ impl ArrangementWidget {
             previews_seen: previews.generation(),
             recut_at: None,
             rebuilds: 0,
+            hidden: std::collections::HashSet::new(),
+            hidden_seen: None,
             folds_seen: crate::folds::generation(),
             edited_seen: EDITED.with(Cell::get),
             previews,
@@ -2773,11 +2777,6 @@ impl ArrangementWidget {
         stages.mark("restructure.names_ms");
         self.tracks = rows.iter().map(|(t, _)| t.clone()).collect();
         self.map = crate::plan::Rows::of(&rows, &self.tracks);
-        self.content_h.set(
-            rows.iter()
-                .map(|(track, _)| self.layout.slot_of(track))
-                .sum(),
-        );
         self.rows = rows;
         self.project = project;
         self.hovered_item = None;
@@ -3871,11 +3870,10 @@ impl ArrangementWidget {
         let lettering = self.scene.lettering;
         let mut stages = architect_telemetry::timing::Stages::start();
         stages.mark("recut.clone_ms");
-        self.scene = Arrangement::build(
+        self.scene = Arrangement::build_hiding(
             &self.palette,
             &self.font,
-            &project,
-            &rows,
+            (&project, &rows),
             self.layout,
             &self.previews,
             crate::tcp::Tcp {
@@ -3883,12 +3881,36 @@ impl ArrangementWidget {
                 recording: self.recording.get(),
                 mixing: self.mixing.get(),
             },
+            &self.hidden,
         );
         stages.mark("recut.build_ms");
+        // The scroll's range is the rows as drawn: a row showing its lanes
+        // is as tall as its stack of takes, not its track.
+        self.content_h.set(self.scene.content_height());
         self.scene.lettering = lettering;
         self.sections = self.project.sections.clone();
         self.markers = self.project.markers.clone();
         self.controls = None;
+    }
+
+    /// Editing, the takes marked bad over the whole of an item go out of
+    /// sight on the rows showing their lanes; recording, every take shows.
+    /// Found again when the ranks or the mode change, the rows cut again
+    /// when what is hidden did.
+    fn hide_rejected(&mut self) {
+        let seen = (crate::hit_overlay::version(), self.editing.get());
+        if self.hidden_seen == Some(seen) {
+            return;
+        }
+        self.hidden_seen = Some(seen);
+        let hidden = match crate::hit_overlay::current() {
+            Some(overlay) if self.editing.get() => hidden_takes(&self.project, &overlay.takes),
+            _ => std::collections::HashSet::new(),
+        };
+        if hidden != self.hidden {
+            self.hidden = hidden;
+            self.recut();
+        }
     }
 
     /// Whether arrivals may cut the recording again now: not within
@@ -4631,6 +4653,7 @@ impl ArrangementWidget {
         self.poi_seen.set(crate::poi::version());
         self.settle_stage();
         self.dirty.set(false);
+        self.hide_rejected();
         let generation = self.previews.generation();
         if generation != self.previews_seen && self.recut_due() {
             self.previews_seen = generation;
@@ -6011,6 +6034,45 @@ impl ArrangementWidget {
     }
 }
 
+/// The items of `project` whose take `marks` mark bad over the whole of
+/// them ([`crate::hit_overlay::rejected`]), and the folded items every
+/// one of whose mics' items is.
+fn hidden_takes(
+    project: &daw_ui::studio::project::Project,
+    marks: &crate::hit_overlay::TakeMarks,
+) -> std::collections::HashSet<String> {
+    if marks.by_item.is_empty() {
+        return std::collections::HashSet::new();
+    }
+    let mut hidden: std::collections::HashSet<String> = project
+        .items
+        .values()
+        .flatten()
+        .filter_map(|item| {
+            let marks = marks.by_item.get(&item.guid)?;
+            let at = item.position.as_seconds();
+            crate::hit_overlay::rejected(marks, (at, at + item.length.as_seconds()))
+                .then(|| item.guid.clone())
+        })
+        .collect();
+    let folded: Vec<String> = project
+        .folds
+        .iter()
+        .flat_map(|(folder, fold)| {
+            let hidden = &hidden;
+            fold.spans
+                .iter()
+                .enumerate()
+                .filter_map(move |(index, span)| {
+                    (!span.from.is_empty() && span.from.iter().all(|g| hidden.contains(g)))
+                        .then(|| daw_ui::studio::folded::guid_of(folder, index))
+                })
+        })
+        .collect();
+    hidden.extend(folded);
+    hidden
+}
+
 /// This paint, for `SESSION_FRAMES` ([`crate::frames`]): what all of it
 /// cost from `began` and pass by pass, and what the shell said the frame
 /// before cost.
@@ -7123,6 +7185,71 @@ mod tests {
         );
         widget.size = (1600.0, 900.0);
         widget
+    }
+
+    /// Editing, a take marked bad leaves the lanes: built hiding take 2 and
+    /// the comp's take, lane 2 has no strip and the comp keeps its own.
+    #[test]
+    fn a_take_hidden_leaves_its_lane_but_the_comp_stays() {
+        let lanes = 4;
+        let track = daw_proto::Track {
+            guid: "vox".to_owned(),
+            name: "Vox".to_owned(),
+            height: Some(90),
+            lane_count: lanes,
+            lane_play_mask: 0b1,
+            lane_names: std::iter::once("C1".to_owned())
+                .chain((1..lanes).map(|l| l.to_string()))
+                .collect(),
+            ..daw_proto::Track::default()
+        };
+        let _ = crate::lanes::set_expanded(&["vox".to_owned()], Some(true));
+        let rows = vec![(track.clone(), 0)];
+        let take = |lane: u32| daw_proto::Item {
+            guid: format!("take{lane}"),
+            track_guid: "vox".to_owned(),
+            length: daw_proto::primitives::Duration::from_seconds(30.0),
+            fixed_lane: Some(lane),
+            ..daw_proto::Item::default()
+        };
+        let project = daw_ui::studio::ProjectRef(std::sync::Arc::new(daw_ui::studio::Project {
+            items: std::iter::once(("vox".to_owned(), (0..lanes).map(take).collect())).collect(),
+            tracks: vec![track],
+            length_secs: 60.0,
+            ..daw_ui::studio::Project::default()
+        }));
+        let hidden: std::collections::HashSet<String> = ["take2".to_owned(), "take0".to_owned()]
+            .into_iter()
+            .collect();
+        let scene = crate::arrangement::Arrangement::build_hiding(
+            &crate::arrangement::Palette::from_theme(&daw_ui::theming::Theme::dark()),
+            &crate::text::Font::embedded().expect("the embedded font"),
+            (
+                &project,
+                &daw_ui::studio::RowsRef(std::sync::Arc::new(rows)),
+            ),
+            crate::layout::Layout::default(),
+            &crate::midi::Previews::default(),
+            crate::tcp::Tcp::FULL,
+            &hidden,
+        );
+        let stack = scene.lane_stack(0).expect("its lanes");
+        assert_eq!(stack.lanes(), &[0, 1, 3][..], "take 2 out, the comp kept");
+        assert!(scene.item_by_guid("take2").is_none());
+        assert!(scene.item_by_guid("take0").is_some());
+    }
+
+    /// A row showing its lanes is as tall as its stack of takes, and the
+    /// scroll reaches all of it: not just its track's height.
+    #[test]
+    fn the_scroll_reaches_every_lane_of_a_row_showing_them() {
+        let widget = laned_vox(12);
+        let stacked = widget.scene.content_height();
+        assert!(
+            stacked > 90.0 + 10.0 * crate::lane_stack::LANE_H,
+            "{stacked}"
+        );
+        assert!((widget.content_h.get() - stacked).abs() < 1e-9);
     }
 
     /// Scrolled down into a tall row's takes, its head stays at the top of
