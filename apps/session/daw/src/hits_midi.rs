@@ -357,6 +357,9 @@ fn fingerprint(notes: &[Note]) -> u64 {
 /// and [`fingerprint`]. Only [`sync`] keeps it.
 static WRITTEN: std::sync::Mutex<BTreeMap<String, u64>> = std::sync::Mutex::new(BTreeMap::new());
 
+/// Held while the views and the hits are brought into step ([`sync`]).
+static SYNCING: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
 fn remember(track: &str, notes: &[Note]) {
     if let Ok(mut w) = WRITTEN.lock() {
         w.insert(track.to_owned(), fingerprint(notes));
@@ -407,6 +410,12 @@ pub fn sync(
     mode: Mode,
     moved: &dyn Fn(f64) -> f64,
 ) -> Result<Synced, String> {
+    // One sync at a time: the step thread's and a caller's own, run
+    // together, both read one note edit as the hits' edit — and the
+    // second's rewrite of the views took the first's back.
+    let _one = SYNCING
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
     let tracks = Tracks::all(daw, project.clone());
     let pieces = crate::drum_reference::pieces_of(&tracks);
     let held: Vec<(View, Vec<Note>)> = views(&tracks, &pieces)

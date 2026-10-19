@@ -35,57 +35,203 @@ pub fn level_of(marker: &TakeMarker) -> Option<i8> {
     }
 }
 
-/// The rank at `source` seconds into the recording: the last rank marker
-/// at or before it; 0 with none.
-#[must_use]
-pub fn level_at(markers: &[TakeMarker], source: f64) -> i8 {
-    markers
-        .iter()
-        .filter(|m| m.source_position_seconds <= source + SAME_PLACE)
-        .filter_map(|m| level_of(m).map(|l| (m.source_position_seconds, l)))
-        .max_by(|a, b| a.0.total_cmp(&b.0))
-        .map_or(0, |(_, l)| l)
+/// Where a rank or a note holds, seconds into the recording: from a
+/// point on (`to` none, REAPER's take marker), or a take region.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Place {
+    pub from: f64,
+    pub to: Option<f64>,
 }
 
-/// `markers` with the rank from `source` on moved `by` levels (up
-/// positive), and the level it is now: the rank marker there replaced, or
-/// one added — none where the level comes out as what rates it already.
-#[must_use]
-pub fn ranked(mut markers: Vec<TakeMarker>, source: f64, by: i8) -> (Vec<TakeMarker>, i8) {
-    let level = (level_at(&markers, source) + by).clamp(-1, MAX_UP);
-    markers.retain(|m| {
-        level_of(m).is_none() || (m.source_position_seconds - source).abs() > SAME_PLACE
-    });
-    if level != level_at(&markers, source) {
-        let name = match level {
-            l if l > 0 => TakeRating::UpRank(u8::try_from(l).unwrap_or(1)).to_marker_name(),
-            l if l < 0 => TakeRating::DownRank.to_marker_name(),
-            // Neutral after a rank earlier in the take: no marker says
-            // that in REAPER's terms; the earlier rank stands.
-            _ => {
-                let standing = level_at(&markers, source);
-                return (markers, standing);
+impl Place {
+    /// Whether `m` is at this place: the same start, and the same end or
+    /// none alike.
+    fn holds(&self, m: &TakeMarker) -> bool {
+        (m.source_position_seconds - self.from).abs() <= SAME_PLACE
+            && match (self.to, m.end_seconds) {
+                (None, None) => true,
+                (Some(a), Some(b)) => (a - b).abs() <= SAME_PLACE,
+                _ => false,
             }
-        };
-        markers.push(TakeMarker {
-            name,
-            source_position_seconds: source,
-            ..TakeMarker::default()
-        });
-        markers.sort_by(|a, b| {
-            a.source_position_seconds
-                .total_cmp(&b.source_position_seconds)
-        });
     }
+}
+
+/// The rank at `source` seconds into the recording: a take region's that
+/// holds it (the latest to start), else the last point rank at or before
+/// it; 0 with none.
+#[must_use]
+pub fn level_at(markers: &[TakeMarker], source: f64) -> i8 {
+    let latest = |regions: bool| {
+        markers
+            .iter()
+            .filter(|m| m.end_seconds.is_some() == regions)
+            .filter(|m| m.source_position_seconds <= source + SAME_PLACE)
+            .filter(|m| m.end_seconds.is_none_or(|end| source < end))
+            .filter_map(|m| level_of(m).map(|l| (m.source_position_seconds, l)))
+            .max_by(|a, b| a.0.total_cmp(&b.0))
+            .map(|(_, l)| l)
+    };
+    latest(true).or_else(|| latest(false)).unwrap_or(0)
+}
+
+fn rank_name(level: i8) -> Option<String> {
+    match level {
+        l if l > 0 => Some(TakeRating::UpRank(u8::try_from(l).unwrap_or(1)).to_marker_name()),
+        l if l < 0 => Some(TakeRating::DownRank.to_marker_name()),
+        _ => None,
+    }
+}
+
+/// `markers` with the rank at `place` moved `by` levels (up positive),
+/// and the level it is now there: the rank marker at the place replaced
+/// (its note kept), or one added — none where the level comes out as
+/// what rates it already. A region at 0 is taken away: what is under it
+/// rates it again.
+#[must_use]
+pub fn ranked(mut markers: Vec<TakeMarker>, place: Place, by: i8) -> (Vec<TakeMarker>, i8) {
+    let probe = place
+        .to
+        .map_or(place.from, |to| f64::midpoint(place.from, to));
+    let was = markers
+        .iter()
+        .find(|m| place.holds(m) && level_of(m).is_some())
+        .cloned();
+    let level = (was
+        .as_ref()
+        .and_then(level_of)
+        .unwrap_or_else(|| level_at(&markers, probe))
+        + by)
+        .clamp(-1, MAX_UP);
+    markers.retain(|m| !(place.holds(m) && level_of(m).is_some()));
+    let under = level_at(&markers, probe);
+    // A point that says what rates it already says nothing; a region
+    // does (it holds against what may come after its start).
+    let says = place.to.is_some() || level != under;
+    let Some(name) = rank_name(level).filter(|_| says) else {
+        return (markers, under);
+    };
+    markers.push(TakeMarker {
+        name,
+        source_position_seconds: place.from,
+        end_seconds: place.to,
+        note: was.map(|m| m.note).unwrap_or_default(),
+        ..TakeMarker::default()
+    });
+    markers.sort_by(|a, b| {
+        a.source_position_seconds
+            .total_cmp(&b.source_position_seconds)
+    });
     (markers, level)
 }
 
+/// `markers` with `note` said at `place`: on the marker there (a rank's
+/// or a note's), else on a new one; an empty note takes a note-only
+/// marker away.
+#[must_use]
+pub fn noted(mut markers: Vec<TakeMarker>, place: Place, note: &str) -> Vec<TakeMarker> {
+    let here = markers
+        .iter()
+        .position(|m| m.hit.is_none() && place.holds(m));
+    match here {
+        Some(i) if note.is_empty() && markers.get(i).and_then(level_of).is_none() => {
+            markers.remove(i);
+        }
+        Some(i) => {
+            if let Some(m) = markers.get_mut(i) {
+                m.note = note.to_owned();
+                if level_of(m).is_none() {
+                    // REAPER shows a marker's name: a note-only marker's is
+                    // its note.
+                    m.name = note.to_owned();
+                }
+            }
+        }
+        None if note.is_empty() => {}
+        None => {
+            markers.push(TakeMarker {
+                name: note.to_owned(),
+                note: note.to_owned(),
+                source_position_seconds: place.from,
+                end_seconds: place.to,
+                ..TakeMarker::default()
+            });
+            markers.sort_by(|a, b| {
+                a.source_position_seconds
+                    .total_cmp(&b.source_position_seconds)
+            });
+        }
+    }
+    markers
+}
+
+/// A rank or note on a take, where the song plays it.
+pub fn shown(markers: &[TakeMarker], origin: f64) -> Vec<crate::hit_overlay::TakeMark> {
+    markers
+        .iter()
+        .filter(|m| m.hit.is_none())
+        .filter_map(|m| {
+            let level = level_of(m).unwrap_or(0);
+            (level != 0 || !m.note.is_empty()).then(|| crate::hit_overlay::TakeMark {
+                from: origin + m.source_position_seconds,
+                to: m.end_seconds.map(|e| origin + e),
+                level,
+                note: m.note.clone(),
+            })
+        })
+        .collect()
+}
+
+/// Every take's ranks and notes where the song plays them: by item (each
+/// slice of a recording carrying any) and by the kit's take (its pass).
+#[must_use]
+pub fn take_marks(p: &daw::standalone::sync::ProjectState) -> crate::hit_overlay::TakeMarks {
+    let marked: std::collections::HashMap<&str, &Vec<TakeMarker>> = p
+        .take_markers
+        .iter()
+        .filter(|(_, ms)| {
+            ms.iter()
+                .any(|m| m.hit.is_none() && (level_of(m).is_some() || !m.note.is_empty()))
+        })
+        .map(|(path, ms)| (path.as_str(), ms))
+        .collect();
+    let mut out = crate::hit_overlay::TakeMarks::default();
+    if marked.is_empty() {
+        return out;
+    }
+    for (guid, entry) in &p.items {
+        let Some(take) = p
+            .takes
+            .get(guid)
+            .and_then(|l| l.takes.get(usize::try_from(l.active_idx).ok()?))
+        else {
+            continue;
+        };
+        let Some((path, markers)) = take
+            .source_file_path
+            .as_deref()
+            .and_then(|path| marked.get(path).map(|m| (path, *m)))
+        else {
+            continue;
+        };
+        let origin = entry.item.position.as_seconds() - take.start_offset.as_seconds();
+        let marks = shown(markers, origin);
+        out.by_pass
+            .entry(crate::hits::pass_key(path))
+            .or_insert_with(|| marks.clone());
+        out.by_item.insert(guid.clone(), marks);
+    }
+    out
+}
+
 /// What to rank: a take by an item playing it, at a moment of the song
-/// (`None`: the take as a whole, from its start).
+/// (`None`: the take as a whole, from its start) — or over a stretch of
+/// it, a take region.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Target {
     pub item: String,
     pub at: Option<f64>,
+    /// With `at`, where a take region ends (song seconds).
+    pub to: Option<f64>,
 }
 
 /// What a rank did.
@@ -97,6 +243,8 @@ pub struct Ranked {
     pub level: i32,
     /// Seconds into its recording the rank is from.
     pub from: f64,
+    /// Where it ends, a take region's.
+    pub to: Option<f64>,
     /// How many recordings carry it (a kit's mics).
     pub recordings: u32,
 }
@@ -145,6 +293,35 @@ pub fn rank(
     target: &Target,
     by: i8,
 ) -> Result<Ranked, String> {
+    on_recordings(daw, project, target, &|m, place| ranked(m, place, by))
+}
+
+/// Say `note` on `target`'s take, on every recording of it.
+///
+/// # Errors
+///
+/// No such item, or one playing no recording.
+pub fn note(
+    daw: &daw::standalone::Standalone,
+    project: &ProjectContext,
+    target: &Target,
+    note: &str,
+) -> Result<Ranked, String> {
+    on_recordings(daw, project, target, &|m, place| {
+        let m = noted(m, place, note);
+        let level = level_at(&m, place.from);
+        (m, level)
+    })
+}
+
+/// `edit` made on the markers of every recording of `target`'s take, at
+/// its place.
+fn on_recordings(
+    daw: &daw::standalone::Standalone,
+    project: &ProjectContext,
+    target: &Target,
+    edit: &dyn Fn(Vec<TakeMarker>, Place) -> (Vec<TakeMarker>, i8),
+) -> Result<Ranked, String> {
     let at = ItemRef::Guid(target.item.clone());
     let item = daw
         .get_item(project.clone(), at.clone())
@@ -153,15 +330,18 @@ pub fn rank(
         .get_active_take(project.clone(), at)
         .and_then(|t| t.source_file_path)
         .ok_or("the item plays no recording")?;
-    let source = target.at.map_or(0.0, |t| {
-        (item.start_offset.as_seconds() + (t - item.position.as_seconds())).max(0.0)
-    });
+    let source_at =
+        |t: f64| (item.start_offset.as_seconds() + (t - item.position.as_seconds())).max(0.0);
+    let place = Place {
+        from: target.at.map_or(0.0, source_at),
+        to: target.at.and(target.to).map(source_at),
+    };
     let recordings = recordings_of(daw, project, &item, &path);
     let mut level = 0;
     for (guid, _) in &recordings {
         let at = ItemRef::Guid(guid.clone());
         let markers = daw.get_take_markers(project.clone(), at.clone(), TakeRef::Active);
-        let (markers, now) = ranked(markers, source, by);
+        let (markers, now) = edit(markers, place);
         level = now;
         daw.set_take_markers(project.clone(), at, TakeRef::Active, markers)
             .map_err(|e| e.to_string())?;
@@ -169,7 +349,8 @@ pub fn rank(
     Ok(Ranked {
         pass: crate::hits::pass_key(&path),
         level: i32::from(level),
-        from: source,
+        from: place.from,
+        to: place.to,
         recordings: u32::try_from(recordings.len()).unwrap_or(u32::MAX),
     })
 }
@@ -262,6 +443,7 @@ pub fn settle(daw: &daw::standalone::Standalone, project: &ProjectContext) {
             let target = Target {
                 item: first.item_guid.clone(),
                 at: Some(t),
+                to: None,
             };
             if let Err(e) = rank(daw, project, &target, by) {
                 tracing::warn!(rank.error = %e, "a rank pressed while recording could not be written");
@@ -273,11 +455,20 @@ pub fn settle(daw: &daw::standalone::Standalone, project: &ProjectContext) {
     crate::studio::request_resync_items();
 }
 
+static NOTE: ActionMeta = crate::actions::meta(
+    "TAKE_NOTE",
+    "take_note",
+    "Note on a take",
+    "Say something on a take: a note on its take marker at `at` (song seconds; none: its start) — or over `at`..`to`, its take region — on its rank marker there if it has one, else a marker of its own; on a kit, on every mic's recording of the pass. An empty `note` takes a note-only marker away. Takes as TAKES_RANK (`items`, or `take` near `near`). One undo step.",
+    "Comp",
+    "",
+);
+
 static RANK: ActionMeta = crate::actions::meta(
     "TAKES_RANK",
     "takes_rank",
     "Rank takes up or down",
-    "Up-rank (`by` 1) or down-rank (-1) takes, REAPER's take ranking: a rank marker (`:)` … `:)))`, `:(`) on each take's recording — on a kit, every mic's recording of the pass — rating it from `at` (song seconds) on, else as a whole. Takes by `items` (GUIDs, from TRACK_ITEMS), else by `take` (pass, colour or lane name, as COMP_CANDIDATES names them) on the kit, found where it plays `near` (song seconds) if given. While the transport records, the press is kept and written on the pass's takes when it ends. One undo step. COMP_CANDIDATES then ranks an up-ranked take first among its kind and a down-ranked one last; T skips it. Says each take's level.",
+    "Up-rank (`by` 1) or down-rank (-1) takes, REAPER's take ranking: a rank marker (`:)` … `:)))` — one to three stars — or `:(`, a red X) on each take's recording — on a kit, every mic's recording of the pass — rating it from `at` (song seconds) on, else as a whole; with `to` too, only `at`..`to`: a take region. Takes by `items` (GUIDs, from TRACK_ITEMS), else by `take` (pass, colour or lane name, as COMP_CANDIDATES names them) on the kit, found where it plays `near` (song seconds) if given. While the transport records, the press is kept and written on the pass's takes when it ends. One undo step. COMP_CANDIDATES then ranks an up-ranked take first among its kind and a down-ranked one last; T skips it. Says each take's level.",
     "Comp",
     "",
 );
@@ -290,7 +481,20 @@ struct RankArg {
     /// Where `take` plays, to find it by (song seconds); else `at`.
     near: Option<f64>,
     at: Option<f64>,
+    /// With `at`: rank only up to here (song seconds), a take region.
+    to: Option<f64>,
     by: i32,
+}
+
+#[derive(Facet)]
+struct NoteArg {
+    #[facet(default)]
+    items: Vec<String>,
+    take: Option<String>,
+    near: Option<f64>,
+    at: Option<f64>,
+    to: Option<f64>,
+    note: String,
 }
 
 pub(crate) fn register(list: &ActionList) {
@@ -305,15 +509,7 @@ pub(crate) fn register(list: &ActionList) {
             );
             return Ok(Vec::new());
         }
-        let items = if a.items.is_empty() {
-            let name = a
-                .take
-                .as_deref()
-                .ok_or("say which takes: `items` or `take`")?;
-            vec![item_of_take(daw, &project, name, a.near.or(a.at))?]
-        } else {
-            a.items.clone()
-        };
+        let items = targets_of(daw, &project, &a.items, a.take.as_deref(), a.near.or(a.at))?;
         let label = if by > 0 {
             "Up-rank the take"
         } else {
@@ -329,16 +525,63 @@ pub(crate) fn register(list: &ActionList) {
                     &Target {
                         item: item.clone(),
                         at: a.at,
+                        to: a.to,
                     },
                     by,
                 )
             })
             .collect::<Result<Vec<Ranked>, String>>();
         daw::service::Projects::end_undo_block(daw, project.clone(), label, None);
-        crate::comp_rank::forget();
-        crate::studio::request_resync_items();
+        changed();
         done
     });
+    list.register(&NOTE, Effect::Mutating, |a: NoteArg| {
+        let (daw, project) = crate::actions::song()?;
+        let items = targets_of(daw, &project, &a.items, a.take.as_deref(), a.near.or(a.at))?;
+        let label = "Note on the take";
+        daw::service::Projects::begin_undo_block(daw, project.clone(), label);
+        let done = items
+            .iter()
+            .map(|item| {
+                note(
+                    daw,
+                    &project,
+                    &Target {
+                        item: item.clone(),
+                        at: a.at,
+                        to: a.to,
+                    },
+                    &a.note,
+                )
+            })
+            .collect::<Result<Vec<Ranked>, String>>();
+        daw::service::Projects::end_undo_block(daw, project.clone(), label, None);
+        changed();
+        done
+    });
+}
+
+/// The ranks changed: the ranking forgotten, the window told.
+fn changed() {
+    crate::comp_rank::forget();
+    crate::studio::request_resync_items();
+    crate::hit_overlay::refresh();
+}
+
+/// The items to rank or note by: `items`, else an item playing the kit's
+/// take `take` (near `near`).
+fn targets_of(
+    daw: &daw::standalone::Standalone,
+    project: &ProjectContext,
+    items: &[String],
+    take: Option<&str>,
+    near: Option<f64>,
+) -> Result<Vec<String>, String> {
+    if !items.is_empty() {
+        return Ok(items.to_vec());
+    }
+    let name = take.ok_or("say which takes: `items` or `take`")?;
+    Ok(vec![item_of_take(daw, project, name, near)?])
 }
 
 /// An item playing the kit's take `name` (around `at`, else anywhere).
@@ -372,6 +615,53 @@ fn item_of_take(
 mod tests {
     use super::*;
 
+    fn pt(from: f64) -> Place {
+        Place { from, to: None }
+    }
+
+    /// A take region rates only inside it; around it the take's rank
+    /// stands. Ranked again, the region steps; at neutral it goes.
+    #[test]
+    fn a_region_rates_only_itself() {
+        let whole = vec![rank_at(0.0, 2)];
+        let region = Place {
+            from: 30.0,
+            to: Some(40.0),
+        };
+        let (m, l) = ranked(whole, region, -3);
+        assert_eq!(l, -1);
+        assert_eq!(
+            (level_at(&m, 20.0), level_at(&m, 35.0), level_at(&m, 45.0)),
+            (2, -1, 2)
+        );
+        let (m, l) = ranked(m, region, 1);
+        assert_eq!(
+            (l, m.len()),
+            (2, 1),
+            "neutral: the region goes, the take's rank holds"
+        );
+        assert_eq!(level_at(&m, 35.0), 2);
+    }
+
+    /// A note sits on the rank marker at its place, or a marker of its own;
+    /// emptied, a note-only marker goes.
+    #[test]
+    fn notes_ride_on_the_marker_there() {
+        let m = vec![rank_at(0.0, 1)];
+        let m = noted(m, pt(0.0), "great feel");
+        assert_eq!(
+            (m.len(), m[0].note.as_str(), m[0].name.as_str()),
+            (1, "great feel", ":)")
+        );
+        let m = noted(m, pt(12.0), "flam on the snare");
+        assert_eq!(m.len(), 2);
+        assert_eq!(level_at(&m, 20.0), 1, "a note is no rank");
+        let m = noted(m, pt(12.0), "");
+        assert_eq!(m.len(), 1);
+        let (m, _) = ranked(m, pt(0.0), 1);
+        assert_eq!(m[0].note, "great feel", "a rank stepped keeps its note");
+    }
+
     fn rank_at(at: f64, level: i8) -> TakeMarker {
         let name = if level > 0 {
             TakeRating::UpRank(u8::try_from(level).unwrap_or(1)).to_marker_name()
@@ -387,16 +677,16 @@ mod tests {
 
     #[test]
     fn up_twice_then_down_through_neutral() {
-        let (m, l) = ranked(Vec::new(), 0.0, 1);
+        let (m, l) = ranked(Vec::new(), pt(0.0), 1);
         assert_eq!((l, m.len()), (1, 1));
-        let (m, l) = ranked(m, 0.0, 1);
+        let (m, l) = ranked(m, pt(0.0), 1);
         assert_eq!((l, m.len(), m[0].name.as_str()), (2, 1, ":))"));
-        let (m, l) = ranked(m, 0.0, -1);
-        let (m, l2) = ranked(m, 0.0, -1);
+        let (m, l) = ranked(m, pt(0.0), -1);
+        let (m, l2) = ranked(m, pt(0.0), -1);
         assert_eq!((l, l2, m.len()), (1, 0, 0), "neutral: no marker");
-        let (m, l) = ranked(m, 0.0, -1);
+        let (m, l) = ranked(m, pt(0.0), -1);
         assert_eq!((l, m[0].name.as_str()), (-1, ":("));
-        let (_, l) = ranked(m, 0.0, -1);
+        let (_, l) = ranked(m, pt(0.0), -1);
         assert_eq!(l, -1, "one level down at most");
     }
 
@@ -408,13 +698,13 @@ mod tests {
         assert_eq!(level_at(&m, 10.0), 2);
         assert_eq!(level_at(&m, 40.0), -1);
         assert_eq!(level_at(&m, 90.0), -1);
-        let (m, l) = ranked(m, 60.0, 1);
+        let (m, l) = ranked(m, pt(60.0), 1);
         assert_eq!(
             l, -1,
             "neutral there is no marker: the rank before it stands"
         );
         assert_eq!(level_at(&m, 60.0), -1);
-        let (m, l) = ranked(m, 60.0, 2);
+        let (m, l) = ranked(m, pt(60.0), 2);
         assert_eq!((l, level_at(&m, 70.0), level_at(&m, 50.0)), (1, 1, -1));
     }
 

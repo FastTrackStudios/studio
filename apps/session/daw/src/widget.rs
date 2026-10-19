@@ -1132,10 +1132,10 @@ impl ArrangementWidget {
         let rows = self.piece_rows(kit, &hits);
         let mut in_strip = false;
         let mut foot = false;
+        // Only on the lane the hits are on: a row showing its lanes keeps
+        // the comp's lanes for its items.
         let (row, _) = rows.iter().find(|(row, _)| {
-            self.scene.row_box(*row).is_some_and(|(top, height)| {
-                let y0 = top.mul_add(view.zoom_y, oy);
-                let y1 = height.mul_add(view.zoom_y, y0);
+            crate::arrangement::marks_span(&self.scene, view, oy, *row).is_some_and(|(y0, y1)| {
                 in_strip = y >= y0 && y <= y0 + FLAG_STRIP;
                 foot = y >= y1 - FOOT_STRIP && y <= y1;
                 y >= y0 && y <= y1
@@ -1180,11 +1180,11 @@ impl ArrangementWidget {
             return false;
         }
         let oy = ruler::ruler_h() - view.scroll_y;
+        // The lane the hits are on, not the comp's lanes of a row showing
+        // its lanes: there a press is the items'.
         kit.into_iter().any(|row| {
-            self.scene.row_box(row).is_some_and(|(top, height)| {
-                let top = top.mul_add(view.zoom_y, oy);
-                y >= top && y < height.mul_add(view.zoom_y, top)
-            })
+            crate::arrangement::marks_span(&self.scene, view, oy, row)
+                .is_some_and(|(top, bottom)| y >= top && y < bottom)
         })
     }
 
@@ -1242,10 +1242,8 @@ impl ArrangementWidget {
             .piece_rows(kit, &hits)
             .into_iter()
             .filter(|(row, _)| {
-                self.scene.row_box(*row).is_some_and(|(top, height)| {
-                    let top = top.mul_add(view.zoom_y, oy);
-                    top < y1 && height.mul_add(view.zoom_y, top) > y0
-                })
+                crate::arrangement::marks_span(&self.scene, view, oy, *row)
+                    .is_some_and(|(top, bottom)| top < y1 && bottom > y0)
             })
             .map(|(_, piece)| piece)
             .collect();
@@ -2013,6 +2011,20 @@ impl ArrangementWidget {
             (false, false) => selected,
             (false, true) => under(),
         };
+        // A time selection on the ruler: only that stretch of each take is
+        // ranked — a take region.
+        let region: Option<(f64, f64)> = self
+            .editor
+            .cursor
+            .selection
+            .filter(|s| s.is_meaningful())
+            .map(|s| (s.start.min(s.end), s.start.max(s.end)));
+        let place = move |args: &mut serde_json::Value| {
+            if let (Some((from, to)), Some(map)) = (region, args.as_object_mut()) {
+                map.insert("at".into(), serde_json::json!(from));
+                map.insert("to".into(), serde_json::json!(to));
+            }
+        };
         #[cfg(feature = "native")]
         {
             let Some(runtime) = crate::open::runtime() else {
@@ -2020,7 +2032,8 @@ impl ArrangementWidget {
             };
             let said = std::sync::Arc::clone(&self.staged);
             runtime.spawn_blocking(move || {
-                let run = |args: serde_json::Value| {
+                let run = |mut args: serde_json::Value| {
+                    place(&mut args);
                     crate::actions::list().run_json("TAKES_RANK", args.to_string().as_bytes())
                 };
                 let outs: Vec<_> = if targets.is_empty() {
@@ -2050,6 +2063,8 @@ impl ArrangementWidget {
                     {
                         "ranked where the recording is: written when it stops"
                     }
+                    None if region.is_some() && by > 0 => "ranked up over the time selection",
+                    None if region.is_some() => "ranked down over the time selection",
                     None if by > 0 => "ranked up",
                     None => "ranked down",
                 };
@@ -4345,6 +4360,19 @@ impl ArrangementWidget {
     /// drag or marquee of them under way — over the lanes as `view` sees
     /// them, content `(0, 0)` at `lanes_at`.
     fn paint_kit_hits(&self, out: &mut Scene, view: Viewport, lanes_at: (f64, f64)) {
+        // In every mode: the takes' ranks and notes on their items.
+        match crate::hit_overlay::current() {
+            Some(hits) => crate::arrangement::take_marks_overlay(
+                out,
+                &self.font,
+                &self.scene,
+                view,
+                lanes_at,
+                &hits.takes,
+            ),
+            None if !self.editing.get() => crate::hit_overlay::refresh(),
+            None => {}
+        }
         if self.editing.get()
             && let Some(kit) = self.kit_rows()
         {
@@ -6100,6 +6128,7 @@ mod tests {
             stretches: Vec::new(),
             comps: Vec::new(),
             kept: Vec::new(),
+            takes: crate::hit_overlay::TakeMarks::default(),
         });
         widget
     }

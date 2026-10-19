@@ -94,6 +94,26 @@ pub struct Overlay {
     pub comps: Vec<CompSpan>,
     /// The stretches kept as comped (`COMP_KEEP`), in time order, seconds.
     pub kept: Vec<(f64, f64)>,
+    /// The takes' ranks and notes.
+    pub takes: TakeMarks,
+}
+
+/// A take's rank or note where the song plays it ([`crate::take_rank`]).
+#[derive(Clone, Debug, PartialEq)]
+pub struct TakeMark {
+    /// Song seconds; `to` ends a take region.
+    pub from: f64,
+    pub to: Option<f64>,
+    /// 1..=3 stars, -1 a red X, 0 a note alone.
+    pub level: i8,
+    pub note: String,
+}
+
+/// Every take's ranks and notes: by item, and by the kit's take (pass).
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct TakeMarks {
+    pub by_item: std::collections::HashMap<String, Vec<TakeMark>>,
+    pub by_pass: std::collections::HashMap<String, Vec<TakeMark>>,
 }
 
 /// A stretch of the song the comp plays from one take.
@@ -282,6 +302,7 @@ mod tests {
             stretches: Vec::new(),
             comps: Vec::new(),
             kept: Vec::new(),
+            takes: crate::hit_overlay::TakeMarks::default(),
         };
         let times: Vec<f64> = overlay.between(1.5, 3.0).iter().map(|m| m.time).collect();
         assert_eq!(times, [2.0, 3.0]);

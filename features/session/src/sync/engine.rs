@@ -308,6 +308,8 @@ pub(crate) fn take_marker_state(source: &str, m: daw_proto::TakeMarker) -> TakeM
         at: m.source_position_seconds,
         name: m.name,
         color: m.color,
+        note: m.note,
+        end: m.end_seconds,
         hit: m.hit.map(|h| HitState {
             piece: h.piece,
             origin: match h.origin {
@@ -340,6 +342,8 @@ pub(crate) fn proto_take_marker(m: &TakeMarkerState) -> daw_proto::TakeMarker {
         name: m.name.clone(),
         source_position_seconds: m.at,
         color: m.color,
+        note: m.note.clone(),
+        end_seconds: m.end,
         hit: m.hit.as_ref().map(|h| daw_proto::HitMark {
             piece: h.piece.clone(),
             origin: match h.origin.as_str() {

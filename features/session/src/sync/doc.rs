@@ -13,7 +13,7 @@
 //! regions: Map   guid → Map { start, end, name, color }
 //! chart  : Text  the keyflow chart
 //! take_markers: Map "<source>#<id>" → Map { source, id, at, name, color,
-//!                hit, hit.piece, hit.origin, hit.run, hit.peak_db,
+//!                note, end (a take region's, or Null), hit, hit.piece, hit.origin, hit.run, hit.peak_db,
 //!                hit.confidence, hit.from_trigger, hit.from_mic,
 //!                hit.ghost, hit.bleed, hit.flam_with, hit.note, hit.velocity }
 //! fx     : Map   fx id → Map { track, index, plugin, name, enabled,
@@ -849,6 +849,9 @@ impl Get<'_> {
             .get(key)
             .and_then(as_string)
             .unwrap_or_else(|| default.to_owned())
+    }
+    fn opt_f64(&self, key: &str) -> Option<f64> {
+        self.0.get(key).and_then(as_f64)
     }
     fn opt_string(&self, key: &str) -> Option<String> {
         self.0.get(key).and_then(as_string)
@@ -2080,6 +2083,8 @@ fn take_marker_fields(m: &TakeMarkerState) -> Fields {
         ("at", LoroValue::Double(m.at)),
         ("name", LoroValue::from(m.name.as_str())),
         ("color", color(m.color)),
+        ("note", LoroValue::from(m.note.as_str())),
+        ("end", m.end.map_or(LoroValue::Null, LoroValue::Double)),
         ("hit", LoroValue::Bool(m.hit.is_some())),
     ];
     // A plain marker writes its hit fields as their defaults, so a hit
@@ -2114,6 +2119,8 @@ fn read_take_marker(fields: &HashMap<String, LoroValue>) -> TakeMarkerState {
         at: g.f64("at", 0.0),
         name: g.string("name"),
         color: g.color("color"),
+        note: g.string("note"),
+        end: g.opt_f64("end"),
         hit: g.bool("hit", false).then(|| HitState {
             piece: g.string("hit.piece"),
             origin: g.string("hit.origin"),

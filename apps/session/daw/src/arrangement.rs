@@ -2542,7 +2542,7 @@ pub fn hits_overlay(
             (y0, y1),
             (&x_of, (from, to)),
             (&overlay.comps, takes, picked),
-            &overlay.kept,
+            (&overlay.kept, &overlay.takes.by_pass, font),
         );
         let foot = if comps_drawn {
             y1 - COMP_STRIP - 1.0
@@ -2669,8 +2669,9 @@ const COMP_STRIP: f64 = 10.0;
 
 /// Where a kit row's hits are drawn, top to bottom on screen (`oy`: the
 /// lanes' content top): the whole row, or — a row showing its lanes — the
-/// lane that plays.
-fn marks_span(scene: &Arrangement, view: Viewport, oy: f64, row: usize) -> Option<(f64, f64)> {
+/// lane that plays (the EDIT lane). What the hit gestures take; the
+/// other lanes are the comp's, where items are selected as anywhere.
+pub fn marks_span(scene: &Arrangement, view: Viewport, oy: f64, row: usize) -> Option<(f64, f64)> {
     let top = crate::ruler::ruler_h();
     let (y, h) = scene.row_box(row)?;
     let (b0, b1) = scene
@@ -2707,7 +2708,11 @@ fn comp_strip(
         &crate::take_colors::TakeColors,
         &[(f64, f64)],
     ),
-    kept: &[(f64, f64)],
+    (kept, ranked, _font): (
+        &[(f64, f64)],
+        &std::collections::HashMap<String, Vec<crate::hit_overlay::TakeMark>>,
+        &crate::text::Font,
+    ),
 ) -> bool {
     /// The name's size, and the room a span needs to carry it, pixels.
     const SIZE: f32 = 8.0;
@@ -2766,6 +2771,39 @@ fn comp_strip(
             &Rect::new(x_of(a), top - 3.0, x_of(b).max(x_of(a) + 2.0), top - 1.0),
         );
     }
+    // Each span's take's ranks and notes over it: the rank it starts on,
+    // then each marker inside it; a region tinted along the strip.
+    for span in comps
+        .get(first..)
+        .unwrap_or_default()
+        .iter()
+        .take_while(|c| c.start <= to)
+    {
+        let Some(marks) = crate::take_colors::stamp(&span.take).and_then(|p| ranked.get(&p)) else {
+            continue;
+        };
+        let starts_on = marks
+            .iter()
+            .filter(|m| m.to.is_none() && m.from <= span.start && m.level != 0)
+            .max_by(|a, b| a.from.total_cmp(&b.from));
+        let inside = marks
+            .iter()
+            .filter(|m| m.from > span.start && m.from < span.end);
+        for m in starts_on.into_iter().chain(inside) {
+            let at = m.from.max(span.start);
+            if let Some(end) = m.to {
+                let tint = if m.level < 0 { RANK_DOWN } else { RANK_UP };
+                painter.fill(
+                    Fill::NonZero,
+                    Affine::IDENTITY,
+                    tint.multiply_alpha(0.45),
+                    None,
+                    &Rect::new(x_of(at), top, x_of(end.min(span.end)), base),
+                );
+            }
+            take_mark(painter, font, (x_of(at) + 2.0, top - 7.0), m);
+        }
+    }
     let ring = vello::kurbo::Stroke::new(1.5);
     for &(a, b) in picked.iter().filter(|(a, b)| *b >= from && *a <= to) {
         let r = Rect::new(x_of(a), top - 0.75, x_of(b).max(x_of(a) + 2.0), base - 0.75);
@@ -2779,6 +2817,156 @@ fn comp_strip(
         painter.stroke(&ring, Affine::IDENTITY, Color::WHITE, None, &r);
     }
     true
+}
+
+/// An up-rank's gold, a down-rank's red: REAPER's stars and X.
+const RANK_UP: Color = Color::from_rgba8(0xf2, 0xc1, 0x4e, 0xff);
+const RANK_DOWN: Color = Color::from_rgba8(0xe5, 0x48, 0x4d, 0xff);
+
+/// A five-pointed star centred at `(cx, cy)`, `r` to its points.
+fn star(cx: f64, cy: f64, r: f64) -> BezPath {
+    let mut path = BezPath::new();
+    for k in 0..10 {
+        let radius = if k % 2 == 0 { r } else { r * 0.45 };
+        let angle = f64::from(k).mul_add(std::f64::consts::PI / 5.0, -std::f64::consts::FRAC_PI_2);
+        let point = (
+            angle.cos().mul_add(radius, cx),
+            angle.sin().mul_add(radius, cy),
+        );
+        if k == 0 {
+            path.move_to(point);
+        } else {
+            path.line_to(point);
+        }
+    }
+    path.close_path();
+    path
+}
+
+/// A take's rank — one to three gold stars, a red X — with its note
+/// after it, its left at `(x, y)` (the glyphs' middle). How wide it drew.
+fn take_mark(
+    painter: &mut impl PaintScene,
+    font: &crate::text::Font,
+    (x, y): (f64, f64),
+    mark: &crate::hit_overlay::TakeMark,
+) -> f64 {
+    /// A star's radius and the step between two, pixels.
+    const R: f64 = 4.0;
+    const STEP: f64 = 9.0;
+    let mut at = x + R;
+    match mark.level {
+        l if l > 0 => {
+            for _ in 0..l {
+                painter.fill(
+                    Fill::NonZero,
+                    Affine::IDENTITY,
+                    RANK_UP,
+                    None,
+                    &star(at, y, R),
+                );
+                at += STEP;
+            }
+        }
+        l if l < 0 => {
+            let cross = vello::kurbo::Stroke::new(2.0);
+            let mut path = BezPath::new();
+            path.move_to((at - R, y - R));
+            path.line_to((at + R, y + R));
+            path.move_to((at + R, y - R));
+            path.line_to((at - R, y + R));
+            painter.stroke(&cross, Affine::IDENTITY, RANK_DOWN, None, &path);
+            at += STEP;
+        }
+        _ => {
+            // A note alone: a small pin.
+            painter.fill(
+                Fill::NonZero,
+                Affine::IDENTITY,
+                Color::WHITE.multiply_alpha(0.8),
+                None,
+                &vello::kurbo::Circle::new((at, y), 2.5),
+            );
+            at += STEP - 2.0;
+        }
+    }
+    if !mark.note.is_empty() {
+        crate::tcp::glyphs(
+            painter,
+            font,
+            Color::WHITE.multiply_alpha(0.85),
+            &mark.note,
+            at - R + 2.0,
+            y + 3.5,
+            9.0,
+        );
+        at += 6.0 * num_traits::ToPrimitive::to_f64(&mark.note.chars().count()).unwrap_or(0.0);
+    }
+    at - x
+}
+
+/// Every item's take ranks and notes on it ([`crate::take_rank`]): a
+/// marker's stars or X (and note) where it is, along the item's top; a
+/// take region tinted from its start to its end.
+pub fn take_marks_overlay(
+    painter: &mut impl PaintScene,
+    font: &crate::text::Font,
+    scene: &Arrangement,
+    view: Viewport,
+    (ox, oy): (f64, f64),
+    marks: &crate::hit_overlay::TakeMarks,
+) {
+    if marks.by_item.is_empty() {
+        return;
+    }
+    let x_of = |t: f64| t.mul_add(view.pps, ox);
+    let pps = view.pps.max(f64::EPSILON);
+    let (from, to) = ((view.panel_w - ox) / pps, (view.width - ox) / pps);
+    let top_of_lanes = crate::ruler::ruler_h();
+    for item in scene.item_boxes() {
+        if item.x1 < from || item.x0 > to {
+            continue;
+        }
+        let Some(list) = marks.by_item.get(&item.guid) else {
+            continue;
+        };
+        let Some((y, h)) = scene.item_box(item) else {
+            continue;
+        };
+        let (y0, y1) = (y.mul_add(view.zoom_y, oy), (y + h).mul_add(view.zoom_y, oy));
+        if y1 < top_of_lanes || y1 - y0 < 12.0 {
+            continue;
+        }
+        // The rank the item starts on, then each marker inside it.
+        let starts_on = list
+            .iter()
+            .filter(|m| m.to.is_none() && m.from <= item.x0 && m.level != 0)
+            .max_by(|a, b| a.from.total_cmp(&b.from));
+        let inside = list.iter().filter(|m| m.from > item.x0 && m.from < item.x1);
+        for m in starts_on.into_iter().chain(inside) {
+            let at = m.from.max(item.x0);
+            let (left, right) = (x_of(at), x_of(m.to.unwrap_or(at).min(item.x1)));
+            if m.to.is_some() {
+                let tint = if m.level < 0 { RANK_DOWN } else { RANK_UP };
+                painter.fill(
+                    Fill::NonZero,
+                    Affine::IDENTITY,
+                    tint.multiply_alpha(0.18),
+                    None,
+                    &Rect::new(left, y0, right, y1),
+                );
+            } else if m.from > item.x0 {
+                painter.fill(
+                    Fill::NonZero,
+                    Affine::IDENTITY,
+                    Color::WHITE.multiply_alpha(0.5),
+                    None,
+                    &Rect::new(left - 0.5, y0, left + 0.5, y1),
+                );
+            }
+            take_mark(painter, font, (left + 2.0, y0.max(top_of_lanes) + 7.0), m);
+        }
+    }
 }
 
 /// A take's name with the mic's number and name set aside

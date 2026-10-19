@@ -2101,6 +2101,12 @@ pub fn overlay(
             .into_iter()
             .map(|k| (k.from, k.to))
             .collect(),
+        takes: match project {
+            ProjectContext::Project(song) => daw
+                .read_project(song, crate::take_rank::take_marks)
+                .unwrap_or_default(),
+            ProjectContext::Current => crate::hit_overlay::TakeMarks::default(),
+        },
     }
 }
 

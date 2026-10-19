@@ -630,6 +630,11 @@ pub struct TakeMarkerState {
     pub color: Option<u32>,
     /// A drum hit's properties, when it is one.
     pub hit: Option<HitState>,
+    /// Anything said about the take here.
+    pub note: String,
+    /// Where a take region ends, seconds into the recording; `None` for a
+    /// point.
+    pub end: Option<f64>,
 }
 
 impl TakeMarkerState {

@@ -381,17 +381,17 @@ static TAKE_UP_MOUSE: ActionMeta = meta(
     "SESSION_TAKE_UPRANK_MOUSE",
     "take_uprank_mouse",
     "Up-rank the take under the mouse",
-    "Up-rank the take under the mouse — a lane's item, the comp strip's span, the folded kit's take there — else as SESSION_TAKE_UPRANK. Mouse button 4.",
+    "Up-rank the take under the mouse — a lane's item, the comp strip's span, the folded kit's take there — else as SESSION_TAKE_UPRANK. Mouse button 5 (forward).",
     "Edit",
-    "Mouse 4",
+    "Mouse 5",
 );
 static TAKE_DOWN_MOUSE: ActionMeta = meta(
     "SESSION_TAKE_DOWNRANK_MOUSE",
     "take_downrank_mouse",
     "Down-rank the take under the mouse",
-    "Down-rank the take under the mouse — a lane's item, the comp strip's span, the folded kit's take there — else as SESSION_TAKE_DOWNRANK. Mouse button 5.",
+    "Down-rank the take under the mouse — a lane's item, the comp strip's span, the folded kit's take there — else as SESSION_TAKE_DOWNRANK. Mouse button 4 (back).",
     "Edit",
-    "Mouse 5",
+    "Mouse 4",
 );
 static COMP_PREV: ActionMeta = meta(
     "SESSION_COMP_PREV",
@@ -2229,6 +2229,11 @@ pub(crate) fn samples_follow(
             }
         }
         Err(e) => tracing::warn!(hits_midi.error = %e, "drums: the hits' MIDI could not follow"),
+    }
+    // An undo or redo may take back what the overlay draws besides hits —
+    // a take's rank, a kept stretch: drawn again from the song.
+    if matches!(mode, crate::hits_midi::Mode::Follow) {
+        crate::hit_overlay::refresh();
     }
 }
 
