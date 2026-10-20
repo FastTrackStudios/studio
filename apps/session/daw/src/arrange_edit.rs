@@ -2582,8 +2582,7 @@ fn seams(
                 let meets = piece.position.as_seconds() + fade;
                 let ends = prev.position.as_seconds() + prev.length.as_seconds();
                 let drawn = if meets - ends > 1e-6 {
-                    draw_out_to(prev, meets, STRETCH_LEAST_RATE)
-                        .or_else(|| draw_out_between(prev, meets))
+                    draw_out_reaching(prev, meets)
                 } else {
                     None
                 };
@@ -2728,6 +2727,12 @@ pub const TAIL_LEAST_RATE: f64 = 0.1;
 /// markers that say so; `None`, and the item left, when it has no decay
 /// to draw.
 fn draw_out_between(item: &mut daw_proto::Item, to: f64) -> Option<Vec<(f64, f64)>> {
+    draw_out_tail(item, to, TAIL_LEAST_RATE)
+}
+
+/// [`draw_out_between`], its far tail slowed no further than `least` —
+/// or, `least` zero, as slow as it takes: the last resort before a gap.
+fn draw_out_tail(item: &mut daw_proto::Item, to: f64, least: f64) -> Option<Vec<(f64, f64)>> {
     use daw_proto::primitives::Duration;
     let length = item.length.as_seconds();
     let keep = STRETCH_KEEP.min(length / 2.0);
@@ -2735,7 +2740,11 @@ fn draw_out_between(item: &mut daw_proto::Item, to: f64) -> Option<Vec<(f64, f64
     let body = STRETCH_BODY.min(decay / 2.0);
     let tail = decay - body;
     let body_played = body / STRETCH_LEAST_RATE;
-    let farthest = keep + body_played + tail / TAIL_LEAST_RATE;
+    let farthest = if least > 0.0 {
+        keep + body_played + tail / least
+    } else {
+        f64::INFINITY
+    };
     let longer = (to - item.position.as_seconds()).min(farthest);
     if tail <= 0.0 || longer <= keep + body_played + tail {
         return None;
@@ -2755,8 +2764,26 @@ fn draw_out_between(item: &mut daw_proto::Item, to: f64) -> Option<Vec<(f64, f64
 /// source time)`, and the item lengthened. `None`, and the item left, when
 /// that would slow it below [`STRETCH_LEAST_RATE`].
 /// [`draw_out`] for the engine's own placement ([`crate::hit_place`]).
+///
+/// Whatever it takes to meet `to`: drawn out whole no slower than
+/// [`STRETCH_LEAST_RATE`], else its far tail slower ([`draw_out_between`]),
+/// else — a slice too short for either, two hits played closer than they
+/// now sit — its tail as slow as it takes. A smeared few milliseconds of
+/// decay is heard far less than every mic of the kit cutting out.
 pub(crate) fn draw_out_markers(item: &mut daw_proto::Item, to: f64) -> Option<Vec<(f64, f64)>> {
+    draw_out_reaching(item, to)
+}
+
+/// See [`draw_out_markers`].
+fn draw_out_reaching(item: &mut daw_proto::Item, to: f64) -> Option<Vec<(f64, f64)>> {
     draw_out(item, to)
+        .or_else(|| {
+            let mut tried = item.clone();
+            draw_out_between(&mut tried, to)
+                .filter(|_| tried.position.as_seconds() + tried.length.as_seconds() >= to - 1e-9)
+                .inspect(|_| *item = tried)
+        })
+        .or_else(|| draw_out_tail(item, to, 0.0))
 }
 
 fn draw_out(item: &mut daw_proto::Item, to: f64) -> Option<Vec<(f64, f64)>> {
@@ -4615,6 +4642,32 @@ mod tests {
         assert!((b.markers.last().map_or(0.0, |m| m.1) - 50.4).abs() < 1e-9);
         // Too far: the hit's slice would be shorter than its attack.
         assert!(super::stretch_around(&before, &hit, (0.005, 0.005), 0.18).is_none());
+    }
+
+    /// Unbreakable's gaps, as a quantize left them: two hits played 37 ms
+    /// apart and sent 101 ms apart (bar 166.2), and a 5 ms slice 65 ms
+    /// short of the next (bar 109). Drawn out whatever it takes, each
+    /// meets the next slice — the kit never cuts out.
+    #[test]
+    fn a_slice_meets_the_next_however_far_it_was_sent() {
+        for (length, to) in [(0.0369, 0.1058), (0.0048, 0.0704)] {
+            let mut item = daw_proto::Item {
+                position: PositionInSeconds::from_seconds(10.0),
+                length: Duration::from_seconds(length),
+                start_offset: Duration::from_seconds(5.0),
+                ..daw_proto::Item::default()
+            };
+            let markers = super::draw_out_markers(&mut item, 10.0 + to).expect("drawn out");
+            let end = item.position.as_seconds() + item.length.as_seconds();
+            assert!((end - (10.0 + to)).abs() < 1e-9, "{length}: reaches {end}");
+            // The attack plays as recorded, and the take is played no
+            // further than it reached: only time is drawn out.
+            assert!(
+                (markers[1].1 - markers[1].0 - 5.0).abs() < 1e-9,
+                "{markers:?}"
+            );
+            assert!((markers.last().map_or(0.0, |m| m.1) - (5.0 + length)).abs() < 1e-9);
+        }
     }
 
     /// Too far for 0.85 all the way: the attack as played, the hit's body
