@@ -180,6 +180,10 @@ pub struct Arrangement {
     /// A replay ran out of [`FINE_BUDGET`] with lanes left to build from
     /// detail: the window draws another frame for them.
     fine_behind: std::cell::Cell<bool>,
+    /// A replay since the last ask drew a lane's own points so far apart
+    /// (zoomed in past them, no detail yet) that a piece of its path runs
+    /// screens past the view: the frame must be cut to the screen whole.
+    lanes_wide: std::cell::Cell<bool>,
     /// The panel's shape — full, or compact. What it was RECORDED at:
     /// changing it re-cuts the panel, because the rows are drawn to it.
     pub tcp: crate::tcp::Tcp,
@@ -1527,7 +1531,27 @@ impl Arrangement {
                 );
                 index.x.push((f64::MIN, f64::MAX));
             }
-            for item in row_items {
+            // A take cut at every hit draws as one item a run.
+            let runs = seamless_runs(
+                &row_items,
+                |a, b| project.title(a).is_some() && project.title(a) == project.title(b),
+                |i| {
+                    daw_ui::studio::folded::parse_guid(&i.guid).is_none()
+                        && previews.get(&i.guid).is_none()
+                        && previews.wave(&i.guid).is_some()
+                },
+            );
+            for (at, &item) in row_items.iter().enumerate() {
+                let part = runs.parts.get(at).copied().unwrap_or(Part::Alone);
+                let inside = part == Part::Inside;
+                // The run it draws for, when it heads one: its slices.
+                let run: Vec<&daw_proto::Item> = match part {
+                    Part::Head { run } => runs.members[run]
+                        .iter()
+                        .filter_map(|&k| row_items.get(k).copied())
+                        .collect(),
+                    _ => vec![item],
+                };
                 let band = if lanes_shown {
                     stack.band(item.fixed_lane.unwrap_or(0))
                 } else {
@@ -1538,6 +1562,9 @@ impl Arrangement {
                 let (y, body) = (band.0.mul_add(body, y), (band.1 - band.0) * body);
                 let x0 = item.position.as_seconds();
                 let x1 = x0 + item.length.as_seconds().max(0.001);
+                let drawn_x1 = run.last().map_or(x1, |last| {
+                    last.position.as_seconds() + last.length.as_seconds().max(0.001)
+                });
                 // How far into the source this item starts. Zero for
                 // everything that has not been slipped, which is why
                 // adding it moves no picture that was right before.
@@ -1573,14 +1600,16 @@ impl Arrangement {
                 } else {
                     body_alpha()
                 };
-                lanes.fill(
-                    Fill::NonZero,
-                    Affine::IDENTITY,
-                    color.multiply_alpha(alpha),
-                    None,
-                    &Rect::new(x0, y + inset, x1, y + body - inset),
-                );
-                index.x.push((x0, x1));
+                if !inside {
+                    lanes.fill(
+                        Fill::NonZero,
+                        Affine::IDENTITY,
+                        color.multiply_alpha(alpha),
+                        None,
+                        &Rect::new(x0, y + inset, drawn_x1, y + body - inset),
+                    );
+                    index.x.push((x0, drawn_x1));
+                }
                 let top = y + inset;
                 let bottom = y + body - inset;
                 // What the item CONTAINS: notes if it holds MIDI, the
@@ -1604,7 +1633,8 @@ impl Arrangement {
                 let is_folder = folded.is_some();
                 // An item that plays is read as its track plays: one read
                 // of the track for all its items, kept through an edit.
-                let source =
+                // A run's: the track's over all of it, or each slice's.
+                let sources =
                     if daw_ui::studio::project::on_playing_lane(lane_track, item) && !item.muted {
                         let version = versions.get(item.track_guid.as_str()).copied().unwrap_or(0);
                         let scale = if item.volume > 1e-6 {
@@ -1612,23 +1642,40 @@ impl Arrangement {
                         } else {
                             1.0
                         };
-                        crate::wave_detail::Source::track(&item.track_guid, x0, x1 - x0, version)
-                            .scaled(scale)
+                        vec![
+                            crate::wave_detail::Source::track(
+                                &item.track_guid,
+                                x0,
+                                drawn_x1 - x0,
+                                version,
+                            )
+                            .scaled(scale),
+                        ]
                     } else {
-                        source_of(item)
+                        run.iter().map(|i| source_of(i)).collect()
                     };
                 let held = folded.unwrap_or_else(|| Held {
                     notes: previews.get(&item.guid),
                     wave: previews.wave(&item.guid),
                     layers: Vec::new(),
-                    sources: vec![source],
+                    sources,
                 });
                 let (notes, wave) = (held.notes, held.wave);
                 // Audio: the take's own peaks, once they have been read —
                 // plain until then, for the same reason.
-                if let Some(whole) = wave
-                    .clone()
-                    .filter(|w| w.step > 0.0 && !w.points.is_empty())
+                let drawn_wave = if run.len() > 1 {
+                    let slices: Vec<(f64, std::sync::Arc<crate::midi::Wave>)> = run
+                        .iter()
+                        .filter_map(|i| Some((i.position.as_seconds(), previews.wave(&i.guid)?)))
+                        .collect();
+                    let slices: Vec<(f64, &crate::midi::Wave)> =
+                        slices.iter().map(|(at, w)| (*at, &**w)).collect();
+                    Some(std::sync::Arc::new(joined_wave(&slices, x0, drawn_x1)))
+                } else {
+                    wave.clone()
+                };
+                if let Some(whole) =
+                    drawn_wave.filter(|w| !inside && w.step > 0.0 && !w.points.is_empty())
                 {
                     // One gain for every layer: the loudest anywhere reaches
                     // the edge, and the layers keep their loudness to each
@@ -1660,7 +1707,7 @@ impl Arrangement {
                         gain,
                         wave,
                         x0,
-                        x1,
+                        x1: drawn_x1,
                         top,
                         bottom,
                         color,
@@ -1704,9 +1751,18 @@ impl Arrangement {
                 // end. Recorded in seconds like the item, so the zoom
                 // stretches them with it.
                 let fades = Fades::of(item);
-                if let Some(path) = fades.path(x0, x1, top, bottom, 1.0) {
+                // A run's: its first slice's fade in, its last's out.
+                let drawn_fades = run.last().map_or(fades, |last| {
+                    let out = Fades::of(last);
+                    Fades {
+                        fade_out: out.fade_out,
+                        out_shape: out.out_shape,
+                        ..fades
+                    }
+                });
+                if !inside && let Some(path) = drawn_fades.path(x0, drawn_x1, top, bottom, 1.0) {
                     lanes.fill(Fill::NonZero, Affine::IDENTITY, FADE_SHADE, None, &path);
-                    index.x.push((x0, x1));
+                    index.x.push((x0, drawn_x1));
                 }
                 boxes.push(ItemBox {
                     row,
@@ -1725,12 +1781,13 @@ impl Arrangement {
                         || project.title(item).map_or(color, take_color),
                         |i| crate::take_colors::swatch(i).1,
                     ),
+                    drawn_to: (!inside).then_some(drawn_x1),
                 });
-                if let Some(name) = project.title(item) {
+                if !inside && let Some(name) = project.title(item) {
                     titles.push(Title {
                         row,
                         x0,
-                        x1,
+                        x1: drawn_x1,
                         name: name.to_owned(),
                         spelled: spell(&track.name, name, x0, &keys),
                     });
@@ -1788,6 +1845,7 @@ impl Arrangement {
             index,
             rows_at: RowLayout::from_heights(0, slot_h),
             fine_behind: std::cell::Cell::new(false),
+            lanes_wide: std::cell::Cell::new(false),
             track_h,
             lane_tracks,
             laned: laned_rows,
@@ -2091,6 +2149,9 @@ pub struct ItemBox {
     /// so every mic of one take — and every slice of it — is ringed alike
     /// while the waveform keeps its track's colour.
     pub outline: Color,
+    /// Where what it draws ends: past its own end when it heads a run of
+    /// slices drawn as one; `None` inside one, its head drawing it.
+    pub drawn_to: Option<f64>,
 }
 
 /// The colour a take is ringed in, from its name.
@@ -2992,14 +3053,20 @@ fn take_mark(
     let mut at = x + R;
     match mark.level {
         l if l > 0 => {
+            thread_local! {
+                /// A star of radius `R` about the origin, made once.
+                static STAR: BezPath = star(0.0, 0.0, R);
+            }
             for _ in 0..l {
-                painter.fill(
-                    Fill::NonZero,
-                    Affine::IDENTITY,
-                    RANK_UP,
-                    None,
-                    &star(at, y, R),
-                );
+                STAR.with(|shape| {
+                    painter.fill(
+                        Fill::NonZero,
+                        Affine::translate((at, y)),
+                        RANK_UP,
+                        None,
+                        shape,
+                    );
+                });
                 at += STEP;
             }
         }
@@ -3061,8 +3128,19 @@ pub fn take_marks_overlay<'a>(
     let pps = view.pps.max(f64::EPSILON);
     let (from, to) = ((view.panel_w - ox) / pps, (view.width - ox) / pps);
     let top_of_lanes = crate::ruler::ruler_h();
-    for item in scene.item_boxes() {
-        if item.x1 < from || item.x0 > to {
+    // The boxes are kept row by row: those of the rows in sight.
+    let rows = scene.visible_rows(view);
+    let boxes = scene.item_boxes();
+    let (lo, hi) = (
+        boxes.partition_point(|b| b.row < rows.start),
+        boxes.partition_point(|b| b.row < rows.end),
+    );
+    for item in boxes.get(lo..hi).unwrap_or(&[]) {
+        // A run of slices is marked once, along all of it.
+        let Some(drawn_to) = item.drawn_to else {
+            continue;
+        };
+        if drawn_to < from || item.x0 > to {
             continue;
         }
         // A folded item wears the marks of the take it stands for.
@@ -3085,10 +3163,12 @@ pub fn take_marks_overlay<'a>(
             .iter()
             .filter(|m| m.to.is_none() && m.from <= item.x0 && m.level != 0)
             .max_by(|a, b| a.from.total_cmp(&b.from));
-        let inside = list.iter().filter(|m| m.from > item.x0 && m.from < item.x1);
+        let inside = list
+            .iter()
+            .filter(|m| m.from > item.x0 && m.from < drawn_to);
         for m in starts_on.into_iter().chain(inside) {
             let at = m.from.max(item.x0);
-            let (left, right) = (x_of(at), x_of(m.to.unwrap_or(at).min(item.x1)));
+            let (left, right) = (x_of(at), x_of(m.to.unwrap_or(at).min(drawn_to)));
             if m.to.is_some() {
                 let tint = if m.level < 0 { RANK_DOWN } else { RANK_UP };
                 painter.fill(
@@ -4487,12 +4567,15 @@ impl Arrangement {
                 // pixels of it.
                 let cut = match cmd {
                     RenderCommand::Fill(fill) => {
-                        cut_to_view(&fill.shape, fill.transform, left, right).map(|shape| {
-                            RenderCommand::Fill(anyrender::recording::FillCommand {
-                                shape,
-                                ..fill.clone()
-                            })
-                        })
+                        let extent = self.index.x.get(i).copied();
+                        cut_to_view(&fill.shape, (fill.transform, extent), left, right).map(
+                            |shape| {
+                                RenderCommand::Fill(anyrender::recording::FillCommand {
+                                    shape,
+                                    ..fill.clone()
+                                })
+                            },
+                        )
                     }
                     _ => None,
                 };
@@ -4533,6 +4616,11 @@ impl Arrangement {
                             );
                         }
                         None => {
+                            // A piece is CHUNK points: at more than a
+                            // 128th of the view a point, it reaches past.
+                            if lane.wave.step * view.pps * 128.0 > view.width {
+                                self.lanes_wide.set(true);
+                            }
                             for path in lane_wave_paths(lane, left, right, view.pps) {
                                 painter.fill(Fill::NonZero, transform, lane.color, None, &*path);
                                 counts.submitted = counts.submitted.saturating_add(1);
@@ -4553,6 +4641,14 @@ impl Arrangement {
     #[must_use]
     pub fn take_fine_behind(&self) -> bool {
         self.fine_behind.replace(false)
+    }
+
+    /// Whether a replay since the last ask drew paths reaching screens
+    /// past the view ([`Arrangement::lanes_wide`]): its lanes must be cut
+    /// to the screen with the rest.
+    #[must_use]
+    pub fn take_lanes_wide(&self) -> bool {
+        self.lanes_wide.replace(false)
     }
 
     /// Cut the panel again, for a new vertical zoom.
@@ -4771,15 +4867,25 @@ fn upright(shape: &BezPath) -> Option<Rect> {
 /// is an upright rectangle reaching further than that — in its own
 /// coordinates, so only for an untransformed shape. `None` to leave it as
 /// it is.
-fn cut_to_view(shape: &BezPath, transform: Affine, left: f64, right: f64) -> Option<BezPath> {
+fn cut_to_view(
+    shape: &BezPath,
+    (transform, extent): (Affine, Option<(f64, f64)>),
+    left: f64,
+    right: f64,
+) -> Option<BezPath> {
     use vello::kurbo::Shape as _;
     if transform != Affine::IDENTITY {
         return None;
     }
     let margin = (right - left).max(0.0);
     let (from, to) = (left - margin, right + margin);
-    let bounds = shape.bounding_box();
-    if bounds.x0 >= from && bounds.x1 <= to {
+    // Its extent as the index has it, when it does: measured when it was
+    // recorded, not again every frame.
+    let (x0, x1) = extent.unwrap_or_else(|| {
+        let bounds = shape.bounding_box();
+        (bounds.x0, bounds.x1)
+    });
+    if x0 >= from && x1 <= to {
         return None;
     }
     let bounds = upright(shape)?;
@@ -4788,31 +4894,44 @@ fn cut_to_view(shape: &BezPath, transform: Affine, left: f64, right: f64) -> Opt
 }
 
 /// Every solid fill in a finished frame `width` by `height` that reaches
-/// far past it, cut to it (and as much again around).
+/// far past it, cut to it (and as much again around) — but those in
+/// `cut_already`, the lanes' own, which their replay cut to the view.
 ///
 /// Zoomed in to the
 /// samples, a section's band on the ruler, a take's body, a stretch of
 /// its coarse waveform are millions of pixels long, and the renderer
 /// sizes its buffers by the length of what it is given, on screen or
 /// not — past its limit it stops the window, or quietly draws nothing.
-pub fn cut_to_screen(scene: &mut anyrender::recording::Scene, width: f64, height: f64) {
+pub fn cut_to_screen(
+    scene: &mut anyrender::recording::Scene,
+    width: f64,
+    height: f64,
+    cut_already: std::ops::Range<usize>,
+) {
     use vello::kurbo::Shape as _;
     let screen = Rect::new(-width, -height, 2.0 * width, 2.0 * height);
-    for cmd in &mut scene.commands {
+    for (i, cmd) in scene.commands.iter_mut().enumerate() {
+        if cut_already.contains(&i) {
+            continue;
+        }
         let RenderCommand::Fill(fill) = cmd else {
             continue;
         };
         if !matches!(fill.brush, anyrender::Paint::Solid(_)) {
             continue;
         }
-        let mut placed = fill.shape.clone();
-        placed.apply_affine(fill.transform);
-        let bounds = placed.bounding_box();
+        // Its box through its transform holds it: inside the screen, it
+        // is left as it is — measured without a copy of the shape.
+        let bounds = fill
+            .transform
+            .transform_rect_bbox(fill.shape.bounding_box());
         if screen.contains(bounds.origin())
             && screen.contains(vello::kurbo::Point::new(bounds.x1, bounds.y1))
         {
             continue;
         }
+        let mut placed = fill.shape.clone();
+        placed.apply_affine(fill.transform);
         fill.shape = clip_to(&placed, screen);
         fill.transform = Affine::IDENTITY;
     }
@@ -5566,6 +5685,106 @@ mod dial_tests {
 
 /// The take `item` plays: its own take's name, or — a shut folder's — the
 /// first of its children's that names a recording pass.
+/// How an item draws among its lane's.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Part {
+    /// On its own.
+    Alone,
+    /// At the head of a run of seamless slices — one take cut at every
+    /// hit, played on as recorded — drawn once for all of them: run `run`
+    /// of [`SliceRuns::members`].
+    Head { run: usize },
+    /// Inside a run: its head draws it.
+    Inside,
+}
+
+/// Seconds a slice may start after the one before it ends and still meet
+/// it seamlessly.
+const SEAMLESS: f64 = 0.002;
+
+/// Whether `next` draws on from `prev` as one item: the same lane and
+/// level, starting where it ends (or inside its crossfade). Where in the
+/// recording each plays from is its own — a quantized slice moved off its
+/// neighbour still draws its own waveform in place ([`joined_wave`]).
+/// Whether it is the same recording is the caller's.
+fn seamless(prev: &daw_proto::Item, next: &daw_proto::Item) -> bool {
+    let (p0, n0) = (prev.position.as_seconds(), next.position.as_seconds());
+    let prev_end = p0 + prev.length.as_seconds();
+    prev.fixed_lane == next.fixed_lane
+        && prev.muted == next.muted
+        && prev.color == next.color
+        && (prev.volume - next.volume).abs() < 1e-6
+        && n0 > p0
+        && n0 <= prev_end + SEAMLESS
+}
+
+/// Each of `items`' part in a run of seamless slices ([`seamless`] and
+/// `same_take`), by index: a sliced take on screen draws as one item, not
+/// as hundreds — the kit cut at every hit, every lane shown, was tens of
+/// thousands of drawing commands a frame. Only items `drawable` (their
+/// waveform read, no notes) join one.
+fn seamless_runs(
+    items: &[&daw_proto::Item],
+    same_take: impl Fn(&daw_proto::Item, &daw_proto::Item) -> bool,
+    drawable: impl Fn(&daw_proto::Item) -> bool,
+) -> SliceRuns {
+    let mut parts = vec![Part::Alone; items.len()];
+    let mut members: Vec<Vec<usize>> = Vec::new();
+    let mut order: Vec<usize> = (0..items.len()).collect();
+    order.sort_by(|&a, &b| {
+        let (a, b) = (items[a], items[b]);
+        a.fixed_lane
+            .cmp(&b.fixed_lane)
+            .then(a.position.as_seconds().total_cmp(&b.position.as_seconds()))
+    });
+    let mut head: Option<(usize, usize)> = None;
+    for &i in &order {
+        let item = items[i];
+        let joined = head.filter(|&(_, last)| {
+            let prev = items[last];
+            drawable(item) && seamless(prev, item) && same_take(prev, item)
+        });
+        match joined {
+            Some((first, _)) => {
+                if let Part::Head { run } = parts[first] {
+                    members[run].push(i);
+                } else {
+                    parts[first] = Part::Head { run: members.len() };
+                    members.push(vec![first, i]);
+                }
+                parts[i] = Part::Inside;
+                head = Some((first, i));
+            }
+            None => head = drawable(item).then_some((i, i)),
+        }
+    }
+    SliceRuns { parts, members }
+}
+
+/// [`seamless_runs`]' answer: each item's part, and each run's items
+/// (indices, in time order).
+struct SliceRuns {
+    parts: Vec<Part>,
+    members: Vec<Vec<usize>>,
+}
+
+/// The waveforms of a run's slices, `first` at `x0`, as one: each slice's
+/// points placed at its own start.
+fn joined_wave(slices: &[(f64, &crate::midi::Wave)], x0: f64, x1: f64) -> crate::midi::Wave {
+    let step = slices
+        .first()
+        .map_or(1.0, |(_, w)| w.step)
+        .max(f64::EPSILON);
+    let mut points = vec![(0.0_f32, 0.0_f32); crate::num::index(((x1 - x0) / step).ceil())];
+    for (at, wave) in slices {
+        let from = crate::num::index(((at - x0) / step).round().max(0.0));
+        for (slot, point) in points.iter_mut().skip(from).zip(&wave.points) {
+            *slot = *point;
+        }
+    }
+    crate::midi::Wave { step, points }
+}
+
 fn take_name<'a>(
     project: &'a daw_ui::studio::project::Project,
     item: &'a daw_proto::Item,
@@ -5669,5 +5888,71 @@ mod take_color_tests {
         assert_ne!(one, take_color("65-In-260907_1321-02.wav"));
         // A name not numbered by mic is a take of its own.
         assert_eq!(take_color("Guide 2"), take_color("Guide 2"));
+    }
+
+    fn slice(at: f64, len: f64, offset: f64) -> daw_proto::Item {
+        daw_proto::Item {
+            guid: format!("s{at}"),
+            position: daw_proto::PositionInSeconds::from_seconds(at),
+            length: daw_proto::Duration::from_seconds(len),
+            start_offset: daw_proto::Duration::from_seconds(offset),
+            volume: 1.0,
+            fixed_lane: Some(2),
+            ..daw_proto::Item::default()
+        }
+    }
+
+    /// A take cut in three, its slices touching, is one run — a slice
+    /// slipped (quantized) as well; on another lane or past a gap, one
+    /// starts its own.
+    #[test]
+    fn seamless_slices_draw_as_one_run() {
+        let a = slice(10.0, 1.0, 5.0);
+        let b = slice(11.0, 1.0, 6.0);
+        let c = slice(11.995, 1.0, 6.995);
+        let slipped = slice(12.99, 0.5, 9.5);
+        let mut other_lane = slice(14.0, 1.0, 9.0);
+        other_lane.fixed_lane = Some(3);
+        let gap = slice(14.5, 1.0, 10.5);
+        let items = [&c, &a, &slipped, &b, &other_lane, &gap];
+        let runs = super::seamless_runs(&items, |_, _| true, |_| true);
+        assert_eq!(runs.members, vec![vec![1, 3, 0, 2]], "{:?}", runs.parts);
+        assert_eq!(runs.parts[1], super::Part::Head { run: 0 });
+        assert_eq!(runs.parts[0], super::Part::Inside);
+        assert_eq!(runs.parts[3], super::Part::Inside);
+        assert_eq!(
+            runs.parts[2],
+            super::Part::Inside,
+            "slipped, still touching"
+        );
+        assert_eq!(runs.parts[4], super::Part::Alone, "another lane");
+        assert_eq!(runs.parts[5], super::Part::Alone, "after a gap");
+        // Another take, or a waveform not read: no run.
+        let apart = super::seamless_runs(&items, |_, _| false, |_| true);
+        assert!(apart.members.is_empty());
+        let unread = super::seamless_runs(&items, |_, _| true, |i| i.guid != "s11");
+        assert_eq!(
+            unread.members,
+            vec![vec![0, 2]],
+            "the middle slice has no waveform yet: those after it run on their own"
+        );
+    }
+
+    /// Slices' waveforms joined: each at its own start.
+    #[test]
+    fn a_run_s_waveform_is_its_slices_in_place() {
+        let one = crate::midi::Wave {
+            step: 0.5,
+            points: vec![(0.1, -0.1), (0.2, -0.2)],
+        };
+        let two = crate::midi::Wave {
+            step: 0.5,
+            points: vec![(0.3, -0.3), (0.4, -0.4)],
+        };
+        let joined = super::joined_wave(&[(10.0, &one), (11.0, &two)], 10.0, 12.0);
+        assert_eq!(
+            joined.points,
+            vec![(0.1, -0.1), (0.2, -0.2), (0.3, -0.3), (0.4, -0.4)]
+        );
     }
 }

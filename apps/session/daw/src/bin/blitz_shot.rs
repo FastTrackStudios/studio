@@ -196,8 +196,15 @@ fn main() {
         // to be the one; this says which function, and it costs a
         // feature flag.
         let profiler = profiler();
+        let from = session_daw::frames::now();
         pan(&mut document, &panel, width, height, frames);
         report(profiler);
+        // The widget's own log of the run: its passes and what it drew.
+        let run = session_daw::frames::Summary::of(&session_daw::frames::since(from));
+        println!(
+            "  widget        paint p50 {:.2}ms p95 {:.2}ms   lanes {:.2}  titles {:.2}  prep {:.2}  commands {:.0}",
+            run.paint.median, run.paint.p95, run.lanes_ms, run.titles_ms, run.prep_ms, run.commands
+        );
         return;
     }
 

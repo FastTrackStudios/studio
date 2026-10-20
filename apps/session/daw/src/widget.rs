@@ -5504,12 +5504,20 @@ impl ArrangementWidget {
         };
 
         self.detail_seen.set(crate::wave_detail::generation());
+        let lanes_from = out.commands.len();
         let lanes = self.scene.replay_lanes(
             &mut out,
             view,
             Affine::translate((self.scene.tcp.width() - view.scroll_x, below))
                 * Affine::scale_non_uniform(view.pps, view.zoom_y),
         );
+        // The lanes' commands are cut to the view as they are replayed;
+        // only paths far past it need the screen's cut after.
+        let lanes_cut = if self.scene.take_lanes_wide() {
+            0..0
+        } else {
+            lanes_from..out.commands.len()
+        };
         spent.lanes = since(&mut mark);
         // An item being slipped, redrawn at the offset the drag has
         // reached. Immediately after the lanes and BEFORE the titles:
@@ -6052,7 +6060,7 @@ impl ArrangementWidget {
                 ],
             );
         }
-        crate::arrangement::cut_to_screen(&mut out, f64::from(width), f64::from(height));
+        crate::arrangement::cut_to_screen(&mut out, f64::from(width), f64::from(height), lanes_cut);
         out
     }
 }
