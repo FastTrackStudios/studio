@@ -2781,6 +2781,7 @@ pub fn hits_overlay(
                 .filter(|s| pieces.contains(&s.piece)),
         );
     }
+    lane_marks(painter, scene, view, (ox, oy), (rows, overlay), palette);
     for &(row, piece) in rows {
         let Some((y0, y1)) = marks_span(row) else {
             continue;
@@ -2857,6 +2858,66 @@ pub fn hits_overlay(
                     painter.fill(Fill::NonZero, Affine::IDENTITY, colour, None, &flag);
                 }
             }
+        }
+    }
+}
+
+/// On a row showing its lanes, each take's own hits on its lane — those
+/// of the row's pieces, where that lane has them: a thin line in the
+/// drum's colour, fainter than the edit's marks and with no flag, for
+/// they are only seen, not dragged. The lane that plays has the edit's.
+fn lane_marks(
+    painter: &mut impl PaintScene,
+    scene: &Arrangement,
+    view: Viewport,
+    (ox, oy): (f64, f64),
+    (rows, overlay): (&[(usize, usize)], &crate::hit_overlay::Overlay),
+    palette: &Palette,
+) {
+    let top = crate::ruler::ruler_h();
+    let pps = view.pps.max(f64::EPSILON);
+    let (from, to) = ((view.panel_w - ox) / pps, (view.width - ox) / pps);
+    let a = overlay.on_lanes.partition_point(|m| m.time < from);
+    let b = overlay.on_lanes.partition_point(|m| m.time <= to);
+    let shown = overlay.on_lanes.get(a..b.max(a)).unwrap_or_default();
+    if shown.is_empty() {
+        return;
+    }
+    let thin = vello::kurbo::Stroke::new(1.0);
+    for &(row, piece) in rows {
+        let (Some(track), Some(stack), Some((y, h))) = (
+            scene.lanes_shown(row),
+            scene.lane_stack(row),
+            scene.row_box(row),
+        ) else {
+            continue;
+        };
+        let playing = crate::lanes::playing(track);
+        let drum = overlay
+            .pieces
+            .get(piece)
+            .and_then(|name| kit_color(editor::kit::kit_role(name, &[])))
+            .unwrap_or(palette.text)
+            .multiply_alpha(0.55);
+        for m in shown.iter().filter(|m| m.piece == piece) {
+            if Some(m.lane) == playing || !stack.lanes().contains(&m.lane) {
+                continue;
+            }
+            let (b0, b1) = stack.band(m.lane);
+            let y0 = b0.mul_add(h, y).mul_add(view.zoom_y, oy).max(top);
+            let y1 = b1.mul_add(h, y).mul_add(view.zoom_y, oy).min(view.height);
+            if y1 <= y0 {
+                continue;
+            }
+            let foot = if m.ghost { f64::midpoint(y0, y1) } else { y1 };
+            let x = m.time.mul_add(view.pps, ox).round() + 0.5;
+            painter.stroke(
+                &thin,
+                Affine::IDENTITY,
+                drum,
+                None,
+                &vello::kurbo::Line::new((x, y0), (x, foot)),
+            );
         }
     }
 }

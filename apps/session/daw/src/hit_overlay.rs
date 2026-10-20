@@ -96,6 +96,23 @@ pub struct Overlay {
     pub kept: Vec<(f64, f64)>,
     /// The takes' ranks and notes.
     pub takes: TakeMarks,
+    /// Each piece's hits on the lanes of its first mic that do not play,
+    /// where each lane has them: drawn on a row showing its lanes, so
+    /// every take's hits are seen beside the edit's.
+    pub on_lanes: Vec<LaneMark>,
+}
+
+/// A hit on a take's lane, where that lane plays it.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct LaneMark {
+    /// Its piece: an index into [`Overlay::pieces`].
+    pub piece: usize,
+    /// The lane, as the piece's mics number them.
+    pub lane: u32,
+    /// Project seconds.
+    pub time: f64,
+    /// A ghost note: drawn short.
+    pub ghost: bool,
 }
 
 /// A take's rank or note where the song plays it ([`crate::take_rank`]).
@@ -331,6 +348,7 @@ mod tests {
             comps: Vec::new(),
             kept: Vec::new(),
             takes: crate::hit_overlay::TakeMarks::default(),
+            on_lanes: Vec::new(),
         };
         let times: Vec<f64> = overlay.between(1.5, 3.0).iter().map(|m| m.time).collect();
         assert_eq!(times, [2.0, 3.0]);

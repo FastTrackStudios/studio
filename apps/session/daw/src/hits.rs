@@ -2106,7 +2106,9 @@ pub fn overlay(
         .collect();
     let stretches = stretches(daw, project, &kit);
     let comps = comps(daw, project, &kit);
+    let on_lanes = lane_marks(daw, project, &kit, &pieces);
     crate::hit_overlay::Overlay {
+        on_lanes,
         pieces,
         tracks,
         marks,
@@ -2124,6 +2126,67 @@ pub fn overlay(
             ProjectContext::Current => crate::hit_overlay::TakeMarks::default(),
         },
     }
+}
+
+/// Each piece's hits on its first mic's lanes that do not play — its
+/// takes, and the comp where the edit plays — where each lane plays them:
+/// an item's markers from where it starts in its recording to where it
+/// ends, at its rate. `pieces` index them.
+fn lane_marks(
+    daw: &daw::standalone::Standalone,
+    project: &ProjectContext,
+    kit: &[KitPiece],
+    pieces: &[String],
+) -> Vec<crate::hit_overlay::LaneMark> {
+    let mut out = Vec::new();
+    for piece in kit {
+        let Some(index) = pieces.iter().position(|n| *n == piece.name) else {
+            continue;
+        };
+        let Some(mic) = piece.mics.first() else {
+            continue;
+        };
+        let Some(track) = Tracks::get(daw, project.clone(), TrackRef::Guid(mic.clone())) else {
+            continue;
+        };
+        let playing = crate::lanes::playing(&track);
+        for item in daw.get_items(project.clone(), TrackRef::Guid(mic.clone())) {
+            let lane = item.fixed_lane.unwrap_or(0);
+            if item.muted || Some(lane) == playing {
+                continue;
+            }
+            let Some(take) = daw.get_active_take(project.clone(), ItemRef::Guid(item.guid.clone()))
+            else {
+                continue;
+            };
+            let rate = if take.play_rate > 0.0 {
+                take.play_rate
+            } else {
+                1.0
+            };
+            let from = take.start_offset.as_seconds();
+            let to = item.length.as_seconds().mul_add(rate, from);
+            let start = item.position.as_seconds();
+            out.extend(
+                daw.get_take_markers(project.clone(), ItemRef::Guid(item.guid), TakeRef::Active)
+                    .into_iter()
+                    .filter_map(|m| {
+                        let h = m.hit.as_ref()?;
+                        let s = m.source_position_seconds;
+                        (h.piece == piece.name && s >= from && s < to).then(|| {
+                            crate::hit_overlay::LaneMark {
+                                piece: index,
+                                lane,
+                                time: start + (s - from) / rate,
+                                ghost: h.ghost,
+                            }
+                        })
+                    }),
+            );
+        }
+    }
+    out.sort_by(|a, b| a.time.total_cmp(&b.time));
+    out
 }
 
 /// Played this near its recorded speed, a stretch is not drawn.
