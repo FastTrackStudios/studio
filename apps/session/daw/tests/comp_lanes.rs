@@ -129,7 +129,7 @@ fn a_swipe_puts_exactly_that_stretch_of_the_lane_on_the_comp() {
         session_daw::comp::swipe(&daw, &project, std::slice::from_ref(inside), lane, span)
     };
     let said = swipe("2", (4.0, 6.0)).expect("comped");
-    assert_eq!(said.len(), 1, "{said:?}");
+    assert_eq!(said.said.len(), 1, "{said:?}");
 
     let comp = on_lane(&daw, &project, inside, COMP);
     assert_eq!(comp.len(), 3, "{comp:?}");
@@ -189,7 +189,7 @@ fn a_swipe_on_a_folder_comps_every_track_under_it_as_one_step() {
     let (project, drums, mics) = kit(&daw);
 
     let said = session_daw::comp::swipe(&daw, &project, &[drums], "2", (2.0, 3.5)).expect("comped");
-    assert_eq!(said.len(), 2, "both mics: {said:?}");
+    assert_eq!(said.said.len(), 2, "both mics: {said:?}");
     for mic in &mics {
         let comp = on_lane(&daw, &project, mic, COMP);
         assert_eq!(comp.len(), 3, "{comp:?}");
@@ -224,7 +224,7 @@ fn a_swipe_on_several_tracks_comps_each_once() {
         (1.0, 2.0),
     )
     .expect("comped");
-    assert_eq!(said.len(), 2, "each mic once: {said:?}");
+    assert_eq!(said.said.len(), 2, "each mic once: {said:?}");
     for mic in &mics {
         assert_eq!(on_lane(&daw, &project, mic, COMP).len(), 3, "{mic}");
     }
@@ -257,5 +257,111 @@ fn a_swipe_with_nothing_to_comp_is_refused() {
         on_lane(&daw, &project, &mics[0], COMP),
         [(0.0, 10.0, TAKE_1_AT)],
         "and nothing changed"
+    );
+}
+
+/// An item `at..at + length` on `lane` of `track`, `offset` into its
+/// recording.
+fn piece(
+    daw: &Standalone,
+    project: &ProjectContext,
+    track: &str,
+    lane: u32,
+    (at, length, offset): (f64, f64, f64),
+) {
+    let guid = Items::add_item(
+        daw,
+        project.clone(),
+        TrackRef::Guid(track.to_owned()),
+        PositionInSeconds::from_seconds(at),
+        Duration::from_seconds(length),
+    )
+    .expect("an item");
+    Items::set_fixed_lane(daw, project.clone(), ItemRef::Guid(guid.clone()), lane)
+        .expect("on its lane");
+    Takes::add_take(daw, project.clone(), ItemRef::Guid(guid.clone())).expect("its take");
+    Takes::set_start_offset(
+        daw,
+        project.clone(),
+        ItemRef::Guid(guid),
+        TakeRef::Active,
+        Duration::from_seconds(offset),
+    )
+    .expect("into its recording");
+}
+
+/// Where an EDIT slice played the recording from: far from both takes, so
+/// a slice the comp left behind shows.
+const EDITED_AT: f64 = 100.0;
+
+/// A kit edited as Session edits one: takes 1 and 2, its COMP (take 1),
+/// and an EDIT lane cut into slices (`EDITED_AT` on), playing.
+fn edited_kit(daw: &Standalone) -> (ProjectContext, String) {
+    const EDIT: u32 = 3;
+    let guid = daw.seed_project(ProjectInfo {
+        guid: "edited-kit".into(),
+        name: "Edited kit".into(),
+        path: String::new(),
+    });
+    let project = ProjectContext::Project(guid);
+    let mic = append(daw, &project, "Snare", 0);
+    let at = TrackRef::Guid(mic.clone());
+    Tracks::set_lane_count(daw, project.clone(), at.clone(), 4).expect("lanes");
+    for (lane, name) in [(TAKE_1, "1"), (TAKE_2, "2"), (COMP, "COMP"), (EDIT, "EDIT")] {
+        Tracks::set_lane_name(daw, project.clone(), at.clone(), lane, name).expect("named");
+    }
+    Tracks::set_lane_play_mask(daw, project.clone(), at, 1 << EDIT).expect("the edit plays");
+    item(daw, &project, &mic, TAKE_1, TAKE_1_AT);
+    item(daw, &project, &mic, TAKE_2, TAKE_2_AT);
+    item(daw, &project, &mic, COMP, TAKE_1_AT);
+    for (from, to) in [(0.0, 3.5), (3.5, 5.5), (5.5, 6.4), (6.4, 10.0)] {
+        piece(
+            daw,
+            &project,
+            &mic,
+            EDIT,
+            (from, to - from, EDITED_AT + from),
+        );
+    }
+    (project, mic)
+}
+
+/// A swipe on an edited kit lands on its edit too: the EDIT lane over the
+/// stretch made the new comp — out to the slices its ends fell in (3.5
+/// and 6.4 s), so nothing of the old edit plays on beside the new take —
+/// and says that stretch, for the quantize.
+#[test]
+fn a_swipe_on_an_edited_kit_lands_on_its_edit_out_to_its_seams() {
+    const EDIT: u32 = 3;
+    let daw = Standalone::new();
+    let (project, mic) = edited_kit(&daw);
+    let swiped =
+        session_daw::comp::swipe(&daw, &project, std::slice::from_ref(&mic), "2", (4.0, 6.0))
+            .expect("comped");
+    let (from, to) = swiped.edited.expect("the edit was made the comp");
+    assert!(
+        (from - 3.5).abs() < 1e-9 && (to - 6.4).abs() < 1e-9,
+        "{from}..{to}"
+    );
+    let edit = on_lane(&daw, &project, &mic, EDIT);
+    let old: Vec<_> = edit
+        .iter()
+        .filter(|i| i.2 >= EDITED_AT - 1e-9 && i.1 > 3.5 + 1e-6 && i.0 < 6.4 - 1e-6)
+        .collect();
+    assert!(old.is_empty(), "the old edit left there: {edit:?}");
+    // Take 2 from 4 s into its item, as the comp plays it.
+    assert!(
+        edit.iter()
+            .any(|i| (i.2 - (TAKE_2_AT + i.0)).abs() < 1e-6 && i.0 < 5.0 && i.1 > 5.0),
+        "take 2 on the edit: {edit:?}"
+    );
+    // Outside the reach, the edit as it was.
+    assert!(
+        edit.iter().any(|i| near(*i, (0.0, 3.5, EDITED_AT))),
+        "{edit:?}"
+    );
+    assert!(
+        edit.iter().any(|i| near(*i, (6.4, 10.0, EDITED_AT + 6.4))),
+        "{edit:?}"
     );
 }

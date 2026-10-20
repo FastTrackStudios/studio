@@ -76,6 +76,11 @@ pub struct Settings {
     /// put on its line, the rest moved with it — the snare in a breakdown,
     /// over the sixteenth kicks. None: the loudest.
     pub lead: Option<String>,
+    /// A comp onto the kit (a swipe, a take chosen or cycled, the best
+    /// takes) lands on its edit quantized: the edit over the stretch made
+    /// the new comp, then quantized there as a step of its own — one undo
+    /// takes the quantize off and leaves the comp.
+    pub quantize_comps: bool,
 }
 
 impl Default for Settings {
@@ -94,6 +99,7 @@ impl Default for Settings {
             stretch_gaps_ms: None,
             fills: Fills::Skip,
             lead: None,
+            quantize_comps: true,
         }
     }
 }
@@ -116,6 +122,7 @@ pub struct Patch {
     pub fills: Option<Fills>,
     /// A piece's name (`Snare`); empty: none, the loudest decides.
     pub lead: Option<String>,
+    pub quantize_comps: Option<bool>,
 }
 
 impl Settings {
@@ -150,6 +157,7 @@ impl Settings {
                 Some(piece) => Some(piece.to_owned()),
                 None => self.lead.clone(),
             },
+            quantize_comps: patch.quantize_comps.unwrap_or(self.quantize_comps),
         }
     }
 }

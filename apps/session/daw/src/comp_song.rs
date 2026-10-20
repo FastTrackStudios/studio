@@ -595,6 +595,9 @@ struct BestOut {
     phrases: u32,
     comped: Vec<ChoiceOut>,
     ops: u32,
+    /// The comped phrases quantized on the edit
+    /// ([`crate::comp::quantize_comped`]), its check included.
+    quantized: Option<Vec<crate::actions::QuantizeSpan>>,
 }
 
 #[derive(Facet)]
@@ -617,11 +620,21 @@ pub(crate) fn register(list: &ActionList) {
         // What is kept as comped is not chosen again.
         let kept = crate::comp_keep::kept(song.daw(), &song.context());
         let phrases = crate::comp_keep::outside(&phrases, &kept);
-        let done = comp_best(&song, &phrases, a.dry_run.unwrap_or(false))?;
+        let dry = a.dry_run.unwrap_or(false);
+        let done = comp_best(&song, &phrases, dry)?;
+        // Where the kit is edited, what was comped quantized there, as a
+        // step of its own.
+        let quantized = if dry || done.ops == 0 {
+            None
+        } else {
+            let comped = union(done.choices.iter().map(|c| (c.from, c.to)));
+            crate::comp::quantize_comped(song.daw(), &song.context(), &comped)?
+        };
         let count = |n: usize| u32::try_from(n).unwrap_or(u32::MAX);
         Ok(BestOut {
             phrases: count(done.phrases),
             ops: count(done.ops),
+            quantized,
             comped: done
                 .choices
                 .into_iter()

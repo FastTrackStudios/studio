@@ -131,6 +131,9 @@ struct Comped {
     takes: Vec<TakeRank>,
     /// The edit over the stretch made the new comp as recorded.
     edit_restored: bool,
+    /// The edit then quantized there ([`crate::comp::quantize_comped`]),
+    /// its check included.
+    quantized: Option<Vec<crate::actions::QuantizeSpan>>,
 }
 
 /// The drum MIDI over `from..to` as strikes on the kit's pieces (its
@@ -622,13 +625,14 @@ pub(crate) fn forget() {
 /// Comp the kit from `take` over `from..to` — each mic from its own lane
 /// holding its recording of the take, the mics it never recorded (of
 /// `versions`) silent there — and where it is edited, its edit there made
-/// the new comp as recorded. Whether the edit was.
+/// the new comp as recorded, then quantized ([`crate::comp::quantize_comped`]).
+/// Whether the edit was, and the quantize.
 fn comp_in(
     daw: &daw::standalone::Standalone,
     project: &ProjectContext,
     (take, versions): (&crate::hits::TakeVersion, &[crate::hits::TakeVersion]),
     (from, to): (f64, f64),
-) -> Result<bool, String> {
+) -> Result<(bool, Option<Vec<crate::actions::QuantizeSpan>>), String> {
     let mut stages = architect_telemetry::timing::Stages::start();
     let (from, to) = seamed(daw, project, take, (from, to));
     stages.mark("comp.seams_ms");
@@ -647,17 +651,23 @@ fn comp_in(
     let edited = comped
         .as_ref()
         .ok()
-        .map(|_| crate::comp::edit_from_comp(daw, project, &tracks, (from, to)))
+        .map(|_| crate::comp::edit_from_comp_to_seams(daw, project, &tracks, (from, to)))
         .transpose();
     stages.mark("comp.restore_ms");
     daw::service::Projects::end_undo_block(daw, project.clone(), &label, None);
     comped?;
-    let edited = edited?.is_some_and(|n| n > 0);
+    let restored = edited?.filter(|(n, _)| *n > 0).map(|(_, span)| span);
+    let edited = restored.is_some();
+    let quantized = match restored {
+        Some(span) => crate::comp::quantize_comped(daw, project, &[span])?,
+        None => None,
+    };
+    stages.mark("comp.quantize_ms");
     // Only the mics' items changed (their comp and edit lanes): the window
     // reads back those, as the engine's journal names them.
     crate::studio::request_resync_items();
     crate::hit_overlay::refresh();
-    Ok(edited)
+    Ok((edited, quantized))
 }
 
 /// The last stretch ranked, its ranking, its takes, and the take last
@@ -771,7 +781,8 @@ pub fn register(list: &ActionList) {
                 .iter()
                 .find(|v| v.pass == next)
                 .ok_or("the take went")?;
-            let edit_restored = comp_in(daw, &project, (version, &versions), (from, to))?;
+            let (edit_restored, quantized) =
+                comp_in(daw, &project, (version, &versions), (from, to))?;
             now_comped((from, to), &next);
             stages.mark("comp.comp_ms");
             out.push(Comped {
@@ -780,6 +791,7 @@ pub fn register(list: &ActionList) {
                 take: next,
                 takes,
                 edit_restored,
+                quantized,
             });
         }
         Ok(out)
@@ -807,7 +819,8 @@ pub fn register(list: &ActionList) {
                     version.pass
                 ));
             }
-            let edit_restored = comp_in(daw, &project, (version, &versions), (from, to))?;
+            let (edit_restored, quantized) =
+                comp_in(daw, &project, (version, &versions), (from, to))?;
             now_comped((from, to), &version.pass);
             out.push(Comped {
                 from,
@@ -815,6 +828,7 @@ pub fn register(list: &ActionList) {
                 take: version.pass.clone(),
                 takes,
                 edit_restored,
+                quantized,
             });
         }
         Ok(out)

@@ -50,6 +50,10 @@ pub fn comp_lane_of(
 ///
 /// More than one track: a track and its media-edit group, swiped as one.
 ///
+/// Where a track is edited (its `EDIT` lane), the edit over the stretch is
+/// made the new comp as recorded, in the same step ([`edit_from_comp`]):
+/// what is swiped is what plays. [`quantize_comped`] then quantizes it.
+///
 /// # Errors
 ///
 /// An empty or backwards stretch; a track that is not there; none of them
@@ -61,7 +65,7 @@ pub fn swipe(
     tracks: &[String],
     lane: &str,
     (from, to): (f64, f64),
-) -> Result<Vec<String>, String> {
+) -> Result<Swiped, String> {
     if !(from.is_finite() && to.is_finite() && to - from > GRAIN) {
         return Err(format!("nothing to comp between {from} and {to} s"));
     }
@@ -107,6 +111,7 @@ pub fn swipe(
     daw::service::Projects::begin_undo_block(daw, project.clone(), &label);
     let mut said = Vec::new();
     let mut refused = None;
+    let comped: Vec<String> = plans.iter().map(|(t, ..)| t.guid.clone()).collect();
     for (target, source, comp) in plans {
         let path = crate::gain_stage::path_of(target, &by_guid).join("/");
         match comp_track(daw, project, target, (source, comp), (from, to)) {
@@ -121,8 +126,130 @@ pub fn swipe(
             }
         }
     }
+    let mut edited = None;
+    if refused.is_none() {
+        match edit_from_comp_to_seams(daw, project, &comped, (from, to)) {
+            Ok((0, _)) => {}
+            Ok((n, (a, b))) => {
+                said.push(format!(
+                    "the edit over {a:.3}–{b:.3} s made the new comp on {n} tracks"
+                ));
+                edited = Some((a, b));
+            }
+            Err(e) => refused = Some(e),
+        }
+    }
     daw::service::Projects::end_undo_block(daw, project.clone(), &label, None);
-    refused.map_or(Ok(said), Err)
+    refused.map_or(Ok(Swiped { said, edited }), Err)
+}
+
+/// What a swipe did: track by track, and where the kit is edited, the
+/// stretch its edit was made the new comp over — out to the edit's seams
+/// ([`edit_from_comp_to_seams`]), what to quantize.
+#[derive(Debug)]
+pub struct Swiped {
+    pub said: Vec<String>,
+    pub edited: Option<(f64, f64)>,
+}
+
+/// How far an end of a comp's stretch is moved out to meet a seam of the
+/// edit, at most, seconds: further, the EDIT item there is one long
+/// stretch never cut, which is the comp as recorded either side anyway.
+const SEAM_REACH: f64 = 2.0;
+
+/// `(from, to)` moved out to the edit's own seams: each end out to where
+/// the EDIT slice holding it starts or ends (`slices`, every edited mic's),
+/// no further than [`SEAM_REACH`].
+///
+/// A comp's end inside an edited slice cut it there, and the rest of it —
+/// the take that played before, moved where the quantize sent it — played
+/// on beside the new take: a sliver of one take between two of another,
+/// an attack heard twice. Out to the seam, the slice is the comp again
+/// and quantized with the rest.
+#[must_use]
+fn to_edit_seams(slices: &[(f64, f64)], (from, to): (f64, f64)) -> (f64, f64) {
+    let from = slices
+        .iter()
+        .filter(|s| s.0 < from && from < s.1 && from - s.0 <= SEAM_REACH)
+        .map(|s| s.0)
+        .fold(from, f64::min);
+    let to = slices
+        .iter()
+        .filter(|s| s.0 < to && to < s.1 && s.1 - to <= SEAM_REACH)
+        .map(|s| s.1)
+        .fold(to, f64::max);
+    (from, to)
+}
+
+/// [`edit_from_comp`] over `(from, to)` moved out to the edit's seams
+/// ([`to_edit_seams`]). How many tracks, and the stretch it covered.
+///
+/// # Errors
+///
+/// The engine refusing an edit.
+pub fn edit_from_comp_to_seams(
+    daw: &daw::standalone::Standalone,
+    project: &ProjectContext,
+    tracks: &[String],
+    (from, to): (f64, f64),
+) -> Result<(usize, (f64, f64)), String> {
+    use crate::drum_lanes::{EDIT, lane_named};
+    let all = Tracks::all(daw, project.clone());
+    let slices: Vec<(f64, f64)> = all
+        .iter()
+        .filter(|t| tracks.contains(&t.guid))
+        .filter_map(|t| Some((t, lane_named(t, EDIT)?)))
+        .flat_map(|(t, edit)| {
+            daw.get_items(project.clone(), TrackRef::Guid(t.guid.clone()))
+                .into_iter()
+                .filter(move |i| i.fixed_lane.unwrap_or(0) == edit)
+                .map(|i| span(&i))
+        })
+        .collect();
+    let span = to_edit_seams(&slices, (from, to));
+    edit_from_comp(daw, project, tracks, span).map(|n| (n, span))
+}
+
+/// A comp onto the kit put on its edit quantized: QUANTIZE over each of
+/// `spans`, brief, as one undo step of its own after the comp's — one
+/// undo takes the quantize off and leaves the comp. Only while the drum
+/// edit settings say so (`quantize_comps`, on unless turned off) and the
+/// kit has hit markers to go by; `None` otherwise, and for no spans.
+///
+/// # Errors
+///
+/// The quantize refusing; the comp stands.
+pub(crate) fn quantize_comped(
+    daw: &daw::standalone::Standalone,
+    project: &ProjectContext,
+    spans: &[(f64, f64)],
+) -> Result<Option<Vec<crate::actions::QuantizeSpan>>, String> {
+    if spans.is_empty()
+        || !crate::drum_settings::current().quantize_comps
+        || crate::hits::kit_from_markers(daw, project).is_none()
+    {
+        return Ok(None);
+    }
+    crate::actions::quantize(crate::actions::QuantizeArg {
+        with: crate::drum_settings::Patch::default(),
+        sections: Vec::new(),
+        from: None,
+        to: None,
+        dry_run: None,
+        lock: None,
+        brief: Some(true),
+        plan: spans
+            .iter()
+            .map(|&(from, to)| crate::actions::PlanStep {
+                with: crate::drum_settings::Patch::default(),
+                sections: Vec::new(),
+                from: Some(from),
+                to: Some(to),
+                lock: None,
+            })
+            .collect(),
+    })
+    .map(Some)
 }
 
 /// [`swipe`] with each track's own source lane: `plans` is `(track GUID,
@@ -483,6 +610,9 @@ struct SwipeArg {
 struct SwipeOut {
     /// `path: lane N over a–b s onto lane COMP (n pieces)`, each track.
     tracks: Vec<String>,
+    /// Where the kit is edited: the quantize of the stretch
+    /// ([`quantize_comped`]), its check included.
+    quantized: Option<Vec<crate::actions::QuantizeSpan>>,
 }
 
 /// Which track's lanes.
@@ -508,10 +638,16 @@ pub(crate) fn register(list: &architect::action::ActionList) {
             .chain(&a.with)
             .map(|t| crate::actions::resolve(daw, &project, t))
             .collect::<Result<Vec<String>, String>>()?;
-        let tracks = swipe(daw, &project, &guids, &a.lane, (a.start, a.end))?;
+        let swiped = swipe(daw, &project, &guids, &a.lane, (a.start, a.end))?;
+        let quantized = match swiped.edited {
+            Some(span) => quantize_comped(daw, &project, &[span])?,
+            None => None,
+        };
+        let tracks = swiped.said;
         crate::studio::request_resync();
+        crate::hit_overlay::refresh();
         crate::actions::list().changed("lanes", "a lane was comped onto the comp");
-        Ok(SwipeOut { tracks })
+        Ok(SwipeOut { tracks, quantized })
     });
     list.register(&SHOW_LANES, Effect::Mutating, |a: ShowArg| {
         let (daw, project) = crate::actions::song()?;
@@ -536,6 +672,30 @@ pub(crate) fn register(list: &architect::action::ActionList) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Bar 174: a swipe ending at 262.300 inside the edited slice
+    /// 262.209–262.345 reaches out to its end, so none of the take before
+    /// plays on past it; its start, on a seam already, stays.
+    #[test]
+    fn a_comp_end_inside_an_edited_slice_reaches_its_seam() {
+        let slices = [
+            (261.3712, 261.4638),
+            (261.4588, 261.5575),
+            (262.2087, 262.3445),
+        ];
+        assert_eq!(
+            to_edit_seams(&slices, (261.40, 262.300)),
+            (261.3712, 262.3445)
+        );
+        assert_eq!(to_edit_seams(&slices, (261.0, 261.2)), (261.0, 261.2));
+    }
+
+    /// One long EDIT item, never cut: the comp as recorded either side,
+    /// left where the call says.
+    #[test]
+    fn an_uncut_edit_is_not_reached_across() {
+        assert_eq!(to_edit_seams(&[(0.0, 120.0)], (60.0, 61.0)), (60.0, 61.0));
+    }
 
     fn area(comp: u32, source: u32, start: f64, end: f64) -> daw_proto::CompArea {
         daw_proto::CompArea {
