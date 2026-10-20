@@ -220,6 +220,7 @@ fn Settings() -> Element {
                 },
             }
         }
+        RenderAheadSettings {}
         if let Some(crate::touch::Touch(on)) = touch {
             Heading { title: "Touch" }
             Switch {
@@ -228,6 +229,58 @@ fn Settings() -> Element {
                 detail: "Sized for a finger: bigger rows, strips and grips; a drag scrolls.",
             }
         }
+    }
+}
+
+/// The engine's render ahead: on or off, and how far. A page has no
+/// engine of its own: nothing to set.
+#[component]
+fn RenderAheadSettings() -> Element {
+    #[cfg(feature = "native")]
+    {
+        let mut now = use_signal(crate::render_ahead::current);
+        let r = now();
+        rsx! {
+            Heading { title: "Engine" }
+            Toggle {
+                on: r.on,
+                label: "Render ahead",
+                detail: "Render the tracks nobody is playing live ahead of the playhead, on a thread of their own: a busy machine eats into that time, not into the audio's deadline, and a session too big for one block still plays. Armed, monitored and played tracks, and a plugin open, stay live. Edits are heard at once either way.",
+                on_change: move |on: bool| {
+                    now.set(crate::render_ahead::set(crate::render_ahead::RenderAhead { on, ..r }));
+                },
+            }
+            if r.on {
+                div {
+                    style: "display:flex; align-items:center; gap:8px; padding:10px 18px; border-bottom:1px solid {RULE};",
+                    span { style: "flex:1; color:{DIM}; font-size:12px;", "How far ahead" }
+                    for ms in crate::render_ahead::DEPTHS {
+                        {
+                            let on = r.depth_ms == ms;
+                            let (bg, ink) = if on { (RAISED, TEXT) } else { ("transparent", DIM) };
+                            rsx! {
+                                button {
+                                    key: "{ms}",
+                                    style: "height:30px; padding:0 12px; border-radius:15px; border:1px solid {RULE}; \
+                                            background:{bg}; color:{ink}; font-family:inherit; font-size:12px; cursor:pointer;",
+                                    onclick: move |_| {
+                                        now.set(crate::render_ahead::set(crate::render_ahead::RenderAhead {
+                                            depth_ms: ms,
+                                            ..r
+                                        }));
+                                    },
+                                    "{ms} ms"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    #[cfg(not(feature = "native"))]
+    {
+        rsx! {}
     }
 }
 
