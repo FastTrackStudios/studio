@@ -52,16 +52,29 @@ impl Swipe {
     #[must_use]
     pub fn comp_args(&self, pps: f64) -> Option<String> {
         let (start, end) = self.span();
-        ((end - start) * pps >= SLOP).then(|| {
-            serde_json::json!({
-                "track": self.track,
-                "with": self.with,
-                "lane": self.called,
-                "start": start,
-                "end": end,
-            })
-            .to_string()
+        ((end - start) * pps >= SLOP).then(|| self.args_over((start, end)))
+    }
+
+    /// Whether it was a click, not a swipe: narrower than [`SLOP`] at
+    /// `pps`.
+    #[must_use]
+    pub fn is_click(&self, pps: f64) -> bool {
+        let (start, end) = self.span();
+        (end - start) * pps < SLOP
+    }
+
+    /// `TRACK_COMP_FROM_LANE`'s arguments for this lane over `start..end`
+    /// — a click comps its lane over a stretch picked before.
+    #[must_use]
+    pub fn args_over(&self, (start, end): (f64, f64)) -> String {
+        serde_json::json!({
+            "track": self.track,
+            "with": self.with,
+            "lane": self.called,
+            "start": start,
+            "end": end,
         })
+        .to_string()
     }
 }
 
@@ -297,5 +310,66 @@ mod tests {
         assert_eq!(parsed["end"], 6.0);
         let click = Swipe { to: 6.01, ..swipe };
         assert!(click.comp_args(100.0).is_none(), "a pixel: a click");
+    }
+}
+
+/// The stretch a click at `t` comps, or T cycles with nothing selected:
+/// the picked stretches (`picked`) when `t` is in one — all of them, so a
+/// stretch swiped once is swapped whole, take after take — else the run
+/// of one take the comp plays at `t` (`comps`, in time order), within the
+/// song's section there (`sections`); with neither, the section alone.
+#[must_use]
+pub fn stretches_at(
+    picked: &[(f64, f64)],
+    comps: &[(f64, f64)],
+    sections: &[(f64, f64)],
+    t: f64,
+) -> Vec<(f64, f64)> {
+    let holds = |s: &(f64, f64)| s.0 <= t && t < s.1;
+    if picked.iter().any(holds) {
+        return picked.to_vec();
+    }
+    let section = sections.iter().copied().find(holds);
+    let run = comps.iter().copied().find(holds);
+    match (run, section) {
+        (Some(r), Some(s)) => {
+            let (a, b) = (r.0.max(s.0), r.1.min(s.1));
+            if b > a { vec![(a, b)] } else { vec![s] }
+        }
+        (Some(r), None) => vec![r],
+        (None, Some(s)) => vec![s],
+        (None, None) => Vec::new(),
+    }
+}
+
+#[cfg(test)]
+mod stretch_tests {
+    use super::stretches_at;
+
+    /// Swiped over bars 42–43: a click in it takes all of it again.
+    #[test]
+    fn a_click_in_a_picked_stretch_takes_the_picked_ones() {
+        let picked = [(61.5, 64.4)];
+        assert_eq!(stretches_at(&picked, &[], &[], 62.0), vec![(61.5, 64.4)]);
+    }
+
+    /// Out of it: the take the comp plays there, within its section.
+    #[test]
+    fn elsewhere_the_comped_run_within_its_section() {
+        let comps = [(0.0, 100.0), (100.0, 110.0)];
+        let sections = [(90.0, 102.0), (102.0, 120.0)];
+        assert_eq!(
+            stretches_at(&[(61.5, 64.4)], &comps, &sections, 95.0),
+            vec![(90.0, 100.0)]
+        );
+        assert_eq!(
+            stretches_at(&[], &comps, &sections, 105.0),
+            vec![(102.0, 110.0)]
+        );
+        assert_eq!(
+            stretches_at(&[], &[], &sections, 105.0),
+            vec![(102.0, 120.0)]
+        );
+        assert!(stretches_at(&[], &[], &[], 5.0).is_empty());
     }
 }

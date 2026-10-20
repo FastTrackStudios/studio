@@ -343,21 +343,24 @@ fn run_hit_action(id: &'static str, args: String) {
     let _ = (id, args);
 }
 
-/// Run a swipe's comp (`TRACK_COMP_FROM_LANE`) on the Action List, off the
-/// window's thread — the same action a model runs, which asks for the song
-/// to be read back once it is done.
-fn run_comp(args: String) {
+/// Run a swipe's comps (`TRACK_COMP_FROM_LANE`, each stretch's arguments)
+/// on the Action List, off the window's thread — the same action a model
+/// runs, which asks for the song to be read back once it is done.
+fn run_comp(each: Vec<String>) {
     #[cfg(feature = "native")]
     if let Some(runtime) = crate::open::runtime() {
+        // In turn: each stretch's comp and quantize before the next's.
         runtime.spawn_blocking(move || {
             let id = crate::comp::SWIPE_COMP.id;
-            if let Err(e) = crate::actions::list().run_json(id, args.as_bytes()) {
-                tracing::warn!(comp.action = id, comp.error = %e, "a swipe comp was refused");
+            for args in each {
+                if let Err(e) = crate::actions::list().run_json(id, args.as_bytes()) {
+                    tracing::warn!(comp.action = id, comp.error = %e, "a swipe comp was refused");
+                }
             }
         });
     }
     #[cfg(not(feature = "native"))]
-    let _ = args;
+    let _ = each;
 }
 
 /// A knob under the pointer, mid-turn.
@@ -1461,8 +1464,11 @@ impl ArrangementWidget {
     /// that is not the comp, on a row showing its lanes, followed; let go,
     /// the stretch comped onto the comp lane (`TRACK_COMP_FROM_LANE`) —
     /// on a shut folder's row every track under it with lanes — behind the
-    /// window, as a model's comp is, the song read back after. A modifier
-    /// leaves the press to the editor (select, move), as on any row.
+    /// window, as a model's comp is, the song read back after; the stretch
+    /// is picked. A click on a take comps it over the picked stretch it is
+    /// in (else the comp's run of one take there, within its section). A
+    /// modifier leaves the press to the editor (select, move), as on any
+    /// row.
     fn swipe_gesture(&mut self, event: &UiEvent) -> bool {
         match event {
             UiEvent::PointerDown(e)
@@ -1494,8 +1500,18 @@ impl ArrangementWidget {
                 };
                 let view = self.viewport(self.size.0, self.size.1);
                 swipe.to = self.seconds_at(f64::from(e.coords.client_x), view);
-                if let Some(args) = swipe.comp_args(view.pps) {
-                    run_comp(args);
+                // A swipe comps its stretch and picks it; a click comps its
+                // lane over the stretch picked there (else the take's run
+                // under it), so a stretch swiped once is tried take after
+                // take with a click on each.
+                let stretches = if swipe.is_click(view.pps) {
+                    self.stretches_at(swipe.from)
+                } else {
+                    vec![swipe.span()]
+                };
+                if !stretches.is_empty() {
+                    run_comp(stretches.iter().map(|&s| swipe.args_over(s)).collect());
+                    self.comp_picked = stretches;
                 }
                 true
             }
@@ -1959,6 +1975,25 @@ impl ArrangementWidget {
         }
     }
 
+    /// Where the mouse is on the timeline, seconds.
+    fn mouse_time(&self) -> Option<f64> {
+        let (x, _) = self.mouse_at?;
+        let view = self.viewport(self.size.0, self.size.1);
+        Some(self.seconds_at(x, view))
+    }
+
+    /// The stretches a click on a take at `t` comps, or T cycles with
+    /// nothing selected ([`crate::swipe::stretches_at`]): the picked ones
+    /// when `t` is in one, else the run of one take the comp plays there,
+    /// within its section.
+    fn stretches_at(&self, t: f64) -> Vec<(f64, f64)> {
+        let comps: Vec<(f64, f64)> = crate::hit_overlay::current()
+            .map(|h| h.comps.iter().map(|c| (c.start, c.end)).collect())
+            .unwrap_or_default();
+        let sections: Vec<(f64, f64)> = self.sections.iter().map(|s| (s.start, s.end)).collect();
+        crate::swipe::stretches_at(&self.comp_picked, &comps, &sections, t)
+    }
+
     /// The kit's take the comp plays at `t`, by its pass.
     fn comp_take_at(t: f64) -> Option<RankOn> {
         let hits = crate::hit_overlay::current()?;
@@ -2173,8 +2208,21 @@ impl ArrangementWidget {
         }
     }
 
-    fn comp_cycle(&self, by: i32) -> bool {
-        let scope = self.comp_scope();
+    /// T / Shift+T: the next (or the take before) in the ranking comped
+    /// over the selection — with nothing selected, over the stretch under
+    /// the mouse ([`Self::stretches_at`]), which is picked so T again, or
+    /// a click on a take, works on the same stretch.
+    fn comp_cycle(&mut self, by: i32) -> bool {
+        let mut scope = self.comp_scope();
+        if scope.merged().is_empty()
+            && let Some(t) = self.mouse_time()
+        {
+            let under = self.stretches_at(t);
+            if !under.is_empty() {
+                self.comp_picked.clone_from(&under);
+                scope = self.comp_scope();
+            }
+        }
         if scope.merged().is_empty() {
             *self
                 .staged
@@ -3665,6 +3713,11 @@ impl ArrangementWidget {
             if action == crate::keys::Action::LevelDrums {
                 handled |= self.level_drums();
                 continue;
+            }
+            // Escape lets the picked comp stretch go too, and goes on to
+            // clear the editor's selection.
+            if action == crate::keys::Action::ClearSelection {
+                self.comp_picked.clear();
             }
             if let crate::keys::Action::CompCycle(by) = action {
                 handled |= self.comp_cycle(by);
@@ -6304,6 +6357,7 @@ mod tests {
             comps: Vec::new(),
             kept: Vec::new(),
             takes: crate::hit_overlay::TakeMarks::default(),
+            on_lanes: Vec::new(),
         });
         widget
     }
