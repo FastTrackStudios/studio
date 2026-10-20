@@ -429,6 +429,10 @@ fn reorder_behavior_to_reaper(behavior: ProtoReorderTracksBehavior) -> ReorderTr
 /// [`set_tcp_height_on_main_thread`] writes to hand a track back to
 /// REAPER — so zero becomes `None` rather than a track nought pixels
 /// tall. What the default then IS belongs to whoever draws the panel.
+/// REAPER's `I_PERFFLAGS` bit that keeps a track out of anticipative FX:
+/// rendered live, always.
+const NO_ANTICIPATIVE_FX: u32 = 2;
+
 pub(crate) fn tcp_height(track: &reaper_high::Track) -> Option<u32> {
     let raw = track.raw().ok()?;
     let medium = ReaperHigh::get().medium_reaper();
@@ -787,6 +791,48 @@ impl Tracks for crate::Reaper {
             GangBehavior::DenyGang,
             GroupingBehavior::PreventGrouping,
         );
+        Ok(())
+    }
+
+    fn render_live(&self, project: ProjectContext, track: TrackRef) -> bool {
+        let Some(raw) = resolve_project(&project)
+            .and_then(|proj| resolve_track(&proj, &track))
+            .and_then(|t| t.raw().ok())
+        else {
+            return false;
+        };
+        let flags = unsafe {
+            ReaperHigh::get()
+                .medium_reaper()
+                .get_media_track_info_value(raw, TrackAttributeKey::PerfFlags)
+        };
+        (flags as u32) & NO_ANTICIPATIVE_FX != 0
+    }
+
+    fn set_render_live(
+        &self,
+        project: ProjectContext,
+        track: TrackRef,
+        live: bool,
+    ) -> DawResult<()> {
+        let proj = resolve_project(&project).ok_or_else(not_found_proj)?;
+        let t = resolve_track(&proj, &track).ok_or_else(not_found_track)?;
+        let raw = t.raw().map_err(|_| not_found_track())?;
+        let medium = ReaperHigh::get().medium_reaper();
+        let flags =
+            unsafe { medium.get_media_track_info_value(raw, TrackAttributeKey::PerfFlags) } as u32;
+        let flags = if live {
+            flags | NO_ANTICIPATIVE_FX
+        } else {
+            flags & !NO_ANTICIPATIVE_FX
+        };
+        unsafe {
+            medium
+                .set_media_track_info_value(raw, TrackAttributeKey::PerfFlags, f64::from(flags))
+                .map_err(|err| {
+                    DawError::operation_failed(format!("set perf flags failed: {err}"))
+                })?;
+        }
         Ok(())
     }
 

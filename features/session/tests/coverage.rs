@@ -126,6 +126,7 @@ fn table() -> Vec<(&'static str, &'static str, &'static str)> {
         parent_send_enabled: "parent_send (the same as the track's)",
         tcp_height_pixels: "height (0: none)",
         comping: "comp.record, comp.lane, comp.last, comp.areas",
+        perf_flags: "the project file's PERF line (REAPER I_PERFFLAGS): this machine's performance choice, not the doc's",
     }));
     all.extend(homes!(ItemEntry { item: "see Item" }));
     all.extend(homes!(Item {

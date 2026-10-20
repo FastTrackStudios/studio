@@ -249,6 +249,8 @@ pub mod reference;
 #[cfg(feature = "native")]
 pub mod reference_play;
 pub mod rename;
+#[cfg(feature = "native")]
+pub mod render_ahead;
 pub mod routes;
 pub mod row;
 pub mod ruler;
