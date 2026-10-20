@@ -361,7 +361,7 @@ version = "1.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "40c48f72fd53cd289104fc64099abca73db4166ad86ea0b4341abe65af83dadc"
 dependencies = [
- "windows-sys 0.61.2",
+ "windows-sys 0.60.2",
 ]
 
 [[package]]
@@ -372,7 +372,7 @@ checksum = "291e6a250ff86cd4a820112fb8898808a366d8f9f58ce16d1f538353ad55747d"
 dependencies = [
  "anstyle",
  "once_cell_polyfill",
- "windows-sys 0.61.2",
+ "windows-sys 0.60.2",
 ]
 
 [[package]]
@@ -865,7 +865,7 @@ dependencies = [
 [[package]]
 name = "architect"
 version = "0.1.0"
-source = "git+https://www.github.com/FastTrackStudios/architect?branch=action-list#b00bb69e447c800bb43e493557a18e9e9403251c"
+source = "git+https://www.github.com/FastTrackStudios/architect?branch=action-list#fc4db34515d7eacf8f4aa2593a17655938a3a139"
 dependencies = [
  "architect-action-derive",
  "architect-atom",
@@ -897,7 +897,7 @@ dependencies = [
 [[package]]
 name = "architect-action-derive"
 version = "0.1.0"
-source = "git+https://www.github.com/FastTrackStudios/architect?branch=action-list#b00bb69e447c800bb43e493557a18e9e9403251c"
+source = "git+https://www.github.com/FastTrackStudios/architect?branch=action-list#fc4db34515d7eacf8f4aa2593a17655938a3a139"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -907,7 +907,7 @@ dependencies = [
 [[package]]
 name = "architect-atom"
 version = "0.1.0"
-source = "git+https://www.github.com/FastTrackStudios/architect?branch=action-list#b00bb69e447c800bb43e493557a18e9e9403251c"
+source = "git+https://www.github.com/FastTrackStudios/architect?branch=action-list#fc4db34515d7eacf8f4aa2593a17655938a3a139"
 dependencies = [
  "dioxus",
 ]
@@ -915,7 +915,7 @@ dependencies = [
 [[package]]
 name = "architect-derive"
 version = "0.1.0"
-source = "git+https://www.github.com/FastTrackStudios/architect?branch=action-list#b00bb69e447c800bb43e493557a18e9e9403251c"
+source = "git+https://www.github.com/FastTrackStudios/architect?branch=action-list#fc4db34515d7eacf8f4aa2593a17655938a3a139"
 dependencies = [
  "heck 0.5.0",
  "proc-macro2",
@@ -926,7 +926,7 @@ dependencies = [
 [[package]]
 name = "architect-launcher-core"
 version = "0.1.0"
-source = "git+https://www.github.com/FastTrackStudios/architect?branch=action-list#b00bb69e447c800bb43e493557a18e9e9403251c"
+source = "git+https://www.github.com/FastTrackStudios/architect?branch=action-list#fc4db34515d7eacf8f4aa2593a17655938a3a139"
 dependencies = [
  "chrono",
  "facet",
@@ -942,7 +942,7 @@ dependencies = [
 [[package]]
 name = "architect-launcher-providers"
 version = "0.1.0"
-source = "git+https://www.github.com/FastTrackStudios/architect?branch=action-list#b00bb69e447c800bb43e493557a18e9e9403251c"
+source = "git+https://www.github.com/FastTrackStudios/architect?branch=action-list#fc4db34515d7eacf8f4aa2593a17655938a3a139"
 dependencies = [
  "architect-launcher-core",
  "serde",
@@ -954,7 +954,7 @@ dependencies = [
 [[package]]
 name = "architect-launcher-ui"
 version = "0.1.0"
-source = "git+https://www.github.com/FastTrackStudios/architect?branch=action-list#b00bb69e447c800bb43e493557a18e9e9403251c"
+source = "git+https://www.github.com/FastTrackStudios/architect?branch=action-list#fc4db34515d7eacf8f4aa2593a17655938a3a139"
 dependencies = [
  "architect-launcher-core",
  "architect-ui",
@@ -966,7 +966,7 @@ dependencies = [
 [[package]]
 name = "architect-mcp"
 version = "0.1.0"
-source = "git+https://www.github.com/FastTrackStudios/architect?branch=action-list#b00bb69e447c800bb43e493557a18e9e9403251c"
+source = "git+https://www.github.com/FastTrackStudios/architect?branch=action-list#fc4db34515d7eacf8f4aa2593a17655938a3a139"
 dependencies = [
  "architect",
  "axum",
@@ -977,7 +977,7 @@ dependencies = [
 [[package]]
 name = "architect-permissions"
 version = "0.1.0"
-source = "git+https://www.github.com/FastTrackStudios/architect?branch=action-list#b00bb69e447c800bb43e493557a18e9e9403251c"
+source = "git+https://www.github.com/FastTrackStudios/architect?branch=action-list#fc4db34515d7eacf8f4aa2593a17655938a3a139"
 dependencies = [
  "serde",
  "serde_json",
@@ -987,7 +987,7 @@ dependencies = [
 [[package]]
 name = "architect-rpc-derive"
 version = "0.1.0"
-source = "git+https://www.github.com/FastTrackStudios/architect?branch=action-list#b00bb69e447c800bb43e493557a18e9e9403251c"
+source = "git+https://www.github.com/FastTrackStudios/architect?branch=action-list#fc4db34515d7eacf8f4aa2593a17655938a3a139"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -997,7 +997,7 @@ dependencies = [
 [[package]]
 name = "architect-story-core"
 version = "0.1.0"
-source = "git+https://www.github.com/FastTrackStudios/architect?branch=action-list#b00bb69e447c800bb43e493557a18e9e9403251c"
+source = "git+https://www.github.com/FastTrackStudios/architect?branch=action-list#fc4db34515d7eacf8f4aa2593a17655938a3a139"
 dependencies = [
  "linkme",
 ]
@@ -1005,7 +1005,7 @@ dependencies = [
 [[package]]
 name = "architect-story-macros"
 version = "0.1.0"
-source = "git+https://www.github.com/FastTrackStudios/architect?branch=action-list#b00bb69e447c800bb43e493557a18e9e9403251c"
+source = "git+https://www.github.com/FastTrackStudios/architect?branch=action-list#fc4db34515d7eacf8f4aa2593a17655938a3a139"
 dependencies = [
  "heck 0.5.0",
  "proc-macro2",
@@ -1016,7 +1016,7 @@ dependencies = [
 [[package]]
 name = "architect-story-runtime"
 version = "0.1.0"
-source = "git+https://www.github.com/FastTrackStudios/architect?branch=action-list#b00bb69e447c800bb43e493557a18e9e9403251c"
+source = "git+https://www.github.com/FastTrackStudios/architect?branch=action-list#fc4db34515d7eacf8f4aa2593a17655938a3a139"
 dependencies = [
  "architect-story-core",
  "architect-story-macros",
@@ -1027,7 +1027,7 @@ dependencies = [
 [[package]]
 name = "architect-telemetry"
 version = "0.1.0"
-source = "git+https://www.github.com/FastTrackStudios/architect?branch=action-list#b00bb69e447c800bb43e493557a18e9e9403251c"
+source = "git+https://www.github.com/FastTrackStudios/architect?branch=action-list#fc4db34515d7eacf8f4aa2593a17655938a3a139"
 dependencies = [
  "opentelemetry",
  "opentelemetry-appender-tracing",
@@ -1043,7 +1043,7 @@ dependencies = [
 [[package]]
 name = "architect-ui"
 version = "0.1.0"
-source = "git+https://www.github.com/FastTrackStudios/architect?branch=action-list#b00bb69e447c800bb43e493557a18e9e9403251c"
+source = "git+https://www.github.com/FastTrackStudios/architect?branch=action-list#fc4db34515d7eacf8f4aa2593a17655938a3a139"
 dependencies = [
  "architect-story-runtime",
  "chrono",
@@ -1525,7 +1525,7 @@ dependencies = [
 [[package]]
 name = "auth-client"
 version = "0.1.0"
-source = "git+https://www.github.com/FastTrackStudios/architect?branch=action-list#b00bb69e447c800bb43e493557a18e9e9403251c"
+source = "git+https://www.github.com/FastTrackStudios/architect?branch=action-list#fc4db34515d7eacf8f4aa2593a17655938a3a139"
 dependencies = [
  "base64 0.22.1",
  "serde",
@@ -1841,7 +1841,7 @@ dependencies = [
  "bitflags 2.13.1",
  "cexpr",
  "clang-sys",
- "itertools 0.12.1",
+ "itertools 0.10.5",
  "lazy_static",
  "lazycell",
  "log",
@@ -2891,7 +2891,7 @@ checksum = "af491d569909a7e4dee0ad7db7f5341fef5c614d5b8ec8cf765732aba3cff681"
 dependencies = [
  "serde",
  "termcolor",
- "unicode-width 0.2.2",
+ "unicode-width 0.1.14",
 ]
 
 [[package]]
@@ -2992,7 +2992,7 @@ version = "3.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "faf9468729b8cbcea668e36183cb69d317348c2e08e994829fb56ebfdfbaac34"
 dependencies = [
- "windows-sys 0.61.2",
+ "windows-sys 0.48.0",
 ]
 
 [[package]]
@@ -3597,7 +3597,7 @@ dependencies = [
 [[package]]
 name = "crdt"
 version = "0.1.0"
-source = "git+https://www.github.com/FastTrackStudios/architect?branch=action-list#b00bb69e447c800bb43e493557a18e9e9403251c"
+source = "git+https://www.github.com/FastTrackStudios/architect?branch=action-list#fc4db34515d7eacf8f4aa2593a17655938a3a139"
 dependencies = [
  "architect",
  "async-trait",
@@ -3617,7 +3617,7 @@ dependencies = [
 [[package]]
 name = "crdt-derive"
 version = "0.1.0"
-source = "git+https://www.github.com/FastTrackStudios/architect?branch=action-list#b00bb69e447c800bb43e493557a18e9e9403251c"
+source = "git+https://www.github.com/FastTrackStudios/architect?branch=action-list#fc4db34515d7eacf8f4aa2593a17655938a3a139"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -5568,7 +5568,7 @@ dependencies = [
  "libc",
  "option-ext",
  "redox_users",
- "windows-sys 0.61.2",
+ "windows-sys 0.60.2",
 ]
 
 [[package]]
@@ -5638,7 +5638,7 @@ checksum = "ad5208a115eaba24916f7456929832e310a81518c641f93fee4f89aa93aa3675"
 dependencies = [
  "cfg-if",
  "libc",
- "windows-sys 0.61.2",
+ "windows-sys 0.60.2",
 ]
 
 [[package]]
@@ -6399,7 +6399,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "39cab71617ae0d63f51a36d69f866391735b51691dbda63cf6f96d042b63efeb"
 dependencies = [
  "libc",
- "windows-sys 0.61.2",
+ "windows-sys 0.60.2",
 ]
 
 [[package]]
@@ -8172,7 +8172,7 @@ dependencies = [
  "log",
  "presser",
  "thiserror 2.0.20",
- "windows 0.62.2",
+ "windows 0.58.0",
 ]
 
 [[package]]
@@ -8948,7 +8948,7 @@ dependencies = [
  "libc",
  "percent-encoding",
  "pin-project-lite",
- "socket2 0.6.5",
+ "socket2 0.5.10",
  "system-configuration",
  "tokio",
  "tower-layer",
@@ -8969,7 +8969,7 @@ dependencies = [
  "js-sys",
  "log",
  "wasm-bindgen",
- "windows-core 0.62.2",
+ "windows-core 0.58.0",
 ]
 
 [[package]]
@@ -9764,7 +9764,7 @@ checksum = "3640c1c38b8e4e43584d8df18be5fc6b0aa314ce6ebf51b53313d4306cca8e46"
 dependencies = [
  "hermit-abi",
  "libc",
- "windows-sys 0.61.2",
+ "windows-sys 0.60.2",
 ]
 
 [[package]]
@@ -11744,7 +11744,7 @@ dependencies = [
  "once_cell",
  "png 0.18.1",
  "thiserror 2.0.20",
- "windows-sys 0.61.2",
+ "windows-sys 0.60.2",
 ]
 
 [[package]]
@@ -12367,7 +12367,7 @@ dependencies = [
  "pin-project-lite",
  "rustc-hash 2.1.3",
  "rustls",
- "socket2 0.6.5",
+ "socket2 0.5.10",
  "thiserror 2.0.20",
  "tokio",
  "tokio-stream",
@@ -12410,7 +12410,7 @@ checksum = "b56d621ed2c1773b5356ab39cc68c819f8d0103f7493d8661c4a5f5f8ea55f40"
 dependencies = [
  "cfg_aliases",
  "libc",
- "socket2 0.6.5",
+ "socket2 0.5.10",
  "tracing",
  "windows-sys 0.61.2",
 ]
@@ -12421,7 +12421,7 @@ version = "0.50.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7957b9740744892f114936ab4a57b3f487491bbeafaf8083688b16841a4240e5"
 dependencies = [
- "windows-sys 0.61.2",
+ "windows-sys 0.60.2",
 ]
 
 [[package]]
@@ -14832,7 +14832,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8a56d757972c98b346a9b766e3f02746cde6dd1cd1d1d563472929fdd74bec4d"
 dependencies = [
  "anyhow",
- "itertools 0.14.0",
+ "itertools 0.10.5",
  "proc-macro2",
  "quote",
  "syn 2.0.119",
@@ -14845,7 +14845,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b570b25f7617e43d59005d0990ccb79e950a423952cea19671b7a876da390adf"
 dependencies = [
  "anyhow",
- "itertools 0.14.0",
+ "itertools 0.10.5",
  "proc-macro2",
  "quote",
  "syn 2.0.119",
@@ -14994,7 +14994,7 @@ dependencies = [
  "quinn-udp",
  "rustc-hash 2.1.3",
  "rustls",
- "socket2 0.6.5",
+ "socket2 0.5.10",
  "thiserror 2.0.20",
  "tokio",
  "tracing",
@@ -15033,9 +15033,9 @@ dependencies = [
  "cfg_aliases",
  "libc",
  "once_cell",
- "socket2 0.6.5",
+ "socket2 0.5.10",
  "tracing",
- "windows-sys 0.61.2",
+ "windows-sys 0.60.2",
 ]
 
 [[package]]
@@ -16233,7 +16233,7 @@ dependencies = [
  "errno",
  "libc",
  "linux-raw-sys 0.12.1",
- "windows-sys 0.61.2",
+ "windows-sys 0.60.2",
 ]
 
 [[package]]
@@ -16292,7 +16292,7 @@ dependencies = [
  "security-framework",
  "security-framework-sys",
  "webpki-root-certs",
- "windows-sys 0.61.2",
+ "windows-sys 0.60.2",
 ]
 
 [[package]]
@@ -18394,7 +18394,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c3d1e2c7f27f8d4cb10542a02c49005dbd6e93095799d6f3be745fae9f8fedd4"
 dependencies = [
  "libc",
- "windows-sys 0.61.2",
+ "windows-sys 0.60.2",
 ]
 
 [[package]]
@@ -19855,7 +19855,7 @@ dependencies = [
  "getrandom 0.4.3",
  "once_cell",
  "rustix 1.1.4",
- "windows-sys 0.61.2",
+ "windows-sys 0.60.2",
 ]
 
 [[package]]
@@ -20867,7 +20867,7 @@ dependencies = [
  "once_cell",
  "png 0.18.1",
  "thiserror 2.0.20",
- "windows-sys 0.61.2",
+ "windows-sys 0.60.2",
 ]
 
 [[package]]
@@ -21250,7 +21250,7 @@ checksum = "f2f6fb2847f6742cd76af783a2a2c49e9375d0a111c7bef6f71cd9e738c72d6e"
 dependencies = [
  "memoffset",
  "tempfile",
- "windows-sys 0.61.2",
+ "windows-sys 0.60.2",
 ]
 
 [[package]]
@@ -23011,7 +23011,7 @@ version = "0.1.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c2a7b1c03c876122aa43f3020e6c3c3ee5c05081c9a00739faf7503aeba10d22"
 dependencies = [
- "windows-sys 0.61.2",
+ "windows-sys 0.48.0",
 ]
 
 [[package]]
