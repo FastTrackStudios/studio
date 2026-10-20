@@ -30,6 +30,7 @@ pub struct Frame {
     pub since: u64,
     /// The paint, microseconds, and its passes.
     pub paint: u64,
+    pub prep: u64,
     pub lanes: u64,
     pub titles: u64,
     pub panel: u64,
@@ -50,15 +51,16 @@ pub struct Frame {
 
 impl Frame {
     /// The CSV header, as [`Frame::csv`] writes a row.
-    pub const CSV_HEADER: &'static str = "at_us,since_us,paint_us,lanes_us,titles_us,panel_us,ruler_us,controls_us,shell_us,encode_us,present_us,replayed,submitted,rebuilds";
+    pub const CSV_HEADER: &'static str = "at_us,since_us,paint_us,prep_us,lanes_us,titles_us,panel_us,ruler_us,controls_us,shell_us,encode_us,present_us,replayed,submitted,rebuilds";
 
     #[must_use]
     pub fn csv(&self) -> String {
         format!(
-            "{},{},{},{},{},{},{},{},{},{},{},{},{},{}",
+            "{},{},{},{},{},{},{},{},{},{},{},{},{},{},{}",
             self.at,
             self.since,
             self.paint,
+            self.prep,
             self.lanes,
             self.titles,
             self.panel,
@@ -88,6 +90,7 @@ pub struct Summary {
     pub gap: Spread,
     /// The paint, ms, and its passes' means.
     pub paint: Spread,
+    pub prep_ms: f64,
     pub lanes_ms: f64,
     pub titles_ms: f64,
     pub panel_ms: f64,
@@ -175,6 +178,7 @@ impl Summary {
             },
             gap,
             paint: Spread::of(frames.iter().map(|f| f.paint)),
+            prep_ms: mean(frames, |f| f.prep),
             lanes_ms: mean(frames, |f| f.lanes),
             titles_ms: mean(frames, |f| f.titles),
             panel_ms: mean(frames, |f| f.panel),
@@ -257,7 +261,7 @@ mod action {
         "SESSION_FRAMES",
         "session_frames",
         "Frame rate",
-        "How the arrangement's frames went: `fps` (one over the median gap between paints while drawing), the gap, the paint and the shell's whole frame as median/p95/max ms, the paint's passes (lanes, titles, panel, ruler, controls) and the shell's encode/present as means, and commands a frame. Over the last `seconds` (default 5); with `wait` (seconds, at most 30) it waits that long first and says only the frames painted meanwhile — play or scroll while it waits. With `file` (a path) it also writes every frame of the run there as CSV. Read-only.",
+        "How the arrangement's frames went: `fps` (one over the median gap between paints while drawing), the gap, the paint and the shell's whole frame as median/p95/max ms, the paint's passes (prep — read-back and re-cuts before drawing —, lanes, titles, panel, ruler, controls) and the shell's encode/present as means, and commands a frame. Over the last `seconds` (default 5); with `wait` (seconds, at most 30) it waits that long first and says only the frames painted meanwhile — play or scroll while it waits. With `file` (a path) it also writes every frame of the run there as CSV. Read-only.",
         "View",
         "",
     );

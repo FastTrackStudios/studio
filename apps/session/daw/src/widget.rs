@@ -538,6 +538,8 @@ pub struct ArrangementWidget {
     /// the overlay's version and mode they were found at.
     hidden: std::collections::HashSet<String>,
     hidden_seen: Option<(u64, bool)>,
+    /// When this paint began ([`Passes::prep`]).
+    paint_began: web_time::Instant,
     /// The folds the rows were planned at ([`crate::folds::generation`]).
     folds_seen: u64,
     /// The outside edits the rows were planned at ([`edit_song`]).
@@ -742,6 +744,9 @@ const RECUT_EVERY: std::time::Duration = std::time::Duration::from_millis(150);
 /// disprove.
 #[derive(Clone, Copy, Debug, Default)]
 struct Passes {
+    /// Everything before the lanes: what arrived read back, the rows
+    /// planned or cut again.
+    prep: u128,
     lanes: u128,
     titles: u128,
     panel: u128,
@@ -831,6 +836,7 @@ impl ArrangementWidget {
             rebuilds: 0,
             hidden: std::collections::HashSet::new(),
             hidden_seen: None,
+            paint_began: web_time::Instant::now(),
             folds_seen: crate::folds::generation(),
             edited_seen: EDITED.with(Cell::get),
             previews,
@@ -4633,6 +4639,7 @@ impl ArrangementWidget {
     /// returns, and what the web host draws into its canvas.
     pub fn paint_scene(&mut self, width: u32, height: u32, scale: f64) -> Scene {
         let began = web_time::Instant::now();
+        self.paint_began = began;
         // A recording pass just ended: its takes selected, the ranks
         // pressed while it ran written on them.
         #[cfg(feature = "native")]
@@ -4733,6 +4740,13 @@ impl ArrangementWidget {
                 rows,
                 floor: self.opening_floor(),
             });
+        }
+        // Lanes left to draw finer: the frame after builds more of them.
+        if self.scene.take_fine_behind() {
+            self.dirty.set(true);
+            if let Some(redraw) = &self.redraw {
+                redraw();
+            }
         }
         let drawn = *self.drawn.borrow();
         record_frame(began, self.spent, drawn, std::mem::take(&mut self.rebuilds));
@@ -5472,7 +5486,10 @@ impl ArrangementWidget {
         // and a closure that also holds it is a borrow fight for no
         // gain — five `mark()` calls say the same thing and read as the
         // list of passes they are measuring.
-        let mut spent = Passes::default();
+        let mut spent = Passes {
+            prep: self.paint_began.elapsed().as_micros(),
+            ..Passes::default()
+        };
         let mut mark = web_time::Instant::now();
         let since = |mark: &mut web_time::Instant| {
             let spent = mark.elapsed().as_micros();
@@ -6081,6 +6098,7 @@ fn record_frame(began: web_time::Instant, spent: Passes, drawn: Drawn, rebuilds:
     let us = |micros: u128| u64::try_from(micros).unwrap_or(u64::MAX);
     crate::frames::record(crate::frames::Frame {
         paint: us(began.elapsed().as_micros()),
+        prep: us(spent.prep),
         lanes: us(spent.lanes),
         titles: us(spent.titles),
         panel: us(spent.panel),

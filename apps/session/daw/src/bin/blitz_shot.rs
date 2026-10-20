@@ -32,7 +32,8 @@
 //!
 //! `FTS_BLITZ_OPEN=Drums,Kick` (or `*`) opens those folders first;
 //! `FTS_BLITZ_LANES=Drums` shows every lane of those tracks;
-//! `FTS_BLITZ_MODE=edit` opens it in Edit mode.
+//! `FTS_BLITZ_MODE=edit` opens it in Edit mode; `FTS_BLITZ_WARM=1` runs a
+//! benchmark's gesture once slowly first, its waveform detail read.
 //!
 //! The session is laid out by `FTS_BLITZ_SCENE` (`drum-mixing` by
 //! default, the app's), and prepared first if `FTS_BLITZ_ORGANIZE`,
@@ -838,6 +839,28 @@ fn pan(
     let mut diff = session_daw::profile::Samples::with_capacity(frames);
     let mut solve = session_daw::profile::Samples::with_capacity(frames);
     let batch = session_daw::headless::BATCH;
+
+    // `FTS_BLITZ_WARM=1`: the gesture run once first, slowly, so the
+    // zoomed-in waveforms' detail has been read along it — what scrolling
+    // a song already looked at is, rather than the reads' first arrival.
+    if std::env::var("FTS_BLITZ_WARM").is_ok_and(|v| !v.is_empty() && v != "0") {
+        for frame in 0..frames {
+            #[expect(clippy::cast_precision_loss, reason = "a frame index")]
+            let t = frame as f64 / frames as f64;
+            drive(document, panel, gesture, t);
+            document.vdom.in_scope(ScopeId::ROOT, || {
+                panel.handle(PanelEvent::Frame { play_at: 0.0 })
+            });
+            document.poll(None);
+            document.inner_mut().resolve(0.0);
+            let _ = renderer.frame(|painter| {
+                let mut inner = document.inner_mut();
+                blitz_paint::paint_scene(painter, &mut inner, 1.0, width, height, 0, 0);
+            });
+            renderer.wait().expect("the gpu to finish");
+            std::thread::sleep(std::time::Duration::from_millis(40));
+        }
+    }
 
     for chunk in 0..frames / batch {
         let started = Instant::now();

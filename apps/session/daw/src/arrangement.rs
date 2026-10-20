@@ -177,6 +177,9 @@ impl Palette {
 
 /// Everything drawn, recorded in content space.
 pub struct Arrangement {
+    /// A replay ran out of [`FINE_BUDGET`] with lanes left to build from
+    /// detail: the window draws another frame for them.
+    fine_behind: std::cell::Cell<bool>,
     /// The panel's shape — full, or compact. What it was RECORDED at:
     /// changing it re-cuts the panel, because the rows are drawn to it.
     pub tcp: crate::tcp::Tcp,
@@ -316,6 +319,8 @@ struct LaneWave {
     gain: f64,
     /// The envelope folded for the last zoom drawn — see [`Runs`].
     runs: std::cell::RefCell<Option<std::rc::Rc<Runs>>>,
+    /// The waveform last drawn from detail, kept — see [`FineKept`].
+    fine_kept: std::cell::RefCell<Option<FineKept>>,
     /// The real items this waveform is of — the item, or a shut folder's
     /// children under it — read again finer when zoomed in past it
     /// ([`crate::wave_detail`]).
@@ -724,6 +729,91 @@ fn fine(lane: &LaneWave, left: f64, right: f64, pps: f64, transform: Affine) -> 
     }
     path.close_path();
     Some(Fine::Envelope(path))
+}
+
+/// A lane's waveform from detail as last drawn: over a stretch wider than
+/// the view, at one zoom, from the detail and the gate as they were.
+///
+/// Drawing from detail is most of what a frame of zoomed-in lanes cost —
+/// every column of every lane built again each frame. Kept, a scroll
+/// inside the stretch draws the path it has (it is in the lanes' own
+/// seconds, the zoom the replay's transform), and nothing is built until
+/// the zoom, the detail or the gate changes, or the view leaves it.
+struct FineKept {
+    pps: f64,
+    detail: u64,
+    gated: u64,
+    from: f64,
+    to: f64,
+    path: std::rc::Rc<BezPath>,
+}
+
+/// How long one frame spends building waveforms from detail; past it, a
+/// lane draws what it kept (or its own points) and is built on a frame
+/// after — a zoom or a burst of detail sharpens over a few frames rather
+/// than holding one up.
+const FINE_BUDGET: std::time::Duration = std::time::Duration::from_millis(2);
+
+/// What [`fine_kept`] gives a lane to draw.
+enum FineDrawn {
+    Envelope(std::rc::Rc<BezPath>),
+    Samples(Vec<BezPath>, Vec<Rect>),
+}
+
+/// [`fine`] for `lane` over `(left, right)`, kept: the path kept when it
+/// is still the one; else built, over half a view more either side, while
+/// `deadline` has not passed; else what was kept, or `None` (its own
+/// points drawn) — `behind` set, so a frame after builds it.
+fn fine_kept(
+    lane: &LaneWave,
+    (left, right): (f64, f64),
+    (pps, transform): (f64, Affine),
+    deadline: web_time::Instant,
+    behind: &mut bool,
+) -> Option<FineDrawn> {
+    if lane.sources.is_empty() || lane.wave.step * pps <= DETAIL_PAST {
+        return None;
+    }
+    let (a, b) = (lane.x0.max(left), lane.x1.min(right));
+    if a >= b {
+        return None;
+    }
+    let detail = crate::wave_detail::generation();
+    let gated = crate::kit_gate::version(lane.role);
+    {
+        let kept = lane.fine_kept.borrow();
+        let covering = kept
+            .as_ref()
+            .filter(|k| k.from <= a + 1e-9 && k.to >= b - 1e-9);
+        if let Some(k) = covering
+            && k.pps.to_bits() == pps.to_bits()
+            && k.detail == detail
+            && k.gated == gated
+        {
+            return Some(FineDrawn::Envelope(std::rc::Rc::clone(&k.path)));
+        }
+        if web_time::Instant::now() >= deadline {
+            *behind = true;
+            return covering.map(|k| FineDrawn::Envelope(std::rc::Rc::clone(&k.path)));
+        }
+    }
+    let spare = (right - left) * 0.5;
+    let (from, to) = ((left - spare).max(lane.x0), (right + spare).min(lane.x1));
+    match fine(lane, from, to, pps, transform)? {
+        Fine::Envelope(path) => {
+            let path = std::rc::Rc::new(path);
+            *lane.fine_kept.borrow_mut() = Some(FineKept {
+                pps,
+                detail,
+                gated,
+                from,
+                to,
+                path: std::rc::Rc::clone(&path),
+            });
+            Some(FineDrawn::Envelope(path))
+        }
+        Fine::Samples(lines, dots) => Some(FineDrawn::Samples(lines, dots)),
+    }
 }
 
 impl Arrangement {
@@ -1557,6 +1647,7 @@ impl Arrangement {
                     };
                     let lane = |wave, color, sources, role| LaneWave {
                         runs: std::cell::RefCell::default(),
+                        fine_kept: std::cell::RefCell::default(),
                         sources,
                         role,
                         gain,
@@ -1689,6 +1780,7 @@ impl Arrangement {
             panel_zoom: cut.zoom,
             index,
             rows_at: RowLayout::from_heights(0, slot_h),
+            fine_behind: std::cell::Cell::new(false),
             track_h,
             lane_tracks,
             laned: laned_rows,
@@ -4374,6 +4466,8 @@ impl Arrangement {
         let (left, right) = view.secs();
         let shown = view.on_screen();
         let mut counts = Counts::default();
+        let deadline = web_time::Instant::now() + FINE_BUDGET;
+        let mut behind = false;
         for row in self.visible_rows(view) {
             let Some(span) = self.index.lanes.get(row) else {
                 continue;
@@ -4414,12 +4508,12 @@ impl Arrangement {
                     .into_iter()
                     .flatten()
                 {
-                    match fine(lane, shown.0, shown.1, view.pps, transform) {
-                        Some(Fine::Envelope(path)) => {
-                            painter.fill(Fill::NonZero, transform, lane.color, None, &path);
+                    match fine_kept(lane, shown, (view.pps, transform), deadline, &mut behind) {
+                        Some(FineDrawn::Envelope(path)) => {
+                            painter.fill(Fill::NonZero, transform, lane.color, None, &*path);
                             counts.submitted = counts.submitted.saturating_add(1);
                         }
-                        Some(Fine::Samples(lines, dots)) => {
+                        Some(FineDrawn::Samples(lines, dots)) => {
                             let stroke = vello::kurbo::Stroke::new(1.25);
                             for line in &lines {
                                 painter.stroke(&stroke, Affine::IDENTITY, lane.color, None, line);
@@ -4448,7 +4542,17 @@ impl Arrangement {
                 }
             }
         }
+        if behind {
+            self.fine_behind.set(true);
+        }
         counts
+    }
+
+    /// Whether a replay since the last ask left lanes to build from detail
+    /// ([`FINE_BUDGET`]): another frame is wanted for them.
+    #[must_use]
+    pub fn take_fine_behind(&self) -> bool {
+        self.fine_behind.replace(false)
     }
 
     /// Cut the panel again, for a new vertical zoom.
@@ -5107,6 +5211,7 @@ mod lane_wave_tests {
             color: Color::WHITE,
             gain: 1.0,
             runs: std::cell::RefCell::default(),
+            fine_kept: std::cell::RefCell::default(),
             sources: Vec::new(),
             role: None,
         }
