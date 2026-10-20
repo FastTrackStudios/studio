@@ -650,9 +650,13 @@ fn fine(lane: &LaneWave, left: f64, right: f64, pps: f64, transform: Affine) -> 
         }
         return Some(Fine::Samples(lines, dots));
     }
-    let columns = crate::num::index(((b - a) * pps).ceil()).max(1);
+    // Columns on the song's own pixel grid, not the stretch's: built again
+    // over another stretch, the same pixel gathers the same points, and
+    // the waveform holds still rather than twitching at every rebuild.
+    let base = (a * pps).floor();
+    let columns = crate::num::index(((b * pps).ceil() - base).max(1.0));
     let mut cols: Vec<Option<(f32, f32)>> = vec![None; columns];
-    let column = |t: f64| crate::num::index(((t - a) * pps).floor());
+    let column = |t: f64| crate::num::index(((t * pps).floor() - base).max(0.0));
     // Each point into every column its span covers: a point coarser than a
     // column (detail read for the zoom before) leaves none of them empty.
     let take = |cols: &mut Vec<Option<(f32, f32)>>, t: f64, step: f64, (max, min)| {
@@ -711,7 +715,7 @@ fn fine(lane: &LaneWave, left: f64, right: f64, pps: f64, transform: Affine) -> 
         .iter()
         .enumerate()
         .filter_map(|(c, v)| {
-            v.map(|(max, min)| ((crate::num::coord(c) + 0.5).mul_add(1.0 / pps, a), max, min))
+            v.map(|(max, min)| ((base + crate::num::coord(c) + 0.5) / pps, max, min))
         })
         .collect();
     // No column with anything in it (a sliver of an item, say): no
@@ -771,9 +775,11 @@ enum FineDrawn {
 }
 
 /// [`fine`] for `lane` over `(left, right)`, kept: the path kept when it
-/// is still the one; else built, over half a view more either side, while
-/// `deadline` has not passed; else what was kept, or `None` (its own
-/// points drawn) — `behind` set, so a frame after builds it.
+/// is still the one (built on ahead near its ends); else built, over a
+/// view more either side, while `deadline` has not passed; else what was
+/// kept, however stale, so a lane never flicks between it and its own
+/// points — or `None` (its own points drawn) with nothing kept; `behind`
+/// set either way, so a frame after builds it.
 fn fine_kept(
     lane: &LaneWave,
     (left, right): (f64, f64),
@@ -790,24 +796,37 @@ fn fine_kept(
     }
     let detail = crate::wave_detail::generation();
     let gated = crate::kit_gate::version(lane.role);
+    let in_time = || web_time::Instant::now() < deadline;
     {
         let kept = lane.fine_kept.borrow();
-        let covering = kept
-            .as_ref()
-            .filter(|k| k.from <= a + 1e-9 && k.to >= b - 1e-9);
-        if let Some(k) = covering
-            && k.pps.to_bits() == pps.to_bits()
-            && (k.detail == detail || k.built.elapsed() < FINE_FRESH)
-            && k.gated == gated
-        {
-            return Some(FineDrawn::Envelope(std::rc::Rc::clone(&k.path)));
-        }
-        if web_time::Instant::now() >= deadline {
-            *behind = true;
-            return covering.map(|k| FineDrawn::Envelope(std::rc::Rc::clone(&k.path)));
+        if let Some(k) = kept.as_ref() {
+            let current = k.pps.to_bits() == pps.to_bits()
+                && (k.detail == detail || k.built.elapsed() < FINE_FRESH)
+                && k.gated == gated;
+            let covers = k.from <= a + 1e-9 && k.to >= b - 1e-9;
+            // Within a quarter of a view of its end, while it still covers:
+            // built on ahead, so a scroll never runs off it.
+            let quarter = (right - left) * 0.25;
+            let near_end = (a - quarter < k.from && k.from > lane.x0)
+                || (b + quarter > k.to && k.to < lane.x1);
+            let drawn = || Some(FineDrawn::Envelope(std::rc::Rc::clone(&k.path)));
+            if current && covers && !(near_end && in_time()) {
+                return drawn();
+            }
+            // Out of time: what it kept stands — at another zoom, its
+            // seconds stretched by the transform — rather than the lane
+            // flicking to its own points and back.
+            if !in_time() && k.from < b && k.to > a {
+                *behind = true;
+                return drawn();
+            }
         }
     }
-    let spare = (right - left) * 0.5;
+    if !in_time() {
+        *behind = true;
+        return None;
+    }
+    let spare = right - left;
     let (from, to) = ((left - spare).max(lane.x0), (right + spare).min(lane.x1));
     match fine(lane, from, to, pps, transform)? {
         Fine::Envelope(path) => {
