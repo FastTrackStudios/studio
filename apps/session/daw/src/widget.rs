@@ -3868,6 +3868,9 @@ impl ArrangementWidget {
 
     /// Cut the whole recording again, from the widget's own project.
     fn recut(&mut self) {
+        // What is out of sight, for the rows as they are now: a folder's
+        // lanes opened are folded items the last count never saw.
+        self.hidden = self.rejected_now();
         self.recut_at = Some(web_time::Instant::now());
         self.rebuilds = self.rebuilds.saturating_add(1);
         let rows = daw_ui::studio::RowsRef(std::sync::Arc::new(self.rows.clone()));
@@ -3909,13 +3912,16 @@ impl ArrangementWidget {
             return;
         }
         self.hidden_seen = Some(seen);
-        let hidden = match crate::hit_overlay::current() {
+        if self.rejected_now() != self.hidden {
+            self.recut();
+        }
+    }
+
+    /// The takes to keep out of sight now: editing, those marked bad.
+    fn rejected_now(&self) -> std::collections::HashSet<String> {
+        match crate::hit_overlay::current() {
             Some(overlay) if self.editing.get() => hidden_takes(&self.project, &overlay.takes),
             _ => std::collections::HashSet::new(),
-        };
-        if hidden != self.hidden {
-            self.hidden = hidden;
-            self.recut();
         }
     }
 
@@ -6053,7 +6059,7 @@ impl ArrangementWidget {
 
 /// The items of `project` whose take `marks` mark bad over the whole of
 /// them ([`crate::hit_overlay::rejected`]), and the folded items every
-/// one of whose mics' items is.
+/// one of whose ranked items (its mics', not a trigger's) is.
 fn hidden_takes(
     project: &daw_ui::studio::project::Project,
     marks: &crate::hit_overlay::TakeMarks,
@@ -6081,7 +6087,14 @@ fn hidden_takes(
                 .iter()
                 .enumerate()
                 .filter_map(move |(index, span)| {
-                    (!span.from.is_empty() && span.from.iter().all(|g| hidden.contains(g)))
+                    // Of what it is folded from, the recordings a rank
+                    // reaches: a trigger's or a sample's items carry none.
+                    let mut ranked = span
+                        .from
+                        .iter()
+                        .filter(|g| marks.by_item.contains_key(g.as_str()))
+                        .peekable();
+                    (ranked.peek().is_some() && ranked.all(|g| hidden.contains(g)))
                         .then(|| daw_ui::studio::folded::guid_of(folder, index))
                 })
         })

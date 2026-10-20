@@ -742,11 +742,17 @@ fn fine(lane: &LaneWave, left: f64, right: f64, pps: f64, transform: Affine) -> 
 struct FineKept {
     pps: f64,
     detail: u64,
+    /// When it was built: detail arriving (any lane's — reads run all the
+    /// while the view moves) builds it again at most every [`FINE_FRESH`].
+    built: web_time::Instant,
     gated: u64,
     from: f64,
     to: f64,
     path: std::rc::Rc<BezPath>,
 }
+
+/// How long a lane's kept waveform stands after new detail arrived.
+const FINE_FRESH: std::time::Duration = std::time::Duration::from_millis(250);
 
 /// How long one frame spends building waveforms from detail; past it, a
 /// lane draws what it kept (or its own points) and is built on a frame
@@ -787,7 +793,7 @@ fn fine_kept(
             .filter(|k| k.from <= a + 1e-9 && k.to >= b - 1e-9);
         if let Some(k) = covering
             && k.pps.to_bits() == pps.to_bits()
-            && k.detail == detail
+            && (k.detail == detail || k.built.elapsed() < FINE_FRESH)
             && k.gated == gated
         {
             return Some(FineDrawn::Envelope(std::rc::Rc::clone(&k.path)));
@@ -805,6 +811,7 @@ fn fine_kept(
             *lane.fine_kept.borrow_mut() = Some(FineKept {
                 pps,
                 detail,
+                built: web_time::Instant::now(),
                 gated,
                 from,
                 to,
@@ -4365,14 +4372,7 @@ pub fn titles(
         }
         // Cut the name to what fits, so a title never runs off its item
         // onto the next one.
-        let mut name: &str = &title.name;
-        while !name.is_empty() && font.width(name, SIZE) > room {
-            let mut end = name.len().saturating_sub(1);
-            while end > 0 && !name.is_char_boundary(end) {
-                end = end.saturating_sub(1);
-            }
-            name = name.get(..end).unwrap_or("");
-        }
+        let name = font.prefix_within(&title.name, SIZE, room);
         if name.is_empty() {
             continue;
         }

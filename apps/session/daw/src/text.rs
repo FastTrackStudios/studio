@@ -29,6 +29,18 @@ pub struct Font {
     data: FontData,
     /// Retained so glyph lookup does not re-parse the file per string.
     inner: FontRef<'static>,
+    /// The ASCII characters' glyphs and advances, by size, as laid out
+    /// once: a frame of the arrangement measures and lays out thousands
+    /// of names, and reading the font's metrics tables for each was a
+    /// tenth of the window's time.
+    ascii: std::sync::Mutex<Vec<std::sync::Arc<Ascii>>>,
+}
+
+/// The 128 ASCII characters at one size: each one's glyph (none when the
+/// face has none) and advance.
+struct Ascii {
+    size: u32,
+    glyphs: [Option<(u32, f32)>; 128],
 }
 
 /// One positioned glyph, in the same shape `anyrender` records.
@@ -57,6 +69,7 @@ impl Font {
         Ok(Self {
             data: FontData::new(Blob::new(std::sync::Arc::new(BYTES)), 0),
             inner,
+            ascii: std::sync::Mutex::default(),
         })
     }
 
@@ -72,6 +85,18 @@ impl Font {
     /// every glyph.
     #[must_use]
     pub fn layout(&self, text: &str, size: f32) -> Vec<Glyph> {
+        if let Some(ascii) = self.ascii_at(text, size) {
+            let mut x = 0.0_f32;
+            return text
+                .bytes()
+                .filter_map(|b| ascii.glyphs[usize::from(b)])
+                .map(|(id, advance)| {
+                    let glyph = Glyph { id, x, y: 0.0 };
+                    x += advance;
+                    glyph
+                })
+                .collect();
+        }
         let charmap = self.inner.charmap();
         let metrics = GlyphMetrics::new(
             &self.inner,
@@ -102,6 +127,14 @@ impl Font {
     /// to be cut short.
     #[must_use]
     pub fn width(&self, text: &str, size: f32) -> f64 {
+        if let Some(ascii) = self.ascii_at(text, size) {
+            return f64::from(
+                text.bytes()
+                    .filter_map(|b| ascii.glyphs[usize::from(b)])
+                    .map(|(_, advance)| advance)
+                    .sum::<f32>(),
+            );
+        }
         let charmap = self.inner.charmap();
         let metrics = GlyphMetrics::new(
             &self.inner,
@@ -114,6 +147,62 @@ impl Font {
                 .filter_map(|id| metrics.advance_width(id))
                 .sum::<f32>(),
         )
+    }
+
+    /// The longest prefix of `text`, cut at a character, no wider than
+    /// `max` at `size` — measured once along it, not again for each cut.
+    #[must_use]
+    pub fn prefix_within<'t>(&self, text: &'t str, size: f32, max: f64) -> &'t str {
+        if let Some(ascii) = self.ascii_at(text, size) {
+            let mut used = 0.0_f64;
+            let end = text
+                .bytes()
+                .take_while(|&b| {
+                    let advance = ascii.glyphs[usize::from(b)].map_or(0.0, |(_, a)| a);
+                    used += f64::from(advance);
+                    used <= max
+                })
+                .count();
+            return text.get(..end).unwrap_or("");
+        }
+        let mut used = 0.0_f64;
+        let mut end = 0;
+        for (at, ch) in text.char_indices() {
+            used += self.width(ch.encode_utf8(&mut [0_u8; 4]), size);
+            if used > max {
+                break;
+            }
+            end = at + ch.len_utf8();
+        }
+        text.get(..end).unwrap_or("")
+    }
+
+    /// The ASCII table at `size`, when `text` is all ASCII: built the
+    /// first time a size is asked for.
+    fn ascii_at(&self, text: &str, size: f32) -> Option<std::sync::Arc<Ascii>> {
+        if !text.is_ascii() {
+            return None;
+        }
+        let bits = size.to_bits();
+        let mut held = self.ascii.lock().ok()?;
+        if let Some(ascii) = held.iter().find(|a| a.size == bits) {
+            return Some(std::sync::Arc::clone(ascii));
+        }
+        let charmap = self.inner.charmap();
+        let metrics = GlyphMetrics::new(
+            &self.inner,
+            Size::new(size),
+            skrifa::instance::LocationRef::default(),
+        );
+        let mut glyphs = [None; 128];
+        for (b, slot) in (0_u8..128).zip(glyphs.iter_mut()) {
+            *slot = charmap
+                .map(char::from(b))
+                .map(|id| (id.to_u32(), metrics.advance_width(id).unwrap_or_default()));
+        }
+        let ascii = std::sync::Arc::new(Ascii { size: bits, glyphs });
+        held.push(std::sync::Arc::clone(&ascii));
+        Some(ascii)
     }
 
     /// The longest prefix of `text` that fits `max` wide.
@@ -183,6 +272,32 @@ mod fit_tests {
 
     fn font() -> Font {
         Font::embedded().expect("the embedded font")
+    }
+
+    /// The table and the font agree, and a prefix is cut where it fits.
+    #[test]
+    fn ascii_from_the_table_measures_as_the_font_does() {
+        let font = font();
+        let slow = |t: &str| {
+            let charmap = skrifa::MetadataProvider::charmap(&font.inner);
+            let metrics = skrifa::metrics::GlyphMetrics::new(
+                &font.inner,
+                skrifa::instance::Size::new(8.0),
+                skrifa::instance::LocationRef::default(),
+            );
+            f64::from(
+                t.chars()
+                    .filter_map(|c| charmap.map(c))
+                    .filter_map(|id| metrics.advance_width(id))
+                    .sum::<f32>(),
+            )
+        };
+        let name = "Drums 123 - Kick In";
+        assert!((font.width(name, 8.0) - slow(name)).abs() < 1e-4);
+        let cut = font.prefix_within(name, 8.0, slow("Drums 1") + 0.01);
+        assert_eq!(cut, "Drums 1");
+        assert_eq!(font.prefix_within(name, 8.0, 1_000.0), name);
+        assert_eq!(font.layout(name, 8.0).len(), name.len());
     }
 
     /// The names that were being thrown away. A 30-wide strip gives
