@@ -826,9 +826,15 @@ fn fine_kept(
         *behind = true;
         return None;
     }
+    // Asked over the same stretch for every lane — the view and a view
+    // either side — not each its own: the lanes a track plays share one
+    // read of it, and lanes asking it over stretches of their own took
+    // turns replacing it, read again forever, each lane flicking between
+    // its detail and its own points.
     let spare = right - left;
-    let (from, to) = ((left - spare).max(lane.x0), (right + spare).min(lane.x1));
-    match fine(lane, from, to, pps, transform)? {
+    let (wide_from, wide_to) = (left - spare, right + spare);
+    let (from, to) = (wide_from.max(lane.x0), wide_to.min(lane.x1));
+    match fine(lane, wide_from, wide_to, pps, transform)? {
         Fine::Envelope(path) => {
             let path = std::rc::Rc::new(path);
             *lane.fine_kept.borrow_mut() = Some(FineKept {
