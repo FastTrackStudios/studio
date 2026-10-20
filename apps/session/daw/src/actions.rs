@@ -1203,6 +1203,8 @@ fn register_data(list: &ActionList) {
     crate::comp::register(list);
     #[cfg(feature = "native")]
     crate::record::register(list);
+    #[cfg(feature = "native")]
+    crate::render_ahead::register(list);
     crate::grow::register(list);
     crate::project_new::register(list);
     crate::instrument_tracks::register(list);
