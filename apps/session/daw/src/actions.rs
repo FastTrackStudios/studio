@@ -1210,6 +1210,7 @@ fn register_data(list: &ActionList) {
     crate::edit_actions::register(list);
     crate::perf::register(list);
     crate::frames::register(list);
+    crate::audio_health::register(list);
     crate::comp_rank::register(list);
     crate::comp_song::register(list);
     crate::bar_step::register(list);

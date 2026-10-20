@@ -14,6 +14,8 @@ pub mod arrange_camera;
 pub mod arrange_edit;
 pub mod arrangement;
 pub mod art;
+#[cfg(feature = "native")]
+pub mod audio_health;
 pub mod audio_mode;
 pub mod automation;
 #[cfg(feature = "native")]
