@@ -631,6 +631,23 @@ fn attach_audio(daw: &Standalone, project_guid: &str) {
     }
 }
 
+/// The song playing, put on the audio device again: how a change to how
+/// the engine renders (the render ahead) is taken up. Nothing playing,
+/// nothing to do.
+pub fn restart_audio() {
+    let playing = AUDIO
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .take();
+    let Some((project_guid, engine)) = playing else {
+        return;
+    };
+    drop(engine);
+    if let Some(daw) = local_engine() {
+        attach_audio(daw, &project_guid);
+    }
+}
+
 fn attach_audio_now(daw: &Standalone, project_guid: &str, asked: u64) {
     let Some(rt) = RUNTIME.get() else {
         return;
@@ -657,7 +674,8 @@ fn attach_audio_now(daw: &Standalone, project_guid: &str, asked: u64) {
     // Close the old stream before opening the device again.
     drop(slot.take());
     let began = std::time::Instant::now();
-    match daw.attach_audio_engine(project_guid) {
+    let prefs = crate::render_ahead::current().io_prefs();
+    match daw.attach_audio_engine_with_prefs(project_guid, &prefs) {
         Ok(engine) => {
             tracing::info!(
                 audio.attach_ms = began.elapsed().as_millis(),
