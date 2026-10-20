@@ -423,6 +423,20 @@ impl KitTake {
     fn in_use(&self) -> bool {
         self.by_track.values().any(|r| r.in_use)
     }
+
+    /// Whether it is crossed out (✕, ranked down) as a whole: the rank
+    /// its recordings hold from their start is down. A take marked bad is
+    /// not one to find hits on and edit.
+    fn crossed_out(&self, daw: &daw::standalone::Standalone, project: &ProjectContext) -> bool {
+        self.by_track.values().any(|r| {
+            let markers = daw.get_take_markers(
+                project.clone(),
+                ItemRef::Guid(r.item.clone()),
+                TakeRef::Active,
+            );
+            crate::take_rank::level_at(&markers, 0.0) < 0
+        })
+    }
 }
 
 /// The kit's recordings gathered into takes: those whose first samples
@@ -986,9 +1000,11 @@ pub fn detect(
     // Each take's hits of each piece, before they are written.
     let mut placed: Vec<(KitTake, usize, Vec<Found>)> = Vec::new();
 
+    // Every take with `all_takes`, so each is known edited before it is
+    // comped — but the ones crossed out; else what the song plays.
     let chosen: Vec<KitTake> = takes(daw, project, &tracks)
         .into_iter()
-        .filter(|t| all_takes || t.in_use())
+        .filter(|t| t.in_use() || (all_takes && !t.crossed_out(daw, project)))
         .collect();
     let mut stages = architect_telemetry::timing::Stages::start();
     // The takes are found at once, a few in flight: each is its files read
@@ -3063,7 +3079,7 @@ static DETECT: ActionMeta = meta(
     "HITS_DETECT",
     "hits_detect",
     "Detect drum hits",
-    "Find every drum hit, once, and write it down as a hit marker on each of its piece's recordings (its mics and trigger, one id across them): the triggers fit each close mic's gate, a dead trigger is caught and its piece read from its mic alone with the other mics' bleed refused. Runs on the takes the song plays (comp or EDIT lanes; `all_takes` for every take kept). Replaces only unchecked detected hits (`auto`) in `from`/`to` (project seconds; the whole song when left out) on `pieces` (all when left out) — hits placed by hand or approved are kept. Settings (HITS_SETTINGS) can be given for this run alone. Says per piece how it was found, the trigger's verdict, the fitted gate, and the counts: both/trigger-only/mic-only/ghosts/flams/unsure (the ones to look at).",
+    "Find every drum hit, once, and write it down as a hit marker on each of its piece's recordings (its mics and trigger, one id across them): the triggers fit each close mic's gate, a dead trigger is caught and its piece read from its mic alone with the other mics' bleed refused. Runs on the takes the song plays (comp or EDIT lanes; `all_takes` for every take kept but those crossed out — ranked down ✕ as a whole — so every take is ready to comp onto the edit quantized). Replaces only unchecked detected hits (`auto`) in `from`/`to` (project seconds; the whole song when left out) on `pieces` (all when left out) — hits placed by hand or approved are kept. Settings (HITS_SETTINGS) can be given for this run alone. Says per piece how it was found, the trigger's verdict, the fitted gate, and the counts: both/trigger-only/mic-only/ghosts/flams/unsure (the ones to look at).",
     "Drums",
     "",
 );
