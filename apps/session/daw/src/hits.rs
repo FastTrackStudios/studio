@@ -3394,79 +3394,94 @@ fn register_zones(list: &ActionList) {
     });
     list.register(&ZONES_EDIT, Effect::Mutating, |a: ZoneEditArg| {
         let (daw, project) = song()?;
-        let zone = zones(daw, &project)
-            .into_iter()
-            .find(|z| z.guid == a.guid)
-            .ok_or_else(|| format!("no zone {}", a.guid))?;
-        // A grid asked of a zone on the ruler: it is moved onto the kit's
-        // folder, where a region keeps one.
-        let grid = match a.grid.as_deref().map(str::trim) {
-            None => None,
-            Some("" | "none" | "as played") => Some(None),
-            Some(text) => Some(Some(crate::track_regions::parse_grid(text)?)),
-        };
-        if grid.is_some() && track_zone(&a.guid).is_none() {
-            remove_zone(daw, &project, &a.guid)?;
-            let moved = add_zone(
-                daw,
-                &project,
-                (a.start.unwrap_or(zone.start), a.end.unwrap_or(zone.end)),
-                (
-                    a.kind.unwrap_or(zone.kind),
-                    a.origin.unwrap_or(zone.origin),
-                    a.note.as_deref().unwrap_or(&zone.note),
-                ),
-            )?;
-            if let Some((track, id)) = track_zone(&moved) {
-                crate::track_regions::change(daw, &project, (track, id), |mut r| {
-                    r.division = grid.flatten();
-                    Some(r)
-                })?;
-            }
-            return Ok(zones(daw, &project).into_iter().find(|z| z.guid == moved));
-        }
-        // Kept on a kit track: changed there.
-        if let Some((track, id)) = track_zone(&a.guid) {
-            if a.remove == Some(true) {
-                remove_zone(daw, &project, &a.guid)?;
-                return Ok(None);
-            }
-            let (start, end) = (a.start.unwrap_or(zone.start), a.end.unwrap_or(zone.end));
+        // One step: undoable, and recorded into the song's file — a change
+        // the engine never finished as a step was never written there,
+        // and a zone's approval was gone at the next open.
+        let label = "Edit an edit zone";
+        Projects::begin_undo_block(daw, project.clone(), label);
+        let edited = edit_zone(daw, project.clone(), a);
+        Projects::end_undo_block(daw, project, label, None);
+        edited
+    });
+}
+
+/// `a` made on its zone: moved, re-kinded, approved or rejected, given a
+/// grid or a note, or removed. The zone as it is after (none, removed).
+fn edit_zone(
+    daw: &daw::standalone::Standalone,
+    project: ProjectContext,
+    a: ZoneEditArg,
+) -> Result<Option<Zone>, String> {
+    let zone = zones(daw, &project)
+        .into_iter()
+        .find(|z| z.guid == a.guid)
+        .ok_or_else(|| format!("no zone {}", a.guid))?;
+    // A grid asked of a zone on the ruler: it is moved onto the kit's
+    // folder, where a region keeps one.
+    let grid = match a.grid.as_deref().map(str::trim) {
+        None => None,
+        Some("" | "none" | "as played") => Some(None),
+        Some(text) => Some(Some(crate::track_regions::parse_grid(text)?)),
+    };
+    if grid.is_some() && track_zone(&a.guid).is_none() {
+        remove_zone(daw, &project, &a.guid)?;
+        let moved = add_zone(
+            daw,
+            &project,
+            (a.start.unwrap_or(zone.start), a.end.unwrap_or(zone.end)),
+            (
+                a.kind.unwrap_or(zone.kind),
+                a.origin.unwrap_or(zone.origin),
+                a.note.as_deref().unwrap_or(&zone.note),
+            ),
+        )?;
+        if let Some((track, id)) = track_zone(&moved) {
             crate::track_regions::change(daw, &project, (track, id), |mut r| {
-                r.start = start;
-                r.end = end;
-                r.kind = region_kind(a.kind.unwrap_or(zone.kind));
-                r.origin = region_origin(a.origin.unwrap_or(zone.origin));
-                if let Some(note) = &a.note {
-                    r.note.clone_from(note);
-                }
-                if let Some(grid) = grid {
-                    r.division = grid;
-                }
+                r.division = grid.flatten();
                 Some(r)
             })?;
-            return Ok(zones(daw, &project).into_iter().find(|z| z.guid == a.guid));
         }
-        let id =
-            zone_region(daw, &project, &a.guid).ok_or_else(|| format!("no zone {}", a.guid))?;
-        let failed = |e: daw_proto::DawError| e.to_string();
+        return Ok(zones(daw, &project).into_iter().find(|z| z.guid == moved));
+    }
+    // Kept on a kit track: changed there.
+    if let Some((track, id)) = track_zone(&a.guid) {
         if a.remove == Some(true) {
-            daw::service::Regions::remove(daw, project, id).map_err(failed)?;
+            remove_zone(daw, &project, &a.guid)?;
             return Ok(None);
         }
         let (start, end) = (a.start.unwrap_or(zone.start), a.end.unwrap_or(zone.end));
-        if (start, end) != (zone.start, zone.end) {
-            daw::service::Regions::set_bounds(daw, project.clone(), id, start, end)
-                .map_err(failed)?;
-        }
-        let name = zone_name(
-            a.kind.unwrap_or(zone.kind),
-            a.origin.unwrap_or(zone.origin),
-            a.note.as_deref().unwrap_or(&zone.note),
-        );
-        daw::service::Regions::rename(daw, project.clone(), id, &name).map_err(failed)?;
-        Ok(zones(daw, &project).into_iter().find(|z| z.guid == a.guid))
-    });
+        crate::track_regions::change(daw, &project, (track, id), |mut r| {
+            r.start = start;
+            r.end = end;
+            r.kind = region_kind(a.kind.unwrap_or(zone.kind));
+            r.origin = region_origin(a.origin.unwrap_or(zone.origin));
+            if let Some(note) = &a.note {
+                r.note.clone_from(note);
+            }
+            if let Some(grid) = grid {
+                r.division = grid;
+            }
+            Some(r)
+        })?;
+        return Ok(zones(daw, &project).into_iter().find(|z| z.guid == a.guid));
+    }
+    let id = zone_region(daw, &project, &a.guid).ok_or_else(|| format!("no zone {}", a.guid))?;
+    let failed = |e: daw_proto::DawError| e.to_string();
+    if a.remove == Some(true) {
+        daw::service::Regions::remove(daw, project, id).map_err(failed)?;
+        return Ok(None);
+    }
+    let (start, end) = (a.start.unwrap_or(zone.start), a.end.unwrap_or(zone.end));
+    if (start, end) != (zone.start, zone.end) {
+        daw::service::Regions::set_bounds(daw, project.clone(), id, start, end).map_err(failed)?;
+    }
+    let name = zone_name(
+        a.kind.unwrap_or(zone.kind),
+        a.origin.unwrap_or(zone.origin),
+        a.note.as_deref().unwrap_or(&zone.note),
+    );
+    daw::service::Regions::rename(daw, project.clone(), id, &name).map_err(failed)?;
+    Ok(zones(daw, &project).into_iter().find(|z| z.guid == a.guid))
 }
 
 /// Correcting what was found.

@@ -49,19 +49,24 @@ pub fn read(daw: &daw::standalone::Standalone, project: &ProjectContext) -> Vec<
         .unwrap_or_default()
 }
 
-/// Keep `points` as the song's, in time order.
+/// Keep `points` as the song's, in time order — as one undo step,
+/// `label`: so it can be undone, and so it is recorded into the song's
+/// file (a change the engine never finished as a step is not).
 fn write(
     daw: &daw::standalone::Standalone,
     project: &ProjectContext,
     mut points: Vec<Poi>,
+    label: &str,
 ) -> Result<Vec<Poi>, String> {
     points.sort_by(|a, b| a.at.total_cmp(&b.at));
     let text = facet_json::to_string(&List {
         points: points.clone(),
     })
     .map_err(|e| e.to_string())?;
-    daw_proto::ExtState::set_project(daw, project.clone(), SECTION, KEY, &text)
-        .map_err(|e| e.to_string())?;
+    daw::service::Projects::begin_undo_block(daw, project.clone(), label);
+    let set = daw_proto::ExtState::set_project(daw, project.clone(), SECTION, KEY, &text);
+    daw::service::Projects::end_undo_block(daw, project.clone(), label, None);
+    set.map_err(|e| e.to_string())?;
     publish(points.clone());
     crate::actions::list().changed("song.poi", "");
     Ok(points)
@@ -286,7 +291,7 @@ pub fn register(list: &ActionList) {
             note: a.note,
             done: false,
         });
-        write(daw, &project, points)?;
+        write(daw, &project, points, "Add a point of interest")?;
         Ok(id)
     });
     list.register(&EDIT, Effect::Mutating, |a: EditArg| {
@@ -308,7 +313,7 @@ pub fn register(list: &ActionList) {
             point.at = at;
         }
         let changed = point.clone();
-        write(daw, &project, points)?;
+        write(daw, &project, points, "Edit a point of interest")?;
         Ok(out(daw, &project, &changed))
     });
     list.register(&REMOVE, Effect::Mutating, |a: RemoveArg| {
@@ -321,7 +326,7 @@ pub fn register(list: &ActionList) {
             .filter(|p| !(a.ids.contains(&p.id) || done && p.done))
             .collect();
         let gone = before.saturating_sub(kept.len());
-        write(daw, &project, kept)?;
+        write(daw, &project, kept, "Remove a point of interest")?;
         Ok(u32::try_from(gone).unwrap_or(u32::MAX))
     });
     list.register(&STEP, Effect::Mutating, |a: StepArg| {
@@ -360,7 +365,7 @@ pub fn register(list: &ActionList) {
         let point = points.get_mut(k).ok_or("gone")?;
         point.done = !point.done;
         let changed = point.clone();
-        write(daw, &project, points)?;
+        write(daw, &project, points, "Tick a point of interest")?;
         Ok(out(daw, &project, &changed))
     });
 }
