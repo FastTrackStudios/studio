@@ -148,6 +148,10 @@ jobs:
         with:
           ref: ${{ needs.resolve.outputs.sha }}
           clean: false
+      # The guitar rig's release build refuses to compile without its captures
+      # (features/rigs/guitar/build.rs); airlock keeps one clone of rig-models.
+      - name: Rig captures (rig-models) linked into the tree
+        run: bash scripts/ci/link-rig-models.sh /Volumes/build-disk/development/rig-models
       - name: Build, sign, notarize, staple
         env:
           KEYCHAIN: fts-build.keychain
@@ -221,6 +225,11 @@ jobs:
           fi
           echo "CARGO_TARGET_DIR=$dir" >> "$GITHUB_ENV"
           echo "TARGET_CAP_GB=$cap_gb" >> "$GITHUB_ENV"
+      # The guitar rig's release build refuses to compile without its captures
+      # (features/rigs/guitar/build.rs); THEBATTLESHIP keeps one clone of
+      # rig-models for CI beside the runners' work dirs.
+      - name: Rig captures (rig-models) linked into the tree
+        run: bash scripts/ci/link-rig-models.sh /run/media/Development/ci-assets/rig-models
       - name: Build both AppImages
         env:
           VERSION: ${{ needs.resolve.outputs.version }}
