@@ -148,6 +148,11 @@ fn main() {
     // SAFETY: first thing in main, before any thread starts.
     unsafe {
         std::env::set_var("BLITZ_SAFE_AREA", "0");
+        // The surface's clear colour: Blitz lays the page out inside the
+        // safe area and paints only that, so the strips outside it (an
+        // iPad's bottom edge, under the home indicator) showed the
+        // renderer's default, white (STA-297). The app's own ground.
+        std::env::set_var("ANYRENDER_BASE_COLOR", "#0f1012");
     }
     // Before anything starts audio: a backgrounded rig must not be throttled
     // (it xran whenever another app had focus).

@@ -11,9 +11,10 @@
 //!              out (its sections in a lane, the big clock, speed, volume)
 //!   foot       the chart's controls in the rig's foot bar: PDF / Keyflow,
 //!              zoom, nudge up / down, fit
-//!   follow     the gig's set as one of the rig's setlists (made once, with
-//!              each song's sections as its parts), and the song up in the
-//!              rig's Setlist view is the song whose chart and track are up
+//!   follow     the gig's set as one of the rig's setlists (made once; its
+//!              songs get no parts from the gig's sections — those are the
+//!              progress bar's), and the song up in the rig's Setlist view
+//!              is the song whose chart and track are up
 //!
 //! Each song keeps its own zoom and offset, one for the PDF and one for the
 //! Keyflow chart (`.chart-views.json` in the gigs folder), so a snippet
@@ -659,9 +660,13 @@ fn GigProgress() -> Element {
     };
     let small = "height: 36px; width: 36px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; \
                  border: none; border-radius: 6px; background: rgba(255,255,255,0.06); cursor: pointer;";
+    // Key and tempo first, then the rest of the key's line (a progression,
+    // a relative minor) — that is what truncates.
+    let (key, key_rest) = signal_rig_perform_ui::colors::split_key(&song.key);
     let facts = [
-        (!song.key.is_empty()).then(|| format!("Key {}", song.key)),
+        (!key.is_empty()).then(|| format!("Key {key}")),
         (!song.tempo.is_empty()).then(|| tempo_text(&song.tempo)),
+        (!key_rest.is_empty()).then_some(key_rest),
     ]
     .into_iter()
     .flatten()
@@ -673,14 +678,16 @@ fn GigProgress() -> Element {
             button { style: small, "aria-label": "Previous song", onclick: move |_| step(-1),
                 Icon { d: PREV, ink: INK }
             }
-            div { style: "flex-shrink: 0; width: 170px; display: flex; flex-direction: column; gap: 1px; overflow: hidden;",
-                span { style: "font-size: 14px; font-weight: 750; color: {INK}; white-space: nowrap; overflow: hidden;",
+            // The title first: it takes what it needs (up to a third of the
+            // bar) and ellipsizes last; the facts under it truncate first.
+            div { style: "flex: 1 1 0; min-width: 0; max-width: 34%; display: flex; flex-direction: column; gap: 1px; overflow: hidden;",
+                span { style: "min-width: 0; font-size: 15px; font-weight: 750; color: {INK}; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;",
                     "{song.number}. {song.title}"
                 }
-                span { style: "font-size: 11px; color: #fde68a; white-space: nowrap; overflow: hidden;", "{facts}" }
+                span { style: "min-width: 0; font-size: 11px; color: #fde68a; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;", "{facts}" }
             }
-            span { style: "font-size: 13px; color: {INK}; font-variant-numeric: tabular-nums; min-width: 40px; text-align: right;", "{clock(p)}" }
-            div { style: "flex: 1; min-width: 0;",
+            span { style: "flex-shrink: 0; font-size: 13px; color: {INK}; font-variant-numeric: tabular-nums; min-width: 40px; text-align: right;", "{clock(p)}" }
+            div { style: "flex: 2 1 0; min-width: 0;",
                 if bar.is_empty() {
                     div { style: "height: 2.75rem; display: flex; align-items: center; color: {INK_3}; font-size: 12px;",
                         if song.audio.is_none() { "No reference track — the chart only." } else { "Loading the track…" }
@@ -698,7 +705,7 @@ fn GigProgress() -> Element {
                     }
                 }
             }
-            span { style: "font-size: 13px; color: {INK_2}; font-variant-numeric: tabular-nums; min-width: 40px;", "{clock(d)}" }
+            span { style: "flex-shrink: 0; font-size: 13px; color: {INK_2}; font-variant-numeric: tabular-nums; min-width: 40px;", "{clock(d)}" }
             button { style: small, "aria-label": "Next song", onclick: move |_| step(1),
                 Icon { d: NEXT, ink: INK }
             }
@@ -732,8 +739,8 @@ fn bpm_of(tempo: &str) -> u32 {
         .unwrap_or(0)
 }
 
-/// Write the gig's set into the rig's library, once: its songs (each one's
-/// sections as its parts), a setlist named for the gig, and that set up.
+/// Write the gig's set into the rig's library, once: its songs (no parts:
+/// see below), a setlist named for the gig, and that set up.
 async fn seed_setlist(r: RigPerformClient, gig: Gig) {
     let Ok(lib) = r.library().await else {
         return;
@@ -742,13 +749,11 @@ async fn seed_setlist(r: RigPerformClient, gig: Gig) {
         return;
     }
     SEEDING.store(true, Ordering::SeqCst);
-    let mut fresh = Vec::new();
     for s in &gig.songs {
         if !lib.songs.iter().any(|x| same_song(&x.name, &s.title)) {
             let _ = r
                 .add_song(s.title.clone(), s.key.clone(), bpm_of(&s.tempo))
                 .await;
-            fresh.push(s.title.clone());
         }
     }
     let _ = r.add_setlist(gig.name.clone()).await;
@@ -770,19 +775,67 @@ async fn seed_setlist(r: RigPerformClient, gig: Gig) {
         let _ = r.add_setlist_entry(set, name).await;
     }
     let _ = r.select_setlist(set).await;
-    // The new songs' sections become their parts (a song the rig already
-    // had keeps its own).
-    for (i, s) in gig.songs.iter().enumerate() {
-        if s.sections.is_empty() || !fresh.iter().any(|t| *t == s.title) {
-            continue;
-        }
-        let _ = r.select_song(u32::try_from(i).unwrap_or(0)).await;
-        for sec in &s.sections {
-            let _ = r.add_part(sec.name.clone()).await;
-        }
-    }
+    // No parts: a gig's sections are its playback (the progress bar), not
+    // the rig's. A song gets parts when the player adds them by hand, and
+    // plays the All-Around profile until then (STA-297).
     SEEDING.store(false, Ordering::SeqCst);
     let _ = r.select_song(0).await;
+}
+
+/// Kept once the one-time clean-up below has run on this device.
+fn parts_cleaned_path() -> PathBuf {
+    gigs_root().join(".gig-parts-cleaned")
+}
+
+/// Once per device: take back the parts an earlier `seed_setlist` made
+/// from each gig song's sections (it added every section as a rig part).
+/// A part goes only when its name is exactly one of that song's sections
+/// in gig.json — so a part added by hand with a section's name goes too.
+/// Only the gigs that were seeded (the rig has a setlist of the gig's
+/// name). The flag is written after a pass that reached the rig, so a rig
+/// that was not up yet is tried again next launch.
+async fn drop_seeded_parts(r: RigPerformClient, gigs: Vec<Gig>) {
+    let flag = parts_cleaned_path();
+    if flag.exists() {
+        return;
+    }
+    let Ok(lib) = r.library().await else {
+        return;
+    };
+    let mut dropped = 0usize;
+    for gig in gigs
+        .iter()
+        .filter(|g| lib.setlists.iter().any(|s| s.name == g.name))
+    {
+        for s in &gig.songs {
+            let Some(entry) = lib.songs.iter().find(|x| same_song(&x.name, &s.title)) else {
+                continue;
+            };
+            for part in seeded_parts(&entry.parts, &s.sections) {
+                if r.edit_song_part(entry.name.clone(), "remove".into(), part, String::new())
+                    .await
+                    .is_ok()
+                {
+                    dropped += 1;
+                }
+            }
+        }
+    }
+    tracing::info!(dropped, "gig: dropped the parts seeded from gig sections");
+    if let Some(dir) = flag.parent() {
+        let _ = std::fs::create_dir_all(dir);
+    }
+    let _ = std::fs::write(&flag, format!("{dropped}\n"));
+}
+
+/// A song's parts that are named exactly as one of its gig sections, in
+/// the song's order (each once per occurrence, so a doubled one goes too).
+fn seeded_parts(parts: &[String], sections: &[Section]) -> Vec<String> {
+    parts
+        .iter()
+        .filter(|p| sections.iter().any(|sec| sec.name == **p))
+        .cloned()
+        .collect()
 }
 
 /// Draws nothing: makes the gig's setlist once, then keeps the chart and
@@ -793,7 +846,11 @@ fn GigFollow() -> Element {
     let perf = try_use_context::<PerfState>();
     use_hook(move || {
         if let (Some(r), Some(gig)) = (signal_rig_perform_ui::perform_client(), st.gig()) {
-            spawn(seed_setlist(r, gig));
+            let gigs = st.gigs.peek().clone();
+            spawn(async move {
+                seed_setlist(r.clone(), gig).await;
+                drop_seeded_parts(r, gigs).await;
+            });
         }
     });
     use_effect(move || {
@@ -835,6 +892,15 @@ fn GigMain() -> Element {
     }
 }
 
+/// How far apart the first two fingers are, in pixels (0 with fewer).
+fn spread(fingers: &BTreeMap<i32, (f64, f64)>) -> f64 {
+    let mut at = fingers.values();
+    match (at.next(), at.next()) {
+        (Some(a), Some(b)) => (a.0 - b.0).hypot(a.1 - b.1),
+        _ => 0.0,
+    }
+}
+
 fn is_keyflow(label: &str) -> bool {
     label.to_lowercase().contains("keyflow")
 }
@@ -863,6 +929,11 @@ fn ChartView() -> Element {
     let keyflow = st.keyflow;
     // A drag: where it started, and the place then.
     let mut drag = use_signal(|| None::<(f64, f64, ChartPlace)>);
+    // The fingers on the chart, by pointer id, and a pinch: how far apart
+    // two were when it started, and the place then. A pinch writes the
+    // same per-song, per-view zoom as the foot bar's − / +.
+    let mut fingers = use_signal(BTreeMap::<i32, (f64, f64)>::new);
+    let mut pinch = use_signal(|| None::<(f64, ChartPlace)>);
     let Some(song) = st.song() else {
         let name = st.gig().map(|g| g.name).unwrap_or_default();
         return rsx! {
@@ -879,6 +950,21 @@ fn ChartView() -> Element {
         .filter(|c| is_keyflow(&c.label) == keyflow())
         .filter_map(|c| image_uri(&c.path).map(|uri| (c.label.clone(), uri)))
         .collect();
+    // A finger (or the mouse) up: a pinch or a drag ends there, and its
+    // place is kept.
+    let mut lift = move |id: i32| {
+        fingers.write().remove(&id);
+        let ended = (pinch.peek().is_some() && fingers.peek().len() < 2) || drag.peek().is_some();
+        if pinch.peek().is_some() && fingers.peek().len() < 2 {
+            pinch.set(None);
+        }
+        if fingers.peek().is_empty() || ended {
+            drag.set(None);
+        }
+        if ended {
+            st.set_place(st.place(), true);
+        }
+    };
     let place = st.place();
     let width = place.zoom * 100.0;
     let img_style = format!(
@@ -889,29 +975,44 @@ fn ChartView() -> Element {
             style: "flex: 1; min-height: 0; position: relative; overflow: hidden; background: {MAIN}; color: {INK}; font-family: {FONT}; touch-action: none;",
             onpointerdown: move |e: PointerEvent| {
                 let c = e.client_coordinates();
-                drag.set(Some((c.x, c.y, st.place())));
+                fingers.write().insert(e.pointer_id(), (c.x, c.y));
+                let f = fingers.peek();
+                if f.len() >= 2 {
+                    // A second finger: the drag becomes a pinch.
+                    let d = spread(&f);
+                    drop(f);
+                    drag.set(None);
+                    if d > 10.0 {
+                        pinch.set(Some((d, st.place())));
+                    }
+                } else {
+                    drop(f);
+                    drag.set(Some((c.x, c.y, st.place())));
+                }
             },
             onpointermove: move |e: PointerEvent| {
+                let c = e.client_coordinates();
+                if let Some(at) = fingers.write().get_mut(&e.pointer_id()) {
+                    *at = (c.x, c.y);
+                }
+                if let Some((d0, from)) = *pinch.peek() {
+                    let d = spread(&fingers.peek());
+                    if d > 0.0 {
+                        let zoom = (from.zoom * d / d0 * 100.0).round() / 100.0;
+                        st.set_place(ChartPlace { zoom, ..from }, false);
+                    }
+                    return;
+                }
                 if let Some((x0, y0, from)) = *drag.peek() {
-                    let c = e.client_coordinates();
                     st.set_place(
                         ChartPlace { x: from.x - (c.x - x0), y: from.y - (c.y - y0), ..from },
                         false,
                     );
                 }
             },
-            onpointerup: move |_| {
-                if drag.peek().is_some() {
-                    drag.set(None);
-                    st.set_place(st.place(), true);
-                }
-            },
-            onpointerleave: move |_| {
-                if drag.peek().is_some() {
-                    drag.set(None);
-                    st.set_place(st.place(), true);
-                }
-            },
+            onpointerup: move |e: PointerEvent| lift(e.pointer_id()),
+            onpointercancel: move |e: PointerEvent| lift(e.pointer_id()),
+            onpointerleave: move |e: PointerEvent| lift(e.pointer_id()),
             div { style: "position: relative; left: {-place.x:.0}px; top: {-place.y:.0}px; padding: 8px 10px;",
                 if pages.is_empty() {
                     div { style: "padding: 24px; color: {INK_3}; font-size: 14px;",
@@ -1126,6 +1227,26 @@ mod tests {
                 ("", 30.0, 40.0, None),
             ]
         );
+    }
+
+    #[test]
+    fn only_parts_named_as_the_songs_sections_are_dropped() {
+        let parts: Vec<String> = ["Intro", "Verse", "Solo (mine)", "Chorus", "verse"]
+            .iter()
+            .map(|s| (*s).to_string())
+            .collect();
+        let sections = [
+            sec("Intro", 0.0, 5.0),
+            sec("Verse", 5.0, 20.0),
+            sec("Chorus", 20.0, 30.0),
+            sec("Verse", 30.0, 40.0),
+        ];
+        // Exact names only: a hand-made part and a different case stay.
+        assert_eq!(
+            seeded_parts(&parts, &sections),
+            vec!["Intro", "Verse", "Chorus"]
+        );
+        assert!(seeded_parts(&parts, &[]).is_empty());
     }
 
     #[test]

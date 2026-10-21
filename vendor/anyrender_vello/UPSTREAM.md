@@ -59,3 +59,8 @@ extended with the present path (always the intermediate now). `--features frame-
 
 Drop the vendor if upstream takes the barrier and latency changes. See
 the root `[patch.crates-io]` entry and issue #119.
+
+FTS (STA-299): `VelloRendererOptions::default()` reads the surface's clear
+colour from `ANYRENDER_BASE_COLOR=#rrggbb` (upstream: white). It is what
+shows wherever the page paints nothing — on iOS, the safe-area strips
+outside Blitz's viewport. Signal's iOS app sets its dark ground there.
