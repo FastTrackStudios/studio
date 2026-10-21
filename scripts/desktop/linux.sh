@@ -158,7 +158,10 @@ floor="$(for f in "$AD"/usr/bin/* "$AD"/usr/lib/*; do
 echo "=== glibc floor of this AppImage: ${floor:-none} (limit $MAX_GLIBC) ==="
 if [ -n "$floor" ] && [ "$(printf '%s\n%s\n' "$floor" "$MAX_GLIBC" | sort -V | tail -1)" != "$MAX_GLIBC" ]; then
     echo "ERROR: needs glibc $floor, over the limit $MAX_GLIBC: it would not start on the distros we claim." >&2
-    echo "       Find the symbol: objdump -T <file> | grep GLIBC_$floor" >&2
+    echo "       Files that ask for GLIBC_$floor (file: symbol):" >&2
+    for f in "$AD"/usr/bin/* "$AD"/usr/lib/*; do
+        objdump -T "$f" 2>/dev/null | grep "GLIBC_$floor" | awk -v f="$(basename "$f")" '{print "         " f ": " $NF}'
+    done | head -20 >&2
     exit 1
 fi
 echo "$floor" > "$OUT_DIR/$title-glibc-floor.txt"
