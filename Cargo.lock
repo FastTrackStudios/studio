@@ -598,9 +598,13 @@ dependencies = [
 name = "app-shell"
 version = "0.1.2"
 dependencies = [
+ "dioxus",
  "dirs",
+ "dock",
+ "facet",
  "tracing",
  "tracing-subscriber",
+ "utils",
 ]
 
 [[package]]
