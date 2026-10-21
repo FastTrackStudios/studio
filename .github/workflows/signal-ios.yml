@@ -137,6 +137,28 @@ jobs:
           ref: ${{ needs.resolve.outputs.sha }}
           clean: false
 
+      # The guitar rig's release build refuses to compile without its captures
+      # (features/rigs/guitar/build.rs). They are in the private rig-models repo,
+      # which airlock keeps one clone of beside its other projects.
+      - name: Rig captures (rig-models) linked into the tree
+        # Inline, not a script in the tree: a re-run of an older tag builds that
+        # tag's sources, which do not have one.
+        run: |
+          set -euo pipefail
+          src=/Volumes/build-disk/development/rig-models
+          [ -d "$src/guitar" ] && [ -d "$src/bass" ] || { echo "::error::no rig-models clone at $src"; exit 1; }
+          while read -r repo from to; do
+            [[ -z $repo || $repo == \#* || $repo != rig-models ]] && continue
+            to="${to:-$from}"
+            n="$(find -L "$src/$from" -type f \( -name '*.nam' -o -name '*.wav' \) | wc -l | tr -d ' ')"
+            [ "$n" -gt 0 ] || { echo "::error::$src/$from holds no captures"; exit 1; }
+            mkdir -p "$(dirname "$to")"
+            if [ -d "$to" ] && [ ! -L "$to" ]; then rmdir "$to"; fi
+            ln -sfn "$src/$from" "$to"
+            echo "linked $to -> $src/$from ($n captures)"
+          done < assets.txt
+          echo "rig-models at $(git -C "$src" rev-parse --short HEAD 2>/dev/null || echo unknown)"
+
       # CFBundleVersion has to climb with every upload: the unix time, taken
       # once, here, so the number built is the number recorded.
       - name: Build number
