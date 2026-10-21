@@ -15,10 +15,10 @@
 set -euo pipefail
 
 # The marketing version (CFBundleShortVersionString) is the release tag's
-# (signal-v0.1.3 -> 0.1.3), set by signal-ios.yml from the GitHub Release being
+# (v0.1.3 -> 0.1.3), set by signal-ios.yml from the GitHub Release being
 # shipped. No default, and checked first: a TestFlight build is a release's,
 # and a missing version must not cost a whole build before it fails.
-: "${MARKETING_VER:?MARKETING_VER is required: the version of the per-app release tag being shipped (e.g. 0.1.3)}"
+: "${MARKETING_VER:?MARKETING_VER is required: the version of the release tag being shipped (e.g. 0.1.3)}"
 
 # Telemetry for a build made here, by hand: CI bakes TASK_OTLP_ENDPOINT /
 # TASK_OTLP_TOKEN / TASK_SENTRY_DSN from the org's secrets

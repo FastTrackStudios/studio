@@ -17,6 +17,10 @@
 {
   perSystem = { pkgs, lib, config, ... }:
     let
+      # One version for the whole studio: the workspace's. The crates take it
+      # with `version.workspace = true`, so the packages cannot drift from it.
+      workspaceVersion = (builtins.fromTOML (builtins.readFile ../../../Cargo.toml)).workspace.package.version;
+
       # Reuse the toolchain's own GUI dep list (toolchain.nix already
       # assembled webkitgtk/gtk3/x11/vulkan for Linux, libiconv for
       # Darwin) instead of duplicating it — commonArgs.buildInputs alone
@@ -33,7 +37,7 @@
 
       session-desktop = config.fts.craneLib.buildPackage (config.fts.commonArgs // guiArgs // {
         pname = "session-desktop";
-        version = "0.0.2-alpha";
+        version = workspaceVersion;
         cargoArtifacts = null;
         cargoExtraArgs = "--package session-desktop";
         doCheck = false;
@@ -43,7 +47,7 @@
       # The isolated live-rig app (one engine, rigs only).
       signal-desktop = config.fts.craneLib.buildPackage (config.fts.commonArgs // guiArgs // {
         pname = "signal-desktop";
-        version = "0.0.2-alpha";
+        version = workspaceVersion;
         cargoArtifacts = null;
         cargoExtraArgs = "--package signal-desktop";
         doCheck = false;

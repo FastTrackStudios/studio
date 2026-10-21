@@ -1968,7 +1968,7 @@ reaper-test-gui FILTER="":
 # where CI runs no build (checks.yml runs on release PRs into main only).
 # The minimum gate for a PR into dev is `cargo check --workspace
 # --all-targets`. NOT the other
-# workflows: `session-ios` (a per-app release tag) and `deploy` need a
+# workflows: `signal-ios` and `session-ios` (the release tag) and `deploy` need a
 # Mac, signing keys and upload credentials, which is why they are not a
 # thing you run before pushing — and why a green run here says nothing
 # about whether either of them is healthy.
@@ -2067,53 +2067,44 @@ ci FROM="lockfile":
 # the PR-title check, so a local check (above) is their gate. A release is
 # a `release/vX.Y.Z` branch cut from dev (dev never freezes) and its PR
 # into main: the full checks + the release guard run there, it is merged
-# with a merge commit, and main then deploys the sites and tags
-# `v<version>`; then main is back-merged into dev. One version,
-# `[workspace.package] version` in Cargo.toml; the changelog is generated
+# with a merge commit, and main then deploys the sites, tags
+# `v<version>` and uploads Signal + Session to TestFlight; then main is
+# back-merged into dev. One version, `[workspace.package] version` in
+# Cargo.toml; the changelog is generated
 # from commit subjects by git-cliff (cliff.toml), one section per
 # release, over the commits since the last tag.
 #
-# Signal and Session (the iOS apps) release PER APP, the same way, on a
-# `release/<app>-vX.Y.Z` branch: `just release-prepare signal` (or
-# `session`). Their version is the app crate's, their tag `<app>-vX.Y.Z`,
-# their changelog apps/<app>/CHANGELOG.md. The merge tags it, publishes
-# its GitHub Release and uploads TestFlight at the tag's version, and
-# nothing else uploads TestFlight.
+# Signal and Session (the iOS apps) are ONE release with the rest of the
+# repo: the same build, the same version (their crates take
+# `version.workspace = true`), the same `vX.Y.Z` tag and GitHub Release.
+# The merge tags it, publishes the Release and uploads BOTH apps to
+# TestFlight at the tag's version; nothing else uploads TestFlight.
 
-# The repo's release version ([workspace.package] in Cargo.toml).
+# The studio's release version ([workspace.package] in Cargo.toml).
 version:
     @bash scripts/release.sh version
 
 # What the next release would be: suggested version, unreleased
 # changelog, and the git dependencies that moved.
-#   just release-plan            the repo's v<version>
-#   just release-plan signal     Signal's next signal-v<version> (or session)
-release-plan *APP:
-    bash scripts/release.sh plan {{APP}}
+release-plan:
+    bash scripts/release.sh plan
 
 # Cut `release/v<next>` from origin/dev: bump the version, write the
 # changelog section, commit `chore(release): v<next>`. Refuses until the
 # last release is back-merged into dev.
 # BUMP: patch (the default, whatever the commits say; 0.1.9 -> 0.1.10, the
 # patch never rolls over), minor or major (only when the Captain or
-# Commander calls one), auto (git-cliff decides; the repo's release only),
-# or an exact X.Y.Z.
-#   just release-prepare                   the repo's release/v<next>
-#   just release-prepare signal [BUMP]     release/signal-v<next>: bumps the
-#       app crate's version, writes apps/signal/CHANGELOG.md's section, and
-#       commits `chore(release): signal-v<next>` (Signal's first is 0.1.0).
-#       The same for `session`.
+# Commander calls one), auto (git-cliff decides), or an exact X.Y.Z.
 release-prepare *ARGS:
     bash scripts/release.sh prepare {{ARGS}}
 
-# On the release/v*, release/<app>-v* (or hotfix/*) branch: push it and
-# open its PR into main, with the changelog as the body.
+# On the release/v* (or hotfix/*) branch: push it and open its PR into
+# main, with the changelog as the body.
 release-pr:
     bash scripts/release.sh pr
 
-# On the release/v* (or release/<app>-v*) branch, after a fix PR landed on
-# it: regenerate the changelog section and end the branch with the release
-# commit again.
+# On the release/v* branch, after a fix PR landed on it: regenerate the
+# changelog section and end the branch with the release commit again.
 release-refresh:
     bash scripts/release.sh refresh
 
@@ -2128,8 +2119,7 @@ release-backmerge:
 release-hotfix:
     bash scripts/release.sh hotfix
 
-# One version's section of CHANGELOG.md (default: the current version);
-# `just release-notes signal [VERSION]` is the app's own changelog.
+# One version's section of CHANGELOG.md (default: the current version).
 release-notes *ARGS:
     @bash scripts/release.sh notes {{ARGS}}
 

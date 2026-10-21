@@ -52,7 +52,8 @@ RESOURCES="$SCRIPT_DIR/installer-resources/session"
 HOST_TARGET="$(rustc -vV | awk '/^host:/{print $2}')"
 read -r -a TARGETS <<<"${MAC_TARGETS:-$HOST_TARGET}"
 
-# `0.0.2-alpha` -> `0.0.2`: CFBundleShortVersionString must be numeric.
+# A pre-release version (`0.2.0-alpha`) -> `0.2.0`: CFBundleShortVersionString
+# must be numeric. (Releases are plain X.Y.Z: the one studio version.)
 VERSION="$(cargo pkgid -p "$PACKAGE" | sed 's/.*[#@]//')"
 SHORT_VERSION="${VERSION%%-*}"
 BUILD_NO="${BUILD_NO:-$(date +%Y%m%d%H%M)}"
