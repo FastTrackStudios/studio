@@ -87,7 +87,13 @@ async fn establish<C: vox_core::FromVoxLane>(url: &str) -> Option<C> {
         .ok()
 }
 
-type Clients = (RigClient, RigStreamClient, AudioSettingsClient, Option<RigPerformClient>, Option<RigPerformStreamClient>);
+type Clients = (
+    RigClient,
+    RigStreamClient,
+    AudioSettingsClient,
+    Option<RigPerformClient>,
+    Option<RigPerformStreamClient>,
+);
 
 async fn connect(url: &str) -> Option<Clients> {
     // The shared performance surface, under the guitar's scope; an older
@@ -154,7 +160,9 @@ fn App() -> Element {
         let mut fails = 0u32;
         loop {
             architect::platform::sleep(std::time::Duration::from_millis(1500)).await;
-            let Some((g, (rig, ..))) = clients.peek().as_ref().cloned() else { continue };
+            let Some((g, (rig, ..))) = clients.peek().as_ref().cloned() else {
+                continue;
+            };
             if g != *generation.peek() {
                 continue;
             }
@@ -187,7 +195,7 @@ fn App() -> Element {
                     let _ = provide_context(rig);
                     let _ = provide_context(stream);
                     let _ = provide_context(settings);
-                    let _ = provide_context(signal_guitar_ui::PerformClients { client: perform, stream: perform_stream });
+                    let _ = provide_context(guitar::ui::PerformClients { client: perform, stream: perform_stream });
                     rsx! {
                         div { style: "flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column;",
                             GuitarRigRemote { key: "{generation}" }

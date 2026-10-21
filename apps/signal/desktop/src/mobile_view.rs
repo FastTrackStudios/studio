@@ -272,7 +272,7 @@ fn DrumPage(on_home: EventHandler<()>) -> Element {
     }
     rsx! {
         div { style: "flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column;",
-            signal_guitar_ui::DrumTablet {}
+            guitar::ui::DrumTablet {}
         }
     }
 }
@@ -280,7 +280,10 @@ fn DrumPage(on_home: EventHandler<()>) -> Element {
 /// The embedded engine's drum clients, when this build has the drum rig.
 #[cfg(feature = "signal-drums-rig")]
 fn drum_clients() -> Option<
-    crate::rig_engine::RigClients<signal_drums_proto::drum::DrumRigClient, signal_drums_proto::drum::DrumRigStreamClient>,
+    crate::rig_engine::RigClients<
+        drums::proto::drum::DrumRigClient,
+        drums::proto::drum::DrumRigStreamClient,
+    >,
 > {
     crate::rig_engine::engine().and_then(|e| e.drums.clone())
 }

@@ -97,7 +97,7 @@ pub fn LibrariesPage(on_back: EventHandler<()>) -> Element {
     let mut host = use_signal(|| {
         crate::remote::engine_iroh_id()
             .map(|id| id.to_string())
-            .or_else(|| crate::prefs::get("signal-engine-ws-url"))
+            .or_else(|| utils::prefs::get_raw("signal-engine-ws-url"))
             .unwrap_or_default()
     });
 
@@ -178,7 +178,7 @@ pub fn LibrariesPage(on_back: EventHandler<()>) -> Element {
     let on_connect = move |_| {
         let raw = host().trim().to_string();
         if raw.starts_with("ws://") || raw.starts_with("wss://") {
-            crate::prefs::set("signal-engine-ws-url", &raw);
+            utils::prefs::set_raw("signal-engine-ws-url", &raw);
             crate::remote::store_engine_iroh_id(None);
         } else if !raw.is_empty() {
             crate::remote::store_engine_iroh_id(Some(&raw));

@@ -195,7 +195,6 @@ pub fn island_on_left() -> Option<bool> {
     }
 }
 
-
 /// What this device is called on screen: "iPhone" or "iPad"
 /// (`UIDevice.userInterfaceIdiom`).
 pub fn device_name() -> &'static str {

@@ -97,9 +97,14 @@ type PerformClients = (
 /// The guitar's performance clients on `target`, scoped.
 async fn connect_perform(target: &EngineTarget) -> PerformClients {
     let slug = signal_rigs_proto::Rig::Guitar.slug();
-    let perform: Option<signal_rigs_proto::perform::service::RigPerformClient> = establish(target).await;
-    let stream: Option<signal_rigs_proto::perform::service::RigPerformStreamClient> = establish(target).await;
-    (perform.map(|c| architect::scope_client!(c, slug)), stream.map(|c| architect::scope_client!(c, slug)))
+    let perform: Option<signal_rigs_proto::perform::service::RigPerformClient> =
+        establish(target).await;
+    let stream: Option<signal_rigs_proto::perform::service::RigPerformStreamClient> =
+        establish(target).await;
+    (
+        perform.map(|c| architect::scope_client!(c, slug)),
+        stream.map(|c| architect::scope_client!(c, slug)),
+    )
 }
 
 /// One connect attempt for every client the page uses.
@@ -207,7 +212,10 @@ pub fn SignalWorkspace() -> Element {
     let Some(kind) = selected() else {
         if libraries() {
             level.crumbs(vec![
-                fts_audio_ui::chrome::Crumb::new("Rigs", Callback::new(move |()| libraries.set(false))),
+                fts_audio_ui::chrome::Crumb::new(
+                    "Rigs",
+                    Callback::new(move |()| libraries.set(false)),
+                ),
                 fts_audio_ui::chrome::Crumb::here("Libraries"),
             ]);
             return rsx! {

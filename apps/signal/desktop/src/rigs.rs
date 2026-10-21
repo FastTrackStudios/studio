@@ -120,7 +120,10 @@ pub fn store_last(rig: Option<Rig>) {
 /// The rig played last — the one the front page lights, even after going
 /// back to the menu.
 pub fn last_played() -> Option<Rig> {
-    utils::prefs::get_raw("last-played").as_deref().and_then(Rig::from_slug).filter(|k| available(*k))
+    utils::prefs::get_raw("last-played")
+        .as_deref()
+        .and_then(Rig::from_slug)
+        .filter(|k| available(*k))
 }
 
 // ── The menu ────────────────────────────────────────────────────────────────
@@ -171,7 +174,11 @@ pub struct FrontState {
 
 impl FrontState {
     fn tile(&self, rig: Rig) -> RigTile {
-        self.tiles.iter().find(|(r, _)| *r == rig).map(|(_, t)| t.clone()).unwrap_or_default()
+        self.tiles
+            .iter()
+            .find(|(r, _)| *r == rig)
+            .map(|(_, t)| t.clone())
+            .unwrap_or_default()
     }
 }
 
@@ -185,7 +192,8 @@ const INK_2: &str = "#a1a1aa";
 const INK_3: &str = "#80808a";
 const DIM: &str = "#3f3f46";
 const LIVE: &str = "#22c55e";
-const FONT: &str = "-apple-system, 'SF Pro Text', system-ui, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif";
+const FONT: &str =
+    "-apple-system, 'SF Pro Text', system-ui, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif";
 
 const PRIMARY: &str = "#2563eb";
 const LIVE_BG: &str = "rgba(34, 197, 94, 0.12)";
@@ -208,7 +216,8 @@ pub fn RigMenu(
     #[props(default)] on_setlists: Option<EventHandler<()>>,
     #[props(default)] front: FrontState,
     /// Taller than wide (an iPad held upright): the set under the rigs.
-    #[props(default)] portrait: bool,
+    #[props(default)]
+    portrait: bool,
 ) -> Element {
     // Bass sits by the guitar it is a mode of; the rest follow the catalogue.
     let mut ready: Vec<Rig> = Rig::ALL.iter().copied().filter(|r| available(*r)).collect();
@@ -225,7 +234,9 @@ pub fn RigMenu(
         .map(Rig::label)
         .chain((!GUIDE_AVAILABLE).then_some("Guide"))
         .collect();
-    let last = last_played().filter(|r| ready.contains(r)).or_else(|| ready.first().copied());
+    let last = last_played()
+        .filter(|r| ready.contains(r))
+        .or_else(|| ready.first().copied());
     let others: Vec<Rig> = ready.iter().copied().filter(|r| Some(*r) != last).collect();
     // A phone in landscape has about 330pt under the bar: tighter, and the
     // Resume pane drops its stacks (the song line says enough).
@@ -233,14 +244,18 @@ pub fn RigMenu(
     let gap = if phone { 10 } else { 14 };
     // On a phone on its side: the camera housing's side kept clear, and the
     // foot clear of the rounded corners and the home indicator.
-    let island_left = try_use_context::<signal_guitar_ui::IslandLeft>().map(|s| (s.0)());
-    let corner = try_use_context::<signal_guitar_ui::ScreenCorners>().map_or(0.0, |c| (c.0)());
+    let island_left = try_use_context::<guitar::ui::IslandLeft>().map(|s| (s.0)());
+    let corner = try_use_context::<guitar::ui::ScreenCorners>().map_or(0.0, |c| (c.0)());
     let (lead, trail) = match (phone, island_left) {
         (true, Some(true)) => (HOUSING, pad),
         (true, Some(false)) => (pad, HOUSING),
         _ => (pad, pad),
     };
-    let foot = if phone && corner > 0.0 { (corner * 0.35).round() as u32 } else { gap };
+    let foot = if phone && corner > 0.0 {
+        (corner * 0.35).round() as u32
+    } else {
+        gap
+    };
     let guitar_live = front.tile(Rig::Guitar).live;
     // Side by side, the rigs no wider than a hand's reach; upright, stacked,
     // each as tall as it needs and the set taking the rest.
@@ -289,7 +304,12 @@ pub fn RigMenu(
 
 /// The bar: the wordmark, where the sound comes from, the Libraries.
 #[component]
-fn Bar(front: FrontState, lead: u32, trail: u32, on_libraries: Option<EventHandler<()>>) -> Element {
+fn Bar(
+    front: FrontState,
+    lead: u32,
+    trail: u32,
+    on_libraries: Option<EventHandler<()>>,
+) -> Element {
     let dot = if front.connected { LIVE } else { DIM };
     rsx! {
         div { style: "flex-shrink: 0; height: 56px; display: flex; align-items: center; gap: 16px; padding: 0 {trail}px 0 {lead}px; border-bottom: 1px solid {RULE_STRONG}; background: {SHEET}; box-sizing: border-box;",
@@ -319,10 +339,27 @@ fn Bar(front: FrontState, lead: u32, trail: u32, on_libraries: Option<EventHandl
 
 /// Where you were: the rig, what it plays, the song up — and Resume.
 #[component]
-fn Resume(rig: Rig, tile: RigTile, set: Option<SetInfo>, phone: bool, on_pick: EventHandler<()>) -> Element {
-    let (pad, gap, name, line, button) = if phone { ("12px 18px", 6, 30, 16, 48) } else { ("26px 26px 24px", 18, 44, 22, 56) };
-    let opens_on = if tile.opens_on.is_empty() { rig.blurb().to_string() } else { tile.opens_on.clone() };
-    let song = set.as_ref().filter(|_| matches!(rig, Rig::Guitar | Rig::Bass)).and_then(|s| s.songs.get(s.up).cloned());
+fn Resume(
+    rig: Rig,
+    tile: RigTile,
+    set: Option<SetInfo>,
+    phone: bool,
+    on_pick: EventHandler<()>,
+) -> Element {
+    let (pad, gap, name, line, button) = if phone {
+        ("12px 18px", 6, 30, 16, 48)
+    } else {
+        ("26px 26px 24px", 18, 44, 22, 56)
+    };
+    let opens_on = if tile.opens_on.is_empty() {
+        rig.blurb().to_string()
+    } else {
+        tile.opens_on.clone()
+    };
+    let song = set
+        .as_ref()
+        .filter(|_| matches!(rig, Rig::Guitar | Rig::Bass))
+        .and_then(|s| s.songs.get(s.up).cloned());
     let state = if tile.live { "Playing" } else { "Last played" };
     rsx! {
         div { style: "flex-shrink: 0; display: flex; flex-direction: column; gap: {gap}px; padding: {pad}; border: 1px solid {RULE_STRONG}; border-radius: 8px; background: {SHEET}; box-sizing: border-box;",
@@ -356,7 +393,7 @@ fn Resume(rig: Rig, tile: RigTile, set: Option<SetInfo>, phone: bool, on_pick: E
                 div { style: "display: flex; flex-wrap: wrap; gap: 8px;",
                     for (i, (stack, patch, up)) in tile.stacks.iter().take(6).enumerate() {
                         {
-                            let (swatch, _) = signal_guitar_ui::folder_color(stack);
+                            let (swatch, _) = guitar::ui::folder_color(stack);
                             let up = *up;
                             rsx! {
                                 // DESIGN's stack chip: a 20% tint and a swatch; the
@@ -435,8 +472,16 @@ fn ResumeButton(rig: Rig, height: u32, on_pick: EventHandler<()>) -> Element {
 #[component]
 fn RigRow(rig: Rig, tile: RigTile, first: bool, phone: bool, on_pick: EventHandler<()>) -> Element {
     let height = if phone { 58 } else { 76 };
-    let opens_on = if tile.opens_on.is_empty() { rig.blurb().to_string() } else { tile.opens_on.clone() };
-    let edge = if first { "none".to_string() } else { format!("1px solid {RULE}") };
+    let opens_on = if tile.opens_on.is_empty() {
+        rig.blurb().to_string()
+    } else {
+        tile.opens_on.clone()
+    };
+    let edge = if first {
+        "none".to_string()
+    } else {
+        format!("1px solid {RULE}")
+    };
     rsx! {
         button {
             class: "fp-press fp-focus",
@@ -458,8 +503,18 @@ fn RigRow(rig: Rig, tile: RigTile, first: bool, phone: bool, on_pick: EventHandl
 /// Tonight: the set up, every song with its key and tempo, the one up
 /// marked; a song is one press from the guitar on it.
 #[component]
-fn RunSheet(set: Option<SetInfo>, phone: bool, live: bool, on_song: Option<EventHandler<usize>>, on_setlists: Option<EventHandler<()>>) -> Element {
-    let (head, title, row) = if phone { ("12px 16px 10px", 20, 48) } else { ("22px 22px 16px", 28, 60) };
+fn RunSheet(
+    set: Option<SetInfo>,
+    phone: bool,
+    live: bool,
+    on_song: Option<EventHandler<usize>>,
+    on_setlists: Option<EventHandler<()>>,
+) -> Element {
+    let (head, title, row) = if phone {
+        ("12px 16px 10px", 20, 48)
+    } else {
+        ("22px 22px 16px", 28, 60)
+    };
     rsx! {
         div { style: "flex: 2 1 0; min-width: 0; min-height: 0; display: flex; flex-direction: column; border: 1px solid {RULE}; border-radius: 8px; background: {SHEET}; overflow: hidden; box-sizing: border-box;",
             match set {

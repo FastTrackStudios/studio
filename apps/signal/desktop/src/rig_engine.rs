@@ -58,12 +58,16 @@ pub struct RigEngine {
     /// The drum backend itself, for what is not on its wire: pointing it at
     /// a library this device just downloaded.
     #[cfg(feature = "signal-drums-rig")]
-    pub drums_backend: Option<signal_drums::DrumRigBackend>,
+    pub drums_backend: Option<drums::DrumRigBackend>,
     #[cfg(feature = "signal-drums-rig")]
-    pub drums: Option<RigClients<signal_drums_proto::drum::DrumRigClient, signal_drums_proto::drum::DrumRigStreamClient>>,
+    pub drums: Option<
+        RigClients<drums::proto::drum::DrumRigClient, drums::proto::drum::DrumRigStreamClient>,
+    >,
     /// The in-process e-kit, as the drums.
     #[cfg(feature = "signal-ekit-rig")]
-    pub ekit: Option<RigClients<signal_ekit_proto::ekit::EkitRigClient, signal_ekit_proto::ekit::EkitRigStreamClient>>,
+    pub ekit: Option<
+        RigClients<ekit::proto::ekit::EkitRigClient, ekit::proto::ekit::EkitRigStreamClient>,
+    >,
     /// Keeps the `LocalServer` acceptor tasks alive for the app's lifetime.
     _scope: Arc<architect::Scope>,
 }
@@ -88,7 +92,12 @@ async fn rig_clients<C: vox_core::FromVoxLane, S: vox_core::FromVoxLane>(
     let (c, st) = match (server.establish::<C>().await, server.establish::<S>().await) {
         (Ok(c), Ok(s)) => (c, s),
         (c, s) => {
-            tracing::warn!(rig = slug, rig_ok = c.is_ok(), stream_ok = s.is_ok(), "embedded: rig clients refused");
+            tracing::warn!(
+                rig = slug,
+                rig_ok = c.is_ok(),
+                stream_ok = s.is_ok(),
+                "embedded: rig clients refused"
+            );
             return None;
         }
     };
@@ -102,7 +111,12 @@ async fn rig_clients<C: vox_core::FromVoxLane, S: vox_core::FromVoxLane>(
         .await
         .ok()
         .map(|c| architect::scope_client!(c, slug));
-    Some(RigClients { rig: c, stream: st, perform, perform_stream })
+    Some(RigClients {
+        rig: c,
+        stream: st,
+        perform,
+        perform_stream,
+    })
 }
 
 static ENGINE: OnceLock<RigEngine> = OnceLock::new();
@@ -155,7 +169,7 @@ pub fn bootstrap_blocking() -> eyre::Result<()> {
         // screens start audio, each with its own performance surface under
         // its scope (as engine_main.rs mounts them).
         #[cfg(feature = "signal-drums-rig")]
-        let drums_backend = signal_drums::DrumRigBackend::new();
+        let drums_backend = drums::DrumRigBackend::new();
         #[cfg(feature = "signal-drums-rig")]
         let router = signal_rigs_proto::mount_perform!(
             router.merge_router(drums_backend.router()),
@@ -163,7 +177,7 @@ pub fn bootstrap_blocking() -> eyre::Result<()> {
             drums_backend.clone()
         );
         #[cfg(feature = "signal-ekit-rig")]
-        let ekit_backend = signal_ekit::EkitBackend::new();
+        let ekit_backend = ekit::EkitBackend::new();
         #[cfg(feature = "signal-ekit-rig")]
         let router = signal_rigs_proto::mount_perform!(
             router.merge_router(ekit_backend.router()),
