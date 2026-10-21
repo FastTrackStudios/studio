@@ -98,7 +98,7 @@ chmod u+w "$AD/usr/bin/$bin"
 excluded() {
     case "$1" in
         libGL.so*|libGLX*|libGLdispatch*|libOpenGL*|libEGL*|libGLESv*|libvulkan*|libdrm*|libgbm*) return 0 ;;
-        libc.so*|libm.so*|libdl.so*|libpthread.so*|librt.so*|libresolv.so*|libutil.so*|libnss_*|ld-linux*) return 0 ;;
+        libc.so*|libm.so*|libdl.so*|libpthread.so*|librt.so*|libresolv.so*|libutil.so*|libmvec.so*|libanl.so*|libBrokenLocale.so*|libthread_db.so*|libnsl.so*|libnss_*|ld-linux*) return 0 ;;
         *) return 1 ;;
     esac
 }
@@ -151,16 +151,20 @@ if grep -rl '/nix/store' "$AD/usr/bin" "$AD/usr/lib" >/dev/null 2>&1; then
     done
 fi
 
+# The glibc symbol versions a file REQUIRES (its "Version References"); the ones
+# it defines (a glibc component bundled by mistake) do not count.
+glibc_refs() { objdump -p "$1" 2>/dev/null | sed -n '/Version References/,$p' | grep -o 'GLIBC_[0-9][0-9.]*' || true; }
+
 # The floor: the newest GLIBC_x.y symbol version any bundled ELF requires.
 floor="$(for f in "$AD"/usr/bin/* "$AD"/usr/lib/*; do
-        objdump -T "$f" 2>/dev/null | grep -o 'GLIBC_[0-9][0-9.]*' || true
+        glibc_refs "$f"
     done | sed 's/GLIBC_//' | sort -uV | tail -1)"
 echo "=== glibc floor of this AppImage: ${floor:-none} (limit $MAX_GLIBC) ==="
 if [ -n "$floor" ] && [ "$(printf '%s\n%s\n' "$floor" "$MAX_GLIBC" | sort -V | tail -1)" != "$MAX_GLIBC" ]; then
     echo "ERROR: needs glibc $floor, over the limit $MAX_GLIBC: it would not start on the distros we claim." >&2
-    echo "       Files that ask for GLIBC_$floor (file: symbol):" >&2
+    echo "       Files that require GLIBC_$floor:" >&2
     for f in "$AD"/usr/bin/* "$AD"/usr/lib/*; do
-        objdump -T "$f" 2>/dev/null | grep "GLIBC_$floor" | awk -v f="$(basename "$f")" '{print "         " f ": " $NF}'
+        if glibc_refs "$f" | grep -qx "GLIBC_$floor"; then echo "         $(basename "$f")"; fi
     done | head -20 >&2
     exit 1
 fi
