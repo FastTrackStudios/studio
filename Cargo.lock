@@ -17982,6 +17982,7 @@ dependencies = [
 name = "signal-rig-shell"
 version = "0.1.2"
 dependencies = [
+ "app-shell",
  "dioxus",
 ]
 

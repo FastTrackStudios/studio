@@ -12,17 +12,21 @@ use dioxus::prelude::*;
 
 use super::layout::{Region, ShellLayout, pref_key};
 use super::registry::{Panel, PanelRegistry, Render};
+use crate::tokens::{INK, INK_3, RULE, SHEET, UP};
 
-const LINE: &str = "#1f1f23";
-const RAIL_BG: &str = "#0b0b0e";
-const INK: &str = "#e4e4e7";
-const INK_DIM: &str = "#71717a";
-const PICKED_BG: &str = "#0c4a6e";
-const PICKED_INK: &str = "#e0f2fe";
+// The region chrome draws from the shell's tokens (`crate::tokens`), the
+// same ones the iPad rig frame (`signal-rig-shell`) uses.
+const LINE: &str = RULE;
+const RAIL_BG: &str = SHEET;
+const INK_DIM: &str = INK_3;
+/// A picked tab is lifted, not blue (the rig frame's rule).
+const PICKED_BG: &str = UP;
+const PICKED_INK: &str = INK;
 /// A collapsed sidebar's rail (spec §2.1: 44 desktop / 56 touch; the touch
 /// width comes with the size classes, spec §10 step 1).
 const RAIL_W: u32 = 44;
-/// The 48px hit floor for touch (spec §3.1) holds for every rail button.
+/// The touch floor for every rail button: 48 px, the spec's padded hit
+/// (§3.1) over the tokens' 44 pt minimum ([`crate::tokens::HIT`]).
 const HIT: u32 = 48;
 
 /// A scope's layout, shared by its frame and every panel inside it.
