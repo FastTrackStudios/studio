@@ -234,11 +234,15 @@ on any recent distro, and `--version` can be smoke-tested without a display. A
 A binary built in a Nix shell points into `/nix/store`, so `linux.sh` bundles
 its libraries, repoints the interpreter at `/lib64/ld-linux-x86-64.so.2`, and
 **computes the glibc floor** (the newest `GLIBC_x.y` any bundled file needs).
-It refuses to build over `MAX_GLIBC` (2.39, Ubuntu 24.04) and writes the floor
+It refuses to build over `MAX_GLIBC` (2.42, a ratchet) and writes the floor
 next to the file, so a toolchain bump that raises it is seen here, not by a
 user. The AppImage therefore runs on distros whose glibc is at least that
-floor (Ubuntu 24.04+, Debian 13+, Fedora 39+, Arch); on Ubuntu 22.04 and
-Debian 12 it stops with `GLIBC_2.xx not found`, which the smoke test shows. The
+floor. Measured on the v0.1.0 build: **2.42** (WebKitGTK and libgpg-error from
+the Nix toolchain's glibc), so Fedora 43+, Arch and other rolling distros;
+Ubuntu 24.04 (2.39) and Debian 12/13 stop with `GLIBC_2.xx not found`. That is
+a real limit of shipping from a Nix toolchain, written into the release notes
+by the workflow, and the way to lower it is a follow-up (build against an older
+glibc, or carry glibc in the AppImage). The
 graphics stack (GL, EGL, the Vulkan loader, DRM, GBM) is taken from the user's
 driver, not bundled.
 
@@ -266,7 +270,7 @@ to be on the default branch before it can be dispatched.)
   <dmg>` and `xcrun stapler validate <dmg>` on airlock say accepted/valid.
 - Each AppImage starts with no display: `scripts/desktop/linux-smoke.sh <file>
   <app> <version>` (on NixOS it goes through `appimage-run`;
-  `SMOKE_PODMAN_IMAGE=docker.io/library/ubuntu:24.04` runs the payload in
+  `SMOKE_PODMAN_IMAGE=docker.io/library/archlinux:latest` runs the payload in
   another distro).
 - The `.sha256` files match.
 

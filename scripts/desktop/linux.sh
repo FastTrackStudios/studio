@@ -29,7 +29,9 @@
 #   VERSION     X.Y.Z (default: [workspace.package])
 #   OUT_DIR     default target/desktop
 #   PROFILE     cargo profile (default release-fast)
-#   MAX_GLIBC   highest glibc symbol version accepted (default 2.39, Ubuntu 24.04)
+#   MAX_GLIBC   highest glibc symbol version accepted (default 2.42: what the Nix toolchain
+#               builds against today; a ratchet, so a toolchain bump that raises
+#               the floor fails here instead of on a user's machine)
 #   SKIP_BUILD  1 reuses $CARGO_TARGET_DIR (or target)/$PROFILE/<bin>
 set -euo pipefail
 
@@ -56,7 +58,7 @@ VERSION="${VERSION:-$(bash scripts/release.sh version)}"
 [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "version '$VERSION' is not X.Y.Z" >&2; exit 2; }
 OUT_DIR="${OUT_DIR:-$ROOT/target/desktop}"
 PROFILE="${PROFILE:-release-fast}"
-MAX_GLIBC="${MAX_GLIBC:-2.39}"
+MAX_GLIBC="${MAX_GLIBC:-2.42}"
 ARCH=x86_64
 mkdir -p "$OUT_DIR"
 OUT="$OUT_DIR/$title-$VERSION-linux-$ARCH.AppImage"

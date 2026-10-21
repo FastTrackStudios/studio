@@ -8,7 +8,7 @@
 # (APPIMAGE_EXTRACT_AND_RUN). On NixOS /lib64 has no real loader, which is
 # exactly why the AppImage's interpreter is the standard path: there the
 # check goes through `appimage-run` (an FHS sandbox with a stock glibc), and
-# SMOKE_PODMAN_IMAGE=<image> (e.g. docker.io/library/ubuntu:24.04) runs its
+# SMOKE_PODMAN_IMAGE=<image> (e.g. docker.io/library/archlinux:latest) runs its
 # payload in a container of another distro, a stronger test of the same claim.
 set -euo pipefail
 
