@@ -18,10 +18,12 @@
 # so "Active" means the cluster is SERVING this sha, not merely that an
 # image was pushed.
 #
-# main is production: under the dev-first workflow
-# (docs/agents/release-workflow.md) it only receives release merges from
-# release/vX.Y.Z branches cut from dev (and hotfix/*), so this runs once
-# per release, not once per push.
+# Production is the latest `v*` TAG, not main (release flow v2,
+# docs/agents/release-workflow.md): main holds finished features, promoted
+# from dev, and a push to main deploys nothing. This runs only when a
+# `vX.Y.Z` tag is pushed (`just release-tag`) or dispatched with a tag as
+# its ref; the first step refuses a tag that is not a release commit on
+# main. Both sites deploy the tagged commit, once per release.
 #
 # No path filtering. session-web's demo backend is the real in-process
 # daw-standalone/session stack, so a change almost anywhere in the
@@ -32,7 +34,7 @@ name: deploy
 
 on:
   push:
-    branches: [main]
+    tags: ["v*"]
   workflow_dispatch:
 
 # Never cancel a deploy mid-push; queue instead. A cancelled deploy can
@@ -66,10 +68,19 @@ jobs:
       url: ${{ matrix.url }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # Production changes only by tag: refuse a branch ref, a tag whose
+      # version is not Cargo.toml's, a commit that is not in main.
+      - name: The ref is a release tag on main
+        run: bash scripts/release.sh tag-guard
 
       - name: Compute tags
         id: tags
-        run: echo "sha=sha-$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
+        run: |
+          echo "sha=sha-$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
+          echo "version=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
 
       - name: Push image
         run: |
@@ -86,7 +97,7 @@ jobs:
             "docker://${REGISTRY}/${img}:latest"
           # Retag from the just-pushed :latest rather than re-streaming:
           # same digest by construction, and the image is built once.
-          for tag in dev "${{ steps.tags.outputs.sha }}"; do
+          for tag in dev "${{ steps.tags.outputs.sha }}" "${{ steps.tags.outputs.version }}"; do
             nix run nixpkgs#skopeo -- --insecure-policy copy \
               --src-tls-verify=false --src-no-creds \
               --dest-tls-verify=false --dest-no-creds \

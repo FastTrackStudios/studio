@@ -2062,36 +2062,40 @@ ci FROM="lockfile":
 
 # ── Releases ─────────────────────────────────────────────────────────────
 #
-# main = production, dev = integration (docs/agents/release-workflow.md).
-# Work lands on dev (pushed, or a PR squash-merged); PRs into dev run only
-# the PR-title check, so a local check (above) is their gate. A release is
-# a `release/vX.Y.Z` branch cut from dev (dev never freezes) and its PR
-# into main: the full checks + the release guard run there, it is merged
-# with a merge commit, and main then deploys the sites, tags
-# `v<version>` and uploads Signal + Session to TestFlight; then main is
-# back-merged into dev. One version, `[workspace.package] version` in
-# Cargo.toml; the changelog is generated
-# from commit subjects by git-cliff (cliff.toml), one section per
-# release, over the commits since the last tag.
+# Two separate stages (docs/agents/release-workflow.md). dev collects
+# verified work (pushed, or a PR squash-merged; PRs into dev run only the
+# PR-title check, so a local check is their gate). `just release-promote`
+# opens dev -> main ("finished features": full checks + the Reviewer, merge
+# commit, NOTHING ships). A release is a TAG on main: `release-prepare` cuts
+# release/vX.Y.Z (version + changelog commit), its PR merges into main, and
+# `release-tag` pushes `vX.Y.Z`, which deploys the sites, uploads Signal +
+# Session to TestFlight, runs the REAPER suites and publishes the one
+# GitHub Release. Production = the latest `v*` tag. One version,
+# `[workspace.package] version` in Cargo.toml; the changelog is generated
+# from commit subjects by git-cliff (cliff.toml).
 #
 # Signal and Session (the iOS apps) are ONE release with the rest of the
 # repo: the same build, the same version (their crates take
 # `version.workspace = true`), the same `vX.Y.Z` tag and GitHub Release.
-# The merge tags it, publishes the Release and uploads BOTH apps to
-# TestFlight at the tag's version; nothing else uploads TestFlight.
+# The tag uploads BOTH apps to TestFlight at its version; nothing else
+# uploads TestFlight.
 
 # The studio's release version ([workspace.package] in Cargo.toml).
 version:
     @bash scripts/release.sh version
 
-# What the next release would be: suggested version, unreleased
-# changelog, and the git dependencies that moved.
+# What is live (latest v* tag), what main holds since, what waits on dev,
+# the unreleased changelog and the git dependencies that moved.
 release-plan:
     bash scripts/release.sh plan
 
-# Cut `release/v<next>` from origin/dev: bump the version, write the
-# changelog section, commit `chore(release): v<next>`. Refuses until the
-# last release is back-merged into dev.
+# Stage 1: open the promotion PR dev -> main (finished features). Merge it
+# with a merge commit once `checks`, the release guard and the Reviewer pass.
+release-promote:
+    bash scripts/release.sh promote
+
+# Stage 2: cut `release/v<next>` from origin/main: bump the version, write
+# the changelog section, commit `chore(release): v<next>`.
 # BUMP: patch (the default, whatever the commits say; 0.1.9 -> 0.1.10, the
 # patch never rolls over), minor or major (only when the Captain or
 # Commander calls one), auto (git-cliff decides), or an exact X.Y.Z.
@@ -2103,21 +2107,22 @@ release-prepare *ARGS:
 release-pr:
     bash scripts/release.sh pr
 
-# On the release/v* branch, after a fix PR landed on it: regenerate the
-# changelog section and end the branch with the release commit again.
-release-refresh:
-    bash scripts/release.sh refresh
+# After the release PR merged: tag v<version> on main. THE TAG SHIPS (sites,
+# Signal + Session TestFlight, REAPER, the GitHub Release). Then it opens
+# the main -> dev back-merge. Pushes as whoever you are: use the fts-forge
+# bot or a person, not a workflow token (that starts no workflow).
+release-tag *ARGS:
+    bash scripts/release.sh tag {{ARGS}}
 
-# After a release or hotfix reached main: PR `backmerge/<tag>` -> dev,
-# merge commit, auto-merge. A no-op when main is already in dev.
+# main -> dev (merge commit, auto-merge). A no-op when dev already has all
+# of main's content. `release-tag` runs it; run it alone after a hotfix.
 release-backmerge:
     bash scripts/release.sh backmerge
 
-# On a hotfix/* branch cut from origin/main (fix already committed), when
-# no release branch is open: the patch bump + changelog + release commit
-# the release guard requires.
-release-hotfix:
-    bash scripts/release.sh hotfix
+# hotfix/<name> from the latest tag (what production runs). Fix, then
+# `just release-pr`; then cut the patch release as usual.
+release-hotfix NAME:
+    bash scripts/release.sh hotfix {{NAME}}
 
 # One version's section of CHANGELOG.md (default: the current version).
 release-notes *ARGS:

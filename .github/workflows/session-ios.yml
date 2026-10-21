@@ -5,18 +5,18 @@
 # The TestFlight marketing version (CFBundleShortVersionString) IS the tag's
 # version, and the tag is a GitHub Release (docs/agents/release-workflow.md).
 #
-#   release/vX.Y.Z --PR, merge commit--> main --> release.yml tags vX.Y.Z on
-#   the branch tip, publishes the one GitHub Release, and dispatches this
-#   workflow AND the other iOS app's on the tag --> resolve (hosted: tag
-#   shape, app crate version == tag version, changelog section, commit in
-#   main, Release exists) --> testflight (airlock: build, sign, upload) -->
+#   dev --promotion PR--> main     finished features; ships NOTHING
+#   main --release PR--> `just release-tag` pushes vX.Y.Z --> this workflow
+#   AND signal-ios.yml start on the tag --> resolve (hosted: tag shape, app
+#   crate version == tag version, changelog section, commit in main,
+#   Release exists) --> testflight (airlock: build, sign, upload) -->
 #   record (hosted: marketing version + build number written into the
 #   Release notes, one line for this app; the other app writes its own line
 #   into the same notes, so the edit re-reads and retries).
 #
-# Triggers: a tag push (a human pushing the tag), and workflow_dispatch with
-# the tag (what release.yml does: a tag made with GITHUB_TOKEN starts no
-# workflow). `dry_run` stops after `resolve`, before anything is built or
+# Triggers: a tag push (`just release-tag`, pushed as the fts-forge App or a
+# person: a tag pushed with GITHUB_TOKEN starts no workflow), and
+# workflow_dispatch with the tag (a re-run). `dry_run` stops after `resolve`, before anything is built or
 # uploaded. No pull_request trigger, so no fork or PR ever reaches the
 # secrets or the runner.
 #

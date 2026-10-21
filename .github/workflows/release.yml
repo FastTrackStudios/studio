@@ -1,48 +1,43 @@
-# Release — the guard on release PRs, and the tag + GitHub Release once a
-# release reaches main. The procedure and its reasons are in
+# Release — the guard on every PR into main, and the GitHub Release once a
+# release tag is pushed. The procedure and its reasons are in
 # docs/agents/release-workflow.md; the logic is scripts/release.sh, so a
 # human can run every step of it by hand (`just release-*`).
 #
-#   pull_request -> main   "Release guard": cheap, on a hosted runner. It
-#                          fails a release PR that would ship something
-#                          other than what `checks` tested:
-#                            - the head is `release/v<its version>` (or
-#                              hotfix/*), not dev or a feature branch,
-#                            - a release branch was cut from a commit of
-#                              dev (dev may have moved on since: fine),
-#                            - Cargo.toml's version is new and greater, and
-#                              both iOS app crates resolve to it,
-#                            - CHANGELOG.md has that version's section,
-#                            - the head commit IS `chore(release): v<ver>`
-#                              (a fix on the branch is followed by
-#                              `just release-refresh`),
-#                            - main is in the head, so merging produces
-#                              exactly the head's tree.
-#   push -> main           "Tag + GitHub Release": tag `v<version>` on the
-#                          release branch tip and publish the ONE GitHub
-#                          Release (Signal and Session are one version),
-#                          then dispatch on that tag the REAPER suites and
-#                          BOTH iOS workflows, `signal-ios.yml` and
-#                          `session-ios.yml`: the ONLY things that upload
-#                          TestFlight, each at the tag's version. A push
-#                          without a CHANGELOG section for its version is
-#                          not a release and publishes nothing.
-#   workflow_dispatch      the same, by hand, on main (a re-run).
+# Two stages, kept apart (release flow v2, the Captain 2026-10-21):
+#   dev  --promotion PR-->  main       "finished features". Nothing ships.
+#   main --release PR + tag-->  vX.Y.Z   The TAG ships: both sites (deploy),
+#                                        BOTH TestFlight uploads (signal-ios,
+#                                        session-ios), the REAPER suites, the
+#                                        desktop installers, this Release.
 #
-# A release is a BRANCH, `release/vX.Y.Z`, cut from dev's head by
-# `just release-prepare`; dev never freezes for it. There are no per-app
-# tags, branches or changelogs.
+#   pull_request -> main   "Release guard": cheap, on a hosted runner. The
+#                          head is one of
+#                            - dev: a promotion. The merge must reproduce
+#                              dev's tree (so dev holds everything main
+#                              does) and the version is untouched,
+#                            - release/vX.Y.Z: ONE commit on top of main,
+#                              touching only the version line(s) and
+#                              CHANGELOG.md; version new, tag absent, both
+#                              iOS app crates on it,
+#                            - hotfix/*: a fix branched from the production
+#                              tag, merges cleanly, no version bump.
+#                          Anything else (a card branch) is refused.
+#   push tag v*            "GitHub Release": the tag guard (the tag is a
+#                          release commit on main), then the ONE GitHub
+#                          Release for Signal + Session. A tag is pushed by
+#                          `just release-tag` as the fts-forge App or a
+#                          person: a tag pushed with GITHUB_TOKEN starts no
+#                          workflow.
+#   workflow_dispatch      the same, by hand, with the tag as the ref.
 #
-# Publishing does not wait for deploy.yml: the product is the desktop
-# apps and the plugins, and the two web sites are one leg of it. A failed
-# site deploy is its own red run, not a missing tag.
+# The release does not wait for deploy.yml: the product is the apps and the
+# plugins, and the two web sites are one leg of it. A failed site deploy is
+# its own red run, not a missing Release.
 #
-# Merge release PRs with "Create a merge commit". Squash or rebase would
-# give main a commit the release branch does not have, and the tag would
-# not be in main's history. After the release: `just release-backmerge`
-# (main -> dev, merge commit). A workflow cannot do that step: PRs opened
-# with GITHUB_TOKEN start no workflows, so dev's title check would never
-# report. The publish job says so in its summary.
+# Merge PRs into main with "Create a merge commit". After a release,
+# `just release-tag` back-merges main into dev; a workflow cannot do that
+# (PRs opened with GITHUB_TOKEN start no workflows, so dev's title check
+# would never report), so the publish job only says so in its summary.
 
 name: release
 
@@ -51,7 +46,7 @@ on:
     branches: [main]
     types: [opened, synchronize, reopened, ready_for_review]
   push:
-    branches: [main]
+    tags: ["v*"]
   workflow_dispatch:
 
 permissions:
@@ -68,7 +63,7 @@ jobs:
         with:
           ref: ${{ github.event.pull_request.head.sha }}
           fetch-depth: 0
-      - name: Is this a sound release?
+      - name: Is this a sound promotion, release or hotfix?
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
@@ -76,15 +71,12 @@ jobs:
         run: bash scripts/release.sh guard
 
   publish:
-    name: Tag + GitHub Release
-    if: ${{ github.event_name != 'pull_request' && github.ref == 'refs/heads/main' }}
+    name: GitHub Release
+    if: ${{ github.event_name != 'pull_request' && startsWith(github.ref, 'refs/tags/v') }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
       contents: write
-      # `gh workflow run reaper.yml / signal-ios.yml / session-ios.yml` on the
-      # new tag.
-      actions: write
     concurrency:
       group: release-publish
       cancel-in-progress: false
@@ -93,17 +85,19 @@ jobs:
         with:
           ref: ${{ github.sha }}
           fetch-depth: 0
+      - name: The tag is a release commit on main
+        run: bash scripts/release.sh tag-guard
       - name: Publish
         env:
           GH_TOKEN: ${{ github.token }}
         run: bash scripts/release.sh publish
       - name: Back-merge reminder
         run: |
-          git fetch --quiet origin dev
-          if git merge-base --is-ancestor HEAD origin/dev; then
-            echo "main is already in dev"
+          git fetch --quiet origin dev main
+          if [ "$(git merge-tree --write-tree origin/dev origin/main | head -1)" = "$(git rev-parse 'origin/dev^{tree}')" ]; then
+            echo "dev already has everything main has"
           else
-            msg="Released. Back-merge main into dev now: just release-backmerge (PR backmerge/$(bash scripts/release.sh backmerge-label) -> dev, merge commit). The next release-prepare refuses until it is merged."
+            msg="Released. dev lacks main's release commit: just release-backmerge (PR backmerge/v$(bash scripts/release.sh version)-<sha> -> dev, merge commit). The next promotion is refused until it is merged."
             echo "::notice::$msg"
             echo "### Back-merge pending" >> "$GITHUB_STEP_SUMMARY"
             echo "$msg" >> "$GITHUB_STEP_SUMMARY"

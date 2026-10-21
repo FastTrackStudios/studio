@@ -1,21 +1,30 @@
-# studio — the release gate.
+# studio — the promotion gate.
 #
-# WHEN THIS RUNS — the dev-first model (docs/agents/release-workflow.md):
+# WHEN THIS RUNS — the dev-first model, release flow v2
+# (docs/agents/release-workflow.md):
 #
 #   PR -> dev           NOT here. The gate is a local `cargo check
 #                       --workspace --all-targets` on the PR's head (or
 #                       the full `just ci`: the same steps, in the same
 #                       order, as below); pr-title.yml is the only job a
 #                       PR into dev runs.
-#   release PR release/vX.Y.Z -> main (or hotfix/* -> main)   HERE, automatically,
-#                       the full set: the last look before production,
-#                       once per release rather than once per push.
+#   PROMOTION PR dev -> main (or hotfix/* -> main)   HERE, automatically,
+#                       the FULL set: main is "finished features", so this
+#                       is the one place the whole workspace is checked
+#                       and the Reviewer reads the diff. It runs once per
+#                       promotion, not once per card.
+#   RELEASE PR release/vX.Y.Z -> main   a one-commit version bump +
+#                       changelog on top of main. The release guard proves
+#                       it touches nothing else, so the `Plan` job below
+#                       SKIPS the heavy job (a skipped job counts as
+#                       passing for the required `Build + test` check):
+#                       the content was checked when it was promoted.
 #   by hand             `gh workflow run checks.yml --ref <branch>`.
 #
-# Never on push: a merge to main is the tree its release PR already
-# passed (release.yml's guard proves the merge commit's tree IS the head's
-# tree), and a second run of it held the one runner while the deploy of
-# that same merge queued behind it.
+# Never on push: a merge to main is the tree its PR already passed
+# (release.yml's guard proves the merge commit's tree IS the head's tree),
+# and nothing ships from a push to main. Production changes only when a v*
+# tag is pushed.
 #
 # Runs on the org's self-hosted runner (THEBATTLESHIP, label `nix-host` —
 # see fasttrackstudio/.flake modules/selfhost/services/github-runner.nix):
@@ -49,8 +58,39 @@ env:
   NIX_DEV: nix develop --accept-flake-config .#ci -c
 
 jobs:
+  # Is this PR only a release commit (version + changelog on top of main)?
+  # Cheap, hosted; the heavy job below is skipped when it is.
+  plan:
+    name: Plan
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      release_only: ${{ steps.plan.outputs.release_only }}
+    steps:
+      - uses: actions/checkout@v4
+        if: ${{ github.event_name == 'pull_request' }}
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+      - name: Release commit only?
+        id: plan
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          HEAD_REF: ${{ github.event.pull_request.head.ref }}
+        run: |
+          if [ "${{ github.event_name }}" = pull_request ] && bash scripts/release.sh release-only; then
+            echo "release_only=true" >> "$GITHUB_OUTPUT"
+            echo "### Release commit only" >> "$GITHUB_STEP_SUMMARY"
+            echo "This PR is one commit changing the version and CHANGELOG.md; its content was checked when it was promoted, so \`Build + test\` is skipped." >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "release_only=false" >> "$GITHUB_OUTPUT"
+          fi
+
   check:
     name: Build + test
+    needs: plan
+    if: ${{ needs.plan.outputs.release_only != 'true' }}
     runs-on: [self-hosted, session]
     timeout-minutes: 60
     steps:
