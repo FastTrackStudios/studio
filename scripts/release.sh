@@ -188,6 +188,16 @@ cmd_notes() { # [VERSION]
     ' "$f" | sed -e '/./,$!d' # drop leading blank lines
 }
 
+# The very first release: no `v*` tag is reachable from <rev>, and <rev>'s
+# CHANGELOG.md has no section for <version>, which already IS <rev>'s
+# workspace version (the repo starts at 0.1.0 and v0.1.0 is cut without a
+# bump). Every later release must be greater than main's version.
+first_release() { # <rev> <version>
+    [ -z "$(last_tag "$1")" ] || return 1
+    [ "$(version_at "$1")" = "$2" ] || return 1
+    ! changelog_has "$1" "$2"
+}
+
 # `git rev-list --count --no-merges A..B`, tolerant of a missing A.
 count_between() {
     if [ -n "${1:-}" ]; then git rev-list --count --no-merges "$1..$2"; else git rev-list --count --no-merges "$2"; fi 2>/dev/null || echo 0
@@ -298,7 +308,11 @@ cmd_prepare() {
         *) is_semver "$want" || die "BUMP must be auto, major, minor, patch or X.Y.Z"
            next="$want" ;;
     esac
-    gt "$next" "$cur" || die "next version $next is not greater than $cur"
+    if [ "$next" = "$cur" ] && first_release "origin/$PRODUCTION_BRANCH" "$next"; then
+        note "first release: v$next is main's own version, so the release commit adds the changelog only"
+    else
+        gt "$next" "$cur" || die "next version $next is not greater than $cur"
+    fi
     git rev-parse -q --verify "refs/tags/v$next" >/dev/null && die "tag v$next already exists"
     if git ls-remote --exit-code --heads origin "release/v$next" >/dev/null 2>&1; then
         git switch --quiet --detach "origin/$PRODUCTION_BRANCH"
@@ -330,14 +344,16 @@ EOT
 # the current branch.
 release_commit() { # <cur> <next>
     local cur="$1" next="$2"
-    # The one version line.
-    sed -i.bak "/^\[workspace\.package\]/,/^\[/s/^version *= *\"$cur\"/version = \"$next\"/" Cargo.toml
-    rm -f Cargo.toml.bak
-    [ "$(version_at)" = "$next" ] || die "failed to rewrite [workspace.package] version"
+    if [ "$cur" != "$next" ]; then
+        # The one version line.
+        sed -i.bak "/^\[workspace\.package\]/,/^\[/s/^version *= *\"$cur\"/version = \"$next\"/" Cargo.toml
+        rm -f Cargo.toml.bak
+        [ "$(version_at)" = "$next" ] || die "failed to rewrite [workspace.package] version"
 
-    # Workspace members' entries in the lockfile follow; nothing else may
-    # move. --offline first: a version bump needs no index.
-    cargo update --workspace --offline 2>/dev/null || cargo update --workspace
+        # Workspace members' entries in the lockfile follow; nothing else may
+        # move. --offline first: a version bump needs no index.
+        cargo update --workspace --offline 2>/dev/null || cargo update --workspace
+    fi
 
     changelog_write "$next"
 
@@ -480,12 +496,16 @@ cmd_tag() {
     if git rev-parse -q --verify "refs/tags/v$v" >/dev/null; then
         die "tag v$v already exists ($(git rev-parse --short "v$v^{commit}")). Never move a tag; a bad release is superseded by the next."
     fi
+    # The release commit's merge into main is the OLDEST first-parent commit
+    # of main that carries version $v AND its changelog section (a later
+    # promotion keeps both). Walking by the changelog section also finds the
+    # first release, where the version did not change.
     local found_edge=0
-    for c in $(git rev-list --first-parent -n 300 "origin/$PRODUCTION_BRANCH"); do
-        if [ "$(version_at "$c")" = "$v" ]; then target="$c"; else found_edge=1; break; fi
+    for c in $(git rev-list --first-parent -n 400 "origin/$PRODUCTION_BRANCH"); do
+        if [ "$(version_at "$c")" = "$v" ] && changelog_has "$c" "$v"; then target="$c"; else found_edge=1; break; fi
     done
-    [ "$found_edge" = 1 ] || [ -z "$target" ] || die "all of main's last 300 first-parent commits carry version $v: cannot find the release commit"
-    [ -n "$target" ] || die "no commit on origin/$PRODUCTION_BRANCH carries version $v: has the release PR merged?"
+    [ "$found_edge" = 1 ] || [ -z "$target" ] || die "all of main's last 400 first-parent commits carry version $v with its changelog section: cannot find the release commit"
+    [ -n "$target" ] || die "no commit on origin/$PRODUCTION_BRANCH carries version $v with a changelog section: has the release PR merged?"
     changelog_has "$target" "$v" \
         || die "CHANGELOG.md at $(git rev-parse --short "$target") has no [$v] section: not a release commit"
     prev="$(last_tag "$target^")"
@@ -618,7 +638,11 @@ cmd_guard() {
         release/v*)
             kind=release
             [ "$ref" = "release/v$v" ] || fail "branch '$ref' carries version '$v'; a release branch is named release/v<its version> (just release-prepare)"
-            gt "$v" "$vb" || fail "version $v is not greater than main's $vb — cut the release with just release-prepare"
+            if [ "$v" = "$vb" ] && first_release "$base" "$v"; then
+                echo "::notice::first release: v$v is main's own version (no v* tag yet), the release commit adds the changelog only"
+            else
+                gt "$v" "$vb" || fail "version $v is not greater than main's $vb — cut the release with just release-prepare"
+            fi
             git rev-parse -q --verify "refs/tags/$tag" >/dev/null && fail "tag $tag already exists"
             changelog_has "$head" "$v" || fail "CHANGELOG.md at the head has no [$v] section"
             subject="$(git log -1 --format=%s "$head")"
