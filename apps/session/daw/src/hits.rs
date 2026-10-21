@@ -2128,63 +2128,122 @@ pub fn overlay(
     }
 }
 
-/// Each piece's hits on its first mic's lanes that do not play — its
-/// takes, and the comp where the edit plays — where each lane plays them:
-/// an item's markers from where it starts in its recording to where it
-/// ends, at its rate. `pieces` index them.
+/// Each piece's hits on the lanes of every track that carries them, but
+/// the lane that plays — its takes, and the comp where the edit plays.
+/// A recording's hits are the markers on the item that holds them
+/// ([`recordings`]); every other cut of that file on a lane shows them
+/// from where it starts in the file to where it ends, at its rate. (Its
+/// own markers are copies from when it was cut, stale.) `pieces` index
+/// them.
 fn lane_marks(
     daw: &daw::standalone::Standalone,
     project: &ProjectContext,
     kit: &[KitPiece],
     pieces: &[String],
-) -> Vec<crate::hit_overlay::LaneMark> {
+) -> Vec<crate::hit_overlay::LaneMarks> {
     let mut out = Vec::new();
     for piece in kit {
         let Some(index) = pieces.iter().position(|n| *n == piece.name) else {
             continue;
         };
-        let Some(mic) = piece.mics.first() else {
-            continue;
-        };
-        let Some(track) = Tracks::get(daw, project.clone(), TrackRef::Guid(mic.clone())) else {
-            continue;
-        };
-        let playing = crate::lanes::playing(&track);
-        for item in daw.get_items(project.clone(), TrackRef::Guid(mic.clone())) {
-            let lane = item.fixed_lane.unwrap_or(0);
-            if item.muted || Some(lane) == playing {
-                continue;
+        for track in piece.tracks() {
+            let marks = track_lane_marks(daw, project, track, &piece.name);
+            if !marks.is_empty() {
+                out.push(crate::hit_overlay::LaneMarks {
+                    track: track.clone(),
+                    piece: index,
+                    marks,
+                });
             }
-            let Some(take) = daw.get_active_take(project.clone(), ItemRef::Guid(item.guid.clone()))
-            else {
-                continue;
-            };
+        }
+    }
+    out
+}
+
+/// One track's hits of `piece` on its lanes that do not play.
+fn track_lane_marks(
+    daw: &daw::standalone::Standalone,
+    project: &ProjectContext,
+    track: &str,
+    piece: &str,
+) -> Vec<crate::hit_overlay::LaneMark> {
+    let Some(this) = Tracks::get(daw, project.clone(), TrackRef::Guid(track.to_owned())) else {
+        return Vec::new();
+    };
+    let playing = crate::lanes::playing(&this);
+    let hits_by_file: BTreeMap<String, Vec<(f64, bool)>> = recordings(daw, project, track)
+        .into_iter()
+        .map(|r| {
+            let hits = daw
+                .get_take_markers(project.clone(), ItemRef::Guid(r.item), TakeRef::Active)
+                .into_iter()
+                .filter_map(|m| {
+                    let h = m.hit?;
+                    (h.piece == piece).then_some((m.source_position_seconds, h.ghost))
+                })
+                .collect();
+            (r.path, hits)
+        })
+        .collect();
+    let cuts: Vec<LaneCut> = daw
+        .get_items(project.clone(), TrackRef::Guid(track.to_owned()))
+        .into_iter()
+        .filter(|item| !item.muted && item.fixed_lane.unwrap_or(0) != playing.unwrap_or(u32::MAX))
+        .filter_map(|item| {
+            let take = daw.get_active_take(project.clone(), ItemRef::Guid(item.guid.clone()))?;
             let rate = if take.play_rate > 0.0 {
                 take.play_rate
             } else {
                 1.0
             };
             let from = take.start_offset.as_seconds();
-            let to = item.length.as_seconds().mul_add(rate, from);
-            let start = item.position.as_seconds();
-            out.extend(
-                daw.get_take_markers(project.clone(), ItemRef::Guid(item.guid), TakeRef::Active)
-                    .into_iter()
-                    .filter_map(|m| {
-                        let h = m.hit.as_ref()?;
-                        let s = m.source_position_seconds;
-                        (h.piece == piece.name && s >= from && s < to).then(|| {
-                            crate::hit_overlay::LaneMark {
-                                piece: index,
-                                lane,
-                                time: start + (s - from) / rate,
-                                ghost: h.ghost,
-                            }
-                        })
-                    }),
-            );
-        }
-    }
+            Some(LaneCut {
+                lane: item.fixed_lane.unwrap_or(0),
+                start: item.position.as_seconds(),
+                from,
+                to: item.length.as_seconds().mul_add(rate, from),
+                rate,
+                file: take.source_file_path?,
+            })
+        })
+        .collect();
+    marks_on_cuts(&cuts, &hits_by_file)
+}
+
+/// A cut of a recording on a lane: where it plays, and the stretch of
+/// its file it plays, at what rate.
+#[derive(Clone, Debug, PartialEq)]
+struct LaneCut {
+    lane: u32,
+    start: f64,
+    from: f64,
+    to: f64,
+    rate: f64,
+    file: String,
+}
+
+/// The hits each cut plays, where it plays them, in time order:
+/// `hits_by_file` holds each recording's hits as (seconds into the file,
+/// ghost).
+fn marks_on_cuts(
+    cuts: &[LaneCut],
+    hits_by_file: &BTreeMap<String, Vec<(f64, bool)>>,
+) -> Vec<crate::hit_overlay::LaneMark> {
+    let mut out: Vec<crate::hit_overlay::LaneMark> = cuts
+        .iter()
+        .flat_map(|c| {
+            hits_by_file
+                .get(&c.file)
+                .into_iter()
+                .flatten()
+                .filter(|(s, _)| *s >= c.from && *s < c.to)
+                .map(|&(s, ghost)| crate::hit_overlay::LaneMark {
+                    lane: c.lane,
+                    time: c.start + (s - c.from) / c.rate,
+                    ghost,
+                })
+        })
+        .collect();
     out.sort_by(|a, b| a.time.total_cmp(&b.time));
     out
 }
@@ -3671,6 +3730,40 @@ mod wav_tests {
             super::pcm_wav_mono(b"OggS....").is_none(),
             "not a WAV: the decoder's"
         );
+    }
+}
+
+#[cfg(test)]
+mod lane_mark_tests {
+    use std::collections::BTreeMap;
+
+    use super::{LaneCut, marks_on_cuts};
+
+    /// A cut shows its own file's hits from where it starts in the file
+    /// to where it ends, at its rate; another file's hits are not its.
+    #[test]
+    fn a_cut_shows_its_recordings_hits_where_it_plays_them() {
+        let hits: BTreeMap<String, Vec<(f64, bool)>> = [
+            (
+                "a.wav".to_owned(),
+                vec![(1.0, false), (2.5, true), (9.0, false)],
+            ),
+            ("b.wav".to_owned(), vec![(2.0, false)]),
+        ]
+        .into();
+        let cuts = [LaneCut {
+            lane: 3,
+            start: 100.0,
+            from: 2.0,
+            to: 6.0,
+            rate: 2.0,
+            file: "a.wav".to_owned(),
+        }];
+        let marks = marks_on_cuts(&cuts, &hits);
+        assert_eq!(marks.len(), 1, "{marks:?}");
+        assert_eq!(marks[0].lane, 3);
+        assert!((marks[0].time - 100.25).abs() < 1e-9);
+        assert!(marks[0].ghost);
     }
 }
 

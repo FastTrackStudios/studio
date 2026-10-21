@@ -2782,6 +2782,8 @@ pub fn hits_overlay(
         );
     }
     lane_marks(painter, scene, view, (ox, oy), (rows, overlay), palette);
+    let mut lines = Ticks::default();
+    let mut feet = Ticks::default();
     for &(row, piece) in rows {
         let Some((y0, y1)) = marks_span(row) else {
             continue;
@@ -2827,22 +2829,10 @@ pub fn hits_overlay(
             let colour = colour.multiply_alpha(if clear { 0.85 } else { 0.45 });
             let x = x_of(m.time).round() + 0.5;
             let foot = if m.ghost { f64::midpoint(y0, y1) } else { y1 };
-            painter.stroke(
-                line,
-                Affine::IDENTITY,
-                colour,
-                None,
-                &vello::kurbo::Line::new((x, y0), (x, foot)),
-            );
+            lines.line((colour, line.width), (x, y0), (x, foot));
             // Its foot: the handle that stretches it.
             if clear && !m.ghost && y1 - y0 > 30.0 {
-                painter.fill(
-                    Fill::NonZero,
-                    Affine::IDENTITY,
-                    colour,
-                    None,
-                    &Rect::new(x - 2.5, y1 - 6.0, x + 2.5, y1 - 1.0),
-                );
+                feet.rect(colour, Rect::new(x - 2.5, y1 - 6.0, x + 2.5, y1 - 1.0));
             }
             let colour =
                 flag_colour.map_or(colour, |c| c.multiply_alpha(if clear { 0.95 } else { 0.5 }));
@@ -2860,6 +2850,61 @@ pub fn hits_overlay(
             }
         }
     }
+    lines.stroke(painter);
+    feet.fill(painter);
+}
+
+/// Many small marks of a few colours, gathered into one path a colour (and
+/// width) and drawn at once: a screen of hits is thousands of lines, and
+/// each drawn alone is a command to encode and replay.
+#[derive(Default)]
+struct Ticks {
+    runs: Vec<(u32, f64, Color, BezPath)>,
+}
+
+impl Ticks {
+    fn path(&mut self, colour: Color, width: f64) -> &mut BezPath {
+        let key = colour.to_rgba8().to_u32();
+        let at = self
+            .runs
+            .iter()
+            .position(|(k, w, _, _)| *k == key && *w == width)
+            .unwrap_or_else(|| {
+                self.runs.push((key, width, colour, BezPath::new()));
+                self.runs.len() - 1
+            });
+        &mut self.runs[at].3
+    }
+
+    /// A line of `colour` and width.
+    fn line(&mut self, (colour, width): (Color, f64), from: (f64, f64), to: (f64, f64)) {
+        let path = self.path(colour, width);
+        path.move_to(from);
+        path.line_to(to);
+    }
+
+    /// A rectangle of `colour`, to fill.
+    fn rect(&mut self, colour: Color, r: Rect) {
+        let path = self.path(colour, 0.0);
+        path.move_to((r.x0, r.y0));
+        path.line_to((r.x1, r.y0));
+        path.line_to((r.x1, r.y1));
+        path.line_to((r.x0, r.y1));
+        path.close_path();
+    }
+
+    fn stroke(self, painter: &mut impl PaintScene) {
+        for (_, width, colour, path) in self.runs {
+            let line = vello::kurbo::Stroke::new(width);
+            painter.stroke(&line, Affine::IDENTITY, colour, None, &path);
+        }
+    }
+
+    fn fill(self, painter: &mut impl PaintScene) {
+        for (_, _, colour, path) in self.runs {
+            painter.fill(Fill::NonZero, Affine::IDENTITY, colour, None, &path);
+        }
+    }
 }
 
 /// On a row showing its lanes, each take's own hits on its lane — those
@@ -2874,16 +2919,13 @@ fn lane_marks(
     (rows, overlay): (&[(usize, usize)], &crate::hit_overlay::Overlay),
     palette: &Palette,
 ) {
+    if overlay.on_lanes.is_empty() {
+        return;
+    }
     let top = crate::ruler::ruler_h();
     let pps = view.pps.max(f64::EPSILON);
     let (from, to) = ((view.panel_w - ox) / pps, (view.width - ox) / pps);
-    let a = overlay.on_lanes.partition_point(|m| m.time < from);
-    let b = overlay.on_lanes.partition_point(|m| m.time <= to);
-    let shown = overlay.on_lanes.get(a..b.max(a)).unwrap_or_default();
-    if shown.is_empty() {
-        return;
-    }
-    let thin = vello::kurbo::Stroke::new(1.0);
+    let mut lines = Ticks::default();
     for &(row, piece) in rows {
         let (Some(track), Some(stack), Some((y, h))) = (
             scene.lanes_shown(row),
@@ -2892,6 +2934,16 @@ fn lane_marks(
         ) else {
             continue;
         };
+        let Some(on) = overlay
+            .on_lanes
+            .iter()
+            .find(|l| l.piece == piece && l.track == track.guid)
+        else {
+            continue;
+        };
+        let a = on.marks.partition_point(|m| m.time < from);
+        let b = on.marks.partition_point(|m| m.time <= to);
+        let shown = on.marks.get(a..b.max(a)).unwrap_or_default();
         let playing = crate::lanes::playing(track);
         let drum = overlay
             .pieces
@@ -2899,7 +2951,7 @@ fn lane_marks(
             .and_then(|name| kit_color(editor::kit::kit_role(name, &[])))
             .unwrap_or(palette.text)
             .multiply_alpha(0.55);
-        for m in shown.iter().filter(|m| m.piece == piece) {
+        for m in shown {
             if Some(m.lane) == playing || !stack.lanes().contains(&m.lane) {
                 continue;
             }
@@ -2911,15 +2963,10 @@ fn lane_marks(
             }
             let foot = if m.ghost { f64::midpoint(y0, y1) } else { y1 };
             let x = m.time.mul_add(view.pps, ox).round() + 0.5;
-            painter.stroke(
-                &thin,
-                Affine::IDENTITY,
-                drum,
-                None,
-                &vello::kurbo::Line::new((x, y0), (x, foot)),
-            );
+            lines.line((drum, 1.0), (x, y0), (x, foot));
         }
     }
+    lines.stroke(painter);
 }
 
 /// A stretch's colour by its rate: red at half speed or slower (or twice

@@ -99,15 +99,23 @@ pub struct Overlay {
     /// Each piece's hits on the lanes of its first mic that do not play,
     /// where each lane has them: drawn on a row showing its lanes, so
     /// every take's hits are seen beside the edit's.
-    pub on_lanes: Vec<LaneMark>,
+    pub on_lanes: Vec<LaneMarks>,
+}
+
+/// One track's hits of one piece on its lanes, in time order.
+#[derive(Clone, Debug, PartialEq)]
+pub struct LaneMarks {
+    /// The track's GUID.
+    pub track: String,
+    /// The piece: an index into [`Overlay::pieces`].
+    pub piece: usize,
+    pub marks: Vec<LaneMark>,
 }
 
 /// A hit on a take's lane, where that lane plays it.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct LaneMark {
-    /// Its piece: an index into [`Overlay::pieces`].
-    pub piece: usize,
-    /// The lane, as the piece's mics number them.
+    /// The lane, as its track numbers them.
     pub lane: u32,
     /// Project seconds.
     pub time: f64,
