@@ -250,6 +250,9 @@ pub fn GigWorkspace(on_back: Option<EventHandler<()>>) -> Element {
                                         "{song.tempo} bpm"
                                     }
                                 }
+                                span { style: "font-size: 13px; padding: 2px 8px; border-radius: 6px; background: #172554; color: #bfdbfe;",
+                                    "Profile: {song.profile.label()}"
+                                }
                                 if !song.guitar.is_empty() {
                                     span { style: "font-size: 13px; padding: 2px 8px; border-radius: 6px; background: #052e16; color: #bbf7d0;",
                                         "Guitar: {song.guitar}"

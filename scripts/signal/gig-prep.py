@@ -165,6 +165,14 @@ def main() -> int:
             "tempo": fact.get("tempo", ""),
             "guitar": fact.get("guitar", ""),
             "notes": fact.get("notes", ""),
+            # The song's sound, by reference: no "patch" = the library's
+            # All-Around profile; "overrides" = this song's own changes on
+            # top (STA-186). Facts may carry a "profile"; otherwise every
+            # song starts inheriting All-Around with no overrides.
+            "profile": {
+                **({"patch": fact["profile"]["patch"]} if fact.get("profile", {}).get("patch") else {}),
+                "overrides": list(fact.get("profile", {}).get("overrides", [])),
+            },
             "charts": [],
             "sections": [],
         }
@@ -222,7 +230,9 @@ def main() -> int:
     print(f"\nwrote {out / 'gig.json'}: {len(songs)} songs, "
           f"{sum(1 for s in songs if 'audio' in s)} with audio, "
           f"{sum(1 for s in songs if s['charts'])} with a chart, "
-          f"{sum(1 for s in songs if s['sections'])} with sections")
+          f"{sum(1 for s in songs if s['sections'])} with sections, "
+          f"{sum(1 for s in songs if 'patch' not in s['profile'])} inheriting All-Around "
+          f"({sum(1 for s in songs if s['profile']['overrides'])} with overrides)")
     for p in problems:
         print("  ! " + p)
     return 0

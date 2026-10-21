@@ -917,11 +917,10 @@ fn ChartView() -> Element {
                 for (k, (label, uri)) in pages.into_iter().enumerate() {
                     img { key: "{k}-{label}", src: "{uri}", style: "{img_style}", draggable: "false" }
                 }
-                if !song.guitar.is_empty() || !song.notes.is_empty() {
-                    div { style: "display: flex; flex-wrap: wrap; gap: 8px; padding: 4px 2px 12px; font-size: 13px; color: {INK_2};",
-                        if !song.guitar.is_empty() { {fact(&format!("Guitar: {}", song.guitar), "#052e16", "#bbf7d0")} }
-                        if !song.notes.is_empty() { span { "{song.notes}" } }
-                    }
+                div { style: "display: flex; flex-wrap: wrap; gap: 8px; padding: 4px 2px 12px; font-size: 13px; color: {INK_2};",
+                    {fact(&format!("Profile: {}", song.profile.label()), "#172554", "#bfdbfe")}
+                    if !song.guitar.is_empty() { {fact(&format!("Guitar: {}", song.guitar), "#052e16", "#bbf7d0")} }
+                    if !song.notes.is_empty() { span { "{song.notes}" } }
                 }
             }
         }
@@ -1078,6 +1077,7 @@ fn StudioSong() -> Element {
             div { style: "display: flex; flex-wrap: wrap; gap: 8px;",
                 if !song.key.is_empty() { {fact(&format!("Key {}", song.key), "#1c1917", "#fde68a")} }
                 if !song.tempo.is_empty() { {fact(&tempo_text(&song.tempo), "#1c1917", "#fde68a")} }
+                {fact(&format!("Profile: {}", song.profile.label()), "#172554", "#bfdbfe")}
                 if !song.guitar.is_empty() { {fact(&format!("Guitar: {}", song.guitar), "#052e16", "#bbf7d0")} }
                 if !song.audio_kind.is_empty() { {fact(&song.audio_kind, "#18181b", INK_3)} }
             }
@@ -1169,6 +1169,7 @@ mod tests {
             charts: Vec::new(),
             pdf: None,
             sections: vec![sec("Intro", 0.0, 10.0), sec("Verse", 10.0, 40.0)],
+            profile: crate::gig::SongProfile::default(),
         };
         let (starts, bar) = progress_sections(&song, 40.0);
         assert_eq!(starts, vec![0.0, 10.0]);
