@@ -76,7 +76,7 @@ signal_app_plist() {
 # frame's examples/plugins (default: the ../frame sibling beside the repo).
 signal_app_faces() {
     local app="$1"
-    local src="${2:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../.." && pwd)/frame/examples/plugins}"
+    local src="${2:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../../.." && pwd)/frame/examples/plugins}"
     if [ ! -d "$src/rig-faces" ]; then
         echo "ERROR: no frame faces at $src/rig-faces (check out frame beside the repo)" >&2
         return 1
