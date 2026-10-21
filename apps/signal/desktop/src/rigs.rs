@@ -135,6 +135,7 @@ pub fn RigMenu(on_pick: EventHandler<Rig>, phone: bool) -> Element {
             // Guide first: on stage you start the click before you pick up an
             // instrument. It reads as a band above the rigs, not one of them.
             GuideCard { phone }
+            GigCard { phone }
             div { style: "{grid}",
                 for kind in Rig::ALL.iter().copied() {
                     RigCard {
@@ -189,6 +190,42 @@ fn RigCard(kind: Rig, phone: bool, on_pick: EventHandler<()>) -> Element {
                 span { style: "font-size: 11px;", "{kind.blurb()}" }
             }
         }
+    }
+}
+
+/// The gig: the band's set, charts and practice tracks. Shown only where the
+/// shell can open it (it provides [`crate::gig::OpenGig`]).
+#[component]
+fn GigCard(phone: bool) -> Element {
+    #[cfg(all(feature = "gig", not(target_arch = "wasm32")))]
+    {
+        let Some(open) = try_consume_context::<crate::gig::OpenGig>() else {
+            return rsx! {};
+        };
+        let size = if phone {
+            "width: 100%; padding: 14px 16px;"
+        } else {
+            "width: 100%; max-width: 600px; padding: 14px 18px;"
+        };
+        rsx! {
+            button {
+                style: "border: 1px solid #3b2f0b; border-radius: 12px; {size} background: #1f1a0b; \
+                        color: #fef3c7; display: flex; align-items: center; gap: 12px; text-align: left; \
+                        cursor: pointer;",
+                onclick: move |_| open.0.call(()),
+                div { style: "display: flex; flex-direction: column; gap: 3px; min-width: 0;",
+                    span { style: "font-size: 11px; font-weight: 600; letter-spacing: 0.14em; \
+                                   text-transform: uppercase; color: #fbbf24;", "Gig" }
+                    span { style: "font-size: 15px; font-weight: 700;", "Setlist & practice" }
+                    span { style: "font-size: 11px; opacity: 0.72;", "the set in order — each song's chart, and its track to play along with" }
+                }
+            }
+        }
+    }
+    #[cfg(not(all(feature = "gig", not(target_arch = "wasm32"))))]
+    {
+        let _ = phone;
+        rsx! {}
     }
 }
 

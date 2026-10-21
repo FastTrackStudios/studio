@@ -86,7 +86,13 @@ webview = []
 # engine (rig_engine.rs) + the mobile shell (mobile_view.rs). Kept separate
 # from `signal` because the drums/keys/synth rig UIs pull signal-ui's
 # Vello/baseview surfaces, which don't build for iOS.
-signal-guitar = ["dep:guitar", "guitar?/ui", "dep:signal-tone3000", "signal-tone3000?/ui", "dep:sampler", "dep:session", "session?/ui", "dep:vox-core", "dep:vox-websocket", "dep:architect", "architect/iroh", "architect/local", "dep:tokio", "dep:vox", "dep:facet-json", "dep:futures-util", "dep:futures-channel", "dep:sha2", "dep:reqwest", "dep:facet", "dep:eyre"]
+signal-guitar = ["gig", "dep:guitar", "guitar?/ui", "dep:signal-tone3000", "signal-tone3000?/ui", "dep:sampler", "dep:session", "session?/ui", "dep:vox-core", "dep:vox-websocket", "dep:architect", "architect/iroh", "architect/local", "dep:tokio", "dep:vox", "dep:facet-json", "dep:futures-util", "dep:futures-channel", "dep:sha2", "dep:reqwest", "dep:facet", "dep:eyre"]
+# The gig page (src/gig/): a band's set in order, each song's chart and its
+# practice track on a small player of its own (cpal out, decoded by
+# fts-sample, speed without pitch through the `stretch` phase vocoder).
+# Part of every rig build, desktop and iPad; native only (the deps are in
+# the cfg(not wasm) table, so this is a no-op on the web build).
+gig = ["dep:cpal", "dep:stretch", "dep:fts-sample", "dep:serde_json", "dep:architect"]
 # The keys rig on the phone: the in-process sampler engine (signal-keys →
 # signal-sampler over CoreAudio, MIDI via midir/CoreMIDI) + the wire types
 # for the mobile keys view + pack downloads. iOS-clean by construction: the
@@ -272,6 +278,10 @@ tokio = { workspace = true, optional = true }
 # (kill(pid,0)) and reaps the engine's process group on exit (engine_main.rs,
 # engines.rs). Unix-only usage is cfg-gated in code.
 libc = { workspace = true }
+# The gig page's practice player (feature `gig`).
+cpal = { workspace = true, optional = true }
+stretch = { workspace = true, optional = true }
+fts-sample = { workspace = true, optional = true, features = ["load"] }
 # DAW domain — facade (daw::get / init_from_parts / LayerRouter) + the
 # standalone backend that plays the setlist without REAPER. "audio" is
 # required by daw-standalone's unconditional `sync` module (same

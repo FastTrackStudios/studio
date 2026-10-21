@@ -40,6 +40,8 @@ enum MobileScreen {
     /// The keys rig (sampler engine + downloaded packs).
     #[cfg(feature = "signal-keys-rig")]
     Keys,
+    /// The gig page: the set, its charts and practice tracks.
+    Gig,
 }
 
 impl MobileScreen {
@@ -204,6 +206,10 @@ fn Router() -> Element {
         crate::rigs::store_last(None);
         screen.set(MobileScreen::Menu);
     };
+    // The menu's Gig card.
+    use_context_provider(|| {
+        crate::gig::OpenGig(Callback::new(move |()| screen.set(MobileScreen::Gig)))
+    });
     match screen() {
         MobileScreen::Menu => rsx! {
             MenuPage {
@@ -219,6 +225,11 @@ fn Router() -> Element {
         #[cfg(feature = "signal-keys-rig")]
         MobileScreen::Keys => rsx! {
             keys_view::KeysShell { on_home: to_menu }
+        },
+        MobileScreen::Gig => rsx! {
+            div { style: "flex: 1; min-width: 0; min-height: 0; display: flex;",
+                crate::gig::GigWorkspace { on_back: Some(EventHandler::new(to_menu)) }
+            }
         },
     }
 }
