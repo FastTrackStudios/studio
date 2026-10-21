@@ -69,10 +69,26 @@ impl Default for VelloRendererOptions {
         Self {
             features: None,
             limits: None,
-            base_color: Color::WHITE,
+            base_color: base_color_from_env().unwrap_or(Color::WHITE),
             antialiasing_method: AaConfig::Msaa16,
         }
     }
+}
+
+/// FTS: the colour the surface is cleared to, `ANYRENDER_BASE_COLOR=#rrggbb`.
+/// What it shows is every pixel the page does not paint — on iOS the safe
+/// area's strips outside the page's viewport (Blitz lays the page out
+/// inside the insets and fills only the viewport with the root's
+/// background). Upstream's white made a white strip along an iPad's
+/// bottom edge under a dark app; the app sets its own ground here.
+fn base_color_from_env() -> Option<Color> {
+    let v = std::env::var("ANYRENDER_BASE_COLOR").ok()?;
+    let hex = v.trim().trim_start_matches('#');
+    if hex.len() != 6 {
+        return None;
+    }
+    let ch = |i: usize| u8::from_str_radix(hex.get(i..i + 2)?, 16).ok();
+    Some(Color::from_rgb8(ch(0)?, ch(2)?, ch(4)?))
 }
 
 pub struct VelloWindowRenderer {
