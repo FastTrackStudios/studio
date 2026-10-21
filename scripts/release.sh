@@ -277,8 +277,10 @@ cmd_prepare() {
     is_semver "$cur" || die "Cargo.toml version '$cur' is not X.Y.Z"
     tag="$(last_tag "origin/$PRODUCTION_BRANCH")"
     # A release commit already on main but never tagged: finish that one.
-    if [ -n "$tag" ] && [ "$tag" != "v$cur" ]; then
-        die "origin/$PRODUCTION_BRANCH is at $cur but the latest tag is $tag: an earlier release was merged and not tagged. Finish it: just release-tag"
+    # (Main carries a changelog section for its own version, and no tag
+    # names it. This also holds before the very first tag exists.)
+    if ! git rev-parse -q --verify "refs/tags/v$cur" >/dev/null && changelog_has "origin/$PRODUCTION_BRANCH" "$cur"; then
+        die "origin/$PRODUCTION_BRANCH is at $cur, which has a changelog section but no tag v$cur (latest tag: ${tag:-none}): an earlier release was merged and not tagged. Finish it: just release-tag"
     fi
     if [ -n "$tag" ] && [ "$(count_between "$tag" "origin/$PRODUCTION_BRANCH")" -eq 0 ]; then
         die "nothing to release: $PRODUCTION_BRANCH has no commits since $tag (promote finished features first: just release-promote)"
