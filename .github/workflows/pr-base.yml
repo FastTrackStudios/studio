@@ -1,0 +1,74 @@
+# PR base — `main` is the default branch, but card PRs belong in `dev`.
+#
+# GitHub has no setting for "default PR base != default branch", so `gh pr
+# create` and the web UI propose `main`. This retargets a PR opened (or
+# edited back) against `main` onto `dev`, unless it is a release path:
+#
+#   release/v*   release PR   (just release-pr)
+#   hotfix/*     hotfix PR    (just release-hotfix, then release-pr)
+#   backmerge/*  back-merge   (just release-backmerge)
+#
+# Release and hotfix PRs into main are opened by hand with one of those head
+# names. Agents still pass `--base dev` explicitly; this is the safety net.
+#
+# SECURITY: `pull_request_target` runs with a write token and the base
+# branch's copy of this file, even for PRs from forks. So this workflow
+# NEVER checks out or runs PR code, uses no third-party actions, reads PR
+# fields only through `env:` (never interpolated into the script), and has
+# `pull-requests: write` and nothing else. A head ref counts as a release
+# path only when it lives in this repo, so a fork cannot exempt itself by
+# naming its branch `release/v9`.
+#
+# NOTE: `pull_request_target` takes the workflow file from the BASE branch,
+# so this only takes effect once the file is on `main` (it ships with the
+# next release or hotfix PR).
+
+name: pr-base
+
+on:
+  pull_request_target:
+    branches: [main]
+    types: [opened, reopened, edited]
+
+permissions:
+  pull-requests: write
+
+concurrency:
+  group: pr-base-${{ github.event.pull_request.number }}
+  cancel-in-progress: false
+
+jobs:
+  retarget:
+    name: Retarget to dev
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Retarget the PR onto dev
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR: ${{ github.event.pull_request.number }}
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
+          HEAD_REF: ${{ github.event.pull_request.head.ref }}
+          HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
+        run: |
+          set -euo pipefail
+
+          if [[ "$BASE_REF" != "main" ]]; then
+            echo "base is '$BASE_REF', not main: nothing to do"
+            exit 0
+          fi
+
+          if [[ "$HEAD_REPO" == "$REPO" ]]; then
+            case "$HEAD_REF" in
+              release/v*|hotfix/*|backmerge/*)
+                echo "head '$HEAD_REF' is a release path: leaving the base on main"
+                exit 0
+                ;;
+            esac
+          fi
+
+          gh pr edit "$PR" --repo "$REPO" --base dev
+          gh pr comment "$PR" --repo "$REPO" --body \
+            "Retargeted from \`main\` to \`dev\`: card PRs land in \`dev\`; only \`release/v*\`, \`hotfix/*\` and \`backmerge/*\` PRs go to \`main\` (docs/agents/release-workflow.md)."
+          echo "retargeted #$PR to dev"

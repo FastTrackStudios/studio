@@ -2,11 +2,11 @@
 
 studio has two long-lived branches and one rule for shipping:
 
-- **`dev`**: the default branch and the integration branch. Everything
-  lands here: the Captain's pushes, and agents' PRs (squash-merged). Dev
-  never freezes.
-- **`main`**: **finished features**. Work gets here by a *promotion PR*
-  from `dev` once it is verified. **A push to main ships nothing**: no
+- **`dev`**: the integration branch. Everything lands here: the Captain's
+  pushes, and agents' PRs (squash-merged). Dev never freezes. It is *not*
+  the repo's default branch: `main` is (see "PR base" below).
+- **`main`**: the default branch, and **finished features**. Work gets here
+  by a *promotion PR* from `dev` once it is verified. **A push to main ships nothing**: no
   deploy, no TestFlight, no installers.
 - **A release is a `v*` tag on main.** The tag ships everything: both
   sites, both iOS apps (Signal and Session, one version, one TestFlight
@@ -36,6 +36,7 @@ version bump.
 
 | Event | Workflows | Runner |
 |---|---|---|
+| PR opened against `main` from a card branch | `pr-base` retargets it to `dev` (seconds, one comment) | GitHub-hosted |
 | PR into `dev` | `pr-title` (a regex on the title, seconds) | GitHub-hosted |
 | push to `dev` | nothing | none |
 | **promotion PR** `dev` -> `main` (or `hotfix/*` -> `main`) | `checks` (the full `just ci` set + advisory clippy; check name `Build + test`), `release` guard | THEBATTLESHIP (`session`), guard GitHub-hosted |
@@ -59,6 +60,28 @@ the **advisory** job `Advisory: wasm + tests`: it runs on every PR into main
 and shows red or green, but is not in the ruleset. It is red today (STA-184);
 when STA-184 makes it green its two steps move back into `Build + test` and
 the advisory job goes away.
+
+## PR base: main is the default, PRs go to dev
+
+`main` is the default branch, so `gh pr create` and the web UI propose `main`
+as the base. GitHub has no setting for a different default PR base, so
+`.github/workflows/pr-base.yml` (`pull_request_target`: opened, reopened,
+edited) retargets any PR whose base is `main` onto `dev` and says why in a
+one-line comment. It leaves alone PRs whose head is `release/v*`,
+`hotfix/*` or `backmerge/*` in this repo; those are the release PRs, opened
+by hand or by `scripts/release.sh`.
+
+- **Agents and scripts still pass `--base dev` explicitly.** The workflow is a
+  safety net, not the plan.
+- It never checks out or runs PR code (it is privileged, and it works for
+  forks), and it needs `pull-requests: write` only.
+- `pull_request_target` runs the workflow file from the base branch, so
+  it only works once it is on `main`. Until then, pass `--base dev`.
+- The retarget is made with the workflow's `GITHUB_TOKEN`, which starts no
+  further workflows: `pr-title` runs on the next push or title edit, not on
+  the retarget itself.
+- A PR into `main` from any other head name is retargeted to `dev`: a
+  hotfix branch must be named `hotfix/<what>`, a release `release/vX.Y.Z`.
 
 ## Day to day
 
@@ -205,9 +228,11 @@ promoted means verified.
 - **TestFlight**: expire the build in App Store Connect (per app); the previous
   build stays installable. To ship the previous version again, cut a new
   patch release; a tag is never moved or reused.
-- **The workflow itself**: set the default branch back to `main`, restore
-  the `on: push: branches: [main]` triggers in `deploy.yml` (one commit), and
-  change the `main (release only)` ruleset only with the Captain's yes.
+- **The workflow itself**: `main` stays the default branch (the Captain's
+  decision, STA-308), so there is no default-branch switch to undo. Restore
+  the `on: push: branches: [main]` triggers in `deploy.yml` (one commit),
+  delete `pr-base.yml` if PRs should stop moving to `dev`, and change the
+  `main (release only)` ruleset only with the Captain's yes.
 
 ## Branches
 
