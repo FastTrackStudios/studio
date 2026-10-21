@@ -62,7 +62,7 @@ mkdir -p "$OUT_DIR"
 OUT="$OUT_DIR/$title-$VERSION-linux-$ARCH.AppImage"
 
 # Re-run inside the CI dev shell (the one checks.yml builds the workspace in),
-# then with the three packaging tools added from the same nixpkgs the flake is
+# then with the packaging tools added from the same nixpkgs the flake is
 # locked to (not whatever `nixpkgs` is today).
 if [ -z "${DESKTOP_IN_SHELL:-}" ]; then
     exec nix develop --accept-flake-config "$ROOT#ci" \
@@ -71,7 +71,7 @@ fi
 if [ -z "${DESKTOP_IN_TOOLS:-}" ]; then
     rev="$(python3 -c "import json;print(json.load(open('flake.lock'))['nodes']['nixpkgs']['locked']['rev'])" 2>/dev/null || true)"
     pk="nixpkgs"; [ -n "$rev" ] && pk="github:NixOS/nixpkgs/$rev"
-    exec nix shell "$pk#patchelf" "$pk#appimagekit" "$pk#binutils" \
+    exec nix shell "$pk#patchelf" "$pk#squashfsTools" "$pk#binutils" "$pk#curl" "$pk#coreutils" \
         --command env DESKTOP_IN_TOOLS=1 bash "$0" "$@"
 fi
 
@@ -87,7 +87,7 @@ fi
 [ -x "$BIN" ] || { echo "ERROR: the build produced no $BIN" >&2; exit 1; }
 
 # ── The AppDir ──────────────────────────────────────────────────────────────
-WORK="$(mktemp -d)"
+WORK="$(mktemp -d -p "$OUT_DIR" .appdir.XXXXXX)"   # on the build disk, not /tmp
 trap 'rm -rf "$WORK"' EXIT
 AD="$WORK/$title.AppDir"
 mkdir -p "$AD/usr/bin" "$AD/usr/lib" "$AD/usr/share/applications" "$AD/usr/share/icons/hicolor/256x256/apps"
@@ -108,6 +108,7 @@ declare -A seen=()
 : > "$WORK/needed-excluded.txt"
 while read -r name arrow path _; do
     [ "$arrow" = "=>" ] || continue
+    name="$(basename "$name")"   # the loader is listed by its full path
     [ -f "${path:-}" ] || continue
     if excluded "$name"; then echo "$name" >> "$WORK/needed-excluded.txt"; continue; fi
     [ -z "${seen[$name]:-}" ] || continue
@@ -184,8 +185,24 @@ APPRUN
 chmod +x "$AD/AppRun"
 
 # ── Pack ────────────────────────────────────────────────────────────────────
+# An AppImage is the type2 runtime (a small static ELF that mounts or extracts
+# the squashfs behind it) with the AppDir's squashfs appended: what
+# `appimagetool` does, without needing it (nixpkgs dropped it). The runtime is
+# a pinned upstream release, checked against its sha256.
+RUNTIME_URL="https://github.com/AppImage/type2-runtime/releases/download/20251108/runtime-x86_64"
+RUNTIME_SHA256="2fca8b443c92510f1483a883f60061ad09b46b978b2631c807cd873a47ec260d"
+RT_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/fts-appimage"
+RT="$RT_DIR/runtime-x86_64-20251108"
+mkdir -p "$RT_DIR"
+if ! { [ -f "$RT" ] && echo "$RUNTIME_SHA256  $RT" | sha256sum -c --status; }; then
+    curl -fsSL --retry 3 -o "$RT.part" "$RUNTIME_URL"
+    echo "$RUNTIME_SHA256  $RT.part" | sha256sum -c --status \
+        || { echo "ERROR: the AppImage runtime does not match its pinned sha256" >&2; rm -f "$RT.part"; exit 1; }
+    mv "$RT.part" "$RT"
+fi
+mksquashfs "$AD" "$WORK/app.squashfs" -root-owned -noappend -comp zstd -Xcompression-level 15 -no-xattrs -quiet
 rm -f "$OUT"
-ARCH=$ARCH VERSION="$VERSION" appimagetool --no-appstream "$AD" "$OUT"
+cat "$RT" "$WORK/app.squashfs" > "$OUT"
 chmod +x "$OUT"
 ( cd "$OUT_DIR" && sha256sum "$(basename "$OUT")" > "$(basename "$OUT").sha256" )
 echo "=== done: $OUT ($(du -h "$OUT" | cut -f1)) ==="
