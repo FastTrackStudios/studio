@@ -11,9 +11,13 @@ pub mod proto;
 #[cfg(feature = "ui")]
 pub mod ui;
 
+#[cfg(not(target_arch = "wasm32"))]
 use std::path::Path;
 
+#[cfg(not(target_arch = "wasm32"))]
 use sampler::midicore::{DrumMap, DrumMapConverter};
+// The kit loaders below drive a native SamplerRig.
+#[cfg(not(target_arch = "wasm32"))]
 use sampler::{InstrumentId, PreloadProfile, PresetSpec, SamplerRig};
 
 // The rig engine (architect::rig, threads, audio) is native-only; the browser
@@ -52,6 +56,7 @@ pub const GM_DRUM_CHANNEL: u8 = 9;
 /// # Errors
 ///
 /// Returns an error if MIDI attachment fails.
+#[cfg(not(target_arch = "wasm32"))]
 pub fn attach_converted_kit(
     rig: &SamplerRig,
     selection: midi::PortSelector,
@@ -85,6 +90,7 @@ pub fn attach_converted_kit(
 /// Returns an error if the preset file cannot be read or loaded.
 // r[impl drums.kit.gm-channel]
 // r[impl drums.kit.sample-zones]
+#[cfg(not(target_arch = "wasm32"))]
 pub fn load_kit_tracks(
     rig: &SamplerRig,
     id: &str,
@@ -103,6 +109,7 @@ pub fn load_kit_tracks(
 /// # Errors
 ///
 /// Returns an error if kit loading fails.
+#[cfg(not(target_arch = "wasm32"))]
 pub fn load_kit_tracks_spec(
     rig: &SamplerRig,
     id: &str,
@@ -117,6 +124,7 @@ pub fn load_kit_tracks_spec(
 /// # Errors
 ///
 /// Returns an error if the preset file cannot be loaded.
+#[cfg(not(target_arch = "wasm32"))]
 pub fn load_preset_kit(
     rig: &SamplerRig,
     id: &str,
@@ -147,6 +155,7 @@ pub fn load_preset_kit(
 /// Returns an error if loading the instrument configuration fails.
 // r[impl drums.kit.gm-channel]
 // r[impl drums.kit.sample-zones]
+#[cfg(not(target_arch = "wasm32"))]
 pub fn load_kit(
     rig: &SamplerRig,
     id: &str,
