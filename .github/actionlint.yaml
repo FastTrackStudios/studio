@@ -1,0 +1,7 @@
+# Self-hosted runner labels used by this repo's workflows, so actionlint
+# does not flag them as unknown.
+self-hosted-runner:
+  labels:
+    - session
+    - airlock
+    - macos

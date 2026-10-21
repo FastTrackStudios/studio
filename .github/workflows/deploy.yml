@@ -18,6 +18,10 @@
 # so "Active" means the cluster is SERVING this sha, not merely that an
 # image was pushed.
 #
+# main is production: under the dev-first workflow
+# (docs/agents/release-workflow.md) it only receives release merges from
+# dev (and hotfix/*), so this runs once per release, not once per push.
+#
 # No path filtering. session-web's demo backend is the real in-process
 # daw-standalone/session stack, so a change almost anywhere in the
 # workspace can change what the site does — a path filter would either

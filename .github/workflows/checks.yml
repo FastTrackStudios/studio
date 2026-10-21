@@ -1,8 +1,19 @@
-# studio — the PR gate.
+# studio — the release gate.
 #
-# Pull requests only (and by hand): a merge to main is the tree its PR
-# already passed, and a second run of it on push held the one runner
-# for ten minutes while the deploy of that same merge queued behind it.
+# WHEN THIS RUNS — the dev-first model (docs/agents/release-workflow.md):
+#
+#   PR -> dev           NOT here. The gate is a local `just ci` on the PR's
+#                       head (the same steps, in the same order, below);
+#                       pr-title.yml is the only job a PR into dev runs.
+#   release PR dev -> main (or hotfix/* -> main)   HERE, automatically,
+#                       the full set: the last look before production,
+#                       once per release rather than once per push.
+#   by hand             `gh workflow run checks.yml --ref <branch>`.
+#
+# Never on push: a merge to main is the tree its release PR already
+# passed (release.yml's guard proves the merge commit's tree IS the head's
+# tree), and a second run of it held the one runner while the deploy of
+# that same merge queued behind it.
 #
 # Runs on the org's self-hosted runner (THEBATTLESHIP, label `nix-host` —
 # see fasttrackstudio/.flake modules/selfhost/services/github-runner.nix):
@@ -25,6 +36,7 @@ name: checks
 
 on:
   pull_request:
+    branches: [main]
   workflow_dispatch:
 
 concurrency:

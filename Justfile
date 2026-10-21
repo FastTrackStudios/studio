@@ -1964,7 +1964,9 @@ reaper-test-gui FILTER="":
     cargo run -p session-reaper-xtask -- --gui --keep-open {{FILTER}}
 
 # Runs exactly what `.github/workflows/checks.yml` runs, in the same
-# order. NOT the other two workflows: `session-ios` and `deploy` need a
+# order — the gate for anything pushed or PR'd into `dev`, where CI runs
+# no build (checks.yml runs on release PRs into main only). NOT the other
+# workflows: `session-ios` and `deploy` need a
 # Mac, signing keys and upload credentials, which is why they are not a
 # thing you run before pushing — and why a green run here says nothing
 # about whether either of them is healthy.
@@ -2055,6 +2057,45 @@ ci FROM="lockfile":
 
     echo
     echo "every CI step passed locally"
+
+# ── Releases ─────────────────────────────────────────────────────────────
+#
+# main = production, dev = integration (docs/agents/release-workflow.md).
+# Work lands on dev (pushed, or a PR squash-merged); PRs into dev run only
+# the PR-title check, so `just ci` above is their gate. A release is a
+# `dev -> main` PR: the full checks + the release guard run there, it is
+# merged with a merge commit, and main then deploys, uploads TestFlight
+# and tags `v<version>`. One version, `[workspace.package] version` in
+# Cargo.toml; the changelog is generated from dev's commit subjects by
+# git-cliff (cliff.toml).
+
+# The repo's release version ([workspace.package] in Cargo.toml).
+version:
+    @bash scripts/release.sh version
+
+# What the next release would be: suggested version, unreleased
+# changelog, and the git dependencies that moved.
+release-plan:
+    bash scripts/release.sh plan
+
+# Bump the version, regenerate CHANGELOG.md and commit
+# `chore(release): v<next>` on a fresh `release/v<next>` off origin/dev.
+# BUMP: auto (from the commits), patch, minor, major, or an exact X.Y.Z.
+release-prepare BUMP="auto":
+    bash scripts/release.sh prepare {{BUMP}}
+
+# Open the release PR, dev -> main, with the changelog as its body.
+release-pr:
+    bash scripts/release.sh pr
+
+# On a hotfix/* branch cut from origin/main (fix already committed): the
+# patch bump + changelog + release commit the release guard requires.
+release-hotfix:
+    bash scripts/release.sh hotfix
+
+# One version's section of CHANGELOG.md (default: the current version).
+release-notes *VERSION:
+    @bash scripts/release.sh notes {{VERSION}}
 
 # The Session DAW view in a browser (session-daw's web_host), built to
 # apps/session/daw-web/dist: cargo → wasm-bindgen → index.html, plus the

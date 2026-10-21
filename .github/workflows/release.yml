@@ -1,0 +1,81 @@
+# Release — the guard on release PRs, and the tag + GitHub Release once a
+# release reaches main. The procedure and its reasons are in
+# docs/agents/release-workflow.md; the logic is scripts/release.sh, so a
+# human can run every step of it by hand (`just release-*`).
+#
+#   pull_request -> main   "Release guard": cheap, on a hosted runner. It
+#                          fails a release PR that would ship something
+#                          other than what `checks` tested:
+#                            - the head is `dev` (or hotfix/*),
+#                            - Cargo.toml's version is new and greater,
+#                            - CHANGELOG.md has that version's section,
+#                            - the head commit IS `chore(release): v<ver>`
+#                              (nothing slipped onto dev after the bump),
+#                            - merging produces exactly the head's tree.
+#   push -> main           "Tag + GitHub Release": tag `v<version>` on the
+#                          dev tip and publish the GitHub Release, then
+#                          dispatch the REAPER suites on the tag. A push
+#                          without a CHANGELOG section for its version is
+#                          not a release and publishes nothing.
+#   workflow_dispatch      the same, by hand, on main (a re-run).
+#
+# Publishing does not wait for deploy.yml: the product is the desktop
+# apps and the plugins, and the two web sites are one leg of it. A failed
+# site deploy is its own red run, not a missing tag.
+#
+# Merge release PRs with "Create a merge commit". Squash or rebase would
+# give main a commit dev does not have, and the next release's guard
+# would (rightly) refuse.
+
+name: release
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened, ready_for_review]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  guard:
+    name: Release guard
+    if: ${{ github.event_name == 'pull_request' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+      - name: Is this a sound release?
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          HEAD_REF: ${{ github.event.pull_request.head.ref }}
+        run: bash scripts/release.sh guard
+
+  publish:
+    name: Tag + GitHub Release
+    if: ${{ github.event_name != 'pull_request' && github.ref == 'refs/heads/main' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+      # `gh workflow run reaper.yml` on the new tag.
+      actions: write
+    concurrency:
+      group: release-publish
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash scripts/release.sh publish
