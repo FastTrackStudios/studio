@@ -652,7 +652,11 @@ fn GigProgress() -> Element {
     } else {
         (Vec::new(), Vec::new())
     };
-    let progress = if d > 0.0 { (p / d * 100.0).clamp(0.0, 100.0) } else { 0.0 };
+    let progress = if d > 0.0 {
+        (p / d * 100.0).clamp(0.0, 100.0)
+    } else {
+        0.0
+    };
     let small = "height: 36px; width: 36px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; \
                  border: none; border-radius: 6px; background: rgba(255,255,255,0.06); cursor: pointer;";
     let facts = [
@@ -946,7 +950,13 @@ fn GigFoot() -> Element {
                  border: none; border-radius: 6px; background: rgba(255,255,255,0.06); color: #e4e4e7; font-size: 15px; font-weight: 650; cursor: pointer;";
     let zoom = move |by: f64| {
         let p = st.place();
-        st.set_place(ChartPlace { zoom: ((p.zoom + by) * 10.0).round() / 10.0, ..p }, true);
+        st.set_place(
+            ChartPlace {
+                zoom: ((p.zoom + by) * 10.0).round() / 10.0,
+                ..p
+            },
+            true,
+        );
     };
     let nudge = move |by: f64| {
         let p = st.place();
