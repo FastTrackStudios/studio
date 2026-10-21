@@ -217,6 +217,9 @@ fn Router() -> Element {
         crate::rigs::store_last(None);
         screen.set(MobileScreen::Menu);
     };
+    // The gig shell: on the iPad, the rig's header, middle and Setlist
+    // sidebar carry the gig (its chart, its track, the set).
+    crate::gig::shell::use_gig_shell();
     // The menu's Gig card.
     use_context_provider(|| {
         crate::gig::OpenGig(Callback::new(move |()| screen.set(MobileScreen::Gig)))

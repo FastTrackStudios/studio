@@ -21,6 +21,9 @@
 //! wired into this page; the Keyflow render rides along as a second tab.
 
 pub mod player;
+/// The gig on the iPad rig: its pieces lent to the tablet layout.
+#[cfg(feature = "signal-guitar")]
+pub mod shell;
 mod view;
 
 pub use view::GigWorkspace;
@@ -93,12 +96,17 @@ pub fn gigs_root() -> PathBuf {
     }
 }
 
-/// Every gig on this machine, by folder name (`FTS_GIG_DIR` alone, if set).
-pub fn list_gigs() -> Vec<Gig> {
-    if let Some(dir) = std::env::var_os("FTS_GIG_DIR") {
-        return read_gig(Path::new(&dir)).into_iter().collect();
-    }
-    let Ok(entries) = std::fs::read_dir(gigs_root()) else {
+/// The gigs that ship inside the app (`<App>.app/Gigs`, put there by the
+/// iOS build), so a set plays on stage with no Mac and no network.
+pub fn bundled_root() -> Option<PathBuf> {
+    let exe = std::env::current_exe().ok()?;
+    let dir = exe.parent()?.join("Gigs");
+    dir.is_dir().then_some(dir)
+}
+
+/// The gig folders directly under `root`, by name.
+fn gig_dirs(root: &Path) -> Vec<PathBuf> {
+    let Ok(entries) = std::fs::read_dir(root) else {
         return Vec::new();
     };
     let mut dirs: Vec<PathBuf> = entries
@@ -107,7 +115,26 @@ pub fn list_gigs() -> Vec<Gig> {
         .filter(|p| p.join("gig.json").is_file())
         .collect();
     dirs.sort();
-    dirs.iter().filter_map(|d| read_gig(d)).collect()
+    dirs
+}
+
+/// Every gig on this machine, by folder name (`FTS_GIG_DIR` alone, if set):
+/// the gigs folder's, then the app's own — a gig of the same name put in
+/// the gigs folder (Files, on an iPad) wins over the one the app shipped.
+pub fn list_gigs() -> Vec<Gig> {
+    if let Some(dir) = std::env::var_os("FTS_GIG_DIR") {
+        return read_gig(Path::new(&dir)).into_iter().collect();
+    }
+    let mut gigs: Vec<Gig> = Vec::new();
+    let roots = std::iter::once(gigs_root()).chain(bundled_root());
+    for dir in roots.flat_map(|r| gig_dirs(&r)) {
+        if let Some(gig) = read_gig(&dir)
+            && !gigs.iter().any(|g| g.name == gig.name)
+        {
+            gigs.push(gig);
+        }
+    }
+    gigs
 }
 
 fn text(v: &Value, key: &str) -> String {
