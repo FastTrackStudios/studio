@@ -283,6 +283,12 @@ use signal_plugin_host::{
 };
 
 impl PluginInstance for NamProcessor {
+    /// Its state is its own: it renders on any render thread, beside
+    /// other tracks' plugins.
+    fn parallel_safe(&self) -> bool {
+        true
+    }
+
     fn descriptor(&self) -> PluginDescriptor {
         PluginDescriptor {
             id: format!("signal.nam:{}", self.model_path),

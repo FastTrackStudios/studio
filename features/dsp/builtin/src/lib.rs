@@ -549,6 +549,12 @@ impl NativeEq {
 }
 
 impl PluginInstance for NativeEq {
+    /// Its state is its own: it renders on any render thread, beside
+    /// other tracks' plugins.
+    fn parallel_safe(&self) -> bool {
+        true
+    }
+
     fn descriptor(&self) -> PluginDescriptor {
         descriptor("signal.fx.eq", "EQ")
     }
@@ -754,6 +760,12 @@ impl NativePreamp {
 }
 
 impl PluginInstance for NativePreamp {
+    /// Its state is its own: it renders on any render thread, beside
+    /// other tracks' plugins.
+    fn parallel_safe(&self) -> bool {
+        true
+    }
+
     fn descriptor(&self) -> PluginDescriptor {
         descriptor("signal.fx.preamp", "Preamp")
     }
@@ -1250,6 +1262,12 @@ impl NativeSaturate {
 }
 
 impl PluginInstance for NativeSaturate {
+    /// Its state is its own: it renders on any render thread, beside
+    /// other tracks' plugins.
+    fn parallel_safe(&self) -> bool {
+        true
+    }
+
     fn descriptor(&self) -> PluginDescriptor {
         descriptor("signal.fx.saturate", "Saturate")
     }
@@ -1679,6 +1697,12 @@ impl NativeTune {
 }
 
 impl PluginInstance for NativeTune {
+    /// Its state is its own: it renders on any render thread, beside
+    /// other tracks' plugins.
+    fn parallel_safe(&self) -> bool {
+        true
+    }
+
     fn descriptor(&self) -> PluginDescriptor {
         descriptor("signal.fx.tune", "Tune")
     }
@@ -2214,6 +2238,12 @@ impl NativeComp {
 }
 
 impl PluginInstance for NativeComp {
+    /// Its state is its own: it renders on any render thread, beside
+    /// other tracks' plugins.
+    fn parallel_safe(&self) -> bool {
+        true
+    }
+
     fn descriptor(&self) -> PluginDescriptor {
         descriptor("signal.fx.comp", "Compressor")
     }
@@ -2479,6 +2509,12 @@ impl NativeLevel {
 }
 
 impl PluginInstance for NativeLevel {
+    /// Its state is its own: it renders on any render thread, beside
+    /// other tracks' plugins.
+    fn parallel_safe(&self) -> bool {
+        true
+    }
+
     fn descriptor(&self) -> PluginDescriptor {
         descriptor("signal.fx.level", "Leveler")
     }
@@ -3897,6 +3933,12 @@ impl NativeReverb {
 }
 
 impl PluginInstance for NativeReverb {
+    /// Its state is its own: it renders on any render thread, beside
+    /// other tracks' plugins.
+    fn parallel_safe(&self) -> bool {
+        true
+    }
+
     fn descriptor(&self) -> PluginDescriptor {
         descriptor("signal.fx.reverb", "Reverb")
     }
@@ -4933,6 +4975,12 @@ impl NativeDelay {
 }
 
 impl PluginInstance for NativeDelay {
+    /// Its state is its own: it renders on any render thread, beside
+    /// other tracks' plugins.
+    fn parallel_safe(&self) -> bool {
+        true
+    }
+
     fn descriptor(&self) -> PluginDescriptor {
         descriptor("signal.fx.delay", "Delay")
     }
@@ -5144,6 +5192,12 @@ impl NativeMod {
 }
 
 impl PluginInstance for NativeMod {
+    /// Its state is its own: it renders on any render thread, beside
+    /// other tracks' plugins.
+    fn parallel_safe(&self) -> bool {
+        true
+    }
+
     fn descriptor(&self) -> PluginDescriptor {
         descriptor("signal.fx.mod", self.label)
     }
@@ -5302,6 +5356,12 @@ impl NativeTrem {
 }
 
 impl PluginInstance for NativeTrem {
+    /// Its state is its own: it renders on any render thread, beside
+    /// other tracks' plugins.
+    fn parallel_safe(&self) -> bool {
+        true
+    }
+
     fn descriptor(&self) -> PluginDescriptor {
         descriptor("signal.fx.trem", "Tremolo")
     }
@@ -5628,6 +5688,12 @@ impl NativePitch {
 }
 
 impl PluginInstance for NativePitch {
+    /// Its state is its own: it renders on any render thread, beside
+    /// other tracks' plugins.
+    fn parallel_safe(&self) -> bool {
+        true
+    }
+
     fn descriptor(&self) -> PluginDescriptor {
         descriptor("signal.fx.pitch", "Pitch")
     }
@@ -5776,6 +5842,12 @@ impl NativePassthrough {
 }
 
 impl PluginInstance for NativePassthrough {
+    /// Its state is its own: it renders on any render thread, beside
+    /// other tracks' plugins.
+    fn parallel_safe(&self) -> bool {
+        true
+    }
+
     fn descriptor(&self) -> PluginDescriptor {
         descriptor("signal.fx.passthrough", self.label)
     }
@@ -5913,6 +5985,12 @@ impl NativeGain {
 }
 
 impl PluginInstance for NativeGain {
+    /// Its state is its own: it renders on any render thread, beside
+    /// other tracks' plugins.
+    fn parallel_safe(&self) -> bool {
+        true
+    }
+
     fn descriptor(&self) -> PluginDescriptor {
         descriptor("signal.fx.gain", "Gain")
     }
@@ -6027,6 +6105,12 @@ impl NativeBoost {
 }
 
 impl PluginInstance for NativeBoost {
+    /// Its state is its own: it renders on any render thread, beside
+    /// other tracks' plugins.
+    fn parallel_safe(&self) -> bool {
+        true
+    }
+
     fn descriptor(&self) -> PluginDescriptor {
         descriptor("signal.fx.boost", "Boost")
     }
@@ -6246,6 +6330,12 @@ impl NativeGate {
 }
 
 impl PluginInstance for NativeGate {
+    /// Its state is its own: it renders on any render thread, beside
+    /// other tracks' plugins.
+    fn parallel_safe(&self) -> bool {
+        true
+    }
+
     fn descriptor(&self) -> PluginDescriptor {
         descriptor("signal.fx.gate", "Gate")
     }
@@ -6453,6 +6543,12 @@ impl NativeTransient {
 }
 
 impl PluginInstance for NativeTransient {
+    /// Its state is its own: it renders on any render thread, beside
+    /// other tracks' plugins.
+    fn parallel_safe(&self) -> bool {
+        true
+    }
+
     fn descriptor(&self) -> PluginDescriptor {
         descriptor("signal.fx.transient", "Transient")
     }

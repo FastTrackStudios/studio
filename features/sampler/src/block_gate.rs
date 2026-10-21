@@ -165,6 +165,12 @@ impl BlockGate {
 }
 
 impl PluginInstance for BlockGate {
+    /// Its state is its own: it renders on any render thread, beside
+    /// other tracks' plugins.
+    fn parallel_safe(&self) -> bool {
+        true
+    }
+
     fn descriptor(&self) -> PluginDescriptor {
         self.inner.descriptor()
     }

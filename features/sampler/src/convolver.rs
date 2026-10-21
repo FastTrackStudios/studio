@@ -216,6 +216,12 @@ use signal_plugin_host::{
 };
 
 impl PluginInstance for Convolver {
+    /// Its state is its own: it renders on any render thread, beside
+    /// other tracks' plugins.
+    fn parallel_safe(&self) -> bool {
+        true
+    }
+
     fn descriptor(&self) -> PluginDescriptor {
         PluginDescriptor {
             id: format!("signal.cabir:{}", self.ir_path),

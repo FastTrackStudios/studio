@@ -272,6 +272,12 @@ struct Saved {
 }
 
 impl<P: Plugin> PluginInstance for Embedded<P> {
+    /// Its state is its own: it renders on any render thread, beside
+    /// other tracks' plugins.
+    fn parallel_safe(&self) -> bool {
+        true
+    }
+
     fn descriptor(&self) -> PluginDescriptor {
         PluginDescriptor {
             id: format!("fts.builtin.{}", P::NAME.to_lowercase().replace(' ', "-")),
