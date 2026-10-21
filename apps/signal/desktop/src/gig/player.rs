@@ -84,6 +84,13 @@ struct Shared {
     length: AtomicU64,
     /// The output's sample rate, Hz (0: no output open).
     rate: AtomicU32,
+    /// The ticket of the output whose voice plays (see [`try_open`]); a
+    /// voice with another ticket stays silent and takes nothing.
+    active_output: AtomicU64,
+    /// The sample rate the current track was decoded at (0: none).
+    track_rate: AtomicU32,
+    /// The ticket of the voice that took the current track up.
+    track_ticket: AtomicU64,
     /// A freshly decoded track for the callback to take up.
     pending: Mutex<Option<Arc<Track>>>,
     /// Tracks the callback let go of, freed off the audio thread.
@@ -111,6 +118,9 @@ impl Shared {
             position: AtomicU64::new(0),
             length: AtomicU64::new(0),
             rate: AtomicU32::new(0),
+            active_output: AtomicU64::new(0),
+            track_rate: AtomicU32::new(0),
+            track_ticket: AtomicU64::new(u64::MAX),
             pending: Mutex::new(None),
             retired: Mutex::new(Vec::with_capacity(8)),
             generation: AtomicU64::new(0),
@@ -138,10 +148,12 @@ struct Voice {
     primed: bool,
     left: Vec<f32>,
     right: Vec<f32>,
+    /// Which output this voice belongs to (see [`Shared::active_output`]).
+    ticket: u64,
 }
 
 impl Voice {
-    fn new(shared: Arc<Shared>, rate: u32) -> Self {
+    fn new(shared: Arc<Shared>, rate: u32, ticket: u64) -> Self {
         Self {
             shared,
             track: None,
@@ -150,15 +162,26 @@ impl Voice {
             primed: false,
             left: vec![0.0; BLOCK],
             right: vec![0.0; BLOCK],
+            ticket,
         }
+    }
+
+    fn active(&self) -> bool {
+        self.shared.active_output.load(Ordering::Acquire) == self.ticket
     }
 
     /// Take up a new track and any pending seek.
     fn take_messages(&mut self) {
+        if !self.active() {
+            return;
+        }
         if let Ok(mut pending) = self.shared.pending.try_lock()
             && let Some(track) = pending.take()
         {
             let old = self.track.replace(track);
+            self.shared
+                .track_ticket
+                .store(self.ticket, Ordering::Release);
             self.pos = 0.0;
             self.primed = false;
             if let Some(old) = old
@@ -177,6 +200,9 @@ impl Voice {
     fn render(&mut self, data: &mut [f32], channels: usize) {
         self.take_messages();
         data.fill(0.0);
+        if !self.active() {
+            return;
+        }
         let channels = channels.max(1);
         let Some(track) = self.track.clone() else {
             return;
@@ -325,27 +351,114 @@ pub fn player() -> &'static Player {
     })
 }
 
-/// Owns the output stream (cpal streams are not `Send` everywhere), and
-/// reopens it when asked.
+/// How long a device may take to open before the next one is tried. A
+/// wedged CoreAudio server blocks `build_output_stream` indefinitely (seen
+/// on a Mac whose `coreaudiod` stopped answering); the attempt's thread is
+/// left behind and the player moves on.
+const OPEN_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(3);
+
+/// Owns the output: opens the asked-for device (else the default), and on
+/// failure or a hang tries every other output in turn.
 fn audio_thread(shared: &Arc<Shared>, commands: &mpsc::Receiver<Command>) {
-    let mut stream: Option<cpal::Stream> = None;
+    // Dropping it closes the open stream (its thread is waiting on it).
+    let mut open: Option<mpsc::Sender<()>> = None;
     while let Ok(command) = commands.recv() {
         match command {
             Command::Open(name) => {
-                drop(stream.take());
+                drop(open.take());
+                shared.active_output.fetch_add(1, Ordering::AcqRel);
                 shared.rate.store(0, Ordering::Release);
-                match open_output(shared, name.as_deref()) {
-                    Ok(s) => {
-                        stream = Some(s);
-                        shared.set_status("");
+                if let Ok(mut d) = shared.device.lock() {
+                    d.clear();
+                }
+                let mut candidates: Vec<Option<String>> = vec![name.clone()];
+                if name.is_some() {
+                    candidates.push(None);
+                }
+                // Enumerating is itself a server call: bounded the same way.
+                let others = run_bounded(output_devices).unwrap_or_default();
+                candidates.extend(others.into_iter().map(Some));
+                let mut failed: Vec<String> = Vec::new();
+                for candidate in candidates {
+                    let label = candidate.clone().unwrap_or_else(|| "default output".into());
+                    if failed.iter().any(|f| f.starts_with(&format!("{label}:"))) {
+                        continue;
                     }
-                    Err(e) => {
-                        tracing::warn!("gig player: no output: {e}");
-                        shared.set_status(format!("No audio output: {e}"));
+                    match try_open(shared, candidate) {
+                        Ok(stop) => {
+                            open = Some(stop);
+                            break;
+                        }
+                        Err(e) => {
+                            tracing::warn!("gig player: {label}: {e}");
+                            failed.push(format!("{label}: {e}"));
+                        }
                     }
+                }
+                if open.is_none() {
+                    shared.set_status(format!("No audio output — {}", failed.join("; ")));
+                } else if failed.is_empty() {
+                    shared.set_status("");
+                } else {
+                    shared.set_status(format!("Skipped {}", failed.join("; ")));
                 }
             }
         }
+    }
+}
+
+/// `f` on a thread of its own, given [`OPEN_TIMEOUT`] to answer.
+fn run_bounded<T: Send + 'static>(f: fn() -> T) -> Option<T> {
+    let (tx, rx) = mpsc::channel();
+    std::thread::Builder::new()
+        .name("gig-probe".into())
+        .spawn(move || {
+            let _ = tx.send(f());
+        })
+        .ok()?;
+    rx.recv_timeout(OPEN_TIMEOUT).ok()
+}
+
+/// Open `name` (`None`: the default) on a thread that then keeps the
+/// stream until the returned sender is dropped. A device that does not
+/// open within [`OPEN_TIMEOUT`] is given up on; should it open later, its
+/// voice is not the active one and stays silent, and its thread closes it.
+fn try_open(shared: &Arc<Shared>, name: Option<String>) -> Result<mpsc::Sender<()>, String> {
+    let ticket = shared
+        .active_output
+        .fetch_add(1, Ordering::AcqRel)
+        .wrapping_add(1);
+    let (result_tx, result_rx) = mpsc::channel::<Result<(u32, String), String>>();
+    let (stop_tx, stop_rx) = mpsc::channel::<()>();
+    let thread_shared = Arc::clone(shared);
+    std::thread::Builder::new()
+        .name("gig-output".into())
+        .spawn(
+            move || match open_output(&thread_shared, name.as_deref(), ticket) {
+                Ok((stream, rate, device)) => {
+                    if result_tx.send(Ok((rate, device))).is_ok() {
+                        // Hold the stream until told to close.
+                        let _ = stop_rx.recv();
+                    }
+                    drop(stream);
+                }
+                Err(e) => {
+                    let _ = result_tx.send(Err(e));
+                }
+            },
+        )
+        .map_err(|e| e.to_string())?;
+    match result_rx.recv_timeout(OPEN_TIMEOUT) {
+        Ok(Ok((rate, device))) => {
+            if let Ok(mut d) = shared.device.lock() {
+                d.clone_from(&device);
+            }
+            shared.rate.store(rate, Ordering::Release);
+            tracing::info!("gig player: output '{device}' at {rate} Hz");
+            Ok(stop_tx)
+        }
+        Ok(Err(e)) => Err(e),
+        Err(_) => Err("did not open (timed out)".into()),
     }
 }
 
@@ -364,22 +477,30 @@ pub fn output_devices() -> Vec<String> {
         .unwrap_or_default()
 }
 
-fn open_output(shared: &Arc<Shared>, name: Option<&str>) -> Result<cpal::Stream, String> {
+fn open_output(
+    shared: &Arc<Shared>,
+    name: Option<&str>,
+    ticket: u64,
+) -> Result<(cpal::Stream, u32, String), String> {
     let host = cpal::default_host();
     let device = match name {
         Some(name) => host
             .output_devices()
             .map_err(|e| e.to_string())?
-            .find(|d| device_name(d).contains(name))
-            .or_else(|| host.default_output_device()),
+            .find(|d| device_name(d) == name)
+            .or_else(|| {
+                host.output_devices()
+                    .ok()?
+                    .find(|d| device_name(d).contains(name))
+            }),
         None => host.default_output_device(),
     }
-    .ok_or_else(|| "no output device".to_string())?;
+    .ok_or_else(|| "no such output device".to_string())?;
     let supported = device.default_output_config().map_err(|e| e.to_string())?;
     let config = supported.config();
     let rate = config.sample_rate;
     let channels = usize::from(config.channels);
-    let mut voice = Voice::new(Arc::clone(shared), rate);
+    let mut voice = Voice::new(Arc::clone(shared), rate, ticket);
     let stream = device
         .build_output_stream(
             config,
@@ -389,16 +510,7 @@ fn open_output(shared: &Arc<Shared>, name: Option<&str>) -> Result<cpal::Stream,
         )
         .map_err(|e| e.to_string())?;
     stream.play().map_err(|e| e.to_string())?;
-    if let Ok(mut d) = shared.device.lock() {
-        *d = device_name(&device);
-    }
-    let was = shared.rate.swap(rate, Ordering::AcqRel);
-    tracing::info!("gig player: output '{}' at {rate} Hz", device_name(&device));
-    // A track decoded for another rate is dropped; the UI reloads it.
-    if was != 0 && was != rate {
-        shared.length.store(0, Ordering::Release);
-    }
-    Ok(stream)
+    Ok((stream, rate, device_name(&device)))
 }
 
 impl Player {
@@ -444,6 +556,7 @@ impl Player {
                 }
                 match decoded {
                     Ok(audio) => {
+                        let track_rate = audio.sample_rate;
                         let mut channels = audio.channels.into_iter();
                         let left = channels.next().unwrap_or_default();
                         let right = channels.next().unwrap_or_else(|| left.clone());
@@ -452,6 +565,7 @@ impl Player {
                         if let Ok(mut pending) = shared.pending.lock() {
                             *pending = Some(Arc::new(track));
                         }
+                        shared.track_rate.store(track_rate, Ordering::Release);
                         shared.length.store(frames, Ordering::Release);
                         shared.position.store(0, Ordering::Release);
                         shared.looping.store(false, Ordering::Release);
@@ -484,22 +598,50 @@ impl Player {
         }
     }
 
-    /// Open another output (`None`: the default) and reload the track at
-    /// its rate.
+    /// Open another output (`None`: the default). The track follows it
+    /// ([`Player::poll`] reloads it for the new voice, at the new rate).
     pub fn open_device(&self, name: Option<String>) {
         if let Ok(tx) = self.commands.lock() {
             let _ = tx.send(Command::Open(name));
         }
-        let current = self.current.lock().ok().and_then(|c| c.clone());
-        if let Some(path) = current {
-            // The open is asynchronous; `load` waits for the new rate.
-            self.shared.rate.store(0, Ordering::Release);
+    }
+
+    /// Keep the track with the output, called on the UI's tick: once an
+    /// output is open, a track decoded at another rate, or taken up by a
+    /// voice that is no longer playing, is decoded again for this one.
+    pub fn poll(&self) {
+        let rate = self.shared.rate.load(Ordering::Acquire);
+        if rate == 0 || self.is_loading() || !self.is_loaded() {
+            return;
+        }
+        let Some(path) = self.current.lock().ok().and_then(|c| c.clone()) else {
+            return;
+        };
+        let waiting = self
+            .shared
+            .pending
+            .try_lock()
+            .map(|p| p.is_some())
+            .unwrap_or(true);
+        let stale_rate = self.shared.track_rate.load(Ordering::Acquire) != rate;
+        let orphaned = !waiting
+            && self.shared.track_ticket.load(Ordering::Acquire)
+                != self.shared.active_output.load(Ordering::Acquire);
+        if stale_rate || orphaned {
+            tracing::info!("gig player: reloading {} for the output", path.display());
             self.load(&path);
         }
     }
 
+    /// The rate positions are counted in: the track's own, else the output's.
     fn rate(&self) -> f64 {
-        f64::from(self.shared.rate.load(Ordering::Acquire).max(1))
+        let track = self.shared.track_rate.load(Ordering::Acquire);
+        let rate = if track != 0 {
+            track
+        } else {
+            self.shared.rate.load(Ordering::Acquire)
+        };
+        f64::from(rate.max(1))
     }
 
     fn to_frames(&self, seconds: f64) -> u64 {

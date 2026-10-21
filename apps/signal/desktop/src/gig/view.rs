@@ -59,6 +59,7 @@ pub fn GigWorkspace(on_back: Option<EventHandler<()>>) -> Element {
     use_future(move || async move {
         loop {
             let p = player();
+            p.poll();
             let (np, nd, npl, nl) = (p.position(), p.duration(), p.is_playing(), p.is_loading());
             if (*pos.peek() - np).abs() > 0.04 {
                 pos.set(np);
