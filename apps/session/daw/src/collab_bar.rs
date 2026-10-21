@@ -50,6 +50,14 @@ pub fn CollabBar() -> Element {
     let mut session_joining = use_signal(crate::collab::joining);
     let mut open = use_signal(|| false);
     let mut copied = use_signal(|| false);
+    // This device's sync switch (`collab::sync_locked`).
+    let mut locked = use_signal(crate::collab::sync_locked);
+    // Natively: the set this window hosts in Task by itself, and why it
+    // could not, if it could not (`live_host`).
+    #[cfg(feature = "native")]
+    let mut task_hosted = use_signal(|| crate::live_host::hosted().map(|h| h.title));
+    #[cfg(feature = "native")]
+    let mut host_error = use_signal(crate::live_host::last_error);
     let density = crate::shell::use_density();
 
     #[cfg(feature = "native")]
@@ -109,6 +117,9 @@ pub fn CollabBar() -> Element {
                     None => tracing::warn!("collab: no ticket to join"),
                 }
             }
+            // Signed in to Task, what is open goes live there by itself
+            // (off when the environment started a session above).
+            crate::live_host::start(display_name());
         });
     });
 
@@ -139,11 +150,36 @@ pub fn CollabBar() -> Element {
             if *people.peek() != here {
                 people.set(here);
             }
+            let now_locked = crate::collab::sync_locked();
+            if *locked.peek() != now_locked {
+                locked.set(now_locked);
+            }
+            #[cfg(feature = "native")]
+            {
+                let hosted = crate::live_host::hosted().map(|h| h.title);
+                if *task_hosted.peek() != hosted {
+                    task_hosted.set(hosted);
+                }
+                let why = crate::live_host::last_error();
+                if *host_error.peek() != why {
+                    host_error.set(why);
+                }
+            }
         }
     });
 
     let live = status();
     let others = people();
+    // Whether the live set is the one this window hosts in Task by itself.
+    #[cfg(feature = "native")]
+    let hosted_title = task_hosted();
+    #[cfg(not(feature = "native"))]
+    let hosted_title: Option<String> = None;
+    let in_task = move |set: &str| hosted_title.as_deref() == Some(set);
+    #[cfg(feature = "native")]
+    let hosting_error = move || host_error();
+    #[cfg(not(feature = "native"))]
+    let hosting_error = || None::<String>;
     // The button: who is here, you first — or, alone, a share glyph.
     let face = match &live {
         Some(l) => {
@@ -205,6 +241,15 @@ pub fn CollabBar() -> Element {
                 if error().is_some() {
                     span { style: "width:7px; height:7px; border-radius:4px; background:#e3b341;" }
                 }
+                // Locked: this device is not syncing — say so on the bar.
+                if locked() && live.is_some() {
+                    span {
+                        title: "This device is locked: the others' edits wait, and yours stay here",
+                        style: "font-size:10px; font-weight:700; letter-spacing:0.04em; padding:1px 5px; \
+                                border-radius:4px; border:1px solid #e3b341; color:#e3b341;",
+                        "LOCKED"
+                    }
+                }
             }
             if open() {
                 div {
@@ -220,6 +265,7 @@ pub fn CollabBar() -> Element {
                             span { style: "font-size:13px; font-weight:700;",
                                 match &live {
                                     Some(l) if l.hosting => rsx! { "Sharing {l.set}" },
+                                    Some(l) if in_task(&l.set) => rsx! { "Live in Task · {l.set}" },
                                     Some(l) => rsx! { "In {l.set}" },
                                     None => rsx! { "Play together" },
                                 }
@@ -339,8 +385,35 @@ pub fn CollabBar() -> Element {
                             }
                         }
                     }
+                    // This device's switch: live, or locked (held both
+                    // ways until it is unlocked, then merged).
+                    Section { label: "This device" }
+                    div {
+                        style: "display:flex; gap:2px; padding:2px; background:#0f1012; \
+                                border:1px solid {RULE}; border-radius:7px;",
+                        button {
+                            style: "{half(!locked())}",
+                            title: "Your edits go out as you make them, and everyone else's come in as they make them",
+                            onclick: move |_| { crate::collab::set_sync_locked(false); locked.set(false); },
+                            "Live"
+                        }
+                        button {
+                            style: "{half(locked())}",
+                            title: "Don't sync this device: the others' edits wait, yours stay here; unlock to merge them",
+                            onclick: move |_| { crate::collab::set_sync_locked(true); locked.set(true); },
+                            "Locked"
+                        }
+                    }
+                    if locked() {
+                        span { style: "font-size:11px; color:{DIM};",
+                            {held_note(live.as_ref().map_or(0, |l| l.held))}
+                        }
+                    }
                     if let Some(why) = error() {
                         span { style: "font-size:11px; color:#e3b341;", "{why}" }
+                    }
+                    if let Some(why) = hosting_error() {
+                        span { style: "font-size:11px; color:#e3b341;", "Task: {why}" }
                     }
                 }
             }
@@ -351,6 +424,15 @@ pub fn CollabBar() -> Element {
 /// Seconds as `m:ss`.
 fn clock(seconds: u64) -> String {
     format!("{}:{:02}", seconds / 60, seconds % 60)
+}
+
+/// What a locked device is holding, in a line.
+fn held_note(held: usize) -> String {
+    match held {
+        0 => "Locked: nothing is waiting. Unlock to sync again.".to_owned(),
+        1 => "Locked: 1 song has changes waiting. Unlock to merge them.".to_owned(),
+        n => format!("Locked: {n} songs have changes waiting. Unlock to merge them."),
+    }
 }
 
 fn who(peers: usize) -> String {

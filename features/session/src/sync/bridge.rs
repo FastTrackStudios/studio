@@ -146,6 +146,61 @@ impl Bridge {
         Ok(bridge)
     }
 
+    /// Join a session while this device is locked ([`crate::sync::Hold`]):
+    /// as [`Self::join`], except the engine is left as it is — the doc's
+    /// state waits for [`Self::merge_held`]. Until then the engine is what
+    /// this bridge last showed, so an edit made here meanwhile is recorded
+    /// as an edit (only what it changed), not as the whole engine.
+    ///
+    /// At the merge the doc wins for anything this device did not change
+    /// after joining: what the engine held before it joined is replaced,
+    /// as an unlocked join replaces it.
+    ///
+    /// # Errors
+    /// When the engine cannot be read.
+    pub async fn join_held(
+        project: Project,
+        media: MediaRoot,
+        doc: SessionDoc,
+        blobs: std::sync::Arc<dyn Blobs>,
+        direct: Option<std::sync::Arc<dyn Direct>>,
+    ) -> eyre::Result<Self> {
+        let ids = EngineIds::default();
+        let current =
+            engine::read(&project, &media, blobs.as_ref(), &ids, direct.as_deref()).await?;
+        let (undo, naming) = undo_manager(&doc);
+        // Starts as "everything touched": the merge reads the doc whole.
+        let watch = doc.watch();
+        Ok(Self {
+            doc,
+            project,
+            media,
+            blobs,
+            ids,
+            direct,
+            shown: current,
+            undo,
+            naming,
+            watch,
+            quiet: Vec::new(),
+        })
+    }
+
+    /// The device was unlocked: merge what the lock held. This engine's
+    /// own edits since the lock go into the doc first, as one step named
+    /// `label` — only what they changed, so the others' edits already in
+    /// the doc stay — then the engine is made to match the doc, which now
+    /// holds both. Returns the steps the engine took, as
+    /// [`Self::remote_changed`] does.
+    ///
+    /// # Errors
+    /// When the engine cannot be read, the doc written, or an engine call
+    /// fails.
+    pub async fn merge_held(&mut self, label: &str) -> eyre::Result<Vec<Change>> {
+        self.local_step(label).await?;
+        self.remote_changed().await
+    }
+
     /// The shared doc — for the sync driver to import into and export from.
     #[must_use]
     pub const fn doc(&self) -> &SessionDoc {

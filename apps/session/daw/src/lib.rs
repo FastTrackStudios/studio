@@ -75,6 +75,8 @@ pub mod lanes;
 pub mod layout;
 pub mod leveler;
 pub mod live;
+#[cfg(feature = "native")]
+pub mod live_host;
 pub mod loading;
 pub mod lyrics_panel;
 pub mod macros;

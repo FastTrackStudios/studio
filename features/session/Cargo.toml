@@ -124,6 +124,11 @@ path = "src/main.rs"
 name = "tts_smoke"
 required-features = ["tts"]
 
+[[test]]
+name = "lock_merge"
+path = "tests/lock_merge.rs"
+required-features = ["engine"]
+
 [[example]]
 name = "doc_edit"
 path = "examples/doc_edit.rs"
