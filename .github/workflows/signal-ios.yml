@@ -1,8 +1,8 @@
 # Signal iOS TestFlight — build the Signal iPhone app (the rig, laid out
 # for a phone) and upload it on every push to main that touches the app or
 # the crates it renders with. main is production and only receives
-# release merges from dev (docs/agents/release-workflow.md), so that is
-# once per release.
+# release merges (release/vX.Y.Z cut from dev;
+# docs/agents/release-workflow.md), so that is once per release.
 #
 # Runs on the org-level self-hosted macOS runner `airlock`, which holds its
 # own credentials (~/.appstoreconnect + fts-build.keychain), so this needs no

@@ -1964,8 +1964,10 @@ reaper-test-gui FILTER="":
     cargo run -p session-reaper-xtask -- --gui --keep-open {{FILTER}}
 
 # Runs exactly what `.github/workflows/checks.yml` runs, in the same
-# order — the gate for anything pushed or PR'd into `dev`, where CI runs
-# no build (checks.yml runs on release PRs into main only). NOT the other
+# order — the full local gate for anything pushed or PR'd into `dev`,
+# where CI runs no build (checks.yml runs on release PRs into main only).
+# The minimum gate for a PR into dev is `cargo check --workspace
+# --all-targets`. NOT the other
 # workflows: `session-ios` and `deploy` need a
 # Mac, signing keys and upload credentials, which is why they are not a
 # thing you run before pushing — and why a green run here says nothing
@@ -2062,12 +2064,14 @@ ci FROM="lockfile":
 #
 # main = production, dev = integration (docs/agents/release-workflow.md).
 # Work lands on dev (pushed, or a PR squash-merged); PRs into dev run only
-# the PR-title check, so `just ci` above is their gate. A release is a
-# `dev -> main` PR: the full checks + the release guard run there, it is
-# merged with a merge commit, and main then deploys, uploads TestFlight
-# and tags `v<version>`. One version, `[workspace.package] version` in
-# Cargo.toml; the changelog is generated from dev's commit subjects by
-# git-cliff (cliff.toml).
+# the PR-title check, so a local check (above) is their gate. A release is
+# a `release/vX.Y.Z` branch cut from dev (dev never freezes) and its PR
+# into main: the full checks + the release guard run there, it is merged
+# with a merge commit, and main then deploys, uploads TestFlight and tags
+# `v<version>`; then main is back-merged into dev. One version,
+# `[workspace.package] version` in Cargo.toml; the changelog is generated
+# from commit subjects by git-cliff (cliff.toml), one section per
+# release, over the commits since the last tag.
 
 # The repo's release version ([workspace.package] in Cargo.toml).
 version:
@@ -2078,18 +2082,33 @@ version:
 release-plan:
     bash scripts/release.sh plan
 
-# Bump the version, regenerate CHANGELOG.md and commit
-# `chore(release): v<next>` on a fresh `release/v<next>` off origin/dev.
-# BUMP: auto (from the commits), patch, minor, major, or an exact X.Y.Z.
-release-prepare BUMP="auto":
+# Cut `release/v<next>` from origin/dev: bump the version, write the
+# changelog section, commit `chore(release): v<next>`. Refuses until the
+# last release is back-merged into dev.
+# BUMP: patch (the default, whatever the commits say; 0.1.9 -> 0.1.10, the
+# patch never rolls over), minor or major (only when the Captain or
+# Commander calls one), auto (git-cliff decides), or an exact X.Y.Z.
+release-prepare BUMP="patch":
     bash scripts/release.sh prepare {{BUMP}}
 
-# Open the release PR, dev -> main, with the changelog as its body.
+# On the release/v* (or hotfix/*) branch: push it and open its PR into
+# main, with the changelog as the body.
 release-pr:
     bash scripts/release.sh pr
 
-# On a hotfix/* branch cut from origin/main (fix already committed): the
-# patch bump + changelog + release commit the release guard requires.
+# On the release/v* branch, after a fix PR landed on it: regenerate the
+# changelog section and end the branch with the release commit again.
+release-refresh:
+    bash scripts/release.sh refresh
+
+# After a release or hotfix reached main: PR `backmerge/v<ver>` -> dev,
+# merge commit, auto-merge. A no-op when main is already in dev.
+release-backmerge:
+    bash scripts/release.sh backmerge
+
+# On a hotfix/* branch cut from origin/main (fix already committed), when
+# no release branch is open: the patch bump + changelog + release commit
+# the release guard requires.
 release-hotfix:
     bash scripts/release.sh hotfix
 

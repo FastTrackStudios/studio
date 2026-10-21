@@ -6,26 +6,37 @@
 #   pull_request -> main   "Release guard": cheap, on a hosted runner. It
 #                          fails a release PR that would ship something
 #                          other than what `checks` tested:
-#                            - the head is `dev` (or hotfix/*),
+#                            - the head is `release/v<its version>` (or
+#                              hotfix/*), not dev or a feature branch,
+#                            - a release branch was cut from a commit of
+#                              dev (dev may have moved on since: fine),
 #                            - Cargo.toml's version is new and greater,
 #                            - CHANGELOG.md has that version's section,
 #                            - the head commit IS `chore(release): v<ver>`
-#                              (nothing slipped onto dev after the bump),
-#                            - merging produces exactly the head's tree.
+#                              (a fix on the branch is followed by
+#                              `just release-refresh`),
+#                            - main is in the head, so merging produces
+#                              exactly the head's tree.
 #   push -> main           "Tag + GitHub Release": tag `v<version>` on the
-#                          dev tip and publish the GitHub Release, then
+#                          release branch tip and publish the GitHub Release, then
 #                          dispatch the REAPER suites on the tag. A push
 #                          without a CHANGELOG section for its version is
 #                          not a release and publishes nothing.
 #   workflow_dispatch      the same, by hand, on main (a re-run).
+#
+# A release is a BRANCH, `release/vX.Y.Z`, cut from dev's head by
+# `just release-prepare`; dev never freezes for it.
 #
 # Publishing does not wait for deploy.yml: the product is the desktop
 # apps and the plugins, and the two web sites are one leg of it. A failed
 # site deploy is its own red run, not a missing tag.
 #
 # Merge release PRs with "Create a merge commit". Squash or rebase would
-# give main a commit dev does not have, and the next release's guard
-# would (rightly) refuse.
+# give main a commit the release branch does not have, and the tag would
+# not be in main's history. After the release: `just release-backmerge`
+# (main -> dev, merge commit). A workflow cannot do that step: PRs opened
+# with GITHUB_TOKEN start no workflows, so dev's title check would never
+# report. The publish job says so in its summary.
 
 name: release
 
@@ -79,3 +90,14 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: bash scripts/release.sh publish
+      - name: Back-merge reminder
+        run: |
+          git fetch --quiet origin dev
+          if git merge-base --is-ancestor HEAD origin/dev; then
+            echo "main is already in dev"
+          else
+            msg="Released. Back-merge main into dev now: just release-backmerge (PR backmerge/v$(bash scripts/release.sh version) -> dev, merge commit). The next release-prepare refuses until it is merged."
+            echo "::notice::$msg"
+            echo "### Back-merge pending" >> "$GITHUB_STEP_SUMMARY"
+            echo "$msg" >> "$GITHUB_STEP_SUMMARY"
+          fi

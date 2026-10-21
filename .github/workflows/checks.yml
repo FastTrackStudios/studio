@@ -2,10 +2,12 @@
 #
 # WHEN THIS RUNS — the dev-first model (docs/agents/release-workflow.md):
 #
-#   PR -> dev           NOT here. The gate is a local `just ci` on the PR's
-#                       head (the same steps, in the same order, below);
-#                       pr-title.yml is the only job a PR into dev runs.
-#   release PR dev -> main (or hotfix/* -> main)   HERE, automatically,
+#   PR -> dev           NOT here. The gate is a local `cargo check
+#                       --workspace --all-targets` on the PR's head (or
+#                       the full `just ci`: the same steps, in the same
+#                       order, as below); pr-title.yml is the only job a
+#                       PR into dev runs.
+#   release PR release/vX.Y.Z -> main (or hotfix/* -> main)   HERE, automatically,
 #                       the full set: the last look before production,
 #                       once per release rather than once per push.
 #   by hand             `gh workflow run checks.yml --ref <branch>`.

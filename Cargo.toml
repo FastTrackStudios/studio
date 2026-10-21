@@ -1233,6 +1233,10 @@ opt-level = 3
 inherits = "dev"
 debug = 2
 split-debuginfo = "packed"
+# Full DWARF for dependencies too in the debugger profile (dev turns it
+# off for them).
+[profile.dev-dbg.package."*"]
+debug = 2
 
 # dx web builds: native debuginfo in the wasm module blew past
 # Chrome's 1 GiB WebAssembly module cap (1.14 GB observed). Wasm dev
@@ -1265,6 +1269,11 @@ opt-level = 3
 # base opt-level and the explicit list further down.
 [profile.dev.package."*"]
 opt-level = 1
+# No debuginfo for third-party dependencies (the Captain's call,
+# 2026-10-21): a backtrace through a registry crate still names the
+# function, and our own crates keep `line-tables-only` (above). Smaller
+# target/ dirs and faster links on every runner and worktree.
+debug = false
 
 # Audio-thread dependencies, kept at 3. `package."*"` above would
 # otherwise drop these to 1, and a dev run of the rig would start
