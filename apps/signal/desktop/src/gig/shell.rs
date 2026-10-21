@@ -145,10 +145,12 @@ impl GigState {
             return;
         }
         let p = player().position();
-        if let Some(s) = self
-            .song()
-            .and_then(|s| s.sections.iter().find(|x| p >= x.start && p < x.end).cloned())
-        {
+        if let Some(s) = self.song().and_then(|s| {
+            s.sections
+                .iter()
+                .find(|x| p >= x.start && p < x.end)
+                .cloned()
+        }) {
             self.set_loop(Some((s.start, s.end)));
             return;
         }
@@ -422,13 +424,28 @@ fn spans(sections: &[Section], dur: f64) -> Vec<Span> {
             continue;
         }
         if a - at > 0.25 {
-            out.push(Span { name: String::new(), start: at, end: a, section: None });
+            out.push(Span {
+                name: String::new(),
+                start: at,
+                end: a,
+                section: None,
+            });
         }
-        out.push(Span { name: s.name.clone(), start: a, end: b, section: Some(k) });
+        out.push(Span {
+            name: s.name.clone(),
+            start: a,
+            end: b,
+            section: Some(k),
+        });
         at = b;
     }
     if dur - at > 0.25 && !out.is_empty() {
-        out.push(Span { name: String::new(), start: at, end: dur, section: None });
+        out.push(Span {
+            name: String::new(),
+            start: at,
+            end: dur,
+            section: None,
+        });
     }
     out
 }
@@ -529,6 +546,16 @@ fn is_keyflow(label: &str) -> bool {
     label.to_lowercase().contains("keyflow")
 }
 
+/// A tempo as the chart gives it: a bare number reads "N bpm", anything
+/// fuller ("246 in 12/8 (~123 felt)") stays as written.
+fn tempo_text(tempo: &str) -> String {
+    if tempo.trim().parse::<f64>().is_ok() {
+        format!("{} bpm", tempo.trim())
+    } else {
+        tempo.to_string()
+    }
+}
+
 fn fact(text: &str, bg: &str, ink: &str) -> Element {
     rsx! {
         span { style: "flex-shrink: 0; font-size: 13px; padding: 3px 8px; border-radius: 5px; background: {bg}; color: {ink};", "{text}" }
@@ -561,9 +588,13 @@ fn ChartView() -> Element {
     let has_keyflow = song.charts.iter().any(|c| is_keyflow(&c.label));
     let has_pdf = song.charts.iter().any(|c| !is_keyflow(&c.label));
     // The page's height for "Page": the window less the bars around it.
-    let page_h = size.map_or(560.0, |s| (s.0.peek().1 - 48.0 - 52.0 - 56.0 - 52.0 - 24.0).max(240.0));
+    let page_h = size.map_or(560.0, |s| {
+        (s.0.peek().1 - 48.0 - 52.0 - 56.0 - 52.0 - 24.0).max(240.0)
+    });
     let img_style = if fit_page() {
-        format!("height: {page_h:.0}px; width: auto; max-width: 100%; display: block; margin: 0 auto 10px; background: #fff; border-radius: 4px;")
+        format!(
+            "height: {page_h:.0}px; width: auto; max-width: 100%; display: block; margin: 0 auto 10px; background: #fff; border-radius: 4px;"
+        )
     } else {
         "width: 100%; height: auto; display: block; margin-bottom: 10px; background: #fff; border-radius: 4px;".to_string()
     };
@@ -572,7 +603,13 @@ fn ChartView() -> Element {
             "height: 32px; padding: 0 14px; display: flex; align-items: center; border: none; border-radius: 5px; \
              background: {}; color: {}; font-size: 14px; font-weight: {}; font-family: {FONT}; cursor: pointer;",
             if on { "#2a2a31" } else { "transparent" },
-            if !enabled { "#4a4a52" } else if on { INK } else { INK_3 },
+            if !enabled {
+                "#4a4a52"
+            } else if on {
+                INK
+            } else {
+                INK_3
+            },
             if on { 750 } else { 600 },
         )
     };
@@ -585,7 +622,7 @@ fn ChartView() -> Element {
                     span { style: "flex-shrink: 0; font-size: 13px; color: {INK_2};", "{song.artist}" }
                 }
                 if !song.key.is_empty() { {fact(&format!("Key {}", song.key), "#1c1917", "#fde68a")} }
-                if !song.tempo.is_empty() { {fact(&format!("{} bpm", song.tempo), "#1c1917", "#fde68a")} }
+                if !song.tempo.is_empty() { {fact(&tempo_text(&song.tempo), "#1c1917", "#fde68a")} }
                 if !song.guitar.is_empty() {
                     span { style: "min-width: 0; overflow: hidden; white-space: nowrap; font-size: 13px; padding: 3px 8px; border-radius: 5px; background: #052e16; color: #bbf7d0;",
                         "Guitar: {song.guitar}"
@@ -635,7 +672,12 @@ fn StudioSong() -> Element {
     let looped = (st.looped)();
     let mut parts = spans(&song.sections, d);
     if parts.is_empty() && d > 0.0 {
-        parts.push(Span { name: "Full song".to_string(), start: 0.0, end: d, section: None });
+        parts.push(Span {
+            name: "Full song".to_string(),
+            start: 0.0,
+            end: d,
+            section: None,
+        });
     }
     let pct = ((st.speed)() * 100.0).round();
     let vol = (f64::from((st.volume)()) * 100.0).round();
@@ -720,7 +762,7 @@ fn StudioSong() -> Element {
             }
             div { style: "display: flex; flex-wrap: wrap; gap: 8px;",
                 if !song.key.is_empty() { {fact(&format!("Key {}", song.key), "#1c1917", "#fde68a")} }
-                if !song.tempo.is_empty() { {fact(&format!("{} bpm", song.tempo), "#1c1917", "#fde68a")} }
+                if !song.tempo.is_empty() { {fact(&tempo_text(&song.tempo), "#1c1917", "#fde68a")} }
                 if !song.guitar.is_empty() { {fact(&format!("Guitar: {}", song.guitar), "#052e16", "#bbf7d0")} }
                 if !song.audio_kind.is_empty() { {fact(&song.audio_kind, "#18181b", INK_3)} }
             }
@@ -792,13 +834,20 @@ mod tests {
     use super::*;
 
     fn sec(name: &str, start: f64, end: f64) -> Section {
-        Section { name: name.to_string(), start, end }
+        Section {
+            name: name.to_string(),
+            start,
+            end,
+        }
     }
 
     #[test]
     fn spans_keep_the_gaps_between_sections() {
         let s = spans(&[sec("Intro", 2.0, 10.0), sec("Verse", 10.0, 30.0)], 40.0);
-        let got: Vec<_> = s.iter().map(|x| (x.name.as_str(), x.start, x.end, x.section)).collect();
+        let got: Vec<_> = s
+            .iter()
+            .map(|x| (x.name.as_str(), x.start, x.end, x.section))
+            .collect();
         assert_eq!(
             got,
             vec![
