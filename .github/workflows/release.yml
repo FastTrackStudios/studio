@@ -22,10 +22,17 @@
 #                          dispatch the REAPER suites on the tag. A push
 #                          without a CHANGELOG section for its version is
 #                          not a release and publishes nothing.
+#                          The same for each iOS app whose release reached
+#                          main (`release/signal-vX.Y.Z`, `release/session-
+#                          vX.Y.Z`): tag `<app>-v<version>`, the GitHub
+#                          Release with the app's changelog, then dispatch
+#                          `<app>-ios.yml` on the tag: the ONLY thing that
+#                          uploads TestFlight, at the tag's version.
 #   workflow_dispatch      the same, by hand, on main (a re-run).
 #
-# A release is a BRANCH, `release/vX.Y.Z`, cut from dev's head by
-# `just release-prepare`; dev never freezes for it.
+# A release is a BRANCH, `release/vX.Y.Z` (or `release/<app>-vX.Y.Z` for
+# Signal / Session), cut from dev's head by `just release-prepare`; dev
+# never freezes for it.
 #
 # Publishing does not wait for deploy.yml: the product is the desktop
 # apps and the plugins, and the two web sites are one leg of it. A failed
@@ -96,7 +103,7 @@ jobs:
           if git merge-base --is-ancestor HEAD origin/dev; then
             echo "main is already in dev"
           else
-            msg="Released. Back-merge main into dev now: just release-backmerge (PR backmerge/v$(bash scripts/release.sh version) -> dev, merge commit). The next release-prepare refuses until it is merged."
+            msg="Released. Back-merge main into dev now: just release-backmerge (PR backmerge/$(bash scripts/release.sh backmerge-label) -> dev, merge commit). The next release-prepare refuses until it is merged."
             echo "::notice::$msg"
             echo "### Back-merge pending" >> "$GITHUB_STEP_SUMMARY"
             echo "$msg" >> "$GITHUB_STEP_SUMMARY"
