@@ -14,6 +14,12 @@
 # the current unix time (passed in, since dx/nix can't read the clock).
 set -euo pipefail
 
+# The marketing version (CFBundleShortVersionString) is the release tag's
+# (v0.1.3 -> 0.1.3), set by signal-ios.yml from the GitHub Release being
+# shipped. No default, and checked first: a TestFlight build is a release's,
+# and a missing version must not cost a whole build before it fails.
+: "${MARKETING_VER:?MARKETING_VER is required: the version of the release tag being shipped (e.g. 0.1.3)}"
+
 # Telemetry for a build made here, by hand: CI bakes TASK_OTLP_ENDPOINT /
 # TASK_OTLP_TOKEN / TASK_SENTRY_DSN from the org's secrets
 # (architect-telemetry reads them with option_env!), and a local build has
@@ -174,7 +180,6 @@ BUNDLE="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP/Info.plis
 # requires CFBundleShortVersionString to be 1-3 period-separated integers
 # (the crate's "0.0.1-alpha" is rejected); CFBundleVersion just has to climb.
 BUILD_NO="${BUILD_NO:-$(date +%s)}"
-MARKETING_VER="${MARKETING_VER:-0.0.1}"
 # App bundle OS type — App Store requires CFBundlePackageType=APPL (dx omits it).
 /usr/libexec/PlistBuddy -c "Set :CFBundlePackageType APPL" "$APP/Info.plist" 2>/dev/null \
     || /usr/libexec/PlistBuddy -c "Add :CFBundlePackageType string APPL" "$APP/Info.plist"

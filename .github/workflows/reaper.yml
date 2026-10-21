@@ -9,7 +9,10 @@
 # Triggers:
 #   workflow_dispatch — run a full pass whenever you want.
 #   push tags v* / rc-* — release candidates and releases always get
-#     the full REAPER pass before anything ships.
+#     the full REAPER pass. The release tag is pushed by `just
+#     release-tag` (as the fts-forge App or a person), so the push
+#     starts this workflow; a tag made with a workflow's GITHUB_TOKEN
+#     would not.
 #
 # The job resolves the same REAPER 7.75 store path the dev machine's
 # rig uses (pinned via gcroot; nixpkgs fallback) and runs both harnesses
