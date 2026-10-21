@@ -221,6 +221,16 @@ pub fn use_gig_shell() {
         if !st.gigs.peek().is_empty() {
             provide_context(SLOTS);
         }
+        // `FTS_GIG_SONG=<n>`: open on the set's nth song (a simulator's
+        // screenshot, a rehearsal relaunch).
+        if let Some(n) = std::env::var("FTS_GIG_SONG")
+            .ok()
+            .and_then(|s| s.trim().parse::<usize>().ok())
+            .and_then(|n| n.checked_sub(1))
+            .filter(|&i| i < st.song_count())
+        {
+            st.select(n);
+        }
     });
     // Mirror the player, ten times a second.
     use_future(move || async move {
