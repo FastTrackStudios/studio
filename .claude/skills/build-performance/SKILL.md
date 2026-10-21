@@ -68,15 +68,15 @@ Platform notes:
 
 ### Linker
 
-mold, via `-C link-arg=-fuse-ld=mold` in `.cargo/config.toml`.
+rustc's default: since Rust 1.90, x86_64-unknown-linux-gnu links with
+the bundled rust-lld (multi-threaded, ships with the toolchain). There
+is no linker override in `.cargo/config.toml` — mold was dropped with
+the move to Rust 1.97.
 
 **Precedence trap:** `target.<triple>.rustflags` *replaces*
 `build.rustflags` — cargo does not merge them. The linux table has to
 repeat `force-frame-pointers`. If you add a global rustflag, add it in
 both places or it silently vanishes on Linux.
-
-mold comes from the devshell. After pulling these changes, `direnv
-reload` — otherwise every link fails with `cannot find -fuse-ld=mold`.
 
 Changing any rustflag invalidates **every** cached artifact in the
 worktree. Expect one full rebuild, and prefer to `just sweep` first.

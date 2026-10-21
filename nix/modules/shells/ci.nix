@@ -28,9 +28,7 @@
       # from-source cargo-install that the stall note above is about.
       ++ lib.optionals (config.fts.tracey != null) [ config.fts.tracey ]
       ++ config.fts.buildInputs
-      # The shared native tool list (pkg-config, bindgen, tailwindcss —
-      # and on Linux, mold: .cargo/config.toml selects it for every
-      # x86_64-linux link, so a shell without it can't link at all).
+      # The shared native tool list (pkg-config, bindgen, tailwindcss).
       # Consumed from toolchain.nix instead of hand-repeating entries
       # here, so the two shells can't drift again.
       ++ config.fts.nativeBuildInputs

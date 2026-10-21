@@ -294,7 +294,7 @@ keys-worklet-wasm out='apps/signal/desktop/web-dist/worklet':
 #   --shared-memory --import-memory          one memory across instances
 #   -Z build-std                             std must be rebuilt with atomics
 #                                            (hence nightly — the rest of the
-#                                            tree stays on stable 1.94)
+#                                            tree stays on stable 1.97)
 #
 # The page creates the WebAssembly.Memory and hands it to the worklet and to
 # each decoder worker, so all three instantiate over the SAME heap. Serving
@@ -1984,7 +1984,7 @@ ci FROM="lockfile":
 
     # Before anything: is there room to build?
     #
-    # A full disk does not fail as a full disk. mold dies with a bus
+    # A full disk does not fail as a full disk. The linker dies with a bus
     # error and cargo reports `linking with cc failed`, which reads as a
     # broken toolchain and sends you looking in the wrong place — it
     # cost an hour once. Checked here because this is the command

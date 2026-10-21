@@ -128,9 +128,9 @@ Some features carry their own `AGENTS.md` / `README.md`
 
 ## Build and test
 
-Dev shell: `nix develop` (or direnv `use flake`) — the Rust 1.94 pin with
+Dev shell: `nix develop` (or direnv `use flake`) — the Rust 1.97 pin with
 wasm (plus iOS on darwin, Android on Linux), `dx`, wasm-bindgen,
-tailwindcss, tracey, mold, and the native headers (alsa, pipewire, jack).
+tailwindcss, tracey, and the native headers (alsa, pipewire, jack).
 It sources `.env` (gitignored) on entry. `nix develop .#ci` is what CI
 runs in, `.#reaper-test` the REAPER suites, `.#stems` stem separation.
 
@@ -158,7 +158,7 @@ first failure: lockfile drift, `cargo fmt --check`, the flow gate
 Signal wasm check, then nextest as above. `just ci <step>` starts from a
 step (`lockfile`, `fmt`, `flows`, `tailwind`, `check`, `wasm`, `nextest`).
 It refuses to start with less than 25 GB free: a full disk shows up as
-mold dying with a bus error, which reads as a broken toolchain
+the linker dying with a bus error, which reads as a broken toolchain
 (`just sweep-incremental` is the always-safe reclaim). It says nothing
 about `session-ios` / `signal-ios` (Xcode, signing), `deploy` or
 `reaper-integration`, which have their own runners and reasons to be red.
@@ -168,8 +168,8 @@ touching a `[profile.*]` knob, benchmarking a build, or when the disk
 fills up. The short version:
 
 - Dev debuginfo is `line-tables-only`; need a debugger? `--profile dev-dbg`.
-- mold is the Linux linker — `direnv reload` after pulling, or links fail
-  with `cannot find -fuse-ld=mold`. `target.<triple>.rustflags` REPLACES
+- The Linux linker is rustc's default, the bundled rust-lld (no mold, no
+  devshell needed). `target.<triple>.rustflags` REPLACES
   `build.rustflags`, so a new global flag goes in both.
 - Dependencies build at opt-level 1, with an allowlist back at 3 for
   audio-thread crates. A dev run of a rig must never xrun: extend the
