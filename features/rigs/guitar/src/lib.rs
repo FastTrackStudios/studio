@@ -39,11 +39,15 @@ pub mod measure;
 pub mod node_store;
 pub mod nodes;
 pub mod profiles;
+// The rig engine (architect::rig, threads, audio) is native-only; the browser
+// remote reaches a network engine through `proto`.
+#[cfg(not(target_arch = "wasm32"))]
 pub mod session;
 pub mod time_sync;
 pub mod web_bundle;
 
 pub use library::RigHome;
+#[cfg(not(target_arch = "wasm32"))]
 pub use session::{GuitarRigBackend, RigHost};
 // Re-export the wire contract so front-end/app crates get types + clients
 // from one place.

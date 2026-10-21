@@ -16,6 +16,9 @@ use std::path::Path;
 use sampler::midicore::{DrumMap, DrumMapConverter};
 use sampler::{InstrumentId, PreloadProfile, PresetSpec, SamplerRig};
 
+// The rig engine (architect::rig, threads, audio) is native-only; the browser
+// remote reaches a network engine through `proto`.
+#[cfg(not(target_arch = "wasm32"))]
 mod backend;
 pub mod cradle;
 pub mod library;
@@ -28,7 +31,10 @@ mod lightguide;
 #[path = "lightguide_none.rs"]
 mod lightguide;
 pub mod mm2fx;
+// Built on signal-space's analysis engine (native-only), for the backend.
+#[cfg(not(target_arch = "wasm32"))]
 pub mod piece_space;
+#[cfg(not(target_arch = "wasm32"))]
 pub use backend::DrumRigBackend;
 pub use lightguide::DrumLightGuide;
 /// General-MIDI percussion channel (0-indexed 9 = MIDI channel 10).
