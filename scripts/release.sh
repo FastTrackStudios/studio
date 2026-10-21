@@ -470,8 +470,14 @@ cmd_guard() {
     local v vb merged subject cut="" ok=1 tag a cv
     fail() { echo "::error::$*"; ok=0; }
 
-    # Bootstrap: until `dev` exists main still takes
-    # ordinary PRs, including the one that adds this guard.
+    # Bootstrap: main still takes ordinary PRs until the release flow has
+    # reached it, including the one that adds this guard. That is true
+    # while main has no scripts/release.sh (whether or not `dev` exists
+    # yet), or while there is no `dev` at all.
+    if ! git cat-file -e "$base:scripts/release.sh" 2>/dev/null; then
+        echo "::notice::main has no scripts/release.sh yet — this PR introduces the release flow; release guard not enforced"
+        return 0
+    fi
     if ! git ls-remote --exit-code --heads origin "$INTEGRATION_BRANCH" >/dev/null 2>&1; then
         echo "::notice::no '$INTEGRATION_BRANCH' branch yet — release guard not enforced"
         return 0
