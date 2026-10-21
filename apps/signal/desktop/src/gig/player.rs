@@ -193,8 +193,8 @@ impl Voice {
         let loop_b = frames_f64(self.shared.loop_b.load(Ordering::Relaxed));
         let looped = looping && loop_b > loop_a + 1.0;
 
-        let mut out = data.chunks_mut(channels);
         let mut remaining = data.len() / channels;
+        let mut out = data.chunks_mut(channels);
         while remaining > 0 {
             if looped && (self.pos >= loop_b || self.pos < loop_a - 1.0) {
                 self.pos = loop_a;
