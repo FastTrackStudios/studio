@@ -95,11 +95,23 @@ jobs:
   check:
     name: Build + test
     needs: plan
-    if: ${{ needs.plan.outputs.release_only != 'true' }}
     runs-on: [self-hosted, session]
     timeout-minutes: 60
+    # Fork PRs never run here: this is a public repo on a self-hosted runner,
+    # and the job holds the inferno-control credential below. GitHub also
+    # withholds secrets from fork PRs, so this is the second lock, and it
+    # keeps fork code off the runner. (workflow_dispatch has no pull_request.)
+    # A release-only PR skips it (Plan), as before.
+    if: ${{ needs.plan.outputs.release_only != 'true' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) }}
     steps:
       - uses: actions/checkout@v4
+      # features/patchbay -> inferno-net is a git dep on the private
+      # FastTrackStudios/inferno-control; give git/cargo a read-only token
+      # for that one repo before anything resolves the workspace.
+      - name: inferno-control read access
+        uses: ./.github/actions/inferno-control-auth
+        with:
+          token: ${{ secrets.INFERNO_CONTROL_TOKEN }}
       - name: Persistent target dir
         run: |
           # On the runner's big disk ($CI_CACHE_DIR: the runner module's
@@ -179,11 +191,16 @@ jobs:
   advisory:
     name: "Advisory: wasm + tests"
     needs: plan
-    if: ${{ needs.plan.outputs.release_only != 'true' }}
+    # Same locks as Build + test: no fork PRs on this runner, none on release-only.
+    if: ${{ needs.plan.outputs.release_only != 'true' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) }}
     runs-on: [self-hosted, session]
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
+      - name: inferno-control read access
+        uses: ./.github/actions/inferno-control-auth
+        with:
+          token: ${{ secrets.INFERNO_CONTROL_TOKEN }}
       - name: Persistent target dir
         run: |
           dir="${CI_CACHE_DIR:-${CACHE_DIRECTORY:-$HOME/.cache}}/cargo-target"
