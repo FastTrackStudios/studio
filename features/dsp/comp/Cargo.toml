@@ -11,7 +11,10 @@ workspace = true
 [features]
 native = ["dep:architect-ui", "dep:fts-audio-ui", "dep:atomic_float", "dep:plugin-core", "dep:eq", "plugin-core?/editor", "dep:nice-plug", "dep:nice-plug-dioxus", "dep:parking_lot", "dep:preset-browser", "eq/native", "dsp-core/params"]
 profiles = ["dep:eq"]
-ui = ["dep:atomic_float", "dep:plugin-core", "dep:dioxus", "dep:fts-audio-ui", "plugin-core?/editor", "dep:nice-plug", "dep:nice-plug-dioxus", "dep:web-time", "profiles", "dsp-core/params"]
+# Portable (the browser remote draws these): the profile view, the transfer
+# curve, the meters. The nice-plug/Blitz editors, the limiter's included,
+# are behind `native`.
+ui = ["dep:dioxus", "dep:fts-audio-ui", "dep:web-time", "profiles"]
 viz = ["dep:anyrender", "dep:blitz-dom", "dep:bytemuck", "dep:dioxus-native-dom", "dep:vello", "fts-audio-ui/shader"]
 
 [dependencies]
@@ -64,7 +67,7 @@ required-features = ["native", "ui"]
 [[test]]
 name = "ui_limiter_gui_editor"
 path = "tests/ui_limiter_gui_editor.rs"
-required-features = ["ui"]
+required-features = ["native", "ui"]
 
 [[example]]
 name = "comp_sheet"
