@@ -53,6 +53,13 @@ description: the head sha, `origin/dev`'s sha, the result and the host.
 The ruleset `main (release only)` makes a PR the only way into main: merge
 commits only, and a green `Build + test` required.
 
+`Build + test` (the required check) is manifests + lockfile, fmt, the flow
+gate and `cargo check --workspace`. The wasm check and the nextest run live in
+the **advisory** job `Advisory: wasm + tests`: it runs on every PR into main
+and shows red or green, but is not in the ruleset. It is red today (STA-184);
+when STA-184 makes it green its two steps move back into `Build + test` and
+the advisory job goes away.
+
 ## Day to day
 
 ```bash

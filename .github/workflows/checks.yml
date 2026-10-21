@@ -9,7 +9,8 @@
 #                       order, as below); pr-title.yml is the only job a
 #                       PR into dev runs.
 #   PROMOTION PR dev -> main (or hotfix/* -> main)   HERE, automatically,
-#                       the FULL set: main is "finished features", so this
+#                       the FULL set (`Build + test`, required; plus the advisory
+#                       job `Advisory: wasm + tests`, see below): main is "finished features", so this
 #                       is the one place the whole workspace is checked
 #                       and the Reviewer reads the diff. It runs once per
 #                       promotion, not once per card.
@@ -87,6 +88,10 @@ jobs:
             echo "release_only=false" >> "$GITHUB_OUTPUT"
           fi
 
+  # REQUIRED by the ruleset `main (release only)` (25572127). Today it means:
+  # manifests + lockfile, fmt, the flow gate, the tailwind sheet and
+  # `cargo check --workspace`. The wasm check and the test run live in the
+  # advisory job below until STA-184 makes them green.
   check:
     name: Build + test
     needs: plan
@@ -153,14 +158,6 @@ jobs:
         run: ${NIX_DEV} just web-tailwind
       - name: cargo check --workspace
         run: ${NIX_DEV} cargo check --workspace
-      # The Signal browser remote: signal-desktop's web build, which the
-      # workspace check (native) never compiles.
-      - name: wasm check (Signal browser remote)
-        run: |
-          ${NIX_DEV} cargo check -p signal-desktop \
-            --target wasm32-unknown-unknown --no-default-features --features signal
-      - name: cargo nextest
-        run: ${NIX_DEV} cargo nextest run --workspace --no-fail-fast --features session-desktop/cli,signal-desktop/cli,web-audio-worklet/guitar,web-audio-worklet/keys
       # Advisory only: the lint debt is being paid down crate by crate, so
       # this reports (grouped by lint and crate, .github/scripts/
       # clippy-report.py) without blocking the PR.
@@ -170,3 +167,38 @@ jobs:
           ${NIX_DEV} cargo clippy --workspace --no-deps --all-targets --keep-going \
             --message-format=json -- --cap-lints warn \
             | ${NIX_DEV} python3 .github/scripts/clippy-report.py
+
+  # ADVISORY (not in the ruleset): the wasm check and the test run, which are
+  # red on main for reasons that predate the dev-first workflow (STA-184: the
+  # Signal browser build pulls tokio/mio into wasm; ~100 nextest failures).
+  # Captain's call (STA-276, 2026-10-21): promote and cut v0.1.0 now, fix the
+  # errors after. It goes BACK INTO `Build + test` (move the two steps up,
+  # delete this job) once STA-184 makes it green. It still runs on every PR
+  # into main and shows red/green on the PR, so the errors stay visible;
+  # it is skipped, like `Build + test`, on a release-only PR.
+  advisory:
+    name: "Advisory: wasm + tests"
+    needs: plan
+    if: ${{ needs.plan.outputs.release_only != 'true' }}
+    runs-on: [self-hosted, session]
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - name: Persistent target dir
+        run: |
+          dir="${CI_CACHE_DIR:-${CACHE_DIRECTORY:-$HOME/.cache}}/cargo-target"
+          mkdir -p "$dir"
+          echo "CARGO_TARGET_DIR=$dir" >> "$GITHUB_ENV"
+          echo "target dir: $dir ($(du -sh "$dir" 2>/dev/null | cut -f1))"
+      # apps/session/web/assets/tailwind.css is gitignored build output that
+      # `asset!()` demands at compile time; the test run compiles session-web.
+      - name: Web tailwind sheet
+        run: ${NIX_DEV} just web-tailwind
+      # The Signal browser remote: signal-desktop's web build, which the
+      # workspace check (native) never compiles.
+      - name: wasm check (Signal browser remote)
+        run: |
+          ${NIX_DEV} cargo check -p signal-desktop \
+            --target wasm32-unknown-unknown --no-default-features --features signal
+      - name: cargo nextest
+        run: ${NIX_DEV} cargo nextest run --workspace --no-fail-fast --features session-desktop/cli,signal-desktop/cli,web-audio-worklet/guitar,web-audio-worklet/keys
