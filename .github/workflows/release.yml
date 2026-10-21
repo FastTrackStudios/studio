@@ -1,0 +1,104 @@
+# Release — the guard on every PR into main, and the GitHub Release once a
+# release tag is pushed. The procedure and its reasons are in
+# docs/agents/release-workflow.md; the logic is scripts/release.sh, so a
+# human can run every step of it by hand (`just release-*`).
+#
+# Two stages, kept apart (release flow v2, the Captain 2026-10-21):
+#   dev  --promotion PR-->  main       "finished features". Nothing ships.
+#   main --release PR + tag-->  vX.Y.Z   The TAG ships: both sites (deploy),
+#                                        BOTH TestFlight uploads (signal-ios,
+#                                        session-ios), the REAPER suites, the
+#                                        desktop installers, this Release.
+#
+#   pull_request -> main   "Release guard": cheap, on a hosted runner. The
+#                          head is one of
+#                            - dev: a promotion. The merge must reproduce
+#                              dev's tree (so dev holds everything main
+#                              does) and the version is untouched,
+#                            - release/vX.Y.Z: ONE commit on top of main,
+#                              touching only the version line(s) and
+#                              CHANGELOG.md; version new, tag absent, both
+#                              iOS app crates on it,
+#                            - hotfix/*: a fix branched from the production
+#                              tag, merges cleanly, no version bump.
+#                          Anything else (a card branch) is refused.
+#   push tag v*            "GitHub Release": the tag guard (the tag is a
+#                          release commit on main), then the ONE GitHub
+#                          Release for Signal + Session. A tag is pushed by
+#                          `just release-tag` as the fts-forge App or a
+#                          person: a tag pushed with GITHUB_TOKEN starts no
+#                          workflow.
+#   workflow_dispatch      the same, by hand, with the tag as the ref.
+#
+# The release does not wait for deploy.yml: the product is the apps and the
+# plugins, and the two web sites are one leg of it. A failed site deploy is
+# its own red run, not a missing Release.
+#
+# Merge PRs into main with "Create a merge commit". After a release,
+# `just release-tag` back-merges main into dev; a workflow cannot do that
+# (PRs opened with GITHUB_TOKEN start no workflows, so dev's title check
+# would never report), so the publish job only says so in its summary.
+
+name: release
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened, ready_for_review]
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  guard:
+    name: Release guard
+    if: ${{ github.event_name == 'pull_request' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+      - name: Is this a sound promotion, release or hotfix?
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          HEAD_REF: ${{ github.event.pull_request.head.ref }}
+        run: bash scripts/release.sh guard
+
+  publish:
+    name: GitHub Release
+    if: ${{ github.event_name != 'pull_request' && startsWith(github.ref, 'refs/tags/v') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    concurrency:
+      group: release-publish
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+      - name: The tag is a release commit on main
+        run: bash scripts/release.sh tag-guard
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash scripts/release.sh publish
+      - name: Back-merge reminder
+        run: |
+          git fetch --quiet origin dev main
+          if [ "$(git merge-tree --write-tree origin/dev origin/main | head -1)" = "$(git rev-parse 'origin/dev^{tree}')" ]; then
+            echo "dev already has everything main has"
+          else
+            msg="Released. dev lacks main's release commit: just release-backmerge (PR backmerge/v$(bash scripts/release.sh version)-<sha> -> dev, merge commit). The next promotion is refused until it is merged."
+            echo "::notice::$msg"
+            echo "### Back-merge pending" >> "$GITHUB_STEP_SUMMARY"
+            echo "$msg" >> "$GITHUB_STEP_SUMMARY"
+          fi

@@ -1964,7 +1964,11 @@ reaper-test-gui FILTER="":
     cargo run -p session-reaper-xtask -- --gui --keep-open {{FILTER}}
 
 # Runs exactly what `.github/workflows/checks.yml` runs, in the same
-# order. NOT the other two workflows: `session-ios` and `deploy` need a
+# order — the full local gate for anything pushed or PR'd into `dev`,
+# where CI runs no build (checks.yml runs on release PRs into main only).
+# The minimum gate for a PR into dev is `cargo check --workspace
+# --all-targets`. NOT the other
+# workflows: `signal-ios` and `session-ios` (the release tag) and `deploy` need a
 # Mac, signing keys and upload credentials, which is why they are not a
 # thing you run before pushing — and why a green run here says nothing
 # about whether either of them is healthy.
@@ -2055,6 +2059,74 @@ ci FROM="lockfile":
 
     echo
     echo "every CI step passed locally"
+
+# ── Releases ─────────────────────────────────────────────────────────────
+#
+# Two separate stages (docs/agents/release-workflow.md). dev collects
+# verified work (pushed, or a PR squash-merged; PRs into dev run only the
+# PR-title check, so a local check is their gate). `just release-promote`
+# opens dev -> main ("finished features": full checks + the Reviewer, merge
+# commit, NOTHING ships). A release is a TAG on main: `release-prepare` cuts
+# release/vX.Y.Z (version + changelog commit), its PR merges into main, and
+# `release-tag` pushes `vX.Y.Z`, which deploys the sites, uploads Signal +
+# Session to TestFlight, runs the REAPER suites and publishes the one
+# GitHub Release. Production = the latest `v*` tag. One version,
+# `[workspace.package] version` in Cargo.toml; the changelog is generated
+# from commit subjects by git-cliff (cliff.toml).
+#
+# Signal and Session (the iOS apps) are ONE release with the rest of the
+# repo: the same build, the same version (their crates take
+# `version.workspace = true`), the same `vX.Y.Z` tag and GitHub Release.
+# The tag uploads BOTH apps to TestFlight at its version; nothing else
+# uploads TestFlight.
+
+# The studio's release version ([workspace.package] in Cargo.toml).
+version:
+    @bash scripts/release.sh version
+
+# What is live (latest v* tag), what main holds since, what waits on dev,
+# the unreleased changelog and the git dependencies that moved.
+release-plan:
+    bash scripts/release.sh plan
+
+# Stage 1: open the promotion PR dev -> main (finished features). Merge it
+# with a merge commit once `checks`, the release guard and the Reviewer pass.
+release-promote:
+    bash scripts/release.sh promote
+
+# Stage 2: cut `release/v<next>` from origin/main: bump the version, write
+# the changelog section, commit `chore(release): v<next>`.
+# BUMP: patch (the default, whatever the commits say; 0.1.9 -> 0.1.10, the
+# patch never rolls over), minor or major (only when the Captain or
+# Commander calls one), auto (git-cliff decides), or an exact X.Y.Z.
+release-prepare *ARGS:
+    bash scripts/release.sh prepare {{ARGS}}
+
+# On the release/v* (or hotfix/*) branch: push it and open its PR into
+# main, with the changelog as the body.
+release-pr:
+    bash scripts/release.sh pr
+
+# After the release PR merged: tag v<version> on main. THE TAG SHIPS (sites,
+# Signal + Session TestFlight, REAPER, the GitHub Release). Then it opens
+# the main -> dev back-merge. Pushes as whoever you are: use the fts-forge
+# bot or a person, not a workflow token (that starts no workflow).
+release-tag *ARGS:
+    bash scripts/release.sh tag {{ARGS}}
+
+# main -> dev (merge commit, auto-merge). A no-op when dev already has all
+# of main's content. `release-tag` runs it; run it alone after a hotfix.
+release-backmerge:
+    bash scripts/release.sh backmerge
+
+# hotfix/<name> from the latest tag (what production runs). Fix, then
+# `just release-pr`; then cut the patch release as usual.
+release-hotfix NAME:
+    bash scripts/release.sh hotfix {{NAME}}
+
+# One version's section of CHANGELOG.md (default: the current version).
+release-notes *ARGS:
+    @bash scripts/release.sh notes {{ARGS}}
 
 # The Session DAW view in a browser (session-daw's web_host), built to
 # apps/session/daw-web/dist: cargo → wasm-bindgen → index.html, plus the
