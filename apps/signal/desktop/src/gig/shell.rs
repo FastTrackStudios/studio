@@ -1,16 +1,23 @@
 //! The gig on the iPad rig: its pieces lent to the tablet layout
 //! ([`guitar::ui::GigSlots`]) so the rig becomes the gig shell.
 //!
-//!   header     a Studio / Signal toggle, then the transport you need with a
-//!              guitar on: previous song, −5 s, play/pause, +5 s, next song,
-//!              the section loop, speed and volume
-//!   progress   the song's timeline under the top bar: its sections named
-//!              over a row of seek targets, the playhead filling it
+//!   header     a Session / Signal toggle, then the transport you need with a
+//!              guitar on: −5 s, play/pause, +5 s, the section loop, speed
+//!              and volume
+//!   progress   Session's own song progress bar (its sections, the playhead;
+//!              a tap on a section plays from it), the song steps either side
 //!   main       Perform's middle: the chosen song's chart, the PDF or the
-//!              Keyflow render — or, on Studio, the song as Session lays it
+//!              Keyflow render — or, on Session, the song as Session lays it
 //!              out (its sections in a lane, the big clock, speed, volume)
-//!   setlist    the sidebar on Setlist: the gig's set; a tap shows the
-//!              song's chart and loads its track
+//!   foot       the chart's controls in the rig's foot bar: PDF / Keyflow,
+//!              zoom, nudge up / down, fit
+//!   follow     the gig's set as one of the rig's setlists (made once, with
+//!              each song's sections as its parts), and the song up in the
+//!              rig's Setlist view is the song whose chart and track are up
+//!
+//! Each song keeps its own zoom and offset, one for the PDF and one for the
+//! Keyflow chart (`.chart-views.json` in the gigs folder), so a snippet
+//! chart opens on exactly the part that matters, offline, across relaunches.
 //!
 //! The model, the player and the chart images are the gig page's own
 //! (`super`, `super::player`) — this is a second face on them, not a second
@@ -19,16 +26,21 @@
 //! reads it.
 //!
 //! The full Session UI inside Signal (and Signal inside Session) comes with
-//! the unified shell (STA-147); until then Studio shows the song's session
+//! the unified shell (STA-147); until then Session shows the song's session
 //! view here, playing the same reference.
 
+use std::collections::BTreeMap;
+use std::path::PathBuf;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
 use dioxus::prelude::*;
 use guitar::ui::GigSlots;
+use session::ui::components::progress::{ProgressSection, SongProgressBar};
+use signal_rig_perform_ui::{PerfState, RigPerformClient};
 
 use super::player::{output_devices, player};
-use super::{Gig, Section, Song, clock, image_uri, list_gigs};
+use super::{Gig, Section, Song, clock, gigs_root, image_uri, list_gigs};
 
 // The rig frame's colours (signal-rig-shell's tokens).
 const SHEET: &str = "#0e0e11";
@@ -38,17 +50,82 @@ const INK: &str = "#e4e4e7";
 const INK_2: &str = "#a1a1aa";
 const INK_3: &str = "#8e8e98";
 const FILL: &str = "rgba(255,255,255,0.06)";
-const LIVE: &str = "#22c55e";
 const ACCENT: &str = "#38bdf8";
 const LOOP: &str = "#f59e0b";
 const FONT: &str = "Inter, -apple-system, sans-serif";
 
-/// Seek targets across the progress bar (no hit-testing needed, which Blitz
-/// and a WebView do differently).
-const CELLS: usize = 96;
-
 /// The speeds the header's speed button steps through, percent.
 const SPEEDS: &[u32] = &[100, 90, 80, 75, 70, 60, 50];
+
+/// The progress bar's section colours, in turn.
+const SECTION_COLOURS: &[&str] = &[
+    "#2563eb", "#7c3aed", "#0d9488", "#c2410c", "#be185d", "#4d7c0f", "#0369a1", "#a16207",
+];
+
+/// How far the chart zooms: out to about three grand-staff systems on a
+/// page's width, in to a snippet filling it.
+const ZOOM_MIN: f64 = 0.4;
+const ZOOM_MAX: f64 = 3.0;
+const ZOOM_STEP: f64 = 0.1;
+/// A nudge of the bottom bar's ▲ / ▼, in pixels.
+const NUDGE: f64 = 80.0;
+
+/// A chart's place: its zoom (1 = the page's width) and how far it is moved
+/// left and up, in pixels.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct ChartPlace {
+    pub zoom: f64,
+    pub x: f64,
+    pub y: f64,
+}
+
+impl Default for ChartPlace {
+    fn default() -> Self {
+        Self {
+            zoom: 1.0,
+            x: 0.0,
+            y: 0.0,
+        }
+    }
+}
+
+impl ChartPlace {
+    fn clamped(self) -> Self {
+        Self {
+            zoom: self.zoom.clamp(ZOOM_MIN, ZOOM_MAX),
+            x: self.x.clamp(-4000.0, 4000.0),
+            y: self.y.clamp(-400.0, 40000.0),
+        }
+    }
+}
+
+/// Every chart's place, by `gig/song number/view`.
+type Places = BTreeMap<String, [f64; 3]>;
+
+fn places_path() -> PathBuf {
+    gigs_root().join(".chart-views.json")
+}
+
+fn load_places() -> Places {
+    std::fs::read_to_string(places_path())
+        .ok()
+        .and_then(|t| serde_json::from_str(&t).ok())
+        .unwrap_or_default()
+}
+
+fn save_places(places: &Places) {
+    let path = places_path();
+    if let Some(dir) = path.parent() {
+        let _ = std::fs::create_dir_all(dir);
+    }
+    if let Ok(text) = serde_json::to_string_pretty(places) {
+        let _ = std::fs::write(path, text);
+    }
+}
+
+fn place_key(gig: &str, song: u32, keyflow: bool) -> String {
+    format!("{gig}/{song}/{}", if keyflow { "keyflow" } else { "pdf" })
+}
 
 /// The gig, the song picked, and the player as the page shows it.
 #[derive(Clone, Copy)]
@@ -56,11 +133,11 @@ pub struct GigState {
     pub gigs: Signal<Vec<Gig>>,
     pub gig_at: Signal<usize>,
     pub song_at: Signal<Option<usize>>,
-    /// The chart shown: the Keyflow render (else the band's PDF).
+    /// The chart shown: the Keyflow render (else the band's PDF, the default).
     pub keyflow: Signal<bool>,
-    /// The chart fitted to the page's height (else to its width).
-    pub fit_page: Signal<bool>,
-    /// Studio (the song's session view) rather than Signal (its chart).
+    /// Each chart's zoom and offset.
+    pub places: Signal<Places>,
+    /// Session (the song's session view) rather than Signal (its chart).
     pub studio: Signal<bool>,
     pub pos: Signal<f64>,
     pub dur: Signal<f64>,
@@ -93,6 +170,34 @@ impl GigState {
             .peek()
             .get(*self.gig_at.peek())
             .map_or(0, |g| g.songs.len())
+    }
+
+    /// The key the chart up keeps its place under.
+    fn place_key(&self) -> Option<String> {
+        let gig = self.gig()?;
+        let song = self.song()?;
+        Some(place_key(&gig.name, song.number, (self.keyflow)()))
+    }
+
+    /// The chart up's place (the default until it is moved).
+    fn place(&self) -> ChartPlace {
+        self.place_key()
+            .and_then(|k| self.places.read().get(&k).copied())
+            .map_or_else(ChartPlace::default, |[zoom, x, y]| {
+                ChartPlace { zoom, x, y }.clamped()
+            })
+    }
+
+    /// Move the chart up; `keep` writes it to disk (a drag keeps only its end).
+    fn set_place(mut self, p: ChartPlace, keep: bool) {
+        let Some(k) = self.place_key() else {
+            return;
+        };
+        let p = p.clamped();
+        self.places.write().insert(k, [p.zoom, p.x, p.y]);
+        if keep {
+            save_places(&self.places.peek());
+        }
     }
 
     /// Pick a song: its chart shows, its track loads (paused, at the top).
@@ -182,7 +287,8 @@ pub const SLOTS: GigSlots = GigSlots {
     header: header_slot,
     progress: progress_slot,
     main: main_slot,
-    setlist: setlist_slot,
+    foot: foot_slot,
+    follow: follow_slot,
 };
 
 fn header_slot() -> Element {
@@ -194,8 +300,11 @@ fn progress_slot() -> Element {
 fn main_slot() -> Element {
     rsx! { GigMain {} }
 }
-fn setlist_slot() -> Element {
-    rsx! { GigSetlist {} }
+fn foot_slot() -> Element {
+    rsx! { GigFoot {} }
+}
+fn follow_slot() -> Element {
+    rsx! { GigFollow {} }
 }
 
 /// Make the gig shell's state and lend its slots to the rig below — when
@@ -206,7 +315,7 @@ pub fn use_gig_shell() {
         gig_at: Signal::new(0),
         song_at: Signal::new(None),
         keyflow: Signal::new(false),
-        fit_page: Signal::new(false),
+        places: Signal::new(load_places()),
         studio: Signal::new(false),
         pos: Signal::new(0.0),
         dur: Signal::new(0.0),
@@ -229,7 +338,7 @@ pub fn use_gig_shell() {
         let mut studio = st.studio;
         let mut keyflow = st.keyflow;
         match std::env::var("FTS_GIG_VIEW").as_deref() {
-            Ok("studio") => studio.set(true),
+            Ok("studio" | "session") => studio.set(true),
             Ok("keyflow") => keyflow.set(true),
             _ => {}
         }
@@ -293,16 +402,28 @@ pub fn use_gig_shell() {
     });
 }
 
-fn usize_f64(n: usize) -> f64 {
-    f64::from(u32::try_from(n).unwrap_or(u32::MAX))
-}
-
 fn btn(on: bool) -> String {
     let (bg, ink) = if on { (ACCENT, "#04121c") } else { (FILL, INK) };
     format!(
         "height: 38px; min-width: 36px; padding: 0 8px; flex-shrink: 0; display: flex; align-items: center; \
          justify-content: center; gap: 6px; border: none; border-radius: 6px; background: {bg}; color: {ink}; \
          font-size: 14px; font-weight: 650; font-family: {FONT}; cursor: pointer;"
+    )
+}
+
+fn seg(on: bool, enabled: bool) -> String {
+    format!(
+        "height: 32px; padding: 0 12px; display: flex; align-items: center; border: none; border-radius: 5px; \
+         background: {}; color: {}; font-size: 14px; font-weight: {}; font-family: {FONT}; cursor: pointer;",
+        if on { "#2a2a31" } else { "transparent" },
+        if !enabled {
+            "#4a4a52"
+        } else if on {
+            INK
+        } else {
+            INK_3
+        },
+        if on { 750 } else { 600 },
     )
 }
 
@@ -323,7 +444,7 @@ const NEXT: &str = "M13 3h2v12h-2ZM3 3v12l9-6Z";
 
 // ── Header ──────────────────────────────────────────────────────────────────
 
-/// The Studio / Signal toggle and the transport.
+/// The Session / Signal toggle and the transport.
 #[component]
 fn GigHeader() -> Element {
     let st = use_context::<GigState>();
@@ -336,21 +457,12 @@ fn GigHeader() -> Element {
         (None, Some(a)) => format!("A {} → B", clock(a)),
         (None, None) => "Loop".to_string(),
     };
-    let seg = |on: bool| {
-        format!(
-            "height: 32px; padding: 0 10px; display: flex; align-items: center; border: none; border-radius: 5px; \
-             background: {}; color: {}; font-size: 14px; font-weight: {}; font-family: {FONT}; cursor: pointer;",
-            if on { "#2a2a31" } else { "transparent" },
-            if on { INK } else { INK_3 },
-            if on { 750 } else { 600 },
-        )
-    };
     rsx! {
         div { style: "flex-shrink: 0; display: flex; align-items: center; gap: 5px; padding: 0 8px; border-left: 1px solid {RULE};",
-            // Studio / Signal.
+            // Session / Signal.
             div { style: "display: flex; padding: 3px; gap: 2px; border-radius: 7px; background: #08080a; margin-right: 6px;",
-                button { style: seg(studio()), onclick: move |_| studio.set(true), "Studio" }
-                button { style: seg(!studio()), onclick: move |_| studio.set(false), "Signal" }
+                button { style: seg(studio(), true), onclick: move |_| studio.set(true), "Session" }
+                button { style: seg(!studio(), true), onclick: move |_| studio.set(false), "Signal" }
             }
             button { style: btn(false), disabled: !has_song,
                 onclick: move |_| player().seek((player().position() - 5.0).max(0.0)), "−5" }
@@ -450,14 +562,83 @@ fn spans(sections: &[Section], dur: f64) -> Vec<Span> {
     out
 }
 
-/// The song's timeline: sections over seek targets, the playhead filling it.
+/// A section's name, short ("Interlude A" → "INT A"), as Session shows it.
+fn short_name(name: &str) -> String {
+    let mut words = name.split_whitespace();
+    let first = words.next().unwrap_or_default();
+    let head: String = first.chars().take(3).collect::<String>().to_uppercase();
+    let rest: Vec<&str> = words.collect();
+    if rest.is_empty() {
+        head
+    } else {
+        format!("{head} {}", rest.join(" "))
+    }
+}
+
+/// The song's spans as Session's progress bar takes them: each start (for
+/// a tap), and the bar's sections.
+fn progress_sections(song: &Song, dur: f64) -> (Vec<f64>, Vec<ProgressSection>) {
+    let mut parts = spans(&song.sections, dur);
+    if parts.is_empty() && dur > 0.0 {
+        parts.push(Span {
+            name: song.title.clone(),
+            start: 0.0,
+            end: dur,
+            section: Some(0),
+        });
+    }
+    let starts = parts.iter().map(|s| s.start).collect();
+    let bar = parts
+        .iter()
+        .map(|s| ProgressSection {
+            start_percent: s.start / dur * 100.0,
+            end_percent: s.end / dur * 100.0,
+            color: s.section.map_or_else(
+                || "#27272a".to_string(),
+                |k| SECTION_COLOURS[k % SECTION_COLOURS.len()].to_string(),
+            ),
+            name: s.name.clone(),
+            short_name: short_name(&s.name),
+            comment: None,
+        })
+        .collect();
+    (starts, bar)
+}
+
+/// The rig's setlist, when it is the gig's set: its client, and the song up.
+fn rig_on_gig(st: GigState, perf: Option<PerfState>) -> Option<(RigPerformClient, usize)> {
+    let perf = perf?;
+    let p = perf.perf.read();
+    let gig = st.gig()?;
+    let up = p.setlists.get(p.setlist_index as usize)?;
+    (*up == gig.name).then_some(())?;
+    let client = signal_rig_perform_ui::perform_client()?;
+    Some((client, p.song_index as usize))
+}
+
+/// The song's progress: Session's bar, the clock, the song steps.
 #[component]
 fn GigProgress() -> Element {
     let st = use_context::<GigState>();
+    let perf = try_use_context::<PerfState>();
     let song = st.song();
     let d = (st.dur)();
     let p = (st.pos)();
-    let looped = (st.looped)();
+    // A song step: the rig's setlist moves on (the chart follows), or,
+    // with the rig on another set, the gig's own list.
+    let step = move |by: isize| match rig_on_gig(st, perf) {
+        Some((rig, at)) => {
+            let n = perf.map_or(0, |s| s.perf.peek().songs.len());
+            let next = at.saturating_add_signed(by).min(n.saturating_sub(1));
+            if next != at {
+                let next = u32::try_from(next).unwrap_or(0);
+                spawn(async move {
+                    let _ = rig.select_song(next).await;
+                });
+            }
+        }
+        None => st.step(by),
+    };
     let Some(song) = song else {
         return rsx! {
             div { style: "flex-shrink: 0; height: 40px; display: flex; align-items: center; padding: 0 16px; \
@@ -466,68 +647,176 @@ fn GigProgress() -> Element {
             }
         };
     };
-    let parts = spans(&song.sections, d);
-    let current = song.sections.iter().position(|s| p >= s.start && p < s.end);
+    let (starts, bar) = if d > 0.0 {
+        progress_sections(&song, d)
+    } else {
+        (Vec::new(), Vec::new())
+    };
+    let progress = if d > 0.0 { (p / d * 100.0).clamp(0.0, 100.0) } else { 0.0 };
     let small = "height: 36px; width: 36px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; \
                  border: none; border-radius: 6px; background: rgba(255,255,255,0.06); cursor: pointer;";
+    let facts = [
+        (!song.key.is_empty()).then(|| format!("Key {}", song.key)),
+        (!song.tempo.is_empty()).then(|| tempo_text(&song.tempo)),
+    ]
+    .into_iter()
+    .flatten()
+    .collect::<Vec<_>>()
+    .join(" · ");
     rsx! {
         div { style: "flex-shrink: 0; display: flex; align-items: center; gap: 10px; padding: 4px 12px; \
                       border-bottom: 1px solid {RULE}; background: {SHEET}; font-family: {FONT};",
-            button { style: small, "aria-label": "Previous song", onclick: move |_| st.step(-1),
+            button { style: small, "aria-label": "Previous song", onclick: move |_| step(-1),
                 Icon { d: PREV, ink: INK }
             }
-            span { style: "font-size: 13px; color: {INK}; font-variant-numeric: tabular-nums; min-width: 40px; text-align: right;", "{clock(p)}" }
-            div { style: "flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px;",
-                if !parts.is_empty() && d > 0.0 {
-                    div { style: "height: 18px; display: flex; gap: 1px;",
-                        for (k, s) in parts.iter().enumerate() {
-                            {
-                                let grow = (s.end - s.start).max(0.01);
-                                let on = s.section.is_some() && s.section == current;
-                                let start = s.start;
-                                let bg = if on { "#0c4a6e" } else if s.section.is_some() { "#1c1c21" } else { "transparent" };
-                                let ink = if on { "#e0f2fe" } else { INK_2 };
-                                rsx! {
-                                    div {
-                                        key: "{k}",
-                                        style: "flex: {grow} 1 0px; min-width: 0; overflow: hidden; white-space: nowrap; border-radius: 3px; \
-                                                background: {bg}; color: {ink}; font-size: 11px; font-weight: 650; padding: 1px 4px; box-sizing: border-box;",
-                                        onclick: move |_| player().seek(start),
-                                        "{s.name}"
-                                    }
-                                }
-                            }
-                        }
-                    }
+            div { style: "flex-shrink: 0; width: 170px; display: flex; flex-direction: column; gap: 1px; overflow: hidden;",
+                span { style: "font-size: 14px; font-weight: 750; color: {INK}; white-space: nowrap; overflow: hidden;",
+                    "{song.number}. {song.title}"
                 }
-                div { style: "height: 22px; display: flex; border-radius: 5px; overflow: hidden; background: #18181b;",
-                    for i in 0..CELLS {
-                        {
-                            let from = (usize_f64(i) / usize_f64(CELLS) * d).clamp(0.0, d.max(0.0));
-                            let mid = ((usize_f64(i) + 0.5) / usize_f64(CELLS)) * d;
-                            let played = d > 0.0 && mid <= p;
-                            let odd = song.sections.iter().position(|s| mid >= s.start && mid < s.end).is_some_and(|k| k % 2 == 1);
-                            let in_loop = looped.is_some_and(|(a, b)| mid >= a && mid < b);
-                            let bg = match (played, odd) {
-                                (true, false) => "#0284c7",
-                                (true, true) => ACCENT,
-                                (false, false) => "#27272a",
-                                (false, true) => "#34343b",
-                            };
-                            let edge = if in_loop { "border-top: 3px solid #f59e0b; box-sizing: border-box;" } else { "" };
-                            rsx! {
-                                div { key: "{i}", style: "flex: 1; height: 100%; background: {bg}; {edge}", onclick: move |_| player().seek(from) }
+                span { style: "font-size: 11px; color: #fde68a; white-space: nowrap; overflow: hidden;", "{facts}" }
+            }
+            span { style: "font-size: 13px; color: {INK}; font-variant-numeric: tabular-nums; min-width: 40px; text-align: right;", "{clock(p)}" }
+            div { style: "flex: 1; min-width: 0;",
+                if bar.is_empty() {
+                    div { style: "height: 2.75rem; display: flex; align-items: center; color: {INK_3}; font-size: 12px;",
+                        if song.audio.is_none() { "No reference track — the chart only." } else { "Loading the track…" }
+                    }
+                } else {
+                    SongProgressBar {
+                        progress,
+                        sections: bar,
+                        height: "2.75rem".to_string(),
+                        on_section_click: move |k: usize| {
+                            if let Some(at) = starts.get(k) {
+                                player().seek(*at);
                             }
-                        }
+                        },
                     }
                 }
             }
             span { style: "font-size: 13px; color: {INK_2}; font-variant-numeric: tabular-nums; min-width: 40px;", "{clock(d)}" }
-            button { style: small, "aria-label": "Next song", onclick: move |_| st.step(1),
+            button { style: small, "aria-label": "Next song", onclick: move |_| step(1),
                 Icon { d: NEXT, ink: INK }
             }
         }
     }
+}
+
+// ── Follow: the gig's set is one of the rig's setlists ─────────────────────
+
+/// Whether the set is being written into the rig (its song changes then are
+/// the writing's, not a pick).
+static SEEDING: AtomicBool = AtomicBool::new(false);
+
+/// A song name, for matching the gig's to the rig's.
+fn same_song(a: &str, b: &str) -> bool {
+    let norm = |s: &str| {
+        s.chars()
+            .filter(|c| c.is_alphanumeric())
+            .flat_map(char::to_lowercase)
+            .collect::<String>()
+    };
+    norm(a) == norm(b)
+}
+
+/// The tempo's first number ("246 in 12/8 (~123 felt)" → 246), 0 if none.
+fn bpm_of(tempo: &str) -> u32 {
+    tempo
+        .split(|c: char| !c.is_ascii_digit())
+        .find(|s| !s.is_empty())
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(0)
+}
+
+/// Write the gig's set into the rig's library, once: its songs (each one's
+/// sections as its parts), a setlist named for the gig, and that set up.
+async fn seed_setlist(r: RigPerformClient, gig: Gig) {
+    let Ok(lib) = r.library().await else {
+        return;
+    };
+    if lib.setlists.iter().any(|s| s.name == gig.name) {
+        return;
+    }
+    SEEDING.store(true, Ordering::SeqCst);
+    let mut fresh = Vec::new();
+    for s in &gig.songs {
+        if !lib.songs.iter().any(|x| same_song(&x.name, &s.title)) {
+            let _ = r
+                .add_song(s.title.clone(), s.key.clone(), bpm_of(&s.tempo))
+                .await;
+            fresh.push(s.title.clone());
+        }
+    }
+    let _ = r.add_setlist(gig.name.clone()).await;
+    let Ok(lib) = r.library().await else {
+        SEEDING.store(false, Ordering::SeqCst);
+        return;
+    };
+    let Some(set) = lib.setlists.iter().position(|s| s.name == gig.name) else {
+        SEEDING.store(false, Ordering::SeqCst);
+        return;
+    };
+    let set = u32::try_from(set).unwrap_or(0);
+    for s in &gig.songs {
+        let name = lib
+            .songs
+            .iter()
+            .find(|x| same_song(&x.name, &s.title))
+            .map_or_else(|| s.title.clone(), |x| x.name.clone());
+        let _ = r.add_setlist_entry(set, name).await;
+    }
+    let _ = r.select_setlist(set).await;
+    // The new songs' sections become their parts (a song the rig already
+    // had keeps its own).
+    for (i, s) in gig.songs.iter().enumerate() {
+        if s.sections.is_empty() || !fresh.iter().any(|t| *t == s.title) {
+            continue;
+        }
+        let _ = r.select_song(u32::try_from(i).unwrap_or(0)).await;
+        for sec in &s.sections {
+            let _ = r.add_part(sec.name.clone()).await;
+        }
+    }
+    SEEDING.store(false, Ordering::SeqCst);
+    let _ = r.select_song(0).await;
+}
+
+/// Draws nothing: makes the gig's setlist once, then keeps the chart and
+/// the track on the song up in the rig's setlist.
+#[component]
+fn GigFollow() -> Element {
+    let st = use_context::<GigState>();
+    let perf = try_use_context::<PerfState>();
+    use_hook(move || {
+        if let (Some(r), Some(gig)) = (signal_rig_perform_ui::perform_client(), st.gig()) {
+            spawn(seed_setlist(r, gig));
+        }
+    });
+    use_effect(move || {
+        let Some(perf) = perf else {
+            return;
+        };
+        let p = perf.perf.read();
+        let name = p.songs.get(p.song_index as usize).map(|s| s.name.clone());
+        drop(p);
+        if SEEDING.load(Ordering::SeqCst) {
+            return;
+        }
+        let Some(name) = name else {
+            return;
+        };
+        let at = st
+            .gigs
+            .peek()
+            .get(*st.gig_at.peek())
+            .and_then(|g| g.songs.iter().position(|s| same_song(&s.title, &name)));
+        if let Some(i) = at
+            && *st.song_at.peek() != Some(i)
+        {
+            st.select(i);
+        }
+    });
+    rsx! {}
 }
 
 // ── Main: the chart, or the song's session view ────────────────────────────
@@ -562,13 +851,14 @@ fn fact(text: &str, bg: &str, ink: &str) -> Element {
     }
 }
 
-/// The song's chart: the band's PDF (every page) or the Keyflow render.
+/// The song's chart, the band's PDF (every page) or the Keyflow render, at
+/// its own zoom and offset: a drag moves it, the foot bar zooms and nudges.
 #[component]
 fn ChartView() -> Element {
     let st = use_context::<GigState>();
-    let mut keyflow = st.keyflow;
-    let mut fit_page = st.fit_page;
-    let size = try_use_context::<guitar::ui::WindowSize>();
+    let keyflow = st.keyflow;
+    // A drag: where it started, and the place then.
+    let mut drag = use_signal(|| None::<(f64, f64, ChartPlace)>);
     let Some(song) = st.song() else {
         let name = st.gig().map(|g| g.name).unwrap_or_default();
         return rsx! {
@@ -585,72 +875,97 @@ fn ChartView() -> Element {
         .filter(|c| is_keyflow(&c.label) == keyflow())
         .filter_map(|c| image_uri(&c.path).map(|uri| (c.label.clone(), uri)))
         .collect();
-    let has_keyflow = song.charts.iter().any(|c| is_keyflow(&c.label));
-    let has_pdf = song.charts.iter().any(|c| !is_keyflow(&c.label));
-    // The page's height for "Page": the window less the bars around it.
-    let page_h = size.map_or(560.0, |s| {
-        (s.0.peek().1 - 48.0 - 52.0 - 56.0 - 52.0 - 24.0).max(240.0)
-    });
-    let img_style = if fit_page() {
-        format!(
-            "height: {page_h:.0}px; width: auto; max-width: 100%; display: block; margin: 0 auto 10px; background: #fff; border-radius: 4px;"
-        )
-    } else {
-        "width: 100%; height: auto; display: block; margin-bottom: 10px; background: #fff; border-radius: 4px;".to_string()
-    };
-    let seg = |on: bool, enabled: bool| {
-        format!(
-            "height: 32px; padding: 0 14px; display: flex; align-items: center; border: none; border-radius: 5px; \
-             background: {}; color: {}; font-size: 14px; font-weight: {}; font-family: {FONT}; cursor: pointer;",
-            if on { "#2a2a31" } else { "transparent" },
-            if !enabled {
-                "#4a4a52"
-            } else if on {
-                INK
-            } else {
-                INK_3
-            },
-            if on { 750 } else { 600 },
-        )
-    };
+    let place = st.place();
+    let width = place.zoom * 100.0;
+    let img_style = format!(
+        "width: {width:.1}%; height: auto; display: block; margin: 0 auto 10px; background: #fff; border-radius: 4px;"
+    );
     rsx! {
-        div { style: "flex: 1; min-height: 0; display: flex; flex-direction: column; background: {MAIN}; color: {INK}; font-family: {FONT};",
-            div { style: "flex-shrink: 0; min-height: 52px; display: flex; align-items: center; gap: 8px; padding: 6px 14px; border-bottom: 1px solid {RULE}; box-sizing: border-box;",
-                span { style: "flex-shrink: 0; font-size: 13px; color: {INK_3};", "{song.number}" }
-                span { style: "flex-shrink: 0; font-size: 18px; font-weight: 800;", "{song.title}" }
-                if !song.artist.is_empty() {
-                    span { style: "flex-shrink: 0; font-size: 13px; color: {INK_2};", "{song.artist}" }
+        div {
+            style: "flex: 1; min-height: 0; position: relative; overflow: hidden; background: {MAIN}; color: {INK}; font-family: {FONT}; touch-action: none;",
+            onpointerdown: move |e: PointerEvent| {
+                let c = e.client_coordinates();
+                drag.set(Some((c.x, c.y, st.place())));
+            },
+            onpointermove: move |e: PointerEvent| {
+                if let Some((x0, y0, from)) = *drag.peek() {
+                    let c = e.client_coordinates();
+                    st.set_place(
+                        ChartPlace { x: from.x - (c.x - x0), y: from.y - (c.y - y0), ..from },
+                        false,
+                    );
                 }
-                if !song.key.is_empty() { {fact(&format!("Key {}", song.key), "#1c1917", "#fde68a")} }
-                if !song.tempo.is_empty() { {fact(&tempo_text(&song.tempo), "#1c1917", "#fde68a")} }
-                if !song.guitar.is_empty() {
-                    span { style: "min-width: 0; overflow: hidden; white-space: nowrap; font-size: 13px; padding: 3px 8px; border-radius: 5px; background: #052e16; color: #bbf7d0;",
-                        "Guitar: {song.guitar}"
-                    }
+            },
+            onpointerup: move |_| {
+                if drag.peek().is_some() {
+                    drag.set(None);
+                    st.set_place(st.place(), true);
                 }
-                span { style: "flex: 1;" }
-                div { style: "flex-shrink: 0; display: flex; padding: 3px; gap: 2px; border-radius: 7px; background: #08080a;",
-                    button { style: seg(!fit_page(), true), onclick: move |_| fit_page.set(false), "Width" }
-                    button { style: seg(fit_page(), true), onclick: move |_| fit_page.set(true), "Page" }
+            },
+            onpointerleave: move |_| {
+                if drag.peek().is_some() {
+                    drag.set(None);
+                    st.set_place(st.place(), true);
                 }
-                div { style: "flex-shrink: 0; display: flex; padding: 3px; gap: 2px; border-radius: 7px; background: #08080a;",
-                    button { style: seg(!keyflow(), has_pdf), onclick: move |_| keyflow.set(false), "PDF" }
-                    button { style: seg(keyflow(), has_keyflow), onclick: move |_| keyflow.set(true), "Keyflow" }
-                }
-            }
-            div { style: "flex: 1; min-height: 0; overflow-y: auto; padding: 10px 14px;",
+            },
+            div { style: "position: relative; left: {-place.x:.0}px; top: {-place.y:.0}px; padding: 8px 10px;",
                 if pages.is_empty() {
                     div { style: "padding: 24px; color: {INK_3}; font-size: 14px;",
                         if keyflow() { "No Keyflow chart for this song." } else { "No PDF chart for this song." }
                     }
                 }
                 for (k, (label, uri)) in pages.into_iter().enumerate() {
-                    img { key: "{k}-{label}", src: "{uri}", style: "{img_style}" }
+                    img { key: "{k}-{label}", src: "{uri}", style: "{img_style}", draggable: "false" }
                 }
-                if !song.notes.is_empty() {
-                    div { style: "padding: 4px 2px 12px; font-size: 13px; color: {INK_2};", "{song.notes}" }
+                if !song.guitar.is_empty() || !song.notes.is_empty() {
+                    div { style: "display: flex; flex-wrap: wrap; gap: 8px; padding: 4px 2px 12px; font-size: 13px; color: {INK_2};",
+                        if !song.guitar.is_empty() { {fact(&format!("Guitar: {}", song.guitar), "#052e16", "#bbf7d0")} }
+                        if !song.notes.is_empty() { span { "{song.notes}" } }
+                    }
                 }
             }
+        }
+    }
+}
+
+/// The chart's controls, in the rig's foot bar: PDF / Keyflow, zoom, nudge
+/// up and down, and fit (the page's width, at the top).
+#[component]
+fn GigFoot() -> Element {
+    let st = use_context::<GigState>();
+    let mut keyflow = st.keyflow;
+    let song = st.song();
+    let has_keyflow = song
+        .as_ref()
+        .is_some_and(|s| s.charts.iter().any(|c| is_keyflow(&c.label)));
+    let has_pdf = song
+        .as_ref()
+        .is_some_and(|s| s.charts.iter().any(|c| !is_keyflow(&c.label)));
+    let place = st.place();
+    let pct = (place.zoom * 100.0).round();
+    let small = "height: 34px; min-width: 34px; padding: 0 8px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; \
+                 border: none; border-radius: 6px; background: rgba(255,255,255,0.06); color: #e4e4e7; font-size: 15px; font-weight: 650; cursor: pointer;";
+    let zoom = move |by: f64| {
+        let p = st.place();
+        st.set_place(ChartPlace { zoom: ((p.zoom + by) * 10.0).round() / 10.0, ..p }, true);
+    };
+    let nudge = move |by: f64| {
+        let p = st.place();
+        st.set_place(ChartPlace { y: p.y + by, ..p }, true);
+    };
+    rsx! {
+        div { style: "display: flex; align-items: center; gap: 6px; font-family: {FONT};",
+            div { style: "flex-shrink: 0; display: flex; padding: 3px; gap: 2px; border-radius: 7px; background: #08080a;",
+                button { style: seg(!keyflow(), has_pdf), onclick: move |_| keyflow.set(false), "PDF" }
+                button { style: seg(keyflow(), has_keyflow), onclick: move |_| keyflow.set(true), "Keyflow" }
+            }
+            button { style: small, "aria-label": "Zoom out", onclick: move |_| zoom(-ZOOM_STEP), "−" }
+            span { style: "font-size: 12px; color: {INK_2}; min-width: 40px; text-align: center; font-variant-numeric: tabular-nums;", "{pct}%" }
+            button { style: small, "aria-label": "Zoom in", onclick: move |_| zoom(ZOOM_STEP), "+" }
+            button { style: small, "aria-label": "Chart up", onclick: move |_| nudge(NUDGE), "▲" }
+            button { style: small, "aria-label": "Chart down", onclick: move |_| nudge(-NUDGE), "▼" }
+            button { style: small, "aria-label": "Fit the width",
+                onclick: move |_| st.set_place(ChartPlace::default(), true), "Fit" }
         }
     }
 }
@@ -663,7 +978,7 @@ fn StudioSong() -> Element {
     let Some(song) = st.song() else {
         return rsx! {
             div { style: "flex: 1; display: flex; align-items: center; justify-content: center; background: {MAIN}; color: {INK_2}; font-size: 14px; font-family: {FONT};",
-                "Studio: pick a song in Setlist to hear its reference."
+                "Session: pick a song in Setlist to hear its reference."
             }
         };
     };
@@ -773,62 +1088,6 @@ fn StudioSong() -> Element {
     }
 }
 
-// ── Setlist ─────────────────────────────────────────────────────────────────
-
-/// The gig's set, in the sidebar.
-#[component]
-fn GigSetlist() -> Element {
-    let st = use_context::<GigState>();
-    let Some(gig) = st.gig() else {
-        return rsx! {};
-    };
-    let at = (st.song_at)();
-    rsx! {
-        div { style: "flex: 1; min-height: 0; display: flex; flex-direction: column; font-family: {FONT}; color: {INK};",
-            div { style: "flex-shrink: 0; padding: 10px 14px 8px; display: flex; flex-direction: column; gap: 3px; border-bottom: 1px solid {RULE};",
-                div { style: "display: flex; align-items: baseline; gap: 8px;",
-                    span { style: "font-size: 16px; font-weight: 800;", "{gig.name}" }
-                    span { style: "font-size: 12px; color: {INK_3};", "{gig.songs.len()} songs" }
-                }
-                for (i, line) in gig.dates.iter().take(1).enumerate() {
-                    span { key: "{i}", style: "font-size: 11px; color: {INK_2};", "{line}" }
-                }
-            }
-            div { style: "flex: 1; min-height: 0; overflow-y: auto; padding: 4px 6px;",
-                for (i, s) in gig.songs.iter().enumerate() {
-                    {
-                        let on = at == Some(i);
-                        let bg = if on { "#0c4a6e" } else { "transparent" };
-                        let rail = if on { LIVE } else { "transparent" };
-                        rsx! {
-                            button {
-                                key: "{i}",
-                                style: "width: 100%; min-height: 48px; text-align: left; border: none; border-radius: 6px; padding: 6px 10px 6px 8px; \
-                                        margin-bottom: 2px; background: {bg}; color: {INK}; cursor: pointer; display: flex; gap: 10px; \
-                                        align-items: center; border-left: 3px solid {rail}; box-sizing: border-box; font-family: {FONT};",
-                                onclick: move |_| st.select(i),
-                                span { style: "width: 22px; flex-shrink: 0; font-size: 12px; color: {INK_3}; text-align: right;", "{s.number}" }
-                                div { style: "display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1;",
-                                    span { style: "font-size: 15px; font-weight: 650; white-space: nowrap; overflow: hidden;", "{s.title}" }
-                                    span { style: "font-size: 11px; color: {INK_2}; white-space: nowrap; overflow: hidden;",
-                                        if s.artist.is_empty() { "—" } else { "{s.artist}" }
-                                    }
-                                }
-                                div { style: "display: flex; flex-direction: column; align-items: flex-end; gap: 2px; flex-shrink: 0;",
-                                    span { style: "font-size: 11px; color: #fde68a;", "{s.key}" }
-                                    span { style: "font-size: 11px; color: {INK_3};",
-                                        if s.audio.is_some() { "{s.tempo}" } else { "chart only" }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -868,5 +1127,57 @@ mod tests {
     fn a_section_past_the_end_is_cut_to_it() {
         let s = spans(&[sec("Out", 5.0, 50.0)], 20.0);
         assert_eq!(s.last().map(|x| x.end), Some(20.0));
+    }
+
+    #[test]
+    fn songs_match_across_punctuation_and_case() {
+        assert!(same_song("Don't Stop Believin'", "dont stop believin"));
+        assert!(!same_song("Hello", "Hallo"));
+    }
+
+    #[test]
+    fn a_tempo_reads_its_first_number() {
+        assert_eq!(bpm_of("246 in 12/8 (~123 felt)"), 246);
+        assert_eq!(bpm_of("120"), 120);
+        assert_eq!(bpm_of("free"), 0);
+    }
+
+    #[test]
+    fn a_chart_place_stays_in_bounds() {
+        let p = ChartPlace {
+            zoom: 0.1,
+            x: 0.0,
+            y: -9999.0,
+        }
+        .clamped();
+        assert!((p.zoom - ZOOM_MIN).abs() < f64::EPSILON);
+        assert!(p.y >= -400.0);
+    }
+
+    #[test]
+    fn the_progress_bar_spans_the_song() {
+        let song = Song {
+            number: 1,
+            title: "T".into(),
+            artist: String::new(),
+            key: String::new(),
+            tempo: String::new(),
+            guitar: String::new(),
+            notes: String::new(),
+            audio: None,
+            audio_kind: String::new(),
+            charts: Vec::new(),
+            pdf: None,
+            sections: vec![sec("Intro", 0.0, 10.0), sec("Verse", 10.0, 40.0)],
+        };
+        let (starts, bar) = progress_sections(&song, 40.0);
+        assert_eq!(starts, vec![0.0, 10.0]);
+        assert!((bar[1].end_percent - 100.0).abs() < 1e-9);
+        assert_eq!(bar[0].short_name, "INT");
+    }
+
+    #[test]
+    fn short_names_keep_their_letter() {
+        assert_eq!(short_name("Interlude A"), "INT A");
     }
 }
