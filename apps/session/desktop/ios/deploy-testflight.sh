@@ -159,6 +159,8 @@ BUNDLE="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP/Info.plis
 # requires CFBundleShortVersionString to be 1-3 period-separated integers
 # (the crate's "0.0.1-alpha" is rejected); CFBundleVersion just has to climb.
 BUILD_NO="${BUILD_NO:-$(date +%s)}"
+# Session and Signal ship the same version exactly (the Captain, STA-160):
+# keep this in step with apps/signal/desktop/ios/deploy-testflight.sh.
 MARKETING_VER="${MARKETING_VER:-0.0.4}"
 # App bundle OS type — App Store requires CFBundlePackageType=APPL (dx omits it).
 /usr/libexec/PlistBuddy -c "Set :CFBundlePackageType APPL" "$APP/Info.plist" 2>/dev/null \
