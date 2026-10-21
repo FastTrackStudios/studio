@@ -71,6 +71,15 @@ mod native;
 mod session_chart_pane;
 
 fn main() {
+    // `--version` / `-V`: print the release version and exit, before any
+    // window, GTK, audio or engine setup. The release workflow smoke-tests
+    // every desktop installer with it, headless (docs/agents/release-workflow.md).
+    #[cfg(not(target_arch = "wasm32"))]
+    if std::env::args().skip(1).any(|a| a == "--version" || a == "-V") {
+        println!("{} {}", env!("CARGO_PKG_NAME"), env!("CARGO_PKG_VERSION"));
+        return;
+    }
+
     // iPhone: the page is drawn to the left and right edges, and minds the
     // camera housing itself (`native::ios_scene::island_on_left`) — a phone
     // on its side reports the housing's inset on both sides.

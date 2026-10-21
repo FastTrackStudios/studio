@@ -41,7 +41,7 @@ version bump.
 | **promotion PR** `dev` -> `main` (or `hotfix/*` -> `main`) | `checks` (the full `just ci` set + advisory clippy; check name `Build + test`), `release` guard | THEBATTLESHIP (`session`), guard GitHub-hosted |
 | **release PR** `release/vX.Y.Z` -> `main` | `release` guard; `checks` plans it as a release commit and **skips** `Build + test` (a skipped job passes the required check) | GitHub-hosted |
 | push to `main` | nothing (`cache-devshell` for flake changes only) | none |
-| push of tag `vX.Y.Z` (or `workflow_dispatch` with the tag as its ref) | `deploy` (session-web, signal-web), `signal-ios` **and** `session-ios` (resolve -> build + upload to TestFlight on `airlock` -> record the build on the Release), `reaper-integration`, `release` publish (the one GitHub Release) | `session`, `airlock`, GitHub-hosted |
+| push of tag `vX.Y.Z` (or `workflow_dispatch` with the tag as its ref) | `deploy` (session-web, signal-web), `signal-ios` **and** `session-ios` (resolve -> build + upload to TestFlight on `airlock` -> record the build on the Release), `reaper-integration`, `desktop` (resolve -> macOS `.dmg` x2 on `airlock` and Linux AppImage x2 on `session` in parallel -> attach all four to the Release), `release` publish (the one GitHub Release) | `session`, `airlock`, GitHub-hosted |
 | by hand | any of them: `gh workflow run <file> --ref <branch or tag>` | |
 
 The gate for work going into `dev` is local: at least
@@ -215,3 +215,63 @@ The Captain's feature branches (`editing-engine`, ...) are cut from and
 merged into `dev`. A branch that was cut from main before the switch and
 is not behind it fast-forwards onto dev unchanged
 (`git push origin <branch>:dev` after a local check).
+
+## Desktop installers: the same tag, the same Release
+
+The release's desktop apps are attached to the one GitHub Release of `vX.Y.Z`
+by `.github/workflows/desktop.yml`, which starts on the tag beside the two iOS
+workflows. Four files, all named with the release's version, each with a
+`.sha256`:
+
+| File | Built on | How |
+|---|---|---|
+| `Signal-X.Y.Z-macos-arm64.dmg`, `Session-X.Y.Z-macos-arm64.dmg` | `airlock` | `scripts/desktop/macos.sh <app>`: `cargo build --profile release-fast` in the dev shell, a bundle whose executable is the Mach-O itself, Developer ID signature with the hardened runtime (`scripts/desktop/macos.entitlements`), a signed `.dmg`, notarization (`notarytool`, must say `Accepted`), staple, and `spctl -a -vv` on the image and on the app inside it |
+| `Signal-X.Y.Z-linux-x86_64.AppImage`, `Session-X.Y.Z-linux-x86_64.AppImage` | THEBATTLESHIP (`session` runner) | `scripts/desktop/linux.sh <app>`: the same build in the CI dev shell with its **own** target dir (size-capped), an AppDir with every needed library except glibc and the graphics stack, no `/nix/store` path left in any ELF, packed as the pinned type2 runtime plus a squashfs (what `appimagetool` does; nixpkgs no longer has it) |
+
+**Why an AppImage for Linux.** One file, no root and no package manager, runs
+on any recent distro, and `--version` can be smoke-tested without a display. A
+`.deb` fits one family and needs dpkg; a tarball has no desktop entry or icon.
+A binary built in a Nix shell points into `/nix/store`, so `linux.sh` bundles
+its libraries, repoints the interpreter at `/lib64/ld-linux-x86-64.so.2`, and
+**computes the glibc floor** (the newest `GLIBC_x.y` any bundled file needs).
+It refuses to build over `MAX_GLIBC` (2.39, Ubuntu 24.04) and writes the floor
+next to the file, so a toolchain bump that raises it is seen here, not by a
+user. The AppImage therefore runs on distros whose glibc is at least that
+floor (Ubuntu 24.04+, Debian 13+, Fedora 39+, Arch); on Ubuntu 22.04 and
+Debian 12 it stops with `GLIBC_2.xx not found`, which the smoke test shows. The
+graphics stack (GL, EGL, the Vulkan loader, DRM, GBM) is taken from the user's
+driver, not bundled.
+
+**Secrets.** None in GitHub. The Developer ID identity is in airlock's build
+keychain (`fts-build.keychain`) and the App Store Connect API key notarytool
+uses is in `~/.appstoreconnect/config.env` on airlock (the TestFlight workflows
+use the same key). The jobs that run there and on THEBATTLESHIP have a
+**read-only** `GITHUB_TOKEN`; the hosted `publish` job is the only one that can
+write to the Release, and it only receives the finished files as artifacts. The
+workflow has no `pull_request` trigger, so no fork or PR reaches either runner.
+(The fts-forge App key is readable on THEBATTLESHIP runners, an accepted risk;
+no signing material is on them.)
+
+**Dry run before a tag.** `gh workflow run desktop.yml --ref <branch> -f
+tag=<branch or sha> -f mode=build-only` builds, signs, notarizes and smoke-tests
+every installer from any ref and keeps them as workflow artifacts; the Release
+is not touched. `-f mode=validate` only resolves the tag. (A workflow file has
+to be on the default branch before it can be dispatched.)
+
+**Verify a shipped release.**
+- Both apps' TestFlight builds show marketing version = the tag
+  (`testflight-status.rb <bundle id>` on airlock), with the build numbers in the
+  Release notes.
+- Download each `.dmg`: `spctl -a -vv -t open --context context:primary-signature
+  <dmg>` and `xcrun stapler validate <dmg>` on airlock say accepted/valid.
+- Each AppImage starts with no display: `scripts/desktop/linux-smoke.sh <file>
+  <app> <version>` (on NixOS it goes through `appimage-run`;
+  `SMOKE_PODMAN_IMAGE=docker.io/library/ubuntu:24.04` runs the payload in
+  another distro).
+- The `.sha256` files match.
+
+**Disk.** airlock builds in its one shared `target/` on `/Volumes/build-disk`
+(the job refuses to start under 50 GB free). THEBATTLESHIP builds in
+`$CI_CACHE_DIR/cargo-target-desktop`, capped at 150 GB (emptied when over it
+before a build; `incremental/` dropped when over it after), and refuses to
+start under 100 GB free on that disk.

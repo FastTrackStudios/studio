@@ -139,6 +139,15 @@ mod mac_activity;
 const LOG_FILTER: &str = "info,vox_core=warn,schema_deser=off";
 
 fn main() {
+    // `--version` / `-V`: print the release version and exit, before any
+    // window, GTK, audio or engine setup. The release workflow smoke-tests
+    // every desktop installer with it, headless (docs/agents/release-workflow.md).
+    #[cfg(not(target_arch = "wasm32"))]
+    if std::env::args().skip(1).any(|a| a == "--version" || a == "-V") {
+        println!("{} {}", env!("CARGO_PKG_NAME"), env!("CARGO_PKG_VERSION"));
+        return;
+    }
+
     // iPhone: the page is the whole screen — no safe area at all. The rig's
     // phone pages keep clear of the one thing that matters, the camera
     // housing, themselves (`IslandLeft`); the bars reach the edges. (UIKit's
