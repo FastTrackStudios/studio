@@ -19,12 +19,12 @@ use sampler::{InstrumentId, PreloadProfile, PresetSpec, SamplerRig};
 mod backend;
 pub mod cradle;
 pub mod library;
-// The keyboard's Light Guide is a USB HID device: on a phone or tablet there
-// is none to drive, and no HID stack to drive it with — a stand-in finds no
-// keyboard there.
-#[cfg(not(any(target_os = "ios", target_os = "android")))]
+// The keyboard's Light Guide is a USB HID device: on a phone, a tablet or in
+// the browser there is none to drive, and no HID stack to drive it with — a
+// stand-in finds no keyboard there.
+#[cfg(not(any(target_os = "ios", target_os = "android", target_arch = "wasm32")))]
 mod lightguide;
-#[cfg(any(target_os = "ios", target_os = "android"))]
+#[cfg(any(target_os = "ios", target_os = "android", target_arch = "wasm32"))]
 #[path = "lightguide_none.rs"]
 mod lightguide;
 pub mod mm2fx;
