@@ -70,6 +70,78 @@ pub struct Song {
     pub charts: Vec<Chart>,
     pub pdf: Option<PathBuf>,
     pub sections: Vec<Section>,
+    /// The song's guitar sound: All-Around unless it names a patch, plus
+    /// this song's own overrides on top (STA-186).
+    pub profile: SongProfile,
+}
+
+/// Which sound a gig song plays, **by reference**: the library's default
+/// profile ("All-Around") when `patch` is absent, else that patch id; and
+/// the song's overrides on top. Never a copy of the profile, so editing
+/// All-Around moves every song that inherits it.
+///
+/// In `gig.json`: `"profile": {"patch": "<patch id>", "overrides":
+/// [{"path": "module.drive.param.gain", "value": 0.8}]}`, every key
+/// optional; no `"profile"` at all means All-Around with no overrides.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct SongProfile {
+    pub patch: Option<String>,
+    pub overrides: Vec<ParamOverride>,
+}
+
+/// One "override for this song": a parameter path and its value.
+#[derive(Clone, Debug, PartialEq)]
+pub struct ParamOverride {
+    pub path: String,
+    pub value: f64,
+}
+
+/// What the default profile is called on the page.
+pub const ALL_AROUND: &str = "All-Around";
+
+impl SongProfile {
+    /// True when the song follows the library default.
+    pub const fn inherits_default(&self) -> bool {
+        self.patch.is_none()
+    }
+
+    /// What the song shows as its active profile: "All-Around",
+    /// "All-Around + overrides", or the named patch's equivalent.
+    pub fn label(&self) -> String {
+        let base = if self.inherits_default() {
+            ALL_AROUND.to_owned()
+        } else {
+            "Song patch".to_owned()
+        };
+        if self.overrides.is_empty() {
+            base
+        } else {
+            format!("{base} + overrides")
+        }
+    }
+
+    fn read(song: &Value) -> Self {
+        let Some(p) = song.get("profile") else {
+            return Self::default();
+        };
+        Self {
+            patch: Some(text(p, "patch")).filter(|s| !s.is_empty()),
+            overrides: p
+                .get("overrides")
+                .and_then(Value::as_array)
+                .map(|ovs| {
+                    ovs.iter()
+                        .filter_map(|o| {
+                            Some(ParamOverride {
+                                path: Some(text(o, "path")).filter(|s| !s.is_empty())?,
+                                value: o.get("value")?.as_f64()?,
+                            })
+                        })
+                        .collect()
+                })
+                .unwrap_or_default(),
+        }
+    }
 }
 
 /// A gig: its set, and the facts worth having on the page.
@@ -211,6 +283,7 @@ pub fn read_gig(dir: &Path) -> Option<Gig> {
                                 .collect()
                         })
                         .unwrap_or_default(),
+                    profile: SongProfile::read(s),
                 })
                 .collect()
         })
@@ -345,5 +418,30 @@ mod tests {
         assert!(one.as_ref().is_some_and(|s| s.audio.is_some()));
         assert!(gig.songs.get(1).is_some_and(|s| s.audio.is_none()));
         assert_eq!(gig.songs.get(1).map(|s| s.number), Some(2));
+    }
+
+    #[test]
+    fn a_song_without_a_profile_inherits_all_around() {
+        let none = serde_json::json!({"title": "One"});
+        let empty = serde_json::json!({"title": "Two", "profile": {"overrides": []}});
+        let over = serde_json::json!({"title": "Three", "profile": {"overrides": [
+            {"path": "module.drive.param.gain", "value": 0.8},
+            {"path": "", "value": 1.0},
+            {"path": "module.eq.param.freq"}
+        ]}});
+        let patch = serde_json::json!({"title": "Four", "profile": {"patch": "p-1"}});
+
+        for song in [&none, &empty] {
+            let p = SongProfile::read(song);
+            assert!(p.inherits_default());
+            assert_eq!(p.label(), "All-Around");
+        }
+        let p = SongProfile::read(&over);
+        assert!(p.inherits_default());
+        assert_eq!(p.overrides.len(), 1, "malformed overrides are dropped");
+        assert_eq!(p.label(), "All-Around + overrides");
+        let p = SongProfile::read(&patch);
+        assert_eq!(p.patch.as_deref(), Some("p-1"));
+        assert_eq!(p.label(), "Song patch");
     }
 }
