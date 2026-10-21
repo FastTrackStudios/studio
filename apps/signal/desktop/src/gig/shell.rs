@@ -222,7 +222,15 @@ pub fn use_gig_shell() {
             provide_context(SLOTS);
         }
         // `FTS_GIG_SONG=<n>`: open on the set's nth song (a simulator's
-        // screenshot, a rehearsal relaunch).
+        // screenshot, a rehearsal relaunch); `FTS_GIG_VIEW=studio|keyflow`
+        // on that view; `FTS_GIG_PLAY=1` playing.
+        let mut studio = st.studio;
+        let mut keyflow = st.keyflow;
+        match std::env::var("FTS_GIG_VIEW").as_deref() {
+            Ok("studio") => studio.set(true),
+            Ok("keyflow") => keyflow.set(true),
+            _ => {}
+        }
         if let Some(n) = std::env::var("FTS_GIG_SONG")
             .ok()
             .and_then(|s| s.trim().parse::<usize>().ok())
@@ -243,6 +251,7 @@ pub fn use_gig_shell() {
             mut device,
             ..
         } = st;
+        let mut autoplay = std::env::var("FTS_GIG_PLAY").is_ok_and(|v| v == "1");
         loop {
             // The player (and its output) opens with the first song picked,
             // not at launch: the rig sets the audio session up first.
@@ -253,6 +262,10 @@ pub fn use_gig_shell() {
             let p = player();
             p.poll();
             let (np, nd, npl, nl) = (p.position(), p.duration(), p.is_playing(), p.is_loading());
+            if autoplay && !nl && nd > 0.0 {
+                autoplay = false;
+                p.play();
+            }
             if (*pos.peek() - np).abs() > 0.04 {
                 pos.set(np);
             }
