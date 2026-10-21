@@ -125,6 +125,14 @@ for f in "$AD"/usr/lib/*; do
     # shellcheck disable=SC2016
     patchelf --set-rpath '$ORIGIN' "$f" 2>/dev/null || true
 done
+# A few libraries (libsoup's libsqlite3) list a NEEDED entry by absolute
+# /nix/store path; the bundle holds that file under its base name.
+for f in "$AD"/usr/bin/* "$AD"/usr/lib/*; do
+    readelf -d "$f" 2>/dev/null | sed -n 's/.*Shared library: \[\(\/[^]]*\)\].*/\1/p' | while read -r abs; do
+        [ -e "$AD/usr/lib/$(basename "$abs")" ] || { echo "ERROR: $f needs $abs, which is not in the bundle" >&2; exit 1; }
+        patchelf --replace-needed "$abs" "$(basename "$abs")" "$f"
+    done
+done
 if grep -rl '/nix/store' "$AD/usr/bin" "$AD/usr/lib" >/dev/null 2>&1; then
     # Strings baked into a binary (build paths in panic messages) are fine;
     # ELF dynamic metadata is not.
