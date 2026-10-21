@@ -212,8 +212,8 @@ pub fn use_gig_shell() {
         loading: Signal::new(false),
         status: Signal::new(String::new()),
         device: Signal::new(String::new()),
-        speed: Signal::new(player().speed()),
-        volume: Signal::new(player().volume()),
+        speed: Signal::new(1.0),
+        volume: Signal::new(1.0),
         looped: Signal::new(None),
         mark_a: Signal::new(None),
     });
@@ -234,6 +234,12 @@ pub fn use_gig_shell() {
             ..
         } = st;
         loop {
+            // The player (and its output) opens with the first song picked,
+            // not at launch: the rig sets the audio session up first.
+            if st.song_at.peek().is_none() {
+                architect::platform::sleep(Duration::from_millis(200)).await;
+                continue;
+            }
             let p = player();
             p.poll();
             let (np, nd, npl, nl) = (p.position(), p.duration(), p.is_playing(), p.is_loading());
@@ -269,7 +275,7 @@ fn usize_f64(n: usize) -> f64 {
 fn btn(on: bool) -> String {
     let (bg, ink) = if on { (ACCENT, "#04121c") } else { (FILL, INK) };
     format!(
-        "height: 38px; min-width: 40px; padding: 0 9px; flex-shrink: 0; display: flex; align-items: center; \
+        "height: 38px; min-width: 36px; padding: 0 8px; flex-shrink: 0; display: flex; align-items: center; \
          justify-content: center; gap: 6px; border: none; border-radius: 6px; background: {bg}; color: {ink}; \
          font-size: 14px; font-weight: 650; font-family: {FONT}; cursor: pointer;"
     )
@@ -307,7 +313,7 @@ fn GigHeader() -> Element {
     };
     let seg = |on: bool| {
         format!(
-            "height: 32px; padding: 0 12px; display: flex; align-items: center; border: none; border-radius: 5px; \
+            "height: 32px; padding: 0 10px; display: flex; align-items: center; border: none; border-radius: 5px; \
              background: {}; color: {}; font-size: 14px; font-weight: {}; font-family: {FONT}; cursor: pointer;",
             if on { "#2a2a31" } else { "transparent" },
             if on { INK } else { INK_3 },
@@ -320,9 +326,6 @@ fn GigHeader() -> Element {
             div { style: "display: flex; padding: 3px; gap: 2px; border-radius: 7px; background: #08080a; margin-right: 6px;",
                 button { style: seg(studio()), onclick: move |_| studio.set(true), "Studio" }
                 button { style: seg(!studio()), onclick: move |_| studio.set(false), "Signal" }
-            }
-            button { style: btn(false), "aria-label": "Previous song", onclick: move |_| st.step(-1),
-                Icon { d: PREV, ink: INK }
             }
             button { style: btn(false), disabled: !has_song,
                 onclick: move |_| player().seek((player().position() - 5.0).max(0.0)), "−5" }
@@ -341,9 +344,6 @@ fn GigHeader() -> Element {
             }
             button { style: btn(false), disabled: !has_song,
                 onclick: move |_| player().seek(player().position() + 5.0), "+5" }
-            button { style: btn(false), "aria-label": "Next song", onclick: move |_| st.step(1),
-                Icon { d: NEXT, ink: INK }
-            }
             button {
                 style: "{btn((st.looped)().is_some())} {loop_color((st.looped)().is_some() || (st.mark_a)().is_some())}",
                 disabled: !has_song,
@@ -428,9 +428,14 @@ fn GigProgress() -> Element {
     };
     let parts = spans(&song.sections, d);
     let current = song.sections.iter().position(|s| p >= s.start && p < s.end);
+    let small = "height: 36px; width: 36px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; \
+                 border: none; border-radius: 6px; background: rgba(255,255,255,0.06); cursor: pointer;";
     rsx! {
         div { style: "flex-shrink: 0; display: flex; align-items: center; gap: 10px; padding: 4px 12px; \
                       border-bottom: 1px solid {RULE}; background: {SHEET}; font-family: {FONT};",
+            button { style: small, "aria-label": "Previous song", onclick: move |_| st.step(-1),
+                Icon { d: PREV, ink: INK }
+            }
             span { style: "font-size: 13px; color: {INK}; font-variant-numeric: tabular-nums; min-width: 40px; text-align: right;", "{clock(p)}" }
             div { style: "flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px;",
                 if !parts.is_empty() && d > 0.0 {
@@ -478,6 +483,9 @@ fn GigProgress() -> Element {
                 }
             }
             span { style: "font-size: 13px; color: {INK_2}; font-variant-numeric: tabular-nums; min-width: 40px;", "{clock(d)}" }
+            button { style: small, "aria-label": "Next song", onclick: move |_| st.step(1),
+                Icon { d: NEXT, ink: INK }
+            }
         }
     }
 }
