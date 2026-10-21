@@ -10,7 +10,8 @@
 #                              hotfix/*), not dev or a feature branch,
 #                            - a release branch was cut from a commit of
 #                              dev (dev may have moved on since: fine),
-#                            - Cargo.toml's version is new and greater,
+#                            - Cargo.toml's version is new and greater, and
+#                              both iOS app crates resolve to it,
 #                            - CHANGELOG.md has that version's section,
 #                            - the head commit IS `chore(release): v<ver>`
 #                              (a fix on the branch is followed by
@@ -18,21 +19,19 @@
 #                            - main is in the head, so merging produces
 #                              exactly the head's tree.
 #   push -> main           "Tag + GitHub Release": tag `v<version>` on the
-#                          release branch tip and publish the GitHub Release, then
-#                          dispatch the REAPER suites on the tag. A push
+#                          release branch tip and publish the ONE GitHub
+#                          Release (Signal and Session are one version),
+#                          then dispatch on that tag the REAPER suites and
+#                          BOTH iOS workflows, `signal-ios.yml` and
+#                          `session-ios.yml`: the ONLY things that upload
+#                          TestFlight, each at the tag's version. A push
 #                          without a CHANGELOG section for its version is
 #                          not a release and publishes nothing.
-#                          The same for each iOS app whose release reached
-#                          main (`release/signal-vX.Y.Z`, `release/session-
-#                          vX.Y.Z`): tag `<app>-v<version>`, the GitHub
-#                          Release with the app's changelog, then dispatch
-#                          `<app>-ios.yml` on the tag: the ONLY thing that
-#                          uploads TestFlight, at the tag's version.
 #   workflow_dispatch      the same, by hand, on main (a re-run).
 #
-# A release is a BRANCH, `release/vX.Y.Z` (or `release/<app>-vX.Y.Z` for
-# Signal / Session), cut from dev's head by `just release-prepare`; dev
-# never freezes for it.
+# A release is a BRANCH, `release/vX.Y.Z`, cut from dev's head by
+# `just release-prepare`; dev never freezes for it. There are no per-app
+# tags, branches or changelogs.
 #
 # Publishing does not wait for deploy.yml: the product is the desktop
 # apps and the plugins, and the two web sites are one leg of it. A failed
@@ -83,7 +82,8 @@ jobs:
     timeout-minutes: 5
     permissions:
       contents: write
-      # `gh workflow run reaper.yml` on the new tag.
+      # `gh workflow run reaper.yml / signal-ios.yml / session-ios.yml` on the
+      # new tag.
       actions: write
     concurrency:
       group: release-publish

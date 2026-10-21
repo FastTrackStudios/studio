@@ -1,6 +1,8 @@
 [package]
 name = "session-desktop"
-version = "0.0.2-alpha"
+# One version for the whole studio: [workspace.package] version in the root
+# Cargo.toml (one release tag drives both iOS apps; docs/agents/release-workflow.md).
+version.workspace = true
 edition = "2024"
 license = "GPL-3.0-or-later"
 authors = ["FastTrackStudio"]
