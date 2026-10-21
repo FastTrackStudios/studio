@@ -137,12 +137,6 @@ jobs:
           ref: ${{ needs.resolve.outputs.sha }}
           clean: false
 
-      # The guitar rig's release build refuses to compile without its captures
-      # (features/rigs/guitar/build.rs). They are in the private rig-models repo,
-      # which airlock keeps one clone of beside its other projects.
-      - name: Rig captures (rig-models) linked into the tree
-        run: bash scripts/ci/link-rig-models.sh /Volumes/build-disk/development/rig-models
-
       # CFBundleVersion has to climb with every upload: the unix time, taken
       # once, here, so the number built is the number recorded.
       - name: Build number
