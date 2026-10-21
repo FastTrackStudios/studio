@@ -86,7 +86,7 @@ webview = []
 # engine (rig_engine.rs) + the mobile shell (mobile_view.rs). Kept separate
 # from `signal` because the drums/keys/synth rig UIs pull signal-ui's
 # Vello/baseview surfaces, which don't build for iOS.
-signal-guitar = ["gig", "dep:guitar", "guitar?/ui", "dep:signal-tone3000", "signal-tone3000?/ui", "dep:sampler", "dep:session", "session?/ui", "dep:vox-core", "dep:vox-websocket", "dep:architect", "architect/iroh", "architect/local", "dep:tokio", "dep:vox", "dep:facet-json", "dep:futures-util", "dep:futures-channel", "dep:sha2", "dep:reqwest", "dep:facet", "dep:eyre"]
+signal-guitar = ["gig", "dep:guitar", "guitar?/ui", "dep:signal-content-proto", "dep:signal-content-client", "dep:signal-tone3000", "signal-tone3000?/ui", "dep:sampler", "dep:session", "session?/ui", "dep:vox-core", "dep:vox-websocket", "dep:architect", "architect/iroh", "architect/local", "dep:tokio", "dep:vox", "dep:facet-json", "dep:futures-util", "dep:futures-channel", "dep:sha2", "dep:reqwest", "dep:facet", "dep:eyre"]
 # The gig page (src/gig/): a band's set in order, each song's chart and its
 # practice track on a small player of its own (cpal out, decoded by
 # fts-sample, speed without pitch through the `stretch` phase vocoder).
@@ -101,7 +101,12 @@ gig = ["dep:cpal", "dep:stretch", "dep:fts-sample", "dep:serde_json", "dep:archi
 # iOS). Packs stream in via pack_client.rs and land in
 # Documents/FastTrackStudio/Packs/Keys.
 signal-keys-rig = ["signal-guitar", "dep:keys"]
-signal = ["signal-guitar", "dep:drums", "dep:keys", "dep:midi", "dep:synth", "synth?/ui", "dep:launcher", "dep:signal-synth-rig", "dep:sampler", "sampler?/library", "dep:signal-space", "signal-space?/engine", "dep:ekit", "tone3000", "dep:axum", "dep:tower-http"]
+# The drum rig in the app itself (the iPad's embedded engine): its backend,
+# its own profiles / songs / setlists, and the iPad drum screen's clients.
+signal-drums-rig = ["signal-guitar", "dep:drums"]
+# The e-kit in the app itself, as the drums.
+signal-ekit-rig = ["signal-guitar", "dep:ekit"]
+signal = ["signal-guitar", "signal-drums-rig", "signal-ekit-rig", "dep:signal-content-library", "dep:drums", "dep:keys", "dep:midi", "dep:synth", "synth?/ui", "dep:launcher", "dep:signal-synth-rig", "dep:sampler", "sampler?/library", "dep:signal-space", "signal-space?/engine", "dep:ekit", "tone3000", "dep:axum", "dep:tower-http"]
 # TONE3000 and the FastTrackStudio account in the app itself (the iPad's
 # embedded engine): search, download and import captures, signing in
 # through the account. Part of `signal`; the iOS build adds it on its own.
@@ -169,6 +174,8 @@ app-shell.workspace = true
 signal-space = { workspace = true, optional = true }
 ekit = { workspace = true, optional = true }
 signal-rigs-proto.workspace = true
+# The performance screens every rig shares — the clients they play through.
+signal-rig-perform-ui.workspace = true
 # Standard-MIDI-file codec (daw-proto's `midi::smf`) — the browser keys
 # rig's demo MIDI player parses the bundled .mid presets with it, and the
 # `demo_midi_gen` example authors them. Wasm-clean, deliberately
@@ -189,6 +196,9 @@ keys = { workspace = true, optional = true, features = ["ui"] }
 midi = { workspace = true, optional = true }
 synth = { workspace = true, optional = true, features = ["ui"] }
 sampler = { workspace = true, optional = true }
+# Libraries: any kit, pack or rig library from a studio, onto this device.
+signal-content-proto = { workspace = true, optional = true }
+signal-content-client = { workspace = true, optional = true }
 
 # Session domain, wire surface — the SetlistService types + generated
 # clients (session-proto) compile everywhere, including the wasm remote.
@@ -297,6 +307,8 @@ drums = { workspace = true, optional = true }
 keys = { workspace = true, optional = true }
 signal-synth-rig = { workspace = true, optional = true }
 sampler = { workspace = true, optional = true, features = ["library"] }
+# Content transfer: everything this engine can give another device.
+signal-content-library = { workspace = true, optional = true }
 signal-space = { workspace = true, optional = true, features = ["engine"] }
 ekit = { workspace = true, optional = true }
 signal-tone3000 = { workspace = true, optional = true, features = ["client"] }

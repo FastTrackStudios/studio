@@ -34,6 +34,9 @@ mod engine_tone3000;
 // The sign-in page in an in-app Safari sheet (iOS).
 #[cfg(all(feature = "signal", not(target_arch = "wasm32")))]
 mod engines;
+/// The front page's live state: each rig's, tonight's set, the studio link.
+#[cfg(all(feature = "signal-guitar", not(target_arch = "wasm32")))]
+mod front_state;
 /// The gig page: a set in order, each song's chart and practice track.
 /// Mounted by the desktop's Gig workspace and the phone shell. (Dead-code
 /// allowed: a desktop `signal-guitar`-only build compiles it unmounted.)
@@ -42,6 +45,10 @@ mod engines;
 mod gig;
 #[cfg(all(feature = "tone3000", target_os = "ios"))]
 mod ios_safari;
+/// Libraries — the home screen's downloads: a studio's kits and packs onto
+/// this device, over the content host.
+#[cfg(all(feature = "signal-guitar", not(target_arch = "wasm32")))]
+mod libraries_view;
 /// In-memory log ring (tracing capture + panic hook) — rendered by the
 /// keys Logs tab on the phone, harmless elsewhere.
 // The shared "dial the engine" plumbing every remote surface uses (rig
@@ -268,12 +275,25 @@ fn main() {
             // Documents/FastTrackStudio/signal.
             // SAFETY: single-threaded, before the engine bootstrap spawns.
             unsafe { std::env::set_var("XDG_CONFIG_HOME", &app_root) };
-            // Downloaded keys packs (pack_client.rs) live beside the config,
-            // Files-app visible; the keys rig scans this dir.
+            // Downloaded keys packs live beside the config, Files-app
+            // visible; the keys rig scans this dir.
             #[cfg(feature = "signal-keys-rig")]
             {
-                let packs = app_root.join("Packs/Keys");
+                // In the libraries folder, at the studio's path, so the
+                // Libraries page's downloads land where the rig scans; packs
+                // from before (`Packs/Keys`) move across once.
+                let packs = std::env::var_os("SIGNAL_LIBRARIES_DIR")
+                    .map_or_else(
+                        || app_root.join("signal/libraries"),
+                        std::path::PathBuf::from,
+                    )
+                    .join("Keys/Keyscape/Packs");
                 let _ = std::fs::create_dir_all(&packs);
+                if let Ok(old) = std::fs::read_dir(app_root.join("Packs/Keys")) {
+                    for f in old.flatten() {
+                        let _ = std::fs::rename(f.path(), packs.join(f.file_name()));
+                    }
+                }
                 // SAFETY: single-threaded, before the engine bootstrap spawns.
                 unsafe { std::env::set_var("FTS_KEYSCAPE_PACKS", &packs) };
                 // Phone RAM: preload only the audition set; everything else
