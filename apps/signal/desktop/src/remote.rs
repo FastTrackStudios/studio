@@ -78,9 +78,9 @@ pub fn engine_iroh_id() -> Option<iroh::EndpointId> {
         return saved.parse().ok();
     }
     // iPhone with nothing configured: fall back to the studio pack host
-    // — but never shadow an explicitly-saved ws URL.
+    // — but never shadow an explicitly-saved or launch-given ws URL.
     #[cfg(target_os = "ios")]
-    if utils::prefs::get_raw("signal-engine-ws-url").is_none() {
+    if utils::prefs::get_raw("signal-engine-ws-url").is_none() && std::env::var("SIGNAL_ENGINE_URL").is_err() {
         return DEFAULT_ENGINE_IROH_ID.parse().ok();
     }
     None
