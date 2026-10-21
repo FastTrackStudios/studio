@@ -211,7 +211,9 @@ fi
 # shellcheck source=app-plist.sh
 source "$SCRIPT_DIR/app-plist.sh"
 signal_app_plist "$APP"
-signal_app_faces "$APP"
+# FRAME_PLUGINS: frame's examples/plugins when frame is not checked out beside
+# the repo (the airlock runner keeps it under /Volumes/build-disk/development).
+signal_app_faces "$APP" "${FRAME_PLUGINS:-}"
 # TestFlight requires ITSAppUsesNonExemptEncryption declared (false = no
 # non-standard crypto → no export-compliance docs).
 /usr/libexec/PlistBuddy -c "Add :ITSAppUsesNonExemptEncryption bool false" "$APP/Info.plist" 2>/dev/null || true

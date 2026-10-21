@@ -171,7 +171,13 @@ jobs:
           # lays the rig out for a phone — with the guitar and keys rigs.
           DX_PACKAGE: signal-desktop
           DX_APP_DIR: apps/signal/desktop
-          DX_FEATURES: --no-default-features --features signal-guitar,signal-keys-rig
+          # The same set as deploy-testflight.sh's default: the guitar and keys
+          # rigs plus the embedded drum and e-kit rigs and tone3000, which the
+          # iPad drum grid and the Libraries page assume.
+          DX_FEATURES: --no-default-features --features signal-guitar,signal-keys-rig,signal-drums-rig,signal-ekit-rig,tone3000
+          # frame's faces ride in the bundle; frame is not checked out beside
+          # the workspace on the runner, so say where it lives.
+          FRAME_PLUGINS: /Volumes/build-disk/development/frame/examples/plugins
           # Bundle id must match apps/signal/desktop/Dioxus.toml.
           DX_BUNDLE_ID: app.fasttrackstudio.signal
           # Home-screen name; without it the device shows the crate name.
