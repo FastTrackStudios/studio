@@ -361,7 +361,7 @@ version = "1.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "40c48f72fd53cd289104fc64099abca73db4166ad86ea0b4341abe65af83dadc"
 dependencies = [
- "windows-sys 0.60.2",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -372,7 +372,7 @@ checksum = "291e6a250ff86cd4a820112fb8898808a366d8f9f58ce16d1f538353ad55747d"
 dependencies = [
  "anstyle",
  "once_cell_polyfill",
- "windows-sys 0.60.2",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -1865,7 +1865,7 @@ dependencies = [
  "bitflags 2.13.1",
  "cexpr",
  "clang-sys",
- "itertools 0.13.0",
+ "itertools 0.10.5",
  "log",
  "prettyplease",
  "proc-macro2",
@@ -2891,7 +2891,7 @@ checksum = "af491d569909a7e4dee0ad7db7f5341fef5c614d5b8ec8cf765732aba3cff681"
 dependencies = [
  "serde",
  "termcolor",
- "unicode-width 0.1.14",
+ "unicode-width 0.2.2",
 ]
 
 [[package]]
@@ -2992,7 +2992,7 @@ version = "3.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "faf9468729b8cbcea668e36183cb69d317348c2e08e994829fb56ebfdfbaac34"
 dependencies = [
- "windows-sys 0.48.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -5568,7 +5568,7 @@ dependencies = [
  "libc",
  "option-ext",
  "redox_users",
- "windows-sys 0.60.2",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -5638,7 +5638,7 @@ checksum = "ad5208a115eaba24916f7456929832e310a81518c641f93fee4f89aa93aa3675"
 dependencies = [
  "cfg-if",
  "libc",
- "windows-sys 0.60.2",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -5808,9 +5808,11 @@ dependencies = [
  "sampler",
  "signal-plugin-host",
  "signal-rig-host",
+ "signal-rig-perform-store",
  "signal-rigs-proto",
  "signal-space",
  "signal-widgets",
+ "tokio",
  "tracing",
  "tracing-subscriber",
  "vox",
@@ -6101,8 +6103,11 @@ dependencies = [
  "facet",
  "midi",
  "sampler",
+ "signal-rig-host",
+ "signal-rig-perform-store",
  "signal-rigs-proto",
  "signal-space",
+ "tokio",
  "tracing",
  "tracing-subscriber",
  "vox",
@@ -6399,7 +6404,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "39cab71617ae0d63f51a36d69f866391735b51691dbda63cf6f96d042b63efeb"
 dependencies = [
  "libc",
- "windows-sys 0.60.2",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -8172,7 +8177,7 @@ dependencies = [
  "log",
  "presser",
  "thiserror 2.0.20",
- "windows 0.58.0",
+ "windows 0.62.2",
 ]
 
 [[package]]
@@ -8299,6 +8304,7 @@ dependencies = [
  "dioxus",
  "dioxus-native",
  "dioxus-native-dom",
+ "drums",
  "eq",
  "facet",
  "facet-json",
@@ -8328,6 +8334,8 @@ dependencies = [
  "signal-nam",
  "signal-proto",
  "signal-rig-host",
+ "signal-rig-perform-ui",
+ "signal-rig-shell",
  "signal-rigs-proto",
  "signal-tone3000",
  "signal-widgets",
@@ -8948,7 +8956,7 @@ dependencies = [
  "libc",
  "percent-encoding",
  "pin-project-lite",
- "socket2 0.5.10",
+ "socket2 0.6.5",
  "system-configuration",
  "tokio",
  "tower-layer",
@@ -8969,7 +8977,7 @@ dependencies = [
  "js-sys",
  "log",
  "wasm-bindgen",
- "windows-core 0.58.0",
+ "windows-core 0.62.2",
 ]
 
 [[package]]
@@ -9764,7 +9772,7 @@ checksum = "3640c1c38b8e4e43584d8df18be5fc6b0aa314ce6ebf51b53313d4306cca8e46"
 dependencies = [
  "hermit-abi",
  "libc",
- "windows-sys 0.60.2",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -11744,7 +11752,7 @@ dependencies = [
  "once_cell",
  "png 0.18.1",
  "thiserror 2.0.20",
- "windows-sys 0.60.2",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -12174,7 +12182,7 @@ checksum = "650eef8c711430f1a879fdd01d4745a7deea475becfb90269c06775983bbf086"
 [[package]]
 name = "nice-log"
 version = "0.3.1"
-source = "git+https://github.com/FastTrackStudios/nice-plug.git?branch=fts-baseview-03#b84359f0d2a6ac2df580af41af81288901d1c017"
+source = "git+https://github.com/FastTrackStudios/nice-plug.git?branch=fts-baseview-03#b6e056f93d834685a21f8ab260a6568d11d515d3"
 dependencies = [
  "tracing-appender",
  "windows 0.62.2",
@@ -12183,7 +12191,7 @@ dependencies = [
 [[package]]
 name = "nice-plug"
 version = "0.3.0"
-source = "git+https://github.com/FastTrackStudios/nice-plug.git?branch=fts-baseview-03#b84359f0d2a6ac2df580af41af81288901d1c017"
+source = "git+https://github.com/FastTrackStudios/nice-plug.git?branch=fts-baseview-03#b6e056f93d834685a21f8ab260a6568d11d515d3"
 dependencies = [
  "anyhow",
  "anymap3",
@@ -12214,7 +12222,7 @@ dependencies = [
 [[package]]
 name = "nice-plug-core"
 version = "0.3.0"
-source = "git+https://github.com/FastTrackStudios/nice-plug.git?branch=fts-baseview-03#b84359f0d2a6ac2df580af41af81288901d1c017"
+source = "git+https://github.com/FastTrackStudios/nice-plug.git?branch=fts-baseview-03#b6e056f93d834685a21f8ab260a6568d11d515d3"
 dependencies = [
  "atomic_float",
  "atomic_refcell",
@@ -12233,7 +12241,7 @@ dependencies = [
 [[package]]
 name = "nice-plug-derive"
 version = "0.1.2"
-source = "git+https://github.com/FastTrackStudios/nice-plug.git?branch=fts-baseview-03#b84359f0d2a6ac2df580af41af81288901d1c017"
+source = "git+https://github.com/FastTrackStudios/nice-plug.git?branch=fts-baseview-03#b6e056f93d834685a21f8ab260a6568d11d515d3"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -12243,7 +12251,7 @@ dependencies = [
 [[package]]
 name = "nice-plug-dioxus"
 version = "0.1.0"
-source = "git+https://github.com/FastTrackStudios/nice-plug.git?branch=fts-baseview-03#b84359f0d2a6ac2df580af41af81288901d1c017"
+source = "git+https://github.com/FastTrackStudios/nice-plug.git?branch=fts-baseview-03#b6e056f93d834685a21f8ab260a6568d11d515d3"
 dependencies = [
  "anyrender 0.11.1",
  "anyrender_vello 0.11.0",
@@ -12276,7 +12284,7 @@ dependencies = [
 [[package]]
 name = "nice-plug-xtask"
 version = "0.1.1"
-source = "git+https://github.com/FastTrackStudios/nice-plug.git?branch=fts-baseview-03#b84359f0d2a6ac2df580af41af81288901d1c017"
+source = "git+https://github.com/FastTrackStudios/nice-plug.git?branch=fts-baseview-03#b6e056f93d834685a21f8ab260a6568d11d515d3"
 dependencies = [
  "anyhow",
  "cargo_metadata",
@@ -12367,7 +12375,7 @@ dependencies = [
  "pin-project-lite",
  "rustc-hash 2.1.3",
  "rustls",
- "socket2 0.5.10",
+ "socket2 0.6.5",
  "thiserror 2.0.20",
  "tokio",
  "tokio-stream",
@@ -12410,7 +12418,7 @@ checksum = "b56d621ed2c1773b5356ab39cc68c819f8d0103f7493d8661c4a5f5f8ea55f40"
 dependencies = [
  "cfg_aliases",
  "libc",
- "socket2 0.5.10",
+ "socket2 0.6.5",
  "tracing",
  "windows-sys 0.61.2",
 ]
@@ -12421,7 +12429,7 @@ version = "0.50.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7957b9740744892f114936ab4a57b3f487491bbeafaf8083688b16841a4240e5"
 dependencies = [
- "windows-sys 0.60.2",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -13492,15 +13500,6 @@ name = "ordered-float"
 version = "4.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7bb71e1b3fa6ca1c61f383464aaf2bb0e2f8e772a1f01d486832464de363b951"
-dependencies = [
- "num-traits",
-]
-
-[[package]]
-name = "ordered-float"
-version = "5.4.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c860fd3227ca4ac3cc032e2cd20cba3f02ccdf4b610538f8ee6584d56bb62e96"
 dependencies = [
  "num-traits",
 ]
@@ -14994,7 +14993,7 @@ dependencies = [
  "quinn-udp",
  "rustc-hash 2.1.3",
  "rustls",
- "socket2 0.5.10",
+ "socket2 0.6.5",
  "thiserror 2.0.20",
  "tokio",
  "tracing",
@@ -15033,9 +15032,9 @@ dependencies = [
  "cfg_aliases",
  "libc",
  "once_cell",
- "socket2 0.5.10",
+ "socket2 0.6.5",
  "tracing",
- "windows-sys 0.60.2",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -16233,7 +16232,7 @@ dependencies = [
  "errno",
  "libc",
  "linux-raw-sys 0.12.1",
- "windows-sys 0.60.2",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -16292,7 +16291,7 @@ dependencies = [
  "security-framework",
  "security-framework-sys",
  "webpki-root-certs",
- "windows-sys 0.60.2",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -16656,7 +16655,7 @@ dependencies = [
  "bigdecimal",
  "chrono",
  "inherent",
- "ordered-float 4.6.0",
+ "ordered-float",
  "rust_decimal",
  "serde_json",
  "time",
@@ -17556,6 +17555,49 @@ dependencies = [
 ]
 
 [[package]]
+name = "signal-content-client"
+version = "0.1.0"
+dependencies = [
+ "architect",
+ "futures-channel",
+ "futures-util",
+ "reqwest 0.12.28",
+ "sha2 0.10.9",
+ "signal-content-library",
+ "signal-content-proto",
+ "tempfile",
+ "tokio",
+ "tracing",
+ "vox",
+]
+
+[[package]]
+name = "signal-content-library"
+version = "0.1.0"
+dependencies = [
+ "architect",
+ "sha2 0.10.9",
+ "signal-content-proto",
+ "tempfile",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+ "vox",
+ "walkdir",
+]
+
+[[package]]
+name = "signal-content-proto"
+version = "0.1.0"
+dependencies = [
+ "architect",
+ "facet",
+ "thiserror 2.0.20",
+ "vox",
+ "vox-types",
+]
+
+[[package]]
 name = "signal-controller"
 version = "0.1.0"
 dependencies = [
@@ -17591,6 +17633,7 @@ dependencies = [
  "block2 0.6.2",
  "builtin",
  "clap",
+ "cpal",
  "daw-proto",
  "dioxus",
  "dioxus-native",
@@ -17601,6 +17644,7 @@ dependencies = [
  "facet",
  "facet-json",
  "fts-audio-ui",
+ "fts-sample",
  "futures-channel",
  "futures-util",
  "getrandom 0.3.4",
@@ -17621,14 +17665,19 @@ dependencies = [
  "session",
  "sha2 0.10.9",
  "signal-analyzer",
+ "signal-content-client",
+ "signal-content-library",
+ "signal-content-proto",
  "signal-import",
  "signal-nam",
  "signal-plugin-host",
  "signal-rig-host",
+ "signal-rig-perform-ui",
  "signal-rigs-proto",
  "signal-space",
  "signal-synth-rig",
  "signal-tone3000",
+ "stretch",
  "synth",
  "tokio",
  "tower-http",
@@ -17791,6 +17840,7 @@ dependencies = [
  "dioxus",
  "dioxus-native",
  "guitar",
+ "signal-rigs-proto",
  "tracing",
  "tracing-subscriber",
  "vox-core",
@@ -17899,6 +17949,36 @@ dependencies = [
  "midi",
  "tokio",
  "tracing",
+]
+
+[[package]]
+name = "signal-rig-perform-store"
+version = "0.1.0"
+dependencies = [
+ "architect",
+ "facet",
+ "signal-rig-host",
+ "signal-rigs-proto",
+ "tracing",
+]
+
+[[package]]
+name = "signal-rig-perform-ui"
+version = "0.1.0"
+dependencies = [
+ "architect",
+ "chrono",
+ "dioxus",
+ "signal-rig-shell",
+ "signal-rigs-proto",
+ "signal-widgets",
+]
+
+[[package]]
+name = "signal-rig-shell"
+version = "0.1.0"
+dependencies = [
+ "dioxus",
 ]
 
 [[package]]
@@ -18394,7 +18474,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c3d1e2c7f27f8d4cb10542a02c49005dbd6e93095799d6f3be745fae9f8fedd4"
 dependencies = [
  "libc",
- "windows-sys 0.60.2",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -19855,7 +19935,7 @@ dependencies = [
  "getrandom 0.4.3",
  "once_cell",
  "rustix 1.1.4",
- "windows-sys 0.60.2",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -19930,7 +20010,7 @@ dependencies = [
  "nix 0.29.0",
  "num-derive",
  "num-traits",
- "ordered-float 4.6.0",
+ "ordered-float",
  "pest",
  "pest_derive",
  "phf 0.11.3",
@@ -20867,7 +20947,7 @@ dependencies = [
  "once_cell",
  "png 0.18.1",
  "thiserror 2.0.20",
- "windows-sys 0.60.2",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -21250,7 +21330,7 @@ checksum = "f2f6fb2847f6742cd76af783a2a2c49e9375d0a111c7bef6f71cd9e738c72d6e"
 dependencies = [
  "memoffset",
  "tempfile",
- "windows-sys 0.60.2",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -22656,7 +22736,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5f2ab60e120fd6eaa68d9567f3226e876684639d22a4219b313ff69ec0ccd5ac"
 dependencies = [
  "log",
- "ordered-float 4.6.0",
+ "ordered-float",
  "strsim 0.11.1",
  "thiserror 1.0.69",
  "wezterm-dynamic-derive",
@@ -22822,7 +22902,7 @@ dependencies = [
  "objc2-metal 0.3.2",
  "objc2-quartz-core 0.3.2",
  "once_cell",
- "ordered-float 5.4.0",
+ "ordered-float",
  "parking_lot",
  "portable-atomic",
  "portable-atomic-util",
@@ -22877,7 +22957,7 @@ dependencies = [
  "objc2-metal 0.3.2",
  "objc2-quartz-core 0.3.2",
  "once_cell",
- "ordered-float 5.4.0",
+ "ordered-float",
  "parking_lot",
  "portable-atomic",
  "portable-atomic-util",
@@ -23011,7 +23091,7 @@ version = "0.1.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c2a7b1c03c876122aa43f3020e6c3c3ee5c05081c9a00739faf7503aeba10d22"
 dependencies = [
- "windows-sys 0.48.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]

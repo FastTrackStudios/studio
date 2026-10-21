@@ -60,6 +60,8 @@ pub mod midi_learn;
 pub mod mixer;
 pub mod store;
 pub mod tempo;
+#[cfg(not(target_arch = "wasm32"))]
+pub mod thread;
 
 /// A realtime engine the host can run on.
 ///
