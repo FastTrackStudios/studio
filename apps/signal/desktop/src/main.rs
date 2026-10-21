@@ -34,8 +34,21 @@ mod engine_tone3000;
 // The sign-in page in an in-app Safari sheet (iOS).
 #[cfg(all(feature = "signal", not(target_arch = "wasm32")))]
 mod engines;
+/// The front page's live state: each rig's, tonight's set, the studio link.
+#[cfg(all(feature = "signal-guitar", not(target_arch = "wasm32")))]
+mod front_state;
+/// The gig page: a set in order, each song's chart and practice track.
+/// Mounted by the desktop's Gig workspace and the phone shell. (Dead-code
+/// allowed: a desktop `signal-guitar`-only build compiles it unmounted.)
+#[allow(dead_code)]
+#[cfg(all(feature = "gig", not(target_arch = "wasm32")))]
+mod gig;
 #[cfg(all(feature = "tone3000", target_os = "ios"))]
 mod ios_safari;
+/// Libraries — the home screen's downloads: a studio's kits and packs onto
+/// this device, over the content host.
+#[cfg(all(feature = "signal-guitar", not(target_arch = "wasm32")))]
+mod libraries_view;
 /// In-memory log ring (tracing capture + panic hook) — rendered by the
 /// keys Logs tab on the phone, harmless elsewhere.
 // The shared "dial the engine" plumbing every remote surface uses (rig
@@ -143,7 +156,7 @@ fn main() {
     // Before anything touches MIDI: CoreMIDI keeps the device list live only
     // through the thread that connected first — make that one with a run
     // loop, or a footswitch switched on after launch is never seen.
-    #[cfg(target_os = "macos")]
+    #[cfg(all(target_os = "macos", feature = "signal"))]
     midi::hub::init_platform();
     // NVIDIA + Wayland: force the WebKitGTK webview through XWayland before
     // tao builds the event loop (`gtk::init` reads GDK_BACKEND there). Dioxus
@@ -262,12 +275,25 @@ fn main() {
             // Documents/FastTrackStudio/signal.
             // SAFETY: single-threaded, before the engine bootstrap spawns.
             unsafe { std::env::set_var("XDG_CONFIG_HOME", &app_root) };
-            // Downloaded keys packs (pack_client.rs) live beside the config,
-            // Files-app visible; the keys rig scans this dir.
+            // Downloaded keys packs live beside the config, Files-app
+            // visible; the keys rig scans this dir.
             #[cfg(feature = "signal-keys-rig")]
             {
-                let packs = app_root.join("Packs/Keys");
+                // In the libraries folder, at the studio's path, so the
+                // Libraries page's downloads land where the rig scans; packs
+                // from before (`Packs/Keys`) move across once.
+                let packs = std::env::var_os("SIGNAL_LIBRARIES_DIR")
+                    .map_or_else(
+                        || app_root.join("signal/libraries"),
+                        std::path::PathBuf::from,
+                    )
+                    .join("Keys/Keyscape/Packs");
                 let _ = std::fs::create_dir_all(&packs);
+                if let Ok(old) = std::fs::read_dir(app_root.join("Packs/Keys")) {
+                    for f in old.flatten() {
+                        let _ = std::fs::rename(f.path(), packs.join(f.file_name()));
+                    }
+                }
                 // SAFETY: single-threaded, before the engine bootstrap spawns.
                 unsafe { std::env::set_var("FTS_KEYSCAPE_PACKS", &packs) };
                 // Phone RAM: preload only the audition set; everything else
@@ -516,6 +542,9 @@ fn launch_app() {
 enum Workspace {
     #[cfg(feature = "signal")]
     Signal,
+    /// The gig page (`--gig`, or the Gig card on the rig menu).
+    #[cfg(all(feature = "signal", feature = "gig", not(target_arch = "wasm32")))]
+    Gig,
 }
 
 impl Workspace {
@@ -523,6 +552,8 @@ impl Workspace {
         vec![
             #[cfg(feature = "signal")]
             (Self::Signal, "Signal"),
+            #[cfg(all(feature = "signal", feature = "gig", not(target_arch = "wasm32")))]
+            (Self::Gig, "Gig"),
         ]
     }
 
@@ -626,6 +657,11 @@ fn apply_open_args() {
             rig.get_or_insert_with(|| slug.to_string());
         }
     }
+    // `--gig`: straight to the gig page (the set, its charts and tracks) —
+    // over the `--guitar` that Signal.app's launcher always passes.
+    if args.iter().any(|a| a == "--gig") {
+        workspace = Some("gig".to_string());
+    }
     // Two flags for running the real rig without consequences — see
     // `guitar::library` for what they do. Translated to environment
     // here rather than threaded through as arguments because the rig core is
@@ -671,6 +707,9 @@ fn App() -> Element {
         store_last_workspace(w);
     });
     let here = current().or_else(Workspace::first);
+    // The rig menu's Gig card opens the gig workspace.
+    #[cfg(all(feature = "signal", feature = "gig", not(target_arch = "wasm32")))]
+    use_context_provider(|| gig::OpenGig(Callback::new(move |()| go.call(Workspace::Gig))));
 
     // The workspace crumb carries every other workspace as its menu, so the
     // rail's icons are never the only way to change place.
@@ -789,6 +828,12 @@ fn App() -> Element {
                         // the same surface as the web remote, pointed at
                         // the (supervised or remote) signal engine.
                         rig_view::SignalWorkspace {}
+                    },
+                    #[cfg(all(feature = "signal", feature = "gig", not(target_arch = "wasm32")))]
+                    Some(Workspace::Gig) => rsx! {
+                        gig::GigWorkspace {
+                            on_back: Some(EventHandler::new(move |()| go.call(Workspace::Signal))),
+                        }
                     },
                 }
             }

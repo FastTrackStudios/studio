@@ -103,6 +103,32 @@ do not touch.
    (`request_local_network()`, `NSBonjourServices` in Info.plist) —
    without user approval LAN paths stay blocked and iroh rides relays.
 
+## Signal from the studio repo (canonical checkout on the build-disk)
+
+The studio tree builds Signal on airlock from
+`/Volumes/build-disk/development/studio` (one warm `target/`, under the
+build-lease), not `~/fts`:
+
+```bash
+cd /Volumes/build-disk/development/studio/apps/signal/desktop
+nix develop ../../.. -c bash -c 'unset DEVELOPER_DIR SDKROOT; export PATH=$HOME/bin-ios:$PATH; \
+  dx build --platform ios --device --release --no-default-features \
+  --features signal-guitar,signal-keys-rig,signal-drums-rig,signal-ekit-rig,tone3000'
+# dx's own codesign fails over SSH (errSecInternalComponent) — harmless:
+KEYCHAIN=fts-build.keychain KEYCHAIN_PW=fts-build SKIP_BUILD=1 \
+  GIG_BUNDLE=/Volumes/build-disk/development/gigs/ipad/CAA-2026 bash ios/deploy-testflight.sh
+```
+
+- A release build needs the rig's captures: `features/rigs/guitar/default-config{,-bass}/models`
+  link to a `rig-models` clone (`/Volumes/build-disk/development/rig-models`;
+  `just assets` clones over SSH, which airlock lacks — `gh repo clone` it).
+- `frame` must sit beside the studio checkout (`signal_app_faces`).
+- Gigs ride inside the app (`GIG_BUNDLE`, `<App>.app/Gigs/`); make the iPad
+  copy with `scripts/signal/gig-ipad.py` first (WAV → Ogg Vorbis, ~7× smaller).
+- Simulator: no Simulator.app on airlock, so no taps — launch with
+  `SIMCTL_CHILD_FTS_OPEN_RIG=guitar SIMCTL_CHILD_FTS_GIG_SONG=4 SIMCTL_CHILD_FTS_GIG_PLAY=1`
+  (`FTS_GIG_VIEW=studio|keyflow`) and `xcrun simctl io <udid> screenshot`.
+
 ## Related
 
 Pack distribution architecture: `crates/signal/docs/pack-distribution.md`.

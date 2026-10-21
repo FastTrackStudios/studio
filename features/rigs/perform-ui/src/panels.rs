@@ -10,9 +10,9 @@
 //!   Key, Tempo, Starts on, Profile, Colour — a song's, in this set
 //!   Patch     what a section or part plays, where there is no browser
 
-use crate::proto::rig::RigClient;
-use crate::proto::{LibraryModel, PerformanceModel, ProfileEntry};
 use dioxus::prelude::*;
+use signal_rigs_proto::perform::service::RigPerformClient;
+use signal_rigs_proto::perform::{LibraryModel, PerformState, ProfileEntry};
 
 use super::colors::{
     SONG_PALETTE, SetMeta, TAPE_GAFFER, add_days, date_label, date_parts, name_colour,
@@ -54,7 +54,7 @@ const KEYS: [&str; 12] = [
 ];
 
 /// Every set's parts, in the set list's order.
-fn metas(perf: &PerformanceModel, lib: &LibraryModel) -> Vec<SetMeta> {
+fn metas(perf: &PerformState, lib: &LibraryModel) -> Vec<SetMeta> {
     perf.setlists
         .iter()
         .enumerate()
@@ -68,7 +68,7 @@ fn metas(perf: &PerformanceModel, lib: &LibraryModel) -> Vec<SetMeta> {
 #[component]
 pub fn PanelView(
     panel: Panel,
-    perf: PerformanceModel,
+    perf: PerformState,
     lib: LibraryModel,
     on_close: EventHandler<()>,
 ) -> Element {
@@ -216,7 +216,7 @@ pub fn PanelView(
 
 #[component]
 fn SetsBody(
-    perf: PerformanceModel,
+    perf: PerformState,
     lib: LibraryModel,
     on_close: EventHandler<()>,
     on_new: EventHandler<()>,
@@ -257,11 +257,11 @@ fn SetsBody(
 fn SetGroup(
     label: &'static str,
     rows: Vec<(usize, SetMeta)>,
-    perf: PerformanceModel,
+    perf: PerformState,
     lib: LibraryModel,
     on_close: EventHandler<()>,
 ) -> Element {
-    let rig = use_hook(try_consume_context::<RigClient>);
+    let rig = use_hook(crate::perform_client);
     if rows.is_empty() {
         return rsx! {};
     }
@@ -330,11 +330,11 @@ fn EventChip(event: String, big: bool) -> Element {
 #[component]
 fn DetailsBody(
     mode: DetailsMode,
-    perf: PerformanceModel,
+    perf: PerformState,
     lib: LibraryModel,
     on_done: EventHandler<()>,
 ) -> Element {
-    let rig = use_hook(try_consume_context::<RigClient>);
+    let rig = use_hook(crate::perform_client);
     let set_index = perf.setlist_index as usize;
     let all = metas(&perf, &lib);
     let set = all.get(set_index).cloned().unwrap_or_default();
@@ -662,8 +662,8 @@ fn DateField(value: String, on_change: EventHandler<String>) -> Element {
 // ── Add songs ──────────────────────────────────────────────────────────────
 
 #[component]
-fn AddBody(perf: PerformanceModel, lib: LibraryModel) -> Element {
-    let rig = use_hook(try_consume_context::<RigClient>);
+fn AddBody(perf: PerformState, lib: LibraryModel) -> Element {
+    let rig = use_hook(crate::perform_client);
     let mut q = use_signal(String::new);
     let mut making = use_signal(|| false);
     let mut key = use_signal(|| "G".to_string());
@@ -809,8 +809,8 @@ fn KeyGrid(value: String, on_pick: EventHandler<String>) -> Element {
 // ── A song's key, tempo, start, colour, profile ────────────────────────────
 
 #[component]
-fn KeyBody(index: usize, perf: PerformanceModel, on_done: EventHandler<()>) -> Element {
-    let rig = use_hook(try_consume_context::<RigClient>);
+fn KeyBody(index: usize, perf: PerformState, on_done: EventHandler<()>) -> Element {
+    let rig = use_hook(crate::perform_client);
     let song = perf.songs.get(index).cloned().unwrap_or_default();
     let value = if song.key.is_empty() {
         "C".to_string()
@@ -832,8 +832,8 @@ fn KeyBody(index: usize, perf: PerformanceModel, on_done: EventHandler<()>) -> E
 }
 
 #[component]
-fn TempoBody(index: usize, perf: PerformanceModel) -> Element {
-    let rig = use_hook(try_consume_context::<RigClient>);
+fn TempoBody(index: usize, perf: PerformState) -> Element {
+    let rig = use_hook(crate::perform_client);
     let song = perf.songs.get(index).cloned().unwrap_or_default();
     rsx! {
         div { style: "padding: 20px; display: flex; flex-direction: column; align-items: center; gap: 16px;",
@@ -869,11 +869,11 @@ fn TempoBody(index: usize, perf: PerformanceModel) -> Element {
 #[component]
 fn StartBody(
     index: usize,
-    perf: PerformanceModel,
+    perf: PerformState,
     lib: LibraryModel,
     on_done: EventHandler<()>,
 ) -> Element {
-    let rig = use_hook(try_consume_context::<RigClient>);
+    let rig = use_hook(crate::perform_client);
     let song = perf.songs.get(index).cloned().unwrap_or_default();
     let current = (!song.start.is_empty()).then(|| song.start.clone());
     rsx! {
@@ -893,8 +893,8 @@ fn StartBody(
 }
 
 #[component]
-fn ColourBody(index: usize, perf: PerformanceModel, on_done: EventHandler<()>) -> Element {
-    let rig = use_hook(try_consume_context::<RigClient>);
+fn ColourBody(index: usize, perf: PerformState, on_done: EventHandler<()>) -> Element {
+    let rig = use_hook(crate::perform_client);
     let song = perf.songs.get(index).cloned().unwrap_or_default();
     let chosen = song.colour.clone();
     let auto = name_colour(&song.name);
@@ -945,11 +945,11 @@ fn ColourBody(index: usize, perf: PerformanceModel, on_done: EventHandler<()>) -
 #[component]
 fn ProfileBody(
     song: Option<usize>,
-    perf: PerformanceModel,
+    perf: PerformState,
     lib: LibraryModel,
     on_done: EventHandler<()>,
 ) -> Element {
-    let rig = use_hook(try_consume_context::<RigClient>);
+    let rig = use_hook(crate::perform_client);
     let set_index = perf.setlist_index;
     let set_profile = lib
         .setlists
@@ -995,10 +995,11 @@ fn ProfileBody(
         .max(1);
     let mut profiles = lib.profiles.clone();
     profiles.sort_by_key(|p| !p.name.eq_ignore_ascii_case(&current));
-    let set = move |rig: Option<RigClient>, song_name: Option<String>, name: String| match song_name
-    {
-        Some(s) => call!(rig, |r| r.set_song_profile(s, name)),
-        None => call!(rig, |r| r.set_setlist_profile(set_index, name)),
+    let set = move |rig: Option<RigPerformClient>, song_name: Option<String>, name: String| {
+        match song_name {
+            Some(s) => call!(rig, |r| r.set_song_profile(s, name)),
+            None => call!(rig, |r| r.set_setlist_profile(set_index, name)),
+        }
     };
     let inherit_profile = lib
         .profiles
@@ -1136,11 +1137,11 @@ fn ProfileCell(
 #[component]
 fn PatchBody(
     part: usize,
-    perf: PerformanceModel,
+    perf: PerformState,
     lib: LibraryModel,
     on_done: EventHandler<()>,
 ) -> Element {
-    let rig = use_hook(try_consume_context::<RigClient>);
+    let rig = use_hook(crate::perform_client);
     let p = perf.parts.get(part).cloned().unwrap_or_default();
     let song = perf
         .songs
@@ -1170,7 +1171,7 @@ fn PatchBody(
 #[component]
 fn PatchList(
     song: String,
-    perf: PerformanceModel,
+    perf: PerformState,
     lib: LibraryModel,
     current: Option<String>,
     default_label: &'static str,

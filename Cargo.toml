@@ -164,6 +164,12 @@ members = [
     "features/rigs/orchestra",
     "features/rigs/synth-rig",
     "features/rigs/keys/wurli",
+    "features/rigs/shell",
+    "features/rigs/perform-ui",
+    "features/rigs/perform-store",
+    "features/signal/content-proto",
+    "features/signal/content-library",
+    "features/signal/content-client",
     "apps/plugins/sampler",
     # ── patchbay ──
     "features/patchbay/driver",
@@ -943,6 +949,12 @@ signal-daw-bridge = { path = "features/signal/daw-bridge" }
 signal-rig-host = { path = "features/rigs/host" }
 signal-rigs-proto = { path = "features/rigs/proto" }
 signal-widgets = { path = "features/signal/widgets" }
+signal-rig-shell = { path = "features/rigs/shell" }
+signal-rig-perform-ui = { path = "features/rigs/perform-ui" }
+signal-rig-perform-store = { path = "features/rigs/perform-store" }
+signal-content-proto = { path = "features/signal/content-proto" }
+signal-content-library = { path = "features/signal/content-library" }
+signal-content-client = { path = "features/signal/content-client" }
 signal-extension = { path = "features/adapters/reaper/signal-extension" }
 signal-macromod = { path = "features/signal/macromod" }
 signal-plugin-host = { path = "features/plugin-host", default-features = false }

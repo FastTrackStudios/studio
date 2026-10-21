@@ -20,9 +20,9 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use crate::proto::rig::RigClient;
-use crate::proto::{LibraryModel, PerfPart, PerformanceModel};
 use dioxus::prelude::*;
+use signal_rigs_proto::perform::service::RigPerformClient;
+use signal_rigs_proto::perform::{LibraryModel, PerfPart, PerformState};
 use signal_widgets::PopupHost;
 use signal_widgets::drag_bus::{DragBus, DragEvent};
 
@@ -34,11 +34,13 @@ use super::marks::{OverrideIcon, Strike, module_colour};
 use super::menu::{Item, MoreButton, Picked, PressMenu, open_naming_under};
 use super::panels::{Panel, PanelView};
 use super::tokens::*;
-use crate::ui::state::RigViewState;
+use crate::PerfState;
 
 /// A rig call from an event handler: clone the client, run it, ignore the
-/// reply (the state stream brings the result).
-macro_rules! call {
+/// reply (the state stream brings the result). Exported as
+/// `signal_rig_perform_ui::rig_call!` for the rigs' own screens.
+#[macro_export]
+macro_rules! rig_call {
     ($rig:expr, |$r:ident| $body:expr) => {{
         if let Some($r) = $rig.clone() {
             // Forever, not the component's: a panel that closes itself
@@ -49,11 +51,11 @@ macro_rules! call {
         }
     }};
 }
-pub(crate) use call;
+pub use crate::rig_call as call;
 
 /// The library, refetched whenever the rig's state moves on.
-pub fn use_library(state: RigViewState) -> Signal<LibraryModel> {
-    let rig = use_hook(try_consume_context::<RigClient>);
+pub fn use_library(state: PerfState) -> Signal<LibraryModel> {
+    let rig = use_hook(crate::perform_client);
     let mut lib = use_signal(LibraryModel::default);
     use_effect(move || {
         let _revision = state.perf.read().revision;
@@ -70,7 +72,7 @@ pub fn use_library(state: RigViewState) -> Signal<LibraryModel> {
 
 /// The stack a patch of `profile` lives in.
 pub fn stack_of(lib: &LibraryModel, profile: &str, patch: &str) -> String {
-    let in_profile = |p: &crate::proto::ProfileEntry| {
+    let in_profile = |p: &signal_rigs_proto::perform::ProfileEntry| {
         p.patch_list
             .iter()
             .find(|x| x.name.eq_ignore_ascii_case(patch))
@@ -88,12 +90,7 @@ pub fn stack_of(lib: &LibraryModel, profile: &str, patch: &str) -> String {
 /// whose rotation holds it, else the stack the library files it under —
 /// when that is a stack (a song's own patch files under the song) — else
 /// the stack its name says ("Ambient Delay Flute" → Ambient).
-pub fn stack_for(
-    perf: &PerformanceModel,
-    lib: &LibraryModel,
-    profile: &str,
-    patch: &str,
-) -> String {
+pub fn stack_for(perf: &PerformState, lib: &LibraryModel, profile: &str, patch: &str) -> String {
     let real = |st: String| {
         perf.stacks
             .iter()
@@ -116,7 +113,7 @@ pub fn stack_for(
 }
 
 /// The profile the rig has active (the one a set without its own plays).
-pub fn active_profile(perf: &PerformanceModel, lib: &LibraryModel) -> String {
+pub fn active_profile(perf: &PerformState, lib: &LibraryModel) -> String {
     lib.profiles
         .iter()
         .find(|p| p.active)
@@ -128,7 +125,7 @@ pub fn active_profile(perf: &PerformanceModel, lib: &LibraryModel) -> String {
 #[derive(Clone, PartialEq)]
 pub struct Section {
     pub name: String,
-    /// Indices into `PerformanceModel::parts`.
+    /// Indices into `PerformState::parts`.
     pub parts: Vec<usize>,
 }
 
@@ -153,7 +150,7 @@ pub fn sections_of(parts: &[PerfPart]) -> Vec<Section> {
 
 /// Reorder the song's parts to `want` (a permutation of their indices),
 /// one `move_part` at a time, in order — what moving a section is.
-pub fn reorder_parts(rig: Option<RigClient>, want: Vec<usize>) {
+pub fn reorder_parts(rig: Option<RigPerformClient>, want: Vec<usize>) {
     let Some(r) = rig else { return };
     let _ = dioxus_core::spawn_forever(async move {
         let mut now: Vec<usize> = (0..want.len()).collect();
@@ -353,7 +350,7 @@ pub fn sound_of(part: &PerfPart) -> Option<String> {
 /// The patch the part up plays (the prototype's `partPatch`): its own,
 /// else the last one before it in the song that sets one (a part that
 /// keeps plays on), else the song's start.
-pub fn part_patch(perf: &PerformanceModel) -> Option<String> {
+pub fn part_patch(perf: &PerformState) -> Option<String> {
     if !perf.parts.is_empty() {
         let at = (perf.part_index as usize).min(perf.parts.len() - 1);
         for p in perf.parts[..=at].iter().rev() {
@@ -383,7 +380,7 @@ pub fn part_patch(perf: &PerformanceModel) -> Option<String> {
 }
 
 /// The patch playing: the active switch's.
-fn playing(perf: &PerformanceModel) -> Option<String> {
+fn playing(perf: &PerformState) -> Option<String> {
     perf.stacks.iter().find(|s| s.is_active).map(|s| {
         s.patches
             .get(s.position as usize)
@@ -393,13 +390,13 @@ fn playing(perf: &PerformanceModel) -> Option<String> {
 }
 
 /// Something other than the part's patch plays — picked by hand.
-pub fn is_live(perf: &PerformanceModel, own: Option<&str>) -> bool {
+pub fn is_live(perf: &PerformState, own: Option<&str>) -> bool {
     matches!((own, playing(perf)), (Some(o), Some(p)) if !o.eq_ignore_ascii_case(&p))
 }
 
 /// The section (or, in one of several parts, the part) playing, by name:
 /// what "Keep for …" and "Make … default for …" speak of.
-pub fn where_label(perf: &PerformanceModel) -> String {
+pub fn where_label(perf: &PerformState) -> String {
     let now = perf.part_index as usize;
     let song = perf
         .songs
@@ -436,7 +433,7 @@ pub struct StackView {
 
 /// The song's stacks: every stack the profile fills, with what the song
 /// put in them.
-pub fn song_stacks(perf: &PerformanceModel, lib: &LibraryModel) -> Vec<StackView> {
+pub fn song_stacks(perf: &PerformState, lib: &LibraryModel) -> Vec<StackView> {
     perf.stacks
         .iter()
         .enumerate()
@@ -457,7 +454,7 @@ pub fn song_stacks(perf: &PerformanceModel, lib: &LibraryModel) -> Vec<StackView
 }
 
 /// The profile's stacks on their own — no song's patches in them.
-pub fn profile_stacks(perf: &PerformanceModel, lib: &LibraryModel) -> Vec<StackView> {
+pub fn profile_stacks(perf: &PerformState, lib: &LibraryModel) -> Vec<StackView> {
     song_stacks(perf, lib)
         .into_iter()
         .zip(perf.stacks.iter().filter(|s| !s.patches.is_empty()))
@@ -492,7 +489,12 @@ pub fn profile_stacks(perf: &PerformanceModel, lib: &LibraryModel) -> Vec<StackV
 
 /// Give the part up `patch` as its own — keeping where it is borrowed
 /// from, or dropping a borrowed profile it no longer needs.
-pub fn give_part(rig: Option<RigClient>, part: &PerfPart, patch: String, borrowed: Option<String>) {
+pub fn give_part(
+    rig: Option<RigPerformClient>,
+    part: &PerfPart,
+    patch: String,
+    borrowed: Option<String>,
+) {
     let Some(r) = rig else { return };
     let (name, had) = (part.name.clone(), !part.profile.is_empty());
     let _ = dioxus_core::spawn_forever(async move {
@@ -510,7 +512,7 @@ pub fn give_part(rig: Option<RigClient>, part: &PerfPart, patch: String, borrowe
 }
 
 /// Play `patch` by name: the rig's patch list says its index.
-pub fn play_patch(rig: Option<RigClient>, patch: String) {
+pub fn play_patch(rig: Option<RigPerformClient>, patch: String) {
     let Some(r) = rig else { return };
     let _ = dioxus_core::spawn_forever(async move {
         if let Ok(list) = r.patches().await
@@ -551,7 +553,7 @@ fn part_modules(all: &[PerfPart], parts: &[usize]) -> Vec<String> {
 
 /// Song `i` of the set's parts: the live ones for the song up, else the
 /// library's.
-fn song_parts(perf: &PerformanceModel, lib: &LibraryModel, i: usize) -> Vec<PerfPart> {
+fn song_parts(perf: &PerformState, lib: &LibraryModel, i: usize) -> Vec<PerfPart> {
     if i == perf.song_index as usize {
         return perf.parts.clone();
     }
@@ -570,8 +572,8 @@ fn song_parts(perf: &PerformanceModel, lib: &LibraryModel, i: usize) -> Vec<Perf
 // ── The sidebar ────────────────────────────────────────────────────────────
 
 #[component]
-pub fn TabletSetlist(state: RigViewState) -> Element {
-    let rig = use_hook(try_consume_context::<RigClient>);
+pub fn TabletSetlist(state: PerfState) -> Element {
+    let rig = use_hook(crate::perform_client);
     let bus = DragBus::try_use();
     let lib = use_library(state);
     let perf = state.perf.read().clone();
@@ -755,7 +757,7 @@ pub fn TabletSetlist(state: RigViewState) -> Element {
 /// Pinned over the list while the song up is scrolled out of it: the song
 /// and the section playing, and a tap back to them.
 #[component]
-fn NowBar(perf: PerformanceModel, above: bool, on_back: EventHandler<()>) -> Element {
+fn NowBar(perf: PerformState, above: bool, on_back: EventHandler<()>) -> Element {
     let Some(song) = perf.songs.get(perf.song_index as usize).cloned() else {
         return rsx! {};
     };
@@ -832,12 +834,12 @@ pub fn PrimaryButton(label: String, onclick: EventHandler<()>, disabled: Option<
 
 #[component]
 fn SetHeader(
-    perf: PerformanceModel,
+    perf: PerformState,
     lib: LibraryModel,
     panel: Signal<Option<Panel>>,
     reordering: Signal<bool>,
 ) -> Element {
-    let rig = use_hook(try_consume_context::<RigClient>);
+    let rig = use_hook(crate::perform_client);
     let set_index = perf.setlist_index as usize;
     let entry = lib.setlists.get(set_index).cloned().unwrap_or_default();
     let name = perf
@@ -971,7 +973,7 @@ const UNSTUCK: &str = "position: relative;";
 
 #[component]
 fn SongRow(
-    perf: PerformanceModel,
+    perf: PerformState,
     lib: LibraryModel,
     index: usize,
     open: bool,
@@ -981,7 +983,7 @@ fn SongRow(
     on_toggle: EventHandler<()>,
     on_grip: EventHandler<PointerEvent>,
 ) -> Element {
-    let rig = use_hook(try_consume_context::<RigClient>);
+    let rig = use_hook(crate::perform_client);
     let Some(song) = perf.songs.get(index).cloned() else {
         return rsx! {};
     };
@@ -1268,12 +1270,12 @@ pub fn PatchChip(
 
 #[component]
 fn Sections(
-    perf: PerformanceModel,
+    perf: PerformState,
     lib: LibraryModel,
     song: usize,
     panel: Signal<Option<Panel>>,
 ) -> Element {
-    let rig = use_hook(try_consume_context::<RigClient>);
+    let rig = use_hook(crate::perform_client);
     let host = PopupHost::try_use();
     let bus = DragBus::try_use();
     let parts = song_parts(&perf, &lib, song);
@@ -1393,7 +1395,7 @@ fn Sections(
 
 /// Reorder library song `song`'s parts to `want`, one move at a time (a
 /// song that is not up).
-fn reorder_song_parts(rig: Option<RigClient>, song: String, want: Vec<usize>) {
+fn reorder_song_parts(rig: Option<RigPerformClient>, song: String, want: Vec<usize>) {
     let Some(r) = rig else { return };
     let _ = dioxus_core::spawn_forever(async move {
         let mut now: Vec<usize> = (0..want.len()).collect();
@@ -1418,7 +1420,7 @@ fn reorder_song_parts(rig: Option<RigClient>, song: String, want: Vec<usize>) {
 }
 
 /// Play song `song` of the set from part `part`.
-fn go_to(rig: Option<RigClient>, song: usize, part: usize) {
+fn go_to(rig: Option<RigPerformClient>, song: usize, part: usize) {
     let Some(r) = rig else { return };
     let _ = dioxus_core::spawn_forever(async move {
         let _ = r.select_song(song as u32).await;
@@ -1435,7 +1437,7 @@ pub struct PickPart {
 
 #[component]
 fn SectionRow(
-    perf: PerformanceModel,
+    perf: PerformState,
     lib: LibraryModel,
     parts: Vec<PerfPart>,
     song: usize,
@@ -1446,8 +1448,8 @@ fn SectionRow(
     panel: Signal<Option<Panel>>,
     on_grip: EventHandler<PointerEvent>,
 ) -> Element {
-    let rig = use_hook(try_consume_context::<RigClient>);
-    let build_pick = try_use_context::<super::BuildPick>();
+    let rig = use_hook(crate::perform_client);
+    let build_pick = try_use_context::<crate::BuildPick>();
     let pick_part = try_use_context::<PickPart>();
     let at = perf.song_index as usize;
     let up = song == at;
@@ -1720,7 +1722,7 @@ fn SectionRow(
 /// none): a tap plays a stack (a tap on the one playing steps it); each
 /// shows the patch a tap plays, its rotation, and what the next tap plays.
 #[component]
-pub fn Stacks(perf: PerformanceModel, lib: LibraryModel, left: u32) -> Element {
+pub fn Stacks(perf: PerformState, lib: LibraryModel, left: u32) -> Element {
     let views = song_stacks(&perf, &lib);
     let own = part_patch(&perf);
     let live = is_live(&perf, own.as_deref());
@@ -1784,7 +1786,7 @@ pub fn StackRow(
     /// Drag the stack into order (the Profile view).
     grip: Option<EventHandler<PointerEvent>>,
 ) -> Element {
-    let rig = use_hook(try_consume_context::<RigClient>);
+    let rig = use_hook(crate::perform_client);
     let index = view.index;
     let on = view.on;
     let n = view.patches.len();

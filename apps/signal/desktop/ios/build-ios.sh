@@ -27,7 +27,7 @@ export PATH="$BIN_IOS:$PATH"
 # `___chkstk_darwin` is missing at the link.
 export IPHONEOS_DEPLOYMENT_TARGET="${IPHONEOS_DEPLOYMENT_TARGET:-15.0}"
 
-dx build --platform ios --no-default-features --features signal-guitar,signal-keys-rig,tone3000
+dx build --platform ios --no-default-features --features signal-guitar,signal-keys-rig,signal-drums-rig,signal-ekit-rig,tone3000
 
 # dx names the bundle from the package (SignalDesktop.app today; it has
 # changed between dx versions), so take the newest one it wrote.
@@ -40,6 +40,8 @@ APP="$(ls -dt "$(cd ../.. && pwd)"/target/dx/signal-desktop/debug/ios/*.app 2>/d
 source "$HERE/app-plist.sh"
 signal_app_plist "$APP"
 signal_app_faces "$APP"
+# The gigs it carries (GIG_BUNDLE, as deploy-testflight.sh).
+signal_app_gigs "$APP" ${GIG_BUNDLE:-}
 
 # IPAD_LANDSCAPE=1 (development only — TestFlight keeps every orientation
 # and multitasking): the iPad held sideways, full screen. A simulator here
