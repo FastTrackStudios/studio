@@ -47,6 +47,12 @@ jobs:
     timeout-minutes: 240
     steps:
       - uses: actions/checkout@v4
+      # features/patchbay -> inferno-net is a git dep on the private
+      # FastTrackStudios/inferno-control; cargo needs read access to resolve the workspace.
+      - name: inferno-control read access
+        uses: ./.github/actions/inferno-control-auth
+        with:
+          token: ${{ secrets.INFERNO_CONTROL_TOKEN }}
 
       - name: Prepare persistent caches
         run: |

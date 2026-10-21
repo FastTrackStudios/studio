@@ -76,6 +76,14 @@ jobs:
       - name: The ref is a release tag on main
         run: bash scripts/release.sh tag-guard
 
+      # features/patchbay -> inferno-net is a git dep on the private
+      # FastTrackStudios/inferno-control; the nix build vendors every git dep in Cargo.lock
+      # (fetchGit runs git as this user, so the env config applies).
+      - name: inferno-control read access
+        uses: ./.github/actions/inferno-control-auth
+        with:
+          token: ${{ secrets.INFERNO_CONTROL_TOKEN }}
+
       - name: Compute tags
         id: tags
         run: |
