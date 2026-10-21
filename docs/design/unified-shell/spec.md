@@ -1,7 +1,7 @@
 # Unified studio shell — design spec
 
 Status: draft 1 for review · Owner: Designer (STA-152) · Parent: STA-142
-Mockups: `docs/design/unified-shell/mockups/` (follow-up commit, static HTML/CSS)
+Mockups: `docs/design/unified-shell/mockups/index.html` (static HTML/CSS, open in a browser; not screenshot-verified in this pass)
 Audit input (A): not used yet, this spec stands on the code and on `docs/signal/DESIGN.md`. Revisit when A lands.
 
 One shell for Session and Signal (Signal is the Session engine with a live-guitar-rig face), on desktop and iPad, with Keyflow charts as a first-class panel in both. This doc covers the regions, how panels dock/collapse/persist, desktop vs iPad, Signal's live-rig ("Stage") mode, the setlist/practice view, how Session and Signal show the same song, and the states every region needs.
