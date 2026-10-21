@@ -107,7 +107,10 @@ excluded() {
 declare -A seen=()
 : > "$WORK/needed-excluded.txt"
 while read -r name arrow path _; do
-    [ "$arrow" = "=>" ] || continue
+    if [ "$arrow" != "=>" ]; then
+        # A NEEDED entry spelled as an absolute path is listed without an arrow.
+        case "$name" in /*) path="$name" ;; *) continue ;; esac
+    fi
     name="$(basename "$name")"   # the loader is listed by its full path
     [ -f "${path:-}" ] || continue
     if excluded "$name"; then echo "$name" >> "$WORK/needed-excluded.txt"; continue; fi
