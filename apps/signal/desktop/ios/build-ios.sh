@@ -40,6 +40,8 @@ APP="$(ls -dt "$(cd ../.. && pwd)"/target/dx/signal-desktop/debug/ios/*.app 2>/d
 source "$HERE/app-plist.sh"
 signal_app_plist "$APP"
 signal_app_faces "$APP"
+# The gigs it carries (GIG_BUNDLE, as deploy-testflight.sh).
+signal_app_gigs "$APP" ${GIG_BUNDLE:-}
 
 # IPAD_LANDSCAPE=1 (development only — TestFlight keeps every orientation
 # and multitasking): the iPad held sideways, full screen. A simulator here
