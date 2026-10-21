@@ -368,6 +368,9 @@ pub(crate) struct Player {
     at: u64,
     /// The block a run was started for (0: none running).
     block: usize,
+    /// The run was handed over before anything was rendered for it
+    /// ([`restart`](Self::restart)): its first blocks may find nothing.
+    cold: bool,
     /// The newest edition, and up to which frame each edition is fresh
     /// (`valid[e % CUTS]`, for the [`CUTS`] newest).
     latest: u64,
@@ -423,6 +426,10 @@ enum Heard {
     /// What was rendered ahead is for somewhere else from this very
     /// block's start: nothing taken; a new run from here.
     Elsewhere,
+    /// Less was rendered ahead than this block needs — the machine busier
+    /// than the render ahead could keep up with: nothing taken; a new run
+    /// from here, its start rendered in the callback, never silence.
+    Short,
 }
 
 /// The tracks a block's feed came from: all the chunks it took were of one
@@ -450,6 +457,7 @@ impl Player {
             generation: 0,
             at: 0,
             block: 0,
+            cold: false,
             latest: 0,
             valid: [u64::MAX; CUTS],
             playing: None,
@@ -475,6 +483,7 @@ impl Player {
         self.recycle_all();
         self.generation = self.generation.wrapping_add(1);
         self.block = block;
+        self.cold = false;
         self.at = 0;
         self.playing = None;
         self.fade = None;
@@ -522,6 +531,7 @@ impl Player {
     fn restart(&mut self, at: f64, block: usize, into_block: usize) {
         self.begin_run(at, block, into_block);
         self.hand_over();
+        self.cold = true;
     }
 
     /// The callback renders whole for now: the render ahead rests, and its
@@ -681,8 +691,23 @@ impl Player {
         })
     }
 
+    /// Whether every frame of the run from `from` to `end` has been
+    /// rendered ahead.
+    fn covers(&self, from: u64, end: u64) -> bool {
+        let mut frame = from;
+        while frame < end {
+            let Some(pick) = self.pick(frame) else {
+                return false;
+            };
+            frame = pick.until.max(frame + 1);
+        }
+        true
+    }
+
     /// The feed for a live block of `frames` at `start`: the frames
-    /// rendered ahead for it, freshest first, silence where there are none.
+    /// rendered ahead for it, freshest first. Short of them, nothing is
+    /// taken ([`Heard::Short`]) — but at a cold run's start, which finds
+    /// nothing yet and plays silence for the tracks ahead.
     fn window(&mut self, start: f64, frames: usize) -> Heard {
         if self.block != frames {
             self.restart(start, frames, 0);
@@ -691,15 +716,18 @@ impl Player {
         self.learn_cuts();
         self.window.clear_window();
         let end = self.at + frames as u64;
+        if !self.covers(self.at, end) {
+            if !self.cold || self.at >= STARTUP {
+                self.stats.ahead_underruns.fetch_add(1, Ordering::Relaxed);
+                return Heard::Short;
+            }
+        } else {
+            self.cold = false;
+        }
         let mut frame = self.at;
         let mut print = None;
         while frame < end {
             let Some(pick) = self.pick(frame) else {
-                // A run's first blocks find nothing yet: that is its start,
-                // not a dropout.
-                if self.at >= STARTUP {
-                    self.stats.ahead_underruns.fetch_add(1, Ordering::Relaxed);
-                }
                 break;
             };
             let (into, its_start, its_print, edition) = {
@@ -976,8 +1004,9 @@ impl DualRender {
                     );
                     return &self.out;
                 }
-                // A locate, a loop the render ahead did not foresee.
-                Heard::Elsewhere => player.begin_run(start, frames, 0),
+                // A locate, a loop the render ahead did not foresee; or the
+                // render ahead fell behind: the callback renders from here.
+                Heard::Elsewhere | Heard::Short => player.begin_run(start, frames, 0),
             }
         }
         self.prime(start, frames, live_set);
@@ -1063,7 +1092,7 @@ impl DualRender {
                 Part::Live(&player.window),
                 &mut self.out,
             ),
-            Heard::Elsewhere => {
+            Heard::Elsewhere | Heard::Short => {
                 // What the callback rendered ahead is for its own course, so
                 // this is a transport that moved meanwhile: start again.
                 player.begin_run(start, frames, 0);
@@ -1596,6 +1625,22 @@ mod tests {
             1,
             "the first chunk is passed and given back"
         );
+    }
+
+    /// Once a run is under way, a block the render ahead has not wholly
+    /// rendered — the machine too busy for it — takes nothing and says it
+    /// is short, so the callback renders it instead of playing silence.
+    #[test]
+    fn a_block_the_render_ahead_fell_behind_on_is_short_not_silent() {
+        let stats = Arc::new(EngineStats::default());
+        let (mut p, mut tx, _) = player(&stats, 4);
+        let _ = p.window(0.0, 4);
+        let generation = p.generation;
+        let _ = tx.push(chunk(generation, 0, 4, 6, 1.0));
+        assert_eq!(p.window(4.0, 4), Heard::Took(Took(Some(5))));
+        assert_eq!(p.window(8.0, 4), Heard::Short, "frames 10 and 11 not here");
+        assert_eq!(stats.ahead_underruns.load(Ordering::Relaxed), 1);
+        assert_eq!(p.at, 8, "nothing taken");
     }
 
     /// A chunk of an older run is passed over; one for another place on

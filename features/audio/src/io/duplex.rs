@@ -221,8 +221,9 @@ pub struct EngineStats {
     /// The render ahead (a dual-buffer engine): frames rendered ahead of
     /// the playhead now, waiting to be played.
     pub ahead_fill_frames: AtomicU64,
-    /// Blocks that found less rendered ahead than they needed and played
-    /// silence for the tracks ahead in its place.
+    /// Blocks that found less rendered ahead than they needed: the run
+    /// starts again there, the callback rendering the tracks ahead itself
+    /// until the render ahead is ahead again.
     pub ahead_underruns: AtomicU64,
     /// Times the render ahead started again from where the playhead is (a
     /// locate, play after stop, a changed live set).
