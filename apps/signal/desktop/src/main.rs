@@ -156,7 +156,7 @@ fn main() {
     // Before anything touches MIDI: CoreMIDI keeps the device list live only
     // through the thread that connected first — make that one with a run
     // loop, or a footswitch switched on after launch is never seen.
-    #[cfg(target_os = "macos")]
+    #[cfg(all(target_os = "macos", feature = "signal"))]
     midi::hub::init_platform();
     // NVIDIA + Wayland: force the WebKitGTK webview through XWayland before
     // tao builds the event loop (`gtk::init` reads GDK_BACKEND there). Dioxus

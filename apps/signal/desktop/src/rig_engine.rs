@@ -375,7 +375,7 @@ pub fn bootstrap_blocking() -> eyre::Result<()> {
                 // The screen's frames, from off the main thread: a frame that
                 // has run for over a second and a half is a frozen screen,
                 // said while it is frozen (once per freeze).
-                let ui = blitz_shell::frame_stats::snapshot();
+                let ui = UiFrames::default();
                 if ui.in_frame_ms > 1500 {
                     if !stuck_logged {
                         tracing::warn!(
@@ -493,4 +493,20 @@ pub fn bootstrap_blocking() -> eyre::Result<()> {
     }
 
     Ok(())
+}
+
+/// The screen's frame stats for the health log. ios-framing's Blitz fork
+/// counts them (`blitz_shell::frame_stats`); the Blitz this tree pins does
+/// not yet, so they read zero until it does.
+#[derive(Default)]
+struct UiFrames {
+    in_frame_ms: u64,
+    layers: u64,
+    fps: u64,
+    mean_ms: u64,
+    worst_ms: u64,
+    update_worst_ms: u64,
+    again_unsettled: u64,
+    again_animating: u64,
+    again_widgets: u64,
 }

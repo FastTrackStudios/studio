@@ -76,7 +76,7 @@ signal_app_plist() {
 # frame's examples/plugins (default: the ../frame sibling beside the repo).
 signal_app_faces() {
     local app="$1"
-    local src="${2:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../.." && pwd)/frame/examples/plugins}"
+    local src="${2:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../../.." && pwd)/frame/examples/plugins}"
     if [ ! -d "$src/rig-faces" ]; then
         echo "ERROR: no frame faces at $src/rig-faces (check out frame beside the repo)" >&2
         return 1
@@ -87,4 +87,24 @@ signal_app_faces() {
     # faces, catalogs and pictures, not the design sources.
     rsync -a --include='*/' --include='*.fm' --include='*.json' --include='*.png' \
         --exclude='*' --prune-empty-dirs "$src/rig-faces/" "$app/frame/rig-faces/"
+}
+
+# Gigs the app carries offline: each argument a gig folder (its gig.json,
+# audio/, charts/, pdf/), copied to <App>.app/Gigs/<folder name>, where
+# `gig::bundled_root` finds them. No arguments: none (and any old ones go).
+signal_app_gigs() {
+    local app="$1"
+    shift
+    rm -rf "$app/Gigs"
+    [ $# -gt 0 ] || return 0
+    mkdir -p "$app/Gigs"
+    local g
+    for g in "$@"; do
+        if [ ! -f "$g/gig.json" ]; then
+            echo "ERROR: $g is not a gig folder (no gig.json)" >&2
+            return 1
+        fi
+        rsync -a --exclude='*.part.ogg' --exclude='.DS_Store' "$g" "$app/Gigs/"
+        echo "gig bundled: $(basename "$g") ($(du -sh "$app/Gigs/$(basename "$g")" | cut -f1))"
+    done
 }
