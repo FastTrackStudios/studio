@@ -2289,3 +2289,17 @@ patchbay-macos-notarize:
 # Regenerate AppIcon.icns from apps/patchbay/assets/icon.svg (needs rsvg-convert).
 patchbay-macos-icon:
     apps/patchbay/packaging/macos/make-icon.sh
+
+# Crate-layout boundaries + ratcheted idioms (boundaries.toml), checked by
+# architect's xtask at a pinned release tag. Resolves graphs, compiles nothing
+# of studio's. Bump the tag with architect releases.
+architect_xtask_tag := "v0.9.10"
+ci-boundaries:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    bin="${CI_CACHE_DIR:-$HOME/.cache}/architect-xtask/{{architect_xtask_tag}}"
+    if [ ! -x "$bin/bin/xtask" ]; then
+        cargo install --locked --quiet --git https://github.com/FastTrackStudios/architect \
+            --tag {{architect_xtask_tag}} xtask --root "$bin"
+    fi
+    "$bin/bin/xtask" boundaries

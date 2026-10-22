@@ -154,6 +154,12 @@ jobs:
           EOF
       - name: cargo fmt --check
         run: ${NIX_DEV} cargo fmt --all --check
+      # Crate-layout boundaries (architect ADR layout.md, STA-268):
+      # resolves graphs and scans sources, compiles nothing of studio's.
+      # Layer table + ratcheted baselines in boundaries.toml.
+      - name: Boundaries
+        if: ${{ !cancelled() }}
+        run: ${NIX_DEV} just ci-boundaries
       # The workflow-spec verification standard (#48): every `flow.*`
       # rule with an r[impl] has an r[verify], or the build is red.
       # Same recipe as local (`just daw-flows`); tracey is a store
