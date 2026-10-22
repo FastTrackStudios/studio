@@ -13,8 +13,10 @@ const SYSTEM_FONT: &[u8] = include_bytes!("/System/Library/Fonts/Supplemental/Ar
 #[cfg(target_os = "windows")]
 const SYSTEM_FONT: &[u8] = include_bytes!("C:/Windows/Fonts/arial.ttf");
 
-// Bundled DejaVuSans — works on any Linux (NixOS, Debian, Fedora, etc.)
-#[cfg(target_os = "linux")]
+// Bundled DejaVuSans — works on any Linux (NixOS, Debian, Fedora, etc.) and is
+// the fallback everywhere else (iOS has no /System/Library/Fonts/Supplemental
+// to include at build time: Session's iOS release build died on this).
+#[cfg(not(any(target_os = "macos", target_os = "windows")))]
 const SYSTEM_FONT: &[u8] = include_bytes!("../fonts/DejaVuSans.ttf");
 
 /// Text renderer that uses Vello's `draw_glyphs` API with skrifa font metrics.
