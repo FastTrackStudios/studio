@@ -1,0 +1,30 @@
+[package]
+name = "fts-account"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+description = "The FastTrackStudio account on a device: device-code sign-in (RFC 8628) to the account server a Task server trusts, the one kept session every FTS app on a desktop shares (~/.config/fts/account/session.json), and (feature ui) the one sign-in UI both Signal and Session mount"
+
+[features]
+# The shared sign-in UI (src/ui): DeviceCodePanel, AccountSheet,
+# SignOutConfirm, AccountMenuItem and the use_account hook. Inline styles
+# only, so it runs on Blitz and a WebView alike.
+ui = ["dep:dioxus"]
+
+[dependencies]
+auth-client = { workspace = true }
+serde_json = { workspace = true }
+tracing = { workspace = true }
+dioxus = { workspace = true, optional = true }
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+dirs = "6"
+reqwest = { workspace = true }
+tokio = { workspace = true }
+
+[dev-dependencies]
+tokio = { workspace = true }
+
+[lints]
+workspace = true

@@ -30,7 +30,7 @@ use session_daw::song_stream::Offline;
 use session_daw::stream_set::{
     Downloading, LibrarySetlist, LibrarySong, ListKind, Remote, with_library,
 };
-use session_daw::task_account::{self, Account, Started};
+use session_daw::task_account::{self, Account, AccountLibrary as _, Started};
 
 pub(super) const BG: &str = "#0f1012";
 pub(super) const BAR: &str = "#17181b";
