@@ -74,7 +74,7 @@ pub fn phrases(song: &Song, (from, to): (f64, f64), bars: f64) -> Vec<(f64, f64)
 /// # Errors
 /// When the engine refuses the edit.
 pub fn comp_best(song: &Song, phrases: &[(f64, f64)], dry: bool) -> Result<Comped, String> {
-    let mut stages = architect_telemetry::timing::Stages::start();
+    let mut stages = crate::stages::Stages::start();
     let (Some(first), Some(last)) = (phrases.first(), phrases.last()) else {
         return Ok(Comped::default());
     };

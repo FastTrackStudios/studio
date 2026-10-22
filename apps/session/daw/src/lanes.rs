@@ -6,6 +6,22 @@
 //! holding items or named for what they are (`COMP`, `EDIT`), never the
 //! empty numbered ones a recording leaves between them.
 
+/// The comp's lane name.
+pub const COMP: &str = "COMP";
+/// The edit's lane name.
+pub const EDIT: &str = "EDIT";
+
+/// A lane by name on `track`.
+#[must_use]
+pub fn lane_named(track: &daw_proto::Track, name: &str) -> Option<u32> {
+    track
+        .lane_names
+        .iter()
+        .position(|n| n.trim().eq_ignore_ascii_case(name.trim()))
+        .and_then(|i| u32::try_from(i).ok())
+        .filter(|&i| i < track.lane_count)
+}
+
 /// The lanes of `track` worth stepping to, in order: named, or holding
 /// one of `items`.
 #[must_use]

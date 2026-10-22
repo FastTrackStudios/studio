@@ -603,7 +603,7 @@ impl Previews {
         if sources.is_empty() {
             return guids.to_vec();
         }
-        let mut stages = architect_telemetry::timing::Stages::start();
+        let mut stages = crate::stages::Stages::start();
         let cuts = crate::wave_pool::map(guids, |guid| cut_of(daw, project, guid));
         stages.mark("waves.cut_of_ms");
         let jobs: Vec<(&String, Option<Cut>)> = guids.iter().zip(cuts).collect();

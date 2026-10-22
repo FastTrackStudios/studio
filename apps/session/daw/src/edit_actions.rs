@@ -362,7 +362,7 @@ fn quantize(a: QuantizeArg) -> Result<Quantized, String> {
 /// `EDIT_REVERT`: see its description.
 fn revert(a: RevertArg) -> Result<Reverted, String> {
     let (daw, project) = crate::actions::song()?;
-    let mut stages = architect_telemetry::timing::Stages::start();
+    let mut stages = crate::stages::Stages::start();
     let on = target(daw, &project, &a.on)?;
     match on.profile {
         Profile::Drums => {

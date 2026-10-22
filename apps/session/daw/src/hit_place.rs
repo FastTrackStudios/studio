@@ -93,7 +93,7 @@ pub fn place(
     moves: &[(f64, f64)],
     joins: Joins,
 ) -> Result<usize, String> {
-    let mut stages = architect_telemetry::timing::Stages::start();
+    let mut stages = crate::stages::Stages::start();
     // Every moment the call names — moved or held where it is — by time,
     // and those it moves.
     let mut named: Vec<(f64, f64)> = moves.to_vec();

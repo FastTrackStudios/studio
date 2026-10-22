@@ -990,7 +990,7 @@ pub fn detect(
         .into_iter()
         .filter(|t| all_takes || t.in_use())
         .collect();
-    let mut stages = architect_telemetry::timing::Stages::start();
+    let mut stages = crate::stages::Stages::start();
     // The takes are found at once, a few in flight: each is its files read
     // whole (a gigabyte a long take across a kit) and its pieces' detection
     // spread across cores inside `drum_hits`. In order, so a run is the

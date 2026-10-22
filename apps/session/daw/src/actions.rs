@@ -3676,7 +3676,7 @@ fn detect(
     span: (f64, f64),
     prepared: &Prepared,
 ) -> Result<Detected, String> {
-    let mut stages = architect_telemetry::timing::Stages::start();
+    let mut stages = crate::stages::Stages::start();
     let kit = &prepared.kit;
     stages.mark("detect.kit_ms");
     let line_of = |h: f64| grid_line(daw, project, h, settings.grid);
@@ -4414,7 +4414,7 @@ fn quantize_span(
     (lock, dry): (Option<&str>, bool),
     prepared: &Prepared,
 ) -> Result<(QuantizeSpan, Planned), String> {
-    let mut stages = architect_telemetry::timing::Stages::start();
+    let mut stages = crate::stages::Stages::start();
     let zones = &prepared.zones;
     stages.mark("span.zones_ms");
     let found = detect(daw, project, settings, (from, to), prepared)?;
@@ -4886,7 +4886,7 @@ fn register_revert(list: &ActionList) {
 fn register_place(list: &ActionList) {
     list.register(&PLACE, Effect::Mutating, |a: PlaceArg| {
         let (daw, project) = song()?;
-        let mut stages = architect_telemetry::timing::Stages::start();
+        let mut stages = crate::stages::Stages::start();
         let before = crate::hits::playback(daw, &project);
         stages.mark("edit.read_ms");
         let ids: Vec<String> = a.id.iter().cloned().chain(a.ids.iter().cloned()).collect();
@@ -5066,7 +5066,7 @@ fn register_requantize(list: &ActionList) {
 /// No hit markers, a section that is not there, or no engine.
 pub(crate) fn quantize(a: QuantizeArg) -> Result<Vec<QuantizeSpan>, String> {
     let (daw, project) = song()?;
-    let mut stages = architect_telemetry::timing::Stages::start();
+    let mut stages = crate::stages::Stages::start();
     if crate::hits::kit_from_markers(daw, &project).is_none() {
         return Err("no hit markers: find the hits first (HITS_DETECT)".to_owned());
     }

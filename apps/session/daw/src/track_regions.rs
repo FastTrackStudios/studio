@@ -16,6 +16,7 @@
 //! saved with the song, in REAPER's project too, and in the project
 //! document — an undo takes them back with everything else.
 
+#[cfg(feature = "native")]
 use architect::action::{ActionList, ActionMeta, Effect};
 use daw::service::{ProjectContext, TrackRef, Tracks};
 use facet::Facet;
@@ -209,6 +210,7 @@ pub fn write(
     .map_err(|e| e.to_string())?;
     changed();
     crate::marks_strip::refresh();
+    #[cfg(feature = "native")]
     crate::actions::list().changed("tracks.marks", track);
     Ok(())
 }
@@ -271,6 +273,7 @@ pub fn over(
 
 /// The kit's folder: the top-level folder over its pieces' triggers —
 /// where the kit's regions live.
+#[cfg(feature = "native")]
 #[must_use]
 pub fn kit_folder(daw: &daw::standalone::Standalone, project: &ProjectContext) -> Option<String> {
     let tracks = Tracks::all(daw, project.clone());
@@ -290,6 +293,7 @@ pub fn kit_folder(daw: &daw::standalone::Standalone, project: &ProjectContext) -
 
 /// The kit's regions with the track each is on: its folder's and every
 /// track's under it.
+#[cfg(feature = "native")]
 #[must_use]
 pub fn kit_marks(
     daw: &daw::standalone::Standalone,
@@ -312,6 +316,7 @@ pub fn kit_marks(
 }
 
 /// The kit's regions: on its folder and on every track under it.
+#[cfg(feature = "native")]
 #[must_use]
 pub fn kit_regions(
     daw: &daw::standalone::Standalone,
@@ -413,12 +418,14 @@ pub fn figure_at(regions: &[TrackRegion], time: f64, sixteenth: f64) -> Option<&
 /// for — every one, on the kit's folder;
 /// a drum's, on its own tracks (the snare on quarters through a double-
 /// kick breakdown, the kick on sixteenths).
+#[cfg(feature = "native")]
 #[derive(Debug, Default)]
 pub struct PartGrids {
     /// `(the drums it is for, the region)`.
     regions: Vec<(Vec<String>, TrackRegion)>,
 }
 
+#[cfg(feature = "native")]
 impl PartGrids {
     /// Read the kit's.
     #[must_use]
@@ -512,6 +519,7 @@ fn new_id() -> String {
 
 /// Where `text` is, seconds: a bar as the ruler writes it (`78.3`, `78:3`,
 /// `79`), a time (`12.5s`) or a section.
+#[cfg(feature = "native")]
 pub(crate) fn moment(
     daw: &daw::standalone::Standalone,
     project: &ProjectContext,
@@ -538,6 +546,7 @@ pub(crate) fn moment(
     crate::fx_actions::moment(daw, project, &spelled)
 }
 
+#[cfg(feature = "native")]
 fn kind_of(text: &str) -> Result<RegionKind, String> {
     match text
         .trim()
@@ -553,6 +562,7 @@ fn kind_of(text: &str) -> Result<RegionKind, String> {
     }
 }
 
+#[cfg(feature = "native")]
 fn origin_of(text: &str) -> Result<Origin, String> {
     match text.trim().to_ascii_lowercase().as_str() {
         "manual" => Ok(Origin::Manual),
@@ -567,6 +577,7 @@ fn origin_of(text: &str) -> Result<Origin, String> {
 
 // ── the actions ───────────────────────────────────────────────────────
 
+#[cfg(feature = "native")]
 pub static LIST: ActionMeta = crate::actions::meta(
     "TRACK_MARKS",
     "track_marks",
@@ -576,6 +587,7 @@ pub static LIST: ActionMeta = crate::actions::meta(
     "",
 );
 
+#[cfg(feature = "native")]
 pub static ADD: ActionMeta = crate::actions::meta(
     "TRACK_REGION_ADD",
     "track_region_add",
@@ -585,6 +597,7 @@ pub static ADD: ActionMeta = crate::actions::meta(
     "",
 );
 
+#[cfg(feature = "native")]
 pub static EDIT: ActionMeta = crate::actions::meta(
     "TRACK_REGION_EDIT",
     "track_region_edit",
@@ -594,6 +607,7 @@ pub static EDIT: ActionMeta = crate::actions::meta(
     "",
 );
 
+#[cfg(feature = "native")]
 pub static REMOVE: ActionMeta = crate::actions::meta(
     "TRACK_MARKS_REMOVE",
     "track_marks_remove",
@@ -603,6 +617,7 @@ pub static REMOVE: ActionMeta = crate::actions::meta(
     "",
 );
 
+#[cfg(feature = "native")]
 pub static MARKER_ADD: ActionMeta = crate::actions::meta(
     "TRACK_MARKER_ADD",
     "track_marker_add",
@@ -612,6 +627,7 @@ pub static MARKER_ADD: ActionMeta = crate::actions::meta(
     "",
 );
 
+#[cfg(feature = "native")]
 pub static GRID_FROM_MIDI: ActionMeta = crate::actions::meta(
     "TRACK_GRID_FROM_MIDI",
     "track_grid_from_midi",
@@ -622,12 +638,14 @@ pub static GRID_FROM_MIDI: ActionMeta = crate::actions::meta(
 );
 
 /// Which track.
+#[cfg(feature = "native")]
 #[derive(Facet)]
 struct TrackArg {
     track: Option<String>,
 }
 
 /// A region to add.
+#[cfg(feature = "native")]
 #[derive(Facet)]
 struct AddArg {
     track: Option<String>,
@@ -639,6 +657,7 @@ struct AddArg {
 }
 
 /// A change to a region.
+#[cfg(feature = "native")]
 #[derive(Facet)]
 struct EditArg {
     track: Option<String>,
@@ -652,6 +671,7 @@ struct EditArg {
 }
 
 /// What to remove.
+#[cfg(feature = "native")]
 #[derive(Facet)]
 struct RemoveArg {
     track: Option<String>,
@@ -659,6 +679,7 @@ struct RemoveArg {
 }
 
 /// A marker to add.
+#[cfg(feature = "native")]
 #[derive(Facet)]
 struct MarkerArg {
     track: Option<String>,
@@ -667,6 +688,7 @@ struct MarkerArg {
 }
 
 /// Where to read the MIDI.
+#[cfg(feature = "native")]
 #[derive(Facet)]
 struct SpanArg {
     from: Option<String>,
@@ -674,6 +696,7 @@ struct SpanArg {
 }
 
 /// A region, as said.
+#[cfg(feature = "native")]
 #[derive(Facet)]
 struct RegionOut {
     id: String,
@@ -688,6 +711,7 @@ struct RegionOut {
 }
 
 /// A marker, as said.
+#[cfg(feature = "native")]
 #[derive(Facet)]
 struct MarkerOut {
     id: String,
@@ -697,6 +721,7 @@ struct MarkerOut {
 }
 
 /// One track's, as said.
+#[cfg(feature = "native")]
 #[derive(Facet)]
 struct TrackOut {
     track: String,
@@ -706,6 +731,7 @@ struct TrackOut {
 }
 
 /// `at` as the ruler writes it: `78.3`, `78.3.500`.
+#[cfg(feature = "native")]
 pub(crate) fn bar_of(
     daw: &daw::standalone::Standalone,
     project: &ProjectContext,
@@ -721,6 +747,7 @@ pub(crate) fn bar_of(
 }
 
 /// The track an action names, or the kit's folder.
+#[cfg(feature = "native")]
 fn track_of(
     daw: &daw::standalone::Standalone,
     project: &ProjectContext,
@@ -736,6 +763,7 @@ fn track_of(
 }
 
 /// One undo step around `f`.
+#[cfg(feature = "native")]
 fn step<T>(
     daw: &daw::standalone::Standalone,
     project: &ProjectContext,
@@ -748,6 +776,7 @@ fn step<T>(
     out
 }
 
+#[cfg(feature = "native")]
 fn said(
     daw: &daw::standalone::Standalone,
     project: &ProjectContext,
@@ -788,6 +817,7 @@ fn said(
     }
 }
 
+#[cfg(feature = "native")]
 pub fn register(list: &ActionList) {
     register_list(list);
     register_add(list);
@@ -797,6 +827,7 @@ pub fn register(list: &ActionList) {
     register_grid_from_midi(list);
 }
 
+#[cfg(feature = "native")]
 fn register_list(list: &ActionList) {
     list.register(&LIST, Effect::ReadOnly, |a: TrackArg| {
         let (daw, project) = crate::actions::song()?;
@@ -819,6 +850,7 @@ fn register_list(list: &ActionList) {
     });
 }
 
+#[cfg(feature = "native")]
 fn register_add(list: &ActionList) {
     list.register(&ADD, Effect::Mutating, |a: AddArg| {
         let (daw, project) = crate::actions::song()?;
@@ -854,6 +886,7 @@ fn register_add(list: &ActionList) {
     });
 }
 
+#[cfg(feature = "native")]
 fn register_edit(list: &ActionList) {
     list.register(&EDIT, Effect::Mutating, |a: EditArg| {
         let (daw, project) = crate::actions::song()?;
@@ -896,6 +929,7 @@ fn register_edit(list: &ActionList) {
     });
 }
 
+#[cfg(feature = "native")]
 fn register_remove(list: &ActionList) {
     list.register(&REMOVE, Effect::Mutating, |a: RemoveArg| {
         let (daw, project) = crate::actions::song()?;
@@ -913,6 +947,7 @@ fn register_remove(list: &ActionList) {
     });
 }
 
+#[cfg(feature = "native")]
 fn register_marker_add(list: &ActionList) {
     list.register(&MARKER_ADD, Effect::Mutating, |a: MarkerArg| {
         let (daw, project) = crate::actions::song()?;
@@ -933,6 +968,7 @@ fn register_marker_add(list: &ActionList) {
     });
 }
 
+#[cfg(feature = "native")]
 fn register_grid_from_midi(list: &ActionList) {
     list.register(&GRID_FROM_MIDI, Effect::Mutating, |a: SpanArg| {
         let (daw, project) = crate::actions::song()?;
@@ -993,6 +1029,7 @@ fn register_grid_from_midi(list: &ActionList) {
 }
 
 /// The beat at `t` (seconds a beat, and the beat's start).
+#[cfg(feature = "native")]
 fn beat_at(daw: &daw::standalone::Standalone, project: &ProjectContext, t: f64) -> (f64, f64) {
     use daw::service::TempoMap as _;
     let (bar, beat, _) = daw.time_to_musical(project.clone(), t);
@@ -1002,12 +1039,15 @@ fn beat_at(daw: &daw::standalone::Standalone, project: &ProjectContext, t: f64) 
 }
 
 /// How near a line a note must be to be on it, of the line's spacing…
+#[cfg(feature = "native")]
 const ON_A_LINE: f64 = 0.12;
 
 /// …and at most, seconds.
+#[cfg(feature = "native")]
 const ON_A_LINE_MOST: f64 = 0.012;
 
 /// The triplet grids, coarse to fine, as a whole note's division.
+#[cfg(feature = "native")]
 const TRIPLETS: [u32; 4] = [3, 6, 12, 24];
 
 /// The stretches of `notes` (seconds, in order) written on a triplet grid.
@@ -1020,6 +1060,7 @@ const TRIPLETS: [u32; 4] = [3, 6, 12, 24];
 /// lines counted from the song's start as a quantize counts them;
 /// `beat_at(t)` the beat holding `t`: `(length, start)`. `(start, end,
 /// division)`.
+#[cfg(feature = "native")]
 #[must_use]
 pub fn triplet_stretches(
     notes: &[f64],
