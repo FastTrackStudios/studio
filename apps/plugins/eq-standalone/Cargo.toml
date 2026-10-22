@@ -41,4 +41,7 @@ anyhow = { workspace = true }
 # auto-connect our input stream to the default sink's monitor — so the analyzer
 # shows live system audio with no manual patchbay routing (the approach cava
 # uses). cpal stays as a fallback for non-PipeWire systems / `FTS_EQ_CAPTURE=cpal`.
+# Linux-only: libspa-sys's build script needs libpipewire-0.3, which macOS and
+# Windows don't have, and it took `cargo check --workspace` down there.
+[target.'cfg(target_os = "linux")'.dependencies]
 pipewire = "0.10"
