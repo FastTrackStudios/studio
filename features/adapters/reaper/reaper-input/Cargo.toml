@@ -15,7 +15,8 @@ default = ["overlay-prewarm"]
 overlay-prewarm = []
 
 [dependencies]
-input = { workspace = true, features = ["dioxus"] }
+architect-input = { workspace = true, features = ["dioxus"] }
+keybinds = { workspace = true, features = ["dioxus"] }
 reaper-high = { workspace = true }
 reaper-medium = { workspace = true }
 reaper-low = { workspace = true }

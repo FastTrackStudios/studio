@@ -17,7 +17,7 @@
 //! may add to the shared scheme; it must not redefine it, which is what
 //! `input`'s own tests pin.
 
-use input::{ActionContext, ActionId, KeymapConfig, ScrollBindingTable, ScrollEvent};
+use architect_input::{InputContext, KeymapConfig, ScrollBindingTable, ScrollEvent};
 
 use crate::tools::Mods;
 
@@ -39,7 +39,7 @@ static TABLE: std::sync::OnceLock<ScrollBindingTable> = std::sync::OnceLock::new
 /// the editor with no scroll at all — a config typo should cost you your
 /// customisation, not the ability to scroll.
 fn build() -> ScrollBindingTable {
-    let mut config = match input::config::load_default_config() {
+    let mut config = match keybinds::load_default_config() {
         Ok(c) => c,
         // The defaults are `include_str!`d and tested, so this is
         // unreachable short of a bad edit to the crate itself.
@@ -49,11 +49,11 @@ fn build() -> ScrollBindingTable {
     // User overrides are a filesystem read, which a browser build has no
     // business attempting.
     #[cfg(not(target_arch = "wasm32"))]
-    if let Ok(Some(user)) = input::config::load_user_config() {
+    if let Ok(Some(user)) = keybinds::load_user_config() {
         config = KeymapConfig::merge(config, user);
     }
 
-    input::table_for_surface(&config, SURFACE).unwrap_or_default()
+    architect_input::table_for_surface(&config, SURFACE).unwrap_or_default()
 }
 
 fn table() -> &'static ScrollBindingTable {
@@ -67,8 +67,8 @@ static USER: std::sync::OnceLock<Option<ScrollBindingTable>> = std::sync::OnceLo
 fn user_table() -> Option<&'static ScrollBindingTable> {
     USER.get_or_init(|| {
         #[cfg(not(target_arch = "wasm32"))]
-        if let Ok(Some(user)) = input::config::load_user_config() {
-            return input::table_for_surface(&user, SURFACE).ok();
+        if let Ok(Some(user)) = keybinds::load_user_config() {
+            return architect_input::table_for_surface(&user, SURFACE).ok();
         }
         None
     })
@@ -77,18 +77,18 @@ fn user_table() -> Option<&'static ScrollBindingTable> {
 
 /// What the user's own keymap binds this gesture to on the roll, if
 /// anything: the override of the shared wheel.
-pub fn override_for(dx: f64, dy: f64, mods: Mods) -> Option<ActionId> {
+pub fn override_for(dx: f64, dy: f64, mods: Mods) -> Option<String> {
     let event = ScrollEvent {
         delta_x: dx,
         delta_y: dy,
-        modifiers: input::Modifiers {
+        modifiers: architect_input::Modifiers {
             ctrl: mods.ctrl,
             alt: mods.alt,
             shift: mods.shift,
             ..Default::default()
         },
     };
-    user_table()?.match_event(&event, &ActionContext::new())
+    user_table()?.match_event(&event, &InputContext::new())
 }
 
 /// One wheel notch, in pixels.
@@ -111,18 +111,18 @@ pub const PIXELS_PER_NOTCH: f64 = 20.0;
 /// `None` when nothing is bound, which the caller should treat as "leave
 /// the view alone" rather than falling back to a guess — an unbound
 /// gesture that still did something is how the schemes drifted apart.
-pub fn action_for(dx: f64, dy: f64, mods: Mods) -> Option<ActionId> {
+pub fn action_for(dx: f64, dy: f64, mods: Mods) -> Option<String> {
     let event = ScrollEvent {
         delta_x: dx,
         delta_y: dy,
-        modifiers: input::Modifiers {
+        modifiers: architect_input::Modifiers {
             ctrl: mods.ctrl,
             alt: mods.alt,
             shift: mods.shift,
             ..Default::default()
         },
     };
-    table().match_event(&event, &ActionContext::new())
+    table().match_event(&event, &InputContext::new())
 }
 
 /// A one-line summary of what the roll's wheel does: the shared wheel
@@ -142,7 +142,7 @@ pub fn hint() -> String {
         ),
     ] {
         let what = override_for(0.0, 1.0, mods).map_or(shared.to_owned(), |action| {
-            match action.0.as_str() {
+            match action.as_str() {
                 "view.vscroll" => "scrolls",
                 "view.hscroll" => "scrolls sideways",
                 "view.zoom_v" => "zooms pitch",
@@ -164,7 +164,7 @@ mod tests {
     use super::*;
 
     fn act(dx: f64, dy: f64, mods: Mods) -> Option<String> {
-        action_for(dx, dy, mods).map(|a| a.0)
+        action_for(dx, dy, mods)
     }
 
     fn mods(ctrl: bool, alt: bool, shift: bool) -> Mods {

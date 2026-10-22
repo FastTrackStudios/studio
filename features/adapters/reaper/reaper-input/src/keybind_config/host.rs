@@ -9,7 +9,7 @@
 
 use std::path::{Path, PathBuf};
 
-use input::proto::{
+use ::keybinds::proto::{
     InputConfigService, OverlayConfig, OverlayInfo, ProfileConfig, ProfileInfo, SectionConfig,
     WorkflowConfig, WorkflowInfo, WriteResult, kebab_to_title,
 };
@@ -233,7 +233,7 @@ impl InputConfigService for InputConfigHost {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use input::proto::KeybindDef;
+    use ::keybinds::proto::KeybindDef;
 
     fn temp_config_dir() -> PathBuf {
         let dir = std::env::temp_dir().join(format!(

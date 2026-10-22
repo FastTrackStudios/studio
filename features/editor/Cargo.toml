@@ -20,12 +20,12 @@ guitarpro = ["dep:guitarpro"]
 host = ["audio", "audio-daw", "dep:daw", "dep:studio", "dep:tracing", "ops"]
 host-standalone = ["daw/standalone-save"]
 ops = ["dep:rand", "dep:tracing"]
-paint = ["dep:anyrender", "dep:daw-ui", "dep:input", "dep:kurbo", "dep:parley", "dep:peniko", "dep:tracing"]
+paint = ["dep:anyrender", "dep:daw-ui", "dep:architect-input", "dep:keybinds", "dep:kurbo", "dep:parley", "dep:peniko", "dep:tracing"]
 pitch = ["dep:tune"]
 reaper = ["audio", "audio-daw", "daw", "dep:daw", "dep:studio", "studio/reaper", "studio/reaper-ui", "dep:dioxus", "dep:tracing", "host", "render", "ui", "ui-host"]
 render = ["tune/world"]
 standalone = ["audio", "audio-daw", "daw", "dep:daw", "dep:studio", "dep:daw-control", "dep:daw-ui", "dep:dioxus", "dep:dioxus-mcp-probe", "dep:dioxus-native", "dep:eyre", "dep:futures-timer", "dep:regex", "dep:serde_json", "dep:tempfile", "dep:tokio", "dep:tracing", "dep:tracing-subscriber", "guitarpro", "host", "host-standalone", "render", "ui", "ui-host"]
-ui = ["dep:anyrender", "dep:daw-ui", "dep:dioxus", "dep:input", "dep:kurbo", "dep:level", "dep:parley", "dep:peniko", "dep:tracing", "host", "ops", "paint"]
+ui = ["dep:anyrender", "dep:daw-ui", "dep:dioxus", "dep:architect-input", "dep:keybinds", "dep:kurbo", "dep:level", "dep:parley", "dep:peniko", "dep:tracing", "host", "ops", "paint"]
 ui-host = ["host"]
 ui-webview = ["dep:anyrender_vello_cpu", "dep:base64", "dep:futures-timer", "dep:png", "dep:serde_json", "dioxus/desktop"]
 webview = ["dioxus/desktop", "dioxus/launch", "ui", "ui-webview"]
@@ -56,7 +56,8 @@ fts-sample = { workspace = true, features = ["write"], optional = true }
 futures-timer = { version = "3", optional = true }
 guitarpro = { version = "=0.4.2", optional = true }
 hound = { version = "3.5", optional = true }
-input = { workspace = true, optional = true }
+architect-input = { workspace = true, optional = true }
+keybinds = { workspace = true, optional = true }
 keyflow = { workspace = true, optional = true }
 keyflow-proto = { workspace = true }
 kurbo = { workspace = true, optional = true }

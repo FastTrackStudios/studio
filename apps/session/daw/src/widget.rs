@@ -3597,7 +3597,7 @@ impl ArrangementWidget {
             return false;
         };
         // Escape abandons a half-typed sequence, and does only that.
-        if code == input::KeyCode::Escape && self.keys.is_pending() {
+        if code == architect_input::KeyCode::Escape && self.keys.is_pending() {
             self.keys.cancel();
             self.publish_which_key();
             return true;
@@ -3609,7 +3609,7 @@ impl ArrangementWidget {
         }
         let actions = self.keys.press(
             code,
-            input::Modifiers {
+            architect_input::Modifiers {
                 ctrl: held.ctrl,
                 alt: held.alt,
                 shift: held.shift,
@@ -3959,7 +3959,7 @@ impl ArrangementWidget {
         let was = self.keys.which_key();
         let hide = self.keys.release(
             code.clone(),
-            input::Modifiers {
+            architect_input::Modifiers {
                 ctrl: held.ctrl,
                 alt: held.alt,
                 shift: held.shift,
@@ -3967,7 +3967,7 @@ impl ArrangementWidget {
             },
         );
         let tool = std::mem::take(&mut self.pointing.borrow_mut().tool_used);
-        if hide || (tool && code == input::KeyCode::Character("z".into())) {
+        if hide || (tool && code == architect_input::KeyCode::Character("z".into())) {
             self.keys.cancel();
         }
         self.publish_which_key();

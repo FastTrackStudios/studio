@@ -17,7 +17,7 @@ use std::collections::{BTreeSet, HashMap};
 use std::hash::BuildHasher;
 
 use architect::action::{ActionInfo, Effect};
-use input::{KeyChord, KeyCode};
+use architect_input::{KeyChord, KeyCode};
 
 use crate::keys::Action;
 
@@ -477,7 +477,7 @@ impl Ids {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use input::Modifiers;
+    use architect_input::Modifiers;
 
     fn info(id: &str, group: &str, effect: Effect, params: Option<&str>) -> ActionInfo {
         ActionInfo {
