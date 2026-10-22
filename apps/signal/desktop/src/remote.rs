@@ -3,10 +3,14 @@
 //! The signal rig views (rig_view.rs) and the browser session player
 //! (session_remote_view.rs) all reach `fasttrackstudio --engine` the same
 //! way: one shared engine target (local WebSocket by default, a saved iroh
-//! endpoint id for p2p), one typed vox client per service established over
-//! its own link. This module owns that plumbing so every view connects
-//! identically — moved out of rig_view.rs when the session player joined.
+//! endpoint id for p2p) and **one connection to it**, taken from
+//! [`architect::connect::pool`]. Every typed vox client is a cheap view over
+//! that shared caller: the engine serves one `LayerRouter` at `/vox` (and
+//! over iroh) that dispatches every service by method id, so a page that
+//! opens a dozen clients opens one socket, not a dozen. This module owns
+//! that plumbing so every view connects identically.
 
+use architect::connect::{ConnectError, Endpoint, RootLane, pool};
 use architect::iroh_link::iroh;
 
 /// Where the engine core lives. Native: `SIGNAL_ENGINE_URL` (or legacy
@@ -118,6 +122,16 @@ impl EngineTarget {
             Self::Iroh(id) => format!("iroh {id}"),
         }
     }
+
+    /// The pool key for this target. Anonymous: the engine reads no
+    /// credential. iroh peers are keyed `iroh://<endpoint-id>`, the
+    /// convention `architect::connect` documents for non-WebSocket dials.
+    fn endpoint(&self) -> Endpoint {
+        match self {
+            Self::Ws(url) => Endpoint::url(url.clone()),
+            Self::Iroh(id) => Endpoint::url(format!("iroh://{id}")),
+        }
+    }
 }
 
 /// This device's iroh secret key — a stable identity per install.
@@ -170,8 +184,7 @@ async fn app_endpoint() -> Result<iroh::Endpoint, String> {
     Ok(CELL.get_or_init(|| ep).clone())
 }
 
-/// Establish one typed client over its own link (a vox caller is
-/// service-bound once constructed, so sibling services don't share one).
+/// A typed client for `target`, over the pooled connection.
 pub async fn establish<C: vox_core::FromVoxLane>(target: &EngineTarget) -> Option<C> {
     establish_verbose(target)
         .await
@@ -181,28 +194,49 @@ pub async fn establish<C: vox_core::FromVoxLane>(target: &EngineTarget) -> Optio
 
 /// [`establish`] with the failure reason kept — surfaces (e.g. in the
 /// phone's pack Library note) instead of vanishing into a debug log.
+///
+/// The client is a view over the shared caller: the first call per target
+/// dials (concurrent callers await that same dial), later calls reuse it,
+/// and a dead connection is evicted and re-dialled on the next call.
 pub async fn establish_verbose<C: vox_core::FromVoxLane>(
     target: &EngineTarget,
 ) -> Result<C, String> {
+    let caller = shared_caller(target).await.map_err(|e| e.to_string())?;
+    // The pool keeps the connection handle alive; the view needs none.
+    Ok(C::from_vox_lane(caller, None))
+}
+
+/// The pooled caller for `target`: WebSocket through the pool's own dial,
+/// iroh through [`dial_iroh`] with the same cache, single-flight and
+/// liveness check.
+async fn shared_caller(target: &EngineTarget) -> Result<vox_core::Caller, ConnectError> {
+    let endpoint = target.endpoint();
     match target {
-        EngineTarget::Ws(url) => {
-            let link = vox_websocket::WsLink::connect(url)
-                .await
-                .map_err(|e| format!("ws connect {url}: {e:?}"))?;
-            vox_core::initiator_on(link)
-                .establish::<C>()
-                .await
-                .map_err(|e| format!("vox handshake: {e:?}"))
-        }
+        EngineTarget::Ws(_) => pool().caller(&endpoint).await,
         EngineTarget::Iroh(id) => {
-            let ep = app_endpoint().await?;
-            let link = architect::iroh_link::connect(&ep, *id)
+            let id = *id;
+            pool()
+                .caller_with(&endpoint, move |endpoint| dial_iroh(endpoint, id))
                 .await
-                .map_err(|e| format!("iroh connect: {e}"))?;
-            vox_core::initiator_on(link)
-                .establish::<C>()
-                .await
-                .map_err(|e| format!("vox handshake (iroh): {e:?}"))
         }
     }
+}
+
+/// Dial the engine's iroh endpoint and complete the root vox handshake.
+async fn dial_iroh(endpoint: Endpoint, id: iroh::EndpointId) -> Result<RootLane, ConnectError> {
+    let dial_failed = |reason: String| ConnectError::Dial {
+        endpoint: endpoint.to_string(),
+        reason,
+    };
+    let ep = app_endpoint().await.map_err(dial_failed)?;
+    let link = architect::iroh_link::connect(&ep, id)
+        .await
+        .map_err(|e| dial_failed(format!("iroh connect: {e}")))?;
+    vox_core::initiator_on(link)
+        .establish::<RootLane>()
+        .await
+        .map_err(|e| ConnectError::Handshake {
+            endpoint: endpoint.to_string(),
+            reason: format!("{e:?}"),
+        })
 }
