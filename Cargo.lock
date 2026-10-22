@@ -600,6 +600,7 @@ version = "0.1.2"
 dependencies = [
  "architect-telemetry",
  "dioxus",
+ "dioxus-test",
  "dirs",
  "dock",
  "facet",

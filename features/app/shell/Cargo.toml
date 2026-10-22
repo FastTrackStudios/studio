@@ -27,5 +27,14 @@ dirs = "6"
 # The flight recorder (ring, crash log, flight log): native only.
 architect-telemetry = { workspace = true, features = ["flight"] }
 
+[dev-dependencies]
+# Headless layout + screenshot of the performer screen on blitz-dom
+# (tests/performer_screen.rs).
+dioxus-test.workspace = true
+
+[[test]]
+name = "performer_screen"
+required-features = ["ui"]
+
 [lints]
 workspace = true
