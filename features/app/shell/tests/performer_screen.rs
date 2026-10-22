@@ -228,7 +228,10 @@ fn every_control_in_the_new_panels_has_a_role_and_a_label() {
     for (name, app) in [("playing", playing as fn() -> Element), ("following", following)] {
         let doc = screen(app);
         let buttons = doc.query_all("button").immediately();
-        assert!(buttons.len() >= 8, "{name}: {} buttons", buttons.len());
+        // Playing: chevrons, pill, nudges, Speed, Level, ⋯. Following: the
+        // transport is the follow card (chevrons, pill, Take control).
+        let least = if name == "playing" { 8 } else { 4 };
+        assert!(buttons.len() >= least, "{name}: {} buttons", buttons.len());
         for b in buttons {
             let label = b.attribute("aria-label").unwrap_or_default();
             assert!(!label.trim().is_empty(), "{name}: a button without a label: {}", b.outer_html());

@@ -286,12 +286,12 @@ pub fn TransportNudgeRow(#[props(default)] more: Option<EventHandler<()>>) -> El
             }
             div { style: "position: relative; display: flex; flex-direction: column; min-width: 0;",
                 button {
-                    "aria-label": "Level, {pct(v.level)}",
+                    "aria-label": "Level, {pct(v.level)}%",
                     "aria-expanded": "{peek() == Some(Peek::Level)}",
                     style: "{cell(DOCK_ROW, peek() == Some(Peek::Level), true)}",
                     onclick: move |_| flip(peek, Peek::Level),
                     span { style: "font-size: 12px; font-weight: 750; letter-spacing: 0.08em; color: {INK_2};", "LEVEL" }
-                    span { style: "font-size: 18px; font-weight: 700; font-variant-numeric: tabular-nums;", "{pct(v.level)}" }
+                    span { style: "font-size: 18px; font-weight: 700; font-variant-numeric: tabular-nums;", "{pct(v.level)}%" }
                 }
                 if peek() == Some(Peek::Level) {
                     LevelPeek {
