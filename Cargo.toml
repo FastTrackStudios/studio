@@ -1529,10 +1529,10 @@ lto = "thin"
 codegen-units = 16
 
 # One architect for the whole graph: v0.9.22 (STA-259, STA-382, STA-395,
-# STA-435). Studio's own pins above are on v0.9.22, and so is keyflow from
-# v0.2.8 on. The patch stays because task@main's crates (editor-keyflow,
+# STA-435). Studio's own pins above are on v0.9.22. The patch stays
+# because keyflow v0.2.8 (v0.9.19) and task@main's crates (editor-keyflow,
 # ssg, the *-proto wire crates; locked at task 6555909, which pins v0.9.2;
-# task main itself pins v0.9.6) still sit on an older tag. It lifts them
+# task main itself pins v0.9.6) still sit on older tags. It lifts them
 # onto this one, so Cargo.lock holds exactly one architect source and vox
 # handshakes match.
 # Task dev is on v0.9.15+ (STA-386); drop this block once a task release
