@@ -19,6 +19,7 @@
 use std::path::PathBuf;
 
 use dioxus::prelude::*;
+use fts_account::ui::Phase;
 use lucide_dioxus::{
     Check, ChevronRight, ChevronsUpDown, CircleAlert, CircleCheck, CloudDownload, FileMusic,
     HardDriveDownload, House, Library, LibraryBig, Link, ListMusic, LogOut, Music, Pencil, Play,
@@ -30,7 +31,6 @@ use session_daw::song_stream::Offline;
 use session_daw::stream_set::{
     Downloading, LibrarySetlist, LibrarySong, ListKind, Remote, with_library,
 };
-use fts_account::ui::Phase;
 use session_daw::task_account::{self, Account, AccountLibrary as _};
 
 pub(super) const BG: &str = "#0f1012";
