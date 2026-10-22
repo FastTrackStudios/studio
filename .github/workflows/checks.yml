@@ -102,9 +102,8 @@ jobs:
     runs-on: [self-hosted, studio]
     timeout-minutes: 15
     # Fork PRs never run here: this is a public repo on self-hosted runners,
-    # and the jobs hold the inferno-control credential below. GitHub also
-    # withholds secrets from fork PRs, so this is the second lock, and it
-    # keeps fork code off the runners. Every other job needs this one, so
+    # and fork code must not run on them. GitHub also withholds secrets from
+    # fork PRs. Every other job needs this one, so
     # they skip with it, and `Build + test` fails the fork PR rather than
     # passing it unchecked. (push/schedule/workflow_dispatch have no
     # pull_request.)
@@ -123,15 +122,6 @@ jobs:
           # Full history: the plan needs both diff endpoints' ancestry, and
           # the release guard the PR's base and head.
           fetch-depth: 0
-      # features/patchbay -> inferno-net is a git dep on the private
-      # FastTrackStudios/inferno-control; give git/cargo a read-only token
-      # for that one repo before anything resolves the workspace (rail's
-      # plan runs cargo metadata).
-      - &inferno-auth
-        name: inferno-control read access
-        uses: ./.github/actions/inferno-control-auth
-        with:
-          token: ${{ secrets.INFERNO_CONTROL_TOKEN }}
       # Which commit to plan against, decided before the evidence restore
       # (its cache key is that commit).
       - name: Choose the comparison base
@@ -261,7 +251,6 @@ jobs:
       # the nightly, a dispatched branch.
       - &checkout
         uses: actions/checkout@v4
-      - *inferno-auth
       - &target-dir
         name: Persistent target dir
         run: |
@@ -376,7 +365,6 @@ jobs:
     if: ${{ needs.plan.outputs.skip != 'true' && needs.plan.outputs.wasm == 'true' }}
     steps:
       - *checkout
-      - *inferno-auth
       - *target-dir
       - *tailwind
       # The three web bundles deploy.yml ships (STA-366). The workspace check
@@ -422,7 +410,6 @@ jobs:
       TEST_FEATURES: session-desktop/cli,signal-desktop/cli,web-audio-worklet/guitar,web-audio-worklet/keys
     steps:
       - *checkout
-      - *inferno-auth
       - *target-dir
       # The test run compiles session-web.
       - *tailwind

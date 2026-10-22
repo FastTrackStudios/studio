@@ -56,13 +56,6 @@ jobs:
       - name: The tag is a release on main or release/v*
         if: ${{ startsWith(github.ref, 'refs/tags/v') }}
         run: bash scripts/release.sh tag-guard
-      # features/patchbay -> inferno-net is a git dep on the private
-      # FastTrackStudios/inferno-control; cargo needs read access to resolve the workspace.
-      - name: inferno-control read access
-        uses: ./.github/actions/inferno-control-auth
-        with:
-          token: ${{ secrets.INFERNO_CONTROL_TOKEN }}
-
       - name: Prepare persistent caches
         run: |
           # `CacheDirectory=` in the runner unit, or the home directory
