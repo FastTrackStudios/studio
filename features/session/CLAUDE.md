@@ -23,7 +23,7 @@ Apps must depend only on `session` (facade) or `session-ui`, never on internal c
 - Never hold std sync primitives across `.await`
 
 ### RPC Services
-- Service traits use `#[roam::service]`
+- Service traits use `#[architect::rpc]` (formerly `roam::service`)
 - Max 4 params per method (Facet constraint)
 - Use `Tx<T>` / `Rx<T>` for streaming
 
