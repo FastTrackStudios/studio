@@ -292,6 +292,7 @@ mod form {
         };
         rsx! {
             form {
+                novalidate: true,
                 style: "display:flex; flex-direction:column; gap:8px; width:100%; max-width:520px;",
                 onsubmit: move |e| {
                     e.prevent_default();
@@ -300,7 +301,12 @@ mod form {
                 div {
                     style: "display:flex; gap:8px; width:100%;",
                     input {
-                        r#type: "url",
+                        // Text, not `url`: the browser's own URL check would
+                        // refuse a link pasted without `https://` (which
+                        // `parse` takes) and say so in its own words, before
+                        // ours.
+                        r#type: "text",
+                        inputmode: "url",
                         name: "link",
                         "aria-label": "Task link",
                         placeholder: "https://task…/org/…/share/…",
@@ -497,6 +503,9 @@ mod tests {
         assert!(html.contains("data-empty-state=\"open-a-set\""), "{html}");
         assert!(html.contains("Open a set"), "{html}");
         assert!(html.contains("<input"), "{html}");
+        // The browser's own URL check stays out of it: a link without
+        // https:// is ours to read, and junk gets our sentence.
+        assert!(!html.contains("type=\"url\""), "{html}");
         assert!(html.contains("href=\"/demo\""), "{html}");
         assert!(!html.contains("did not open"), "{html}");
     }
