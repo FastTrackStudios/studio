@@ -56,7 +56,11 @@ read -r -a TARGETS <<<"${MAC_TARGETS:-$HOST_TARGET}"
 # must be numeric. (Releases are plain X.Y.Z: the one studio version.)
 VERSION="$(cargo pkgid -p "$PACKAGE" | sed 's/.*[#@]//')"
 SHORT_VERSION="${VERSION%%-*}"
-BUILD_NO="${BUILD_NO:-$(date +%Y%m%d%H%M)}"
+# The global Apple build number (scripts/release.sh header, "Apple
+# versions"): UTC unix time, the same sequence as Session's iOS uploads.
+BUILD_NO="${BUILD_NO:-$(bash "$ROOT/scripts/release.sh" build-number)}"
+[[ "$SHORT_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "ERROR: version '$VERSION' is not X.Y.Z"; exit 1; }
+[[ "$BUILD_NO" =~ ^[0-9]+$ ]] || { echo "ERROR: build number '$BUILD_NO' is not an integer"; exit 1; }
 echo "=== $PRODUCT_NAME $VERSION (build $BUILD_NO) for ${TARGETS[*]} ==="
 
 # ── Build ────────────────────────────────────────────────────────────────────

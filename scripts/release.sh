@@ -104,6 +104,28 @@
 #                                          the marketing version + build number
 #                                          into the release notes (one line per
 #                                          app; safe to run concurrently)
+#   scripts/release.sh build-number       the Apple build number (CFBundleVersion)
+#                                          for a build made now (see below)
+#
+# Apple versions. Every Apple bundle studio builds (Signal, Session, their
+# watchOS companion, Patchbay, iOS and macOS alike) carries:
+#   CFBundleShortVersionString = the workspace version = the tag's version
+#     (CalVer YY.M.MICRO, digits and dots only, as Apple requires);
+#   CFBundleVersion = ONE global, ever-increasing integer: the UTC unix time,
+#     in seconds, taken once when the build starts. Not a per-workflow run
+#     number: signal-ios, session-ios and any macOS build each have their own
+#     run_number, so those could not be one sequence per app, and they are far
+#     below the unix-time builds already uploaded to App Store Connect
+#     (~1.76e9 and up). The clock needs no state, never repeats for one app
+#     (one airlock builds an app's uploads one after the other) and never goes
+#     backwards. An embedded companion (the watch app) gets its parent's
+#     marketing version AND build number (App Store Connect requires both).
+#   The CI workflows stamp it inline (`date -u +%s`: a re-run of an older tag
+#   builds that tag's tree, which may not have this command); scripts that
+#   run in a checkout call `scripts/release.sh build-number`. Older local
+#   macOS builds of Session and Patchbay used YYYYMMDDHHMM; none of those
+#   reached App Store Connect, and the marketing version moving from 0.x to
+#   26.x keeps every bundle ascending regardless.
 #
 # See docs/agents/release-workflow.md for the whole procedure.
 set -euo pipefail
@@ -205,14 +227,26 @@ next_version() {
 # They are not released on their own: they are built from the one `v<version>`
 # tag. Their crates follow the workspace version; the helpers below read
 # that back so the guard and the TestFlight gate can prove it.
-IOS_APPS="signal session"
+#
+# The ONE table of Apple apps: everything below (the guard, tag-guard,
+# ios-resolve, ios-record, the Release's TestFlight block) reads it, and the
+# reusable workflow apple-testflight.yml takes the app key. Adding an app
+# (the coming single Studio app, app.fasttrackstudio.studio) or retiring one
+# is a line here plus a thin caller workflow.
+#   key      app crate manifest (version.workspace = true)  title    bundle id
+IOS_TABLE='
+signal   apps/signal/desktop/Cargo.toml                    Signal   app.fasttrackstudio.signal
+session  apps/session/desktop/Cargo.toml                   Session  app.fasttrackstudio.session
+'
+ios_field() { awk -v k="$1" -v f="$2" '$1 == k { print $f }' <<<"$IOS_TABLE"; } # <app> <column>
+IOS_APPS="$(awk 'NF { printf "%s%s", sep, $1; sep = " " }' <<<"$IOS_TABLE")"
 
 ios_check() {
-    case "${1:-}" in signal|session) ;; *) die "unknown iOS app '${1:-}' (signal or session)" ;; esac
+    [ -n "${1:-}" ] && [ -n "$(ios_field "$1" 2)" ] || die "unknown iOS app '${1:-}' (one of: $IOS_APPS)"
 }
-ios_manifest() { case "$1" in signal) echo apps/signal/desktop/Cargo.toml ;; session) echo apps/session/desktop/Cargo.toml ;; esac; }
-ios_title() { case "$1" in signal) echo Signal ;; session) echo Session ;; esac; }
-ios_bundle_id() { echo "app.fasttrackstudio.$1"; }
+ios_manifest() { ios_field "$1" 2; }
+ios_title() { ios_field "$1" 3; }
+ios_bundle_id() { ios_field "$1" 4; }
 
 # The version an app crate resolves to at a revision (default: working
 # tree): the workspace version when it says `version.workspace = true`, else
@@ -293,6 +327,7 @@ require_green() { # <sha>
 }
 
 cmd_version() { version_at; }
+cmd_build_number() { date -u +%s; }
 cmd_next() { git fetch --quiet --tags origin 2>/dev/null || note "offline: next version from the local tags"; next_version; }
 
 cmd_notes() { # [VERSION]
@@ -991,7 +1026,7 @@ tf_render() { # <tag> <version> <body> [<app> <newline>]
     local a l
     echo "$TF_BEGIN"
     echo "### iOS TestFlight"
-    echo "Marketing version **$2** (CFBundleShortVersionString) == this release, \`$1\`, for Signal and Session alike. One line per app, its latest upload."
+    echo "Marketing version **$2** (CFBundleShortVersionString) == this release, \`$1\`, for every app. One line per app, its latest upload; the build number (CFBundleVersion) is the upload's UTC unix time, one ever-increasing sequence across iOS and macOS."
     for a in $IOS_APPS; do
         if [ "$a" = "${4:-}" ]; then
             echo "${5:-}"
@@ -1095,6 +1130,7 @@ cmd_ios_resolve() { # <app> <tag>
     re='^v[0-9]+\.[0-9]+\.[0-9]+$'
     [[ "$tag" =~ $re ]] || die "tag '$tag' does not match $re: TestFlight uploads only from a release tag"
     v="${tag#v}"
+    is_calver "$v" || die "tag '$tag' is not CalVer vYY.M.MICRO (no zero padding): the marketing version must be a studio release version"
     cv="$(crate_version_at "$app")"
     [ "$cv" = "$v" ] \
         || die "$(ios_manifest "$app") says version '${cv:-none}' but the tag is $tag ($v): the marketing version is the tag's, so the crate must carry it (version.workspace = true, released with just release-prepare)"
@@ -1127,14 +1163,14 @@ cmd_ios_release() { # <tag>
 
 # The app's line once its build is uploaded; earlier builds of the same
 # version (a re-run) stay listed at its end.
-ios_record_line() { # <app> <build> <run-url> <prior line>
-    local app="$1" build="$2" run="$3" prior="$4" cur old list="" line
-    cur="$(sed -n 's/^.*: build \([0-9][0-9]*\),.*$/\1/p' <<<"$prior")"
+ios_record_line() { # <app> <marketing> <build> <run-url> <prior line>
+    local app="$1" mv="$2" build="$3" run="$4" prior="$5" cur old list="" line
+    cur="$(sed -n 's/^.*[:,] build \([0-9][0-9]*\),.*$/\1/p' <<<"$prior")"
     old="$(sed -n 's/^.*(earlier builds: \([0-9, ]*\))$/\1/p' <<<"$prior")"
     if [ "$cur" = "$build" ]; then echo "$prior"; return 0; fi
     [ -z "$cur" ] || list="$cur"
     [ -z "$old" ] || list="${list:+$list, }$old"
-    line="- $(ios_title "$app") (\`$(ios_bundle_id "$app")\`): build $build, $(date -u +%FT%TZ)${run:+, [run]($run)}"
+    line="- $(ios_title "$app") (\`$(ios_bundle_id "$app")\`): version $mv, build $build, $(date -u +%FT%TZ)${run:+, [run]($run)}"
     [ -z "$list" ] || line="$line (earlier builds: $list)"
     echo "$line"
 }
@@ -1150,6 +1186,7 @@ cmd_ios_record() { # <app> <tag> <marketing> <build> [run-url]
     local body prior line keep out tries=0 max="${RECORD_TRIES:-6}"
     ios_check "$app"
     [ "$tag" = "v$mv" ] || die "marketing version '$mv' is not the version of tag '$tag'"
+    is_calver "$mv" || die "marketing version '$mv' is not CalVer YY.M.MICRO"
     [[ "$build" =~ ^[0-9]+$ ]] || die "build number '$build' is not a number"
     release_dedupe "$tag"   # an edit of a tag with several Releases is a 422
     while :; do
@@ -1157,8 +1194,8 @@ cmd_ios_record() { # <app> <tag> <marketing> <build> [run-url]
         body="$(gh release view "$tag" --repo "$REPO" --json body --jq .body)" \
             || die "no GitHub Release for $tag (TestFlight needs one: ios-release)"
         prior="$(tf_app_line "$body" "$app")"
-        if ! grep -Fq -- "): build $build," <<<"$prior"; then
-            line="$(ios_record_line "$app" "$build" "$run" "$prior")"
+        if ! grep -Fq -- "version $mv, build $build," <<<"$prior"; then
+            line="$(ios_record_line "$app" "$mv" "$build" "$run" "$prior")"
             keep="$(printf '%s\n' "$body" | sed "\\#$TF_BEGIN#,\\#$TF_END#d" | sed -e :a -e '/^\n*$/{$d;N;ba' -e '}')"
             out="$(mktemp)"
             {
@@ -1171,7 +1208,7 @@ cmd_ios_record() { # <app> <tag> <marketing> <build> [run-url]
         sleep "${RECORD_SETTLE:-4}"
         body="$(gh release view "$tag" --repo "$REPO" --json body --jq .body)" \
             || die "no GitHub Release for $tag"
-        if grep -Fq -- "): build $build," <<<"$(tf_app_line "$body" "$app")"; then
+        if grep -Fq -- "version $mv, build $build," <<<"$(tf_app_line "$body" "$app")"; then
             note "recorded on $tag: $app marketing $mv, build $build"
             return 0
         fi
@@ -1199,5 +1236,6 @@ case "${1:-}" in
     ios-resolve) shift; cmd_ios_resolve "$@" ;;
     ios-release) shift; cmd_ios_release "$@" ;;
     ios-record) shift; cmd_ios_record "$@" ;;
+    build-number) shift; cmd_build_number "$@" ;;
     *) sed -n '2,/^set -euo/p' "$0" | sed '$d' | sed 's/^# \{0,1\}//'; exit 2 ;;
 esac

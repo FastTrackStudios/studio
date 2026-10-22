@@ -7434,7 +7434,7 @@ dependencies = [
 
 [[package]]
 name = "fts-patchbay"
-version = "0.1.0"
+version = "0.1.2"
 dependencies = [
  "architect",
  "architect-telemetry",
@@ -17812,7 +17812,7 @@ dependencies = [
 
 [[package]]
 name = "signal-mobile"
-version = "0.1.0"
+version = "0.1.2"
 dependencies = [
  "android-activity",
  "architect",

@@ -23,8 +23,13 @@ BIN="$REPO/target/release/fts-clap-host"
 
 [ -x "$BIN" ] || { echo "no host binary at $BIN — run: cargo build --release -p fts-clap-host" >&2; exit 1; }
 
+# A dev harness, not a shipped app, but it says which build it is like every
+# other bundle: the workspace version and the global Apple build number
+# (scripts/release.sh header, "Apple versions").
+VERSION="$(bash "$REPO/scripts/release.sh" version)"
+BUILD_NO="$(bash "$REPO/scripts/release.sh" build-number)"
 mkdir -p "$APP/Contents/MacOS"
-cat > "$APP/Contents/Info.plist" <<'PLIST'
+cat > "$APP/Contents/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0"><dict>
@@ -32,7 +37,8 @@ cat > "$APP/Contents/Info.plist" <<'PLIST'
 <key>CFBundleIdentifier</key><string>com.fasttrackstudio.pluginhost</string>
 <key>CFBundleName</key><string>FTSPluginHost</string>
 <key>CFBundlePackageType</key><string>APPL</string>
-<key>CFBundleShortVersionString</key><string>1.0</string>
+<key>CFBundleShortVersionString</key><string>$VERSION</string>
+<key>CFBundleVersion</key><string>$BUILD_NO</string>
 <key>NSHighResolutionCapable</key><true/>
 <key>LSEnvironment</key><dict>
   <key>FTS_HOST_TRACE</key><string>1</string>

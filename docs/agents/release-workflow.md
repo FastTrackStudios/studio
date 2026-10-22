@@ -118,13 +118,22 @@ changelog section, its commit is on `main` or a `release/v*` line, and
   or a fork. One tag starts **both** `signal-ios` and `session-ios`.
 - **Marketing version (CFBundleShortVersionString) = the tag's version**
   (`v26.10.3` → `26.10.3`) for both apps, and each app crate must resolve
-  to it. The build number (CFBundleVersion) is the unix time of the upload.
+  to it. Every app crate is `version.workspace = true` (Patchbay and
+  signal-mobile too), and every Apple bundle (Signal, Session, the watch
+  companion, Patchbay; iOS and macOS) is stamped from it.
+- **Build number (CFBundleVersion)**: one global, ever-increasing integer
+  per app across iOS and macOS, the UTC unix time when the build starts
+  (`scripts/release.sh build-number`; the iOS workflows stamp it inline).
+  Not a workflow run number: each workflow has its own, and they are far
+  below the unix-time builds already in App Store Connect. An embedded
+  companion (the watch app) carries its parent's marketing version and
+  build number.
 - **One GitHub Release** per tag (title `studio 26.10.3`, the changelog
   section as notes). After each upload that app's workflow writes its
   marketing version, build number and run URL into the Release notes, one
   line per app; the two edit concurrently, so each re-reads and retries.
 - `signal-ios` / `session-ios` refuse a tag that is not
-  `^v[0-9]+\.[0-9]+\.[0-9]+$`, a crate or workspace version that differs, a
+  `^v[0-9]+\.[0-9]+\.[0-9]+$` (and CalVer `vYY.M.MICRO`), a crate or workspace version that differs, a
   missing changelog section, a commit on neither `main` nor `release/v*`, or
   a red `Build + test`. `workflow_dispatch` with `dry_run` stops after
   those checks.

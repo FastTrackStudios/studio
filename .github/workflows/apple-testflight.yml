@@ -1,0 +1,287 @@
+# Apple TestFlight, reusable: resolve a release tag, build + sign + upload
+# one app, record it on the tag's GitHub Release. Called by one thin
+# workflow per app (signal-ios.yml, session-ios.yml today; the coming single
+# Studio app, app.fasttrackstudio.studio, is one more caller with its own
+# inputs and a line in scripts/release.sh's IOS_TABLE).
+#
+# Everything about versions lives in scripts/release.sh, not here:
+#   ios-resolve   the tag is ^v[0-9]+\.[0-9]+\.[0-9]+$ AND CalVer vYY.M.MICRO,
+#                 == v + [workspace.package] version (the marketing
+#                 version), the app crate is on it, CHANGELOG.md has the
+#                 section, the commit is on main or release/v*, `Build +
+#                 test` is green
+#   ios-release   the tag's one GitHub Release exists
+#   ios-record    one line per app (marketing version, build number, run
+#                 URL) in the Release notes; re-reads and retries, since the
+#                 apps record concurrently
+# The build number (CFBundleVersion) is the app's one global, ever-increasing
+# integer across iOS and macOS: the UTC unix time when the build starts
+# (scripts/release.sh header, "Apple versions"). An embedded companion gets
+# the same marketing version and build number.
+#
+# dry_run stops after resolve: validated, nothing built or uploaded.
+#
+# The upload runs on the org-level self-hosted macOS runner `airlock`, which
+# holds its own credentials (~/.appstoreconnect + fts-build.keychain), so
+# this needs no GitHub secrets beyond the telemetry ones (callers pass
+# `secrets: inherit`). airlock is one runner: the apps' uploads of a tag run
+# one after the other.
+
+name: apple-testflight
+
+on:
+  workflow_call:
+    inputs:
+      app:
+        description: "App key in scripts/release.sh IOS_TABLE (signal, session, ...)"
+        required: true
+        type: string
+      title:
+        description: "Display title for summaries (Signal, Session, ...)"
+        required: true
+        type: string
+      tag:
+        description: "The release tag vYY.M.MICRO"
+        required: true
+        type: string
+      dry_run:
+        description: "Validate the tag and stop before building or uploading"
+        required: false
+        type: boolean
+        default: false
+      deploy_script:
+        description: "deploy-testflight.sh to run (from the repo root)"
+        required: true
+        type: string
+      dx_package:
+        required: true
+        type: string
+      dx_app_dir:
+        required: true
+        type: string
+      dx_features:
+        required: true
+        type: string
+      bundle_id:
+        description: "Must match the app's Dioxus.toml and IOS_TABLE"
+        required: true
+        type: string
+      display_name:
+        description: "Home-screen name (CFBundleDisplayName)"
+        required: true
+        type: string
+      profile_name:
+        description: "The app's own App Store provisioning profile"
+        required: true
+        type: string
+      icons_dir:
+        description: "Asset catalog, relative to the repo root"
+        required: true
+        type: string
+      frame_plugins:
+        description: "frame's examples/plugins on the runner (Signal's faces); empty when unused"
+        required: false
+        type: string
+        default: ""
+
+permissions:
+  contents: read
+
+env:
+  TAG: ${{ inputs.tag }}
+  APP: ${{ inputs.app }}
+  TITLE: ${{ inputs.title }}
+
+jobs:
+  resolve:
+    name: Resolve the tag
+    # Never a fork: its tag is not this repo's release.
+    if: ${{ github.repository == 'FastTrackStudios/studio' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      # The GitHub Release is created here when the tag has none yet.
+      contents: write
+      # ios-resolve reads the tagged commit's `Build + test` check.
+      checks: read
+    outputs:
+      version: ${{ steps.resolve.outputs.version }}
+      sha: ${{ steps.resolve.outputs.sha }}
+    steps:
+      - name: The tag is vX.Y.Z
+        run: |
+          if [[ ! "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::'$TAG' is not a release tag (^v[0-9]+\.[0-9]+\.[0-9]+$): TestFlight uploads only from the studio release tag"
+            exit 1
+          fi
+      - uses: actions/checkout@v4
+        with:
+          ref: refs/tags/${{ env.TAG }}
+          fetch-depth: 0
+      - name: CalVer tag = workspace version = marketing version, on main or release/v*, changelog section, green
+        id: resolve
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash scripts/release.sh ios-resolve "$APP" "$TAG"
+      - name: A GitHub Release exists for the tag
+        if: ${{ !inputs.dry_run }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash scripts/release.sh ios-release "$TAG"
+      - name: Summary
+        env:
+          VERSION: ${{ steps.resolve.outputs.version }}
+          SHA: ${{ steps.resolve.outputs.sha }}
+          DRY_RUN: ${{ inputs.dry_run }}
+        run: |
+          {
+            echo "### $TITLE iOS TestFlight: $TAG"
+            echo "- marketing version: \`$VERSION\` (the tag's)"
+            echo "- commit: \`${SHA:0:12}\` (on main or a release/v* line)"
+            if [ "$DRY_RUN" = true ]; then
+              echo "- **dry run**: stopped before the build and the upload"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  testflight:
+    name: Build, sign, upload
+    needs: resolve
+    if: ${{ !inputs.dry_run }}
+    runs-on: [self-hosted, macos, airlock]
+    # Turn a missing runner into a red X within the hour. Without it a job
+    # with no available runner sits QUEUED and is eventually cancelled,
+    # which reads as "cancelled" rather than "failed" and alerts nobody.
+    timeout-minutes: 90
+    outputs:
+      build_no: ${{ steps.stamp.outputs.build_no }}
+    steps:
+      - name: Preflight — build volume mounted
+        run: |
+          if [ ! -d /Volumes/build-disk ]; then
+            echo "ERROR: /Volumes/build-disk is not mounted on this runner." >&2
+            exit 1
+          fi
+          df -h /Volumes/build-disk | tail -1
+
+      # The commit `resolve` checked, not whatever the ref points at now.
+      # clean:false keeps target/ between runs so cargo builds incrementally.
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.resolve.outputs.sha }}
+          clean: false
+
+      # The guitar rig's release build refuses to compile without its captures
+      # (features/rigs/guitar/build.rs). They are in the private rig-models repo,
+      # which airlock keeps one clone of beside its other projects. The clone is
+      # fast-forwarded to origin/main first, so a capture pushed to rig-models
+      # ships in the next build; a failed fetch fails the job rather than
+      # building with stale captures. https, so the fts-forge credential helper
+      # authenticates (airlock has no GitHub ssh key).
+      - name: Rig captures (rig-models) linked into the tree
+        # Inline, not a script in the tree: a re-run of an older tag builds that
+        # tag's sources, which do not have one.
+        run: |
+          set -euo pipefail
+          src=/Volumes/build-disk/development/rig-models
+          url=https://github.com/FastTrackStudios/rig-models.git
+          if [ -d "$src/.git" ]; then
+            before="$(git -C "$src" rev-parse --short HEAD)"
+            git -C "$src" fetch --quiet origin \
+              || { echo "::error::could not fetch rig-models into $src; not building with stale captures"; exit 1; }
+            git -C "$src" merge --ff-only --quiet origin/main \
+              || { echo "::error::$src cannot fast-forward to origin/main (local commits or changes?); not building with stale captures"; exit 1; }
+            echo "rig-models $before -> $(git -C "$src" rev-parse --short HEAD)"
+          else
+            git clone --quiet "$url" "$src" \
+              || { echo "::error::could not clone $url into $src"; exit 1; }
+            echo "rig-models cloned at $(git -C "$src" rev-parse --short HEAD)"
+          fi
+          [ -d "$src/guitar" ] && [ -d "$src/bass" ] || { echo "::error::no rig-models clone at $src"; exit 1; }
+          while read -r repo from to; do
+            [[ -z $repo || $repo == \#* || $repo != rig-models ]] && continue
+            to="${to:-$from}"
+            n="$(find -L "$src/$from" -type f \( -name '*.nam' -o -name '*.wav' \) | wc -l | tr -d ' ')"
+            [ "$n" -gt 0 ] || { echo "::error::$src/$from holds no captures"; exit 1; }
+            mkdir -p "$(dirname "$to")"
+            if [ -d "$to" ] && [ ! -L "$to" ]; then rmdir "$to"; fi
+            ln -sfn "$src/$from" "$to"
+            echo "linked $to -> $src/$from ($n captures)"
+          done < assets.txt
+          echo "rig-models at $(git -C "$src" rev-parse --short HEAD 2>/dev/null || echo unknown)"
+
+      # CFBundleVersion has to climb with every upload: the UTC unix time,
+      # taken once, here, so the number built is the number recorded. Inline
+      # (the same rule as `scripts/release.sh build-number`): a re-run of an
+      # older tag checks out a tree that may not have that command.
+      - name: Build number
+        id: stamp
+        run: |
+          build_no="$(date -u +%s)"
+          echo "build_no=$build_no" >> "$GITHUB_OUTPUT"
+          echo "$TITLE $TAG: marketing version ${{ needs.resolve.outputs.version }}, build $build_no"
+
+      - name: Build, sign, and upload to TestFlight
+        env:
+          KEYCHAIN: fts-build.keychain
+          KEYCHAIN_PW: fts-build
+          # The tag's version, from `resolve`; deploy-testflight.sh refuses to
+          # run without one. There is no default: a build is a release's.
+          MARKETING_VER: ${{ needs.resolve.outputs.version }}
+          BUILD_NO: ${{ steps.stamp.outputs.build_no }}
+          # The release Xcode xcode-select points at (27, on macOS 27) builds,
+          # compiles the icon catalog, signs and uploads: App Store Connect
+          # refuses a beta SDK (90534), and actool must match the macOS.
+          # ── Telemetry ────────────────────────────────────────────────
+          # Baked at build time via option_env! in architect-telemetry: a
+          # shipped app has nobody to set env vars for it, and the exporter
+          # is built at process start -- before sign-in -- so a session
+          # token cannot be the credential. Both empty => the app is
+          # telemetry-free, which is the local-first default.
+          TASK_OTLP_ENDPOINT: ${{ vars.TASK_OTLP_ENDPOINT }}
+          TASK_OTLP_TOKEN: ${{ secrets.TASK_OTLP_TOKEN }}
+          TASK_SENTRY_DSN: ${{ secrets.TASK_SENTRY_DSN }}
+          # ── Product identity (the caller's) ──────────────────────────
+          DX_PACKAGE: ${{ inputs.dx_package }}
+          DX_APP_DIR: ${{ inputs.dx_app_dir }}
+          DX_FEATURES: ${{ inputs.dx_features }}
+          FRAME_PLUGINS: ${{ inputs.frame_plugins }}
+          DX_BUNDLE_ID: ${{ inputs.bundle_id }}
+          APP_DISPLAY_NAME: ${{ inputs.display_name }}
+          PROFILE_NAME: ${{ inputs.profile_name }}
+          ICONS_DIR: ${{ github.workspace }}/${{ inputs.icons_dir }}
+          DEPLOY_SCRIPT: ${{ inputs.deploy_script }}
+        run: |
+          set -euo pipefail
+          export PATH="/nix/var/nix/profiles/default/bin:$PATH"
+          export NIX=/nix/var/nix/profiles/default/bin/nix
+          bash "$DEPLOY_SCRIPT"
+
+      - name: Summary
+        if: always()
+        env:
+          VERSION: ${{ needs.resolve.outputs.version }}
+          BUILD_NO: ${{ steps.stamp.outputs.build_no }}
+          RESULT: ${{ job.status }}
+        run: |
+          echo "### $TITLE iOS TestFlight" >> "$GITHUB_STEP_SUMMARY"
+          echo "\`$TAG\` (\`$(git rev-parse --short HEAD)\`): marketing version \`$VERSION\`, build \`$BUILD_NO\`: $RESULT." >> "$GITHUB_STEP_SUMMARY"
+
+  record:
+    name: Record on the GitHub Release
+    needs: [resolve, testflight]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.resolve.outputs.sha }}
+      # So the Release and the TestFlight build can be traced to each other.
+      - name: Marketing version + build number into the release notes
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.resolve.outputs.version }}
+          BUILD_NO: ${{ needs.testflight.outputs.build_no }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: bash scripts/release.sh ios-record "$APP" "$TAG" "$VERSION" "$BUILD_NO" "$RUN_URL"

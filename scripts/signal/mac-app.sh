@@ -67,7 +67,13 @@ if [ -f "$icon" ]; then
     iconutil -c icns "$set_dir" -o "$app/Contents/Resources/Signal.icns"
 fi
 
-version=$(sed -n 's/^version = "\(.*\)"/\1/p' apps/signal/desktop/Cargo.toml | head -1)
+# The one studio version (signal-desktop is `version.workspace = true`, so
+# its own Cargo.toml has no version line) and the global Apple build number
+# (scripts/release.sh header, "Apple versions"). No fallback: a bundle that
+# says 0.0.1 is a bundle nobody can trace.
+version=$(bash scripts/release.sh version)
+build=$(bash scripts/release.sh build-number)
+[[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "workspace version '$version' is not X.Y.Z (Apple takes digits and dots only)" >&2; exit 1; }
 cat > "$app/Contents/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -79,8 +85,8 @@ cat > "$app/Contents/Info.plist" <<PLIST
     <key>CFBundleExecutable</key><string>Signal</string>
     <key>CFBundleIconFile</key><string>Signal</string>
     <key>CFBundlePackageType</key><string>APPL</string>
-    <key>CFBundleShortVersionString</key><string>${version:-0.0.1}</string>
-    <key>CFBundleVersion</key><string>$(date +%s)</string>
+    <key>CFBundleShortVersionString</key><string>$version</string>
+    <key>CFBundleVersion</key><string>$build</string>
     <key>LSMinimumSystemVersion</key><string>13.0</string>
     <key>NSHighResolutionCapable</key><true/>
     <key>LSApplicationCategoryType</key><string>public.app-category.music</string>

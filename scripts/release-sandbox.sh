@@ -249,6 +249,11 @@ export GITHUB_OUTPUT="$S/gho"; : > "$GITHUB_OUTPUT"
 for a in signal session; do expect_ok "ios-resolve $a v26.10.0" R ios-resolve "$a" v26.10.0; done
 expect_out "  marketing version output" "$GITHUB_OUTPUT" '^version=26\.10\.0$'
 for t in v26.10 26.10.0 v26.10.0-rc.1 V26.10.0 signal-v26.10.0; do expect_fail "ios-resolve refuses '$t'" R ios-resolve signal "$t"; done
+expect_fail "ios-resolve: an app not in the table" R ios-resolve patchbay v26.10.0
+for t in v26.01.0 v26.13.0 v0.1.2 v2026.10.0; do
+  expect_fail "ios-resolve refuses non-CalVer '$t'" R ios-resolve signal "$t"
+  grep -q 'is not CalVer' "$S/last.out" && ok "  ...as not CalVer" || bad "  ...refused for another reason"
+done
 # a tag whose versions and changelog are right, on a commit no release line has
 git switch -q -c t/stray v26.10.0; sed -i 's/26\.10\.0/26.10.9/g' Cargo.toml CHANGELOG.md; git commit -qam "chore(release): v26.10.9"; git tag v26.10.9
 expect_fail "ios-resolve: a commit on neither main nor release/v*" R ios-resolve signal v26.10.9
@@ -266,6 +271,13 @@ expect_ok "ios-record signal" R ios-record signal v26.10.0 26.10.0 1760000001 ht
 expect_ok "ios-record session" R ios-record session v26.10.0 26.10.0 1760000002
 expect_out "notes: Signal's build" "$S/releases/v26.10.0.body" '^- Signal .*build 1760000001, '
 expect_out "notes: Session's build" "$S/releases/v26.10.0.body" '^- Session .*build 1760000002, '
+expect_out "notes: Signal's line has the marketing version" "$S/releases/v26.10.0.body" '^- Signal .*: version 26\.10\.0, build 1760000001, .*\[run\]\(https://github.com/x/y/actions/runs/1\)'
+expect_ok "ios-record signal again (a re-run)" R ios-record signal v26.10.0 26.10.0 1760000003
+expect_out "notes: the re-run's build, the earlier one kept" "$S/releases/v26.10.0.body" '^- Signal .*: version 26\.10\.0, build 1760000003, .*\(earlier builds: 1760000001\)$'
+expect_out "notes: Session's line untouched by Signal's re-run" "$S/releases/v26.10.0.body" '^- Session .*: version 26\.10\.0, build 1760000002, '
+expect_fail "ios-record: a build number that is not a number" R ios-record signal v26.10.0 26.10.0 26.10.0
+b1="$(R build-number)"; b2="$(R build-number)"
+[[ "$b1" =~ ^[0-9]{10,}$ ]] && [ "$b2" -ge "$b1" ] && [ "$b1" -gt 1760000000 ] && ok "build-number: unix time, never decreasing ($b1)" || bad "build-number: '$b1' then '$b2'"
 expect_fail "ios-record: marketing version != tag" R ios-record signal v26.10.0 26.10.1 1
 
 echo "=== the next release in the same month: 26.10.1, then 26.10.2"

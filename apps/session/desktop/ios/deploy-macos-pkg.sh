@@ -59,14 +59,15 @@
 #   KEYCHAIN=fts-build.keychain KEYCHAIN_PW=fts-build ./ios/deploy-macos-pkg.sh
 #
 # Env knobs:
-#   MARKETING_VER=0.1.0   version baked into the pkg (default: app crate version)
+#   MARKETING_VER=26.10.0 version baked into the pkg (default: the workspace version)
 #   SKIP_BUILD=1          reuse existing target/*.app + target/bundled
 #   PKG_UNSIGNED=1        skip signing + notarization (local structure testing;
 #                         produces an installable-but-unsigned .pkg)
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
+# The repo root: this script is apps/<app>/desktop/ios/, four levels down.
+ROOT="$(cd "$SCRIPT_DIR/../../../.." && pwd)"
 cd "$ROOT"
 
 # Which product's installer to build. Each ships its OWN .pkg — they are
@@ -172,11 +173,9 @@ if [ "$INCLUDE_PLUGINS" = "1" ]; then
     echo "plugins: $BUNDLED"
 fi
 
-VERSION="${MARKETING_VER:-}"
-if [ -z "$VERSION" ]; then
-    VERSION="$("$NIX" develop "$ROOT" --accept-flake-config -c cargo pkgid -p fasttrackstudio 2>/dev/null | tail -1 | sed 's/.*[#@]//')"
-fi
-[ -n "$VERSION" ] || { echo "ERROR: could not determine a version (set MARKETING_VER)"; exit 1; }
+# The one studio version (scripts/release.sh header, "Apple versions").
+VERSION="${MARKETING_VER:-$(bash "$ROOT/scripts/release.sh" version)}"
+[[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "ERROR: version '$VERSION' is not X.Y.Z (set MARKETING_VER, or fix [workspace.package] version)"; exit 1; }
 echo "version: $VERSION"
 
 WORK="$(mktemp -d)"

@@ -55,8 +55,11 @@ fi
 echo "==> cargo build --release"
 cargo build --release -p fts-patchbay --bin fts-patchbay --bin patchbay ${features[@]+"${features[@]}"}
 
-version="$(sed -n 's/^version = "\(.*\)"/\1/p' apps/patchbay/Cargo.toml | head -1)"
-build="$(date -u +%Y%m%d%H%M)"
+# The one studio version (fts-patchbay is `version.workspace = true`) and the
+# global Apple build number: scripts/release.sh header, "Apple versions".
+version="$(bash scripts/release.sh version)"
+build="$(bash scripts/release.sh build-number)"
+[[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "macos-app: workspace version '$version' is not X.Y.Z" >&2; exit 1; }
 app="target/macos/Patchbay.app"
 rm -rf "$app"
 mkdir -p "$app/Contents/MacOS" "$app/Contents/Helpers" "$app/Contents/Resources"

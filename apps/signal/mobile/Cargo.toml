@@ -1,6 +1,6 @@
 [package]
 name = "signal-mobile"
-version = "0.1.0"
+version.workspace = true
 edition = "2024"
 license.workspace = true
 description = "Signal on a phone — the guitar rig's phone pages as a remote of a signal engine, on Blitz"

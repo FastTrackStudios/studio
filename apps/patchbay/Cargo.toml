@@ -1,6 +1,6 @@
 [package]
 name = "fts-patchbay"
-version = "0.1.0"
+version.workspace = true
 edition = "2024"
 license.workspace = true
 description = "FTS Patchbay: the PipeWire studio-routing app, its agent CLI, and its browser remote"

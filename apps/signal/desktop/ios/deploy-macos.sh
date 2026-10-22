@@ -13,7 +13,8 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
+# The repo root: this script is apps/<app>/desktop/ios/, four levels down.
+ROOT="$(cd "$SCRIPT_DIR/../../../.." && pwd)"
 cd "$SCRIPT_DIR/.."
 
 # Which product to build. Defaults to the FastTrackStudio desktop app; for
@@ -273,6 +274,20 @@ else
     echo "  WARNING: no icon-1024.png under $ICONS_DIR — app will have a blank icon"
 fi
 
+# ── Versions (scripts/release.sh header, "Apple versions") ───────────────────
+# Marketing version = the workspace version (the release tag's); build number
+# = the global, ever-increasing one (UTC unix time), the same sequence as the
+# app's iOS uploads. Stamped before signing: the signature seals Info.plist.
+BUILD_NO="${BUILD_NO:-$(date -u +%s)}"
+MARKETING_VER="${MARKETING_VER:-$(bash "$ROOT/scripts/release.sh" version)}"
+[[ "$MARKETING_VER" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "ERROR: marketing version '$MARKETING_VER' is not X.Y.Z"; exit 1; }
+[[ "$BUILD_NO" =~ ^[0-9]+$ ]] || { echo "ERROR: build number '$BUILD_NO' is not an integer"; exit 1; }
+/usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $MARKETING_VER" "$APP/Contents/Info.plist" 2>/dev/null \
+    || /usr/libexec/PlistBuddy -c "Add :CFBundleShortVersionString string $MARKETING_VER" "$APP/Contents/Info.plist"
+/usr/libexec/PlistBuddy -c "Set :CFBundleVersion $BUILD_NO" "$APP/Contents/Info.plist" 2>/dev/null \
+    || /usr/libexec/PlistBuddy -c "Add :CFBundleVersion string $BUILD_NO" "$APP/Contents/Info.plist"
+echo "version: $MARKETING_VER (build $BUILD_NO)"
+
 # ── Hardened runtime entitlements ────────────────────────────────────────────
 # allow-jit / allow-unsigned-executable-memory: phon-jit copies its stencils
 # into executable memory at runtime — the hardened runtime KILLS that without
@@ -317,9 +332,8 @@ fi
 
 # ── Package .dmg ─────────────────────────────────────────────────────────────
 echo "=== packaging .dmg ==="
-BUILD_NO="${BUILD_NO:-$(date +%s)}"
 PRODUCT_NAME="${PRODUCT_NAME:-FastTrackStudio}"
-DMG="$ROOT/target/${PRODUCT_NAME}-${MARKETING_VER:-0.0.1}-${BUILD_NO}-macos.dmg"
+DMG="$ROOT/target/${PRODUCT_NAME}-${MARKETING_VER}-${BUILD_NO}-macos.dmg"
 STAGE="$(mktemp -d)"
 cp -R "$APP" "$STAGE/"
 ln -s /Applications "$STAGE/Applications"

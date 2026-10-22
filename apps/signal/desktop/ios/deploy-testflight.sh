@@ -15,10 +15,18 @@
 set -euo pipefail
 
 # The marketing version (CFBundleShortVersionString) is the release tag's
-# (v0.1.3 -> 0.1.3), set by signal-ios.yml from the GitHub Release being
+# (v26.10.0 -> 26.10.0), set by signal-ios.yml from the GitHub Release being
 # shipped. No default, and checked first: a TestFlight build is a release's,
 # and a missing version must not cost a whole build before it fails.
-: "${MARKETING_VER:?MARKETING_VER is required: the version of the release tag being shipped (e.g. 0.1.3)}"
+: "${MARKETING_VER:?MARKETING_VER is required: the version of the release tag being shipped (e.g. 26.10.0)}"
+# Apple takes digits and dots only; CalVer YY.M.MICRO is what studio ships.
+[[ "$MARKETING_VER" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] \
+    || { echo "ERROR: MARKETING_VER '$MARKETING_VER' is not X.Y.Z (the release tag's version)" >&2; exit 1; }
+# The build number (CFBundleVersion): the app's one global, ever-increasing
+# integer across iOS and macOS, the UTC unix time (scripts/release.sh header,
+# "Apple versions"). CI passes the one it records; by hand it is taken here.
+[ -z "${BUILD_NO:-}" ] || [[ "$BUILD_NO" =~ ^[0-9]+$ ]] \
+    || { echo "ERROR: BUILD_NO '$BUILD_NO' is not an integer" >&2; exit 1; }
 
 # Telemetry for a build made here, by hand: CI bakes TASK_OTLP_ENDPOINT /
 # TASK_OTLP_TOKEN / TASK_SENTRY_DSN from the org's secrets
@@ -179,7 +187,7 @@ BUNDLE="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP/Info.plis
 # Info.plist: usage strings + file sharing + versions. The App Store
 # requires CFBundleShortVersionString to be 1-3 period-separated integers
 # (the crate's "0.0.1-alpha" is rejected); CFBundleVersion just has to climb.
-BUILD_NO="${BUILD_NO:-$(date +%s)}"
+BUILD_NO="${BUILD_NO:-$(date -u +%s)}"
 # App bundle OS type — App Store requires CFBundlePackageType=APPL (dx omits it).
 /usr/libexec/PlistBuddy -c "Set :CFBundlePackageType APPL" "$APP/Info.plist" 2>/dev/null \
     || /usr/libexec/PlistBuddy -c "Add :CFBundlePackageType string APPL" "$APP/Info.plist"
@@ -318,6 +326,7 @@ if [ -n "$WATCH_APP" ]; then
         -configuration Release -destination 'generic/platform=watchOS' \
         -derivedDataPath "$WATCH_DD" \
         CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO \
+        MARKETING_VERSION="$MARKETING_VER" CURRENT_PROJECT_VERSION="$BUILD_NO" \
         build > /tmp/fts-watch-build.log 2>&1 \
         || { echo "ERROR: watch build failed"; tail -30 /tmp/fts-watch-build.log; exit 1; }
     WATCH_BUILT="$WATCH_DD/Build/Products/Release-watchos/$WATCH_PRODUCT.app"

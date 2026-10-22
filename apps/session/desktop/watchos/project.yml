@@ -16,8 +16,14 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: app.fasttrackstudio.watch
         PRODUCT_NAME: FastTrackStudio
+        # Placeholders for a local build only. An embedded companion must
+        # carry its parent app's marketing version AND build number (App
+        # Store Connect rejects a mismatch): deploy-testflight.sh passes the
+        # parent's MARKETING_VERSION / CURRENT_PROJECT_VERSION to xcodebuild
+        # and stamps both into the embedded Info.plist (scripts/release.sh
+        # header, "Apple versions"). Never ship these values.
         CURRENT_PROJECT_VERSION: 1
-        MARKETING_VERSION: 0.1.0
+        MARKETING_VERSION: 0.0.0
         SWIFT_VERSION: "6.0"
         # App-icon catalog (FTSWatch/Assets.xcassets). Required — altool
         # rejects a watch app with no icon. watchOS icons must have no alpha.
