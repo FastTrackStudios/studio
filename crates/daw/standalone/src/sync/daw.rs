@@ -1223,7 +1223,7 @@ impl Standalone {
     /// audio callback becomes the sole driver of the playhead.
     /// Sample-accurate. Returns the engine; drop it to release the
     /// stream (and re-enable the soft clock manually if desired).
-    #[cfg(feature = "audio")]
+    #[cfg(all(feature = "audio", not(target_arch = "wasm32")))]
     pub fn attach_audio_engine(
         &self,
         guid: &str,
