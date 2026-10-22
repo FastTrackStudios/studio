@@ -6,6 +6,13 @@
 //!   the flight log a run that ends without warning leaves behind.
 //! - [`updates`]: the update check against the studio repo's GitHub
 //!   releases.
+//! - `ui` (feature `ui`): the shared studio shell — the frame with its
+//!   sidebars and drawers, its saved layout, and the panel registry.
 
 pub mod log_ring;
+/// The studio shell's tokens: colours, sizes and the font, shared by the
+/// desktop frame (`ui`) and the iPad rig frame (`signal-rig-shell`).
+pub mod tokens;
+#[cfg(feature = "ui")]
+pub mod ui;
 pub mod updates;

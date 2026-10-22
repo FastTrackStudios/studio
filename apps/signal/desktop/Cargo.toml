@@ -169,7 +169,8 @@ required-features = ["signal"]
 
 [dependencies]
 utils.workspace = true
-app-shell.workspace = true
+# `ui`: the shared studio shell the window is drawn in (app_shell::ui).
+app-shell = { workspace = true, features = ["ui"] }
 # Sample-space + Electronic Kit WIRE CONTRACTS (#77). Wasm-clean — the
 # browser remote renders the map and the pad grid from these; their
 # backends (signal-space / signal-ekit) stay native-only below.
