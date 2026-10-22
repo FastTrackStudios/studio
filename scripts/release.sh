@@ -12,9 +12,9 @@
 #       squash --> tag vYY.M.MICRO on that merge commit
 #                                              The TAG ships: the two sites
 #                                              (deploy), BOTH TestFlight
-#                                              uploads (Signal, Session), the
-#                                              REAPER suites and the one
-#                                              GitHub Release.
+#                                              uploads (Signal, Session) and
+#                                              the one GitHub Release. (The
+#                                              REAPER suites run locally.)
 #
 #   hotfix, when main can't ship: release/v<latest tag> (from the tag)
 #       <-- PR of `cherry-pick -x` of fixes already on main
@@ -86,7 +86,7 @@
 #   scripts/release.sh release-only       CI (checks.yml plan): 0 = a sound
 #                                          release PR, 1 = not a release PR,
 #                                          3 = a release PR the guard refuses
-#   scripts/release.sh tag-guard          CI (deploy, release, reaper): is this
+#   scripts/release.sh tag-guard          CI (deploy, release): is this
 #                                          tag a release on main or release/v*?
 #   scripts/release.sh publish [TAG]      CI: the GitHub Release for the tag
 #   scripts/release.sh ios-resolve APP TAG
@@ -529,7 +529,7 @@ Next:
      branch and cut again (it takes a minute).
   4. just release-tag    tags v$next on the merge commit once its '$BUILD_CHECK'
      is green. THE TAG SHIPS: both sites, BOTH TestFlight uploads (Signal and
-     Session, marketing version $next), REAPER, the Release.
+     Session, marketing version $next), the Release.
 EOT
 }
 
@@ -650,7 +650,7 @@ cmd_pr() {
             echo "## Summary"
             echo "Release **$tag** into \`$base\`: ONE commit, the CalVer version bump (\`Cargo.toml\`, the workspace members in \`Cargo.lock\`) and the \`CHANGELOG.md\` section built from the pending change files, which it deletes. Signal and Session share the version."
             echo
-            echo "Merge with \`just release-merge\` (re-runs the guard against the current \`$base\`, then squash-merges). Merging ships nothing. **The tag does:** \`just release-tag\` tags \`$tag\` on the merge commit once its \`$BUILD_CHECK\` is green → both sites deploy, BOTH TestFlight uploads (\`signal-ios\`, \`session-ios\`, marketing version **$v**), the REAPER suites, the one GitHub Release."
+            echo "Merge with \`just release-merge\` (re-runs the guard against the current \`$base\`, then squash-merges). Merging ships nothing. **The tag does:** \`just release-tag\` tags \`$tag\` on the merge commit once its \`$BUILD_CHECK\` is green → both sites deploy, BOTH TestFlight uploads (\`signal-ios\`, \`session-ios\`, marketing version **$v**), the one GitHub Release."
             local d; d="$(git_deps_moved "$(last_tag HEAD^)" HEAD)"
             if [ -n "$d" ]; then
                 echo
@@ -825,7 +825,7 @@ cmd_guard() {
         echo "- head: \`$(git rev-parse --short "$head")\` $subject; base now \`$(git rev-parse --short "$cur")\`"
         local d; d="$(git_deps_moved "$(last_tag "$cur")" "$head" | paste -sd, -)"
         echo "- git deps moved since last release: ${d:-none}"
-        echo "- merging ships nothing; production changes only when the tag is pushed (sites, signal-ios + session-ios TestFlight, REAPER, the Release)"
+        echo "- merging ships nothing; production changes only when the tag is pushed (sites, signal-ios + session-ios TestFlight, the Release)"
     } >> "${GITHUB_STEP_SUMMARY:-/dev/stderr}"
     [ "$ok" = 1 ] || exit 1
     echo "release guard: ok ($tag → $base_ref)"
@@ -860,8 +860,7 @@ release_commit_of() { # <version>
 
 # After the release PR merged: tag v<version> on its merge commit, once
 # that commit's `Build + test` is green. The TAG is the release: it starts
-# the deploy, BOTH TestFlight uploads, the REAPER suites and the GitHub
-# Release. Pushing as a GitHub App (fts-forge) or a person starts the
+# the deploy, BOTH TestFlight uploads and the GitHub Release. Pushing as a GitHub App (fts-forge) or a person starts the
 # workflows; a tag pushed with a workflow's GITHUB_TOKEN would not.
 cmd_tag() {
     local v="${1:-}" target line found prev pending l
@@ -893,14 +892,14 @@ cmd_tag() {
     prev="$(last_tag "$target^")"
     if [ -n "$prev" ]; then gt "$v" "${prev#v}" || die "v$v is not greater than the previous release $prev"; fi
     require_green "$target"
-    note "tagging v$v at $(git rev-parse --short "$target") on $line (previous: ${prev:-none}). This ships: sites, Signal + Session TestFlight, REAPER, the Release."
+    note "tagging v$v at $(git rev-parse --short "$target") on $line (previous: ${prev:-none}). This ships: sites, Signal + Session TestFlight, the Release."
     # An annotated tag needs a committer identity; a bot checkout may have none.
     local ident=()
     git config user.email >/dev/null 2>&1 || [ -n "${GIT_COMMITTER_EMAIL:-}" ] \
         || ident=(-c "user.name=fts-forge[bot]" -c "user.email=fts-forge[bot]@users.noreply.github.com")
     git ${ident[@]+"${ident[@]}"} tag -a "v$v" "$target" -m "studio $v"
     git push --quiet origin "refs/tags/v$v"
-    note "pushed v$v: deploy, signal-ios, session-ios, reaper and the Release start from the tag"
+    note "pushed v$v: deploy, signal-ios, session-ios and the Release start from the tag"
     if [ "$line" != "$MAIN_BRANCH" ]; then cmd_forward_port "$v"; fi
 }
 
@@ -942,7 +941,7 @@ cmd_forward_port() { # <version>
     git switch --quiet "$here" 2>/dev/null || true
 }
 
-# CI, first step of the deploy (and of release publish and reaper on a
+# CI, first step of the deploy (and of release publish on a
 # tag): the tag that started this run must be a release commit on main or
 # on a release/v* hotfix line. Stops a stray `v*` tag (on a feature branch,
 # on a commit with another version) from reaching production. With GH_TOKEN

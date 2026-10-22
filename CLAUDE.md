@@ -160,8 +160,10 @@ step (`lockfile`, `fmt`, `flows`, `tailwind`, `check`, `wasm`, `nextest`).
 It refuses to start with less than 25 GB free: a full disk shows up as
 mold dying with a bus error, which reads as a broken toolchain
 (`just sweep-incremental` is the always-safe reclaim). It says nothing
-about `session-ios` / `signal-ios` (Xcode, signing), `deploy` or
-`reaper-integration`, which have their own runners and reasons to be red.
+about `session-ios` / `signal-ios` (Xcode, signing) or `deploy`, which
+have their own runners and reasons to be red. The REAPER integration
+suites (`just reaper-test`, `just reaper daw-test`) are not in CI at all:
+they need a licensed REAPER, so run them locally.
 
 **Build performance / disk** — read the `build-performance` skill before
 touching a `[profile.*]` knob, benchmarking a build, or when the disk

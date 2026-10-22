@@ -6,9 +6,11 @@
 # write access to the fasttrackstudio cache). Without it the workflow
 # skips pushing and merely reports what would be cached.
 #
-# Runs on the repo's light self-hosted runner, label `studio` (nix
-# preinstalled), so there is no installer step and `cachix` itself comes
-# from nixpkgs — downloaded dynamic binaries do not run on NixOS.
+# Runs on a GitHub-HOSTED runner (.github/actions/hosted-nix installs nix
+# and cachix): the shells are almost entirely cache hits (cache.nixos.org +
+# this cache; a dry run builds nothing and fetches ~1.5 GiB), so it is not
+# heavy work, and seeding from a hosted runner proves exactly what the
+# hosted checks.yml jobs will find. Recent runs took 1-6 minutes.
 
 name: cache-devshell
 
@@ -27,10 +29,15 @@ concurrency:
 
 jobs:
   seed:
-    runs-on: [self-hosted, studio]
+    runs-on: ubuntu-latest
     timeout-minutes: 180
     steps:
       - uses: actions/checkout@v4
+      - uses: ./.github/actions/hosted-nix
+        with:
+          # With a token, cachix-action also pushes whatever this job builds.
+          cachix-auth-token: ${{ secrets.CACHIX_AUTH_TOKEN }}
+          shell: ""
       - name: Build CI devshell closure
         run: |
           nix build --accept-flake-config --no-link --print-out-paths \
@@ -46,4 +53,4 @@ jobs:
             cat devshell-paths.txt
             exit 0
           fi
-          xargs -a devshell-paths.txt nix run nixpkgs#cachix -- push fasttrackstudio
+          xargs -a devshell-paths.txt cachix push fasttrackstudio

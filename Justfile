@@ -1952,8 +1952,9 @@ studio-song PROJECT CHART="" SIZE="2560x1440":
 #
 # Stands up an isolated REAPER under target/fts-reaper-test with only
 # daw-bridge in its UserPlugins (built from the sibling ../daw), then
-# runs the suites that attach the window to it. Not part of `just ci`:
-# it needs a licensed REAPER, which the runner does not have.
+# runs the suites that attach the window to it. Not part of `just ci`
+# and not run by CI at all: it needs a licensed REAPER, so it is checked
+# locally (this, and `just reaper daw-test` for daw-reaper's suites).
 
 # Run the REAPER integration suites against a real REAPER
 reaper-test FILTER="":
@@ -2082,8 +2083,9 @@ ci FROM="lockfile":
 # from .changes/), `release-pr` opens it, `release-merge` squash-merges it
 # after re-checking it against the current main, and `release-tag` pushes
 # `vYY.M.MICRO` once that commit is green, which deploys the sites, uploads
-# Signal + Session to TestFlight, runs the REAPER suites and publishes the
-# one GitHub Release. Production = the latest `v*` tag.
+# Signal + Session to TestFlight and publishes the one GitHub Release.
+# (The REAPER suites are not in CI: run `just reaper-test` and `just reaper
+# daw-test` locally.) Production = the latest `v*` tag.
 #
 # Signal and Session (the iOS apps) are ONE release with the rest of the
 # repo: the same build, the same version (their crates take
@@ -2117,7 +2119,7 @@ release-merge:
 
 # After the release PR merged: tag v<version> on its merge commit once
 # `Build + test` is green there. THE TAG SHIPS (sites, Signal + Session
-# TestFlight, REAPER, the GitHub Release). After a hotfix it opens the
+# TestFlight, the GitHub Release). After a hotfix it opens the
 # forward-port PR into main. Push as the fts-forge bot or a person, not a
 # workflow token (that starts no workflow).
 release-tag *ARGS:

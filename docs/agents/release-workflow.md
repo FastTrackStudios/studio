@@ -18,15 +18,16 @@ In short:
   PR whose changed crates have none. Nobody edits `CHANGELOG.md` outside a
   release.
 - **A release is a `vYY.M.MICRO` tag.** The tag ships everything: both
-  sites, both iOS apps (Signal and Session, one TestFlight upload each),
-  the REAPER suites and the one GitHub Release. **Production is the
+  sites, both iOS apps (Signal and Session, one TestFlight upload each)
+  and the one GitHub Release. The REAPER integration suites are not in CI;
+  they are checked locally (`just reaper-test`, `just reaper daw-test`). **Production is the
   latest `v*` tag**; a push to `main` ships nothing.
 
 ```
 feat/sta-1-x ─PR (fast checks, change file)─squash─▶ main ─release/pending PR─▶ tag v26.10.3
 fix/sta-2-y  ─┘                                       │ full set after every merge     │
                                                       │      sites . Signal + Session TestFlight
-        hotfix: release/v26.10.3 (from the tag) ◀── cherry-pick -x    . REAPER . GitHub Release
+        hotfix: release/v26.10.3 (from the tag) ◀── cherry-pick -x    . GitHub Release
                 └─ release/pending PR ─▶ tag v26.10.4 ─▶ forward-port PR (changelog) into main
 ```
 
@@ -79,12 +80,20 @@ delete a tag; a bad release is superseded by the next.
 
 | Event | Workflows | Runner |
 |---|---|---|
-| PR into `main` | `checks` (`Build + test`: the rail-selected set + `cargo rail change check`), `pr-title`, `release` guard (passes at once) | Mac Pro (`studio`, `studio-lint`, `studio-wasm`, `studio-tests`), hosted |
-| release PR `release/pending` → `main` | `release` guard; `checks` runs the same guard from the base commit and **skips** the heavy jobs if it passes, fails `Build + test` if not | hosted + `studio` |
+| PR into `main` | `checks` (`Build + test`: the rail-selected set + `cargo rail change check`), `pr-title`, `release` guard (passes at once) | hosted (plan, lint, wasm, the aggregator, `pr-title`, the guard); Mac Pro `studio-tests` (the nextest build) |
+| release PR `release/pending` → `main` | `release` guard; `checks` runs the same guard from the base commit and **skips** the heavy jobs if it passes, fails `Build + test` if not | hosted |
 | PR into `release/**` (hotfix) | `checks` (the full set), `pr-title`, `release` guard | as above |
-| push to `main` / `release/**` | `checks` full set (+ rail evidence on `main`) | Mac Pro |
-| nightly | `checks` full set on `main` | Mac Pro |
-| push of tag `vYY.M.MICRO` (or `workflow_dispatch` with the tag as ref) | `deploy` (session-web, signal-web), `signal-ios` **and** `session-ios`, `reaper-integration`, `release` publish | `studio-deploy`, `airlock`, `studio`, hosted |
+| push to `main` / `release/**` | `checks` full set (+ rail evidence on `main`) | hosted + Mac Pro `studio-tests` |
+| nightly | `checks` full set on `main` | hosted + Mac Pro `studio-tests` |
+| push of tag `vYY.M.MICRO` (or `workflow_dispatch` with the tag as ref) | `deploy` (session-web, signal-web), `signal-ios` **and** `session-ios`, `release` publish | `studio-deploy` (LAN registry), `airlock`, hosted |
+
+Hosted jobs restore one Actions cache per build kind (`lint`, `wasm`)
+that only `main` saves, so PRs never evict it from the repo's 10 GB
+budget; nix comes from fasttrackstudio.cachix.org, seeded by
+`cache-devshell` (also hosted). Only the nextest build stays on the Mac
+Pro, for its warm target dir. The REAPER integration suites are not in
+CI (they need a licensed REAPER): run `just reaper-test` and `just reaper
+daw-test` locally before a change to the REAPER adapters lands.
 
 `Build + test` is the one required check (the `main` ruleset). It is an
 aggregator: it requires the `lint` job and, when the plan gave it work, the
