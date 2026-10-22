@@ -105,7 +105,7 @@ session-domain = [
     "dep:daw-ui",
     "dep:dawfile-reaper",
     "dep:keyflow",
-    "dep:keyflow-sync",
+    "dep:keyflow-lang",
     "dep:daw", "dep:studio",
     "dep:daw-control",
     "dep:daw-standalone",
@@ -247,10 +247,11 @@ libc = { workspace = true, optional = true }
 # output through daw-standalone's aux post-render hook. On iOS the
 # session-demo feature drives it with default features (no tts/ONNX) into a
 # small cpal stream instead.
-# Lyric-sync sidecar (TimingMap) reader for the Lyric Sync workspace. Lean
-# default features only — no onnx/whisper; alignment is produced offline by
-# the `kf` CLI, the app just loads + edits the resulting sidecar.
-keyflow-sync = { workspace = true, optional = true }
+# Lyric-sync sidecar (TimingMap) reader for the Lyric Sync workspace:
+# keyflow-lang's lean `sync` module only — no onnx/whisper; alignment is
+# produced offline by the `kf` CLI, the app just loads + edits the
+# resulting sidecar.
+keyflow-lang = { workspace = true, optional = true, features = ["sync"] }
 # DAW domain — facade (daw::get / init_from_parts / LayerRouter) + the
 # standalone backend that plays the setlist without REAPER. "audio" is
 # required by daw-standalone's unconditional `sync` module (same

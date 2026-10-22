@@ -354,30 +354,28 @@ song = { path = "features/song" }
 # listed only because in-tree consumers still name them directly; new code
 # should go through a facade.
 #
-# `keyflow-proto` and `keyflow-syntax` stay in `daw`: expression-editor-core,
-# which daw-reaper hard-depends on, needs them.
-keyflow = { git = "https://github.com/FastTrackStudios/keyflow", tag = "v0.2.4" }
-keyflow-proto = { git = "https://github.com/FastTrackStudios/keyflow", tag = "v0.2.4" }
-keyflow-syntax = { git = "https://github.com/FastTrackStudios/keyflow", tag = "v0.2.4" }
-keyflow-text = { git = "https://github.com/FastTrackStudios/keyflow", tag = "v0.2.4" }
-keyflow-chordpro = { git = "https://github.com/FastTrackStudios/keyflow", tag = "v0.2.4" }
-keyflow-midi = { git = "https://github.com/FastTrackStudios/keyflow", tag = "v0.2.4" }
-keyflow-live = { git = "https://github.com/FastTrackStudios/keyflow", tag = "v0.2.4" }
-keyflow-musicxml = { git = "https://github.com/FastTrackStudios/keyflow", tag = "v0.2.4" }
-keyflow-musx = { git = "https://github.com/FastTrackStudios/keyflow", tag = "v0.2.4" }
-keyflow-annotate = { git = "https://github.com/FastTrackStudios/keyflow", tag = "v0.2.4" }
-keyflow-orchestra = { git = "https://github.com/FastTrackStudios/keyflow", tag = "v0.2.4" }
-keyflow-sync = { git = "https://github.com/FastTrackStudios/keyflow", tag = "v0.2.4" }
-keyflow-daw-analysis = { git = "https://github.com/FastTrackStudios/keyflow", tag = "v0.2.4" }
-keyflow-ui = { git = "https://github.com/FastTrackStudios/keyflow", tag = "v0.2.4" }
-keyflow-cli = { git = "https://github.com/FastTrackStudios/keyflow", tag = "v0.2.4" }
-keyflow-lsp = { git = "https://github.com/FastTrackStudios/keyflow", tag = "v0.2.4" }
-tree-sitter-keyflow = { git = "https://github.com/FastTrackStudios/keyflow", tag = "v0.2.4" }
+# Since v0.2.8 keyflow is four crates, not twenty: `keyflow-proto` (the
+# model, with the lexer/parser as its `syntax` module), `keyflow-lang`
+# (every format as a module behind a feature of its name: `text`,
+# `chordpro`, `midi`, `orchestra`, `sync`, …), `engraver` (layout +
+# render, `score` included) and the `keyflow` facade. `keyflow-lang`
+# defaults OFF here; consumers name the formats they use.
+keyflow = { git = "https://github.com/FastTrackStudios/keyflow", tag = "v0.2.8" }
+keyflow-proto = { git = "https://github.com/FastTrackStudios/keyflow", tag = "v0.2.8" }
+keyflow-lang = { git = "https://github.com/FastTrackStudios/keyflow", tag = "v0.2.8", default-features = false }
+keyflow-annotate = { git = "https://github.com/FastTrackStudios/keyflow", tag = "v0.2.8" }
+keyflow-daw-analysis = { git = "https://github.com/FastTrackStudios/keyflow", tag = "v0.2.8" }
+keyflow-ui = { git = "https://github.com/FastTrackStudios/keyflow", tag = "v0.2.8" }
+keyflow-cli = { git = "https://github.com/FastTrackStudios/keyflow", tag = "v0.2.8" }
+tree-sitter-keyflow = { git = "https://github.com/FastTrackStudios/keyflow", tag = "v0.2.8" }
+# The in-tree `crates/keyflow/keyflow-{proto,syntax}` copies stay in `daw`
+# (expression-editor-core, which daw-reaper hard-depends on, needs them);
+# keyflow no longer ships a separate `keyflow-syntax`, so the copy here
+# is the one they build against.
+keyflow-syntax = { path = "crates/keyflow/keyflow-syntax" }
 # Engraver — defaults OFF at the root (the full `engraver` feature drags
 # wgpu/vello + PDF export); consumers opt into `svg`/`wgpu`/`engraver`.
-engraver = { git = "https://github.com/FastTrackStudios/keyflow", tag = "v0.2.4", default-features = false }
-engraver-proto = { git = "https://github.com/FastTrackStudios/keyflow", tag = "v0.2.4", default-features = false }
-engraver-score = { git = "https://github.com/FastTrackStudios/keyflow", tag = "v0.2.4" }
+engraver = { git = "https://github.com/FastTrackStudios/keyflow", tag = "v0.2.8", default-features = false }
 
 # ── signal domain (wave 4) ────────────────────────────────────────────
 # `signal` is the facade — the only public API surface for the signal
@@ -846,15 +844,16 @@ libc = "0.2"
 # The editor itself, from its own repo — what the Organize view's keyflow
 # editor is built on (Blitz-native: `editor-view/native`). The core only:
 # no Typst / Mermaid fence renderers (`default-features = false`).
-editor-view = { git = "https://github.com/FastTrackStudios/editor", tag = "v0.1.21", default-features = false }
-editor-state = { git = "https://github.com/FastTrackStudios/editor", tag = "v0.1.21", default-features = false }
+editor-view = { git = "https://github.com/FastTrackStudios/editor", tag = "v0.1.24", default-features = false }
+editor-state = { git = "https://github.com/FastTrackStudios/editor", tag = "v0.1.24", default-features = false }
 # Remote edits into the editor as changes (the caret stays put).
-editor-crdt = { git = "https://github.com/FastTrackStudios/editor", tag = "v0.1.21" }
+editor-crdt = { git = "https://github.com/FastTrackStudios/editor", tag = "v0.1.24" }
 # Keyflow's language support for it (syntax colours, live diagnostics) —
-# keyflow's own copy, which moved there from task at keyflow v0.2.0.
-# Renamed because task's older `editor-keyflow-lang` (above, for the site)
-# has the same package name.
-keyflow-editor-lang = { package = "editor-keyflow-lang", git = "https://github.com/FastTrackStudios/keyflow", tag = "v0.2.4" }
+# keyflow's `editor-keyflow` (its `lang` module; `editor-keyflow-lang`
+# folded into it at keyflow v0.2.8). Defaults off: no `.kf` fence
+# renderer, so no engraver. Renamed because task's older `editor-keyflow`
+# (below, for the site) has the same package name.
+keyflow-editor-lang = { package = "editor-keyflow", git = "https://github.com/FastTrackStudios/keyflow", tag = "v0.2.8", default-features = false }
 editor-keyflow = { git = "https://github.com/FastTrackStudios/task", branch = "main" }
 editor-keyflow-lang = { git = "https://github.com/FastTrackStudios/task", branch = "main" }
 view-knowledge-graph = { git = "https://github.com/FastTrackStudios/task", branch = "main" }
@@ -1530,14 +1529,12 @@ lto = "thin"
 codegen-units = 16
 
 # One architect for the whole graph: v0.9.22 (STA-259, STA-382, STA-395,
-# STA-435). Studio's own pins above are on v0.9.22, and so is keyflow from
-# v0.2.8 on. The patch stays because task@main's crates (editor-keyflow,
+# STA-435). Studio's own pins above are on v0.9.22. The patch stays
+# because keyflow v0.2.8 (v0.9.19) and task@main's crates (editor-keyflow,
 # ssg, the *-proto wire crates; locked at task 6555909, which pins v0.9.2;
-# task main itself pins v0.9.6) still sit on an older tag, and so does the
-# keyflow v0.2.4 pinned above (v0.9.2; moving to v0.2.8 means taking
-# keyflow's crate fold, a separate migration). It lifts them all onto this
-# one, so Cargo.lock holds exactly one architect source and vox handshakes
-# match.
+# task main itself pins v0.9.6) still sit on older tags. It lifts them
+# onto this one, so Cargo.lock holds exactly one architect source and vox
+# handshakes match.
 # Task dev is on v0.9.15+ (STA-386); drop this block once a task release
 # with v0.9.15+ reaches task main and studio's task pins resolve to it at
 # the same tag as the pins above.

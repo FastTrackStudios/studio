@@ -9,7 +9,7 @@
 
 use crate::ui::prelude::*;
 
-/// Confidence tier for an aligned word (mirrors `keyflow_sync::timing::Rating`,
+/// Confidence tier for an aligned word (mirrors `keyflow_lang::sync::timing::Rating`,
 /// kept local so session-ui stays independent of the sync crate).
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum SyncRating {

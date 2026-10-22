@@ -635,7 +635,7 @@ fn App() -> Element {
                     },
                     #[cfg(all(feature = "session", not(target_arch = "wasm32")))]
                     Some(Workspace::LyricSync) => rsx! {
-                        // Editable per-word lyric timings from a keyflow-sync
+                        // Editable per-word lyric timings from keyflow-lang's `sync`
                         // TimingMap sidecar (forced alignment on the vocal stem).
                         lyric_sync_view::LyricSyncWorkspace {}
                     },
