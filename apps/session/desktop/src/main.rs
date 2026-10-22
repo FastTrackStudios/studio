@@ -1419,44 +1419,28 @@ fn EnginesArea() -> Element {
     }
 }
 
-// ── Settings (version + update check stub) ─────────────────────────────────
+// ── Settings (version + update status) ─────────────────────────────────
 
 #[component]
 fn SettingsPanel() -> Element {
-    #[allow(unused_mut)]
-    let mut update_msg = use_signal(String::new);
-
     rsx! {
         div {
             style: "display: flex; flex-direction: column; align-items: flex-start; gap: 12px; \
                     padding: 12px; font-size: 12px;",
             span { style: "color: #a1a1aa;", "Session v{env!(\"CARGO_PKG_VERSION\")}" }
-            UpdateCheck { msg: update_msg }
-            if !update_msg().is_empty() {
-                span { style: "color: #a1a1aa;", "{update_msg}" }
-            }
+            UpdateCheck {}
         }
     }
 }
 
+/// Settings' update block: the release feed's answer for this build, and
+/// the signed install when one is possible (`app_shell::updates`).
 #[cfg(not(any(target_arch = "wasm32", target_os = "ios")))]
 #[component]
-fn UpdateCheck(msg: Signal<String>) -> Element {
+fn UpdateCheck() -> Element {
     rsx! {
-        button {
-            style: "padding: 3px 10px; border-radius: 5px; background: transparent; color: #a1a1aa; border: 1px solid #27272a; font-size: 11px;",
-            onclick: move |_| {
-                use app_shell::updates::Updater as _;
-                let text = match app_shell::updates::GithubUpdater::new(env!("CARGO_PKG_VERSION")).check_for_updates() {
-                    app_shell::updates::UpdateStatus::UpToDate => "Up to date.".to_string(),
-                    app_shell::updates::UpdateStatus::Available(info) => {
-                        format!("Update available: v{}", info.version)
-                    }
-                    app_shell::updates::UpdateStatus::Failed(e) => format!("Check failed: {e}"),
-                };
-                msg.set(text);
-            },
-            "Check for updates"
+        app_shell::updates::UpdateSettings {
+            app: app_shell::updates::App::new(env!("CARGO_PKG_NAME"), env!("CARGO_PKG_VERSION")),
         }
     }
 }
@@ -1464,8 +1448,7 @@ fn UpdateCheck(msg: Signal<String>) -> Element {
 /// Web/mobile build: the deployment updates itself — nothing to check.
 #[cfg(any(target_arch = "wasm32", target_os = "ios"))]
 #[component]
-fn UpdateCheck(msg: Signal<String>) -> Element {
-    let _ = msg;
+fn UpdateCheck() -> Element {
     rsx! {}
 }
 

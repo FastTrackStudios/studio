@@ -32,6 +32,10 @@ mod engine_watch;
 #[cfg(all(feature = "tone3000", not(target_arch = "wasm32")))]
 mod engine_tone3000;
 // The sign-in page in an in-app Safari sheet (iOS).
+/// The FastTrackStudio account (STA-361): the shared `fts_account` sign-in,
+/// one session with Session on this computer.
+#[cfg(not(target_arch = "wasm32"))]
+mod account;
 #[cfg(all(feature = "signal", not(target_arch = "wasm32")))]
 mod engines;
 /// The front page's live state: each rig's, tonight's set, the studio link.
@@ -45,10 +49,6 @@ mod front_state;
 mod gig;
 #[cfg(all(feature = "tone3000", target_os = "ios"))]
 mod ios_safari;
-/// The FastTrackStudio account (STA-361): the shared `fts_account` sign-in,
-/// one session with Session on this computer.
-#[cfg(not(target_arch = "wasm32"))]
-mod account;
 /// Libraries — the home screen's downloads: a studio's kits and packs onto
 /// this device, over the content host.
 #[cfg(all(feature = "signal-guitar", not(target_arch = "wasm32")))]
@@ -1111,13 +1111,10 @@ fn EnginesArea() -> Element {
     }
 }
 
-// ── Settings (version + update check stub) ─────────────────────────────────
+// ── Settings (version + update status) ─────────────────────────────────
 
 #[component]
 fn SettingsPanel() -> Element {
-    #[expect(unused_mut)]
-    let mut update_msg = use_signal(String::new);
-
     rsx! {
         div {
             style: "display: flex; flex-direction: column; align-items: flex-start; gap: 12px; \
@@ -1127,10 +1124,7 @@ fn SettingsPanel() -> Element {
             AccountSettings {}
             EnginesArea {}
             EngineModeSetting {}
-            UpdateCheck { msg: update_msg }
-            if !update_msg().is_empty() {
-                span { style: "color: #a1a1aa;", "{update_msg}" }
-            }
+            UpdateCheck {}
         }
     }
 }
@@ -1359,8 +1353,7 @@ fn EngineModeSetting() -> Element {
 /// Web/mobile build: the deployment updates itself — nothing to check.
 #[cfg(any(target_arch = "wasm32", target_os = "ios"))]
 #[component]
-fn UpdateCheck(msg: Signal<String>) -> Element {
-    let _ = msg;
+fn UpdateCheck() -> Element {
     rsx! {}
 }
 
@@ -1377,24 +1370,14 @@ fn AccountSettings() -> Element {
     rsx! {}
 }
 
+/// Settings' update block: the release feed's answer for this build, and
+/// the signed install when one is possible (`app_shell::updates`).
 #[cfg(not(any(target_arch = "wasm32", target_os = "ios")))]
 #[component]
-fn UpdateCheck(msg: Signal<String>) -> Element {
+fn UpdateCheck() -> Element {
     rsx! {
-        button {
-            style: "padding: 3px 10px; border-radius: 5px; background: transparent; color: #a1a1aa; border: 1px solid #27272a; font-size: 11px;",
-            onclick: move |_| {
-                use app_shell::updates::Updater as _;
-                let text = match app_shell::updates::GithubUpdater::new(env!("CARGO_PKG_VERSION")).check_for_updates() {
-                    app_shell::updates::UpdateStatus::UpToDate => "Up to date.".to_string(),
-                    app_shell::updates::UpdateStatus::Available(info) => {
-                        format!("Update available: v{}", info.version)
-                    }
-                    app_shell::updates::UpdateStatus::Failed(e) => format!("Check failed: {e}"),
-                };
-                msg.set(text);
-            },
-            "Check for updates"
+        app_shell::updates::UpdateSettings {
+            app: app_shell::updates::App::new(env!("CARGO_PKG_NAME"), env!("CARGO_PKG_VERSION")),
         }
     }
 }

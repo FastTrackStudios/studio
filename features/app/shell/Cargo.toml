@@ -4,7 +4,7 @@ version.workspace = true
 edition.workspace = true
 license.workspace = true
 authors.workspace = true
-description = "What every FTS app shares around its UI: the in-memory log ring (with the crash log and the flight log), the update check, and (feature ui) the studio shell: frame, regions, saved layout, panel registry"
+description = "What every FTS app shares around its UI: the in-memory log ring (with the crash log and the flight log), the update check (architect::release), and (feature ui) the studio shell: frame, regions, saved layout, panel registry"
 
 [features]
 # The shared studio shell (src/ui): ShellFrame, ShellState, PanelRegistry.
@@ -27,10 +27,25 @@ dirs = "6"
 # The flight recorder (ring, crash log, flight log): native only.
 architect-telemetry = { workspace = true, features = ["flight"] }
 
+# The update check and install (`updates`): architect's signed self-update
+# against the studio repo's GitHub Releases. Desktop only: the web build is
+# its deployment and iOS updates through the App Store.
+[target.'cfg(not(any(target_arch = "wasm32", target_os = "ios")))'.dependencies]
+architect = { workspace = true, features = ["release"] }
+# The check runs on its own small runtime (reqwest needs tokio), whatever
+# executor the app's UI is on.
+tokio = { workspace = true }
+
 [dev-dependencies]
 # Headless layout + screenshot of the performer screen on blitz-dom
 # (tests/performer_screen.rs).
 dioxus-test.workspace = true
+
+[target.'cfg(not(any(target_arch = "wasm32", target_os = "ios")))'.dev-dependencies]
+# tests/updates.rs: a fake releases feed on 127.0.0.1.
+axum = { workspace = true }
+tempfile = { workspace = true }
+tokio = { workspace = true }
 
 [[test]]
 name = "performer_screen"
