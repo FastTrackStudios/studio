@@ -235,6 +235,9 @@ eyre = { workspace = true, optional = true }
 dioxus = { workspace = true, default-features = true, features = ["desktop", "launch"] }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+# The FastTrackStudio account (STA-361): device-code sign-in and the one
+# session file Signal and Session share, with its sign-in UI.
+fts-account = { workspace = true, features = ["ui"] }
 # The command-line tools' own (feature `cli`).
 clap = { workspace = true, features = ["derive"], optional = true }
 serde_json = { workspace = true, optional = true }

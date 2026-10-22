@@ -7356,6 +7356,20 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "42703706b716c37f96a77aea830392ad231f44c9e9a67872fa5548707e11b11c"
 
 [[package]]
+name = "fts-account"
+version = "0.1.2"
+dependencies = [
+ "auth-client",
+ "dioxus",
+ "dirs",
+ "futures-timer",
+ "reqwest 0.12.28",
+ "serde_json",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
 name = "fts-audio-ui"
 version = "0.1.2"
 dependencies = [
@@ -17206,6 +17220,7 @@ dependencies = [
  "facet",
  "facet-json",
  "frame",
+ "fts-account",
  "fts-audio-ui",
  "fts-sample",
  "futures-channel",
@@ -17298,6 +17313,7 @@ dependencies = [
  "dioxus-native",
  "dirs",
  "eyre",
+ "fts-account",
  "fts-audio-ui",
  "fts-sample",
  "futures-timer",
@@ -17653,6 +17669,7 @@ dependencies = [
  "eyre",
  "facet",
  "facet-json",
+ "fts-account",
  "fts-audio-ui",
  "fts-sample",
  "futures-channel",
