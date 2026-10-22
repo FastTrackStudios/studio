@@ -68,6 +68,15 @@ pub fn TransportControlBar(
     /// row). The performer screen reads 14 at arm's length.
     #[props(default)]
     label_px: Option<u32>,
+    /// With `wide_play`: the song has no sections, so the skips step by
+    /// song and say so ("Song": back restarts it, forward loads the next).
+    #[props(default)]
+    skip_song: bool,
+    /// With `wide_play`: forward is armed (a first tap while playing asked
+    /// to load the next song); it turns the primary blue and says "Load
+    /// next?" until the second tap or the arm runs out.
+    #[props(default)]
+    forward_armed: bool,
 ) -> Element {
     let playing = is_playing;
     let looping = is_looping;
@@ -134,16 +143,8 @@ pub fn TransportControlBar(
     } else {
         "background:#0b0c0e;"
     };
-    let (back_word, forward_word) = if wide_play {
-        ("Section", "Section")
-    } else {
-        ("Back", "Advance")
-    };
-    let (back_aria, forward_aria) = if wide_play {
-        ("Previous section", "Next section")
-    } else {
-        ("Back", "Advance")
-    };
+    let (back_word, forward_word, back_aria, forward_aria) =
+        skip_words(wide_play, skip_song, forward_armed);
 
     rsx! {
         div {
@@ -254,7 +255,11 @@ pub fn TransportControlBar(
                         // Advance Button — while playing too.
             button {
                 "aria-label": forward_aria,
-                style: cls(Look::Idle),
+                style: if wide_play && forward_armed {
+                    format!("{} background:#2563eb; color:#ffffff; border-color:#2563eb;", cls(Look::Idle))
+                } else {
+                    cls(Look::Idle)
+                },
                 onclick: move |_| on_forward.call(()),
                 ForwardIcon { size: icon, color: "currentColor" }
                 if !icons_only { "{forward_word}" }
@@ -277,4 +282,38 @@ enum Look {
     Red,
     /// Record, not recording: red words on the dark.
     RedWord,
+}
+
+/// The skip cells' words and labels: back, forward, back's label,
+/// forward's label.
+fn skip_words(
+    wide_play: bool,
+    skip_song: bool,
+    forward_armed: bool,
+) -> (&'static str, &'static str, &'static str, &'static str) {
+    match (wide_play, skip_song, forward_armed) {
+        (false, _, _) => ("Back", "Advance", "Back", "Advance"),
+        (true, _, true) => (
+            if skip_song { "Song" } else { "Section" },
+            "Load next?",
+            if skip_song { "Restart the song" } else { "Previous section" },
+            "Load the next song: tap again",
+        ),
+        (true, true, false) => ("Song", "Song", "Restart the song", "Skip to the next song"),
+        (true, false, false) => ("Section", "Section", "Previous section", "Next section"),
+    }
+}
+
+#[cfg(test)]
+mod skip_word_tests {
+    use super::skip_words;
+
+    #[test]
+    fn a_song_without_sections_skips_by_song() {
+        assert_eq!(skip_words(true, true, false).0, "Song");
+        assert_eq!(skip_words(true, true, false).1, "Song");
+        assert_eq!(skip_words(true, false, false).1, "Section");
+        assert_eq!(skip_words(true, true, true).1, "Load next?");
+        assert_eq!(skip_words(false, true, false).0, "Back", "the classic bar is as it was");
+    }
 }
