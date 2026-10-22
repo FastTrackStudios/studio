@@ -417,8 +417,8 @@ proptest! {
             doc.put(&step).unwrap();
             doc.commit("test");
             replica.import(&doc.updates_since(&since).unwrap()).unwrap();
-            prop_assert_eq!(doc.get::<Setlist>(&step.doc_key()).unwrap().as_ref(), Some(&step));
-            prop_assert_eq!(replica.get::<Setlist>(&step.doc_key()).unwrap().as_ref(), Some(&step));
+            prop_assert_eq!(doc.get::<Setlist>(&step.doc_key()).unwrap(), Some(step.clone()));
+            prop_assert_eq!(replica.get::<Setlist>(&step.doc_key()).unwrap(), Some(step.clone()));
             last = Some(step);
         }
     }
@@ -437,8 +437,8 @@ proptest! {
         left.import(&right.updates_since(&lv).unwrap()).unwrap();
         right.import(&left.updates_since(&rv).unwrap()).unwrap();
         prop_assert_eq!(left.dump(), right.dump());
-        prop_assert_eq!(left.get::<Patch>(&a.doc_key()).unwrap().as_ref(), Some(&a));
-        prop_assert_eq!(left.get::<Patch>(&b.doc_key()).unwrap().as_ref(), Some(&b));
+        prop_assert_eq!(left.get::<Patch>(&a.doc_key()).unwrap(), Some(a.clone()));
+        prop_assert_eq!(left.get::<Patch>(&b.doc_key()).unwrap(), Some(b.clone()));
     }
 }
 
