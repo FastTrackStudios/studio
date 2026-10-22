@@ -1,40 +1,39 @@
 # Session — Claude Code Instructions
 
-Session is the session/project management domain for FastTrackStudio.
+Session is FastTrackStudio's setlist, song, live-sync and song-library domain.
 
-## Architecture
+## Layout
 
-This repo follows the **crate facade pattern**:
-- `session` — the facade crate, the only public API surface
-- `session-proto` — protocol/domain types (internal)
-- `session-ui` — Dioxus UI components (public, feature-gated)
-- `session-extension` — SHM guest process binary
+`session` is **one crate**; its roles are cargo features, per architect's
+crate-layout ADR (architect `docs/content/architecture/layout.md`). Read
+that before adding a crate or a flag.
 
-Apps must depend only on `session` (facade) or `session-ui`, never on internal crates.
+- Contract (entities, wire types, `#[architect::rpc]` traits): `src/proto/`.
+- Roles: `ui` (Dioxus, `src/ui/`), `engine`, `net`, `collab`, `library`,
+  `reaper`, `tts`, `vault-sync`, `web` / `desktop`. Flags compose one way:
+  `ui` never implies a backend, a backend never implies `ui`.
+- Apps (`apps/session/*`) depend on `session` with the flags they need.
+- The REAPER extension is a separate binary, so it is its own crate:
+  `features/adapters/reaper/session-extension`.
 
-## Key Rules
+## RPC services
 
-### Async & Concurrency
-- Use `architect::platform::spawn` instead of `tokio::spawn` (wasm-cfg-split:
-  tokio on native, `spawn_local` on wasm); likewise `architect::platform::{sleep,
-  timeout}` for timers
-- Use `tokio::sync::{Mutex, RwLock, broadcast, watch, mpsc}` for locks/channels
-  (moire is retired — Jul 2026)
-- Never hold std sync primitives across `.await`
+- Service traits use `#[architect::rpc]` (see `src/proto/services/`).
+- Stream with `vox::Tx<T>` / `vox::Rx<T>`.
 
-### RPC Services
-- Service traits use `#[architect::rpc]` (formerly `roam::service`)
-- Max 4 params per method (Facet constraint)
-- Use `Tx<T>` / `Rx<T>` for streaming
+## Async
 
-## Build & Test
+- Spawn and time with `architect::platform::{spawn, sleep, timeout}`: tokio
+  on native, `spawn_local` on wasm.
+- Locks and channels come from `tokio::sync`; release std sync primitives
+  before any `.await`.
+
+## Build & test
 
 ```bash
-cargo check -p session           # Type-check facade
-cargo check --workspace          # Type-check all
-cargo test -p session            # Run tests
+cargo check -p session                 # default features
+cargo check -p session --features ui   # with the UI role
+cargo test -p session                  # dev-deps turn on engine, net, tts, ui
 ```
 
-## Issue Tracking
-
-Use `bd` (beads) for all task tracking. See AGENTS.md for workflow.
+Run `just ci` at the repo root before pushing.
