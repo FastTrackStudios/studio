@@ -1731,7 +1731,13 @@ mod tests {
                 ..PerformState::default()
             }),
         });
-        rsx! { GigScreenView { rig: GigScreen { app_bar: bar, rig: tiles }, ipad: true } }
+        // The iPad page's own sheets (mobile_view.rs, iOS only): the root
+        // reset and the app's Tailwind (Session's progress bar uses it).
+        rsx! {
+            style { "html, body {{ margin: 0; padding: 0; background: #0c0c0f; }}" }
+            style { {include_str!("../../assets/tailwind-signal.css")} }
+            GigScreenView { rig: GigScreen { app_bar: bar, rig: tiles }, ipad: true }
+        }
     }
 
     fn lantern() -> Element {
@@ -1814,11 +1820,15 @@ mod tests {
         assert!(button(&doc, "Previous section").is_some());
         assert!(button(&doc, "Next section").is_some());
         assert!(button(&doc, "Loop").is_some());
-        // Every button on the screen says what it does.
-        for b in doc.query_all("button").immediately() {
-            let label = b.attribute("aria-label").unwrap_or_default();
-            assert!(!label.trim().is_empty(), "a button without a label: {}", b.outer_html());
-        }
+        // Every button on the screen says what it does (all listed at once).
+        let unlabelled: Vec<String> = doc
+            .query_all("button")
+            .immediately()
+            .into_iter()
+            .filter(|b| b.attribute("aria-label").unwrap_or_default().trim().is_empty())
+            .map(|b| b.outer_html().chars().take(400).collect())
+            .collect();
+        assert!(unlabelled.is_empty(), "buttons without a label:\n{}", unlabelled.join("\n---\n"));
     }
 
     #[test]

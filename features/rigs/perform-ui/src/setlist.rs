@@ -1019,6 +1019,7 @@ fn SetHeader(
             div { style: "display: flex; align-items: center; gap: 2px;",
                 // The set's name and a chevron: a tap opens the sets.
                 button {
+                    "aria-label": "Set: {heading}. Choose a set",
                     style: "flex: 1; min-width: 0; min-height: 44px; display: flex; flex-direction: column; justify-content: center; align-items: flex-start; gap: 3px; text-align: left; padding: 0 8px; margin: 0 0 0 -8px; border: none; border-radius: {R_MD}; background: transparent; color: {INK}; font-family: {FONT}; cursor: pointer;",
                     onclick: move |_| panel_w.set(Some(Panel::Sets)),
                     span { style: "display: flex; align-items: center; gap: 8px; min-width: 0; max-width: 100%;",
