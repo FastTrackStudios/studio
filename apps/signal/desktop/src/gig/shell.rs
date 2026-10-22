@@ -723,7 +723,12 @@ fn ipad_insets() -> bool {
 /// [`GigPlayback`] with Session's progress bar, the rig's setlist, the
 /// chart, and the dock (the rig's switches beside the transport).
 #[component]
-fn GigScreenView(rig: GigScreen) -> Element {
+fn GigScreenView(
+    rig: GigScreen,
+    /// Draw the iPad's insets whatever the platform (a test, a screenshot).
+    #[props(default)]
+    ipad: bool,
+) -> Element {
     let st = use_context::<GigState>();
     let perf = try_use_context::<PerfState>();
     provide_playback(GigPlayback { st, perf });
@@ -735,7 +740,7 @@ fn GigScreenView(rig: GigScreen) -> Element {
             .with(Panel::new(ids::CHART, "Chart", Region::Main, chart_panel))
             .with(Panel::new(ids::DOCK, "Dock", Region::Bottom, dock_panel))
     });
-    let (top, bottom) = if ipad_insets() {
+    let (top, bottom) = if ipad || ipad_insets() {
         (performer::STATUS_INSET, performer::HOME_INSET)
     } else {
         (0, 0)
@@ -1625,6 +1630,206 @@ mod tests {
         // A song without sections steps as one.
         assert_eq!(section_step_target(&[], 80.0, -1), Step::Seek(0.0));
         assert_eq!(section_step_target(&[], 80.0, 1), Step::NextSong);
+    }
+
+    // ── The mount, headless on Blitz at 1194 x 834 ─────────────────────────
+
+    use dioxus_test::DocumentTester;
+    use signal_rigs_proto::perform::{PerformState, SongSlot};
+
+    fn fixture() -> Gig {
+        let sectioned = |t: &str| {
+            song(
+                t,
+                vec![
+                    sec("Intro", 0.0, 16.0),
+                    sec("Verse 1", 16.0, 64.0),
+                    sec("Chorus", 64.0, 96.0),
+                    sec("Verse 2", 96.0, 112.0),
+                    sec("Chorus", 112.0, 160.0),
+                    sec("Bridge", 160.0, 200.0),
+                    sec("Chorus", 200.0, 248.0),
+                ],
+            )
+        };
+        Gig {
+            dir: PathBuf::new(),
+            name: "Sunday AM".into(),
+            dates: Vec::new(),
+            note: String::new(),
+            songs: vec![
+                sectioned("Harbor Light"),
+                sectioned("Lantern Hymn"),
+                // A CAA chart: no sections.
+                song("Morning Tide", Vec::new()),
+            ],
+        }
+    }
+
+    /// The rig's two pieces, as boxes of their real size (the guitar
+    /// crate's own bar and switches need a running rig).
+    fn bar(middle: Element) -> Element {
+        rsx! {
+            div { style: "display: flex; align-items: center; gap: 12px; flex: 1; height: 48px; padding: 0 12px;",
+                span { style: "font-size: 15px; font-weight: 800; color: #e4e4e7;", "Signal" }
+                span { style: "flex: 1;" }
+                {middle}
+            }
+        }
+    }
+    fn tiles() -> Element {
+        rsx! {
+            div { style: "display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); grid-template-rows: 60px 60px; gap: 8px; height: 128px;",
+                for k in 0..10 {
+                    div { key: "{k}", style: "border-radius: 8px; background: #1b1b20; border: 1px solid #2b2b31;" }
+                }
+            }
+        }
+    }
+
+    /// Song `up` of the fixture set, playing 1:48 into 4:08 (what
+    /// `FTS_GIG_PLAY=1` leaves the player doing), the rig's setlist on
+    /// the gig's set.
+    #[component]
+    fn Mount(up: usize) -> Element {
+        let gig = fixture();
+        let slots: Vec<SongSlot> = gig
+            .songs
+            .iter()
+            .map(|s| SongSlot {
+                name: s.title.clone(),
+                key: "E".into(),
+                bpm: 124,
+                start: String::new(),
+                colour: String::new(),
+            })
+            .collect();
+        use_context_provider(|| GigState {
+            gigs: Signal::new(vec![gig]),
+            gig_at: Signal::new(0),
+            song_at: Signal::new(Some(up)),
+            keyflow: Signal::new(false),
+            places: Signal::new(Places::new()),
+            studio: Signal::new(false),
+            pos: Signal::new(108.0),
+            dur: Signal::new(248.0),
+            playing: Signal::new(true),
+            loading: Signal::new(false),
+            status: Signal::new(String::new()),
+            device: Signal::new(String::new()),
+            speed: Signal::new(1.0),
+            volume: Signal::new(1.0),
+            looped: Signal::new(None),
+            mark_a: Signal::new(None),
+        });
+        use_context_provider(|| PerfState {
+            perf: Signal::new(PerformState {
+                mode: 2,
+                songs: slots,
+                song_index: u32::try_from(up).unwrap_or(0),
+                setlists: vec!["Sunday AM".into()],
+                ..PerformState::default()
+            }),
+        });
+        rsx! { GigScreenView { rig: GigScreen { app_bar: bar, rig: tiles }, ipad: true } }
+    }
+
+    fn lantern() -> Element {
+        rsx! { Mount { up: 1 } }
+    }
+    fn morning() -> Element {
+        rsx! { Mount { up: 2 } }
+    }
+
+    fn screen(app: fn() -> Element) -> DocumentTester {
+        DocumentTester::from_element(app)
+            .with_window_size(performer::WIDTH, performer::HEIGHT)
+            .build()
+    }
+
+    fn size(doc: &DocumentTester, which: &str) -> (f32, f32) {
+        doc.query(format!("[data-perform=\"{which}\"]").as_str())
+            .immediately()
+            .unwrap_or_else(|e| panic!("{which}: {e:?}"))
+            .size()
+    }
+
+    fn near(a: f32, b: u32) -> bool {
+        (a - b as f32).abs() <= 2.0
+    }
+
+    fn button(doc: &DocumentTester, label: &str) -> Option<String> {
+        doc.query(format!("button[aria-label=\"{label}\"]").as_str())
+            .immediately()
+            .ok()
+            .map(|b| b.attribute("style").unwrap_or_default())
+    }
+
+    #[test]
+    fn the_signal_mount_lands_at_the_specs_rects() {
+        let doc = screen(lantern);
+        let (w, h) = size(&doc, "screen");
+        assert!(near(w, 1194) && near(h, 834), "screen {w}x{h}");
+        for (which, want) in [
+            ("status-inset", 24),
+            ("app-bar", 48),
+            ("now", 112),
+            ("setlist", 486),
+            ("chart", 486),
+            ("dock", 144),
+            ("home-inset", 20),
+        ] {
+            let (_, h) = size(&doc, which);
+            assert!(near(h, want), "{which}: {h} tall, want {want}");
+        }
+        for (which, want) in [
+            ("app-bar", 1194),
+            ("setlist", 320),
+            ("chart", 874),
+            ("rig", 592),
+            ("transport", 562),
+        ] {
+            let (w, _) = size(&doc, which);
+            assert!(near(w, want), "{which}: {w} wide, want {want}");
+        }
+        // The home inset (the bottom 20 px) is the desk, never white.
+        let inset = doc
+            .query("[data-perform=\"home-inset\"]")
+            .immediately()
+            .expect("home inset")
+            .attribute("style")
+            .unwrap_or_default();
+        assert!(inset.contains("#0c0c0f"), "home inset: {inset}");
+        if let Ok(path) = std::env::var("PERFORMER_SHOT") {
+            doc.render_png(&path);
+        }
+    }
+
+    #[test]
+    fn playing_the_play_cell_is_green_and_says_pause() {
+        let doc = screen(lantern);
+        let play = button(&doc, "Pause").expect("the Play cell, playing");
+        assert!(play.contains("#22c55e"), "Play while playing: {play}");
+        // Section skips on a song with sections; the loop and nudges there.
+        assert!(button(&doc, "Previous section").is_some());
+        assert!(button(&doc, "Next section").is_some());
+        assert!(button(&doc, "Loop").is_some());
+        // Every button on the screen says what it does.
+        for b in doc.query_all("button").immediately() {
+            let label = b.attribute("aria-label").unwrap_or_default();
+            assert!(!label.trim().is_empty(), "a button without a label: {}", b.outer_html());
+        }
+    }
+
+    #[test]
+    fn a_song_without_sections_skips_by_song() {
+        let doc = screen(morning);
+        assert!(button(&doc, "Restart the song").is_some(), "back says Song");
+        assert!(button(&doc, "Skip to the next song").is_some(), "forward says Song");
+        assert!(button(&doc, "Previous section").is_none());
+        if let Ok(path) = std::env::var("PERFORMER_SHOT") {
+            doc.render_png(path.replace(".png", "-no-sections.png"));
+        }
     }
 
     #[test]

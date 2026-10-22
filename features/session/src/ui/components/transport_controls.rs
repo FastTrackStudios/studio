@@ -299,7 +299,7 @@ fn skip_words(
             if skip_song { "Restart the song" } else { "Previous section" },
             "Load the next song: tap again",
         ),
-        (true, true, false) => ("Song", "Song", "Restart the song", "Next song"),
+        (true, true, false) => ("Song", "Song", "Restart the song", "Skip to the next song"),
         (true, false, false) => ("Section", "Section", "Previous section", "Next section"),
     }
 }

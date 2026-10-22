@@ -17645,6 +17645,7 @@ dependencies = [
  "dioxus",
  "dioxus-native",
  "dioxus-native-dom",
+ "dioxus-test",
  "drums",
  "ekit",
  "eyre",

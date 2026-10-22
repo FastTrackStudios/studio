@@ -416,3 +416,8 @@ facet-json = { workspace = true }
 base64 = { workspace = true }
 # getrandom 0.3 (transitive via iroh) needs its js backend on wasm32.
 getrandom = { version = "0.3", features = ["wasm_js"] }
+
+# Headless tests of the performer mount (gig/shell.rs): Blitz layout and a
+# PNG of the screen at 1194 x 834 (STA-359).
+[target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
+dioxus-test.workspace = true
