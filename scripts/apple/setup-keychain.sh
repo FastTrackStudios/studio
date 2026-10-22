@@ -10,7 +10,7 @@
 # Idempotent: safe to re-run. Reads the distribution key/cert from
 # ~/.appstoreconnect (dist.key + dist.cer, as written by mint-dist-cert.rb).
 #
-#   ./ios/setup-keychain.sh
+#   scripts/apple/setup-keychain.sh
 #
 # Env: KEYCHAIN (default fts-build.keychain), KEYCHAIN_PW (default fts-build).
 set -euo pipefail

@@ -40,6 +40,8 @@ fi
 # an rsync'd source copy that isn't a git checkout.
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 ROOT="$(cd "$SCRIPT_DIR/../../../.." && pwd)"
+# Signing helpers shared with the other apps (STA-393).
+APPLE_DIR="$ROOT/scripts/apple"
 cd "$SCRIPT_DIR/.."
 
 # Every scratch dir this script mktemp's, removed on exit (success OR failure).
@@ -108,7 +110,7 @@ fi
 # in the keychain yet (no Xcode UI needed).
 if ! security find-identity -v -p codesigning "$KEYCHAIN" | grep -q "Apple Distribution"; then
     echo "=== creating Apple Distribution certificate ==="
-    eval "$(ruby "$SCRIPT_DIR/mint-dist-cert.rb" | grep -E '^DIST_(KEY|CER)=')"
+    eval "$(ruby "$APPLE_DIR/mint-dist-cert.rb" | grep -E '^DIST_(KEY|CER)=')"
     # Bundle key + cert into a .p12 and import (-A: allow all apps, so
     # codesign uses it without a per-run keychain prompt). OpenSSL 3.x needs
     # -legacy for the encoding `security` reads; LibreSSL defaults to it.
@@ -133,7 +135,7 @@ PROFILE_NAME="${PROFILE_NAME:-FTS ${DX_BUNDLE_ID##*.} App Store}"
 
 echo "=== App Store provisioning profile ($PROFILE_NAME) ==="
 PROFILE="$(PROFILE_TYPE=IOS_APP_STORE CERT_TYPE=DISTRIBUTION \
-    ruby "$SCRIPT_DIR/mint-dev-profile.rb" - "$DX_BUNDLE_ID" "$PROFILE_NAME" | awk -F= '/PROFILE_PATH=/{print $2}')"
+    ruby "$APPLE_DIR/mint-dev-profile.rb" - "$DX_BUNDLE_ID" "$PROFILE_NAME" | awk -F= '/PROFILE_PATH=/{print $2}')"
 echo "profile: $PROFILE"
 
 echo "=== building release ==="
@@ -325,7 +327,7 @@ if [ -n "$WATCH_APP" ]; then
 
     echo "=== watch App Store provisioning profile ==="
     WATCH_PROFILE="$(PROFILE_TYPE=IOS_APP_STORE CERT_TYPE=DISTRIBUTION \
-        ruby "$SCRIPT_DIR/mint-dev-profile.rb" - "$WATCH_BUNDLE_ID" "FTS Watch App Store" \
+        ruby "$APPLE_DIR/mint-dev-profile.rb" - "$WATCH_BUNDLE_ID" "FTS Watch App Store" \
         | awk -F= '/PROFILE_PATH=/{print $2}')"
     echo "watch profile: $WATCH_PROFILE"
 

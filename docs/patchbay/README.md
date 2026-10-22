@@ -261,7 +261,7 @@ it calls `codesign --keychain …`. With `PATCHBAY_KEYCHAIN_PW` exported
 (e.g. in your shell profile) it is non-interactive; without it `security`
 asks for the password once per session. The password is never stored in
 this repo. The keychain is `fts-build.keychain`, created by
-`apps/signal/desktop/ios/setup-keychain.sh` with a key partition list for
+`scripts/apple/setup-keychain.sh` with a key partition list for
 `apple-tool:`/`apple:`. These variables override the defaults:
 
 - `PATCHBAY_KEYCHAIN`: the keychain name.

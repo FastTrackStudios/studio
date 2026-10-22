@@ -178,7 +178,7 @@ it.
 
 Verify a release: App Store Connect's build for each bundle id has marketing version ==
 the Release's tag version and the build number written in its notes
-(`ruby apps/<app>/desktop/ios/testflight-status.rb app.fasttrackstudio.<app>` on airlock).
+(`ruby scripts/apple/testflight-status.rb app.fasttrackstudio.<app>` on airlock).
 
 ## What the guard checks (release.yml, on every PR into main)
 

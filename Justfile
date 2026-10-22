@@ -650,7 +650,7 @@ mic-models-install:
 # Package the plugin bundles as a single release tarball in dist/
 # (fts-plugins-v<version>-<platform>.tar.gz + SHA256SUMS entry). The macOS
 # release artifact is NOT this — it's the signed+notarized .zip built by
-# apps/session/desktop/ios/deploy-macos-plugins.sh, since Apple only accepts
+# scripts/apple/deploy-macos-plugins.sh, since Apple only accepts
 # zip/pkg/dmg for notarization.
 plugins-package: plugins-bundle
     #!/usr/bin/env bash

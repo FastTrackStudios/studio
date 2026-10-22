@@ -24,7 +24,7 @@
 #     just "does this slice load and start running at all"
 set -euo pipefail
 
-ROOT="$(cd "$(dirname "$0")/../../.." && pwd)"
+ROOT="$(git -C "$(dirname "$0")" rev-parse --show-toplevel)"
 MODE="${1:-}"
 ARTIFACT="${2:-}"
 

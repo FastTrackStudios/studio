@@ -17,7 +17,7 @@ id="${PATCHBAY_SIGN_ID:-Developer ID Application: CODY JAMES WRIGHT (28C2G63DA7)
 [[ -d "$app" ]] || { echo "no $app — run 'just patchbay-macos-app' first" >&2; exit 1; }
 
 # Non-interactive signing: the identities live in a dedicated build
-# keychain (created by signal/apps/desktop/ios/setup-keychain.sh with a
+# keychain (created by scripts/apple/setup-keychain.sh with a
 # key partition list for apple-tool:/apple:), unlocked here so codesign
 # never pops a password dialog. Missing keychain → the default search
 # list (login keychain) is used.

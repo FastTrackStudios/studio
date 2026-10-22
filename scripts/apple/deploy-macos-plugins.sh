@@ -17,13 +17,13 @@
 #
 # Runs on airlock (headless) with the dedicated keychain, same as
 # deploy-macos.sh:
-#   KEYCHAIN=fts-build.keychain KEYCHAIN_PW=fts-build ./ios/deploy-macos-plugins.sh
+#   KEYCHAIN=fts-build.keychain KEYCHAIN_PW=fts-build scripts/apple/deploy-macos-plugins.sh
 # Needs the App Store Connect key in ~/.appstoreconnect (also used to
 # notarize) and setup-keychain.sh already run (WWDR intermediates present).
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
+ROOT="$(git -C "$SCRIPT_DIR" rev-parse --show-toplevel)"
 cd "$ROOT"
 
 # ADHOC_SIGN=1: local test build — ad-hoc signature, no Developer ID, no
