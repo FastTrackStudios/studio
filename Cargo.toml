@@ -64,6 +64,7 @@ members = [
     "features/adapters/reaper/daw-reaper-dioxus-ext",
     "features/adapters/reaper/tests/daw-reaper-dioxus-ext-test",
     "apps/session/desktop",
+    "apps/session/node",
     "apps/session/daw-web",
     "apps/session/daw",
     "apps/session/web",
@@ -876,6 +877,13 @@ task-dial = { git = "https://github.com/FastTrackStudios/task", branch = "main" 
 # Live sessions Task keeps: joining a set, the clock, the epochs.
 live-proto = { git = "https://github.com/FastTrackStudios/task", branch = "main" }
 links-proto = { git = "https://github.com/FastTrackStudios/task", branch = "main" }
+# A studio install as a Task device node (ADR 0002, STA-362): Task's own
+# LocalNode, embedded by `session-node` behind its `task-node` feature.
+# Every plugin off but FastTrackStudio's (songs, setlists, live), which is
+# what Session and Signal read; the core lanes (auth, files, docs, the
+# iroh presence) are not features and always come with it.
+task-server = { git = "https://github.com/FastTrackStudios/task", branch = "main", default-features = false, features = ["plugin-fasttrackstudio"] }
+session-node = { path = "apps/session/node" }
 
 # Task's externals not already pinned above (root pins win everywhere
 # a key already existed — dioxus, serde, tokio, facet/vox rc.5 fleet,
@@ -1553,5 +1561,10 @@ architect-story-runtime = { git = "https://www.github.com/FastTrackStudios/archi
 architect-telemetry = { git = "https://www.github.com/FastTrackStudios/architect", tag = "v0.9.9" }
 architect-ui = { git = "https://www.github.com/FastTrackStudios/architect", tag = "v0.9.9" }
 auth-client = { git = "https://www.github.com/FastTrackStudios/architect", tag = "v0.9.9" }
+# task-server's (ADR 0002): task main pins v0.9.6; lifted here with the rest.
+architect-auth = { git = "https://www.github.com/FastTrackStudios/architect", tag = "v0.9.9" }
+architect-permissions-proto = { git = "https://www.github.com/FastTrackStudios/architect", tag = "v0.9.9" }
+auth = { git = "https://www.github.com/FastTrackStudios/architect", tag = "v0.9.9" }
+auth-proto = { git = "https://www.github.com/FastTrackStudios/architect", tag = "v0.9.9" }
 crdt = { git = "https://www.github.com/FastTrackStudios/architect", tag = "v0.9.9" }
 crdt-derive = { git = "https://www.github.com/FastTrackStudios/architect", tag = "v0.9.9" }

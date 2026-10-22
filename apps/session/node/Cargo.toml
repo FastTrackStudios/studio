@@ -1,0 +1,44 @@
+[package]
+name = "session-node"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "A Signal or Session install as a Task device node: Task's LocalNode (account pass, one iroh endpoint per org, the admitted set, the doc lane) embedded behind the `task-node` feature (ADR 0002, STA-362)"
+
+[lints]
+workspace = true
+
+# ADR 0002 (option A): the node is Task's own `LocalNode`, embedded, not a
+# second implementation of it. It lives under apps/ because it hosts a
+# transport (architect `server` + `iroh`), which boundaries.toml only lets
+# apps/ do. Off by default: an app opts in with `session-node/task-node`.
+[features]
+default = []
+task-node = ["dep:task-server", "dep:openssl"]
+
+[dependencies]
+eyre = { workspace = true }
+task-server = { workspace = true, optional = true }
+# The node runs its background work (iroh accept loops, the device pull)
+# on a runtime of its own; the probe binary's baseline holds one too, so
+# the size delta is the node and not tokio.
+tokio = { workspace = true, features = ["rt-multi-thread", "macros"] }
+
+# architect-auth's passkeys (webauthn-rs) link OpenSSL. iOS has none to
+# link and the dev shell's is a macOS one, so the phone builds it from
+# source: the same recipe as Task's apps/mobile.
+[target.'cfg(target_os = "ios")'.dependencies]
+openssl = { version = "0.10", features = ["vendored"], optional = true }
+
+[dev-dependencies]
+# Its own tests build with the node in, so a plain
+# `cargo check --workspace --all-targets` compiles the embedded node.
+session-node = { path = ".", features = ["task-node"] }
+tempfile = { workspace = true }
+
+# The size probe (ADR 0002): built `--release` once without and once with
+# `--features task-node`; the difference is what the node adds.
+[[bin]]
+name = "session-node-probe"
+path = "src/bin/probe.rs"
