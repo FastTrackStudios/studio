@@ -31,9 +31,9 @@ static CYCLE: ActionMeta = crate::actions::meta(
     "COMP_CYCLE",
     "comp_cycle",
     "Comp the next take",
-    "Over a stretch (the selection, or `from`/`to` / `sections`), comp the kit from the next take in COMP_CANDIDATES' ranking (`by` 1, the default) or the one before (-1), round from the last to the first, empty takes skipped; from none comped there, the best. Every mic from the same take; where the kit is edited (its EDIT lanes), the edit over the stretch is made the new comp as recorded. Says the take, the ranking and the stretch. T and Shift+T.",
+    "Over a stretch (the selection, or `from`/`to` / `sections`), comp the kit from the next take in COMP_CANDIDATES' ranking (`by` 1, the default) or the one before (-1), round from the last to the first, empty takes skipped; from none comped there, the best. Every mic from the same take; where the kit is edited (its EDIT lanes), the edit over the stretch is made the new comp as recorded. Says the take, the ranking and the stretch. The keys T and Shift+T are SESSION_COMP_NEXT and SESSION_COMP_PREV, which run this over the selection.",
     "Edit",
-    "T",
+    "",
 );
 
 static CHOOSE: ActionMeta = crate::actions::meta(
