@@ -13,8 +13,16 @@ const APP: App = App::new("session-desktop", "0.2.0");
 
 /// Serve `releases` as the studio repo's release list; returns the API base.
 async fn feed(releases: String) -> String {
-    let path = format!("/repos/{REPO}/releases");
-    let app = axum::Router::new().route(&path, axum::routing::get(move || async move { releases }));
+    let list = format!("/repos/{REPO}/releases");
+    // One fallback answers every path (as architect's own release test
+    // does): the list at `list`, 404 elsewhere.
+    let app = axum::Router::new().fallback(move |uri: axum::http::Uri| async move {
+        if uri.path() == list {
+            (axum::http::StatusCode::OK, releases)
+        } else {
+            (axum::http::StatusCode::NOT_FOUND, String::new())
+        }
+    });
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let base = format!("http://{}", listener.local_addr().unwrap());
     tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
