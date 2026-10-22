@@ -888,8 +888,10 @@ dependencies = [
  "gloo-timers",
  "include_dir",
  "iroh",
+ "js-sys",
  "thiserror 2.0.20",
  "tokio",
+ "tokio-tungstenite 0.29.0",
  "tower-http",
  "tracing",
  "tracing-subscriber",
@@ -897,7 +899,10 @@ dependencies = [
  "vox",
  "vox-core",
  "vox-types",
+ "vox-websocket",
+ "wasm-bindgen",
  "wasm-bindgen-futures",
+ "web-sys",
  "web-time",
 ]
 
