@@ -67,9 +67,9 @@ the advisory job goes away.
 as the base. GitHub has no setting for a different default PR base, so
 `.github/workflows/pr-base.yml` (`pull_request_target`: opened, reopened,
 edited) retargets any PR whose base is `main` onto `dev` and says why in a
-one-line comment. It leaves alone PRs whose head is `release/v*`,
-`hotfix/*` or `backmerge/*` in this repo; those are the release PRs, opened
-by hand or by `scripts/release.sh`.
+one-line comment. It leaves alone PRs whose head is `dev` (the promotion PR),
+`release/v*`, `hotfix/*` or `backmerge/*` in this repo; those are the release
+PRs, opened by hand or by `scripts/release.sh`.
 
 - **Agents and scripts still pass `--base dev` explicitly.** The workflow is a
   safety net, not the plan.
