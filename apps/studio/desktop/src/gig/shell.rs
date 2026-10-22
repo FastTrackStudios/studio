@@ -38,11 +38,10 @@ use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
-use app_shell::ui::performer::{self, PerformDock, PerformerScreen, ids};
+use app_shell::ui::performer::{self, PerformDock, PerformerScreen};
 use app_shell::ui::playback::{PlaybackModel, PlaybackView, SectionView, SongView};
 use app_shell::ui::{
-    NowBand, Panel, PanelRegistry, Region, SyncPill, TransportNudgeRow, provide_playback,
-    use_panel_registry, use_playback,
+    NowBand, SyncPill, TransportNudgeRow, provide_playback, use_panel_registry, use_playback,
 };
 use dioxus::prelude::*;
 use guitar::ui::{GigScreen, GigSlots};
@@ -647,6 +646,8 @@ impl PlaybackModel for GigPlayback {
             can_control: true,
             following: None,
             peers: 0,
+            // Signal counts in time, not bars.
+            bar_beat: None,
         }
     }
 
@@ -741,17 +742,14 @@ fn GigScreenView(
     let perf = try_use_context::<PerfState>();
     provide_playback(GigPlayback { st, perf });
     use_context_provider(|| RigPieces(rig));
+    // The one registry function Session's performer view calls too (no fork).
     use_panel_registry(|| {
-        PanelRegistry::new()
-            .with(Panel::new(ids::NOW, "Now", Region::Top, now_panel))
-            .with(Panel::new(
-                ids::SETLIST,
-                "Setlist",
-                Region::Left,
-                setlist_panel,
-            ))
-            .with(Panel::new(ids::CHART, "Chart", Region::Main, chart_panel))
-            .with(Panel::new(ids::DOCK, "Dock", Region::Bottom, dock_panel))
+        performer::performer_registry(performer::PerformerBodies {
+            now: now_panel,
+            setlist: setlist_panel,
+            chart: chart_panel,
+            dock: dock_panel,
+        })
     });
     let (top, bottom) = if ipad || ipad_insets() {
         (performer::STATUS_INSET, performer::HOME_INSET)
