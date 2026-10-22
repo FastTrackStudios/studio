@@ -2159,7 +2159,9 @@ web-daw-serve:
 
 # Fetch the large binaries kept out of this repository (assets.txt: the
 # private studio-assets and rig-models repos) into .assets/<repo>, and link
-# each listed file or directory into place. Re-run to update.
+# each listed file or directory into place. Re-run to update. Clones over
+# https so gh's credential helper authenticates (fleet hosts have no GitHub
+# ssh key).
 assets:
     #!/usr/bin/env bash
     set -euo pipefail
@@ -2170,7 +2172,7 @@ assets:
         to=${to:-$from}
         if [[ -z ${fetched[$repo]:-} ]]; then
             if [[ -d .assets/$repo/.git ]]; then git -C ".assets/$repo" pull --ff-only --quiet
-            else git clone --quiet "git@github.com:FastTrackStudios/$repo.git" ".assets/$repo"; fi
+            else git clone --quiet "https://github.com/FastTrackStudios/$repo.git" ".assets/$repo"; fi
             fetched[$repo]=1
         fi
         mkdir -p "$(dirname "$to")"

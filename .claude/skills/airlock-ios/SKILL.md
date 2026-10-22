@@ -120,8 +120,11 @@ KEYCHAIN=fts-build.keychain KEYCHAIN_PW=fts-build SKIP_BUILD=1 \
 ```
 
 - A release build needs the rig's captures: `features/rigs/guitar/default-config{,-bass}/models`
-  link to a `rig-models` clone (`/Volumes/build-disk/development/rig-models`;
-  `just assets` clones over SSH, which airlock lacks — `gh repo clone` it).
+  link to a current `rig-models` clone. For a manual build or upload, run
+  `just assets` in the checkout first: it clones or `pull --ff-only`s rig-models
+  over https into `.assets/` and links the captures. The release workflows
+  fast-forward airlock's long-lived clone (`/Volumes/build-disk/development/rig-models`)
+  to origin/main themselves.
 - `frame` must sit beside the studio checkout (`signal_app_faces`).
 - Gigs ride inside the app (`GIG_BUNDLE`, `<App>.app/Gigs/`); make the iPad
   copy with `scripts/signal/gig-ipad.py` first (WAV → Ogg Vorbis, ~7× smaller).
