@@ -102,11 +102,12 @@ fn TransportBarView(reading: crate::engine::Reading, big: bool) -> Element {
     let seconds = r.at - minutes * 60.0;
     let clock = format!("{minutes:.0}:{seconds:05.2}");
     let bpm = tempo_text(r.bpm);
-    let ends = if big {
-        density == Density::Full
-    } else {
-        density != Density::Narrow
-    };
+    // Go to start / Go to end stay at Compact too (the iPad audit's fix
+    // 7: a tablet's bottom bar is Compact, and Home / End are a keyboard's);
+    // at Narrow they move into the ⋯ overflow beside the bar.beat.
+    let ends = density != Density::Narrow;
+    let overflow = density == Density::Narrow;
+    let mut more = use_signal(|| false);
     // A finger's sizes, or a mouse's.
     let (tall, card, beat_px, clock_px, pill_px) = if big {
         (40, 40, 20, 13, 15)
@@ -210,6 +211,44 @@ fn TransportBarView(reading: crate::engine::Reading, big: bool) -> Element {
                     span { style: "font-size:{clock_px}px; color:{DIM};", "{clock}" }
                 }
             }
+            if overflow {
+                // Narrow: what the bar has no room for, one tap away — Go
+                // to start, Go to end, the clock, tempo and key (the iPad
+                // audit's fix 7). 48 x 48 by touch.
+                div {
+                    style: "position:relative; height:100%; flex:none; display:flex; align-items:center;",
+                    button {
+                        "aria-label": "More transport",
+                        title: "More transport",
+                        style: "width:48px; height:48px; border:none; border-radius:8px; background:transparent; \
+                                color:{TEXT}; font-size:20px; cursor:pointer;",
+                        onclick: move |_| more.toggle(),
+                        "⋯"
+                    }
+                    if more() {
+                        div {
+                            style: "{crate::shell::SCRIM} z-index:40;",
+                            onclick: move |_| more.set(false),
+                        }
+                        div {
+                            role: "menu",
+                            style: "position:absolute; right:0; {menu_side} z-index:41; min-width:220px; \
+                                    padding:6px; background:{BG}; border:1px solid {RULE}; border-radius:10px; \
+                                    display:flex; flex-direction:column; gap:2px; box-shadow:0 10px 30px rgba(0,0,0,0.5);",
+                            button { role: "menuitem", "aria-label": "Go to start", style: overflow_row(),
+                                onclick: move |_| { transport(Move::Home, 0.0); more.set(false); },
+                                "Go to start"
+                            }
+                            button { role: "menuitem", "aria-label": "Go to end", style: overflow_row(),
+                                onclick: move |_| { transport(Move::End, 0.0); more.set(false); },
+                                "Go to end"
+                            }
+                            div { style: "{overflow_row()} cursor:default; font-family:ui-monospace, monospace;", "{clock}" }
+                            div { style: "{overflow_row()} cursor:default;", "{bpm} BPM · {key}" }
+                        }
+                    }
+                }
+            }
             if density == Density::Full {
                 // Tempo and key as one card, each a small label over its
                 // value — what the song is doing where the playhead is.
@@ -241,6 +280,15 @@ fn TransportBarView(reading: crate::engine::Reading, big: bool) -> Element {
             }
         }
     }
+}
+
+/// One 52 px row of the narrow bar's ⋯ overflow.
+fn overflow_row() -> String {
+    format!(
+        "display:flex; align-items:center; height:52px; padding:0 12px; box-sizing:border-box; \
+         border:none; border-radius:6px; background:transparent; color:{TEXT}; font-size:15px; \
+         text-align:left; cursor:pointer;"
+    )
 }
 
 /// One row of the stop menu: ticked when it is the behaviour in force.
