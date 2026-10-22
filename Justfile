@@ -1972,11 +1972,10 @@ web-wasm-check:
     cargo check -p session-web --target wasm32-unknown-unknown
     cargo check -p signal-web --target wasm32-unknown-unknown
 
-# Runs exactly what `.github/workflows/checks.yml` runs, in the same
-# order — the full local gate for anything pushed or PR'd into `dev`,
-# where CI runs no build (checks.yml runs on release PRs into main only).
-# The minimum gate for a PR into dev is `cargo check --workspace
-# --all-targets`. NOT the other
+# Runs what `.github/workflows/checks.yml` runs, in the same order: a
+# local run gives the same answer as CI's fast checks on a PR into main
+# (CI narrows the tests with `cargo rail plan`; this runs them all). NOT
+# the other
 # workflows: `signal-ios` and `session-ios` (the release tag) and `deploy` need a
 # Mac, signing keys and upload credentials, which is why they are not a
 # thing you run before pushing — and why a green run here says nothing
@@ -2074,71 +2073,70 @@ ci FROM="lockfile":
 
 # ── Releases ─────────────────────────────────────────────────────────────
 #
-# Two separate stages (docs/agents/release-workflow.md). dev collects
-# verified work (pushed, or a PR squash-merged; PRs into dev run only the
-# PR-title check, so a local check is their gate). `just release-promote`
-# opens dev -> main ("finished features": full checks + the Reviewer, merge
-# commit, NOTHING ships). A release is a TAG on main: `release-prepare` cuts
-# release/vX.Y.Z (version + changelog commit), its PR merges into main, and
-# `release-tag` pushes `vX.Y.Z`, which deploys the sites, uploads Signal +
-# Session to TestFlight, runs the REAPER suites and publishes the one
-# GitHub Release. Production = the latest `v*` tag. One version,
-# `[workspace.package] version` in Cargo.toml; the changelog is generated
-# from commit subjects by git-cliff (cliff.toml).
+# Fleet release flow v4 (the `release-workflow` skill; studio specifics in
+# docs/agents/release-workflow.md). `main` is the only long-lived branch:
+# every PR squash-merges into it with a cargo-rail change file
+# (`cargo rail change add <crates> --bump <none|patch|minor|major> -m
+# "<note>"`). A release is a TAG: `release-prepare` cuts `release/pending`
+# (ONE commit: the CalVer bump YY.M.MICRO and the CHANGELOG.md section built
+# from .changes/), `release-pr` opens it, `release-merge` squash-merges it
+# after re-checking it against the current main, and `release-tag` pushes
+# `vYY.M.MICRO` once that commit is green, which deploys the sites, uploads
+# Signal + Session to TestFlight, runs the REAPER suites and publishes the
+# one GitHub Release. Production = the latest `v*` tag.
 #
 # Signal and Session (the iOS apps) are ONE release with the rest of the
 # repo: the same build, the same version (their crates take
-# `version.workspace = true`), the same `vX.Y.Z` tag and GitHub Release.
-# The tag uploads BOTH apps to TestFlight at its version; nothing else
-# uploads TestFlight.
+# `version.workspace = true`), the same tag and GitHub Release.
 
 # The studio's release version ([workspace.package] in Cargo.toml).
 version:
     @bash scripts/release.sh version
 
-# What is live (latest v* tag), what main holds since, what waits on dev,
-# the unreleased changelog and the git dependencies that moved.
+# What is live (latest v* tag), what main holds since, the next CalVer
+# version, the draft changelog from .changes/ and the git deps that moved.
 release-plan:
     bash scripts/release.sh plan
 
-# Stage 1: open the promotion PR dev -> main (finished features). Merge it
-# with a merge commit once `checks`, the release guard and the Reviewer pass.
-release-promote:
-    bash scripts/release.sh promote
-
-# Stage 2: cut `release/v<next>` from origin/main: bump the version, write
-# the changelog section, commit `chore(release): v<next>`.
-# BUMP: patch (the default, whatever the commits say; 0.1.9 -> 0.1.10, the
-# patch never rolls over), minor or major (only when the Captain or
-# Commander calls one), auto (git-cliff decides), or an exact X.Y.Z.
+# Cut `release/pending` from origin/main: bump to the next CalVer version,
+# write the changelog section from .changes/ (deleting the files), commit
+# `chore(release): v<next>`. An X.Y.Z argument only pins the version you
+# expect (it must be the computed next one). `--hotfix` cuts from
+# origin/release/v<latest tag> instead (after `release-hotfix` merged).
 release-prepare *ARGS:
     bash scripts/release.sh prepare {{ARGS}}
 
-# On the release/v* (or hotfix/*) branch: push it and open its PR into
-# main, with the changelog as the body.
+# On release/pending (or a hotfix branch): push it and open its PR.
 release-pr:
     bash scripts/release.sh pr
 
-# After the release PR merged: tag v<version> on main. THE TAG SHIPS (sites,
-# Signal + Session TestFlight, REAPER, the GitHub Release). Then it opens
-# the main -> dev back-merge. Pushes as whoever you are: use the fts-forge
-# bot or a person, not a workflow token (that starts no workflow).
+# Re-run the release guard against the CURRENT base, then squash-merge
+# the release PR (pinned to its head commit).
+release-merge:
+    bash scripts/release.sh merge
+
+# After the release PR merged: tag v<version> on its merge commit once
+# `Build + test` is green there. THE TAG SHIPS (sites, Signal + Session
+# TestFlight, REAPER, the GitHub Release). After a hotfix it opens the
+# forward-port PR into main. Push as the fts-forge bot or a person, not a
+# workflow token (that starts no workflow).
 release-tag *ARGS:
     bash scripts/release.sh tag {{ARGS}}
 
-# main -> dev (merge commit, auto-merge). A no-op when dev already has all
-# of main's content. `release-tag` runs it; run it alone after a hotfix.
-release-backmerge:
-    bash scripts/release.sh backmerge
-
-# hotfix/<name> from the latest tag (what production runs). Fix, then
-# `just release-pr`; then cut the patch release as usual.
-release-hotfix NAME:
-    bash scripts/release.sh hotfix {{NAME}}
+# Hotfix while main can't ship: release/v<latest tag> from the tag (if
+# missing), the given main commits cherry-picked with -x on a branch, and
+# its PR into that line. Then release-prepare --hotfix, release-pr,
+# release-merge, release-tag.
+release-hotfix +COMMITS:
+    bash scripts/release.sh hotfix {{COMMITS}}
 
 # One version's section of CHANGELOG.md (default: the current version).
 release-notes *ARGS:
     @bash scripts/release.sh notes {{ARGS}}
+
+# The release tooling's own end-to-end test (synthetic repo, local origin).
+release-sandbox:
+    bash scripts/release-sandbox.sh
 
 # The Session DAW view in a browser (session-daw's web_host), built to
 # apps/session/daw-web/dist: cargo → wasm-bindgen → index.html, plus the

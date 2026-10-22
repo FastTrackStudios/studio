@@ -9,10 +9,10 @@
 # Triggers:
 #   workflow_dispatch — run a full pass whenever you want.
 #   push tags v* / rc-* — release candidates and releases always get
-#     the full REAPER pass. The release tag is pushed by `just
-#     release-tag` (as the fts-forge App or a person), so the push
-#     starts this workflow; a tag made with a workflow's GITHUB_TOKEN
-#     would not.
+#     the full REAPER pass. The release tag (vYY.M.MICRO, on main or a
+#     release/v* hotfix line) is pushed by `just release-tag` (as the
+#     fts-forge App or a person), so the push starts this workflow; a
+#     tag made with a workflow's GITHUB_TOKEN would not.
 #
 # The job resolves the same REAPER 7.75 store path the dev machine's
 # rig uses (pinned via gcroot; nixpkgs fallback) and runs both harnesses
@@ -47,6 +47,15 @@ jobs:
     timeout-minutes: 240
     steps:
       - uses: actions/checkout@v4
+        with:
+          # The tag guard needs main's and the release/v* lines' history.
+          fetch-depth: 0
+      # A release tag gets its REAPER pass only if it is a real release:
+      # a release commit on main or on a release/v* hotfix line. (rc-* tags
+      # and dispatches are by hand and run as they are.)
+      - name: The tag is a release on main or release/v*
+        if: ${{ startsWith(github.ref, 'refs/tags/v') }}
+        run: bash scripts/release.sh tag-guard
       # features/patchbay -> inferno-net is a git dep on the private
       # FastTrackStudios/inferno-control; cargo needs read access to resolve the workspace.
       - name: inferno-control read access

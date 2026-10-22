@@ -1,7 +1,9 @@
 # cargo-rail — CI change selection (`cargo rail plan`): which workspace
 # packages a change actually affects, through cargo's resolved
-# reverse-dependency graph. studio is a big workspace, so running only
-# the affected tests is worth real minutes per promotion PR. nixpkgs
+# reverse-dependency graph; and release intent (`cargo rail change
+# add/check`, the .changes/ files the release changelog is built from).
+# studio is a big workspace, so running only the affected tests is worth
+# real minutes per PR. nixpkgs
 # carries 0.7.0, which predates the plan contract, so it is built here
 # from the release tag (same version and hashes as Task's module).
 #

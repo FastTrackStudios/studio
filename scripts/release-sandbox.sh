@@ -1,288 +1,347 @@
 #!/usr/bin/env bash
-# Sandbox test of scripts/release.sh: the ONE studio release (release/vX.Y.Z, tag
-# vX.Y.Z, one GitHub Release) that drives both iOS TestFlight uploads (Signal +
-# Session), end to end, on a synthetic repo and a local bare "origin". Nothing
-# leaves the sandbox: cargo and gh are shims (gh keeps its releases as files).
+# Sandbox test of scripts/release.sh (flow v4): CalVer next versions, the
+# changelog from cargo-rail change files, the release guard, tagging, a
+# hotfix line with its forward-port, and the TestFlight helpers, end to end
+# on a synthetic repo and a local bare "origin". Nothing leaves the
+# sandbox: cargo and gh are shims (gh keeps its releases and PRs as files).
 # Run from anywhere:
 #
 #   scripts/release-sandbox.sh [SCRATCH_DIR]
 #
-# Needs git, git-cliff and jq on PATH. Exits non-zero if any check fails.
+# Needs git and awk; git-cliff (or nix) only for the no-change-files
+# fallback. Exits non-zero if any check fails.
 # shellcheck disable=SC2015,SC2016 # `[ test ] && ok || bad` is the idiom here: ok never fails; the ERE patterns hold literal backticks
 set -uo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 S="${1:-${TMPDIR:-/tmp}/release-sandbox}"
 REPO=FastTrackStudios/studio
 export GIT_AUTHOR_NAME=test GIT_AUTHOR_EMAIL=t@example.invalid GIT_COMMITTER_NAME=test GIT_COMMITTER_EMAIL=t@example.invalid
-rm -rf "$S"; mkdir -p "$S/shim" "$S/releases"
+export GIT_CONFIG_GLOBAL=/dev/null
+rm -rf "$S"; mkdir -p "$S/shim" "$S/releases" "$S/prs"
 export PATH="$S/shim:$PATH"
 export GITHUB_REPOSITORY="$REPO"
+unset GITHUB_STEP_SUMMARY GITHUB_OUTPUT GH_TOKEN RELEASE_MONTH
 pass=0; failn=0
 ok()  { echo "PASS: $*"; pass=$((pass+1)); }
 bad() { echo "FAIL: $*"; failn=$((failn+1)); }
 expect_ok()   { local d="$1"; shift; if "$@" >"$S/last.out" 2>&1; then ok "$d"; else bad "$d"; cat "$S/last.out"; fi; }
 expect_fail() { local d="$1"; shift; if "$@" >"$S/last.out" 2>&1; then bad "$d (unexpected pass)"; cat "$S/last.out"; else ok "$d"; grep -h '::error::\|release:' "$S/last.out" | head -2 | sed 's/^/      /'; fi; }
-# expect_out <description> <file> <ERE>: the file matches
-expect_out()  { if grep -qiE "$3" "$2"; then ok "$1"; else bad "$1 (no match for: $3)"; sed 's/^/      | /' "$2" | head -20; fi; }
+expect_rc()   { local d="$1" want="$2"; shift 2; "$@" >"$S/last.out" 2>&1; local rc=$?; [ "$rc" = "$want" ] && ok "$d (exit $rc)" || { bad "$d (exit $rc, wanted $want)"; cat "$S/last.out"; }; }
+expect_out()  { if grep -qiE "$3" "$2"; then ok "$1"; else bad "$1 (no match for: $3)"; sed 's/^/      | /' "$2" | head -30; fi; }
 expect_no()   { if grep -qiE "$3" "$2"; then bad "$1 (found: $3)"; else ok "$1"; fi; }
+eq()          { [ "$2" = "$3" ] && ok "$1: $2" || bad "$1: got '$2', wanted '$3'"; }
+lastpr()      { local f n=0; for f in "$S"/prs/*.meta; do [ -e "$f" ] && n=$((n+1)); done; echo "$n"; } # the newest PR's number
 
 # ── shims ────────────────────────────────────────────────────────────────
+# cargo: `update --workspace` moves the lockfile entries of the members that
+# inherit the workspace version (as cargo does), nothing else.
 cat > "$S/shim/cargo" <<'EOF'
-#!/bin/sh
+#!/usr/bin/env bash
 echo "[shim] cargo $*" >&2
+[ "$1" = update ] || exit 0
+v="$(sed -n '/^\[workspace\.package\]/,/^\[/{s/^version *= *"\([^"]*\)".*/\1/p;}' Cargo.toml | head -1)"
+awk -v v="$v" -v members="signal-desktop session-desktop" '
+  BEGIN { n = split(members, m, " "); for (i = 1; i <= n; i++) mem[m[i]] = 1 }
+  /^name = / { name = $3; gsub(/"/, "", name) }
+  /^version = / && (name in mem) && !unused { print "version = \"" v "\""; next }
+  /^\[\[patch\.unused\]\]/ { unused = 1 }
+  { print }' Cargo.lock > Cargo.lock.new && mv Cargo.lock.new Cargo.lock
 EOF
 cat > "$S/shim/gh" <<'EOF'
-#!/bin/bash
-# A tiny gh: releases are files under $SHIM_REL, calls are logged to $SHIM_LOG.
+#!/usr/bin/env bash
+# A tiny gh: releases and PRs are files, calls are logged to $SHIM_LOG.
 echo "[shim] gh $*" >> "$SHIM_LOG"
 arg() { local k="$1"; shift; while [ $# -gt 0 ]; do [ "$1" = "$k" ] && { echo "$2"; return; }; shift; done; }
 case "$1 $2" in
   "release view") [ -f "$SHIM_REL/$3.body" ] || exit 1
      case "$*" in *"--json body"*) b="$(cat "$SHIM_REL/$3.body")"; sleep "${SHIM_VIEW_DELAY:-0}"; printf '%s\n' "$b" ;; esac ;;
   "release create") tag="$3"; shift 3
-     tgt="$(arg --target "$@")"; nf="$(arg --notes-file "$@")"
-     cp "$nf" "$SHIM_REL/$tag.body"; arg --title "$@" > "$SHIM_REL/$tag.title"
-     case " $* " in *" --latest=false "*) echo false > "$SHIM_REL/$tag.latest" ;; *) echo true > "$SHIM_REL/$tag.latest" ;; esac
-     git rev-parse -q --verify "refs/tags/$tag" >/dev/null || { git tag "$tag" "$tgt" && git push -q origin "$tag"; } ;;
+     cp "$(arg --notes-file "$@")" "$SHIM_REL/$tag.body"; arg --title "$@" > "$SHIM_REL/$tag.title" ;;
   "release edit") tag="$3"; shift 3; cp "$(arg --notes-file "$@")" "$SHIM_REL/$tag.body" ;;
   "pr list") exit 0 ;;
-  "pr create") shift 2; cp "$(arg --body-file "$@")" "$SHIM_PRBODY"; echo "https://github.com/x/y/pull/9999" ;;
-  "pr merge"|"workflow run") : ;;
+  "pr create") shift 2; n=$(( $(ls "$SHIM_PRS" | grep -c meta) + 1 ))
+     { echo "base=$(arg --base "$@")"; echo "head=$(arg --head "$@")"; echo "title=$(arg --title "$@")"; } > "$SHIM_PRS/$n.meta"
+     f="$(arg --body-file "$@")"; if [ -n "$f" ]; then cp "$f" "$SHIM_PRS/$n.body"; else arg --body "$@" > "$SHIM_PRS/$n.body"; fi
+     echo "https://github.com/x/y/pull/$n" ;;
+  "api -X") case "$*" in *check-runs*) echo "${SHIM_CHECK:-completed success}" ;; esac ;;
+  "api --paginate") : ;;
 esac
 EOF
 chmod +x "$S/shim/cargo" "$S/shim/gh"
-export SHIM_LOG="$S/gh.log" SHIM_REL="$S/releases" SHIM_PRBODY="$S/pr.body"; : > "$SHIM_LOG"
+export SHIM_LOG="$S/gh.log" SHIM_REL="$S/releases" SHIM_PRS="$S/prs"; : > "$SHIM_LOG"
 
-# ── a synthetic repo: the real tooling, the real cliff.toml ──────────────
-W="$S/seed"; mkdir -p "$W/scripts" "$W/apps/signal/desktop" "$W/apps/session/desktop" "$W/features/signal" "$W/features/session" "$W/crates/shared"
-cp "$HERE/scripts/release.sh" "$W/scripts/"; cp "$HERE/cliff.toml" "$W/"
-printf '[workspace.package]\nversion = "0.1.0"\n' > "$W/Cargo.toml"
+# ── a synthetic repo: the real script, the real cliff.toml ───────────────
+W="$S/seed"; mkdir -p "$W/scripts" "$W/apps/signal/desktop" "$W/apps/session/desktop" "$W/crates/shared" "$W/.changes"
+cp "$HERE/scripts/release.sh" "$W/scripts/"; cp "$HERE/cliff.toml" "$W/" 2>/dev/null || true
+printf 'Change files: cargo rail change add <crates> --bump <none|patch|minor|major> -m "<note>"\n' > "$W/.changes/README"
+printf '[workspace]\nmembers = ["apps/*/desktop", "crates/shared"]\n\n[workspace.package]\nversion = "0.1.0"\nedition = "2021"\n' > "$W/Cargo.toml"
 for a in signal session; do
-  printf '[package]\nname = "%s-desktop"\nversion.workspace = true\n\n[dependencies]\nserde = { version = "1" }\n' "$a" > "$W/apps/$a/desktop/Cargo.toml"
-  echo "// $a" > "$W/features/$a/lib.rs"
+  printf '[package]\nname = "%s-desktop"\nversion.workspace = true\n' "$a" > "$W/apps/$a/desktop/Cargo.toml"
 done
-echo "// shared" > "$W/crates/shared/lib.rs"; echo "# lock" > "$W/Cargo.lock"
+printf '[package]\nname = "shared"\nversion = "0.1.0"\n' > "$W/crates/shared/Cargo.toml"
+cat > "$W/Cargo.lock" <<'EOF'
+# This file is automatically @generated by Cargo.
+version = 4
+
+[[package]]
+name = "serde"
+version = "0.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+
+[[package]]
+name = "session-desktop"
+version = "0.1.0"
+
+[[package]]
+name = "shared"
+version = "0.1.0"
+
+[[package]]
+name = "signal-desktop"
+version = "0.1.0"
+
+[[patch.unused]]
+name = "a-patch"
+version = "1.0.0"
+
+[[patch.unused]]
+name = "b-patch"
+version = "2.0.0"
+EOF
+printf '# Changelog\n\nAll notable changes to this project are documented in this file.\n\n' > "$W/CHANGELOG.md"
 git -C "$W" init -q -b main; git -C "$W" add -A; git -C "$W" commit -qm "initial import"
+# v0.1.0 .. v0.1.2: the pre-CalVer history (flow v2 releases)
+for v in 0.1.0 0.1.1 0.1.2; do
+  if [ "$v" != 0.1.0 ]; then
+    sed -i "s/^version = \"0\.1\.[0-9]\"$/version = \"$v\"/" "$W/Cargo.toml"
+    sed -i "/^name = \"s[ei][gs][ns][ai][lo]n\{0,1\}-desktop\"/{n;s/^version = .*/version = \"$v\"/}" "$W/Cargo.lock"
+  fi
+  awk -v v="$v" 'done || !/^## \[/ { print; next } { print "## [" v "] - 2026-10-21\n\n- v2 release " v "\n"; print; done = 1 } END { if (!done) print "## [" v "] - 2026-10-21\n\n- v2 release " v }' "$W/CHANGELOG.md" > "$W/cl" && mv "$W/cl" "$W/CHANGELOG.md"
+  git -C "$W" commit -qam "chore(release): v$v (#$((${v##*.} + 1)))"; git -C "$W" tag -a "v$v" -m "studio $v"
+done
+git -C "$W" tag v99.1.0-rc.1 -m "a suffixed tag never counts"
 git init -q --bare -b main "$S/origin.git"
-git -C "$W" push -q "$S/origin.git" main:main main:dev
+git -C "$W" push -q "$S/origin.git" main:main --tags
 git clone -q "$S/origin.git" "$S/wc"; cd "$S/wc" || exit 1
 R() { bash scripts/release.sh "$@"; }
-git_ver() { sed -n '/^\[package\]/,/^\[/{s/^version *= *"\([^"]*\)".*/\1/p;}' "$1" | head -1; }
-guard() { BASE_SHA="$(git rev-parse origin/main)" HEAD_SHA="$1" HEAD_REF="$2" GITHUB_STEP_SUMMARY="$S/summary.md" bash scripts/release.sh guard; }
-card() { # <file> <subject>: a commit on dev, wherever the checkout is
-  local here; here="$(git rev-parse --abbrev-ref HEAD)"; [ "$here" = HEAD ] && here="$(git rev-parse HEAD)"
-  git fetch -q origin; git switch -q --detach origin/dev
-  mkdir -p "$(dirname "$1")"; echo "// $2" >> "$1"; git add "$1"; git commit -qm "$2"; git push -q origin HEAD:dev
-  git switch -q "$here" 2>/dev/null || git switch -q --detach "$here"; }
-ship() { # <sha> <tag>: merge commit on main, publish, back-merge, and the back-merge lands on dev
-  git switch -q --detach origin/main; git merge -q --no-ff -m "Merge pull request #1 from $REPO/release/$2" "$1"; git push -q origin HEAD:main
-  R publish >"$S/publish.out" 2>&1; R backmerge >"$S/backmerge.out" 2>&1; git fetch -q --tags origin; git switch -q --detach origin/dev
-  git merge -q --no-ff -m "Merge main into dev after $2" "origin/backmerge/$2" && git push -q origin HEAD:dev; }
-dev() { git fetch -q --tags origin; git switch -q --detach origin/dev; }
+# guard <head sha> [base ref] [head ref]
+guard() { BASE_REF="${2:-main}" HEAD_REF="${3:-release/pending}" HEAD_SHA="$1" GITHUB_STEP_SUMMARY="$S/summary.md" bash scripts/release.sh guard; }
+release_only() { BASE_REF="${2:-main}" HEAD_REF="${3:-release/pending}" HEAD_SHA="$1" GITHUB_STEP_SUMMARY="$S/summary.md" bash scripts/release.sh release-only; }
+# land <subject> <file> [<change file name> <front matter lines> <note>]: a squash-merged PR on <line> (default main)
+land() {
+  local subj="$1" f="$2" line="${LINE:-main}"
+  git fetch -q origin; git switch -q --detach "origin/$line"
+  mkdir -p "$(dirname "$f")"; echo "// $subj" >> "$f"; git add "$f"
+  if [ $# -ge 5 ]; then printf -- '---\n%b---\n\n%b\n' "$4" "$5" > ".changes/$3.md"; git add ".changes/$3.md"; fi
+  git commit -qm "$subj"; git push -q origin "HEAD:$line"; }
+# merge_release <line> <pr number>: the release PR squash-merged, the branch deleted
+merge_release() {
+  local v; git fetch -q origin; v="$(git show origin/release/pending:Cargo.toml | sed -n '/^\[workspace\.package\]/,/^\[/{s/^version *= *"\([^"]*\)".*/\1/p;}')"
+  git switch -q --detach "origin/$1"; git merge -q --squash origin/release/pending
+  git commit -qm "chore(release): v$v (#$2)"; git push -q origin "HEAD:$1"; git push -q origin --delete release/pending
+  git branch -qD release/pending 2>/dev/null; git fetch -q --prune origin; }
 
-echo "=== one release: plan, prepare, the release PR"
-card tc_A.txt "feat: card A before the cut (#2)"; dev
+echo "=== CalVer: the next version"
+export RELEASE_MONTH=26.10
+eq "tags v0.1.1, v0.1.2 (and v99.1.0-rc.1) in October 2026" "$(R next 2>/dev/null)" 26.10.0
+eq "the same in November" "$(RELEASE_MONTH=26.11 R next 2>/dev/null)" 26.11.0
+eq "this month, from the real clock" "$(env -u RELEASE_MONTH bash scripts/release.sh next 2>/dev/null)" "$(date -u +%y).$((10#$(date -u +%m))).0"
+expect_fail "RELEASE_MONTH must be YY.M" env RELEASE_MONTH=26.01 bash scripts/release.sh next
+
+echo "=== change files -> CHANGELOG (first v4 release: 0.1.2 -> 26.10.0)"
+land "feat(signal): offline drafts (#70)" crates/shared/a.rs added-drafts '"signal-desktop" = "minor"\n"shared" = "patch"\n' "Added offline drafts (signal)"
+land "fix(session): reconnect backoff (#71)" crates/shared/b.rs fixed-backoff '"session-desktop" = "patch"\n' "Fixed reconnect backoff resetting after sleep (session)"
+land "feat(shared)!: rename sync.peer (#72)" crates/shared/c.rs renamed-peer '"shared" = "major"\n' "Renamed config key \`sync.peer\` to \`sync.peers\` (session)\n\nMigration: run \`session migrate-config\`; no database migration."
+land "ci: faster plan (#73)" .github/x.yml ci-plan '"shared" = "none"\n' "CI plans faster"
+git switch -q --detach origin/main
 expect_ok "plan" R plan; R plan > "$S/plan.out" 2>&1
-expect_out "plan: next is 0.1.1" "$S/plan.out" 'next release: *0\.1\.1'
-expect_out "plan: one tag and Release for both apps" "$S/plan.out" 'one tag v0\.1\.1 and one GitHub Release for Signal \+ Session'
-expect_out "plan: signal crate at the workspace version" "$S/plan.out" 'signal crate version: *0\.1\.0'
-expect_no  "plan: crates agree with the workspace" "$S/plan.out" 'differs'
-expect_fail "prepare signal: there is no per-app release any more" R prepare signal
-expect_fail "prepare session: there is no per-app release any more" R prepare session
-expect_fail "prepare 0.1.0.1: not X.Y.Z" R prepare 0.1.0.1
-expect_ok "prepare (patch default)" R prepare
-[ "$(git rev-parse --abbrev-ref HEAD)" = release/v0.1.1 ] && ok "on release/v0.1.1" || bad "branch is $(git rev-parse --abbrev-ref HEAD)"
-[ "$(R version)" = 0.1.1 ] && ok "workspace version 0.1.1" || bad "workspace version $(R version)"
-for a in signal session; do
-  grep -q '^version.workspace = true' "apps/$a/desktop/Cargo.toml" && ok "$a crate still follows the workspace version" || bad "$a crate pinned"
-done
-[ "$(git log -1 --format=%s)" = "chore(release): v0.1.1" ] && ok "release commit subject" || bad "subject: $(git log -1 --format=%s)"
-git show --stat --format= HEAD > "$S/stat.out"
-expect_out "release commit holds Cargo.toml, Cargo.lock and the root CHANGELOG.md" "$S/stat.out" ' CHANGELOG.md'
-expect_no  "no per-app changelog anywhere" <(git ls-files) 'apps/.*CHANGELOG'
-R notes 0.1.1 > "$S/n.md"; expect_out "one changelog section lists card A" "$S/n.md" 'card A'
-card docs/late.md "docs: a doc card after the cut (#4)"
-expect_ok "release-pr" R pr; REL=$(git rev-parse HEAD)
-expect_out "PR body: one tag, one Release" "$S/pr.body" 'tags `v0\.1\.1`'
-expect_out "PR body: both TestFlight uploads" "$S/pr.body" '`signal-ios`.*`session-ios`|BOTH iOS TestFlight'
-expect_out "PR body: marketing version" "$S/pr.body" 'marketing version \*\*0\.1\.1\*\*'
-git push -q origin release/v0.1.1
+expect_out "plan: next is 26.10.0" "$S/plan.out" 'next release: *26\.10\.0'
+expect_out "plan: four pending change files" "$S/plan.out" 'pending change files: *4'
+expect_out "plan: the draft has the Added group" "$S/plan.out" '^### Added'
+expect_fail "prepare 26.10.5: not the next version" R prepare 26.10.5
+expect_fail "prepare 26.01.0: not CalVer" R prepare 26.01.0
+expect_ok "prepare 26.10.0" R prepare 26.10.0
+eq "branch" "$(git rev-parse --abbrev-ref HEAD)" release/pending
+eq "workspace version" "$(R version)" 26.10.0
+eq "subject" "$(git log -1 --format=%s)" "chore(release): v26.10.0"
+eq "one commit on main" "$(git rev-list --count origin/main..HEAD)" 1
+eq "change files consumed (only the README is left)" "$(git ls-tree --name-only HEAD .changes/ | paste -sd' ' -)" .changes/README
+R notes 26.10.0 > "$S/n.md"; cp "$S/n.md" "$S/section-26.10.0.md"
+expect_out "Breaking / Migration holds the major note" "$S/n.md" '^### Breaking / Migration'
+expect_out "  ...with its Migration paragraph indented under it" "$S/n.md" '^  Migration: run `session migrate-config`'
+expect_out "Added holds the minor note" "$S/n.md" '^- Added offline drafts \(signal\)$'
+expect_out "Fixed and improved holds the patch note" "$S/n.md" '^- Fixed reconnect backoff resetting after sleep \(session\)$'
+expect_no  "the none note is skipped" "$S/n.md" 'CI plans faster'
+[ "$(grep -n '^### ' "$S/n.md" | cut -d: -f2- | paste -sd'|' -)" = "### Breaking / Migration|### Added|### Fixed and improved" ] \
+  && ok "groups in order: Breaking, Added, Fixed" || bad "group order: $(grep '^### ' "$S/n.md" | paste -sd'|' -)"
+grep -n '^## \[' CHANGELOG.md | head -2 > "$S/heads"; expect_out "the new section sits above [0.1.2]" "$S/heads" '^[0-9]+:## \[26\.10\.0\].*$'
+git diff HEAD^ HEAD -- Cargo.lock > "$S/lock.diff"
+expect_out "Cargo.lock: signal-desktop moved" "$S/lock.diff" '^\+version = "26\.10\.0"'
+eq "Cargo.lock: shared (own version) did not move" "$(grep -A1 'name = "shared"' Cargo.lock | tail -1)" 'version = "0.1.0"'
+expect_ok "release-pr" R pr
+expect_out "PR: into main" "$S/prs/1.meta" '^base=main$'
+expect_out "PR: title is the release commit" "$S/prs/1.meta" '^title=chore\(release\): v26\.10\.0$'
+expect_out "PR body: template sections" "$S/prs/1.body" '^## Change files$'
+expect_out "PR body: the changelog" "$S/prs/1.body" 'Added offline drafts'
+REL=$(git rev-parse HEAD)
 
 echo "=== the release guard"
-expect_ok "guard passes (dev moved on)" guard "$REL" release/v0.1.1
-expect_fail "guard: dev -> main refused" guard "$REL" dev
-expect_fail "guard: name/version mismatch" guard "$REL" release/v0.1.9
-expect_fail "guard: a per-app release branch is refused" guard "$REL" release/signal-v0.1.1
-expect_fail "guard: a per-app release branch is refused (session)" guard "$REL" release/session-v0.1.1
-echo fix > tc_fix.txt; git add tc_fix.txt; git commit -qm "fix(signal): on the release branch (#5)"
-expect_fail "guard: a fix landed after the release commit" guard "$(git rev-parse HEAD)" release/v0.1.1
-expect_ok "refresh" R refresh; git push -q origin release/v0.1.1; REL=$(git rev-parse HEAD)
-expect_ok "guard: after refresh" guard "$REL" release/v0.1.1
-# an app crate pinned to another version
-git switch -q -c t/pin; sed -i 's/^version.workspace = true/version = "0.0.2-alpha"/' apps/signal/desktop/Cargo.toml; git commit -qam "chore(release): v0.1.1"; PIN=$(git rev-parse HEAD)
-expect_fail "guard: signal crate pinned to another version" guard "$PIN" release/v0.1.1
-grep -q 'signal/desktop/Cargo.toml resolves to version .0.0.2-alpha. but the release is 0.1.1' "$S/last.out" && ok "  ...naming the crate and both versions" || bad "  ...message"
+expect_ok "guard passes" guard "$REL"
+expect_ok "an ordinary PR is not checked" guard "$REL" main feat/sta-1-thing
+grep -q 'not a release PR' "$S/last.out" && ok "  ...and says so" || bad "  ...message"
+expect_ok "a fork's release/pending is not a release PR" env HEAD_REPO=someone/studio BASE_REF=main HEAD_REF=release/pending HEAD_SHA="$REL" bash scripts/release.sh guard
+expect_rc "release-only: a sound release PR" 0 release_only "$REL"
+expect_rc "release-only: an ordinary PR" 1 release_only "$REL" main feat/sta-1-thing
+git switch -q -c t/two "$REL"; echo x > extra.txt; git add extra.txt; git commit -qm "fix: sneaked in"; TWO=$(git rev-parse HEAD)
+expect_fail "guard: a two-commit release branch" guard "$TWO"
+expect_rc "release-only: that one fails the required check" 3 release_only "$TWO"
+git switch -q --detach "$REL"; git switch -q -c t/file; echo x > extra.txt; git add extra.txt; git commit -q --amend --no-edit; FILE=$(git rev-parse HEAD)
+expect_fail "guard: one commit that also changes a non-version file" guard "$FILE"
+grep -q 'extra.txt: not a release file' "$S/last.out" && ok "  ...naming the file" || bad "  ...message"
+git switch -q --detach "$REL"; git switch -q -c t/toml; sed -i 's/^edition = "2021"/edition = "2024"/' Cargo.toml; git commit -qa --amend --no-edit
+expect_fail "guard: Cargo.toml changes more than the version" guard "$(git rev-parse HEAD)"
+git switch -q --detach "$REL"; git switch -q -c t/lock; sed -i '/name = "serde"/{n;s/.*/version = "26.10.0"/}' Cargo.lock; git commit -qa --amend --no-edit
+expect_fail "guard: a non-member (registry) crate's version moved in Cargo.lock" guard "$(git rev-parse HEAD)"
+grep -q 'non-member packages changed version: "serde"' "$S/last.out" && ok "  ...naming serde" || bad "  ...message"
+# reorder the [[patch.unused]] trailer (as cargo does at random): still sound
+git switch -q --detach "$REL"; git switch -q -c t/unused
+awk '/^\[\[patch\.unused\]\]/ { u = 1 } !u { print } u { t = t $0 "\n" } END { n = split(t, b, "\n\n"); printf "%s\n\n%s", b[2], b[1] "\n" }' Cargo.lock > l && mv l Cargo.lock
+git commit -qa --amend --no-edit; tail -7 Cargo.lock > "$S/unused.out"
+expect_out "  (the trailer is reordered)" "$S/unused.out" '^name = "b-patch"'
+expect_ok "guard: a reordered [[patch.unused]] trailer is not a change" guard "$(git rev-parse HEAD)"
+git switch -q --detach "$REL"; git switch -q -c t/old; sed -i 's/^- v2 release 0\.1\.1$/- rewritten/' CHANGELOG.md; git commit -qa --amend --no-edit
+expect_fail "guard: a released changelog section edited" guard "$(git rev-parse HEAD)"
+git switch -q --detach "$REL"; git switch -q -c t/ver; sed -i 's/26\.10\.0/26.10.3/g' Cargo.toml Cargo.lock CHANGELOG.md; git commit -qa --amend -m "chore(release): v26.10.3"
+expect_fail "guard: not the next version (26.10.3)" guard "$(git rev-parse HEAD)"
+grep -q 'is not the next version 26.10.0' "$S/last.out" && ok "  ...naming the next version" || bad "  ...message"
+git switch -q --detach "$REL"; git switch -q -c t/subj; git commit -q --amend -m "chore: release"
+expect_fail "guard: wrong subject" guard "$(git rev-parse HEAD)"
+git switch -q --detach "$REL"; git switch -q -c t/pin; sed -i 's/^version.workspace = true/version = "0.0.2"/' apps/signal/desktop/Cargo.toml; git commit -qa --amend --no-edit
+expect_fail "guard: signal crate pinned off the workspace version" guard "$(git rev-parse HEAD)"
 git switch -q --detach "$REL"
-git switch -q -c t/pin2; sed -i 's/^version.workspace = true/version = "0.1.0"/' apps/session/desktop/Cargo.toml; git commit -qam "chore(release): v0.1.1"; PIN2=$(git rev-parse HEAD)
-expect_fail "guard: session crate pinned to another version" guard "$PIN2" release/v0.1.1
+expect_fail "guard: unreachable origin fails, never passes" env BASE_REF=main HEAD_REF=release/pending HEAD_SHA="$REL" GIT_DIR="$S/wc/.git" bash -c "git remote set-url origin $S/nowhere.git; bash scripts/release.sh guard; rc=\$?; git remote set-url origin $S/origin.git; exit \$rc"
+land "docs: a late PR (#74)" docs/late.md
 git switch -q --detach "$REL"
-# a crate that spells the same version out is fine; so is the table form
-git switch -q -c t/lit; sed -i 's/^version.workspace = true/version = "0.1.1"/' apps/signal/desktop/Cargo.toml
-sed -i 's/^version.workspace = true/version = { workspace = true }/' apps/session/desktop/Cargo.toml; git commit -qam "chore(release): v0.1.1"; LIT=$(git rev-parse HEAD)
-expect_ok "guard: a literal equal version and the table form both resolve to 0.1.1" guard "$LIT" release/v0.1.1
-git switch -q --detach "$REL"
-# no changelog section
-git switch -q -c t/nocl; git rm -q CHANGELOG.md; git commit -qm "chore(release): v0.1.1"; NC=$(git rev-parse HEAD)
-expect_fail "guard: changelog section missing" guard "$NC" release/v0.1.1
-git switch -q --detach "$REL"
-# version not moved from main's
-git switch -q -c t/nomove; git checkout -q origin/main -- Cargo.toml; git commit -qm "chore(release): v0.1.1"; NM=$(git rev-parse HEAD)
-expect_fail "guard: version not moved past main's" guard "$NM" release/v0.1.1
-git switch -q --detach "$REL"
+expect_fail "guard: main moved since the cut (stale release PR)" guard "$REL"
+grep -q 'not on top of the CURRENT main' "$S/last.out" && ok "  ...saying main moved" || bad "  ...message"
+expect_fail "prepare: refuses while release/pending is on origin" R prepare
+git push -q origin --delete release/pending; git branch -qD release/pending
+git switch -q --detach origin/main
+expect_ok "re-cut after main moved" R prepare; git push -q origin release/pending; REL=$(git rev-parse HEAD)
+expect_ok "guard passes on the re-cut" guard "$REL"
 
-echo "=== merge: ONE tag, ONE GitHub Release, BOTH TestFlight workflows dispatched"
-ship "$REL" v0.1.1
-[ "$(git rev-parse 'v0.1.1^{commit}')" = "$REL" ] && ok "v0.1.1 on the release tip" || bad "v0.1.1 target"
-[ "$(git tag --list | paste -sd, -)" = v0.1.1 ] && ok "v0.1.1 is the only tag (no per-app tags)" || bad "tags: $(git tag --list | paste -sd, -)"
-rels=("$S"/releases/*.body); [ "${#rels[@]}" = 1 ] && ok "exactly one GitHub Release" || bad "releases: ${rels[*]}"
-[ "$(cat "$S/releases/v0.1.1.title")" = "studio 0.1.1" ] && ok "release title: studio 0.1.1" || bad "title: $(cat "$S/releases/v0.1.1.title")"
-[ "$(cat "$S/releases/v0.1.1.latest")" = true ] && ok "it is the latest release" || bad "latest flag"
-expect_out "release notes: the changelog section" "$S/releases/v0.1.1.body" 'card A'
-expect_out "release notes: TestFlight block" "$S/releases/v0.1.1.body" 'testflight:begin'
-expect_out "release notes: Signal line pending" "$S/releases/v0.1.1.body" '^- Signal \(`app.fasttrackstudio.signal`\): pending'
-expect_out "release notes: Session line pending" "$S/releases/v0.1.1.body" '^- Session \(`app.fasttrackstudio.session`\): pending'
-expect_out "release notes: marketing version = tag version" "$S/releases/v0.1.1.body" 'Marketing version \*\*0\.1\.1\*\*'
-expect_out "publish dispatched reaper on the tag" "$SHIM_LOG" 'workflow run reaper.yml .*--ref v0.1.1'
-expect_out "publish dispatched signal-ios.yml on the one tag" "$SHIM_LOG" 'workflow run signal-ios.yml .*--ref v0.1.1 -f tag=v0.1.1'
-expect_out "publish dispatched session-ios.yml on the same tag" "$SHIM_LOG" 'workflow run session-ios.yml .*--ref v0.1.1 -f tag=v0.1.1'
-grep -q "backmerge/v0.1.1" "$SHIM_LOG" && ok "back-merge branch backmerge/v0.1.1" || bad "backmerge branch name"
-expect_ok "publish is idempotent" R publish
-[ "$(grep -c 'release create v0.1.1' "$SHIM_LOG")" = 1 ] && ok "no second release" || bad "second release created"
-[ "$(grep -c 'workflow run signal-ios.yml' "$SHIM_LOG")" = 1 ] && [ "$(grep -c 'workflow run session-ios.yml' "$SHIM_LOG")" = 1 ] && ok "no second dispatch" || bad "dispatched twice"
-[ -e tc_fix.txt ] && ok "the branch fix reached dev" || bad "fix not on dev"
-card tc_B.txt "docs: card B (#3)"
-
-echo "=== the TestFlight gate (ios-resolve), for each app"
-git fetch -q --tags origin; git switch -q --detach v0.1.1
+echo "=== merge (squash) and tag"
+merge_release main 80; M1=$(git rev-parse origin/main)
+SHIM_CHECK="completed failure" expect_fail "tag: refused while Build + test is red" R tag
+grep -q "is 'completed failure', not green" "$S/last.out" && ok "  ...naming the check result" || bad "  ...message"
+SHIM_CHECK="in_progress null" expect_fail "tag: refused while Build + test is running" R tag
+expect_ok "tag (Build + test green)" R tag
+git fetch -q --tags origin
+eq "v26.10.0 is on the squash merge commit" "$(git rev-parse 'v26.10.0^{commit}')" "$M1"
+eq "annotated" "$(git cat-file -t v26.10.0)" tag
+expect_fail "tag again: never moved" R tag 26.10.0
+git switch -q --detach v26.10.0
+expect_ok "tag-guard on v26.10.0" env GITHUB_REF=refs/tags/v26.10.0 bash scripts/release.sh tag-guard
+expect_ok "tag-guard with GH_TOKEN checks Build + test" env GITHUB_REF=refs/tags/v26.10.0 GH_TOKEN=x bash scripts/release.sh tag-guard
+SHIM_CHECK="completed failure" expect_fail "tag-guard with GH_TOKEN: red Build + test" env GITHUB_REF=refs/tags/v26.10.0 GH_TOKEN=x bash scripts/release.sh tag-guard
+expect_fail "tag-guard: a branch ref" env GITHUB_REF=refs/heads/main bash scripts/release.sh tag-guard
 export GITHUB_OUTPUT="$S/gho"; : > "$GITHUB_OUTPUT"
-for a in signal session; do
-  : > "$GITHUB_OUTPUT"
-  expect_ok "resolve $a v0.1.1" R ios-resolve "$a" v0.1.1
-  expect_out "  $a: marketing version output" "$GITHUB_OUTPUT" '^version=0\.1\.1$'
-  expect_out "  $a: sha output" "$GITHUB_OUTPUT" "^sha=$(git rev-parse HEAD)$"
-  expect_out "  $a: tag output" "$GITHUB_OUTPUT" '^tag=v0\.1\.1$'
-done
-for t in v0.1 0.1.1 v0.1.1-rc1 v0.1.1.1 V0.1.1 signal-v0.1.1 session-v0.1.1 v01.1.1x ""; do
-  expect_fail "resolve refuses tag '$t'" R ios-resolve signal "$t"
-done
-expect_fail "resolve: unknown app" R ios-resolve studio v0.1.1
-expect_fail "resolve: a tag whose version differs from the crates (v0.1.5 on the 0.1.1 commit)" R ios-resolve signal v0.1.5
-grep -q "says version '0.1.1' but the tag is v0.1.5" "$S/last.out" && ok "  ...naming both versions" || bad "  ...message"
-# a crate that stopped following the workspace
-git switch -q -c t/rpin; sed -i 's/^version.workspace = true/version = "0.0.2-alpha"/' apps/session/desktop/Cargo.toml; git commit -qam "pin"
-expect_fail "resolve: session crate pinned to another version than the tag" R ios-resolve session v0.1.1
-grep -q "session/desktop/Cargo.toml says version '0.0.2-alpha'" "$S/last.out" && ok "  ...naming the crate" || bad "  ...message"
-git switch -q --detach v0.1.1; git branch -qD t/rpin
-# the crates say the tag's version outright, the workspace version differs
-git switch -q -c t/ws; sed -i 's/^version = "0.1.1"/version = "0.1.2"/' Cargo.toml
-sed -i 's/^version.workspace = true/version = "0.1.1"/' apps/signal/desktop/Cargo.toml; git commit -qam "ws"
-expect_fail "resolve: workspace version != tag" R ios-resolve signal v0.1.1
-grep -q "workspace.package. version is '0.1.2' but the tag is v0.1.1" "$S/last.out" && ok "  ...naming the workspace version" || bad "  ...message"
-git switch -q --detach v0.1.1; git branch -qD t/ws
-# a tag whose crates, workspace and changelog are all right, on a commit main does not have
-git switch -q --detach origin/dev
-sed -i 's/^version = "0.1.1"/version = "0.7.7"/' Cargo.toml
-printf '## [0.7.7] - 2026-10-21\n\n- x\n' >> CHANGELOG.md
-git commit -qam "chore(release): v0.7.7"; git tag v0.7.7 HEAD
-expect_fail "resolve: a tag that is not in main is refused" R ios-resolve session v0.7.7
-grep -q 'is not in origin/main' "$S/last.out" && ok "  ...for being outside main" || bad "  ...refused for another reason"
-git tag -d v0.7.7 >/dev/null; git reset -q --hard
-git switch -q --detach "$REL"; git rm -q --cached CHANGELOG.md; mv CHANGELOG.md "$S/cl.bak"
-expect_fail "resolve: no changelog section" R ios-resolve signal v0.1.1
-grep -q 'has no \[0.1.1\] section' "$S/last.out" && ok "  ...for the missing section" || bad "  ...refused for another reason"
-mv "$S/cl.bak" CHANGELOG.md; git reset -q --hard "$REL"
-git fetch -q origin; git switch -q --detach origin/main
-expect_fail "resolve: main's tip has the right versions but is not on the tag" R ios-resolve signal v0.1.1
+for a in signal session; do expect_ok "ios-resolve $a v26.10.0" R ios-resolve "$a" v26.10.0; done
+expect_out "  marketing version output" "$GITHUB_OUTPUT" '^version=26\.10\.0$'
+for t in v26.10 26.10.0 v26.10.0-rc.1 V26.10.0 signal-v26.10.0; do expect_fail "ios-resolve refuses '$t'" R ios-resolve signal "$t"; done
+# a tag whose versions and changelog are right, on a commit no release line has
+git switch -q -c t/stray v26.10.0; sed -i 's/26\.10\.0/26.10.9/g' Cargo.toml CHANGELOG.md; git commit -qam "chore(release): v26.10.9"; git tag v26.10.9
+expect_fail "ios-resolve: a commit on neither main nor release/v*" R ios-resolve signal v26.10.9
+grep -q 'is in neither origin/main nor an origin/release/v\* line' "$S/last.out" && ok "  ...for that reason" || bad "  ...refused for another reason"
+expect_fail "tag-guard: the same stray tag" env GITHUB_REF=refs/tags/v26.10.9 bash scripts/release.sh tag-guard
+git tag -d v26.10.9 >/dev/null; git switch -q --detach v26.10.0; unset GITHUB_OUTPUT
 
-echo "=== a tag pushed by hand has no Release: ios-release creates it once, from either workflow"
-git switch -q --detach v0.1.1
-mkdir -p "$S/kept"; mv "$S/releases"/v0.1.1.* "$S/kept/"
-n0=$(grep -c 'workflow run' "$SHIM_LOG")
-expect_ok "ios-release v0.1.1 (signal-ios first)" R ios-release v0.1.1
-expect_out "  the Release exists again, with the pending block" "$S/releases/v0.1.1.body" '^- Signal .*pending'
-expect_ok "ios-release v0.1.1 (session-ios second)" R ios-release v0.1.1
-[ "$(grep -c 'release create v0.1.1' "$SHIM_LOG")" = 2 ] && ok "  created once (a second ios-release finds it), not twice" || bad "  create count $(grep -c 'release create v0.1.1' "$SHIM_LOG")"
-[ "$(grep -c 'workflow run' "$SHIM_LOG")" = "$n0" ] && ok "  and it dispatched nothing (the hand-pushed tag started both workflows itself)" || bad "  ios-release dispatched workflows"
-expect_fail "ios-release: not a tag" R ios-release 0.1.1
-rm -f "$S/releases"/v0.1.1.*; mv "$S/kept"/v0.1.1.* "$S/releases/"
+echo "=== publish + TestFlight record"
+expect_ok "publish v26.10.0" env GITHUB_REF=refs/tags/v26.10.0 bash scripts/release.sh publish
+expect_out "release notes: the changelog section" "$S/releases/v26.10.0.body" 'Added offline drafts'
+expect_out "release notes: on main" "$S/releases/v26.10.0.body" 'on main'
+expect_out "release notes: TestFlight block" "$S/releases/v26.10.0.body" '^- Signal .*pending'
+export RECORD_SETTLE=0
+expect_ok "ios-record signal" R ios-record signal v26.10.0 26.10.0 1760000001 https://github.com/x/y/actions/runs/1
+expect_ok "ios-record session" R ios-record session v26.10.0 26.10.0 1760000002
+expect_out "notes: Signal's build" "$S/releases/v26.10.0.body" '^- Signal .*build 1760000001, '
+expect_out "notes: Session's build" "$S/releases/v26.10.0.body" '^- Session .*build 1760000002, '
+expect_fail "ios-record: marketing version != tag" R ios-record signal v26.10.0 26.10.1 1
 
-echo "=== both workflows record into the same Release"
-export RECORD_SETTLE=1
-expect_ok "ios-record signal" R ios-record signal v0.1.1 0.1.1 1760000001 https://github.com/x/y/actions/runs/1
-B="$S/releases/v0.1.1.body"
-expect_out "notes: Signal line with its build and run" "$B" '^- Signal \(`app.fasttrackstudio.signal`\): build 1760000001, [0-9TZ:-]+, \[run\]\(https://github.com/x/y/actions/runs/1\)$'
-expect_out "notes: Session still pending" "$B" '^- Session .*pending'
-expect_ok "ios-record session" R ios-record session v0.1.1 0.1.1 1760000002 https://github.com/x/y/actions/runs/2
-expect_out "notes: Session line" "$B" '^- Session \(`app.fasttrackstudio.session`\): build 1760000002, '
-expect_out "notes: Signal line kept" "$B" '^- Signal \(`app.fasttrackstudio.signal`\): build 1760000001, '
-expect_no  "notes: nothing pending any more" "$B" 'pending'
-expect_out "notes: marketing version" "$B" 'Marketing version \*\*0\.1\.1\*\*'
-expect_out "notes: the changelog is still there" "$B" 'card A'
-[ "$(grep -c 'testflight:begin' "$B")" = 1 ] && ok "one TestFlight block" || bad "block duplicated"
-[ "$(grep -c '^- \(Signal\|Session\) ' "$B")" = 2 ] && ok "one line per app" || bad "lines: $(grep -c '^- \(Signal\|Session\) ' "$B")"
-expect_ok "ios-record signal again (a re-run, a new build)" R ios-record signal v0.1.1 0.1.1 1760000999
-[ "$(grep -c '^- Signal ' "$B")" = 1 ] && ok "still one Signal line" || bad "Signal lines: $(grep -c '^- Signal ' "$B")"
-expect_out "notes: the new build leads, the old one is listed" "$B" '^- Signal .*build 1760000999, .*\(earlier builds: 1760000001\)$'
-expect_out "notes: Session untouched by Signal's re-run" "$B" '^- Session .*build 1760000002, '
-expect_ok "ios-record signal, the same build twice" R ios-record signal v0.1.1 0.1.1 1760000999
-[ "$(grep -c '1760000999' "$B")" = 1 ] && ok "no duplicate of the same build" || bad "build listed $(grep -c '1760000999' "$B") times"
-expect_fail "ios-record: marketing version != tag version" R ios-record signal v0.1.1 0.1.2 1760000002
-expect_fail "ios-record: build number not a number" R ios-record signal v0.1.1 0.1.1 12ab
-expect_fail "ios-record: no release for the tag" R ios-record signal v0.9.9 0.9.9 1760000003
-expect_fail "ios-record: unknown app" R ios-record studio v0.1.1 0.1.1 1760000004
-expect_fail "ios-record: a per-app tag" R ios-record signal signal-v0.1.1 0.1.1 1760000004
+echo "=== the next release in the same month: 26.10.1, then 26.10.2"
+land "fix(signal): tuner jitter (#81)" crates/shared/d.rs fixed-tuner '"signal-desktop" = "patch"\n' "Fixed tuner needle jitter (signal)"
+git switch -q --detach origin/main
+expect_ok "prepare" R prepare; eq "version" "$(R version)" 26.10.1
+git push -q origin release/pending; expect_ok "guard" guard "$(git rev-parse HEAD)"
+merge_release main 82; expect_ok "tag v26.10.1" R tag
+git fetch -q --tags origin
+eq "next after v26.10.0, v26.10.1 in October" "$(R next 2>/dev/null)" 26.10.2
 
-echo "=== both record at once (each edit replaces the whole body)"
-dev
-card features/signal/c0.rs "fix(signal): card C (#12)"; dev
-expect_ok "prepare (v0.1.2)" R prepare; git push -q origin release/v0.1.2; CREL=$(git rev-parse HEAD)
-expect_ok "guard: v0.1.2" guard "$CREL" release/v0.1.2
-ship "$CREL" v0.1.2
-C="$S/releases/v0.1.2.body"
-n0=$(grep -c 'release edit v0.1.2' "$SHIM_LOG")
-export SHIM_VIEW_DELAY=1 RECORD_SETTLE=2
-R ios-record signal v0.1.2 0.1.2 1760001111 https://github.com/x/y/actions/runs/3 > "$S/rec1.out" 2>&1 & p1=$!
-R ios-record session v0.1.2 0.1.2 1760002222 https://github.com/x/y/actions/runs/4 > "$S/rec2.out" 2>&1 & p2=$!
-wait $p1; r1=$?; wait $p2; r2=$?
-unset SHIM_VIEW_DELAY; export RECORD_SETTLE=1
-[ "$r1" = 0 ] && [ "$r2" = 0 ] && ok "both records exit 0" || { bad "exit codes $r1 $r2"; cat "$S/rec1.out" "$S/rec2.out"; }
-expect_out "concurrent: Signal's line survived" "$C" '^- Signal .*build 1760001111, '
-expect_out "concurrent: Session's line survived" "$C" '^- Session .*build 1760002222, '
-expect_no  "concurrent: nothing pending" "$C" 'pending'
-[ "$(grep -c 'testflight:begin' "$C")" = 1 ] && ok "concurrent: one TestFlight block" || bad "block count"
-[ "$(( $(grep -c 'release edit v0.1.2' "$SHIM_LOG") - n0 ))" -ge 3 ] && ok "one run had to go round again after the other overwrote it" || bad "edits: $(( $(grep -c 'release edit v0.1.2' "$SHIM_LOG") - n0 ))"
-cat "$S/rec1.out" "$S/rec2.out" | grep -q 'trying again' && ok "  ...and said so" || bad "  ...no retry message"
-RECORD_TRIES=1 SHIM_VIEW_DELAY=0 expect_ok "a record whose line is already there needs no edit" R ios-record signal v0.1.2 0.1.2 1760001111
+echo "=== hotfix on release/v26.10.1, forward-port into main"
+land "feat(session): half-done mixer (#83)" crates/shared/e.rs added-mixer '"session-desktop" = "minor"\n' "Added the new mixer (session)"
+land "fix(signal): crash on preset load (#84)" crates/shared/f.rs fixed-crash '"signal-desktop" = "patch"\n' "Fixed a crash when loading a preset (signal)"
+FIX=$(git rev-parse origin/main)
+land "feat(session): more unshippable work (#85)" crates/shared/g.rs added-more '"session-desktop" = "minor"\n' "Added more (session)"
+git switch -q --detach origin/main
+expect_fail "hotfix: a commit not on main is refused" R hotfix "$(git rev-parse t/stray)"
+expect_ok "hotfix $FIX" R hotfix "$FIX"
+HB="$(git rev-parse --abbrev-ref HEAD)"
+eq "hotfix branch name" "$HB" "fix/no-issue-hotfix-$(git rev-parse --short "$FIX")"
+eq "release/v26.10.1 created at the tag" "$(git rev-parse origin/release/v26.10.1)" "$(git rev-parse 'v26.10.1^{commit}')"
+git log -1 --format=%B > "$S/pick.out"; expect_out "cherry-picked with -x" "$S/pick.out" "cherry picked from commit $FIX"
+P=$(lastpr); expect_out "hotfix PR into release/v26.10.1" "$S/prs/$P.meta" '^base=release/v26\.10\.1$'
+expect_out "hotfix PR title is the fix's" "$S/prs/$P.meta" '^title=fix\(signal\): crash on preset load$'
+# the hotfix PR squash-merged into the release line
+git switch -q --detach origin/release/v26.10.1; git merge -q --squash "$HB"; git commit -qm "fix(signal): crash on preset load (#86)"; git push -q origin HEAD:release/v26.10.1
+expect_ok "prepare --hotfix" R prepare --hotfix
+eq "hotfix version (next free number)" "$(R version)" 26.10.2
+R notes 26.10.2 > "$S/n.md"
+expect_out "hotfix section: the fix" "$S/n.md" 'Fixed a crash when loading a preset'
+expect_no  "hotfix section: nothing unshipped from main" "$S/n.md" 'mixer|Added more'
+expect_ok "release-pr (hotfix)" R pr
+P=$(lastpr); expect_out "release PR into the hotfix line" "$S/prs/$P.meta" '^base=release/v26\.10\.1$'
+HREL=$(git rev-parse HEAD)
+expect_ok "guard: release PR into release/v26.10.1" guard "$HREL" release/v26.10.1
+expect_fail "guard: the same commit is no release into main" guard "$HREL" main
+merge_release release/v26.10.1 87
+expect_ok "tag v26.10.2 on the hotfix line" R tag
+git fetch -q --tags origin
+expect_out "  ...it says so" "$S/last.out" 'on release/v26\.10\.1'
+git merge-base --is-ancestor v26.10.2 origin/main && bad "v26.10.2 is not on main" || ok "v26.10.2 is on the release line, not main"
+P=$(lastpr); expect_out "forward-port PR into main" "$S/prs/$P.meta" '^base=main$'
+FP="$(sed -n 's/^head=//p' "$S/prs/$P.meta")"
+eq "forward-port branch" "$FP" chore/no-issue-forward-port-v26-10-2
+git fetch -q origin
+git show "origin/$FP:CHANGELOG.md" | grep -n '^## \[' | head -3 | cut -d: -f2- | paste -sd'|' - > "$S/fp.out"
+expect_out "forward-port: [26.10.2] above [26.10.1] on main" "$S/fp.out" '^## \[26\.10\.2\].*\|## \[26\.10\.1\]'
+eq "forward-port: the consumed change file is deleted on main" "$(git ls-tree --name-only "origin/$FP" .changes/ | grep -c fixed-crash)" 0
+eq "forward-port: the unshipped change files stay" "$(git ls-tree --name-only "origin/$FP" .changes/ | grep -c 'added-mixer\|added-more')" 2
+expect_ok "tag-guard on v26.10.2 (release/v* line)" env GITHUB_REF=refs/tags/v26.10.2 bash -c 'git switch -q --detach v26.10.2 && bash scripts/release.sh tag-guard'
+# the forward-port merges; main's next release
+git switch -q --detach origin/main; git merge -q --squash "origin/$FP"; git commit -qm "chore(release): forward-port the v26.10.2 changelog (#88)"; git push -q origin HEAD:main
+git switch -q --detach origin/main
+expect_ok "prepare on main after the hotfix" R prepare
+eq "version" "$(R version)" 26.10.3
+R notes 26.10.3 > "$S/n.md"
+expect_out "main's section: includes the hotfix" "$S/n.md" '^Includes all changes up to v26\.10\.2\.$'
+expect_out "main's section: the mixer" "$S/n.md" 'Added the new mixer'
+expect_no  "main's section: the hotfixed crash is not listed twice" "$S/n.md" 'Fixed a crash'
+eq "next month, after v26.10.x" "$(RELEASE_MONTH=26.11 R next 2>/dev/null)" 26.11.0
+git switch -q --detach origin/main; git branch -qD release/pending
 
-echo "=== 0.1.9 -> 0.1.10 -> 0.1.11 (the patch never rolls over)"
-dev
-card features/signal/a.rs "fix(signal): card for 0.1.9 (#9)"; dev
-expect_ok "prepare 0.1.9 (explicit)" R prepare 0.1.9; git push -q origin release/v0.1.9; ship "$(git rev-parse HEAD)" v0.1.9
-card features/session/b.rs "fix(session): card F (#10)"; dev
-expect_ok "prepare" R prepare; [ "$(R version)" = 0.1.10 ] && ok "0.1.10 (not 0.2.0)" || bad "got $(R version)"
-git push -q origin release/v0.1.10; ship "$(git rev-parse HEAD)" v0.1.10
-card features/signal/c.rs "fix(signal): card G (#11)"; dev
-expect_ok "prepare" R prepare; [ "$(R version)" = 0.1.11 ] && ok "0.1.11" || bad "got $(R version)"
-[ "$(git tag --list 'v*' --sort=-v:refname | head -1)" = v0.1.10 ] && ok "newest tag by sort -V is v0.1.10" || bad "tag order"
-for a in signal session; do
-  [ "$(git show "HEAD:apps/$a/desktop/Cargo.toml" | grep -c '^version.workspace = true')" = 1 ] && ok "$a crate follows 0.1.11 with no edit of its own" || bad "$a crate changed"
-done
-R notes 0.1.11 > "$S/n.md"; expect_no "[0.1.11] repeats nothing of 0.1.10" "$S/n.md" 'card F'
-expect_out "[0.1.11] has card G" "$S/n.md" 'card G'
-expect_fail "prepare while a release/v0.1.10 exists would be a duplicate tag" R prepare 0.1.10
-git switch -q --detach origin/dev
-expect_fail "prepare refuses a version that is not greater" R prepare 0.1.3
-[ "$(git tag --list | grep -vc '^v[0-9]')" = 0 ] && ok "every tag in the sandbox is a vX.Y.Z tag" || bad "stray tags: $(git tag --list | grep -v '^v[0-9]' | paste -sd, -)"
+echo "=== no change files at all: git-cliff over the range (pre-v4 history)"
+if [ -f cliff.toml ] && { command -v git-cliff >/dev/null || command -v nix >/dev/null; }; then
+  # main rewound to v26.10.1 (no pending change files) plus one commit
+  # without a change file: only possible in the sandbox
+  git switch -q --detach v26.10.1
+  echo "// x" >> crates/shared/z.rs; git add -A; git commit -qm "fix(signal): a v2-era commit (#90)"
+  git push -q -f origin HEAD:main
+  expect_ok "prepare falls back to git-cliff" R prepare
+  R notes "$(R version)" > "$S/n.md"
+  expect_out "fallback section lists the commit" "$S/n.md" 'v2-era commit'
+else
+  echo "SKIP: no git-cliff / nix for the fallback"
+fi
 
 echo; echo "=== RESULT: $pass passed, $failn failed"
 [ "$failn" = 0 ]

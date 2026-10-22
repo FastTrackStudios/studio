@@ -1,32 +1,32 @@
-# studio — the promotion gate.
+# studio — the fast checks on every PR, the full set after every merge.
 #
-# WHEN THIS RUNS — the dev-first model, release flow v2
-# (docs/agents/release-workflow.md):
+# WHEN THIS RUNS — fleet flow v4, trunk-based (the `release-workflow`
+# skill; docs/agents/release-workflow.md):
 #
-#   PR -> dev           NOT here. The gate is a local `cargo check
-#                       --workspace --all-targets` on the PR's head (or
-#                       the full `just ci`: the same steps as below);
-#                       pr-title.yml is the only job a PR into dev runs.
-#   PROMOTION PR dev -> main (or hotfix/* -> main)   HERE, automatically:
-#                       the AFFECTED set (rail plan against the PR's base
-#                       commit, see CHANGE SELECTION). main is "finished
-#                       features", so this is the one place the workspace
-#                       is checked and the Reviewer reads the diff. It runs
-#                       once per promotion, not once per card. The required
-#                       check is `Build + test` (the aggregator at the end).
-#   RELEASE PR release/vX.Y.Z -> main   a one-commit version bump +
-#                       changelog on top of main. The release guard proves
-#                       it touches nothing else, so the `plan` job below
-#                       SKIPS every heavy job (`Build + test` still runs and
-#                       passes): the content was checked when it was
-#                       promoted.
+#   PR -> main          HERE, the AFFECTED set (rail plan against the PR's
+#                       base commit, see CHANGE SELECTION), plus `cargo
+#                       rail change check` (every changed crate has a
+#                       change file in .changes/). The required check is
+#                       `Build + test` (the aggregator at the end). PRs
+#                       squash-merge into main.
+#   PR -> release/**    a hotfix onto a release line (just release-hotfix):
+#                       the FULL set, never narrowed.
+#   RELEASE PR release/pending -> main (or -> release/v*)   one commit: the
+#                       CalVer bump + the changelog built from .changes/.
+#                       The plan runs the release guard from the BASE
+#                       commit's scripts/release.sh: a sound release PR
+#                       SKIPS every heavy job (`Build + test` still runs
+#                       and passes: its content was checked when it merged
+#                       into main); a release PR the guard refuses FAILS
+#                       `Build + test`.
 #   push to main        the FULL set, once per merge, and records rail
-#                       EVIDENCE for that commit: it is the base the next
-#                       promotion plans against. Nothing ships from it —
-#                       production changes only when a v* tag is pushed.
-#   nightly             the FULL set on dev's tip (flow v2), so dev's
-#                       accumulated cards are compiled together at least
-#                       once a day, not first at promotion.
+#   (and release/**)    EVIDENCE for that commit (main only): it is the
+#                       base the next PRs plan against, and a green
+#                       `Build + test` on a release merge commit is what
+#                       `just release-tag` requires. Nothing ships from a
+#                       push: production changes only when a v* tag is
+#                       pushed.
+#   nightly             the FULL set on main.
 #   by hand             `gh workflow run checks.yml --ref <branch>` runs
 #                       everything; add `-f base=main` to check only what the
 #                       branch changed against main.
@@ -74,9 +74,9 @@ name: checks
 
 on:
   pull_request:
-    branches: [main]
+    branches: [main, "release/**"]
   push:
-    branches: [main]
+    branches: [main, "release/**"]
   workflow_dispatch:
     inputs:
       base:
@@ -94,8 +94,8 @@ env:
   NIX_DEV: nix develop --accept-flake-config .#ci -c
 
 jobs:
-  # Which jobs have work: a release-only PR skips them all; otherwise rail
-  # decides (or the run is full). Self-hosted because rail needs the nix
+  # Which jobs have work: a sound release PR skips them all (a refused one
+  # fails here); otherwise rail decides (or the run is full). Self-hosted because rail needs the nix
   # shell and the workspace's git deps.
   plan:
     name: Plan
@@ -116,7 +116,6 @@ jobs:
       test_filter: ${{ steps.filter.outputs.test_filter }}
       wasm: ${{ steps.filter.outputs.wasm }}
       skip: ${{ steps.filter.outputs.skip }}
-      ref: ${{ steps.filter.outputs.ref }}
       record: ${{ steps.filter.outputs.record }}
     steps:
       - uses: actions/checkout@v4
@@ -164,8 +163,10 @@ jobs:
         env:
           BASE: ${{ steps.base.outputs.sha }}
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           HEAD_REF: ${{ github.event.pull_request.head.ref }}
+          HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
           EVIDENCE: ${{ runner.temp }}/rail-evidence/cargo.test.json
         run: |
           set -u
@@ -187,23 +188,39 @@ jobs:
 
           case "${GITHUB_EVENT_NAME:-}" in
             pull_request)
-              # The release commit: its content was checked when it was
-              # promoted (scripts/release.sh proves it is version +
-              # changelog only).
-              if bash scripts/release.sh release-only; then
-                {
-                  echo "### Release commit only"
-                  echo "This PR is one commit changing the version and CHANGELOG.md; its content was checked when it was promoted, so the heavy jobs are skipped."
-                } >> "$GITHUB_STEP_SUMMARY"
-                skip_all "release commit only (${HEAD_REF})"
-              fi ;;
-            push)
-              record; run_all "push to ${GITHUB_REF_NAME}: full set after every merge" ;;
-            schedule)
-              if git ls-remote --exit-code --heads origin dev >/dev/null; then
-                echo "ref=dev" >> "$GITHUB_OUTPUT"
+              # A release PR (release/pending): the release guard, run from
+              # the BASE commit's copy of the script (never the PR's, which
+              # could exempt itself). 0 = sound: version + changelog only,
+              # its content was checked when it merged, skip the heavy
+              # jobs. 3 = refused: fail, which fails `Build + test`.
+              # 1 = not a release PR: plan as usual.
+              rc=1
+              if git show "${BASE_SHA}:scripts/release.sh" > "${RUNNER_TEMP}/release-base.sh" 2>/dev/null; then
+                bash "${RUNNER_TEMP}/release-base.sh" release-only || rc=$?
+                [ "$rc" = 0 ] || [ "$rc" = 1 ] || rc=3
               fi
-              record; run_all "nightly" ;;
+              case "$rc" in
+                0)
+                  {
+                    echo "### Release commit only"
+                    echo "This PR is one commit changing the version, CHANGELOG.md and consumed change files; its content was checked when it merged, so the heavy jobs are skipped."
+                  } >> "$GITHUB_STEP_SUMMARY"
+                  skip_all "release commit only (${HEAD_REF} -> ${BASE_REF})" ;;
+                3)
+                  echo "::error::${HEAD_REF} -> ${BASE_REF} is a release PR the release guard refuses (see above)"
+                  exit 1 ;;
+              esac
+              # A hotfix onto a release line ships on its own: never narrowed.
+              case "${BASE_REF}" in
+                release/*) run_all "PR into ${BASE_REF}: a hotfix line runs the full set" ;;
+              esac ;;
+            push)
+              # Evidence is only visible to other branches' PRs when saved
+              # on main (cargo-rail.md), so release lines don't record it.
+              [ "${GITHUB_REF_NAME}" != main ] || record
+              run_all "push to ${GITHUB_REF_NAME}: full set after every merge" ;;
+            schedule)
+              record; run_all "nightly (main)" ;;
             workflow_dispatch)
               [ -n "${BASE}" ] || { record; run_all "manual dispatch"; } ;;
             *) run_all "event ${GITHUB_EVENT_NAME:-?}" ;;
@@ -240,12 +257,10 @@ jobs:
     needs: plan
     if: ${{ needs.plan.outputs.skip != 'true' }}
     steps:
+      # The event's own ref: a PR's merge ref, the pushed commit, main for
+      # the nightly, a dispatched branch.
       - &checkout
         uses: actions/checkout@v4
-        with:
-          # Empty = the event's own ref (a PR's merge ref, a dispatched
-          # branch); `dev` for the nightly run.
-          ref: ${{ needs.plan.outputs.ref }}
       - *inferno-auth
       - &target-dir
         name: Persistent target dir
@@ -293,6 +308,22 @@ jobs:
       # save nothing.
       - name: cargo fmt --check
         run: ${NIX_DEV} cargo fmt --all --check
+      # Release intent (fleet flow v4): every crate a PR changes needs a
+      # change file in .changes/ (`cargo rail change add <crates> --bump
+      # <none|patch|minor|major> -m "<note>"`); the release builds the
+      # changelog from them. PRs only: a push or the nightly has no
+      # "change" to describe, and a release PR never reaches this job.
+      # `--since <the PR's base commit>` rather than `--merge-base`: the
+      # checkout is shallow (no default-branch ref to find a merge-base
+      # with), and for a PR into a release/v* line the merge-base with main
+      # would count the line's earlier, already-consumed hotfixes.
+      - name: cargo rail change check
+        if: ${{ github.event_name == 'pull_request' }}
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          git fetch --quiet --no-tags --depth=1 origin "${BASE_SHA}"
+          ${NIX_DEV} cargo rail change check --since "${BASE_SHA}"
       # Crate-layout boundaries (architect ADR layout.md, STA-268):
       # resolves graphs and scans sources, compiles nothing of studio's.
       # Layer table + ratcheted baselines in boundaries.toml.
@@ -372,10 +403,10 @@ jobs:
           echo "### Signal browser remote wasm check failed (advisory, STA-184)" >> "$GITHUB_STEP_SUMMARY"
 
   # ADVISORY (not part of `Build + test`): the test run, red on main for
-  # reasons that predate the dev-first workflow (STA-184: ~100 nextest
-  # failures). Captain's call (STA-276, 2026-10-21): promote and cut v0.1.0
-  # now, fix the errors after. It shows red/green on the PR, so the errors
-  # stay visible; once STA-184 makes it green, add it to the aggregator's
+  # reasons that predate the release flow (STA-184: ~100 nextest
+  # failures). Captain's call (STA-276, 2026-10-21): release now, fix the
+  # errors after. It shows red/green on the PR, so the errors stay
+  # visible; once STA-184 makes it green, add it to the aggregator's
   # required set. It is skipped on a release-only PR.
   tests:
     name: "Advisory: tests"
@@ -459,8 +490,9 @@ jobs:
           if-no-files-found: ignore
           retention-days: 7
 
-  # The REQUIRED check: its name is what the ruleset `main (release only)`
-  # (25572127) requires, unchanged from the single-job days. A required
+  # The REQUIRED check: its name is what the `main` ruleset (25572127)
+  # requires, unchanged from the single-job days, and what `just
+  # release-tag` and the tag guards require green on a release. A required
   # check that is skipped counts as passing, so this never skips: it fails
   # unless every REQUIRED job the plan asked for succeeded (lint, and wasm
   # when the plan gave it work). A job may only be skipped when the plan
