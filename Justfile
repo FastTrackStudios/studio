@@ -1963,6 +1963,15 @@ reaper-test FILTER="":
 reaper-test-gui FILTER="":
     cargo run -p session-reaper-xtask -- --gui --keep-open {{FILTER}}
 
+# The three web bundles deploy.yml ships, checked for wasm32 (STA-366):
+# `cargo check --workspace` is native and never compiles them, so a
+# native-only dep leaking into their graph (tokio `net` -> mio, an engine,
+# X11/HID) only showed when the deploy failed. Required in checks.yml.
+web-wasm-check:
+    cargo check -p session-daw-web --target wasm32-unknown-unknown
+    cargo check -p session-web --target wasm32-unknown-unknown
+    cargo check -p signal-web --target wasm32-unknown-unknown
+
 # Runs exactly what `.github/workflows/checks.yml` runs, in the same
 # order — the full local gate for anything pushed or PR'd into `dev`,
 # where CI runs no build (checks.yml runs on release PRs into main only).
@@ -1972,6 +1981,7 @@ reaper-test-gui FILTER="":
 # Mac, signing keys and upload credentials, which is why they are not a
 # thing you run before pushing — and why a green run here says nothing
 # about whether either of them is healthy.
+
 
 ci FROM="lockfile":
     #!/usr/bin/env bash
@@ -2045,6 +2055,8 @@ ci FROM="lockfile":
     fi
 
     if run_from wasm; then
+      echo "── wasm check (web bundles) ─────────────────────────"
+      just web-wasm-check
       echo "── wasm check (Signal browser remote) ───────────────"
       cargo check -p signal-desktop --target wasm32-unknown-unknown --no-default-features --features signal
       echo "ok"

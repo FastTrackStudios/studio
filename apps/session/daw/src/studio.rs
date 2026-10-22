@@ -290,7 +290,7 @@ impl StudioSession {
         // stage by stage (`PERF_RECENT`).
         let span = tracing::info_span!("song.open", song.tracks = tracing::field::Empty);
         let _in = span.enter();
-        let mut stages = architect_telemetry::timing::Stages::start();
+        let mut stages = crate::stages::Stages::start();
         let plan = crate::open::song_plan(path, prepare);
         let opened = if let Some(audio) = first {
             crate::open::open_first_with(&plan.open, audio, media)?
@@ -561,7 +561,7 @@ pub fn fetch() -> Option<daw_ui::studio::project::Project> {
         .enable_all()
         .build()
         .ok()?;
-    let mut stages = architect_telemetry::timing::Stages::start();
+    let mut stages = crate::stages::Stages::start();
     mark_seen();
     let project = rt.block_on(daw_ui::studio::project::fetch())?;
     stages.mark("fetch.read_ms");
@@ -625,7 +625,7 @@ pub fn plan_rows_with(
     scene: Option<&str>,
     kinds: &crate::plan::Kinds,
 ) -> (ProjectRef, RowsRef) {
-    let mut stages = architect_telemetry::timing::Stages::start();
+    let mut stages = crate::stages::Stages::start();
     let project = ProjectRef(Arc::new(raw.clone()));
     stages.mark("plan.clone_ms");
     let (visible, depths) =

@@ -10,10 +10,7 @@
 
 use daw::service::{ItemRef, Items as _, ProjectContext, Takes as _, TrackRef, Tracks};
 
-/// The comp's lane name.
-pub const COMP: &str = "COMP";
-/// The edit's lane name.
-pub const EDIT: &str = "EDIT";
+pub use crate::lanes::{COMP, EDIT, lane_named};
 
 /// The kit's tracks: every track under the top-level Drums folder, but
 /// none in its Process (the mix, not the recording).
@@ -38,17 +35,6 @@ pub fn kit_tracks(
         })
         .cloned()
         .collect()
-}
-
-/// A lane by name on `track`.
-#[must_use]
-pub fn lane_named(track: &daw_proto::Track, name: &str) -> Option<u32> {
-    track
-        .lane_names
-        .iter()
-        .position(|n| n.trim().eq_ignore_ascii_case(name.trim()))
-        .and_then(|i| u32::try_from(i).ok())
-        .filter(|&i| i < track.lane_count)
 }
 
 /// Set the kit up for editing; what it did — or, `dry`, would — track by

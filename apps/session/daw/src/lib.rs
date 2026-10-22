@@ -39,6 +39,7 @@ pub mod collab_bar;
 pub mod collab_pointers;
 #[cfg(feature = "native")]
 pub mod comp;
+#[cfg(feature = "native")]
 pub mod comp_rank;
 pub mod compact;
 pub mod cursor;
@@ -111,8 +112,8 @@ pub mod song_stream;
 pub mod stream_in;
 #[cfg(feature = "native")]
 pub mod stream_set;
-#[cfg(feature = "native")]
 pub mod take_colors;
+#[cfg(feature = "native")]
 pub mod task_account;
 #[cfg(any(feature = "native", feature = "web"))]
 pub mod task_set;
@@ -202,6 +203,7 @@ pub mod drum_reference;
 #[cfg(feature = "signal")]
 pub mod drum_samples;
 pub mod drum_settings;
+#[cfg(feature = "native")]
 pub mod edit_actions;
 pub mod fundamental;
 pub mod gain_stage;
@@ -211,9 +213,12 @@ pub use editing::groove;
 pub mod audio_window;
 #[cfg(feature = "native")]
 pub mod comp_keep;
+#[cfg(feature = "native")]
 pub mod comp_song;
+#[cfg(feature = "native")]
 pub mod hit_index;
 pub mod hit_overlay;
+#[cfg(feature = "native")]
 pub mod hit_place;
 #[cfg(feature = "native")]
 pub mod hits;
@@ -232,6 +237,7 @@ pub mod overlay;
 pub mod panel;
 #[cfg(feature = "native")]
 pub mod patch_list;
+#[cfg(feature = "native")]
 pub mod perf;
 pub mod plan;
 pub mod poi;
@@ -267,9 +273,11 @@ pub mod setup;
 pub mod shell;
 pub mod simulate;
 pub mod skin;
+#[cfg(feature = "native")]
 pub mod song;
 pub mod song_bars;
 pub mod song_chart;
+pub mod stages;
 pub mod strip;
 pub mod studio;
 pub mod swipe;

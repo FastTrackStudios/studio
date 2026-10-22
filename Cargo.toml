@@ -220,7 +220,7 @@ logic = { path = "features/adapters/logic" }
 interchange = { path = "features/adapters/interchange" }
 session-format = { path = "crates/daw/session-format" }
 daw-ui = { path = "features/ui/daw-ui" }
-dynamic-template = { path = "features/dynamic-template" }
+dynamic-template = { path = "features/dynamic-template", default-features = false }
 audio = { path = "features/audio" }
 builtin = { path = "features/dsp/builtin" }
 dsp-core = { path = "features/dsp/core" }

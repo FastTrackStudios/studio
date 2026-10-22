@@ -629,7 +629,7 @@ fn comp_in(
     (take, versions): (&crate::hits::TakeVersion, &[crate::hits::TakeVersion]),
     (from, to): (f64, f64),
 ) -> Result<bool, String> {
-    let mut stages = architect_telemetry::timing::Stages::start();
+    let mut stages = crate::stages::Stages::start();
     let (from, to) = seamed(daw, project, take, (from, to));
     stages.mark("comp.seams_ms");
     let label = format!("Comp from take {}", take.pass);
@@ -743,7 +743,7 @@ pub fn register(list: &ActionList) {
     });
     list.register(&CYCLE, Effect::Mutating, |a: CycleArg| {
         let (daw, project) = crate::actions::song()?;
-        let mut stages = architect_telemetry::timing::Stages::start();
+        let mut stages = crate::stages::Stages::start();
         let mut out = Vec::new();
         for (from, to) in crate::edit_actions::stretches(daw, &project, &a.on)? {
             let (takes, versions, now) = ranked_for(daw, &project, (from, to));

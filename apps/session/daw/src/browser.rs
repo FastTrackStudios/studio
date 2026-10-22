@@ -20,6 +20,7 @@ const READ_EVERY_MS: u64 = 400;
 const TOGGLE_EVERY_MS: u64 = 100;
 
 /// Show or hide the browser: what to load on the selected track.
+#[cfg(feature = "native")]
 pub static BROWSER: architect::action::ActionMeta = crate::actions::meta(
     "SESSION_BROWSER",
     "browser",

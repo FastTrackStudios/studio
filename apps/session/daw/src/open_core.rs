@@ -347,7 +347,7 @@ fn load_project_file(
     } else {
         branch.to_owned()
     };
-    let mut stages = architect_telemetry::timing::Stages::start();
+    let mut stages = crate::stages::Stages::start();
     let project_guid = crate::project_file::load(daw, &name, file, branch)
         .map_err(|e| eyre::eyre!("{} did not open: {e}", path.display()))?;
     let build_ms = stages.mark("load.build_ms");

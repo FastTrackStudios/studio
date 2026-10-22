@@ -45,13 +45,13 @@
 
       # The dx build runs from the app dir but writes to the
       # WORKSPACE-ROOT target/dx/<name>/release/web/public.
-      mkDxWebBundle = { pname, appDir, dxName, preBuild ? "", dxArgs ? "", env ? { } }:
+      mkDxWebBundle = { pname, appDir, dxName, preBuild ? "", dxArgs ? "", env ? { }, extraNativeBuildInputs ? [ ] }:
         craneLib.buildPackage (commonArgs // dxWebEnv // env // {
           inherit pname;
           version = "0.1.0";
           cargoArtifacts = null;
           cargoExtraArgs = "--manifest-path ${appDir}/Cargo.toml";
-          nativeBuildInputs = dxWebNativeInputs;
+          nativeBuildInputs = dxWebNativeInputs ++ extraNativeBuildInputs;
           doNotPostBuildInstallCargoBinaries = true;
           buildPhaseCargoCommand = ''
             export HOME="$TMPDIR/dx-home"
@@ -154,7 +154,14 @@
           # needs the devshell's native libraries even though the shipped
           # artifact is wasm.
           buildInputs = config.fts.buildInputs;
+          # The rig's NAM captures (rig-models, `just assets`) are not in
+          # the source: nothing here ships a rig, so the guitar crate's
+          # release check for them stands down (features/rigs/guitar/build.rs).
+          SIGNAL_RIG_NO_CAPTURES = "1";
         };
+        # pipewire's -sys crates (cpal, in that host half) run bindgen:
+        # libclang and the C headers, as the devshell gives them.
+        extraNativeBuildInputs = [ pkgs.rustPlatform.bindgenHook ];
       };
 
       # session.fasttrackstudio.app — landing page + the live in-browser
