@@ -861,28 +861,29 @@ fn grew(said: &str) {
     crate::actions::list().changed("tracks", said);
 }
 
-pub(crate) fn register(list: &ActionList) {
+pub(crate) fn register(list: &ActionList) -> Result<(), architect::action::ActionError> {
     list.register(&DOUBLE_TRACK, Effect::Mutating, |a: DoubleArg| {
         let (daw, project) = crate::actions::song()?;
         let guid = target(daw, &project, a.track.as_deref())?;
         let said = double(daw, &project, &guid)?;
         grew(&said);
         Ok(said)
-    });
+    })?;
     list.register(&ADD_ARRANGEMENT, Effect::Mutating, |a: GrowArg| {
         let (daw, project) = crate::actions::song()?;
         let guid = target(daw, &project, a.track.as_deref())?;
         let said = add_arrangement(daw, &project, &guid, a.name.as_deref())?;
         grew(&said);
         Ok(said)
-    });
+    })?;
     list.register(&ADD_PART, Effect::Mutating, |a: GrowArg| {
         let (daw, project) = crate::actions::song()?;
         let guid = target(daw, &project, a.track.as_deref())?;
         let said = add_part(daw, &project, &guid, a.name.as_deref())?;
         grew(&said);
         Ok(said)
-    });
+    })?;
+    Ok(())
 }
 
 #[cfg(test)]

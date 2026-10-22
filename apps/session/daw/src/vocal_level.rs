@@ -956,7 +956,9 @@ fn vocals(daw: &daw::standalone::Standalone, project: &ProjectContext) -> Vec<da
         .collect()
 }
 
-pub(crate) fn register(list: &architect::action::ActionList) {
+pub(crate) fn register(
+    list: &architect::action::ActionList,
+) -> Result<(), architect::action::ActionError> {
     list.register(
         &LEVEL,
         architect::action::Effect::Mutating,
@@ -997,7 +999,7 @@ pub(crate) fn register(list: &architect::action::ActionList) {
             }
             Ok(out)
         },
-    );
+    )?;
     list.register(
         &DIALS,
         architect::action::Effect::ReadOnly,
@@ -1011,8 +1013,9 @@ pub(crate) fn register(list: &architect::action::ActionList) {
                     .collect::<Vec<_>>(),
             )
         },
-    );
+    )?;
     list.register(&DIAL, architect::action::Effect::Mutating, |a: DialArg| {
         dial(&a)
-    });
+    })?;
+    Ok(())
 }

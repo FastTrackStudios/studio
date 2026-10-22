@@ -490,6 +490,8 @@ mod tests {
             effect,
             params_schema: params.map(str::to_owned),
             result_schema: None,
+            enabled: true,
+            disabled_reason: None,
         }
     }
 

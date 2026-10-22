@@ -110,7 +110,7 @@ impl Instrument {
     }
 }
 
-pub fn register(list: &ActionList) {
+pub fn register(list: &ActionList) -> Result<(), architect::action::ActionError> {
     list.register(&ADD, Effect::Mutating, |a: AddArg| {
         let instrument = Instrument::named(&a.instrument).ok_or_else(|| {
             format!(
@@ -124,7 +124,7 @@ pub fn register(list: &ActionList) {
         crate::studio::request_resync();
         crate::actions::list().changed("tracks", instrument.name());
         Ok(said)
-    });
+    })?;
     list.register(&RENAME, Effect::Mutating, |a: RenameArg| {
         let name = a.name.trim();
         if name.is_empty() {
@@ -140,7 +140,8 @@ pub fn register(list: &ActionList) {
         crate::studio::request_resync();
         crate::actions::list().changed("tracks", &guid);
         Ok(guid)
-    });
+    })?;
+    Ok(())
 }
 
 /// Add `instrument`'s tracks to the song — one undo step — and say what

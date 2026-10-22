@@ -723,7 +723,7 @@ fn shows_name(shows: Shows) -> String {
 }
 
 /// Register the hits-as-MIDI actions.
-pub fn register(list: &ActionList) {
+pub fn register(list: &ActionList) -> Result<(), architect::action::ActionError> {
     let count = |n: usize| u32::try_from(n).unwrap_or(u32::MAX);
     list.register(&SET_UP, Effect::Mutating, move |_: NoArg| {
         let (daw, project) = song()?;
@@ -751,7 +751,7 @@ pub fn register(list: &ActionList) {
                 notes: count(s.notes),
             })
             .collect::<Vec<_>>())
-    });
+    })?;
     list.register(&CHECK, Effect::ReadOnly, move |a: CheckArg| {
         let (daw, project) = song()?;
         let span = (
@@ -771,7 +771,8 @@ pub fn register(list: &ActionList) {
                 velocities: count(s.velocities),
             })
             .collect::<Vec<_>>())
-    });
+    })?;
+    Ok(())
 }
 
 #[cfg(test)]

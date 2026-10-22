@@ -182,9 +182,10 @@ pub fn toggle_through_the_list() {
     }
 }
 
-pub(crate) fn register(list: &ActionList) {
-    list.register(&TRACK_ARM, Effect::Mutating, |a: ArmArg| arm(&a));
+pub(crate) fn register(list: &ActionList) -> Result<(), architect::action::ActionError> {
+    list.register(&TRACK_ARM, Effect::Mutating, |a: ArmArg| arm(&a))?;
     list.register(&TRANSPORT_RECORD, Effect::Destructive, |a: RecordArg| {
         run(a.on)
-    });
+    })?;
+    Ok(())
 }

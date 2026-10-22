@@ -497,7 +497,7 @@ struct NoteArg {
     note: String,
 }
 
-pub(crate) fn register(list: &ActionList) {
+pub(crate) fn register(list: &ActionList) -> Result<(), architect::action::ActionError> {
     list.register(&RANK, Effect::Mutating, |a: RankArg| {
         let (daw, project) = crate::actions::song()?;
         let up = i32::from(MAX_UP);
@@ -534,7 +534,7 @@ pub(crate) fn register(list: &ActionList) {
         daw::service::Projects::end_undo_block(daw, project.clone(), label, None);
         changed();
         done
-    });
+    })?;
     list.register(&NOTE, Effect::Mutating, |a: NoteArg| {
         let (daw, project) = crate::actions::song()?;
         let items = targets_of(daw, &project, &a.items, a.take.as_deref(), a.near.or(a.at))?;
@@ -558,7 +558,8 @@ pub(crate) fn register(list: &ActionList) {
         daw::service::Projects::end_undo_block(daw, project.clone(), label, None);
         changed();
         done
-    });
+    })?;
+    Ok(())
 }
 
 /// The ranks changed: the ranking forgotten, the window told.

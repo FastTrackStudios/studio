@@ -605,7 +605,7 @@ struct ChoiceOut {
     score: f64,
 }
 
-pub(crate) fn register(list: &ActionList) {
+pub(crate) fn register(list: &ActionList) -> Result<(), architect::action::ActionError> {
     list.register(&BEST, Effect::Mutating, |a: BestArg| {
         let song = Song::current()?;
         let bars = a.phrase_bars.unwrap_or(PHRASE_BARS);
@@ -633,7 +633,8 @@ pub(crate) fn register(list: &ActionList) {
                 })
                 .collect(),
         })
-    });
+    })?;
+    Ok(())
 }
 
 /// The stretches a call names: its spans, its `from`/`to`, its sections —

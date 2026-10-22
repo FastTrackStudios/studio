@@ -294,14 +294,14 @@ fn named(points: &[Poi], id: Option<&str>) -> Result<usize, String> {
 }
 
 #[cfg(feature = "native")]
-pub fn register(list: &ActionList) {
+pub fn register(list: &ActionList) -> Result<(), architect::action::ActionError> {
     list.register(&LIST, Effect::ReadOnly, |_: ListArg| {
         let (daw, project) = crate::actions::song()?;
         Ok(read(daw, &project)
             .iter()
             .map(|p| out(daw, &project, p))
             .collect::<Vec<_>>())
-    });
+    })?;
     list.register(&ADD, Effect::Mutating, |a: AddArg| {
         let (daw, project) = crate::actions::song()?;
         let at = at_of(daw, &project, a.at.as_deref())?;
@@ -315,7 +315,7 @@ pub fn register(list: &ActionList) {
         });
         write(daw, &project, points, "Add a point of interest")?;
         Ok(id)
-    });
+    })?;
     list.register(&EDIT, Effect::Mutating, |a: EditArg| {
         let (daw, project) = crate::actions::song()?;
         let mut points = read(daw, &project);
@@ -337,7 +337,7 @@ pub fn register(list: &ActionList) {
         let changed = point.clone();
         write(daw, &project, points, "Edit a point of interest")?;
         Ok(out(daw, &project, &changed))
-    });
+    })?;
     list.register(&REMOVE, Effect::Mutating, |a: RemoveArg| {
         let (daw, project) = crate::actions::song()?;
         let points = read(daw, &project);
@@ -350,7 +350,7 @@ pub fn register(list: &ActionList) {
         let gone = before.saturating_sub(kept.len());
         write(daw, &project, kept, "Remove a point of interest")?;
         Ok(u32::try_from(gone).unwrap_or(u32::MAX))
-    });
+    })?;
     list.register(&STEP, Effect::Mutating, |a: StepArg| {
         let (daw, project) = crate::actions::song()?;
         let points = read(daw, &project);
@@ -379,7 +379,7 @@ pub fn register(list: &ActionList) {
         }
         set_current(Some(point.id.clone()));
         Ok(out(daw, &project, &point))
-    });
+    })?;
     list.register(&TOGGLE, Effect::Mutating, |a: ToggleArg| {
         let (daw, project) = crate::actions::song()?;
         let mut points = read(daw, &project);
@@ -389,7 +389,8 @@ pub fn register(list: &ActionList) {
         let changed = point.clone();
         write(daw, &project, points, "Tick a point of interest")?;
         Ok(out(daw, &project, &changed))
-    });
+    })?;
+    Ok(())
 }
 
 /// The points of interest in the ruler's MARKS lane: a flag at each, its

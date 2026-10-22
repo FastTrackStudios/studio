@@ -818,17 +818,18 @@ fn said(
 }
 
 #[cfg(feature = "native")]
-pub fn register(list: &ActionList) {
-    register_list(list);
-    register_add(list);
-    register_edit(list);
-    register_remove(list);
-    register_marker_add(list);
-    register_grid_from_midi(list);
+pub fn register(list: &ActionList) -> Result<(), architect::action::ActionError> {
+    register_list(list)?;
+    register_add(list)?;
+    register_edit(list)?;
+    register_remove(list)?;
+    register_marker_add(list)?;
+    register_grid_from_midi(list)?;
+    Ok(())
 }
 
 #[cfg(feature = "native")]
-fn register_list(list: &ActionList) {
+fn register_list(list: &ActionList) -> Result<(), architect::action::ActionError> {
     list.register(&LIST, Effect::ReadOnly, |a: TrackArg| {
         let (daw, project) = crate::actions::song()?;
         let tracks = Tracks::all(daw, project.clone());
@@ -847,11 +848,12 @@ fn register_list(list: &ActionList) {
             .iter()
             .map(|(guid, _)| said(daw, &project, (guid, &name(guid))))
             .collect::<Vec<_>>())
-    });
+    })?;
+    Ok(())
 }
 
 #[cfg(feature = "native")]
-fn register_add(list: &ActionList) {
+fn register_add(list: &ActionList) -> Result<(), architect::action::ActionError> {
     list.register(&ADD, Effect::Mutating, |a: AddArg| {
         let (daw, project) = crate::actions::song()?;
         let track = track_of(daw, &project, a.track.as_deref())?;
@@ -883,11 +885,12 @@ fn register_add(list: &ActionList) {
             write(daw, &project, &track, &marks)
         })?;
         Ok(id)
-    });
+    })?;
+    Ok(())
 }
 
 #[cfg(feature = "native")]
-fn register_edit(list: &ActionList) {
+fn register_edit(list: &ActionList) -> Result<(), architect::action::ActionError> {
     list.register(&EDIT, Effect::Mutating, |a: EditArg| {
         let (daw, project) = crate::actions::song()?;
         let track = track_of(daw, &project, a.track.as_deref())?;
@@ -926,11 +929,12 @@ fn register_edit(list: &ActionList) {
             write(daw, &project, &track, &marks)
         })?;
         Ok(label)
-    });
+    })?;
+    Ok(())
 }
 
 #[cfg(feature = "native")]
-fn register_remove(list: &ActionList) {
+fn register_remove(list: &ActionList) -> Result<(), architect::action::ActionError> {
     list.register(&REMOVE, Effect::Mutating, |a: RemoveArg| {
         let (daw, project) = crate::actions::song()?;
         let track = track_of(daw, &project, a.track.as_deref())?;
@@ -944,11 +948,12 @@ fn register_remove(list: &ActionList) {
             write(daw, &project, &track, &marks)
         })?;
         Ok(format!("{removed} removed"))
-    });
+    })?;
+    Ok(())
 }
 
 #[cfg(feature = "native")]
-fn register_marker_add(list: &ActionList) {
+fn register_marker_add(list: &ActionList) -> Result<(), architect::action::ActionError> {
     list.register(&MARKER_ADD, Effect::Mutating, |a: MarkerArg| {
         let (daw, project) = crate::actions::song()?;
         let track = track_of(daw, &project, a.track.as_deref())?;
@@ -965,11 +970,12 @@ fn register_marker_add(list: &ActionList) {
             write(daw, &project, &track, &marks)
         })?;
         Ok(id)
-    });
+    })?;
+    Ok(())
 }
 
 #[cfg(feature = "native")]
-fn register_grid_from_midi(list: &ActionList) {
+fn register_grid_from_midi(list: &ActionList) -> Result<(), architect::action::ActionError> {
     list.register(&GRID_FROM_MIDI, Effect::Mutating, |a: SpanArg| {
         let (daw, project) = crate::actions::song()?;
         let folder = kit_folder(daw, &project).ok_or("no kit to put them on")?;
@@ -1025,7 +1031,8 @@ fn register_grid_from_midi(list: &ActionList) {
             write(daw, &project, &folder, &marks)
         })?;
         Ok(proposed)
-    });
+    })?;
+    Ok(())
 }
 
 /// The beat at `t` (seconds a beat, and the beat's start).
