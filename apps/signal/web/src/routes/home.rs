@@ -9,6 +9,11 @@
 //! them; drums is still a CSS mock. See [`crate::demos`]. The button is
 //! the escape hatch to the playable thing at `/rigs/<slug>`.
 //!
+//! Each demo is labelled "Preview, not interactive" and takes no taps:
+//! its switches and scenes are not wired to a rig engine yet (that is the
+//! wasm audio worklet, a later project), and a control that ignores a
+//! press reads as a broken product.
+//!
 //! Vocal is on the page without a demo on purpose. Leaving it off would
 //! be tidier and would also hide the roadmap; a stripe that says "coming
 //! soon" is honest, and a fake demo of something that does not exist is
@@ -93,7 +98,21 @@ fn Stripe(rig: Rig, demo: Element) -> Element {
                         span { class: "sg-btn sg-btn-disabled", "Live demo" }
                     }
                 }
-                div { class: "sg-stripe-demo", {demo} }
+                div { class: "sg-stripe-demo",
+                    // The landing page's surfaces are a picture of the rig,
+                    // not the rig: nothing on them answers a tap yet. Said
+                    // so, and the taps are not taken (`.sg-preview`), so a
+                    // press on a dead switch is not mistaken for a broken
+                    // one. The playable rig is behind "Live demo".
+                    if available {
+                        div { class: "sg-preview",
+                            span { class: "sg-preview-badge", "Preview, not interactive" }
+                            {demo}
+                        }
+                    } else {
+                        {demo}
+                    }
+                }
             }
         }
     }
