@@ -79,9 +79,9 @@ delete a tag; a bad release is superseded by the next.
 
 | Event | Workflows | Runner |
 |---|---|---|
-| PR into `main` | `checks` (`Build + test`: the rail-selected set + `cargo rail change check`), `pr-title`, `release` guard (passes at once) | Mac Pro (`studio`, `studio-lint`, `studio-wasm`, `studio-tests`), hosted |
+| PR into `main` | `checks` (`Build + test`: the rail-selected set + `cargo rail change check`); the `release` guard only on release PRs (passes at once) | Mac Pro (`studio`, `studio-lint`, `studio-wasm`, `studio-tests`), hosted |
 | release PR `release/pending` → `main` | `release` guard; `checks` runs the same guard from the base commit and **skips** the heavy jobs if it passes, fails `Build + test` if not | hosted + `studio` |
-| PR into `release/**` (hotfix) | `checks` (the full set), `pr-title`, `release` guard | as above |
+| PR into `release/**` (hotfix) | `checks` (the full set), `release` guard | as above |
 | push to `main` / `release/**` | `checks` full set (+ rail evidence on `main`) | Mac Pro |
 | nightly | `checks` full set on `main` | Mac Pro |
 | push of tag `vYY.M.MICRO` (or `workflow_dispatch` with the tag as ref) | `deploy` (session-web, signal-web), `signal-ios` **and** `session-ios`, `reaper-integration`, `release` publish | `studio-deploy`, `airlock`, `studio`, hosted |
