@@ -9,12 +9,15 @@
 //!
 //! [`serve_mcp`] serves such a list over `architect-mcp`'s HTTP transport on
 //! loopback, behind a bearer token it mints — what `signal-desktop
-//! --engine` does when asked to (`--mcp` / `SIGNAL_MCP=1`).
+//! --engine` does when asked to (`--mcp` / `SIGNAL_MCP=1`); it needs the
+//! `mcp` feature, so a UI build of the rig never links the HTTP server.
 
 use std::future::Future;
+#[cfg(feature = "mcp")]
 use std::io;
 
 use architect::action::{ActionError, ActionList};
+#[cfg(feature = "mcp")]
 use architect_mcp::http::Serving;
 use signal_proto::commands::{CommandOutcome, SignalCommand, SignalCommandHost, Variation};
 
@@ -204,6 +207,7 @@ pub fn mint_token() -> String {
 /// # Errors
 ///
 /// The port could not be bound.
+#[cfg(feature = "mcp")]
 pub async fn serve_mcp(list: ActionList, port: u16, token: String) -> io::Result<Serving> {
     let listener = tokio::net::TcpListener::bind((std::net::Ipv4Addr::LOCALHOST, port)).await?;
     let addr = listener.local_addr()?;
@@ -224,6 +228,7 @@ pub async fn serve_mcp(list: ActionList, port: u16, token: String) -> io::Result
 }
 
 /// What a model is told about the engine when it connects.
+#[cfg(feature = "mcp")]
 const INSTRUCTIONS: &str = "This is the FastTrackStudio Signal engine: the live guitar rig a \
 player performs through. FTS_SIGNAL_NEXT_SONG / FTS_SIGNAL_PREVIOUS_SONG step the active setlist; \
 FTS_SIGNAL_NEXT_SECTION / FTS_SIGNAL_PREVIOUS_SECTION step the song's sections; \
