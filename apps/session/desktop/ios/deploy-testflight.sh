@@ -23,7 +23,7 @@ set -euo pipefail
 # Derive paths from the script's own location, not git — a build box may hold
 # an rsync'd source copy that isn't a git checkout.
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
+ROOT="$(cd "$SCRIPT_DIR/../../../.." && pwd)"
 cd "$SCRIPT_DIR/.."
 
 # Every scratch dir this script mktemp's, removed on exit (success OR failure).
@@ -39,7 +39,7 @@ trap cleanup_tmp EXIT
 #   DX_PACKAGE=task-app-mobile DX_APP_DIR=apps/task/mobile DX_FEATURES="" \
 #   ICONS_DIR=apps/task/mobile/ios/Assets.xcassets ./ios/deploy-testflight.sh
 DX_PACKAGE="${DX_PACKAGE:-session-desktop}"
-DX_APP_DIR="${DX_APP_DIR:-apps/desktop}"
+DX_APP_DIR="${DX_APP_DIR:-apps/session/desktop}"
 # No colon: an explicitly-empty DX_FEATURES (Task, default features) is honored.
 DX_FEATURES="${DX_FEATURES---no-default-features --features native,session-domain,charts}"
 # Bundle id the App Store profile is minted for — must match the built .app's
@@ -265,7 +265,7 @@ echo "=== SDK metadata: iphoneos${SDK_VER} (${SDK_BUILD}), Xcode ${XCODE_VER} ($
 # rejects the upload: 90022/90023/91111). Point ACTOOL_DEVELOPER_DIR at an
 # Xcode whose actool matches this OS (the 27 beta) for the icon compile ONLY —
 # it produces a valid Assets.car and does not touch the build/upload SDK.
-ICONS_DIR="${ICONS_DIR:-$ROOT/apps/desktop/ios/Assets.xcassets}"
+ICONS_DIR="${ICONS_DIR:-$ROOT/apps/session/desktop/ios/Assets.xcassets}"
 if [ -d "$ICONS_DIR" ]; then
     ICON_DEV="${ACTOOL_DEVELOPER_DIR:-$DEV}"
     ACTOOL="$ICON_DEV/usr/bin/actool"; [ -x "$ACTOOL" ] || ACTOOL="$(xcrun --find actool)"
