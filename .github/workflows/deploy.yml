@@ -19,12 +19,14 @@
 # so "Active" means the cluster is SERVING this sha, not merely that an
 # image was pushed.
 #
-# Production is the latest `v*` TAG, not main (release flow v2,
-# docs/agents/release-workflow.md): main holds finished features, promoted
-# from dev, and a push to main deploys nothing. This runs only when a
-# `vX.Y.Z` tag is pushed (`just release-tag`) or dispatched with a tag as
-# its ref; the first step refuses a tag that is not a release commit on
-# main. Both sites deploy the tagged commit, once per release.
+# Production is the latest `v*` TAG, not main (fleet release flow v4,
+# docs/agents/release-workflow.md): every PR squash-merges into main, and a
+# push to main deploys nothing. This runs only when a `vYY.M.MICRO` tag is
+# pushed (`just release-tag`) or dispatched with a tag as its ref (a
+# rollback: the previous tag); the first step refuses a tag that is not a
+# release commit on main or on a release/v* hotfix line, or whose
+# `Build + test` is not green. Both sites deploy the tagged commit, once
+# per release.
 #
 # No path filtering. session-web's demo backend is the real in-process
 # daw-standalone/session stack, so a change almost anywhere in the
@@ -67,14 +69,22 @@ jobs:
     environment:
       name: ${{ matrix.env }}
       url: ${{ matrix.url }}
+    # The repo default token is read-only with no `checks` scope; the tag
+    # guard reads the `Build + test` check of the tagged commit.
+    permissions:
+      contents: read
+      checks: read
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
       # Production changes only by tag: refuse a branch ref, a tag whose
-      # version is not Cargo.toml's, a commit that is not in main.
-      - name: The ref is a release tag on main
+      # version is not Cargo.toml's, a commit on neither main nor a
+      # release/v* line, a commit whose `Build + test` is not green.
+      - name: The ref is a green release tag on main or release/v*
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: bash scripts/release.sh tag-guard
 
       # features/patchbay -> inferno-net is a git dep on the private

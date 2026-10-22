@@ -301,6 +301,16 @@ first). The rules are not optional:
 
 ## Agent skills and process
 
+- **Branches, PRs and releases: fleet release flow v4.** Load the
+  `release-workflow` skill before branching, opening or merging a PR, or
+  releasing; studio's specifics are in `docs/agents/release-workflow.md`.
+  Branch from `origin/main` (`feat/sta-123-slug`), open the PR into `main`
+  with a conventional title and `.github/pull_request_template.md` filled
+  in, add a change file for every crate you change (`cargo rail change add
+  <crates> --bump <none|patch|minor|major> -m "<note> (signal|session)"`),
+  squash-merge. There is no `dev` branch. Releases are CalVer tags cut with
+  `just release-prepare` / `release-pr` / `release-merge` / `release-tag`;
+  never edit `CHANGELOG.md` or the workspace version in a normal PR.
 - Issues: GitHub Issues on `FastTrackStudios/studio` via `gh` — see
   `docs/agents/issue-tracker.md`; the triage labels (`needs-triage`,
   `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`) in

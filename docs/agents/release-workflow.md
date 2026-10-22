@@ -1,245 +1,162 @@
-# Releases: dev first, main is finished features, a tag is the release
+# Releases: trunk-based main, change files, a CalVer tag is the release
 
-studio has two long-lived branches and one rule for shipping:
+studio runs the fleet's **release flow v4**. The rules (branch names, PR
+titles and template, change files, versions, tags, CI gates, hotfixes,
+rollback) live in ONE place, the fleet **`release-workflow` skill**
+(`SKILL.md` + `references/`). This page covers only what is specific to
+studio. If the two disagree, this page is stale: fix it.
 
-- **`dev`**: the integration branch. Everything lands here: the Captain's
-  pushes, and agents' PRs (squash-merged). Dev never freezes. It is *not*
-  the repo's default branch: `main` is (see "PR base" below).
-- **`main`**: the default branch, and **finished features**. Work gets here
-  by a *promotion PR* from `dev` once it is verified. **A push to main ships nothing**: no
-  deploy, no TestFlight, no installers.
-- **A release is a `v*` tag on main.** The tag ships everything: both
-  sites, both iOS apps (Signal and Session, one version, one TestFlight
-  upload each), the REAPER suites, the desktop installers, and the one
-  GitHub Release. **Production is the latest `v*` tag.**
+In short:
 
-**studio is one version.** Signal and Session are the same build, and a change
-to one almost always affects the other, so they are one release: one
-`[workspace.package] version`, one `vX.Y.Z` tag, one GitHub Release, one
-`CHANGELOG.md` section. There are no per-app tags, branches or changelogs. The
-version the repo is on is the version both apps are on.
+- **`main` is the only long-lived branch.** Branch from `origin/main`
+  (`feat/sta-123-slug`, `fix/gh-42-slug`, `chore/no-issue-slug`), open a PR
+  into `main`, squash-merge it. There is no `dev`, no promotion PR and no
+  back-merge.
+- **Every PR that changes a crate carries a change file**:
+  `cargo rail change add <crates> --bump <none|patch|minor|major> -m
+  "<note>"` writes `.changes/<slug>.md` (see `.changes/README`). CI fails a
+  PR whose changed crates have none. Nobody edits `CHANGELOG.md` outside a
+  release.
+- **A release is a `vYY.M.MICRO` tag.** The tag ships everything: both
+  sites, both iOS apps (Signal and Session, one TestFlight upload each),
+  the REAPER suites and the one GitHub Release. **Production is the
+  latest `v*` tag**; a push to `main` ships nothing.
 
 ```
-PRs --squash--> dev --promotion PR (merge commit)--> main (finished features)
-                 ^                                     |
-                 |                    release PR (version + changelog), merge commit
-                 |                                     v
-                 +---- back-merge main -> dev <---- tag vX.Y.Z on main
-                                                       |
-                       sites . Signal + Session TestFlight . REAPER . installers . GitHub Release
+feat/sta-1-x ─PR (fast checks, change file)─squash─▶ main ─release/pending PR─▶ tag v26.10.3
+fix/sta-2-y  ─┘                                       │ full set after every merge     │
+                                                      │      sites . Signal + Session TestFlight
+        hotfix: release/v26.10.3 (from the tag) ◀── cherry-pick -x    . REAPER . GitHub Release
+                └─ release/pending PR ─▶ tag v26.10.4 ─▶ forward-port PR (changelog) into main
 ```
 
-CI is spent once per promotion, not once per push, and a release costs a
-version bump.
+## One version for Signal and Session
+
+Signal and Session are the same build, and a change to one almost always
+affects the other, so they are one release: one `[workspace.package]
+version`, one tag, one GitHub Release, one `CHANGELOG.md` section. Both app
+crates (`apps/signal/desktop`, `apps/session/desktop`) say
+`version.workspace = true`. Change-file notes end with `(signal)` or
+`(session)` so the shared changelog says which app changed.
+
+Versions are CalVer `YY.M.MICRO` (no leading zeros). The next version is
+computed, not chosen: the highest `vX.Y.Z` tag (suffixed tags don't count);
+same month → `MICRO + 1`, otherwise `YY.M.0`. The flow-v2 releases were
+`v0.1.0`–`v0.1.2`; the first v4 release is `26.M.0` (ascending, so App
+Store Connect accepts it).
+
+## Commands
+
+```bash
+cargo rail change add <crates> --bump patch -m "Fixed … (signal)"   # in every PR that changes a crate
+cargo rail plan --explain                                            # which tests CI will run for your branch
+
+just release-plan            # latest tag, what main holds since, the next version, the draft changelog
+just release-prepare         # release/pending from origin/main: ONE commit `chore(release): vYY.M.MICRO`
+just release-pr              # push it, open its PR into main
+just release-merge           # re-run the guard against the CURRENT main, then squash-merge
+just release-tag             # tag the merge commit once its `Build + test` is green: THIS ships
+
+just release-hotfix <sha>…   # release/v<latest tag> + the main fixes cherry-picked (-x) + PR into it
+just release-prepare --hotfix  # then release-pr, release-merge, release-tag (opens the forward-port PR)
+just release-sandbox         # the release tooling's own end-to-end test (no network)
+```
+
+`release-prepare` builds the section from `.changes/*.md` (major →
+Breaking / Migration, minor → Added, patch → Fixed and improved, none →
+nothing), deletes the files it consumed, bumps `Cargo.toml` and the
+workspace members in `Cargo.lock`. With no change files at all it falls
+back to git-cliff over the commits since the last tag (history before v4).
+Tidy wording by amending the one commit. `cargo rail release` can't do
+this for studio (it refuses `version.workspace = true` crates); `release.sh`
+fills that gap until it can.
+
+`release-tag` pushes the tag as the `fts-forge` App (or a person): a tag
+pushed with a workflow's `GITHUB_TOKEN` starts no workflow. Never move or
+delete a tag; a bad release is superseded by the next.
 
 ## What runs where
 
 | Event | Workflows | Runner |
 |---|---|---|
-| PR opened against `main` from a card branch | `pr-base` retargets it to `dev` (seconds, one comment) | GitHub-hosted |
-| PR into `dev` | `pr-title` (a regex on the title, seconds) | GitHub-hosted |
-| push to `dev` | nothing | none |
-| **promotion PR** `dev` -> `main` (or `hotfix/*` -> `main`) | `checks` (the full `just ci` set + advisory clippy; check name `Build + test`), `release` guard | THEBATTLESHIP (`session`), guard GitHub-hosted |
-| **release PR** `release/vX.Y.Z` -> `main` | `release` guard; `checks` plans it as a release commit and **skips** `Build + test` (a skipped job passes the required check) | GitHub-hosted |
-| push to `main` | nothing (`cache-devshell` for flake changes only) | none |
-| push of tag `vX.Y.Z` (or `workflow_dispatch` with the tag as its ref) | `deploy` (session-web, signal-web), `signal-ios` **and** `session-ios` (resolve -> build + upload to TestFlight on `airlock` -> record the build on the Release), `reaper-integration`, `release` publish (the one GitHub Release) | `session`, `airlock`, GitHub-hosted |
-| by hand | any of them: `gh workflow run <file> --ref <branch or tag>` | |
+| PR into `main` | `checks` (`Build + test`: the rail-selected set + `cargo rail change check`), `pr-title`, `release` guard (passes at once) | Mac Pro (`studio`, `studio-lint`, `studio-wasm`, `studio-tests`), hosted |
+| release PR `release/pending` → `main` | `release` guard; `checks` runs the same guard from the base commit and **skips** the heavy jobs if it passes, fails `Build + test` if not | hosted + `studio` |
+| PR into `release/**` (hotfix) | `checks` (the full set), `pr-title`, `release` guard | as above |
+| push to `main` / `release/**` | `checks` full set (+ rail evidence on `main`) | Mac Pro |
+| nightly | `checks` full set on `main` | Mac Pro |
+| push of tag `vYY.M.MICRO` (or `workflow_dispatch` with the tag as ref) | `deploy` (session-web, signal-web), `signal-ios` **and** `session-ios`, `reaper-integration`, `release` publish | `studio-deploy`, `airlock`, `studio`, hosted |
 
-The gate for work going into `dev` is local: at least
-`cargo check --workspace --all-targets` in the dev shell on the commit
-being pushed, or the full `just ci` (exactly what `checks.yml` runs, in the
-same order). An agent's PR into dev carries that evidence in its
-description: the head sha, `origin/dev`'s sha, the result and the host.
+`Build + test` is the one required check (the `main` ruleset). It is an
+aggregator: it requires the `lint` job and, when the plan gave it work, the
+web-bundle wasm check. Advisory (red or green, never blocking): clippy, the
+Signal browser remote wasm check and the `Advisory: tests` nextest run, red
+today (STA-184); when STA-184 makes them green they join the required set.
+`main` may be red for code reasons; nothing is tagged until it is green.
 
-The ruleset `main (release only)` makes a PR the only way into main: merge
-commits only, and a green `Build + test` required.
+## What the guards check
 
-`Build + test` (the required check) is an aggregator over per-kind jobs on
-the Mac Pro runners (`checks.yml`). `cargo rail plan` first picks what the PR
-affects (any doubt runs everything); `Build + test` then requires the `lint`
-job (manifests + lockfile, fmt, Boundaries, the flow gate, the tailwind sheet,
-`cargo check --workspace`) and, when the plan gave it work, the web-bundle
-wasm check. Advisory, shown red or green but never blocking: clippy, the
-Signal browser remote wasm check and the `Advisory: tests` nextest run. They
-are red today (STA-184); when STA-184 makes them green they join the required
-set in the aggregator.
+**Release guard** (`release.sh guard`, from the base commit's copy of the
+script; any head other than `release/pending` in this repo passes):
+the head is ONE commit `chore(release): vX.Y.Z` directly on the **current**
+head of its base (`main` or `release/v*`); `X.Y.Z` is the computed next
+version and untagged; the commit changes only the `[workspace.package]`
+version line, the workspace members' version lines in `Cargo.lock`, adds
+the `CHANGELOG.md` section and deletes consumed change files; no change
+file is left pending; both iOS crates resolve to the version. A network
+error fails it. `just release-merge` re-runs it right before merging, so a
+release PR cut before another merge can't ship that merge unlisted.
 
-## PR base: main is the default, PRs go to dev
-
-`main` is the default branch, so `gh pr create` and the web UI propose `main`
-as the base. GitHub has no setting for a different default PR base, so
-`.github/workflows/pr-base.yml` (`pull_request_target`: opened, reopened,
-edited) retargets any PR whose base is `main` onto `dev` and says why in a
-one-line comment. It leaves alone PRs whose head is `dev` (the promotion PR),
-`release/v*`, `hotfix/*` or `backmerge/*` in this repo; those are the release
-PRs, opened by hand or by `scripts/release.sh`.
-
-- **Agents and scripts still pass `--base dev` explicitly.** The workflow is a
-  safety net, not the plan.
-- It never checks out or runs PR code (it is privileged, and it works for
-  forks), and it needs `pull-requests: write` only.
-- `pull_request_target` runs the workflow file from the base branch, so
-  it only works once it is on `main`. Until then, pass `--base dev`.
-- The retarget is made with the workflow's `GITHUB_TOKEN`, which starts no
-  further workflows: `pr-title` runs on the next push or title edit, not on
-  the retarget itself.
-- A PR into `main` from any other head name is retargeted to `dev`: a
-  hotfix branch must be named `hotfix/<what>`, a release `release/vX.Y.Z`.
-
-## Day to day
-
-```bash
-git switch dev && git pull            # once: track dev instead of main
-cargo check --workspace --all-targets # (or just ci) before pushing
-git push origin HEAD:dev              # or open a PR into dev
-```
-
-PR titles into dev must be conventional commits (`feat(editor): ...`,
-`fix: ...`, `chore(deps)!: ...`), because a squash merge turns the title
-into the commit subject and git-cliff turns that into the changelog line.
-Merge PRs into dev with **squash**, and give `gh pr merge` a conventional
-`--subject` when the title is not one. Commits pushed directly with prose
-subjects are fine; they land under "Changes".
-
-## Stage 1: promote (dev -> main)
-
-```bash
-just release-plan          # what is live, what main holds, what waits on dev
-just release-promote       # opens the promotion PR dev -> main
-```
-
-- `checks` (the full workspace) and the `Release guard` run on it, and the
-  **Reviewer** agent reads the diff and posts its review (blocking /
-  should-fix / nit) on the PR before it merges.
-- Merge with **Create a merge commit**, never squash or rebase. Nothing
-  ships.
-- `release-promote` refuses while main has content dev lacks (a release
-  commit or a hotfix): `just release-backmerge` first.
-- Promote whenever a feature set is verified. Features pile up on main
-  until a release is cut.
-
-## Stage 2: release (a tag on main)
-
-```bash
-just release-prepare       # cuts release/vX.Y.Z from origin/main: ONE commit, version + CHANGELOG.md
-just release-pr            # push it, open release/vX.Y.Z -> main
-# merge it with a merge commit (nothing ships yet), then:
-just release-tag           # tag vX.Y.Z on main: THIS ships; then opens the back-merge
-```
-
-- Versions: **patch by default**, and the patch never rolls over
-  (0.1.9 -> 0.1.10 -> ... -> 0.1.86). `just release-prepare minor|major|X.Y.Z`
-  only when the Captain or Commander calls it. Versions compare
-  semantically (`sort -V`), never as strings. Versions move only on main,
-  never on dev.
-- A release PR is exactly one commit that changes only the version line
-  (`Cargo.toml`, the workspace members' lines in `Cargo.lock`) and
-  `CHANGELOG.md`. The guard proves it, so the heavy checks are skipped.
-- If main moves before the release PR merges (another promotion), close
-  the PR, delete the branch and cut again. It takes a minute.
-- `release-tag` pushes the tag as the `fts-forge` App (or a person). A tag
-  pushed with a workflow's `GITHUB_TOKEN` starts no workflow, which is why
-  the tag is pushed from outside CI. Never move or delete a tag; a bad
-  release is superseded by the next.
-- After the tag, `release-tag` runs `release-backmerge`: a PR
-  `backmerge/vX.Y.Z-<sha>` -> dev, merge commit, auto-merge, so dev gets
-  the version and the changelog. If it conflicts (usually Cargo.lock next to
-  a version line), merge dev into the backmerge branch and resolve there,
-  never on main. After a plain promotion the back-merge is a no-op (the merge
-  commit's tree is dev's).
+**Tag guard** (`release.sh tag-guard`, first step of `deploy`, `release`
+publish and `reaper` on a `v*` tag; `ios-resolve` in the iOS workflows):
+the tag is `v` + the workspace version, both iOS crates are on it, it has a
+changelog section, its commit is on `main` or a `release/v*` line, and
+(where the job has a token) `Build + test` is green on it.
 
 ## iOS apps: TestFlight is a release
 
-Signal (`app.fasttrackstudio.signal`) and Session (`app.fasttrackstudio.session`,
-the iPad/iPhone app) are released **together, at one version**:
+- **TestFlight uploads only from the release tag**, never on a push, a PR
+  or a fork. One tag starts **both** `signal-ios` and `session-ios`.
+- **Marketing version (CFBundleShortVersionString) = the tag's version**
+  (`v26.10.3` → `26.10.3`) for both apps, and each app crate must resolve
+  to it. The build number (CFBundleVersion) is the unix time of the upload.
+- **One GitHub Release** per tag (title `studio 26.10.3`, the changelog
+  section as notes). After each upload that app's workflow writes its
+  marketing version, build number and run URL into the Release notes, one
+  line per app; the two edit concurrently, so each re-reads and retries.
+- `signal-ios` / `session-ios` refuse a tag that is not
+  `^v[0-9]+\.[0-9]+\.[0-9]+$`, a crate or workspace version that differs, a
+  missing changelog section, a commit on neither `main` nor `release/v*`, or
+  a red `Build + test`. `workflow_dispatch` with `dry_run` stops after
+  those checks.
 
-- **One version.** Both app crates (`apps/signal/desktop`,
-  `apps/session/desktop`) say `version.workspace = true`, so they take
-  `[workspace.package] version` from the root `Cargo.toml` and cannot differ.
-- **TestFlight uploads only from the release tag** `vX.Y.Z`, never on a push to
-  main, a path change, a PR or a fork. One tag starts **both** `signal-ios` and
-  `session-ios`.
-- **The TestFlight marketing version (CFBundleShortVersionString) is the tag's
-  version** (`v0.1.3` -> `0.1.3`) for both apps, and each app crate's version
-  must be that same version.
-- **One GitHub Release** for the tag (title `studio 0.1.3`, the changelog section
-  as the notes). After each upload, that app's workflow writes the marketing
-  version, the build number (CFBundleVersion, the unix time of the upload,
-  climbing across re-runs) and its run URL into the Release notes, **one line per
-  app**, so the Release and the TestFlight builds can be traced to each other.
-  The two workflows edit the same notes at about the same time: each re-reads the
-  notes, edits, and checks that its line survived (retrying if the other's edit
-  overwrote it). macOS and Linux installers attach to that same Release.
-
-What `signal-ios` / `session-ios` refuse (red job, nothing built): a tag that is not
-`^v[0-9]+\.[0-9]+\.[0-9]+$`; an app crate (or the workspace) whose version differs
-from the tag's; a tag without its changelog section; a commit that is not in `main`.
-A `workflow_dispatch` with `dry_run` runs those checks and stops before the build. A
-tag pushed by hand starts both workflows too (the first creates the Release if there
-is none). `MARKETING_VER` has no default: `deploy-testflight.sh` refuses to run without
-it.
-
-Verify a release: App Store Connect's build for each bundle id has marketing version ==
-the Release's tag version and the build number written in its notes
-(`ruby apps/<app>/desktop/ios/testflight-status.rb app.fasttrackstudio.<app>` on airlock).
-
-## What the guard checks (release.yml, on every PR into main)
-
-| Head | Fails when |
-|---|---|
-| `dev` (promotion) | no commits main lacks; the version differs from main's; merging would not reproduce dev's tree (main has content dev lacks: back-merge first) |
-| `release/vX.Y.Z` | the name does not match the version; the version is not greater than main's or the tag exists; no `[X.Y.Z]` changelog section; the head is not `chore(release): vX.Y.Z`; main is not in the head; it is not exactly one commit; it changes anything but the version line, `Cargo.lock` versions and `CHANGELOG.md`; either iOS crate does not resolve to the version |
-| `hotfix/*` | the version moved; nothing main lacks; it conflicts with main |
-| anything else | always (card branches target `dev`) |
-
-Until `scripts/release.sh` exists on main, the guard only prints a notice
-(the PR that introduced this flow). The tag side has its own guard
-(`release.sh tag-guard`, run first by `deploy` and by `release` publish): the
-tag is `v<Cargo version>`, both iOS crates are on it, it is in main's history,
-and it has a changelog section.
-
-## The changelog
-
-Each release's section is generated over a git range, the commits on main
-since the last `v*` tag (`git cliff --tag vX.Y.Z --strip all <last>..HEAD`),
-and written above the older sections, which stay as released. Never
-regenerate the whole file with `git cliff -o`. One `CHANGELOG.md` section
-covers Signal and Session (and their macOS and Linux installers) together;
-there are no per-app changelogs. cliff.toml's `tag_pattern` counts only
-`vX.Y.Z` tags (the plugins' tags are not covered yet).
+Verify a release: App Store Connect's build for each bundle id has the
+Release's version and the build number written in its notes
+(`ruby apps/<app>/desktop/ios/testflight-status.rb app.fasttrackstudio.<app>`
+on airlock).
 
 ## Hotfix
 
-```bash
-just release-hotfix NAME   # hotfix/NAME from the latest tag (what production runs)
-# fix, commit (fix(scope): ...), just ci
-just release-pr            # PR hotfix/NAME -> main: checks + guard; merge commit
-just release-prepare       # then the patch release as usual
-just release-pr            # merge, then
-just release-tag
-```
-
-Finished features promoted since the tag ship with the hotfix, because
-promoted means verified.
+1. Fix on `main` first (a `fix(scope): …` PR with its change file).
+2. If everything on `main` since the last tag is shippable: cut a normal
+   release.
+3. Otherwise `just release-hotfix <merged sha>…`: it creates
+   `release/v<latest tag>` from the tag if missing, cherry-picks the fixes
+   (and their change files) with `-x` onto
+   `fix/no-issue-hotfix-<sha>`, and opens a PR into that line (full set).
+   Merge it, then `just release-prepare --hotfix`, `release-pr`,
+   `release-merge`, `release-tag`. The version is the next free number.
+4. `release-tag` then opens `chore/no-issue-forward-port-v<version>` into
+   `main`: the hotfix's changelog section, and the consumed change files
+   deleted there. `main`'s next section starts "Includes all changes up to
+   v<hotfix>." `release/*` is never merged back.
 
 ## Rollback
 
-- **Sites**: `deploy` tags every image `sha-<short>` and `vX.Y.Z`. Point
-  argocd-image-updater back at the previous release's tag (or re-run
-  `deploy` on the previous tag: `gh workflow run deploy.yml --ref vX.Y.Z`).
-  Nothing in studio's sites holds data, so an image swap is a full rollback.
-- **TestFlight**: expire the build in App Store Connect (per app); the previous
-  build stays installable. To ship the previous version again, cut a new
-  patch release; a tag is never moved or reused.
-- **The workflow itself**: `main` stays the default branch (the Captain's
-  decision, STA-308), so there is no default-branch switch to undo. Restore
-  the `on: push: branches: [main]` triggers in `deploy.yml` (one commit),
-  delete `pr-base.yml` if PRs should stop moving to `dev`, and change the
-  `main (release only)` ruleset only with the Captain's yes.
-
-## Branches
-
-The Captain's feature branches (`editing-engine`, ...) are cut from and
-merged into `dev`. A branch that was cut from main before the switch and
-is not behind it fast-forwards onto dev unchanged
-(`git push origin <branch>:dev` after a local check).
+- **Sites**: re-run `deploy` on the previous tag
+  (`gh workflow run deploy.yml --ref v26.10.2`), or point
+  argocd-image-updater at the previous release's image tag. Nothing in
+  studio's sites holds data, so an image swap is a full rollback. A
+  rollback is a production deploy: get the Captain's yes/no first.
+- **TestFlight**: expire the build in App Store Connect (per app); the
+  previous build stays installable. To ship the previous code again, fix
+  forward and release a new version; a tag is never moved or reused.

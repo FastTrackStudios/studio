@@ -5,11 +5,12 @@
 # The TestFlight marketing version (CFBundleShortVersionString) IS the tag's
 # version, and the tag is a GitHub Release (docs/agents/release-workflow.md).
 #
-#   dev --promotion PR--> main     finished features; ships NOTHING
-#   main --release PR--> `just release-tag` pushes vX.Y.Z --> this workflow
-#   AND session-ios.yml start on the tag --> resolve (hosted: tag shape, app
-#   crate version == tag version, changelog section, commit in main,
-#   Release exists) --> testflight (airlock: build, sign, upload) -->
+#   PRs --squash--> main           ships NOTHING
+#   release PR merged --> `just release-tag` pushes vYY.M.MICRO (on main, or
+#   on a release/v* hotfix line) --> this workflow AND session-ios.yml start
+#   on the tag --> resolve (hosted: tag shape, app crate version == tag
+#   version, changelog section, commit on main or release/v*, `Build +
+#   test` green, Release exists) --> testflight (airlock: build, sign, upload) -->
 #   record (hosted: marketing version + build number written into the
 #   Release notes, one line for this app; the other app writes its own line
 #   into the same notes, so the edit re-reads and retries).
@@ -39,7 +40,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: "Release tag to ship to TestFlight (e.g. v0.1.3): must be on main"
+        description: "Release tag to ship to TestFlight (e.g. v26.10.3): must be on main or release/v*"
         required: true
         type: string
       dry_run:
@@ -73,6 +74,8 @@ jobs:
     permissions:
       # The GitHub Release is created here when the tag has none yet.
       contents: write
+      # ios-resolve reads the tagged commit's `Build + test` check.
+      checks: read
     outputs:
       version: ${{ steps.resolve.outputs.version }}
       sha: ${{ steps.resolve.outputs.sha }}
@@ -87,8 +90,10 @@ jobs:
         with:
           ref: refs/tags/${{ env.TAG }}
           fetch-depth: 0
-      - name: Marketing version = tag version, tag in main, changelog section
+      - name: Marketing version = tag version, tag on main or release/v*, changelog section, green
         id: resolve
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: bash scripts/release.sh ios-resolve signal "$TAG"
       - name: A GitHub Release exists for the tag
         if: ${{ !inputs.dry_run }}

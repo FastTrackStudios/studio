@@ -1,49 +1,42 @@
-# Release — the guard on every PR into main, and the GitHub Release once a
-# release tag is pushed. The procedure and its reasons are in
+# Release — the guard on every PR into main or a release/v* hotfix line,
+# and the GitHub Release once a release tag is pushed. The fleet flow (v4)
+# is the `release-workflow` skill; studio specifics are in
 # docs/agents/release-workflow.md; the logic is scripts/release.sh, so a
 # human can run every step of it by hand (`just release-*`).
 #
-# Two stages, kept apart (release flow v2, the Captain 2026-10-21):
-#   dev  --promotion PR-->  main       "finished features". Nothing ships.
-#   main --release PR + tag-->  vX.Y.Z   The TAG ships: both sites (deploy),
-#                                        BOTH TestFlight uploads (signal-ios,
-#                                        session-ios), the REAPER suites, the
-#                                        desktop installers, this Release.
-#
-#   pull_request -> main   "Release guard": cheap, on a hosted runner. The
-#                          head is one of
-#                            - dev: a promotion. The merge must reproduce
-#                              dev's tree (so dev holds everything main
-#                              does) and the version is untouched,
-#                            - release/vX.Y.Z: ONE commit on top of main,
-#                              touching only the version line(s) and
-#                              CHANGELOG.md; version new, tag absent, both
-#                              iOS app crates on it,
-#                            - hotfix/*: a fix branched from the production
-#                              tag, merges cleanly, no version bump.
-#                          Anything else (a card branch) is refused.
+#   PR into main or release/**   "Release guard": cheap, on a hosted
+#                          runner. Only a release PR (head `release/pending`
+#                          in this repo) is checked; any other PR passes at
+#                          once. A release PR must be ONE commit
+#                          `chore(release): vYY.M.MICRO` directly on the
+#                          CURRENT head of its base (fetched now, not the
+#                          event's base.sha), at the computed next CalVer
+#                          version, touching only the version line(s), the
+#                          new CHANGELOG.md section and the change files it
+#                          consumed; both iOS app crates on the version.
+#                          checks.yml's plan runs the same guard, so a
+#                          refused release PR also fails `Build + test`.
 #   push tag v*            "GitHub Release": the tag guard (the tag is a
-#                          release commit on main), then the ONE GitHub
+#                          release commit on main or release/v*, with
+#                          `Build + test` green), then the ONE GitHub
 #                          Release for Signal + Session. A tag is pushed by
 #                          `just release-tag` as the fts-forge App or a
 #                          person: a tag pushed with GITHUB_TOKEN starts no
 #                          workflow.
 #   workflow_dispatch      the same, by hand, with the tag as the ref.
 #
+# SECURITY: the guard runs the BASE commit's copy of scripts/release.sh,
+# never the PR's: a release PR that edits the script must not judge itself.
+#
 # The release does not wait for deploy.yml: the product is the apps and the
 # plugins, and the two web sites are one leg of it. A failed site deploy is
 # its own red run, not a missing Release.
-#
-# Merge PRs into main with "Create a merge commit". After a release,
-# `just release-tag` back-merges main into dev; a workflow cannot do that
-# (PRs opened with GITHUB_TOKEN start no workflows, so dev's title check
-# would never report), so the publish job only says so in its summary.
 
 name: release
 
 on:
   pull_request:
-    branches: [main]
+    branches: [main, "release/**"]
     types: [opened, synchronize, reopened, ready_for_review]
   push:
     tags: ["v*"]
@@ -63,12 +56,19 @@ jobs:
         with:
           ref: ${{ github.event.pull_request.head.sha }}
           fetch-depth: 0
-      - name: Is this a sound promotion, release or hotfix?
+      - name: Is this release PR sound? (the base commit's script)
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           HEAD_REF: ${{ github.event.pull_request.head.ref }}
-        run: bash scripts/release.sh guard
+          HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
+        run: |
+          if ! git show "${BASE_SHA}:scripts/release.sh" > "${RUNNER_TEMP}/release-base.sh"; then
+            echo "::notice::the base has no scripts/release.sh: nothing to guard"
+            exit 0
+          fi
+          bash "${RUNNER_TEMP}/release-base.sh" guard
 
   publish:
     name: GitHub Release
@@ -77,6 +77,7 @@ jobs:
     timeout-minutes: 5
     permissions:
       contents: write
+      checks: read
     concurrency:
       group: release-publish
       cancel-in-progress: false
@@ -85,20 +86,11 @@ jobs:
         with:
           ref: ${{ github.sha }}
           fetch-depth: 0
-      - name: The tag is a release commit on main
+      - name: The tag is a green release commit on main or release/v*
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: bash scripts/release.sh tag-guard
       - name: Publish
         env:
           GH_TOKEN: ${{ github.token }}
         run: bash scripts/release.sh publish
-      - name: Back-merge reminder
-        run: |
-          git fetch --quiet origin dev main
-          if [ "$(git merge-tree --write-tree origin/dev origin/main | head -1)" = "$(git rev-parse 'origin/dev^{tree}')" ]; then
-            echo "dev already has everything main has"
-          else
-            msg="Released. dev lacks main's release commit: just release-backmerge (PR backmerge/v$(bash scripts/release.sh version)-<sha> -> dev, merge commit). The next promotion is refused until it is merged."
-            echo "::notice::$msg"
-            echo "### Back-merge pending" >> "$GITHUB_STEP_SUMMARY"
-            echo "$msg" >> "$GITHUB_STEP_SUMMARY"
-          fi
