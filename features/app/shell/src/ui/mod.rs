@@ -37,10 +37,17 @@
 
 mod frame;
 mod layout;
+pub mod perform;
+pub mod performer;
+pub mod playback;
 mod registry;
 
 pub use frame::{
     RegionHost, ShellFrame, ShellState, load_layout, use_panel_registry, use_shell, use_shell_state,
+    use_shell_state_with,
 };
+pub use perform::{FollowCard, LevelPeek, NowBand, SpeedMenu, SyncPill, TransportNudgeRow};
+pub use performer::{PerformDock, PerformerScreen};
+pub use playback::{Playback, PlaybackModel, PlaybackView, provide_playback, use_playback};
 pub use layout::{Region, RegionLayout, ShellLayout, pref_key};
 pub use registry::{Panel, PanelConstraints, PanelRegistry, Render};
