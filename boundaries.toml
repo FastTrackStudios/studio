@@ -44,7 +44,18 @@ pattern = ".route("
 instead = "a #[architect::service] trait mounted by EngineHost"
 
 [baseline]
-# BASELINE-PLACEHOLDER
+# 2026-10-21 first run (architect xtask d644a04, studio dev 5849ca8), 5m30s.
+#   contract-clean 17: tokio/rt 7, tokio/rt-multi-thread 3, dioxus/dioxus-core 6, vello 1.
+#   ui-reach 7: comp/drums/editor/guitar/keys/mic/synth `ui` reach tower-http.
+#   transport-host 2: session-extension enables architect/iroh + server-axum.
+#   lints 22: 9 vendored crates, 13 studio crates (align-dsp, fts-sample, ...).
+#   single-source 0, unmapped 0.
+#   hand-routes 31: sampler node_render 6, signal-desktop engine_tone3000 4 + engine_watch 4, ...
+contract-clean = 17
+ui-reach = 7
+transport-host = 2
+lints = 22
+hand-routes = 31
 
 # ── L0 contracts ──
 [[row]]
