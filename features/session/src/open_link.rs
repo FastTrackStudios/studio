@@ -158,7 +158,9 @@ impl Url {
             return Err(LinkError::NotALink);
         }
         let (scheme, rest) = match text.split_once("://") {
-            Some((s, rest)) if s.eq_ignore_ascii_case("https") || s.eq_ignore_ascii_case("http") => {
+            Some((s, rest))
+                if s.eq_ignore_ascii_case("https") || s.eq_ignore_ascii_case("http") =>
+            {
                 (s.to_ascii_lowercase(), rest)
             }
             Some(_) => return Err(LinkError::NotALink),
@@ -432,12 +434,24 @@ mod tests {
         assert_eq!(parse("   "), Err(LinkError::Empty));
         assert_eq!(parse("hello there"), Err(LinkError::NotALink));
         assert_eq!(parse("just-a-word"), Err(LinkError::NotALink));
-        assert_eq!(parse("ftp://task.example/org/a/share/b"), Err(LinkError::NotALink));
+        assert_eq!(
+            parse("ftp://task.example/org/a/share/b"),
+            Err(LinkError::NotALink)
+        );
         assert_eq!(parse("javascript:alert(1)"), Err(LinkError::NotALink));
-        assert_eq!(parse("https://user@task.example/org/a/share/b"), Err(LinkError::NotALink));
+        assert_eq!(
+            parse("https://user@task.example/org/a/share/b"),
+            Err(LinkError::NotALink)
+        );
         assert_eq!(parse("https://example.com/"), Err(LinkError::NotATaskLink));
-        assert_eq!(parse("https://task.example/org/a"), Err(LinkError::NotATaskLink));
-        assert_eq!(parse("https://task.example/org//share/b"), Err(LinkError::NotATaskLink));
+        assert_eq!(
+            parse("https://task.example/org/a"),
+            Err(LinkError::NotATaskLink)
+        );
+        assert_eq!(
+            parse("https://task.example/org//share/b"),
+            Err(LinkError::NotATaskLink)
+        );
         assert_eq!(
             parse("https://task.example/org/a/share/b/download/song.ogg"),
             Err(LinkError::NotATaskLink)
@@ -447,7 +461,11 @@ mod tests {
             Err(LinkError::NotATaskLink)
         );
         // Every refusal is a sentence, not a code.
-        for e in [LinkError::Empty, LinkError::NotALink, LinkError::NotATaskLink] {
+        for e in [
+            LinkError::Empty,
+            LinkError::NotALink,
+            LinkError::NotATaskLink,
+        ] {
             assert!(e.to_string().ends_with('.'));
         }
     }
@@ -464,7 +482,10 @@ mod tests {
     #[test]
     fn the_app_with_no_link_opens_nothing() {
         assert_eq!(app_open(query(&[])), (AppOpen::Nothing, None));
-        assert_eq!(app_open(query(&[("live", ""), ("share", " ")])).0, AppOpen::Nothing);
+        assert_eq!(
+            app_open(query(&[("live", ""), ("share", " ")])).0,
+            AppOpen::Nothing
+        );
     }
 
     #[test]

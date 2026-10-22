@@ -111,15 +111,28 @@ pub fn LoadingFrame(headline: String, detail: String, failed: bool, children: El
 pub fn readable_failure(detail: &str) -> String {
     const LONGEST: usize = 240;
     let lower = detail.to_ascii_lowercase();
-    let markup = ["<!doctype", "<html", "<head", "<body", "<script", "<div", "<meta", "<title"]
-        .iter()
-        .any(|tag| lower.contains(tag));
+    let markup = [
+        "<!doctype",
+        "<html",
+        "<head",
+        "<body",
+        "<script",
+        "<div",
+        "<meta",
+        "<title",
+    ]
+    .iter()
+    .any(|tag| lower.contains(tag));
     if markup {
         return "The server sent back a web page instead of the session's files. \
                 Check the link, or ask whoever shared it for a new one."
             .to_owned();
     }
-    let line = detail.lines().map(str::trim).find(|l| !l.is_empty()).unwrap_or("");
+    let line = detail
+        .lines()
+        .map(str::trim)
+        .find(|l| !l.is_empty())
+        .unwrap_or("");
     if line.is_empty() {
         return "Something went wrong opening it.".to_owned();
     }
@@ -136,7 +149,9 @@ pub struct NoWebGl2;
 
 impl std::fmt::Display for NoWebGl2 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str("this browser gave the page no WebGL2 (hardware acceleration is off or unsupported)")
+        f.write_str(
+            "this browser gave the page no WebGL2 (hardware acceleration is off or unsupported)",
+        )
     }
 }
 
@@ -193,12 +208,19 @@ mod tests {
 
     #[test]
     fn a_response_body_is_never_the_message() {
-        let html = "expected `<REAPER_PROJECT`, found: <!DOCTYPE html><html><head><title>Session</title>";
+        let html =
+            "expected `<REAPER_PROJECT`, found: <!DOCTYPE html><html><head><title>Session</title>";
         let said = readable_failure(html);
         assert!(!said.contains('<'), "{said}");
-        assert!(said.starts_with("The server sent back a web page"), "{said}");
+        assert!(
+            said.starts_with("The server sent back a web page"),
+            "{said}"
+        );
         assert_eq!(readable_failure("HTTP 404"), "HTTP 404");
-        assert_eq!(readable_failure("\n  the set has no songs\nmore"), "the set has no songs");
+        assert_eq!(
+            readable_failure("\n  the set has no songs\nmore"),
+            "the set has no songs"
+        );
         let long = "x".repeat(1000);
         assert!(readable_failure(&long).chars().count() <= 241);
     }

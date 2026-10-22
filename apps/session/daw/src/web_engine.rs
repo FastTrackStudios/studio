@@ -951,7 +951,9 @@ async fn fetch_bytes(url: &str) -> Result<Arc<[u8]>, String> {
         .flatten()
         .is_some_and(|t| t.to_ascii_lowercase().starts_with("text/html"));
     if html {
-        return Err(format!("{url} is not there (the server sent a web page instead)"));
+        return Err(format!(
+            "{url} is not there (the server sent a web page instead)"
+        ));
     }
     let body = response.array_buffer().map_err(|e| format!("{e:?}"))?;
     let body = wasm_bindgen_futures::JsFuture::from(body)

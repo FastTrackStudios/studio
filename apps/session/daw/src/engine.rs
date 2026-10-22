@@ -891,7 +891,10 @@ pub fn jumps() -> u64 {
 /// tells the window what happened, so waiting for the call to return
 /// would be waiting for news the window is already subscribed to.
 pub fn transport(command: Move, seconds: f64) {
-    if matches!(command, Move::Seek | Move::Home | Move::End | Move::PlayFrom) {
+    if matches!(
+        command,
+        Move::Seek | Move::Home | Move::End | Move::PlayFrom
+    ) {
         JUMPS.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
     }
     // A press by a person: playing together, everyone's.
