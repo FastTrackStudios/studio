@@ -64,5 +64,5 @@ pub mod profile_handle;
 #[cfg(feature = "native")]
 pub mod sections;
 
-#[cfg(feature = "ui")]
+#[cfg(feature = "native")]
 pub mod limiter;
