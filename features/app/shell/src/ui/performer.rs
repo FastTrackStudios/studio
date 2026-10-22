@@ -176,6 +176,22 @@ pub fn PerformerScreen(
     #[props(default = HOME_INSET)] inset_bottom: u32,
 ) -> Element {
     use_shell_state_with(scope, load_performer_layout);
+    // The app's panels, read by id here; the frames below see an empty
+    // registry, so they draw only the slots given (no tab rows, rails or
+    // drawer handles of their own).
+    let panels = try_use_context::<PanelRegistry>().unwrap_or_default();
+    use_context_provider(|| PerformPanels(panels));
+    rsx! { Frames { inset_top, inset_bottom, app_bar } }
+}
+
+/// The app's [`PanelRegistry`], as the performer screen saw it: the frames
+/// inside it get an empty one.
+#[derive(Clone, PartialEq)]
+struct PerformPanels(PanelRegistry);
+
+#[component]
+fn Frames(inset_top: u32, inset_bottom: u32, app_bar: Option<Element>) -> Element {
+    use_context_provider(PanelRegistry::new);
     let bar = rsx! {
         div {
             "data-perform": "app-bar",
@@ -215,7 +231,7 @@ pub fn PerformerScreen(
     rsx! {
         div {
             "data-perform": "screen",
-            style: "display: flex; flex-direction: column; width: 100%; height: 100vh; min-height: 0; \
+            style: "display: flex; flex-direction: column; width: 100vw; height: 100vh; min-height: 0; \
                     background: {DESK}; color: {INK}; font-family: {FONT};",
             div { "data-perform": "status-inset", style: "flex-shrink: 0; height: {inset_top}px; background: {DESK};" }
             ShellFrame { app_bar: bar, top, main: body, bottom }
@@ -261,7 +277,7 @@ const CHEVRON: &str = "border: none; border-radius: 8px; background: rgba(255,25
 /// A registered panel's body by id, or nothing when none is registered.
 #[component]
 fn PerformPanel(id: &'static str) -> Element {
-    let registry = try_use_context::<PanelRegistry>().unwrap_or_default();
+    let registry = try_use_context::<PerformPanels>().map(|p| p.0).unwrap_or_default();
     match registry.get(id).map(|p| p.render) {
         Some(render) => rsx! { PanelBody { key: "{id}", render } },
         None => rsx! {},
