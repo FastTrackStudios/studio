@@ -65,7 +65,7 @@ keyflow = { workspace = true }
 # The visual presets. Which tracks a preset shows, and how large, is a
 # rule resolved against the session's own taxonomy — not a list of GUIDs
 # this window keeps. See `src/plan.rs`.
-dynamic-template = { workspace = true, default-features = false }
+dynamic-template = { workspace = true }
 # The hit detector (native: it reads whole recordings and runs on cores).
 hits = { workspace = true, optional = true }
 # The album's plan and the room's profile, behind the Patch List view —
