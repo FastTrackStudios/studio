@@ -758,6 +758,13 @@ fn GigScreenView(
     } else {
         (0, 0)
     };
+    // The account: the ⋯ menu's first item, and on the iPad its sheet
+    // (on a desktop the window's own sheet, in main.rs, shows it). The
+    // scrim starts below the app bar so Mute and Panic stay live.
+    let account = try_use_context::<fts_account::ui::AccountState>();
+    use_context_provider(|| guitar::ui::BarAccountItem(account_item));
+    // On a desktop the window's own sheet (main.rs) is the one.
+    let touch = ipad || cfg!(target_os = "ios");
     rsx! {
         PerformerScreen {
             scope: performer::SIGNAL_SCOPE,
@@ -765,6 +772,24 @@ fn GigScreenView(
             inset_top: top,
             inset_bottom: bottom,
         }
+        if touch && account.is_some() {
+            crate::account::AccountOverlay { top: top.saturating_add(48).max(72), width: 834 }
+        }
+    }
+}
+
+/// The ⋯ menu's Account item (STA-361): signed out, signed in, or ended.
+fn account_item(close: Callback<()>) -> Element {
+    rsx! { AccountItem { close } }
+}
+
+#[component]
+fn AccountItem(close: Callback<()>) -> Element {
+    let Some(state) = try_use_context::<fts_account::ui::AccountState>() else {
+        return rsx! {};
+    };
+    rsx! {
+        fts_account::ui::AccountMenuItem { state, locked: false, on_pick: move |()| close.call(()) }
     }
 }
 

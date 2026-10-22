@@ -16,7 +16,11 @@ impl Platform {
     /// This build's platform.
     #[must_use]
     pub const fn current() -> Self {
-        if cfg!(target_os = "ios") { Self::Ipad } else { Self::Desktop }
+        if cfg!(target_os = "ios") {
+            Self::Ipad
+        } else {
+            Self::Desktop
+        }
     }
 
     /// "this computer" / "this iPad".
@@ -74,7 +78,8 @@ pub const OPEN_PAGE: &str = "Open sign-in page";
 pub const COPY_CODE: &str = "Copy code";
 pub const COPY_LINK: &str = "Copy link";
 pub const WAITING: &str = "Waiting for approval…";
-pub const OFFLINE_WAITING: &str = "Offline. Still waiting; this carries on when you're back online.";
+pub const OFFLINE_WAITING: &str =
+    "Offline. Still waiting; this carries on when you're back online.";
 pub const ONLY_YOURS: &str = "Only approve a code you just asked this app for.";
 
 /// "On another device? Go to {where} and enter it."
@@ -108,7 +113,11 @@ pub fn finishing() -> Words {
 /// Just signed in (`In`).
 #[must_use]
 pub fn signed_in_now(app: App, platform: Platform, email: &str) -> Words {
-    let who = if email.is_empty() { "Signed in.".to_owned() } else { format!("Signed in as {email}.") };
+    let who = if email.is_empty() {
+        "Signed in.".to_owned()
+    } else {
+        format!("Signed in as {email}.")
+    };
     Words {
         title: "You're signed in",
         body: match platform {
@@ -187,9 +196,10 @@ pub fn failed(app: App, failure: &Failure, server: &str, minutes: u64) -> Words 
 pub fn ended() -> Words {
     Words {
         title: "Your sign-in ended",
-        body: "It expired, or you signed out on another device. Sign in again to keep your devices \
+        body:
+            "It expired, or you signed out on another device. Sign in again to keep your devices \
                connected. Your sets and rigs are still here."
-            .to_owned(),
+                .to_owned(),
         primary: Some("Sign in again"),
         secondary: Some("Not now"),
     }
@@ -247,6 +257,10 @@ mod tests {
 
     #[test]
     fn expired_copy_uses_the_servers_minutes() {
-        assert!(failed(App::Session, &Failure::Expired, "", 15).body.contains("15 minutes"));
+        assert!(
+            failed(App::Session, &Failure::Expired, "", 15)
+                .body
+                .contains("15 minutes")
+        );
     }
 }

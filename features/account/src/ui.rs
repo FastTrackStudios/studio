@@ -16,7 +16,7 @@ use std::time::{Duration, SystemTime};
 use dioxus::prelude::*;
 
 use crate::copy::{self, Platform};
-use crate::flow::{self, Clock as _, Http, SystemClock};
+use crate::flow::{self, Http, SystemClock};
 use crate::{Account, App, Failure, Stamp, Started, Store, cut};
 
 pub const SHEET: &str = "#16171b";
@@ -68,7 +68,17 @@ pub struct AccountState {
     /// Whether the sheet is open.
     pub sheet: Signal<bool>,
     task: Signal<Option<Task>>,
+    /// The sign-in's work on the account runtime, to stop it on Cancel.
+    work: Signal<Option<tokio::task::AbortHandle>>,
     stamp: Signal<Stamp>,
+}
+
+/// What the sign-in's work on the account runtime tells the UI.
+enum Event {
+    Code(Started),
+    Offline(bool),
+    Failed(Failure, u64),
+    Approved(Account, bool),
 }
 
 /// The account for `app`: read from the shared file now, re-read whenever
@@ -77,6 +87,7 @@ pub fn use_account(app: App) -> AccountState {
     let phase = use_signal(|| crate::signed_in().map_or(Phase::Out, |a| signed(a, false)));
     let sheet = use_signal(|| false);
     let task = use_signal(|| None::<Task>);
+    let work = use_signal(|| None::<tokio::task::AbortHandle>);
     let stamp = use_signal(|| Store::shared().and_then(|s| s.stamp()));
     let state = AccountState {
         app,
@@ -84,12 +95,13 @@ pub fn use_account(app: App) -> AccountState {
         phase,
         sheet,
         task,
+        work,
         stamp,
     };
     use_hook(move || {
         spawn(async move {
             loop {
-                SystemClock.sleep(Duration::from_secs(5)).await;
+                futures_timer::Delay::new(Duration::from_secs(5)).await;
                 state.refresh();
             }
         })
@@ -151,52 +163,80 @@ impl AccountState {
         }
     }
 
-    /// Start (or restart) a sign-in.
+    /// Start (or restart) a sign-in. The HTTP runs on the account's own
+    /// runtime; this window's task only shows what it reports.
     pub fn begin(mut self) {
         self.stop();
         self.phase.set(Phase::Starting);
+        let Some(runtime) = crate::runtime() else {
+            self.phase.set(Phase::Failed {
+                failure: Failure::Other("no runtime to sign in on".to_owned()),
+                minutes: 10,
+            });
+            return;
+        };
         let app = self.app;
-        let task = spawn(async move {
+        let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<Event>();
+        let work = runtime.spawn(async move {
             let http = Http::new();
             let server = crate::server();
             let started = match flow::start(&http, &SystemClock, &server, app.client_id()).await {
                 Ok(s) => s,
                 Err(failure) => {
-                    self.phase.set(Phase::Failed { failure, minutes: 10 });
+                    let _ = tx.send(Event::Failed(failure, 10));
                     return;
                 }
             };
             let minutes = started.minutes();
-            self.phase.set(Phase::Code {
-                started: started.clone(),
-                offline: false,
-            });
-            let mut phase = self.phase;
-            let got = flow::finish(&http, &SystemClock, &started, app.client_id(), |offline| {
-                if let Phase::Code { offline: o, .. } = &mut *phase.write() {
-                    *o = offline;
-                }
+            let _ = tx.send(Event::Code(started.clone()));
+            let offline_tx = tx.clone();
+            let got = flow::finish(&http, &SystemClock, &started, app.client_id(), move |o| {
+                let _ = offline_tx.send(Event::Offline(o));
             })
             .await;
-            match got {
+            let _ = tx.send(match got {
                 Ok(session) => {
-                    self.phase.set(Phase::Finishing);
                     let saved = flow::keep(&session);
-                    self.stamp.set(Store::shared().and_then(|s| s.stamp()));
-                    self.phase.set(Phase::In {
-                        account: Account { server, session },
-                        just_now: true,
-                        elsewhere: false,
-                        saved,
-                    });
+                    Event::Approved(Account { server, session }, saved)
                 }
-                Err(failure) => self.phase.set(Phase::Failed { failure, minutes }),
+                Err(failure) => Event::Failed(failure, minutes),
+            });
+        });
+        self.work.set(Some(work.abort_handle()));
+        let task = spawn(async move {
+            while let Some(event) = rx.recv().await {
+                match event {
+                    Event::Code(started) => self.phase.set(Phase::Code {
+                        started,
+                        offline: false,
+                    }),
+                    Event::Offline(offline) => {
+                        if let Phase::Code { offline: o, .. } = &mut *self.phase.write() {
+                            *o = offline;
+                        }
+                    }
+                    Event::Failed(failure, minutes) => {
+                        self.phase.set(Phase::Failed { failure, minutes });
+                    }
+                    Event::Approved(account, saved) => {
+                        self.stamp.set(Store::shared().and_then(|s| s.stamp()));
+                        self.phase.set(Phase::In {
+                            account,
+                            just_now: true,
+                            elsewhere: false,
+                            saved,
+                        });
+                    }
+                }
             }
         });
         self.task.set(Some(task));
     }
 
     fn stop(mut self) {
+        if let Some(w) = self.work.write().take() {
+            w.abort();
+        }
         if let Some(t) = self.task.write().take() {
             t.cancel();
         }
@@ -303,13 +343,17 @@ pub fn DeviceCodePanel(
     use_hook(move || {
         spawn(async move {
             loop {
-                SystemClock.sleep(Duration::from_secs(1)).await;
+                futures_timer::Delay::new(Duration::from_secs(1)).await;
                 now.set(SystemTime::now());
             }
         })
     });
     let left = started.left(now()).as_secs();
-    let shown = if left < 60 { left } else { left.div_ceil(30).saturating_mul(30) };
+    let shown = if left < 60 {
+        left
+    } else {
+        left.div_ceil(30).saturating_mul(30)
+    };
     let expiry = copy::expires_in(shown);
     let urgent = left < 60;
     let (w, h, f) = if narrow { (36, 48, 24) } else { (44, 56, 28) };
@@ -378,7 +422,12 @@ pub fn DeviceCodePanel(
 
 /// The sign-out confirm (§4.5): a popover, Cancel first for the keyboard.
 #[component]
-pub fn SignOutConfirm(app: App, platform: Platform, on_confirm: EventHandler<()>, on_cancel: EventHandler<()>) -> Element {
+pub fn SignOutConfirm(
+    app: App,
+    platform: Platform,
+    on_confirm: EventHandler<()>,
+    on_cancel: EventHandler<()>,
+) -> Element {
     rsx! {
         div {
             role: "alertdialog",

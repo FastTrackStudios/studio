@@ -156,9 +156,9 @@ impl Account {
             .user_id
             .as_deref()
             .unwrap_or_else(|| self.email());
-        key.bytes()
-            .fold(0usize, |h, b| h.wrapping_mul(31).wrapping_add(usize::from(b)))
-            % 5
+        key.bytes().fold(0usize, |h, b| {
+            h.wrapping_mul(31).wrapping_add(usize::from(b))
+        }) % 5
     }
 
     /// Whether this is the default server (the server is only shown when
@@ -288,7 +288,9 @@ impl std::fmt::Display for Failure {
             Self::NoAccountServer => f.write_str("the server names no account server"),
             Self::Expired => f.write_str("the code expired before it was approved"),
             Self::Declined => f.write_str("the sign-in was refused"),
-            Self::Unreadable(s) => write!(f, "the account server answered what this cannot read: {s}"),
+            Self::Unreadable(s) => {
+                write!(f, "the account server answered what this cannot read: {s}")
+            }
             Self::Other(s) => write!(f, "sign-in failed: {s}"),
         }
     }
@@ -382,7 +384,10 @@ impl Store {
         if session.is_none()
             && let Some(legacy) = &self.legacy
         {
-            session = auth_client::FileTokenStore::new(legacy).load().ok().flatten();
+            session = auth_client::FileTokenStore::new(legacy)
+                .load()
+                .ok()
+                .flatten();
             if let Some(s) = &session {
                 // Moved once: the shared file is the one from now on.
                 if let Err(e) = self.file.save(s) {
@@ -427,6 +432,25 @@ impl Store {
     }
 }
 
+/// The account's own runtime: the sign-in's HTTP (reqwest needs tokio)
+/// runs here, whatever executor the app's UI is on. One small worker.
+#[cfg(not(target_arch = "wasm32"))]
+pub fn runtime() -> Option<&'static tokio::runtime::Runtime> {
+    static RUNTIME: std::sync::OnceLock<Option<tokio::runtime::Runtime>> =
+        std::sync::OnceLock::new();
+    RUNTIME
+        .get_or_init(|| {
+            tokio::runtime::Builder::new_multi_thread()
+                .worker_threads(1)
+                .thread_name("fts-account")
+                .enable_all()
+                .build()
+                .inspect_err(|e| tracing::warn!(error = %e, "account: no runtime"))
+                .ok()
+        })
+        .as_ref()
+}
+
 /// The person signed in on this device, if a session is kept.
 #[cfg(not(target_arch = "wasm32"))]
 #[must_use]
@@ -450,10 +474,8 @@ mod tests {
     use super::*;
 
     fn scratch(name: &str) -> PathBuf {
-        let dir = std::env::temp_dir().join(format!(
-            "fts-account-test-{name}-{}",
-            std::process::id()
-        ));
+        let dir =
+            std::env::temp_dir().join(format!("fts-account-test-{name}-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         dir.join("fts/account/session.json")
     }
@@ -503,7 +525,10 @@ mod tests {
             file: auth_client::FileTokenStore::new(&path),
             legacy: Some(legacy.clone()),
         };
-        assert_eq!(store.load(SERVER)?.map(|a| a.session.token).as_deref(), Some("old"));
+        assert_eq!(
+            store.load(SERVER)?.map(|a| a.session.token).as_deref(),
+            Some("old")
+        );
         assert!(path.exists());
         assert!(!legacy.exists());
         Ok(())
@@ -517,8 +542,14 @@ mod tests {
 
     #[test]
     fn servers_read_as_https() {
-        assert_eq!(normalize_server("wss://task.example.test/"), "https://task.example.test");
-        assert_eq!(normalize_server(" http://localhost:3000 "), "http://localhost:3000");
+        assert_eq!(
+            normalize_server("wss://task.example.test/"),
+            "https://task.example.test"
+        );
+        assert_eq!(
+            normalize_server(" http://localhost:3000 "),
+            "http://localhost:3000"
+        );
     }
 
     #[test]

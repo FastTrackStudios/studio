@@ -39,7 +39,12 @@ impl AccountLibrary for Account {
 /// something this does not understand.
 pub fn start(server: &str) -> eyre::Result<Started> {
     let runtime = crate::open::engine_runtime()?;
-    Ok(runtime.block_on(flow::start(&Http::new(), &SystemClock, server, APP.client_id()))?)
+    Ok(runtime.block_on(flow::start(
+        &Http::new(),
+        &SystemClock,
+        server,
+        APP.client_id(),
+    ))?)
 }
 
 /// Wait for `started` to be approved (or refused, or to run out), polling

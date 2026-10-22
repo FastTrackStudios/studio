@@ -10,13 +10,16 @@ description = "The FastTrackStudio account on a device: device-code sign-in (RFC
 # The shared sign-in UI (src/ui): DeviceCodePanel, AccountSheet,
 # SignOutConfirm, AccountMenuItem and the use_account hook. Inline styles
 # only, so it runs on Blitz and a WebView alike.
-ui = ["dep:dioxus"]
+ui = ["dep:dioxus", "dep:futures-timer"]
 
 [dependencies]
 auth-client = { workspace = true }
 serde_json = { workspace = true }
 tracing = { workspace = true }
 dioxus = { workspace = true, optional = true }
+# The UI's timers (the 5 s shared-file watch, the countdown): runtime-free,
+# so they run on whatever executor the app's renderer has.
+futures-timer = { workspace = true, optional = true }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 dirs = "6"

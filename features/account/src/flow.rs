@@ -41,7 +41,11 @@ pub trait Transport {
     /// GET `url`.
     fn get(&self, url: &str) -> impl Future<Output = Result<Answer, Unreachable>>;
     /// POST the JSON `body` to `url`.
-    fn post_json(&self, url: &str, body: String) -> impl Future<Output = Result<Answer, Unreachable>>;
+    fn post_json(
+        &self,
+        url: &str,
+        body: String,
+    ) -> impl Future<Output = Result<Answer, Unreachable>>;
 }
 
 /// The wall clock and a way to wait.
@@ -132,7 +136,10 @@ pub async fn start(
     let issuer =
         device::issuer_from_well_known(&well_known.body).ok_or(Failure::NoAccountServer)?;
     let started = http
-        .post_json(&format!("{issuer}{}", device::CODE_PATH), device::start_body(client_id))
+        .post_json(
+            &format!("{issuer}{}", device::CODE_PATH),
+            device::start_body(client_id),
+        )
         .await
         .map_err(|_| Failure::Offline)?;
     if started.status >= 500 {
@@ -171,14 +178,20 @@ pub async fn finish(
             return Err(Failure::Expired);
         }
         let answer = match http
-            .post_json(&url, device::poll_body(&started.code.device_code, client_id))
+            .post_json(
+                &url,
+                device::poll_body(&started.code.device_code, client_id),
+            )
             .await
         {
             Ok(a) if a.status < 500 => a,
             Ok(_) | Err(_) => {
                 if !offline {
                     offline = true;
-                    tracing::info!(auth.flow = "device", "account: polling offline; carrying on");
+                    tracing::info!(
+                        auth.flow = "device",
+                        "account: polling offline; carrying on"
+                    );
                     on_offline(true);
                 }
                 continue;
@@ -190,7 +203,11 @@ pub async fn finish(
         }
         match device::parse_poll(answer.ok(), &answer.body)? {
             Poll::Approved(session) => {
-                tracing::info!(auth.flow = "device", auth.outcome = "approved", "account: signed in");
+                tracing::info!(
+                    auth.flow = "device",
+                    auth.outcome = "approved",
+                    "account: signed in"
+                );
                 return Ok(session);
             }
             Poll::Pending => {}
@@ -316,7 +333,8 @@ mod tests {
     const WELL_KNOWN: &str = r#"{"central_auth":"https://auth.example.test/"}"#;
     const CODE: &str = r#"{"device_code":"dev-secret","user_code":"QK72-M9X4","verification_uri":"/auth/device","verification_uri_complete":"/auth/device?code=QK72-M9X4","expires_in_seconds":600,"interval_seconds":5}"#;
     const PENDING: &str = r#"{"code":"verification_required","message":"not yet"}"#;
-    const APPROVED: &str = r#"{"token":"tok-1","user":{"id":"u-1","email":"jules.marlowe@example.test"}}"#;
+    const APPROVED: &str =
+        r#"{"token":"tok-1","user":{"id":"u-1","email":"jules.marlowe@example.test"}}"#;
     const REFUSED: &str = r#"{"code":"permission_denied","message":"the person refused"}"#;
 
     async fn started(clock: &Fake) -> Result<Started, Failure> {
@@ -329,7 +347,10 @@ mod tests {
         let clock = Fake::new();
         let s = started(&clock).await?;
         assert_eq!(s.issuer, "https://auth.example.test");
-        assert_eq!(s.link(), "https://auth.example.test/auth/device?code=QK72-M9X4");
+        assert_eq!(
+            s.link(),
+            "https://auth.example.test/auth/device?code=QK72-M9X4"
+        );
         assert_eq!(s.other_device(), "auth.example.test/auth/device");
         assert_eq!(s.groups(), ["QK72", "M9X4"]);
         assert_eq!(s.minutes(), 10);
@@ -353,7 +374,11 @@ mod tests {
     async fn a_refused_code_is_declined() -> Result<(), Failure> {
         let clock = Fake::new();
         let s = started(&clock).await?;
-        let http = Script::new([Some((400, PENDING)), Some((403, REFUSED)), Some((200, APPROVED))]);
+        let http = Script::new([
+            Some((400, PENDING)),
+            Some((403, REFUSED)),
+            Some((200, APPROVED)),
+        ]);
         let got = finish(&http, &clock, &s, "signal-app", |_| {}).await;
         assert_eq!(got, Err(Failure::Declined));
         assert_eq!(http.1.get(), 2, "no poll after the refusal");

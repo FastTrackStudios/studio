@@ -104,6 +104,9 @@ pub fn MobileApp() -> Element {
     let mut corners = use_context_provider(|| ScreenCorners(Signal::new(PHONE_CORNER_RADIUS)));
     // The log ring, for the Audio mode's Log tab (copied for pasting into a
     // message when the audio misbehaves).
+    // The FastTrackStudio account (STA-361): the ⋯ menu's Account item
+    // and its sheet read it from context.
+    let _account = crate::account::provide_account();
     use_context_provider(|| guitar::ui::LogFeed {
         lines: app_shell::log_ring::snapshot,
         copy: copy_log,
