@@ -5,119 +5,256 @@
 #
 #   PR -> dev           NOT here. The gate is a local `cargo check
 #                       --workspace --all-targets` on the PR's head (or
-#                       the full `just ci`: the same steps, in the same
-#                       order, as below); pr-title.yml is the only job a
-#                       PR into dev runs.
-#   PROMOTION PR dev -> main (or hotfix/* -> main)   HERE, automatically,
-#                       the FULL set (`Build + test`, required; plus the advisory
-#                       job `Advisory: wasm + tests`, see below): main is "finished features", so this
-#                       is the one place the whole workspace is checked
-#                       and the Reviewer reads the diff. It runs once per
-#                       promotion, not once per card.
+#                       the full `just ci`: the same steps as below);
+#                       pr-title.yml is the only job a PR into dev runs.
+#   PROMOTION PR dev -> main (or hotfix/* -> main)   HERE, automatically:
+#                       the AFFECTED set (rail plan against the PR's base
+#                       commit, see CHANGE SELECTION). main is "finished
+#                       features", so this is the one place the workspace
+#                       is checked and the Reviewer reads the diff. It runs
+#                       once per promotion, not once per card. The required
+#                       check is `Build + test` (the aggregator at the end).
 #   RELEASE PR release/vX.Y.Z -> main   a one-commit version bump +
 #                       changelog on top of main. The release guard proves
-#                       it touches nothing else, so the `Plan` job below
-#                       SKIPS the heavy job (a skipped job counts as
-#                       passing for the required `Build + test` check):
-#                       the content was checked when it was promoted.
-#   by hand             `gh workflow run checks.yml --ref <branch>`.
+#                       it touches nothing else, so the `plan` job below
+#                       SKIPS every heavy job (`Build + test` still runs and
+#                       passes): the content was checked when it was
+#                       promoted.
+#   push to main        the FULL set, once per merge, and records rail
+#                       EVIDENCE for that commit: it is the base the next
+#                       promotion plans against. Nothing ships from it —
+#                       production changes only when a v* tag is pushed.
+#   nightly             the FULL set on dev's tip (flow v2), so dev's
+#                       accumulated cards are compiled together at least
+#                       once a day, not first at promotion.
+#   by hand             `gh workflow run checks.yml --ref <branch>` runs
+#                       everything; add `-f base=main` to check only what the
+#                       branch changed against main.
 #
-# Never on push: a merge to main is the tree its PR already passed
-# (release.yml's guard proves the merge commit's tree IS the head's tree),
-# and nothing ships from a push to main. Production changes only when a v*
-# tag is pushed.
+# RUNNERS: self-hosted, one label PER BUILD KIND (Tom's Mac Pro VM):
 #
-# Runs on the org's self-hosted runner (THEBATTLESHIP, label `nix-host` —
-# see fasttrackstudio/.flake modules/selfhost/services/github-runner.nix):
-# nix and the toolchain live on the host already, so there is no installer
-# step and no rust-cache action — CARGO_TARGET_DIR points at the runner
-# instance's systemd CacheDirectory instead, which persists across runs
-# (and across restarts/reboots) the way a hosted-runner cache never could.
+#   studio         light jobs: the plan (needs nix + cargo metadata)
+#   studio-lint    fmt, manifests, Boundaries, flow gate, tailwind,
+#                  `cargo check --workspace`, clippy (check mode, no codegen)
+#   studio-wasm    the wasm32 checks (another target triple)
+#   studio-tests   the nextest build (full codegen) + rail evidence
+#
+# The three kinds share NO artifacts except build scripts and proc macros
+# (check-mode units are not the test build's units, and wasm32 units are
+# another triple), so serialising them in one job only added their times
+# together. Each instance's target dir holds one kind and stays warm for
+# it, and the jobs of one PR run side by side.
+#
+# nix and the toolchain live on the runner already, so there is no
+# installer step and no rust-cache action — CARGO_TARGET_DIR points at the
+# runner instance's own cache dir instead, which persists across runs (and
+# across restarts/reboots) the way a hosted-runner cache never could.
 #
 # Toolchain comes from the repo flake: every step runs under
 # `nix develop .#ci -c`. `--accept-flake-config` picks up the
 # fasttrackstudio.cachix.org substituter from flake.nix nixConfig.
+# Everything the workspace builds is in this repo (daw, processor, signal
+# and patchbay were folded in), so there are no sibling checkouts.
 #
-# Deliberately simple: no `cargo rail plan` to pick affected crates — the
-# whole workspace is checked and tested, the same steps `just ci` runs
-# locally, in the same order. Everything the workspace builds is in this
-# repo (daw, processor, signal and patchbay were folded in), so there are
-# no sibling checkouts.
+# CHANGE SELECTION: the `plan` job asks `cargo rail plan` (0.32, built in
+# nix/modules/cargo-rail.nix) which workspace packages a change affects,
+# through cargo's resolved reverse-dependency graph, and
+# scripts/ci-rail-plan.py turns that into gates plus a nextest filterset.
+# Only which tests RUN narrows; the test BUILD stays --workspace so the
+# warm target dir keeps one artifact set. Full runs (push to main, the
+# nightly, a dispatch without `base`) record rail's observed-input
+# evidence for their commit (dep-info of every unit, no extra compiling)
+# into the Actions cache; a later plan against that commit restores it,
+# which is what lets a docs/fixture change narrow instead of widening to
+# the whole workspace. Workflow, Justfile, nix, scripts or nextest-config
+# changes (.config/rail.toml [plan.work.*]), workspace scope, or any rail
+# failure FAIL OPEN to the full set.
 
 name: checks
 
 on:
   pull_request:
     branches: [main]
+  push:
+    branches: [main]
   workflow_dispatch:
+    inputs:
+      base:
+        description: "Only check crates affected since this ref (e.g. main). Empty = everything."
+        required: false
+        default: ""
+  schedule:
+    - cron: "47 10 * * *"
 
 concurrency:
-  group: checks-${{ github.event.pull_request.number || github.ref }}
+  group: checks-${{ github.event.pull_request.number || github.ref }}-${{ github.event_name == 'schedule' && 'nightly' || 'run' }}
   cancel-in-progress: true
 
 env:
   NIX_DEV: nix develop --accept-flake-config .#ci -c
 
 jobs:
-  # Is this PR only a release commit (version + changelog on top of main)?
-  # Cheap, hosted; the heavy job below is skipped when it is.
+  # Which jobs have work: a release-only PR skips them all; otherwise rail
+  # decides (or the run is full). Self-hosted because rail needs the nix
+  # shell and the workspace's git deps.
   plan:
     name: Plan
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    outputs:
-      release_only: ${{ steps.plan.outputs.release_only }}
-    steps:
-      - uses: actions/checkout@v4
-        if: ${{ github.event_name == 'pull_request' }}
-        with:
-          ref: ${{ github.event.pull_request.head.sha }}
-          fetch-depth: 0
-      - name: Release commit only?
-        id: plan
-        env:
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
-          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-          HEAD_REF: ${{ github.event.pull_request.head.ref }}
-        run: |
-          if [ "${{ github.event_name }}" = pull_request ] && bash scripts/release.sh release-only; then
-            echo "release_only=true" >> "$GITHUB_OUTPUT"
-            echo "### Release commit only" >> "$GITHUB_STEP_SUMMARY"
-            echo "This PR is one commit changing the version and CHANGELOG.md; its content was checked when it was promoted, so \`Build + test\` is skipped." >> "$GITHUB_STEP_SUMMARY"
-          else
-            echo "release_only=false" >> "$GITHUB_OUTPUT"
-          fi
-
-  # REQUIRED by the ruleset `main (release only)` (25572127). Today it means:
-  # manifests + lockfile, fmt, the flow gate, the tailwind sheet and
-  # `cargo check --workspace`. The wasm check and the test run live in the
-  # advisory job below until STA-184 makes them green.
-  check:
-    name: Build + test
-    needs: plan
-    runs-on: [self-hosted, session]
-    timeout-minutes: 60
-    # Fork PRs never run here: this is a public repo on a self-hosted runner,
-    # and the job holds the inferno-control credential below. GitHub also
+    runs-on: [self-hosted, studio]
+    timeout-minutes: 15
+    # Fork PRs never run here: this is a public repo on self-hosted runners,
+    # and the jobs hold the inferno-control credential below. GitHub also
     # withholds secrets from fork PRs, so this is the second lock, and it
-    # keeps fork code off the runner. (workflow_dispatch has no pull_request.)
-    # A release-only PR skips it (Plan), as before.
-    if: ${{ needs.plan.outputs.release_only != 'true' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) }}
+    # keeps fork code off the runners. Every other job needs this one, so
+    # they skip with it, and `Build + test` fails the fork PR rather than
+    # passing it unchecked. (push/schedule/workflow_dispatch have no
+    # pull_request.)
+    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
+    outputs:
+      full: ${{ steps.filter.outputs.full }}
+      cargo: ${{ steps.filter.outputs.cargo }}
+      tests: ${{ steps.filter.outputs.tests }}
+      test_filter: ${{ steps.filter.outputs.test_filter }}
+      wasm: ${{ steps.filter.outputs.wasm }}
+      skip: ${{ steps.filter.outputs.skip }}
+      ref: ${{ steps.filter.outputs.ref }}
+      record: ${{ steps.filter.outputs.record }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          # Full history: the plan needs both diff endpoints' ancestry, and
+          # the release guard the PR's base and head.
+          fetch-depth: 0
       # features/patchbay -> inferno-net is a git dep on the private
       # FastTrackStudios/inferno-control; give git/cargo a read-only token
-      # for that one repo before anything resolves the workspace.
-      - name: inferno-control read access
+      # for that one repo before anything resolves the workspace (rail's
+      # plan runs cargo metadata).
+      - &inferno-auth
+        name: inferno-control read access
         uses: ./.github/actions/inferno-control-auth
         with:
           token: ${{ secrets.INFERNO_CONTROL_TOKEN }}
-      - name: Persistent target dir
+      # Which commit to plan against, decided before the evidence restore
+      # (its cache key is that commit).
+      - name: Choose the comparison base
+        id: base
+        env:
+          DISPATCH_BASE: ${{ inputs.base }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          set -u
+          base=""
+          case "${GITHUB_EVENT_NAME:-}" in
+            pull_request) base="${BASE_SHA}" ;;
+            workflow_dispatch)
+              if [ -n "${DISPATCH_BASE}" ]; then
+                git fetch --quiet origin "${DISPATCH_BASE}" || true
+                base="$(git merge-base "origin/${DISPATCH_BASE}" HEAD 2>/dev/null || true)"
+              fi ;;
+          esac
+          echo "sha=${base}" >> "$GITHUB_OUTPUT"
+          echo "base: ${base:-<none: full run>}"
+      - name: Restore rail evidence for the base
+        if: ${{ steps.base.outputs.sha != '' }}
+        uses: actions/cache/restore@v4
+        with:
+          path: ${{ runner.temp }}/rail-evidence
+          key: rail-evidence-${{ runner.os }}-${{ runner.arch }}-cargo.test-${{ steps.base.outputs.sha }}
+      - name: Plan affected crates
+        id: filter
+        env:
+          BASE: ${{ steps.base.outputs.sha }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          HEAD_REF: ${{ github.event.pull_request.head.ref }}
+          EVIDENCE: ${{ runner.temp }}/rail-evidence/cargo.test.json
+        run: |
+          set -u
+
+          # Fail open: if we cannot compute an honest plan, run everything.
+          run_all() {
+            echo "plan: $1 — running EVERYTHING"
+            printf 'full=true\ncargo=true\ntests=true\ntest_filter=\nwasm=true\n' >> "$GITHUB_OUTPUT"
+            exit 0
+          }
+          skip_all() {
+            echo "plan: $1 — nothing to run"
+            printf 'skip=true\nfull=false\ncargo=false\ntests=false\ntest_filter=\nwasm=false\n' >> "$GITHUB_OUTPUT"
+            exit 0
+          }
+          # Full runs record evidence for the commit they check, so later
+          # plans against it can narrow.
+          record() { echo "record=true" >> "$GITHUB_OUTPUT"; }
+
+          case "${GITHUB_EVENT_NAME:-}" in
+            pull_request)
+              # The release commit: its content was checked when it was
+              # promoted (scripts/release.sh proves it is version +
+              # changelog only).
+              if bash scripts/release.sh release-only; then
+                {
+                  echo "### Release commit only"
+                  echo "This PR is one commit changing the version and CHANGELOG.md; its content was checked when it was promoted, so the heavy jobs are skipped."
+                } >> "$GITHUB_STEP_SUMMARY"
+                skip_all "release commit only (${HEAD_REF})"
+              fi ;;
+            push)
+              record; run_all "push to ${GITHUB_REF_NAME}: full set after every merge" ;;
+            schedule)
+              if git ls-remote --exit-code --heads origin dev >/dev/null; then
+                echo "ref=dev" >> "$GITHUB_OUTPUT"
+              fi
+              record; run_all "nightly" ;;
+            workflow_dispatch)
+              [ -n "${BASE}" ] || { record; run_all "manual dispatch"; } ;;
+            *) run_all "event ${GITHUB_EVENT_NAME:-?}" ;;
+          esac
+          [ -n "${BASE}" ] || run_all "no comparison base"
+
+          ev=()
+          if [ -f "${EVIDENCE}" ]; then
+            ev=(--evidence "${EVIDENCE}")
+            echo "plan: using rail evidence for ${BASE}"
+          else
+            echo "plan: no rail evidence for ${BASE} (non-Rust changes will widen)"
+          fi
+          # rail reads .config/rail.toml from the commits it compares: a base
+          # with the pre-0.32 config fails here, which runs everything.
+          plan="${RUNNER_TEMP}/rail-plan.json"
+          ${NIX_DEV} cargo rail plan --from "${BASE}" --to HEAD "${ev[@]}" --json > "${plan}" \
+            || run_all "cargo rail plan failed"
+          ${NIX_DEV} cargo rail plan --from "${BASE}" --to HEAD "${ev[@]}" --explain-work cargo.test || true
+
+          gates="$(${NIX_DEV} python3 scripts/ci-rail-plan.py "${plan}")" \
+            || run_all "plan parse failed"
+          [ -n "${gates}" ] || run_all "plan parse produced no gates"
+          echo "${gates}" >> "$GITHUB_OUTPUT"
+          echo "${gates}"
+
+  # REQUIRED (through `Build + test`): manifests + lockfile, fmt, the
+  # boundaries and flow gates, the tailwind sheet and `cargo check
+  # --workspace`. Clippy reports here too, advisory.
+  lint:
+    name: "Lint (fmt + manifests + gates + check + clippy)"
+    runs-on: [self-hosted, studio-lint]
+    timeout-minutes: 60
+    needs: plan
+    if: ${{ needs.plan.outputs.skip != 'true' }}
+    steps:
+      - &checkout
+        uses: actions/checkout@v4
+        with:
+          # Empty = the event's own ref (a PR's merge ref, a dispatched
+          # branch); `dev` for the nightly run.
+          ref: ${{ needs.plan.outputs.ref }}
+      - *inferno-auth
+      - &target-dir
+        name: Persistent target dir
         run: |
           # On the runner's big disk ($CI_CACHE_DIR: the runner module's
-          # per-instance dir on /run/media/Development), not /var/cache on
-          # the root disk, which a 580 GB target dir filled until jobs died
-          # mid-test. The fallbacks are for a runner without one.
+          # per-instance dir), not /var/cache on the root disk, which a
+          # 580 GB target dir filled until jobs died mid-test. Per instance,
+          # so instances never share a cargo lock and each holds one build
+          # kind. The fallbacks are for a runner without one.
           dir="${CI_CACHE_DIR:-${CACHE_DIRECTORY:-$HOME/.cache}}/cargo-target"
           mkdir -p "$dir"
           echo "CARGO_TARGET_DIR=$dir" >> "$GITHUB_ENV"
@@ -152,6 +289,8 @@ jobs:
             exit 1
           fi
           EOF
+      # fmt is ungated: it compiles nothing, so change selection would
+      # save nothing.
       - name: cargo fmt --check
         run: ${NIX_DEV} cargo fmt --all --check
       # Crate-layout boundaries (architect ADR layout.md, STA-268):
@@ -172,10 +311,43 @@ jobs:
       # apps/session/web/assets/tailwind.css is gitignored build output that
       # `asset!()` demands at compile time (see apps/session/web/tailwind.css) —
       # the sheet has to exist before any cargo step touches session-web.
-      - name: Web tailwind sheet
+      # Every job that compiles session-web runs this itself: the jobs share
+      # no checkout.
+      - &tailwind
+        name: Web tailwind sheet
         run: ${NIX_DEV} just web-tailwind
+      # Gated on the plan: a change that touches no crate (docs, with
+      # evidence for the base) compiles nothing.
       - name: cargo check --workspace
+        if: ${{ needs.plan.outputs.cargo == 'true' }}
         run: ${NIX_DEV} cargo check --workspace
+      # Advisory only: the lint debt is being paid down crate by crate, so
+      # this reports (grouped by lint and crate, .github/scripts/
+      # clippy-report.py) without blocking the PR. Same check-mode
+      # dependency metadata as `cargo check`, so it lives in this job.
+      - name: cargo clippy (advisory, does not block)
+        if: ${{ needs.plan.outputs.cargo == 'true' }}
+        continue-on-error: true
+        run: |
+          ${NIX_DEV} cargo clippy --workspace --no-deps --all-targets --keep-going \
+            --message-format=json -- --cap-lints warn \
+            | ${NIX_DEV} python3 .github/scripts/clippy-report.py
+
+  # The browser builds, which the workspace check (native) never compiles.
+  # REQUIRED part: the web bundles. ADVISORY part: the Signal browser remote
+  # (red since STA-184: it pulls tokio/mio into wasm), which reports but
+  # cannot fail the job.
+  wasm:
+    name: wasm checks
+    runs-on: [self-hosted, studio-wasm]
+    timeout-minutes: 60
+    needs: plan
+    if: ${{ needs.plan.outputs.skip != 'true' && needs.plan.outputs.wasm == 'true' }}
+    steps:
+      - *checkout
+      - *inferno-auth
+      - *target-dir
+      - *tailwind
       # The three web bundles deploy.yml ships (STA-366). The workspace check
       # is native, so it never compiles them: a native-only dep (tokio `net`,
       # an engine, an X11/HID crate) leaking into their graph stayed hidden
@@ -183,52 +355,158 @@ jobs:
       # nix/modules/packages/web-bundles.nix builds (`just web-wasm-check`).
       - name: wasm check (web bundles)
         run: ${NIX_DEV} just web-wasm-check
-      # Advisory only: the lint debt is being paid down crate by crate, so
-      # this reports (grouped by lint and crate, .github/scripts/
-      # clippy-report.py) without blocking the PR.
-      - name: cargo clippy (advisory, does not block)
+      # The Signal browser remote: signal-desktop's web build. Advisory
+      # until STA-184 makes it green; then drop continue-on-error and it is
+      # required like the bundles.
+      - name: wasm check (Signal browser remote, advisory)
+        id: signal
+        if: ${{ !cancelled() }}
         continue-on-error: true
-        run: |
-          ${NIX_DEV} cargo clippy --workspace --no-deps --all-targets --keep-going \
-            --message-format=json -- --cap-lints warn \
-            | ${NIX_DEV} python3 .github/scripts/clippy-report.py
-
-  # ADVISORY (not in the ruleset): the wasm check and the test run, which are
-  # red on main for reasons that predate the dev-first workflow (STA-184: the
-  # Signal browser build pulls tokio/mio into wasm; ~100 nextest failures).
-  # Captain's call (STA-276, 2026-10-21): promote and cut v0.1.0 now, fix the
-  # errors after. It goes BACK INTO `Build + test` (move the two steps up,
-  # delete this job) once STA-184 makes it green. It still runs on every PR
-  # into main and shows red/green on the PR, so the errors stay visible;
-  # it is skipped, like `Build + test`, on a release-only PR.
-  advisory:
-    name: "Advisory: wasm + tests"
-    needs: plan
-    # Same locks as Build + test: no fork PRs on this runner, none on release-only.
-    if: ${{ needs.plan.outputs.release_only != 'true' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) }}
-    runs-on: [self-hosted, session]
-    timeout-minutes: 60
-    steps:
-      - uses: actions/checkout@v4
-      - name: inferno-control read access
-        uses: ./.github/actions/inferno-control-auth
-        with:
-          token: ${{ secrets.INFERNO_CONTROL_TOKEN }}
-      - name: Persistent target dir
-        run: |
-          dir="${CI_CACHE_DIR:-${CACHE_DIRECTORY:-$HOME/.cache}}/cargo-target"
-          mkdir -p "$dir"
-          echo "CARGO_TARGET_DIR=$dir" >> "$GITHUB_ENV"
-          echo "target dir: $dir ($(du -sh "$dir" 2>/dev/null | cut -f1))"
-      # apps/session/web/assets/tailwind.css is gitignored build output that
-      # `asset!()` demands at compile time; the test run compiles session-web.
-      - name: Web tailwind sheet
-        run: ${NIX_DEV} just web-tailwind
-      # The Signal browser remote: signal-desktop's web build, which the
-      # workspace check (native) never compiles.
-      - name: wasm check (Signal browser remote)
         run: |
           ${NIX_DEV} cargo check -p signal-desktop \
             --target wasm32-unknown-unknown --no-default-features --features signal
+      - name: Advisory result
+        if: ${{ !cancelled() && steps.signal.outcome == 'failure' }}
+        run: |
+          echo "::warning::wasm check (Signal browser remote) failed — advisory (STA-184), does not block"
+          echo "### Signal browser remote wasm check failed (advisory, STA-184)" >> "$GITHUB_STEP_SUMMARY"
+
+  # ADVISORY (not part of `Build + test`): the test run, red on main for
+  # reasons that predate the dev-first workflow (STA-184: ~100 nextest
+  # failures). Captain's call (STA-276, 2026-10-21): promote and cut v0.1.0
+  # now, fix the errors after. It shows red/green on the PR, so the errors
+  # stay visible; once STA-184 makes it green, add it to the aggregator's
+  # required set. It is skipped on a release-only PR.
+  tests:
+    name: "Advisory: tests"
+    runs-on: [self-hosted, studio-tests]
+    timeout-minutes: 90
+    needs: plan
+    if: ${{ needs.plan.outputs.skip != 'true' && needs.plan.outputs.tests == 'true' }}
+    env:
+      # The app CLIs and the worklet rigs sit behind features: name them, or
+      # their tests never build (an app crate has no lib to dev-depend on).
+      # Same list as `just test` / `just ci`; the evidence recording below
+      # uses it too, so both builds are the same units.
+      TEST_FEATURES: session-desktop/cli,signal-desktop/cli,web-audio-worklet/guitar,web-audio-worklet/keys
+    steps:
+      - *checkout
+      - *inferno-auth
+      - *target-dir
+      # The test run compiles session-web.
+      - *tailwind
+      # Full runs first record rail evidence for this commit: the recorder
+      # wraps rustc for one `cargo test --no-run` (units already fresh keep
+      # their dep-info, so this compiles nothing nextest wouldn't), and the
+      # nextest run after it finds every unit fresh. Best effort: a failure
+      # only means later plans against this commit widen. Not `--locked`,
+      # for the [[patch.unused]] ordering reason in the lint job.
+      - name: Record rail evidence
+        if: ${{ needs.plan.outputs.record == 'true' }}
+        env:
+          EVIDENCE_DIR: ${{ runner.temp }}/rail-evidence
+        run: |
+          mkdir -p "${EVIDENCE_DIR}"
+          ${NIX_DEV} cargo rail plan evidence --work cargo.test \
+            --output "${EVIDENCE_DIR}/cargo.test.json" \
+            -- test --workspace --no-run --features "${TEST_FEATURES}" \
+            || echo "::warning::rail evidence not recorded; later plans against this commit widen"
+      # TEST_FILTER: a nextest filterset from the plan job (only the packages
+      # a PR affects, scripts/ci-rail-plan.py). Empty = every test. The BUILD
+      # stays --workspace either way so the warm target dir keeps one
+      # artifact set; only which tests run narrows.
+      #
+      # nextest's report goes to a FILE, then a digest to the step's log. On
+      # the Mac Pro VM runners Task's nextest died with exit 110, "error
+      # writing to output", at the first failing test's captured output:
+      # writing to the runner's stdout pipe failed. A regular file cannot do
+      # that. The full log is the `nextest-ci` artifact.
       - name: cargo nextest
-        run: ${NIX_DEV} cargo nextest run --workspace --no-fail-fast --features session-desktop/cli,signal-desktop/cli,web-audio-worklet/guitar,web-audio-worklet/keys
+        env:
+          TEST_FILTER: ${{ needs.plan.outputs.test_filter }}
+          TEST_LOG: ${{ runner.temp }}/nextest-ci.log
+        run: |
+          ${NIX_DEV} bash -uo pipefail -s <<'EOF'
+          filter=()
+          [ -n "${TEST_FILTER}" ] && filter=(-E "${TEST_FILTER}" --no-tests=pass)
+          cargo nextest run --workspace --no-fail-fast --features "${TEST_FEATURES}" "${filter[@]}" >"${TEST_LOG}" 2>&1
+          rc=$?
+          { grep -E '^ *(FAIL|TRY [0-9]+ (FAIL|TMT)|SIGSEGV|SIGABRT|LEAK|TIMEOUT)|Summary \[|tests were not run|^error' "${TEST_LOG}" | head -n 200
+            echo "── tail of the nextest log (full log: the nextest-ci artifact) ──"; tail -n 60 "${TEST_LOG}"; } || true
+          exit "$rc"
+          EOF
+      - name: Evidence key
+        id: evidence
+        if: ${{ always() && needs.plan.outputs.record == 'true' }}
+        run: |
+          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          [ -f "${RUNNER_TEMP}/rail-evidence/cargo.test.json" ] && echo "have=true" >> "$GITHUB_OUTPUT" || true
+      # Saved even when tests are red: evidence describes the build, not the
+      # results. Only saves on main (and the nightly's default-branch scope)
+      # are visible to other branches' PRs.
+      - name: Save rail evidence
+        if: ${{ always() && steps.evidence.outputs.have == 'true' }}
+        uses: actions/cache/save@v4
+        with:
+          path: ${{ runner.temp }}/rail-evidence
+          key: rail-evidence-${{ runner.os }}-${{ runner.arch }}-cargo.test-${{ steps.evidence.outputs.sha }}
+      - name: Test log
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: nextest-ci
+          path: ${{ runner.temp }}/nextest-ci.log
+          if-no-files-found: ignore
+          retention-days: 7
+
+  # The REQUIRED check: its name is what the ruleset `main (release only)`
+  # (25572127) requires, unchanged from the single-job days. A required
+  # check that is skipped counts as passing, so this never skips: it fails
+  # unless every REQUIRED job the plan asked for succeeded (lint, and wasm
+  # when the plan gave it work). A job may only be skipped when the plan
+  # said it had no work. The advisory work (clippy, the Signal browser
+  # remote, the tests job) cannot fail it.
+  build-and-test:
+    name: Build + test
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    needs: [plan, lint, wasm, tests]
+    if: ${{ always() }}
+    steps:
+      - name: Every required job succeeded
+        env:
+          EVENT: ${{ github.event_name }}
+          FORK: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository }}
+          PLAN: ${{ needs.plan.result }}
+          SKIP: ${{ needs.plan.outputs.skip }}
+          LINT: ${{ needs.lint.result }}
+          WASM: ${{ needs.wasm.result }}
+          WANT_WASM: ${{ needs.plan.outputs.wasm }}
+          TESTS: ${{ needs.tests.result }}
+          WANT_TESTS: ${{ needs.plan.outputs.tests }}
+        run: |
+          set -u
+          fail=0
+          bad() { echo "::error::$1"; fail=1; }
+          if [ "$FORK" = "true" ]; then
+            bad "fork PR: not run on the self-hosted runners; a maintainer must re-push it from a branch of this repo"
+            exit 1
+          fi
+          [ "$PLAN" = success ] || bad "plan: $PLAN"
+          if [ "$SKIP" = "true" ]; then
+            echo "plan: nothing to run (release commit)"; exit "$fail"
+          fi
+          check() { # name result wanted
+            if [ "$3" = "true" ]; then
+              [ "$2" = success ] || bad "$1: $2"
+            else
+              case "$2" in success|skipped) ;; *) bad "$1: $2" ;; esac
+            fi
+            echo "$1: $2 (wanted=$3)"
+          }
+          check lint "$LINT" true
+          check wasm "$WASM" "$WANT_WASM"
+          # Advisory (STA-184): reported, never fails this check.
+          echo "tests (advisory): $TESTS (wanted=$WANT_TESTS)"
+          case "$TESTS" in success|skipped) ;; *) echo "::warning::tests (advisory): $TESTS" ;; esac
+          exit "$fail"

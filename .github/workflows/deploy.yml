@@ -8,9 +8,10 @@
 # One matrix leg per site; a failing leg does not stop the other.
 #
 # The in-cluster registry is NOT reachable from GitHub-hosted runners, so
-# this runs on the org's SELF-HOSTED runner labelled `nix-host`
-# (github-fts). That runner is registered on the FastTrackStudios org, so
-# it reaches this repo; it does not reach personal-account repos.
+# this runs on the org's SELF-HOSTED runner labelled `studio-deploy` (the
+# Mac Pro VM; its own label so a deploy never queues behind a check build).
+# That runner is registered on the FastTrackStudios org, so it reaches
+# this repo; it does not reach personal-account repos.
 #
 # GitHub Deployments: the `environment:` block registers a real
 # Deployment, so runs appear under the repo's Environments tab with a
@@ -52,7 +53,7 @@ env:
 jobs:
   deploy:
     name: deploy ${{ matrix.img }}
-    runs-on: [self-hosted, session]
+    runs-on: [self-hosted, studio-deploy]
     strategy:
       fail-fast: false
       matrix:

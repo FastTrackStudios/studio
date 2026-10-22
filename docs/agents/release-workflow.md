@@ -54,12 +54,15 @@ description: the head sha, `origin/dev`'s sha, the result and the host.
 The ruleset `main (release only)` makes a PR the only way into main: merge
 commits only, and a green `Build + test` required.
 
-`Build + test` (the required check) is manifests + lockfile, fmt, the flow
-gate and `cargo check --workspace`. The wasm check and the nextest run live in
-the **advisory** job `Advisory: wasm + tests`: it runs on every PR into main
-and shows red or green, but is not in the ruleset. It is red today (STA-184);
-when STA-184 makes it green its two steps move back into `Build + test` and
-the advisory job goes away.
+`Build + test` (the required check) is an aggregator over per-kind jobs on
+the Mac Pro runners (`checks.yml`). `cargo rail plan` first picks what the PR
+affects (any doubt runs everything); `Build + test` then requires the `lint`
+job (manifests + lockfile, fmt, Boundaries, the flow gate, the tailwind sheet,
+`cargo check --workspace`) and, when the plan gave it work, the web-bundle
+wasm check. Advisory, shown red or green but never blocking: clippy, the
+Signal browser remote wasm check and the `Advisory: tests` nextest run. They
+are red today (STA-184); when STA-184 makes them green they join the required
+set in the aggregator.
 
 ## PR base: main is the default, PRs go to dev
 

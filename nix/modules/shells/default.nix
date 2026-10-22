@@ -31,10 +31,9 @@
         config.fts.dx.wasmBindgen  # wasm-bindgen-cli 0.2.126 (lock match)
         config.fts.dx.binaryen     # wasm-opt 129 — what dx 0.7.9 pins
       ]
-      # cargo-rail — graph-aware workspace maintenance (unify / change /
-      # release / split). Pinned upstream binary, NOT nixpkgs' stale
-      # 0.7.0 — see nix/modules/cargo-rail.nix (incl. the plan/affected
-      # caveat on this tree).
+      # cargo-rail 0.32 — `cargo rail plan --explain` reproduces CI's
+      # change selection locally. Built from the release tag, NOT
+      # nixpkgs' stale 0.7.0 — see nix/modules/cargo-rail.nix.
       ++ lib.optionals (config.fts.cargoRail != null) [ config.fts.cargoRail ]
       # tracey — spec coverage (`just daw-flows`). Store-sourced from the
       # upstream release tarball (nix/modules/tracey.nix); the old

@@ -1,15 +1,14 @@
 # Seed fasttrackstudio.cachix.org with the CI devshell closure so
-# checks.yml jobs pull the toolchain (rust pin, dx trio, patched
-# cargo-rail, native deps) instead of rebuilding it on every fresh
-# hosted runner.
+# checks.yml jobs pull the toolchain (rust pin, dx trio, cargo-rail,
+# native deps) instead of rebuilding it on every fresh runner.
 #
 # Needs the CACHIX_AUTH_TOKEN repo/org secret (a cachix auth token with
 # write access to the fasttrackstudio cache). Without it the workflow
 # skips pushing and merely reports what would be cached.
 #
-# Runs on the repo's own self-hosted runner (NixOS, nix preinstalled), so
-# there is no installer step and `cachix` itself comes from nixpkgs —
-# downloaded dynamic binaries do not run on NixOS.
+# Runs on the repo's light self-hosted runner, label `studio` (nix
+# preinstalled), so there is no installer step and `cachix` itself comes
+# from nixpkgs — downloaded dynamic binaries do not run on NixOS.
 
 name: cache-devshell
 
@@ -28,7 +27,7 @@ concurrency:
 
 jobs:
   seed:
-    runs-on: [self-hosted, session]
+    runs-on: [self-hosted, studio]
     timeout-minutes: 180
     steps:
       - uses: actions/checkout@v4
