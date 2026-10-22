@@ -84,7 +84,7 @@ webview = []
 # engine (rig_engine.rs) + the mobile shell (mobile_view.rs). Kept separate
 # from `signal` because the drums/keys/synth rig UIs pull signal-ui's
 # Vello/baseview surfaces, which don't build for iOS.
-signal-guitar = ["gig", "dep:guitar", "guitar?/ui", "dep:signal-content-proto", "dep:signal-content-client", "dep:signal-tone3000", "signal-tone3000?/ui", "dep:sampler", "dep:session", "session?/ui", "dep:vox-core", "dep:vox-websocket", "dep:architect", "architect/iroh", "architect/local", "dep:tokio", "dep:vox", "dep:facet-json", "dep:futures-util", "dep:futures-channel", "dep:sha2", "dep:reqwest", "dep:facet", "dep:eyre"]
+signal-guitar = ["gig", "dep:guitar", "guitar?/ui", "dep:signal-content-proto", "dep:signal-content-client", "dep:signal-tone3000", "signal-tone3000?/ui", "dep:sampler", "dep:session", "session?/ui", "dep:vox-core", "dep:vox-websocket", "dep:architect", "architect/iroh", "architect/local", "architect/connect", "dep:tokio", "dep:vox", "dep:facet-json", "dep:futures-util", "dep:futures-channel", "dep:sha2", "dep:reqwest", "dep:facet", "dep:eyre"]
 # The gig page (src/gig/): a band's set in order, each song's chart and its
 # practice track on a small player of its own (cpal out, decoded by
 # fts-sample, speed without pitch through the `stretch` phase vocoder).
