@@ -6,7 +6,7 @@
 //!   health & safety    Panic (with the health it fixes, far from Mute), the
 //!                      MIDI and Audio lights (a press opens Setup), CPU, the
 //!                      IN · OUT · PHONES meters, and Mute: a tap mutes the
-//!                      house, a hold offers muting fully
+//!                      house, its ⋯ offers muting fully
 
 use std::time::Duration;
 
@@ -31,7 +31,6 @@ pub fn TopBar(
 ) -> Element {
     // Panic resetting: the meters go flat until it is done.
     let resetting = use_signal(|| false);
-    let gig = use_hook(try_consume_context::<super::GigSlots>);
     let midi = use_midi_health();
     let hp = &model.headphone;
     let output = *state.out_level.read();
@@ -72,14 +71,8 @@ pub fn TopBar(
             if !*state.running.read() {
                 AudioBadge { failed: !state.audio_error.read().is_empty() }
             }
-            // The gig's toggle and transport, when there is a gig, in the
-            // record player's place.
-            if let Some(g) = gig {
-                {(g.header)()}
-            } else {
-                Rule {}
-                super::player::Player {}
-            }
+            Rule {}
+            super::player::Player {}
             Rule {}
             PanicButton { busy: resetting }
             Rule {}
@@ -97,6 +90,196 @@ pub fn TopBar(
             Rule {}
             MuteButton { house: model.headphone.main_mute, phones: model.headphone.phones_mute }
         }
+    }
+}
+
+/// The performer screen's app bar (48 tall; mounts spec §2.2): the mark,
+/// the set up, the rig crumb with its own ⋯ (Edit switches, MIDI learn,
+/// Switch rig — the foot bar's Switches menu, moved here; no "Hidden",
+/// the dock never hides), the app's `middle` (its sync pill), the MIDI
+/// and Audio lights, Mute and Panic (one tap each, never under a menu:
+/// the menus open below the bar), and the Views ⋯ (Build, Edit, Setup).
+#[component]
+pub(super) fn PerformerBar(middle: Element) -> Element {
+    let rig = use_context::<super::PerformerRig>();
+    let model = rig.model.read().clone();
+    let state = rig.state;
+    let resetting = use_signal(|| false);
+    let midi = use_midi_health();
+    let mut menu = use_signal(|| None::<BarMenu>);
+    let set = model
+        .setlists
+        .get(model.setlist_index as usize)
+        .cloned()
+        .unwrap_or_default();
+    let crumb = if model.profile_name.is_empty() {
+        "Rig".to_string()
+    } else {
+        cut(&model.profile_name, 12)
+    };
+    let audio = if *state.running.read() { LIVE } else { VOID };
+    rsx! {
+        div { style: "position: relative; display: flex; align-items: center; gap: 8px; flex: 1; min-width: 0; height: 48px; padding: 0 0 0 12px; box-sizing: border-box; font-family: {FONT};",
+            span { style: "flex-shrink: 0; font-size: 15px; font-weight: 800; letter-spacing: 0.04em; color: {INK};", "Signal" }
+            if !set.is_empty() {
+                span { "aria-label": "Set: {set}", style: "flex-shrink: 0; padding: 0 10px; font-size: 15px; font-weight: 650; color: {INK_2}; white-space: nowrap;", "{cut(&set, 14)}" }
+            }
+            // The rig crumb and its ⋯.
+            div { style: "position: relative; display: flex; align-items: center; flex-shrink: 0;",
+                span { style: "padding: 0 4px 0 10px; font-size: 15px; font-weight: 700; color: {INK}; white-space: nowrap;", "{crumb}" }
+                button {
+                    "aria-label": "Rig options",
+                    "aria-expanded": "{menu() == Some(BarMenu::Rig)}",
+                    style: "{BAR_BTN} width: 48px;",
+                    onclick: move |e: MouseEvent| {
+                        e.stop_propagation();
+                        flip(menu, BarMenu::Rig);
+                    },
+                    {dots()}
+                }
+                if menu() == Some(BarMenu::Rig) {
+                    div { role: "menu", "aria-label": "Rig options", style: "{BAR_MENU} left: 0;",
+                        for (id, label) in RIG_ITEMS {
+                            button {
+                                key: "{id}",
+                                role: "menuitem",
+                                "aria-label": "{label}",
+                                style: BAR_ITEM,
+                                onclick: move |e: MouseEvent| {
+                                    e.stop_propagation();
+                                    menu.set(None);
+                                    match id {
+                                        "edit" => rig.go(super::View::Edit),
+                                        "learn" => rig.setup("midi"),
+                                        _ => rig.setup("guitar"),
+                                    }
+                                },
+                                "{label}"
+                            }
+                        }
+                    }
+                }
+            }
+            span { style: "flex: 1;" }
+            if !*state.running.read() {
+                AudioBadge { failed: !state.audio_error.read().is_empty() }
+            }
+            {middle}
+            Indicator { kind: "midi", tone: midi, onclick: move |_| rig.setup("midi") }
+            Indicator { kind: "audio", tone: audio, onclick: move |_| rig.setup("audio") }
+            div { style: "display: flex; align-items: stretch; align-self: stretch; flex-shrink: 0;",
+                MuteButton { house: model.headphone.main_mute, phones: model.headphone.phones_mute }
+            }
+            div { style: "display: flex; align-items: stretch; align-self: stretch; flex-shrink: 0; margin-left: 8px;",
+                PanicButton { busy: resetting }
+            }
+            div { style: "position: relative; display: flex; align-items: center; flex-shrink: 0;",
+                button {
+                    "aria-label": "Views and settings",
+                    "aria-expanded": "{menu() == Some(BarMenu::Views)}",
+                    style: "{BAR_BTN} width: 48px;",
+                    onclick: move |e: MouseEvent| {
+                        e.stop_propagation();
+                        flip(menu, BarMenu::Views);
+                    },
+                    {dots()}
+                }
+                if menu() == Some(BarMenu::Views) {
+                    div { role: "menu", "aria-label": "Views", style: "{BAR_MENU} right: 0;",
+                        for (id, label) in VIEW_ITEMS {
+                            button {
+                                key: "{id}",
+                                role: "menuitem",
+                                "aria-label": "{label}",
+                                style: BAR_ITEM,
+                                onclick: move |e: MouseEvent| {
+                                    e.stop_propagation();
+                                    menu.set(None);
+                                    match id {
+                                        "build" => rig.go(super::View::Build),
+                                        "edit" => rig.go(super::View::Edit),
+                                        _ => rig.setup("guitar"),
+                                    }
+                                },
+                                "{label}"
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// Open a bar menu, or close it when it is the one open.
+fn flip(mut menu: Signal<Option<BarMenu>>, m: BarMenu) {
+    let now = *menu.peek();
+    menu.set(if now == Some(m) { None } else { Some(m) });
+}
+
+/// The performer bar's two menus.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+enum BarMenu {
+    Rig,
+    Views,
+}
+
+/// The rig crumb's ⋯: what the foot bar's Switches menu was, less
+/// "Hidden" (the performer screen's dock never hides; spec §8.4).
+pub(super) const RIG_ITEMS: [(&str, &str); 3] = [
+    ("edit", "Edit switches"),
+    ("learn", "MIDI learn"),
+    ("switch", "Switch rig"),
+];
+
+/// The app bar's ⋯: the rig's other views.
+pub(super) const VIEW_ITEMS: [(&str, &str); 3] =
+    [("build", "Build"), ("edit", "Edit"), ("setup", "Setup")];
+
+const BAR_BTN: &str = "height: 48px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; \
+                       border: none; border-radius: 8px; background: transparent; padding: 0; cursor: pointer;";
+/// A bar menu: under the bar (y = 48), so Mute and Panic stay uncovered.
+const BAR_MENU: &str = "position: absolute; top: 48px; z-index: 60; display: flex; flex-direction: column; gap: 2px; \
+                        padding: 4px; min-width: 200px; border-radius: 10px; background: #141418; border: 1px solid #2b2b31;";
+const BAR_ITEM: &str = "height: 52px; padding: 0 14px; text-align: left; border: none; border-radius: 8px; \
+                        background: transparent; color: #e4e4e7; font-size: 16px; font-weight: 650; cursor: pointer;";
+
+fn dots() -> Element {
+    rsx! {
+        svg { width: "18", height: "4", view_box: "0 0 18 4", style: "display: block;",
+            circle { cx: "2", cy: "2", r: "1.8", fill: INK_2 }
+            circle { cx: "9", cy: "2", r: "1.8", fill: INK_2 }
+            circle { cx: "16", cy: "2", r: "1.8", fill: INK_2 }
+        }
+    }
+}
+
+/// `s` cut to `max` characters with "…" (no `text-overflow` in Blitz).
+fn cut(s: &str, max: usize) -> String {
+    if s.chars().count() <= max {
+        s.to_string()
+    } else {
+        let mut c: String = s.chars().take(max.saturating_sub(1)).collect();
+        c.push('…');
+        c
+    }
+}
+
+#[cfg(test)]
+mod performer_bar_tests {
+    use super::*;
+
+    #[test]
+    fn the_rig_menu_has_no_hidden() {
+        let labels: Vec<&str> = RIG_ITEMS.iter().map(|(_, l)| *l).collect();
+        assert_eq!(labels, ["Edit switches", "MIDI learn", "Switch rig"]);
+        assert!(!labels.iter().any(|l| l.contains("Hidden")));
+    }
+
+    #[test]
+    fn crumbs_are_cut_by_count() {
+        assert_eq!(cut("Clean Machine", 12), "Clean Machi…");
+        assert_eq!(cut("Ambient", 12), "Ambient");
     }
 }
 
@@ -165,16 +348,12 @@ fn PanicButton(busy: Signal<bool>) -> Element {
 }
 
 /// Mute: a tap mutes the house (you still hear yourself in the phones);
-/// held, a menu offers muting fully. Lit red while muted; a tap while lit
+/// its ⋯ offers muting fully. Lit red while muted; a tap while lit
 /// unmutes.
 #[component]
 fn MuteButton(house: bool, phones: bool) -> Element {
     let rig = use_hook(try_consume_context::<RigClient>);
     let host = PopupHost::try_use();
-    let mut held = use_signal(|| false);
-    let mut fired = use_signal(|| false);
-    // Each press its own: a hold timer from an earlier press never fires.
-    let mut press = use_signal(|| 0u32);
     let full = house && phones;
     let any = house || phones;
     let items = vec![
@@ -214,11 +393,11 @@ fn MuteButton(house: bool, phones: bool) -> Element {
         })
     });
     let aria = if full {
-        "Fully muted — tap to unmute, hold for more"
+        "Fully muted — tap to unmute"
     } else if any {
-        "House muted — tap to unmute, hold for more"
+        "House muted — tap to unmute"
     } else {
-        "Mute house — tap to mute the house, hold to mute fully"
+        "Mute house — tap to mute the house; ⋯ to mute fully"
     };
     let shade = if any {
         (1.0 - (phase() * std::f64::consts::TAU).cos()) / 2.0 * 0.18
@@ -226,64 +405,61 @@ fn MuteButton(house: bool, phones: bool) -> Element {
         0.0
     };
     rsx! {
-        button {
-            "aria-label": "{aria}",
-            "aria-pressed": "{any}",
-            style: "align-self: stretch; min-width: 48px; flex-shrink: 0; padding: 0 12px; display: flex; align-items: center; justify-content: center; border: none; background: {bg}; touch-action: none; cursor: pointer; position: relative;",
-            onpointerdown: {
-                let rig = rig.clone();
-                let items = items.clone();
-                move |e: PointerEvent| {
-                    let (c, el) = (e.client_coordinates(), e.element_coordinates());
-                    let (left, bottom) = (c.x - el.x, c.y - el.y + f64::from(TOP_H));
-                    held.set(true);
-                    fired.set(false);
-                    let mine = press() + 1;
-                    press.set(mine);
+        div { style: "align-self: stretch; flex-shrink: 0; display: flex; align-items: stretch;",
+            button {
+                "aria-label": "{aria}",
+                "aria-pressed": "{any}",
+                style: "align-self: stretch; min-width: 48px; flex-shrink: 0; padding: 0 12px; display: flex; align-items: center; justify-content: center; border: none; background: {bg}; cursor: pointer; position: relative;",
+                // A tap: mute the house, or unmute.
+                onclick: {
                     let rig = rig.clone();
-                    let items = items.clone();
-                    spawn(async move {
-                        architect::platform::sleep(Duration::from_millis(500)).await;
-                        if held() && press() == mine {
-                            fired.set(true);
-                            open_menu(host, left - MENU_W, bottom + 4.0, items, mute_pick(rig));
-                        }
-                    });
-                }
-            },
-            onpointerup: {
-                let rig = rig.clone();
-                move |_| {
-                    let was = held();
-                    held.set(false);
-                    if was && !fired() {
+                    move |_| {
                         if any { set(rig.clone(), false, false) } else { set(rig.clone(), true, phones) }
                     }
+                },
+                // Right-click: the menu, as its ⋯ opens it.
+                oncontextmenu: {
+                    let rig = rig.clone();
+                    let items = items.clone();
+                    signal_widgets::right_click(move |e: MouseEvent| {
+                        e.prevent_default();
+                        let (c, el) = (e.client_coordinates(), e.element_coordinates());
+                        let (left, bottom) = (c.x - el.x, c.y - el.y + f64::from(TOP_H));
+                        open_menu(host, left - MENU_W, bottom + 4.0, items.clone(), mute_pick(rig.clone()));
+                    })
+                },
+                if shade > 0.0 {
+                    span { style: "position: absolute; left: 0; right: 0; top: 0; bottom: 0; background: rgba(0,0,0,{shade});" }
                 }
-            },
-            onpointerleave: move |_| held.set(false),
-            onpointercancel: move |_| held.set(false),
-            oncontextmenu: {
-                let rig = rig.clone();
-                let items = items.clone();
-                move |e: MouseEvent| {
-                    e.prevent_default();
-                    let (c, el) = (e.client_coordinates(), e.element_coordinates());
-                    let (left, bottom) = (c.x - el.x, c.y - el.y + f64::from(TOP_H));
-                    held.set(false);
-                    open_menu(host, left - MENU_W, bottom + 4.0, items.clone(), mute_pick(rig.clone()));
+                svg { key: "{any}", width: "17", height: "17", view_box: "0 0 16 16",
+                    path { d: "M2 6h2.5L8 3v10L4.5 10H2Z", fill: ink }
+                    if any {
+                        path { d: "M10.5 6l4 4M14.5 6l-4 4", stroke: ink, stroke_width: "1.6", stroke_linecap: "round" }
+                    } else {
+                        path { d: "M10.5 5.5a3.5 3.5 0 0 1 0 5", fill: "none", stroke: ink, stroke_width: "1.4", stroke_linecap: "round" }
+                        path { d: "M12.5 3.8a6 6 0 0 1 0 8.4", fill: "none", stroke: ink, stroke_width: "1.4", stroke_linecap: "round", opacity: "0.7" }
+                    }
                 }
-            },
-            if shade > 0.0 {
-                span { style: "position: absolute; left: 0; right: 0; top: 0; bottom: 0; background: rgba(0,0,0,{shade});" }
             }
-            svg { key: "{any}", width: "17", height: "17", view_box: "0 0 16 16",
-                path { d: "M2 6h2.5L8 3v10L4.5 10H2Z", fill: ink }
-                if any {
-                    path { d: "M10.5 6l4 4M14.5 6l-4 4", stroke: ink, stroke_width: "1.6", stroke_linecap: "round" }
-                } else {
-                    path { d: "M10.5 5.5a3.5 3.5 0 0 1 0 5", fill: "none", stroke: ink, stroke_width: "1.4", stroke_linecap: "round" }
-                    path { d: "M12.5 3.8a6 6 0 0 1 0 8.4", fill: "none", stroke: ink, stroke_width: "1.4", stroke_linecap: "round", opacity: "0.7" }
+            // More: mute fully, or unmute — no press-and-hold
+            // (`signal_widgets::touch`).
+            button {
+                "aria-label": "Mute options",
+                title: "Mute options",
+                style: "align-self: stretch; width: 26px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; border: none; background: {bg}; padding: 0; cursor: pointer;",
+                onclick: {
+                    let rig = rig.clone();
+                    let items = items.clone();
+                    move |e: MouseEvent| {
+                        let (c, el) = (e.client_coordinates(), e.element_coordinates());
+                        let (right, bottom) = (c.x - el.x + 26.0, c.y - el.y + f64::from(TOP_H));
+                        open_menu(host, right - MENU_W, bottom + 4.0, items.clone(), mute_pick(rig.clone()));
+                    }
+                },
+                svg { width: "12", height: "4", view_box: "0 0 12 4", style: "display: block;",
+                    circle { cx: "2", cy: "2", r: "1.5", fill: ink }
+                    circle { cx: "6", cy: "2", r: "1.5", fill: ink }
+                    circle { cx: "10", cy: "2", r: "1.5", fill: ink }
                 }
             }
         }

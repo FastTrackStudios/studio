@@ -1080,9 +1080,11 @@ fn write(a: &WriteArg) -> Result<String, String> {
     ))
 }
 
-pub(crate) fn register(list: &architect::action::ActionList) {
+pub(crate) fn register(
+    list: &architect::action::ActionList,
+) -> Result<(), architect::action::ActionError> {
     use architect::action::Effect;
-    list.register(&LANES, Effect::ReadOnly, |a: TrackArg| lanes(&a));
+    list.register(&LANES, Effect::ReadOnly, |a: TrackArg| lanes(&a))?;
     list.register(&SHOW, Effect::Mutating, |a: ShowArg| {
         let (daw, project) = crate::actions::song()?;
         let track = track_of(daw, &project, &a.track)?;
@@ -1126,8 +1128,8 @@ pub(crate) fn register(list: &architect::action::ActionList) {
             track.name,
             if shown { "shown" } else { "hidden" }
         ))
-    });
-    list.register(&WRITE, Effect::Mutating, |a: WriteArg| write(&a));
+    })?;
+    list.register(&WRITE, Effect::Mutating, |a: WriteArg| write(&a))?;
     list.register(&CLEAR, Effect::Mutating, |a: ClearArg| {
         let (daw, project) = crate::actions::song()?;
         let track = track_of(daw, &project, &a.track)?;
@@ -1150,7 +1152,7 @@ pub(crate) fn register(list: &architect::action::ActionList) {
             }
         });
         Ok::<_, String>(format!("{} on {} cleared", found.name, track.name))
-    });
+    })?;
     list.register(&MODE, Effect::Mutating, |a: ModeArg| {
         let (daw, project) = crate::actions::song()?;
         let track = track_of(daw, &project, &a.track)?;
@@ -1165,15 +1167,16 @@ pub(crate) fn register(list: &architect::action::ActionList) {
             );
         });
         Ok::<_, String>(format!("{} on {}: {mode:?}", found.name, track.name))
-    });
-    list.register(&ITEM, Effect::Mutating, |a: ItemArg| item(&a));
+    })?;
+    list.register(&ITEM, Effect::Mutating, |a: ItemArg| item(&a))?;
     list.register(&SECTIONS, Effect::ReadOnly, |(): ()| {
         let (daw, project) = crate::actions::song()?;
         Ok::<_, String>(analyse(daw, &project))
-    });
+    })?;
     list.register(&BY_SECTION, Effect::Mutating, |a: BySectionArg| {
         by_section(&a)
-    });
+    })?;
+    Ok(())
 }
 
 #[cfg(test)]

@@ -28,7 +28,9 @@ const SIGNAL_TAILWIND: &str = include_str!("../assets/tailwind-signal.css");
 
 /// Blitz gives `body` an 8px margin, and the root's background is also what
 /// fills under the status bar and the home indicator.
-const ROOT_CSS: &str = "html, body { margin: 0; padding: 0; background: #0f1012; }";
+/// The desk (app-shell's `DESK`), as the performer screen paints its insets
+/// (STA-359): no strip of another shade at either edge.
+const ROOT_CSS: &str = "html, body { margin: 0; padding: 0; background: #0c0c0f; }";
 
 /// Which top-level screen is showing.
 #[derive(Clone, Copy, PartialEq)]

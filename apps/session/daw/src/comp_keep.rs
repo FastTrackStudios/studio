@@ -165,7 +165,7 @@ struct KeepOut {
     did: Vec<String>,
 }
 
-pub(crate) fn register(list: &ActionList) {
+pub(crate) fn register(list: &ActionList) -> Result<(), architect::action::ActionError> {
     list.register(&KEEP, Effect::Mutating, |a: KeepArg| {
         let (daw, project) = crate::actions::song()?;
         let stretches = crate::edit_actions::stretches(daw, &project, &a.on)?;
@@ -201,7 +201,8 @@ pub(crate) fn register(list: &ActionList) {
             kept: kept(daw, &project),
             did,
         })
-    });
+    })?;
+    Ok(())
 }
 
 #[cfg(test)]
@@ -301,7 +302,7 @@ fn off_main(
         .collect()
 }
 
-pub(crate) fn register_main(list: &ActionList) {
+pub(crate) fn register_main(list: &ActionList) -> Result<(), architect::action::ActionError> {
     list.register(&MAIN, Effect::Mutating, |a: MainArg| {
         let (daw, project) = crate::actions::song()?;
         let song_span = (f64::NEG_INFINITY, f64::INFINITY);
@@ -367,5 +368,6 @@ pub(crate) fn register_main(list: &ActionList) {
                 .collect(),
             left,
         })
-    });
+    })?;
+    Ok(())
 }

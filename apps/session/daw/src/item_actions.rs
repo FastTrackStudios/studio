@@ -234,7 +234,7 @@ fn recording(
         .ok_or_else(|| format!("no recording called {file} in the song"))
 }
 
-pub(crate) fn register(list: &ActionList) {
+pub(crate) fn register(list: &ActionList) -> Result<(), architect::action::ActionError> {
     list.register(&SET, Effect::Mutating, |a: SetArg| {
         let (daw, project) = song()?;
         let label = a.label.as_deref().unwrap_or("Edit items");
@@ -245,7 +245,7 @@ pub(crate) fn register(list: &ActionList) {
             .iter()
             .map(|p| item_out(daw, &project, &p.guid))
             .collect::<Result<Vec<_>, _>>()
-    });
+    })?;
     list.register(&ADD, Effect::Mutating, |a: AddArg| {
         let (daw, project) = song()?;
         let track = crate::actions::resolve(daw, &project, &a.track)?;
@@ -280,7 +280,7 @@ pub(crate) fn register(list: &ActionList) {
             Ok(guid)
         })?;
         item_out(daw, &project, &guid)
-    });
+    })?;
     list.register(&DELETE, Effect::Destructive, |a: DeleteArg| {
         let (daw, project) = song()?;
         let n = step(daw, &project, "Delete items", || {
@@ -291,7 +291,7 @@ pub(crate) fn register(list: &ActionList) {
             Ok(a.items.len())
         })?;
         Ok(u32::try_from(n).unwrap_or(u32::MAX))
-    });
+    })?;
     list.register(&SPLIT, Effect::Mutating, |a: SplitArg| {
         let (daw, project) = song()?;
         let before = item_out(daw, &project, &a.item)?;
@@ -332,5 +332,6 @@ pub(crate) fn register(list: &ActionList) {
             item_out(daw, &project, &a.item)?,
             item_out(daw, &project, &after)?,
         ])
-    });
+    })?;
+    Ok(())
 }

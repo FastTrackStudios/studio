@@ -52,7 +52,7 @@ struct NewArg {
     template: Option<String>,
 }
 
-pub fn register(list: &ActionList) {
+pub fn register(list: &ActionList) -> Result<(), architect::action::ActionError> {
     list.register(&NEW, Effect::Mutating, |a: NewArg| {
         if let Some(template) = a.template.filter(|t| !t.trim().is_empty()) {
             return Err(format!(
@@ -68,7 +68,8 @@ pub fn register(list: &ActionList) {
         Ok(format!(
             "a new song, {UNTITLED}, in Organize: COUNT-IN, SONGSTART and SONGEND placed and the guide over them. It is named when it is first saved (SESSION_SAVE with `to`)."
         ))
-    });
+    })?;
+    Ok(())
 }
 
 /// The song `SESSION_NEW` made, until the start screen opens it.

@@ -154,7 +154,7 @@ fn compact_when_idle() {
                         let mut songs = open_songs().lock().await;
                         for open in songs.values_mut().filter(|o| o.uncompacted > 0) {
                             let _job = crate::jobs::start("Saving the song's history", 0);
-                            let mut stages = architect_telemetry::timing::Stages::start();
+                            let mut stages = crate::stages::Stages::start();
                             let doc = open.bridge.doc();
                             if let Err(e) = with_store(&open.store, |s| {
                                 s.compact(&open.branch, doc.loro()).map_err(|e| e.to_string())
@@ -405,7 +405,7 @@ fn append(open: &mut Open, label: &str) -> Result<(), String> {
     // the snapshot holds beyond them is appended again and merged as the
     // same operations.
     if open.uncompacted >= COMPACT_AFTER {
-        let mut stages = architect_telemetry::timing::Stages::start();
+        let mut stages = crate::stages::Stages::start();
         with_store(&open.store, |s| {
             s.compact(&open.branch, doc.loro())
                 .map_err(|e| e.to_string())
@@ -601,7 +601,7 @@ async fn step_back(open: &mut Open, pending: &str, back: bool) -> Result<Undone,
 pub fn load(daw: &Standalone, name: &str, path: &Path, branch: &str) -> Result<String, String> {
     let _job = crate::jobs::start("Opening", 0);
     record_steps();
-    let mut stages = architect_telemetry::timing::Stages::start();
+    let mut stages = crate::stages::Stages::start();
     let (store, loaded, uncompacted) = open_branch(path, branch)?;
     stages.mark("load.store_ms");
     // A backlog on the snapshot is folded once the song is left alone.

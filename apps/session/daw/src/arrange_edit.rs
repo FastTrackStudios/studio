@@ -2242,7 +2242,7 @@ impl Editor {
         to: f64,
         effects: &mut Vec<Effect>,
     ) {
-        use crate::drum_lanes::{COMP, EDIT, lane_named};
+        use crate::lanes::{COMP, EDIT, lane_named};
         Self::copy_lanes(
             project,
             folder,

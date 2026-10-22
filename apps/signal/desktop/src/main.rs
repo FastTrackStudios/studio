@@ -148,6 +148,13 @@ fn main() {
     // SAFETY: first thing in main, before any thread starts.
     unsafe {
         std::env::set_var("BLITZ_SAFE_AREA", "0");
+        // The surface's clear colour: Blitz lays the page out inside the
+        // safe area and paints only that, so the strips outside it (an
+        // iPad's bottom edge, under the home indicator) showed the
+        // renderer's default, white (STA-297). The app's own ground: the
+        // desk (app-shell's `DESK`), which the performer screen also paints
+        // under the status bar and the home indicator (STA-359).
+        std::env::set_var("ANYRENDER_BASE_COLOR", "#0c0c0f");
     }
     // Before anything starts audio: a backgrounded rig must not be throttled
     // (it xran whenever another app had focus).
@@ -775,11 +782,16 @@ fn App() -> Element {
         document::Style { {"@layer base{:where(button.flex,button.inline-flex){justify-content:flex-start;}}"} }
         ResizeHandles {}
         PlatformMenu {}
-        // ONE bar over two rails (fts_audio_ui::chrome::AppFrame). The bar is also the
-        // title bar — the native decorations are off on desktop, so its slack
-        // is the drag surface and the window controls sit at its right end.
-        fts_audio_ui::chrome::AppFrame {
-            top: rsx! {
+        // The shared studio shell (app_shell::ui::ShellFrame): the app bar,
+        // the app-level Settings flyout in the right region, and the
+        // workspace in main. A workspace with sidebars and drawers of its
+        // own (Gig) mounts a nested frame in main with its own panels.
+        // The bar is also the title bar — the native decorations are off on
+        // desktop, so its slack is the drag surface and the window controls
+        // sit at its right end.
+        app_shell::ui::ShellFrame {
+            root: true,
+            app_bar: rsx! {
                 if !bar_claimed {
                 fts_audio_ui::chrome::TopBar {
                     leading: rsx! {
@@ -808,35 +820,36 @@ fn App() -> Element {
                 }
                 }
             },
-            rail: rsx! {},
             // App-level flyouts. Views render their own inside their layout.
-            panel: rsx! {
+            right: rsx! {
                 fts_audio_ui::chrome::PanelHost { id: "settings".to_string(), SettingsPanel {} }
             },
-            main { style: "flex: 1; min-width: 0; min-height: 0; display: flex;",
-                match here {
-                    // No domain feature compiled in — there is nowhere to go.
-                    None => rsx! {
-                        Placeholder {
-                            title: "Nothing built",
-                            body: "This binary has no domain features compiled in.",
-                        }
-                    },
-                    #[cfg(feature = "signal")]
-                    Some(Workspace::Signal) => rsx! {
-                        // Rig picker → the chosen rig's remote over vox —
-                        // the same surface as the web remote, pointed at
-                        // the (supervised or remote) signal engine.
-                        rig_view::SignalWorkspace {}
-                    },
-                    #[cfg(all(feature = "signal", feature = "gig", not(target_arch = "wasm32")))]
-                    Some(Workspace::Gig) => rsx! {
-                        gig::GigWorkspace {
-                            on_back: Some(EventHandler::new(move |()| go.call(Workspace::Signal))),
-                        }
-                    },
+            main: rsx! {
+                main { style: "flex: 1; min-width: 0; min-height: 0; display: flex;",
+                    match here {
+                        // No domain feature compiled in — there is nowhere to go.
+                        None => rsx! {
+                            Placeholder {
+                                title: "Nothing built",
+                                body: "This binary has no domain features compiled in.",
+                            }
+                        },
+                        #[cfg(feature = "signal")]
+                        Some(Workspace::Signal) => rsx! {
+                            // Rig picker → the chosen rig's remote over vox —
+                            // the same surface as the web remote, pointed at
+                            // the (supervised or remote) signal engine.
+                            rig_view::SignalWorkspace {}
+                        },
+                        #[cfg(all(feature = "signal", feature = "gig", not(target_arch = "wasm32")))]
+                        Some(Workspace::Gig) => rsx! {
+                            gig::GigWorkspace {
+                                on_back: Some(EventHandler::new(move |()| go.call(Workspace::Signal))),
+                            }
+                        },
+                    }
                 }
-            }
+            },
         }
     }
 }

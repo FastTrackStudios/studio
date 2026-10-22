@@ -1,0 +1,588 @@
+# `cargo xtask boundaries` (FastTrackStudios/architect xtask, STA-268): the
+# layer table for architect's docs/content/architecture/layout.md, applied to
+# studio (Session + Signal). Run with `just ci-boundaries`.
+#
+# Each [[row]] is a package + feature set, resolved with `cargo tree -p`:
+#   L0  contract: resolved for wasm32; must not reach an engine/storage/host/UI
+#       package, a tokio runtime, or a transport-host/server architect feature.
+#   L4  ui: must not reach an engine/storage/host package or a server feature.
+#   L1  everything else in features/ (engine, storage, glue): recorded, not
+#       constrained, until each feature folds into one crate with flags.
+# Workspace rules: nothing outside apps/ enables a transport host by default;
+# every member has `[lints] workspace = true`; one architect source in
+# Cargo.lock; every feature crate has a row.
+#
+# studio already uses one crate per feature. L0 rows: crates with a `vox`
+# flag or a proto crate (their default set is the contract). L4 rows: each
+# crate's `ui`/`dioxus` flag and the remaining *-ui crates. L1: engines,
+# DSP and REAPER adapters (native by design; recorded, not constrained).
+#
+# [baseline] is today's count per rule. Above it fails; below it fails until
+# you lower it here, so the numbers only go down.
+
+contract-target = "wasm32-unknown-unknown"
+host-dirs = ["apps"]
+unmapped-ok = ["features/adapters/reaper/tests", "features/adapters/reaper/session-extension/xtask", "features/adapters/reaper/daw-reaper/xtask"]
+single-source = ["architect", "architect-*", "auth", "auth-*", "crdt", "crdt-*", "ui-snapshot"]
+
+[forbidden]
+engine = [
+    "sea-orm", "sea-orm-migration", "sqlx", "rusqlite", "libsql", "turso",
+    "axum", "tower-http", "iroh", "tokio-tungstenite",
+]
+ui = ["dioxus", "dioxus-core", "dioxus-web", "dioxus-desktop", "blitz-dom", "vello"]
+tokio-runtime = ["rt", "rt-multi-thread"]
+transport-host = ["host", "server", "server-axum", "http", "iroh", "dispatch-tokio"]
+architect-server = ["server-seaorm"]
+
+# A hand-written axum route describes a capability a second time; the trait
+# (#[architect::service] / #[architect::rpc], mounted by EngineHost) is the
+# one description.
+[[idiom]]
+name = "hand-routes"
+pattern = ".route("
+instead = "a #[architect::service] trait mounted by EngineHost"
+
+[baseline]
+# 2026-10-21 first run (architect xtask d644a04, studio dev 5849ca8), 5m30s.
+#   contract-clean 17: tokio/rt 7, tokio/rt-multi-thread 3, dioxus/dioxus-core 6, vello 1.
+#   ui-reach 7: comp/drums/editor/guitar/keys/mic/synth `ui` reach tower-http.
+#   transport-host 2: session-extension enables architect/iroh + server-axum.
+#   lints 22: 9 vendored crates, 13 studio crates (align-dsp, fts-sample, ...).
+#   single-source 0, unmapped 0.
+#   hand-routes 31: sampler node_render 6, signal-desktop engine_tone3000 4 + engine_watch 4, ...
+# ratcheted down 2026-10-22 (STA-356): contract-clean 17 -> 14, ui-reach 7 -> 6 (CI measured 14 and 6).
+contract-clean = 14
+ui-reach = 6
+transport-host = 2
+lints = 22
+hand-routes = 31
+
+# ── L0 contracts ──
+[[row]]
+package = "drums"
+layer = "L0"
+
+[[row]]
+package = "ekit"
+layer = "L0"
+
+[[row]]
+package = "guitar"
+layer = "L0"
+
+[[row]]
+package = "keys"
+layer = "L0"
+
+[[row]]
+package = "midi"
+layer = "L0"
+
+[[row]]
+package = "patchbay"
+layer = "L0"
+
+[[row]]
+package = "sampler"
+layer = "L0"
+
+[[row]]
+package = "session"
+layer = "L0"
+
+[[row]]
+package = "signal-content-proto"
+layer = "L0"
+
+[[row]]
+package = "signal-proto"
+layer = "L0"
+
+[[row]]
+package = "signal-rigs-proto"
+layer = "L0"
+
+[[row]]
+package = "signal-space"
+layer = "L0"
+
+[[row]]
+package = "signal-tone3000"
+layer = "L0"
+
+[[row]]
+package = "synth"
+layer = "L0"
+
+# ── L4 ui ──
+[[row]]
+package = "comp"
+features = ["ui"]
+layer = "L4"
+
+[[row]]
+package = "daw-ui"
+layer = "L4"
+note = "sibling ui crate; fold in as a ui flag"
+
+[[row]]
+package = "delay"
+features = ["ui"]
+layer = "L4"
+
+[[row]]
+package = "dock"
+features = ["ui"]
+layer = "L4"
+
+[[row]]
+package = "drums"
+features = ["ui"]
+layer = "L4"
+
+[[row]]
+package = "editor"
+features = ["ui"]
+layer = "L4"
+
+[[row]]
+package = "ekit"
+features = ["ui"]
+layer = "L4"
+
+[[row]]
+package = "eq"
+features = ["ui"]
+layer = "L4"
+
+[[row]]
+package = "fts-audio-ui"
+layer = "L4"
+note = "sibling ui crate; fold in as a ui flag"
+
+[[row]]
+package = "guitar"
+features = ["ui"]
+layer = "L4"
+
+[[row]]
+package = "input"
+features = ["dioxus"]
+layer = "L4"
+
+[[row]]
+package = "keys"
+features = ["ui"]
+layer = "L4"
+
+[[row]]
+package = "mic"
+features = ["ui"]
+layer = "L4"
+
+[[row]]
+package = "midi"
+features = ["ui"]
+layer = "L4"
+
+[[row]]
+package = "modulation"
+features = ["ui"]
+layer = "L4"
+
+[[row]]
+package = "patchbay"
+features = ["ui"]
+layer = "L4"
+
+[[row]]
+package = "preset-browser"
+features = ["ui"]
+layer = "L4"
+
+[[row]]
+package = "reverb"
+features = ["ui"]
+layer = "L4"
+
+[[row]]
+package = "saturate"
+features = ["ui"]
+layer = "L4"
+
+[[row]]
+package = "session"
+features = ["ui"]
+layer = "L4"
+
+[[row]]
+package = "signal-grid-ui"
+layer = "L4"
+note = "sibling ui crate; fold in as a ui flag"
+
+[[row]]
+package = "signal-rig-perform-ui"
+layer = "L4"
+note = "sibling ui crate; fold in as a ui flag"
+
+[[row]]
+package = "signal-tone3000"
+features = ["ui"]
+layer = "L4"
+
+[[row]]
+package = "synth"
+features = ["ui"]
+layer = "L4"
+
+[[row]]
+package = "trigger"
+features = ["ui"]
+layer = "L4"
+
+# ── L1 engine / DSP / adapters ──
+[[row]]
+package = "ableton"
+layer = "L1"
+
+[[row]]
+package = "align-dsp"
+layer = "L1"
+
+[[row]]
+package = "app-shell"
+layer = "L1"
+
+[[row]]
+package = "audio"
+layer = "L1"
+
+[[row]]
+package = "audio-controls"
+layer = "L1"
+
+[[row]]
+package = "builtin"
+layer = "L1"
+
+[[row]]
+package = "comp"
+layer = "L1"
+
+[[row]]
+package = "control-surfaces"
+layer = "L1"
+
+[[row]]
+package = "daw-audio-sync"
+layer = "L1"
+
+[[row]]
+package = "daw-bridge"
+layer = "L1"
+
+[[row]]
+package = "daw-extension-runtime"
+layer = "L1"
+
+[[row]]
+package = "daw-reaper"
+layer = "L1"
+
+[[row]]
+package = "daw-reaper-dioxus-ext"
+layer = "L1"
+
+[[row]]
+package = "daw-sync"
+layer = "L1"
+
+[[row]]
+package = "dawfile-reaper"
+layer = "L1"
+
+[[row]]
+package = "delay"
+layer = "L1"
+
+[[row]]
+package = "dock"
+layer = "L1"
+
+[[row]]
+package = "dsp-core"
+layer = "L1"
+
+[[row]]
+package = "dynamic-template"
+layer = "L1"
+
+[[row]]
+package = "dynamic-template-extension"
+layer = "L1"
+
+[[row]]
+package = "editing"
+layer = "L1"
+
+[[row]]
+package = "editor"
+layer = "L1"
+
+[[row]]
+package = "eq"
+layer = "L1"
+
+[[row]]
+package = "fts-icons"
+layer = "L1"
+
+[[row]]
+package = "fts-sample"
+layer = "L1"
+
+[[row]]
+package = "fx-stack"
+layer = "L1"
+
+[[row]]
+package = "gate"
+layer = "L1"
+
+[[row]]
+package = "hits"
+layer = "L1"
+
+[[row]]
+package = "input"
+layer = "L1"
+
+[[row]]
+package = "interchange"
+layer = "L1"
+
+[[row]]
+package = "launcher"
+layer = "L1"
+
+[[row]]
+package = "level"
+layer = "L1"
+
+[[row]]
+package = "logic"
+layer = "L1"
+
+[[row]]
+package = "mic"
+layer = "L1"
+
+[[row]]
+package = "modulation"
+layer = "L1"
+
+[[row]]
+package = "multiband-dsp"
+layer = "L1"
+
+[[row]]
+package = "openwurli-dsp"
+layer = "L1"
+
+[[row]]
+package = "patch-list"
+layer = "L1"
+
+[[row]]
+package = "patchbay-driver"
+layer = "L1"
+
+[[row]]
+package = "pitch"
+layer = "L1"
+
+[[row]]
+package = "plugin-core"
+layer = "L1"
+
+[[row]]
+package = "plugin-faces"
+layer = "L1"
+
+[[row]]
+package = "preset-browser"
+layer = "L1"
+
+[[row]]
+package = "protools"
+layer = "L1"
+
+[[row]]
+package = "reaper-config"
+layer = "L1"
+
+[[row]]
+package = "reaper-dioxus"
+layer = "L1"
+
+[[row]]
+package = "reaper-embed"
+layer = "L1"
+
+[[row]]
+package = "reaper-hwnd"
+layer = "L1"
+
+[[row]]
+package = "reaper-input"
+layer = "L1"
+
+[[row]]
+package = "reaper-input-config"
+layer = "L1"
+
+[[row]]
+package = "reaper-kbd"
+layer = "L1"
+
+[[row]]
+package = "reaper-launcher"
+layer = "L1"
+
+[[row]]
+package = "reverb"
+layer = "L1"
+
+[[row]]
+package = "saturate"
+layer = "L1"
+
+[[row]]
+package = "session-extension"
+layer = "L1"
+
+[[row]]
+package = "signal"
+layer = "L1"
+
+[[row]]
+package = "signal-analyzer"
+layer = "L1"
+
+[[row]]
+package = "signal-browser"
+layer = "L1"
+
+[[row]]
+package = "signal-content-client"
+layer = "L1"
+
+[[row]]
+package = "signal-content-library"
+layer = "L1"
+
+[[row]]
+package = "signal-controller"
+layer = "L1"
+
+[[row]]
+package = "signal-daw-bridge"
+layer = "L1"
+
+[[row]]
+package = "signal-extension"
+layer = "L1"
+
+[[row]]
+package = "signal-fx"
+layer = "L1"
+
+[[row]]
+package = "signal-grid"
+layer = "L1"
+
+[[row]]
+package = "signal-import"
+layer = "L1"
+
+[[row]]
+package = "signal-live"
+layer = "L1"
+
+[[row]]
+package = "signal-macromod"
+layer = "L1"
+
+[[row]]
+package = "signal-nam"
+layer = "L1"
+
+[[row]]
+package = "signal-orchestra"
+layer = "L1"
+
+[[row]]
+package = "signal-plugin-host"
+layer = "L1"
+
+[[row]]
+package = "signal-reaper-controller"
+layer = "L1"
+
+[[row]]
+package = "signal-rig-host"
+layer = "L1"
+
+[[row]]
+package = "signal-rig-perform-store"
+layer = "L1"
+
+[[row]]
+package = "signal-rig-shell"
+layer = "L1"
+
+[[row]]
+package = "signal-separator"
+layer = "L1"
+
+[[row]]
+package = "signal-storage"
+layer = "L1"
+
+[[row]]
+package = "signal-synth-rig"
+layer = "L1"
+
+[[row]]
+package = "signal-widgets"
+layer = "L1"
+
+[[row]]
+package = "song"
+layer = "L1"
+
+[[row]]
+package = "stretch"
+layer = "L1"
+
+[[row]]
+package = "themer"
+layer = "L1"
+
+[[row]]
+package = "timeline"
+layer = "L1"
+
+[[row]]
+package = "trigger"
+layer = "L1"
+
+[[row]]
+package = "tune"
+layer = "L1"
+
+[[row]]
+package = "web-audio-worklet"
+layer = "L1"
+

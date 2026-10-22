@@ -362,7 +362,7 @@ fn quantize(a: QuantizeArg) -> Result<Quantized, String> {
 /// `EDIT_REVERT`: see its description.
 fn revert(a: RevertArg) -> Result<Reverted, String> {
     let (daw, project) = crate::actions::song()?;
-    let mut stages = architect_telemetry::timing::Stages::start();
+    let mut stages = crate::stages::Stages::start();
     let on = target(daw, &project, &a.on)?;
     match on.profile {
         Profile::Drums => {
@@ -503,12 +503,13 @@ fn level(a: LevelArg) -> Result<Leveled, String> {
     }
 }
 
-pub fn register(list: &ActionList) {
+pub fn register(list: &ActionList) -> Result<(), architect::action::ActionError> {
     list.register(&SCOPE, Effect::ReadOnly, |on: On| {
         let (daw, project) = crate::actions::song()?;
         Ok(target(daw, &project, &on)?.said())
-    });
-    list.register(&QUANTIZE, Effect::Mutating, quantize);
-    list.register(&REVERT, Effect::Mutating, revert);
-    list.register(&LEVEL, Effect::Mutating, level);
+    })?;
+    list.register(&QUANTIZE, Effect::Mutating, quantize)?;
+    list.register(&REVERT, Effect::Mutating, revert)?;
+    list.register(&LEVEL, Effect::Mutating, level)?;
+    Ok(())
 }

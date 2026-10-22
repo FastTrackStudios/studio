@@ -47,26 +47,20 @@ use signal_widgets::SwitchesMode;
 /// its practice player) to the iPad layout. Provided as context; without
 /// it the layout is the rig's own.
 ///
-///   header     beside the top bar's mode tabs: the Session / Signal toggle
-///              and the transport
-///   progress   a strip under the top bar: Session's song progress bar
-///              (its sections, the playhead; a tap seeks)
-///   main       Perform's middle, in the routing's and the macros' place:
-///              the chosen song's chart (or, on Session, its session view)
-///   foot       the chart's own controls, in the foot bar while the chart
-///              holds the middle (PDF / Keyflow, zoom, offset)
+///   screen     Perform, under a gig: the app's performer screen
+///              (`app_shell::ui::PerformerScreen`), handed the rig's two
+///              pieces of it (the app bar and the dock's switches) as
+///              [`GigScreen`]. The rig's own foot bar is not drawn there;
+///              Build, Edit and Setup are in the app bar's ⋯ and keep it.
 ///   follow     draws nothing: ties the gig to the rig's setlist (the set
-///              shows in the rig's own Setlist view; the song up there is
-///              the song whose chart and track are up here)
+///              shows in the screen's setlist; the song up there is the
+///              song whose chart and track are up)
 ///
 /// Each returns a component of the app's (`rsx! { Its {} }`), so its hooks
 /// are its own.
 #[derive(Clone, Copy)]
 pub struct GigSlots {
-    pub header: fn() -> Element,
-    pub progress: fn() -> Element,
-    pub main: fn() -> Element,
-    pub foot: fn() -> Element,
+    pub screen: fn(GigScreen) -> Element,
     pub follow: fn() -> Element,
 }
 
@@ -77,6 +71,67 @@ impl PartialEq for GigSlots {
     }
 }
 
+/// The rig's pieces of the performer screen, each a component that reads
+/// the rig from context (so the app can mount it in any panel).
+///
+///   app_bar    the iPad top bar, 48 tall: the rig crumb with its ⋯
+///              (Edit switches, MIDI learn, Switch rig), the MIDI and
+///              Audio lights, Mute, Panic and the Views ⋯. `middle` is the
+///              app's (its sync pill), drawn before the lights.
+///   rig        the dock's rig half: the ten switches at their Gig size.
+#[derive(Clone, Copy)]
+pub struct GigScreen {
+    pub app_bar: fn(Element) -> Element,
+    pub rig: fn() -> Element,
+}
+
+impl PartialEq for GigScreen {
+    fn eq(&self, _: &Self) -> bool {
+        true
+    }
+}
+
+/// What the performer screen's rig pieces read: the rig as the layout has
+/// it now, and the ways out of the screen (its views).
+#[derive(Clone, Copy)]
+pub(crate) struct PerformerRig {
+    pub model: Signal<PerformanceModel>,
+    pub state: RigViewState,
+    view: Signal<View>,
+    setup_tab: Signal<setup::SetupTab>,
+}
+
+impl PerformerRig {
+    /// Leave the performer screen for one of the rig's views.
+    fn go(self, v: View) {
+        let mut view = self.view;
+        view.set(v);
+    }
+
+    /// Setup, on one of its tabs (`guitar`, `midi`, `audio`).
+    fn setup(self, tab: &'static str) {
+        let mut t = self.setup_tab;
+        t.set(setup::SetupTab::from_id(tab));
+        self.go(View::Setup);
+    }
+}
+
+fn performer_bar(middle: Element) -> Element {
+    rsx! { topbar::PerformerBar { middle } }
+}
+
+fn performer_rig() -> Element {
+    rsx! { PerformerSwitches {} }
+}
+
+/// The dock's rig half: the switches at the performer screen's size.
+#[component]
+fn PerformerSwitches() -> Element {
+    let rig = use_context::<PerformerRig>();
+    let model = rig.model.read().clone();
+    rsx! { switches::TouchSwitches { perf: model, size: switches::SwitchSize::Gig } }
+}
+
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 enum View {
     Perform,
@@ -85,20 +140,53 @@ enum View {
     Setup,
 }
 
+/// Where the switches' mode (Full / Compact / Hidden) is kept, across
+/// launches.
+fn switches_mode_path() -> std::path::PathBuf {
+    signal_rig_host::store::signal_config_dir().join("tablet-switches")
+}
+
+/// The switches' mode kept last time, if any.
+fn load_switches_mode() -> Option<SwitchesMode> {
+    match std::fs::read_to_string(switches_mode_path()).ok()?.trim() {
+        "full" => Some(SwitchesMode::Full),
+        "compact" => Some(SwitchesMode::Compact),
+        "hidden" => Some(SwitchesMode::Hidden),
+        _ => None,
+    }
+}
+
+/// Keep the switches' mode for the next launch.
+fn store_switches_mode(m: SwitchesMode) {
+    let word = match m {
+        SwitchesMode::Full => "full",
+        SwitchesMode::Compact => "compact",
+        SwitchesMode::Hidden => "hidden",
+    };
+    let path = switches_mode_path();
+    if let Some(dir) = path.parent() {
+        let _ = std::fs::create_dir_all(dir);
+    }
+    let _ = std::fs::write(path, word);
+}
+
 #[component]
 pub fn TabletRemote(model: PerformanceModel, state: RigViewState) -> Element {
     let mut view = use_signal(|| View::Perform);
-    // The gig, when the app lends one: its chart holds Perform's middle
-    // until the routing or the browser is asked for.
+    // The gig, when the app lends one: Perform is its performer screen.
     let gig = use_hook(try_consume_context::<GigSlots>);
-    let mut chart_on = use_signal(|| gig.is_some());
     let mut sidebar = use_signal(|| true);
     let mut macros = use_signal(|| true);
-    // The switches at the foot: under a gig a compact row (switches 1–5),
-    // so the chart gets the room and the rig stays in sight. A hold on the
-    // foot bar's Switches picks Full / Compact / Hidden.
-    let mut docked = use_signal(|| true);
-    let mut sw_compact = use_signal(|| gig.is_some());
+    // The switches at the foot: under a gig compact (all ten, both rows cut
+    // down), so the chart gets the room and the rig stays in sight. The ⋯
+    // beside the foot bar's Switches picks Full / Compact / Hidden, and the
+    // pick is kept across launches.
+    let kept = load_switches_mode();
+    let mut docked = use_signal(|| kept != Some(SwitchesMode::Hidden));
+    let mut sw_compact = use_signal(|| match kept {
+        Some(m) => m == SwitchesMode::Compact,
+        None => gig.is_some(),
+    });
     // Perform's middle: the routing grid, unless it's switched off.
     let mut routing_on = use_signal(|| true);
     // Perform's FX row: the selected block's controls, in the switches'
@@ -115,9 +203,16 @@ pub fn TabletRemote(model: PerformanceModel, state: RigViewState) -> Element {
     });
     // Edit's routing selection, and where it points the browser.
     let routing_sel = use_context_provider(|| routing::RoutingSel(Signal::new(None))).0;
+    // Whether a block was picked, last time: only a change moves the dock
+    // (the first run leaves the switches as they were kept).
+    let mut was_picked = use_signal(|| false);
     use_effect(move || {
         let picked = routing_sel().is_some();
         fx_on.set(picked);
+        if picked == *was_picked.peek() {
+            return;
+        }
+        was_picked.set(picked);
         // Under a gig the switches stay as they were left when a pick is let go.
         if picked || gig.is_none() {
             docked.set(!picked);
@@ -216,7 +311,31 @@ pub fn TabletRemote(model: PerformanceModel, state: RigViewState) -> Element {
         let mut b = pick.building;
         b.set(view() == View::Build);
     });
-    let gig_main = gig.filter(|_| chart_on()).map(|g| g.main);
+    // The performer screen's view of the rig: the model as it is now (kept
+    // in step with the prop), the rig's state and the ways to its views.
+    let performer = use_context_provider(|| PerformerRig {
+        model: Signal::new(model.clone()),
+        state,
+        view,
+        setup_tab,
+    });
+    if *performer.model.peek() != model {
+        let mut m = performer.model;
+        m.set(model.clone());
+    }
+    // Perform under a gig: the app's performer screen, the rig's bar and
+    // switches lent into it, and no foot bar (spec B2).
+    if let Some(g) = gig
+        && view() == View::Perform
+    {
+        return rsx! {
+            div { style: "position: relative; display: flex; flex-direction: column; width: 100%; height: 100%; min-height: 0;",
+                {(g.follow)()}
+                {(g.screen)(GigScreen { app_bar: performer_bar, rig: performer_rig })}
+                signal_widgets::PopupLayer {}
+            }
+        };
+    }
     rsx! {
         Frame {
             onpointerdown: move |_| away.press(),
@@ -233,7 +352,6 @@ pub fn TabletRemote(model: PerformanceModel, state: RigViewState) -> Element {
             }
             if let Some(g) = gig {
                 {(g.follow)()}
-                {(g.progress)()}
             }
             Middle {
                 if view() == View::Setup {
@@ -308,9 +426,8 @@ pub fn TabletRemote(model: PerformanceModel, state: RigViewState) -> Element {
                     Main {
                         match view() {
                             View::Perform => rsx! {
-                                // The macros along the top: what you turn while playing
-                                // (the gig's chart, when it holds the middle, takes the room).
-                                if macros() && !(gig_main.is_some() && !browser()) {
+                                // The macros along the top: what you turn while playing.
+                                if macros() {
                                     div { style: "flex-shrink: 0; position: relative; z-index: 4; border-bottom: 1px solid #000;",
                                         macros::TouchMacroBar { state }
                                     }
@@ -323,8 +440,6 @@ pub fn TabletRemote(model: PerformanceModel, state: RigViewState) -> Element {
                             browser.set(false);
                             routing_on.set(true);
                         } }
-                                    } else if let Some(main) = gig_main {
-                                        div { style: "flex: 1; min-height: 0; display: flex; flex-direction: column;", {main()} }
                                     } else if routing_on() {
                                         div { style: "flex: 1; min-height: 0;", routing::Routing { state } }
                                     }
@@ -349,16 +464,9 @@ pub fn TabletRemote(model: PerformanceModel, state: RigViewState) -> Element {
             TabletFoot {
                 view: view(),
                 on_view: move |v| view.set(v),
-                macros: macros() && !(gig_main.is_some() && !browser()),
+                macros: macros(),
                 on_macros: move |()| {
-                    // Over the chart, Macros brings the rig's middle back.
-                    if gig_main.is_some() && !browser() {
-                        chart_on.set(false);
-                        routing_on.set(true);
-                        macros.set(true);
-                    } else {
-                        macros.toggle();
-                    }
+                    macros.toggle();
                 },
                 switches: docked(),
                 switches_compact: sw_compact(),
@@ -366,37 +474,29 @@ pub fn TabletRemote(model: PerformanceModel, state: RigViewState) -> Element {
                     use signal_widgets::SwitchesMode as M;
                     docked.set(m != M::Hidden);
                     sw_compact.set(m == M::Compact);
+                    store_switches_mode(m);
                     if m != M::Hidden {
                         fx_on.set(false);
                     }
                 },
                 on_switches: move |()| {
                     docked.toggle();
+                    store_switches_mode(if !docked() {
+                        signal_widgets::SwitchesMode::Hidden
+                    } else if sw_compact() {
+                        signal_widgets::SwitchesMode::Compact
+                    } else {
+                        signal_widgets::SwitchesMode::Full
+                    });
                     if docked() {
                         fx_on.set(false);
                     }
                 },
-                routing: routing_on() && gig_main.is_none(),
-                // The middle holds one at a time: the chart, the routing, or the browser.
+                routing: routing_on(),
+                // The middle holds one at a time: the routing or the browser.
                 on_routing: move |()| {
-                    if chart_on() {
-                        chart_on.set(false);
-                        routing_on.set(true);
-                    } else {
-                        routing_on.toggle();
-                    }
+                    routing_on.toggle();
                     if routing_on() {
-                        browser.set(false);
-                    }
-                },
-                chart: gig.map(|_| chart_on() && !browser()),
-                chart_tools: gig.filter(|_| chart_on() && !browser() && view() == View::Perform),
-                on_chart: move |()| {
-                    if chart_on() && !browser() {
-                        chart_on.set(false);
-                        routing_on.set(true);
-                    } else {
-                        chart_on.set(true);
                         browser.set(false);
                     }
                 },
@@ -411,7 +511,7 @@ pub fn TabletRemote(model: PerformanceModel, state: RigViewState) -> Element {
                 state,
                 on_browser: move |()| {
                     browser.toggle();
-                    routing_on.set(!browser() && !chart_on());
+                    routing_on.set(!browser());
                 },
             }
             signal_widgets::PopupLayer {}
@@ -456,7 +556,7 @@ fn TabletFoot(
     switches: bool,
     /// The switches as one compact row.
     switches_compact: bool,
-    /// A hold on Switches picked how they show.
+    /// Switches' ⋯ picked how they show.
     on_switches_mode: EventHandler<SwitchesMode>,
     on_switches: EventHandler<()>,
     routing: bool,
@@ -465,11 +565,6 @@ fn TabletFoot(
     on_fx: EventHandler<()>,
     browser: bool,
     on_browser: EventHandler<()>,
-    /// The gig's chart in the middle (`None`: no gig).
-    chart: Option<bool>,
-    on_chart: EventHandler<()>,
-    /// The chart's own controls, while it holds the middle.
-    chart_tools: Option<GigSlots>,
     state: RigViewState,
 ) -> Element {
     let (perform, build, edit, setup) = (
@@ -478,7 +573,6 @@ fn TabletFoot(
         view == View::Edit,
         view == View::Setup,
     );
-    let long = signal_widgets::use_long_press();
     let mut sw_menu = use_signal(|| false);
     rsx! {
         FootBar {
@@ -502,12 +596,6 @@ fn TabletFoot(
             if perform {
                 Rule {}
                 Group {
-                    if let Some(chart) = chart {
-                        FootButton { label: "Chart", on: chart, pin: true, grouped: true, onclick: move |_| on_chart.call(()),
-                            rect { x: "3.5", y: "2", width: "11", height: "14", rx: "1.5", fill: "none", stroke: ink(chart), stroke_width: "1.4" }
-                            path { d: "M6 6h6M6 9h6M6 12h4", stroke: ink(chart), stroke_width: "1.4", stroke_linecap: "round" }
-                        }
-                    }
                     FootButton { label: "Routing", on: routing, pin: true, grouped: true, onclick: move |_| on_routing.call(()),
                         circle { cx: "3.5", cy: "9", r: "1.8", fill: "none", stroke: ink(routing), stroke_width: "1.4" }
                         circle { cx: "14.5", cy: "4.5", r: "1.8", fill: "none", stroke: ink(routing), stroke_width: "1.4" }
@@ -526,14 +614,8 @@ fn TabletFoot(
                 }
             }
             // The FX row's block and its preset, while the row is up.
-            // The chart's own controls take that room while it holds the middle.
             if (perform && fx) || edit {
                 fx_row::FxPresetBar { state }
-            } else if let Some(tools) = chart_tools {
-                Rule {}
-                div { style: "flex: 1; min-width: 0; display: flex; align-items: center; justify-content: center;",
-                    {(tools.foot)()}
-                }
             } else {
                 span { style: "flex: 1;" }
             }
@@ -542,21 +624,28 @@ fn TabletFoot(
             if perform {
                 Group {
                     div {
-                        style: "position: relative; display: flex;",
-                        onpointerdown: move |e: PointerEvent| long.down(&e, move |_| sw_menu.set(true)),
-                        onpointermove: move |e: PointerEvent| long.moved(&e),
-                        onpointerup: move |_| long.cancel(),
-                        onpointercancel: move |_| long.cancel(),
+                        style: "position: relative; display: flex; align-items: center;",
                         FootButton { label: "Switches", on: switches, pin: true, grouped: true,
-                            onclick: move |_| {
-                                // A hold opened the menu: its release is not a tap.
-                                if !long.fired() {
-                                    on_switches.call(());
-                                }
-                            },
+                            onclick: move |_| on_switches.call(()),
                             rect { x: "2", y: "5", width: "4", height: "8", rx: "1", fill: "none", stroke: ink(switches), stroke_width: "1.4" }
                             rect { x: "7", y: "5", width: "4", height: "8", rx: "1", fill: "none", stroke: ink(switches), stroke_width: "1.4" }
                             rect { x: "12", y: "5", width: "4", height: "8", rx: "1", fill: "none", stroke: ink(switches), stroke_width: "1.4" }
+                        }
+                        // How the switches show: its ⋯ (no press-and-hold —
+                        // `signal_widgets::touch`).
+                        button {
+                            "aria-label": "How the switches show",
+                            title: "How the switches show",
+                            style: "width: 28px; height: 44px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; border: none; background: transparent; padding: 0; cursor: pointer;",
+                            onclick: move |e: MouseEvent| {
+                                e.stop_propagation();
+                                sw_menu.toggle();
+                            },
+                            svg { width: "14", height: "4", view_box: "0 0 14 4", style: "display: block;",
+                                circle { cx: "2", cy: "2", r: "1.6", fill: "#a1a1aa" }
+                                circle { cx: "7", cy: "2", r: "1.6", fill: "#a1a1aa" }
+                                circle { cx: "12", cy: "2", r: "1.6", fill: "#a1a1aa" }
+                            }
                         }
                         if sw_menu() {
                             div { style: "position: absolute; bottom: calc(100% + 6px); right: 0; z-index: 60; display: flex; flex-direction: column; gap: 2px; padding: 4px; min-width: 140px; border-radius: 8px; background: #1c1c21; border: 1px solid #2e2e35; box-shadow: 0 8px 24px rgba(0,0,0,0.5);",

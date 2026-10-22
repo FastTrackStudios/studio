@@ -31,9 +31,9 @@ static CYCLE: ActionMeta = crate::actions::meta(
     "COMP_CYCLE",
     "comp_cycle",
     "Comp the next take",
-    "Over a stretch (the selection, or `from`/`to` / `sections`), comp the kit from the next take in COMP_CANDIDATES' ranking (`by` 1, the default) or the one before (-1), round from the last to the first, empty takes skipped; from none comped there, the best. Every mic from the same take; where the kit is edited (its EDIT lanes), the edit over the stretch is made the new comp as recorded. Says the take, the ranking and the stretch. T and Shift+T.",
+    "Over a stretch (the selection, or `from`/`to` / `sections`), comp the kit from the next take in COMP_CANDIDATES' ranking (`by` 1, the default) or the one before (-1), round from the last to the first, empty takes skipped; from none comped there, the best. Every mic from the same take; where the kit is edited (its EDIT lanes), the edit over the stretch is made the new comp as recorded. Says the take, the ranking and the stretch. The keys T and Shift+T are SESSION_COMP_NEXT and SESSION_COMP_PREV, which run this over the selection.",
     "Edit",
-    "T",
+    "",
 );
 
 static CHOOSE: ActionMeta = crate::actions::meta(
@@ -629,7 +629,7 @@ fn comp_in(
     (take, versions): (&crate::hits::TakeVersion, &[crate::hits::TakeVersion]),
     (from, to): (f64, f64),
 ) -> Result<bool, String> {
-    let mut stages = architect_telemetry::timing::Stages::start();
+    let mut stages = crate::stages::Stages::start();
     let (from, to) = seamed(daw, project, take, (from, to));
     stages.mark("comp.seams_ms");
     let label = format!("Comp from take {}", take.pass);
@@ -716,7 +716,7 @@ fn now_comped(span: (f64, f64), take: &str) {
     }
 }
 
-pub fn register(list: &ActionList) {
+pub fn register(list: &ActionList) -> Result<(), architect::action::ActionError> {
     list.register(&CANDIDATES, Effect::ReadOnly, |a: CandidatesArg| {
         let (daw, project) = crate::actions::song()?;
         Ok(crate::edit_actions::stretches(daw, &project, &a.on)?
@@ -740,10 +740,10 @@ pub fn register(list: &ActionList) {
                 }
             })
             .collect::<Vec<Ranking>>())
-    });
+    })?;
     list.register(&CYCLE, Effect::Mutating, |a: CycleArg| {
         let (daw, project) = crate::actions::song()?;
-        let mut stages = architect_telemetry::timing::Stages::start();
+        let mut stages = crate::stages::Stages::start();
         let mut out = Vec::new();
         for (from, to) in crate::edit_actions::stretches(daw, &project, &a.on)? {
             let (takes, versions, now) = ranked_for(daw, &project, (from, to));
@@ -783,7 +783,7 @@ pub fn register(list: &ActionList) {
             });
         }
         Ok(out)
-    });
+    })?;
     list.register(&CHOOSE, Effect::Mutating, |a: ChooseArg| {
         let (daw, project) = crate::actions::song()?;
         let mut out = Vec::new();
@@ -818,5 +818,6 @@ pub fn register(list: &ActionList) {
             });
         }
         Ok(out)
-    });
+    })?;
+    Ok(())
 }

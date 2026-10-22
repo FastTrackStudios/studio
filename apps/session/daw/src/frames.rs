@@ -284,7 +284,7 @@ mod action {
         num_traits::ToPrimitive::to_u64(&(seconds.max(0.0) * 1e6)).unwrap_or(0)
     }
 
-    pub fn register(list: &ActionList) {
+    pub fn register(list: &ActionList) -> Result<(), architect::action::ActionError> {
         list.register(&FRAMES, Effect::ReadOnly, |a: FramesArg| {
             let from = match a.wait.filter(|w| *w > 0.0) {
                 Some(wait) => {
@@ -308,7 +308,8 @@ mod action {
                 summary: Summary::of(&frames),
                 file: a.file,
             })
-        });
+        })?;
+        Ok(())
     }
 }
 

@@ -131,10 +131,13 @@ pub fn run() {
     // (http/protobuf → the local collector on :4318). Both guards must live
     // for the whole process — dropping them flushes and stops the exporters.
     let (_sentry, _otel) = architect_telemetry::init_tracing_full("signal-engine", "info");
-    // Log every panic loudly (thread name + backtrace). Panics stay
-    // unwinding — control-plane panics are caught and survived (the rig's
-    // meter pump self-heals; audio keeps playing) — but none die silently.
-    host::install_panic_logger();
+    // One panic hook, the same flight recorder the app window installs:
+    // each panic (thread, backtrace) appended to the engine's own
+    // `<data dir>/Signal/engine/crash.log`, beside the window's. Panics
+    // stay unwinding — control-plane panics are caught and survived (the
+    // rig's meter pump self-heals; audio keeps playing) — but none die
+    // silently.
+    app_shell::log_ring::install_panic_hook("Signal/engine");
 
     // If the desktop app spawned us (FTS_SUPERVISOR_PID), self-terminate when
     // it goes away — even if it was SIGKILLed and never reaped us.

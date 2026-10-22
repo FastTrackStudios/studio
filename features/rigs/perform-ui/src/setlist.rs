@@ -3,9 +3,11 @@
 //!
 //!   Header   the set's name (a tap opens the sets), event · date · profile
 //!            in words, the set as a bar of song colours; ⋯ manages the set.
-//!   Songs    number on the song's colour, name, Now / Next, key, tempo, ⋯.
-//!            The song up is open on its sections; a tap on another plays it.
-//!            Reorder mode grows handles to drag songs into order.
+//!   Songs    a grip, the number on the song's colour, the name (the whole
+//!            width, truncated last), Now / Next; under it the key, the
+//!            tempo and the rest of the key's line; ⋯. The song up is open
+//!            on its sections; a tap on another plays it. The grip drags a
+//!            song into order (Reorder folds the sections away for it).
 //!   Sections a part's `section` groups consecutive parts; each shows the
 //!            patch it plays, its changes in words, and a ⋯; its grip drags
 //!            it. The section playing opens into the stacks.
@@ -31,7 +33,7 @@ use super::colors::{
     suggest_section, tape_for, when_label,
 };
 use super::marks::{OverrideIcon, Strike, module_colour};
-use super::menu::{Item, MoreButton, Picked, PressMenu, open_naming_under};
+use super::menu::{Item, MoreButton, Picked, RowMenu, open_naming_under};
 use super::panels::{Panel, PanelView};
 use super::tokens::*;
 use crate::PerfState;
@@ -207,15 +209,19 @@ pub fn begin_row_drag(
     {
         let tops = Rc::clone(&tops);
         spawn(async move {
-            let mut out = Vec::with_capacity(els.len());
-            for e in els {
-                out.push(match e {
-                    Some(e) => e
-                        .get_client_rect()
-                        .await
-                        .map_or(f64::INFINITY, |r| r.min_y()),
-                    None => f64::INFINITY,
-                });
+            // A row Blitz cannot measure right now (the document is busy
+            // — it usually is mid-gesture) is asked again, not taken as
+            // "infinitely far down": that sent every drop to the top.
+            let mut out = vec![f64::INFINITY; els.len()];
+            for (k, e) in els.into_iter().enumerate() {
+                let Some(e) = e else { continue };
+                for _ in 0..30 {
+                    if let Ok(r) = e.get_client_rect().await {
+                        out[k] = r.min_y();
+                        break;
+                    }
+                    architect::platform::sleep(std::time::Duration::from_millis(16)).await;
+                }
             }
             *tops.borrow_mut() = out;
         });
@@ -234,12 +240,20 @@ pub fn begin_row_drag(
                 if t.is_empty() {
                     return;
                 }
-                let mut to = 0;
+                // The last measured row whose top (plus `grace`) the pointer
+                // is below; above them all, the first — but only when the
+                // first was measured, else it stays where it was.
+                let mut to = None;
                 for (k, top) in t.iter().enumerate() {
-                    if y > top + grace {
-                        to = k;
+                    if top.is_finite() && y > top + grace {
+                        to = Some(k);
                     }
                 }
+                let to = to.unwrap_or(if t.first().is_some_and(|x| x.is_finite()) {
+                    0
+                } else {
+                    from
+                });
                 d.set(Some((from, to)));
             }
             DragEvent::End => {
@@ -571,8 +585,61 @@ fn song_parts(perf: &PerformState, lib: &LibraryModel, i: usize) -> Vec<PerfPart
 
 // ── The sidebar ────────────────────────────────────────────────────────────
 
+/// How long a row armed to load stays armed (worship / gig screen spec
+/// §8.7): a second tap inside it loads the song; after it, nothing.
+pub const ARM_FOR: std::time::Duration = std::time::Duration::from_secs(6);
+
+/// The primary button's fill (the armed row's Load): 5.2:1 under white.
+const PRIMARY: &str = "#2563eb";
+
+/// What a tap on a song row's body does.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum RowTap {
+    /// Reordering: the grip moves rows, a tap does nothing.
+    Nothing,
+    /// The song up: open or fold its sections.
+    Toggle,
+    /// Another song while arming is on: arm it (highlight, show Load).
+    Arm,
+    /// Load it: between songs, or the second tap on an armed row.
+    Load,
+}
+
+/// A row tap's meaning. Arm-to-load (on while a song plays, or the touch
+/// lock is on) asks for two taps, so a stray tap mid-song never changes
+/// the rig's sound (`select_song` does at once).
+#[must_use]
+pub const fn row_tap(reordering: bool, up: bool, arm_to_load: bool, armed: bool) -> RowTap {
+    if reordering {
+        RowTap::Nothing
+    } else if up {
+        RowTap::Toggle
+    } else if arm_to_load && !armed {
+        RowTap::Arm
+    } else {
+        RowTap::Load
+    }
+}
+
 #[component]
-pub fn TabletSetlist(state: PerfState) -> Element {
+pub fn TabletSetlist(
+    state: PerfState,
+    /// The song up opens on its sections (the default). Off (the
+    /// performer screen's narrow column): every song stays folded until
+    /// its row is tapped open.
+    #[props(default = true)]
+    sections: bool,
+    /// Two taps to load another song: the first arms the row (a Load
+    /// button shows in it for [`ARM_FOR`]), the second loads it. The app
+    /// turns it on while a song plays; between songs one tap loads.
+    #[props(default)]
+    arm_to_load: bool,
+    /// The search text, when the screen holds it (the performer screen's
+    /// own field, or a test); without it the setlist keeps its own. Either
+    /// way the list is filtered by the song search (`search`).
+    #[props(default)]
+    filter: Option<Signal<String>>,
+) -> Element {
     let rig = use_hook(crate::perform_client);
     let bus = DragBus::try_use();
     let lib = use_library(state);
@@ -587,6 +654,36 @@ pub fn TabletSetlist(state: PerfState) -> Element {
     let set_index = perf.setlist_index;
     // A song being dragged into order: (from, to).
     let drag = use_signal(|| None::<(usize, usize)>);
+    // The search field's text: only the songs that answer it are listed,
+    // each at its own set position (`search`).
+    let own_query = use_signal(String::new);
+    let query = filter.unwrap_or(own_query);
+    let q = query();
+    // The row armed to load, if any (only while arming is on).
+    let mut armed = use_signal(|| None::<usize>);
+    let armed_now = (*armed.read()).filter(|_| arm_to_load);
+    let mut arm = move |i: usize| {
+        armed.set(Some(i));
+        spawn(async move {
+            architect::platform::sleep(ARM_FOR).await;
+            if *armed.peek() == Some(i) {
+                armed.set(None);
+            }
+        });
+    };
+    let filtering = super::search::is_filtering(&q);
+    let shown: Vec<bool> = {
+        let hits = super::search::matching_songs(
+            &q,
+            songs.iter().map(|s| (s.name.as_str(), s.key.as_str())),
+        );
+        let mut v = vec![false; songs.len()];
+        for i in hits {
+            v[i] = true;
+        }
+        v
+    };
+    let none_shown = filtering && !shown.contains(&true);
     // The list and its songs, measured: whether the song up is scrolled
     // out of the list, and which way.
     let mut list_el = use_signal(|| None::<Rc<MountedData>>);
@@ -672,16 +769,34 @@ pub fn TabletSetlist(state: PerfState) -> Element {
             });
         }
     });
+    // The search cleared: the whole list back, and the song up in view.
+    let mut was_filtering = use_signal(|| false);
+    if *was_filtering.peek() != filtering {
+        was_filtering.set(filtering);
+        if !filtering {
+            spawn(async move {
+                // Once the rows are back (and measured).
+                architect::platform::sleep(std::time::Duration::from_millis(60)).await;
+                let at = perf_sig.peek().song_index as usize;
+                if let Some(Some(up)) = rows.peek().get(at).cloned() {
+                    let _ = up.scroll_to(ScrollBehavior::Instant).await;
+                }
+            });
+        }
+    }
     let count = songs.len();
     rsx! {
         section { style: "position: relative; height: 100%; display: flex; flex-direction: column; min-height: 0; overflow: hidden; background: {SHEET}; font-family: {FONT}; color: {INK};",
             SetHeader { perf: perf.clone(), lib: lib_now.clone(), panel, reordering }
+            if !songs.is_empty() && !reordering() {
+                super::search::SongSearch { query }
+            }
             div { style: "position: relative; flex: 1; min-height: 0; display: flex; flex-direction: column;",
             div {
                 style: "position: relative; flex: 1; min-height: 0; overflow-y: auto;",
                 onmounted: move |e| list_el.set(Some(e.data())),
                 onscroll: move |_| measure(),
-                for (i, song) in songs.iter().enumerate() {
+                for (i, song) in songs.iter().enumerate().filter(|(i, _)| reordering() || shown[*i]) {
                     div {
                         key: "{i}-{song.name}",
                         onmounted: move |e| {
@@ -694,11 +809,16 @@ pub fn TabletSetlist(state: PerfState) -> Element {
                             perf: perf.clone(),
                             lib: lib_now.clone(),
                             index: i,
-                            open: !reordering() && (i == at || open.read().contains(&i)),
+                            open: !reordering() && ((sections && i == at) || open.read().contains(&i)),
                             reordering: reordering(),
+                            arm_to_load,
+                            armed: armed_now == Some(i),
+                            on_arm: move |()| arm(i),
+                            on_loaded: move |()| armed.set(None),
                             drag,
                             panel,
                             on_toggle: move |()| {
+                                armed.set(None);
                                 let mut o = open.write();
                                 if !o.remove(&i) {
                                     o.insert(i);
@@ -707,6 +827,11 @@ pub fn TabletSetlist(state: PerfState) -> Element {
                             on_grip: {
                                 let rig = rig.clone();
                                 move |_: PointerEvent| {
+                                    // Filtered, the rows on screen are not the
+                                    // set's order: clear the search to reorder.
+                                    if filtering {
+                                        return;
+                                    }
                                     let rig = rig.clone();
                                     begin_row_drag(bus, drag, rows, count, i, 24.0, move |from, to| {
                                         call!(rig, |r| r.move_setlist_entry(set_index, from as u32, to as u32));
@@ -715,13 +840,19 @@ pub fn TabletSetlist(state: PerfState) -> Element {
                             },
                         }
                         // The song up is open on its sections; others when opened.
-                        if !reordering() && (i == at || open.read().contains(&i)) {
+                        if !reordering() && ((sections && i == at) || open.read().contains(&i)) {
                             Sections { perf: perf.clone(), lib: lib_now.clone(), song: i, panel }
                         }
                     }
                 }
-                if !songs.is_empty() && !reordering() {
+                if none_shown && !reordering() {
+                    div { "data-testid": "setlist-search-empty", style: "padding: 18px 20px; font-size: 15px; color: {INK_3};",
+                        "No song in this set matches “{q}”."
+                    }
+                }
+                if !songs.is_empty() && !reordering() && !filtering {
                     button {
+                        "aria-label": "Add songs",
                         style: "display: flex; align-items: center; gap: 10px; width: 100%; min-height: 52px; padding: 0 18px; border: none; border-top: 1px solid {RULE}; background: transparent; color: {INK_3}; font-size: 15px; font-weight: 600; font-family: {FONT}; text-align: left; justify-content: flex-start; cursor: pointer;",
                         onclick: move |_| panel.set(Some(Panel::Add)),
                         Plus { size: 14 }
@@ -736,7 +867,7 @@ pub fn TabletSetlist(state: PerfState) -> Element {
                 }
             }
             // Scrolled away from the song up: where it is, and a way back.
-            if let Some(above) = away() {
+            if let Some(above) = away().filter(|_| !filtering) {
                 NowBar { perf: perf.clone(), above, on_back: move |()| {
                     let at = perf_sig.peek().song_index as usize;
                     if let Some(up) = rows.peek().get(at).cloned().flatten() {
@@ -889,6 +1020,7 @@ fn SetHeader(
             div { style: "display: flex; align-items: center; gap: 2px;",
                 // The set's name and a chevron: a tap opens the sets.
                 button {
+                    "aria-label": "Set: {heading}. Choose a set",
                     style: "flex: 1; min-width: 0; min-height: 44px; display: flex; flex-direction: column; justify-content: center; align-items: flex-start; gap: 3px; text-align: left; padding: 0 8px; margin: 0 0 0 -8px; border: none; border-radius: {R_MD}; background: transparent; color: {INK}; font-family: {FONT}; cursor: pointer;",
                     onclick: move |_| panel_w.set(Some(Panel::Sets)),
                     span { style: "display: flex; align-items: center; gap: 8px; min-width: 0; max-width: 100%;",
@@ -978,6 +1110,16 @@ fn SongRow(
     index: usize,
     open: bool,
     reordering: bool,
+    /// Arm-to-load is on (see [`row_tap`]).
+    #[props(default)]
+    arm_to_load: bool,
+    /// This row is armed: its Load button shows.
+    #[props(default)]
+    armed: bool,
+    /// Arm this row.
+    on_arm: EventHandler<()>,
+    /// This row's song was loaded (the setlist disarms).
+    on_loaded: EventHandler<()>,
     drag: Signal<Option<(usize, usize)>>,
     panel: Signal<Option<Panel>>,
     on_toggle: EventHandler<()>,
@@ -993,6 +1135,15 @@ fn SongRow(
     let next = index == at + 1;
     let count = perf.songs.len();
     let last = count.saturating_sub(1);
+    // What the row's button says to assistive tech (the song, and whether
+    // it is up or armed to load).
+    let row_label = if up {
+        format!("{}, playing", song.name)
+    } else if armed {
+        format!("Load {}", song.name)
+    } else {
+        song.name.clone()
+    };
     let colour = song_colour(&song.name, &song.colour);
     let lib_song = lib
         .songs
@@ -1020,9 +1171,12 @@ fn SongRow(
     let start = song.start.clone();
     let start_stack = stack_for(&perf, &lib, &shown_profile, &start);
     let set_index = perf.setlist_index;
-    let (lifted, drop_above) = match drag() {
-        Some((from, to)) => (from == index, to == index && from != index),
-        None => (false, false),
+    // Lifted: the song being dragged. Where it lands: a line above this
+    // song (moving up) or below it (moving down).
+    let (lifted, drop_line) = match drag() {
+        Some((from, to)) if to == index && from != index => (false, Some(to < from)),
+        Some((from, _)) => (from == index, None),
+        None => (false, None),
     };
 
     let items = vec![
@@ -1065,6 +1219,8 @@ fn SongRow(
     let mut panel_w = panel;
     let bg = if lifted {
         SHEET_2.to_string()
+    } else if armed {
+        tint(PRIMARY, 18)
     } else if open {
         tint(&colour, pick(up, 7, 4))
     } else {
@@ -1076,10 +1232,12 @@ fn SongRow(
     } else {
         UNSTUCK
     };
-    let top_rule = if drop_above {
-        format!("border-top: 3px solid {FOCUS_FG};")
-    } else {
-        format!("border-top: 1px solid {RULE};")
+    let top_rule = match drop_line {
+        Some(true) => format!("border-top: 3px solid {FOCUS_FG};"),
+        Some(false) => {
+            format!("border-top: 1px solid {RULE}; border-bottom: 3px solid {FOCUS_FG};")
+        }
+        None => format!("border-top: 1px solid {RULE};"),
     };
     let number_bg = if played {
         format!("color-mix(in srgb, {colour} 35%, {SHEET})")
@@ -1110,36 +1268,64 @@ fn SongRow(
             _ => {}
         }
     });
+    // The key as a chip ("C#"), the rest of what the chart says of it
+    // ("A#m7-D#m7-F#") after the tempo, where it truncates first.
+    let (key_chip, key_rest) = super::colors::split_key(&song.key);
+    let grip_ink = colour.clone();
+    let has_more = !start.is_empty()
+        || !own_profile.is_empty()
+        || !modules.is_empty()
+        || (!open && sections > 0);
     rsx! {
-        PressMenu {
+        RowMenu {
             items: items.clone(),
             on_pick: pick_handler,
             off: reordering,
-            style: "{pin} display: flex; align-items: stretch; min-height: 64px; {top_rule} background: {bg};",
+            style: "{pin} display: flex; align-items: stretch; min-height: 64px; {top_rule} background: {bg}; opacity: {pick(lifted, 0.5, 1.0)};",
             if up {
                 span { style: "position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: {colour};" }
             }
+            // The grip, as the profile's stacks have it: drag the song into
+            // its place (the order is the rig's, so it persists, and the song
+            // up stays up).
+            span {
+                "aria-label": "Drag {song.name} to move it",
+                style: "width: 34px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; cursor: grab; touch-action: none;",
+                onpointerdown: move |e: PointerEvent| {
+                    e.prevent_default();
+                    e.stop_propagation();
+                    on_grip.call(e);
+                },
+                svg { width: "14", height: "12", view_box: "0 0 14 12",
+                    path { d: "M1.5 2h11M1.5 6h11M1.5 10h11", stroke: "{grip_ink}", stroke_opacity: if played { "0.45" } else { "1" }, stroke_width: "1.7", stroke_linecap: "round" }
+                }
+            }
             button {
-                style: "flex: 1; min-width: 0; display: flex; align-items: center; justify-content: flex-start; gap: 10px; padding: 10px 2px 10px 14px; text-align: left; background: transparent; border: none; color: inherit; font: inherit; cursor: pointer;",
+                "aria-label": "{row_label}",
+                style: "flex: 1; min-width: 0; display: flex; align-items: center; justify-content: flex-start; gap: 10px; padding: 8px 2px 8px 0; text-align: left; background: transparent; border: none; color: inherit; font: inherit; cursor: pointer;",
                 onclick: {
                     let rig = rig.clone();
                     move |_| {
                         // The song up stays open (a tap keeps it open after it);
-                        // another is played.
-                        if reordering {
-                        } else if up {
-                            on_toggle.call(());
-                        } else {
-                            call!(rig, |r| r.select_song(index as u32));
+                        // another is played — or, while arming, armed first.
+                        match row_tap(reordering, up, arm_to_load, armed) {
+                            RowTap::Nothing => {}
+                            RowTap::Toggle => on_toggle.call(()),
+                            RowTap::Arm => on_arm.call(()),
+                            RowTap::Load => {
+                                call!(rig, |r| r.select_song(index as u32));
+                                on_loaded.call(());
+                            }
                         }
                     }
                 },
                 span { style: "width: 28px; height: 28px; border-radius: 7px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 750; color: #0b0b0e; background: {number_bg};",
                     "{index + 1}"
                 }
-                span { style: "flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px;",
+                span { style: "flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px;",
+                    // The title first, the whole width: it gives way last.
                     span { style: "display: flex; align-items: center; gap: 8px; min-width: 0;",
-                        span { style: "position: relative; min-width: 0; font-size: 17px; font-weight: {pick(up, 750, 600)}; color: {pick(played, INK_3, INK)}; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;",
+                        span { style: "position: relative; flex: 1 1 auto; min-width: 0; font-size: 17px; font-weight: {pick(up, 750, 600)}; color: {pick(played, INK_3, INK)}; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;",
                             "{song.name}"
                             if played {
                                 Strike { width: 1.6 }
@@ -1148,44 +1334,57 @@ fn SongRow(
                         if up { Badge { live: true, "Now" } }
                         if next { Badge { live: false, "Next" } }
                     }
-                    span { style: "display: flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 500; color: {INK_3}; min-width: 0; white-space: nowrap; overflow: hidden;",
-                        if !start.is_empty() {
-                            PatchChip { patch: start.clone(), stack: start_stack.clone(), small: true, lit: false }
-                        }
-                        // Its own profile, in words — only when it isn't the set's.
-                        if !own_profile.is_empty() {
-                            span { style: "flex-shrink: 0; color: {INK_2}; font-weight: 650;", "{own_profile}" }
-                        }
-                        Changes { modules: modules.clone(), max: 2 }
-                        if !open && sections > 0 {
-                            span { style: "flex-shrink: 0;", "{sections} sections" }
+                    // Then the key and the tempo, then what else the chart
+                    // says of the key — that truncates first.
+                    if !key_chip.is_empty() || song.bpm > 0 || !key_rest.is_empty() {
+                        span { style: "display: flex; align-items: center; gap: 7px; min-width: 0; white-space: nowrap; overflow: hidden; font-size: 13px; color: {INK_3};",
+                            if !key_chip.is_empty() {
+                                span { style: "flex-shrink: 0; min-width: 24px; height: 20px; padding: 0 5px; box-sizing: border-box; border: 1px solid {RULE_STRONG}; border-radius: 4px; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 650; color: {INK_2};",
+                                    "{key_chip}"
+                                }
+                            }
+                            if song.bpm > 0 {
+                                span { style: "flex-shrink: 0; font-weight: 600; color: {INK_2}; font-variant-numeric: tabular-nums;", "{song.bpm} BPM" }
+                            }
+                            if !key_rest.is_empty() {
+                                span { style: "flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis;", "{key_rest}" }
+                            }
                         }
                     }
-                }
-                if !song.key.is_empty() {
-                    span { style: "flex-shrink: 0; min-width: 30px; height: 28px; padding: 0 6px; box-sizing: border-box; border: 1px solid {RULE_STRONG}; border-radius: 4px; display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 650; color: {INK_2}; font-variant-numeric: tabular-nums;",
-                        "{song.key}"
+                    if has_more {
+                        span { style: "display: flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 500; color: {INK_3}; min-width: 0; white-space: nowrap; overflow: hidden;",
+                            if !start.is_empty() {
+                                PatchChip { patch: start.clone(), stack: start_stack.clone(), small: true, lit: false }
+                            }
+                            // Its own profile, in words — only when it isn't the set's.
+                            if !own_profile.is_empty() {
+                                span { style: "flex-shrink: 0; color: {INK_2}; font-weight: 650;", "{own_profile}" }
+                            }
+                            Changes { modules: modules.clone(), max: 2 }
+                            if !open && sections > 0 {
+                                span { style: "flex-shrink: 0;", "{sections} sections" }
+                            }
+                        }
                     }
-                }
-                span { style: "width: 30px; text-align: right; font-size: 14px; font-weight: 600; color: {INK_2}; flex-shrink: 0; font-variant-numeric: tabular-nums;",
-                    if song.bpm > 0 { "{song.bpm}" }
                 }
             }
             div { style: "display: flex; align-items: center;",
-                if reordering {
-                    // The handle: drag the song into its place.
-                    span {
-                        "aria-label": "Drag {song.name}",
-                        style: "width: 52px; height: 52px; display: flex; align-items: center; justify-content: center; cursor: grab; touch-action: none;",
-                        onpointerdown: move |e: PointerEvent| {
-                            e.prevent_default();
-                            e.stop_propagation();
-                            on_grip.call(e);
+                if armed && !reordering {
+                    button {
+                        "aria-label": "Load {song.name}",
+                        style: "flex-shrink: 0; width: 84px; height: 48px; margin-right: 4px; border: none; border-radius: 8px; background: {PRIMARY}; color: #ffffff; font-size: 16px; font-weight: 700; font-family: {FONT}; cursor: pointer;",
+                        onclick: {
+                            let rig = rig.clone();
+                            move |_| {
+                                call!(rig, |r| r.select_song(index as u32));
+                                on_loaded.call(());
+                            }
                         },
-                        svg { width: "14", height: "10", view_box: "0 0 14 10",
-                            path { d: "M1 1h12M1 5h12M1 9h12", stroke: INK_2, stroke_width: "1.8", stroke_linecap: "round" }
-                        }
+                        "Load"
                     }
+                }
+                if reordering {
+                    span { style: "width: 12px;" }
                 } else {
                     MoreButton {
                         items: items.clone(),
@@ -1640,7 +1839,7 @@ fn SectionRow(
         }
     });
     rsx! {
-        PressMenu {
+        RowMenu {
             items: items.clone(),
             on_pick: pick_handler,
             style: "{pin} display: flex; align-items: center; min-height: 50px; background: {row_bg};",
@@ -1970,7 +2169,7 @@ pub fn StackRow(
     };
     let grip_ink = super::colors::tape_mark(&view.name);
     rsx! {
-        PressMenu {
+        RowMenu {
             items: items.clone(),
             on_pick: pick_handler,
             style: "position: relative; display: flex; align-items: stretch; border-top: 1px solid {RULE}; background: {pick(on, tint(&song_colour, 18), CLEAR.to_string())};",
@@ -2064,5 +2263,35 @@ fn RotationDot(lit: bool, source: Src, song_colour: String) -> Element {
     };
     rsx! {
         span { style: "width: {pick(lit, 12, 5)}px; height: 5px; border-radius: 999px; flex-shrink: 0; {style}" }
+    }
+}
+
+#[cfg(test)]
+mod row_tap_tests {
+    use super::*;
+
+    #[test]
+    fn between_songs_a_row_loads_on_one_tap() {
+        assert_eq!(row_tap(false, false, false, false), RowTap::Load);
+    }
+
+    #[test]
+    fn while_playing_another_row_takes_two_taps() {
+        assert_eq!(
+            row_tap(false, false, true, false),
+            RowTap::Arm,
+            "first tap arms"
+        );
+        assert_eq!(
+            row_tap(false, false, true, true),
+            RowTap::Load,
+            "second tap loads"
+        );
+    }
+
+    #[test]
+    fn the_song_up_folds_and_reordering_taps_nothing() {
+        assert_eq!(row_tap(false, true, true, false), RowTap::Toggle);
+        assert_eq!(row_tap(true, false, true, true), RowTap::Nothing);
     }
 }

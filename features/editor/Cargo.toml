@@ -22,7 +22,7 @@ host-standalone = ["daw/standalone-save"]
 ops = ["dep:rand", "dep:tracing"]
 paint = ["dep:anyrender", "dep:daw-ui", "dep:input", "dep:kurbo", "dep:parley", "dep:peniko", "dep:tracing"]
 pitch = ["dep:tune"]
-reaper = ["audio", "audio-daw", "daw", "dep:daw", "dep:studio", "dep:dioxus", "dep:tracing", "host", "render", "ui", "ui-host"]
+reaper = ["audio", "audio-daw", "daw", "dep:daw", "dep:studio", "studio/reaper", "studio/reaper-ui", "dep:dioxus", "dep:tracing", "host", "render", "ui", "ui-host"]
 render = ["tune/world"]
 standalone = ["audio", "audio-daw", "daw", "dep:daw", "dep:studio", "dep:daw-control", "dep:daw-ui", "dep:dioxus", "dep:dioxus-mcp-probe", "dep:dioxus-native", "dep:eyre", "dep:futures-timer", "dep:regex", "dep:serde_json", "dep:tempfile", "dep:tokio", "dep:tracing", "dep:tracing-subscriber", "guitarpro", "host", "host-standalone", "render", "ui", "ui-host"]
 ui = ["dep:anyrender", "dep:daw-ui", "dep:dioxus", "dep:input", "dep:kurbo", "dep:level", "dep:parley", "dep:peniko", "dep:tracing", "host", "ops", "paint"]
@@ -41,7 +41,7 @@ architect-ui = { workspace = true, optional = true }
 base64 = { workspace = true, optional = true }
 clap = { workspace = true, optional = true }
 daw = { workspace = true, optional = true, features = ["standalone", "standalone-bootstrap", "standalone-rpp", "standalone-save"] }
-studio = { workspace = true, optional = true, features = ["reaper", "reaper-ui"] }
+studio = { workspace = true, optional = true }
 daw-control = { workspace = true, optional = true }
 daw-proto = { workspace = true, optional = true }
 daw-ui = { workspace = true, optional = true, features = ["web"] }

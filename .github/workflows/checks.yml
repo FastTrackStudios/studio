@@ -154,6 +154,12 @@ jobs:
           EOF
       - name: cargo fmt --check
         run: ${NIX_DEV} cargo fmt --all --check
+      # Crate-layout boundaries (architect ADR layout.md, STA-268):
+      # resolves graphs and scans sources, compiles nothing of studio's.
+      # Layer table + ratcheted baselines in boundaries.toml.
+      - name: Boundaries
+        if: ${{ !cancelled() }}
+        run: ${NIX_DEV} just ci-boundaries
       # The workflow-spec verification standard (#48): every `flow.*`
       # rule with an r[impl] has an r[verify], or the build is red.
       # Same recipe as local (`just daw-flows`); tracey is a store
@@ -170,6 +176,13 @@ jobs:
         run: ${NIX_DEV} just web-tailwind
       - name: cargo check --workspace
         run: ${NIX_DEV} cargo check --workspace
+      # The three web bundles deploy.yml ships (STA-366). The workspace check
+      # is native, so it never compiles them: a native-only dep (tokio `net`,
+      # an engine, an X11/HID crate) leaking into their graph stayed hidden
+      # until the deploy itself failed. Same targets and features as
+      # nix/modules/packages/web-bundles.nix builds (`just web-wasm-check`).
+      - name: wasm check (web bundles)
+        run: ${NIX_DEV} just web-wasm-check
       # Advisory only: the lint debt is being paid down crate by crate, so
       # this reports (grouped by lint and crate, .github/scripts/
       # clippy-report.py) without blocking the PR.

@@ -20,7 +20,17 @@ use std::collections::BTreeMap;
 use std::sync::Arc;
 use std::sync::atomic::Ordering;
 
+#[cfg(target_os = "linux")]
 mod pipewire_capture;
+
+/// PipeWire is Linux-only. Elsewhere `spawn` fails up front and `main`
+/// falls through to cpal (CoreAudio on macOS, WASAPI on Windows).
+#[cfg(not(target_os = "linux"))]
+mod pipewire_capture {
+    pub fn spawn(_ui: &std::sync::Arc<eq::ui::params::EqUiState>) -> anyhow::Result<()> {
+        anyhow::bail!("PipeWire is Linux-only")
+    }
+}
 
 use dioxus_native::launch_cfg;
 use dioxus_native::prelude::{document, rsx};

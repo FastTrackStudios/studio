@@ -684,7 +684,7 @@ fn settle(
         .collect()
 }
 
-pub(crate) fn register(list: &ActionList) {
+pub(crate) fn register(list: &ActionList) -> Result<(), architect::action::ActionError> {
     list.register(&LIST, Effect::ReadOnly, |a: TrackArg| {
         let (daw, project) = song()?;
         let guid = resolve(daw, &project, &a.track)?;
@@ -710,7 +710,7 @@ pub(crate) fn register(list: &ActionList) {
                 on: fx.enabled,
             })
             .collect::<Vec<_>>())
-    });
+    })?;
     list.register(&PARAMS, Effect::ReadOnly, |a: ParamsArg| {
         let (daw, project) = song()?;
         let (target, _) = target(daw, &project, &a.track, &a.fx)?;
@@ -730,14 +730,14 @@ pub(crate) fn register(list: &ActionList) {
                 normalized: p.value,
             })
             .collect::<Vec<_>>())
-    });
+    })?;
     list.register(&SET, Effect::Mutating, |a: SetArg| {
         let (daw, project) = song()?;
         let (target, fx) = target(daw, &project, &a.track, &a.fx)?;
         let said = settle(daw, &project, (&target, &fx.name), &a.set);
         crate::actions::list().changed("fx", &fx.guid);
         Ok(said)
-    });
+    })?;
     list.register(&ADD, Effect::Mutating, |a: AddArg| {
         let (daw, project) = song()?;
         if !daw_standalone::plugin::FxFactory::provides(&builtin::engine::BuiltinFx, &a.fx) {
@@ -793,14 +793,14 @@ pub(crate) fn register(list: &ActionList) {
             });
         daw::service::Projects::end_undo_block(daw, project, &label, None);
         out
-    });
+    })?;
     list.register(&AUTOMATION, Effect::ReadOnly, |a: AutomationArg| {
         automation(&a)
-    });
-    list.register(&AUTOMATE, Effect::Mutating, |a: AutomateArg| automate(&a));
+    })?;
+    list.register(&AUTOMATE, Effect::Mutating, |a: AutomateArg| automate(&a))?;
     list.register(&UNAUTOMATE, Effect::Mutating, |a: UnautomateArg| {
         unautomate(&a)
-    });
+    })?;
     list.register(&ENABLE, Effect::Mutating, |a: EnableArg| {
         let (daw, project) = song()?;
         let (target, fx) = target(daw, &project, &a.track, &a.fx)?;
@@ -810,5 +810,6 @@ pub(crate) fn register(list: &ActionList) {
             fx.name,
             if a.on { "on" } else { "bypassed" }
         ))
-    });
+    })?;
+    Ok(())
 }

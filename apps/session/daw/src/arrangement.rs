@@ -1413,7 +1413,7 @@ impl Arrangement {
         let mut row_takes = Vec::with_capacity(rows.len());
         let mut row_lane_takes = Vec::with_capacity(rows.len());
         let mut y = 0.0_f64;
-        let mut stages = architect_telemetry::timing::Stages::start();
+        let mut stages = crate::stages::Stages::start();
         let keys = keys_of(project);
         stages.mark("build.keys_ms");
         let roles = kit_roles(project);

@@ -26,7 +26,7 @@ facet = { workspace = true, features = ["indexmap"] }
 facet-styx = { workspace = true }
 indexmap = { workspace = true }
 # The selector vocabulary an entry lowers into — the scene engine's.
-dynamic-template = { workspace = true }
+dynamic-template = { workspace = true, features = ["reaper"] }
 # The facade apply drives: `Tracks::set_record_input`, one undo block
 # via `Projects`, and the project-scoped `ExtState` the applied copy
 # and the override live in. The proto crate directly rather than the

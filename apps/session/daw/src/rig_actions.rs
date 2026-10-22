@@ -214,7 +214,9 @@ fn load(
     said(daw, project, guid)
 }
 
-pub(crate) fn register(list: &architect::action::ActionList) {
+pub(crate) fn register(
+    list: &architect::action::ActionList,
+) -> Result<(), architect::action::ActionError> {
     use architect::action::Effect;
     list.register(&RIG_LOAD, Effect::Mutating, |a: LoadArg| {
         let (daw, project) = crate::actions::song()?;
@@ -223,7 +225,7 @@ pub(crate) fn register(list: &architect::action::ActionList) {
         crate::studio::request_resync();
         crate::actions::list().changed("signal.rig", "a signal rig was loaded");
         Ok(out)
-    });
+    })?;
     list.register(&TONE_SET, Effect::Mutating, |a: ToneArg| {
         let (daw, project) = crate::actions::song()?;
         let guid = crate::actions::resolve(daw, &project, &a.track)?;
@@ -240,7 +242,7 @@ pub(crate) fn register(list: &architect::action::ActionList) {
         }
         crate::actions::list().changed("signal.tone", "a rig's tone was set");
         said(daw, &project, &guid)
-    });
+    })?;
     list.register(&TONE_INSERT, Effect::Mutating, |a: InsertArg| {
         let (daw, project) = crate::actions::song()?;
         let guid = crate::actions::resolve(daw, &project, &a.track)?;
@@ -263,7 +265,8 @@ pub(crate) fn register(list: &architect::action::ActionList) {
             .map_err(|e| format!("the switch would not write: {e}"))?;
         crate::actions::list().changed("signal.tone", "a tone switch was put in");
         said(daw, &project, &guid)
-    });
+    })?;
+    Ok(())
 }
 
 /// What the browser shows for a track: its rig's profiles, stacks and

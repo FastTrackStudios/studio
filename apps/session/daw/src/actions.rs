@@ -42,13 +42,31 @@ static LIST: OnceLock<ActionList> = OnceLock::new();
 static WINDOW: Mutex<VecDeque<Action>> = Mutex::new(VecDeque::new());
 
 /// The Action List, every action registered.
+///
+/// A registration architect refuses (a duplicate id) is a bug the
+/// `the_list_registers_cleanly` test catches before it ships; a build that
+/// still has one logs it and keeps the actions registered before it,
+/// rather than taking the window down.
 pub fn list() -> &'static ActionList {
     LIST.get_or_init(|| {
         let list = ActionList::new();
-        register_window(&list);
-        register_data(&list);
+        if let Err(error) = register_all(&list) {
+            tracing::error!(%error, "the action list stopped registering");
+        }
         list
     })
+}
+
+/// Every action, into `list`: the window's, then the data's.
+///
+/// # Errors
+///
+/// The first registration the list refuses ([`ActionError::Duplicate`]).
+///
+/// [`ActionError::Duplicate`]: architect::action::ActionError::Duplicate
+fn register_all(list: &ActionList) -> Result<(), architect::action::ActionError> {
+    register_window(list)?;
+    register_data(list)
 }
 
 /// The window's actions run since it last looked, in order.
@@ -637,11 +655,11 @@ enum Zoom {
 /// The scenes a scene action can name: the window's `&'static` slugs.
 const SCENES: &[&str] = &["overview", "overview-top"];
 
-fn register_window(list: &ActionList) {
+fn register_window(list: &ActionList) -> Result<(), architect::action::ActionError> {
     list.register(&QUANTIZE_PANEL, Effect::Mutating, |(): ()| {
         crate::quantize_panel::ask();
         Ok("the Quantize panel shown, or hidden if it was".to_owned())
-    });
+    })?;
     let plain: [(&'static ActionMeta, Effect, Action); 26] = [
         (&PLAY_STOP, Effect::Mutating, Action::PlayStop),
         (&PLAY_PAUSE, Effect::Mutating, Action::PlayPause),
@@ -714,40 +732,40 @@ fn register_window(list: &ActionList) {
     list.register(&crate::browser::BROWSER, Effect::Mutating, |(): ()| {
         crate::browser::request_toggle();
         Ok(())
-    });
+    })?;
     for (meta, effect, action) in plain {
         list.register(meta, effect, move |(): ()| {
             queue(action.clone());
             Ok(())
-        });
+        })?;
     }
     list.register(&HIDE_ALL, Effect::Mutating, |(): ()| {
         queue(Action::Visibility(crate::keys::Visibility::HideAll));
         Ok(())
-    });
+    })?;
     list.register(&COMP_TAKE, Effect::Mutating, |t: Take| {
         queue(Action::CompTake(t.take));
         Ok(())
-    });
+    })?;
     list.register(&CURSOR_BAR, Effect::Mutating, |b: By| {
         queue(Action::CursorBar(b.by));
         Ok(())
-    });
+    })?;
     list.register(&CURSOR_BEAT, Effect::Mutating, |b: By| {
         queue(Action::CursorBeat(b.by));
         Ok(())
-    });
+    })?;
     list.register(&MARKER, Effect::Mutating, |b: By| {
         queue(Action::Marker(b.by));
         Ok(())
-    });
+    })?;
     list.register(&TRACK_STEP, Effect::Mutating, |s: Step| {
         queue(Action::TrackStep {
             by: s.by,
             extend: s.extend.unwrap_or(false),
         });
         Ok(())
-    });
+    })?;
     list.register(&SCENE, Effect::Mutating, |s: SceneArg| {
         let slug = SCENES
             .iter()
@@ -755,11 +773,11 @@ fn register_window(list: &ActionList) {
             .ok_or_else(|| format!("no scene {}: one of {SCENES:?}", s.scene))?;
         queue(Action::ToggleScene(slug));
         Ok(())
-    });
+    })?;
     list.register(&SHOW_GROUP, Effect::Mutating, |g: GroupArg| {
         queue(Action::Visibility(crate::keys::Visibility::Toggle(g.group)));
         Ok(())
-    });
+    })?;
     list.register(&ZOOM, Effect::Mutating, |z: ZoomArg| {
         use crate::zoom::Command as Z;
         let step = |vertical, inward| Z::Step { vertical, inward };
@@ -778,7 +796,8 @@ fn register_window(list: &ActionList) {
             Zoom::OutVertical => step(true, false),
         }));
         Ok(())
-    });
+    })?;
+    Ok(())
 }
 
 static TRACKS: ActionMeta = ActionMeta {
@@ -1090,7 +1109,7 @@ fn view_span(
     }
 }
 
-fn register_view(list: &ActionList) {
+fn register_view(list: &ActionList) -> Result<(), architect::action::ActionError> {
     list.register(&VIEW, Effect::Mutating, |a: ViewArg| {
         let (daw, project) = song()?;
         let span = view_span(daw, &project, &a)?;
@@ -1111,11 +1130,12 @@ fn register_view(list: &ActionList) {
             tracks,
         });
         Ok(())
-    });
+    })?;
     list.register(&SECTIONS, Effect::ReadOnly, |(): ()| {
         let (daw, project) = song()?;
         Ok(sections(daw, &project))
-    });
+    })?;
+    Ok(())
 }
 
 static PHASE: ActionMeta = meta(
@@ -1134,7 +1154,7 @@ struct PhaseArg {
     mode: Option<String>,
 }
 
-fn register_phase(list: &ActionList) {
+fn register_phase(list: &ActionList) -> Result<(), architect::action::ActionError> {
     list.register(&PHASE, Effect::Mutating, |a: PhaseArg| {
         let name = a.mode.as_deref().unwrap_or("Edit");
         let mode = session::modes::Mode::ALL
@@ -1158,10 +1178,11 @@ fn register_phase(list: &ActionList) {
             })?;
         session::mode_phases::choose(mode, phase.slug);
         Ok(())
-    });
+    })?;
+    Ok(())
 }
 
-fn register_mode(list: &ActionList) {
+fn register_mode(list: &ActionList) -> Result<(), architect::action::ActionError> {
     list.register(&MODE, Effect::Mutating, |a: ModeArg| {
         let mode = session::modes::Mode::ALL
             .into_iter()
@@ -1177,49 +1198,51 @@ fn register_mode(list: &ActionList) {
             *slot = Some(mode);
         }
         Ok(())
-    });
+    })?;
+    Ok(())
 }
 
-fn register_data(list: &ActionList) {
-    register_mode(list);
-    register_phase(list);
-    register_view(list);
-    register_tracks(list);
-    register_fundamental(list);
-    crate::hits::register(list);
-    crate::hits_midi::register(list);
-    crate::seams::register(list);
-    crate::comp_keep::register(list);
-    crate::comp_keep::register_main(list);
-    crate::item_actions::register(list);
-    crate::take_rank::register(list);
-    register_track_set(list);
-    register_reference(list);
+fn register_data(list: &ActionList) -> Result<(), architect::action::ActionError> {
+    register_mode(list)?;
+    register_phase(list)?;
+    register_view(list)?;
+    register_tracks(list)?;
+    register_fundamental(list)?;
+    crate::hits::register(list)?;
+    crate::hits_midi::register(list)?;
+    crate::seams::register(list)?;
+    crate::comp_keep::register(list)?;
+    crate::comp_keep::register_main(list)?;
+    crate::item_actions::register(list)?;
+    crate::take_rank::register(list)?;
+    register_track_set(list)?;
+    register_reference(list)?;
     #[cfg(feature = "native")]
-    crate::fx_actions::register(list);
-    crate::vocal_level::register(list);
-    crate::automation_actions::register(list);
+    crate::fx_actions::register(list)?;
+    crate::vocal_level::register(list)?;
+    crate::automation_actions::register(list)?;
     #[cfg(feature = "native")]
-    crate::comp::register(list);
+    crate::comp::register(list)?;
     #[cfg(feature = "native")]
-    crate::record::register(list);
+    crate::record::register(list)?;
     #[cfg(feature = "native")]
-    crate::render_ahead::register(list);
-    crate::grow::register(list);
-    crate::project_new::register(list);
-    crate::instrument_tracks::register(list);
-    crate::timeline_actions::register(list);
-    crate::edit_actions::register(list);
-    crate::perf::register(list);
-    crate::frames::register(list);
-    crate::audio_health::register(list);
-    crate::comp_rank::register(list);
-    crate::comp_song::register(list);
-    crate::bar_step::register(list);
-    crate::poi::register(list);
-    crate::track_regions::register(list);
+    crate::render_ahead::register(list)?;
+    crate::grow::register(list)?;
+    crate::project_new::register(list)?;
+    crate::instrument_tracks::register(list)?;
+    crate::timeline_actions::register(list)?;
+    crate::edit_actions::register(list)?;
+    crate::perf::register(list)?;
+    crate::frames::register(list)?;
+    crate::audio_health::register(list)?;
+    crate::comp_rank::register(list)?;
+    crate::comp_song::register(list)?;
+    crate::bar_step::register(list)?;
+    crate::poi::register(list)?;
+    crate::track_regions::register(list)?;
     #[cfg(feature = "signal")]
-    crate::rig_actions::register(list);
+    crate::rig_actions::register(list)?;
+    Ok(())
 }
 
 static REFERENCE_MAP: ActionMeta = meta(
@@ -1387,32 +1410,33 @@ fn reference(
     Ok((notes, pieces, map))
 }
 
-fn register_reference(list: &ActionList) {
+fn register_reference(list: &ActionList) -> Result<(), architect::action::ActionError> {
     #[cfg(feature = "signal")]
-    register_samples(list);
+    register_samples(list)?;
     #[cfg(feature = "signal")]
-    register_samples_align(list);
+    register_samples_align(list)?;
     #[cfg(feature = "signal")]
-    register_bass_rig(list);
-    register_items(list);
-    register_lanes(list);
-    register_remove(list);
+    register_bass_rig(list)?;
+    register_items(list)?;
+    register_lanes(list)?;
+    register_remove(list)?;
     #[cfg(feature = "native")]
-    register_verbs(list);
+    register_verbs(list)?;
     #[cfg(feature = "native")]
-    register_save(list);
+    register_save(list)?;
     #[cfg(feature = "native")]
-    register_undo(list);
-    register_style(list);
-    register_drum_settings(list);
-    register_peaks(list);
-    register_reference_map(list);
-    register_reference_notes(list);
-    register_compare(list);
-    register_restore_midi(list);
-    register_copy_to_lane(list);
-    register_review(list);
-    register_level(list);
+    register_undo(list)?;
+    register_style(list)?;
+    register_drum_settings(list)?;
+    register_peaks(list)?;
+    register_reference_map(list)?;
+    register_reference_notes(list)?;
+    register_compare(list)?;
+    register_restore_midi(list)?;
+    register_copy_to_lane(list)?;
+    register_review(list)?;
+    register_level(list)?;
+    Ok(())
 }
 
 static LEVEL: ActionMeta = meta(
@@ -1437,7 +1461,7 @@ struct LevelArg {
     dry_run: Option<bool>,
 }
 
-fn register_level(list: &ActionList) {
+fn register_level(list: &ActionList) -> Result<(), architect::action::ActionError> {
     list.register(&LEVEL, Effect::Mutating, |a: LevelArg| {
         let (daw, project) = song()?;
         let knobs = crate::drum_level::Knobs {
@@ -1451,7 +1475,8 @@ fn register_level(list: &ActionList) {
             (&a.pieces, &[]),
             (&knobs, a.dry_run.unwrap_or(false)),
         )
-    });
+    })?;
+    Ok(())
 }
 
 static REVIEW: ActionMeta = meta(
@@ -1544,7 +1569,7 @@ fn nearest_of(list: &[f64], t: f64) -> Option<f64> {
         .min_by(|x, y| (x - t).abs().total_cmp(&(y - t).abs()))
 }
 
-fn register_review(list: &ActionList) {
+fn register_review(list: &ActionList) -> Result<(), architect::action::ActionError> {
     list.register(&REVIEW, Effect::ReadOnly, |a: ReviewArg| {
         let (daw, project) = song()?;
         let kit = kit(daw, &project);
@@ -1636,7 +1661,8 @@ fn register_review(list: &ActionList) {
             })
             .map(Ok)
             .collect::<Result<Vec<Reviewed>, String>>()
-    });
+    })?;
+    Ok(())
 }
 
 static COPY_TO_LANE: ActionMeta = meta(
@@ -1657,7 +1683,7 @@ struct CopyToLaneArg {
     to: Option<f64>,
 }
 
-fn register_copy_to_lane(list: &ActionList) {
+fn register_copy_to_lane(list: &ActionList) -> Result<(), architect::action::ActionError> {
     list.register(&COPY_TO_LANE, Effect::Mutating, |a: CopyToLaneArg| {
         let (daw, project) = song()?;
         let label = "Copy an item to a lane";
@@ -1711,7 +1737,8 @@ fn register_copy_to_lane(list: &ActionList) {
         daw::service::Projects::end_undo_block(daw, project, label, None);
         crate::studio::request_resync();
         placed
-    });
+    })?;
+    Ok(())
 }
 
 static RESTORE_MIDI: ActionMeta = meta(
@@ -1730,14 +1757,15 @@ struct RestoreMidiArg {
     from: String,
 }
 
-fn register_restore_midi(list: &ActionList) {
+fn register_restore_midi(list: &ActionList) -> Result<(), architect::action::ActionError> {
     list.register(&RESTORE_MIDI, Effect::Mutating, |a: RestoreMidiArg| {
         let (daw, project) = song()?;
         let guid = resolve(daw, &project, &a.track)?;
         let (items, notes) =
             crate::drum_reference::restore(daw, &project, &guid, std::path::Path::new(&a.from))?;
         Ok(format!("{items} items, {notes} notes restored"))
-    });
+    })?;
+    Ok(())
 }
 
 static EDIT_LANES: ActionMeta = meta(
@@ -1798,7 +1826,7 @@ struct VerbsArg {
 }
 
 #[cfg(feature = "native")]
-fn register_verbs(list: &ActionList) {
+fn register_verbs(list: &ActionList) -> Result<(), architect::action::ActionError> {
     list.register(&VERBS, Effect::Mutating, |a: VerbsArg| {
         let (daw, project) = song()?;
         let dry = a.dry_run.unwrap_or(false);
@@ -1809,7 +1837,7 @@ fn register_verbs(list: &ActionList) {
             crate::actions::list().changed("drums.verbs", "the drum verbs were set");
         }
         Ok(said)
-    });
+    })?;
     list.register(&GROUP, Effect::Mutating, |a: VerbsArg| {
         let (daw, project) = song()?;
         let dry = a.dry_run.unwrap_or(false);
@@ -1819,7 +1847,7 @@ fn register_verbs(list: &ActionList) {
             crate::actions::list().changed("drums.group", "the kit was grouped");
         }
         Ok(grouped)
-    });
+    })?;
     list.register(&TRIGGERS, Effect::Mutating, |_: NoArg| {
         let (daw, project) = song()?;
         let mut target = dynamic_template::apply::DawTarget::on(daw.clone(), project);
@@ -1827,7 +1855,8 @@ fn register_verbs(list: &ActionList) {
         crate::studio::request_resync();
         crate::actions::list().changed("drums.triggers", "the triggers were muted");
         Ok(muted)
-    });
+    })?;
+    Ok(())
 }
 
 #[cfg(feature = "native")]
@@ -2117,13 +2146,13 @@ struct StopBehaviourArg {
     behaviour: String,
 }
 
-fn register_style(list: &ActionList) {
+fn register_style(list: &ActionList) -> Result<(), architect::action::ActionError> {
     list.register(&STOP_BEHAVIOUR, Effect::Mutating, |a: StopBehaviourArg| {
         if let Some(stop) = crate::play_return::Stop::from_slug(&a.behaviour) {
             crate::play_return::set(stop);
         }
         Ok(crate::play_return::get().slug())
-    });
+    })?;
     list.register(&JOBS, Effect::ReadOnly, |(): ()| {
         Ok(crate::jobs::running()
             .into_iter()
@@ -2133,17 +2162,18 @@ fn register_style(list: &ActionList) {
                 total: u64::try_from(total).unwrap_or(u64::MAX),
             })
             .collect::<Vec<_>>())
-    });
+    })?;
     list.register(&ITEM_STYLE, Effect::Mutating, |a: ItemStyleArg| {
         crate::options::OUTLINED.set(a.outlined);
         // The lanes are recorded with their bodies: read back, drawn anew.
         crate::studio::request_resync();
         Ok(if a.outlined { "outlined" } else { "filled" })
-    });
+    })?;
+    Ok(())
 }
 
 #[cfg(feature = "native")]
-fn register_undo(list: &ActionList) {
+fn register_undo(list: &ActionList) -> Result<(), architect::action::ActionError> {
     list.register(&FOLD, Effect::Mutating, |a: FoldArg| {
         let (daw, project) = song()?;
         let guid = resolve(daw, &project, &a.track)?;
@@ -2168,7 +2198,7 @@ fn register_undo(list: &ActionList) {
                 .and_then(|p| by_guid.get(p).copied());
         }
         Ok(opened)
-    });
+    })?;
     list.register(&UNDO, Effect::Mutating, |_: NoArg| {
         let (daw, project) = song()?;
         // A song open from its file undoes through its doc: only this
@@ -2190,7 +2220,7 @@ fn register_undo(list: &ActionList) {
             "undid {}",
             label.unwrap_or_else(|| "a step".to_owned())
         ))
-    });
+    })?;
     list.register(&REDO, Effect::Mutating, |_: NoArg| {
         let (daw, project) = song()?;
         if let Some(said) = undo_through_doc(daw, &project, false)? {
@@ -2210,7 +2240,8 @@ fn register_undo(list: &ActionList) {
             "redid {}",
             label.unwrap_or_else(|| "a step".to_owned())
         ))
-    });
+    })?;
+    Ok(())
 }
 
 /// The kit's hits as MIDI (and so its samples) made to agree with the
@@ -2310,7 +2341,7 @@ fn undo_through_doc(
 }
 
 #[cfg(feature = "native")]
-fn register_save(list: &ActionList) {
+fn register_save(list: &ActionList) -> Result<(), architect::action::ActionError> {
     list.register(&SELECT_TRACK, Effect::Mutating, |a: SelectTrackArg| {
         let (daw, project) = song()?;
         let guid = resolve(daw, &project, &a.track)?;
@@ -2321,7 +2352,7 @@ fn register_save(list: &ActionList) {
         )
         .map_err(|e| e.to_string())?;
         Ok(guid)
-    });
+    })?;
     list.register(&MARK_KINDS, Effect::Mutating, |_: NoArg| {
         let (daw, project) = song()?;
         daw::service::Projects::begin_undo_block(daw, project.clone(), "Mark the kit's kinds");
@@ -2331,7 +2362,7 @@ fn register_save(list: &ActionList) {
         let marked = marked.map_err(|e| e.to_string())?;
         crate::studio::request_resync();
         Ok(format!("{marked} tracks marked"))
-    });
+    })?;
     list.register(&CHECKPOINT, Effect::Mutating, |a: CheckpointArg| {
         let (daw, project) = song()?;
         let ProjectContext::Project(guid) = &project else {
@@ -2349,7 +2380,7 @@ fn register_save(list: &ActionList) {
             a.name.trim(),
             file.display()
         ))
-    });
+    })?;
     list.register(&OPEN, Effect::Mutating, |a: OpenArg| {
         let path = match (a.name, a.path) {
             (_, Some(path)) => std::path::PathBuf::from(path),
@@ -2367,7 +2398,7 @@ fn register_save(list: &ActionList) {
         }
         crate::projects::open_from_outside(path.clone());
         Ok(format!("opening {}", path.display()))
-    });
+    })?;
     list.register(&ALTERNATIVES, Effect::ReadOnly, |(): ()| {
         let (daw, project) = song()?;
         let ProjectContext::Project(guid) = &project else {
@@ -2393,7 +2424,7 @@ fn register_save(list: &ActionList) {
             )
         }));
         Ok(out)
-    });
+    })?;
     list.register(&RECENT, Effect::ReadOnly, |(): ()| {
         Ok(crate::projects::recent()
             .into_iter()
@@ -2418,7 +2449,7 @@ fn register_save(list: &ActionList) {
                 )
             })
             .collect::<Vec<_>>())
-    });
+    })?;
     list.register(&SAVE, Effect::Mutating, |a: SaveArg| {
         let (daw, project) = song()?;
         let ProjectContext::Project(guid) = &project else {
@@ -2455,7 +2486,7 @@ fn register_save(list: &ActionList) {
             crate::projects::mark_saved(daw, guid);
         }
         Ok(format!("saved to {}", at.display()))
-    });
+    })?;
     list.register(&CHECK_SAVED, Effect::ReadOnly, |a: CheckSavedArg| {
         let (daw, project) = song()?;
         let ProjectContext::Project(guid) = &project else {
@@ -2467,7 +2498,8 @@ fn register_save(list: &ActionList) {
         } else {
             apart
         })
-    });
+    })?;
+    Ok(())
 }
 
 static REMOVE: ActionMeta = meta(
@@ -2487,7 +2519,7 @@ struct RemoveArg {
     tracks: Option<Vec<String>>,
 }
 
-fn register_remove(list: &ActionList) {
+fn register_remove(list: &ActionList) -> Result<(), architect::action::ActionError> {
     list.register(&REMOVE, Effect::Destructive, |a: RemoveArg| {
         if a.to <= a.from {
             return Err("`to` must be after `from`".to_owned());
@@ -2509,7 +2541,8 @@ fn register_remove(list: &ActionList) {
             to_us: us(a.to),
         });
         Ok(())
-    });
+    })?;
+    Ok(())
 }
 
 #[cfg(feature = "signal")]
@@ -2563,7 +2596,7 @@ struct BassRigArg {
 }
 
 #[cfg(feature = "signal")]
-fn register_bass_rig(list: &ActionList) {
+fn register_bass_rig(list: &ActionList) -> Result<(), architect::action::ActionError> {
     list.register(&BASS_RIG, Effect::Mutating, |a: BassRigArg| {
         let (daw, project) = song()?;
         let setup = if a.patches.unwrap_or(false) {
@@ -2572,7 +2605,8 @@ fn register_bass_rig(list: &ActionList) {
             crate::bass_rig::Setup::Profile(a.profile.unwrap_or_else(|| "Metal".to_owned()))
         };
         crate::bass_rig::set_up(daw, &project, &setup, a.dry_run.unwrap_or(false))
-    });
+    })?;
+    Ok(())
 }
 
 #[cfg(feature = "signal")]
@@ -2609,7 +2643,7 @@ struct AlignOut {
 }
 
 #[cfg(feature = "signal")]
-fn register_samples_align(list: &ActionList) {
+fn register_samples_align(list: &ActionList) -> Result<(), architect::action::ActionError> {
     list.register(&SAMPLES_ALIGN, Effect::Mutating, |a: SamplesArg| {
         let (daw, project) = song()?;
         let preset = std::path::PathBuf::from(a.preset.as_deref().unwrap_or(DEFAULT_KIT));
@@ -2648,11 +2682,12 @@ fn register_samples_align(list: &ActionList) {
             tracks,
             applied: !dry,
         })
-    });
+    })?;
+    Ok(())
 }
 
 #[cfg(feature = "signal")]
-fn register_samples(list: &ActionList) {
+fn register_samples(list: &ActionList) -> Result<(), architect::action::ActionError> {
     list.register(&SAMPLES, Effect::Mutating, |a: SamplesArg| {
         let (daw, project) = song()?;
         let preset = std::path::PathBuf::from(a.preset.as_deref().unwrap_or(DEFAULT_KIT));
@@ -2676,7 +2711,8 @@ fn register_samples(list: &ActionList) {
             notes: u32::try_from(report.notes).unwrap_or(u32::MAX),
             applied: !dry,
         })
-    });
+    })?;
+    Ok(())
 }
 
 static ITEMS: ActionMeta = meta(
@@ -2728,7 +2764,7 @@ fn slowest_rate(markers: &[daw_proto::StretchMarker]) -> Option<f64> {
         .reduce(f64::min)
 }
 
-fn register_items(list: &ActionList) {
+fn register_items(list: &ActionList) -> Result<(), architect::action::ActionError> {
     list.register(&ITEMS, Effect::ReadOnly, |a: ItemsArg| {
         let (daw, project) = song()?;
         let guid = resolve(daw, &project, &a.track)?;
@@ -2777,10 +2813,11 @@ fn register_items(list: &ActionList) {
         rows.sort_by(|a, b| a.position.total_cmp(&b.position));
         rows.truncate(500);
         Ok(rows)
-    });
+    })?;
+    Ok(())
 }
 
-fn register_lanes(list: &ActionList) {
+fn register_lanes(list: &ActionList) -> Result<(), architect::action::ActionError> {
     list.register(&EDIT_LANES, Effect::Mutating, |a: LanesArg| {
         let (daw, project) = song()?;
         let dry = a.dry_run.unwrap_or(false);
@@ -2793,14 +2830,15 @@ fn register_lanes(list: &ActionList) {
             tracks,
             applied: !dry,
         })
-    });
+    })?;
     list.register(&PLAY_LANE, Effect::Mutating, |a: PlayLaneArg| {
         let (daw, project) = song()?;
         crate::drum_lanes::play(daw, &project, &a.lane)
-    });
+    })?;
+    Ok(())
 }
 
-fn register_reference_map(list: &ActionList) {
+fn register_reference_map(list: &ActionList) -> Result<(), architect::action::ActionError> {
     list.register(&REFERENCE_MAP, Effect::ReadOnly, |a: MapArg| {
         let (daw, project) = song()?;
         let (_, _, map) = reference(daw, &project, a.track.as_deref())?;
@@ -2813,10 +2851,11 @@ fn register_reference_map(list: &ActionList) {
                 agreement: m.agreement,
             })
             .collect::<Vec<_>>())
-    });
+    })?;
+    Ok(())
 }
 
-fn register_reference_notes(list: &ActionList) {
+fn register_reference_notes(list: &ActionList) -> Result<(), architect::action::ActionError> {
     list.register(&REFERENCE, Effect::ReadOnly, |a: ReferenceArg| {
         let (daw, project) = song()?;
         let (notes, _, map) = reference(daw, &project, a.track.as_deref())?;
@@ -2860,10 +2899,11 @@ fn register_reference_notes(list: &ActionList) {
             offset,
             notes: page,
         })
-    });
+    })?;
+    Ok(())
 }
 
-fn register_compare(list: &ActionList) {
+fn register_compare(list: &ActionList) -> Result<(), architect::action::ActionError> {
     list.register(&COMPARE, Effect::ReadOnly, |a: CompareArg| {
         let (daw, project) = song()?;
         let (notes, pieces, map) = reference(daw, &project, a.track.as_deref())?;
@@ -2951,10 +2991,11 @@ fn register_compare(list: &ActionList) {
             detail,
             extra_hits: c.extra.into_iter().take(50).collect(),
         })
-    });
+    })?;
+    Ok(())
 }
 
-fn register_tracks(list: &ActionList) {
+fn register_tracks(list: &ActionList) -> Result<(), architect::action::ActionError> {
     list.register(&TRACKS, Effect::ReadOnly, |a: TracksArg| {
         let (daw, project) = song()?;
         let tracks = Tracks::all(daw, project.clone());
@@ -3009,10 +3050,11 @@ fn register_tracks(list: &ActionList) {
                 .collect(),
             })
             .collect::<Vec<_>>())
-    });
+    })?;
+    Ok(())
 }
 
-fn register_fundamental(list: &ActionList) {
+fn register_fundamental(list: &ActionList) -> Result<(), architect::action::ActionError> {
     list.register(&DRUM_FUNDAMENTAL, Effect::ReadOnly, |a: FundamentalArg| {
         let (daw, project) = song()?;
         let trigger = resolve(daw, &project, &a.trigger)?;
@@ -3029,10 +3071,11 @@ fn register_fundamental(list: &ActionList) {
         crate::fundamental::find(daw, &project, &trigger, &mics, range).ok_or_else(|| {
             "no fundamental: no hits on the trigger, or nothing on the mics at them".to_owned()
         })
-    });
+    })?;
+    Ok(())
 }
 
-fn register_track_set(list: &ActionList) {
+fn register_track_set(list: &ActionList) -> Result<(), architect::action::ActionError> {
     list.register(&TRACK_SET, Effect::Mutating, |a: TrackSetArg| {
         let (daw, project) = song()?;
         let guid = resolve(daw, &project, &a.track)?;
@@ -3053,7 +3096,8 @@ fn register_track_set(list: &ActionList) {
         }
         crate::actions::list().changed("tracks", &guid);
         Ok(())
-    });
+    })?;
+    Ok(())
 }
 
 /// The engine and the open song, as a pair — for the call sites not yet
@@ -3125,6 +3169,33 @@ mod tests {
 
     /// The window's queue is one for the process: these take turns.
     static TURN: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+    /// Every registration goes in (no id twice), and the list as a whole
+    /// passes architect's checks: `AREA_VERB` ids, no shortcut on two
+    /// actions, params and result schemas that are JSON objects. Nothing
+    /// runs, so no handler touches a project.
+    #[test]
+    fn the_list_registers_cleanly() {
+        let fresh = architect::action::ActionList::new();
+        super::register_all(&fresh).expect("every action registers once");
+        fresh.validate().expect("the list validates");
+        assert_eq!(fresh.infos().len(), list().infos().len());
+        list().validate().expect("the app's list validates");
+    }
+
+    /// A second registration of an id is refused, not swapped in: the
+    /// first handler stays and `register` says why.
+    #[test]
+    fn a_duplicate_registration_is_refused() {
+        let twice = architect::action::ActionList::new();
+        super::register_all(&twice).expect("first time");
+        let again = super::register_all(&twice).expect_err("second time");
+        assert!(
+            matches!(again, architect::action::ActionError::Duplicate(_)),
+            "{again:?}"
+        );
+        assert!(twice.validate().is_err(), "validate names the duplicate");
+    }
 
     /// Every action a key can produce has an id in the list, and running
     /// it through the list hands the window the same action back — the
@@ -3676,7 +3747,7 @@ fn detect(
     span: (f64, f64),
     prepared: &Prepared,
 ) -> Result<Detected, String> {
-    let mut stages = architect_telemetry::timing::Stages::start();
+    let mut stages = crate::stages::Stages::start();
     let kit = &prepared.kit;
     stages.mark("detect.kit_ms");
     let line_of = |h: f64| grid_line(daw, project, h, settings.grid);
@@ -4414,7 +4485,7 @@ fn quantize_span(
     (lock, dry): (Option<&str>, bool),
     prepared: &Prepared,
 ) -> Result<(QuantizeSpan, Planned), String> {
-    let mut stages = architect_telemetry::timing::Stages::start();
+    let mut stages = crate::stages::Stages::start();
     let zones = &prepared.zones;
     stages.mark("span.zones_ms");
     let found = detect(daw, project, settings, (from, to), prepared)?;
@@ -4708,7 +4779,7 @@ fn stretch_edits(
     Ok(edits)
 }
 
-fn register_stretch(list: &ActionList) {
+fn register_stretch(list: &ActionList) -> Result<(), architect::action::ActionError> {
     list.register(&STRETCH, Effect::Mutating, |a: StretchArg| {
         let (daw, project) = song()?;
         let hit = crate::hits::playback(daw, &project)
@@ -4755,7 +4826,8 @@ fn register_stretch(list: &ActionList) {
         });
         landed(ticket);
         Ok(Stretched { at: to, slices })
-    });
+    })?;
+    Ok(())
 }
 
 static REVERT: ActionMeta = meta(
@@ -4878,15 +4950,16 @@ pub(crate) fn revert(a: RevertArg) -> Result<Vec<QuantizeSpan>, String> {
     Ok(out)
 }
 
-fn register_revert(list: &ActionList) {
-    list.register(&REVERT, Effect::Mutating, revert);
+fn register_revert(list: &ActionList) -> Result<(), architect::action::ActionError> {
+    list.register(&REVERT, Effect::Mutating, revert)?;
+    Ok(())
 }
 
 // r[impl hits.place]
-fn register_place(list: &ActionList) {
+fn register_place(list: &ActionList) -> Result<(), architect::action::ActionError> {
     list.register(&PLACE, Effect::Mutating, |a: PlaceArg| {
         let (daw, project) = song()?;
-        let mut stages = architect_telemetry::timing::Stages::start();
+        let mut stages = crate::stages::Stages::start();
         let before = crate::hits::playback(daw, &project);
         stages.mark("edit.read_ms");
         let ids: Vec<String> = a.id.iter().cloned().chain(a.ids.iter().cloned()).collect();
@@ -4952,7 +5025,8 @@ fn register_place(list: &ActionList) {
         let out = checked(daw, &project, (&settings, &pairs), &before, span);
         stages.mark("edit.check_ms");
         Ok(out)
-    });
+    })?;
+    Ok(())
 }
 
 static REQUANTIZE: ActionMeta = meta(
@@ -4989,7 +5063,7 @@ struct Requantized {
 /// kit's folder, with the song.
 const PLAN_KEY: &str = "fts.quantize_plan";
 
-fn register_requantize(list: &ActionList) {
+fn register_requantize(list: &ActionList) -> Result<(), architect::action::ActionError> {
     list.register(&REQUANTIZE, Effect::Mutating, |a: RequantizeArg| {
         let (daw, project) = song()?;
         let folder = crate::track_regions::kit_folder(daw, &project).ok_or("no kit")?;
@@ -5055,7 +5129,8 @@ fn register_requantize(list: &ActionList) {
                 .unwrap_or_default(),
             placed_back,
         })
-    });
+    })?;
+    Ok(())
 }
 
 /// `QUANTIZE`: the kit, over `a`'s spans or plan, from its hit markers —
@@ -5066,7 +5141,7 @@ fn register_requantize(list: &ActionList) {
 /// No hit markers, a section that is not there, or no engine.
 pub(crate) fn quantize(a: QuantizeArg) -> Result<Vec<QuantizeSpan>, String> {
     let (daw, project) = song()?;
-    let mut stages = architect_telemetry::timing::Stages::start();
+    let mut stages = crate::stages::Stages::start();
     if crate::hits::kit_from_markers(daw, &project).is_none() {
         return Err("no hit markers: find the hits first (HITS_DETECT)".to_owned());
     }
@@ -5143,12 +5218,12 @@ pub(crate) fn quantize(a: QuantizeArg) -> Result<Vec<QuantizeSpan>, String> {
     Ok(out)
 }
 
-fn register_quantize(list: &ActionList) {
-    register_requantize(list);
-    register_place(list);
-    register_stretch(list);
-    register_revert(list);
-    list.register(&QUANTIZE, Effect::Mutating, quantize);
+fn register_quantize(list: &ActionList) -> Result<(), architect::action::ActionError> {
+    register_requantize(list)?;
+    register_place(list)?;
+    register_stretch(list)?;
+    register_revert(list)?;
+    list.register(&QUANTIZE, Effect::Mutating, quantize)?;
     list.register(&GROOVE, Effect::ReadOnly, |a: GrooveArg| {
         let (daw, project) = song()?;
         let kit = kit(daw, &project);
@@ -5159,7 +5234,7 @@ fn register_quantize(list: &ActionList) {
             .into_iter()
             .map(|span| groove_out(daw, &project, (&kit, a.triplets.unwrap_or(false)), span))
             .collect::<Result<Vec<GrooveOut>, String>>()
-    });
+    })?;
     list.register(&ZONES_FIND, Effect::Mutating, |a: SpanArg| {
         let (daw, project) = song()?;
         let kit = kit(daw, &project);
@@ -5167,14 +5242,15 @@ fn register_quantize(list: &ActionList) {
         let fills = find_fills(daw, &project, &kit, span);
         let proposed = crate::hits::find_zones(daw, &project, &fills, span)?;
         Ok(proposed)
-    });
+    })?;
+    Ok(())
 }
 
-fn register_drum_settings(list: &ActionList) {
-    register_quantize(list);
+fn register_drum_settings(list: &ActionList) -> Result<(), architect::action::ActionError> {
+    register_quantize(list)?;
     list.register(&EDIT_SETTINGS, Effect::ReadOnly, |(): ()| {
         Ok(crate::drum_settings::current())
-    });
+    })?;
     list.register(&EDIT_SET, Effect::Mutating, |a: SetArg| {
         if a.reset.unwrap_or(false) {
             crate::drum_settings::reset();
@@ -5182,7 +5258,8 @@ fn register_drum_settings(list: &ActionList) {
         let settings = crate::drum_settings::set(&a.with);
         crate::actions::list().changed("drums.settings", "the drum edit settings changed");
         Ok(settings)
-    });
+    })?;
+    Ok(())
 }
 
 /// Where.
@@ -5434,7 +5511,7 @@ struct TrackSamplesOut {
 /// The most values `TRACK_SAMPLES` gives.
 const MOST_SAMPLES: f64 = 96_000.0;
 
-fn register_peaks(list: &ActionList) {
+fn register_peaks(list: &ActionList) -> Result<(), architect::action::ActionError> {
     list.register(&TRACK_SAMPLES, Effect::ReadOnly, |a: TrackSamplesArg| {
         use daw_proto::AudioAccessors as _;
         let (daw, project) = song()?;
@@ -5467,7 +5544,7 @@ fn register_peaks(list: &ActionList) {
             channels: data.num_channels,
             samples: data.samples,
         })
-    });
+    })?;
     list.register(&PEAKS, Effect::ReadOnly, |a: PeaksArg| {
         let (daw, project) = song()?;
         let guid = resolve(daw, &project, &a.track)?;
@@ -5491,5 +5568,6 @@ fn register_peaks(list: &ActionList) {
             step: (a.to - a.from) / f64::from(points),
             peaks,
         })
-    });
+    })?;
+    Ok(())
 }

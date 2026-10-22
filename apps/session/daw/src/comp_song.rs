@@ -74,7 +74,7 @@ pub fn phrases(song: &Song, (from, to): (f64, f64), bars: f64) -> Vec<(f64, f64)
 /// # Errors
 /// When the engine refuses the edit.
 pub fn comp_best(song: &Song, phrases: &[(f64, f64)], dry: bool) -> Result<Comped, String> {
-    let mut stages = architect_telemetry::timing::Stages::start();
+    let mut stages = crate::stages::Stages::start();
     let (Some(first), Some(last)) = (phrases.first(), phrases.last()) else {
         return Ok(Comped::default());
     };
@@ -605,7 +605,7 @@ struct ChoiceOut {
     score: f64,
 }
 
-pub(crate) fn register(list: &ActionList) {
+pub(crate) fn register(list: &ActionList) -> Result<(), architect::action::ActionError> {
     list.register(&BEST, Effect::Mutating, |a: BestArg| {
         let song = Song::current()?;
         let bars = a.phrase_bars.unwrap_or(PHRASE_BARS);
@@ -633,7 +633,8 @@ pub(crate) fn register(list: &ActionList) {
                 })
                 .collect(),
         })
-    });
+    })?;
+    Ok(())
 }
 
 /// The stretches a call names: its spans, its `from`/`to`, its sections —

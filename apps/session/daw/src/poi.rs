@@ -12,6 +12,7 @@ use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 
 use anyrender::PaintScene;
+#[cfg(feature = "native")]
 use architect::action::{ActionList, ActionMeta, Effect};
 use daw::service::ProjectContext;
 use facet::Facet;
@@ -52,6 +53,7 @@ pub fn read(daw: &daw::standalone::Standalone, project: &ProjectContext) -> Vec<
 /// Keep `points` as the song's, in time order — as one undo step,
 /// `label`: so it can be undone, and so it is recorded into the song's
 /// file (a change the engine never finished as a step is not).
+#[cfg(feature = "native")]
 fn write(
     daw: &daw::standalone::Standalone,
     project: &ProjectContext,
@@ -78,6 +80,7 @@ static CURRENT: Mutex<Option<String>> = Mutex::new(None);
 static VERSION: AtomicU64 = AtomicU64::new(0);
 static ASKED: AtomicBool = AtomicBool::new(false);
 
+#[cfg(feature = "native")]
 fn publish(points: Vec<Poi>) {
     if let Ok(mut shown) = SHOWN.lock() {
         *shown = Some(Arc::new(points));
@@ -116,6 +119,7 @@ fn current() -> Option<String> {
     CURRENT.lock().ok().and_then(|c| c.clone())
 }
 
+#[cfg(feature = "native")]
 fn set_current(id: Option<String>) {
     if let Ok(mut c) = CURRENT.lock() {
         *c = id;
@@ -125,6 +129,7 @@ fn set_current(id: Option<String>) {
 
 /// Where `at` is: a bar as the ruler writes it (`83.1`), `12.5s`, a
 /// section; the edit cursor when left out.
+#[cfg(feature = "native")]
 fn at_of(
     daw: &daw::standalone::Standalone,
     project: &ProjectContext,
@@ -142,6 +147,7 @@ fn at_of(
 
 /// The one to step to from `here` by `by` (+1 the next after it, -1 the
 /// one before), the open ones only when `open`.
+#[cfg(feature = "native")]
 fn step_from(points: &[Poi], here: f64, by: i32, open: bool) -> Option<&Poi> {
     /// Nearer than this to `here` is where it is, not after or before.
     const SAME: f64 = 0.005;
@@ -153,6 +159,7 @@ fn step_from(points: &[Poi], here: f64, by: i32, open: bool) -> Option<&Poi> {
     }
 }
 
+#[cfg(feature = "native")]
 static LIST: ActionMeta = crate::actions::meta(
     "POI_LIST",
     "poi_list",
@@ -161,6 +168,7 @@ static LIST: ActionMeta = crate::actions::meta(
     "Session",
     "",
 );
+#[cfg(feature = "native")]
 static ADD: ActionMeta = crate::actions::meta(
     "POI_ADD",
     "poi_add",
@@ -169,6 +177,7 @@ static ADD: ActionMeta = crate::actions::meta(
     "Session",
     "",
 );
+#[cfg(feature = "native")]
 static EDIT: ActionMeta = crate::actions::meta(
     "POI_EDIT",
     "poi_edit",
@@ -177,6 +186,7 @@ static EDIT: ActionMeta = crate::actions::meta(
     "Session",
     "",
 );
+#[cfg(feature = "native")]
 static REMOVE: ActionMeta = crate::actions::meta(
     "POI_REMOVE",
     "poi_remove",
@@ -186,6 +196,7 @@ static REMOVE: ActionMeta = crate::actions::meta(
     "",
 );
 /// Step to the next or the one before (`}` / `{`).
+#[cfg(feature = "native")]
 pub static STEP: ActionMeta = crate::actions::meta(
     "POI_STEP",
     "poi_step",
@@ -195,6 +206,7 @@ pub static STEP: ActionMeta = crate::actions::meta(
     "",
 );
 /// Tick the one stepped to off, or open it again (`|`).
+#[cfg(feature = "native")]
 pub static TOGGLE: ActionMeta = crate::actions::meta(
     "POI_TOGGLE",
     "poi_toggle",
@@ -204,9 +216,11 @@ pub static TOGGLE: ActionMeta = crate::actions::meta(
     "",
 );
 
+#[cfg(feature = "native")]
 #[derive(Facet)]
 struct ListArg {}
 
+#[cfg(feature = "native")]
 #[derive(Facet)]
 struct PoiOut {
     id: String,
@@ -217,12 +231,14 @@ struct PoiOut {
     current: bool,
 }
 
+#[cfg(feature = "native")]
 #[derive(Facet)]
 struct AddArg {
     at: Option<String>,
     note: String,
 }
 
+#[cfg(feature = "native")]
 #[derive(Facet)]
 struct EditArg {
     id: Option<String>,
@@ -231,6 +247,7 @@ struct EditArg {
     at: Option<String>,
 }
 
+#[cfg(feature = "native")]
 #[derive(Facet)]
 struct RemoveArg {
     #[facet(default)]
@@ -238,17 +255,20 @@ struct RemoveArg {
     done: Option<bool>,
 }
 
+#[cfg(feature = "native")]
 #[derive(Facet)]
 struct StepArg {
     by: Option<i32>,
     open: Option<bool>,
 }
 
+#[cfg(feature = "native")]
 #[derive(Facet)]
 struct ToggleArg {
     id: Option<String>,
 }
 
+#[cfg(feature = "native")]
 fn out(daw: &daw::standalone::Standalone, project: &ProjectContext, p: &Poi) -> PoiOut {
     PoiOut {
         id: p.id.clone(),
@@ -261,6 +281,7 @@ fn out(daw: &daw::standalone::Standalone, project: &ProjectContext, p: &Poi) -> 
 }
 
 /// The one an edit names: `id`, or the one stepped to last.
+#[cfg(feature = "native")]
 fn named(points: &[Poi], id: Option<&str>) -> Result<usize, String> {
     let id = id
         .map(str::to_owned)
@@ -272,14 +293,15 @@ fn named(points: &[Poi], id: Option<&str>) -> Result<usize, String> {
         .ok_or_else(|| format!("no point of interest {id}"))
 }
 
-pub fn register(list: &ActionList) {
+#[cfg(feature = "native")]
+pub fn register(list: &ActionList) -> Result<(), architect::action::ActionError> {
     list.register(&LIST, Effect::ReadOnly, |_: ListArg| {
         let (daw, project) = crate::actions::song()?;
         Ok(read(daw, &project)
             .iter()
             .map(|p| out(daw, &project, p))
             .collect::<Vec<_>>())
-    });
+    })?;
     list.register(&ADD, Effect::Mutating, |a: AddArg| {
         let (daw, project) = crate::actions::song()?;
         let at = at_of(daw, &project, a.at.as_deref())?;
@@ -293,7 +315,7 @@ pub fn register(list: &ActionList) {
         });
         write(daw, &project, points, "Add a point of interest")?;
         Ok(id)
-    });
+    })?;
     list.register(&EDIT, Effect::Mutating, |a: EditArg| {
         let (daw, project) = crate::actions::song()?;
         let mut points = read(daw, &project);
@@ -315,7 +337,7 @@ pub fn register(list: &ActionList) {
         let changed = point.clone();
         write(daw, &project, points, "Edit a point of interest")?;
         Ok(out(daw, &project, &changed))
-    });
+    })?;
     list.register(&REMOVE, Effect::Mutating, |a: RemoveArg| {
         let (daw, project) = crate::actions::song()?;
         let points = read(daw, &project);
@@ -328,7 +350,7 @@ pub fn register(list: &ActionList) {
         let gone = before.saturating_sub(kept.len());
         write(daw, &project, kept, "Remove a point of interest")?;
         Ok(u32::try_from(gone).unwrap_or(u32::MAX))
-    });
+    })?;
     list.register(&STEP, Effect::Mutating, |a: StepArg| {
         let (daw, project) = crate::actions::song()?;
         let points = read(daw, &project);
@@ -357,7 +379,7 @@ pub fn register(list: &ActionList) {
         }
         set_current(Some(point.id.clone()));
         Ok(out(daw, &project, &point))
-    });
+    })?;
     list.register(&TOGGLE, Effect::Mutating, |a: ToggleArg| {
         let (daw, project) = crate::actions::song()?;
         let mut points = read(daw, &project);
@@ -367,7 +389,8 @@ pub fn register(list: &ActionList) {
         let changed = point.clone();
         write(daw, &project, points, "Tick a point of interest")?;
         Ok(out(daw, &project, &changed))
-    });
+    })?;
+    Ok(())
 }
 
 /// The points of interest in the ruler's MARKS lane: a flag at each, its

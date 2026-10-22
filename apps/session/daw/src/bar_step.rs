@@ -13,13 +13,17 @@
 //! `SESSION_STEP` is the one way in: the transport bar's buttons, `[` and
 //! `]`, and a model all run it.
 
+#[cfg(feature = "native")]
 use architect::action::{ActionList, ActionMeta, Effect};
+#[cfg(feature = "native")]
 use daw::service::{Markers, ProjectContext, Tracks};
 use dioxus::prelude::*;
+#[cfg(feature = "native")]
 use facet::Facet;
 
 /// How much of the bars either side a page shows, as a part of a bar: a
 /// beat of 4/4.
+#[cfg(feature = "native")]
 const EDGE_OF_A_BAR: f64 = 0.25;
 
 /// The page sizes the buttons offer, bars.
@@ -90,12 +94,14 @@ pub fn get() -> Step {
         })
 }
 
+#[cfg(feature = "native")]
 fn set(step: Step) {
     if let Ok(mut slot) = STEP.lock() {
         *slot = Some(step);
     }
 }
 
+#[cfg(feature = "native")]
 pub static STEP_ACTION: ActionMeta = crate::actions::meta(
     "SESSION_STEP",
     "step",
@@ -106,6 +112,7 @@ pub static STEP_ACTION: ActionMeta = crate::actions::meta(
 );
 
 /// How to step.
+#[cfg(feature = "native")]
 #[derive(Facet)]
 struct StepArg {
     by: Option<i32>,
@@ -116,6 +123,7 @@ struct StepArg {
 }
 
 /// The page shown.
+#[cfg(feature = "native")]
 #[derive(Facet)]
 struct StepOut {
     first_bar: i32,
@@ -140,6 +148,7 @@ const fn add_bars(bar: i32, n: i32) -> i32 {
 
 /// The first bar of the page of `bars` holding `bar`, pages counted from
 /// bar 1 (bars before it, the count-in, page backwards from −1).
+#[cfg(feature = "native")]
 const fn page_of(bar: i32, bars: i32) -> i32 {
     let bars = if bars < 1 { 1 } else { bars };
     // How many whole pages before it, counted from bar 1 (or, before the
@@ -166,6 +175,7 @@ const fn page_of(bar: i32, bars: i32) -> i32 {
 
 /// The song's last bar: the one its `SONGEND` falls in (just before it,
 /// when it is on a bar line), `None` without one.
+#[cfg(feature = "native")]
 fn last_bar(daw: &daw::standalone::Standalone, project: &ProjectContext) -> Option<i32> {
     let end = Markers::all(daw, project.clone())
         .into_iter()
@@ -177,6 +187,7 @@ fn last_bar(daw: &daw::standalone::Standalone, project: &ProjectContext) -> Opti
 /// The tracks a page frames down the view: the group's tracks, kept to the
 /// top-level folder holding most of them (the kit, not the references'
 /// rehearsal drums) and everything under it. Empty for every track.
+#[cfg(feature = "native")]
 fn framed(
     daw: &daw::standalone::Standalone,
     project: &ProjectContext,
@@ -223,7 +234,8 @@ fn framed(
         .collect())
 }
 
-pub fn register(list: &ActionList) {
+#[cfg(feature = "native")]
+pub fn register(list: &ActionList) -> Result<(), architect::action::ActionError> {
     list.register(&STEP_ACTION, Effect::Mutating, |a: StepArg| {
         let (daw, project) = crate::actions::song()?;
         let mut step = get();
@@ -294,7 +306,8 @@ pub fn register(list: &ActionList) {
             from,
             to,
         })
-    });
+    })?;
+    Ok(())
 }
 
 /// Run `SESSION_STEP` with `args`, off the window's thread.

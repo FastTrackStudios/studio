@@ -100,7 +100,7 @@ impl Index {
         tracks: &[daw_proto::Track],
         pieces: Vec<(String, String)>,
     ) {
-        let mut stages = architect_telemetry::timing::Stages::start();
+        let mut stages = crate::stages::Stages::start();
         let has_items = |guid: &str| p.items_by_track.get(guid).is_some_and(|v| !v.is_empty());
         let (kit, _) = crate::hits::kit_from(tracks, pieces, &has_items);
         // Each piece's hits are read off its first close mic.

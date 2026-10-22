@@ -2366,7 +2366,7 @@ impl ArrangementWidget {
             slip.edits = tracing::field::Empty
         );
         let _in = span.enter();
-        let mut stages = architect_telemetry::timing::Stages::start();
+        let mut stages = crate::stages::Stages::start();
         // Where in its source each take started, before it is cut: every
         // slice of it shows its own part of the take's waveform.
         let taken: std::collections::HashSet<&str> = items.iter().map(String::as_str).collect();
@@ -2616,7 +2616,7 @@ impl ArrangementWidget {
         // One timed unit (`PERF_RECENT {name: "window.resync"}`).
         let span = tracing::info_span!("window.resync", resync.items = tracing::field::Empty);
         let _entered = span.enter();
-        let mut stages = architect_telemetry::timing::Stages::start();
+        let mut stages = crate::stages::Stages::start();
         let patched = self
             .replan
             .as_ref()
@@ -2687,7 +2687,7 @@ impl ArrangementWidget {
         // One timed unit (`PERF_RECENT {name: "window.resync"}`).
         let span = tracing::info_span!("window.resync");
         let _entered = span.enter();
-        let mut stages = architect_telemetry::timing::Stages::start();
+        let mut stages = crate::stages::Stages::start();
         let Some(fresh) = crate::studio::fetch() else {
             tracing::warn!("the session could not be read back from the engine");
             return;
@@ -2753,7 +2753,7 @@ impl ArrangementWidget {
         let Some((planner, raw)) = self.replan.as_mut() else {
             return;
         };
-        let mut stages = architect_telemetry::timing::Stages::start();
+        let mut stages = crate::stages::Stages::start();
         let (project, rows) = planner.plan(&raw.borrow());
         stages.mark("adopt.plan_ms");
         self.restructure((*project.0).clone(), rows.as_slice().to_vec());
@@ -2778,7 +2778,7 @@ impl ArrangementWidget {
         project: daw_ui::studio::project::Project,
         rows: Vec<(daw_proto::Track, u32)>,
     ) {
-        let mut stages = architect_telemetry::timing::Stages::start();
+        let mut stages = crate::stages::Stages::start();
         crate::tcp::fit_names(&self.font, &rows, self.layout);
         stages.mark("restructure.names_ms");
         self.tracks = rows.iter().map(|(t, _)| t.clone()).collect();
@@ -3877,7 +3877,7 @@ impl ArrangementWidget {
         let project = daw_ui::studio::ProjectRef(std::sync::Arc::new(self.project.clone()));
         // A view setting, not the session's: an edit must not reset it.
         let lettering = self.scene.lettering;
-        let mut stages = architect_telemetry::timing::Stages::start();
+        let mut stages = crate::stages::Stages::start();
         stages.mark("recut.clone_ms");
         self.scene = Arrangement::build_hiding(
             &self.palette,
@@ -5431,6 +5431,7 @@ impl ArrangementWidget {
             self.editor.cursor = asked;
         }
         crate::cursor::publish(self.editor.cursor);
+        #[cfg(feature = "native")]
         crate::edit_actions::publish(self.scope());
         crate::ghosts::local_selection(self.editor.selected.as_set(), &self.rows);
         crate::ghosts::local_shown(&self.rows, &self.scene);

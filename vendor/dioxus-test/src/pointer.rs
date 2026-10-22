@@ -54,7 +54,44 @@ fn pointer_event(
     }
 }
 
+/// A finger's pointer event at `(x, y)`: a touch, so a drag past Blitz's
+/// slop pans the scroll container under it (no selection, no click on
+/// lift) exactly as on a tablet.
+fn finger_event(x: f64, y: f64, buttons: MouseEventButtons) -> BlitzPointerEvent {
+    let mut e = pointer_event(x, y, MouseEventButton::Main, buttons, Modifiers::empty());
+    e.id = BlitzPointerId::Finger(1);
+    e
+}
+
 impl DocumentTester {
+    /// A finger touches down at document coordinates `(x, y)`.
+    pub fn finger_down(&self, x: f64, y: f64) {
+        self.send_ui_event(UiEvent::PointerDown(finger_event(
+            x,
+            y,
+            MouseEventButtons::Primary,
+        )));
+    }
+
+    /// The finger, still down, moves to `(x, y)` — a run of these is a
+    /// scroll (pan) of whatever scrolls under it.
+    pub fn finger_move(&self, x: f64, y: f64) {
+        self.send_ui_event(UiEvent::PointerMove(finger_event(
+            x,
+            y,
+            MouseEventButtons::Primary,
+        )));
+    }
+
+    /// The finger lifts at `(x, y)`.
+    pub fn finger_up(&self, x: f64, y: f64) {
+        self.send_ui_event(UiEvent::PointerUp(finger_event(
+            x,
+            y,
+            MouseEventButtons::None,
+        )));
+    }
+
     /// Presses the primary mouse button at document coordinates `(x, y)`.
     ///
     /// The event is hit-tested: whichever element the layout places under

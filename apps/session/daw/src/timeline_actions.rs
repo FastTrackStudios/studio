@@ -373,11 +373,11 @@ fn selection(daw: &daw::standalone::Standalone, project: &ProjectContext) -> Sel
     }
 }
 
-pub fn register(list: &ActionList) {
+pub fn register(list: &ActionList) -> Result<(), architect::action::ActionError> {
     list.register(&WHAT_IS_SELECTED, Effect::ReadOnly, |(): ()| {
         let (daw, project) = crate::actions::song()?;
         Ok(selection(daw, &project))
-    });
+    })?;
     list.register(&TEMPO, Effect::Mutating, |a: TempoArg| {
         if !BPM.contains(&a.bpm) {
             return Err(format!(
@@ -419,7 +419,7 @@ pub fn register(list: &ActionList) {
                 ""
             }
         ))
-    });
+    })?;
     list.register(&SELECTION, Effect::Mutating, |a: SelectionArg| {
         let (daw, project) = crate::actions::song()?;
         let Some(chosen) = span(daw, &project, a.from.as_deref(), a.to.as_deref())? else {
@@ -443,7 +443,7 @@ pub fn register(list: &ActionList) {
             "{:.3} s to {:.3} s selected, the edit cursor at its start",
             chosen.start, chosen.end
         ))
-    });
+    })?;
     list.register(&SECTION, Effect::Mutating, |a: SectionArg| {
         let kind = section_kind(&a.kind)?;
         let (daw, project) = crate::actions::song()?;
@@ -463,7 +463,7 @@ pub fn register(list: &ActionList) {
             .into_iter()
             .find(|s| (s.end - end).abs() < SAME_POINT)
             .ok_or_else(|| format!("no {} was inserted at {:.3} s", a.kind, edit.at))
-    });
+    })?;
     list.register(&MARKER, Effect::Mutating, |a: MarkerArg| {
         let (kind, written) = marker_kind(&a.kind)?;
         let (daw, project) = crate::actions::song()?;
@@ -475,7 +475,8 @@ pub fn register(list: &ActionList) {
         crate::studio::request_resync();
         crate::actions::list().changed("markers", written);
         Ok(format!("{written} at {:.3} s", edit.at))
-    });
+    })?;
+    Ok(())
 }
 
 /// Whether anything in the song is audio — a take recorded or imported
