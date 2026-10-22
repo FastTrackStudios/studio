@@ -14,6 +14,13 @@
 //! serve." The browser remote is the signal-desktop WEB build, embedded with
 //! `--features embed-web` (staged by `just rig-install` into `web-dist/`), so
 //! the deployed engine is ONE artifact.
+//!
+//! Signal's command core (`signal_proto::commands`, run by the guitar rig —
+//! `guitar::signal_commands`) is served to a model over MCP when asked for
+//! (`--mcp`, or `SIGNAL_MCP=1`; `FTS_MCP=0` vetoes): on loopback only
+//! (`127.0.0.1:47812`, `SIGNAL_MCP_PORT` to move it), behind a bearer token
+//! minted at start. Where it is and the token are written to
+//! `~/.config/fts/signal-mcp.json` (mode 0600), never to the log.
 
 use architect::host::{self, EngineHost, WebBundle};
 use architect::rig::RigBackend as _;
@@ -30,6 +37,81 @@ fn bind_addr() -> String {
     std::env::var("SIGNAL_ENGINE_ADDR")
         .or_else(|_| std::env::var("RIGD_ADDR"))
         .unwrap_or_else(|_| DEFAULT_ADDR.to_string())
+}
+
+/// Where the MCP face listens unless `SIGNAL_MCP_PORT` says otherwise
+/// (Session's window is on 47811).
+const DEFAULT_MCP_PORT: u16 = 47_812;
+
+/// The MCP face's name: `~/.config/fts/<name>-mcp.json`.
+const MCP_DISCOVERY_NAME: &str = "signal";
+
+/// The port to serve MCP on, or `None` when it was not asked for: `--mcp`
+/// among `args` or `SIGNAL_MCP=1` asks; `FTS_MCP=0` (every FTS app's off
+/// switch) wins over both.
+///
+/// # Errors
+///
+/// `SIGNAL_MCP_PORT` is set to something that is not a port.
+fn mcp_port(args: &[String], env: impl Fn(&str) -> Option<String>) -> Result<Option<u16>, String> {
+    let asked =
+        args.iter().any(|a| a == "--mcp") || env("SIGNAL_MCP").is_some_and(|v| v.trim() == "1");
+    let vetoed = env("FTS_MCP").is_some_and(|v| v.trim() == "0");
+    if !asked || vetoed {
+        return Ok(None);
+    }
+    env("SIGNAL_MCP_PORT")
+        .filter(|p| !p.trim().is_empty())
+        .map_or(Ok(DEFAULT_MCP_PORT), |p| {
+            p.trim()
+                .parse()
+                .map_err(|_| format!("SIGNAL_MCP_PORT={p:?} is not a port"))
+        })
+        .map(Some)
+}
+
+/// Serve Signal's commands on `guitar` over MCP when the command line or
+/// environment asks for it, and say where (the discovery file). Failing to
+/// serve is logged, never fatal: the rig plays on.
+async fn start_mcp(guitar: &GuitarRigBackend) {
+    let args: Vec<String> = std::env::args().collect();
+    let port = match mcp_port(&args, |name| std::env::var(name).ok()) {
+        Ok(Some(port)) => port,
+        Ok(None) => return,
+        Err(error) => {
+            tracing::warn!(%error, "mcp: not served");
+            return;
+        }
+    };
+    let list = match guitar::signal_commands::command_list(guitar) {
+        Ok(list) => list,
+        Err(error) => {
+            tracing::warn!(%error, "mcp: not served, the command list did not build");
+            return;
+        }
+    };
+    let actions = list.len();
+    let token = guitar::signal_commands::mint_token();
+    let serving = match guitar::signal_commands::serve_mcp(list, port, token).await {
+        Ok(serving) => serving,
+        Err(error) => {
+            tracing::warn!(%error, port, "mcp: not served");
+            return;
+        }
+    };
+    match serving.publish(MCP_DISCOVERY_NAME) {
+        Ok(path) => tracing::info!(
+            mcp.url = %serving.url,
+            mcp.actions = actions,
+            mcp.discovery = %path.display(),
+            "mcp: serving Signal's commands"
+        ),
+        Err(error) => tracing::warn!(
+            %error,
+            mcp.url = %serving.url,
+            "mcp: served, but where (and its token) could not be written"
+        ),
+    }
 }
 
 /// The staged web bundle, compiled into the binary. `just rig-install`
@@ -161,6 +243,8 @@ async fn async_main() {
     signal_rig_host::engine::install_shared(signal_rig_host::engine::Engine::new("Signal"));
     let guitar = GuitarRigBackend::new();
     guitar.start(); // worship rig: open audio + load profile off-thread
+    // Signal's commands for a model, when asked (`--mcp` / `SIGNAL_MCP=1`).
+    start_mcp(&guitar).await;
     let drums = drums::DrumRigBackend::new(); // dormant until started
     let keys = keys::KeysRigBackend::new(); // dormant until started
     let synth = signal_synth_rig::SynthRigBackend::new(); // dormant until started
@@ -314,4 +398,51 @@ async fn async_main() {
         .cross_origin_isolated(true)
         .serve()
         .await;
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{DEFAULT_MCP_PORT, mcp_port};
+
+    fn env<'a>(vars: &'a [(&'a str, &'a str)]) -> impl Fn(&str) -> Option<String> + 'a {
+        move |name| {
+            vars.iter()
+                .find(|(k, _)| *k == name)
+                .map(|(_, v)| (*v).to_owned())
+        }
+    }
+
+    fn args(list: &[&str]) -> Vec<String> {
+        list.iter().map(|a| (*a).to_owned()).collect()
+    }
+
+    #[test]
+    fn mcp_is_off_unless_asked_for() {
+        assert_eq!(mcp_port(&args(&["x", "--engine"]), env(&[])), Ok(None));
+        assert_eq!(
+            mcp_port(&args(&["x", "--engine"]), env(&[("SIGNAL_MCP", "0")])),
+            Ok(None)
+        );
+    }
+
+    #[test]
+    fn the_flag_or_the_variable_asks_and_fts_mcp_0_vetoes() {
+        let on = Ok(Some(DEFAULT_MCP_PORT));
+        assert_eq!(mcp_port(&args(&["x", "--engine", "--mcp"]), env(&[])), on);
+        assert_eq!(mcp_port(&args(&["x"]), env(&[("SIGNAL_MCP", "1")])), on);
+        assert_eq!(
+            mcp_port(&args(&["x", "--mcp"]), env(&[("FTS_MCP", "0")])),
+            Ok(None)
+        );
+    }
+
+    #[test]
+    fn the_port_variable_moves_it_and_garbage_is_refused() {
+        let asked = args(&["x", "--mcp"]);
+        assert_eq!(
+            mcp_port(&asked, env(&[("SIGNAL_MCP_PORT", "5000")])),
+            Ok(Some(5000))
+        );
+        assert!(mcp_port(&asked, env(&[("SIGNAL_MCP_PORT", "nope")])).is_err());
+    }
 }

@@ -8322,6 +8322,7 @@ dependencies = [
  "anyrender_vello 0.12.0",
  "anyrender_vello_hybrid",
  "architect",
+ "architect-mcp",
  "audio",
  "base64 0.22.1",
  "blake3",
@@ -17739,6 +17740,7 @@ dependencies = [
 name = "signal-extension"
 version = "0.1.2"
 dependencies = [
+ "architect",
  "daw",
  "daw-extension-runtime",
  "eyre",
