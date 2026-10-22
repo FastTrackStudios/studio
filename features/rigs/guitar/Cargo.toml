@@ -65,11 +65,14 @@ vox = { workspace = true, optional = true }
 guitar = { path = ".", features = ["ui"] }
 architect = { workspace = true, features = ["vox", "local"] }
 neural-amp-modeler = { workspace = true }
+serde_json = { workspace = true }
 tokio = { workspace = true, features = ["rt-multi-thread", "macros", "time"] }
 tracing-subscriber = { workspace = true }
 vox = { workspace = true }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+# Signal's Action List served to a model over MCP (src/signal_commands.rs).
+architect-mcp = { workspace = true, features = ["http"] }
 audio = { workspace = true, features = ["io"] }
 blitz-dom = { workspace = true, features = ["custom-widget"] }
 blitz-traits = { workspace = true }
