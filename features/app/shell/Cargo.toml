@@ -25,5 +25,14 @@ utils = { workspace = true, optional = true }
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 dirs = "6"
 
+[dev-dependencies]
+# Headless layout + screenshot of the performer screen on blitz-dom
+# (tests/performer_screen.rs).
+dioxus-test.workspace = true
+
+[[test]]
+name = "performer_screen"
+required-features = ["ui"]
+
 [lints]
 workspace = true

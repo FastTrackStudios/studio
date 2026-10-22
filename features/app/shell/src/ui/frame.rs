@@ -122,6 +122,17 @@ pub fn use_shell_state(scope: &'static str) -> ShellState {
     })
 }
 
+/// [`use_shell_state`] with the scope's stored layout read through `load`
+/// instead of [`load_layout`]: a preset that falls back on its own terms
+/// (the performer screen loads its preset when a stored layout names a
+/// panel it doesn't have).
+pub fn use_shell_state_with(scope: &'static str, load: fn(&str) -> ShellLayout) -> ShellState {
+    use_context_provider(|| ShellState {
+        scope,
+        layout: Signal::new(load(scope)),
+    })
+}
+
 /// The layout state the nearest frame above provides.
 ///
 /// # Panics
