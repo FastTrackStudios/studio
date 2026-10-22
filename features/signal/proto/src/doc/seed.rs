@@ -7,11 +7,12 @@
 //!
 //! Every id is a `seed_id`, so the library is the same on every run.
 
+use crate::default_profile::LibrarySettings;
 use crate::engine::EngineId;
 use crate::ids::seed_id;
 use crate::metadata::Metadata;
 use crate::overrides::{NodePath, Override};
-use crate::profile::{Patch, PatchId, Profile};
+use crate::profile::{Patch, PatchId, Profile, ProfileId};
 use crate::rig::{EngineSelection, Rig, RigScene, RigType};
 use crate::setlist::{Setlist, SetlistEntry};
 use crate::slug::slugify;
@@ -331,8 +332,8 @@ const SONGS: &[(&str, Option<&str>, &[(&str, &str)])] = &[
         None,
         &[
             ("Intro", "worship-tremolo"),
-            ("Verse", "allround-clean"),
-            ("Chorus", "allround-drive"),
+            ("Verse", INHERIT),
+            ("Chorus", INHERIT),
             ("Outro", "worship-tremolo"),
         ],
     ),
@@ -353,7 +354,7 @@ const SONGS: &[(&str, Option<&str>, &[(&str, &str)])] = &[
         None,
         &[
             ("Intro", "keys-piano"),
-            ("Verse", "worship-clean"),
+            ("Verse", INHERIT),
             ("Chorus", "worship-lead"),
             ("Bridge", "worship-ambient"),
             ("Outro", "keys-piano"),
@@ -398,7 +399,7 @@ const SONGS: &[(&str, Option<&str>, &[(&str, &str)])] = &[
         Some("Roots & Wires"),
         &[
             ("Intro", "allround-ambient"),
-            ("Verse", "allround-clean"),
+            ("Verse", INHERIT),
             ("Chorus", "rock-drive"),
             ("Bridge", "allround-lead"),
             ("Outro", "allround-ambient"),
@@ -461,11 +462,12 @@ pub fn setlist_id(slug: &str) -> crate::setlist::SetlistId {
 pub fn song(title: &str, album: Option<&str>, scenes: &[(&str, &str)]) -> Option<Song> {
     let slug = slugify(title);
     let scene = |n: usize, (name, patch): &(&str, &str)| {
-        let scene = Scene::from_patch(
-            seed_id(&format!("song-{slug}-{n}")),
-            *name,
-            PatchId::from(seed_id(patch)),
-        );
+        let id = seed_id(&format!("song-{slug}-{n}"));
+        let scene = if *patch == INHERIT {
+            Scene::inheriting_default(id, *name)
+        } else {
+            Scene::from_patch(id, *name, PatchId::from(seed_id(patch)))
+        };
         if *name == "Solo" {
             scene.with_override(Override::set(guitar_param("dream-delay", "mix"), 0.4))
         } else {
@@ -516,5 +518,21 @@ pub fn demo_library() -> Library {
             Some(setlist)
         })
         .collect();
-    Library::from_profiles(vec![guitar_rig(), keys_rig()], &profiles(), songs, setlists)
+    Library::from_profiles(
+        vec![guitar_rig(), keys_rig()],
+        &profiles(),
+        LibrarySettings::with_default_profile(all_around_id()),
+        songs,
+        setlists,
+    )
 }
+
+/// The All-Around profile's id — the library's default profile.
+#[must_use]
+pub fn all_around_id() -> ProfileId {
+    ProfileId::from(seed_id("allround-profile"))
+}
+
+/// A scene's patch in [`SONGS`] that is not a patch: the scene inherits the
+/// library's default profile (All-Around) by reference.
+const INHERIT: &str = "";

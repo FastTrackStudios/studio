@@ -1,17 +1,27 @@
 //! Signal's model in Loro docs — the codec under the live docs.
 //!
-//! A [`SignalDoc`] holds Signal entities — [`Rig`], [`Patch`], [`Song`],
-//! [`Setlist`] — each under the name every device and agent knows it by
-//! ([`DocEntity::doc_key`]): `rig:<id>`, `patch:<slug>`, `song:<id>`,
-//! `setlist:<id>`. Schema (version [`SCHEMA`]):
+//! A [`SignalDoc`] holds Signal entities — [`Rig`], [`Patch`], profiles
+//! ([`library::ProfileEntry`]), [`Song`], [`Setlist`] and the library's
+//! [`LibrarySettings`] — each under the name every device and agent knows it
+//! by ([`DocEntity::doc_key`]). Schema (version [`SCHEMA`]):
 //!
 //! ```text
 //! meta    : Map { schema: i64 }
-//! rig     : Map  "rig:<id>"      → the rig     (codec layout, see below)
-//! patch   : Map  "patch:<slug>"  → the patch
-//! song    : Map  "song:<id>"     → the song
-//! setlist : Map  "setlist:<id>"  → the setlist
+//! rig     : Map  "rig:<id>"          → the rig     (codec layout, see below)
+//! patch   : Map  "patch:<slug>"      → the patch
+//! profile : Map  "profile:<id>"      → { id, name, default_patch: "patch:<slug>",
+//!                                        patches: keyed list of { id: "patch:<slug>" },
+//!                                        metadata }
+//! song    : Map  "song:<id>"         → the song
+//! setlist : Map  "setlist:<id>"      → the setlist
+//! library : Map  "library:settings"  → { default_profile_id } (All-Around)
 //! ```
+//!
+//! A profile holds its patches **by key**, not by value: a patch is one
+//! entity wherever it is listed, so the Captain tweaking a patch and an
+//! agent adding another to the same profile both land, and a song scene
+//! that inherits the default profile (`SceneSource::DefaultProfile`)
+//! follows `library:settings` → the profile → its default patch.
 //!
 //! Each entity is its serde form laid out by [`codec`]: a field per map
 //! entry, lists of things with ids as keyed lists (an entry edited in place,
@@ -21,8 +31,9 @@
 //! `tests/doc_roundtrip.rs`).
 //!
 //! One doc can hold one entity or many; which entities go in which doc is
-//! [`library::Layout`]. The decision between the layouts, with the numbers,
-//! is `docs/adr/0001-signal-live-doc-granularity.md`: one doc per entity.
+//! [`library::Layout`]. The decision between the layouts goes in
+//! `docs/adr/0001-signal-live-doc-granularity.md`, from the numbers
+//! `tests/doc_granularity.rs` prints.
 
 pub mod codec;
 pub mod library;
@@ -32,6 +43,7 @@ use loro::{LoroDoc, LoroEncodeError, LoroError, LoroMap, LoroValue, VersionVecto
 use serde::Serialize;
 use serde::de::DeserializeOwned;
 
+use crate::default_profile::LibrarySettings;
 use crate::profile::Patch;
 use crate::rig::Rig;
 use crate::setlist::Setlist;
@@ -62,12 +74,23 @@ pub enum DocError {
 pub enum EntityKind {
     Rig,
     Patch,
+    /// A profile: its name, default patch and patches, the patches by key.
+    Profile,
     Song,
     Setlist,
+    /// Library-wide settings — the default profile pointer.
+    Library,
 }
 
 impl EntityKind {
-    pub const ALL: [Self; 4] = [Self::Rig, Self::Patch, Self::Song, Self::Setlist];
+    pub const ALL: [Self; 6] = [
+        Self::Rig,
+        Self::Patch,
+        Self::Profile,
+        Self::Song,
+        Self::Setlist,
+        Self::Library,
+    ];
 
     /// The root map's name, and the prefix of every key in it.
     #[must_use]
@@ -75,8 +98,10 @@ impl EntityKind {
         match self {
             Self::Rig => "rig",
             Self::Patch => "patch",
+            Self::Profile => "profile",
             Self::Song => "song",
             Self::Setlist => "setlist",
+            Self::Library => "library",
         }
     }
 
@@ -109,6 +134,23 @@ impl DocEntity for Patch {
         Self::doc_key(self)
     }
 }
+
+impl DocEntity for library::ProfileEntry {
+    const KIND: EntityKind = EntityKind::Profile;
+    fn doc_key(&self) -> String {
+        format!("profile:{}", self.id)
+    }
+}
+
+impl DocEntity for LibrarySettings {
+    const KIND: EntityKind = EntityKind::Library;
+    fn doc_key(&self) -> String {
+        LIBRARY_SETTINGS_KEY.to_owned()
+    }
+}
+
+/// The key of the library's settings (the default profile pointer).
+pub const LIBRARY_SETTINGS_KEY: &str = "library:settings";
 
 impl DocEntity for Song {
     const KIND: EntityKind = EntityKind::Song;

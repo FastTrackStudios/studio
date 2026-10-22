@@ -31,10 +31,11 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::time::{Duration, Instant};
 
-use signal_proto::doc::library::{Layout, Library, build};
+use signal_proto::default_profile::LibrarySettings;
+use signal_proto::doc::library::{Layout, Library, PatchRef, build};
 use signal_proto::doc::{DocEntity, SignalDoc, seed};
 use signal_proto::overrides::NodeOverrideOp;
-use signal_proto::profile::{Patch, PatchId};
+use signal_proto::profile::{Patch, PatchId, ProfileId};
 use signal_proto::seed_id;
 use signal_proto::song::SceneSource;
 use signal_proto::{ParameterValue, setlist::Setlist};
@@ -239,6 +240,24 @@ const EDITS: &[Edit] = &[
         let mut patch = lib.patch("patch:allround-ambient").unwrap().clone();
         patch = patch.duplicate(PatchId::from(seed_id("allround-shimmer")), "Shimmer");
         lib.patches.push(patch.with_slug("allround-shimmer"));
+        let all_around = format!("profile:{}", seed::all_around_id());
+        lib.profile_mut(&all_around)
+            .unwrap()
+            .patches
+            .push(PatchRef {
+                id: "patch:allround-shimmer".to_owned(),
+            });
+    }),
+    (
+        "Captain edits All-Around's default patch (inheriting songs follow)",
+        |lib| {
+            set_first_override(lib.patch_mut("patch:allround-clean").unwrap(), 0.3);
+        },
+    ),
+    ("switch the library's default profile to Worship", |lib| {
+        lib.settings = Some(LibrarySettings::with_default_profile(ProfileId::from(
+            seed_id("worship-profile"),
+        )));
     }),
 ];
 
@@ -265,20 +284,41 @@ fn measure_doc_granularity() {
         )
         .chain(
             library
+                .profiles
+                .iter()
+                .map(|e| serde_json::to_vec(e).unwrap().len()),
+        )
+        .chain(
+            library
                 .setlists
                 .iter()
                 .map(|e| serde_json::to_vec(e).unwrap().len()),
         )
         .sum();
+    let inheriting = library
+        .songs
+        .iter()
+        .flat_map(|s| &s.scenes)
+        .filter(|s| s.inherits_default())
+        .count();
     println!(
-        "\n## Library\n\n{} rigs · {} patches · {} songs · {} setlists = {} entities, {} as JSON\n",
+        "\n## Library\n\n{} rigs · {} patches · {} profiles · {} songs ({} scenes inherit All-Around) · {} setlists · library:settings = {} entities, {} as JSON\n",
         library.rigs.len(),
         library.patches.len(),
+        library.profiles.len(),
         library.songs.len(),
+        inheriting,
         library.setlists.len(),
         library.len(),
         kib(entity_json),
     );
+    for setlist in &library.setlists {
+        println!(
+            "{} references {}\n",
+            setlist.name,
+            library.patch_refs(setlist).join(", ")
+        );
+    }
 
     // 1. size
     println!("## 1. Size\n");

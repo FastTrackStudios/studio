@@ -10,11 +10,13 @@
 
 use proptest::prelude::*;
 use serde_json::{Map, Number, Value};
+use signal_proto::default_profile::LibrarySettings;
+use signal_proto::doc::library::{PatchRef, ProfileEntry};
 use signal_proto::doc::{DocEntity, SignalDoc, codec};
 use signal_proto::engine::EngineSceneId;
 use signal_proto::metadata::{Metadata, Tags};
 use signal_proto::overrides::{NodeOverrideOp, NodePath, NodePathSegment, Override};
-use signal_proto::profile::{Patch, PatchTarget};
+use signal_proto::profile::{Patch, PatchTarget, Profile, ProfileId};
 use signal_proto::rig::{EngineSelection, Rig, RigScene, RigType};
 use signal_proto::setlist::{Setlist, SetlistEntry};
 use signal_proto::song::{Scene, SceneSource, Song};
@@ -116,6 +118,24 @@ prop_compose! {
 }
 
 prop_compose! {
+    fn profile_entry()(
+        id in uuid(),
+        name in text(),
+        refs in prop::collection::btree_set(word(), 0..8),
+        default in word(),
+        metadata in metadata(),
+    ) -> ProfileEntry {
+        ProfileEntry {
+            id: id.into(),
+            name,
+            default_patch: format!("patch:{default}"),
+            patches: refs.into_iter().map(|r| PatchRef { id: format!("patch:{r}") }).collect(),
+            metadata,
+        }
+    }
+}
+
+prop_compose! {
     fn scene()(
         id in uuid(),
         name in text(),
@@ -125,6 +145,7 @@ prop_compose! {
                 rig_id: r.into(),
                 scene_id: s.into(),
             }),
+            Just(SceneSource::DefaultProfile),
         ],
         overrides in overrides(),
         metadata in metadata(),
@@ -317,6 +338,50 @@ proptest! {
     #[test]
     fn a_rig_round_trips(before in rig(), after in rig()) {
         round_trips(&before, &after);
+    }
+
+    #[test]
+    fn a_profile_round_trips(before in profile_entry(), after in profile_entry()) {
+        round_trips(&before, &after);
+    }
+
+    #[test]
+    fn the_default_profile_pointer_round_trips(
+        before in prop::option::of(uuid()),
+        after in prop::option::of(uuid()),
+    ) {
+        let settings = |id: Option<Uuid>| LibrarySettings {
+            default_profile_id: id.map(ProfileId::from),
+        };
+        round_trips(&settings(before), &settings(after));
+    }
+
+    /// A profile split into its entry and its patches, written to a doc and
+    /// read back, assembles to the same profile.
+    #[test]
+    fn a_profile_and_its_patches_reassemble(
+        patches in prop::collection::btree_map(word(), patch(), 1..6),
+        id in uuid(),
+        name in text(),
+        pick in any::<prop::sample::Index>(),
+    ) {
+        let patches: Vec<Patch> = patches
+            .into_iter()
+            .map(|(slug, p)| p.with_slug(slug))
+            .collect();
+        let default = patches[pick.index(patches.len())].clone();
+        let mut profile = Profile::new(id, name, default.clone());
+        for p in patches.iter().filter(|p| p.id != default.id) {
+            profile.add_patch(p.clone());
+        }
+        let doc = SignalDoc::new();
+        doc.put(&ProfileEntry::of(&profile)).unwrap();
+        for p in &profile.patches {
+            doc.put(p).unwrap();
+        }
+        doc.commit("test");
+        let read = doc.read_library().unwrap();
+        prop_assert_eq!(read.assembled_profiles(), vec![profile]);
     }
 
     /// The codec under the entities: any JSON, over any JSON.
