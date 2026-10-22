@@ -262,6 +262,12 @@ fn size(doc: &DocumentTester, which: &str) -> (f32, f32) {
     find(doc, &format!("[data-perform=\"{which}\"]")).size()
 }
 
+/// A bordered control's height as a finger meets it: dioxus-test's
+/// `size()` is the content box, so add back its 1 px border either side.
+fn touch_height(e: &dioxus_test::ResolvedElement) -> f32 {
+    e.size().1 + 2.0
+}
+
 fn near(a: f32, b: u32) -> bool {
     (a - b as f32).abs() <= 2.0
 }
@@ -360,7 +366,7 @@ fn with_no_rig_the_transport_spans_the_dock_and_the_bar_offers_pairing() {
     assert!(near(w, 1170), "transport {w} wide, want 1170");
     let pair = find(&doc, "[data-rig=\"pair\"]");
     assert!(pair.inner_html().contains("Pair a rig"));
-    let (_, h) = pair.size();
+    let h = touch_height(&pair);
     assert!(h >= 48.0, "Pair a rig is {h} tall");
     // Every other region is where it is with a rig.
     let with = open(remote());
@@ -379,6 +385,7 @@ fn the_band_reads_time_bar_beat_bpm_and_key_and_the_menu_goes_to_either_end() {
     }
     find(&doc, "button[aria-label=\"More playback options\"]").click();
     doc.drain();
+    doc.relayout();
     let items = doc.query_all("[role=\"menuitem\"]").immediately();
     let labels: Vec<String> = items
         .iter()
@@ -386,7 +393,7 @@ fn the_band_reads_time_bar_beat_bpm_and_key_and_the_menu_goes_to_either_end() {
         .collect();
     assert_eq!(&labels[..2], ["Go to start", "Go to end"], "{labels:?}");
     for i in &items[..2] {
-        let (_, h) = i.size();
+        let h = touch_height(i);
         assert!(h >= 48.0, "a menu row {h} tall");
     }
     items[0].click();
