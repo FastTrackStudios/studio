@@ -24,6 +24,8 @@ utils = { workspace = true, optional = true }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 dirs = "6"
+# The flight recorder (ring, crash log, flight log): native only.
+architect-telemetry = { workspace = true, features = ["flight"] }
 
 [lints]
 workspace = true

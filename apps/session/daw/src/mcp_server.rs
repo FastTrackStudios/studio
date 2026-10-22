@@ -7,16 +7,22 @@
 //! it for Claude Code, and `~/.config/fts/session-mcp.json` says where it
 //! is for any other client.
 //!
+//! Serving, the port and token variables and the discovery file are
+//! `architect_mcp`'s (`Server::serve_loopback_or`, `Serving::publish`);
+//! the committed `.mcp.json` is what `architect_mcp::project_mcp_json`
+//! writes (`tests/mcp_in_process.rs` checks it).
+//!
 //! Only this machine reaches it: it listens on loopback and refuses a
 //! browser's request from anywhere else (`architect_mcp::http`). A token
 //! is optional — `FTS_MCP_TOKEN` sets one, and then a client must send it
 //! as `Authorization: Bearer …`; unset, there is none, so a model on this
 //! machine connects with nothing to configure.
 
-use std::path::PathBuf;
-
 /// Where it listens unless `FTS_MCP_PORT` says otherwise.
 pub const DEFAULT_PORT: u16 = 47_811;
+
+/// Its name: in `.mcp.json` and in `~/.config/fts/<name>-mcp.json`.
+pub const DISCOVERY_NAME: &str = "session";
 
 /// What a model is told about this app when it connects.
 const INSTRUCTIONS: &str = "This is FastTrackStudio Session, the DAW the user mixes in, with the \
@@ -40,60 +46,45 @@ on its own rows and shades the zones. SESSION_VIEW frames bars, a section or sec
 down to the samples. The drum MIDI is a guide, \
 not the truth: a live drummer plays other fills.";
 
-/// Where it is being served, and the token to reach it, if it wants one.
-#[derive(Clone, Debug)]
-pub struct Serving {
-    pub url: String,
-    pub token: Option<String>,
-}
-
-/// Serve the Action List on the engine's runtime, unless `FTS_MCP=0`;
-/// `None` when it is off or the port is taken (said in the log).
-pub fn start() -> Option<Serving> {
-    if std::env::var("FTS_MCP").is_ok_and(|v| v == "0") {
-        return None;
-    }
+/// Serve the Action List on the engine's runtime, unless `FTS_MCP=0`, and
+/// say where it is (`~/.config/fts/session-mcp.json`); `None` when it is
+/// off or could not be served (said in the log).
+pub fn start() -> Option<architect_mcp::http::Serving> {
     let runtime = crate::open::runtime()?;
-    let port = std::env::var("FTS_MCP_PORT")
-        .ok()
-        .and_then(|p| p.parse::<u16>().ok())
-        .unwrap_or(DEFAULT_PORT);
-    let listener = match std::net::TcpListener::bind(("127.0.0.1", port)) {
-        Ok(l) => l,
-        Err(error) => {
-            tracing::warn!(mcp.port = port, error = %error, "mcp: not served, the port is taken");
-            return None;
-        }
-    };
-    if listener.set_nonblocking(true).is_err() {
-        return None;
-    }
-    // Optional: a token only when one is asked for.
-    let token = std::env::var("FTS_MCP_TOKEN")
-        .ok()
-        .filter(|t| !t.is_empty());
-    let url = format!("http://127.0.0.1:{port}/mcp");
     let server = architect_mcp::Server::new(
         "FastTrackStudio Session",
         env!("CARGO_PKG_VERSION"),
         crate::actions::list().clone(),
     )
     .with_instructions(INSTRUCTIONS);
-    let guarded = token.clone();
-    runtime.spawn(async move {
-        let listener = match tokio::net::TcpListener::from_std(listener) {
-            Ok(l) => l,
-            Err(error) => {
-                tracing::warn!(error = %error, "mcp: the listener would not start");
-                return;
-            }
-        };
-        if let Err(error) = architect_mcp::http::serve(listener, server, guarded).await {
-            tracing::warn!(error = %error, "mcp: stopped");
-        }
+    // On a thread of its own: a caller on a runtime worker can't block on
+    // the runtime.
+    let served = std::thread::scope(|scope| {
+        scope
+            .spawn(move || {
+                runtime.block_on(server.serve_loopback_or(
+                    DEFAULT_PORT,
+                    "FTS_MCP_PORT",
+                    "FTS_MCP_TOKEN",
+                ))
+            })
+            .join()
     });
-    let serving = Serving { url, token };
-    write_config(&serving);
+    let serving = match served {
+        Ok(Ok(Some(serving))) => serving,
+        Ok(Ok(None)) => return None,
+        Err(_) => {
+            tracing::warn!("mcp: not served, starting it panicked");
+            return None;
+        }
+        Ok(Err(error)) => {
+            tracing::warn!(error = %error, "mcp: not served");
+            return None;
+        }
+    };
+    if let Err(error) = serving.publish(DISCOVERY_NAME) {
+        tracing::warn!(error = %error, "mcp: could not write where it is served");
+    }
     tracing::info!(
         mcp.url = %serving.url,
         mcp.token = serving.token.is_some(),
@@ -101,30 +92,4 @@ pub fn start() -> Option<Serving> {
         "mcp: serving the Action List"
     );
     Some(serving)
-}
-
-/// `~/.config/fts/session-mcp.json`: where a client finds it.
-fn config_path() -> Option<PathBuf> {
-    dirs::config_dir().map(|d| d.join("fts").join("session-mcp.json"))
-}
-
-/// Say where it is, readable by this user only — a token, if any, is in
-/// it.
-fn write_config(serving: &Serving) {
-    let Some(path) = config_path() else { return };
-    if let Some(dir) = path.parent()
-        && std::fs::create_dir_all(dir).is_err()
-    {
-        return;
-    }
-    let text = serde_json::json!({ "url": serving.url, "token": serving.token }).to_string();
-    if std::fs::write(&path, text).is_err() {
-        tracing::warn!("mcp: could not write where it is served");
-        return;
-    }
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt as _;
-        let _ = std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600));
-    }
 }
