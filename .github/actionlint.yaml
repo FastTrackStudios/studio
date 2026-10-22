@@ -2,6 +2,12 @@
 # does not flag them as unknown.
 self-hosted-runner:
   labels:
-    - session
+    # The Mac Pro VM's per-kind runners (checks.yml, cache-devshell.yml,
+    # reaper.yml, deploy.yml).
+    - studio
+    - studio-lint
+    - studio-wasm
+    - studio-tests
+    - studio-deploy
     - airlock
     - macos

@@ -20,6 +20,14 @@
     dioxus-flake.url = "github:FastTrackStudios/Dioxus-Flake";
     nixpkgs.follows = "dioxus-flake/nixpkgs";
     rust-overlay.follows = "dioxus-flake/rust-overlay";
+
+    # A second rust-overlay, used ONLY to build cargo-rail
+    # (nix/modules/cargo-rail.nix). rail 0.32 needs rustc >= 1.98.1; the
+    # workspace pin is 1.94 and the hub's rust-overlay above stops at
+    # 1.94.1, so the CI tool gets its own compiler without moving the
+    # workspace's. Nothing else reads this input.
+    rust-overlay-rail.url = "github:oxalica/rust-overlay";
+    rust-overlay-rail.inputs.nixpkgs.follows = "nixpkgs";
     flake-parts.url = "github:hercules-ci/flake-parts";
 
     # crane — cargo-in-nix builds for the deployable images (task-server

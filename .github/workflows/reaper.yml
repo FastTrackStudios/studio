@@ -1,10 +1,10 @@
 # REAPER integration suites — INTENTIONALLY TRIGGERED ONLY, never on
 # push/PR. This is the one workflow that MUST run self-hosted: REAPER's
 # license does not permit redistribution, so the suites only run where
-# REAPER is licensed (THEBATTLESHIP).
+# REAPER is licensed.
 #
-# Runs on the same self-hosted runner as checks.yml (THEBATTLESHIP,
-# where REAPER is licensed).
+# Runs on the light `studio` runner (the Mac Pro VM that also runs
+# checks.yml's per-kind jobs); that runner must have REAPER licensed.
 #
 # Triggers:
 #   workflow_dispatch — run a full pass whenever you want.
@@ -43,7 +43,7 @@ concurrency:
 
 jobs:
   reaper-integration:
-    runs-on: [self-hosted, session]
+    runs-on: [self-hosted, studio]
     timeout-minutes: 240
     steps:
       - uses: actions/checkout@v4
