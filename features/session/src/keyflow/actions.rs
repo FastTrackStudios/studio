@@ -1024,7 +1024,7 @@ impl SectionKind {
 
     /// Map a keyflow `SectionType` back to the session `SectionKind` used for
     /// marker insertion. `Pre(_)` collapses to `PreChorus`, `Opening`→`Intro`,
-    /// `Post(_)`→`Outro`, and `Custom(_)` falls back to `Instrumental` — the
+    /// `Post(_)`→`Outro`, `Transition` (a medley link)→`Interlude`, and `Custom(_)` falls back to `Instrumental` — the
     /// session model has no free-form section kind, so a custom section is
     /// stamped as a generic instrumental region (its label is carried
     /// separately).
@@ -1040,7 +1040,7 @@ impl SectionKind {
             SectionType::CountIn => Self::CountIn,
             SectionType::End => Self::End,
             SectionType::Hits => Self::Hits,
-            SectionType::Interlude => Self::Interlude,
+            SectionType::Interlude | SectionType::Transition => Self::Interlude,
             SectionType::Breakdown => Self::Breakdown,
             SectionType::Vamp => Self::Vamp,
             SectionType::Refrain => Self::Refrain,

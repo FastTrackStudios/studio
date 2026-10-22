@@ -89,10 +89,13 @@ pub fn midi_note_for_section(section_type: &SectionType) -> Option<u8> {
         // Names the enum doesn't model (Rap, Acapella, Exhortation)
         // still resolve through the legacy table.
         SectionType::Custom(name) => return get_midi_note_for_section_type(name),
-        // Count-ins are Count-track material; Opening and Hits had no
-        // note in the legacy layout and inventing one would put an
+        // Count-ins are Count-track material; Opening, Hits and Transition
+        // had no note in the legacy layout and inventing one would put an
         // unexpected trigger into someone's sampler.
-        SectionType::CountIn | SectionType::Opening | SectionType::Hits => return None,
+        SectionType::CountIn
+        | SectionType::Opening
+        | SectionType::Hits
+        | SectionType::Transition => return None,
     })
 }
 

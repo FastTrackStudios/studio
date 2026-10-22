@@ -1,4 +1,4 @@
-//! Lyric Sync workspace — loads a keyflow-sync `TimingMap` sidecar (per-word
+//! Lyric Sync workspace — loads a keyflow `sync` `TimingMap` sidecar (per-word
 //! forced-alignment timings + confidence) and shows it in session-ui's
 //! editable `LyricSyncView`. Nudges shift a word's start/end and write the
 //! sidecar back to disk, so a manual pass over the aligner's output persists.
@@ -10,7 +10,7 @@ use std::path::PathBuf;
 
 use dioxus::prelude::*;
 
-use keyflow_sync::timing::{Rating, TimingMap};
+use keyflow_lang::sync::timing::{Rating, TimingMap};
 use session::ui::components::{LyricSyncView, SyncRating, SyncWord};
 
 fn sidecar_path() -> PathBuf {
@@ -21,7 +21,7 @@ fn sidecar_path() -> PathBuf {
     PathBuf::from(home).join("Downloads/Worship MultiTracks/sync/praise.kf.json")
 }
 
-fn to_sync_word(w: &keyflow_sync::timing::WordEntry) -> SyncWord {
+fn to_sync_word(w: &keyflow_lang::sync::timing::WordEntry) -> SyncWord {
     SyncWord {
         text: w.text.clone(),
         start: w.start as f64,

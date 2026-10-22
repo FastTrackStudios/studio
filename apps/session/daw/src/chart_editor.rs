@@ -1,7 +1,7 @@
 //! Organize mode's chart editor: the song's `.kf`, edited live.
 //!
 //! The text is the editor's (`editor-view`, Blitz-native), coloured and
-//! checked as keyflow as it is typed (`editor-keyflow-lang`: syntax colours,
+//! checked as keyflow as it is typed (`editor-keyflow::lang`: syntax colours,
 //! live diagnostics). Each pause in typing lays the chart over the song —
 //! the tempo, the markers and section regions, the key and the chords are
 //! rebuilt, and the click, count and cues regenerated
@@ -123,8 +123,9 @@ pub fn ChartEditor() -> Element {
             "chart saved — the song is rebuilt only in Engine mode".to_owned()
         }
     };
-    let css =
-        keyflow_editor_lang::highlight_css(&keyflow_editor_lang::HighlightTheme::default_dark());
+    let css = keyflow_editor_lang::lang::highlight_css(
+        &keyflow_editor_lang::lang::HighlightTheme::default_dark(),
+    );
     rsx! {
         style { dangerous_inner_html: editor_view::EDITOR_CSS }
         style { dangerous_inner_html: "{css}" }
@@ -153,7 +154,7 @@ pub fn ChartEditor() -> Element {
                 editor_view::Editor {
                     state,
                     decorations: Some(editor_view::DecorationSource::new(|st| {
-                        let mut out = keyflow_editor_lang::keyflow_decorations(st);
+                        let mut out = keyflow_editor_lang::lang::keyflow_decorations(st);
                         out.extend(remote_carets(st));
                         out
                     })),
