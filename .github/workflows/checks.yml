@@ -176,6 +176,13 @@ jobs:
         run: ${NIX_DEV} just web-tailwind
       - name: cargo check --workspace
         run: ${NIX_DEV} cargo check --workspace
+      # The three web bundles deploy.yml ships (STA-366). The workspace check
+      # is native, so it never compiles them: a native-only dep (tokio `net`,
+      # an engine, an X11/HID crate) leaking into their graph stayed hidden
+      # until the deploy itself failed. Same targets and features as
+      # nix/modules/packages/web-bundles.nix builds (`just web-wasm-check`).
+      - name: wasm check (web bundles)
+        run: ${NIX_DEV} just web-wasm-check
       # Advisory only: the lint debt is being paid down crate by crate, so
       # this reports (grouped by lint and crate, .github/scripts/
       # clippy-report.py) without blocking the PR.
