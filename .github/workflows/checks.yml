@@ -343,15 +343,32 @@ jobs:
         id: xtask
         if: ${{ !cancelled() }}
         run: echo "tag=$(sed -n 's/^architect_xtask_tag := "\(.*\)"$/\1/p' Justfile)" >> "$GITHUB_OUTPUT"
-      - name: Cache architect xtask
+      - name: Restore architect xtask
+        id: xtask-cache
         if: ${{ !cancelled() && steps.xtask.outputs.tag != '' }}
-        uses: actions/cache@v4
+        uses: actions/cache/restore@v4
         with:
           path: ~/.cache/architect-xtask/${{ steps.xtask.outputs.tag }}
           key: architect-xtask-${{ runner.os }}-${{ steps.xtask.outputs.tag }}-${{ hashFiles('flake.lock') }}
       - name: Boundaries
         if: ${{ !cancelled() }}
         run: ${NIX_DEV} just ci-boundaries
+      # Saved even when Boundaries reports violations: the binary is fine.
+      - name: architect xtask built?
+        id: xtask-built
+        if: ${{ !cancelled() && steps.xtask.outputs.tag != '' && steps.xtask-cache.outputs.cache-hit != 'true' }}
+        env:
+          TAG: ${{ steps.xtask.outputs.tag }}
+        run: |
+          if [ -x "$HOME/.cache/architect-xtask/${TAG}/bin/xtask" ]; then
+            echo "yes=true" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Save architect xtask
+        if: ${{ !cancelled() && steps.xtask-built.outputs.yes == 'true' }}
+        uses: actions/cache/save@v4
+        with:
+          path: ~/.cache/architect-xtask/${{ steps.xtask.outputs.tag }}
+          key: architect-xtask-${{ runner.os }}-${{ steps.xtask.outputs.tag }}-${{ hashFiles('flake.lock') }}
       # The workflow-spec verification standard (#48): every `flow.*`
       # rule with an r[impl] has an r[verify], or the build is red.
       # Same recipe as local (`just daw-flows`); tracey is a store
@@ -360,6 +377,7 @@ jobs:
       # short state dir — the runner's HOME pushes tracey's default
       # socket path past the 108-byte Unix limit — and stops it after.
       - name: Flow verification gate
+        if: ${{ !cancelled() }}
         run: ${NIX_DEV} just daw-flows --own-daemon
       # apps/session/web/assets/tailwind.css is gitignored build output that
       # `asset!()` demands at compile time (see apps/session/web/tailwind.css) —
@@ -368,18 +386,22 @@ jobs:
       # no checkout.
       - &tailwind
         name: Web tailwind sheet
+        if: ${{ !cancelled() }}
         run: ${NIX_DEV} just web-tailwind
       # Gated on the plan: a change that touches no crate (docs, with
-      # evidence for the base) compiles nothing.
+      # evidence for the base) compiles nothing. From here on every step
+      # runs even when an earlier gate failed (`!cancelled()`), so one run
+      # reports fmt AND Boundaries AND check instead of one at a time; the
+      # job still fails.
       - name: cargo check --workspace
-        if: ${{ needs.plan.outputs.cargo == 'true' }}
+        if: ${{ !cancelled() && needs.plan.outputs.cargo == 'true' }}
         run: ${NIX_DEV} cargo check --workspace
       # Advisory only: the lint debt is being paid down crate by crate, so
       # this reports (grouped by lint and crate, .github/scripts/
       # clippy-report.py) without blocking the PR. Same check-mode
       # dependency metadata as `cargo check`, so it lives in this job.
       - name: cargo clippy (advisory, does not block)
-        if: ${{ needs.plan.outputs.cargo == 'true' }}
+        if: ${{ !cancelled() && needs.plan.outputs.cargo == 'true' }}
         continue-on-error: true
         run: |
           ${NIX_DEV} cargo clippy --workspace --no-deps --all-targets --keep-going \
