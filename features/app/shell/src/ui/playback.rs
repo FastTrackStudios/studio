@@ -275,7 +275,10 @@ mod tests {
             ..PlaybackView::default()
         };
         assert_eq!(v.song().map(|s| s.title.as_str()), Some("Harbor Light"));
-        assert_eq!(v.next().map(|(i, s)| (i, s.title.as_str())), Some((1, "Lantern Hymn")));
+        assert_eq!(
+            v.next().map(|(i, s)| (i, s.title.as_str())),
+            Some((1, "Lantern Hymn"))
+        );
         assert_eq!(v.section().map(|s| s.name.as_str()), Some("VER 1"));
         let last = PlaybackView {
             current: Some(1),

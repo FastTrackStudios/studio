@@ -51,8 +51,9 @@ instead = "a #[architect::service] trait mounted by EngineHost"
 #   lints 22: 9 vendored crates, 13 studio crates (align-dsp, fts-sample, ...).
 #   single-source 0, unmapped 0.
 #   hand-routes 31: sampler node_render 6, signal-desktop engine_tone3000 4 + engine_watch 4, ...
-contract-clean = 17
-ui-reach = 7
+# ratcheted down 2026-10-22 (STA-356): contract-clean 17 -> 14, ui-reach 7 -> 6 (CI measured 14 and 6).
+contract-clean = 14
+ui-reach = 6
 transport-host = 2
 lints = 22
 hand-routes = 31

@@ -85,7 +85,11 @@ impl DocumentTester {
 
     /// The finger lifts at `(x, y)`.
     pub fn finger_up(&self, x: f64, y: f64) {
-        self.send_ui_event(UiEvent::PointerUp(finger_event(x, y, MouseEventButtons::None)));
+        self.send_ui_event(UiEvent::PointerUp(finger_event(
+            x,
+            y,
+            MouseEventButtons::None,
+        )));
     }
 
     /// Presses the primary mouse button at document coordinates `(x, y)`.
