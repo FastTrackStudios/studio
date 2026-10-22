@@ -599,6 +599,7 @@ name = "app-shell"
 version = "0.1.2"
 dependencies = [
  "dioxus",
+ "dioxus-test",
  "dirs",
  "dock",
  "facet",

@@ -113,7 +113,7 @@ fn dock() -> Element {
     } else {
         rsx! {
             div { style: "display: flex; height: 60px; border: 1px dashed #2b2b31; border-radius: 8px; align-items: center; justify-content: center; color: #8e8e98;",
-                "TransportControlBar { wide_play, label_px: 14 }"
+                "TransportControlBar {{ wide_play, label_px: 14 }}"
             }
             TransportNudgeRow { more: move |()| {} }
         }
