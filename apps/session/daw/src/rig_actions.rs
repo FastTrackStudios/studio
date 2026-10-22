@@ -214,7 +214,9 @@ fn load(
     said(daw, project, guid)
 }
 
-pub(crate) fn register(list: &architect::action::ActionList) -> Result<(), architect::action::ActionError> {
+pub(crate) fn register(
+    list: &architect::action::ActionList,
+) -> Result<(), architect::action::ActionError> {
     use architect::action::Effect;
     list.register(&RIG_LOAD, Effect::Mutating, |a: LoadArg| {
         let (daw, project) = crate::actions::song()?;

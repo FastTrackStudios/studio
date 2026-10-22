@@ -360,7 +360,9 @@ struct SeamsOut {
     moved: u32,
 }
 
-pub(crate) fn register(list: &architect::action::ActionList) -> Result<(), architect::action::ActionError> {
+pub(crate) fn register(
+    list: &architect::action::ActionList,
+) -> Result<(), architect::action::ActionError> {
     list.register(
         &SEAMS,
         architect::action::Effect::Mutating,

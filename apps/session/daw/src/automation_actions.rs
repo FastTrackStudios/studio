@@ -1080,7 +1080,9 @@ fn write(a: &WriteArg) -> Result<String, String> {
     ))
 }
 
-pub(crate) fn register(list: &architect::action::ActionList) -> Result<(), architect::action::ActionError> {
+pub(crate) fn register(
+    list: &architect::action::ActionList,
+) -> Result<(), architect::action::ActionError> {
     use architect::action::Effect;
     list.register(&LANES, Effect::ReadOnly, |a: TrackArg| lanes(&a))?;
     list.register(&SHOW, Effect::Mutating, |a: ShowArg| {

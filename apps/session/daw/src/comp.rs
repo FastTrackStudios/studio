@@ -500,7 +500,9 @@ struct ShowOut {
     tracks: Vec<String>,
 }
 
-pub(crate) fn register(list: &architect::action::ActionList) -> Result<(), architect::action::ActionError> {
+pub(crate) fn register(
+    list: &architect::action::ActionList,
+) -> Result<(), architect::action::ActionError> {
     use architect::action::Effect;
     list.register(&SWIPE_COMP, Effect::Mutating, |a: SwipeArg| {
         let (daw, project) = crate::actions::song()?;

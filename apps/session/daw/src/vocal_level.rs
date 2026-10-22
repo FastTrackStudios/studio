@@ -956,7 +956,9 @@ fn vocals(daw: &daw::standalone::Standalone, project: &ProjectContext) -> Vec<da
         .collect()
 }
 
-pub(crate) fn register(list: &architect::action::ActionList) -> Result<(), architect::action::ActionError> {
+pub(crate) fn register(
+    list: &architect::action::ActionList,
+) -> Result<(), architect::action::ActionError> {
     list.register(
         &LEVEL,
         architect::action::Effect::Mutating,
