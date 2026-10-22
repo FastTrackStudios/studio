@@ -143,7 +143,7 @@ impl Account {
         let second = parts.next();
         match (first, second) {
             (Some(a), Some(b)) => [a, b].iter().flat_map(|c| c.to_uppercase()).collect(),
-            (Some(a), None) => name.chars().take(2).flat_map(char::to_uppercase).collect(),
+            (Some(_), None) => name.chars().take(2).flat_map(char::to_uppercase).collect(),
             _ => "?".to_owned(),
         }
     }

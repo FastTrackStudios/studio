@@ -13,6 +13,7 @@
 
 use std::time::{Duration, SystemTime};
 
+use dioxus::dioxus_core::Task;
 use dioxus::prelude::*;
 
 use crate::copy::{self, Platform};
