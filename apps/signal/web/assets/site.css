@@ -698,6 +698,35 @@ a { color: inherit; text-decoration: none; }
   --sg-demo-h: 1125;
 }
 
+/* -- preview label ---------------------------------------------------- */
+
+/* The landing demos are pictures of the rigs: labelled so, and they take
+ * no taps (the playable rig is the stripe's "Live demo"). */
+.sg-preview {
+  position: relative;
+}
+
+.sg-preview > :not(.sg-preview-badge) {
+  pointer-events: none;
+  user-select: none;
+}
+
+.sg-preview-badge {
+  position: absolute;
+  top: 0.75rem;
+  right: 0.75rem;
+  z-index: 2;
+  font-family: var(--mono);
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  background: rgba(0, 0, 0, 0.6);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 0.3rem 0.8rem;
+}
+
 /* -- vocal (no demo) ------------------------------------------------- */
 
 .sg-demo-soon {

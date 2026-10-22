@@ -25,7 +25,8 @@ pub fn Shell(children: Element) -> Element {
                 nav { class: "sg-nav",
                     Link { to: Route::GuideIndex {}, "Guide" }
                     a {
-                        href: "https://github.com/FastTrackStudios/signal",
+                        // Signal's code lives in the studio monorepo now.
+                        href: "https://github.com/FastTrackStudios/studio",
                         rel: "noreferrer",
                         "Source"
                     }

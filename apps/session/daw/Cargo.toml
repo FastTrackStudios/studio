@@ -175,7 +175,7 @@ tracing-subscriber = { workspace = true, optional = true }
 pprof = { version = "0.15", features = ["flamegraph"], optional = true }
 web-sys = { workspace = true, optional = true, features = [
     "Window", "Document", "Element", "HtmlElement", "HtmlCanvasElement",
-    "DomRect", "CssStyleDeclaration", "console", "Response", "PointerEvent",
+    "DomRect", "CssStyleDeclaration", "console", "Response", "Headers", "PointerEvent",
     "EventTarget",
     # The audio out (`web_audio`): a worklet the page posts rendered blocks to.
     "AudioContext", "AudioContextOptions", "BaseAudioContext", "AudioContextState",
