@@ -209,15 +209,19 @@ pub fn begin_row_drag(
     {
         let tops = Rc::clone(&tops);
         spawn(async move {
-            let mut out = Vec::with_capacity(els.len());
-            for e in els {
-                out.push(match e {
-                    Some(e) => e
-                        .get_client_rect()
-                        .await
-                        .map_or(f64::INFINITY, |r| r.min_y()),
-                    None => f64::INFINITY,
-                });
+            // A row Blitz cannot measure right now (the document is busy
+            // — it usually is mid-gesture) is asked again, not taken as
+            // "infinitely far down": that sent every drop to the top.
+            let mut out = vec![f64::INFINITY; els.len()];
+            for (k, e) in els.into_iter().enumerate() {
+                let Some(e) = e else { continue };
+                for _ in 0..30 {
+                    if let Ok(r) = e.get_client_rect().await {
+                        out[k] = r.min_y();
+                        break;
+                    }
+                    architect::platform::sleep(std::time::Duration::from_millis(16)).await;
+                }
             }
             *tops.borrow_mut() = out;
         });
@@ -236,12 +240,20 @@ pub fn begin_row_drag(
                 if t.is_empty() {
                     return;
                 }
-                let mut to = 0;
+                // The last measured row whose top (plus `grace`) the pointer
+                // is below; above them all, the first — but only when the
+                // first was measured, else it stays where it was.
+                let mut to = None;
                 for (k, top) in t.iter().enumerate() {
-                    if y > top + grace {
-                        to = k;
+                    if top.is_finite() && y > top + grace {
+                        to = Some(k);
                     }
                 }
+                let to = to.unwrap_or(if t.first().is_some_and(|x| x.is_finite()) {
+                    0
+                } else {
+                    from
+                });
                 d.set(Some((from, to)));
             }
             DragEvent::End => {
