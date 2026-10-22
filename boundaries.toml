@@ -255,6 +255,10 @@ package = "app-shell"
 layer = "L1"
 
 [[row]]
+package = "fts-account"
+layer = "L1"
+
+[[row]]
 package = "audio"
 layer = "L1"
 
