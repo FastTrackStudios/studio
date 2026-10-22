@@ -17969,9 +17969,11 @@ dependencies = [
  "architect",
  "chrono",
  "dioxus",
+ "dioxus-test",
  "signal-rig-shell",
  "signal-rigs-proto",
  "signal-widgets",
+ "tokio",
 ]
 
 [[package]]
