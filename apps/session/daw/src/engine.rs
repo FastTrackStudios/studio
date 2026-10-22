@@ -874,12 +874,26 @@ pub enum Move {
     PlayFrom,
 }
 
+/// Jumps asked of the transport by a press here ([`transport`]: a seek,
+/// Home, End, a play from a point), counted: what the arrangement follows
+/// even while stopped (`panel::follow_cursor`).
+static JUMPS: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
+/// How many jumps have been asked for so far.
+#[must_use]
+pub fn jumps() -> u64 {
+    JUMPS.load(std::sync::atomic::Ordering::Relaxed)
+}
+
 /// Send a transport command, off the event loop.
 ///
 /// Fire and forget, like [`Applier`]: the transport's own poll is what
 /// tells the window what happened, so waiting for the call to return
 /// would be waiting for news the window is already subscribed to.
 pub fn transport(command: Move, seconds: f64) {
+    if matches!(command, Move::Seek | Move::Home | Move::End | Move::PlayFrom) {
+        JUMPS.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    }
     // A press by a person: playing together, everyone's.
     #[cfg(any(feature = "native", feature = "web"))]
     if !matches!(command, Move::ToggleLoop | Move::ToggleRecord) {

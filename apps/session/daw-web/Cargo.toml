@@ -12,6 +12,9 @@ publish = false
 # desktop's and compile the browser-only host there.
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 session-daw = { path = "../daw", default-features = false, features = ["web"] }
+# What the address opens, and the "open a set" page when it names nothing
+# (`session::open_link`).
+session = { workspace = true, features = ["ui"] }
 dioxus = { workspace = true, features = ["web", "launch"] }
 tracing = { workspace = true }
 tracing-wasm = "0.2"

@@ -63,7 +63,7 @@ pub fn Loading(progress: Progress) -> Element {
             None,
         ),
     };
-    let detail = retry.unwrap_or(detail);
+    let detail = retry.map_or(detail, |r| readable_failure(&r));
     rsx! {
         LoadingFrame { headline, detail, failed: false, Sweep {} }
     }
@@ -101,5 +101,105 @@ pub fn LoadingFrame(headline: String, detail: String, failed: bool, children: El
             div { style: "font-size:13px; color:{detail_color}; max-width:420px; line-height:1.5;", "{detail}" }
             {children}
         }
+    }
+}
+
+/// A failure as the loading screen may say it: its first line, cut short.
+/// Never a response body: a static server answers a missing file with the
+/// site's `index.html`, and a page of HTML is not a reason anyone can read.
+#[must_use]
+pub fn readable_failure(detail: &str) -> String {
+    const LONGEST: usize = 240;
+    let lower = detail.to_ascii_lowercase();
+    let markup = ["<!doctype", "<html", "<head", "<body", "<script", "<div", "<meta", "<title"]
+        .iter()
+        .any(|tag| lower.contains(tag));
+    if markup {
+        return "The server sent back a web page instead of the session's files. \
+                Check the link, or ask whoever shared it for a new one."
+            .to_owned();
+    }
+    let line = detail.lines().map(str::trim).find(|l| !l.is_empty()).unwrap_or("");
+    if line.is_empty() {
+        return "Something went wrong opening it.".to_owned();
+    }
+    if line.chars().count() > LONGEST {
+        let cut: String = line.chars().take(LONGEST).collect();
+        return format!("{}…", cut.trim_end());
+    }
+    line.to_owned()
+}
+
+/// Why a canvas cannot be drawn: the browser gave it no WebGL2.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct NoWebGl2;
+
+impl std::fmt::Display for NoWebGl2 {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("this browser gave the page no WebGL2 (hardware acceleration is off or unsupported)")
+    }
+}
+
+impl std::error::Error for NoWebGl2 {}
+
+/// A renderer over a canvas's WebGL2 context: `context` asks the browser
+/// for it (`None` when there is none), `make` builds the renderer once it
+/// is there. The renderer itself would panic on a missing context
+/// (`vello_hybrid::WebGlRenderer::new` expects it), so it is only made
+/// once the context is known to exist.
+///
+/// # Errors
+///
+/// [`NoWebGl2`]: the browser gave no WebGL2 context.
+pub fn init_renderer<C, R>(
+    context: impl FnOnce() -> Option<C>,
+    make: impl FnOnce(C) -> R,
+) -> Result<R, NoWebGl2> {
+    context().map(make).ok_or(NoWebGl2)
+}
+
+/// What the page shows where it cannot draw: the views are drawn on the
+/// GPU, and this browser has none to give.
+#[component]
+pub fn HardwareNeeded() -> Element {
+    rsx! {
+        LoadingFrame {
+            headline: "Hardware acceleration needed".to_owned(),
+            detail: "Session draws its views with WebGL2, and this browser isn't offering it. \
+                     Turn on hardware acceleration in the browser's settings (or try another \
+                     browser), then reload the page."
+                .to_owned(),
+            failed: true,
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{NoWebGl2, init_renderer, readable_failure};
+
+    #[test]
+    fn no_webgl2_is_an_error_not_a_panic() {
+        let mut made = false;
+        let got = init_renderer(|| None::<()>, |()| made = true);
+        assert_eq!(got, Err(NoWebGl2));
+        assert!(!made, "the renderer is not built without a context");
+    }
+
+    #[test]
+    fn a_webgl2_context_builds_the_renderer() {
+        assert_eq!(init_renderer(|| Some(2), |gl| gl * 21), Ok(42));
+    }
+
+    #[test]
+    fn a_response_body_is_never_the_message() {
+        let html = "expected `<REAPER_PROJECT`, found: <!DOCTYPE html><html><head><title>Session</title>";
+        let said = readable_failure(html);
+        assert!(!said.contains('<'), "{said}");
+        assert!(said.starts_with("The server sent back a web page"), "{said}");
+        assert_eq!(readable_failure("HTTP 404"), "HTTP 404");
+        assert_eq!(readable_failure("\n  the set has no songs\nmore"), "the set has no songs");
+        let long = "x".repeat(1000);
+        assert!(readable_failure(&long).chars().count() <= 241);
     }
 }

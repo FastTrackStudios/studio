@@ -78,6 +78,7 @@ pub mod lyrics;
 pub mod mix_phases;
 pub mod mode_phases;
 pub mod modes;
+pub mod open_link;
 pub mod playback;
 // Growing a guitar part over the daw facade. Native-only for the same
 // reason as `track_manager`: it drives `dynamic-template`.

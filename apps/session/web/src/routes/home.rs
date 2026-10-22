@@ -6,6 +6,10 @@
 //! real chart data (the same [`chart_to_layout`] the `/demo` route stamps
 //! into the live backend), so the section names/order aren't fabricated,
 //! just not wired to a live transport here — that's what `/demo` is for.
+//!
+//! Beside the demo's button, a paste box for the visitor's own set: the
+//! share link Task gave them opens the app on that set
+//! ([`session::open_link`]).
 
 use std::time::Duration;
 
@@ -75,6 +79,15 @@ pub fn Home() -> Element {
                             class: "rounded-md bg-sky-500 px-5 py-2.5 font-medium text-zinc-950 hover:bg-sky-400 transition-colors",
                             "Try the live demo"
                         }
+                    }
+                    // Your own set: the link Task gave for it, pasted, opens
+                    // the app on it (`/app/?live=…`, `session::open_link`).
+                    div { class: "flex flex-col gap-2 pt-2",
+                        span { class: "text-sm font-medium text-zinc-300", "Open your own set" }
+                        span { class: "text-sm text-zinc-500",
+                            "Paste the share link Task gave you for the set."
+                        }
+                        session::open_link::OpenSetForm {}
                     }
                     p { class: "text-sm text-zinc-500", "Open Source \u{2014} No Account Required" }
                 }

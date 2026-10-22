@@ -91,14 +91,25 @@ struct Gpu {
 }
 
 impl Gpu {
-    fn new(canvas: &web_sys::HtmlCanvasElement, width: u32, height: u32) -> Self {
-        Self {
-            renderer: vello_hybrid::WebGlRenderer::new(canvas),
+    /// The renderer over `canvas`, or why there is none: a browser with
+    /// hardware acceleration off gives no WebGL2, and the renderer would
+    /// panic on that, so the context is asked for first.
+    fn new(
+        canvas: &web_sys::HtmlCanvasElement,
+        width: u32,
+        height: u32,
+    ) -> Result<Self, crate::loading::NoWebGl2> {
+        let renderer = crate::loading::init_renderer(
+            || webgl2_context(canvas),
+            |_context| vello_hybrid::WebGlRenderer::new(canvas),
+        )?;
+        Ok(Self {
+            renderer,
             resources: vello_hybrid::Resources::new(),
             scene: Self::scene_at(width, height),
             images: rustc_hash::FxHashMap::default(),
             size: (width, height),
-        }
+        })
     }
 
     fn scene_at(width: u32, height: u32) -> vello_hybrid::Scene {
@@ -144,6 +155,29 @@ impl Gpu {
         }
         self.scene.reset();
     }
+}
+
+/// `canvas`'s WebGL2 context, asked for with the options the renderer asks
+/// with (no antialiasing, a depth buffer) so the context it then gets is
+/// this one, set up as it wants. `None`: the browser has none to give.
+fn webgl2_context(canvas: &web_sys::HtmlCanvasElement) -> Option<js_sys::Object> {
+    let options = js_sys::Object::new();
+    js_sys::Reflect::set(&options, &"antialias".into(), &wasm_bindgen::JsValue::FALSE).ok()?;
+    js_sys::Reflect::set(&options, &"depth".into(), &wasm_bindgen::JsValue::TRUE).ok()?;
+    canvas
+        .get_context_with_context_options("webgl2", &options)
+        .ok()
+        .flatten()
+}
+
+/// Whether this browser draws with WebGL2 at all: asked of a canvas made
+/// for the question, before the page shows anything drawn.
+fn webgl2_offered() -> bool {
+    web_sys::window()
+        .and_then(|w| w.document())
+        .and_then(|d| d.create_element("canvas").ok())
+        .and_then(|el| el.dyn_into::<web_sys::HtmlCanvasElement>().ok())
+        .is_some_and(|canvas| webgl2_context(&canvas).is_some())
 }
 
 /// The DOM's modifier keys, as Blitz's.
@@ -428,7 +462,23 @@ fn start_painting(
         )]
         let scene = widget.0.borrow_mut().paint(css_w as u32, css_h as u32, 1.0);
         let mut gpu = gpu.borrow_mut();
-        let gpu = gpu.get_or_insert_with(|| Gpu::new(&canvas, px_w, px_h));
+        if gpu.is_none() {
+            match Gpu::new(&canvas, px_w, px_h) {
+                Ok(made) => *gpu = Some(made),
+                Err(e) => {
+                    // No panic, and no frame loop with nothing to draw
+                    // on: the page says so (`WebDemo`'s check), and this
+                    // canvas stays blank.
+                    tracing::error!(error = %e, "the canvas cannot be drawn");
+                    drop(gpu);
+                    again.borrow_mut().take();
+                    return;
+                }
+            }
+        }
+        let Some(gpu) = gpu.as_mut() else {
+            return;
+        };
         gpu.resize(px_w, px_h);
         gpu.draw(scene, dpr);
         if let Some(next) = again.borrow().as_ref() {
@@ -496,6 +546,16 @@ pub fn WebDemo(
     guide: Option<String>,
 ) -> Element {
     use crate::web_engine::Progress;
+    // The views are drawn with WebGL2: without it, say what is needed
+    // rather than open a set nothing can be drawn for. Asked once; the
+    // answer does not change while the page is up.
+    if !use_hook(webgl2_offered) {
+        return rsx! { crate::loading::HardwareNeeded {} };
+    }
+    // A live set, joined by its share link, is a guest's: played, not
+    // rearranged (there is no signing in on the web yet; the demo's
+    // playground is one of these).
+    let read_only = matches!(source, crate::web_engine::WebSource::Live { .. });
     // What the loading screen says: each step of the open, and why it is
     // trying again when it is.
     let progress = use_signal(|| Progress::Joining { retry: None });
@@ -516,7 +576,8 @@ pub fn WebDemo(
         Some(Err(e)) => rsx! {
             crate::loading::LoadingFrame {
                 headline: "The session did not open".to_owned(),
-                detail: e.clone(),
+                // A sentence, never a response body (`readable_failure`).
+                detail: crate::loading::readable_failure(e),
                 failed: true,
                 button {
                     style: "margin-top:8px; height:32px; padding:0 16px; border-radius:8px; border:none; \
@@ -527,7 +588,7 @@ pub fn WebDemo(
             }
         },
         Some(Ok((engine, setlist))) => rsx! {
-            DemoView { engine: engine.clone(), setlist: setlist.clone() }
+            DemoView { engine: engine.clone(), setlist: setlist.clone(), read_only }
         },
     }
 }
@@ -535,7 +596,12 @@ pub fn WebDemo(
 /// The opened demo: the app's frame — the views, the setlist, the
 /// transport and the mode — over whichever song is up.
 #[component]
-fn DemoView(engine: crate::web_engine::EngineRef, setlist: crate::setlist::Setlist) -> Element {
+fn DemoView(
+    engine: crate::web_engine::EngineRef,
+    setlist: crate::setlist::Setlist,
+    /// A guest's set: no reorder or removal (`ReadOnlySet`).
+    read_only: bool,
+) -> Element {
     use crate::compact::{CompactShell, PhoneView};
     use crate::shell::{SAFE_AREA, TopBar, View};
     use session::modes::Mode;
@@ -546,6 +612,7 @@ fn DemoView(engine: crate::web_engine::EngineRef, setlist: crate::setlist::Setli
     let view = use_signal(|| View::Daw);
     let mode = use_signal(|| Mode::Live);
     use_context_provider(|| mode);
+    use_context_provider(|| crate::setlist::ReadOnlySet(read_only));
     // The lyrics' Audience / Performer and layer, held across songs.
     use_context_provider(crate::lyrics_panel::LyricsChoice::new);
     // The songs — a signal from here on, which the tabs read and a pick
