@@ -15,7 +15,7 @@ workspace = true
 # apps/ do. Off by default: an app opts in with `session-node/task-node`.
 [features]
 default = []
-task-node = ["dep:task-server", "dep:openssl"]
+task-node = ["dep:task-server", "dep:openssl", "dep:bzip2"]
 
 [dependencies]
 eyre = { workspace = true }
@@ -30,6 +30,9 @@ tokio = { workspace = true, features = ["rt-multi-thread", "macros"] }
 # source: the same recipe as Task's apps/mobile.
 [target.'cfg(target_os = "ios")'.dependencies]
 openssl = { version = "0.10", features = ["vendored"], optional = true }
+# Same for bzip2 (zip, under the node's mail lane): pkg-config finds the
+# dev shell's macOS libbz2 unless the library is built for the target.
+bzip2 = { version = "0.5", features = ["static"], optional = true }
 
 [dev-dependencies]
 # Its own tests build with the node in, so a plain

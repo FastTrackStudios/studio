@@ -879,10 +879,10 @@ live-proto = { git = "https://github.com/FastTrackStudios/task", branch = "main"
 links-proto = { git = "https://github.com/FastTrackStudios/task", branch = "main" }
 # A studio install as a Task device node (ADR 0002, STA-362): Task's own
 # LocalNode, embedded by `session-node` behind its `task-node` feature.
-# Every plugin off but FastTrackStudio's (songs, setlists, live), which is
-# what Session and Signal read; the core lanes (auth, files, docs, the
-# iroh presence) are not features and always come with it.
-task-server = { git = "https://github.com/FastTrackStudios/task", branch = "main", default-features = false, features = ["plugin-fasttrackstudio"] }
+# Default features (every plugin), as Task's own apps/mobile takes it:
+# task main's `--no-default-features` build does not compile (mcp.rs and
+# notifier.rs name the plugin crates unconditionally; 97 errors, ADR 0002).
+task-server = { git = "https://github.com/FastTrackStudios/task", branch = "main" }
 session-node = { path = "apps/session/node" }
 
 # Task's externals not already pinned above (root pins win everywhere
