@@ -235,7 +235,7 @@ fn framed(
 }
 
 #[cfg(feature = "native")]
-pub fn register(list: &ActionList) {
+pub fn register(list: &ActionList) -> Result<(), architect::action::ActionError> {
     list.register(&STEP_ACTION, Effect::Mutating, |a: StepArg| {
         let (daw, project) = crate::actions::song()?;
         let mut step = get();
@@ -306,7 +306,8 @@ pub fn register(list: &ActionList) {
             from,
             to,
         })
-    });
+    })?;
+    Ok(())
 }
 
 /// Run `SESSION_STEP` with `args`, off the window's thread.

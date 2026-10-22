@@ -360,7 +360,7 @@ struct SeamsOut {
     moved: u32,
 }
 
-pub(crate) fn register(list: &architect::action::ActionList) {
+pub(crate) fn register(list: &architect::action::ActionList) -> Result<(), architect::action::ActionError> {
     list.register(
         &SEAMS,
         architect::action::Effect::Mutating,
@@ -395,7 +395,8 @@ pub(crate) fn register(list: &architect::action::ActionList) {
                 moved: u32::try_from(moved).unwrap_or(u32::MAX),
             })
         },
-    );
+    )?;
+    Ok(())
 }
 
 #[cfg(test)]

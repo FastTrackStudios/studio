@@ -716,7 +716,7 @@ fn now_comped(span: (f64, f64), take: &str) {
     }
 }
 
-pub fn register(list: &ActionList) {
+pub fn register(list: &ActionList) -> Result<(), architect::action::ActionError> {
     list.register(&CANDIDATES, Effect::ReadOnly, |a: CandidatesArg| {
         let (daw, project) = crate::actions::song()?;
         Ok(crate::edit_actions::stretches(daw, &project, &a.on)?
@@ -740,7 +740,7 @@ pub fn register(list: &ActionList) {
                 }
             })
             .collect::<Vec<Ranking>>())
-    });
+    })?;
     list.register(&CYCLE, Effect::Mutating, |a: CycleArg| {
         let (daw, project) = crate::actions::song()?;
         let mut stages = crate::stages::Stages::start();
@@ -783,7 +783,7 @@ pub fn register(list: &ActionList) {
             });
         }
         Ok(out)
-    });
+    })?;
     list.register(&CHOOSE, Effect::Mutating, |a: ChooseArg| {
         let (daw, project) = crate::actions::song()?;
         let mut out = Vec::new();
@@ -818,5 +818,6 @@ pub fn register(list: &ActionList) {
             });
         }
         Ok(out)
-    });
+    })?;
+    Ok(())
 }

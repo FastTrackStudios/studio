@@ -3260,17 +3260,18 @@ struct MarkArg {
 }
 
 /// Register the hit detector's actions.
-pub fn register(list: &ActionList) {
-    register_reads(list);
-    register_edits(list);
-    register_zones(list);
+pub fn register(list: &ActionList) -> Result<(), architect::action::ActionError> {
+    register_reads(list)?;
+    register_edits(list)?;
+    register_zones(list)?;
+    Ok(())
 }
 
 /// Detecting, and reading what was found.
-fn register_reads(list: &ActionList) {
+fn register_reads(list: &ActionList) -> Result<(), architect::action::ActionError> {
     list.register(&SETTINGS, Effect::Mutating, |a: HitPatch| {
         Ok(set_settings(&a))
-    });
+    })?;
     list.register(&DETECT, Effect::Mutating, |a: DetectArg| {
         let (daw, project) = song()?;
         let settings = settings().with(&a.settings);
@@ -3285,7 +3286,7 @@ fn register_reads(list: &ActionList) {
             &settings,
             a.all_takes.unwrap_or(false),
         )
-    });
+    })?;
     list.register(&LIST, Effect::ReadOnly, |a: ListArg| {
         let (daw, project) = song()?;
         let (from, to) = (
@@ -3322,7 +3323,7 @@ fn register_reads(list: &ActionList) {
                 .take(usize::try_from(limit).unwrap_or(usize::MAX))
                 .collect(),
         })
-    });
+    })?;
     list.register(&EXPLAIN, Effect::ReadOnly, |a: ExplainArg| {
         let (daw, project) = song()?;
         let (piece, time) = match (&a.id, &a.piece, a.time) {
@@ -3344,11 +3345,12 @@ fn register_reads(list: &ActionList) {
                 usize::try_from(a.points.unwrap_or(120)).unwrap_or(120),
             ),
         )
-    });
+    })?;
+    Ok(())
 }
 
 /// The song's edit zones.
-fn register_zones(list: &ActionList) {
+fn register_zones(list: &ActionList) -> Result<(), architect::action::ActionError> {
     list.register(&AUDIT, Effect::ReadOnly, |a: SpanOnly| {
         let (daw, project) = song()?;
         Ok(audit(
@@ -3359,11 +3361,11 @@ fn register_zones(list: &ActionList) {
                 a.to.unwrap_or(f64::INFINITY),
             ),
         ))
-    });
+    })?;
     list.register(&ZONES_LIST, Effect::ReadOnly, |(): ()| {
         let (daw, project) = song()?;
         Ok(zones(daw, &project))
-    });
+    })?;
     list.register(&ZONES_ADD, Effect::Mutating, |a: ZoneAddArg| {
         let (daw, project) = song()?;
         if a.end <= a.start {
@@ -3391,7 +3393,7 @@ fn register_zones(list: &ActionList) {
         Ok(zones(daw, &project)
             .into_iter()
             .find(|z| (z.start - a.start).abs() < 1e-6 && (z.end - a.end).abs() < 1e-6))
-    });
+    })?;
     list.register(&ZONES_EDIT, Effect::Mutating, |a: ZoneEditArg| {
         let (daw, project) = song()?;
         // One step: undoable, and recorded into the song's file — a change
@@ -3402,7 +3404,8 @@ fn register_zones(list: &ActionList) {
         let edited = edit_zone(daw, project.clone(), a);
         Projects::end_undo_block(daw, project, label, None);
         edited
-    });
+    })?;
+    Ok(())
 }
 
 /// `a` made on its zone: moved, re-kinded, approved or rejected, given a
@@ -3485,7 +3488,7 @@ fn edit_zone(
 }
 
 /// Correcting what was found.
-fn register_edits(list: &ActionList) {
+fn register_edits(list: &ActionList) -> Result<(), architect::action::ActionError> {
     list.register(&ADD, Effect::Mutating, |a: AddArg| {
         let (daw, project) = song()?;
         let time = if a.now.unwrap_or(false) {
@@ -3501,7 +3504,7 @@ fn register_edits(list: &ActionList) {
             time,
             (a.snap.unwrap_or(true), a.note.unwrap_or_default()),
         )
-    });
+    })?;
     list.register(&REMOVE, Effect::Mutating, |a: IdsArg| {
         let (daw, project) = song()?;
         let ids: BTreeSet<String> = a.ids.into_iter().collect();
@@ -3512,7 +3515,7 @@ fn register_edits(list: &ActionList) {
             "Remove drum hits",
             |_, _| false,
         ))
-    });
+    })?;
     list.register(&MOVE, Effect::Mutating, |a: MoveArg| {
         let (daw, project) = song()?;
         let which = BTreeSet::from([a.id.clone()]);
@@ -3531,7 +3534,7 @@ fn register_edits(list: &ActionList) {
             return Err(format!("no hit {}", a.id));
         }
         Ok(n)
-    });
+    })?;
     list.register(&MARK, Effect::Mutating, |a: MarkArg| {
         let (daw, project) = song()?;
         let ids: BTreeSet<String> = a.ids.iter().cloned().collect();
@@ -3554,7 +3557,8 @@ fn register_edits(list: &ActionList) {
             }
             true
         }))
-    });
+    })?;
+    Ok(())
 }
 
 #[cfg(test)]

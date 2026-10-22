@@ -251,10 +251,11 @@ mod action {
         "",
     );
 
-    pub fn register(list: &ActionList) {
+    pub fn register(list: &ActionList) -> Result<(), architect::action::ActionError> {
         list.register(&AUDIO, Effect::ReadOnly, |(): ()| {
             Ok(super::LAST.lock().ok().and_then(|l| l.clone()))
-        });
+        })?;
+        Ok(())
     }
 }
 

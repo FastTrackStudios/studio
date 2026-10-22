@@ -52,7 +52,7 @@ struct Timed {
     ago_s: f64,
 }
 
-pub fn register(list: &ActionList) {
+pub fn register(list: &ActionList) -> Result<(), architect::action::ActionError> {
     list.register(&RECENT, Effect::ReadOnly, |a: RecentArg| {
         let limit = usize::try_from(a.limit.unwrap_or(20)).unwrap_or(20);
         let now = std::time::SystemTime::now();
@@ -88,5 +88,6 @@ pub fn register(list: &ActionList) {
                 total_ms: t.total_ms,
             })
             .collect::<Vec<Timed>>())
-    });
+    })?;
+    Ok(())
 }

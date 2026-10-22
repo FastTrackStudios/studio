@@ -165,7 +165,7 @@ struct RenderAheadArg {
     depth_ms: Option<u32>,
 }
 
-pub(crate) fn register(list: &ActionList) {
+pub(crate) fn register(list: &ActionList) -> Result<(), architect::action::ActionError> {
     list.register(
         &SESSION_RENDER_AHEAD,
         Effect::Mutating,
@@ -176,8 +176,9 @@ pub(crate) fn register(list: &ActionList) {
                 depth_ms: a.depth_ms.unwrap_or(was.depth_ms),
             }))
         },
-    );
+    )?;
     list.register(&TRACK_RENDER_LIVE, Effect::Mutating, |a: RenderLiveArg| {
         render_live(&a)
-    });
+    })?;
+    Ok(())
 }

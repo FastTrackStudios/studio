@@ -500,7 +500,7 @@ struct ShowOut {
     tracks: Vec<String>,
 }
 
-pub(crate) fn register(list: &architect::action::ActionList) {
+pub(crate) fn register(list: &architect::action::ActionList) -> Result<(), architect::action::ActionError> {
     use architect::action::Effect;
     list.register(&SWIPE_COMP, Effect::Mutating, |a: SwipeArg| {
         let (daw, project) = crate::actions::song()?;
@@ -512,7 +512,7 @@ pub(crate) fn register(list: &architect::action::ActionList) {
         crate::studio::request_resync();
         crate::actions::list().changed("lanes", "a lane was comped onto the comp");
         Ok(SwipeOut { tracks })
-    });
+    })?;
     list.register(&SHOW_LANES, Effect::Mutating, |a: ShowArg| {
         let (daw, project) = crate::actions::song()?;
         let guid = crate::actions::resolve(daw, &project, &a.track)?;
@@ -530,7 +530,8 @@ pub(crate) fn register(list: &architect::action::ActionList) {
         }
         let shown = crate::lanes::set_expanded(&tracks, a.show);
         Ok(ShowOut { shown, tracks })
-    });
+    })?;
+    Ok(())
 }
 
 #[cfg(test)]
