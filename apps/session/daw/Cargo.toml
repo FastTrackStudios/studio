@@ -175,7 +175,7 @@ tracing-subscriber = { workspace = true, optional = true }
 pprof = { version = "0.15", features = ["flamegraph"], optional = true }
 web-sys = { workspace = true, optional = true, features = [
     "Window", "Document", "Element", "HtmlElement", "HtmlCanvasElement",
-    "DomRect", "CssStyleDeclaration", "console", "Response", "PointerEvent",
+    "DomRect", "CssStyleDeclaration", "console", "Response", "Headers", "PointerEvent",
     "EventTarget",
     # The audio out (`web_audio`): a worklet the page posts rendered blocks to.
     "AudioContext", "AudioContextOptions", "BaseAudioContext", "AudioContextState",
@@ -233,6 +233,8 @@ reqwest = { workspace = true, optional = true }
 # Signing in to Task from another device (task_account): the protocol and
 # the kept session.
 auth-client = { workspace = true, optional = true }
+# The shared account (device-code sign-in, the one desktop session file).
+fts-account = { workspace = true, optional = true }
 serde_json = { workspace = true }
 
 # The browser's tokio: channels and `select!` for the live session's loop
@@ -253,7 +255,7 @@ default = ["native"]
 signal = ["native", "dep:signal-fx"]
 # The desktop app: dioxus-native (Blitz) hosts for the panels, the
 # in-process engine with its audio device, threads, the plugin-UI graph.
-native = ["dep:dioxus-native", "dep:zbus", "dep:realfft", "dep:architect-mcp", "dep:anyrender_vello", "dep:wgpu", "dep:wgpu-context-07", "dep:pollster", "dep:dirs", "dep:winit", "dep:tokio", "dep:tracing-subscriber", "eq/native", "daw/standalone-rpp", "daw/standalone-bootstrap", "daw-standalone/reapeaks", "daw-standalone/stream-ogg", "daw/standalone-session-file", "studio/cli", "dynamic-template/reaper", "dep:patch-list", "dep:editor-view", "editor-view/native", "dep:editor-state", "dep:keyflow-editor-lang", "dep:futures-channel", "dep:rayon", "dep:hits", "dep:session-format", "dep:futures-util", "session/collab", "dep:architect", "architect/iroh", "dep:crdt", "dep:vox-core", "dep:uuid", "dep:editor-crdt", "dep:futures-timer", "dep:daw-transport-sync", "dep:fts-sample", "fts-sample/engine-native", "fts-sample/write", "dep:dawfile-reaper", "dep:builtin", "builtin?/engine", "dawfile-reaper/peaks-wav", "dawfile-reaper/peaks-ogg", "session/library", "dep:auth-client", "dep:live-proto", "dep:task-dial", "dep:reqwest"]
+native = ["dep:dioxus-native", "dep:zbus", "dep:realfft", "dep:architect-mcp", "dep:anyrender_vello", "dep:wgpu", "dep:wgpu-context-07", "dep:pollster", "dep:dirs", "dep:winit", "dep:tokio", "dep:tracing-subscriber", "eq/native", "daw/standalone-rpp", "daw/standalone-bootstrap", "daw-standalone/reapeaks", "daw-standalone/stream-ogg", "daw/standalone-session-file", "studio/cli", "dynamic-template/reaper", "dep:patch-list", "dep:editor-view", "editor-view/native", "dep:editor-state", "dep:keyflow-editor-lang", "dep:futures-channel", "dep:rayon", "dep:hits", "dep:session-format", "dep:futures-util", "session/collab", "dep:architect", "architect/iroh", "dep:crdt", "dep:vox-core", "dep:uuid", "dep:editor-crdt", "dep:futures-timer", "dep:daw-transport-sync", "dep:fts-sample", "fts-sample/engine-native", "fts-sample/write", "dep:dawfile-reaper", "dep:builtin", "builtin?/engine", "dawfile-reaper/peaks-wav", "dawfile-reaper/peaks-ogg", "session/library", "dep:auth-client", "dep:fts-account", "dep:live-proto", "dep:task-dial", "dep:reqwest"]
 # The browser: the same widgets, hosted in <canvas> elements under
 # dioxus-web and drawn with vello_hybrid's WebGL renderer (keyflow-ui's
 # `wasm-graphics` pattern). See `web_host`.

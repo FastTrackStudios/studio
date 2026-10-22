@@ -942,6 +942,19 @@ async fn fetch_bytes(url: &str) -> Result<Arc<[u8]>, String> {
     if !response.ok() {
         return Err(format!("HTTP {}", response.status()));
     }
+    // The static server answers a file it does not have with the site's
+    // `index.html` and a 200: that is a missing file, not its contents.
+    let html = response
+        .headers()
+        .get("content-type")
+        .ok()
+        .flatten()
+        .is_some_and(|t| t.to_ascii_lowercase().starts_with("text/html"));
+    if html {
+        return Err(format!(
+            "{url} is not there (the server sent a web page instead)"
+        ));
+    }
     let body = response.array_buffer().map_err(|e| format!("{e:?}"))?;
     let body = wasm_bindgen_futures::JsFuture::from(body)
         .await

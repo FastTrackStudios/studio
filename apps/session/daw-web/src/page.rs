@@ -6,7 +6,10 @@
 //! open (its prepared `.session`, mirrored into memory) with its proxies
 //! streaming in by range, what will be heard first first; `&guide=<link>`
 //! is the guide sample library's, for the click, the count and the cues.
-//! Without a link it opens the copy bundled under `session/`, silent. See
+//! Without a link it asks for one (`session::open_link::OpenSet`): a paste
+//! box for the link Task gave, and the way to the demo. It does not guess
+//! at a song: the static server answers a missing file with the site's
+//! `index.html`, so a guessed one opened as a page of HTML. See
 //! `session_daw::web_engine`.
 
 use dioxus::prelude::*;
@@ -37,11 +40,6 @@ pub fn run() {
     dioxus::launch(App);
 }
 
-/// The query parameter a share link comes in.
-const SHARE: &str = "share";
-/// The query parameter a live link (a set Task keeps) comes in.
-const LIVE: &str = "live";
-
 /// A visitor's name, when the page is not told one: Guest and four
 /// letters, so two guests are told apart.
 fn guest_name() -> String {
@@ -50,33 +48,25 @@ fn guest_name() -> String {
 }
 
 /// What the page opens — a set Task keeps, joined by its live link
-/// (`?live=<link>&name=<who>`), the song a share link shares
-/// (`?share=<link>`), or the copy bundled under `session/`, silent — and
-/// the guide library's link (`&guide=<link>`).
-fn source() -> (session_daw::web_engine::WebSource, Option<String>) {
+/// (`?live=<link>&name=<who>`), or the song a share link shares
+/// (`?share=<link>`) — and the guide library's link (`&guide=<link>`).
+/// `None` when the address names neither: the page asks for a link.
+fn source() -> (Option<session_daw::web_engine::WebSource>, Option<String>) {
+    use session::open_link::{AppOpen, app_open};
     use session_daw::web_engine::WebSource;
     let query = web_sys::window()
         .and_then(|w| w.location().search().ok())
         .and_then(|q| web_sys::UrlSearchParams::new_with_str(&q).ok());
-    let param = |key: &str| {
-        query
-            .as_ref()
-            .and_then(|q| q.get(key))
-            .filter(|v| !v.is_empty())
-    };
-    let source = match (param(LIVE), param(SHARE)) {
-        (Some(link), _) => WebSource::Live {
+    let (open, guide) = app_open(|key| query.as_ref().and_then(|q| q.get(key)));
+    let source = match open {
+        AppOpen::Live { link, name } => Some(WebSource::Live {
             link,
-            name: param("name").unwrap_or_else(guest_name),
-        },
-        (None, Some(link)) => WebSource::Shared { link },
-        (None, None) => WebSource::Bundled {
-            name: "Always On Time".to_owned(),
-            rpp_url: "session/demo.RPP".to_owned(),
-            chart_url: Some("session/demo.kf".to_owned()),
-        },
+            name: name.unwrap_or_else(guest_name),
+        }),
+        AppOpen::Shared { link } => Some(WebSource::Shared { link }),
+        AppOpen::Nothing => None,
     };
-    (source, param("guide"))
+    (source, guide)
 }
 
 #[component]
@@ -84,6 +74,10 @@ fn App() -> Element {
     let (source, guide) = use_hook(source);
     rsx! {
         style { {TAILWIND} }
-        session_daw::web_host::WebDemo { source, guide }
+        if let Some(source) = source {
+            session_daw::web_host::WebDemo { source, guide }
+        } else {
+            session::open_link::OpenSet {}
+        }
     }
 }

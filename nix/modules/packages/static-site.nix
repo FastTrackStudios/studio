@@ -19,7 +19,7 @@
           mkdir -p $out
           cp -a ${siteRoot}/. $out/
           chmod u+w $out
-          echo '{"rev":"${config.fts.buildRev}"}' > $out/version.json
+          echo '{"rev":"${config.fts.buildRev}","tag":"${config.fts.buildTag}","date":"${config.fts.buildDate}"}' > $out/version.json
         '';
         swsConfig = pkgs.writeText "sws.toml" ''
           [general]

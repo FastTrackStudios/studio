@@ -45,6 +45,10 @@ mod front_state;
 mod gig;
 #[cfg(all(feature = "tone3000", target_os = "ios"))]
 mod ios_safari;
+/// The FastTrackStudio account (STA-361): the shared `fts_account` sign-in,
+/// one session with Session on this computer.
+#[cfg(not(target_arch = "wasm32"))]
+mod account;
 /// Libraries — the home screen's downloads: a studio's kits and packs onto
 /// this device, over the content host.
 #[cfg(all(feature = "signal-guitar", not(target_arch = "wasm32")))]
@@ -708,6 +712,8 @@ fn App() -> Element {
     let _chrome = fts_audio_ui::chrome::provide_chrome();
     let level = fts_audio_ui::chrome::use_chrome_level(0);
     let chrome = level.chrome();
+    #[cfg(not(target_arch = "wasm32"))]
+    let _account = account::provide_account();
 
     let go = use_callback(move |w: Workspace| {
         current.set(Some(w));
@@ -782,6 +788,9 @@ fn App() -> Element {
         document::Style { {"@layer base{:where(button.flex,button.inline-flex){justify-content:flex-start;}}"} }
         ResizeHandles {}
         PlatformMenu {}
+        // The account sheet, over the whole window (desktop: the scrim
+        // starts at the window top).
+        AccountOverlayHost {}
         // The shared studio shell (app_shell::ui::ShellFrame): the app bar,
         // the app-level Settings flyout in the right region, and the
         // workspace in main. A workspace with sidebars and drawers of its
@@ -1114,6 +1123,7 @@ fn SettingsPanel() -> Element {
             style: "display: flex; flex-direction: column; align-items: flex-start; gap: 12px; \
                     padding: 12px; font-size: 12px;",
             span { style: "color: #a1a1aa;", "Signal v{env!(\"CARGO_PKG_VERSION\")}" }
+            AccountBlockHost {}
             AccountSettings {}
             EnginesArea {}
             EngineModeSetting {}
@@ -1125,7 +1135,34 @@ fn SettingsPanel() -> Element {
     }
 }
 
-/// The `FastTrackStudio` account — sign in once here, and TONE3000 (whatever
+/// Settings' Account block: the shared FastTrackStudio account (STA-361).
+#[cfg(not(target_arch = "wasm32"))]
+#[component]
+fn AccountBlockHost() -> Element {
+    rsx! { account::AccountBlock {} }
+}
+
+#[cfg(target_arch = "wasm32")]
+#[component]
+fn AccountBlockHost() -> Element {
+    rsx! {}
+}
+
+/// The account sheet over the window.
+#[cfg(not(target_arch = "wasm32"))]
+#[component]
+fn AccountOverlayHost() -> Element {
+    rsx! { account::AccountOverlay { top: 0, width: 1024 } }
+}
+
+#[cfg(target_arch = "wasm32")]
+#[component]
+fn AccountOverlayHost() -> Element {
+    rsx! {}
+}
+
+/// TONE3000 (renamed from "FastTrackStudio account", STA-361): the engine's
+/// OIDC session, which links TONE3000 — sign in once here, and TONE3000 (whatever
 /// else the account gathers, later) works on every machine signed in to it
 /// without a second, per-machine authorization. See `crates/signal/account`
 /// and `crates/signal/docs/tone3000.md`'s "Two ways to be authorized".
@@ -1180,12 +1217,12 @@ fn AccountSettings() -> Element {
 
     rsx! {
         div { style: "display: flex; flex-direction: column; gap: 6px; width: 100%;",
-            span { style: "color: #71717a; font-size: 11px;", "FastTrackStudio account" }
+            span { style: "color: #9aa0a6; font-size: 12px; font-weight: 750; letter-spacing: 0.06em;", "TONE3000" }
             if signed_in {
                 div { style: "display: flex; align-items: center; gap: 8px;",
                     span { style: "width: 8px; height: 8px; border-radius: 999px; background: #22c55e; flex-shrink: 0;" }
                     span { style: "color: #e4e4e7; font-size: 12px; min-width: 0; overflow: hidden; text-overflow: clip; white-space: nowrap;",
-                        if status.read().email.is_empty() { "Signed in" } else { "{status.read().email}" }
+                        if status.read().email.is_empty() { "Connected" } else { "Connected as {status.read().email}" }
                     }
                     button {
                         style: "margin-left: auto; padding: 3px 10px; border-radius: 5px; background: transparent; \
@@ -1198,13 +1235,13 @@ fn AccountSettings() -> Element {
                                 status.set(AccountStatus::default());
                             });
                         },
-                        "Sign out"
+                        "Disconnect"
                     }
                 }
             } else {
                 div { style: "display: flex; align-items: center; gap: 8px;",
                     span { style: "width: 8px; height: 8px; border-radius: 999px; background: #52525b; flex-shrink: 0;" }
-                    span { style: "color: #a1a1aa; font-size: 12px;", "Not signed in" }
+                    span { style: "color: #a1a1aa; font-size: 14px;", "Not connected" }
                     button {
                         style: "margin-left: auto; padding: 3px 10px; border-radius: 5px; background: #10283f; \
                                 color: #7dd3fc; border: 1px solid #38bdf8; font-size: 11px;",
@@ -1226,12 +1263,12 @@ fn AccountSettings() -> Element {
                                 rig_view::open_externally(request.authorize_url);
                                 message.set(
                                     "Finish signing in in your browser, then come back and \
-                                     press \"I've signed in\"."
+                                     press \"I've connected\"."
                                         .to_string(),
                                 );
                             });
                         },
-                        "Sign in"
+                        "Connect"
                     }
                 }
                 if !message.read().is_empty() {
@@ -1241,15 +1278,13 @@ fn AccountSettings() -> Element {
                             style: "align-self: flex-start; padding: 3px 10px; border-radius: 5px; background: transparent; \
                                     color: #a1a1aa; border: 1px solid #27272a; font-size: 11px;",
                             onclick: move |_| refresh(c_refresh.clone()),
-                            "I've signed in"
+                            "I've connected"
                         }
                     }
                 }
             }
-            span { style: "color: #52525b; font-size: 10px; line-height: 1.4;",
-                "Links TONE3000 to this account once, at auth.fasttrackstudio.app — every machine \
-                 signed in here can then browse and download captures without its own TONE3000 \
-                 sign-in."
+            span { style: "color: #9aa0a6; font-size: 14px; line-height: 1.4;",
+                "Uses a second sign-in at auth.fasttrackstudio.app."
             }
         }
     }

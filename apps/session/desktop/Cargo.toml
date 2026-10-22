@@ -201,6 +201,8 @@ tracing-subscriber.workspace = true
 # winit for the window's title bar.
 dioxus-native = { workspace = true, optional = true }
 session-daw = { path = "../daw", optional = true }
+# The shared FastTrackStudio account and its sign-in UI (STA-361).
+fts-account = { workspace = true, features = ["ui"] }
 winit = { version = "0.31.0-beta.2", optional = true }
 # Where the native app remembers the last session it opened
 # (`native::choose`).

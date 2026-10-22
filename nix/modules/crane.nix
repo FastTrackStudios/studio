@@ -1,5 +1,5 @@
 # crane plumbing shared by every deployable package (fills fts.craneLib,
-# fts.src, fts.commonArgs, fts.buildRev).
+# fts.src, fts.commonArgs, fts.buildRev, fts.buildTag, fts.buildDate).
 { inputs, self, ... }:
 {
   perSystem = { pkgs, lib, config, ... }:
@@ -124,5 +124,16 @@
       # TASK_BUILD_REV). Only the cheap wrapper layers depend on it —
       # the expensive cargo/wasm derivations stay rev-free and cached.
       fts.buildRev = self.rev or self.dirtyRev or "unknown";
+      # The release the commit belongs to, as its tag (`v<workspace
+      # version>`, what the release flow tags), and when the commit was
+      # made (the flake's own lastModifiedDate, UTC) — both read from the
+      # source, so no extra derivation and no clock in the build.
+      fts.buildTag = "v" + (builtins.fromTOML (builtins.readFile (self + "/Cargo.toml"))).workspace.package.version;
+      fts.buildDate =
+        let
+          d = self.lastModifiedDate or "19700101000000";
+          at = start: len: lib.substring start len d;
+        in
+        "${at 0 4}-${at 4 2}-${at 6 2}T${at 8 2}:${at 10 2}:${at 12 2}Z";
     };
 }

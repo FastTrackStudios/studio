@@ -202,6 +202,11 @@ pub struct ArrangementPanel {
     /// where it was put.
     pub follow: Rc<Cell<bool>>,
     followed_at: Rc<Cell<f64>>,
+    /// The last jump asked of the transport this view has seen
+    /// ([`crate::engine::jumps`]), and how many frames are left for the
+    /// cursor to land: a jump is followed even while stopped.
+    jumps_seen: Rc<Cell<u64>>,
+    landing: Rc<Cell<u32>>,
     /// The panel's outer node (measured) and the widget's (focused).
     pub mounted: Rc<RefCell<Option<Rc<MountedData>>>>,
     pub focus_node: Rc<RefCell<Option<Rc<MountedData>>>>,
@@ -346,6 +351,8 @@ pub fn use_arrangement_panel<H: Clone + 'static>(
     // and only then (`follow_cursor`): stopped, it stays where it was.
     let follow = use_hook(|| Rc::new(Cell::new(true)));
     let followed_at = use_hook(|| Rc::new(Cell::new(0.0_f64)));
+    let jumps_seen = use_hook(|| Rc::new(Cell::new(crate::engine::jumps())));
+    let landing = use_hook(|| Rc::new(Cell::new(0_u32)));
     let history = use_hook(|| Rc::new(RefCell::new(crate::zoom::History::default())));
     let which_shown = use_signal(|| None::<crate::which_key::WhichKey>);
     let focus_node = use_hook(|| {
@@ -453,6 +460,8 @@ pub fn use_arrangement_panel<H: Clone + 'static>(
         shape,
         follow,
         followed_at,
+        jumps_seen,
+        landing,
         mounted,
         focus_node,
         measured,
@@ -943,10 +952,20 @@ impl ArrangementPanel {
     /// zoom where a view sliding under the cursor is not.
     fn follow_cursor(&self, r: (f64, f64, f64, f64), play_at: f64) {
         let moved = (self.followed_at.replace(play_at) - play_at).abs() > 1e-6;
-        // Only while the song plays: stopped, the cursor going back to
-        // where play began leaves the view where it was — on what was
-        // playing when it stopped.
-        if !self.follow.get() || !moved || !crate::engine::moving() {
+        // A jump asked for (a tap on a progress-strip section, Home, End):
+        // the cursor's next move is it landing, followed playing or not.
+        let jumps = crate::engine::jumps();
+        if self.jumps_seen.replace(jumps) != jumps {
+            self.landing.set(LANDING_FRAMES);
+        }
+        let landing = self.landing.get();
+        let jumped = landing > 0 && moved;
+        self.landing
+            .set(if jumped { 0 } else { landing.saturating_sub(1) });
+        // Otherwise only while the song plays: stopped, the cursor going
+        // back to where play began leaves the view where it was — on what
+        // was playing when it stopped.
+        if !self.follow.get() || !moved || !(jumped || crate::engine::moving()) {
             return;
         }
         let (zoom_x, zoom_y) = *self.zoom.peek();
@@ -1010,6 +1029,12 @@ fn on_the_page(page: crate::bar_step::Page, width: f64, pps: f64) -> bool {
 /// How far the view's span may be from a page's for it to be that page's
 /// zoom still, of the span.
 const PAGE_ZOOM_SLACK: f64 = 0.02;
+
+/// How many frames a jump has to land in before it is forgotten (about
+/// two seconds): the transport answers a seek in a frame or two, and a
+/// jump to where the cursor already was never moves it at all, so an old
+/// one must not page the view at the next stop.
+const LANDING_FRAMES: u32 = 120;
 
 /// What is drawn over the widget: the main toolbar, the which-key popup,
 /// and the two scrollbars. Ordinary DOM, the same under either host.

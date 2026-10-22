@@ -86,6 +86,8 @@ daw-proto = { workspace = true }
 daw-standalone = { workspace = true, features = ["audio", "bootstrap", "decode", "rpp-project", "session-file"] }
 daw-sync = { workspace = true }
 dioxus-test = { workspace = true }
+# `open_link`'s empty-state test renders the component to HTML.
+dioxus-ssr = { git = "https://github.com/DioxusLabs/dioxus", rev = "f717a8e184a522d078b70bb4b4d62a5f9a99ddfc", default-features = false }
 eyre = { workspace = true }
 facet-postcard = { workspace = true }
 session-format = { workspace = true, features = ["store"] }

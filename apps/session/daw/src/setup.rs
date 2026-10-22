@@ -465,12 +465,24 @@ fn SongTable(setlist: Signal<Setlist>, on_pick: Option<EventHandler<usize>>) -> 
     let room = room();
     let wide = room >= 760.0;
     let roomy = room >= 520.0;
-    // A row's buttons: a thumb's width each, a little less on a phone.
-    let row_w: u32 = if roomy { 48 } else { 40 };
+    // A row's buttons: a thumb's width each, a little less on a phone —
+    // none in a set this page only views (a guest's, `ReadOnlySet`).
+    let read_only = crate::setlist::ReadOnlySet::here();
+    let row_w: u32 = match (read_only, roomy) {
+        (true, _) => 0,
+        (false, true) => 48,
+        (false, false) => 40,
+    };
     let head = "font-size:11px; font-weight:700; letter-spacing:0.08em; color:#6b7280;";
     rsx! {
         div {
             style: "display:flex; flex-direction:column;",
+            if read_only {
+                div {
+                    style: "padding:10px 12px; font-size:13px; color:{DIM}; border-bottom:1px solid {RULE};",
+                    "You're a guest in this set: you can play it, but not reorder or remove its songs."
+                }
+            }
             div {
                 style: "display:flex; height:34px; padding:0 8px 0 0; border-bottom:1px solid {RULE}; {head}",
                 div { style: cell(0, "center"), "#" }
@@ -529,6 +541,7 @@ fn SongTable(setlist: Signal<Setlist>, on_pick: Option<EventHandler<usize>>) -> 
                                 div { style: "{cell(4, \"flex-start\")} font-family:ui-monospace, monospace; color:{DIM};", "{long}" }
                                 div { style: "{cell(5, \"flex-start\")} color:{DIM};", "{mode}" }
                             }
+                            if !read_only {
                             div {
                                                                 style: "{cell(6, \"flex-end\")} align-items:stretch; width:{3 * row_w}px;",
                                 {row_button("Earlier in the set", earlier, RowIcon::Up,
@@ -537,6 +550,7 @@ fn SongTable(setlist: Signal<Setlist>, on_pick: Option<EventHandler<usize>>) -> 
                                     EventHandler::new(move |()| setlist.write().reorder(index, index + 1)))}
                                 {row_button("Take it out of the set", true, RowIcon::Remove,
                                     EventHandler::new(move |()| setlist.write().remove(index)))}
+                            }
                             }
                         }
                     }

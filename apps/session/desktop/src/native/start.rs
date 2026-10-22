@@ -30,7 +30,8 @@ use session_daw::song_stream::Offline;
 use session_daw::stream_set::{
     Downloading, LibrarySetlist, LibrarySong, ListKind, Remote, with_library,
 };
-use session_daw::task_account::{self, Account, Started};
+use fts_account::ui::Phase;
+use session_daw::task_account::{self, Account, AccountLibrary as _};
 
 pub(super) const BG: &str = "#0f1012";
 pub(super) const BAR: &str = "#17181b";
@@ -141,17 +142,6 @@ enum Opening {
     Idle,
     /// Opening: the loading screen shows where it has got to.
     Busy(Progress),
-    Failed(String),
-}
-
-/// Where signing in to Task has got to.
-#[derive(Clone, PartialEq)]
-enum SignIn {
-    Out,
-    Starting,
-    /// Waiting for the code to be approved.
-    Code(Started),
-    In(Account),
     Failed(String),
 }
 
@@ -337,7 +327,9 @@ fn Start(opened: Signal<Option<Setlist>>) -> Element {
     });
 
     // Task: signed in already, or not yet.
-    let mut sign_in = use_signal(|| task_account::signed_in().map_or(SignIn::Out, SignIn::In));
+    // The shared account (fts_account): one session with Signal on this
+    // computer, re-read when Signal changes it.
+    let acct = fts_account::ui::use_account(fts_account::App::Session);
     let mut orgs = use_signal(|| Load::<Vec<String>>::Waiting);
     let mut org = use_signal(|| None::<String>);
     let mut setlists = use_signal(|| Load::<Vec<LibrarySetlist>>::Waiting);
@@ -347,10 +339,8 @@ fn Start(opened: Signal<Option<Setlist>>) -> Element {
     // The song editor, over the page: `Some(None)` making one.
     let mut song_editing = use_signal(|| None::<Option<LibrarySong>>);
     let mut reread = use_signal(|| 0_u32);
-    let account = match sign_in() {
-        SignIn::In(account) => Some(account),
-        _ => None,
-    };
+    let phase = (acct.phase)();
+    let account = acct.account();
     let for_orgs = account.clone();
     use_effect(use_reactive!(|for_orgs| {
         let Some(account) = for_orgs else { return };
@@ -395,28 +385,9 @@ fn Start(opened: Signal<Option<Setlist>>) -> Element {
             }
         });
     }));
-    let start_sign_in = move |()| {
-        sign_in.set(SignIn::Starting);
-        spawn(async move {
-            let server = task_account::server();
-            let at = server.clone();
-            let started = match off_thread(move || task_account::start(&at)).await {
-                Some(Ok(started)) => started,
-                Some(Err(e)) => {
-                    sign_in.set(SignIn::Failed(brief(&e)));
-                    return;
-                }
-                None => return,
-            };
-            super::open_url(&started.link());
-            sign_in.set(SignIn::Code(started.clone()));
-            match off_thread(move || task_account::finish(&server, &started)).await {
-                Some(Ok(account)) => sign_in.set(SignIn::In(account)),
-                Some(Err(e)) => sign_in.set(SignIn::Failed(brief(&e))),
-                None => {}
-            }
-        });
-    };
+    // The start card signs in inline; the org switcher opens the sheet.
+    let start_sign_in = move |()| acct.begin();
+    let open_account = move |()| acct.open();
 
     let mut link = use_signal(String::new);
     let who = account.as_ref().map_or_else(guest_name, Account::name);
@@ -659,42 +630,82 @@ fn Start(opened: Signal<Option<Setlist>>) -> Element {
     let here = section();
     // Signing in, as a card: where the library would be.
     let sign_in_card = rsx! {
-        match sign_in() {
-            SignIn::Out | SignIn::Failed(_) => rsx! {
-                div {
-                    style: "display:flex; flex-wrap:wrap; align-items:center; gap:16px; padding:20px; border-radius:20px; \
-                            background:linear-gradient(120deg, #1d3357 0%, {BAR} 70%);",
-                    Art { seed: "library".to_owned(), size: 60, radius: 16, LibraryBig { size: 28, color: ART_INK } }
+        match phase.clone() {
+            Phase::Out | Phase::Failed { .. } | Phase::Ended => {
+                let words = match &phase {
+                    Phase::Failed { failure, minutes } => Some(fts_account::copy::failed(
+                        fts_account::App::Session,
+                        failure,
+                        &task_account::server(),
+                        *minutes,
+                    )),
+                    Phase::Ended => Some(fts_account::copy::ended()),
+                    _ => None,
+                };
+                rsx! {
                     div {
-                        style: "flex:1 1 220px; min-width:0; display:flex; flex-direction:column; gap:4px;",
-                        span { style: "font-size:18px; font-weight:750; letter-spacing:-0.01em;", "Bring your library" }
-                        span { style: "font-size:13px; color:#a3aab4; line-height:1.45;", "Sign in with FastTrackStudio to play your org's setlists, make lists, and keep them on this device." }
-                        if let SignIn::Failed(why) = sign_in() {
-                            span { style: "font-size:12px; color:{WARN}; line-height:1.4;", "Not signed in — {why}" }
+                        style: "display:flex; flex-wrap:wrap; align-items:center; gap:16px; padding:20px; border-radius:20px; \
+                                background:linear-gradient(120deg, #1d3357 0%, {BAR} 70%);",
+                        Art { seed: "library".to_owned(), size: 60, radius: 16, LibraryBig { size: 28, color: ART_INK } }
+                        div {
+                            style: "flex:1 1 220px; min-width:0; display:flex; flex-direction:column; gap:4px;",
+                            if let Some(words) = words.clone() {
+                                span { role: "status", style: "font-size:16px; font-weight:750;", "{words.title}" }
+                                span { style: "font-size:14px; color:#9aa0a6; line-height:1.45;", "{words.body}" }
+                            } else {
+                                span { style: "font-size:18px; font-weight:750; letter-spacing:-0.01em;", "Bring your library" }
+                                span { style: "font-size:14px; color:#9aa0a6; line-height:1.45;", "Sign in with FastTrackStudio to play your org's setlists, make lists, and keep them on this device." }
+                            }
+                        }
+                        button {
+                            style: "height:56px; padding:0 24px; border:none; border-radius:12px; background:#2563eb; color:#ffffff; \
+                                    font-size:17px; font-weight:700; font-family:inherit; cursor:pointer;",
+                            onclick: move |_| start_sign_in(()),
+                            match &words {
+                                Some(w) => w.primary.unwrap_or("Sign in"),
+                                None => "Sign in",
+                            }
                         }
                     }
-                    Pill { label: "Sign in", primary: true, on_press: start_sign_in }
                 }
-            },
-            SignIn::Starting => rsx! {
-                Card { span { style: "font-size:14px; color:{DIM};", "Getting a sign-in code…" } }
-            },
-            SignIn::Code(started) => rsx! {
+            }
+            Phase::Starting | Phase::Finishing => rsx! {
                 Card {
-                    div {
-                        style: "display:flex; flex-direction:column; align-items:center; gap:12px; padding:6px 0;",
-                        span { style: "font-size:14px; color:{DIM};", "Approve this code in your browser" }
-                        CodeBoxes { code: started.code.user_code.clone() }
-                        span { style: "font-size:12px; color:#6b7280;", "Waiting for approval…" }
-                        Pill {
-                            label: "Open the page again",
-                            primary: false,
-                            on_press: move |()| super::open_url(&started.link()),
+                    div { role: "status", style: "display:flex; align-items:center; gap:12px;",
+                        span { style: "width:20px; height:20px; border-radius:999px; border:2px solid {RULE}; border-top-color:{TEXT}; flex:none;" }
+                        span { style: "flex:1; font-size:15px; color:#9aa0a6;",
+                            if matches!(phase, Phase::Starting) { "Getting a sign-in code…" } else { "Finishing sign-in…" }
+                        }
+                        button {
+                            style: "height:48px; padding:0 16px; border:none; border-radius:10px; background:transparent; color:{TEXT}; font-size:15px; font-family:inherit; cursor:pointer;",
+                            onclick: move |_| acct.close(),
+                            "Cancel"
                         }
                     }
                 }
             },
-            SignIn::In(_) => rsx! {},
+            Phase::Code { started, offline } => rsx! {
+                Card {
+                    div { style: "display:flex; flex-direction:column; gap:14px; padding:6px 0;",
+                        span { style: "font-size:22px; font-weight:750;", "{fts_account::copy::CODE_TITLE}" }
+                        fts_account::ui::DeviceCodePanel {
+                            started,
+                            offline,
+                            narrow: width() < 520.0,
+                            on_open: move |url: String| super::open_url(&url),
+                            on_copy: move |text: String| copy_text(&text),
+                        }
+                        div { style: "display:flex; justify-content:flex-end;",
+                            button {
+                                style: "height:48px; padding:0 16px; border:none; border-radius:10px; background:transparent; color:{TEXT}; font-size:15px; font-family:inherit; cursor:pointer;",
+                                onclick: move |_| acct.close(),
+                                "Cancel"
+                            }
+                        }
+                    }
+                }
+            },
+            Phase::In { .. } => rsx! {},
         }
     };
     let signed_in = account.is_some();
@@ -1039,11 +1050,9 @@ fn Start(opened: Signal<Option<Setlist>>) -> Element {
                         orgs: orgs(),
                         org,
                         compact: true,
-                        on_sign_in: start_sign_in,
-                        on_sign_out: move |()| {
-                            task_account::sign_out();
-                            sign_in.set(SignIn::Out);
-                        },
+                        on_sign_in: open_account,
+                        on_account: open_account,
+                        on_sign_out: move |()| acct.sign_out(),
                     }
                 }
             }
@@ -1084,6 +1093,18 @@ fn Start(opened: Signal<Option<Setlist>>) -> Element {
              color:{TEXT}; font-family:system-ui, -apple-system, sans-serif;"
         )
     };
+    // The account sheet (STA-361): Account… from the org switcher, and
+    // signing in from it; over the whole window.
+    let sheet = rsx! {
+        fts_account::ui::AccountSheet {
+            state: acct,
+            top: 0,
+            width: width().max(0.0) as u32,
+            on_open: move |url: String| super::open_url(&url),
+            on_copy: move |text: String| copy_text(&text),
+            rows: None,
+        }
+    };
     if wide {
         rsx! {
             div {
@@ -1113,20 +1134,19 @@ fn Start(opened: Signal<Option<Setlist>>) -> Element {
                             orgs: orgs(),
                             org,
                             compact: false,
-                            on_sign_in: start_sign_in,
-                            on_sign_out: move |()| {
-                                task_account::sign_out();
-                                sign_in.set(SignIn::Out);
-                            },
+                            on_sign_in: open_account,
+                            on_account: open_account,
+                            on_sign_out: move |()| acct.sign_out(),
                         }
                     }
                 }
                 {main}
+                {sheet.clone()}
             }
         }
     } else {
         rsx! {
-            div { style: frame("column"), {main} }
+            div { style: frame("column"), {main} {sheet} }
         }
     }
 }
@@ -1401,13 +1421,20 @@ fn OrgSwitcher(
     org: Signal<Option<String>>,
     compact: bool,
     on_sign_in: EventHandler<()>,
+    on_account: EventHandler<()>,
     on_sign_out: EventHandler<()>,
 ) -> Element {
     let mut org = org;
     let mut open = use_signal(|| false);
+    let mut confirm = use_signal(|| false);
     let Some(email) = email else {
         return rsx! {
-            Pill { label: "Sign in", primary: true, on_press: on_sign_in }
+            button {
+                style: "height:48px; padding:0 20px; border:none; border-radius:10px; background:#2563eb; color:#ffffff; \
+                        font-size:15px; font-weight:700; font-family:inherit; cursor:pointer;",
+                onclick: move |_| on_sign_in.call(()),
+                "Sign in"
+            }
         };
     };
     let current = org().unwrap_or_default();
@@ -1473,14 +1500,34 @@ fn OrgSwitcher(
                     div { style: "height:1px; margin:6px 4px; background:{RULE};" }
                     span { style: "padding:4px 10px 2px; font-size:12px; color:{DIM}; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;", "{email}" }
                     button {
-                        style: "display:flex; align-items:center; gap:10px; min-height:40px; padding:0 10px; border:none; \
+                        style: "display:flex; align-items:center; gap:10px; min-height:48px; padding:0 10px; border:none; \
                                 border-radius:9px; background:transparent; color:{TEXT}; font-family:inherit; text-align:left; cursor:pointer;",
                         onclick: move |_| {
                             open.set(false);
-                            on_sign_out.call(());
+                            on_account.call(());
                         },
-                        LogOut { size: 16, color: DIM }
-                        span { style: "font-size:14px;", "Sign out" }
+                        span { style: "font-size:14px;", "Account…" }
+                    }
+                    // Sign out never acts on the first tap (STA-379 §4.5).
+                    if confirm() {
+                        fts_account::ui::SignOutConfirm {
+                            app: fts_account::App::Session,
+                            platform: fts_account::copy::Platform::current(),
+                            on_confirm: move |()| {
+                                confirm.set(false);
+                                open.set(false);
+                                on_sign_out.call(());
+                            },
+                            on_cancel: move |()| confirm.set(false),
+                        }
+                    } else {
+                        button {
+                            style: "display:flex; align-items:center; gap:10px; min-height:48px; padding:0 10px; border:none; \
+                                    border-radius:9px; background:transparent; color:{TEXT}; font-family:inherit; text-align:left; cursor:pointer;",
+                            onclick: move |_| confirm.set(true),
+                            LogOut { size: 16, color: DIM }
+                            span { style: "font-size:14px;", "Sign out" }
+                        }
                     }
                 }
             }
@@ -2244,23 +2291,30 @@ pub(super) fn Chip(label: String, on: bool, on_press: EventHandler<()>) -> Eleme
     }
 }
 
-/// A sign-in code, one box per character, as the approval page shows it.
-#[component]
-fn CodeBoxes(code: String) -> Element {
-    rsx! {
-        div {
-            style: "display:flex; gap:6px; justify-content:center;",
-            for (i, c) in code.chars().enumerate() {
-                span {
-                    key: "{i}",
-                    style: "width:30px; height:40px; border-radius:8px; display:flex; align-items:center; \
-                            justify-content:center; background:#0f1012; border:1px solid {RULE}; \
-                            font-size:20px; font-weight:700; font-family:ui-monospace, monospace;",
-                    "{c}"
-                }
-            }
+/// Put `text` on the clipboard: the platform's clipboard tool, the first
+/// that runs.
+fn copy_text(text: &str) {
+    use std::io::Write as _;
+    let tools: &[(&str, &[&str])] = if cfg!(target_os = "macos") {
+        &[("pbcopy", &[])]
+    } else {
+        &[("wl-copy", &[]), ("xclip", &["-selection", "clipboard"])]
+    };
+    for (program, args) in tools {
+        let Ok(mut child) = std::process::Command::new(program)
+            .args(*args)
+            .stdin(std::process::Stdio::piped())
+            .spawn()
+        else {
+            continue;
+        };
+        if let Some(mut stdin) = child.stdin.take() {
+            let _ = stdin.write_all(text.as_bytes());
         }
+        let _ = child.wait();
+        return;
     }
+    tracing::warn!("account: no clipboard tool to copy with");
 }
 
 #[cfg(test)]

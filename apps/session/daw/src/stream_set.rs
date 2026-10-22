@@ -632,6 +632,7 @@ mod download_probe {
     #[test]
     #[ignore = "needs a signed-in account and the network"]
     fn a_library_setlist_downloads_and_lists_its_songs() {
+        use crate::task_account::AccountLibrary as _;
         let account = crate::task_account::signed_in().expect("signed in on this machine");
         let orgs = crate::task_account::orgs(&account).expect("the orgs");
         let (library, list) = orgs

@@ -41,6 +41,14 @@
         type = lib.types.str;
         description = "Git rev baked into deployable images (version.json / TASK_BUILD_REV).";
       };
+      buildTag = lib.mkOption {
+        type = lib.types.str;
+        description = "Release tag (v<workspace version>) baked into version.json.";
+      };
+      buildDate = lib.mkOption {
+        type = lib.types.str;
+        description = "Commit date (UTC, ISO 8601) baked into version.json.";
+      };
       mkStaticSite = lib.mkOption {
         type = lib.types.raw;
         description = "static-web-server OCI image factory: { name, tag ?, siteRoot }.";
