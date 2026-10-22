@@ -277,7 +277,9 @@ const CHEVRON: &str = "border: none; border-radius: 8px; background: rgba(255,25
 /// A registered panel's body by id, or nothing when none is registered.
 #[component]
 fn PerformPanel(id: &'static str) -> Element {
-    let registry = try_use_context::<PerformPanels>().map(|p| p.0).unwrap_or_default();
+    let registry = try_use_context::<PerformPanels>()
+        .map(|p| p.0)
+        .unwrap_or_default();
     match registry.get(id).map(|p| p.render) {
         Some(render) => rsx! { PanelBody { key: "{id}", render } },
         None => rsx! {},
@@ -344,7 +346,10 @@ mod tests {
         // The dock: two 60 px rows, and its two halves across the width.
         assert_eq!(GAP + DOCK_ROW + GAP + DOCK_ROW + GAP, DOCK);
         assert_eq!((RIG_W, TRANSPORT_W), (592, 562));
-        assert_eq!(DOCK_PAD + RIG_W + DOCK_SPLIT + TRANSPORT_W + DOCK_PAD, WIDTH);
+        assert_eq!(
+            DOCK_PAD + RIG_W + DOCK_SPLIT + TRANSPORT_W + DOCK_PAD,
+            WIDTH
+        );
     }
 
     #[test]

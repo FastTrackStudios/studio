@@ -20,12 +20,9 @@ use dioxus::prelude::*;
 
 use super::performer::{DOCK_ROW, GAP, HIT};
 use super::playback::{
-    NUDGE_S, PlaybackView, SPEEDS, clock, nudged, speed_label, stepped_level,
-    use_playback,
+    NUDGE_S, PlaybackView, SPEEDS, clock, nudged, speed_label, stepped_level, use_playback,
 };
-use crate::tokens::{
-    FOCUS_FG, FONT, INK, INK_2, INK_3, LIVE, RULE_STRONG, SHEET_2, pct, tint,
-};
+use crate::tokens::{FOCUS_FG, FONT, INK, INK_2, INK_3, LIVE, RULE_STRONG, SHEET_2, pct, tint};
 
 /// The one solid button on the screen (Load next, Take control): 5.2:1
 /// under white.
@@ -411,7 +408,10 @@ pub fn LevelPeek(level: f64, on_set: EventHandler<f64>, on_close: EventHandler<(
 pub fn FollowCard() -> Element {
     let playback = use_playback();
     let v = playback.view();
-    let peer = v.following.clone().unwrap_or_else(|| "another device".to_string());
+    let peer = v
+        .following
+        .clone()
+        .unwrap_or_else(|| "another device".to_string());
     let mut asking = use_signal(|| false);
     rsx! {
         div { role: "group", "aria-label": "Following {peer}",
@@ -493,7 +493,10 @@ mod tests {
     #[test]
     fn budget_cuts_long_titles_with_an_ellipsis() {
         assert_eq!(budget("Lantern Hymn", 22), "Lantern Hymn");
-        assert_eq!(budget("A Very Long Song Title That Keeps Going", 10), "A Very Lo…");
+        assert_eq!(
+            budget("A Very Long Song Title That Keeps Going", 10),
+            "A Very Lo…"
+        );
         assert_eq!(budget("Été", 3), "Été", "counts characters, not bytes");
     }
 

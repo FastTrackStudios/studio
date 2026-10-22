@@ -225,7 +225,10 @@ fn the_regions_land_at_the_specs_rects() {
 
 #[test]
 fn every_control_in_the_new_panels_has_a_role_and_a_label() {
-    for (name, app) in [("playing", playing as fn() -> Element), ("following", following)] {
+    for (name, app) in [
+        ("playing", playing as fn() -> Element),
+        ("following", following),
+    ] {
         let doc = screen(app);
         let buttons = doc.query_all("button").immediately();
         // Playing: chevrons, pill, nudges, Speed, Level, ⋯. Following: the
@@ -234,7 +237,11 @@ fn every_control_in_the_new_panels_has_a_role_and_a_label() {
         assert!(buttons.len() >= least, "{name}: {} buttons", buttons.len());
         for b in buttons {
             let label = b.attribute("aria-label").unwrap_or_default();
-            assert!(!label.trim().is_empty(), "{name}: a button without a label: {}", b.outer_html());
+            assert!(
+                !label.trim().is_empty(),
+                "{name}: a button without a label: {}",
+                b.outer_html()
+            );
         }
         if let Ok(path) = std::env::var("PERFORMER_SHOT") {
             if name == "following" {
@@ -256,6 +263,9 @@ fn speed_and_level_open_a_peek_whose_choices_are_labelled() {
     let items = doc.query_all("[role=\"menuitemradio\"]").immediately();
     assert_eq!(items.len(), 6, "six speeds");
     for i in items {
-        assert!(i.attribute("aria-label").is_some_and(|l| l.starts_with("Speed ")));
+        assert!(
+            i.attribute("aria-label")
+                .is_some_and(|l| l.starts_with("Speed "))
+        );
     }
 }

@@ -505,7 +505,6 @@ fn rig_on_gig(st: GigState, perf: Option<PerfState>) -> Option<(RigPerformClient
     Some((client, p.song_index as usize))
 }
 
-
 /// A song's colour (its number badge, and the strip of a song without
 /// sections): the rig setlist's own.
 fn song_colour(song: &Song) -> String {
@@ -565,7 +564,11 @@ enum Step {
 /// next song.
 fn section_step_target(sections: &[SectionView], pos: f64, by: i32) -> Step {
     if sections.is_empty() {
-        return if by < 0 { Step::Seek(0.0) } else { Step::NextSong };
+        return if by < 0 {
+            Step::Seek(0.0)
+        } else {
+            Step::NextSong
+        };
     }
     // The section the playhead is in (None: before the first).
     let here = sections.iter().rposition(|s| pos >= s.start - 0.01);
@@ -615,7 +618,12 @@ impl GigPlayback {
 impl PlaybackModel for GigPlayback {
     fn view(&self) -> PlaybackView {
         let st = self.st;
-        let songs = st.gigs.read().get((st.gig_at)()).map(|g| g.songs.clone()).unwrap_or_default();
+        let songs = st
+            .gigs
+            .read()
+            .get((st.gig_at)())
+            .map(|g| g.songs.clone())
+            .unwrap_or_default();
         let current = (st.song_at)();
         let duration = (st.dur)();
         let position = (st.pos)();
@@ -736,7 +744,12 @@ fn GigScreenView(
     use_panel_registry(|| {
         PanelRegistry::new()
             .with(Panel::new(ids::NOW, "Now", Region::Top, now_panel))
-            .with(Panel::new(ids::SETLIST, "Setlist", Region::Left, setlist_panel))
+            .with(Panel::new(
+                ids::SETLIST,
+                "Setlist",
+                Region::Left,
+                setlist_panel,
+            ))
             .with(Panel::new(ids::CHART, "Chart", Region::Main, chart_panel))
             .with(Panel::new(ids::DOCK, "Dock", Region::Bottom, dock_panel))
     });
@@ -813,7 +826,11 @@ fn GigBar() -> Element {
 
 /// The loop as the progress bar draws it (its wash), in percent of the
 /// song — none for a song without sections (one strip, no wash).
-fn loop_indicator(looped: Option<(f64, f64)>, dur: f64, unsectioned: bool) -> Option<LoopIndicatorData> {
+fn loop_indicator(
+    looped: Option<(f64, f64)>,
+    dur: f64,
+    unsectioned: bool,
+) -> Option<LoopIndicatorData> {
     let (a, b) = looped?;
     if unsectioned || dur <= 0.0 {
         return None;
@@ -871,13 +888,23 @@ fn GigChart() -> Element {
         ChartMode::Pdf
     };
     let song = st.song();
-    let has_keyflow = song.as_ref().is_some_and(|s| s.charts.iter().any(|c| is_keyflow(&c.label)));
-    let has_pdf = song.as_ref().is_some_and(|s| s.charts.iter().any(|c| !is_keyflow(&c.label)));
+    let has_keyflow = song
+        .as_ref()
+        .is_some_and(|s| s.charts.iter().any(|c| is_keyflow(&c.label)));
+    let has_pdf = song
+        .as_ref()
+        .is_some_and(|s| s.charts.iter().any(|c| !is_keyflow(&c.label)));
     let place = st.place();
     let pct = (place.zoom * 100.0).round();
     let zoom = move |by: f64| {
         let p = st.place();
-        st.set_place(ChartPlace { zoom: ((p.zoom + by) * 10.0).round() / 10.0, ..p }, true);
+        st.set_place(
+            ChartPlace {
+                zoom: ((p.zoom + by) * 10.0).round() / 10.0,
+                ..p
+            },
+            true,
+        );
     };
     let nudge = move |by: f64| {
         let p = st.place();
@@ -976,7 +1003,12 @@ fn GigTransport() -> Element {
     // tap asks, the second loads the next song), so one tap never changes
     // the rig's sound mid-song.
     let mut armed = use_signal(|| false);
-    let (p1, p2, p3, p4) = (playback.clone(), playback.clone(), playback.clone(), playback);
+    let (p1, p2, p3, p4) = (
+        playback.clone(),
+        playback.clone(),
+        playback.clone(),
+        playback,
+    );
     let on_forward = move |()| {
         if unsectioned && playing && !armed() {
             armed.set(true);
@@ -1606,7 +1638,10 @@ mod tests {
             vec![sec("Intro", 2.0, 10.0), sec("Verse 1", 10.0, 40.0)],
         );
         let v = &song_views(std::slice::from_ref(&s), Some((0, 60.0)))[0];
-        assert_eq!(v.key, "E", "the key alone; the progression stays off the row");
+        assert_eq!(
+            v.key, "E",
+            "the key alone; the progression stays off the row"
+        );
         assert_eq!(v.bpm, 124);
         let names: Vec<_> = v.sections.iter().map(|x| x.name.as_str()).collect();
         assert_eq!(names, ["INT", "VER 1"], "gaps are not sections");
@@ -1618,14 +1653,31 @@ mod tests {
     fn section_steps_go_by_section_then_by_song() {
         let secs = |v: &[(f64, f64)]| {
             v.iter()
-                .map(|&(a, b)| SectionView { name: String::new(), colour: String::new(), start: a, end: b })
+                .map(|&(a, b)| SectionView {
+                    name: String::new(),
+                    colour: String::new(),
+                    start: a,
+                    end: b,
+                })
                 .collect::<Vec<_>>()
         };
         let s = secs(&[(0.0, 10.0), (10.0, 30.0), (30.0, 50.0)]);
         assert_eq!(section_step_target(&s, 15.0, 1), Step::Seek(30.0));
-        assert_eq!(section_step_target(&s, 35.0, 1), Step::NextSong, "past the last: the next song");
-        assert_eq!(section_step_target(&s, 15.0, -1), Step::Seek(10.0), "back to the section's start");
-        assert_eq!(section_step_target(&s, 11.0, -1), Step::Seek(0.0), "just in: the one before");
+        assert_eq!(
+            section_step_target(&s, 35.0, 1),
+            Step::NextSong,
+            "past the last: the next song"
+        );
+        assert_eq!(
+            section_step_target(&s, 15.0, -1),
+            Step::Seek(10.0),
+            "back to the section's start"
+        );
+        assert_eq!(
+            section_step_target(&s, 11.0, -1),
+            Step::Seek(0.0),
+            "just in: the one before"
+        );
         assert_eq!(section_step_target(&s, 1.0, -1), Step::Seek(0.0));
         // A song without sections steps as one.
         assert_eq!(section_step_target(&[], 80.0, -1), Step::Seek(0.0));
@@ -1825,17 +1877,29 @@ mod tests {
             .query_all("button")
             .immediately()
             .into_iter()
-            .filter(|b| b.attribute("aria-label").unwrap_or_default().trim().is_empty())
+            .filter(|b| {
+                b.attribute("aria-label")
+                    .unwrap_or_default()
+                    .trim()
+                    .is_empty()
+            })
             .map(|b| b.outer_html().chars().take(400).collect())
             .collect();
-        assert!(unlabelled.is_empty(), "buttons without a label:\n{}", unlabelled.join("\n---\n"));
+        assert!(
+            unlabelled.is_empty(),
+            "buttons without a label:\n{}",
+            unlabelled.join("\n---\n")
+        );
     }
 
     #[test]
     fn a_song_without_sections_skips_by_song() {
         let doc = screen(morning);
         assert!(button(&doc, "Restart the song").is_some(), "back says Song");
-        assert!(button(&doc, "Skip to the next song").is_some(), "forward says Song");
+        assert!(
+            button(&doc, "Skip to the next song").is_some(),
+            "forward says Song"
+        );
         assert!(button(&doc, "Previous section").is_none());
         if let Ok(path) = std::env::var("PERFORMER_SHOT") {
             doc.render_png(path.replace(".png", "-no-sections.png"));

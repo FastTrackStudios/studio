@@ -121,7 +121,9 @@ pub fn TransportControlBar(
             (Look::RedWord, _) => ("#ef4444", "#0b0c0e"),
         };
         let edge = match (state, wide_play) {
-            (_, false) => "border:none; border-left:1px solid #2a2c31; border-radius:0;".to_string(),
+            (_, false) => {
+                "border:none; border-left:1px solid #2a2c31; border-radius:0;".to_string()
+            }
             // Loop on: an amber ring, and the words say it.
             (Look::On, true) => "border:2px solid #f59e0b; border-radius:8px;".to_string(),
             (_, true) => "border:1px solid #2b2b31; border-radius:8px;".to_string(),
@@ -296,7 +298,11 @@ fn skip_words(
         (true, _, true) => (
             if skip_song { "Song" } else { "Section" },
             "Load next?",
-            if skip_song { "Restart the song" } else { "Previous section" },
+            if skip_song {
+                "Restart the song"
+            } else {
+                "Previous section"
+            },
             "Load the next song: tap again",
         ),
         (true, true, false) => ("Song", "Song", "Restart the song", "Skip to the next song"),
@@ -314,6 +320,10 @@ mod skip_word_tests {
         assert_eq!(skip_words(true, true, false).1, "Song");
         assert_eq!(skip_words(true, false, false).1, "Section");
         assert_eq!(skip_words(true, true, true).1, "Load next?");
-        assert_eq!(skip_words(false, true, false).0, "Back", "the classic bar is as it was");
+        assert_eq!(
+            skip_words(false, true, false).0,
+            "Back",
+            "the classic bar is as it was"
+        );
     }
 }
