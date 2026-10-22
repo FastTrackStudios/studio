@@ -501,43 +501,43 @@ inferno-net = { git = "https://github.com/FastTrackStudios/inferno-control", rev
 # (FastTrackStudios/architect: the entity/RPC framework, the auth/crdt/
 # permissions stack, architect-ui + architect-story, architect-telemetry).
 # One tag pin shared by every entry so the whole framework moves together.
-architect = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.9.11" }
-architect-derive = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.9.11" }
-architect-rpc-derive = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.9.11" }
-architect-action-derive = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.9.11" }
-architect-mcp = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.9.11" }
-architect-atom = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.9.11" }
-architect-form = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.9.11" }
-architect-permissions = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.9.11" }
-architect-permissions-proto = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.9.11" }
-architect-auth = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.9.11" }
-auth = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.9.11" }
-auth-proto = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.9.11" }
-auth-db = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.9.11" }
+architect = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.9.14" }
+architect-derive = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.9.14" }
+architect-rpc-derive = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.9.14" }
+architect-action-derive = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.9.14" }
+architect-mcp = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.9.14" }
+architect-atom = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.9.14" }
+architect-form = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.9.14" }
+architect-permissions = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.9.14" }
+architect-permissions-proto = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.9.14" }
+architect-auth = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.9.14" }
+auth = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.9.14" }
+auth-proto = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.9.14" }
+auth-db = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.9.14" }
 # auth-client (`auth_client::device`, sign-in from another device) is on
 # the same tag as the rest: one architect source per Cargo.lock.
-auth-client = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.9.11" }
-crdt = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.9.11" }
-crdt-derive = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.9.11" }
-crdt-seaorm = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.9.11" }
+auth-client = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.9.14" }
+crdt = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.9.14" }
+crdt-derive = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.9.14" }
+crdt-seaorm = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.9.14" }
 # The Dioxus primitive library (was libs/ui/fts-ui, renamed on the split).
-architect-ui = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.9.11" }
+architect-ui = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.9.14" }
 # The launcher engine, vendored into architect in v0.2.0 (was
 # launcher-core / launcher-ui / providers on dioxus-launcher.git).
-architect-launcher-core = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.9.11" }
+architect-launcher-core = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.9.14" }
 # default-features = false lives here, not on the consumer: cargo refuses
 # `default-features = false` on a workspace-inherited dep.
-architect-launcher-ui = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.9.11" }
-architect-launcher-providers = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.9.11" }
+architect-launcher-ui = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.9.14" }
+architect-launcher-providers = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.9.14" }
 # Wide-events telemetry (was crates/task/telemetry).
-architect-telemetry = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.9.11" }
+architect-telemetry = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.9.14" }
 # Story/snapshot tooling (was libs/fts-story/*).
-architect-story-core = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.9.11" }
-architect-story-macros = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.9.11" }
-architect-story-runtime = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.9.11" }
-architect-story-shell = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.9.11" }
-architect-story-snapshots = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.9.11" }
-architect-story-parity = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.9.11" }
+architect-story-core = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.9.14" }
+architect-story-macros = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.9.14" }
+architect-story-runtime = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.9.14" }
+architect-story-shell = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.9.14" }
+architect-story-snapshots = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.9.14" }
+architect-story-parity = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.9.14" }
 
 # Architect's externals, merged from its dissolved workspace table
 # (root pins win — both were already on the rc.5 fleet).
@@ -1527,8 +1527,8 @@ inherits = "release"
 lto = "thin"
 codegen-units = 16
 
-# One architect for the whole graph: v0.9.11 (STA-259, STA-382). Studio's
-# own pins above are already v0.9.11; this patch also lifts the git
+# One architect for the whole graph: v0.9.14 (STA-259, STA-382, STA-395).
+# Studio's own pins above are already v0.9.14; this patch also lifts the git
 # dependencies that still pin an older architect tag (task main's crates
 # pin v0.9.6, keyflow v0.2.4..v0.2.7 pin v0.9.2) onto the same tag, so
 # Cargo.lock holds exactly one architect source and vox handshakes match.
@@ -1538,21 +1538,21 @@ codegen-units = 16
 # with the pins above (`architect` skill: one architect tag per Cargo.lock).
 # Drop the patch once task (STA-386) and keyflow pin the same tag as studio.
 [patch."https://github.com/FastTrackStudios/architect"]
-architect = { git = "https://www.github.com/FastTrackStudios/architect", tag = "v0.9.11" }
-architect-action-derive = { git = "https://www.github.com/FastTrackStudios/architect", tag = "v0.9.11" }
-architect-atom = { git = "https://www.github.com/FastTrackStudios/architect", tag = "v0.9.11" }
-architect-derive = { git = "https://www.github.com/FastTrackStudios/architect", tag = "v0.9.11" }
-architect-launcher-core = { git = "https://www.github.com/FastTrackStudios/architect", tag = "v0.9.11" }
-architect-mcp = { git = "https://www.github.com/FastTrackStudios/architect", tag = "v0.9.11" }
-architect-launcher-providers = { git = "https://www.github.com/FastTrackStudios/architect", tag = "v0.9.11" }
-architect-launcher-ui = { git = "https://www.github.com/FastTrackStudios/architect", tag = "v0.9.11" }
-architect-permissions = { git = "https://www.github.com/FastTrackStudios/architect", tag = "v0.9.11" }
-architect-rpc-derive = { git = "https://www.github.com/FastTrackStudios/architect", tag = "v0.9.11" }
-architect-story-core = { git = "https://www.github.com/FastTrackStudios/architect", tag = "v0.9.11" }
-architect-story-macros = { git = "https://www.github.com/FastTrackStudios/architect", tag = "v0.9.11" }
-architect-story-runtime = { git = "https://www.github.com/FastTrackStudios/architect", tag = "v0.9.11" }
-architect-telemetry = { git = "https://www.github.com/FastTrackStudios/architect", tag = "v0.9.11" }
-architect-ui = { git = "https://www.github.com/FastTrackStudios/architect", tag = "v0.9.11" }
-auth-client = { git = "https://www.github.com/FastTrackStudios/architect", tag = "v0.9.11" }
-crdt = { git = "https://www.github.com/FastTrackStudios/architect", tag = "v0.9.11" }
-crdt-derive = { git = "https://www.github.com/FastTrackStudios/architect", tag = "v0.9.11" }
+architect = { git = "https://www.github.com/FastTrackStudios/architect", tag = "v0.9.14" }
+architect-action-derive = { git = "https://www.github.com/FastTrackStudios/architect", tag = "v0.9.14" }
+architect-atom = { git = "https://www.github.com/FastTrackStudios/architect", tag = "v0.9.14" }
+architect-derive = { git = "https://www.github.com/FastTrackStudios/architect", tag = "v0.9.14" }
+architect-launcher-core = { git = "https://www.github.com/FastTrackStudios/architect", tag = "v0.9.14" }
+architect-mcp = { git = "https://www.github.com/FastTrackStudios/architect", tag = "v0.9.14" }
+architect-launcher-providers = { git = "https://www.github.com/FastTrackStudios/architect", tag = "v0.9.14" }
+architect-launcher-ui = { git = "https://www.github.com/FastTrackStudios/architect", tag = "v0.9.14" }
+architect-permissions = { git = "https://www.github.com/FastTrackStudios/architect", tag = "v0.9.14" }
+architect-rpc-derive = { git = "https://www.github.com/FastTrackStudios/architect", tag = "v0.9.14" }
+architect-story-core = { git = "https://www.github.com/FastTrackStudios/architect", tag = "v0.9.14" }
+architect-story-macros = { git = "https://www.github.com/FastTrackStudios/architect", tag = "v0.9.14" }
+architect-story-runtime = { git = "https://www.github.com/FastTrackStudios/architect", tag = "v0.9.14" }
+architect-telemetry = { git = "https://www.github.com/FastTrackStudios/architect", tag = "v0.9.14" }
+architect-ui = { git = "https://www.github.com/FastTrackStudios/architect", tag = "v0.9.14" }
+auth-client = { git = "https://www.github.com/FastTrackStudios/architect", tag = "v0.9.14" }
+crdt = { git = "https://www.github.com/FastTrackStudios/architect", tag = "v0.9.14" }
+crdt-derive = { git = "https://www.github.com/FastTrackStudios/architect", tag = "v0.9.14" }

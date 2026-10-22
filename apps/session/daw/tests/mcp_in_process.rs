@@ -3,8 +3,9 @@
 //! Action List, fed JSON-RPC messages directly with no socket. It names
 //! architect's five tools, and SESSION_TRACKS answers through `run` with the
 //! open song's tracks, as a model connected to the window would see them.
-//! Then the same over its HTTP face (`architect_mcp::http::serve`, what the
-//! window listens with), on a free loopback port.
+//! Then the same over its HTTP face (`Server::serve_loopback`, what the
+//! window listens with), on a free loopback port. And the committed
+//! `.mcp.json` is the one `architect_mcp::project_mcp_json` writes.
 //!
 //! One test, one process: the daw facade is bound to the first engine
 //! opened.
@@ -73,18 +74,23 @@ fn the_mcp_server_lists_five_tools_and_runs_session_tracks() {
         assert!(paths.contains(&path), "no {path} among {paths:?}");
     }
 
-    // The same server on its HTTP face, as `mcp_server::start` serves it
-    // (there on 127.0.0.1:47811, here on a free loopback port).
+    // The same server on its HTTP face, served the way `mcp_server::start`
+    // serves it (`serve_loopback_or` on 127.0.0.1:47811), here through
+    // `serve_loopback` with variables nothing sets: a free loopback port
+    // and no token.
     let runtime = tokio::runtime::Builder::new_multi_thread()
         .enable_all()
         .build()
         .expect("a runtime");
     runtime.block_on(async {
-        let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+        let serving = server
+            .serve_loopback("FTS_MCP_PORT_STA395_UNSET", "FTS_MCP_TOKEN_STA395_UNSET")
             .await
-            .expect("bound");
-        let at = listener.local_addr().expect("an address");
-        tokio::spawn(architect_mcp::http::serve(listener, server, None));
+            .expect("bound on loopback")
+            .expect("served (FTS_MCP=0 turns MCP off: unset it to run this test)");
+        assert!(serving.token.is_none(), "no token was asked for");
+        assert_eq!(serving.url, format!("http://{}/mcp", serving.addr));
+        let at = serving.addr;
 
         let listed = post(
             at,
@@ -112,6 +118,25 @@ fn the_mcp_server_lists_five_tools_and_runs_session_tracks() {
             "SESSION_TRACKS over HTTP: {text}"
         );
     });
+}
+
+/// The repository's `.mcp.json` names the window's server the way
+/// `architect_mcp::project_mcp_json` writes it: regenerated here, and
+/// unchanged. If this fails it has just rewritten the file; commit it.
+#[test]
+fn the_committed_mcp_json_is_project_mcp_json() {
+    let repo = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../..");
+    let url = format!(
+        "http://127.0.0.1:{}/mcp",
+        session_daw::mcp_server::DEFAULT_PORT
+    );
+    let changed =
+        architect_mcp::project_mcp_json(&repo, session_daw::mcp_server::DISCOVERY_NAME, &url)
+            .expect(".mcp.json is a JSON object it can write");
+    assert!(
+        !changed,
+        "project_mcp_json rewrote .mcp.json for {url}; commit the regenerated file"
+    );
 }
 
 /// POST one JSON-RPC message to `/mcp` and parse the JSON reply.
