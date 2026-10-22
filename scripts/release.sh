@@ -793,10 +793,30 @@ publish_release() { # [tag]
         --title "studio $v" --notes-file "$notes" --latest; then
         gh release view "$tag" --repo "$REPO" >/dev/null 2>&1 \
             || die "could not create the GitHub Release for $tag"
-        note "release $tag was created meanwhile — nothing to do"; rm -f "$notes"; return 0
+        note "release $tag was created meanwhile — nothing to do"; rm -f "$notes"; release_dedupe "$tag"; return 0
     fi
     rm -f "$notes"
+    release_dedupe "$tag"
     note "published https://github.com/$REPO/releases/tag/$tag"
+}
+
+# `publish` and both ios-release steps start together on a tag, and
+# `gh release view` + `gh release create` is not atomic: GitHub lets three
+# creators each make a Release for one tag (v0.1.1 got three, and editing any
+# of them then fails with 422 "tag_name already_exists"). Whoever created one
+# keeps the lowest id and deletes the rest (the tag stays); concurrent callers
+# converge on the same survivor.
+release_dedupe() { # <tag>
+    local tag="$1" ids keep id
+    ids="$(gh api --paginate "repos/$REPO/releases" --jq ".[] | select(.tag_name == \"$tag\") | .id" 2>/dev/null | sort -n)" || return 0
+    keep="$(head -1 <<<"$ids")"
+    [ -n "$keep" ] || return 0
+    for id in $ids; do
+        [ "$id" = "$keep" ] && continue
+        gh api -X DELETE "repos/$REPO/releases/$id" >/dev/null 2>&1 \
+            && note "removed the duplicate Release $id of $tag (kept $keep)"
+    done
+    return 0
 }
 
 cmd_publish() { publish_release "$@"; }
@@ -867,6 +887,7 @@ cmd_ios_record() { # <app> <tag> <marketing> <build> [run-url]
     ios_check "$app"
     [ "$tag" = "v$mv" ] || die "marketing version '$mv' is not the version of tag '$tag'"
     [[ "$build" =~ ^[0-9]+$ ]] || die "build number '$build' is not a number"
+    release_dedupe "$tag"   # an edit of a tag with several Releases is a 422
     while :; do
         tries=$((tries + 1))
         body="$(gh release view "$tag" --repo "$REPO" --json body --jq .body)" \
