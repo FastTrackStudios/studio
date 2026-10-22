@@ -31,24 +31,37 @@
 #                       everything; add `-f base=main` to check only what the
 #                       branch changed against main.
 #
-# RUNNERS: self-hosted, one label PER BUILD KIND (Tom's Mac Pro VM):
+# RUNNERS: light and parallel work on GitHub-HOSTED runners (public repo:
+# free, ~20 concurrent Linux jobs org-wide); only the heavy test build on
+# the self-hosted Mac Pro VM, whose warm target dir it needs:
 #
-#   studio         light jobs: the plan (needs nix + cargo metadata)
-#   studio-lint    fmt, manifests, Boundaries, flow gate, tailwind,
-#                  `cargo check --workspace`, clippy (check mode, no codegen)
-#   studio-wasm    the wasm32 checks (another target triple)
-#   studio-tests   the nextest build (full codegen) + rail evidence
+#   ubuntu-latest  plan (nix + cargo metadata), lint (fmt, manifests,
+#                  Boundaries, flow gate, tailwind, `cargo check
+#                  --workspace`, clippy: check mode, no codegen), wasm
+#                  (the wasm32 checks), and the `Build + test` aggregator
+#   studio-tests   (self-hosted) the nextest build + rail evidence: ~1460
+#                  crates and 814 test binaries at full codegen, 20 min
+#                  on the warm Mac Pro; cold on a 4-vCPU hosted runner it
+#                  would not fit the disk or the 10 GB cache budget.
 #
-# The three kinds share NO artifacts except build scripts and proc macros
-# (check-mode units are not the test build's units, and wasm32 units are
-# another triple), so serialising them in one job only added their times
-# together. Each instance's target dir holds one kind and stays warm for
-# it, and the jobs of one PR run side by side.
+# The three build kinds share NO artifacts except build scripts and proc
+# macros (check-mode units are not the test build's units, and wasm32
+# units are another triple), so they run as separate jobs side by side.
 #
-# nix and the toolchain live on the runner already, so there is no
-# installer step and no rust-cache action — CARGO_TARGET_DIR points at the
-# runner instance's own cache dir instead, which persists across runs (and
-# across restarts/reboots) the way a hosted-runner cache never could.
+# HOSTED jobs (.github/actions/hosted-nix): free the image's disk, install
+# nix, pull the ci shell from fasttrackstudio.cachix.org (cache-devshell.yml
+# seeds it), then Swatinem/rust-cache with ONE shared key per build kind
+# (`lint`, `wasm`). Only main SAVES (`save-if`): PRs restore main's entry
+# and never write their own, so the repo's 10 GB cache budget holds one
+# lint set + one wasm set + the small rail-evidence and architect-xtask
+# entries instead of being evicted by every open PR. `cache-on-failure`:
+# the cache holds compiled dependencies, not results. Debuginfo is
+# line-tables-only (as [profile.dev] already sets) and incremental is off.
+#
+# The SELF-HOSTED tests job has nix and the toolchain on the runner already,
+# so there is no installer step and no rust-cache action — CARGO_TARGET_DIR
+# points at the runner instance's own cache dir instead, which persists
+# across runs (and across restarts/reboots).
 #
 # Toolchain comes from the repo flake: every step runs under
 # `nix develop .#ci -c`. `--accept-flake-config` picks up the
@@ -95,16 +108,15 @@ env:
 
 jobs:
   # Which jobs have work: a sound release PR skips them all (a refused one
-  # fails here); otherwise rail decides (or the run is full). Self-hosted because rail needs the nix
-  # shell and the workspace's git deps.
+  # fails here); otherwise rail decides (or the run is full). Hosted, with
+  # the nix ci shell for cargo-rail.
   plan:
     name: Plan
-    runs-on: [self-hosted, studio]
-    timeout-minutes: 15
-    # Fork PRs never run here: this is a public repo on self-hosted runners,
-    # and the jobs hold the inferno-control credential below. GitHub also
-    # withholds secrets from fork PRs, so this is the second lock, and it
-    # keeps fork code off the runners. Every other job needs this one, so
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    # Fork PRs never run here: the tests job runs on a self-hosted runner,
+    # and fork code must not run on it. GitHub also withholds secrets from
+    # fork PRs. Every other job needs this one, so
     # they skip with it, and `Build + test` fails the fork PR rather than
     # passing it unchecked. (push/schedule/workflow_dispatch have no
     # pull_request.)
@@ -123,15 +135,7 @@ jobs:
           # Full history: the plan needs both diff endpoints' ancestry, and
           # the release guard the PR's base and head.
           fetch-depth: 0
-      # features/patchbay -> inferno-net is a git dep on the private
-      # FastTrackStudios/inferno-control; give git/cargo a read-only token
-      # for that one repo before anything resolves the workspace (rail's
-      # plan runs cargo metadata).
-      - &inferno-auth
-        name: inferno-control read access
-        uses: ./.github/actions/inferno-control-auth
-        with:
-          token: ${{ secrets.INFERNO_CONTROL_TOKEN }}
+      - uses: ./.github/actions/hosted-nix
       # Which commit to plan against, decided before the evidence restore
       # (its cache key is that commit).
       - name: Choose the comparison base
@@ -252,28 +256,33 @@ jobs:
   # --workspace`. Clippy reports here too, advisory.
   lint:
     name: "Lint (fmt + manifests + gates + check + clippy)"
-    runs-on: [self-hosted, studio-lint]
-    timeout-minutes: 60
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
     needs: plan
     if: ${{ needs.plan.outputs.skip != 'true' }}
+    env: &hosted-cargo-env
+      # [profile.dev] already says line-tables-only; pinned here too so a
+      # profile edit cannot silently fatten the cached target dir.
+      CARGO_PROFILE_DEV_DEBUG: line-tables-only
+      CARGO_INCREMENTAL: "0"
     steps:
       # The event's own ref: a PR's merge ref, the pushed commit, main for
       # the nightly, a dispatched branch.
       - &checkout
         uses: actions/checkout@v4
-      - *inferno-auth
-      - &target-dir
-        name: Persistent target dir
-        run: |
-          # On the runner's big disk ($CI_CACHE_DIR: the runner module's
-          # per-instance dir), not /var/cache on the root disk, which a
-          # 580 GB target dir filled until jobs died mid-test. Per instance,
-          # so instances never share a cargo lock and each holds one build
-          # kind. The fallbacks are for a runner without one.
-          dir="${CI_CACHE_DIR:-${CACHE_DIRECTORY:-$HOME/.cache}}/cargo-target"
-          mkdir -p "$dir"
-          echo "CARGO_TARGET_DIR=$dir" >> "$GITHUB_ENV"
-          echo "target dir: $dir ($(du -sh "$dir" 2>/dev/null | cut -f1))"
+      - &hosted-nix
+        uses: ./.github/actions/hosted-nix
+      # One shared key per build kind, saved by main only (see RUNNERS).
+      # `key: flake.lock` because the toolchain is nix's, not the rustc on
+      # the image's PATH that rust-cache fingerprints by default.
+      - name: Rust cache (lint, main saves)
+        uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: lint
+          key: ${{ hashFiles('flake.lock') }}
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+          cache-on-failure: true
+          cache-bin: false
       # Not `--locked`: cargo writes the lockfile's [[patch.unused]] trailer
       # in HashMap order — one group per patched source URL — so the same
       # inputs serialise differently from one run to the next and
@@ -327,9 +336,39 @@ jobs:
       # Crate-layout boundaries (architect ADR layout.md, STA-268):
       # resolves graphs and scans sources, compiles nothing of studio's.
       # Layer table + ratcheted baselines in boundaries.toml.
+      # architect's xtask, `cargo install`ed by `just ci-boundaries` into
+      # ~/.cache/architect-xtask/<tag> (4+ minutes cold). Keyed on the
+      # pinned tag, so an entry never changes and is saved once.
+      - name: architect xtask tag
+        id: xtask
+        if: ${{ !cancelled() }}
+        run: echo "tag=$(sed -n 's/^architect_xtask_tag := "\(.*\)"$/\1/p' Justfile)" >> "$GITHUB_OUTPUT"
+      - name: Restore architect xtask
+        id: xtask-cache
+        if: ${{ !cancelled() && steps.xtask.outputs.tag != '' }}
+        uses: actions/cache/restore@v4
+        with:
+          path: ~/.cache/architect-xtask/${{ steps.xtask.outputs.tag }}
+          key: architect-xtask-${{ runner.os }}-${{ steps.xtask.outputs.tag }}-${{ hashFiles('flake.lock') }}
       - name: Boundaries
         if: ${{ !cancelled() }}
         run: ${NIX_DEV} just ci-boundaries
+      # Saved even when Boundaries reports violations: the binary is fine.
+      - name: architect xtask built?
+        id: xtask-built
+        if: ${{ !cancelled() && steps.xtask.outputs.tag != '' && steps.xtask-cache.outputs.cache-hit != 'true' }}
+        env:
+          TAG: ${{ steps.xtask.outputs.tag }}
+        run: |
+          if [ -x "$HOME/.cache/architect-xtask/${TAG}/bin/xtask" ]; then
+            echo "yes=true" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Save architect xtask
+        if: ${{ !cancelled() && steps.xtask-built.outputs.yes == 'true' }}
+        uses: actions/cache/save@v4
+        with:
+          path: ~/.cache/architect-xtask/${{ steps.xtask.outputs.tag }}
+          key: architect-xtask-${{ runner.os }}-${{ steps.xtask.outputs.tag }}-${{ hashFiles('flake.lock') }}
       # The workflow-spec verification standard (#48): every `flow.*`
       # rule with an r[impl] has an r[verify], or the build is red.
       # Same recipe as local (`just daw-flows`); tracey is a store
@@ -338,6 +377,7 @@ jobs:
       # short state dir — the runner's HOME pushes tracey's default
       # socket path past the 108-byte Unix limit — and stops it after.
       - name: Flow verification gate
+        if: ${{ !cancelled() }}
         run: ${NIX_DEV} just daw-flows --own-daemon
       # apps/session/web/assets/tailwind.css is gitignored build output that
       # `asset!()` demands at compile time (see apps/session/web/tailwind.css) —
@@ -346,23 +386,36 @@ jobs:
       # no checkout.
       - &tailwind
         name: Web tailwind sheet
+        if: ${{ !cancelled() }}
         run: ${NIX_DEV} just web-tailwind
       # Gated on the plan: a change that touches no crate (docs, with
-      # evidence for the base) compiles nothing.
+      # evidence for the base) compiles nothing. From here on every step
+      # runs even when an earlier gate failed (`!cancelled()`), so one run
+      # reports fmt AND Boundaries AND check instead of one at a time; the
+      # job still fails.
       - name: cargo check --workspace
-        if: ${{ needs.plan.outputs.cargo == 'true' }}
+        if: ${{ !cancelled() && needs.plan.outputs.cargo == 'true' }}
         run: ${NIX_DEV} cargo check --workspace
       # Advisory only: the lint debt is being paid down crate by crate, so
       # this reports (grouped by lint and crate, .github/scripts/
       # clippy-report.py) without blocking the PR. Same check-mode
       # dependency metadata as `cargo check`, so it lives in this job.
       - name: cargo clippy (advisory, does not block)
-        if: ${{ needs.plan.outputs.cargo == 'true' }}
+        if: ${{ !cancelled() && needs.plan.outputs.cargo == 'true' }}
         continue-on-error: true
         run: |
           ${NIX_DEV} cargo clippy --workspace --no-deps --all-targets --keep-going \
             --message-format=json -- --cap-lints warn \
             | ${NIX_DEV} python3 .github/scripts/clippy-report.py
+      # What this kind would put in the Actions cache (rust-cache trims
+      # the workspace crates before saving, so the entry is smaller), and
+      # the disk left: the numbers to watch against the 10 GB budget.
+      - &footprint
+        name: Cache footprint
+        if: ${{ always() }}
+        run: |
+          du -sh target ~/.cargo/registry ~/.cargo/git 2>/dev/null || true
+          df -h / | tail -n 1
 
   # The browser builds, which the workspace check (native) never compiles.
   # REQUIRED part: the web bundles. ADVISORY part: the Signal browser remote
@@ -370,14 +423,22 @@ jobs:
   # cannot fail the job.
   wasm:
     name: wasm checks
-    runs-on: [self-hosted, studio-wasm]
-    timeout-minutes: 60
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
     needs: plan
     if: ${{ needs.plan.outputs.skip != 'true' && needs.plan.outputs.wasm == 'true' }}
+    env: *hosted-cargo-env
     steps:
       - *checkout
-      - *inferno-auth
-      - *target-dir
+      - *hosted-nix
+      - name: Rust cache (wasm, main saves)
+        uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: wasm
+          key: ${{ hashFiles('flake.lock') }}
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+          cache-on-failure: true
+          cache-bin: false
       - *tailwind
       # The three web bundles deploy.yml ships (STA-366). The workspace check
       # is native, so it never compiles them: a native-only dep (tokio `net`,
@@ -401,6 +462,7 @@ jobs:
         run: |
           echo "::warning::wasm check (Signal browser remote) failed — advisory (STA-184), does not block"
           echo "### Signal browser remote wasm check failed (advisory, STA-184)" >> "$GITHUB_STEP_SUMMARY"
+      - *footprint
 
   # ADVISORY (not part of `Build + test`): the test run, red on main for
   # reasons that predate the release flow (STA-184: ~100 nextest
@@ -408,6 +470,12 @@ jobs:
   # errors after. It shows red/green on the PR, so the errors stay
   # visible; once STA-184 makes it green, add it to the aggregator's
   # required set. It is skipped on a release-only PR.
+  #
+  # SELF-HOSTED on purpose (the one heavy job): ~1460 crates at full codegen
+  # into 814 test binaries took 20 min to build on the warm Mac Pro
+  # (run 39654183163); the tests themselves ran in 4.5 min. Cold on a
+  # hosted runner that build would cost well over an hour every PR and a
+  # target dir larger than the whole 10 GB cache budget.
   tests:
     name: "Advisory: tests"
     runs-on: [self-hosted, studio-tests]
@@ -422,8 +490,17 @@ jobs:
       TEST_FEATURES: session-desktop/cli,signal-desktop/cli,web-audio-worklet/guitar,web-audio-worklet/keys
     steps:
       - *checkout
-      - *inferno-auth
-      - *target-dir
+      - name: Persistent target dir
+        run: |
+          # On the runner's big disk ($CI_CACHE_DIR: the runner module's
+          # per-instance dir), not /var/cache on the root disk, which a
+          # 580 GB target dir filled until jobs died mid-test. Per instance,
+          # so instances never share a cargo lock. The fallbacks are for a
+          # runner without one.
+          dir="${CI_CACHE_DIR:-${CACHE_DIRECTORY:-$HOME/.cache}}/cargo-target"
+          mkdir -p "$dir"
+          echo "CARGO_TARGET_DIR=$dir" >> "$GITHUB_ENV"
+          echo "target dir: $dir ($(du -sh "$dir" 2>/dev/null | cut -f1))"
       # The test run compiles session-web.
       - *tailwind
       # Full runs first record rail evidence for this commit: the recorder
@@ -521,7 +598,7 @@ jobs:
           fail=0
           bad() { echo "::error::$1"; fail=1; }
           if [ "$FORK" = "true" ]; then
-            bad "fork PR: not run on the self-hosted runners; a maintainer must re-push it from a branch of this repo"
+            bad "fork PR: not run (the tests job is self-hosted); a maintainer must re-push it from a branch of this repo"
             exit 1
           fi
           [ "$PLAN" = success ] || bad "plan: $PLAN"

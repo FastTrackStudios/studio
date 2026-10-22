@@ -1,0 +1,63 @@
+# Setup for a job on a GitHub-HOSTED runner (ubuntu-latest) that works in
+# the repo's nix dev shell: free the image's disk, install nix, trust
+# fasttrackstudio.cachix.org, and realise the `.#ci` shell up front so its
+# download shows as its own step instead of hiding inside the first
+# `${NIX_DEV}` command.
+#
+# The self-hosted Mac Pro jobs (tests, deploy) do NOT use this: nix lives on
+# that host already.
+#
+# The ci shell is ~1.5 GiB to download (7.7 GiB unpacked) and builds
+# nothing when cache-devshell.yml has seeded cachix: the toolchain, the
+# native headers, cargo-rail, tracey and nextest all come prebuilt.
+
+name: hosted nix
+description: Free disk, install nix + the fasttrackstudio cachix, realise the ci dev shell.
+
+inputs:
+  cachix-auth-token:
+    description: >-
+      A write token for fasttrackstudio.cachix.org. Empty (the default) =
+      read only: nothing this job builds is pushed. Only cache-devshell.yml
+      passes one.
+    required: false
+    default: ""
+  shell:
+    description: The dev shell to realise (empty = none).
+    required: false
+    default: ci
+
+runs:
+  using: composite
+  steps:
+    # The image's preinstalled SDKs we never use (the toolchain comes from
+    # nix): ~25 GB back. In the background, so nothing waits on it; it is
+    # done long before the target dir grows.
+    - name: Free disk (background)
+      shell: bash
+      run: |
+        df -h / | tail -n 1
+        nohup sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc \
+          /usr/local/.ghcup /opt/hostedtoolcache /usr/share/swift \
+          /usr/local/share/powershell /usr/local/share/chromium \
+          /usr/local/share/boost /opt/microsoft /opt/google \
+          </dev/null >/dev/null 2>&1 &
+    - name: Install nix
+      uses: cachix/install-nix-action@v31
+      with:
+        # Flake inputs come from the GitHub API; unauthenticated, 60/h per IP.
+        github_access_token: ${{ github.token }}
+        extra_nix_config: |
+          accept-flake-config = true
+    - name: fasttrackstudio cachix
+      uses: cachix/cachix-action@v17
+      with:
+        name: fasttrackstudio
+        authToken: ${{ inputs.cachix-auth-token }}
+        skipPush: ${{ inputs.cachix-auth-token == '' }}
+    - name: Realise the ${{ inputs.shell }} dev shell
+      if: ${{ inputs.shell != '' }}
+      shell: bash
+      env:
+        SHELL_NAME: ${{ inputs.shell }}
+      run: nix develop --accept-flake-config ".#${SHELL_NAME}" -c true
