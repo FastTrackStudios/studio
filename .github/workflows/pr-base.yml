@@ -4,6 +4,7 @@
 # create` and the web UI propose `main`. This retargets a PR opened (or
 # edited back) against `main` onto `dev`, unless it is a release path:
 #
+#   dev          promotion PR (just release-promote: dev -> main)
 #   release/v*   release PR   (just release-pr)
 #   hotfix/*     hotfix PR    (just release-hotfix, then release-pr)
 #   backmerge/*  back-merge   (just release-backmerge)
@@ -61,7 +62,7 @@ jobs:
 
           if [[ "$HEAD_REPO" == "$REPO" ]]; then
             case "$HEAD_REF" in
-              release/v*|hotfix/*|backmerge/*)
+              dev|release/v*|hotfix/*|backmerge/*)
                 echo "head '$HEAD_REF' is a release path: leaving the base on main"
                 exit 0
                 ;;
