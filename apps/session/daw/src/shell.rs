@@ -433,6 +433,14 @@ pub const SAFE_AREA: &str = "position:absolute; top:0; left:0; width:100vw; heig
     padding:env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px) \
     env(safe-area-inset-bottom, 0px) env(safe-area-inset-left, 0px);";
 
+/// [`SAFE_AREA`] round the performer view (`crate::performer`): the same
+/// box, filled the desk (`#0c0c0f`) so the status and home insets read as
+/// the screen's edge, never as a lighter band.
+pub const SAFE_AREA_PERFORMER: &str = "position:absolute; top:0; left:0; width:100vw; height:100vh; \
+    box-sizing:border-box; display:flex; overflow:hidden; background:#0c0c0f; \
+    padding:env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px) \
+    env(safe-area-inset-bottom, 0px) env(safe-area-inset-left, 0px);";
+
 /// A press-outside-closes layer under a popup: the whole screen, from
 /// wherever the popup is. Past the screen's edges on every side, because
 /// Blitz places a `fixed` box from its container rather than the

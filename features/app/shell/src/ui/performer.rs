@@ -36,7 +36,7 @@ use dioxus::prelude::*;
 
 use super::frame::{ShellFrame, use_shell, use_shell_state_with};
 use super::layout::{Region, RegionLayout, ShellLayout, pref_key};
-use super::registry::{PanelRegistry, Render};
+use super::registry::{Panel, PanelRegistry, Render};
 use crate::tokens::{DESK, FONT, INK, MAIN, RULE, SHEET};
 
 /// The size class this preset is for (unified shell spec §2.3).
@@ -103,6 +103,31 @@ pub const RIG_W: u32 = 5 * 112 + 4 * GAP;
 pub const TRANSPORT_W: u32 = WIDTH - 2 * DOCK_PAD - DOCK_SPLIT - RIG_W;
 /// The smallest thing a finger presses on this screen.
 pub const HIT: u32 = 48;
+
+/// The four bodies an app gives the performer screen: its own now band
+/// (usually the shared [`super::NowBand`] over its progress bar), its
+/// setlist, its chart and its dock.
+#[derive(Clone, Copy)]
+pub struct PerformerBodies {
+    pub now: fn() -> Element,
+    pub setlist: fn() -> Element,
+    pub chart: fn() -> Element,
+    pub dock: fn() -> Element,
+}
+
+/// The performer screen's panels, registered under [`ids`] in the regions
+/// they live in — **the one registry function** both apps call (Signal's
+/// gig mount and Session's performer view). An app never builds these
+/// [`Panel`]s itself: a test reads both apps' sources to hold them to it
+/// (`tests/performer_mounts.rs`).
+#[must_use]
+pub fn performer_registry(bodies: PerformerBodies) -> PanelRegistry {
+    PanelRegistry::new()
+        .with(Panel::new(ids::NOW, "Now", Region::Top, bodies.now))
+        .with(Panel::new(ids::SETLIST, "Setlist", Region::Left, bodies.setlist))
+        .with(Panel::new(ids::CHART, "Chart", Region::Main, bodies.chart))
+        .with(Panel::new(ids::DOCK, "Dock", Region::Bottom, bodies.dock))
+}
 
 /// The layout this screen opens with, and falls back to.
 #[must_use]

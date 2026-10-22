@@ -41,13 +41,17 @@ pub mod perform;
 pub mod performer;
 pub mod playback;
 mod registry;
+pub mod rig;
 
 pub use frame::{
     RegionHost, ShellFrame, ShellState, load_layout, use_panel_registry, use_shell,
     use_shell_state, use_shell_state_with,
 };
 pub use layout::{Region, RegionLayout, ShellLayout, pref_key};
-pub use perform::{FollowCard, LevelPeek, NowBand, SpeedMenu, SyncPill, TransportNudgeRow};
-pub use performer::{PerformDock, PerformerScreen};
+pub use perform::{
+    FollowCard, LevelPeek, MoreMenu, NowBand, SpeedMenu, SyncPill, TransportNudgeRow,
+};
+pub use performer::{PerformDock, PerformerBodies, PerformerScreen, performer_registry};
+pub use rig::{Rig, RigClient, RigCrumb, RigLink, provide_rig, rig_half, use_rig};
 pub use playback::{Playback, PlaybackModel, PlaybackView, provide_playback, use_playback};
 pub use registry::{Panel, PanelConstraints, PanelRegistry, Render};

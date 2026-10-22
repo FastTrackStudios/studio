@@ -244,6 +244,7 @@ pub mod poi;
 pub mod pointer;
 pub mod prepare;
 pub mod profile;
+pub mod performer;
 pub mod progress;
 #[cfg(feature = "native")]
 pub mod quantize_panel;

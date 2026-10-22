@@ -1000,6 +1000,17 @@ fn SongViews(
 /// The performance view: the progress, the chart, the transport buttons.
 #[component]
 fn WebPerformance() -> Element {
+    // A tablet's browser (a finger, room for the wide layout): the shared
+    // performer screen (`crate::performer`, STA-360).
+    let touch = crate::touch::use_touch();
+    let form = crate::compact::use_form();
+    if crate::performer::wants_performer(touch, form) {
+        return rsx! {
+            div { style: "position:absolute; top:0; left:0; right:0; bottom:0; display:flex;",
+                crate::performer::SessionPerformer {}
+            }
+        };
+    }
     rsx! {
         div {
             style: "position:absolute; top:0; left:0; right:0; bottom:0; display:flex; \

@@ -224,7 +224,7 @@ pub fn TransportButtons(
 /// Where a transport button goes: a place in this song, or the song
 /// before or after it.
 #[derive(Clone, Copy, Debug, PartialEq)]
-enum Step {
+pub(crate) enum Step {
     Seek(f64),
     Song,
 }
@@ -232,7 +232,7 @@ enum Step {
 /// Back from `at`: the start of this section, the section before if this
 /// one was only just started, and past the song's first section, the song
 /// before.
-fn back_to(song: &Song, at: f64) -> Step {
+pub(crate) fn back_to(song: &Song, at: f64) -> Step {
     match song.current(at) {
         Some(i) if at - song.sections[i].0 < 1.0 && i > 0 => Step::Seek(song.sections[i - 1].0),
         Some(0) if at - song.sections[0].0 < 1.0 => Step::Song,
@@ -245,7 +245,7 @@ fn back_to(song: &Song, at: f64) -> Step {
 }
 
 /// Forward from `at`: the next section, and after the last, the next song.
-fn forward_to(song: &Song, at: f64) -> Step {
+pub(crate) fn forward_to(song: &Song, at: f64) -> Step {
     song.sections
         .iter()
         .map(|(from, _)| *from)
@@ -254,7 +254,7 @@ fn forward_to(song: &Song, at: f64) -> Step {
 }
 
 /// Pick the song `by` places along the set, if there is one there.
-fn step_song(
+pub(crate) fn step_song(
     pick: Option<crate::record_view::PickSong>,
     setlist: Option<Signal<crate::setlist::Setlist>>,
     by: isize,

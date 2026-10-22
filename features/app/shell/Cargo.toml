@@ -51,5 +51,9 @@ tokio = { workspace = true }
 name = "performer_screen"
 required-features = ["ui"]
 
+[[test]]
+name = "performer_mounts"
+required-features = ["ui"]
+
 [lints]
 workspace = true

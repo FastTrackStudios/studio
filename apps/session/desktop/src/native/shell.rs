@@ -634,6 +634,17 @@ fn Arrangement(#[props(default)] docked: bool) -> Element {
 /// playhead, and — once it exists — the lyrics beside it.
 #[component]
 fn PerformanceView() -> Element {
+    // The iPad (a finger, room for the wide layout): the shared performer
+    // screen (`session_daw::performer`, STA-360).
+    let touch = session_daw::touch::use_touch();
+    let form = session_daw::compact::use_form();
+    if session_daw::performer::wants_performer(touch, form) {
+        return rsx! {
+            div { style: "position:absolute; top:0; left:0; right:0; bottom:0; display:flex;",
+                session_daw::performer::SessionPerformer {}
+            }
+        };
+    }
     rsx! {
         div {
             style: "position:absolute; top:0; left:0; right:0; bottom:0; display:flex; \
