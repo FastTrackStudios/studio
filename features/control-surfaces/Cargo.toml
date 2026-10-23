@@ -54,3 +54,8 @@ required-features = ["kontrol"]
 name = "screenprobe"
 path = "examples/screenprobe.rs"
 required-features = ["kontrol"]
+
+[[bin]]
+name = "zon2styx"
+path = "src/bin/zon2styx.rs"
+test = false

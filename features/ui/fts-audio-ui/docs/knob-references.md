@@ -7,7 +7,7 @@ before you read a word on the panel, and which of them the kit can draw.
 Look at what exists before adding to it:
 
 ```sh
-cargo test -p fts-audio-ui --test knob_sheet   # the kit, plain and tinted
+cargo test -p fts-audio-ui --test it -- knob_sheet::   # the kit, plain and tinted
 cargo test -p kit-sheet                        # every knob on the panel it sits on
 ```
 

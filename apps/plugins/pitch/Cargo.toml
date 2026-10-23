@@ -8,6 +8,7 @@ description = "FTS Pitch — pitch shifter + stereo doubler over the pitch-dsp e
 
 [lib]
 crate-type = ["cdylib", "lib"]
+test = false
 
 [lints]
 workspace = true

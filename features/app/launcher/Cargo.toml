@@ -52,3 +52,8 @@ libc = { workspace = true }
 name = "fts-launcher-standalone"
 path = "src/main.rs"
 required-features = ["standalone"]
+test = false
+
+[lib]
+# No #[test] in it: skip building and linking an empty test harness.
+test = false

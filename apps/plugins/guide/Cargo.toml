@@ -9,6 +9,7 @@ description = "FTS Guide — CLAP/VST3 click/guide generator over the session-gu
 [lib]
 # cdylib → the loadable CLAP/VST3 binary; lib → tests + a future standalone host.
 crate-type = ["cdylib", "lib"]
+test = false
 
 [lints]
 workspace = true

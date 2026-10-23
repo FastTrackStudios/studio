@@ -522,7 +522,7 @@ cargo test -p expression-editor-standalone --lib workstation::tests
 cargo test -p expression-editor-standalone --test arrange_scroll
 cargo test -p expression-editor-standalone --lib workstation::mixer::tests
 cargo test -p expression-editor-ui --test stack_slip
-cargo test -p daw-ui --features web --test folders
+cargo test -p daw-ui --features web --test it -- folders::
 cargo test -p dioxus-native-dom --lib lifetime_tests
 ```
 

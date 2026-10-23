@@ -100,149 +100,14 @@ name = "strips"
 required-features = ["cpu", "embed", "runtime"]
 
 [[test]]
-name = "end_to_end"
-path = "tests/end_to_end.rs"
-required-features = ["runtime"]
-
-[[test]]
-name = "meters_and_readouts"
-path = "tests/meters_and_readouts.rs"
-required-features = ["runtime"]
-
-[[test]]
-name = "surface_runtime_motion"
-path = "tests/surface_runtime_motion.rs"
-required-features = ["runtime"]
-
-[[test]]
-name = "needle_subtree"
-path = "tests/needle_subtree.rs"
-required-features = ["anyrender", "render", "runtime"]
-
-[[test]]
-name = "plots_and_handles"
-path = "tests/plots_and_handles.rs"
-required-features = ["render", "runtime"]
-
-[[test]]
-name = "remote"
-path = "tests/remote.rs"
-required-features = ["runtime", "surface-runtime-rpc"]
-
-[[test]]
-name = "stepped"
-path = "tests/stepped.rs"
-required-features = ["runtime"]
-
-[[test]]
-name = "persistence"
-path = "tests/persistence.rs"
-required-features = ["io", "runtime"]
-
-[[test]]
-name = "controls"
-path = "tests/controls.rs"
-required-features = ["design", "runtime"]
-
-[[test]]
-name = "eq_graph"
-path = "tests/eq_graph.rs"
-required-features = ["design", "library", "render", "runtime"]
-
-[[test]]
-name = "knobs"
-path = "tests/knobs.rs"
-required-features = ["design", "render", "runtime"]
-
-[[test]]
-name = "lettering"
-path = "tests/lettering.rs"
-required-features = ["render", "runtime"]
-
-[[test]]
-name = "materials"
-path = "tests/materials.rs"
-required-features = ["runtime"]
-
-[[test]]
-name = "meters"
-path = "tests/meters.rs"
-required-features = ["design", "runtime"]
-
-[[test]]
-name = "surface_kit_motion"
-path = "tests/surface_kit_motion.rs"
-required-features = ["runtime"]
-
-[[test]]
-name = "viz"
-path = "tests/viz.rs"
-required-features = ["design", "render", "runtime"]
-
-[[test]]
-name = "viz_lit"
-path = "tests/viz_lit.rs"
-required-features = ["design", "render", "runtime"]
-
-[[test]]
 name = "realtime"
 path = "tests/realtime.rs"
 required-features = ["dsp"]
-
-[[test]]
-name = "golden_primitives"
-path = "tests/golden_primitives.rs"
-required-features = ["figma", "render"]
-
-[[test]]
-name = "components"
-path = "tests/components.rs"
-required-features = ["theme"]
-
-[[test]]
-name = "layers"
-path = "tests/layers.rs"
-required-features = ["theme"]
-
-[[test]]
-name = "shapes"
-path = "tests/shapes.rs"
-required-features = ["theme"]
-
-[[test]]
-name = "slots"
-path = "tests/slots.rs"
-required-features = ["theme"]
-
-[[test]]
-name = "strip"
-path = "tests/strip.rs"
-required-features = ["theme"]
 
 [[example]]
 name = "strip_bench"
 path = "examples/strip_bench.rs"
 required-features = ["theme"]
-
-[[test]]
-name = "bundle"
-path = "tests/bundle.rs"
-required-features = ["figma", "io"]
-
-[[test]]
-name = "loro_scene"
-path = "tests/loro_scene.rs"
-required-features = ["figma", "io"]
-
-[[test]]
-name = "design_lint_motion"
-path = "tests/design_lint_motion.rs"
-required-features = ["design"]
-
-[[test]]
-name = "rules"
-path = "tests/rules.rs"
-required-features = ["design", "runtime"]
 
 [[example]]
 name = "face_bench"
@@ -254,12 +119,3 @@ name = "face_frames"
 path = "examples/face_frames.rs"
 required-features = ["live"]
 
-[[test]]
-name = "harness"
-path = "tests/harness.rs"
-required-features = ["cpu", "embed", "runtime"]
-
-[[test]]
-name = "law"
-path = "tests/law.rs"
-required-features = ["figma"]

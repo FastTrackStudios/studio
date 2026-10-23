@@ -8,6 +8,7 @@ description = "Dynamic Template domain SHM guest — currently inactive; awaitin
 [[bin]]
 name = "dynamic-template"
 path = "src/main.rs"
+test = false
 
 [dependencies]
 eyre.workspace = true

@@ -15,3 +15,7 @@ libm = { version = "0.2", default-features = false }
 
 [dev-dependencies]
 hound = { version = "3.5" }
+
+[lib]
+# No #[test] in it: skip building and linking an empty test harness.
+test = false

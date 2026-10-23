@@ -24,3 +24,7 @@ audio-controls.workspace = true
 # Portable timing (`platform::sleep`): tokio native / browser timers on wasm.
 architect = { workspace = true, features = ["platform"] }
 tracing.workspace = true
+
+[lib]
+# No #[test] in it: skip building and linking an empty test harness.
+test = false

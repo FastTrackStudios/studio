@@ -31,12 +31,3 @@ realfft = { version = "3" }
 # required-features): a plain `cargo test` of the workspace builds them all.
 dsp-core = { path = ".", features = ["audio"] }
 
-[[test]]
-name = "loudness"
-path = "tests/loudness.rs"
-required-features = ["audio"]
-
-[[test]]
-name = "oversampling"
-path = "tests/oversampling.rs"
-required-features = ["audio"]

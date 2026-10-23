@@ -57,9 +57,5 @@ axum = { workspace = true }
 tempfile = { workspace = true }
 tokio = { workspace = true }
 
-[[test]]
-name = "performer_screen"
-required-features = ["ui"]
-
 [lints]
 workspace = true

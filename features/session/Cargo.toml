@@ -124,41 +124,6 @@ path = "src/main.rs"
 name = "tts_smoke"
 required-features = ["tts"]
 
-[[test]]
-name = "navigation"
-path = "tests/navigation.rs"
-required-features = ["ui"]
-
-[[test]]
-name = "take_review"
-path = "tests/take_review.rs"
-required-features = ["ui"]
-
-[[test]]
-name = "transport_stats"
-path = "tests/transport_stats.rs"
-required-features = ["ui"]
-
-[[test]]
-name = "doc_undo"
-path = "tests/doc_undo.rs"
-required-features = ["engine"]
-
-[[test]]
-name = "engine_roundtrip"
-path = "tests/engine_roundtrip.rs"
-required-features = ["engine"]
-
-[[test]]
-name = "net"
-path = "tests/net.rs"
-required-features = ["net"]
-
-[[test]]
-name = "whole"
-path = "tests/whole.rs"
-required-features = ["engine"]
-
 [[example]]
 name = "doc_edit"
 path = "examples/doc_edit.rs"
@@ -168,3 +133,13 @@ required-features = ["engine"]
 name = "doc_scale"
 path = "examples/doc_scale.rs"
 required-features = ["engine"]
+
+[[bin]]
+name = "convert-markers"
+path = "src/bin/convert-markers.rs"
+test = false
+
+[[bin]]
+name = "report-sections"
+path = "src/bin/report-sections.rs"
+test = false

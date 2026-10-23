@@ -13,6 +13,7 @@ rustdoc-args = ["--html-in-header", "arborium-header.html"]
 crate-type = ["cdylib"]
 name = "reaper_daw_bridge"
 path = "src/lib.rs"
+test = false
 
 [dependencies]
 # DAW facade (REAPER impl). The UI host is provided by the pinned direct

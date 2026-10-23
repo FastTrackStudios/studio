@@ -99,16 +99,6 @@ required-features = ["render"]
 name = "roundtrip"
 required-features = ["render"]
 
-[[test]]
-name = "antitheme"
-path = "tests/antitheme.rs"
-required-features = ["reaper-theme"]
-
-[[test]]
-name = "corpus"
-path = "tests/corpus.rs"
-required-features = ["reaper-theme"]
-
 [[example]]
 name = "audit_markers"
 path = "examples/audit_markers.rs"

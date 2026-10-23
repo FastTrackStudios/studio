@@ -91,3 +91,7 @@ workspace = true
 architect = { workspace = true, features = ["vox", "local"] }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
 eyre = { workspace = true }
+
+[lib]
+# No #[test] in it: skip building and linking an empty test harness.
+test = false

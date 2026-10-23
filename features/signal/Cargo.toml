@@ -35,3 +35,7 @@ uuid.workspace = true
 futures.workspace = true
 base64 = "0.22"
 serde_json.workspace = true
+
+[lib]
+# No #[test] in it: skip building and linking an empty test harness.
+test = false

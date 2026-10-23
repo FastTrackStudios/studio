@@ -62,39 +62,3 @@ blitz-traits = { workspace = true, optional = true }
 dioxus-native = { workspace = true, optional = true }
 nice-plug-dioxus = { workspace = true, optional = true }
 
-[[test]]
-name = "gui_editor"
-required-features = ["graph", "native", "ui"]
-
-[[test]]
-name = "screenshots"
-required-features = ["native", "ui"]
-
-[[test]]
-name = "param_round_trip"
-required-features = ["native", "ui"]
-
-[[test]]
-name = "gui_headless"
-path = "tests/gui_headless.rs"
-required-features = ["ui"]
-
-[[test]]
-name = "gui_smoke"
-path = "tests/gui_smoke.rs"
-required-features = ["ui"]
-
-[[test]]
-name = "proq_presets"
-path = "tests/proq_presets.rs"
-required-features = ["native", "ui"]
-
-[[test]]
-name = "scene_snapshot"
-path = "tests/scene_snapshot.rs"
-required-features = ["graph", "graph-paint", "ui"]
-
-[[test]]
-name = "ui_overheads_preset"
-path = "tests/ui_overheads_preset.rs"
-required-features = ["native", "ui"]

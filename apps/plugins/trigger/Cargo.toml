@@ -9,6 +9,7 @@ description = "FTS Trigger — CLAP/VST3 drum-trigger plugin (audio in → sampl
 [lib]
 # cdylib → the loadable CLAP/VST3 binary; lib → tests + a future standalone host.
 crate-type = ["cdylib", "lib"]
+test = false
 
 [lints]
 workspace = true

@@ -53,3 +53,7 @@ daw-standalone = { workspace = true }
 
 [lints]
 workspace = true
+
+[lib]
+# No #[test] in it: skip building and linking an empty test harness.
+test = false

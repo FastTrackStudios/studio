@@ -24,3 +24,7 @@ dawfile-reaper = { workspace = true }
 loro = { workspace = true }
 tempfile = { workspace = true }
 uuid = { workspace = true }
+
+[lib]
+# No #[test] in it: skip building and linking an empty test harness.
+test = false

@@ -47,3 +47,13 @@ workspace = true
 
 [dev-dependencies]
 tokio = { workspace = true }
+
+[[bin]]
+name = "keybind-editor"
+path = "src/bin/keybind-editor.rs"
+test = false
+
+[[bin]]
+name = "mousemap"
+path = "src/bin/mousemap.rs"
+test = false

@@ -14,6 +14,7 @@ path = "src/main.rs"
 name = "patchbay-cli"
 path = "src/cli_compat.rs"
 required-features = ["native"]
+test = false
 
 [[bin]]
 name = "patchbay"

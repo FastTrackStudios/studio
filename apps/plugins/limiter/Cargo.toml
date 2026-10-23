@@ -9,6 +9,7 @@ description = "FTS Limiter — CLAP/VST3 brickwall limiter plugin over the comp 
 [lib]
 # cdylib → the loadable CLAP/VST3 binary; lib → tests + a future standalone host.
 crate-type = ["cdylib", "lib"]
+test = false
 
 [lints]
 workspace = true

@@ -489,28 +489,28 @@ tailwind-eq-standalone: _lumen-link
 # tests drive), so a GUI change can be looked at without opening a DAW.
 # Shots land in target/gui-shots/<fx>/ (FTS_SHOTS_DIR overrides).
 comp-shots:
-    cargo test -p comp --features native,profiles,ui --test screenshots -- --include-ignored --test-threads 1 --nocapture
+    cargo test -p comp --features native,profiles,ui --test it -- screenshots:: --include-ignored --test-threads 1 --nocapture
 
 eq-shots:
-    cargo test -p eq --features native,ui --test screenshots -- --include-ignored --test-threads 1 --nocapture
+    cargo test -p eq --features native,ui --test it -- screenshots:: --include-ignored --test-threads 1 --nocapture
 
 reverb-shots:
-    cargo test -p reverb --features native,profiles,ui --test screenshots -- --include-ignored --test-threads 1 --nocapture
+    cargo test -p reverb --features native,profiles,ui --test it -- screenshots:: --include-ignored --test-threads 1 --nocapture
 
 delay-shots:
-    cargo test -p delay --features native,profiles,ui --test screenshots -- --include-ignored --test-threads 1 --nocapture
+    cargo test -p delay --features native,profiles,ui --test it -- screenshots:: --include-ignored --test-threads 1 --nocapture
 
 saturate-shots:
-    cargo test -p saturate --features native,profiles,ui --test screenshots -- --include-ignored --test-threads 1 --nocapture
+    cargo test -p saturate --features native,profiles,ui --test it -- screenshots:: --include-ignored --test-threads 1 --nocapture
 
 modulation-shots:
-    cargo test -p modulation --features native,profiles,ui --test screenshots -- --include-ignored --test-threads 1 --nocapture
+    cargo test -p modulation --features native,profiles,ui --test it -- screenshots:: --include-ignored --test-threads 1 --nocapture
 
 # The daw-ui strip, track row, panels and main window, painted through
 # blitz-dom for side-by-side comparison with REAPER (target/theme-shots/).
 # MIXER_HEIGHT sets the strip height (228 = the reference REAPER shot).
 daw-ui-shots:
-    cargo test -p daw-ui --test strip_shot --test window_shot -- --include-ignored --test-threads 1 --nocapture
+    cargo test -p daw-ui --test it -- strip_shot:: window_shot:: --include-ignored --test-threads 1 --nocapture
 
 # THE plugin suite — the one list every plugin recipe iterates. A name here
 # is `<name>-plugin` as a cargo package and "FTS <Name>" as a bundle (see
@@ -986,8 +986,8 @@ workstation SOURCE="/run/media/AudioHaven/Project/02 LORD OF THE FIGHT/02 LORD O
 # of the suite into timing out. Single-threaded on purpose: they are all
 # CPU rasterization, so running them in parallel only makes each slower.
 ee-shots *ARGS:
-    cargo test -p editor --features guitarpro,ui --test screenshots \
-        -- --ignored --test-threads 1 {{ARGS}}
+    cargo test -p editor --features guitarpro,ui --test it \
+        -- screenshots:: --ignored --test-threads 1 {{ARGS}}
 
 # ── apps/session/web (session.fasttrackstudio.app) ────────────────────────────────
 # `apps/session/web/tailwind.css` @sources this crate plus architect-ui, a GIT DEP
@@ -1187,7 +1187,7 @@ ee-practice-prepare $SONG="both" $FRESH="false":
 
 # Real-song regression: copy, load, split, undo/redo, save/reopen, verify originals.
 ee-practice-test:
-    cargo test -p editor --features audio,standalone --test practice_real -- --ignored --nocapture --test-threads=1
+    cargo test -p editor --features audio,standalone --test it -- practice_real:: --ignored --nocapture --test-threads=1
 
 # Fast iteration loop: the SAME cached song/audio staging every run, fewer
 # frames, optionally one phase. Prints the report directory for compare.py.
@@ -1302,8 +1302,8 @@ daw-scenes:
     # the runner and this box disagree about antialiasing). Refreshing
     # one without the other is how a fixture goes stale.
     export FTS_UPDATE_GOLDEN=1
-    cargo test -p dynamic-template --test scene_rows
-    cargo test -p session-daw --test golden_scenes
+    cargo test -p dynamic-template --test it -- scene_rows::
+    cargo test -p session-daw --test it -- golden_scenes::
     # The generated scenes' pictures (drum-mixing and its kin) are not
     # compared — the negative control reads two of them, and the app's
     # Mix view is checked against drum-mixing by eye — so the test above
@@ -1332,7 +1332,7 @@ daw-scenes:
 # Run this after a deliberate change to the fold, the colours or the
 # fixture media, and commit the result.
 daw-folder-items:
-    FTS_UPDATE_GOLDEN=1 cargo test -p session-daw --test folder_items
+    FTS_UPDATE_GOLDEN=1 cargo test -p session-daw --test it -- folder_items::
 
 # One sheet of folder items over a project, by hand — the same render the
 # fixtures come from, so it is the way to LOOK at a fold.
@@ -1373,7 +1373,7 @@ drums-bench SONG DETECT="" BUDGET="":
     [ -n "{{DETECT}}" ] && export FTS_BENCH_DETECT=1
     [ -n "{{BUDGET}}" ] && export FTS_BENCH_BUDGET_MS="{{BUDGET}}"
     cargo nextest run --cargo-profile release-fast -p session-daw --features signal \
-      --test drums_full_real --run-ignored all --no-capture
+      --test it -E 'test(/^drums_full_real::/)' --run-ignored all --no-capture
     python3 -I - "$out" <<'PY'
     import json, sys
     r = json.load(open(sys.argv[1]))

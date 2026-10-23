@@ -16,10 +16,12 @@ toolbar = ["dep:daw-proto"]
 [lib]
 name = "fts_icons"
 path = "src/lib.rs"
+test = false
 
 [[bin]]
 name = "fts-icons"
 path = "src/bin/fts-icons.rs"
+test = false
 
 [dependencies]
 anyhow = { workspace = true }

@@ -29,3 +29,8 @@ tracing-subscriber = { workspace = true }
 # The activity the app runs in: Android's NativeActivity, with
 # `android_main` (main.rs) as its entry.
 android-activity = { version = "0.6", features = ["native-activity"] }
+
+[[bin]]
+name = "signal-mobile"
+path = "src/main.rs"
+test = false

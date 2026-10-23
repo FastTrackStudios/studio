@@ -34,6 +34,3 @@ dioxus-test = { workspace = true }
 symphonia = { version = "0.5", features = ["wav", "pcm"] }
 tokio = { workspace = true, features = ["macros", "rt"] }
 
-[[test]]
-name = "gui_editor"
-required-features = ["native"]

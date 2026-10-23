@@ -33,3 +33,7 @@ unsafe_code = "allow"
 
 [lints.rustdoc]
 broken_intra_doc_links = "allow"
+
+[lib]
+# No #[test] in it: skip building and linking an empty test harness.
+test = false

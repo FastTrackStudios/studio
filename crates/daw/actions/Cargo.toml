@@ -20,3 +20,7 @@ tokio = { workspace = true, features = ["sync"] }
 
 [lints]
 workspace = true
+
+[lib]
+# No #[test] in it: skip building and linking an empty test harness.
+test = false

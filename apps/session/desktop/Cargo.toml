@@ -37,6 +37,7 @@ required-features = ["cli"]
 name = "session-vault-sync"
 path = "src/bin/session-vault-sync.rs"
 required-features = ["cli"]
+test = false
 
 [features]
 # Two axes here -- Session and Charts. (The monorepo had a third, Signal;

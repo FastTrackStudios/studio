@@ -19,3 +19,7 @@ workspace = true
 dioxus.workspace = true
 # The studio shell's tokens (app_shell::tokens, no features: no UI deps).
 app-shell.workspace = true
+
+[lib]
+# No #[test] in it: skip building and linking an empty test harness.
+test = false

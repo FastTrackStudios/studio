@@ -6,7 +6,7 @@ slow-timeout = { period = "30s", terminate-after = 1 }
 # than hung. Without this the suite is red out of the box on a clean
 # tree, which trains everyone to ignore a red run.
 [[profile.default.overrides]]
-filter = 'test(=shoot_every_scene)'
+filter = 'test(=screenshots::shoot_every_scene)'
 slow-timeout = { period = "60s", terminate-after = 10 }
 
 # A drum slip on a real song, held to a budget (`perf_slip`, run only
@@ -14,7 +14,7 @@ slow-timeout = { period = "60s", terminate-after = 10 }
 # (its song document read in full) before the stages it times. Slow
 # because the song is big; a hang is still caught.
 [[profile.default.overrides]]
-filter = 'test(=a_slip_on_a_real_song)'
+filter = 'test(=perf_slip::a_slip_on_a_real_song)'
 slow-timeout = { period = "60s", terminate-after = 5 }
 
 # The fill detector's album check decodes six real drum sessions and
@@ -22,7 +22,7 @@ slow-timeout = { period = "60s", terminate-after = 5 }
 # it is slow for the same reason: it does real work, and it finishes.
 # Headroom for a slower runner, still short enough to catch a hang.
 [[profile.default.overrides]]
-filter = 'test(=fills_land_where_a_drummer_puts_them)'
+filter = 'test(=fills_real::fills_land_where_a_drummer_puts_them)'
 slow-timeout = { period = "60s", terminate-after = 5 }
 
 # Its sibling, which opens one album session and runs the same detector
@@ -32,7 +32,7 @@ slow-timeout = { period = "60s", terminate-after = 5 }
 # until then — so this override is the cost of that speed-up, and it is
 # worth saying so rather than leaving a number that looks arbitrary.
 [[profile.default.overrides]]
-filter = 'test(=protecting_fills_keeps_them_out_of_the_quantize)'
+filter = 'test(=fills_real::protecting_fills_keeps_them_out_of_the_quantize)'
 slow-timeout = { period = "60s", terminate-after = 5 }
 
 # The golden session's eleven scene renders: each is a real GPU frame of
@@ -47,7 +47,7 @@ slow-timeout = { period = "60s", terminate-after = 5 }
 # on an idle machine goes red under load, which teaches everyone to
 # rerun a red suite instead of reading it.
 [[profile.default.overrides]]
-filter = 'test(=every_scene_renders_to_its_committed_fixture)'
+filter = 'test(=golden_scenes::every_scene_renders_to_its_committed_fixture)'
 slow-timeout = { period = "60s", terminate-after = 10 }
 
 # The folder-item zoom renders: real GPU frames through the bench, like
@@ -61,7 +61,7 @@ slow-timeout = { period = "60s", terminate-after = 10 }
 # running teaches everyone to rerun a red suite instead of reading it.
 # Ten minutes still catches a hang.
 [[profile.default.overrides]]
-filter = 'test(=every_zoom_renders_to_its_committed_fixture)'
+filter = 'test(=folder_items::every_zoom_renders_to_its_committed_fixture)'
 slow-timeout = { period = "60s", terminate-after = 10 }
 
 # The folder-item picture: one more real GPU frame through the bench,
@@ -74,7 +74,7 @@ slow-timeout = { period = "60s", terminate-after = 10 }
 # reasons unrelated to the code teaches everyone to rerun it instead of
 # reading it.
 [[profile.default.overrides]]
-filter = 'test(=a_hidden_child_replays_the_picture_and_a_muted_one_changes_it)'
+filter = 'test(=folder_items::a_hidden_child_replays_the_picture_and_a_muted_one_changes_it)'
 slow-timeout = { period = "60s", terminate-after = 10 }
 
 # The reverb stability sweep renders every algorithm at three decays and
@@ -89,5 +89,5 @@ slow-timeout = { period = "60s", terminate-after = 10 }
 # the bug, so the budget moves instead. `terminate-after` still catches a
 # genuine hang, just at four minutes rather than thirty seconds.
 [[profile.default.overrides]]
-filter = 'test(=every_algorithm_stays_bounded_across_its_knob_range)'
+filter = 'test(=stability::every_algorithm_stays_bounded_across_its_knob_range)'
 slow-timeout = { period = "120s", terminate-after = 2 }

@@ -47,32 +47,6 @@ naga = { version = "29", features = ["wgsl-in"] }
 png = { version = "0.18" }
 tokio = { workspace = true, features = ["macros", "rt"] }
 
-[[test]]
-name = "screenshots"
-required-features = ["native", "profiles", "ui"]
-
-[[test]]
-name = "param_round_trip"
-required-features = ["native", "ui"]
-
-[[test]]
-name = "tempo_sync"
-required-features = ["native", "ui"]
-
-[[test]]
-name = "time_field"
-required-features = ["native", "ui"]
-
-[[test]]
-name = "families_differ"
-path = "tests/families_differ.rs"
-required-features = ["ui", "viz"]
-
-[[test]]
-name = "knob_readouts"
-path = "tests/knob_readouts.rs"
-required-features = ["native", "ui"]
-
 [[example]]
 name = "family_sheet"
 path = "examples/family_sheet.rs"

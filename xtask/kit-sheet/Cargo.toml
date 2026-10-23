@@ -28,3 +28,7 @@ eq = { workspace = true, features = ["native", "ui"] }
 reverb = { workspace = true, features = ["native", "profiles", "ui", "viz"] }
 saturate = { workspace = true, features = ["native", "profiles", "ui", "viz"] }
 tokio = { workspace = true, features = ["macros", "rt"] }
+
+[lib]
+# No #[test] in it: skip building and linking an empty test harness.
+test = false

@@ -9,6 +9,7 @@ description = "fts-clap-host — launch any CLAP plugin's embedded GUI in a wind
 [[bin]]
 name = "fts-clap-host"
 path = "src/main.rs"
+test = false
 
 [lints]
 workspace = true

@@ -32,3 +32,4 @@ serde = { workspace = true }
 name = "fts-themer"
 path = "src/bin/fts-themer.rs"
 required-features = ["cli"]
+test = false

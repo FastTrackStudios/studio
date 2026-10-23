@@ -8,6 +8,7 @@ description = "FTS Meter — LUFS / true-peak / correlation / goniometer / spect
 
 [lib]
 crate-type = ["cdylib", "lib"]
+test = false
 
 [lints]
 workspace = true

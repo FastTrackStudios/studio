@@ -9,6 +9,7 @@ description = "FTS Level — CLAP/VST3 vocal-leveling plugin (riding + gate + de
 [lib]
 # cdylib → the loadable CLAP/VST3 binary; lib → tests + a future standalone host.
 crate-type = ["cdylib", "lib"]
+test = false
 
 [lints]
 workspace = true

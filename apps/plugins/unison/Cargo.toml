@@ -8,6 +8,7 @@ description = "FTS Unison — audio-domain unison / double-tracking engine (the 
 
 [lib]
 crate-type = ["cdylib", "lib"]
+test = false
 
 [lints]
 workspace = true

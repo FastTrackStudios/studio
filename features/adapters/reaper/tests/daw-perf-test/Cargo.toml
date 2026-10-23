@@ -9,6 +9,7 @@ description = "REAPER extension that benchmarks native reaper-rs vs DAW RPC (ind
 crate-type = ["cdylib"]
 name = "reaper_daw_perf_test"
 path = "src/lib.rs"
+test = false
 
 [dependencies]
 # DAW facade (reaper impl for native benchmarks)

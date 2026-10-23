@@ -126,19 +126,10 @@ midi = { workspace = true, features = ["midir", "pipewire", "vox"] }
 [[bin]]
 name = "signal-phones"
 path = "src/bin/signal-phones.rs"
+test = false
 
 [[example]]
 name = "rig_shot"
-required-features = ["ui"]
-
-[[test]]
-name = "signal_mcp"
-path = "tests/signal_mcp.rs"
-required-features = ["mcp"]
-
-[[test]]
-name = "param_flood"
-path = "tests/param_flood.rs"
 required-features = ["ui"]
 
 [[example]]

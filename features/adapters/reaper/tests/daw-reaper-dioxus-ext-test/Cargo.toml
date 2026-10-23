@@ -10,6 +10,7 @@ description = "REAPER extension cdylib that mounts a deterministic Dioxus panel 
 crate-type = ["cdylib"]
 name = "reaper_daw_dioxus_test_panel"
 path = "src/lib.rs"
+test = false
 
 [dependencies]
 reaper-dioxus = { workspace = true }

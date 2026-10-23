@@ -10,7 +10,6 @@ license = "GPL-3.0-or-later"
 [package.metadata."docs.rs"]
 rustdoc-args = ["--html-in-header", "arborium-header.html"]
 
-
 [dependencies]
 # Parser dependencies
 nom = "8"
@@ -60,6 +59,12 @@ harness = false
 name = "rpp_perf"
 path = "src/bin/rpp_perf.rs"
 required-features = ["binaries"]
+test = false
 
 [lints]
 workspace = true
+
+[[bin]]
+name = "decode_domains"
+path = "src/bin/decode_domains.rs"
+test = false

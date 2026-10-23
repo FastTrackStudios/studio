@@ -286,38 +286,43 @@ profile = ["dep:pprof"]
 # See #119, and libs/vendor/anyrender_vello/UPSTREAM.md.
 frame-times = ["anyrender_vello?/log_frame_times"]
 
-
 # Every binary is a desktop one.
 
 [[bin]]
 name = "bench"
 path = "src/bin/bench.rs"
 required-features = ["native"]
+test = false
 
 [[bin]]
 name = "hits"
 path = "src/bin/hits.rs"
 required-features = ["native"]
+test = false
 
 [[bin]]
 name = "reference"
 path = "src/bin/reference.rs"
 required-features = ["native"]
+test = false
 
 [[bin]]
 name = "prepare"
 path = "src/bin/prepare.rs"
 required-features = ["native"]
+test = false
 
 [[bin]]
 name = "blitz_shot"
 path = "src/bin/blitz_shot.rs"
 required-features = ["native"]
+test = false
 
 [[bin]]
 name = "chain-probe"
 path = "src/bin/chain-probe.rs"
 required-features = ["native"]
+test = false
 
 [dev-dependencies]
 builtin = { workspace = true, features = ["engine"] }
@@ -335,3 +340,13 @@ fts-sample = { workspace = true, features = ["engine-native"] }
 
 [lints]
 workspace = true
+
+[[bin]]
+name = "theme_diff"
+path = "src/bin/theme_diff.rs"
+test = false
+
+[[bin]]
+name = "theme_export"
+path = "src/bin/theme_export.rs"
+test = false

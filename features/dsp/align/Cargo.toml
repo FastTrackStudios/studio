@@ -15,3 +15,7 @@ dsp-core = { workspace = true, features = ["audio"] }
 
 [dev-dependencies]
 align-dsp = { workspace = true }
+
+[lib]
+# No #[test] in it: skip building and linking an empty test harness.
+test = false

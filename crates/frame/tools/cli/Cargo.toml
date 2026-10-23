@@ -30,3 +30,68 @@ frame = { path = "../..", features = ["design"] }
 
 [lints]
 workspace = true
+
+[[bin]]
+name = "engine_probe"
+path = "src/bin/engine_probe.rs"
+test = false
+
+[[bin]]
+name = "export_markup"
+path = "src/bin/export_markup.rs"
+test = false
+
+[[bin]]
+name = "font_sheet"
+path = "src/bin/font_sheet.rs"
+test = false
+
+[[bin]]
+name = "import_diagnostics"
+path = "src/bin/import_diagnostics.rs"
+test = false
+
+[[bin]]
+name = "kit_sheet"
+path = "src/bin/kit_sheet.rs"
+test = false
+
+[[bin]]
+name = "load_profile"
+path = "src/bin/load_profile.rs"
+test = false
+
+[[bin]]
+name = "mock_engine"
+path = "src/bin/mock_engine.rs"
+test = false
+
+[[bin]]
+name = "render_diagnostics"
+path = "src/bin/render_diagnostics.rs"
+test = false
+
+[[bin]]
+name = "render_png"
+path = "src/bin/render_png.rs"
+test = false
+
+[[bin]]
+name = "render_svg"
+path = "src/bin/render_svg.rs"
+test = false
+
+[[bin]]
+name = "svg_structure_diff"
+path = "src/bin/svg_structure_diff.rs"
+test = false
+
+[[bin]]
+name = "visual_diff"
+path = "src/bin/visual_diff.rs"
+test = false
+
+[[bin]]
+name = "wgpu_preview"
+path = "src/bin/wgpu_preview.rs"
+test = false

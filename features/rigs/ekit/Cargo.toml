@@ -39,3 +39,7 @@ tokio = { workspace = true, features = ["rt-multi-thread", "macros"] }
 
 [target.'cfg(target_os = "linux")'.dependencies]
 midi = { workspace = true, features = ["midir", "pipewire", "vox"] }
+
+[lib]
+# No #[test] in it: skip building and linking an empty test harness.
+test = false

@@ -9,6 +9,7 @@ description = "FTS Delay — CLAP/VST3 stereo delay plugin (tape/digital/BBD/...
 [lib]
 # cdylib → the loadable CLAP/VST3 binary; lib → tests + a future standalone host.
 crate-type = ["cdylib", "lib"]
+test = false
 
 [lints]
 workspace = true
