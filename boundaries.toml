@@ -167,7 +167,7 @@ features = ["ui"]
 layer = "L4"
 
 [[row]]
-package = "input"
+package = "keybinds"
 features = ["dioxus"]
 layer = "L4"
 
@@ -359,7 +359,7 @@ package = "hits"
 layer = "L1"
 
 [[row]]
-package = "input"
+package = "keybinds"
 layer = "L1"
 
 [[row]]

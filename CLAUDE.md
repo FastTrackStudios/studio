@@ -56,8 +56,8 @@ scripts/    helper scripts the Justfile calls
 ```
 
 Some features carry their own `AGENTS.md` / `README.md`
-(`features/input`, `features/dynamic-template`,
-`features/editor`, …) — read it before working there.
+(`features/dynamic-template`, `features/editor`, …) — read it before
+working there.
 
 ## The model
 

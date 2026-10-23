@@ -1621,10 +1621,10 @@ fn grid_key(ed: &mut Editor, second: &str) -> bool {
     editor::ui::keys::release(second, plain());
     let mut ran = false;
     for cmd in &cmds {
-        if let input::InputCommand::Action(a) = cmd {
+        if let architect_input::InputCommand::Action(a) = cmd {
             ran |= editor::ui::keys::dispatch(
                 ed,
-                &a.0,
+                a,
                 editor::memagic::Region::NoteArea,
                 editor::memagic::Anchor { t: 0.0, row: None },
             );

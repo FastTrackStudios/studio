@@ -1,0 +1,21 @@
+[package]
+name = "keybinds"
+version = "0.1.0"
+edition = "2024"
+license.workspace = true
+description = "Studio's keybind files on architect-input: the styx/REAPER keybind format, profiles, the shipped defaults, and the which-key overlay"
+
+[lints]
+workspace = true
+
+[features]
+dioxus = ["dep:architect-ui", "dep:dioxus", "architect-input/dioxus"]
+
+[dependencies]
+architect-input = { workspace = true }
+architect-ui = { workspace = true, optional = true }
+dioxus = { workspace = true, optional = true }
+facet = { workspace = true }
+facet-styx = { workspace = true }
+thiserror = { workspace = true }
+vox = { workspace = true }

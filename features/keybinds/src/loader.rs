@@ -1,4 +1,4 @@
-//! Load keybind profiles/sections from styx into an `crate::KeymapConfig`.
+//! Load keybind profiles/sections from styx into a [`KeymapConfig`].
 //!
 //! The app-agnostic slice of reaper-input's `keybind_config/loader.rs`:
 //! parse `profile.styx` (a [`ProfileConfig`]) + its section files (each a
@@ -6,13 +6,13 @@
 //! wheel bindings into a [`KeymapConfig`]. No REAPER-specific overlay,
 //! workflow, or mouse-modifier handling — those stay in reaper-input.
 
-use std::collections::HashMap;
 use std::path::Path;
 
-use crate::config::KeymapConfig;
+use architect_input::{KeymapConfig, WhichKeyLabels, which_key};
+
 use crate::proto::{KeybindDef, ProfileConfig, SectionConfig, WheelBindDef, WhichKeyTreeDef};
 
-use crate::keybinds::bridge::{keymap_config_from_defs, section_to_keymap_config};
+use crate::bridge::{keymap_config_from_defs, section_to_keymap_config};
 
 /// Parse a single section's styx source into a [`KeymapConfig`].
 ///
@@ -24,11 +24,11 @@ pub fn keymap_from_section_str(styx: &str) -> Result<KeymapConfig, String> {
 }
 
 /// A profile, loaded: the keymap to run, and the which-key labels the
-/// keymap itself does not keep (see [`crate::keybinds::bridge::which_key_labels`]).
+/// keymap itself does not keep (see [`architect_input::which_key::labels`]).
 #[derive(Debug, Clone, Default)]
 pub struct Profile {
     pub keymap: KeymapConfig,
-    pub labels: HashMap<Vec<crate::KeyChord>, String>,
+    pub labels: WhichKeyLabels,
 }
 
 /// Load a [`KeymapConfig`] from a profile directory.
@@ -47,7 +47,7 @@ pub fn load_profile_dir(dir: &Path) -> Option<Profile> {
 
 /// Load a profile from any source of its files, by file name
 /// (`profile.styx`, then each section it lists): a directory, or the
-/// copy compiled in ([`crate::keybinds::embedded`]).
+/// copy compiled in ([`crate::embedded`]).
 pub fn load_profile_from(read: impl Fn(&str) -> Option<String>) -> Option<Profile> {
     let profile = facet_styx::from_str::<ProfileConfig>(&read("profile.styx")?).ok()?;
 
@@ -66,7 +66,7 @@ pub fn load_profile_from(read: impl Fn(&str) -> Option<String>) -> Option<Profil
 
     Some(Profile {
         keymap: keymap_config_from_defs(&bindings, &trees, &wheel),
-        labels: crate::keybinds::bridge::which_key_labels(&trees),
+        labels: which_key::labels(&trees),
     })
 }
 

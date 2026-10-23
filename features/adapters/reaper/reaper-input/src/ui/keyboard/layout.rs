@@ -3,7 +3,7 @@
 //! Defines the key positions, sizes, and labels for rendering a keyboard
 //! visualization. Based on the input-dioxus visualizer layout.
 
-use input::KeyCode;
+use architect_input::KeyCode;
 
 /// A single key on the keyboard.
 #[derive(Clone, Debug, PartialEq)]

@@ -25,9 +25,9 @@ use crate::components::toolbars::{
 };
 use crate::controls::{use_daw_tracks, use_track_store};
 use crate::prelude::*;
+use architect_input::dioxus::use_input_processor;
+use architect_input::{InputCommand, InputContext, InputProcessor};
 use daw_proto::{Item, Track};
-use input::InputCommand;
-use input::dioxus::use_input_processor;
 
 /// What an item shows of its content — REAPER's waveform or note preview.
 ///
@@ -210,8 +210,8 @@ fn profiles_root() -> std::path::PathBuf {
 /// Load one profile's keymap by slug — falls back to an empty (no
 /// bindings) config if the profile is missing/unparseable rather than
 /// erroring, matching `KeybindProfile::list`'s own quiet-skip behavior.
-fn load_keymap(slug: &str) -> input::KeymapConfig {
-    input::keybinds::load_profile_keymap(&profiles_root().join(slug)).unwrap_or_default()
+fn load_keymap(slug: &str) -> architect_input::KeymapConfig {
+    keybinds::load_profile_keymap(&profiles_root().join(slug)).unwrap_or_default()
 }
 
 /// The ruler's band, above the lanes.
@@ -1281,12 +1281,14 @@ pub fn ArrangementView(
 
     // The real input engine, loaded from the active profile's ACTUAL
     // keybind data (`transport.styx`/`navigation.styx`/...) — the same
-    // files `reaper-input` loads, via `input::keybinds::load_profile_keymap`.
-    // `use_hook` (not `use_signal`): loaded once at mount, then only
-    // refreshed explicitly on a profile switch (below) — reading the
-    // profile's ~20 styx files on every render would be needless I/O at
-    // the ~30Hz this component already re-renders for the play cursor.
-    let input_handle = use_input_processor(use_hook(|| load_keymap("fasttrackstudio")));
+    // files `reaper-input` loads, via `keybinds::load_profile_keymap`.
+    // Loaded once at mount (the hook runs its init on first render only),
+    // then only refreshed explicitly on a profile switch (below) — reading
+    // the profile's ~20 styx files on every render would be needless I/O
+    // at the ~30Hz this component already re-renders for the play cursor.
+    let input_handle = use_input_processor::<String>(|| {
+        InputProcessor::from_config(load_keymap("fasttrackstudio")).unwrap_or_default()
+    });
     // Track selection (j/k) is a local UI concept — no DAW round trip:
     // REAPER's own "select track" is a much heavier operation (arm
     // state, TCP scroll, action context) this doesn't attempt to mirror.
@@ -1559,7 +1561,9 @@ pub fn ArrangementView(
     let track_count = tracks.len();
     let keydown_input_handle = input_handle.clone();
     let handle_keydown = move |evt: KeyboardEvent| {
-        for cmd in keydown_input_handle.handle_key(&evt) {
+        // The arrange view sets no context tags: every binding here is a
+        // global one.
+        for cmd in keydown_input_handle.handle_key(&evt, &InputContext::new()) {
             let InputCommand::Action(id) = cmd else {
                 continue;
             };
@@ -1656,7 +1660,9 @@ pub fn ArrangementView(
                         profiles: profiles(),
                         active_slug: active_profile(),
                         on_select: move |slug: String| {
-                            input_handle.reload_config(load_keymap(&slug));
+                            // A profile with an unparseable key sequence
+                            // keeps the current keymap rather than losing it.
+                            let _kept_on_error = input_handle.reload_config(load_keymap(&slug));
                             active_profile.set(slug);
                         },
                     }

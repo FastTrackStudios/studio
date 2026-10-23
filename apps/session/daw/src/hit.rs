@@ -28,7 +28,7 @@
 //! `Columns`, `Frame`, the row offsets — which has the useful property
 //! that a hit and a draw cannot disagree unless the arithmetic does.
 
-use input::proto::MouseModifierContext as Context;
+use keybinds::proto::MouseModifierContext as Context;
 
 /// What the pointer is over.
 #[derive(Clone, Copy, PartialEq, Debug)]

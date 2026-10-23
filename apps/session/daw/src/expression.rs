@@ -44,7 +44,6 @@ use editor::paint::{canvas, demo, keys};
 use editor::rows::DrumMap;
 use editor::tools::{self, Hit};
 use editor::{Edit, Editor, Mode, RowSpace, StripLane, Tool, Viewport, memagic};
-use input::InputCommand;
 use vello::kurbo::Affine;
 
 use crate::mousemap::Mods;
@@ -923,11 +922,7 @@ impl Expression {
         let commands = keys::resolve(key, m);
         let mut ran = false;
         for cmd in &commands {
-            let action = match cmd {
-                InputCommand::Action(a) => Some(a.0.as_str()),
-                InputCommand::ActionWithArgs { action, .. } => Some(action.0.as_str()),
-                _ => None,
-            };
+            let action = cmd.action().map(String::as_str);
             if let Some(action) = action {
                 let (region, anchor) = self.memagic();
                 if keys::dispatch(&mut self.editor, action, region, anchor) {

@@ -8,12 +8,12 @@
 //! is geometry, a mouse map is preference.
 //!
 //! The table here is the FTS default. A mouse profile
-//! (`input::proto::MouseProfileConfig`) is the same shape — a
+//! (`keybinds::proto::MouseProfileConfig`) is the same shape — a
 //! context, a modifier set, a behaviour — and is where a user's
 //! overrides will load into once the profile system reaches this
 //! window; the contexts are already its contexts.
 
-use input::proto::MouseModifierContext as Context;
+use keybinds::proto::MouseModifierContext as Context;
 
 /// The keys held during a gesture: the Editor's too.
 pub use timeline::input::Mods;

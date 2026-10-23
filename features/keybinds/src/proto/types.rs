@@ -102,44 +102,9 @@ pub struct KeybindDef {
     pub why: Option<String>,
 }
 
-/// A which-key prefix tree loaded from a section file.
-#[derive(Facet, Debug, Clone, PartialEq)]
-pub struct WhichKeyTreeDef {
-    /// Prefix key that opens the tree, e.g. `z`.
-    pub prefix: String,
-
-    /// Human-readable label shown in the overlay.
-    pub label: String,
-
-    /// Children under the prefix.
-    pub entries: Vec<WhichKeyEntryDef>,
-
-    /// When `true`, children match regardless of Shift state. Useful for
-    /// trees whose prefix is itself a shifted chord (e.g. `<S-m>`) and the
-    /// user expects to keep Shift held while picking leaves. Defaults to
-    /// `false`. Optional in styx — omit to inherit the default.
-    #[facet(skip_serializing_if = Option::is_none)]
-    pub case_insensitive: Option<bool>,
-}
-
-/// A which-key entry. If `action` is present, the entry is a leaf. If
-/// `children` is present, the entry is a branch.
-#[derive(Facet, Debug, Clone, PartialEq)]
-pub struct WhichKeyEntryDef {
-    /// Key under the current prefix/branch.
-    pub key: String,
-
-    /// Human-readable label shown in the overlay.
-    pub label: String,
-
-    /// Action command ID for leaf entries.
-    #[facet(skip_serializing_if = Option::is_none)]
-    pub action: Option<String>,
-
-    /// Nested entries for branch entries.
-    #[facet(skip_serializing_if = Option::is_none)]
-    pub children: Option<Vec<WhichKeyEntryDef>>,
-}
+/// Which-key prefix trees are architect-input's: the same shape, so a
+/// section file's `which_key` block parses straight into them.
+pub use architect_input::which_key::{WhichKeyEntryDef, WhichKeyTreeDef};
 
 /// A single mouse wheel binding.
 #[derive(Facet, Debug, Clone, PartialEq)]

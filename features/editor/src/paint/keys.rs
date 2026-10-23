@@ -8,7 +8,7 @@
 //! first key of every zoom sequence.
 //!
 //! So the bindings live in `input`'s keymap under the [`SURFACE`] mode
-//! and are resolved through [`input::InputProcessor`], which owns the
+//! and are resolved through [`architect_input::InputProcessor`], which owns the
 //! **sequence state**: `z` alone resolves to nothing and leaves a
 //! pending prefix, and the next key completes it. That is what makes
 //! `z z` / `z i` work at all, and it is why this is a processor rather
@@ -16,8 +16,8 @@
 
 use std::cell::RefCell;
 
-use input::{
-    ActionContext, InputCommand, InputEvent, InputProcessor, KeyChord, KeyCode, KeyEvent, KeyTrie,
+use architect_input::{
+    InputCommand, InputContext, InputEvent, InputProcessor, KeyChord, KeyCode, KeyEvent, KeyTrie,
     KeymapConfig, ModeId, Modifiers,
 };
 
@@ -44,9 +44,9 @@ thread_local! {
 }
 
 fn config() -> KeymapConfig {
-    let mut config = input::config::load_default_config().unwrap_or_default();
+    let mut config = keybinds::load_default_config().unwrap_or_default();
     #[cfg(not(target_arch = "wasm32"))]
-    if let Ok(Some(user)) = input::config::load_user_config() {
+    if let Ok(Some(user)) = keybinds::load_user_config() {
         config = KeymapConfig::merge(config, user);
     }
     config
@@ -153,7 +153,7 @@ pub fn resolve(key: &str, mods: Mods) -> Vec<InputCommand> {
             // every binding.
             InputProcessor::from_config(editor_config()).unwrap_or_default()
         });
-        proc.process(event, &ActionContext::new())
+        proc.process(event, &InputContext::new())
     });
 
     // Mirror the processor's sequence state so the overlay can walk to
@@ -206,7 +206,7 @@ pub fn release(key: &str, mods: Mods) -> bool {
     let hide = PROCESSOR.with(|p| {
         p.borrow_mut()
             .as_mut()
-            .map(|proc| proc.notify_key_release(chord))
+            .map(|proc| proc.notify_key_release(&chord))
             .unwrap_or(false)
     });
     // The mirror the overlay walks has to follow the processor's state,
@@ -434,11 +434,8 @@ mod tests {
 
     fn actions(cmds: &[InputCommand]) -> Vec<String> {
         cmds.iter()
-            .filter_map(|c| match c {
-                InputCommand::Action(a) => Some(a.0.clone()),
-                InputCommand::ActionWithArgs { action, .. } => Some(action.0.clone()),
-                _ => None,
-            })
+            .filter_map(InputCommand::action)
+            .cloned()
             .collect()
     }
 

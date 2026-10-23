@@ -1,19 +1,19 @@
 //! REAPER-specific InputProcessor wrapper.
 //!
 //! Bridges the gap between REAPER's raw VK-code keyboard API and the
-//! unified `input::InputProcessor` state machine.
+//! unified `architect_input::InputProcessor` state machine.
 
 use std::collections::HashMap;
 use std::path::Path;
 use std::sync::{OnceLock, RwLock};
 
+use architect_input::InputCommand;
+use architect_input::InputContext;
+use architect_input::InputProcessor;
+use architect_input::KeyChord;
+use architect_input::KeyTrie;
+use architect_input::KeymapConfig;
 use enumflags2::BitFlags;
-use input::command::InputCommand;
-use input::config::KeymapConfig;
-use input::context::ActionContext;
-use input::key::KeyChord;
-use input::processor::InputProcessor;
-use input::trie::KeyTrie;
 use reaper_medium::{AcceleratorBehavior, AcceleratorKeyCode};
 use tracing::{debug, info};
 
@@ -31,7 +31,7 @@ use super::keybinds::{KeybindContext, KeybindOverride, KeybindPreset};
 /// override layers, and preset switching.
 pub struct ReaperInputProcessor {
     processor: InputProcessor,
-    context: ActionContext,
+    context: InputContext,
 
     /// The base KeymapConfig (from preset + which-key trees).
     base_config: KeymapConfig,
@@ -73,7 +73,7 @@ impl ReaperInputProcessor {
 
         let mut this = Self {
             processor,
-            context: ActionContext::new(),
+            context: InputContext::new(),
             base_config: config,
             active_overrides: Vec::new(),
             available_presets: HashMap::new(),
@@ -127,7 +127,7 @@ impl ReaperInputProcessor {
     }
 
     /// Process an InputEvent directly (for testing — bypasses VK code conversion).
-    pub fn process_event(&mut self, event: input::InputEvent) -> Vec<InputCommand> {
+    pub fn process_event(&mut self, event: architect_input::InputEvent) -> Vec<InputCommand> {
         self.processor.process(event, &self.context)
     }
 
@@ -143,21 +143,21 @@ impl ReaperInputProcessor {
         behavior: &BitFlags<AcceleratorBehavior>,
         raw_flags: u8,
     ) -> bool {
-        let Some(input::InputEvent::Key(event)) =
+        let Some(architect_input::InputEvent::Key(event)) =
             bridge::vk_to_input_event_with_flags(key, behavior, raw_flags)
         else {
             return false;
         };
-        let chord = input::KeyChord::new(event.key, event.modifiers);
-        self.processor.notify_key_release(chord)
+        let chord = architect_input::KeyChord::new(event.key, event.modifiers);
+        self.processor.notify_key_release(&chord)
     }
 
     /// Clear any pending key sequence and reset the processor to idle state.
     pub fn clear_pending(&mut self) {
         // Process an Escape key to cancel any pending sequence
-        let esc = input::InputEvent::Key(input::KeyEvent {
-            key: input::KeyCode::Escape,
-            modifiers: input::Modifiers::default(),
+        let esc = architect_input::InputEvent::Key(architect_input::KeyEvent {
+            key: architect_input::KeyCode::Escape,
+            modifiers: architect_input::Modifiers::default(),
         });
         let _ = self.processor.process(esc, &self.context);
     }
@@ -281,6 +281,12 @@ impl ReaperInputProcessor {
         self.processor.pending_display()
     }
 
+    /// The chords of the pending sequence, exactly as the processor
+    /// matched them (empty when none is): the path to walk the trie by.
+    pub fn pending_keys(&self) -> &[KeyChord] {
+        self.processor.pending_keys()
+    }
+
     /// Check if the processor is waiting for more keys.
     pub fn needs_timeout(&self) -> bool {
         self.processor.needs_timeout()
@@ -331,7 +337,9 @@ impl ReaperInputProcessor {
 
     /// Get the keytrie for the normal mode (for which-key introspection).
     pub fn normal_keytrie(&self) -> Option<&KeyTrie> {
-        self.processor.keymaps().get(&input::mode::ModeId::normal())
+        self.processor
+            .keymaps()
+            .get(&architect_input::ModeId::normal())
     }
 
     /// Get continuations at a given prefix path (for which-key overlay).
@@ -464,7 +472,7 @@ impl ReaperInputProcessor {
     /// editor is focused), then the global keymap. The `bool` flags whether
     /// the trie came from a context layer.
     pub fn active_tries(&self) -> Vec<(&KeyTrie, bool)> {
-        let normal = input::mode::ModeId::normal();
+        let normal = architect_input::ModeId::normal();
         let mut out = Vec::new();
         if let Some(layers) = self.processor.context_keymaps().get(&normal) {
             for (when, trie) in layers {

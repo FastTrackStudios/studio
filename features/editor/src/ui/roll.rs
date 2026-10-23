@@ -27,7 +27,6 @@ use crate::memagic;
 use crate::tools::Mods;
 use dioxus::prelude::*;
 use dioxus_elements::input_data::MouseButton;
-use input::InputCommand;
 use keyboard_types::Modifiers;
 
 use crate::ui::interaction::{self, Drag};
@@ -346,11 +345,7 @@ pub fn Canvas(
                 let commands = keys::resolve(&key, m);
                 let mut ran = false;
                 for cmd in &commands {
-                    let action = match cmd {
-                        InputCommand::Action(a) => Some(a.0.as_str()),
-                        InputCommand::ActionWithArgs { action, .. } => Some(action.0.as_str()),
-                        _ => None,
-                    };
+                    let action = cmd.action().map(String::as_str);
                     if let Some(action) = action {
                         // Velocity commands first: they own a live shape
                         // that outlives the keypress, which a function

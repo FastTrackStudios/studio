@@ -23,7 +23,7 @@
 //! assert!(testing::is_enabled());
 //! ```
 
-use input::{InputCommand, InputEvent, KeyCode, KeyEvent, Modifiers};
+use architect_input::{InputCommand, InputEvent, KeyCode, KeyEvent, Modifiers};
 
 use crate::input::processor;
 

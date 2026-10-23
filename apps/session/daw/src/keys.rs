@@ -2,8 +2,8 @@
 //!
 //! The profile is the one REAPER runs on (`reaper-input`'s
 //! `fasttrackstudio` — `transport.styx`, `editing.styx`,
-//! `navigation.styx`, …), read by `input-keybinds` into an
-//! `input::InputProcessor`, so a key means the same thing in this window
+//! `navigation.styx`, …), read by studio's `keybinds` into an
+//! `architect_input::InputProcessor`, so a key means the same thing in this window
 //! as it does in REAPER with the extension loaded. The bindings name
 //! REAPER actions by number; [`Action`] is the subset this window can
 //! do, and [`action_of`] is the table from one to the other. A bound
@@ -11,7 +11,7 @@
 //! with its id, so it is logged rather than silently dropped.
 //!
 //! Where the profile is found: `FTS_INPUT_PROFILE` (a profile
-//! directory), else the copy `input-keybinds` compiles in (so an
+//! directory), else the copy `keybinds` compiles in (so an
 //! installed app, started from anywhere, has the same keys), else a
 //! built-in copy of the bindings this window needs.
 //!
@@ -22,9 +22,9 @@
 use std::collections::HashMap;
 use std::path::PathBuf;
 
-use input::{
-    ActionContext, InputCommand, InputEvent, InputProcessor, KeyChord, KeyCode, KeyTrie,
-    KeymapConfig, ModeId, Modifiers,
+use architect_input::{
+    InputCommand, InputContext, InputEvent, InputProcessor, KeyChord, KeyCode, KeyTrie,
+    KeymapConfig, LeafAction, ModeId, Modifiers, WhichKeyEntry, WhichKeyLabels, WhichKeyNext,
 };
 
 use crate::which_key::{Entry, WhichKey};
@@ -336,14 +336,10 @@ pub fn action_of(id: &str) -> Action {
 /// The keyboard: the processor and where its map came from.
 pub struct Keys {
     processor: InputProcessor,
-    context: ActionContext,
+    context: InputContext,
     pub source: String,
     /// The which-key labels the keymap does not keep.
-    labels: HashMap<Vec<KeyChord>, String>,
-    /// The chords of the sequence typed so far, mirrored because the
-    /// processor reports its pending sequence only as a display string,
-    /// and the popup has to walk the trie to it.
-    pending: Vec<KeyChord>,
+    labels: WhichKeyLabels,
 }
 
 impl Keys {
@@ -352,50 +348,42 @@ impl Keys {
     pub fn load() -> Self {
         let (profile, source) = profile_dir()
             .and_then(|dir| {
-                input::keybinds::load_profile_dir(&dir).map(|p| (p, dir.display().to_string()))
+                keybinds::load_profile_dir(&dir).map(|p| (p, dir.display().to_string()))
             })
             .or_else(|| {
-                input::keybinds::embedded::fasttrackstudio()
+                keybinds::embedded::fasttrackstudio()
                     .map(|p| (p, "fasttrackstudio (embedded)".to_owned()))
             })
             .or_else(|| {
                 KeymapConfig::from_json_str(BUILTIN).ok().map(|keymap| {
-                    let profile = input::keybinds::Profile {
+                    let profile = keybinds::Profile {
                         keymap,
                         labels: HashMap::new(),
                     };
                     (profile, "built-in".to_owned())
                 })
             })
-            .unwrap_or_else(|| (input::keybinds::Profile::default(), "none".to_owned()));
+            .unwrap_or_else(|| (keybinds::Profile::default(), "none".to_owned()));
         let processor =
             InputProcessor::from_config(profile.keymap).unwrap_or_else(|_| InputProcessor::new());
         Self {
             processor,
-            context: ActionContext::new(),
+            context: InputContext::new(),
             source,
             labels: profile.labels,
-            pending: Vec::new(),
         }
     }
 
     /// A key went down. The actions it asked for, in order — empty
     /// when the key is not bound, so the window can keep its own.
     pub fn press(&mut self, key: KeyCode, modifiers: Modifiers) -> Vec<Action> {
-        let chord = KeyChord::new(key.clone(), modifiers);
-        let event = InputEvent::Key(input::KeyEvent { key, modifiers });
-        let actions = self
-            .processor
+        let event = InputEvent::Key(architect_input::KeyEvent { key, modifiers });
+        self.processor
             .process(event, &self.context)
-            .into_iter()
-            .filter_map(|command| match command {
-                InputCommand::Action(id) => Some(action_of(id.as_str())),
-                InputCommand::ActionWithArgs { action, .. } => Some(action_of(action.as_str())),
-                _ => None,
-            })
-            .collect();
-        self.follow(Some(chord));
-        actions
+            .iter()
+            .filter_map(InputCommand::action)
+            .map(|id| action_of(id))
+            .collect()
     }
 
     /// A key came back up. Only from a real key-up: the processor keeps
@@ -403,11 +391,8 @@ impl Keys {
     /// held prefix is sticky (hold `z`, tap `t` then `v`: both fire).
     /// `true` when the popup should go.
     pub fn release(&mut self, key: KeyCode, modifiers: Modifiers) -> bool {
-        let hide = self
-            .processor
-            .notify_key_release(KeyChord::new(key, modifiers));
-        self.follow(None);
-        hide
+        self.processor
+            .notify_key_release(&KeyChord::new(key, modifiers))
     }
 
     /// Drop a half-typed sequence: Escape, or a held `z` used as the zoom
@@ -416,7 +401,6 @@ impl Keys {
         // The public way to drop one. It hands back the abandoned first
         // key as unhandled, which nothing here wants.
         let _ = self.processor.timeout_expired();
-        self.pending.clear();
     }
 
     /// Whether a sequence is half-typed.
@@ -425,82 +409,42 @@ impl Keys {
         self.processor.pending_display().is_some()
     }
 
-    /// Keep the mirror in step with the processor: extended by the chord
-    /// just pressed while a prefix is live, rewound to what is still
-    /// pending after a sticky match, cleared when nothing is.
-    fn follow(&mut self, pressed: Option<KeyChord>) {
-        let Some(display) = self.processor.pending_display() else {
-            self.pending.clear();
-            return;
-        };
-        let depth = display.split_whitespace().count();
-        if let Some(chord) = pressed
-            && self.pending.len() < depth
-        {
-            self.pending.push(chord);
-        }
-        self.pending.truncate(depth);
-    }
-
     /// What can follow the keys typed so far, for the which-key popup.
     /// `None` when nothing is pending.
     #[must_use]
     pub fn which_key(&self) -> Option<WhichKey> {
-        if self.pending.is_empty() {
-            return None;
-        }
-        let KeyTrie::Node(root) = self.processor.keymaps().get(&ModeId::new("normal"))? else {
-            return None;
-        };
-        let mut node = root;
-        for chord in &self.pending {
-            match node.get(chord) {
-                Some(KeyTrie::Node(next)) => node = next,
-                _ => return None,
-            }
-        }
-        let mut entries: Vec<Entry> = node
-            .children
-            .iter()
-            .map(|(chord, child)| {
-                let mut path = self.pending.clone();
-                path.push(chord.clone());
-                let (label, available) = match child {
-                    KeyTrie::Leaf(input::trie::LeafAction::Action(id)) => {
-                        let done = !matches!(action_of(id.as_str()), Action::Unbound(_));
-                        let label = self.labels.get(&path).cloned();
-                        (label.unwrap_or_else(|| id.as_str().to_owned()), done)
-                    }
-                    KeyTrie::Leaf(_) => {
-                        (self.labels.get(&path).cloned().unwrap_or_default(), false)
-                    }
-                    KeyTrie::Node(n) => (
-                        self.labels
-                            .get(&path)
-                            .cloned()
-                            .unwrap_or_else(|| n.name.clone()),
-                        true,
-                    ),
-                };
-                Entry {
-                    key: chord_label(chord),
-                    label,
-                    group: matches!(child, KeyTrie::Node(_)),
-                    available,
-                }
-            })
-            .collect();
+        let popup = self.processor.which_key(&self.context, &self.labels)?;
+        let mut entries: Vec<Entry> = popup.entries.iter().map(entry_of).collect();
         entries.sort_by(|a, b| a.key.cmp(&b.key));
         Some(WhichKey {
-            title: self.labels.get(&self.pending).cloned().unwrap_or_default(),
-            typed: self
-                .pending
+            title: popup.title.unwrap_or_default(),
+            typed: popup
+                .typed
                 .iter()
                 .map(chord_label)
                 .collect::<Vec<_>>()
                 .join(" "),
             entries,
         })
+    }
+}
+
+/// One popup row: a group is always available; a leaf is when this
+/// window does what it is bound to, and reads as its label, else its id.
+fn entry_of(entry: &WhichKeyEntry) -> Entry {
+    let (label, available) = match &entry.next {
+        WhichKeyNext::Group => (entry.label.clone().unwrap_or_default(), true),
+        WhichKeyNext::Leaf(LeafAction::Action(id)) => (
+            entry.label.clone().unwrap_or_else(|| id.clone()),
+            !matches!(action_of(id), Action::Unbound(_)),
+        ),
+        WhichKeyNext::Leaf(_) => (entry.label.clone().unwrap_or_default(), false),
+    };
+    Entry {
+        key: chord_label(&entry.chord),
+        label,
+        group: entry.is_group(),
+        available,
     }
 }
 
@@ -519,14 +463,14 @@ impl Keys {
 
 /// [`Keys::bindings`] under `node`, reached by `path`.
 fn collect_bindings(
-    node: &input::trie::TrieNode,
+    node: &architect_input::TrieNode,
     path: &mut Vec<KeyChord>,
     found: &mut Vec<(Vec<KeyChord>, Action)>,
 ) {
     for (chord, child) in &node.children {
         path.push(chord.clone());
         match child {
-            KeyTrie::Leaf(input::trie::LeafAction::Action(id)) => {
+            KeyTrie::Leaf(architect_input::LeafAction::Action(id)) => {
                 found.push((path.clone(), action_of(id.as_str())));
             }
             KeyTrie::Node(next) => collect_bindings(next, path, found),
@@ -824,10 +768,9 @@ mod tests {
         let config = KeymapConfig::from_json_str(BUILTIN).expect("the built-in map parses");
         let mut keys = Keys {
             processor: InputProcessor::from_config(config).expect("a processor"),
-            context: ActionContext::new(),
+            context: InputContext::new(),
             source: "test".into(),
             labels: HashMap::new(),
-            pending: Vec::new(),
         };
         assert_eq!(
             keys.press(KeyCode::Character(" ".into()), Modifiers::NONE),
@@ -880,13 +823,12 @@ mod tests {
     /// The profile the app ships toggles the Editor on `e`.
     #[test]
     fn the_shipped_profile_toggles_the_editor_on_e() {
-        let profile = input::keybinds::embedded::fasttrackstudio().expect("the embedded profile");
+        let profile = keybinds::embedded::fasttrackstudio().expect("the embedded profile");
         let mut keys = Keys {
             processor: InputProcessor::from_config(profile.keymap).expect("a processor"),
-            context: ActionContext::new(),
+            context: InputContext::new(),
             source: "test".into(),
             labels: HashMap::new(),
-            pending: Vec::new(),
         };
         assert_eq!(
             keys.press(KeyCode::Character("e".into()), Modifiers::NONE),
@@ -899,13 +841,12 @@ mod tests {
     /// Quantize panel on Shift+Q.
     #[test]
     fn the_shipped_profile_quantizes_on_q() {
-        let profile = input::keybinds::embedded::fasttrackstudio().expect("the embedded profile");
+        let profile = keybinds::embedded::fasttrackstudio().expect("the embedded profile");
         let mut keys = Keys {
             processor: InputProcessor::from_config(profile.keymap).expect("a processor"),
-            context: ActionContext::new(),
+            context: InputContext::new(),
             source: "test".into(),
             labels: HashMap::new(),
-            pending: Vec::new(),
         };
         assert_eq!(
             keys.press(KeyCode::Character("q".into()), Modifiers::NONE),
@@ -954,13 +895,12 @@ mod tests {
     /// Alt+G.
     #[test]
     fn the_shipped_profile_gain_stages_on_g() {
-        let profile = input::keybinds::embedded::fasttrackstudio().expect("the embedded profile");
+        let profile = keybinds::embedded::fasttrackstudio().expect("the embedded profile");
         let mut keys = Keys {
             processor: InputProcessor::from_config(profile.keymap).expect("a processor"),
-            context: ActionContext::new(),
+            context: InputContext::new(),
             source: "test".into(),
             labels: HashMap::new(),
-            pending: Vec::new(),
         };
         assert_eq!(
             keys.press(KeyCode::Character("g".into()), shift()),
@@ -979,13 +919,12 @@ mod tests {
     /// Ctrl+N comps from take N.
     #[test]
     fn the_shipped_profile_comps_on_ctrl_digits() {
-        let profile = input::keybinds::embedded::fasttrackstudio().expect("the embedded profile");
+        let profile = keybinds::embedded::fasttrackstudio().expect("the embedded profile");
         let mut keys = Keys {
             processor: InputProcessor::from_config(profile.keymap).expect("a processor"),
-            context: ActionContext::new(),
+            context: InputContext::new(),
             source: "test".into(),
             labels: HashMap::new(),
-            pending: Vec::new(),
         };
         let ctrl = Modifiers {
             ctrl: true,

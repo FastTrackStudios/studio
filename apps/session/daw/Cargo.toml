@@ -74,7 +74,8 @@ hits = { workspace = true, optional = true }
 patch-list = { workspace = true, optional = true }
 # The mouse-modifier contexts a hit reports, so bindings stay
 # configurable rather than being hard-coded per widget.
-input = { workspace = true }
+architect-input = { workspace = true }
+keybinds = { workspace = true }
 
 # The expression editor: its engine, its painter and gestures (no
 # dioxus), and the take-to-document conversion.

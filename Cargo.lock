@@ -875,7 +875,7 @@ dependencies = [
 [[package]]
 name = "architect"
 version = "0.1.0"
-source = "git+https://www.github.com/FastTrackStudios/architect?tag=v0.9.22#d2e87a26b53a2db89cafa895338f1b06f8962797"
+source = "git+https://www.github.com/FastTrackStudios/architect?tag=v0.9.24#664459ab5a6d401aeed1e445a78ba237a5d9ed1a"
 dependencies = [
  "architect-action-derive",
  "architect-atom",
@@ -912,7 +912,7 @@ dependencies = [
 [[package]]
 name = "architect-action-derive"
 version = "0.1.0"
-source = "git+https://www.github.com/FastTrackStudios/architect?tag=v0.9.22#d2e87a26b53a2db89cafa895338f1b06f8962797"
+source = "git+https://www.github.com/FastTrackStudios/architect?tag=v0.9.24#664459ab5a6d401aeed1e445a78ba237a5d9ed1a"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -922,7 +922,7 @@ dependencies = [
 [[package]]
 name = "architect-atom"
 version = "0.1.0"
-source = "git+https://www.github.com/FastTrackStudios/architect?tag=v0.9.22#d2e87a26b53a2db89cafa895338f1b06f8962797"
+source = "git+https://www.github.com/FastTrackStudios/architect?tag=v0.9.24#664459ab5a6d401aeed1e445a78ba237a5d9ed1a"
 dependencies = [
  "dioxus",
 ]
@@ -930,7 +930,7 @@ dependencies = [
 [[package]]
 name = "architect-derive"
 version = "0.1.0"
-source = "git+https://www.github.com/FastTrackStudios/architect?tag=v0.9.22#d2e87a26b53a2db89cafa895338f1b06f8962797"
+source = "git+https://www.github.com/FastTrackStudios/architect?tag=v0.9.24#664459ab5a6d401aeed1e445a78ba237a5d9ed1a"
 dependencies = [
  "heck 0.5.0",
  "proc-macro2",
@@ -939,9 +939,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "architect-input"
+version = "0.1.0"
+source = "git+https://www.github.com/FastTrackStudios/architect?tag=v0.9.24#664459ab5a6d401aeed1e445a78ba237a5d9ed1a"
+dependencies = [
+ "dioxus",
+ "facet",
+ "gloo-timers",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.20",
+ "tokio",
+]
+
+[[package]]
 name = "architect-launcher-core"
 version = "0.1.0"
-source = "git+https://www.github.com/FastTrackStudios/architect?tag=v0.9.22#d2e87a26b53a2db89cafa895338f1b06f8962797"
+source = "git+https://www.github.com/FastTrackStudios/architect?tag=v0.9.24#664459ab5a6d401aeed1e445a78ba237a5d9ed1a"
 dependencies = [
  "chrono",
  "facet",
@@ -957,7 +971,7 @@ dependencies = [
 [[package]]
 name = "architect-launcher-providers"
 version = "0.1.0"
-source = "git+https://www.github.com/FastTrackStudios/architect?tag=v0.9.22#d2e87a26b53a2db89cafa895338f1b06f8962797"
+source = "git+https://www.github.com/FastTrackStudios/architect?tag=v0.9.24#664459ab5a6d401aeed1e445a78ba237a5d9ed1a"
 dependencies = [
  "architect-launcher-core",
  "serde",
@@ -969,7 +983,7 @@ dependencies = [
 [[package]]
 name = "architect-launcher-ui"
 version = "0.1.0"
-source = "git+https://www.github.com/FastTrackStudios/architect?tag=v0.9.22#d2e87a26b53a2db89cafa895338f1b06f8962797"
+source = "git+https://www.github.com/FastTrackStudios/architect?tag=v0.9.24#664459ab5a6d401aeed1e445a78ba237a5d9ed1a"
 dependencies = [
  "architect-launcher-core",
  "architect-ui",
@@ -981,7 +995,7 @@ dependencies = [
 [[package]]
 name = "architect-mcp"
 version = "0.1.0"
-source = "git+https://www.github.com/FastTrackStudios/architect?tag=v0.9.22#d2e87a26b53a2db89cafa895338f1b06f8962797"
+source = "git+https://www.github.com/FastTrackStudios/architect?tag=v0.9.24#664459ab5a6d401aeed1e445a78ba237a5d9ed1a"
 dependencies = [
  "architect",
  "axum",
@@ -994,7 +1008,7 @@ dependencies = [
 [[package]]
 name = "architect-permissions"
 version = "0.1.0"
-source = "git+https://www.github.com/FastTrackStudios/architect?tag=v0.9.22#d2e87a26b53a2db89cafa895338f1b06f8962797"
+source = "git+https://www.github.com/FastTrackStudios/architect?tag=v0.9.24#664459ab5a6d401aeed1e445a78ba237a5d9ed1a"
 dependencies = [
  "serde",
  "serde_json",
@@ -1004,7 +1018,7 @@ dependencies = [
 [[package]]
 name = "architect-rpc-derive"
 version = "0.1.0"
-source = "git+https://www.github.com/FastTrackStudios/architect?tag=v0.9.22#d2e87a26b53a2db89cafa895338f1b06f8962797"
+source = "git+https://www.github.com/FastTrackStudios/architect?tag=v0.9.24#664459ab5a6d401aeed1e445a78ba237a5d9ed1a"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -1014,7 +1028,7 @@ dependencies = [
 [[package]]
 name = "architect-story-core"
 version = "0.1.0"
-source = "git+https://www.github.com/FastTrackStudios/architect?tag=v0.9.22#d2e87a26b53a2db89cafa895338f1b06f8962797"
+source = "git+https://www.github.com/FastTrackStudios/architect?tag=v0.9.24#664459ab5a6d401aeed1e445a78ba237a5d9ed1a"
 dependencies = [
  "linkme",
 ]
@@ -1022,7 +1036,7 @@ dependencies = [
 [[package]]
 name = "architect-story-macros"
 version = "0.1.0"
-source = "git+https://www.github.com/FastTrackStudios/architect?tag=v0.9.22#d2e87a26b53a2db89cafa895338f1b06f8962797"
+source = "git+https://www.github.com/FastTrackStudios/architect?tag=v0.9.24#664459ab5a6d401aeed1e445a78ba237a5d9ed1a"
 dependencies = [
  "heck 0.5.0",
  "proc-macro2",
@@ -1033,7 +1047,7 @@ dependencies = [
 [[package]]
 name = "architect-story-runtime"
 version = "0.1.0"
-source = "git+https://www.github.com/FastTrackStudios/architect?tag=v0.9.22#d2e87a26b53a2db89cafa895338f1b06f8962797"
+source = "git+https://www.github.com/FastTrackStudios/architect?tag=v0.9.24#664459ab5a6d401aeed1e445a78ba237a5d9ed1a"
 dependencies = [
  "architect-story-core",
  "architect-story-macros",
@@ -1044,7 +1058,7 @@ dependencies = [
 [[package]]
 name = "architect-telemetry"
 version = "0.1.0"
-source = "git+https://www.github.com/FastTrackStudios/architect?tag=v0.9.22#d2e87a26b53a2db89cafa895338f1b06f8962797"
+source = "git+https://www.github.com/FastTrackStudios/architect?tag=v0.9.24#664459ab5a6d401aeed1e445a78ba237a5d9ed1a"
 dependencies = [
  "opentelemetry",
  "opentelemetry-appender-tracing",
@@ -1060,7 +1074,7 @@ dependencies = [
 [[package]]
 name = "architect-ui"
 version = "0.1.0"
-source = "git+https://www.github.com/FastTrackStudios/architect?tag=v0.9.22#d2e87a26b53a2db89cafa895338f1b06f8962797"
+source = "git+https://www.github.com/FastTrackStudios/architect?tag=v0.9.24#664459ab5a6d401aeed1e445a78ba237a5d9ed1a"
 dependencies = [
  "architect-story-runtime",
  "chrono",
@@ -1542,7 +1556,7 @@ dependencies = [
 [[package]]
 name = "auth-client"
 version = "0.1.0"
-source = "git+https://www.github.com/FastTrackStudios/architect?tag=v0.9.22#d2e87a26b53a2db89cafa895338f1b06f8962797"
+source = "git+https://www.github.com/FastTrackStudios/architect?tag=v0.9.24#664459ab5a6d401aeed1e445a78ba237a5d9ed1a"
 dependencies = [
  "base64 0.22.1",
  "serde",
@@ -3614,7 +3628,7 @@ dependencies = [
 [[package]]
 name = "crdt"
 version = "0.1.0"
-source = "git+https://www.github.com/FastTrackStudios/architect?tag=v0.9.22#d2e87a26b53a2db89cafa895338f1b06f8962797"
+source = "git+https://www.github.com/FastTrackStudios/architect?tag=v0.9.24#664459ab5a6d401aeed1e445a78ba237a5d9ed1a"
 dependencies = [
  "architect",
  "architect-permissions",
@@ -3635,7 +3649,7 @@ dependencies = [
 [[package]]
 name = "crdt-derive"
 version = "0.1.0"
-source = "git+https://www.github.com/FastTrackStudios/architect?tag=v0.9.22#d2e87a26b53a2db89cafa895338f1b06f8962797"
+source = "git+https://www.github.com/FastTrackStudios/architect?tag=v0.9.24#664459ab5a6d401aeed1e445a78ba237a5d9ed1a"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -4432,6 +4446,7 @@ name = "daw-ui"
 version = "0.1.2"
 dependencies = [
  "architect",
+ "architect-input",
  "architect-ui",
  "audio-controls",
  "daw-control",
@@ -4448,7 +4463,7 @@ dependencies = [
  "facet-styx",
  "futures-timer",
  "image",
- "input",
+ "keybinds",
  "reaper-dioxus",
  "resvg",
  "thiserror 2.0.20",
@@ -5986,6 +6001,7 @@ dependencies = [
  "anyrender_vello_cpu",
  "architect",
  "architect-action-derive",
+ "architect-input",
  "architect-ui",
  "base64 0.22.1",
  "blitz-dom",
@@ -6012,7 +6028,7 @@ dependencies = [
  "guitarpro",
  "hound",
  "image",
- "input",
+ "keybinds",
  "keyflow",
  "keyflow-proto",
  "kurbo 0.13.1",
@@ -9503,23 +9519,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "input"
-version = "0.1.0"
-dependencies = [
- "architect-ui",
- "dioxus",
- "facet",
- "facet-styx",
- "gloo-timers",
- "serde",
- "serde_json",
- "thiserror 2.0.20",
- "tokio",
- "tracing",
- "vox",
-]
-
-[[package]]
 name = "insta"
 version = "1.48.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -10048,6 +10047,19 @@ dependencies = [
  "hashbrown 0.16.1",
  "portable-atomic",
  "thiserror 2.0.20",
+]
+
+[[package]]
+name = "keybinds"
+version = "0.1.0"
+dependencies = [
+ "architect-input",
+ "architect-ui",
+ "dioxus",
+ "facet",
+ "facet-styx",
+ "thiserror 2.0.20",
+ "vox",
 ]
 
 [[package]]
@@ -15550,6 +15562,7 @@ dependencies = [
 name = "reaper-input"
 version = "0.1.2"
 dependencies = [
+ "architect-input",
  "architect-ui",
  "camino",
  "daw",
@@ -15560,7 +15573,7 @@ dependencies = [
  "facet-styx",
  "figue",
  "helgoboss-midi",
- "input",
+ "keybinds",
  "once_cell",
  "reaper-config",
  "reaper-dioxus",
@@ -17110,6 +17123,7 @@ dependencies = [
  "anyrender_vello_cpu",
  "anyrender_vello_hybrid",
  "architect",
+ "architect-input",
  "architect-mcp",
  "architect-telemetry",
  "auth-client",
@@ -17154,8 +17168,8 @@ dependencies = [
  "gloo-timers",
  "hits",
  "image",
- "input",
  "js-sys",
+ "keybinds",
  "keyflow",
  "level",
  "live-proto",
