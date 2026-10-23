@@ -2,4 +2,4 @@
 "xtask-workflows" = "none"
 ---
 
-CI runs on WarpBuild; a PR whose exact tree a full local just ci passed skips the tests job (studio)
+CI follows Task's model: PRs into main run the free gates plus a local-ci status the pre-push hook posts; the full set runs after every merge, the big builds on WarpBuild (studio)

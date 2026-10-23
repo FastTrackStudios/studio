@@ -47,6 +47,23 @@ if [ -z "$base" ]; then
 fi
 echo "ci-local: $(git rev-parse --short HEAD) against $(git rev-parse --short "$base")"
 
+# A release PR (release/pending): the release guard CI's plan runs, from
+# the base's copy of the script. A sound one is the version + changelog
+# only, whose content was checked when it merged: nothing to build.
+if [ "$(git rev-parse --abbrev-ref HEAD)" = release/pending ]; then
+  guard="$(mktemp)"
+  git show "$base:scripts/release.sh" >"$guard"
+  rc=0
+  HEAD_SHA="$(git rev-parse HEAD)" HEAD_REF=release/pending BASE_REF=main \
+    bash "$guard" release-only || rc=$?
+  rm -f "$guard"
+  case "$rc" in
+    0) echo "ci-local: a sound release commit: nothing to build"; exit 0 ;;
+    1) ;;
+    *) echo "ci-local: the release guard refuses this release commit" >&2; exit 1 ;;
+  esac
+fi
+
 echo "── fmt ──"
 cargo fmt --all --check
 echo "── change files ──"

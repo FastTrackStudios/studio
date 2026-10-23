@@ -13,108 +13,43 @@ on:
     - release/**
   workflow_dispatch:
     inputs:
-      base:
-        description: Only check crates affected since this ref (e.g. main). Empty = everything.
-        required: false
-        default: ''
-      refresh_snapshot:
+      seed:
         description: 'On main: rebuild the tests job''s WarpBuild snapshot from clean and save it.'
         type: boolean
         required: false
         default: false
-  schedule:
-  - cron: 47 10 * * *
 concurrency:
-  group: checks-${{ github.event.pull_request.number || github.ref }}-${{ github.event_name == 'schedule' && 'nightly' || github.event_name == 'push' && github.sha || 'run' }}
+  group: checks-${{ github.event.pull_request.number || github.ref }}-${{ github.event_name == 'push' && github.sha || 'run' }}
   cancel-in-progress: true
 jobs:
   plan:
     name: Plan
-    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
-    runs-on: warp-ubuntu-latest-x64-2x
-    timeout-minutes: 20
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
     permissions:
       contents: read
-      statuses: read
     outputs:
-      full: ${{ steps.filter.outputs.full }}
-      cargo: ${{ steps.filter.outputs.cargo }}
-      tests: ${{ steps.local.outputs.ok == 'true' && 'false' || steps.filter.outputs.tests }}
-      test_filter: ${{ steps.filter.outputs.test_filter }}
-      test_packages: ${{ steps.filter.outputs.test_packages }}
-      wasm: ${{ steps.filter.outputs.wasm }}
-      skip: ${{ steps.filter.outputs.skip }}
-      record: ${{ steps.filter.outputs.record }}
-      local: ${{ steps.local.outputs.ok }}
+      skip: ${{ steps.plan.outputs.skip }}
+      full: ${{ steps.plan.outputs.full }}
+      deps: ${{ steps.plan.outputs.deps }}
     steps:
     - uses: actions/checkout@v4
       with:
         fetch-depth: 0
-    - name: Rust 1.94.0
-      uses: dtolnay/rust-toolchain@1.94.0
-    - name: cargo-rail 0.32.0
-      run: |
-        set -euo pipefail
-        mkdir -p "$HOME/.local/bin"
-        echo "$HOME/.local/bin" >> "$GITHUB_PATH"
-        curl -fsSL --retry 3 -o "$RUNNER_TEMP/cargo-rail.zip" "https://github.com/loadingalias/cargo-rail/releases/download/v0.32.0/cargo-rail-x86_64-unknown-linux-gnu.zip"
-        echo "5fcda1a62d36d51834ad49a5ef2ebc82777fd9d134d3d409f7021ce1a495dee4  $RUNNER_TEMP/cargo-rail.zip" | sha256sum -c -
-        unzip -q -o "$RUNNER_TEMP/cargo-rail.zip" -d "$HOME/.local/share"
-        echo "$HOME/.local/share/cargo-rail" >> "$GITHUB_PATH"
-        "$HOME/.local/share/cargo-rail/cargo-rail" --version
-    - name: Choose the comparison base
-      id: base
+    - name: Plan
+      id: plan
       env:
-        DISPATCH_BASE: ${{ inputs.base }}
-        BASE_SHA: ${{ github.event.pull_request.base.sha }}
-      run: |
-        set -u
-        base=""
-        case "${GITHUB_EVENT_NAME:-}" in
-          pull_request) base="${BASE_SHA}" ;;
-          workflow_dispatch)
-            if [ -n "${DISPATCH_BASE}" ]; then
-              git fetch --quiet origin "${DISPATCH_BASE}" || true
-              base="$(git merge-base "origin/${DISPATCH_BASE}" HEAD 2>/dev/null || true)"
-            fi ;;
-        esac
-        echo "sha=${base}" >> "$GITHUB_OUTPUT"
-        echo "base: ${base:-<none: full run>}"
-    - name: Restore rail evidence for the base
-      id: evidence
-      if: ${{ steps.base.outputs.sha != '' }}
-      uses: WarpBuilds/cache/restore@v1
-      with:
-        path: ~/.cache/rail-evidence
-        key: rail-evidence-${{ runner.os }}-${{ runner.arch }}-cargo.test-${{ steps.base.outputs.sha }}
-        restore-keys: rail-evidence-${{ runner.os }}-${{ runner.arch }}-cargo.test-
-    - name: Plan affected crates
-      id: filter
-      env:
-        BASE: ${{ steps.base.outputs.sha }}
         BASE_SHA: ${{ github.event.pull_request.base.sha }}
         BASE_REF: ${{ github.event.pull_request.base.ref }}
         HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         HEAD_REF: ${{ github.event.pull_request.head.ref }}
         HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
-        EVIDENCE: ~/.cache/rail-evidence/cargo.test.json
-        EVIDENCE_KEY: ${{ steps.evidence.outputs.cache-matched-key }}
+        BEFORE: ${{ github.event.before }}
+        DEPS_PATHS: Cargo.lock .cargo xtask/workflows/src/steps.rs nix/modules/toolchain.nix rust-toolchain.toml
       run: |
         set -u
-        EVIDENCE="${EVIDENCE/#\~/$HOME}"
-
-        run_all() {
-          echo "plan: $1 — running EVERYTHING"
-          printf 'full=true\ncargo=true\ntests=true\ntest_filter=\nwasm=true\n' >> "$GITHUB_OUTPUT"
-          exit 0
-        }
-        skip_all() {
-          echo "plan: $1 — nothing to run"
-          printf 'skip=true\nfull=false\ncargo=false\ntests=false\ntest_filter=\nwasm=false\n' >> "$GITHUB_OUTPUT"
-          exit 0
-        }
-        record() { echo "record=true" >> "$GITHUB_OUTPUT"; }
-
+        out() { printf '%s\n' "$@" >> "$GITHUB_OUTPUT"; }
+        full=true
         case "${GITHUB_EVENT_NAME:-}" in
           pull_request)
             rc=1
@@ -124,124 +59,56 @@ jobs:
             fi
             case "$rc" in
               0)
-                {
-                  echo "### Release commit only"
-                  echo "This PR is one commit changing the version, CHANGELOG.md and consumed change files; its content was checked when it merged, so the heavy jobs are skipped."
+                { echo "### Release commit only"
+                  echo "This PR is one commit changing the version, CHANGELOG.md and consumed change files; its content was checked when it merged, so every job is skipped."
                 } >> "$GITHUB_STEP_SUMMARY"
-                skip_all "release commit only (${HEAD_REF} -> ${BASE_REF})" ;;
+                echo "plan: release commit only (${HEAD_REF} -> ${BASE_REF}): nothing to run"
+                out skip=true full=false deps=false
+                exit 0 ;;
               3)
                 echo "::error::${HEAD_REF} -> ${BASE_REF} is a release PR the release guard refuses (see above)"
                 exit 1 ;;
             esac
             case "${BASE_REF}" in
-              release/*) run_all "PR into ${BASE_REF}: a hotfix line runs the full set" ;;
+              release/*)
+                if [ "${HEAD_REPO}" != "${GITHUB_REPOSITORY}" ]; then
+                  echo "::error::fork PR into ${BASE_REF}: the full set runs on the org's paid runners; re-push it from a branch of this repo"
+                  exit 1
+                fi
+                echo "plan: PR into ${BASE_REF}: a hotfix line runs the full set" ;;
+              *)
+                full=false
+                echo "plan: PR into ${BASE_REF}: the gates (the tests ran locally: the local-ci status)" ;;
             esac ;;
-          push)
-            [ "${GITHUB_REF_NAME}" != main ] || record
-            run_all "push to ${GITHUB_REF_NAME}: full set after every merge" ;;
-          schedule)
-            record; run_all "nightly (main)" ;;
-          workflow_dispatch)
-            [ -n "${BASE}" ] || { record; run_all "manual dispatch"; } ;;
-          *) run_all "event ${GITHUB_EVENT_NAME:-?}" ;;
+          *) echo "plan: ${GITHUB_EVENT_NAME:-?} on ${GITHUB_REF_NAME}: the full set" ;;
         esac
-        [ -n "${BASE}" ] || run_all "no comparison base"
-
-        # Evidence for an older main commit than the base (the restore's prefix
-        # fallback): plan from that commit, whose evidence it is. The diff from it
-        # covers the PR's change and more, so the selection stays sound.
-        ev_sha="${EVIDENCE_KEY##*-}"
-        if [ -f "${EVIDENCE}" ] && [ -n "${EVIDENCE_KEY}" ] && [ "${ev_sha}" != "${BASE}" ]; then
-          if git cat-file -e "${ev_sha}^{commit}" 2>/dev/null; then
-            echo "plan: no evidence for ${BASE}; planning from ${ev_sha}, the newest commit with evidence"
-            BASE="${ev_sha}"
-          else
-            echo "plan: evidence for ${ev_sha}, which this checkout lacks: not used"
-            rm -f "${EVIDENCE}"
+        deps=false
+        if [ "${GITHUB_EVENT_NAME:-}" = push ] && [ "${GITHUB_REF_NAME}" = main ]; then
+          # shellcheck disable=SC2086 # DEPS_PATHS is a list of pathspecs
+          if ! git cat-file -e "${BEFORE}^{commit}" 2>/dev/null \
+            || ! git diff --quiet "${BEFORE}" "${GITHUB_SHA}" -- ${DEPS_PATHS}; then
+            deps=true
+            echo "plan: dependencies or toolchain changed: the tests job saves a new snapshot"
           fi
         fi
-
-        ev=()
-        if [ -f "${EVIDENCE}" ]; then
-          ev=(--evidence "${EVIDENCE}")
-          echo "plan: using rail evidence for ${BASE}"
-        else
-          echo "plan: no rail evidence for ${BASE} (non-Rust changes will widen)"
-        fi
-        plan="${RUNNER_TEMP}/rail-plan.json"
-        cargo rail plan --from "${BASE}" --to HEAD "${ev[@]}" --json > "${plan}" \
-          || run_all "cargo rail plan failed"
-        cargo rail plan --from "${BASE}" --to HEAD "${ev[@]}" --explain-work cargo.test || true
-
-        gates="$(python3 scripts/ci-rail-plan.py "${plan}")" \
-          || run_all "plan parse failed"
-        [ -n "${gates}" ] || run_all "plan parse produced no gates"
-        echo "${gates}" >> "$GITHUB_OUTPUT"
-        echo "${gates}"
-    - name: A local just ci for this tree?
-      id: local
-      if: ${{ github.event_name == 'pull_request' && steps.filter.outputs.tests == 'true' }}
-      env:
-        GH_TOKEN: ${{ github.token }}
-        REPO: ${{ github.repository }}
-        HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-        BASE_SHA: ${{ github.event.pull_request.base.sha }}
-      run: |
-        set -u
-        ok=false
-        st=""
-        for _ in 1 2 3 4 5; do
-          st=$(curl -fsSL -H "Authorization: Bearer ${GH_TOKEN}" -H "Accept: application/vnd.github+json" \
-            "https://api.github.com/repos/${REPO}/commits/${HEAD_SHA}/statuses?per_page=100" \
-            | jq -r '[.[] | select(.context == "ci/local")][0] // empty | "\(.state) \(.description)"' 2>/dev/null || true)
-          [ -n "$st" ] && break
-          sleep 10
-        done
-        state=${st%% *}
-        claimed=$(printf '%s' "$st" | grep -oE 'tree [0-9a-f]{40}' | cut -d' ' -f2 || true)
-        tree=$(git rev-parse "${HEAD_SHA}^{tree}")
-        if [ -z "$st" ]; then
-          echo "no ci/local status on ${HEAD_SHA}: the tests run here"
-        elif [ "$state" != success ]; then
-          echo "ci/local is ${state}: the tests run here"
-        elif [ "$claimed" != "$tree" ]; then
-          echo "ci/local passed tree ${claimed:-?}, this head is ${tree}: the tests run here"
-        elif ! git merge-base --is-ancestor "${BASE_SHA}" "${HEAD_SHA}"; then
-          echo "the head does not contain the base ${BASE_SHA}: the merge is a different tree, the tests run here"
-        else
-          ok=true
-          echo "ci/local passed tree ${tree} (${st#* }): the tests job is skipped"
-          { echo "### Tests: trusted a local run"
-            echo "\`just ci\` passed on this exact tree (\`${tree}\`), and the head contains the base: the tests job is skipped. Lint and wasm still run."; } >> "$GITHUB_STEP_SUMMARY"
-        fi
-        echo "ok=${ok}" >> "$GITHUB_OUTPUT"
-  lint:
-    name: Lint (fmt + manifests + gates + check + clippy)
+        out skip=false "full=${full}" "deps=${deps}"
+  gates:
+    name: Gates (fmt, manifests, workflows, change files, flows)
     needs: plan
     if: ${{ needs.plan.outputs.skip != 'true' }}
-    runs-on: warp-ubuntu-latest-x64-8x
-    timeout-minutes: 90
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
     env:
       CARGO_INCREMENTAL: '0'
     steps:
     - uses: actions/checkout@v4
-    - name: Free disk (background)
-      run: |
-        df -h / | tail -n 1
-        nohup sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc \
-          /usr/local/.ghcup /opt/hostedtoolcache /usr/share/swift \
-          /usr/local/share/powershell /usr/local/share/chromium \
-          /usr/local/share/boost /opt/microsoft /opt/google \
-          </dev/null >/dev/null 2>&1 &
     - name: Rust 1.94.0
       uses: dtolnay/rust-toolchain@1.94.0
       with:
-        components: rustfmt,clippy
-    - name: Native headers (apt, cached)
-      uses: awalsh128/cache-apt-pkgs-action@v1.6.3
-      with:
-        packages: pkg-config libssl-dev libfontconfig1-dev libfreetype-dev libclang-dev clang llvm mold libasound2-dev libudev-dev libjack-jackd2-dev libpipewire-0.3-dev libspa-0.2-dev libglib2.0-dev libgtk-3-dev libharfbuzz-dev libsoup-3.0-dev libwebkit2gtk-4.1-dev libxdo-dev libx11-dev libxcursor-dev libxrandr-dev libxi-dev libxcb1-dev libxkbcommon-dev libwayland-dev libgl-dev libvulkan-dev
-        version: '1'
+        components: rustfmt
+    - name: mold
+      run: |
+        sudo apt-get install -y --no-install-recommends mold
     - name: just
       uses: taiki-e/install-action@v2
       with:
@@ -266,14 +133,6 @@ jobs:
         tar -xJf "$RUNNER_TEMP/tracey.tar.xz" -C "$RUNNER_TEMP"
         install -m755 "$RUNNER_TEMP/tracey-x86_64-unknown-linux-gnu/tracey" "$HOME/.local/bin/tracey"
         "$HOME/.local/bin/tracey" --version
-    - name: tailwindcss 4.2.2
-      run: |
-        set -euo pipefail
-        mkdir -p "$HOME/.local/bin"
-        echo "$HOME/.local/bin" >> "$GITHUB_PATH"
-        curl -fsSL --retry 3 -o "$RUNNER_TEMP/tailwindcss" "https://github.com/tailwindlabs/tailwindcss/releases/download/v4.2.2/tailwindcss-linux-x64"
-        echo "4ab84f2b496c402d3ec4fd25e0e5559fe1184d886dadae8fb4438344ec044c22  $RUNNER_TEMP/tailwindcss" | sha256sum -c -
-        install -m755 "$RUNNER_TEMP/tailwindcss" "$HOME/.local/bin/tailwindcss"
     - name: actionlint 1.7.12
       run: |
         set -euo pipefail
@@ -287,12 +146,12 @@ jobs:
       run: |
         mkdir -p ../.cargo
         cp .cargo/ci-config.toml ../.cargo/config.toml
-    - name: Rust cache (lint, main saves)
+    - name: Rust cache (gates, main saves)
       uses: Swatinem/rust-cache@v2
       with:
-        shared-key: lint
+        shared-key: gates
         save-if: ${{ github.ref == 'refs/heads/main' }}
-        cache-provider: warpbuild
+        cache-provider: github
         cache-on-failure: true
         cache-bin: false
     - name: Prune unused units before the cache is saved
@@ -319,6 +178,7 @@ jobs:
           exit 1
         fi
     - name: cargo fmt --check
+      if: ${{ !cancelled() }}
       run: cargo fmt --all --check
     - name: Workflows are generated (xtask-workflows check)
       if: ${{ !cancelled() }}
@@ -333,47 +193,59 @@ jobs:
       run: |
         git fetch --quiet --no-tags --depth=1 origin "${BASE_SHA}"
         cargo rail change check --since "${BASE_SHA}"
-    - name: architect xtask tag
-      id: xtask
+    - name: rail config
       if: ${{ !cancelled() }}
-      run: |
-        echo "tag=$(sed -n 's/^architect_xtask_tag := "\(.*\)"$/\1/p' Justfile)" >> "$GITHUB_OUTPUT"
-    - name: Restore architect xtask
-      id: xtask-cache
-      if: ${{ !cancelled() && steps.xtask.outputs.tag != '' }}
-      uses: WarpBuilds/cache/restore@v1
-      with:
-        path: ~/.cache/architect-xtask/${{ steps.xtask.outputs.tag }}
-        key: architect-xtask-${{ runner.os }}-${{ steps.xtask.outputs.tag }}-rust-1.94.0
-    - name: Boundaries
-      if: ${{ !cancelled() }}
-      run: just ci-boundaries
-    - name: architect xtask built?
-      id: xtask-built
-      if: ${{ !cancelled() && steps.xtask.outputs.tag != '' && steps.xtask-cache.outputs.cache-hit != 'true' }}
-      env:
-        TAG: ${{ steps.xtask.outputs.tag }}
-      run: |
-        if [ -x "$HOME/.cache/architect-xtask/${TAG}/bin/xtask" ]; then
-          echo "yes=true" >> "$GITHUB_OUTPUT"
-        fi
-    - name: Save architect xtask
-      if: ${{ !cancelled() && steps.xtask-built.outputs.yes == 'true' }}
-      uses: WarpBuilds/cache/save@v1
-      with:
-        path: ~/.cache/architect-xtask/${{ steps.xtask.outputs.tag }}
-        key: architect-xtask-${{ runner.os }}-${{ steps.xtask.outputs.tag }}-rust-1.94.0
+      run: cargo rail config validate --strict
     - name: Flow verification gate
       if: ${{ !cancelled() }}
       run: just daw-flows --own-daemon
-    - name: Web tailwind sheet
-      if: ${{ !cancelled() }}
-      run: just web-tailwind
+  check:
+    name: check (cargo check + clippy)
+    needs: plan
+    if: ${{ needs.plan.outputs.full == 'true' }}
+    runs-on: warp-ubuntu-latest-x64-8x
+    timeout-minutes: 90
+    env:
+      CARGO_INCREMENTAL: '0'
+    steps:
+    - uses: actions/checkout@v4
+    - name: Free disk (background)
+      run: |
+        df -h / | tail -n 1
+        nohup sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc \
+          /usr/local/.ghcup /opt/hostedtoolcache /usr/share/swift \
+          /usr/local/share/powershell /usr/local/share/chromium \
+          /usr/local/share/boost /opt/microsoft /opt/google \
+          </dev/null >/dev/null 2>&1 &
+    - name: Rust 1.94.0
+      uses: dtolnay/rust-toolchain@1.94.0
+      with:
+        components: clippy
+    - name: Native headers (apt, cached)
+      uses: awalsh128/cache-apt-pkgs-action@v1.6.3
+      with:
+        packages: pkg-config libssl-dev libfontconfig1-dev libfreetype-dev libclang-dev clang llvm mold libasound2-dev libudev-dev libjack-jackd2-dev libpipewire-0.3-dev libspa-0.2-dev libglib2.0-dev libgtk-3-dev libharfbuzz-dev libsoup-3.0-dev libwebkit2gtk-4.1-dev libxdo-dev libx11-dev libxcursor-dev libxrandr-dev libxi-dev libxcb1-dev libxkbcommon-dev libwayland-dev libgl-dev libvulkan-dev
+        version: '1'
+    - name: CI cargo config
+      run: |
+        mkdir -p ../.cargo
+        cp .cargo/ci-config.toml ../.cargo/config.toml
+    - name: Rust cache (lint, main saves)
+      uses: Swatinem/rust-cache@v2
+      with:
+        shared-key: lint
+        save-if: ${{ github.ref == 'refs/heads/main' }}
+        cache-provider: warpbuild
+        cache-on-failure: true
+        cache-bin: false
+    - name: Prune unused units before the cache is saved
+      uses: ./.github/actions/prune-cargo-target
+      with:
+        target-dir: target
     - name: cargo check --workspace
-      if: ${{ !cancelled() && needs.plan.outputs.cargo == 'true' }}
       run: cargo check --workspace
     - name: cargo clippy (advisory, does not block)
-      if: ${{ !cancelled() && needs.plan.outputs.cargo == 'true' }}
+      if: ${{ !cancelled() }}
       continue-on-error: true
       run: |
         cargo clippy --workspace --no-deps --all-targets --keep-going \
@@ -387,8 +259,8 @@ jobs:
   wasm:
     name: wasm checks
     needs: plan
-    if: ${{ needs.plan.outputs.skip != 'true' && needs.plan.outputs.wasm == 'true' }}
-    runs-on: warp-ubuntu-latest-x64-8x
+    if: ${{ needs.plan.outputs.full == 'true' }}
+    runs-on: ubuntu-latest
     timeout-minutes: 75
     env:
       CARGO_INCREMENTAL: '0'
@@ -417,14 +289,6 @@ jobs:
       uses: taiki-e/install-action@v2
       with:
         tool: just@1.48.1
-    - name: tailwindcss 4.2.2
-      run: |
-        set -euo pipefail
-        mkdir -p "$HOME/.local/bin"
-        echo "$HOME/.local/bin" >> "$GITHUB_PATH"
-        curl -fsSL --retry 3 -o "$RUNNER_TEMP/tailwindcss" "https://github.com/tailwindlabs/tailwindcss/releases/download/v4.2.2/tailwindcss-linux-x64"
-        echo "4ab84f2b496c402d3ec4fd25e0e5559fe1184d886dadae8fb4438344ec044c22  $RUNNER_TEMP/tailwindcss" | sha256sum -c -
-        install -m755 "$RUNNER_TEMP/tailwindcss" "$HOME/.local/bin/tailwindcss"
     - name: CI cargo config
       run: |
         mkdir -p ../.cargo
@@ -434,16 +298,13 @@ jobs:
       with:
         shared-key: wasm
         save-if: ${{ github.ref == 'refs/heads/main' }}
-        cache-provider: warpbuild
+        cache-provider: github
         cache-on-failure: true
         cache-bin: false
     - name: Prune unused units before the cache is saved
       uses: ./.github/actions/prune-cargo-target
       with:
         target-dir: target
-    - name: Web tailwind sheet
-      if: ${{ !cancelled() }}
-      run: just web-tailwind
     - name: wasm check (web bundles)
       run: just web-wasm-check
     - name: wasm check (Signal browser remote, advisory)
@@ -466,8 +327,8 @@ jobs:
   tests:
     name: tests
     needs: plan
-    if: ${{ needs.plan.outputs.skip != 'true' && needs.plan.outputs.tests == 'true' }}
-    runs-on: ${{ (github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.refresh_snapshot)) && 'warp-ubuntu-latest-x64-16x;snapshot.enabled=true' || 'warp-ubuntu-latest-x64-16x;snapshot.key=studio-tests' }}
+    if: ${{ needs.plan.outputs.full == 'true' }}
+    runs-on: ${{ (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.seed) && 'warp-ubuntu-latest-x64-16x;snapshot.enabled=true' || 'warp-ubuntu-latest-x64-16x;snapshot.key=studio-tests' }}
     timeout-minutes: 120
     environment: ${{ github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && 'ci-assets' || '' }}
     env:
@@ -492,40 +353,27 @@ jobs:
       uses: taiki-e/install-action@v2
       with:
         tool: cargo-nextest@0.9.132
-    - name: cargo-rail 0.32.0
-      run: |
-        set -euo pipefail
-        mkdir -p "$HOME/.local/bin"
-        echo "$HOME/.local/bin" >> "$GITHUB_PATH"
-        curl -fsSL --retry 3 -o "$RUNNER_TEMP/cargo-rail.zip" "https://github.com/loadingalias/cargo-rail/releases/download/v0.32.0/cargo-rail-x86_64-unknown-linux-gnu.zip"
-        echo "5fcda1a62d36d51834ad49a5ef2ebc82777fd9d134d3d409f7021ce1a495dee4  $RUNNER_TEMP/cargo-rail.zip" | sha256sum -c -
-        unzip -q -o "$RUNNER_TEMP/cargo-rail.zip" -d "$HOME/.local/share"
-        echo "$HOME/.local/share/cargo-rail" >> "$GITHUB_PATH"
-        "$HOME/.local/share/cargo-rail/cargo-rail" --version
-    - name: tailwindcss 4.2.2
-      run: |
-        set -euo pipefail
-        mkdir -p "$HOME/.local/bin"
-        echo "$HOME/.local/bin" >> "$GITHUB_PATH"
-        curl -fsSL --retry 3 -o "$RUNNER_TEMP/tailwindcss" "https://github.com/tailwindlabs/tailwindcss/releases/download/v4.2.2/tailwindcss-linux-x64"
-        echo "4ab84f2b496c402d3ec4fd25e0e5559fe1184d886dadae8fb4438344ec044c22  $RUNNER_TEMP/tailwindcss" | sha256sum -c -
-        install -m755 "$RUNNER_TEMP/tailwindcss" "$HOME/.local/bin/tailwindcss"
     - name: CI cargo config
       run: |
         mkdir -p ../.cargo
         cp .cargo/ci-config.toml ../.cargo/config.toml
     - name: Persistent target dir
+      id: target
       run: |
         dir="${CI_CACHE_DIR:-${CACHE_DIRECTORY:-$HOME/.cache}}/cargo-target"
         mkdir -p "$dir"
         echo "CARGO_TARGET_DIR=$dir" >> "$GITHUB_ENV"
         free_gb() { df -Pk "$dir" | awk 'NR==2 { print int($4 / 1048576) }'; }
-        # The jobs build with CARGO_INCREMENTAL=0: any incremental cache here is left
-        # over from before, and only takes disk.
         rm -rf "$dir"/*/incremental "$dir"/*/*/incremental
         if [ "$(free_gb)" -lt 30 ]; then
           echo "::warning::still $(free_gb) GB free: clearing the target dir (a cold build follows)"
           rm -rf "$dir" && mkdir -p "$dir"
+        fi
+        stamp="$(cat "$HOME/.cache/snapshot-stamp" 2>/dev/null || echo 0)"
+        age=$(( ($(date +%s) - stamp) / 86400 ))
+        if [ ! -d "$dir/debug" ] || [ "$age" -ge 3 ]; then
+          echo "stale=true" >> "$GITHUB_OUTPUT"
+          echo "snapshot: stale (target $( [ -d "$dir/debug" ] && echo warm || echo cold ), ${age} days old): main saves a fresh one"
         fi
         echo "target dir: $dir ($(du -sh "$dir" 2>/dev/null | cut -f1)), $(free_gb) GB free"
     - name: Mark the target dir's fingerprints
@@ -560,66 +408,34 @@ jobs:
         else
           echo "::warning::no asset clones on this runner yet and no credential to fetch them (a main run fetches them): tests that need assets will fail"
         fi
-    - name: Web tailwind sheet
-      if: ${{ !cancelled() }}
-      run: just web-tailwind
     - name: Plugin faces
       if: ${{ !cancelled() }}
       run: just faces
-    - name: Record rail evidence
-      if: ${{ needs.plan.outputs.record == 'true' }}
-      run: |
-        mkdir -p "$HOME/.cache/rail-evidence"
-        cargo rail plan evidence --work cargo.test \
-          --output "$HOME/.cache/rail-evidence/cargo.test.json" \
-          -- test --workspace --no-run --features "${TEST_FEATURES}" \
-          || echo "::warning::rail evidence not recorded; later plans against this commit widen"
     - name: cargo nextest
       id: nextest
       env:
-        TEST_FILTER: ${{ needs.plan.outputs.test_filter }}
-        TEST_PACKAGES: ${{ needs.plan.outputs.test_packages }}
         TEST_LOG: ${{ runner.temp }}/nextest-ci.log
-        RUN_LABEL: tests
       run: |
         bash -uo pipefail -s <<'EOF'
-        sel=(--workspace)
-        feats="${TEST_FEATURES}"
-        if [ -n "${TEST_PACKAGES:-}" ]; then
-          sel=()
-          feats=""
-          for p in ${TEST_PACKAGES}; do sel+=(-p "$p"); done
-          IFS=, read -ra all <<< "${TEST_FEATURES}"
-          for f in "${all[@]}"; do
-            case " ${TEST_PACKAGES} " in *" ${f%%/*} "*) feats="${feats:+${feats},}${f}" ;; esac
-          done
-        fi
-        feat=()
-        [ -n "${feats}" ] && feat=(--features "${feats}")
-        filter=()
-        [ -n "${TEST_FILTER}" ] && filter=(-E "${TEST_FILTER}" --no-tests=pass)
-        echo "selection: ${sel[*]} ${feat[*]}"
         t0=$(date +%s)
-        cargo nextest run "${sel[@]}" "${feat[@]}" --no-run >"${TEST_LOG}" 2>&1
+        cargo nextest run --workspace --features "${TEST_FEATURES}" --no-run >"${TEST_LOG}" 2>&1
         rc=$?
         t1=$(date +%s)
-        # A full build that succeeded read every unit the workspace uses: the target
-        # dir may be pruned to that set (target_sweep), whatever the tests say.
-        if [ "$rc" = 0 ] && [ -z "${TEST_PACKAGES:-}" ]; then
-          echo "prunable=true" >> "${GITHUB_OUTPUT}"
-        fi
+        # A build that succeeded read every unit the workspace uses: the target dir
+        # may be pruned to that set (target_sweep), whatever the tests say.
         if [ "$rc" = 0 ]; then
-          cargo nextest run "${sel[@]}" --no-fail-fast "${feat[@]}" "${filter[@]}" >>"${TEST_LOG}" 2>&1
+          echo "prunable=true" >> "${GITHUB_OUTPUT}"
+          cargo nextest run --workspace --no-fail-fast --features "${TEST_FEATURES}" >>"${TEST_LOG}" 2>&1
           rc=$?
         fi
         t2=$(date +%s)
-        { echo "### ${RUN_LABEL}: timing"
+        { echo "### tests: timing"
           echo "| phase | seconds |"
           echo "|---|---|"
           echo "| build (nextest --no-run) | $((t1 - t0)) |"
           echo "| tests | $((t2 - t1)) |"
           echo
-          echo "selection: \`${sel[*]} ${feat[*]}\`; exit ${rc}"; } >> "${GITHUB_STEP_SUMMARY}"
+          echo "exit ${rc}"; } >> "${GITHUB_STEP_SUMMARY}"
         { grep -E '^ *(FAIL|TRY [0-9]+ (FAIL|TMT)|SIGSEGV|SIGABRT|LEAK|TIMEOUT)|Summary \[|tests were not run|^error' "${TEST_LOG}" | head -n 200
           echo "── tail of the nextest log (full log: the nextest-ci artifact) ──"; tail -n 60 "${TEST_LOG}"; } || true
         exit "$rc"
@@ -629,18 +445,6 @@ jobs:
       uses: ./.github/actions/prune-cargo-target/sweep
       with:
         target-dir: ${{ env.CARGO_TARGET_DIR }}
-    - name: Evidence key
-      id: evidence
-      if: ${{ always() && needs.plan.outputs.record == 'true' }}
-      run: |
-        echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
-        if [ -f "$HOME/.cache/rail-evidence/cargo.test.json" ]; then echo "have=true" >> "$GITHUB_OUTPUT"; fi
-    - name: Save rail evidence
-      if: ${{ always() && steps.evidence.outputs.have == 'true' }}
-      uses: WarpBuilds/cache/save@v1
-      with:
-        path: ~/.cache/rail-evidence
-        key: rail-evidence-${{ runner.os }}-${{ runner.arch }}-cargo.test-${{ steps.evidence.outputs.sha }}
     - name: Test log
       if: ${{ always() }}
       uses: actions/upload-artifact@v4
@@ -650,13 +454,14 @@ jobs:
         if-no-files-found: ignore
         retention-days: 7
     - name: Clean up before the snapshot
-      if: ${{ !cancelled() && (github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.refresh_snapshot)) }}
+      if: ${{ !cancelled() && github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && (needs.plan.outputs.deps == 'true' || steps.target.outputs.stale == 'true' || (github.event_name == 'workflow_dispatch' && inputs.seed)) }}
       run: |
         rm -rf "$HOME/.ssh" "$HOME/.aws"
         git config --local --unset-all http.https://github.com/.extraheader || true
+        date +%s > "$HOME/.cache/snapshot-stamp"
         du -sh "$HOME/.cache/cargo-target" 2>/dev/null || true
     - name: Save the WarpBuild snapshot
-      if: ${{ !cancelled() && (github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.refresh_snapshot)) }}
+      if: ${{ !cancelled() && github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && (needs.plan.outputs.deps == 'true' || steps.target.outputs.stale == 'true' || (github.event_name == 'workflow_dispatch' && inputs.seed)) }}
       uses: WarpBuilds/snapshot-save@v1
       with:
         alias: studio-tests
@@ -666,45 +471,41 @@ jobs:
     name: Build + test
     needs:
     - plan
-    - lint
+    - gates
+    - check
     - wasm
     - tests
     if: ${{ always() }}
-    runs-on: warp-ubuntu-latest-x64-2x
+    runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
     - name: Every required job succeeded
       env:
-        EVENT: ${{ github.event_name }}
-        FORK: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository }}
         PLAN: ${{ needs.plan.result }}
         SKIP: ${{ needs.plan.outputs.skip }}
-        LINT: ${{ needs.lint.result }}
+        FULL: ${{ needs.plan.outputs.full }}
+        GATES: ${{ needs.gates.result }}
+        CHECK: ${{ needs.check.result }}
         WASM: ${{ needs.wasm.result }}
-        WANT_WASM: ${{ needs.plan.outputs.wasm }}
         TESTS: ${{ needs.tests.result }}
-        WANT_TESTS: ${{ needs.plan.outputs.tests }}
       run: |
         set -u
         fail=0
         bad() { echo "::error::$1"; fail=1; }
-        if [ "$FORK" = "true" ]; then
-          bad "fork PR: not run (CI runs on the org's paid runners); a maintainer must re-push it from a branch of this repo"
-          exit 1
-        fi
-        [ "$PLAN" = success ] || bad "plan: $PLAN"
+        [ "$PLAN" = success ] || { bad "plan: $PLAN"; exit 1; }
         if [ "$SKIP" = "true" ]; then
-          echo "plan: nothing to run (release commit)"; exit "$fail"
+          echo "plan: nothing to run (release commit)"; exit 0
         fi
-        check() { # name result wanted
-          if [ "$3" = "true" ]; then
-            [ "$2" = success ] || bad "$1: $2"
-          else
-            case "$2" in success|skipped) ;; *) bad "$1: $2" ;; esac
-          fi
-          echo "$1: $2 (wanted=$3)"
+        need() { # name result
+          [ "$2" = success ] || bad "$1: $2"
+          echo "$1: $2"
         }
-        check lint "$LINT" true
-        check wasm "$WASM" "$WANT_WASM"
-        check tests "$TESTS" "$WANT_TESTS"
+        need gates "$GATES"
+        if [ "$FULL" = "true" ]; then
+          need check "$CHECK"
+          need wasm "$WASM"
+          need tests "$TESTS"
+        else
+          echo "check, wasm, tests: not run on a PR into main (the local-ci status covers them)"
+        fi
         exit "$fail"

@@ -81,39 +81,40 @@ delete a tag; a bad release is superseded by the next.
 
 | Event | Workflows | Runner |
 |---|---|---|
-| PR into `main` | `checks` (`Build + test`: the rail-selected set + `cargo rail change check`); the `release` guard only on release PRs | WarpBuild: plan, lint, wasm, the aggregator (the guard: hosted); `tests` (the nextest build, required) on a 16x snapshot runner, skipped for a tree a local `just ci` passed (`ci/local`) |
-| release PR `release/pending` → `main` | `release` guard; `checks` runs the same guard from the base commit and **skips** the heavy jobs if it passes, fails `Build + test` if not | hosted |
-| PR into `release/**` (hotfix) | `checks` (the full set), `release` guard | as above |
-| push to `main` / `release/**` | `checks` full set (+ rail evidence on `main`) | WarpBuild; `main` saves the tests snapshot |
-| nightly | `checks` full set on `main` | WarpBuild |
+| PR into `main` | the `local-ci` status (the pre-push hook: rail-selected tests + check + wasm, on the pusher's machine); `checks` (`Build + test`: the gates — lockfile, fmt, workflows, change files, rail config, flow gate); the `release` guard only on release PRs | the gates on GitHub's free runners |
+| release PR `release/pending` → `main` | `release` guard; `checks` runs the same guard from the base commit and **skips** every job if it passes, fails `Build + test` if not; `ci-local` runs the same guard and posts `local-ci` without building | hosted |
+| PR into `release/**` (hotfix) | `checks` (the full set), `release` guard | as below |
+| push to `main` / `release/**` | `checks` full set: gates, `cargo check --workspace` + clippy, wasm, every test | gates + wasm free; check on a WarpBuild 8x; tests on a 16x snapshot runner (`main` saves the snapshot when the dependencies change or it is 3 days old) |
 | push of tag `vYY.M.MICRO` (or `workflow_dispatch` with the tag as ref) | `deploy` (session-web, signal-web), `studio-ios`, `release` publish | `studio-deploy` (LAN registry), `airlock`, hosted |
 
 The workflow files are generated from `xtask/workflows` (one Rust module per
 workflow, the reasons as comments there): edit the Rust, run `just
-workflows`, commit both; the lint job fails on drift (`just
-workflows-check`) and runs actionlint.
+workflows`, commit both; the gates fail on drift (`just workflows-check`)
+and run actionlint.
 
-The `checks` jobs run on WarpBuild without nix: the pinned rustc
+The `checks` jobs run without nix: the pinned rustc
 (dtolnay/rust-toolchain), apt headers (cached), and pinned release binaries
-for just, cargo-rail, tracey, tailwindcss and actionlint. Lint and wasm
-restore one rust-cache per build kind (WarpBuild's cache) that only `main`
-saves. The tests job boots from a WarpBuild snapshot that `main`'s full runs
-save (warm target dir, pruned to what that build used); it builds just the
-packages a PR affects (`-p …`), the whole workspace on full runs, and is
-skipped for a PR whose exact tree a full local `just ci` passed (the
-`ci/local` status `just push` posts).
+for just, cargo-rail, tracey and actionlint. Gates, check and wasm restore
+one rust-cache per build kind that only `main` saves (GitHub's cache on the
+free runners, WarpBuild's on the 8x). The tests job boots from a WarpBuild
+snapshot (warm target dir, pruned to what the last saving build used) and
+builds the whole workspace; `gh workflow run checks.yml -f seed=true` on
+`main` rebuilds the snapshot clean. There is no nightly, no tailwind step
+(the sheets are committed; dx builds session-web's) and no Boundaries step
+(`just ci-boundaries` is manual).
 `cache-devshell` still seeds fasttrackstudio.cachix.org, for developers'
 `nix develop`; no CI job depends on it. The REAPER integration suites are not in
 CI (they need a licensed REAPER): run `just reaper-test` and `just reaper
 daw-test` locally before a change to the REAPER adapters lands.
 
-`Build + test` is the one required check (the `main` ruleset). It is an
-aggregator: it requires the `lint` job and, when the plan gave them work,
-the web-bundle wasm check and the `tests` nextest run. Advisory (red or
-green, never blocking): clippy and the Signal browser remote wasm check (red
-today, STA-184), and `tests (warpbuild trial)` when the `WARPBUILD_TRIAL`
-repository variable turns it on. `main` may be red for code reasons; nothing
-is tagged until it is green.
+`Build + test` and `local-ci` are the required checks (the `main`
+ruleset). `Build + test` is an aggregator: it requires the gates and, on a
+full run, `cargo check`, the web-bundle wasm check and the tests. Advisory
+(red or green, never blocking): clippy and the Signal browser remote wasm
+check (red today, STA-184). `local-ci` is as honest as whoever posts it —
+anyone who can push could post one — which is the bargain (2026-10): the
+full set after every merge catches what a local run missed. `main` may be
+red for code reasons; nothing is tagged until it is green.
 
 ## What the guards check
 

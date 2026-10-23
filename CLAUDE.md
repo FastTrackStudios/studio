@@ -155,30 +155,40 @@ just assets                # link the big binaries (see Assets)
 The test feature list matters: the app CLIs and the worklet rigs sit
 behind features, and without them their tests never build.
 
-**Before you push: `just ci`.** It runs exactly what
-`.github/workflows/checks.yml` runs, in the same order, and stops at the
-first failure: lockfile drift, `cargo fmt --check`, the generated
-workflows being current (`just workflows-check`), the flow gate
-(`just daw-flows`), the web tailwind sheet, `cargo check --workspace`, the
-Signal wasm check, then (after `just assets` and `just faces`) nextest as
-above. `just ci <step>` starts from a step (`lockfile`, `fmt`, `workflows`,
-`flows`, `tailwind`, `check`, `wasm`, `nextest`).
+**Before you push: `just install-hooks`, once per clone.** The pre-push
+hook runs `just ci-local` (scripts/ci-local.sh): fmt, change files, then the
+tests, `cargo check --workspace` and the wasm check for what `cargo rail
+plan` says the change affects, on your warm target dir. When it passes it
+posts a `local-ci` commit status on the pushed commits, which the `main`
+ruleset requires next to `Build + test`. PRs into `main` run only the cheap
+gates in CI (lockfile, fmt, generated workflows + actionlint, change files,
+rail config, flow gate) on free runners; the full set runs on WarpBuild
+after every merge to `main`. main may go red: releases are cut by hand,
+from a green commit. `NO_LOCAL_CI=1 git push` skips the hook (and posts
+nothing). `just rail-evidence` on a clean `main` lets later `ci-local`
+runs narrow a docs or CI change instead of running everything; `just
+ci-churn` checks that a warm build recompiles nothing after the CI prep.
 
-**Then push with `just push`.** A full `just ci` (from the first step) that
-passes on a clean tree — no uncommitted or untracked files, HEAD unchanged —
-records a `ci/local` commit status naming that commit's tree; `just push`
-pushes and posts it (`just ci-publish` if you pushed another way). A PR whose
-head carries it, for its exact tree, with the base already merged in, skips
-CI's tests job: lint and wasm still run, and every push to `main` and the
-nightly run everything. Don't post it for a run you didn't finish.
+**`just ci`** runs everything a merge to `main` runs, in the same order,
+and stops at the first failure: lockfile drift, `cargo fmt --check`, the
+generated workflows (`just workflows-check`), the rail config and flow gate
+(`just daw-flows`), `cargo check --workspace`, the wasm checks, then
+(after `just assets` and `just faces`) nextest as above. `just ci <step>`
+starts from a step (`lockfile`, `fmt`, `workflows`, `flows`, `check`,
+`wasm`, `nextest`). No tailwind step anywhere: committed sheets, and dx
+builds session-web's. `just ci-boundaries` (the crate-layout check) is
+manual, not CI.
 
 **The workflows are generated.** Every file in `.github/workflows/` is
 written by `xtask/workflows` (`just workflows`); edit the Rust, never the
-YAML — the lint job fails when they differ. Every `checks` job runs on
-WarpBuild, without nix (rustup 1.94 + apt + pinned tool binaries); the tests
-job on a 16x snapshot runner that keeps the warm target. `deploy` (nix
-images) and `studio-ios` (Xcode signing) keep their own runners.
-It refuses to start with less than 25 GB free: a full disk shows up as
+YAML — the gates fail when they differ. The `checks` jobs run without nix
+(rustup 1.94 + apt + pinned tool binaries): plan, gates, wasm and the
+aggregator on GitHub's free runners, `cargo check` on a WarpBuild 8x, the
+tests on a WarpBuild 16x snapshot runner that keeps the warm target (main
+saves it when the dependencies change or it is 3 days old; `gh workflow run
+checks.yml -f seed=true` rebuilds it clean). `deploy` (nix images) and
+`studio-ios` (Xcode signing) keep their own runners.
+`just ci` refuses to start with less than 25 GB free: a full disk shows up as
 mold dying with a bus error, which reads as a broken toolchain
 (`just sweep-incremental` is the always-safe reclaim). It says nothing
 about `studio-ios` (Xcode, signing) or `deploy`, which

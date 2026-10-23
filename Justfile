@@ -2000,21 +2000,17 @@ workflows-check:
     cargo run -q -p xtask-workflows -- check
     if command -v actionlint >/dev/null; then actionlint; fi
 
-# Runs what `.github/workflows/checks.yml` runs, in the same order: a
-# local run gives the same answer as CI's fast checks on a PR into main
-# (CI narrows the tests with `cargo rail plan`; this runs them all). NOT
-# the other
-# workflows: `studio-ios` (the release tag) and `deploy` need a
-# Mac, signing keys and upload credentials, which is why they are not a
-# thing you run before pushing — and why a green run here says nothing
-# about whether either of them is healthy.
-
-
+# The same order as CI: the gates, then the whole workspace check, the wasm
+# checks and every test. A PR is checked by `just ci-local` instead (the
+# pre-push hook): the gates plus what the change affects. NOT the other
+# workflows: `studio-ios` (the release tag) and `deploy` need a Mac, signing
+# keys and upload credentials, so a green run here says nothing about them.
+# Everything checks.yml runs after a merge to main, locally.
 ci FROM="lockfile":
     #!/usr/bin/env bash
     set -euo pipefail
     export CARGO_TARGET_DIR="${CARGO_TARGET_DIR:-$PWD/target}"
-    steps=(lockfile fmt workflows flows tailwind check wasm nextest)
+    steps=(lockfile fmt workflows flows check wasm nextest)
     start=0
     for i in "${!steps[@]}"; do
       [ "${steps[$i]}" = "{{FROM}}" ] && start=$i && break
@@ -2071,14 +2067,9 @@ ci FROM="lockfile":
     fi
 
     if run_from flows; then
-      echo "── flow verification gate ───────────────────────────"
+      echo "── rail config + flow verification gate ─────────────"
+      cargo rail config validate --strict
       just daw-flows --own-daemon
-    fi
-
-    if run_from tailwind; then
-      echo "── web tailwind sheet ───────────────────────────────"
-      just web-tailwind
-      echo "ok"
     fi
 
     if run_from check; then
@@ -2129,7 +2120,7 @@ ci-local BASE="":
 # narrows a docs or CI-file change instead of running everything. Kept in the
 # git dir, one file per work item; one warm test build and one warm check.
 # Record rail's observed-input evidence for HEAD.
-rail-evidence: web-tailwind
+rail-evidence:
     #!/usr/bin/env bash
     set -euo pipefail
     dir="$(git rev-parse --git-common-dir)/rail-evidence/$(git rev-parse HEAD)"
