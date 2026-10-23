@@ -207,7 +207,14 @@ mod tests {
         let config = keymap_config_from_defs(&bindings, &[], &[]);
         let normal = config.keymap.get("normal").unwrap();
         assert_eq!(normal.get("a"), Some(&"action_a".to_string()));
-        assert_eq!(normal.get("Ctrl+s"), Some(&"save".to_string()));
+        // `<C-…>` is the primary modifier: Cmd ("Meta") on a Mac, Control
+        // elsewhere (architect-input's notation).
+        let save = if cfg!(target_os = "macos") {
+            "Meta+s"
+        } else {
+            "Ctrl+s"
+        };
+        assert_eq!(normal.get(save), Some(&"save".to_string()));
     }
 
     #[test]
