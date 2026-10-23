@@ -1,19 +1,25 @@
 # studio — Repo Instructions
 
 **studio is FastTrackStudio's audio/music product in one repo**: the DAW
-(`daw`) and everything built on it — Session (the full DAW), Signal (the
-live-rig app), Patchbay (studio routing), the CLAP/VST3 plugins, and
-frame (the design / control-surface engine). It is the merger, in October
+(`daw`) and everything built on it — **Studio, the one app** (Signal, the
+live rig, and Session, the full DAW, behind one front screen), Patchbay
+(studio routing), the CLAP/VST3 plugins, and frame (the design /
+control-surface engine). It is the merger, in October
 2026, of the former session, daw, processor, signal, patchbay and frame
 repos. One Cargo workspace, one lockfile, one `target/`, one flake.
 
 ## Layout
 
 ```
-apps/       session/{desktop,daw,web,daw-web}  Session: the desktop app, the DAW
-                                               view, the site, the DAW in a browser
-            signal/{desktop,mobile,web}        Signal: the desktop/iOS app (and its
-                                               headless `--engine`), Android, the site
+apps/       studio/desktop                     Studio, THE app (desktop + iOS, one
+                                               TestFlight upload): its front screen
+                                               opens Signal or Session; Signal's app
+                                               crate (`studio-desktop`, and its
+                                               headless `--engine`)
+            session/{desktop,daw,web,daw-web}  Session: its app as a library Studio
+                                               mounts (+ its own binary and CLIs), the
+                                               DAW view, the site, the DAW in a browser
+            signal/{mobile,web}                Signal: Android, the site
             patchbay/                          fts-patchbay: app, agent CLI, browser remote
             plugins/*                          the CLAP/VST3 plugins (`<name>-plugin`),
                                                verify/ (bundle load checks)
@@ -68,16 +74,16 @@ Some features carry their own `AGENTS.md` / `README.md`
   project, one realtime audio engine on one device. A rig is a folder of
   tracks in that project (`signal_rig_host::engine::{Engine, Rig}`), not an
   engine of its own. Signal and Session both just run the DAW: Signal is
-  the isolated live-rig app, Session the full DAW, and rigs live in Session
-  as tracks. More engines means more processes of the same engine. Read
+  the isolated live rig, Session the full DAW, and rigs live in Session
+  as tracks. In Studio a launch goes into one of the two (its front
+  screen, `apps/studio/desktop/src/front.rs`), so the side not chosen
+  never starts an engine. More engines means more processes of the same engine. Read
   **`docs/design/one-engine.md`** before touching rigs, engines, meters or
   MIDI.
-- **The apps share their shell**: the log ring / crash log / flight log
-  and the update check are `features/app/shell`; prefs are `utils::prefs`.
-  Session and Signal do not keep copies.
-- **The apps share their shell**: the log ring / crash log / flight log
-  and the update check are `features/app/shell`; prefs are `utils::prefs`.
-  Session and Signal do not keep copies.
+- **The apps share their shell**: the log ring / crash log / flight log,
+  the update check and the iOS scene delegate (`app_shell::ios_scene`)
+  are `features/app/shell`; prefs are `utils::prefs`. Session and Signal
+  do not keep copies.
 - **Faces are frame documents.** Control surfaces and plugin faces are
   `.frame` documents rendered by `crates/frame`. `just faces` generates the
   plugin faces into `features/ui/plugin-faces/generated` (not kept in git; the apps
@@ -134,11 +140,11 @@ runs in, `.#reaper-test` the REAPER suites, `.#stems` stem separation.
 
 ```bash
 just check                 # cargo check --workspace
-just test                  # cargo nextest run --workspace --features session-desktop/cli,signal-desktop/cli,web-audio-worklet/guitar,web-audio-worklet/keys
+just test                  # cargo nextest run --workspace --features session-desktop/cli,studio-desktop/cli,web-audio-worklet/guitar,web-audio-worklet/keys
 just test-doc              # doctests (nextest cannot run them)
 just app [PROJECT]         # Session (session-desktop, release-fast)
-just guitar / just keys    # Signal's rigs (signal-desktop)
-just signal-engine         # signal-desktop --engine: the headless rig engine (ws://:4040/vox)
+just guitar / just keys    # Signal's rigs (studio-desktop; FTS_STUDIO_OPEN=signal|session skips the front screen)
+just signal-engine         # studio-desktop --engine: the headless rig engine (ws://:4040/vox)
 just reaper-test [FILTER]  # Session's #[reaper_test] suites in a real REAPER
 just reaper daw-test       # daw-reaper's suites (module: features/adapters/reaper/reaper.just)
 just plugins-bundle [names] && just plugins-link   # .clap/.vst3 into target/bundled, linked into ~/.clap, ~/.vst3
@@ -158,7 +164,7 @@ step (`lockfile`, `fmt`, `flows`, `tailwind`, `check`, `wasm`, `nextest`).
 It refuses to start with less than 25 GB free: a full disk shows up as
 mold dying with a bus error, which reads as a broken toolchain
 (`just sweep-incremental` is the always-safe reclaim). It says nothing
-about `session-ios` / `signal-ios` (Xcode, signing) or `deploy`, which
+about `studio-ios` (Xcode, signing) or `deploy`, which
 have their own runners and reasons to be red. The REAPER integration
 suites (`just reaper-test`, `just reaper daw-test`) are not in CI at all:
 they need a licensed REAPER, so run them locally.
@@ -211,7 +217,8 @@ other way.
 Signal is the live-rig domain: `features/rigs/*` (the domain core in
 `features/signal/*` — proto, live, storage, controller, rig-host, grid,
 tone3000, …; docs in `features/signal/docs/`), the effects in
-`features/dsp/*`, `features/adapters/reaper/signal-*` and `apps/signal/*`.
+`features/dsp/*`, `features/adapters/reaper/signal-*`, `apps/signal/*` and
+Studio's Signal side (`apps/studio/desktop`).
 `docs/signal/domain-model.md` explains the rig model.
 
 **Detachable GUI (strict)**: the rig engine is headless; every GUI —
@@ -222,7 +229,7 @@ as a CLAP/VST3 editor and embedded in REAPER, through one pipeline:
 `nice-plug-dioxus` / `dioxus_native` → Blitz (Vello + wgpu):
 
 - Never `dioxus::desktop::LaunchBuilder` for this UI (WebKit/WRY breaks
-  plugin parity; `signal-desktop --features webview` is an escape hatch
+  plugin parity; `studio-desktop --features webview` is an escape hatch
   that nothing painted can mount under).
 - **Inline styles only** — Blitz does not load external stylesheets.
   Inline `style`, or a static string via `document::Style { {CSS} }`;

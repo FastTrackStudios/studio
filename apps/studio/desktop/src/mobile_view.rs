@@ -1,0 +1,377 @@
+//! The iPhone shell, on Blitz.
+//!
+//! The app ships as **Signal**, so its front door is the instrument menu
+//! (`crate::rigs::RigMenu`) — the same catalogue the desktop renders. A
+//! remembered rig opens straight into itself on launch; the menu is one tap
+//! back (the rig's rail has a Rigs button).
+//!
+//! The guitar rig is `GuitarRigRemote`, the surface the desktop and the
+//! Android remote mount: on a phone held sideways it lays the chain out a
+//! page at a time in frame's phone faces (`signal_guitar_ui`'s `phone`), so
+//! the phone has no rig UI of its own. This shell only gives it what a phone
+//! window can tell it — its size in points (the form factor) and which side
+//! the camera housing is on — and the way back to the menu.
+//!
+//! Blitz draws it (dioxus-native, the desktop's renderer): the faces are
+//! painted custom widgets, which the WebView this replaced could not host.
+//! The rig clients come from `rig_engine.rs` (in-process `LocalServer`) and
+//! are provided as context, so every shared component works unchanged.
+
+#[cfg(feature = "signal-keys-rig")]
+use crate::keys_view;
+use dioxus::prelude::*;
+use guitar::ui::{GuitarRigRemote, IslandLeft, PhoneHost, ScreenCorners, WindowAspect, WindowSize};
+
+use crate::rigs::{Rig, RigMenu};
+
+const SIGNAL_TAILWIND: &str = include_str!("../assets/tailwind-signal.css");
+
+/// Blitz gives `body` an 8px margin, and the root's background is also what
+/// fills under the status bar and the home indicator.
+/// The desk (app-shell's `DESK`), as the performer screen paints its insets
+/// (STA-359): no strip of another shade at either edge.
+const ROOT_CSS: &str = "html, body { margin: 0; padding: 0; background: #0c0c0f; }";
+
+/// Which top-level screen is showing.
+#[derive(Clone, Copy, PartialEq)]
+enum MobileScreen {
+    /// The instrument menu — the front door.
+    Menu,
+    /// The guitar rig, or (`bass`) the same rig as the bass.
+    Rig { bass: bool },
+    /// The drum rig's pads and kit.
+    Drums,
+    /// The keys rig (sampler engine + downloaded packs).
+    #[cfg(feature = "signal-keys-rig")]
+    Keys,
+    /// The gig page: the set, its charts and practice tracks.
+    Gig,
+    /// The studio's kits and packs, onto this device.
+    Libraries,
+}
+
+impl MobileScreen {
+    /// The screen a rig opens onto. A rig with no phone surface keeps you on
+    /// the menu rather than opening a blank one — the menu already marks it
+    /// as not-yet, so nothing needs saying twice.
+    fn for_rig(rig: Rig) -> MobileScreen {
+        // A rig the phone does not offer (greyed out on the menu) — the
+        // last one played may be one — opens the menu.
+        if !crate::rigs::available(rig) {
+            return MobileScreen::Menu;
+        }
+        match rig {
+            Rig::Guitar => MobileScreen::Rig { bass: false },
+            Rig::Bass => MobileScreen::Rig { bass: true },
+            Rig::Drums => MobileScreen::Drums,
+            #[cfg(feature = "signal-keys-rig")]
+            Rig::Keys => MobileScreen::Keys,
+            _ => MobileScreen::Menu,
+        }
+    }
+}
+
+/// The phone app root: hand winit's window to the app's scene, measure the
+/// window, bootstrap the engine into context, then route between the
+/// instrument menu and the rigs.
+#[component]
+pub fn MobileApp() -> Element {
+    // First, before anything else: winit's window joins the app's window
+    // scene (`ios_scene`) — without one iOS 27 never shows it.
+    let window = dioxus_native::use_window();
+    use_hook({
+        let window = window.clone();
+        move || {
+            use dioxus_native::winit::raw_window_handle::{HasWindowHandle, RawWindowHandle};
+            if let Ok(handle) = window.window_handle()
+                && let RawWindowHandle::UiKit(uikit) = handle.as_raw()
+            {
+                app_shell::ios_scene::window_created(uikit.ui_view);
+            }
+        }
+    });
+
+    // The window's size in points, its aspect, and the housing's side: the
+    // rig's form factor and where its page keeps clear. Read on a timer
+    // (as the desktop's rig view does) — a rotation changes all three.
+    let mut size = use_context_provider(|| WindowSize(Signal::new((402.0, 874.0))));
+    let mut aspect = use_context_provider(|| WindowAspect(Signal::new(402.0 / 874.0)));
+    let mut island = use_context_provider(|| IslandLeft(Signal::new(false)));
+    // The screen's corner radius, for what sits in its corners to clear the
+    // curve: a current iPhone's (62 points on the 16 and 17 Pro, the
+    // largest — a smaller one only leaves a little to spare) or an iPad's.
+    // UIKit does not publish it.
+    let mut corners = use_context_provider(|| ScreenCorners(Signal::new(PHONE_CORNER_RADIUS)));
+    // The log ring, for the Audio mode's Log tab (copied for pasting into a
+    // message when the audio misbehaves).
+    // The FastTrackStudio account (STA-361): the ⋯ menu's Account item
+    // and its sheet read it from context.
+    let _account = crate::account::provide_account();
+    use_context_provider(|| guitar::ui::LogFeed {
+        lines: app_shell::log_ring::snapshot,
+        copy: copy_log,
+    });
+    use_future(move || {
+        let window = window.clone();
+        async move {
+            loop {
+                let px = window.surface_size();
+                if px.height > 0 {
+                    let scale = window.scale_factor().max(0.1);
+                    let pt = (f64::from(px.width) / scale, f64::from(px.height) / scale);
+                    let was = *size.0.peek();
+                    if (was.0 - pt.0).abs() > 1.0 || (was.1 - pt.1).abs() > 1.0 {
+                        size.0.set(pt);
+                        aspect.0.set(pt.0 / pt.1);
+                        // A phone's short side is under 500 points.
+                        let radius = if pt.0.min(pt.1) < 500.0 {
+                            PHONE_CORNER_RADIUS
+                        } else {
+                            PAD_CORNER_RADIUS
+                        };
+                        if *corners.0.peek() != radius {
+                            corners.0.set(radius);
+                        }
+                    }
+                }
+                let left = app_shell::ios_scene::island_on_left() == Some(true);
+                if *island.0.peek() != left {
+                    island.0.set(left);
+                }
+                architect::platform::sleep(std::time::Duration::from_millis(300)).await;
+            }
+        }
+    });
+
+    let engine = crate::rig_engine::engine();
+    rsx! {
+        document::Style { {ROOT_CSS} }
+        document::Style { {SIGNAL_TAILWIND} }
+        // The viewport, sized explicitly: an absolute box stretched only by
+        // its insets gets no height in Blitz. Blitz keeps the safe area's
+        // top and bottom out of the viewport; the sides are the page's own
+        // (`BLITZ_SAFE_AREA_SIDES=0`, so the rig runs under the housing).
+        div {
+            style: "position: absolute; top: 0; left: 0; width: 100vw; height: 100vh; \
+                    box-sizing: border-box; display: flex; flex-direction: column; \
+                    background: #0f1012; color: #e4e4e7; overflow: hidden; \
+                    font-family: Inter, -apple-system, sans-serif;",
+            match engine {
+                Some(engine) => {
+                    let _ = provide_context(engine.rig.clone());
+                    let _ = provide_context(engine.stream.clone());
+                    let _ = provide_context(engine.settings.clone());
+                    // The guitar's performance surface, for its screens. The
+                    // drum page provides its own (it must not play the guitar's).
+                    let _ = provide_context(signal_rig_perform_ui::PerformClients {
+                        client: engine.perform.clone(),
+                        stream: engine.perform_stream.clone(),
+                    });
+                    #[cfg(feature = "signal-keys-rig")]
+                    let _ = provide_context(engine.keys.clone());
+                    // TONE3000 and the account: the browser's Tone3000 source
+                    // and the sign-in, the page opened in an in-app sheet.
+                    #[cfg(feature = "tone3000")]
+                    {
+                        if let Some(t) = engine.tones.clone() {
+                            let _ = provide_context(t);
+                        }
+                        if let Some(t) = engine.tones_stream.clone() {
+                            let _ = provide_context(t);
+                        }
+                        if let Some(a) = engine.account.clone() {
+                            let _ = provide_context(a);
+                        }
+                        let _ = provide_context(signal_tone3000::ui::UrlOpener::new(|url| {
+                            #[cfg(target_os = "ios")]
+                            crate::ios_safari::open(&url);
+                            #[cfg(not(target_os = "ios"))]
+                            let _ = url;
+                        }));
+                    }
+                    rsx! { Router {} }
+                }
+                None => rsx! {
+                    div { style: "display: flex; flex: 1; align-items: center; justify-content: center; flex-direction: column; gap: 8px;",
+                        span { style: "width: 12px; height: 12px; border-radius: 999px; background: #ef4444;" }
+                        span { style: "font-size: 14px; font-weight: 600;", "Engine failed to start" }
+                        span { style: "font-size: 12px; color: #71717a;", "Check the logs (audio device / library load)." }
+                    }
+                },
+            }
+        }
+    }
+}
+
+/// The screen corner radii the layout clears (points).
+const PHONE_CORNER_RADIUS: f64 = 62.0;
+const PAD_CORNER_RADIUS: f64 = 18.0;
+
+/// Menu → rig. Each screen owns its orientation (set on mount), so
+/// navigating swaps the component and rotates the phone.
+#[component]
+fn Router() -> Element {
+    // Launch back into the rig you were playing; the menu is the cold-start
+    // and the one-tap-back screen.
+    let mut screen = use_signal(|| {
+        crate::rigs::load_last()
+            .map(MobileScreen::for_rig)
+            .unwrap_or(MobileScreen::Menu)
+    });
+    let to_menu = move |()| {
+        crate::rigs::store_last(None);
+        screen.set(MobileScreen::Menu);
+    };
+    // The gig shell: on the iPad, the rig's header, middle and Setlist
+    // sidebar carry the gig (its chart, its track, the set).
+    crate::gig::shell::use_gig_shell();
+    // The menu's Gig card.
+    use_context_provider(|| {
+        crate::gig::OpenGig(Callback::new(move |()| screen.set(MobileScreen::Gig)))
+    });
+    match screen() {
+        MobileScreen::Menu => rsx! {
+            MenuPage {
+                on_pick: move |rig: Rig| {
+                    crate::rigs::store_last(Some(rig));
+                    screen.set(MobileScreen::for_rig(rig));
+                },
+                on_libraries: move |()| screen.set(MobileScreen::Libraries),
+            }
+        },
+        MobileScreen::Libraries => rsx! {
+            crate::libraries_view::LibrariesPage { on_back: move |()| screen.set(MobileScreen::Menu) }
+        },
+        MobileScreen::Rig { bass } => rsx! {
+            GuitarPage { bass, on_home: to_menu }
+        },
+        MobileScreen::Drums => rsx! {
+            DrumPage { on_home: to_menu }
+        },
+        #[cfg(feature = "signal-keys-rig")]
+        MobileScreen::Keys => rsx! {
+            keys_view::KeysShell { on_home: to_menu }
+        },
+        MobileScreen::Gig => rsx! {
+            div { style: "flex: 1; min-width: 0; min-height: 0; display: flex;",
+                crate::gig::GigWorkspace { on_back: Some(EventHandler::new(to_menu)) }
+            }
+        },
+    }
+}
+
+/// The drum rig: its pads and its kit (the drum rig's client when the app
+/// provides one; its demo kit until then).
+#[component]
+fn DrumPage(on_home: EventHandler<()>) -> Element {
+    use_context_provider(|| PhoneHost {
+        on_home: Callback::new(move |()| on_home.call(())),
+    });
+    // The in-process drum rig, and its own performance surface — never the
+    // guitar's from above. No drum engine in this build: the screen says so.
+    let drums = drum_clients();
+    use_context_provider(|| signal_rig_perform_ui::PerformClients {
+        client: drums.as_ref().and_then(|d| d.perform.clone()),
+        stream: drums.as_ref().and_then(|d| d.perform_stream.clone()),
+    });
+    if let Some(d) = drums {
+        use_context_provider(|| d.rig.clone());
+        use_context_provider(|| d.stream.clone());
+    }
+    rsx! {
+        div { style: "flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column;",
+            guitar::ui::DrumTablet {}
+        }
+    }
+}
+
+/// The embedded engine's drum clients, when this build has the drum rig.
+#[cfg(feature = "signal-drums-rig")]
+fn drum_clients() -> Option<
+    crate::rig_engine::RigClients<
+        drums::proto::drum::DrumRigClient,
+        drums::proto::drum::DrumRigStreamClient,
+    >,
+> {
+    crate::rig_engine::engine().and_then(|e| e.drums.clone())
+}
+#[cfg(not(feature = "signal-drums-rig"))]
+fn drum_clients() -> Option<NoDrums> {
+    None
+}
+/// Stands in for the drum clients in a build without the drum rig.
+#[cfg(not(feature = "signal-drums-rig"))]
+#[derive(Clone)]
+struct NoDrums {
+    perform: Option<signal_rig_perform_ui::RigPerformClient>,
+    perform_stream: Option<signal_rig_perform_ui::RigPerformStreamClient>,
+    rig: (),
+    stream: (),
+}
+
+/// The front door: the shared instrument menu, phone layout.
+#[component]
+fn MenuPage(on_pick: EventHandler<Rig>, on_libraries: EventHandler<()>) -> Element {
+    let front = crate::front_state::use_front();
+    // A phone on its side is short; an iPad is not — the page's compact
+    // layout follows the window, not the device family.
+    let compact = try_use_context::<WindowSize>().is_none_or(|w| w.0.read().1 < 600.0);
+    let portrait = try_use_context::<WindowSize>().is_some_and(|w| {
+        let (width, height) = *w.0.read();
+        height > width
+    });
+    rsx! {
+        div { style: "flex: 1; min-height: 0; height: 100%; display: flex; flex-direction: column;",
+            RigMenu {
+                phone: compact,
+                on_pick,
+                on_libraries,
+                // A song from tonight's set: the guitar, on that song.
+                on_song: move |i: usize| {
+                    crate::front_state::play_song(i);
+                    on_pick.call(Rig::Guitar);
+                },
+                // No set yet: the guitar, on its setlists.
+                on_setlists: move |()| {
+                    crate::front_state::open_setlists();
+                    on_pick.call(Rig::Guitar);
+                },
+                front: front(),
+                portrait,
+            }
+        }
+    }
+}
+
+/// The guitar rig: the shared remote, which lays itself out for the phone
+/// (frame's phone faces, a page at a time). Its rail's Rigs button comes
+/// back here.
+#[component]
+fn GuitarPage(bass: bool, on_home: EventHandler<()>) -> Element {
+    use_context_provider(|| PhoneHost {
+        on_home: Callback::new(move |()| on_home.call(())),
+    });
+    // The bass is this rig as another instrument: the engine is told which.
+    use_effect(use_reactive!(|bass| {
+        if let Some(rig) = try_consume_context::<guitar::proto::rig::RigClient>() {
+            let id = if bass { "bass" } else { "guitar" };
+            spawn(async move {
+                let _ = rig.set_instrument(id.to_string()).await;
+            });
+        }
+    }));
+    rsx! {
+        div { style: "flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column;",
+            GuitarRigRemote {}
+        }
+    }
+}
+
+/// Put the copied log on the clipboard (the phone's; elsewhere there is no
+/// shell clipboard to reach from here).
+fn copy_log(text: &str) {
+    #[cfg(target_os = "ios")]
+    crate::ios_orientation::set_clipboard(text);
+    #[cfg(not(target_os = "ios"))]
+    let _ = text;
+}

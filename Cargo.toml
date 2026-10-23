@@ -131,7 +131,7 @@ members = [
     "features/dsp/stack",
     "xtask/kit-sheet",
     # ── signal ──
-    "apps/signal/desktop",
+    "apps/studio/desktop",
     "apps/signal/mobile",
     "vendor/dioxus-core",
     "vendor/winit-uikit",
@@ -939,6 +939,9 @@ signal-live = { path = "features/signal/live" }
 signal-storage = { path = "features/signal/storage" }
 signal-import = { path = "features/signal/import" }
 signal-web = { path = "apps/signal/web" }
+# Session's app as a library: Studio (apps/studio/desktop) mounts it behind
+# its front screen. No default features: Studio picks the iOS-clean set.
+session-desktop = { path = "apps/session/desktop", default-features = false }
 signal-daw-bridge = { path = "features/signal/daw-bridge" }
 signal-rig-host = { path = "features/rigs/host" }
 signal-rigs-proto = { path = "features/rigs/proto" }

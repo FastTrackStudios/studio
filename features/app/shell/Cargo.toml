@@ -36,6 +36,16 @@ architect = { workspace = true, features = ["release"] }
 # executor the app's UI is on.
 tokio = { workspace = true }
 
+# The UIScene lifecycle (`ios_scene`): the objc2 winit itself is built on.
+[target.'cfg(target_os = "ios")'.dependencies]
+objc2 = "0.6"
+objc2-ui-kit = { version = "0.3", features = [
+    "UIApplication", "UIResponder", "UIScene", "UISceneOptions", "UISceneSession",
+    "UIWindowScene", "UIWindow", "UIView", "UIViewController", "UIScreen", "UIPasteboard",
+    "UIOrientation", "block2",
+] }
+objc2-foundation = { version = "0.3", features = ["NSArray", "NSSet", "NSDictionary", "NSString", "NSURL"] }
+
 [dev-dependencies]
 # Headless layout + screenshot of the performer screen on blitz-dom
 # (tests/performer_screen.rs).

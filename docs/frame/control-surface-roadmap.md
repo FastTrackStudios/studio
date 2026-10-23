@@ -34,7 +34,7 @@ frame stage.frame             ←  hot-reloads each edit; play it against the mo
 - Design tokens as document variables with modes (theme switching without regenerating).
 - Selector / XY / graph widgets (EQ, ADSR); modulation rings.
 - `.fig` Kiwi import.
-- Hosts: embedding in Blitz/Dioxus (signal-desktop), a baseview plugin window, native iOS.
+- Hosts: embedding in Blitz/Dioxus (studio-desktop), a baseview plugin window, native iOS.
 - The editor UI (bind mode, MIDI learn) on architect-ui.
 - Value-only render fast path and cached chrome, for large surfaces.
 

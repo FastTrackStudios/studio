@@ -18,8 +18,6 @@
 
 #[cfg(target_os = "ios")]
 mod ios_audio;
-#[cfg(target_os = "ios")]
-mod ios_scene;
 
 mod library;
 mod shell;
@@ -27,6 +25,8 @@ mod start;
 
 use std::any::Any;
 use std::path::{Path, PathBuf};
+
+use dioxus::prelude::*;
 
 /// The developer's example session, used when it is there and nothing
 /// else has been chosen: Always On Time, from the sessions checkout beside
@@ -129,7 +129,7 @@ fn ask(title: &str, description: String, _buttons: &[&str]) -> Option<String> {
 /// Open `url` in the browser (a sign-in's approval page).
 fn open_url(url: &str) {
     #[cfg(target_os = "ios")]
-    ios_scene::open_url(url);
+    app_shell::ios_scene::open_url(url);
     #[cfg(not(target_os = "ios"))]
     {
         let opener = if cfg!(target_os = "macos") {
@@ -149,7 +149,7 @@ fn open_url(url: &str) {
 /// phone, where typing a link is the hard way).
 fn pasted() -> Option<String> {
     #[cfg(target_os = "ios")]
-    return ios_scene::pasted();
+    return app_shell::ios_scene::pasted();
     #[cfg(not(target_os = "ios"))]
     None
 }
@@ -188,6 +188,23 @@ fn remember(project: &Path) {
 /// before there is a window to say so. With nothing chosen, or when it
 /// does not open, the start screen stays.
 pub fn launch() {
+    if let Some(Prepared { setlist, open }) = prepare() {
+        run(setlist, open);
+    }
+}
+
+/// What the window opens over: the set a Remote or Cue window attached to,
+/// or (Engine mode) what to open as it comes up ([`choose`]).
+#[derive(Clone)]
+pub struct Prepared {
+    setlist: Option<session_daw::setlist::Setlist>,
+    open: Option<PathBuf>,
+}
+
+/// Everything [`launch`] does before the window: the engine dialer, the
+/// audio mode, and attaching to the system a Remote or Cue window drives.
+/// `None` when attaching failed and the person chose to quit.
+pub fn prepare() -> Option<Prepared> {
     // The global app menu (File, Edit, View, …) for the desktop shell's
     // top bar, on the session bus — on a thread of its own.
     #[cfg(target_os = "linux")]
@@ -210,14 +227,41 @@ pub fn launch() {
     } else {
         mode.target
     };
+    let engine = || Prepared {
+        setlist: None,
+        open: choose(),
+    };
     match remote {
-        Some(target) => match attach(&target) {
-            Some(Attached::Set(setlist)) => run(Some(setlist), None),
-            Some(Attached::Engine) => run(None, choose()),
-            None => {}
+        Some(target) => match attach(&target)? {
+            Attached::Set(setlist) => Some(Prepared {
+                setlist: Some(setlist),
+                open: None,
+            }),
+            Attached::Engine => Some(engine()),
         },
-        None => run(None, choose()),
+        None => Some(engine()),
     }
+}
+
+/// Session inside another app's window: Studio's, once its front screen
+/// has chosen Session. Prepares as [`launch`] does (on the first render,
+/// on the UI thread, where a desktop's dialogs must be asked), provides
+/// what `run` hands the window as root contexts, and draws the app.
+///
+/// The host draws the window: its attributes are the host's, and on iOS
+/// the host registers the scene delegate (`app_shell::ios_scene`). Quitting
+/// at a failed attach quits the process, as it does Session's own.
+#[component]
+pub fn Embedded() -> Element {
+    let Prepared { setlist, open } = use_hook(|| {
+        prepare().unwrap_or_else(|| {
+            tracing::info!("session: quit at the attach dialog");
+            std::process::exit(0)
+        })
+    });
+    use_context_provider(move || setlist);
+    use_context_provider(move || start::OpenFirst(open));
+    rsx! { start::App {} }
 }
 
 /// What attaching came to: the set the other system has open, or Engine
@@ -262,7 +306,7 @@ fn run(setlist: Option<session_daw::setlist::Setlist>, open: Option<PathBuf>) {
     // iOS 27 stops an app that has not adopted scenes: ours is registered
     // before UIKit starts, for Info.plist to name.
     #[cfg(target_os = "ios")]
-    ios_scene::register();
+    app_shell::ios_scene::register(app_shell::ios_scene::Opening::AsHeld);
     let attributes = window_attributes();
     let contexts: Vec<Box<dyn Fn() -> Box<dyn Any> + Send + Sync>> = vec![
         Box::new(move || Box::new(setlist.clone()) as Box<dyn Any>),

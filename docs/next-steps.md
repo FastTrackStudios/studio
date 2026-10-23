@@ -17,7 +17,7 @@ comes next, in order. The design docs this points at are in `docs/design/`.
 
 ## Known red
 
-- `just ci` wasm step (`signal-desktop` for wasm32): architect pulls tokio
+- `just ci` wasm step (`studio-desktop` for wasm32): architect pulls tokio
   `net` → mio, which does not build for the browser. Pre-existing.
 - `reaper-rs` and `reaper-lib` are still git deps on Codeberg: GitHub's
   `reaper-rs` branch lacks the locked commit `3a9e7063`, and `reaper-lib`
@@ -113,7 +113,7 @@ an app; give it its own sheet.
 ## Working notes
 
 - `cargo nextest run --workspace --features
-  session-desktop/cli,signal-desktop/cli,web-audio-worklet/guitar,web-audio-worklet/keys`
+  session-desktop/cli,studio-desktop/cli,web-audio-worklet/guitar,web-audio-worklet/keys`
   is the full run (~5 min after the build). Most of the wall clock is
   compiling ~790 test binaries; iterate with `-p <crate>`.
 - ~50 tests fail on a fresh checkout without the private assets

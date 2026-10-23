@@ -11,9 +11,9 @@
 #   main --release PR (release/pending: ONE commit, version + changelog)-->
 #       squash --> tag vYY.M.MICRO on that merge commit
 #                                              The TAG ships: the two sites
-#                                              (deploy), BOTH TestFlight
-#                                              uploads (Signal, Session) and
-#                                              the one GitHub Release. (The
+#                                              (deploy), the Studio
+#                                              TestFlight upload and the
+#                                              one GitHub Release. (The
 #                                              REAPER suites run locally.)
 #
 #   hotfix, when main can't ship: release/v<latest tag> (from the tag)
@@ -26,13 +26,11 @@
 #
 # The version lives in ONE place, `[workspace.package] version` in the
 # root Cargo.toml. Every crate that says `version.workspace = true` follows
-# it, and that includes both iOS app crates (apps/signal/desktop,
-# apps/session/desktop), so Signal and Session can never differ: Signal
-# and Session are the same build, and a change to one almost always
-# touches the other. There are no per-app tags, branches or changelogs.
-# The `v<version>` tag drives BOTH TestFlight uploads (signal-ios.yml,
-# session-ios.yml): the marketing version of each is the tag's version, and
-# each writes its build number into the same Release's notes. The plugins'
+# it, and that includes the iOS app crate (apps/studio/desktop: Studio,
+# Signal and Session in one app). There are no per-app tags, branches or
+# changelogs. The `v<version>` tag drives the TestFlight upload
+# (studio-ios.yml): its marketing version is the tag's version, and it
+# writes its build number into the Release's notes. The plugins'
 # tags are not covered here.
 #
 # Versions are CalVer YY.M.MICRO (no leading zeros: Cargo and Apple both
@@ -201,17 +199,18 @@ next_version() {
     fi
 }
 
-# ── the iOS apps (Signal, Session) ───────────────────────────────────────
-# They are not released on their own: they are built from the one `v<version>`
-# tag. Their crates follow the workspace version; the helpers below read
+# ── the iOS app (Studio) ─────────────────────────────────────────────────
+# Studio (Signal and Session in one app, apps/studio/desktop) is the one iOS
+# app; Signal's and Session's own App Store records get no new builds. It is
+# not released on its own: it is built from the one `v<version>` tag. Their crates follow the workspace version; the helpers below read
 # that back so the guard and the TestFlight gate can prove it.
-IOS_APPS="signal session"
+IOS_APPS="studio"
 
 ios_check() {
-    case "${1:-}" in signal|session) ;; *) die "unknown iOS app '${1:-}' (signal or session)" ;; esac
+    case "${1:-}" in studio) ;; *) die "unknown iOS app '${1:-}' (studio)" ;; esac
 }
-ios_manifest() { case "$1" in signal) echo apps/signal/desktop/Cargo.toml ;; session) echo apps/session/desktop/Cargo.toml ;; esac; }
-ios_title() { case "$1" in signal) echo Signal ;; session) echo Session ;; esac; }
+ios_manifest() { case "$1" in studio) echo apps/studio/desktop/Cargo.toml ;; esac; }
+ios_title() { case "$1" in studio) echo Studio ;; esac; }
 ios_bundle_id() { echo "app.fasttrackstudio.$1"; }
 
 # The version an app crate resolves to at a revision (default: working
@@ -308,7 +307,7 @@ cmd_notes() { # [VERSION]
 # ── change files (.changes/*.md, written by `cargo rail change add`) ──────
 #
 #   ---
-#   "signal-desktop" = "minor"
+#   "studio-desktop" = "minor"
 #   "session-desktop" = "patch"
 #   ---
 #
@@ -450,7 +449,7 @@ cmd_plan() {
     files="$(change_files_at "$ref")"
     echo "pending change files:        $(grep -c . <<<"$files" || true)"
     echo "next release:                $next (CalVer YY.M.MICRO from the highest tag and this month)"
-    echo "                             one tag v$next and one GitHub Release for Signal + Session; both TestFlight uploads come from it"
+    echo "                             one tag v$next and one GitHub Release; the Studio TestFlight upload comes from it"
     echo
     echo "── draft changelog ($ref) ──"
     sec="$(mktemp)"
@@ -528,8 +527,8 @@ Next:
      If $line moved first, the guard refuses: close the PR, delete the
      branch and cut again (it takes a minute).
   4. just release-tag    tags v$next on the merge commit once its '$BUILD_CHECK'
-     is green. THE TAG SHIPS: both sites, BOTH TestFlight uploads (Signal and
-     Session, marketing version $next), the Release.
+     is green. THE TAG SHIPS: both sites, the Studio TestFlight upload
+     (marketing version $next), the Release.
 EOT
 }
 
@@ -648,9 +647,9 @@ cmd_pr() {
         consumed="$(git diff --diff-filter=D --name-only HEAD^ HEAD -- "$CHANGES_DIR" | sed 's/^/- `/; s/$/` (consumed)/')"
         {
             echo "## Summary"
-            echo "Release **$tag** into \`$base\`: ONE commit, the CalVer version bump (\`Cargo.toml\`, the workspace members in \`Cargo.lock\`) and the \`CHANGELOG.md\` section built from the pending change files, which it deletes. Signal and Session share the version."
+            echo "Release **$tag** into \`$base\`: ONE commit, the CalVer version bump (\`Cargo.toml\`, the workspace members in \`Cargo.lock\`) and the \`CHANGELOG.md\` section built from the pending change files, which it deletes. Every app shares the version."
             echo
-            echo "Merge with \`just release-merge\` (re-runs the guard against the current \`$base\`, then squash-merges). Merging ships nothing. **The tag does:** \`just release-tag\` tags \`$tag\` on the merge commit once its \`$BUILD_CHECK\` is green → both sites deploy, BOTH TestFlight uploads (\`signal-ios\`, \`session-ios\`, marketing version **$v**), the one GitHub Release."
+            echo "Merge with \`just release-merge\` (re-runs the guard against the current \`$base\`, then squash-merges). Merging ships nothing. **The tag does:** \`just release-tag\` tags \`$tag\` on the merge commit once its \`$BUILD_CHECK\` is green → both sites deploy, the Studio TestFlight upload (\`studio-ios\`, marketing version **$v**), the one GitHub Release."
             local d; d="$(git_deps_moved "$(last_tag HEAD^)" HEAD)"
             if [ -n "$d" ]; then
                 echo
@@ -811,21 +810,21 @@ cmd_guard() {
         || fail "the release commit may change only the version line (Cargo.toml, Cargo.lock members), add the CHANGELOG.md section and delete consumed change files: $why"
     pending="$(change_files_at "$head" | paste -sd' ' -)"
     [ -z "$pending" ] || fail "change files left unconsumed at the head: $pending"
-    # One version for the whole studio: Signal and Session follow the
+    # One version for the whole studio: the app crate follows the
     # workspace version (version.workspace = true), so they cannot differ.
     for a in $IOS_APPS; do
         cv="$(crate_version_at "$a" "$head")"
         [ "$cv" = "$v" ] \
-            || fail "$(ios_manifest "$a") resolves to version '${cv:-none}' but the release is $v: both apps take [workspace.package] version (version.workspace = true)"
+            || fail "$(ios_manifest "$a") resolves to version '${cv:-none}' but the release is $v: the app takes [workspace.package] version (version.workspace = true)"
     done
 
     {
         echo "### Release guard: $RELEASE_BRANCH → $base_ref"
-        echo "- version: $vb → $v (next by the CalVer rule: $next; Signal and Session share it)"
+        echo "- version: $vb → $v (next by the CalVer rule: $next; every app shares it)"
         echo "- head: \`$(git rev-parse --short "$head")\` $subject; base now \`$(git rev-parse --short "$cur")\`"
         local d; d="$(git_deps_moved "$(last_tag "$cur")" "$head" | paste -sd, -)"
         echo "- git deps moved since last release: ${d:-none}"
-        echo "- merging ships nothing; production changes only when the tag is pushed (sites, signal-ios + session-ios TestFlight, the Release)"
+        echo "- merging ships nothing; production changes only when the tag is pushed (sites, studio-ios TestFlight, the Release)"
     } >> "${GITHUB_STEP_SUMMARY:-/dev/stderr}"
     [ "$ok" = 1 ] || exit 1
     echo "release guard: ok ($tag → $base_ref)"
@@ -860,7 +859,7 @@ release_commit_of() { # <version>
 
 # After the release PR merged: tag v<version> on its merge commit, once
 # that commit's `Build + test` is green. The TAG is the release: it starts
-# the deploy, BOTH TestFlight uploads and the GitHub Release. Pushing as a GitHub App (fts-forge) or a person starts the
+# the deploy, the TestFlight upload and the GitHub Release. Pushing as a GitHub App (fts-forge) or a person starts the
 # workflows; a tag pushed with a workflow's GITHUB_TOKEN would not.
 cmd_tag() {
     local v="${1:-}" target line found prev pending l
@@ -892,14 +891,14 @@ cmd_tag() {
     prev="$(last_tag "$target^")"
     if [ -n "$prev" ]; then gt "$v" "${prev#v}" || die "v$v is not greater than the previous release $prev"; fi
     require_green "$target"
-    note "tagging v$v at $(git rev-parse --short "$target") on $line (previous: ${prev:-none}). This ships: sites, Signal + Session TestFlight, the Release."
+    note "tagging v$v at $(git rev-parse --short "$target") on $line (previous: ${prev:-none}). This ships: sites, Studio TestFlight, the Release."
     # An annotated tag needs a committer identity; a bot checkout may have none.
     local ident=()
     git config user.email >/dev/null 2>&1 || [ -n "${GIT_COMMITTER_EMAIL:-}" ] \
         || ident=(-c "user.name=fts-forge[bot]" -c "user.email=fts-forge[bot]@users.noreply.github.com")
     git ${ident[@]+"${ident[@]}"} tag -a "v$v" "$target" -m "studio $v"
     git push --quiet origin "refs/tags/v$v"
-    note "pushed v$v: deploy, signal-ios, session-ios and the Release start from the tag"
+    note "pushed v$v: deploy, studio-ios and the Release start from the tag"
     if [ "$line" != "$MAIN_BRANCH" ]; then cmd_forward_port "$v"; fi
 }
 
@@ -990,7 +989,7 @@ tf_render() { # <tag> <version> <body> [<app> <newline>]
     local a l
     echo "$TF_BEGIN"
     echo "### iOS TestFlight"
-    echo "Marketing version **$2** (CFBundleShortVersionString) == this release, \`$1\`, for Signal and Session alike. One line per app, its latest upload."
+    echo "Marketing version **$2** (CFBundleShortVersionString) == this release, \`$1\`, for Studio. One line per app, its latest upload."
     for a in $IOS_APPS; do
         if [ "$a" = "${4:-}" ]; then
             echo "${5:-}"
@@ -1007,8 +1006,8 @@ tf_render() { # <tag> <version> <body> [<app> <newline>]
 # exists (cmd_tag pushed it); this attaches the GitHub Release with the
 # changelog section, moved git deps and the TestFlight block. Idempotent.
 # With no argument the tag is the ref of the run, else HEAD's workspace
-# version. signal-ios and session-ios both ask for the Release of a tag,
-# and one of them is first.
+# version. studio-ios asks for the Release of a tag too, and may be
+# first.
 publish_release() { # [tag]
     local v tag="${1:-}" target prev notes line
     if [ -z "$tag" ]; then
@@ -1099,7 +1098,7 @@ cmd_ios_resolve() { # <app> <tag>
         || die "$(ios_manifest "$app") says version '${cv:-none}' but the tag is $tag ($v): the marketing version is the tag's, so the crate must carry it (version.workspace = true, released with just release-prepare)"
     wv="$(version_at)"
     [ "$wv" = "$v" ] \
-        || die "[workspace.package] version is '$wv' but the tag is $tag ($v): one version for Signal and Session"
+        || die "[workspace.package] version is '$wv' but the tag is $tag ($v): one version for the whole studio"
     grep -q "^## \[$v\]" CHANGELOG.md 2>/dev/null \
         || die "CHANGELOG.md has no [$v] section: $tag is not a release commit"
     sha="$(git rev-parse HEAD)"
@@ -1140,8 +1139,9 @@ ios_record_line() { # <app> <build> <run-url> <prior line>
 
 # CI, last job of <app>-ios.yml: write what was uploaded into the release
 # notes, so the GitHub Release and the TestFlight build name each other.
-# Signal and Session record into the SAME Release at about the same time,
-# and `gh release edit` replaces the whole body, so each run re-reads the
+# More than one run can record into the SAME Release at about the same time
+# (a re-run beside the first), and `gh release edit` replaces the whole
+# body, so each run re-reads the
 # notes before editing and, after a short settle, checks its own line
 # survived; if the other run's edit overwrote it, it goes round again.
 cmd_ios_record() { # <app> <tag> <marketing> <build> [run-url]

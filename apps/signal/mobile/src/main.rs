@@ -2,7 +2,7 @@
 //! engine.
 //!
 //! The same `GuitarRigRemote` the desktop app and the browser remote mount,
-//! over vox WebSocket to `signal-desktop --engine` — the phone is one more
+//! over vox WebSocket to `studio-desktop --engine` — the phone is one more
 //! remote of the headless core. Its window's size picks the phone form
 //! factor (a phone held sideways lays the chain out a page at a time).
 //!

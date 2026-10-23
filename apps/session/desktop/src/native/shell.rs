@@ -229,7 +229,7 @@ pub fn Shell() -> Element {
             let insets = reading.safe_area();
             let scale = reading.scale_factor().max(1.0);
             let clear = |inset: u32| (f64::from(inset) / scale).min(HOUSING);
-            let now = match super::ios_scene::island_on_left() {
+            let now = match app_shell::ios_scene::island_on_left() {
                 Some(true) => Sides {
                     left: clear(insets.left),
                     right: 0.0,

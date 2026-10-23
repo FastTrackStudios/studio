@@ -1,0 +1,14 @@
+# dx config for the app. Only the mobile/bundle identity lives here; the
+# desktop and web launches are configured in main.rs via LaunchBuilder, and
+# feature selection is via cargo features (see Cargo.toml).
+[application]
+
+# App bundle identity (iOS CFBundleIdentifier / TestFlight App ID).
+#
+# This binary ships as STUDIO — Signal and Session in one app, under its own
+# App Store record (6826004255, "Studio - by FastTrackStudio"). Signal's
+# (app.fasttrackstudio.signal) and Session's (app.fasttrackstudio.session)
+# records stay where they are and get no new builds.
+[bundle]
+identifier = "app.fasttrackstudio.studio"
+publisher = "FastTrackStudio"

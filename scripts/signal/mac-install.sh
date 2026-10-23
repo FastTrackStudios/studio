@@ -23,7 +23,7 @@ done
 # Quit the rig (ours — the bundle id, not the Signal messenger).
 osascript -e 'quit app id "app.fasttrackstudio.signal.mac"' >/dev/null 2>&1 || true
 sleep 2
-pkill -f 'Signal.app/Contents/MacOS/signal-desktop' 2>/dev/null || true
+pkill -f 'Signal.app/Contents/MacOS/studio-desktop' 2>/dev/null || true
 
 cfg="$HOME/.config/signal"
 mkdir -p "$HOME/.config"

@@ -40,7 +40,7 @@ cat > "$S/shim/cargo" <<'EOF'
 echo "[shim] cargo $*" >&2
 [ "$1" = update ] || exit 0
 v="$(sed -n '/^\[workspace\.package\]/,/^\[/{s/^version *= *"\([^"]*\)".*/\1/p;}' Cargo.toml | head -1)"
-awk -v v="$v" -v members="signal-desktop session-desktop" '
+awk -v v="$v" -v members="studio-desktop session-desktop" '
   BEGIN { n = split(members, m, " "); for (i = 1; i <= n; i++) mem[m[i]] = 1 }
   /^name = / { name = $3; gsub(/"/, "", name) }
   /^version = / && (name in mem) && !unused { print "version = \"" v "\""; next }
@@ -71,11 +71,11 @@ chmod +x "$S/shim/cargo" "$S/shim/gh"
 export SHIM_LOG="$S/gh.log" SHIM_REL="$S/releases" SHIM_PRS="$S/prs"; : > "$SHIM_LOG"
 
 # ── a synthetic repo: the real script, the real cliff.toml ───────────────
-W="$S/seed"; mkdir -p "$W/scripts" "$W/apps/signal/desktop" "$W/apps/session/desktop" "$W/crates/shared" "$W/.changes"
+W="$S/seed"; mkdir -p "$W/scripts" "$W/apps/studio/desktop" "$W/apps/session/desktop" "$W/crates/shared" "$W/.changes"
 cp "$HERE/scripts/release.sh" "$W/scripts/"; cp "$HERE/cliff.toml" "$W/" 2>/dev/null || true
 printf 'Change files: cargo rail change add <crates> --bump <none|patch|minor|major> -m "<note>"\n' > "$W/.changes/README"
 printf '[workspace]\nmembers = ["apps/*/desktop", "crates/shared"]\n\n[workspace.package]\nversion = "0.1.0"\nedition = "2021"\n' > "$W/Cargo.toml"
-for a in signal session; do
+for a in studio session; do
   printf '[package]\nname = "%s-desktop"\nversion.workspace = true\n' "$a" > "$W/apps/$a/desktop/Cargo.toml"
 done
 printf '[package]\nname = "shared"\nversion = "0.1.0"\n' > "$W/crates/shared/Cargo.toml"
@@ -97,7 +97,7 @@ name = "shared"
 version = "0.1.0"
 
 [[package]]
-name = "signal-desktop"
+name = "studio-desktop"
 version = "0.1.0"
 
 [[patch.unused]]
@@ -149,7 +149,7 @@ eq "this month, from the real clock" "$(env -u RELEASE_MONTH bash scripts/releas
 expect_fail "RELEASE_MONTH must be YY.M" env RELEASE_MONTH=26.01 bash scripts/release.sh next
 
 echo "=== change files -> CHANGELOG (first v4 release: 0.1.2 -> 26.10.0)"
-land "feat(signal): offline drafts (#70)" crates/shared/a.rs added-drafts '"signal-desktop" = "minor"\n"shared" = "patch"\n' "Added offline drafts (signal)"
+land "feat(signal): offline drafts (#70)" crates/shared/a.rs added-drafts '"studio-desktop" = "minor"\n"shared" = "patch"\n' "Added offline drafts (signal)"
 land "fix(session): reconnect backoff (#71)" crates/shared/b.rs fixed-backoff '"session-desktop" = "patch"\n' "Fixed reconnect backoff resetting after sleep (session)"
 land "feat(shared)!: rename sync.peer (#72)" crates/shared/c.rs renamed-peer '"shared" = "major"\n' "Renamed config key \`sync.peer\` to \`sync.peers\` (session)\n\nMigration: run \`session migrate-config\`; no database migration."
 land "ci: faster plan (#73)" .github/x.yml ci-plan '"shared" = "none"\n' "CI plans faster"
@@ -176,7 +176,7 @@ expect_no  "the none note is skipped" "$S/n.md" 'CI plans faster'
   && ok "groups in order: Breaking, Added, Fixed" || bad "group order: $(grep '^### ' "$S/n.md" | paste -sd'|' -)"
 grep -n '^## \[' CHANGELOG.md | head -2 > "$S/heads"; expect_out "the new section sits above [0.1.2]" "$S/heads" '^[0-9]+:## \[26\.10\.0\].*$'
 git diff HEAD^ HEAD -- Cargo.lock > "$S/lock.diff"
-expect_out "Cargo.lock: signal-desktop moved" "$S/lock.diff" '^\+version = "26\.10\.0"'
+expect_out "Cargo.lock: studio-desktop moved" "$S/lock.diff" '^\+version = "26\.10\.0"'
 eq "Cargo.lock: shared (own version) did not move" "$(grep -A1 'name = "shared"' Cargo.lock | tail -1)" 'version = "0.1.0"'
 expect_ok "release-pr" R pr
 expect_out "PR: into main" "$S/prs/1.meta" '^base=main$'
@@ -216,8 +216,8 @@ expect_fail "guard: not the next version (26.10.3)" guard "$(git rev-parse HEAD)
 grep -q 'is not the next version 26.10.0' "$S/last.out" && ok "  ...naming the next version" || bad "  ...message"
 git switch -q --detach "$REL"; git switch -q -c t/subj; git commit -q --amend -m "chore: release"
 expect_fail "guard: wrong subject" guard "$(git rev-parse HEAD)"
-git switch -q --detach "$REL"; git switch -q -c t/pin; sed -i 's/^version.workspace = true/version = "0.0.2"/' apps/signal/desktop/Cargo.toml; git commit -qa --amend --no-edit
-expect_fail "guard: signal crate pinned off the workspace version" guard "$(git rev-parse HEAD)"
+git switch -q --detach "$REL"; git switch -q -c t/pin; sed -i 's/^version.workspace = true/version = "0.0.2"/' apps/studio/desktop/Cargo.toml; git commit -qa --amend --no-edit
+expect_fail "guard: studio crate pinned off the workspace version" guard "$(git rev-parse HEAD)"
 git switch -q --detach "$REL"
 expect_fail "guard: unreachable origin fails, never passes" env BASE_REF=main HEAD_REF=release/pending HEAD_SHA="$REL" GIT_DIR="$S/wc/.git" bash -c "git remote set-url origin $S/nowhere.git; bash scripts/release.sh guard; rc=\$?; git remote set-url origin $S/origin.git; exit \$rc"
 land "docs: a late PR (#74)" docs/late.md
@@ -246,12 +246,12 @@ expect_ok "tag-guard with GH_TOKEN checks Build + test" env GITHUB_REF=refs/tags
 SHIM_CHECK="completed failure" expect_fail "tag-guard with GH_TOKEN: red Build + test" env GITHUB_REF=refs/tags/v26.10.0 GH_TOKEN=x bash scripts/release.sh tag-guard
 expect_fail "tag-guard: a branch ref" env GITHUB_REF=refs/heads/main bash scripts/release.sh tag-guard
 export GITHUB_OUTPUT="$S/gho"; : > "$GITHUB_OUTPUT"
-for a in signal session; do expect_ok "ios-resolve $a v26.10.0" R ios-resolve "$a" v26.10.0; done
+for a in studio; do expect_ok "ios-resolve $a v26.10.0" R ios-resolve "$a" v26.10.0; done
 expect_out "  marketing version output" "$GITHUB_OUTPUT" '^version=26\.10\.0$'
-for t in v26.10 26.10.0 v26.10.0-rc.1 V26.10.0 signal-v26.10.0; do expect_fail "ios-resolve refuses '$t'" R ios-resolve signal "$t"; done
+for t in v26.10 26.10.0 v26.10.0-rc.1 V26.10.0 studio-v26.10.0; do expect_fail "ios-resolve refuses '$t'" R ios-resolve studio "$t"; done
 # a tag whose versions and changelog are right, on a commit no release line has
 git switch -q -c t/stray v26.10.0; sed -i 's/26\.10\.0/26.10.9/g' Cargo.toml CHANGELOG.md; git commit -qam "chore(release): v26.10.9"; git tag v26.10.9
-expect_fail "ios-resolve: a commit on neither main nor release/v*" R ios-resolve signal v26.10.9
+expect_fail "ios-resolve: a commit on neither main nor release/v*" R ios-resolve studio v26.10.9
 grep -q 'is in neither origin/main nor an origin/release/v\* line' "$S/last.out" && ok "  ...for that reason" || bad "  ...refused for another reason"
 expect_fail "tag-guard: the same stray tag" env GITHUB_REF=refs/tags/v26.10.9 bash scripts/release.sh tag-guard
 git tag -d v26.10.9 >/dev/null; git switch -q --detach v26.10.0; unset GITHUB_OUTPUT
@@ -260,16 +260,16 @@ echo "=== publish + TestFlight record"
 expect_ok "publish v26.10.0" env GITHUB_REF=refs/tags/v26.10.0 bash scripts/release.sh publish
 expect_out "release notes: the changelog section" "$S/releases/v26.10.0.body" 'Added offline drafts'
 expect_out "release notes: on main" "$S/releases/v26.10.0.body" 'on main'
-expect_out "release notes: TestFlight block" "$S/releases/v26.10.0.body" '^- Signal .*pending'
+expect_out "release notes: TestFlight block" "$S/releases/v26.10.0.body" '^- Studio .*pending'
 export RECORD_SETTLE=0
-expect_ok "ios-record signal" R ios-record signal v26.10.0 26.10.0 1760000001 https://github.com/x/y/actions/runs/1
-expect_ok "ios-record session" R ios-record session v26.10.0 26.10.0 1760000002
-expect_out "notes: Signal's build" "$S/releases/v26.10.0.body" '^- Signal .*build 1760000001, '
-expect_out "notes: Session's build" "$S/releases/v26.10.0.body" '^- Session .*build 1760000002, '
-expect_fail "ios-record: marketing version != tag" R ios-record signal v26.10.0 26.10.1 1
+expect_ok "ios-record studio" R ios-record studio v26.10.0 26.10.0 1760000001 https://github.com/x/y/actions/runs/1
+expect_ok "ios-record studio again" R ios-record studio v26.10.0 26.10.0 1760000002
+expect_out "notes: Studio's latest build" "$S/releases/v26.10.0.body" '^- Studio .*build 1760000002, '
+expect_out "  ...naming the earlier one" "$S/releases/v26.10.0.body" '^- Studio .*earlier builds: 1760000001'
+expect_fail "ios-record: marketing version != tag" R ios-record studio v26.10.0 26.10.1 1
 
 echo "=== the next release in the same month: 26.10.1, then 26.10.2"
-land "fix(signal): tuner jitter (#81)" crates/shared/d.rs fixed-tuner '"signal-desktop" = "patch"\n' "Fixed tuner needle jitter (signal)"
+land "fix(signal): tuner jitter (#81)" crates/shared/d.rs fixed-tuner '"studio-desktop" = "patch"\n' "Fixed tuner needle jitter (signal)"
 git switch -q --detach origin/main
 expect_ok "prepare" R prepare; eq "version" "$(R version)" 26.10.1
 git push -q origin release/pending; expect_ok "guard" guard "$(git rev-parse HEAD)"
@@ -279,7 +279,7 @@ eq "next after v26.10.0, v26.10.1 in October" "$(R next 2>/dev/null)" 26.10.2
 
 echo "=== hotfix on release/v26.10.1, forward-port into main"
 land "feat(session): half-done mixer (#83)" crates/shared/e.rs added-mixer '"session-desktop" = "minor"\n' "Added the new mixer (session)"
-land "fix(signal): crash on preset load (#84)" crates/shared/f.rs fixed-crash '"signal-desktop" = "patch"\n' "Fixed a crash when loading a preset (signal)"
+land "fix(signal): crash on preset load (#84)" crates/shared/f.rs fixed-crash '"studio-desktop" = "patch"\n' "Fixed a crash when loading a preset (signal)"
 FIX=$(git rev-parse origin/main)
 land "feat(session): more unshippable work (#85)" crates/shared/g.rs added-more '"session-desktop" = "minor"\n' "Added more (session)"
 git switch -q --detach origin/main

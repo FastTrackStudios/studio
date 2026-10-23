@@ -26,10 +26,10 @@ from typing import NoReturn
 
 # Leaf entry points of the browser builds checks.yml's `wasm` job checks:
 # the three web bundles deploy.yml ships (`just web-wasm-check`) and the
-# Signal browser remote (signal-desktop's web build). rail's selection
+# Signal browser remote (studio-desktop's web build). rail's selection
 # already includes reverse dependencies, so membership of these is enough
 # to know the wasm job has work.
-WASM = {"session-daw-web", "session-web", "signal-web", "signal-desktop"}
+WASM = {"session-daw-web", "session-web", "signal-web", "studio-desktop"}
 
 # Repository work declared in .config/rail.toml whose change means "run
 # the full set".
