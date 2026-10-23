@@ -81,11 +81,11 @@ delete a tag; a bad release is superseded by the next.
 
 | Event | Workflows | Runner |
 |---|---|---|
-| PR into `main` | `checks` (`Build + test`: the rail-selected set + `cargo rail change check`); the `release` guard only on release PRs | hosted (plan, lint, wasm, the aggregator, the guard); Mac Pro `studio-tests` (the nextest build, required) |
+| PR into `main` | `checks` (`Build + test`: the rail-selected set + `cargo rail change check`); the `release` guard only on release PRs | WarpBuild: plan, lint, wasm, the aggregator (the guard: hosted); `tests` (the nextest build, required) on a 16x snapshot runner, skipped for a tree a local `just ci` passed (`ci/local`) |
 | release PR `release/pending` → `main` | `release` guard; `checks` runs the same guard from the base commit and **skips** the heavy jobs if it passes, fails `Build + test` if not | hosted |
 | PR into `release/**` (hotfix) | `checks` (the full set), `release` guard | as above |
-| push to `main` / `release/**` | `checks` full set (+ rail evidence on `main`) | hosted + Mac Pro `studio-tests` |
-| nightly | `checks` full set on `main` | hosted + Mac Pro `studio-tests` |
+| push to `main` / `release/**` | `checks` full set (+ rail evidence on `main`) | WarpBuild; `main` saves the tests snapshot |
+| nightly | `checks` full set on `main` | WarpBuild |
 | push of tag `vYY.M.MICRO` (or `workflow_dispatch` with the tag as ref) | `deploy` (session-web, signal-web), `studio-ios`, `release` publish | `studio-deploy` (LAN registry), `airlock`, hosted |
 
 The workflow files are generated from `xtask/workflows` (one Rust module per
@@ -93,13 +93,15 @@ workflow, the reasons as comments there): edit the Rust, run `just
 workflows`, commit both; the lint job fails on drift (`just
 workflows-check`) and runs actionlint.
 
-Hosted jobs run without nix: the pinned rustc (dtolnay/rust-toolchain),
-apt headers (cached), and pinned release binaries for just, cargo-rail,
-tracey, tailwindcss and actionlint. They restore one Actions cache per
-build kind (`lint`, `wasm`) that only `main` saves, so PRs never evict it
-from the repo's 10 GB budget. Only the nextest build stays on the Mac Pro
-(NixOS, the ci dev shell), for its warm target dir; it builds just the
-packages a PR affects (`-p …`), the whole workspace on full runs.
+The `checks` jobs run on WarpBuild without nix: the pinned rustc
+(dtolnay/rust-toolchain), apt headers (cached), and pinned release binaries
+for just, cargo-rail, tracey, tailwindcss and actionlint. Lint and wasm
+restore one rust-cache per build kind (WarpBuild's cache) that only `main`
+saves. The tests job boots from a WarpBuild snapshot that `main`'s full runs
+save (warm target dir, pruned to what that build used); it builds just the
+packages a PR affects (`-p …`), the whole workspace on full runs, and is
+skipped for a PR whose exact tree a full local `just ci` passed (the
+`ci/local` status `just push` posts).
 `cache-devshell` still seeds fasttrackstudio.cachix.org, for developers'
 `nix develop`; no CI job depends on it. The REAPER integration suites are not in
 CI (they need a licensed REAPER): run `just reaper-test` and `just reaper

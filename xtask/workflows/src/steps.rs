@@ -136,10 +136,8 @@ const APT_CACHE_VERSION: &str = "1";
 #[derive(Clone, Copy)]
 pub enum Toolchain {
     /// A hosted job: the tools are on PATH (installed by [`hosted_setup`]).
+    /// (The self-hosted NixOS variant went with the Mac Pro tests job.)
     Hosted,
-    /// A self-hosted NixOS job: every command runs under `${NIX_DEV}`
-    /// (`nix develop --accept-flake-config .#ci -c`); the job sets it.
-    Nix,
 }
 
 impl Toolchain {
@@ -147,15 +145,9 @@ impl Toolchain {
     pub fn cmd(self, cmd: &str) -> String {
         match self {
             Self::Hosted => cmd.to_owned(),
-            Self::Nix => format!("${{NIX_DEV}} {cmd}"),
         }
     }
 }
-
-/// `nix develop` into the ci shell; `--accept-flake-config` picks up the
-/// fasttrackstudio.cachix.org substituter from flake.nix nixConfig. Only the
-/// self-hosted NixOS jobs use it.
-pub const NIX_DEV: &str = "nix develop --accept-flake-config .#ci -c";
 
 /// The event's own ref: a PR's merge ref, the pushed commit, main for the
 /// nightly, a dispatched branch.
@@ -392,6 +384,9 @@ pub fn rust_cache(shared_key: &str) -> [Step; 2] {
         )
         .with("shared-key", shared_key)
         .with("save-if", "${{ github.ref == 'refs/heads/main' }}")
+        // WarpBuild's cache (the jobs run there): unlimited, 7 days from
+        // last use, instead of GitHub's 10 GB.
+        .with("cache-provider", "warpbuild")
         .with("cache-on-failure", true)
         .with("cache-bin", false),
         Step::uses(

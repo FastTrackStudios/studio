@@ -26,17 +26,21 @@ jobs:
   plan:
     name: Plan
     if: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
-    runs-on: ubuntu-latest
+    runs-on: warp-ubuntu-latest-x64-2x
     timeout-minutes: 20
+    permissions:
+      contents: read
+      statuses: read
     outputs:
       full: ${{ steps.filter.outputs.full }}
       cargo: ${{ steps.filter.outputs.cargo }}
-      tests: ${{ steps.filter.outputs.tests }}
+      tests: ${{ steps.local.outputs.ok == 'true' && 'false' || steps.filter.outputs.tests }}
       test_filter: ${{ steps.filter.outputs.test_filter }}
       test_packages: ${{ steps.filter.outputs.test_packages }}
       wasm: ${{ steps.filter.outputs.wasm }}
       skip: ${{ steps.filter.outputs.skip }}
       record: ${{ steps.filter.outputs.record }}
+      local: ${{ steps.local.outputs.ok }}
     steps:
     - uses: actions/checkout@v4
       with:
@@ -151,11 +155,48 @@ jobs:
         [ -n "${gates}" ] || run_all "plan parse produced no gates"
         echo "${gates}" >> "$GITHUB_OUTPUT"
         echo "${gates}"
+    - name: A local just ci for this tree?
+      id: local
+      if: ${{ github.event_name == 'pull_request' && steps.filter.outputs.tests == 'true' }}
+      env:
+        GH_TOKEN: ${{ github.token }}
+        REPO: ${{ github.repository }}
+        HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        BASE_SHA: ${{ github.event.pull_request.base.sha }}
+      run: |
+        set -u
+        ok=false
+        st=""
+        for _ in 1 2 3 4 5; do
+          st=$(curl -fsSL -H "Authorization: Bearer ${GH_TOKEN}" -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${REPO}/commits/${HEAD_SHA}/statuses?per_page=100" \
+            | jq -r '[.[] | select(.context == "ci/local")][0] // empty | "\(.state) \(.description)"' 2>/dev/null || true)
+          [ -n "$st" ] && break
+          sleep 10
+        done
+        state=${st%% *}
+        claimed=$(printf '%s' "$st" | grep -oE 'tree [0-9a-f]{40}' | cut -d' ' -f2 || true)
+        tree=$(git rev-parse "${HEAD_SHA}^{tree}")
+        if [ -z "$st" ]; then
+          echo "no ci/local status on ${HEAD_SHA}: the tests run here"
+        elif [ "$state" != success ]; then
+          echo "ci/local is ${state}: the tests run here"
+        elif [ "$claimed" != "$tree" ]; then
+          echo "ci/local passed tree ${claimed:-?}, this head is ${tree}: the tests run here"
+        elif ! git merge-base --is-ancestor "${BASE_SHA}" "${HEAD_SHA}"; then
+          echo "the head does not contain the base ${BASE_SHA}: the merge is a different tree, the tests run here"
+        else
+          ok=true
+          echo "ci/local passed tree ${tree} (${st#* }): the tests job is skipped"
+          { echo "### Tests: trusted a local run"
+            echo "\`just ci\` passed on this exact tree (\`${tree}\`), and the head contains the base: the tests job is skipped. Lint and wasm still run."; } >> "$GITHUB_STEP_SUMMARY"
+        fi
+        echo "ok=${ok}" >> "$GITHUB_OUTPUT"
   lint:
     name: Lint (fmt + manifests + gates + check + clippy)
     needs: plan
     if: ${{ needs.plan.outputs.skip != 'true' }}
-    runs-on: ubuntu-latest
+    runs-on: warp-ubuntu-latest-x64-8x
     timeout-minutes: 90
     env:
       CARGO_INCREMENTAL: '0'
@@ -228,6 +269,7 @@ jobs:
       with:
         shared-key: lint
         save-if: ${{ github.ref == 'refs/heads/main' }}
+        cache-provider: warpbuild
         cache-on-failure: true
         cache-bin: false
     - name: Prune unused units before the cache is saved
@@ -323,7 +365,7 @@ jobs:
     name: wasm checks
     needs: plan
     if: ${{ needs.plan.outputs.skip != 'true' && needs.plan.outputs.wasm == 'true' }}
-    runs-on: ubuntu-latest
+    runs-on: warp-ubuntu-latest-x64-8x
     timeout-minutes: 75
     env:
       CARGO_INCREMENTAL: '0'
@@ -369,6 +411,7 @@ jobs:
       with:
         shared-key: wasm
         save-if: ${{ github.ref == 'refs/heads/main' }}
+        cache-provider: warpbuild
         cache-on-failure: true
         cache-bin: false
     - name: Prune unused units before the cache is saved
@@ -401,17 +444,47 @@ jobs:
     name: tests
     needs: plan
     if: ${{ needs.plan.outputs.skip != 'true' && needs.plan.outputs.tests == 'true' }}
-    runs-on:
-    - self-hosted
-    - studio-tests
-    timeout-minutes: 90
+    runs-on: warp-ubuntu-latest-x64-16x;snapshot.key=studio-tests
+    timeout-minutes: 120
     environment: ${{ github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && 'ci-assets' || '' }}
     env:
-      NIX_DEV: nix develop --accept-flake-config .#ci -c
       TEST_FEATURES: session-desktop/cli,studio-desktop/cli,web-audio-worklet/guitar,web-audio-worklet/keys
       CARGO_INCREMENTAL: '0'
     steps:
     - uses: actions/checkout@v4
+    - name: Rust 1.94.0
+      uses: dtolnay/rust-toolchain@1.94.0
+    - name: Native headers (apt, cached)
+      uses: awalsh128/cache-apt-pkgs-action@v1.6.3
+      with:
+        packages: pkg-config libssl-dev libfontconfig1-dev libfreetype-dev libclang-dev clang llvm mold libasound2-dev libudev-dev libjack-jackd2-dev libpipewire-0.3-dev libspa-0.2-dev libglib2.0-dev libgtk-3-dev libharfbuzz-dev libsoup-3.0-dev libwebkit2gtk-4.1-dev libxdo-dev libx11-dev libxcursor-dev libxrandr-dev libxi-dev libxcb1-dev libxkbcommon-dev libwayland-dev libgl-dev libvulkan-dev mesa-vulkan-drivers
+        version: '1'
+    - name: just
+      uses: taiki-e/install-action@v2
+      with:
+        tool: just@1.48.1
+    - name: cargo-nextest
+      uses: taiki-e/install-action@v2
+      with:
+        tool: cargo-nextest@0.9.132
+    - name: cargo-rail 0.32.0
+      run: |
+        set -euo pipefail
+        mkdir -p "$HOME/.local/bin"
+        echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+        curl -fsSL --retry 3 -o "$RUNNER_TEMP/cargo-rail.zip" "https://github.com/loadingalias/cargo-rail/releases/download/v0.32.0/cargo-rail-x86_64-unknown-linux-gnu.zip"
+        echo "5fcda1a62d36d51834ad49a5ef2ebc82777fd9d134d3d409f7021ce1a495dee4  $RUNNER_TEMP/cargo-rail.zip" | sha256sum -c -
+        unzip -q -o "$RUNNER_TEMP/cargo-rail.zip" -d "$HOME/.local/share"
+        echo "$HOME/.local/share/cargo-rail" >> "$GITHUB_PATH"
+        "$HOME/.local/share/cargo-rail/cargo-rail" --version
+    - name: tailwindcss 4.2.2
+      run: |
+        set -euo pipefail
+        mkdir -p "$HOME/.local/bin"
+        echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+        curl -fsSL --retry 3 -o "$RUNNER_TEMP/tailwindcss" "https://github.com/tailwindlabs/tailwindcss/releases/download/v4.2.2/tailwindcss-linux-x64"
+        echo "4ab84f2b496c402d3ec4fd25e0e5559fe1184d886dadae8fb4438344ec044c22  $RUNNER_TEMP/tailwindcss" | sha256sum -c -
+        install -m755 "$RUNNER_TEMP/tailwindcss" "$HOME/.local/bin/tailwindcss"
     - name: CI cargo config
       run: |
         mkdir -p ../.cargo
@@ -455,26 +528,26 @@ jobs:
           export GIT_CONFIG_COUNT=1
           export GIT_CONFIG_KEY_0="url.https://x-access-token:${ASSETS_TOKEN}@github.com/.insteadOf"
           export GIT_CONFIG_VALUE_0="https://github.com/"
-          ${NIX_DEV} just assets
+          just assets
         elif [ -d "$store/studio-assets/.git" ] && [ -d "$store/rig-models/.git" ] && [ -d "$store/mic-models/.git" ]; then
           echo "no asset credential on this run (only main's full runs fetch): linking the clones this runner holds"
-          ASSETS_OFFLINE=1 ${NIX_DEV} just assets
+          ASSETS_OFFLINE=1 just assets
         else
           echo "::warning::no asset clones on this runner yet and no credential to fetch them (a main run fetches them): tests that need assets will fail"
         fi
     - name: Web tailwind sheet
       if: ${{ !cancelled() }}
-      run: ${NIX_DEV} just web-tailwind
+      run: just web-tailwind
     - name: Plugin faces
       if: ${{ !cancelled() }}
-      run: ${NIX_DEV} just faces
+      run: just faces
     - name: Record rail evidence
       if: ${{ needs.plan.outputs.record == 'true' }}
       env:
         EVIDENCE_DIR: ${{ runner.temp }}/rail-evidence
       run: |
         mkdir -p "${EVIDENCE_DIR}"
-        ${NIX_DEV} cargo rail plan evidence --work cargo.test \
+        cargo rail plan evidence --work cargo.test \
           --output "${EVIDENCE_DIR}/cargo.test.json" \
           -- test --workspace --no-run --features "${TEST_FEATURES}" \
           || echo "::warning::rail evidence not recorded; later plans against this commit widen"
@@ -484,9 +557,9 @@ jobs:
         TEST_FILTER: ${{ needs.plan.outputs.test_filter }}
         TEST_PACKAGES: ${{ needs.plan.outputs.test_packages }}
         TEST_LOG: ${{ runner.temp }}/nextest-ci.log
-        RUN_LABEL: tests (self-hosted)
+        RUN_LABEL: tests
       run: |
-        ${NIX_DEV} bash -uo pipefail -s <<'EOF'
+        bash -uo pipefail -s <<'EOF'
         sel=(--workspace)
         feats="${TEST_FEATURES}"
         if [ -n "${TEST_PACKAGES:-}" ]; then
@@ -553,161 +626,6 @@ jobs:
         path: ${{ runner.temp }}/nextest-ci.log
         if-no-files-found: ignore
         retention-days: 7
-  tests-warpbuild:
-    name: tests (warpbuild trial)
-    needs: plan
-    if: ${{ vars.WARPBUILD_TRIAL == 'true' && needs.plan.outputs.skip != 'true' && needs.plan.outputs.tests == 'true' }}
-    runs-on: warp-ubuntu-latest-x64-16x;snapshot.key=studio-tests
-    timeout-minutes: 120
-    continue-on-error: true
-    environment: ${{ github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && 'ci-assets' || '' }}
-    env:
-      CARGO_INCREMENTAL: '0'
-      TEST_FEATURES: session-desktop/cli,studio-desktop/cli,web-audio-worklet/guitar,web-audio-worklet/keys
-    steps:
-    - uses: actions/checkout@v4
-    - name: Rust 1.94.0
-      uses: dtolnay/rust-toolchain@1.94.0
-    - name: Native headers (apt, cached)
-      uses: awalsh128/cache-apt-pkgs-action@v1.6.3
-      with:
-        packages: pkg-config libssl-dev libfontconfig1-dev libfreetype-dev libclang-dev clang llvm mold libasound2-dev libudev-dev libjack-jackd2-dev libpipewire-0.3-dev libspa-0.2-dev libglib2.0-dev libgtk-3-dev libharfbuzz-dev libsoup-3.0-dev libwebkit2gtk-4.1-dev libxdo-dev libx11-dev libxcursor-dev libxrandr-dev libxi-dev libxcb1-dev libxkbcommon-dev libwayland-dev libgl-dev libvulkan-dev mesa-vulkan-drivers
-        version: '1'
-    - name: just
-      uses: taiki-e/install-action@v2
-      with:
-        tool: just@1.48.1
-    - name: cargo-nextest
-      uses: taiki-e/install-action@v2
-      with:
-        tool: cargo-nextest@0.9.132
-    - name: tailwindcss 4.2.2
-      run: |
-        set -euo pipefail
-        mkdir -p "$HOME/.local/bin"
-        echo "$HOME/.local/bin" >> "$GITHUB_PATH"
-        curl -fsSL --retry 3 -o "$RUNNER_TEMP/tailwindcss" "https://github.com/tailwindlabs/tailwindcss/releases/download/v4.2.2/tailwindcss-linux-x64"
-        echo "4ab84f2b496c402d3ec4fd25e0e5559fe1184d886dadae8fb4438344ec044c22  $RUNNER_TEMP/tailwindcss" | sha256sum -c -
-        install -m755 "$RUNNER_TEMP/tailwindcss" "$HOME/.local/bin/tailwindcss"
-    - name: CI cargo config
-      run: |
-        mkdir -p ../.cargo
-        cp .cargo/ci-config.toml ../.cargo/config.toml
-    - name: Persistent target dir
-      run: |
-        dir="${CI_CACHE_DIR:-${CACHE_DIRECTORY:-$HOME/.cache}}/cargo-target"
-        mkdir -p "$dir"
-        echo "CARGO_TARGET_DIR=$dir" >> "$GITHUB_ENV"
-        free_gb() { df -Pk "$dir" | awk 'NR==2 { print int($4 / 1048576) }'; }
-        # The jobs build with CARGO_INCREMENTAL=0: any incremental cache here is left
-        # over from before, and only takes disk.
-        rm -rf "$dir"/*/incremental "$dir"/*/*/incremental
-        if [ "$(free_gb)" -lt 100 ]; then
-          echo "::warning::still $(free_gb) GB free: clearing the target dir (a cold build follows)"
-          rm -rf "$dir" && mkdir -p "$dir"
-        fi
-        echo "target dir: $dir ($(du -sh "$dir" 2>/dev/null | cut -f1)), $(free_gb) GB free"
-    - name: Mark the target dir's fingerprints
-      uses: ./.github/actions/prune-cargo-target/mark
-      with:
-        target-dir: ${{ env.CARGO_TARGET_DIR }}
-    - name: Asset repo token (main runs only)
-      id: assets-token
-      if: ${{ github.ref == 'refs/heads/main' && github.event_name != 'pull_request' }}
-      uses: actions/create-github-app-token@v2
-      with:
-        app-id: ${{ vars.FORGE_APP_ID }}
-        private-key: ${{ secrets.FORGE_APP_PRIVATE_KEY }}
-        owner: FastTrackStudios
-        repositories: studio-assets,rig-models,mic-models
-        permission-contents: read
-    - name: Assets (studio-assets, rig-models, mic-models)
-      env:
-        ASSETS_TOKEN: ${{ steps.assets-token.outputs.token }}
-      run: |
-        store="${CI_CACHE_DIR:-${CACHE_DIRECTORY:-$HOME/.cache}}/assets"
-        mkdir -p "$store"
-        [ -L .assets ] || [ -e .assets ] || ln -s "$store" .assets
-        if [ -n "${ASSETS_TOKEN}" ]; then
-          export GIT_CONFIG_COUNT=1
-          export GIT_CONFIG_KEY_0="url.https://x-access-token:${ASSETS_TOKEN}@github.com/.insteadOf"
-          export GIT_CONFIG_VALUE_0="https://github.com/"
-          just assets
-        elif [ -d "$store/studio-assets/.git" ] && [ -d "$store/rig-models/.git" ] && [ -d "$store/mic-models/.git" ]; then
-          echo "no asset credential on this run (only main's full runs fetch): linking the clones this runner holds"
-          ASSETS_OFFLINE=1 just assets
-        else
-          echo "::warning::no asset clones on this runner yet and no credential to fetch them (a main run fetches them): tests that need assets will fail"
-        fi
-    - name: Web tailwind sheet
-      if: ${{ !cancelled() }}
-      run: just web-tailwind
-    - name: Plugin faces
-      if: ${{ !cancelled() }}
-      run: just faces
-    - name: cargo nextest
-      id: nextest
-      env:
-        TEST_FILTER: ${{ needs.plan.outputs.test_filter }}
-        TEST_PACKAGES: ${{ needs.plan.outputs.test_packages }}
-        TEST_LOG: ${{ runner.temp }}/nextest-ci.log
-        RUN_LABEL: tests (warpbuild trial)
-      run: |
-        bash -uo pipefail -s <<'EOF'
-        sel=(--workspace)
-        feats="${TEST_FEATURES}"
-        if [ -n "${TEST_PACKAGES:-}" ]; then
-          sel=()
-          feats=""
-          for p in ${TEST_PACKAGES}; do sel+=(-p "$p"); done
-          IFS=, read -ra all <<< "${TEST_FEATURES}"
-          for f in "${all[@]}"; do
-            case " ${TEST_PACKAGES} " in *" ${f%%/*} "*) feats="${feats:+${feats},}${f}" ;; esac
-          done
-        fi
-        feat=()
-        [ -n "${feats}" ] && feat=(--features "${feats}")
-        filter=()
-        [ -n "${TEST_FILTER}" ] && filter=(-E "${TEST_FILTER}" --no-tests=pass)
-        echo "selection: ${sel[*]} ${feat[*]}"
-        t0=$(date +%s)
-        cargo nextest run "${sel[@]}" "${feat[@]}" --no-run >"${TEST_LOG}" 2>&1
-        rc=$?
-        t1=$(date +%s)
-        # A full build that succeeded read every unit the workspace uses: the target
-        # dir may be pruned to that set (target_sweep), whatever the tests say.
-        if [ "$rc" = 0 ] && [ -z "${TEST_PACKAGES:-}" ]; then
-          echo "prunable=true" >> "${GITHUB_OUTPUT}"
-        fi
-        if [ "$rc" = 0 ]; then
-          cargo nextest run "${sel[@]}" --no-fail-fast "${feat[@]}" "${filter[@]}" >>"${TEST_LOG}" 2>&1
-          rc=$?
-        fi
-        t2=$(date +%s)
-        { echo "### ${RUN_LABEL}: timing"
-          echo "| phase | seconds |"
-          echo "|---|---|"
-          echo "| build (nextest --no-run) | $((t1 - t0)) |"
-          echo "| tests | $((t2 - t1)) |"
-          echo
-          echo "selection: \`${sel[*]} ${feat[*]}\`; exit ${rc}"; } >> "${GITHUB_STEP_SUMMARY}"
-        { grep -E '^ *(FAIL|TRY [0-9]+ (FAIL|TMT)|SIGSEGV|SIGABRT|LEAK|TIMEOUT)|Summary \[|tests were not run|^error' "${TEST_LOG}" | head -n 200
-          echo "── tail of the nextest log (full log: the nextest-ci artifact) ──"; tail -n 60 "${TEST_LOG}"; } || true
-        exit "$rc"
-        EOF
-    - name: Prune what the build did not use
-      if: ${{ !cancelled() && steps.nextest.outputs.prunable == 'true' }}
-      uses: ./.github/actions/prune-cargo-target/sweep
-      with:
-        target-dir: ${{ env.CARGO_TARGET_DIR }}
-    - name: Test log
-      if: ${{ always() }}
-      uses: actions/upload-artifact@v4
-      with:
-        name: nextest-warpbuild
-        path: ${{ runner.temp }}/nextest-ci.log
-        if-no-files-found: ignore
-        retention-days: 7
     - name: Clean up before the snapshot
       if: ${{ !cancelled() && github.ref == 'refs/heads/main' && github.event_name != 'pull_request' }}
       run: |
@@ -729,7 +647,7 @@ jobs:
     - wasm
     - tests
     if: ${{ always() }}
-    runs-on: ubuntu-latest
+    runs-on: warp-ubuntu-latest-x64-2x
     timeout-minutes: 5
     steps:
     - name: Every required job succeeded
@@ -748,7 +666,7 @@ jobs:
         fail=0
         bad() { echo "::error::$1"; fail=1; }
         if [ "$FORK" = "true" ]; then
-          bad "fork PR: not run (the tests job is self-hosted); a maintainer must re-push it from a branch of this repo"
+          bad "fork PR: not run (CI runs on the org's paid runners); a maintainer must re-push it from a branch of this repo"
           exit 1
         fi
         [ "$PLAN" = success ] || bad "plan: $PLAN"

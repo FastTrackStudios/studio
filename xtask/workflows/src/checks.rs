@@ -33,40 +33,33 @@
 //!                       branch changed against main.
 //! ```
 //!
-//! RUNNERS: light and parallel work on GitHub-HOSTED runners (public repo:
-//! free, ~20 concurrent Linux jobs org-wide); only the heavy test build on
-//! the self-hosted VM, whose warm target dir it needs:
+//! RUNNERS: every job on WarpBuild (2026-10), none self-hosted:
 //!
 //! ```text
-//!   ubuntu-latest  plan (cargo metadata + rail), lint (fmt, manifests,
-//!                  the generated workflows, Boundaries, flow gate,
-//!                  tailwind, `cargo check --workspace`, clippy: check
-//!                  mode, no codegen), wasm (the wasm32 checks), and the
-//!                  `Build + test` aggregator
-//!   studio-tests   (self-hosted, NixOS) the nextest build + rail evidence:
-//!                  ~1460 crates and 814 test binaries at full codegen, 20
-//!                  min on the warm Mac Pro; cold on a 4-vCPU hosted runner
-//!                  it would not fit the disk or the 10 GB cache budget.
+//!   warp 2x    plan (cargo metadata + rail, the local-run check) and the
+//!              `Build + test` aggregator
+//!   warp 8x    lint (fmt, manifests, the generated workflows, Boundaries,
+//!              flow gate, tailwind, `cargo check --workspace`, clippy:
+//!              check mode, no codegen) and wasm (the wasm32 checks), each
+//!              with rust-cache on WarpBuild's cache
+//!   warp 16x   tests: the nextest build + rail evidence, ~1460 crates and
+//!              ~800 test binaries at full codegen, on a SNAPSHOT runner
+//!              whose saved VM holds the warm target dir
 //! ```
 //!
 //! The three build kinds share NO artifacts except build scripts and proc
 //! macros (check-mode units are not the test build's units, and wasm32
 //! units are another triple), so they run as separate jobs side by side.
 //!
-//! HOSTED jobs run WITHOUT nix (see [`crate::steps`]): free the image's disk,
+//! The jobs run WITHOUT nix (see [`crate::steps`]): free the image's disk,
 //! install the pinned rustc with dtolnay/rust-toolchain, the native headers
-//! from apt (cached), the pinned tools as release binaries, then
-//! Swatinem/rust-cache with ONE shared key per build kind ([`rust_cache`]).
-//! Debuginfo is line-tables-only (.cargo/ci-config.toml, as [profile.dev]
-//! already sets) and incremental is off.
+//! from apt (cached), the pinned tools as release binaries. Debuginfo is
+//! line-tables-only (.cargo/ci-config.toml, as [profile.dev] already sets)
+//! and incremental is off. Everything the workspace builds is in this repo,
+//! so there are no sibling checkouts.
 //!
-//! The SELF-HOSTED tests job has nix and the toolchain on the runner
-//! already, so there is no installer step and no rust-cache action —
-//! `CARGO_TARGET_DIR` points at the runner instance's own cache dir
-//! instead, which persists across runs (and across restarts/reboots). Its
-//! steps run under `nix develop .#ci -c` ([`NIX_DEV`]). Everything the
-//! workspace builds is in this repo (daw, processor, signal and patchbay
-//! were folded in), so there are no sibling checkouts.
+//! LOCAL RUNS COUNT: a PR whose exact tree `just ci` already passed (a
+//! `ci/local` commit status, see [`LOCAL_RUN`]) skips the tests job.
 //!
 //! CHANGE SELECTION: the `plan` job asks `cargo rail plan` (0.32) which
 //! workspace packages a change affects, through cargo's resolved
@@ -81,10 +74,10 @@
 //! scripts or nextest-config changes (.config/rail.toml [plan.work.*]),
 //! workspace scope, or any rail failure FAIL OPEN to the full set.
 
-use crate::model::{Job, RunsOn, Step, UBUNTU, Workflow, yaml};
+use crate::model::{Job, RunsOn, Step, Workflow, yaml};
 use crate::steps::{
-    NIX_DEV, RUST, Toolchain, Tools, checkout, checkout_full, ci_cargo_config, faces, footprint,
-    hosted_setup, rust_cache, tailwind, target_mark, target_sweep,
+    RUST, Toolchain, Tools, checkout, checkout_full, faces, footprint, hosted_setup, rust_cache,
+    tailwind, target_mark, target_sweep,
 };
 use anyhow::Result;
 
@@ -93,6 +86,14 @@ use anyhow::Result;
 /// app crate has no lib to dev-depend on).
 const TEST_FEATURES: &str =
     "session-desktop/cli,studio-desktop/cli,web-audio-worklet/guitar,web-audio-worklet/keys";
+
+/// Every `checks` job runs on WarpBuild (2026-10: the trial's cold full
+/// suite passed in ~25 min on a 16x; the self-hosted Mac Pro VM was one
+/// runner for every PR, so it was the queue, and its persistent target
+/// filled the shared disk). Small jobs on the smallest size, the builds on
+/// bigger ones; one constant each, so resizing is a one-line change.
+const WARP_SMALL: RunsOn = RunsOn::Label("warp-ubuntu-latest-x64-2x");
+const WARP_CHECK: RunsOn = RunsOn::Label("warp-ubuntu-latest-x64-8x");
 
 pub fn workflow() -> Result<Workflow> {
     Ok(Workflow::new(
@@ -127,18 +128,17 @@ schedule:
          github.event_name == 'push' && github.sha || 'run' }}",
         true,
     )
-    .job("plan", plan())
+    .job("plan", plan()?)
     .job("lint", lint())
     .job("wasm", wasm())
     .job("tests", tests())
-    .job("tests-warpbuild", tests_warpbuild())
     .job("build-and-test", build_and_test()))
 }
 
 /// Which jobs have work: a sound release PR skips them all (a refused one
 /// fails here); otherwise rail decides (or the run is full). Hosted: the
 /// toolchain for `cargo metadata`, cargo-rail, and the image's python3.
-fn plan() -> Job {
+fn plan() -> Result<Job> {
     let outputs = [
         "full",
         "cargo",
@@ -149,12 +149,14 @@ fn plan() -> Job {
         "skip",
         "record",
     ];
-    let mut job = Job::new(UBUNTU)
+    let mut job = Job::new(WARP_SMALL)
         .name("Plan")
         .timeout(20)
-        // Fork PRs never run here: the tests job runs on a self-hosted
-        // runner, and fork code must not run on it. GitHub also withholds
-        // secrets from fork PRs. Every other job needs this one, so they
+        // Read-only, plus the statuses the local-run check reads.
+        .permissions(yaml("contents: read\nstatuses: read\n")?)
+        // Fork PRs never run here: they would run on the org's paid
+        // WarpBuild runners with whatever their code does, and GitHub
+        // withholds secrets from fork PRs anyway. Every other job needs this one, so they
         // skip with it, and `Build + test` fails the fork PR rather than
         // passing it unchecked. (push/schedule/workflow_dispatch have no
         // pull_request.)
@@ -163,9 +165,18 @@ fn plan() -> Job {
              github.event.pull_request.head.repo.full_name == github.repository }}",
         );
     for out in outputs {
-        job = job.output(out, &format!("${{{{ steps.filter.outputs.{out} }}}}"));
+        // `tests` is the plan's answer unless a local `just ci` already ran
+        // the suite on exactly this tree (see `LOCAL_RUN`).
+        let value = if out == "tests" {
+            "${{ steps.local.outputs.ok == 'true' && 'false' || steps.filter.outputs.tests }}"
+                .to_owned()
+        } else {
+            format!("${{{{ steps.filter.outputs.{out} }}}}")
+        };
+        job = job.output(out, &value);
     }
-    job
+    job = job.output("local", "${{ steps.local.outputs.ok }}");
+    Ok(job
         // Full history: the plan needs both diff endpoints' ancestry, and
         // the release guard the PR's base and head.
         .step(checkout_full(None))
@@ -205,7 +216,64 @@ fn plan() -> Job {
                 .env("HEAD_REPO", "${{ github.event.pull_request.head.repo.full_name }}")
                 .env("EVIDENCE", "${{ runner.temp }}/rail-evidence/cargo.test.json"),
         )
+        .step(
+            Step::run("A local just ci for this tree?", LOCAL_RUN)
+                .id("local")
+                .cond("${{ github.event_name == 'pull_request' && steps.filter.outputs.tests == 'true' }}")
+                .env("GH_TOKEN", "${{ github.token }}")
+                .env("REPO", "${{ github.repository }}")
+                .env("HEAD_SHA", "${{ github.event.pull_request.head.sha }}")
+                .env("BASE_SHA", "${{ github.event.pull_request.base.sha }}"),
+        ))
 }
+
+/// The agents (and people) pushing PRs run `just ci` before they push: the
+/// whole suite, on exactly the tree they push. Running it again here only
+/// queues. So a PR whose head carries a `ci/local` success status — posted
+/// by `just ci` / `just push` (scripts/ci-local-status.sh) — skips the
+/// tests job, when ALL of these hold:
+///
+/// - the status names the head commit's TREE (its description says `tree
+///   <hash>`), so what passed is byte for byte what is here;
+/// - the head contains the PR's base, so the merge CI would test is that
+///   same tree (a branch behind main is tested here, as before);
+/// - the status is `success`.
+///
+/// Lint and wasm still run: they check Linux and the browser, which a Mac
+/// cannot. Pushes to main and the nightly always run everything. It is as
+/// honest as whoever posts the status — anyone who can push could post one
+/// — which is the bargain the team chose (2026-10). The status may land a
+/// few seconds after the push (`just push` posts it once GitHub has the
+/// commit), so this waits up to ~40 s for it.
+const LOCAL_RUN: &str = r####"set -u
+ok=false
+st=""
+for _ in 1 2 3 4 5; do
+  st=$(curl -fsSL -H "Authorization: Bearer ${GH_TOKEN}" -H "Accept: application/vnd.github+json" \
+    "https://api.github.com/repos/${REPO}/commits/${HEAD_SHA}/statuses?per_page=100" \
+    | jq -r '[.[] | select(.context == "ci/local")][0] // empty | "\(.state) \(.description)"' 2>/dev/null || true)
+  [ -n "$st" ] && break
+  sleep 10
+done
+state=${st%% *}
+claimed=$(printf '%s' "$st" | grep -oE 'tree [0-9a-f]{40}' | cut -d' ' -f2 || true)
+tree=$(git rev-parse "${HEAD_SHA}^{tree}")
+if [ -z "$st" ]; then
+  echo "no ci/local status on ${HEAD_SHA}: the tests run here"
+elif [ "$state" != success ]; then
+  echo "ci/local is ${state}: the tests run here"
+elif [ "$claimed" != "$tree" ]; then
+  echo "ci/local passed tree ${claimed:-?}, this head is ${tree}: the tests run here"
+elif ! git merge-base --is-ancestor "${BASE_SHA}" "${HEAD_SHA}"; then
+  echo "the head does not contain the base ${BASE_SHA}: the merge is a different tree, the tests run here"
+else
+  ok=true
+  echo "ci/local passed tree ${tree} (${st#* }): the tests job is skipped"
+  { echo "### Tests: trusted a local run"
+    echo "\`just ci\` passed on this exact tree (\`${tree}\`), and the head contains the base: the tests job is skipped. Lint and wasm still run."; } >> "$GITHUB_STEP_SUMMARY"
+fi
+echo "ok=${ok}" >> "$GITHUB_OUTPUT"
+"####;
 
 const CHOOSE_BASE: &str = r#"set -u
 base=""
@@ -323,7 +391,7 @@ const CARGO_WANTED: &str = "${{ !cancelled() && needs.plan.outputs.cargo == 'tru
 /// and `cargo check --workspace`. Clippy reports here too, advisory.
 fn lint() -> Job {
     hosted_cargo_job(
-        Job::new(UBUNTU)
+        Job::new(WARP_CHECK)
             .name("Lint (fmt + manifests + gates + check + clippy)")
             .needs(&["plan"])
             .cond("${{ needs.plan.outputs.skip != 'true' }}")
@@ -498,7 +566,7 @@ fi
 /// cannot fail the job.
 fn wasm() -> Job {
     hosted_cargo_job(
-        Job::new(UBUNTU)
+        Job::new(WARP_CHECK)
             .name("wasm checks")
             .needs(&["plan"])
             .cond("${{ needs.plan.outputs.skip != 'true' && needs.plan.outputs.wasm == 'true' }}")
@@ -559,94 +627,137 @@ echo \"### Signal browser remote wasm check failed (advisory, STA-184)\" >> \"$G
 }
 
 /// REQUIRED (through `Build + test`, when the plan wants tests): the test
-/// run. It was advisory while main carried ~100 nextest failures (STA-184,
-/// the captain's call in STA-276 to release first and fix after); it is now
-/// a required job like lint and wasm. It is skipped on a release-only PR.
+/// run, on a WarpBuild SNAPSHOT runner, without nix: the hosted jobs'
+/// rustup/apt/release-binary setup plus nextest and lavapipe (software
+/// Vulkan) for the GPU tests. Skipped on a release-only PR, and on a PR whose
+/// exact tree a local `just ci` already passed (see `LOCAL_RUN`).
 ///
-/// SELF-HOSTED on purpose (the one heavy job): ~1460 crates at full codegen
-/// into 814 test binaries took 20 min to build on the warm Mac Pro (run
-/// 39654183163); the tests themselves ran in 4.5 min. Cold on a hosted
-/// runner that build would cost well over an hour every PR and a target
-/// dir larger than the whole 10 GB cache budget. The runner is a NixOS VM:
-/// nix is its package manager, so the steps run in the ci dev shell.
+/// The warm target dir is the snapshot (`<label>;snapshot.key=<alias>`,
+/// WarpBuilds/snapshot-save): the VM boots from the last snapshot saved under
+/// [`WARPBUILD_SNAPSHOT`], or the base image if there is none. Only main's
+/// full runs (a push, the nightly) SAVE it, after pruning the target to what
+/// that build used and a cleanup, so a PR never writes the state the next run
+/// boots from — the rule the hosted rust-cache follows too. Snapshots expire
+/// after 15 days, which the nightly keeps from happening. First run (main,
+/// 2026-10-23): cold build 15 min, 10 949 tests 2 min, on a 16x.
+///
+/// Before WarpBuild this was the self-hosted Mac Pro VM: one runner for
+/// every PR (the queue), and a persistent target that filled the disk every
+/// other runner on that host shared.
 fn tests() -> Job {
-    let nix = Toolchain::Nix;
-    Job::new(RunsOn::Labels(&["self-hosted", "studio-tests"]))
-        .name("tests")
-        .needs(&["plan"])
-        .cond("${{ needs.plan.outputs.skip != 'true' && needs.plan.outputs.tests == 'true' }}")
-        .timeout(90)
-        .env("NIX_DEV", NIX_DEV)
-        // Same list as `just test` / `just ci`; the evidence recording below
-        // uses it too, so both builds are the same units.
-        .env("TEST_FEATURES", TEST_FEATURES)
-        // No incremental caches: they grow without bound in a persistent
-        // target (372 GB on one dev machine) and a CI build seldom rebuilds
-        // the same crate twice. Dioxus and Zed run CI the same way.
-        .env("CARGO_INCREMENTAL", "0")
-        .step(checkout())
-        .environment(ASSETS_ENVIRONMENT.into())
-        // The CI cargo config here too: its profile is what the hosted jobs
-        // build with, and it builds frame and plugin-faces optimised for
-        // their tests (.cargo/ci-config.toml says why).
-        .step(ci_cargo_config())
-        .step(Step::run("Persistent target dir", TARGET_DIR))
-        .step(target_mark())
-        .step(assets_token())
-        .step(assets(nix))
-        // The test run compiles session-web.
-        .step(tailwind(nix))
-        .step(faces(nix))
-        // Full runs first record rail evidence for this commit: the recorder
-        // wraps rustc for one `cargo test --no-run` (units already fresh
-        // keep their dep-info, so this compiles nothing nextest wouldn't),
-        // and the nextest run after it finds every unit fresh. Best effort:
-        // a failure only means later plans against this commit widen. Not
-        // `--locked`, for the [[patch.unused]] ordering reason in the lint
-        // job.
-        .step(
-            Step::run(
-                "Record rail evidence",
-                &format!(
-                    "\
+    let warp = Toolchain::Hosted;
+    Job::new(RunsOn::Owned(format!(
+        "{WARPBUILD_RUNNER};snapshot.key={WARPBUILD_SNAPSHOT}"
+    )))
+    .name("tests")
+    .needs(&["plan"])
+    .cond("${{ needs.plan.outputs.skip != 'true' && needs.plan.outputs.tests == 'true' }}")
+    .timeout(120)
+    // Same list as `just test` / `just ci`; the evidence recording below
+    // uses it too, so both builds are the same units.
+    .env("TEST_FEATURES", TEST_FEATURES)
+    // No incremental caches: they grow without bound in a persistent target
+    // (372 GB on one dev machine) and a CI build seldom rebuilds the same
+    // crate twice. Dioxus and Zed run CI the same way.
+    .env("CARGO_INCREMENTAL", "0")
+    .step(checkout())
+    .steps(hosted_setup(
+        "",
+        "",
+        Tools {
+            apt: true,
+            gpu: true,
+            just: true,
+            nextest: true,
+            tailwind: true,
+            cargo_rail: true,
+            ci_cargo_config: true,
+            ..Tools::default()
+        },
+    ))
+    .environment(ASSETS_ENVIRONMENT.into())
+    // ~/.cache/cargo-target: outside the checkout, so the pre-snapshot
+    // `git clean` keeps it.
+    .step(Step::run("Persistent target dir", TARGET_DIR))
+    .step(target_mark())
+    .step(assets_token())
+    .step(assets(warp))
+    // The test run compiles session-web.
+    .step(tailwind(warp))
+    .step(faces(warp))
+    // Full runs first record rail evidence for this commit: the recorder
+    // wraps rustc for one `cargo test --no-run` (units already fresh keep
+    // their dep-info, so this compiles nothing nextest wouldn't), and the
+    // nextest run after it finds every unit fresh. Best effort: a failure
+    // only means later plans against this commit widen. Not `--locked`, for
+    // the [[patch.unused]] ordering reason in the lint job.
+    .step(
+        Step::run(
+            "Record rail evidence",
+            &format!(
+                "\
 mkdir -p \"${{EVIDENCE_DIR}}\"
 {} \\
   --output \"${{EVIDENCE_DIR}}/cargo.test.json\" \\
   -- test --workspace --no-run --features \"${{TEST_FEATURES}}\" \\
   || echo \"::warning::rail evidence not recorded; later plans against this commit widen\"
 ",
-                    nix.cmd("cargo rail plan evidence --work cargo.test")
-                ),
-            )
-            .cond("${{ needs.plan.outputs.record == 'true' }}")
-            .env("EVIDENCE_DIR", "${{ runner.temp }}/rail-evidence"),
+                warp.cmd("cargo rail plan evidence --work cargo.test")
+            ),
         )
-        .step(nextest(nix, "tests (self-hosted)"))
-        .step(target_sweep())
-        .step(
-            Step::run(
-                "Evidence key",
-                "\
+        .cond("${{ needs.plan.outputs.record == 'true' }}")
+        .env("EVIDENCE_DIR", "${{ runner.temp }}/rail-evidence"),
+    )
+    .step(nextest(warp, "tests"))
+    .step(target_sweep())
+    .step(
+        Step::run(
+            "Evidence key",
+            "\
 echo \"sha=$(git rev-parse HEAD)\" >> \"$GITHUB_OUTPUT\"
 [ -f \"${RUNNER_TEMP}/rail-evidence/cargo.test.json\" ] && echo \"have=true\" >> \"$GITHUB_OUTPUT\" || true
 ",
-            )
-            .id("evidence")
-            .cond("${{ always() && needs.plan.outputs.record == 'true' }}"),
         )
-        // Saved even when tests are red: evidence describes the build, not
-        // the results. Only saves on main (and the nightly's default-branch
-        // scope) are visible to other branches' PRs.
-        .step(
-            Step::uses("Save rail evidence", "actions/cache/save@v4")
-                .cond("${{ always() && steps.evidence.outputs.have == 'true' }}")
-                .with("path", "${{ runner.temp }}/rail-evidence")
-                .with(
-                    "key",
-                    "rail-evidence-${{ runner.os }}-${{ runner.arch }}-cargo.test-${{ steps.evidence.outputs.sha }}",
-                ),
+        .id("evidence")
+        .cond("${{ always() && needs.plan.outputs.record == 'true' }}"),
+    )
+    // Saved even when tests are red: evidence describes the build, not the
+    // results. Only saves on main (and the nightly's default-branch scope)
+    // are visible to other branches' PRs.
+    .step(
+        Step::uses("Save rail evidence", "actions/cache/save@v4")
+            .cond("${{ always() && steps.evidence.outputs.have == 'true' }}")
+            .with("path", "${{ runner.temp }}/rail-evidence")
+            .with(
+                "key",
+                "rail-evidence-${{ runner.os }}-${{ runner.arch }}-cargo.test-${{ steps.evidence.outputs.sha }}",
+            ),
+    )
+    .step(test_log("nextest-ci"))
+    // Before the snapshot: nothing secret may be in it (WarpBuild's own
+    // advice; a snapshot alias is readable by any run in the org). The
+    // asset clones STAY: PR runs get no credential (see `assets`), so the
+    // snapshot is how a PR has them, and they are only as private as the
+    // org that owns both. The checkout's ignored files go. The target dir,
+    // ~/.cargo, rustup and the apt packages stay: that is the point.
+    .step(
+        Step::run(
+            "Clean up before the snapshot",
+            "\
+rm -rf \"$HOME/.ssh\" \"$HOME/.aws\"
+git clean -ffdx
+du -sh \"$HOME/.cache/cargo-target\" 2>/dev/null || true
+",
         )
-        .step(test_log("nextest-ci"))
+        .cond(SAVE_SNAPSHOT),
+    )
+    .step(
+        Step::uses("Save the WarpBuild snapshot", "WarpBuilds/snapshot-save@v1")
+            .cond(SAVE_SNAPSHOT)
+            .with("alias", WARPBUILD_SNAPSHOT)
+            .with("fail-on-error", false)
+            .with("wait-timeout-minutes", 60),
+    )
 }
 
 /// The full nextest log as an artifact (see [`NEXTEST`] for why it is a file).
@@ -676,105 +787,16 @@ fn nextest(tc: Toolchain, label: &str) -> Step {
     .env("RUN_LABEL", label)
 }
 
-/// The WarpBuild runner the trial job uses. One constant, so trying another
+/// The WarpBuild runner the tests job uses. One constant, so trying another
 /// size is a one-line change (then `just workflows`).
 const WARPBUILD_RUNNER: &str = "warp-ubuntu-latest-x64-16x";
 
-/// The WarpBuild snapshot alias: the trial job boots from the VM snapshot
-/// saved under it (toolchain, apt packages, ~/.cargo and the warm target dir
-/// in ~/.cache/cargo-target), so its build is incremental the way the Mac
-/// Pro's is.
+/// The WarpBuild snapshot alias: the tests job boots from the VM snapshot
+/// saved under it (toolchain, apt packages, ~/.cargo, the asset clones and
+/// the warm target dir in ~/.cache/cargo-target).
 const WARPBUILD_SNAPSHOT: &str = "studio-tests";
 
-/// TRIAL (never part of `Build + test`, `continue-on-error`): the same test
-/// run as [`tests`] on a WarpBuild cloud runner, WITHOUT nix — the hosted
-/// jobs' rustup/apt/release-binary setup plus nextest and lavapipe for the
-/// GPU tests — to compare its build and test times (the step summary) with
-/// the self-hosted Mac Pro VM.
-///
-/// Off until the `WARPBUILD_TRIAL` repository variable is `true`, so it
-/// costs nothing (and queues nothing) before the WarpBuild GitHub App is
-/// installed on the org.
-///
-/// The warm target dir is a WarpBuild SNAPSHOT runner
-/// (`<label>;snapshot.key=<alias>`, WarpBuilds/snapshot-save): the VM boots
-/// from the last snapshot saved under [`WARPBUILD_SNAPSHOT`] (or the base
-/// image if there is none). Only main pushes and the nightly SAVE it (after
-/// a cleanup, below), so a PR never writes the state the next run boots
-/// from — the same rule as the hosted rust-cache. Snapshots expire after 15
-/// days. No rail evidence here: the self-hosted job records it, and a second
-/// writer would race it for the same cache key.
-fn tests_warpbuild() -> Job {
-    let warp = Toolchain::Hosted;
-    Job::new(RunsOn::Owned(format!(
-        "{WARPBUILD_RUNNER};snapshot.key={WARPBUILD_SNAPSHOT}"
-    )))
-    .name("tests (warpbuild trial)")
-    .needs(&["plan"])
-    .cond(
-        "${{ vars.WARPBUILD_TRIAL == 'true' && needs.plan.outputs.skip != 'true' && \
-         needs.plan.outputs.tests == 'true' }}",
-    )
-    .timeout(120)
-    .continue_on_error()
-    // Incremental off, as on the Mac Pro, so the timings compare like for
-    // like.
-    .env("CARGO_INCREMENTAL", "0")
-    .env("TEST_FEATURES", TEST_FEATURES)
-    .step(checkout())
-    .steps(hosted_setup(
-        "",
-        "",
-        Tools {
-            apt: true,
-            gpu: true,
-            just: true,
-            nextest: true,
-            tailwind: true,
-            ci_cargo_config: true,
-            ..Tools::default()
-        },
-    ))
-    // ~/.cache/cargo-target: outside the checkout, so the pre-snapshot
-    // `git clean` keeps it.
-    .environment(ASSETS_ENVIRONMENT.into())
-    .step(Step::run("Persistent target dir", TARGET_DIR))
-    .step(target_mark())
-    .step(assets_token())
-    .step(assets(warp))
-    .step(tailwind(warp))
-    .step(faces(warp))
-    .step(nextest(warp, "tests (warpbuild trial)"))
-    .step(target_sweep())
-    .step(test_log("nextest-warpbuild"))
-    // Before the snapshot: nothing secret may be in it (WarpBuild's own
-    // advice; a snapshot alias is readable by any run in the org). The
-    // asset clones STAY: PR runs get no credential (see `assets`), so the
-    // snapshot is how a PR on this runner has them, and they are only as
-    // private as the org that owns both. The checkout's ignored files go.
-    // The target dir, ~/.cargo, rustup and the apt packages stay: that is
-    // the point.
-    .step(
-        Step::run(
-            "Clean up before the snapshot",
-            "\
-rm -rf \"$HOME/.ssh\" \"$HOME/.aws\"
-git clean -ffdx
-du -sh \"$HOME/.cache/cargo-target\" 2>/dev/null || true
-",
-        )
-        .cond(SAVE_SNAPSHOT),
-    )
-    .step(
-        Step::uses("Save the WarpBuild snapshot", "WarpBuilds/snapshot-save@v1")
-            .cond(SAVE_SNAPSHOT)
-            .with("alias", WARPBUILD_SNAPSHOT)
-            .with("fail-on-error", false)
-            .with("wait-timeout-minutes", 60),
-    )
-}
-
-/// The trial's snapshot is saved by main's full runs only (a push or the
+/// The snapshot is saved by main's full runs only (a push or the
 /// nightly), and even when tests are red: it holds the build, not results.
 const SAVE_SNAPSHOT: &str = "${{ !cancelled() && github.ref == 'refs/heads/main' && \
      github.event_name != 'pull_request' }}";
@@ -950,7 +972,7 @@ exit "$rc"
 /// plan said it had no work. The advisory work (clippy, the Signal browser
 /// remote) cannot fail it.
 fn build_and_test() -> Job {
-    Job::new(UBUNTU)
+    Job::new(WARP_SMALL)
         .name("Build + test")
         .needs(&["plan", "lint", "wasm", "tests"])
         .cond("${{ always() }}")
@@ -977,7 +999,7 @@ const AGGREGATE: &str = r#"set -u
 fail=0
 bad() { echo "::error::$1"; fail=1; }
 if [ "$FORK" = "true" ]; then
-  bad "fork PR: not run (the tests job is self-hosted); a maintainer must re-push it from a branch of this repo"
+  bad "fork PR: not run (CI runs on the org's paid runners); a maintainer must re-push it from a branch of this repo"
   exit 1
 fi
 [ "$PLAN" = success ] || bad "plan: $PLAN"

@@ -160,15 +160,24 @@ behind features, and without them their tests never build.
 first failure: lockfile drift, `cargo fmt --check`, the generated
 workflows being current (`just workflows-check`), the flow gate
 (`just daw-flows`), the web tailwind sheet, `cargo check --workspace`, the
-Signal wasm check, then nextest as above. `just ci <step>` starts from a
-step (`lockfile`, `fmt`, `workflows`, `flows`, `tailwind`, `check`, `wasm`,
-`nextest`).
+Signal wasm check, then (after `just assets` and `just faces`) nextest as
+above. `just ci <step>` starts from a step (`lockfile`, `fmt`, `workflows`,
+`flows`, `tailwind`, `check`, `wasm`, `nextest`).
+
+**Then push with `just push`.** A full `just ci` (from the first step) that
+passes on a clean tree — no uncommitted or untracked files, HEAD unchanged —
+records a `ci/local` commit status naming that commit's tree; `just push`
+pushes and posts it (`just ci-publish` if you pushed another way). A PR whose
+head carries it, for its exact tree, with the base already merged in, skips
+CI's tests job: lint and wasm still run, and every push to `main` and the
+nightly run everything. Don't post it for a run you didn't finish.
 
 **The workflows are generated.** Every file in `.github/workflows/` is
 written by `xtask/workflows` (`just workflows`); edit the Rust, never the
-YAML — the lint job fails when they differ. The GitHub-hosted jobs run
-without nix (rustup 1.94 + apt + pinned tool binaries); the self-hosted
-NixOS jobs (tests, deploy) keep `nix develop .#ci`.
+YAML — the lint job fails when they differ. Every `checks` job runs on
+WarpBuild, without nix (rustup 1.94 + apt + pinned tool binaries); the tests
+job on a 16x snapshot runner that keeps the warm target. `deploy` (nix
+images) and `studio-ios` (Xcode signing) keep their own runners.
 It refuses to start with less than 25 GB free: a full disk shows up as
 mold dying with a bus error, which reads as a broken toolchain
 (`just sweep-incremental` is the always-safe reclaim). It says nothing

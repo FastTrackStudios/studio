@@ -178,12 +178,6 @@ impl Job {
         self
     }
 
-    /// The job's failure never fails the workflow (a trial).
-    pub const fn continue_on_error(mut self) -> Self {
-        self.continue_on_error = Some(true);
-        self
-    }
-
     pub fn permissions(mut self, permissions: Value) -> Self {
         self.permissions = Some(permissions);
         self

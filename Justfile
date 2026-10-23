@@ -2006,6 +2006,10 @@ ci FROM="lockfile":
     #!/usr/bin/env bash
     set -euo pipefail
     export CARGO_TARGET_DIR="${CARGO_TARGET_DIR:-$PWD/target}"
+    # The commit this run vouches for (scripts/ci-local-status.sh): a full
+    # run that passes records `ci/local` for it, so the PR's CI skips the
+    # tests it would only repeat.
+    start_head="$(git rev-parse HEAD)"
     steps=(lockfile fmt workflows flows tailwind check wasm nextest)
     start=0
     for i in "${!steps[@]}"; do
@@ -2088,6 +2092,11 @@ ci FROM="lockfile":
     fi
 
     if run_from nextest; then
+      # What CI's tests job has before nextest: the private assets linked
+      # and the plugin faces generated (session-daw reads them at runtime).
+      echo "── assets + plugin faces ────────────────────────────"
+      just assets
+      just faces
       echo "── cargo nextest --workspace ────────────────────────"
       # The app CLIs and the worklet rigs sit behind features: name them, or
       # their tests never build (an app crate has no lib to dev-depend on).
@@ -2096,6 +2105,21 @@ ci FROM="lockfile":
 
     echo
     echo "every CI step passed locally"
+    # Only a run from the first step vouches for the tree.
+    if [ "{{FROM}}" = lockfile ]; then
+      scripts/ci-local-status.sh record "$start_head"
+    fi
+
+# `just push` does this for you, once GitHub has the commit.
+# Post `ci/local` for every full `just ci` pass whose commit is on GitHub.
+ci-publish:
+    scripts/ci-local-status.sh publish
+
+# A PR whose exact tree passed skips CI's tests job (checks.rs, LOCAL_RUN).
+# `git push`, then post `ci/local` for every commit a full `just ci` passed.
+push *ARGS:
+    git push {{ARGS}}
+    scripts/ci-local-status.sh publish
 
 # ── Releases ─────────────────────────────────────────────────────────────
 #
