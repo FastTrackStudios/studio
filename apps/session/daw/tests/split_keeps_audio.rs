@@ -14,6 +14,10 @@ use session_daw::engine::{Edit, apply_now};
 fn a_split_keeps_its_audio_and_its_new_half_answers_to_the_windows_name() {
     let path = Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../../../features/dynamic-template/fixtures/golden/template.rpp");
+    // The media the project references is generated, not committed: a
+    // fresh checkout (CI) has none until a test writes it.
+    dynamic_template::golden_session::write_media(path.parent().expect("the golden folder"))
+        .expect("the golden media");
     session_daw::open::open_silent(&path).expect("the golden session opens");
     let runtime = session_daw::open::runtime().expect("a runtime");
     let read = || {

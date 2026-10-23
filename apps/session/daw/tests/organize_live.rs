@@ -39,6 +39,12 @@ fn a_live_organize_matches_the_file_organize() {
         .collect();
 
     // The live side: the same file, opened the way the window opens it.
+    // The media the project references is generated, not committed: a
+    // fresh checkout (CI) has none until a test writes it.
+    dynamic_template::golden_session::write_media(
+        Path::new(GOLDEN).parent().expect("the golden folder"),
+    )
+    .expect("the golden media");
     let opened = session_daw::open::open_silent(Path::new(GOLDEN)).expect("open");
     let project = ProjectContext::Project(opened.project_guid.clone());
     let mut target = DawTarget::on(opened.daw.clone(), project.clone());

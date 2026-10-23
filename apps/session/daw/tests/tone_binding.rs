@@ -15,6 +15,10 @@ fn template() -> PathBuf {
 
 #[test]
 fn a_rack_edit_sets_the_tracks_processor() {
+    // The media the project references is generated, not committed: a
+    // fresh checkout (CI) has none until a test writes it.
+    dynamic_template::golden_session::write_media(template().parent().expect("the golden folder"))
+        .expect("the golden media");
     let opened = session_daw::open::open_silent(&template()).expect("the template opens");
     let read = |what: &str| {
         session_daw::open::block_on_engine(async move {

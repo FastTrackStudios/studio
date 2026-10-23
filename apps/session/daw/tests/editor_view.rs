@@ -17,6 +17,10 @@ fn template() -> PathBuf {
 #[test]
 fn the_editor_opens_on_a_midi_item_and_reads_its_notes() {
     let path = template();
+    // The media the project references is generated, not committed: a
+    // fresh checkout (CI) has none until a test writes it.
+    dynamic_template::golden_session::write_media(path.parent().expect("the golden folder"))
+        .expect("the golden media");
     session_daw::open::open_silent(&path).expect("the golden session opens");
     let session = StudioSession::read_current(Some(&path), None).expect("and reads back");
     let project = &session.project.0;
