@@ -141,7 +141,10 @@ checks() {
   echo "── generated workflows + actionlint ──"
   just workflows-check
   echo "── flow verification gate ──"
-  just daw-flows --own-daemon
+  # The user's tracey daemon, not `--own-daemon`: that mode is for CI's
+  # runners (whose HOME pushes the socket path past the Unix limit), and on
+  # macOS tracey keeps its socket outside the XDG_STATE_HOME it sets.
+  just daw-flows
 }
 phase checks checks
 
