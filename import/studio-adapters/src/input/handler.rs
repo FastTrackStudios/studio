@@ -3,7 +3,7 @@
 //! Main handler that processes keypresses and manages the input system.
 //! Uses TranslateAccel to intercept keypresses before REAPER processes them.
 //!
-//! Key events flow through the `input::InputProcessor` state machine via the
+//! Key events flow through the `architect_input::InputProcessor` state machine via the
 //! `processor` module. The processor handles both single-key bindings and
 //! multi-key sequences (including which-key prefix trees) natively.
 
@@ -12,7 +12,7 @@ use crate::input::keybinds::which_key::WhichKeyEntry;
 use crate::input::state::Context;
 use crate::input::which_key_component::OverlayEntry;
 use crate::input::window_detection;
-use input::command::InputCommand;
+use architect_input::InputCommand;
 use reaper_high::Reaper;
 use reaper_low::raw;
 use reaper_medium::{
@@ -702,11 +702,10 @@ impl TranslateAccel for InputHandler {
                     } else {
                         let proc = crate::input::processor::get_processor().read().unwrap();
                         if let Some(trie) = proc.normal_keytrie() {
-                            let pending_chords = pending_display_to_chords(pending_display);
                             let continuations =
                                 crate::input::keybinds::bridge::trie_continuations_at(
                                     trie,
-                                    &pending_chords,
+                                    proc.pending_keys(),
                                 );
                             if !continuations.is_empty() {
                                 crate::input::which_key_overlay::show(
@@ -841,10 +840,9 @@ impl TranslateAccel for InputHandler {
             } else {
                 let proc = crate::input::processor::get_processor().read().unwrap();
                 if let Some(trie) = proc.normal_keytrie() {
-                    let pending_chords = pending_display_to_chords(pending_display);
                     let continuations = crate::input::keybinds::bridge::trie_continuations_at(
                         trie,
-                        &pending_chords,
+                        proc.pending_keys(),
                     );
                     if !continuations.is_empty() {
                         crate::input::which_key_overlay::show(pending_display, &continuations);
@@ -1372,8 +1370,8 @@ fn display_remainder_tokens(remainder: &str) -> Vec<String> {
 /// ("Shift+n" → [s,h,i,f,t,+,n]), which silently broke trie lookups — and
 /// with them which-key labels/headers — for every modifier-anchored prefix
 /// like `<S-n>`. This is a best-effort parse for common cases.
-pub(crate) fn pending_display_to_chords(display: &str) -> Vec<input::key::KeyChord> {
-    use input::key::{KeyChord, KeyCode, Modifiers};
+pub(crate) fn pending_display_to_chords(display: &str) -> Vec<architect_input::KeyChord> {
+    use architect_input::{KeyChord, KeyCode, Modifiers};
 
     let mut chords = Vec::new();
     let mut rest = display;
@@ -1671,7 +1669,7 @@ pub fn register_input_handler() -> Result<(), Box<dyn std::error::Error>> {
 #[cfg(test)]
 mod pending_display_tests {
     use super::pending_display_to_chords;
-    use input::key::{KeyChord, KeyCode, Modifiers};
+    use architect_input::{KeyChord, KeyCode, Modifiers};
 
     fn plain(c: &str) -> KeyChord {
         KeyChord::plain(KeyCode::Character(c.to_string()))

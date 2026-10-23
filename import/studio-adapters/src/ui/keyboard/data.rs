@@ -1,6 +1,6 @@
 //! Data extraction from the input processor for keyboard visualization.
 
-use input::{KeyCode, Modifiers};
+use architect_input::{KeyCode, Modifiers};
 use std::collections::HashMap;
 
 use crate::input::processor;
@@ -229,7 +229,7 @@ pub fn collect_current_bindings() -> Vec<KeyBindingInfo> {
 /// Collect ALL leaf bindings by walking the entire keytrie.
 /// Returns a flat list of every complete key sequence → action mapping.
 pub fn collect_all_leaf_bindings() -> Vec<KeyBindingInfo> {
-    use input::trie::KeyTrie;
+    use architect_input::KeyTrie;
 
     let proc = processor::get_processor();
     let proc = proc.read().unwrap();
@@ -248,18 +248,18 @@ pub fn collect_all_leaf_bindings() -> Vec<KeyBindingInfo> {
         match node {
             KeyTrie::Leaf(leaf) => {
                 let action_id = match leaf {
-                    input::trie::LeafAction::Action(id) => id.0.clone(),
-                    input::trie::LeafAction::SwitchMode(m) => format!("mode:{}", m.0),
-                    input::trie::LeafAction::PushMode(m) => format!("push:{}", m.0),
-                    input::trie::LeafAction::Operator(s) => format!("op:{s}"),
-                    input::trie::LeafAction::Motion(s) => format!("motion:{s}"),
-                    input::trie::LeafAction::TextObject(s) => format!("textobj:{s}"),
-                    input::trie::LeafAction::Sequence(ids) => ids
+                    architect_input::LeafAction::Action(id) => id.clone(),
+                    architect_input::LeafAction::SwitchMode(m) => format!("mode:{}", m.0),
+                    architect_input::LeafAction::PushMode(m) => format!("push:{}", m.0),
+                    architect_input::LeafAction::Operator(s) => format!("op:{s}"),
+                    architect_input::LeafAction::Motion(s) => format!("motion:{s}"),
+                    architect_input::LeafAction::TextObject(s) => format!("textobj:{s}"),
+                    architect_input::LeafAction::Sequence(ids) => ids
                         .iter()
-                        .map(|id| id.0.as_str())
+                        .map(String::as_str)
                         .collect::<Vec<_>>()
                         .join(", "),
-                    input::trie::LeafAction::Unbind => "unbind".into(),
+                    architect_input::LeafAction::Unbind => "unbind".into(),
                 };
 
                 let sequence_display = path

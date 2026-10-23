@@ -8,10 +8,10 @@
 
 use std::collections::HashMap;
 
+use architect_input::KeymapConfig;
+use architect_input::{InputEvent, KeyEvent};
+use architect_input::{KeyChord, KeyCode, Modifiers};
 use enumflags2::BitFlags;
-use input::config::KeymapConfig;
-use input::event::{InputEvent, KeyEvent};
-use input::key::{KeyChord, KeyCode, Modifiers};
 use reaper_medium::{AcceleratorBehavior, AcceleratorKeyCode};
 
 use super::which_key::WhichKeyEntry;
@@ -118,7 +118,7 @@ pub fn vk_to_input_event_with_flags(
     Some(InputEvent::Key(KeyEvent { key, modifiers }))
 }
 
-/// Map a Windows VK code to an `input::KeyCode`.
+/// Map a Windows VK code to an `architect_input::KeyCode`.
 fn vk_to_key_code(key_code: u32) -> Option<KeyCode> {
     match key_code {
         // Letters (A-Z) → lowercase character
@@ -315,11 +315,11 @@ pub fn preset_to_keymap_config(
     keymap.insert("normal".to_string(), global_bindings);
 
     // Build keymap_context
-    let mut keymap_context: HashMap<String, Vec<input::config::ContextLayerConfig>> =
+    let mut keymap_context: HashMap<String, Vec<architect_input::ContextLayerConfig>> =
         HashMap::new();
     for (ctx, bindings) in context_bindings {
         let when = context_to_when_expr(ctx);
-        let layer = input::config::ContextLayerConfig { when, bindings };
+        let layer = architect_input::ContextLayerConfig { when, bindings };
         keymap_context
             .entry("normal".to_string())
             .or_default()
@@ -488,7 +488,7 @@ fn anchor_modifiers(translated_prefix: &str) -> Vec<&'static str> {
 /// Key-notation translation is app-agnostic and now lives in the shared
 /// `input-keybinds` crate; re-exported here so callers keep using
 /// `bridge::translate_sequence`.
-pub use input::keybinds::translate_sequence;
+pub use architect_input::translate_sequence;
 
 // ---------------------------------------------------------------------------
 // Context → WhenExpr string
@@ -588,7 +588,7 @@ fn parse_reaper_modifier_string(mods: &str) -> String {
 ///
 /// Returns `(key_display, label, is_branch)` tuples.
 pub fn trie_continuations_at(
-    trie: &input::trie::KeyTrie,
+    trie: &architect_input::KeyTrie,
     prefix: &[KeyChord],
 ) -> Vec<(String, String, bool)> {
     trie_continuations_at_detailed(trie, prefix)
@@ -602,10 +602,10 @@ pub fn trie_continuations_at(
 /// can fall back to humanizing the leaf action when no tree metadata
 /// is available (e.g. a workflow-only binding with no `desc`).
 pub fn trie_continuations_at_detailed(
-    trie: &input::trie::KeyTrie,
+    trie: &architect_input::KeyTrie,
     prefix: &[KeyChord],
 ) -> Vec<(String, String, bool, Option<String>)> {
-    use input::trie::{KeyTrie, LeafAction};
+    use architect_input::{KeyTrie, LeafAction};
 
     let node = walk_trie(trie, prefix);
     match node {
@@ -636,10 +636,10 @@ pub fn trie_continuations_at_detailed(
 
 /// Walk a KeyTrie along a sequence of chords.
 fn walk_trie<'a>(
-    trie: &'a input::trie::KeyTrie,
+    trie: &'a architect_input::KeyTrie,
     path: &[KeyChord],
-) -> Option<&'a input::trie::KeyTrie> {
-    use input::trie::KeyTrie;
+) -> Option<&'a architect_input::KeyTrie> {
+    use architect_input::KeyTrie;
 
     if path.is_empty() {
         return Some(trie);

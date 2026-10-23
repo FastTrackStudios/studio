@@ -288,7 +288,7 @@ fn convert_mouse(def: &MouseBindDef) -> MouseModifier {
 
 #[cfg(test)]
 mod tests {
-    use input::proto::{KeybindContext, SectionConfig};
+    use ::keybinds::proto::{KeybindContext, SectionConfig};
 
     /// An app-defined context binding parses out of a section file —
     /// what the expression-editor section relies on. A parse failure
@@ -299,7 +299,7 @@ mod tests {
         // Learn the canonical serialization first, then assert the
         // config file form parses back.
         let canonical = facet_styx::to_string(&SectionConfig {
-            bindings: Some(vec![input::proto::KeybindDef {
+            bindings: Some(vec![::keybinds::proto::KeybindDef {
                 keys: "e".into(),
                 action: "FTS_EXPRESSION_EDITOR_OPEN".into(),
                 desc: Some("Close".into()),
