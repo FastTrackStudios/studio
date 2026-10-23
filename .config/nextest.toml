@@ -77,21 +77,6 @@ slow-timeout = { period = "60s", terminate-after = 10 }
 filter = 'test(=a_hidden_child_replays_the_picture_and_a_muted_one_changes_it)'
 slow-timeout = { period = "60s", terminate-after = 10 }
 
-# The reverb stability sweep renders every algorithm at three decays and
-# five pre-delays — 225 impulse responses of four seconds each, so a
-# quarter-hour of 48 kHz audio through an unoptimised build. Measured at
-# 85 s locally; it passes, it is simply long.
-#
-# It is not padding: the NonLinear regeneration this file was written for
-# only showed up at particular knob combinations, and pre-delay is the
-# engine's feedback control on Magneto and NonLinear rather than a plain
-# pre-loop delay. Trimming the sweep would drop the coverage that found
-# the bug, so the budget moves instead. `terminate-after` still catches a
-# genuine hang, just at four minutes rather than thirty seconds.
-[[profile.default.overrides]]
-filter = 'test(=every_algorithm_stays_bounded_across_its_knob_range)'
-slow-timeout = { period = "120s", terminate-after = 2 }
-
 # The fx editors' screenshot harnesses (delay, modulation, reverb and
 # saturate under features/dsp/) are the same shape as `shoot_every_scene`:
 # they rasterize the real editor through vello_cpu and, as their own module
@@ -152,3 +137,10 @@ slow-timeout = { period = "120s", terminate-after = 3 }
 [[profile.default.overrides]]
 filter = 'package(sampler) & (test(=a_live_write_sets_every_builtin_effect_as_its_build_does) | test(=a_param_dropped_from_a_preset_is_written_as_its_build_default))'
 slow-timeout = { period = "120s", terminate-after = 2 }
+
+# The Velvet reverb sums ~16k sparse taps per sample — a full core per
+# instance (studio#182). Its two stability sweeps take 16–17 s on an idle
+# Mac and several times that on the CI runner. Room until it is made cheap.
+[[profile.default.overrides]]
+filter = 'test(=velvet_stays_bounded_across_its_knob_range) | test(=reverb_algorithm_12_at_full_decay_stays_bounded)'
+slow-timeout = { period = "60s", terminate-after = 4 }
