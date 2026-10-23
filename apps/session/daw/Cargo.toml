@@ -283,7 +283,7 @@ profile = ["dep:pprof"]
 #
 #   cargo run --release -p session-daw --bin blitz_shot --features frame-times
 #
-# See #119, and libs/vendor/anyrender_vello/UPSTREAM.md.
+# See #119, and anyrender_vello/UPSTREAM.md in FastTrackStudios/vendor.
 frame-times = ["anyrender_vello?/log_frame_times"]
 
 

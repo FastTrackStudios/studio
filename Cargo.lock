@@ -432,34 +432,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "anyrender_skia"
-version = "0.9.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "01f3348aa2a0cc6a797b05773d1c2e50c8220919240dc72b21ac5a88c038eaba"
-dependencies = [
- "anyrender 0.11.1",
- "ash",
- "ash-window",
- "debug_timer 0.1.3 (registry+https://github.com/rust-lang/crates.io-index)",
- "gl",
- "glutin",
- "hashbrown 0.17.1",
- "kurbo 0.13.1",
- "oaty",
- "objc2 0.6.4",
- "objc2-app-kit 0.3.2",
- "objc2-core-foundation",
- "objc2-metal 0.3.2",
- "objc2-quartz-core 0.3.2",
- "objc2-ui-kit 0.3.2",
- "peniko 0.6.1",
- "pixels_window_renderer",
- "raw-window-handle 0.6.2",
- "skia-safe",
- "softbuffer_window_renderer",
-]
-
-[[package]]
 name = "anyrender_svg"
 version = "0.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -506,6 +478,7 @@ dependencies = [
 [[package]]
 name = "anyrender_vello"
 version = "0.12.0"
+source = "git+https://github.com/FastTrackStudios/vendor?tag=v0.5.0#9253d077d2da99125827efae746fa0c789c366b2"
 dependencies = [
  "anyrender 0.11.1",
  "debug_timer 0.1.3 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -550,7 +523,6 @@ dependencies = [
  "kurbo 0.13.1",
  "peniko 0.6.1",
  "pixels_window_renderer",
- "softbuffer_window_renderer",
  "vello_common",
  "vello_cpu",
 ]
@@ -558,6 +530,7 @@ dependencies = [
 [[package]]
 name = "anyrender_vello_hybrid"
 version = "0.8.0"
+source = "git+https://github.com/FastTrackStudios/vendor?tag=v0.5.0#9253d077d2da99125827efae746fa0c789c366b2"
 dependencies = [
  "anyrender 0.11.1",
  "debug_timer 0.1.3 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -1165,17 +1138,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0bb44936d800fea8f016d7f2311c6a4f97aebd5dc86f09906139ec848cf3a46f"
 dependencies = [
  "libloading 0.8.9",
-]
-
-[[package]]
-name = "ash-window"
-version = "0.13.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "52bca67b61cb81e5553babde81b8211f713cb6db79766f80168f3e5f40ea6c82"
-dependencies = [
- "ash",
- "raw-window-handle 0.6.2",
- "raw-window-metal 0.4.0",
 ]
 
 [[package]]
@@ -1809,6 +1771,7 @@ dependencies = [
 [[package]]
 name = "baseview"
 version = "0.3.3"
+source = "git+https://github.com/FastTrackStudios/vendor?tag=v0.5.0#9253d077d2da99125827efae746fa0c789c366b2"
 dependencies = [
  "block2 0.6.2",
  "bytemuck",
@@ -2053,7 +2016,6 @@ dependencies = [
  "stylo_traits",
  "taffy 0.12.2",
  "thread_local",
- "tracing",
  "url",
  "usvg 0.46.0",
  "web-time",
@@ -2068,7 +2030,6 @@ dependencies = [
  "blitz-dom",
  "blitz-traits",
  "html5ever 0.39.0",
- "tracing",
  "xml5ever",
 ]
 
@@ -2081,7 +2042,6 @@ dependencies = [
  "data-url",
  "reqwest 0.13.4",
  "tokio",
- "tracing",
  "wasm-bindgen-futures",
 ]
 
@@ -2123,7 +2083,6 @@ dependencies = [
  "futures-util",
  "keyboard-types 0.7.0",
  "rfd",
- "tracing",
  "wasm-bindgen",
  "web-sys",
  "web-time",
@@ -2614,15 +2573,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "18758054972164c3264f7c8386f5fc6da6114cb46b619fd365d4e3b2dc3ae487"
 
 [[package]]
-name = "cgl"
-version = "0.3.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0ced0551234e87afee12411d535648dd89d2e7f34c78b753395567aff3d447ff"
-dependencies = [
- "libc",
-]
-
-[[package]]
 name = "chacha20"
 version = "0.10.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2860,46 +2810,16 @@ dependencies = [
 
 [[package]]
 name = "cocoa"
-version = "0.25.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f6140449f97a6e97f9511815c5632d84c8aacf8ac271ad77c559218161a1373c"
-dependencies = [
- "bitflags 1.3.2",
- "block",
- "cocoa-foundation 0.1.2",
- "core-foundation 0.9.4",
- "core-graphics 0.23.2",
- "foreign-types 0.5.0",
- "libc",
- "objc",
-]
-
-[[package]]
-name = "cocoa"
 version = "0.26.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ad36507aeb7e16159dfe68db81ccc27571c3ccd4b76fb2fb72fc59e7a4b1b64c"
 dependencies = [
  "bitflags 2.13.1",
  "block",
- "cocoa-foundation 0.2.1",
+ "cocoa-foundation",
  "core-foundation 0.10.1",
  "core-graphics 0.24.0",
  "foreign-types 0.5.0",
- "libc",
- "objc",
-]
-
-[[package]]
-name = "cocoa-foundation"
-version = "0.1.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8c6234cbb2e4c785b456c0644748b1ac416dd045799740356f8363dfe00c93f7"
-dependencies = [
- "bitflags 1.3.2",
- "block",
- "core-foundation 0.9.4",
- "core-graphics-types 0.1.3",
  "libc",
  "objc",
 ]
@@ -3887,15 +3807,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "704a3c26996a80471189265814dbc2c257598b96b8a7feae2d31ace646bb9782"
 dependencies = [
  "memchr",
-]
-
-[[package]]
-name = "ctor"
-version = "0.10.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "83cf0d42651b16c6dfe68685716d18480d18a9c39c62d76e8cf3eb6ed5d8bcbf"
-dependencies = [
- "dtor",
 ]
 
 [[package]]
@@ -4901,6 +4812,7 @@ dependencies = [
 [[package]]
 name = "dioxus-core"
 version = "0.8.0-alpha.0"
+source = "git+https://github.com/FastTrackStudios/vendor?tag=v0.5.0#9253d077d2da99125827efae746fa0c789c366b2"
 dependencies = [
  "anyhow",
  "const_format",
@@ -5282,10 +5194,10 @@ dependencies = [
 [[package]]
 name = "dioxus-native"
 version = "0.8.0-alpha.0"
+source = "git+https://github.com/FastTrackStudios/vendor?tag=v0.5.0#9253d077d2da99125827efae746fa0c789c366b2"
 dependencies = [
  "android-activity",
  "anyrender 0.11.1",
- "anyrender_skia",
  "anyrender_vello 0.12.0",
  "anyrender_vello_cpu",
  "anyrender_vello_hybrid",
@@ -5314,7 +5226,6 @@ dependencies = [
  "rustc-hash 2.1.3",
  "slotmap",
  "tokio",
- "tracing",
  "webbrowser",
  "wgpu_context 0.7.0",
  "winit 0.31.0-beta.2",
@@ -5323,16 +5234,15 @@ dependencies = [
 [[package]]
 name = "dioxus-native-dom"
 version = "0.8.0-alpha.0"
+source = "git+https://github.com/FastTrackStudios/vendor?tag=v0.5.0#9253d077d2da99125827efae746fa0c789c366b2"
 dependencies = [
  "blitz-dom",
  "blitz-traits",
- "dioxus",
  "dioxus-core 0.8.0-alpha.0",
  "dioxus-html",
  "futures-util",
  "keyboard-types 0.7.0",
  "rustc-hash 2.1.3",
- "tracing",
 ]
 
 [[package]]
@@ -5771,9 +5681,6 @@ name = "dpi"
 version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d8b14ccef22fc6f5a8f4d7d768562a182c04ce9a3b3157b91390b52ddfdf1a76"
-dependencies = [
- "serde",
-]
 
 [[package]]
 name = "dpp"
@@ -5788,46 +5695,6 @@ dependencies = [
  "thiserror 2.0.20",
  "udif",
  "xara",
-]
-
-[[package]]
-name = "drm"
-version = "0.14.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "80bc8c5c6c2941f70a55c15f8d9f00f9710ebda3ffda98075f996a0e6c92756f"
-dependencies = [
- "bitflags 2.13.1",
- "bytemuck",
- "drm-ffi",
- "drm-fourcc",
- "libc",
- "rustix 0.38.44",
-]
-
-[[package]]
-name = "drm-ffi"
-version = "0.9.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "51a91c9b32ac4e8105dec255e849e0d66e27d7c34d184364fb93e469db08f690"
-dependencies = [
- "drm-sys",
- "rustix 1.1.4",
-]
-
-[[package]]
-name = "drm-fourcc"
-version = "2.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0aafbcdb8afc29c1a7ee5fbe53b5d62f4565b35a042a662ca9fecd0b54dae6f4"
-
-[[package]]
-name = "drm-sys"
-version = "0.8.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ecc8e1361066d91f5ffccff060a3c3be9c3ecde15be2959c1937595f7a82a9f8"
-dependencies = [
- "libc",
- "linux-raw-sys 0.9.4",
 ]
 
 [[package]]
@@ -5880,12 +5747,6 @@ checksum = "cd1511a7b6a56299bd043a9c167a6d2bfb37bf84a6dfceaba651168adfb43c87"
 dependencies = [
  "dtoa",
 ]
-
-[[package]]
-name = "dtor"
-version = "0.8.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "edf234dd1594d6dd434a8fb8cada51ddbbc593e40e4a01556a0b31c62da2775b"
 
 [[package]]
 name = "dunce"
@@ -7952,15 +7813,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "gl"
-version = "0.14.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a94edab108827d67608095e269cf862e60d920f144a5026d3dbcfd8b877fb404"
-dependencies = [
- "gl_generator",
-]
-
-[[package]]
 name = "gl_generator"
 version = "0.14.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7970,12 +7822,6 @@ dependencies = [
  "log",
  "xml-rs",
 ]
-
-[[package]]
-name = "glam"
-version = "0.32.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f70749695b063ecbf6b62949ccccde2e733ec3ecbbd71d467dca4e5c6c97cca0"
 
 [[package]]
 name = "glib"
@@ -8119,63 +7965,6 @@ dependencies = [
  "slotmap",
  "wasm-bindgen",
  "web-sys",
-]
-
-[[package]]
-name = "glutin"
-version = "0.32.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "12124de845cacfebedff80e877bb37b5b75c34c5a4c89e47e1cdd67fb6041325"
-dependencies = [
- "bitflags 2.13.1",
- "cfg_aliases",
- "cgl",
- "dispatch2",
- "glutin_egl_sys",
- "glutin_glx_sys",
- "glutin_wgl_sys",
- "libloading 0.8.9",
- "objc2 0.6.4",
- "objc2-app-kit 0.3.2",
- "objc2-core-foundation",
- "objc2-foundation 0.3.2",
- "once_cell",
- "raw-window-handle 0.6.2",
- "wayland-sys",
- "windows-sys 0.52.0",
- "x11-dl",
-]
-
-[[package]]
-name = "glutin-winit"
-version = "0.5.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "85edca7075f8fc728f28cb8fbb111a96c3b89e930574369e3e9c27eb75d3788f"
-dependencies = [
- "cfg_aliases",
- "glutin",
- "raw-window-handle 0.6.2",
- "winit 0.30.13",
-]
-
-[[package]]
-name = "glutin_egl_sys"
-version = "0.7.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4c4680ba6195f424febdc3ba46e7a42a0e58743f2edb115297b86d7f8ecc02d2"
-dependencies = [
- "gl_generator",
- "windows-sys 0.52.0",
-]
-
-[[package]]
-name = "glutin_glx_sys"
-version = "0.6.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8a7bb2938045a88b612499fbcba375a77198e01306f52272e692f8c1f3751185"
-dependencies = [
- "gl_generator",
- "x11-dl",
 ]
 
 [[package]]
@@ -10397,12 +10186,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "lhash"
-version = "1.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "744a4c881f502e98c2241d2e5f50040ac73b30194d64452bb6260393b53f0dc9"
-
-[[package]]
 name = "libappindicator"
 version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -10636,12 +10419,6 @@ name = "linux-raw-sys"
 version = "0.4.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d26c52dbd32dccf2d10cac7725f8eae5296885fb5703b261f7d0a0739ec807ab"
-
-[[package]]
-name = "linux-raw-sys"
-version = "0.9.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cd945864f07fe9f5371a27ad7b52a172b4b499999f1d97574c9fa68373937e12"
 
 [[package]]
 name = "linux-raw-sys"
@@ -11094,15 +10871,6 @@ dependencies = [
  "nix 0.31.3",
  "serde",
  "windows-sys 0.61.2",
-]
-
-[[package]]
-name = "mach-dxcompiler-rs"
-version = "0.1.6+2026.09.16-48d5a66.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "699d5b85d279d172f6ea742c6c47342fdd7c388872cea2e137e2c6721ef2e6d6"
-dependencies = [
- "lhash",
 ]
 
 [[package]]
@@ -12608,15 +12376,6 @@ dependencies = [
  "quote",
  "syn 2.0.119",
  "urlencoding",
-]
-
-[[package]]
-name = "oaty"
-version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cc8f19a1c361e5fb1a57e487b993ff8b3c44321b50ca86c9e2b235e57dc94008"
-dependencies = [
- "font-types 0.11.3",
 ]
 
 [[package]]
@@ -15340,21 +15099,8 @@ checksum = "20675572f6f24e9e76ef639bc5552774ed45f1c30e2951e1e99c59888861c539"
 
 [[package]]
 name = "raw-window-metal"
-version = "0.4.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "76e8caa82e31bb98fee12fa8f051c94a6aa36b07cddb03f0d4fc558988360ff1"
-dependencies = [
- "cocoa 0.25.0",
- "core-graphics 0.23.2",
- "objc",
- "raw-window-handle 0.6.2",
-]
-
-[[package]]
-name = "raw-window-metal"
 version = "1.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "40d213455a5f1dc59214213c7330e074ddf8114c9a42411eb890c767357ce135"
+source = "git+https://github.com/FastTrackStudios/vendor?tag=v0.5.0#9253d077d2da99125827efae746fa0c789c366b2"
 dependencies = [
  "objc2 0.6.4",
  "objc2-core-foundation",
@@ -15488,7 +15234,7 @@ dependencies = [
  "blitz-dom",
  "blitz-paint",
  "blitz-traits",
- "cocoa 0.26.1",
+ "cocoa",
  "crossbeam",
  "daw-module",
  "daw-proto",
@@ -15515,7 +15261,7 @@ dependencies = [
 name = "reaper-embed"
 version = "26.10.0"
 dependencies = [
- "cocoa 0.26.1",
+ "cocoa",
  "objc",
  "pollster",
  "raw-window-handle 0.6.2",
@@ -18133,33 +17879,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "skia-bindings"
-version = "0.97.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e6a38f4d460276ea40588c958396a9de0eec808c679009a5b52afdf6ebf34132"
-dependencies = [
- "bindgen 0.72.1",
- "cc",
- "flate2",
- "heck 0.5.0",
- "pkg-config",
- "regex",
- "serde_json",
- "tar",
- "toml 1.1.5+spec-1.1.0",
-]
-
-[[package]]
-name = "skia-safe"
-version = "0.97.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1ecfc54fcd40dc5dea15dd2a84f8422cdb0f76c6a51ebb8835ce0b7ef590a21f"
-dependencies = [
- "bitflags 2.13.1",
- "skia-bindings",
-]
-
-[[package]]
 name = "skrifa"
 version = "0.22.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -18394,49 +18113,6 @@ name = "softaes"
 version = "0.1.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c4fdfe13e1c42e45f497416afb8dc4e783bf0e25b7be9077c1c77c5fb14cb998"
-
-[[package]]
-name = "softbuffer"
-version = "0.4.8"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "aac18da81ebbf05109ab275b157c22a653bb3c12cf884450179942f81bcbf6c3"
-dependencies = [
- "as-raw-xcb-connection",
- "bytemuck",
- "drm",
- "fastrand",
- "js-sys",
- "memmap2",
- "ndk",
- "objc2 0.6.4",
- "objc2-core-foundation",
- "objc2-core-graphics",
- "objc2-foundation 0.3.2",
- "objc2-quartz-core 0.3.2",
- "raw-window-handle 0.6.2",
- "redox_syscall 0.5.18",
- "rustix 1.1.4",
- "tiny-xlib",
- "tracing",
- "wasm-bindgen",
- "wayland-backend",
- "wayland-client",
- "wayland-sys",
- "web-sys",
- "windows-sys 0.61.2",
- "x11rb",
-]
-
-[[package]]
-name = "softbuffer_window_renderer"
-version = "0.6.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7cae3e92b3b12c02b617279601a4d390d447cfbfb1197fc3126ef90b51fd1c25"
-dependencies = [
- "anyrender 0.11.1",
- "debug_timer 0.1.3 (registry+https://github.com/rust-lang/crates.io-index)",
- "softbuffer",
-]
 
 [[package]]
 name = "song"
@@ -20198,19 +19874,6 @@ dependencies = [
  "arrayref",
  "bytemuck",
  "strict-num",
-]
-
-[[package]]
-name = "tiny-xlib"
-version = "0.2.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a90a0ca3ee6a69f2ad28fd11621a4c3f03b371f366be500b64df260c4ffbafb4"
-dependencies = [
- "as-raw-xcb-connection",
- "ctor",
- "libloading 0.8.9",
- "pkg-config",
- "tracing",
 ]
 
 [[package]]
@@ -22771,7 +22434,7 @@ dependencies = [
  "wasm-bindgen-futures",
  "web-sys",
  "wgpu-core",
- "wgpu-hal 29.0.4 (registry+https://github.com/rust-lang/crates.io-index)",
+ "wgpu-hal",
  "wgpu-types",
 ]
 
@@ -22804,7 +22467,7 @@ dependencies = [
  "wgpu-core-deps-emscripten",
  "wgpu-core-deps-wasm",
  "wgpu-core-deps-windows-linux-android",
- "wgpu-hal 29.0.4 (registry+https://github.com/rust-lang/crates.io-index)",
+ "wgpu-hal",
  "wgpu-naga-bridge",
  "wgpu-types",
 ]
@@ -22815,7 +22478,7 @@ version = "29.0.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f5e39e26c4c0e07589e67d18546cf79ff45383659fc72fca4dd293358a0347f3"
 dependencies = [
- "wgpu-hal 29.0.4 (registry+https://github.com/rust-lang/crates.io-index)",
+ "wgpu-hal",
 ]
 
 [[package]]
@@ -22824,7 +22487,7 @@ version = "29.0.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "01e09be551dc939498bdd5f6b2c66e55ab275dad25825267a08605a80fc9f0af"
 dependencies = [
- "wgpu-hal 29.0.4 (registry+https://github.com/rust-lang/crates.io-index)",
+ "wgpu-hal",
 ]
 
 [[package]]
@@ -22833,7 +22496,7 @@ version = "29.0.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "af1fb1798be2a912497d4c224f72d39bb0cb34af50e8bcc29865bc339c943059"
 dependencies = [
- "wgpu-hal 29.0.4 (registry+https://github.com/rust-lang/crates.io-index)",
+ "wgpu-hal",
 ]
 
 [[package]]
@@ -22842,72 +22505,13 @@ version = "29.0.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4e592c1bbef6ad047647ae6e666ebd8cee7a32bb4544d9700ec96cbf73230257"
 dependencies = [
- "wgpu-hal 29.0.4 (registry+https://github.com/rust-lang/crates.io-index)",
+ "wgpu-hal",
 ]
 
 [[package]]
 name = "wgpu-hal"
 version = "29.0.4"
-dependencies = [
- "android_system_properties",
- "arrayvec",
- "ash",
- "bit-set 0.9.1",
- "bitflags 2.13.1",
- "block2 0.6.2",
- "bytemuck",
- "cfg-if",
- "cfg_aliases",
- "env_logger",
- "glam",
- "glow",
- "glutin",
- "glutin-winit",
- "glutin_wgl_sys",
- "gpu-allocator",
- "gpu-descriptor",
- "hashbrown 0.16.1",
- "js-sys",
- "khronos-egl",
- "libc",
- "libloading 0.8.9",
- "log",
- "mach-dxcompiler-rs",
- "naga",
- "ndk-sys",
- "objc2 0.6.4",
- "objc2-core-foundation",
- "objc2-foundation 0.3.2",
- "objc2-metal 0.3.2",
- "objc2-quartz-core 0.3.2",
- "once_cell",
- "ordered-float",
- "parking_lot",
- "portable-atomic",
- "portable-atomic-util",
- "profiling",
- "range-alloc",
- "raw-window-handle 0.6.2",
- "raw-window-metal 1.1.0",
- "renderdoc-sys",
- "smallvec 1.16.0",
- "thiserror 2.0.20",
- "wasm-bindgen",
- "wayland-sys",
- "web-sys",
- "wgpu-naga-bridge",
- "wgpu-types",
- "windows 0.62.2",
- "windows-core 0.62.2",
- "windows-result 0.4.1",
- "winit 0.30.13",
-]
-
-[[package]]
-name = "wgpu-hal"
-version = "29.0.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "97ace1c17727311c22a46e4e3faf56ea6de81af99dcc839bdfb54857b94d448d"
+source = "git+https://github.com/FastTrackStudios/vendor?tag=v0.5.0#9253d077d2da99125827efae746fa0c789c366b2"
 dependencies = [
  "android_system_properties",
  "arrayvec",
@@ -22943,7 +22547,7 @@ dependencies = [
  "profiling",
  "range-alloc",
  "raw-window-handle 0.6.2",
- "raw-window-metal 1.1.0",
+ "raw-window-metal",
  "renderdoc-sys",
  "smallvec 1.16.0",
  "thiserror 2.0.20",
@@ -23731,7 +23335,7 @@ dependencies = [
  "winit-common",
  "winit-core",
  "winit-orbital",
- "winit-uikit 0.31.0-beta.2 (registry+https://github.com/rust-lang/crates.io-index)",
+ "winit-uikit",
  "winit-wayland",
  "winit-web",
  "winit-win32",
@@ -23827,28 +23431,7 @@ dependencies = [
 [[package]]
 name = "winit-uikit"
 version = "0.31.0-beta.2"
-dependencies = [
- "bitflags 2.13.1",
- "block2 0.6.2",
- "dispatch2",
- "dpi",
- "objc2 0.6.4",
- "objc2-core-foundation",
- "objc2-foundation 0.3.2",
- "objc2-ui-kit 0.3.2",
- "raw-window-handle 0.6.2",
- "serde",
- "smol_str 0.3.2",
- "tracing",
- "winit-common",
- "winit-core",
-]
-
-[[package]]
-name = "winit-uikit"
-version = "0.31.0-beta.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "680a356e798837d8eb274d4556e83bceaf81698194e31aafc5cfb8a9f2fab643"
+source = "git+https://github.com/FastTrackStudios/vendor?tag=v0.5.0#9253d077d2da99125827efae746fa0c789c366b2"
 dependencies = [
  "bitflags 2.13.1",
  "block2 0.6.2",
@@ -24029,7 +23612,8 @@ dependencies = [
 
 [[package]]
 name = "world-sys"
-version = "26.10.0"
+version = "0.1.2"
+source = "git+https://github.com/FastTrackStudios/vendor?tag=v0.5.0#9253d077d2da99125827efae746fa0c789c366b2"
 dependencies = [
  "cc",
 ]

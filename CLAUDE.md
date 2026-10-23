@@ -104,10 +104,10 @@ working there.
   pins that remain say why in Cargo.toml (nice-plug's `fts-baseview-03`,
   reaper-rs, task's `editor`).
 - **The root `[patch]` tables**, all live: `crates-io` (the vendor repo's
-  vox-phon / phon / phon-jit / styx-format / facet-core forks, the FTS
-  blitz tag, pipewire-rs past 0.10.0, in-tree `vendor/baseview` and
-  `vendor/anyrender_*`); `DioxusLabs/dioxus` (in-tree
-  `vendor/dioxus-native{,-dom}` and `vendor/dioxus-core`);
+  vox-phon / phon / phon-jit / styx-format / facet-core / baseview /
+  anyrender_* / winit-uikit / wgpu-hal / raw-window-metal forks, the FTS
+  blitz tag, pipewire-rs past 0.10.0); `DioxusLabs/dioxus` (the vendor
+  repo's dioxus-native{,-dom} and dioxus-core);
   `FastTrackStudios/daw` (hands keyflow's git dep the in-tree `daw`,
   `dawfile-reaper` and `fts-sample` — goes when keyflow takes them from
   studio). There is no architect `[patch]`: studio, keyflow and task@main
@@ -204,9 +204,10 @@ and `LICENSE` at the root say so; a new crate inherits it with
 `license.workspace = true` and does not declare its own.
 
 Vendored code keeps the licence of the code it vendors, because it is not
-ours to change: everything under `vendor/` (the dioxus crates, baseview,
-anyrender_*, wgpu-hal, winit-uikit, raw-window-metal, dioxus-test — MIT
-and/or Apache-2.0; `vendor/world`, the WORLD vocoder — BSD-3-Clause), and
+ours to change: everything under `vendor/` (dioxus-test, facet-swift —
+MIT and/or Apache-2.0) and in FastTrackStudios/vendor (the dioxus crates,
+baseview, anyrender_*, wgpu-hal, winit-uikit, raw-window-metal — MIT
+and/or Apache-2.0; `world`, the WORLD vocoder — BSD-3-Clause), and
 `features/patchbay/driver` (forked from MARS mars-hal:
 `GPL-3.0-or-later AND MIT`). Incoming code must be GPL-compatible (MIT,
 BSD, Apache-2.0 — keep the notice and licence text); code cannot go the

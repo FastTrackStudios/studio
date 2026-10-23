@@ -40,7 +40,7 @@
 
       # Vendor against the root Cargo.lock. (The old baseview fetch
       # override is gone: the dead Codys-Wright/baseview.git dep was
-      # vendored into libs/vendor/baseview as a path dep 2026-07-16.)
+      # vendored as a patch 2026-07-16; now from FastTrackStudios/vendor.)
       cargoVendorDir = craneLib.vendorCargoDeps {
         src = ftsSrc;
 
