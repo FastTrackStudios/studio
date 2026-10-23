@@ -139,8 +139,10 @@ The default `slow-timeout` is **30 s, terminate after one period**: a
 test that takes longer is killed. Every override in that file follows
 one rule, and a new one must too:
 
-- **One override per test, filtered by exact name** (`test(=name)`), not
-  a pattern that silently catches the next test someone adds.
+- **One override per test, filtered by its exact full name** — with one
+  integration binary per crate that is `test(=<module>::<name>)`
+  (`test(=fills_real::fills_land_where_a_drummer_puts_them)`), not a
+  pattern that silently catches the next test someone adds.
 - **A comment that says what the test does, the time measured (idle
   and under load if you have both), and why it cannot be cheaper.** "It
   was red" is not a reason; "it renders eleven GPU frames of a 233-track
@@ -173,7 +175,9 @@ just test                                   # the CI feature set; nextest, no do
 just test-doc                               # doctests
 cargo nextest run -p <crate>                # one crate
 cargo nextest run -p <crate> -E 'test(/routing::/)'
-cargo nextest run -p <crate> --test it      # one integration binary
+cargo nextest run -p <crate> --test it      # the crate's integration tests
+cargo nextest run -p <crate> -E 'test(/^stability::/)'   # one former test file
+cargo test -p <crate> --test it -- screenshots:: --include-ignored   # an ignored harness, libtest-style
 cargo nextest list -p <crate>               # what exists, without running
 ```
 
