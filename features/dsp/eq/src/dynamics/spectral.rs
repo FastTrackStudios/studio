@@ -299,8 +299,12 @@ fn region_envelope(r: &SpectralRegion, hz: f64) -> f64 {
             let a = 10.0f64.powf(-depth / 40.0);
             let qs = (r.q * SPECTRAL_Q_SCALE).max(0.02);
             let u = 1.0 / ratio - ratio;
-            let num = a * u + (a / qs) * (a / qs);
-            let den = a * u + 1.0 / (a * qs) / (a * qs);
+            // |H|² of an analog peaking filter: (u² + (A/Q)²) / (u² + 1/(AQ)²).
+            // `u` is squared — it is negative above the band's frequency, and
+            // a linear `u` there drove the ratio negative and the reduction
+            // to full depth across the whole upper spectrum.
+            let num = u.mul_add(u, (a / qs) * (a / qs));
+            let den = u.mul_add(u, 1.0 / (a * qs) / (a * qs));
             let db = 10.0 * (num / den).max(1.0e-30).log10();
             (db / -depth).clamp(0.0, 1.0)
         }
@@ -952,6 +956,30 @@ mod tests {
             im += x * ph.sin();
         }
         (re * re + im * im) / num::count_to_f64(buf.len())
+    }
+
+    /// A bell's reduction is symmetric in log-frequency and fades away from
+    /// the band. A linear `u` (6d1b1af) made everything above the band read
+    /// as full depth, so a 2 kHz spectral bell cut 6 kHz by 17 dB.
+    #[test]
+    fn a_bell_region_is_symmetric_and_falls_off() {
+        let r = SpectralRegion {
+            freq_hz: 2_000.0,
+            q: 1.0,
+            shape: SpectralShape::Bell,
+            max_depth_db: -24.0,
+            threshold_db: 0.0,
+            auto: true,
+            density: 1.0,
+            tilt: false,
+        };
+        assert!((region_envelope(&r, 2_000.0) - 1.0).abs() < 1e-9);
+        for ratio in [1.5, 3.0, 8.0] {
+            let above = region_envelope(&r, 2_000.0 * ratio);
+            let below = region_envelope(&r, 2_000.0 / ratio);
+            assert!((above - below).abs() < 1e-9, "x{ratio}: {above} vs {below}");
+        }
+        assert!(region_envelope(&r, 16_000.0) < 0.1);
     }
 
     #[test]
