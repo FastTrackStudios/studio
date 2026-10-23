@@ -3365,13 +3365,20 @@ mod tests {
         let mut voice = Voice::with_rate(data, 60, VoiceKind::Zoned, 1.0, 1.0, 8)
             .with_forward_loop(loop_start, loop_end);
 
-        // Play 30 seconds — many loop passes, and long enough that the idle
-        // sweep runs several times underneath.
+        // Play 12 seconds — six passes of the 2 s loop, and six runs of the
+        // streamer's idle sweep (every 2 s) underneath. It plays in real time,
+        // so this is also the test's wall time: it was 30 s, which nextest's
+        // 30 s slow-timeout killed every run.
         let mut block = vec![0.0f32; 512 * 2];
-        let blocks = (sr as usize * 30) / 512;
+        let blocks = (sr as usize * 12) / 512;
         let mut silent_runs = 0usize;
         let mut worst_run = 0usize;
-        for _ in 0..blocks {
+        // Paced against a deadline, not by a fixed sleep per block: a loaded
+        // machine oversleeps, and summed over a thousand blocks that would
+        // stretch the run and slow the streamer's clock relative to playback.
+        let period = std::time::Duration::from_micros(10_667);
+        let started = std::time::Instant::now();
+        for i in 0..blocks {
             block.fill(0.0);
             voice.render_block(&mut block);
             let peak = block.iter().fold(0.0f32, |a, b| a.max(b.abs()));
@@ -3383,7 +3390,8 @@ mod tests {
             }
             // Real time: the streamer gets the same wall clock a live rig
             // would give it (512 frames ≈ 10.7 ms).
-            std::thread::sleep(std::time::Duration::from_micros(10_667));
+            let due = started + period * (i as u32 + 1);
+            std::thread::sleep(due.saturating_duration_since(std::time::Instant::now()));
         }
         let _ = std::fs::remove_file(&tmp);
         assert!(
