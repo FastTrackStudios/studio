@@ -26,7 +26,7 @@ use sampler::rig::prepare_chain;
 
 use crate::guitar::plan::{Place, Plan, model_budget_us};
 use crate::guitar::remote::{Lag, Link, MAX_POSTED_PARAMS};
-use crate::guitar::runner::{BuildOptions, ChainRunner, build, plan_chain};
+use crate::guitar::runner::{BuildOptions, ChainRunner, build, plan_chain, prepare_worker_block};
 
 const SEQ_IN: u32 = 0;
 const SEQ_OUT: u32 = 1;
@@ -52,6 +52,10 @@ const STATE_FAILED: i32 = 2;
 
 /// The browser's render quantum.
 const QUANTUM: u32 = 128;
+
+// A bypassed lag-one model's held-back input goes to its worker in one post
+// (`remote::BACKLOG_QUANTA` quanta), so the shared buffer must hold it.
+const _: () = assert!(crate::guitar::remote::BACKLOG_QUANTA as u32 * QUANTUM <= MAX_FRAMES);
 
 #[wasm_bindgen(start)]
 fn start() {
@@ -497,20 +501,11 @@ impl NamWorker {
             self.v.store(STATE, STATE_FAILED);
             JsValue::from_str(&format!("block JSON: {e}"))
         })?;
-        let built = prepare_chain(
-            std::slice::from_ref(&block),
-            &[block.id.clone()],
-            sample_rate as u32,
-        )
-        .map_err(|e| {
-            self.v.store(STATE, STATE_FAILED);
-            JsValue::from_str(&e)
-        })?;
-        let mut boxed = built
-            .into_blocks()
-            .pop()
-            .map(|(_, b)| b)
-            .ok_or_else(|| JsValue::from_str("the model built nothing"))?;
+        let mut boxed =
+            prepare_worker_block(&block, &block.id, sample_rate as u32).map_err(|e| {
+                self.v.store(STATE, STATE_FAILED);
+                JsValue::from_str(&e)
+            })?;
 
         // Measure: a warm-up, then enough quanta that a ms clock resolves.
         let q = QUANTUM as usize;

@@ -5,8 +5,17 @@
 //! input drifts. The PRNG is a fixed xorshift written out in full for the same
 //! reason: a dependency bump must not be able to invalidate every reference
 //! vector in the tree.
+//!
+//! The periodic generators also compute in `f64` and round to `f32` once, at
+//! the end. Platform libms disagree in the last bit of `sinf`/`expf`, and a
+//! sweep's phase reaches tens of thousands of radians, where one `f32` ULP of
+//! phase is a thousandth of a radian: computed in `f32`, the *excitation*
+//! itself differed between x86_64 Linux and aarch64 macOS by up to -90 dB,
+//! before any DSP ran. In `f64` the libms still disagree in the last bit, but
+//! that bit is lost in the final rounding, so every platform feeds the
+//! fixtures the same samples.
 
-use crate::num::{count_to_f32, u32_to_f32};
+use crate::num::{count_to_f64, f64_to_f32, u32_to_f32};
 
 /// A unit impulse at sample 0, silence after. Reveals a filter's entire
 /// linear behaviour in one pass.
@@ -22,8 +31,10 @@ pub fn impulse(len: usize) -> Vec<f32> {
 /// A steady sine at `freq` Hz. Phase starts at zero.
 #[must_use]
 pub fn sine(len: usize, freq: f32, sample_rate: f32) -> Vec<f32> {
-    let step = core::f32::consts::TAU * freq / sample_rate;
-    (0..len).map(|n| (count_to_f32(n) * step).sin()).collect()
+    let step = core::f64::consts::TAU * f64::from(freq) / f64::from(sample_rate);
+    (0..len)
+        .map(|n| f64_to_f32((count_to_f64(n) * step).sin()))
+        .collect()
 }
 
 /// An exponential sweep from `f0` to `f1` — the standard excitation for
@@ -31,14 +42,14 @@ pub fn sine(len: usize, freq: f32, sample_rate: f32) -> Vec<f32> {
 /// octave shows up here and nowhere else).
 #[must_use]
 pub fn log_sweep(len: usize, f0: f32, f1: f32, sample_rate: f32) -> Vec<f32> {
-    let n = count_to_f32(len).max(1.0);
-    let ratio = (f1 / f0).max(f32::MIN_POSITIVE);
-    let k = ratio.ln();
+    let n = count_to_f64(len).max(1.0);
+    let (f0, f1, sample_rate) = (f64::from(f0), f64::from(f1), f64::from(sample_rate));
+    let k = (f1 / f0).max(f64::MIN_POSITIVE).ln();
     (0..len)
         .map(|i| {
-            let t = count_to_f32(i) / n;
-            let phase = core::f32::consts::TAU * f0 * n / sample_rate / k * (t * k).exp_m1();
-            phase.sin()
+            let t = count_to_f64(i) / n;
+            let phase = core::f64::consts::TAU * f0 * n / sample_rate / k * (t * k).exp_m1();
+            f64_to_f32(phase.sin())
         })
         .collect()
 }
@@ -68,13 +79,14 @@ pub fn noise(len: usize, seed: u64) -> Vec<f32> {
 #[must_use]
 pub fn transients(len: usize, sample_rate: f32) -> Vec<f32> {
     let period = crate::num::f32_to_index(sample_rate * 0.25).max(1);
-    let decay = (sample_rate * 0.02).max(1.0);
+    let rate = f64::from(sample_rate);
+    let decay = (rate * 0.02).max(1.0);
     (0..len)
         .map(|n| {
             let since = n.checked_rem(period).unwrap_or(0);
-            let env = (-count_to_f32(since) / decay).exp();
-            let tone = (count_to_f32(n) * core::f32::consts::TAU * 180.0 / sample_rate).sin();
-            env * tone
+            let env = (-count_to_f64(since) / decay).exp();
+            let tone = (count_to_f64(n) * core::f64::consts::TAU * 180.0 / rate).sin();
+            f64_to_f32(env * tone)
         })
         .collect()
 }
@@ -105,6 +117,7 @@ pub fn dc(len: usize, level: f32) -> Vec<f32> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::num::count_to_f32;
 
     #[test]
     fn generators_are_reproducible() {

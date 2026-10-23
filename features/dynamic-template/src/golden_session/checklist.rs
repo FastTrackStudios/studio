@@ -229,20 +229,20 @@ fn one_note_chains(g: &Golden) -> bool {
 }
 
 fn compress(g: &Golden) -> bool {
-    g.track("Process/Compress")
+    g.track("Drums/Process/Compress")
         .is_some_and(|t| t.kind == Kind::Compress && t.name.starts_with("Compress"))
         && names_eq(
             g,
-            "Process/Compress",
+            "Drums/Process/Compress",
             &["Dry", "Tight", "Punch", "Smash", "Crunch"],
         )
 }
 
 fn process_fx(g: &Golden) -> bool {
-    names_eq(g, "Process/FX", &["Room Sim", "Verb"])
+    names_eq(g, "Drums/Process/FX", &["Room Sim", "Verb"])
         && names_eq(
             g,
-            "Process/FX/Verb",
+            "Drums/Process/FX/Verb",
             &[
                 "Wood Room",
                 "Music Club",

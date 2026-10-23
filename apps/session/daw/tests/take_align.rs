@@ -14,6 +14,10 @@ use session_daw::studio::StudioSession;
 fn aligned_the_double_lands_on_its_lead() {
     let path = Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../../../features/dynamic-template/fixtures/golden/template.rpp");
+    // The media the project references is generated, not committed: a
+    // fresh checkout (CI) has none until a test writes it.
+    dynamic_template::golden_session::write_media(path.parent().expect("the golden folder"))
+        .expect("the golden media");
     session_daw::open::open_silent(&path).expect("the golden session opens");
     let session = StudioSession::read_current(Some(&path), None).expect("and reads back");
     let project = &session.project.0;

@@ -476,10 +476,20 @@ impl Previews {
     /// waveform pool ([`crate::wave_pool`]); otherwise over the engine's
     /// link, several at a time.
     pub fn fill_waves_blocking(&self, guids: Vec<String>) {
+        self.fill_waves_blocking_in(None, guids);
+    }
+
+    /// [`Self::fill_waves_blocking`] for the items of `song` (a project
+    /// guid) rather than whichever song is current when the read runs: a
+    /// read behind a song's opening must not look for its items in the
+    /// song a setlist switched to meanwhile. `None`: the current song.
+    pub fn fill_waves_blocking_in(&self, song: Option<String>, guids: Vec<String>) {
         #[cfg(feature = "native")]
-        if self.fill_waves_local(&guids) {
+        if self.fill_waves_local(song, &guids) {
             return;
         }
+        #[cfg(not(feature = "native"))]
+        let _ = song;
         let Some(runtime) = crate::open::runtime() else {
             return;
         };
@@ -489,10 +499,12 @@ impl Previews {
     /// Read every item's peaks from the engine in this process, in
     /// parallel on the waveform pool; `false` with no engine here.
     #[cfg(feature = "native")]
-    fn fill_waves_local(&self, guids: &[String]) -> bool {
+    fn fill_waves_local(&self, song: Option<String>, guids: &[String]) -> bool {
         use daw::service::ProjectContext;
-        let (Some(daw), Some(song)) = (crate::open::local_engine(), crate::open::current_song())
-        else {
+        let (Some(daw), Some(song)) = (
+            crate::open::local_engine(),
+            song.or_else(crate::open::current_song),
+        ) else {
             return false;
         };
         let project = ProjectContext::Project(song);

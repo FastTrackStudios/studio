@@ -1,8 +1,9 @@
 //! Builds the default mic (LD-47K) into the plugin, so FTS Mic works with
 //! no models installed. The model files are private (measured from a
 //! commercial plugin) and live outside this repository: the build takes
-//! them from the first of `$FTS_MIC_MODELS`, `~/.local/share/fts/mic-models`
-//! and a `mic-models` checkout beside this one that has them. Without any,
+//! them from the first of `$FTS_MIC_MODELS`, `~/.local/share/fts/mic-models`,
+//! `models/` here (linked by `just assets` from the private mic-models repo,
+//! see assets.txt) and a `mic-models` checkout beside this one that has them. Without any,
 //! the plugin builds with nothing embedded and needs the models installed.
 
 use std::fmt::Write as _;
@@ -22,6 +23,8 @@ fn candidates() -> Vec<PathBuf> {
         dirs.push(PathBuf::from(home).join(".local/share/fts/mic-models"));
     }
     if let Some(manifest) = std::env::var_os("CARGO_MANIFEST_DIR") {
+        // `just assets` links each set here (assets.txt).
+        dirs.push(PathBuf::from(&manifest).join("models"));
         // processor/apps/plugins/mic -> ../../../../mic-models
         dirs.push(PathBuf::from(manifest).join("../../../../mic-models"));
     }
@@ -30,6 +33,8 @@ fn candidates() -> Vec<PathBuf> {
 
 fn main() {
     println!("cargo:rerun-if-env-changed=FTS_MIC_MODELS");
+    // A fresh `just assets` creates the links: rebuild with the models in.
+    println!("cargo:rerun-if-changed=models");
     let root = candidates()
         .into_iter()
         .find(|d| d.join("48000").join(DEFAULT).is_file());

@@ -18,9 +18,13 @@
 //!   fresh where the attack copy ends: its first frames take the input's
 //!   phases, so the copy crossfades into it without a seam, and its pitch
 //!   is the source's whatever the rate.
-//! - **Nothing of the next hit.** A segment reads its source only up to
-//!   where the next segment starts: the next attack is never smeared back
-//!   into this decay (pre-echo); the next segment plays it, as recorded.
+//! - **Nothing of the next hit.** The vocoder reads a segment's source
+//!   only up to a few milliseconds before where the next segment starts:
+//!   the next attack is never smeared back into this decay (pre-echo).
+//!   Those last milliseconds, and the joint past the end, are copied at
+//!   speed, so the run-up to the next hit — and the first samples of its
+//!   attack, when its marker sits where a detector fired, a little way in
+//!   — play as recorded.
 //! - **Mics stay in phase.** Every decision here is the map's — where the
 //!   copies end, where the vocoder restarts — never the signal's: the
 //!   mics of one kit, rendered one take at a time through the same map,
@@ -216,11 +220,17 @@ fn stretched(
     let joint = config.joint.max(1).min(keep.max(1));
     let rest_out = n - keep;
     let ratio = (span - keep as f64) / rest_out.max(1) as f64;
+    // The run-up to the next segment: the last `lead` frames play the
+    // source at speed, so a hit whose marker sits a few samples into its
+    // attack (where a detector fires) keeps those samples as recorded.
+    let lead = (2 * joint).min(rest_out / 3);
     // The decay, from where the attack copy ends: its source read only up
-    // to the segment's end.
+    // to where the run-up takes over. Reading on to the segment's end let
+    // the vocoder frame the next attack's first samples, cut off hard, and
+    // smear them up to a frame early — a pre-echo a detector fires on.
     let mut source = Bounded {
         channels: [left, right],
-        until: s1.ceil() as i64,
+        until: (s1 - lead as f64).ceil() as i64,
     };
     let from = s0 + keep as f64;
     stretcher.seek(from, ratio, 1.0, &mut source);
@@ -229,10 +239,24 @@ fn stretched(
     stretcher.render(&mut l, &mut r, ratio, 1.0, &mut source);
     // The attack as recorded, on a joint into the decay.
     copy([left, right], s0, piece, 0, keep + joint);
-    for (dest, src) in piece.iter_mut().zip([&l, &r]) {
+    blend_from(piece, [&l, &r], keep, joint);
+    // The run-up and the overrun past the end, at speed, on a joint out of
+    // the decay. The overrun is what the next segment starts with, so the
+    // two fade across each other as one signal; the vocoder's own overrun
+    // decays into silence and dipped the next attack for a joint.
+    let at = n - lead;
+    let mut tail = [vec![0.0f32; lead + more], vec![0.0f32; lead + more]];
+    copy([left, right], s1 - lead as f64, &mut tail, 0, lead + more);
+    let [tl, tr] = &tail;
+    blend_from(piece, [tl, tr], at, joint.min(lead));
+}
+
+/// Write `src` into `piece` from `at`, crossfading over its first `joint`
+/// frames from what `piece` already holds there.
+fn blend_from(piece: &mut [Vec<f32>; 2], src: [&[f32]; 2], at: usize, joint: usize) {
+    for (dest, src) in piece.iter_mut().zip(src) {
         for (i, &s) in src.iter().enumerate() {
-            let at = keep + i;
-            let Some(slot) = dest.get_mut(at) else {
+            let Some(slot) = dest.get_mut(at + i) else {
                 break;
             };
             if i < joint {

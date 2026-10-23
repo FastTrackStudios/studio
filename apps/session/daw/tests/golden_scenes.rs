@@ -21,6 +21,21 @@
 //!   different colour is not that: it is thousands of pixels past the
 //!   threshold, and the negative control below pins that.
 //!
+//!   One thing past the threshold is still rasterisation: a **hairline**.
+//!   A one-pixel grid or edge line inside a painted visualiser (an EQ
+//!   graph's grid, a plot's frame) lands its coverage differently from
+//!   one renderer to the next — Metal here against the machine the
+//!   fixtures were drawn on, and lavapipe on CI — and the same line comes
+//!   out up to 45 of 255 brighter or fainter, on the same pixels (where
+//!   two such lines cross, a 2x2 of them). So a structural difference
+//!   only counts when it is **solid**: a [`SOLID`]x[`SOLID`] block of
+//!   pixels that all differ. A line one or two pixels wide, their
+//!   crossings, or a lone pixel have no such block; anything with an area
+//!   — a moved or resized box, a changed colour, a fold opened — has
+//!   thousands (and a renamed row is the row list's to catch).
+//!   Hairline-only differences are still capped ([`HAIRLINE_TOLERANCE`]),
+//!   so a picture whose every line moved does not pass on that alone.
+//!
 //! `just daw-scenes` rewrites both.
 
 use std::path::{Path, PathBuf};
@@ -33,8 +48,15 @@ const SIZE: &str = "2560x1440";
 /// A per-channel difference this large or smaller is rasterisation, not
 /// a different picture — `scripts/ui-stress/imagediff.py`'s own default.
 const STRUCTURAL: i16 = 24;
-/// How many pixels may differ structurally: none.
+/// The side of the square of differing pixels that is a difference with
+/// an area rather than a hairline (see the module doc).
+const SOLID: usize = 3;
+/// How many pixels may differ structurally in a solid block: none.
 const STRUCTURAL_TOLERANCE: usize = 0;
+/// How many pixels may differ structurally as hairlines — lines one pixel
+/// wide, or lone pixels: half a per cent of the picture. Measured: up to
+/// 1501 on one scene, Metal against the committed fixtures.
+const HAIRLINE_TOLERANCE: usize = 2560 * 1440 / 200;
 /// Below this many colours, a render is a blank window rather than a
 /// scene.
 const MIN_COLOURS: usize = 64;
@@ -91,24 +113,55 @@ fn pixels(path: &Path) -> Result<(u32, u32, Vec<u8>)> {
     Ok((w, h, image.into_raw()))
 }
 
-/// How two renders differ: the count of pixels past the structural
-/// threshold, and the largest per-channel difference among all of them.
-fn compare(a: &[u8], b: &[u8]) -> (usize, i16) {
-    let mut structural = 0_usize;
-    let mut worst = 0_i16;
-    for (pa, pb) in a.chunks(4).zip(b.chunks(4)) {
-        let delta = pa
-            .iter()
-            .zip(pb)
-            .map(|(x, y)| i16::from(*x).saturating_sub(i16::from(*y)).saturating_abs())
-            .max()
-            .unwrap_or(0);
-        if delta > STRUCTURAL {
-            structural = structural.saturating_add(1);
-        }
-        worst = worst.max(delta);
+/// How two renders of `width` pixels a row differ.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct Diff {
+    /// Pixels past the structural threshold.
+    structural: usize,
+    /// Of those, the top-left corners of a [`SOLID`]-square block of
+    /// them: a difference with an
+    /// area, not a hairline (see the module doc).
+    solid: usize,
+    /// The largest per-channel difference among all pixels.
+    worst: i16,
+}
+
+impl Diff {
+    /// Whether the two are the same picture, rasterisation aside.
+    const fn holds(self) -> bool {
+        self.solid <= STRUCTURAL_TOLERANCE && self.structural <= HAIRLINE_TOLERANCE
     }
-    (structural, worst)
+}
+
+fn compare(a: &[u8], b: &[u8], width: usize) -> Diff {
+    let mut worst = 0_i16;
+    let past: Vec<bool> = a
+        .chunks(4)
+        .zip(b.chunks(4))
+        .map(|(pa, pb)| {
+            let delta = pa
+                .iter()
+                .zip(pb)
+                .map(|(x, y)| i16::from(*x).saturating_sub(i16::from(*y)).saturating_abs())
+                .max()
+                .unwrap_or(0);
+            worst = worst.max(delta);
+            delta > STRUCTURAL
+        })
+        .collect();
+    let at = |i: usize| past.get(i).copied().unwrap_or(false);
+    let structural = past.iter().filter(|p| **p).count();
+    let solid = (0..past.len())
+        .filter(|&i| {
+            let x = i % width.max(1);
+            x + SOLID <= width && (0..SOLID).all(|dy| (0..SOLID).all(|dx| at(i + dy * width + dx)))
+        })
+        .count();
+    Diff {
+        structural,
+        solid,
+        worst,
+    }
 }
 
 /// How many distinct colours a render uses.
@@ -279,17 +332,22 @@ fn every_scene_renders_to_its_committed_fixture() -> Result<()> {
             ));
             continue;
         }
-        let (structural, worst) = compare(&a, &b);
-        if structural > STRUCTURAL_TOLERANCE {
+        let diff = compare(&a, &b, w as usize);
+        if !diff.holds() {
             // Kept where the fixtures are NOT: a failing run must not
             // leave six hundred kilobytes of untracked PNG beside the
             // committed ones, where the next `add -A` would sweep them
             // in.
             let kept = std::env::temp_dir().join(format!("fts-scene-{}.fresh.png", scene));
             std::fs::copy(&fresh_png, &kept)?;
+            let Diff {
+                structural,
+                solid,
+                worst,
+            } = diff;
             failures.push(format!(
-                "{}: {structural} pixels differ structurally (worst channel by {worst} of 255); \
-                 fresh render kept at {}",
+                "{}: {structural} pixels differ structurally, {solid} of them in solid blocks \
+                 (worst channel by {worst} of 255); fresh render kept at {}",
                 scene,
                 kept.display()
             ));
@@ -310,18 +368,68 @@ fn every_scene_renders_to_its_committed_fixture() -> Result<()> {
 #[test]
 fn two_scenes_differ_by_more_than_the_tolerances() -> Result<()> {
     let scenes_dir = fixtures().join("scenes");
-    let (_, _, a) = pixels(&scenes_dir.join("drum-tracking.png"))?;
+    let (w, _, a) = pixels(&scenes_dir.join("drum-tracking.png"))?;
     let (_, _, b) = pixels(&scenes_dir.join("drum-mixing.png"))?;
-    let (structural, worst) = compare(&a, &b);
-    assert!(
-        structural > 10_000,
-        "{structural} pixels differ structurally"
-    );
-    assert!(worst > STRUCTURAL, "worst {worst}");
+    let diff = compare(&a, &b, w as usize);
+    assert!(diff.solid > 10_000, "{diff:?}");
+    assert!(diff.worst > STRUCTURAL, "{diff:?}");
+    assert!(!diff.holds());
     let rows_a = std::fs::read_to_string(scenes_dir.join("drum-tracking.rows"))?;
     let rows_b = std::fs::read_to_string(scenes_dir.join("drum-mixing.rows"))?;
     assert_ne!(rows_a, rows_b);
     Ok(())
+}
+
+/// The hairline rule: a one-pixel line drawn brighter holds, a lone pixel
+/// holds, and a box two pixels square that changed colour does not.
+#[test]
+fn a_hairline_is_rasterisation_and_a_block_is_not() {
+    let (w, h) = (16_usize, 16_usize);
+    let base = vec![40_u8; w * h * 4];
+    let set = |px: &mut Vec<u8>, x: usize, y: usize, v: u8| {
+        let i = (y * w + x) * 4;
+        px.splice(i..i + 3, [v, v, v]);
+    };
+    let mut line = base.clone();
+    for x in 2..14 {
+        set(&mut line, x, 5, 90);
+    }
+    set(&mut line, 9, 11, 90);
+    let diff = compare(&base, &line, w);
+    assert_eq!((diff.structural, diff.solid), (13, 0));
+    assert!(diff.holds());
+    // A two-pixel line crossing it: still lines.
+    let mut crossed = line.clone();
+    for y in 1..15 {
+        set(&mut crossed, 7, y, 90);
+        set(&mut crossed, 8, y, 90);
+    }
+    assert!(compare(&base, &crossed, w).holds());
+    // Three lines side by side are a band with an area: that is a change.
+    let mut band = line.clone();
+    for x in 2..14 {
+        set(&mut band, x, 6, 90);
+        set(&mut band, x, 7, 90);
+    }
+    assert!(!compare(&base, &band, w).holds());
+    let mut block = base.clone();
+    for y in 3..6 {
+        for x in 3..6 {
+            set(&mut block, x, y, 90);
+        }
+    }
+    let diff = compare(&base, &block, w);
+    assert_eq!(diff.solid, 1);
+    assert!(!diff.holds());
+    // A block's right columns on one row and its left on the next are
+    // not a block: the rows wrap at `width`, not into each other.
+    let mut edges = base.clone();
+    for y in 2..5 {
+        for x in [w - 2, w - 1, 0] {
+            set(&mut edges, x, y, 90);
+        }
+    }
+    assert_eq!(compare(&base, &edges, w).solid, 0);
 }
 
 /// Every scene has a committed picture at the committed size and a row

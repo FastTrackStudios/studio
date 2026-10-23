@@ -43,6 +43,11 @@ mod support;
 
 use support::{Fixture, Gesture, mount, mount_sized, ptr_key};
 
+/// Travel a bare 30 px drag starting at a dB parameter's default buys: the
+/// knob treats dB as bipolar and holds a `DETENT_PX` (6 px) dead zone at the
+/// default, paid once on the way out.
+const BARE_PX: f32 = 30.0 - 6.0;
+
 /// Select a profile by id through the shell rail.
 ///
 /// The rail is one button per compressor family, and clicking the active
@@ -255,8 +260,11 @@ async fn dragging_threshold_knob_up_raises_threshold() -> dioxus_test::Result<()
         after > before,
         "drag up did not raise threshold: {before} → {after}"
     );
-    // 30 px at 150 px-per-sweep over the linear −60..0 dB range = +12 dB.
-    let expected = before + (30.0 / 150.0) * 60.0;
+    // A dB parameter is bipolar to the knob, with a 6 px dead zone at its
+    // default that the drag pays once on the way out (fts-audio-ui's drag,
+    // "Stop the gain knob jumping 0 → 2.4 dB"). From the default, 30 px is
+    // 24 px of travel at 150 px-per-sweep over the linear −60..0 dB range.
+    let expected = before + (BARE_PX / 150.0) * 60.0;
     assert!(
         (after - expected).abs() < 0.5,
         "threshold landed at {after} dB, expected ~{expected} dB"
@@ -1142,12 +1150,12 @@ async fn modifier_mid_drag_does_not_jump() -> dioxus_test::Result<()> {
     let (sx, sy) = fx.knob_center("knob-threshold");
     fx.tester.pointer_down(sx, sy);
     let _ = fx.tester.pump().await;
-    // 30 px bare = +12 dB.
+    // 30 px bare from the default = 24 px past the detent = +9.6 dB.
     fx.tester.pointer_move(sx, sy - 30.0, true);
     let _ = fx.tester.pump().await;
     let coarse = fx.params.stage1.threshold_db.value();
     assert!(
-        (coarse - (before + 12.0)).abs() < 0.5,
+        (coarse - (before + (BARE_PX / 150.0) * 60.0)).abs() < 0.5,
         "coarse leg: {coarse}"
     );
     // Press Ctrl without moving: nothing changes.

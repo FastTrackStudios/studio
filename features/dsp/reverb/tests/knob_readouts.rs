@@ -68,34 +68,46 @@ fn params_on_face(profile_id: &str) -> Vec<&'static str> {
         .collect()
 }
 
+/// Every knob the face for `profile_id` draws prints a number beside it.
+async fn the_face_prints_a_value_beside_every_knob_it_draws(profile_id: &str) {
+    let fx = on_profile(profile_id).await;
+    let params = params_on_face(profile_id);
+    assert!(!params.is_empty(), "{profile_id} draws no knobs at all");
+
+    for param in params {
+        let text = readout(&fx, param)
+            .unwrap_or_else(|| panic!("no readout element for {profile_id}/{param}"));
+        assert!(
+            text.chars().any(|c| c.is_ascii_digit()),
+            "the {profile_id}/{param} readout should print a number, got {text:?}"
+        );
+    }
+}
+
 /// One profile per design family, plus the ones carrying an extra knob — the
 /// extras sit on the same readout row and are the easiest thing to forget.
-const PROFILES: [&str; 6] = [
-    "hall_concert",
-    "plate_classic",
-    "room_medium",
-    "spring_classic",
-    "shimmer",
-    "ir",
-];
+///
+/// A test each: every one mounts and lays out a whole editor, and six of them
+/// in one test ran past the per-test timeout. Apart they run in parallel.
+macro_rules! every_face_prints_a_value_beside_every_knob_it_draws {
+    ($($name:ident = $profile:literal),* $(,)?) => {
+        $(
+            #[tokio::test]
+            async fn $name() -> dioxus_test::Result<()> {
+                the_face_prints_a_value_beside_every_knob_it_draws($profile).await;
+                Ok(())
+            }
+        )*
+    };
+}
 
-#[tokio::test]
-async fn every_face_prints_a_value_beside_every_knob_it_draws() -> dioxus_test::Result<()> {
-    for profile_id in PROFILES {
-        let fx = on_profile(profile_id).await;
-        let params = params_on_face(profile_id);
-        assert!(!params.is_empty(), "{profile_id} draws no knobs at all");
-
-        for param in params {
-            let text = readout(&fx, param)
-                .unwrap_or_else(|| panic!("no readout element for {profile_id}/{param}"));
-            assert!(
-                text.chars().any(|c| c.is_ascii_digit()),
-                "the {profile_id}/{param} readout should print a number, got {text:?}"
-            );
-        }
-    }
-    Ok(())
+every_face_prints_a_value_beside_every_knob_it_draws! {
+    the_hall_face_prints_a_value_beside_every_knob = "hall_concert",
+    the_plate_face_prints_a_value_beside_every_knob = "plate_classic",
+    the_room_face_prints_a_value_beside_every_knob = "room_medium",
+    the_spring_face_prints_a_value_beside_every_knob = "spring_classic",
+    the_shimmer_face_prints_a_value_beside_every_knob = "shimmer",
+    the_ir_face_prints_a_value_beside_every_knob = "ir",
 }
 
 /// Each knob shows its OWN parameter.

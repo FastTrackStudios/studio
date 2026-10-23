@@ -75,6 +75,10 @@ fn point(t: f64, value: f64) -> EnvelopePoint {
 // r[verify automation.items]
 #[test]
 fn an_item_is_made_pooled_across_tracks_resized_and_deleted() {
+    // The media the project references is generated, not committed: a
+    // fresh checkout (CI) has none until a test writes it.
+    dynamic_template::golden_session::write_media(template().parent().expect("the golden folder"))
+        .expect("the golden media");
     let _opened = session_daw::open::open_silent(&template()).expect("the template opens");
     let (a, b) = two_tracks();
     let volume = EnvelopeRef::Type(EnvelopeType::Volume);

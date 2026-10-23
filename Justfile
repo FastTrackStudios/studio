@@ -2181,21 +2181,26 @@ web-daw-serve:
 assets:
     #!/usr/bin/env bash
     set -euo pipefail
+    # bash 3.2 (macOS's /bin/bash, a CI runner without nix): no `declare -A`.
     n=0
-    declare -A fetched=()
+    fetched=" "
     while read -r repo from to; do
         [[ -z $repo || $repo == \#* ]] && continue
         to=${to:-$from}
-        if [[ -z ${fetched[$repo]:-} ]]; then
-            if [[ -d .assets/$repo/.git ]]; then git -C ".assets/$repo" pull --ff-only --quiet
+        if [[ $fetched != *" $repo "* ]]; then
+            # ASSETS_OFFLINE=1 links what .assets/ already holds and never
+            # touches the network: CI's PR runs, which get no credential.
+            if [[ -n ${ASSETS_OFFLINE:-} ]]; then
+                [[ -d .assets/$repo/.git ]] || { echo "ASSETS_OFFLINE: .assets/$repo is not cloned" >&2; exit 1; }
+            elif [[ -d .assets/$repo/.git ]]; then git -C ".assets/$repo" pull --ff-only --quiet
             else git clone --quiet "https://github.com/FastTrackStudios/$repo.git" ".assets/$repo"; fi
-            fetched[$repo]=1
+            fetched="$fetched$repo "
         fi
         mkdir -p "$(dirname "$to")"
         ln -sfn "$PWD/.assets/$repo/$from" "$to"
         n=$((n+1))
     done < assets.txt
-    echo "linked $n assets from ${#fetched[@]} repos"
+    echo "linked $n assets from $(echo $fetched | wc -w | tr -d ' ') repos"
 
 # Generate frame's plugin faces (features/ui/plugin-faces/generated: every `.frame`, the
 # catalogs and rig-faces/faces.json) from features/ui/plugin-faces. They are

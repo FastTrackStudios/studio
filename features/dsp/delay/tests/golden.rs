@@ -200,16 +200,15 @@ fn chain_variants() -> Vec<ChainVariant> {
 /// Two configurations rendering identically means either the parameter never
 /// reaches the processor or the fixture fails to drive it. Both are worth
 /// knowing, and a duplicated reference vector would hide both, so the set is
-/// pinned exactly rather than tolerated:
+/// pinned exactly rather than tolerated.
 ///
-/// - `mono` == `pingpong`: `StereoMode::PingPong` mixes to mono and adds a
-///   cross-fed `last_feedback()` term, so it should differ from plain mono.
-/// - `lr_offset` == `plain`: `lr_offset_ms` is smoothed and sizes a delay line
-///   in `update()`, but changes nothing audible at 12 ms.
-///
-/// Neither is fixed here — this pass is a refactor, and both are behaviour
-/// changes. If one is fixed, this test fails and the vectors get re-recorded.
-const KNOWN_INERT: [(&str, &str); 2] = [("mono", "pingpong"), ("lr_offset", "plain")];
+/// Empty since 4ea6de5 ("the Tape machine's time is when its echo lands").
+/// Before it the tape's time set head 1 and the default head 3 played at
+/// 2.85× that: the left echo landed at 427 ms and the right (190 ms) at
+/// 541 ms, past this half-second fixture. So `pingpong` rendered as `mono`
+/// (the cross-fed repeat never arrived) and `lr_offset` as `plain` (it offset
+/// a right echo that never arrived). Both now land inside the fixture.
+const KNOWN_INERT: [(&str, &str); 0] = [];
 
 #[test]
 fn only_the_known_chain_parameters_are_inert() {

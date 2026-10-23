@@ -57,11 +57,23 @@ fn build(b: &mut Builder<'_>, parent: NodeId, p: &Place) -> NodeId {
         *letter_spacing = 2.0;
     }
     b.add(root, title);
+    // The readout is a frame around its text: a control's slots point
+    // inside it, never at the control itself.
+    let readout_box = b.add(
+        root,
+        draw::frame(
+            "threshold readout",
+            w - 12.0 - 40.0 - 90.0,
+            10.0,
+            90.0,
+            12.0,
+        ),
+    );
     let mut value = draw::text(
-        "threshold",
+        "value",
         "-60 dB",
-        w - 12.0 - 40.0 - 90.0,
-        10.0,
+        0.0,
+        0.0,
         90.0,
         12.0,
         &accent,
@@ -70,12 +82,12 @@ fn build(b: &mut Builder<'_>, parent: NodeId, p: &Place) -> NodeId {
     if let NodeKind::Text(TextData { font_weight, .. }) = &mut value.kind {
         *font_weight = Some(600.0);
     }
-    let value = b.add(root, value);
+    let value = b.add(readout_box, value);
     let readout = Control::new(ControlKind::Readout)
         .slot(SlotRole::Value, value.0)
         .bound(Binding::param(addr("threshold")))
         .formatted(ValueFormat::decimals(0).unit("dB"));
-    b.controls.insert(value, readout);
+    b.controls.insert(readout_box, readout);
     // Power: a ring that lights in the accent while the gate is in.
     let power = b.add(root, draw::frame("power", w - 12.0 - 30.0, 3.0, 30.0, 28.0));
     b.add(

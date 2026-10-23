@@ -149,24 +149,83 @@ fn assert_bounded(label: &str, ir: &[f64]) {
 /// pre-delay at all — the chain remaps it to the engine's feedback and
 /// disengages the delay line — so its top end is the most loop-gain those two
 /// algorithms can be asked for.
-#[test]
-fn every_algorithm_stays_bounded_across_its_knob_range() {
-    for algo in AlgorithmType::ALL {
-        // Convolution needs an IR loaded to do anything; without one it is a
-        // pass-through and there is no loop to test.
-        if *algo == AlgorithmType::Convolution {
-            continue;
-        }
-        for decay in [0.0, 0.5, 1.0] {
-            for predelay_ms in [0.0, 50.0, 125.0, 250.0, 500.0, 1500.0] {
-                let ir = impulse_response(*algo, decay, predelay_ms, 4.0);
-                assert_bounded(
-                    &format!("{algo:?} decay={decay} predelay={predelay_ms}ms"),
-                    &ir,
-                );
-            }
+fn stays_bounded_across_its_knob_range(algo: AlgorithmType) {
+    // Where PRE-DELAY is a feedback control, every step of it; anywhere else
+    // it is a plain delay ahead of the engine, and its two ends say all there
+    // is to say (the longest exercises the line's wrap).
+    let predelays: &[f64] = if matches!(algo, AlgorithmType::Magneto | AlgorithmType::NonLinear) {
+        &[0.0, 50.0, 125.0, 250.0, 500.0, 1500.0]
+    } else {
+        &[0.0, 1500.0]
+    };
+    for decay in [0.0, 0.5, 1.0] {
+        for &predelay_ms in predelays {
+            let ir = impulse_response(algo, decay, predelay_ms, 4.0);
+            assert_bounded(
+                &format!("{algo:?} decay={decay} predelay={predelay_ms}ms"),
+                &ir,
+            );
         }
     }
+}
+
+/// A test per algorithm for the sweep above and the shared level below: the
+/// sweep is a quarter-hour of audio and the level check a minute, and run as
+/// one test each they took minutes on a loaded runner. Apart, they run in
+/// parallel and a failure names its algorithm. Convolution is left out of
+/// both (it needs an IR loaded to have a loop or a level of its own) and
+/// Swell out of the level check: it renders silence at every setting, a
+/// defect of its own that a trim cannot repair.
+macro_rules! per_algorithm {
+    ($($bounded:ident, $level:ident = $algo:ident),* $(,)?) => {
+        $(
+            #[test]
+            fn $bounded() {
+                stays_bounded_across_its_knob_range(AlgorithmType::$algo);
+            }
+
+            #[test]
+            fn $level() {
+                shares_the_output_level(AlgorithmType::$algo);
+            }
+        )*
+    };
+}
+
+per_algorithm! {
+    room_stays_bounded_across_its_knob_range, room_shares_the_output_level = Room,
+    hall_stays_bounded_across_its_knob_range, hall_shares_the_output_level = Hall,
+    plate_stays_bounded_across_its_knob_range, plate_shares_the_output_level = Plate,
+    spring_stays_bounded_across_its_knob_range, spring_shares_the_output_level = Spring,
+    cloud_stays_bounded_across_its_knob_range, cloud_shares_the_output_level = Cloud,
+    bloom_stays_bounded_across_its_knob_range, bloom_shares_the_output_level = Bloom,
+    shimmer_stays_bounded_across_its_knob_range, shimmer_shares_the_output_level = Shimmer,
+    chorale_stays_bounded_across_its_knob_range, chorale_shares_the_output_level = Chorale,
+    magneto_stays_bounded_across_its_knob_range, magneto_shares_the_output_level = Magneto,
+    nonlinear_stays_bounded_across_its_knob_range, nonlinear_shares_the_output_level = NonLinear,
+    reflections_stays_bounded_across_its_knob_range, reflections_shares_the_output_level = Reflections,
+    velvet_stays_bounded_across_its_knob_range, velvet_shares_the_output_level = Velvet,
+    freeverb_stays_bounded_across_its_knob_range, freeverb_shares_the_output_level = FreeVerb,
+    random_stays_bounded_across_its_knob_range, random_shares_the_output_level = Random,
+}
+
+#[test]
+fn swell_stays_bounded_across_its_knob_range() {
+    stays_bounded_across_its_knob_range(AlgorithmType::Swell);
+}
+
+/// `per_algorithm!` must name every algorithm with a loop: one added to
+/// `AlgorithmType::ALL` without a line there would go unswept.
+#[test]
+fn the_per_algorithm_tests_cover_every_algorithm() {
+    let covered = 14 + 1; // per_algorithm!, Swell
+    let left_out = 1; // Convolution
+    assert_eq!(
+        AlgorithmType::ALL.len(),
+        covered + left_out,
+        "a new algorithm: add it to `per_algorithm!` (or say why it is left \
+         out) and update this count"
+    );
 }
 
 /// The full BigSky pre-delay reaches the output: nothing before 1.5 s, the
@@ -259,8 +318,7 @@ fn the_nonlinear_regeneration_knob_does_not_self_oscillate() {
 /// [`AlgorithmType::wet_calibration_db`] anchors them all to unity wet energy
 /// for a unit impulse at the reference decay. This is the test that fails when
 /// an engine changes and its constant goes stale.
-#[test]
-fn algorithms_share_one_output_level() {
+fn shares_the_output_level(algo: AlgorithmType) {
     /// The decay the constants are measured at.
     const REFERENCE_T60: f64 = 2.0;
     /// How far from unity energy a calibrated engine may sit.
@@ -270,37 +328,20 @@ fn algorithms_share_one_output_level() {
     /// change while still being a tenth of the spread it replaced.
     const TOLERANCE_DB: f64 = 1.5;
 
-    let mut worst: Option<(AlgorithmType, f64)> = None;
-    for algo in AlgorithmType::ALL {
-        // Convolution's level belongs to the IR that gets loaded, and Swell
-        // renders silence at every setting — a defect of its own, tracked
-        // separately, that a trim cannot repair.
-        if matches!(algo, AlgorithmType::Convolution | AlgorithmType::Swell) {
-            continue;
-        }
+    let ir = impulse_response_t60(algo, REFERENCE_T60, REFERENCE_T60 * 3.0);
+    let energy: f64 = ir.iter().map(|s| s * s).sum();
+    assert!(
+        energy > 1e-9,
+        "{algo:?}: rendered silence at T60 {REFERENCE_T60}s",
+    );
 
-        let ir = impulse_response_t60(*algo, REFERENCE_T60, REFERENCE_T60 * 3.0);
-        let energy: f64 = ir.iter().map(|s| s * s).sum();
-        assert!(
-            energy > 1e-9,
-            "{algo:?}: rendered silence at T60 {REFERENCE_T60}s",
-        );
-
-        let error_db = 10.0 * energy.log10();
-        if worst.is_none_or(|(_, w)| error_db.abs() > w.abs()) {
-            worst = Some((*algo, error_db));
-        }
-        assert!(
-            error_db.abs() <= TOLERANCE_DB,
-            "{algo:?}: {error_db:+.2} dB from the shared level at T60 \
-             {REFERENCE_T60}s — its `wet_calibration_db` is stale. Re-derive \
-             with `cargo run --release -p reverb-dsp --example wet_level`.",
-        );
-    }
-
-    if let Some((algo, db)) = worst {
-        println!("furthest from the shared level: {algo:?} at {db:+.2} dB");
-    }
+    let error_db = 10.0 * energy.log10();
+    assert!(
+        error_db.abs() <= TOLERANCE_DB,
+        "{algo:?}: {error_db:+.2} dB from the shared level at T60 \
+         {REFERENCE_T60}s — its `wet_calibration_db` is stale. Re-derive \
+         with `cargo run --release -p reverb-dsp --example wet_level`.",
+    );
 }
 
 /// The user's wet trim does what it says, on top of the calibration.

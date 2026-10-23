@@ -103,6 +103,10 @@ fn drag(track: &str) {
 // r[verify automation.write]
 #[test]
 fn a_fader_moved_in_latch_writes_its_moves() {
+    // The media the project references is generated, not committed: a
+    // fresh checkout (CI) has none until a test writes it.
+    dynamic_template::golden_session::write_media(template().parent().expect("the golden folder"))
+        .expect("the golden media");
     let _opened = session_daw::open::open_silent(&template()).expect("the template opens");
     let (track, before) = volume_points(None);
     assert!(

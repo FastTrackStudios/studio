@@ -55,6 +55,20 @@
         export PATH="$PATH:$HOME/.cargo/bin"
       '';
     }
-    // config.fts.shellEnv);
+    // config.fts.shellEnv
+    # The CI runners have no GPU, so wgpu found no adapter and every test
+    # that draws a frame (the plugin faces, the session views, the EQ
+    # screenshots) panicked with NoCompatibleDevice. Mesa's lavapipe is a
+    # software Vulkan driver: pointing the loader at it alone gives those
+    # tests a (CPU) adapter. CI shell only; the dev shell keeps the
+    # machine's real GPU.
+    // lib.optionalAttrs pkgs.stdenv.isLinux {
+      VK_DRIVER_FILES = "${pkgs.mesa}/share/vulkan/icd.d/lvp_icd.${pkgs.stdenv.hostPlatform.uname.processor}.json";
+      # lavapipe rasterizes on a thread per core by default; with nextest
+      # running a test per core beside it that oversubscribes the box many
+      # times over. Two each: the frame tests run two at a time anyway
+      # (.config/nextest.toml, gpu-frames).
+      LP_NUM_THREADS = "2";
+    });
   };
 }

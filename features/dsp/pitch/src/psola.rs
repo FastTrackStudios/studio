@@ -42,6 +42,13 @@ pub struct PsolaShifter {
 
     sample_rate: f64,
     window_size: usize,
+
+    /// The detection window, newest first, laid out contiguously so the YIN
+    /// difference runs over slices instead of two modulo ring reads per
+    /// term. Sized in `update` (and `new`), never on the audio thread.
+    yin_recent: Vec<f64>,
+    /// YIN's cumulative-mean-normalised difference, one per lag.
+    yin_cmnd: Vec<f64>,
 }
 
 impl PsolaShifter {
@@ -75,7 +82,19 @@ impl PsolaShifter {
             detect_interval: 512,
             sample_rate: 48000.0,
             window_size: Self::DEFAULT_WINDOW,
+            yin_recent: vec![0.0; Self::DEFAULT_WINDOW],
+            yin_cmnd: vec![1.0; 1200 + 1],
         }
+    }
+
+    /// The longest window `detect_pitch` reads and the most lags it scores.
+    const fn yin_extent(&self) -> (usize, usize) {
+        let window = if self.window_size < self.max_period * 2 + self.min_period {
+            self.window_size
+        } else {
+            self.max_period * 2 + self.min_period
+        };
+        (window, self.max_period + 1)
     }
 
     pub fn update(&mut self, sample_rate: f64) {
@@ -106,6 +125,14 @@ impl PsolaShifter {
         let tail_len = self.grain_size / 4;
         self.prev_tail_a.resize(tail_len, 0.0);
         self.prev_tail_b.resize(tail_len, 0.0);
+
+        let (window, lags) = self.yin_extent();
+        if self.yin_recent.len() < window {
+            self.yin_recent.resize(window, 0.0);
+        }
+        if self.yin_cmnd.len() < lags {
+            self.yin_cmnd.resize(lags, 1.0);
+        }
     }
 
     pub fn reset(&mut self) {
@@ -128,7 +155,7 @@ impl PsolaShifter {
     }
 
     /// YIN pitch detection. Returns period in samples, or 0 if unvoiced.
-    fn detect_pitch(&self) -> usize {
+    fn detect_pitch(&mut self) -> usize {
         let window = self.window_size.min(self.max_period * 2 + self.min_period);
         if self.write_count < window {
             return 0;
@@ -137,16 +164,25 @@ impl PsolaShifter {
         let max_lag = self.max_period.min(window / 2);
         let threshold = 0.15;
 
-        let mut cmnd_vals = vec![1.0f64; max_lag + 1];
+        // `update` sizes both for the largest window and lag; a shifter used
+        // without one keeps `new`'s 48 kHz sizes, which cover its defaults.
+        let (Some(recent), Some(cmnd_vals)) = (
+            self.yin_recent.get_mut(..window),
+            self.yin_cmnd.get_mut(..=max_lag),
+        ) else {
+            return 0;
+        };
+        for (k, slot) in recent.iter_mut().enumerate() {
+            *slot = self.analysis_buf.read(k + 1);
+        }
+        cmnd_vals.fill(1.0);
         let mut running_sum = 0.0f64;
 
-        #[allow(clippy::needless_range_loop)]
+        // The same terms in the same order as reading the ring per term, so
+        // the detected period is bit-for-bit what it was.
         for lag in 1..=max_lag {
             let mut diff = 0.0f64;
-            let n = window - lag;
-            for i in 0..n {
-                let a = self.analysis_buf.read(i + 1);
-                let b = self.analysis_buf.read(i + lag + 1);
+            for (a, b) in recent.iter().zip(&recent[lag..]) {
                 let d = a - b;
                 diff += d * d;
             }
