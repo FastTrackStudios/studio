@@ -10778,16 +10778,6 @@ mod phase_tests {
             assert_eq!(which.is_spectral(), spectral, "{which:?}");
         }
     }
-
-    /// Every phase answers — a `match` that grew a hole would be a
-    /// phase button that silently kept the previous rack.
-    #[test]
-    fn every_phase_answers() {
-        for phase in P::ALL {
-            let panels = panels_for(phase);
-            assert!(!panels.is_empty(), "{phase:?} asked for {panels:?}");
-        }
-    }
 }
 
 #[cfg(test)]

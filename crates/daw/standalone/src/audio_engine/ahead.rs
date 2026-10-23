@@ -1854,9 +1854,14 @@ mod tests {
         })
     }
 
-    /// Once the render ahead has caught up, the dual render plays exactly
-    /// what the whole render plays — the live track rendered in the
-    /// callback, the rest handed over from the thread ahead.
+    /// The dual render plays exactly what the whole render plays — the live
+    /// track rendered in the callback, the rest handed over from the thread
+    /// ahead — from the run's very first block: play from stop renders the
+    /// start in the callback until the render ahead has caught up, so there
+    /// is not one frame of silence. And a meter on a track rendered ahead
+    /// moves with what is heard, block by block, not with when its frames
+    /// were rendered. One pair of real-time runs proves all three (each
+    /// `play` paces itself to the clock, so a pair per claim cost seconds).
     #[test]
     fn played_ahead_the_song_is_the_same_song() {
         let whole = play(None, None, 160, no_edit);
@@ -1871,16 +1876,8 @@ mod tests {
             1,
             "one run, from the first block"
         );
-        assert_same_from(&whole.out, &dual.out, 60);
-    }
+        assert_same_from(&whole.out, &dual.out, 0);
 
-    /// A meter on a track rendered ahead moves with what is heard, block by
-    /// block, as it does when everything renders in the callback — not
-    /// when its frames were rendered.
-    #[test]
-    fn a_meter_ahead_moves_with_what_is_heard() {
-        let whole = play(None, None, 160, no_edit);
-        let dual = play(Some(AheadPrefs::default()), None, 160, no_edit);
         assert!(
             whole.meter[60..].iter().any(|m| *m > 0.01),
             "Kick is metered"
@@ -2026,18 +2023,6 @@ mod tests {
         use daw_proto::Tracks;
         let ctx = daw_proto::ProjectContext::Project(guid.to_string());
         Tracks::set_armed(daw, ctx, track(daw, guid, name), armed).expect("the arm");
-    }
-
-    /// Play from stop: the callback renders the run's start itself until
-    /// the render ahead has caught up, so the song is the same song from
-    /// its very first block — not one frame of silence.
-    #[test]
-    fn a_run_starts_without_a_gap() {
-        let whole = play(None, None, 100, no_edit);
-        let dual = play(Some(AheadPrefs::default()), None, 100, no_edit);
-        assert_same_from(&whole.out, &dual.out, 0);
-        assert_eq!(dual.count(|s| &s.ahead_underruns), 0);
-        assert_eq!(dual.count(|s| &s.ahead_restarts), 1);
     }
 
     /// A locate while playing: the next block plays the new place, with

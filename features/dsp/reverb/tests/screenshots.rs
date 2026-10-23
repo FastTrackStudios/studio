@@ -52,6 +52,7 @@ async fn on_profile(profile_id: &str) -> Fixture {
 /// One shot per family, plus every variant — the point of the exercise is that
 /// they do not look like each other.
 #[tokio::test]
+#[ignore = "visual inspection, asserts nothing: just reverb-shots"]
 async fn every_space() {
     for profile in reverb::profiles::PROFILES {
         let fx = on_profile(profile.id).await;
@@ -62,6 +63,7 @@ async fn every_space() {
 /// The IR panel with a library behind it — the browser is the half of a
 /// convolution reverb that is not a knob.
 #[tokio::test]
+#[ignore = "visual inspection, asserts nothing: just reverb-shots"]
 async fn ir_with_a_library() {
     // Safety: the harness is single-threaded per test binary and this runs
     // before the editor mounts.

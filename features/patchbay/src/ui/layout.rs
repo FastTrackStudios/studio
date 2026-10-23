@@ -1297,64 +1297,6 @@ mod live_probe {
                 .collect::<Vec<_>>()
         );
     }
-
-    /// Ground truth against the LIVE `PipeWire` graph via an in-process
-    /// backend (no separate app needed):
-    /// `cargo test -p patchbay-ui inproc_layout -- --ignored --nocapture`
-    #[tokio::test]
-    #[ignore = "needs live PipeWire"]
-    async fn inproc_layout() {
-        let backend = crate::server::PatchbayBackend::new();
-        tokio::time::sleep(std::time::Duration::from_secs(2)).await;
-        use crate::server::proto::PatchbayService as _;
-        let graph = backend.graph().await.expect("snapshot");
-        println!(
-            "graph: {} nodes / {} ports / {} links",
-            graph.nodes.len(),
-            graph.ports.len(),
-            graph.links.len()
-        );
-        if let Some(r) = graph.nodes.iter().find(|n| n.name == "REAPER") {
-            let ins = graph
-                .ports
-                .iter()
-                .filter(|p| p.node_id == r.id && p.direction == PortDirection::Input)
-                .count();
-            let outs = graph
-                .ports
-                .iter()
-                .filter(|p| p.node_id == r.id && p.direction == PortDirection::Output)
-                .count();
-            println!(
-                "mirror REAPER: id={} class={:?} kind={:?} ins={ins} outs={outs}",
-                r.id, r.media_class, r.media_kind
-            );
-        } else {
-            println!("mirror REAPER: ABSENT");
-        }
-        let aliases = HashMap::new();
-        let filters = Filters {
-            search: "",
-            tab: MediaKind::Audio,
-            hide_unconnected: false,
-            aliases: &aliases,
-            hide_monitors: false,
-            collapsed: [false; 4],
-        };
-        let lay = compute_layout(&graph, &filters, &HashMap::new());
-        match lay.cards.iter().find(|c| c.node.name == "REAPER") {
-            Some(c) => {
-                let col = ((c.x - MARGIN) / (CARD_W + COL_GAP)).round() as usize;
-                println!(
-                    "layout REAPER: column {col} ({}), {} rows, x={}",
-                    COLUMN_TITLES_DBG.get(col).unwrap_or(&"?"),
-                    c.rows.len(),
-                    c.x
-                );
-            }
-            None => println!("layout REAPER: NOT IN LAYOUT (nodes present but filtered out)"),
-        }
-    }
 }
 
 #[cfg(test)]

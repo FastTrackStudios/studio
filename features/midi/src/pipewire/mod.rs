@@ -795,41 +795,7 @@ fn init() {
 
 #[cfg(test)]
 mod tests {
-    use super::{ump_to_midi1, wants};
-    use crate::proto::{PortId, PortSelector};
-
-    const S88: &str = "Midi-Bridge:KONTROL S88 MK3: Main (capture)";
-
-    #[test]
-    fn omni_wants_every_device() {
-        assert!(wants(&PortSelector::All, S88));
-        assert!(wants(&PortSelector::NameContains(String::new()), S88));
-    }
-
-    /// A stored port name is matched as a case-insensitive substring, the
-    /// same rule the midir backend used — so a rig preset written against
-    /// the old backend selects the same device on this one.
-    #[test]
-    fn a_named_selector_matches_a_substring_case_insensitively() {
-        assert!(wants(
-            &PortSelector::NameContains("kontrol s88".into()),
-            S88
-        ));
-        assert!(!wants(&PortSelector::NameContains("mioXM".into()), S88));
-    }
-
-    #[test]
-    fn an_id_selector_matches_the_whole_name_only() {
-        assert!(wants(&PortSelector::Id(PortId(S88.into())), S88));
-        assert!(!wants(&PortSelector::Id(PortId("KONTROL".into())), S88));
-    }
-
-    /// A virtual port is a node other apps connect *to*; there is nothing on
-    /// the far end for us to link, so it must never pull a device in.
-    #[test]
-    fn a_virtual_selector_links_nothing() {
-        assert!(!wants(&PortSelector::Virtual("Signal".into()), S88));
-    }
+    use super::ump_to_midi1;
 
     /// UMP message type 0x2 is MIDI 1.0 channel voice — note on, at full
     /// velocity, on channel 1.

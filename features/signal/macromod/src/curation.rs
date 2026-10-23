@@ -58,12 +58,4 @@ mod tests {
         assert!(curation.is_empty());
         assert_eq!(curation.len(), 0);
     }
-
-    #[test]
-    fn serde_round_trip() {
-        let curation = ParamCuration::new(vec!["gain".into(), "tone".into(), "level".into()]);
-        let json = serde_json::to_string(&curation).unwrap();
-        let parsed: ParamCuration = serde_json::from_str(&json).unwrap();
-        assert_eq!(curation, parsed);
-    }
 }

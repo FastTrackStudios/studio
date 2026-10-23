@@ -223,6 +223,7 @@ async fn switching_models_by_rail_click_does_not_panic() {
 /// Every size preset on the Pultec — whether a form is usable is not something
 /// a size in a table can tell you.
 #[tokio::test]
+#[ignore = "visual inspection, asserts nothing: just eq-shots"]
 async fn shot_every_editor_form() {
     for form in fts_audio_ui::EDITOR_FORMS {
         let (w, h) = eq::ui::faces::editor_size_for(1, *form);
@@ -242,6 +243,7 @@ async fn shot_every_editor_form() {
 }
 
 #[tokio::test]
+#[ignore = "visual inspection, asserts nothing: just eq-shots"]
 async fn shot_every_hardware_model() {
     for (model, name) in [
         (1, "pultec"),

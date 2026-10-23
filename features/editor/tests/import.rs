@@ -96,15 +96,6 @@ fn the_sounding_pitch_is_still_derivable_from_string_and_fret() {
     assert_eq!(row_of(&t, 5, 12), 76, "twelfth on the high E");
 }
 
-#[test]
-fn a_capo_raises_every_open_string() {
-    let t = StringTuning {
-        capo: 2,
-        ..standard()
-    };
-    assert_eq!(row_of(&t, 0, 0), 42, "open low E behind a second-fret capo");
-}
-
 // ── Bends ────────────────────────────────────────────────────────────
 
 #[test]

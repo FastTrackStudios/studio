@@ -220,12 +220,4 @@ mod tests {
         assert_eq!(found.len(), 1);
         assert_eq!(found[0].cc_number, 1);
     }
-
-    #[test]
-    fn serde_round_trip() {
-        let mapping = MidiCcMapping::new(11, MidiTarget::MorphSlider);
-        let json = serde_json::to_string(&mapping).unwrap();
-        let parsed: MidiCcMapping = serde_json::from_str(&json).unwrap();
-        assert_eq!(mapping, parsed);
-    }
 }

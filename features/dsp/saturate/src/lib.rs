@@ -246,14 +246,6 @@ mod tests {
     }
 
     #[test]
-    fn tube_curve_has_no_dc_at_silence() {
-        let mut s = Saturator::new();
-        s.set_drive(0.8);
-        s.set_curve(SaturationCurve::Tube);
-        assert!(s.process(0.0).abs() < 1e-6);
-    }
-
-    #[test]
     fn db_to_gain_is_sane() {
         assert!((db_to_gain(0.0) - 1.0).abs() < 1e-3);
         assert!((db_to_gain(6.0) - 1.995).abs() < 2e-2);

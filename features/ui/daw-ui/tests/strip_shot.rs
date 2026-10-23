@@ -5,7 +5,7 @@
 //! through blitz-dom — the renderer REAPER embeds — so the picture is
 //! honest and arrives in seconds.
 //!
-//! `MIXER_HEIGHT=228 cargo test -p daw-ui --test strip_shot -- --nocapture`
+//! `MIXER_HEIGHT=228 just daw-ui-shots` (they are `#[ignore]`d in the suite)
 //! writes `target/theme-shots/strip-dioxus.png`, which
 //! `just` (or the comparison script) montages against a crop of the real
 //! MCP. 228 is not arbitrary: it is the height of the strip in the
@@ -38,6 +38,7 @@ fn kick() -> Track {
 }
 
 #[test]
+#[ignore = "a picture for comparison, asserts nothing: just daw-ui-shots"]
 fn paint_the_strip_for_comparison() {
     let height: f32 = std::env::var("MIXER_HEIGHT")
         .ok()
@@ -117,6 +118,7 @@ fn crop_to_strip_sized(path: &std::path::Path, width: u32, height: u32) {
 
 /// The FX pill on its own, for the same loop.
 #[test]
+#[ignore = "a picture for comparison, asserts nothing: just daw-ui-shots"]
 fn paint_the_fx_pill() {
     fn app() -> Element {
         let mut store = use_hook(TrackStore::new);
@@ -147,6 +149,7 @@ fn paint_the_fx_pill() {
 /// The label half alone, to isolate the pill's own geometry from the
 /// button's placement of it.
 #[test]
+#[ignore = "a picture for comparison, asserts nothing: just daw-ui-shots"]
 fn paint_the_fx_label_half() {
     fn app() -> Element {
         rsx! {
@@ -192,6 +195,7 @@ fn tcp_kick() -> Track {
 
 /// The TCP row, painted for the same loop.
 #[test]
+#[ignore = "a picture for comparison, asserts nothing: just daw-ui-shots"]
 fn paint_the_track_row() {
     fn app() -> Element {
         let mut store = use_hook(TrackStore::new);
@@ -226,6 +230,7 @@ fn paint_the_track_row() {
 /// of tracks in different states are put side by side — a soloed track
 /// next to a muted one next to an armed one.
 #[test]
+#[ignore = "a picture for comparison, asserts nothing: just daw-ui-shots"]
 fn paint_the_panels() {
     fn demo() -> Vec<Track> {
         // Built on the reference fixtures above rather than a third

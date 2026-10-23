@@ -545,59 +545,6 @@ const fn correlation_exempt(alg: AlgorithmType) -> bool {
     matches!(alg, AlgorithmType::Spring | AlgorithmType::Magneto)
 }
 
-/// Temporary probe: localize Room/Chamber's subsonic energy in frequency.
-#[test]
-#[ignore = "temporary probe"]
-fn probe_chamber() {
-    for (alg, v, label) in [
-        (AlgorithmType::Room, 1usize, "chamber"),
-        (AlgorithmType::Room, 0usize, "medium"),
-        (AlgorithmType::Hall, 0usize, "hall"),
-    ] {
-        let ir = render_ir(alg, v);
-        let n = ir.left.len();
-        let mono = mono(&ir.left, &ir.right);
-        let sum: f64 = mono.iter().sum();
-        let energy: f64 = mono.iter().map(|x| x * x).sum();
-        println!("{label}: len {n} sum {sum:.4} energy {energy:.4}");
-
-        // One big FFT over the whole IR for fine LF resolution.
-        let mut planner = RealFftPlanner::<f64>::new();
-        let nfft = n.next_power_of_two();
-        let fft = planner.plan_fft_forward(nfft);
-        let mut buf = vec![0.0; nfft];
-        buf[..n].copy_from_slice(&mono);
-        let mut spec = fft.make_output_vec();
-        fft.process(&mut buf, &mut spec).unwrap();
-        let bin_hz = SR / num::count_to_f64(nfft);
-        let band = |lo: f64, hi: f64| -> f64 {
-            let a = num::f64_to_index(lo / bin_hz);
-            let b = num::f64_to_index(hi / bin_hz).min(spec.len().saturating_sub(1));
-            spec.get(a..=b)
-                .unwrap_or(&[])
-                .iter()
-                .map(realfft::num_complex::Complex::norm_sqr)
-                .sum::<f64>()
-        };
-        let total = band(0.0, SR / 2.0);
-        for (lo, hi) in [
-            (0.0, 5.0),
-            (5.0, 10.0),
-            (10.0, 20.0),
-            (20.0, 50.0),
-            (50.0, 100.0),
-            (100.0, 24000.0),
-        ] {
-            println!(
-                "  {:>6.0}-{:>5.0} Hz: {:>7.3}%",
-                lo,
-                hi,
-                100.0 * band(lo, hi) / total
-            );
-        }
-    }
-}
-
 #[test]
 fn ir_metrics() {
     let mut reports = Vec::new();

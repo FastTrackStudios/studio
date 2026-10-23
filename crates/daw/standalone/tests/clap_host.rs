@@ -18,12 +18,6 @@ fn load_from_bogus_path_errors_cleanly() {
     assert!(matches!(err, ClapHostError::BundleLoad));
 }
 
-#[test]
-fn host_constructs_with_custom_identity() {
-    let host = ClapHost::new("MyDaw", "com.example.mydaw");
-    let _ = host; // construction must not panic; visible via dropping the value
-}
-
 fn lsp_parametric_eq_bundle_path() -> Option<PathBuf> {
     if let Some(path) = std::env::var_os("DAW_TEST_LSP_CLAP_BUNDLE") {
         return Some(PathBuf::from(path));

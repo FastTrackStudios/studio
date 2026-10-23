@@ -489,22 +489,28 @@ tailwind-eq-standalone: _lumen-link
 # tests drive), so a GUI change can be looked at without opening a DAW.
 # Shots land in target/gui-shots/<fx>/ (FTS_SHOTS_DIR overrides).
 comp-shots:
-    cargo test -p comp --features native,profiles,ui --test screenshots -- --nocapture
+    cargo test -p comp --features native,profiles,ui --test screenshots -- --include-ignored --test-threads 1 --nocapture
 
 eq-shots:
-    cargo test -p eq --features native,ui --test screenshots -- --nocapture
+    cargo test -p eq --features native,ui --test screenshots -- --include-ignored --test-threads 1 --nocapture
 
 reverb-shots:
-    cargo test -p reverb --features native,profiles,ui --test screenshots -- --nocapture
+    cargo test -p reverb --features native,profiles,ui --test screenshots -- --include-ignored --test-threads 1 --nocapture
 
 delay-shots:
-    cargo test -p delay --features native,profiles,ui --test screenshots -- --nocapture
+    cargo test -p delay --features native,profiles,ui --test screenshots -- --include-ignored --test-threads 1 --nocapture
 
 saturate-shots:
-    cargo test -p saturate --features native,profiles,ui --test screenshots -- --nocapture
+    cargo test -p saturate --features native,profiles,ui --test screenshots -- --include-ignored --test-threads 1 --nocapture
 
 modulation-shots:
-    cargo test -p modulation --features native,profiles,ui --test screenshots -- --nocapture
+    cargo test -p modulation --features native,profiles,ui --test screenshots -- --include-ignored --test-threads 1 --nocapture
+
+# The daw-ui strip, track row, panels and main window, painted through
+# blitz-dom for side-by-side comparison with REAPER (target/theme-shots/).
+# MIXER_HEIGHT sets the strip height (228 = the reference REAPER shot).
+daw-ui-shots:
+    cargo test -p daw-ui --test strip_shot --test window_shot -- --include-ignored --test-threads 1 --nocapture
 
 # THE plugin suite — the one list every plugin recipe iterates. A name here
 # is `<name>-plugin` as a cargo package and "FTS <Name>" as a bundle (see

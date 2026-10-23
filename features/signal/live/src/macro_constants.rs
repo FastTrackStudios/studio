@@ -101,13 +101,4 @@ mod tests {
         const { assert!(validation::MAX_PARAM_VALUE == 1.0) };
         const { assert!(validation::MIN_KNOB_ID_LENGTH >= 1) };
     }
-
-    #[test]
-    fn test_feature_flags_are_boolean() {
-        // Just ensure they compile and have expected types
-        let _ = features::ENABLE_PARALLEL_UPDATES;
-        let _ = features::ENABLE_AUTO_RECORDING;
-        let _ = features::ENABLE_REGISTRY_STATS;
-        let _ = features::ENABLE_INPUT_VALIDATION;
-    }
 }

@@ -11,75 +11,10 @@ use rusty_link::{AblLink, SessionState};
 use std::time::Instant;
 use tracing::{debug, info};
 
-// ── Rolling Average ─────────────────────────────────────────────────────────
-
-/// Fixed-size circular buffer with interquartile-mean smoothing.
-///
-/// Port of ReaBlink's `RollingAverage.hpp`. Maintains a bounded window of
-/// samples and returns the trimmed mean (drops the lowest and highest
-/// quarters before averaging), which rejects outliers from timer jitter
-/// and scheduling noise.
-pub struct RollingAverage {
-    values: Vec<f64>,
-    max_size: usize,
-    /// Write cursor — next position to overwrite in the circular buffer.
-    cursor: usize,
-    /// Number of values added so far (saturates at `max_size`).
-    len: usize,
-}
-
-impl RollingAverage {
-    /// Create a new rolling average with the given window size.
-    pub fn new(size: usize) -> Self {
-        assert!(size > 0, "RollingAverage size must be > 0");
-        Self {
-            values: vec![0.0; size],
-            max_size: size,
-            cursor: 0,
-            len: 0,
-        }
-    }
-
-    /// Push a new sample into the buffer, evicting the oldest if full.
-    pub fn add(&mut self, value: f64) {
-        self.values[self.cursor] = value;
-        self.cursor = (self.cursor + 1) % self.max_size;
-        if self.len < self.max_size {
-            self.len += 1;
-        }
-    }
-
-    /// Interquartile mean of the buffered samples.
-    ///
-    /// Sorts a copy of the live window, trims the bottom and top quarters,
-    /// and averages the remaining middle half. Returns `0.0` when empty.
-    pub fn average(&self) -> f64 {
-        if self.len == 0 {
-            return 0.0;
-        }
-
-        let mut sorted: Vec<f64> = self.values[..self.len].to_vec();
-        sorted.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
-
-        let quarter = sorted.len() / 4;
-        let trimmed = &sorted[quarter..sorted.len() - quarter];
-        if trimmed.is_empty() {
-            // Fewer than 4 samples — just average everything.
-            return sorted.iter().sum::<f64>() / sorted.len() as f64;
-        }
-        trimmed.iter().sum::<f64>() / trimmed.len() as f64
-    }
-
-    /// Number of samples currently in the buffer.
-    pub fn len(&self) -> usize {
-        self.len
-    }
-
-    /// Whether the buffer is empty.
-    pub fn is_empty(&self) -> bool {
-        self.len == 0
-    }
-}
+// The smoothing window is the drift corrector's (`crate::drift`), the same
+// ReaBlink `RollingAverage.hpp` port; re-exported so `link::RollingAverage`
+// keeps its path.
+pub use crate::drift::RollingAverage;
 
 // ── Audio Buffer Info ───────────────────────────────────────────────────────
 
@@ -905,51 +840,6 @@ const TEMPO_TOLERANCE: f64 = 0.001;
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn rolling_average_basic() {
-        let mut ra = RollingAverage::new(4);
-        assert!(ra.is_empty());
-        assert_eq!(ra.average(), 0.0);
-
-        ra.add(1.0);
-        ra.add(2.0);
-        ra.add(3.0);
-        // 3 samples, quarter = 0, trimmed = all 3
-        let avg = ra.average();
-        assert!((avg - 2.0).abs() < 1e-9);
-    }
-
-    #[test]
-    fn rolling_average_circular_eviction() {
-        let mut ra = RollingAverage::new(3);
-        ra.add(10.0);
-        ra.add(20.0);
-        ra.add(30.0);
-        // Full: [10, 20, 30]
-        ra.add(40.0);
-        // Now: [40, 20, 30] (oldest evicted)
-        assert_eq!(ra.len(), 3);
-        // sorted: [20, 30, 40], quarter=0 => avg of all = 30
-        assert!((ra.average() - 30.0).abs() < 1e-9);
-    }
-
-    #[test]
-    fn rolling_average_outlier_rejection() {
-        let mut ra = RollingAverage::new(8);
-        // 6 normal values + 1 low outlier + 1 high outlier
-        ra.add(100.0); // outlier high
-        ra.add(10.0);
-        ra.add(10.0);
-        ra.add(10.0);
-        ra.add(10.0);
-        ra.add(10.0);
-        ra.add(10.0);
-        ra.add(0.001); // outlier low
-        // sorted: [0.001, 10, 10, 10, 10, 10, 10, 100]
-        // quarter = 2, trimmed = [10, 10, 10, 10] => avg = 10.0
-        assert!((ra.average() - 10.0).abs() < 1e-9);
-    }
 
     #[test]
     fn audio_buffer_info_duration() {

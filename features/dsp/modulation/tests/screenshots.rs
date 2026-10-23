@@ -52,6 +52,7 @@ async fn on_profile(profile_id: &str) -> Fixture {
 /// One shot per family, plus every variant — the point of the exercise is
 /// that they do not look like each other.
 #[tokio::test]
+#[ignore = "visual inspection, asserts nothing: just modulation-shots"]
 async fn every_space() {
     for profile in modulation::profiles::PROFILES {
         let fx = on_profile(profile.id).await;

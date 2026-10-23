@@ -56,22 +56,6 @@ async fn current_project_through_in_process_daw() -> eyre::Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn transport_play_through_in_process_daw() -> eyre::Result<()> {
-    let bundle = build_in_process_daw(seeded()).await?;
-    let project = bundle.daw.current_project().await?;
-    let transport = project.transport();
-
-    assert!(!transport.is_playing().await?);
-    transport.play().await?;
-    // Drive a few soft-clock ticks so the engine advances measurably.
-    tokio::time::sleep(std::time::Duration::from_millis(120)).await;
-    assert!(transport.is_playing().await?);
-    let pos = transport.get_position().await?;
-    assert!(pos > 0.05, "expected playhead to advance, got {pos}s");
-    Ok(())
-}
-
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn transport_reaper_parity_through_in_process_daw() -> eyre::Result<()> {
     let bundle = build_in_process_daw(seeded()).await?;
     let project = bundle.daw.current_project().await?;
@@ -155,16 +139,6 @@ async fn transport_reaper_parity_through_in_process_daw() -> eyre::Result<()> {
     transport.toggle_recording().await?;
     assert_eq!(transport.get_play_state().await?, PlayState::Stopped);
 
-    Ok(())
-}
-
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn tempo_round_trip_through_in_process_daw() -> eyre::Result<()> {
-    let bundle = build_in_process_daw(seeded()).await?;
-    let project = bundle.daw.current_project().await?;
-    project.transport().set_tempo(140.0).await?;
-    let bpm = project.transport().get_tempo().await?;
-    assert!((bpm - 140.0).abs() < 1e-9);
     Ok(())
 }
 

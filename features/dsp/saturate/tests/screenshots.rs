@@ -52,6 +52,7 @@ async fn on_profile(profile_id: &str) -> Fixture {
 /// The emphasis EQ strip, open under the tape panel
 /// (`fx.sat.emphasis.display`).
 #[tokio::test]
+#[ignore = "visual inspection, asserts nothing: just saturate-shots"]
 async fn emphasis_strip_open() {
     let params = std::sync::Arc::new(saturate::ui::params::SatParams::default());
     params.store_profile_id(saturate::profiles::profile_index("tape").unwrap());
@@ -90,6 +91,7 @@ async fn emphasis_strip_open() {
 /// One shot per family, plus every variant — the point of the exercise is
 /// that they do not look like each other.
 #[tokio::test]
+#[ignore = "visual inspection, asserts nothing: just saturate-shots"]
 async fn every_space() {
     for profile in saturate::profiles::PROFILES {
         let fx = on_profile(profile.id).await;

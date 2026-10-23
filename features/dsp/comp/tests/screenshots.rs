@@ -58,6 +58,7 @@ fn mount_design() -> Fixture {
 /// The stack, three stages deep: FTS surface + LA-2A serial, an 1176 on a
 /// parallel lane — every stage visible as a row (`fx.stack.strip`).
 #[tokio::test]
+#[ignore = "visual inspection, asserts nothing: just comp-shots"]
 async fn shot_stack_of_three() {
     use nice_plug::prelude::Param;
     let (_w, base_h) = comp::ui::faces::preferred_editor_size(0);
@@ -105,6 +106,7 @@ async fn shot_stack_of_three() {
 /// A faceplate at a SMALL window: the panel scales down to fit instead of
 /// cropping (the resize contract — no scale floor in the way).
 #[tokio::test]
+#[ignore = "visual inspection, asserts nothing: just comp-shots"]
 async fn shot_1176_scaled_down() {
     // 500 wide is well under the old 0.55 scale floor that used to crop.
     // Opened directly on the persisted id — at this size the rail is too
@@ -126,6 +128,7 @@ async fn shot_1176_scaled_down() {
 /// A stage's sidechain-EQ sidecar, open under the FTS surface
 /// (`fx.embed-eq.one-surface`).
 #[tokio::test]
+#[ignore = "visual inspection, asserts nothing: just comp-shots"]
 async fn shot_sidechain_sidecar() {
     use nice_plug::prelude::Param;
     let (w, base_h) = comp::ui::faces::preferred_editor_size(0);
@@ -202,12 +205,14 @@ async fn turn(fx: &mut Fixture, testid: &str, dy: f64) {
 }
 
 #[tokio::test]
+#[ignore = "visual inspection, asserts nothing: just comp-shots"]
 async fn shot_control_face() {
     let fx = mount_design();
     shot(&fx, "control-basic");
 }
 
 #[tokio::test]
+#[ignore = "visual inspection, asserts nothing: just comp-shots"]
 async fn shot_control_face_advanced() {
     let mut fx = mount_design();
     click_testid(&mut fx, "advanced-toggle").await;
@@ -217,6 +222,7 @@ async fn shot_control_face_advanced() {
 /// The character dropdown open — seven waveshapes that used to be seven
 /// segments across the bar.
 #[tokio::test]
+#[ignore = "visual inspection, asserts nothing: just comp-shots"]
 async fn shot_character_dropdown() {
     let mut fx = mount_design();
     click_testid(&mut fx, "advanced-toggle").await;
@@ -225,6 +231,7 @@ async fn shot_character_dropdown() {
 }
 
 #[tokio::test]
+#[ignore = "visual inspection, asserts nothing: just comp-shots"]
 async fn shot_la2a_face() {
     let mut fx = mount_face("la2a").await;
     // Some peak reduction on the meter, and gain brought back up.
@@ -237,6 +244,7 @@ async fn shot_la2a_face() {
 }
 
 #[tokio::test]
+#[ignore = "visual inspection, asserts nothing: just comp-shots"]
 async fn shot_ssl_bus_face() {
     let mut fx = mount_face("ssl_bus").await;
     fx.ui
@@ -247,6 +255,7 @@ async fn shot_ssl_bus_face() {
 }
 
 #[tokio::test]
+#[ignore = "visual inspection, asserts nothing: just comp-shots"]
 async fn shot_1176_face() {
     let mut fx = mount_face("urei_1176").await;
     fx.ui
@@ -260,6 +269,7 @@ async fn shot_1176_face() {
 /// Every remaining unit, one shot each — this is the sheet to look at after
 /// touching the panel kit.
 #[tokio::test]
+#[ignore = "visual inspection, asserts nothing: just comp-shots"]
 async fn shot_every_other_unit() {
     for id in [
         "cl1b",
@@ -286,6 +296,7 @@ async fn shot_every_other_unit() {
 /// says whether a form is usable, which is not something a size in a table can
 /// tell you.
 #[tokio::test]
+#[ignore = "visual inspection, asserts nothing: just comp-shots"]
 async fn shot_every_editor_form() {
     for form in fts_audio_ui::EDITOR_FORMS {
         let index = comp::profiles::profile_index("la2a").unwrap();
@@ -302,6 +313,7 @@ async fn shot_every_editor_form() {
 /// The same face in a window the user dragged wider — this is what host
 /// resizing does to a faceplate (scale it, not reflow it).
 #[tokio::test]
+#[ignore = "visual inspection, asserts nothing: just comp-shots"]
 async fn shot_la2a_face_large() {
     let mut fx = mount_sized(1500, 520);
     select_profile(&mut fx, "la2a").await;

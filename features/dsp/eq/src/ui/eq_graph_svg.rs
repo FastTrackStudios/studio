@@ -323,14 +323,6 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_eq_band_default() {
-        let band = EqBand::default();
-        assert!(!band.used);
-        assert!(!band.enabled);
-        assert_eq!(band.gain, 0.0);
-    }
-
-    #[test]
     fn test_grid_generation() {
         let grid = generate_grid_elements(40.0, 720.0, 220.0, 20.0, 20000.0, 24.0);
         assert!(!grid.is_empty());

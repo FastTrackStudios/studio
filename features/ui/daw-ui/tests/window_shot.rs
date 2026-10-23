@@ -370,6 +370,7 @@ fn fts_eq_embed(cell: EmbeddedFx) -> Element {
 }
 
 #[test]
+#[ignore = "a picture for comparison, asserts nothing: just daw-ui-shots"]
 fn paint_the_main_window() {
     fn app() -> Element {
         let mut store = use_hook(TrackStore::new);
