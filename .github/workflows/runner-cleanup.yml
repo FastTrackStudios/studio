@@ -1,0 +1,32 @@
+# One-off: the studio-tests runner's disk is full (PR #184: "Set up job"
+# cannot unpack actions). From another runner instance on the same host,
+# clear that instance's incremental caches (rebuildable). Throwaway PR; this
+# file never merges.
+name: runner-cleanup
+on:
+  pull_request:
+    paths: [".github/workflows/runner-cleanup.yml"]
+permissions:
+  contents: read
+jobs:
+  cleanup:
+    runs-on: [self-hosted, studio-lint]
+    timeout-minutes: 30
+    steps:
+      - name: Disk before
+        run: |
+          df -h /build || true
+          ls -la /build/ci 2>&1 | head -30 || true
+          du -sh /build/ci/*/cargo-target 2>/dev/null || true
+      - name: Clear the tests instance's incremental caches
+        run: |
+          t=/build/ci/macpro-studio-tests/cargo-target
+          if [ -d "$t" ]; then
+            for d in "$t"/*/incremental "$t"/*/*/incremental; do
+              [ -d "$d" ] && { echo "clearing $d"; rm -rf "$d" || echo "::warning::could not clear $d"; }
+            done
+          else
+            echo "::warning::$t is not visible from this runner"
+          fi
+      - name: Disk after
+        run: df -h /build || true
