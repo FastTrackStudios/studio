@@ -11,8 +11,9 @@
 //!
 //! - [`signal`] generates deterministic excitation — impulse, sweep, fixed-seed
 //!   noise, transient bursts, DC, silence.
-//! - [`golden`] pins the resulting output as a bit-exact reference vector and
-//!   tells you *where* a later run diverged.
+//! - [`golden`] pins the resulting output as a reference vector — bit-exact on
+//!   the recording machine, within a tight tolerance across platforms — and
+//!   tells you *where* (which window of the buffer) a later run diverged.
 //! - [`alloc`] arms a counting allocator around `process()` so "allocation-free
 //!   on the hot path" is a test result rather than a comment.
 //! - [`num`] is re-exported from `dsp-core`: the audited conversion boundary the
@@ -26,8 +27,13 @@
 //!    unmodified code (`UPDATE_GOLDEN=1`). Commit the reference files on their
 //!    own, so the baseline is a reviewable artifact.
 //! 2. Refactor.
-//! 3. Run the tests. A reference file that changes is the refactor telling you
-//!    it was not one.
+//! 3. Run the tests — with `GOLDEN_EXACT=1` on the machine that recorded the
+//!    references, so even a reordered float operation shows. A reference file
+//!    that changes is the refactor telling you it was not one.
+//!
+//! Without `GOLDEN_EXACT` a reference holds on every platform (x86_64 Linux CI
+//! and aarch64 macOS disagree in libm's last bits); see [`golden`] for the
+//! tolerance and when re-recording is legitimate.
 
 pub mod alloc;
 pub mod golden;
