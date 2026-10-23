@@ -20,7 +20,7 @@ checksum = "366ffbaa4442f4684d91e2cd7c5ea7c4ed8add41959a31447066e279e432b618"
 
 [[package]]
 name = "ableton"
-version = "0.1.2"
+version = "26.10.0"
 dependencies = [
  "daw-proto",
  "dawfile-reaper",
@@ -210,7 +210,7 @@ checksum = "250f629c0161ad8107cf89319e990051fae62832fd343083bea452d93e2205fd"
 
 [[package]]
 name = "align-dsp"
-version = "0.1.2"
+version = "26.10.0"
 dependencies = [
  "align-dsp",
  "dsp-core",
@@ -596,7 +596,7 @@ dependencies = [
 
 [[package]]
 name = "app-shell"
-version = "0.1.2"
+version = "26.10.0"
 dependencies = [
  "architect",
  "architect-telemetry",
@@ -1528,7 +1528,7 @@ dependencies = [
 
 [[package]]
 name = "audio"
-version = "0.1.2"
+version = "26.10.0"
 dependencies = [
  "anyhow",
  "atomic_float",
@@ -1547,7 +1547,7 @@ dependencies = [
 
 [[package]]
 name = "audio-controls"
-version = "0.1.2"
+version = "26.10.0"
 dependencies = [
  "daw-proto",
  "dioxus",
@@ -2277,7 +2277,7 @@ checksum = "56ed6191a7e78c36abdb16ab65341eefd73d64d303fffccdbb00d51e4205967b"
 
 [[package]]
 name = "builtin"
-version = "0.1.2"
+version = "26.10.0"
 dependencies = [
  "builtin",
  "comp",
@@ -3047,7 +3047,7 @@ dependencies = [
 
 [[package]]
 name = "comp"
-version = "0.1.2"
+version = "26.10.0"
 dependencies = [
  "anyrender 0.11.1",
  "architect-ui",
@@ -3075,7 +3075,7 @@ dependencies = [
 
 [[package]]
 name = "comp-plugin"
-version = "0.1.2"
+version = "26.10.0"
 dependencies = [
  "comp",
  "fx-stack",
@@ -3264,7 +3264,7 @@ dependencies = [
 
 [[package]]
 name = "control-surfaces"
-version = "0.1.2"
+version = "26.10.0"
 dependencies = [
  "control-surfaces",
  "daw-control",
@@ -4134,7 +4134,7 @@ checksum = "be1e0bca6c3637f992fc1cc7cbc52a78c1ef6db076dbf1059c4323d6a2048376"
 
 [[package]]
 name = "daw"
-version = "0.1.2"
+version = "26.10.0"
 dependencies = [
  "architect",
  "daw-control",
@@ -4163,15 +4163,15 @@ dependencies = [
 
 [[package]]
 name = "daw-allocator"
-version = "0.1.2"
+version = "26.10.0"
 
 [[package]]
 name = "daw-audio-graph"
-version = "0.1.2"
+version = "26.10.0"
 
 [[package]]
 name = "daw-audio-sync"
-version = "0.1.2"
+version = "26.10.0"
 dependencies = [
  "bincode",
  "daw-transport-sync",
@@ -4186,7 +4186,7 @@ dependencies = [
 
 [[package]]
 name = "daw-bridge"
-version = "0.1.2"
+version = "26.10.0"
 dependencies = [
  "ableton",
  "architect",
@@ -4235,7 +4235,7 @@ dependencies = [
 
 [[package]]
 name = "daw-extension-runtime"
-version = "0.1.2"
+version = "26.10.0"
 dependencies = [
  "architect",
  "crossbeam-channel",
@@ -4254,7 +4254,7 @@ dependencies = [
 
 [[package]]
 name = "daw-module"
-version = "0.1.2"
+version = "26.10.0"
 dependencies = [
  "tokio",
  "tracing",
@@ -4262,7 +4262,7 @@ dependencies = [
 
 [[package]]
 name = "daw-perf-test"
-version = "0.1.2"
+version = "26.10.0"
 dependencies = [
  "crossbeam-channel",
  "daw",
@@ -4334,7 +4334,7 @@ dependencies = [
 
 [[package]]
 name = "daw-reaper-dioxus-ext"
-version = "0.1.2"
+version = "26.10.0"
 dependencies = [
  "crossbeam-channel",
  "daw",
@@ -4356,7 +4356,7 @@ dependencies = [
 
 [[package]]
 name = "daw-reaper-dioxus-ext-test"
-version = "0.1.2"
+version = "26.10.0"
 dependencies = [
  "daw-module",
  "reaper-dioxus",
@@ -4368,7 +4368,7 @@ dependencies = [
 
 [[package]]
 name = "daw-reaper-xtask"
-version = "0.1.2"
+version = "26.10.0"
 dependencies = [
  "daw",
  "studio",
@@ -4414,7 +4414,7 @@ dependencies = [
 
 [[package]]
 name = "daw-sync"
-version = "0.1.2"
+version = "26.10.0"
 dependencies = [
  "daw",
  "daw-sync",
@@ -4439,14 +4439,14 @@ dependencies = [
 
 [[package]]
 name = "daw-transport-sync"
-version = "0.1.2"
+version = "26.10.0"
 dependencies = [
  "web-time",
 ]
 
 [[package]]
 name = "daw-ui"
-version = "0.1.2"
+version = "26.10.0"
 dependencies = [
  "architect",
  "architect-input",
@@ -4560,7 +4560,7 @@ checksum = "ac6b926516df9c60bfa16e107b21086399f8285a44ca9711344b9e553c5146e2"
 
 [[package]]
 name = "delay"
-version = "0.1.2"
+version = "26.10.0"
 dependencies = [
  "anyrender 0.11.1",
  "architect-ui",
@@ -4588,7 +4588,7 @@ dependencies = [
 
 [[package]]
 name = "delay-plugin"
-version = "0.1.2"
+version = "26.10.0"
 dependencies = [
  "delay",
  "dsp-core",
@@ -5718,7 +5718,7 @@ checksum = "780955b8b195a21ab8e4ac6b60dd1dbdcec1dc6c51c0617964b08c81785e12c9"
 
 [[package]]
 name = "dock"
-version = "0.1.2"
+version = "26.10.0"
 dependencies = [
  "dioxus",
  "facet",
@@ -5832,7 +5832,7 @@ dependencies = [
 
 [[package]]
 name = "drums"
-version = "0.1.2"
+version = "26.10.0"
 dependencies = [
  "architect",
  "builtin",
@@ -5856,7 +5856,7 @@ dependencies = [
 
 [[package]]
 name = "dsp-core"
-version = "0.1.2"
+version = "26.10.0"
 dependencies = [
  "atomic_float",
  "dsp-core",
@@ -5907,7 +5907,7 @@ checksum = "15401da73a9ed8c80e3b2d4dc05fe10e7b72d7243b9f614e516a44fa99986e88"
 
 [[package]]
 name = "dynamic-template"
-version = "0.1.2"
+version = "26.10.0"
 dependencies = [
  "anyhow",
  "architect",
@@ -5939,7 +5939,7 @@ dependencies = [
 
 [[package]]
 name = "dynamic-template-extension"
-version = "0.1.2"
+version = "26.10.0"
 dependencies = [
  "eyre",
  "tracing",
@@ -5987,7 +5987,7 @@ dependencies = [
 
 [[package]]
 name = "editing"
-version = "0.1.2"
+version = "26.10.0"
 dependencies = [
  "facet",
  "facet-json",
@@ -5997,7 +5997,7 @@ dependencies = [
 
 [[package]]
 name = "editor"
-version = "0.1.2"
+version = "26.10.0"
 dependencies = [
  "align-dsp",
  "anyrender 0.11.1",
@@ -6134,7 +6134,7 @@ dependencies = [
 
 [[package]]
 name = "ekit"
-version = "0.1.2"
+version = "26.10.0"
 dependencies = [
  "architect",
  "daw",
@@ -6335,7 +6335,7 @@ dependencies = [
 
 [[package]]
 name = "eq"
-version = "0.1.2"
+version = "26.10.0"
 dependencies = [
  "anyrender 0.11.1",
  "architect-ui",
@@ -6372,7 +6372,7 @@ dependencies = [
 
 [[package]]
 name = "eq-plugin"
-version = "0.1.2"
+version = "26.10.0"
 dependencies = [
  "dsp-core",
  "eq",
@@ -6382,7 +6382,7 @@ dependencies = [
 
 [[package]]
 name = "eq-standalone"
-version = "0.1.2"
+version = "26.10.0"
 dependencies = [
  "anyhow",
  "atomic_float",
@@ -7266,7 +7266,7 @@ dependencies = [
 
 [[package]]
 name = "frame"
-version = "0.1.2"
+version = "26.10.0"
 dependencies = [
  "anyrender 0.11.1",
  "anyrender 0.13.0",
@@ -7313,7 +7313,7 @@ dependencies = [
 
 [[package]]
 name = "frame-cli"
-version = "0.1.2"
+version = "26.10.0"
 dependencies = [
  "architect",
  "frame",
@@ -7332,7 +7332,7 @@ dependencies = [
 
 [[package]]
 name = "frame-desktop"
-version = "0.1.2"
+version = "26.10.0"
 dependencies = [
  "architect",
  "frame",
@@ -7348,7 +7348,7 @@ dependencies = [
 
 [[package]]
 name = "frame-library-server"
-version = "0.1.2"
+version = "26.10.0"
 dependencies = [
  "architect",
  "frame",
@@ -7361,7 +7361,7 @@ dependencies = [
 
 [[package]]
 name = "frame-mcp"
-version = "0.1.2"
+version = "26.10.0"
 dependencies = [
  "architect",
  "frame",
@@ -7377,7 +7377,7 @@ checksum = "42703706b716c37f96a77aea830392ad231f44c9e9a67872fa5548707e11b11c"
 
 [[package]]
 name = "fts-account"
-version = "0.1.2"
+version = "26.10.0"
 dependencies = [
  "auth-client",
  "dioxus",
@@ -7391,7 +7391,7 @@ dependencies = [
 
 [[package]]
 name = "fts-audio-ui"
-version = "0.1.2"
+version = "26.10.0"
 dependencies = [
  "anyrender 0.11.1",
  "anyrender_vello 0.12.0",
@@ -7420,7 +7420,7 @@ dependencies = [
 
 [[package]]
 name = "fts-clap-host"
-version = "0.1.2"
+version = "26.10.0"
 dependencies = [
  "baseview 0.2.2",
  "block2 0.6.2",
@@ -7434,11 +7434,11 @@ dependencies = [
 
 [[package]]
 name = "fts-devtools"
-version = "0.1.2"
+version = "26.10.0"
 
 [[package]]
 name = "fts-icons"
-version = "0.1.2"
+version = "26.10.0"
 dependencies = [
  "anyhow",
  "clap",
@@ -7475,14 +7475,14 @@ dependencies = [
 
 [[package]]
 name = "fts-plugin-xtask"
-version = "0.1.2"
+version = "26.10.0"
 dependencies = [
  "nice-plug-xtask",
 ]
 
 [[package]]
 name = "fts-sample"
-version = "0.1.2"
+version = "26.10.0"
 dependencies = [
  "arc-swap",
  "claxon",
@@ -7504,7 +7504,7 @@ dependencies = [
 
 [[package]]
 name = "fts-themer-ui"
-version = "0.1.2"
+version = "26.10.0"
 dependencies = [
  "daw-proto",
  "daw-ui",
@@ -7652,7 +7652,7 @@ dependencies = [
 
 [[package]]
 name = "fx-stack"
-version = "0.1.2"
+version = "26.10.0"
 dependencies = [
  "libm",
 ]
@@ -7668,7 +7668,7 @@ dependencies = [
 
 [[package]]
 name = "gate"
-version = "0.1.2"
+version = "26.10.0"
 dependencies = [
  "dsp-core",
  "hound",
@@ -7677,7 +7677,7 @@ dependencies = [
 
 [[package]]
 name = "gate-plugin"
-version = "0.1.2"
+version = "26.10.0"
 dependencies = [
  "gate",
  "level",
@@ -8309,7 +8309,7 @@ dependencies = [
 
 [[package]]
 name = "guide-plugin"
-version = "0.1.2"
+version = "26.10.0"
 dependencies = [
  "nice-plug",
  "session",
@@ -8327,7 +8327,7 @@ dependencies = [
 
 [[package]]
 name = "guitar"
-version = "0.1.2"
+version = "26.10.0"
 dependencies = [
  "anyrender 0.11.1",
  "anyrender_vello 0.12.0",
@@ -8777,7 +8777,7 @@ dependencies = [
 
 [[package]]
 name = "hits"
-version = "0.1.2"
+version = "26.10.0"
 dependencies = [
  "anyhow",
  "approx",
@@ -9548,7 +9548,7 @@ dependencies = [
 
 [[package]]
 name = "interchange"
-version = "0.1.2"
+version = "26.10.0"
 dependencies = [
  "cfb 0.10.0",
  "daw-proto",
@@ -10160,7 +10160,7 @@ dependencies = [
 
 [[package]]
 name = "keys"
-version = "0.1.2"
+version = "26.10.0"
 dependencies = [
  "architect",
  "architect-telemetry",
@@ -10232,7 +10232,7 @@ dependencies = [
 
 [[package]]
 name = "kit-sheet"
-version = "0.1.2"
+version = "26.10.0"
 dependencies = [
  "comp",
  "delay",
@@ -10310,7 +10310,7 @@ checksum = "bf36173d4167ed999940f804952e6b08197cae5ad5d572eb4db150ce8ad5d58f"
 
 [[package]]
 name = "launcher"
-version = "0.1.2"
+version = "26.10.0"
 dependencies = [
  "ab_glyph",
  "architect-launcher-core",
@@ -10382,7 +10382,7 @@ checksum = "7a79a3332a6609480d7d0c9eab957bca6b455b91bb84e66d19f5ff66294b85b8"
 
 [[package]]
 name = "level"
-version = "0.1.2"
+version = "26.10.0"
 dependencies = [
  "dsp-core",
  "hound",
@@ -10390,7 +10390,7 @@ dependencies = [
 
 [[package]]
 name = "level-plugin"
-version = "0.1.2"
+version = "26.10.0"
 dependencies = [
  "level",
  "nice-plug",
@@ -10575,7 +10575,7 @@ dependencies = [
 
 [[package]]
 name = "limiter-plugin"
-version = "0.1.2"
+version = "26.10.0"
 dependencies = [
  "comp",
  "nice-plug",
@@ -10756,7 +10756,7 @@ dependencies = [
 
 [[package]]
 name = "logic"
-version = "0.1.2"
+version = "26.10.0"
 dependencies = [
  "daw-proto",
  "dawfile-reaper",
@@ -11394,7 +11394,7 @@ dependencies = [
 
 [[package]]
 name = "meter-plugin"
-version = "0.1.2"
+version = "26.10.0"
 dependencies = [
  "dioxus",
  "dsp-core",
@@ -11406,7 +11406,7 @@ dependencies = [
 
 [[package]]
 name = "mic"
-version = "0.1.2"
+version = "26.10.0"
 dependencies = [
  "dioxus",
  "dioxus-test",
@@ -11423,7 +11423,7 @@ dependencies = [
 
 [[package]]
 name = "mic-plugin"
-version = "0.1.2"
+version = "26.10.0"
 dependencies = [
  "crossbeam-channel",
  "dsp-core",
@@ -11434,7 +11434,7 @@ dependencies = [
 
 [[package]]
 name = "midi"
-version = "0.1.2"
+version = "26.10.0"
 dependencies = [
  "architect",
  "core-foundation 0.10.1",
@@ -11598,7 +11598,7 @@ dependencies = [
 
 [[package]]
 name = "modulation"
-version = "0.1.2"
+version = "26.10.0"
 dependencies = [
  "anyrender 0.11.1",
  "architect-ui",
@@ -11624,7 +11624,7 @@ dependencies = [
 
 [[package]]
 name = "modulation-plugin"
-version = "0.1.2"
+version = "26.10.0"
 dependencies = [
  "atomic_float",
  "dsp-core",
@@ -11736,7 +11736,7 @@ dependencies = [
 
 [[package]]
 name = "multiband-dsp"
-version = "0.1.2"
+version = "26.10.0"
 
 [[package]]
 name = "music-catalog"
@@ -11871,7 +11871,7 @@ dependencies = [
 
 [[package]]
 name = "nam-plugin"
-version = "0.1.2"
+version = "26.10.0"
 dependencies = [
  "architect",
  "neural-amp-modeler",
@@ -13754,7 +13754,7 @@ checksum = "2ee67f1008b1ba2321834326597b8e186293b049a023cdef258527550b9935b4"
 
 [[package]]
 name = "patch-list"
-version = "0.1.2"
+version = "26.10.0"
 dependencies = [
  "architect-telemetry",
  "chrono",
@@ -13774,7 +13774,7 @@ dependencies = [
 
 [[package]]
 name = "patchbay"
-version = "0.1.2"
+version = "26.10.0"
 dependencies = [
  "architect",
  "architect-telemetry",
@@ -13815,7 +13815,7 @@ dependencies = [
 
 [[package]]
 name = "patchbay-driver"
-version = "0.1.2"
+version = "26.10.0"
 dependencies = [
  "arc-swap",
  "once_cell",
@@ -14197,7 +14197,7 @@ dependencies = [
 
 [[package]]
 name = "pitch"
-version = "0.1.2"
+version = "26.10.0"
 dependencies = [
  "criterion",
  "dsp-core",
@@ -14209,7 +14209,7 @@ dependencies = [
 
 [[package]]
 name = "pitch-plugin"
-version = "0.1.2"
+version = "26.10.0"
 dependencies = [
  "dsp-core",
  "nice-plug",
@@ -14327,7 +14327,7 @@ dependencies = [
 
 [[package]]
 name = "plugin-core"
-version = "0.1.2"
+version = "26.10.0"
 dependencies = [
  "architect-ui",
  "atomic_float",
@@ -14341,7 +14341,7 @@ dependencies = [
 
 [[package]]
 name = "plugin-faces"
-version = "0.1.2"
+version = "26.10.0"
 dependencies = [
  "frame",
  "kurbo 0.13.1",
@@ -14574,7 +14574,7 @@ dependencies = [
 
 [[package]]
 name = "preset-browser"
-version = "0.1.2"
+version = "26.10.0"
 dependencies = [
  "dioxus",
  "dioxus-test",
@@ -14814,7 +14814,7 @@ dependencies = [
 
 [[package]]
 name = "protools"
-version = "0.1.2"
+version = "26.10.0"
 dependencies = [
  "daw-proto",
  "dawfile-reaper",
@@ -15471,7 +15471,7 @@ dependencies = [
 
 [[package]]
 name = "reaper-config"
-version = "0.1.2"
+version = "26.10.0"
 dependencies = [
  "bitflags 2.13.1",
  "facet",
@@ -15481,7 +15481,7 @@ dependencies = [
 
 [[package]]
 name = "reaper-dioxus"
-version = "0.1.2"
+version = "26.10.0"
 dependencies = [
  "anyrender_vello 0.12.0",
  "architect",
@@ -15513,7 +15513,7 @@ dependencies = [
 
 [[package]]
 name = "reaper-embed"
-version = "0.1.2"
+version = "26.10.0"
 dependencies = [
  "cocoa 0.26.1",
  "objc",
@@ -15556,14 +15556,14 @@ dependencies = [
 
 [[package]]
 name = "reaper-hwnd"
-version = "0.1.2"
+version = "26.10.0"
 dependencies = [
  "serde",
 ]
 
 [[package]]
 name = "reaper-input"
-version = "0.1.2"
+version = "26.10.0"
 dependencies = [
  "architect-input",
  "architect-ui",
@@ -15594,11 +15594,11 @@ dependencies = [
 
 [[package]]
 name = "reaper-input-config"
-version = "0.1.2"
+version = "26.10.0"
 
 [[package]]
 name = "reaper-kbd"
-version = "0.1.2"
+version = "26.10.0"
 dependencies = [
  "bitflags 2.13.1",
  "serde",
@@ -15910,7 +15910,7 @@ dependencies = [
 
 [[package]]
 name = "reverb"
-version = "0.1.2"
+version = "26.10.0"
 dependencies = [
  "anyrender 0.11.1",
  "architect-ui",
@@ -15943,7 +15943,7 @@ dependencies = [
 
 [[package]]
 name = "reverb-plugin"
-version = "0.1.2"
+version = "26.10.0"
 dependencies = [
  "crossbeam-channel",
  "dsp-core",
@@ -16365,7 +16365,7 @@ dependencies = [
 
 [[package]]
 name = "sampler"
-version = "0.1.2"
+version = "26.10.0"
 dependencies = [
  "architect",
  "architect-telemetry",
@@ -16414,7 +16414,7 @@ dependencies = [
 
 [[package]]
 name = "saturate"
-version = "0.1.2"
+version = "26.10.0"
 dependencies = [
  "anyrender 0.11.1",
  "anyrender_vello_cpu",
@@ -16443,7 +16443,7 @@ dependencies = [
 
 [[package]]
 name = "saturate-plugin"
-version = "0.1.2"
+version = "26.10.0"
 dependencies = [
  "atomic_float",
  "nice-plug",
@@ -17119,7 +17119,7 @@ dependencies = [
 
 [[package]]
 name = "session-daw"
-version = "0.1.2"
+version = "26.10.0"
 dependencies = [
  "anyrender 0.11.1",
  "anyrender_vello 0.12.0",
@@ -17218,7 +17218,7 @@ dependencies = [
 
 [[package]]
 name = "session-daw-web"
-version = "0.1.2"
+version = "26.10.0"
 dependencies = [
  "console_error_panic_hook",
  "dioxus",
@@ -17234,7 +17234,7 @@ dependencies = [
 
 [[package]]
 name = "session-desktop"
-version = "0.1.2"
+version = "26.10.0"
 dependencies = [
  "app-shell",
  "architect",
@@ -17294,7 +17294,7 @@ dependencies = [
 
 [[package]]
 name = "session-extension"
-version = "0.1.2"
+version = "26.10.0"
 dependencies = [
  "architect",
  "axum",
@@ -17315,7 +17315,7 @@ dependencies = [
 
 [[package]]
 name = "session-extension-xtask"
-version = "0.1.2"
+version = "26.10.0"
 dependencies = [
  "daw",
  "studio",
@@ -17323,7 +17323,7 @@ dependencies = [
 
 [[package]]
 name = "session-format"
-version = "0.1.2"
+version = "26.10.0"
 dependencies = [
  "daw-proto",
  "dawfile-reaper",
@@ -17344,7 +17344,7 @@ dependencies = [
 
 [[package]]
 name = "session-reaper-xtask"
-version = "0.1.2"
+version = "26.10.0"
 dependencies = [
  "daw",
  "studio",
@@ -17352,7 +17352,7 @@ dependencies = [
 
 [[package]]
 name = "session-web"
-version = "0.1.2"
+version = "26.10.0"
 dependencies = [
  "architect",
  "architect-ui",
@@ -17468,7 +17468,7 @@ dependencies = [
 
 [[package]]
 name = "signal"
-version = "0.1.2"
+version = "26.10.0"
 dependencies = [
  "base64 0.22.1",
  "daw",
@@ -17492,7 +17492,7 @@ dependencies = [
 
 [[package]]
 name = "signal-analyzer"
-version = "0.1.2"
+version = "26.10.0"
 dependencies = [
  "builtin",
  "daw",
@@ -17509,7 +17509,7 @@ dependencies = [
 
 [[package]]
 name = "signal-browser"
-version = "0.1.2"
+version = "26.10.0"
 dependencies = [
  "rayon",
  "sampler",
@@ -17523,7 +17523,7 @@ dependencies = [
 
 [[package]]
 name = "signal-content-client"
-version = "0.1.2"
+version = "26.10.0"
 dependencies = [
  "architect",
  "futures-channel",
@@ -17540,7 +17540,7 @@ dependencies = [
 
 [[package]]
 name = "signal-content-library"
-version = "0.1.2"
+version = "26.10.0"
 dependencies = [
  "architect",
  "sha2 0.10.9",
@@ -17555,7 +17555,7 @@ dependencies = [
 
 [[package]]
 name = "signal-content-proto"
-version = "0.1.2"
+version = "26.10.0"
 dependencies = [
  "architect",
  "facet",
@@ -17566,7 +17566,7 @@ dependencies = [
 
 [[package]]
 name = "signal-controller"
-version = "0.1.2"
+version = "26.10.0"
 dependencies = [
  "signal-live",
  "signal-proto",
@@ -17579,7 +17579,7 @@ dependencies = [
 
 [[package]]
 name = "signal-daw-bridge"
-version = "0.1.2"
+version = "26.10.0"
 dependencies = [
  "daw",
  "serde",
@@ -17589,7 +17589,7 @@ dependencies = [
 
 [[package]]
 name = "signal-extension"
-version = "0.1.2"
+version = "26.10.0"
 dependencies = [
  "architect",
  "daw",
@@ -17609,7 +17609,7 @@ dependencies = [
 
 [[package]]
 name = "signal-fx"
-version = "0.1.2"
+version = "26.10.0"
 dependencies = [
  "daw-proto",
  "daw-standalone",
@@ -17624,7 +17624,7 @@ dependencies = [
 
 [[package]]
 name = "signal-grid"
-version = "0.1.2"
+version = "26.10.0"
 dependencies = [
  "signal-proto",
  "uuid",
@@ -17632,7 +17632,7 @@ dependencies = [
 
 [[package]]
 name = "signal-grid-ui"
-version = "0.1.2"
+version = "26.10.0"
 dependencies = [
  "architect",
  "architect-ui",
@@ -17678,7 +17678,7 @@ dependencies = [
 
 [[package]]
 name = "signal-import"
-version = "0.1.2"
+version = "26.10.0"
 dependencies = [
  "base64 0.22.1",
  "builtin",
@@ -17697,7 +17697,7 @@ dependencies = [
 
 [[package]]
 name = "signal-live"
-version = "0.1.2"
+version = "26.10.0"
 dependencies = [
  "base64 0.22.1",
  "daw",
@@ -17717,7 +17717,7 @@ dependencies = [
 
 [[package]]
 name = "signal-macromod"
-version = "0.1.2"
+version = "26.10.0"
 dependencies = [
  "dsp-core",
  "facet",
@@ -17744,7 +17744,7 @@ dependencies = [
 
 [[package]]
 name = "signal-nam"
-version = "0.1.2"
+version = "26.10.0"
 dependencies = [
  "base64 0.22.1",
  "fts-sample",
@@ -17763,7 +17763,7 @@ dependencies = [
 
 [[package]]
 name = "signal-orchestra"
-version = "0.1.2"
+version = "26.10.0"
 dependencies = [
  "eyre",
  "hound",
@@ -17774,7 +17774,7 @@ dependencies = [
 
 [[package]]
 name = "signal-plugin"
-version = "0.1.2"
+version = "26.10.0"
 dependencies = [
  "eyre",
  "facet",
@@ -17787,7 +17787,7 @@ dependencies = [
 
 [[package]]
 name = "signal-plugin-host"
-version = "0.1.2"
+version = "26.10.0"
 dependencies = [
  "daw",
  "hound",
@@ -17795,7 +17795,7 @@ dependencies = [
 
 [[package]]
 name = "signal-proto"
-version = "0.1.2"
+version = "26.10.0"
 dependencies = [
  "architect",
  "base64 0.22.1",
@@ -17816,7 +17816,7 @@ dependencies = [
 
 [[package]]
 name = "signal-reaper-controller"
-version = "0.1.2"
+version = "26.10.0"
 dependencies = [
  "atomic_float",
  "crossbeam-channel",
@@ -17836,7 +17836,7 @@ dependencies = [
 
 [[package]]
 name = "signal-rig-host"
-version = "0.1.2"
+version = "26.10.0"
 dependencies = [
  "audio",
  "crossbeam-channel",
@@ -17851,7 +17851,7 @@ dependencies = [
 
 [[package]]
 name = "signal-rig-perform-store"
-version = "0.1.2"
+version = "26.10.0"
 dependencies = [
  "architect",
  "facet",
@@ -17862,7 +17862,7 @@ dependencies = [
 
 [[package]]
 name = "signal-rig-perform-ui"
-version = "0.1.2"
+version = "26.10.0"
 dependencies = [
  "architect",
  "chrono",
@@ -17876,7 +17876,7 @@ dependencies = [
 
 [[package]]
 name = "signal-rig-shell"
-version = "0.1.2"
+version = "26.10.0"
 dependencies = [
  "app-shell",
  "dioxus",
@@ -17884,7 +17884,7 @@ dependencies = [
 
 [[package]]
 name = "signal-rigs-proto"
-version = "0.1.2"
+version = "26.10.0"
 dependencies = [
  "architect",
  "facet",
@@ -17893,7 +17893,7 @@ dependencies = [
 
 [[package]]
 name = "signal-sampler-clap"
-version = "0.1.2"
+version = "26.10.0"
 dependencies = [
  "arc-swap",
  "eyre",
@@ -17911,7 +17911,7 @@ dependencies = [
 
 [[package]]
 name = "signal-separator"
-version = "0.1.2"
+version = "26.10.0"
 dependencies = [
  "anyhow",
  "reqwest 0.12.28",
@@ -17922,7 +17922,7 @@ dependencies = [
 
 [[package]]
 name = "signal-space"
-version = "0.1.2"
+version = "26.10.0"
 dependencies = [
  "architect",
  "bhtsne",
@@ -17939,7 +17939,7 @@ dependencies = [
 
 [[package]]
 name = "signal-storage"
-version = "0.1.2"
+version = "26.10.0"
 dependencies = [
  "async-trait",
  "base64 0.22.1",
@@ -17957,7 +17957,7 @@ dependencies = [
 
 [[package]]
 name = "signal-synth-rig"
-version = "0.1.2"
+version = "26.10.0"
 dependencies = [
  "architect",
  "audio",
@@ -17975,7 +17975,7 @@ dependencies = [
 
 [[package]]
 name = "signal-tone3000"
-version = "0.1.2"
+version = "26.10.0"
 dependencies = [
  "architect",
  "auth-client",
@@ -18002,7 +18002,7 @@ dependencies = [
 
 [[package]]
 name = "signal-web"
-version = "0.1.2"
+version = "26.10.0"
 dependencies = [
  "architect",
  "console_error_panic_hook",
@@ -18022,7 +18022,7 @@ dependencies = [
 
 [[package]]
 name = "signal-widgets"
-version = "0.1.2"
+version = "26.10.0"
 dependencies = [
  "architect",
  "dioxus",
@@ -18440,7 +18440,7 @@ dependencies = [
 
 [[package]]
 name = "song"
-version = "0.1.2"
+version = "26.10.0"
 dependencies = [
  "attachments-proto",
  "serde",
@@ -18838,7 +18838,7 @@ checksum = "fe895eb47f22e2ddd4dabc02bce419d2e643c8e3b585c78158b349195bc24d82"
 
 [[package]]
 name = "stretch"
-version = "0.1.2"
+version = "26.10.0"
 dependencies = [
  "dsp-core",
  "hound",
@@ -19000,7 +19000,7 @@ dependencies = [
 
 [[package]]
 name = "studio"
-version = "0.1.2"
+version = "26.10.0"
 dependencies = [
  "ableton",
  "architect",
@@ -19032,7 +19032,7 @@ dependencies = [
 
 [[package]]
 name = "studio-desktop"
-version = "0.1.2"
+version = "26.10.0"
 dependencies = [
  "app-shell",
  "architect",
@@ -19700,7 +19700,7 @@ dependencies = [
 
 [[package]]
 name = "synth"
-version = "0.1.2"
+version = "26.10.0"
 dependencies = [
  "architect",
  "daw",
@@ -20027,7 +20027,7 @@ checksum = "f18aa187839b2bdb1ad2fa35ead8c4c2976b64e4363c386d45ac0f7ee85c9233"
 
 [[package]]
 name = "themer"
-version = "0.1.2"
+version = "26.10.0"
 dependencies = [
  "anyhow",
  "clap",
@@ -20141,7 +20141,7 @@ dependencies = [
 
 [[package]]
 name = "timeline"
-version = "0.1.2"
+version = "26.10.0"
 dependencies = [
  "architect",
  "architect-action-derive",
@@ -20936,7 +20936,7 @@ checksum = "009994f150cc0cd50ff54917d5bc8bffe8cad10ca10d81c34da2ec421ae61782"
 
 [[package]]
 name = "trigger"
-version = "0.1.2"
+version = "26.10.0"
 dependencies = [
  "approx",
  "architect-ui",
@@ -20957,7 +20957,7 @@ dependencies = [
 
 [[package]]
 name = "trigger-plugin"
-version = "0.1.2"
+version = "26.10.0"
 dependencies = [
  "nice-plug",
  "nice-plug-dioxus",
@@ -20981,7 +20981,7 @@ dependencies = [
 
 [[package]]
 name = "tune"
-version = "0.1.2"
+version = "26.10.0"
 dependencies = [
  "pitch",
  "realfft",
@@ -20991,7 +20991,7 @@ dependencies = [
 
 [[package]]
 name = "tune-plugin"
-version = "0.1.2"
+version = "26.10.0"
 dependencies = [
  "dsp-core",
  "nice-plug",
@@ -21462,7 +21462,7 @@ checksum = "39ec24b3121d976906ece63c9daad25b85969647682eee313cb5779fdd69e14e"
 
 [[package]]
 name = "unison-plugin"
-version = "0.1.2"
+version = "26.10.0"
 dependencies = [
  "dsp-core",
  "nice-plug",
@@ -21686,7 +21686,7 @@ checksum = "06abde3611657adf66d383f00b093d7faecc7fa57071cce2578660c9f1010821"
 
 [[package]]
 name = "utils"
-version = "0.1.2"
+version = "26.10.0"
 dependencies = [
  "facet",
  "facet-styx",
@@ -22496,7 +22496,7 @@ dependencies = [
 
 [[package]]
 name = "web-audio-worklet"
-version = "0.1.2"
+version = "26.10.0"
 dependencies = [
  "daw-standalone",
  "eyre",
@@ -24028,7 +24028,7 @@ dependencies = [
 
 [[package]]
 name = "world-sys"
-version = "0.1.2"
+version = "26.10.0"
 dependencies = [
  "cc",
 ]

@@ -8,6 +8,13 @@ Each release's section is built by `just release-prepare` (scripts/release.sh)
 from the cargo-rail change files in `.changes/` (up to 0.1.2, by `git cliff`
 from the commits since the previous release); edit it only in a release PR.
 
+## [26.10.0] - 2026-10-23
+
+### Added
+
+- Signal's 43 commands are one architect Action List: keys, MIDI, REAPER and a model run them by id. `studio-desktop --engine --mcp` (or `SIGNAL_MCP=1`) serves them over MCP on loopback, behind a token it generates and writes to `~/.config/fts/signal-mcp.json`.
+- Added Studio, one app for Signal and Session: its front screen opens either one, it has a new icon, and it ships to TestFlight as Studio in place of the separate Signal and Session apps (studio)
+
 ## [0.1.2] - 2026-10-22
 
 ### Fixes
