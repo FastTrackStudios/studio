@@ -16,7 +16,7 @@ use guitar::ui::GuitarRigRemote;
 use signal_rigs_proto::perform::service::{RigPerformClient, RigPerformStreamClient};
 
 /// The signal UI's compiled Tailwind (the desktop app's sheet).
-const SIGNAL_TAILWIND: &str = include_str!("../../desktop/assets/tailwind-signal.css");
+const SIGNAL_TAILWIND: &str = include_str!("../../../studio/desktop/assets/tailwind-signal.css");
 
 fn main() {
     init_tracing();
