@@ -6,11 +6,12 @@
 use std::time::Duration;
 
 use sampler::RigBlock;
-use sampler::rig::prepare_chain;
 
 use crate::guitar::remote::thread::ThreadLink;
 use crate::guitar::remote::{Lag, Link};
-use crate::guitar::runner::{BuildOptions, ChainRunner, build, plan_chain};
+use crate::guitar::runner::{
+    BuildOptions, ChainRunner, build, plan_chain, prepare_worker_block,
+};
 
 const Q: usize = 128;
 const SR: u32 = 48_000;
@@ -29,8 +30,7 @@ fn amp() -> String {
 
 /// The same block, built alone — what a worker runs.
 fn worker_for(block: &RigBlock, delay: Duration) -> Box<dyn Link> {
-    let built = prepare_chain(std::slice::from_ref(block), &["w".into()], SR).unwrap();
-    let (_, boxed) = built.into_blocks().pop().unwrap();
+    let boxed = prepare_worker_block(block, "w", SR).unwrap();
     Box::new(ThreadLink::spawn(boxed, delay))
 }
 

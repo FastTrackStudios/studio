@@ -804,11 +804,17 @@ mod tests {
     use super::*;
     use signal::rig::RigType;
 
+    /// The signal crate's own test fixtures: the runtime seed ships no rigs,
+    /// so the JM guitar megarig is built here the way signal's tests build it.
+    #[path = "../../../../tests/fixtures.rs"]
+    mod fixtures;
+
     #[tokio::test]
     async fn manage_tab_guitar_pipeline_produces_grid_slots() {
         let signal = signal::bootstrap_in_memory_controller_async()
             .await
             .expect("bootstrap failed");
+        fixtures::seed_jm_megarig(&signal).await;
 
         let rigs = signal.rigs().list().await.unwrap();
         let guitar_rigs: Vec<_> = rigs

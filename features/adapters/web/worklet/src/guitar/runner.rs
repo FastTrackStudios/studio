@@ -10,7 +10,7 @@ use std::sync::Arc;
 
 use sampler::RigBlock;
 use sampler::amp_blend::{self, Role};
-use sampler::rig::prepare_chain_with;
+use sampler::rig::{prepare_chain, prepare_chain_with};
 use signal_plugin_host::{PluginEvents, PluginInstance};
 
 use crate::guitar::plan::{self, Model, Place, Plan};
@@ -90,6 +90,31 @@ pub fn plan_chain(
         })
         .collect();
     plan::plan(&models, budget_us)
+}
+
+/// Build the block a worker runs for one slot.
+///
+/// Always built switched on: bypass belongs to the worklet's slot, which
+/// stops collecting the worker's output while the block is off and keeps the
+/// model warm meanwhile (see [`Standby`]). A worker built from a bypassed
+/// block would wrap the model in a gate that never opens, and stomping it on
+/// would play the dry guitar.
+///
+/// # Errors
+///
+/// When the block fails to build.
+pub fn prepare_worker_block(
+    block: &RigBlock,
+    id: &str,
+    sample_rate: u32,
+) -> Result<Box<dyn PluginInstance>, String> {
+    let mut on = block.clone();
+    on.bypassed = false;
+    prepare_chain(std::slice::from_ref(&on), &[id.to_string()], sample_rate)?
+        .into_blocks()
+        .pop()
+        .map(|(_, b)| b)
+        .ok_or_else(|| "the model built nothing".to_string())
 }
 
 /// Build the chain as `plan` places it.
