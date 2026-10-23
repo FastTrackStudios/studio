@@ -152,3 +152,10 @@ slow-timeout = { period = "60s", terminate-after = 4 }
 [[profile.default.overrides]]
 filter = 'package(session-daw) & test(=backspace_takes_off_the_automated_edit_then_the_hand_placements)'
 threads-required = 'num-test-threads'
+
+# kit-sheet paints every plugin knob on its own panel through the CPU
+# rasterizer: 21.4 s on an idle Mac (October 2026), so thirty seconds only
+# fit when nothing else ran. Real work; a hang is still caught.
+[[profile.default.overrides]]
+filter = 'package(kit-sheet) & test(=shot_every_knob_on_the_panel_it_sits_on)'
+slow-timeout = { period = "60s", terminate-after = 3 }
