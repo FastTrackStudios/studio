@@ -19,9 +19,6 @@ comes next, in order. The design docs this points at are in `docs/design/`.
 
 - `just ci` wasm step (`studio-desktop` for wasm32): architect pulls tokio
   `net` → mio, which does not build for the browser. Pre-existing.
-- `reaper-rs` and `reaper-lib` are still git deps on Codeberg: GitHub's
-  `reaper-rs` branch lacks the locked commit `3a9e7063`, and `reaper-lib`
-  has no GitHub repo yet.
 
 ## Step 2 — one editing engine: `timeline`
 
