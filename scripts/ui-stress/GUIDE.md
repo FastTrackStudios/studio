@@ -495,7 +495,7 @@ The harness has already exposed two classes of real failure:
   outruns the commit step.
 - Sustained combined input exposed recycled native DOM node IDs during subtree
   replacement. The focused local renderer patch and its provenance are documented
-  in [the vendor notes](../../libs/vendor/dioxus-native-dom/UPSTREAM.md).
+  in [the vendor notes](../../dioxus-native-dom/UPSTREAM.md in FastTrackStudios/vendor).
 
 Do not catch a renderer panic and count the frame as successful. Do not disable
 virtualization, omit the crashing phase or bypass event handlers merely to obtain
