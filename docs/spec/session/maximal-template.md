@@ -35,10 +35,10 @@ fixed tree.
       and Rooms Far.
 - [x] One-note tracks (Fund, Sub) get Gate → band-pass at the fundamental
       → Sat; triggers get nothing.
-- [ ] **Process/Compress/**: Dry, Tight, Punch, Smash, Crunch — a balance
+- [x] **Process/Compress/**: Dry, Tight, Punch, Smash, Crunch — a balance
       group (`session-daw::balance`): one fader up, the others down by the
       same amount between them; a fader at silence is out.
-- [ ] **Process/FX/**: Room Sim (captured rooms, compressed fast on the
+- [x] **Process/FX/**: Room Sim (captured rooms, compressed fast on the
       way back) and a **Verb** bank: Wood Room, Music Club, Stadium,
       RMX 16, Nonlin, Brick Wall.
 - [x] Drums — the kit and Process in it — reaches the mix by a send to
