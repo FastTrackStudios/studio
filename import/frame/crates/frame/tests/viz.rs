@@ -17,9 +17,19 @@ fn catalog() -> Catalog {
     params.extend(viz::catalog::eq_view_params("eq"));
     params.extend(viz::catalog::comp_params("comp"));
     params.extend(viz::catalog::adsr_params("env"));
+    params.extend(viz::catalog::comp_params("gate"));
+    params.push(
+        frame::surface::proto::ParamInfo::new(
+            "gate/on",
+            "On",
+            frame::surface::proto::Range::default(),
+        )
+        .toggle(),
+    );
     let mut streams = viz::catalog::eq_streams("eq", 64);
     streams.push(viz::catalog::adsr_stream("env", 2));
     streams.extend(viz::catalog::comp_streams("comp", 120));
+    streams.extend(viz::catalog::comp_streams("gate", 240));
     streams.push(frame::surface::proto::FeedInfo::new(
         "scope",
         "Scope",
@@ -40,6 +50,7 @@ fn placement(id: &str) -> Place {
             .options(&["ns=eq", "bands=4"])
             .bind(Binding::stream("eq/spectrum")),
         "viz.comp" => Place::new("Comp").options(&["ns=comp"]),
+        "viz.gate" => Place::new("Gate").options(&["ns=gate"]),
         "viz.adsr" => Place::new("Env").options(&["ns=env", "playheads=env/voices", "voices=2"]),
         "viz.spectrum" => Place::new("Spectrum").bind(Binding::stream("eq/spectrum")),
         "viz.gr_history" => Place::new("GR").bind(Binding::stream("comp/gr")),
@@ -138,7 +149,7 @@ fn every_viz_component_places_and_lints_clean() {
         .into_iter()
         .filter(|c| c.family == Family::Viz && !viz::lit::IDS.contains(&c.id))
         .collect();
-    assert_eq!(defs.len(), 6);
+    assert_eq!(defs.len(), 7);
     for def in defs {
         assert!(def.id.starts_with("viz."));
         let (rt, _) = runtime(def.id);
