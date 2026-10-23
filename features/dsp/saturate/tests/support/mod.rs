@@ -166,9 +166,14 @@ impl Fixture {
     /// drives the `VirtualDom` but does not recompute layout, so anything it
     /// creates keeps a 0x0 box until the document is resolved.
     pub async fn settle(&mut self) {
+        // `pump` waits up to a second for work and most of these ten find
+        // none, so a bare `pump` made every settle ~10 s of idle waiting —
+        // three settles and a test ran past the 30 s timeout. Each wait is
+        // bounded instead; work that is ready still runs at once.
         for _ in 0..10 {
             tokio::time::sleep(std::time::Duration::from_millis(20)).await;
-            let _ = self.tester.pump().await;
+            let _ = tokio::time::timeout(std::time::Duration::from_millis(50), self.tester.pump())
+                .await;
         }
         self.tester
             .advance_time(std::time::Duration::from_millis(16))
