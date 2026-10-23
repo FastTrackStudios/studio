@@ -28,6 +28,20 @@ const MAX_TAIL_SECONDS: f64 = 5.0;
 /// perceptually indistinguishable from Gaussian white noise reverb.
 const DENSITY_HZ: f64 = 2000.0;
 
+/// The densest the pattern gets: `rebuild_firs` scales [`DENSITY_HZ`] by
+/// up to 2 (full diffusion).
+const MAX_DENSITY_HZ: f64 = DENSITY_HZ * 2.0;
+
+/// Average spacing between impulses at `density_hz`, in samples.
+fn spacing_for(density_hz: f64) -> f64 {
+    (48000.0_f64 / density_hz).max(1.0)
+}
+
+/// The smallest whole spacing `rebuild` can use.
+fn min_spacing() -> usize {
+    num::f64_to_index(spacing_for(MAX_DENSITY_HZ)).max(1)
+}
+
 /// One velvet-noise FIR. Stores sparse (offset, `signed_gain`) taps and a
 /// circular input buffer.
 struct VelvetFir {
@@ -46,7 +60,11 @@ impl VelvetFir {
             buffer: vec![0.0; buffer_size],
             buffer_size,
             write_idx: 0,
-            taps: Vec::with_capacity(16384),
+            // Room for the densest pattern `rebuild` can lay over the whole
+            // buffer, so a rebuild from `set_params` never allocates. A fixed
+            // 16384 did not cover it: 5 s at 4000 taps/s is 20000, and the
+            // push past capacity reallocated on the audio thread.
+            taps: Vec::with_capacity(buffer_size / min_spacing() + 1),
         }
     }
 
@@ -59,7 +77,7 @@ impl VelvetFir {
         let length = length_samples.min(self.buffer_size.saturating_sub(1));
         let mut rng = LcgRandom::new(seed);
         // Average spacing between impulses (Karjalainen 2007).
-        let avg_spacing = (48000.0_f64 / density_hz).max(1.0);
+        let avg_spacing = spacing_for(density_hz);
         let spacing = num::f64_to_index(avg_spacing);
         let count = length.checked_div(spacing.max(1)).unwrap_or(0);
 
