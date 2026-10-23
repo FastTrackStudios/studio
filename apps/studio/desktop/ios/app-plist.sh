@@ -23,6 +23,11 @@ studio_app_plist() {
         -c "Add :UIApplicationSceneManifest:UISceneConfigurations:UIWindowSceneSessionRoleApplication:0:UISceneDelegateClassName string StudioSceneDelegate" \
         "$plist"
 
+    # The name under the icon and in the system's prompts (dx names the
+    # bundle from the package, StudioDesktop).
+    $pb -c "Set :CFBundleDisplayName Studio" "$plist" 2>/dev/null \
+        || $pb -c "Add :CFBundleDisplayName string Studio" "$plist"
+
     # The app is dark whatever the phone's setting: a light status bar over
     # its background, and a dark launch screen rather than a white flash.
     $pb -c "Delete :UIUserInterfaceStyle" "$plist" 2>/dev/null || true

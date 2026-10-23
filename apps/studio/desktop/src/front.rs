@@ -106,14 +106,35 @@ pub fn Studio() -> Element {
     #[cfg(target_os = "ios")]
     {
         let window = dioxus_native::use_window();
-        use_hook(move || {
-            use dioxus_native::winit::raw_window_handle::{HasWindowHandle, RawWindowHandle};
-            if let Ok(handle) = window.window_handle()
-                && let RawWindowHandle::UiKit(uikit) = handle.as_raw()
-            {
-                app_shell::ios_scene::window_created(uikit.ui_view);
+        use_hook({
+            let window = window.clone();
+            move || {
+                use dioxus_native::winit::raw_window_handle::{HasWindowHandle, RawWindowHandle};
+                if let Ok(handle) = window.window_handle()
+                    && let RawWindowHandle::UiKit(uikit) = handle.as_raw()
+                {
+                    app_shell::ios_scene::window_created(uikit.ui_view);
+                }
             }
         });
+        // The window takes the scene's size only once it has joined it,
+        // after the first frame (an iPad opened sideways starts out the
+        // shape of the screen held upright): watch its size, as the phone
+        // shell does, and lay the doors out again when it changes.
+        let mut surface = use_signal(|| (0_u32, 0_u32));
+        use_future(move || {
+            let window = window.clone();
+            async move {
+                loop {
+                    let px = window.surface_size();
+                    if *surface.peek() != (px.width, px.height) {
+                        surface.set((px.width, px.height));
+                    }
+                    futures_timer::Delay::new(std::time::Duration::from_millis(300)).await;
+                }
+            }
+        });
+        let _ = surface();
     }
 
     let mut side = use_signal(|| {
@@ -167,7 +188,10 @@ fn SignalSide() -> Element {
 fn Doors(opening: Option<Side>, on_pick: EventHandler<Side>) -> Element {
     rsx! {
         div {
-            style: "width: 100%; height: 100%; display: flex; flex-direction: column; \
+            // Sized from the viewport, not the parent: Blitz gives a box
+            // stretched only by percentages of an unsized parent no height.
+            style: "position: absolute; top: 0; left: 0; width: 100vw; height: 100vh; \
+                    display: flex; flex-direction: column; \
                     align-items: center; justify-content: center; gap: 28px; padding: 32px; \
                     box-sizing: border-box; overflow: hidden; background: #0c0c0f; \
                     color: #e5e7eb; font-family: Inter, system-ui, sans-serif;",
