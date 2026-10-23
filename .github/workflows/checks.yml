@@ -654,7 +654,6 @@ jobs:
       run: |
         rm -rf "$HOME/.ssh" "$HOME/.aws"
         git config --local --unset-all http.https://github.com/.extraheader || true
-        git clean -ffdx
         du -sh "$HOME/.cache/cargo-target" 2>/dev/null || true
     - name: Save the WarpBuild snapshot
       if: ${{ !cancelled() && (github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.refresh_snapshot)) }}

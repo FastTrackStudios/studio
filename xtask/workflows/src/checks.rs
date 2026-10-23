@@ -781,15 +781,18 @@ if [ -f \"$HOME/.cache/rail-evidence/cargo.test.json\" ]; then echo \"have=true\
     // advice; a snapshot alias is readable by any run in the org). The
     // asset clones STAY: PR runs get no credential (see `assets`), so the
     // snapshot is how a PR has them, and they are only as private as the
-    // org that owns both. The checkout's ignored files go. The target dir,
-    // ~/.cargo, rustup and the apt packages stay: that is the point.
+    // org that owns both. So do the checkout's ignored files — the asset
+    // links, the tailwind sheet, the plugin faces: build scripts watch some
+    // of them, and recreating them each boot rebuilt mic-plugin and
+    // session-web and everything above (13 min of a warm PR build). The
+    // target dir, ~/.cargo, rustup and the apt packages stay: that is the
+    // point.
     .step(
         Step::run(
             "Clean up before the snapshot",
             "\
 rm -rf \"$HOME/.ssh\" \"$HOME/.aws\"
 git config --local --unset-all http.https://github.com/.extraheader || true
-git clean -ffdx
 du -sh \"$HOME/.cache/cargo-target\" 2>/dev/null || true
 ",
         )

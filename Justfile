@@ -1005,8 +1005,16 @@ _web-tw-link:
 
 # Compile the site's Tailwind sheet. Gitignored output; `asset!()` needs it
 # at compile time, so this runs before any build of apps/web.
+# Writes the sheet only when it changed: session-web's build script watches
+# it, so a fresh mtime on identical bytes rebuilt session-web every run.
 web-tailwind: _web-tw-link
-    cd apps/session/web && tailwindcss -i ./tailwind.css -o ./assets/tailwind.css --minify
+    #!/usr/bin/env bash
+    set -euo pipefail
+    cd apps/session/web
+    tmp="$(mktemp)"
+    tailwindcss -i ./tailwind.css -o "$tmp" --minify
+    mkdir -p assets
+    if cmp -s "$tmp" assets/tailwind.css; then rm -f "$tmp"; else mv "$tmp" assets/tailwind.css; fi
 
 # Serve apps/session/web with hot reload.
 web: web-tailwind
@@ -2242,7 +2250,10 @@ assets:
             fetched="$fetched$repo "
         fi
         mkdir -p "$(dirname "$to")"
-        ln -sfn "$PWD/.assets/$repo/$from" "$to"
+        # Only when it isn't already that link: re-linking moves the parent
+        # directory's mtime, and build scripts that watch it (FTS Mic's
+        # `models`) then rebuild — and everything above them.
+        [ "$(readlink "$to" 2>/dev/null)" = "$PWD/.assets/$repo/$from" ] || ln -sfn "$PWD/.assets/$repo/$from" "$to"
         n=$((n+1))
     done < assets.txt
     echo "linked $n assets from $(echo $fetched | wc -w | tr -d ' ') repos"
