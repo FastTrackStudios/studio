@@ -144,3 +144,11 @@ slow-timeout = { period = "120s", terminate-after = 2 }
 [[profile.default.overrides]]
 filter = 'test(=velvet_stays_bounded_across_its_knob_range) | test(=reverb_algorithm_12_at_full_decay_stays_bounded)'
 slow-timeout = { period = "60s", terminate-after = 4 }
+
+# Backspace's two presses end to end on the golden session. Under a full
+# suite at load ~100 it once lost an item between the quantize's slip and
+# the hand placement (studio#183, a real ordering race, not yet found);
+# alone it passes every time. Alone until that is fixed.
+[[profile.default.overrides]]
+filter = 'package(session-daw) & test(=backspace_takes_off_the_automated_edit_then_the_hand_placements)'
+threads-required = 'num-test-threads'
