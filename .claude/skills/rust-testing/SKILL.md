@@ -39,6 +39,12 @@ change: `git mv tests/foo.rs tests/it/foo.rs`, `mod foo;` in
 the same helper or the same `#[tokio::test]` name — they now share a
 namespace.
 
+**The one exception: a test that installs a `#[global_allocator]`**
+(`dsp_core::install_counting_allocator!()`, the realtime no-allocation
+tests). A binary has one allocator, and a counting one would count every
+other module's allocations too, so each of those files stays its own
+`tests/<name>.rs` binary.
+
 Doctests are binaries too (one per doctest). Internal crates should
 carry examples as unit tests; a published crate keeps doctests and
 `just test-doc` runs them (nextest cannot).
