@@ -719,6 +719,16 @@ mod tests {
         assert_eq!(translate_sequence("a"), "a");
     }
 
+    /// `<C-…>` is the primary modifier: Cmd ("Meta") on a Mac, Control
+    /// elsewhere (architect-input's notation).
+    fn primary() -> &'static str {
+        if cfg!(target_os = "macos") {
+            "Meta"
+        } else {
+            "Ctrl"
+        }
+    }
+
     #[test]
     fn test_translate_multi_key_sequence() {
         assert_eq!(translate_sequence("gg"), "g g");
@@ -726,7 +736,7 @@ mod tests {
 
     #[test]
     fn test_translate_ctrl_key() {
-        assert_eq!(translate_sequence("<C-s>"), "Ctrl+s");
+        assert_eq!(translate_sequence("<C-s>"), format!("{}+s", primary()));
     }
 
     #[test]
@@ -741,12 +751,15 @@ mod tests {
 
     #[test]
     fn test_translate_multi_modifier() {
-        assert_eq!(translate_sequence("<C-S-a>"), "Ctrl+Shift+a");
+        assert_eq!(
+            translate_sequence("<C-S-a>"),
+            format!("{}+Shift+a", primary())
+        );
     }
 
     #[test]
     fn test_translate_mixed_sequence() {
-        assert_eq!(translate_sequence("g<C-a>"), "g Ctrl+a");
+        assert_eq!(translate_sequence("g<C-a>"), format!("g {}+a", primary()));
     }
 
     #[test]
@@ -842,8 +855,11 @@ mod tests {
     #[test]
     fn test_parse_reaper_modifier_string() {
         assert_eq!(parse_reaper_modifier_string(""), "");
-        assert_eq!(parse_reaper_modifier_string("<C->"), "Ctrl");
-        assert_eq!(parse_reaper_modifier_string("<C-S->"), "Ctrl+Shift");
+        assert_eq!(parse_reaper_modifier_string("<C->"), primary());
+        assert_eq!(
+            parse_reaper_modifier_string("<C-S->"),
+            format!("{}+Shift", primary())
+        );
         assert_eq!(parse_reaper_modifier_string("<M->"), "Meta");
     }
 
@@ -859,7 +875,10 @@ mod tests {
 
         let normal = config.keymap.get("normal").unwrap();
         assert_eq!(normal.get("a"), Some(&"action_a".to_string()));
-        assert_eq!(normal.get("Ctrl+s"), Some(&"save".to_string()));
+        assert_eq!(
+            normal.get(&format!("{}+s", primary())),
+            Some(&"save".to_string())
+        );
         assert_eq!(normal.get("g g"), Some(&"goto_top".to_string()));
     }
 
