@@ -101,6 +101,7 @@ members = [
     "crates/daw/transport-sync",
     "crates/daw/macros",
     "xtask/devtools",
+    "xtask/workflows",
     "crates/daw/utils",
     "vendor/dioxus-test",
     # ── processor ──
@@ -293,6 +294,7 @@ daw-actions = { path = "crates/daw/actions" }
 daw-control = { path = "crates/daw/control" }
 daw-module = { path = "crates/daw/module" }
 fts-devtools = { path = "xtask/devtools" }
+xtask-workflows = { path = "xtask/workflows" }
 daw-test-macro = { path = "crates/daw/macros" }
 daw-audio-graph = { path = "crates/daw/audio-graph" }
 # RT-aware allocator — offloads RT deallocation to background thread

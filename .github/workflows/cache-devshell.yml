@@ -1,56 +1,42 @@
-# Seed fasttrackstudio.cachix.org with the CI devshell closure so
-# checks.yml jobs pull the toolchain (rust pin, dx trio, cargo-rail,
-# native deps) instead of rebuilding it on every fresh runner.
-#
-# Needs the CACHIX_AUTH_TOKEN repo/org secret (a cachix auth token with
-# write access to the fasttrackstudio cache). Without it the workflow
-# skips pushing and merely reports what would be cached.
-#
-# Runs on a GitHub-HOSTED runner (.github/actions/hosted-nix installs nix
-# and cachix): the shells are almost entirely cache hits (cache.nixos.org +
-# this cache; a dry run builds nothing and fetches ~1.5 GiB), so it is not
-# heavy work, and seeding from a hosted runner proves exactly what the
-# hosted checks.yml jobs will find. Recent runs took 1-6 minutes.
-
+# Generated from xtask::workflows::cache_devshell (xtask/workflows/src/cache_devshell.rs)
+# Rebuild with `just workflows`; do not edit by hand (`just workflows-check` fails CI on drift).
+# The reasons for every job and step are comments in that Rust source.
 name: cache-devshell
-
 on:
-  workflow_dispatch:
+  workflow_dispatch: null
   push:
-    branches: [main]
+    branches:
+    - main
     paths:
-      - "flake.nix"
-      - "flake.lock"
-      - "nix/**"
-
+    - flake.nix
+    - flake.lock
+    - nix/**
 concurrency:
   group: cache-devshell
   cancel-in-progress: true
-
 jobs:
   seed:
     runs-on: ubuntu-latest
     timeout-minutes: 180
     steps:
-      - uses: actions/checkout@v4
-      - uses: ./.github/actions/hosted-nix
-        with:
-          # With a token, cachix-action also pushes whatever this job builds.
-          cachix-auth-token: ${{ secrets.CACHIX_AUTH_TOKEN }}
-          shell: ""
-      - name: Build CI devshell closure
-        run: |
-          nix build --accept-flake-config --no-link --print-out-paths \
-            .#devShells.x86_64-linux.ci \
-            .#devShells.x86_64-linux.default \
-            | tee devshell-paths.txt
-      - name: Push to cachix
-        env:
-          CACHIX_AUTH_TOKEN: ${{ secrets.CACHIX_AUTH_TOKEN }}
-        run: |
-          if [ -z "${CACHIX_AUTH_TOKEN}" ]; then
-            echo "CACHIX_AUTH_TOKEN not set — would push:"
-            cat devshell-paths.txt
-            exit 0
-          fi
-          xargs -a devshell-paths.txt cachix push fasttrackstudio
+    - uses: actions/checkout@v4
+    - uses: ./.github/actions/hosted-nix
+      with:
+        cachix-auth-token: ${{ secrets.CACHIX_AUTH_TOKEN }}
+        shell: ''
+    - name: Build CI devshell closure
+      run: |
+        nix build --accept-flake-config --no-link --print-out-paths \
+          .#devShells.x86_64-linux.ci \
+          .#devShells.x86_64-linux.default \
+          | tee devshell-paths.txt
+    - name: Push to cachix
+      env:
+        CACHIX_AUTH_TOKEN: ${{ secrets.CACHIX_AUTH_TOKEN }}
+      run: |
+        if [ -z "${CACHIX_AUTH_TOKEN}" ]; then
+          echo "CACHIX_AUTH_TOKEN not set — would push:"
+          cat devshell-paths.txt
+          exit 0
+        fi
+        xargs -a devshell-paths.txt cachix push fasttrackstudio

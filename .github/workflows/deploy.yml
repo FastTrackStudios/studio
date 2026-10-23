@@ -1,138 +1,83 @@
-# Deploy — a pure-Nix OCI image pushed to the in-cluster registry, rolled
-# out by ArgoCD + argocd-image-updater (digest strategy on the channel
-# tag).
-#
-#   session-web -> registry.starcommand.live:30050/session-web  (session.fasttrackstudio.app)
-#   signal-web  -> registry.starcommand.live:30050/signal-web   (signal.fasttrackstudio.app)
-#
-# One matrix leg per site; a failing leg does not stop the other.
-#
-# The in-cluster registry is NOT reachable from GitHub-hosted runners, so
-# this runs on the org's SELF-HOSTED runner labelled `studio-deploy` (the
-# Mac Pro VM; its own label so a deploy never queues behind a check build).
-# That runner is registered on the FastTrackStudios org, so it reaches
-# this repo; it does not reach personal-account repos.
-#
-# GitHub Deployments: the `environment:` block registers a real
-# Deployment, so runs appear under the repo's Environments tab with a
-# link to the live site. It only goes green after "Verify live" passes —
-# so "Active" means the cluster is SERVING this sha, not merely that an
-# image was pushed.
-#
-# Production is the latest `v*` TAG, not main (fleet release flow v4,
-# docs/agents/release-workflow.md): every PR squash-merges into main, and a
-# push to main deploys nothing. This runs only when a `vYY.M.MICRO` tag is
-# pushed (`just release-tag`) or dispatched with a tag as its ref (a
-# rollback: the previous tag); the first step refuses a tag that is not a
-# release commit on main or on a release/v* hotfix line, or whose
-# `Build + test` is not green. Both sites deploy the tagged commit, once
-# per release.
-#
-# No path filtering. session-web's demo backend is the real in-process
-# daw-standalone/session stack, so a change almost anywhere in the
-# workspace can change what the site does — a path filter would either
-# be wrong or be a list of everything.
-
+# Generated from xtask::workflows::deploy (xtask/workflows/src/deploy.rs)
+# Rebuild with `just workflows`; do not edit by hand (`just workflows-check` fails CI on drift).
+# The reasons for every job and step are comments in that Rust source.
 name: deploy
-
 on:
   push:
-    tags: ["v*"]
-  workflow_dispatch:
-
-# Never cancel a deploy mid-push; queue instead. A cancelled deploy can
-# leave the registry holding a tag the cluster never rolled.
+    tags:
+    - v*
+  workflow_dispatch: null
 concurrency:
   group: deploy-${{ github.ref }}
   cancel-in-progress: false
-
 env:
   REGISTRY: registry.starcommand.live:30050
-  # Newer skopeo rejects the host's v1 registries.conf; every registry is
-  # named explicitly below, so an empty (valid) config is enough.
   CONTAINERS_REGISTRIES_CONF: /dev/null
-
 jobs:
   deploy:
     name: deploy ${{ matrix.img }}
-    runs-on: [self-hosted, studio-deploy]
+    runs-on:
+    - self-hosted
+    - studio-deploy
+    permissions:
+      contents: read
+      checks: read
     strategy:
       fail-fast: false
       matrix:
         include:
-          - img: session-web
-            env: session-production
-            url: https://session.fasttrackstudio.app
-          - img: signal-web
-            env: signal-production
-            url: https://signal.fasttrackstudio.app
+        - img: session-web
+          env: session-production
+          url: https://session.fasttrackstudio.app
+        - img: signal-web
+          env: signal-production
+          url: https://signal.fasttrackstudio.app
     environment:
       name: ${{ matrix.env }}
       url: ${{ matrix.url }}
-    # The repo default token is read-only with no `checks` scope; the tag
-    # guard reads the `Build + test` check of the tagged commit.
-    permissions:
-      contents: read
-      checks: read
     steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      # Production changes only by tag: refuse a branch ref, a tag whose
-      # version is not Cargo.toml's, a commit on neither main nor a
-      # release/v* line, a commit whose `Build + test` is not green.
-      - name: The ref is a green release tag on main or release/v*
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: bash scripts/release.sh tag-guard
-
-      - name: Compute tags
-        id: tags
-        run: |
-          echo "sha=sha-$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
-          echo "version=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
-
-      - name: Push image
-        run: |
-          set -euo pipefail
-          img=${{ matrix.img }}
-          echo "── $img ──"
-          # streamLayeredImage builds an EXECUTABLE that streams a
-          # docker-archive to stdout — there is no tarball on disk to
-          # copy, which is what keeps a ~60 MB bundle out of the store
-          # twice.
-          streamer="$(nix build .#${img}-image --no-link --print-out-paths)"
-          "$streamer" | nix run nixpkgs#skopeo -- --insecure-policy copy \
-            --dest-tls-verify=false --dest-no-creds docker-archive:/dev/stdin \
-            "docker://${REGISTRY}/${img}:latest"
-          # Retag from the just-pushed :latest rather than re-streaming:
-          # same digest by construction, and the image is built once.
-          for tag in dev "${{ steps.tags.outputs.sha }}" "${{ steps.tags.outputs.version }}"; do
-            nix run nixpkgs#skopeo -- --insecure-policy copy \
-              --src-tls-verify=false --src-no-creds \
-              --dest-tls-verify=false --dest-no-creds \
-              "docker://${REGISTRY}/${img}:latest" \
-              "docker://${REGISTRY}/${img}:${tag}"
-          done
-
-      # A green run must mean the cluster serves THIS commit. The bundle
-      # reports the rev it was built from in version.json (written by
-      # mkStaticSite), so this is the site answering, not the registry.
-      - name: Verify live
-        run: |
-          url="${{ matrix.url }}"
-          want="${GITHUB_SHA}"
-          echo "waiting for $url to serve $want"
-          for i in $(seq 1 60); do
-            got="$(curl -sf --max-time 10 "$url/version.json" \
-              | sed -n 's/.*"rev":"\([^"]*\)".*/\1/p' || true)"
-            echo "  poll $i: ${got:-?}"
-            if [ "$got" = "$want" ]; then
-              echo "LIVE: $url serves $want"
-              exit 0
-            fi
-            sleep 15
-          done
-          echo "TIMED OUT: $url never served $want — check argocd-image-updater / rollouts"
-          exit 1
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+    - name: The ref is a green release tag on main or release/v*
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: bash scripts/release.sh tag-guard
+    - name: Compute tags
+      id: tags
+      run: |
+        echo "sha=sha-$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
+        echo "version=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
+    - name: Push image
+      run: |
+        set -euo pipefail
+        img=${{ matrix.img }}
+        echo "── $img ──"
+        streamer="$(nix build .#${img}-image --no-link --print-out-paths)"
+        "$streamer" | nix run nixpkgs#skopeo -- --insecure-policy copy \
+          --dest-tls-verify=false --dest-no-creds docker-archive:/dev/stdin \
+          "docker://${REGISTRY}/${img}:latest"
+        for tag in dev "${{ steps.tags.outputs.sha }}" "${{ steps.tags.outputs.version }}"; do
+          nix run nixpkgs#skopeo -- --insecure-policy copy \
+            --src-tls-verify=false --src-no-creds \
+            --dest-tls-verify=false --dest-no-creds \
+            "docker://${REGISTRY}/${img}:latest" \
+            "docker://${REGISTRY}/${img}:${tag}"
+        done
+    - name: Verify live
+      run: |
+        url="${{ matrix.url }}"
+        want="${GITHUB_SHA}"
+        echo "waiting for $url to serve $want"
+        for i in $(seq 1 60); do
+          got="$(curl -sf --max-time 10 "$url/version.json" \
+            | sed -n 's/.*"rev":"\([^"]*\)".*/\1/p' || true)"
+          echo "  poll $i: ${got:-?}"
+          if [ "$got" = "$want" ]; then
+            echo "LIVE: $url serves $want"
+            exit 0
+          fi
+          sleep 15
+        done
+        echo "TIMED OUT: $url never served $want — check argocd-image-updater / rollouts"
+        exit 1

@@ -1,7 +1,8 @@
-# Self-hosted runner labels used by this repo's workflows, so actionlint
-# does not flag them as unknown. Everything else runs on GitHub-hosted
+# Runner labels used by this repo's workflows that actionlint does not know,
+# so it does not flag them as unknown. Everything else runs on GitHub-hosted
 # ubuntu-latest (checks.yml plan/lint/wasm/aggregator, cache-devshell.yml,
-# pr-title.yml, release.yml).
+# release.yml, studio-ios.yml resolve/record). The workflows are generated
+# (xtask/workflows); the lint job runs actionlint over them.
 self-hosted-runner:
   labels:
     # The Mac Pro VM: the heavy nextest build (checks.yml `tests`, warm
@@ -11,3 +12,6 @@ self-hosted-runner:
     # The iOS build (studio-ios.yml).
     - airlock
     - macos
+    # WarpBuild cloud runners (checks.yml `tests (warpbuild trial)`), with
+    # their `;snapshot.key=…` options.
+    - "warp-*"

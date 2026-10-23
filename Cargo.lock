@@ -23858,6 +23858,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "xtask-workflows"
+version = "26.10.0"
+dependencies = [
+ "anyhow",
+ "indexmap 2.14.1",
+ "serde",
+ "serde_yaml",
+]
+
+[[package]]
 name = "xterm-query"
 version = "0.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"

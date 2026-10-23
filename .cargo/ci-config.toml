@@ -1,0 +1,41 @@
+# CI-only cargo settings, for the GitHub-hosted cargo jobs (checks.yml `lint`
+# and `wasm`, and the WarpBuild trial). NOT read where it lies: cargo only
+# reads `.cargo/config.toml`. The job copies it to `../.cargo/config.toml`
+# (the PARENT of the checkout), so cargo MERGES it with this repo's
+# .cargo/config.toml: on a conflict the repo's file wins, and arrays such as
+# rustflags are joined (https://doc.rust-lang.org/cargo/reference/config.html#hierarchical-structure).
+# An env var would not do: RUSTFLAGS REPLACES every rustflag in the config
+# files (rust-lang/cargo#5376), mold and target-cpu included. The trick is
+# Zed's (.cargo/ci-config.toml there).
+#
+# The self-hosted tests job does not use it: its warm target dir was built
+# with the repo config alone, and a rustflags change would rebuild it.
+
+# `[target.'cfg(all())']`, not `[build]`: every matching `target.*` table is
+# joined (so x86_64-linux keeps mold + x86-64-v3 from the repo config), while
+# `build.rustflags` is IGNORED as soon as any target table sets rustflags.
+# That is also why this repeats the repo's `[build]` frame-pointer flag:
+# without it the targets with no table of their own (wasm32) would lose it.
+#
+# TODO: add "-D", "warnings" here once the workspace is warning-clean, so CI
+# fails on a new warning without making developers' builds fail.
+[target.'cfg(all())']
+rustflags = ["-C", "force-frame-pointers=yes"]
+
+# [profile.dev] in Cargo.toml already says line-tables-only; pinned here too
+# (it used to be the CARGO_PROFILE_DEV_DEBUG env) so a profile edit cannot
+# silently fatten the cached target dir. Config-file profiles override the
+# manifest's.
+[profile.dev]
+debug = "line-tables-only"
+
+# frame and plugin-faces at opt-level 3 in CI only. Their tests build and
+# lint frame documents and render them: 5-22 s each in a dev build on an
+# idle Mac, past 120 s on the loaded CI runner (PR #184, October 2026). A
+# developer edits frame constantly, so the workspace's dev profile keeps it
+# fast to compile; CI builds it once into a warm target and runs it a lot.
+[profile.dev.package.frame]
+opt-level = 3
+
+[profile.dev.package.plugin-faces]
+opt-level = 3

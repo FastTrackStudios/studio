@@ -157,10 +157,18 @@ behind features, and without them their tests never build.
 
 **Before you push: `just ci`.** It runs exactly what
 `.github/workflows/checks.yml` runs, in the same order, and stops at the
-first failure: lockfile drift, `cargo fmt --check`, the flow gate
+first failure: lockfile drift, `cargo fmt --check`, the generated
+workflows being current (`just workflows-check`), the flow gate
 (`just daw-flows`), the web tailwind sheet, `cargo check --workspace`, the
 Signal wasm check, then nextest as above. `just ci <step>` starts from a
-step (`lockfile`, `fmt`, `flows`, `tailwind`, `check`, `wasm`, `nextest`).
+step (`lockfile`, `fmt`, `workflows`, `flows`, `tailwind`, `check`, `wasm`,
+`nextest`).
+
+**The workflows are generated.** Every file in `.github/workflows/` is
+written by `xtask/workflows` (`just workflows`); edit the Rust, never the
+YAML — the lint job fails when they differ. The GitHub-hosted jobs run
+without nix (rustup 1.94 + apt + pinned tool binaries); the self-hosted
+NixOS jobs (tests, deploy) keep `nix develop .#ci`.
 It refuses to start with less than 25 GB free: a full disk shows up as
 mold dying with a bus error, which reads as a broken toolchain
 (`just sweep-incremental` is the always-safe reclaim). It says nothing

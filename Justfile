@@ -1977,6 +1977,21 @@ web-wasm-check:
     cargo check -p session-web --target wasm32-unknown-unknown
     cargo check -p signal-web --target wasm32-unknown-unknown
 
+# The workflows in .github/workflows are GENERATED from xtask/workflows (one
+# Rust module per workflow, the reasons as comments there). Edit the Rust,
+# then run this and commit both.
+workflows:
+    cargo run -q -p xtask-workflows -- generate
+
+# Fails if a workflow on disk is not what `just workflows` would write (a
+# hand edit, or a source change without a regenerate); then actionlint, when
+# it is on PATH. checks.yml's lint job runs both.
+workflows-check:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    cargo run -q -p xtask-workflows -- check
+    if command -v actionlint >/dev/null; then actionlint; fi
+
 # Runs what `.github/workflows/checks.yml` runs, in the same order: a
 # local run gives the same answer as CI's fast checks on a PR into main
 # (CI narrows the tests with `cargo rail plan`; this runs them all). NOT
@@ -1991,7 +2006,7 @@ ci FROM="lockfile":
     #!/usr/bin/env bash
     set -euo pipefail
     export CARGO_TARGET_DIR="${CARGO_TARGET_DIR:-$PWD/target}"
-    steps=(lockfile fmt flows tailwind check wasm nextest)
+    steps=(lockfile fmt workflows flows tailwind check wasm nextest)
     start=0
     for i in "${!steps[@]}"; do
       [ "${steps[$i]}" = "{{FROM}}" ] && start=$i && break
@@ -2038,6 +2053,12 @@ ci FROM="lockfile":
     if run_from fmt; then
       echo "── cargo fmt --check ────────────────────────────────"
       cargo fmt --all --check
+      echo "ok"
+    fi
+
+    if run_from workflows; then
+      echo "── generated workflows ──────────────────────────────"
+      just workflows-check
       echo "ok"
     fi
 
