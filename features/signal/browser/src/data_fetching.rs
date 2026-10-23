@@ -799,15 +799,18 @@ pub const fn rig_type_to_engine_type(rig_type: RigType) -> signal::EngineType {
 
 // region: --- Tests
 
+/// The signal crate's own test fixtures: the runtime seed ships no rigs, so
+/// the JM guitar megarig is built here the way signal's tests build it.
+/// Declared at file level, not inside `tests`: a `#[path]` in an inline
+/// module resolves through `src/data_fetching/tests/`, which does not exist.
+#[cfg(test)]
+#[path = "../../tests/fixtures.rs"]
+mod fixtures;
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use signal::rig::RigType;
-
-    /// The signal crate's own test fixtures: the runtime seed ships no rigs,
-    /// so the JM guitar megarig is built here the way signal's tests build it.
-    #[path = "../../../../tests/fixtures.rs"]
-    mod fixtures;
 
     #[tokio::test]
     async fn manage_tab_guitar_pipeline_produces_grid_slots() {
