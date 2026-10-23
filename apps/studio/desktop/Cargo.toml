@@ -47,10 +47,11 @@ required-features = ["cli"]
 workspace = true
 
 [features]
-# Three domain axes — Signal, Session, Charts — all on by default. Drop any
-# one for fast iteration or a focused `dx serve`; e.g.
-# `cargo run -p studio-desktop --no-default-features --features "session,charts"`
-# skips the heavy `signal` rig (nam C++, lucide icons, webkit engine deps).
+# Signal (`signal`) and Session (`session-app`, plus `tts` for its spoken
+# cues) are on by default. Drop one for fast iteration; e.g.
+# `cargo run -p studio-desktop --no-default-features --features session-app`
+# skips the heavy `signal` rig (nam C++, lucide icons, webkit engine deps),
+# and `--no-default-features --features signal` leaves Session out.
 default = ["signal", "session-app", "tts"]
 # The command-line tools (src/bin/): native only.
 cli = [

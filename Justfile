@@ -418,6 +418,10 @@ install: rig-install
     #!/usr/bin/env bash
     set -euo pipefail
     install -d ~/.local/bin
+    # Signal's own install, from before Studio: its launcher would still
+    # open the old binary.
+    rm -f ~/.local/bin/signal-desktop ~/.local/share/applications/signal-desktop.desktop \
+        ~/.local/share/icons/hicolor/scalable/apps/signal-desktop.svg
     ln -sf ~/.local/lib/fts/studio-desktop ~/.local/bin/studio-desktop
     install -d ~/.local/share/icons/hicolor/512x512/apps
     install -m 644 apps/studio/desktop/assets/icon.png \

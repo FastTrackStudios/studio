@@ -27,11 +27,13 @@ export PATH="$BIN_IOS:$PATH"
 # `___chkstk_darwin` is missing at the link.
 export IPHONEOS_DEPLOYMENT_TARGET="${IPHONEOS_DEPLOYMENT_TARGET:-15.0}"
 
-dx build --platform ios --no-default-features --features signal-guitar,signal-keys-rig,signal-drums-rig,signal-ekit-rig,tone3000,session-app
+# dx can exit non-zero after a good build (its own codesign step): gate on
+# the .app below instead.
+dx build --platform ios --no-default-features --features signal-guitar,signal-keys-rig,signal-drums-rig,signal-ekit-rig,tone3000,session-app || true
 
 # dx names the bundle from the package (StudioDesktop.app today; it has
 # changed between dx versions), so take the newest one it wrote.
-APP="$(ls -dt "$(cd ../.. && pwd)"/target/dx/studio-desktop/debug/ios/*.app 2>/dev/null | head -1)"
+APP="$(ls -dt "$(cd "$HERE/../../../.." && pwd)"/target/dx/studio-desktop/debug/ios/*.app 2>/dev/null | head -1)"
 [ -n "$APP" ] && [ -f "$APP/Info.plist" ] || { echo "ERROR: dx produced no app" >&2; exit 1; }
 
 # Info.plist (scene manifest, dark, usage strings) and frame's faces —

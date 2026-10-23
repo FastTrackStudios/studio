@@ -297,14 +297,14 @@ fn fill(menu: &NSMenu, target: &Target) {
     for a in &apps {
         add(item(
             mtm,
-            &format!("Signal app open · pid {}", a.pid),
+            &format!("Studio open · pid {}", a.pid),
             None,
             target,
             0,
         ));
         add(item(
             mtm,
-            "    Quit Signal app",
+            "    Quit Studio",
             Some(sel!(stopProcess:)),
             target,
             a.pid as isize,
