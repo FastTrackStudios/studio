@@ -106,11 +106,11 @@ needs no change file unless the crate's behaviour changes.
    disk (see `build-performance`).
 2. **Things nobody asserts on stay out of the PR run.** A test that
    paints pictures for a human, with no assertion, is a `just` recipe,
-   not CI. Today the fx editors' `every_space` screenshot tests
-   (`features/dsp/{delay,modulation,reverb,saturate}/tests/screenshots.rs`,
-   217 s for reverb) still run in CI with a raised timeout; the editor's
-   `shoot_every_scene` already moved to `#[ignore]` + `just ee-shots`.
-   Follow the editor.
+   not CI: `#[ignore = "visual inspection, asserts nothing: just <x>-shots"]`
+   and a `just` recipe that runs it with `--include-ignored` (precedent:
+   `just ee-shots`, `just comp-shots` … `just daw-ui-shots`). A screenshot
+   test that *does* assert (a panel opened, a picture matches a committed
+   fixture) stays in the suite.
 3. **Make a slow test cheaper before you raise its timeout.** Render
    fewer seconds, a lower sample rate, a smaller grid — when the shorter
    version still fails on the bug it guards. If it cannot be cheaper
