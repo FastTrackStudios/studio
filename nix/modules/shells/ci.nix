@@ -64,6 +64,11 @@
     # machine's real GPU.
     // lib.optionalAttrs pkgs.stdenv.isLinux {
       VK_DRIVER_FILES = "${pkgs.mesa}/share/vulkan/icd.d/lvp_icd.${pkgs.stdenv.hostPlatform.uname.processor}.json";
+      # lavapipe rasterizes on a thread per core by default; with nextest
+      # running a test per core beside it that oversubscribes the box many
+      # times over. Two each: the frame tests run two at a time anyway
+      # (.config/nextest.toml, gpu-frames).
+      LP_NUM_THREADS = "2";
     });
   };
 }

@@ -97,14 +97,15 @@ slow-timeout = { period = "120s", terminate-after = 4 }
 # here so a red run means a broken test, not a busy box.
 
 # Tests that draw real GPU frames, at most two at a time. On a GPU each
-# takes a second; on lavapipe each one wants every core, and twelve of them
-# at once starved each other past the thirty-second timeout (the plugin-
-# faces and session-view runs on main, October 2026).
+# takes a second; on lavapipe each one wants every core, and twenty of them
+# at once starved each other — and every CPU-bound test beside them — past
+# their timeouts (frame's render tests ~29 s each, plugin-faces past 120 s,
+# PR #184's first run with lavapipe, October 2026).
 [test-groups]
 gpu-frames = { max-threads = 2 }
 
 [[profile.default.overrides]]
-filter = 'binary(golden_scenes) | binary(folder_items) | binary(patch_list_view) | (package(eq) & binary(screenshots))'
+filter = 'binary(golden_scenes) | binary(folder_items) | binary(patch_list_view) | (package(eq) & binary(screenshots)) | (package(frame) & test(/^render::/))'
 test-group = 'gpu-frames'
 
 # The run-ahead engine's real-time tests hand the start of a run to the
