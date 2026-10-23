@@ -2105,13 +2105,19 @@ ci FROM="lockfile":
 ci-churn:
     scripts/ci-churn-check.sh
 
-# Run once per clone. The hook posts the `local-ci` status main requires.
-# Install the git hooks: `ci-local` on every push.
+# Run once per clone (prek.toml): rustfmt / shellcheck / actionlint on the
+# staged files at commit, `ci-local` at push, which posts the `Local CI`
+# status main requires. Clears a leftover core.hooksPath (the old .githooks).
+# Install the git hooks (prek): format on commit, local CI on push.
 install-hooks:
-    ./.githooks/install.sh
+    #!/usr/bin/env bash
+    set -euo pipefail
+    git config --unset core.hooksPath 2>/dev/null || true
+    prek install --force
 
 # BASE defaults to the merge-base with origin/main; the pre-push hook runs
-# this and marks the pushed commits `local-ci`.
+# this and marks the pushed commits `Local CI`. Run it BEFORE pushing a long
+# change: the pass it records makes the push instant.
 # The PR gate, locally: tests + check + wasm for what `cargo rail plan` affects.
 ci-local BASE="":
     bash scripts/ci-local.sh {{BASE}}
@@ -2177,7 +2183,7 @@ release-merge:
     bash scripts/release.sh merge
 
 # After the release PR merged: tag v<version> on its merge commit once
-# `Build + test` is green there. THE TAG SHIPS (sites, Signal + Session
+# `CI passed` is green there. THE TAG SHIPS (sites, Signal + Session
 # TestFlight, the GitHub Release). After a hotfix it opens the
 # forward-port PR into main. Push as the fts-forge bot or a person, not a
 # workflow token (that starts no workflow).

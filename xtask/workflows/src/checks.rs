@@ -1,39 +1,37 @@
-//! `checks` — the cheap gates on every PR, the full set after every merge.
+//! `CI` — the full set after every merge, on hotfix PRs and by hand.
 //!
-//! THE MODEL (Task's, 2026-10): the agents and people pushing PRs already
-//! build and test before they push, so CI does not do it again on a billed
-//! runner. The pre-push hook (`just install-hooks`) runs scripts/ci-local.sh
-//! — fmt, change files, then the tests, the workspace check and the wasm
-//! check for what `cargo rail plan` says the change affects, on the
-//! machine's warm target dir — and posts a `local-ci` commit status on the
-//! pushed commits. The `main` ruleset requires `local-ci` and `Build + test`.
+//! THE MODEL (Task's, 2026-10). Every CI minute of a workspace this size is
+//! a build, so the expensive half of the PR gate runs on the developer's own
+//! warm target dir, and CI pays for builds once per merge:
 //!
 //! ```text
-//!   PR -> main          the GATES only (free runner): lockfile, fmt, the
-//!                       generated workflows + actionlint, change files, rail
-//!                       config, the flow gate. Nothing compiles beyond the
-//!                       workflows crate.
-//!   PR -> release/**    a hotfix onto a release line (just release-hotfix):
-//!                       the FULL set.
-//!   RELEASE PR release/pending -> main (or -> release/v*)   the plan runs
-//!                       the release guard from the BASE commit's
-//!                       scripts/release.sh: a sound release PR skips every
-//!                       job (`Build + test` still runs and passes); one the
-//!                       guard refuses fails `Build + test`.
-//!   push to main        the FULL set, once per merge: what catches two PRs
-//!   (and release/**)    that pass alone and break together. main may go red
-//!                       — releases are cut by hand, from a green commit
-//!                       (`just release-tag` requires `Build + test`).
-//!   by hand             `gh workflow run checks.yml --ref <branch>` runs the
-//!                       full set; on main, `-f seed=true` also rebuilds the
-//!                       tests job's snapshot from clean.
+//!   PR into main   NOT this workflow: pr.yml (`PR checks`, a free backstop
+//!                  that compiles nothing) plus the `Local CI` commit status
+//!                  the pre-push hook posts (prek.toml -> scripts/
+//!                  ci-local-hook.sh -> scripts/ci-local.sh: the static
+//!                  guards, then the rail-planned tests, `cargo check` and
+//!                  wasm check). Main requires both, and `Release guard`.
+//!   push to main   the FULL set, once per merge: what catches two PRs that
+//!   (release/v*)   each passed alone but break together. main may go red —
+//!                  releases are cut by hand, and `just release-tag`
+//!                  requires `CI passed` on the release commit.
+//!   PR into        a hotfix onto a release line: the FULL set (nothing left
+//!   release/**     to a hook, on a branch that ships straight out). A
+//!                  release PR (version + changelog only, proved by the BASE
+//!                  commit's release.sh) skips everything.
+//!   by hand        `gh workflow run checks.yml --ref <branch>` runs
+//!                  everything and, when green, posts `Local CI` on the
+//!                  branch's head (for a push the hook couldn't vouch for);
+//!                  `-f seed=true` on main reseeds the snapshot.
+//!   weekly seed    Sunday: the FULL set on main from the base image, saving
+//!                  a fresh tests snapshot (see `tests`). No nightly.
 //! ```
 //!
-//! RUNNERS: only the big builds are paid for.
+//! RUNNERS: only the builds are paid for.
 //!
 //! ```text
-//!   ubuntu-latest  plan, gates, wasm and the `Build + test` aggregator
-//!                  (free: the repo is public)
+//!   ubuntu-latest  plan, gates, wasm, deps-cache and the `CI passed`
+//!                  aggregator (free: the repo is public)
 //!   warp 8x        check: `cargo check --workspace` + advisory clippy, with
 //!                  rust-cache on WarpBuild's cache
 //!   warp 16x       tests: ~1460 crates and ~800 test binaries at full
@@ -53,8 +51,8 @@
 
 use crate::model::{Job, RunsOn, Step, UBUNTU, Workflow, yaml};
 use crate::steps::{
-    Cache, Toolchain, Tools, checkout, checkout_full, faces, footprint, hosted_setup, rust_cache,
-    target_mark, target_sweep,
+    Cache, Toolchain, Tools, cargo_deps_save, checkout, checkout_full, faces, footprint,
+    hosted_setup, rust_cache, target_mark, target_sweep,
 };
 use anyhow::Result;
 
@@ -68,57 +66,64 @@ const TEST_FEATURES: &str =
 /// one-line change (then `just workflows`).
 const WARP_CHECK: RunsOn = RunsOn::Label("warp-ubuntu-latest-x64-8x");
 
+/// The weekly seed. `plan` matches this exact string to tell it from any
+/// other schedule.
+const SEED_CRON: &str = "37 9 * * 0";
+
 pub fn workflow() -> Result<Workflow> {
     Ok(Workflow::new(
-        "checks",
-        yaml(
+        "CI",
+        yaml(&format!(
             r#"
 pull_request:
-  branches: [main, "release/**"]
+  branches: ["release/**"]
 push:
-  branches: [main, "release/**"]
+  # release/v* (hotfix lines), not release/pending: a release PR's head is
+  # version + changelog only and gets no run of its own.
+  branches: [main, "release/v*"]
 workflow_dispatch:
   inputs:
     seed:
-      description: "On main: rebuild the tests job's WarpBuild snapshot from clean and save it."
+      description: "On main: boot from the base image, build cold, save a fresh tests snapshot."
       type: boolean
       required: false
       default: false
-"#,
-        )?,
+schedule:
+  - cron: "{SEED_CRON}"
+"#
+        ))?,
     )
-    // One group per PR, so a new push to a PR cancels its predecessor's run.
-    // A PUSH gets a group of its own commit (the Zed way): every merge is
-    // checked to the end, never cancelled by the next merge — its green
-    // `Build + test` is what `just release-tag` requires.
+    // One group per PR, so a new push to a hotfix PR cancels its
+    // predecessor. A PUSH gets a group of its own commit (the Zed way):
+    // every merge is checked to the end, never cancelled by the next one —
+    // its green `CI passed` is what `just release-tag` requires.
     .concurrency(
-        "checks-${{ github.event.pull_request.number || github.ref }}-${{ \
-         github.event_name == 'push' && github.sha || 'run' }}",
+        "ci-${{ github.event.pull_request.number || github.ref }}-${{ \
+         github.event_name == 'push' && github.sha || github.event_name }}",
         true,
     )
     .job("plan", plan()?)
+    .job("deps-cache", deps_cache())
     .job("gates", gates())
     .job("check", check())
     .job("wasm", wasm())
     .job("tests", tests())
-    .job("build-and-test", build_and_test()))
+    .job("ci-passed", ci_passed()?))
 }
 
-/// Which jobs have work: a sound release PR none (a refused one fails
-/// here); a PR into main the gates; everything else the full set. Plus
-/// whether main's tests run should save the snapshot ([`DEPS_PATHS`]).
-/// Bash and git only: no toolchain.
+/// Whether there is anything to run (a sound hotfix release PR: no; a
+/// refused one fails here) and whether this is a SEED run. Bash and git
+/// only: no toolchain.
 fn plan() -> Result<Job> {
     let mut job = Job::new(UBUNTU)
         .name("Plan")
         .timeout(10)
         .permissions(yaml("contents: read\n")?);
-    for out in ["skip", "full", "deps"] {
+    for out in ["skip", "seed"] {
         job = job.output(out, &format!("${{{{ steps.plan.outputs.{out} }}}}"));
     }
     Ok(job
-        // Full history: the release guard reads the PR's base and head, and
-        // `deps` diffs a push against the commit before it.
+        // Full history: the release guard reads the PR's base and head.
         .step(checkout_full(None))
         .step(
             Step::run("Plan", PLAN)
@@ -131,30 +136,23 @@ fn plan() -> Result<Job> {
                     "HEAD_REPO",
                     "${{ github.event.pull_request.head.repo.full_name }}",
                 )
-                .env("BEFORE", "${{ github.event.before }}")
-                .env("DEPS_PATHS", DEPS_PATHS),
+                .env("INPUT_SEED", "${{ inputs.seed }}")
+                .env("SCHEDULE", "${{ github.event.schedule }}")
+                .env("SEED_CRON", SEED_CRON),
         ))
 }
 
-/// What a tests snapshot is built from besides the workspace's own code: the
-/// lockfile, the cargo config, the toolchain pins (steps.rs's `RUST`, the
-/// flake's). A push to main changing one of these saves a new snapshot; the
-/// workspace's own crates rebuild incrementally from an older one.
-const DEPS_PATHS: &str =
-    "Cargo.lock .cargo xtask/workflows/src/steps.rs nix/modules/toolchain.nix rust-toolchain.toml";
-
-/// A release PR (release/pending) runs the release guard from the BASE
-/// commit's copy of the script (never the PR's, which could exempt itself).
-/// 0 = sound: version + changelog only, its content was checked when it
-/// merged, skip everything. 3 = refused: fail, which fails `Build + test`.
-/// 1 = not a release PR.
+/// Only PRs into release/** reach this workflow (pr.yml has main). The
+/// release guard runs from the BASE commit's copy of the script (never the
+/// PR's, which could exempt itself): 0 = sound, version + changelog only,
+/// skip everything; 3 = refused, fail; 1 = a hotfix, the full set. A fork
+/// PR would run the full set on the org's paid runners with whatever its
+/// code does: refused.
 ///
-/// A fork PR into a release line would run the full set on the org's paid
-/// runners with whatever its code does: refused. Into main it runs the free
-/// gates like any PR.
+/// A seed is the weekly cron or a dispatch on main with `seed`.
 const PLAN: &str = r####"set -u
 out() { printf '%s\n' "$@" >> "$GITHUB_OUTPUT"; }
-full=true
+seed=false
 case "${GITHUB_EVENT_NAME:-}" in
   pull_request)
     rc=1
@@ -168,36 +166,40 @@ case "${GITHUB_EVENT_NAME:-}" in
           echo "This PR is one commit changing the version, CHANGELOG.md and consumed change files; its content was checked when it merged, so every job is skipped."
         } >> "$GITHUB_STEP_SUMMARY"
         echo "plan: release commit only (${HEAD_REF} -> ${BASE_REF}): nothing to run"
-        out skip=true full=false deps=false
+        out skip=true seed=false
         exit 0 ;;
       3)
         echo "::error::${HEAD_REF} -> ${BASE_REF} is a release PR the release guard refuses (see above)"
         exit 1 ;;
     esac
-    case "${BASE_REF}" in
-      release/*)
-        if [ "${HEAD_REPO}" != "${GITHUB_REPOSITORY}" ]; then
-          echo "::error::fork PR into ${BASE_REF}: the full set runs on the org's paid runners; re-push it from a branch of this repo"
-          exit 1
-        fi
-        echo "plan: PR into ${BASE_REF}: a hotfix line runs the full set" ;;
-      *)
-        full=false
-        echo "plan: PR into ${BASE_REF}: the gates (the tests ran locally: the local-ci status)" ;;
-    esac ;;
+    if [ "${HEAD_REPO}" != "${GITHUB_REPOSITORY}" ]; then
+      echo "::error::fork PR into ${BASE_REF}: the full set runs on the org's paid runners; re-push it from a branch of this repo"
+      exit 1
+    fi
+    echo "plan: PR into ${BASE_REF} (hotfix): the full set" ;;
+  schedule)
+    [ "${SCHEDULE}" = "${SEED_CRON}" ] && seed=true
+    echo "plan: schedule '${SCHEDULE}' (seed=${seed}): the full set" ;;
+  workflow_dispatch)
+    [ "${INPUT_SEED}" = true ] && [ "${GITHUB_REF_NAME}" = main ] && seed=true
+    echo "plan: dispatch on ${GITHUB_REF_NAME} (seed=${seed}): the full set" ;;
   *) echo "plan: ${GITHUB_EVENT_NAME:-?} on ${GITHUB_REF_NAME}: the full set" ;;
 esac
-deps=false
-if [ "${GITHUB_EVENT_NAME:-}" = push ] && [ "${GITHUB_REF_NAME}" = main ]; then
-  # shellcheck disable=SC2086 # DEPS_PATHS is a list of pathspecs
-  if ! git cat-file -e "${BEFORE}^{commit}" 2>/dev/null \
-    || ! git diff --quiet "${BEFORE}" "${GITHUB_SHA}" -- ${DEPS_PATHS}; then
-    deps=true
-    echo "plan: dependencies or toolchain changed: the tests job saves a new snapshot"
-  fi
-fi
-out skip=false "full=${full}" "deps=${deps}"
+out skip=false "seed=${seed}"
 "####;
+
+/// Main is the only writer of the cargo-dependency cache pr.yml's `PR
+/// checks` restore (the 10 GB Actions cache budget): fetched once per
+/// lockfile, on a free runner, and no job waits on it.
+fn deps_cache() -> Job {
+    Job::new(UBUNTU)
+        .name("Dependency cache")
+        .timeout(15)
+        .cond("${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}")
+        .step(checkout())
+        .steps(hosted_setup("", "", Tools::default()))
+        .steps(cargo_deps_save())
+}
 
 /// The env every hosted cargo job sets. Incremental is off: a CI build is
 /// never rebuilt in place, and incremental dirs would only fatten the cache.
@@ -210,19 +212,20 @@ fn hosted_cargo_job(job: Job) -> Job {
 /// the job still fails.
 const NOT_CANCELLED: &str = "${{ !cancelled() }}";
 
-/// The jobs only a full run has.
-const FULL: &str = "${{ needs.plan.outputs.full == 'true' }}";
+/// Every job but the plan: nothing to run on a sound release PR.
+const WANTED: &str = "${{ needs.plan.outputs.skip != 'true' }}";
 
-/// REQUIRED (through `Build + test`) on every run: the checks no machine's
-/// local run can vouch for or that cost nothing — manifests + lockfile, fmt,
-/// the generated workflows, change files, the rail config, the flow gate.
+/// REQUIRED (through `CI passed`): the static guards — manifests +
+/// lockfile, fmt, the generated workflows + actionlint, change files (a
+/// hotfix PR), the rail config, the flow gate. `just ci-local` runs the same
+/// set before every push; pr.yml re-checks the compile-nothing half.
 /// Compiles only the workflows crate.
 fn gates() -> Job {
     hosted_cargo_job(
         Job::new(UBUNTU)
-            .name("Gates (fmt, manifests, workflows, change files, flows)")
+            .name("Gates")
             .needs(&["plan"])
-            .cond("${{ needs.plan.outputs.skip != 'true' }}")
+            .cond(WANTED)
             .timeout(30),
     )
     .step(checkout())
@@ -261,9 +264,9 @@ fn gates() -> Job {
 fn check() -> Job {
     hosted_cargo_job(
         Job::new(WARP_CHECK)
-            .name("check (cargo check + clippy)")
+            .name("Check")
             .needs(&["plan"])
-            .cond(FULL)
+            .cond(WANTED)
             .timeout(90),
     )
     .step(checkout())
@@ -304,7 +307,7 @@ cargo clippy --workspace --no-deps --all-targets --keep-going \\
 /// random (observed locally: four consecutive `cargo metadata` runs, three
 /// orderings). Instead: resolve, then diff the committed lockfile against
 /// the written one with the trailer compared as a sorted set.
-const LOCKFILE: &str = r#"set -euo pipefail
+pub const LOCKFILE: &str = r#"set -euo pipefail
 committed="$RUNNER_TEMP/Cargo.lock.committed"
 cp Cargo.lock "$committed"
 cargo metadata --format-version 1 > /dev/null
@@ -369,9 +372,9 @@ cargo rail change check --since \"${BASE_SHA}\"
 fn wasm() -> Job {
     hosted_cargo_job(
         Job::new(UBUNTU)
-            .name("wasm checks")
+            .name("Wasm")
             .needs(&["plan"])
-            .cond(FULL)
+            .cond(WANTED)
             .timeout(75),
     )
     // The wasm32 C builds (ring): the nix shell pointed these at an
@@ -432,23 +435,28 @@ echo \"### Signal browser remote wasm check failed (advisory, STA-184)\" >> \"$G
 ///
 /// The warm target dir is the snapshot (`<label>;snapshot.key=<alias>`,
 /// WarpBuilds/snapshot-save): the VM boots from the last snapshot saved under
-/// [`WARPBUILD_SNAPSHOT`], or the base image if there is none. Only main
-/// saves it (a PR never runs this job, and a release line never saves), and
-/// only when it is worth the ~13 min of 16x a save costs ([`SAVE_SNAPSHOT`]):
-/// the dependencies or toolchain changed, the snapshot is [`STALE_DAYS`] old
-/// (or missing: WarpBuild expires one after 15 days unused), or a dispatch
-/// asked for a clean one. Before a save the target is pruned to what that
-/// build used. First run (2026-10-23): cold build 15 min, 10 949 tests
-/// 2 min, on a 16x.
+/// [`WARPBUILD_SNAPSHOT`], or the base image if there is none.
+///
+/// SNAPSHOTS ARE SEEDED, NEVER CHAINED. Only a SEED run saves one (the
+/// weekly cron, or a dispatch on main with `seed`): it boots from
+/// WarpBuild's BASE image (`snapshot.enabled=true`), builds cold and saves.
+/// Every other run restores and saves nothing. Task saved from a runner that
+/// was itself restored, and the snapshot of a snapshot booted runners that
+/// were shut down within a minute without ever picking up the job
+/// (2026-10-23). Snapshots expire after 15 days unused, so weekly keeps one
+/// alive; between seeds a run rebuilds what changed since the last one.
+/// Reseed by hand after a lockfile or toolchain change that makes warm runs
+/// slow: `gh workflow run checks.yml --ref main -f seed=true`. First run
+/// (2026-10-23): cold build 15 min, 10 949 tests 2 min, on a 16x.
 fn tests() -> Job {
     let warp = Toolchain::Hosted;
     Job::new(RunsOn::Owned(format!(
-        "${{{{ {SEED} && '{WARPBUILD_RUNNER};snapshot.enabled=true' || \
+        "${{{{ needs.plan.outputs.seed == 'true' && '{WARPBUILD_RUNNER};snapshot.enabled=true' || \
          '{WARPBUILD_RUNNER};snapshot.key={WARPBUILD_SNAPSHOT}' }}}}"
     )))
-    .name("tests")
+    .name("Tests")
     .needs(&["plan"])
-    .cond(FULL)
+    .cond(WANTED)
     .timeout(120)
     .env("TEST_FEATURES", TEST_FEATURES)
     // No incremental caches: they grow without bound in a persistent target
@@ -473,7 +481,7 @@ fn tests() -> Job {
     .environment(ASSETS_ENVIRONMENT.into())
     // ~/.cache/cargo-target: outside the checkout, so the pre-snapshot
     // `git clean` keeps it.
-    .step(Step::run("Persistent target dir", &target_dir_script()).id("target"))
+    .step(Step::run("Persistent target dir", TARGET_DIR))
     .step(target_mark())
     .step(assets_token())
     .step(assets(warp))
@@ -495,14 +503,13 @@ fn tests() -> Job {
     // faces: build scripts watch some of them, and recreating them each boot
     // rebuilt mic-plugin and everything above (13 min of a warm build;
     // `just ci-churn` checks it). The target dir, ~/.cargo, rustup and the
-    // apt packages stay: that is the point. The stamp dates the snapshot.
+    // apt packages stay: that is the point.
     .step(
         Step::run(
             "Clean up before the snapshot",
             "\
 rm -rf \"$HOME/.ssh\" \"$HOME/.aws\"
 git config --local --unset-all http.https://github.com/.extraheader || true
-date +%s > \"$HOME/.cache/snapshot-stamp\"
 du -sh \"$HOME/.cache/cargo-target\" 2>/dev/null || true
 ",
         )
@@ -537,21 +544,9 @@ const WARPBUILD_RUNNER: &str = "warp-ubuntu-latest-x64-16x";
 /// the warm target dir in ~/.cache/cargo-target).
 const WARPBUILD_SNAPSHOT: &str = "studio-tests";
 
-/// A dispatch on main asking for a clean snapshot: boots the base image and
-/// saves.
-const SEED: &str =
-    "(github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.seed)";
-
-/// How old a snapshot may get before main's next run saves a fresh one. The
-/// workspace's own crates rebuild from an old one; this bounds how many.
-const STALE_DAYS: u32 = 3;
-
-/// See [`tests`]. Main's own runs only (a push or a dispatch), never a
-/// release line's.
-const SAVE_SNAPSHOT: &str = "${{ !cancelled() && github.ref == 'refs/heads/main' && \
-     github.event_name != 'pull_request' && (needs.plan.outputs.deps == 'true' || \
-     steps.target.outputs.stale == 'true' || \
-     (github.event_name == 'workflow_dispatch' && inputs.seed)) }}";
+/// See [`tests`]: a seed run, and never from a restored runner (a seed
+/// boots from the base image).
+const SAVE_SNAPSHOT: &str = "${{ !cancelled() && needs.plan.outputs.seed == 'true' }}";
 
 /// Cargo never collects garbage: every lockfile and feature set leaves its
 /// own units here until the disk is full and rustc dies mid-build (PR #184,
@@ -559,30 +554,17 @@ const SAVE_SNAPSHOT: &str = "${{ !cancelled() && github.ref == 'refs/heads/main'
 /// backstop: the incremental caches always go (the jobs build without them),
 /// and below 30 GB free the whole dir does (100 GB wiped the warm snapshot
 /// on every boot: a 16x boots with 186 GB free and the target is 87 GB).
-///
-/// `stale`: the snapshot this VM booted from is missing, cleared or older
-/// than [`STALE_DAYS`] (the stamp is written just before a save).
-fn target_dir_script() -> String {
-    format!(
-        r#"dir="${{CI_CACHE_DIR:-${{CACHE_DIRECTORY:-$HOME/.cache}}}}/cargo-target"
+const TARGET_DIR: &str = r#"dir="${CI_CACHE_DIR:-${CACHE_DIRECTORY:-$HOME/.cache}}/cargo-target"
 mkdir -p "$dir"
 echo "CARGO_TARGET_DIR=$dir" >> "$GITHUB_ENV"
-free_gb() {{ df -Pk "$dir" | awk 'NR==2 {{ print int($4 / 1048576) }}'; }}
+free_gb() { df -Pk "$dir" | awk 'NR==2 { print int($4 / 1048576) }'; }
 rm -rf "$dir"/*/incremental "$dir"/*/*/incremental
 if [ "$(free_gb)" -lt 30 ]; then
   echo "::warning::still $(free_gb) GB free: clearing the target dir (a cold build follows)"
   rm -rf "$dir" && mkdir -p "$dir"
 fi
-stamp="$(cat "$HOME/.cache/snapshot-stamp" 2>/dev/null || echo 0)"
-age=$(( ($(date +%s) - stamp) / 86400 ))
-if [ ! -d "$dir/debug" ] || [ "$age" -ge {STALE_DAYS} ]; then
-  echo "stale=true" >> "$GITHUB_OUTPUT"
-  echo "snapshot: stale (target $( [ -d "$dir/debug" ] && echo warm || echo cold ), ${{age}} days old): main saves a fresh one"
-fi
 echo "target dir: $dir ($(du -sh "$dir" 2>/dev/null | cut -f1)), $(free_gb) GB free"
-"#
-    )
-}
+"#;
 /// The large fixtures and the rigs' NAM captures / IRs live in the private
 /// repos studio-assets, rig-models and mic-models (assets.txt); `just assets` clones them
 /// into .assets/ and links each file into place, so the tests that need them
@@ -686,28 +668,46 @@ t2=$(date +%s)
 exit "$rc"
 "####;
 
-/// The REQUIRED check: its name is what the `main` ruleset (25572127)
-/// requires, and what `just release-tag` and the tag guards require green on
-/// a release. A required check that is skipped counts as passing, so this
-/// never skips: it fails unless the plan and the gates succeeded and, on a
-/// full run, check, wasm and tests too. The advisory work (clippy, the
-/// Signal browser remote) cannot fail it.
-fn build_and_test() -> Job {
-    Job::new(UBUNTU)
-        .name("Build + test")
+/// The aggregate: `just release-tag` and the tag guards require `CI passed`
+/// green on a release commit (scripts/release.sh `BUILD_CHECK`). A skipped
+/// required check counts as passing, so this never skips: it fails unless
+/// the plan, the gates, check, wasm and tests all succeeded (a sound release
+/// PR skips them all). The advisory work (clippy, the Signal browser remote)
+/// cannot fail it.
+///
+/// The escape hatch for a push the pre-push hook couldn't vouch for (a
+/// contributor without the hook, a dirty tree, `SKIP=local-ci`): a green
+/// DISPATCHED full run posts `Local CI` on the branch's head.
+fn ci_passed() -> Result<Job> {
+    Ok(Job::new(UBUNTU)
+        .name("CI passed")
         .needs(&["plan", "gates", "check", "wasm", "tests"])
         .cond("${{ always() }}")
         .timeout(5)
+        .permissions(yaml("statuses: write\n")?)
         .step(
             Step::run("Every required job succeeded", AGGREGATE)
                 .env("PLAN", "${{ needs.plan.result }}")
                 .env("SKIP", "${{ needs.plan.outputs.skip }}")
-                .env("FULL", "${{ needs.plan.outputs.full }}")
                 .env("GATES", "${{ needs.gates.result }}")
                 .env("CHECK", "${{ needs.check.result }}")
                 .env("WASM", "${{ needs.wasm.result }}")
                 .env("TESTS", "${{ needs.tests.result }}"),
         )
+        .step(
+            Step::run(
+                "Post Local CI for a green dispatched run",
+                "\
+gh api -X POST \"repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}\" --silent \\
+  -f state=success -f context=\"Local CI\" \\
+  -f description=\"full run on GitHub (${GITHUB_RUN_ID})\" \\
+  -f target_url=\"${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}\"
+echo \"Local CI posted on ${GITHUB_SHA}\"
+",
+            )
+            .cond("${{ success() && github.event_name == 'workflow_dispatch' }}")
+            .env("GH_TOKEN", "${{ secrets.GITHUB_TOKEN }}"),
+        ))
 }
 
 const AGGREGATE: &str = r#"set -u
@@ -717,17 +717,9 @@ bad() { echo "::error::$1"; fail=1; }
 if [ "$SKIP" = "true" ]; then
   echo "plan: nothing to run (release commit)"; exit 0
 fi
-need() { # name result
-  [ "$2" = success ] || bad "$1: $2"
-  echo "$1: $2"
-}
-need gates "$GATES"
-if [ "$FULL" = "true" ]; then
-  need check "$CHECK"
-  need wasm "$WASM"
-  need tests "$TESTS"
-else
-  echo "check, wasm, tests: not run on a PR into main (the local-ci status covers them)"
-fi
+for job in "gates:$GATES" "check:$CHECK" "wasm:$WASM" "tests:$TESTS"; do
+  [ "${job#*:}" = success ] || bad "${job%%:*}: ${job#*:}"
+  echo "$job"
+done
 exit "$fail"
 "#;

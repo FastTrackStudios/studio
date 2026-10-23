@@ -16,10 +16,10 @@
 //!                          new CHANGELOG.md section and the change files it
 //!                          consumed; both iOS app crates on the version.
 //!                          checks.yml's plan runs the same guard, so a
-//!                          refused release PR also fails `Build + test`.
+//!                          refused release PR also fails `CI passed`.
 //!   push tag v*            "GitHub Release": the tag guard (the tag is a
 //!                          release commit on main or release/v*, with
-//!                          `Build + test` green), then the ONE GitHub
+//!                          `CI passed` green), then the ONE GitHub
 //!                          Release for Signal + Session. A tag is pushed by
 //!                          `just release-tag` as the fts-forge App or a
 //!                          person: a tag pushed with GITHUB_TOKEN starts no

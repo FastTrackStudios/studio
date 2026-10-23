@@ -61,6 +61,10 @@
         type = lib.types.nullOr lib.types.package;
         description = "tracey spec-coverage CLI, from the upstream release tarball (null where upstream ships no asset).";
       };
+      prek = lib.mkOption {
+        type = lib.types.nullOr lib.types.package;
+        description = "prek git hook manager (prek.toml), the upstream release binary (null where upstream ships no asset).";
+      };
     };
   });
 }

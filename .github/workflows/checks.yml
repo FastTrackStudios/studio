@@ -1,25 +1,26 @@
 # Generated from xtask::workflows::checks (xtask/workflows/src/checks.rs)
 # Rebuild with `just workflows`; do not edit by hand (`just workflows-check` fails CI on drift).
 # The reasons for every job and step are comments in that Rust source.
-name: checks
+name: CI
 on:
   pull_request:
     branches:
-    - main
     - release/**
   push:
     branches:
     - main
-    - release/**
+    - release/v*
   workflow_dispatch:
     inputs:
       seed:
-        description: 'On main: rebuild the tests job''s WarpBuild snapshot from clean and save it.'
+        description: 'On main: boot from the base image, build cold, save a fresh tests snapshot.'
         type: boolean
         required: false
         default: false
+  schedule:
+  - cron: 37 9 * * 0
 concurrency:
-  group: checks-${{ github.event.pull_request.number || github.ref }}-${{ github.event_name == 'push' && github.sha || 'run' }}
+  group: ci-${{ github.event.pull_request.number || github.ref }}-${{ github.event_name == 'push' && github.sha || github.event_name }}
   cancel-in-progress: true
 jobs:
   plan:
@@ -30,8 +31,7 @@ jobs:
       contents: read
     outputs:
       skip: ${{ steps.plan.outputs.skip }}
-      full: ${{ steps.plan.outputs.full }}
-      deps: ${{ steps.plan.outputs.deps }}
+      seed: ${{ steps.plan.outputs.seed }}
     steps:
     - uses: actions/checkout@v4
       with:
@@ -44,12 +44,13 @@ jobs:
         HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         HEAD_REF: ${{ github.event.pull_request.head.ref }}
         HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
-        BEFORE: ${{ github.event.before }}
-        DEPS_PATHS: Cargo.lock .cargo xtask/workflows/src/steps.rs nix/modules/toolchain.nix rust-toolchain.toml
+        INPUT_SEED: ${{ inputs.seed }}
+        SCHEDULE: ${{ github.event.schedule }}
+        SEED_CRON: 37 9 * * 0
       run: |
         set -u
         out() { printf '%s\n' "$@" >> "$GITHUB_OUTPUT"; }
-        full=true
+        seed=false
         case "${GITHUB_EVENT_NAME:-}" in
           pull_request)
             rc=1
@@ -63,37 +64,59 @@ jobs:
                   echo "This PR is one commit changing the version, CHANGELOG.md and consumed change files; its content was checked when it merged, so every job is skipped."
                 } >> "$GITHUB_STEP_SUMMARY"
                 echo "plan: release commit only (${HEAD_REF} -> ${BASE_REF}): nothing to run"
-                out skip=true full=false deps=false
+                out skip=true seed=false
                 exit 0 ;;
               3)
                 echo "::error::${HEAD_REF} -> ${BASE_REF} is a release PR the release guard refuses (see above)"
                 exit 1 ;;
             esac
-            case "${BASE_REF}" in
-              release/*)
-                if [ "${HEAD_REPO}" != "${GITHUB_REPOSITORY}" ]; then
-                  echo "::error::fork PR into ${BASE_REF}: the full set runs on the org's paid runners; re-push it from a branch of this repo"
-                  exit 1
-                fi
-                echo "plan: PR into ${BASE_REF}: a hotfix line runs the full set" ;;
-              *)
-                full=false
-                echo "plan: PR into ${BASE_REF}: the gates (the tests ran locally: the local-ci status)" ;;
-            esac ;;
+            if [ "${HEAD_REPO}" != "${GITHUB_REPOSITORY}" ]; then
+              echo "::error::fork PR into ${BASE_REF}: the full set runs on the org's paid runners; re-push it from a branch of this repo"
+              exit 1
+            fi
+            echo "plan: PR into ${BASE_REF} (hotfix): the full set" ;;
+          schedule)
+            [ "${SCHEDULE}" = "${SEED_CRON}" ] && seed=true
+            echo "plan: schedule '${SCHEDULE}' (seed=${seed}): the full set" ;;
+          workflow_dispatch)
+            [ "${INPUT_SEED}" = true ] && [ "${GITHUB_REF_NAME}" = main ] && seed=true
+            echo "plan: dispatch on ${GITHUB_REF_NAME} (seed=${seed}): the full set" ;;
           *) echo "plan: ${GITHUB_EVENT_NAME:-?} on ${GITHUB_REF_NAME}: the full set" ;;
         esac
-        deps=false
-        if [ "${GITHUB_EVENT_NAME:-}" = push ] && [ "${GITHUB_REF_NAME}" = main ]; then
-          # shellcheck disable=SC2086 # DEPS_PATHS is a list of pathspecs
-          if ! git cat-file -e "${BEFORE}^{commit}" 2>/dev/null \
-            || ! git diff --quiet "${BEFORE}" "${GITHUB_SHA}" -- ${DEPS_PATHS}; then
-            deps=true
-            echo "plan: dependencies or toolchain changed: the tests job saves a new snapshot"
-          fi
-        fi
-        out skip=false "full=${full}" "deps=${deps}"
+        out skip=false "seed=${seed}"
+  deps-cache:
+    name: Dependency cache
+    if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+    - uses: actions/checkout@v4
+    - name: Rust 1.94.0
+      uses: dtolnay/rust-toolchain@1.94.0
+    - name: Restore cargo's dependencies
+      id: deps
+      uses: actions/cache/restore@v4
+      with:
+        path: |
+          ~/.cargo/registry/index
+          ~/.cargo/registry/cache
+          ~/.cargo/git/db
+        key: cargo-deps-${{ runner.os }}-${{ hashFiles('Cargo.lock') }}
+        restore-keys: cargo-deps-${{ runner.os }}-
+    - name: Fetch cargo's dependencies
+      if: ${{ steps.deps.outputs.cache-hit != 'true' }}
+      run: cargo fetch
+    - name: Save cargo's dependencies
+      if: ${{ steps.deps.outputs.cache-hit != 'true' }}
+      uses: actions/cache/save@v4
+      with:
+        path: |
+          ~/.cargo/registry/index
+          ~/.cargo/registry/cache
+          ~/.cargo/git/db
+        key: cargo-deps-${{ runner.os }}-${{ hashFiles('Cargo.lock') }}
   gates:
-    name: Gates (fmt, manifests, workflows, change files, flows)
+    name: Gates
     needs: plan
     if: ${{ needs.plan.outputs.skip != 'true' }}
     runs-on: ubuntu-latest
@@ -200,9 +223,9 @@ jobs:
       if: ${{ !cancelled() }}
       run: just daw-flows --own-daemon
   check:
-    name: check (cargo check + clippy)
+    name: Check
     needs: plan
-    if: ${{ needs.plan.outputs.full == 'true' }}
+    if: ${{ needs.plan.outputs.skip != 'true' }}
     runs-on: warp-ubuntu-latest-x64-8x
     timeout-minutes: 90
     env:
@@ -257,9 +280,9 @@ jobs:
         du -sh target ~/.cargo/registry ~/.cargo/git 2>/dev/null || true
         df -h / | tail -n 1
   wasm:
-    name: wasm checks
+    name: Wasm
     needs: plan
-    if: ${{ needs.plan.outputs.full == 'true' }}
+    if: ${{ needs.plan.outputs.skip != 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 75
     env:
@@ -325,10 +348,10 @@ jobs:
         du -sh target ~/.cargo/registry ~/.cargo/git 2>/dev/null || true
         df -h / | tail -n 1
   tests:
-    name: tests
+    name: Tests
     needs: plan
-    if: ${{ needs.plan.outputs.full == 'true' }}
-    runs-on: ${{ (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.seed) && 'warp-ubuntu-latest-x64-16x;snapshot.enabled=true' || 'warp-ubuntu-latest-x64-16x;snapshot.key=studio-tests' }}
+    if: ${{ needs.plan.outputs.skip != 'true' }}
+    runs-on: ${{ needs.plan.outputs.seed == 'true' && 'warp-ubuntu-latest-x64-16x;snapshot.enabled=true' || 'warp-ubuntu-latest-x64-16x;snapshot.key=studio-tests' }}
     timeout-minutes: 120
     environment: ${{ github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && 'ci-assets' || '' }}
     env:
@@ -358,7 +381,6 @@ jobs:
         mkdir -p ../.cargo
         cp .cargo/ci-config.toml ../.cargo/config.toml
     - name: Persistent target dir
-      id: target
       run: |
         dir="${CI_CACHE_DIR:-${CACHE_DIRECTORY:-$HOME/.cache}}/cargo-target"
         mkdir -p "$dir"
@@ -368,12 +390,6 @@ jobs:
         if [ "$(free_gb)" -lt 30 ]; then
           echo "::warning::still $(free_gb) GB free: clearing the target dir (a cold build follows)"
           rm -rf "$dir" && mkdir -p "$dir"
-        fi
-        stamp="$(cat "$HOME/.cache/snapshot-stamp" 2>/dev/null || echo 0)"
-        age=$(( ($(date +%s) - stamp) / 86400 ))
-        if [ ! -d "$dir/debug" ] || [ "$age" -ge 3 ]; then
-          echo "stale=true" >> "$GITHUB_OUTPUT"
-          echo "snapshot: stale (target $( [ -d "$dir/debug" ] && echo warm || echo cold ), ${age} days old): main saves a fresh one"
         fi
         echo "target dir: $dir ($(du -sh "$dir" 2>/dev/null | cut -f1)), $(free_gb) GB free"
     - name: Mark the target dir's fingerprints
@@ -454,21 +470,20 @@ jobs:
         if-no-files-found: ignore
         retention-days: 7
     - name: Clean up before the snapshot
-      if: ${{ !cancelled() && github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && (needs.plan.outputs.deps == 'true' || steps.target.outputs.stale == 'true' || (github.event_name == 'workflow_dispatch' && inputs.seed)) }}
+      if: ${{ !cancelled() && needs.plan.outputs.seed == 'true' }}
       run: |
         rm -rf "$HOME/.ssh" "$HOME/.aws"
         git config --local --unset-all http.https://github.com/.extraheader || true
-        date +%s > "$HOME/.cache/snapshot-stamp"
         du -sh "$HOME/.cache/cargo-target" 2>/dev/null || true
     - name: Save the WarpBuild snapshot
-      if: ${{ !cancelled() && github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && (needs.plan.outputs.deps == 'true' || steps.target.outputs.stale == 'true' || (github.event_name == 'workflow_dispatch' && inputs.seed)) }}
+      if: ${{ !cancelled() && needs.plan.outputs.seed == 'true' }}
       uses: WarpBuilds/snapshot-save@v1
       with:
         alias: studio-tests
         fail-on-error: true
         wait-timeout-minutes: 60
-  build-and-test:
-    name: Build + test
+  ci-passed:
+    name: CI passed
     needs:
     - plan
     - gates
@@ -478,12 +493,13 @@ jobs:
     if: ${{ always() }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    permissions:
+      statuses: write
     steps:
     - name: Every required job succeeded
       env:
         PLAN: ${{ needs.plan.result }}
         SKIP: ${{ needs.plan.outputs.skip }}
-        FULL: ${{ needs.plan.outputs.full }}
         GATES: ${{ needs.gates.result }}
         CHECK: ${{ needs.check.result }}
         WASM: ${{ needs.wasm.result }}
@@ -496,16 +512,18 @@ jobs:
         if [ "$SKIP" = "true" ]; then
           echo "plan: nothing to run (release commit)"; exit 0
         fi
-        need() { # name result
-          [ "$2" = success ] || bad "$1: $2"
-          echo "$1: $2"
-        }
-        need gates "$GATES"
-        if [ "$FULL" = "true" ]; then
-          need check "$CHECK"
-          need wasm "$WASM"
-          need tests "$TESTS"
-        else
-          echo "check, wasm, tests: not run on a PR into main (the local-ci status covers them)"
-        fi
+        for job in "gates:$GATES" "check:$CHECK" "wasm:$WASM" "tests:$TESTS"; do
+          [ "${job#*:}" = success ] || bad "${job%%:*}: ${job#*:}"
+          echo "$job"
+        done
         exit "$fail"
+    - name: Post Local CI for a green dispatched run
+      if: ${{ success() && github.event_name == 'workflow_dispatch' }}
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        gh api -X POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" --silent \
+          -f state=success -f context="Local CI" \
+          -f description="full run on GitHub (${GITHUB_RUN_ID})" \
+          -f target_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+        echo "Local CI posted on ${GITHUB_SHA}"

@@ -39,6 +39,11 @@
       # upstream release tarball (nix/modules/tracey.nix); the old
       # `cargo install tracey` shellHook is gone with it.
       ++ lib.optionals (config.fts.tracey != null) [ config.fts.tracey ]
+      # prek — the git hooks (prek.toml: rustfmt / shellcheck / actionlint
+      # on commit, local CI on push), and the two linters its commit hooks
+      # call. The upstream release binary (nix/modules/prek.nix).
+      ++ lib.optionals (config.fts.prek != null) [ config.fts.prek ]
+      ++ [ pkgs.shellcheck pkgs.actionlint ]
       ++ lib.optionals pkgs.stdenv.isLinux [
         # pw-jack — run the live rigs through PipeWire's JACK shim.
         pkgs.pipewire.jack

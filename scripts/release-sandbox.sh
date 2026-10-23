@@ -232,18 +232,18 @@ expect_ok "guard passes on the re-cut" guard "$REL"
 
 echo "=== merge (squash) and tag"
 merge_release main 80; M1=$(git rev-parse origin/main)
-SHIM_CHECK="completed failure" expect_fail "tag: refused while Build + test is red" R tag
+SHIM_CHECK="completed failure" expect_fail "tag: refused while CI passed is red" R tag
 grep -q "is 'completed failure', not green" "$S/last.out" && ok "  ...naming the check result" || bad "  ...message"
-SHIM_CHECK="in_progress null" expect_fail "tag: refused while Build + test is running" R tag
-expect_ok "tag (Build + test green)" R tag
+SHIM_CHECK="in_progress null" expect_fail "tag: refused while CI passed is running" R tag
+expect_ok "tag (CI passed green)" R tag
 git fetch -q --tags origin
 eq "v26.10.0 is on the squash merge commit" "$(git rev-parse 'v26.10.0^{commit}')" "$M1"
 eq "annotated" "$(git cat-file -t v26.10.0)" tag
 expect_fail "tag again: never moved" R tag 26.10.0
 git switch -q --detach v26.10.0
 expect_ok "tag-guard on v26.10.0" env GITHUB_REF=refs/tags/v26.10.0 bash scripts/release.sh tag-guard
-expect_ok "tag-guard with GH_TOKEN checks Build + test" env GITHUB_REF=refs/tags/v26.10.0 GH_TOKEN=x bash scripts/release.sh tag-guard
-SHIM_CHECK="completed failure" expect_fail "tag-guard with GH_TOKEN: red Build + test" env GITHUB_REF=refs/tags/v26.10.0 GH_TOKEN=x bash scripts/release.sh tag-guard
+expect_ok "tag-guard with GH_TOKEN checks CI passed" env GITHUB_REF=refs/tags/v26.10.0 GH_TOKEN=x bash scripts/release.sh tag-guard
+SHIM_CHECK="completed failure" expect_fail "tag-guard with GH_TOKEN: red CI passed" env GITHUB_REF=refs/tags/v26.10.0 GH_TOKEN=x bash scripts/release.sh tag-guard
 expect_fail "tag-guard: a branch ref" env GITHUB_REF=refs/heads/main bash scripts/release.sh tag-guard
 export GITHUB_OUTPUT="$S/gho"; : > "$GITHUB_OUTPUT"
 for a in studio; do expect_ok "ios-resolve $a v26.10.0" R ios-resolve "$a" v26.10.0; done

@@ -447,3 +447,40 @@ df -h / | tail -n 1
     )
     .cond("${{ always() }}")
 }
+
+/// What [`cargo_deps_restore`] / [`cargo_deps_save`] keep: cargo's
+/// downloaded registry and git dependencies (not anything built).
+const CARGO_DEPS_PATHS: &str = "\
+~/.cargo/registry/index
+~/.cargo/registry/cache
+~/.cargo/git/db
+";
+
+/// Keyed on the lockfile, which content-addresses every download.
+const CARGO_DEPS_KEY: &str = "cargo-deps-${{ runner.os }}-${{ hashFiles('Cargo.lock') }}";
+
+/// cargo's downloaded dependencies from the Actions cache, for a free job
+/// that runs cargo but builds nothing (the PR checks). Without it the first
+/// cargo command spends most of a minute fetching every git dependency.
+/// Only main writes the entry (CI's `deps-cache` job, [`cargo_deps_save`]),
+/// so PRs never spend the 10 GB budget.
+pub fn cargo_deps_restore() -> Step {
+    Step::uses("Restore cargo's dependencies", "actions/cache/restore@v4")
+        .id("deps")
+        .with("path", CARGO_DEPS_PATHS)
+        .with("key", CARGO_DEPS_KEY)
+        .with("restore-keys", "cargo-deps-${{ runner.os }}-")
+}
+
+/// [`cargo_deps_restore`], then on a miss fetch everything and save it.
+pub fn cargo_deps_save() -> [Step; 3] {
+    let miss = "${{ steps.deps.outputs.cache-hit != 'true' }}";
+    [
+        cargo_deps_restore(),
+        Step::run("Fetch cargo's dependencies", "cargo fetch").cond(miss),
+        Step::uses("Save cargo's dependencies", "actions/cache/save@v4")
+            .cond(miss)
+            .with("path", CARGO_DEPS_PATHS)
+            .with("key", CARGO_DEPS_KEY),
+    ]
+}

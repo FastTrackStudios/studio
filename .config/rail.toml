@@ -54,6 +54,7 @@ paths = [
   "scripts/**",
   ".cargo/ci-config.toml",
   ".config/nextest.toml",
+  "prek.toml",
 ]
 
 [plan.work.dev-shell]

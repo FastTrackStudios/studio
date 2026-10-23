@@ -11,7 +11,7 @@
 //!   release PR merged --> `just release-tag` pushes vYY.M.MICRO (on main, or
 //!   on a release/v* hotfix line) --> this workflow starts on the tag -->
 //!   resolve (hosted: tag shape, app crate version == tag version, changelog
-//!   section, commit on main or release/v*, `Build + test` green, Release
+//!   section, commit on main or release/v*, `CI passed` green, Release
 //!   exists) --> testflight (airlock: build, sign, upload) --> record
 //!   (hosted: marketing version + build number written into the Release
 //!   notes; a re-run's edit re-reads and retries).
