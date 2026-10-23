@@ -17,13 +17,13 @@
 set -euo pipefail
 cd "$(dirname "$0")/../.."
 
-bin=target/release-fast/signal-desktop
+bin=target/release-fast/studio-desktop
 [ -x "$bin" ] || { echo "no $bin — run \`just app\` first" >&2; exit 1; }
 
 app=target/Signal.app
 rm -rf "$app"
 mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources"
-cp "$bin" "$app/Contents/MacOS/signal-desktop"
+cp "$bin" "$app/Contents/MacOS/studio-desktop"
 
 cat > "$app/Contents/MacOS/Signal" <<'SH'
 #!/bin/bash
@@ -35,7 +35,7 @@ export RUST_LOG="${RUST_LOG:-info,vox_core=warn,schema_deser=off}"
 # volume, and macOS asks before every app that reads one.
 export SIGNAL_FRAME_DIR="${SIGNAL_FRAME_DIR:-$(cd "$(dirname "$0")/../Resources/faces" && pwd)}"
 __WINDOW__
-exec "$(dirname "$0")/signal-desktop" --guitar "$@" >>"$logs/signal.log" 2>&1
+exec "$(dirname "$0")/studio-desktop" --guitar "$@" >>"$logs/signal.log" 2>&1
 SH
 # The window size, baked in at bundle time (Finder passes no environment).
 if [ -n "${SIGNAL_WINDOW_SIZE:-}" ]; then
@@ -56,7 +56,7 @@ else
     echo "no $faces (run `just faces`) — the app will draw plain cards" >&2
 fi
 
-icon=apps/signal/desktop/ios/Assets.xcassets/AppIcon.appiconset/icon-1024.png
+icon=apps/studio/desktop/ios/Assets.xcassets/AppIcon.appiconset/icon-1024.png
 if [ -f "$icon" ]; then
     set_dir=$(mktemp -d)/Signal.iconset
     mkdir -p "$set_dir"
@@ -67,7 +67,7 @@ if [ -f "$icon" ]; then
     iconutil -c icns "$set_dir" -o "$app/Contents/Resources/Signal.icns"
 fi
 
-version=$(sed -n 's/^version = "\(.*\)"/\1/p' apps/signal/desktop/Cargo.toml | head -1)
+version=$(sed -n 's/^version = "\(.*\)"/\1/p' apps/studio/desktop/Cargo.toml | head -1)
 cat > "$app/Contents/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">

@@ -71,7 +71,7 @@ app (Session / Signal / phone / browser) ── connects to 1..N engines
 3. **Rigs take an engine**: `GuitarRig`, `KeysRig`, `SamplerRig` (sampler)
    and the drums/ekit/synth backends build into a `Rig` they are given;
    their meters, MIDI and tempo go through the engine.
-4. **signal-desktop runs one engine** for all its rigs; the rig services
+4. **studio-desktop runs one engine** for all its rigs; the rig services
    (vox) are mounted on it beside the daw facade.
 5. **Session hosts rigs the same way**: a rig is tracks in Session's own
    project; `signal-fx`'s nested renderer goes.

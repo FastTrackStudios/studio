@@ -20,7 +20,7 @@ config="${SIGNAL_CONFIG_SRC:-$HOME/.config/signal}"
 dist=target/mac-release
 rm -rf "$dist" && mkdir -p "$dist"
 
-CARGO_BUILD_JOBS="${CARGO_BUILD_JOBS:-6}" cargo build --profile release-fast -p signal-desktop --features signal-keys-rig
+CARGO_BUILD_JOBS="${CARGO_BUILD_JOBS:-6}" cargo build --profile release-fast -p studio-desktop --features signal-keys-rig
 # No baked window size: on the laptop it opens filling the screen.
 scripts/signal/mac-app.sh >/dev/null
 # ditto keeps the bundle's signature and resource forks intact.

@@ -12,7 +12,7 @@ sample libraries, effects, routing — and every interface you touch is a
 
 That split is the whole architecture, and it is strict:
 
-- The rig core has no window. It runs as `signal-desktop --engine` and serves
+- The rig core has no window. It runs as `studio-desktop --engine` and serves
   a vox router on `ws://:4040/vox`.
 - Desktop, tablet, browser and the plugin editor are all clients of that
   router. They render the same state because they are looking at the same

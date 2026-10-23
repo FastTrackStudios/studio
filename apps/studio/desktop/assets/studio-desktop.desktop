@@ -1,0 +1,13 @@
+# Template — `just install` substitutes the binary path and copies this
+# to ~/.local/share/applications/.
+[Desktop Entry]
+Type=Application
+Name=Studio
+GenericName=Live Rig and DAW
+Comment=FastTrackStudio: Signal, the live rig, and Session, the DAW, in one app
+Exec=@LAUNCH@@BIN@
+Icon=studio-desktop
+Terminal=false
+Categories=AudioVideo;Audio;Music;
+Keywords=guitar;rig;amp;NAM;setlist;worship;daw;
+StartupWMClass=fasttrackstudio

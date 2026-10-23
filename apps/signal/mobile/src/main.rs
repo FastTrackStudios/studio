@@ -2,7 +2,7 @@
 //! engine.
 //!
 //! The same `GuitarRigRemote` the desktop app and the browser remote mount,
-//! over vox WebSocket to `signal-desktop --engine` — the phone is one more
+//! over vox WebSocket to `studio-desktop --engine` — the phone is one more
 //! remote of the headless core. Its window's size picks the phone form
 //! factor (a phone held sideways lays the chain out a page at a time).
 //!
@@ -16,7 +16,7 @@ use guitar::ui::GuitarRigRemote;
 use signal_rigs_proto::perform::service::{RigPerformClient, RigPerformStreamClient};
 
 /// The signal UI's compiled Tailwind (the desktop app's sheet).
-const SIGNAL_TAILWIND: &str = include_str!("../../desktop/assets/tailwind-signal.css");
+const SIGNAL_TAILWIND: &str = include_str!("../../../studio/desktop/assets/tailwind-signal.css");
 
 fn main() {
     init_tracing();

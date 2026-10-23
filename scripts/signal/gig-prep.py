@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build a Signal gig folder from a gig manifest — see apps/signal/desktop/src/gig/.
+"""Build a Signal gig folder from a gig manifest — see apps/studio/desktop/src/gig/.
 
     python3 scripts/signal/gig-prep.py \
         --manifest /Volumes/dev-drive/caa-2026/manifest.json \

@@ -45,7 +45,7 @@ _lumen-link:
     dir=$(cargo metadata --locked --format-version 1 2>/dev/null \
         | python3 -c 'import json,sys,os; print(next(os.path.dirname(p["manifest_path"]) for p in json.load(sys.stdin)["packages"] if p["name"]=="lumen-blocks"))')
     ln -sfn "$dir" apps/session/desktop/.lumen-blocks
-    ln -sfn "$dir" apps/signal/desktop/.lumen-blocks
+    ln -sfn "$dir" apps/studio/desktop/.lumen-blocks
     # architect-ui, for the FX editors' sheets (a git dep has no stable path).
     ui=$(cargo metadata --locked --format-version 1 2>/dev/null \
         | python3 -c 'import json,sys,os; print(next(os.path.dirname(p["manifest_path"]) for p in json.load(sys.stdin)["packages"] if p["name"]=="architect-ui"))')
@@ -83,11 +83,11 @@ tailwind-check: tailwind
 # NOTE: needs `libpipewire` on PKG_CONFIG_PATH for `--features pipewire`.
 
 # The signal engine — the headless rig core (serves the vox router on
-# ws://:4040/vox): the signal-desktop binary in --engine mode. `rigd`
+# ws://:4040/vox): the studio-desktop binary in --engine mode. `rigd`
 # kept as an alias for muscle memory. (`session-desktop --engine` is a
 # different thing: the setlist + daw facade server.)
 signal-engine:
-    cargo run --release -p signal-desktop -- --engine
+    cargo run --release -p studio-desktop -- --engine
 
 alias rigd := signal-engine
 
@@ -107,15 +107,15 @@ web-stage: tailwind
     rm -rf apps/session/desktop/web-dist
     cp -r target/dx/session-desktop/release/web/public apps/session/desktop/web-dist
 
-# ── Signal (apps/signal/desktop) ─────────────────────────────────────────
+# ── Signal (apps/studio/desktop) ─────────────────────────────────────────
 # The isolated live-rig app: the same one engine as Session, running only
 # the rigs (see docs/design/one-engine.md). Its Tailwind sheet is its own
-# (apps/signal/desktop/assets/tailwind-signal.css, include_str!'d by
-# rig_view.rs), built from apps/signal/desktop/input.css.
+# (apps/studio/desktop/assets/tailwind-signal.css, include_str!'d by
+# rig_view.rs), built from apps/studio/desktop/input.css.
 
 # Build the Signal app's Tailwind sheet
 signal-tailwind: _lumen-link
-    cd apps/signal/desktop && tailwindcss -i ./input.css -o ./assets/tailwind-signal.css --minify
+    cd apps/studio/desktop && tailwindcss -i ./input.css -o ./assets/tailwind-signal.css --minify
 
 # Release rather than dev because the rig plays audio in-process, and a
 # debug build xruns. dx rebuilds and relaunches on a source change; that is
@@ -123,8 +123,8 @@ signal-tailwind: _lumen-link
 # only want to launch the thing.
 #
 # Run the Signal desktop app (release) through dx, with its file watcher
-signal-desktop: signal-tailwind
-    cd apps/signal/desktop && PIPEWIRE_PROPS='{ application.name = FTS-Signal }' \
+studio-desktop: signal-tailwind
+    cd apps/studio/desktop && PIPEWIRE_PROPS='{ application.name = FTS-Signal }' \
         dx serve --release --platform desktop
 
 # ONE build line for the app, shared by every recipe that runs it. The
@@ -134,8 +134,8 @@ signal-desktop: signal-tailwind
 # cargo recompile every shared crate for the other combination: that was the
 # difference between a 2-minute rebuild and a 15-minute one.
 signal_features := "signal-keys-rig"
-signal_build := "cargo build --profile release-fast -p signal-desktop --features " + signal_features
-signal_bin := "./target/release-fast/signal-desktop"
+signal_build := "cargo build --profile release-fast -p studio-desktop --features " + signal_features
+signal_bin := "./target/release-fast/studio-desktop"
 
 # Build the Signal app (what `Signal.app` and the menu bar run)
 signal-app:
@@ -172,13 +172,13 @@ signal-mac-release tag:
     scripts/signal/mac-release.sh {{tag}}
 
 # Stage the Signal web bundle (the browser remote) for embedding: tailwind →
-# dx web build → apps/signal/desktop/web-dist/, which `cargo build -p
-# signal-desktop --features embed-web` compiles into the binary
+# dx web build → apps/studio/desktop/web-dist/, which `cargo build -p
+# studio-desktop --features embed-web` compiles into the binary
 # (include_dir), plus the keys AudioWorklet. web-dist/ is gitignored.
 signal-web-stage: signal-tailwind
-    cd apps/signal/desktop && dx build --platform web --release --no-default-features --features signal
-    rm -rf apps/signal/desktop/web-dist
-    cp -r target/dx/signal-desktop/release/web/public apps/signal/desktop/web-dist
+    cd apps/studio/desktop && dx build --platform web --release --no-default-features --features signal
+    rm -rf apps/studio/desktop/web-dist
+    cp -r target/dx/studio-desktop/release/web/public apps/studio/desktop/web-dist
     just keys-worklet-wasm
 
 # ── The guitar rig ───────────────────────────────────────────────────────
@@ -261,7 +261,7 @@ guitar-switch-bench SWITCHES="12":
 #   /worklet/signal_keys_worklet_bg.wasm
 # wasm-bindgen-cli comes from the dev shell, pinned to the workspace
 # wasm-bindgen version (same as task-worklet-wasm).
-keys-worklet-wasm out='apps/signal/desktop/web-dist/worklet':
+keys-worklet-wasm out='apps/studio/desktop/web-dist/worklet':
     # --max-memory: default wasm linear memory caps at 2 GB — resident pack
     # bytes + decoded-PCM budget + app need the full 4 GB address space.
     #
@@ -303,7 +303,7 @@ keys-worklet-wasm out='apps/signal/desktop/web-dist/worklet':
 # Kept as its OWN recipe until it is proven: `keys-worklet-wasm` (single
 # threaded) stays the default so a toolchain problem here can never take the
 # working rig down with it.
-keys-worklet-wasm-threads out='apps/signal/desktop/web-dist/worklet':
+keys-worklet-wasm-threads out='apps/studio/desktop/web-dist/worklet':
     # The four TLS symbols are exported EXPLICITLY: wasm-bindgen's threading
     # pass looks up `__wasm_init_tls` (each thread initialises its own TLS
     # block through it), and LLD garbage-collects all of them when no Rust
@@ -338,7 +338,7 @@ keys-worklet-wasm-threads out='apps/signal/desktop/web-dist/worklet':
 #   guitar_processor.js  nam_worker.js  guitar_rig.js  worklet_polyfill.js
 #   signal_guitar_worklet.js  signal_guitar_worklet_bg.wasm
 # +simd128: the NAM kernels are what decides how many models fit a quantum.
-guitar-worklet-wasm out='apps/signal/desktop/web-dist/worklet/guitar':
+guitar-worklet-wasm out='apps/studio/desktop/web-dist/worklet/guitar':
     RUSTFLAGS="-C target-feature=+simd128" \
     cargo build -p web-audio-worklet --features guitar --lib \
         --target wasm32-unknown-unknown --release
@@ -358,7 +358,7 @@ guitar-worklet-wasm out='apps/signal/desktop/web-dist/worklet/guitar':
 # `node profile.mjs <profile> <patch>` in the dir prints each block's cost.
 guitar-web-harness dir='target/guitar-web' port='8765':
     just guitar-worklet-wasm {{dir}}
-    cargo run -q -p signal-desktop --features cli --bin signal -- rig web-bundle {{dir}}/rig
+    cargo run -q -p studio-desktop --features cli --bin signal -- rig web-bundle {{dir}}/rig
     cp features/adapters/web/worklet/harness/index.html features/adapters/web/worklet/harness/serve.py features/adapters/web/worklet/harness/profile.mjs {{dir}}/
     cp "${XDG_CONFIG_HOME:-$HOME/.config}/signal/calibration/di-reference.wav" {{dir}}/ || echo "no di-reference.wav — the demo input needs one"
     python3 {{dir}}/serve.py {{port}}
@@ -367,21 +367,21 @@ guitar-web-harness dir='target/guitar-web' port='8765':
 # bundle + keys worklet (signal-web-stage), then embed it into the release
 # binary. Order matters — embed-web include_dir!s web-dist/ at compile
 # time, so staging runs first. Then:
-#   target/release/signal-desktop --engine     (binds 0.0.0.0:4040)
+#   target/release/studio-desktop --engine     (binds 0.0.0.0:4040)
 # and open http://<host>:4040/rigs/keys/worship (tailnet-reachable).
 keys-web: signal-web-stage
-    cargo build --release -p signal-desktop --features embed-web
+    cargo build --release -p studio-desktop --features embed-web
 
 # Playwright end-to-end suite for the browser keys rig (W5): spawns its
 # own engine on a scratch port (SIGNAL_ENGINE_ADDR) and proves the rig
-# makes SOUND in real chromium. Expects target/release/signal-desktop
+# makes SOUND in real chromium. Expects target/release/studio-desktop
 # to exist — build it with `just keys-web` first. Needs the real pack
 # library (or FTS_PACK_LIBRARY pointing at one with the Worship proxies).
 keys-web-e2e:
-    cd apps/signal/desktop/e2e && npm install --no-fund --no-audit && npx playwright test
+    cd apps/studio/desktop/e2e && npm install --no-fund --no-audit && npx playwright test
 
 # Build the RELEASE Signal binary (web bundle EMBEDDED) and deploy the ONE
-# artifact to ~/.local/lib/fts/signal-desktop behind the signal-engine
+# artifact to ~/.local/lib/fts/studio-desktop behind the signal-engine
 # systemd user unit. The unit is installed but NOT enabled: the desktop
 # app (or `systemctl --user start signal-engine`) is the on/off switch;
 # while running, systemd restarts crashes in ~1s; an explicit stop is
@@ -391,15 +391,15 @@ keys-web-e2e:
 rig-install: signal-web-stage
     #!/usr/bin/env bash
     set -euo pipefail
-    cargo build --release -p signal-desktop --features embed-web
+    cargo build --release -p studio-desktop --features embed-web
     install -d ~/.local/lib/fts
-    install -m 755 target/release/signal-desktop ~/.local/lib/fts/signal-desktop.new
-    mv -T ~/.local/lib/fts/signal-desktop.new ~/.local/lib/fts/signal-desktop
+    install -m 755 target/release/studio-desktop ~/.local/lib/fts/studio-desktop.new
+    mv -T ~/.local/lib/fts/studio-desktop.new ~/.local/lib/fts/studio-desktop
     # No launcher prefix: audio is daw-audio-io's native PipeWire duplex and
     # MIDI midicore's native PipeWire backend, so the engine needs no
     # `pw-jack` shim.
     install -d ~/.config/systemd/user
-    sed "s|@LAUNCH@||" apps/signal/desktop/systemd/signal-engine.service \
+    sed "s|@LAUNCH@||" apps/studio/desktop/systemd/signal-engine.service \
         > ~/.config/systemd/user/signal-engine.service
     systemctl --user daemon-reload
     systemctl --user try-restart signal-engine
@@ -418,17 +418,21 @@ install: rig-install
     #!/usr/bin/env bash
     set -euo pipefail
     install -d ~/.local/bin
-    ln -sf ~/.local/lib/fts/signal-desktop ~/.local/bin/signal-desktop
-    install -d ~/.local/share/icons/hicolor/scalable/apps
-    install -m 644 apps/signal/desktop/assets/icon.svg \
+    # Signal's own install, from before Studio: its launcher would still
+    # open the old binary.
+    rm -f ~/.local/bin/signal-desktop ~/.local/share/applications/signal-desktop.desktop \
         ~/.local/share/icons/hicolor/scalable/apps/signal-desktop.svg
+    ln -sf ~/.local/lib/fts/studio-desktop ~/.local/bin/studio-desktop
+    install -d ~/.local/share/icons/hicolor/512x512/apps
+    install -m 644 apps/studio/desktop/assets/icon.png \
+        ~/.local/share/icons/hicolor/512x512/apps/studio-desktop.png
     install -d ~/.local/share/applications
-    sed -e "s|@LAUNCH@||" -e "s|@BIN@|$HOME/.local/lib/fts/signal-desktop|" \
-        apps/signal/desktop/assets/signal-desktop.desktop \
-        > ~/.local/share/applications/signal-desktop.desktop
+    sed -e "s|@LAUNCH@||" -e "s|@BIN@|$HOME/.local/lib/fts/studio-desktop|" \
+        apps/studio/desktop/assets/studio-desktop.desktop \
+        > ~/.local/share/applications/studio-desktop.desktop
     update-desktop-database ~/.local/share/applications 2>/dev/null || true
     gtk-update-icon-cache ~/.local/share/icons/hicolor 2>/dev/null || true
-    echo "installed: signal-desktop in ~/.local/bin, launcher entry ready"
+    echo "installed: studio-desktop in ~/.local/bin, launcher entry ready"
 
 # Remove everything `just install` put on this machine: stop + remove
 # the systemd unit, binary, symlink, launcher entry, and icon.
@@ -443,10 +447,10 @@ uninstall:
     systemctl --user daemon-reload
     # ~/.local/lib/fts is shared with the other FTS products (patchbay,
     # session). Remove only what this recipe installed.
-    rm -f ~/.local/bin/signal-desktop
-    rm -f ~/.local/lib/fts/signal-desktop
-    rm -f ~/.local/share/applications/signal-desktop.desktop
-    rm -f ~/.local/share/icons/hicolor/scalable/apps/signal-desktop.svg
+    rm -f ~/.local/bin/studio-desktop
+    rm -f ~/.local/lib/fts/studio-desktop
+    rm -f ~/.local/share/applications/studio-desktop.desktop
+    rm -f ~/.local/share/icons/hicolor/512x512/apps/studio-desktop.png
     update-desktop-database ~/.local/share/applications 2>/dev/null || true
     gtk-update-icon-cache ~/.local/share/icons/hicolor 2>/dev/null || true
     echo "uninstalled (user data in ~/.config/fts and ~/.config/signal kept)"
@@ -706,14 +710,14 @@ drums: (rig "Drum Rig")
 keys log="/tmp/fts-keys.log":
     #!/usr/bin/env bash
     set -euo pipefail
-    cargo build --release -p signal-desktop --features signal-keys-rig
+    cargo build --release -p studio-desktop --features signal-keys-rig
     echo "logging to {{log}}"
     # The engine is a child with inherited stdio, so one tee captures the app
     # AND the engine it spawns — which is where the rig actually lives, and so
     # where anything worth debugging gets logged.
     PIPEWIRE_PROPS='{ application.name = FTS-Signal }' \
     RUST_LOG="${RUST_LOG:-info,keys=debug,sampler=debug,vox_core=warn,schema_deser=off}" \
-        ./target/release/signal-desktop --keys 2>&1 | tee "{{log}}"
+        ./target/release/studio-desktop --keys 2>&1 | tee "{{log}}"
 
 # A terminal surface over the composition-tree presets, no GUI. This was
 # `just keys` before the app grew a keys mode.
@@ -816,7 +820,7 @@ check:
 # `cargo test` on this many crates. It does NOT run doctests — use
 # `just test-doc` for those.
 test:
-    cargo nextest run --workspace --features session-desktop/cli,signal-desktop/cli,web-audio-worklet/guitar,web-audio-worklet/keys
+    cargo nextest run --workspace --features session-desktop/cli,studio-desktop/cli,web-audio-worklet/guitar,web-audio-worklet/keys
 
 # Doctests only — nextest can't run them (libtest owns doctests).
 test-doc:
@@ -1977,7 +1981,7 @@ web-wasm-check:
 # local run gives the same answer as CI's fast checks on a PR into main
 # (CI narrows the tests with `cargo rail plan`; this runs them all). NOT
 # the other
-# workflows: `signal-ios` and `session-ios` (the release tag) and `deploy` need a
+# workflows: `studio-ios` (the release tag) and `deploy` need a
 # Mac, signing keys and upload credentials, which is why they are not a
 # thing you run before pushing — and why a green run here says nothing
 # about whether either of them is healthy.
@@ -2058,7 +2062,7 @@ ci FROM="lockfile":
       echo "── wasm check (web bundles) ─────────────────────────"
       just web-wasm-check
       echo "── wasm check (Signal browser remote) ───────────────"
-      cargo check -p signal-desktop --target wasm32-unknown-unknown --no-default-features --features signal
+      cargo check -p studio-desktop --target wasm32-unknown-unknown --no-default-features --features signal
       echo "ok"
     fi
 
@@ -2066,7 +2070,7 @@ ci FROM="lockfile":
       echo "── cargo nextest --workspace ────────────────────────"
       # The app CLIs and the worklet rigs sit behind features: name them, or
       # their tests never build (an app crate has no lib to dev-depend on).
-      cargo nextest run --workspace --no-fail-fast --features session-desktop/cli,signal-desktop/cli,web-audio-worklet/guitar,web-audio-worklet/keys
+      cargo nextest run --workspace --no-fail-fast --features session-desktop/cli,studio-desktop/cli,web-audio-worklet/guitar,web-audio-worklet/keys
     fi
 
     echo

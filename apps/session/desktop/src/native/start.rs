@@ -66,7 +66,7 @@ pub fn App() -> Element {
             if let Ok(handle) = window.window_handle()
                 && let RawWindowHandle::UiKit(uikit) = handle.as_raw()
             {
-                super::ios_scene::window_created(uikit.ui_view);
+                app_shell::ios_scene::window_created(uikit.ui_view);
             }
             // An audio app, as iOS knows one: its session (the loudspeaker,
             // Bluetooth, AirPlay) set before the engine opens the device,

@@ -13,7 +13,7 @@
 //! module's doc says why it is a proxy rather than a re-mounted router).
 //!
 //! Two transports, one router — architect's [`EngineHost`], the same host
-//! `signal-desktop --engine` serves on:
+//! `studio-desktop --engine` serves on:
 //!
 //! - WebSocket `ws://0.0.0.0:<port>/vox` (default 4040) — binds every
 //!   interface, since the point is reachability from other devices.

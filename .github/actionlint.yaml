@@ -8,6 +8,6 @@ self-hosted-runner:
     # target dir) and the deploy (deploy.yml, needs the LAN registry).
     - studio-tests
     - studio-deploy
-    # The iOS builds (signal-ios.yml, session-ios.yml).
+    # The iOS build (studio-ios.yml).
     - airlock
     - macos

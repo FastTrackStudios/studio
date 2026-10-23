@@ -16,7 +16,7 @@ OUT="${1:-rig-live.png}"
 EXPECT_W="${2:-}"
 # Which window to raise. The rig by default; the gallery is the other thing
 # worth photographing and it is a different binary.
-MATCH="${3:-signal-desktop}"
+MATCH="${3:-studio-desktop}"
 
 if ! pgrep -x "$MATCH" >/dev/null; then
     echo "rig-grab: no $MATCH is running — start one with 'just guitar --design' (or 'just viz-gallery')" >&2

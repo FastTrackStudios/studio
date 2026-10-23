@@ -447,7 +447,7 @@ jobs:
       # nix/modules/packages/web-bundles.nix builds (`just web-wasm-check`).
       - name: wasm check (web bundles)
         run: ${NIX_DEV} just web-wasm-check
-      # The Signal browser remote: signal-desktop's web build. Advisory
+      # The Signal browser remote: studio-desktop's web build. Advisory
       # until STA-184 makes it green; then drop continue-on-error and it is
       # required like the bundles.
       - name: wasm check (Signal browser remote, advisory)
@@ -455,7 +455,7 @@ jobs:
         if: ${{ !cancelled() }}
         continue-on-error: true
         run: |
-          ${NIX_DEV} cargo check -p signal-desktop \
+          ${NIX_DEV} cargo check -p studio-desktop \
             --target wasm32-unknown-unknown --no-default-features --features signal
       - name: Advisory result
         if: ${{ !cancelled() && steps.signal.outcome == 'failure' }}
@@ -487,7 +487,7 @@ jobs:
       # their tests never build (an app crate has no lib to dev-depend on).
       # Same list as `just test` / `just ci`; the evidence recording below
       # uses it too, so both builds are the same units.
-      TEST_FEATURES: session-desktop/cli,signal-desktop/cli,web-audio-worklet/guitar,web-audio-worklet/keys
+      TEST_FEATURES: session-desktop/cli,studio-desktop/cli,web-audio-worklet/guitar,web-audio-worklet/keys
     steps:
       - *checkout
       - name: Persistent target dir

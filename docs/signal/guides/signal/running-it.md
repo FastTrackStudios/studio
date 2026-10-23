@@ -10,8 +10,8 @@ Everything builds from the repo root — one Cargo workspace, one lockfile.
 
 ```bash
 # The app: desktop GUI, and `--engine` for the headless rig.
-cargo build -p signal-desktop
-target/debug/signal-desktop --engine
+cargo build -p studio-desktop
+target/debug/studio-desktop --engine
 ```
 
 The engine serves on `ws://:4040/vox`. Any remote — the desktop GUI, the

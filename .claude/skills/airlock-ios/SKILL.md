@@ -103,19 +103,27 @@ do not touch.
    (`request_local_network()`, `NSBonjourServices` in Info.plist) —
    without user approval LAN paths stay blocked and iroh rides relays.
 
-## Signal from the studio repo (canonical checkout on the build-disk)
+## Studio from the studio repo (canonical checkout on the build-disk)
 
-The studio tree builds Signal on airlock from
+**Studio is the one iOS app** (`apps/studio/desktop`, package
+`studio-desktop`, bundle `app.fasttrackstudio.studio`, App Store record
+6826004255): Signal and Session behind a front screen (`src/front.rs`).
+Signal's and Session's own records get no new builds. The scene delegate
+every build registers is `StudioSceneDelegate` (`app_shell::ios_scene`).
+`FTS_STUDIO_OPEN=signal|session` skips the front screen (simulator:
+`SIMCTL_CHILD_FTS_STUDIO_OPEN=signal`).
+
+The studio tree builds Studio on airlock from
 `/Volumes/build-disk/development/studio` (one warm `target/`, under the
 build-lease), not `~/fts`:
 
 ```bash
-cd /Volumes/build-disk/development/studio/apps/signal/desktop
+cd /Volumes/build-disk/development/studio/apps/studio/desktop
 nix develop ../../.. -c bash -c 'unset DEVELOPER_DIR SDKROOT; export PATH=$HOME/bin-ios:$PATH; \
   dx build --platform ios --device --release --no-default-features \
-  --features signal-guitar,signal-keys-rig,signal-drums-rig,signal-ekit-rig,tone3000'
+  --features signal-guitar,signal-keys-rig,signal-drums-rig,signal-ekit-rig,tone3000,session-app'
 # dx's own codesign fails over SSH (errSecInternalComponent) — harmless:
-KEYCHAIN=fts-build.keychain KEYCHAIN_PW=fts-build SKIP_BUILD=1 \
+KEYCHAIN=fts-build.keychain KEYCHAIN_PW=fts-build SKIP_BUILD=1 MARKETING_VER=<tag version> \
   GIG_BUNDLE=/Volumes/build-disk/development/gigs/ipad/CAA-2026 bash ios/deploy-testflight.sh
 ```
 
@@ -125,11 +133,11 @@ KEYCHAIN=fts-build.keychain KEYCHAIN_PW=fts-build SKIP_BUILD=1 \
   over https into `.assets/` and links the captures. The release workflows
   fast-forward airlock's long-lived clone (`/Volumes/build-disk/development/rig-models`)
   to origin/main themselves.
-- `frame` must sit beside the studio checkout (`signal_app_faces`).
+- `frame` must sit beside the studio checkout (`studio_app_faces`).
 - Gigs ride inside the app (`GIG_BUNDLE`, `<App>.app/Gigs/`); make the iPad
   copy with `scripts/signal/gig-ipad.py` first (WAV → Ogg Vorbis, ~7× smaller).
 - Simulator: no Simulator.app on airlock, so no taps — launch with
-  `SIMCTL_CHILD_FTS_OPEN_RIG=guitar SIMCTL_CHILD_FTS_GIG_SONG=4 SIMCTL_CHILD_FTS_GIG_PLAY=1`
+  `SIMCTL_CHILD_FTS_STUDIO_OPEN=signal SIMCTL_CHILD_FTS_OPEN_RIG=guitar SIMCTL_CHILD_FTS_GIG_SONG=4 SIMCTL_CHILD_FTS_GIG_PLAY=1`
   (`FTS_GIG_VIEW=studio|keyflow`) and `xcrun simctl io <udid> screenshot`.
 
 ## Related

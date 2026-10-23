@@ -18,8 +18,8 @@ In short:
   PR whose changed crates have none. Nobody edits `CHANGELOG.md` outside a
   release.
 - **A release is a `vYY.M.MICRO` tag.** The tag ships everything: both
-  sites, both iOS apps (Signal and Session, one TestFlight upload each)
-  and the one GitHub Release. The REAPER integration suites are not in CI;
+  sites, the iOS app (Studio, one TestFlight upload) and the one GitHub
+  Release. The REAPER integration suites are not in CI;
   they are checked locally (`just reaper-test`, `just reaper daw-test`). **Production is the
   latest `v*` tag**; a push to `main` ships nothing.
 
@@ -31,14 +31,15 @@ fix/sta-2-y  ─┘                                       │ full set after eve
                 └─ release/pending PR ─▶ tag v26.10.4 ─▶ forward-port PR (changelog) into main
 ```
 
-## One version for Signal and Session
+## One version, one app
 
-Signal and Session are the same build, and a change to one almost always
-affects the other, so they are one release: one `[workspace.package]
-version`, one tag, one GitHub Release, one `CHANGELOG.md` section. Both app
-crates (`apps/signal/desktop`, `apps/session/desktop`) say
-`version.workspace = true`. Change-file notes end with `(signal)` or
-`(session)` so the shared changelog says which app changed.
+Signal and Session ship as one app, Studio, so there is one release: one
+`[workspace.package] version`, one tag, one GitHub Release, one
+`CHANGELOG.md` section. The app crates (`apps/studio/desktop`, and
+`apps/session/desktop`, which Studio links) say `version.workspace =
+true`. Change-file notes end with `(signal)` or `(session)` so the shared
+changelog says which side of Studio changed, or `(studio)` for the app as
+a whole (its front screen, packaging, the TestFlight build).
 
 Versions are CalVer `YY.M.MICRO` (no leading zeros). The next version is
 computed, not chosen: the highest `vX.Y.Z` tag (suffixed tags don't count);
@@ -85,7 +86,7 @@ delete a tag; a bad release is superseded by the next.
 | PR into `release/**` (hotfix) | `checks` (the full set), `release` guard | as above |
 | push to `main` / `release/**` | `checks` full set (+ rail evidence on `main`) | hosted + Mac Pro `studio-tests` |
 | nightly | `checks` full set on `main` | hosted + Mac Pro `studio-tests` |
-| push of tag `vYY.M.MICRO` (or `workflow_dispatch` with the tag as ref) | `deploy` (session-web, signal-web), `signal-ios` **and** `session-ios`, `release` publish | `studio-deploy` (LAN registry), `airlock`, hosted |
+| push of tag `vYY.M.MICRO` (or `workflow_dispatch` with the tag as ref) | `deploy` (session-web, signal-web), `studio-ios`, `release` publish | `studio-deploy` (LAN registry), `airlock`, hosted |
 
 Hosted jobs restore one Actions cache per build kind (`lint`, `wasm`)
 that only `main` saves, so PRs never evict it from the repo's 10 GB
@@ -111,28 +112,33 @@ head of its base (`main` or `release/v*`); `X.Y.Z` is the computed next
 version and untagged; the commit changes only the `[workspace.package]`
 version line, the workspace members' version lines in `Cargo.lock`, adds
 the `CHANGELOG.md` section and deletes consumed change files; no change
-file is left pending; both iOS crates resolve to the version. A network
+file is left pending; the iOS app crate resolves to the version. A network
 error fails it. `just release-merge` re-runs it right before merging, so a
 release PR cut before another merge can't ship that merge unlisted.
 
 **Tag guard** (`release.sh tag-guard`, first step of `deploy`, `release`
 publish and `reaper` on a `v*` tag; `ios-resolve` in the iOS workflows):
-the tag is `v` + the workspace version, both iOS crates are on it, it has a
+the tag is `v` + the workspace version, the iOS app crate is on it, it has a
 changelog section, its commit is on `main` or a `release/v*` line, and
 (where the job has a token) `Build + test` is green on it.
 
-## iOS apps: TestFlight is a release
+## The iOS app: TestFlight is a release
+
+Studio (`apps/studio/desktop`, App Store record "Studio - by
+FastTrackStudio", `app.fasttrackstudio.studio`) is the one iOS app:
+Signal and Session behind one front screen. Signal's and Session's own
+records (`app.fasttrackstudio.signal`, `.session`) get no new builds.
 
 - **TestFlight uploads only from the release tag**, never on a push, a PR
-  or a fork. One tag starts **both** `signal-ios` and `session-ios`.
+  or a fork. The tag starts `studio-ios`.
 - **Marketing version (CFBundleShortVersionString) = the tag's version**
-  (`v26.10.3` → `26.10.3`) for both apps, and each app crate must resolve
-  to it. The build number (CFBundleVersion) is the unix time of the upload.
+  (`v26.10.3` → `26.10.3`), and the app crate must resolve to it. The
+  build number (CFBundleVersion) is the unix time of the upload.
 - **One GitHub Release** per tag (title `studio 26.10.3`, the changelog
-  section as notes). After each upload that app's workflow writes its
-  marketing version, build number and run URL into the Release notes, one
-  line per app; the two edit concurrently, so each re-reads and retries.
-- `signal-ios` / `session-ios` refuse a tag that is not
+  section as notes). After the upload the workflow writes its marketing
+  version, build number and run URL into the Release notes; a re-run
+  editing at the same time re-reads and retries.
+- `studio-ios` refuses a tag that is not
   `^v[0-9]+\.[0-9]+\.[0-9]+$`, a crate or workspace version that differs, a
   missing changelog section, a commit on neither `main` nor `release/v*`, or
   a red `Build + test`. `workflow_dispatch` with `dry_run` stops after

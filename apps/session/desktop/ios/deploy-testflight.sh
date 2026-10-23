@@ -15,7 +15,7 @@
 set -euo pipefail
 
 # The marketing version (CFBundleShortVersionString) is the release tag's
-# (v0.1.3 -> 0.1.3), set by session-ios.yml from the GitHub Release being
+# (v0.1.3 -> 0.1.3), set by studio-ios.yml (which ships Studio now) from the GitHub Release being
 # shipped. No default, and checked first: a TestFlight build is a release's,
 # and a missing version must not cost a whole build before it fails.
 : "${MARKETING_VER:?MARKETING_VER is required: the version of the release tag being shipped (e.g. 0.1.3)}"
@@ -176,7 +176,7 @@ BUILD_NO="${BUILD_NO:-$(date +%s)}"
 /usr/libexec/PlistBuddy -c "Delete :UIUserInterfaceStyle" "$APP/Info.plist" 2>/dev/null || true
 /usr/libexec/PlistBuddy -c "Add :UIUserInterfaceStyle string Dark" "$APP/Info.plist"
 # The UIScene lifecycle — iOS 27 stops an app at launch without it. The
-# delegate class is the app's own (apps/desktop/src/native/ios_scene.rs):
+# delegate class is the app's own (app-shell: features/app/shell/src/ios_scene.rs):
 # winit, which the app draws into, does not adopt scenes itself yet.
 /usr/libexec/PlistBuddy -c "Delete :UIApplicationSceneManifest" "$APP/Info.plist" 2>/dev/null || true
 /usr/libexec/PlistBuddy \
@@ -186,7 +186,7 @@ BUILD_NO="${BUILD_NO:-$(date +%s)}"
     -c "Add :UIApplicationSceneManifest:UISceneConfigurations:UIWindowSceneSessionRoleApplication array" \
     -c "Add :UIApplicationSceneManifest:UISceneConfigurations:UIWindowSceneSessionRoleApplication:0 dict" \
     -c "Add :UIApplicationSceneManifest:UISceneConfigurations:UIWindowSceneSessionRoleApplication:0:UISceneConfigurationName string Default" \
-    -c "Add :UIApplicationSceneManifest:UISceneConfigurations:UIWindowSceneSessionRoleApplication:0:UISceneDelegateClassName string SessionSceneDelegate" \
+    -c "Add :UIApplicationSceneManifest:UISceneConfigurations:UIWindowSceneSessionRoleApplication:0:UISceneDelegateClassName string StudioSceneDelegate" \
     "$APP/Info.plist"
 # Single supported platform — dx leaves both iPhoneOS+iPadOS, which Apple
 # rejects (91177). This is an iOS app; keep only iPhoneOS.

@@ -14,17 +14,17 @@ computer becomes the rig, all audio in the tab) is planned — see
 ## Build and run — read this first
 
 - **One build line:** `just app` =
-  `cargo build --profile release-fast -p signal-desktop --features signal-keys-rig`.
+  `cargo build --profile release-fast -p studio-desktop --features signal-keys-rig`.
   `just guitar` and `just desktop-run` use the same line. Building
-  `signal-desktop` with a *different* feature set or profile makes cargo
+  `studio-desktop` with a *different* feature set or profile makes cargo
   recompile every shared crate (that was the 15-minute rebuilds). The CLI
   builds alongside with no penalty:
-  `cargo build --profile release-fast -p signal-desktop -p signal-desktop --features cli --bin signal --features signal-desktop/signal-keys-rig`.
+  `cargo build --profile release-fast -p studio-desktop -p studio-desktop --features cli --bin signal --features studio-desktop/signal-keys-rig`.
 - **release-fast** (root `Cargo.toml`): release opt, incremental, 256 CGUs.
   An edit in `signal-sampler` rebuilds the app in ~15 s. Local only.
   **dev** now has the render stack (Blitz/Stylo/Taffy/Parley/Vello/wgpu) at
   opt-level 3, so a dev build is usable too.
-- `bin/signal-latest-bin` prints the newest of `target/{release-fast,release,debug}/signal-desktop`;
+- `bin/signal-latest-bin` prints the newest of `target/{release-fast,release,debug}/studio-desktop`;
   `Signal Rig.app`'s launcher and the menu bar's login agent hard-link it,
   so **whatever you built last is what launches**.
 - Launch: `open "/Volumes/dev-drive/bin/Signal Rig.app"` (config
