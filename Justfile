@@ -2115,6 +2115,29 @@ install-hooks:
     git config --unset core.hooksPath 2>/dev/null || true
     prek install --force
 
+# Rewrites the version and every per-platform sha256 in nix/modules/prek.nix
+# from the release's own `.sha256` files; then `just install-hooks` again.
+# Move prek to its newest release (or VERSION).
+prek-bump VERSION="":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    v="{{VERSION}}"
+    if [ -z "$v" ]; then
+        v="$(curl -fsSL https://api.github.com/repos/j178/prek/releases/latest | sed -n 's/.*"tag_name": *"v\([^"]*\)".*/\1/p')"
+    fi
+    [ -n "$v" ] || { echo "could not read prek's latest release" >&2; exit 1; }
+    f=nix/modules/prek.nix
+    # -i.bak + rm: one spelling for GNU and BSD (macOS) sed.
+    sed -i.bak "s/version = \"[^\"]*\";/version = \"$v\";/" "$f"
+    for t in x86_64-unknown-linux-musl aarch64-unknown-linux-musl x86_64-apple-darwin aarch64-apple-darwin; do
+        sum="$(curl -fsSL "https://github.com/j178/prek/releases/download/v$v/prek-$t.tar.gz.sha256" | cut -d' ' -f1)"
+        [[ "$sum" =~ ^[0-9a-f]{64}$ ]] || { echo "no sha256 for $t at v$v" >&2; exit 1; }
+        sed -i.bak "s|target = \"$t\"; sha256 = \"[0-9a-f]*\"|target = \"$t\"; sha256 = \"$sum\"|" "$f"
+    done
+    rm -f "$f.bak"
+    git diff --stat -- "$f"
+    echo "prek -> $v"
+
 # BASE defaults to the merge-base with origin/main; the pre-push hook runs
 # this and marks the pushed commits `Local CI`. Run it BEFORE pushing a long
 # change: the pass it records makes the push instant.
