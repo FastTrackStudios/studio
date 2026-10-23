@@ -42,9 +42,13 @@ pub const RELEASE_KEY: Option<&str> = match option_env!("FTS_RELEASE_PUBKEY") {
     None => ORG_RELEASE_KEY,
 };
 
-/// The org key compiled into every build. Unset until the Captain
-/// publishes the key: paste the `.pub` file's base64 line as `Some("RW…")`.
-const ORG_RELEASE_KEY: Option<&str> = None;
+/// The org key compiled into every build: the same key Task pins
+/// (`task:apps/server/src/self_update.rs` `RELEASE_SIGNING_KEY`). Its
+/// secret half signs `SHA256SUMS` from the `FTS_RELEASE_MINISIGN_KEY`
+/// secret of the tag-only `release-signing` environment, and is kept in
+/// nix-secrets.
+const ORG_RELEASE_KEY: Option<&str> =
+    Some("RWRh9Gk9qaStQMhku4THMidEYrQsmAEsm2dDprUkZxShEtqfIcroM8Od");
 
 /// One app's releases, as it names itself.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
