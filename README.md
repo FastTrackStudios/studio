@@ -27,7 +27,7 @@ a rig being a folder of tracks in it
 ```
 apps/      the applications — session/, signal/, patchbay/, plugins/, themer/
 crates/    daw (the DAW core and its standalone engine), studio (the
-           umbrella: REAPER adapter, project files, UI, CLI), frame, keyflow
+           umbrella: REAPER adapter, project files, UI, CLI), frame
 features/  one crate per feature — the effects, the rigs, audio, MIDI,
            formats, editing, control surfaces, …
 vendor/    patched third-party crates

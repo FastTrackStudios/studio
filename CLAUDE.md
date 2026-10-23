@@ -26,8 +26,6 @@ crates/     daw/*      the DAW alone: the domain core (`daw`), proto, control,
                        all cargo features of `studio`
             frame/     the design / control-surface engine (+ tools/: cli,
                        desktop, mcp, library-server)
-            keyflow/   keyflow-proto, keyflow-syntax (the rest of keyflow is a
-                       git dep)
 features/   one crate per feature, sub-folders allowed. Name a feature for what
             it is; anything host-specific goes under adapters/<host>.
             signal/      Signal's domain: rigs, presets, scenes, its browser,
