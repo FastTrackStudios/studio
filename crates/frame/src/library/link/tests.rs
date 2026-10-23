@@ -109,15 +109,21 @@ fn server_in_process_client_subscribes() {
     let first = wait_for(&follow, |e| matches!(e, Event::Update(_)));
     assert_eq!(name_of(&first).as_deref(), Some("Verb"));
     std::fs::write(&file, panel("Verb II")).unwrap();
-    let e = wait_for(&follow, |e| matches!(e, Event::Update(_)));
+    // The update and the index change for it arrive on separate streams, in
+    // either order: waiting for one would drop the other.
+    let (mut update, mut indexed) = (None, false);
+    while update.is_none() || !indexed {
+        match wait_for(&follow, |e| {
+            matches!(e, Event::Update(_)) || matches!(e, Event::Index(c) if c.id == "fx/verb")
+        }) {
+            e @ Event::Update(_) => update = Some(e),
+            _ => indexed = true,
+        }
+    }
+    let e = update.unwrap();
     assert_eq!(name_of(&e).as_deref(), Some("Verb II"));
     let Event::Update(u) = e else { unreachable!() };
     assert_eq!(u.version, 2);
-    // The index change for it arrives as well.
-    wait_for(
-        &follow,
-        |e| matches!(e, Event::Index(c) if c.id == "fx/verb"),
-    );
 
     // Switch to another surface: its snapshot arrives.
     follow.follow(Some("fx/delay".into()));
