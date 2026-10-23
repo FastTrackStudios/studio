@@ -19,7 +19,7 @@ FONT=${FONT:-$(nix build --no-link --print-out-paths nixpkgs#dejavu_fonts)/share
 BANDS=features/daw-ui/daw-ui/tests/bands.py
 
 nix develop /run/media/Development/FastTrackStudio -c \
-  cargo test -q -p daw-ui --test strip_shot -- --nocapture
+  cargo test -q -p daw-ui --test strip_shot -- --include-ignored --nocapture
 
 magick "$REF"  -crop 254x694+18+6   +repage "$OUT/.c-reaper.png"
 magick "$HAND" -crop 178x470+8+803  +repage "$OUT/.c-hand.png"
@@ -37,7 +37,7 @@ python3 "$BANDS" "$OUT/.c-ours.png"    3 0 228 1.0
 # band — and everything else is then measurable against it.
 if [ -f "$OUT/.reaper1x.png" ] || magick "$REF" -resize 33.3333% +repage "$OUT/.reaper1x.png"; then
   MIXER_HEIGHT=235 nix develop /run/media/Development/FastTrackStudio -c \
-    cargo test -q -p daw-ui --test strip_shot -- paint_the_strip >/dev/null 2>&1
+    cargo test -q -p daw-ui --test strip_shot -- --include-ignored paint_the_strip >/dev/null 2>&1
   magick "$OUT/.reaper1x.png" -background "#262626" -splice 0x10 \
     -crop 85x231+0+0 +repage "$OUT/.ref.png"
   magick "$OUT/strip-dioxus.png" -crop 85x231+0+0 +repage "$OUT/.aligned.png"
