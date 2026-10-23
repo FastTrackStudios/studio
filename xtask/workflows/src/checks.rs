@@ -758,7 +758,7 @@ mkdir -p \"$HOME/.cache/rail-evidence\"
             "Evidence key",
             "\
 echo \"sha=$(git rev-parse HEAD)\" >> \"$GITHUB_OUTPUT\"
-[ -f \"$HOME/.cache/rail-evidence/cargo.test.json\" ] && echo \"have=true\" >> \"$GITHUB_OUTPUT\" || true
+if [ -f \"$HOME/.cache/rail-evidence/cargo.test.json\" ]; then echo \"have=true\" >> \"$GITHUB_OUTPUT\"; fi
 ",
         )
         .id("evidence")

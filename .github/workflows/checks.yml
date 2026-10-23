@@ -634,7 +634,7 @@ jobs:
       if: ${{ always() && needs.plan.outputs.record == 'true' }}
       run: |
         echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
-        [ -f "$HOME/.cache/rail-evidence/cargo.test.json" ] && echo "have=true" >> "$GITHUB_OUTPUT" || true
+        if [ -f "$HOME/.cache/rail-evidence/cargo.test.json" ]; then echo "have=true" >> "$GITHUB_OUTPUT"; fi
     - name: Save rail evidence
       if: ${{ always() && steps.evidence.outputs.have == 'true' }}
       uses: WarpBuilds/cache/save@v1

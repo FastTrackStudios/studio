@@ -113,7 +113,7 @@ jobs:
             || { echo "::error::could not clone $url into $src"; exit 1; }
           echo "rig-models cloned at $(git -C "$src" rev-parse --short HEAD)"
         fi
-        [ -d "$src/guitar" ] && [ -d "$src/bass" ] || { echo "::error::no rig-models clone at $src"; exit 1; }
+        if [ ! -d "$src/guitar" ] || [ ! -d "$src/bass" ]; then echo "::error::no rig-models clone at $src"; exit 1; fi
         while read -r repo from to; do
           [[ -z $repo || $repo == \#* || $repo != rig-models ]] && continue
           to="${to:-$from}"
