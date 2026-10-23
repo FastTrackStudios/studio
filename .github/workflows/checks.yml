@@ -488,6 +488,10 @@ jobs:
       # Same list as `just test` / `just ci`; the evidence recording below
       # uses it too, so both builds are the same units.
       TEST_FEATURES: session-desktop/cli,studio-desktop/cli,web-audio-worklet/guitar,web-audio-worklet/keys
+      # No incremental caches: they grow without bound in a persistent
+      # target (372 GB on one dev machine) and a CI build seldom rebuilds the
+      # same crate twice. Dioxus and Zed run CI the same way.
+      CARGO_INCREMENTAL: "0"
     steps:
       - *checkout
       - name: Persistent target dir
@@ -500,7 +504,21 @@ jobs:
           dir="${CI_CACHE_DIR:-${CACHE_DIRECTORY:-$HOME/.cache}}/cargo-target"
           mkdir -p "$dir"
           echo "CARGO_TARGET_DIR=$dir" >> "$GITHUB_ENV"
-          echo "target dir: $dir ($(du -sh "$dir" 2>/dev/null | cut -f1))"
+          # Cargo never collects garbage: every branch's lockfile and
+          # features leave their own units here until the disk is full and
+          # rustc dies mid-build (PR #184, October 2026). Free space first:
+          # the incremental caches (rebuildable, and the job builds without
+          # them), then — if that is not enough — the whole dir.
+          free_gb() { df -Pk "$dir" | awk 'NR==2 { print int($4 / 1048576) }'; }
+          if [ "$(free_gb)" -lt 150 ]; then
+            echo "::warning::$(free_gb) GB free: clearing the incremental caches"
+            rm -rf "$dir"/*/incremental "$dir"/*/*/incremental
+          fi
+          if [ "$(free_gb)" -lt 100 ]; then
+            echo "::warning::still $(free_gb) GB free: clearing the target dir (a cold build follows)"
+            rm -rf "$dir" && mkdir -p "$dir"
+          fi
+          echo "target dir: $dir ($(du -sh "$dir" 2>/dev/null | cut -f1)), $(free_gb) GB free"
       # The test run compiles session-web.
       - *tailwind
       # Full runs first record rail evidence for this commit: the recorder
