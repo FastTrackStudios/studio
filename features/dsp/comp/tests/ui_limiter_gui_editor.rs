@@ -288,8 +288,11 @@ async fn dragging_ceiling_lowers_the_parameter() -> dioxus_test::Result<()> {
         after < before,
         "drag down did not lower ceiling: {before} -> {after}"
     );
-    // 30 px at 150 px per sweep over the linear -20..0 dB range = -4 dB.
-    let expected = before - (30.0 / 150.0) * 20.0;
+    // A dB parameter is bipolar to the knob, with a 6 px dead zone at its
+    // default paid once on the way out (fts-audio-ui's drag, "Stop the gain
+    // knob jumping 0 → 2.4 dB"): from the default, 30 px is 24 px of travel
+    // at 150 px per sweep over the linear -20..0 dB range = -3.2 dB.
+    let expected = before - ((30.0 - 6.0) / 150.0) * 20.0;
     assert!(
         (after - expected).abs() < 0.5,
         "ceiling landed at {after} dB, expected ~{expected} dB"
