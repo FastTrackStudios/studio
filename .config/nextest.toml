@@ -103,3 +103,45 @@ slow-timeout = { period = "120s", terminate-after = 2 }
 [[profile.default.overrides]]
 filter = 'test(=every_space)'
 slow-timeout = { period = "120s", terminate-after = 4 }
+
+# ── CI on a loaded runner (fix/green-tests, 2026-10) ─────────────────────
+#
+# The CI tests job runs the whole workspace on one VM with no GPU: every
+# frame a test draws goes through lavapipe (software Vulkan), on the same
+# cores the other ~10 000 tests are using. Two things follow, and both are
+# here so a red run means a broken test, not a busy box.
+
+# Tests that draw real GPU frames, at most two at a time. On a GPU each
+# takes a second; on lavapipe each one wants every core, and twelve of them
+# at once starved each other past the thirty-second timeout (the plugin-
+# faces and session-view runs on main, October 2026).
+[test-groups]
+gpu-frames = { max-threads = 2 }
+
+[[profile.default.overrides]]
+filter = 'binary(golden_scenes) | binary(folder_items) | binary(patch_list_view) | (package(eq) & binary(screenshots))'
+test-group = 'gpu-frames'
+
+# The run-ahead engine's real-time tests hand the start of a run to the
+# ahead worker thread within MAX_PRIME blocks; when the box is too busy to
+# schedule that thread in time the window comes up empty and plays as
+# silence, by design. Alone they pass every time (18/18, four runs in a
+# row); beside a full suite at load ~100 they flaked. They run alone.
+[[profile.default.overrides]]
+filter = 'package(daw-standalone) & test(/audio_engine::ahead::tests::/)'
+threads-required = 'num-test-threads'
+
+# The plugin faces' tests build and lint frame documents in a dev build:
+# 5–22 s each on an idle Mac, measured October 2026 (motion reels 22.2 s,
+# spring tank 16.9 s, verb_480 12–16 s). Real work, and the work is the
+# point; sixty seconds with room for a loaded runner still catches a hang.
+[[profile.default.overrides]]
+filter = 'package(plugin-faces)'
+slow-timeout = { period = "60s", terminate-after = 2 }
+
+# Generates all 867 faces twice and compares them byte for byte — 1 734
+# documents, 30 s+ on its own in a dev build. A smaller sample would
+# weaken the one guarantee it gives (no churn in examples/plugins).
+[[profile.default.overrides]]
+filter = 'package(plugin-faces) & test(=a_second_regeneration_is_byte_identical)'
+slow-timeout = { period = "120s", terminate-after = 3 }
