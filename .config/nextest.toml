@@ -145,3 +145,10 @@ slow-timeout = { period = "60s", terminate-after = 2 }
 [[profile.default.overrides]]
 filter = 'package(plugin-faces) & test(=a_second_regeneration_is_byte_identical)'
 slow-timeout = { period = "120s", terminate-after = 3 }
+
+# The sampler's live-parameter sweeps: 855 build-and-compare cases, now on
+# every core (10–14 s on an idle Mac at load 40). Real work, like the reverb
+# stability sweep above; the same room for a loaded runner.
+[[profile.default.overrides]]
+filter = 'package(sampler) & (test(=a_live_write_sets_every_builtin_effect_as_its_build_does) | test(=a_param_dropped_from_a_preset_is_written_as_its_build_default))'
+slow-timeout = { period = "120s", terminate-after = 2 }
