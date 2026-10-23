@@ -233,6 +233,27 @@ mod support {
             self.tester.relayout();
         }
 
+        /// After typing: every keystroke's handler, and the re-render each
+        /// write to the controlled field causes, has run. One pump takes the
+        /// first batch; on a loaded runner the rest can still be queued (CI
+        /// read "High Shelf" where "Air Lift" had been typed), so drain and
+        /// yield until the document stops changing — waiting on the work, not
+        /// on a clock.
+        pub async fn settle_typing(&self) {
+            let _ = self.tester.pump().await;
+            let mut last = String::new();
+            for _ in 0..50 {
+                self.tester.drain();
+                tokio::task::yield_now().await;
+                let now = self.tester.root().inner_html();
+                if now == last {
+                    break;
+                }
+                last = now;
+            }
+            self.tester.relayout();
+        }
+
         /// The band detail panel, if it is currently mounted.
         pub fn panel(&self) -> Option<dioxus_test::ResolvedElement> {
             self.tester
@@ -1746,7 +1767,7 @@ async fn double_clicking_a_band_node_names_it() -> dioxus_test::Result<()> {
     );
 
     fx.tester.type_text("Boxiness");
-    fx.settle().await;
+    fx.settle_typing().await;
 
     assert!(
         fx.tester.root().inner_html().contains("Boxiness"),
@@ -1836,7 +1857,7 @@ async fn typing_over_an_open_name_replaces_it() -> dioxus_test::Result<()> {
 
     fx.double_click_at(x, y).await;
     fx.tester.type_text("Boxiness");
-    fx.settle().await;
+    fx.settle_typing().await;
     fx.tester.press_key(Key::Enter, Modifiers::empty());
     fx.settle().await;
     assert_eq!(*fx.params.bands[1].name.read(), "Boxiness");
@@ -1846,7 +1867,7 @@ async fn typing_over_an_open_name_replaces_it() -> dioxus_test::Result<()> {
     fx.double_click_at(x, y).await;
     assert!(fx.label_editor_is_open(), "the field should be open");
     fx.tester.type_text("Air");
-    fx.settle().await;
+    fx.settle_typing().await;
 
     assert_eq!(
         *fx.params.bands[1].name.read(),
@@ -1865,7 +1886,7 @@ async fn opening_the_field_alone_does_not_change_the_name() -> dioxus_test::Resu
 
     fx.double_click_at(x, y).await;
     fx.tester.type_text("Boxiness");
-    fx.settle().await;
+    fx.settle_typing().await;
     fx.tester.press_key(Key::Enter, Modifiers::empty());
     fx.settle().await;
 
@@ -1894,7 +1915,7 @@ async fn clicking_into_the_empty_field_restores_the_old_name() -> dioxus_test::R
 
     fx.double_click_at(x, y).await;
     fx.tester.type_text("Boxiness");
-    fx.settle().await;
+    fx.settle_typing().await;
     fx.tester.press_key(Key::Enter, Modifiers::empty());
     fx.settle().await;
     assert_eq!(*fx.params.bands[1].name.read(), "Boxiness");
@@ -1936,7 +1957,7 @@ async fn a_space_in_a_band_name_survives_typing() -> dioxus_test::Result<()> {
     fx.double_click_at(x, y).await;
 
     fx.tester.type_text("Air Lift");
-    fx.settle().await;
+    fx.settle_typing().await;
 
     assert_eq!(
         *fx.params.bands[1].name.read(),
@@ -1956,7 +1977,7 @@ async fn whitespace_is_tidied_when_the_field_closes() -> dioxus_test::Result<()>
     fx.double_click_at(x, y).await;
 
     fx.tester.type_text("Air ");
-    fx.settle().await;
+    fx.settle_typing().await;
     assert_eq!(
         *fx.params.bands[1].name.read(),
         "Air ",
@@ -2031,7 +2052,7 @@ async fn the_delete_command_removes_a_character_from_the_name_field() -> dioxus_
     fx.double_click_at(x, y).await;
 
     fx.tester.type_text("Air");
-    fx.settle().await;
+    fx.settle_typing().await;
     assert_eq!(*fx.params.bands[1].name.read(), "Air");
 
     fx.tester
