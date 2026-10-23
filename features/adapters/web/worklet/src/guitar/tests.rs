@@ -9,9 +9,7 @@ use sampler::RigBlock;
 
 use crate::guitar::remote::thread::ThreadLink;
 use crate::guitar::remote::{Lag, Link};
-use crate::guitar::runner::{
-    BuildOptions, ChainRunner, build, plan_chain, prepare_worker_block,
-};
+use crate::guitar::runner::{BuildOptions, ChainRunner, build, plan_chain, prepare_worker_block};
 
 const Q: usize = 128;
 const SR: u32 = 48_000;

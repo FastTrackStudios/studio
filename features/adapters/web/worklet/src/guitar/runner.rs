@@ -134,7 +134,20 @@ pub fn build(
     let mut amp_r_prefetch = None;
     let mut link_err = None;
     let wait_budget = opts.budget_us.max(1);
-    let prepared = prepare_chain_with(blocks, ids, opts.sample_rate, &mut |slot, block| {
+    // Built switched on, every block: bypass is the slot's (`Slot::bypass`,
+    // which `set_bypass` flips and `process` skips). Built from the saved
+    // bypass, `prepare_chain_with` would wrap a bypassed block in a gate that
+    // starts closed and that nothing here ever opens, so stomping it on
+    // would play the dry guitar for good.
+    let switched_on: Vec<RigBlock> = blocks
+        .iter()
+        .map(|b| {
+            let mut on = b.clone();
+            on.bypassed = false;
+            on
+        })
+        .collect();
+    let prepared = prepare_chain_with(&switched_on, ids, opts.sample_rate, &mut |slot, block| {
         let Place::Worker(lag) = plan.place(slot) else {
             return None;
         };

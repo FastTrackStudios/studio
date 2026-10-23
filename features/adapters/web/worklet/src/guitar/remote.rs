@@ -33,13 +33,21 @@ use signal_plugin_host::{
 /// not a thing a player does; the rest wait for the next quantum.
 pub const MAX_POSTED_PARAMS: usize = 8;
 
+/// The most quanta of input a bypassed lag-one block holds back for a busy
+/// worker (see [`Standby::feed`]), and so the most one post carries. A link
+/// must take this many quanta in one post: the web's shared buffer holds
+/// `MAX_FRAMES` = 256 frames, two 128-frame quanta.
+pub const BACKLOG_QUANTA: usize = 2;
+
 /// The far end of a [`RemoteBlock`].
 pub trait Link: Send {
-    /// Hand the worker one quantum of input (and any parameter changes).
+    /// Hand the worker input — one quantum, or up to [`BACKLOG_QUANTA`] of
+    /// them in order — and any parameter changes.
     fn post(&mut self, in_l: &[f32], in_r: &[f32], params: &[(u32, f64)]);
     /// Whether the output for the last post has arrived.
     fn ready(&self) -> bool;
-    /// Copy the last post's output out. Only meaningful after [`ready`](Self::ready).
+    /// Copy the last post's output out, from its start, as many frames as
+    /// `out_l` holds. Only meaningful after [`ready`](Self::ready).
     fn take(&mut self, out_l: &mut [f32], out_r: &mut [f32]);
     /// Wait for [`ready`](Self::ready), at most about `budget_us`
     /// microseconds. Returns whether it arrived.
@@ -66,8 +74,73 @@ struct Inner {
     link: Box<dyn Link>,
     /// A post is outstanding for this quantum (prefetched, or lag-one's).
     posted: bool,
+    /// Frames in the outstanding post: its output's last quantum is the
+    /// one a lag-one block plays next.
+    posted_frames: usize,
     /// Parameter changes waiting for the next post.
     params: Vec<(u32, f64)>,
+    /// Input a bypassed lag-one block heard while its worker was busy, not
+    /// yet posted: `backlog_frames` of it, oldest first. Preallocated to
+    /// [`BACKLOG_QUANTA`] quanta.
+    backlog: [Vec<f32>; 2],
+    backlog_frames: usize,
+    /// Where a post's whole output is collected before its last quantum is
+    /// played. Preallocated to [`BACKLOG_QUANTA`] quanta.
+    collected: [Vec<f32>; 2],
+}
+
+impl Inner {
+    /// Hold `in_l`/`in_r` back for the next post. Past the backlog's room
+    /// (a worker stalled for quanta), the oldest input is let go: the model
+    /// misses it, as it would have without a backlog.
+    fn hold(&mut self, in_l: &[f32], in_r: &[f32]) {
+        let cap = self.backlog[0].len();
+        let n = in_l.len().min(in_r.len()).min(cap);
+        let over = (self.backlog_frames + n).saturating_sub(cap);
+        if over > 0 {
+            for ch in &mut self.backlog {
+                ch.copy_within(over..self.backlog_frames, 0);
+            }
+            self.backlog_frames -= over;
+        }
+        let at = self.backlog_frames;
+        self.backlog[0][at..at + n].copy_from_slice(&in_l[in_l.len() - n..]);
+        self.backlog[1][at..at + n].copy_from_slice(&in_r[in_r.len() - n..]);
+        self.backlog_frames += n;
+    }
+
+    /// Post `in_l`/`in_r` with the parameter changes waiting.
+    fn post(&mut self, in_l: &[f32], in_r: &[f32]) {
+        self.link.post(in_l, in_r, &self.params);
+        self.params.clear();
+        self.posted = true;
+        self.posted_frames = in_l.len();
+    }
+
+    /// Post the backlog, oldest first, and empty it.
+    fn post_backlog(&mut self) {
+        let n = self.backlog_frames;
+        self.link
+            .post(&self.backlog[0][..n], &self.backlog[1][..n], &self.params);
+        self.params.clear();
+        self.posted = true;
+        self.posted_frames = n;
+        self.backlog_frames = 0;
+    }
+
+    /// The last `out_l.len()` frames of the outstanding post's output —
+    /// what the model made of the newest input it was given.
+    fn take_last(&mut self, out_l: &mut [f32], out_r: &mut [f32]) {
+        let cap = self.collected[0].len();
+        let all = self.posted_frames.min(cap);
+        let [cl, cr] = &mut self.collected;
+        self.link.take(&mut cl[..all], &mut cr[..all]);
+        let n = out_l.len().min(out_r.len()).min(all);
+        out_l[..n].copy_from_slice(&cl[all - n..all]);
+        out_r[..n].copy_from_slice(&cr[all - n..all]);
+        out_l[n..].fill(0.0);
+        out_r[n..].fill(0.0);
+    }
 }
 
 /// A slot whose block runs on a worker. See the module docs.
@@ -94,10 +167,7 @@ impl Prefetch {
         if s.posted {
             return;
         }
-        let s = &mut *s;
-        s.link.post(in_l, in_r, &s.params);
-        s.params.clear();
-        s.posted = true;
+        s.post(in_l, in_r);
     }
 }
 
@@ -106,21 +176,23 @@ impl Prefetch {
 pub struct Standby(Arc<Mutex<Inner>>);
 
 impl Standby {
-    /// Hand the worker this quantum's input if it is idle; never wait. The
-    /// output is not needed — only the model's state, so that switching it
-    /// on is seamless. A busy worker skips the quantum, which a bypassed
-    /// model can afford: the audio thread must never spin for it (browsers
-    /// render quanta in bursts, so "a quantum later" can be well under a
-    /// quantum of wall time).
+    /// Hand the worker this quantum's input; never wait. The output is not
+    /// needed — only the model's state, so that switching it on is
+    /// seamless. The audio thread must never spin for a bypassed model
+    /// (browsers render quanta in bursts, so "a quantum later" can be well
+    /// under a quantum of wall time), so input a busy worker cannot take
+    /// yet is held back and posted, in order, with the next quantum's once
+    /// it is free — the model hears every quantum, not every other one,
+    /// and the first quantum after the stomp plays what it made of the
+    /// last one before it (see [`RemoteBlock`]'s `process_block`).
     pub fn feed(&self, in_l: &[f32], in_r: &[f32]) {
         let Ok(mut s) = self.0.try_lock() else { return };
+        let s = &mut *s;
+        s.hold(in_l, in_r);
         if s.posted && !s.link.ready() {
             return;
         }
-        let s = &mut *s;
-        s.link.post(in_l, in_r, &s.params);
-        s.params.clear();
-        s.posted = true;
+        s.post_backlog();
     }
 }
 
@@ -141,7 +213,17 @@ impl RemoteBlock {
             inner: Arc::new(Mutex::new(Inner {
                 link,
                 posted: false,
+                posted_frames: 0,
                 params: Vec::with_capacity(MAX_POSTED_PARAMS),
+                backlog: [
+                    vec![0.0; BACKLOG_QUANTA * quantum as usize],
+                    vec![0.0; BACKLOG_QUANTA * quantum as usize],
+                ],
+                backlog_frames: 0,
+                collected: [
+                    vec![0.0; BACKLOG_QUANTA * quantum as usize],
+                    vec![0.0; BACKLOG_QUANTA * quantum as usize],
+                ],
             })),
             stats: Arc::new(RemoteStats::default()),
             budget_us,
@@ -233,8 +315,7 @@ impl PluginInstance for RemoteBlock {
         match self.lag {
             Lag::Zero => {
                 if !s.posted {
-                    s.link.post(in_l, in_r, &s.params);
-                    s.params.clear();
+                    s.post(in_l, in_r);
                 }
                 s.posted = false;
                 if s.link.wait(self.budget_us) {
@@ -245,21 +326,32 @@ impl PluginInstance for RemoteBlock {
                 }
             }
             Lag::One => {
-                if s.posted {
-                    // The worker had a whole quantum; waiting here is only
-                    // for a worker that is late, and stays bounded.
+                // The worker had a whole quantum; waiting here is only for a
+                // worker that is late, and stays bounded.
+                let landed = !s.posted || s.link.wait(self.budget_us);
+                if !landed {
+                    self.stats.misses.fetch_add(1, Ordering::Relaxed);
+                    s.backlog_frames = 0;
+                    silence(out_l, out_r);
+                } else if s.backlog_frames > 0 {
+                    // Just switched on, with input the standby held back
+                    // for a busy worker: the model has not heard the
+                    // quantum before this one yet. Send it and wait for
+                    // what the model makes of it — once, on the stomp,
+                    // bounded like any wait — so this quantum plays it.
+                    s.post_backlog();
                     if s.link.wait(self.budget_us) {
-                        s.link.take(out_l, out_r);
+                        s.take_last(out_l, out_r);
                     } else {
                         self.stats.misses.fetch_add(1, Ordering::Relaxed);
                         silence(out_l, out_r);
                     }
+                } else if s.posted {
+                    s.take_last(out_l, out_r);
                 } else {
                     silence(out_l, out_r);
                 }
-                s.link.post(in_l, in_r, &s.params);
-                s.params.clear();
-                s.posted = true;
+                s.post(in_l, in_r);
             }
         }
         Ok(())
