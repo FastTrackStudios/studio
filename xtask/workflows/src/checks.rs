@@ -110,6 +110,11 @@ workflow_dispatch:
       description: "Only check crates affected since this ref (e.g. main). Empty = everything."
       required: false
       default: ""
+    refresh_snapshot:
+      description: "On main: rebuild the tests job's WarpBuild snapshot from clean and save it."
+      type: boolean
+      required: false
+      default: false
 schedule:
   - cron: "47 10 * * *"
 "#,
@@ -202,10 +207,10 @@ fn plan() -> Result<Job> {
             // everything since it — a superset of the PR's change, so still
             // sound — instead of widening every non-Rust change to the whole
             // workspace (`PLAN` switches its base to the matched commit).
-            Step::uses("Restore rail evidence for the base", "actions/cache/restore@v4")
+            Step::uses("Restore rail evidence for the base", "WarpBuilds/cache/restore@v1")
                 .id("evidence")
                 .cond("${{ steps.base.outputs.sha != '' }}")
-                .with("path", "${{ runner.temp }}/rail-evidence")
+                .with("path", EVIDENCE_PATH)
                 .with(
                     "key",
                     "rail-evidence-${{ runner.os }}-${{ runner.arch }}-cargo.test-${{ steps.base.outputs.sha }}",
@@ -224,7 +229,7 @@ fn plan() -> Result<Job> {
                 .env("HEAD_SHA", "${{ github.event.pull_request.head.sha }}")
                 .env("HEAD_REF", "${{ github.event.pull_request.head.ref }}")
                 .env("HEAD_REPO", "${{ github.event.pull_request.head.repo.full_name }}")
-                .env("EVIDENCE", "${{ runner.temp }}/rail-evidence/cargo.test.json")
+                .env("EVIDENCE", EVIDENCE_FILE)
                 .env("EVIDENCE_KEY", "${{ steps.evidence.outputs.cache-matched-key }}"),
         )
         .step(
@@ -237,6 +242,14 @@ fn plan() -> Result<Job> {
                 .env("BASE_SHA", "${{ github.event.pull_request.base.sha }}"),
         ))
 }
+
+/// Where rail evidence lives, as a LITERAL path: a cache's version hashes
+/// its path, and `${{ runner.temp }}` expands before the cache action sees
+/// it, so the same evidence saved on one runner image missed on another
+/// (the self-hosted job's entries never restored on WarpBuild). `~` is
+/// hashed unexpanded.
+const EVIDENCE_PATH: &str = "~/.cache/rail-evidence";
+const EVIDENCE_FILE: &str = "~/.cache/rail-evidence/cargo.test.json";
 
 /// The agents (and people) pushing PRs run `just ci` before they push: the
 /// whole suite, on exactly the tree they push. Running it again here only
@@ -316,6 +329,7 @@ echo "base: ${base:-<none: full run>}"
 /// .config/rail.toml from the commits it compares: a base with the pre-0.32
 /// config fails, which runs everything.
 const PLAN: &str = r####"set -u
+EVIDENCE="${EVIDENCE/#\~/$HOME}"
 
 run_all() {
   echo "plan: $1 — running EVERYTHING"
@@ -558,7 +572,7 @@ fn boundaries() -> [Step; 5] {
         )
         .id("xtask")
         .cond(NOT_CANCELLED),
-        Step::uses("Restore architect xtask", "actions/cache/restore@v4")
+        Step::uses("Restore architect xtask", "WarpBuilds/cache/restore@v1")
             .id("xtask-cache")
             .cond("${{ !cancelled() && steps.xtask.outputs.tag != '' }}")
             .with("path", path)
@@ -578,7 +592,7 @@ fi
              steps.xtask-cache.outputs.cache-hit != 'true' }}",
         )
         .env("TAG", "${{ steps.xtask.outputs.tag }}"),
-        Step::uses("Save architect xtask", "actions/cache/save@v4")
+        Step::uses("Save architect xtask", "WarpBuilds/cache/save@v1")
             .cond("${{ !cancelled() && steps.xtask-built.outputs.yes == 'true' }}")
             .with("path", path)
             .with("key", key.as_str()),
@@ -671,8 +685,11 @@ echo \"### Signal browser remote wasm check failed (advisory, STA-184)\" >> \"$G
 /// other runner on that host shared.
 fn tests() -> Job {
     let warp = Toolchain::Hosted;
+    // The nightly (and a dispatch with `refresh_snapshot`) boots CLEAN and
+    // saves; everything else boots from that snapshot and never saves.
     Job::new(RunsOn::Owned(format!(
-        "{WARPBUILD_RUNNER};snapshot.key={WARPBUILD_SNAPSHOT}"
+        "${{{{ {REFRESH} && '{WARPBUILD_RUNNER};snapshot.enabled=true' || \
+         '{WARPBUILD_RUNNER};snapshot.key={WARPBUILD_SNAPSHOT}' }}}}"
     )))
     .name("tests")
     .needs(&["plan"])
@@ -685,7 +702,9 @@ fn tests() -> Job {
     // (372 GB on one dev machine) and a CI build seldom rebuilds the same
     // crate twice. Dioxus and Zed run CI the same way.
     .env("CARGO_INCREMENTAL", "0")
-    .step(checkout())
+    // No token left in .git/config: checkout only removes it in its post
+    // step, after the snapshot has been taken.
+    .step(checkout().with("persist-credentials", false))
     .steps(hosted_setup(
         "",
         "",
@@ -721,17 +740,16 @@ fn tests() -> Job {
             "Record rail evidence",
             &format!(
                 "\
-mkdir -p \"${{EVIDENCE_DIR}}\"
+mkdir -p \"$HOME/.cache/rail-evidence\"
 {} \\
-  --output \"${{EVIDENCE_DIR}}/cargo.test.json\" \\
+  --output \"$HOME/.cache/rail-evidence/cargo.test.json\" \\
   -- test --workspace --no-run --features \"${{TEST_FEATURES}}\" \\
   || echo \"::warning::rail evidence not recorded; later plans against this commit widen\"
 ",
                 warp.cmd("cargo rail plan evidence --work cargo.test")
             ),
         )
-        .cond("${{ needs.plan.outputs.record == 'true' }}")
-        .env("EVIDENCE_DIR", "${{ runner.temp }}/rail-evidence"),
+        .cond("${{ needs.plan.outputs.record == 'true' }}"),
     )
     .step(nextest(warp, "tests"))
     .step(target_sweep())
@@ -740,7 +758,7 @@ mkdir -p \"${{EVIDENCE_DIR}}\"
             "Evidence key",
             "\
 echo \"sha=$(git rev-parse HEAD)\" >> \"$GITHUB_OUTPUT\"
-[ -f \"${RUNNER_TEMP}/rail-evidence/cargo.test.json\" ] && echo \"have=true\" >> \"$GITHUB_OUTPUT\" || true
+[ -f \"$HOME/.cache/rail-evidence/cargo.test.json\" ] && echo \"have=true\" >> \"$GITHUB_OUTPUT\" || true
 ",
         )
         .id("evidence")
@@ -750,9 +768,9 @@ echo \"sha=$(git rev-parse HEAD)\" >> \"$GITHUB_OUTPUT\"
     // results. Only saves on main (and the nightly's default-branch scope)
     // are visible to other branches' PRs.
     .step(
-        Step::uses("Save rail evidence", "actions/cache/save@v4")
+        Step::uses("Save rail evidence", "WarpBuilds/cache/save@v1")
             .cond("${{ always() && steps.evidence.outputs.have == 'true' }}")
-            .with("path", "${{ runner.temp }}/rail-evidence")
+            .with("path", EVIDENCE_PATH)
             .with(
                 "key",
                 "rail-evidence-${{ runner.os }}-${{ runner.arch }}-cargo.test-${{ steps.evidence.outputs.sha }}",
@@ -770,6 +788,7 @@ echo \"sha=$(git rev-parse HEAD)\" >> \"$GITHUB_OUTPUT\"
             "Clean up before the snapshot",
             "\
 rm -rf \"$HOME/.ssh\" \"$HOME/.aws\"
+git config --local --unset-all http.https://github.com/.extraheader || true
 git clean -ffdx
 du -sh \"$HOME/.cache/cargo-target\" 2>/dev/null || true
 ",
@@ -780,7 +799,8 @@ du -sh \"$HOME/.cache/cargo-target\" 2>/dev/null || true
         Step::uses("Save the WarpBuild snapshot", "WarpBuilds/snapshot-save@v1")
             .cond(SAVE_SNAPSHOT)
             .with("alias", WARPBUILD_SNAPSHOT)
-            .with("fail-on-error", false)
+            // A failed save on the run that exists to save is a failure.
+            .with("fail-on-error", true)
             .with("wait-timeout-minutes", 60),
     )
 }
@@ -821,10 +841,17 @@ const WARPBUILD_RUNNER: &str = "warp-ubuntu-latest-x64-16x";
 /// the warm target dir in ~/.cache/cargo-target).
 const WARPBUILD_SNAPSHOT: &str = "studio-tests";
 
-/// The snapshot is saved by main's full runs only (a push or the
-/// nightly), and even when tests are red: it holds the build, not results.
-const SAVE_SNAPSHOT: &str = "${{ !cancelled() && github.ref == 'refs/heads/main' && \
-     github.event_name != 'pull_request' }}";
+/// When the tests job boots clean and saves the snapshot: the nightly (on
+/// main), or a dispatch on main with `refresh_snapshot`. A save is 13.5 min
+/// of 16x (WarpBuild, 2026-10), so not every push: pushes and PRs boot from
+/// the last nightly's snapshot (at most a day behind, so their build is
+/// incremental) and never write it. A clean rebuild each night also keeps
+/// the target from growing without bound.
+const REFRESH: &str = "(github.event_name == 'schedule' || \
+     (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.refresh_snapshot))";
+
+const SAVE_SNAPSHOT: &str = "${{ !cancelled() && (github.event_name == 'schedule' || \
+     (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.refresh_snapshot)) }}";
 
 /// On the runner's big disk ($CI_CACHE_DIR: the runner module's
 /// per-instance dir), not /var/cache on the root disk, which a 580 GB target
@@ -835,7 +862,7 @@ const SAVE_SNAPSHOT: &str = "${{ !cancelled() && github.ref == 'refs/heads/main'
 /// their own units here until the disk is full and rustc dies mid-build (PR
 /// #184, October 2026). [`target_sweep`] is the garbage collection; this is
 /// the backstop: the incremental caches always go (the jobs build without
-/// them), and below 100 GB free the whole dir does.
+/// them), and below 30 GB free the whole dir does (100 GB wiped the warm snapshot on every boot: a 16x boots with 186 GB free and the target is 87 GB).
 const TARGET_DIR: &str = r#"dir="${CI_CACHE_DIR:-${CACHE_DIRECTORY:-$HOME/.cache}}/cargo-target"
 mkdir -p "$dir"
 echo "CARGO_TARGET_DIR=$dir" >> "$GITHUB_ENV"
@@ -843,7 +870,7 @@ free_gb() { df -Pk "$dir" | awk 'NR==2 { print int($4 / 1048576) }'; }
 # The jobs build with CARGO_INCREMENTAL=0: any incremental cache here is left
 # over from before, and only takes disk.
 rm -rf "$dir"/*/incremental "$dir"/*/*/incremental
-if [ "$(free_gb)" -lt 100 ]; then
+if [ "$(free_gb)" -lt 30 ]; then
   echo "::warning::still $(free_gb) GB free: clearing the target dir (a cold build follows)"
   rm -rf "$dir" && mkdir -p "$dir"
 fi

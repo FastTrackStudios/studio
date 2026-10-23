@@ -17,6 +17,11 @@ on:
         description: Only check crates affected since this ref (e.g. main). Empty = everything.
         required: false
         default: ''
+      refresh_snapshot:
+        description: 'On main: rebuild the tests job''s WarpBuild snapshot from clean and save it.'
+        type: boolean
+        required: false
+        default: false
   schedule:
   - cron: 47 10 * * *
 concurrency:
@@ -78,9 +83,9 @@ jobs:
     - name: Restore rail evidence for the base
       id: evidence
       if: ${{ steps.base.outputs.sha != '' }}
-      uses: actions/cache/restore@v4
+      uses: WarpBuilds/cache/restore@v1
       with:
-        path: ${{ runner.temp }}/rail-evidence
+        path: ~/.cache/rail-evidence
         key: rail-evidence-${{ runner.os }}-${{ runner.arch }}-cargo.test-${{ steps.base.outputs.sha }}
         restore-keys: rail-evidence-${{ runner.os }}-${{ runner.arch }}-cargo.test-
     - name: Plan affected crates
@@ -92,10 +97,11 @@ jobs:
         HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         HEAD_REF: ${{ github.event.pull_request.head.ref }}
         HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
-        EVIDENCE: ${{ runner.temp }}/rail-evidence/cargo.test.json
+        EVIDENCE: ~/.cache/rail-evidence/cargo.test.json
         EVIDENCE_KEY: ${{ steps.evidence.outputs.cache-matched-key }}
       run: |
         set -u
+        EVIDENCE="${EVIDENCE/#\~/$HOME}"
 
         run_all() {
           echo "plan: $1 — running EVERYTHING"
@@ -335,7 +341,7 @@ jobs:
     - name: Restore architect xtask
       id: xtask-cache
       if: ${{ !cancelled() && steps.xtask.outputs.tag != '' }}
-      uses: actions/cache/restore@v4
+      uses: WarpBuilds/cache/restore@v1
       with:
         path: ~/.cache/architect-xtask/${{ steps.xtask.outputs.tag }}
         key: architect-xtask-${{ runner.os }}-${{ steps.xtask.outputs.tag }}-rust-1.94.0
@@ -353,7 +359,7 @@ jobs:
         fi
     - name: Save architect xtask
       if: ${{ !cancelled() && steps.xtask-built.outputs.yes == 'true' }}
-      uses: actions/cache/save@v4
+      uses: WarpBuilds/cache/save@v1
       with:
         path: ~/.cache/architect-xtask/${{ steps.xtask.outputs.tag }}
         key: architect-xtask-${{ runner.os }}-${{ steps.xtask.outputs.tag }}-rust-1.94.0
@@ -461,7 +467,7 @@ jobs:
     name: tests
     needs: plan
     if: ${{ needs.plan.outputs.skip != 'true' && needs.plan.outputs.tests == 'true' }}
-    runs-on: warp-ubuntu-latest-x64-16x;snapshot.key=studio-tests
+    runs-on: ${{ (github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.refresh_snapshot)) && 'warp-ubuntu-latest-x64-16x;snapshot.enabled=true' || 'warp-ubuntu-latest-x64-16x;snapshot.key=studio-tests' }}
     timeout-minutes: 120
     environment: ${{ github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && 'ci-assets' || '' }}
     env:
@@ -469,6 +475,8 @@ jobs:
       CARGO_INCREMENTAL: '0'
     steps:
     - uses: actions/checkout@v4
+      with:
+        persist-credentials: false
     - name: Rust 1.94.0
       uses: dtolnay/rust-toolchain@1.94.0
     - name: Native headers (apt, cached)
@@ -515,7 +523,7 @@ jobs:
         # The jobs build with CARGO_INCREMENTAL=0: any incremental cache here is left
         # over from before, and only takes disk.
         rm -rf "$dir"/*/incremental "$dir"/*/*/incremental
-        if [ "$(free_gb)" -lt 100 ]; then
+        if [ "$(free_gb)" -lt 30 ]; then
           echo "::warning::still $(free_gb) GB free: clearing the target dir (a cold build follows)"
           rm -rf "$dir" && mkdir -p "$dir"
         fi
@@ -560,12 +568,10 @@ jobs:
       run: just faces
     - name: Record rail evidence
       if: ${{ needs.plan.outputs.record == 'true' }}
-      env:
-        EVIDENCE_DIR: ${{ runner.temp }}/rail-evidence
       run: |
-        mkdir -p "${EVIDENCE_DIR}"
+        mkdir -p "$HOME/.cache/rail-evidence"
         cargo rail plan evidence --work cargo.test \
-          --output "${EVIDENCE_DIR}/cargo.test.json" \
+          --output "$HOME/.cache/rail-evidence/cargo.test.json" \
           -- test --workspace --no-run --features "${TEST_FEATURES}" \
           || echo "::warning::rail evidence not recorded; later plans against this commit widen"
     - name: cargo nextest
@@ -628,12 +634,12 @@ jobs:
       if: ${{ always() && needs.plan.outputs.record == 'true' }}
       run: |
         echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
-        [ -f "${RUNNER_TEMP}/rail-evidence/cargo.test.json" ] && echo "have=true" >> "$GITHUB_OUTPUT" || true
+        [ -f "$HOME/.cache/rail-evidence/cargo.test.json" ] && echo "have=true" >> "$GITHUB_OUTPUT" || true
     - name: Save rail evidence
       if: ${{ always() && steps.evidence.outputs.have == 'true' }}
-      uses: actions/cache/save@v4
+      uses: WarpBuilds/cache/save@v1
       with:
-        path: ${{ runner.temp }}/rail-evidence
+        path: ~/.cache/rail-evidence
         key: rail-evidence-${{ runner.os }}-${{ runner.arch }}-cargo.test-${{ steps.evidence.outputs.sha }}
     - name: Test log
       if: ${{ always() }}
@@ -644,17 +650,18 @@ jobs:
         if-no-files-found: ignore
         retention-days: 7
     - name: Clean up before the snapshot
-      if: ${{ !cancelled() && github.ref == 'refs/heads/main' && github.event_name != 'pull_request' }}
+      if: ${{ !cancelled() && (github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.refresh_snapshot)) }}
       run: |
         rm -rf "$HOME/.ssh" "$HOME/.aws"
+        git config --local --unset-all http.https://github.com/.extraheader || true
         git clean -ffdx
         du -sh "$HOME/.cache/cargo-target" 2>/dev/null || true
     - name: Save the WarpBuild snapshot
-      if: ${{ !cancelled() && github.ref == 'refs/heads/main' && github.event_name != 'pull_request' }}
+      if: ${{ !cancelled() && (github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.refresh_snapshot)) }}
       uses: WarpBuilds/snapshot-save@v1
       with:
         alias: studio-tests
-        fail-on-error: false
+        fail-on-error: true
         wait-timeout-minutes: 60
   build-and-test:
     name: Build + test
