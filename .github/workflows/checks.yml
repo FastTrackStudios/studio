@@ -76,11 +76,13 @@ jobs:
         echo "sha=${base}" >> "$GITHUB_OUTPUT"
         echo "base: ${base:-<none: full run>}"
     - name: Restore rail evidence for the base
+      id: evidence
       if: ${{ steps.base.outputs.sha != '' }}
       uses: actions/cache/restore@v4
       with:
         path: ${{ runner.temp }}/rail-evidence
         key: rail-evidence-${{ runner.os }}-${{ runner.arch }}-cargo.test-${{ steps.base.outputs.sha }}
+        restore-keys: rail-evidence-${{ runner.os }}-${{ runner.arch }}-cargo.test-
     - name: Plan affected crates
       id: filter
       env:
@@ -91,6 +93,7 @@ jobs:
         HEAD_REF: ${{ github.event.pull_request.head.ref }}
         HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
         EVIDENCE: ${{ runner.temp }}/rail-evidence/cargo.test.json
+        EVIDENCE_KEY: ${{ steps.evidence.outputs.cache-matched-key }}
       run: |
         set -u
 
@@ -137,6 +140,20 @@ jobs:
           *) run_all "event ${GITHUB_EVENT_NAME:-?}" ;;
         esac
         [ -n "${BASE}" ] || run_all "no comparison base"
+
+        # Evidence for an older main commit than the base (the restore's prefix
+        # fallback): plan from that commit, whose evidence it is. The diff from it
+        # covers the PR's change and more, so the selection stays sound.
+        ev_sha="${EVIDENCE_KEY##*-}"
+        if [ -f "${EVIDENCE}" ] && [ -n "${EVIDENCE_KEY}" ] && [ "${ev_sha}" != "${BASE}" ]; then
+          if git cat-file -e "${ev_sha}^{commit}" 2>/dev/null; then
+            echo "plan: no evidence for ${BASE}; planning from ${ev_sha}, the newest commit with evidence"
+            BASE="${ev_sha}"
+          else
+            echo "plan: evidence for ${ev_sha}, which this checkout lacks: not used"
+            rm -f "${EVIDENCE}"
+          fi
+        fi
 
         ev=()
         if [ -f "${EVIDENCE}" ]; then

@@ -4,8 +4,9 @@
 Usage: ci-rail-plan.py PLAN.json  -> prints KEY=VALUE lines for $GITHUB_OUTPUT
 
 Outputs:
-  full=true|false    run everything (workspace scope, CI inputs changed, or
-                     anything this script can't read exactly)
+  full=true|false    run everything (workspace scope, or anything this
+                     script can't read exactly). CI's own inputs changing
+                     is a smoke run, not a full one (.config/rail.toml).
   cargo=true|false   any Cargo work at all (cargo check, clippy)
   tests=true|false   the test step has work
   test_filter=EXPR   nextest filterset for the affected packages ("" = all)
@@ -33,9 +34,13 @@ from typing import NoReturn
 # to know the wasm job has work.
 WASM = {"session-daw-web", "session-web", "signal-web", "studio-desktop"}
 
-# Repository work declared in .config/rail.toml whose change means "run
-# the full set".
-FULL_RUN_WORK = {"ci-infra", "test-runner"}
+# Repository work declared in .config/rail.toml (see the comments there).
+# ci-infra: a SMOKE run of the tests job (SMOKE_PACKAGE, end to end) on top
+# of whatever crates the change affects; dev-shell and docs: nothing.
+SMOKE_WORK = {"ci-infra"}
+# The workflows crate: tiny, and it is CI's own definition, so building and
+# testing it is the honest smoke of the tests job.
+SMOKE_PACKAGE = "xtask-workflows"
 
 
 def emit(**kv):
@@ -84,11 +89,23 @@ def main():
     required = set(plan["required"])
     work = plan["work"]
 
-    hit = required & FULL_RUN_WORK
-    if hit:
-        full(f"CI inputs changed ({', '.join(sorted(hit))})")
+    smoke = bool(required & SMOKE_WORK)
+    if smoke:
+        print("plan: CI inputs changed -> smoke the tests job", file=sys.stderr)
 
     cargo = bool(required & {"cargo.build", "cargo.clippy", "cargo.test", "cargo.doc"})
+
+    if "cargo.test" not in required and smoke:
+        emit(
+            full=False,
+            cargo=cargo,
+            tests=True,
+            test_filter=f"package({SMOKE_PACKAGE})",
+            test_packages=SMOKE_PACKAGE,
+            wasm=False,
+            n_packages=1,
+        )
+        return
 
     if "cargo.test" not in required:
         build = work.get("cargo.build", {})

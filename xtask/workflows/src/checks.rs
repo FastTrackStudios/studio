@@ -197,12 +197,22 @@ fn plan() -> Result<Job> {
                 .env("BASE_SHA", "${{ github.event.pull_request.base.sha }}"),
         )
         .step(
+            // The base's own evidence, or failing that the newest main has
+            // saved (the prefix): planning from that older commit diffs
+            // everything since it — a superset of the PR's change, so still
+            // sound — instead of widening every non-Rust change to the whole
+            // workspace (`PLAN` switches its base to the matched commit).
             Step::uses("Restore rail evidence for the base", "actions/cache/restore@v4")
+                .id("evidence")
                 .cond("${{ steps.base.outputs.sha != '' }}")
                 .with("path", "${{ runner.temp }}/rail-evidence")
                 .with(
                     "key",
                     "rail-evidence-${{ runner.os }}-${{ runner.arch }}-cargo.test-${{ steps.base.outputs.sha }}",
+                )
+                .with(
+                    "restore-keys",
+                    "rail-evidence-${{ runner.os }}-${{ runner.arch }}-cargo.test-",
                 ),
         )
         .step(
@@ -214,7 +224,8 @@ fn plan() -> Result<Job> {
                 .env("HEAD_SHA", "${{ github.event.pull_request.head.sha }}")
                 .env("HEAD_REF", "${{ github.event.pull_request.head.ref }}")
                 .env("HEAD_REPO", "${{ github.event.pull_request.head.repo.full_name }}")
-                .env("EVIDENCE", "${{ runner.temp }}/rail-evidence/cargo.test.json"),
+                .env("EVIDENCE", "${{ runner.temp }}/rail-evidence/cargo.test.json")
+                .env("EVIDENCE_KEY", "${{ steps.evidence.outputs.cache-matched-key }}"),
         )
         .step(
             Step::run("A local just ci for this tree?", LOCAL_RUN)
@@ -349,6 +360,20 @@ case "${GITHUB_EVENT_NAME:-}" in
   *) run_all "event ${GITHUB_EVENT_NAME:-?}" ;;
 esac
 [ -n "${BASE}" ] || run_all "no comparison base"
+
+# Evidence for an older main commit than the base (the restore's prefix
+# fallback): plan from that commit, whose evidence it is. The diff from it
+# covers the PR's change and more, so the selection stays sound.
+ev_sha="${EVIDENCE_KEY##*-}"
+if [ -f "${EVIDENCE}" ] && [ -n "${EVIDENCE_KEY}" ] && [ "${ev_sha}" != "${BASE}" ]; then
+  if git cat-file -e "${ev_sha}^{commit}" 2>/dev/null; then
+    echo "plan: no evidence for ${BASE}; planning from ${ev_sha}, the newest commit with evidence"
+    BASE="${ev_sha}"
+  else
+    echo "plan: evidence for ${ev_sha}, which this checkout lacks: not used"
+    rm -f "${EVIDENCE}"
+  fi
+fi
 
 ev=()
 if [ -f "${EVIDENCE}" ]; then
