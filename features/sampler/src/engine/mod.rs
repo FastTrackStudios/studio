@@ -240,10 +240,10 @@ use std::sync::Arc;
 use crate::spec::{ArticulationKind, Cc1Layer};
 use crate::{PlayerPatch, VoiceConfig};
 use cache::{EvictStats, PreloadStats, SampleCache, SampleData};
+pub use dispatch::KeyswitchState;
 use filter::BiquadFilter;
 use rr::RrCounters;
 pub use trace::{MissReason, RenderTrace, TraceEvent, TraceKind, VoiceSpawn as TraceVoiceSpawn};
-pub use dispatch::KeyswitchState;
 pub use voice::ArticClass;
 use voice::{DynLayer, FlexEnv, Voice, VoiceKind, VoicePool, VoiceStealPolicy};
 

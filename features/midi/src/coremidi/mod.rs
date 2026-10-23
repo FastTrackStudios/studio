@@ -51,8 +51,8 @@ use std::sync::{Arc, Mutex, RwLock};
 use std::time::{Duration, Instant};
 
 use crate::proto::{
-    BackendError, Direction, InputBackend, InputConfig, MaybeSend, PortId, PortInfo, PortSelector,
-    TimedEvent, decode_all,
+    decode_all, BackendError, Direction, InputBackend, InputConfig, MaybeSend, PortId, PortInfo,
+    PortSelector, TimedEvent,
 };
 use coremidi::{Client, InputPort, PacketList, Source, Sources, VirtualDestination};
 

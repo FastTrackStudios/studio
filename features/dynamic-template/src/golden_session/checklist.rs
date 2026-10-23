@@ -13,8 +13,8 @@
 use std::path::{Path, PathBuf};
 
 use super::kind::Kind;
-use super::rpp::{Built, Flat, armed};
-use super::shape::{BUS_CHAIN, GroupRole, Layout, ONE_NOTE_CHAIN, Routing, maximal};
+use super::rpp::{armed, Built, Flat};
+use super::shape::{maximal, GroupRole, Layout, Routing, BUS_CHAIN, ONE_NOTE_CHAIN};
 
 /// The golden session as the checks see it: the built maximal fixture
 /// and which scene renders are committed beside it.
