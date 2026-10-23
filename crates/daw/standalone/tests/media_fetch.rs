@@ -340,11 +340,18 @@ async fn a_resident_window_holds_only_what_is_near_the_playhead() {
             "{}: nothing far ahead is fetched",
             t.path
         );
+        // The window (5 s behind, 20 s ahead) and no more: what is resident
+        // is counted in the sparse store's 64 KiB blocks, so allow a block of
+        // rounding at each end. (A share of the file would not do: at this
+        // test's 8 kHz a block is an eighth of a two-minute proxy.)
+        let window = t.index.bytes_for(frames(5.0), frames(30.0));
+        let budget = (window.end - window.start) + 2 * 64 * 1024;
         assert!(
-            t.bytes.resident() < t.bytes.len() / 3,
-            "{}: {} of {} held",
+            t.bytes.resident() <= budget,
+            "{}: {} held, the window is {} of {}",
             t.path,
             t.bytes.resident(),
+            window.end - window.start,
             t.bytes.len()
         );
     }
