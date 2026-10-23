@@ -2188,7 +2188,11 @@ assets:
         [[ -z $repo || $repo == \#* ]] && continue
         to=${to:-$from}
         if [[ $fetched != *" $repo "* ]]; then
-            if [[ -d .assets/$repo/.git ]]; then git -C ".assets/$repo" pull --ff-only --quiet
+            # ASSETS_OFFLINE=1 links what .assets/ already holds and never
+            # touches the network: CI's PR runs, which get no credential.
+            if [[ -n ${ASSETS_OFFLINE:-} ]]; then
+                [[ -d .assets/$repo/.git ]] || { echo "ASSETS_OFFLINE: .assets/$repo is not cloned" >&2; exit 1; }
+            elif [[ -d .assets/$repo/.git ]]; then git -C ".assets/$repo" pull --ff-only --quiet
             else git clone --quiet "https://github.com/FastTrackStudios/$repo.git" ".assets/$repo"; fi
             fetched="$fetched$repo "
         fi
