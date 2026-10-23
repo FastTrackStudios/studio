@@ -13,8 +13,8 @@
 use std::path::{Path, PathBuf};
 
 use super::kind::Kind;
-use super::rpp::{armed, Built, Flat};
-use super::shape::{maximal, GroupRole, Layout, Routing, BUS_CHAIN, ONE_NOTE_CHAIN};
+use super::rpp::{Built, Flat, armed};
+use super::shape::{BUS_CHAIN, GroupRole, Layout, ONE_NOTE_CHAIN, Routing, maximal};
 
 /// The golden session as the checks see it: the built maximal fixture
 /// and which scene renders are committed beside it.
@@ -229,20 +229,20 @@ fn one_note_chains(g: &Golden) -> bool {
 }
 
 fn compress(g: &Golden) -> bool {
-    g.track("Process/Compress")
+    g.track("Drums/Process/Compress")
         .is_some_and(|t| t.kind == Kind::Compress && t.name.starts_with("Compress"))
         && names_eq(
             g,
-            "Process/Compress",
+            "Drums/Process/Compress",
             &["Dry", "Tight", "Punch", "Smash", "Crunch"],
         )
 }
 
 fn process_fx(g: &Golden) -> bool {
-    names_eq(g, "Process/FX", &["Room Sim", "Verb"])
+    names_eq(g, "Drums/Process/FX", &["Room Sim", "Verb"])
         && names_eq(
             g,
-            "Process/FX/Verb",
+            "Drums/Process/FX/Verb",
             &[
                 "Wood Room",
                 "Music Club",
