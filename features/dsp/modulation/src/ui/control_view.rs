@@ -234,6 +234,12 @@ pub fn App() -> Element {
 pub fn profile_badge(profile_id: &str) -> String {
     match profile_id {
         "juno" => "JUNO",
+        "ce2" => "CE2",
+        "dimension" => "DIM",
+        "clone" => "CLON",
+        "tri" => "TRI",
+        "scf" => "SCF",
+        "julia" => "JULI",
         "bbd" => "BBD",
         "tape" => "TAPE",
         "orbit" => "ORB",
@@ -241,6 +247,7 @@ pub fn profile_badge(profile_id: &str) -> String {
         "flanger" => "FLNG",
         "flanger_bbd" => "AFLG",
         "vibrato" => "VIB",
+        "vibrato_ce1" => "CE1V",
         "vibrato_juno" => "JVIB",
         "trem_opto" => "OPTO",
         "trem_stereo" => "ST",
