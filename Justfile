@@ -2014,10 +2014,6 @@ ci FROM="lockfile":
     #!/usr/bin/env bash
     set -euo pipefail
     export CARGO_TARGET_DIR="${CARGO_TARGET_DIR:-$PWD/target}"
-    # The commit this run vouches for (scripts/ci-local-status.sh): a full
-    # run that passes records `ci/local` for it, so the PR's CI skips the
-    # tests it would only repeat.
-    start_head="$(git rev-parse HEAD)"
     steps=(lockfile fmt workflows flows tailwind check wasm nextest)
     start=0
     for i in "${!steps[@]}"; do
@@ -2113,21 +2109,36 @@ ci FROM="lockfile":
 
     echo
     echo "every CI step passed locally"
-    # Only a run from the first step vouches for the tree.
-    if [ "{{FROM}}" = lockfile ]; then
-      scripts/ci-local-status.sh record "$start_head"
-    fi
 
-# `just push` does this for you, once GitHub has the commit.
-# Post `ci/local` for every full `just ci` pass whose commit is on GitHub.
-ci-publish:
-    scripts/ci-local-status.sh publish
+# Two CI-boot passes (prep + test build); the second must compile nothing.
+ci-churn:
+    scripts/ci-churn-check.sh
 
-# A PR whose exact tree passed skips CI's tests job (checks.rs, LOCAL_RUN).
-# `git push`, then post `ci/local` for every commit a full `just ci` passed.
-push *ARGS:
-    git push {{ARGS}}
-    scripts/ci-local-status.sh publish
+# Run once per clone. The hook posts the `local-ci` status main requires.
+# Install the git hooks: `ci-local` on every push.
+install-hooks:
+    ./.githooks/install.sh
+
+# BASE defaults to the merge-base with origin/main; the pre-push hook runs
+# this and marks the pushed commits `local-ci`.
+# The PR gate, locally: tests + check + wasm for what `cargo rail plan` affects.
+ci-local BASE="":
+    bash scripts/ci-local.sh {{BASE}}
+
+# Run on a clean HEAD (normally main after a pull), so `ci-local` against it
+# narrows a docs or CI-file change instead of running everything. Kept in the
+# git dir, one file per work item; one warm test build and one warm check.
+# Record rail's observed-input evidence for HEAD.
+rail-evidence: web-tailwind
+    #!/usr/bin/env bash
+    set -euo pipefail
+    dir="$(git rev-parse --git-common-dir)/rail-evidence/$(git rev-parse HEAD)"
+    mkdir -p "$dir"
+    cargo rail plan evidence --work cargo.test -o "$dir/cargo.test.json" -- \
+      test --workspace --no-run --features session-desktop/cli,studio-desktop/cli,web-audio-worklet/guitar,web-audio-worklet/keys
+    cargo rail plan evidence --work cargo.build -o "$dir/cargo.build.json" -- check --workspace
+    echo "rail evidence: $dir"
+
 
 # ── Releases ─────────────────────────────────────────────────────────────
 #

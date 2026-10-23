@@ -4,22 +4,27 @@
 Usage: ci-rail-plan.py PLAN.json  -> prints KEY=VALUE lines for $GITHUB_OUTPUT
 
 Outputs:
-  full=true|false    run everything (workspace scope, or anything this
-                     script can't read exactly). CI's own inputs changing
-                     is a smoke run, not a full one (.config/rail.toml).
-  cargo=true|false   any Cargo work at all (cargo check, clippy)
-  tests=true|false   the test step has work
-  test_filter=EXPR   nextest filterset for the affected packages ("" = all)
-  test_packages=A B  the affected packages, space-separated ("" = build and
-                     test the whole workspace)
-  wasm=true|false    the wasm checks have work
+  full=true|false    the whole workspace (a workspace-scoped selection, or
+                     anything this script can't read exactly)
+  cargo=true|false   any compiling work at all (check, clippy, tests)
+  check=true|false   the check job has work (cargo.build is required)
+  check_packages=A B what it checks: the affected packages, space-separated
+                     ("" with check=true = the whole workspace)
+  tests=true|false   the tests job has work
+  test_filter=EXPR   nextest filterset for the selected packages ("" = all)
+  test_packages=A B  the packages the tests job builds and runs ("" = the
+                     whole workspace)
+  wasm=true|false    the wasm job has work
   n_packages=N       size of the test selection (for the log)
 
-The tests job builds `-p` for each of test_packages (and runs the
-filterset), so a narrowed PR also builds less. The accepted cost: building
-a subset of packages can change Cargo's feature unification, which rebuilds
-some dependencies with other features and leaves a second artifact set in
-the warm target dir. Full runs (test_packages empty) build `--workspace`.
+Tests come from the `test-data` work item (.config/rail.toml): cargo.test's
+selection plus the packages owning any changed fixture/golden/snapshot,
+which compiler evidence cannot see. A change to CI's own files (`ci-infra`)
+adds a SMOKE run of the tests job on one tiny package.
+
+The cargo gate counts cargo.build, cargo.clippy and cargo.test only:
+cargo.doc, cargo.doctest and cargo.package have no evidence recorder, so
+they always widen, and would make every docs-only PR compile everything.
 
 Anything unexpected fails open (full=true), never narrow on a guess.
 """
@@ -27,20 +32,22 @@ import json
 import sys
 from typing import NoReturn
 
-# Leaf entry points of the browser builds checks.yml's `wasm` job checks:
-# the three web bundles deploy.yml ships (`just web-wasm-check`) and the
-# Signal browser remote (studio-desktop's web build). rail's selection
-# already includes reverse dependencies, so membership of these is enough
-# to know the wasm job has work.
+# Leaf entry points of the browser builds the wasm job checks: the three web
+# bundles deploy.yml ships (`just web-wasm-check`) and the Signal browser
+# remote (studio-desktop's web build). rail's selection already includes
+# reverse dependencies, so membership of these is enough.
 WASM = {"session-daw-web", "session-web", "signal-web", "studio-desktop"}
 
-# Repository work declared in .config/rail.toml (see the comments there).
-# ci-infra: a SMOKE run of the tests job (SMOKE_PACKAGE, end to end) on top
-# of whatever crates the change affects; dev-shell and docs: nothing.
-SMOKE_WORK = {"ci-infra"}
-# The workflows crate: tiny, and it is CI's own definition, so building and
-# testing it is the honest smoke of the tests job.
+# A change to CI's own definition (.config/rail.toml `ci-infra`): smoke the
+# tests job end to end on the workflows crate — tiny, and CI's own code.
+SMOKE_WORK = "ci-infra"
 SMOKE_PACKAGE = "xtask-workflows"
+
+COMPILING = {"cargo.build", "cargo.clippy", "cargo.test"}
+
+# The plan JSON contract this reads. Anything else fails open: a new rail
+# could rename what this relies on.
+CONTRACT = 9
 
 
 def emit(**kv):
@@ -52,30 +59,37 @@ def emit(**kv):
 
 def full(reason) -> NoReturn:
     print(f"plan: {reason} -> full run", file=sys.stderr)
-    emit(full=True, cargo=True, tests=True, test_filter="", test_packages="", wasm=True, n_packages="all")
+    emit(full=True, cargo=True, check=True, check_packages="", tests=True, test_filter="",
+         test_packages="", wasm=True, n_packages="all")
     sys.exit(0)
 
 
-def packages(work):
-    """Package names of a required Cargo work item, or None for workspace scope."""
-    scope = work.get("scope") or {}
+def selection(item):
+    """The packages a required Cargo work item covers: a set, or None for the
+    whole workspace (or anything this can't read exactly)."""
+    scope = item.get("scope") or {}
+    if scope.get("kind") != "cargo":
+        return None
     sel = scope.get("selection") or {}
-    if scope.get("kind") != "cargo" or sel.get("kind") == "workspace":
+    if sel.get("kind") == "workspace":
         return None
-    args = sel.get("cargo_args")
-    if not isinstance(args, list) or not args:
-        return None
+    named = {p.get("name") for p in sel.get("packages") or [] if p.get("name")}
+    if named:
+        return named
+    # Older shape: the package flags in cargo_args.
     names = set()
-    it = iter(args)
+    it = iter(sel.get("cargo_args") or [])
     for a in it:
         if a in ("-p", "--package"):
             names.add(next(it, ""))
         elif a.startswith("--package="):
             names.add(a.split("=", 1)[1])
-        # Target narrowing (--test/--lib/...) is ignored: the package is a
-        # safe superset of its targets.
     names.discard("")
     return names or None
+
+
+def required(work, name):
+    return (work.get(name) or {}).get("state") == "required"
 
 
 def main():
@@ -85,54 +99,44 @@ def main():
         full(f"unreadable plan ({e})")
     if plan.get("error") or "work" not in plan or "required" not in plan:
         full("plan reported an error")
-
-    required = set(plan["required"])
+    if plan.get("plan_contract_version") != CONTRACT:
+        full(f"plan contract {plan.get('plan_contract_version')!r}, this reads {CONTRACT}")
     work = plan["work"]
+    req = set(plan["required"])
 
-    smoke = bool(required & SMOKE_WORK)
-    if smoke:
+    cargo = bool(req & COMPILING)
+
+    check = required(work, "cargo.build")
+    built = selection(work["cargo.build"]) if check else set()
+    check_packages = "" if built is None else " ".join(sorted(built))
+
+    # Tests: the test-data item (cargo.test + runtime fixtures), else cargo.test.
+    source = "test-data" if "test-data" in work else "cargo.test"
+    tested = selection(work[source]) if required(work, source) else set()
+    if tested is None:
+        full(f"{source} has workspace scope")
+
+    if SMOKE_WORK in req and not tested:
         print("plan: CI inputs changed -> smoke the tests job", file=sys.stderr)
+        tested = {SMOKE_PACKAGE}
 
-    cargo = bool(required & {"cargo.build", "cargo.clippy", "cargo.test", "cargo.doc"})
+    # The browser builds: whenever a selection reaches one of them (or the
+    # check covers the whole workspace).
+    wasm = built is None or bool(((built or set()) | tested) & WASM)
 
-    if "cargo.test" not in required and smoke:
-        emit(
-            full=False,
-            cargo=cargo,
-            tests=True,
-            test_filter=f"package({SMOKE_PACKAGE})",
-            test_packages=SMOKE_PACKAGE,
-            wasm=False,
-            n_packages=1,
-        )
-        return
-
-    if "cargo.test" not in required:
-        build = work.get("cargo.build", {})
-        if build.get("state") == "required":
-            pk = packages(build)
-            wasm = pk is None or bool(pk & WASM)
-        else:
-            wasm = False
+    if not tested:
         print("plan: no tests affected", file=sys.stderr)
-        emit(full=False, cargo=cargo, tests=False, test_filter="", test_packages="", wasm=wasm, n_packages=0)
+        emit(full=False, cargo=cargo, check=check, check_packages=check_packages, tests=False,
+             test_filter="", test_packages="", wasm=wasm, n_packages=0)
         return
 
-    pk = packages(work["cargo.test"])
-    if pk is None:
-        full("cargo.test has workspace scope")
-
-    expr = " | ".join(f"package({p})" for p in sorted(pk))
-    emit(
-        full=False,
-        cargo=True,
-        tests=True,
-        test_filter=expr,
-        test_packages=" ".join(sorted(pk)),
-        wasm=bool(pk & WASM),
-        n_packages=len(pk),
-    )
-    print(f"plan: tests for {len(pk)} package(s): {', '.join(sorted(pk))}", file=sys.stderr)
+    # Exact matches: `package(name)` is a glob in nextest, and `name@version`
+    # (two packages sharing a name) would match nothing.
+    expr = " | ".join(f"package(={p})" for p in sorted(tested))
+    emit(full=False, cargo=True, check=check, check_packages=check_packages, tests=True,
+         test_filter=expr, test_packages=" ".join(sorted(tested)), wasm=wasm,
+         n_packages=len(tested))
+    print(f"plan: tests for {len(tested)} package(s): {', '.join(sorted(tested))}", file=sys.stderr)
 
 
 if __name__ == "__main__":
