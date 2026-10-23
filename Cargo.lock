@@ -6014,7 +6014,7 @@ dependencies = [
  "image",
  "input",
  "keyflow",
- "keyflow-proto 0.1.0 (git+https://github.com/FastTrackStudios/keyflow?tag=v0.2.8)",
+ "keyflow-proto",
  "kurbo 0.13.1",
  "level",
  "midly",
@@ -6181,7 +6181,7 @@ dependencies = [
  "getrandom 0.2.17",
  "helgoboss-midi",
  "keyflow-lang",
- "keyflow-proto 0.1.0 (git+https://github.com/FastTrackStudios/keyflow?tag=v0.2.8)",
+ "keyflow-proto",
  "kurbo 0.13.1",
  "lyon",
  "macro_rules_attribute",
@@ -10084,7 +10084,7 @@ dependencies = [
  "getrandom 0.2.17",
  "helgoboss-midi",
  "keyflow-lang",
- "keyflow-proto 0.1.0 (git+https://github.com/FastTrackStudios/keyflow?tag=v0.2.8)",
+ "keyflow-proto",
  "regex",
  "tracing",
  "uuid",
@@ -10119,30 +10119,12 @@ dependencies = [
  "fts-sample",
  "hound",
  "keyflow-annotate",
- "keyflow-proto 0.1.0 (git+https://github.com/FastTrackStudios/keyflow?tag=v0.2.8)",
+ "keyflow-proto",
  "midly",
  "musicxml",
  "thiserror 2.0.20",
  "tracing",
  "zip 2.4.2",
-]
-
-[[package]]
-name = "keyflow-proto"
-version = "0.1.0"
-dependencies = [
- "architect",
- "color-palette 0.1.0 (git+https://github.com/FastTrackStudios/music-convention?tag=v0.1.3)",
- "daw-proto",
- "facet",
- "helgoboss-midi",
- "keyflow-syntax",
- "music-catalog 0.1.0 (git+https://github.com/FastTrackStudios/music-convention?tag=v0.1.3)",
- "serde",
- "thiserror 2.0.20",
- "tracing",
- "uuid",
- "vox",
 ]
 
 [[package]]
@@ -10159,15 +10141,6 @@ dependencies = [
  "thiserror 2.0.20",
  "tracing",
  "uuid",
-]
-
-[[package]]
-name = "keyflow-syntax"
-version = "0.1.2"
-dependencies = [
- "facet",
- "serde",
- "thiserror 2.0.20",
 ]
 
 [[package]]
