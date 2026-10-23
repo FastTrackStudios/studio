@@ -1973,6 +1973,15 @@ pub struct VoicePool {
     /// The current strike, stamped on every voice spawned (see
     /// [`begin_strike`](Self::begin_strike)).
     strike: u32,
+    /// Scratch for [`make_room_for_note`](Self::make_room_for_note): the
+    /// re-struck key's distinct strikes. Pre-allocated so a note-on never
+    /// allocates on the audio thread (`tests/rt_safety.rs`); a key's strikes
+    /// cannot outnumber the voices, so `MAX_VOICES` holds them.
+    room_strikes: Vec<u32>,
+    /// Scratch for [`make_room_for_note`](Self::make_room_for_note): the
+    /// sounding keys and whether each is all released. At most one entry per
+    /// MIDI key, so 128 is the bound.
+    room_notes: Vec<(u8, bool)>,
 }
 
 impl Default for VoicePool {
@@ -1993,6 +2002,8 @@ impl VoicePool {
             solo_notes: None,
             solo_scratch: Vec::new(),
             strike: 0,
+            room_strikes: Vec::with_capacity(MAX_VOICES),
+            room_notes: Vec::with_capacity(128),
         }
     }
 
@@ -2008,6 +2019,8 @@ impl VoicePool {
             solo_notes: None,
             solo_scratch: Vec::new(),
             strike: 0,
+            room_strikes: Vec::with_capacity(MAX_VOICES),
+            room_notes: Vec::with_capacity(128),
         }
     }
 
@@ -2483,7 +2496,8 @@ impl VoicePool {
         // a release nearly over — no longer counts.
         let fading = |v: &Voice| matches!(v.state, VoiceState::Releasing { frames_remaining } if frames_remaining <= REPEAT_FADE);
         // The same key: keep the latest strike, fade the older ones.
-        let mut strikes: Vec<u32> = Vec::new();
+        let strikes = &mut self.room_strikes;
+        strikes.clear();
         for v in &self.voices {
             if v.note == incoming
                 && v.state != VoiceState::Done
@@ -2511,7 +2525,8 @@ impl VoicePool {
         loop {
             // Sounding keys, in first-voice order, with whether all their
             // voices are already releasing.
-            let mut notes: Vec<(u8, bool)> = Vec::new();
+            let notes = &mut self.room_notes;
+            notes.clear();
             for v in &self.voices {
                 if v.state == VoiceState::Done || v.note == incoming || fading(v) {
                     continue;
