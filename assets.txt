@@ -5,9 +5,18 @@
 #
 #   studio-assets  private: test fixtures over 1 MB, research captures
 #   rig-models     private: the captures and IRs the rigs ship with
+#   mic-models     private: FTS Mic's measured mic models; the plugin builds
+#                  the default mic (LD-47K) in from these (apps/plugins/mic/build.rs)
 
 rig-models  guitar  features/rigs/guitar/default-config/models
 rig-models  bass    features/rigs/guitar/default-config-bass/models
+
+mic-models  44100      apps/plugins/mic/models/44100
+mic-models  48000      apps/plugins/mic/models/48000
+mic-models  88200      apps/plugins/mic/models/88200
+mic-models  96000      apps/plugins/mic/models/96000
+mic-models  48000-LX   apps/plugins/mic/models/48000-LX
+mic-models  48000-180  apps/plugins/mic/models/48000-180
 
 studio-assets  features/formats/tests/fixtures/logic/Fire.logicx/Alternatives/000/ProjectData  features/adapters/logic/tests/fixtures/logic/Fire.logicx/Alternatives/000/ProjectData
 studio-assets  features/formats/tests/fixtures/logic/Fire.logicx/Alternatives/001/ProjectData  features/adapters/logic/tests/fixtures/logic/Fire.logicx/Alternatives/001/ProjectData
