@@ -1,0 +1,15 @@
+# The two halves of ../action.yml (Dioxus's prune-cargo-target) as separate
+# steps, for a PERSISTENT target dir (the test jobs): `mark` before the
+# build, `sweep` after it — run on its own condition, not the parent action's
+# post-if: success(), so a red TEST run (whose build was fine) still sweeps.
+# Same lib.js, studio's own files (GPL-3.0-or-later).
+name: Prune cargo target (sweep)
+description: >
+  Delete every unit whose fingerprint cargo did not read since mark.
+inputs:
+  target-dir:
+    description: The cargo target dir
+    required: true
+runs:
+  using: node24
+  main: index.js

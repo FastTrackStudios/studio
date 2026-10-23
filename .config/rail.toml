@@ -41,6 +41,9 @@ paths = [
   "flake.lock",
   "nix/**",
   "scripts/**",
+  # The CI-only cargo config the hosted jobs merge in (.github/workflows
+  # are generated from xtask/workflows, a workspace crate rail already sees).
+  ".cargo/ci-config.toml",
 ]
 
 # nextest's own configuration (profiles, slow-timeout overrides): a change

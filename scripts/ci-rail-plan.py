@@ -9,14 +9,16 @@ Outputs:
   cargo=true|false   any Cargo work at all (cargo check, clippy)
   tests=true|false   the test step has work
   test_filter=EXPR   nextest filterset for the affected packages ("" = all)
+  test_packages=A B  the affected packages, space-separated ("" = build and
+                     test the whole workspace)
   wasm=true|false    the wasm checks have work
   n_packages=N       size of the test selection (for the log)
 
-Why a filterset and not rail's `-p` list: building a subset of packages
-changes Cargo's feature unification, which rebuilds dependencies with
-other features and leaves a second artifact set in the warm target dir.
-The test BUILD stays `--workspace` (identical units, all fresh except
-what changed); only which tests RUN narrows.
+The tests job builds `-p` for each of test_packages (and runs the
+filterset), so a narrowed PR also builds less. The accepted cost: building
+a subset of packages can change Cargo's feature unification, which rebuilds
+some dependencies with other features and leaves a second artifact set in
+the warm target dir. Full runs (test_packages empty) build `--workspace`.
 
 Anything unexpected fails open (full=true), never narrow on a guess.
 """
@@ -45,7 +47,7 @@ def emit(**kv):
 
 def full(reason) -> NoReturn:
     print(f"plan: {reason} -> full run", file=sys.stderr)
-    emit(full=True, cargo=True, tests=True, test_filter="", wasm=True, n_packages="all")
+    emit(full=True, cargo=True, tests=True, test_filter="", test_packages="", wasm=True, n_packages="all")
     sys.exit(0)
 
 
@@ -96,7 +98,7 @@ def main():
         else:
             wasm = False
         print("plan: no tests affected", file=sys.stderr)
-        emit(full=False, cargo=cargo, tests=False, test_filter="", wasm=wasm, n_packages=0)
+        emit(full=False, cargo=cargo, tests=False, test_filter="", test_packages="", wasm=wasm, n_packages=0)
         return
 
     pk = packages(work["cargo.test"])
@@ -104,7 +106,15 @@ def main():
         full("cargo.test has workspace scope")
 
     expr = " | ".join(f"package({p})" for p in sorted(pk))
-    emit(full=False, cargo=True, tests=True, test_filter=expr, wasm=bool(pk & WASM), n_packages=len(pk))
+    emit(
+        full=False,
+        cargo=True,
+        tests=True,
+        test_filter=expr,
+        test_packages=" ".join(sorted(pk)),
+        wasm=bool(pk & WASM),
+        n_packages=len(pk),
+    )
     print(f"plan: tests for {len(pk)} package(s): {', '.join(sorted(pk))}", file=sys.stderr)
 
 

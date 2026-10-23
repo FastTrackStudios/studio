@@ -81,27 +81,37 @@ delete a tag; a bad release is superseded by the next.
 
 | Event | Workflows | Runner |
 |---|---|---|
-| PR into `main` | `checks` (`Build + test`: the rail-selected set + `cargo rail change check`); the `release` guard only on release PRs | hosted (plan, lint, wasm, the aggregator, the guard); Mac Pro `studio-tests` (the nextest build) |
+| PR into `main` | `checks` (`Build + test`: the rail-selected set + `cargo rail change check`); the `release` guard only on release PRs | hosted (plan, lint, wasm, the aggregator, the guard); Mac Pro `studio-tests` (the nextest build, required) |
 | release PR `release/pending` → `main` | `release` guard; `checks` runs the same guard from the base commit and **skips** the heavy jobs if it passes, fails `Build + test` if not | hosted |
 | PR into `release/**` (hotfix) | `checks` (the full set), `release` guard | as above |
 | push to `main` / `release/**` | `checks` full set (+ rail evidence on `main`) | hosted + Mac Pro `studio-tests` |
 | nightly | `checks` full set on `main` | hosted + Mac Pro `studio-tests` |
 | push of tag `vYY.M.MICRO` (or `workflow_dispatch` with the tag as ref) | `deploy` (session-web, signal-web), `studio-ios`, `release` publish | `studio-deploy` (LAN registry), `airlock`, hosted |
 
-Hosted jobs restore one Actions cache per build kind (`lint`, `wasm`)
-that only `main` saves, so PRs never evict it from the repo's 10 GB
-budget; nix comes from fasttrackstudio.cachix.org, seeded by
-`cache-devshell` (also hosted). Only the nextest build stays on the Mac
-Pro, for its warm target dir. The REAPER integration suites are not in
+The workflow files are generated from `xtask/workflows` (one Rust module per
+workflow, the reasons as comments there): edit the Rust, run `just
+workflows`, commit both; the lint job fails on drift (`just
+workflows-check`) and runs actionlint.
+
+Hosted jobs run without nix: the pinned rustc (dtolnay/rust-toolchain),
+apt headers (cached), and pinned release binaries for just, cargo-rail,
+tracey, tailwindcss and actionlint. They restore one Actions cache per
+build kind (`lint`, `wasm`) that only `main` saves, so PRs never evict it
+from the repo's 10 GB budget. Only the nextest build stays on the Mac Pro
+(NixOS, the ci dev shell), for its warm target dir; it builds just the
+packages a PR affects (`-p …`), the whole workspace on full runs.
+`cache-devshell` still seeds fasttrackstudio.cachix.org, for developers'
+`nix develop`; no CI job depends on it. The REAPER integration suites are not in
 CI (they need a licensed REAPER): run `just reaper-test` and `just reaper
 daw-test` locally before a change to the REAPER adapters lands.
 
 `Build + test` is the one required check (the `main` ruleset). It is an
-aggregator: it requires the `lint` job and, when the plan gave it work, the
-web-bundle wasm check. Advisory (red or green, never blocking): clippy, the
-Signal browser remote wasm check and the `Advisory: tests` nextest run, red
-today (STA-184); when STA-184 makes them green they join the required set.
-`main` may be red for code reasons; nothing is tagged until it is green.
+aggregator: it requires the `lint` job and, when the plan gave them work,
+the web-bundle wasm check and the `tests` nextest run. Advisory (red or
+green, never blocking): clippy and the Signal browser remote wasm check (red
+today, STA-184), and `tests (warpbuild trial)` when the `WARPBUILD_TRIAL`
+repository variable turns it on. `main` may be red for code reasons; nothing
+is tagged until it is green.
 
 ## What the guards check
 

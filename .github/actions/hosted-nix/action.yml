@@ -1,15 +1,13 @@
-# Setup for a job on a GitHub-HOSTED runner (ubuntu-latest) that works in
-# the repo's nix dev shell: free the image's disk, install nix, trust
-# fasttrackstudio.cachix.org, and realise the `.#ci` shell up front so its
-# download shows as its own step instead of hiding inside the first
-# `${NIX_DEV}` command.
+# Setup for a job on a GitHub-HOSTED runner (ubuntu-latest) that needs nix:
+# free the image's disk, install nix, trust fasttrackstudio.cachix.org, and
+# (optionally) realise a dev shell up front so its download shows as its own
+# step.
 #
-# The self-hosted Mac Pro jobs (tests, deploy) do NOT use this: nix lives on
-# that host already.
-#
-# The ci shell is ~1.5 GiB to download (7.7 GiB unpacked) and builds
-# nothing when cache-devshell.yml has seeded cachix: the toolchain, the
-# native headers, cargo-rail, tracey and nextest all come prebuilt.
+# Only cache-devshell.yml uses it now. The hosted checks.yml jobs stopped
+# using nix (October 2026): they install the pinned rustc, apt headers and
+# release binaries directly (xtask/workflows/src/steps.rs), which is faster
+# than pulling the ~1.5 GiB (7.7 GiB unpacked) ci shell. The self-hosted
+# jobs (tests, deploy) never used this: nix lives on those hosts already.
 
 name: hosted nix
 description: Free disk, install nix + the fasttrackstudio cachix, realise the ci dev shell.
