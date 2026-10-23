@@ -751,8 +751,11 @@ pub fn previews_of(project: &ProjectRef) -> crate::midi::Previews {
     // still while a song of thousands of items opened.
     #[cfg(feature = "native")]
     {
+        // Read as the song it is now: a set opening songs one after
+        // another has moved on to the next by the time this runs.
+        let song = crate::open::current_song();
         let reading = previews.clone();
-        crate::wave_pool::spawn(move || reading.fill_waves_blocking(waves));
+        crate::wave_pool::spawn(move || reading.fill_waves_blocking_in(song, waves));
     }
     #[cfg(not(feature = "native"))]
     previews.fill_waves_blocking(waves);

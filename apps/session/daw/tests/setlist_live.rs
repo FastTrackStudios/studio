@@ -80,7 +80,8 @@ fn a_setlist_opens_every_song_into_one_engine_and_switches_between_them() {
     let bpm = |i: usize| setlist.songs[i].session.project.0.bpm;
     assert!((bpm(0) - 90.0).abs() < 1e-6, "Loud is at 90: {}", bpm(0));
     assert!((bpm(1) - 120.0).abs() < 1e-6, "Quiet is at 120: {}", bpm(1));
-    assert!(loud.with_extension("session").is_dir() && quiet.with_extension("session").is_dir());
+    // A `.session` is a project file now (`project_file`), not a folder.
+    assert!(loud.with_extension("session").is_file() && quiet.with_extension("session").is_file());
     assert_eq!(
         setlist.songs[1].saved.as_deref(),
         Some(quiet.with_extension("session").as_path())
@@ -88,6 +89,22 @@ fn a_setlist_opens_every_song_into_one_engine_and_switches_between_them() {
 
     // Each song's Media/Click.wav is its own: the waveforms differ as the
     // files do.
+    // The waveforms are read behind the opening: wait for each song's
+    // (its prepared tracks have items with none, so not for every item).
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(20);
+    let read = |i: usize| {
+        let session = &setlist.songs[i].session;
+        session
+            .project
+            .0
+            .items
+            .values()
+            .flatten()
+            .any(|item| session.previews.wave(&item.guid).is_some())
+    };
+    while !(read(0) && read(1)) && std::time::Instant::now() < deadline {
+        std::thread::sleep(std::time::Duration::from_millis(20));
+    }
     let loudest = |i: usize| {
         let session = &setlist.songs[i].session;
         session

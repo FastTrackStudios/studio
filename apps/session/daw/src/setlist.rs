@@ -259,8 +259,8 @@ impl Setlist {
 #[cfg(feature = "native")]
 impl Song {
     /// The song opened from `path` into the engine as `project`: named by
-    /// `title`, or its file's; saved into its `.session` folder, when it has
-    /// one.
+    /// `title`, or its file's; saved into its `.session` (a project file,
+    /// `crate::project_file`), when it has one.
     fn opened(
         path: &std::path::Path,
         title: Option<String>,
@@ -278,7 +278,7 @@ impl Song {
         } else {
             path.with_extension("session")
         })
-        .filter(|dir| dir.is_dir());
+        .filter(|saved| saved.exists());
         song
     }
 }
