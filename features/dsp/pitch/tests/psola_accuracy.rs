@@ -17,8 +17,9 @@ fn zc_freq(buf: &[f64]) -> f64 {
 #[test]
 fn psola_is_cents_accurate_at_small_and_moderate_shifts() {
     for st in [-0.467f64, -2.0, 2.0, 5.0, -5.0] {
-        let mut chain = pitch::chain::PitchChain::new();
-        chain.algorithm = pitch::chain::Algorithm::Psola;
+        // Only the engine under test: `new()` builds and prepares all nine,
+        // the spectral shifter's FFTs among them, for each of the five.
+        let mut chain = pitch::chain::PitchChain::only(pitch::chain::Algorithm::Psola);
         chain.semitones = st;
         chain.mix = 1.0;
         chain.update(AudioConfig {
@@ -47,15 +48,17 @@ fn psola_is_cents_accurate_at_small_and_moderate_shifts() {
     }
 }
 
+/// A report, not a check — it asserts nothing. Run it by hand:
+/// `cargo nextest run -p pitch --test psola_accuracy --run-ignored only --no-capture`.
 #[test]
+#[ignore = "a report that asserts nothing; run with --run-ignored only --no-capture"]
 fn print_psola_vs_wsola_cents() {
     for algo in [
         pitch::chain::Algorithm::Psola,
         pitch::chain::Algorithm::Wsola,
     ] {
         for st in [-0.467f64, -2.0, 2.0] {
-            let mut chain = pitch::chain::PitchChain::new();
-            chain.algorithm = algo;
+            let mut chain = pitch::chain::PitchChain::only(algo);
             chain.semitones = st;
             chain.mix = 1.0;
             chain.update(AudioConfig {
