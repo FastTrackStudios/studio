@@ -333,18 +333,9 @@ jobs:
         target-dir: target
     - name: wasm check (web bundles)
       run: just web-wasm-check
-    - name: wasm check (Signal browser remote, advisory)
-      id: signal
+    - name: wasm check (Signal browser remote)
       if: ${{ !cancelled() }}
-      continue-on-error: true
-      run: |
-        cargo check -p studio-desktop \
-          --target wasm32-unknown-unknown --no-default-features --features signal
-    - name: Advisory result
-      if: ${{ !cancelled() && steps.signal.outcome == 'failure' }}
-      run: |
-        echo "::warning::wasm check (Signal browser remote) failed — advisory (STA-184), does not block"
-        echo "### Signal browser remote wasm check failed (advisory, STA-184)" >> "$GITHUB_STEP_SUMMARY"
+      run: just signal-wasm-check
     - name: Cache footprint
       if: ${{ always() }}
       run: |

@@ -118,8 +118,7 @@ daw-test` locally before a change to the REAPER adapters lands.
 `main` ruleset). `CI passed` is the aggregate of a full run: it requires
 `Gates`, `Check`, `Wasm` and `Tests`, and `just release-tag` and the tag
 guards require it green on the release commit. Advisory (red or green,
-never blocking): clippy and the Signal browser remote wasm check (red
-today, STA-184). `Local CI` is as honest as whoever posts it — anyone who
+never blocking): clippy. `Local CI` is as honest as whoever posts it — anyone who
 can push could post one — which is the bargain (2026-10): the full set
 after every merge catches what a local run missed. `main` may be red for
 code reasons; nothing is tagged until `CI passed` is green.

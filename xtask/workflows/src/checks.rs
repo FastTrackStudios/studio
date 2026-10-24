@@ -394,10 +394,8 @@ cargo rail change check --since \"${BASE_SHA}\"
     .env("BASE_SHA", "${{ github.event.pull_request.base.sha }}")
 }
 
-/// The browser builds, which the workspace check (native) never compiles.
-/// REQUIRED part: the web bundles. ADVISORY part: the Signal browser remote
-/// (red since STA-184: it pulls tokio/mio into wasm), which reports but
-/// cannot fail the job.
+/// REQUIRED: the browser builds, which the workspace check (native) never
+/// compiles — the web bundles and the Signal browser remote.
 fn wasm() -> Job {
     hosted_cargo_job(
         Job::new(UBUNTU)
@@ -430,30 +428,15 @@ fn wasm() -> Job {
     // until the deploy itself failed. Same targets and features as
     // nix/modules/packages/web-bundles.nix builds (`just web-wasm-check`).
     .step(Step::run("wasm check (web bundles)", "just web-wasm-check"))
-    // The Signal browser remote: studio-desktop's web build. Advisory until
-    // STA-184 makes it green; then drop continue-on-error and it is
-    // required like the bundles.
+    // The Signal browser remote: studio-desktop's web build. Required since
+    // it went green (STA-184: tokio/mio no longer reach wasm; the device-only
+    // Libraries page is gated off the browser, 2026-10-24).
     .step(
         Step::run(
-            "wasm check (Signal browser remote, advisory)",
-            "\
-cargo check -p studio-desktop \\
-  --target wasm32-unknown-unknown --no-default-features --features signal
-",
+            "wasm check (Signal browser remote)",
+            "just signal-wasm-check",
         )
-        .id("signal")
-        .cond(NOT_CANCELLED)
-        .continue_on_error(),
-    )
-    .step(
-        Step::run(
-            "Advisory result",
-            "\
-echo \"::warning::wasm check (Signal browser remote) failed — advisory (STA-184), does not block\"
-echo \"### Signal browser remote wasm check failed (advisory, STA-184)\" >> \"$GITHUB_STEP_SUMMARY\"
-",
-        )
-        .cond("${{ !cancelled() && steps.signal.outcome == 'failure' }}"),
+        .cond(NOT_CANCELLED),
     )
     .step(footprint())
 }
@@ -702,8 +685,7 @@ exit "$rc"
 /// required check counts as passing, so this never skips: it fails unless
 /// the plan, the gates, check, wasm, tests and the macOS release-tooling
 /// run all succeeded (a sound release
-/// PR skips them all). The advisory work (clippy, the Signal browser remote)
-/// cannot fail it.
+/// PR skips them all). The advisory work (clippy) cannot fail it.
 ///
 /// The escape hatch for a push the pre-push hook couldn't vouch for (a
 /// contributor without the hook, a dirty tree, `SKIP=local-ci`): a green
