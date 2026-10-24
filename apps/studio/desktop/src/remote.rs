@@ -14,7 +14,9 @@ use architect::connect::{ConnectError, Endpoint, RootLane, pool};
 use architect::iroh_link::iroh;
 
 /// Where the engine core lives. Native: `SIGNAL_ENGINE_URL` (or legacy
-/// `RIGD_URL`) at runtime, else the local default. Web: same-origin —
+/// `RIGD_URL`) at runtime, else the local default. Web: a URL saved from
+/// the connect form, else Task's `/vox` when the page's `/config.json`
+/// names a Task elsewhere (studio-web's `TASK_URL`), else same-origin —
 /// the engine that served this page also serves /vox — falling back to
 /// the local default under a dev server.
 #[cfg(not(target_arch = "wasm32"))]
@@ -32,7 +34,15 @@ pub(crate) fn server_url() -> String {
     if let Some(saved) = utils::prefs::get_raw("signal-engine-ws-url") {
         return saved;
     }
-    let derived = web_sys::window().and_then(|w| {
+    let window = web_sys::window();
+    let origin = window
+        .as_ref()
+        .and_then(|w| w.location().origin().ok())
+        .unwrap_or_default();
+    if let Some(url) = configured_task_vox(&app_shell::web_config::current(), &origin) {
+        return url;
+    }
+    let derived = window.and_then(|w| {
         let loc = w.location();
         let host = loc.host().ok()?; // e.g. "localhost:8080"
         let hostname = loc.hostname().ok()?; // "localhost"
@@ -57,6 +67,14 @@ pub(crate) fn server_url() -> String {
         Some(format!("{scheme}://{host}/vox"))
     });
     derived.unwrap_or_else(|| "ws://127.0.0.1:4040/vox".to_string())
+}
+
+/// Task's `/vox` when the page's config names a Task other than the page's
+/// own origin; `None` for the same-origin setup, where the page's own
+/// rules (a dev server's port, the engine that served it) decide.
+fn configured_task_vox(config: &app_shell::web_config::WebConfig, origin: &str) -> Option<String> {
+    let same = app_shell::web_config::WebConfig::same_origin(origin);
+    (config.task_url != same.task_url).then(|| config.task_ws("/vox"))
 }
 
 // ── Engine target (local ws vs remote iroh) ─────────────────────────────────
@@ -239,4 +257,28 @@ async fn dial_iroh(endpoint: Endpoint, id: iroh::EndpointId) -> Result<RootLane,
             endpoint: endpoint.to_string(),
             reason: format!("{e:?}"),
         })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::configured_task_vox;
+    use app_shell::web_config::resolve;
+
+    const ORIGIN: &str = "https://studio.example";
+
+    #[test]
+    fn a_configured_task_is_dialled_at_its_vox() {
+        let config = resolve(Some(r#"{"task_url":"https://task.example"}"#), ORIGIN);
+        assert_eq!(
+            configured_task_vox(&config, ORIGIN).as_deref(),
+            Some("wss://task.example/vox")
+        );
+    }
+
+    #[test]
+    fn the_same_origin_setup_keeps_the_page_rules() {
+        assert_eq!(configured_task_vox(&resolve(None, ORIGIN), ORIGIN), None);
+        let config = resolve(Some(r#"{"task_url":"https://studio.example/"}"#), ORIGIN);
+        assert_eq!(configured_task_vox(&config, ORIGIN), None);
+    }
 }

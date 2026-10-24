@@ -37,7 +37,9 @@ pub fn run() {
                 ));
         let _ = tracing::subscriber::set_global_default(subscriber);
     }
-    dioxus::launch(App);
+    // Where this deployment's Task is (`/config.json`, studio-web) is known
+    // before the address's link is read.
+    app_shell::web_config::load_then(|| dioxus::launch(App));
 }
 
 /// A visitor's name, when the page is not told one: Guest and four
@@ -57,7 +59,15 @@ fn source() -> (Option<session_daw::web_engine::WebSource>, Option<String>) {
     let query = web_sys::window()
         .and_then(|w| w.location().search().ok())
         .and_then(|q| web_sys::UrlSearchParams::new_with_str(&q).ok());
-    let (open, guide) = app_open(|key| query.as_ref().and_then(|q| q.get(key)));
+    // A link given as a path (`?live=/org/<org>/share/<code>`) is a link
+    // on this deployment's Task.
+    let task_url = app_shell::web_config::current().task_url;
+    let (open, guide) = app_open(|key| {
+        query
+            .as_ref()
+            .and_then(|q| q.get(key))
+            .map(|v| session::open_link::on_task(&v, &task_url))
+    });
     let source = match open {
         AppOpen::Live { link, name } => Some(WebSource::Live {
             link,
@@ -77,7 +87,7 @@ fn App() -> Element {
         if let Some(source) = source {
             session_daw::web_host::WebDemo { source, guide }
         } else {
-            session::open_link::OpenSet {}
+            session::open_link::OpenSet { task_url: app_shell::web_config::current().task_url }
         }
     }
 }

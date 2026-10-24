@@ -564,6 +564,7 @@ dependencies = [
  "dirs",
  "dock",
  "facet",
+ "facet-json",
  "objc2 0.6.4",
  "objc2-foundation 0.3.2",
  "objc2-ui-kit 0.3.2",
@@ -572,6 +573,9 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "utils",
+ "wasm-bindgen",
+ "wasm-bindgen-futures",
+ "web-sys",
 ]
 
 [[package]]
@@ -16468,6 +16472,7 @@ dependencies = [
 name = "session-daw-web"
 version = "26.10.2"
 dependencies = [
+ "app-shell",
  "console_error_panic_hook",
  "dioxus",
  "getrandom 0.3.4",
