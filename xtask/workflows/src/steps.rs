@@ -484,3 +484,55 @@ pub fn cargo_deps_save() -> [Step; 3] {
             .with("key", CARGO_DEPS_KEY),
     ]
 }
+
+/// Link a self-hosted runner's rig-models clone into the tree, per
+/// assets.txt: the guitar rig's release build refuses to compile without
+/// its captures (features/rigs/guitar/build.rs), and they are in the private
+/// rig-models repo, which the release runners keep one clone of beside their
+/// other projects.
+///
+/// `fetch`: fast-forward the clone to origin/main first, so a capture pushed
+/// to rig-models ships in the next build, and fail rather than build with
+/// stale captures (https, so the fts-forge credential helper authenticates:
+/// airlock has no GitHub ssh key). Without it (a runner that has no
+/// credential for the private repo) the clone is linked as it is. Inline,
+/// not a script in the tree: a re-run of an older tag builds that tag's
+/// sources, which do not have one.
+pub fn rig_models(src: &str, fetch: bool) -> String {
+    let sync = if fetch {
+        r#"url=https://github.com/FastTrackStudios/rig-models.git
+if [ -d "$src/.git" ]; then
+  before="$(git -C "$src" rev-parse --short HEAD)"
+  git -C "$src" fetch --quiet origin \
+    || { echo "::error::could not fetch rig-models into $src; not building with stale captures"; exit 1; }
+  git -C "$src" merge --ff-only --quiet origin/main \
+    || { echo "::error::$src cannot fast-forward to origin/main (local commits or changes?); not building with stale captures"; exit 1; }
+  echo "rig-models $before -> $(git -C "$src" rev-parse --short HEAD)"
+else
+  git clone --quiet "$url" "$src" \
+    || { echo "::error::could not clone $url into $src"; exit 1; }
+  echo "rig-models cloned at $(git -C "$src" rev-parse --short HEAD)"
+fi
+"#
+    } else {
+        r#"[ -d "$src" ] || { echo "::error::no rig-models clone at $src (this runner does not fetch it)"; exit 1; }
+"#
+    };
+    format!(
+        r#"set -euo pipefail
+src={src}
+{sync}if [ ! -d "$src/guitar" ] || [ ! -d "$src/bass" ]; then echo "::error::no rig-models clone at $src"; exit 1; fi
+while read -r repo from to; do
+  [[ -z $repo || $repo == \#* || $repo != rig-models ]] && continue
+  to="${{to:-$from}}"
+  n="$(find -L "$src/$from" -type f \( -name '*.nam' -o -name '*.wav' \) | wc -l | tr -d ' ')"
+  [ "$n" -gt 0 ] || {{ echo "::error::$src/$from holds no captures"; exit 1; }}
+  mkdir -p "$(dirname "$to")"
+  if [ -d "$to" ] && [ ! -L "$to" ]; then rmdir "$to"; fi
+  ln -sfn "$src/$from" "$to"
+  echo "linked $to -> $src/$from ($n captures)"
+done < assets.txt
+echo "rig-models at $(git -C "$src" rev-parse --short HEAD 2>/dev/null || echo unknown)"
+"#
+    )
+}

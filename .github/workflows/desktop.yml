@@ -1,0 +1,304 @@
+# Generated from xtask::workflows::desktop (xtask/workflows/src/desktop.rs)
+# Rebuild with `just workflows`; do not edit by hand (`just workflows-check` fails CI on drift).
+# The reasons for every job and step are comments in that Rust source.
+name: desktop
+on:
+  push:
+    tags:
+    - v*
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag (e.g. v26.10.1) for publish/validate; any branch or sha for build-only
+        required: true
+        type: string
+      mode:
+        description: 'publish: attach to the tag''s Release. validate: resolve only. build-only: build + notarize + smoke-test, no Release.'
+        required: false
+        type: choice
+        options:
+        - publish
+        - validate
+        - build-only
+        default: publish
+permissions:
+  contents: read
+concurrency:
+  group: desktop-${{ inputs.tag || github.ref_name }}
+  cancel-in-progress: false
+env:
+  TAG: ${{ inputs.tag || github.ref_name }}
+  MODE: ${{ inputs.mode || 'publish' }}
+jobs:
+  resolve:
+    name: Resolve the tag
+    if: ${{ github.repository == 'FastTrackStudios/studio' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    outputs:
+      version: ${{ steps.resolve.outputs.version || steps.ref.outputs.version }}
+      sha: ${{ steps.resolve.outputs.sha || steps.ref.outputs.sha }}
+    steps:
+    - name: The tag is vX.Y.Z
+      if: ${{ env.MODE != 'build-only' }}
+      run: |
+        if [[ ! "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+          echo "::error::'$TAG' is not a release tag (^v[0-9]+\.[0-9]+\.[0-9]+$): installers are attached only to the studio release tag"
+          exit 1
+        fi
+    - uses: actions/checkout@v4
+      with:
+        ref: ${{ env.MODE == 'build-only' && env.TAG || format('refs/tags/{0}', env.TAG) }}
+        fetch-depth: 0
+    - name: Version = tag version, on main, changelog, CI passed
+      id: resolve
+      if: ${{ env.MODE != 'build-only' }}
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        bash scripts/release.sh ios-resolve studio "$TAG"
+    - name: Build-only ref
+      id: ref
+      if: ${{ env.MODE == 'build-only' }}
+      run: |
+        echo "version=$(bash scripts/release.sh version)" >> "$GITHUB_OUTPUT"
+        echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+    - name: A GitHub Release exists for the tag
+      if: ${{ env.MODE == 'publish' }}
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        bash scripts/release.sh ios-release "$TAG"
+    - name: Summary
+      env:
+        VERSION: ${{ steps.resolve.outputs.version || steps.ref.outputs.version }}
+        SHA: ${{ steps.resolve.outputs.sha || steps.ref.outputs.sha }}
+      run: |
+        {
+          echo "### Studio desktop installers: $TAG ($MODE)"
+          echo "- version: \`$VERSION\`"
+          echo "- commit: \`${SHA:0:12}\`"
+          if [ "$MODE" = validate ]; then echo "- **validate**: stopped before any build"; fi
+          if [ "$MODE" = build-only ]; then echo "- **build-only**: nothing will be attached to a Release"; fi
+        } >> "$GITHUB_STEP_SUMMARY"
+  macos:
+    name: macOS .dmg
+    needs: resolve
+    if: ${{ inputs.mode != 'validate' }}
+    runs-on:
+    - self-hosted
+    - macos
+    - airlock
+    timeout-minutes: 150
+    steps:
+    - name: Preflight — build volume mounted, space free
+      run: |
+        if [ ! -d /Volumes/build-disk ]; then
+          echo "ERROR: /Volumes/build-disk is not mounted on this runner." >&2
+          exit 1
+        fi
+        df -h /Volumes/build-disk | tail -1
+        avail_kb="$(df -k /Volumes/build-disk | awk 'NR==2 {print $4}')"
+        if [ "$avail_kb" -lt $((50 * 1024 * 1024)) ]; then
+          echo "ERROR: under 50 GB free on /Volumes/build-disk: sweep target/ before building" >&2
+          exit 1
+        fi
+    - uses: actions/checkout@v4
+      with:
+        ref: ${{ needs.resolve.outputs.sha }}
+        clean: false
+    - name: Rig captures (rig-models) linked into the tree
+      run: |
+        set -euo pipefail
+        src=/Volumes/build-disk/development/rig-models
+        url=https://github.com/FastTrackStudios/rig-models.git
+        if [ -d "$src/.git" ]; then
+          before="$(git -C "$src" rev-parse --short HEAD)"
+          git -C "$src" fetch --quiet origin \
+            || { echo "::error::could not fetch rig-models into $src; not building with stale captures"; exit 1; }
+          git -C "$src" merge --ff-only --quiet origin/main \
+            || { echo "::error::$src cannot fast-forward to origin/main (local commits or changes?); not building with stale captures"; exit 1; }
+          echo "rig-models $before -> $(git -C "$src" rev-parse --short HEAD)"
+        else
+          git clone --quiet "$url" "$src" \
+            || { echo "::error::could not clone $url into $src"; exit 1; }
+          echo "rig-models cloned at $(git -C "$src" rev-parse --short HEAD)"
+        fi
+        if [ ! -d "$src/guitar" ] || [ ! -d "$src/bass" ]; then echo "::error::no rig-models clone at $src"; exit 1; fi
+        while read -r repo from to; do
+          [[ -z $repo || $repo == \#* || $repo != rig-models ]] && continue
+          to="${to:-$from}"
+          n="$(find -L "$src/$from" -type f \( -name '*.nam' -o -name '*.wav' \) | wc -l | tr -d ' ')"
+          [ "$n" -gt 0 ] || { echo "::error::$src/$from holds no captures"; exit 1; }
+          mkdir -p "$(dirname "$to")"
+          if [ -d "$to" ] && [ ! -L "$to" ]; then rmdir "$to"; fi
+          ln -sfn "$src/$from" "$to"
+          echo "linked $to -> $src/$from ($n captures)"
+        done < assets.txt
+        echo "rig-models at $(git -C "$src" rev-parse --short HEAD 2>/dev/null || echo unknown)"
+    - name: Build, sign, notarize, staple
+      env:
+        KEYCHAIN: fts-build.keychain
+        KEYCHAIN_PW: fts-build
+        VERSION: ${{ needs.resolve.outputs.version }}
+      run: |
+        set -euo pipefail
+        export PATH="/nix/var/nix/profiles/default/bin:$PATH"
+        export NIX=/nix/var/nix/profiles/default/bin/nix
+        BUILD_NO="$(date +%s)"
+        export BUILD_NO
+        rm -rf target/desktop
+        bash scripts/desktop/macos.sh
+        ls -l target/desktop
+    - name: Keep the .dmg
+      uses: actions/upload-artifact@v4
+      with:
+        name: desktop-macos
+        path: |
+          target/desktop/*.dmg
+          target/desktop/*.dmg.sha256
+        if-no-files-found: error
+        retention-days: 14
+    - name: Summary
+      if: always()
+      env:
+        VERSION: ${{ needs.resolve.outputs.version }}
+        RESULT: ${{ job.status }}
+      run: |
+        {
+          echo "### macOS installer: $TAG"
+          echo "version \`$VERSION\`, $RESULT."
+          for f in target/desktop/*.dmg; do [ -f "$f" ] && echo "- \`$(basename "$f")\` ($(du -h "$f" | cut -f1))"; done
+        } >> "$GITHUB_STEP_SUMMARY"
+  linux:
+    name: Linux AppImage
+    needs: resolve
+    if: ${{ inputs.mode != 'validate' }}
+    runs-on:
+    - self-hosted
+    - session
+    timeout-minutes: 120
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        ref: ${{ needs.resolve.outputs.sha }}
+    - name: Own target dir, size-capped
+      run: |
+        base="${CI_CACHE_DIR:-${CACHE_DIRECTORY:-$HOME/.cache}}"
+        dir="$base/cargo-target-desktop"
+        cap_gb="${TARGET_CAP_GB-150}"
+        mkdir -p "$dir"
+        used_gb="$(du -s --block-size=1G "$dir" | cut -f1)"
+        free_gb="$(df -BG --output=avail "$base" | tail -1 | tr -dc '0-9')"
+        echo "target dir: $dir (${used_gb} GB used, cap ${cap_gb} GB; ${free_gb} GB free on its disk)"
+        if [ "$used_gb" -gt "$cap_gb" ]; then
+          echo "::warning::$dir is ${used_gb} GB, over the ${cap_gb} GB cap: emptying it (cold build)"
+          rm -rf "$dir"; mkdir -p "$dir"
+        fi
+        if [ "$free_gb" -lt 60 ]; then
+          echo "::error::under 60 GB free on the runner's disk ($base): clean it before building"
+          exit 1
+        fi
+        echo "CARGO_TARGET_DIR=$dir" >> "$GITHUB_ENV"
+        echo "TARGET_CAP_GB=$cap_gb" >> "$GITHUB_ENV"
+    - name: Rig captures (rig-models) linked into the tree
+      run: |
+        set -euo pipefail
+        src=/run/media/Development/ci-assets/rig-models
+        [ -d "$src" ] || { echo "::error::no rig-models clone at $src (this runner does not fetch it)"; exit 1; }
+        if [ ! -d "$src/guitar" ] || [ ! -d "$src/bass" ]; then echo "::error::no rig-models clone at $src"; exit 1; fi
+        while read -r repo from to; do
+          [[ -z $repo || $repo == \#* || $repo != rig-models ]] && continue
+          to="${to:-$from}"
+          n="$(find -L "$src/$from" -type f \( -name '*.nam' -o -name '*.wav' \) | wc -l | tr -d ' ')"
+          [ "$n" -gt 0 ] || { echo "::error::$src/$from holds no captures"; exit 1; }
+          mkdir -p "$(dirname "$to")"
+          if [ -d "$to" ] && [ ! -L "$to" ]; then rmdir "$to"; fi
+          ln -sfn "$src/$from" "$to"
+          echo "linked $to -> $src/$from ($n captures)"
+        done < assets.txt
+        echo "rig-models at $(git -C "$src" rev-parse --short HEAD 2>/dev/null || echo unknown)"
+    - name: Build the AppImage
+      env:
+        VERSION: ${{ needs.resolve.outputs.version }}
+      run: |
+        set -euo pipefail
+        rm -rf target/desktop
+        bash scripts/desktop/linux.sh
+        ls -l target/desktop
+    - name: Smoke test, headless
+      env:
+        VERSION: ${{ needs.resolve.outputs.version }}
+      run: |
+        set -euo pipefail
+        export PATH="$PATH:/run/current-system/sw/bin"
+        bash scripts/desktop/linux-smoke.sh "target/desktop/Studio-$VERSION-linux-x86_64.AppImage" "$VERSION"
+    - name: Bound the target dir
+      if: always()
+      run: |
+        dir="${CARGO_TARGET_DIR:-}"
+        [ -n "$dir" ] && [ -d "$dir" ] || exit 0
+        used_gb="$(du -s --block-size=1G "$dir" | cut -f1)"
+        if [ "$used_gb" -gt "${TARGET_CAP_GB-150}" ]; then
+          echo "::warning::$dir is ${used_gb} GB after the build: dropping incremental/"
+          rm -rf "$dir"/*/incremental
+        fi
+        echo "target dir after: $(du -sh "$dir" | cut -f1)"
+    - name: Keep the AppImage
+      uses: actions/upload-artifact@v4
+      with:
+        name: desktop-linux
+        path: |
+          target/desktop/*.AppImage
+          target/desktop/*.AppImage.sha256
+          target/desktop/*-glibc-floor.txt
+        if-no-files-found: error
+        retention-days: 14
+    - name: Summary
+      if: always()
+      env:
+        VERSION: ${{ needs.resolve.outputs.version }}
+        RESULT: ${{ job.status }}
+      run: |
+        {
+          echo "### Linux installer: $TAG"
+          echo "version \`$VERSION\`, $RESULT."
+          for f in target/desktop/*.AppImage; do [ -f "$f" ] && echo "- \`$(basename "$f")\` ($(du -h "$f" | cut -f1))"; done
+          for f in target/desktop/*-glibc-floor.txt; do [ -f "$f" ] && echo "- needs glibc >= $(cat "$f")"; done
+        } >> "$GITHUB_STEP_SUMMARY"
+  publish:
+    name: Attach to the GitHub Release
+    needs:
+    - resolve
+    - macos
+    - linux
+    if: ${{ inputs.mode != 'validate' && inputs.mode != 'build-only' && needs.macos.result == 'success' && needs.linux.result == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    steps:
+    - name: The installers
+      uses: actions/download-artifact@v4
+      with:
+        path: installers
+        merge-multiple: true
+    - name: Verify, then attach to the one Release
+      env:
+        GH_TOKEN: ${{ github.token }}
+        VERSION: ${{ needs.resolve.outputs.version }}
+      run: |
+        set -euo pipefail
+        cd installers
+        ls -l
+        test -f "Studio-$VERSION-macos-arm64.dmg"
+        test -f "Studio-$VERSION-linux-x86_64.AppImage"
+        for f in *.sha256; do sha256sum -c "$f"; done
+        gh release upload "$TAG" --repo "$GITHUB_REPOSITORY" --clobber ./*.dmg ./*.AppImage ./*.sha256
+        {
+          echo "### Attached to $TAG"
+          # shellcheck disable=SC2016 # the backticks are markdown, for jq's output
+          gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[] | "- `\(.name)` (\(.size) bytes)"'
+        } >> "$GITHUB_STEP_SUMMARY"

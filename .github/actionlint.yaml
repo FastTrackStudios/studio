@@ -9,9 +9,12 @@ self-hosted-runner:
     # target dir) and the deploy (deploy.yml, needs the LAN registry).
     - studio-tests
     - studio-deploy
-    # The iOS build (studio-ios.yml).
+    # The iOS build (studio-ios.yml) and the macOS .dmg (desktop.yml).
     - airlock
     - macos
+    # THEBATTLESHIP: the Linux AppImage (desktop.yml), beside its rig-models
+    # clone.
+    - session
     # WarpBuild cloud runners (checks.yml `tests (warpbuild trial)`), with
     # their `;snapshot.key=…` options.
     - "warp-*"

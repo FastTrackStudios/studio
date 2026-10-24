@@ -142,6 +142,14 @@ mod mac_activity;
 const LOG_FILTER: &str = "info,vox_core=warn,schema_deser=off";
 
 fn main() {
+    // `--version`: the release's version and nothing else, before any
+    // window, audio or log starts. The Linux installer's smoke test reads it
+    // headless (scripts/desktop/linux-smoke.sh), and it is how a user tells
+    // which Studio they have.
+    if std::env::args().nth(1).as_deref() == Some("--version") {
+        println!("studio-desktop {}", env!("CARGO_PKG_VERSION"));
+        return;
+    }
     // iPhone: the page is the whole screen — no safe area at all. The rig's
     // phone pages keep clear of the one thing that matters, the camera
     // housing, themselves (`IslandLeft`); the bars reach the edges. (UIKit's
