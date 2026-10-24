@@ -232,6 +232,16 @@ expect_ok "guard passes on the re-cut" guard "$REL"
 
 echo "=== merge (squash) and tag"
 merge_release main 80; M1=$(git rev-parse origin/main)
+# Main now carries 26.10.0, merged and not yet tagged: a new cut refuses
+# unless told to release past it, and then takes 26.10.1, not 26.10.0.
+expect_fail "prepare: refuses while a merged release is untagged" R prepare
+grep -q 'was not tagged' "$S/last.out" && ok "  ...naming the untagged release" || bad "  ...message"
+eq "next: a merged, untagged 26.10.0 counts as taken" "$(R next 2>/dev/null)" 26.10.1
+expect_ok "prepare --skip-untagged cuts past it" R prepare --skip-untagged; SK=$(git rev-parse HEAD)
+eq "  ...as 26.10.1" "$(git show "$SK:Cargo.toml" | sed -n '/^\[workspace\.package\]/,/^\[/{s/^version *= *"\([^"]*\)".*/\1/p;}')" 26.10.1
+grep -q '26.10.0 merged but was never tagged or shipped' <(git show "$SK:CHANGELOG.md") && ok "  ...noting the skipped 26.10.0" || bad "  ...note"
+expect_ok "guard passes on the cut past an untagged release" guard "$SK"
+git switch -q --detach origin/main; git branch -qD release/pending
 SHIM_CHECK="completed failure" expect_fail "tag: refused while CI passed is red" R tag
 grep -q "is 'completed failure', not green" "$S/last.out" && ok "  ...naming the check result" || bad "  ...message"
 SHIM_CHECK="in_progress null" expect_fail "tag: refused while CI passed is running" R tag
@@ -246,7 +256,7 @@ expect_ok "tag-guard with GH_TOKEN checks CI passed" env GITHUB_REF=refs/tags/v2
 SHIM_CHECK="completed failure" expect_fail "tag-guard with GH_TOKEN: red CI passed" env GITHUB_REF=refs/tags/v26.10.0 GH_TOKEN=x bash scripts/release.sh tag-guard
 expect_fail "tag-guard: a branch ref" env GITHUB_REF=refs/heads/main bash scripts/release.sh tag-guard
 export GITHUB_OUTPUT="$S/gho"; : > "$GITHUB_OUTPUT"
-for a in studio; do expect_ok "ios-resolve $a v26.10.0" R ios-resolve "$a" v26.10.0; done
+expect_ok "ios-resolve studio v26.10.0" R ios-resolve studio v26.10.0
 expect_out "  marketing version output" "$GITHUB_OUTPUT" '^version=26\.10\.0$'
 for t in v26.10 26.10.0 v26.10.0-rc.1 V26.10.0 studio-v26.10.0; do expect_fail "ios-resolve refuses '$t'" R ios-resolve studio "$t"; done
 # a tag whose versions and changelog are right, on a commit no release line has
