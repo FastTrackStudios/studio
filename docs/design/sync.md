@@ -7,17 +7,20 @@ working with no network, and are saved on the device. This is how.
 
 ## Everything is a Loro doc
 
-| doc kind  | what it is                                         | on a device                 |
-|-----------|----------------------------------------------------|-----------------------------|
-| `session` | a project: tracks, items, takes, routing, the chart | a `.session` file (Turso)  |
-| `setlist` | songs in order, each with its key, tempo, start    | the library store           |
-| `rig`     | a rig: its blocks, modules, the tracks it lives on | the library store           |
-| `patch`   | a sound on a rig, by slug                          | the library store           |
-| `profile` | patches by key, the default patch                  | the library store           |
+| doc kind  | what it is                                               | on a device          |
+|-----------|----------------------------------------------------------|----------------------|
+| `session` | a project, one doc per branch                            | a `.session` file    |
+| `rig`     | a rig: blocks, modules, presets, patches and profiles    | the library store    |
+| `song`    | key, tempo, sections, chart and audio by hash            | the library store    |
+| `setlist` | entries in order (with ids), per-set key, tempo, start   | the library store    |
+| `part`    | one person's sound per entry of one setlist              | the library store    |
 
 A rig on a track of a session and a rig loaded as the live guitar rig are
-the same doc, opened by a different view. Nothing in the model knows which
-view opened it.
+the same `rig` doc, opened by a different view: a preset chosen in Session
+is the one the live rig plays. Nothing is copied between docs; everything
+references by id, so a profile edit reaches every setlist that plays it.
+Where the boundaries are, and why, is ADR 0002
+(`docs/adr/0002-studio-doc-boundaries.md`).
 
 A kind is an opaque string. Task never reads a doc; it only stores,
 relays and merges Loro updates by version vector. A new kind needs no
@@ -99,9 +102,8 @@ build (`GIG_BUNDLE`); a gig is imported into the account once.
 
 ## Replaces
 
-- ADR 0001 (one doc per Signal entity): the granularity holds for the
-  library kinds; the entities now come from the merged model, not
-  `signal-storage`.
+- ADR 0001 (one doc per Signal entity): replaced by ADR 0002 (a rig is
+  one doc; setlists, songs and parts point into it).
 - The rigs' own `.styx` perform libraries (`perform-store`, the guitar
   rig's `home().save_setlists`) and `signal-storage`'s SQLite: one model,
   moved onto library docs.
@@ -113,8 +115,8 @@ build (`GIG_BUNDLE`); a gig is imported into the account once.
 2. `session-format`: the store as `crdt::Persistence`.
 3. The sync driver: signed in, every local doc runs a `SyncedDoc` against
    its owner's Task, and the catalog stream opens docs other devices made.
-4. The library: setlists, rigs, patches and profiles as docs; the rigs
-   read and write them instead of their own files.
+4. The library: rigs, songs, setlists and parts as docs (ADR 0002); the
+   rigs read and write them instead of their own files.
 5. Imports: CAA 2026 and the rest of the real sets into the account; the
    app keeps the demo only.
 6. Peer to peer and the device registry (#85).
