@@ -73,9 +73,11 @@ struct GigState {
 
 impl GigState {
     fn new(on_back: Option<EventHandler<()>>) -> Self {
+        let gigs = list_gigs();
+        let at = super::remembered_index(&gigs);
         Self {
-            gigs: Signal::new(list_gigs()),
-            gig_at: Signal::new(0),
+            gigs: Signal::new(gigs),
+            gig_at: Signal::new(at),
             song_at: Signal::new(None),
             chart_at: Signal::new(0),
             pos: Signal::new(0.0),

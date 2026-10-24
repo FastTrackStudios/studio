@@ -18179,6 +18179,7 @@ dependencies = [
  "blitz-shell",
  "block2 0.6.2",
  "builtin",
+ "chrono",
  "clap",
  "cpal",
  "daw-proto",

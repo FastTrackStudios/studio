@@ -16,7 +16,8 @@ with a band without sharing anyone's sounds?
 
 | doc | holds | lives in |
 |---|---|---|
-| `rig` | its blocks and modules, presets, patches and profiles | its owner's space |
+| `rig` | its blocks and modules, presets, patches and profiles; each preset's overrides per audio device preset | its owner's space |
+| `setup` | the person's audio device presets and MIDI control presets, and which of them each of their devices uses | its owner's space |
 | `song` | key, tempo, sections, chart and audio (by sha256) | the space it is shared in |
 | `setlist` | entries in order (each with an id), per-set key, tempo, start | the space it is shared in |
 | `part` | one person's sound per entry of one setlist: patch/profile references, overrides | that person's space |
@@ -43,7 +44,21 @@ with a band without sharing anyone's sounds?
    setlist entry id, so a reorder of the shared set carries every part with
    it. A profile edit changes your sound in every set you play and nothing
    anybody else sees.
-5. **Content never edited is content-addressed** (NAM captures, IRs, plugin
+5. **Hardware setup is one doc, apart from the rigs.** Audio device and
+   MIDI control presets are small, rarely edited and shared by every rig
+   (the keys play through the same interface and the same foot controller
+   as the guitar), so they are one `setup` doc. It also keys each device's
+   current choice by device id, so a change made from the laptop moves the
+   iPad. It is not in the rig doc: a session opening a rig on a track
+   should not need the MIDI maps, and a rig shared with someone should not
+   carry the owner's hardware.
+6. **Per-device overrides point one way.** A preset that sounds different
+   through another interface keeps that difference in its rig doc, keyed by
+   the audio preset's id (`overrides[<audio preset id>]`). Nothing in
+   `setup` points back, so no edit ever spans both docs. A preset resolves
+   as: its values, then the override for the active audio preset, then (in
+   a setlist) the song's override.
+7. **Content never edited is content-addressed** (NAM captures, IRs, plugin
    states, charts, practice audio): a sha256 in the doc, the bytes stored
    once. A hash cannot drift.
 
@@ -55,6 +70,8 @@ received yet, or one deleted elsewhere.
 - **Deletes are tombstones.** A deleted patch, profile or song stays in its
   doc marked deleted: it still resolves (shown as deleted, restorable), and
   an offline device learns of the delete instead of keeping a ghost.
+- **An override for an audio preset that is gone no longer applies:** the
+  preset plays its own values, and the view says so.
 - **Resolution falls back:** the entry's override, then the part's patch,
   then the profile's default patch, then the library's default profile.
   The view says what it fell back to ("patch missing — playing All-Around").

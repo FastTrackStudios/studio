@@ -303,23 +303,27 @@ fn follow_slot() -> Element {
 /// Make the gig shell's state and lend its slots to the rig below — when
 /// there is a gig on this device (the app's own, or one put in Files).
 pub fn use_gig_shell() {
-    let st = use_context_provider(|| GigState {
-        gigs: Signal::new(list_gigs()),
-        gig_at: Signal::new(0),
-        song_at: Signal::new(None),
-        keyflow: Signal::new(false),
-        places: Signal::new(load_places()),
-        studio: Signal::new(false),
-        pos: Signal::new(0.0),
-        dur: Signal::new(0.0),
-        playing: Signal::new(false),
-        loading: Signal::new(false),
-        status: Signal::new(String::new()),
-        device: Signal::new(String::new()),
-        speed: Signal::new(1.0),
-        volume: Signal::new(1.0),
-        looped: Signal::new(None),
-        mark_a: Signal::new(None),
+    let st = use_context_provider(|| {
+        let gigs = list_gigs();
+        let at = super::remembered_index(&gigs);
+        GigState {
+            gigs: Signal::new(gigs),
+            gig_at: Signal::new(at),
+            song_at: Signal::new(None),
+            keyflow: Signal::new(false),
+            places: Signal::new(load_places()),
+            studio: Signal::new(false),
+            pos: Signal::new(0.0),
+            dur: Signal::new(0.0),
+            playing: Signal::new(false),
+            loading: Signal::new(false),
+            status: Signal::new(String::new()),
+            device: Signal::new(String::new()),
+            speed: Signal::new(1.0),
+            volume: Signal::new(1.0),
+            looped: Signal::new(None),
+            mark_a: Signal::new(None),
+        }
     });
     use_hook(move || {
         if !st.gigs.peek().is_empty() {
@@ -1139,6 +1143,41 @@ async fn seed_setlist(r: RigPerformClient, gig: Gig) {
     let _ = r.select_song(0).await;
 }
 
+/// Load the gig's set in the rig: written in first if it is not there yet
+/// ([`seed_setlist`]), then up, on its first song — what Studio's home asks
+/// for when the gig is picked or on now.
+pub async fn load_set(r: RigPerformClient, gig: Gig) {
+    seed_setlist(r.clone(), gig.clone()).await;
+    let Ok(lib) = r.library().await else {
+        return;
+    };
+    let Some(set) = lib.setlists.iter().position(|s| s.name == gig.name) else {
+        tracing::warn!(gig.name = %gig.name, "gig: the set was not in the rig to load");
+        return;
+    };
+    let _ = r.select_setlist(u32::try_from(set).unwrap_or(0)).await;
+    let _ = r.select_song(0).await;
+}
+
+/// The desktop's guitar rig (no gig shell): load the remembered gig's set
+/// once the rig is connected, when the home asked for it. Draws nothing.
+#[component]
+pub fn LoadOnEntry() -> Element {
+    use_hook(|| {
+        if !super::take_load_on_entry() {
+            return;
+        }
+        let Some(r) = signal_rig_perform_ui::perform_client() else {
+            return;
+        };
+        let gigs = list_gigs();
+        if let Some(gig) = gigs.get(super::remembered_index(&gigs)).cloned() {
+            spawn(load_set(r, gig));
+        }
+    });
+    rsx! {}
+}
+
 /// Kept once the one-time clean-up below has run on this device.
 fn parts_cleaned_path() -> PathBuf {
     gigs_root().join(".gig-parts-cleaned")
@@ -1204,8 +1243,13 @@ fn GigFollow() -> Element {
     use_hook(move || {
         if let (Some(r), Some(gig)) = (signal_rig_perform_ui::perform_client(), st.gig()) {
             let gigs = st.gigs.peek().clone();
+            let load = super::take_load_on_entry();
             spawn(async move {
-                seed_setlist(r.clone(), gig).await;
+                if load {
+                    load_set(r.clone(), gig).await;
+                } else {
+                    seed_setlist(r.clone(), gig).await;
+                }
                 drop_seeded_parts(r, gigs).await;
             });
         }

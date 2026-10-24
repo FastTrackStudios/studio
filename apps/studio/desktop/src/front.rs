@@ -1,13 +1,14 @@
 //! The front screen: which side of Studio a launch goes into.
 //!
 //! Studio is Signal (the live rig: guitar, keys, drums, e-kit, the gig
-//! page) and Session (setlists, songs, charts, the DAW) in one app. For
-//! now they meet only here: the window opens on two doors, and the one
-//! chosen is the app until it quits. A process runs ONE engine
+//! page) and Session (setlists, songs, charts, the DAW) in one app. The
+//! window opens on the home (`home.rs`): play here, or join a session
+//! happening elsewhere. What is pressed there goes into one side, which is
+//! the app until it quits. A process runs ONE engine
 //! (docs/design/one-engine.md), so the side not chosen never starts its
 //! own; going to the other side is a relaunch.
 //!
-//! `FTS_STUDIO_OPEN=signal|session` skips the doors (a dev run, the
+//! `FTS_STUDIO_OPEN=signal|session` skips the home (a dev run, the
 //! simulator, a desk that is only ever one of them).
 
 use dioxus::prelude::*;
@@ -23,7 +24,7 @@ pub enum Side {
 }
 
 impl Side {
-    /// Every side this build has, in the order the doors show them.
+    /// Every side this build has.
     fn all() -> Vec<Self> {
         vec![
             Self::Signal,
@@ -38,28 +39,11 @@ impl Side {
             .find(|side| side.name().eq_ignore_ascii_case(slug.trim()))
     }
 
-    fn name(self) -> &'static str {
+    pub(crate) fn name(self) -> &'static str {
         match self {
             Self::Signal => "Signal",
             #[cfg(feature = "session-app")]
             Self::Session => "Session",
-        }
-    }
-
-    fn blurb(self) -> &'static str {
-        match self {
-            Self::Signal => "The live rig: guitar, keys, drums and the gig.",
-            #[cfg(feature = "session-app")]
-            Self::Session => "The DAW: setlists, songs, charts and the band's mix.",
-        }
-    }
-
-    /// The side's colour, its app icon's: Signal's green, Session's blue.
-    fn accent(self) -> &'static str {
-        match self {
-            Self::Signal => "#2fd572",
-            #[cfg(feature = "session-app")]
-            Self::Session => "#3aa0ff",
         }
     }
 }
@@ -98,7 +82,7 @@ fn enter(side: Side) {
     }
 }
 
-/// The window's root: the doors, then the side chosen.
+/// The window's root: the home, then the side chosen.
 #[component]
 pub fn Studio() -> Element {
     // iOS: winit's window joins the app's scene first, whichever side the
@@ -162,7 +146,7 @@ pub fn Studio() -> Element {
         Some(Side::Signal) => rsx! { SignalSide {} },
         #[cfg(feature = "session-app")]
         Some(Side::Session) => rsx! { session_desktop::native::Embedded {} },
-        None => rsx! { Doors { opening: opening(), on_pick: pick } },
+        None => rsx! { crate::home::Home { opening: opening(), on_pick: pick } },
     }
 }
 
@@ -181,68 +165,4 @@ fn SignalSide() -> Element {
     return rsx! { crate::mobile_view::MobileApp {} };
     #[cfg(not(all(feature = "signal-guitar", target_os = "ios")))]
     return rsx! { crate::App {} };
-}
-
-/// The two doors, side by side on a wide window and stacked on a tall one.
-#[component]
-fn Doors(opening: Option<Side>, on_pick: EventHandler<Side>) -> Element {
-    rsx! {
-        div {
-            // Sized from the viewport, not the parent: Blitz gives a box
-            // stretched only by percentages of an unsized parent no height.
-            style: "position: absolute; top: 0; left: 0; width: 100vw; height: 100vh; \
-                    display: flex; flex-direction: column; \
-                    align-items: center; justify-content: center; gap: 28px; padding: 32px; \
-                    box-sizing: border-box; overflow: hidden; background: #0c0c0f; \
-                    color: #e5e7eb; font-family: Inter, system-ui, sans-serif;",
-            div {
-                style: "display: flex; flex-direction: column; align-items: center; gap: 6px;",
-                div { style: "font-size: 30px; font-weight: 700; letter-spacing: 0.5px;", "Studio" }
-                div { style: "font-size: 14px; color: #8b9099;", "by FastTrackStudio" }
-            }
-            div {
-                style: "display: flex; flex-wrap: wrap; justify-content: center; gap: 20px; \
-                        width: 100%; max-width: 760px;",
-                for side in Side::all() {
-                    Door {
-                        key: "{side.name()}",
-                        side,
-                        lit: opening == Some(side),
-                        dim: opening.is_some_and(|o| o != side),
-                        on_pick,
-                    }
-                }
-            }
-        }
-    }
-}
-
-#[component]
-fn Door(side: Side, lit: bool, dim: bool, on_pick: EventHandler<Side>) -> Element {
-    let accent = side.accent();
-    let border = if lit { accent } else { "#2a2c31" };
-    let opacity = if dim { "0.4" } else { "1" };
-    let glow = if lit {
-        format!("box-shadow: 0 0 24px {accent}55;")
-    } else {
-        String::new()
-    };
-    rsx! {
-        div {
-            style: "flex: 1 1 280px; min-width: 0; max-width: 360px; display: flex; \
-                    flex-direction: column; gap: 10px; padding: 26px 24px; border-radius: 18px; \
-                    background: #17181b; border: 2px solid {border}; opacity: {opacity}; \
-                    cursor: pointer; box-sizing: border-box; {glow}",
-            onclick: move |_| on_pick.call(side),
-            div {
-                style: "width: 44px; height: 6px; border-radius: 3px; background: {accent};",
-            }
-            div { style: "font-size: 24px; font-weight: 700;", "{side.name()}" }
-            div { style: "font-size: 15px; line-height: 1.4; color: #b4b9c2;", "{side.blurb()}" }
-            div {
-                style: "margin-top: 6px; font-size: 13px; font-weight: 600; color: {accent};",
-                if lit { "Opening…" } else { "Open {side.name()}" }
-            }
-        }
-    }
 }

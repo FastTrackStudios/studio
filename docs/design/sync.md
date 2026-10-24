@@ -11,6 +11,7 @@ working with no network, and are saved on the device. This is how.
 |-----------|----------------------------------------------------------|----------------------|
 | `session` | a project, one doc per branch                            | a `.session` file    |
 | `rig`     | a rig: blocks, modules, presets, patches and profiles    | the library store    |
+| `setup`   | audio device and MIDI control presets, each device's pick | the library store    |
 | `song`    | key, tempo, sections, chart and audio by hash            | the library store    |
 | `setlist` | entries in order (with ids), per-set key, tempo, start   | the library store    |
 | `part`    | one person's sound per entry of one setlist              | the library store    |
@@ -71,14 +72,35 @@ org; a device serves the same host to its peers over iroh. It gives:
   in the org's database (`crdt-seaorm`).
 - **Permissions:** an org's members read and write its docs; the personal
   space is its owner's.
-- **Blobs:** large immutable content (plugin states, MIDI, chart PDFs,
-  practice audio) is referenced from a doc by sha256. On a device it is in
-  the `.session` store's `blobs`; in Task, a Files root `studio/blobs`
-  (`sha256/<ab>/<hex>`, written create-only), uploaded once.
+- **Media is never in a doc.** A doc holds a sha256; the bytes (chart
+  PDFs, practice audio, NAM captures, IRs, plugin states) move through
+  architect's blobs layer (see below).
 - **The device driver** (architect too): pending creates pushed parent
   first, the catalog pulled from the last revision seen, a `SyncedDoc` per
   doc, each doc on its own `Persistence` (a project's file, or the
   library's database), and what arrives persisted before it counts.
+
+## Media: architect's blobs layer
+
+Every offline-first, multiplayer app on architect needs content-addressed
+media beside its docs, so it lives in architect, not in Task:
+
+- **A content-addressed store** (sha256 in, bytes out): the filesystem on a
+  device, IndexedDB in the browser, disk or object storage on a server. A
+  project's `.session` store keeps its own blobs (`Store::put_blob`).
+- **Transfer by hash** over vox and peer to peer over iroh, chunked,
+  resumable, and verified against the hash before anything is kept.
+- **References from docs:** each kind says which hashes a doc references
+  (the app knows its schema; architect does not). The driver uploads what
+  the owner's space lacks and fetches what is missing when it is opened.
+- **Pinning for offline:** pin a setlist, and everything it references,
+  through its songs and parts to the rigs' captures, is on the device
+  before it leaves the house. The rest is fetched on demand and evictable.
+- **Permissions follow the docs** (who can read a doc can fetch what it
+  references), and content no live doc references is collected.
+
+Task keeps the product on top: folders and roots, versions, renditions
+(proxies, waveforms), review, share links, the OS integrations.
 
 ## Peer to peer
 
