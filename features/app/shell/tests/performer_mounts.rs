@@ -321,7 +321,11 @@ fn a_reachable_rig_shows_ten_switches_and_a_press_reaches_the_client() {
     assert_eq!(calls(|c| c.presses.len()), 11);
     // The crumb says whose rig it is.
     let crumb = find(&doc, "[data-rig=\"crumb\"]");
-    assert!(crumb.inner_html().contains("REMOTE"), "{}", crumb.outer_html());
+    assert!(
+        crumb.inner_html().contains("REMOTE"),
+        "{}",
+        crumb.outer_html()
+    );
     shot(&doc, "rig");
 }
 
@@ -344,7 +348,11 @@ fn a_rig_that_drops_dims_takes_no_press_and_moves_nothing() {
     // A finger on a tile reaches nothing.
     doc.click_at(TILE.0, TILE.1);
     doc.drain();
-    assert!(calls(|c| c.presses.is_empty()), "{:?}", calls(|c| c.presses.clone()));
+    assert!(
+        calls(|c| c.presses.is_empty()),
+        "{:?}",
+        calls(|c| c.presses.clone())
+    );
     // No region moved, to the pixel; the rig's box neither.
     assert_eq!(rects(&doc), before);
     assert_eq!(size(&doc, "rig"), rig_before);
@@ -360,7 +368,10 @@ fn a_rig_that_drops_dims_takes_no_press_and_moves_nothing() {
 #[test]
 fn with_no_rig_the_transport_spans_the_dock_and_the_bar_offers_pairing() {
     let doc = open(RigLink::Unpaired);
-    assert!(doc.query("[data-perform=\"rig\"]").immediately().is_err(), "no rig half");
+    assert!(
+        doc.query("[data-perform=\"rig\"]").immediately().is_err(),
+        "no rig half"
+    );
     assert!(doc.query_all("[data-switch]").immediately().is_empty());
     let (w, _) = size(&doc, "transport");
     assert!(near(w, 1170), "transport {w} wide, want 1170");
@@ -370,7 +381,15 @@ fn with_no_rig_the_transport_spans_the_dock_and_the_bar_offers_pairing() {
     assert!(h >= 48.0, "Pair a rig is {h} tall");
     // Every other region is where it is with a rig.
     let with = open(remote());
-    for r in ["status-inset", "app-bar", "now", "setlist", "chart", "dock", "home-inset"] {
+    for r in [
+        "status-inset",
+        "app-bar",
+        "now",
+        "setlist",
+        "chart",
+        "dock",
+        "home-inset",
+    ] {
         assert_eq!(size(&doc, r), size(&with, r), "{r}");
     }
     shot(&doc, "no-rig");
@@ -415,7 +434,9 @@ fn rust_files(dir: &Path, out: &mut Vec<PathBuf>) {
     for e in entries.flatten() {
         let p = e.path();
         if p.is_dir() {
-            if p.file_name().is_some_and(|n| n == "target" || n == "node_modules") {
+            if p.file_name()
+                .is_some_and(|n| n == "target" || n == "node_modules")
+            {
                 continue;
             }
             rust_files(&p, out);
@@ -445,8 +466,16 @@ fn both_apps_register_the_performer_panels_through_one_function() {
         let src = std::fs::read_to_string(f).unwrap_or_default();
         let rel = f.strip_prefix(&root).unwrap_or(f).display().to_string();
         // Nobody builds a performer panel by hand.
-        for id in ["perform.now", "perform.setlist", "perform.chart", "perform.dock"] {
-            assert!(!src.contains(&format!("\"{id}\"")), "{rel} names {id} itself");
+        for id in [
+            "perform.now",
+            "perform.setlist",
+            "perform.chart",
+            "perform.dock",
+        ] {
+            assert!(
+                !src.contains(&format!("\"{id}\"")),
+                "{rel} names {id} itself"
+            );
         }
         assert!(
             !src.contains("Panel::new(ids::") && !src.contains("Panel::new(performer::ids::"),

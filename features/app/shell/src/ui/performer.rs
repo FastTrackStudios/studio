@@ -124,7 +124,12 @@ pub struct PerformerBodies {
 pub fn performer_registry(bodies: PerformerBodies) -> PanelRegistry {
     PanelRegistry::new()
         .with(Panel::new(ids::NOW, "Now", Region::Top, bodies.now))
-        .with(Panel::new(ids::SETLIST, "Setlist", Region::Left, bodies.setlist))
+        .with(Panel::new(
+            ids::SETLIST,
+            "Setlist",
+            Region::Left,
+            bodies.setlist,
+        ))
         .with(Panel::new(ids::CHART, "Chart", Region::Main, bodies.chart))
         .with(Panel::new(ids::DOCK, "Dock", Region::Bottom, bodies.dock))
 }

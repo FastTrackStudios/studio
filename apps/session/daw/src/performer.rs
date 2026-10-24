@@ -28,8 +28,8 @@ use dioxus::prelude::*;
 use app_shell::ui::performer::{PerformerBodies, SESSION_SCOPE, performer_registry};
 use app_shell::ui::playback::{PlaybackModel, PlaybackView, SectionView, SongView};
 use app_shell::ui::{
-    NowBand, PerformDock, PerformerScreen, RigCrumb, SyncPill, TransportNudgeRow,
-    provide_playback, rig_half, use_panel_registry,
+    NowBand, PerformDock, PerformerScreen, RigCrumb, SyncPill, TransportNudgeRow, provide_playback,
+    rig_half, use_panel_registry,
 };
 
 use crate::engine::{Move, Reading, Transport, transport};
@@ -343,7 +343,10 @@ mod tests {
         assert!(wants_performer(true, ipad));
         assert!(wants_performer(true, upright));
         assert!(!wants_performer(true, phone), "a phone keeps its shell");
-        assert!(!wants_performer(false, ipad), "a mouse keeps the classic view");
+        assert!(
+            !wants_performer(false, ipad),
+            "a mouse keeps the classic view"
+        );
     }
 
     #[test]

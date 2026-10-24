@@ -52,6 +52,6 @@ pub use perform::{
     FollowCard, LevelPeek, MoreMenu, NowBand, SpeedMenu, SyncPill, TransportNudgeRow,
 };
 pub use performer::{PerformDock, PerformerBodies, PerformerScreen, performer_registry};
-pub use rig::{Rig, RigClient, RigCrumb, RigLink, provide_rig, rig_half, use_rig};
 pub use playback::{Playback, PlaybackModel, PlaybackView, provide_playback, use_playback};
 pub use registry::{Panel, PanelConstraints, PanelRegistry, Render};
+pub use rig::{Rig, RigClient, RigCrumb, RigLink, provide_rig, rig_half, use_rig};
