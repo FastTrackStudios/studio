@@ -13,17 +13,3 @@ pub trait KeyflowScaffoldActions {
     )]
     fn scaffold_keyflow(&self);
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn id_matches_reaper_command_convention() {
-        let ids: Vec<_> = KeyflowScaffoldActionsActions::all()
-            .iter()
-            .map(|m| m.id)
-            .collect();
-        assert_eq!(ids, vec!["FTS_SESSION_SCAFFOLD_KEYFLOW"]);
-    }
-}

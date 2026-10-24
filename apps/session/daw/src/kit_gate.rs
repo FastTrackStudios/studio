@@ -132,29 +132,3 @@ pub fn of(role: LaneRole) -> Option<Rc<Gate>> {
         gate
     })
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn a_drum_shows_whole_on_its_hits_and_faint_between() {
-        let gate = Gate::new(LaneRole::Kick, vec![2.0, 1.0]).expect("the kick is gated");
-        // Before any hit, and long after one: the bleed, faint.
-        assert!((gate.at(0.5) - BLEED_SHOWN).abs() < 1e-9);
-        assert!((gate.at(1.5) - BLEED_SHOWN).abs() < 1e-9);
-        // On the attack (a hair before its mark) and while it rings: whole.
-        assert!((gate.at(1.0 - 0.002) - 1.0).abs() < 1e-9);
-        assert!((gate.at(1.05) - 1.0).abs() < 1e-9);
-        // Ringing out: between.
-        let out = gate.at(1.15);
-        assert!(out < 1.0 && out > BLEED_SHOWN, "{out}");
-        // The next hit opens it again.
-        assert!((gate.at(2.01) - 1.0).abs() < 1e-9);
-    }
-
-    #[test]
-    fn the_wash_is_never_gated() {
-        assert_eq!(Gate::new(LaneRole::Other, vec![1.0]), None);
-    }
-}

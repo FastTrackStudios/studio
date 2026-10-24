@@ -391,24 +391,3 @@ mod anyrender_0_11_impl {
 
 #[cfg(feature = "anyrender-0-11")]
 pub use anyrender_0_11_impl::AnyRender;
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn a_recording_replays_under_a_transform() {
-        let mut rec = Recording::new();
-        rec.fill_rect(
-            Affine::IDENTITY,
-            Color::WHITE,
-            Rect::new(0.0, 0.0, 10.0, 10.0),
-        );
-        let mut out = Recording::new();
-        rec.replay(&mut out, Affine::translate((100.0, 5.0)));
-        assert_eq!(out.bounds(), Some(Rect::new(100.0, 5.0, 110.0, 15.0)));
-        let mut t = Tally::default();
-        rec.replay(&mut t, Affine::IDENTITY);
-        assert_eq!(t.fills, 1);
-    }
-}

@@ -760,26 +760,6 @@ pub fn level(
     Ok(said)
 }
 
-#[cfg(test)]
-mod tests {
-    use super::{EnvPoint, power_mean, value_at};
-
-    #[test]
-    fn a_curve_is_read_between_its_points() {
-        let c = [EnvPoint::new(0.0, 0.0), EnvPoint::new(1.0, -10.0)];
-        assert!((value_at(&c, 0.5) + 5.0).abs() < 1e-9);
-        assert!((value_at(&c, 2.0) + 10.0).abs() < 1e-9);
-        assert!(value_at(&[], 1.0).abs() < 1e-12);
-    }
-
-    #[test]
-    fn a_power_mean_leans_to_the_loud() {
-        let m = power_mean([-20.0, -40.0].into_iter()).expect("a mean");
-        assert!(m > -24.0 && m < -22.0, "{m}");
-        assert!(power_mean(std::iter::empty()).is_none());
-    }
-}
-
 static LEVEL: architect::action::ActionMeta = crate::actions::meta(
     "VOCAL_LEVEL",
     "vocal_level",

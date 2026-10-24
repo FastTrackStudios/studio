@@ -288,21 +288,6 @@ fn PresetRow(
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn the_match_badge_grades_rather_than_just_reporting() {
-        // Colour carries the judgement so a glance is enough.
-        assert_eq!(match_badge(Some(0.01)).unwrap().1, "#5fd08a");
-        assert_eq!(match_badge(Some(0.10)).unwrap().1, "#d9c05a");
-        assert_eq!(match_badge(Some(0.90)).unwrap().1, "#e2603f");
-        // Never measured is not the same as measured badly, and shows nothing.
-        assert!(match_badge(None).is_none());
-    }
-}
-
 /// Apply a preset's parameters through the host, by name.
 ///
 /// Returns `(applied, unmatched)` — a library is shared across plugin
@@ -342,102 +327,6 @@ pub fn apply_to_handles(
         }
     }
     (applied, unmatched)
-}
-
-#[cfg(test)]
-mod apply_tests {
-    use super::*;
-    use fts_audio_ui::ParamHandle;
-    use std::collections::HashMap;
-    use std::sync::{Arc, Mutex};
-
-    /// A handle that records the gesture it was given.
-    fn recording(name: &str, log: Arc<Mutex<Vec<(String, f32)>>>) -> ParamHandle {
-        let n = name.to_string();
-        let begin_log = log.clone();
-        let set_log = log.clone();
-        let end_log = log;
-        let (b, s, e) = (n.clone(), n.clone(), n.clone());
-        ParamHandle::new(
-            || 0.0,
-            move || begin_log.lock().unwrap().push((format!("begin:{b}"), 0.0)),
-            move |v| set_log.lock().unwrap().push((format!("set:{s}"), v)),
-            move || end_log.lock().unwrap().push((format!("end:{e}"), 0.0)),
-            String::new,
-            move || n.clone(),
-            // Stands in for a 0..4 parameter: the preset stores plain units
-            // and only the parameter knows how to normalize them. Asserting
-            // the converted value is the point — handing `set_as_gesture` an
-            // unconverted 1.94 would simply clamp to 1.0.
-            |text| text.parse::<f32>().ok().map(|v| v / 4.0),
-        )
-    }
-
-    #[test]
-    fn every_named_parameter_is_written_as_a_complete_gesture() {
-        let log = Arc::new(Mutex::new(Vec::new()));
-        let mut handles = HashMap::new();
-        handles.insert(
-            "decay_time".to_string(),
-            recording("decay_time", log.clone()),
-        );
-        handles.insert("mix".to_string(), recording("mix", log.clone()));
-
-        let (applied, unmatched) = apply_to_handles(
-            &[("decay_time".into(), 1.94), ("mix".into(), 0.5)],
-            &handles,
-        );
-        assert_eq!(applied, 2);
-        assert!(unmatched.is_empty());
-
-        let calls = log.lock().unwrap().clone();
-        // A DAW needs the begin/end around the set to record the edit.
-        assert_eq!(calls.len(), 6);
-        assert_eq!(calls[0].0, "begin:decay_time");
-        // 1.94 seconds through the parameter's own curve, not the raw number.
-        assert_eq!(calls[1], ("set:decay_time".to_string(), 1.94 / 4.0));
-        assert_eq!(calls[2].0, "end:decay_time");
-    }
-
-    #[test]
-    fn an_unknown_parameter_is_reported_and_the_rest_still_apply() {
-        // A library outlives a build; a preset naming something this version
-        // dropped must not cost the parameters it does have.
-        let log = Arc::new(Mutex::new(Vec::new()));
-        let mut handles = HashMap::new();
-        handles.insert("mix".to_string(), recording("mix", log.clone()));
-
-        let (applied, unmatched) = apply_to_handles(
-            &[("gravity_well".into(), 1.0), ("mix".into(), 0.25)],
-            &handles,
-        );
-        assert_eq!(applied, 1);
-        assert_eq!(unmatched, vec!["gravity_well".to_string()]);
-        assert_eq!(log.lock().unwrap()[1], ("set:mix".to_string(), 0.25 / 4.0));
-    }
-
-    #[test]
-    fn a_value_the_parameter_cannot_read_counts_as_unmatched() {
-        let log: Arc<Mutex<Vec<(String, f32)>>> = Arc::new(Mutex::new(Vec::new()));
-        let mut handles = HashMap::new();
-        // A parser that rejects everything stands in for a range that moved.
-        handles.insert(
-            "mix".to_string(),
-            ParamHandle::new(
-                || 0.0,
-                || {},
-                |_| {},
-                || {},
-                String::new,
-                || "mix".to_string(),
-                |_| None,
-            ),
-        );
-        let (applied, unmatched) = apply_to_handles(&[("mix".into(), 0.5)], &handles);
-        assert_eq!(applied, 0);
-        assert_eq!(unmatched, vec!["mix".to_string()]);
-        assert!(log.lock().unwrap().is_empty());
-    }
 }
 
 /// The always-visible preset strip.

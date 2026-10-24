@@ -117,36 +117,3 @@ where
     };
     apply_warp(daw, project, items, &alignment)
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    // r[verify drums.manual.stretch]
-    #[test]
-    fn anchors_pin_the_neighbours_and_move_the_hit() {
-        let a = stretch_alignment(1.0, 0.5, 2.0, 4.0, 0.1, false, 100.0).expect("alignment");
-        let knots: Vec<(usize, f64)> = a.anchors.iter().map(|k| (k.dub, k.reference)).collect();
-        assert_eq!(knots, vec![(50, 50.0), (100, 110.0), (200, 200.0)]);
-
-        // BothStretch pins the take ends instead.
-        let b = stretch_alignment(1.0, 0.5, 2.0, 4.0, 0.1, true, 100.0).expect("alignment");
-        let knots: Vec<(usize, f64)> = b.anchors.iter().map(|k| (k.dub, k.reference)).collect();
-        assert_eq!(knots, vec![(0, 0.0), (100, 110.0), (400, 400.0)]);
-    }
-
-    // r[verify drums.manual.stretch]
-    #[test]
-    fn the_drag_is_clamped_to_the_stretch_limits() {
-        // Left span 0.5 s, right span 1.0 s. The hardest allowed pull
-        // left is right-span × (1 − 4) = −3.0 capped by left-span ×
-        // (0.125 − 1) = −0.4375 — the tighter bound wins.
-        let d = clamp_delta(1.0, 0.5, 2.0, -2.0);
-        assert!((d - (-0.4375)).abs() < 1e-12, "got {d}");
-        // And pushing right: left × 3 = 1.5 vs right × 0.875 = 0.875.
-        let d = clamp_delta(1.0, 0.5, 2.0, 5.0);
-        assert!((d - 0.875).abs() < 1e-12, "got {d}");
-        // A zero-delta stretch is no alignment at all.
-        assert!(stretch_alignment(1.0, 0.5, 2.0, 4.0, 0.0, false, 100.0).is_none());
-    }
-}

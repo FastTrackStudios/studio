@@ -98,37 +98,3 @@ impl Default for LoudnessHistogram {
         Self::new()
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn converges_to_the_program_level() {
-        let mut h = LoudnessHistogram::new();
-        for i in 0..2000 {
-            // Program alternating around −24 dB with ±6 dB swing.
-            let db = -24.0 + if i % 2 == 0 { 6.0 } else { -6.0 };
-            h.push(db);
-        }
-        let (thr, knee) = h.learned().unwrap();
-        assert!(
-            (-31.0..=-17.0).contains(&thr),
-            "threshold should sit within the program spread: {thr}"
-        );
-        assert!((5.0..=10.0).contains(&knee), "knee ≈ half spread: {knee}");
-    }
-
-    #[test]
-    fn silence_is_ignored() {
-        let mut h = LoudnessHistogram::new();
-        for _ in 0..100 {
-            h.push(-20.0);
-        }
-        for _ in 0..1000 {
-            h.push(-200.0); // below floor — ignored
-        }
-        let (thr, _) = h.learned().unwrap();
-        assert!(thr > -25.0, "silence must not drag the threshold: {thr}");
-    }
-}

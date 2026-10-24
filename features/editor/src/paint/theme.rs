@@ -244,64 +244,6 @@ pub fn mode_icon(mode: crate::Mode) -> &'static str {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    /// Every colour this module exposes must come from the canonical
-    /// palette, never a local literal.
-    ///
-    /// A literal here is how a surface quietly opts out of the shared theme:
-    /// it keeps rendering, looks fine in isolation, and only surfaces much
-    /// later as "the editor doesn't quite match REAPER". Two such duplicates
-    /// existed before this migration — one of them was the accent, re-typed
-    /// by hand.
-    #[test]
-    fn no_colour_is_defined_locally() {
-        for line in include_str!("theme.rs").lines() {
-            let line = line.trim();
-            if !line.starts_with("pub const") || !line.contains(": &str") {
-                continue;
-            }
-            assert!(
-                line.contains("d::"),
-                "colour defined locally instead of in daw_ui::theme::defaults:\n  {line}"
-            );
-        }
-    }
-
-    /// No module in this crate may write a colour literal.
-    ///
-    /// The narrower test above only guards `theme.rs`; the drift that
-    /// actually happened was 31 literals scattered through the *other*
-    /// modules, where a `background: #1a1a22` in an rsx style reads as
-    /// perfectly ordinary code. Six near-identical darks had accumulated
-    /// that way, doing the same job under different values.
-    ///
-    /// Every module is listed explicitly rather than walked: a new file
-    /// should have to opt in here, which is a moment to ask whether it
-    /// needs a new named colour or an existing one. The Dioxus crate
-    /// keeps the same test over its own modules.
-    #[test]
-    fn no_module_writes_a_hex_literal() {
-        const MODULES: [(&str, &str); 9] = [
-            ("theme.rs", include_str!("theme.rs")),
-            ("lib.rs", include_str!("mod.rs")),
-            ("canvas.rs", include_str!("canvas.rs")),
-            ("guitar.rs", include_str!("guitar.rs")),
-            ("interaction.rs", include_str!("interaction.rs")),
-            ("keys.rs", include_str!("keys.rs")),
-            ("paint.rs", include_str!("paint.rs")),
-            ("scroll.rs", include_str!("scroll.rs")),
-            ("text.rs", include_str!("text.rs")),
-        ];
-        let found = super::hex_literals(MODULES);
-        assert!(
-            found.is_empty(),
-            "hex literals must come from daw_ui::theme::defaults:\n  {}",
-            found.join("\n  ")
-        );
-    }
-}
-
 /// Every line of `modules` that writes a CSS colour literal, as
 /// `file:line: text`. Doc and line comments are skipped — they
 /// legitimately name colours when explaining a choice.

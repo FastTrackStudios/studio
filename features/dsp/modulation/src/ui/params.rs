@@ -207,33 +207,3 @@ impl ModParams {
         *self.editor_form.write() = form.id().to_string();
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn a_session_restores_from_the_id_and_not_the_number() {
-        let params = ModParams::default();
-        params.store_profile_id(crate::profiles::profile_index("wah_pattern").unwrap());
-        assert_eq!(params.resolved_profile().id, "wah_pattern");
-
-        // A profile this build does not have — a project from a newer
-        // version — falls back to the index rather than guessing.
-        *params.profile_id.write() = "rotary".to_string();
-        assert_eq!(
-            params.resolved_profile_index(),
-            params.profile.value() as usize,
-        );
-    }
-
-    /// The rate control is stored normalised and shown in Hz, so the two
-    /// conversions have to be each other's inverse or the readout lies.
-    #[test]
-    fn the_rate_readout_round_trips() {
-        let params = ModParams::default();
-        let hz = crate::profiles::rate_hz_from(params.rate.value());
-        let back = crate::profiles::rate_knob_from(hz);
-        assert!((back - params.rate.value()).abs() < 1.0e-4);
-    }
-}

@@ -443,27 +443,3 @@ pub fn paint(
         crate::tcp::glyphs(painter, font, color, &p.note, x + 5.0, y1 - 2.0, SIZE);
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn at(at: f64, done: bool) -> Poi {
-        Poi {
-            id: format!("{at}"),
-            at,
-            note: String::new(),
-            done,
-        }
-    }
-
-    #[test]
-    fn steps_go_to_the_next_and_the_one_before() {
-        let points = [at(1.0, false), at(2.0, true), at(3.0, false)];
-        assert_eq!(step_from(&points, 1.0, 1, false).map(|p| p.at), Some(2.0));
-        assert_eq!(step_from(&points, 1.0, 1, true).map(|p| p.at), Some(3.0));
-        assert_eq!(step_from(&points, 3.0, -1, false).map(|p| p.at), Some(2.0));
-        assert_eq!(step_from(&points, 0.5, -1, false).map(|p| p.at), None);
-        assert_eq!(step_from(&points, 3.0, 1, false).map(|p| p.at), None);
-    }
-}

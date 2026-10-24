@@ -59,8 +59,6 @@ if [ "${1:-}" = "--post" ]; then
   exit 0
 fi
 
-features="session-desktop/cli,studio-desktop/cli,web-audio-worklet/guitar,web-audio-worklet/keys"
-
 base="${1:-}"
 if [ -z "$base" ]; then
   git fetch --quiet origin main || echo "ci-local: fetch failed; planning against the local origin/main" >&2
@@ -184,16 +182,16 @@ timings+=("plan $(dur $((SECONDS - t)))")
 gate() { printf '%s\n' "$gates" | sed -n "s/^$1=//p" | head -1; }
 echo "ci-local: check=$(gate check) tests=$(gate tests) wasm=$(gate wasm) filter=$(gate test_filter)"
 
-# The test build is --workspace (one artifact set in the warm target dir; a
-# `-p` subset changes feature unification) and only which tests RUN narrows.
-# Its codegen is what `cargo check` then finds fresh.
+# The test build is the core test set (`just test_packages`, the same list
+# CI's Tests job builds): the crates that still have tests. rail decides
+# which of their tests RUN (the filter); a crate outside the set has none.
 tests() {
   just assets >/dev/null
-  just faces >/dev/null
-  local filter=() f
+  local filter=() f pkgs=() p
+  for p in $(just --evaluate test_packages); do pkgs+=(-p "$p"); done
   f="$(gate test_filter)"
   [ -n "$f" ] && filter=(-E "$f" --no-tests=pass)
-  cargo nextest run --workspace --no-fail-fast --features "$features" ${filter[@]+"${filter[@]}"}
+  cargo nextest run "${pkgs[@]}" --no-fail-fast ${filter[@]+"${filter[@]}"}
 }
 if [ "$(gate tests)" = true ]; then
   phase tests tests

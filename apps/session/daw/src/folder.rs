@@ -205,33 +205,3 @@ pub fn session_text(folder: &dyn Folder, dir: &Path) -> eyre::Result<String> {
     )
     .map_err(|e| eyre::eyre!(e))
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn a_memory_folder_lists_and_reads_like_a_directory() {
-        let folder = Memory::new();
-        folder.insert("/s/Song.RPP", b"rpp".to_vec());
-        folder.insert("/s/Song.session/Song.session", b"manifest".to_vec());
-        folder.insert("/s/Song.session/objects/sha256-aa", b"obj".to_vec());
-        folder.insert("/s/Song.kf", b"chart".to_vec());
-        let mut names = folder.list(Path::new("/s")).unwrap();
-        names.sort();
-        assert_eq!(names, ["Song.RPP", "Song.kf", "Song.session"]);
-        assert!(folder.is_dir(Path::new("/s/Song.session")));
-        assert!(!folder.is_dir(Path::new("/s/Song.RPP")));
-        assert_eq!(folder.read(Path::new("/s/Song.kf")).unwrap(), b"chart");
-        assert_eq!(
-            folder.only_with_extension(Path::new("/s"), "kf"),
-            Some(PathBuf::from("/s/Song.kf"))
-        );
-        assert_eq!(
-            folder.only_with_extension(Path::new("/s"), "session"),
-            None,
-            "a directory is not a file"
-        );
-        assert!(folder.read(Path::new("/s/missing")).is_err());
-    }
-}

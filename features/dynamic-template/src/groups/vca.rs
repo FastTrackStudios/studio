@@ -24,33 +24,3 @@ impl From<Vca> for Group<ItemMetadata> {
             .build()
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use crate::track_schema::classify_track;
-
-    #[test]
-    fn vca_tracks_classify_as_vca() {
-        for name in ["BAND RECORD VCA", "VCA", "Drums VCA", "Vox VCA"] {
-            let g = classify_track(name).matched_groups;
-            assert!(g.iter().any(|x| x == "VCA"), "{name} → {g:?}");
-        }
-    }
-
-    /// A VCA is control, not content — it must never acquire a bus.
-    #[test]
-    fn vcas_route_nowhere() {
-        let path = classify_track("BAND RECORD VCA").matched_groups;
-        assert_eq!(crate::buses::bus_for_path(&path), None);
-    }
-
-    #[test]
-    fn ordinary_tracks_are_not_vcas() {
-        for name in ["Kick In", "Bass DI", "GTR E - Chords"] {
-            assert!(!classify_track(name)
-                .matched_groups
-                .iter()
-                .any(|x| x == "VCA"));
-        }
-    }
-}

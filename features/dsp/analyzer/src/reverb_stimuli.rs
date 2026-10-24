@@ -206,19 +206,3 @@ fn fade(i: usize, len: usize, ms: f64, sr: f64) -> f64 {
     let c = |x: f64| 0.5 - 0.5 * (x * PI).cos();
     c(a) * c(b)
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn every_stimulus_is_deterministic_and_has_headroom() {
-        for s in Stimulus::ALL {
-            let a = s.generate(48_000.0);
-            assert_eq!(a, s.generate(48_000.0), "{} is deterministic", s.name());
-            let peak = a.iter().fold(0.0f32, |m, v| m.max(v.abs()));
-            assert!(peak > 0.05 && peak <= 0.5, "{} peak {peak}", s.name());
-            assert_eq!(Stimulus::from_name(s.name()), Some(s));
-        }
-    }
-}

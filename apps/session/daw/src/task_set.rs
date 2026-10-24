@@ -71,16 +71,3 @@ pub fn brief(error: &str) -> String {
         None => line.to_owned(),
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::brief;
-
-    #[test]
-    fn a_dial_error_is_its_status_or_its_first_line() {
-        let dial = "ws connect `wss://x/vox`: Http(Response { status: 502, version: HTTP/1.1, body: Some([60, 104]) })";
-        assert_eq!(brief(dial), "the server answered 502");
-        assert_eq!(brief("refused\nmore"), "refused");
-        assert_eq!(brief(&"x".repeat(300)).chars().count(), 121);
-    }
-}

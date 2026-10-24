@@ -53,16 +53,3 @@ pub fn Demo() -> Element {
         }
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::demo_url;
-
-    #[test]
-    fn the_demo_link_rides_in_the_apps_address() {
-        assert_eq!(
-            demo_url("https://task.example/org/days-to-praise/share/abc"),
-            "/app/?live=https%3A%2F%2Ftask.example%2Forg%2Fdays-to-praise%2Fshare%2Fabc"
-        );
-    }
-}

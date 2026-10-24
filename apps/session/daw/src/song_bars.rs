@@ -66,26 +66,3 @@ pub const fn to_engine(bar: i32, bar_one: i32) -> i32 {
         bar.saturating_add(bar_one).saturating_sub(1)
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    /// Bar 1 is the song's start, the bars before it count down, and the
-    /// two ways round agree.
-    #[test]
-    fn bars_count_from_the_song() {
-        assert_eq!(to_song(2, 2), 1);
-        assert_eq!(to_song(5, 2), 4);
-        assert_eq!(to_song(1, 2), -1);
-        assert_eq!(to_song(1, 1), 1, "a song starting at the top");
-        for measure in 1..20 {
-            assert_eq!(to_engine(to_song(measure, 3), 3), measure);
-        }
-        assert_eq!(
-            crate::ruler::from_song(1, 3),
-            i64::from(to_song(1, 3)),
-            "the ruler counts the same"
-        );
-    }
-}

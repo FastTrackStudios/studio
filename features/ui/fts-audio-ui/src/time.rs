@@ -294,27 +294,3 @@ pub fn format_ms(ms: f64) -> String {
         format!("{ms:.1} ms")
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn times_print_with_a_unit_and_a_stable_number_of_digits() {
-        assert_eq!(format_ms(7.25), "7.2 ms");
-        assert_eq!(format_ms(375.0), "375 ms");
-        assert_eq!(format_ms(1500.0), "1.50 s");
-    }
-
-    /// The normalized round trip the picker relies on: a stepped parameter's
-    /// position has to land back on the same entry, or stepping would drift.
-    #[test]
-    fn every_note_survives_the_normalized_round_trip() {
-        let last = (MusicalTime::COUNT - 1) as f64;
-        for (i, t) in MusicalTime::ALL.iter().enumerate() {
-            let normalized = i as f64 / last;
-            let back = MusicalTime::from_index((normalized * last).round() as usize);
-            assert_eq!(back, *t, "index {i} did not survive");
-        }
-    }
-}

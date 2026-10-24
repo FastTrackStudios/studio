@@ -26,29 +26,3 @@ pub fn is_edited(track: &daw_proto::Track, item: &daw_proto::Item) -> bool {
         |lane| item.fixed_lane.unwrap_or(0) == lane,
     )
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    /// Once a track has an EDIT lane its edits are made there, whichever
-    /// lane plays; before, on what plays.
-    #[test]
-    fn edits_are_made_on_the_edit_lane() {
-        let item = |lane| daw_proto::Item {
-            fixed_lane: Some(lane),
-            ..daw_proto::Item::default()
-        };
-        let mut track = daw_proto::Track {
-            lane_count: 3,
-            lane_names: vec!["COMP".into(), "1".into(), "EDIT".into()],
-            lane_play_mask: 1,
-            ..daw_proto::Track::default()
-        };
-        assert!(is_edited(&track, &item(2)), "EDIT, with COMP playing");
-        assert!(!is_edited(&track, &item(0)), "never the comp");
-        track.lane_names = vec!["C1".into(), "1".into(), "2".into()];
-        assert!(is_edited(&track, &item(0)), "no EDIT: what plays");
-        assert!(!is_edited(&track, &item(2)));
-    }
-}

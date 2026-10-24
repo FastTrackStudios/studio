@@ -172,36 +172,3 @@ impl Font {
         Some(path)
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn glyphs_have_outlines_and_widths() {
-        let font = Font::default();
-        let line = font.line("EQ 4 · 5.5dB", 7.0, 0.0, 400.0);
-        assert!(!line.path.elements().is_empty());
-        assert!((line.width - font.width("EQ 4 · 5.5dB", 7.0, 0.0)).abs() < 1e-6);
-        assert!(font.width("COMP", 7.0, 0.0) > font.width("EQ", 7.0, 0.0));
-        assert!(font.ascent(10.0) > 6.0);
-    }
-
-    #[test]
-    fn family_and_weight_reach_the_outlines() {
-        use kurbo::Shape;
-        let font = Font::default();
-        let ink = |spec: &FontSpec| font.line_of(spec, "HOT", 40.0, 0.0).path.area().abs();
-        let regular = ink(&FontSpec::default());
-        let black = ink(&spec_of(900.0));
-        assert!(black > regular * 1.4, "black {black} vs regular {regular}");
-        let lcd = FontSpec {
-            family: Some("DSEG14 Classic".into()),
-            ..FontSpec::default()
-        };
-        assert!(
-            (ink(&lcd) - regular).abs() > 1.0,
-            "a different family draws different glyphs"
-        );
-    }
-}

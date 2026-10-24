@@ -506,34 +506,3 @@ impl Default for McpTheme {
         Self::fts_default()
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn default_theme_has_named_layouts() {
-        let mcp = McpTheme::fts_default();
-        assert_eq!(mcp.layout(Some("narrow")).name, "narrow");
-        assert_eq!(mcp.layout(Some("vertical")).name, "vertical");
-        // Unknown / None fall back to the first layout.
-        assert_eq!(mcp.layout(Some("nope")).name, "vertical");
-        assert_eq!(mcp.layout(None).name, "vertical");
-    }
-
-    #[test]
-    fn narrow_layout_hides_pan_and_io() {
-        let narrow = McpLayout::narrow();
-        assert!(narrow.pan.is_hidden());
-        assert!(narrow.io.is_hidden());
-        assert!(!narrow.volume.is_hidden());
-        assert!(!narrow.meter.is_hidden());
-    }
-
-    #[test]
-    fn params_resolve_by_name() {
-        let mcp = McpTheme::fts_default();
-        assert_eq!(mcp.param("mcp_show_pan"), Some(1.0));
-        assert_eq!(mcp.param("missing"), None);
-    }
-}

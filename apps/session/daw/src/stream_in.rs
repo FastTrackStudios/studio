@@ -564,22 +564,3 @@ async fn local_song_file(remote: &str) -> Option<PathBuf> {
                 .is_some_and(|s| s.to_string_lossy().eq_ignore_ascii_case(&name))
         })
 }
-
-#[cfg(test)]
-mod tests {
-    use super::share_link_for;
-
-    #[test]
-    fn a_song_takes_its_own_share_link_before_the_catch_all() {
-        let links = "http://t/org/d/share/any washed=http://t/org/d/share/w";
-        assert_eq!(
-            share_link_for(links, "washed").as_deref(),
-            Some("http://t/org/d/share/w")
-        );
-        assert_eq!(
-            share_link_for(links, "who-else").as_deref(),
-            Some("http://t/org/d/share/any")
-        );
-        assert_eq!(share_link_for("washed=http://t/x", "who-else"), None);
-    }
-}

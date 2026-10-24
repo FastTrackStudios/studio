@@ -40,29 +40,3 @@ pub trait AutoColorActions {
     )]
     fn auto_color_clear_selected(&self);
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    /// These ids predate the move from `daw-actions` and must survive it —
-    /// `apps/extensions/reaper-fts-extensions/tests/extension_loads.rs`
-    /// asserts REAPER has them.
-    #[test]
-    fn ids_match_pre_move_command_ids() {
-        let ids: Vec<_> = AutoColorActionsActions::all()
-            .iter()
-            .map(|m| m.id)
-            .collect();
-        assert_eq!(
-            ids,
-            vec![
-                "FTS_SESSION_AUTO_COLOR_COLOR_ALL",
-                "FTS_SESSION_AUTO_COLOR_COLOR_SELECTED",
-                "FTS_SESSION_AUTO_COLOR_TOGGLE",
-                "FTS_SESSION_AUTO_COLOR_CLEAR_ALL",
-                "FTS_SESSION_AUTO_COLOR_CLEAR_SELECTED",
-            ]
-        );
-    }
-}

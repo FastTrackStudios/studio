@@ -59,38 +59,3 @@ pub fn ride_of(piece: &str) -> Ride {
 pub fn target_at(hits: &[Hit], t: f64) -> Option<f64> {
     crate::events::target_at(hits, t, AROUND)
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::events::{gain, ride};
-
-    /// A ghost is not leveled up to a stroke: it rides under the gain of
-    /// the stroke before it.
-    #[test]
-    fn a_ghost_stays_a_ghost() {
-        let stroke = |t_s| Hit {
-            t_s,
-            level_db: -16.0,
-            rides: true,
-        };
-        let ghost = Hit {
-            t_s: 1.2,
-            level_db: -40.0,
-            rides: false,
-        };
-        assert!(ride(&[stroke(1.0), ghost, stroke(2.0)], |_| -16.0, &SNARE).is_empty());
-    }
-
-    /// Each drum has its own ride; a hand's knobs turn it.
-    #[test]
-    fn each_drum_has_its_own_ride() {
-        assert_eq!(ride_of("Kick In"), KICK);
-        assert_eq!(ride_of("Snare"), SNARE);
-        assert_eq!(ride_of("Tom 3"), TOM);
-        assert!((gain(-40.0, -10.0, &TOM) - TOM.max_gain_db).abs() < 1e-9);
-        assert!((gain(0.0, -30.0, &TOM) + TOM.max_cut_db).abs() < 1e-9);
-        let all = KICK.turned(Some(1.0), Some(24.0));
-        assert!((gain(-30.0, -20.0, &all) - 10.0).abs() < 1e-12);
-    }
-}

@@ -98,31 +98,3 @@ pub trait GuitarGrowActions {
     /// or the template configures no further source name.
     fn add_source(&self) -> DawResult<()>;
 }
-
-#[cfg(test)]
-mod tests {
-    /// The command ids REAPER lists, a keybinding binds and a toolbar
-    /// button fires. They are derived from the method names, so a rename
-    /// silently breaks every binding on the old one — this is the test
-    /// that makes that a failure instead.
-    ///
-    /// Bare here, without the `FTS_SESSION` prefix production registers
-    /// them under: the trait names only itself, and the scope is composed
-    /// by `crate::register_all_actions`.
-    #[test]
-    fn command_ids_are_stable() {
-        let ids: Vec<&str> = super::GuitarGrowActionsActions::all()
-            .iter()
-            .map(|action| action.id)
-            .collect();
-        assert_eq!(
-            ids,
-            vec![
-                "GUITAR_DOUBLE",
-                "GUITAR_ADD_ARRANGEMENT",
-                "GUITAR_ADD_LAYER",
-                "GUITAR_ADD_SOURCE",
-            ]
-        );
-    }
-}

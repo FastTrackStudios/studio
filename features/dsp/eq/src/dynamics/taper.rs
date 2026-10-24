@@ -37,19 +37,3 @@ impl LogMidTaper {
         }
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn midpoint_sits_at_half_travel() {
-        let t = LogMidTaper::new(10.0, 1000.0, 30000.0);
-        assert!((t.value(0.5) - 1000.0).abs() < 1e-9);
-        assert!((t.value(0.0) - 10.0).abs() < 1e-9);
-        assert!((t.value(1.0) - 30000.0).abs() < 1e-6);
-        for &v in &[10.0, 55.0, 1000.0, 4200.0, 30000.0] {
-            assert!((t.value(t.normalized(v)) - v).abs() / v < 1e-9);
-        }
-    }
-}

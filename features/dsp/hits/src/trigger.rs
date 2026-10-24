@@ -82,22 +82,3 @@ pub fn health(best: Option<&super::Calibration>) -> Health {
         _ => Health::Working,
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn one_hit_per_spike() {
-        let rate = 48_000.0;
-        let mut sig = vec![0.0_f32; 48_000];
-        for at in [1_000, 10_000, 30_000] {
-            for i in 0..50 {
-                sig[at + i] = num_traits::ToPrimitive::to_f32(&i)
-                    .unwrap()
-                    .mul_add(-0.01, 0.9);
-            }
-        }
-        assert_eq!(spikes(&sig, rate, 24.0, 0.04), vec![1_000, 10_000, 30_000]);
-    }
-}

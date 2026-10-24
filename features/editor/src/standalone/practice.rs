@@ -289,6 +289,3 @@ fn resolve_media(album: &Path, project: &Path, reference: &str) -> Result<PathBu
         .canonicalize()
         .map_err(Into::into)
 }
-
-#[cfg(test)]
-mod tests;

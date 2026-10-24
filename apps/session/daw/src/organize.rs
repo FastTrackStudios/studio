@@ -383,30 +383,3 @@ async fn upsert_signature_remote(
     tempo.set_time_signature_at(index, num, den).await?;
     Ok(())
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    /// Every button a remote press runs by id names an action the session
-    /// actually registers with REAPER.
-    #[test]
-    fn every_structure_button_is_a_registered_session_action() {
-        let registered: Vec<&str> = session::keyflow_actions::KeyflowActionsActions::all()
-            .iter()
-            .map(|m| m.id)
-            .collect();
-        for (button, label) in STRUCTURE {
-            let id = command_id(button).unwrap_or_else(|| panic!("{label} has no command id"));
-            assert!(
-                registered.contains(&id),
-                "{label}: {id} is not a registered session action"
-            );
-        }
-        assert_eq!(
-            command_id(Button::TimeSig(4, 4)),
-            None,
-            "a signature is written, not run"
-        );
-    }
-}

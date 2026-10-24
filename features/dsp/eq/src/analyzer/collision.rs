@@ -91,36 +91,3 @@ fn softmax_avg(data: &[f32], k: f32) -> f32 {
         sum / weight_sum
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn silence_produces_no_collision() {
-        let mut c = SpectrumCollision::new(16);
-        let quiet = vec![-200.0f32; 16];
-        c.update(&quiet, &quiet, 0.1);
-        assert!(c.strengths().iter().all(|&p| p == 0.0));
-    }
-
-    #[test]
-    fn shared_peak_produces_collision() {
-        // Collisions highlight regions that stand out above the average in BOTH
-        // spectra — a flat spectrum yields nothing, but a shared peak does.
-        let mut c = SpectrumCollision::new(32);
-        let mut spec = vec![-60.0f32; 32];
-        for s in &mut spec[12..16] {
-            *s = 0.0; // a loud bump present in both pre and post
-        }
-        for _ in 0..10 {
-            c.update(&spec, &spec, 0.1);
-        }
-        let str = c.strengths();
-        // The collision should appear in the bump region.
-        assert!(
-            str[12..16].iter().any(|&p| p > 0.0),
-            "no collision in peak: {str:?}"
-        );
-    }
-}

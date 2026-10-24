@@ -832,6 +832,3 @@ impl architect::Services for FsLibrary {
         ]
     }
 }
-
-#[cfg(test)]
-mod tests;

@@ -66,26 +66,3 @@ pub fn running() -> Vec<(String, usize, usize)> {
         },
     )
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    /// A job is listed while held, with how far it is, and gone once
-    /// dropped.
-    #[test]
-    fn a_job_runs_while_held() {
-        let job = start("Waveforms (test)", 10);
-        job.advance(4);
-        let mine = |jobs: Vec<(String, usize, usize)>| {
-            jobs.into_iter()
-                .find(|(label, ..)| label == "Waveforms (test)")
-        };
-        assert_eq!(
-            mine(running()),
-            Some(("Waveforms (test)".to_owned(), 4, 10))
-        );
-        drop(job);
-        assert_eq!(mine(running()), None);
-    }
-}

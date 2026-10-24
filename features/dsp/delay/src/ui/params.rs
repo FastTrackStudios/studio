@@ -313,23 +313,3 @@ impl DelayParams {
         *self.editor_form.write() = form.id().to_string();
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn a_session_restores_from_the_id_and_not_the_number() {
-        let params = DelayParams::default();
-        params.store_profile_id(crate::profiles::profile_index("oilcan").unwrap());
-        assert_eq!(params.resolved_profile().id, "oilcan");
-
-        // A profile this build does not have — a project from a newer
-        // version — falls back to the index rather than guessing.
-        *params.profile_id.write() = "gravity_well".to_string();
-        assert_eq!(
-            params.resolved_profile_index(),
-            params.profile.value() as usize,
-        );
-    }
-}

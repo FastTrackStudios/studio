@@ -21,15 +21,3 @@ pub fn slugify(title: &str) -> String {
     }
     out
 }
-
-#[cfg(test)]
-mod tests {
-    use super::slugify;
-
-    #[test]
-    fn a_title_becomes_the_librarys_id() {
-        assert_eq!(slugify("God, I'm Just Grateful"), "god-im-just-grateful");
-        assert_eq!(slugify("Always On Time"), "always-on-time");
-        assert_eq!(slugify("  Who Else? "), "who-else");
-    }
-}

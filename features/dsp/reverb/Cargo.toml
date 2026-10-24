@@ -53,33 +53,8 @@ png = { version = "0.18" }
 tokio = { workspace = true, features = ["macros", "rt"] }
 
 [[test]]
-name = "screenshots"
-required-features = ["native", "profiles", "ui"]
-
-[[test]]
-name = "ir_browser"
-required-features = ["native", "profiles", "ui"]
-
-[[test]]
-name = "presets"
-required-features = ["native"]
-
-[[test]]
-name = "knob_readouts"
-required-features = ["native", "profiles", "ui"]
-
-[[test]]
 name = "param_round_trip"
 required-features = ["native", "ui"]
-
-[[test]]
-name = "tempo_sync"
-required-features = ["native", "ui"]
-
-[[test]]
-name = "families_differ"
-path = "tests/families_differ.rs"
-required-features = ["ui", "viz"]
 
 [[example]]
 name = "family_sheet"

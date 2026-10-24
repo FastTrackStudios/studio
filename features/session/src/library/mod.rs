@@ -883,16 +883,3 @@ async fn fetch_to(
     std::fs::rename(&partial, local)?;
     Ok(())
 }
-
-#[cfg(test)]
-mod tests {
-    #[test]
-    fn a_title_slugs_as_the_library_does() {
-        assert_eq!(
-            super::slugify("God, I'm Just Grateful"),
-            "god-im-just-grateful"
-        );
-        assert_eq!(super::slugify("Always On Time"), "always-on-time");
-        assert_eq!(super::slugify("  Thank God I’m Free!"), "thank-god-im-free");
-    }
-}

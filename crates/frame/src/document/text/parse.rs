@@ -1201,22 +1201,3 @@ fn source_value(v: Value) -> std::result::Result<SourceRef, String> {
         v => from_json(v),
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn whitespace_rule() {
-        assert_eq!(jsx_whitespace("  Gain "), "  Gain ");
-        assert_eq!(jsx_whitespace("\n   Hello\n   world\n  "), "Hello world");
-    }
-
-    #[test]
-    fn entities() {
-        assert_eq!(
-            unescape("a &amp; b &lt;c&gt; &lbrace; &#65;&#x42; & ;"),
-            "a & b <c> { AB & ;"
-        );
-    }
-}

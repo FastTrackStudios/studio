@@ -2,8 +2,8 @@
 # Would a warm CI tests job rebuild something it didn't need to?
 #
 # CI's tests job boots from a WarpBuild snapshot holding main's last target
-# dir and checkout, re-runs its prep (`just assets`, `just faces`) and
-# builds the tests. Anything a build script watches that
+# dir and checkout, re-runs its prep (`just assets`) and builds the core
+# test set (`just test_packages`). Anything a build script watches that
 # the prep touches — a re-made symlink, a rewritten sheet, a path that isn't
 # there — recompiles that crate and everything above it, on every run (it
 # cost 13 min of a warm PR build, 2026-10). This does what a boot does,
@@ -11,16 +11,16 @@
 # build script, a generator recipe or the CI prep.
 set -euo pipefail
 
-features="session-desktop/cli,studio-desktop/cli,web-audio-worklet/guitar,web-audio-worklet/keys"
 logs="$(mktemp -d)"
 
 prep() {
   ASSETS_OFFLINE="${ASSETS_OFFLINE:-}" just assets >/dev/null
-  just faces >/dev/null
 }
 
 build() {
-  cargo nextest run --workspace --no-run --features "$features" >"$logs/$1.log" 2>&1 \
+  local pkgs=() p
+  for p in $(just --evaluate test_packages); do pkgs+=(-p "$p"); done
+  cargo nextest run "${pkgs[@]}" --no-run >"$logs/$1.log" 2>&1 \
     || { tail -n 40 "$logs/$1.log"; exit 1; }
   grep -E '^\s+Finished' "$logs/$1.log" | tail -n 1
 }

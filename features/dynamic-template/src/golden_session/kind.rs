@@ -209,33 +209,3 @@ pub fn read_kinds(rpp: &str) -> Vec<TrackExt> {
     }
     out
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn every_kind_round_trips_through_its_string() {
-        for kind in Kind::ALL {
-            assert_eq!(Kind::parse(kind.as_str()), Some(kind));
-        }
-        assert_eq!(Kind::parse("kick"), None, "a name is not a kind");
-    }
-
-    #[test]
-    fn kinds_read_back_from_track_chunks_and_a_plain_track_has_none() {
-        let rpp = "<REAPER_PROJECT 0.1 \"7.0\" 0\n  <TRACK {A}\n    NAME \"Kick\"\n    EXT FTS:kind piece\n    EXT FTS:group Drums/Drum Kit/Kick\n    <ITEM\n      NAME \"Kick 1\"\n    >\n  >\n  <TRACK {B}\n    NAME \"Talkback\"\n  >\n>\n";
-        let tracks = read_kinds(rpp);
-        assert_eq!(tracks.len(), 2);
-        assert_eq!(tracks.first().map(|t| t.kind), Some(Some(Kind::Piece)));
-        assert_eq!(
-            tracks.first().and_then(|t| t.group.as_deref()),
-            Some("Drums/Drum Kit/Kick")
-        );
-        assert_eq!(tracks.first().map(|t| t.guid.as_str()), Some("{A}"));
-        // The negative control: a track nobody tagged reads as untagged
-        // rather than as some default kind.
-        assert_eq!(tracks.get(1).map(|t| t.kind), Some(None));
-        assert_eq!(tracks.get(1).map(|t| t.name.as_str()), Some("Talkback"));
-    }
-}

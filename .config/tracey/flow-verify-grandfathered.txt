@@ -7,3 +7,47 @@
 # (issue #48) is that this file stays empty: when the gate was wired
 # (issue #33) the five implemented-but-unverified flow rules got their
 # verifies instead of a line here.
+
+# 2026-10-24: the test suite was cut to a core set (the DSP math, the session
+# format, the engine, the timeline, the wire types, the parameter round-trips;
+# 'test: cut the suite to a core set'). These flows' verifying tests went with
+# it. Each comes off this list when a test that proves it comes back.
+flow.drums.comping.crossfade  # verify removed with the test cut (2026-10-24)
+flow.drums.comping.folder-item-colours  # verify removed with the test cut (2026-10-24)
+flow.drums.comping.folder-items  # verify removed with the test cut (2026-10-24)
+flow.drums.comping.folder-lanes  # verify removed with the test cut (2026-10-24)
+flow.drums.comping.group  # verify removed with the test cut (2026-10-24)
+flow.drums.editing.hands  # verify removed with the test cut (2026-10-24)
+flow.drums.editing.quantize  # verify removed with the test cut (2026-10-24)
+flow.drums.editing.scene  # verify removed with the test cut (2026-10-24)
+flow.drums.editing.stack  # verify removed with the test cut (2026-10-24)
+flow.drums.mixing.balance  # verify removed with the test cut (2026-10-24)
+flow.drums.mixing.scenes  # verify removed with the test cut (2026-10-24)
+flow.drums.tracking.arm  # verify removed with the test cut (2026-10-24)
+flow.drums.tracking.full  # verify removed with the test cut (2026-10-24)
+flow.drums.tracking.overview  # verify removed with the test cut (2026-10-24)
+flow.guitars.acoustics  # verify removed with the test cut (2026-10-24)
+flow.guitars.dimensions  # verify removed with the test cut (2026-10-24)
+flow.guitars.folder-items  # verify removed with the test cut (2026-10-24)
+flow.guitars.grow  # verify removed with the test cut (2026-10-24)
+flow.guitars.mixing.balance-scene  # verify removed with the test cut (2026-10-24)
+flow.guitars.mixing.source-defaults  # verify removed with the test cut (2026-10-24)
+flow.keys.midi-editing  # verify removed with the test cut (2026-10-24)
+flow.patch-list.apply  # verify removed with the test cut (2026-10-24)
+flow.patch-list.plan  # verify removed with the test cut (2026-10-24)
+flow.patch-list.project-level  # verify removed with the test cut (2026-10-24)
+flow.patch-list.session-override  # verify removed with the test cut (2026-10-24)
+flow.patch-list.studio-profiles  # verify removed with the test cut (2026-10-24)
+flow.scenes.follow-mode  # verify removed with the test cut (2026-10-24)
+flow.scenes.groups  # verify removed with the test cut (2026-10-24)
+flow.scenes.guide-folder  # verify removed with the test cut (2026-10-24)
+flow.scenes.keyflow-folder  # verify removed with the test cut (2026-10-24)
+flow.scenes.performer-rig  # verify removed with the test cut (2026-10-24)
+flow.scenes.two-audiences  # verify removed with the test cut (2026-10-24)
+flow.vocals.comping  # verify removed with the test cut (2026-10-24)
+flow.vocals.language  # verify removed with the test cut (2026-10-24)
+flow.vocals.language.active  # verify removed with the test cut (2026-10-24)
+flow.vocals.mixing.fx  # verify removed with the test cut (2026-10-24)
+flow.vocals.mixing.main  # verify removed with the test cut (2026-10-24)
+flow.vocals.tracking  # verify removed with the test cut (2026-10-24)
+flow.vocals.tuning  # verify removed with the test cut (2026-10-24)

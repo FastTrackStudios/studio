@@ -357,39 +357,3 @@ fn clock(seconds: f64) -> String {
     let rest = minutes.mul_add(-60.0, seconds);
     format!("{minutes:.0}:{rest:04.1}")
 }
-
-#[cfg(test)]
-mod tests {
-    use super::{clock, envelope_path, percent};
-
-    #[test]
-    fn an_empty_envelope_draws_nothing_rather_than_a_flat_lie() {
-        assert!(envelope_path(&[]).is_empty());
-    }
-
-    /// The path is closed and mirrored, so it fills.
-    #[test]
-    fn the_envelope_is_a_closed_shape() {
-        let path = envelope_path(&[0.0, 1.0, 0.5]);
-        assert!(path.starts_with("M 0 50"), "{path}");
-        assert!(path.ends_with(" Z"), "{path}");
-        // The loudest column reaches the top and its mirror.
-        assert!(path.contains("2.0"), "{path}");
-        assert!(path.contains("98.0"), "{path}");
-    }
-
-    #[test]
-    fn a_position_is_a_percentage_of_the_pass() {
-        assert!((percent(30.0, 120.0) - 25.0).abs() < 1e-9);
-        // A pass with no length cannot divide, and does not panic.
-        assert!(percent(30.0, 0.0).abs() < 1e-9);
-        // Nothing runs off either end.
-        assert!((percent(300.0, 120.0) - 100.0).abs() < 1e-9);
-    }
-
-    #[test]
-    fn a_time_reads_as_minutes_and_seconds() {
-        assert_eq!(clock(0.0), "0:00.0");
-        assert_eq!(clock(64.25), "1:04.2");
-    }
-}

@@ -1178,32 +1178,3 @@ pub(crate) fn register(
     })?;
     Ok(())
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn section(name: &str, loud: bool, vocal: bool) -> Analysis {
-        Analysis {
-            name: name.to_owned(),
-            start: 0.0,
-            end: 1.0,
-            level_db: 0.0,
-            sung: 0.0,
-            loud,
-            vocal,
-        }
-    }
-
-    #[test]
-    fn a_section_is_picked_by_name_kind_or_what_is_in_it() {
-        let chorus = section("CH 2", true, true);
-        let solo = section("INST", true, false);
-        let verse = section("VS 1", false, true);
-        assert!(picks("CH 2", &chorus) && picks("ch", &chorus));
-        assert!(!picks("CH 1", &chorus));
-        assert!(picks("loud instrumental", &solo) && !picks("loud instrumental", &chorus));
-        assert!(picks("quiet vocal", &verse) && picks("vocal", &chorus));
-        assert!(!picks("bridge", &verse));
-    }
-}

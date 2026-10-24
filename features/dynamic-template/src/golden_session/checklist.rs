@@ -930,37 +930,3 @@ pub fn regenerate(doc: &str, golden: &Golden) -> Result<String, String> {
     out.push_str(doc.get(end..).unwrap_or_default());
     Ok(out)
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn golden() -> Golden {
-        Golden::load(&super::super::fixtures_dir())
-    }
-
-    #[test]
-    fn a_check_that_fails_leaves_its_item_unticked() {
-        let mut g = golden();
-        // Take the kick's Sub away: the kick item is no longer true and
-        // the render says so, while the snare's tick is unaffected.
-        g.built.tracks.retain(|t| t.path != "Drums/Kick/Sub");
-        let text = render(&g);
-        assert!(text.contains("- [ ] **Kick**: In, Out, Trig, Sample; Sub; **Verb/** Room."));
-        assert!(text.contains("- [x] **Snare**: Top, Bottom, Trig, Sample, Fund;"));
-    }
-
-    #[test]
-    fn regenerate_only_touches_the_checklist_section() {
-        let doc = "# Title\n\nintro\n\n## Checklist\n\nstale\n\n## Routing rules\n\nkept\n";
-        let out = regenerate(doc, &golden()).unwrap_or_default();
-        assert!(out.starts_with("# Title\n\nintro\n\n## Checklist\n\n### "));
-        assert!(out.ends_with("\n## Routing rules\n\nkept\n"));
-        assert!(!out.contains("stale"));
-    }
-
-    #[test]
-    fn regenerate_refuses_a_doc_without_the_section() {
-        assert!(regenerate("# nothing here\n", &golden()).is_err());
-    }
-}

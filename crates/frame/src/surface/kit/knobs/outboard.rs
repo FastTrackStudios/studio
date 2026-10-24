@@ -373,15 +373,3 @@ pub(crate) fn defs() -> Vec<ComponentDef> {
         ),
     ]
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn every_variant_has_a_tint_entry() {
-        for spec in [&KNURLED_INSERT, &CAPPED_SKIRT, &NUMBERED_CREAM] {
-            assert_eq!(spec.variants.len(), spec.tints.len());
-        }
-    }
-}

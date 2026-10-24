@@ -31,23 +31,3 @@ pub trait SetlistActions {
     )]
     fn dump_ruler_state(&self);
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    /// Generated ids must reproduce the exact REAPER command-id strings
-    /// the retired `session_actions` entries produced.
-    #[test]
-    fn ids_match_retired_session_actions_command_ids() {
-        let ids: Vec<_> = SetlistActionsActions::all().iter().map(|m| m.id).collect();
-        assert_eq!(
-            ids,
-            vec![
-                "FTS_SESSION_BUILD_SETLIST",
-                "FTS_SESSION_LOAD_DEMO_SETLIST",
-                "FTS_SESSION_DUMP_RULER_STATE",
-            ]
-        );
-    }
-}

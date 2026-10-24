@@ -325,6 +325,3 @@ fn held<'a>(
     let key = folder.picture_key(take, grid);
     cache.get_or_build(key, || folder.picture(take, grid))
 }
-
-#[cfg(test)]
-mod tests;

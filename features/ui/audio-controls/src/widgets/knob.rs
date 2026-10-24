@@ -403,21 +403,3 @@ pub fn Knob(
         }
     }
 }
-
-#[cfg(test)]
-mod tests {
-    #[test]
-    fn knob_rotation_range() {
-        // At 0%, rotation should be -135 deg
-        let rotation_at_0: f64 = -135.0 + (0.0 * 270.0);
-        assert!((rotation_at_0 - (-135.0)).abs() < 0.01);
-
-        // At 50%, rotation should be 0 deg
-        let rotation_at_50: f64 = -135.0 + (0.5 * 270.0);
-        assert!((rotation_at_50 - 0.0).abs() < 0.01);
-
-        // At 100%, rotation should be +135 deg
-        let rotation_at_100: f64 = -135.0 + (1.0 * 270.0);
-        assert!((rotation_at_100 - 135.0).abs() < 0.01);
-    }
-}

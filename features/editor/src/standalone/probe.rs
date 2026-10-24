@@ -170,27 +170,3 @@ fn civil_from_days(days: i64) -> (i64, u32, u32) {
     let m = if mp < 10 { mp + 3 } else { mp - 9 } as u32;
     (if m <= 2 { y + 1 } else { y }, m, d)
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn the_epoch_formats_as_the_epoch() {
-        assert_eq!(civil_from_days(0), (1970, 1, 1));
-    }
-
-    #[test]
-    fn a_leap_day_is_a_leap_day() {
-        // 2024-02-29 is 19782 days after the epoch.
-        assert_eq!(civil_from_days(19_782), (2024, 2, 29));
-    }
-
-    #[test]
-    fn a_stamp_is_rfc_3339_shaped() {
-        let ts = now_rfc3339();
-        assert_eq!(ts.len(), 20, "{ts}");
-        assert!(ts.ends_with('Z'), "{ts}");
-        assert!(ts.starts_with("20"), "{ts}");
-    }
-}

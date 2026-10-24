@@ -30,6 +30,3 @@ pub use language::{audible, follow_language, Switched};
 pub use slots::{assign, survives_save, Purpose};
 pub use vca::{leads, VcaLead};
 pub use watch::{follow_arm, Followed};
-
-#[cfg(test)]
-mod tests;

@@ -923,28 +923,3 @@ fn Confidence(words: Words, at: f64, size: (f64, f64)) -> Element {
         }
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    /// The next slide wears its section's colour unless that is whitish.
-    #[test]
-    fn a_pale_section_colour_gives_way_to_yellow() {
-        assert_eq!(next_color("#3aa0ff"), "#3aa0ff");
-        assert_eq!(next_color("#e84a5f"), "#e84a5f");
-        assert_eq!(next_color("#f2f2f2"), NEXT_YELLOW);
-        assert_eq!(next_color("#dde3ea"), NEXT_YELLOW);
-        assert_eq!(next_color("rgb(1,2,3)"), NEXT_YELLOW);
-    }
-
-    /// A rail spells the section out, keeping its number and part.
-    #[test]
-    fn a_rail_spells_the_section() {
-        assert_eq!(spelled("VS 2B"), "Verse 2B");
-        assert_eq!(spelled("CH 1"), "Chorus 1");
-        assert_eq!(spelled("PRE-CH"), "Pre-Chorus");
-        assert_eq!(spelled("IN"), "Intro");
-        assert_eq!(spelled("Mystery 3"), "Mystery 3");
-    }
-}

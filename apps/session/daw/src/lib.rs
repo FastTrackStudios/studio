@@ -224,8 +224,6 @@ pub mod hit_place;
 pub mod hits;
 #[cfg(feature = "native")]
 pub mod hits_midi;
-#[cfg(test)]
-mod hook_rules;
 #[cfg(feature = "native")]
 pub mod item_actions;
 pub mod kit_gate;

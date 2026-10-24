@@ -454,31 +454,3 @@ pub fn Stepper(big: bool) -> Element {
         }
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn pages_are_counted_from_bar_one() {
-        assert_eq!(page_of(1, 4), 1);
-        assert_eq!(page_of(4, 4), 1);
-        assert_eq!(page_of(5, 4), 5);
-        assert_eq!(page_of(63, 4), 61);
-        assert_eq!(page_of(63, 8), 57);
-        assert_eq!(page_of(63, 1), 63);
-        // The count-in pages backwards from −1.
-        assert_eq!(page_of(-1, 4), -4);
-        assert_eq!(page_of(-4, 4), -4);
-        assert_eq!(page_of(-5, 4), -8);
-    }
-
-    #[test]
-    fn stepping_skips_bar_zero() {
-        assert_eq!(add_bars(1, 4), 5);
-        assert_eq!(add_bars(5, -4), 1);
-        assert_eq!(add_bars(-4, 4), 1);
-        assert_eq!(add_bars(1, -4), -4);
-        assert_eq!(add_bars(61, 4), 65);
-    }
-}

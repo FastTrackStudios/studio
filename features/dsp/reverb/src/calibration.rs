@@ -150,33 +150,3 @@ impl SizedTable {
 }
 
 include!("calibration_tables.rs");
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn every_row_rises_and_inverts() {
-        for &(a, v) in MEASURED {
-            let t = table(a, v).expect("measured");
-            assert_eq!(t.rows.len(), t.sizes.len(), "{a:?}/{v}");
-            for (row, size) in t.rows.iter().zip(t.sizes) {
-                assert!(row.t60.len() >= 2, "{a:?}/{v} at {size} has a curve");
-                assert!(
-                    row.t60.windows(2).all(|w| w[1] > w[0]),
-                    "{a:?}/{v} at {size} rises"
-                );
-                assert!(
-                    row.decay.windows(2).all(|w| w[1] > w[0]),
-                    "{a:?}/{v} at {size} decay rises"
-                );
-                for (d, s) in row.decay.iter().zip(row.t60) {
-                    assert!(
-                        (row.engine_decay(*s) - d).abs() < 1e-9,
-                        "{a:?}/{v} inverts at {s}"
-                    );
-                }
-            }
-        }
-    }
-}

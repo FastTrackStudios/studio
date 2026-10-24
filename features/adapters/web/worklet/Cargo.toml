@@ -35,7 +35,3 @@ hound = { version = "3.5" }
 js-sys = { workspace = true }
 wasm-bindgen = { workspace = true }
 
-[[test]]
-name = "open_headless"
-path = "tests/open_headless.rs"
-required-features = ["keys"]

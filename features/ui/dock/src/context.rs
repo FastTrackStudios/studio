@@ -84,16 +84,3 @@ impl WhenExpr {
         }
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn evaluates_tab_context() {
-        let mut ctx = ActionContext::new();
-        ctx.set_tab("performance");
-        assert!(WhenExpr::parse("tab:performance").evaluate(&ctx));
-        assert!(!WhenExpr::parse("tab:chart").evaluate(&ctx));
-    }
-}

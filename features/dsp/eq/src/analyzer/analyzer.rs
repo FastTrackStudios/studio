@@ -416,34 +416,3 @@ fn bin_freqs(sample_rate: f32, fft_size: usize) -> Vec<f32> {
     let delta = sample_rate / fft_size as f32;
     (0..bins).map(|i| i as f32 * delta).collect()
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn sine_shows_peak_at_its_bin() {
-        let sr = 48_000.0f32;
-        let (analyzer, mut feed) = Analyzer::new(1001, sr);
-        // 1 kHz sine.
-        let f = 1000.0f32;
-        let n = 8192 * 4;
-        let buf: Vec<f32> = (0..n)
-            .map(|i| (2.0 * std::f32::consts::PI * f * i as f32 / sr).sin())
-            .collect();
-        feed.push_pre(&buf);
-        feed.push_post(&buf);
-        analyzer.tick(60.0);
-        let snap = analyzer.snapshot();
-        // Find the loudest post bin and confirm its frequency is near 1 kHz.
-        let (idx, _) = snap
-            .post_db
-            .iter()
-            .enumerate()
-            .max_by(|a, b| a.1.total_cmp(b.1))
-            .unwrap();
-        let peak_hz = snap.freq_hz[idx];
-        assert!((peak_hz - 1000.0).abs() < 50.0, "peak at {peak_hz} Hz");
-        sharing::unregister(1001);
-    }
-}

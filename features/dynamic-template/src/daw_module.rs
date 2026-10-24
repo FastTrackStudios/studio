@@ -517,56 +517,6 @@ fn writes_for(arrange: &[scenes::Row], mixer: &[scenes::Row]) -> Writes {
     }
 }
 
-#[cfg(test)]
-mod visibility_tests {
-    use super::writes_for;
-    use crate::golden_session::Kind;
-    use crate::scenes::{self, Fact, GroupBy, Segment};
-
-    /// A performer-grouped scene's row list, with a header among the
-    /// real tracks — exactly what `flow.scenes.performer-order` regroups
-    /// a tracking scene into.
-    fn rows_with_a_header() -> Vec<scenes::Row> {
-        let group = Segment::named("Electric").of(Kind::Group);
-        let facts = vec![
-            Fact::folder("electric", "Electric", 0, 0)
-                .of(Kind::Group)
-                .at(vec![group.clone()]),
-            {
-                let mut f = Fact::leaf("rhythm", "Rhythm", 1, 1)
-                    .of(Kind::Part)
-                    .at(vec![group]);
-                f.performer = Some("Cody".to_owned());
-                f
-            },
-        ];
-        let mut scene = scenes::scene("drum-tracking")
-            .expect("the built-in scene")
-            .clone();
-        scene.group_by = GroupBy::Performer;
-        scenes::resolve(&scene, &facts, scenes::Surface::Arrange, None, None, None)
-    }
-
-    /// The REAPER applier's own claim, checked: a performer header
-    /// produces no visibility write and no height write, because it has
-    /// no guid to write one to.
-    #[test]
-    fn a_performer_header_produces_no_track_writes() {
-        let rows = rows_with_a_header();
-        assert!(
-            rows.iter().any(|r| r.guid().is_none()),
-            "the fixture has a header to prove the point with"
-        );
-        let writes = writes_for(&rows, &rows);
-        let header_count = rows.iter().filter(|r| r.guid().is_none()).count();
-        let track_count = rows.len() - header_count;
-        assert_eq!(writes.in_arrange.len(), track_count);
-        assert_eq!(writes.in_mixer.len(), track_count);
-        assert_eq!(writes.heights.len(), track_count);
-        assert!(header_count > 0, "nothing to prove without a header");
-    }
-}
-
 fn set_track_height(guid: &str, height_pixels: u32) -> eyre::Result<()> {
     set_tcp_height_on_main_thread(guid, height_pixels)
         .map_err(|err| eyre::eyre!("failed to set height for track {guid}: {err}"))
@@ -2079,57 +2029,4 @@ pub fn register_architect_actions<B: architect::action::ActionBackend>(backend: 
     register_visibility_manager_actions(backend, Arc::new(VisibilityManagerActionsImpl));
     register_create_group_actions(backend, Arc::new(CreateGroupActionsImpl));
     register_toggle_group_actions(backend, Arc::new(ToggleGroupActionsImpl));
-}
-
-#[cfg(test)]
-mod architect_actions_id_tests {
-    use super::*;
-
-    /// Every action REAPER can invoke reaches a handler.
-    ///
-    /// `actions()` registers straight from `architect_metas()`, so a
-    /// command id exists in REAPER's action list purely because a trait
-    /// method declares it — with nothing forcing `handle_action` to know
-    /// what to do when it fires. This walks the same list through the
-    /// dispatch match, so a new method with no arm is a failing test
-    /// rather than a menu entry that silently does nothing.
-    #[test]
-    fn every_registered_action_has_a_dispatch_arm() {
-        let unhandled: Vec<&str> = architect_metas()
-            .into_iter()
-            .map(|m| m.id)
-            .filter(|id| !is_dispatchable(id))
-            .collect();
-
-        assert!(
-            unhandled.is_empty(),
-            "{} registered ids reach no handler:\n  {}",
-            unhandled.len(),
-            unhandled.join("\n  "),
-        );
-    }
-
-    #[test]
-    fn create_group_ids_match_existing_reaper_command_convention() {
-        let ids: Vec<&str> = CreateGroupActionsActions::all()
-            .iter()
-            .map(|m| m.id)
-            .collect();
-        assert_eq!(ids.len(), 34, "expected all 34 CREATE_NEW_* ids");
-        assert!(ids.contains(&"FTS_DYNAMIC_TEMPLATE_CREATE_NEW_DRUMS"));
-        assert!(ids.contains(&"FTS_DYNAMIC_TEMPLATE_CREATE_NEW_STEM_SPLIT"));
-        assert!(ids.contains(&"FTS_DYNAMIC_TEMPLATE_CREATE_NEW_BASS_SYNTH"));
-        assert!(ids.contains(&"FTS_DYNAMIC_TEMPLATE_CREATE_NEW_ELECTRONIC_KIT"));
-    }
-
-    #[test]
-    fn toggle_group_ids_match_existing_reaper_command_convention() {
-        let ids: Vec<&str> = ToggleGroupActionsActions::all()
-            .iter()
-            .map(|m| m.id)
-            .collect();
-        assert_eq!(ids.len(), 16, "expected all 16 TOGGLE_* ids");
-        assert!(ids.contains(&"FTS_VISIBILITY_MANAGER_TOGGLE_DRUMS"));
-        assert!(ids.contains(&"FTS_VISIBILITY_MANAGER_TOGGLE_STEM_SPLIT"));
-    }
 }

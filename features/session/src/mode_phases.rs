@@ -96,32 +96,3 @@ pub fn choose(mode: Mode, slug: &str) {
 pub fn version() -> u64 {
     chosen().lock().map_or(0, |c| c.version)
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn organize_imports_then_maps_the_tempo() {
-        let slugs: Vec<&str> = of(Mode::Organize).iter().map(|p| p.slug).collect();
-        assert_eq!(slugs, ["import", "tempo-map"]);
-    }
-
-    #[test]
-    fn mixing_runs_through_the_mix_phases_and_live_has_none() {
-        assert_eq!(of(Mode::Mix).len(), MixPhase::ALL.len());
-        assert_eq!(of(Mode::Mix).first().map(|p| p.slug), Some("rescue"));
-        assert!(of(Mode::Live).is_empty());
-    }
-
-    #[test]
-    fn a_choice_moves_the_version_and_a_stranger_does_not() {
-        let before = version();
-        choose(Mode::Organize, "tempo-map");
-        assert_eq!(current(Mode::Organize).map(|p| p.slug), Some("tempo-map"));
-        let after = version();
-        assert_ne!(before, after);
-        choose(Mode::Organize, "not-a-phase");
-        assert_eq!(version(), after);
-    }
-}

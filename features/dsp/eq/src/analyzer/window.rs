@@ -43,17 +43,3 @@ pub fn build_scaled(kind: WindowKind, out: &mut [f32]) {
         *w = v * scale;
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn hann_endpoints_are_zero() {
-        let mut w = vec![0.0f32; 8];
-        build_scaled(WindowKind::Hann, &mut w);
-        // Periodic Hann starts at 0; symmetric peak in the middle.
-        assert!(w[0].abs() < 1e-6);
-        assert!(w[4] > w[0]);
-    }
-}

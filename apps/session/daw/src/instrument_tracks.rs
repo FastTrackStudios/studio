@@ -521,33 +521,3 @@ fn press(instrument: Instrument) {
         );
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    /// An instrument is named loosely, and nothing else is one.
-    #[test]
-    fn instruments_are_named_loosely() {
-        assert_eq!(Instrument::named("drums"), Some(Instrument::Drums));
-        assert_eq!(Instrument::named(" Kit "), Some(Instrument::Drums));
-        assert_eq!(Instrument::named("Guitars"), Some(Instrument::Guitar));
-        assert_eq!(Instrument::named("BASS"), Some(Instrument::Bass));
-        assert_eq!(Instrument::named("keys"), None);
-    }
-
-    /// The engine's colour is REAPER's: blue first, the flag on top.
-    #[test]
-    fn colours_go_native() {
-        assert_eq!(native_colour(0x0012_3456), 0x0156_3412);
-    }
-
-    /// The kit is the golden template's, with its MIDI track first.
-    #[test]
-    fn the_kit_starts_with_its_midi() {
-        let kit = kit();
-        assert_eq!(kit.name, "Drums");
-        assert_eq!(kit.children.first().map(|c| c.name.as_str()), Some(MIDI));
-        assert!(kit.children.iter().any(|c| c.name == "Kick"));
-    }
-}

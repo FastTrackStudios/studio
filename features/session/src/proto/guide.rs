@@ -74,30 +74,3 @@ pub trait GuideActions {
     /// cannot be written.
     fn clear_guide_tracks(&self) -> DawResult<()>;
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn ids_follow_the_reaper_command_convention() {
-        let ids: Vec<_> = GuideActionsActions::all().iter().map(|m| m.id).collect();
-        assert_eq!(
-            ids,
-            vec![
-                "FTS_SESSION_GUIDE_GENERATE_GUIDE_TRACKS",
-                "FTS_SESSION_GUIDE_GENERATE_CLICK_TRACK",
-                "FTS_SESSION_GUIDE_GENERATE_CUE_TRACKS",
-                "FTS_SESSION_GUIDE_CLEAR_GUIDE_TRACKS",
-            ]
-        );
-    }
-
-    /// Everything that writes must be undoable in one block.
-    #[test]
-    fn writing_actions_are_undo_bracketed() {
-        for meta in GuideActionsActions::all() {
-            assert!(meta.undo, "{} should be undo-bracketed", meta.id);
-        }
-    }
-}

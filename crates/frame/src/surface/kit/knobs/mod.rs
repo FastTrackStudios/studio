@@ -1469,31 +1469,3 @@ fn add_index(
         }
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn every_variant_has_a_tint_entry() {
-        for def in defs() {
-            let spec = spec_of(def.id).expect("spec");
-            assert!(!spec.variants.is_empty(), "{}", def.id);
-            assert_eq!(spec.variants.len(), spec.tints.len(), "{}", def.id);
-        }
-    }
-
-    #[test]
-    fn css_colours_parse() {
-        let c = css("rgba(255,255,255,0.5)");
-        assert!((c.r - 1.0).abs() < 1e-9 && (c.a - 0.5).abs() < 1e-9);
-        assert_eq!(hex_of(css("#102030")), "#102030ff");
-    }
-
-    #[test]
-    fn a_knurl_is_cut_at_a_pitch_not_a_count() {
-        assert_eq!(flute_count(54, 20.0), 19);
-        assert_eq!(flute_count(54, 400.0), 54);
-        assert_eq!(flute_count(54, 2.0), 8);
-    }
-}

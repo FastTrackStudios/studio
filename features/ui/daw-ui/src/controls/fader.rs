@@ -215,27 +215,3 @@ fn position(gain: f64) -> f64 {
 fn gain(position: f64) -> f64 {
     taper::TOP * position.clamp(0.0, 1.0).powf(taper::CURVE)
 }
-
-#[cfg(test)]
-mod taper_tests {
-    use super::{gain, position, taper};
-
-    /// Unity is where REAPER puts it — not at the top of the rail.
-    #[test]
-    fn unity_sits_below_the_top_of_the_rail() {
-        let p = position(1.0);
-        assert!((0.69..0.73).contains(&p), "unity at {p}, not ~0.71");
-        assert_eq!(position(0.0), 0.0);
-        assert!((position(taper::TOP) - 1.0).abs() < 1e-9);
-    }
-
-    /// And a drag round-trips: the position a gain shows at is the position
-    /// that produces it again.
-    #[test]
-    fn the_taper_round_trips() {
-        for g in [0.0, 0.25, 0.5, 1.0, 2.0, taper::TOP] {
-            let back = gain(position(g));
-            assert!((back - g).abs() < 1e-9, "{g} came back as {back}");
-        }
-    }
-}

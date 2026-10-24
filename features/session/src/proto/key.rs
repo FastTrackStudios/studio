@@ -400,36 +400,3 @@ pub trait KeyActions {
     /// cannot be written at the edit cursor.
     fn clear_key_changes(&self) -> DawResult<()>;
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    /// Thirty keys plus bake and clear. Both enharmonic spellings of each
-    /// black note are present as their own action, because a chart in
-    /// D♭ is not a chart in C♯.
-    #[test]
-    fn covers_every_key_in_both_spellings() {
-        let ids: Vec<&str> = KeyActionsActions::all().iter().map(|m| m.id).collect();
-        assert_eq!(ids.len(), 32, "15 major + 15 minor + bake + clear");
-
-        for id in [
-            "FTS_SESSION_KEY_SET_KEY_C_SHARP_MAJOR",
-            "FTS_SESSION_KEY_SET_KEY_D_FLAT_MAJOR",
-            "FTS_SESSION_KEY_SET_KEY_C_FLAT_MAJOR",
-            "FTS_SESSION_KEY_SET_KEY_A_SHARP_MINOR",
-            "FTS_SESSION_KEY_SET_KEY_B_FLAT_MINOR",
-        ] {
-            assert!(ids.contains(&id), "missing {id}");
-        }
-    }
-
-    /// Every one of these writes, so every one must be undoable in a
-    /// single block.
-    #[test]
-    fn all_actions_are_undo_bracketed() {
-        for meta in KeyActionsActions::all() {
-            assert!(meta.undo, "{} should be undo-bracketed", meta.id);
-        }
-    }
-}

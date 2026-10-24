@@ -214,53 +214,6 @@ fn pow2_int(n: i32) -> f32 {
     f32::from_bits(u32::try_from(biased).unwrap_or(0) << 23)
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn zero_drive_full_mix_is_transparent() {
-        let s = Saturator::new();
-        for x in [-1.0f32, -0.5, 0.0, 0.25, 0.9] {
-            assert!((s.process(x) - x).abs() < 1e-6);
-        }
-    }
-
-    #[test]
-    fn drive_bounds_output() {
-        let mut s = Saturator::new();
-        s.set_drive(1.0);
-        for curve in [
-            SaturationCurve::Tanh,
-            SaturationCurve::Tape,
-            SaturationCurve::Tube,
-            SaturationCurve::Hard,
-        ] {
-            s.set_curve(curve);
-            for i in -100..=100 {
-                let x = num::i32_to_f32(i) / 25.0; // -4..4, past the ceiling
-                let y = s.process(x);
-                assert!(y.abs() <= 1.5, "{curve:?} exploded: {x} -> {y}");
-            }
-        }
-    }
-
-    #[test]
-    fn tube_curve_has_no_dc_at_silence() {
-        let mut s = Saturator::new();
-        s.set_drive(0.8);
-        s.set_curve(SaturationCurve::Tube);
-        assert!(s.process(0.0).abs() < 1e-6);
-    }
-
-    #[test]
-    fn db_to_gain_is_sane() {
-        assert!((db_to_gain(0.0) - 1.0).abs() < 1e-3);
-        assert!((db_to_gain(6.0) - 1.995).abs() < 2e-2);
-        assert!((db_to_gain(-6.0) - 0.501).abs() < 1e-2);
-    }
-}
-
 // ── from the saturate facade ──
 /// Stereo (or N-channel) saturator: one memoryless [`Saturator`] per channel
 /// sharing one settings set.

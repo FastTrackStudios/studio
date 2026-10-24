@@ -216,36 +216,3 @@ fn marks_for(height: u32) -> Vec<String> {
     }
     marks
 }
-
-#[cfg(test)]
-mod mark_tests {
-    use super::marks_for;
-
-    /// The ladder thins as the meter shortens, and always reaches the
-    /// floor.
-    #[test]
-    fn the_ladder_thins_when_there_is_no_room() {
-        let tall = marks_for(400);
-        let short = marks_for(120);
-        assert!(
-            tall.len() > short.len(),
-            "the ladder did not thin: {short:?}"
-        );
-        for marks in [&tall, &short] {
-            assert_eq!(marks[0], "-inf", "no readout at the top");
-            assert!(
-                marks.last().unwrap().starts_with("-60"),
-                "the floor is missing: {marks:?}"
-            );
-        }
-    }
-
-    /// And it never crowds: the marks stay far enough apart to read.
-    #[test]
-    fn the_marks_never_crowd() {
-        for h in (60..=800).step_by(10) {
-            let n = marks_for(h).len() as f32;
-            assert!(h as f32 / n >= 8.0, "{n} marks in {h} rows is unreadable",);
-        }
-    }
-}

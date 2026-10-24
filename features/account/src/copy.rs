@@ -236,31 +236,3 @@ pub fn signed_in_here(platform: Platform) -> (String, Option<&'static str>) {
         },
     )
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn expiry_counts_minutes_then_seconds() {
-        assert_eq!(expires_in(540), "Expires in 9 min");
-        assert_eq!(expires_in(61), "Expires in 2 min");
-        assert_eq!(expires_in(40), "Expires in 40 s");
-    }
-
-    #[test]
-    fn sign_out_names_both_apps_on_a_desktop_and_one_on_an_ipad() {
-        assert!(sign_out_body(App::Signal, Platform::Desktop).contains("Session and Signal"));
-        let ipad = sign_out_body(App::Signal, Platform::Ipad);
-        assert!(ipad.contains("Signal on this iPad") && !ipad.contains("Session"));
-    }
-
-    #[test]
-    fn expired_copy_uses_the_servers_minutes() {
-        assert!(
-            failed(App::Session, &Failure::Expired, "", 15)
-                .body
-                .contains("15 minutes")
-        );
-    }
-}

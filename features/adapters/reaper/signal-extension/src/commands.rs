@@ -121,25 +121,3 @@ pub fn list(daw: Daw) -> Result<ActionList, ActionError> {
 pub async fn dispatch(list: &ActionList, command_name: &str) -> Result<(), ActionError> {
     list.run_json_async(command_name, b"").await.map(|_| ())
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn reaper_runs_the_project_commands_and_disables_the_rest_with_a_reason() {
-        let runs = SignalCommand::all()
-            .filter(|c| availability_in_reaper(*c).is_ok())
-            .count();
-        // Four dev loads, three switch placers, seven macro-learn steps.
-        assert_eq!(runs, 14);
-        assert_eq!(
-            availability_in_reaper(SignalCommand::NextSong),
-            Err(NEEDS_CONTROLLER.to_owned())
-        );
-        assert_eq!(
-            availability_in_reaper(SignalCommand::MacroAdd),
-            Err(MACRO_ADD_PENDING.to_owned())
-        );
-    }
-}

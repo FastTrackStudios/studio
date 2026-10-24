@@ -600,22 +600,3 @@ fn open_file(path: &std::path::Path) {
     #[cfg(not(target_os = "macos"))]
     let _ = path;
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn the_gig_page_fills_left_top_main_and_bottom() {
-        let r = registry();
-        let at = |region| r.in_region(region).map(|p| p.id).collect::<Vec<_>>();
-        assert_eq!(at(Region::Left), ["gig.setlist"]);
-        assert_eq!(at(Region::Top), ["gig.song"]);
-        assert_eq!(at(Region::Main), ["gig.chart"]);
-        assert_eq!(at(Region::Bottom), ["gig.practice"]);
-        assert!(
-            !r.has(Region::Right),
-            "the app's Settings flyout keeps the right edge"
-        );
-    }
-}

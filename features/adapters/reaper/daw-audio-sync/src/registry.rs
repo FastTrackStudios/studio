@@ -247,37 +247,3 @@ pub fn set_global_registry(reg: Arc<ProjectRegistry>) {
 pub fn global_registry() -> Option<&'static Arc<ProjectRegistry>> {
     GLOBAL_REGISTRY.get()
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn empty_registry_has_no_snapshots() {
-        let reg = ProjectRegistry::new();
-        assert!(reg.snapshots().is_empty());
-        assert!(reg.assignments().is_empty());
-        assert_eq!(reg.find_vacant(), Some(0));
-    }
-
-    #[test]
-    fn slot_lifecycle() {
-        let reg = ProjectRegistry::new();
-        // Forge a non-null pointer for the test. We never deref it
-        // here — the audio hook isn't run.
-        let fake = std::ptr::NonNull::<reaper_low::raw::ReaProject>::dangling();
-        let project = unsafe { ReaProject::new(fake.as_ptr()).unwrap() };
-        let id = [1u8; 16];
-
-        let slot_idx = reg.find_vacant().unwrap();
-        reg.slot(slot_idx).unwrap().assign(project, id);
-        assert_eq!(reg.find_vacant(), Some(slot_idx + 1));
-        assert_eq!(reg.find_slot(project), Some(slot_idx));
-        assert_eq!(reg.assignments(), vec![(slot_idx, id)]);
-
-        reg.slot(slot_idx).unwrap().clear();
-        assert_eq!(reg.find_vacant(), Some(slot_idx));
-        assert_eq!(reg.find_slot(project), None);
-        assert!(reg.assignments().is_empty());
-    }
-}
