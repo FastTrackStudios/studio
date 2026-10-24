@@ -169,6 +169,74 @@ pub fn scale_point(scale: VuScale, value: f64, inset: f64) -> (f64, f64) {
     (PIVOT_X + r * rad.sin(), PIVOT_Y - r * rad.cos())
 }
 
+/// How a card prints its numerals: how big, and whether they lean.
+///
+/// The positions are the scale's ([`VuScale::ticks`]); this is the type.
+/// A console movement prints its numbers larger relative to the card than
+/// a period VU does, and on most real movements each numeral is set along
+/// the arc, square to the needle that points at it — a good part of why a
+/// real card reads as curved.
+#[derive(Clone, Copy, PartialEq, Debug)]
+pub struct Numerals {
+    /// Font size, in the card's viewBox units.
+    pub size: f64,
+    /// Lean each numeral with the arc, rather than print it upright.
+    pub follow_arc: bool,
+}
+
+impl Numerals {
+    /// A period movement's: small, set along the arc.
+    pub const PERIOD: Self = Self {
+        size: 6.0,
+        follow_arc: true,
+    };
+    /// A modern console movement's (an SSL's): larger, set along the arc.
+    pub const CONSOLE: Self = Self {
+        size: 7.4,
+        follow_arc: true,
+    };
+}
+
+/// Where a numeral is printed: its baseline anchor (middle-anchored text)
+/// and its lean in degrees, clockwise, about that anchor.
+#[derive(Clone, Copy, PartialEq, Debug)]
+pub struct NumeralPlacement {
+    pub x: f64,
+    pub y: f64,
+    pub rotate: f64,
+}
+
+/// How far a numeral's baseline sits below its centre, per unit of font
+/// size: the drop that centres a digit's cap height on its point.
+const BASELINE_DROP: f64 = 2.2 / 6.0;
+
+/// Where the numeral for `value` is printed, centred on the arc at `inset`
+/// from the needle's length.
+///
+/// A leaning numeral turns with the needle at its value, so its baseline is
+/// tangent to the arc; the baseline drop turns with it, so the digit stays
+/// centred on the same point of the arc whichever way it leans.
+pub fn numeral_placement(
+    scale: VuScale,
+    value: f64,
+    inset: f64,
+    numerals: Numerals,
+) -> NumeralPlacement {
+    let (cx, cy) = scale_point(scale, value, inset);
+    let rotate = if numerals.follow_arc {
+        scale.angle(value)
+    } else {
+        0.0
+    };
+    let drop = numerals.size * BASELINE_DROP;
+    let rad = rotate.to_radians();
+    NumeralPlacement {
+        x: cx - drop * rad.sin(),
+        y: cy + drop * rad.cos(),
+        rotate,
+    }
+}
+
 /// The needle tip for a scale position.
 pub fn scale_needle_tip(scale: VuScale, value: f64) -> (f64, f64) {
     let rad = scale.angle(value).to_radians();
@@ -218,3 +286,6 @@ pub fn gr_to_vu(gr_db: f64) -> f64 {
 pub fn db_to_vu(db: f64) -> f64 {
     (db + 18.0).clamp(-20.0, 3.0)
 }
+
+#[cfg(test)]
+mod tests;

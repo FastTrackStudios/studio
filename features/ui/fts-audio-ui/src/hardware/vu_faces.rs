@@ -11,6 +11,7 @@
 //! add one, and the `vu_sheet` test for how to look at it.
 
 use super::vu_kit::{Bezel, Core, Glow, Halo, Lamp, Needle, Shade, Vent, VuSpec, Wash};
+use super::vu_svg::Numerals;
 
 // ─────────────────────────────────────────────────────────────────────────
 // Bezels
@@ -222,6 +223,7 @@ pub static AMBER: VuSpec = VuSpec {
     card: "linear-gradient(180deg, #f6d79a 0%, #e8b45f 62%, #d99a3c 100%)",
     ink: "#3a2a12",
     hot: "#8f2010",
+    numerals: Numerals::PERIOD,
     needle: DARK_NEEDLE,
     lamp: Some(Lamp {
         color: "rgba(255,214,120,0.50)",
@@ -248,6 +250,7 @@ pub static IVORY: VuSpec = VuSpec {
     card: "linear-gradient(180deg, #f4f2ea 0%, #ddd9cd 100%)",
     ink: "#2a241c",
     hot: "#a8281c",
+    numerals: Numerals::PERIOD,
     needle: Needle {
         color: "#1d1a15",
         ..DARK_NEEDLE
@@ -278,6 +281,7 @@ pub static AMBER_BLUE: VuSpec = VuSpec {
     card: "linear-gradient(180deg, #f7cf86 0%, #eab259 58%, #d99b3f 100%)",
     ink: "#1c4f96",
     hot: "#1c4f96",
+    numerals: Numerals::PERIOD,
     needle: Needle {
         color: "#14161a",
         ..DARK_NEEDLE
@@ -306,6 +310,7 @@ pub static BLUE: VuSpec = VuSpec {
     card: "linear-gradient(180deg, #2f5f8f 0%, #16324e 100%)",
     ink: "#e8f2ff",
     hot: "#ff6a5c",
+    numerals: Numerals::PERIOD,
     needle: Needle {
         color: "#f4f8ff",
         ..DARK_NEEDLE
@@ -346,6 +351,7 @@ pub static BACKLIT: VuSpec = VuSpec {
     // is no 0 VU on it to be over, and the reference prints the whole scale
     // in one colour.
     hot: "#eef3f8",
+    numerals: Numerals::CONSOLE,
     needle: Needle {
         color: "#ffffff",
         width: 1.5,
