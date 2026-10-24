@@ -55,6 +55,16 @@ jobs:
       with:
         ref: ${{ github.sha }}
         fetch-depth: 0
+    - name: Stamp the release version from the tag
+      env:
+        STAMP_TAG: ${{ github.ref_name }}
+      run: |
+        set -euo pipefail
+        if grep -q '^    stamp)' scripts/release.sh; then
+          bash scripts/release.sh stamp "$STAMP_TAG"
+        else
+          echo "$STAMP_TAG predates the stamp: its commit carries its version ($(bash scripts/release.sh version))"
+        fi
     - name: The tag is a green release commit on main or release/v*
       env:
         GH_TOKEN: ${{ github.token }}

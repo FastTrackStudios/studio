@@ -47,6 +47,16 @@ jobs:
       with:
         ref: refs/tags/${{ env.TAG }}
         fetch-depth: 0
+    - name: Stamp the release version from the tag
+      env:
+        STAMP_TAG: ${{ env.TAG }}
+      run: |
+        set -euo pipefail
+        if grep -q '^    stamp)' scripts/release.sh; then
+          bash scripts/release.sh stamp "$STAMP_TAG"
+        else
+          echo "$STAMP_TAG predates the stamp: its commit carries its version ($(bash scripts/release.sh version))"
+        fi
     - name: Marketing version = tag version, tag on main or release/v*, changelog section, green
       id: resolve
       env:
@@ -96,6 +106,16 @@ jobs:
       with:
         ref: ${{ needs.resolve.outputs.sha }}
         clean: false
+    - name: Stamp the release version from the tag
+      env:
+        STAMP_TAG: ${{ env.TAG }}
+      run: |
+        set -euo pipefail
+        if grep -q '^    stamp)' scripts/release.sh; then
+          bash scripts/release.sh stamp "$STAMP_TAG"
+        else
+          echo "$STAMP_TAG predates the stamp: its commit carries its version ($(bash scripts/release.sh version))"
+        fi
     - name: Rig captures (rig-models) linked into the tree
       run: |
         set -euo pipefail

@@ -37,7 +37,7 @@
 //! Never a pull_request, so no fork or PR reaches the runners.
 
 use crate::model::{Job, RunsOn, Step, UBUNTU, Workflow, yaml};
-use crate::steps::{checkout, rig_models};
+use crate::steps::{checkout, rig_models, stamp};
 use anyhow::Result;
 
 pub fn workflow() -> Result<Workflow> {
@@ -76,6 +76,10 @@ workflow_dispatch:
 
 const NOT_VALIDATE: &str = "${{ inputs.mode != 'validate' }}";
 
+/// A release build takes the tag's version (scripts/release.sh `stamp`); a
+/// build-only run builds the ref with the version it commits.
+const STAMPED: &str = "${{ env.MODE != 'build-only' }}";
+
 /// The same checks TestFlight makes (release.sh ios-resolve): the tag is
 /// vX.Y.Z, studio-desktop's version is the tag's, the changelog has its
 /// section, the commit is on main or release/v*, `CI passed` is green. A
@@ -109,6 +113,7 @@ fi
                 )
                 .with("fetch-depth", 0),
         )
+        .step(stamp("${{ env.TAG }}").cond(STAMPED))
         .step(
             Step::run(
                 "Version = tag version, on main, changelog, CI passed",
@@ -180,6 +185,7 @@ fi
                 .with("ref", "${{ needs.resolve.outputs.sha }}")
                 .with("clean", false),
         )
+        .step(stamp("${{ env.TAG }}").cond(STAMPED))
         // The guitar rig's release build refuses to compile without its
         // captures (features/rigs/guitar/build.rs): airlock's rig-models
         // clone, fast-forwarded first (as studio-ios does).
@@ -237,6 +243,7 @@ fn linux() -> Job {
         .cond(NOT_VALIDATE)
         .timeout(120)
         .step(checkout().with("ref", "${{ needs.resolve.outputs.sha }}"))
+        .step(stamp("${{ env.TAG }}").cond(STAMPED))
         // Its OWN target dir in the release pool's shared cache, so whichever
         // instance claims the job builds warm, with a size cap (a release
         // build has other fingerprints than any check's). Over the

@@ -37,7 +37,7 @@
 //! wrong or be a list of everything.
 
 use crate::model::{Job, RunsOn, Step, Workflow, yaml};
-use crate::steps::checkout_full;
+use crate::steps::{checkout_full, stamp};
 use anyhow::Result;
 
 pub fn workflow() -> Result<Workflow> {
@@ -82,6 +82,9 @@ matrix:
         )?)
         .environment(yaml("name: ${{ matrix.env }}\nurl: ${{ matrix.url }}\n")?)
         .step(checkout_full(None))
+        // The tag's version into the checkout first: the sites' bundles
+        // read the workspace version, and a release commits none.
+        .step(stamp("${{ github.ref_name }}").cond("${{ startsWith(github.ref, 'refs/tags/v') }}"))
         // Production changes only by tag: refuse a branch ref, a tag whose
         // version is not Cargo.toml's, a commit on neither main nor a
         // release/v* line, a commit whose `CI passed` is not green.
@@ -114,7 +117,10 @@ echo \"version=${GITHUB_REF_NAME}\" >> \"$GITHUB_OUTPUT\"
 const PUSH_IMAGE: &str = r#"set -euo pipefail
 img=${{ matrix.img }}
 echo "── $img ──"
-streamer="$(nix build .#${img}-image --no-link --print-out-paths)"
+# The stamp left the tree dirty, so the flake has no self.rev: the image's
+# revision (version.json, which "Verify live" reads) is passed in instead
+# (nix/modules/crane.nix `fts.buildRev`, read only under --impure).
+streamer="$(FTS_BUILD_REV="$GITHUB_SHA" nix build --impure .#${img}-image --no-link --print-out-paths)"
 "$streamer" | nix run nixpkgs#skopeo -- --insecure-policy copy \
   --dest-tls-verify=false --dest-no-creds docker-archive:/dev/stdin \
   "docker://${REGISTRY}/${img}:latest"

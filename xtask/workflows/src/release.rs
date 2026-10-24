@@ -35,7 +35,7 @@
 //! its own red run, not a missing Release.
 
 use crate::model::{Job, Step, UBUNTU, Workflow, yaml};
-use crate::steps::checkout_full;
+use crate::steps::{checkout_full, stamp};
 use anyhow::Result;
 
 pub fn workflow() -> Result<Workflow> {
@@ -98,6 +98,7 @@ fn publish() -> Result<Job> {
         .permissions(yaml("contents: write\nchecks: read\n")?)
         .concurrency("release-publish", false)
         .step(checkout_full(Some("${{ github.sha }}")))
+        .step(stamp("${{ github.ref_name }}"))
         .step(
             Step::run(
                 "The tag is a green release commit on main or release/v*",

@@ -92,6 +92,13 @@
 #   scripts/release.sh tag-guard          CI (deploy, release): is this
 #                                          tag a release on main or release/v*?
 #   scripts/release.sh publish [TAG]      CI: the GitHub Release for the tag
+#   scripts/release.sh stamp X.Y.Z        CI, first step of every release build:
+#                                          write X.Y.Z into this checkout's
+#                                          [workspace.package] version and the
+#                                          workspace members' Cargo.lock
+#                                          entries (uncommitted), so every
+#                                          env!("CARGO_PKG_VERSION") is the
+#                                          release's
 #   scripts/release.sh ios-resolve APP TAG
 #                                         CI (<app>-ios.yml): refuse a tag that
 #                                          is not vX.Y.Z, whose app crate
@@ -331,6 +338,45 @@ require_images() { # <sha> <version>
     [ "$itag" = "$2" ] || die "$CHART at $(git rev-parse --short "$1") has appVersion $itag, not $2: the chart would deploy the wrong image"
     bash scripts/ghcr-images.sh check "$itag" "$1" \
         || die "the images for v$2 are not on GHCR yet (or not public, or not from $(git rev-parse --short "$1")). Wait for the Images workflow (gh run list -w images.yml --commit $1), then re-run."
+}
+
+# Write <version> into the working tree's [workspace.package] version and
+# the workspace members' entries in Cargo.lock: the release build's own
+# checkout, never committed. Every crate with `version.workspace = true`
+# (the app crates included) then builds as the release, so
+# env!("CARGO_PKG_VERSION"), the iOS marketing version, the desktop app's
+# version and the update check all agree with the tag. A member is a
+# [[package]] with no `source` line whose version is the old workspace
+# version; nothing else in the lockfile moves (no cargo re-lock, which
+# would re-resolve registry picks). Idempotent.
+cmd_stamp() { # <X.Y.Z | vX.Y.Z>
+    local v="${1:-}" cur lock
+    v="${v#v}"
+    is_semver "$v" || die "usage: release.sh stamp X.Y.Z (got '${1:-}')"
+    cur="$(version_at)"
+    [ -n "$cur" ] || die "Cargo.toml has no [workspace.package] version"
+    if [ "$cur" = "$v" ]; then
+        note "stamp: the checkout is already $v"
+        return 0
+    fi
+    sed "/^\[workspace\.package\]/,/^\[/s/^version *= *\"$cur\"/version = \"$v\"/" Cargo.toml > Cargo.toml.stamp \
+        && mv Cargo.toml.stamp Cargo.toml
+    [ "$(version_at)" = "$v" ] || die "stamp: failed to rewrite [workspace.package] version"
+    lock="$(mktemp)"
+    awk -v cur="$cur" -v nv="$v" '
+        function flush(   i) {
+            for (i = 1; i <= n; i++) {
+                if (!src && buf[i] == "version = \"" cur "\"") buf[i] = "version = \"" nv "\""
+                print buf[i]
+            }
+            n = 0; src = 0
+        }
+        /^\[\[package\]\]$/ || /^\[\[patch\.unused\]\]$/ || /^\[metadata\]$/ { flush() }
+        { buf[++n] = $0; if ($0 ~ /^source = /) src = 1 }
+        END { flush() }
+    ' Cargo.lock > "$lock" && cat "$lock" > Cargo.lock
+    rm -f "$lock"
+    note "stamp: $cur -> $v in Cargo.toml and Cargo.lock (uncommitted: the committed version is not the released one)"
 }
 
 cmd_version() { version_at "$@"; } # [rev]
@@ -1307,6 +1353,7 @@ case "${1:-}" in
     release-only) shift; cmd_release_only "$@" ;;
     tag-guard) shift; cmd_tag_guard "$@" ;;
     publish) shift; cmd_publish "$@" ;;
+    stamp) shift; cmd_stamp "$@" ;;
     ios-resolve) shift; cmd_ios_resolve "$@" ;;
     ios-release) shift; cmd_ios_release "$@" ;;
     ios-record) shift; cmd_ios_record "$@" ;;
