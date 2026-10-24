@@ -9,7 +9,8 @@ use dioxus::prelude::*;
 
 use crate::hardware::vu_kit::{Bezel, VuSpec, Wash};
 use crate::hardware::vu_svg::{
-    scale_arc_for, scale_needle_tip, scale_point, VuScale, PIVOT_X, PIVOT_Y, VU_H, VU_W,
+    numeral_placement, scale_arc_for, scale_needle_tip, scale_point, VuScale, PIVOT_X, PIVOT_Y,
+    VU_H, VU_W,
 };
 
 /// What the needle is reading.
@@ -363,7 +364,7 @@ pub fn VuMeter(
                     {
                         let (x1, y1) = scale_point(card, v, 6.0);
                         let (x2, y2) = scale_point(card, v, if major { 13.0 } else { 10.0 });
-                        let (lx, ly) = scale_point(card, v, 22.0);
+                        let n = numeral_placement(card, v, 22.0, spec.numerals);
                         let hot = card.hot_from().map(|from| v > from).unwrap_or(false);
                         let color = if hot { spec.hot } else { spec.ink };
                         rsx! {
@@ -374,8 +375,9 @@ pub fn VuMeter(
                             }
                             if major {
                                 text {
-                                    x: "{lx:.2}", y: "{ly + 2.2:.2}",
-                                    fill: "{color}", font_size: "6",
+                                    x: "{n.x:.2}", y: "{n.y:.2}",
+                                    transform: "rotate({n.rotate:.2} {n.x:.2} {n.y:.2})",
+                                    fill: "{color}", font_size: "{spec.numerals.size:.1}",
                                     text_anchor: "middle", font_weight: "600",
                                     "{label}"
                                 }
