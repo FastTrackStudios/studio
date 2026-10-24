@@ -5,7 +5,7 @@
 //!
 //! Based on tiagolr's trigger system shared across gate12, filtr, time12, reevr.
 
-use crate::modulation::tempo::{self, SYNC_TABLE, SyncDivision, TransportInfo};
+use crate::modulation::tempo::{self, SyncDivision, TransportInfo};
 
 /// Trigger mode for pattern playback.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -27,9 +27,9 @@ const ANTICLICK_MS: f64 = 5.0;
 pub struct TriggerEngine {
     /// Current trigger mode.
     pub mode: TriggerMode,
-    /// Sync division index into SYNC_TABLE.
-    pub sync_index: usize,
-    /// Free-running rate in Hz (used when sync_index = 0).
+    /// What one cycle lasts: a note value, or `FreeHz` for [`Self::rate_hz`].
+    pub division: SyncDivision,
+    /// Free-running rate in Hz (used when `division` is `FreeHz`).
     pub rate_hz: f64,
     /// Phase offset (0..1).
     pub phase_offset: f64,
@@ -67,7 +67,7 @@ impl TriggerEngine {
     pub fn new() -> Self {
         Self {
             mode: TriggerMode::Sync,
-            sync_index: 9, // 1/1 bar default
+            division: SyncDivision::Beat(4.0), // 1/1 bar default
             rate_hz: 1.0,
             phase_offset: 0.0,
             always_playing: false,
@@ -96,7 +96,7 @@ impl TriggerEngine {
 
     /// Get the current sync division.
     pub fn sync_division(&self) -> &SyncDivision {
-        &SYNC_TABLE[self.sync_index.min(SYNC_TABLE.len() - 1)]
+        &self.division
     }
 
     /// Calculate per-sample increment for one-shot modes.
@@ -315,7 +315,7 @@ mod tests {
     fn sync_mode_follows_transport() {
         let mut t = TriggerEngine::new();
         t.mode = TriggerMode::Sync;
-        t.sync_index = 9; // 1/1 bar = 4 QN
+        t.division = SyncDivision::Beat(4.0); // 1/1 bar = 4 QN
         t.update(SR);
 
         // At beat 0, phase should be 0
@@ -347,7 +347,7 @@ mod tests {
     fn free_mode_runs_independently() {
         let mut t = TriggerEngine::new();
         t.mode = TriggerMode::Free;
-        t.sync_index = 0; // Free Hz
+        t.division = SyncDivision::FreeHz;
         t.rate_hz = 1.0; // 1 Hz
         t.update(SR);
 
@@ -373,7 +373,7 @@ mod tests {
     fn midi_trigger_starts_oneshot() {
         let mut t = TriggerEngine::new();
         t.mode = TriggerMode::Midi;
-        t.sync_index = 0;
+        t.division = SyncDivision::FreeHz;
         t.rate_hz = 2.0; // 2 Hz = 0.5s per cycle
         t.update(SR);
 
@@ -397,7 +397,7 @@ mod tests {
     fn phase_offset_applied() {
         let mut t = TriggerEngine::new();
         t.mode = TriggerMode::Sync;
-        t.sync_index = 9; // 1/1 bar
+        t.division = SyncDivision::Beat(4.0); // 1/1 bar = 4 QN
         t.phase_offset = 0.25;
         t.update(SR);
 
@@ -412,7 +412,7 @@ mod tests {
     fn anticlick_factor() {
         let mut t = TriggerEngine::new();
         t.mode = TriggerMode::Midi;
-        t.sync_index = 0;
+        t.division = SyncDivision::FreeHz;
         t.rate_hz = 1.0;
         t.update(SR);
 

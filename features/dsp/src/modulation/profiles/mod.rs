@@ -796,11 +796,14 @@ pub fn rail_click_target(current_index: usize, clicked_category: usize) -> usize
 /// thing on every modulator ever built.
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub struct Controls {
-    /// Normalised rate — see [`rate_hz_from`] for the taper.
+    /// Normalised rate — see [`rate_hz_from`] for the taper. What the
+    /// modulator runs at while [`Self::clock`] is [`Clock::Free`].
     pub rate: f32,
     pub depth: f32,
     pub mix: f32,
     pub knobs: [f32; 4],
+    /// Free in Hz, or locked to the host's tempo.
+    pub clock: Clock,
 }
 
 impl Default for Controls {
@@ -810,8 +813,23 @@ impl Default for Controls {
             depth: 0.5,
             mix: 0.5,
             knobs: [0.5; 4],
+            clock: Clock::Free,
         }
     }
+}
+
+/// What a modulator's cycle is timed by.
+///
+/// A choice, not a default: a synced modulator is locked to the host's bar
+/// line and stands still while the transport does, which is right for a
+/// tremolo on a track and wrong for one on a stage with no transport at all.
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
+pub enum Clock {
+    /// Its own clock, at the Rate knob's Hz.
+    #[default]
+    Free,
+    /// One cycle per note value, phase-locked to the transport.
+    Synced(dsp_core::time::MusicalTime),
 }
 
 /// The rate knob's range.
@@ -952,7 +970,7 @@ pub fn apply(
             trem.set_mode(mode);
             trem.set_depth(depth);
             trem.mix = mix;
-            free_running(&mut trem.modulator.trigger, rate);
+            set_clock(&mut trem.modulator.trigger, rate, controls.clock);
             // Stereo voicing is a 90° offset; the chain only reads its stereo
             // path when `stereo_phase` is nonzero.
             let (phase, offset) = if mode == TremMode::Stereo {
@@ -972,7 +990,7 @@ pub fn apply(
             wah.source = source;
             wah.env_amount = depth;
             wah.mix = mix;
-            free_running(&mut wah.modulator.trigger, rate);
+            set_clock(&mut wah.modulator.trigger, rate, controls.clock);
             wah.filter_l.mode = filter;
             wah.filter_r.mode = filter;
             wah.base_position = 0.3;
@@ -994,21 +1012,30 @@ pub fn apply(
     }
 }
 
-/// Put a modulator on its own clock at `rate`.
+/// Put a modulator on its clock: its own at `rate`, or the host's.
 ///
 /// Belongs here rather than in the plugin's constructor: a chain that has a
 /// rate but is still waiting for a transport does not move at all, and the
 /// editor builds its own chains to draw from. Setting it in one place and not
-/// the other is how the panel ended up drawing a flat line for a tremolo.
-///
-/// Tempo sync is a follow-up — the host transport is not plumbed through yet.
-const fn free_running(
+/// the other is how the panel ended up drawing a flat line for a tremolo — so
+/// this stays the only place a modulator's clock is configured.
+fn set_clock(
     trigger: &mut crate::modulation::trem::fts_modulation::TriggerEngine,
     rate: f64,
+    clock: Clock,
 ) {
-    trigger.mode = crate::modulation::trem::fts_modulation::TriggerMode::Free;
-    trigger.sync_index = 0;
+    use crate::modulation::trem::fts_modulation::{TriggerMode, tempo::SyncDivision};
     trigger.rate_hz = rate;
+    match clock {
+        Clock::Free => {
+            trigger.mode = TriggerMode::Free;
+            trigger.division = SyncDivision::FreeHz;
+        }
+        Clock::Synced(note) => {
+            trigger.mode = TriggerMode::Sync;
+            trigger.division = SyncDivision::from(note);
+        }
+    }
 }
 
 fn apply_knob(
@@ -1108,15 +1135,11 @@ pub fn shape(profile: &Profile, controls: &Controls, out: &mut [f64]) {
             );
         }
         Circuit::Tremolo { .. } => {
-            let n = out.len().max(2);
-            // The same pretend-sample-rate trick the chorus analysis uses:
-            // one cycle in `n` ticks whatever the real rate is.
-            let rate = trem.modulator.trigger.rate_hz.max(1.0e-6);
-            trem.modulator.update(n as f64 * rate.max(1.0));
+            let clock = OneCycle::of(&trem.modulator, out.len());
+            trem.modulator.update(clock.sample_rate);
             trem.modulator.reset();
-            let transport = TransportInfo::default();
-            for slot in out.iter_mut() {
-                trem.modulator.tick(&transport, 0.0);
+            for (i, slot) in out.iter_mut().enumerate() {
+                trem.modulator.tick(&clock.transport_at(i), 0.0);
                 *slot = trem.modulator.output();
             }
         }
@@ -1130,12 +1153,11 @@ pub fn shape(profile: &Profile, controls: &Controls, out: &mut [f64]) {
                 // against: drawn where the pedal actually is.
                 return;
             }
-            let rate = wah.modulator.trigger.rate_hz.max(1.0e-6);
-            wah.modulator.update(n as f64 * rate.max(1.0));
+            let clock = OneCycle::of(&wah.modulator, n);
+            wah.modulator.update(clock.sample_rate);
             wah.modulator.reset();
-            let transport = TransportInfo::default();
-            for slot in out.iter_mut() {
-                wah.modulator.tick(&transport, 0.0);
+            for (i, slot) in out.iter_mut().enumerate() {
+                wah.modulator.tick(&clock.transport_at(i), 0.0);
                 *slot = wah
                     .modulator
                     .output()
@@ -1148,6 +1170,52 @@ pub fn shape(profile: &Profile, controls: &Controls, out: &mut [f64]) {
     // measured in its own units (a delay in ms means nothing as a height);
     // the wah's own position when it is a position.
     normalise(out, 0.5);
+}
+
+/// A pretend clock that runs a modulator through exactly one cycle in `n`
+/// ticks, whatever its real rate — the trick the chorus analysis uses.
+///
+/// Free, that is a sample rate of `n` cycles' worth of Hz. Synced, the
+/// modulator reads the transport, so the transport is what moves: playing,
+/// at a tempo that crosses one note value in `n` ticks of a sample rate of
+/// `n`. A synced chain drawn against a stopped transport stands still, which
+/// is the flat line this exists to avoid.
+struct OneCycle {
+    sample_rate: f64,
+    /// Quarter notes per tick, when synced.
+    synced_qn_per_tick: Option<f64>,
+}
+
+impl OneCycle {
+    fn of(modulator: &crate::modulation::trem::fts_modulation::Modulator, n: usize) -> Self {
+        let n = n.max(2) as f64;
+        let trigger = &modulator.trigger;
+        let qn = trigger.sync_division().quarter_notes();
+        if trigger.sync_division().is_free() || qn <= 0.0 {
+            let rate = trigger.rate_hz.max(1.0e-6);
+            Self {
+                sample_rate: n * rate.max(1.0),
+                synced_qn_per_tick: None,
+            }
+        } else {
+            Self {
+                sample_rate: n,
+                synced_qn_per_tick: Some(qn / n),
+            }
+        }
+    }
+
+    fn transport_at(&self, tick: usize) -> TransportInfo {
+        match self.synced_qn_per_tick {
+            None => TransportInfo::default(),
+            Some(step) => TransportInfo {
+                position_qn: tick as f64 * step,
+                // Beats per tick × ticks per second × 60.
+                tempo_bpm: step * self.sample_rate * 60.0,
+                playing: true,
+            },
+        }
+    }
 }
 
 /// Scale a sampled cycle into 0..1 against its own range.
@@ -1181,3 +1249,6 @@ fn normalise(out: &mut [f64], flat_at: f64) {
 }
 
 use crate::modulation::trem::fts_modulation::TransportInfo;
+
+#[cfg(test)]
+mod tests;
