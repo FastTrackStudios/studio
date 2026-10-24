@@ -85,9 +85,23 @@
           else
             drv;
 
+        # Every git checkout: drop the `Cargo.toml.orig` files a repo of
+        # vendored crates carries (FastTrackStudios/vendor keeps the
+        # crates.io tarballs' as they came). crane lists each crate with
+        # `cargo package -l`, which refuses a source holding that reserved
+        # name ("invalid inclusion of reserved file name Cargo.toml.orig"),
+        # and the whole vendor step, so every crane build, failed with it.
+        # cargo writes its own when it packages; nothing reads these.
         overrideVendorGitCheckout = ps: drv:
+          let
+            noOrig = drv.overrideAttrs (old: {
+              preInstall = (old.preInstall or "") + ''
+                find . -name Cargo.toml.orig -type f -delete
+              '';
+            });
+          in
           if lib.any (p: p.name == "reaper-low") ps then
-            drv.overrideAttrs (old: {
+            noOrig.overrideAttrs (old: {
               postInstall = (old.postInstall or "") + ''
                 for d in $out/reaper-low-*; do
                   rm -rf "$d/lib/WDL"
@@ -97,7 +111,7 @@
               '';
             })
           else
-            drv;
+            noOrig;
       };
     in
     {

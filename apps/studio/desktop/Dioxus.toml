@@ -1,6 +1,7 @@
-# dx config for the app. Only the mobile/bundle identity lives here; the
-# desktop and web launches are configured in main.rs via LaunchBuilder, and
-# feature selection is via cargo features (see Cargo.toml).
+# dx config for the app. Only the mobile/bundle identity (and the web page's
+# title) lives here; the desktop and web launches are configured in main.rs
+# via LaunchBuilder, and feature selection is via cargo features (see
+# Cargo.toml).
 [application]
 
 # App bundle identity (iOS CFBundleIdentifier / TestFlight App ID).
@@ -12,3 +13,8 @@
 [bundle]
 identifier = "app.fasttrackstudio.studio"
 publisher = "FastTrackStudio"
+
+# The browser build's page title (served by the engine, and under /signal/
+# in studio-web). Its base path is given at build time (`--base-path`).
+[web.app]
+title = "Signal"

@@ -26,9 +26,12 @@ use wasm_bindgen::JsCast as _;
 use wasm_bindgen::JsValue;
 use wasm_bindgen::closure::Closure;
 
-use crate::web_keys_rig::{WORKLET_GLUE_URL, WORKLET_WASM_URL};
+use crate::web_keys_rig::{worklet_glue_url, worklet_wasm_url};
 
-const STREAMER_WORKER_URL: &str = "/worklet/keys_streamer_worker.js";
+/// The streamer worker, under the page's base path (`crate::web_base`).
+fn streamer_worker_url() -> String {
+    crate::web_base::url("/worklet/keys_streamer_worker.js")
+}
 
 /// Memory descriptor. Must match what the module's memory IMPORT declares —
 /// the generated glue's own default (`initial: 40, maximum: 65536` pages,
@@ -220,7 +223,7 @@ pub(crate) fn spawn_over(memory: &JsValue) {
     let opts = web_sys::WorkerOptions::new();
     opts.set_type(web_sys::WorkerType::Module);
     for _ in 0..worker_count() {
-        let Ok(worker) = web_sys::Worker::new_with_options(STREAMER_WORKER_URL, &opts) else {
+        let Ok(worker) = web_sys::Worker::new_with_options(&streamer_worker_url(), &opts) else {
             continue;
         };
         let onmessage =
@@ -255,8 +258,8 @@ pub(crate) fn spawn_over(memory: &JsValue) {
 
         let init = Object::new();
         let _ = Reflect::set(&init, &"kind".into(), &"init".into());
-        let _ = Reflect::set(&init, &"glueUrl".into(), &WORKLET_GLUE_URL.into());
-        let _ = Reflect::set(&init, &"wasmUrl".into(), &WORKLET_WASM_URL.into());
+        let _ = Reflect::set(&init, &"glueUrl".into(), &worklet_glue_url().into());
+        let _ = Reflect::set(&init, &"wasmUrl".into(), &worklet_wasm_url().into());
         let _ = Reflect::set(&init, &"memory".into(), &memory);
         if worker.post_message(&init).is_ok() {
             // Replay the packs already shared — this worker missed them.

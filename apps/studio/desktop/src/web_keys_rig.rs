@@ -40,12 +40,22 @@ use crate::web_packs::{self, PackEvent, PackWant};
 
 // ── The staged worklet bundle (the W4 contract — one place) ────────────────
 
+//
+// Each is under the page's base path (`crate::web_base`): the root when the
+// engine serves the page, `/signal/` in studio-web.
+
 /// The AudioWorkletProcessor module (daw-standalone's `processor.js`).
-pub(crate) const WORKLET_PROCESSOR_URL: &str = "/worklet/keys_processor.js";
+pub(crate) fn worklet_processor_url() -> String {
+    crate::web_base::url("/worklet/keys_processor.js")
+}
 /// The wasm-bindgen glue for `signal-keys-worklet`.
-pub(crate) const WORKLET_GLUE_URL: &str = "/worklet/signal_keys_worklet.js";
+pub(crate) fn worklet_glue_url() -> String {
+    crate::web_base::url("/worklet/signal_keys_worklet.js")
+}
 /// The `signal-keys-worklet` wasm binary.
-pub(crate) const WORKLET_WASM_URL: &str = "/worklet/signal_keys_worklet_bg.wasm";
+pub(crate) fn worklet_wasm_url() -> String {
+    crate::web_base::url("/worklet/signal_keys_worklet_bg.wasm")
+}
 
 /// IndexedDB key caching the last `lane_program_wire` reply, so a fully
 /// offline boot still opens the lanes (packs then come from OPFS).
@@ -130,9 +140,11 @@ const DEMO_FILES: [(&str, &[u8]); 3] = [
 
 // ── Routing ────────────────────────────────────────────────────────────────
 
-/// `/rigs/keys/{profile}` → the profile segment.
+/// `/rigs/keys/{profile}` (under the page's base path) → the profile segment.
 fn profile_from_path() -> Option<String> {
     let path = web_sys::window()?.location().pathname().ok()?;
+    let base = crate::web_base::current();
+    let path = crate::web_base::strip(&base, &path);
     let segs: Vec<&str> = path.split('/').filter(|s| !s.is_empty()).collect();
     match segs.as_slice() {
         ["rigs", "keys", profile] => Some((*profile).to_string()),
@@ -453,13 +465,14 @@ async fn boot_worklet(warm_port: web_sys::MessagePort) -> Result<Worklet, String
     let worklet = ctx
         .audio_worklet()
         .map_err(|e| format!("audioWorklet: {}", js_str(e)))?;
+    let processor_url = worklet_processor_url();
     JsFuture::from(
         worklet
-            .add_module(WORKLET_PROCESSOR_URL)
+            .add_module(&processor_url)
             .map_err(|e| format!("addModule: {}", js_str(e)))?,
     )
     .await
-    .map_err(|e| format!("addModule({WORKLET_PROCESSOR_URL}): {}", js_str(e)))?;
+    .map_err(|e| format!("addModule({processor_url}): {}", js_str(e)))?;
 
     let opts = AudioWorkletNodeOptions::new();
     let counts = Array::of1(&2u32.into());
@@ -505,15 +518,16 @@ async fn boot_worklet(warm_port: web_sys::MessagePort) -> Result<Worklet, String
 
     // Fetch the worklet wasm on the main thread (the worklet scope can't
     // fetch) and hand it over with the init.
-    let resp = JsFuture::from(window.fetch_with_str(WORKLET_WASM_URL))
+    let wasm_url = worklet_wasm_url();
+    let resp = JsFuture::from(window.fetch_with_str(&wasm_url))
         .await
-        .map_err(|e| format!("fetch {WORKLET_WASM_URL}: {}", js_str(e)))?;
+        .map_err(|e| format!("fetch {wasm_url}: {}", js_str(e)))?;
     let resp: web_sys::Response = resp
         .dyn_into()
         .map_err(|_| "fetch: not a Response".to_string())?;
     if !resp.ok() {
         return Err(format!(
-            "worklet wasm missing ({} on {WORKLET_WASM_URL}) — staged by `just web-stage` (W4)",
+            "worklet wasm missing ({} on {wasm_url}) — staged by `just web-stage` (W4)",
             resp.status()
         ));
     }
@@ -540,7 +554,7 @@ async fn boot_worklet(warm_port: web_sys::MessagePort) -> Result<Worklet, String
     if let Some(mem) = shared_memory.as_ref() {
         Worklet::set(&init, "memory", mem);
     }
-    Worklet::set(&init, "glueUrl", &WORKLET_GLUE_URL.into());
+    Worklet::set(&init, "glueUrl", &worklet_glue_url().into());
     Worklet::set(&init, "sampleRate", &f64::from(ctx.sample_rate()).into());
     Worklet::set(&init, "entry", &"keys".into());
     Worklet::set(&init, "warmPort", warm_port.as_ref());
