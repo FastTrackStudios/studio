@@ -8,6 +8,31 @@ Each release's section is built by `just release-prepare` (scripts/release.sh)
 from the cargo-rail change files in `.changes/` (up to 0.1.2, by `git cliff`
 from the commits since the previous release); edit it only in a release PR.
 
+## [26.10.1] - 2026-10-24
+
+_26.10.0 merged but was never tagged or shipped: its changes ship in this release._
+
+### New
+
+- Studio for the desktop: a signed, notarized macOS app (Apple silicon) and a Linux AppImage (x86_64), attached to this release (studio)
+- One command installs or updates it: `curl -fsSL https://raw.githubusercontent.com/FastTrackStudios/studio/main/scripts/install.sh | sh` (studio)
+- Studio for iPhone and iPad ships to the TestFlight beta from the same release (studio)
+- The Signal browser remote builds again (signal)
+
+### Fixed and improved
+
+- A rebuilt plugin no longer allocates on the audio thread on its first render on macOS (session)
+- Document mode plays its legato transitions and its off-grid shorts on time again, starting in the right articulation; libraries with a legato engine but no vibrato controller (Cinematic Brass) now play legato transitions live; a note-on no longer allocates on the audio thread (signal)
+- Every chorus and vibrato space, ce2 among them, shows its own badge in the rail (studio)
+- In the browser rig, a pedal saved as off plays its model when stomped on, seamlessly even when the worker falls behind (signal)
+- PipeWire MIDI delivered as UMP plays: words are read in native byte order (every UMP note was dropped), and the UMP control type is matched by its ABI value, so the crate builds against PipeWire before 1.4 (Ubuntu 24.04) (signal)
+- PSOLA pitch detection no longer allocates on the audio thread and runs about ten times faster (studio)
+- Stretched audio plays the run-up to each hit as recorded, so quantized hits land on the grid instead of 2–3 ms early (session)
+- The gate visualiser's threshold readout is a well-formed control (studio)
+- The maximal template's Compress and FX checks find Process under Drums (session)
+- The spectral bell reduces only inside its band again, not everything above it (studio)
+- The Velvet reverb no longer allocates on the audio thread (studio)
+
 ## [26.10.0] - 2026-10-23
 
 ### Added
