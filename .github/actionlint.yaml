@@ -9,12 +9,12 @@ self-hosted-runner:
     # target dir) and the deploy (deploy.yml, needs the LAN registry).
     - studio-tests
     - studio-deploy
-    # The iOS build (studio-ios.yml) and the macOS .dmg (desktop.yml).
-    - airlock
+    # airlock, studio's own release runner there: the iOS build
+    # (studio-ios.yml) and the macOS .dmg (desktop.yml).
+    - studio-release-mac
     - macos
-    # THEBATTLESHIP: the Linux AppImage (desktop.yml), beside its rig-models
-    # clone, and CI's build jobs (checks.yml): the studio-main pool for merges,
-    # studio-release for release commits and hotfix PRs.
-    - session
+    # THEBATTLESHIP: CI's build jobs (checks.yml) on the studio-main pool,
+    # every check, a release commit's included; the release builds (the
+    # Linux AppImage, desktop.yml) on the studio-release pool.
     - studio-main
     - studio-release

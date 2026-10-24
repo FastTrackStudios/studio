@@ -90,7 +90,7 @@ jobs:
     runs-on:
     - self-hosted
     - macos
-    - airlock
+    - studio-release-mac
     timeout-minutes: 150
     steps:
     - name: Preflight — build volume mounted, space free
