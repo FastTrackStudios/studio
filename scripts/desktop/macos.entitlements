@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <!-- Developer-ID (direct download) entitlements for Studio.
+       The hardened runtime is on, because notarization requires it; these
+       are the holes it has to leave open, and nothing else. No app-sandbox
+       on purpose: the app reads and writes ~/.config/signal, opens projects
+       from anywhere, loads plugins and talks to local engines.
+
+       allow-jit and allow-unsigned-executable-memory: phon-jit copies its DSP
+       stencils into executable memory at run time; the hardened runtime
+       kills the process on the first serialize without them.
+       disable-library-validation: the app loads libraries and plugins that
+       are not signed by this team (CLAP plugins, vendored NAM).
+       device.audio-input: the rig and the recorder read an audio interface. -->
+  <key>com.apple.security.cs.allow-jit</key><true/>
+  <key>com.apple.security.cs.allow-unsigned-executable-memory</key><true/>
+  <key>com.apple.security.cs.disable-library-validation</key><true/>
+  <key>com.apple.security.device.audio-input</key><true/>
+</dict>
+</plist>

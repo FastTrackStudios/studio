@@ -20,6 +20,7 @@
 mod cache_devshell;
 mod checks;
 mod deploy;
+mod desktop;
 mod model;
 mod pr;
 mod release;
@@ -45,6 +46,7 @@ const WORKFLOWS: &[(&str, Build)] = &[
     ("pr", pr::workflow),
     ("cache-devshell", cache_devshell::workflow),
     ("deploy", deploy::workflow),
+    ("desktop", desktop::workflow),
     ("release", release::workflow),
     ("studio-ios", studio_ios::workflow),
 ];

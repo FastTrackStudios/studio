@@ -90,7 +90,7 @@ delete a tag; a bad release is superseded by the next.
 | push to `main` / `release/v*` | `CI` full set: `Gates`, `Check` (+ advisory clippy), `Wasm`, `Tests`, aggregated as `CI passed`; on `main` also `Dependency cache` (the cargo downloads `PR checks` restore) | gates, wasm, plan, aggregator free; `Check` on a WarpBuild 8x; `Tests` on a 16x snapshot runner |
 | Sunday (cron) / `gh workflow run checks.yml --ref main -f seed=true` | `CI` full set as a **seed**: `Tests` boots from WarpBuild's base image and saves a fresh snapshot | as above |
 | `gh workflow run checks.yml --ref <branch>` | `CI` full set; green, it posts `Local CI` on the branch's head (for a push the hook couldn't vouch for) | as above |
-| push of tag `vYY.M.MICRO` (or `workflow_dispatch` with the tag as ref) | `deploy` (session-web, signal-web), `studio-ios`, `release` publish | `studio-deploy` (LAN registry), `airlock`, hosted |
+| push of tag `vYY.M.MICRO` (or `workflow_dispatch` with the tag as ref) | `deploy` (session-web, signal-web), `studio-ios` (TestFlight), `desktop` (the signed, notarized macOS `.dmg` and the Linux AppImage, attached to the Release; `gh workflow run desktop.yml -f tag=<ref> -f mode=build-only` proves them from any branch), `release` publish | `studio-deploy` (LAN registry), `airlock`, hosted |
 
 The workflow files are generated from `xtask/workflows` (one Rust module per
 workflow, the reasons as comments there): edit the Rust, run `just

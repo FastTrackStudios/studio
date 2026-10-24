@@ -33,7 +33,7 @@
 //! is recorded in the step summary and in the release notes.
 
 use crate::model::{Job, RunsOn, Step, UBUNTU, Workflow, yaml};
-use crate::steps::{checkout, checkout_full};
+use crate::steps::{checkout, checkout_full, rig_models};
 use anyhow::Result;
 
 pub fn workflow() -> Result<Workflow> {
@@ -166,7 +166,10 @@ df -h /Volumes/build-disk | tail -1
         // https, so the fts-forge credential helper authenticates (airlock
         // has no GitHub ssh key). Inline, not a script in the tree: a re-run
         // of an older tag builds that tag's sources, which do not have one.
-        .step(Step::run("Rig captures (rig-models) linked into the tree", RIG_MODELS))
+        .step(Step::run(
+            "Rig captures (rig-models) linked into the tree",
+            &rig_models("/Volumes/build-disk/development/rig-models", true),
+        ))
         // CFBundleVersion has to climb with every upload: the unix time,
         // taken once, here, so the number built is the number recorded.
         .step(
@@ -193,35 +196,6 @@ echo "\`$TAG\` (\`$(git rev-parse --short HEAD)\`): marketing version \`$VERSION
             .env("RESULT", "${{ job.status }}"),
         )
 }
-
-const RIG_MODELS: &str = r#"set -euo pipefail
-src=/Volumes/build-disk/development/rig-models
-url=https://github.com/FastTrackStudios/rig-models.git
-if [ -d "$src/.git" ]; then
-  before="$(git -C "$src" rev-parse --short HEAD)"
-  git -C "$src" fetch --quiet origin \
-    || { echo "::error::could not fetch rig-models into $src; not building with stale captures"; exit 1; }
-  git -C "$src" merge --ff-only --quiet origin/main \
-    || { echo "::error::$src cannot fast-forward to origin/main (local commits or changes?); not building with stale captures"; exit 1; }
-  echo "rig-models $before -> $(git -C "$src" rev-parse --short HEAD)"
-else
-  git clone --quiet "$url" "$src" \
-    || { echo "::error::could not clone $url into $src"; exit 1; }
-  echo "rig-models cloned at $(git -C "$src" rev-parse --short HEAD)"
-fi
-if [ ! -d "$src/guitar" ] || [ ! -d "$src/bass" ]; then echo "::error::no rig-models clone at $src"; exit 1; fi
-while read -r repo from to; do
-  [[ -z $repo || $repo == \#* || $repo != rig-models ]] && continue
-  to="${to:-$from}"
-  n="$(find -L "$src/$from" -type f \( -name '*.nam' -o -name '*.wav' \) | wc -l | tr -d ' ')"
-  [ "$n" -gt 0 ] || { echo "::error::$src/$from holds no captures"; exit 1; }
-  mkdir -p "$(dirname "$to")"
-  if [ -d "$to" ] && [ ! -L "$to" ]; then rmdir "$to"; fi
-  ln -sfn "$src/$from" "$to"
-  echo "linked $to -> $src/$from ($n captures)"
-done < assets.txt
-echo "rig-models at $(git -C "$src" rev-parse --short HEAD 2>/dev/null || echo unknown)"
-"#;
 
 /// The env block is the product identity for deploy-testflight.sh.
 ///
