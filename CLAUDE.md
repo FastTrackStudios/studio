@@ -375,6 +375,6 @@ first). The rules are not optional:
   `gh stack submit --auto`, every layer `Local CI: success`, merge, then
   `CI passed` on main.
 - Project skills live in `.claude/skills/` (build-performance,
-  logging-best-practices, blitz-design, reaper-testing, architect-actions,
+  logging-best-practices, blitz-design, rust-testing, reaper-testing, architect-actions,
   signalpack, reaper-theme-*, …) — load the matching one before the work
   it covers.
