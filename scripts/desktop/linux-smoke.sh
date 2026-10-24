@@ -33,11 +33,22 @@ if [ -n "${SMOKE_PODMAN_IMAGE:-}" ]; then
         nix shell nixpkgs#squashfsTools -c unsquashfs -q -o "$off" -d "$work/app" "$img" >/dev/null
     fi
     out="$(podman run --rm --network none -v "$work/app:/app:ro" "$SMOKE_PODMAN_IMAGE" /app/AppRun --version 2>&1)" || { echo "$out"; exit 1; }
-elif [ -e /lib64/ld-linux-x86-64.so.2 ] && /lib64/ld-linux-x86-64.so.2 --version >/dev/null 2>&1; then
-    out="$("${env_clean[@]}" "$img" --version 2>&1)" || { echo "$out"; exit 1; }
-elif command -v appimage-run >/dev/null 2>&1 && out="$("${env_clean[@]}" appimage-run "$img" --version 2>&1)"; then
-    :
 else
+  # Each way in turn; the first that runs it wins. A host's /lib64 loader or
+  # appimage-run can both end in bubblewrap (NixOS registers a binfmt handler
+  # for AppImages), which needs user namespaces a hardened runner service
+  # may not have: then the payload below. SMOKE_FORCE_PAYLOAD=1 goes straight
+  # there (how that path is tested on a host that has namespaces).
+  ran=0; out=""
+  if [ "${SMOKE_FORCE_PAYLOAD:-0}" != 1 ]; then
+    if [ -e /lib64/ld-linux-x86-64.so.2 ] && /lib64/ld-linux-x86-64.so.2 --version >/dev/null 2>&1 \
+      && out="$("${env_clean[@]}" "$img" --version 2>&1)"; then
+      ran=1
+    elif command -v appimage-run >/dev/null 2>&1 && out="$("${env_clean[@]}" appimage-run "$img" --version 2>&1)"; then
+      ran=1
+    fi
+  fi
+  if [ "$ran" = 0 ]; then
     # No FHS loader, and no sandbox: appimage-run's bubblewrap needs user
     # namespaces, which a hardened runner service may not have ("bwrap: No
     # permissions to create a new namespace", THEBATTLESHIP, 2026-10-24).
@@ -46,8 +57,14 @@ else
     # everything the binary needs but glibc and the graphics stack is in the
     # bundle, and it starts without a display.
     [ -n "${out:-}" ] && echo "appimage-run could not start it here: $(printf '%s\n' "$out" | tail -1)" >&2
-    off="$("$img" --appimage-offset 2>/dev/null || true)"
-    case "$off" in ''|*[!0-9]*) off="${SMOKE_RUNTIME_SIZE:-944632}" ;; esac
+    # Where the squashfs starts: the end of the runtime ELF's section
+    # header table (e_shoff + e_shentsize * e_shnum), which is how the type2
+    # runtime finds it (--appimage-offset). Read, not run: running the file
+    # is what bubblewrap refused.
+    shoff="$(od -An -t u8 -j 40 -N 8 "$img" | tr -d ' ')"
+    shentsize="$(od -An -t u2 -j 58 -N 2 "$img" | tr -d ' ')"
+    shnum="$(od -An -t u2 -j 60 -N 2 "$img" | tr -d ' ')"
+    off=$((shoff + shentsize * shnum))
     work="$(mktemp -d -p "$(dirname "$img")" .smoke.XXXXXX)"
     trap 'rm -rf "$work"' EXIT
     if command -v unsquashfs >/dev/null 2>&1; then
@@ -60,6 +77,7 @@ else
     echo "running the payload through the host loader $ld" >&2
     out="$(env -u DISPLAY -u WAYLAND_DISPLAY "$ld" --library-path "$work/app/usr/lib" "$work/app/usr/bin/$crate" --version 2>&1)" \
         || { echo "$out"; exit 1; }
+  fi
 fi
 echo "$out"
 last="$(printf '%s\n' "$out" | tail -1)"
