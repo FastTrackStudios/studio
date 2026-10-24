@@ -9,6 +9,8 @@ publish = false
 frame = { path = "../../../crates/frame", features = ["io", "render", "runtime"] }
 serde_json = { workspace = true }
 uuid = { workspace = true }
+# frame's skrifa, not the workspace's: the font handles come from frame
+# (`Face::font`), which is on the vello 0.10 stack.
 skrifa = "0.26"
 
 [dev-dependencies]
