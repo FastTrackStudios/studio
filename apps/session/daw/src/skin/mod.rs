@@ -23,7 +23,10 @@
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, PoisonError, RwLock};
-use std::time::{Duration, Instant, SystemTime};
+// A file's mtime is std's `SystemTime`; the clock is `web_time`'s, which a
+// browser has.
+use std::time::{Duration, SystemTime};
+use web_time::Instant;
 
 use daw_proto::Track;
 use frame::theme::runtime::{Fields, Rgba, Schema, Theme, Value};

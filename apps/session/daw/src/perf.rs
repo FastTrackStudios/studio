@@ -55,7 +55,7 @@ struct Timed {
 pub fn register(list: &ActionList) -> Result<(), architect::action::ActionError> {
     list.register(&RECENT, Effect::ReadOnly, |a: RecentArg| {
         let limit = usize::try_from(a.limit.unwrap_or(20)).unwrap_or(20);
-        let now = std::time::SystemTime::now();
+        let now = web_time::SystemTime::now();
         Ok(architect_telemetry::timing::recent(usize::MAX)
             .into_iter()
             .filter(|t| a.name.as_deref().is_none_or(|n| t.name == n))

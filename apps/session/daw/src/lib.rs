@@ -311,3 +311,7 @@ pub mod widget;
 pub mod window_cursor;
 pub use editing::written;
 pub mod zoom;
+
+// The library reads a clock a browser has (#235).
+#[cfg(test)]
+mod web_clock_tests;

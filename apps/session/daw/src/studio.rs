@@ -365,7 +365,7 @@ impl StudioSession {
                 }
             }),
         };
-        let planning = std::time::Instant::now();
+        let planning = web_time::Instant::now();
         let (project, rows) = planner.plan(&planner.raw);
         let planned = planning.elapsed();
         let previews = previews_of(&project);

@@ -276,7 +276,7 @@ fn load_rpp_in(
         .file_stem()
         .map(|s| s.to_string_lossy().into_owned())
         .unwrap_or_else(|| path.to_string_lossy().into_owned());
-    let began = std::time::Instant::now();
+    let began = web_time::Instant::now();
     let summary = load_rpp_text(&daw, &name, &path.to_string_lossy(), &text)
         .map_err(|e| eyre::eyre!("{name} did not parse: {e}"))?;
     let parsed = began.elapsed();

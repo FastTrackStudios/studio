@@ -392,7 +392,7 @@ pub fn hear_stems() {
     let spawned = std::thread::Builder::new()
         .name("session-stems-handover".into())
         .spawn(move || {
-            let started = std::time::Instant::now();
+            let started = web_time::Instant::now();
             let mut waiting = waiting;
             while !waiting.is_empty() {
                 let at = crate::engine::Transport::shared().map_or(0.0, |t| t.read().0);
