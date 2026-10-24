@@ -949,7 +949,7 @@ pub fn detect(
     settings: &HitSettings,
     all_takes: bool,
 ) -> Result<DetectReport, String> {
-    let started = std::time::Instant::now();
+    let started = web_time::Instant::now();
     let _job = crate::jobs::start("Finding the drum hits", 0);
     let (all_pieces, extras) = kit(daw, project);
     let pieces: Vec<KitPiece> = all_pieces

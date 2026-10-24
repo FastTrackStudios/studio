@@ -797,7 +797,7 @@ struct MixerWidget {
     /// every rack's history and spectrum fed by [`crate::simulate::Feed`]
     /// on the clock since the window opened, as the engine would feed them
     /// while playing.
-    simulated: Option<(std::time::Instant, crate::simulate::Feed)>,
+    simulated: Option<(web_time::Instant, crate::simulate::Feed)>,
     /// Which mix phases are folded shut in the racks.
     folds: crate::tone::Fold,
     /// How far the racks' chains are scrolled under their boxes.
@@ -936,7 +936,7 @@ impl MixerWidget {
             levels: std::collections::HashMap::new(),
             simulated: std::env::var_os("FTS_SIMULATE")
                 .is_some_and(|v| !v.is_empty() && v != "0")
-                .then(|| (std::time::Instant::now(), crate::simulate::Feed::new())),
+                .then(|| (web_time::Instant::now(), crate::simulate::Feed::new())),
             folds: crate::tone::Fold::rest(),
             rack_scroll: 0.0,
             rack_hover: None,

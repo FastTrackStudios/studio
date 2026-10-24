@@ -162,7 +162,7 @@ pub fn open_untitled(name: &str, audio: Option<bool>) -> eyre::Result<Opened> {
 
 fn open_with_audio(path: &Path, audio: bool, media: Media) -> eyre::Result<Opened> {
     refuse_unless_local(path)?;
-    let began = std::time::Instant::now();
+    let began = web_time::Instant::now();
     let opened = load_into_with(engine(), path, media)?;
     let loaded = began.elapsed();
     bootstrap(&opened.daw)?;
@@ -673,7 +673,7 @@ fn attach_audio_now(daw: &Standalone, project_guid: &str, asked: u64) {
     }
     // Close the old stream before opening the device again.
     drop(slot.take());
-    let began = std::time::Instant::now();
+    let began = web_time::Instant::now();
     let prefs = crate::render_ahead::current().io_prefs();
     match daw.attach_audio_engine_with_prefs(project_guid, &prefs) {
         Ok(engine) => {

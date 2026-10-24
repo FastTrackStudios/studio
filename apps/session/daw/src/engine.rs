@@ -1487,7 +1487,7 @@ pub fn ticket() -> u64 {
 /// applied — at most `within`. False if it was not.
 pub fn wait_done(ticket: u64, within: std::time::Duration) -> bool {
     let (lock, signal) = &DONE;
-    let started = std::time::Instant::now();
+    let started = web_time::Instant::now();
     let mut applied = lock
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner);

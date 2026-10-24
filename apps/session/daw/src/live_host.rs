@@ -38,7 +38,8 @@
 
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::time::{Duration, Instant};
+use std::time::Duration;
+use web_time::Instant;
 
 use session::library::{Library, ListKind, Setlist, slugify};
 

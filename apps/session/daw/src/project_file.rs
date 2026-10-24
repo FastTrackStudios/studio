@@ -125,7 +125,7 @@ const COMPACT_AFTER: usize = 64;
 const IDLE: std::time::Duration = std::time::Duration::from_secs(10);
 
 /// When a song's file was last written to.
-static LAST_WRITE: Mutex<Option<std::time::Instant>> = Mutex::new(None);
+static LAST_WRITE: Mutex<Option<web_time::Instant>> = Mutex::new(None);
 
 /// Fold every open song's updates into a snapshot once the songs have been
 /// left alone for [`IDLE`] — in the background, under each song's lock (so
@@ -396,7 +396,7 @@ fn append(open: &mut Open, label: &str) -> Result<(), String> {
         open.saved = doc.version();
         open.uncompacted = open.uncompacted.saturating_add(1);
         if let Ok(mut at) = LAST_WRITE.lock() {
-            *at = Some(std::time::Instant::now());
+            *at = Some(web_time::Instant::now());
         }
     }
     // Folded into a snapshot once there are enough to slow an open. Safe
@@ -467,7 +467,7 @@ pub(crate) fn record_steps() {
                         // What is made from the recording follows it first —
                         // the kit's samples onto where its hits play now — so
                         // it is in the same commit as the edit that moved it.
-                        let started = std::time::Instant::now();
+                        let started = web_time::Instant::now();
                         if let Some(daw) = crate::open::local_engine() {
                             crate::actions::samples_follow(
                                 daw,
@@ -608,7 +608,7 @@ pub fn load(daw: &Standalone, name: &str, path: &Path, branch: &str) -> Result<S
     if uncompacted > 0
         && let Ok(mut at) = LAST_WRITE.lock()
     {
-        *at = Some(std::time::Instant::now());
+        *at = Some(web_time::Instant::now());
     }
     let doc = SessionDoc::from_loro(loaded);
     let saved = doc.version();
