@@ -350,6 +350,48 @@ fn organize_dynamic(tracks: &[Track]) -> Vec<MixNode> {
     if out.is_empty() {
         return organize_builtin(tracks);
     }
+    with_homes(out)
+}
+
+/// The browser's two dedicated homes, on the native tree too: Reference
+/// and Tracks are always their own labelled folder — even for a lone track
+/// — and Reference is the leftmost.
+///
+/// The template keeps Reference last ("utility tracks at the bottom"),
+/// which is right for a REAPER project's track list and wrong for a mixer,
+/// where the reference is what you reach for first. So the mixer reorders
+/// its own view rather than the template.
+#[cfg(not(target_arch = "wasm32"))]
+fn with_homes(nodes: Vec<MixNode>) -> Vec<MixNode> {
+    let mut out: Vec<MixNode> = Vec::with_capacity(nodes.len());
+    for node in nodes {
+        let home = match &node {
+            MixNode::Leaf(t) => match Inst::from_name(&t.name) {
+                c @ (Inst::Reference | Inst::Tracks) => Some(c.label()),
+                _ => None,
+            },
+            MixNode::Folder(_) => None,
+        };
+        let Some(home) = home else {
+            out.push(node);
+            continue;
+        };
+        // Into the folder of that name if the sorter made one, else a new
+        // one where the lone track stood.
+        let existing = out.iter_mut().find_map(|n| match n {
+            MixNode::Folder(f) if f.name == home => Some(f),
+            _ => None,
+        });
+        match existing {
+            Some(folder) => folder.children.push(node),
+            None => out.push(MixNode::Folder(FolderNode {
+                name: home.to_string(),
+                children: vec![node],
+            })),
+        }
+    }
+    // Stable: everything else keeps the template's order behind it.
+    out.sort_by_key(|n| !matches!(n, MixNode::Folder(f) if f.name == Inst::Reference.label()));
     out
 }
 
@@ -934,3 +976,6 @@ fn ChannelStrip(
         }
     }
 }
+
+#[cfg(all(test, not(target_arch = "wasm32")))]
+mod tests;
