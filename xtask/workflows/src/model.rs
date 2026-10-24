@@ -85,8 +85,6 @@ impl Concurrency {
 pub enum RunsOn {
     Label(&'static str),
     Labels(&'static [&'static str]),
-    /// A label built at generation time (a WarpBuild label with options).
-    Owned(String),
 }
 
 impl Serialize for RunsOn {
@@ -94,7 +92,6 @@ impl Serialize for RunsOn {
         match self {
             Self::Label(label) => s.serialize_str(label),
             Self::Labels(labels) => labels.serialize(s),
-            Self::Owned(label) => s.serialize_str(label),
         }
     }
 }

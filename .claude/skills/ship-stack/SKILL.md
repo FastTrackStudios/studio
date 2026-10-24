@@ -1,6 +1,6 @@
 ---
 name: ship-stack
-description: Ship studio work as a gh stack through the Local CI gate, from first branch to green main. Use when starting a change, splitting work into PRs, pushing or opening PRs, a PR waiting on `Local CI` or `PR checks`, merging (normal or forced), checking main after a merge, or when CI, WarpBuild or its snapshots misbehave.
+description: Ship studio work as a gh stack through the Local CI gate, from first branch to green main. Use when starting a change, splitting work into PRs, pushing or opening PRs, a PR waiting on `Local CI` or `PR checks`, merging (normal or forced), checking main after a merge, or when CI misbehaves.
 ---
 
 # Ship a stack (studio's Local CI gate)
@@ -11,7 +11,7 @@ fmt, change files and the static guards, then the tests, `cargo check` and
 the wasm check that `cargo rail plan` says the change affects, on the warm
 local target dir. When it's green,
 the hook posts the **`Local CI`** commit status, with how long it took.
-**GitHub** runs one free job on a PR, then the full suite on WarpBuild
+**GitHub** runs one free job on a PR, then the full set on its free runners
 once per merge to main.
 
 One green run on the top of a stack vouches for every layer below it,
@@ -33,8 +33,7 @@ worktree with its own `target/` costs a cold build.
 | `git push` | prek pre-push → `scripts/ci-local-hook.sh` → `just ci-local` | your machine | the PR gate's expensive half; posts **`Local CI`** |
 | PR into main | `PR / PR checks` (`pr.yml`) | free hosted, rustup + cargo-rail, no nix | fmt, change files, the lockfile, the rail config |
 | PR into main | `Release / Release guard` | free hosted | judges `release/pending` PRs only; passes otherwise |
-| push to main | `CI` (`checks.yml`): Plan, Dependency cache, Gates, Check, Wasm, Tests, **`CI passed`** | Check on a WarpBuild 8x (rust-cache), Tests on a 16x (restored snapshot); the rest free hosted | the full suite, once per merge (no nightly) |
-| Sunday 09:37 UTC | `CI` seed | WarpBuild from the base image | the full suite, cold, saving fresh snapshots |
+| push to main | `CI` (`checks.yml`): Plan, Dependency cache, Gates, Check, Wasm, Tests, Release tooling (macOS), **`CI passed`** | free hosted (ubuntu-latest; macos-latest for the release tooling), rust-cache main saves | the full set, once per merge (no nightly, no schedule) |
 | PR into `release/**` | `CI` | same | a hotfix: the full suite |
 
 **Main requires:** `PR checks`, `Release guard` and `Local CI` (ruleset
@@ -203,8 +202,7 @@ gh api -X PUT repos/FastTrackStudios/studio/rulesets/25572127 --input /tmp/rs-pu
 
 ### 7. Main is green
 
-Each merge to main starts a full `CI` run (Check on a WarpBuild 8x, Tests
-on a 16x restored warm from the seeded snapshot, the rest free). Cancel the ones the last merge
+Each merge to main starts a full `CI` run, all on GitHub's free runners. Cancel the ones the last merge
 superseded, so the suite runs once, on the top commit:
 
 ```bash
@@ -235,30 +233,10 @@ Done when the run on main's head commit has a green `CI passed`.
   locally and after merge. `just ci-churn` checks that a warm build
   recompiles nothing after the CI prep (assets, plugin faces).
 
-**WarpBuild** (billed per started minute: 2x $0.004, 8x $0.016, 16x
-$0.032; check spend with the WarpBuild MCP: `GET /reports/billing/ci`)
-- **The snapshot** `studio-tests` keeps the toolchain, the apt packages,
-  `~/.cargo`, the asset clones and the warm target dir (no nix on the
-  runners).
-  - **Saved only by a seed run** (the Sunday cron, or
-    `gh workflow run checks.yml --ref main -f seed=true`). A seed boots from
-    WarpBuild's base image (`snapshot.enabled=true`), builds cold (~15 min
-    of 16x) and saves.
-  - **Every other run only restores** (`snapshot.key=<alias>`). Never make a
-    restored runner save: a snapshot of a snapshot boots runners that never
-    pick up a job.
-  - **Expiry:** snapshots expire after 15 days, which the weekly seed
-    covers. Reseed by hand after a toolchain or lockfile change that makes
-    warm runs slow.
-- **Jobs stuck queued** while WarpBuild boots runners that are purged within
-  a minute (`cleanup_hook`; `GET /runner_instance` in the WarpBuild MCP
-  shows `last_job_processed_id` empty): the snapshot is broken. Cancel the
-  run, delete the aliases (`GET /runner-images?type=warpbuild_snapshot_image`,
-  then `DELETE /runner-images/<id>`) and dispatch a seed.
-- **A restored runner carries the saving job's environment** (Task's
-  restored runners kept a `TMPDIR` under a `_temp` dir that no longer
-  existed). If a tool misbehaves only on restored runners, suspect leftover
-  environment.
+**Runners:** GitHub's free hosted runners only (the repo is public), since
+2026-10-24 (WarpBuild is gone). The test build is the core test set
+(the Justfile's `test_packages`, ~650 tests), which fits a free runner;
+rust-cache, saved by main, keeps its dependencies warm.
 - **Setup:** every job is generated (`xtask/workflows`, `just workflows`):
   rustup at the pinned toolchain, apt headers (cached), pinned release
   binaries (just, cargo-rail, tracey, nextest, actionlint); `PR checks`

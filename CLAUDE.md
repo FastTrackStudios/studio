@@ -140,7 +140,7 @@ runs in, `.#reaper-test` the REAPER suites, `.#stems` stem separation.
 
 ```bash
 just check                 # cargo check --workspace
-just test                  # cargo nextest run --workspace --features session-desktop/cli,studio-desktop/cli,web-audio-worklet/guitar,web-audio-worklet/keys
+just test                  # the core test set: cargo nextest run -p <each of the Justfile's test_packages>
 just test-doc              # doctests (nextest cannot run them)
 just app [PROJECT]         # Session (session-desktop, release-fast)
 just guitar / just keys    # Signal's rigs (studio-desktop; FTS_STUDIO_OPEN=signal|session skips the front screen)
@@ -152,8 +152,11 @@ just faces                 # generate the plugin faces
 just assets                # link the big binaries (see Assets)
 ```
 
-The test feature list matters: the app CLIs and the worklet rigs sit
-behind features, and without them their tests never build.
+The suite is a core set (cut on 2026-10-24 from 11 317 tests to ~650): the
+crates in the Justfile's `test_packages` — the DSP math, the session
+format, the engine, the timeline, the wire types, every effect's parameter
+round-trip. `just test`, local CI and CI build and run exactly those. A
+crate gains a place there when it gains tests worth running on every change.
 
 **Before you push: `just install-hooks`, once per clone.** It installs the
 prek hooks (`prek.toml`): rustfmt, shellcheck and actionlint on the staged
@@ -180,11 +183,8 @@ full set, **`CI`** (`checks.yml`: `Gates`, `Check` + advisory clippy,
 `main`, on hotfix PRs into `release/**`, and by hand. `main` may go red:
 releases are cut by hand, and `just release-tag` requires `CI passed` on
 the release commit. Plan, gates, wasm and the aggregator run on GitHub's
-free runners; `Check` on a WarpBuild 8x; `Tests` on a WarpBuild 16x
-snapshot runner that keeps the warm target. Only a **seed** saves that
-snapshot — the Sunday cron, or `gh workflow run checks.yml --ref main -f
-seed=true` — booting from the base image; a restored runner never saves
-(a snapshot of a snapshot breaks the runners). No tailwind step anywhere
+free runners, and so do `Check` and `Tests` (the core test set), with
+rust-cache that main saves. No WarpBuild, no snapshots, no schedule. No tailwind step anywhere
 (committed sheets; dx builds session-web's); `just ci-boundaries` is
 manual, not CI.
 

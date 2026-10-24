@@ -15,6 +15,3 @@ self-hosted-runner:
     # THEBATTLESHIP: the Linux AppImage (desktop.yml), beside its rig-models
     # clone.
     - session
-    # WarpBuild cloud runners (checks.yml `tests (warpbuild trial)`), with
-    # their `;snapshot.key=…` options.
-    - "warp-*"
