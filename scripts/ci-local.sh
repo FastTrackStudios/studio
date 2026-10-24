@@ -67,6 +67,9 @@ if [ -z "$base" ]; then
   base="$(git merge-base origin/main HEAD)"
 fi
 echo "ci-local: $(git rev-parse --short HEAD) against $(git rev-parse --short "$base")"
+# The commit this run checks: a pass is recorded for it only if HEAD is
+# still it at the end (a commit made mid-run was never checked).
+started_at="$(git rev-parse HEAD)"
 
 # Wall time per phase, for the summary line, the pass record and the
 # `Local CI` status description ("passed in 6m12s on host: tests 2m05s, …").
@@ -93,6 +96,8 @@ finish() {
   dirty="$(git status --porcelain --untracked-files=no)"
   if [ -n "${1:-}" ]; then
     echo "ci-local: BASE given, so no pass recorded (a narrower run doesn't vouch for the commit)"
+  elif [ "$(git rev-parse HEAD)" != "$started_at" ]; then
+    echo "ci-local: HEAD moved to $(git rev-parse --short HEAD) during the run, so no pass recorded (this run checked $(git rev-parse --short "$started_at"))"
   elif [ -n "$dirty" ]; then
     echo "ci-local: the tree changed, so no pass recorded for $(git rev-parse --short HEAD):"
     echo "$dirty"
