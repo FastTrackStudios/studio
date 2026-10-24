@@ -229,7 +229,7 @@ fts-account = { path = "features/account" }
 # The grid that follows the zoom. Pure arithmetic and no dependencies, so
 # the arrange view and the expression editor can agree on it without
 # either depending on the other.
-neural-amp-modeler = { git = "https://github.com/FastTrackStudios/neural-amp-modeler-rs", tag = "v0.1.1" }
+neural-amp-modeler = { git = "https://github.com/FastTrackStudios/neural-amp-modeler-rs", tag = "v0.1.2" }
 # Defaults OFF at the root so lean consumers (probe-only scanners, the
 # iOS-clean session-guide) don't drag the pack engine in; each consumer
 # names the features it needs ("load" / "write" / "engine").
@@ -1442,6 +1442,10 @@ opt-level = 3
 [profile.dev.package.daw-standalone]
 opt-level = 3
 [profile.dev.package.neural-amp-modeler]
+opt-level = 3
+# neural-amp-modeler's engine since v0.1.2: the NAM forward pass, in the
+# audio callback.
+[profile.dev.package.valverig-nam]
 opt-level = 3
 # The effects (features/dsp: eq, comp, reverb, delay, pitch, trigger, …
 # were crates of their own, each listed here).
