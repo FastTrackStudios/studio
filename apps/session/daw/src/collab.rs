@@ -27,6 +27,18 @@
 //! The same code runs natively and in a browser: its tasks and timers are
 //! `architect::platform`'s (tokio natively, the page's event loop in wasm).
 //! Hosting and iroh are the desktop's; a page only joins a set Task keeps.
+//!
+//! Signed in to Task, the desktop needs no button to share: whatever it
+//! has open is hosted in Task by itself (`live_host`), and the
+//! members and agents in the set edit it live.
+//!
+//! **This device's lock.** "Lock / don't sync" ([`set_sync_locked`]) is
+//! per device and remembered on it: locked, the session's task holds the
+//! others' edits in the songs' docs instead of making them in this engine,
+//! and keeps this engine's edits (the chart's too) out of the docs. The
+//! set's presence goes on. Unlocking merges, song by song
+//! (`Bridge::merge_held`): this engine's edits go into the doc first, as
+//! one step, then the engine is made to match the doc, which holds both.
 
 use std::collections::{BTreeSet, HashMap};
 use std::sync::{Arc, Mutex};
@@ -41,7 +53,7 @@ use session::sync::presence::{self, PeerState, PlayState, Pointer, Roster, Throt
 use session::sync::transport::{
     self, Command, LocalTransport, SharedTransport, SyncPosition, TransportMode, TransportSync,
 };
-use session::sync::{Bridge, Change, ORIGIN_LOCAL, SessionDoc};
+use session::sync::{Bridge, Change, Hold, ORIGIN_LOCAL, SessionDoc};
 use uuid::Uuid;
 
 /// Where the sessions' FX state is kept while they are shared: one
@@ -85,6 +97,11 @@ pub struct Status {
     /// When a playground set (the public demo) starts over, on this
     /// machine's clock; `None` for a set that keeps what is done in it.
     pub resets_at: Option<architect::platform::Instant>,
+    /// This device is locked ([`sync_locked`]): nothing goes out or comes
+    /// in until it is unlocked.
+    pub locked: bool,
+    /// Songs with something held by the lock, to merge when it lifts.
+    pub held: usize,
 }
 
 /// One song of the set, as the session keeps it.
@@ -113,6 +130,25 @@ struct Live {
 }
 
 static LIVE: Mutex<Option<Live>> = Mutex::new(None);
+
+/// Who this peer is in a session shared with nobody (this machine's own
+/// record of its songs' edits) — never locked: there is nothing to hold.
+const LOCAL_ME: &str = "local";
+
+/// Join a song's doc that already holds the session: the engine made to
+/// match it — or, locked ([`sync_locked`]), left as it is until the lock
+/// lifts.
+async fn join_bridge(
+    project: daw_control::Project,
+    media: MediaRoot,
+    doc: SessionDoc,
+) -> eyre::Result<Bridge> {
+    if sync_locked() {
+        Bridge::join_held(project, media, doc, blobs(), local()).await
+    } else {
+        Bridge::join(project, media, doc, blobs(), local()).await
+    }
+}
 
 /// Whether an environment switch is on: set, and not to nothing.
 #[must_use]
@@ -159,8 +195,94 @@ pub fn status() -> Option<Status> {
         .ok()?
         .as_ref()
         .filter(|l| l.shared)
-        .map(|l| l.status.clone())
+        .map(|l| Status {
+            locked: sync_locked(),
+            held: HELD.load(std::sync::atomic::Ordering::Relaxed),
+            ..l.status.clone()
+        })
 }
+
+// ---- This device's lock ------------------------------------------------
+//
+// "Lock / don't sync", per device (`session::sync::hold`): locked, the
+// session's task holds what the others send in the songs' docs instead of
+// making it in this engine, and keeps this engine's edits out of the docs;
+// unlocking merges both. Presence goes on either way — the others still
+// see who is here and where. The switch is remembered on this device.
+
+/// The switch, as the session's task follows it (it wakes on a change).
+static LOCK: std::sync::LazyLock<tokio::sync::watch::Sender<bool>> =
+    std::sync::LazyLock::new(|| tokio::sync::watch::channel(remembered_lock()).0);
+
+/// Songs with something held right now (the session's task keeps it).
+static HELD: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+
+/// Chart edits made here while locked, by project: written into their
+/// songs' docs as the lock lifts.
+static HELD_CHARTS: Mutex<Option<HashMap<String, String>>> = Mutex::new(None);
+
+/// Whether this device is locked: not sending its edits, not taking the
+/// others'.
+#[must_use]
+pub fn sync_locked() -> bool {
+    *LOCK.borrow()
+}
+
+/// Lock this device, or unlock it — unlocking merges what was held: this
+/// engine's edits go out, then the others' are made here.
+pub fn set_sync_locked(locked: bool) {
+    if !locked {
+        // The chart editor's edits first: the session's task merges the
+        // rest, and the doc then holds both.
+        let charts = HELD_CHARTS
+            .lock()
+            .ok()
+            .and_then(|mut c| c.take())
+            .unwrap_or_default();
+        for (project, text) in charts {
+            if let Some((song, _, _)) = song_where(|s| s.project == project) {
+                write_chart(&song, &text);
+            }
+        }
+    }
+    remember_lock(locked);
+    LOCK.send_replace(locked);
+    tracing::info!(collab.locked = locked, "collab: this device's sync switch");
+}
+
+/// Where the switch is remembered: this device's data dir.
+#[cfg(feature = "native")]
+fn lock_file() -> Option<std::path::PathBuf> {
+    Some(dirs::data_dir()?.join("Session").join("live-sync-locked"))
+}
+
+#[cfg(feature = "native")]
+fn remembered_lock() -> bool {
+    lock_file()
+        .and_then(|p| std::fs::read_to_string(p).ok())
+        .is_some_and(|v| v.trim() == "1")
+}
+
+#[cfg(feature = "native")]
+fn remember_lock(locked: bool) {
+    let Some(path) = lock_file() else { return };
+    let written = path
+        .parent()
+        .map_or(Ok(()), std::fs::create_dir_all)
+        .and_then(|()| std::fs::write(&path, if locked { "1" } else { "0" }));
+    if let Err(e) = written {
+        tracing::warn!(collab.error = %e, "collab: the sync switch was not remembered");
+    }
+}
+
+/// A page starts live and remembers nothing.
+#[cfg(not(feature = "native"))]
+const fn remembered_lock() -> bool {
+    false
+}
+
+#[cfg(not(feature = "native"))]
+const fn remember_lock(_: bool) {}
 
 fn song_where(pick: impl Fn(&Song) -> bool) -> Option<(Song, Arc<dyn PresenceSink>, String)> {
     let live = LIVE.lock().ok()?;
@@ -335,7 +457,7 @@ fn open_local_with(mut docs: HashMap<String, SessionDoc>) -> eyre::Result<()> {
             Arc::clone(&presence),
             SharedClock::owned(),
             String::new(),
-            "local".into(),
+            LOCAL_ME.into(),
             String::new(),
             None,
             None,
@@ -381,11 +503,32 @@ pub fn chart_context() -> Option<(SessionDoc, Arc<dyn PresenceSink>, String)> {
     current().map(|(s, p, me)| (s.doc, p, me))
 }
 
-/// The chart was edited here (the song on screen).
+/// The chart was edited here (the song on screen). Locked, it is kept
+/// here until the lock lifts.
 pub fn local_chart(text: &str) {
     let Some((song, _, _)) = current() else {
         return;
     };
+    if sync_locked() && shared() {
+        if let Ok(mut held) = HELD_CHARTS.lock() {
+            held.get_or_insert_with(HashMap::new)
+                .insert(song.project.clone(), text.to_owned());
+        }
+        return;
+    }
+    write_chart(&song, text);
+}
+
+/// Whether the session is shared with anyone (not only this machine's
+/// record of its songs).
+fn shared() -> bool {
+    LIVE.lock()
+        .ok()
+        .is_some_and(|l| l.as_ref().is_some_and(|l| l.shared))
+}
+
+/// Record `text` as `song`'s chart.
+fn write_chart(song: &Song, text: &str) {
     // The bridge owns doc writes; a chart edit is recorded straight into
     // the text, which the next local reconcile leaves alone.
     let mut model = song.doc.read();
@@ -651,7 +794,7 @@ fn join_inner(ticket: &str, name: String) -> eyre::Result<()> {
         for (doc, (project, media, key, path)) in replicas {
             let guid = project.guid().to_owned();
             let bridge = if doc.has_session() {
-                Bridge::join(project, media, doc, blobs(), local()).await?
+                join_bridge(project, media, doc).await?
             } else {
                 let own = docs.remove(&key).unwrap_or_default();
                 let chart = chart_for(&path, &own);
@@ -797,6 +940,41 @@ fn join_task_inner(set: &TaskSet, name: String) -> eyre::Result<()> {
         *slot = Some(live);
     }
     Ok(())
+}
+
+/// The songs open in this engine, by the name every machine knows each by
+/// (`Washed`), in the engine's order.
+///
+/// # Errors
+/// When the engine is not up or cannot be read.
+#[cfg(feature = "native")]
+pub fn open_song_keys() -> eyre::Result<Vec<String>> {
+    let runtime = crate::open::runtime().ok_or_else(|| eyre::eyre!("the engine is not up"))?;
+    runtime.block_on(async {
+        Ok::<_, eyre::Report>(open_songs().await?.into_iter().map(|s| s.2).collect())
+    })
+}
+
+/// The name the open set is known by (the setlist's, or a lone song's):
+/// what its live set in Task is called.
+///
+/// # Errors
+/// When the engine is not up or cannot be read.
+#[cfg(feature = "native")]
+pub fn open_set_title() -> eyre::Result<String> {
+    let runtime = crate::open::runtime().ok_or_else(|| eyre::eyre!("the engine is not up"))?;
+    runtime.block_on(async { Ok::<_, eyre::Report>(set_key(&open_songs().await?)) })
+}
+
+/// Run `work` on the engine's runtime, to its end — for what a thread of
+/// its own must do against Task (the auto-host's library calls).
+///
+/// # Errors
+/// When the engine is not up, or `work` fails.
+#[cfg(feature = "native")]
+pub fn on_runtime<T>(work: impl std::future::Future<Output = eyre::Result<T>>) -> eyre::Result<T> {
+    let runtime = crate::open::runtime().ok_or_else(|| eyre::eyre!("the engine is not up"))?;
+    runtime.block_on(work)
 }
 
 /// Whether a session is being joined right now — a page joins in the
@@ -1069,10 +1247,7 @@ async fn bridge_song(
 ) -> eyre::Result<(Song, Bridge, bool)> {
     let guid = project.guid().to_owned();
     let (bridge, seeded) = match doc {
-        Some(doc) if doc.has_session() => (
-            Bridge::join(project, media, doc, blobs(), local()).await?,
-            false,
-        ),
+        Some(doc) if doc.has_session() => (join_bridge(project, media, doc).await?, false),
         Some(doc) => {
             let chart = chart_for(&path, &doc);
             (
@@ -1159,6 +1334,22 @@ fn follow_doc(
     }))
 }
 
+/// A chart the others changed, among `changes` to `song`: for the chart
+/// editor to take when it next looks.
+fn note_remote_chart(
+    changes: &[Change],
+    song: &Song,
+    remote_chart: &Mutex<HashMap<String, String>>,
+) {
+    for change in changes {
+        if let Change::ChartChanged(text) = change
+            && let Ok(mut slot) = remote_chart.lock()
+        {
+            slot.insert(song.project.clone(), text.clone());
+        }
+    }
+}
+
 /// The half-built `Live` [`start`] returns; finished by the caller.
 struct Started {
     stop: tokio::sync::watch::Sender<bool>,
@@ -1182,6 +1373,8 @@ impl Started {
                 color: presence::color_for(&self.me),
                 name: self.name,
                 resets_at: None,
+                locked: false,
+                held: 0,
             },
             stop: self.stop,
             sync: self.sync,
@@ -1254,12 +1447,52 @@ fn start(
         // Sample-accurate following (daw-transport-sync): the leader's
         // stamped playhead, this engine locked to it.
         let mut lock = Lock::default();
+        // This device's lock (`session::sync::hold`): only a shared
+        // session holds anything. A locked device starts with every song
+        // held: its joins left its engine as it was.
+        let holds = me != LOCAL_ME;
+        let mut lock_rx = LOCK.subscribe();
+        let mut hold = Hold::new(holds && *lock_rx.borrow_and_update());
+        if hold.locked() {
+            for index in 0..songs.len() {
+                hold.remote(index);
+            }
+        }
+        HELD.store(hold.held(), std::sync::atomic::Ordering::Relaxed);
         let key_of = |songs: &[Song], project: Option<String>| {
             project.and_then(|p| songs.iter().find(|s| s.project == p).map(|s| s.key.clone()))
         };
         loop {
             tokio::select! {
                 _ = stopped.changed() => break,
+                // Locked or unlocked here: unlocking merges what was held,
+                // song by song — this engine's edits out, the others' in.
+                Ok(()) = lock_rx.changed(), if holds => {
+                    let locked = *lock_rx.borrow_and_update();
+                    let held = hold.set_locked(locked);
+                    let showing = crate::open::current_song();
+                    for i in &held.songs {
+                        let (Some(bridge), Some(song)) = (bridges.get_mut(*i), songs.get(*i)) else { continue };
+                        match bridge.merge_held("Edits while locked").await {
+                            Ok(changes) => {
+                                note_remote_chart(&changes, song, &remote_chart);
+                                if !changes.is_empty() && showing.as_deref() == Some(song.project.as_str()) {
+                                    crate::studio::request_resync();
+                                }
+                            }
+                            Err(e) => tracing::warn!(collab.error = %e, "collab: what the lock held did not merge"),
+                        }
+                    }
+                    if !held.is_empty() {
+                        tracing::info!(
+                            collab.songs = held.songs.len(),
+                            collab.local = held.local,
+                            collab.remote = held.remote,
+                            "collab: unlocked; what was held is merged"
+                        );
+                    }
+                    HELD.store(hold.held(), std::sync::atomic::Ordering::Relaxed);
+                }
                 // A song opened after the session began (a page's songs
                 // arrive one by one): followed the same way as the rest.
                 Some((song, bridge)) = next_add(&mut adds) => {
@@ -1272,6 +1505,11 @@ fn start(
                         l.songs.push(song.clone());
                     }
                     tracing::info!(collab.song = %song.key, collab.songs = index + 1, "collab: a song joined the session");
+                    if hold.locked() {
+                        // Joined while locked: its engine waits too.
+                        hold.remote(index);
+                        HELD.store(hold.held(), std::sync::atomic::Ordering::Relaxed);
+                    }
                     songs.push(song);
                     bridges.push(bridge);
                     crate::studio::request_resync();
@@ -1285,12 +1523,17 @@ fn start(
                         touched.insert(i);
                     }
                     for i in touched {
+                        // Locked: kept in this engine, not recorded yet.
+                        if !hold.local(i) {
+                            continue;
+                        }
                         if let Some(bridge) = bridges.get_mut(i)
                             && let Err(e) = bridge.local_changed().await
                         {
                             tracing::warn!(collab.error = %e, "collab: a local edit was not shared");
                         }
                     }
+                    HELD.store(hold.held(), std::sync::atomic::Ordering::Relaxed);
                 }
                 Some(first) = remote_rx.recv() => {
                     let mut touched = BTreeSet::from([first]);
@@ -1299,16 +1542,14 @@ fn start(
                     }
                     let showing = crate::open::current_song();
                     for i in touched {
+                        // Locked: held in the doc, not made here yet.
+                        if !hold.remote(i) {
+                            continue;
+                        }
                         let (Some(bridge), Some(song)) = (bridges.get_mut(i), songs.get(i)) else { continue };
                         match bridge.remote_changed().await {
                             Ok(changes) if !changes.is_empty() => {
-                                for change in &changes {
-                                    if let Change::ChartChanged(text) = change
-                                        && let Ok(mut slot) = remote_chart.lock()
-                                    {
-                                        slot.insert(song.project.clone(), text.clone());
-                                    }
-                                }
+                                note_remote_chart(&changes, song, &remote_chart);
                                 if showing.as_deref() == Some(song.project.as_str()) {
                                     crate::studio::request_resync();
                                 }
@@ -1317,6 +1558,7 @@ fn start(
                             Err(e) => tracing::warn!(collab.error = %e, "collab: a remote edit did not apply"),
                         }
                     }
+                    HELD.store(hold.held(), std::sync::atomic::Ordering::Relaxed);
                 }
                 () = architect::platform::sleep(next_tick.saturating_duration_since(architect::platform::now())) => {
                     next_tick = architect::platform::now() + TICK;

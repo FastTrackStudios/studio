@@ -31,6 +31,32 @@ impl AccountLibrary for Account {
     }
 }
 
+/// Where the org this window last picked is kept.
+fn org_file() -> Option<std::path::PathBuf> {
+    Some(dirs::data_dir()?.join("Session").join("task-org"))
+}
+
+/// Keep `org` as the one this window picked — the org it hosts what it
+/// has open in (`live_host`).
+pub fn remember_org(org: &str) {
+    let Some(path) = org_file() else { return };
+    let kept = path
+        .parent()
+        .map_or(Ok(()), std::fs::create_dir_all)
+        .and_then(|()| std::fs::write(&path, org));
+    if let Err(e) = kept {
+        tracing::warn!(error = %e, "task: the org picked was not kept");
+    }
+}
+
+/// The org this window last picked, if one was kept.
+#[must_use]
+pub fn remembered_org() -> Option<String> {
+    let org = std::fs::read_to_string(org_file()?).ok()?;
+    let org = org.trim();
+    (!org.is_empty()).then(|| org.to_owned())
+}
+
 /// Start signing in to `server`: ask its account server for a code.
 ///
 /// # Errors

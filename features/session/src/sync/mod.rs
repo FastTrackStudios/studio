@@ -22,6 +22,7 @@ pub mod direct;
 pub mod doc;
 #[cfg(feature = "engine")]
 pub mod engine;
+pub mod hold;
 pub mod model;
 #[cfg(feature = "net")]
 pub mod net;
@@ -35,6 +36,7 @@ pub mod whole;
 pub use bridge::Bridge;
 pub use diff::{Change, ItemField, TrackField, diff};
 pub use doc::{ORIGIN_LOCAL, SCHEMA, SessionDoc};
+pub use hold::{Held, Hold};
 pub use loro;
 pub use model::{
     AutomationItemState, CcState, ChannelPressureState, CompAreaState, CompingState,

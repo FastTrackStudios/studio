@@ -366,6 +366,8 @@ fn Start(opened: Signal<Option<Setlist>>) -> Element {
         };
         setlists.set(Load::Waiting);
         songs.set(Load::Waiting);
+        // The org this window hosts what it opens in (`live_host`).
+        task_account::remember_org(&org);
         let library = account.library(&org);
         let for_songs = library.clone();
         spawn(async move {
