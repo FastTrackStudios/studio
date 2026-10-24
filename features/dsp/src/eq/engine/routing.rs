@@ -118,7 +118,9 @@ impl FtsEq {
                 filtered,
                 lo_hz: lo,
                 hi_hz: hi,
+                key,
             } = slot.side;
+            d.params.keyed = key;
             d.params.side_mode = if filtered {
                 crate::eq::dynamics::SideMode::Free
             } else {

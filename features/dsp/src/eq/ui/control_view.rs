@@ -1252,6 +1252,8 @@ fn AppShell() -> Element {
                                                         release: param_handle(bp.dyn_release.as_ptr(), ctx.clone()),
                                                         auto: param_handle(bp.dyn_auto.as_ptr(), ctx.clone()),
                                                         density: param_handle(bp.spectral_density.as_ptr(), ctx.clone()),
+                                                        relative: param_handle(bp.dyn_relative.as_ptr(), ctx.clone()),
+                                                        ext_key: param_handle(bp.dyn_key.as_ptr(), ctx.clone()),
                                                     }
 
                                                     div { class: "rounded-md border border-border bg-muted/20 p-2",

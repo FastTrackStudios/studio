@@ -99,6 +99,8 @@ struct SideChain {
     filtered: bool,
     lo_hz: f64,
     hi_hz: f64,
+    /// Listen to the external key rather than the band's own input.
+    key: bool,
 }
 
 /// Per-band spectral-mode settings.
@@ -141,6 +143,7 @@ impl BandSlot {
             filtered: false,
             lo_hz: 20.0,
             hi_hz: 20_000.0,
+            key: false,
         },
         spectral: SpectralSettings {
             on: false,
@@ -225,6 +228,9 @@ pub struct FtsEq {
     /// sat 49 dB low because those shelves were listening downstream of the
     /// cut.
     side_ref: Vec<f64>,
+    /// The external key's mono sum for this block, when one is routed —
+    /// what a keyed band's detector hears instead of `side_ref`.
+    key_ref: Vec<f64>,
 }
 
 /// A band's normalised magnitude shape, 1 at its own frequency and 0 far away.
@@ -417,6 +423,7 @@ impl FtsEq {
             scratch_sl: Vec::new(),
             scratch_sr: Vec::new(),
             side_ref: Vec::new(),
+            key_ref: Vec::new(),
         }
     }
 
@@ -578,6 +585,7 @@ impl FtsEq {
         self.scratch_sl = vec![0.0; num::u32_to_index(block_size.max(1))];
         self.scratch_sr = vec![0.0; num::u32_to_index(block_size.max(1))];
         self.side_ref = vec![0.0; num::u32_to_index(block_size.max(1))];
+        self.key_ref = vec![0.0; num::u32_to_index(block_size.max(1))];
         let grid_capacity = num::f64_to_index(
             ((self.sample_rate * 0.45 / 20.0).log2() * 12.0)
                 .ceil()
@@ -665,6 +673,7 @@ impl FtsEq {
             filtered: dynamics.side_filtered,
             lo_hz: dynamics.side_lo_hz,
             hi_hz: dynamics.side_hi_hz,
+            key: dynamics.external_key,
         };
     }
 
@@ -831,6 +840,7 @@ impl FtsEq {
             sh.dc_y1 = 0.0;
         }
         self.side_ref.fill(0.0);
+        self.key_ref.fill(0.0);
         self.scratch_sl.fill(0.0);
         self.scratch_sr.fill(0.0);
     }
@@ -916,3 +926,6 @@ impl FtsEq {
         self.refresh_auto_gain();
     }
 }
+
+#[cfg(test)]
+mod tests;

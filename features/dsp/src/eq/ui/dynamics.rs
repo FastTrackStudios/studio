@@ -362,6 +362,11 @@ pub fn BandDynamicsPanel(
     release: ParamHandle,
     auto: ParamHandle,
     density: ParamHandle,
+    /// Detect prominence over the programme instead of level, 0/1.
+    relative: ParamHandle,
+    /// Trigger from the plugin's side-chain input, 0/1. (`key` is
+    /// Dioxus's own prop.)
+    ext_key: ParamHandle,
 ) -> Element {
     let mut expanded = use_signal(|| false);
 
@@ -493,6 +498,22 @@ pub fn BandDynamicsPanel(
                             }
                         }
 
+                        // How the detector judges "loud": against the mix
+                        // (Relative), and what it listens to (the side-chain
+                        // input). A spectral band's bins are relative already.
+                        if !spectral {
+                            SwitchRow {
+                                label: "Relative".to_string(),
+                                handle: relative.clone(),
+                                colour: "#f0c040".to_string(),
+                            }
+                        }
+                        SwitchRow {
+                            label: "Ext Sidechain".to_string(),
+                            handle: ext_key.clone(),
+                            colour: "#f0c040".to_string(),
+                        }
+
                         // Spectral-only. The tilt is the difference between a
                         // spectral band behaving on a full mix and fighting it.
                         if spectral {
@@ -517,6 +538,27 @@ pub fn BandDynamicsPanel(
                         }
                     }
                 }
+            }
+        }
+    }
+}
+
+/// A labelled on/off switch over a 0/1 parameter, one gesture per press.
+#[component]
+fn SwitchRow(label: String, handle: ParamHandle, colour: String) -> Element {
+    let on = handle.normalized() > 0.5;
+    rsx! {
+        div { class: "flex items-center justify-between",
+            div { class: "text-[10px] uppercase tracking-wider text-muted-foreground", "{label}" }
+            button {
+                class: "text-[10px] uppercase rounded px-2 py-1 border border-border",
+                style: if on {
+                    format!("background:{colour}; color:#0c0c0f; font-weight:600;")
+                } else {
+                    "background:transparent; color:#737380;".to_string()
+                },
+                onclick: move |_| handle.set_as_gesture(if on { 0.0 } else { 1.0 }),
+                if on { "On" } else { "Off" }
             }
         }
     }

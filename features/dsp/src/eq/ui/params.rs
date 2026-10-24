@@ -169,6 +169,28 @@ pub struct BandParams {
 
     #[id = "schi"]
     pub side_hi_hz: FloatParam,
+
+    /// Detect the band's prominence over the programme rather than its
+    /// level: it rides when the band sticks out of the mix, not when the mix
+    /// gets loud. Appended, so an old session opens absolute.
+    #[id = "dynrelmode"]
+    pub dyn_relative: FloatParam,
+
+    /// Trigger from the plugin's side-chain input instead of the band's own
+    /// audio. With nothing routed to the side-chain the band hears itself.
+    #[id = "dynkey"]
+    pub dyn_key: FloatParam,
+}
+
+/// An on/off switch as a host sees it: prints "On"/"Off" and reads them back.
+fn on_off(name: String) -> FloatParam {
+    FloatParam::new(name, 0.0, FloatRange::Linear { min: 0.0, max: 1.0 })
+        .with_value_to_string(Arc::new(|v| if v > 0.5 { "On" } else { "Off" }.to_string()))
+        .with_string_to_value(Arc::new(|s| match s.trim().to_lowercase().as_str() {
+            "on" | "1" | "true" => Some(1.0),
+            "off" | "0" | "false" => Some(0.0),
+            _ => s.parse().ok(),
+        }))
 }
 
 impl BandParams {
@@ -547,6 +569,9 @@ impl BandParams {
                 },
             )
             .with_unit(" Hz"),
+
+            dyn_relative: on_off(format!("B{} Dyn Relative", idx + 1)),
+            dyn_key: on_off(format!("B{} Dyn Ext SC", idx + 1)),
         }
     }
 }
