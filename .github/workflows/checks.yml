@@ -12,8 +12,8 @@ on:
     - release/v*
   workflow_dispatch: null
 concurrency:
-  group: ci-${{ github.event.pull_request.number || github.ref }}-${{ github.event_name == 'push' && github.sha || github.event_name }}
-  cancel-in-progress: true
+  group: 'ci-${{ github.event.pull_request.number || github.ref }}-${{ startsWith(github.event.head_commit.message, ''chore(release): v'') && github.sha || ''run'' }}'
+  cancel-in-progress: '${{ !startsWith(github.event.head_commit.message, ''chore(release): v'') }}'
 jobs:
   plan:
     name: Plan
@@ -198,121 +198,88 @@ jobs:
     name: Check
     needs: plan
     if: ${{ needs.plan.outputs.skip != 'true' }}
-    runs-on: ubuntu-latest
+    runs-on: '${{ (github.event_name == ''pull_request'' || startsWith(github.event.head_commit.message, ''chore(release): v'')) && fromJSON(''["self-hosted","studio-release"]'') || fromJSON(''["self-hosted","studio-main"]'') }}'
     timeout-minutes: 90
     env:
       CARGO_INCREMENTAL: '0'
     steps:
     - uses: actions/checkout@v4
-    - name: Free disk (background)
-      run: |
-        df -h / | tail -n 1
-        nohup sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc \
-          /usr/local/.ghcup /opt/hostedtoolcache /usr/share/swift \
-          /usr/local/share/powershell /usr/local/share/chromium \
-          /usr/local/share/boost /opt/microsoft /opt/google \
-          </dev/null >/dev/null 2>&1 &
-    - name: Rust 1.94.0
-      uses: dtolnay/rust-toolchain@1.94.0
       with:
-        components: clippy
-    - name: Native headers (apt, cached)
-      uses: awalsh128/cache-apt-pkgs-action@v1.6.3
-      with:
-        packages: pkg-config libssl-dev libfontconfig1-dev libfreetype-dev libclang-dev clang llvm mold libasound2-dev libudev-dev libjack-jackd2-dev libpipewire-0.3-dev libspa-0.2-dev libglib2.0-dev libgtk-3-dev libharfbuzz-dev libsoup-3.0-dev libwebkit2gtk-4.1-dev libxdo-dev libx11-dev libxcursor-dev libxrandr-dev libxi-dev libxcb1-dev libxkbcommon-dev libwayland-dev libgl-dev libvulkan-dev
-        version: '1'
+        persist-credentials: false
     - name: CI cargo config
       run: |
         mkdir -p ../.cargo
         cp .cargo/ci-config.toml ../.cargo/config.toml
-    - name: Rust cache (check, main saves)
-      uses: Swatinem/rust-cache@v2
-      with:
-        shared-key: check
-        save-if: ${{ github.ref == 'refs/heads/main' }}
-        cache-on-failure: true
-        cache-bin: false
-    - name: Prune unused units before the cache is saved
-      uses: ./.github/actions/prune-cargo-target
-      with:
-        target-dir: target
+    - name: Target dir (check, pool capped at 200 GB)
+      run: |
+        pool="${STUDIO_CACHE_DIR:?not a studio pool runner (no STUDIO_CACHE_DIR)}"
+        dir="$pool/check"
+        mkdir -p "$dir"
+        echo "CARGO_TARGET_DIR=$dir" >> "$GITHUB_ENV"
+        used="$(du -s --block-size=1G "$pool" | cut -f1)"
+        if [ "$used" -gt 200 ]; then
+          echo "::warning::the pool cache is ${used} GB, over 200 GB: emptying $dir (a cold check build)"
+          rm -rf "$dir" && mkdir -p "$dir"
+        fi
+        echo "target dir: $dir; pool $(du -sh "$pool" | cut -f1) of 200 GB; $(df -h "$pool" | awk 'NR==2 {print $4}') free on the disk"
     - name: cargo check --workspace
-      run: cargo check --workspace
+      run: |
+        nix develop --accept-flake-config .#ci --command bash -euo pipefail -s <<'EOF'
+        cargo check --workspace
+        EOF
     - name: cargo clippy (advisory, does not block)
       if: ${{ !cancelled() }}
       continue-on-error: true
       run: |
+        nix develop --accept-flake-config .#ci --command bash -euo pipefail -s <<'EOF'
         cargo clippy --workspace --no-deps --all-targets --keep-going \
           --message-format=json -- --cap-lints warn \
           | python3 .github/scripts/clippy-report.py
-    - name: Cache footprint
-      if: ${{ always() }}
-      run: |
-        du -sh target ~/.cargo/registry ~/.cargo/git 2>/dev/null || true
-        df -h / | tail -n 1
+        EOF
   wasm:
     name: Wasm
     needs: plan
     if: ${{ needs.plan.outputs.skip != 'true' }}
-    runs-on: ubuntu-latest
+    runs-on: '${{ (github.event_name == ''pull_request'' || startsWith(github.event.head_commit.message, ''chore(release): v'')) && fromJSON(''["self-hosted","studio-release"]'') || fromJSON(''["self-hosted","studio-main"]'') }}'
     timeout-minutes: 75
     env:
       CARGO_INCREMENTAL: '0'
-      CC_wasm32_unknown_unknown: clang
-      AR_wasm32_unknown_unknown: llvm-ar
     steps:
     - uses: actions/checkout@v4
-    - name: Free disk (background)
-      run: |
-        df -h / | tail -n 1
-        nohup sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc \
-          /usr/local/.ghcup /opt/hostedtoolcache /usr/share/swift \
-          /usr/local/share/powershell /usr/local/share/chromium \
-          /usr/local/share/boost /opt/microsoft /opt/google \
-          </dev/null >/dev/null 2>&1 &
-    - name: Rust 1.94.0
-      uses: dtolnay/rust-toolchain@1.94.0
       with:
-        targets: wasm32-unknown-unknown
-    - name: Native headers (apt, cached)
-      uses: awalsh128/cache-apt-pkgs-action@v1.6.3
-      with:
-        packages: pkg-config libssl-dev libfontconfig1-dev libfreetype-dev libclang-dev clang llvm mold libasound2-dev libudev-dev libjack-jackd2-dev libpipewire-0.3-dev libspa-0.2-dev libglib2.0-dev libgtk-3-dev libharfbuzz-dev libsoup-3.0-dev libwebkit2gtk-4.1-dev libxdo-dev libx11-dev libxcursor-dev libxrandr-dev libxi-dev libxcb1-dev libxkbcommon-dev libwayland-dev libgl-dev libvulkan-dev
-        version: '1'
-    - name: just
-      uses: taiki-e/install-action@v2
-      with:
-        tool: just@1.48.1
+        persist-credentials: false
     - name: CI cargo config
       run: |
         mkdir -p ../.cargo
         cp .cargo/ci-config.toml ../.cargo/config.toml
-    - name: Rust cache (wasm, main saves)
-      uses: Swatinem/rust-cache@v2
-      with:
-        shared-key: wasm
-        save-if: ${{ github.ref == 'refs/heads/main' }}
-        cache-on-failure: true
-        cache-bin: false
-    - name: Prune unused units before the cache is saved
-      uses: ./.github/actions/prune-cargo-target
-      with:
-        target-dir: target
+    - name: Target dir (wasm, pool capped at 200 GB)
+      run: |
+        pool="${STUDIO_CACHE_DIR:?not a studio pool runner (no STUDIO_CACHE_DIR)}"
+        dir="$pool/wasm"
+        mkdir -p "$dir"
+        echo "CARGO_TARGET_DIR=$dir" >> "$GITHUB_ENV"
+        used="$(du -s --block-size=1G "$pool" | cut -f1)"
+        if [ "$used" -gt 200 ]; then
+          echo "::warning::the pool cache is ${used} GB, over 200 GB: emptying $dir (a cold wasm build)"
+          rm -rf "$dir" && mkdir -p "$dir"
+        fi
+        echo "target dir: $dir; pool $(du -sh "$pool" | cut -f1) of 200 GB; $(df -h "$pool" | awk 'NR==2 {print $4}') free on the disk"
     - name: wasm check (web bundles)
-      run: just web-wasm-check
+      run: |
+        nix develop --accept-flake-config .#ci --command bash -euo pipefail -s <<'EOF'
+        just web-wasm-check
+        EOF
     - name: wasm check (Signal browser remote)
       if: ${{ !cancelled() }}
-      run: just signal-wasm-check
-    - name: Cache footprint
-      if: ${{ always() }}
       run: |
-        du -sh target ~/.cargo/registry ~/.cargo/git 2>/dev/null || true
-        df -h / | tail -n 1
+        nix develop --accept-flake-config .#ci --command bash -euo pipefail -s <<'EOF'
+        just signal-wasm-check
+        EOF
   tests:
     name: Tests
     needs: plan
     if: ${{ needs.plan.outputs.skip != 'true' }}
-    runs-on: ubuntu-latest
+    runs-on: '${{ (github.event_name == ''pull_request'' || startsWith(github.event.head_commit.message, ''chore(release): v'')) && fromJSON(''["self-hosted","studio-release"]'') || fromJSON(''["self-hosted","studio-main"]'') }}'
     timeout-minutes: 120
     environment: ${{ github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && 'ci-assets' || '' }}
     env:
@@ -321,44 +288,22 @@ jobs:
     - uses: actions/checkout@v4
       with:
         persist-credentials: false
-    - name: Free disk (background)
-      run: |
-        df -h / | tail -n 1
-        nohup sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc \
-          /usr/local/.ghcup /opt/hostedtoolcache /usr/share/swift \
-          /usr/local/share/powershell /usr/local/share/chromium \
-          /usr/local/share/boost /opt/microsoft /opt/google \
-          </dev/null >/dev/null 2>&1 &
-    - name: Rust 1.94.0
-      uses: dtolnay/rust-toolchain@1.94.0
-    - name: Native headers (apt, cached)
-      uses: awalsh128/cache-apt-pkgs-action@v1.6.3
-      with:
-        packages: pkg-config libssl-dev libfontconfig1-dev libfreetype-dev libclang-dev clang llvm mold libasound2-dev libudev-dev libjack-jackd2-dev libpipewire-0.3-dev libspa-0.2-dev libglib2.0-dev libgtk-3-dev libharfbuzz-dev libsoup-3.0-dev libwebkit2gtk-4.1-dev libxdo-dev libx11-dev libxcursor-dev libxrandr-dev libxi-dev libxcb1-dev libxkbcommon-dev libwayland-dev libgl-dev libvulkan-dev mesa-vulkan-drivers
-        version: '1'
-    - name: just
-      uses: taiki-e/install-action@v2
-      with:
-        tool: just@1.48.1
-    - name: cargo-nextest
-      uses: taiki-e/install-action@v2
-      with:
-        tool: cargo-nextest@0.9.132
     - name: CI cargo config
       run: |
         mkdir -p ../.cargo
         cp .cargo/ci-config.toml ../.cargo/config.toml
-    - name: Rust cache (tests, main saves)
-      uses: Swatinem/rust-cache@v2
-      with:
-        shared-key: tests
-        save-if: ${{ github.ref == 'refs/heads/main' }}
-        cache-on-failure: true
-        cache-bin: false
-    - name: Prune unused units before the cache is saved
-      uses: ./.github/actions/prune-cargo-target
-      with:
-        target-dir: target
+    - name: Target dir (tests, pool capped at 200 GB)
+      run: |
+        pool="${STUDIO_CACHE_DIR:?not a studio pool runner (no STUDIO_CACHE_DIR)}"
+        dir="$pool/tests"
+        mkdir -p "$dir"
+        echo "CARGO_TARGET_DIR=$dir" >> "$GITHUB_ENV"
+        used="$(du -s --block-size=1G "$pool" | cut -f1)"
+        if [ "$used" -gt 200 ]; then
+          echo "::warning::the pool cache is ${used} GB, over 200 GB: emptying $dir (a cold tests build)"
+          rm -rf "$dir" && mkdir -p "$dir"
+        fi
+        echo "target dir: $dir; pool $(du -sh "$pool" | cut -f1) of 200 GB; $(df -h "$pool" | awk 'NR==2 {print $4}') free on the disk"
     - name: Asset repo token (main runs only)
       id: assets-token
       if: ${{ github.ref == 'refs/heads/main' && github.event_name != 'pull_request' }}
@@ -373,17 +318,17 @@ jobs:
       env:
         ASSETS_TOKEN: ${{ steps.assets-token.outputs.token }}
       run: |
-        store="${CI_CACHE_DIR:-${CACHE_DIRECTORY:-$HOME/.cache}}/assets"
+        store="${STUDIO_CACHE_DIR:-${CI_CACHE_DIR:-${CACHE_DIRECTORY:-$HOME/.cache}}}/assets"
         mkdir -p "$store"
         [ -L .assets ] || [ -e .assets ] || ln -s "$store" .assets
         if [ -n "${ASSETS_TOKEN}" ]; then
           export GIT_CONFIG_COUNT=1
           export GIT_CONFIG_KEY_0="url.https://x-access-token:${ASSETS_TOKEN}@github.com/.insteadOf"
           export GIT_CONFIG_VALUE_0="https://github.com/"
-          just assets
+          nix develop --accept-flake-config .#ci --command just assets
         elif [ -d "$store/studio-assets/.git" ] && [ -d "$store/rig-models/.git" ] && [ -d "$store/mic-models/.git" ]; then
           echo "no asset credential on this run (only main's full runs fetch): linking the clones this runner holds"
-          ASSETS_OFFLINE=1 just assets
+          ASSETS_OFFLINE=1 nix develop --accept-flake-config .#ci --command just assets
         else
           echo "::warning::no asset clones on this runner yet and no credential to fetch them (a main run fetches them): tests that need assets will fail"
         fi
@@ -392,7 +337,7 @@ jobs:
       env:
         TEST_LOG: ${{ runner.temp }}/nextest-ci.log
       run: |
-        bash -uo pipefail -s <<'EOF'
+        nix develop --accept-flake-config .#ci --command bash -euo pipefail -s <<'EOF'
         pkgs=()
         for p in $(just --evaluate test_packages); do pkgs+=(-p "$p"); done
         echo "packages: ${pkgs[*]}"

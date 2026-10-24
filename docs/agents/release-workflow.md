@@ -87,7 +87,7 @@ delete a tag; a bad release is superseded by the next.
 | PR into `main` | `PR` (`PR checks`: fmt, change files, the lockfile, the rail config — compiles nothing) + the `Local CI` status (the prek pre-push hook: the static guards, then the rail-selected tests + `cargo check` + wasm, on the pusher's machine) + `Release guard` | `PR checks` on GitHub's free runners |
 | release PR `release/pending` → `main` | `Release guard`; `PR checks` runs the same guard from the base commit and skips its checks if it passes; `ci-local` runs it too and posts `Local CI` without building | hosted |
 | PR into `release/**` (hotfix) | `CI` (the full set), `Release guard` | as below |
-| push to `main` / `release/v*` | `CI` full set: `Gates`, `Check` (+ advisory clippy), `Wasm`, `Tests` (the core test set), `Release tooling (macOS)`, aggregated as `CI passed`; on `main` also `Dependency cache` (the cargo downloads `PR checks` restore) | GitHub's free runners (macos-latest for the release tooling) |
+| push to `main` / `release/v*` | `CI` full set: `Gates`, `Check` (+ advisory clippy), `Wasm`, `Tests` (the core test set), `Release tooling (macOS)`, aggregated as `CI passed`; on `main` also `Dependency cache` (the cargo downloads `PR checks` restore) | Check, Tests, Wasm on THEBATTLESHIP (`studio-main`; a release commit on `studio-release`, never cancelled); the rest on GitHub's free runners |
 | `gh workflow run checks.yml --ref <branch>` | `CI` full set; green, it posts `Local CI` on the branch's head (for a push the hook couldn't vouch for) | as above |
 | push of tag `vYY.M.MICRO` (or `workflow_dispatch` with the tag as ref) | `deploy` (session-web, signal-web), `studio-ios` (TestFlight), `desktop` (the signed, notarized macOS `.dmg` and the Linux AppImage, attached to the Release; `gh workflow run desktop.yml -f tag=<ref> -f mode=build-only` proves them from any branch), `release` publish | `studio-deploy` (LAN registry), `airlock`, hosted |
 
@@ -98,10 +98,14 @@ workflows-check`) and run actionlint.
 
 The `CI` jobs run without nix: the pinned rustc (dtolnay/rust-toolchain),
 apt headers (cached), and pinned release binaries for just, cargo-rail,
-tracey and actionlint. Every job runs on GitHub's free runners and
-restores one rust-cache per build kind that only `main` saves. `Tests`
-builds and runs the core test set (the Justfile's `test_packages`, ~650
-tests since 2026-10-24). No WarpBuild, no snapshots.
+actionlint. The cheap jobs run on GitHub's free runners. The builds
+(`Check`, `Tests` with the core test set, `Wasm`) run side by side on
+THEBATTLESHIP's studio pools, three runners sharing one warm cache each
+(`studio-main` for merges, `studio-release` for release commits and hotfix
+PRs, capped at 200 GB; Codys-Wright/nix-config
+hosts/THEBATTLESHIP/github-runners.nix), in the `.#ci` dev shell. A newer
+merge cancels the older run; a release commit's run is never cancelled. No
+WarpBuild, no snapshots.
 There is no nightly, no tailwind step (the sheets are committed; dx builds
 session-web's) and no Boundaries step (`just ci-boundaries` is manual).
 `cache-devshell` still seeds fasttrackstudio.cachix.org, for developers'

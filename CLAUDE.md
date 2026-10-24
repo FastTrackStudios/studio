@@ -182,9 +182,14 @@ full set, **`CI`** (`checks.yml`: `Gates`, `Check` + advisory clippy,
 `Wasm`, `Tests`, aggregated as **`CI passed`**), runs after every merge to
 `main`, on hotfix PRs into `release/**`, and by hand. `main` may go red:
 releases are cut by hand, and `just release-tag` requires `CI passed` on
-the release commit. Plan, gates, wasm and the aggregator run on GitHub's
-free runners, and so do `Check` and `Tests` (the core test set), with
-rust-cache that main saves. No WarpBuild, no snapshots, no schedule. No tailwind step anywhere
+the release commit. Plan, gates, the macOS release tooling and the
+aggregator run on GitHub's free runners. The builds — `Check`, `Tests` (the
+core test set) and `Wasm` — run side by side on THEBATTLESHIP, in a pool of
+three runners sharing one warm cache (`Codys-Wright/nix-config`
+hosts/THEBATTLESHIP/github-runners.nix): `studio-main` for merges,
+`studio-release` for release commits and hotfix PRs. A newer merge cancels
+the older run; a release commit's run is never cancelled. Each pool's cache
+is capped at 200 GB. No WarpBuild, no snapshots, no schedule. No tailwind step anywhere
 (committed sheets; dx builds session-web's); `just ci-boundaries` is
 manual, not CI.
 

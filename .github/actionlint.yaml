@@ -13,5 +13,8 @@ self-hosted-runner:
     - airlock
     - macos
     # THEBATTLESHIP: the Linux AppImage (desktop.yml), beside its rig-models
-    # clone.
+    # clone, and CI's build jobs (checks.yml): the studio-main pool for merges,
+    # studio-release for release commits and hotfix PRs.
     - session
+    - studio-main
+    - studio-release
