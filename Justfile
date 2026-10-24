@@ -1956,7 +1956,8 @@ ci FROM="lockfile":
       diff -u <(unused "$committed") <(unused Cargo.lock) || ok=0
       rm -f "$committed"
       [ "$ok" = 1 ] || { echo "Cargo.lock is out of date — commit the result of cargo metadata"; exit 1; }
-      echo "ok"
+      echo "── duplicate crate versions ─────────────────────────"
+      python3 scripts/check-duplicate-deps.py
     fi
 
     if run_from fmt; then
@@ -2001,6 +2002,11 @@ ci FROM="lockfile":
 
     echo
     echo "every CI step passed locally"
+
+# Crates Cargo.lock holds in more than one version (each is another
+# compile): fails on a new one. `--write` after an intended change.
+deps-dupes *ARGS:
+    python3 scripts/check-duplicate-deps.py {{ARGS}}
 
 # Two CI-boot passes (prep + test build); the second must compile nothing.
 ci-churn:

@@ -71,11 +71,11 @@ web-sys = { workspace = true, features = [
 ] }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
-tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+tracing-subscriber = { workspace = true, features = ["env-filter"] }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
-tracing-wasm = "0.2"
-console_error_panic_hook = "0.1"
+tracing-wasm = { workspace = true }
+console_error_panic_hook = { workspace = true }
 
 [build-dependencies]
 # Reads docs/guides/signal and codegens the page table. The whole build

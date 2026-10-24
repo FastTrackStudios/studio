@@ -28,4 +28,4 @@ tracing-subscriber = { workspace = true }
 [target.'cfg(target_os = "android")'.dependencies]
 # The activity the app runs in: Android's NativeActivity, with
 # `android_main` (main.rs) as its entry.
-android-activity = { version = "0.6", features = ["native-activity"] }
+android-activity = { workspace = true, features = ["native-activity"] }

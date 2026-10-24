@@ -12,9 +12,9 @@ workspace = true
 
 [dependencies]
 daw-proto = { workspace = true }
-flate2 = { version = "1" }
-quick-xml = { version = "0.37" }
-roxmltree = { version = "0.20" }
+flate2 = { workspace = true }
+quick-xml = { workspace = true }
+roxmltree = { workspace = true }
 thiserror = { workspace = true }
 
 [dev-dependencies]

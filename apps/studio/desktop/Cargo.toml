@@ -332,7 +332,7 @@ signal-space = { workspace = true, optional = true, features = ["engine"] }
 ekit = { workspace = true, optional = true }
 signal-tone3000 = { workspace = true, optional = true, features = ["client"] }
 signal-nam = { workspace = true, optional = true }
-url = { version = "2", optional = true }
+url = { workspace = true, optional = true }
 axum = { workspace = true, optional = true }
 tower-http = { workspace = true, optional = true }
 # Watch bridge (engine_watch.rs): facet-json for the WatchState wire form,
@@ -362,10 +362,10 @@ include_dir = { workspace = true, optional = true }
 [target.'cfg(target_os = "macos")'.dependencies]
 # `midi_hub::init_platform` — the CoreMIDI run-loop thread, first in `main`.
 signal-rig-host = { workspace = true }
-objc2 = "0.6"
-objc2-foundation = { version = "0.3", default-features = false, features = ["std", "NSString"] }
+objc2 = { workspace = true }
+objc2-foundation = { workspace = true, features = ["std", "NSString"] }
 # + the status item for `--menubar` (menubar.rs).
-objc2-app-kit = { version = "0.3", default-features = false, features = ["std", "NSApplication", "NSMenu", "NSMenuItem", "NSEvent", "NSResponder", "NSRunningApplication", "NSStatusBar", "NSStatusItem", "NSStatusBarButton", "NSButton", "NSControl", "NSView", "NSImage", "NSCell", "NSButtonCell"] }
+objc2-app-kit = { workspace = true, features = ["std", "NSApplication", "NSMenu", "NSMenuItem", "NSEvent", "NSResponder", "NSRunningApplication", "NSStatusBar", "NSStatusItem", "NSStatusBarButton", "NSButton", "NSControl", "NSView", "NSImage", "NSCell", "NSButtonCell"] }
 
 # ── iPhone (dx build --platform ios) — the in-process rig + phone shell ──
 [target.'cfg(target_os = "ios")'.dependencies]
@@ -373,16 +373,13 @@ dioxus = { workspace = true, default-features = true, features = ["mobile", "lau
 # The objc2 winit itself is built on: the AVAudioSession bootstrap
 # (ios_audio.rs) and the orientation / pasteboard / Bonjour calls
 # (ios_orientation.rs). The UIScene delegate is app-shell's (ios_scene).
-objc2 = "0.6"
+objc2 = { workspace = true }
 # The record-permission request's completion handler (ios_audio.rs).
-block2 = "0.6"
+block2 = { workspace = true }
 # The config dir the TONE3000 and account sessions live in (rig_engine.rs).
 signal-rig-host = { workspace = true }
-objc2-ui-kit = { version = "0.3", features = [
-    "UIApplication", "UIResponder", "UIScene", "UISceneOptions", "UISceneSession",
-    "UIWindowScene", "UIWindow", "UIView", "UIViewController", "UIScreen", "UIOrientation", "block2",
-] }
-objc2-foundation = { version = "0.3", features = ["NSArray", "NSSet", "NSString", "NSURL"] }
+objc2-ui-kit = { workspace = true, features = ["UIApplication", "UIResponder", "UIScene", "UISceneOptions", "UISceneSession", "UIWindowScene", "UIWindow", "UIView", "UIViewController", "UIScreen", "UIOrientation", "block2"] }
+objc2-foundation = { workspace = true, features = ["default", "NSArray", "NSSet", "NSString", "NSURL"] }
 
 # PipeWire (audio + MIDI) is the Linux DEFAULT via target-gated deps inside
 # daw-audio-io and the rig crates themselves — no per-app feature plumbing.
@@ -393,27 +390,7 @@ session = { workspace = true, features = ["ui", "web"], optional = true }
 # NO daw-ui here: its daw-control backend is not wasm-clean, and the daw
 # panels (Arrangement / Mixer) are native-only workspaces anyway — the
 # session feature's "dep:daw-ui" is a no-op on the web build.
-web-sys = { version = "0.3", features = [
-    "Window", "Storage", "Location",
-    # ── Browser keys rig (/rigs/keys/:profile — web_keys_rig.rs) ──
-    # AudioWorklet boot + the main-thread ↔ worklet message port.
-    "AudioContext", "AudioContextOptions", "BaseAudioContext", "AudioWorklet",
-    "AudioWorkletNode",
-    "AudioWorkletNodeOptions", "AudioNode", "AudioDestinationNode",
-    "MessagePort", "MessageEvent", "MessageChannel", "Event", "EventTarget", "Response",
-    "Worker", "WorkerOptions", "WorkerType",
-    # OPFS pack cache (web_packs.rs).
-    "Navigator", "StorageManager", "FileSystemDirectoryHandle",
-    "FileSystemFileHandle", "FileSystemGetDirectoryOptions",
-    "FileSystemGetFileOptions", "FileSystemCreateWritableOptions",
-    "FileSystemWritableFileStream", "File", "Blob",
-    # IndexedDB download ledger + lane-program cache.
-    "IdbFactory", "IdbOpenDbRequest", "IdbDatabase", "IdbObjectStore",
-    "IdbTransaction", "IdbTransactionMode", "IdbRequest",
-    # WebMIDI input.
-    "MidiAccess", "MidiInput", "MidiInputMap", "MidiMessageEvent",
-    "MidiOptions", "MidiPort",
-] }
+web-sys = { workspace = true, features = ["Window", "Storage", "Location", "AudioContext", "AudioContextOptions", "BaseAudioContext", "AudioWorklet", "AudioWorkletNode", "AudioWorkletNodeOptions", "AudioNode", "AudioDestinationNode", "MessagePort", "MessageEvent", "MessageChannel", "Event", "EventTarget", "Response", "Worker", "WorkerOptions", "WorkerType", "Navigator", "StorageManager", "FileSystemDirectoryHandle", "FileSystemFileHandle", "FileSystemGetDirectoryOptions", "FileSystemGetFileOptions", "FileSystemCreateWritableOptions", "FileSystemWritableFileStream", "File", "Blob", "IdbFactory", "IdbOpenDbRequest", "IdbDatabase", "IdbObjectStore", "IdbTransaction", "IdbTransactionMode", "IdbRequest", "MidiAccess", "MidiInput", "MidiInputMap", "MidiMessageEvent", "MidiOptions", "MidiPort"] }
 # The keys-rig page's async browser plumbing: js promises, transferable
 # pack bytes, oneshot replies from the worklet port, sha256 verify of
 # streamed packs, and the facet-json ledger/cache rows in IndexedDB.

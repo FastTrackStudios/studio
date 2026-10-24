@@ -24,8 +24,8 @@ eyre.workspace = true
 architect = { workspace = true, features = ["server-axum", "iroh"] }
 axum = { workspace = true, features = ["ws"] }
 tokio = { workspace = true, features = ["net"] }
-fragile = "2"
-crossbeam-channel = "0.5"
+fragile = { workspace = true }
+crossbeam-channel = { workspace = true }
 reaper-low.workspace = true
 reaper-macros.workspace = true
 tracing.workspace = true

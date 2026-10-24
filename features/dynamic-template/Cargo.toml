@@ -26,9 +26,9 @@ eyre = { workspace = true }
 facet = { workspace = true }
 monarchy = { workspace = true }
 music-catalog = { workspace = true }
-num-traits = { version = "0.2" }
+num-traits = { workspace = true }
 serde = { workspace = true }
-serde_json = { version = "1.0" }
+serde_json = { workspace = true }
 thiserror = { workspace = true }
 tracing = { workspace = true }
 vox = { workspace = true }
@@ -40,9 +40,9 @@ dynamic-template = { path = ".", features = ["reaper"] }
 daw-standalone = { workspace = true, features = ["audio"] }
 facet-json = { workspace = true }
 facet-styx = { workspace = true }
-insta = { version = "1.34" }
-pretty_assertions = { version = "1.4" }
-tempfile = { version = "3.8" }
+insta = { workspace = true }
+pretty_assertions = { workspace = true }
+tempfile = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
 
 [[bin]]

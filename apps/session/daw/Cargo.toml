@@ -125,25 +125,25 @@ studio = { workspace = true }
 # `peniko::kurbo`, which is where `Rect`, `Affine` and `Color` come from.
 # Depending on kurbo and peniko directly would mean pinning two more
 # versions by hand and keeping them in step with whatever Vello moves to.
-anyrender = "0.11"
+anyrender = { workspace = true }
 # Rasterizes the painted pointer glyphs into window cursors
 # (`window_cursor`).
 anyrender_vello_cpu = { workspace = true }
 # Themes: the mixer's strips drawn from a frame document instead of the
 # painters here, when one is loaded (`skin`).
-anyrender_vello = { version = "0.12", optional = true }
+anyrender_vello = { workspace = true, optional = true }
 # A frame face's GPU path (`faces::Painters`): the device the desktop
 # renderer hands over (anyrender_vello 0.12 boxes a wgpu_context 0.7
 # handle), given to frame-live to render its effects stage — the EQ's
 # glow — into a texture the renderer composites.
 wgpu = { workspace = true, optional = true }
-wgpu-context-07 = { package = "wgpu_context", version = "0.7", optional = true }
+wgpu-context-07 = { workspace = true, optional = true }
 vello = "0.9"
-pollster = { version = "0.4", optional = true }
+pollster = { workspace = true, optional = true }
 image = { workspace = true }
 # Finding REAPER's resource path, for the toolbar icons it installs.
-dirs = { version = "6", optional = true }
-skrifa = "0.42"
+dirs = { workspace = true, optional = true }
+skrifa = { workspace = true }
 timeline = { workspace = true, features = ["actions"] }
 # Razor areas, the same ones the expression editor uses — see the
 # `razor` crate for why the rectangle is shared and the operations on
@@ -151,10 +151,10 @@ timeline = { workspace = true, features = ["actions"] }
 winit = { version = "0.31.0-beta.2", optional = true }
 # The pointer shapes, which winit re-exports; named directly so the web
 # host (CSS `cursor`) shares them.
-cursor-icon = "1.2"
+cursor-icon = { workspace = true }
 # `Instant` that works in a browser (std's panics on wasm32); std's own
 # everywhere else.
-web-time = "1"
+web-time = { workspace = true }
 
 eyre = { workspace = true }
 tokio = { workspace = true, features = ["rt-multi-thread"], optional = true }
@@ -173,7 +173,7 @@ tracing-subscriber = { workspace = true, optional = true }
 
 # A sampling profiler for the headless benchmarks, behind the `profile`
 # feature — see below.
-pprof = { version = "0.15", features = ["flamegraph"], optional = true }
+pprof = { workspace = true, features = ["flamegraph"], optional = true }
 web-sys = { workspace = true, optional = true, features = [
     "Window", "Document", "Element", "HtmlElement", "HtmlCanvasElement",
     "DomRect", "CssStyleDeclaration", "console", "Response", "Headers", "PointerEvent",
@@ -202,7 +202,7 @@ js-sys = { workspace = true, optional = true }
 anyrender_vello_hybrid = { workspace = true, optional = true, features = ["webgl"] }
 vello_hybrid = { workspace = true, optional = true }
 vello_common = { workspace = true, optional = true }
-rustc-hash = { version = "2", optional = true }
+rustc-hash = { workspace = true, optional = true }
 gloo-timers = { workspace = true, optional = true }
 # The engine, in the page (the native build reaches it through `daw`'s
 # standalone features instead).

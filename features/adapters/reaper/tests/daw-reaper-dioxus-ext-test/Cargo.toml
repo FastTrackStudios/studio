@@ -16,7 +16,7 @@ reaper-dioxus = { workspace = true }
 daw-module = { workspace = true }
 reaper-low.workspace = true
 reaper-high.workspace = true
-reaper-macros = { git = "https://codeberg.org/FastTrackStudios/reaper-rs.git", branch = "feat/reaper-763-ruler-lanes" }
+reaper-macros = { workspace = true }
 tracing.workspace = true
 
 [lints.rust]

@@ -15,11 +15,11 @@ aaf = ["dep:cfb"]
 dawproject = ["dep:roxmltree", "dep:zip"]
 
 [dependencies]
-cfb = { version = "0.10", optional = true }
+cfb = { workspace = true, optional = true }
 daw-proto = { workspace = true }
-roxmltree = { version = "0.20", optional = true }
+roxmltree = { workspace = true, optional = true }
 thiserror = { workspace = true }
-zip = { version = "2", default-features = false, features = ["deflate"], optional = true }
+zip = { workspace = true, features = ["deflate"], optional = true }
 
 [dev-dependencies]
 interchange = { path = ".", features = ["aaf", "dawproject"] }
