@@ -25,8 +25,7 @@
 #
 # Modelled on T3 Code's installer (https://t3.codes/install.sh): POSIX sh,
 # no dependencies beyond a downloader and a checksum tool, every download
-# checked against the sha256 GitHub publishes for it before anything is
-# installed.
+# checked against the release's SHA256SUMS before anything is installed.
 set -eu
 
 repo="FastTrackStudios/studio"
@@ -108,21 +107,17 @@ asset="Studio-${version}-${asset_suffix}"
 say "Installing Studio ${version} (${os} ${arch})"
 
 # ── Download and verify ─────────────────────────────────────────────────────
-# The expected hash is the one GitHub computed for the asset when it was
-# uploaded: the `digest` the Releases API publishes for it. A mirror
-# (STUDIO_RELEASE_BASE_URL) only serves the bytes; they are still checked
-# against GitHub's digest.
-fetch "https://api.github.com/repos/${repo}/releases/tags/v${version}" "$work/release.json" \
-  || fail "could not read release v${version} from GitHub"
-# The asset's own object: its "name" line, then its "digest" line (the
-# uploader object between them has neither key).
-expected="$(awk -v want="\"name\": \"${asset}\"" '
-  index($0, want) { found = 1; next }
-  found && /"digest":/ { sub(/.*"digest": *"sha256:/, ""); sub(/".*/, ""); print; exit }
-' "$work/release.json")"
-if [ -z "$expected" ]; then
-  fail "release v${version} has no ${asset} yet (the desktop builds may still be uploading; try again in a few minutes)"
+# Each release carries one SHA256SUMS over its installers, attached after
+# them, so a release that has it has the installers too.
+rc=0
+fetch "${base_url}/v${version}/SHA256SUMS" "$work/SHA256SUMS" || rc=$?
+if [ "$rc" -eq 44 ]; then
+  fail "release v${version} has no installers yet (the desktop builds may still be uploading; try again in a few minutes)"
+elif [ "$rc" -ne 0 ]; then
+  fail "could not download the release checksums"
 fi
+expected="$(grep " \*\{0,1\}${asset}\$" "$work/SHA256SUMS" | cut -d' ' -f1)"
+[ -n "$expected" ] || fail "${asset} is not listed in release v${version}'s SHA256SUMS"
 say "Downloading ${asset}..."
 fetch "${base_url}/v${version}/${asset}" "$work/${asset}" || fail "could not download ${asset}"
 actual="$(checksum "$work/${asset}")"

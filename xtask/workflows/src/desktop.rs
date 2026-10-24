@@ -350,10 +350,11 @@ bash "$smoke" "target/desktop/Studio-$VERSION-linux-x86_64.AppImage" "$VERSION"
 "#;
 
 /// The only job with a write token: checks both installers are there (named
-/// with the release's version) and attaches them. No .sha256 files: GitHub
-/// computes each asset's sha256 on upload and publishes it as the asset's
-/// `digest`, which scripts/install.sh checks; this job checks it matches the
-/// file it uploaded.
+/// with the release's version), attaches them, then attaches one SHA256SUMS
+/// over both, which scripts/install.sh checks a download against (T3 Code's
+/// layout). SHA256SUMS goes up last, so a release that has it has the
+/// installers too. GitHub's own `digest` for each asset must match the file
+/// uploaded.
 fn publish() -> Result<Job> {
     Ok(Job::new(UBUNTU)
         .name("Attach to the GitHub Release")
@@ -377,9 +378,12 @@ cd installers
 ls -l
 test -f "Studio-$VERSION-macos-arm64.dmg"
 test -f "Studio-$VERSION-linux-x86_64.AppImage"
+sha256sum ./*.dmg ./*.AppImage | sed 's| \./| |' > SHA256SUMS
+cat SHA256SUMS
 gh release upload "$TAG" --repo "$GITHUB_REPOSITORY" --clobber ./*.dmg ./*.AppImage
+gh release upload "$TAG" --repo "$GITHUB_REPOSITORY" --clobber SHA256SUMS
 # GitHub's digest for each uploaded asset must be the file's own sha256.
-for f in ./*.dmg ./*.AppImage; do
+for f in ./*.dmg ./*.AppImage ./SHA256SUMS; do
   name="$(basename "$f")"
   want="sha256:$(sha256sum "$f" | cut -d' ' -f1)"
   got="$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/$TAG" --jq ".assets[] | select(.name == \"$name\") | .digest")"
