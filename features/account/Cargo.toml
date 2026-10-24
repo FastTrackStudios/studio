@@ -22,7 +22,7 @@ dioxus = { workspace = true, optional = true }
 futures-timer = { workspace = true, optional = true }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
-dirs = "6"
+dirs = { workspace = true }
 reqwest = { workspace = true }
 tokio = { workspace = true }
 

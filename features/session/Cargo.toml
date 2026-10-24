@@ -28,7 +28,7 @@ web = ["dioxus", "dock/ui", "dock/web"]
 serde_json = { workspace = true, optional = true }
 architect = { workspace = true, features = ["local", "platform", "vox"] }
 architect-ui = { workspace = true, optional = true }
-chatterbox-rs = { git = "https://github.com/bearcove/cbx", optional = true }
+chatterbox-rs = { workspace = true, optional = true }
 chrono = { version = "0.4" }
 collection-proto = { workspace = true, features = ["vox"], optional = true }
 color-palette = { workspace = true }
@@ -48,7 +48,7 @@ files-proto = { workspace = true, optional = true }
 fts-sample = { workspace = true, features = ["load"] }
 futures = { workspace = true, optional = true }
 futures-util = { workspace = true, optional = true }
-hound = { version = "3.5" }
+hound = { workspace = true }
 keyflow = { workspace = true, features = ["text"] }
 keyflow-daw-analysis = { workspace = true }
 links-proto = { workspace = true, optional = true }
@@ -57,12 +57,12 @@ lucide-dioxus = { workspace = true, optional = true }
 monarchy = { workspace = true }
 music-catalog = { workspace = true }
 num-traits = { workspace = true }
-ort = { version = "=2.0.0-rc.10", optional = true, default-features = false }
+ort = { workspace = true, optional = true }
 resources-proto = { workspace = true, optional = true }
-rustc-hash = { version = "2" }
+rustc-hash = { workspace = true }
 serde = { workspace = true }
 sha2 = { workspace = true }
-smallvec = { version = "1.13" }
+smallvec = { workspace = true }
 task-dial = { workspace = true, optional = true }
 thiserror = { workspace = true }
 tokio = { version = "1.48", features = ["macros", "rt", "sync", "time"] }
@@ -87,7 +87,7 @@ daw-standalone = { workspace = true, features = ["audio", "bootstrap", "decode",
 daw-sync = { workspace = true }
 dioxus-test = { workspace = true }
 # `open_link`'s empty-state test renders the component to HTML.
-dioxus-ssr = { git = "https://github.com/DioxusLabs/dioxus", rev = "f717a8e184a522d078b70bb4b4d62a5f9a99ddfc", default-features = false }
+dioxus-ssr = { workspace = true }
 eyre = { workspace = true }
 facet-postcard = { workspace = true }
 session-format = { workspace = true, features = ["store"] }
@@ -98,7 +98,7 @@ tracing-subscriber = { workspace = true, features = ["env-filter"] }
 vox = { workspace = true }
 vox-stream = { workspace = true }
 vox-websocket = { workspace = true }
-zstd = { version = "0.13" }
+zstd = { workspace = true }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 daw = { workspace = true }
@@ -114,7 +114,7 @@ vox = { workspace = true, features = ["transport-local"] }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 futures = { workspace = true }
-web-sys = { version = "0.3", features = ["Window", "Performance"] }
+web-sys = { workspace = true, features = ["Window", "Performance"] }
 
 [[bin]]
 name = "session"

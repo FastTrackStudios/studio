@@ -37,8 +37,8 @@ daw-proto = { workspace = true }
 architect-telemetry = { workspace = true }
 # The applied copy's timestamp.
 chrono = { workspace = true }
-dirs = "6"
-gethostname = "1"
+dirs = { workspace = true }
+gethostname = { workspace = true }
 thiserror = { workspace = true }
 tracing = { workspace = true }
 
@@ -46,7 +46,7 @@ tracing = { workspace = true }
 tempfile = { workspace = true }
 # Parsing a document to a tree for schema validation in the tests —
 # the same rc facet-styx is pinned to.
-styx-tree = "5.0.0-rc.5"
+styx-tree = { workspace = true }
 # The apply scenario test drives the facade against a real backend with
 # no REAPER in the picture.
 daw-standalone = { workspace = true }

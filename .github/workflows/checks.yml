@@ -172,6 +172,9 @@ jobs:
           echo "::error::Cargo.lock is out of date — run cargo metadata and commit the result"
           exit 1
         fi
+    - name: Duplicate crate versions
+      if: ${{ !cancelled() }}
+      run: python3 scripts/check-duplicate-deps.py
     - name: cargo fmt --check
       if: ${{ !cancelled() }}
       run: cargo fmt --all --check

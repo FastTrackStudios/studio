@@ -47,15 +47,15 @@ eyre = { workspace = true }
 tracing = { workspace = true }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
-tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+tracing-subscriber = { workspace = true, features = ["env-filter"] }
 # Only reachable via daw::init_from_parts's native overload, which this
 # crate never actually calls at runtime (it only ever runs as wasm32) —
 # present so a plain host `cargo check` type-checks the cfg-split.
 tokio = { workspace = true }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
-tracing-wasm = "0.2"
-console_error_panic_hook = "0.1"
+tracing-wasm = { workspace = true }
+console_error_panic_hook = { workspace = true }
 # getrandom 0.3 (transitive via uuid/ahash) needs its js backend on wasm32.
 getrandom = { version = "0.3", features = ["wasm_js"] }
 

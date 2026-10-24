@@ -142,7 +142,7 @@ tts = ["session/tts"]
 [dependencies]
 # A timer that needs no runtime: the native shell's loops (frames while
 # the transport moves; on iOS, Now Playing and the remote commands).
-futures-timer = "3"
+futures-timer = { workspace = true }
 utils.workspace = true
 app-shell = { workspace = true, features = ["ui"] }
 tracing.workspace = true
@@ -185,7 +185,7 @@ daw-proto.workspace = true
 [target.'cfg(not(any(target_arch = "wasm32", target_os = "ios")))'.dependencies]
 # The native app's Open dialog and error alert (`native::pick`, `native::ask`)
 # — a desktop's: a phone joins a set by its link instead.
-rfd = { version = "0.17", optional = true }
+rfd = { workspace = true, optional = true }
 dioxus = { workspace = true, default-features = true, features = ["desktop", "launch"] }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
@@ -195,7 +195,7 @@ clap = { workspace = true, features = ["derive"], optional = true }
 fts-sample = { workspace = true, features = ["engine-native", "mapped"], optional = true }
 serde = { workspace = true, optional = true }
 serde_json = { workspace = true, optional = true }
-ureq = { version = "2", optional = true }
+ureq = { workspace = true, optional = true }
 tracing-subscriber.workspace = true
 # The Blitz shell (feature `native`): the renderer, the studio panels, and
 # winit for the window's title bar.
@@ -206,7 +206,7 @@ fts-account = { workspace = true, features = ["ui"] }
 winit = { version = "0.31.0-beta.2", optional = true }
 # Where the native app remembers the last session it opened
 # (`native::choose`).
-dirs = { version = "6", optional = true }
+dirs = { workspace = true, optional = true }
 # The start screen's icons (native::start), the same set the views use.
 lucide-dioxus = { workspace = true, optional = true }
 # Telemetry: fmt console logs + optional Sentry + OTLP export (traces,
@@ -279,22 +279,14 @@ dioxus = { workspace = true, default-features = true, features = ["mobile", "lau
 # The UIScene delegate iOS 27 requires (`native::ios_scene`) — the objc2
 # winit itself is built on — and the start screen's links and pasteboard
 # (`native::ios`).
-objc2 = "0.6"
-objc2-ui-kit = { version = "0.3", features = [
-    "UIApplication", "UIResponder", "UIScene", "UISceneOptions", "UISceneSession",
-    "UIWindowScene", "UIWindow", "UIView", "UIScreen", "UIPasteboard", "UIOrientation", "block2",
-] }
-objc2-foundation = { version = "0.3", features = [
-    "NSArray", "NSSet", "NSDictionary", "NSString", "NSURL", "NSValue", "NSError",
-] }
+objc2 = { workspace = true }
+objc2-ui-kit = { workspace = true, features = ["UIApplication", "UIResponder", "UIScene", "UISceneOptions", "UISceneSession", "UIWindowScene", "UIWindow", "UIView", "UIScreen", "UIPasteboard", "UIOrientation", "block2"] }
+objc2-foundation = { workspace = true, features = ["default", "NSArray", "NSSet", "NSDictionary", "NSString", "NSURL", "NSValue", "NSError"] }
 # Playing as an iOS audio app (`native::ios_audio`): the audio session
 # (loudspeaker, Bluetooth, AirPlay), Now Playing, and the remote commands.
-objc2-avf-audio = { version = "0.3", features = ["AVAudioSession", "AVAudioSessionTypes", "AVAudioSessionRoute"] }
-objc2-media-player = { version = "0.3", features = [
-    "MPNowPlayingInfoCenter", "MPRemoteCommandCenter", "MPRemoteCommand",
-    "MPRemoteCommandEvent", "MPMediaItem", "block2",
-] }
-block2 = "0.6"
+objc2-avf-audio = { workspace = true, features = ["AVAudioSession", "AVAudioSessionTypes", "AVAudioSessionRoute"] }
+objc2-media-player = { workspace = true, features = ["MPNowPlayingInfoCenter", "MPRemoteCommandCenter", "MPRemoteCommand", "MPRemoteCommandEvent", "MPMediaItem", "block2"] }
+block2 = { workspace = true }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 dioxus = { workspace = true, default-features = true, features = ["web", "launch"] }
@@ -306,7 +298,7 @@ collection-proto = { workspace = true, features = ["vox"], optional = true }
 # NO daw-ui here: its daw-control backend is not wasm-clean, and the daw
 # panels (Arrangement / Mixer) are native-only workspaces anyway — the
 # session feature's "dep:daw-ui" is a no-op on the web build.
-web-sys = { version = "0.3", features = ["Window", "Storage", "Location"] }
+web-sys = { workspace = true, features = ["Window", "Storage", "Location"] }
 # iroh's wasm transport plumbing (remote.rs's EngineTarget::Iroh path) and
 # the collection browser's async CollectionService calls.
 wasm-bindgen = { workspace = true }

@@ -24,13 +24,13 @@ atomic_float = { workspace = true }
 # as nice-plug-dioxus (9ebd23a) so they share blitz/anyrender/vello types.
 dioxus-native = { workspace = true }
 blitz-shell = { workspace = true }
-winit = "0.30"
-dioxus-core = { git = "https://github.com/DioxusLabs/dioxus", rev = "f717a8e184a522d078b70bb4b4d62a5f9a99ddfc" }
+winit = { workspace = true }
+dioxus-core = { workspace = true }
 # `asset!` macro (from dioxus_native::prelude) expands to `::manganis::...`,
 # so the crate must be a direct dep at the bin's top-level path.
-manganis = "0.7"
+manganis = { workspace = true }
 # `Signal` etc. used by `rsx!` body in the standalone shell.
-dioxus-signals = "0.7"
+dioxus-signals = { workspace = true }
 # Live audio capture for the spectrum analyzer. cpal picks the platform backend
 # (ALSA/PipeWire/PulseAudio on Linux, CoreAudio on macOS, WASAPI on Windows);
 # the app appears as an input node you can patch the system-audio monitor into
@@ -44,4 +44,4 @@ anyhow = { workspace = true }
 # Linux-only: libspa-sys's build script needs libpipewire-0.3, which macOS and
 # Windows don't have, and it took `cargo check --workspace` down there.
 [target.'cfg(target_os = "linux")'.dependencies]
-pipewire = "0.10"
+pipewire = { workspace = true }

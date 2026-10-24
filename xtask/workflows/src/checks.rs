@@ -203,6 +203,15 @@ fn gates() -> Job {
     ))
     .steps(rust_cache("gates"))
     .step(Step::run("Manifests + lockfile", LOCKFILE))
+    // Each extra version of a crate is another compile: fail when Cargo.lock
+    // gains one (.config/duplicate-deps.toml lists the ones we carry).
+    .step(
+        Step::run(
+            "Duplicate crate versions",
+            "python3 scripts/check-duplicate-deps.py",
+        )
+        .cond(NOT_CANCELLED),
+    )
     .step(Step::run("cargo fmt --check", "cargo fmt --all --check").cond(NOT_CANCELLED))
     .steps(workflow_gates())
     .step(change_check())

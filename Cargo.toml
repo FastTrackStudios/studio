@@ -104,6 +104,7 @@ members = [
     "xtask/workflows",
     "crates/daw/utils",
     "vendor/dioxus-test",
+    "vendor/tone3000",
     # ── processor ──
     "apps/plugins/comp",
     "apps/plugins/delay",
@@ -431,9 +432,9 @@ signal-fx = { path = "features/rigs/fx" }
 
 # ── Facet reflection + vox RPC — the rc.5 fleet pins ──────────────────
 facet = { version = "0.50.0-rc.5", features = ["reflect", "chrono", "uuid"] }
-facet-json = { version = "0.50.0-rc.5" }
+facet-json = { version = "0.50.0-rc.7" }
 facet-postcard = { version = "0.50.0-rc.5" }
-facet-styx = { version = "5.0.0-rc.5" }
+facet-styx = { version = "5.0.0-rc.7" }
 # facet-styx's formatter, needed directly by anyone who has to set
 # `omit_none` (the `.daw` writer). Routed to the vendor repo by the
 # [patch.crates-io] table below.
@@ -537,7 +538,7 @@ sea-orm-migration = { version = "1", features = ["sqlx-sqlite", "runtime-tokio-r
 async-trait = "0.1"
 loro = { version = "1.12", default-features = false }
 argon2 = "0.5"
-base64 = "0.22"
+base64 = "0.22.1"
 chacha20poly1305 = "0.10"
 cookie = "0.18"
 hkdf = "0.12"
@@ -678,7 +679,9 @@ libloading = "0.8"
 # ── GPU rendering stack (reaper-embed / reaper-dioxus) ────────
 wgpu = { version = "29", features = ["wgsl"] }
 vello = { version = "0.9", features = ["wgpu"] }
-skrifa = "0.37"
+# 0.42: the skrifa vello 0.9 and parley 0.10 build on (frame, on vello
+# 0.10, keeps its own until the graphics stack moves together).
+skrifa = "0.42"
 anyrender_vello = "0.12"
 # keyflow-ui / engraver-proto renderer stack (paired with dioxus-native
 # 0.7.9 from crates.io). NOTE: keyflow-ui pins anyrender_vello 0.10.1 and
@@ -765,13 +768,13 @@ proc-macro2 = "1"
 dssim-core = "3"
 png = "0.17"
 proptest = "1"
-tempfile = "3"
+tempfile = "3.8"
 
 # ── Audio / plugin framework externals (nice-plug + audiocore) ───────
 atomic_float = "1.1"
 atomic_refcell = "0.1"
 bitflags = "2.11"
-raw-window-handle = "0.5"
+raw-window-handle = "0.6"
 realfft = "3.0"
 # Pure-Rust ONNX inference (no C onnxruntime dep) — Basic Pitch polyphonic
 # note transcription in tune-dsp, behind the `basic-pitch` feature.
@@ -788,7 +791,7 @@ pollster = "0.4.0"
 parking_lot = "0.12"
 egui = { version = "0.34.1", default-features = false, features = ["bytemuck"] }
 symphonium = { version = "0.6", default-features = false, features = ["wav", "pcm", "fft-resampler"] }
-once_cell = "1.19"
+once_cell = "1.20"
 helgoboss-midi = "0.4"
 
 # ── Utilities ─────────────────────────────────────────────────────────
@@ -967,7 +970,111 @@ anyrender_svg = { git = "https://github.com/DioxusLabs/anyrender.git", branch = 
 taffy = { version = "0.7", default-features = false, features = ["std", "flexbox", "taffy_tree"] }
 winit = "0.30"
 
+# ── external dependencies, declared once (moved up from the member
+# manifests; a member says `x = { workspace = true }` and adds its features) ──
+ab_glyph = "0.2"
+android-activity = "0.6"
+anyrender_0_11 = { package = "anyrender", git = "https://github.com/FastTrackStudios/blitz", tag = "fts-focus-2026-10" }
+anyrender_svg_0_12 = { version = "0.12", package = "anyrender_svg" }
+arc-swap = "1.7"
+baseview = "0.2.2"
+bhtsne = "0.5"
+bincode = "1"
+block2 = "0.6"
+bytemuck = "1"
+cfb = "0.10"
+chatterbox-rs = { git = "https://github.com/bearcove/cbx" }
+claxon = "0.4"
+console_error_panic_hook = "0.1"
+core-foundation = "0.10"
+coremidi = "0.9"
+criterion = "0.5"
+cursor-icon = "1.2"
+dioxus-core = { git = "https://github.com/DioxusLabs/dioxus", rev = "f717a8e184a522d078b70bb4b4d62a5f9a99ddfc" }
+dioxus-signals = { git = "https://github.com/DioxusLabs/dioxus", rev = "f717a8e184a522d078b70bb4b4d62a5f9a99ddfc" }
+dioxus-ssr = { git = "https://github.com/DioxusLabs/dioxus", rev = "f717a8e184a522d078b70bb4b4d62a5f9a99ddfc", default-features = false }
+dirs = "6"
+dispatch2 = "0.3"
+display-info = "0.5"
+dpp = "0.4"
+fixed = "1.28"
+flacenc = "0.5.1"
+flate2 = "1"
+gethostname = "1"
+guitarpro = "=0.4.2"
+hound = "3.5"
+icns = "0.4"
+if-addrs = "0.13"
+insta = "1.34"
+keyboard-types = "0.7"
+libspa = "0.10"
+libspa-sys = "0.10"
+manganis = { git = "https://github.com/DioxusLabs/dioxus", rev = "f717a8e184a522d078b70bb4b4d62a5f9a99ddfc" }
+mdns-sd = "0.13"
+midly = "0.5"
+miniz_oxide = "0.8"
+nice-plug-core = { git = "https://github.com/FastTrackStudios/nice-plug.git", branch = "fts-baseview-03" }
+nom = "8"
+objc2 = "0.6.4"
+objc2-app-kit = { version = "0.3.2", default-features = false }
+objc2-av-foundation = { version = "0.3", default-features = false }
+objc2-avf-audio = "0.3"
+objc2-core-audio = { version = "0.3", default-features = false }
+objc2-core-audio-types = { version = "0.3", default-features = false }
+objc2-core-foundation = { version = "0.3", default-features = false }
+objc2-foundation = { version = "0.3.2", default-features = false }
+objc2-media-player = "0.3"
+objc2-ui-kit = "0.3"
+ort = { version = "=2.0.0-rc.10", default-features = false }
+pipewire = "0.10"
+plist = "1"
+pprof = "0.15"
+pretty_assertions = "1.4"
+quick-xml = "0.41"
+ratatui = "0.30"
+raw-window-handle-06 = { version = "0.6", package = "raw-window-handle" }
+resvg = "0.45"
+rfd = "0.17"
+roxmltree = "0.20"
+rustc-hash = "2"
+rusty_link = "0.4"
+smallvec = "1.13"
+styx-tree = "5.0.0-rc.5"
+svg = "0.18"
+symphonia = { version = "0.5", default-features = false }
+symphonia-bundle-flac = "0.5"
+symphonia-codec-vorbis = "0.5"
+symphonia-core = "0.5"
+symphonia-format-ogg = "0.5"
+tiny-skia = "0.11"
+toml = "0.8"
+tracing-wasm = "0.2"
+turso = { version = "0.8.2", default-features = false }
+ureq = "2"
+url = "2"
+vello_cpu = { version = "0.0.9", default-features = false }
+vorbis_rs = "0.5"
+wgpu-context-06 = { version = "0.6", package = "wgpu_context" }
+wgpu-context-07 = { version = "0.7", package = "wgpu_context" }
+wiremock = "0.6"
+x11-dl = "2.21"
+zip = { version = "2", default-features = false }
+zstd = "0.13"
+
+# ── external dependencies, declared once (moved up from the member
+# manifests; a member says `x = { workspace = true }` and adds its features) ──
+naga = "29"
+wasm-bindgen-test = "0.3"
+wgpu_context = "0.7"
+
 [patch.crates-io]
+# tone3000 on reqwest 0.12's ring-backed rustls instead of 0.13's `rustls`,
+# whose only backend is aws-lc-rs: aws-lc-sys's build script (a cmake C
+# build) was 186 s of a 375 s clean `cargo check --workspace`, all of it on
+# the critical path. tone3000 was the only crate in the graph asking for it.
+# See vendor/tone3000/FTS-PATCH.md; drop it once upstream lets a consumer
+# pick the TLS backend.
+tone3000 = { path = "vendor/tone3000" }
 # Vendored one-line fix: parse_schema_bytes rejected every real schema
 # exchange with "schema decode consumed N of M bytes" — it compared
 # phon_schema::schema_from_bytes's owned-allocation byte count (added in

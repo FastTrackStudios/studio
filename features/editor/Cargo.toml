@@ -53,16 +53,16 @@ facet = { workspace = true }
 facet-styx = { workspace = true, optional = true }
 session-format = { workspace = true, optional = true }
 fts-sample = { workspace = true, features = ["write"], optional = true }
-futures-timer = { version = "3", optional = true }
-guitarpro = { version = "=0.4.2", optional = true }
-hound = { version = "3.5", optional = true }
+futures-timer = { workspace = true, optional = true }
+guitarpro = { workspace = true, optional = true }
+hound = { workspace = true, optional = true }
 architect-input = { workspace = true, optional = true }
 keybinds = { workspace = true, optional = true }
 keyflow = { workspace = true, optional = true }
 keyflow-proto = { workspace = true }
 kurbo = { workspace = true, optional = true }
 level = { workspace = true, optional = true }
-midly = { version = "0.5", optional = true }
+midly = { workspace = true, optional = true }
 parley = { workspace = true, optional = true }
 peniko = { workspace = true, optional = true }
 png = { workspace = true, optional = true }
@@ -89,17 +89,17 @@ studio = { workspace = true, features = ["reaper", "reaper-ui", "test-harness"] 
 daw-test-macro = { workspace = true }
 dawfile-reaper = { workspace = true }
 dioxus = { workspace = true, default-features = true, features = ["desktop", "launch"] }
-dioxus-ssr = { git = "https://github.com/DioxusLabs/dioxus", rev = "f717a8e184a522d078b70bb4b4d62a5f9a99ddfc", default-features = false }
+dioxus-ssr = { workspace = true }
 dioxus-test = { workspace = true }
 eyre = { workspace = true }
 facet-styx = { workspace = true }
 keyflow = { workspace = true }
 session-format = { workspace = true }
-guitarpro = { version = "=0.4.2" }
-hound = { version = "3.5" }
+guitarpro = { workspace = true }
+hound = { workspace = true }
 image = { workspace = true, default-features = false, features = ["bmp"] }
 level = { workspace = true }
-midly = { version = "0.5" }
+midly = { workspace = true }
 png = { workspace = true }
 sha2 = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt", "time"] }

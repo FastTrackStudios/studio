@@ -23,17 +23,17 @@ daw-extension-runtime.workspace = true
 daw-module = { workspace = true }
 reaper-dioxus = { workspace = true }
 daw-ui = { workspace = true, features = ["reaper-test-panels"] }
-crossbeam-channel = "0.5"
-eyre = "0.6"
+crossbeam-channel = { workspace = true }
+eyre = { workspace = true }
 fragile.workspace = true
 vox.workspace = true
 reaper-low.workspace = true
 reaper-high.workspace = true
-reaper-macros = { git = "https://codeberg.org/FastTrackStudios/reaper-rs.git", branch = "feat/reaper-763-ruler-lanes" }
+reaper-macros = { workspace = true }
 # The action-dispatch channel's receiver type.
 tokio = { workspace = true, features = ["sync"] }
 tracing.workspace = true
-tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+tracing-subscriber = { workspace = true, features = ["env-filter"] }
 
 [lints.rust]
 unsafe_code = "allow"

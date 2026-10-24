@@ -24,4 +24,4 @@ dsp-core = { workspace = true, features = ["meter"], optional = true }
 fts-audio-ui = { workspace = true, optional = true }
 nice-plug = { workspace = true }
 nice-plug-dioxus = { workspace = true, optional = true }
-parking_lot = { version = "0.12", optional = true }
+parking_lot = { workspace = true, optional = true }

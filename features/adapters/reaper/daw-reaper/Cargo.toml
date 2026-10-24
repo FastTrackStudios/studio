@@ -33,7 +33,7 @@ tokio = { workspace = true, features = ["net", "rt", "time"] }
 # RPP chunk parsing/serialization for chunk-based FX manipulation. This is
 # the RPP *output* serializer — mandatory, used by every importer.
 dawfile-reaper = { workspace = true }
-base64 = "0.22.1"
+base64 = { workspace = true }
 
 # Source-format importers (format → RPP). Each is optional and gated by an
 # `import-<format>` feature so a specialized build (e.g. a Pro-Tools-only
@@ -48,8 +48,8 @@ reaper-high.workspace = true
 reaper-medium.workspace = true
 reaper-low.workspace = true
 enumflags2.workspace = true
-camino = "1"
-libloading = "0.8"
+camino = { workspace = true }
+libloading = { workspace = true }
 crossbeam-channel.workspace = true
 daw-control = { workspace = true }
 eyre.workspace = true
@@ -65,14 +65,14 @@ swell-ui.workspace = true
 # without target gating, which drags (and breaks) wayland on iOS
 # builds — and screensets are a desktop-REAPER concern anyway.
 [target.'cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))'.dependencies]
-display-info = "0.5"
+display-info = { workspace = true }
 
 [dev-dependencies]
 editor = { workspace = true, features = ["daw", "ops"] }
 
 daw-control = { workspace = true }
 daw-proto = { workspace = true }
-base64 = "0.22.1"
+base64 = { workspace = true }
 # Integration-test harness — now folded into the `daw` facade behind the
 # `test-harness` feature (replaces the former `reaper-test` crate).
 # `standalone-audio` for the take-peaks parity test: the same fixture

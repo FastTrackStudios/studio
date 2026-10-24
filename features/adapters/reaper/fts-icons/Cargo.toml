@@ -29,10 +29,10 @@ serde_json = { workspace = true }
 daw-proto = { workspace = true, optional = true }
 
 # SVG rendering — same major as the rest of the tree (keyflow-cli, engraver).
-resvg = "0.45"
-toml = "0.8"
-ureq = { version = "2", features = ["json"] }
-dirs = "6"
+resvg = { workspace = true }
+toml = { workspace = true }
+ureq = { workspace = true, features = ["json"] }
+dirs = { workspace = true }
 
 [lints]
 workspace = true

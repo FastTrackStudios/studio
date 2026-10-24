@@ -42,8 +42,8 @@ tracing.workspace = true
 uuid = { version = "1", features = ["v4", "serde"] }
 # Wire format for the clock-sync protocol. postcard is small + facet-
 # free so we don't drag in vox here.
-serde = { version = "1", features = ["derive"] }
-bincode = "1"
+serde = { workspace = true, features = ["derive"] }
+bincode = { workspace = true }
 socket2 = { version = "0.5", features = ["all"] }
 
 [dev-dependencies]

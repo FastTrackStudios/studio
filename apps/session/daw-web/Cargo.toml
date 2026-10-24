@@ -17,9 +17,9 @@ session-daw = { path = "../daw", default-features = false, features = ["web"] }
 session = { workspace = true, features = ["ui"] }
 dioxus = { workspace = true, features = ["web", "launch"] }
 tracing = { workspace = true }
-tracing-wasm = "0.2"
+tracing-wasm = { workspace = true }
 tracing-subscriber = { workspace = true }
-console_error_panic_hook = "0.1"
+console_error_panic_hook = { workspace = true }
 getrandom = { version = "0.3", features = ["wasm_js"] }
 # The page's query: which share link to open (`main::source`).
 web-sys = { workspace = true, features = ["Window", "Location", "UrlSearchParams"] }
