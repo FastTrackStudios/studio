@@ -198,7 +198,9 @@ jobs:
     name: Check
     needs: plan
     if: ${{ needs.plan.outputs.skip != 'true' }}
-    runs-on: '${{ (github.event_name == ''pull_request'' || startsWith(github.event.head_commit.message, ''chore(release): v'')) && fromJSON(''["self-hosted","studio-release"]'') || fromJSON(''["self-hosted","studio-main"]'') }}'
+    runs-on:
+    - self-hosted
+    - studio-main
     timeout-minutes: 90
     env:
       CARGO_INCREMENTAL: '0'
@@ -240,7 +242,9 @@ jobs:
     name: Wasm
     needs: plan
     if: ${{ needs.plan.outputs.skip != 'true' }}
-    runs-on: '${{ (github.event_name == ''pull_request'' || startsWith(github.event.head_commit.message, ''chore(release): v'')) && fromJSON(''["self-hosted","studio-release"]'') || fromJSON(''["self-hosted","studio-main"]'') }}'
+    runs-on:
+    - self-hosted
+    - studio-main
     timeout-minutes: 75
     env:
       CARGO_INCREMENTAL: '0'
@@ -279,7 +283,9 @@ jobs:
     name: Tests
     needs: plan
     if: ${{ needs.plan.outputs.skip != 'true' }}
-    runs-on: '${{ (github.event_name == ''pull_request'' || startsWith(github.event.head_commit.message, ''chore(release): v'')) && fromJSON(''["self-hosted","studio-release"]'') || fromJSON(''["self-hosted","studio-main"]'') }}'
+    runs-on:
+    - self-hosted
+    - studio-main
     timeout-minutes: 120
     environment: ${{ github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && 'ci-assets' || '' }}
     env:

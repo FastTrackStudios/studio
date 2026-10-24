@@ -87,9 +87,9 @@ delete a tag; a bad release is superseded by the next.
 | PR into `main` | `PR` (`PR checks`: fmt, change files, the lockfile, the rail config — compiles nothing) + the `Local CI` status (the prek pre-push hook: the static guards, then the rail-selected tests + `cargo check` + wasm, on the pusher's machine) + `Release guard` | `PR checks` on GitHub's free runners |
 | release PR `release/pending` → `main` | `Release guard`; `PR checks` runs the same guard from the base commit and skips its checks if it passes; `ci-local` runs it too and posts `Local CI` without building | hosted |
 | PR into `release/**` (hotfix) | `CI` (the full set), `Release guard` | as below |
-| push to `main` / `release/v*` | `CI` full set: `Gates`, `Check` (+ advisory clippy), `Wasm`, `Tests` (the core test set), `Release tooling (macOS)`, aggregated as `CI passed`; on `main` also `Dependency cache` (the cargo downloads `PR checks` restore) | Check, Tests, Wasm on THEBATTLESHIP (`studio-main`; a release commit on `studio-release`, never cancelled); the rest on GitHub's free runners |
+| push to `main` / `release/v*` | `CI` full set: `Gates`, `Check` (+ advisory clippy), `Wasm`, `Tests` (the core test set), `Release tooling (macOS)`, aggregated as `CI passed`; on `main` also `Dependency cache` (the cargo downloads `PR checks` restore) | Check, Tests, Wasm on THEBATTLESHIP (`studio-main`, a release commit's run too, never cancelled); the rest on GitHub's free runners |
 | `gh workflow run checks.yml --ref <branch>` | `CI` full set; green, it posts `Local CI` on the branch's head (for a push the hook couldn't vouch for) | as above |
-| push of tag `vYY.M.MICRO` (or `workflow_dispatch` with the tag as ref) | `deploy` (session-web, signal-web), `studio-ios` (TestFlight), `desktop` (the signed, notarized macOS `.dmg` and the Linux AppImage, attached to the Release; `gh workflow run desktop.yml -f tag=<ref> -f mode=build-only` proves them from any branch), `release` publish | `studio-deploy` (LAN registry), `airlock`, hosted |
+| push of tag `vYY.M.MICRO` (or `workflow_dispatch` with the tag as ref) | `deploy` (session-web, signal-web), `studio-ios` (TestFlight), `desktop` (the signed, notarized macOS `.dmg` and the Linux AppImage, attached to the Release; `gh workflow run desktop.yml -f tag=<ref> -f mode=build-only` proves them from any branch), `release` publish | `studio-deploy` (LAN registry), `airlock`, the Linux AppImage on THEBATTLESHIP's `studio-release`, hosted |
 
 The workflow files are generated from `xtask/workflows` (one Rust module per
 workflow, the reasons as comments there): edit the Rust, run `just
@@ -101,8 +101,9 @@ apt headers (cached), and pinned release binaries for just, cargo-rail,
 actionlint. The cheap jobs run on GitHub's free runners. The builds
 (`Check`, `Tests` with the core test set, `Wasm`) run side by side on
 THEBATTLESHIP's studio pools, three runners sharing one warm cache each
-(`studio-main` for merges, `studio-release` for release commits and hotfix
-PRs, capped at 200 GB; Codys-Wright/nix-config
+(`studio-main` for every check, a release commit's and a hotfix PR's
+included; `studio-release` only for release builds, the Linux AppImage;
+capped at 200 GB; Codys-Wright/nix-config
 hosts/THEBATTLESHIP/github-runners.nix), in the `.#ci` dev shell. A newer
 merge cancels the older run; a release commit's run is never cancelled. No
 WarpBuild, no snapshots.

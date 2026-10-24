@@ -8,8 +8,9 @@
 //!   release publish all start on the tag --> resolve (hosted: tag shape,
 //!   the app crate's version == the tag's, changelog section, commit on main
 //!   or release/v*, Release exists) --> macos (airlock) and linux
-//!   (THEBATTLESHIP) build in parallel and upload workflow artifacts -->
-//!   publish (hosted) checks them and attaches them to the Release.
+//!   (THEBATTLESHIP, `studio-release`) build in parallel and upload
+//!   workflow artifacts --> publish (hosted) checks them and attaches them
+//!   to the Release.
 //! ```
 //!
 //! The signing identity and the notarization key never leave their machine:
@@ -225,23 +226,25 @@ ls -l target/desktop
         )
 }
 
-/// THEBATTLESHIP (x86_64 NixOS, `session`): the AppImage (scripts/desktop/
-/// linux.sh), smoke-tested headless.
+/// THEBATTLESHIP's `studio-release` pool (x86_64 NixOS; the pool for
+/// release builds, never checks): the AppImage (scripts/desktop/linux.sh),
+/// smoke-tested headless.
 fn linux() -> Job {
-    Job::new(RunsOn::Labels(&["self-hosted", "session"]))
+    Job::new(RunsOn::Labels(&["self-hosted", "studio-release"]))
         .name("Linux AppImage")
         .needs(&["resolve"])
         .cond(NOT_VALIDATE)
         .timeout(120)
         .step(checkout().with("ref", "${{ needs.resolve.outputs.sha }}"))
-        // Its OWN target dir on the runner's big disk, with a size cap (a
-        // release build has other fingerprints than any check's). Over the
+        // Its OWN target dir in the release pool's shared cache, so whichever
+        // instance claims the job builds warm, with a size cap (a release
+        // build has other fingerprints than any check's). Over the
         // cap before the build it is emptied (a cold build); over it after,
         // only `incremental/` is dropped.
         .step(Step::run(
             "Own target dir, size-capped",
-            r#"base="${CI_CACHE_DIR:-${CACHE_DIRECTORY:-$HOME/.cache}}"
-dir="$base/cargo-target-desktop"
+            r#"base="${STUDIO_CACHE_DIR:?not a studio pool runner (no STUDIO_CACHE_DIR)}"
+dir="$base/desktop-linux"
 cap_gb="${TARGET_CAP_GB-150}"
 mkdir -p "$dir"
 used_gb="$(du -s --block-size=1G "$dir" | cut -f1)"

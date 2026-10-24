@@ -303,18 +303,16 @@ cargo rail change check --since \"${BASE_SHA}\"
 
 /// The pool a run's build jobs go to (Codys-Wright/nix-config
 /// hosts/THEBATTLESHIP/github-runners.nix: two pools of three instances,
-/// each pool sharing one warm cache, $STUDIO_CACHE_DIR). A release commit
-/// and a hotfix PR into release/** take `studio-release`, so a release
-/// never queues behind ordinary merges; every other run (a merge to main, a
-/// dispatch) takes `studio-main`. Only trusted code reaches them: CI runs no
-/// PR into main (pr.yml does, on free runners), and `plan` refuses a fork
-/// PR into a release line.
-const POOL: RunsOn = RunsOn::Expr(
-    "${{ (github.event_name == 'pull_request' || \
-     startsWith(github.event.head_commit.message, 'chore(release): v')) && \
-     fromJSON('[\"self-hosted\",\"studio-release\"]') || \
-     fromJSON('[\"self-hosted\",\"studio-main\"]') }}",
-);
+/// each pool sharing one warm cache, $STUDIO_CACHE_DIR). Every check runs on
+/// `studio-main`, a release commit's and a hotfix PR's included: the checks
+/// share one set of check/test/wasm target dirs instead of building them
+/// twice. `studio-release` is for release BUILDS (the installers, desktop.yml),
+/// whose release-profile target dir has nothing in common with a check's. A
+/// release commit's run is never cancelled (the concurrency above), so it
+/// cannot lose its place to a merge. Only trusted code reaches the pool: CI
+/// runs no PR into main (pr.yml does, on free runners), and `plan` refuses a
+/// fork PR into a release line.
+const POOL: RunsOn = RunsOn::Labels(&["self-hosted", "studio-main"]);
 
 /// The pool's shared cache holds one target dir per build kind (check mode,
 /// test codegen and wasm32 share no artifacts), so the three jobs of a run

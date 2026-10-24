@@ -103,12 +103,10 @@ impl Concurrency {
     }
 }
 
-/// `runs-on`: one label, a list of labels for a self-hosted runner, or an
-/// expression that picks one per run.
+/// `runs-on`: one label, or a list of labels for a self-hosted runner.
 pub enum RunsOn {
     Label(&'static str),
     Labels(&'static [&'static str]),
-    Expr(&'static str),
 }
 
 impl Serialize for RunsOn {
@@ -116,7 +114,6 @@ impl Serialize for RunsOn {
         match self {
             Self::Label(label) => s.serialize_str(label),
             Self::Labels(labels) => labels.serialize(s),
-            Self::Expr(expr) => s.serialize_str(expr),
         }
     }
 }
