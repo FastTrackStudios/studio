@@ -346,15 +346,6 @@ cp .cargo/ci-config.toml ../.cargo/config.toml
     )
 }
 
-/// Where [`rust_cache`] keeps its entries: WarpBuild's cache (unlimited, 7
-/// days from last use) works on WarpBuild runners only; GitHub's (10 GB per
-/// repo) is the free runners'.
-#[derive(Clone, Copy)]
-pub enum Cache {
-    Warp,
-    Github,
-}
-
 /// Swatinem/rust-cache with ONE shared key per build kind, saved by main
 /// only: PRs restore main's entry and never write their own, so a cache
 /// budget holds one set per kind instead of being evicted by every open PR. `cache-on-failure`: the cache holds compiled dependencies,
@@ -370,11 +361,7 @@ pub enum Cache {
 /// deletes every unit the build did not read, so the entry main saves holds
 /// only what this build used instead of piling up the `-<hash>` units of
 /// every past Cargo.lock.
-pub fn rust_cache(shared_key: &str, cache: Cache) -> [Step; 2] {
-    let provider = match cache {
-        Cache::Warp => "warpbuild",
-        Cache::Github => "github",
-    };
+pub fn rust_cache(shared_key: &str) -> [Step; 2] {
     [
         Step::uses(
             &format!("Rust cache ({shared_key}, main saves)"),
@@ -382,7 +369,6 @@ pub fn rust_cache(shared_key: &str, cache: Cache) -> [Step; 2] {
         )
         .with("shared-key", shared_key)
         .with("save-if", "${{ github.ref == 'refs/heads/main' }}")
-        .with("cache-provider", provider)
         .with("cache-on-failure", true)
         .with("cache-bin", false),
         Step::uses(
@@ -391,47 +377,6 @@ pub fn rust_cache(shared_key: &str, cache: Cache) -> [Step; 2] {
         )
         .with("target-dir", "target"),
     ]
-}
-
-/// Garbage collection for a PERSISTENT target dir (the test jobs), which
-/// cargo never does: Dioxus's prune-cargo-target split in two.
-/// [`target_mark`] sets every fingerprint's atime to 0 before the build;
-/// [`target_sweep`] then deletes every unit whose fingerprint the build did
-/// not read — what earlier branches' lockfiles, features and profiles left.
-///
-/// The sweep runs only after a FULL (`--workspace`) build succeeded
-/// ([`nextest`]'s `prunable`): after a narrowed PR build (`-p …`) it would
-/// delete the rest of the workspace and turn the next run cold. Full runs —
-/// main's pushes and the nightly — prune to the workspace's live set, which
-/// also clears whatever PR builds added since. A red test run still sweeps:
-/// its build was fine.
-pub fn target_mark() -> Step {
-    Step::uses(
-        "Mark the target dir's fingerprints",
-        "./.github/actions/prune-cargo-target/mark",
-    )
-    .with("target-dir", "${{ env.CARGO_TARGET_DIR }}")
-}
-
-/// See [`target_mark`].
-pub fn target_sweep() -> Step {
-    Step::uses(
-        "Prune what the build did not use",
-        "./.github/actions/prune-cargo-target/sweep",
-    )
-    .cond("${{ !cancelled() && steps.nextest.outputs.prunable == 'true' }}")
-    .with("target-dir", "${{ env.CARGO_TARGET_DIR }}")
-}
-
-/// features/ui/plugin-faces/generated is gitignored build output too: the
-/// plugin faces as `.frame` documents, which session-daw reads at runtime
-/// (`faces::design_dir()`), and its faces tests with it — without them no
-/// face opens and those tests fail. session-daw does not depend on
-/// plugin-faces, so its tests cannot generate them; the job does, before
-/// nextest. A release build of plugin-faces into the persistent target dir:
-/// minutes once, then a fresh binary and a few seconds of writing.
-pub fn faces(tc: Toolchain) -> Step {
-    Step::run("Plugin faces", &tc.cmd("just faces")).cond("${{ !cancelled() }}")
 }
 
 /// What this kind would put in the Actions cache (rust-cache trims the

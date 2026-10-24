@@ -21,22 +21,18 @@
 //!                  commit's release.sh) skips everything.
 //!   by hand        `gh workflow run checks.yml --ref <branch>` runs
 //!                  everything and, when green, posts `Local CI` on the
-//!                  branch's head (for a push the hook couldn't vouch for);
-//!                  `-f seed=true` on main reseeds the snapshot.
-//!   weekly seed    Sunday: the FULL set on main from the base image, saving
-//!                  a fresh tests snapshot (see `tests`). No nightly.
+//!                  branch's head (for a push the hook couldn't vouch for).
 //! ```
 //!
-//! RUNNERS: only the builds are paid for.
+//! No nightly, no schedule. RUNNERS: GitHub's free hosted runners only (the
+//! repo is public), with rust-cache that main saves; macos-latest for the
+//! release tooling on macOS. No WarpBuild (2026-10-24).
 //!
 //! ```text
-//!   ubuntu-latest  plan, gates, wasm, deps-cache and the `CI passed`
-//!                  aggregator (free: the repo is public)
-//!   warp 8x        check: `cargo check --workspace` + advisory clippy, with
-//!                  rust-cache on WarpBuild's cache
-//!   warp 16x       tests: ~1460 crates and ~800 test binaries at full
-//!                  codegen, on a SNAPSHOT runner whose saved VM holds the
-//!                  warm target dir
+//!   ubuntu-latest  plan, gates, check (`cargo check --workspace` + advisory
+//!                  clippy), wasm, tests (the core test set), deps-cache and
+//!                  the `CI passed` aggregator
+//!   macos-latest   release tooling (the sandbox, macOS's own tools)
 //! ```
 //!
 //! No tailwind step: every sheet a crate `include_str!`s is committed, and
@@ -51,29 +47,14 @@
 
 use crate::model::{Job, RunsOn, Step, UBUNTU, Workflow, yaml};
 use crate::steps::{
-    Cache, Toolchain, Tools, cargo_deps_save, checkout, checkout_full, faces, footprint,
-    hosted_setup, rust_cache, target_mark, target_sweep,
+    Toolchain, Tools, cargo_deps_save, checkout, checkout_full, footprint, hosted_setup, rust_cache,
 };
 use anyhow::Result;
-
-/// The features `just test` / `just ci` name: the app CLIs and the worklet
-/// rigs sit behind features, and without them their tests never build (an
-/// app crate has no lib to dev-depend on).
-const TEST_FEATURES: &str =
-    "session-desktop/cli,studio-desktop/cli,web-audio-worklet/guitar,web-audio-worklet/keys";
-
-/// The workspace check's WarpBuild size. One constant, so resizing is a
-/// one-line change (then `just workflows`).
-const WARP_CHECK: RunsOn = RunsOn::Label("warp-ubuntu-latest-x64-8x");
-
-/// The weekly seed. `plan` matches this exact string to tell it from any
-/// other schedule.
-const SEED_CRON: &str = "37 9 * * 0";
 
 pub fn workflow() -> Result<Workflow> {
     Ok(Workflow::new(
         "CI",
-        yaml(&format!(
+        yaml(
             r#"
 pull_request:
   branches: ["release/**"]
@@ -82,16 +63,8 @@ push:
   # version + changelog only and gets no run of its own.
   branches: [main, "release/v*"]
 workflow_dispatch:
-  inputs:
-    seed:
-      description: "On main: boot from the base image, build cold, save a fresh tests snapshot."
-      type: boolean
-      required: false
-      default: false
-schedule:
-  - cron: "{SEED_CRON}"
-"#
-        ))?,
+"#,
+        )?,
     )
     // One group per PR, so a new push to a hotfix PR cancels its
     // predecessor. A PUSH gets a group of its own commit (the Zed way):
@@ -113,16 +86,13 @@ schedule:
 }
 
 /// Whether there is anything to run (a sound hotfix release PR: no; a
-/// refused one fails here) and whether this is a SEED run. Bash and git
-/// only: no toolchain.
+/// refused one fails here). Bash and git only: no toolchain.
 fn plan() -> Result<Job> {
     let mut job = Job::new(UBUNTU)
         .name("Plan")
         .timeout(10)
         .permissions(yaml("contents: read\n")?);
-    for out in ["skip", "seed"] {
-        job = job.output(out, &format!("${{{{ steps.plan.outputs.{out} }}}}"));
-    }
+    job = job.output("skip", "${{ steps.plan.outputs.skip }}");
     Ok(job
         // Full history: the release guard reads the PR's base and head.
         .step(checkout_full(None))
@@ -136,10 +106,7 @@ fn plan() -> Result<Job> {
                 .env(
                     "HEAD_REPO",
                     "${{ github.event.pull_request.head.repo.full_name }}",
-                )
-                .env("INPUT_SEED", "${{ inputs.seed }}")
-                .env("SCHEDULE", "${{ github.event.schedule }}")
-                .env("SEED_CRON", SEED_CRON),
+                ),
         ))
 }
 
@@ -149,11 +116,8 @@ fn plan() -> Result<Job> {
 /// skip everything; 3 = refused, fail; 1 = a hotfix, the full set. A fork
 /// PR would run the full set on the org's paid runners with whatever its
 /// code does: refused.
-///
-/// A seed is the weekly cron or a dispatch on main with `seed`.
 const PLAN: &str = r####"set -u
 out() { printf '%s\n' "$@" >> "$GITHUB_OUTPUT"; }
-seed=false
 case "${GITHUB_EVENT_NAME:-}" in
   pull_request)
     rc=1
@@ -167,7 +131,7 @@ case "${GITHUB_EVENT_NAME:-}" in
           echo "This PR is one commit changing the version, CHANGELOG.md and consumed change files; its content was checked when it merged, so every job is skipped."
         } >> "$GITHUB_STEP_SUMMARY"
         echo "plan: release commit only (${HEAD_REF} -> ${BASE_REF}): nothing to run"
-        out skip=true seed=false
+        out skip=true
         exit 0 ;;
       3)
         echo "::error::${HEAD_REF} -> ${BASE_REF} is a release PR the release guard refuses (see above)"
@@ -178,15 +142,11 @@ case "${GITHUB_EVENT_NAME:-}" in
       exit 1
     fi
     echo "plan: PR into ${BASE_REF} (hotfix): the full set" ;;
-  schedule)
-    [ "${SCHEDULE}" = "${SEED_CRON}" ] && seed=true
-    echo "plan: schedule '${SCHEDULE}' (seed=${seed}): the full set" ;;
   workflow_dispatch)
-    [ "${INPUT_SEED}" = true ] && [ "${GITHUB_REF_NAME}" = main ] && seed=true
-    echo "plan: dispatch on ${GITHUB_REF_NAME} (seed=${seed}): the full set" ;;
+    echo "plan: dispatch on ${GITHUB_REF_NAME}: the full set" ;;
   *) echo "plan: ${GITHUB_EVENT_NAME:-?} on ${GITHUB_REF_NAME}: the full set" ;;
 esac
-out skip=false "seed=${seed}"
+out skip=false
 "####;
 
 /// Main is the only writer of the cargo-dependency cache pr.yml's `PR
@@ -243,7 +203,7 @@ fn gates() -> Job {
             ..Tools::default()
         },
     ))
-    .steps(rust_cache("gates", Cache::Github))
+    .steps(rust_cache("gates"))
     .step(Step::run("Manifests + lockfile", LOCKFILE))
     .step(Step::run("cargo fmt --check", "cargo fmt --all --check").cond(NOT_CANCELLED))
     .steps(workflow_gates())
@@ -292,7 +252,7 @@ fn release_macos() -> Job {
 /// without failing. Same check-mode dependency metadata, so same job.
 fn check() -> Job {
     hosted_cargo_job(
-        Job::new(WARP_CHECK)
+        Job::new(UBUNTU)
             .name("Check")
             .needs(&["plan"])
             .cond(WANTED)
@@ -309,8 +269,7 @@ fn check() -> Job {
             ..Tools::default()
         },
     ))
-    // The "lint" key: the entries the old lint job saved still match.
-    .steps(rust_cache("lint", Cache::Warp))
+    .steps(rust_cache("check"))
     .step(Step::run(
         "cargo check --workspace",
         "cargo check --workspace",
@@ -421,7 +380,7 @@ fn wasm() -> Job {
             ..Tools::default()
         },
     ))
-    .steps(rust_cache("wasm", Cache::Github))
+    .steps(rust_cache("wasm"))
     // The three web bundles deploy.yml ships (STA-366). The workspace check
     // is native, so it never compiles them: a native-only dep (tokio `net`,
     // an engine, an X11/HID crate) leaking into their graph stayed hidden
@@ -441,42 +400,25 @@ fn wasm() -> Job {
     .step(footprint())
 }
 
-/// REQUIRED on full runs: the whole suite, on a WarpBuild SNAPSHOT runner,
+/// REQUIRED on full runs: the core test set, on a free hosted runner,
 /// without nix: the hosted jobs' rustup/apt/release-binary setup plus
-/// nextest and lavapipe (software Vulkan) for the GPU tests.
+/// nextest and lavapipe (software Vulkan).
 ///
-/// The warm target dir is the snapshot (`<label>;snapshot.key=<alias>`,
-/// WarpBuilds/snapshot-save): the VM boots from the last snapshot saved under
-/// [`WARPBUILD_SNAPSHOT`], or the base image if there is none.
-///
-/// SNAPSHOTS ARE SEEDED, NEVER CHAINED. Only a SEED run saves one (the
-/// weekly cron, or a dispatch on main with `seed`): it boots from
-/// WarpBuild's BASE image (`snapshot.enabled=true`), builds cold and saves.
-/// Every other run restores and saves nothing. Task saved from a runner that
-/// was itself restored, and the snapshot of a snapshot booted runners that
-/// were shut down within a minute without ever picking up the job
-/// (2026-10-23). Snapshots expire after 15 days unused, so weekly keeps one
-/// alive; between seeds a run rebuilds what changed since the last one.
-/// Reseed by hand after a lockfile or toolchain change that makes warm runs
-/// slow: `gh workflow run checks.yml --ref main -f seed=true`. First run
-/// (2026-10-23): cold build 15 min, 10 949 tests 2 min, on a 16x.
+/// The suite was cut to a core set (2026-10-24: ~650 tests in ~40 binaries,
+/// from 11 317 in 815): the DAW core, the session format, the DSP math, the
+/// timeline, every effect's parameter round-trip. Only the crates that still
+/// have tests are built (`just test-packages`, the one list `just test` and
+/// local CI use too), so the build fits a free runner, and rust-cache (main
+/// saves) keeps their dependencies warm. No WarpBuild, no snapshot.
 fn tests() -> Job {
-    let warp = Toolchain::Hosted;
-    Job::new(RunsOn::Owned(format!(
-        "${{{{ needs.plan.outputs.seed == 'true' && '{WARPBUILD_RUNNER};snapshot.enabled=true' || \
-         '{WARPBUILD_RUNNER};snapshot.key={WARPBUILD_SNAPSHOT}' }}}}"
-    )))
-    .name("Tests")
-    .needs(&["plan"])
-    .cond(WANTED)
-    .timeout(120)
-    .env("TEST_FEATURES", TEST_FEATURES)
-    // No incremental caches: they grow without bound in a persistent target
-    // (372 GB on one dev machine) and a CI build seldom rebuilds the same
-    // crate twice. Dioxus and Zed run CI the same way.
-    .env("CARGO_INCREMENTAL", "0")
-    // No token left in .git/config: checkout only removes it in its post
-    // step, after the snapshot has been taken.
+    let tc = Toolchain::Hosted;
+    hosted_cargo_job(
+        Job::new(UBUNTU)
+            .name("Tests")
+            .needs(&["plan"])
+            .cond(WANTED)
+            .timeout(120),
+    )
     .step(checkout().with("persist-credentials", false))
     .steps(hosted_setup(
         "",
@@ -487,17 +429,14 @@ fn tests() -> Job {
             just: true,
             nextest: true,
             ci_cargo_config: true,
+            free_disk: true,
             ..Tools::default()
         },
     ))
+    .steps(rust_cache("tests"))
     .environment(ASSETS_ENVIRONMENT.into())
-    // ~/.cache/cargo-target: outside the checkout, so the pre-snapshot
-    // `git clean` keeps it.
-    .step(Step::run("Persistent target dir", TARGET_DIR))
-    .step(target_mark())
     .step(assets_token())
-    .step(assets(warp))
-    .step(faces(warp))
+    .step(assets(tc))
     .step(
         Step::run(
             "cargo nextest",
@@ -506,35 +445,7 @@ fn tests() -> Job {
         .id("nextest")
         .env("TEST_LOG", "${{ runner.temp }}/nextest-ci.log"),
     )
-    .step(target_sweep())
     .step(test_log("nextest-ci"))
-    // Before the snapshot: nothing secret may be in it (WarpBuild's own
-    // advice; a snapshot alias is readable by any run in the org). The
-    // asset clones STAY: they are only as private as the org that owns
-    // both. So do the checkout's ignored files — the asset links, the plugin
-    // faces: build scripts watch some of them, and recreating them each boot
-    // rebuilt mic-plugin and everything above (13 min of a warm build;
-    // `just ci-churn` checks it). The target dir, ~/.cargo, rustup and the
-    // apt packages stay: that is the point.
-    .step(
-        Step::run(
-            "Clean up before the snapshot",
-            "\
-rm -rf \"$HOME/.ssh\" \"$HOME/.aws\"
-git config --local --unset-all http.https://github.com/.extraheader || true
-du -sh \"$HOME/.cache/cargo-target\" 2>/dev/null || true
-",
-        )
-        .cond(SAVE_SNAPSHOT),
-    )
-    .step(
-        Step::uses("Save the WarpBuild snapshot", "WarpBuilds/snapshot-save@v1")
-            .cond(SAVE_SNAPSHOT)
-            .with("alias", WARPBUILD_SNAPSHOT)
-            // A failed save on a run that set out to save is a failure.
-            .with("fail-on-error", true)
-            .with("wait-timeout-minutes", 60),
-    )
 }
 
 /// The full nextest log as an artifact (see [`NEXTEST`] for why it is a file).
@@ -547,36 +458,6 @@ fn test_log(artifact: &str) -> Step {
         .with("retention-days", 7)
 }
 
-/// The WarpBuild runner the tests job uses. One constant, so trying another
-/// size is a one-line change (then `just workflows`).
-const WARPBUILD_RUNNER: &str = "warp-ubuntu-latest-x64-16x";
-
-/// The WarpBuild snapshot alias: the tests job boots from the VM snapshot
-/// saved under it (toolchain, apt packages, ~/.cargo, the asset clones and
-/// the warm target dir in ~/.cache/cargo-target).
-const WARPBUILD_SNAPSHOT: &str = "studio-tests";
-
-/// See [`tests`]: a seed run, and never from a restored runner (a seed
-/// boots from the base image).
-const SAVE_SNAPSHOT: &str = "${{ !cancelled() && needs.plan.outputs.seed == 'true' }}";
-
-/// Cargo never collects garbage: every lockfile and feature set leaves its
-/// own units here until the disk is full and rustc dies mid-build (PR #184,
-/// October 2026). [`target_sweep`] is the garbage collection; this is the
-/// backstop: the incremental caches always go (the jobs build without them),
-/// and below 30 GB free the whole dir does (100 GB wiped the warm snapshot
-/// on every boot: a 16x boots with 186 GB free and the target is 87 GB).
-const TARGET_DIR: &str = r#"dir="${CI_CACHE_DIR:-${CACHE_DIRECTORY:-$HOME/.cache}}/cargo-target"
-mkdir -p "$dir"
-echo "CARGO_TARGET_DIR=$dir" >> "$GITHUB_ENV"
-free_gb() { df -Pk "$dir" | awk 'NR==2 { print int($4 / 1048576) }'; }
-rm -rf "$dir"/*/incremental "$dir"/*/*/incremental
-if [ "$(free_gb)" -lt 30 ]; then
-  echo "::warning::still $(free_gb) GB free: clearing the target dir (a cold build follows)"
-  rm -rf "$dir" && mkdir -p "$dir"
-fi
-echo "target dir: $dir ($(du -sh "$dir" 2>/dev/null | cut -f1)), $(free_gb) GB free"
-"#;
 /// The large fixtures and the rigs' NAM captures / IRs live in the private
 /// repos studio-assets, rig-models and mic-models (assets.txt); `just assets` clones them
 /// into .assets/ and links each file into place, so the tests that need them
@@ -656,15 +537,15 @@ fn assets_token() -> Step {
 /// output", at the first failing test's captured output: writing to the
 /// runner's stdout pipe failed. A regular file cannot do that. The full log
 /// is the job's test-log artifact.
-const NEXTEST: &str = r####"t0=$(date +%s)
-cargo nextest run --workspace --features "${TEST_FEATURES}" --no-run >"${TEST_LOG}" 2>&1
+const NEXTEST: &str = r####"pkgs=()
+for p in $(just --evaluate test_packages); do pkgs+=(-p "$p"); done
+echo "packages: ${pkgs[*]}"
+t0=$(date +%s)
+cargo nextest run "${pkgs[@]}" --no-run >"${TEST_LOG}" 2>&1
 rc=$?
 t1=$(date +%s)
-# A build that succeeded read every unit the workspace uses: the target dir
-# may be pruned to that set (target_sweep), whatever the tests say.
 if [ "$rc" = 0 ]; then
-  echo "prunable=true" >> "${GITHUB_OUTPUT}"
-  cargo nextest run --workspace --no-fail-fast --features "${TEST_FEATURES}" >>"${TEST_LOG}" 2>&1
+  cargo nextest run "${pkgs[@]}" --no-fail-fast >>"${TEST_LOG}" 2>&1
   rc=$?
 fi
 t2=$(date +%s)

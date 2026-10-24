@@ -10,15 +10,7 @@ on:
     branches:
     - main
     - release/v*
-  workflow_dispatch:
-    inputs:
-      seed:
-        description: 'On main: boot from the base image, build cold, save a fresh tests snapshot.'
-        type: boolean
-        required: false
-        default: false
-  schedule:
-  - cron: 37 9 * * 0
+  workflow_dispatch: null
 concurrency:
   group: ci-${{ github.event.pull_request.number || github.ref }}-${{ github.event_name == 'push' && github.sha || github.event_name }}
   cancel-in-progress: true
@@ -31,7 +23,6 @@ jobs:
       contents: read
     outputs:
       skip: ${{ steps.plan.outputs.skip }}
-      seed: ${{ steps.plan.outputs.seed }}
     steps:
     - uses: actions/checkout@v4
       with:
@@ -44,13 +35,9 @@ jobs:
         HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         HEAD_REF: ${{ github.event.pull_request.head.ref }}
         HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
-        INPUT_SEED: ${{ inputs.seed }}
-        SCHEDULE: ${{ github.event.schedule }}
-        SEED_CRON: 37 9 * * 0
       run: |
         set -u
         out() { printf '%s\n' "$@" >> "$GITHUB_OUTPUT"; }
-        seed=false
         case "${GITHUB_EVENT_NAME:-}" in
           pull_request)
             rc=1
@@ -64,7 +51,7 @@ jobs:
                   echo "This PR is one commit changing the version, CHANGELOG.md and consumed change files; its content was checked when it merged, so every job is skipped."
                 } >> "$GITHUB_STEP_SUMMARY"
                 echo "plan: release commit only (${HEAD_REF} -> ${BASE_REF}): nothing to run"
-                out skip=true seed=false
+                out skip=true
                 exit 0 ;;
               3)
                 echo "::error::${HEAD_REF} -> ${BASE_REF} is a release PR the release guard refuses (see above)"
@@ -75,15 +62,11 @@ jobs:
               exit 1
             fi
             echo "plan: PR into ${BASE_REF} (hotfix): the full set" ;;
-          schedule)
-            [ "${SCHEDULE}" = "${SEED_CRON}" ] && seed=true
-            echo "plan: schedule '${SCHEDULE}' (seed=${seed}): the full set" ;;
           workflow_dispatch)
-            [ "${INPUT_SEED}" = true ] && [ "${GITHUB_REF_NAME}" = main ] && seed=true
-            echo "plan: dispatch on ${GITHUB_REF_NAME} (seed=${seed}): the full set" ;;
+            echo "plan: dispatch on ${GITHUB_REF_NAME}: the full set" ;;
           *) echo "plan: ${GITHUB_EVENT_NAME:-?} on ${GITHUB_REF_NAME}: the full set" ;;
         esac
-        out skip=false "seed=${seed}"
+        out skip=false
   deps-cache:
     name: Dependency cache
     if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
@@ -174,7 +157,6 @@ jobs:
       with:
         shared-key: gates
         save-if: ${{ github.ref == 'refs/heads/main' }}
-        cache-provider: github
         cache-on-failure: true
         cache-bin: false
     - name: Prune unused units before the cache is saved
@@ -229,7 +211,7 @@ jobs:
     name: Check
     needs: plan
     if: ${{ needs.plan.outputs.skip != 'true' }}
-    runs-on: warp-ubuntu-latest-x64-8x
+    runs-on: ubuntu-latest
     timeout-minutes: 90
     env:
       CARGO_INCREMENTAL: '0'
@@ -256,12 +238,11 @@ jobs:
       run: |
         mkdir -p ../.cargo
         cp .cargo/ci-config.toml ../.cargo/config.toml
-    - name: Rust cache (lint, main saves)
+    - name: Rust cache (check, main saves)
       uses: Swatinem/rust-cache@v2
       with:
-        shared-key: lint
+        shared-key: check
         save-if: ${{ github.ref == 'refs/heads/main' }}
-        cache-provider: warpbuild
         cache-on-failure: true
         cache-bin: false
     - name: Prune unused units before the cache is saved
@@ -324,7 +305,6 @@ jobs:
       with:
         shared-key: wasm
         save-if: ${{ github.ref == 'refs/heads/main' }}
-        cache-provider: github
         cache-on-failure: true
         cache-bin: false
     - name: Prune unused units before the cache is saved
@@ -345,16 +325,23 @@ jobs:
     name: Tests
     needs: plan
     if: ${{ needs.plan.outputs.skip != 'true' }}
-    runs-on: ${{ needs.plan.outputs.seed == 'true' && 'warp-ubuntu-latest-x64-16x;snapshot.enabled=true' || 'warp-ubuntu-latest-x64-16x;snapshot.key=studio-tests' }}
+    runs-on: ubuntu-latest
     timeout-minutes: 120
     environment: ${{ github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && 'ci-assets' || '' }}
     env:
-      TEST_FEATURES: session-desktop/cli,studio-desktop/cli,web-audio-worklet/guitar,web-audio-worklet/keys
       CARGO_INCREMENTAL: '0'
     steps:
     - uses: actions/checkout@v4
       with:
         persist-credentials: false
+    - name: Free disk (background)
+      run: |
+        df -h / | tail -n 1
+        nohup sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc \
+          /usr/local/.ghcup /opt/hostedtoolcache /usr/share/swift \
+          /usr/local/share/powershell /usr/local/share/chromium \
+          /usr/local/share/boost /opt/microsoft /opt/google \
+          </dev/null >/dev/null 2>&1 &
     - name: Rust 1.94.0
       uses: dtolnay/rust-toolchain@1.94.0
     - name: Native headers (apt, cached)
@@ -374,22 +361,17 @@ jobs:
       run: |
         mkdir -p ../.cargo
         cp .cargo/ci-config.toml ../.cargo/config.toml
-    - name: Persistent target dir
-      run: |
-        dir="${CI_CACHE_DIR:-${CACHE_DIRECTORY:-$HOME/.cache}}/cargo-target"
-        mkdir -p "$dir"
-        echo "CARGO_TARGET_DIR=$dir" >> "$GITHUB_ENV"
-        free_gb() { df -Pk "$dir" | awk 'NR==2 { print int($4 / 1048576) }'; }
-        rm -rf "$dir"/*/incremental "$dir"/*/*/incremental
-        if [ "$(free_gb)" -lt 30 ]; then
-          echo "::warning::still $(free_gb) GB free: clearing the target dir (a cold build follows)"
-          rm -rf "$dir" && mkdir -p "$dir"
-        fi
-        echo "target dir: $dir ($(du -sh "$dir" 2>/dev/null | cut -f1)), $(free_gb) GB free"
-    - name: Mark the target dir's fingerprints
-      uses: ./.github/actions/prune-cargo-target/mark
+    - name: Rust cache (tests, main saves)
+      uses: Swatinem/rust-cache@v2
       with:
-        target-dir: ${{ env.CARGO_TARGET_DIR }}
+        shared-key: tests
+        save-if: ${{ github.ref == 'refs/heads/main' }}
+        cache-on-failure: true
+        cache-bin: false
+    - name: Prune unused units before the cache is saved
+      uses: ./.github/actions/prune-cargo-target
+      with:
+        target-dir: target
     - name: Asset repo token (main runs only)
       id: assets-token
       if: ${{ github.ref == 'refs/heads/main' && github.event_name != 'pull_request' }}
@@ -418,24 +400,21 @@ jobs:
         else
           echo "::warning::no asset clones on this runner yet and no credential to fetch them (a main run fetches them): tests that need assets will fail"
         fi
-    - name: Plugin faces
-      if: ${{ !cancelled() }}
-      run: just faces
     - name: cargo nextest
       id: nextest
       env:
         TEST_LOG: ${{ runner.temp }}/nextest-ci.log
       run: |
         bash -uo pipefail -s <<'EOF'
+        pkgs=()
+        for p in $(just --evaluate test_packages); do pkgs+=(-p "$p"); done
+        echo "packages: ${pkgs[*]}"
         t0=$(date +%s)
-        cargo nextest run --workspace --features "${TEST_FEATURES}" --no-run >"${TEST_LOG}" 2>&1
+        cargo nextest run "${pkgs[@]}" --no-run >"${TEST_LOG}" 2>&1
         rc=$?
         t1=$(date +%s)
-        # A build that succeeded read every unit the workspace uses: the target dir
-        # may be pruned to that set (target_sweep), whatever the tests say.
         if [ "$rc" = 0 ]; then
-          echo "prunable=true" >> "${GITHUB_OUTPUT}"
-          cargo nextest run --workspace --no-fail-fast --features "${TEST_FEATURES}" >>"${TEST_LOG}" 2>&1
+          cargo nextest run "${pkgs[@]}" --no-fail-fast >>"${TEST_LOG}" 2>&1
           rc=$?
         fi
         t2=$(date +%s)
@@ -450,11 +429,6 @@ jobs:
           echo "── tail of the nextest log (full log: the nextest-ci artifact) ──"; tail -n 60 "${TEST_LOG}"; } || true
         exit "$rc"
         EOF
-    - name: Prune what the build did not use
-      if: ${{ !cancelled() && steps.nextest.outputs.prunable == 'true' }}
-      uses: ./.github/actions/prune-cargo-target/sweep
-      with:
-        target-dir: ${{ env.CARGO_TARGET_DIR }}
     - name: Test log
       if: ${{ always() }}
       uses: actions/upload-artifact@v4
@@ -463,19 +437,6 @@ jobs:
         path: ${{ runner.temp }}/nextest-ci.log
         if-no-files-found: ignore
         retention-days: 7
-    - name: Clean up before the snapshot
-      if: ${{ !cancelled() && needs.plan.outputs.seed == 'true' }}
-      run: |
-        rm -rf "$HOME/.ssh" "$HOME/.aws"
-        git config --local --unset-all http.https://github.com/.extraheader || true
-        du -sh "$HOME/.cache/cargo-target" 2>/dev/null || true
-    - name: Save the WarpBuild snapshot
-      if: ${{ !cancelled() && needs.plan.outputs.seed == 'true' }}
-      uses: WarpBuilds/snapshot-save@v1
-      with:
-        alias: studio-tests
-        fail-on-error: true
-        wait-timeout-minutes: 60
   release-macos:
     name: Release tooling (macOS)
     needs: plan
