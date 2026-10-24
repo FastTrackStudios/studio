@@ -178,7 +178,7 @@ jobs:
     if: ${{ inputs.mode != 'validate' }}
     runs-on:
     - self-hosted
-    - session
+    - studio-release
     timeout-minutes: 120
     steps:
     - uses: actions/checkout@v4
@@ -186,8 +186,8 @@ jobs:
         ref: ${{ needs.resolve.outputs.sha }}
     - name: Own target dir, size-capped
       run: |
-        base="${CI_CACHE_DIR:-${CACHE_DIRECTORY:-$HOME/.cache}}"
-        dir="$base/cargo-target-desktop"
+        base="${STUDIO_CACHE_DIR:?not a studio pool runner (no STUDIO_CACHE_DIR)}"
+        dir="$base/desktop-linux"
         cap_gb="${TARGET_CAP_GB-150}"
         mkdir -p "$dir"
         used_gb="$(du -s --block-size=1G "$dir" | cut -f1)"

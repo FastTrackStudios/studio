@@ -235,7 +235,8 @@ Done when the run on main's head commit has a green `CI passed`.
 
 **Runners** (WarpBuild is gone, 2026-10-24): PRs and the cheap jobs on
 GitHub's free runners; the builds on THEBATTLESHIP, two pools of three
-runners (`studio-main`, `studio-release`), each pool sharing one warm
+runners (`studio-main` for every check, release commits included;
+`studio-release` for release builds only), each pool sharing one warm
 cache capped at 200 GB, defined in Codys-Wright/nix-config
 hosts/THEBATTLESHIP/github-runners.nix.
 - **Setup:** every job is generated (`xtask/workflows`, `just workflows`):

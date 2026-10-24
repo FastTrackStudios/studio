@@ -186,8 +186,10 @@ the release commit. Plan, gates, the macOS release tooling and the
 aggregator run on GitHub's free runners. The builds — `Check`, `Tests` (the
 core test set) and `Wasm` — run side by side on THEBATTLESHIP, in a pool of
 three runners sharing one warm cache (`Codys-Wright/nix-config`
-hosts/THEBATTLESHIP/github-runners.nix): `studio-main` for merges,
-`studio-release` for release commits and hotfix PRs. A newer merge cancels
+hosts/THEBATTLESHIP/github-runners.nix): `studio-main` for every check,
+a release commit's and a hotfix PR's included, so the check target dirs
+are built once; `studio-release` builds only release artifacts (the
+Linux AppImage). A newer merge cancels
 the older run; a release commit's run is never cancelled. Each pool's cache
 is capped at 200 GB. No WarpBuild, no snapshots, no schedule. No tailwind step anywhere
 (committed sheets; dx builds session-web's); `just ci-boundaries` is
