@@ -222,6 +222,9 @@ jobs:
     - name: Flow verification gate
       if: ${{ !cancelled() }}
       run: just daw-flows --own-daemon
+    - name: Release tooling (sandbox)
+      if: ${{ !cancelled() }}
+      run: bash scripts/release-sandbox.sh
   check:
     name: Check
     needs: plan
@@ -482,6 +485,18 @@ jobs:
         alias: studio-tests
         fail-on-error: true
         wait-timeout-minutes: 60
+  release-macos:
+    name: Release tooling (macOS)
+    needs: plan
+    if: ${{ needs.plan.outputs.skip != 'true' }}
+    runs-on: macos-latest
+    timeout-minutes: 15
+    steps:
+    - uses: actions/checkout@v4
+    - name: Release tooling (sandbox, macOS system tools only)
+      run: |
+        env -i HOME="$HOME" TMPDIR="$RUNNER_TEMP" PATH=/usr/bin:/bin:/usr/sbin:/sbin \
+          /bin/bash scripts/release-sandbox.sh
   ci-passed:
     name: CI passed
     needs:
@@ -490,6 +505,7 @@ jobs:
     - check
     - wasm
     - tests
+    - release-macos
     if: ${{ always() }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -504,6 +520,7 @@ jobs:
         CHECK: ${{ needs.check.result }}
         WASM: ${{ needs.wasm.result }}
         TESTS: ${{ needs.tests.result }}
+        RELEASE_MACOS: ${{ needs.release-macos.result }}
       run: |
         set -u
         fail=0
@@ -512,7 +529,7 @@ jobs:
         if [ "$SKIP" = "true" ]; then
           echo "plan: nothing to run (release commit)"; exit 0
         fi
-        for job in "gates:$GATES" "check:$CHECK" "wasm:$WASM" "tests:$TESTS"; do
+        for job in "gates:$GATES" "check:$CHECK" "wasm:$WASM" "tests:$TESTS" "release-macos:$RELEASE_MACOS"; do
           [ "${job#*:}" = success ] || bad "${job%%:*}: ${job#*:}"
           echo "$job"
         done
