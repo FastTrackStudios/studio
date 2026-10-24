@@ -62,7 +62,7 @@ impl SongService for SongServiceImpl {
     async fn song(&self, project_guid: String) -> Result<Song, SessionServiceError> {
         info!("SONG SERVICE: song called for project: {}", project_guid);
 
-        if Reaper.get(&project_guid).is_none() {
+        if Reaper.project(&project_guid).is_none() {
             warn!("Failed to get project {}", project_guid);
             return Err(SessionServiceError::DawError(format!(
                 "Failed to get project {project_guid}"

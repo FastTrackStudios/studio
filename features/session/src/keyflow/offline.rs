@@ -358,7 +358,7 @@ impl Projects for OfflineDaw {
         self.info(ProjectContext::Current).ok()
     }
 
-    fn get(&self, _project_id: &str) -> Option<ProjectInfo> {
+    fn project(&self, _project_id: &str) -> Option<ProjectInfo> {
         self.current()
     }
 

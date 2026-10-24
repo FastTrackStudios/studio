@@ -86,7 +86,7 @@ where
         let daw = self.daw.clone();
         let project_guid = current.project_guid.clone();
         let project_name =
-            daw_proto::main_thread::query(move || daw.get(&project_guid).map(|info| info.name))
+            daw_proto::main_thread::query(move || daw.project(&project_guid).map(|info| info.name))
                 .await
                 .flatten()
                 .unwrap_or_else(|| current.project_guid.clone());
@@ -519,7 +519,7 @@ where
         let daw = self.daw.clone();
         let project_guid = song_snapshot.project_guid.clone();
         let project_exists =
-            daw_proto::main_thread::query(move || -> bool { daw.get(&project_guid).is_some() })
+            daw_proto::main_thread::query(move || -> bool { daw.project(&project_guid).is_some() })
                 .await
                 .unwrap_or(false);
         if !project_exists {
@@ -575,7 +575,7 @@ where
                 .await;
             let project_name = self
                 .daw
-                .get(&song_snapshot.project_guid)
+                .project(&song_snapshot.project_guid)
                 .map_or_else(|| song_snapshot.project_guid.clone(), |info| info.name);
             self.song_cache
                 .insert(
