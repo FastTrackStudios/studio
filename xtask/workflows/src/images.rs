@@ -97,7 +97,10 @@ else
     echo "build=false" >> "$GITHUB_OUTPUT"
     exit 0
   fi
-  git show "$sha:CHANGELOG.md" | grep -q "^## \[$v\]" \
+  # Captured, then matched: `git show | grep -q` under pipefail can read an
+  # early match as a failure (grep exits, git show dies of SIGPIPE).
+  changelog="$(git show "$sha:CHANGELOG.md")"
+  grep -q "^## \[$v\]" <<<"$changelog" \
     || { echo "::error::version $vp -> $v but CHANGELOG.md has no [$v] section: not a release commit"; exit 1; }
   ! git rev-parse -q --verify "refs/tags/v$v" >/dev/null \
     || { echo "::error::tag v$v already exists; a released version's image is never replaced"; exit 1; }
