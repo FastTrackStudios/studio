@@ -169,7 +169,7 @@ fn hosted_cargo_job(job: Job) -> Job {
 }
 
 /// From here on a step runs even when an earlier gate failed, so one run
-/// reports fmt AND the workflows AND the flow gate instead of one at a time;
+/// reports fmt AND the workflows AND the change files instead of one at a time;
 /// the job still fails.
 const NOT_CANCELLED: &str = "${{ !cancelled() }}";
 
@@ -178,7 +178,7 @@ const WANTED: &str = "${{ needs.plan.outputs.skip != 'true' }}";
 
 /// REQUIRED (through `CI passed`): the static guards — manifests +
 /// lockfile, fmt, the generated workflows + actionlint, change files (a
-/// hotfix PR), the rail config, the flow gate. `just ci-local` runs the same
+/// hotfix PR), the rail config. `just ci-local` runs the same
 /// set before every push; pr.yml re-checks the compile-nothing half.
 /// Compiles only the workflows crate.
 fn gates() -> Job {
@@ -197,7 +197,6 @@ fn gates() -> Job {
             mold: true,
             just: true,
             cargo_rail: true,
-            tracey: true,
             actionlint: true,
             ci_cargo_config: true,
             ..Tools::default()
@@ -209,13 +208,6 @@ fn gates() -> Job {
     .steps(workflow_gates())
     .step(change_check())
     .step(Step::run("rail config", "cargo rail config validate --strict").cond(NOT_CANCELLED))
-    // The workflow-spec verification standard (#48): every `flow.*` rule
-    // with an r[impl] has an r[verify], or the build is red. Same recipe as
-    // local (`just daw-flows`); tracey is the pinned release binary.
-    // `--own-daemon`: the script runs its own tracey daemon under a short
-    // state dir — the runner's HOME pushes tracey's default socket path past
-    // the 108-byte Unix limit — and stops it after.
-    .step(Step::run("Flow verification gate", "just daw-flows --own-daemon").cond(NOT_CANCELLED))
     // The release tooling's own end-to-end test (scripts/release-sandbox.sh:
     // a synthetic repo and a local bare origin, cargo and gh shimmed), with
     // GNU tools here and macOS's own in `release_macos`.

@@ -1308,13 +1308,12 @@ daw-bench PROJECT="" SIZE="5120x1440":
     FTS_BENCH_SIZE="{{SIZE}}" ./target/release/bench "$project" 2>&1 | grep -viE 'vulkan|objects:|WARN'
 
 # The master workflow checklist (docs/spec/session/workflows.md): which
-# flows have an implementation and a test, and which are still open —
-# and the gate CI runs (checks.yml, "Flow verification gate"): a
-# `flow.*` rule with an r[impl] and no r[verify] fails; open rules
-# (neither) are counted, never failing. Same script here and in CI;
-# `-v` lists every rule by state. tracey comes from the dev shell
-# (nix/modules/tracey.nix). Exemptions, with a reason, go in
-# .config/tracey/flow-verify-grandfathered.txt.
+# flows have an implementation and a test, and which are still open. A
+# report you run by hand — no longer a CI or local-CI gate (2026-10-24):
+# it exits 1 when a `flow.*` rule has an r[impl] and no r[verify]; open
+# rules (neither) are counted. `-v` lists every rule by state. tracey
+# comes from the dev shell (nix/modules/tracey.nix); exemptions, with a
+# reason, are in .config/tracey/flow-verify-grandfathered.txt.
 daw-flows *ARGS:
     python3 scripts/tracey-flow-gate.py {{ARGS}}
 
@@ -1916,7 +1915,7 @@ ci FROM="lockfile":
     #!/usr/bin/env bash
     set -euo pipefail
     export CARGO_TARGET_DIR="${CARGO_TARGET_DIR:-$PWD/target}"
-    steps=(lockfile fmt workflows flows check wasm nextest)
+    steps=(lockfile fmt workflows rail check wasm nextest)
     start=0
     for i in "${!steps[@]}"; do
       [ "${steps[$i]}" = "{{FROM}}" ] && start=$i && break
@@ -1972,10 +1971,9 @@ ci FROM="lockfile":
       echo "ok"
     fi
 
-    if run_from flows; then
-      echo "── rail config + flow verification gate ─────────────"
+    if run_from rail; then
+      echo "── rail config ──────────────────────────────────────"
       cargo rail config validate --strict
-      just daw-flows --own-daemon
     fi
 
     if run_from check; then

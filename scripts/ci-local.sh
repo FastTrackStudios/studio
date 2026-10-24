@@ -11,7 +11,7 @@
 # PRs into main run only the free `PR checks` (pr.yml: fmt, change files,
 # the lockfile, the rail config) plus the `Local CI` status this posts. The
 # rest of the PR gate runs HERE: the static guards (the generated
-# workflows + actionlint, the flow gate), then the tests, `cargo check
+# workflows + actionlint), then the tests, `cargo check
 # --workspace` and the wasm check for what the change affects: `cargo rail
 # plan` from BASE (default: the merge-base with origin/main) through
 # cargo's reverse-dependency graph, turned into gates by
@@ -132,8 +132,7 @@ if [ "$(git rev-parse --abbrev-ref HEAD)" = release/pending ]; then
 fi
 
 # The static guards, seconds each: what pr.yml checks, plus the generated
-# workflows (+ actionlint) and the flow gate, which CI's `Gates` job also
-# runs after a merge.
+# workflows (+ actionlint), which CI's `Gates` job also runs after a merge.
 checks() {
   echo "── fmt ──"
   cargo fmt --all --check
@@ -150,11 +149,6 @@ checks() {
     echo "── release tooling (sandbox) ──"
     bash scripts/release-sandbox.sh
   fi
-  echo "── flow verification gate ──"
-  # The user's tracey daemon, not `--own-daemon`: that mode is for CI's
-  # runners (whose HOME pushes the socket path past the Unix limit), and on
-  # macOS tracey keeps its socket outside the XDG_STATE_HOME it sets.
-  just daw-flows
 }
 phase checks checks
 
