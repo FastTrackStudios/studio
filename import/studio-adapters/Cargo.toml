@@ -43,12 +43,12 @@ vello.workspace = true
 dioxus-devtools = { workspace = true, optional = true }
 
 # Event types for forwarding input to Blitz
-keyboard-types = "0.7"
+keyboard-types = { workspace = true }
 
 # Utilities
 futures-util = "0.3"
-crossbeam = "0.8"
-raw-window-handle = "0.6"
+crossbeam = { workspace = true }
+raw-window-handle = { workspace = true }
 tracing.workspace = true
 
 [features]
@@ -56,15 +56,15 @@ default = ["hot-reload"]
 hot-reload = ["dep:dioxus-devtools"]
 
 [target.'cfg(target_os = "linux")'.dependencies]
-libc = "0.2"
-x11-dl = "2.21"
+libc = { workspace = true }
+x11-dl = { workspace = true }
 
 [target.'cfg(target_os = "macos")'.dependencies]
 cocoa.workspace = true
 objc.workspace = true
 
 [dev-dependencies]
-tempfile = "3"
+tempfile = { workspace = true }
 
 [lints.rust]
 unsafe_code = "allow"
