@@ -14,10 +14,12 @@
 #     answered with Signal's page, every other unknown path with the front
 #     door.
 #
-# The start step (scripts/studio-web/serve.sh) serves a runtime directory
-# of symlinks into the root plus the `/config.json` it writes from
-# TASK_URL / AUTH_URL (scripts/studio-web/write-config.sh): the root is in
-# the read-only store, the config is the container's.
+# The start step (scripts/studio-web/serve.sh) writes `<root>/config/
+# config.json` from TASK_URL / AUTH_URL (scripts/studio-web/write-config.sh)
+# and `/config.json` is a rewrite to it. The tree is a real copy (`/srv` in
+# the image), not a symlink farm into the store: static-web-server refuses
+# any file or symlink that resolves outside its root, so the one writable
+# directory, `config/`, is inside it too.
 #
 #   just studio-web-preview                    # on :8090, same origin
 #   TASK_URL=https://task.fasttrackstudio.app just studio-web-preview
@@ -66,16 +68,28 @@
         [[advanced.rewrites]]
         source = "/signal/rigs/**"
         destination = "/signal/index.html"
+
+        # Written when the container starts (scripts/studio-web/serve.sh).
+        [[advanced.rewrites]]
+        source = "/config.json"
+        destination = "/config/config.json"
       '';
 
-      # The root as the image serves it: the tree, plus version.json (which
-      # commit, which release) for the probes and for `deploy`'s "Verify
-      # live". Symlinks, not a copy: static-web-server follows them, and only
-      # this cheap layer depends on the rev.
-      servedRoot = pkgs.runCommand "studio-web-served-root" { } ''
-        mkdir -p $out
-        for e in ${config.packages.studio-web-root}/*; do ln -s "$e" "$out/$(basename "$e")"; done
-        echo '{"rev":"${config.fts.buildRev}","tag":"${config.fts.buildTag}","date":"${config.fts.buildDate}"}' > $out/version.json
+      # What a served root holds beside the tree: version.json (which
+      # commit, which release) for the probes. Only this cheap file depends
+      # on the rev.
+      versionJson = pkgs.writeText "studio-web-version.json"
+        ''{"rev":"${config.fts.buildRev}","tag":"${config.fts.buildTag}","date":"${config.fts.buildDate}"}'';
+      # `installRoot <dir>`: the tree copied into <dir> (real files, the .br
+      # alongside), version.json, and the writable config/.
+      installRoot = ''
+        installRoot() {
+          mkdir -p "$1"
+          cp -R ${config.packages.studio-web-root}/. "$1/"
+          chmod -R u+w "$1"
+          cp ${versionJson} "$1/version.json"
+          mkdir -p "$1/config"
+        }
       '';
 
       write-config = pkgs.writeShellApplication {
@@ -92,14 +106,19 @@
       };
 
       # The tree on this machine, served as the image serves it (TASK_URL /
-      # AUTH_URL from the environment, like the container).
+      # AUTH_URL from the environment, like the container), from a copy in
+      # a temporary directory.
       studio-web-preview = pkgs.writeShellApplication {
         name = "studio-web-preview";
-        runtimeInputs = [ pkgs.coreutils ];
+        runtimeInputs = [ pkgs.coreutils pkgs.gnused ];
         text = ''
-          export STUDIO_WEB_RUNTIME_DIR="''${STUDIO_WEB_RUNTIME_DIR:-$(mktemp -d)}"
+          dir="$(mktemp -d)"
+          trap 'rm -rf "$dir"' EXIT
+          ${installRoot}
+          installRoot "$dir/root"
+          sed "s|@root@|$dir/root|g" ${studioWebSwsConfig { root = "@root@"; port = 8090; }} > "$dir/sws.toml"
           echo "studio-web: http://localhost:8090  (/, /signal/, /session/, /config.json)" >&2
-          exec ${lib.getExe serve} ${servedRoot} ${studioWebSwsConfig { root = "@root@"; port = 8090; }}
+          ${lib.getExe serve} "$dir/root" "$dir/sws.toml"
         '';
       };
 
@@ -122,19 +141,22 @@
           name = "studio-web";
           tag = "latest";
           contents = [ pkgs.cacert ];
-          # Where the start step writes: /run/studio-web, writable by the
-          # unprivileged user it runs as (a read-only root filesystem
-          # mounts an emptyDir there: deploy/chart/studio).
+          # The tree at /srv, real files. /srv/config is where the start
+          # step writes, writable by the unprivileged user it runs as (with a
+          # read-only root filesystem, mount a tmpfs or emptyDir there:
+          # deploy/chart/studio, deploy/docker-compose.yml).
           extraCommands = ''
-            mkdir -p run/studio-web tmp
-            chmod 1777 run run/studio-web tmp
+            ${installRoot}
+            installRoot srv
+            chmod 1777 srv/config
+            mkdir -p tmp
+            chmod 1777 tmp
           '';
           config = {
-            Entrypoint = [ (lib.getExe serve) "${servedRoot}" "${studioWebSwsConfig { root = "@root@"; }}" ];
+            Entrypoint = [ (lib.getExe serve) "/srv" "${studioWebSwsConfig { root = "/srv"; }}" ];
             User = "65534:65534";
             ExposedPorts = { "8080/tcp" = { }; };
             Env = [
-              "STUDIO_WEB_RUNTIME_DIR=/run/studio-web"
               "SSL_CERT_FILE=${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt"
             ];
             # What `scripts/ghcr-images.sh check` reads: the image is the
