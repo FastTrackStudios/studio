@@ -96,10 +96,8 @@ fn authority_ok(authority: &str) -> bool {
         let Some((inner, after)) = v6.split_once(']') else {
             return false;
         };
-        let inner_ok = inner.contains(':')
-            && inner
-                .bytes()
-                .all(|b| b.is_ascii_hexdigit() || matches!(b, b':' | b'.'));
+        // A real IPv6 address, as the browser's URL parser will judge it.
+        let inner_ok = inner.parse::<std::net::Ipv6Addr>().is_ok();
         let port = match after {
             "" => None,
             p => match p.strip_prefix(':') {
@@ -304,6 +302,20 @@ mod tests {
     }
 
     #[test]
+    fn a_malformed_ipv6_host_falls_back() {
+        for bad in [
+            "https://[1:2:3:4:5:6:7:8:9]",
+            "https://[::1::2]",
+            "https://[12345::1]",
+            "https://[]",
+            "https://[task.example]",
+        ] {
+            let text = format!(r#"{{ "task_url": "{bad}" }}"#);
+            assert_eq!(resolve(Some(&text), ORIGIN).task_url, ORIGIN, "{bad}");
+        }
+    }
+
+    #[test]
     fn well_formed_base_urls_are_kept() {
         for good in [
             "https://task.example",
@@ -312,6 +324,7 @@ mod tests {
             "http://127.0.0.1:18080",
             "http://[::1]:8090",
             "https://[2001:db8::1]",
+            "http://[::ffff:192.0.2.1]:8090",
             "https://task.example:65535",
         ] {
             let text = format!(r#"{{ "task_url": "{good}" }}"#);
