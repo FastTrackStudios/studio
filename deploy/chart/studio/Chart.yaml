@@ -1,0 +1,20 @@
+apiVersion: v2
+name: studio
+description: >-
+  studio.fasttrackstudio.app — Studio's web front end: the front door,
+  Signal at /signal/ and Session at /session/. Static files and a static
+  file server, nothing else: Task and fts-auth do every connection, and
+  the container finds them from TASK_URL / AUTH_URL (values taskUrl /
+  authUrl), written to /config.json when it starts.
+type: application
+home: https://github.com/FastTrackStudios/studio
+sources:
+  - https://github.com/FastTrackStudios/studio
+# Both follow the repo's one version (Cargo.toml [workspace.package]
+# version): the release commit (scripts/release.sh) rewrites these two
+# lines with the bump. appVersion is the image tag the chart renders when
+# values set none, so the chart at tag vX.Y.Z deploys
+# ghcr.io/fasttrackstudios/studio-web:X.Y.Z, which the release pushes
+# before the tag exists (images.yml, scripts/ghcr-images.sh).
+version: 26.10.2
+appVersion: "26.10.2"

@@ -1,0 +1,38 @@
+{{- if .Values.ingress.enabled }}
+{{/*
+On starcommand this is not what routes traffic: Caddy does, configured
+from nix (`starcommand.cluster.routes`), to studio.studio.svc:80. It is
+the record external-dns publishes, which is why it has no
+ingressClassName by default. A cluster that routes by Ingress sets
+ingress.className (and ingress.tls).
+*/}}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ include "studio.fullname" . }}
+  labels:
+    {{- include "studio.labels" . | nindent 4 }}
+  {{- with .Values.ingress.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  {{- with .Values.ingress.className }}
+  ingressClassName: {{ . }}
+  {{- end }}
+  {{- with .Values.ingress.tls }}
+  tls:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  rules:
+    - host: {{ .Values.ingress.host | quote }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ include "studio.fullname" . }}
+                port:
+                  number: {{ .Values.service.port }}
+{{- end }}
