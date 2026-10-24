@@ -10,16 +10,9 @@
 //! The consuming app must call `Session::init()` during startup.
 
 use crate::ui::components::{
-    ChannelStripPropsBuilder_Optional, CommentMarker, FadedSongTitle,
-    FadedSongTitlePropsBuilder_Optional, LoopIndicatorData, LyricSyncViewPropsBuilder_Optional,
-    MeasureIndicator, MixGroupPropsBuilder_Optional, MixerViewPropsBuilder_Optional,
-    NudgeBtnPropsBuilder_Optional, ProgressSection, SectionItem, SectionProgressBar,
-    SectionProgressBarPropsBuilder_Optional, SegmentedProgressBarPropsBuilder_Optional, SongItem,
-    SongItemData, SongItemPropsBuilder_Optional, SongProgressBar,
-    SongProgressBarPropsBuilder_Optional, SongTitle, SongTitlePropsBuilder_Optional,
-    TempoCardPropsBuilder_Optional, TempoMarkerData, TimeSignatureCardPropsBuilder_Optional,
-    TransportControlBar, TransportControlBarPropsBuilder_Optional, TransportStats,
-    TransportStatsPropsBuilder_Optional,
+    CommentMarker, FadedSongTitle, LoopIndicatorData, MeasureIndicator, ProgressSection,
+    SectionItem, SectionProgressBar, SongItem, SongItemData, SongProgressBar, SongTitle,
+    TempoMarkerData, TransportControlBar, TransportStats,
 };
 use crate::ui::prelude::*;
 use crate::ui::signals::{

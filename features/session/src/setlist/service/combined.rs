@@ -326,9 +326,6 @@ where
         guid: &str,
         song_infos: &[studio::file::setlist_rpp::SongInfo],
     ) {
-        use crate::proto::SongId;
-        use crate::proto::offset_map::{SetlistOffsetMap, SongOffset};
-
         let offset_map = Self::build_offset_map(song_infos);
         let song_guids = self.fetch_song_project_guids(guid).await;
 

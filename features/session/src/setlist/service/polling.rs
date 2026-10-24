@@ -26,7 +26,6 @@ use tokio::sync::{broadcast, mpsc, watch};
 #[cfg(not(target_arch = "wasm32"))]
 use tokio::time::MissedTickBehavior;
 use tracing::{debug, info, warn};
-use vox::Tx;
 
 /// A timestamp `dur` in the past, wasm-safe. `web_time::Instant` (what
 /// `architect::platform::now()` returns) is relative to page load, so it starts
@@ -938,7 +937,7 @@ where
     async fn process_transport_for_project(
         &self,
         st: &mut StreamState,
-        daw: &Daw,
+        _daw: &Daw,
         project_guid: String,
         transport_state: daw::rpc::TransportState,
     ) -> (

@@ -216,7 +216,7 @@ impl TriggerScheduler {
     /// Schedule eighth note triggers
     fn schedule_eighth_triggers(
         params: &TriggerSchedulingParams,
-        intervals: &SubdivisionIntervals,
+        _intervals: &SubdivisionIntervals,
         next_eighth_quarter_clamped: f64,
         triggers: &mut Vec<TriggerResult>,
     ) {
@@ -244,7 +244,7 @@ impl TriggerScheduler {
     /// Schedule sixteenth note triggers
     fn schedule_sixteenth_triggers(
         params: &TriggerSchedulingParams,
-        intervals: &SubdivisionIntervals,
+        _intervals: &SubdivisionIntervals,
         next_sixteenth_quarter_clamped: f64,
         triggers: &mut Vec<TriggerResult>,
     ) {

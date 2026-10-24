@@ -34,9 +34,6 @@ use std::collections::HashMap;
 #[cfg(target_arch = "wasm32")]
 use std::cell::RefCell;
 
-#[cfg(not(target_arch = "wasm32"))]
-use std::sync::OnceLock;
-
 // ============================================================================
 // Latency Tracking
 // ============================================================================

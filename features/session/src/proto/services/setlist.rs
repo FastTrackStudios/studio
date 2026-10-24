@@ -7,7 +7,6 @@ use crate::proto::song::{Section, Song, SongChartHydration};
 use crate::proto::{SectionId, SongId};
 use daw_proto::MusicalPosition;
 use facet::Facet;
-use vox::Tx;
 
 /// Measure information for RPC
 #[derive(Clone, Debug, PartialEq, Facet)]
@@ -148,7 +147,7 @@ pub enum SetlistEvent {
 pub mod setlist_service {
     use super::{
         ActiveIndices, AudioLatencyInfo, MeasureInfo, MusicalPosition, Section,
-        SessionServiceError, Setlist, SetlistEvent, Song, SongChartHydration, Tx,
+        SessionServiceError, Setlist, SetlistEvent, Song, SongChartHydration,
     };
 
     #[architect::rpc]
