@@ -21,6 +21,8 @@ tracing-wasm = { workspace = true }
 tracing-subscriber = { workspace = true }
 console_error_panic_hook = { workspace = true }
 getrandom = { version = "0.3", features = ["wasm_js"] }
+# /config.json at boot: where this deployment's Task is (studio-web).
+app-shell = { workspace = true, features = ["web-config"] }
 # The page's query: which share link to open (`main::source`).
 web-sys = { workspace = true, features = ["Window", "Location", "UrlSearchParams"] }
 js-sys = { workspace = true }

@@ -10,7 +10,10 @@ description = "What every FTS app shares around its UI: the in-memory log ring (
 # The shared studio shell (src/ui): ShellFrame, ShellState, PanelRegistry.
 # Renderer-agnostic Dioxus with inline styles only, so it runs on Blitz, a
 # WebView and the web alike; the app picks the renderer.
-ui = ["dep:dioxus", "dep:dock", "dep:facet", "dep:utils"]
+ui = ["dep:dioxus", "dep:dock", "dep:utils"]
+# The web apps' runtime config (`web_config`): the fetch of /config.json
+# in a page. The parsing is always compiled (and tested natively).
+web-config = ["dep:web-sys", "dep:wasm-bindgen", "dep:wasm-bindgen-futures"]
 
 [dependencies]
 tracing = { workspace = true }
@@ -19,8 +22,16 @@ dioxus = { workspace = true, optional = true }
 # Only the pure registry types (PanelConstraints): no dock features, so no
 # WebView, serde or tokio come with it.
 dock = { workspace = true, optional = true }
-facet = { workspace = true, optional = true }
+# facet + facet-json: the web config's file (`web_config`), and the shell's
+# saved layout (`ui`).
+facet = { workspace = true }
+facet-json = { workspace = true }
 utils = { workspace = true, optional = true }
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+web-sys = { workspace = true, optional = true, features = ["Window", "Location", "Request", "RequestInit", "RequestCache", "Response"] }
+wasm-bindgen = { workspace = true, optional = true }
+wasm-bindgen-futures = { workspace = true, optional = true }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 dirs = { workspace = true }

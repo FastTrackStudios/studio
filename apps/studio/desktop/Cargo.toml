@@ -385,6 +385,9 @@ objc2-foundation = { workspace = true, features = ["default", "NSArray", "NSSet"
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 dioxus = { workspace = true, default-features = true, features = ["web", "launch"] }
+# /config.json at boot: where Task and fts-auth are (studio-web). Not the
+# rig engine: remote.rs keeps its own same-origin rule.
+app-shell = { workspace = true, features = ["ui", "web-config"] }
 session = { workspace = true, features = ["ui", "web"], optional = true }
 # NO daw-ui here: its daw-control backend is not wasm-clean, and the daw
 # panels (Arrangement / Mixer) are native-only workspaces anyway — the

@@ -137,6 +137,49 @@ pub fn demo_href(demo_link: Option<&str>) -> String {
     }
 }
 
+/// A link as the app is given it, made whole against `task_url` (where
+/// this deployment's Task is, `/config.json`): a path
+/// (`/org/<org>/share/<code>`) is a link on that Task; anything else is
+/// returned as it is.
+#[must_use]
+pub fn on_task(link: &str, task_url: &str) -> String {
+    let link = link.trim();
+    if link.starts_with('/') && !link.starts_with("//") {
+        format!("{}{link}", task_url.trim_end_matches('/'))
+    } else {
+        link.to_owned()
+    }
+}
+
+/// The app's query parameters that carry a Task link (`?live=`,
+/// `?share=`, `&guide=`).
+pub const LINK_PARAMS: [&str; 3] = ["live", "share", "guide"];
+
+/// A query parameter's value as the app reads it: a link parameter
+/// ([`LINK_PARAMS`]) made whole on `task_url` ([`on_task`]); any other
+/// (`name`, a display name) exactly as given.
+#[must_use]
+pub fn param_on_task(key: &str, value: &str, task_url: &str) -> String {
+    if LINK_PARAMS.contains(&key) {
+        on_task(value, task_url)
+    } else {
+        value.to_owned()
+    }
+}
+
+/// [`parse`], with a path pasted alone taken as a link on `task_url`
+/// ([`on_task`]).
+///
+/// # Errors
+///
+/// As [`parse`].
+pub fn parse_on(text: &str, task_url: Option<&str>) -> Result<Opening, LinkError> {
+    match task_url {
+        Some(task) => parse(&on_task(text, task)),
+        None => parse(text),
+    }
+}
+
 /// What the Session web app opens, from its address's query.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum AppOpen {
@@ -296,10 +339,13 @@ mod form {
         /// Where an opened link goes; by default the page goes to the app
         /// (`/app/?live=…`).
         on_open: Option<EventHandler<super::Opening>>,
+        /// This deployment's Task: a path pasted alone
+        /// (`/org/<org>/share/<code>`) is a link there.
+        task_url: Option<String>,
     ) -> Element {
         let mut pasted = use_signal(String::new);
         let mut problem = use_signal(|| None::<super::LinkError>);
-        let mut submit = move || match super::parse(&pasted.peek()) {
+        let mut submit = move || match super::parse_on(&pasted.peek(), task_url.as_deref()) {
             Ok(opening) => {
                 problem.set(None);
                 match on_open {
@@ -364,7 +410,10 @@ mod form {
     /// The app with no link: what it opens and how to give it one, rather
     /// than a song it doesn't have.
     #[component]
-    pub fn OpenSet() -> Element {
+    pub fn OpenSet(
+        /// This deployment's Task (see [`OpenSetForm`]).
+        task_url: Option<String>,
+    ) -> Element {
         let demo = super::demo_href(option_env!("SESSION_DEMO_LINK"));
         rsx! {
             div {
@@ -381,6 +430,7 @@ mod form {
                 // In the app itself: a pasted link opens here, wherever
                 // the app is served, not on the session site's `/app/`.
                 OpenSetForm {
+                    task_url,
                     on_open: move |opening: super::Opening| {
                         let url = opening.app_query();
                         let _ = dioxus::document::eval(&format!("window.location.assign({url:?})"));
@@ -411,6 +461,43 @@ mod tests {
             "?live=https%3A%2F%2Ftask.example%2Forg%2Fa%2Fshare%2Fb"
         );
         assert_eq!(opening.app_url(), format!("/app/{}", opening.app_query()));
+    }
+
+    #[test]
+    fn a_path_is_a_link_on_this_deployments_task() {
+        let task = "https://task.example/";
+        assert_eq!(
+            on_task("/org/a/share/b", task),
+            "https://task.example/org/a/share/b"
+        );
+        // Whole links, and protocol-relative ones, are left as they are.
+        assert_eq!(
+            on_task("https://other.example/org/a/share/b", task),
+            "https://other.example/org/a/share/b"
+        );
+        assert_eq!(on_task("//evil.example/x", task), "//evil.example/x");
+        assert_eq!(
+            parse_on(" /org/a/share/b ", Some(task)),
+            Ok(Opening::Live {
+                link: "https://task.example/org/a/share/b".into(),
+                guide: None
+            })
+        );
+        assert_eq!(parse_on("/org/a/share/b", None), Err(LinkError::NotALink));
+    }
+
+    #[test]
+    fn only_link_params_resolve_on_task() {
+        let task = "https://task.example";
+        for key in LINK_PARAMS {
+            assert_eq!(
+                param_on_task(key, "/org/a/share/b", task),
+                "https://task.example/org/a/share/b"
+            );
+        }
+        // A display name that looks like a path is still a name.
+        assert_eq!(param_on_task("name", "/dev/null", task), "/dev/null");
+        assert_eq!(param_on_task("name", "Guest", task), "Guest");
     }
 
     #[test]

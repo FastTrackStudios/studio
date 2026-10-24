@@ -520,14 +520,19 @@ fn launch_app() {
 
 #[cfg(target_arch = "wasm32")]
 fn launch_app() {
-    // Additive branch: a `/rigs/keys/{profile}` URL launches the browser
-    // keys rig instead of the app shell.
-    #[cfg(feature = "signal")]
-    if web_keys_rig::route_matches() {
-        dioxus::launch(web_keys_rig::KeysWebRig);
-        return;
-    }
-    dioxus::launch(App);
+    // Where Task and fts-auth are (`/config.json`, studio-web) is known
+    // before the app starts. The rig engine is not among them: remote.rs
+    // dials the page's own origin, as before.
+    app_shell::web_config::load_then(|| {
+        // Additive branch: a `/rigs/keys/{profile}` URL launches the
+        // browser keys rig instead of the app shell.
+        #[cfg(feature = "signal")]
+        if web_keys_rig::route_matches() {
+            dioxus::launch(web_keys_rig::KeysWebRig);
+            return;
+        }
+        dioxus::launch(App);
+    });
 }
 
 /// iPhone: the phone shell (mobile_view.rs) over the in-process rig, on

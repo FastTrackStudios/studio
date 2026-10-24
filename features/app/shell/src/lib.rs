@@ -10,6 +10,9 @@
 //!   the one scene delegate every app's `Info.plist` names.
 //! - `ui` (feature `ui`): the shared studio shell — the frame with its
 //!   sidebars and drawers, its saved layout, and the panel registry.
+//! - [`web_config`]: where a web app finds Task and fts-auth, from the
+//!   `/config.json` studio-web writes at start (the fetch: feature
+//!   `web-config`).
 
 #[cfg(target_os = "ios")]
 pub mod ios_scene;
@@ -21,3 +24,4 @@ pub mod tokens;
 pub mod ui;
 #[cfg(not(any(target_arch = "wasm32", target_os = "ios")))]
 pub mod updates;
+pub mod web_config;

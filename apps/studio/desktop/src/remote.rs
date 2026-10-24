@@ -16,7 +16,11 @@ use architect::iroh_link::iroh;
 /// Where the engine core lives. Native: `SIGNAL_ENGINE_URL` (or legacy
 /// `RIGD_URL`) at runtime, else the local default. Web: same-origin —
 /// the engine that served this page also serves /vox — falling back to
-/// the local default under a dev server.
+/// the local default under a dev server ([`page_engine_url`]).
+///
+/// Never Task: the page's `/config.json` (`task_url`, studio-web) is where
+/// Session syncs, not a rig engine. On studio-web the browser rigs run in
+/// the tab; reaching a remote engine through Task is later work (#85, #89).
 #[cfg(not(target_arch = "wasm32"))]
 pub fn server_url() -> String {
     std::env::var("SIGNAL_ENGINE_URL")
@@ -32,31 +36,38 @@ pub(crate) fn server_url() -> String {
     if let Some(saved) = utils::prefs::get_raw("signal-engine-ws-url") {
         return saved;
     }
-    let derived = web_sys::window().and_then(|w| {
-        let loc = w.location();
-        let host = loc.host().ok()?; // e.g. "localhost:8080"
-        let hostname = loc.hostname().ok()?; // "localhost"
-        let scheme = match loc.protocol().ok()?.as_str() {
-            "https:" => "wss",
-            _ => "ws",
-        };
-        // A dev server (`dx serve`) does NOT serve `/vox`; point those
-        // KNOWN dev ports at the local engine so hot-reload iteration
-        // connects without a manual `signal-engine-ws-url` override.
-        // Everything else — including an engine bound to a scratch port
-        // via SIGNAL_ENGINE_ADDR (the e2e suite, side-by-side engines) —
-        // is served BY the engine, so it stays same-origin. (The old
-        // rule, "any local port that isn't 4040", silently pointed the
-        // e2e's page at the LIVE :4040 engine — W7 chased phantom
-        // schema-compat errors that were really an old binary.)
-        let is_local = hostname == "localhost" || hostname == "127.0.0.1";
-        let dx_dev_port = host.ends_with(":8080") || host.ends_with(":8087");
-        if is_local && dx_dev_port {
-            return Some("ws://127.0.0.1:4040/vox".to_string());
-        }
-        Some(format!("{scheme}://{host}/vox"))
-    });
-    derived.unwrap_or_else(|| "ws://127.0.0.1:4040/vox".to_string())
+    web_sys::window()
+        .and_then(|w| {
+            let loc = w.location();
+            Some(page_engine_url(
+                &loc.protocol().ok()?,
+                &loc.host().ok()?,
+                &loc.hostname().ok()?,
+            ))
+        })
+        .unwrap_or_else(|| "ws://127.0.0.1:4040/vox".to_string())
+}
+
+/// The engine a page dials, from where the page is (`location.protocol`,
+/// `.host`, `.hostname`): its own origin's `/vox`.
+///
+/// A dev server (`dx serve`) does NOT serve `/vox`; those KNOWN dev ports
+/// point at the local engine so hot-reload iteration connects without a
+/// manual `signal-engine-ws-url` override. Everything else — including an
+/// engine bound to a scratch port via SIGNAL_ENGINE_ADDR (the e2e suite,
+/// side-by-side engines) — is served BY the engine, so it stays
+/// same-origin. (The old rule, "any local port that isn't 4040", silently
+/// pointed the e2e's page at the LIVE :4040 engine — W7 chased phantom
+/// schema-compat errors that were really an old binary.)
+#[cfg(any(target_arch = "wasm32", test))]
+fn page_engine_url(protocol: &str, host: &str, hostname: &str) -> String {
+    let scheme = if protocol == "https:" { "wss" } else { "ws" };
+    let is_local = hostname == "localhost" || hostname == "127.0.0.1";
+    let dx_dev_port = host.ends_with(":8080") || host.ends_with(":8087");
+    if is_local && dx_dev_port {
+        return "ws://127.0.0.1:4040/vox".to_string();
+    }
+    format!("{scheme}://{host}/vox")
 }
 
 // ── Engine target (local ws vs remote iroh) ─────────────────────────────────
@@ -239,4 +250,46 @@ async fn dial_iroh(endpoint: Endpoint, id: iroh::EndpointId) -> Result<RootLane,
             endpoint: endpoint.to_string(),
             reason: format!("{e:?}"),
         })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::page_engine_url;
+    use app_shell::web_config::resolve;
+
+    #[test]
+    fn a_configured_task_is_not_the_rig_engine() {
+        // studio-web with TASK_URL set: Session syncs there, but Signal's
+        // engine URL is what it always was, the page's own /vox.
+        let config = resolve(
+            Some(r#"{"task_url":"https://task.fasttrackstudio.app"}"#),
+            "https://studio.fasttrackstudio.app",
+        );
+        assert_eq!(config.task_url, "https://task.fasttrackstudio.app");
+        let engine = page_engine_url(
+            "https:",
+            "studio.fasttrackstudio.app",
+            "studio.fasttrackstudio.app",
+        );
+        assert_eq!(engine, "wss://studio.fasttrackstudio.app/vox");
+        assert_ne!(engine, config.task_ws("/vox"));
+    }
+
+    #[test]
+    fn the_page_rules_are_unchanged() {
+        // The engine that served the page, on any port but the dx ones.
+        assert_eq!(
+            page_engine_url("http:", "192.168.1.9:4040", "192.168.1.9"),
+            "ws://192.168.1.9:4040/vox"
+        );
+        assert_eq!(
+            page_engine_url("http:", "localhost:4123", "localhost"),
+            "ws://localhost:4123/vox"
+        );
+        // A dx dev server: the local engine.
+        assert_eq!(
+            page_engine_url("http:", "localhost:8080", "localhost"),
+            "ws://127.0.0.1:4040/vox"
+        );
+    }
 }
