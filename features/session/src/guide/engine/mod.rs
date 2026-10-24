@@ -1,6 +1,7 @@
 // Lint debt: workspace flipped dead_code/unused to warn (task cleanup);
-// this crate predates that — burn down separately.
-#![allow(dead_code, unused)]
+// `unused` is paid down (#138); dead code is next, each item a judgement
+// call between deleting it and wiring it up.
+#![allow(dead_code)]
 
 //! session-guide — portable guide engine for the session domain.
 //!

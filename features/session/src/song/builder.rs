@@ -257,8 +257,8 @@ impl SongBuilder {
         tempo_map: &daw::rpc::TempoMap,
         song_region: Option<&Region>,
     ) -> eyre::Result<(f64, f64, f64)> {
-        let count_in_marker = markers.iter().find(|m| Self::is_count_in_marker(&m.name));
-        let absolute_start_marker = markers.iter().find(|m| m.name == "=START");
+        let _count_in_marker = markers.iter().find(|m| Self::is_count_in_marker(&m.name));
+        let _absolute_start_marker = markers.iter().find(|m| m.name == "=START");
         let songstart_marker = markers.iter().find(|m| Self::is_songstart_marker(&m.name));
         let songend_marker = markers.iter().find(|m| Self::is_songend_marker(&m.name));
         let absolute_end_marker = markers.iter().find(|m| m.name == "=END");

@@ -1,7 +1,6 @@
 //! Session mode control (Organize / Write / Produce / Record / …).
 
 use super::error::SessionServiceError;
-use vox::Tx;
 
 // ─── Mode control ──────────────────────────────────────────────────────
 //
@@ -17,7 +16,7 @@ use vox::Tx;
 /// any other Vox peer (e.g. a mobile app). State is host-process-
 /// global; per-project mode is a future extension.
 pub mod session_mode_service {
-    use super::{SessionServiceError, Tx};
+    use super::SessionServiceError;
 
     #[architect::rpc]
     pub trait SessionModeService {

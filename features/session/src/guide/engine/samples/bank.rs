@@ -229,7 +229,7 @@ impl SampleBank {
         sample_rate: u32,
     ) {
         let paths = ClickSamplePaths::for_sound(click_base_path, click_sound);
-        let mut load = |path: &Path| match load_wav(path, sample_rate) {
+        let load = |path: &Path| match load_wav(path, sample_rate) {
             Ok(audio) => Some(audio),
             Err(e) => {
                 warn!(path = %path.display(), error = %e, "Failed to load click sample");
