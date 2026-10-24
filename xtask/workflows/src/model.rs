@@ -185,11 +185,6 @@ impl Job {
         self
     }
 
-    pub fn environment(mut self, environment: Value) -> Self {
-        self.environment = Some(environment);
-        self
-    }
-
     pub fn output(mut self, key: &str, value: &str) -> Self {
         self.outputs.insert(key.to_owned(), value.to_owned());
         self
