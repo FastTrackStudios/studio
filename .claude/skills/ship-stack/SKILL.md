@@ -48,7 +48,7 @@ release commit.
 1. **checks:** `cargo fmt --check`, `cargo rail change check --since <base>`
    (every touched crate has a `.changes/*.md`), `cargo rail config validate
    --strict`, `just workflows-check` (the generated workflows are current,
-   then actionlint), `just daw-flows` (the flow verification gate).
+   then actionlint).
 2. **plan:** `cargo rail plan` from the merge-base with origin/main, through
    `scripts/ci-rail-plan.py`. Local evidence is used if
    `just rail-evidence` recorded some for the base.
@@ -64,7 +64,7 @@ release commit.
 ### 1. Hooks installed
 
 ```bash
-nix develop            # prek, cargo-rail, nextest, tracey, shellcheck, actionlint
+nix develop            # prek, cargo-rail, nextest, shellcheck, actionlint
 gh extension install github/gh-stack   # once per machine
 just install-hooks     # once per clone: prek shims into .git/hooks
 ```
@@ -239,7 +239,7 @@ Done when the run on main's head commit has a green `CI passed`.
 rust-cache, saved by main, keeps its dependencies warm.
 - **Setup:** every job is generated (`xtask/workflows`, `just workflows`):
   rustup at the pinned toolchain, apt headers (cached), pinned release
-  binaries (just, cargo-rail, tracey, nextest, actionlint); `PR checks`
+  binaries (just, cargo-rail, nextest, actionlint); `PR checks`
   also restores the cargo dependency cache main's `Dependency cache` job
   saves. Edit the Rust, never the YAML.
 

@@ -162,7 +162,7 @@ crate gains a place there when it gains tests worth running on every change.
 prek hooks (`prek.toml`): rustfmt, shellcheck and actionlint on the staged
 files at commit, and **local CI** at push (`scripts/ci-local-hook.sh` ->
 `just ci-local`): the static guards (fmt, change files, rail config, the
-generated workflows + actionlint, the flow gate), then the tests, `cargo
+generated workflows + actionlint), then the tests, `cargo
 check --workspace` and the wasm check for what `cargo rail plan` says the
 change affects, on your warm target dir. Green, it posts the **`Local CI`**
 commit status ("passed in 6m12s on host: checks 21s, plan 8s, tests …") on
@@ -190,11 +190,11 @@ manual, not CI.
 
 **`just ci`** runs everything a merge to `main` runs, in the same order,
 and stops at the first failure: lockfile drift, `cargo fmt --check`, the
-generated workflows (`just workflows-check`), the rail config and flow gate
-(`just daw-flows`), `cargo check --workspace`, the wasm checks, then
-(after `just assets` and `just faces`) nextest as above. `just ci <step>`
-starts from a step (`lockfile`, `fmt`, `workflows`, `flows`, `check`,
-`wasm`, `nextest`).
+generated workflows (`just workflows-check`), the rail config, `cargo check
+--workspace`, the wasm checks, then (after `just assets`) the core test set.
+`just ci <step>` starts from a step (`lockfile`, `fmt`, `workflows`, `rail`,
+`check`, `wasm`, `nextest`). The workflow-spec checklist (`just daw-flows`)
+is a report you run by hand, not a gate.
 
 **The workflows are generated.** Every file in `.github/workflows/` is
 written by `xtask/workflows` (`just workflows`); edit the Rust, never the

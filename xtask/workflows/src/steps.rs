@@ -13,9 +13,9 @@
 //!   `fts.buildInputs` on Linux) as Ubuntu packages, [`APT_PACKAGES`],
 //!   cached by `awalsh128/cache-apt-pkgs-action` the way Dioxus does;
 //! - just from `taiki-e/install-action`;
-//! - cargo-rail, tracey and actionlint as upstream release
+//! - cargo-rail and actionlint as upstream release
 //!   binaries, checked against a pinned sha256 ([`Pinned`]) — the same
-//!   artefacts (and for tracey the same hash) nix fetched;
+//!   artefacts nix fetched;
 //! - python3 from the runner image (/usr/bin/python3).
 //!
 //! The SELF-HOSTED jobs (`tests` on the NixOS VM, `deploy`) keep nix: there it
@@ -45,14 +45,6 @@ pub struct Pinned {
 const CARGO_RAIL: Pinned = Pinned {
     version: "0.32.0",
     sha256: "5fcda1a62d36d51834ad49a5ef2ebc82777fd9d134d3d409f7021ce1a495dee4",
-};
-
-/// tracey: the spec-coverage gate (`just daw-flows`). Same release tarball
-/// nix/modules/tracey.nix fetches (its SRI hash is this sha256): NEVER
-/// `cargo install`, whose build.rs needs node + pnpm and stalled CI for hours.
-const TRACEY: Pinned = Pinned {
-    version: "1.3.0",
-    sha256: "fbc0c25c44328ccb0970b2509095ff29412fa72cbbc6b0036c4cee8c12821f47",
 };
 
 /// actionlint lints the generated workflows in the lint job (and runs the
@@ -165,7 +157,6 @@ pub struct Tools {
     pub apt: bool,
     pub just: bool,
     pub cargo_rail: bool,
-    pub tracey: bool,
     pub actionlint: bool,
     pub nextest: bool,
     /// lavapipe (software Vulkan) for running the GPU tests.
@@ -208,9 +199,6 @@ pub fn hosted_setup(components: &str, targets: &str, tools: Tools) -> Vec<Step> 
     }
     if tools.cargo_rail {
         steps.push(install_cargo_rail());
-    }
-    if tools.tracey {
-        steps.push(install_tracey());
     }
     if tools.actionlint {
         steps.push(install_actionlint());
@@ -297,22 +285,6 @@ echo \"$HOME/.local/share/cargo-rail\" >> \"$GITHUB_PATH\"
 ",
     );
     Step::run(&format!("cargo-rail {version}"), &script)
-}
-
-fn install_tracey() -> Step {
-    let Pinned { version, sha256 } = TRACEY;
-    let url = format!(
-        "https://github.com/bearcove/tracey/releases/download/v{version}/tracey-x86_64-unknown-linux-gnu.tar.xz"
-    );
-    let mut script = fetch(&url, "tracey.tar.xz", sha256);
-    script.push_str(
-        "\
-tar -xJf \"$RUNNER_TEMP/tracey.tar.xz\" -C \"$RUNNER_TEMP\"
-install -m755 \"$RUNNER_TEMP/tracey-x86_64-unknown-linux-gnu/tracey\" \"$HOME/.local/bin/tracey\"
-\"$HOME/.local/bin/tracey\" --version
-",
-    );
-    Step::run(&format!("tracey {version}"), &script)
 }
 
 fn install_actionlint() -> Step {
