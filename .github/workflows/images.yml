@@ -4,94 +4,83 @@
 name: Images
 on:
   push:
-    branches:
-    - main
-    - release/v*
-    paths:
-    - Cargo.toml
+    tags:
+    - v*
   workflow_dispatch:
     inputs:
       tag:
-        description: Existing release tag to (re)publish the image for, e.g. v26.10.3
+        description: Existing release tag to (re)publish the image for, e.g. v26.10.4
         required: true
         type: string
 permissions:
   contents: read
 concurrency:
-  group: images-${{ inputs.tag || github.sha }}
+  group: images-${{ inputs.tag || github.ref_name }}
   cancel-in-progress: false
+env:
+  TAG: ${{ inputs.tag || github.ref_name }}
 jobs:
   plan:
     name: What to publish
     if: ${{ github.repository == 'FastTrackStudios/studio' }}
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      checks: read
     outputs:
-      build: ${{ steps.plan.outputs.build }}
       sha: ${{ steps.plan.outputs.sha }}
       tags: ${{ steps.plan.outputs.tags }}
     steps:
+    - name: The image tag is the bare CalVer
+      run: |
+        set -euo pipefail
+        v="${TAG#v}"
+        if [ "$v" = "$TAG" ] || [[ ! "$v" =~ ^[1-9][0-9]\.(1[0-2]|[1-9])\.(0|[1-9][0-9]*)$ ]]; then
+          echo "::error::'$TAG' is not vYY.M.MICRO CalVer: its image tag '$v' would not match the cluster's ^[1-9][0-9]\.(1[0-2]|[1-9])\.(0|[1-9][0-9]*)\$ and would sort wrong or be ignored"
+          exit 1
+        fi
+        echo "image tag: $v"
     - uses: actions/checkout@v4
       with:
+        ref: refs/tags/${{ env.TAG }}
         fetch-depth: 0
+    - name: Stamp the release version from the tag
+      env:
+        STAMP_TAG: ${{ env.TAG }}
+      run: |
+        set -euo pipefail
+        if grep -q '^    stamp)' scripts/release.sh; then
+          bash scripts/release.sh stamp "$STAMP_TAG"
+        else
+          echo "$STAMP_TAG predates the stamp: its commit carries its version ($(bash scripts/release.sh version))"
+        fi
+    - name: The tag is a green release on main or release/v*
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        GITHUB_REF="refs/tags/$TAG" bash scripts/release.sh tag-guard
     - name: Plan
       id: plan
       env:
         EVENT: ${{ github.event_name }}
-        INPUT_TAG: ${{ inputs.tag }}
       run: |
         set -euo pipefail
-        git fetch --quiet --tags origin
-        if [ "$EVENT" = workflow_dispatch ]; then
-          [[ "$INPUT_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "::error::tag '$INPUT_TAG' is not vX.Y.Z"; exit 1; }
-          sha="$(git rev-parse --verify --quiet "refs/tags/$INPUT_TAG^{commit}")" \
-            || { echo "::error::no tag $INPUT_TAG"; exit 1; }
-          v="$(bash scripts/release.sh version "$sha")"
-          [ "v$v" = "$INPUT_TAG" ] || { echo "::error::$INPUT_TAG names a commit with version $v"; exit 1; }
-          extra=""
-        else
-          sha="$GITHUB_SHA"
-          v="$(bash scripts/release.sh version "$sha")"
-          vp="$(bash scripts/release.sh version "$sha^1")"
-          if [ "$v" = "$vp" ]; then
-            echo "version unchanged ($v): not a release commit, nothing to publish"
-            echo "build=false" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-          # Captured, then matched: `git show | grep -q` under pipefail can read an
-          # early match as a failure (grep exits, git show dies of SIGPIPE).
-          changelog="$(git show "$sha:CHANGELOG.md")"
-          grep -q "^## \[$v\]" <<<"$changelog" \
-            || { echo "::error::version $vp -> $v but CHANGELOG.md has no [$v] section: not a release commit"; exit 1; }
-          ! git rev-parse -q --verify "refs/tags/v$v" >/dev/null \
-            || { echo "::error::tag v$v already exists; a released version's image is never replaced"; exit 1; }
-          extra="latest"
-        fi
-        # A release line cut before studio-web (a hotfix of an older release) has
-        # no chart and ships no image.
-        if ! git cat-file -e "$sha:deploy/chart/studio/Chart.yaml" 2>/dev/null; then
-          echo "no deploy/chart/studio at $sha: this line ships no studio-web, nothing to publish"
-          echo "build=false" >> "$GITHUB_OUTPUT"
-          exit 0
-        fi
-        # The tag the release (and the chart at its tag) pulls.
-        itag="$(bash scripts/ghcr-images.sh tag "$sha")"
-        if [ "$itag" != "$v" ]; then
-          echo "::error::the image tag at $sha is $itag but the release is $v: the cluster would pull the wrong image"
-          exit 1
-        fi
-        tags="$(xargs <<<"$itag sha-$(git rev-parse --short "$sha") $extra")"
+        sha="$(git rev-parse HEAD)"
+        v="${TAG#v}"
+        extra="latest"
+        # A re-publish never moves `latest` (a newer release may own it).
+        [ "$EVENT" != workflow_dispatch ] || extra=""
+        tags="$(xargs <<<"$v sha-$(git rev-parse --short "$sha") $extra")"
         echo "publishing $sha as: $tags"
         {
-          echo "build=true"
           echo "sha=$sha"
           echo "tags=$tags"
         } >> "$GITHUB_OUTPUT"
-        echo "### studio-web for v$v: \`$tags\` from \`$sha\`" >> "$GITHUB_STEP_SUMMARY"
+        echo "### studio-web for $TAG: \`$tags\` from \`$sha\`" >> "$GITHUB_STEP_SUMMARY"
   publish:
     name: Build + push to GHCR
     needs: plan
-    if: ${{ needs.plan.outputs.build == 'true' }}
     runs-on:
     - self-hosted
     - studio-release
@@ -107,9 +96,20 @@ jobs:
         ref: ${{ needs.plan.outputs.sha }}
         fetch-depth: 0
         persist-credentials: false
+    - name: Stamp the release version from the tag
+      env:
+        STAMP_TAG: ${{ env.TAG }}
+      run: |
+        set -euo pipefail
+        if grep -q '^    stamp)' scripts/release.sh; then
+          bash scripts/release.sh stamp "$STAMP_TAG"
+        else
+          echo "$STAMP_TAG predates the stamp: its commit carries its version ($(bash scripts/release.sh version))"
+        fi
     - name: Build and push studio-web
       env:
         TAGS: ${{ needs.plan.outputs.tags }}
+        SHA: ${{ needs.plan.outputs.sha }}
         GHCR_USER: ${{ github.actor }}
         GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
@@ -120,7 +120,10 @@ jobs:
         printf '%s' "$GHCR_TOKEN" | skopeo login ghcr.io -u "$GHCR_USER" --password-stdin
         read -r -a tags <<<"$TAGS"
         dest="docker://ghcr.io/fasttrackstudios/studio-web"
-        streamer="$(nix build --accept-flake-config .#studio-web-image --no-link --print-out-paths)"
+        # The stamp left the tree dirty (no self.rev): the revision label is the
+        # tagged commit, passed in (nix/modules/crane.nix `fts.buildRev`, read
+        # only under --impure).
+        streamer="$(FTS_BUILD_REV="$SHA" nix build --impure --accept-flake-config .#studio-web-image --no-link --print-out-paths)"
         "$streamer" | skopeo --insecure-policy copy docker-archive:/dev/stdin "$dest:${tags[0]}"
         for tag in "${tags[@]:1}"; do
           skopeo --insecure-policy copy "$dest:${tags[0]}" "$dest:$tag"

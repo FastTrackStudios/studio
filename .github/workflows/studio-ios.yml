@@ -57,7 +57,7 @@ jobs:
         else
           echo "$STAMP_TAG predates the stamp: its commit carries its version ($(bash scripts/release.sh version))"
         fi
-    - name: Marketing version = tag version, tag on main or release/v*, changelog section, green
+    - name: Marketing version = tag version, tag on main or release/v*, green
       id: resolve
       env:
         GH_TOKEN: ${{ github.token }}

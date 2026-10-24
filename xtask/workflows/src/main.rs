@@ -19,7 +19,6 @@
 
 mod cache_devshell;
 mod checks;
-mod deploy;
 mod desktop;
 mod images;
 mod model;
@@ -46,7 +45,6 @@ const WORKFLOWS: &[(&str, Build)] = &[
     ("checks", checks::workflow),
     ("pr", pr::workflow),
     ("cache-devshell", cache_devshell::workflow),
-    ("deploy", deploy::workflow),
     ("desktop", desktop::workflow),
     ("images", images::workflow),
     ("release", release::workflow),

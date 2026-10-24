@@ -25,8 +25,9 @@ use crate::model::{Job, Step, UBUNTU, Workflow, yaml};
 use crate::steps::{Tools, cargo_deps_restore, checkout, hosted_setup};
 use anyhow::Result;
 
-/// Every check below is skipped on a release commit.
-const NOT_RELEASE: &str = "${{ !cancelled() && steps.release.outputs.only != 'true' }}";
+/// From the change files on, a step runs even when fmt failed, so one run
+/// reports every problem; the job still fails.
+const NOT_CANCELLED: &str = "${{ !cancelled() }}";
 
 pub fn workflow() -> Result<Workflow> {
     Ok(
@@ -51,52 +52,20 @@ fn pr_checks() -> Result<Job> {
             cargo_rail: true,
             ..Tools::default()
         },
-    )
-    .into_iter()
-    .map(|s| s.cond("${{ steps.release.outputs.only != 'true' }}"));
+    );
     Ok(Job::new(UBUNTU)
         .name("PR checks")
         .timeout(15)
         .permissions(yaml("contents: read\n")?)
         // The merge commit and its parents: the change check diffs against
-        // the first parent (the base it merges into). A release PR needs
-        // full history for the release-only test.
-        .step(checkout().with(
-            "fetch-depth",
-            "${{ github.head_ref == 'release/pending' && 0 || 2 }}",
-        ))
-        // A release PR (release/pending: version + changelog only) was
-        // checked commit by commit before it. The BASE commit's release.sh
-        // decides, never the PR's own copy: a release/pending branch that
-        // edited the script must not be able to skip the checks.
-        .step(
-            Step::run(
-                "Release commit?",
-                "\
-git show \"$BASE_SHA:scripts/release.sh\" > \"$RUNNER_TEMP/release-base.sh\"
-if bash \"$RUNNER_TEMP/release-base.sh\" release-only; then
-  echo \"only=true\" >> \"$GITHUB_OUTPUT\"
-  echo \"release commit only: nothing to check\"
-fi
-",
-            )
-            .id("release")
-            .cond("${{ github.head_ref == 'release/pending' }}")
-            .env("BASE_SHA", "${{ github.event.pull_request.base.sha }}")
-            .env("BASE_REF", "${{ github.event.pull_request.base.ref }}")
-            .env("HEAD_SHA", "${{ github.event.pull_request.head.sha }}")
-            .env("HEAD_REF", "${{ github.head_ref }}")
-            .env(
-                "HEAD_REPO",
-                "${{ github.event.pull_request.head.repo.full_name }}",
-            ),
-        )
+        // the first parent (the base it merges into).
+        .step(checkout().with("fetch-depth", 2))
         .steps(setup)
         // Main's cargo registry + git checkouts (CI's `deps-cache` job saves
         // them): without it the first cargo command spends most of a minute
         // fetching every git dependency.
-        .step(cargo_deps_restore().cond("${{ steps.release.outputs.only != 'true' }}"))
-        .step(Step::run("fmt", "cargo fmt --all --check").cond(NOT_RELEASE))
+        .step(cargo_deps_restore())
+        .step(Step::run("fmt", "cargo fmt --all --check"))
         // Every crate the PR changes needs a cargo-rail change file
         // (.changes/), against the base this PR merges into.
         .step(
@@ -104,8 +73,8 @@ fi
                 "Change files",
                 "cargo rail change check --since \"$(git rev-parse HEAD^1)\"",
             )
-            .cond(NOT_RELEASE),
+            .cond(NOT_CANCELLED),
         )
-        .step(Step::run("Manifests + lockfile", LOCKFILE).cond(NOT_RELEASE))
-        .step(Step::run("rail config", "cargo rail config validate --strict").cond(NOT_RELEASE)))
+        .step(Step::run("Manifests + lockfile", LOCKFILE).cond(NOT_CANCELLED))
+        .step(Step::run("rail config", "cargo rail config validate --strict").cond(NOT_CANCELLED)))
 }

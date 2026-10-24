@@ -12,8 +12,8 @@ on:
     - release/v*
   workflow_dispatch: null
 concurrency:
-  group: 'ci-${{ github.event.pull_request.number || github.ref }}-${{ startsWith(github.event.head_commit.message, ''chore(release): v'') && github.sha || ''run'' }}'
-  cancel-in-progress: '${{ !startsWith(github.event.head_commit.message, ''chore(release): v'') }}'
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 jobs:
   plan:
     name: Plan
@@ -21,42 +21,16 @@ jobs:
     timeout-minutes: 10
     permissions:
       contents: read
-    outputs:
-      skip: ${{ steps.plan.outputs.skip }}
     steps:
-    - uses: actions/checkout@v4
-      with:
-        fetch-depth: 0
     - name: Plan
       id: plan
       env:
-        BASE_SHA: ${{ github.event.pull_request.base.sha }}
         BASE_REF: ${{ github.event.pull_request.base.ref }}
-        HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-        HEAD_REF: ${{ github.event.pull_request.head.ref }}
         HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
       run: |
         set -u
-        out() { printf '%s\n' "$@" >> "$GITHUB_OUTPUT"; }
         case "${GITHUB_EVENT_NAME:-}" in
           pull_request)
-            rc=1
-            if git show "${BASE_SHA}:scripts/release.sh" > "${RUNNER_TEMP}/release-base.sh" 2>/dev/null; then
-              bash "${RUNNER_TEMP}/release-base.sh" release-only || rc=$?
-              [ "$rc" = 0 ] || [ "$rc" = 1 ] || rc=3
-            fi
-            case "$rc" in
-              0)
-                { echo "### Release commit only"
-                  echo "This PR is one commit changing the version, CHANGELOG.md and consumed change files; its content was checked when it merged, so every job is skipped."
-                } >> "$GITHUB_STEP_SUMMARY"
-                echo "plan: release commit only (${HEAD_REF} -> ${BASE_REF}): nothing to run"
-                out skip=true
-                exit 0 ;;
-              3)
-                echo "::error::${HEAD_REF} -> ${BASE_REF} is a release PR the release guard refuses (see above)"
-                exit 1 ;;
-            esac
             if [ "${HEAD_REPO}" != "${GITHUB_REPOSITORY}" ]; then
               echo "::error::fork PR into ${BASE_REF}: the full set runs on the org's paid runners; re-push it from a branch of this repo"
               exit 1
@@ -66,7 +40,6 @@ jobs:
             echo "plan: dispatch on ${GITHUB_REF_NAME}: the full set" ;;
           *) echo "plan: ${GITHUB_EVENT_NAME:-?} on ${GITHUB_REF_NAME}: the full set" ;;
         esac
-        out skip=false
   deps-cache:
     name: Dependency cache
     if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
@@ -101,7 +74,6 @@ jobs:
   gates:
     name: Gates
     needs: plan
-    if: ${{ needs.plan.outputs.skip != 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
     env:
@@ -200,7 +172,6 @@ jobs:
   check:
     name: Check
     needs: plan
-    if: ${{ needs.plan.outputs.skip != 'true' }}
     runs-on:
     - self-hosted
     - studio-main
@@ -244,7 +215,6 @@ jobs:
   wasm:
     name: Wasm
     needs: plan
-    if: ${{ needs.plan.outputs.skip != 'true' }}
     runs-on:
     - self-hosted
     - studio-main
@@ -285,7 +255,6 @@ jobs:
   tests:
     name: Tests
     needs: plan
-    if: ${{ needs.plan.outputs.skip != 'true' }}
     runs-on:
     - self-hosted
     - studio-main
@@ -381,7 +350,6 @@ jobs:
   release-macos:
     name: Release tooling (macOS)
     needs: plan
-    if: ${{ needs.plan.outputs.skip != 'true' }}
     runs-on: macos-latest
     timeout-minutes: 15
     steps:
@@ -408,7 +376,6 @@ jobs:
     - name: Every required job succeeded
       env:
         PLAN: ${{ needs.plan.result }}
-        SKIP: ${{ needs.plan.outputs.skip }}
         GATES: ${{ needs.gates.result }}
         CHECK: ${{ needs.check.result }}
         WASM: ${{ needs.wasm.result }}
@@ -419,9 +386,6 @@ jobs:
         fail=0
         bad() { echo "::error::$1"; fail=1; }
         [ "$PLAN" = success ] || { bad "plan: $PLAN"; exit 1; }
-        if [ "$SKIP" = "true" ]; then
-          echo "plan: nothing to run (release commit)"; exit 0
-        fi
         for job in "gates:$GATES" "check:$CHECK" "wasm:$WASM" "tests:$TESTS" "release-macos:$RELEASE_MACOS"; do
           [ "${job#*:}" = success ] || bad "${job%%:*}: ${job#*:}"
           echo "$job"

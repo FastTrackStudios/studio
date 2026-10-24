@@ -19,7 +19,7 @@
 //! - python3 from the runner image (/usr/bin/python3).
 //!
 //! The SELF-HOSTED jobs (CI's Check, Tests and Wasm on THEBATTLESHIP's studio
-//! pools, `deploy`) keep nix: there it is the host's own package manager, not
+//! pools; the release builds on `studio-release`) keep nix: there it is the host's own package manager, not
 //! an install step (their commands run in the repo's `.#ci` dev shell).
 
 use crate::model::Step;
