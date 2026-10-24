@@ -32,37 +32,13 @@ impl SyncDivision {
     }
 }
 
-/// Standard sync division table matching tiagolr's plugins.
-///
-/// Index 0 = Free Hz, then musical divisions from 1/256 to 4/1,
-/// plus triplets and dotted variants.
-pub const SYNC_TABLE: &[SyncDivision] = &[
-    SyncDivision::FreeHz,
-    // Straight divisions (quarter-note values)
-    SyncDivision::Beat(1.0 / 64.0), // 1/256 (256th note)
-    SyncDivision::Beat(1.0 / 32.0), // 1/128
-    SyncDivision::Beat(1.0 / 16.0), // 1/64
-    SyncDivision::Beat(1.0 / 8.0),  // 1/32
-    SyncDivision::Beat(1.0 / 4.0),  // 1/16
-    SyncDivision::Beat(1.0 / 2.0),  // 1/8
-    SyncDivision::Beat(1.0),        // 1/4
-    SyncDivision::Beat(2.0),        // 1/2
-    SyncDivision::Beat(4.0),        // 1/1 (one bar)
-    SyncDivision::Beat(8.0),        // 2/1
-    SyncDivision::Beat(16.0),       // 4/1
-    // Triplets
-    SyncDivision::Triplet(1.0 / 4.0), // 1/16t
-    SyncDivision::Triplet(1.0 / 2.0), // 1/8t
-    SyncDivision::Triplet(1.0),       // 1/4t
-    SyncDivision::Triplet(2.0),       // 1/2t
-    SyncDivision::Triplet(4.0),       // 1/1t
-    // Dotted
-    SyncDivision::Dotted(1.0 / 4.0), // 1/16.
-    SyncDivision::Dotted(1.0 / 2.0), // 1/8.
-    SyncDivision::Dotted(1.0),       // 1/4.
-    SyncDivision::Dotted(2.0),       // 1/2.
-    SyncDivision::Dotted(4.0),       // 1/1.
-];
+/// A note value from the one table every synced control picks from
+/// ([`crate::time::MusicalTime`]), as a cycle length.
+impl From<crate::time::MusicalTime> for SyncDivision {
+    fn from(t: crate::time::MusicalTime) -> Self {
+        SyncDivision::Beat(t.quarter_notes())
+    }
+}
 
 /// Transport state from the host DAW.
 #[derive(Debug, Clone, Copy, Default)]
@@ -131,13 +107,13 @@ mod tests {
     use super::*;
 
     #[test]
-    fn sync_table_has_expected_entries() {
-        assert_eq!(SYNC_TABLE.len(), 22);
-        assert!(SYNC_TABLE[0].is_free());
-        // 1/4 note = 1.0 QN
-        assert_eq!(SYNC_TABLE[7].quarter_notes(), 1.0);
-        // 1/1 bar = 4.0 QN
-        assert_eq!(SYNC_TABLE[9].quarter_notes(), 4.0);
+    fn a_note_value_lasts_as_many_quarter_notes_as_it_says() {
+        use crate::time::{Flavour, MusicalTime, NoteValue};
+        let qn = |v, f| SyncDivision::from(MusicalTime::new(v, f)).quarter_notes();
+        assert_eq!(qn(NoteValue::Quarter, Flavour::Straight), 1.0);
+        assert_eq!(qn(NoteValue::Whole, Flavour::Straight), 4.0);
+        assert_eq!(qn(NoteValue::Eighth, Flavour::Dotted), 0.75);
+        assert!((qn(NoteValue::Quarter, Flavour::Triplet) - 2.0 / 3.0).abs() < 1e-12);
     }
 
     #[test]

@@ -19,6 +19,7 @@ use dioxus::prelude::*;
 use fts_audio_ui::ParamHandle;
 use fts_audio_ui::hardware::knob::{HardwareKnob, KnobStyle};
 use fts_audio_ui::hardware::panel::{Panel, PanelEnds, PanelSlot, PanelTexture, Silkscreen};
+use fts_audio_ui::time::{NotePicker, TimeModeSwitch};
 use std::fmt::Write;
 
 /// Panel drawing size — 2U, like the saturator's faces.
@@ -229,11 +230,32 @@ pub fn placed_controls(profile_id: &str) -> Vec<Placed> {
         .collect()
 }
 
+/// The clock the panel's switch and picker say, read the way
+/// [`crate::modulation::ui::params::ModParams::controls`] reads the
+/// parameters, so the drawn cycle is the one the engine runs.
+fn clock_of(
+    handles: &std::collections::HashMap<String, ParamHandle>,
+) -> crate::modulation::profiles::Clock {
+    let synced = handles
+        .get("rate_sync")
+        .is_some_and(|h| h.normalized() >= 0.5);
+    match handles.get("rate_div") {
+        Some(div) if synced => {
+            crate::modulation::profiles::Clock::Synced(fts_audio_ui::time::division_of(div))
+        }
+        _ => crate::modulation::profiles::Clock::Free,
+    }
+}
+
 /// A drawn modulator: the panel, its shape, and its row of controls.
 #[component]
 pub fn ModFace(
     profile_id: String,
     handles: std::collections::HashMap<String, ParamHandle>,
+    /// The host's tempo, if it has one. `None` is a host with no transport,
+    /// and the Sync switch says so rather than pretending.
+    #[props(default)]
+    tempo: Option<f64>,
     /// The shell's redraw tick. Not read; its job is to change, so the panel
     /// re-renders against fresh parameter values instead of being memoized.
     frame: u64,
@@ -260,7 +282,12 @@ pub fn ModFace(
             value("knob_c", 0.5),
             value("knob_d", 0.5),
         ],
+        clock: clock_of(&handles),
     };
+    // Only a tremolo and a wah run on a trigger clock; a chorus's sweep is
+    // its own, and a Sync switch on it would flip and change nothing.
+    let clocked = profile.voicing.circuit.chain() != crate::modulation::profiles::Chain::Delay;
+    let synced = clocked && controls.clock != crate::modulation::profiles::Clock::Free;
 
     let placed = placed_controls(&profile_id);
 
@@ -299,10 +326,39 @@ pub fn ModFace(
                 size: 8.0, color: design.dim_ink.to_string(),
             }
 
+            // The clock switch lives in the left column, under the title,
+            // as the delay's does: it governs Rate, the first knob.
+            if clocked {
+                if let Some(sync) = handles.get("rate_sync") {
+                    PanelSlot { scale, x: 78.0, y: 106.0, w: 140.0, h: 26.0,
+                        TimeModeSwitch {
+                            sync: sync.clone(),
+                            tempo,
+                            testid: "mod-rate".to_string(),
+                            ink: design.ink.to_string(),
+                            accent: design.accent.to_string(),
+                            scale,
+                        }
+                    }
+                }
+            }
+
             for (index , spec) in placed.iter().cloned().enumerate() {
                 div {
                     key: "{design.family}-{index}",
-                    if let Some(handle) = handles.get(spec.param) {
+                    // Synced, Rate is a note value: the knob's Hz would be a
+                    // control that changes nothing.
+                    if let (true, "rate", Some(div)) = (synced, spec.param, handles.get("rate_div")) {
+                        PanelSlot { scale, x: spec.x, y: 206.0, w: spec.d * 2.0, h: spec.d * 2.0,
+                            NotePicker {
+                                handle: div.clone(),
+                                testid: "mod-rate-note".to_string(),
+                                ink: design.ink.to_string(),
+                                accent: design.accent.to_string(),
+                                scale,
+                            }
+                        }
+                    } else if let Some(handle) = handles.get(spec.param) {
                         PanelSlot { scale, x: spec.x, y: 206.0, w: spec.d * 2.0, h: spec.d * 2.0,
                             HardwareKnob {
                                 handle: handle.clone(),

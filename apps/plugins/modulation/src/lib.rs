@@ -28,6 +28,7 @@ use dsp::modulation::trem::chain::TremChain;
 use dsp::modulation::ui::params::{ModParams, ModUiState};
 use dsp::modulation::wah::chain::WahChain;
 use dsp_core::audio::{AudioConfig, Processor};
+use dsp_core::modulation::tempo::TransportInfo;
 
 const PLUGIN_NAME: &str = "FTS Modulation";
 
@@ -174,12 +175,26 @@ impl Plugin for FtsModulation {
         &mut self,
         buffer: &mut Buffer,
         _aux: &mut AuxiliaryBuffers,
-        _context: &mut impl ProcessContext<Self>,
+        context: &mut impl ProcessContext<Self>,
     ) -> ProcessStatus {
         if buffer.channels() < 2 {
             return ProcessStatus::Normal;
         }
         let chain = self.sync_params();
+        // The bar line a synced modulator locks to, and what Groove and Feel
+        // push and pull against. A host with no tempo reads as stopped: a
+        // synced chain then stands still rather than guessing a tempo.
+        let t = context.transport();
+        let transport = TransportInfo {
+            position_qn: t.pos_beats().unwrap_or(0.0),
+            tempo_bpm: t.tempo.unwrap_or(0.0),
+            playing: t.playing && t.tempo.is_some(),
+        };
+        self.trem.set_transport(transport);
+        self.wah.set_transport(transport);
+        self.ui_state
+            .tempo_bpm
+            .store(t.tempo.map_or(0.0, |bpm| bpm as f32), Ordering::Relaxed);
         let output = 10.0f32.powf(self.params.output.value() / 20.0);
 
         let mut input_peak = 0.0f32;

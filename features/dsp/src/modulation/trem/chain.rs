@@ -127,7 +127,7 @@ impl TremChain {
         let mut modulator = Modulator::new();
         // Default: sine-like LFO at 1/4 note
         modulator.trigger.mode = TriggerMode::Sync;
-        modulator.trigger.sync_index = 7; // 1/4 note
+        modulator.trigger.division = dsp_core::modulation::tempo::SyncDivision::Beat(1.0); // 1/4 note
         modulator.smoother.set_params(0.0, 0.0, 48000.0); // No smoothing for clean LFO
 
         // Default sine pattern

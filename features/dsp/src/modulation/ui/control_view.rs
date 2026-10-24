@@ -127,6 +127,16 @@ pub fn App() -> Element {
         }
     }
 
+    // Zero is how the audio thread says "this host has no transport"; a note
+    // value means nothing then, so it becomes `None` rather than 0 BPM.
+    let tempo = {
+        let bpm = ui
+            .state
+            .tempo_bpm
+            .load(std::sync::atomic::Ordering::Relaxed);
+        (bpm > 0.0).then(|| f64::from(bpm))
+    };
+
     // Every control the faces can bind, by name.
     let handles: HashMap<String, ParamHandle> = [
         ("rate", params.rate.as_ptr()),
@@ -137,6 +147,8 @@ pub fn App() -> Element {
         ("knob_b", params.knob_b.as_ptr()),
         ("knob_c", params.knob_c.as_ptr()),
         ("knob_d", params.knob_d.as_ptr()),
+        ("rate_sync", params.rate_sync.as_ptr()),
+        ("rate_div", params.rate_div.as_ptr()),
     ]
     .into_iter()
     .map(|(name, ptr)| (name.to_string(), param_handle(ptr, ctx.clone())))
@@ -221,6 +233,7 @@ pub fn App() -> Element {
                         key: "{id}",
                         profile_id: id.to_string(),
                         handles: handles.clone(),
+                        tempo,
                         frame,
                     }
                 }

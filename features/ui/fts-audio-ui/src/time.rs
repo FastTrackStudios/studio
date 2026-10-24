@@ -21,8 +21,9 @@ use crate::ParamHandle;
 use dioxus::prelude::*;
 use dsp_core::time::{Flavour, MusicalTime, NoteValue};
 
-/// Read the note value a division parameter is currently on.
-fn current(handle: &ParamHandle) -> MusicalTime {
+/// Read the note value a division parameter is currently on — what a face
+/// that draws from the parameters (a modulator's cycle) reads it as.
+pub fn division_of(handle: &ParamHandle) -> MusicalTime {
     // `ParamHandle` speaks normalized; the division parameter is a stepped
     // integer over the whole table, so the normalized position maps straight
     // onto an index.
@@ -62,7 +63,7 @@ pub fn NotePicker(
     enabled: bool,
     #[props(default = 1.0)] scale: f64,
 ) -> Element {
-    let now = current(&handle);
+    let now = division_of(&handle);
     // A slaved side still shows its note; it just cannot be changed.
     let dim = if enabled { "1" } else { "0.45" };
 

@@ -30,6 +30,9 @@ pub struct ModUiState {
     /// The modulator's current output, 0..1. On a wah this is where the
     /// filter is sitting, which no number on a panel has ever conveyed.
     pub mod_value: AtomicF32,
+    /// The host's tempo, as the audio thread last saw it. Zero means the
+    /// host has no transport — the Sync switch will not lock to one then.
+    pub tempo_bpm: AtomicF32,
 }
 
 /// **Noon is the circuit as designed.**
@@ -78,6 +81,16 @@ pub struct ModParams {
     pub knob_c: FloatParam,
     #[id = "knobd"]
     pub knob_d: FloatParam,
+
+    /// Lock the modulator to the host's tempo: Rate stops being Hz and the
+    /// cycle lasts [`Self::rate_div`]. Appended, so an old session opens
+    /// free, as it was saved.
+    #[id = "rate_sync"]
+    pub rate_sync: BoolParam,
+
+    /// The note value one cycle lasts while [`Self::rate_sync`] is on.
+    #[id = "rate_div"]
+    pub rate_div: IntParam,
 
     /// What a session restores from.
     ///
@@ -147,6 +160,15 @@ impl Default for ModParams {
             knob_c: knob("Knob C"),
             knob_d: knob("Knob D"),
 
+            rate_sync: dsp_core::time::params::sync_param("Rate Sync", false),
+            rate_div: dsp_core::time::params::division_param(
+                "Rate Div",
+                dsp_core::time::MusicalTime::new(
+                    dsp_core::time::NoteValue::Quarter,
+                    dsp_core::time::Flavour::Straight,
+                ),
+            ),
+
             profile_id: parking_lot::RwLock::new(String::new()),
             editor_form: parking_lot::RwLock::new(String::new()),
         }
@@ -197,6 +219,13 @@ impl ModParams {
                 self.knob_c.value(),
                 self.knob_d.value(),
             ],
+            clock: if self.rate_sync.value() {
+                crate::modulation::profiles::Clock::Synced(dsp_core::time::MusicalTime::from_param(
+                    self.rate_div.value(),
+                ))
+            } else {
+                crate::modulation::profiles::Clock::Free
+            },
         }
     }
 
