@@ -22,7 +22,7 @@ daw-extension-runtime.workspace = true
 signal-macromod.workspace = true
 signal.workspace = true
 fragile = { workspace = true }
-# Codeberg reaper-rs — must match daw's source (codeberg, same branch) so the
+# reaper-rs (GitHub, the workspace entry) — must match daw's source so the
 # graph has ONE reaper_low instance. (Was starcommand.live → two copies → type
 # mismatch in `daw[reaper]` + this crate's reaper_low.)
 reaper-low = { workspace = true }
