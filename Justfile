@@ -804,7 +804,7 @@ check:
 # build and run exactly these; building the workspace's ~200 crates with no
 # tests left would only link empty harnesses. Add a crate here when it gains
 # tests worth running on every change.
-test_packages := "dsp-core session-format daw-standalone timeline daw-proto studio daw-transport-sync utils daw-control frame gate-plugin studio-desktop dsp"
+test_packages := "dsp-core session-format daw-standalone timeline daw-proto studio daw-transport-sync utils daw-control frame gate-plugin studio-desktop dsp dioxus-test"
 
 # Run the core test set (test_packages above).
 test:
