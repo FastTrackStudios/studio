@@ -2162,11 +2162,19 @@ web-daw SESSION="../sessions/Always On Time" RPP="Always On Time.RPP" CHART="Alw
 
 # Build studio-web's root (`nix build .#studio-web`: the front door, Signal
 # under /signal/, Session under /session/) and serve it on
-# http://localhost:8090 as the image does: static-web-server with COOP/COEP
-# (the keys rig's shared memory) and the image's cache rules
+# http://localhost:8090 as the image does: its start step
+# (scripts/studio-web/serve.sh) writes /config.json from TASK_URL / AUTH_URL
+# (unset: same origin), static-web-server adds COOP/COEP (the keys rig's
+# shared memory) and the image's cache rules
 # (nix/modules/packages/studio-web.nix).
+#   TASK_URL=https://task.fasttrackstudio.app just studio-web-preview
 studio-web-preview:
     nix run .#studio-web-preview
+
+# The /config.json writer's cases (also the `studio-web-config-test` flake
+# check).
+studio-web-config-test:
+    bash scripts/studio-web/write-config-test.sh
 
 # Serve the built web DAW on http://localhost:8765.
 web-daw-serve:
