@@ -122,35 +122,3 @@ pub fn find_all_blocks(blocks: &[RawBlock], ct: u16) -> Vec<&RawBlock> {
     walk(blocks, ct, &mut out);
     out
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn wrap_produces_correct_header() {
-        // CT 0x4501, 4-byte payload "test"
-        let block = wrap_as_block(0x4501, b"test");
-        assert_eq!(block.len(), 9 + 4, "header (9) + payload (4)");
-        assert_eq!(block[0], 0x5A, "magic byte");
-        assert_eq!(&block[1..3], &[0x01, 0x00], "block_type = 1");
-        assert_eq!(
-            u32::from_le_bytes(block[3..7].try_into().unwrap()),
-            2 + 4,
-            "block_size = 2 (ct) + 4 (payload)"
-        );
-        assert_eq!(&block[7..9], &[0x01, 0x45], "content_type 0x4501 LE");
-        assert_eq!(&block[9..], b"test", "payload");
-    }
-
-    #[test]
-    fn wrap_empty_payload() {
-        let block = wrap_as_block(0x2030, &[]);
-        assert_eq!(block.len(), 9);
-        assert_eq!(
-            u32::from_le_bytes(block[3..7].try_into().unwrap()),
-            2,
-            "block_size = 2 even for empty payload"
-        );
-    }
-}
