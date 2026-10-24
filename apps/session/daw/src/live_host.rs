@@ -42,6 +42,8 @@ use std::time::{Duration, Instant};
 
 use session::library::{Library, ListKind, Setlist, slugify};
 
+use crate::task_account::AccountLibrary;
+
 /// The environment switch that turns automatic hosting off (`0`, `off`,
 /// `false`, `no`).
 pub const AUTOHOST_ENV: &str = "FTS_LIVE_AUTOHOST";
