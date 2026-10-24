@@ -16,5 +16,5 @@ sources:
 # values set none, so the chart at tag vX.Y.Z deploys
 # ghcr.io/fasttrackstudios/studio-web:X.Y.Z, which the release pushes
 # before the tag exists (images.yml, scripts/ghcr-images.sh).
-version: 26.10.2
-appVersion: "26.10.2"
+version: 26.10.3
+appVersion: "26.10.3"

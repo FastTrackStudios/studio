@@ -8,6 +8,22 @@ Each release's section is built by `just release-prepare` (scripts/release.sh)
 from the cargo-rail change files in `.changes/` (up to 0.1.2, by `git cliff`
 from the commits since the previous release); edit it only in a release PR.
 
+## [26.10.3] - 2026-10-24
+
+_26.10.2 merged but was never tagged or shipped: its changes ship in this release._
+
+### Added
+
+- Studio on the web: one static root (nix build .#studio-web) with a front door at /, Signal under /signal/ and Session under /session/; just studio-web-preview serves it with COOP/COEP (studio)
+- Studio on the web finds Task and fts-auth from /config.json at boot (task_url, auth_url), falling back to the page's own origin; Session takes share links given as paths on the configured Task, and Signal's rig engine stays on the page's own origin (studio)
+- The studio-web image (nix .#studio-web-image): static-web-server with COOP/COEP and the cache rules, writing /config.json from TASK_URL / AUTH_URL when it starts (studio)
+- Self-host Studio on the web: deploy/chart/studio (Helm 3, taskUrl / authUrl), deploy/docker-compose.yml next to a Task of your own, and deploy/README.md; the release commit sets the chart's appVersion, the image tag it deploys (studio)
+
+### Fixed and improved
+
+- Improved: the amp captures (NAM) run on a faster pure-Rust engine, about twice as fast on a standard capture (signal)
+- Session and Signal pin the org release key (the same minisign key as Task), so a signed release can install from Settings
+
 ## [26.10.2] - 2026-10-24
 
 _The first CalVer release to ship. 26.10.0 and 26.10.1 merged but were never tagged or shipped: everything in them ships here._
