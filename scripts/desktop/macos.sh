@@ -3,7 +3,7 @@
 # as a Developer-ID signed, notarized, stapled .dmg: the installer attached
 # to the release's GitHub Release, and what scripts/install.sh installs.
 #
-#   scripts/desktop/macos.sh     # -> target/desktop/Studio-<version>-macos-arm64.dmg (+ .sha256)
+#   scripts/desktop/macos.sh     # -> target/desktop/Studio-<version>-macos-arm64.dmg
 #
 # Runs on airlock (Apple silicon), where the Developer ID identity lives in
 # the dedicated build keychain and the App Store Connect API key (the same
@@ -200,6 +200,5 @@ spctl -a -vv -t exec "$MOUNT/$title.app" \
     || { echo "ERROR: Gatekeeper refused the app inside the image" >&2; exit 1; }
 codesign -dv --verbose=2 "$MOUNT/$title.app" 2>&1 | grep -E 'Identifier|Authority|TeamIdentifier|flags|Timestamp' || true
 
-( cd "$OUT_DIR" && shasum -a 256 "$(basename "$DMG")" > "$(basename "$DMG").sha256" )
 echo "=== done: $DMG ($(du -h "$DMG" | cut -f1)) ==="
 echo "dmg=$DMG"
