@@ -259,7 +259,6 @@ jobs:
     - self-hosted
     - studio-main
     timeout-minutes: 120
-    environment: ${{ github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && 'ci-assets' || '' }}
     env:
       CARGO_INCREMENTAL: '0'
     steps:

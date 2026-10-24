@@ -370,7 +370,6 @@ fn wasm() -> Job {
 /// 2026-10-24), warm on the pool.
 fn tests() -> Job {
     pool_job("Tests", "tests", 120)
-        .environment(ASSETS_ENVIRONMENT.into())
         .step(assets_token())
         .step(assets())
         .step(
@@ -396,13 +395,14 @@ fn test_log(artifact: &str) -> Step {
 /// into .assets/ and links each file into place, so the tests that need them
 /// run instead of skipping.
 ///
-/// WHO MAY FETCH: only main's runs (a push to main, a dispatch on main). They
-/// run in the `ci-assets` environment, which only `main` may deploy from and
-/// which holds the fts-forge App's id and key; `assets_token` mints from it
-/// a token that can only READ the two asset repos, for this one job. A PR
-/// never gets the environment, so neither the key nor a token is ever in a
-/// job that runs a PR's code (this repo is public, and the PR's own Justfile
-/// is what `just assets` runs). A PR run links the clones its runner already
+/// WHO MAY FETCH: only main's runs (a push to main, a dispatch on main).
+/// `assets_token` mints, from the fts-forge App's id (repo variable
+/// `FORGE_APP_ID`) and key (org secret `FORGE_APP_PRIVATE_KEY`), a token
+/// that can only READ the asset repos, for this one job, and only when the
+/// run is main's: no token is minted in a job that runs a PR's code (this
+/// repo is public, and the PR's own Justfile is what `just assets` runs; a
+/// fork's PR gets no secrets at all). No GitHub environment: a job in one
+/// records a deployment on every run. A PR run links the clones its runner already
 /// holds (`ASSETS_OFFLINE=1`: no fetch); an asset added in a PR reaches CI
 /// once main has merged it and a main run has fetched it.
 ///
@@ -438,11 +438,6 @@ fi
     )
     .env("ASSETS_TOKEN", "${{ steps.assets-token.outputs.token }}")
 }
-
-/// Main's full runs only: the job is in the `ci-assets` environment, whose
-/// deployment branch policy allows `main` alone. Empty (no environment) on
-/// every other run, PRs above all. See `assets`.
-const ASSETS_ENVIRONMENT: &str = "${{ github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && 'ci-assets' || '' }}";
 
 /// A token from the fts-forge App that can read the contents of the three
 /// asset repos and nothing else, valid for an hour. Main's full runs only
