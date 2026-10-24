@@ -10,11 +10,11 @@ type: application
 home: https://github.com/FastTrackStudios/studio
 sources:
   - https://github.com/FastTrackStudios/studio
-# Both follow the repo's one version (Cargo.toml [workspace.package]
-# version): the release commit (scripts/release.sh) rewrites these two
-# lines with the bump. appVersion is the image tag the chart renders when
-# values set none, so the chart at tag vX.Y.Z deploys
-# ghcr.io/fasttrackstudios/studio-web:X.Y.Z, which the release pushes
-# before the tag exists (images.yml, scripts/ghcr-images.sh).
+# Static: a release changes neither. The chart does not pin its image: it
+# renders `image.tag`, `latest` by default, and on starcommand
+# argocd-image-updater writes the release into image.repository /
+# image.tag (the highest X.Y.Z studio-web image on GHCR, which the release
+# tag's Images job pushes). Bump `version` by hand when the chart itself
+# changes.
 version: 26.10.3
 appVersion: "26.10.3"

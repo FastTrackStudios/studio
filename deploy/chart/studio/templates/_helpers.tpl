@@ -19,7 +19,7 @@
 helm.sh/chart: {{ printf "%s-%s" .Chart.Name .Chart.Version }}
 app.kubernetes.io/name: {{ include "studio.name" . }}
 app.kubernetes.io/instance: {{ .Release.Name }}
-app.kubernetes.io/version: {{ .Chart.AppVersion | quote }}
+app.kubernetes.io/version: {{ include "studio.imageTag" . | quote }}
 app.kubernetes.io/managed-by: {{ .Release.Service }}
 {{- end -}}
 
@@ -30,10 +30,17 @@ app.kubernetes.io/instance: {{ .Release.Name }}
 app.kubernetes.io/component: web
 {{- end -}}
 
-{{/* The image: <registry>/<repository>:<tag, or the chart's appVersion>.
-A repository containing "/" is a full image name and is used as it is. */}}
+{{/* The image tag: image.tag, or `latest`. The chart pins no release;
+argocd-image-updater sets image.tag on starcommand. */}}
+{{- define "studio.imageTag" -}}
+{{- .Values.image.tag | default "latest" -}}
+{{- end -}}
+
+{{/* The image: <registry>/<repository>:<tag>. A repository containing "/"
+is a full image name and is used as it is (what argocd-image-updater
+writes). */}}
 {{- define "studio.image" -}}
-{{- $tag := .Values.image.tag | default .Chart.AppVersion -}}
+{{- $tag := include "studio.imageTag" . -}}
 {{- if contains "/" .Values.image.repository -}}
 {{- printf "%s:%s" .Values.image.repository $tag -}}
 {{- else -}}

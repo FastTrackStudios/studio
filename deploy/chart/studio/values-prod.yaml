@@ -1,5 +1,6 @@
 # EXAMPLE values: production on starcommand (Argo CD's `studio`
-# Application, namespace `studio`, following the newest v* tag). Copy as a
+# Application, namespace `studio`; its argocd-image-updater sets
+# image.repository / image.tag to the newest release image). Copy as a
 # starting point; the chart defaults are generic.
 #
 #   helm upgrade --install studio ./deploy/chart/studio \
