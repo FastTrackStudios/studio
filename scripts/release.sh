@@ -130,6 +130,14 @@ BUILD_CHECK="${BUILD_CHECK:-CI passed}"
 # appVersion, and appVersion is the image tag the chart at the tag renders
 # (scripts/ghcr-images.sh), the one Argo CD pulls.
 CHART="deploy/chart/studio/Chart.yaml"
+# A release line cut from a tag before the chart existed (a hotfix of an
+# older release) has none: it ships no studio-web, and its release commit
+# bumps no chart.
+has_chart() { git cat-file -e "${1:-HEAD}:$CHART" 2>/dev/null; } # [rev]
+# A field of the chart at <rev> (`version`, `appVersion`), unquoted.
+chart_field() { # <rev> <field>
+    git show "$1:$CHART" 2>/dev/null | sed -n "s/^$2: *\"\{0,1\}\([^\"[:space:]]*\)\"\{0,1\}.*/\1/p" | head -1
+}
 
 die() { echo "release: $*" >&2; exit 1; }
 note() { echo "release: $*" >&2; }
@@ -315,6 +323,10 @@ require_green() { # <sha>
 # images.yml pushes them when the release commit lands.
 require_images() { # <sha> <version>
     local itag
+    if ! has_chart "$1"; then
+        note "no $CHART at $(git rev-parse --short "$1") (a line cut before studio-web): no image to wait for"
+        return 0
+    fi
     itag="$(bash scripts/ghcr-images.sh tag "$1")"
     [ "$itag" = "$2" ] || die "$CHART at $(git rev-parse --short "$1") has appVersion $itag, not $2: the chart would deploy the wrong image"
     bash scripts/ghcr-images.sh check "$itag" "$1" \
@@ -604,11 +616,16 @@ release_commit() { # <cur> <next> [skipped version]
     cargo metadata --format-version 1 --offline >/dev/null 2>&1 || cargo metadata --format-version 1 >/dev/null \
         || die "cargo cannot read the lockfile after the version bump"
 
-    # The chart's version and appVersion: the image tag Argo pulls at the tag.
+    # The chart's version and appVersion: the image tag Argo pulls at the
+    # tag. A line cut before the chart existed has none to bump.
+    if [ -f "$CHART" ]; then
     sed -E "s/^version: *\"?$cur\"?[[:space:]]*$/version: $next/; s/^appVersion: *\"?$cur\"?[[:space:]]*$/appVersion: \"$next\"/" "$CHART" > "$CHART.new" \
         && mv "$CHART.new" "$CHART"
     { grep -qx "appVersion: \"$next\"" "$CHART" && grep -qx "version: $next" "$CHART"; } \
         || die "failed to rewrite $CHART version/appVersion ($cur -> $next): both must be the workspace version"
+    else
+        note "no $CHART on this line (cut before studio-web): no chart to bump"
+    fi
 
     sec="$(mktemp)"
     files="$(change_files_at HEAD)"
@@ -632,7 +649,8 @@ release_commit() { # <cur> <next> [skipped version]
     changelog_write "$next" "$sec"
     rm -f "$sec"
 
-    git add Cargo.toml Cargo.lock CHANGELOG.md "$CHART"
+    git add Cargo.toml Cargo.lock CHANGELOG.md
+    if [ -f "$CHART" ]; then git add "$CHART"; fi
     git commit --quiet -m "chore(release): v$next"
     # The guard's own lockfile rule, here, so a bad cut fails at once.
     local why
@@ -805,12 +823,17 @@ release_diff_only() { # <base> <head>
             || { echo "Cargo.toml: more than the [workspace.package] version line changed"; return 1; }
     fi
     lock_members_only "$base" "$head" "$vb" "$vh" || return 1
-    # The chart: only its version and appVersion lines, to the new version.
-    local nb
-    nb="${vh//./\\.}"
-    out="$(git diff -U0 "$base" "$head" -- "$CHART" | grep -E '^[+-]' | grep -vE '^(\+\+\+|---)' \
-        | grep -vE "^-(version|appVersion): \"?[0-9]+\.[0-9]+\.[0-9]+\"?$|^\+version: $nb$|^\+appVersion: \"$nb\"$" || true)"
-    [ -z "$out" ] || { echo "$CHART: more than its version and appVersion lines changed, or not to $vh"; return 1; }
+    # The chart (where the line has one): exactly its version and
+    # appVersion lines, each from the old version to the new, nothing else.
+    if has_chart "$base" || has_chart "$head"; then
+        if ! has_chart "$base" || ! has_chart "$head"; then echo "$CHART: added or removed"; return 1; fi
+        local want got
+        want="$(printf '%s\n' "-appVersion: \"$vb\"" "-version: $vb" "+appVersion: \"$vh\"" "+version: $vh" | sort)"
+        got="$(git diff -U0 "$base" "$head" -- "$CHART" | grep -E '^[+-]' | grep -vE '^(\+\+\+|---)' \
+            | sed -E 's/^-(version|appVersion): *"?([^"[:space:]]*)"?[[:space:]]*$/-\1: \2/' \
+            | sed -E 's/^-appVersion: (.*)$/-appVersion: "\1"/' | sort || true)"
+        [ "$got" = "$want" ] || { echo "$CHART: the release changes exactly its version and appVersion lines, $vb -> $vh"; return 1; }
+    fi
     # CHANGELOG.md: lines are only added (the new section), never removed.
     out="$(git diff -U0 "$base" "$head" -- CHANGELOG.md | grep -E '^-' | grep -vE '^---' || true)"
     [ -z "$out" ] || { echo "CHANGELOG.md: released sections changed (only the new section may be added)"; return 1; }
@@ -889,8 +912,12 @@ cmd_guard() {
     changelog_has "$head" "$v" || fail "CHANGELOG.md at the head has no [$v] section"
     why="$(release_diff_only "$cur" "$head")" \
         || fail "the release commit may change only the version line (Cargo.toml, Cargo.lock members), the chart's version and appVersion ($CHART), add the CHANGELOG.md section and delete consumed change files: $why"
-    a="$(bash scripts/ghcr-images.sh tag "$head" 2>/dev/null || true)"
-    [ "$a" = "$v" ] || fail "$CHART at the head has appVersion '${a:-none}', not $v: the chart at the tag would deploy the wrong image"
+    if has_chart "$head"; then
+        a="$(chart_field "$head" appVersion)"
+        [ "$a" = "$v" ] || fail "$CHART at the head has appVersion '${a:-none}', not $v: the chart at the tag would deploy the wrong image"
+        a="$(chart_field "$head" version)"
+        [ "$a" = "$v" ] || fail "$CHART at the head has version '${a:-none}', not $v: the chart's version follows the release"
+    fi
     pending="$(change_files_at "$head" | paste -sd' ' -)"
     [ -z "$pending" ] || fail "change files left unconsumed at the head: $pending"
     # One version for the whole studio: the app crate follows the

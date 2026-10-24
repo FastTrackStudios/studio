@@ -66,7 +66,12 @@ docker compose -f deploy/docker-compose.yml up -d
 ```
 
 That runs studio-web, task-server (state in the `task-data` volume),
-task-web and an nginx `edge` doing the same-origin split for both. A fresh
+task-web and an nginx `edge` doing the same-origin split for both. The
+edge binds to 127.0.0.1 only, since it also exposes Task's API. To serve
+other machines, set `EDGE_BIND` (e.g. `0.0.0.0`) behind TLS and your own
+access control, and `TASK_SERVER_PUBLIC_URL` to the address they use.
+`TASK_URL` / `AUTH_URL` from the environment or an `--env-file` point the
+apps at a Task and fts-auth elsewhere instead. A fresh
 Task hosts no orgs: create one with the `task` CLI (`task org create
 <slug> --home`, pointed at http://localhost:8090), as task's README says.
 

@@ -67,6 +67,13 @@ jobs:
             || { echo "::error::tag v$v already exists; a released version's image is never replaced"; exit 1; }
           extra="latest"
         fi
+        # A release line cut before studio-web (a hotfix of an older release) has
+        # no chart and ships no image.
+        if ! git cat-file -e "$sha:deploy/chart/studio/Chart.yaml" 2>/dev/null; then
+          echo "no deploy/chart/studio at $sha: this line ships no studio-web, nothing to publish"
+          echo "build=false" >> "$GITHUB_OUTPUT"
+          exit 0
+        fi
         # The tag the release (and the chart at its tag) pulls.
         itag="$(bash scripts/ghcr-images.sh tag "$sha")"
         if [ "$itag" != "$v" ]; then

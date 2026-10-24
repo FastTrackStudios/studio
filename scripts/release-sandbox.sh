@@ -233,6 +233,11 @@ git switch -q --detach "$REL"; git switch -q -c t/chart; printf 'description: x\
 expect_fail "guard: the chart changes more than its version lines" guard "$(git rev-parse HEAD)"
 git switch -q --detach "$REL"; git switch -q -c t/chart2; sedi 's/^appVersion: .*/appVersion: "26.10.9"/' deploy/chart/studio/Chart.yaml; git commit -qa --amend --no-edit
 expect_fail "guard: the chart's appVersion is not the release" guard "$(git rev-parse HEAD)"
+git switch -q --detach "$REL"; git switch -q -c t/chart3; sedi '/^version: /d' deploy/chart/studio/Chart.yaml; git commit -qa --amend --no-edit
+expect_fail "guard: the chart's version line dropped (appVersion kept)" guard "$(git rev-parse HEAD)"
+grep -q "exactly its version and appVersion lines" "$S/last.out" && ok "  ...naming the chart's lines" || bad "  ...message"
+git switch -q --detach "$REL"; git switch -q -c t/chart4; sedi 's/^version: .*/version: 26.10.2/' deploy/chart/studio/Chart.yaml; git commit -qa --amend --no-edit
+expect_fail "guard: the chart's version is not the release" guard "$(git rev-parse HEAD)"
 git switch -q --detach "$REL"; git switch -q -c t/lock; sedi '/name = "serde"/{n;s/.*/version = "26.10.0"/;}' Cargo.lock; git commit -qa --amend --no-edit
 expect_fail "guard: a non-member (registry) crate's version moved in Cargo.lock" guard "$(git rev-parse HEAD)"
 grep -q 'non-member packages changed version: "serde"' "$S/last.out" && ok "  ...naming serde" || bad "  ...message"
@@ -394,6 +399,21 @@ if [ -f cliff.toml ] && { command -v git-cliff >/dev/null || command -v nix >/de
 else
   echo "SKIP: no git-cliff / nix for the fallback"
 fi
+
+echo "=== a line cut before the chart (an older release's hotfix line)"
+# main as such a line: v26.10.2 without deploy/chart/studio, one fix since.
+git switch -q --detach v26.10.2; git branch -qD release/pending 2>/dev/null || true
+git rm -q deploy/chart/studio/Chart.yaml; git commit -qm "chore: a line from before studio-web"
+git push -q -f origin HEAD:main
+land "fix(session): an old line's fix (#95)" crates/shared/old.rs old-fix '"session-desktop" = "patch"\n' "Fixed an old line (session)"
+git switch -q --detach origin/main
+expect_ok "prepare on a line with no chart" R prepare
+eq "  ...the release commit adds no chart" "$(git ls-tree --name-only HEAD deploy/chart/studio/ | wc -l | tr -d ' ')" 0
+PRE=$(git rev-parse HEAD); PREV="$(R version)"
+expect_ok "guard passes with no chart on either side" guard "$PRE"
+R pr >/dev/null 2>&1; merge_release main 96
+SHIM_IMAGES=missing expect_ok "tag on a line with no chart: no image to wait for" R tag "$PREV"
+grep -q "no image to wait for" "$S/last.out" && ok "  ...and says so" || bad "  ...message"
 
 echo; echo "=== RESULT: $pass passed, $failn failed"
 [ "$failn" = 0 ]
