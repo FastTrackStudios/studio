@@ -22,6 +22,35 @@ Session and Signal run the same engine: one DAW engine per process, with
 a rig being a folder of tracks in it
 ([docs/design/one-engine.md](docs/design/one-engine.md)).
 
+## Install
+
+**Studio** is the app: Signal and Session behind one front screen.
+
+### macOS and Linux
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/FastTrackStudios/studio/main/scripts/install.sh | sh
+```
+
+The command installs the newest release. On macOS (Apple silicon), the
+signed, notarized Studio.app goes into `/Applications`. On Linux (x86_64),
+the AppImage goes into `~/.local/share/studio`, with `studio` on your PATH
+and an entry in your app menu. Every download is checked against its
+published sha256 before anything is installed.
+
+Running the command again updates Studio in place. To install a particular
+version, set `STUDIO_VERSION=26.10.1`. You can also download the
+installers yourself from
+[Releases](https://github.com/FastTrackStudios/studio/releases/latest).
+
+### iPhone and iPad (TestFlight beta)
+
+Studio for iPhone and iPad is in beta on TestFlight, and every release
+ships there too. Install [TestFlight](https://apps.apple.com/app/testflight/id899247664)
+from the App Store, then join the beta:
+
+**[Join the Studio beta on TestFlight](https://testflight.apple.com/join/TESTFLIGHT_CODE)** <!-- TODO: the public link; `ruby apps/studio/desktop/ios/testflight-status.rb app.fasttrackstudio.studio` prints it -->
+
 ## Layout
 
 ```
