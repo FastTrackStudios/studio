@@ -40,6 +40,76 @@ jobs:
             echo "plan: dispatch on ${GITHUB_REF_NAME}: the full set" ;;
           *) echo "plan: ${GITHUB_EVENT_NAME:-?} on ${GITHUB_REF_NAME}: the full set" ;;
         esac
+  rail:
+    name: Rail plan
+    needs: plan
+    runs-on:
+    - self-hosted
+    - studio-main
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    outputs:
+      full: ${{ steps.rail.outputs.full }}
+      check: ${{ steps.rail.outputs.check }}
+      cargo: ${{ steps.rail.outputs.cargo }}
+      tests: ${{ steps.rail.outputs.tests }}
+      test_filter: ${{ steps.rail.outputs.test_filter }}
+      wasm: ${{ steps.rail.outputs.wasm }}
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        persist-credentials: false
+        fetch-depth: 64
+    - name: CI cargo config
+      run: |
+        mkdir -p ../.cargo
+        cp .cargo/ci-config.toml ../.cargo/config.toml
+    - name: cargo rail plan
+      id: rail
+      env:
+        EVENT: ${{ github.event_name }}
+        REF: ${{ github.ref }}
+      run: |
+        nix develop --accept-flake-config .#ci --command bash -euo pipefail -s <<'EOF'
+        store="${STUDIO_CACHE_DIR:?not a studio pool runner (no STUDIO_CACHE_DIR)}/rail-evidence"
+        mkdir -p "$store/$GITHUB_SHA"
+        gates_out() {
+          printf '%s\n' "$1" >> "$GITHUB_OUTPUT"
+          printf '%s\n' "$1" > "$store/$GITHUB_SHA/gates"
+        }
+        full() {
+          echo "plan: $1 -> the full set"
+          gates_out $'full=true\ncargo=true\ncheck=true\ntests=true\ntest_filter=\nwasm=true'
+          exit 0
+        }
+        if [ "$EVENT" != push ] || [ "$REF" != refs/heads/main ]; then
+          full "$EVENT on $REF, not a push to main"
+        fi
+        # Keep the newest 40 commits' evidence (a few hundred KB each).
+        find "$store" -mindepth 1 -maxdepth 1 -type d -printf '%T@ %p\n' | sort -rn | tail -n +41 \
+          | cut -d' ' -f2- | while read -r old; do rm -rf "$old"; done
+        base=""
+        for sha in $(git rev-list --first-parent --max-count=50 HEAD~1); do
+          d="$store/$sha"
+          [ -f "$d/cargo.build.json" ] && [ -f "$d/cargo.test.json" ] && [ -f "$d/gates" ] || continue
+          green=1
+          for job in check tests wasm; do
+            if grep -qx "$job=true" "$d/gates" && [ ! -f "$d/$job.ok" ]; then green=0; fi
+          done
+          if [ "$green" = 1 ]; then base="$sha"; break; fi
+        done
+        [ -n "$base" ] || full "no green ancestor with rail evidence in the last 50 commits"
+        ev=()
+        for f in "$store/$base"/*.json; do ev+=(--evidence "$f"); done
+        plan="$RUNNER_TEMP/rail-plan.json"
+        cargo rail plan --from "$base" --to HEAD "${ev[@]}" --json > "$plan" \
+          || full "cargo rail plan failed"
+        gates="$(python3 scripts/ci-rail-plan.py "$plan")" || full "the plan could not be read"
+        echo "plan: from $base (${#ev[@]} evidence file(s))"
+        printf '%s\n' "$gates"
+        gates_out "$gates"
+        EOF
   deps-cache:
     name: Dependency cache
     if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
@@ -171,7 +241,10 @@ jobs:
       run: bash scripts/release-sandbox.sh
   check:
     name: Check
-    needs: plan
+    needs:
+    - plan
+    - rail
+    if: ${{ needs.rail.outputs.check == 'true' || needs.rail.outputs.cargo == 'true' }}
     runs-on:
     - self-hosted
     - studio-main
@@ -199,10 +272,24 @@ jobs:
         fi
         echo "target dir: $dir; pool $(du -sh "$pool" | cut -f1) of 200 GB; $(df -h "$pool" | awk 'NR==2 {print $4}') free on the disk"
     - name: cargo check --workspace
+      env:
+        RECORD: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
       run: |
         nix develop --accept-flake-config .#ci --command bash -euo pipefail -s <<'EOF'
-        cargo check --workspace
+        if [ "$RECORD" = true ]; then
+          ev="$STUDIO_CACHE_DIR/rail-evidence/$GITHUB_SHA"
+          mkdir -p "$ev"
+          cargo rail plan evidence --work cargo.build --output "$ev/cargo.build.json" -- check --workspace
+          cargo rail plan evidence --work cargo.test --output "$ev/cargo.test.json" -- check --workspace --all-targets
+        else
+          cargo check --workspace
+        fi
         EOF
+    - name: Mark check green for rail
+      if: ${{ success() && github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+      run: |
+        mkdir -p "$STUDIO_CACHE_DIR/rail-evidence/$GITHUB_SHA"
+        touch "$STUDIO_CACHE_DIR/rail-evidence/$GITHUB_SHA/check.ok"
     - name: cargo clippy (advisory, does not block)
       if: ${{ !cancelled() }}
       continue-on-error: true
@@ -214,7 +301,10 @@ jobs:
         EOF
   wasm:
     name: Wasm
-    needs: plan
+    needs:
+    - plan
+    - rail
+    if: ${{ needs.rail.outputs.wasm == 'true' }}
     runs-on:
     - self-hosted
     - studio-main
@@ -252,9 +342,17 @@ jobs:
         nix develop --accept-flake-config .#ci --command bash -euo pipefail -s <<'EOF'
         just signal-wasm-check
         EOF
+    - name: Mark wasm green for rail
+      if: ${{ success() && github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+      run: |
+        mkdir -p "$STUDIO_CACHE_DIR/rail-evidence/$GITHUB_SHA"
+        touch "$STUDIO_CACHE_DIR/rail-evidence/$GITHUB_SHA/wasm.ok"
   tests:
     name: Tests
-    needs: plan
+    needs:
+    - plan
+    - rail
+    if: ${{ needs.rail.outputs.tests == 'true' }}
     runs-on:
     - self-hosted
     - studio-main
@@ -313,6 +411,7 @@ jobs:
       id: nextest
       env:
         TEST_LOG: ${{ runner.temp }}/nextest-ci.log
+        TEST_FILTER: ${{ needs.rail.outputs.test_filter }}
       run: |
         nix develop --accept-flake-config .#ci --command bash -euo pipefail -s <<'EOF'
         pkgs=()
@@ -322,8 +421,14 @@ jobs:
         cargo nextest run "${pkgs[@]}" --no-run >"${TEST_LOG}" 2>&1
         rc=$?
         t1=$(date +%s)
+        # The rail plan's filter: only the tests of the packages the change
+        # reaches (empty: all of them). The build above is the whole set either way
+        # (warm, it rebuilds only what changed).
+        filter=()
+        [ -n "${TEST_FILTER:-}" ] && filter=(-E "${TEST_FILTER}" --no-tests=pass)
+        echo "filter: ${TEST_FILTER:-<all>}"
         if [ "$rc" = 0 ]; then
-          cargo nextest run "${pkgs[@]}" --no-fail-fast >>"${TEST_LOG}" 2>&1
+          cargo nextest run "${pkgs[@]}" --no-fail-fast ${filter[@]+"${filter[@]}"} >>"${TEST_LOG}" 2>&1
           rc=$?
         fi
         t2=$(date +%s)
@@ -346,6 +451,11 @@ jobs:
         path: ${{ runner.temp }}/nextest-ci.log
         if-no-files-found: ignore
         retention-days: 7
+    - name: Mark tests green for rail
+      if: ${{ success() && github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+      run: |
+        mkdir -p "$STUDIO_CACHE_DIR/rail-evidence/$GITHUB_SHA"
+        touch "$STUDIO_CACHE_DIR/rail-evidence/$GITHUB_SHA/tests.ok"
   release-macos:
     name: Release tooling (macOS)
     needs: plan
@@ -361,6 +471,7 @@ jobs:
     name: CI passed
     needs:
     - plan
+    - rail
     - gates
     - check
     - wasm
@@ -375,6 +486,7 @@ jobs:
     - name: Every required job succeeded
       env:
         PLAN: ${{ needs.plan.result }}
+        RAIL: ${{ needs.rail.result }}
         GATES: ${{ needs.gates.result }}
         CHECK: ${{ needs.check.result }}
         WASM: ${{ needs.wasm.result }}
@@ -385,8 +497,18 @@ jobs:
         fail=0
         bad() { echo "::error::$1"; fail=1; }
         [ "$PLAN" = success ] || { bad "plan: $PLAN"; exit 1; }
-        for job in "gates:$GATES" "check:$CHECK" "wasm:$WASM" "tests:$TESTS" "release-macos:$RELEASE_MACOS"; do
+        [ "$RAIL" = success ] || { bad "rail plan: $RAIL"; exit 1; }
+        for job in "gates:$GATES" "release-macos:$RELEASE_MACOS"; do
           [ "${job#*:}" = success ] || bad "${job%%:*}: ${job#*:}"
+          echo "$job"
+        done
+        # The builds: skipped is fine when the rail plan skipped them (nothing they
+        # cover changed since a green base); anything else must have succeeded.
+        for job in "check:$CHECK" "wasm:$WASM" "tests:$TESTS"; do
+          case "${job#*:}" in
+            success | skipped) ;;
+            *) bad "${job%%:*}: ${job#*:}" ;;
+          esac
           echo "$job"
         done
         exit "$fail"
