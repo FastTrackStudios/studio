@@ -424,12 +424,29 @@ fn pool_job(name: &str, kind: &str, timeout: u32) -> Job {
     .step(target_dir(kind))
 }
 
-/// .cargo/ci-config.toml as the cargo config one level up, where cargo
-/// finds it for every command in the checkout.
+/// One cargo home for the pool, with .cargo/ci-config.toml as its
+/// config.toml: cargo merges it under the repo's .cargo/config.toml, as it
+/// did the copy one directory up that this replaces.
+///
+/// SHARED, because rail binds its evidence to the Cargo configuration, and
+/// each runner instance has its own HOME (so its own ~/.cargo) and its own
+/// work dir (so its own `../.cargo`): evidence `Check` recorded on one
+/// instance never matched a plan made on another ("planning evidence is
+/// bound to different Cargo configuration"). One path for every instance,
+/// and the registry downloads are shared too. The config is replaced with
+/// a rename, so a job on another instance never reads half of it.
 fn ci_cargo_config() -> Step {
     Step::run(
-        "CI cargo config",
-        "mkdir -p ../.cargo\ncp .cargo/ci-config.toml ../.cargo/config.toml\n",
+        "CI cargo config (the pool's cargo home)",
+        r#"home="${STUDIO_CACHE_DIR:?not a studio pool runner (no STUDIO_CACHE_DIR)}/cargo-home"
+mkdir -p "$home"
+echo "CARGO_HOME=$home" >> "$GITHUB_ENV"
+# The old per-checkout copy, which cargo would still find from the checkout.
+rm -f ../.cargo/config.toml
+tmp="$(mktemp "$home/config.toml.XXXXXX")"
+cp .cargo/ci-config.toml "$tmp"
+mv -f "$tmp" "$home/config.toml"
+"#,
     )
 }
 
