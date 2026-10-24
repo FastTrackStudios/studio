@@ -79,8 +79,24 @@ else
     fi
     ld="$(ldd "$(command -v bash)" 2>/dev/null | awk '/ld-linux-x86-64/ { print ($3 != "" ? $3 : $1) }' | head -1)"
     [ -x "$ld" ] || { echo "no way to run the payload here (no /lib64 loader, no usable appimage-run, no host glibc loader)" >&2; exit 1; }
+    # The graphics stack is not in the bundle by design: the user's driver
+    # provides it (libgbm, libEGL, libGLX, libGLdispatch, libdrm). A host's
+    # own first (NixOS keeps them in /run/opengl-driver/lib); a headless box
+    # with none gets mesa's from nixpkgs, only so the binary LOADS: --version
+    # draws nothing.
+    gl=""
+    for d in /run/opengl-driver/lib /usr/lib/x86_64-linux-gnu /usr/lib64 /usr/lib; do
+      [ -e "$d/libgbm.so.1" ] && gl="${gl:+$gl:}$d"
+    done
+    if [ -z "$gl" ] && command -v nix >/dev/null 2>&1; then
+      for p in libgbm libglvnd libdrm.out; do
+        o="$(nix build --no-link --print-out-paths "nixpkgs#$p" 2>/dev/null | head -1)" || true
+        [ -n "$o" ] && gl="${gl:+$gl:}$o/lib"
+      done
+      echo "no host graphics stack: mesa's from nixpkgs for the load check ($gl)" >&2
+    fi
     echo "running the payload through the host loader $ld" >&2
-    out="$(env -u DISPLAY -u WAYLAND_DISPLAY "$ld" --library-path "$work/app/usr/lib" "$work/app/usr/bin/$crate" --version 2>&1)" \
+    out="$(env -u DISPLAY -u WAYLAND_DISPLAY "$ld" --library-path "$work/app/usr/lib${gl:+:$gl}" "$work/app/usr/bin/$crate" --version 2>&1)" \
         || { echo "$out"; exit 1; }
   fi
 fi
