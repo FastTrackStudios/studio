@@ -55,7 +55,7 @@ dawfile-reaper = { workspace = true }
 # Observability
 tracing.workspace = true
 tracing-subscriber.workspace = true
-eyre = "0.6"
+eyre = { workspace = true }
 
 # Sync stack — engine + peer mesh. Default-on so reaper-test multi-instance
 # tests have the runtime available; production users that don't want it can
@@ -67,7 +67,7 @@ default = ["sync"]
 sync = ["dep:daw-sync", "daw-sync?/network"]
 
 [dev-dependencies]
-eyre = "0.6"
+eyre = { workspace = true }
 # Integration-test harness via the daw facade's `test-harness` feature
 # (replaces the former `reaper-test` crate).
 daw = { workspace = true }
