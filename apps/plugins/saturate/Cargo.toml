@@ -20,7 +20,7 @@ nice-plug = { workspace = true, features = ["vst3"] }
 plugin-core = { workspace = true }
 
 # The DSP facade (re-exports saturate-dsp). Never depend on saturate-dsp directly.
-saturate = { workspace = true, features = ["native", "profiles", "ui", "viz"] }
+dsp = { workspace = true, features = ["saturate", "saturate-native", "saturate-profiles", "saturate-ui", "saturate-viz"] }
 # What each circuit IS, and the only place that knows how a knob reaches the
 # DSP — the shell deliberately carries no voicing table of its own.
 # The Blitz/nice-plug editor: the five circuits and their panels. `native`
@@ -36,3 +36,4 @@ default = []
 # the session engine's built-in FX, or a workspace test build, where cargo
 # unifies features — collide.
 export = []
+

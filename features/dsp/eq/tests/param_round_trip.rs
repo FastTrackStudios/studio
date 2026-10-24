@@ -11,7 +11,7 @@
 //! `.with_string_to_value`, so typing "50" back did nothing at all. Forty-one
 //! parameters across the four FX were like this.
 
-#![cfg(feature = "native")]
+#![cfg(feature = "eq-native")]
 
 use nice_plug::prelude::Params;
 
@@ -22,7 +22,7 @@ const PROBES: [f32; 7] = [0.0, 0.004, 0.25, 0.5, 0.75, 0.996, 1.0];
 
 #[test]
 fn every_parameter_parses_the_string_it_prints() {
-    let params = eq::ui::params::FtsEqParams::default();
+    let params = dsp::eq::ui::params::FtsEqParams::default();
     let mut broken: Vec<String> = Vec::new();
 
     for (id, ptr, _group) in params.param_map() {

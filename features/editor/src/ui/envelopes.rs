@@ -14,7 +14,7 @@
 //! This module holds the state and the geometry — everything assertable
 //! without a renderer. The `rsx!` lives with the rest of the canvas.
 
-use level::envelope::{Contributions, EnvPoint, composite};
+use dsp::level::envelope::{Contributions, EnvPoint, composite};
 
 /// Which of the four a gesture is aimed at.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]

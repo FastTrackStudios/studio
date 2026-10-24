@@ -7,7 +7,7 @@
 //! not a loop anybody runs twice, and the families nobody reaches are the ones
 //! that ship unlooked-at. This reaches all eight without a window.
 
-use reverb::ui::viz::{Family, ReverbUniforms, ReverbView};
+use dsp::reverb::ui::viz::{Family, ReverbUniforms, ReverbView};
 
 const W: u32 = 760;
 const H: u32 = 190;
@@ -44,7 +44,7 @@ fn main() {
         for (tag, time) in [("a", 0.4_f32), ("b", 2.3_f32)] {
             let v = view(family, time);
             let u = ReverbUniforms::of(&v, W as f32, H as f32);
-            let frame = probe.render(reverb::ui::viz::SHADER, bytemuck::bytes_of(&u), W, H);
+            let frame = probe.render(dsp::reverb::ui::viz::SHADER, bytemuck::bytes_of(&u), W, H);
             let name = format!("{dir}/reverb-{}-{tag}.png", label(family));
             write_png(&name, &frame.rgba, W, H);
             println!("{name}  coverage {:.3}", frame.coverage());

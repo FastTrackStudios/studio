@@ -14,7 +14,7 @@ workspace = true
 
 [dependencies]
 plugin-core = { workspace = true }
-eq = { workspace = true, features = ["native", "profiles", "ui"] }
+dsp = { workspace = true, features = ["eq", "eq-native", "eq-profiles", "eq-ui"] }
 # The full Dioxus plugin editor (control view, EQ graph, spectrum) —
 # `native` pulls nice-plug-dioxus/Blitz.
 dsp-core = { workspace = true, features = ["audio"] }
@@ -28,3 +28,4 @@ default = []
 # the session engine's built-in FX, or a workspace test build, where cargo
 # unifies features — collide.
 export = []
+

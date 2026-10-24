@@ -6,7 +6,7 @@
 //! like while it is working are different pictures and only one of them gets
 //! looked at by accident.
 
-use comp::ui::viz::{CompUniforms, CompView, SHADER};
+use dsp::comp::ui::viz::{CompUniforms, CompView, SHADER};
 
 const W: u32 = 620;
 const H: u32 = 520;

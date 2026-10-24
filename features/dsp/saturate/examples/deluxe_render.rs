@@ -11,7 +11,7 @@
 
 use std::process::ExitCode;
 
-use saturate::deluxe::{Deluxe, DeluxeParams};
+use dsp::saturate::deluxe::{Deluxe, DeluxeParams};
 
 fn run(args: &[String]) -> Result<(), String> {
     let [

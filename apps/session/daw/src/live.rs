@@ -18,8 +18,8 @@ use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, OnceLock, mpsc};
 
-use reverb::algorithm::{AlgorithmParams, AlgorithmType};
-use saturate::preamp::ClassAPreamp;
+use dsp::reverb::algorithm::{AlgorithmParams, AlgorithmType};
+use dsp::saturate::preamp::ClassAPreamp;
 
 /// Everything in one track's rack that moves with the audio.
 ///
@@ -172,8 +172,8 @@ impl SatKey {
     }
 }
 
-const fn shaper_index(shaper: saturate::preamp::SideShaper) -> u8 {
-    use saturate::preamp::SideShaper as S;
+const fn shaper_index(shaper: dsp::saturate::preamp::SideShaper) -> u8 {
+    use dsp::saturate::preamp::SideShaper as S;
     match shaper {
         S::Clean => 0,
         S::OpAmp => 1,
@@ -199,7 +199,7 @@ thread_local! {
 /// The harmonic ladder for this stage, measured once per distinct
 /// setting.
 ///
-/// Three probes through `saturate::preamp::analysis` on a miss —
+/// Three probes through `dsp::saturate::preamp::analysis` on a miss —
 /// about a third of a millisecond — and a hash lookup on a hit. The
 /// memo is per thread because the probe is pure and the racks are
 /// drawn from one; sharing it across threads would buy a lock for
@@ -215,7 +215,7 @@ pub fn ladder(pre: &ClassAPreamp) -> Ladder {
         for (level, row) in LEVELS.iter().zip(rungs.iter_mut()) {
             // H1..H8; the ladder drops H1, which is the signal itself.
             let mut all = [0.0_f32; RUNGS + 1];
-            saturate::preamp::analysis::harmonic_spectrum_at(pre, *level, &mut all);
+            dsp::saturate::preamp::analysis::harmonic_spectrum_at(pre, *level, &mut all);
             for (slot, value) in row.iter_mut().zip(all.iter().skip(1)) {
                 *slot = value.clamp(0.0, 1.0);
             }
@@ -242,7 +242,7 @@ pub const TAIL_BINS: usize = 64;
 /// A reverb's envelope over its own decay window, in dB below its peak.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Tail {
-    /// One value per slice, [`reverb::analysis::FLOOR_DB`]..0.
+    /// One value per slice, [`dsp::reverb::analysis::FLOOR_DB`]..0.
     pub envelope: Arc<[f32; TAIL_BINS]>,
     /// Whether this is the algorithm's own response, or the exponential
     /// standing in for it while the worker renders. A display draws the
@@ -297,7 +297,7 @@ impl RoomKey {
         // log map over a plausible range is the best a display can do.
         let decay = algorithm.t60_range(0).map_or_else(
             || (decay_s.clamp(0.1, 20.0) / 0.1).log(200.0),
-            |(lo, hi)| reverb::algorithm::t60_to_decay(decay_s, lo, hi),
+            |(lo, hi)| dsp::reverb::algorithm::t60_to_decay(decay_s, lo, hi),
         );
         AlgorithmParams {
             decay,
@@ -312,7 +312,7 @@ impl RoomKey {
         let mut out = [0.0_f32; TAIL_BINS];
         // The window is the decay: a tail that reaches −60 dB at the
         // panel's right edge is a tail drawn to its own setting.
-        reverb::analysis::impulse_envelope(
+        dsp::reverb::analysis::impulse_envelope(
             self.algorithm(),
             0,
             &self.params(),

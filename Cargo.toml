@@ -40,20 +40,7 @@ members = [
     "features/app/launcher",
     "features/preset-browser",
     "features/control-surfaces",
-    "features/dsp/hits",
-    "features/dsp/eq",
-    "features/dsp/modulation",
-    "features/dsp/comp",
-    "features/dsp/saturate",
-    "features/dsp/reverb",
-    "features/dsp/delay",
-    "features/dsp/mic",
-    "features/dsp/trigger",
-    "features/dsp/stretch",
-    "features/dsp/pitch",
-    "features/dsp/level",
-    "features/dsp/tune",
-    "features/dsp/gate",
+    "features/dsp",
     # ── session ──
     "xtask/session-reaper",
     "features/rigs/fx",
@@ -77,7 +64,6 @@ members = [
     "crates/studio",
     "crates/daw/module",
     "crates/daw/proto",
-    "features/dsp/align",
     "features/ui/audio-controls",
     "crates/daw/allocator",
     "crates/daw/audio-graph",
@@ -124,8 +110,6 @@ members = [
     "apps/plugins/unison",
     "xtask/plugins",
     "apps/plugins/eq-standalone",
-    "features/dsp/multiband",
-    "features/dsp/stack",
     "xtask/kit-sheet",
     # ── signal ──
     "apps/studio/desktop",
@@ -147,8 +131,6 @@ members = [
     "features/signal",
     "features/signal/storage",
     "features/signal/widgets",
-    "features/dsp/analyzer",
-    "features/dsp/separator",
     "features/signal/macromod",
     "features/dsp/nam",
     "features/plugin-host",
@@ -225,19 +207,7 @@ themer = { path = "features/ui/themer", default-features = false }
 launcher = { path = "features/app/launcher" }
 preset-browser = { path = "features/preset-browser" }
 control-surfaces = { path = "features/control-surfaces" }
-hits = { path = "features/dsp/hits" }
-eq = { path = "features/dsp/eq" }
-modulation = { path = "features/dsp/modulation" }
-comp = { path = "features/dsp/comp" }
-saturate = { path = "features/dsp/saturate" }
-reverb = { path = "features/dsp/reverb" }
-delay = { path = "features/dsp/delay" }
-mic = { path = "features/dsp/mic" }
-trigger = { path = "features/dsp/trigger" }
-stretch = { path = "features/dsp/stretch" }
-pitch = { path = "features/dsp/pitch" }
-level = { path = "features/dsp/level" }
-tune = { path = "features/dsp/tune" }
+dsp = { path = "features/dsp" }
 # Razor edit areas: a rectangle of time by row, and the set algebra over
 # it. Dependency-free and shared by the expression editor and the
 # arrangement, so the two cannot disagree about what an area is.
@@ -384,7 +354,6 @@ engraver = { git = "https://github.com/FastTrackStudios/keyflow", tag = "v0.2.9"
 # The comp plugin editor. Core (profile view data model) is portable; the
 # nice-plug/Blitz editor is behind its `native` feature.
 world-sys = { git = "https://github.com/FastTrackStudios/vendor", tag = "v0.5.0" }
-align-dsp = { path = "features/dsp/align" }
 # ── The built-in FX, from the processor repo ──────────────────────────
 # The mixer's Tone rack draws a real EQ, compressor and saturator, and
 # it draws them from the SAME functions the plugins' own editors do:
@@ -922,9 +891,6 @@ vox-codegen = "0.10.0-rc.5"
 # ── from processor's workspace (joined into studio) ──
 tone3000 = "0.1"
 signal-nam = { path = "features/dsp/nam" }
-gate = { path = "features/dsp/gate" }
-multiband-dsp = { path = "features/dsp/multiband" }
-fx-stack = { path = "features/dsp/stack" }
 web-time = "1"
 
 # ── from signal's workspace (joined into studio) ──
@@ -957,8 +923,6 @@ signal-plugin-host = { path = "features/plugin-host", default-features = false }
 openwurli-dsp = { path = "features/rigs/keys/wurli" }
 signal-orchestra = { path = "features/rigs/orchestra" }
 signal-synth-rig = { path = "features/rigs/synth-rig" }
-signal-analyzer = { path = "features/dsp/analyzer" }
-signal-separator = { path = "features/dsp/separator" }
 
 # ── from patchbay's workspace (joined into studio) ──
 socket2 = { version = "0.6", features = ["all"] }
@@ -1038,7 +1002,7 @@ rfd = "0.17"
 roxmltree = "0.20"
 rustc-hash = "2"
 rusty_link = "0.4"
-smallvec = "1.13"
+smallvec = "1.15.2"
 styx-tree = "5.0.0-rc.5"
 svg = "0.18"
 symphonia = { version = "0.5", default-features = false }
@@ -1066,6 +1030,13 @@ zstd = "0.13"
 naga = "29"
 wasm-bindgen-test = "0.3"
 wgpu_context = "0.7"
+
+# ── external dependencies, declared once (moved up from the member
+# manifests; a member says `x = { workspace = true }` and adds its features) ──
+ebur128 = "0.1"
+libm = { version = "0.2", default-features = false }
+rustfft = "6.2"
+test-that = { version = "0.5.2", default-features = false }
 
 [patch.crates-io]
 # tone3000 on reqwest 0.12's ring-backed rustls instead of 0.13's `rustls`,
@@ -1390,8 +1361,8 @@ debug = false
 # Audio-thread dependencies, kept at 3. `package."*"` above would
 # otherwise drop these to 1, and a dev run of the rig would start
 # xrunning. Sourced from `cargo tree` over audiocore-dsp /
-# daw-audio-graph / signal-sampler / neural-amp-modeler / eq-dsp /
-# pitch-dsp, keeping the crates that do real per-sample or per-block
+# daw-audio-graph / signal-sampler / neural-amp-modeler / dsp (the
+# effects), keeping the crates that do real per-sample or per-block
 # work (resampling, decode, FFT, sample-pack decompression, JIT).
 #
 # If a dev run ever xruns on a path not covered here: run it --release
@@ -1472,7 +1443,9 @@ opt-level = 3
 opt-level = 3
 [profile.dev.package.neural-amp-modeler]
 opt-level = 3
-[profile.dev.package.pitch]
+# The effects (features/dsp: eq, comp, reverb, delay, pitch, trigger, …
+# were crates of their own, each listed here).
+[profile.dev.package.dsp]
 opt-level = 3
 
 # Preserve audio sources on newly split items until the upstream exporter is fixed.
@@ -1495,26 +1468,6 @@ fts-sample = { path = "features/audio/sample" }
 
 # from processor
 [profile.dev.package.builtin]
-opt-level = 3
-
-# from processor
-[profile.dev.package.eq]
-opt-level = 3
-
-# from processor
-[profile.dev.package.comp]
-opt-level = 3
-
-# from processor
-[profile.dev.package.reverb]
-opt-level = 3
-
-# from processor
-[profile.dev.package.delay]
-opt-level = 3
-
-# from processor
-[profile.dev.package.trigger]
 opt-level = 3
 
 # from signal

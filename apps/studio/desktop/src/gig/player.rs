@@ -47,7 +47,7 @@ impl Track {
 /// The stretcher's view of a track: frames by index, silence outside it.
 struct TrackSource<'a>(&'a Track);
 
-impl stretch::Source for TrackSource<'_> {
+impl dsp::stretch::Source for TrackSource<'_> {
     fn read(&mut self, start: i64, left: &mut [f32], right: &mut [f32]) {
         let frames = self.0.frames();
         for (i, (l, r)) in left.iter_mut().zip(right.iter_mut()).enumerate() {
@@ -143,7 +143,7 @@ struct Voice {
     track: Option<Arc<Track>>,
     /// Playhead, in input frames (fractional while stretching).
     pos: f64,
-    stretcher: stretch::Stretcher,
+    stretcher: dsp::stretch::Stretcher,
     /// The stretcher is primed at `pos` (false: seek it before rendering).
     primed: bool,
     left: Vec<f32>,
@@ -158,7 +158,9 @@ impl Voice {
             shared,
             track: None,
             pos: 0.0,
-            stretcher: stretch::Stretcher::new(stretch::Config::for_sample_rate(f64::from(rate))),
+            stretcher: dsp::stretch::Stretcher::new(dsp::stretch::Config::for_sample_rate(
+                f64::from(rate),
+            )),
             primed: false,
             left: vec![0.0; BLOCK],
             right: vec![0.0; BLOCK],

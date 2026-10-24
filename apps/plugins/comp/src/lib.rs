@@ -1,10 +1,10 @@
 //! FTS Comp — CLAP/VST3 compressor plugin.
 //!
-//! A nice-plug shell over a **stack** of [`comp::CompChain`]s
-//! (docs/spec/fx/stack.md): up to [`comp::ui::params::MAX_STAGES`] complete
+//! A nice-plug shell over a **stack** of [`dsp::comp::CompChain`]s
+//! (docs/spec/fx/stack.md): up to [`dsp::comp::ui::params::MAX_STAGES`] complete
 //! compressors — each with its own profile, classic and extended surface —
 //! arranged into parallel lanes of serial stages by the stack params and run
-//! through [`fx_stack::StagePool`]. The default is one stage on one lane:
+//! through [`dsp::stack::StagePool`]. The default is one stage on one lane:
 //! exactly the pre-stack plugin, bit-for-bit (stage 1 keeps the original
 //! param ids).
 //!
@@ -13,17 +13,17 @@
 //! smoothing and metering stay per channel inside the shared
 //! `ProC3Compressor` core.
 //!
-//! Params + shared UI state live in [`comp::ui::params`] (like `eq-ui`), so
-//! the Dioxus editor ([`comp::ui::control_view::App`]) renders against them
+//! Params + shared UI state live in [`dsp::comp::ui::params`] (like `eq-ui`), so
+//! the Dioxus editor ([`dsp::comp::ui::control_view::App`]) renders against them
 //! without a circular dep.
 
 use plugin_core::prelude::*;
 use std::sync::Arc;
 use std::sync::atomic::Ordering;
 
-use comp::CompChain;
-use comp::ui::params::{CompParams, CompStageParams, CompUiState, MAX_STAGES};
-use fx_stack::{LaneCtl, Stage, StagePool, SumMode};
+use dsp::comp::CompChain;
+use dsp::comp::ui::params::{CompParams, CompStageParams, CompUiState, MAX_STAGES};
+use dsp::stack::{LaneCtl, Stage, StagePool, SumMode};
 
 const PLUGIN_NAME: &str = "FTS Comp";
 
@@ -34,7 +34,7 @@ const MAX_LOOKAHEAD_MS: f64 = 10.0;
 // The param layer and the DSP must agree on the sidechain EQ's band count —
 // they cannot share the constant (comp-ui does not link the DSP), so the
 // crate that links both pins it.
-const _: () = assert!(comp::ui::params::SC_EQ_BANDS == comp::chain::SC_EQ_BANDS);
+const _: () = assert!(dsp::comp::ui::params::SC_EQ_BANDS == dsp::comp::chain::SC_EQ_BANDS);
 
 // ── Stage adapter ─────────────────────────────────────────────────────────
 
@@ -42,7 +42,7 @@ const _: () = assert!(comp::ui::params::SC_EQ_BANDS == comp::chain::SC_EQ_BANDS)
 struct CompStage {
     chain: CompChain,
     sample_rate: f64,
-    model_controls: Option<comp::CompressorConfig>,
+    model_controls: Option<dsp::comp::CompressorConfig>,
 }
 
 impl CompStage {
@@ -60,15 +60,16 @@ impl CompStage {
         // The LA-2A face selects a DSP model and writes native dial positions.
         // Other profiles still use the extended host processor.
         if p.profile.value() == 2 {
-            let mut controls =
-                comp::CompressorConfig::new(comp::Model::La2aGray(comp::La2aControls {
+            let mut controls = dsp::comp::CompressorConfig::new(dsp::comp::Model::La2aGray(
+                dsp::comp::La2aControls {
                     peak_reduction: f64::from(p.la2a_peak_reduction.value()),
                     gain: f64::from(p.la2a_gain.value()),
-                }));
+                },
+            ));
             controls.mix = f64::from(p.mix.value());
             controls.stereo_link = f64::from(p.stereo_link.value());
             if self.model_controls != Some(controls) {
-                if let Ok(spec) = comp::ProcessSpec::new(self.sample_rate, 1)
+                if let Ok(spec) = dsp::comp::ProcessSpec::new(self.sample_rate, 1)
                     && let Ok(prepared) = controls.prepare(spec)
                 {
                     self.chain.set_model(&prepared);
@@ -116,7 +117,7 @@ impl CompStage {
         // (`fx.embed-eq.one-surface`). Change-detected inside.
         self.chain.set_sidechain_eq(std::array::from_fn(|i| {
             let b = &p.sc_eq[i];
-            comp::chain::SidechainBand {
+            dsp::comp::chain::SidechainBand {
                 shape: b.shape.value().max(0) as u32,
                 freq_hz: f64::from(b.freq_hz.value()),
                 gain_db: f64::from(b.gain_db.value()),
@@ -174,16 +175,16 @@ impl Default for FtsComp {
         Self {
             params,
             ui_state,
-            // Sized by the editor surface itself — see comp::ui::control_view::
+            // Sized by the editor surface itself — see dsp::comp::ui::control_view::
             // EDITOR_W/EDITOR_H for why it is a hard constraint rather than a
             // preference.
             editor_state: DioxusState::new(|| {
                 (
-                    comp::ui::control_view::EDITOR_W,
-                    comp::ui::control_view::EDITOR_H,
+                    dsp::comp::ui::control_view::EDITOR_W,
+                    dsp::comp::ui::control_view::EDITOR_H,
                 )
             })
-            .with_resize_hint(comp::ui::control_view::resize_hint()),
+            .with_resize_hint(dsp::comp::ui::control_view::resize_hint()),
             pool: StagePool::new((0..MAX_STAGES).map(|_| CompStage::new()).collect()),
             buf_l: Vec::new(),
             buf_r: Vec::new(),
@@ -264,7 +265,7 @@ impl Plugin for FtsComp {
         create_dioxus_editor_with_state(
             self.editor_state.clone(),
             self.ui_state.clone(),
-            comp::ui::control_view::App,
+            dsp::comp::ui::control_view::App,
         )
     }
 

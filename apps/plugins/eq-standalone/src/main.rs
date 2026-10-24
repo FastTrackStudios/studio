@@ -27,14 +27,14 @@ mod pipewire_capture;
 /// falls through to cpal (CoreAudio on macOS, WASAPI on Windows).
 #[cfg(not(target_os = "linux"))]
 mod pipewire_capture {
-    pub fn spawn(_ui: &std::sync::Arc<eq::ui::params::EqUiState>) -> anyhow::Result<()> {
+    pub fn spawn(_ui: &std::sync::Arc<dsp::eq::ui::params::EqUiState>) -> anyhow::Result<()> {
         anyhow::bail!("PipeWire is Linux-only")
     }
 }
 
 use dioxus_native::launch_cfg;
 use dioxus_native::prelude::{document, rsx};
-use eq::ui::params::{EqUiState, FtsEqParams, NUM_BANDS, SPECTRUM_BINS};
+use dsp::eq::ui::params::{EqUiState, FtsEqParams, NUM_BANDS, SPECTRUM_BINS};
 use nice_plug::context::gui::{GuiContext, GuiContextInner};
 use nice_plug::prelude::*;
 use nice_plug_dioxus::{ParamContext, SharedState};
@@ -101,8 +101,8 @@ fn main() {
     // track, so use the static/env provider: set `FTS_EQ_TRACK_NAME="Kick In"`
     // (etc.) to test how the overlay auto-selects per track. The plugin build
     // swaps in a CLAP track-info-backed provider instead.
-    let track_provider: Arc<dyn eq::ui::cheatsheet::TrackInfoProvider> =
-        Arc::new(eq::ui::cheatsheet::StaticTrackProvider::from_env());
+    let track_provider: Arc<dyn dsp::eq::ui::cheatsheet::TrackInfoProvider> =
+        Arc::new(dsp::eq::ui::cheatsheet::StaticTrackProvider::from_env());
 
     let contexts: Vec<Box<dyn Fn() -> Box<dyn Any> + Send + Sync>> = vec![
         Box::new(move || Box::new(param_ctx.clone()) as Box<dyn Any>),
@@ -116,7 +116,7 @@ fn main() {
 fn standalone_shell() -> dioxus_core::Element {
     rsx! {
         document::Style { {TAILWIND_CSS} }
-        eq::ui::control_view::App {}
+        dsp::eq::ui::control_view::App {}
     }
 }
 

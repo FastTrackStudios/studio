@@ -18,8 +18,8 @@ use std::process::ExitCode;
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
+use dsp::saturate::deluxe::{Deluxe, DeluxeParams, DetectorParams};
 use dsp_core::num::count_to_f64;
-use saturate::deluxe::{Deluxe, DeluxeParams, DetectorParams};
 
 struct Dataset {
     settings: DeluxeParams,

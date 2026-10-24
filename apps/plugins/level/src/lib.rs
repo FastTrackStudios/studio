@@ -1,7 +1,7 @@
 //! FTS Level — CLAP/VST3 vocal-leveling plugin.
 //!
 //! A thin nice-plug shell over the [`level`] engine's realtime chain
-//! ([`level::VocalLeveler`]: gate → de-breath → ride → de-ess). All four stages
+//! ([`dsp::level::VocalLeveler`]: gate → de-breath → ride → de-ess). All four stages
 //! run every block; each is driven by a host parameter and bypasses
 //! transparently at its neutral value, so there are no enable switches.
 //!
@@ -15,7 +15,9 @@
 use nice_plug::prelude::*;
 use std::sync::Arc;
 
-use level::{DeBreathConfig, DeEssConfig, GateConfig, LevelerConfig, RiderConfig, VocalLeveler};
+use dsp::level::{
+    DeBreathConfig, DeEssConfig, GateConfig, LevelerConfig, RiderConfig, VocalLeveler,
+};
 
 const PLUGIN_NAME: &str = "FTS Level";
 

@@ -12,9 +12,9 @@ use std::io::BufWriter;
 
 use anyrender::{ImageRenderer, PaintScene, Scene};
 use anyrender_vello_cpu::VelloCpuImageRenderer;
+use dsp::saturate::ui::viz::{BandView, MultibandSatView, SatView, paint_multiband_sat, paint_sat};
 use kurbo::{Affine, Rect};
 use peniko::{Color, Fill};
-use saturate::ui::viz::{BandView, MultibandSatView, SatView, paint_multiband_sat, paint_sat};
 
 const W: u32 = 760;
 const H: u32 = 190;
@@ -25,8 +25,8 @@ fn main() -> Result<(), Box<dyn Error>> {
         .unwrap_or_else(|| "target/sat-viz".into());
     std::fs::create_dir_all(&dir)?;
 
-    for profile in saturate::profiles::PROFILES {
-        let base = SatView::of(*profile, saturate::profiles::Controls::default());
+    for profile in dsp::saturate::profiles::PROFILES {
+        let base = SatView::of(*profile, dsp::saturate::profiles::Controls::default());
         for (tag, drive, level) in [
             ("lo", 0.2, None),
             ("hi", 0.75, None),

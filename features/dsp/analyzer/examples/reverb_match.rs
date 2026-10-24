@@ -30,7 +30,7 @@ use std::collections::BTreeMap;
 use std::path::Path;
 
 use builtin::NativeReverb;
-use signal_analyzer::{DecayFit, Thresholds, compare, decay, generators};
+use dsp::analyzer::{DecayFit, Thresholds, compare, decay, generators};
 use signal_import::valhalla;
 use signal_plugin_host::{HostedPlugin, PluginInstance};
 
@@ -753,7 +753,7 @@ fn run_comparison(
     // silent plugin) would otherwise look like a translation failure.
     for (label, ir) in [("reference", &reference_ir), ("ours", &native_ir)] {
         let rt = decay::reverb_time_best_effort(ir, SAMPLE_RATE, DecayFit::T20);
-        let peak = signal_analyzer::null::peak_db(ir);
+        let peak = dsp::analyzer::null::peak_db(ir);
         println!("{label:9}: peak {peak:7.2} dBFS   RT60 {rt:?}");
     }
 
@@ -874,12 +874,12 @@ fn run_comparison(
                 "decay_passed": result
                     .results
                     .iter()
-                    .find(|r| r.criterion == signal_analyzer::Criterion::Decay)
+                    .find(|r| r.criterion == dsp::analyzer::Criterion::Decay)
                     .map(|r| r.passed),
                 "loudness_passed": result
                     .results
                     .iter()
-                    .find(|r| r.criterion == signal_analyzer::Criterion::Loudness)
+                    .find(|r| r.criterion == dsp::analyzer::Criterion::Loudness)
                     .map(|r| r.passed),
                 "all_criteria_passed": result.passed(),
             },

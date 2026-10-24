@@ -13,8 +13,8 @@
 //! the engine renders a kit's takes — by:
 //!
 //! - `wsola`: the engine's renderer before this crate's map (WSOLA per
-//!   stretch, `pitch::wsola::stretch_planar`);
-//! - `map`: [`stretch::map`];
+//!   stretch, `dsp::pitch::wsola::stretch_planar`);
+//! - `map`: [`dsp::stretch::map`];
 //! - `rubberband`: Rubber Band R3 with the same map as a key-frame map
 //!   (`RUBBERBAND`, default `rubberband-r3` on the PATH), as the bar.
 //!
@@ -54,7 +54,7 @@
 
 use std::path::{Path, PathBuf};
 
-use stretch::map::{Anchor, MapConfig};
+use dsp::stretch::map::{Anchor, MapConfig};
 
 const SR: f64 = 48_000.0;
 const TAKE: &str = "260907_1321-01";
@@ -228,7 +228,7 @@ fn drawn_out(hits: &[usize], len: usize, slow: f64) -> Vec<Anchor> {
     anchors
 }
 
-/// The engine's renderer before `stretch::map`: WSOLA per stretch, a
+/// The engine's renderer before `dsp::stretch::map`: WSOLA per stretch, a
 /// 2 ms joint (`daw-standalone`'s `stretch_render`, as it was).
 fn wsola(input: &Planar, anchors: &[Anchor], len: usize) -> Planar {
     let joint = 96;
@@ -255,7 +255,7 @@ fn wsola(input: &Planar, anchors: &[Anchor], len: usize) -> Planar {
         } else {
             let span = (s1 - s0).round().max(1.0) as usize;
             let segment: Planar = input.iter().map(|c| read(c, from, span)).collect();
-            pitch::wsola::stretch_planar(&segment, 0, rate, n + more, grain)
+            dsp::pitch::wsola::stretch_planar(&segment, 0, rate, n + more, grain)
         };
         for (dest, p) in out.iter_mut().zip(&piece) {
             for (i, s) in p.iter().enumerate() {
@@ -584,7 +584,7 @@ fn main() {
         let started = std::time::Instant::now();
         let renders: Vec<Option<Planar>> = vec![
             Some(wsola(&input, &anchors, len)),
-            Some(stretch::map::render(
+            Some(dsp::stretch::map::render(
                 &input.iter().map(Vec::as_slice).collect::<Vec<_>>(),
                 &anchors,
                 len,

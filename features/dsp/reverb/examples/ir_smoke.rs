@@ -5,10 +5,10 @@
 //! Loads each file via `IrAsset` -> `IrTransforms` -> Convolution, renders a
 //! unit impulse, and prints length / peak / RT60-style decay stats.
 
+use dsp::reverb::algorithm::ReverbAlgorithm;
+use dsp::reverb::algorithms::convolution::Convolution;
+use dsp::reverb::ir::{IrAsset, IrTransforms};
 use dsp_core::num;
-use reverb::algorithm::ReverbAlgorithm;
-use reverb::algorithms::convolution::Convolution;
-use reverb::ir::{IrAsset, IrTransforms};
 
 const SR: f64 = 48000.0;
 

@@ -13,7 +13,7 @@
 //! ```
 
 use builtin::NativeReverb;
-use signal_analyzer::{DecayFit, decay, generators};
+use dsp::analyzer::{DecayFit, decay, generators};
 use signal_plugin_host::{PluginEvents, PluginInstance};
 
 const SAMPLE_RATE: f64 = 48_000.0;
@@ -203,7 +203,7 @@ fn render_burst_inner(
     if !band_filter {
         return tail;
     }
-    let bp = signal_analyzer::filters::Biquad::bandpass(probe_hz, 1.414, SAMPLE_RATE);
+    let bp = dsp::analyzer::filters::Biquad::bandpass(probe_hz, 1.414, SAMPLE_RATE);
     let mut band = bp.apply(&tail);
     for _ in 0..2 {
         band = bp.apply(&band);
@@ -289,7 +289,7 @@ fn main() {
             print!("  {name:<10}");
             for want in [1.0f64, 2.5, 5.0] {
                 let ir = render_ir(algo, variant, 0.5, Some(want), &[]);
-                match signal_analyzer::decay::reverb_time(&ir, SAMPLE_RATE, DecayFit::T20) {
+                match dsp::analyzer::decay::reverb_time(&ir, SAMPLE_RATE, DecayFit::T20) {
                     Some(v) => print!("  ask {want:4.1} -> {v:5.2}"),
                     None => print!("  ask {want:4.1} ->     ·"),
                 }
@@ -324,8 +324,7 @@ fn main() {
             ("high shelf 3kHz 0.5x", dband(2.0, 3000.0, 0.5)),
         ] {
             let ir = render_ir(0, 1, 0.5, Some(2.5), &extra);
-            let bands =
-                signal_analyzer::decay::reverb_time_per_band(&ir, SAMPLE_RATE, DecayFit::T20);
+            let bands = dsp::analyzer::decay::reverb_time_per_band(&ir, SAMPLE_RATE, DecayFit::T20);
             print!("  {label:<22}");
             for (hz, rt) in bands.iter().skip(1).take(6) {
                 match rt {
@@ -360,7 +359,7 @@ fn main() {
                 print!("  {aname:<8} {label:<22}");
                 for probe_hz in [125.0, 1000.0, 4000.0] {
                     let ir = render_burst(algo, variant, Some(2.5), &extra, probe_hz);
-                    match signal_analyzer::decay::reverb_time(&ir, SAMPLE_RATE, DecayFit::T20) {
+                    match dsp::analyzer::decay::reverb_time(&ir, SAMPLE_RATE, DecayFit::T20) {
                         Some(v) => print!("  {probe_hz:.0}Hz {v:5.2}"),
                         None => print!("  {probe_hz:.0}Hz    ·"),
                     }
@@ -379,17 +378,14 @@ fn main() {
             ("lowshelf 300Hz 0.5x", dband(1.0, 300.0, 0.5)),
         ] {
             let tail = render_burst_raw(0, 1, Some(2.5), &extra, 4000.0);
-            let bands = signal_analyzer::filters::octave_bands(&tail, SAMPLE_RATE);
+            let bands = dsp::analyzer::filters::octave_bands(&tail, SAMPLE_RATE);
             let e: Vec<f64> = bands
                 .iter()
                 .map(|b| b.iter().map(|&s| f64::from(s) * f64::from(s)).sum::<f64>())
                 .collect();
             let total: f64 = e.iter().sum::<f64>().max(1e-30);
             print!("  {label:<22}");
-            for (i, hz) in signal_analyzer::filters::OCTAVE_CENTRES_HZ
-                .iter()
-                .enumerate()
-            {
+            for (i, hz) in dsp::analyzer::filters::OCTAVE_CENTRES_HZ.iter().enumerate() {
                 print!("  {hz:.0}Hz {:5.1}dB", 10.0 * (e[i] / total).log10());
             }
             println!();
@@ -399,8 +395,7 @@ fn main() {
         println!("Hall: per-band RT60 vs low_end");
         for (label, low_end) in [("low_end 0.5 (neutral)", 0.5), ("low_end 0.0 (tamed)", 0.0)] {
             let ir = render_ir(1, 0, 0.9, None, &[("low_end", low_end)]);
-            let bands =
-                signal_analyzer::decay::reverb_time_per_band(&ir, SAMPLE_RATE, DecayFit::T20);
+            let bands = dsp::analyzer::decay::reverb_time_per_band(&ir, SAMPLE_RATE, DecayFit::T20);
             print!("  {label:<22}");
             for (hz, rt) in bands.iter().take(5) {
                 match rt {

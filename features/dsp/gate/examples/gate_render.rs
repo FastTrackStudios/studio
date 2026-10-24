@@ -16,7 +16,7 @@
     reason = "offline render tool: per-sample loops over buffers sized by construction"
 )]
 
-use gate::{DrumGate, Mode, Settings};
+use dsp::gate::{DrumGate, Mode, Settings};
 
 /// Channels of samples, and the sample rate.
 type Wav = (Vec<Vec<f64>>, u32);

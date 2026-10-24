@@ -10,11 +10,11 @@
 
 use std::process::ExitCode;
 
+use dsp::reverb::algorithm::{AlgorithmType, IrSlot};
+use dsp::reverb::chain::ReverbChain;
+use dsp::reverb::ir::{IrAsset, IrTransforms};
 use dsp_core::audio::{AudioConfig, Processor};
 use dsp_core::num;
-use reverb::algorithm::{AlgorithmType, IrSlot};
-use reverb::chain::ReverbChain;
-use reverb::ir::{IrAsset, IrTransforms};
 
 const SR: f64 = 48000.0;
 const BLOCK: usize = 512;

@@ -1,7 +1,7 @@
 //! Run with `cargo run -p eq-dsp --example equalize`.
-use eq::{BandConfig, CutSlope, EqConfig, EqProcessor, Placement, ProcessSpec};
+use dsp::eq::{BandConfig, CutSlope, EqConfig, EqProcessor, Placement, ProcessSpec};
 
-fn main() -> Result<(), eq::Error> {
+fn main() -> Result<(), dsp::eq::Error> {
     let mut config = EqConfig::new();
     let presence =
         config.add_band(BandConfig::bell(3_000.0, 2.5, 0.8).placement(Placement::Mid))?;

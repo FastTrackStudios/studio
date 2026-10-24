@@ -19,9 +19,9 @@ use std::path::Path;
 use std::sync::Arc;
 use std::thread;
 
+use dsp::pitch::chain::{Algorithm, PitchChain};
 use dsp_core::audio::{AudioConfig, Processor};
-use pitch::chain::{Algorithm, PitchChain};
-use rustfft::{num_complex::Complex, FftPlanner};
+use rustfft::{FftPlanner, num_complex::Complex};
 
 const SAMPLE_RATE: f64 = 48000.0;
 const BLOCK_SIZE: usize = 512;
@@ -316,11 +316,7 @@ fn detect_pitch_yin(frame: &[f64], sample_rate: f64) -> Option<f64> {
                 min_t = tau;
             }
         }
-        if min_val < 0.5 {
-            Some(min_t)
-        } else {
-            None
-        }
+        if min_val < 0.5 { Some(min_t) } else { None }
     })?;
 
     // Parabolic interpolation.

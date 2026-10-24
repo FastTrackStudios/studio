@@ -178,7 +178,7 @@ fn narrow(value: f64) -> f32 {
 }
 
 fn eq(tone: &mut Tone, fx: &EngineFx) {
-    use eq::ui::eq_graph_model::{EqBand, EqBandShape as S};
+    use dsp::eq::ui::eq_graph_model::{EqBand, EqBandShape as S};
     let shape = |text: &str| match text.trim() {
         "Low Shelf" => S::LowShelf,
         "High Shelf" => S::HighShelf,
@@ -243,13 +243,13 @@ fn comp(tone: &mut Tone, fx: &EngineFx) {
 
 fn sat(tone: &mut Tone, fx: &EngineFx) {
     if let Some(index) = fx.text("Space").and_then(|space| {
-        saturate::profiles::PROFILES
+        dsp::saturate::profiles::PROFILES
             .iter()
             .position(|p| p.name.eq_ignore_ascii_case(space.trim()))
     }) {
         tone.set_sat_profile(index);
     }
-    let Some(profile) = saturate::profiles::PROFILES.get(tone.sat_profile) else {
+    let Some(profile) = dsp::saturate::profiles::PROFILES.get(tone.sat_profile) else {
         return;
     };
     let v = profile.voicing;
@@ -302,7 +302,7 @@ fn reverb(tone: &mut Tone, fx: &EngineFx, bpm: f64) {
     let beat = 60.0 / bpm.max(1.0);
     let room = &mut tone.reverb;
     let profile = fx.text("Space").and_then(|space| {
-        reverb::profiles::PROFILES
+        dsp::reverb::profiles::PROFILES
             .iter()
             .find(|p| p.name.eq_ignore_ascii_case(space.trim()))
     });
@@ -315,7 +315,7 @@ fn reverb(tone: &mut Tone, fx: &EngineFx, bpm: f64) {
         "Time" => fx.number("Decay Time"),
         "Sync" => fx.text("Decay Div").and_then(quarters).map(|q| q * beat),
         _ => profile.and_then(|p| {
-            reverb::algorithm::decay_seconds(p.algorithm, p.variant, fx.fraction("Decay")?)
+            dsp::reverb::algorithm::decay_seconds(p.algorithm, p.variant, fx.fraction("Decay")?)
         }),
     };
     if let Some(seconds) = seconds {
@@ -404,7 +404,7 @@ fn delay(tone: &mut Tone, fx: &EngineFx, bpm: f64) {
         }
     }
     if let Some(profile) = fx.text("Space").and_then(|space| {
-        delay::profiles::PROFILES
+        dsp::delay::profiles::PROFILES
             .iter()
             .find(|p| p.name.eq_ignore_ascii_case(space.trim()))
     }) {
@@ -413,7 +413,7 @@ fn delay(tone: &mut Tone, fx: &EngineFx, bpm: f64) {
 }
 
 fn modulation(tone: &mut Tone, fx: &EngineFx) {
-    use modulation::ui::viz::Engine;
+    use dsp::modulation::ui::viz::Engine;
     let w = &mut tone.modulation;
     if let Some(circuit) = fx.text("Circuit").map(str::trim) {
         // The circuit's family is what the face draws: delay modulation

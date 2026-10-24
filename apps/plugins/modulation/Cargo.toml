@@ -17,7 +17,7 @@ workspace = true
 plugin-core = { workspace = true }
 # What each circuit IS, and the only place that knows how a knob reaches the
 # DSP — the shell deliberately carries no engine table of its own.
-modulation = { workspace = true, features = ["native", "profiles", "ui", "viz"] }
+dsp = { workspace = true, features = ["modulation", "modulation-native", "modulation-profiles", "modulation-ui", "modulation-viz"] }
 # The Blitz/nice-plug editor: the five circuits and their panels.
 # The meters the editor reads.
 atomic_float = { workspace = true }
@@ -40,3 +40,4 @@ default = []
 # the session engine's built-in FX, or a workspace test build, where cargo
 # unifies features — collide.
 export = []
+

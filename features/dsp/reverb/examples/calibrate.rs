@@ -15,9 +15,9 @@
 //! `cargo run --release -p reverb-dsp --example calibrate > src/calibration_tables.rs`
 //! Then check it: `cargo run --release -p reverb-dsp --example time_accuracy`.
 
+use dsp::reverb::AlgorithmType;
+use dsp::reverb::chain::ReverbChain;
 use dsp_core::audio::Processor as _;
-use reverb::AlgorithmType;
-use reverb::chain::ReverbChain;
 
 const SR: f64 = 48_000.0;
 const BLOCK: usize = 512;
@@ -161,7 +161,7 @@ fn name(algorithm: AlgorithmType, variant: usize) -> String {
 }
 
 fn main() {
-    reverb::calibration::measure_raw(true);
+    dsp::reverb::calibration::measure_raw(true);
     let jobs: Vec<(usize, usize)> = (0..ENGINES.len())
         .flat_map(|e| (0..SIZES.len()).map(move |s| (e, s)))
         .collect();

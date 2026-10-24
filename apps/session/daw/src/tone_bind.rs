@@ -20,8 +20,8 @@ use crate::tone::Tone;
 pub type Stage = (&'static str, Vec<(u32, f64)>);
 
 /// The plugin's name for a band type.
-const fn shape(shape: eq::ui::eq_graph_model::EqBandShape) -> &'static str {
-    use eq::ui::eq_graph_model::EqBandShape as S;
+const fn shape(shape: dsp::eq::ui::eq_graph_model::EqBandShape) -> &'static str {
+    use dsp::eq::ui::eq_graph_model::EqBandShape as S;
     match shape {
         S::Bell => "Bell",
         S::LowShelf => "Low Shelf",
@@ -103,7 +103,7 @@ fn note(quarters: f64) -> Option<&'static str> {
 
 fn reverb(tone: &Tone) -> Vec<(u32, f64)> {
     let room = &tone.reverb;
-    let space = reverb::profiles::PROFILES
+    let space = dsp::reverb::profiles::PROFILES
         .iter()
         .find(|p| p.algorithm == room.algorithm)
         .map_or("Concert Hall", |p| p.name);
@@ -162,7 +162,7 @@ fn reverb(tone: &Tone) -> Vec<(u32, f64)> {
 
 fn delay(tone: &Tone) -> Vec<(u32, f64)> {
     let echo = &tone.delay;
-    let space = delay::profiles::PROFILES
+    let space = dsp::delay::profiles::PROFILES
         .iter()
         .find(|p| p.style == echo.style)
         .map(|p| p.name);
@@ -188,7 +188,7 @@ fn delay(tone: &Tone) -> Vec<(u32, f64)> {
 }
 
 fn modulation(tone: &Tone) -> Vec<(u32, f64)> {
-    use modulation::ui::viz::Engine;
+    use dsp::modulation::ui::viz::Engine;
     let w = &tone.modulation;
     let circuit = match w.engine {
         Engine::Flanger => "Flanger",
@@ -270,7 +270,7 @@ fn comp(tone: &Tone) -> Vec<(u32, f64)> {
 
 fn sat(tone: &Tone) -> Vec<(u32, f64)> {
     const FX: &str = "FTS Saturate";
-    let Some(profile) = saturate::profiles::PROFILES.get(tone.sat_profile) else {
+    let Some(profile) = dsp::saturate::profiles::PROFILES.get(tone.sat_profile) else {
         return Vec::new();
     };
     let v = profile.voicing;

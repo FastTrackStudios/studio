@@ -1,0 +1,715 @@
+[package]
+name = "dsp"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "The FTS effects and their engines — one crate, one module (and one cargo feature) per effect"
+# Every target is listed below, each behind its module's feature.
+autobins = false
+autoexamples = false
+autotests = false
+autobenches = false
+
+[lints]
+workspace = true
+
+[features]
+default = ["std"]
+align = [
+    "std",
+    "dep:realfft",
+    "dep:dsp-core",
+    "dsp-core/audio",
+]
+analyzer = [
+    "std",
+    "dep:dsp-core",
+    "dsp-core/audio",
+    "dep:realfft",
+    "dep:serde",
+]
+comp = ["std", "dep:dsp-core", "dsp-core/audio"]
+comp-native = [
+    "comp",
+    "dep:architect-ui",
+    "dep:fts-audio-ui",
+    "dep:atomic_float",
+    "dep:plugin-core",
+    "plugin-core/editor",
+    "eq",
+    "eq-profiles",
+    "eq-ui",
+    "plugin-core?/editor",
+    "dep:nice-plug",
+    "dep:nice-plug-dioxus",
+    "dep:parking_lot",
+    "dep:preset-browser",
+    "preset-browser/ui",
+    "eq-native",
+    "dsp-core/params",
+]
+comp-profiles = [
+    "comp",
+    "eq",
+    "eq-profiles",
+    "eq-ui",
+]
+comp-ui = [
+    "comp",
+    "dep:dioxus",
+    "dep:fts-audio-ui",
+    "dep:web-time",
+    "comp-profiles",
+]
+comp-viz = [
+    "comp",
+    "dep:anyrender",
+    "dep:blitz-dom",
+    "blitz-dom/custom-widget",
+    "dep:bytemuck",
+    "bytemuck/derive",
+    "dep:dioxus-native-dom",
+    "dep:vello",
+    "fts-audio-ui/shader",
+    "dep:fts-audio-ui",
+]
+delay = [
+    "std",
+    "dep:dsp-core",
+    "dsp-core/audio",
+    "pitch",
+]
+delay-native = [
+    "delay",
+    "dep:architect-ui",
+    "dep:atomic_float",
+    "dep:plugin-core",
+    "plugin-core/editor",
+    "plugin-core?/editor",
+    "dep:nice-plug",
+    "dep:nice-plug-dioxus",
+    "dep:parking_lot",
+    "dsp-core/params",
+]
+delay-profiles = ["delay"]
+delay-ui = [
+    "delay",
+    "dep:crossbeam-channel",
+    "dep:dioxus",
+    "dep:fts-audio-ui",
+    "dep:web-time",
+    "delay-profiles",
+]
+delay-viz = [
+    "delay",
+    "dep:anyrender",
+    "dep:blitz-dom",
+    "blitz-dom/custom-widget",
+    "dep:bytemuck",
+    "bytemuck/derive",
+    "dep:dioxus-native-dom",
+    "dep:vello",
+    "fts-audio-ui/shader",
+    "dep:fts-audio-ui",
+]
+eq = [
+    "std",
+    "dep:dsp-core",
+    "dsp-core/audio",
+    "dep:realfft",
+    "dep:smallvec",
+]
+eq-analyzer = [
+    "eq",
+    "dep:once_cell",
+    "dep:parking_lot",
+    "dep:rtrb",
+]
+eq-analyzer-ui = [
+    "eq",
+    "dep:anyrender",
+    "dep:dioxus",
+    "dep:kurbo",
+    "dep:peniko",
+]
+eq-gpu-tests = ["eq"]
+eq-graph = [
+    "eq",
+    "eq-analyzer",
+    "eq-analyzer-ui",
+    "dep:architect-ui",
+    "dep:atomic_float",
+    "dep:blitz-traits",
+    "dep:bytemuck",
+    "bytemuck/derive",
+    "dep:dioxus-native",
+    "dep:futures-timer",
+    "fts-audio-ui/shader",
+    "dep:fts-audio-ui",
+    "eq-graph-paint",
+]
+eq-graph-paint = [
+    "eq",
+    "eq-analyzer",
+    "eq-analyzer-ui",
+    "dep:anyrender",
+    "dep:kurbo",
+    "dep:peniko",
+]
+eq-native = [
+    "eq",
+    "eq-analyzer",
+    "eq-analyzer-ui",
+    "dep:plugin-core",
+    "plugin-core/editor",
+    "plugin-core?/editor",
+    "dep:nice-plug",
+    "dep:nice-plug-dioxus",
+    "dep:preset-browser",
+    "preset-browser/ui",
+    "eq-graph",
+    "eq-panel",
+    "eq-profiles",
+]
+eq-panel = [
+    "eq",
+    "dep:architect-ui",
+    "dep:plugin-core",
+    "plugin-core/editor",
+    "dep:fts-audio-ui",
+    "dep:nice-plug-dioxus",
+]
+eq-profiles = ["eq"]
+eq-ui = [
+    "eq",
+    "dep:blitz-dom",
+    "blitz-dom/autofocus",
+    "dep:dioxus",
+    "dep:fts-audio-ui",
+    "dep:parking_lot",
+    "dep:web-time",
+    "eq-profiles",
+    "eq-analyzer",
+]
+gate = ["dep:dsp-core", "dep:libm"]
+hits = [
+    "std",
+    "eq",
+    "dep:num-traits",
+    "dep:rayon",
+    "trigger",
+]
+level = ["std", "dep:dsp-core", "dsp-core/audio"]
+mic = ["std", "dep:dsp-core", "dep:realfft"]
+mic-ui = [
+    "mic",
+    "dep:dioxus",
+    "dep:fts-audio-ui",
+    "dep:plugin-core",
+    "plugin-core/editor",
+    "plugin-core?/editor",
+    "dep:nice-plug",
+    "dep:nice-plug-dioxus",
+]
+modulation = [
+    "std",
+    "dep:dsp-core",
+    "dsp-core/audio",
+    "dsp-core/modulation",
+]
+modulation-native = [
+    "modulation",
+    "dep:architect-ui",
+    "dep:atomic_float",
+    "dep:plugin-core",
+    "plugin-core/editor",
+    "plugin-core?/editor",
+    "dep:nice-plug",
+    "dep:nice-plug-dioxus",
+    "dep:parking_lot",
+]
+modulation-profiles = ["modulation"]
+modulation-ui = [
+    "modulation",
+    "dep:dioxus",
+    "dep:fts-audio-ui",
+    "dep:web-time",
+    "modulation-profiles",
+]
+modulation-viz = [
+    "modulation",
+    "dep:anyrender",
+    "dep:blitz-dom",
+    "blitz-dom/custom-widget",
+    "dep:dioxus-native-dom",
+    "dep:vello",
+    "fts-audio-ui/shader",
+    "dep:fts-audio-ui",
+]
+multiband = ["std"]
+pitch = [
+    "std",
+    "dep:dsp-core",
+    "dsp-core/audio",
+    "dep:realfft",
+    "dep:serde",
+]
+pitch-rubberband = ["pitch"]
+reverb = [
+    "std",
+    "dep:dsp-core",
+    "dsp-core/audio",
+    "dsp-core/modulation",
+    "dep:crossbeam-channel",
+    "pitch",
+    "dep:realfft",
+    "dep:symphonium",
+    "symphonium/wav",
+    "symphonium/pcm",
+    "symphonium/fft-resampler",
+    "dep:thiserror",
+]
+reverb-native = [
+    "reverb",
+    "dep:architect-ui",
+    "dep:atomic_float",
+    "eq",
+    "eq-ui",
+    "dep:plugin-core",
+    "plugin-core/editor",
+    "plugin-core?/editor",
+    "dep:nice-plug",
+    "dep:nice-plug-dioxus",
+    "dep:parking_lot",
+    "dep:preset-browser",
+    "preset-browser/ui",
+    "eq-native",
+    "dsp-core/params",
+]
+reverb-profiles = ["reverb"]
+reverb-ui = [
+    "reverb",
+    "dep:dioxus",
+    "dep:fts-audio-ui",
+    "dep:web-time",
+    "reverb-profiles",
+]
+reverb-viz = [
+    "reverb",
+    "dep:anyrender",
+    "dep:blitz-dom",
+    "blitz-dom/custom-widget",
+    "dep:bytemuck",
+    "bytemuck/derive",
+    "dep:dioxus-native-dom",
+    "dep:vello",
+    "fts-audio-ui/shader",
+    "dep:fts-audio-ui",
+]
+saturate = ["dep:dsp-core", "dep:libm"]
+saturate-analysis = ["saturate", "std"]
+saturate-native = [
+    "saturate",
+    "dep:architect-ui",
+    "dep:atomic_float",
+    "eq",
+    "eq-ui",
+    "dep:plugin-core",
+    "plugin-core/editor",
+    "plugin-core?/editor",
+    "dep:nice-plug",
+    "dep:nice-plug-dioxus",
+    "dep:parking_lot",
+    "eq-native",
+]
+saturate-profiles = ["saturate", "std"]
+saturate-ui = [
+    "saturate",
+    "std",
+    "dep:crossbeam-channel",
+    "dep:dioxus",
+    "dep:fts-audio-ui",
+    "saturate-profiles",
+]
+saturate-viz = [
+    "saturate",
+    "saturate-analysis",
+    "dep:anyrender",
+    "dep:kurbo",
+    "multiband",
+    "dep:peniko",
+]
+separator = [
+    "std",
+    "dep:anyhow",
+    "dep:reqwest",
+    "dep:sha2",
+    "dep:tokio",
+    "tokio/fs",
+    "tokio/process",
+    "tokio/rt",
+    "tokio/macros",
+    "dep:tracing",
+]
+stack = ["dep:libm"]
+std = []
+stretch = ["std", "dep:dsp-core", "dep:realfft"]
+trigger = [
+    "std",
+    "dep:dsp-core",
+    "dsp-core/audio",
+    "eq",
+    "dep:rustfft",
+]
+trigger-native = [
+    "trigger",
+    "dep:architect-ui",
+    "dep:atomic_float",
+    "dep:plugin-core",
+    "plugin-core/editor",
+    "dep:fts-audio-ui",
+    "plugin-core?/editor",
+    "dep:nice-plug",
+    "dep:nice-plug-dioxus",
+]
+trigger-ui = ["trigger"]
+tune = ["std", "pitch", "dep:realfft"]
+tune-basic-pitch = ["tune", "dep:tract-onnx"]
+tune-world = ["tune", "dep:world-sys"]
+
+[dependencies]
+anyhow = {workspace = true, optional = true}
+anyrender = {workspace = true, optional = true}
+architect-ui = {workspace = true, optional = true}
+atomic_float = {workspace = true, optional = true}
+blitz-dom = {workspace = true, optional = true}
+bytemuck = { workspace = true, optional = true }
+crossbeam-channel = {workspace = true, optional = true}
+dioxus = {workspace = true, optional = true}
+dioxus-native-dom = {workspace = true, optional = true}
+dsp-core = {workspace = true, optional = true}
+fts-audio-ui = {workspace = true, optional = true}
+futures-timer = { workspace = true, optional = true }
+kurbo = {workspace = true, optional = true}
+libm = { workspace = true, optional = true }
+nice-plug = {workspace = true, optional = true}
+nice-plug-dioxus = {workspace = true, optional = true}
+num-traits = {workspace = true, optional = true}
+once_cell = {workspace = true, optional = true}
+parking_lot = {workspace = true, optional = true}
+peniko = {workspace = true, optional = true}
+plugin-core = {workspace = true, optional = true}
+preset-browser = {workspace = true, optional = true}
+rayon = {workspace = true, optional = true}
+realfft = {workspace = true, optional = true}
+reqwest = {workspace = true, optional = true}
+rtrb = { workspace = true, optional = true }
+rustfft = { workspace = true, optional = true }
+serde = {workspace = true, optional = true}
+sha2 = {workspace = true, optional = true}
+smallvec = { workspace = true, optional = true }
+symphonium = {version = "0.6", default-features = false, optional = true}
+thiserror = {workspace = true, optional = true}
+tokio = {workspace = true, optional = true}
+tracing = {workspace = true, optional = true}
+tract-onnx = {workspace = true, optional = true}
+vello = {workspace = true, optional = true}
+web-time = {workspace = true, optional = true}
+world-sys = {workspace = true, optional = true}
+
+[dev-dependencies]
+anyhow = { workspace = true }
+anyrender_vello_cpu = {workspace = true}
+approx = {workspace = true}
+blitz-traits = {workspace = true}
+builtin = {workspace = true}
+bytemuck = { workspace = true, features = ["derive"] }
+criterion = { workspace = true }
+daw = {workspace = true, features = ["standalone", "vst3-host"]}
+dioxus = {workspace = true}
+dioxus-ssr = { workspace = true }
+dioxus-test = {workspace = true}
+dsp-core = {workspace = true, features = ["audio", "golden", "modulation"]}
+fts-audio-ui = {workspace = true, features = ["probe"]}
+fts-sample = {workspace = true, features = ["decode-compressed"]}
+hound = { workspace = true }
+naga = { workspace = true, features = ["wgsl-in"] }
+png = {version = "0.18"}
+pollster = { workspace = true }
+rustfft = { workspace = true }
+serde_json = {workspace = true}
+signal-import = {workspace = true}
+signal-plugin-host = {workspace = true, features = ["clap-host", "vst3-host"]}
+symphonia = { workspace = true, features = ["default", "wav", "pcm"] }
+test-that = { workspace = true, features = ["regex", "num-traits"] }
+tokio = {workspace = true, features = ["macros", "rt"]}
+wgpu = {version = "29"}
+dsp = {path = ".", features = ["align", "reverb", "eq", "analyzer", "comp", "comp-native", "comp-profiles", "comp-ui", "comp-viz", "delay", "delay-native", "delay-profiles", "delay-ui", "delay-viz", "eq-graph", "eq-graph-paint", "eq-native", "eq-ui", "gate", "hits", "level", "mic", "mic-ui", "modulation", "modulation-native", "modulation-profiles", "modulation-ui", "modulation-viz", "multiband", "pitch", "reverb-native", "reverb-profiles", "reverb-ui", "reverb-viz", "saturate", "saturate-native", "saturate-profiles", "saturate-ui", "saturate-viz", "stack", "separator", "stretch", "trigger", "trigger-native", "tune"]}
+
+[target."cfg(not(target_arch = \"wasm32\"))".dependencies]
+blitz-traits = {workspace = true, optional = true}
+dioxus-native = {workspace = true, optional = true}
+nice-plug-dioxus = {workspace = true, optional = true}
+
+[[example]]
+name = "analyzer_wet_level"
+path = "analyzer/examples/wet_level.rs"
+required-features = ["analyzer"]
+
+[[example]]
+name = "bigsky_match"
+path = "analyzer/examples/bigsky_match.rs"
+required-features = ["analyzer"]
+
+[[example]]
+name = "bluebox_bench"
+path = "saturate/examples/bluebox_bench.rs"
+required-features = ["saturate"]
+
+[[example]]
+name = "bluebox_render"
+path = "saturate/examples/bluebox_render.rs"
+required-features = ["saturate"]
+
+[[example]]
+name = "calibrate"
+path = "reverb/examples/calibrate.rs"
+required-features = ["reverb"]
+
+[[example]]
+name = "callback_cost"
+path = "eq/examples/callback_cost.rs"
+required-features = ["eq"]
+
+[[example]]
+name = "chart"
+path = "hits/examples/chart.rs"
+required-features = ["hits"]
+
+[[example]]
+name = "chorus_audition"
+path = "modulation/examples/chorus_audition.rs"
+required-features = ["modulation"]
+
+[[example]]
+name = "chorus_measure"
+path = "modulation/examples/chorus_measure.rs"
+required-features = ["modulation"]
+
+[[example]]
+name = "comp_bundle_check"
+path = "analyzer/examples/comp_bundle_check.rs"
+required-features = ["analyzer"]
+
+[[example]]
+name = "comp_sheet"
+path = "comp/examples/comp_sheet.rs"
+required-features = ["comp", "comp-ui", "comp-viz"]
+
+[[example]]
+name = "compare_samples"
+path = "comp/examples/compare_samples.rs"
+required-features = ["comp"]
+
+[[example]]
+name = "conformance_scan"
+path = "eq/examples/conformance_scan.rs"
+required-features = ["eq"]
+
+[[example]]
+name = "decay_calibration"
+path = "analyzer/examples/decay_calibration.rs"
+required-features = ["analyzer"]
+
+[[example]]
+name = "delay_family_sheet"
+path = "delay/examples/family_sheet.rs"
+required-features = ["delay", "delay-ui", "delay-viz"]
+
+[[example]]
+name = "deluxe_fit_eval"
+path = "saturate/examples/deluxe_fit_eval.rs"
+required-features = ["saturate"]
+
+[[example]]
+name = "deluxe_render"
+path = "saturate/examples/deluxe_render.rs"
+required-features = ["saturate"]
+
+[[example]]
+name = "engine_sheet"
+path = "modulation/examples/engine_sheet.rs"
+required-features = ["modulation", "modulation-ui", "modulation-viz"]
+
+[[example]]
+name = "eq_auto_fit"
+path = "analyzer/examples/eq_auto_fit.rs"
+required-features = ["analyzer"]
+
+[[example]]
+name = "eq_auto_probe"
+path = "analyzer/examples/eq_auto_probe.rs"
+required-features = ["analyzer"]
+
+[[example]]
+name = "eq_bundle_check"
+path = "analyzer/examples/eq_bundle_check.rs"
+required-features = ["analyzer"]
+
+[[example]]
+name = "eq_detector_probe"
+path = "analyzer/examples/eq_detector_probe.rs"
+required-features = ["analyzer"]
+
+[[example]]
+name = "eq_dyn_probe"
+path = "analyzer/examples/eq_dyn_probe.rs"
+required-features = ["analyzer"]
+
+[[example]]
+name = "eq_match"
+path = "analyzer/examples/eq_match.rs"
+required-features = ["analyzer"]
+
+[[example]]
+name = "eq_spectral_probe"
+path = "analyzer/examples/eq_spectral_probe.rs"
+required-features = ["analyzer"]
+
+[[example]]
+name = "eq_sweep"
+path = "analyzer/examples/eq_sweep.rs"
+required-features = ["analyzer"]
+
+[[example]]
+name = "equalize"
+path = "eq/examples/equalize.rs"
+required-features = ["eq"]
+
+[[example]]
+name = "gate_render"
+path = "gate/examples/gate_render.rs"
+required-features = ["gate"]
+
+[[example]]
+name = "ir_morph_demo"
+path = "reverb/examples/ir_morph_demo.rs"
+required-features = ["reverb"]
+
+[[example]]
+name = "ir_smoke"
+path = "reverb/examples/ir_smoke.rs"
+required-features = ["reverb"]
+
+[[example]]
+name = "mic_render"
+path = "mic/examples/mic_render.rs"
+required-features = ["mic"]
+
+[[example]]
+name = "models"
+path = "comp/examples/models.rs"
+required-features = ["comp"]
+
+[[example]]
+name = "pitch_quality"
+path = "pitch/examples/pitch_quality.rs"
+required-features = ["pitch"]
+
+[[example]]
+name = "plugin_params"
+path = "analyzer/examples/plugin_params.rs"
+required-features = ["analyzer"]
+
+[[example]]
+name = "preset_sweep"
+path = "analyzer/examples/preset_sweep.rs"
+required-features = ["analyzer"]
+
+[[example]]
+name = "proq_params"
+path = "analyzer/examples/proq_params.rs"
+required-features = ["analyzer"]
+
+[[example]]
+name = "pultec"
+path = "eq/examples/pultec.rs"
+required-features = ["eq"]
+
+[[example]]
+name = "release_verify"
+path = "comp/examples/release_verify.rs"
+required-features = ["comp"]
+
+[[example]]
+name = "reverb_family_sheet"
+path = "reverb/examples/family_sheet.rs"
+required-features = ["reverb", "reverb-ui", "reverb-viz"]
+
+[[example]]
+name = "reverb_match"
+path = "analyzer/examples/reverb_match.rs"
+required-features = ["analyzer"]
+
+[[example]]
+name = "reverb_wet_level"
+path = "reverb/examples/wet_level.rs"
+required-features = ["reverb"]
+
+[[example]]
+name = "sat_sheet"
+path = "saturate/examples/sat_sheet.rs"
+required-features = ["saturate", "saturate-profiles", "saturate-ui", "saturate-viz"]
+
+[[example]]
+name = "stretch_ab"
+path = "stretch/examples/stretch_ab.rs"
+required-features = ["stretch"]
+
+[[example]]
+name = "time_accuracy"
+path = "reverb/examples/time_accuracy.rs"
+required-features = ["reverb"]
+
+[[test]]
+name = "comp_param_round_trip"
+path = "comp/tests/param_round_trip.rs"
+required-features = ["comp", "comp-native", "comp-ui"]
+
+[[test]]
+name = "delay_param_round_trip"
+path = "delay/tests/param_round_trip.rs"
+required-features = ["delay", "delay-native", "delay-ui"]
+
+[[test]]
+name = "eq_param_round_trip"
+path = "eq/tests/param_round_trip.rs"
+required-features = ["eq", "eq-native", "eq-ui"]
+
+[[test]]
+name = "mic_param_round_trip"
+path = "mic/tests/param_round_trip.rs"
+required-features = ["mic", "mic-ui"]
+
+[[test]]
+name = "reverb_param_round_trip"
+path = "reverb/tests/param_round_trip.rs"
+required-features = ["reverb", "reverb-native", "reverb-ui"]
+
+[[test]]
+name = "saturate_param_round_trip"
+path = "saturate/tests/param_round_trip.rs"
+required-features = ["saturate", "saturate-native", "saturate-ui"]
+
+[[bench]]
+name = "pitch_quality"
+path = "pitch/benches/quality.rs"
+harness = false
+required-features = ["pitch"]
+
+[[bench]]
+name = "pitch_throughput"
+path = "pitch/benches/throughput.rs"
+harness = false
+required-features = ["pitch"]

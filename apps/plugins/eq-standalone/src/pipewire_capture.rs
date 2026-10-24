@@ -10,8 +10,8 @@
 
 use std::sync::Arc;
 
-use eq::analyzer::{Analyzer, AudioFeed};
-use eq::ui::params::EqUiState;
+use dsp::eq::analyzer::{Analyzer, AudioFeed};
+use dsp::eq::ui::params::EqUiState;
 use pipewire as pw;
 use pw::spa;
 

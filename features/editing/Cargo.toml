@@ -9,7 +9,7 @@ description = "Editing a recorded performance — timing and dynamics, one engin
 
 [dependencies]
 facet.workspace = true
-level.workspace = true
+dsp = { workspace = true, features = ["level"] }
 num-traits.workspace = true
 
 [dev-dependencies]

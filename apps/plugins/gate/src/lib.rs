@@ -5,13 +5,13 @@
 //! - **Classic** (the default, and what older sessions load as): a thin
 //!   shell over the `level` engine's standalone gate stage — described
 //!   below.
-//! - **Drum**: the [`gate::DrumGate`] engine — source modes (kick, snare
+//! - **Drum**: the [`dsp::gate::DrumGate`] engine — source modes (kick, snare
 //!   top/bottom, toms) with look-ahead and a voiced detector, Length-shaped
 //!   release, Ghost, and the HF de-bleed. It can be keyed from the stereo
 //!   sidechain input. Reports its look-ahead as latency.
 //!
 //! Classic: a thin nice-plug shell over the `level` engine's standalone gate stage
-//! ([`level::Gate`]: peak detector → threshold-with-hysteresis →
+//! ([`dsp::level::Gate`]: peak detector → threshold-with-hysteresis →
 //! attack/hold/release → range floor). The gate stage is cleanly separable
 //! from the vocal chain, so this crate reuses it via the `level` facade
 //! rather than duplicating the DSP.
@@ -30,8 +30,8 @@
 use nice_plug::prelude::*;
 use std::sync::Arc;
 
-use gate::{DrumGate, Mode, Settings as DrumSettings};
-use level::{Gate, GateConfig};
+use dsp::gate::{DrumGate, Mode, Settings as DrumSettings};
+use dsp::level::{Gate, GateConfig};
 
 const PLUGIN_NAME: &str = "FTS Gate";
 

@@ -16,9 +16,9 @@
 //!
 //! | panel | curve from |
 //! |---|---|
-//! | EQ | `eq::ui::eq_graph_response::calculate_combined_response` |
-//! | Compressor | `comp::ui::comp_graph_svg::compress_transfer` |
-//! | Saturation | `saturate::preamp::analysis::transfer_curve` |
+//! | EQ | `dsp::eq::ui::eq_graph_response::calculate_combined_response` |
+//! | Compressor | `dsp::comp::ui::comp_graph_svg::compress_transfer` |
+//! | Saturation | `dsp::saturate::preamp::analysis::transfer_curve` |
 //!
 //! None of the maths is here, and that is the point: a curve in the
 //! strip that disagreed with the curve in the plugin window would be
@@ -35,13 +35,13 @@
 //! whose processing was rendered offline still animates.
 
 use anyrender::{PaintScene, Scene};
-use delay::engine::{DelayStyle, Family as DelayFamily};
-use eq::ui::eq_graph_interaction::{self as interaction, GraphMapper, Mods};
-use eq::ui::eq_graph_model::{EqBand, EqBandShape, StereoMode};
-use eq::ui::eq_graph_response::calculate_combined_response;
+use dsp::delay::engine::{DelayStyle, Family as DelayFamily};
+use dsp::eq::ui::eq_graph_interaction::{self as interaction, GraphMapper, Mods};
+use dsp::eq::ui::eq_graph_model::{EqBand, EqBandShape, StereoMode};
+use dsp::eq::ui::eq_graph_response::calculate_combined_response;
+use dsp::reverb::algorithm::{AlgorithmType, Family as RoomFamily};
+use dsp::saturate::preamp::{Circuit, ClassAPreamp, SideShaper};
 use fts_audio_ui::axis::{DbAxis, FreqAxis};
-use reverb::algorithm::{AlgorithmType, Family as RoomFamily};
-use saturate::preamp::{Circuit, ClassAPreamp, SideShaper};
 use vello::kurbo::{Affine, BezPath, Line, Rect, Shape, Stroke};
 use vello::peniko::{Color, Fill};
 
@@ -80,17 +80,17 @@ pub struct Tone {
     pub comp: Comp,
     pub sat: ClassAPreamp,
     /// Which of the plugin's profiles the stage is — an index into
-    /// `saturate::profiles::PROFILES`. The selector picks one; `sat` is
+    /// `dsp::saturate::profiles::PROFILES`. The selector picks one; `sat` is
     /// what `apply` made of it, plus whatever the grips moved since.
     pub sat_profile: usize,
     /// The quantiser after the stage, which only the digital profiles
     /// switch on. Kept so the curve can draw its steps.
-    pub sat_digital: saturate::digital::DigitalStage,
+    pub sat_digital: dsp::saturate::digital::DigitalStage,
     /// The saturator's emphasis EQ: six bands before the stage, exactly
     /// inverted after it, so the curve chooses what distorts and not
     /// what comes out (`fx.sat.emphasis`). Bell and shelves only — a
     /// cut has no inverse. At 0 dB a band is idle.
-    pub sat_emphasis: [saturate::emphasis::EmphBand; saturate::emphasis::BANDS],
+    pub sat_emphasis: [dsp::saturate::emphasis::EmphBand; dsp::saturate::emphasis::BANDS],
     /// Whether the saturator's face shows its emphasis EQ in place of
     /// its picture.
     pub sat_emphasis_view: bool,
@@ -162,7 +162,7 @@ pub struct Tone {
     /// Which of the three are switched out.
     pub bypass: Bypass,
     /// How far the EQ graph is zoomed, as an index into the plugin's
-    /// own [`eq::ui::eq_graph_model::DB_RANGE_STEPS`].
+    /// own [`dsp::eq::ui::eq_graph_model::DB_RANGE_STEPS`].
     ///
     /// An INDEX rather than a number of decibels, because the zoom is a
     /// list of stops the plugin publishes and a rack that invented its
@@ -374,7 +374,7 @@ impl Tone {
     /// The EQ graph's dB range, top to bottom.
     #[must_use]
     pub fn eq_db_range(&self) -> f64 {
-        eq::ui::eq_graph_model::db_range_for_index(self.eq_range)
+        dsp::eq::ui::eq_graph_model::db_range_for_index(self.eq_range)
     }
 
     /// Zoom the graph by `steps`, positive being further out.
@@ -382,7 +382,7 @@ impl Tone {
     /// Returns whether it moved, so a caller knows whether to re-record
     /// rather than guessing.
     pub fn zoom_eq(&mut self, steps: i32) -> bool {
-        let last = i32::try_from(eq::ui::eq_graph_model::DB_RANGE_STEPS.len())
+        let last = i32::try_from(dsp::eq::ui::eq_graph_model::DB_RANGE_STEPS.len())
             .unwrap_or(1)
             .saturating_sub(1);
         let to = self.eq_range.saturating_add(steps).clamp(0, last);
@@ -483,7 +483,7 @@ impl Tone {
     /// profile is in, else what the shapers say.
     #[must_use]
     pub fn sat_circuit(&self) -> Circuit {
-        if saturate::profiles::PROFILES
+        if dsp::saturate::profiles::PROFILES
             .get(self.sat_profile)
             .is_some_and(|p| p.voicing.digital)
         {
@@ -500,21 +500,21 @@ impl Tone {
     /// fuzz travels further than a tape machine, and carrying the gain
     /// across would land a modest tape drive at the top of the fuzz.
     pub fn set_sat_profile(&mut self, index: usize) {
-        let Some(profile) = saturate::profiles::PROFILES.get(index) else {
+        let Some(profile) = dsp::saturate::profiles::PROFILES.get(index) else {
             return;
         };
-        let was_scale = saturate::profiles::PROFILES
+        let was_scale = dsp::saturate::profiles::PROFILES
             .get(self.sat_profile)
             .map_or(1.0, |p| p.voicing.drive_scale)
             .max(f32::EPSILON);
         let knob = ((self.sat.drive - 1.0) / (15.0 * was_scale)).clamp(0.0, 1.0);
         let mix = self.sat.mix;
-        let controls = saturate::profiles::Controls {
+        let controls = dsp::saturate::profiles::Controls {
             drive: knob,
             mix,
-            ..saturate::profiles::Controls::default()
+            ..dsp::saturate::profiles::Controls::default()
         };
-        saturate::profiles::apply(profile, &controls, &mut self.sat, &mut self.sat_digital);
+        dsp::saturate::profiles::apply(profile, &controls, &mut self.sat, &mut self.sat_digital);
         self.sat.mix = mix;
         self.sat_profile = index;
     }
@@ -522,14 +522,14 @@ impl Tone {
     /// A click on a circuit chip: the plugin's own rail rule — the
     /// family's first profile, or the next one if you are already in it.
     pub fn choose_sat_family(&mut self, category: usize) {
-        let to = saturate::profiles::rail_click_target(self.sat_profile, category);
+        let to = dsp::saturate::profiles::rail_click_target(self.sat_profile, category);
         self.set_sat_profile(to);
     }
 
     /// The next profile, wrapping — what a click on the glyph does.
     pub fn cycle_sat(&mut self) {
         let next = self.sat_profile.saturating_add(1);
-        let to = if next >= saturate::profiles::PROFILES.len() {
+        let to = if next >= dsp::saturate::profiles::PROFILES.len() {
             0
         } else {
             next
@@ -611,7 +611,7 @@ impl Tone {
     /// back to the first, and a click that does nothing reads as a
     /// broken control.
     pub fn cycle_eq_range(&mut self) {
-        let last = i32::try_from(eq::ui::eq_graph_model::DB_RANGE_STEPS.len()).unwrap_or(1);
+        let last = i32::try_from(dsp::eq::ui::eq_graph_model::DB_RANGE_STEPS.len()).unwrap_or(1);
         self.eq_range = self.eq_range.saturating_add(1).rem_euclid(last.max(1));
     }
 }
@@ -703,7 +703,7 @@ fn suppression(set: Suppress) -> String {
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Wobble {
     /// Which machine: chorus, flanger, phaser, tremolo, vibrato, rotary.
-    pub engine: modulation::ui::viz::Engine,
+    pub engine: dsp::modulation::ui::viz::Engine,
     /// How fast, in Hz.
     pub rate: f32,
     /// How deep, 0 to 1.
@@ -715,7 +715,7 @@ pub struct Wobble {
 impl Default for Wobble {
     fn default() -> Self {
         Self {
-            engine: modulation::ui::viz::Engine::Chorus,
+            engine: dsp::modulation::ui::viz::Engine::Chorus,
             rate: 0.8,
             depth: 0.5,
             mix: 0.5,
@@ -2800,7 +2800,7 @@ fn ground(scene: &mut Scene, palette: &Palette, at: Panel) {
 
 /// The plugin's own EQ graph, painted into the rack.
 ///
-/// Not a redraw of it — `eq::ui::eq_graph_painter` records into an
+/// Not a redraw of it — `dsp::eq::ui::eq_graph_painter` records into an
 /// `anyrender::Scene` under a transform, which is exactly what this
 /// rack does, so the strip can hand it a sub-rectangle and get the
 /// editor's own grid, curves, fills and per-shape nodes.
@@ -2836,7 +2836,7 @@ fn eq_from_plugin(
     at: Panel,
     rack: Rack,
 ) -> bool {
-    let state = eq::ui::eq_graph_model::EqGraphRenderState::new();
+    let state = dsp::eq::ui::eq_graph_model::EqGraphRenderState::new();
     state.bands.write().clone_from(&bands.to_vec());
     // The analyser, behind the curves. The painter draws it when the
     // state carries it and skips it when it does not, so a track with
@@ -2884,7 +2884,7 @@ fn eq_from_plugin(
     if width < 2 || height < 2 {
         return false;
     }
-    eq::ui::eq_graph_painter::paint_eq_graph_scene(
+    dsp::eq::ui::eq_graph_painter::paint_eq_graph_scene(
         scene,
         &state,
         Affine::translate((at.x, at.y)),
@@ -3326,7 +3326,7 @@ fn comp(
     // Taken from the plugin so the threshold line, the ladder and
     // whatever level is drawn over them land on the same numbers it
     // uses.
-    let to_y = |db: f64| at.y + comp::ui::comp_graph_svg::db_to_y(db, at.height);
+    let to_y = |db: f64| at.y + dsp::comp::ui::comp_graph_svg::db_to_y(db, at.height);
 
     // The ladder the levels are read against. Without it the threshold
     // is a line at a height rather than a line at a level.
@@ -3343,7 +3343,7 @@ fn comp(
     // over the levels is the comparison.
     let y = threshold_y(comp, at);
     let held = matches!(lit, Some(Grip::Threshold(_)));
-    let red = hex(comp::ui::comp_graph_svg::colors::THRESHOLD);
+    let red = hex(dsp::comp::ui::comp_graph_svg::colors::THRESHOLD);
     rule_wide(
         scene,
         red,
@@ -3371,7 +3371,7 @@ fn comp(
 /// itself, the envelope glyph that meets it, and the hit test that
 /// decides which of the two a click belongs to.
 fn threshold_y(comp: Comp, at: Panel) -> f64 {
-    let y = at.y + comp::ui::comp_graph_svg::db_to_y(f64::from(comp.threshold), at.height);
+    let y = at.y + dsp::comp::ui::comp_graph_svg::db_to_y(f64::from(comp.threshold), at.height);
     y.clamp(at.y, at.y + at.height)
 }
 
@@ -3387,7 +3387,7 @@ fn threshold_y(comp: Comp, at: Panel) -> f64 {
 /// so a departure from the default is a bar in the direction it
 /// departed.
 fn envelope(scene: &mut Scene, font: &Font, comp: Comp, at: Panel, lit: Option<Grip>) {
-    let red = hex(comp::ui::comp_graph_svg::colors::THRESHOLD);
+    let red = hex(dsp::comp::ui::comp_graph_svg::colors::THRESHOLD);
     if let Some(strips) = Strips::of(at) {
         strips.draw(scene, font, comp, red, lit);
     }
@@ -3721,7 +3721,7 @@ fn gate(
     let at = display_of(at, Which::Gate, rack);
     let right = at.x + at.width;
     let bottom = at.y + at.height;
-    let to_y = |db: f64| at.y + comp::ui::comp_graph_svg::db_to_y(db, at.height);
+    let to_y = |db: f64| at.y + dsp::comp::ui::comp_graph_svg::db_to_y(db, at.height);
 
     if rack.detailed() {
         for db in [-12.0, -24.0, -36.0, -48.0] {
@@ -4656,7 +4656,7 @@ fn sat(
     }
 
     let mut samples = [(0.0_f32, 0.0_f32); SAMPLES];
-    saturate::preamp::analysis::transfer_curve(pre, &mut samples);
+    dsp::saturate::preamp::analysis::transfer_curve(pre, &mut samples);
     // A quantiser has no transfer curve of its own — there is no curve
     // that produces an alias — but it does one thing to this one: it
     // turns it into a staircase, and that is the honest picture of it.
@@ -4917,7 +4917,7 @@ fn glyph(scene: &mut Scene, ink: Color, glyph: Glyph, x: f64, baseline: f64) {
 }
 
 /// The saturator's five circuits, in the plugin's own rail order —
-/// which is `saturate::profiles::CATEGORIES`' order, chip for chip.
+/// which is `dsp::saturate::profiles::CATEGORIES`' order, chip for chip.
 const CIRCUITS: [Circuit; 5] = [
     Circuit::Valve,
     Circuit::Tape,
@@ -4946,11 +4946,11 @@ fn selector(
     const SIZE: f32 = 6.5;
     let (chips, current, name): (Vec<Glyph>, usize, &str) = match which {
         Which::Sat => {
-            let profile = saturate::profiles::PROFILES.get(tone.sat_profile);
+            let profile = dsp::saturate::profiles::PROFILES.get(tone.sat_profile);
             (
                 CIRCUITS.iter().map(|c| Glyph::Circuit(*c)).collect(),
                 profile
-                    .and_then(|p| saturate::profiles::category_of(p.id))
+                    .and_then(|p| dsp::saturate::profiles::category_of(p.id))
                     .map_or(0, |(category, _)| category),
                 profile.map_or("", |p| p.name),
             )
@@ -5475,7 +5475,7 @@ fn minimal_body(
         }
         // The level against the threshold, and a light for the door.
         Which::Gate => {
-            let to_y = |db: f64| at.y + comp::ui::comp_graph_svg::db_to_y(db, at.height);
+            let to_y = |db: f64| at.y + dsp::comp::ui::comp_graph_svg::db_to_y(db, at.height);
             let line = to_y(f64::from(tone.gate.threshold)).clamp(at.y, bottom);
             rule(
                 scene,
@@ -5487,7 +5487,7 @@ fn minimal_body(
                 scene.fill(
                     Fill::NonZero,
                     Affine::IDENTITY,
-                    hex(comp::ui::comp_graph_svg::colors::GREY).multiply_alpha(0.6),
+                    hex(dsp::comp::ui::comp_graph_svg::colors::GREY).multiply_alpha(0.6),
                     None,
                     &Rect::new(at.x + 2.0, top, right - 2.0, bottom),
                 );
@@ -5509,7 +5509,7 @@ fn minimal_body(
                 tone.rescue_comp
             };
             let reduction = peak_db.map_or(0.0, |db| {
-                let out = comp::ui::comp_graph_svg::compress_transfer(
+                let out = dsp::comp::ui::comp_graph_svg::compress_transfer(
                     crate::mcp::f64_to_f32(db),
                     comp.threshold,
                     comp.ratio,
@@ -5520,16 +5520,16 @@ fn minimal_body(
             // The threshold where the panel would draw it, and the
             // reduction hanging from the ceiling in the panel's red.
             let line = (at.y
-                + comp::ui::comp_graph_svg::db_to_y(f64::from(comp.threshold), at.height))
+                + dsp::comp::ui::comp_graph_svg::db_to_y(f64::from(comp.threshold), at.height))
             .clamp(at.y, bottom);
             rule(
                 scene,
-                hex(comp::ui::comp_graph_svg::colors::THRESHOLD).multiply_alpha(0.7),
+                hex(dsp::comp::ui::comp_graph_svg::colors::THRESHOLD).multiply_alpha(0.7),
                 Line::new((at.x, line), (right, line)),
             );
             bar(
                 scene,
-                hex(comp::ui::comp_graph_svg::colors::REDUCTION_EDGE),
+                hex(dsp::comp::ui::comp_graph_svg::colors::REDUCTION_EDGE),
                 reduction / 60.0,
             );
         }
@@ -5967,7 +5967,7 @@ fn hex(value: &str) -> Color {
 /// what must not happen, since the point of the colour is that a band
 /// is the same colour in the strip as it is in the plugin window.
 fn band_color(hz: f64) -> Color {
-    hex(&eq::ui::eq_graph_model::freq_to_color(hz))
+    hex(&dsp::eq::ui::eq_graph_model::freq_to_color(hz))
 }
 
 /// A filled circle — a handle, or a marker on a curve.
@@ -6077,10 +6077,12 @@ impl Sidechain {
 
 /// The emphasis bands' starting spread — the plugin's: idle bells at
 /// 80 Hz … 10 kHz.
-fn emphasis_spread() -> [saturate::emphasis::EmphBand; saturate::emphasis::BANDS] {
-    [80.0, 250.0, 700.0, 1_800.0, 4_500.0, 10_000.0].map(|freq_hz| saturate::emphasis::EmphBand {
-        freq_hz,
-        ..saturate::emphasis::EmphBand::default()
+fn emphasis_spread() -> [dsp::saturate::emphasis::EmphBand; dsp::saturate::emphasis::BANDS] {
+    [80.0, 250.0, 700.0, 1_800.0, 4_500.0, 10_000.0].map(|freq_hz| {
+        dsp::saturate::emphasis::EmphBand {
+            freq_hz,
+            ..dsp::saturate::emphasis::EmphBand::default()
+        }
     })
 }
 
@@ -6143,8 +6145,8 @@ pub fn placeholder(index: usize) -> Tone {
         sc_view: None,
         drum: false,
         modulation: Wobble {
-            engine: modulation::ui::viz::Engine::ALL
-                .get(index % modulation::ui::viz::Engine::ALL.len())
+            engine: dsp::modulation::ui::viz::Engine::ALL
+                .get(index % dsp::modulation::ui::viz::Engine::ALL.len())
                 .copied()
                 .unwrap_or_default(),
             ..Wobble::default()
@@ -6168,7 +6170,7 @@ pub fn placeholder(index: usize) -> Tone {
             pre
         },
         sat_profile: 0,
-        sat_digital: saturate::digital::DigitalStage::new(),
+        sat_digital: dsp::saturate::digital::DigitalStage::new(),
         sat_emphasis: emphasis_spread(),
         sat_emphasis_view: false,
         pre_eq: Vec::new(),
@@ -6185,7 +6187,7 @@ pub fn placeholder(index: usize) -> Tone {
     // Each voice on its own circuit, so a mixer of racks shows the five
     // faces; the drive the voice wants survives the profile.
     let drive = tone.sat.drive;
-    tone.set_sat_profile(saturate::profiles::profile_index(voice.sat_profile()).unwrap_or(0));
+    tone.set_sat_profile(dsp::saturate::profiles::profile_index(voice.sat_profile()).unwrap_or(0));
     tone.sat.drive = drive;
     tone
 }
@@ -6292,7 +6294,7 @@ fn fundamental(mut tone: Tone, name: &str, ancestors: &[String]) -> Tone {
         hold: 40.0,
         release: 90.0,
     };
-    tone.set_sat_profile(saturate::profiles::profile_index("transformer").unwrap_or(0));
+    tone.set_sat_profile(dsp::saturate::profiles::profile_index("transformer").unwrap_or(0));
     tone.sat.drive = 2.0;
     tone.presets = Vec::new();
     tone.preset = None;
@@ -8764,7 +8766,7 @@ fn gate_grip(gate: Gate, body: Panel, rack: Rack, x: f64, y: f64) -> Grip {
     if !rack.detailed() {
         return Grip::Threshold(Which::Gate);
     }
-    let to_y = |db: f64| display.y + comp::ui::comp_graph_svg::db_to_y(db, display.height);
+    let to_y = |db: f64| display.y + dsp::comp::ui::comp_graph_svg::db_to_y(db, display.height);
     let bottom = display.y + display.height;
     let line = to_y(f64::from(gate.threshold)).clamp(display.y, bottom);
     let floor = to_y(f64::from(gate.threshold + gate.range)).clamp(display.y, bottom);
@@ -8919,7 +8921,7 @@ fn transfer_curve(
     at: Panel,
     lit: Option<Grip>,
 ) {
-    let red = hex(comp::ui::comp_graph_svg::colors::THRESHOLD);
+    let red = hex(dsp::comp::ui::comp_graph_svg::colors::THRESHOLD);
     let right = at.x + at.width;
     let bottom = at.y + at.height;
     // Level to position: 0 dB at the top and the right, -60 at the floor
@@ -10416,7 +10418,8 @@ impl Levels {
         {
             return Some(std::sync::Arc::clone(path));
         }
-        let d = comp::ui::comp_graph_svg::smooth_path(&self.scaled(), width, height, true, true);
+        let d =
+            dsp::comp::ui::comp_graph_svg::smooth_path(&self.scaled(), width, height, true, true);
         let built = std::sync::Arc::new(BezPath::from_svg(&d).ok()?);
         self.path = Some((width, height, std::sync::Arc::clone(&built)));
         Some(built)
@@ -10460,7 +10463,7 @@ impl Levels {
                     0.0
                 } else {
                     let db = 20.0 * peak.log10();
-                    let out = comp::ui::comp_graph_svg::compress_transfer(
+                    let out = dsp::comp::ui::comp_graph_svg::compress_transfer(
                         db,
                         comp.threshold,
                         comp.ratio,
@@ -10497,11 +10500,11 @@ impl Levels {
         {
             return Some(std::sync::Arc::clone(path));
         }
-        let gr = comp::ui::comp_graph_svg::scale_gr_wave(&self.reduction_db(comp));
+        let gr = dsp::comp::ui::comp_graph_svg::scale_gr_wave(&self.reduction_db(comp));
         if gr.iter().all(|v| *v <= f32::EPSILON) {
             return None;
         }
-        let d = comp::ui::comp_graph_svg::smooth_path(&gr, width, height, false, true);
+        let d = dsp::comp::ui::comp_graph_svg::smooth_path(&gr, width, height, false, true);
         let built = std::sync::Arc::new(BezPath::from_svg(&d).ok()?);
         self.reduction = Some((width, height, comp, std::sync::Arc::clone(&built)));
         Some(built)
@@ -10520,7 +10523,7 @@ impl Levels {
     #[must_use]
     pub fn scaled(&self) -> Vec<f32> {
         let raw: Vec<f32> = self.peaks.iter().copied().collect();
-        comp::ui::comp_graph_svg::scale_input_wave(&raw)
+        dsp::comp::ui::comp_graph_svg::scale_input_wave(&raw)
     }
 }
 
@@ -10779,7 +10782,7 @@ fn one_level(
         // outline makes that a comparison of two lines instead. Dim,
         // because the threshold is drawn over it and a solid fill makes
         // the line the thing you cannot see.
-        let grey = hex(comp::ui::comp_graph_svg::colors::GREY);
+        let grey = hex(dsp::comp::ui::comp_graph_svg::colors::GREY);
         scene.fill(
             Fill::NonZero,
             at,
@@ -10800,8 +10803,8 @@ fn one_level(
     // one thing on this panel that is a REDUCTION, and it shares its
     // colour with the threshold that caused it.
     if let Some(path) = levels.reduction_path(comp, body.width, body.height) {
-        let fill = hex(comp::ui::comp_graph_svg::colors::REDUCTION_FILL);
-        let edge = hex(comp::ui::comp_graph_svg::colors::REDUCTION_EDGE);
+        let fill = hex(dsp::comp::ui::comp_graph_svg::colors::REDUCTION_FILL);
+        let edge = hex(dsp::comp::ui::comp_graph_svg::colors::REDUCTION_EDGE);
         scene.fill(
             Fill::NonZero,
             at,

@@ -1,9 +1,9 @@
 //! Observational callback benchmark; run on an idle machine for comparisons.
-use eq::{BandConfig, Dynamics, DynamicsMode, EqConfig, EqProcessor, ProcessSpec};
+use dsp::eq::{BandConfig, Dynamics, DynamicsMode, EqConfig, EqProcessor, ProcessSpec};
 use std::hint::black_box;
 use std::time::Instant;
 
-fn main() -> Result<(), eq::Error> {
+fn main() -> Result<(), dsp::eq::Error> {
     for (name, mode, transient, modulated) in [
         ("static", DynamicsMode::Static, false, false),
         ("dynamic", DynamicsMode::Dynamic, false, false),
@@ -25,13 +25,13 @@ fn main() -> Result<(), eq::Error> {
         if modulated {
             let ids: Vec<_> = config.bands().map(|(id, _)| id).collect();
             for id in ids {
-                config.band_mut(id)?.filter = eq::Filter::FlatTilt {
+                config.band_mut(id)?.filter = dsp::eq::Filter::FlatTilt {
                     frequency_hz: 1000.0,
                     gain_db: 1.0,
                     q: 0.707,
-                    steepness: eq::Steepness::Order2,
+                    steepness: dsp::eq::Steepness::Order2,
                 };
-                config.band_mut(id)?.dynamics.threshold = eq::Threshold::FixedDb(-40.0);
+                config.band_mut(id)?.dynamics.threshold = dsp::eq::Threshold::FixedDb(-40.0);
             }
         }
         let prepared = config.prepare(ProcessSpec::new(48_000.0, 512)?)?;

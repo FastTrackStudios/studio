@@ -1,6 +1,6 @@
 //! Model-specific controls can be chosen at the application's configuration boundary.
-use comp::{CompressorConfig, GenericControls, La2aControls, Model, ProcessSpec};
-fn main() -> Result<(), comp::Error> {
+use dsp::comp::{CompressorConfig, GenericControls, La2aControls, Model, ProcessSpec};
+fn main() -> Result<(), dsp::comp::Error> {
     let spec = ProcessSpec::new(48_000.0, 512)?;
     for model in [
         Model::Generic(GenericControls::default()),

@@ -14,7 +14,7 @@
 //! wah's resonance, stages and sensitivity were fields nothing wrote. Seven
 //! parameters over about twenty-five real controls.
 //!
-//! [`modulation::profiles::apply`] is the only thing that knows how a knob
+//! [`dsp::modulation::profiles::apply`] is the only thing that knows how a knob
 //! reaches the DSP — which is also why the editor's shape is the engine's own
 //! movement rather than a drawing of one.
 
@@ -22,12 +22,12 @@ use plugin_core::prelude::*;
 use std::sync::Arc;
 use std::sync::atomic::Ordering;
 
+use dsp::modulation::chorus::chain::ChorusChain;
+use dsp::modulation::profiles::Chain;
+use dsp::modulation::trem::chain::TremChain;
+use dsp::modulation::ui::params::{ModParams, ModUiState};
+use dsp::modulation::wah::chain::WahChain;
 use dsp_core::audio::{AudioConfig, Processor};
-use modulation::chorus::chain::ChorusChain;
-use modulation::profiles::Chain;
-use modulation::trem::chain::TremChain;
-use modulation::ui::params::{ModParams, ModUiState};
-use modulation::wah::chain::WahChain;
 
 const PLUGIN_NAME: &str = "FTS Modulation";
 
@@ -52,20 +52,20 @@ pub struct FtsModulation {
 
 impl Default for FtsModulation {
     fn default() -> Self {
-        // The modulators' clocks are set by `modulation::profiles::apply`, not
+        // The modulators' clocks are set by `dsp::modulation::profiles::apply`, not
         // here — a chain configured in two places is how the editor ended up
         // drawing a still line for the tremolo while the plugin ran fine.
         Self {
             params: Arc::new(ModParams::default()),
             ui_state: Arc::new(ModUiState::default()),
-            // The editor sizes itself — see modulation::ui::control_view.
+            // The editor sizes itself — see dsp::modulation::ui::control_view.
             editor_state: DioxusState::new(|| {
                 (
-                    modulation::ui::control_view::EDITOR_W,
-                    modulation::ui::control_view::EDITOR_H,
+                    dsp::modulation::ui::control_view::EDITOR_W,
+                    dsp::modulation::ui::control_view::EDITOR_H,
                 )
             })
-            .with_resize_hint(modulation::ui::control_view::resize_hint()),
+            .with_resize_hint(dsp::modulation::ui::control_view::resize_hint()),
             chorus: ChorusChain::new(),
             trem: TremChain::new(),
             wah: WahChain::new(),
@@ -99,7 +99,7 @@ impl FtsModulation {
             }
         }
 
-        modulation::profiles::apply(
+        dsp::modulation::profiles::apply(
             profile,
             &self.params.controls(),
             &mut self.chorus,
@@ -135,11 +135,11 @@ impl Plugin for FtsModulation {
     fn editor(&mut self, _async_executor: AsyncExecutor<Self>) -> Option<Self::Editor> {
         create_dioxus_editor_with_state(
             self.editor_state.clone(),
-            Arc::new(modulation::ui::control_view::ModUi {
+            Arc::new(dsp::modulation::ui::control_view::ModUi {
                 params: self.params.clone(),
                 state: self.ui_state.clone(),
             }),
-            modulation::ui::control_view::App,
+            dsp::modulation::ui::control_view::App,
         )
     }
 

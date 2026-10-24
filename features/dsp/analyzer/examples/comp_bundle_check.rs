@@ -11,7 +11,7 @@
 //!     --state <state.json> [--reference ~/.clap/yabridge/"FabFilter Pro-C 3.clap"]
 //! ```
 
-use signal_analyzer::eq_transfer::{self, Stimulus};
+use dsp::analyzer::eq_transfer::{self, Stimulus};
 use signal_plugin_host::HostedPlugin;
 
 const SR: f64 = 48_000.0;

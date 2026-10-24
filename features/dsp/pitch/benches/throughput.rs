@@ -12,8 +12,8 @@ use std::sync::Arc;
 use std::thread;
 use std::time::Instant;
 
+use dsp::pitch::chain::{Algorithm, PitchChain};
 use dsp_core::audio::{AudioConfig, Processor};
-use pitch::chain::{Algorithm, PitchChain};
 
 const SAMPLE_RATE: f64 = 48000.0;
 const DURATION_SECS: f64 = 10.0;
@@ -91,11 +91,7 @@ fn load_atd_clips() -> Option<Vec<(String, Arc<Vec<f64>>)>> {
         }
     }
 
-    if clips.is_empty() {
-        None
-    } else {
-        Some(clips)
-    }
+    if clips.is_empty() { None } else { Some(clips) }
 }
 
 struct BenchResult {
@@ -172,7 +168,9 @@ fn bench_one(
 
 fn main() {
     eprintln!("pitch-dsp throughput benchmark");
-    eprintln!("  {TOTAL_SAMPLES} samples ({DURATION_SECS}s) per clip, {RUNS} runs each, block size {BLOCK_SIZE}");
+    eprintln!(
+        "  {TOTAL_SAMPLES} samples ({DURATION_SECS}s) per clip, {RUNS} runs each, block size {BLOCK_SIZE}"
+    );
     eprintln!();
 
     // Load audio clips.

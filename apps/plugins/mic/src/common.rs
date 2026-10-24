@@ -1,14 +1,14 @@
 //! Where the models live (the mic list and parameter helpers are
-//! `mic::ui::params`).
+//! `dsp::mic::ui::params`).
 //!
 //! Installed models (`$FTS_MIC_MODELS`, else `~/.local/share/fts/mic-models`,
 //! a checkout of the private `mic-models` repository) are read first, so they
 //! can be updated without rebuilding; the default mic is also built in.
 
-use mic::MicModel;
+use dsp::mic::MicModel;
 use std::path::PathBuf;
 
-pub use mic::ui::params::{MICS, index};
+pub use dsp::mic::ui::params::{MICS, index};
 
 pub fn models_dir() -> PathBuf {
     std::env::var_os("FTS_MIC_MODELS").map_or_else(

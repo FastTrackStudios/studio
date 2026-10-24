@@ -7,9 +7,9 @@
 //! `cargo run --release -p reverb-dsp --example wet_level`, and copy the
 //! printed constants into `AlgorithmType::wet_calibration_db`.
 
+use dsp::reverb::AlgorithmType;
+use dsp::reverb::chain::ReverbChain;
 use dsp_core::audio::Processor as _;
-use reverb::AlgorithmType;
-use reverb::chain::ReverbChain;
 
 const SR: f64 = 48_000.0;
 const REFERENCE_T60: f64 = 2.0;

@@ -61,7 +61,7 @@ cli = [
     "dep:serde_json",
     "dep:signal-tone3000",
     "signal-tone3000?/client",
-    "dep:signal-analyzer",
+    "dep:dsp", "dsp/analyzer",
     "dep:signal-import",
     "dep:signal-nam",
     "dep:signal-plugin-host",
@@ -90,7 +90,7 @@ signal-guitar = ["gig", "dep:guitar", "guitar?/ui", "dep:signal-content-proto", 
 # fts-sample, speed without pitch through the `stretch` phase vocoder).
 # Part of every rig build, desktop and iPad; native only (the deps are in
 # the cfg(not wasm) table, so this is a no-op on the web build).
-gig = ["dep:cpal", "dep:stretch", "dep:fts-sample", "fts-sample?/decode-compressed", "dep:serde_json", "dep:architect"]
+gig = ["dep:cpal", "dep:dsp", "dsp/stretch", "dep:fts-sample", "fts-sample?/decode-compressed", "dep:serde_json", "dep:architect"]
 # The keys rig on the phone: the in-process sampler engine (signal-keys →
 # signal-sampler over CoreAudio, MIDI via midir/CoreMIDI) + the wire types
 # for the mobile keys view + pack downloads. iOS-clean by construction: the
@@ -253,7 +253,7 @@ clap = { workspace = true, features = ["derive"], optional = true }
 serde_json = { workspace = true, optional = true }
 signal-import = { workspace = true, optional = true }
 signal-plugin-host = { workspace = true, features = ["clap-host"], optional = true }
-signal-analyzer = { workspace = true, optional = true }
+dsp = { workspace = true, optional = true }
 # The rig's store and config dir: rig_engine.rs (native, and its TONE3000
 # session on every desktop, not only macOS).
 signal-rig-host = { workspace = true }
@@ -307,7 +307,6 @@ tokio = { workspace = true, optional = true }
 libc = { workspace = true }
 # The gig page's practice player (feature `gig`).
 cpal = { workspace = true, optional = true }
-stretch = { workspace = true, optional = true }
 fts-sample = { workspace = true, optional = true, features = ["load"] }
 # DAW domain — facade (daw::get / init_from_parts / LayerRouter) + the
 # standalone backend that plays the setlist without REAPER. "audio" is

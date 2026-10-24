@@ -33,8 +33,8 @@
     reason = "pending the DSP algorithm rewrite"
 )]
 
-use eq::design::{FilterType, design_filter};
-use eq::runtime::response::compute_magnitude_response;
+use dsp::eq::design::{FilterType, design_filter};
+use dsp::eq::runtime::response::compute_magnitude_response;
 use std::collections::BTreeMap;
 use std::fs;
 use std::path::Path;

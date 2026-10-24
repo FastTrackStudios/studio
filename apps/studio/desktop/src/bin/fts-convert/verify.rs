@@ -33,7 +33,7 @@
 //! infinite error.
 
 use builtin::NativeEq;
-use signal_analyzer::eq_transfer::{self, Difference, Stimulus};
+use dsp::analyzer::eq_transfer::{self, Difference, Stimulus};
 use signal_import::rpp::convert::Family;
 use signal_plugin_host::{HostedPlugin, PluginEvents, PluginInstance};
 

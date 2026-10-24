@@ -14,7 +14,7 @@ workspace = true
 
 [dependencies]
 nice-plug = { workspace = true, features = ["vst3"] }
-mic = { workspace = true, features = ["ui"] }
+dsp = { workspace = true, features = ["mic", "mic-ui"] }
 nice-plug-dioxus.workspace = true
 dsp-core = { workspace = true }
 crossbeam-channel = { workspace = true }
@@ -27,3 +27,4 @@ default = []
 # the session engine's built-in FX, or a workspace test build, where cargo
 # unifies features — collide.
 export = []
+

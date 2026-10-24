@@ -1,7 +1,7 @@
 //! FTS Trigger — CLAP/VST3 drum-trigger plugin.
 //!
 //! A nice-plug shell over the legacy FTS-Trigger engine
-//! ([`trigger::TriggerChain`]): each stereo frame runs through the chain's
+//! ([`dsp::trigger::TriggerChain`]): each stereo frame runs through the chain's
 //! detection sidechain (`detect_tick` — HPF/LPF → onset detector → velocity
 //! curve) while the audio passes through untouched, and every detected onset
 //! becomes a sample-accurate `NoteOn` (channel 0, configurable note) with a
@@ -22,8 +22,8 @@
 //! file-management UI/state, so this shell is MIDI-out + passthrough only;
 //! it is a follow-up.
 //!
-//! Params + shared UI state live in [`trigger::ui::params`] (like `comp-ui`),
-//! so the Dioxus editor ([`trigger::ui::control_view::App`] — analysis
+//! Params + shared UI state live in [`dsp::trigger::ui::params`] (like `comp-ui`),
+//! so the Dioxus editor ([`dsp::trigger::ui::control_view::App`] — analysis
 //! waveform with draggable threshold + hit markers, knob/select surface)
 //! renders against them without a circular dep. `process()` feeds the
 //! editor's lock-free rings: one mono-sum input peak per block plus a
@@ -34,10 +34,10 @@ use nice_plug_dioxus::prelude::*;
 use std::sync::Arc;
 use std::sync::atomic::Ordering;
 
-use trigger::detector::DetectAlgorithm;
-use trigger::ui::params::{TriggerParams, TriggerUiState};
-use trigger::velocity::{VelocityCurve, VelocityMapper};
-use trigger::{AudioConfig, Processor, TriggerChain};
+use dsp::trigger::detector::DetectAlgorithm;
+use dsp::trigger::ui::params::{TriggerParams, TriggerUiState};
+use dsp::trigger::velocity::{VelocityCurve, VelocityMapper};
+use dsp::trigger::{AudioConfig, Processor, TriggerChain};
 
 const PLUGIN_NAME: &str = "FTS Trigger";
 
@@ -50,7 +50,7 @@ const CLICK_LEN_MS: f32 = 2.0;
 const CLICK_FREQ_HZ: f32 = 1_000.0;
 
 // ── Parameters ────────────────────────────────────────────────────────────
-// The param tree moved to trigger::ui::params (same ids/ranges — host
+// The param tree moved to dsp::trigger::ui::params (same ids/ranges — host
 // sessions keep loading); only the engine-enum mappings live here.
 
 fn algorithm_from_index(i: i32) -> DetectAlgorithm {
@@ -236,7 +236,7 @@ impl Plugin for FtsTrigger {
         create_dioxus_editor_with_state(
             self.editor_state.clone(),
             self.ui_state.clone(),
-            trigger::ui::control_view::App,
+            dsp::trigger::ui::control_view::App,
         )
     }
 
