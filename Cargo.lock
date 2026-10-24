@@ -16578,6 +16578,8 @@ dependencies = [
 name = "session-format"
 version = "26.10.3"
 dependencies = [
+ "async-trait",
+ "crdt",
  "daw-proto",
  "dawfile-reaper",
  "facet",
@@ -16590,6 +16592,7 @@ dependencies = [
  "styx-format",
  "tempfile",
  "thiserror 2.0.20",
+ "tokio",
  "turso",
  "uuid",
  "zstd",
