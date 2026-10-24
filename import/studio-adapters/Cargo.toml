@@ -22,7 +22,7 @@ daw-module = { workspace = true }
 daw-proto = { workspace = true }
 daw-reaper = { workspace = true, default-features = true }
 vox.workspace = true
-eyre = "0.6"
+eyre = { workspace = true }
 tracing.workspace = true
 tokio = { workspace = true, features = ["rt-multi-thread"] }
 crossbeam-channel.workspace = true
