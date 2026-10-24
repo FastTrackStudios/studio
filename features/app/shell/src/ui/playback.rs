@@ -75,6 +75,10 @@ pub struct PlaybackView {
     pub following: Option<String>,
     /// How many peers are connected.
     pub peers: u32,
+    /// Where the playhead is in bars and beats (`41.2`), for an app that
+    /// counts in bars (Session fills it from `song_bar_beat`; Signal leaves
+    /// it `None`). Shown in the now band's meta line.
+    pub bar_beat: Option<String>,
 }
 
 impl Default for PlaybackView {
@@ -92,6 +96,7 @@ impl Default for PlaybackView {
             can_control: true,
             following: None,
             peers: 0,
+            bar_beat: None,
         }
     }
 }
@@ -151,6 +156,16 @@ pub trait PlaybackModel {
     fn set_level(&self, level: f64);
     /// Stop following a peer and drive playback here.
     fn take_control(&self) {}
+    /// Whether this app can jump to the song's very start and end (the
+    /// transport's ⋯ menu then offers Go to start / Go to end: the iPad
+    /// audit's fix 7, which the classic bar drops at compact widths).
+    fn can_go_to(&self) -> bool {
+        false
+    }
+    /// The playhead to the song's start.
+    fn go_to_start(&self) {}
+    /// The playhead to the song's end.
+    fn go_to_end(&self) {}
 }
 
 /// The app's [`PlaybackModel`], shared by every panel through context.

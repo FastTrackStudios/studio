@@ -53,5 +53,9 @@ axum = { workspace = true }
 tempfile = { workspace = true }
 tokio = { workspace = true }
 
+[[test]]
+name = "performer_mounts"
+required-features = ["ui"]
+
 [lints]
 workspace = true

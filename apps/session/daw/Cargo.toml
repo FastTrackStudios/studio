@@ -66,6 +66,9 @@ keyflow = { workspace = true }
 # rule resolved against the session's own taxonomy — not a list of GUIDs
 # this window keeps. See `src/plan.rs`.
 dynamic-template = { workspace = true }
+# The shared performer screen (the iPad's Performance view, `performer`):
+# its frame, panels and registry, the playback and rig traits.
+app-shell = { workspace = true, features = ["ui"] }
 # The hit detector (native: it reads whole recordings and runs on cores).
 dsp = { workspace = true, features = ["comp", "comp-ui", "eq", "eq-ui", "saturate", "saturate-analysis", "saturate-profiles", "saturate-ui", "saturate-viz", "delay", "delay-profiles", "delay-ui", "delay-viz", "reverb", "reverb-profiles", "reverb-ui", "reverb-viz", "modulation", "modulation-ui", "modulation-viz", "level"] }
 # The album's plan and the room's profile, behind the Patch List view —

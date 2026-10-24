@@ -16379,6 +16379,7 @@ dependencies = [
  "anyrender_vello 0.12.0",
  "anyrender_vello_cpu",
  "anyrender_vello_hybrid",
+ "app-shell",
  "architect",
  "architect-input",
  "architect-mcp",

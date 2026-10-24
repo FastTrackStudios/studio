@@ -121,6 +121,9 @@ pub fn NowBand(#[props(default)] progress: Option<Element>) -> Element {
                     div { style: "display: flex; align-items: center; gap: 10px; font-size: 16px; color: {INK_2}; white-space: nowrap;",
                         if let Some(s) = song.as_ref().filter(|s| !s.key.is_empty()) { span { "Key {s.key}" } }
                         if let Some(s) = song.as_ref().filter(|s| s.bpm > 0) { span { "{s.bpm} bpm" } }
+                        if let Some(bb) = v.bar_beat.as_ref() {
+                            span { "aria-label": "Bar {bb}", style: "font-variant-numeric: tabular-nums;", "bar {bb}" }
+                        }
                         if let Some(sec) = section.as_ref() {
                             span { style: "padding: 1px 6px; border-radius: 4px; font-size: 12px; font-weight: 750; background: {sec.colour}; color: #fafafa;", "{sec.name}" }
                         }
@@ -222,6 +225,7 @@ fn SectionStrip(view: PlaybackView) -> Element {
 enum Peek {
     Speed,
     Level,
+    More,
 }
 
 /// The transport's second row (60 tall): −5 s, +5 s, Speed, Level, ⋯.
@@ -240,10 +244,13 @@ pub fn TransportNudgeRow(#[props(default)] more: Option<EventHandler<()>>) -> El
         playback.clone(),
         playback.clone(),
         playback.clone(),
-        playback,
+        playback.clone(),
     );
     let (pos, dur) = (v.position, v.duration);
-    let cols = if more.is_some() { 5 } else { 4 };
+    let go_to = playback.can_go_to();
+    let ends = playback.clone();
+    let has_more = more.is_some() || go_to;
+    let cols = if has_more { 5 } else { 4 };
     rsx! {
         div { style: "position: relative; display: grid; grid-template-columns: repeat({cols}, minmax(0, 1fr)); gap: {GAP}px; height: {DOCK_ROW}px;",
             button {
@@ -298,12 +305,26 @@ pub fn TransportNudgeRow(#[props(default)] more: Option<EventHandler<()>>) -> El
                     }
                 }
             }
-            if let Some(more) = more {
-                button {
-                    "aria-label": "More playback options",
-                    style: "{cell(DOCK_ROW, false, true)} font-size: 22px; font-weight: 700;",
-                    onclick: move |_| more.call(()),
-                    "⋯"
+            if has_more {
+                div { style: "position: relative; display: flex; flex-direction: column; min-width: 0;",
+                    button {
+                        "aria-label": "More playback options",
+                        "aria-expanded": "{peek() == Some(Peek::More)}",
+                        style: "{cell(DOCK_ROW, peek() == Some(Peek::More), true)} font-size: 22px; font-weight: 700;",
+                        // With Go to start / end, the ⋯ is a menu here; an
+                        // app's own options are its last item.
+                        onclick: move |_| if go_to { flip(peek, Peek::More) } else if let Some(more) = more { more.call(()) },
+                        "⋯"
+                    }
+                    if peek() == Some(Peek::More) {
+                        MoreMenu {
+                            can,
+                            on_start: { let p = ends.clone(); move |()| { p.go_to_start(); peek.set(None); } },
+                            on_end: { let p = ends.clone(); move |()| { p.go_to_end(); peek.set(None); } },
+                            on_more: more.map(|m| EventHandler::new(move |()| { peek.set(None); m.call(()); })),
+                            on_close: move |()| peek.set(None),
+                        }
+                    }
                 }
             }
         }
@@ -321,6 +342,56 @@ fn flip(mut peek: Signal<Option<Peek>>, p: Peek) {
 const PEEK: &str = "position: absolute; bottom: 68px; z-index: 20; display: flex; flex-direction: column; \
                     gap: 8px; padding: 8px; box-sizing: border-box; border-radius: 10px; \
                     border: 1px solid #2b2b31; background: #141418;";
+
+/// The transport's ⋯ menu: Go to start and Go to end first (52 tall, the
+/// iPad audit's fix 7 — the classic bar drops them at compact widths),
+/// then the app's own options when it has any.
+#[component]
+pub fn MoreMenu(
+    /// Whether this device drives playback (off while following a peer).
+    can: bool,
+    on_start: EventHandler<()>,
+    on_end: EventHandler<()>,
+    #[props(default)] on_more: Option<EventHandler<()>>,
+    on_close: EventHandler<()>,
+) -> Element {
+    const ROW: u32 = 52;
+    rsx! {
+        div { role: "menu", "aria-label": "More playback options", style: "{PEEK} right: 0; width: 240px;",
+            button {
+                role: "menuitem",
+                "aria-label": "Go to start",
+                disabled: !can,
+                style: "{cell(ROW, false, can)} align-items: flex-start; padding: 0 14px; font-size: 17px; font-weight: 650;",
+                onclick: move |_| if can { on_start.call(()) },
+                "⏮  Go to start"
+            }
+            button {
+                role: "menuitem",
+                "aria-label": "Go to end",
+                disabled: !can,
+                style: "{cell(ROW, false, can)} align-items: flex-start; padding: 0 14px; font-size: 17px; font-weight: 650;",
+                onclick: move |_| if can { on_end.call(()) },
+                "⏭  Go to end"
+            }
+            if let Some(more) = on_more {
+                button {
+                    role: "menuitem",
+                    "aria-label": "Playback settings",
+                    style: "{cell(ROW, false, true)} align-items: flex-start; padding: 0 14px; font-size: 17px; font-weight: 650;",
+                    onclick: move |_| more.call(()),
+                    "Settings…"
+                }
+            }
+            button {
+                "aria-label": "Close menu",
+                style: "{cell(HIT, false, true)} font-size: 15px; font-weight: 650; color: {INK_2};",
+                onclick: move |_| on_close.call(()),
+                "Done"
+            }
+        }
+    }
+}
 
 /// The Speed peek: the gig shell's speeds as six buttons, the one in use
 /// ringed. A pick sets it and closes.

@@ -237,6 +237,7 @@ pub mod panel;
 pub mod patch_list;
 #[cfg(feature = "native")]
 pub mod perf;
+pub mod performer;
 pub mod plan;
 pub mod poi;
 pub mod pointer;
