@@ -151,6 +151,8 @@ pub fn bootstrap_blocking() -> eyre::Result<()> {
         // calibration) and opens audio off-thread on start().
         // One engine for every rig in the process, as in engine_main.rs.
         signal_rig_host::engine::install_shared(signal_rig_host::engine::Engine::new("Signal"));
+        // The rig libraries as books (synced Loro docs), before a rig reads one.
+        crate::books::enable();
         let backend = GuitarRigBackend::new();
         let router = backend.router();
         // The shared performance surface, under the guitar's scope — as

@@ -241,6 +241,8 @@ async fn async_main() {
     // the rigs join it as folders of tracks, and the guitar rig opens its
     // device with the guitar's audio settings.
     signal_rig_host::engine::install_shared(signal_rig_host::engine::Engine::new("Signal"));
+    // The rig libraries as books (synced Loro docs), before a rig reads one.
+    crate::books::enable();
     let guitar = GuitarRigBackend::new();
     guitar.start(); // worship rig: open audio + load profile off-thread
     // Signal's commands for a model, when asked (`--mcp` / `SIGNAL_MCP=1`).

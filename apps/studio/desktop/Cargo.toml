@@ -255,8 +255,9 @@ signal-import = { workspace = true, optional = true }
 signal-plugin-host = { workspace = true, features = ["clap-host"], optional = true }
 dsp = { workspace = true, optional = true }
 # The rig's store and config dir: rig_engine.rs (native, and its TONE3000
-# session on every desktop, not only macOS).
-signal-rig-host = { workspace = true }
+# session on every desktop, not only macOS); its `book`, the rig libraries
+# as synced Loro docs (books.rs).
+signal-rig-host = { workspace = true, features = ["book"] }
 # The Blitz native renderer — the desktop path and the iPhone's.
 #
 # `dioxus::desktop` puts WebKit/WRY behind the same components, and a WebView
