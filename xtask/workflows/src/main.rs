@@ -21,6 +21,7 @@ mod cache_devshell;
 mod checks;
 mod deploy;
 mod model;
+mod pr;
 mod release;
 mod steps;
 mod studio_ios;
@@ -41,6 +42,7 @@ type Build = fn() -> Result<Workflow>;
 /// (file stem, builder); the module is the stem with `_` for `-`.
 const WORKFLOWS: &[(&str, Build)] = &[
     ("checks", checks::workflow),
+    ("pr", pr::workflow),
     ("cache-devshell", cache_devshell::workflow),
     ("deploy", deploy::workflow),
     ("release", release::workflow),

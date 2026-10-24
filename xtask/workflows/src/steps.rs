@@ -13,7 +13,7 @@
 //!   `fts.buildInputs` on Linux) as Ubuntu packages, [`APT_PACKAGES`],
 //!   cached by `awalsh128/cache-apt-pkgs-action` the way Dioxus does;
 //! - just from `taiki-e/install-action`;
-//! - cargo-rail, tracey, tailwindcss and actionlint as upstream release
+//! - cargo-rail, tracey and actionlint as upstream release
 //!   binaries, checked against a pinned sha256 ([`Pinned`]) — the same
 //!   artefacts (and for tracey the same hash) nix fetched;
 //! - python3 from the runner image (/usr/bin/python3).
@@ -53,13 +53,6 @@ const CARGO_RAIL: Pinned = Pinned {
 const TRACEY: Pinned = Pinned {
     version: "1.3.0",
     sha256: "fbc0c25c44328ccb0970b2509095ff29412fa72cbbc6b0036c4cee8c12821f47",
-};
-
-/// The tailwindcss standalone CLI, the version of the ci shell's
-/// `tailwindcss_4` (nixpkgs). `just web-tailwind` needs it.
-const TAILWIND: Pinned = Pinned {
-    version: "4.2.2",
-    sha256: "4ab84f2b496c402d3ec4fd25e0e5559fe1184d886dadae8fb4438344ec044c22",
 };
 
 /// actionlint lints the generated workflows in the lint job (and runs the
@@ -136,10 +129,8 @@ const APT_CACHE_VERSION: &str = "1";
 #[derive(Clone, Copy)]
 pub enum Toolchain {
     /// A hosted job: the tools are on PATH (installed by [`hosted_setup`]).
+    /// (The self-hosted NixOS variant went with the Mac Pro tests job.)
     Hosted,
-    /// A self-hosted NixOS job: every command runs under `${NIX_DEV}`
-    /// (`nix develop --accept-flake-config .#ci -c`); the job sets it.
-    Nix,
 }
 
 impl Toolchain {
@@ -147,15 +138,9 @@ impl Toolchain {
     pub fn cmd(self, cmd: &str) -> String {
         match self {
             Self::Hosted => cmd.to_owned(),
-            Self::Nix => format!("${{NIX_DEV}} {cmd}"),
         }
     }
 }
-
-/// `nix develop` into the ci shell; `--accept-flake-config` picks up the
-/// fasttrackstudio.cachix.org substituter from flake.nix nixConfig. Only the
-/// self-hosted NixOS jobs use it.
-pub const NIX_DEV: &str = "nix develop --accept-flake-config .#ci -c";
 
 /// The event's own ref: a PR's merge ref, the pushed commit, main for the
 /// nightly, a dispatched branch.
@@ -181,7 +166,6 @@ pub struct Tools {
     pub just: bool,
     pub cargo_rail: bool,
     pub tracey: bool,
-    pub tailwind: bool,
     pub actionlint: bool,
     pub nextest: bool,
     /// lavapipe (software Vulkan) for running the GPU tests.
@@ -190,6 +174,10 @@ pub struct Tools {
     pub ci_cargo_config: bool,
     /// Free the image's disk (a job that builds).
     pub free_disk: bool,
+    /// mold alone, for a job without the full [`APT_PACKAGES`] list:
+    /// .cargo/config.toml links every x86_64-linux build with it, so even
+    /// `cargo run -p xtask-workflows` needs it.
+    pub mold: bool,
 }
 
 /// Everything a hosted job needs before its first cargo command.
@@ -201,6 +189,11 @@ pub fn hosted_setup(components: &str, targets: &str, tools: Tools) -> Vec<Step> 
     steps.push(rust_toolchain(components, targets));
     if tools.apt {
         steps.push(apt_packages(tools.gpu));
+    } else if tools.mold {
+        steps.push(Step::run(
+            "mold",
+            "sudo apt-get install -y --no-install-recommends mold\n",
+        ));
     }
     if tools.just {
         steps.push(
@@ -218,9 +211,6 @@ pub fn hosted_setup(components: &str, targets: &str, tools: Tools) -> Vec<Step> 
     }
     if tools.tracey {
         steps.push(install_tracey());
-    }
-    if tools.tailwind {
-        steps.push(install_tailwind());
     }
     if tools.actionlint {
         steps.push(install_actionlint());
@@ -325,17 +315,6 @@ install -m755 \"$RUNNER_TEMP/tracey-x86_64-unknown-linux-gnu/tracey\" \"$HOME/.l
     Step::run(&format!("tracey {version}"), &script)
 }
 
-fn install_tailwind() -> Step {
-    let Pinned { version, sha256 } = TAILWIND;
-    let url = format!(
-        "https://github.com/tailwindlabs/tailwindcss/releases/download/v{version}/tailwindcss-linux-x64"
-    );
-    let mut script = fetch(&url, "tailwindcss", sha256);
-    script
-        .push_str("install -m755 \"$RUNNER_TEMP/tailwindcss\" \"$HOME/.local/bin/tailwindcss\"\n");
-    Step::run(&format!("tailwindcss {version}"), &script)
-}
-
 fn install_actionlint() -> Step {
     let Pinned { version, sha256 } = ACTIONLINT;
     let url = format!(
@@ -367,11 +346,18 @@ cp .cargo/ci-config.toml ../.cargo/config.toml
     )
 }
 
+/// Where [`rust_cache`] keeps its entries: WarpBuild's cache (unlimited, 7
+/// days from last use) works on WarpBuild runners only; GitHub's (10 GB per
+/// repo) is the free runners'.
+#[derive(Clone, Copy)]
+pub enum Cache {
+    Warp,
+    Github,
+}
+
 /// Swatinem/rust-cache with ONE shared key per build kind, saved by main
-/// only: PRs restore main's entry and never write their own, so the repo's
-/// 10 GB cache budget holds one lint set + one wasm set + the small
-/// rail-evidence and architect-xtask entries instead of being evicted by
-/// every open PR. `cache-on-failure`: the cache holds compiled dependencies,
+/// only: PRs restore main's entry and never write their own, so a cache
+/// budget holds one set per kind instead of being evicted by every open PR. `cache-on-failure`: the cache holds compiled dependencies,
 /// not results.
 ///
 /// No `key:` — rust-cache already fingerprints the active rustc
@@ -384,7 +370,11 @@ cp .cargo/ci-config.toml ../.cargo/config.toml
 /// deletes every unit the build did not read, so the entry main saves holds
 /// only what this build used instead of piling up the `-<hash>` units of
 /// every past Cargo.lock.
-pub fn rust_cache(shared_key: &str) -> [Step; 2] {
+pub fn rust_cache(shared_key: &str, cache: Cache) -> [Step; 2] {
+    let provider = match cache {
+        Cache::Warp => "warpbuild",
+        Cache::Github => "github",
+    };
     [
         Step::uses(
             &format!("Rust cache ({shared_key}, main saves)"),
@@ -392,6 +382,7 @@ pub fn rust_cache(shared_key: &str) -> [Step; 2] {
         )
         .with("shared-key", shared_key)
         .with("save-if", "${{ github.ref == 'refs/heads/main' }}")
+        .with("cache-provider", provider)
         .with("cache-on-failure", true)
         .with("cache-bin", false),
         Step::uses(
@@ -432,15 +423,6 @@ pub fn target_sweep() -> Step {
     .with("target-dir", "${{ env.CARGO_TARGET_DIR }}")
 }
 
-/// apps/session/web/assets/tailwind.css is gitignored build output that
-/// `asset!()` demands at compile time (see apps/session/web/tailwind.css) —
-/// the sheet has to exist before any cargo step touches session-web. Every
-/// job that compiles session-web runs this itself: the jobs share no
-/// checkout.
-pub fn tailwind(tc: Toolchain) -> Step {
-    Step::run("Web tailwind sheet", &tc.cmd("just web-tailwind")).cond("${{ !cancelled() }}")
-}
-
 /// features/ui/plugin-faces/generated is gitignored build output too: the
 /// plugin faces as `.frame` documents, which session-daw reads at runtime
 /// (`faces::design_dir()`), and its faces tests with it — without them no
@@ -464,4 +446,41 @@ df -h / | tail -n 1
 ",
     )
     .cond("${{ always() }}")
+}
+
+/// What [`cargo_deps_restore`] / [`cargo_deps_save`] keep: cargo's
+/// downloaded registry and git dependencies (not anything built).
+const CARGO_DEPS_PATHS: &str = "\
+~/.cargo/registry/index
+~/.cargo/registry/cache
+~/.cargo/git/db
+";
+
+/// Keyed on the lockfile, which content-addresses every download.
+const CARGO_DEPS_KEY: &str = "cargo-deps-${{ runner.os }}-${{ hashFiles('Cargo.lock') }}";
+
+/// cargo's downloaded dependencies from the Actions cache, for a free job
+/// that runs cargo but builds nothing (the PR checks). Without it the first
+/// cargo command spends most of a minute fetching every git dependency.
+/// Only main writes the entry (CI's `deps-cache` job, [`cargo_deps_save`]),
+/// so PRs never spend the 10 GB budget.
+pub fn cargo_deps_restore() -> Step {
+    Step::uses("Restore cargo's dependencies", "actions/cache/restore@v4")
+        .id("deps")
+        .with("path", CARGO_DEPS_PATHS)
+        .with("key", CARGO_DEPS_KEY)
+        .with("restore-keys", "cargo-deps-${{ runner.os }}-")
+}
+
+/// [`cargo_deps_restore`], then on a miss fetch everything and save it.
+pub fn cargo_deps_save() -> [Step; 3] {
+    let miss = "${{ steps.deps.outputs.cache-hit != 'true' }}";
+    [
+        cargo_deps_restore(),
+        Step::run("Fetch cargo's dependencies", "cargo fetch").cond(miss),
+        Step::uses("Save cargo's dependencies", "actions/cache/save@v4")
+            .cond(miss)
+            .with("path", CARGO_DEPS_PATHS)
+            .with("key", CARGO_DEPS_KEY),
+    ]
 }

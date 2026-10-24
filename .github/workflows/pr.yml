@@ -1,0 +1,96 @@
+# Generated from xtask::workflows::pr (xtask/workflows/src/pr.rs)
+# Rebuild with `just workflows`; do not edit by hand (`just workflows-check` fails CI on drift).
+# The reasons for every job and step are comments in that Rust source.
+name: PR
+on:
+  pull_request:
+    types:
+    - opened
+    - synchronize
+    - reopened
+    - ready_for_review
+concurrency:
+  group: pr-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+jobs:
+  pr-checks:
+    name: PR checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: ${{ github.head_ref == 'release/pending' && 0 || 2 }}
+    - name: Release commit?
+      id: release
+      if: ${{ github.head_ref == 'release/pending' }}
+      env:
+        BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        BASE_REF: ${{ github.event.pull_request.base.ref }}
+        HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        HEAD_REF: ${{ github.head_ref }}
+        HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
+      run: |
+        git show "$BASE_SHA:scripts/release.sh" > "$RUNNER_TEMP/release-base.sh"
+        if bash "$RUNNER_TEMP/release-base.sh" release-only; then
+          echo "only=true" >> "$GITHUB_OUTPUT"
+          echo "release commit only: nothing to check"
+        fi
+    - name: Rust 1.94.0
+      if: ${{ steps.release.outputs.only != 'true' }}
+      uses: dtolnay/rust-toolchain@1.94.0
+      with:
+        components: rustfmt
+    - name: cargo-rail 0.32.0
+      if: ${{ steps.release.outputs.only != 'true' }}
+      run: |
+        set -euo pipefail
+        mkdir -p "$HOME/.local/bin"
+        echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+        curl -fsSL --retry 3 -o "$RUNNER_TEMP/cargo-rail.zip" "https://github.com/loadingalias/cargo-rail/releases/download/v0.32.0/cargo-rail-x86_64-unknown-linux-gnu.zip"
+        echo "5fcda1a62d36d51834ad49a5ef2ebc82777fd9d134d3d409f7021ce1a495dee4  $RUNNER_TEMP/cargo-rail.zip" | sha256sum -c -
+        unzip -q -o "$RUNNER_TEMP/cargo-rail.zip" -d "$HOME/.local/share"
+        echo "$HOME/.local/share/cargo-rail" >> "$GITHUB_PATH"
+        "$HOME/.local/share/cargo-rail/cargo-rail" --version
+    - name: Restore cargo's dependencies
+      id: deps
+      if: ${{ steps.release.outputs.only != 'true' }}
+      uses: actions/cache/restore@v4
+      with:
+        path: |
+          ~/.cargo/registry/index
+          ~/.cargo/registry/cache
+          ~/.cargo/git/db
+        key: cargo-deps-${{ runner.os }}-${{ hashFiles('Cargo.lock') }}
+        restore-keys: cargo-deps-${{ runner.os }}-
+    - name: fmt
+      if: ${{ !cancelled() && steps.release.outputs.only != 'true' }}
+      run: cargo fmt --all --check
+    - name: Change files
+      if: ${{ !cancelled() && steps.release.outputs.only != 'true' }}
+      run: cargo rail change check --since "$(git rev-parse HEAD^1)"
+    - name: Manifests + lockfile
+      if: ${{ !cancelled() && steps.release.outputs.only != 'true' }}
+      run: |
+        set -euo pipefail
+        committed="$RUNNER_TEMP/Cargo.lock.committed"
+        cp Cargo.lock "$committed"
+        cargo metadata --format-version 1 > /dev/null
+        packages() { sed '/^\[\[patch\.unused\]\]/,$d' "$1"; }
+        unused() {
+          awk '/^\[\[patch\.unused\]\]/ { f = 1; next }
+               f && /^name = /    { n = $3 }
+               f && /^version = / { print n "@" $3 }' "$1" | sort
+        }
+        ok=1
+        diff -u <(packages "$committed") <(packages Cargo.lock) || ok=0
+        diff -u <(unused "$committed") <(unused Cargo.lock) || ok=0
+        if [ "$ok" = 0 ]; then
+          echo "::error::Cargo.lock is out of date — run cargo metadata and commit the result"
+          exit 1
+        fi
+    - name: rail config
+      if: ${{ !cancelled() && steps.release.outputs.only != 'true' }}
+      run: cargo rail config validate --strict

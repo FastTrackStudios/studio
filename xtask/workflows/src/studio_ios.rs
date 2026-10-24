@@ -11,7 +11,7 @@
 //!   release PR merged --> `just release-tag` pushes vYY.M.MICRO (on main, or
 //!   on a release/v* hotfix line) --> this workflow starts on the tag -->
 //!   resolve (hosted: tag shape, app crate version == tag version, changelog
-//!   section, commit on main or release/v*, `Build + test` green, Release
+//!   section, commit on main or release/v*, `CI passed` green, Release
 //!   exists) --> testflight (airlock: build, sign, upload) --> record
 //!   (hosted: marketing version + build number written into the Release
 //!   notes; a re-run's edit re-reads and retries).
@@ -209,7 +209,7 @@ else
     || { echo "::error::could not clone $url into $src"; exit 1; }
   echo "rig-models cloned at $(git -C "$src" rev-parse --short HEAD)"
 fi
-[ -d "$src/guitar" ] && [ -d "$src/bass" ] || { echo "::error::no rig-models clone at $src"; exit 1; }
+if [ ! -d "$src/guitar" ] || [ ! -d "$src/bass" ]; then echo "::error::no rig-models clone at $src"; exit 1; fi
 while read -r repo from to; do
   [[ -z $repo || $repo == \#* || $repo != rig-models ]] && continue
   to="${to:-$from}"

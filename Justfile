@@ -1005,8 +1005,16 @@ _web-tw-link:
 
 # Compile the site's Tailwind sheet. Gitignored output; `asset!()` needs it
 # at compile time, so this runs before any build of apps/web.
+# Writes the sheet only when it changed: session-web's build script watches
+# it, so a fresh mtime on identical bytes rebuilt session-web every run.
 web-tailwind: _web-tw-link
-    cd apps/session/web && tailwindcss -i ./tailwind.css -o ./assets/tailwind.css --minify
+    #!/usr/bin/env bash
+    set -euo pipefail
+    cd apps/session/web
+    tmp="$(mktemp)"
+    tailwindcss -i ./tailwind.css -o "$tmp" --minify
+    mkdir -p assets
+    if cmp -s "$tmp" assets/tailwind.css; then rm -f "$tmp"; else mv "$tmp" assets/tailwind.css; fi
 
 # Serve apps/session/web with hot reload.
 web: web-tailwind
@@ -1992,21 +2000,17 @@ workflows-check:
     cargo run -q -p xtask-workflows -- check
     if command -v actionlint >/dev/null; then actionlint; fi
 
-# Runs what `.github/workflows/checks.yml` runs, in the same order: a
-# local run gives the same answer as CI's fast checks on a PR into main
-# (CI narrows the tests with `cargo rail plan`; this runs them all). NOT
-# the other
-# workflows: `studio-ios` (the release tag) and `deploy` need a
-# Mac, signing keys and upload credentials, which is why they are not a
-# thing you run before pushing — and why a green run here says nothing
-# about whether either of them is healthy.
-
-
+# The same order as CI: the gates, then the whole workspace check, the wasm
+# checks and every test. A PR is checked by `just ci-local` instead (the
+# pre-push hook): the gates plus what the change affects. NOT the other
+# workflows: `studio-ios` (the release tag) and `deploy` need a Mac, signing
+# keys and upload credentials, so a green run here says nothing about them.
+# Everything checks.yml runs after a merge to main, locally.
 ci FROM="lockfile":
     #!/usr/bin/env bash
     set -euo pipefail
     export CARGO_TARGET_DIR="${CARGO_TARGET_DIR:-$PWD/target}"
-    steps=(lockfile fmt workflows flows tailwind check wasm nextest)
+    steps=(lockfile fmt workflows flows check wasm nextest)
     start=0
     for i in "${!steps[@]}"; do
       [ "${steps[$i]}" = "{{FROM}}" ] && start=$i && break
@@ -2063,14 +2067,9 @@ ci FROM="lockfile":
     fi
 
     if run_from flows; then
-      echo "── flow verification gate ───────────────────────────"
+      echo "── rail config + flow verification gate ─────────────"
+      cargo rail config validate --strict
       just daw-flows --own-daemon
-    fi
-
-    if run_from tailwind; then
-      echo "── web tailwind sheet ───────────────────────────────"
-      just web-tailwind
-      echo "ok"
     fi
 
     if run_from check; then
@@ -2088,6 +2087,11 @@ ci FROM="lockfile":
     fi
 
     if run_from nextest; then
+      # What CI's tests job has before nextest: the private assets linked
+      # and the plugin faces generated (session-daw reads them at runtime).
+      echo "── assets + plugin faces ────────────────────────────"
+      just assets
+      just faces
       echo "── cargo nextest --workspace ────────────────────────"
       # The app CLIs and the worklet rigs sit behind features: name them, or
       # their tests never build (an app crate has no lib to dev-depend on).
@@ -2096,6 +2100,65 @@ ci FROM="lockfile":
 
     echo
     echo "every CI step passed locally"
+
+# Two CI-boot passes (prep + test build); the second must compile nothing.
+ci-churn:
+    scripts/ci-churn-check.sh
+
+# Run once per clone (prek.toml): rustfmt / shellcheck / actionlint on the
+# staged files at commit, `ci-local` at push, which posts the `Local CI`
+# status main requires. Clears a leftover core.hooksPath (the old .githooks).
+# Install the git hooks (prek): format on commit, local CI on push.
+install-hooks:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    git config --unset core.hooksPath 2>/dev/null || true
+    prek install --force
+
+# Rewrites the version and every per-platform sha256 in nix/modules/prek.nix
+# from the release's own `.sha256` files; then `just install-hooks` again.
+# Move prek to its newest release (or VERSION).
+prek-bump VERSION="":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    v="{{VERSION}}"
+    if [ -z "$v" ]; then
+        v="$(curl -fsSL https://api.github.com/repos/j178/prek/releases/latest | sed -n 's/.*"tag_name": *"v\([^"]*\)".*/\1/p')"
+    fi
+    [ -n "$v" ] || { echo "could not read prek's latest release" >&2; exit 1; }
+    f=nix/modules/prek.nix
+    # -i.bak + rm: one spelling for GNU and BSD (macOS) sed.
+    sed -i.bak "s/version = \"[^\"]*\";/version = \"$v\";/" "$f"
+    for t in x86_64-unknown-linux-musl aarch64-unknown-linux-musl x86_64-apple-darwin aarch64-apple-darwin; do
+        sum="$(curl -fsSL "https://github.com/j178/prek/releases/download/v$v/prek-$t.tar.gz.sha256" | cut -d' ' -f1)"
+        [[ "$sum" =~ ^[0-9a-f]{64}$ ]] || { echo "no sha256 for $t at v$v" >&2; exit 1; }
+        sed -i.bak "s|target = \"$t\"; sha256 = \"[0-9a-f]*\"|target = \"$t\"; sha256 = \"$sum\"|" "$f"
+    done
+    rm -f "$f.bak"
+    git diff --stat -- "$f"
+    echo "prek -> $v"
+
+# BASE defaults to the merge-base with origin/main; the pre-push hook runs
+# this and marks the pushed commits `Local CI`. Run it BEFORE pushing a long
+# change: the pass it records makes the push instant.
+# The PR gate, locally: tests + check + wasm for what `cargo rail plan` affects.
+ci-local BASE="":
+    bash scripts/ci-local.sh {{BASE}}
+
+# Run on a clean HEAD (normally main after a pull), so `ci-local` against it
+# narrows a docs or CI-file change instead of running everything. Kept in the
+# git dir, one file per work item; one warm test build and one warm check.
+# Record rail's observed-input evidence for HEAD.
+rail-evidence:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    dir="$(git rev-parse --git-common-dir)/rail-evidence/$(git rev-parse HEAD)"
+    mkdir -p "$dir"
+    cargo rail plan evidence --work cargo.test -o "$dir/cargo.test.json" -- \
+      test --workspace --no-run --features session-desktop/cli,studio-desktop/cli,web-audio-worklet/guitar,web-audio-worklet/keys
+    cargo rail plan evidence --work cargo.build -o "$dir/cargo.build.json" -- check --workspace
+    echo "rail evidence: $dir"
+
 
 # ── Releases ─────────────────────────────────────────────────────────────
 #
@@ -2143,7 +2206,7 @@ release-merge:
     bash scripts/release.sh merge
 
 # After the release PR merged: tag v<version> on its merge commit once
-# `Build + test` is green there. THE TAG SHIPS (sites, Signal + Session
+# `CI passed` is green there. THE TAG SHIPS (sites, Signal + Session
 # TestFlight, the GitHub Release). After a hotfix it opens the
 # forward-port PR into main. Push as the fts-forge bot or a person, not a
 # workflow token (that starts no workflow).
@@ -2218,7 +2281,10 @@ assets:
             fetched="$fetched$repo "
         fi
         mkdir -p "$(dirname "$to")"
-        ln -sfn "$PWD/.assets/$repo/$from" "$to"
+        # Only when it isn't already that link: re-linking moves the parent
+        # directory's mtime, and build scripts that watch it (FTS Mic's
+        # `models`) then rebuild — and everything above them.
+        [ "$(readlink "$to" 2>/dev/null)" = "$PWD/.assets/$repo/$from" ] || ln -sfn "$PWD/.assets/$repo/$from" "$to"
         n=$((n+1))
     done < assets.txt
     echo "linked $n assets from $(echo $fetched | wc -w | tr -d ' ') repos"

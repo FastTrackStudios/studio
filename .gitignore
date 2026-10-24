@@ -70,7 +70,7 @@ apps/session/web/.tailwind-src/
 features/dynamic-template/fixtures/golden/media/
 
 # Large binaries linked in by `just assets` (see assets.txt)
-/.assets/
+/.assets
 /features/rigs/guitar/default-config/models
 /features/rigs/guitar/default-config-bass/models
 /features/adapters/logic/tests/fixtures/logic/Fire.logicx/Alternatives/000/ProjectData

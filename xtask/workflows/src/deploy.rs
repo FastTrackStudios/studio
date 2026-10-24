@@ -65,7 +65,7 @@ fn deploy() -> Result<Job> {
     Ok(Job::new(RunsOn::Labels(&["self-hosted", "studio-deploy"]))
         .name("deploy ${{ matrix.img }}")
         // The repo default token is read-only with no `checks` scope; the
-        // tag guard reads the `Build + test` check of the tagged commit.
+        // tag guard reads the `CI passed` check of the tagged commit.
         .permissions(yaml("contents: read\nchecks: read\n")?)
         .strategy(yaml(
             r"
@@ -84,7 +84,7 @@ matrix:
         .step(checkout_full(None))
         // Production changes only by tag: refuse a branch ref, a tag whose
         // version is not Cargo.toml's, a commit on neither main nor a
-        // release/v* line, a commit whose `Build + test` is not green.
+        // release/v* line, a commit whose `CI passed` is not green.
         .step(
             Step::run(
                 "The ref is a green release tag on main or release/v*",

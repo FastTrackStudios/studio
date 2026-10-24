@@ -18,36 +18,60 @@ targets = ["wasm32-unknown-unknown"]
 # Releases go through scripts/release.sh (docs/agents/release-workflow.md):
 # rail 0.32 cannot bump crates that inherit `version.workspace = true`,
 # which is every app crate here. Its default would publish to crates.io
-# and create GitHub releases; make `cargo rail release` inert, and name
-# the change files (.changes/, the default change_dir) as the release
-# source, which is what release.sh reads.
+# and create GitHub releases; make `cargo rail release` inert. (The change
+# files in .changes/ are already rail's default release source.)
 [release]
 publish = "none"
 github_release = false
 checks = "none"
-source = "changes"
 
-# Inputs outside the Cargo graph that change what CI itself does. Any of
-# these changing makes the plan job run the FULL set (workflows, the
-# Justfile recipes the steps call, the nix CI shell, the scripts the
-# steps run). Built-in Cargo work already covers manifests, Cargo.lock,
+# Inputs outside the Cargo graph. Each repository work item ADDS work when
+# its paths change (scripts/ci-rail-plan.py decides what each means); it
+# does not stop the Cargo items from widening. Whether a non-Rust change
+# narrows is decided by EVIDENCE for the base commit (observed compiler
+# inputs, recorded by main's full runs): with it, a YAML edit that no unit
+# reads requires no Cargo work; without it, rail cannot rule that out and
+# every Cargo item widens to the workspace.
+#
+#   ci-infra   CI's own definition: the workflows and actions, the Justfile
+#              recipes the steps call, the scripts they run, the CI-only cargo
+#              config, nextest's config. A SMOKE run: lint as always (it
+#              checks the generated workflows and lints them), and the tests
+#              job end to end on one tiny package — the job works, without
+#              building the workspace for a YAML edit. The full set runs on
+#              the next push to main, as for everything.
+#   dev-shell  nix and the flake: developers' shells and deploy's images. No
+#              checks job uses nix any more (2026-10), so: nothing to run.
+#   docs       prose and change files: nothing to run.
+#
+# Built-in Cargo work already covers manifests, Cargo.lock,
 # .cargo/config.toml and rust-toolchain files; don't repeat them.
 [plan.work.ci-infra]
 scope = "repository"
 paths = [
   ".github/**",
   "Justfile",
-  "flake.nix",
-  "flake.lock",
-  "nix/**",
   "scripts/**",
-  # The CI-only cargo config the hosted jobs merge in (.github/workflows
-  # are generated from xtask/workflows, a workspace crate rail already sees).
   ".cargo/ci-config.toml",
+  ".config/nextest.toml",
+  "prek.toml",
 ]
 
-# nextest's own configuration (profiles, slow-timeout overrides): a change
-# can alter how every test runs, so it means the full test set.
-[plan.work.test-runner]
+[plan.work.dev-shell]
 scope = "repository"
-paths = [".config/nextest.toml"]
+paths = ["flake.nix", "flake.lock", "nix/**"]
+
+[plan.work.docs]
+scope = "repository"
+paths = ["docs/**", "*.md", ".changes/**", ".claude/**", "assets.txt"]
+
+# Files tests open at RUN time: compiler evidence cannot see them (it sees
+# what rustc reads), so once evidence narrows a PR, a changed fixture would
+# otherwise run no test. A Cargo-scoped item subscribed to cargo.test: its
+# selection is cargo.test's packages plus the package that owns each changed
+# path (a path outside every package widens to the workspace). The tests
+# job routes from THIS item, not cargo.test.
+[plan.work.test-data]
+scope = "cargo"
+cargo = ["cargo.test"]
+paths = ["**/fixtures/**", "**/golden/**", "**/snapshots/**", "**/tests/**", "assets.txt"]

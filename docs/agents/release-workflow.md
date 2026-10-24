@@ -57,7 +57,7 @@ just release-plan            # latest tag, what main holds since, the next versi
 just release-prepare         # release/pending from origin/main: ONE commit `chore(release): vYY.M.MICRO`
 just release-pr              # push it, open its PR into main
 just release-merge           # re-run the guard against the CURRENT main, then squash-merge
-just release-tag             # tag the merge commit once its `Build + test` is green: THIS ships
+just release-tag             # tag the merge commit once its `CI passed` is green: THIS ships
 
 just release-hotfix <sha>…   # release/v<latest tag> + the main fixes cherry-picked (-x) + PR into it
 just release-prepare --hotfix  # then release-pr, release-merge, release-tag (opens the forward-port PR)
@@ -81,37 +81,45 @@ delete a tag; a bad release is superseded by the next.
 
 | Event | Workflows | Runner |
 |---|---|---|
-| PR into `main` | `checks` (`Build + test`: the rail-selected set + `cargo rail change check`); the `release` guard only on release PRs | hosted (plan, lint, wasm, the aggregator, the guard); Mac Pro `studio-tests` (the nextest build, required) |
-| release PR `release/pending` → `main` | `release` guard; `checks` runs the same guard from the base commit and **skips** the heavy jobs if it passes, fails `Build + test` if not | hosted |
-| PR into `release/**` (hotfix) | `checks` (the full set), `release` guard | as above |
-| push to `main` / `release/**` | `checks` full set (+ rail evidence on `main`) | hosted + Mac Pro `studio-tests` |
-| nightly | `checks` full set on `main` | hosted + Mac Pro `studio-tests` |
+| PR into `main` | `PR` (`PR checks`: fmt, change files, the lockfile, the rail config — compiles nothing) + the `Local CI` status (the prek pre-push hook: the static guards, then the rail-selected tests + `cargo check` + wasm, on the pusher's machine) + `Release guard` | `PR checks` on GitHub's free runners |
+| release PR `release/pending` → `main` | `Release guard`; `PR checks` runs the same guard from the base commit and skips its checks if it passes; `ci-local` runs it too and posts `Local CI` without building | hosted |
+| PR into `release/**` (hotfix) | `CI` (the full set), `Release guard` | as below |
+| push to `main` / `release/v*` | `CI` full set: `Gates`, `Check` (+ advisory clippy), `Wasm`, `Tests`, aggregated as `CI passed`; on `main` also `Dependency cache` (the cargo downloads `PR checks` restore) | gates, wasm, plan, aggregator free; `Check` on a WarpBuild 8x; `Tests` on a 16x snapshot runner |
+| Sunday (cron) / `gh workflow run checks.yml --ref main -f seed=true` | `CI` full set as a **seed**: `Tests` boots from WarpBuild's base image and saves a fresh snapshot | as above |
+| `gh workflow run checks.yml --ref <branch>` | `CI` full set; green, it posts `Local CI` on the branch's head (for a push the hook couldn't vouch for) | as above |
 | push of tag `vYY.M.MICRO` (or `workflow_dispatch` with the tag as ref) | `deploy` (session-web, signal-web), `studio-ios`, `release` publish | `studio-deploy` (LAN registry), `airlock`, hosted |
 
 The workflow files are generated from `xtask/workflows` (one Rust module per
 workflow, the reasons as comments there): edit the Rust, run `just
-workflows`, commit both; the lint job fails on drift (`just
-workflows-check`) and runs actionlint.
+workflows`, commit both; `Gates` and `just ci-local` fail on drift (`just
+workflows-check`) and run actionlint.
 
-Hosted jobs run without nix: the pinned rustc (dtolnay/rust-toolchain),
+The `CI` jobs run without nix: the pinned rustc (dtolnay/rust-toolchain),
 apt headers (cached), and pinned release binaries for just, cargo-rail,
-tracey, tailwindcss and actionlint. They restore one Actions cache per
-build kind (`lint`, `wasm`) that only `main` saves, so PRs never evict it
-from the repo's 10 GB budget. Only the nextest build stays on the Mac Pro
-(NixOS, the ci dev shell), for its warm target dir; it builds just the
-packages a PR affects (`-p …`), the whole workspace on full runs.
+tracey and actionlint. Gates, check and wasm restore one rust-cache per
+build kind that only `main` saves (GitHub's cache on the free runners,
+WarpBuild's on the 8x). `Tests` boots from a WarpBuild snapshot (warm
+target dir, pruned to what the seed's build used) and builds the whole
+workspace. **Only a seed saves the snapshot**, from a runner booted from
+the base image: Task saved from a restored runner, and the snapshot of a
+snapshot booted runners that never picked up a job (2026-10-23).
+Snapshots expire after 15 days unused; the weekly seed keeps one alive.
+There is no nightly, no tailwind step (the sheets are committed; dx builds
+session-web's) and no Boundaries step (`just ci-boundaries` is manual).
 `cache-devshell` still seeds fasttrackstudio.cachix.org, for developers'
 `nix develop`; no CI job depends on it. The REAPER integration suites are not in
 CI (they need a licensed REAPER): run `just reaper-test` and `just reaper
 daw-test` locally before a change to the REAPER adapters lands.
 
-`Build + test` is the one required check (the `main` ruleset). It is an
-aggregator: it requires the `lint` job and, when the plan gave them work,
-the web-bundle wasm check and the `tests` nextest run. Advisory (red or
-green, never blocking): clippy and the Signal browser remote wasm check (red
-today, STA-184), and `tests (warpbuild trial)` when the `WARPBUILD_TRIAL`
-repository variable turns it on. `main` may be red for code reasons; nothing
-is tagged until it is green.
+`PR checks`, `Local CI` and `Release guard` are the required checks (the
+`main` ruleset). `CI passed` is the aggregate of a full run: it requires
+`Gates`, `Check`, `Wasm` and `Tests`, and `just release-tag` and the tag
+guards require it green on the release commit. Advisory (red or green,
+never blocking): clippy and the Signal browser remote wasm check (red
+today, STA-184). `Local CI` is as honest as whoever posts it — anyone who
+can push could post one — which is the bargain (2026-10): the full set
+after every merge catches what a local run missed. `main` may be red for
+code reasons; nothing is tagged until `CI passed` is green.
 
 ## What the guards check
 
@@ -130,7 +138,7 @@ release PR cut before another merge can't ship that merge unlisted.
 publish and `reaper` on a `v*` tag; `ios-resolve` in the iOS workflows):
 the tag is `v` + the workspace version, the iOS app crate is on it, it has a
 changelog section, its commit is on `main` or a `release/v*` line, and
-(where the job has a token) `Build + test` is green on it.
+(where the job has a token) `CI passed` is green on it.
 
 ## The iOS app: TestFlight is a release
 
@@ -151,7 +159,7 @@ records (`app.fasttrackstudio.signal`, `.session`) get no new builds.
 - `studio-ios` refuses a tag that is not
   `^v[0-9]+\.[0-9]+\.[0-9]+$`, a crate or workspace version that differs, a
   missing changelog section, a commit on neither `main` nor `release/v*`, or
-  a red `Build + test`. `workflow_dispatch` with `dry_run` stops after
+  a red `CI passed`. `workflow_dispatch` with `dry_run` stops after
   those checks.
 
 Verify a release: App Store Connect's build for each bundle id has the

@@ -155,21 +155,53 @@ just assets                # link the big binaries (see Assets)
 The test feature list matters: the app CLIs and the worklet rigs sit
 behind features, and without them their tests never build.
 
-**Before you push: `just ci`.** It runs exactly what
-`.github/workflows/checks.yml` runs, in the same order, and stops at the
-first failure: lockfile drift, `cargo fmt --check`, the generated
-workflows being current (`just workflows-check`), the flow gate
-(`just daw-flows`), the web tailwind sheet, `cargo check --workspace`, the
-Signal wasm check, then nextest as above. `just ci <step>` starts from a
-step (`lockfile`, `fmt`, `workflows`, `flows`, `tailwind`, `check`, `wasm`,
-`nextest`).
+**Before you push: `just install-hooks`, once per clone.** It installs the
+prek hooks (`prek.toml`): rustfmt, shellcheck and actionlint on the staged
+files at commit, and **local CI** at push (`scripts/ci-local-hook.sh` ->
+`just ci-local`): the static guards (fmt, change files, rail config, the
+generated workflows + actionlint, the flow gate), then the tests, `cargo
+check --workspace` and the wasm check for what `cargo rail plan` says the
+change affects, on your warm target dir. Green, it posts the **`Local CI`**
+commit status ("passed in 6m12s on host: checks 21s, plan 8s, tests …") on
+the pushed commit — and on every open layer of a `gh stack` the tree
+contains, so one run on the top covers the stack. Run `just ci-local`
+before pushing a long change: the pass it records makes the push instant.
+`SKIP=local-ci git push` skips it; the PR then waits on `Local CI` until
+`gh workflow run checks.yml --ref <branch>` (a green manual full run posts
+it). `just rail-evidence` on a clean `main` lets later runs narrow a docs or
+CI change; `just ci-churn` checks a warm build recompiles nothing after
+the CI prep.
+
+**What GitHub runs.** A PR into `main` gets one free job, **`PR checks`**
+(`pr.yml`: fmt, change files, the lockfile, the rail config — compiles
+nothing). `main` requires `PR checks`, `Local CI` and `Release guard`. The
+full set, **`CI`** (`checks.yml`: `Gates`, `Check` + advisory clippy,
+`Wasm`, `Tests`, aggregated as **`CI passed`**), runs after every merge to
+`main`, on hotfix PRs into `release/**`, and by hand. `main` may go red:
+releases are cut by hand, and `just release-tag` requires `CI passed` on
+the release commit. Plan, gates, wasm and the aggregator run on GitHub's
+free runners; `Check` on a WarpBuild 8x; `Tests` on a WarpBuild 16x
+snapshot runner that keeps the warm target. Only a **seed** saves that
+snapshot — the Sunday cron, or `gh workflow run checks.yml --ref main -f
+seed=true` — booting from the base image; a restored runner never saves
+(a snapshot of a snapshot breaks the runners). No tailwind step anywhere
+(committed sheets; dx builds session-web's); `just ci-boundaries` is
+manual, not CI.
+
+**`just ci`** runs everything a merge to `main` runs, in the same order,
+and stops at the first failure: lockfile drift, `cargo fmt --check`, the
+generated workflows (`just workflows-check`), the rail config and flow gate
+(`just daw-flows`), `cargo check --workspace`, the wasm checks, then
+(after `just assets` and `just faces`) nextest as above. `just ci <step>`
+starts from a step (`lockfile`, `fmt`, `workflows`, `flows`, `check`,
+`wasm`, `nextest`).
 
 **The workflows are generated.** Every file in `.github/workflows/` is
 written by `xtask/workflows` (`just workflows`); edit the Rust, never the
-YAML — the lint job fails when they differ. The GitHub-hosted jobs run
-without nix (rustup 1.94 + apt + pinned tool binaries); the self-hosted
-NixOS jobs (tests, deploy) keep `nix develop .#ci`.
-It refuses to start with less than 25 GB free: a full disk shows up as
+YAML — `Gates` and `just ci-local` fail when they differ. The jobs run
+without nix (rustup + apt + pinned tool binaries). `deploy` (nix images)
+and `studio-ios` (Xcode signing) keep their own runners.
+`just ci` refuses to start with less than 25 GB free: a full disk shows up as
 mold dying with a bus error, which reads as a broken toolchain
 (`just sweep-incremental` is the always-safe reclaim). It says nothing
 about `studio-ios` (Xcode, signing) or `deploy`, which
@@ -331,6 +363,10 @@ first). The rules are not optional:
   `docs/agents/issue-tracker.md`; the triage labels (`needs-triage`,
   `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`) in
   `docs/agents/triage-labels.md`; domain docs in `docs/agents/domain.md`.
+- **Shipping a change: the `ship-stack` skill** — one concern per layer of
+  a `gh stack`, commit through the prek hooks, `just ci-local` on the top,
+  `gh stack submit --auto`, every layer `Local CI: success`, merge, then
+  `CI passed` on main.
 - Project skills live in `.claude/skills/` (build-performance,
   logging-best-practices, blitz-design, reaper-testing, architect-actions,
   signalpack, reaper-theme-*, …) — load the matching one before the work

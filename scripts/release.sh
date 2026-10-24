@@ -69,7 +69,7 @@
 #                                          PR (pinned to its head commit)
 #   scripts/release.sh tag [X.Y.Z]        after the release PR merged: tag
 #                                          vX.Y.Z on its merge commit, only if
-#                                          that commit's `Build + test` is green
+#                                          that commit's `CI passed` is green
 #                                          (this is what ships); after a hotfix,
 #                                          open the forward-port PR into main
 #   scripts/release.sh hotfix <commit>... release/v<latest tag> from the tag
@@ -120,7 +120,7 @@ RELEASE_BRANCH="release/pending"
 CHANGES_DIR=".changes"
 # The required check of checks.yml (the aggregator). A release is tagged,
 # deployed and uploaded only from a commit where it is green.
-BUILD_CHECK="${BUILD_CHECK:-Build + test}"
+BUILD_CHECK="${BUILD_CHECK:-CI passed}"
 
 die() { echo "release: $*" >&2; exit 1; }
 note() { echo "release: $*" >&2; }
@@ -280,7 +280,7 @@ remote_has_branch() { # <branch>
     case "$rc" in 0) return 0 ;; 2) return 1 ;; *) die "cannot reach origin to look for $1 (git ls-remote exit $rc)" ;; esac
 }
 
-# `Build + test` on <sha> must have run and be green: the latest run of the
+# `CI passed` on <sha> must have run and be green: the latest run of the
 # check (a re-run supersedes a failure). A network or API failure dies.
 require_green() { # <sha>
     local out
@@ -858,7 +858,7 @@ release_commit_of() { # <version>
 }
 
 # After the release PR merged: tag v<version> on its merge commit, once
-# that commit's `Build + test` is green. The TAG is the release: it starts
+# that commit's `CI passed` is green. The TAG is the release: it starts
 # the deploy, the TestFlight upload and the GitHub Release. Pushing as a GitHub App (fts-forge) or a person starts the
 # workflows; a tag pushed with a workflow's GITHUB_TOKEN would not.
 cmd_tag() {
@@ -944,7 +944,7 @@ cmd_forward_port() { # <version>
 # tag): the tag that started this run must be a release commit on main or
 # on a release/v* hotfix line. Stops a stray `v*` tag (on a feature branch,
 # on a commit with another version) from reaching production. With GH_TOKEN
-# set it also requires `Build + test` green on the commit.
+# set it also requires `CI passed` green on the commit.
 cmd_tag_guard() {
     local ref="${GITHUB_REF:-}" tag v ok=1 a cv line
     fail() { echo "::error::$*"; ok=0; }
@@ -1085,7 +1085,7 @@ cmd_publish() { publish_release "$@"; }
 # ships exactly the tag: refuse a tag that is not vX.Y.Z, an app crate
 # (or the workspace) whose version is not the tag's, a tag without its
 # changelog section, a commit that is on neither main nor a release/v*
-# hotfix line. With GH_TOKEN set, `Build + test` must be green on it too.
+# hotfix line. With GH_TOKEN set, `CI passed` must be green on it too.
 # Prints the marketing version.
 cmd_ios_resolve() { # <app> <tag>
     local app="${1:-}" tag="${2:-}" v cv wv sha re line

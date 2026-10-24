@@ -1,90 +1,58 @@
-//! `checks` — the fast checks on every PR, the full set after every merge.
+//! `CI` — the full set after every merge, on hotfix PRs and by hand.
 //!
-//! WHEN THIS RUNS — fleet flow v4, trunk-based (the `release-workflow`
-//! skill; docs/agents/release-workflow.md):
-//!
-//! ```text
-//!   PR -> main          HERE, the AFFECTED set (rail plan against the PR's
-//!                       base commit, see CHANGE SELECTION), plus `cargo
-//!                       rail change check` (every changed crate has a
-//!                       change file in .changes/). The required check is
-//!                       `Build + test` (the aggregator at the end). PRs
-//!                       squash-merge into main.
-//!   PR -> release/**    a hotfix onto a release line (just release-hotfix):
-//!                       the FULL set, never narrowed.
-//!   RELEASE PR release/pending -> main (or -> release/v*)   one commit: the
-//!                       CalVer bump + the changelog built from .changes/.
-//!                       The plan runs the release guard from the BASE
-//!                       commit's scripts/release.sh: a sound release PR
-//!                       SKIPS every heavy job (`Build + test` still runs
-//!                       and passes: its content was checked when it merged
-//!                       into main); a release PR the guard refuses FAILS
-//!                       `Build + test`.
-//!   push to main        the FULL set, once per merge, and records rail
-//!   (and release/**)    EVIDENCE for that commit (main only): it is the
-//!                       base the next PRs plan against, and a green
-//!                       `Build + test` on a release merge commit is what
-//!                       `just release-tag` requires. Nothing ships from a
-//!                       push: production changes only when a v* tag is
-//!                       pushed.
-//!   nightly             the FULL set on main.
-//!   by hand             `gh workflow run checks.yml --ref <branch>` runs
-//!                       everything; add `-f base=main` to check only what the
-//!                       branch changed against main.
-//! ```
-//!
-//! RUNNERS: light and parallel work on GitHub-HOSTED runners (public repo:
-//! free, ~20 concurrent Linux jobs org-wide); only the heavy test build on
-//! the self-hosted VM, whose warm target dir it needs:
+//! THE MODEL (Task's, 2026-10). Every CI minute of a workspace this size is
+//! a build, so the expensive half of the PR gate runs on the developer's own
+//! warm target dir, and CI pays for builds once per merge:
 //!
 //! ```text
-//!   ubuntu-latest  plan (cargo metadata + rail), lint (fmt, manifests,
-//!                  the generated workflows, Boundaries, flow gate,
-//!                  tailwind, `cargo check --workspace`, clippy: check
-//!                  mode, no codegen), wasm (the wasm32 checks), and the
-//!                  `Build + test` aggregator
-//!   studio-tests   (self-hosted, NixOS) the nextest build + rail evidence:
-//!                  ~1460 crates and 814 test binaries at full codegen, 20
-//!                  min on the warm Mac Pro; cold on a 4-vCPU hosted runner
-//!                  it would not fit the disk or the 10 GB cache budget.
+//!   PR into main   NOT this workflow: pr.yml (`PR checks`, a free backstop
+//!                  that compiles nothing) plus the `Local CI` commit status
+//!                  the pre-push hook posts (prek.toml -> scripts/
+//!                  ci-local-hook.sh -> scripts/ci-local.sh: the static
+//!                  guards, then the rail-planned tests, `cargo check` and
+//!                  wasm check). Main requires both, and `Release guard`.
+//!   push to main   the FULL set, once per merge: what catches two PRs that
+//!   (release/v*)   each passed alone but break together. main may go red —
+//!                  releases are cut by hand, and `just release-tag`
+//!                  requires `CI passed` on the release commit.
+//!   PR into        a hotfix onto a release line: the FULL set (nothing left
+//!   release/**     to a hook, on a branch that ships straight out). A
+//!                  release PR (version + changelog only, proved by the BASE
+//!                  commit's release.sh) skips everything.
+//!   by hand        `gh workflow run checks.yml --ref <branch>` runs
+//!                  everything and, when green, posts `Local CI` on the
+//!                  branch's head (for a push the hook couldn't vouch for);
+//!                  `-f seed=true` on main reseeds the snapshot.
+//!   weekly seed    Sunday: the FULL set on main from the base image, saving
+//!                  a fresh tests snapshot (see `tests`). No nightly.
 //! ```
 //!
-//! The three build kinds share NO artifacts except build scripts and proc
-//! macros (check-mode units are not the test build's units, and wasm32
-//! units are another triple), so they run as separate jobs side by side.
+//! RUNNERS: only the builds are paid for.
 //!
-//! HOSTED jobs run WITHOUT nix (see [`crate::steps`]): free the image's disk,
-//! install the pinned rustc with dtolnay/rust-toolchain, the native headers
-//! from apt (cached), the pinned tools as release binaries, then
-//! Swatinem/rust-cache with ONE shared key per build kind ([`rust_cache`]).
-//! Debuginfo is line-tables-only (.cargo/ci-config.toml, as [profile.dev]
-//! already sets) and incremental is off.
+//! ```text
+//!   ubuntu-latest  plan, gates, wasm, deps-cache and the `CI passed`
+//!                  aggregator (free: the repo is public)
+//!   warp 8x        check: `cargo check --workspace` + advisory clippy, with
+//!                  rust-cache on WarpBuild's cache
+//!   warp 16x       tests: ~1460 crates and ~800 test binaries at full
+//!                  codegen, on a SNAPSHOT runner whose saved VM holds the
+//!                  warm target dir
+//! ```
 //!
-//! The SELF-HOSTED tests job has nix and the toolchain on the runner
-//! already, so there is no installer step and no rust-cache action —
-//! `CARGO_TARGET_DIR` points at the runner instance's own cache dir
-//! instead, which persists across runs (and across restarts/reboots). Its
-//! steps run under `nix develop .#ci -c` ([`NIX_DEV`]). Everything the
-//! workspace builds is in this repo (daw, processor, signal and patchbay
-//! were folded in), so there are no sibling checkouts.
+//! No tailwind step: every sheet a crate `include_str!`s is committed, and
+//! session-web's build.rs writes a placeholder for its generated one (dx
+//! builds the real sheet). No Boundaries step: `just ci-boundaries` is a
+//! manual check.
 //!
-//! CHANGE SELECTION: the `plan` job asks `cargo rail plan` (0.32) which
-//! workspace packages a change affects, through cargo's resolved
-//! reverse-dependency graph, and scripts/ci-rail-plan.py turns that into
-//! gates plus a nextest filterset. Only which tests RUN narrows; the test
-//! BUILD stays --workspace so the warm target dir keeps one artifact set.
-//! Full runs (push to main, the nightly, a dispatch without `base`) record
-//! rail's observed-input evidence for their commit (dep-info of every unit,
-//! no extra compiling) into the Actions cache; a later plan against that
-//! commit restores it, which is what lets a docs/fixture change narrow
-//! instead of widening to the whole workspace. Workflow, Justfile, nix,
-//! scripts or nextest-config changes (.config/rail.toml [plan.work.*]),
-//! workspace scope, or any rail failure FAIL OPEN to the full set.
+//! The jobs run WITHOUT nix (see [`crate::steps`]): the pinned rustc from
+//! dtolnay/rust-toolchain, the native headers from apt (cached), the pinned
+//! tools as release binaries. Debuginfo is line-tables-only
+//! (.cargo/ci-config.toml) and incremental is off.
 
 use crate::model::{Job, RunsOn, Step, UBUNTU, Workflow, yaml};
 use crate::steps::{
-    NIX_DEV, RUST, Toolchain, Tools, checkout, checkout_full, ci_cargo_config, faces, footprint,
-    hosted_setup, rust_cache, tailwind, target_mark, target_sweep,
+    Cache, Toolchain, Tools, cargo_deps_save, checkout, checkout_full, faces, footprint,
+    hosted_setup, rust_cache, target_mark, target_sweep,
 };
 use anyhow::Result;
 
@@ -94,162 +62,97 @@ use anyhow::Result;
 const TEST_FEATURES: &str =
     "session-desktop/cli,studio-desktop/cli,web-audio-worklet/guitar,web-audio-worklet/keys";
 
+/// The workspace check's WarpBuild size. One constant, so resizing is a
+/// one-line change (then `just workflows`).
+const WARP_CHECK: RunsOn = RunsOn::Label("warp-ubuntu-latest-x64-8x");
+
+/// The weekly seed. `plan` matches this exact string to tell it from any
+/// other schedule.
+const SEED_CRON: &str = "37 9 * * 0";
+
 pub fn workflow() -> Result<Workflow> {
     Ok(Workflow::new(
-        "checks",
-        yaml(
+        "CI",
+        yaml(&format!(
             r#"
 pull_request:
-  branches: [main, "release/**"]
+  branches: ["release/**"]
 push:
-  branches: [main, "release/**"]
+  # release/v* (hotfix lines), not release/pending: a release PR's head is
+  # version + changelog only and gets no run of its own.
+  branches: [main, "release/v*"]
 workflow_dispatch:
   inputs:
-    base:
-      description: "Only check crates affected since this ref (e.g. main). Empty = everything."
+    seed:
+      description: "On main: boot from the base image, build cold, save a fresh tests snapshot."
+      type: boolean
       required: false
-      default: ""
+      default: false
 schedule:
-  - cron: "47 10 * * *"
-"#,
-        )?,
+  - cron: "{SEED_CRON}"
+"#
+        ))?,
     )
-    // One group per PR, so a new push to a PR cancels its predecessor's run.
-    // A PUSH (to main or a release/** line) gets a group of its own commit
-    // (the Zed way): every merge is checked to the end, never cancelled by
-    // the next merge — its green `Build + test` is the rail evidence the
-    // next PRs plan against and what `just release-tag` requires on a
-    // release merge commit. The nightly keeps a group of its own so it
-    // never cancels (or is cancelled by) a dispatch on main.
+    // One group per PR, so a new push to a hotfix PR cancels its
+    // predecessor. A PUSH gets a group of its own commit (the Zed way):
+    // every merge is checked to the end, never cancelled by the next one —
+    // its green `CI passed` is what `just release-tag` requires.
     .concurrency(
-        "checks-${{ github.event.pull_request.number || github.ref }}-${{ \
-         github.event_name == 'schedule' && 'nightly' || \
-         github.event_name == 'push' && github.sha || 'run' }}",
+        "ci-${{ github.event.pull_request.number || github.ref }}-${{ \
+         github.event_name == 'push' && github.sha || github.event_name }}",
         true,
     )
-    .job("plan", plan())
-    .job("lint", lint())
+    .job("plan", plan()?)
+    .job("deps-cache", deps_cache())
+    .job("gates", gates())
+    .job("check", check())
     .job("wasm", wasm())
     .job("tests", tests())
-    .job("tests-warpbuild", tests_warpbuild())
-    .job("build-and-test", build_and_test()))
+    .job("ci-passed", ci_passed()?))
 }
 
-/// Which jobs have work: a sound release PR skips them all (a refused one
-/// fails here); otherwise rail decides (or the run is full). Hosted: the
-/// toolchain for `cargo metadata`, cargo-rail, and the image's python3.
-fn plan() -> Job {
-    let outputs = [
-        "full",
-        "cargo",
-        "tests",
-        "test_filter",
-        "test_packages",
-        "wasm",
-        "skip",
-        "record",
-    ];
+/// Whether there is anything to run (a sound hotfix release PR: no; a
+/// refused one fails here) and whether this is a SEED run. Bash and git
+/// only: no toolchain.
+fn plan() -> Result<Job> {
     let mut job = Job::new(UBUNTU)
         .name("Plan")
-        .timeout(20)
-        // Fork PRs never run here: the tests job runs on a self-hosted
-        // runner, and fork code must not run on it. GitHub also withholds
-        // secrets from fork PRs. Every other job needs this one, so they
-        // skip with it, and `Build + test` fails the fork PR rather than
-        // passing it unchecked. (push/schedule/workflow_dispatch have no
-        // pull_request.)
-        .cond(
-            "${{ github.event_name != 'pull_request' || \
-             github.event.pull_request.head.repo.full_name == github.repository }}",
-        );
-    for out in outputs {
-        job = job.output(out, &format!("${{{{ steps.filter.outputs.{out} }}}}"));
+        .timeout(10)
+        .permissions(yaml("contents: read\n")?);
+    for out in ["skip", "seed"] {
+        job = job.output(out, &format!("${{{{ steps.plan.outputs.{out} }}}}"));
     }
-    job
-        // Full history: the plan needs both diff endpoints' ancestry, and
-        // the release guard the PR's base and head.
+    Ok(job
+        // Full history: the release guard reads the PR's base and head.
         .step(checkout_full(None))
-        .steps(hosted_setup(
-            "",
-            "",
-            Tools {
-                cargo_rail: true,
-                ..Tools::default()
-            },
-        ))
-        // Which commit to plan against, decided before the evidence restore
-        // (its cache key is that commit).
         .step(
-            Step::run("Choose the comparison base", CHOOSE_BASE)
-                .id("base")
-                .env("DISPATCH_BASE", "${{ inputs.base }}")
-                .env("BASE_SHA", "${{ github.event.pull_request.base.sha }}"),
-        )
-        .step(
-            Step::uses("Restore rail evidence for the base", "actions/cache/restore@v4")
-                .cond("${{ steps.base.outputs.sha != '' }}")
-                .with("path", "${{ runner.temp }}/rail-evidence")
-                .with(
-                    "key",
-                    "rail-evidence-${{ runner.os }}-${{ runner.arch }}-cargo.test-${{ steps.base.outputs.sha }}",
-                ),
-        )
-        .step(
-            Step::run("Plan affected crates", PLAN)
-                .id("filter")
-                .env("BASE", "${{ steps.base.outputs.sha }}")
+            Step::run("Plan", PLAN)
+                .id("plan")
                 .env("BASE_SHA", "${{ github.event.pull_request.base.sha }}")
                 .env("BASE_REF", "${{ github.event.pull_request.base.ref }}")
                 .env("HEAD_SHA", "${{ github.event.pull_request.head.sha }}")
                 .env("HEAD_REF", "${{ github.event.pull_request.head.ref }}")
-                .env("HEAD_REPO", "${{ github.event.pull_request.head.repo.full_name }}")
-                .env("EVIDENCE", "${{ runner.temp }}/rail-evidence/cargo.test.json"),
-        )
+                .env(
+                    "HEAD_REPO",
+                    "${{ github.event.pull_request.head.repo.full_name }}",
+                )
+                .env("INPUT_SEED", "${{ inputs.seed }}")
+                .env("SCHEDULE", "${{ github.event.schedule }}")
+                .env("SEED_CRON", SEED_CRON),
+        ))
 }
 
-const CHOOSE_BASE: &str = r#"set -u
-base=""
-case "${GITHUB_EVENT_NAME:-}" in
-  pull_request) base="${BASE_SHA}" ;;
-  workflow_dispatch)
-    if [ -n "${DISPATCH_BASE}" ]; then
-      git fetch --quiet origin "${DISPATCH_BASE}" || true
-      base="$(git merge-base "origin/${DISPATCH_BASE}" HEAD 2>/dev/null || true)"
-    fi ;;
-esac
-echo "sha=${base}" >> "$GITHUB_OUTPUT"
-echo "base: ${base:-<none: full run>}"
-"#;
-
-/// The plan itself. Fail open: if it cannot compute an honest plan, it runs
-/// everything. Full runs record evidence for the commit they check, so later
-/// plans against it can narrow.
+/// Only PRs into release/** reach this workflow (pr.yml has main). The
+/// release guard runs from the BASE commit's copy of the script (never the
+/// PR's, which could exempt itself): 0 = sound, version + changelog only,
+/// skip everything; 3 = refused, fail; 1 = a hotfix, the full set. A fork
+/// PR would run the full set on the org's paid runners with whatever its
+/// code does: refused.
 ///
-/// A release PR (release/pending) runs the release guard from the BASE
-/// commit's copy of the script (never the PR's, which could exempt itself).
-/// 0 = sound: version + changelog only, its content was checked when it
-/// merged, skip the heavy jobs. 3 = refused: fail, which fails `Build +
-/// test`. 1 = not a release PR: plan as usual. A hotfix onto a release line
-/// ships on its own: never narrowed.
-///
-/// Evidence is only visible to other branches' PRs when saved on main
-/// (cargo-rail.md), so release lines don't record it. rail reads
-/// .config/rail.toml from the commits it compares: a base with the pre-0.32
-/// config fails, which runs everything.
+/// A seed is the weekly cron or a dispatch on main with `seed`.
 const PLAN: &str = r####"set -u
-
-run_all() {
-  echo "plan: $1 — running EVERYTHING"
-  printf 'full=true\ncargo=true\ntests=true\ntest_filter=\nwasm=true\n' >> "$GITHUB_OUTPUT"
-  exit 0
-}
-skip_all() {
-  echo "plan: $1 — nothing to run"
-  printf 'skip=true\nfull=false\ncargo=false\ntests=false\ntest_filter=\nwasm=false\n' >> "$GITHUB_OUTPUT"
-  exit 0
-}
-record() { echo "record=true" >> "$GITHUB_OUTPUT"; }
-
+out() { printf '%s\n' "$@" >> "$GITHUB_OUTPUT"; }
+seed=false
 case "${GITHUB_EVENT_NAME:-}" in
   pull_request)
     rc=1
@@ -259,114 +162,130 @@ case "${GITHUB_EVENT_NAME:-}" in
     fi
     case "$rc" in
       0)
-        {
-          echo "### Release commit only"
-          echo "This PR is one commit changing the version, CHANGELOG.md and consumed change files; its content was checked when it merged, so the heavy jobs are skipped."
+        { echo "### Release commit only"
+          echo "This PR is one commit changing the version, CHANGELOG.md and consumed change files; its content was checked when it merged, so every job is skipped."
         } >> "$GITHUB_STEP_SUMMARY"
-        skip_all "release commit only (${HEAD_REF} -> ${BASE_REF})" ;;
+        echo "plan: release commit only (${HEAD_REF} -> ${BASE_REF}): nothing to run"
+        out skip=true seed=false
+        exit 0 ;;
       3)
         echo "::error::${HEAD_REF} -> ${BASE_REF} is a release PR the release guard refuses (see above)"
         exit 1 ;;
     esac
-    case "${BASE_REF}" in
-      release/*) run_all "PR into ${BASE_REF}: a hotfix line runs the full set" ;;
-    esac ;;
-  push)
-    [ "${GITHUB_REF_NAME}" != main ] || record
-    run_all "push to ${GITHUB_REF_NAME}: full set after every merge" ;;
+    if [ "${HEAD_REPO}" != "${GITHUB_REPOSITORY}" ]; then
+      echo "::error::fork PR into ${BASE_REF}: the full set runs on the org's paid runners; re-push it from a branch of this repo"
+      exit 1
+    fi
+    echo "plan: PR into ${BASE_REF} (hotfix): the full set" ;;
   schedule)
-    record; run_all "nightly (main)" ;;
+    [ "${SCHEDULE}" = "${SEED_CRON}" ] && seed=true
+    echo "plan: schedule '${SCHEDULE}' (seed=${seed}): the full set" ;;
   workflow_dispatch)
-    [ -n "${BASE}" ] || { record; run_all "manual dispatch"; } ;;
-  *) run_all "event ${GITHUB_EVENT_NAME:-?}" ;;
+    [ "${INPUT_SEED}" = true ] && [ "${GITHUB_REF_NAME}" = main ] && seed=true
+    echo "plan: dispatch on ${GITHUB_REF_NAME} (seed=${seed}): the full set" ;;
+  *) echo "plan: ${GITHUB_EVENT_NAME:-?} on ${GITHUB_REF_NAME}: the full set" ;;
 esac
-[ -n "${BASE}" ] || run_all "no comparison base"
-
-ev=()
-if [ -f "${EVIDENCE}" ]; then
-  ev=(--evidence "${EVIDENCE}")
-  echo "plan: using rail evidence for ${BASE}"
-else
-  echo "plan: no rail evidence for ${BASE} (non-Rust changes will widen)"
-fi
-plan="${RUNNER_TEMP}/rail-plan.json"
-cargo rail plan --from "${BASE}" --to HEAD "${ev[@]}" --json > "${plan}" \
-  || run_all "cargo rail plan failed"
-cargo rail plan --from "${BASE}" --to HEAD "${ev[@]}" --explain-work cargo.test || true
-
-gates="$(python3 scripts/ci-rail-plan.py "${plan}")" \
-  || run_all "plan parse failed"
-[ -n "${gates}" ] || run_all "plan parse produced no gates"
-echo "${gates}" >> "$GITHUB_OUTPUT"
-echo "${gates}"
+out skip=false "seed=${seed}"
 "####;
+
+/// Main is the only writer of the cargo-dependency cache pr.yml's `PR
+/// checks` restore (the 10 GB Actions cache budget): fetched once per
+/// lockfile, on a free runner, and no job waits on it.
+fn deps_cache() -> Job {
+    Job::new(UBUNTU)
+        .name("Dependency cache")
+        .timeout(15)
+        .cond("${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}")
+        .step(checkout())
+        .steps(hosted_setup("", "", Tools::default()))
+        .steps(cargo_deps_save())
+}
 
 /// The env every hosted cargo job sets. Incremental is off: a CI build is
 /// never rebuilt in place, and incremental dirs would only fatten the cache.
-/// (Debuginfo is pinned line-tables-only in .cargo/ci-config.toml, which
-/// replaced the `CARGO_PROFILE_DEV_DEBUG` env.)
 fn hosted_cargo_job(job: Job) -> Job {
     job.env("CARGO_INCREMENTAL", "0")
 }
 
 /// From here on a step runs even when an earlier gate failed, so one run
-/// reports fmt AND Boundaries AND check instead of one at a time; the job
-/// still fails.
+/// reports fmt AND the workflows AND the flow gate instead of one at a time;
+/// the job still fails.
 const NOT_CANCELLED: &str = "${{ !cancelled() }}";
 
-/// The cargo steps are gated on the plan: a change that touches no crate
-/// (docs, with evidence for the base) compiles nothing.
-const CARGO_WANTED: &str = "${{ !cancelled() && needs.plan.outputs.cargo == 'true' }}";
+/// Every job but the plan: nothing to run on a sound release PR.
+const WANTED: &str = "${{ needs.plan.outputs.skip != 'true' }}";
 
-/// REQUIRED (through `Build + test`): manifests + lockfile, fmt, the
-/// generated workflows, the boundaries and flow gates, the tailwind sheet
-/// and `cargo check --workspace`. Clippy reports here too, advisory.
-fn lint() -> Job {
+/// REQUIRED (through `CI passed`): the static guards — manifests +
+/// lockfile, fmt, the generated workflows + actionlint, change files (a
+/// hotfix PR), the rail config, the flow gate. `just ci-local` runs the same
+/// set before every push; pr.yml re-checks the compile-nothing half.
+/// Compiles only the workflows crate.
+fn gates() -> Job {
     hosted_cargo_job(
         Job::new(UBUNTU)
-            .name("Lint (fmt + manifests + gates + check + clippy)")
+            .name("Gates")
             .needs(&["plan"])
-            .cond("${{ needs.plan.outputs.skip != 'true' }}")
+            .cond(WANTED)
+            .timeout(30),
+    )
+    .step(checkout())
+    .steps(hosted_setup(
+        "rustfmt",
+        "",
+        Tools {
+            mold: true,
+            just: true,
+            cargo_rail: true,
+            tracey: true,
+            actionlint: true,
+            ci_cargo_config: true,
+            ..Tools::default()
+        },
+    ))
+    .steps(rust_cache("gates", Cache::Github))
+    .step(Step::run("Manifests + lockfile", LOCKFILE))
+    .step(Step::run("cargo fmt --check", "cargo fmt --all --check").cond(NOT_CANCELLED))
+    .steps(workflow_gates())
+    .step(change_check())
+    .step(Step::run("rail config", "cargo rail config validate --strict").cond(NOT_CANCELLED))
+    // The workflow-spec verification standard (#48): every `flow.*` rule
+    // with an r[impl] has an r[verify], or the build is red. Same recipe as
+    // local (`just daw-flows`); tracey is the pinned release binary.
+    // `--own-daemon`: the script runs its own tracey daemon under a short
+    // state dir — the runner's HOME pushes tracey's default socket path past
+    // the 108-byte Unix limit — and stops it after.
+    .step(Step::run("Flow verification gate", "just daw-flows --own-daemon").cond(NOT_CANCELLED))
+}
+
+/// REQUIRED on full runs: `cargo check --workspace`. Clippy reports here
+/// too, advisory: the lint debt is being paid down crate by crate, so it
+/// reports (grouped by lint and crate, .github/scripts/clippy-report.py)
+/// without failing. Same check-mode dependency metadata, so same job.
+fn check() -> Job {
+    hosted_cargo_job(
+        Job::new(WARP_CHECK)
+            .name("Check")
+            .needs(&["plan"])
+            .cond(WANTED)
             .timeout(90),
     )
     .step(checkout())
     .steps(hosted_setup(
-        "rustfmt,clippy",
+        "clippy",
         "",
         Tools {
             apt: true,
-            just: true,
-            cargo_rail: true,
-            tracey: true,
-            tailwind: true,
-            actionlint: true,
             ci_cargo_config: true,
             free_disk: true,
             ..Tools::default()
         },
     ))
-    .steps(rust_cache("lint"))
-    .step(Step::run("Manifests + lockfile", LOCKFILE))
-    // fmt is ungated: it compiles nothing, so change selection would save
-    // nothing.
-    .step(Step::run("cargo fmt --check", "cargo fmt --all --check"))
-    .steps(workflow_gates())
-    .step(change_check())
-    .steps(boundaries())
-    // The workflow-spec verification standard (#48): every `flow.*` rule
-    // with an r[impl] has an r[verify], or the build is red. Same recipe as
-    // local (`just daw-flows`); tracey is the pinned release binary. Cheap,
-    // so it runs before any cargo step. `--own-daemon`: the script runs its
-    // own tracey daemon under a short state dir — the runner's HOME pushes
-    // tracey's default socket path past the 108-byte Unix limit — and stops
-    // it after.
-    .step(Step::run("Flow verification gate", "just daw-flows --own-daemon").cond(NOT_CANCELLED))
-    .step(tailwind(Toolchain::Hosted))
-    .step(Step::run("cargo check --workspace", "cargo check --workspace").cond(CARGO_WANTED))
-    // Advisory only: the lint debt is being paid down crate by crate, so
-    // this reports (grouped by lint and crate, .github/scripts/
-    // clippy-report.py) without blocking the PR. Same check-mode dependency
-    // metadata as `cargo check`, so it lives in this job.
+    // The "lint" key: the entries the old lint job saved still match.
+    .steps(rust_cache("lint", Cache::Warp))
+    .step(Step::run(
+        "cargo check --workspace",
+        "cargo check --workspace",
+    ))
     .step(
         Step::run(
             "cargo clippy (advisory, does not block)",
@@ -376,7 +295,7 @@ cargo clippy --workspace --no-deps --all-targets --keep-going \\
   | python3 .github/scripts/clippy-report.py
 ",
         )
-        .cond(CARGO_WANTED)
+        .cond(NOT_CANCELLED)
         .continue_on_error(),
     )
     .step(footprint())
@@ -388,7 +307,7 @@ cargo clippy --workspace --no-deps --all-targets --keep-going \\
 /// random (observed locally: four consecutive `cargo metadata` runs, three
 /// orderings). Instead: resolve, then diff the committed lockfile against
 /// the written one with the trailer compared as a sorted set.
-const LOCKFILE: &str = r#"set -euo pipefail
+pub const LOCKFILE: &str = r#"set -euo pipefail
 committed="$RUNNER_TEMP/Cargo.lock.committed"
 cp Cargo.lock "$committed"
 cargo metadata --format-version 1 > /dev/null
@@ -412,6 +331,8 @@ fi
 /// `just workflows` is red. Then actionlint over every workflow (it runs the
 /// image's shellcheck over each `run:` script too). Two steps rather than
 /// `just workflows-check` (which runs both), so each reports on its own.
+/// The workflows check is the one gate that compiles (the xtask-workflows
+/// crate, from the rust cache).
 fn workflow_gates() -> [Step; 2] {
     [
         Step::run(
@@ -426,8 +347,8 @@ fn workflow_gates() -> [Step; 2] {
 /// Release intent (fleet flow v4): every crate a PR changes needs a change
 /// file in .changes/ (`cargo rail change add <crates> --bump
 /// <none|patch|minor|major> -m "<note>"`); the release builds the changelog
-/// from them. PRs only: a push or the nightly has no "change" to describe,
-/// and a release PR never reaches this job. `--since <the PR's base
+/// from them. PRs only: a push has no "change" to describe, and a release
+/// PR never reaches this job. `--since <the PR's base
 /// commit>` rather than `--merge-base`: the checkout is shallow (no
 /// default-branch ref to find a merge-base with), and for a PR into a
 /// release/v* line the merge-base with main would count the line's
@@ -444,54 +365,6 @@ cargo rail change check --since \"${BASE_SHA}\"
     .env("BASE_SHA", "${{ github.event.pull_request.base.sha }}")
 }
 
-/// Crate-layout boundaries (architect ADR layout.md, STA-268): resolves
-/// graphs and scans sources, compiles nothing of studio's. Layer table +
-/// ratcheted baselines in boundaries.toml. architect's xtask, `cargo
-/// install`ed by `just ci-boundaries` into ~/.cache/architect-xtask/<tag>
-/// (4+ minutes cold). Keyed on the pinned tag and the rustc that built it
-/// (it was the nix toolchain's, keyed on flake.lock; a binary built in the
-/// nix shell would not even load outside it), so an entry never changes and
-/// is saved once. Saved even when Boundaries reports violations: the binary
-/// is fine.
-fn boundaries() -> [Step; 5] {
-    let path = "~/.cache/architect-xtask/${{ steps.xtask.outputs.tag }}";
-    let key = format!(
-        "architect-xtask-${{{{ runner.os }}}}-${{{{ steps.xtask.outputs.tag }}}}-rust-{RUST}"
-    );
-    [
-        Step::run(
-            "architect xtask tag",
-            "echo \"tag=$(sed -n 's/^architect_xtask_tag := \"\\(.*\\)\"$/\\1/p' Justfile)\" >> \"$GITHUB_OUTPUT\"\n",
-        )
-        .id("xtask")
-        .cond(NOT_CANCELLED),
-        Step::uses("Restore architect xtask", "actions/cache/restore@v4")
-            .id("xtask-cache")
-            .cond("${{ !cancelled() && steps.xtask.outputs.tag != '' }}")
-            .with("path", path)
-            .with("key", key.as_str()),
-        Step::run("Boundaries", "just ci-boundaries").cond(NOT_CANCELLED),
-        Step::run(
-            "architect xtask built?",
-            "\
-if [ -x \"$HOME/.cache/architect-xtask/${TAG}/bin/xtask\" ]; then
-  echo \"yes=true\" >> \"$GITHUB_OUTPUT\"
-fi
-",
-        )
-        .id("xtask-built")
-        .cond(
-            "${{ !cancelled() && steps.xtask.outputs.tag != '' && \
-             steps.xtask-cache.outputs.cache-hit != 'true' }}",
-        )
-        .env("TAG", "${{ steps.xtask.outputs.tag }}"),
-        Step::uses("Save architect xtask", "actions/cache/save@v4")
-            .cond("${{ !cancelled() && steps.xtask-built.outputs.yes == 'true' }}")
-            .with("path", path)
-            .with("key", key.as_str()),
-    ]
-}
-
 /// The browser builds, which the workspace check (native) never compiles.
 /// REQUIRED part: the web bundles. ADVISORY part: the Signal browser remote
 /// (red since STA-184: it pulls tokio/mio into wasm), which reports but
@@ -499,9 +372,9 @@ fi
 fn wasm() -> Job {
     hosted_cargo_job(
         Job::new(UBUNTU)
-            .name("wasm checks")
+            .name("Wasm")
             .needs(&["plan"])
-            .cond("${{ needs.plan.outputs.skip != 'true' && needs.plan.outputs.wasm == 'true' }}")
+            .cond(WANTED)
             .timeout(75),
     )
     // The wasm32 C builds (ring): the nix shell pointed these at an
@@ -516,14 +389,12 @@ fn wasm() -> Job {
         Tools {
             apt: true,
             just: true,
-            tailwind: true,
             ci_cargo_config: true,
             free_disk: true,
             ..Tools::default()
         },
     ))
-    .steps(rust_cache("wasm"))
-    .step(tailwind(Toolchain::Hosted))
+    .steps(rust_cache("wasm", Cache::Github))
     // The three web bundles deploy.yml ships (STA-366). The workspace check
     // is native, so it never compiles them: a native-only dep (tokio `net`,
     // an engine, an X11/HID crate) leaking into their graph stayed hidden
@@ -558,95 +429,100 @@ echo \"### Signal browser remote wasm check failed (advisory, STA-184)\" >> \"$G
     .step(footprint())
 }
 
-/// REQUIRED (through `Build + test`, when the plan wants tests): the test
-/// run. It was advisory while main carried ~100 nextest failures (STA-184,
-/// the captain's call in STA-276 to release first and fix after); it is now
-/// a required job like lint and wasm. It is skipped on a release-only PR.
+/// REQUIRED on full runs: the whole suite, on a WarpBuild SNAPSHOT runner,
+/// without nix: the hosted jobs' rustup/apt/release-binary setup plus
+/// nextest and lavapipe (software Vulkan) for the GPU tests.
 ///
-/// SELF-HOSTED on purpose (the one heavy job): ~1460 crates at full codegen
-/// into 814 test binaries took 20 min to build on the warm Mac Pro (run
-/// 39654183163); the tests themselves ran in 4.5 min. Cold on a hosted
-/// runner that build would cost well over an hour every PR and a target
-/// dir larger than the whole 10 GB cache budget. The runner is a NixOS VM:
-/// nix is its package manager, so the steps run in the ci dev shell.
+/// The warm target dir is the snapshot (`<label>;snapshot.key=<alias>`,
+/// WarpBuilds/snapshot-save): the VM boots from the last snapshot saved under
+/// [`WARPBUILD_SNAPSHOT`], or the base image if there is none.
+///
+/// SNAPSHOTS ARE SEEDED, NEVER CHAINED. Only a SEED run saves one (the
+/// weekly cron, or a dispatch on main with `seed`): it boots from
+/// WarpBuild's BASE image (`snapshot.enabled=true`), builds cold and saves.
+/// Every other run restores and saves nothing. Task saved from a runner that
+/// was itself restored, and the snapshot of a snapshot booted runners that
+/// were shut down within a minute without ever picking up the job
+/// (2026-10-23). Snapshots expire after 15 days unused, so weekly keeps one
+/// alive; between seeds a run rebuilds what changed since the last one.
+/// Reseed by hand after a lockfile or toolchain change that makes warm runs
+/// slow: `gh workflow run checks.yml --ref main -f seed=true`. First run
+/// (2026-10-23): cold build 15 min, 10 949 tests 2 min, on a 16x.
 fn tests() -> Job {
-    let nix = Toolchain::Nix;
-    Job::new(RunsOn::Labels(&["self-hosted", "studio-tests"]))
-        .name("tests")
-        .needs(&["plan"])
-        .cond("${{ needs.plan.outputs.skip != 'true' && needs.plan.outputs.tests == 'true' }}")
-        .timeout(90)
-        .env("NIX_DEV", NIX_DEV)
-        // Same list as `just test` / `just ci`; the evidence recording below
-        // uses it too, so both builds are the same units.
-        .env("TEST_FEATURES", TEST_FEATURES)
-        // No incremental caches: they grow without bound in a persistent
-        // target (372 GB on one dev machine) and a CI build seldom rebuilds
-        // the same crate twice. Dioxus and Zed run CI the same way.
-        .env("CARGO_INCREMENTAL", "0")
-        .step(checkout())
-        .environment(ASSETS_ENVIRONMENT.into())
-        // The CI cargo config here too: its profile is what the hosted jobs
-        // build with, and it builds frame and plugin-faces optimised for
-        // their tests (.cargo/ci-config.toml says why).
-        .step(ci_cargo_config())
-        .step(Step::run("Persistent target dir", TARGET_DIR))
-        .step(target_mark())
-        .step(assets_token())
-        .step(assets(nix))
-        // The test run compiles session-web.
-        .step(tailwind(nix))
-        .step(faces(nix))
-        // Full runs first record rail evidence for this commit: the recorder
-        // wraps rustc for one `cargo test --no-run` (units already fresh
-        // keep their dep-info, so this compiles nothing nextest wouldn't),
-        // and the nextest run after it finds every unit fresh. Best effort:
-        // a failure only means later plans against this commit widen. Not
-        // `--locked`, for the [[patch.unused]] ordering reason in the lint
-        // job.
-        .step(
-            Step::run(
-                "Record rail evidence",
-                &format!(
-                    "\
-mkdir -p \"${{EVIDENCE_DIR}}\"
-{} \\
-  --output \"${{EVIDENCE_DIR}}/cargo.test.json\" \\
-  -- test --workspace --no-run --features \"${{TEST_FEATURES}}\" \\
-  || echo \"::warning::rail evidence not recorded; later plans against this commit widen\"
+    let warp = Toolchain::Hosted;
+    Job::new(RunsOn::Owned(format!(
+        "${{{{ needs.plan.outputs.seed == 'true' && '{WARPBUILD_RUNNER};snapshot.enabled=true' || \
+         '{WARPBUILD_RUNNER};snapshot.key={WARPBUILD_SNAPSHOT}' }}}}"
+    )))
+    .name("Tests")
+    .needs(&["plan"])
+    .cond(WANTED)
+    .timeout(120)
+    .env("TEST_FEATURES", TEST_FEATURES)
+    // No incremental caches: they grow without bound in a persistent target
+    // (372 GB on one dev machine) and a CI build seldom rebuilds the same
+    // crate twice. Dioxus and Zed run CI the same way.
+    .env("CARGO_INCREMENTAL", "0")
+    // No token left in .git/config: checkout only removes it in its post
+    // step, after the snapshot has been taken.
+    .step(checkout().with("persist-credentials", false))
+    .steps(hosted_setup(
+        "",
+        "",
+        Tools {
+            apt: true,
+            gpu: true,
+            just: true,
+            nextest: true,
+            ci_cargo_config: true,
+            ..Tools::default()
+        },
+    ))
+    .environment(ASSETS_ENVIRONMENT.into())
+    // ~/.cache/cargo-target: outside the checkout, so the pre-snapshot
+    // `git clean` keeps it.
+    .step(Step::run("Persistent target dir", TARGET_DIR))
+    .step(target_mark())
+    .step(assets_token())
+    .step(assets(warp))
+    .step(faces(warp))
+    .step(
+        Step::run(
+            "cargo nextest",
+            &format!("bash -uo pipefail -s <<'EOF'\n{NEXTEST}EOF\n"),
+        )
+        .id("nextest")
+        .env("TEST_LOG", "${{ runner.temp }}/nextest-ci.log"),
+    )
+    .step(target_sweep())
+    .step(test_log("nextest-ci"))
+    // Before the snapshot: nothing secret may be in it (WarpBuild's own
+    // advice; a snapshot alias is readable by any run in the org). The
+    // asset clones STAY: they are only as private as the org that owns
+    // both. So do the checkout's ignored files — the asset links, the plugin
+    // faces: build scripts watch some of them, and recreating them each boot
+    // rebuilt mic-plugin and everything above (13 min of a warm build;
+    // `just ci-churn` checks it). The target dir, ~/.cargo, rustup and the
+    // apt packages stay: that is the point.
+    .step(
+        Step::run(
+            "Clean up before the snapshot",
+            "\
+rm -rf \"$HOME/.ssh\" \"$HOME/.aws\"
+git config --local --unset-all http.https://github.com/.extraheader || true
+du -sh \"$HOME/.cache/cargo-target\" 2>/dev/null || true
 ",
-                    nix.cmd("cargo rail plan evidence --work cargo.test")
-                ),
-            )
-            .cond("${{ needs.plan.outputs.record == 'true' }}")
-            .env("EVIDENCE_DIR", "${{ runner.temp }}/rail-evidence"),
         )
-        .step(nextest(nix, "tests (self-hosted)"))
-        .step(target_sweep())
-        .step(
-            Step::run(
-                "Evidence key",
-                "\
-echo \"sha=$(git rev-parse HEAD)\" >> \"$GITHUB_OUTPUT\"
-[ -f \"${RUNNER_TEMP}/rail-evidence/cargo.test.json\" ] && echo \"have=true\" >> \"$GITHUB_OUTPUT\" || true
-",
-            )
-            .id("evidence")
-            .cond("${{ always() && needs.plan.outputs.record == 'true' }}"),
-        )
-        // Saved even when tests are red: evidence describes the build, not
-        // the results. Only saves on main (and the nightly's default-branch
-        // scope) are visible to other branches' PRs.
-        .step(
-            Step::uses("Save rail evidence", "actions/cache/save@v4")
-                .cond("${{ always() && steps.evidence.outputs.have == 'true' }}")
-                .with("path", "${{ runner.temp }}/rail-evidence")
-                .with(
-                    "key",
-                    "rail-evidence-${{ runner.os }}-${{ runner.arch }}-cargo.test-${{ steps.evidence.outputs.sha }}",
-                ),
-        )
-        .step(test_log("nextest-ci"))
+        .cond(SAVE_SNAPSHOT),
+    )
+    .step(
+        Step::uses("Save the WarpBuild snapshot", "WarpBuilds/snapshot-save@v1")
+            .cond(SAVE_SNAPSHOT)
+            .with("alias", WARPBUILD_SNAPSHOT)
+            // A failed save on a run that set out to save is a failure.
+            .with("fail-on-error", true)
+            .with("wait-timeout-minutes", 60),
+    )
 }
 
 /// The full nextest log as an artifact (see [`NEXTEST`] for why it is a file).
@@ -659,156 +535,42 @@ fn test_log(artifact: &str) -> Step {
         .with("retention-days", 7)
 }
 
-/// The nextest step both test jobs run: the plan's selection, a timed build
-/// phase and a timed test phase, the digest in the log, the timings in the
-/// step summary. The body runs under bash in the job's toolchain (inside the
-/// dev shell on the NixOS host, which has no grep/tail guarantees on the
-/// runner's PATH).
-fn nextest(tc: Toolchain, label: &str) -> Step {
-    Step::run(
-        "cargo nextest",
-        &format!("{} <<'EOF'\n{NEXTEST}EOF\n", tc.cmd("bash -uo pipefail -s")),
-    )
-    .id("nextest")
-    .env("TEST_FILTER", "${{ needs.plan.outputs.test_filter }}")
-    .env("TEST_PACKAGES", "${{ needs.plan.outputs.test_packages }}")
-    .env("TEST_LOG", "${{ runner.temp }}/nextest-ci.log")
-    .env("RUN_LABEL", label)
-}
-
-/// The WarpBuild runner the trial job uses. One constant, so trying another
+/// The WarpBuild runner the tests job uses. One constant, so trying another
 /// size is a one-line change (then `just workflows`).
 const WARPBUILD_RUNNER: &str = "warp-ubuntu-latest-x64-16x";
 
-/// The WarpBuild snapshot alias: the trial job boots from the VM snapshot
-/// saved under it (toolchain, apt packages, ~/.cargo and the warm target dir
-/// in ~/.cache/cargo-target), so its build is incremental the way the Mac
-/// Pro's is.
+/// The WarpBuild snapshot alias: the tests job boots from the VM snapshot
+/// saved under it (toolchain, apt packages, ~/.cargo, the asset clones and
+/// the warm target dir in ~/.cache/cargo-target).
 const WARPBUILD_SNAPSHOT: &str = "studio-tests";
 
-/// TRIAL (never part of `Build + test`, `continue-on-error`): the same test
-/// run as [`tests`] on a WarpBuild cloud runner, WITHOUT nix — the hosted
-/// jobs' rustup/apt/release-binary setup plus nextest and lavapipe for the
-/// GPU tests — to compare its build and test times (the step summary) with
-/// the self-hosted Mac Pro VM.
-///
-/// Off until the `WARPBUILD_TRIAL` repository variable is `true`, so it
-/// costs nothing (and queues nothing) before the WarpBuild GitHub App is
-/// installed on the org.
-///
-/// The warm target dir is a WarpBuild SNAPSHOT runner
-/// (`<label>;snapshot.key=<alias>`, WarpBuilds/snapshot-save): the VM boots
-/// from the last snapshot saved under [`WARPBUILD_SNAPSHOT`] (or the base
-/// image if there is none). Only main pushes and the nightly SAVE it (after
-/// a cleanup, below), so a PR never writes the state the next run boots
-/// from — the same rule as the hosted rust-cache. Snapshots expire after 15
-/// days. No rail evidence here: the self-hosted job records it, and a second
-/// writer would race it for the same cache key.
-fn tests_warpbuild() -> Job {
-    let warp = Toolchain::Hosted;
-    Job::new(RunsOn::Owned(format!(
-        "{WARPBUILD_RUNNER};snapshot.key={WARPBUILD_SNAPSHOT}"
-    )))
-    .name("tests (warpbuild trial)")
-    .needs(&["plan"])
-    .cond(
-        "${{ vars.WARPBUILD_TRIAL == 'true' && needs.plan.outputs.skip != 'true' && \
-         needs.plan.outputs.tests == 'true' }}",
-    )
-    .timeout(120)
-    .continue_on_error()
-    // Incremental off, as on the Mac Pro, so the timings compare like for
-    // like.
-    .env("CARGO_INCREMENTAL", "0")
-    .env("TEST_FEATURES", TEST_FEATURES)
-    .step(checkout())
-    .steps(hosted_setup(
-        "",
-        "",
-        Tools {
-            apt: true,
-            gpu: true,
-            just: true,
-            nextest: true,
-            tailwind: true,
-            ci_cargo_config: true,
-            ..Tools::default()
-        },
-    ))
-    // ~/.cache/cargo-target: outside the checkout, so the pre-snapshot
-    // `git clean` keeps it.
-    .environment(ASSETS_ENVIRONMENT.into())
-    .step(Step::run("Persistent target dir", TARGET_DIR))
-    .step(target_mark())
-    .step(assets_token())
-    .step(assets(warp))
-    .step(tailwind(warp))
-    .step(faces(warp))
-    .step(nextest(warp, "tests (warpbuild trial)"))
-    .step(target_sweep())
-    .step(test_log("nextest-warpbuild"))
-    // Before the snapshot: nothing secret may be in it (WarpBuild's own
-    // advice; a snapshot alias is readable by any run in the org). The
-    // asset clones STAY: PR runs get no credential (see `assets`), so the
-    // snapshot is how a PR on this runner has them, and they are only as
-    // private as the org that owns both. The checkout's ignored files go.
-    // The target dir, ~/.cargo, rustup and the apt packages stay: that is
-    // the point.
-    .step(
-        Step::run(
-            "Clean up before the snapshot",
-            "\
-rm -rf \"$HOME/.ssh\" \"$HOME/.aws\"
-git clean -ffdx
-du -sh \"$HOME/.cache/cargo-target\" 2>/dev/null || true
-",
-        )
-        .cond(SAVE_SNAPSHOT),
-    )
-    .step(
-        Step::uses("Save the WarpBuild snapshot", "WarpBuilds/snapshot-save@v1")
-            .cond(SAVE_SNAPSHOT)
-            .with("alias", WARPBUILD_SNAPSHOT)
-            .with("fail-on-error", false)
-            .with("wait-timeout-minutes", 60),
-    )
-}
+/// See [`tests`]: a seed run, and never from a restored runner (a seed
+/// boots from the base image).
+const SAVE_SNAPSHOT: &str = "${{ !cancelled() && needs.plan.outputs.seed == 'true' }}";
 
-/// The trial's snapshot is saved by main's full runs only (a push or the
-/// nightly), and even when tests are red: it holds the build, not results.
-const SAVE_SNAPSHOT: &str = "${{ !cancelled() && github.ref == 'refs/heads/main' && \
-     github.event_name != 'pull_request' }}";
-
-/// On the runner's big disk ($CI_CACHE_DIR: the runner module's
-/// per-instance dir), not /var/cache on the root disk, which a 580 GB target
-/// dir filled until jobs died mid-test. Per instance, so instances never
-/// share a cargo lock. The fallbacks are for a runner without one.
-///
-/// Cargo never collects garbage: every branch's lockfile and features leave
-/// their own units here until the disk is full and rustc dies mid-build (PR
-/// #184, October 2026). [`target_sweep`] is the garbage collection; this is
-/// the backstop: the incremental caches always go (the jobs build without
-/// them), and below 100 GB free the whole dir does.
+/// Cargo never collects garbage: every lockfile and feature set leaves its
+/// own units here until the disk is full and rustc dies mid-build (PR #184,
+/// October 2026). [`target_sweep`] is the garbage collection; this is the
+/// backstop: the incremental caches always go (the jobs build without them),
+/// and below 30 GB free the whole dir does (100 GB wiped the warm snapshot
+/// on every boot: a 16x boots with 186 GB free and the target is 87 GB).
 const TARGET_DIR: &str = r#"dir="${CI_CACHE_DIR:-${CACHE_DIRECTORY:-$HOME/.cache}}/cargo-target"
 mkdir -p "$dir"
 echo "CARGO_TARGET_DIR=$dir" >> "$GITHUB_ENV"
 free_gb() { df -Pk "$dir" | awk 'NR==2 { print int($4 / 1048576) }'; }
-# The jobs build with CARGO_INCREMENTAL=0: any incremental cache here is left
-# over from before, and only takes disk.
 rm -rf "$dir"/*/incremental "$dir"/*/*/incremental
-if [ "$(free_gb)" -lt 100 ]; then
+if [ "$(free_gb)" -lt 30 ]; then
   echo "::warning::still $(free_gb) GB free: clearing the target dir (a cold build follows)"
   rm -rf "$dir" && mkdir -p "$dir"
 fi
 echo "target dir: $dir ($(du -sh "$dir" 2>/dev/null | cut -f1)), $(free_gb) GB free"
 "#;
-
 /// The large fixtures and the rigs' NAM captures / IRs live in the private
 /// repos studio-assets, rig-models and mic-models (assets.txt); `just assets` clones them
 /// into .assets/ and links each file into place, so the tests that need them
 /// run instead of skipping.
 ///
-/// WHO MAY FETCH: only main's full runs (a push to main, the nightly). They
+/// WHO MAY FETCH: only main's runs (a push to main, a dispatch on main). They
 /// run in the `ci-assets` environment, which only `main` may deploy from and
 /// which holds the fts-forge App's id and key; `assets_token` mints from it
 /// a token that can only READ the two asset repos, for this one job. A PR
@@ -873,127 +635,91 @@ fn assets_token() -> Step {
     .with("permission-contents", "read")
 }
 
-/// What to build and run, from the plan job (scripts/ci-rail-plan.py):
-///
-/// - TEST_PACKAGES: the packages a PR affects, space-separated. Non-empty =
-///   the BUILD narrows too: `-p A -p B …`, with `--features` cut down to the
-///   TEST_FEATURES entries whose package is in the set (cargo refuses a
-///   `pkg/feature` for a package it is not building). Empty — every full run
-///   (push, nightly, dispatch without `base`, a release line) and every
-///   fail-open path — = `--workspace` with every TEST_FEATURES entry, as
-///   before.
-/// - TEST_FILTER: the same set as a nextest filterset; empty = every test.
-///
-/// The accepted cost of a narrowed build: building a subset can unify
-/// features differently from `--workspace`, so some dependencies are built
-/// a second time with other features and that second artifact set also
-/// lands in the warm target dir. (rail evidence is still recorded with
-/// `--workspace`: it describes the full build.)
-///
-/// Build and tests are two timed phases (`nextest run --no-run`, then the
-/// run, which finds every unit fresh); the times go to the step summary so
-/// the runners can be compared.
+/// The whole workspace, in two timed phases (`nextest run --no-run`, then
+/// the run, which finds every unit fresh); the times go to the step summary
+/// so runner sizes can be compared.
 ///
 /// nextest's report goes to a FILE, then a digest to the step's log. On the
 /// Mac Pro VM runners Task's nextest died with exit 110, "error writing to
 /// output", at the first failing test's captured output: writing to the
 /// runner's stdout pipe failed. A regular file cannot do that. The full log
 /// is the job's test-log artifact.
-const NEXTEST: &str = r####"sel=(--workspace)
-feats="${TEST_FEATURES}"
-if [ -n "${TEST_PACKAGES:-}" ]; then
-  sel=()
-  feats=""
-  for p in ${TEST_PACKAGES}; do sel+=(-p "$p"); done
-  IFS=, read -ra all <<< "${TEST_FEATURES}"
-  for f in "${all[@]}"; do
-    case " ${TEST_PACKAGES} " in *" ${f%%/*} "*) feats="${feats:+${feats},}${f}" ;; esac
-  done
-fi
-feat=()
-[ -n "${feats}" ] && feat=(--features "${feats}")
-filter=()
-[ -n "${TEST_FILTER}" ] && filter=(-E "${TEST_FILTER}" --no-tests=pass)
-echo "selection: ${sel[*]} ${feat[*]}"
-t0=$(date +%s)
-cargo nextest run "${sel[@]}" "${feat[@]}" --no-run >"${TEST_LOG}" 2>&1
+const NEXTEST: &str = r####"t0=$(date +%s)
+cargo nextest run --workspace --features "${TEST_FEATURES}" --no-run >"${TEST_LOG}" 2>&1
 rc=$?
 t1=$(date +%s)
-# A full build that succeeded read every unit the workspace uses: the target
-# dir may be pruned to that set (target_sweep), whatever the tests say.
-if [ "$rc" = 0 ] && [ -z "${TEST_PACKAGES:-}" ]; then
-  echo "prunable=true" >> "${GITHUB_OUTPUT}"
-fi
+# A build that succeeded read every unit the workspace uses: the target dir
+# may be pruned to that set (target_sweep), whatever the tests say.
 if [ "$rc" = 0 ]; then
-  cargo nextest run "${sel[@]}" --no-fail-fast "${feat[@]}" "${filter[@]}" >>"${TEST_LOG}" 2>&1
+  echo "prunable=true" >> "${GITHUB_OUTPUT}"
+  cargo nextest run --workspace --no-fail-fast --features "${TEST_FEATURES}" >>"${TEST_LOG}" 2>&1
   rc=$?
 fi
 t2=$(date +%s)
-{ echo "### ${RUN_LABEL}: timing"
+{ echo "### tests: timing"
   echo "| phase | seconds |"
   echo "|---|---|"
   echo "| build (nextest --no-run) | $((t1 - t0)) |"
   echo "| tests | $((t2 - t1)) |"
   echo
-  echo "selection: \`${sel[*]} ${feat[*]}\`; exit ${rc}"; } >> "${GITHUB_STEP_SUMMARY}"
+  echo "exit ${rc}"; } >> "${GITHUB_STEP_SUMMARY}"
 { grep -E '^ *(FAIL|TRY [0-9]+ (FAIL|TMT)|SIGSEGV|SIGABRT|LEAK|TIMEOUT)|Summary \[|tests were not run|^error' "${TEST_LOG}" | head -n 200
   echo "── tail of the nextest log (full log: the nextest-ci artifact) ──"; tail -n 60 "${TEST_LOG}"; } || true
 exit "$rc"
 "####;
 
-/// The REQUIRED check: its name is what the `main` ruleset (25572127)
-/// requires, unchanged from the single-job days, and what `just
-/// release-tag` and the tag guards require green on a release. A required
-/// check that is skipped counts as passing, so this never skips: it fails
-/// unless every REQUIRED job the plan asked for succeeded (lint; wasm and
-/// tests when the plan gave them work). A job may only be skipped when the
-/// plan said it had no work. The advisory work (clippy, the Signal browser
-/// remote) cannot fail it.
-fn build_and_test() -> Job {
-    Job::new(UBUNTU)
-        .name("Build + test")
-        .needs(&["plan", "lint", "wasm", "tests"])
+/// The aggregate: `just release-tag` and the tag guards require `CI passed`
+/// green on a release commit (scripts/release.sh `BUILD_CHECK`). A skipped
+/// required check counts as passing, so this never skips: it fails unless
+/// the plan, the gates, check, wasm and tests all succeeded (a sound release
+/// PR skips them all). The advisory work (clippy, the Signal browser remote)
+/// cannot fail it.
+///
+/// The escape hatch for a push the pre-push hook couldn't vouch for (a
+/// contributor without the hook, a dirty tree, `SKIP=local-ci`): a green
+/// DISPATCHED full run posts `Local CI` on the branch's head.
+fn ci_passed() -> Result<Job> {
+    Ok(Job::new(UBUNTU)
+        .name("CI passed")
+        .needs(&["plan", "gates", "check", "wasm", "tests"])
         .cond("${{ always() }}")
         .timeout(5)
+        .permissions(yaml("statuses: write\n")?)
         .step(
             Step::run("Every required job succeeded", AGGREGATE)
-                .env("EVENT", "${{ github.event_name }}")
-                .env(
-                    "FORK",
-                    "${{ github.event_name == 'pull_request' && \
-                     github.event.pull_request.head.repo.full_name != github.repository }}",
-                )
                 .env("PLAN", "${{ needs.plan.result }}")
                 .env("SKIP", "${{ needs.plan.outputs.skip }}")
-                .env("LINT", "${{ needs.lint.result }}")
+                .env("GATES", "${{ needs.gates.result }}")
+                .env("CHECK", "${{ needs.check.result }}")
                 .env("WASM", "${{ needs.wasm.result }}")
-                .env("WANT_WASM", "${{ needs.plan.outputs.wasm }}")
-                .env("TESTS", "${{ needs.tests.result }}")
-                .env("WANT_TESTS", "${{ needs.plan.outputs.tests }}"),
+                .env("TESTS", "${{ needs.tests.result }}"),
         )
+        .step(
+            Step::run(
+                "Post Local CI for a green dispatched run",
+                "\
+gh api -X POST \"repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}\" --silent \\
+  -f state=success -f context=\"Local CI\" \\
+  -f description=\"full run on GitHub (${GITHUB_RUN_ID})\" \\
+  -f target_url=\"${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}\"
+echo \"Local CI posted on ${GITHUB_SHA}\"
+",
+            )
+            .cond("${{ success() && github.event_name == 'workflow_dispatch' }}")
+            .env("GH_TOKEN", "${{ secrets.GITHUB_TOKEN }}"),
+        ))
 }
 
 const AGGREGATE: &str = r#"set -u
 fail=0
 bad() { echo "::error::$1"; fail=1; }
-if [ "$FORK" = "true" ]; then
-  bad "fork PR: not run (the tests job is self-hosted); a maintainer must re-push it from a branch of this repo"
-  exit 1
-fi
-[ "$PLAN" = success ] || bad "plan: $PLAN"
+[ "$PLAN" = success ] || { bad "plan: $PLAN"; exit 1; }
 if [ "$SKIP" = "true" ]; then
-  echo "plan: nothing to run (release commit)"; exit "$fail"
+  echo "plan: nothing to run (release commit)"; exit 0
 fi
-check() { # name result wanted
-  if [ "$3" = "true" ]; then
-    [ "$2" = success ] || bad "$1: $2"
-  else
-    case "$2" in success|skipped) ;; *) bad "$1: $2" ;; esac
-  fi
-  echo "$1: $2 (wanted=$3)"
-}
-check lint "$LINT" true
-check wasm "$WASM" "$WANT_WASM"
-check tests "$TESTS" "$WANT_TESTS"
+for job in "gates:$GATES" "check:$CHECK" "wasm:$WASM" "tests:$TESTS"; do
+  [ "${job#*:}" = success ] || bad "${job%%:*}: ${job#*:}"
+  echo "$job"
+done
 exit "$fail"
 "#;

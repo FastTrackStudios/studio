@@ -16,10 +16,10 @@
 //!                          new CHANGELOG.md section and the change files it
 //!                          consumed; both iOS app crates on the version.
 //!                          checks.yml's plan runs the same guard, so a
-//!                          refused release PR also fails `Build + test`.
+//!                          refused release PR also fails `CI passed`.
 //!   push tag v*            "GitHub Release": the tag guard (the tag is a
 //!                          release commit on main or release/v*, with
-//!                          `Build + test` green), then the ONE GitHub
+//!                          `CI passed` green), then the ONE GitHub
 //!                          Release for Signal + Session. A tag is pushed by
 //!                          `just release-tag` as the fts-forge App or a
 //!                          person: a tag pushed with GITHUB_TOKEN starts no
@@ -43,8 +43,11 @@ pub fn workflow() -> Result<Workflow> {
         "release",
         yaml(
             r#"
+# Every base, not just main and release/**: on a gh stack each layer's
+# base is the layer below, and the atomic stack merge wants `Release
+# guard` on every PR (it skips, which counts as passing, unless the PR
+# is a release).
 pull_request:
-  branches: [main, "release/**"]
   types: [opened, synchronize, reopened, ready_for_review]
 push:
   tags: ["v*"]
