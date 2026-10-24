@@ -194,10 +194,11 @@ signal-web-stage: signal-tailwind
 # GL backend and panics before drawing a frame.
 
 # The guitar rig — the Signal app, release-fast build
-# Studio on the booted iOS simulator (an iPad Pro 11" here): built
+# Studio on an iOS simulator — an iPad Pro 11" kept on the build disk
+# (never the system drive; SIM names another by udid): built
 # optimised, Info.plist and faces as TestFlight writes them, installed and
 # launched. GIGS ("<gig folder> …") puts gigs in its Documents, as Files
-# does; SIM picks a simulator by udid (default: the booted one).
+# does; screenshots: `xcrun simctl --set /Volumes/build-disk/home/simulators io booted screenshot`.
 #   just ios-sim
 #   just ios-sim /Volumes/build-disk/development/gigs/ipad/CAA-2026
 ios-sim GIGS="" SIM="":

@@ -9,9 +9,12 @@
 #   cd apps/studio/desktop && ./ios/build-ios.sh [--sim [<udid>]]
 #   just ios-sim                      # the same, release, on the booted sim
 #
-# With --sim, also installs and relaunches on that simulator (the booted
-# one when no udid is given), microphone granted so its prompt does not
-# cover the page. RELEASE=1 builds optimised (what TestFlight plays);
+# With --sim, also installs and relaunches on that simulator, microphone
+# granted so its prompt does not cover the page. With no udid it uses an
+# iPad Pro 11" in a device set ON THE BUILD DISK (SIM_SET, default
+# /Volumes/build-disk/home/simulators), made and booted on first use:
+# a simulator's apps and files never land on the Mac's small system drive
+# (an install there filled it once). RELEASE=1 builds optimised (what TestFlight plays);
 # SIM_GIGS="<gig folder> …" copies gigs into the app's Documents there,
 # as Files does on an iPad.
 set -euo pipefail
@@ -80,18 +83,42 @@ codesign --force --sign - --timestamp=none "$APP" >/dev/null
 echo "built: $APP"
 
 if [[ "${1:-}" == "--sim" ]]; then
-    SIM="${2:-booted}"
+    SIM="${2:-}"
+    SET=()
+    if [[ -z "$SIM" ]]; then
+        SIM_SET="${SIM_SET:-/Volumes/build-disk/home/simulators}"
+        mkdir -p "$SIM_SET"
+        SET=(--set "$SIM_SET")
+        NAME="iPad Pro 11 (build disk)"
+        SIM="$(xcrun simctl "${SET[@]}" list devices available | grep -F "$NAME" | grep -oE '[0-9A-F]{8}(-[0-9A-F]{4}){3}-[0-9A-F]{12}' | head -1 || true)"
+        if [[ -z "$SIM" ]]; then
+            RUNTIME="$(xcrun simctl list runtimes available | grep -oE 'com\.apple\.CoreSimulator\.SimRuntime\.iOS-[0-9-]+' | tail -1)"
+            TYPE="$(xcrun simctl list devicetypes | grep -oE 'com\.apple\.CoreSimulator\.SimDeviceType\.iPad-Pro-11-inch-M[0-9]+[A-Za-z0-9-]*' | tail -1)"
+            if ! SIM="$(xcrun simctl "${SET[@]}" create "$NAME" "$TYPE" "$RUNTIME")"; then
+                # Never fall back to the system drive. The usual cause:
+                # CoreSimulatorService may not write to an external volume.
+                echo "ERROR: no simulator could be made in $SIM_SET." >&2
+                echo "  Allow it: System Settings > Privacy & Security > Full Disk Access," >&2
+                echo "  add /Library/Developer/PrivateFrameworks/CoreSimulator.framework/" >&2
+                echo "  Versions/A/XPCServices/com.apple.CoreSimulator.CoreSimulatorService.xpc," >&2
+                echo "  then run again. Or name a simulator: just ios-sim '' <udid>." >&2
+                exit 1
+            fi
+            echo "made simulator $SIM in $SIM_SET"
+        fi
+        xcrun simctl "${SET[@]}" boot "$SIM" 2>/dev/null || true
+    fi
     ID="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP/Info.plist")"
-    xcrun simctl install "$SIM" "$APP"
-    xcrun simctl privacy "$SIM" grant microphone "$ID" 2>/dev/null || true
+    xcrun simctl "${SET[@]}" install "$SIM" "$APP"
+    xcrun simctl "${SET[@]}" privacy "$SIM" grant microphone "$ID" 2>/dev/null || true
     if [[ -n "${SIM_GIGS:-}" ]]; then
-        DOCS="$(xcrun simctl get_app_container "$SIM" "$ID" data)/Documents/FastTrackStudio/Gigs"
+        DOCS="$(xcrun simctl "${SET[@]}" get_app_container "$SIM" "$ID" data)/Documents/FastTrackStudio/Gigs"
         mkdir -p "$DOCS"
         for g in $SIM_GIGS; do
             rsync -a --exclude='*.bak' --exclude='.DS_Store' "$g" "$DOCS/"
             echo "gig in Documents: $(basename "$g")"
         done
     fi
-    xcrun simctl launch --terminate-running-process "$SIM" "$ID"
+    xcrun simctl "${SET[@]}" launch --terminate-running-process "$SIM" "$ID"
     echo "launched on simulator $SIM"
 fi
