@@ -93,8 +93,6 @@
 #                                         CI: after the TestFlight upload, write
 #                                          the marketing version + build number
 #                                          into the release notes
-#   scripts/release.sh guard              the `Release guard` check: there are
-#                                          no release PRs any more; passes
 #
 # `release` pushes the tag as whoever runs it: a person, or the fts-forge
 # App. A tag pushed with a workflow's GITHUB_TOKEN starts no workflow, so a
@@ -653,13 +651,6 @@ cmd_hotfix() {
     rm -f "$body"
 }
 
-# The `Release guard` required check (release.yml) once judged release
-# PRs. There are none now (a release is a tag), so it passes; it stays so
-# main's ruleset keeps seeing the check it requires.
-cmd_guard() {
-    echo "release guard: releases are tags pushed by \`just release\` (no release PRs, nothing to check)"
-}
-
 # Kept for older workflow copies that still ask: no PR is a release PR.
 cmd_release_only() { return 1; }
 
@@ -906,7 +897,6 @@ case "${1:-}" in
     hotfix) shift; cmd_hotfix "$@" ;;
     stamp) shift; cmd_stamp "$@" ;;
     image-tag) shift; cmd_image_tag "$@" ;;
-    guard) shift; cmd_guard "$@" ;;
     release-only) shift; cmd_release_only "$@" ;;
     tag-guard) shift; cmd_tag_guard "$@" ;;
     publish) shift; cmd_publish "$@" ;;

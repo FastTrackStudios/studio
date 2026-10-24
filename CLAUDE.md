@@ -169,15 +169,15 @@ commit status ("passed in 6m12s on host: checks 21s, plan 8s, tests …") on
 the pushed commit — and on every open layer of a `gh stack` the tree
 contains, so one run on the top covers the stack. Run `just ci-local`
 before pushing a long change: the pass it records makes the push instant.
-`SKIP=local-ci git push` skips it; the PR then waits on `Local CI` until
-`gh workflow run checks.yml --ref <branch>` (a green manual full run posts
-it). `just rail-evidence` on a clean `main` lets later runs narrow a docs or
+`SKIP=local-ci git push` skips it; the PR can merge without it, since
+`Local CI` is not required. `just rail-evidence` on a clean `main` lets later runs narrow a docs or
 CI change; `just ci-churn` checks a warm build recompiles nothing after
 the CI prep.
 
 **What GitHub runs.** A PR into `main` gets one free job, **`PR checks`**
 (`pr.yml`: fmt, change files, the lockfile, the rail config — compiles
-nothing). `main` requires `PR checks`, `Local CI` and `Release guard`. **`CI`**
+nothing). `main` requires only `PR checks`; `Local CI` (the pre-push
+hook's status) is an indicator, not a gate. **`CI`**
 (`checks.yml`: `Gates`, `Rail plan`, `Check` + advisory clippy, `Wasm`,
 `Tests`, aggregated as **`CI passed`**) runs after every merge to `main`,
 NARROWED by `cargo rail plan` to what the merge reaches since the newest

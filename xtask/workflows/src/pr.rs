@@ -9,8 +9,8 @@
 //! part on a free hosted runner, without nix, for a push that skipped the
 //! hook: fmt, change files, the lockfile, the rail config.
 //!
-//! Main requires `PR checks` (this job), `Local CI` and `Release guard`
-//! (release.yml). The full set (`CI`, checks.yml) runs after every merge to
+//! Main requires only `PR checks` (this job); `Local CI` is an indicator,
+//! not a gate. The full set (`CI`, checks.yml) runs after every merge to
 //! main, on hotfix PRs into release/**, and by hand:
 //!
 //! ```text

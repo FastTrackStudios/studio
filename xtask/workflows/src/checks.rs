@@ -10,7 +10,8 @@
 //!                  the pre-push hook posts (prek.toml -> scripts/
 //!                  ci-local-hook.sh -> scripts/ci-local.sh: the static
 //!                  guards, then the rail-planned tests, `cargo check` and
-//!                  wasm check). Main requires both, and `Release guard`.
+//!                  wasm check). Main requires only `PR checks`; `Local
+//!                  CI` is an indicator, not a gate.
 //!   push to main   once per merge, what the merge reaches: `cargo rail
 //!                  plan` from the newest green ancestor with rail evidence
 //!                  (see [`rail_plan`]), the full set when there is none.

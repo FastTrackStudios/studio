@@ -33,13 +33,12 @@ worktree with its own `target/` costs a cold build.
 | `git commit` | prek pre-commit (`prek.toml`) | your machine | rustfmt, shellcheck, actionlint on the **staged** files |
 | `git push` | prek pre-push → `scripts/ci-local-hook.sh` → `just ci-local` | your machine | the PR gate's expensive half; posts **`Local CI`** |
 | PR into main | `PR / PR checks` (`pr.yml`) | free hosted, rustup + cargo-rail, no nix | fmt, change files, the lockfile, the rail config |
-| PR into main | `release / Release guard` | free hosted | a no-op that passes and says why: releases are tags, there are no release PRs (kept because the ruleset requires it) |
 | push to main | `CI` (`checks.yml`): Plan, Rail plan, Dependency cache, Gates, Check, Wasm, Tests, Release tooling (macOS), **`CI passed`** | Rail plan, Check, Tests, Wasm on THEBATTLESHIP's `studio-main` pool (warm shared cache); the rest free hosted | what the merge reaches since the newest green commit with rail evidence (the full set without one); a newer merge cancels the older run |
 | PR into `release/**` | `CI` | same | a hotfix: the full suite |
 | push of a `v*` tag (`just release`) | `Images`, `studio-ios`, `desktop`, `release` | `studio-release` / `studio-release-mac` / hosted | the release builds, from the tag alone, in parallel, never cancelled; no tests (the tag guard checks `CI passed`) |
 
-**Main requires:** `PR checks`, `Release guard` and `Local CI` (ruleset
-25572127). `just release` separately requires `CI passed` green on the
+**Main requires:** `PR checks` only (ruleset 25572127). `Local CI` is an
+indicator, not a gate. `just release` separately requires `CI passed` green on the
 commit it tags.
 
 **`just ci-local`, in order** (`scripts/ci-local.sh`):
@@ -157,8 +156,8 @@ on GitHub for that branch, which posts `Local CI` when green:
 
 ### 6. Merge
 
-**Normal:** when `gh pr checks <n>` shows `PR checks`, `Release guard` and
-`Local CI` passing on every layer:
+**Normal:** when `gh pr checks <n>` shows `PR checks` passing on every
+layer (and `Local CI`, if the push ran the hook):
 
 ```bash
 gh stack merge <top pr> --yes --squash      # all-or-nothing, bottom-up
@@ -218,8 +217,9 @@ part of merging a stack.
 ## Reference
 
 **Escape hatches**
-- `SKIP=local-ci git push`: push without local CI; the PR waits on
-  `Local CI`. (`local-ci` is the prek hook id; `Local CI` is the status.)
+- `SKIP=local-ci git push`: push without local CI; the PR gets no `Local
+  CI` status and can still merge. (`local-ci` is the prek hook id; `Local
+  CI` is the status.)
 - `gh workflow run checks.yml --ref <branch>`: the full suite on GitHub;
   posts `Local CI` when green.
 - `just ci-local <base>`: a narrower run against another base. It records

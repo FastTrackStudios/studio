@@ -347,9 +347,7 @@ expect_no  "  ...and no 'Includes' line from the later main release" "$S/nh2.md"
 eq "next month, after v26.10.x" "$(RELEASE_MONTH=26.11 R next 2>/dev/null)" 26.11.0
 expect_fail "release <old hotfix-line sha>: already released" R release --yes "$HOT"
 
-echo "=== Release guard: there are no release PRs"
-expect_ok "guard passes" R guard
-grep -q 'no release PRs' "$S/last.out" && ok "  ...and says why" || bad "  ...message"
+echo "=== there are no release PRs"
 expect_rc "release-only: never a release PR" 1 R release-only
 
 echo "=== an unreachable origin fails, never passes"
