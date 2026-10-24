@@ -209,25 +209,34 @@ pub fn SignalWorkspace() -> Element {
         crate::rigs::store_last(rig);
     });
 
+    // Libraries downloads a studio's kits and packs onto THIS device
+    // (main.rs gates the page off wasm), so the browser remote has no
+    // entry for it.
+    let on_libraries: Option<EventHandler<()>> =
+        (!cfg!(target_arch = "wasm32")).then(|| EventHandler::new(move |()| libraries.set(true)));
+
     let Some(kind) = selected() else {
-        if libraries() {
-            level.crumbs(vec![
-                fts_audio_ui::chrome::Crumb::new(
-                    "Rigs",
-                    Callback::new(move |()| libraries.set(false)),
-                ),
-                fts_audio_ui::chrome::Crumb::here("Libraries"),
-            ]);
-            return rsx! {
-                crate::libraries_view::LibrariesPage { on_back: move |()| libraries.set(false) }
-            };
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            if libraries() {
+                level.crumbs(vec![
+                    fts_audio_ui::chrome::Crumb::new(
+                        "Rigs",
+                        Callback::new(move |()| libraries.set(false)),
+                    ),
+                    fts_audio_ui::chrome::Crumb::here("Libraries"),
+                ]);
+                return rsx! {
+                    crate::libraries_view::LibrariesPage { on_back: move |()| libraries.set(false) }
+                };
+            }
         }
         level.crumbs(vec![fts_audio_ui::chrome::Crumb::here("Rigs")]);
         return rsx! {
             RigMenu {
                 phone: false,
                 on_pick: move |rig| pick.call(Some(rig)),
-                on_libraries: move |()| libraries.set(true),
+                on_libraries,
                 // A song from tonight's set: the guitar, on that song.
                 on_song: move |i: usize| {
                     #[cfg(not(target_arch = "wasm32"))]
@@ -356,6 +365,7 @@ fn GuitarRigView(instrument: &'static str) -> Element {
     // The window's width over its height, for the rig's wide layout (the
     // whole rig on an ultrawide). Blitz has no resize events, so it is
     // polled from the window a few times a second.
+    #[allow(unused_mut)] // set only by the native polling below
     let mut aspect = use_signal(|| 1.0_f64);
     use_context_provider(|| guitar::ui::WindowAspect(aspect));
     // Its size in points, for the form factor (a phone held sideways lays

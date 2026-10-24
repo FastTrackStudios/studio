@@ -1985,6 +1985,11 @@ web-wasm-check:
     cargo check -p session-web --target wasm32-unknown-unknown
     cargo check -p signal-web --target wasm32-unknown-unknown
 
+# The Signal browser remote: studio-desktop's web build (rig + tone UI over
+# the engine's vox). Required in CI's Wasm job and in local CI.
+signal-wasm-check:
+    cargo check -p studio-desktop --target wasm32-unknown-unknown --no-default-features --features signal
+
 # The workflows in .github/workflows are GENERATED from xtask/workflows (one
 # Rust module per workflow, the reasons as comments there). Edit the Rust,
 # then run this and commit both.
@@ -2082,7 +2087,7 @@ ci FROM="lockfile":
       echo "── wasm check (web bundles) ─────────────────────────"
       just web-wasm-check
       echo "── wasm check (Signal browser remote) ───────────────"
-      cargo check -p studio-desktop --target wasm32-unknown-unknown --no-default-features --features signal
+      just signal-wasm-check
       echo "ok"
     fi
 
