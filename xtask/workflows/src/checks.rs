@@ -144,7 +144,12 @@ esac
 /// (`<sha>/<job>.ok`, written by the job on success). A job a plan skipped
 /// inherits its base's green: nothing it covers changed since.
 fn rail_plan() -> Result<Job> {
-    Ok(Job::new(POOL)
+    // Check's cargo environment exactly (CARGO_INCREMENTAL=0, its target
+    // dir): rail binds evidence to a hash of the Cargo configuration, and
+    // the first narrowed run fell back to the full set because this job's
+    // differed ("planning evidence is bound to different Cargo
+    // configuration").
+    Ok(hosted_cargo_job(Job::new(POOL))
         .name("Rail plan")
         .needs(&["plan"])
         .timeout(15)
@@ -162,6 +167,7 @@ fn rail_plan() -> Result<Job> {
                 .with("fetch-depth", 64),
         )
         .step(ci_cargo_config())
+        .step(target_dir("check"))
         .step(
             Step::run("cargo rail plan", &in_shell(RAIL_PLAN))
                 .id("rail")
@@ -206,6 +212,8 @@ for f in "$store/$base"/*.json; do ev+=(--evidence "$f"); done
 plan="$RUNNER_TEMP/rail-plan.json"
 cargo rail plan --from "$base" --to HEAD "${ev[@]}" --json > "$plan" \
   || full "cargo rail plan failed"
+# Why the tests widened or not, in the log, for whoever reads a full run.
+cargo rail plan --from "$base" --to HEAD "${ev[@]}" --explain-work cargo.test 2>&1 | head -n 40 || true
 gates="$(python3 scripts/ci-rail-plan.py "$plan")" || full "the plan could not be read"
 echo "plan: from $base (${#ev[@]} evidence file(s))"
 printf '%s\n' "$gates"
