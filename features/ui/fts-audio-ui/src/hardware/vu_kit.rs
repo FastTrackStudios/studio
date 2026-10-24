@@ -29,7 +29,12 @@
 //! *instruments*, not two colour schemes — so it stays in
 //! [`VuScale`](crate::hardware::vu_svg::VuScale) where the geometry can test
 //! it. A face says how the meter is lit and printed; a scale says what it
-//! reads.
+//! reads. What a face does choose about the numbers is their type — how big,
+//! and whether they lean with the arc — and that is geometry too:
+//! [`Numerals`](crate::hardware::vu_svg::Numerals), placed by
+//! [`numeral_placement`](crate::hardware::vu_svg::numeral_placement).
+
+use crate::hardware::vu_svg::Numerals;
 
 /// The needle and the hub it swings on.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -279,6 +284,8 @@ pub struct VuSpec {
     /// The over-zero stretch of the scale — red on every VU ever made, and
     /// not present at all on a decibel readout.
     pub hot: &'static str,
+    /// How the scale's numbers are printed: their size and lean.
+    pub numerals: Numerals,
     pub needle: Needle,
     pub lamp: Option<Lamp>,
     /// The reflection on the glass over the card. `None` for an open face.
