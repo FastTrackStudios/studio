@@ -11545,10 +11545,11 @@ dependencies = [
 [[package]]
 name = "neural-amp-modeler"
 version = "0.1.0"
-source = "git+https://github.com/FastTrackStudios/neural-amp-modeler-rs?tag=v0.1.1#28035789bbe3ceaeff2acfb4639bba8ba29d3666"
+source = "git+https://github.com/FastTrackStudios/neural-amp-modeler-rs?tag=v0.1.2#9b00e2463c12263e098edf40082dfb8ac0e0a2b9"
 dependencies = [
  "cc",
  "serde_json",
+ "valverig-nam",
 ]
 
 [[package]]
@@ -20825,6 +20826,17 @@ name = "value-bag"
 version = "1.14.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2799ffb329a792ecfd902b71306c8a815a6ef1c0470fa9953a6aa4d4cecbe511"
+
+[[package]]
+name = "valverig-nam"
+version = "0.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "59d1fc2bc218caad2b4dc86aa60a8ad1b7f9db86e4bf5f65d89ecbc7ff32a803"
+dependencies = [
+ "serde",
+ "serde_json",
+ "thiserror 2.0.20",
+]
 
 [[package]]
 name = "vcpkg"
