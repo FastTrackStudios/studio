@@ -940,7 +940,7 @@ winit = "0.30"
 # manifests; a member says `x = { workspace = true }` and adds its features) ──
 ab_glyph = "0.2"
 android-activity = "0.6"
-anyrender_0_11 = { package = "anyrender", git = "https://github.com/FastTrackStudios/blitz", tag = "fts-focus-2026-10" }
+anyrender_0_11 = { package = "anyrender", git = "https://github.com/FastTrackStudios/blitz", tag = "fts-press-2026-10" }
 anyrender_svg_0_12 = { version = "0.12", package = "anyrender_svg" }
 arc-swap = "1.7"
 baseview = "0.2.2"
@@ -1133,18 +1133,23 @@ pipewire-sys = { git = "https://gitlab.freedesktop.org/pipewire/pipewire-rs.git"
 # texture widgets over a kept page, redraws only for DOM changes or
 # widgets with something to draw, idle frames that skip layout, a
 # pressed widget holding the pointer. The processor's painted
-# visualisers need it (`Widget::composite_texture`). The same tag as
-# processor's own pin, so the two never disagree about blitz.
-blitz-dom = { git = "https://github.com/FastTrackStudios/blitz", tag = "fts-focus-2026-10" }
-blitz-traits = { git = "https://github.com/FastTrackStudios/blitz", tag = "fts-focus-2026-10" }
-blitz-paint = { git = "https://github.com/FastTrackStudios/blitz", tag = "fts-focus-2026-10" }
-blitz-shell = { git = "https://github.com/FastTrackStudios/blitz", tag = "fts-focus-2026-10" }
-blitz-net = { git = "https://github.com/FastTrackStudios/blitz", tag = "fts-focus-2026-10" }
-blitz-html = { git = "https://github.com/FastTrackStudios/blitz", tag = "fts-focus-2026-10" }
+# visualisers need it (`Widget::composite_texture`).
+# Tag `fts-press-2026-10` = `fts-focus-2026-10` + one commit (studio#178):
+# a click goes to what the press and the release share (a knob let go
+# over a footswitch does not press it), and z-indexed children are placed
+# from the finished layout, so a transformed dropdown nested in z-indexed
+# layers takes its own presses. Guarded by vendor/dioxus-test's presses
+# tests and the fork's blitz-html nested_stacking_hit.
+blitz-dom = { git = "https://github.com/FastTrackStudios/blitz", tag = "fts-press-2026-10" }
+blitz-traits = { git = "https://github.com/FastTrackStudios/blitz", tag = "fts-press-2026-10" }
+blitz-paint = { git = "https://github.com/FastTrackStudios/blitz", tag = "fts-press-2026-10" }
+blitz-shell = { git = "https://github.com/FastTrackStudios/blitz", tag = "fts-press-2026-10" }
+blitz-net = { git = "https://github.com/FastTrackStudios/blitz", tag = "fts-press-2026-10" }
+blitz-html = { git = "https://github.com/FastTrackStudios/blitz", tag = "fts-press-2026-10" }
 # The fork's anyrender, carried in the blitz repo at the same tag: the
 # compositor's `composite` module and `RenderContext::render`, which the
 # processor's painted visualisers and the vendored anyrender_vello use.
-anyrender = { git = "https://github.com/FastTrackStudios/blitz", tag = "fts-focus-2026-10" }
+anyrender = { git = "https://github.com/FastTrackStudios/blitz", tag = "fts-press-2026-10" }
 # From the vendor repo (a sibling checkout path would build on one machine
 # and nowhere else). Three
 # measured changes to the present path — the GPU barrier removed, frame
