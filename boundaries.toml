@@ -572,6 +572,10 @@ package = "stretch"
 layer = "L1"
 
 [[row]]
+package = "swell-ui"
+layer = "L1"
+
+[[row]]
 package = "themer"
 layer = "L1"
 

@@ -74,6 +74,7 @@ members = [
     "features/adapters/reaper/daw-reaper",
     "features/adapters/reaper/reaper-dioxus",
     "features/adapters/reaper/reaper-embed",
+    "features/adapters/reaper/swell-ui",
     "features/adapters/reaper/daw-reaper/xtask",
     "features/adapters/reaper/fts-icons",
     "features/adapters/reaper/reaper-config",
@@ -614,12 +615,13 @@ palette = "0.7.6"
 linkme = "0.3"
 
 # ── REAPER bindings (FTS fork with v7.63 ruler lane APIs) ─────────────
-reaper-low = { git = "https://codeberg.org/FastTrackStudios/reaper-rs.git", branch = "feat/reaper-763-ruler-lanes" }
-reaper-medium = { git = "https://codeberg.org/FastTrackStudios/reaper-rs.git", branch = "feat/reaper-763-ruler-lanes" }
-reaper-high = { git = "https://codeberg.org/FastTrackStudios/reaper-rs.git", branch = "feat/reaper-763-ruler-lanes" }
-reaper-macros = { git = "https://codeberg.org/FastTrackStudios/reaper-rs.git", branch = "feat/reaper-763-ruler-lanes" }
-# swell-ui from FTS reaper-lib — typed Window/Hwnd wrappers around SWELL.
-swell-ui = { git = "https://codeberg.org/FastTrackStudios/reaper-lib.git", branch = "main" }
+reaper-low = { git = "https://github.com/FastTrackStudios/reaper-rs.git", branch = "feat/reaper-763-ruler-lanes" }
+reaper-medium = { git = "https://github.com/FastTrackStudios/reaper-rs.git", branch = "feat/reaper-763-ruler-lanes" }
+reaper-high = { git = "https://github.com/FastTrackStudios/reaper-rs.git", branch = "feat/reaper-763-ruler-lanes" }
+reaper-macros = { git = "https://github.com/FastTrackStudios/reaper-rs.git", branch = "feat/reaper-763-ruler-lanes" }
+# swell-ui — typed Window/Hwnd wrappers around SWELL (in-tree since 2026-10;
+# it was reaper-lib's).
+swell-ui = { path = "features/adapters/reaper/swell-ui" }
 
 # ── Plugin frameworks / hosting (daw) ─────────────────────────────────
 nih_plug = { git = "https://github.com/FastTrackStudios/nih-plug.git", branch = "reaper-embed-ui" }

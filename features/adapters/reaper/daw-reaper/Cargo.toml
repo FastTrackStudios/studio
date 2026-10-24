@@ -55,7 +55,7 @@ daw-control = { workspace = true }
 eyre.workspace = true
 facet-json.workspace = true
 
-# Typed SWELL Window/Hwnd wrappers from FTS reaper-lib. Used by the
+# Typed SWELL Window/Hwnd wrappers (features/adapters/reaper/swell-ui). Used by the
 # window-geometry helpers (nudge / resize / center) so our action set
 # rides on the same primitives the rest of FTS's reaper-side UIs use.
 swell-ui.workspace = true

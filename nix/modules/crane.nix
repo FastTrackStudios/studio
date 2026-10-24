@@ -20,7 +20,7 @@
 
       craneLib = (inputs.crane.mkLib pkgs).overrideToolchain config.fts.rustToolchain;
 
-      # reaper-low (git dep on codeberg.org/FastTrackStudios/reaper-rs)
+      # reaper-low (git dep on github.com/FastTrackStudios/reaper-rs)
       # mounts justinfrankel/WDL as a git submodule at main/low/lib/WDL.
       # crane's git-dep vendoring lists files via `cargo package -l`,
       # which walks git-TRACKED files from the superproject's index —
