@@ -81,6 +81,21 @@ export SHIM_LOG="$S/gh.log" SHIM_REL="$S/releases" SHIM_PRS="$S/prs"; : > "$SHIM
 # ── a synthetic repo: the real script, the real cliff.toml ───────────────
 W="$S/seed"; mkdir -p "$W/scripts" "$W/apps/studio/desktop" "$W/apps/session/desktop" "$W/crates/shared" "$W/.changes"
 cp "$HERE/scripts/release.sh" "$W/scripts/"; cp "$HERE/cliff.toml" "$W/" 2>/dev/null || true
+# The GHCR images check (scripts/ghcr-images.sh) as a shim: `tag` as the
+# real one reads it, `check` answers from $SHIM_IMAGES (ok, missing, or a
+# revision the images were "built from").
+cat > "$W/scripts/ghcr-images.sh" <<'EOF2'
+#!/usr/bin/env bash
+case "$1" in
+  tag) git show "${2:-HEAD}:Cargo.toml" | sed -n '/^\[workspace\.package\]/,/^\[/{s/^version *= *"\([^"]*\)".*/\1/p;}' | head -1 ;;
+  check) want="$(git rev-parse "${3:-HEAD}^{commit}")"
+    case "${SHIM_IMAGES:-ok}" in
+      ok) echo "ghcr-images: ok (shim) $2" >&2 ;;
+      missing) echo "ghcr-images: MISSING (shim) studio-web:$2" >&2; exit 1 ;;
+      *) [ "$SHIM_IMAGES" = "$want" ] || { echo "ghcr-images: studio-web:$2 was built from $SHIM_IMAGES, not $want (shim)" >&2; exit 1; } ;;
+    esac ;;
+esac
+EOF2
 printf 'Change files: cargo rail change add <crates> --bump <none|patch|minor|major> -m "<note>"\n' > "$W/.changes/README"
 printf '[workspace]\nmembers = ["apps/*/desktop", "crates/shared"]\n\n[workspace.package]\nversion = "0.1.0"\nedition = "2021"\n' > "$W/Cargo.toml"
 for a in studio session; do
@@ -259,7 +274,10 @@ git switch -q --detach origin/main; git branch -qD release/pending 2>/dev/null |
 SHIM_CHECK="completed failure" expect_fail "tag: refused while CI passed is red" R tag
 grep -q "is 'completed failure', not green" "$S/last.out" && ok "  ...naming the check result" || bad "  ...message"
 SHIM_CHECK="in_progress null" expect_fail "tag: refused while CI passed is running" R tag
-expect_ok "tag (CI passed green)" R tag
+SHIM_IMAGES=missing expect_fail "tag: refused while the images are not on GHCR" R tag
+grep -q "not on GHCR yet" "$S/last.out" && ok "  ...saying so" || bad "  ...message"
+SHIM_IMAGES=0000000000000000000000000000000000000000 expect_fail "tag: refused while the images are another commit's" R tag
+expect_ok "tag (CI passed green, images on GHCR)" R tag
 git fetch -q --tags origin
 eq "v26.10.0 is on the squash merge commit" "$(git rev-parse 'v26.10.0^{commit}')" "$M1"
 eq "annotated" "$(git cat-file -t v26.10.0)" tag
