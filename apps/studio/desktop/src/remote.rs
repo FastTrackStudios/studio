@@ -59,6 +59,7 @@ pub(crate) fn server_url() -> String {
 /// same-origin. (The old rule, "any local port that isn't 4040", silently
 /// pointed the e2e's page at the LIVE :4040 engine — W7 chased phantom
 /// schema-compat errors that were really an old binary.)
+#[cfg(any(target_arch = "wasm32", test))]
 fn page_engine_url(protocol: &str, host: &str, hostname: &str) -> String {
     let scheme = if protocol == "https:" { "wss" } else { "ws" };
     let is_local = hostname == "localhost" || hostname == "127.0.0.1";

@@ -151,6 +151,22 @@ pub fn on_task(link: &str, task_url: &str) -> String {
     }
 }
 
+/// The app's query parameters that carry a Task link (`?live=`,
+/// `?share=`, `&guide=`).
+pub const LINK_PARAMS: [&str; 3] = ["live", "share", "guide"];
+
+/// A query parameter's value as the app reads it: a link parameter
+/// ([`LINK_PARAMS`]) made whole on `task_url` ([`on_task`]); any other
+/// (`name`, a display name) exactly as given.
+#[must_use]
+pub fn param_on_task(key: &str, value: &str, task_url: &str) -> String {
+    if LINK_PARAMS.contains(&key) {
+        on_task(value, task_url)
+    } else {
+        value.to_owned()
+    }
+}
+
 /// [`parse`], with a path pasted alone taken as a link on `task_url`
 /// ([`on_task`]).
 ///
@@ -468,6 +484,20 @@ mod tests {
             })
         );
         assert_eq!(parse_on("/org/a/share/b", None), Err(LinkError::NotALink));
+    }
+
+    #[test]
+    fn only_link_params_resolve_on_task() {
+        let task = "https://task.example";
+        for key in LINK_PARAMS {
+            assert_eq!(
+                param_on_task(key, "/org/a/share/b", task),
+                "https://task.example/org/a/share/b"
+            );
+        }
+        // A display name that looks like a path is still a name.
+        assert_eq!(param_on_task("name", "/dev/null", task), "/dev/null");
+        assert_eq!(param_on_task("name", "Guest", task), "Guest");
     }
 
     #[test]

@@ -60,13 +60,13 @@ fn source() -> (Option<session_daw::web_engine::WebSource>, Option<String>) {
         .and_then(|w| w.location().search().ok())
         .and_then(|q| web_sys::UrlSearchParams::new_with_str(&q).ok());
     // A link given as a path (`?live=/org/<org>/share/<code>`) is a link
-    // on this deployment's Task.
+    // on this deployment's Task; `name` and the rest are kept as given.
     let task_url = app_shell::web_config::current().task_url;
     let (open, guide) = app_open(|key| {
         query
             .as_ref()
             .and_then(|q| q.get(key))
-            .map(|v| session::open_link::on_task(&v, &task_url))
+            .map(|v| session::open_link::param_on_task(key, &v, &task_url))
     });
     let source = match open {
         AppOpen::Live { link, name } => Some(WebSource::Live {

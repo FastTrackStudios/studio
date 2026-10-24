@@ -74,13 +74,23 @@ pub fn resolve(config: Option<&str>, origin: &str) -> WebConfig {
 }
 
 /// A configured URL, when it is one: trimmed, `http(s)`, a host after the
-/// scheme, no trailing slash.
+/// scheme (`name`, `name:port`, `[v6]:port`; no userinfo), no trailing
+/// slash.
 fn usable(url: Option<String>) -> Option<String> {
     let url = trim(url.as_deref()?);
     let rest = url
         .strip_prefix("https://")
         .or_else(|| url.strip_prefix("http://"))?;
-    (!rest.is_empty() && !rest.starts_with('/')).then_some(url)
+    let authority = rest.split(['/', '?', '#']).next().unwrap_or_default();
+    let host = authority
+        .rsplit_once(':')
+        .filter(|(_, port)| !port.is_empty() && port.bytes().all(|b| b.is_ascii_digit()))
+        .map_or(authority, |(host, _)| host);
+    let host_ok = !host.is_empty()
+        && host
+            .bytes()
+            .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'.' | b'-' | b'[' | b']' | b':'));
+    host_ok.then_some(url)
 }
 
 fn trim(url: &str) -> String {
@@ -199,6 +209,30 @@ mod tests {
         assert_eq!(got, WebConfig::same_origin(ORIGIN));
         let got = resolve(Some(r#"{ "task_url": "https://" }"#), ORIGIN);
         assert_eq!(got.task_url, ORIGIN);
+    }
+
+    #[test]
+    fn a_url_without_a_host_falls_back() {
+        for bad in [
+            "https://?x",
+            "https://#frag",
+            "http:///path",
+            "https://:443",
+            "https://user@task.example",
+            "https://task example",
+        ] {
+            let text = format!(r#"{{ "task_url": "{bad}" }}"#);
+            assert_eq!(resolve(Some(&text), ORIGIN).task_url, ORIGIN, "{bad}");
+        }
+        for good in [
+            "https://task.example",
+            "http://localhost:8090",
+            "https://task.example/sub?x=1",
+            "http://[::1]:8090",
+        ] {
+            let text = format!(r#"{{ "task_url": "{good}" }}"#);
+            assert_eq!(resolve(Some(&text), ORIGIN).task_url, good, "{good}");
+        }
     }
 
     #[test]
