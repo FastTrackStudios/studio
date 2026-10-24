@@ -11,6 +11,9 @@
 # SMOKE_PODMAN_IMAGE=<image> (e.g. docker.io/library/archlinux:latest) runs its
 # payload in a container of another distro, a stronger test of the same claim.
 set -euo pipefail
+# Say where it stopped: a runner's hardening fails these in ways that print
+# nothing of their own.
+trap 'echo "linux-smoke: failed at line $LINENO: $BASH_COMMAND" >&2' ERR
 
 img="${1:?usage: linux-smoke.sh <file.AppImage> <X.Y.Z>}"
 want="${2:?version}"
@@ -41,11 +44,13 @@ else
   # there (how that path is tested on a host that has namespaces).
   ran=0; out=""
   if [ "${SMOKE_FORCE_PAYLOAD:-0}" != 1 ]; then
-    if [ -e /lib64/ld-linux-x86-64.so.2 ] && /lib64/ld-linux-x86-64.so.2 --version >/dev/null 2>&1 \
-      && out="$("${env_clean[@]}" "$img" --version 2>&1)"; then
-      ran=1
-    elif command -v appimage-run >/dev/null 2>&1 && out="$("${env_clean[@]}" appimage-run "$img" --version 2>&1)"; then
-      ran=1
+    if [ -e /lib64/ld-linux-x86-64.so.2 ] && /lib64/ld-linux-x86-64.so.2 --version >/dev/null 2>&1; then
+      echo "trying: the file itself (the host has an FHS loader)" >&2
+      if out="$("${env_clean[@]}" "$img" --version 2>&1)"; then ran=1; else echo "  it did not start: $(printf '%s\n' "$out" | tail -1)" >&2; fi
+    fi
+    if [ "$ran" = 0 ] && command -v appimage-run >/dev/null 2>&1; then
+      echo "trying: appimage-run" >&2
+      if out="$("${env_clean[@]}" appimage-run "$img" --version 2>&1)"; then ran=1; else echo "  it did not start: $(printf '%s\n' "$out" | tail -1)" >&2; fi
     fi
   fi
   if [ "$ran" = 0 ]; then
@@ -56,7 +61,7 @@ else
     # only the bundled libraries on the path. Still the claim that matters:
     # everything the binary needs but glibc and the graphics stack is in the
     # bundle, and it starts without a display.
-    [ -n "${out:-}" ] && echo "appimage-run could not start it here: $(printf '%s\n' "$out" | tail -1)" >&2
+    echo "trying: the payload through the host loader" >&2
     # Where the squashfs starts: the end of the runtime ELF's section
     # header table (e_shoff + e_shentsize * e_shnum), which is how the type2
     # runtime finds it (--appimage-offset). Read, not run: running the file
