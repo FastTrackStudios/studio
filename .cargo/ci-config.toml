@@ -1,7 +1,9 @@
-# CI-only cargo settings, for the GitHub-hosted cargo jobs (checks.yml `lint`
-# and `wasm`, and the WarpBuild trial). NOT read where it lies: cargo only
-# reads `.cargo/config.toml`. The job copies it to `../.cargo/config.toml`
-# (the PARENT of the checkout), so cargo MERGES it with this repo's
+# CI-only cargo settings, for checks.yml's cargo jobs. NOT read where it
+# lies: cargo only reads `.cargo/config.toml`. The hosted jobs copy it to
+# `../.cargo/config.toml` (the PARENT of the checkout); the pool jobs (Rail
+# plan, Check, Wasm, Tests) to `$CARGO_HOME/config.toml`, one cargo home
+# shared by the pool's instances so rail's evidence matches from one
+# instance to the next. Either way cargo MERGES it with this repo's
 # .cargo/config.toml: on a conflict the repo's file wins, and arrays such as
 # rustflags are joined (https://doc.rust-lang.org/cargo/reference/config.html#hierarchical-structure).
 # An env var would not do: RUSTFLAGS REPLACES every rustflag in the config

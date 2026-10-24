@@ -63,10 +63,16 @@ jobs:
       with:
         persist-credentials: false
         fetch-depth: 64
-    - name: CI cargo config
+    - name: CI cargo config (the pool's cargo home)
       run: |
-        mkdir -p ../.cargo
-        cp .cargo/ci-config.toml ../.cargo/config.toml
+        home="${STUDIO_CACHE_DIR:?not a studio pool runner (no STUDIO_CACHE_DIR)}/cargo-home"
+        mkdir -p "$home"
+        echo "CARGO_HOME=$home" >> "$GITHUB_ENV"
+        # The old per-checkout copy, which cargo would still find from the checkout.
+        rm -f ../.cargo/config.toml
+        tmp="$(mktemp "$home/config.toml.XXXXXX")"
+        cp .cargo/ci-config.toml "$tmp"
+        mv -f "$tmp" "$home/config.toml"
     - name: Target dir (check, pool capped at 200 GB)
       run: |
         pool="${STUDIO_CACHE_DIR:?not a studio pool runner (no STUDIO_CACHE_DIR)}"
@@ -271,10 +277,16 @@ jobs:
     - uses: actions/checkout@v4
       with:
         persist-credentials: false
-    - name: CI cargo config
+    - name: CI cargo config (the pool's cargo home)
       run: |
-        mkdir -p ../.cargo
-        cp .cargo/ci-config.toml ../.cargo/config.toml
+        home="${STUDIO_CACHE_DIR:?not a studio pool runner (no STUDIO_CACHE_DIR)}/cargo-home"
+        mkdir -p "$home"
+        echo "CARGO_HOME=$home" >> "$GITHUB_ENV"
+        # The old per-checkout copy, which cargo would still find from the checkout.
+        rm -f ../.cargo/config.toml
+        tmp="$(mktemp "$home/config.toml.XXXXXX")"
+        cp .cargo/ci-config.toml "$tmp"
+        mv -f "$tmp" "$home/config.toml"
     - name: Target dir (check, pool capped at 200 GB)
       run: |
         pool="${STUDIO_CACHE_DIR:?not a studio pool runner (no STUDIO_CACHE_DIR)}"
@@ -331,10 +343,16 @@ jobs:
     - uses: actions/checkout@v4
       with:
         persist-credentials: false
-    - name: CI cargo config
+    - name: CI cargo config (the pool's cargo home)
       run: |
-        mkdir -p ../.cargo
-        cp .cargo/ci-config.toml ../.cargo/config.toml
+        home="${STUDIO_CACHE_DIR:?not a studio pool runner (no STUDIO_CACHE_DIR)}/cargo-home"
+        mkdir -p "$home"
+        echo "CARGO_HOME=$home" >> "$GITHUB_ENV"
+        # The old per-checkout copy, which cargo would still find from the checkout.
+        rm -f ../.cargo/config.toml
+        tmp="$(mktemp "$home/config.toml.XXXXXX")"
+        cp .cargo/ci-config.toml "$tmp"
+        mv -f "$tmp" "$home/config.toml"
     - name: Target dir (wasm, pool capped at 200 GB)
       run: |
         pool="${STUDIO_CACHE_DIR:?not a studio pool runner (no STUDIO_CACHE_DIR)}"
@@ -379,10 +397,16 @@ jobs:
     - uses: actions/checkout@v4
       with:
         persist-credentials: false
-    - name: CI cargo config
+    - name: CI cargo config (the pool's cargo home)
       run: |
-        mkdir -p ../.cargo
-        cp .cargo/ci-config.toml ../.cargo/config.toml
+        home="${STUDIO_CACHE_DIR:?not a studio pool runner (no STUDIO_CACHE_DIR)}/cargo-home"
+        mkdir -p "$home"
+        echo "CARGO_HOME=$home" >> "$GITHUB_ENV"
+        # The old per-checkout copy, which cargo would still find from the checkout.
+        rm -f ../.cargo/config.toml
+        tmp="$(mktemp "$home/config.toml.XXXXXX")"
+        cp .cargo/ci-config.toml "$tmp"
+        mv -f "$tmp" "$home/config.toml"
     - name: Target dir (tests, pool capped at 200 GB)
       run: |
         pool="${STUDIO_CACHE_DIR:?not a studio pool runner (no STUDIO_CACHE_DIR)}"
