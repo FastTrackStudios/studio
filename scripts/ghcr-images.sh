@@ -10,7 +10,9 @@
 # follows the newest tag, so what it will pull must already be public.
 #
 #   scripts/ghcr-images.sh tag [REV]         the image tag at REV (default HEAD):
-#                                            the workspace version, no `v`
+#                                            deploy/chart/studio's appVersion,
+#                                            which the release commit sets to
+#                                            the version (release.sh), no `v`
 #   scripts/ghcr-images.sh check TAG [REV]   every image TAG exists and is
 #                                            pullable WITHOUT credentials (as
 #                                            the cluster pulls them); with REV,
@@ -30,12 +32,16 @@ MANIFEST_TYPES="application/vnd.docker.distribution.manifest.v2+json,application
 
 die() { echo "ghcr-images: $*" >&2; exit 1; }
 
+# The chart at the tag renders `<registry>/studio-web:<appVersion>` when no
+# value overrides the tag (deploy/chart/studio/templates/_helpers.tpl), and
+# Argo CD sets none: appVersion IS the image tag.
+CHART="deploy/chart/studio/Chart.yaml"
+
 cmd_tag() { # [rev]
-    local t
-    t="$(git show "${1:-HEAD}:Cargo.toml" \
-        | sed -n '/^\[workspace\.package\]/,/^\[/{s/^version *= *"\([^"]*\)".*/\1/p;}' | head -1)" \
-        || die "no Cargo.toml at ${1:-HEAD}"
-    [ -n "$t" ] || die "Cargo.toml at ${1:-HEAD} has no [workspace.package] version"
+    local c t
+    c="$(git show "${1:-HEAD}:$CHART")" || die "no $CHART at ${1:-HEAD}"
+    t="$(sed -n 's/^appVersion: *"\{0,1\}\([^"[:space:]]*\)"\{0,1\}.*/\1/p' <<<"$c" | head -1)"
+    [ -n "$t" ] || die "$CHART at ${1:-HEAD} has no appVersion"
     echo "$t"
 }
 
@@ -82,5 +88,5 @@ cmd="${1:-}"; shift || true
 case "$cmd" in
     tag) cmd_tag "$@" ;;
     check) cmd_check "$@" ;;
-    *) sed -n '2,22p' "$0" >&2; exit 2 ;;
+    *) sed -n '2,24p' "$0" >&2; exit 2 ;;
 esac

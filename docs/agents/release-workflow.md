@@ -70,8 +70,10 @@ just release-sandbox         # the release tooling's own end-to-end test (no net
 
 `release-prepare` builds the section from `.changes/*.md` (major →
 Breaking / Migration, minor → Added, patch → Fixed and improved, none →
-nothing), deletes the files it consumed, bumps `Cargo.toml` and the
-workspace members in `Cargo.lock`. With no change files at all it falls
+nothing), deletes the files it consumed, bumps `Cargo.toml`, the
+workspace members in `Cargo.lock` and studio-web's chart
+(`deploy/chart/studio/Chart.yaml` `version` and `appVersion`: the image
+tag the chart at the tag deploys). With no change files at all it falls
 back to git-cliff over the commits since the last tag (history before v4).
 Tidy wording by amending the one commit. `cargo rail release` can't do
 this for studio (it refuses `version.workspace = true` crates); `release.sh`
@@ -132,9 +134,11 @@ script; any head other than `release/pending` in this repo passes):
 the head is ONE commit `chore(release): vX.Y.Z` directly on the **current**
 head of its base (`main` or `release/v*`); `X.Y.Z` is the computed next
 version and untagged; the commit changes only the `[workspace.package]`
-version line, the workspace members' version lines in `Cargo.lock`, adds
-the `CHANGELOG.md` section and deletes consumed change files; no change
-file is left pending; the iOS app crate resolves to the version. A network
+version line, the workspace members' version lines in `Cargo.lock`, the
+chart's `version` and `appVersion` lines (to the version), adds the
+`CHANGELOG.md` section and deletes consumed change files; no change file
+is left pending; the iOS app crate and the chart's appVersion resolve to
+the version. A network
 error fails it. `just release-merge` re-runs it right before merging, so a
 release PR cut before another merge can't ship that merge unlisted.
 

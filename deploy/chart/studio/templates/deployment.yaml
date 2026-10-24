@@ -1,0 +1,90 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "studio.fullname" . }}
+  labels:
+    {{- include "studio.labels" . | nindent 4 }}
+    app.kubernetes.io/component: web
+spec:
+  replicas: {{ .Values.replicas }}
+  selector:
+    matchLabels:
+      {{- include "studio.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "studio.selectorLabels" . | nindent 8 }}
+      annotations:
+        # A changed taskUrl / authUrl is a new /config.json, written at
+        # start: roll the pods.
+        checksum/config: {{ printf "%s|%s" .Values.taskUrl .Values.authUrl | sha256sum | trunc 16 }}
+        {{- with .Values.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+    spec:
+      {{- with .Values.image.pullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65534
+        runAsGroup: 65534
+      containers:
+        - name: web
+          image: {{ include "studio.image" . | quote }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          env:
+            # The only runtime input: the start step writes them to
+            # /config.json (empty = same origin).
+            - name: TASK_URL
+              value: {{ .Values.taskUrl | quote }}
+            - name: AUTH_URL
+              value: {{ .Values.authUrl | quote }}
+          ports:
+            - name: http
+              containerPort: 8080
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
+          # `/version.json` rather than `/`: every unknown path answers 200
+          # with the front door, so only a real file proves the root is
+          # the one built.
+          livenessProbe:
+            httpGet:
+              path: /version.json
+              port: http
+            periodSeconds: 30
+          readinessProbe:
+            httpGet:
+              path: /config.json
+              port: http
+            periodSeconds: 10
+          {{- with .Values.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          volumeMounts:
+            # The one place the start step writes: /srv/config/config.json,
+            # served as /config.json (the image's root filesystem is
+            # read-only here).
+            - name: config
+              mountPath: /srv/config
+      volumes:
+        - name: config
+          emptyDir:
+            sizeLimit: 1Mi
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

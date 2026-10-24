@@ -1,0 +1,49 @@
+# Default values for the studio chart (studio-web, #217).
+#
+# One Deployment serving static files on :8080, one Service, one Ingress.
+# It keeps no state and talks to nothing itself: the browser talks to Task
+# and fts-auth, at the URLs below. Every replica is interchangeable.
+
+# Where the apps find Task and fts-auth: written to /config.json when the
+# container starts (its TASK_URL / AUTH_URL). Empty = the page's own
+# origin, for a setup where Task is routed behind the same host (task's
+# deploy/README.md, "same origin"; deploy/docker-compose.yml here).
+taskUrl: ""
+authUrl: ""
+
+image:
+  registry: ghcr.io/fasttrackstudios
+  repository: studio-web
+  # Empty = the chart's appVersion: the chart at tag vX.Y.Z deploys
+  # studio-web:X.Y.Z (pushed by images.yml from the release commit).
+  tag: ""
+  pullPolicy: IfNotPresent
+  pullSecrets: []
+
+replicas: 1
+podAnnotations: {}
+# Static file serving of precompressed files: next to no CPU or memory.
+resources:
+  requests:
+    cpu: 10m
+    memory: 32Mi
+  limits:
+    memory: 128Mi
+nodeSelector: {}
+tolerations: []
+affinity: {}
+
+service:
+  type: ClusterIP
+  port: 80
+
+ingress:
+  # starcommand routes with Caddy, configured from nix; nothing watches
+  # this Ingress for traffic. It is the record external-dns publishes,
+  # which is why it is on by default but carries no class. A cluster that
+  # does route by Ingress sets className (and tls).
+  enabled: true
+  host: studio.example.com
+  className: ""
+  annotations: {}
+  tls: []

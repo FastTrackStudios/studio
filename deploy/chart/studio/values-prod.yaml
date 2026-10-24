@@ -1,0 +1,12 @@
+# EXAMPLE values: production on starcommand (Argo CD's `studio`
+# Application, namespace `studio`, following the newest v* tag). Copy as a
+# starting point; the chart defaults are generic.
+#
+#   helm upgrade --install studio ./deploy/chart/studio \
+#     -n studio --create-namespace -f deploy/chart/studio/values-prod.yaml
+
+taskUrl: https://task.fasttrackstudio.app
+authUrl: https://auth.fasttrackstudio.app
+
+ingress:
+  host: studio.fasttrackstudio.app
