@@ -35,7 +35,7 @@
 //! is recorded in the step summary and in the release notes.
 
 use crate::model::{Job, RunsOn, Step, UBUNTU, Workflow, yaml};
-use crate::steps::{checkout, checkout_full, rig_models};
+use crate::steps::{checkout, checkout_full, rig_models, stamp};
 use anyhow::Result;
 
 pub fn workflow() -> Result<Workflow> {
@@ -96,6 +96,9 @@ fi
 "#,
         ))
         .step(checkout_full(Some("refs/tags/${{ env.TAG }}")))
+        // The tag's version into the checkout, so ios-resolve checks the
+        // version the build will carry (a release commits none).
+        .step(stamp("${{ env.TAG }}"))
         .step(
             Step::run(
                 "Marketing version = tag version, tag on main or release/v*, changelog section, green",
@@ -159,6 +162,9 @@ df -h /Volumes/build-disk | tail -1
                 .with("ref", "${{ needs.resolve.outputs.sha }}")
                 .with("clean", false),
         )
+        // The tag's version into the build (the app's CARGO_PKG_VERSION, its
+        // update check); the next checkout overwrites it.
+        .step(stamp("${{ env.TAG }}"))
         // The guitar rig's release build refuses to compile without its
         // captures (features/rigs/guitar/build.rs). They are in the private
         // rig-models repo, which airlock keeps one clone of beside its other

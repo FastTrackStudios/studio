@@ -134,6 +134,31 @@ pub fn checkout_full(git_ref: Option<&str>) -> Step {
     step.with("fetch-depth", 0)
 }
 
+/// The release version from the tag, into this checkout (scripts/release.sh
+/// `stamp`): the FIRST step after the checkout of every job that builds or
+/// judges a release. Releases commit no version; the tag is the version, so
+/// `env!("CARGO_PKG_VERSION")`, the iOS marketing version, the desktop app
+/// version and the update check see it only once it is written into the
+/// workspace version and Cargo.lock's member entries (uncommitted). `tag` is
+/// a workflow expression (`${{ env.TAG }}`, `${{ github.ref_name }}`).
+///
+/// A tag cut before the stamp existed (a re-run of v26.10.3 or older) carries
+/// its version in its commit, and its script has no `stamp`: then the step
+/// only says so, and the tag guard checks the committed version as before.
+pub fn stamp(tag: &str) -> Step {
+    Step::run(
+        "Stamp the release version from the tag",
+        r#"set -euo pipefail
+if grep -q '^    stamp)' scripts/release.sh; then
+  bash scripts/release.sh stamp "$STAMP_TAG"
+else
+  echo "$STAMP_TAG predates the stamp: its commit carries its version ($(bash scripts/release.sh version))"
+fi
+"#,
+    )
+    .env("STAMP_TAG", tag)
+}
+
 /// The tools a hosted job installs on top of the toolchain.
 #[derive(Clone, Copy, Default)]
 #[allow(clippy::struct_excessive_bools)] // a set of independent switches

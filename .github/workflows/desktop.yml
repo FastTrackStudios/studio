@@ -52,6 +52,17 @@ jobs:
       with:
         ref: ${{ env.MODE == 'build-only' && env.TAG || format('refs/tags/{0}', env.TAG) }}
         fetch-depth: 0
+    - name: Stamp the release version from the tag
+      if: ${{ env.MODE != 'build-only' }}
+      env:
+        STAMP_TAG: ${{ env.TAG }}
+      run: |
+        set -euo pipefail
+        if grep -q '^    stamp)' scripts/release.sh; then
+          bash scripts/release.sh stamp "$STAMP_TAG"
+        else
+          echo "$STAMP_TAG predates the stamp: its commit carries its version ($(bash scripts/release.sh version))"
+        fi
     - name: Version = tag version, on main, changelog, CI passed
       id: resolve
       if: ${{ env.MODE != 'build-only' }}
@@ -109,6 +120,17 @@ jobs:
       with:
         ref: ${{ needs.resolve.outputs.sha }}
         clean: false
+    - name: Stamp the release version from the tag
+      if: ${{ env.MODE != 'build-only' }}
+      env:
+        STAMP_TAG: ${{ env.TAG }}
+      run: |
+        set -euo pipefail
+        if grep -q '^    stamp)' scripts/release.sh; then
+          bash scripts/release.sh stamp "$STAMP_TAG"
+        else
+          echo "$STAMP_TAG predates the stamp: its commit carries its version ($(bash scripts/release.sh version))"
+        fi
     - name: Rig captures (rig-models) linked into the tree
       run: |
         set -euo pipefail
@@ -183,6 +205,17 @@ jobs:
     - uses: actions/checkout@v4
       with:
         ref: ${{ needs.resolve.outputs.sha }}
+    - name: Stamp the release version from the tag
+      if: ${{ env.MODE != 'build-only' }}
+      env:
+        STAMP_TAG: ${{ env.TAG }}
+      run: |
+        set -euo pipefail
+        if grep -q '^    stamp)' scripts/release.sh; then
+          bash scripts/release.sh stamp "$STAMP_TAG"
+        else
+          echo "$STAMP_TAG predates the stamp: its commit carries its version ($(bash scripts/release.sh version))"
+        fi
     - name: Own target dir, size-capped
       run: |
         base="${STUDIO_CACHE_DIR:?not a studio pool runner (no STUDIO_CACHE_DIR)}"

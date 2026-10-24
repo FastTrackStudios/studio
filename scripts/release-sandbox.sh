@@ -141,7 +141,7 @@ for v in 0.1.0 0.1.1 0.1.2; do
   if [ "$v" != 0.1.0 ]; then
     sedi "s/^version = \"0\.1\.[0-9]\"$/version = \"$v\"/" "$W/Cargo.toml"
     sedi "s/^version: .*/version: $v/; s/^appVersion: .*/appVersion: \"$v\"/" "$W/deploy/chart/studio/Chart.yaml"
-    sedi "/^name = \"s[ei][gs][ns][ai][lo]n\{0,1\}-desktop\"/{n;s/^version = .*/version = \"$v\"/;}" "$W/Cargo.lock"
+    for m in studio session; do sedi "/^name = \"$m-desktop\"/{n;s/^version = .*/version = \"$v\"/;}" "$W/Cargo.lock"; done
   fi
   awk -v v="$v" 'done || !/^## \[/ { print; next } { print "## [" v "] - 2026-10-21\n\n- v2 release " v "\n"; print; done = 1 } END { if (!done) print "## [" v "] - 2026-10-21\n\n- v2 release " v }' "$W/CHANGELOG.md" > "$W/cl" && mv "$W/cl" "$W/CHANGELOG.md"
   git -C "$W" commit -qam "chore(release): v$v (#$((${v##*.} + 1)))"; git -C "$W" tag -a "v$v" -m "studio $v"
@@ -414,6 +414,21 @@ expect_ok "guard passes with no chart on either side" guard "$PRE"
 R pr >/dev/null 2>&1; merge_release main 96
 SHIM_IMAGES=missing expect_ok "tag on a line with no chart: no image to wait for" R tag "$PREV"
 grep -q "no image to wait for" "$S/last.out" && ok "  ...and says so" || bad "  ...message"
+
+echo "=== stamp: the release version into a build's checkout (uncommitted)"
+git switch -q --detach origin/main; git reset -q --hard
+SV="$(R version)"
+expect_ok "stamp v26.10.7" R stamp v26.10.7
+eq "  ...the workspace version" "$(R version)" 26.10.7
+eq "  ...studio-desktop in Cargo.lock" "$(grep -A1 '^name = "studio-desktop"$' Cargo.lock | tail -1)" 'version = "26.10.7"'
+eq "  ...session-desktop in Cargo.lock" "$(grep -A1 '^name = "session-desktop"$' Cargo.lock | tail -1)" 'version = "26.10.7"'
+eq "  ...shared (its own version) did not move" "$(grep -A1 '^name = "shared"$' Cargo.lock | tail -1)" 'version = "0.1.0"'
+eq "  ...serde (a registry crate) did not move" "$(grep -A1 '^name = "serde"$' Cargo.lock | tail -1)" 'version = "0.1.2"'
+eq "  ...only Cargo.toml and Cargo.lock changed, uncommitted" "$(git status --porcelain | awk '{ print $2 }' | paste -sd' ' -)" "Cargo.lock Cargo.toml"
+eq "  ...HEAD still carries the committed version" "$(R version HEAD)" "$SV"
+expect_ok "stamp again: a no-op" R stamp 26.10.7
+expect_fail "stamp refuses a non-X.Y.Z" R stamp 26.10
+git checkout -q -- Cargo.toml Cargo.lock
 
 echo; echo "=== RESULT: $pass passed, $failn failed"
 [ "$failn" = 0 ]
