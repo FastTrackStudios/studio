@@ -22,29 +22,12 @@ jobs:
     steps:
     - uses: actions/checkout@v4
       with:
-        fetch-depth: ${{ github.head_ref == 'release/pending' && 0 || 2 }}
-    - name: Release commit?
-      id: release
-      if: ${{ github.head_ref == 'release/pending' }}
-      env:
-        BASE_SHA: ${{ github.event.pull_request.base.sha }}
-        BASE_REF: ${{ github.event.pull_request.base.ref }}
-        HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-        HEAD_REF: ${{ github.head_ref }}
-        HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
-      run: |
-        git show "$BASE_SHA:scripts/release.sh" > "$RUNNER_TEMP/release-base.sh"
-        if bash "$RUNNER_TEMP/release-base.sh" release-only; then
-          echo "only=true" >> "$GITHUB_OUTPUT"
-          echo "release commit only: nothing to check"
-        fi
+        fetch-depth: 2
     - name: Rust 1.94.0
-      if: ${{ steps.release.outputs.only != 'true' }}
       uses: dtolnay/rust-toolchain@1.94.0
       with:
         components: rustfmt
     - name: cargo-rail 0.32.0
-      if: ${{ steps.release.outputs.only != 'true' }}
       run: |
         set -euo pipefail
         mkdir -p "$HOME/.local/bin"
@@ -56,7 +39,6 @@ jobs:
         "$HOME/.local/share/cargo-rail/cargo-rail" --version
     - name: Restore cargo's dependencies
       id: deps
-      if: ${{ steps.release.outputs.only != 'true' }}
       uses: actions/cache/restore@v4
       with:
         path: |
@@ -66,13 +48,12 @@ jobs:
         key: cargo-deps-${{ runner.os }}-${{ hashFiles('Cargo.lock') }}
         restore-keys: cargo-deps-${{ runner.os }}-
     - name: fmt
-      if: ${{ !cancelled() && steps.release.outputs.only != 'true' }}
       run: cargo fmt --all --check
     - name: Change files
-      if: ${{ !cancelled() && steps.release.outputs.only != 'true' }}
+      if: ${{ !cancelled() }}
       run: cargo rail change check --since "$(git rev-parse HEAD^1)"
     - name: Manifests + lockfile
-      if: ${{ !cancelled() && steps.release.outputs.only != 'true' }}
+      if: ${{ !cancelled() }}
       run: |
         set -euo pipefail
         committed="$RUNNER_TEMP/Cargo.lock.committed"
@@ -92,5 +73,5 @@ jobs:
           exit 1
         fi
     - name: rail config
-      if: ${{ !cancelled() && steps.release.outputs.only != 'true' }}
+      if: ${{ !cancelled() }}
       run: cargo rail config validate --strict

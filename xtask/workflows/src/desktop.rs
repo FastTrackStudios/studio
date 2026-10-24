@@ -4,10 +4,10 @@
 //! the same tag. scripts/install.sh installs them (README, "Install").
 //!
 //! ```text
-//!   `just release-tag` pushes vX.Y.Z --> this, studio-ios, deploy and the
-//!   release publish all start on the tag --> resolve (hosted: tag shape,
-//!   the app crate's version == the tag's, changelog section, commit on main
-//!   or release/v*, Release exists) --> macos (airlock) and linux
+//!   `just release` pushes vX.Y.Z --> this, Images, studio-ios and the
+//!   release publish all start on the tag, in parallel --> resolve (hosted:
+//!   the tag's version stamped in, tag shape, the app crate's version == the
+//!   tag's, commit on main or release/v*, `CI passed` green, Release exists) --> macos (airlock) and linux
 //!   (THEBATTLESHIP, `studio-release`) build in parallel and upload
 //!   workflow artifacts --> publish (hosted) checks them and attaches them
 //!   to the Release.
@@ -21,7 +21,7 @@
 //! this reads no GitHub secret. Only the hosted `publish` job can write to
 //! the Release; the jobs that touch the identity have a read-only token.
 //!
-//! Triggers: a tag push (`just release-tag`, pushed as the fts-forge App or
+//! Triggers: a tag push (`just release`, pushed as the fts-forge App or
 //! a person: a tag pushed with GITHUB_TOKEN starts no workflow), and
 //! workflow_dispatch:
 //!
@@ -81,8 +81,8 @@ const NOT_VALIDATE: &str = "${{ inputs.mode != 'validate' }}";
 const STAMPED: &str = "${{ env.MODE != 'build-only' }}";
 
 /// The same checks TestFlight makes (release.sh ios-resolve): the tag is
-/// vX.Y.Z, studio-desktop's version is the tag's, the changelog has its
-/// section, the commit is on main or release/v*, `CI passed` is green. A
+/// vX.Y.Z, the stamped studio-desktop's version is the tag's, the commit is
+/// on main or release/v*, `CI passed` is green. A
 /// build-only run checks none of that and builds the ref as it is.
 fn resolve() -> Result<Job> {
     Ok(Job::new(UBUNTU)
@@ -116,7 +116,7 @@ fi
         .step(stamp("${{ env.TAG }}").cond(STAMPED))
         .step(
             Step::run(
-                "Version = tag version, on main, changelog, CI passed",
+                "Version = tag version, on main or release/v*, CI passed",
                 "bash scripts/release.sh ios-resolve studio \"$TAG\"\n",
             )
             .id("resolve")

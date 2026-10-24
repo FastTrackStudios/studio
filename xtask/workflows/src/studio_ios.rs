@@ -8,16 +8,16 @@
 //!
 //! ```text
 //!   PRs --squash--> main           ships NOTHING
-//!   release PR merged --> `just release-tag` pushes vYY.M.MICRO (on main, or
-//!   on a release/v* hotfix line) --> this workflow starts on the tag -->
-//!   resolve (hosted: tag shape, app crate version == tag version, changelog
-//!   section, commit on main or release/v*, `CI passed` green, Release
-//!   exists) --> testflight (airlock: build, sign, upload) --> record
+//!   `just release` pushes vYY.M.MICRO on a green commit (of main, or of a
+//!   release/v* hotfix line) --> this workflow starts on the tag -->
+//!   resolve (hosted: the tag's version stamped in, tag shape, app crate
+//!   version == tag version, commit on main or release/v*, `CI passed`
+//!   green, Release exists) --> testflight (airlock: build, sign, upload) --> record
 //!   (hosted: marketing version + build number written into the Release
 //!   notes; a re-run's edit re-reads and retries).
 //! ```
 //!
-//! Triggers: a tag push (`just release-tag`, pushed as the fts-forge App or
+//! Triggers: a tag push (`just release`, pushed as the fts-forge App or
 //! a person: a tag pushed with GITHUB_TOKEN starts no workflow), and
 //! workflow_dispatch with the tag (a re-run). `dry_run` stops after
 //! `resolve`, before anything is built or uploaded. No pull_request
@@ -101,7 +101,7 @@ fi
         .step(stamp("${{ env.TAG }}"))
         .step(
             Step::run(
-                "Marketing version = tag version, tag on main or release/v*, changelog section, green",
+                "Marketing version = tag version, tag on main or release/v*, green",
                 "bash scripts/release.sh ios-resolve studio \"$TAG\"\n",
             )
             .id("resolve")

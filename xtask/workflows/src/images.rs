@@ -1,32 +1,37 @@
-//! `images` — studio's public image, pushed to GHCR from the release commit,
-//! BEFORE the release tag exists (mirrors FastTrackStudios/task's
-//! images.yml):
+//! `images` — studio's public image, built and pushed to GHCR from the
+//! release TAG:
 //!
 //! ```text
 //!   ghcr.io/fasttrackstudios/studio-web:<X.Y.Z>   (+ sha-<short>, latest)
 //!
-//!   release PR squash-merges -> push of `chore(release): vX.Y.Z` to main
-//!     (or to release/v* for a hotfix release)
-//!     -> this builds `.#studio-web-image` and pushes it
-//!   just release-tag -> refuses until studio-web:X.Y.Z is on GHCR, public,
-//!                       and labelled with the release commit
-//!                       (scripts/ghcr-images.sh check)
-//!     -> pushes vX.Y.Z -> Argo CD deploys the newest tag (deploy/chart/studio)
+//!   just release -> pushes vX.Y.Z on a green commit of main (or release/v*)
+//!     -> this (beside studio-ios, desktop and the GitHub Release, all from
+//!        the tag, in parallel): the tag guard, then `.#studio-web-image`
+//!        built from the tag with the tag's version stamped in, pushed
+//!     -> argocd-image-updater (starcommand) picks the highest X.Y.Z image
+//!        and Argo CD rolls it out. This repo deploys nothing.
 //! ```
 //!
-//! A push that does not change the version builds nothing. Versions are
-//! CalVer (26.10.3): the image tag is the bare version, no `v`.
+//! Nothing waits for this: `just release` does not, and the Release does
+//! not. The test suite is not run again; the tag guard checks `CI passed`
+//! is already green on the tagged commit.
+//!
+//! THE IMAGE TAG IS EXACTLY THE BARE CALVER (`26.10.4`: no `v`, no leading
+//! zeros). The cluster's image-updater filters tags by
+//! `^[0-9]+\.[0-9]+\.[0-9]+$` and orders them as semver, which orders CalVer
+//! correctly only in that shape; `plan` refuses any other. `latest` and
+//! `sha-<short>` ride along (the filter ignores them).
 //!
 //! workflow_dispatch with `tag`: build and push the image for an EXISTING
-//! release tag from that tag's source (re-publishing a lost image, seeding
-//! GHCR). Creates no git tag, never moves `latest`.
+//! release tag from that tag's source (re-publishing a lost image). Never
+//! moves `latest`.
 //!
-//! Packages pushed with GITHUB_TOKEN are created PRIVATE: the org makes
-//! `studio-web` public once, after its first push, or the cluster cannot
-//! pull it (and the anonymous `ghcr-images.sh check` fails).
+//! Packages pushed with GITHUB_TOKEN are created PRIVATE: the org made
+//! `studio-web` public once, after its first push, or the cluster could not
+//! pull it (and the anonymous `ghcr-images.sh check` would fail).
 
 use crate::model::{Job, RunsOn, Step, UBUNTU, Workflow, yaml};
-use crate::steps::{checkout, checkout_full};
+use crate::steps::{checkout, checkout_full, stamp};
 use anyhow::Result;
 
 pub fn workflow() -> Result<Workflow> {
@@ -35,134 +40,116 @@ pub fn workflow() -> Result<Workflow> {
         yaml(
             r#"
 push:
-  # main: a release PR's squash commit. release/v*: a hotfix release.
-  branches: [main, "release/v*"]
-  # A release commit always changes Cargo.toml's version.
-  paths: [Cargo.toml]
+  tags: ["v*"]
 workflow_dispatch:
   inputs:
     tag:
-      description: "Existing release tag to (re)publish the image for, e.g. v26.10.3"
+      description: "Existing release tag to (re)publish the image for, e.g. v26.10.4"
       required: true
       type: string
 "#,
         )?,
     )
-    // One group PER RELEASE, never cancelled, like a release commit's CI
-    // run: a shared group holds only one pending run and drops it for the
-    // next, so a release queued behind another could vanish. Two publishes
-    // still never build side by side on one runner: the pool takes them in
-    // arrival order.
-    .concurrency("images-${{ inputs.tag || github.sha }}", false)
+    // One group PER TAG, never cancelled: a release build runs to the end
+    // (a shared group holds one pending run and would drop a queued
+    // release). The `studio-release` pool takes them in arrival order.
+    .concurrency("images-${{ inputs.tag || github.ref_name }}", false)
     .permissions(yaml("contents: read\n")?)
+    .env("TAG", "${{ inputs.tag || github.ref_name }}")
     .job("plan", plan()?)
     .job("publish", publish()?))
 }
 
-/// Is this a release commit, and which tags does its image get? Hosted,
-/// cheap: a push that is not a release says so and stops here.
+/// Is the tag a release of a green commit, and which tags does its image
+/// get? Hosted, cheap.
 fn plan() -> Result<Job> {
     Ok(Job::new(UBUNTU)
         .name("What to publish")
-        // Never a fork: its release commit is not this repo's.
+        // Never a fork: its tag is not this repo's release.
         .cond("${{ github.repository == 'FastTrackStudios/studio' }}")
-        .timeout(5)
-        .output("build", "${{ steps.plan.outputs.build }}")
+        .timeout(10)
+        // checks: the tag guard reads the tagged commit's `CI passed`.
+        .permissions(yaml("contents: read\nchecks: read\n")?)
         .output("sha", "${{ steps.plan.outputs.sha }}")
         .output("tags", "${{ steps.plan.outputs.tags }}")
-        .step(checkout_full(None))
+        .step(Step::run("The image tag is the bare CalVer", CALVER))
+        .step(checkout_full(Some("refs/tags/${{ env.TAG }}")))
+        .step(stamp("${{ env.TAG }}"))
+        .step(
+            Step::run(
+                "The tag is a green release on main or release/v*",
+                // A dispatch runs on a branch ref: judge the tag it names.
+                "GITHUB_REF=\"refs/tags/$TAG\" bash scripts/release.sh tag-guard\n",
+            )
+            .env("GH_TOKEN", "${{ github.token }}"),
+        )
         .step(
             Step::run("Plan", PLAN)
                 .id("plan")
-                .env("EVENT", "${{ github.event_name }}")
-                .env("INPUT_TAG", "${{ inputs.tag }}"),
+                .env("EVENT", "${{ github.event_name }}"),
         ))
 }
 
-const PLAN: &str = r####"set -euo pipefail
-git fetch --quiet --tags origin
-if [ "$EVENT" = workflow_dispatch ]; then
-  [[ "$INPUT_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "::error::tag '$INPUT_TAG' is not vX.Y.Z"; exit 1; }
-  sha="$(git rev-parse --verify --quiet "refs/tags/$INPUT_TAG^{commit}")" \
-    || { echo "::error::no tag $INPUT_TAG"; exit 1; }
-  v="$(bash scripts/release.sh version "$sha")"
-  [ "v$v" = "$INPUT_TAG" ] || { echo "::error::$INPUT_TAG names a commit with version $v"; exit 1; }
-  extra=""
-else
-  sha="$GITHUB_SHA"
-  v="$(bash scripts/release.sh version "$sha")"
-  vp="$(bash scripts/release.sh version "$sha^1")"
-  if [ "$v" = "$vp" ]; then
-    echo "version unchanged ($v): not a release commit, nothing to publish"
-    echo "build=false" >> "$GITHUB_OUTPUT"
-    exit 0
-  fi
-  # Captured, then matched: `git show | grep -q` under pipefail can read an
-  # early match as a failure (grep exits, git show dies of SIGPIPE).
-  changelog="$(git show "$sha:CHANGELOG.md")"
-  grep -q "^## \[$v\]" <<<"$changelog" \
-    || { echo "::error::version $vp -> $v but CHANGELOG.md has no [$v] section: not a release commit"; exit 1; }
-  ! git rev-parse -q --verify "refs/tags/v$v" >/dev/null \
-    || { echo "::error::tag v$v already exists; a released version's image is never replaced"; exit 1; }
-  extra="latest"
-fi
-# A release line cut before studio-web (a hotfix of an older release) has
-# no chart and ships no image.
-if ! git cat-file -e "$sha:deploy/chart/studio/Chart.yaml" 2>/dev/null; then
-  echo "no deploy/chart/studio at $sha: this line ships no studio-web, nothing to publish"
-  echo "build=false" >> "$GITHUB_OUTPUT"
-  exit 0
-fi
-# The tag the release (and the chart at its tag) pulls.
-itag="$(bash scripts/ghcr-images.sh tag "$sha")"
-if [ "$itag" != "$v" ]; then
-  echo "::error::the image tag at $sha is $itag but the release is $v: the cluster would pull the wrong image"
+/// argocd-image-updater's contract (starcommand): exactly YY.M.MICRO, no
+/// leading zeros. Inline, not the tag's script: a re-publish of an older
+/// tag is judged by today's rule.
+const CALVER: &str = r#"set -euo pipefail
+v="${TAG#v}"
+if [ "$v" = "$TAG" ] || [[ ! "$v" =~ ^[1-9][0-9]\.(1[0-2]|[1-9])\.(0|[1-9][0-9]*)$ ]]; then
+  echo "::error::'$TAG' is not vYY.M.MICRO CalVer: its image tag '$v' would not match the cluster's ^[1-9][0-9]\.(1[0-2]|[1-9])\.(0|[1-9][0-9]*)\$ and would sort wrong or be ignored"
   exit 1
 fi
-tags="$(xargs <<<"$itag sha-$(git rev-parse --short "$sha") $extra")"
+echo "image tag: $v"
+"#;
+
+const PLAN: &str = r####"set -euo pipefail
+sha="$(git rev-parse HEAD)"
+v="${TAG#v}"
+extra="latest"
+# A re-publish never moves `latest` (a newer release may own it).
+[ "$EVENT" != workflow_dispatch ] || extra=""
+tags="$(xargs <<<"$v sha-$(git rev-parse --short "$sha") $extra")"
 echo "publishing $sha as: $tags"
 {
-  echo "build=true"
   echo "sha=$sha"
   echo "tags=$tags"
 } >> "$GITHUB_OUTPUT"
-echo "### studio-web for v$v: \`$tags\` from \`$sha\`" >> "$GITHUB_STEP_SUMMARY"
+echo "### studio-web for $TAG: \`$tags\` from \`$sha\`" >> "$GITHUB_STEP_SUMMARY"
 "####;
 
 /// THEBATTLESHIP's `studio-release` pool (Codys-Wright/nix-config
 /// hosts/THEBATTLESHIP/github-runners.nix; x86_64 NixOS, the pool for
 /// release builds, never checks, as desktop.yml's AppImage): the image is
 /// Linux-only and a nix build, and the pool's nix store is warm. Only
-/// trusted code reaches it: a push to main or release/v*, or a dispatch.
-/// `just release-tag` waits for this image, so a release takes as long as
-/// this build.
+/// trusted code reaches it: a tag push, or a dispatch.
 fn publish() -> Result<Job> {
     Ok(Job::new(RunsOn::Labels(&["self-hosted", "studio-release"]))
         .name("Build + push to GHCR")
         .needs(&["plan"])
-        .cond("${{ needs.plan.outputs.build == 'true' }}")
         .timeout(180)
         .permissions(yaml("contents: read\npackages: write\n")?)
         // Newer skopeo rejects some hosts' v1 registries.conf; the registry
         // is named explicitly everywhere, so an empty (valid) config is enough.
         .env("CONTAINERS_REGISTRIES_CONF", "/dev/null")
-        // Full history and a clean tree: the image's revision label is the
-        // flake's `self.rev`, which a dirty tree does not have.
         .step(
             checkout()
                 .with("ref", "${{ needs.plan.outputs.sha }}")
                 .with("fetch-depth", 0)
                 .with("persist-credentials", false),
         )
+        // The tag's version into the source the image is built from (the
+        // web bundles' CARGO_PKG_VERSION, the image's version label).
+        .step(stamp("${{ env.TAG }}"))
         .step(
             Step::run("Build and push studio-web", PUSH)
                 .env("TAGS", "${{ needs.plan.outputs.tags }}")
+                .env("SHA", "${{ needs.plan.outputs.sha }}")
                 .env("GHCR_USER", "${{ github.actor }}")
                 .env("GHCR_TOKEN", "${{ secrets.GITHUB_TOKEN }}"),
         )
-        // What `just release-tag` will check: an anonymous pull, and the
-        // revision label. Fails (with the reason) while the package is still
-        // private.
+        // An anonymous pull and the revision label: what the cluster gets.
+        // Fails (with the reason) if the package went private. Nothing
+        // waits on it.
         .step(
             Step::run("Pullable without credentials, from this commit?", PULLABLE)
                 .env("TAGS", "${{ needs.plan.outputs.tags }}")
@@ -180,7 +167,10 @@ skopeo() { nix run nixpkgs#skopeo -- "$@"; }
 printf '%s' "$GHCR_TOKEN" | skopeo login ghcr.io -u "$GHCR_USER" --password-stdin
 read -r -a tags <<<"$TAGS"
 dest="docker://ghcr.io/fasttrackstudios/studio-web"
-streamer="$(nix build --accept-flake-config .#studio-web-image --no-link --print-out-paths)"
+# The stamp left the tree dirty (no self.rev): the revision label is the
+# tagged commit, passed in (nix/modules/crane.nix `fts.buildRev`, read
+# only under --impure).
+streamer="$(FTS_BUILD_REV="$SHA" nix build --impure --accept-flake-config .#studio-web-image --no-link --print-out-paths)"
 "$streamer" | skopeo --insecure-policy copy docker-archive:/dev/stdin "$dest:${tags[0]}"
 for tag in "${tags[@]:1}"; do
   skopeo --insecure-policy copy "$dest:${tags[0]}" "$dest:$tag"
@@ -192,8 +182,8 @@ rm -f "$REGISTRY_AUTH_FILE"
 } >> "$GITHUB_STEP_SUMMARY"
 "####;
 
-const PULLABLE: &str = r####"set -euo pipefail
+const PULLABLE: &str = r#"set -euo pipefail
 first="${TAGS%% *}"
 bash scripts/ghcr-images.sh check "$first" "$SHA" \
   || { echo "::warning::not anonymously pullable yet: make ghcr.io/fasttrackstudios/studio-web PUBLIC (org package settings), then re-run this job"; exit 1; }
-"####;
+"#;

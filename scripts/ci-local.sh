@@ -15,8 +15,8 @@
 # --workspace` and the wasm check for what the change affects: `cargo rail
 # plan` from BASE (default: the merge-base with origin/main) through
 # cargo's reverse-dependency graph, turned into gates by
-# scripts/ci-rail-plan.py. The full set runs on WarpBuild after every merge
-# to main (checks.yml), which is what catches two PRs that pass alone and
+# scripts/ci-rail-plan.py. The full set runs on THEBATTLESHIP after every
+# merge to main (checks.yml), which is what catches two PRs that pass alone and
 # break together.
 set -euo pipefail
 cd "$(git rev-parse --show-toplevel)"
@@ -109,27 +109,6 @@ finish() {
   fi
   echo "ci-local: green in $total ($breakdown)"
 }
-
-# A release PR (release/pending): the release guard CI runs, from the base's
-# copy of the script. A sound one is the version + changelog only, whose
-# content was checked when it merged: nothing to build.
-if [ "$(git rev-parse --abbrev-ref HEAD)" = release/pending ]; then
-  guard="$(mktemp)"
-  git show "$base:scripts/release.sh" >"$guard"
-  rc=0
-  HEAD_SHA="$(git rev-parse HEAD)" HEAD_REF=release/pending BASE_REF=main \
-    bash "$guard" release-only || rc=$?
-  rm -f "$guard"
-  case "$rc" in
-    0)
-      echo "ci-local: a sound release commit: nothing to build"
-      timings+=("release guard $(dur $((SECONDS - start)))")
-      finish "${1:-}"
-      exit 0 ;;
-    1) ;;
-    *) echo "ci-local: the release guard refuses this release commit" >&2; exit 1 ;;
-  esac
-fi
 
 # The static guards, seconds each: what pr.yml checks, plus the generated
 # workflows (+ actionlint), which CI's `Gates` job also runs after a merge.

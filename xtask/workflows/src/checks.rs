@@ -13,12 +13,10 @@
 //!                  wasm check). Main requires both, and `Release guard`.
 //!   push to main   the FULL set, once per merge: what catches two PRs that
 //!   (release/v*)   each passed alone but break together. main may go red —
-//!                  releases are cut by hand, and `just release-tag`
-//!                  requires `CI passed` on the release commit.
+//!                  `just release` tags only a commit whose `CI passed` is
+//!                  green, and the tag's builds never run this again.
 //!   PR into        a hotfix onto a release line: the FULL set (nothing left
-//!   release/**     to a hook, on a branch that ships straight out). A
-//!                  release PR (version + changelog only, proved by the BASE
-//!                  commit's release.sh) skips everything.
+//!   release/**     to a hook, on a branch that ships straight out).
 //!   by hand        `gh workflow run checks.yml --ref <branch>` runs
 //!                  everything and, when green, posts `Local CI` on the
 //!                  branch's head (for a push the hook couldn't vouch for).
@@ -46,7 +44,7 @@
 //! (.cargo/ci-config.toml) and incremental is off.
 
 use crate::model::{Job, RunsOn, Step, UBUNTU, Workflow, yaml};
-use crate::steps::{Tools, cargo_deps_save, checkout, checkout_full, hosted_setup, rust_cache};
+use crate::steps::{Tools, cargo_deps_save, checkout, hosted_setup, rust_cache};
 use anyhow::Result;
 
 pub fn workflow() -> Result<Workflow> {
@@ -57,22 +55,19 @@ pub fn workflow() -> Result<Workflow> {
 pull_request:
   branches: ["release/**"]
 push:
-  # release/v* (hotfix lines), not release/pending: a release PR's head is
-  # version + changelog only and gets no run of its own.
+  # release/v*: the hotfix lines, released from their own green commits.
   branches: [main, "release/v*"]
 workflow_dispatch:
 "#,
         )?,
     )
     // One group per PR or branch, cancel-in-progress: a newer merge to main
-    // cancels the older run, whose result no longer matters. EXCEPT a
-    // release commit (`chore(release): v…`): its run gets a group of its own
-    // commit and is never cancelled — it queues and runs to the end, because
-    // `just release-tag` requires its `CI passed`.
-    .concurrency_when(
-        "ci-${{ github.event.pull_request.number || github.ref }}-${{ \
-         startsWith(github.event.head_commit.message, 'chore(release): v') && github.sha || 'run' }}",
-        "${{ !startsWith(github.event.head_commit.message, 'chore(release): v') }}",
+    // cancels the older run, whose result no longer matters (`just release`
+    // tags the newest commit that did go green). Release builds run from
+    // the tag in their own workflows and groups, never cancelled.
+    .concurrency(
+        "ci-${{ github.event.pull_request.number || github.ref }}",
+        true,
     )
     .job("plan", plan()?)
     .job("deps-cache", deps_cache())
@@ -84,24 +79,17 @@ workflow_dispatch:
     .job("ci-passed", ci_passed()?))
 }
 
-/// Whether there is anything to run (a sound hotfix release PR: no; a
-/// refused one fails here). Bash and git only: no toolchain.
+/// What this run is, and a fork PR refused. Bash only: no checkout, no
+/// toolchain.
 fn plan() -> Result<Job> {
-    let mut job = Job::new(UBUNTU)
+    Ok(Job::new(UBUNTU)
         .name("Plan")
         .timeout(10)
-        .permissions(yaml("contents: read\n")?);
-    job = job.output("skip", "${{ steps.plan.outputs.skip }}");
-    Ok(job
-        // Full history: the release guard reads the PR's base and head.
-        .step(checkout_full(None))
+        .permissions(yaml("contents: read\n")?)
         .step(
             Step::run("Plan", PLAN)
                 .id("plan")
-                .env("BASE_SHA", "${{ github.event.pull_request.base.sha }}")
                 .env("BASE_REF", "${{ github.event.pull_request.base.ref }}")
-                .env("HEAD_SHA", "${{ github.event.pull_request.head.sha }}")
-                .env("HEAD_REF", "${{ github.event.pull_request.head.ref }}")
                 .env(
                     "HEAD_REPO",
                     "${{ github.event.pull_request.head.repo.full_name }}",
@@ -109,33 +97,12 @@ fn plan() -> Result<Job> {
         ))
 }
 
-/// Only PRs into release/** reach this workflow (pr.yml has main). The
-/// release guard runs from the BASE commit's copy of the script (never the
-/// PR's, which could exempt itself): 0 = sound, version + changelog only,
-/// skip everything; 3 = refused, fail; 1 = a hotfix, the full set. A fork
-/// PR would run the full set on the org's paid runners with whatever its
-/// code does: refused.
-const PLAN: &str = r####"set -u
-out() { printf '%s\n' "$@" >> "$GITHUB_OUTPUT"; }
+/// Only PRs into release/** reach this workflow (pr.yml has main): a hotfix,
+/// the full set. A fork PR would run the full set on the org's runners with
+/// whatever its code does: refused.
+const PLAN: &str = r#"set -u
 case "${GITHUB_EVENT_NAME:-}" in
   pull_request)
-    rc=1
-    if git show "${BASE_SHA}:scripts/release.sh" > "${RUNNER_TEMP}/release-base.sh" 2>/dev/null; then
-      bash "${RUNNER_TEMP}/release-base.sh" release-only || rc=$?
-      [ "$rc" = 0 ] || [ "$rc" = 1 ] || rc=3
-    fi
-    case "$rc" in
-      0)
-        { echo "### Release commit only"
-          echo "This PR is one commit changing the version, CHANGELOG.md and consumed change files; its content was checked when it merged, so every job is skipped."
-        } >> "$GITHUB_STEP_SUMMARY"
-        echo "plan: release commit only (${HEAD_REF} -> ${BASE_REF}): nothing to run"
-        out skip=true
-        exit 0 ;;
-      3)
-        echo "::error::${HEAD_REF} -> ${BASE_REF} is a release PR the release guard refuses (see above)"
-        exit 1 ;;
-    esac
     if [ "${HEAD_REPO}" != "${GITHUB_REPOSITORY}" ]; then
       echo "::error::fork PR into ${BASE_REF}: the full set runs on the org's paid runners; re-push it from a branch of this repo"
       exit 1
@@ -145,8 +112,7 @@ case "${GITHUB_EVENT_NAME:-}" in
     echo "plan: dispatch on ${GITHUB_REF_NAME}: the full set" ;;
   *) echo "plan: ${GITHUB_EVENT_NAME:-?} on ${GITHUB_REF_NAME}: the full set" ;;
 esac
-out skip=false
-"####;
+"#;
 
 /// Main is the only writer of the cargo-dependency cache pr.yml's `PR
 /// checks` restore (the 10 GB Actions cache budget): fetched once per
@@ -172,63 +138,54 @@ fn hosted_cargo_job(job: Job) -> Job {
 /// the job still fails.
 const NOT_CANCELLED: &str = "${{ !cancelled() }}";
 
-/// Every job but the plan: nothing to run on a sound release PR.
-const WANTED: &str = "${{ needs.plan.outputs.skip != 'true' }}";
-
 /// REQUIRED (through `CI passed`): the static guards — manifests +
 /// lockfile, fmt, the generated workflows + actionlint, change files (a
 /// hotfix PR), the rail config. `just ci-local` runs the same
 /// set before every push; pr.yml re-checks the compile-nothing half.
 /// Compiles only the workflows crate.
 fn gates() -> Job {
-    hosted_cargo_job(
-        Job::new(UBUNTU)
-            .name("Gates")
-            .needs(&["plan"])
-            .cond(WANTED)
-            .timeout(30),
-    )
-    .step(checkout())
-    .steps(hosted_setup(
-        "rustfmt",
-        "",
-        Tools {
-            mold: true,
-            just: true,
-            cargo_rail: true,
-            actionlint: true,
-            ci_cargo_config: true,
-            ..Tools::default()
-        },
-    ))
-    .steps(rust_cache("gates"))
-    .step(Step::run("Manifests + lockfile", LOCKFILE))
-    // Each extra version of a crate is another compile: fail when Cargo.lock
-    // gains one (.config/duplicate-deps.toml lists the ones we carry).
-    .step(
-        Step::run(
-            "Duplicate crate versions",
-            "python3 scripts/check-duplicate-deps.py",
+    hosted_cargo_job(Job::new(UBUNTU).name("Gates").needs(&["plan"]).timeout(30))
+        .step(checkout())
+        .steps(hosted_setup(
+            "rustfmt",
+            "",
+            Tools {
+                mold: true,
+                just: true,
+                cargo_rail: true,
+                actionlint: true,
+                ci_cargo_config: true,
+                ..Tools::default()
+            },
+        ))
+        .steps(rust_cache("gates"))
+        .step(Step::run("Manifests + lockfile", LOCKFILE))
+        // Each extra version of a crate is another compile: fail when Cargo.lock
+        // gains one (.config/duplicate-deps.toml lists the ones we carry).
+        .step(
+            Step::run(
+                "Duplicate crate versions",
+                "python3 scripts/check-duplicate-deps.py",
+            )
+            .cond(NOT_CANCELLED),
         )
-        .cond(NOT_CANCELLED),
-    )
-    .step(Step::run("cargo fmt --check", "cargo fmt --all --check").cond(NOT_CANCELLED))
-    .steps(workflow_gates())
-    .step(change_check())
-    .step(Step::run("rail config", "cargo rail config validate --strict").cond(NOT_CANCELLED))
-    // The release tooling's own end-to-end test (scripts/release-sandbox.sh:
-    // a synthetic repo and a local bare origin, cargo and gh shimmed), with
-    // GNU tools here and macOS's own in `release_macos`.
-    .step(
-        Step::run(
-            "Release tooling (sandbox)",
-            "bash scripts/release-sandbox.sh",
+        .step(Step::run("cargo fmt --check", "cargo fmt --all --check").cond(NOT_CANCELLED))
+        .steps(workflow_gates())
+        .step(change_check())
+        .step(Step::run("rail config", "cargo rail config validate --strict").cond(NOT_CANCELLED))
+        // The release tooling's own end-to-end test (scripts/release-sandbox.sh:
+        // a synthetic repo and a local bare origin, cargo and gh shimmed), with
+        // GNU tools here and macOS's own in `release_macos`.
+        .step(
+            Step::run(
+                "Release tooling (sandbox)",
+                "bash scripts/release-sandbox.sh",
+            )
+            .cond(NOT_CANCELLED),
         )
-        .cond(NOT_CANCELLED),
-    )
 }
 
-/// The release tooling runs on Macs too (`just release-prepare` on a
+/// The release tooling runs on Macs too (`just release` on a
 /// developer's machine, the TestFlight helpers on airlock), where sed is
 /// BSD's and bash is 3.2: GNU-only spellings there broke 28 of the
 /// sandbox's checks once. So the sandbox runs here with NOTHING but the
@@ -237,7 +194,6 @@ fn release_macos() -> Job {
     Job::new(RunsOn::Label("macos-latest"))
         .name("Release tooling (macOS)")
         .needs(&["plan"])
-        .cond(WANTED)
         .timeout(15)
         .step(checkout())
         .step(Step::run(
@@ -313,12 +269,11 @@ cargo rail change check --since \"${BASE_SHA}\"
 /// The pool a run's build jobs go to (Codys-Wright/nix-config
 /// hosts/THEBATTLESHIP/github-runners.nix: two pools of three instances,
 /// each pool sharing one warm cache, $STUDIO_CACHE_DIR). Every check runs on
-/// `studio-main`, a release commit's and a hotfix PR's included: the checks
-/// share one set of check/test/wasm target dirs instead of building them
-/// twice. `studio-release` is for release BUILDS (the installers, desktop.yml),
-/// whose release-profile target dir has nothing in common with a check's. A
-/// release commit's run is never cancelled (the concurrency above), so it
-/// cannot lose its place to a merge. Only trusted code reaches the pool: CI
+/// `studio-main`, a hotfix PR's included: the checks share one set of
+/// check/test/wasm target dirs instead of building them twice.
+/// `studio-release` is for release BUILDS only (the image, the AppImage:
+/// images.yml, desktop.yml), whose release-profile target dir has nothing in
+/// common with a check's. Only trusted code reaches the pool: CI
 /// runs no PR into main (pr.yml does, on free runners), and `plan` refuses a
 /// fork PR into a release line.
 const POOL: RunsOn = RunsOn::Labels(&["self-hosted", "studio-main"]);
@@ -352,19 +307,13 @@ echo "target dir: $dir; pool $(du -sh "$pool" | cut -f1) of 200 GB; $(df -h "$po
 /// NixOS: the toolchain, the native headers, just, nextest and the wasm32 C
 /// toolchain all come from it).
 fn pool_job(name: &str, kind: &str, timeout: u32) -> Job {
-    hosted_cargo_job(
-        Job::new(POOL)
-            .name(name)
-            .needs(&["plan"])
-            .cond(WANTED)
-            .timeout(timeout),
-    )
-    .step(checkout().with("persist-credentials", false))
-    .step(Step::run(
-        "CI cargo config",
-        "mkdir -p ../.cargo\ncp .cargo/ci-config.toml ../.cargo/config.toml\n",
-    ))
-    .step(target_dir(kind))
+    hosted_cargo_job(Job::new(POOL).name(name).needs(&["plan"]).timeout(timeout))
+        .step(checkout().with("persist-credentials", false))
+        .step(Step::run(
+            "CI cargo config",
+            "mkdir -p ../.cargo\ncp .cargo/ci-config.toml ../.cargo/config.toml\n",
+        ))
+        .step(target_dir(kind))
 }
 
 /// `script`, run in the dev shell.
@@ -397,9 +346,9 @@ fn check() -> Job {
 }
 
 /// REQUIRED on full runs: the browser builds, which the workspace check
-/// (native) never compiles — the three web bundles deploy.yml ships
+/// (native) never compiles — the web bundles the studio-web image ships
 /// (STA-366: a native-only dep leaking into their graph stayed hidden until
-/// the deploy failed) and the Signal browser remote (required since it went
+/// a deploy failed) and the Signal browser remote (required since it went
 /// green, STA-184).
 fn wasm() -> Job {
     pool_job("Wasm", "wasm", 75)
@@ -545,12 +494,12 @@ t2=$(date +%s)
 exit "$rc"
 "####;
 
-/// The aggregate: `just release-tag` and the tag guards require `CI passed`
-/// green on a release commit (scripts/release.sh `BUILD_CHECK`). A skipped
-/// required check counts as passing, so this never skips: it fails unless
-/// the plan, the gates, check, wasm, tests and the macOS release-tooling
-/// run all succeeded (a sound release
-/// PR skips them all). The advisory work (clippy) cannot fail it.
+/// The aggregate: `just release` and the tag guards require `CI passed`
+/// green on the commit they release (scripts/release.sh `BUILD_CHECK`). A
+/// skipped required check counts as passing, so this never skips: it fails
+/// unless the plan, the gates, check, wasm, tests and the macOS
+/// release-tooling run all succeeded. The advisory work (clippy) cannot
+/// fail it.
 ///
 /// The escape hatch for a push the pre-push hook couldn't vouch for (a
 /// contributor without the hook, a dirty tree, `SKIP=local-ci`): a green
@@ -565,7 +514,6 @@ fn ci_passed() -> Result<Job> {
         .step(
             Step::run("Every required job succeeded", AGGREGATE)
                 .env("PLAN", "${{ needs.plan.result }}")
-                .env("SKIP", "${{ needs.plan.outputs.skip }}")
                 .env("GATES", "${{ needs.gates.result }}")
                 .env("CHECK", "${{ needs.check.result }}")
                 .env("WASM", "${{ needs.wasm.result }}")
@@ -592,9 +540,6 @@ const AGGREGATE: &str = r#"set -u
 fail=0
 bad() { echo "::error::$1"; fail=1; }
 [ "$PLAN" = success ] || { bad "plan: $PLAN"; exit 1; }
-if [ "$SKIP" = "true" ]; then
-  echo "plan: nothing to run (release commit)"; exit 0
-fi
 for job in "gates:$GATES" "check:$CHECK" "wasm:$WASM" "tests:$TESTS" "release-macos:$RELEASE_MACOS"; do
   [ "${job#*:}" = success ] || bad "${job%%:*}: ${job#*:}"
   echo "$job"

@@ -54,12 +54,6 @@ impl Workflow {
         self
     }
 
-    /// [`Self::concurrency`] with `cancel-in-progress` decided per run.
-    pub fn concurrency_when(mut self, group: &str, cancel_in_progress: &str) -> Self {
-        self.concurrency = Some(Concurrency::when(group, cancel_in_progress));
-        self
-    }
-
     pub fn env(mut self, key: &str, value: &str) -> Self {
         self.env.insert(key.to_owned(), value.to_owned());
         self
@@ -75,30 +69,14 @@ impl Workflow {
 #[serde(rename_all = "kebab-case")]
 pub struct Concurrency {
     pub group: String,
-    pub cancel_in_progress: Cancel,
-}
-
-/// `cancel-in-progress`: a constant, or an expression evaluated per run
-/// (e.g. never cancel a release commit's run).
-#[derive(Serialize)]
-#[serde(untagged)]
-pub enum Cancel {
-    Always(bool),
-    When(String),
+    pub cancel_in_progress: bool,
 }
 
 impl Concurrency {
     pub fn new(group: &str, cancel_in_progress: bool) -> Self {
         Self {
             group: group.to_owned(),
-            cancel_in_progress: Cancel::Always(cancel_in_progress),
-        }
-    }
-
-    pub fn when(group: &str, cancel_in_progress: &str) -> Self {
-        Self {
-            group: group.to_owned(),
-            cancel_in_progress: Cancel::When(cancel_in_progress.to_owned()),
+            cancel_in_progress,
         }
     }
 }
@@ -204,11 +182,6 @@ impl Job {
 
     pub fn concurrency(mut self, group: &str, cancel_in_progress: bool) -> Self {
         self.concurrency = Some(Concurrency::new(group, cancel_in_progress));
-        self
-    }
-
-    pub fn strategy(mut self, strategy: Value) -> Self {
-        self.strategy = Some(strategy);
         self
     }
 

@@ -63,7 +63,7 @@ jobs:
         else
           echo "$STAMP_TAG predates the stamp: its commit carries its version ($(bash scripts/release.sh version))"
         fi
-    - name: Version = tag version, on main, changelog, CI passed
+    - name: Version = tag version, on main or release/v*, CI passed
       id: resolve
       if: ${{ env.MODE != 'build-only' }}
       env:

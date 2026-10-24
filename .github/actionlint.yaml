@@ -6,9 +6,8 @@
 self-hosted-runner:
   labels:
     # The Mac Pro VM: the heavy nextest build (checks.yml `tests`, warm
-    # target dir) and the deploy (deploy.yml, needs the LAN registry).
+    # target dir).
     - studio-tests
-    - studio-deploy
     # airlock, studio's own release runner there: the iOS build
     # (studio-ios.yml) and the macOS .dmg (desktop.yml).
     - studio-release-mac

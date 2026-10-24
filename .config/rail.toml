@@ -10,7 +10,7 @@
 #     check`. scripts/release.sh builds CHANGELOG.md from them.
 # Commands stay in the Justfile; this file only declares inputs.
 
-# The web bundles deploy.yml ships (session-daw-web, session-web,
+# The web bundles (session-daw-web, session-web,
 # signal-web) and the Signal browser remote must stay wasm-clean, so
 # target-aware decisions resolve for the browser target too.
 targets = ["wasm32-unknown-unknown"]

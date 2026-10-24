@@ -18,27 +18,17 @@ permissions:
 jobs:
   guard:
     name: Release guard
-    if: ${{ github.event_name == 'pull_request' && (startsWith(github.head_ref, 'release/') || startsWith(github.base_ref, 'release/')) }}
+    if: ${{ github.event_name == 'pull_request' }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-    - uses: actions/checkout@v4
-      with:
-        ref: ${{ github.event.pull_request.head.sha }}
-        fetch-depth: 0
-    - name: Is this release PR sound? (the base commit's script)
-      env:
-        BASE_SHA: ${{ github.event.pull_request.base.sha }}
-        BASE_REF: ${{ github.event.pull_request.base.ref }}
-        HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-        HEAD_REF: ${{ github.event.pull_request.head.ref }}
-        HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
+    - name: 'No release PRs: releases are tags'
       run: |
-        if ! git show "${BASE_SHA}:scripts/release.sh" > "${RUNNER_TEMP}/release-base.sh"; then
-          echo "::notice::the base has no scripts/release.sh: nothing to guard"
-          exit 0
-        fi
-        bash "${RUNNER_TEMP}/release-base.sh" guard
+        {
+          echo "### Release guard: nothing to judge"
+          echo "Releases are tags pushed by \`just release\` on a green commit of main (or release/v*); no PR is a release PR. This check stays because main's ruleset requires it."
+        } >> "$GITHUB_STEP_SUMMARY"
+        echo "release guard: releases are tags (just release); no release PRs, nothing to check"
   publish:
     name: GitHub Release
     if: ${{ github.event_name != 'pull_request' && startsWith(github.ref, 'refs/tags/v') }}
@@ -65,7 +55,7 @@ jobs:
         else
           echo "$STAMP_TAG predates the stamp: its commit carries its version ($(bash scripts/release.sh version))"
         fi
-    - name: The tag is a green release commit on main or release/v*
+    - name: The tag is a green commit on main or release/v*
       env:
         GH_TOKEN: ${{ github.token }}
       run: bash scripts/release.sh tag-guard

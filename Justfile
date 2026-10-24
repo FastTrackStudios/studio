@@ -1876,7 +1876,7 @@ reaper-test FILTER="":
 reaper-test-gui FILTER="":
     cargo run -p session-reaper-xtask -- --gui --keep-open {{FILTER}}
 
-# The three web bundles deploy.yml ships, checked for wasm32 (STA-366):
+# The three web bundles (studio-web's image ships them), checked for wasm32 (STA-366):
 # `cargo check --workspace` is native and never compiles them, so a
 # native-only dep leaking into their graph (tokio `net` -> mio, an engine,
 # X11/HID) only showed when the deploy failed. Required in checks.yml.
@@ -2069,65 +2069,49 @@ rail-evidence:
 
 # ── Releases ─────────────────────────────────────────────────────────────
 #
-# Fleet release flow v4 (the `release-workflow` skill; studio specifics in
-# docs/agents/release-workflow.md). `main` is the only long-lived branch:
-# every PR squash-merges into it with a cargo-rail change file
-# (`cargo rail change add <crates> --bump <none|patch|minor|major> -m
-# "<note>"`). A release is a TAG: `release-prepare` cuts `release/pending`
-# (ONE commit: the CalVer bump YY.M.MICRO and the CHANGELOG.md section built
-# from .changes/), `release-pr` opens it, `release-merge` squash-merges it
-# after re-checking it against the current main, and `release-tag` pushes
-# `vYY.M.MICRO` once that commit is green, which deploys the sites, uploads
-# Signal + Session to TestFlight and publishes the one GitHub Release.
+# Tag-from-main (docs/agents/release-workflow.md). `main` is the only
+# long-lived branch: every PR squash-merges into it with a cargo-rail
+# change file (`cargo rail change add <crates> --bump
+# <none|patch|minor|major> -m "<note>"`), and a merge runs CI and ships
+# nothing. A release is a TAG: `just release` tags the next CalVer
+# `vYY.M.MICRO` on main's newest commit whose `CI passed` is green, and the
+# tag alone starts the release builds (the studio-web image, the Studio
+# TestFlight upload, the desktop installers, the one GitHub Release with
+# the notes from the change files added since the previous tag). Nothing
+# is committed for a release: each build stamps the tag's version into its
+# checkout, so the version committed on main is not the released one.
 # (The REAPER suites are not in CI: run `just reaper-test` and `just reaper
 # daw-test` locally.) Production = the latest `v*` tag.
-#
-# Signal and Session (the iOS apps) are ONE release with the rest of the
-# repo: the same build, the same version (their crates take
-# `version.workspace = true`), the same tag and GitHub Release.
 
-# The studio's release version ([workspace.package] in Cargo.toml).
+# The version the tree carries ([workspace.package] in Cargo.toml): NOT the
+# released version, which is the latest v* tag (`just release-plan`).
 version:
     @bash scripts/release.sh version
 
 # What is live (latest v* tag), what main holds since, the next CalVer
-# version, the draft changelog from .changes/ and the git deps that moved.
+# version, the draft notes from .changes/ and the git deps that moved.
 release-plan:
     bash scripts/release.sh plan
 
-# Cut `release/pending` from origin/main: bump to the next CalVer version,
-# write the changelog section from .changes/ (deleting the files), commit
-# `chore(release): v<next>`. An X.Y.Z argument only pins the version you
-# expect (it must be the computed next one). `--hotfix` cuts from
-# origin/release/v<latest tag> instead (after `release-hotfix` merged).
-release-prepare *ARGS:
-    bash scripts/release.sh prepare {{ARGS}}
-
-# On release/pending (or a hotfix branch): push it and open its PR.
-release-pr:
-    bash scripts/release.sh pr
-
-# Re-run the release guard against the CURRENT base, then squash-merge
-# the release PR (pinned to its head commit).
-release-merge:
-    bash scripts/release.sh merge
-
-# After the release PR merged: tag v<version> on its merge commit once
-# `CI passed` is green there. THE TAG SHIPS (sites, Signal + Session
-# TestFlight, the GitHub Release). After a hotfix it opens the
-# forward-port PR into main. Push as the fts-forge bot or a person, not a
-# workflow token (that starts no workflow).
-release-tag *ARGS:
-    bash scripts/release.sh tag {{ARGS}}
+# Tag the next CalVer version on main's newest commit with a green
+# `CI passed` (or on SHA: on main or a release/v* line, and green), after
+# showing the notes; asks before pushing on a terminal. THE TAG SHIPS.
+# Run as a person or the fts-forge App, never with a workflow token (that
+# starts no workflow).
+#   just release --dry-run     which commit, which version, the notes; no tag
+#   just release               tag + push (asks on a terminal; --yes skips it)
+#   just release <sha>         a given green commit (a hotfix line's head)
+release *ARGS:
+    bash scripts/release.sh release {{ARGS}}
 
 # Hotfix while main can't ship: release/v<latest tag> from the tag (if
 # missing), the given main commits cherry-picked with -x on a branch, and
-# its PR into that line. Then release-prepare --hotfix, release-pr,
-# release-merge, release-tag.
+# its PR into that line. Once it merged and that commit's `CI passed` is
+# green: just release <sha>.
 release-hotfix +COMMITS:
     bash scripts/release.sh hotfix {{COMMITS}}
 
-# One version's section of CHANGELOG.md (default: the current version).
+# The release notes of a tag (default: the draft for origin/main).
 release-notes *ARGS:
     @bash scripts/release.sh notes {{ARGS}}
 
