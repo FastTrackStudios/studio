@@ -12,7 +12,7 @@ workspace = true
 
 [dependencies]
 daw-proto = { workspace = true }
-plist = { version = "1" }
+plist = { workspace = true }
 thiserror = { workspace = true }
 
 [dev-dependencies]
