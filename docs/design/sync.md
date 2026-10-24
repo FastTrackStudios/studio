@@ -102,6 +102,28 @@ media beside its docs, so it lives in architect, not in Task:
 Task keeps the product on top: folders and roots, versions, renditions
 (proxies, waveforms), review, share links, the OS integrations.
 
+## The mount: Task hosts it
+
+The code is architect's (the engine, each platform's mount); **Task is the
+deployment** that runs the device's one sync engine and registers the one
+mount, with a folder per app space (Studio, Task, …):
+
+- **macOS:** Task's files daemon (a LaunchAgent) runs the engine; Task's
+  File Provider registers one domain.
+- **iOS:** the Task app embeds the File Provider and the engine.
+- **Linux:** Task's daemon as a systemd user unit, mounted through FUSE.
+- **Windows** (the Cloud Files API) and **Android** (a DocumentsProvider)
+  later; WebDAV everywhere as the fallback.
+
+Studio hands its spaces to Task when Task is installed (and offers "Get
+Task" when it is not), through the shared App Group
+`group.app.fasttrackstudio.task`. Or it embeds the same code and registers
+a mount of its own. Either way it talks the server's own wire (Docs,
+DocSync, DocPresence, Blobs) to the engine, on a local socket or in
+process, and keeps the docs it is editing in its own memory. On iOS the
+foreground app holds the engine and never waits for it; nothing of it
+runs on the audio thread.
+
 ## Peer to peer
 
 Devices also exchange docs directly over iroh (`crdt::peer`, the lane

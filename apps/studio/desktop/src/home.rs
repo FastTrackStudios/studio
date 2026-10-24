@@ -82,7 +82,10 @@ pub fn Home(opening: Option<Side>, on_pick: EventHandler<Side>) -> Element {
 /// The bar: the wordmark, and the account (signed in, or a Sign in).
 /// Room on the bar's left for the window's buttons, which sit over the page
 /// on a Mac (the title bar is drawn through); none on an iPad.
-const BUTTONS: u32 = if cfg!(target_os = "macos") { 84 } else { 22 };
+#[cfg(target_os = "macos")]
+const BUTTONS: u32 = crate::front::MAC_WINDOW_BUTTONS + 4;
+#[cfg(not(target_os = "macos"))]
+const BUTTONS: u32 = 22;
 
 #[component]
 fn Bar(on_account: EventHandler<()>) -> Element {
@@ -273,7 +276,7 @@ fn Setlists(on_pick: EventHandler<Side>) -> Element {
 }
 
 /// A gig opens as the guitar rig with the gig's set loaded in it (the
-/// iPad's gig shell adds its charts and practice tracks around the rig).
+/// gig shell adds its charts and practice tracks around the rig).
 #[cfg(feature = "gig")]
 fn open_gig(name: &str) {
     crate::gig::remember(name);
