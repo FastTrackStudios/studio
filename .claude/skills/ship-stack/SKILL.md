@@ -11,8 +11,9 @@ fmt, change files and the static guards, then the tests, `cargo check` and
 the wasm check that `cargo rail plan` says the change affects, on the warm
 local target dir. When it's green,
 the hook posts the **`Local CI`** commit status, with how long it took.
-**GitHub** runs one free job on a PR, then the full set on its free runners
-once per merge to main.
+**GitHub** runs one free job on a PR, then the full set once per merge to
+main: the builds on THEBATTLESHIP's warm `studio-main` pool, the cheap jobs
+on GitHub's free runners.
 
 One green run on the top of a stack vouches for every layer below it,
 because the top's tree holds every layer's change. So: many small PRs,
@@ -202,8 +203,10 @@ gh api -X PUT repos/FastTrackStudios/studio/rulesets/25572127 --input /tmp/rs-pu
 
 ### 7. Main is green
 
-Each merge to main starts a full `CI` run: the builds on THEBATTLESHIP's `studio-main` pool, the rest on GitHub's free runners. A newer merge cancels the older run. Cancel the ones the last merge
-superseded, so the suite runs once, on the top commit:
+Each merge to main starts a full `CI` run: the builds on THEBATTLESHIP's
+`studio-main` pool, the rest on GitHub's free runners. A newer merge
+cancels the older run itself (a release commit's run is never cancelled);
+if one is still going, cancel it so the suite runs once, on the top commit:
 
 ```bash
 gh run list -b main -w checks.yml -L 5 --json databaseId,status,headSha
@@ -238,7 +241,16 @@ GitHub's free runners; the builds on THEBATTLESHIP, two pools of three
 runners (`studio-main` for every check, release commits included;
 `studio-release` for release builds only), each pool sharing one warm
 cache capped at 200 GB, defined in Codys-Wright/nix-config
-hosts/THEBATTLESHIP/github-runners.nix.
+hosts/THEBATTLESHIP/github-runners.nix. The Mac release builds (TestFlight,
+the `.dmg`) run on airlock's `airlock-studio-release` runner (label
+`studio-release-mac`, a LaunchAgent copied from `airlock`'s, with its own
+warm checkout); Task's are on `airlock-task-release` (`task-release-mac`).
+A new or auto-updated runner binary on airlock waits on a macOS
+permission prompt for the external build disk until someone clicks Allow
+(it stalls at "Validating directory permissions").
+- **Which pool builds what:** checks never run on a release pool, release
+  commits included, so a pool keeps one set of target dirs. Release
+  artifacts only on `studio-release` / `studio-release-mac`.
 - **Setup:** every job is generated (`xtask/workflows`, `just workflows`):
   rustup at the pinned toolchain, apt headers (cached), pinned release
   binaries (just, cargo-rail, nextest, actionlint); `PR checks`
