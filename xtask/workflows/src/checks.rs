@@ -68,13 +68,17 @@ workflow_dispatch:
 "#,
         )?,
     )
-    // One group per PR or branch, cancel-in-progress: a newer merge to main
-    // cancels the older run, whose result no longer matters (`just release`
-    // tags the newest commit that did go green). Release builds run from
-    // the tag in their own workflows and groups, never cancelled.
+    // One group per PR or branch, QUEUED, not cancelled: the running run
+    // finishes, and of the merges that land meanwhile only the newest waits
+    // (GitHub replaces a pending run with a newer one). Cancelling the running
+    // one starved the rail plan: on a busy main no run finished, so none
+    // recorded the evidence or the green marks the next plan needs, and every
+    // run fell back to the full set. The newest run plans from the last green
+    // commit, so the merges whose runs were replaced are still covered.
+    // Release builds run from the tag in their own workflows and groups.
     .concurrency(
         "ci-${{ github.event.pull_request.number || github.ref }}",
-        true,
+        false,
     )
     .job("plan", plan()?)
     .job("rail", rail_plan()?)

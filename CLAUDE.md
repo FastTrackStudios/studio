@@ -193,7 +193,8 @@ hosts/THEBATTLESHIP/github-runners.nix): `studio-main` for every check,
 a hotfix PR's included, so the check target dirs are built once;
 `studio-release` (and airlock's `studio-release-mac`) build only release
 artifacts from a tag: the studio-web image, the AppImage, the `.dmg`,
-TestFlight. A newer merge cancels the older run; a release job is never
+TestFlight. A newer merge queues behind the running run (only the newest waits),
+so every run that starts finishes and records rail's evidence; a release job is never
 cancelled. Each pool's cache
 is capped at 200 GB. No WarpBuild, no snapshots, no schedule. No tailwind step anywhere
 (committed sheets; dx builds session-web's); `just ci-boundaries` is

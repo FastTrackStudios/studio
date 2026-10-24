@@ -33,7 +33,7 @@ worktree with its own `target/` costs a cold build.
 | `git commit` | prek pre-commit (`prek.toml`) | your machine | rustfmt, shellcheck, actionlint on the **staged** files |
 | `git push` | prek pre-push → `scripts/ci-local-hook.sh` → `just ci-local` | your machine | the PR gate's expensive half; posts **`Local CI`** |
 | PR into main | `PR / PR checks` (`pr.yml`) | free hosted, rustup + cargo-rail, no nix | fmt, change files, the lockfile, the rail config |
-| push to main | `CI` (`checks.yml`): Plan, Rail plan, Dependency cache, Gates, Check, Wasm, Tests, Release tooling (macOS), **`CI passed`** | Rail plan, Check, Tests, Wasm on THEBATTLESHIP's `studio-main` pool (warm shared cache); the rest free hosted | what the merge reaches since the newest green commit with rail evidence (the full set without one); a newer merge cancels the older run |
+| push to main | `CI` (`checks.yml`): Plan, Rail plan, Dependency cache, Gates, Check, Wasm, Tests, Release tooling (macOS), **`CI passed`** | Rail plan, Check, Tests, Wasm on THEBATTLESHIP's `studio-main` pool (warm shared cache); the rest free hosted | what the merge reaches since the newest green commit with rail evidence (the full set without one); the running run finishes and only the newest merge waits behind it |
 | PR into `release/**` | `CI` | same | a hotfix: the full suite |
 | push of a `v*` tag (`just release`) | `Images`, `studio-ios`, `desktop`, `release` | `studio-release` / `studio-release-mac` / hosted | the release builds, from the tag alone, in parallel, never cancelled; no tests (the tag guard checks `CI passed`) |
 
@@ -200,13 +200,16 @@ gh api -X PUT repos/FastTrackStudios/studio/rulesets/25572127 --input /tmp/rs-pu
 
 ### 7. Main is green
 
-Each merge to main starts a full `CI` run: the builds on THEBATTLESHIP's
+Each merge to main starts a `CI` run, narrowed by `Rail plan` to what it
+reaches since the last green commit: the builds on THEBATTLESHIP's
 `studio-main` pool, the rest on GitHub's free runners. A newer merge
-cancels the older run itself; if one is still going, cancel it so the suite runs once, on the top commit:
+waits behind the running run, and only the newest waits. **Don't cancel
+a running main run**: it is what records the rail evidence and the green
+marks the next run plans from, and a cancelled one makes the next run
+fall back to the full set.
 
 ```bash
 gh run list -b main -w checks.yml -L 5 --json databaseId,status,headSha
-gh run cancel <older in-progress id>
 ```
 
 Done when the run on main's head commit has a green `CI passed`.
