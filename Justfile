@@ -484,28 +484,6 @@ tailwind-trigger: _lumen-link
 tailwind-eq-standalone: _lumen-link
     tailwindcss -i apps/plugins/eq-standalone/tailwind.css -o apps/plugins/eq-standalone/assets/tailwind.css --minify
 
-# Rasterize an FX editor to PNGs — every profile face / family / circuit,
-# painted headless through blitz + vello_cpu (the same mount the behavioural
-# tests drive), so a GUI change can be looked at without opening a DAW.
-# Shots land in target/gui-shots/<fx>/ (FTS_SHOTS_DIR overrides).
-comp-shots:
-    cargo test -p comp --features native,profiles,ui --test screenshots -- --nocapture
-
-eq-shots:
-    cargo test -p eq --features native,ui --test screenshots -- --nocapture
-
-reverb-shots:
-    cargo test -p reverb --features native,profiles,ui --test screenshots -- --nocapture
-
-delay-shots:
-    cargo test -p delay --features native,profiles,ui --test screenshots -- --nocapture
-
-saturate-shots:
-    cargo test -p saturate --features native,profiles,ui --test screenshots -- --nocapture
-
-modulation-shots:
-    cargo test -p modulation --features native,profiles,ui --test screenshots -- --nocapture
-
 # THE plugin suite — the one list every plugin recipe iterates. A name here
 # is `<name>-plugin` as a cargo package and "FTS <Name>" as a bundle (see
 # bundler.toml); adding a plugin means touching this line and that file.
@@ -819,8 +797,21 @@ check:
 # Run tests. nextest: parallel per-test binaries, much faster than
 # `cargo test` on this many crates. It does NOT run doctests — use
 # `just test-doc` for those.
+# The crates that have tests: the core set the suite was cut to on
+# 2026-10-24 (11 317 tests in 815 binaries -> ~650 in ~40): the DSP math,
+# the session format, the engine, the timeline, the wire types, every
+# effect's parameter round-trip. `just test`, local CI and CI's Tests job
+# build and run exactly these; building the workspace's ~200 crates with no
+# tests left would only link empty harnesses. Add a crate here when it gains
+# tests worth running on every change.
+test_packages := "dsp-core session-format daw-standalone timeline daw-proto studio daw-transport-sync utils daw-control frame gate-plugin studio-desktop comp delay eq mic reverb saturate"
+
+# Run the core test set (test_packages above).
 test:
-    cargo nextest run --workspace --features session-desktop/cli,studio-desktop/cli,web-audio-worklet/guitar,web-audio-worklet/keys
+    #!/usr/bin/env bash
+    set -euo pipefail
+    pkgs=(); for p in {{test_packages}}; do pkgs+=(-p "$p"); done
+    cargo nextest run "${pkgs[@]}"
 
 # Doctests only — nextest can't run them (libtest owns doctests).
 test-doc:
@@ -971,17 +962,6 @@ ee SOURCE="phrase" *ARGS:
 workstation SOURCE="/run/media/AudioHaven/Project/02 LORD OF THE FIGHT/02 LORD OF THE FIGHT.RPP" *ARGS:
     cargo run --release -p editor --features standalone --example workstation -- \
         "{{SOURCE}}" --drums --size 1920x1080 {{ARGS}}
-
-# Repaint the visual-inspection PNGs into target/gui-shots/expression-editor.
-#
-# These are artefacts for a human to look at, not assertions, so they are
-# #[ignore]d and never run in `cargo nextest run` — one of them paints ~49
-# scenes through a software rasterizer for minutes, which starved the rest
-# of the suite into timing out. Single-threaded on purpose: they are all
-# CPU rasterization, so running them in parallel only makes each slower.
-ee-shots *ARGS:
-    cargo test -p editor --features guitarpro,ui --test screenshots \
-        -- --ignored --test-threads 1 {{ARGS}}
 
 # ── apps/session/web (session.fasttrackstudio.app) ────────────────────────────────
 # `apps/session/web/tailwind.css` @sources this crate plus architect-ui, a GIT DEP
@@ -1187,10 +1167,6 @@ ee-practice-prepare $SONG="both" $FRESH="false":
     if [[ "$FRESH" == "true" ]]; then staging=(); fi
     cargo run -p editor --features standalone --example practice -- "${staging[@]}" "$SONG"
 
-# Real-song regression: copy, load, split, undo/redo, save/reopen, verify originals.
-ee-practice-test:
-    cargo test -p editor --features audio,standalone --test practice_real -- --ignored --nocapture --test-threads=1
-
 # Fast iteration loop: the SAME cached song/audio staging every run, fewer
 # frames, optionally one phase. Prints the report directory for compare.py.
 #
@@ -1290,52 +1266,6 @@ daw-fixture TRACKS="2000" ITEMS="20000":
 daw-template:
     cargo run -p dynamic-template --bin golden-session -- "{{GOLDEN_DIR}}"
 
-# Re-render every scene's committed picture from the golden session.
-#
-# The pictures under features/dynamic-template/fixtures/golden/scenes/
-# are test fixtures (`apps/session/daw/tests/golden_scenes.rs`): a
-# change to what a scene shows is a diff in a PR. Run this after a
-# deliberate scene or template change and commit the result.
-daw-scenes:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    # Both halves of a scene fixture: the row list (byte-exact, the half
-    # that carries the decision) and the picture (structural, because
-    # the runner and this box disagree about antialiasing). Refreshing
-    # one without the other is how a fixture goes stale.
-    export FTS_UPDATE_GOLDEN=1
-    cargo test -p dynamic-template --test scene_rows
-    cargo test -p session-daw --test golden_scenes
-    # The generated scenes' pictures (drum-mixing and its kin) are not
-    # compared — the negative control reads two of them, and the app's
-    # Mix view is checked against drum-mixing by eye — so the test above
-    # does not refresh them. Re-render each one committed, the same way,
-    # so they are of the template as it is now rather than as it was.
-    cargo build -q --release -p session-daw --bin bench
-    for png in "{{GOLDEN_DIR}}"/scenes/*.png; do
-        slug=$(basename "$png" .png)
-        case "$slug" in
-            *-tracking|*-tracking-overview|*-comping|*-editing|*-mixing) ;;
-            *) continue ;;
-        esac
-        project="{{GOLDEN_DIR}}/template.rpp"
-        [[ "$slug" == lead-vocal* ]] && project="{{GOLDEN_DIR}}/vocal-fx.rpp"
-        FTS_BENCH_SCENE="$slug" FTS_BENCH_MIXER="$png" FTS_BENCH_ROWS="{{GOLDEN_DIR}}/scenes/$slug.rows" \
-            FTS_BENCH_SIZE=2560x1440 ./target/release/bench "$project" >/dev/null
-        echo "rendered $slug"
-    done
-
-# Re-render the folder-item fixtures from the golden session's own peaks.
-#
-# Both halves, at three zooms, under
-# features/dynamic-template/fixtures/golden/folder-items/ — the fold
-# (`<slug>.fold`, compared byte for byte) and the picture (`<slug>.png`,
-# compared structurally). See `apps/session/daw/tests/folder_items.rs`.
-# Run this after a deliberate change to the fold, the colours or the
-# fixture media, and commit the result.
-daw-folder-items:
-    FTS_UPDATE_GOLDEN=1 cargo test -p session-daw --test folder_items
-
 # One sheet of folder items over a project, by hand — the same render the
 # fixtures come from, so it is the way to LOOK at a fold.
 #
@@ -1355,35 +1285,6 @@ daw-folder-item-sheet OUT="/tmp/fts-folder-items.png" PROJECT="" WINDOW="" SIZE=
     [[ -n "$window" ]] || unset FTS_BENCH_WINDOW
     FTS_BENCH_FOLDER_ITEMS="{{OUT}}" FTS_BENCH_SIZE="{{SIZE}}" \
         ./target/debug/bench "$project" 2>&1 | grep -viE 'vulkan|objects:|WARN|Fontconfig'
-
-# The whole drum edit of a real song, timed (tests/drums_full_real.rs): a
-# consistent copy of SONG (SQLite's online backup, safe while Session has it
-# open), the kit comped phrase by phrase from its best takes, quantized over
-# the whole song, a hand's drags — each step timed, the report kept in
-# target/drums-bench/<when>.json to compare runs. DETECT=1 times hit
-# detection too; BUDGET=2000 fails the run over that many ms of editing.
-drums-bench SONG DETECT="" BUDGET="":
-    #!/usr/bin/env bash
-    set -euo pipefail
-    dir="$PWD/target/drums-bench"
-    mkdir -p "$dir"
-    copy="$dir/song.session"
-    rm -f "$copy" "$copy-wal" "$copy-shm" "$copy-tshm"
-    python3 -I -c 'import sqlite3, sys; s = sqlite3.connect(f"file:{sys.argv[1]}?mode=ro", uri=True); d = sqlite3.connect(sys.argv[2]); s.backup(d); d.close(); s.close()' "{{SONG}}" "$copy"
-    out="$dir/$(date +%Y%m%d-%H%M%S).json"
-    export FTS_PERF_SESSION="$copy" FTS_BENCH_OUT="$out"
-    [ -n "{{DETECT}}" ] && export FTS_BENCH_DETECT=1
-    [ -n "{{BUDGET}}" ] && export FTS_BENCH_BUDGET_MS="{{BUDGET}}"
-    cargo nextest run --cargo-profile release-fast -p session-daw --features signal \
-      --test drums_full_real --run-ignored all --no-capture
-    python3 -I - "$out" <<'PY'
-    import json, sys
-    r = json.load(open(sys.argv[1]))
-    print(f"edit (comp + quantize + drags): {r['edit_ms']:.0f} ms")
-    for s in r["steps"]:
-        print(f"  {s['step']:<9}{s['ms']:>9.0f} ms  window {s['window_ms']:>7.0f} ms  {s['note']}")
-    PY
-    echo "report: $out"
 
 # Benchmark the arrangement HEADLESSLY: no window, no surface, no vsync.
 #
@@ -2092,15 +1993,12 @@ ci FROM="lockfile":
     fi
 
     if run_from nextest; then
-      # What CI's tests job has before nextest: the private assets linked
-      # and the plugin faces generated (session-daw reads them at runtime).
-      echo "── assets + plugin faces ────────────────────────────"
+      # What CI's Tests job has before nextest: the private assets linked.
+      echo "── assets ───────────────────────────────────────────"
       just assets
-      just faces
-      echo "── cargo nextest --workspace ────────────────────────"
-      # The app CLIs and the worklet rigs sit behind features: name them, or
-      # their tests never build (an app crate has no lib to dev-depend on).
-      cargo nextest run --workspace --no-fail-fast --features session-desktop/cli,studio-desktop/cli,web-audio-worklet/guitar,web-audio-worklet/keys
+      echo "── cargo nextest (the core test set) ────────────────"
+      pkgs=(); for p in {{test_packages}}; do pkgs+=(-p "$p"); done
+      cargo nextest run "${pkgs[@]}" --no-fail-fast
     fi
 
     echo

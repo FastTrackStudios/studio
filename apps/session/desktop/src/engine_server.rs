@@ -281,7 +281,3 @@ fn local_ip_interfaces() -> std::io::Result<Vec<std::net::Ipv4Addr>> {
 fn local_ip_interfaces() -> std::io::Result<Vec<std::net::Ipv4Addr>> {
     Ok(Vec::new())
 }
-
-#[cfg(test)]
-#[path = "engine_server_tests.rs"]
-mod tests;

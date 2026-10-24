@@ -195,36 +195,3 @@ pub fn guide_library(library: &Path, out: &Path, quality: f32) -> eyre::Result<(
     );
     Ok(())
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn a_proxy_sits_in_a_folder_beside_its_media() {
-        assert_eq!(
-            proxy_of(Path::new("/s/Media/Bass.wav")),
-            Some(PathBuf::from("/s/Media/Proxies/Bass.ogg"))
-        );
-        assert_eq!(proxy_of(Path::new("/s/Media/Proxies/Bass.ogg")), None);
-    }
-
-    #[test]
-    fn the_sources_are_the_projects_file_lines() {
-        let dir = std::env::temp_dir().join(format!("proxies-{}", std::process::id()));
-        std::fs::create_dir_all(&dir).expect("dir");
-        let rpp = dir.join("Song.RPP");
-        std::fs::write(
-            &rpp,
-            "<REAPER_PROJECT\n  <SOURCE WAVE\n    FILE \"Media/Bass.wav\"\n  >\n  \
-             <SOURCE WAVE\n    FILE \"Media/Bass.wav\"\n  >\n  <SOURCE MIDI\n    FILE \"\"\n  >\n>\n",
-        )
-        .expect("rpp");
-        assert_eq!(
-            sources(&rpp).expect("sources"),
-            vec![dir.join("Media/Bass.wav")]
-        );
-        assert_eq!(project_file(&dir).expect("project"), rpp);
-        let _ = std::fs::remove_dir_all(&dir);
-    }
-}

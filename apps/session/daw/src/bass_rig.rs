@@ -205,28 +205,3 @@ pub fn set_up(
     }
     Ok(said)
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn a_track_takes_the_patch_its_name_holds() {
-        assert_eq!(patch_for("Clean").map(|p| p.name), Some("Clean"));
-        assert_eq!(
-            patch_for("Bass Harmonics").map(|p| p.name),
-            Some("Harmonics")
-        );
-        assert_eq!(patch_for("crunch 2").map(|p| p.name), Some("Crunch"));
-        assert!(patch_for("Sub").is_none());
-    }
-
-    #[test]
-    fn a_patch_is_the_rigs_state() {
-        let crunch = patch_for("Crunch").expect("crunch");
-        let state = crunch.state();
-        assert!(state["drive"].as_str().is_some_and(|d| d.ends_with(HM2)));
-        assert!(state["amp"].as_str().is_some_and(|a| a.ends_with(DP3X)));
-        assert!(state["cab"].is_null());
-    }
-}

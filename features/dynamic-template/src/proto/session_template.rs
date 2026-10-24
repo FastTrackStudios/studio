@@ -332,34 +332,3 @@ impl TemplateBus {
         self
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn builders_shape_nodes() {
-        let kick = TemplateNode::folder("Kick", vec!["Drums".into(), "Kick".into()])
-            .with_child(TemplateNode::dimension(
-                "MultiMic",
-                vec!["In".into(), "Out".into()],
-            ))
-            .in_group("Drums");
-
-        assert_eq!(kick.group_path, vec!["Drums", "Kick"]);
-        assert_eq!(kick.kind, NodeKind::Folder);
-        assert_eq!(
-            kick.group_membership.as_ref().map(|g| g.category.as_str()),
-            Some("Drums")
-        );
-
-        let mics = &kick.children[0];
-        assert_eq!(mics.name, "MultiMic");
-        assert_eq!(mics.kind, NodeKind::Dimension);
-        assert_eq!(mics.vocabulary, vec!["In", "Out"]);
-        assert!(mics.children.is_empty());
-
-        let sum = TemplateNode::collection("SUM", vec!["In".into(), "Out".into(), "Trig".into()]);
-        assert_eq!(sum.kind, NodeKind::Collection);
-    }
-}

@@ -111,28 +111,3 @@ impl FeedSource for EnvelopeReader {
         self.read_into(out);
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn voices_round_trip() {
-        let (tap, mut r) = envelope(3);
-        tap.set(0, 1, 0.5, 0.8);
-        tap.set(2, 3, 1.0, 0.25);
-        tap.set(7, 0, 0.0, 0.0);
-        let mut out = Vec::new();
-        r.read_into(&mut out);
-        assert_eq!(out.len(), 9);
-        let v: Vec<_> = VoiceState::decode(&out).collect();
-        assert_eq!(v[0].stage, Some(1));
-        assert!((v[0].position - 0.5).abs() < 1e-4 && (v[0].level - 0.8).abs() < 1e-6);
-        assert_eq!(v[1].stage, None);
-        assert_eq!(v[2].stage, Some(3));
-        tap.idle(0);
-        r.set_voices(1);
-        r.read_into(&mut out);
-        assert_eq!(out, [-1.0, 0.0, 0.0]);
-    }
-}

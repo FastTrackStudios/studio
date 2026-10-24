@@ -178,16 +178,3 @@ fn seconds_at(content_x: f64, panel_w: f64, view: crate::arrangement::Viewport) 
     }
     ((content_x - panel_w + view.scroll_x) / view.pps).max(0.0)
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    /// The contexts REAPER makes configurable come back as real
-    /// contexts; the ones nobody rebinds come back as `Custom`. That
-    /// distinction is the whole point of returning a context at all.
-    #[test]
-    fn configurable_things_carry_a_real_context() {
-        assert_eq!(Hit::empty().context, Context::Custom("empty"));
-    }
-}

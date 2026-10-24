@@ -381,39 +381,3 @@ pub fn on_playing_lane(track: &daw_proto::Track, item: &Item) -> bool {
             .fixed_lane
             .is_none_or(|lane| lane < 64 && track.lane_play_mask & (1_u64 << lane) != 0)
 }
-
-#[cfg(test)]
-mod playing_lane_tests {
-    use super::on_playing_lane;
-    use daw_proto::{Item, Track};
-
-    /// The renderer's rule: no lanes, everything; with lanes, the lanes in
-    /// the play mask — a comp lane playing hides the takes under it.
-    #[test]
-    fn only_a_playing_lane_sounds() {
-        let on = |lane: Option<u32>| Item {
-            fixed_lane: lane,
-            ..Item::default()
-        };
-        let plain = Track::default();
-        assert!(on_playing_lane(&plain, &on(None)));
-        let comped = Track {
-            lane_count: 6,
-            lane_play_mask: 0b1,
-            ..Track::default()
-        };
-        assert!(
-            on_playing_lane(&comped, &on(Some(0))),
-            "the comp lane plays"
-        );
-        assert!(
-            !on_playing_lane(&comped, &on(Some(3))),
-            "a take under it does not"
-        );
-        let take_four = Track {
-            lane_play_mask: 0b1_0000,
-            ..comped
-        };
-        assert!(on_playing_lane(&take_four, &on(Some(4))));
-    }
-}

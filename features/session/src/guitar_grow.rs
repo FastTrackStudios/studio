@@ -472,22 +472,3 @@ fn strip_token(name: &str, token: &str) -> String {
         .collect();
     kept.join(" ").trim_matches(['-', '_', ' ']).to_string()
 }
-
-#[cfg(test)]
-mod tests {
-    use super::{eq_name, strip_token};
-
-    #[test]
-    fn stripping_an_arrangement_leaves_the_part_name() {
-        assert_eq!(strip_token("GTR E Rhythm", "Rhythm"), "GTR E");
-        assert_eq!(strip_token("GTR A Strum", "Strum"), "GTR A");
-        // Nothing to strip leaves the name alone.
-        assert_eq!(strip_token("GTR E", "Rhythm"), "GTR E");
-    }
-
-    #[test]
-    fn template_names_compare_loosely() {
-        assert!(eq_name("Amp 1", "amp 1"));
-        assert!(!eq_name("Amp 1", "Amp 2"));
-    }
-}

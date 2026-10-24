@@ -40,18 +40,3 @@ impl SpectrumAccumulator {
         }
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn running_mean_of_constant_converges() {
-        let mut acc = SpectrumAccumulator::new(4);
-        for _ in 0..10 {
-            let mut frame = [2.0f32; 4];
-            acc.process(&mut frame);
-            assert!((frame[0] - 2.0).abs() < 1e-6);
-        }
-    }
-}

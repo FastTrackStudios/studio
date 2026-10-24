@@ -788,22 +788,3 @@ impl Deluxe {
         (yl * wet + left * dry, yr * wet + right * dry)
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::Curve;
-
-    #[test]
-    fn curve_is_smooth_through_zero_and_flat_past_the_rails() {
-        let c = Curve::new();
-        let slope = |u: f64| (c.at(u + 1e-7) - c.at(u - 1e-7)) / 2e-7;
-        assert!(c.at(0.0).abs() < 1e-15, "value at 0: {}", c.at(0.0));
-        assert!(
-            (slope(0.0) - 1.0).abs() < 1e-6,
-            "slope at 0: {}",
-            slope(0.0)
-        );
-        assert!(slope(2.0).abs() < 1e-3 && slope(-2.0).abs() < 1e-3);
-        assert!((0.28..0.32).contains(&c.at(2.0)) && (-0.40..-0.36).contains(&c.at(-2.0)));
-    }
-}

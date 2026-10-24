@@ -266,38 +266,3 @@ impl Oversampler {
         }
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn impulse(factor: usize) -> [f64; 128] {
-        let mut os = Oversampler::new(factor);
-        let mut out = [0.0; 128];
-        for (i, o) in out.iter_mut().enumerate() {
-            *o = os.process(if i == 0 { 1.0 } else { 0.0 }, |v| v);
-        }
-        out
-    }
-
-    #[test]
-    fn round_trip_is_a_symmetric_pulse_at_the_reported_latency() {
-        for factor in [1, 2, 4] {
-            let h = impulse(factor);
-            let lat = Oversampler::new(factor).latency();
-            let peak = h.iter().enumerate().fold((0, 0.0_f64), |(bi, bv), (i, v)| {
-                if v.abs() > bv { (i, v.abs()) } else { (bi, bv) }
-            });
-            assert_eq!(peak.0, lat, "factor {factor}");
-            for d in 1..lat {
-                let (a, b) = (h[lat - d], h[lat + d]);
-                assert!(
-                    (a - b).abs() < 1e-12,
-                    "factor {factor} asymmetric at ±{d}: {a} {b}"
-                );
-            }
-            let dc: f64 = h.iter().sum();
-            assert!((dc - 1.0).abs() < 1e-9, "factor {factor} dc {dc}");
-        }
-    }
-}

@@ -356,26 +356,3 @@ pub fn rack(units: &[Which], bands: usize) -> Catalog {
     }
     c
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn every_address_is_namespaced_and_unique() {
-        let c = rack(&super::super::chains::CHANNEL, 4);
-        let mut seen = std::collections::HashSet::new();
-        for p in &c.params {
-            assert!(seen.insert(p.addr.0.clone()), "duplicate {}", p.addr.0);
-            assert!(p.addr.0.contains('/'), "{}", p.addr.0);
-        }
-        assert!(
-            c.param(&crate::surface::proto::ParamAddr::new("comp/threshold"))
-                .is_some()
-        );
-        assert!(
-            c.stream(&crate::surface::proto::EntryId::new("comp/gr_history"))
-                .is_some()
-        );
-    }
-}

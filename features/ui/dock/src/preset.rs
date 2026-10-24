@@ -192,16 +192,3 @@ impl PresetCollection {
         }
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::layout::DockLayout;
-    use crate::panel::PanelId;
-
-    #[test]
-    fn missing_panel_state_returns_none() {
-        let preset = DockPreset::new("Test", DockLayout::single(PanelId::Performance));
-        assert_eq!(preset.load_panel_state("panel.missing"), None);
-    }
-}

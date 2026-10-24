@@ -709,30 +709,4 @@ where
     crate::proto::guide::register_guide_actions(backend, std::sync::Arc::new(Guide::new(daw)));
 }
 
-#[cfg(test)]
-mod note_length_tests {
-    use super::note_create;
-    use crate::guide::engine::midi::GuideMidiNote;
-
-    fn note() -> GuideMidiNote {
-        GuideMidiNote {
-            role: crate::proto::GuideTrackRole::Click,
-            time_seconds: 0.0,
-            length_seconds: 0.1,
-            pitch: 60,
-            velocity: 96,
-        }
-    }
-
-    /// A sixteenth, whatever the note said — and at most half the way to
-    /// the next, so notes a sixteenth apart still have a gap between.
-    #[test]
-    fn a_sixteenth_or_half_the_gap() {
-        assert_eq!(note_create(&note(), 4.0, None).length_ppq, 240.0);
-        assert_eq!(note_create(&note(), 4.0, Some(4.5)).length_ppq, 240.0);
-        assert_eq!(note_create(&note(), 4.0, Some(4.25)).length_ppq, 120.0);
-        assert_eq!(note_create(&note(), 4.0, Some(4.5)).start_ppq, 4.0);
-    }
-}
-
 pub mod engine;

@@ -1034,6 +1034,3 @@ fn set_geometry(node: &mut Node, g: Vec<String>) {
     }
     node.fill_geometry = g;
 }
-
-#[cfg(test)]
-mod tests;

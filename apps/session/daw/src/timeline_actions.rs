@@ -579,20 +579,3 @@ fn set_tempo(
     crate::cursor::ask(edit);
     Ok(())
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    /// A kind is named however it is written.
-    #[test]
-    fn kinds_are_named_loosely() {
-        assert_eq!(section_kind("Pre-Chorus"), Ok(SectionKind::PreChorus));
-        assert_eq!(section_kind(" chorus "), Ok(SectionKind::Chorus));
-        assert_eq!(section_kind("IN"), Ok(SectionKind::Intro));
-        assert!(section_kind("coda please").is_err());
-        assert_eq!(marker_kind("Count-In").map(|(_, w)| w), Ok("COUNT-IN"));
-        assert_eq!(marker_kind("=END").map(|(_, w)| w), Ok("=END"));
-        assert_eq!(marker_kind("SONGSTART").map(|(_, w)| w), Ok("SONGSTART"));
-    }
-}

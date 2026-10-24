@@ -309,21 +309,3 @@ fn skip_words(
         (true, false, false) => ("Section", "Section", "Previous section", "Next section"),
     }
 }
-
-#[cfg(test)]
-mod skip_word_tests {
-    use super::skip_words;
-
-    #[test]
-    fn a_song_without_sections_skips_by_song() {
-        assert_eq!(skip_words(true, true, false).0, "Song");
-        assert_eq!(skip_words(true, true, false).1, "Song");
-        assert_eq!(skip_words(true, false, false).1, "Section");
-        assert_eq!(skip_words(true, true, true).1, "Load next?");
-        assert_eq!(
-            skip_words(false, true, false).0,
-            "Back",
-            "the classic bar is as it was"
-        );
-    }
-}

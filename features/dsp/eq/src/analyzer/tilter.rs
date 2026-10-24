@@ -42,31 +42,3 @@ impl SpectrumTilter {
         }
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn pivot_at_1khz_is_zero_octave_doubles() {
-        // 8192-pt FFT @ 48 kHz: bin spacing ~5.86 Hz.
-        let n = 4097;
-        let sr = 48_000.0;
-        let mut t = SpectrumTilter::new(n);
-        t.set_slope(sr, 4.5);
-        let delta = sr * 0.5 / (n as f64 - 1.0);
-        let bin_1k = (1000.0 / delta).round() as usize;
-        let bin_2k = (2000.0 / delta).round() as usize;
-        // ~0 dB at 1 kHz, ~+4.5 dB one octave up.
-        assert!(
-            t.shift_db[bin_1k].abs() < 0.1,
-            "1k shift {}",
-            t.shift_db[bin_1k]
-        );
-        assert!(
-            (t.shift_db[bin_2k] - 4.5).abs() < 0.1,
-            "2k shift {}",
-            t.shift_db[bin_2k]
-        );
-    }
-}

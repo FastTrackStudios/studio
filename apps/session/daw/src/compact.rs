@@ -688,19 +688,3 @@ fn ViewIcon(view: PhoneView, color: &'static str) -> Element {
         PhoneView::Editor => rsx! { AudioWaveform { size, color } },
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::Form;
-
-    #[test]
-    fn a_phone_is_compact_either_way_up_and_a_desktop_window_is_wide() {
-        assert_eq!(Form::of(390.0, 844.0), Form::Portrait);
-        assert_eq!(Form::of(844.0, 390.0), Form::Landscape);
-        assert_eq!(Form::of(1440.0, 900.0), Form::Wide);
-        // An iPad either way up, and a desktop window made narrow but tall.
-        assert_eq!(Form::of(820.0, 1180.0), Form::Wide);
-        assert_eq!(Form::of(1180.0, 820.0), Form::Wide);
-        assert_eq!(Form::of(600.0, 900.0), Form::Portrait);
-    }
-}

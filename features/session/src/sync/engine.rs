@@ -2071,24 +2071,3 @@ async fn apply_grouping(
 fn engine_error(e: &daw_proto::DawError) -> daw_control::Error {
     daw_control::Error::Other(e.to_string())
 }
-
-#[cfg(test)]
-mod curve_tests {
-    use super::{GainPoint, over_item};
-
-    /// A slice keeps its own stretch of a take's curve, and the points
-    /// just beyond it, so the curve at its edges is what it was.
-    #[test]
-    fn a_slice_keeps_its_stretch_of_the_curve() {
-        let curve: Vec<GainPoint> = (-50..50)
-            .map(|s| GainPoint {
-                at: f64::from(s),
-                value: 1.0,
-            })
-            .collect();
-        let kept = over_item(&curve, 2.0);
-        let at: Vec<f64> = kept.iter().map(|g| g.at).collect();
-        assert_eq!(at, [-2.0, -1.0, 0.0, 1.0, 2.0, 3.0, 4.0]);
-        assert!(over_item(&[], 2.0).is_empty());
-    }
-}

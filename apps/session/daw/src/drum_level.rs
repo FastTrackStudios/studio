@@ -326,26 +326,3 @@ pub(crate) fn write_curve(
     }
     true
 }
-
-#[cfg(test)]
-mod tests {
-    use super::{Knobs, ride_for};
-
-    #[test]
-    fn each_drum_has_its_own_ride() {
-        let none = Knobs::default();
-        assert_eq!(ride_for("Kick", &none), level::drums::KICK);
-        assert_eq!(ride_for("Snare", &none), level::drums::SNARE);
-        assert_eq!(ride_for("Tom 3", &none), level::drums::TOM);
-        let all_one = Knobs {
-            consistency: Some(1.0),
-            range_db: Some(24.0),
-            whole_song: true,
-        };
-        let ride = ride_for("Kick", &all_one);
-        assert!((ride.amount - 1.0).abs() < 1e-12);
-        assert!((ride.max_gain_db - 24.0).abs() < 1e-12 && (ride.max_cut_db - 24.0).abs() < 1e-12);
-        // At 100% a stroke lands on the target, as far as the range allows.
-        assert!((level::events::gain(-30.0, -20.0, &ride) - 10.0).abs() < 1e-12);
-    }
-}

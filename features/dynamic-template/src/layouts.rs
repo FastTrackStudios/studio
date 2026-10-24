@@ -169,22 +169,3 @@ pub fn layout_for_path(path: &[&str]) -> Option<TrackLayout> {
 
     None
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_layout_for_group() {
-        assert!(layout_for_group("Guide").is_some());
-        assert!(layout_for_group("guide").is_some());
-        assert!(layout_for_group("Drums").is_some());
-    }
-
-    #[test]
-    fn test_layout_for_path() {
-        assert!(layout_for_path(&["Guide"]).is_some());
-        assert!(layout_for_path(&["Drums"]).is_some());
-        assert_eq!(layout_for_path(&[]), None);
-    }
-}

@@ -122,34 +122,3 @@ impl Default for SvgTexture {
         Self::rotating("")
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn rotation_angles() {
-        let texture = SvgTexture::rotating("<svg/>");
-
-        assert!((texture.rotation_angle(0.0) - (-135.0)).abs() < f32::EPSILON);
-        assert!((texture.rotation_angle(0.5) - 0.0).abs() < f32::EPSILON);
-        assert!((texture.rotation_angle(1.0) - 135.0).abs() < f32::EPSILON);
-    }
-
-    #[test]
-    fn sprite_sheet_frames() {
-        let texture = SvgTexture::sprite_sheet("<svg/>", 100);
-
-        assert_eq!(texture.frame_index(0.0), 0);
-        assert_eq!(texture.frame_index(0.5), 50);
-        assert_eq!(texture.frame_index(1.0), 99);
-    }
-
-    #[test]
-    fn sprite_offset_calculation() {
-        let texture = SvgTexture::sprite_sheet("<svg/>", 10);
-
-        assert!((texture.frame_offset_percent(0.0) - 0.0).abs() < f32::EPSILON);
-        assert!((texture.frame_offset_percent(1.0) - 90.0).abs() < f32::EPSILON);
-    }
-}

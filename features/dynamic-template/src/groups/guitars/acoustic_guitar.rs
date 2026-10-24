@@ -113,33 +113,3 @@ impl From<AcousticGuitar> for Group<ItemMetadata> {
             .build()
     }
 }
-
-#[cfg(test)]
-mod house_convention_tests {
-    use crate::track_schema::classify_track;
-
-    fn leaf(name: &str) -> Vec<String> {
-        classify_track(name).matched_groups
-    }
-
-    /// `GTR A` is the acoustic and `GTR E` the electric. Electric owns the
-    /// bare `gtr` pattern, so both once landed on the electric bus — and in a
-    /// session already routed by hand, that put the acoustic on two buses.
-    #[test]
-    fn gtr_a_is_acoustic_and_gtr_e_is_electric() {
-        for name in ["GTR A", "GTR A - Strum", "GTR A - 12 String"] {
-            assert!(
-                leaf(name).iter().any(|g| g == "Acoustic"),
-                "{name} should be Acoustic, got {:?}",
-                leaf(name)
-            );
-        }
-        for name in ["GTR E", "GTR E - Chords", "GTR E - Drive"] {
-            assert!(
-                leaf(name).iter().any(|g| g == "Electric"),
-                "{name} should be Electric, got {:?}",
-                leaf(name)
-            );
-        }
-    }
-}

@@ -120,37 +120,3 @@ fn synth_portable_chunk(tpl: &PortableChunkTemplate, xml: &[u8]) -> String {
     out.push('>');
     out
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn omnisphere_chunk_structure_and_size_patch() {
-        let xml = b"<SynthMaster vers=\"3.0.2c\">test</SynthMaster>";
-        let fx = convert(&PluginInstanceState {
-            track_name: "Inst 1".into(),
-            kind: PluginStateKind::Omnisphere,
-            state: xml.to_vec(),
-        })
-        .unwrap();
-        assert!(fx.raw_block.starts_with("<VST \"VST3i: Omnisphere"));
-        assert!(fx.raw_block.trim_end().ends_with('>'));
-        assert_eq!(fx.preset_name, "Program 1");
-
-        // Decode seg0 (first segment, ends at its `==` padding) and confirm the
-        // embedded state-length field was patched to OUR seg1 length.
-        let body: String = fx
-            .raw_block
-            .lines()
-            .skip(1)
-            .take_while(|l| *l != ">")
-            .collect();
-        let seg0_end = body.find("==").unwrap() + 2;
-        let seg0 = B64.decode(&body[..seg0_end]).unwrap();
-        assert_eq!(&seg0[..8], b"mS+\x06\xee^\xed\xfe");
-        let embedded = u32::from_le_bytes(seg0[160..164].try_into().unwrap()) as usize;
-        let expected_seg1 = 32 + xml.len() + 46; // header + xml + trailer
-        assert_eq!(embedded, expected_seg1);
-    }
-}

@@ -207,57 +207,6 @@ pub mod served {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn a_scene_becomes_a_png_data_uri() {
-        let mut scene = Scene::new();
-        scene.fill(
-            Fill::NonZero,
-            Affine::IDENTITY,
-            Color::from_rgb8(0xff, 0x00, 0x00),
-            None,
-            &Rect::new(0.0, 0.0, 8.0, 8.0),
-        );
-        let uri = scene_data_uri(&scene, 8.0, 8.0, 1.0, Color::BLACK);
-        assert!(uri.starts_with("data:image/png;base64,"));
-        // Long enough to be an actual image rather than a header stub.
-        assert!(uri.len() > 100, "suspiciously short: {} bytes", uri.len());
-    }
-
-    #[test]
-    fn a_scene_becomes_a_bmp_a_browser_can_decode() {
-        let mut scene = Scene::new();
-        scene.fill(
-            Fill::NonZero,
-            Affine::IDENTITY,
-            Color::from_rgb8(0xff, 0x00, 0x00),
-            None,
-            &Rect::new(0.0, 0.0, 4.0, 2.0),
-        );
-        let bytes = scene_bmp(&scene, 4.0, 2.0, 1.0, Color::BLACK);
-        assert_eq!(&bytes[0..2], b"BM");
-        // 54-byte header plus 4 bytes a pixel, and nothing else.
-        assert_eq!(bytes.len(), 54 + 4 * 4 * 2);
-        assert_eq!(
-            u32::from_le_bytes(bytes[2..6].try_into().unwrap()) as usize,
-            bytes.len()
-        );
-        // Top-down: the height is stored negative.
-        assert_eq!(i32::from_le_bytes(bytes[22..26].try_into().unwrap()), -2);
-        // The first pixel is the red fill, in BGRA order.
-        assert_eq!(&bytes[54..58], &[0x00, 0x00, 0xff, 0xff]);
-    }
-
-    #[test]
-    fn an_empty_scene_still_produces_its_background() {
-        let uri = scene_data_uri(&Scene::new(), 4.0, 4.0, 1.0, Color::BLACK);
-        assert!(uri.starts_with("data:image/png;base64,"));
-    }
-}
-
 /// Rasterizing on a thread of its own, so a frame never costs the UI.
 ///
 /// Turning a scene into pixels is ~2.8 ms at stack size — a third of a

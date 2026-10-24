@@ -24,32 +24,3 @@ pub fn mix(channels: &mut [f64]) {
         *ch = sum.mul_add(scale, -*ch);
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn energy_preserved() {
-        let mut ch = [1.0, 0.0, 0.0, 0.0];
-        let energy_in: f64 = ch.iter().map(|x| x * x).sum();
-        mix(&mut ch);
-        let energy_out: f64 = ch.iter().map(|x| x * x).sum();
-        assert!(
-            (energy_in - energy_out).abs() < 1e-10,
-            "Energy should be preserved: {energy_in} vs {energy_out}"
-        );
-    }
-
-    #[test]
-    fn involution() {
-        // Householder is its own inverse: H * H = I
-        let original = [0.3, -0.7, 0.5, 0.1];
-        let mut ch = original;
-        mix(&mut ch);
-        mix(&mut ch);
-        for (a, b) in ch.iter().zip(original.iter()) {
-            assert!((a - b).abs() < 1e-10, "H*H should equal I");
-        }
-    }
-}

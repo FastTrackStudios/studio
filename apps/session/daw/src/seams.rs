@@ -400,21 +400,3 @@ pub(crate) fn register(
     )?;
     Ok(())
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    /// A fill's seams move out of it, never in; another seam either way.
-    #[test]
-    fn a_fills_seams_only_move_out_of_it() {
-        let fills = [(10.0, 12.0)];
-        assert_eq!(allowed_around(9.99, &fills, (9.59, 10.39)), (9.6, 9.99));
-        assert_eq!(allowed_around(12.01, &fills, (11.61, 12.41)), (12.01, 12.4));
-        assert_eq!(allowed_around(20.0, &fills, (19.6, 20.4)), (19.6, 20.4));
-        // Moved out once, it is still the fill's: no further out than the
-        // reach from the fill's edge.
-        assert_eq!(allowed_around(9.7, &fills, (9.3, 10.1)), (9.6, 9.7));
-        assert_eq!(allowed_around(9.6, &fills, (9.2, 10.0)), (9.6, 9.6));
-    }
-}

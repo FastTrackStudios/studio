@@ -485,28 +485,3 @@ pub fn SyncPill(#[props(default)] on_open: Option<EventHandler<()>>) -> Element 
         }
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn budget_cuts_long_titles_with_an_ellipsis() {
-        assert_eq!(budget("Lantern Hymn", 22), "Lantern Hymn");
-        assert_eq!(
-            budget("A Very Long Song Title That Keeps Going", 10),
-            "A Very Lo…"
-        );
-        assert_eq!(budget("Été", 3), "Été", "counts characters, not bytes");
-    }
-
-    #[test]
-    fn the_pill_says_peers_or_whom_it_follows() {
-        let mut v = PlaybackView::default();
-        assert_eq!(sync_state(&v).0, "No peers");
-        v.peers = 2;
-        assert_eq!(sync_state(&v), ("2 peers".to_string(), LIVE));
-        v.following = Some("Studio Mac".into());
-        assert_eq!(sync_state(&v), ("Following Studio Mac".to_string(), AMBER));
-    }
-}

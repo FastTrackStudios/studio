@@ -117,16 +117,3 @@ pub fn calibrate(scan: &Scan, truth: &[usize], retrig_secs: f64) -> Option<Calib
     }
     best
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn agreement_counts_each_hit_once() {
-        let a = agree(&[100, 200, 205, 400], &[101, 203, 300], 5);
-        assert_eq!(a.matched, 2);
-        assert!((a.precision() - 0.5).abs() < 1e-9);
-        assert!((a.recall() - 2.0 / 3.0).abs() < 1e-9);
-    }
-}

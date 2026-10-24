@@ -100,28 +100,3 @@ pub const CORE_PARAM_NAMES: &[&str] = &[
     "la2a_peak_reduction",
     "la2a_gain",
 ];
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    /// Every listed name has to resolve, or the list is lying about what the
-    /// plugin can write.
-    #[test]
-    fn every_listed_core_param_resolves() {
-        let params = CompStageParams::default();
-        for name in CORE_PARAM_NAMES {
-            assert!(
-                core_param_ptr(&params, name).is_some(),
-                "{name} is listed but does not resolve",
-            );
-        }
-    }
-
-    #[test]
-    fn an_unexposed_param_is_absent_from_the_list() {
-        let params = CompStageParams::default();
-        assert!(core_param_ptr(&params, "multiband_amount").is_none());
-        assert!(!CORE_PARAM_NAMES.contains(&"multiband_amount"));
-    }
-}

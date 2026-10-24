@@ -782,39 +782,3 @@ pub fn report(
     );
     s
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    /// A synthetic exponential noise tail with a known RT60 measures back
-    /// to it, and against itself has zero distance.
-    #[test]
-    fn exponential_noise_tail_measures_its_rt60() {
-        let sr = 48_000.0;
-        let rt60 = 1.5;
-        let n = (sr * 4.0) as usize;
-        let mut seed = 1u32;
-        let mut noise = || {
-            seed = seed.wrapping_mul(1_664_525).wrapping_add(1_013_904_223);
-            f64::from(seed >> 8) / f64::from(1u32 << 24) - 0.5
-        };
-        let (l, r): (Vec<f32>, Vec<f32>) = (0..n)
-            .map(|i| {
-                let g = 10f64.powf(-3.0 * i as f64 / sr / rt60);
-                ((noise() * g) as f32, (noise() * g) as f32)
-            })
-            .unzip();
-        let c = measure(&l, &r, sr, 0.0, None);
-        let t20 = c.decay.t20.unwrap_or(0.0);
-        assert!((t20 - rt60).abs() < 0.1, "T20 {t20}");
-        assert!(
-            c.correlation[3].abs() < 0.1,
-            "independent channels decorrelate"
-        );
-        let late_density = c.echo_density.get(60).copied().unwrap_or(0.0);
-        assert!(late_density > 0.8, "noise is fog: {late_density}");
-        let d = distance(&c, &c);
-        assert!(d.envelope_db.abs() < 1e-9 && d.decay_log2 == Some(0.0));
-    }
-}

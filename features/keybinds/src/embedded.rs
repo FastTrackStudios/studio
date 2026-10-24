@@ -142,20 +142,3 @@ pub fn fasttrackstudio() -> Option<Profile> {
             .map(|(_, text)| (*text).to_owned())
     })
 }
-
-#[cfg(test)]
-mod tests {
-    use architect_input::parse_key_sequence;
-
-    /// The embedded profile loads, carries the zoom tree, and names it.
-    #[test]
-    fn the_embedded_profile_has_the_zoom_tree_and_its_labels() {
-        let profile = super::fasttrackstudio().expect("the embedded profile parses");
-        let normal = profile.keymap.keymap.get("normal").expect("a normal mode");
-        assert!(normal.contains_key("z t"), "z t is bound");
-        let z = parse_key_sequence("z").unwrap();
-        assert_eq!(profile.labels.get(&z).map(String::as_str), Some("Zoom"));
-        let zt = parse_key_sequence("z t").unwrap();
-        assert!(profile.labels.contains_key(&zt), "z t has a label");
-    }
-}

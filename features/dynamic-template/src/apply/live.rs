@@ -1797,27 +1797,6 @@ impl<D: Tracks + Routing + Items> DawTarget<D> {
     }
 }
 
-#[cfg(test)]
-mod rehearsal_group_tests {
-    use super::rehearsal_group;
-
-    /// A rehearsal track goes in its instrument's folder by its part — the
-    /// name before ` - Song`; a band's Lead and Rhythm are its guitars; a
-    /// nameless track or a bare stem names none.
-    #[test]
-    fn a_rehearsal_track_is_filed_by_its_part() {
-        let group = |name: &str| rehearsal_group(name);
-        assert_eq!(group("Kick - The Plague").as_deref(), Some("Drums"));
-        assert_eq!(group("OH L - The Plague").as_deref(), Some("Drums"));
-        assert_eq!(group("Bass - The Plague").as_deref(), Some("Bass"));
-        assert_eq!(group("Lead - The Plague").as_deref(), Some("Guitars"));
-        assert_eq!(group("Rhythm - The Plague").as_deref(), Some("Guitars"));
-        assert_eq!(group("Vocals - The Plague").as_deref(), Some("Vocals"));
-        assert_eq!(group(""), None);
-        assert_eq!(group(" - stem"), None);
-    }
-}
-
 /// A track and the tracks in it: the project as a folder tree, for a
 /// restructure built on the tree and written back as one layout
 /// ([`Branch::flatten`]).

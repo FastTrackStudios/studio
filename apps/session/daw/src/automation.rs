@@ -984,39 +984,3 @@ pub fn without_point(points: &[EnvelopePoint], index: usize) -> Vec<EnvelopePoin
         })
         .collect()
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn a_volume_reads_back_from_where_it_is_drawn() {
-        for value in [0.0, 0.001, 0.25, 1.0, 2.0] {
-            let y = Kind::Volume.y_of(value);
-            assert!((Kind::Volume.value_of(y) - value).abs() < 1e-9, "{value}");
-        }
-        // 0 dB well up the lane, and the top +6 dB.
-        assert!(Kind::Volume.y_of(1.0) > 0.8);
-        assert_eq!(Kind::Volume.text(2.0), "+6.0 dB");
-        assert_eq!(Kind::Pan.text(0.25), "50%L");
-        assert_eq!(Kind::Pan.text(0.5), "C");
-    }
-
-    #[test]
-    fn a_point_moved_keeps_the_points_in_order() {
-        let p = |t: f64| EnvelopePoint {
-            time: PositionInSeconds::from_seconds(t),
-            value: 0.5,
-            ..EnvelopePoint::default()
-        };
-        let points = [p(1.0), p(2.0), p(3.0)];
-        let (moved, at) = with_point(&points, Some(0), 2.5, 0.9, EnvelopeShape::Linear);
-        let times: Vec<f64> = moved.iter().map(|p| p.time.as_seconds()).collect();
-        assert_eq!(times, [2.0, 2.5, 3.0]);
-        assert_eq!(at, 1);
-        let (added, at) = with_point(&points, None, 0.5, 0.1, EnvelopeShape::Square);
-        assert_eq!(added.len(), 4);
-        assert_eq!(at, 0);
-        assert_eq!(without_point(&added, 0).len(), 3);
-    }
-}

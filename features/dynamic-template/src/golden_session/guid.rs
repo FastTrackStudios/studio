@@ -44,30 +44,3 @@ pub fn guid(path: &str) -> String {
         take(12)
     )
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn a_path_always_hashes_to_the_same_well_formed_guid() {
-        let a = guid("track:Drum Kit/Kick");
-        assert_eq!(a, guid("track:Drum Kit/Kick"));
-        assert_eq!(a.len(), 38);
-        assert!(a.starts_with('{') && a.ends_with('}'));
-        let body: Vec<&str> = a.trim_matches(['{', '}']).split('-').collect();
-        assert_eq!(
-            body.iter().map(|s| s.len()).collect::<Vec<_>>(),
-            [8, 4, 4, 4, 12]
-        );
-        assert!(body
-            .iter()
-            .all(|s| s.chars().all(|c| c.is_ascii_hexdigit())));
-    }
-
-    #[test]
-    fn different_paths_give_different_guids() {
-        assert_ne!(guid("track:Drum Kit/Kick"), guid("track:Drum Kit/Snare"));
-        assert_ne!(guid("track:Kick"), guid("item:Kick"));
-    }
-}

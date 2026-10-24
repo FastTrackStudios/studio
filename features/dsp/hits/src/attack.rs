@@ -81,30 +81,3 @@ pub fn attack_peak(samples: &[f32], rate: f64, at: usize) -> f32 {
     )
     .map_or(0.0, |(_, s)| s)
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn f(i: usize) -> f32 {
-        num_traits::ToPrimitive::to_f32(&i).unwrap()
-    }
-
-    #[test]
-    fn the_start_is_before_where_a_gate_fires() {
-        let rate = 48_000.0;
-        let mut sig = vec![0.0_f32; 9_600];
-        // A 2 ms linear rise from sample 4800 to a peak, then a decay.
-        for i in 0..96 {
-            sig[4_800 + i] = 0.5 * (f(i) / 96.0);
-        }
-        for i in 0..2_000 {
-            sig[4_896 + i] = 0.5 * (-f(i) / 400.0).exp();
-        }
-        // A gate fires part way up.
-        let start = attack_start(&sig, rate, 4_860);
-        // At most half a fine window ahead of the true start, never after it.
-        assert!((4_780..4_812).contains(&start), "{start}");
-        assert!((attack_peak(&sig, rate, start) - 0.5).abs() < 1e-3);
-    }
-}

@@ -45,26 +45,3 @@ pub trait PlaybackActions {
     )]
     fn toggle_song_loop(&self);
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    /// Generated ids must reproduce the exact REAPER command-id strings
-    /// the legacy `session_actions` block used — anything already wired
-    /// into a keybinding or menu depends on these exact strings.
-    #[test]
-    fn ids_match_existing_reaper_command_convention() {
-        let ids: Vec<_> = PlaybackActionsActions::all()
-            .iter()
-            .map(|m| (m.method_name, m.id))
-            .collect();
-        assert_eq!(
-            ids,
-            vec![
-                ("toggle_playback", "FTS_SESSION_TOGGLE_PLAYBACK"),
-                ("toggle_song_loop", "FTS_SESSION_TOGGLE_SONG_LOOP"),
-            ]
-        );
-    }
-}

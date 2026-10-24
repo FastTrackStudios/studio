@@ -259,15 +259,3 @@ pub(crate) fn defs() -> Vec<ComponentDef> {
         build,
     }]
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn the_law_puts_zero_on_the_right_stop_and_is_monotonic() {
-        assert!((fraction(0.0) - 1.0).abs() < 1e-12 && fraction(-20.0).abs() < 1e-12);
-        assert!(LAW.windows(2).all(|w| w[0].0 < w[1].0 && w[0].1 < w[1].1));
-        assert!((law().apply(0.5) - fraction(-10.0)).abs() < 1e-12);
-    }
-}

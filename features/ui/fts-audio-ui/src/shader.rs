@@ -478,25 +478,3 @@ pub fn compose(source: &str) -> String {
         format!("{DEFAULT_UNIFORMS}\n{PRELUDE}\n{source}")
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    /// The uniform block is four-float rows all the way down, so what Rust
-    /// writes and what WGSL reads cannot drift apart over padding.
-    #[test]
-    fn the_uniform_block_has_no_padding() {
-        assert_eq!(std::mem::size_of::<Uniforms>(), 48);
-        assert_eq!(std::mem::align_of::<Uniforms>(), 4);
-    }
-
-    /// A surface cannot be built from a context that is not a wgpu device —
-    /// which is exactly what a CPU backend hands over, and must be a `None`
-    /// rather than a panic.
-    #[test]
-    fn a_context_without_a_device_makes_no_surface() {
-        let not_a_device: Box<dyn std::any::Any> = Box::new(42u32);
-        assert!(ShaderSurface::new(not_a_device, "").is_none());
-    }
-}

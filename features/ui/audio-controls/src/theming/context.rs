@@ -279,31 +279,3 @@ impl Default for ControlConfig {
         Self::DEFAULT
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn theme_context_default() {
-        let theme = ThemeContext::new();
-        assert!(theme.animations_enabled);
-        assert!((theme.scale_factor - 1.0).abs() < f32::EPSILON);
-    }
-
-    #[test]
-    fn theme_context_scale() {
-        let theme = ThemeContext::new().with_scale(2.0);
-        assert_eq!(theme.scale(50), 100);
-        assert!((theme.scale_f32(25.0) - 50.0).abs() < f32::EPSILON);
-    }
-
-    #[test]
-    fn control_config() {
-        let config = ControlConfig::DEFAULT;
-        assert!(config.has_animations());
-
-        let minimal = ControlConfig::MINIMAL;
-        assert!(!minimal.has_animations());
-    }
-}

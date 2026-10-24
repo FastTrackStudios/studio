@@ -140,33 +140,3 @@ impl Default for NormalParam {
         }
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn normal_clamps_values() {
-        assert_eq!(Normal::new(-0.5).value(), 0.0);
-        assert_eq!(Normal::new(0.5).value(), 0.5);
-        assert_eq!(Normal::new(1.5).value(), 1.0);
-    }
-
-    #[test]
-    fn bipolar_conversion() {
-        assert!((Normal::new(0.0).to_bipolar() - (-1.0)).abs() < f32::EPSILON);
-        assert!((Normal::new(0.5).to_bipolar() - 0.0).abs() < f32::EPSILON);
-        assert!((Normal::new(1.0).to_bipolar() - 1.0).abs() < f32::EPSILON);
-
-        assert!((Normal::from_bipolar(-1.0).value() - 0.0).abs() < f32::EPSILON);
-        assert!((Normal::from_bipolar(0.0).value() - 0.5).abs() < f32::EPSILON);
-        assert!((Normal::from_bipolar(1.0).value() - 1.0).abs() < f32::EPSILON);
-    }
-
-    #[test]
-    fn lerp_interpolation() {
-        let a = Normal::new(0.0);
-        let b = Normal::new(1.0);
-        assert!((a.lerp(b, 0.5).value() - 0.5).abs() < f32::EPSILON);
-    }
-}

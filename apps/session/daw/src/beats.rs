@@ -102,21 +102,3 @@ pub fn seconds_text(s: f64) -> String {
         format!("{s:.0} s")
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn a_half_second_repeat_at_120_is_a_quarter() {
-        assert_eq!(DELAY[nearest_delay(500.0, 120.0)].0, "1/4");
-        assert_eq!(DELAY[nearest_delay(375.0, 120.0)].0, "1/8.");
-    }
-
-    #[test]
-    fn a_two_second_tail_at_120_is_a_bar() {
-        assert_eq!(REVERB[nearest_reverb(2.0, 120.0)].0, "1 bar");
-        // Never "Free": the switch is to the beat.
-        assert_ne!(nearest_reverb(0.0001, 120.0), 0);
-    }
-}

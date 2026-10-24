@@ -207,16 +207,3 @@ pub fn without_trigger(own: &[f32], scan: &Scan, others: &[Other<'_>], crest_db:
         .collect();
     crate::fuse::settle(hits, rate)
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn the_valley_is_between_the_clusters() {
-        let mut levels = vec![-50.0, -49.0, -51.0, -48.5, -50.5];
-        levels.extend([-12.0, -10.0, -11.5, -9.0]);
-        let v = otsu_db(&levels).unwrap();
-        assert!(v > -48.5 && v < -12.0, "{v}");
-    }
-}

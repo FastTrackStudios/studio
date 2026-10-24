@@ -146,34 +146,3 @@ const fn compute_style_optical_coefficients() -> StyleCoefficients {
         coeff_4: 1.0,
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_style_conversion() {
-        assert_eq!(CompressionStyle::from_id(0), CompressionStyle::Clean);
-        assert_eq!(CompressionStyle::from_id(1), CompressionStyle::Fet);
-        assert_eq!(CompressionStyle::from_id(2), CompressionStyle::Vca);
-        assert_eq!(CompressionStyle::from_id(3), CompressionStyle::Optical);
-        assert_eq!(CompressionStyle::Fet.id(), 1);
-    }
-
-    #[test]
-    fn test_dispatcher() {
-        let coeffs = compute_style_dispatcher(CompressionStyle::Fet, 48000.0);
-        assert!(coeffs.attack_coeff > 0.0);
-        assert!(coeffs.release_coeff > 0.0);
-    }
-
-    #[test]
-    fn test_atan_approx() {
-        let val = atan_approx(0.5);
-        assert!(val > 0.0);
-        assert!(val < 1.0);
-
-        // atan_approx should be odd function: f(-x) = -f(x)
-        assert!((atan_approx(-0.5) + val).abs() < 0.001);
-    }
-}

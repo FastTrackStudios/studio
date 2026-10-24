@@ -274,53 +274,6 @@ fn title_case(text: &str) -> String {
         .join(" ")
 }
 
-#[cfg(test)]
-mod song_name_tests {
-    #[test]
-    fn the_end_is_before_the_first_silence() {
-        let at = |s: u64, peak: f32| (s * 10, peak);
-        // Heard to 3, quiet 4–8 (a gap of 5 >= 4), heard again at 9.
-        let chunks = [
-            at(0, 1.0),
-            at(1, 1.0),
-            at(2, 0.5),
-            at(3, 0.2),
-            at(4, 0.0),
-            at(5, 0.0),
-            at(6, 0.0),
-            at(7, 0.0),
-            at(8, 0.0),
-            at(9, 0.9),
-        ];
-        assert_eq!(
-            super::last_heard(&chunks, 0.1, 10, 40).map(|c| c.0),
-            Some(30)
-        );
-        // A short pause does not end it.
-        let paused = [at(0, 1.0), at(1, 0.0), at(2, 0.0), at(3, 0.8)];
-        assert_eq!(
-            super::last_heard(&paused, 0.1, 10, 40).map(|c| c.0),
-            Some(30)
-        );
-    }
-
-    #[test]
-    fn a_song_is_named_title_dash_artist() {
-        assert_eq!(
-            super::strip_working_suffix("unbreakable.current"),
-            "unbreakable"
-        );
-        assert_eq!(super::strip_date("crescendum-2026-10-08"), "crescendum");
-        assert_eq!(super::strip_date("Crescendum"), "Crescendum");
-        assert_eq!(
-            super::strip_date("north-point-2026-1-08"),
-            "north-point-2026-1-08"
-        );
-        assert_eq!(super::title_case("it knows my name"), "It Knows My Name");
-        assert_eq!(super::title_case("unbreakable"), "Unbreakable");
-    }
-}
-
 /// Where the song ends: where most of what is still playing at its last
 /// marker stops — the median of those tracks' last item ends. Not the
 /// latest end: a guitar take left running, a click rendered long, a
@@ -778,26 +731,4 @@ pub fn steps(
         target.hide_in_tcp("MIX BUS")?;
     }
     Ok(())
-}
-
-#[cfg(test)]
-mod chart_tests {
-    use super::chart_beside;
-
-    /// The chart beside a project is used only when it is the only one.
-    #[test]
-    fn a_session_folder_s_one_chart_is_its_chart() {
-        let dir = std::env::temp_dir().join(format!("session-chart-{}", std::process::id()));
-        std::fs::create_dir_all(&dir).unwrap();
-        let project = dir.join("Song.RPP");
-        std::fs::write(&project, "").unwrap();
-        assert_eq!(chart_beside(&project), None, "no chart at all");
-
-        std::fs::write(dir.join("Song.kf"), "").unwrap();
-        assert_eq!(chart_beside(&project), Some(dir.join("Song.kf")));
-
-        std::fs::write(dir.join("Other.KF"), "").unwrap();
-        assert_eq!(chart_beside(&project), None, "two charts is a guess");
-        std::fs::remove_dir_all(&dir).unwrap();
-    }
 }

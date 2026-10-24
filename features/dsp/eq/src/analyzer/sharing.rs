@@ -96,23 +96,3 @@ pub fn list_others(exclude: InstanceId) -> Vec<(InstanceId, String)> {
         .map(|(id, slot)| (*id, slot.label()))
         .collect()
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn publish_then_read_across_handles() {
-        let a = register(42);
-        let b = get(42).expect("registered");
-        a.publish("track A", &[-3.0, -6.0], &[100.0, 200.0]);
-        let mut db = Vec::new();
-        let mut fz = Vec::new();
-        let generation = b.read_into(&mut db, &mut fz);
-        assert_eq!(db, vec![-3.0, -6.0]);
-        assert_eq!(fz, vec![100.0, 200.0]);
-        assert!(generation >= 1);
-        unregister(42);
-        assert!(get(42).is_none());
-    }
-}

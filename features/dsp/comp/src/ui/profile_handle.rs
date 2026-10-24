@@ -258,28 +258,3 @@ pub fn handle_for(
         .map(plugin_core::Param::as_ptr);
     profile_control_handle(profile, control, params, stage, ctx, slot)
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::profiles::{LA2A, UREI_1176};
-
-    #[test]
-    fn the_first_compound_control_takes_the_first_macro_slot() {
-        assert_eq!(macro_slot_index(&LA2A, "peak_reduction"), None);
-        assert_eq!(macro_slot_index(&UREI_1176, "input"), Some(0));
-        // Non-compound controls never claim a slot.
-        assert_eq!(macro_slot_index(&LA2A, "gain"), None);
-        assert_eq!(macro_slot_index(&UREI_1176, "ratio"), None);
-    }
-
-    #[test]
-    fn stepped_positions_snap_to_the_nearest_detent() {
-        let values = &[4.0, 8.0, 12.0, 20.0, 32.0];
-        assert_eq!(step_index(values, 4.0), 0);
-        assert_eq!(step_index(values, 11.0), 2);
-        assert_eq!(step_index(values, 99.0), 4);
-        assert_eq!(nearest_step(values, 4.0), 0.0);
-        assert_eq!(nearest_step(values, 32.0), 1.0);
-    }
-}

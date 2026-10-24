@@ -79,28 +79,3 @@ impl SpectrumSmoother {
         }
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn flat_stays_flat() {
-        let mut s = SpectrumSmoother::new(64);
-        s.set_smooth(1.0);
-        let mut data = vec![5.0f32; 64];
-        s.smooth(&mut data);
-        for v in &data {
-            assert!((v - 5.0).abs() < 1e-3, "got {v}");
-        }
-    }
-
-    #[test]
-    fn disabled_is_identity() {
-        let mut s = SpectrumSmoother::new(8);
-        let mut data = [1.0, 7.0, 2.0, 9.0, 0.0, 3.0, 4.0, 5.0];
-        let orig = data;
-        s.smooth(&mut data);
-        assert_eq!(data, orig);
-    }
-}

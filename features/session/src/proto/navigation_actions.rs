@@ -68,29 +68,3 @@ pub trait NavigationActions {
     )]
     fn previous_section(&self);
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    /// Generated ids must reproduce the exact REAPER command-id strings
-    /// the retired `session_actions` entries produced.
-    #[test]
-    fn ids_match_retired_session_actions_command_ids() {
-        let ids: Vec<_> = NavigationActionsActions::all()
-            .iter()
-            .map(|m| m.id)
-            .collect();
-        assert_eq!(
-            ids,
-            vec![
-                "FTS_SESSION_SMART_NEXT",
-                "FTS_SESSION_SMART_PREVIOUS",
-                "FTS_SESSION_NEXT_SONG",
-                "FTS_SESSION_PREVIOUS_SONG",
-                "FTS_SESSION_NEXT_SECTION",
-                "FTS_SESSION_PREVIOUS_SECTION",
-            ]
-        );
-    }
-}

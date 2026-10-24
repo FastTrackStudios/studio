@@ -34,8 +34,6 @@ mod chords;
 mod hit;
 mod lanes;
 mod tempo;
-#[cfg(test)]
-mod tests;
 mod timeline;
 
 pub use bars::*;

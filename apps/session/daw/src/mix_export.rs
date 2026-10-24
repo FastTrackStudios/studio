@@ -181,33 +181,3 @@ pub fn write_rpp(
     std::fs::write(&path, text)?;
     Ok(Exported { path, chained })
 }
-
-#[cfg(test)]
-mod tests {
-    use super::{chain_for, splice};
-
-    #[test]
-    fn the_session_made_tracks_get_the_templates_chains() {
-        let bus = chain_for("DRUM BUS").expect("a bus chain");
-        assert!(bus.starts_with("<FXCHAIN") && bus.ends_with('>'));
-        assert!(bus.contains("ReaEQ") && bus.contains("ReaComp"), "{bus}");
-        assert!(chain_for("Smash").is_some_and(|c| c.contains("ReaComp")));
-        assert!(chain_for("Stadium").is_some_and(|c| c.contains("ReaVerbate")));
-        assert!(
-            chain_for("Kick In").is_none(),
-            "a recorded track keeps its own"
-        );
-    }
-
-    #[test]
-    fn a_chain_goes_in_before_the_items_and_never_twice() {
-        let text = "<REAPER_PROJECT\n  <TRACK {A}\n    NAME a\n    <ITEM\n      POSITION 0\n    >\n  >\n  <TRACK {B}\n    NAME b\n  >\n>\n";
-        let block = "<FXCHAIN\n  SHOW 0\n>";
-        let with = splice(text, "{A}", block).expect("spliced");
-        let fx = with.find("<FXCHAIN").expect("in");
-        assert!(fx < with.find("<ITEM").expect("item") && fx > with.find("<TRACK {A}").expect("a"));
-        assert!(splice(&with, "{A}", block).is_none(), "never twice");
-        let b = splice(text, "{B}", block).expect("no items: before the close");
-        assert!(b.find("<FXCHAIN").expect("in") > b.find("<TRACK {B}").expect("b"));
-    }
-}

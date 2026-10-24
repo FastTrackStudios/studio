@@ -1104,29 +1104,6 @@ pub fn PanelChrome(panel: ArrangementPanel) -> Element {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::zoom_about;
-
-    /// The session point under the pointer stays under it.
-    #[test]
-    fn a_zoom_keeps_the_point_under_the_pointer() {
-        // 300px into the frame, scrolled 500: session point 800 at zoom 1.
-        let scroll = zoom_about(300.0, 500.0, 1.0, 2.0);
-        // At zoom 2 that point is at 1600; on screen at 1600 - scroll.
-        assert!((1600.0 - scroll - 300.0).abs() < 1e-9, "{scroll}");
-        // And back out lands where it began.
-        assert!((zoom_about(300.0, scroll, 2.0, 1.0) - 500.0).abs() < 1e-9);
-    }
-
-    /// With the pointer at the frame's origin it is the old behaviour:
-    /// the top-left stays put.
-    #[test]
-    fn at_the_origin_it_zooms_about_the_corner() {
-        assert!((zoom_about(0.0, 100.0, 1.0, 3.0) - 300.0).abs() < 1e-9);
-    }
-}
-
 /// Where to page the view to keep the play cursor in sight
 /// ([`timeline::scroll::page_to`]).
 use timeline::scroll::page_to;

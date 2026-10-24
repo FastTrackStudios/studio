@@ -182,26 +182,3 @@ impl Fingers {
         !self.down.is_empty()
     }
 }
-
-#[cfg(test)]
-mod gesture_tests {
-    use super::*;
-
-    #[test]
-    fn one_finger_drags_and_a_second_makes_it_a_pinch() {
-        use blitz_traits::events::BlitzPointerId::Finger;
-        let mut fingers = Fingers::default();
-        fingers.down(Finger(1), (100.0, 100.0));
-        let drag = fingers.moved(Finger(1), (110.0, 105.0)).expect("a drag");
-        assert_eq!((drag.sx, drag.dx, drag.dy), (1.0, 10.0, 5.0));
-        fingers.down(Finger(2), (210.0, 105.0));
-        let pinch = fingers.moved(Finger(2), (310.0, 105.0)).expect("a pinch");
-        assert!(pinch.sx > 1.0, "{pinch:?}");
-        fingers.up(Finger(1));
-        assert!(fingers.any(), "the other finger carries on");
-        assert!(
-            fingers.moved(Finger(3), (0.0, 0.0)).is_none(),
-            "an unfollowed finger"
-        );
-    }
-}

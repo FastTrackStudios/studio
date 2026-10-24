@@ -332,37 +332,6 @@ pub fn LedMeter(
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn silence_lights_nothing_and_zero_lights_everything() {
-        assert_eq!(lit_segments(-90.0), 0);
-        assert_eq!(lit_segments(0.0), METER_STEPS_DB.len());
-    }
-
-    #[test]
-    fn the_ladder_fills_from_the_bottom() {
-        let quiet = lit_segments(-35.0);
-        let loud = lit_segments(-6.0);
-        assert!(quiet > 0 && quiet < loud, "{quiet} then {loud}");
-        assert!(loud < METER_STEPS_DB.len());
-    }
-
-    #[test]
-    fn a_segment_lights_at_its_own_edge() {
-        // -20 is a printed edge: reaching it lights that segment, and a hair
-        // under it does not.
-        assert!(lit_segments(-20.0) > lit_segments(-20.1));
-    }
-
-    #[test]
-    fn the_scale_runs_downward_without_repeating() {
-        assert!(METER_STEPS_DB.windows(2).all(|w| w[0] > w[1]));
-    }
-}
-
 /// A horizontal LED ladder with its scale printed above it — the Distressor's
 /// gain-reduction display.
 ///

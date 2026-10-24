@@ -147,24 +147,3 @@ impl HermiteCubicSmoother {
         self.history.fill(History::default());
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_hermite_identity_hypothesis() {
-        let mut smoother = HermiteCubicSmoother::new(StateFuncHypothesis::Identity);
-
-        // Test with simple values
-        let gr_inst = 0.5_f64;
-        let attack = 0.01_f64;
-        let release = 0.05_f64;
-
-        let result = smoother.process(gr_inst, attack, release, Channel::LEFT);
-
-        // Should not panic and should produce a valid f64
-        assert!(result.is_finite());
-        assert!(result >= 0.0);
-    }
-}

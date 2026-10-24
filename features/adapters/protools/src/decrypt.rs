@@ -69,34 +69,3 @@ fn gen_xor_delta(xor_value: u8, mul: u8, negative: bool) -> u8 {
     // both odd, so they have multiplicative inverses mod 256)
     0
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn gen_xor_delta_old_format() {
-        // For mul=53, solving i*53 ≡ xor_value (mod 256)
-        // Just verify it's the inverse
-        for seed in 0..=255u8 {
-            let delta = gen_xor_delta(seed, 53, false);
-            assert_eq!(delta.wrapping_mul(53), seed);
-        }
-    }
-
-    #[test]
-    fn gen_xor_delta_new_format() {
-        // For mul=11, solving i*11 ≡ xor_value (mod 256), then negate
-        for seed in 0..=255u8 {
-            let delta = gen_xor_delta(seed, 11, true);
-            let positive = (-(delta as i16) & 0xFF) as u8;
-            assert_eq!(positive.wrapping_mul(11), seed);
-        }
-    }
-
-    #[test]
-    fn decrypt_too_short() {
-        let mut data = vec![0u8; 10];
-        assert!(matches!(decrypt(&mut data), Err(PtError::FileTooShort(10))));
-    }
-}

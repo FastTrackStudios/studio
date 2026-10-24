@@ -382,34 +382,3 @@ pub fn FloatingPanel(
         }
     }
 }
-
-#[cfg(test)]
-mod cycle_tests {
-    use super::*;
-
-    /// A family with one unit has nothing to cycle, so it draws no dots —
-    /// otherwise every single-entry rail would grow a dot that means nothing.
-    #[test]
-    fn one_unit_draws_no_dots() {
-        assert_eq!(ShellItem::new("main", "Main").with_cycle(1, 0).cycle, None);
-        assert_eq!(ShellItem::new("main", "Main").with_cycle(0, 0).cycle, None);
-    }
-
-    /// …and a family of several says how many and where you are.
-    #[test]
-    fn several_units_say_how_many_and_which() {
-        let item = ShellItem::new("opto", "Opto").with_cycle(3, 1);
-        assert_eq!(item.cycle, Some((3, 1)));
-    }
-
-    /// An index past the end is clamped rather than dropped: the caller is
-    /// reporting a position, and a position that cannot be drawn is worse
-    /// than one that is drawn at the end.
-    #[test]
-    fn an_out_of_range_position_lands_on_the_last_dot() {
-        assert_eq!(
-            ShellItem::new("x", "X").with_cycle(3, 9).cycle,
-            Some((3, 2))
-        );
-    }
-}

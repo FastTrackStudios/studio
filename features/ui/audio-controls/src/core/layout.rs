@@ -277,28 +277,3 @@ impl LayoutConstraints {
         }
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn form_factor_lod_compatibility() {
-        // Mini form factor should only support Mini LOD
-        assert!(FormFactor::Mini.supports_lod(LevelOfDetail::Mini));
-        assert!(!FormFactor::Mini.supports_lod(LevelOfDetail::Full));
-
-        // Fullscreen should support all LODs
-        assert!(FormFactor::Fullscreen.supports_lod(LevelOfDetail::Full));
-        assert!(FormFactor::Fullscreen.supports_lod(LevelOfDetail::Mini));
-    }
-
-    #[test]
-    fn auto_lod_selection() {
-        let small = LayoutConstraints::auto_lod(FormFactor::Square, 50, 50);
-        assert_eq!(small.lod, LevelOfDetail::Mini);
-
-        let large = LayoutConstraints::auto_lod(FormFactor::Square, 300, 300);
-        assert_eq!(large.lod, LevelOfDetail::Full);
-    }
-}

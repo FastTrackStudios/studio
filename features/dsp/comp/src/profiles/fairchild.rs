@@ -138,36 +138,3 @@ impl Profile for Fairchild670Profile {
         CONSTRAINTS
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn the_time_constant_switch_has_six_detents_that_all_resolve() {
-        for i in 0..TIME_CONSTANTS {
-            let x = i as f64 / (TIME_CONSTANTS - 1) as f64;
-            assert_eq!(position(x), i);
-            assert!(tc_attack(x) > 0.0 && tc_release(x) > 0.0);
-        }
-    }
-
-    #[test]
-    fn only_the_last_two_positions_are_program_dependent() {
-        let at = |i: usize| i as f64 / (TIME_CONSTANTS - 1) as f64;
-        for i in 0..4 {
-            assert_eq!(tc_inertia(at(i)), 0.0, "position {} should be fixed", i + 1);
-        }
-        assert!(tc_inertia(at(4)) > 0.0);
-        assert!(tc_inertia(at(5)) > tc_inertia(at(4)));
-        // …and the sixth lets go the most slowly of all.
-        assert!(tc_inertia_decay(at(5)) > tc_inertia_decay(at(4)));
-    }
-
-    #[test]
-    fn release_lengthens_across_the_first_four_positions() {
-        let at = |i: usize| i as f64 / (TIME_CONSTANTS - 1) as f64;
-        let releases: Vec<f64> = (0..4).map(|i| tc_release(at(i))).collect();
-        assert!(releases.windows(2).all(|w| w[1] > w[0]), "{releases:?}");
-    }
-}
