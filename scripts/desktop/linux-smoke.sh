@@ -11,6 +11,9 @@
 # SMOKE_PODMAN_IMAGE=<image> (e.g. docker.io/library/archlinux:latest) runs its
 # payload in a container of another distro, a stronger test of the same claim.
 set -euo pipefail
+# Say where it stopped: a runner's hardening fails these in ways that print
+# nothing of their own.
+trap 'echo "linux-smoke: failed at line $LINENO: $BASH_COMMAND" >&2' ERR
 
 img="${1:?usage: linux-smoke.sh <file.AppImage> <X.Y.Z>}"
 want="${2:?version}"
@@ -33,13 +36,69 @@ if [ -n "${SMOKE_PODMAN_IMAGE:-}" ]; then
         nix shell nixpkgs#squashfsTools -c unsquashfs -q -o "$off" -d "$work/app" "$img" >/dev/null
     fi
     out="$(podman run --rm --network none -v "$work/app:/app:ro" "$SMOKE_PODMAN_IMAGE" /app/AppRun --version 2>&1)" || { echo "$out"; exit 1; }
-elif [ -e /lib64/ld-linux-x86-64.so.2 ] && /lib64/ld-linux-x86-64.so.2 --version >/dev/null 2>&1; then
-    out="$("${env_clean[@]}" "$img" --version 2>&1)" || { echo "$out"; exit 1; }
-elif command -v appimage-run >/dev/null 2>&1; then
-    out="$("${env_clean[@]}" appimage-run "$img" --version 2>&1)" || { echo "$out"; exit 1; }
 else
-    echo "no way to run an FHS binary here (no /lib64 loader, no appimage-run, no SMOKE_PODMAN_IMAGE)" >&2
-    exit 1
+  # Each way in turn; the first that runs it wins. A host's /lib64 loader or
+  # appimage-run can both end in bubblewrap (NixOS registers a binfmt handler
+  # for AppImages), which needs user namespaces a hardened runner service
+  # may not have: then the payload below. SMOKE_FORCE_PAYLOAD=1 goes straight
+  # there (how that path is tested on a host that has namespaces).
+  ran=0; out=""
+  if [ "${SMOKE_FORCE_PAYLOAD:-0}" != 1 ]; then
+    if [ -e /lib64/ld-linux-x86-64.so.2 ] && /lib64/ld-linux-x86-64.so.2 --version >/dev/null 2>&1; then
+      echo "trying: the file itself (the host has an FHS loader)" >&2
+      if out="$("${env_clean[@]}" "$img" --version 2>&1)"; then ran=1; else echo "  it did not start: $(printf '%s\n' "$out" | tail -1)" >&2; fi
+    fi
+    if [ "$ran" = 0 ] && command -v appimage-run >/dev/null 2>&1; then
+      echo "trying: appimage-run" >&2
+      if out="$("${env_clean[@]}" appimage-run "$img" --version 2>&1)"; then ran=1; else echo "  it did not start: $(printf '%s\n' "$out" | tail -1)" >&2; fi
+    fi
+  fi
+  if [ "$ran" = 0 ]; then
+    # No FHS loader, and no sandbox: appimage-run's bubblewrap needs user
+    # namespaces, which a hardened runner service may not have ("bwrap: No
+    # permissions to create a new namespace", THEBATTLESHIP, 2026-10-24).
+    # Then: the payload, unpacked, run through THIS host's glibc loader with
+    # only the bundled libraries on the path. Still the claim that matters:
+    # everything the binary needs but glibc and the graphics stack is in the
+    # bundle, and it starts without a display.
+    echo "trying: the payload through the host loader" >&2
+    # Where the squashfs starts: the end of the runtime ELF's section
+    # header table (e_shoff + e_shentsize * e_shnum), which is how the type2
+    # runtime finds it (--appimage-offset). Read, not run: running the file
+    # is what bubblewrap refused.
+    shoff="$(od -An -t u8 -j 40 -N 8 "$img" | tr -d ' ')"
+    shentsize="$(od -An -t u2 -j 58 -N 2 "$img" | tr -d ' ')"
+    shnum="$(od -An -t u2 -j 60 -N 2 "$img" | tr -d ' ')"
+    off=$((shoff + shentsize * shnum))
+    work="$(mktemp -d -p "$(dirname "$img")" .smoke.XXXXXX)"
+    trap 'rm -rf "$work"' EXIT
+    if command -v unsquashfs >/dev/null 2>&1; then
+        unsquashfs -q -o "$off" -d "$work/app" "$img" >/dev/null
+    else
+        nix shell nixpkgs#squashfsTools -c unsquashfs -q -o "$off" -d "$work/app" "$img" >/dev/null
+    fi
+    ld="$(ldd "$(command -v bash)" 2>/dev/null | awk '/ld-linux-x86-64/ { print ($3 != "" ? $3 : $1) }' | head -1)"
+    [ -x "$ld" ] || { echo "no way to run the payload here (no /lib64 loader, no usable appimage-run, no host glibc loader)" >&2; exit 1; }
+    # The graphics stack is not in the bundle by design: the user's driver
+    # provides it (libgbm, libEGL, libGLX, libGLdispatch, libdrm). A host's
+    # own first (NixOS keeps them in /run/opengl-driver/lib); a headless box
+    # with none gets mesa's from nixpkgs, only so the binary LOADS: --version
+    # draws nothing.
+    gl=""
+    for d in /run/opengl-driver/lib /usr/lib/x86_64-linux-gnu /usr/lib64 /usr/lib; do
+      [ -e "$d/libgbm.so.1" ] && gl="${gl:+$gl:}$d"
+    done
+    if [ -z "$gl" ] && command -v nix >/dev/null 2>&1; then
+      for p in libgbm libglvnd libdrm.out; do
+        o="$(nix build --no-link --print-out-paths "nixpkgs#$p" 2>/dev/null | head -1)" || true
+        [ -n "$o" ] && gl="${gl:+$gl:}$o/lib"
+      done
+      echo "no host graphics stack: mesa's from nixpkgs for the load check ($gl)" >&2
+    fi
+    echo "running the payload through the host loader $ld" >&2
+    out="$(env -u DISPLAY -u WAYLAND_DISPLAY "$ld" --library-path "$work/app/usr/lib${gl:+:$gl}" "$work/app/usr/bin/$crate" --version 2>&1)" \
+        || { echo "$out"; exit 1; }
+  fi
 fi
 echo "$out"
 last="$(printf '%s\n' "$out" | tail -1)"

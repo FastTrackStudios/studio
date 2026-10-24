@@ -234,7 +234,15 @@ jobs:
       run: |
         set -euo pipefail
         export PATH="$PATH:/run/current-system/sw/bin"
-        bash scripts/desktop/linux-smoke.sh "target/desktop/Studio-$VERSION-linux-x86_64.AppImage" "$VERSION"
+        smoke="$RUNNER_TEMP/linux-smoke.sh"
+        git fetch --quiet --depth 1 origin "$GITHUB_WORKFLOW_SHA" 2>/dev/null || true
+        if git show "$GITHUB_WORKFLOW_SHA:scripts/desktop/linux-smoke.sh" > "$smoke" 2>/dev/null; then
+          echo "smoke test from the workflow's commit ${GITHUB_WORKFLOW_SHA:0:12}"
+        else
+          cp scripts/desktop/linux-smoke.sh "$smoke"
+          echo "smoke test from the checked-out tree"
+        fi
+        bash "$smoke" "target/desktop/Studio-$VERSION-linux-x86_64.AppImage" "$VERSION"
     - name: Bound the target dir
       if: always()
       run: |
