@@ -207,7 +207,7 @@ ls -l target/desktop
         .step(
             Step::uses("Keep the .dmg", "actions/upload-artifact@v4")
                 .with("name", "desktop-macos")
-                .with("path", "target/desktop/*.dmg\ntarget/desktop/*.dmg.sha256\n")
+                .with("path", "target/desktop/*.dmg\n")
                 .with("if-no-files-found", "error")
                 .with("retention-days", 14),
         )
@@ -307,7 +307,7 @@ echo "target dir after: $(du -sh "$dir" | cut -f1)"
                 .with("name", "desktop-linux")
                 .with(
                     "path",
-                    "target/desktop/*.AppImage\ntarget/desktop/*.AppImage.sha256\ntarget/desktop/*-glibc-floor.txt\n",
+                    "target/desktop/*.AppImage\ntarget/desktop/*-glibc-floor.txt\n",
                 )
                 .with("if-no-files-found", "error")
                 .with("retention-days", 14),
@@ -342,8 +342,11 @@ fi
 bash "$smoke" "target/desktop/Studio-$VERSION-linux-x86_64.AppImage" "$VERSION"
 "#;
 
-/// The only job with a write token: checks both installers (named with the
-/// release's version, each matching its .sha256) and attaches them.
+/// The only job with a write token: checks both installers are there (named
+/// with the release's version) and attaches them. No .sha256 files: GitHub
+/// computes each asset's sha256 on upload and publishes it as the asset's
+/// `digest`, which scripts/install.sh checks; this job checks it matches the
+/// file it uploaded.
 fn publish() -> Result<Job> {
     Ok(Job::new(UBUNTU)
         .name("Attach to the GitHub Release")
@@ -367,12 +370,18 @@ cd installers
 ls -l
 test -f "Studio-$VERSION-macos-arm64.dmg"
 test -f "Studio-$VERSION-linux-x86_64.AppImage"
-for f in *.sha256; do sha256sum -c "$f"; done
-gh release upload "$TAG" --repo "$GITHUB_REPOSITORY" --clobber ./*.dmg ./*.AppImage ./*.sha256
+gh release upload "$TAG" --repo "$GITHUB_REPOSITORY" --clobber ./*.dmg ./*.AppImage
+# GitHub's digest for each uploaded asset must be the file's own sha256.
+for f in ./*.dmg ./*.AppImage; do
+  name="$(basename "$f")"
+  want="sha256:$(sha256sum "$f" | cut -d' ' -f1)"
+  got="$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/$TAG" --jq ".assets[] | select(.name == \"$name\") | .digest")"
+  [ "$got" = "$want" ] || { echo "::error::$name: GitHub's digest is '$got', the file is $want"; exit 1; }
+done
 {
   echo "### Attached to $TAG"
   # shellcheck disable=SC2016 # the backticks are markdown, for jq's output
-  gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[] | "- `\(.name)` (\(.size) bytes)"'
+  gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[] | "- `\(.name)` (\(.size) bytes, `\(.digest)`)"'
 } >> "$GITHUB_STEP_SUMMARY"
 "####,
             )

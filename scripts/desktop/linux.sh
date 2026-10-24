@@ -3,7 +3,7 @@
 # Linux as an AppImage: the installer attached to the release's GitHub
 # Release, and what scripts/install.sh installs.
 #
-#   scripts/desktop/linux.sh     # -> target/desktop/Studio-<version>-linux-x86_64.AppImage (+ .sha256)
+#   scripts/desktop/linux.sh     # -> target/desktop/Studio-<version>-linux-x86_64.AppImage
 #
 # Runs on THEBATTLESHIP (x86_64 NixOS runner), inside the repo's dev shell.
 # Called by the `linux` job of .github/workflows/desktop.yml; a human can run
@@ -213,6 +213,5 @@ mksquashfs "$AD" "$WORK/app.squashfs" -root-owned -noappend -comp zstd -Xcompres
 rm -f "$OUT"
 cat "$RT" "$WORK/app.squashfs" > "$OUT"
 chmod +x "$OUT"
-( cd "$OUT_DIR" && sha256sum "$(basename "$OUT")" > "$(basename "$OUT").sha256" )
 echo "=== done: $OUT ($(du -h "$OUT" | cut -f1)) ==="
 echo "appimage=$OUT"
