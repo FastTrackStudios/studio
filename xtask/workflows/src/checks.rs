@@ -108,6 +108,7 @@ schedule:
     .job("check", check())
     .job("wasm", wasm())
     .job("tests", tests())
+    .job("release-macos", release_macos())
     .job("ci-passed", ci_passed()?))
 }
 
@@ -255,6 +256,34 @@ fn gates() -> Job {
     // state dir — the runner's HOME pushes tracey's default socket path past
     // the 108-byte Unix limit — and stops it after.
     .step(Step::run("Flow verification gate", "just daw-flows --own-daemon").cond(NOT_CANCELLED))
+    // The release tooling's own end-to-end test (scripts/release-sandbox.sh:
+    // a synthetic repo and a local bare origin, cargo and gh shimmed), with
+    // GNU tools here and macOS's own in `release_macos`.
+    .step(
+        Step::run(
+            "Release tooling (sandbox)",
+            "bash scripts/release-sandbox.sh",
+        )
+        .cond(NOT_CANCELLED),
+    )
+}
+
+/// The release tooling runs on Macs too (`just release-prepare` on a
+/// developer's machine, the TestFlight helpers on airlock), where sed is
+/// BSD's and bash is 3.2: GNU-only spellings there broke 28 of the
+/// sandbox's checks once. So the sandbox runs here with NOTHING but the
+/// system's tools on PATH. Free: the repo is public.
+fn release_macos() -> Job {
+    Job::new(RunsOn::Label("macos-latest"))
+        .name("Release tooling (macOS)")
+        .needs(&["plan"])
+        .cond(WANTED)
+        .timeout(15)
+        .step(checkout())
+        .step(Step::run(
+            "Release tooling (sandbox, macOS system tools only)",
+            "env -i HOME=\"$HOME\" TMPDIR=\"$RUNNER_TEMP\" PATH=/usr/bin:/bin:/usr/sbin:/sbin \\\n  /bin/bash scripts/release-sandbox.sh\n",
+        ))
 }
 
 /// REQUIRED on full runs: `cargo check --workspace`. Clippy reports here
@@ -671,7 +700,8 @@ exit "$rc"
 /// The aggregate: `just release-tag` and the tag guards require `CI passed`
 /// green on a release commit (scripts/release.sh `BUILD_CHECK`). A skipped
 /// required check counts as passing, so this never skips: it fails unless
-/// the plan, the gates, check, wasm and tests all succeeded (a sound release
+/// the plan, the gates, check, wasm, tests and the macOS release-tooling
+/// run all succeeded (a sound release
 /// PR skips them all). The advisory work (clippy, the Signal browser remote)
 /// cannot fail it.
 ///
@@ -681,7 +711,7 @@ exit "$rc"
 fn ci_passed() -> Result<Job> {
     Ok(Job::new(UBUNTU)
         .name("CI passed")
-        .needs(&["plan", "gates", "check", "wasm", "tests"])
+        .needs(&["plan", "gates", "check", "wasm", "tests", "release-macos"])
         .cond("${{ always() }}")
         .timeout(5)
         .permissions(yaml("statuses: write\n")?)
@@ -692,7 +722,8 @@ fn ci_passed() -> Result<Job> {
                 .env("GATES", "${{ needs.gates.result }}")
                 .env("CHECK", "${{ needs.check.result }}")
                 .env("WASM", "${{ needs.wasm.result }}")
-                .env("TESTS", "${{ needs.tests.result }}"),
+                .env("TESTS", "${{ needs.tests.result }}")
+                .env("RELEASE_MACOS", "${{ needs.release-macos.result }}"),
         )
         .step(
             Step::run(
@@ -717,7 +748,7 @@ bad() { echo "::error::$1"; fail=1; }
 if [ "$SKIP" = "true" ]; then
   echo "plan: nothing to run (release commit)"; exit 0
 fi
-for job in "gates:$GATES" "check:$CHECK" "wasm:$WASM" "tests:$TESTS"; do
+for job in "gates:$GATES" "check:$CHECK" "wasm:$WASM" "tests:$TESTS" "release-macos:$RELEASE_MACOS"; do
   [ "${job#*:}" = success ] || bad "${job%%:*}: ${job#*:}"
   echo "$job"
 done

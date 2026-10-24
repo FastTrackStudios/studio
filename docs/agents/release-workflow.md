@@ -59,6 +59,9 @@ just release-pr              # push it, open its PR into main
 just release-merge           # re-run the guard against the CURRENT main, then squash-merge
 just release-tag             # tag the merge commit once its `CI passed` is green: THIS ships
 
+just release-prepare --skip-untagged  # main carries a release that merged but was never tagged: release past it
+                             # (its changes ship in the next version; the section says so)
+
 just release-hotfix <sha>…   # release/v<latest tag> + the main fixes cherry-picked (-x) + PR into it
 just release-prepare --hotfix  # then release-pr, release-merge, release-tag (opens the forward-port PR)
 just release-sandbox         # the release tooling's own end-to-end test (no network)

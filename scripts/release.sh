@@ -37,7 +37,9 @@
 # reject them). The NEXT version is computed, never chosen: take the
 # highest vX.Y.Z tag (tags with a `-` suffix don't count); if its YY.M is
 # this month (UTC) the next is MICRO+1, otherwise YY.M.0 of this month.
-# Hotfixes use the same rule, so every version is unique and ascending
+# A version the line already carries counts as taken even untagged (a
+# release that merged and was skipped, `prepare --skip-untagged`): the next
+# is then above it. Hotfixes use the same rule, so every version is unique and ascending
 # (App Store Connect requires it). The 0.1.x tags predate CalVer:
 # 0.1.2 -> 26.M.0 is ascending.
 #
@@ -188,15 +190,24 @@ this_month() {
 }
 
 # The CalVer next-version rule (see the header). Needs the tags fetched.
-next_version() {
-    local tag v ym
+# With a line (a rev), the version it already carries is taken too: a
+# release that merged and was never tagged is skipped, not reused.
+next_version() { # [line rev]
+    local tag v ym next cv
     tag="$(latest_tag)"; ym="$(this_month)"
     v="${tag#v}"
     if [ -n "$tag" ] && [ "${v%.*}" = "$ym" ]; then
-        echo "$ym.$(( ${v##*.} + 1 ))"
+        next="$ym.$(( ${v##*.} + 1 ))"
     else
-        echo "$ym.0"
+        next="$ym.0"
     fi
+    if [ -n "${1:-}" ]; then
+        cv="$(version_at "$1")"
+        if is_calver "$cv" && [ "${cv%.*}" = "$ym" ] && ! gt "$next" "$cv"; then
+            next="$ym.$(( ${cv##*.} + 1 ))"
+        fi
+    fi
+    echo "$next"
 }
 
 # ── the iOS app (Studio) ─────────────────────────────────────────────────
@@ -292,7 +303,11 @@ require_green() { # <sha>
 }
 
 cmd_version() { version_at; }
-cmd_next() { git fetch --quiet --tags origin 2>/dev/null || note "offline: next version from the local tags"; next_version; }
+cmd_next() {
+    git fetch --quiet --tags origin "+refs/heads/$MAIN_BRANCH:refs/remotes/origin/$MAIN_BRANCH" 2>/dev/null \
+        || note "offline: next version from the local tags and origin/$MAIN_BRANCH"
+    next_version "origin/$MAIN_BRANCH"
+}
 
 cmd_notes() { # [VERSION]
     local v="${1:-$(version_at)}" f=CHANGELOG.md
@@ -438,7 +453,7 @@ cmd_plan() {
         || note "offline: planning from the local origin/$MAIN_BRANCH and tags"
     local ref="origin/$MAIN_BRANCH" cur tag mtag next a cv files sec
     cur="$(version_at "$ref")"; tag="$(latest_tag)"; mtag="$(last_tag "$ref")"
-    next="$(next_version)"
+    next="$(next_version "$ref")"
     echo "production (latest v* tag):  ${tag:-none}"
     echo "version on $MAIN_BRANCH:              $cur"
     for a in $IOS_APPS; do
@@ -470,11 +485,12 @@ cmd_plan() {
 # Cut release/pending from origin/main (or, with --hotfix, from
 # origin/release/v<latest tag>): ONE commit, `chore(release): v<next>`.
 cmd_prepare() {
-    local hotfix=0 want="" line base cur next tag mtag
+    local hotfix=0 skip=0 want="" line base cur next tag mtag skipped=""
     while [ $# -gt 0 ]; do
         case "$1" in
             --hotfix) hotfix=1 ;;
-            -*) die "unknown option '$1' (prepare [--hotfix] [X.Y.Z])" ;;
+            --skip-untagged) skip=1 ;;
+            -*) die "unknown option '$1' (prepare [--hotfix] [--skip-untagged] [X.Y.Z])" ;;
             *) [ -z "$want" ] || die "one version at most"; want="$1" ;;
         esac
         shift
@@ -493,9 +509,14 @@ cmd_prepare() {
     base="origin/$line"
     cur="$(version_at "$base")"
     [ -n "$cur" ] || die "$base has no [workspace.package] version"
-    # A release commit already on the line but never tagged: finish that one.
+    # A release commit already on the line but never tagged: finish that one,
+    # or (--skip-untagged) leave it unshipped and release past it, its
+    # changes and everything since in the next version.
     if ! git rev-parse -q --verify "refs/tags/v$cur" >/dev/null && changelog_has "$base" "$cur"; then
-        die "$base is at $cur, which has a changelog section but no tag v$cur: an earlier release merged and was not tagged. Finish it: just release-tag $cur"
+        [ "$skip" = 1 ] \
+            || die "$base is at $cur, which has a changelog section but no tag v$cur: an earlier release merged and was not tagged. Finish it (just release-tag $cur), or release past it (just release-prepare --skip-untagged)"
+        skipped="$cur"
+        note "skipping $cur: merged, never tagged or shipped; its changes ship in the next version"
     fi
     remote_has_branch "$RELEASE_BRANCH" \
         && die "$RELEASE_BRANCH is already on origin: a release is in flight. Merge it (just release-merge, then just release-tag), or close its PR and delete the branch to re-cut"
@@ -504,7 +525,7 @@ cmd_prepare() {
         die "nothing to release: $line has no commits since $mtag"
     fi
 
-    next="$(next_version)"
+    next="$(next_version "$base")"
     if [ -n "$want" ]; then
         want="${want#v}"
         is_calver "$want" || die "'$want' is not a CalVer version YY.M.MICRO (no leading zeros)"
@@ -516,7 +537,7 @@ cmd_prepare() {
 
     git switch --quiet -C "$RELEASE_BRANCH" "$base"
     note "cutting v$next (was $cur) on $RELEASE_BRANCH from $base $(git rev-parse --short "$base")"
-    release_commit "$cur" "$next"
+    release_commit "$cur" "$next" "$skipped"
     cat >&2 <<EOT
 
 Next:
@@ -535,15 +556,34 @@ EOT
 # Bump the version (Cargo.toml: the one line both iOS crates follow),
 # Cargo.lock, write the changelog section, delete the consumed change
 # files, commit `chore(release): v<next>` on the current branch.
-release_commit() { # <cur> <next>
-    local cur="$1" next="$2" sec files from f
+release_commit() { # <cur> <next> [skipped version]
+    local cur="$1" next="$2" skipped="${3:-}" sec files from f lock
     sed -i.bak "/^\[workspace\.package\]/,/^\[/s/^version *= *\"$cur\"/version = \"$next\"/" Cargo.toml
     rm -f Cargo.toml.bak
     [ "$(version_at)" = "$next" ] || die "failed to rewrite [workspace.package] version"
 
     # Workspace members' entries in the lockfile follow; nothing else may
-    # move. --offline first: a version bump needs no index.
-    cargo update --workspace --offline 2>/dev/null || cargo update --workspace
+    # move. Rewritten in place, not by cargo: any re-lock (`cargo update
+    # --workspace`, even `cargo metadata` after the bump) re-resolves the
+    # whole graph and moves registry picks (windows-sys, socket2: seen on
+    # the 26.10.1 cut), which the guard rightly refuses. A member is a
+    # [[package]] with no `source` line.
+    lock="$(mktemp)"
+    awk -v cur="$cur" -v nv="$next" '
+        function flush(   i) {
+            for (i = 1; i <= n; i++) {
+                if (!src && buf[i] == "version = \"" cur "\"") buf[i] = "version = \"" nv "\""
+                print buf[i]
+            }
+            n = 0; src = 0
+        }
+        /^\[\[package\]\]$/ || /^\[\[patch\.unused\]\]$/ || /^\[metadata\]$/ { flush() }
+        { buf[++n] = $0; if ($0 ~ /^source = /) src = 1 }
+        END { flush() }
+    ' Cargo.lock > "$lock" && cat "$lock" > Cargo.lock
+    rm -f "$lock"
+    cargo metadata --format-version 1 --offline >/dev/null 2>&1 || cargo metadata --format-version 1 >/dev/null \
+        || die "cargo cannot read the lockfile after the version bump"
 
     sec="$(mktemp)"
     files="$(change_files_at HEAD)"
@@ -559,11 +599,20 @@ release_commit() { # <cur> <next>
         grep -q "^## \[$next\]" "$sec" \
             || die "git-cliff produced no [$next] section: nothing to release since ${from:-the first commit}?"
     fi
+    if [ -n "$skipped" ]; then
+        # The section's first line, then the note: only lines are added.
+        awk -v v="$skipped" 'NR == 1 { print; print ""; print "_" v " merged but was never tagged or shipped: its changes ship in this release._"; next } { print }' \
+            "$sec" > "$sec.n" && mv "$sec.n" "$sec"
+    fi
     changelog_write "$next" "$sec"
     rm -f "$sec"
 
     git add Cargo.toml Cargo.lock CHANGELOG.md
     git commit --quiet -m "chore(release): v$next"
+    # The guard's own lockfile rule, here, so a bad cut fails at once.
+    local why
+    why="$(lock_members_only HEAD~1 HEAD "$cur" "$next")" \
+        || die "the release commit moved more than member versions in Cargo.lock ($why): git reset --hard HEAD~1"
     note "committed: $(git log -1 --format='%h %s')"
 }
 
@@ -795,7 +844,7 @@ cmd_guard() {
     git cat-file -e "$head^{commit}" 2>/dev/null || die "head $head is not in this checkout (fetch the PR head first)"
 
     v="$(version_at "$head")"; vb="$(version_at "$cur")"; tag="v$v"
-    next="$(next_version)"
+    next="$(next_version "$cur")"
     subject="$(git log -1 --format=%s "$head")"
 
     [ "$(git rev-list --parents -n 1 "$head" | awk '{ print NF }')" = 2 ] || fail "the head must be one ordinary commit (not a merge)"

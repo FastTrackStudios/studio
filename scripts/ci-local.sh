@@ -145,6 +145,13 @@ checks() {
   cargo rail config validate --strict
   echo "── generated workflows + actionlint ──"
   just workflows-check
+  # The release tooling's end-to-end test (~40 s), when it changed. CI's
+  # Gates runs it with GNU tools and `Release tooling (macOS)` with only
+  # macOS's own, so a GNU-only spelling can't slip in from either side.
+  if [ -n "$(git diff --name-only "$base" HEAD -- scripts/release.sh scripts/release-sandbox.sh)" ]; then
+    echo "── release tooling (sandbox) ──"
+    bash scripts/release-sandbox.sh
+  fi
   echo "── flow verification gate ──"
   # The user's tracey daemon, not `--own-daemon`: that mode is for CI's
   # runners (whose HOME pushes the socket path past the Unix limit), and on

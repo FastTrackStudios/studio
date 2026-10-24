@@ -9,7 +9,11 @@
 #   scripts/release-sandbox.sh [SCRATCH_DIR]
 #
 # Needs git and awk; git-cliff (or nix) only for the no-change-files
-# fallback. Exits non-zero if any check fails.
+# fallback. Exits non-zero if any check fails. Portable: it (and
+# release.sh) must pass with GNU tools AND with nothing but macOS's own
+# (BSD sed, bash 3.2) on PATH — CI runs both (checks.yml `Gates`,
+# `Release tooling (macOS)`). Edit files in place with `sedi`, never
+# `sed -i`, whose argument BSD sed reads as a backup suffix.
 # shellcheck disable=SC2015,SC2016 # `[ test ] && ok || bad` is the idiom here: ok never fails; the ERE patterns hold literal backticks
 set -uo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -29,6 +33,10 @@ expect_fail() { local d="$1"; shift; if "$@" >"$S/last.out" 2>&1; then bad "$d (
 expect_rc()   { local d="$1" want="$2"; shift 2; "$@" >"$S/last.out" 2>&1; local rc=$?; [ "$rc" = "$want" ] && ok "$d (exit $rc)" || { bad "$d (exit $rc, wanted $want)"; cat "$S/last.out"; }; }
 expect_out()  { if grep -qiE "$3" "$2"; then ok "$1"; else bad "$1 (no match for: $3)"; sed 's/^/      | /' "$2" | head -30; fi; }
 expect_no()   { if grep -qiE "$3" "$2"; then bad "$1 (found: $3)"; else ok "$1"; fi; }
+# sed in place, one spelling for GNU and BSD (macOS) sed: BSD `sed -i`
+# takes the next argument as a backup suffix. Through a temp file, so no
+# backup is left behind.
+sedi()        { local e="$1" f; shift; for f in "$@"; do sed "$e" "$f" > "$f.sedi" && mv "$f.sedi" "$f"; done; }
 eq()          { [ "$2" = "$3" ] && ok "$1: $2" || bad "$1: got '$2', wanted '$3'"; }
 lastpr()      { local f n=0; for f in "$S"/prs/*.meta; do [ -e "$f" ] && n=$((n+1)); done; echo "$n"; } # the newest PR's number
 
@@ -113,8 +121,8 @@ git -C "$W" init -q -b main; git -C "$W" add -A; git -C "$W" commit -qm "initial
 # v0.1.0 .. v0.1.2: the pre-CalVer history (flow v2 releases)
 for v in 0.1.0 0.1.1 0.1.2; do
   if [ "$v" != 0.1.0 ]; then
-    sed -i "s/^version = \"0\.1\.[0-9]\"$/version = \"$v\"/" "$W/Cargo.toml"
-    sed -i "/^name = \"s[ei][gs][ns][ai][lo]n\{0,1\}-desktop\"/{n;s/^version = .*/version = \"$v\"/}" "$W/Cargo.lock"
+    sedi "s/^version = \"0\.1\.[0-9]\"$/version = \"$v\"/" "$W/Cargo.toml"
+    sedi "/^name = \"s[ei][gs][ns][ai][lo]n\{0,1\}-desktop\"/{n;s/^version = .*/version = \"$v\"/;}" "$W/Cargo.lock"
   fi
   awk -v v="$v" 'done || !/^## \[/ { print; next } { print "## [" v "] - 2026-10-21\n\n- v2 release " v "\n"; print; done = 1 } END { if (!done) print "## [" v "] - 2026-10-21\n\n- v2 release " v }' "$W/CHANGELOG.md" > "$W/cl" && mv "$W/cl" "$W/CHANGELOG.md"
   git -C "$W" commit -qam "chore(release): v$v (#$((${v##*.} + 1)))"; git -C "$W" tag -a "v$v" -m "studio $v"
@@ -198,9 +206,9 @@ expect_rc "release-only: that one fails the required check" 3 release_only "$TWO
 git switch -q --detach "$REL"; git switch -q -c t/file; echo x > extra.txt; git add extra.txt; git commit -q --amend --no-edit; FILE=$(git rev-parse HEAD)
 expect_fail "guard: one commit that also changes a non-version file" guard "$FILE"
 grep -q 'extra.txt: not a release file' "$S/last.out" && ok "  ...naming the file" || bad "  ...message"
-git switch -q --detach "$REL"; git switch -q -c t/toml; sed -i 's/^edition = "2021"/edition = "2024"/' Cargo.toml; git commit -qa --amend --no-edit
+git switch -q --detach "$REL"; git switch -q -c t/toml; sedi 's/^edition = "2021"/edition = "2024"/' Cargo.toml; git commit -qa --amend --no-edit
 expect_fail "guard: Cargo.toml changes more than the version" guard "$(git rev-parse HEAD)"
-git switch -q --detach "$REL"; git switch -q -c t/lock; sed -i '/name = "serde"/{n;s/.*/version = "26.10.0"/}' Cargo.lock; git commit -qa --amend --no-edit
+git switch -q --detach "$REL"; git switch -q -c t/lock; sedi '/name = "serde"/{n;s/.*/version = "26.10.0"/;}' Cargo.lock; git commit -qa --amend --no-edit
 expect_fail "guard: a non-member (registry) crate's version moved in Cargo.lock" guard "$(git rev-parse HEAD)"
 grep -q 'non-member packages changed version: "serde"' "$S/last.out" && ok "  ...naming serde" || bad "  ...message"
 # reorder the [[patch.unused]] trailer (as cargo does at random): still sound
@@ -209,14 +217,14 @@ awk '/^\[\[patch\.unused\]\]/ { u = 1 } !u { print } u { t = t $0 "\n" } END { n
 git commit -qa --amend --no-edit; tail -7 Cargo.lock > "$S/unused.out"
 expect_out "  (the trailer is reordered)" "$S/unused.out" '^name = "b-patch"'
 expect_ok "guard: a reordered [[patch.unused]] trailer is not a change" guard "$(git rev-parse HEAD)"
-git switch -q --detach "$REL"; git switch -q -c t/old; sed -i 's/^- v2 release 0\.1\.1$/- rewritten/' CHANGELOG.md; git commit -qa --amend --no-edit
+git switch -q --detach "$REL"; git switch -q -c t/old; sedi 's/^- v2 release 0\.1\.1$/- rewritten/' CHANGELOG.md; git commit -qa --amend --no-edit
 expect_fail "guard: a released changelog section edited" guard "$(git rev-parse HEAD)"
-git switch -q --detach "$REL"; git switch -q -c t/ver; sed -i 's/26\.10\.0/26.10.3/g' Cargo.toml Cargo.lock CHANGELOG.md; git commit -qa --amend -m "chore(release): v26.10.3"
+git switch -q --detach "$REL"; git switch -q -c t/ver; sedi 's/26\.10\.0/26.10.3/g' Cargo.toml Cargo.lock CHANGELOG.md; git commit -qa --amend -m "chore(release): v26.10.3"
 expect_fail "guard: not the next version (26.10.3)" guard "$(git rev-parse HEAD)"
 grep -q 'is not the next version 26.10.0' "$S/last.out" && ok "  ...naming the next version" || bad "  ...message"
 git switch -q --detach "$REL"; git switch -q -c t/subj; git commit -q --amend -m "chore: release"
 expect_fail "guard: wrong subject" guard "$(git rev-parse HEAD)"
-git switch -q --detach "$REL"; git switch -q -c t/pin; sed -i 's/^version.workspace = true/version = "0.0.2"/' apps/studio/desktop/Cargo.toml; git commit -qa --amend --no-edit
+git switch -q --detach "$REL"; git switch -q -c t/pin; sedi 's/^version.workspace = true/version = "0.0.2"/' apps/studio/desktop/Cargo.toml; git commit -qa --amend --no-edit
 expect_fail "guard: studio crate pinned off the workspace version" guard "$(git rev-parse HEAD)"
 git switch -q --detach "$REL"
 expect_fail "guard: unreachable origin fails, never passes" env BASE_REF=main HEAD_REF=release/pending HEAD_SHA="$REL" GIT_DIR="$S/wc/.git" bash -c "git remote set-url origin $S/nowhere.git; bash scripts/release.sh guard; rc=\$?; git remote set-url origin $S/origin.git; exit \$rc"
@@ -232,6 +240,22 @@ expect_ok "guard passes on the re-cut" guard "$REL"
 
 echo "=== merge (squash) and tag"
 merge_release main 80; M1=$(git rev-parse origin/main)
+# Main now carries 26.10.0, merged and not yet tagged: a new cut refuses
+# unless told to release past it, and then takes 26.10.1, not 26.10.0.
+expect_fail "prepare: refuses while a merged release is untagged" R prepare
+grep -q 'was not tagged' "$S/last.out" && ok "  ...naming the untagged release" || bad "  ...message"
+eq "next: a merged, untagged 26.10.0 counts as taken" "$(R next 2>/dev/null)" 26.10.1
+# A fix merged after the untagged release (as on the real main), so the
+# cut builds its section from change files, not the git-cliff fallback.
+land "fix(session): a late fix (#81)" crates/shared/late.rs late-fix '"session-desktop" = "patch"\n' "Fixed a late bug (session)"
+expect_ok "prepare --skip-untagged cuts past it" R prepare --skip-untagged; SK=$(git rev-parse HEAD)
+eq "  ...as 26.10.1" "$(git show "$SK:Cargo.toml" | sed -n '/^\[workspace\.package\]/,/^\[/{s/^version *= *"\([^"]*\)".*/\1/p;}')" 26.10.1
+grep -q '26.10.0 merged but was never tagged or shipped' <(git show "$SK:CHANGELOG.md") && ok "  ...noting the skipped 26.10.0" || bad "  ...note"
+expect_ok "guard passes on the cut past an untagged release" guard "$SK"
+# Back to main as the merge left it, for the tag tests below: drop the
+# late fix (the sandbox's origin is a local bare repo).
+git reset -q --hard; git push -qf origin "$M1:refs/heads/main"; git fetch -q origin
+git switch -q --detach origin/main; git branch -qD release/pending 2>/dev/null || true
 SHIM_CHECK="completed failure" expect_fail "tag: refused while CI passed is red" R tag
 grep -q "is 'completed failure', not green" "$S/last.out" && ok "  ...naming the check result" || bad "  ...message"
 SHIM_CHECK="in_progress null" expect_fail "tag: refused while CI passed is running" R tag
@@ -246,11 +270,11 @@ expect_ok "tag-guard with GH_TOKEN checks CI passed" env GITHUB_REF=refs/tags/v2
 SHIM_CHECK="completed failure" expect_fail "tag-guard with GH_TOKEN: red CI passed" env GITHUB_REF=refs/tags/v26.10.0 GH_TOKEN=x bash scripts/release.sh tag-guard
 expect_fail "tag-guard: a branch ref" env GITHUB_REF=refs/heads/main bash scripts/release.sh tag-guard
 export GITHUB_OUTPUT="$S/gho"; : > "$GITHUB_OUTPUT"
-for a in studio; do expect_ok "ios-resolve $a v26.10.0" R ios-resolve "$a" v26.10.0; done
+expect_ok "ios-resolve studio v26.10.0" R ios-resolve studio v26.10.0
 expect_out "  marketing version output" "$GITHUB_OUTPUT" '^version=26\.10\.0$'
 for t in v26.10 26.10.0 v26.10.0-rc.1 V26.10.0 studio-v26.10.0; do expect_fail "ios-resolve refuses '$t'" R ios-resolve studio "$t"; done
 # a tag whose versions and changelog are right, on a commit no release line has
-git switch -q -c t/stray v26.10.0; sed -i 's/26\.10\.0/26.10.9/g' Cargo.toml CHANGELOG.md; git commit -qam "chore(release): v26.10.9"; git tag v26.10.9
+git switch -q -c t/stray v26.10.0; sedi 's/26\.10\.0/26.10.9/g' Cargo.toml CHANGELOG.md; git commit -qam "chore(release): v26.10.9"; git tag v26.10.9
 expect_fail "ios-resolve: a commit on neither main nor release/v*" R ios-resolve studio v26.10.9
 grep -q 'is in neither origin/main nor an origin/release/v\* line' "$S/last.out" && ok "  ...for that reason" || bad "  ...refused for another reason"
 expect_fail "tag-guard: the same stray tag" env GITHUB_REF=refs/tags/v26.10.9 bash scripts/release.sh tag-guard
