@@ -57,7 +57,8 @@ just release-plan            # latest tag, what main holds since, the next versi
 just release-prepare         # release/pending from origin/main: ONE commit `chore(release): vYY.M.MICRO`
 just release-pr              # push it, open its PR into main
 just release-merge           # re-run the guard against the CURRENT main, then squash-merge
-just release-tag             # tag the merge commit once its `CI passed` is green: THIS ships
+just release-tag             # tag the merge commit once its `CI passed` is green and its
+                             # studio-web image is on GHCR (images.yml): THIS ships
 
 just release-prepare --skip-untagged  # main carries a release that merged but was never tagged: release past it
                              # (its changes ship in the next version; the section says so)
@@ -87,6 +88,7 @@ delete a tag; a bad release is superseded by the next.
 | PR into `main` | `PR` (`PR checks`: fmt, change files, the lockfile, the rail config — compiles nothing) + the `Local CI` status (the prek pre-push hook: the static guards, then the rail-selected tests + `cargo check` + wasm, on the pusher's machine) + `Release guard` | `PR checks` on GitHub's free runners |
 | release PR `release/pending` → `main` | `Release guard`; `PR checks` runs the same guard from the base commit and skips its checks if it passes; `ci-local` runs it too and posts `Local CI` without building | hosted |
 | PR into `release/**` (hotfix) | `CI` (the full set), `Release guard` | as below |
+| push of a release commit (`chore(release): vX.Y.Z`) to `main` / `release/v*` | `Images` (images.yml): `.#studio-web-image` pushed to `ghcr.io/fasttrackstudios/studio-web` as `X.Y.Z`, `sha-<short>`, `latest`, labelled with the commit, BEFORE the tag; `just release-tag` refuses until it is there, public (scripts/ghcr-images.sh) | plan hosted; the build and push on THEBATTLESHIP's `studio-release` |
 | push to `main` / `release/v*` | `CI` full set: `Gates`, `Check` (+ advisory clippy), `Wasm`, `Tests` (the core test set), `Release tooling (macOS)`, aggregated as `CI passed`; on `main` also `Dependency cache` (the cargo downloads `PR checks` restore) | Check, Tests, Wasm on THEBATTLESHIP (`studio-main`, a release commit's run too, never cancelled); the rest on GitHub's free runners |
 | `gh workflow run checks.yml --ref <branch>` | `CI` full set; green, it posts `Local CI` on the branch's head (for a push the hook couldn't vouch for) | as above |
 | push of tag `vYY.M.MICRO` (or `workflow_dispatch` with the tag as ref) | `deploy` (session-web, signal-web), `studio-ios` (TestFlight), `desktop` (the signed, notarized macOS `.dmg` and the Linux AppImage, attached to the Release; `gh workflow run desktop.yml -f tag=<ref> -f mode=build-only` proves them from any branch), `release` publish | `studio-deploy` (LAN registry), airlock's `studio-release-mac` (TestFlight, the `.dmg`), the Linux AppImage on THEBATTLESHIP's `studio-release`, hosted |

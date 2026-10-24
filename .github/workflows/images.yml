@@ -1,0 +1,131 @@
+# Generated from xtask::workflows::images (xtask/workflows/src/images.rs)
+# Rebuild with `just workflows`; do not edit by hand (`just workflows-check` fails CI on drift).
+# The reasons for every job and step are comments in that Rust source.
+name: Images
+on:
+  push:
+    branches:
+    - main
+    - release/v*
+    paths:
+    - Cargo.toml
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing release tag to (re)publish the image for, e.g. v26.10.3
+        required: true
+        type: string
+permissions:
+  contents: read
+concurrency:
+  group: images-${{ inputs.tag || github.sha }}
+  cancel-in-progress: false
+jobs:
+  plan:
+    name: What to publish
+    if: ${{ github.repository == 'FastTrackStudios/studio' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      build: ${{ steps.plan.outputs.build }}
+      sha: ${{ steps.plan.outputs.sha }}
+      tags: ${{ steps.plan.outputs.tags }}
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+    - name: Plan
+      id: plan
+      env:
+        EVENT: ${{ github.event_name }}
+        INPUT_TAG: ${{ inputs.tag }}
+      run: |
+        set -euo pipefail
+        git fetch --quiet --tags origin
+        if [ "$EVENT" = workflow_dispatch ]; then
+          [[ "$INPUT_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "::error::tag '$INPUT_TAG' is not vX.Y.Z"; exit 1; }
+          sha="$(git rev-parse --verify --quiet "refs/tags/$INPUT_TAG^{commit}")" \
+            || { echo "::error::no tag $INPUT_TAG"; exit 1; }
+          v="$(bash scripts/release.sh version "$sha")"
+          [ "v$v" = "$INPUT_TAG" ] || { echo "::error::$INPUT_TAG names a commit with version $v"; exit 1; }
+          extra=""
+        else
+          sha="$GITHUB_SHA"
+          v="$(bash scripts/release.sh version "$sha")"
+          vp="$(bash scripts/release.sh version "$sha^1")"
+          if [ "$v" = "$vp" ]; then
+            echo "version unchanged ($v): not a release commit, nothing to publish"
+            echo "build=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          git show "$sha:CHANGELOG.md" | grep -q "^## \[$v\]" \
+            || { echo "::error::version $vp -> $v but CHANGELOG.md has no [$v] section: not a release commit"; exit 1; }
+          ! git rev-parse -q --verify "refs/tags/v$v" >/dev/null \
+            || { echo "::error::tag v$v already exists; a released version's image is never replaced"; exit 1; }
+          extra="latest"
+        fi
+        # The tag the release (and the chart at its tag) pulls.
+        itag="$(bash scripts/ghcr-images.sh tag "$sha")"
+        if [ "$itag" != "$v" ]; then
+          echo "::error::the image tag at $sha is $itag but the release is $v: the cluster would pull the wrong image"
+          exit 1
+        fi
+        tags="$(xargs <<<"$itag sha-$(git rev-parse --short "$sha") $extra")"
+        echo "publishing $sha as: $tags"
+        {
+          echo "build=true"
+          echo "sha=$sha"
+          echo "tags=$tags"
+        } >> "$GITHUB_OUTPUT"
+        echo "### studio-web for v$v: \`$tags\` from \`$sha\`" >> "$GITHUB_STEP_SUMMARY"
+  publish:
+    name: Build + push to GHCR
+    needs: plan
+    if: ${{ needs.plan.outputs.build == 'true' }}
+    runs-on:
+    - self-hosted
+    - studio-release
+    timeout-minutes: 180
+    permissions:
+      contents: read
+      packages: write
+    env:
+      CONTAINERS_REGISTRIES_CONF: /dev/null
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        ref: ${{ needs.plan.outputs.sha }}
+        fetch-depth: 0
+        persist-credentials: false
+    - name: Build and push studio-web
+      env:
+        TAGS: ${{ needs.plan.outputs.tags }}
+        GHCR_USER: ${{ github.actor }}
+        GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        set -euo pipefail
+        export PATH="$PATH:/run/current-system/sw/bin"
+        export REGISTRY_AUTH_FILE="$RUNNER_TEMP/ghcr-auth.json"
+        skopeo() { nix run nixpkgs#skopeo -- "$@"; }
+        printf '%s' "$GHCR_TOKEN" | skopeo login ghcr.io -u "$GHCR_USER" --password-stdin
+        read -r -a tags <<<"$TAGS"
+        dest="docker://ghcr.io/fasttrackstudios/studio-web"
+        streamer="$(nix build --accept-flake-config .#studio-web-image --no-link --print-out-paths)"
+        "$streamer" | skopeo --insecure-policy copy docker-archive:/dev/stdin "$dest:${tags[0]}"
+        for tag in "${tags[@]:1}"; do
+          skopeo --insecure-policy copy "$dest:${tags[0]}" "$dest:$tag"
+        done
+        rm -f "$REGISTRY_AUTH_FILE"
+        {
+          echo "### Pushed ghcr.io/fasttrackstudios/studio-web"
+          for tag in "${tags[@]}"; do echo "- \`$tag\`"; done
+        } >> "$GITHUB_STEP_SUMMARY"
+    - name: Pullable without credentials, from this commit?
+      env:
+        TAGS: ${{ needs.plan.outputs.tags }}
+        SHA: ${{ needs.plan.outputs.sha }}
+      run: |
+        set -euo pipefail
+        first="${TAGS%% *}"
+        bash scripts/ghcr-images.sh check "$first" "$SHA" \
+          || { echo "::warning::not anonymously pullable yet: make ghcr.io/fasttrackstudios/studio-web PUBLIC (org package settings), then re-run this job"; exit 1; }

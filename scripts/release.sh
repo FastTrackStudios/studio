@@ -72,8 +72,11 @@
 #   scripts/release.sh tag [X.Y.Z]        after the release PR merged: tag
 #                                          vX.Y.Z on its merge commit, only if
 #                                          that commit's `CI passed` is green
-#                                          (this is what ships); after a hotfix,
-#                                          open the forward-port PR into main
+#                                          and its images are on GHCR, public
+#                                          and labelled with it (images.yml,
+#                                          scripts/ghcr-images.sh) (this is
+#                                          what ships); after a hotfix, open
+#                                          the forward-port PR into main
 #   scripts/release.sh hotfix <commit>... release/v<latest tag> from the tag
 #                                          (if missing), a branch with the fixes
 #                                          cherry-picked (-x) from main, its PR
@@ -302,7 +305,19 @@ require_green() { # <sha>
         || die "'$BUILD_CHECK' on $(git rev-parse --short "$1") is '${out:-missing}', not green: nothing ships from a red or unchecked commit (fix main, or wait for the run)"
 }
 
-cmd_version() { version_at; }
+# The release's images (ghcr.io/fasttrackstudios/studio-web) must be on
+# GHCR, public, and built from <sha> before the tag exists: Argo CD deploys
+# the newest tag within minutes, and pulls `:<version>` anonymously.
+# images.yml pushes them when the release commit lands.
+require_images() { # <sha> <version>
+    local itag
+    itag="$(bash scripts/ghcr-images.sh tag "$1")"
+    [ "$itag" = "$2" ] || die "the image tag at $(git rev-parse --short "$1") is $itag, not $2: the cluster would pull the wrong images"
+    bash scripts/ghcr-images.sh check "$itag" "$1" \
+        || die "the images for v$2 are not on GHCR yet (or not public, or not from $(git rev-parse --short "$1")). Wait for the Images workflow (gh run list -w images.yml --commit $1), then re-run."
+}
+
+cmd_version() { version_at "$@"; } # [rev]
 cmd_next() {
     git fetch --quiet --tags origin "+refs/heads/$MAIN_BRANCH:refs/remotes/origin/$MAIN_BRANCH" 2>/dev/null \
         || note "offline: next version from the local tags and origin/$MAIN_BRANCH"
@@ -693,6 +708,7 @@ cmd_pr() {
     fi
     body="$(mktemp)"
     if [ "$ref" = "$RELEASE_BRANCH" ]; then
+        # shellcheck disable=SC2016 # the backticks are markdown, not expansions
         consumed="$(git diff --diff-filter=D --name-only HEAD^ HEAD -- "$CHANGES_DIR" | sed 's/^/- `/; s/$/` (consumed)/')"
         {
             echo "## Summary"
@@ -940,6 +956,7 @@ cmd_tag() {
     prev="$(last_tag "$target^")"
     if [ -n "$prev" ]; then gt "$v" "${prev#v}" || die "v$v is not greater than the previous release $prev"; fi
     require_green "$target"
+    require_images "$target" "$v"
     note "tagging v$v at $(git rev-parse --short "$target") on $line (previous: ${prev:-none}). This ships: sites, Studio TestFlight, the Release."
     # An annotated tag needs a committer identity; a bot checkout may have none.
     local ident=()
@@ -982,6 +999,7 @@ cmd_forward_port() { # <version>
     done <<<"$consumed"
     git commit --quiet -m "chore(release): forward-port the v$v changelog to $MAIN_BRANCH"
     git push --quiet -u origin "HEAD:refs/heads/$branch"
+    # shellcheck disable=SC2016 # the backticks are markdown, not expansions
     gh pr create --repo "$REPO" --base "$MAIN_BRANCH" --head "$branch" \
         --title "chore(release): forward-port the v$v changelog" \
         --body "$(printf '## Summary\nHotfix v%s shipped from `release/*`. This copies its CHANGELOG.md section into `%s` and deletes the change files it consumed there, so the next release does not list them twice. `release/*` is never merged back.\n\n## Issue\nRefs: none (release)\n\n## Change files\nnone needed (deletes consumed ones)\n\n## AI disclosure\nTool: none (scripts/release.sh). Extent: generated. Human reviewed: no.\n' "$v" "$MAIN_BRANCH")" \
