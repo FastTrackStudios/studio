@@ -5,18 +5,19 @@ description: "Write, place, prune and speed up Rust tests in this workspace — 
 
 # Rust tests in this tree
 
-~11 000 tests, ~1460 crates and **814 test binaries** in CI's
-`studio-tests` job (20 min on the warm Mac Pro). Most of that time is
-**building and linking test binaries, not running tests**: every
-`tests/*.rs` file is its own binary, and each one links its crate's whole
-dependency tree again. So the cheapest test is one that adds no binary,
-and the most expensive habit is a new file under `tests/` per behaviour.
+The workspace has thousands of tests across ~1460 crates, but **CI runs a
+core set**: the crates in the Justfile's `test_packages` (~650 tests,
+cut on 2026-10-24) — the DSP math, the session format, the engine, the
+timeline, the wire types, every effect's parameter round-trip. A crate
+earns a place there when its tests are worth running on every change.
+Outside that set, `just ci-local` still runs what `cargo rail plan` says
+a change affects.
 
-CI already narrows which tests *run* (`cargo rail plan` →
-`scripts/ci-rail-plan.py` → a nextest filterset of the affected
-packages), but the test *build* stays `--workspace`. A new binary costs
-every PR; a slow test costs every PR that touches its crate or anything
-it depends on.
+Most of a test run is **building and linking test binaries, not running
+tests**: every `tests/*.rs` file is its own binary, and each one links its
+crate's whole dependency tree again. So the cheapest test is one that
+adds no binary, and the most expensive habit is a new file under `tests/`
+per behaviour.
 
 ## Where a test lives
 
