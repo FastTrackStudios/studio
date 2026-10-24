@@ -364,7 +364,7 @@ fn RemoteEngineForm(generation: Signal<u32>) -> Element {
 fn GuitarRigView(instrument: &'static str) -> Element {
     // The gig shell, as on the iPad: the rig's own layout carries the gig
     // (its chart, its track, its set loaded) — one rig on every screen.
-    #[cfg(feature = "gig")]
+    #[cfg(all(feature = "gig", not(target_arch = "wasm32")))]
     crate::gig::shell::use_gig_shell();
     // The window's width over its height, for the rig's wide layout (the
     // whole rig on an ultrawide). Blitz has no resize events, so it is
