@@ -1,5 +1,5 @@
 //! Compare the model against extracted applied-gain traces with the real pulsing stimulus.
-use comp::la2a::La2a;
+use dsp::comp::la2a::La2a;
 fn main() {
     let fixture = include_str!("../tests/fixtures/la2a_release.csv");
     let rows: Vec<(f64, usize, f64)> = fixture

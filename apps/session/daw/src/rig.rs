@@ -15,7 +15,7 @@
 
 use std::collections::HashMap;
 
-use reverb::algorithm::AlgorithmType;
+use dsp::reverb::algorithm::AlgorithmType;
 
 /// One block of a rig, as the rig presents it to its view.
 #[derive(Clone, Debug, PartialEq)]
@@ -519,7 +519,7 @@ impl Faces {
     }
 }
 
-/// `delay::Style` order, as signal's rig view names the machines.
+/// `dsp::delay::Style` order, as signal's rig view names the machines.
 pub const DELAY_ALGOS: [&str; 13] = [
     "Tape", "Digital", "Analog", "Lo-Fi", "Shimmer", "Reverse", "Ice", "Rhythm", "Drum", "Oil Can",
     "MultiTap", "Spectral", "Filter",
@@ -565,7 +565,7 @@ const MOD_HZ: (f64, f64) = (0.05, 12.0);
 fn verb_seconds(block: &Block, decay: f64) -> f64 {
     let alg = AlgorithmType::from_index(crate::num::index(block.param("algorithm", 1.0).round()));
     let variant = crate::num::index(block.param("variant", 0.0).round());
-    reverb::algorithm::decay_seconds(alg, variant, decay).unwrap_or(decay * 8.0)
+    dsp::reverb::algorithm::decay_seconds(alg, variant, decay).unwrap_or(decay * 8.0)
 }
 
 /// The decay that rings for `seconds` (the engine's law, inverted).

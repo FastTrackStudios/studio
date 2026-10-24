@@ -6,8 +6,8 @@
 //! that engine loaded. See `fts_audio_ui::shader::probe` for why that is not
 //! a loop worth running six times.
 
+use dsp::modulation::ui::viz::{Engine, SHADER, engine_index};
 use fts_audio_ui::shader::Uniforms;
-use modulation::ui::viz::{Engine, SHADER, engine_index};
 
 const W: u32 = 760;
 const H: u32 = 220;

@@ -20,7 +20,7 @@ workspace = true
 nice-plug = { workspace = true, features = ["vst3"] }
 
 # The DSP facade (re-exports reverb-dsp). Never depend on reverb-dsp directly.
-reverb = { workspace = true, features = ["native", "profiles", "ui", "viz"] }
+dsp = { workspace = true, features = ["reverb", "reverb-native", "reverb-profiles", "reverb-ui", "reverb-viz"] }
 
 # The chain's lifecycle trait (`Processor`) + `AudioConfig` live here.
 dsp-core = { workspace = true, features = ["audio"] }
@@ -39,3 +39,4 @@ default = []
 # the session engine's built-in FX, or a workspace test build, where cargo
 # unifies features — collide.
 export = []
+

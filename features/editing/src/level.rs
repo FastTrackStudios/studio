@@ -1,6 +1,6 @@
 //! Leveling a stretch of a part, not the whole of it.
 //!
-//! A part is leveled by events ([`level::events`]): one gain an event,
+//! A part is leveled by events ([`dsp::level::events`]): one gain an event,
 //! set a lead before it and held through its ring until the next. Leveled
 //! over a selection, the curve is the part's own outside it — an earlier
 //! pass, a hand's drawing — and the selection's inside: each event in it
@@ -10,8 +10,8 @@
 //!
 //! Times here are one timeline throughout: an item's, as its curve is.
 
-use level::envelope::EnvPoint;
-use level::events::{Event, Ride};
+use dsp::level::envelope::EnvPoint;
+use dsp::level::events::{Event, Ride};
 
 /// The stretches of a curve `spans` own: from a lead (and a ramp) before
 /// the first riding event in a span until a lead before the first riding

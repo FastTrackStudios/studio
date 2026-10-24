@@ -7,15 +7,15 @@ use plugin_core::prelude::*;
 use std::sync::Arc;
 use std::sync::atomic::Ordering;
 
-use eq::analyzer::AudioFeed;
+use dsp::eq::analyzer::AudioFeed;
 
-use eq::hardware::hardware_eq::{
+use dsp::eq::hardware::hardware_eq::{
     Api550aSettings, HardwareEqModel, HardwareEqSettings, PultecEqp1aSettings, SslChannelSettings,
 };
-use eq::hardware::neve_1073::{
+use dsp::eq::hardware::neve_1073::{
     Neve1073Hpf, Neve1073LowFreq, Neve1073MidFreq, Neve1073Model, Neve1073Settings,
 };
-use eq::ui::params::{EqUiState, FtsEqParams, NUM_BANDS, SPECTRUM_BINS};
+use dsp::eq::ui::params::{EqUiState, FtsEqParams, NUM_BANDS, SPECTRUM_BINS};
 
 // ── Plugin ──────────────────────────────────────────────────────────
 
@@ -26,7 +26,7 @@ pub struct FtsEqPlugin {
     /// The one FTS EQ engine — the same one the rig plays through. It used to
     /// be a bare `EqChain` here, which is why this plugin could not sound a
     /// dynamic or spectral band at all.
-    engine: eq::host::CanonicalEq,
+    engine: dsp::eq::host::CanonicalEq,
     neve_1073: Neve1073Model,
     hardware_eq: HardwareEqModel,
     sample_rate: f64,
@@ -43,17 +43,17 @@ impl Default for FtsEqPlugin {
     fn default() -> Self {
         let params = Arc::new(FtsEqParams::default());
         let ui_state = Arc::new(EqUiState::new(params.clone()));
-        let engine = eq::host::CanonicalEq::new(48000.0);
+        let engine = dsp::eq::host::CanonicalEq::new(48000.0);
         Self {
             params,
             ui_state,
             editor_state: DioxusState::new(|| {
                 (
-                    eq::ui::control_view::EDITOR_W,
-                    eq::ui::control_view::EDITOR_H,
+                    dsp::eq::ui::control_view::EDITOR_W,
+                    dsp::eq::ui::control_view::EDITOR_H,
                 )
             })
-            .with_resize_hint(eq::ui::control_view::resize_hint()),
+            .with_resize_hint(dsp::eq::ui::control_view::resize_hint()),
             engine,
             neve_1073: Neve1073Model::new(48000.0, Neve1073Settings::default()),
             hardware_eq: HardwareEqModel::new(
@@ -116,7 +116,7 @@ impl FtsEqPlugin {
 
             self.engine.set_canonical_band(
                 i,
-                eq::host::CanonicalBandConfig {
+                dsp::eq::host::CanonicalBandConfig {
                     // The plugin has no separate "used" flag — a band it
                     // carries is a band that exists, and `enabled` says
                     // whether it sounds.
@@ -128,10 +128,10 @@ impl FtsEqPlugin {
                     q: f64::from(bp.q.value()) * std::f64::consts::FRAC_1_SQRT_2,
                     shape: bp.filter_type.value().max(0) as u32,
                     slope: f64::from(bp.slope.value().max(0.0)),
-                    placement: eq::Placement::from_index(bp.placement.value().max(0) as u32),
+                    placement: dsp::eq::Placement::from_index(bp.placement.value().max(0) as u32),
                     stream: 0,
                 },
-                eq::host::CanonicalBandDynamics {
+                dsp::eq::host::CanonicalBandDynamics {
                     range_db: f64::from(bp.dyn_range_db.value()),
                     threshold_db: f64::from(bp.dyn_threshold_db.value()),
                     attack_pct: f64::from(bp.dyn_attack.value()),
@@ -352,7 +352,7 @@ impl Plugin for FtsEqPlugin {
         create_dioxus_editor_with_state(
             self.editor_state.clone(),
             self.ui_state.clone(),
-            eq::ui::control_view::App,
+            dsp::eq::ui::control_view::App,
         )
     }
 

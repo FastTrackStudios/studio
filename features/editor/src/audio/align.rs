@@ -31,11 +31,11 @@
 //! worse-sounding than pinning the syllables and letting the sustains
 //! stretch between them.
 
-use tune::model::WarpMarker;
+use dsp::tune::model::WarpMarker;
 
 use crate::audio::Analysis;
 
-pub use align_dsp::{
+pub use dsp::align::{
     AlignConfig, Alignment, Anchor, AnchorConfig, AnchorKind, CostConfig, Material, Offset,
     OffsetConfig, WarpConfig,
 };
@@ -49,7 +49,7 @@ pub use align_dsp::{
 /// takes are phase-coherent — two mics on one source, a bounced copy —
 /// [`align_to_audio`] resolves the offset far more precisely.
 pub fn align(reference: &Analysis, dub: &Analysis, cfg: AlignConfig) -> Option<Alignment> {
-    align_dsp::align(&reference.align, &dub.align, &cfg)
+    dsp::align::align(&reference.align, &dub.align, &cfg)
 }
 
 /// Align `dub` to `reference`, refining the offset against the waveforms.
@@ -65,7 +65,7 @@ pub fn align_to_audio(
     dub_audio: &[f64],
     cfg: AlignConfig,
 ) -> Option<Alignment> {
-    align_dsp::align_audio(
+    dsp::align::align_audio(
         &reference.align,
         reference_audio,
         &dub.align,
@@ -111,7 +111,7 @@ pub fn align_placed(
     let frames = ((to - from) * rate).floor() as usize;
     let ref_skip = ((from - reference_start) * rate).round() as usize;
     let dub_skip = ((from - dub_start) * rate).round() as usize;
-    let cut = |features: &align_dsp::Features, skip: usize| align_dsp::Features {
+    let cut = |features: &dsp::align::Features, skip: usize| dsp::align::Features {
         frames: features
             .frames
             .iter()
@@ -121,7 +121,7 @@ pub fn align_placed(
             .collect(),
         frame_rate: rate,
     };
-    let shared = align_dsp::align(
+    let shared = dsp::align::align(
         &cut(&reference.align, ref_skip),
         &cut(&dub.align, dub_skip),
         &cfg,

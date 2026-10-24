@@ -11,7 +11,7 @@
 //!     --plugin ~/.clap/"FTS EQ.clap"
 //! ```
 
-use signal_analyzer::eq_transfer::{self, Stimulus};
+use dsp::analyzer::eq_transfer::{self, Stimulus};
 use signal_plugin_host::HostedPlugin;
 
 const SR: f64 = 48_000.0;
@@ -89,10 +89,10 @@ fn main() {
         pos += n;
     }
 
-    let mut engine = eq::host::CanonicalEq::new(SR);
+    let mut engine = dsp::eq::host::CanonicalEq::new(SR);
     engine.set_band(
         0,
-        eq::host::CanonicalBandConfig {
+        dsp::eq::host::CanonicalBandConfig {
             used: true,
             enabled: true,
             freq_hz: 1000.0,
@@ -100,7 +100,7 @@ fn main() {
             q: 1.0,
             shape: 0,
             slope: 2.0,
-            placement: eq::Placement::Stereo,
+            placement: dsp::eq::Placement::Stereo,
             stream: 0,
         },
     );

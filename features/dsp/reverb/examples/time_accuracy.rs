@@ -11,9 +11,9 @@
 //! against the time it is held to when the engine cannot reach it there.
 //! Arguments: `--size 0.5` for one size only, `--only room` for one engine.
 
+use dsp::reverb::AlgorithmType;
+use dsp::reverb::chain::ReverbChain;
 use dsp_core::audio::Processor as _;
-use reverb::AlgorithmType;
-use reverb::chain::ReverbChain;
 
 const SR: f64 = 48_000.0;
 

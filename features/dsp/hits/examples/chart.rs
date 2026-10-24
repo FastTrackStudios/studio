@@ -40,8 +40,8 @@ fn main() -> anyhow::Result<()> {
         None,
         fts_sample::ResampleQuality::default(),
     )?;
-    let config = hits::detect::Config::for_rate(f64::from(sample_rate));
-    let analysis = hits::detect::analyze(&samples, &config);
+    let config = dsp::hits::detect::Config::for_rate(f64::from(sample_rate));
+    let analysis = dsp::hits::detect::analyze(&samples, &config);
 
     let secs = samples.len() as f64 / f64::from(sample_rate);
     println!(
@@ -55,9 +55,9 @@ fn main() -> anyhow::Result<()> {
     let mut counts = [0usize; 3];
     for hit in &analysis.hits {
         counts[match hit.band {
-            hits::detect::Band::Low => 0,
-            hits::detect::Band::Mid => 1,
-            hits::detect::Band::High => 2,
+            dsp::hits::detect::Band::Low => 0,
+            dsp::hits::detect::Band::Mid => 1,
+            dsp::hits::detect::Band::High => 2,
         }] += 1;
     }
     println!(

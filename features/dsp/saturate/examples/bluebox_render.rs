@@ -13,7 +13,7 @@
 
 use std::process::ExitCode;
 
-use saturate::bluebox::{Bluebox, BlueboxParams, Cal, SatFreq};
+use dsp::saturate::bluebox::{Bluebox, BlueboxParams, Cal, SatFreq};
 
 fn run(args: &[String]) -> Result<(), String> {
     let [_, input, output, settings @ ..] = args else {

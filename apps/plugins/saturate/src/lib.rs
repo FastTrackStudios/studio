@@ -11,12 +11,12 @@
 //! Transformer/Console/Fuzz — which named nearly the same circuits as the
 //! rail did, mapped them to slightly different settings, and drifted from it.
 //! Two vocabularies for one choice is a bug that ships as a sound. There is
-//! one now, and [`saturate::profiles::apply`] is the only thing that knows how
+//! one now, and [`dsp::saturate::profiles::apply`] is the only thing that knows how
 //! a knob reaches the DSP — which is also why the editor's curve is the
 //! engine's curve rather than a drawing of one.
 //!
-//! Engine: [`saturate::preamp::ClassAPreamp`] for the nonlinearity, plus
-//! [`saturate::digital::DigitalStage`] on the wet path for the digital
+//! Engine: [`dsp::saturate::preamp::ClassAPreamp`] for the nonlinearity, plus
+//! [`dsp::saturate::digital::DigitalStage`] on the wet path for the digital
 //! family (there is no transfer curve that produces an alias, so quantisation
 //! and rate reduction cannot be a shaper).
 
@@ -26,12 +26,12 @@ use plugin_core::prelude::*;
 use std::sync::Arc;
 use std::sync::atomic::Ordering;
 
-use saturate::bluebox::Bluebox;
-use saturate::deluxe::Deluxe;
-use saturate::digital::DigitalStage;
-use saturate::emphasis::EmphasisEq;
-use saturate::preamp::ClassAPreamp;
-use saturate::ui::params::{SatParams, SatUiState};
+use dsp::saturate::bluebox::Bluebox;
+use dsp::saturate::deluxe::Deluxe;
+use dsp::saturate::digital::DigitalStage;
+use dsp::saturate::emphasis::EmphasisEq;
+use dsp::saturate::preamp::ClassAPreamp;
+use dsp::saturate::ui::params::{SatParams, SatUiState};
 
 const PLUGIN_NAME: &str = "FTS Saturate";
 
@@ -68,14 +68,14 @@ impl Default for FtsSaturate {
         Self {
             params: Arc::new(SatParams::default()),
             ui_state: Arc::new(SatUiState::default()),
-            // The editor sizes itself — see saturate::ui::control_view.
+            // The editor sizes itself — see dsp::saturate::ui::control_view.
             editor_state: DioxusState::new(|| {
                 (
-                    saturate::ui::control_view::EDITOR_W,
-                    saturate::ui::control_view::EDITOR_H,
+                    dsp::saturate::ui::control_view::EDITOR_W,
+                    dsp::saturate::ui::control_view::EDITOR_H,
                 )
             })
-            .with_resize_hint(saturate::ui::control_view::resize_hint()),
+            .with_resize_hint(dsp::saturate::ui::control_view::resize_hint()),
             pre: [ClassAPreamp::new(48_000.0), ClassAPreamp::new(48_000.0)],
             quantiser: [DigitalStage::new(), DigitalStage::new()],
             emph: [EmphasisEq::new(48_000.0), EmphasisEq::new(48_000.0)],
@@ -88,9 +88,9 @@ impl Default for FtsSaturate {
 
 impl FtsSaturate {
     /// The latency `engine` adds, in samples.
-    fn latency_of(&self, engine: saturate::profiles::Engine) -> u32 {
+    fn latency_of(&self, engine: dsp::saturate::profiles::Engine) -> u32 {
         match engine {
-            saturate::profiles::Engine::Bluebox { .. } => {
+            dsp::saturate::profiles::Engine::Bluebox { .. } => {
                 u32::try_from(self.bluebox.latency()).unwrap_or(0)
             }
             _ => 0,
@@ -102,9 +102,9 @@ impl FtsSaturate {
     /// Resolved through the *persisted id* rather than the automatable index,
     /// so growing the rail never repoints an old session at a different
     /// circuit — same contract the reverb and the compressor keep.
-    fn sync_params(&mut self) -> (bool, saturate::profiles::Engine) {
+    fn sync_params(&mut self) -> (bool, dsp::saturate::profiles::Engine) {
         let profile = self.params.resolved_profile();
-        let controls = saturate::profiles::Controls {
+        let controls = dsp::saturate::profiles::Controls {
             drive: self.params.drive.value(),
             bias: self.params.bias.value(),
             sag: self.params.sag.value(),
@@ -128,19 +128,19 @@ impl FtsSaturate {
         let sigma_gain = self.emph[0].sigma_gain();
         for (pre, quantiser) in self.pre.iter_mut().zip(self.quantiser.iter_mut()) {
             pre.set_emphasis_sigma_gain(sigma_gain);
-            saturate::profiles::apply(profile, &controls, pre, quantiser);
+            dsp::saturate::profiles::apply(profile, &controls, pre, quantiser);
         }
         // The measured models take the same knobs through their own mapping.
         match profile.engine {
-            saturate::profiles::Engine::Deluxe => self
+            dsp::saturate::profiles::Engine::Deluxe => self
                 .deluxe
-                .set(saturate::profiles::deluxe_params(&controls)),
-            saturate::profiles::Engine::Bluebox { sat_freq, alt_tube } => {
-                self.bluebox.set(saturate::profiles::bluebox_params(
+                .set(dsp::saturate::profiles::deluxe_params(&controls)),
+            dsp::saturate::profiles::Engine::Bluebox { sat_freq, alt_tube } => {
+                self.bluebox.set(dsp::saturate::profiles::bluebox_params(
                     &controls, sat_freq, alt_tube,
                 ));
             }
-            saturate::profiles::Engine::Preamp => {}
+            dsp::saturate::profiles::Engine::Preamp => {}
         }
         (
             profile.voicing.digital && !self.quantiser[0].is_transparent(),
@@ -174,11 +174,11 @@ impl Plugin for FtsSaturate {
     fn editor(&mut self, _async_executor: AsyncExecutor<Self>) -> Option<Self::Editor> {
         create_dioxus_editor_with_state(
             self.editor_state.clone(),
-            Arc::new(saturate::ui::control_view::SatUi {
+            Arc::new(dsp::saturate::ui::control_view::SatUi {
                 params: self.params.clone(),
                 state: self.ui_state.clone(),
             }),
-            saturate::ui::control_view::App,
+            dsp::saturate::ui::control_view::App,
         )
     }
 
@@ -237,7 +237,7 @@ impl Plugin for FtsSaturate {
         let mut input_peak = 0.0f32;
         let mut output_peak = 0.0f32;
 
-        if engine != saturate::profiles::Engine::Preamp {
+        if engine != dsp::saturate::profiles::Engine::Preamp {
             // A measured model is a whole stereo algorithm with its own mix
             // law (handed over in `sync_params`); the emphasis pair still
             // wraps what it distorts, and Output stays ours.
@@ -253,7 +253,7 @@ impl Plugin for FtsSaturate {
                 }
                 let [l, r] = io;
                 let wet_pair: [f64; 2] = match engine {
-                    saturate::profiles::Engine::Deluxe => {
+                    dsp::saturate::profiles::Engine::Deluxe => {
                         self.deluxe.process(f64::from(l), f64::from(r))
                     }
                     _ => self.bluebox.process(f64::from(l), f64::from(r)),

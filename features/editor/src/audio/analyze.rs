@@ -18,9 +18,9 @@
 //! alone can produce audio.
 
 use crate::ExpressionDoc;
-use tune::model::PitchDoc;
-use tune::tracker::TrackConfig;
-use tune::{AnalyzeConfig, TuneAnalysis};
+use dsp::tune::model::PitchDoc;
+use dsp::tune::tracker::TrackConfig;
+use dsp::tune::{AnalyzeConfig, TuneAnalysis};
 
 /// Everything an editing session needs from one take.
 #[derive(Clone, Debug)]
@@ -44,7 +44,7 @@ pub struct Analysis {
     /// at exactly `frames`' hop and window — frame *i* has to mean the
     /// same audio in both, and reconstructing that from a caller is how
     /// two frame indices quietly stop describing the same moment.
-    pub align: align_dsp::Features,
+    pub align: dsp::align::Features,
 }
 
 /// How the take is analysed.
@@ -81,7 +81,7 @@ impl Default for TakeConfig {
 /// channel first, because which of those is right depends on the
 /// material and this cannot know.
 pub fn analyze_take(samples: &[f64], sample_rate: f64, cfg: TakeConfig) -> Analysis {
-    let frames = tune::analyze(samples, sample_rate, cfg.analyze);
+    let frames = dsp::tune::analyze(samples, sample_rate, cfg.analyze);
     let frame_rate = sample_rate / frames.hop.max(1) as f64;
 
     // The tracker takes candidate pitches per frame. YIN gives at most
@@ -92,7 +92,7 @@ pub fn analyze_take(samples: &[f64], sample_rate: f64, cfg: TakeConfig) -> Analy
         .iter()
         .map(|f| f.f0_hz.into_iter().collect())
         .collect();
-    let tracked = tune::track_notes(&candidates, cfg.track);
+    let tracked = dsp::tune::track_notes(&candidates, cfg.track);
     let pitch = PitchDoc::from_notes(&tracked, frames.hop, sample_rate);
 
     let rms: Vec<f32> = frames.frames.iter().map(|f| f.rms as f32).collect();
@@ -112,21 +112,21 @@ pub fn analyze_take(samples: &[f64], sample_rate: f64, cfg: TakeConfig) -> Analy
 
     let doc = crate::audio::to_doc_with_audio(&pitch, frame_rate, &rms, &voiced_or_silent);
 
-    // `tune::analyze` frames every `hop` samples over a window four
+    // `dsp::tune::analyze` frames every `hop` samples over a window four
     // times that (its YIN window, quartered), so this reproduces its
     // framing exactly and the two frame counts agree.
     let hop = frames.hop.max(1);
     let semitones: Vec<Option<f64>> = frames
         .frames
         .iter()
-        .map(|f| f.f0_hz.map(tune::hz_to_midi))
+        .map(|f| f.f0_hz.map(dsp::tune::hz_to_midi))
         .collect();
-    let align = align_dsp::extract(
+    let align = dsp::align::extract(
         samples,
         sample_rate,
         hop,
         hop * 4,
-        align_dsp::FeatureConfig::default(),
+        dsp::align::FeatureConfig::default(),
     )
     .with_pitch(&semitones);
 
@@ -170,7 +170,7 @@ impl Analysis {
     pub fn render(&self, audio: &[f64]) -> Vec<f64> {
         let warped = self.pitch.markers.iter().any(|m| m.d_time.abs() > 1e-9);
         if warped {
-            return tune::render::render_world_warped(
+            return dsp::tune::render::render_world_warped(
                 &self.pitch,
                 audio,
                 self.pitch.sample_rate as u32,
@@ -178,7 +178,8 @@ impl Analysis {
         }
         // No timing edits: skip the warp path, which remaps every frame
         // even when the map is the identity.
-        let mut out = tune::render::render_world(&self.pitch, audio, self.pitch.sample_rate as u32);
+        let mut out =
+            dsp::tune::render::render_world(&self.pitch, audio, self.pitch.sample_rate as u32);
         out.resize(audio.len(), 0.0);
         out
     }

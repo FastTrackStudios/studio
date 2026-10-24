@@ -18,7 +18,7 @@
 
 use crate::{ExpressionDoc, NoteId};
 use daw::service::StretchMarker;
-use tune::model::PitchDoc;
+use dsp::tune::model::PitchDoc;
 
 /// Where the take sits, which decides how document time converts.
 ///

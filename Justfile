@@ -215,9 +215,9 @@ alias gd := guitar-design
 
 # Every visualiser in the rig, in one window, on the design rig's fake
 # guitar. Stills of one effect at a time, rendered offline with no window:
-#   cargo run -p delay      --features viz --example family_sheet -- out/
-#   cargo run -p reverb     --features viz --example family_sheet -- out/
-#   cargo run -p modulation --features viz --example engine_sheet -- out/
+#   cargo run -p dsp --features delay-ui,delay-viz --example delay_family_sheet -- out/
+#   cargo run -p dsp --features reverb-ui,reverb-viz --example reverb_family_sheet -- out/
+#   cargo run -p dsp --features modulation-ui,modulation-viz --example engine_sheet -- out/
 viz-gallery:
     cargo run --release -p guitar --features ui --example viz_gallery
 
@@ -804,7 +804,7 @@ check:
 # build and run exactly these; building the workspace's ~200 crates with no
 # tests left would only link empty harnesses. Add a crate here when it gains
 # tests worth running on every change.
-test_packages := "dsp-core session-format daw-standalone timeline daw-proto studio daw-transport-sync utils daw-control frame gate-plugin studio-desktop comp delay eq mic reverb saturate"
+test_packages := "dsp-core session-format daw-standalone timeline daw-proto studio daw-transport-sync utils daw-control frame gate-plugin studio-desktop dsp"
 
 # Run the core test set (test_packages above).
 test:

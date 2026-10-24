@@ -31,13 +31,13 @@
 use std::f64::consts::PI;
 use std::time::Instant;
 
+use dsp::pitch::allpass_shift::AllpassShifter;
+use dsp::pitch::granular::GranularShifter;
+use dsp::pitch::pog::{OctaveShift, PolyOctave};
+use dsp::pitch::psola::PsolaShifter;
+use dsp::pitch::wsola::WsolaShifter;
 use dsp_core::audio::grain_pitch::GrainPitchShifter;
-use pitch::allpass_shift::AllpassShifter;
-use pitch::granular::GranularShifter;
-use pitch::pog::{OctaveShift, PolyOctave};
-use pitch::psola::PsolaShifter;
-use pitch::wsola::WsolaShifter;
-use rustfft::{num_complex::Complex, FftPlanner};
+use rustfft::{FftPlanner, num_complex::Complex};
 
 const SR: f64 = 48000.0;
 
@@ -193,7 +193,7 @@ fn extra_candidates() -> Vec<Candidate> {
 
 mod extra {
     use super::*;
-    use pitch::spectral::SpectralShifter;
+    use dsp::pitch::spectral::SpectralShifter;
     fn pv(r: f64, n: usize, ov: usize) -> Option<Box<dyn Shifter>> {
         let mut s = SpectralShifter::new();
         s.speed = r;
@@ -779,7 +779,19 @@ fn main() {
     let intervals = [12.0, -12.0, 7.0, 5.0];
     println!(
         "| {:<18} | {:>4} | {:>6} | {:>6} | {:>6} | {:>7} | {:>6} | {:>7} | {:>7} | {:>6} | {:>7} | {:>13} | {:>6} |",
-        "shifter", "st", "cents", "gross%", "xam dB", "nonh dB", "xflux", "hf dB", "rise ms", "pre dB", "gain dB", "lat ms meas/rep", "ns/smp"
+        "shifter",
+        "st",
+        "cents",
+        "gross%",
+        "xam dB",
+        "nonh dB",
+        "xflux",
+        "hf dB",
+        "rise ms",
+        "pre dB",
+        "gain dB",
+        "lat ms meas/rep",
+        "ns/smp"
     );
     println!("|{}|", "-".repeat(150));
     for c in candidates() {

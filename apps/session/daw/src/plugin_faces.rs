@@ -136,17 +136,17 @@ fn design(which: Which, tone: &Tone) -> Option<&'static str> {
         Which::Comp => Some(tone.comp_face.design()),
         Which::RescueComp if tone.comp_face == CompFace::Opto => Some(CompFace::Fet.design()),
         Which::Sat => Some(match sat_circuit(tone) {
-            saturate::ui::viz::Circuit::Valve => "saturate/01-tube",
-            saturate::ui::viz::Circuit::Tape => "saturate/02-tape",
-            saturate::ui::viz::Circuit::Core => "saturate/03-transformer",
-            saturate::ui::viz::Circuit::Solid => "saturate/04-transistor",
-            saturate::ui::viz::Circuit::Steps => "saturate/05-digital",
+            dsp::saturate::ui::viz::Circuit::Valve => "saturate/01-tube",
+            dsp::saturate::ui::viz::Circuit::Tape => "saturate/02-tape",
+            dsp::saturate::ui::viz::Circuit::Core => "saturate/03-transformer",
+            dsp::saturate::ui::viz::Circuit::Solid => "saturate/04-transistor",
+            dsp::saturate::ui::viz::Circuit::Steps => "saturate/05-digital",
         }),
         Which::Mod => match tone.modulation.engine {
-            modulation::ui::viz::Engine::Chorus => Some("modulation/01-chorus"),
-            modulation::ui::viz::Engine::Flanger => Some("modulation/02-flanger"),
-            modulation::ui::viz::Engine::Vibrato => Some("modulation/03-vibrato"),
-            modulation::ui::viz::Engine::Tremolo => Some("modulation/04-tremolo"),
+            dsp::modulation::ui::viz::Engine::Chorus => Some("modulation/01-chorus"),
+            dsp::modulation::ui::viz::Engine::Flanger => Some("modulation/02-flanger"),
+            dsp::modulation::ui::viz::Engine::Vibrato => Some("modulation/03-vibrato"),
+            dsp::modulation::ui::viz::Engine::Tremolo => Some("modulation/04-tremolo"),
             _ => None,
         },
         _ => None,
@@ -154,14 +154,16 @@ fn design(which: Which, tone: &Tone) -> Option<&'static str> {
 }
 
 /// The circuit the saturator's profile is.
-fn sat_circuit(tone: &Tone) -> saturate::ui::viz::Circuit {
-    saturate::profiles::PROFILES.get(tone.sat_profile).map_or(
-        saturate::ui::viz::Circuit::Valve,
-        |profile| {
-            saturate::ui::viz::SatView::of(*profile, saturate::profiles::Controls::default())
-                .circuit()
-        },
-    )
+fn sat_circuit(tone: &Tone) -> dsp::saturate::ui::viz::Circuit {
+    dsp::saturate::profiles::PROFILES
+        .get(tone.sat_profile)
+        .map_or(dsp::saturate::ui::viz::Circuit::Valve, |profile| {
+            dsp::saturate::ui::viz::SatView::of(
+                *profile,
+                dsp::saturate::profiles::Controls::default(),
+            )
+            .circuit()
+        })
 }
 
 /// The namespace a design's controls are under.
@@ -235,8 +237,8 @@ fn choice_index(value: f64, options: usize) -> usize {
     crate::num::index((value.clamp(0.0, 1.0) * top).round())
 }
 
-const EQ_SHAPES: [eq::ui::eq_graph_model::EqBandShape; 10] = {
-    use eq::ui::eq_graph_model::EqBandShape as S;
+const EQ_SHAPES: [dsp::eq::ui::eq_graph_model::EqBandShape; 10] = {
+    use dsp::eq::ui::eq_graph_model::EqBandShape as S;
     [
         S::Bell,
         S::LowShelf,
@@ -251,8 +253,8 @@ const EQ_SHAPES: [eq::ui::eq_graph_model::EqBandShape; 10] = {
     ]
 };
 
-const EQ_PLACEMENTS: [eq::ui::eq_graph_model::StereoMode; 5] = {
-    use eq::ui::eq_graph_model::StereoMode as M;
+const EQ_PLACEMENTS: [dsp::eq::ui::eq_graph_model::StereoMode; 5] = {
+    use dsp::eq::ui::eq_graph_model::StereoMode as M;
     [M::Stereo, M::Left, M::Right, M::Mid, M::Side]
 };
 
@@ -261,7 +263,7 @@ const EQ_PLACEMENTS: [eq::ui::eq_graph_model::StereoMode; 5] = {
 const EQ_SLOPES: usize = 11;
 
 /// What the EQ graph shows for `bands`: each slot by its band's index.
-fn eq_values(bands: &[eq::ui::eq_graph_model::EqBand]) -> Vec<(String, f64)> {
+fn eq_values(bands: &[dsp::eq::ui::eq_graph_model::EqBand]) -> Vec<(String, f64)> {
     let mut out = Vec::new();
     for slot in 0..EQ_SLOTS {
         let at = |k: &str| format!("eq/b{}_{k}", slot + 1);
@@ -293,7 +295,7 @@ fn eq_values(bands: &[eq::ui::eq_graph_model::EqBand]) -> Vec<(String, f64)> {
 }
 
 /// The EQ graph's band names.
-fn eq_texts(bands: &[eq::ui::eq_graph_model::EqBand]) -> Vec<(String, String)> {
+fn eq_texts(bands: &[dsp::eq::ui::eq_graph_model::EqBand]) -> Vec<(String, String)> {
     bands
         .iter()
         .filter(|b| b.used && b.index < EQ_SLOTS)
@@ -310,7 +312,11 @@ fn eq_edit(which: Which, tone: &mut Tone, param: &str, value: f64) -> bool {
 }
 
 /// An edit an EQ graph made on `bands`: `param` is `b{n}_field`.
-fn bands_edit(bands: &mut Vec<eq::ui::eq_graph_model::EqBand>, param: &str, value: f64) -> bool {
+fn bands_edit(
+    bands: &mut Vec<dsp::eq::ui::eq_graph_model::EqBand>,
+    param: &str,
+    value: f64,
+) -> bool {
     let Some((slot, field)) = param
         .strip_prefix('b')
         .and_then(|rest| rest.split_once('_'))
@@ -324,7 +330,7 @@ fn bands_edit(bands: &mut Vec<eq::ui::eq_graph_model::EqBand>, param: &str, valu
     let at = if let Some(at) = bands.iter().position(|b| b.index == slot) {
         at
     } else {
-        bands.push(eq::ui::eq_graph_model::EqBand {
+        bands.push(dsp::eq::ui::eq_graph_model::EqBand {
             index: slot,
             used: false,
             enabled: true,
@@ -332,9 +338,9 @@ fn bands_edit(bands: &mut Vec<eq::ui::eq_graph_model::EqBand>, param: &str, valu
             gain: 0.0,
             q: 0.707,
             slope: None,
-            shape: eq::ui::eq_graph_model::EqBandShape::Bell,
+            shape: dsp::eq::ui::eq_graph_model::EqBandShape::Bell,
             focus: false,
-            stereo_mode: eq::ui::eq_graph_model::StereoMode::Stereo,
+            stereo_mode: dsp::eq::ui::eq_graph_model::StereoMode::Stereo,
             name: String::new(),
         });
         bands.len() - 1
@@ -407,10 +413,10 @@ fn sc_face(
 }
 
 /// The emphasis EQ's shapes, by the face's `emph/b{n}_shape` index.
-const EMPH_SHAPES: [saturate::emphasis::EmphShape; 3] = [
-    saturate::emphasis::EmphShape::Bell,
-    saturate::emphasis::EmphShape::LowShelf,
-    saturate::emphasis::EmphShape::HighShelf,
+const EMPH_SHAPES: [dsp::saturate::emphasis::EmphShape; 3] = [
+    dsp::saturate::emphasis::EmphShape::Bell,
+    dsp::saturate::emphasis::EmphShape::LowShelf,
+    dsp::saturate::emphasis::EmphShape::HighShelf,
 ];
 
 /// What a saturator's emphasis view shows: whether it is up, and the six
@@ -464,11 +470,11 @@ fn emphasis_edit(tone: &mut Tone, param: &str, value: f64) -> bool {
     true
 }
 
-fn band(tone: &Tone, n: usize) -> Option<&eq::ui::eq_graph_model::EqBand> {
+fn band(tone: &Tone, n: usize) -> Option<&dsp::eq::ui::eq_graph_model::EqBand> {
     tone.eq.iter().filter(|b| b.used).nth(n)
 }
 
-fn band_mut(tone: &mut Tone, n: usize) -> Option<&mut eq::ui::eq_graph_model::EqBand> {
+fn band_mut(tone: &mut Tone, n: usize) -> Option<&mut dsp::eq::ui::eq_graph_model::EqBand> {
     tone.eq.iter_mut().filter(|b| b.used).nth(n)
 }
 
@@ -580,7 +586,7 @@ pub fn title(which: Which, tone: &Tone) -> String {
             format!("{} → {after}", tone.comp_face.title())
         }
         Which::Comp => tone.comp_face.title().to_owned(),
-        Which::Sat => saturate::profiles::PROFILES
+        Which::Sat => dsp::saturate::profiles::PROFILES
             .get(tone.sat_profile)
             .map_or_else(|| "Saturation".to_owned(), |p| p.name.to_owned()),
         Which::Mod => format!("{:?}", tone.modulation.engine),
@@ -624,7 +630,7 @@ fn values(design: &str, which: Which, tone: &Tone) -> Vec<(String, f64)> {
             out
         }
         "tube" | "tape_sat" | "transformer" | "transistor" | "digital_sat" => {
-            let scale = saturate::profiles::PROFILES
+            let scale = dsp::saturate::profiles::PROFILES
                 .get(tone.sat_profile)
                 .map_or(1.0, |p| p.voicing.drive_scale)
                 .max(f32::EPSILON);
@@ -776,7 +782,7 @@ pub fn edit(which: Which, tone: &mut Tone, addr: &str, value: f64) -> bool {
             return emphasis_edit(tone, p, value);
         }
         ("tube" | "tape_sat" | "transformer" | "transistor" | "digital_sat", "drive") => {
-            let scale = saturate::profiles::PROFILES
+            let scale = dsp::saturate::profiles::PROFILES
                 .get(tone.sat_profile)
                 .map_or(1.0, |p| p.voicing.drive_scale);
             tone.sat.drive = (15.0 * scale).mul_add(span(value / 100.0, 0.0, 1.0), 1.0);

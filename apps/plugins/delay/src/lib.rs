@@ -1,7 +1,7 @@
 //! FTS Delay — CLAP/VST3 stereo delay plugin.
 //!
 //! A thin nice-plug shell over the [`delay`] facade's [`DelayChain`] — the
-//! full stereo processor (per-side [`delay::DelayEngine`]s with runtime style
+//! full stereo processor (per-side [`dsp::delay::DelayEngine`]s with runtime style
 //! switching, ducking, mix). This shell exposes the CORE knob set: time L/R
 //! (free-running ms; tempo sync is a follow-up), link, feedback, style,
 //! tone (feedback hi-cut), drive, wow/flutter wobble, duck amount, and mix.
@@ -14,9 +14,9 @@
 use plugin_core::prelude::*;
 use std::sync::Arc;
 
-use delay::ui::params::{DelayParams, DelayUiState};
+use dsp::delay::ui::params::{DelayParams, DelayUiState};
 
-use delay::DelayChain;
+use dsp::delay::DelayChain;
 use dsp_core::audio::{AudioConfig, Processor};
 
 const PLUGIN_NAME: &str = "FTS Delay";
@@ -38,14 +38,14 @@ impl Default for FtsDelay {
         Self {
             params: Arc::new(DelayParams::default()),
             ui_state: Arc::new(DelayUiState::default()),
-            // The editor sizes itself — see delay::ui::control_view.
+            // The editor sizes itself — see dsp::delay::ui::control_view.
             editor_state: DioxusState::new(|| {
                 (
-                    delay::ui::control_view::EDITOR_W,
-                    delay::ui::control_view::EDITOR_H,
+                    dsp::delay::ui::control_view::EDITOR_W,
+                    dsp::delay::ui::control_view::EDITOR_H,
                 )
             })
-            .with_resize_hint(delay::ui::control_view::resize_hint()),
+            .with_resize_hint(dsp::delay::ui::control_view::resize_hint()),
             chain: DelayChain::new(),
             sample_rate: 48_000.0,
             max_buffer_size: 512,
@@ -133,11 +133,11 @@ impl Plugin for FtsDelay {
     fn editor(&mut self, _async_executor: AsyncExecutor<Self>) -> Option<Self::Editor> {
         create_dioxus_editor_with_state(
             self.editor_state.clone(),
-            Arc::new(delay::ui::control_view::DelayUi {
+            Arc::new(dsp::delay::ui::control_view::DelayUi {
                 params: self.params.clone(),
                 state: self.ui_state.clone(),
             }),
-            delay::ui::control_view::App,
+            dsp::delay::ui::control_view::App,
         )
     }
 

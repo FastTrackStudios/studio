@@ -19,7 +19,7 @@ workspace = true
 nice-plug = { workspace = true, features = ["vst3"] }
 
 # DSP facade (re-exports tune-dsp, which re-exports the pitch-dsp shifter).
-tune.workspace = true
+dsp = { workspace = true, features = ["tune"] }
 
 # The `Processor` trait + `AudioConfig` used to drive the pitch-shift chain.
 dsp-core = { workspace = true, features = ["audio"] }
@@ -32,3 +32,4 @@ default = []
 # the session engine's built-in FX, or a workspace test build, where cargo
 # unifies features — collide.
 export = []
+

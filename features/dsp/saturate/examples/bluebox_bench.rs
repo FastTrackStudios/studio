@@ -7,7 +7,7 @@
 
 use std::time::Instant;
 
-use saturate::bluebox::{Bluebox, BlueboxParams};
+use dsp::saturate::bluebox::{Bluebox, BlueboxParams};
 
 fn main() {
     let mut seed = 1u32;

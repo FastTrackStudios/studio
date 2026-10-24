@@ -3,7 +3,7 @@
 //!
 //! Both reverbs are driven through the same `daw::standalone::offline_fx::render`
 //! — same stimulus, same pre-roll, same block size — and measured with
-//! [`signal_analyzer::reverb_character`]. BigSky is set by its own knob
+//! [`dsp::analyzer::reverb_character`]. BigSky is set by its own knob
 //! names and values; ours is set through [`Algo::map`], the translation
 //! from BigSky's knobs to our parameters. That translation is half of what
 //! this tool exists to get right (the other half is the DSP).
@@ -30,8 +30,8 @@ use std::path::{Path, PathBuf};
 
 use builtin::NativeReverb;
 use daw::standalone::offline_fx::{self, RenderOptions};
-use signal_analyzer::reverb_character::{self, Character};
-use signal_analyzer::reverb_stimuli::Stimulus;
+use dsp::analyzer::reverb_character::{self, Character};
+use dsp::analyzer::reverb_stimuli::Stimulus;
 
 const SR: f64 = 48_000.0;
 const BIGSKY: &str = "/Library/Audio/Plug-Ins/VST3/Strymon/BigSky.vst3";

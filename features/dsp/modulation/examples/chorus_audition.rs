@@ -15,9 +15,9 @@
     reason = "measurement tool"
 )]
 
+use dsp::modulation::chorus::chain::ChorusChain;
+use dsp::modulation::chorus::engine::{EffectType, EngineType};
 use dsp_core::audio::{AudioConfig, Processor};
-use modulation::chorus::chain::ChorusChain;
-use modulation::chorus::engine::{EffectType, EngineType};
 use std::io::{Read, Write};
 
 const SR: f64 = 48_000.0;

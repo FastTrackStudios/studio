@@ -4,7 +4,7 @@
 //! An engineer evens a kick out before mixing it — clip gain stroke by
 //! stroke, or a compressor — so the compressor later shapes a steady
 //! drum rather than chasing an uneven one. Here it is the leveler's drum
-//! ride ([`level::drums`] on [`level::events`]): one gain a stroke, read off its hit
+//! ride ([`dsp::level::drums`] on [`dsp::level::events`]): one gain a stroke, read off its hit
 //! marker's level, set a few milliseconds before the attack and held
 //! through the ring. A ghost note, bleed or a flam's grace is no stroke
 //! and rides under the stroke before it.
@@ -47,7 +47,7 @@ fn hits_on(
     project: &ProjectContext,
     item: &daw_proto::Item,
     piece: &str,
-) -> Vec<level::drums::Hit> {
+) -> Vec<dsp::level::drums::Hit> {
     let markers = daw.get_take_markers(
         project.clone(),
         ItemRef::Guid(item.guid.clone()),
@@ -62,7 +62,7 @@ fn hits_on(
             Some((m.id.as_str(), (h.peak_db, m.source_position_seconds)))
         })
         .collect();
-    let mut hits: Vec<level::drums::Hit> = markers
+    let mut hits: Vec<dsp::level::drums::Hit> = markers
         .iter()
         .filter(|m| m.source_position_seconds >= from && m.source_position_seconds < to)
         .filter_map(|m| {
@@ -74,7 +74,7 @@ fn hits_on(
                 .as_deref()
                 .and_then(|other| peaks.get(other))
                 .is_some_and(|(peak, _)| *peak > h.peak_db);
-            Some(level::drums::Hit {
+            Some(dsp::level::drums::Hit {
                 t_s: m.source_position_seconds - from,
                 level_db: h.peak_db,
                 rides: !(h.ghost || h.bleed || grace),
@@ -102,8 +102,8 @@ pub struct Knobs {
 }
 
 /// The ride for a drum by its name, turned by `knobs`.
-fn ride_for(piece: &str, knobs: &Knobs) -> level::events::Ride {
-    level::drums::ride_of(piece).turned(knobs.consistency, knobs.range_db)
+fn ride_for(piece: &str, knobs: &Knobs) -> dsp::level::events::Ride {
+    dsp::level::drums::ride_of(piece).turned(knobs.consistency, knobs.range_db)
 }
 
 /// The items a drum's mic plays its comp from: its COMP lane's, once the
@@ -181,30 +181,30 @@ pub fn level(
         };
         // Every hit on the song's timeline: what each stroke is held up to
         // is the playing around it there.
-        let mut all: Vec<level::drums::Hit> = comp_items(daw, project, first)
+        let mut all: Vec<dsp::level::drums::Hit> = comp_items(daw, project, first)
             .iter()
             .flat_map(|item| {
                 let at = item.position.as_seconds();
                 hits_on(daw, project, item, &piece.name)
                     .into_iter()
-                    .map(move |h| level::drums::Hit {
+                    .map(move |h| dsp::level::drums::Hit {
                         t_s: h.t_s + at,
                         ..h
                     })
             })
             .collect();
         all.sort_by(|a, b| a.t_s.total_cmp(&b.t_s));
-        let Some(target) = level::events::target(&all) else {
+        let Some(target) = dsp::level::events::target(&all) else {
             continue;
         };
         let around = |t: f64| {
             if knobs.whole_song {
                 target
             } else {
-                level::drums::target_at(&all, t).unwrap_or(target)
+                dsp::level::drums::target_at(&all, t).unwrap_or(target)
             }
         };
-        let counted: Vec<level::drums::Hit> = if spans.is_empty() {
+        let counted: Vec<dsp::level::drums::Hit> = if spans.is_empty() {
             all.clone()
         } else {
             all.iter()
@@ -215,7 +215,7 @@ pub fn level(
         if !spans.is_empty() && !counted.iter().any(|h| h.rides) {
             continue;
         }
-        let moved = level::events::moved(&counted, around, &ride);
+        let moved = dsp::level::events::moved(&counted, around, &ride);
         let mut said = Leveled {
             piece: piece.name.clone(),
             target_db: Some(target),
@@ -230,7 +230,7 @@ pub fn level(
                 for item in leveled_items(daw, project, mic) {
                     let at = item.position.as_seconds();
                     let hits = hits_on(daw, project, &item, &piece.name);
-                    let mut curve = level::events::ride(&hits, |t| around(t + at), &ride);
+                    let mut curve = dsp::level::events::ride(&hits, |t| around(t + at), &ride);
                     if !spans.is_empty() {
                         // In the take's own time; the rest of its curve kept.
                         let here: Vec<(f64, f64)> =
@@ -264,7 +264,7 @@ fn read_curve(
     daw: &daw::standalone::Standalone,
     project: &ProjectContext,
     item: &daw_proto::Item,
-) -> Vec<level::envelope::EnvPoint> {
+) -> Vec<dsp::level::envelope::EnvPoint> {
     let Some(take) = daw.get_active_take(project.clone(), ItemRef::Guid(item.guid.clone())) else {
         return Vec::new();
     };
@@ -279,7 +279,10 @@ fn read_curve(
     daw.points(project.clone(), location)
         .iter()
         .map(|p| {
-            level::envelope::EnvPoint::new(p.time.as_seconds(), 20.0 * p.value.max(1e-6).log10())
+            dsp::level::envelope::EnvPoint::new(
+                p.time.as_seconds(),
+                20.0 * p.value.max(1e-6).log10(),
+            )
         })
         .collect()
 }
@@ -291,7 +294,7 @@ pub(crate) fn write_curve(
     daw: &daw::standalone::Standalone,
     project: &ProjectContext,
     item: &daw_proto::Item,
-    curve: &[level::envelope::EnvPoint],
+    curve: &[dsp::level::envelope::EnvPoint],
 ) -> bool {
     let Some(take) = daw.get_active_take(project.clone(), ItemRef::Guid(item.guid.clone())) else {
         return false;

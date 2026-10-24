@@ -1,6 +1,6 @@
 //! Independent boost and attenuation controls plus a separate coloration stage.
-use eq::{ProcessSpec, hardware::hardware_eq::PultecEqp1aSettings};
-fn main() -> Result<(), eq::Error> {
+use dsp::eq::{ProcessSpec, hardware::hardware_eq::PultecEqp1aSettings};
+fn main() -> Result<(), dsp::eq::Error> {
     let controls = PultecEqp1aSettings {
         low_boost_db: 8.0,
         low_atten_db: 5.0,

@@ -10,29 +10,29 @@ description = "The expression editor: piano roll, drum lanes and curves over one
 workspace = true
 
 [features]
-audio = ["dep:align-dsp", "dep:realfft", "dep:tune", "ops", "pitch"]
+audio = ["dep:dsp", "dsp/align", "dep:realfft", "dsp/tune", "ops", "pitch"]
 audio-daw = ["dep:daw", "dep:studio", "dep:fts-sample"]
 chords = ["dep:architect-ui", "dep:dioxus", "dep:keyflow", "dep:tracing"]
 corpus = ["audio", "dep:clap", "dep:fts-sample", "dep:hound", "dep:midly"]
-daw = ["dep:daw", "dep:daw-proto", "dep:studio", "dep:facet-styx", "dep:level", "ops"]
+daw = ["dep:daw", "dep:daw-proto", "dep:studio", "dep:facet-styx", "dep:dsp", "dsp/level", "ops"]
 demo = ["dep:daw-proto", "dep:session-format", "guitarpro"]
 guitarpro = ["dep:guitarpro"]
 host = ["audio", "audio-daw", "dep:daw", "dep:studio", "dep:tracing", "ops"]
 host-standalone = ["daw/standalone-save"]
 ops = ["dep:rand", "dep:tracing"]
 paint = ["dep:anyrender", "dep:daw-ui", "dep:architect-input", "dep:keybinds", "dep:kurbo", "dep:parley", "dep:peniko", "dep:tracing"]
-pitch = ["dep:tune"]
+pitch = ["dep:dsp", "dsp/tune"]
 reaper = ["audio", "audio-daw", "daw", "dep:daw", "dep:studio", "studio/reaper", "studio/reaper-ui", "dep:dioxus", "dep:tracing", "host", "render", "ui", "ui-host"]
-render = ["tune/world"]
+render = ["dep:dsp", "dsp/tune", "dsp/tune-world"]
 standalone = ["audio", "audio-daw", "daw", "dep:daw", "dep:studio", "dep:daw-control", "dep:daw-ui", "dep:dioxus", "dep:dioxus-mcp-probe", "dep:dioxus-native", "dep:eyre", "dep:futures-timer", "dep:regex", "dep:serde_json", "dep:tempfile", "dep:tokio", "dep:tracing", "dep:tracing-subscriber", "guitarpro", "host", "host-standalone", "render", "ui", "ui-host"]
-ui = ["dep:anyrender", "dep:daw-ui", "dep:dioxus", "dep:architect-input", "dep:keybinds", "dep:kurbo", "dep:level", "dep:parley", "dep:peniko", "dep:tracing", "host", "ops", "paint"]
+ui = ["dep:anyrender", "dep:daw-ui", "dep:dioxus", "dep:architect-input", "dep:keybinds", "dep:kurbo", "dep:dsp", "dsp/level", "dep:parley", "dep:peniko", "dep:tracing", "host", "ops", "paint"]
 ui-host = ["host"]
 ui-webview = ["dep:anyrender_vello_cpu", "dep:base64", "dep:futures-timer", "dep:png", "dep:serde_json", "dioxus/desktop"]
 webview = ["dioxus/desktop", "dioxus/launch", "ui", "ui-webview"]
 
 [dependencies]
 timeline = { workspace = true, features = ["actions"] }
-align-dsp = { workspace = true, optional = true }
+dsp = { workspace = true, optional = true }
 anyrender = { workspace = true, optional = true }
 anyrender_vello_cpu = { workspace = true, optional = true }
 architect = { workspace = true }
@@ -61,7 +61,6 @@ keybinds = { workspace = true, optional = true }
 keyflow = { workspace = true, optional = true }
 keyflow-proto = { workspace = true }
 kurbo = { workspace = true, optional = true }
-level = { workspace = true, optional = true }
 midly = { workspace = true, optional = true }
 parley = { workspace = true, optional = true }
 peniko = { workspace = true, optional = true }
@@ -74,7 +73,6 @@ tempfile = { workspace = true, optional = true }
 tokio = { workspace = true, features = ["rt-multi-thread"], optional = true }
 tracing = { workspace = true, optional = true }
 tracing-subscriber = { workspace = true, optional = true }
-tune = { workspace = true, optional = true }
 
 [dev-dependencies]
 # Its own tests and examples, with the features they need (see their
@@ -98,7 +96,7 @@ session-format = { workspace = true }
 guitarpro = { workspace = true }
 hound = { workspace = true }
 image = { workspace = true, default-features = false, features = ["bmp"] }
-level = { workspace = true }
+dsp = { workspace = true, features = ["level"] }
 midly = { workspace = true }
 png = { workspace = true }
 sha2 = { workspace = true }

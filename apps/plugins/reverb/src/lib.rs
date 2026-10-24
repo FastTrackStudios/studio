@@ -1,7 +1,7 @@
 //! FTS Reverb — CLAP/VST3 reverb plugin.
 //!
 //! A thin nice-plug shell over the [`reverb`] engine's realtime chain
-//! ([`reverb::ReverbChain`]: input filtering → pre-delay → algorithm → output
+//! ([`dsp::reverb::ReverbChain`]: input filtering → pre-delay → algorithm → output
 //! EQ → width → mix). The chain is stereo-coupled (one engine, two channels),
 //! so exactly one [`ReverbChain`] is instantiated for the whole plugin.
 //!
@@ -15,12 +15,12 @@
 //! GUI is deliberately absent for now (headless, host-generic params), matching
 //! `signal-sampler-clap`; the nice-plug-dioxus editor is a follow-up.
 
+use dsp::reverb::ui::params::{ReverbParams, ReverbUiState};
 use plugin_core::prelude::*;
-use reverb::ui::params::{ReverbParams, ReverbUiState};
 use std::sync::Arc;
 
+use dsp::reverb::ReverbChain;
 use dsp_core::audio::{AudioConfig, Processor};
-use reverb::ReverbChain;
 
 const PLUGIN_NAME: &str = "FTS Reverb";
 
@@ -55,14 +55,14 @@ impl Default for FtsReverb {
         Self {
             params,
             ui_state,
-            // The editor sizes itself — see reverb::ui::control_view.
+            // The editor sizes itself — see dsp::reverb::ui::control_view.
             editor_state: DioxusState::new(|| {
                 (
-                    reverb::ui::control_view::EDITOR_W,
-                    reverb::ui::control_view::EDITOR_H,
+                    dsp::reverb::ui::control_view::EDITOR_W,
+                    dsp::reverb::ui::control_view::EDITOR_H,
                 )
             })
-            .with_resize_hint(reverb::ui::control_view::resize_hint()),
+            .with_resize_hint(dsp::reverb::ui::control_view::resize_hint()),
             chain,
             scratch_l: Vec::new(),
             scratch_r: Vec::new(),
@@ -132,10 +132,10 @@ impl FtsReverb {
         // the wet output, the Decay Rate EQ into the algorithm's feedback
         // path (exact on the Hall family, collapsed elsewhere). Both are
         // change-detected downstream, so writing every block costs a compare.
-        for i in 0..reverb::chain::POST_EQ_BANDS {
+        for i in 0..dsp::reverb::chain::POST_EQ_BANDS {
             self.chain.post_eq[i] = self.params.post_eq[i].to_band();
         }
-        for i in 0..reverb::algorithm::DECAY_BANDS {
+        for i in 0..dsp::reverb::algorithm::DECAY_BANDS {
             self.chain.params.decay_bands[i] = self.params.decay_eq[i].to_band();
         }
 
@@ -168,11 +168,11 @@ impl Plugin for FtsReverb {
     fn editor(&mut self, _async_executor: AsyncExecutor<Self>) -> Option<Self::Editor> {
         create_dioxus_editor_with_state(
             self.editor_state.clone(),
-            Arc::new(reverb::ui::control_view::ReverbUi {
+            Arc::new(dsp::reverb::ui::control_view::ReverbUi {
                 params: self.params.clone(),
                 state: self.ui_state.clone(),
             }),
-            reverb::ui::control_view::App,
+            dsp::reverb::ui::control_view::App,
         )
     }
 

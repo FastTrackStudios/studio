@@ -21,9 +21,9 @@
 use nice_plug::prelude::*;
 use std::sync::Arc;
 
+use dsp::tune::shifter::chain::{Algorithm, PitchChain};
+use dsp::tune::{Scale, YinConfig, YinDetector, hz_to_midi};
 use dsp_core::audio::{AudioConfig, Processor};
-use tune::shifter::chain::{Algorithm, PitchChain};
-use tune::{Scale, YinConfig, YinDetector, hz_to_midi};
 
 const PLUGIN_NAME: &str = "FTS Tune";
 

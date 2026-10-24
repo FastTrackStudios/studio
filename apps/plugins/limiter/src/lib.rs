@@ -1,10 +1,10 @@
 //! FTS Limiter — CLAP/VST3 brickwall limiter plugin.
 //!
-//! A thin nice-plug shell over the [`comp::limiter`] engine surface: input
+//! A thin nice-plug shell over the [`dsp::comp::limiter`] engine surface: input
 //! gain drives the signal into a brickwall gain computer (instant attack,
 //! program-release), and a Character-blended ceiling stage — golden-ratio hard
-//! clip ([`comp::limiter::GoldenClip`], ClipOnly2/ADClip8 lineage) morphing
-//! into the `ClipSoftly` sine waveshaper ([`comp::limiter::sin_clip`]) —
+//! clip ([`dsp::comp::limiter::GoldenClip`], ClipOnly2/ADClip8 lineage) morphing
+//! into the `ClipSoftly` sine waveshaper ([`dsp::comp::limiter::sin_clip`]) —
 //! guarantees no sample ever exceeds the ceiling.
 //!
 //! Once `limiter-dsp`'s `LimiterChain` (`AdClip` → `ClipSoftly` → `BlockParty` →
@@ -13,8 +13,8 @@
 //! onto that chain (Input → drive, Ceiling → output ceiling, Release →
 //! `BlockParty` release, Character → clip-stage morph).
 //!
-//! Params + shared UI state live in [`comp::ui::limiter::params`] (like `comp-ui`),
-//! so the Dioxus editor ([`comp::ui::limiter::control_view::App`]) renders against
+//! Params + shared UI state live in [`dsp::comp::ui::limiter::params`] (like `comp-ui`),
+//! so the Dioxus editor ([`dsp::comp::ui::limiter::control_view::App`]) renders against
 //! them without a circular dep.
 
 use nice_plug::prelude::*;
@@ -22,8 +22,8 @@ use nice_plug_dioxus::{DioxusState, create_dioxus_editor_with_state};
 use std::sync::Arc;
 use std::sync::atomic::Ordering;
 
-use comp::limiter::{GoldenClip, sin_clip};
-use comp::ui::limiter::params::{LimiterParams, LimiterUiState};
+use dsp::comp::limiter::{GoldenClip, sin_clip};
+use dsp::comp::ui::limiter::params::{LimiterParams, LimiterUiState};
 
 const PLUGIN_NAME: &str = "FTS Limiter";
 
@@ -143,11 +143,11 @@ impl Default for FtsLimiter {
             ui_state,
             editor_state: DioxusState::new(|| {
                 (
-                    comp::ui::limiter::control_view::EDITOR_W,
-                    comp::ui::limiter::control_view::EDITOR_H,
+                    dsp::comp::ui::limiter::control_view::EDITOR_W,
+                    dsp::comp::ui::limiter::control_view::EDITOR_H,
                 )
             })
-            .with_resize_hint(comp::ui::limiter::control_view::resize_hint()),
+            .with_resize_hint(dsp::comp::ui::limiter::control_view::resize_hint()),
             channels: Vec::new(),
             sample_rate: 48_000.0,
         }
@@ -180,7 +180,7 @@ impl Plugin for FtsLimiter {
         create_dioxus_editor_with_state(
             self.editor_state.clone(),
             self.ui_state.clone(),
-            comp::ui::limiter::control_view::App,
+            dsp::comp::ui::limiter::control_view::App,
         )
     }
 
