@@ -1,9 +1,9 @@
-# git-cliff config — generates CHANGELOG.md from the commit history.
+# git-cliff config — a commit-history view of a release range, by hand.
 #
-# The release procedure runs it for you (scripts/release.sh, `just
-# release-plan` / `just release-prepare`), over a RANGE: the commits on main
-# since the last release tag become the new section, older sections stay as
-# released. Do not regenerate the whole file with `git cliff -o`: the
+# The release tooling no longer runs it: release notes come from the
+# change files (scripts/release.sh, `just release`) and CHANGELOG.md is no
+# longer written. Kept for previewing a range from the commits. Do not
+# regenerate CHANGELOG.md with `git cliff -o`: the
 # whole-history walk files commits under tags by date, which is wrong when
 # promotions land on main between releases. By hand:
 #
@@ -83,8 +83,7 @@ sort_commits = "oldest"
 
 [bump]
 # Pre-1.0: a feature is a minor, a breaking change is also a minor (not a
-# jump to 1.0.0). Going 1.0 is a decision, made with an explicit
-# `just release-prepare 1.0.0`.
+# jump to 1.0.0). (Releases are CalVer now; see scripts/release.sh.)
 features_always_bump_minor = true
 breaking_always_bump_major = false
 initial_tag = "v0.1.0"

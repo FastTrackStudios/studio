@@ -1,4 +1,4 @@
-Change files: release intent, one per PR (fleet release flow v4).
+Change files: release intent, one per PR.
 
 Every PR that changes a crate adds one here with cargo-rail:
 
@@ -13,15 +13,16 @@ none.
   Changed / Removed / Security) and end with the app, `(signal)` or
   `(session)`.
 - --bump none: nothing a user would notice (refactor, CI, tests, docs).
-  It satisfies the check and adds no changelog line.
+  It satisfies the check and adds no release-notes line.
 - --bump major: a breaking change (a title with `!`, anything under
   migrations/). Add a `Migration:` paragraph to the file body: what
   changed, why, the exact steps.
 
-`just release-prepare` (scripts/release.sh) turns the pending files into
-the CHANGELOG.md section (major -> Breaking / Migration, minor -> Added,
-patch -> Fixed and improved) and deletes them. Nobody edits CHANGELOG.md
-outside a release PR.
+`just release` (scripts/release.sh) builds a release's notes from the
+files ADDED since the previous tag (major -> Breaking / Migration, minor
+-> Added, patch -> Fixed and improved) and they go into the GitHub
+Release. Nothing deletes them: they stay as the record. CHANGELOG.md
+ends at 26.10.3 and is no longer written.
 
 This file has no .md extension on purpose: cargo-rail reads every .md
 here as a change file and rejects one without the front matter.
