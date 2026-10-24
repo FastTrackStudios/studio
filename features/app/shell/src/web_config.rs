@@ -73,24 +73,69 @@ pub fn resolve(config: Option<&str>, origin: &str) -> WebConfig {
     }
 }
 
-/// A configured URL, when it is one: trimmed, `http(s)`, a host after the
-/// scheme (`name`, `name:port`, `[v6]:port`; no userinfo), no trailing
+/// A configured base URL, when it is one: trimmed, `http(s)`, an authority
+/// that is a host (a domain name, IPv4, or `[IPv6]`) with an optional port
+/// in 1..=65535 and no userinfo, then an optional path, with no query or
+/// fragment (a share path is appended to it: `on_task`), and no trailing
 /// slash.
 fn usable(url: Option<String>) -> Option<String> {
     let url = trim(url.as_deref()?);
     let rest = url
         .strip_prefix("https://")
         .or_else(|| url.strip_prefix("http://"))?;
-    let authority = rest.split(['/', '?', '#']).next().unwrap_or_default();
-    let host = authority
-        .rsplit_once(':')
-        .filter(|(_, port)| !port.is_empty() && port.bytes().all(|b| b.is_ascii_digit()))
-        .map_or(authority, |(host, _)| host);
-    let host_ok = !host.is_empty()
-        && host
-            .bytes()
-            .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'.' | b'-' | b'[' | b']' | b':'));
-    host_ok.then_some(url)
+    if rest.contains(['?', '#']) {
+        return None;
+    }
+    let authority = rest.split('/').next().unwrap_or_default();
+    authority_ok(authority).then_some(url)
+}
+
+/// `host[:port]` or `[v6][:port]`.
+fn authority_ok(authority: &str) -> bool {
+    let (host_ok, port) = if let Some(v6) = authority.strip_prefix('[') {
+        let Some((inner, after)) = v6.split_once(']') else {
+            return false;
+        };
+        let inner_ok = inner.contains(':')
+            && inner
+                .bytes()
+                .all(|b| b.is_ascii_hexdigit() || matches!(b, b':' | b'.'));
+        let port = match after {
+            "" => None,
+            p => match p.strip_prefix(':') {
+                Some(port) => Some(port),
+                None => return false,
+            },
+        };
+        (inner_ok, port)
+    } else {
+        let (host, port) = match authority.split_once(':') {
+            Some((host, port)) => (host, Some(port)),
+            None => (authority, None),
+        };
+        (domain_ok(host), port)
+    };
+    host_ok && port.is_none_or(port_ok)
+}
+
+/// Dot-separated labels of letters, digits and inner hyphens.
+fn domain_ok(host: &str) -> bool {
+    !host.is_empty()
+        && host.split('.').all(|label| {
+            !label.is_empty()
+                && !label.starts_with('-')
+                && !label.ends_with('-')
+                && label
+                    .bytes()
+                    .all(|b| b.is_ascii_alphanumeric() || b == b'-')
+        })
+}
+
+/// A TCP port: digits, 1..=65535.
+fn port_ok(port: &str) -> bool {
+    !port.is_empty()
+        && port.bytes().all(|b| b.is_ascii_digit())
+        && port.parse::<u16>().is_ok_and(|p| p != 0)
 }
 
 fn trim(url: &str) -> String {
@@ -220,15 +265,54 @@ mod tests {
             "https://:443",
             "https://user@task.example",
             "https://task example",
+            "https://a..b",
+            "https://-task.example",
         ] {
             let text = format!(r#"{{ "task_url": "{bad}" }}"#);
             assert_eq!(resolve(Some(&text), ORIGIN).task_url, ORIGIN, "{bad}");
         }
+    }
+
+    #[test]
+    fn a_base_url_with_a_query_or_fragment_falls_back() {
+        // A share path is appended to it: `…/sub?x=1/org/a/share/b` would
+        // put the path in the query.
+        for bad in [
+            "https://task.example/sub?x=1",
+            "https://task.example?x",
+            "https://task.example/#frag",
+        ] {
+            let text = format!(r#"{{ "task_url": "{bad}" }}"#);
+            assert_eq!(resolve(Some(&text), ORIGIN).task_url, ORIGIN, "{bad}");
+        }
+    }
+
+    #[test]
+    fn a_bad_port_falls_back() {
+        for bad in [
+            "https://task.example:abc",
+            "https://task.example:99999",
+            "https://task.example:0",
+            "https://task.example:",
+            "https://task.example:80:80",
+            "http://[::1]8090",
+            "http://[::1:8090",
+        ] {
+            let text = format!(r#"{{ "task_url": "{bad}" }}"#);
+            assert_eq!(resolve(Some(&text), ORIGIN).task_url, ORIGIN, "{bad}");
+        }
+    }
+
+    #[test]
+    fn well_formed_base_urls_are_kept() {
         for good in [
             "https://task.example",
+            "https://task.example/sub",
             "http://localhost:8090",
-            "https://task.example/sub?x=1",
+            "http://127.0.0.1:18080",
             "http://[::1]:8090",
+            "https://[2001:db8::1]",
+            "https://task.example:65535",
         ] {
             let text = format!(r#"{{ "task_url": "{good}" }}"#);
             assert_eq!(resolve(Some(&text), ORIGIN).task_url, good, "{good}");
