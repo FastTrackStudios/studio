@@ -80,7 +80,7 @@ jobs:
     runs-on:
     - self-hosted
     - macos
-    - airlock
+    - studio-release-mac
     timeout-minutes: 90
     outputs:
       build_no: ${{ steps.stamp.outputs.build_no }}

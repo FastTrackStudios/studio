@@ -23,8 +23,10 @@
 //! `resolve`, before anything is built or uploaded. No pull_request
 //! trigger, so no fork or PR ever reaches the secrets or the runner.
 //!
-//! The upload runs on the org-level self-hosted macOS runner `airlock`,
-//! which holds its own credentials (~/.appstoreconnect + fts-build.keychain),
+//! The upload runs on airlock (the Mac mini), on the org-level self-hosted
+//! runner `studio-release-mac`: studio's own release runner there, with its
+//! own warm checkout, so it never queues behind Task's jobs. The machine
+//! holds its own credentials (~/.appstoreconnect + fts-build.keychain),
 //! so this needs no GitHub secrets.
 //!
 //! Reuses the same parameterized deploy-testflight.sh the other products
@@ -61,8 +63,8 @@ workflow_dispatch:
     .permissions(yaml("contents: read\n")?)
     // Per tag, so two releases in a row are not collapsed into one pending
     // run (a concurrency group holds only one pending run); a re-run of the
-    // same tag queues behind the first. airlock is a single runner and takes
-    // one job at a time.
+    // same tag queues behind the first. `studio-release-mac` is a single
+    // runner and takes one job at a time (this, then desktop's macOS .dmg).
     .concurrency(
         "ios-testflight-${{ github.workflow }}-${{ inputs.tag || github.ref_name }}",
         false,
@@ -130,7 +132,7 @@ fi
 }
 
 fn testflight() -> Job {
-    Job::new(RunsOn::Labels(&["self-hosted", "macos", "airlock"]))
+    Job::new(RunsOn::Labels(&["self-hosted", "macos", "studio-release-mac"]))
         .name("Build, sign, upload")
         .needs(&["resolve"])
         .cond("${{ !inputs.dry_run }}")

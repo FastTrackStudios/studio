@@ -14,8 +14,9 @@
 //! ```
 //!
 //! The signing identity and the notarization key never leave their machine:
-//! `macos` runs on the org-level self-hosted runner `airlock`, whose build
-//! keychain holds the Developer ID Application identity and whose
+//! `macos` runs on airlock (the Mac mini), on studio's own release runner
+//! there, `studio-release-mac` (its own warm checkout, shared with the
+//! TestFlight build), whose build keychain holds the Developer ID Application identity and whose
 //! ~/.appstoreconnect holds the App Store Connect key notarytool uses, so
 //! this reads no GitHub secret. Only the hosted `publish` job can write to
 //! the Release; the jobs that touch the identity have a read-only token.
@@ -149,11 +150,11 @@ echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
         ))
 }
 
-/// airlock: build, Developer-ID sign, notarize, staple (scripts/desktop/
-/// macos.sh). A missing runner becomes a red X within the time limit, not a
+/// airlock's `studio-release-mac`: build, Developer-ID sign, notarize,
+/// staple (scripts/desktop/macos.sh). A missing runner becomes a red X within the time limit, not a
 /// job that waits for hours.
 fn macos() -> Job {
-    Job::new(RunsOn::Labels(&["self-hosted", "macos", "airlock"]))
+    Job::new(RunsOn::Labels(&["self-hosted", "macos", "studio-release-mac"]))
         .name("macOS .dmg")
         .needs(&["resolve"])
         .cond(NOT_VALIDATE)
