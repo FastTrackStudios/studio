@@ -274,14 +274,14 @@ echo "TARGET_CAP_GB=$cap_gb" >> "$GITHUB_ENV"
             .env("VERSION", "${{ needs.resolve.outputs.version }}"),
         )
         // --version with no display: the file starts on a machine without
-        // the app's libraries. appimage-run is the FHS sandbox NixOS has for
-        // exactly this.
+        // the app's libraries (scripts/desktop/linux-smoke.sh: appimage-run,
+        // NixOS's FHS sandbox, or the payload through the host's loader where
+        // the runner has no user namespaces). The HARNESS is the workflow's
+        // own commit's, the AppImage the tag's: a `publish` dispatch from main
+        // re-runs a tag whose own copy of the test could not run here.
         .step(
-            Step::run(
-                "Smoke test, headless",
-                "set -euo pipefail\nexport PATH=\"$PATH:/run/current-system/sw/bin\"\nbash scripts/desktop/linux-smoke.sh \"target/desktop/Studio-$VERSION-linux-x86_64.AppImage\" \"$VERSION\"\n",
-            )
-            .env("VERSION", "${{ needs.resolve.outputs.version }}"),
+            Step::run("Smoke test, headless", SMOKE)
+                .env("VERSION", "${{ needs.resolve.outputs.version }}"),
         )
         .step(
             Step::run(
@@ -324,6 +324,19 @@ echo "target dir after: $(du -sh "$dir" | cut -f1)"
             .env("RESULT", "${{ job.status }}"),
         )
 }
+
+const SMOKE: &str = r#"set -euo pipefail
+export PATH="$PATH:/run/current-system/sw/bin"
+smoke="$RUNNER_TEMP/linux-smoke.sh"
+git fetch --quiet --depth 1 origin "$GITHUB_WORKFLOW_SHA" 2>/dev/null || true
+if git show "$GITHUB_WORKFLOW_SHA:scripts/desktop/linux-smoke.sh" > "$smoke" 2>/dev/null; then
+  echo "smoke test from the workflow's commit ${GITHUB_WORKFLOW_SHA:0:12}"
+else
+  cp scripts/desktop/linux-smoke.sh "$smoke"
+  echo "smoke test from the checked-out tree"
+fi
+bash "$smoke" "target/desktop/Studio-$VERSION-linux-x86_64.AppImage" "$VERSION"
+"#;
 
 /// The only job with a write token: checks both installers (named with the
 /// release's version, each matching its .sha256) and attaches them.

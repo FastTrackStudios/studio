@@ -35,7 +35,9 @@ curl -fsSL https://raw.githubusercontent.com/FastTrackStudios/studio/main/script
 The command installs the newest release. On macOS (Apple silicon), the
 signed, notarized Studio.app goes into `/Applications`. On Linux (x86_64),
 the AppImage goes into `~/.local/share/studio`, with `studio` on your PATH
-and an entry in your app menu. Every download is checked against its
+and an entry in your app menu. For now the Linux build needs glibc 2.42 or
+newer (Arch, Fedora 43, Ubuntu 25.10 and later); a build for the LTS
+distros is next. Every download is checked against its
 published sha256 before anything is installed.
 
 Running the command again updates Studio in place. To install a particular

@@ -35,11 +35,31 @@ if [ -n "${SMOKE_PODMAN_IMAGE:-}" ]; then
     out="$(podman run --rm --network none -v "$work/app:/app:ro" "$SMOKE_PODMAN_IMAGE" /app/AppRun --version 2>&1)" || { echo "$out"; exit 1; }
 elif [ -e /lib64/ld-linux-x86-64.so.2 ] && /lib64/ld-linux-x86-64.so.2 --version >/dev/null 2>&1; then
     out="$("${env_clean[@]}" "$img" --version 2>&1)" || { echo "$out"; exit 1; }
-elif command -v appimage-run >/dev/null 2>&1; then
-    out="$("${env_clean[@]}" appimage-run "$img" --version 2>&1)" || { echo "$out"; exit 1; }
+elif command -v appimage-run >/dev/null 2>&1 && out="$("${env_clean[@]}" appimage-run "$img" --version 2>&1)"; then
+    :
 else
-    echo "no way to run an FHS binary here (no /lib64 loader, no appimage-run, no SMOKE_PODMAN_IMAGE)" >&2
-    exit 1
+    # No FHS loader, and no sandbox: appimage-run's bubblewrap needs user
+    # namespaces, which a hardened runner service may not have ("bwrap: No
+    # permissions to create a new namespace", THEBATTLESHIP, 2026-10-24).
+    # Then: the payload, unpacked, run through THIS host's glibc loader with
+    # only the bundled libraries on the path. Still the claim that matters:
+    # everything the binary needs but glibc and the graphics stack is in the
+    # bundle, and it starts without a display.
+    [ -n "${out:-}" ] && echo "appimage-run could not start it here: $(printf '%s\n' "$out" | tail -1)" >&2
+    off="$("$img" --appimage-offset 2>/dev/null || true)"
+    case "$off" in ''|*[!0-9]*) off="${SMOKE_RUNTIME_SIZE:-944632}" ;; esac
+    work="$(mktemp -d -p "$(dirname "$img")" .smoke.XXXXXX)"
+    trap 'rm -rf "$work"' EXIT
+    if command -v unsquashfs >/dev/null 2>&1; then
+        unsquashfs -q -o "$off" -d "$work/app" "$img" >/dev/null
+    else
+        nix shell nixpkgs#squashfsTools -c unsquashfs -q -o "$off" -d "$work/app" "$img" >/dev/null
+    fi
+    ld="$(ldd "$(command -v bash)" 2>/dev/null | awk '/ld-linux-x86-64/ { print ($3 != "" ? $3 : $1) }' | head -1)"
+    [ -x "$ld" ] || { echo "no way to run the payload here (no /lib64 loader, no usable appimage-run, no host glibc loader)" >&2; exit 1; }
+    echo "running the payload through the host loader $ld" >&2
+    out="$(env -u DISPLAY -u WAYLAND_DISPLAY "$ld" --library-path "$work/app/usr/lib" "$work/app/usr/bin/$crate" --version 2>&1)" \
+        || { echo "$out"; exit 1; }
 fi
 echo "$out"
 last="$(printf '%s\n' "$out" | tail -1)"
