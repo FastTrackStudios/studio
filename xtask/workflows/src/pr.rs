@@ -1,4 +1,5 @@
-//! `PR` — the free backstop every PR into main gets, and nothing else.
+//! `PR` — the free backstop every PR gets (into main, or into the layer
+//! below on a gh stack), and nothing else.
 //!
 //! The expensive half of the PR gate runs on the author's machine: the prek
 //! pre-push hook (prek.toml -> scripts/ci-local-hook.sh -> scripts/
@@ -29,9 +30,16 @@ const NOT_RELEASE: &str = "${{ !cancelled() && steps.release.outputs.only != 'tr
 
 pub fn workflow() -> Result<Workflow> {
     Ok(
-        Workflow::new("PR", yaml("pull_request:\n  branches: [main]\n")?)
-            .concurrency("pr-${{ github.event.pull_request.number }}", true)
-            .job("pr-checks", pr_checks()?),
+        // Every base, not just main: on a gh stack each layer's base is the
+        // layer below, and GitHub's atomic stack merge requires `PR checks`
+        // on every PR of the stack. Change files are checked against the
+        // merge commit's first parent, so each layer against its own base.
+        Workflow::new(
+            "PR",
+            yaml("pull_request:\n  types: [opened, synchronize, reopened, ready_for_review]\n")?,
+        )
+        .concurrency("pr-${{ github.event.pull_request.number }}", true)
+        .job("pr-checks", pr_checks()?),
     )
 }
 

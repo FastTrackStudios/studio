@@ -43,8 +43,11 @@ pub fn workflow() -> Result<Workflow> {
         "release",
         yaml(
             r#"
+# Every base, not just main and release/**: on a gh stack each layer's
+# base is the layer below, and the atomic stack merge wants `Release
+# guard` on every PR (it skips, which counts as passing, unless the PR
+# is a release).
 pull_request:
-  branches: [main, "release/**"]
   types: [opened, synchronize, reopened, ready_for_review]
 push:
   tags: ["v*"]
