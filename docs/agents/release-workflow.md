@@ -114,8 +114,8 @@ edit the change file on main before releasing.
 
 | Event | Workflows | Runner |
 |---|---|---|
-| PR into `main` | `PR` (`PR checks`: fmt, change files, the lockfile, the rail config; compiles nothing), the `Local CI` status (the prek pre-push hook: the static guards, then the rail-selected tests, `cargo check` and wasm, on the pusher's machine), `Release guard` (a no-op; see below) | `PR checks` and `Release guard` on GitHub's free runners |
-| PR into `release/**` (hotfix) | `CI` (the full set), `Release guard` | as below |
+| PR into `main` | `PR` (`PR checks`: fmt, change files, the lockfile, the rail config; compiles nothing), the `Local CI` status (the prek pre-push hook: the static guards, then the rail-selected tests, `cargo check` and wasm, on the pusher's machine; an indicator, not required) | `PR checks` on GitHub's free runners |
+| PR into `release/**` (hotfix) | `CI` (the full set) | as below |
 | push to `main` | `CI`, narrowed: `Rail plan` (`cargo rail plan` from the newest green commit with rail evidence; the full set without one) gates `Check` (+ advisory clippy; records the evidence), `Wasm` and `Tests` (the core test set, filtered to the packages reached); with `Gates`, `Release tooling (macOS)`, aggregated as `CI passed`; also `Dependency cache`. A newer push cancels the older run | Rail plan, Check, Tests, Wasm on THEBATTLESHIP's `studio-main`; the rest on GitHub's free runners |
 | push to `release/v*` | `CI` full set | as above |
 | `gh workflow run checks.yml --ref <branch>` | `CI` full set; when green it posts `Local CI` on the branch's head | as above |
@@ -142,8 +142,9 @@ ci-boundaries` is manual). `cache-devshell` still seeds
 fasttrackstudio.cachix.org, for developers' `nix develop`; no CI job
 depends on it.
 
-`PR checks`, `Local CI` and `Release guard` are the required checks (the
-`main` ruleset). `CI passed` is the aggregate of a run: it requires
+`PR checks` is the only required check (the `main` ruleset). `Local CI`
+says a change's tests passed on a warm machine; it is an indicator, not a
+gate. `CI passed` is the aggregate of a run: it requires
 `Gates` and `Rail plan`, and `Check`, `Wasm` and `Tests` green or skipped by
 the plan, and `just release` and the tag guard
 require it green on the released commit. Advisory (red or green, never
@@ -155,10 +156,6 @@ red for code reasons; nothing is released until a commit's `CI passed` is
 green.
 
 ## What the guards check
-
-**Release guard** (`release.yml`, required by the ruleset). It used to
-judge `release/pending` PRs. There are none now, so it passes on every PR
-and says why. It stays so the ruleset still sees the check it requires.
 
 **Tag guard** (`release.sh tag-guard` after `stamp`, in `Images` and the
 `release` publish; `ios-resolve` in `studio-ios` and `desktop`):

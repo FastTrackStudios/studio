@@ -3,12 +3,6 @@
 # The reasons for every job and step are comments in that Rust source.
 name: release
 on:
-  pull_request:
-    types:
-    - opened
-    - synchronize
-    - reopened
-    - ready_for_review
   push:
     tags:
     - v*
@@ -16,22 +10,9 @@ on:
 permissions:
   contents: read
 jobs:
-  guard:
-    name: Release guard
-    if: ${{ github.event_name == 'pull_request' }}
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    steps:
-    - name: 'No release PRs: releases are tags'
-      run: |
-        {
-          echo "### Release guard: nothing to judge"
-          echo "Releases are tags pushed by \`just release\` on a green commit of main (or release/v*); no PR is a release PR. This check stays because main's ruleset requires it."
-        } >> "$GITHUB_STEP_SUMMARY"
-        echo "release guard: releases are tags (just release); no release PRs, nothing to check"
   publish:
     name: GitHub Release
-    if: ${{ github.event_name != 'pull_request' && startsWith(github.ref, 'refs/tags/v') }}
+    if: ${{ startsWith(github.ref, 'refs/tags/v') }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:

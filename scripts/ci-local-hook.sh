@@ -3,9 +3,9 @@
 # (scripts/ci-local.sh: the static guards, then the tests, `cargo check`
 # and wasm check `cargo rail plan` says the change affects) on this
 # machine's warm target dir, and once the push lands mark the pushed
-# commit with the `Local CI` status. That status is a required check on
-# main: PRs run only the free `PR checks` (pr.yml), so this is where the
-# tests gate a PR (checks.yml header).
+# commit with the `Local CI` status. That status is not required on main
+# (only `PR checks` is): it says the change's tests passed on a warm
+# machine, and the full set runs after every merge (checks.yml header).
 #
 # The pushed commit is prek's PRE_COMMIT_TO_REF (prek hands a hook only the
 # FIRST ref of a push). On a gh stack the status also goes to every open
@@ -20,7 +20,7 @@
 #   gh workflow run checks.yml --ref <branch>     (posts Local CI when green)
 #
 # Skip: `SKIP=local-ci git push …` (prek's switch; NO_LOCAL_CI=1 also
-# works). The PR then waits on `Local CI`.
+# works). The PR then has no `Local CI` status; it is not required.
 #
 # Pushes queue on one lock per clone where flock exists (Linux), so
 # parallel agents don't each build the workspace at once. A long run is
@@ -30,7 +30,7 @@
 set -euo pipefail
 
 if [ "${NO_LOCAL_CI:-0}" = "1" ]; then
-  echo >&2 "local-ci: NO_LOCAL_CI=1, not checked; the PR's Local CI check stays pending."
+  echo >&2 "local-ci: NO_LOCAL_CI=1, not checked; the PR gets no Local CI status (not required)."
   exit 0
 fi
 
