@@ -84,6 +84,10 @@ pub struct CanonicalBandDynamics {
     pub side_filtered: bool,
     pub side_lo_hz: f64,
     pub side_hi_hz: f64,
+    /// Trigger from the external side-chain input (the plugin's aux bus)
+    /// instead of the band's own input. With no key routed the band hears
+    /// its own input, as if this were off.
+    pub external_key: bool,
 }
 
 impl Default for CanonicalBandDynamics {
@@ -101,6 +105,7 @@ impl Default for CanonicalBandDynamics {
             side_filtered: false,
             side_lo_hz: 20.0,
             side_hi_hz: 20_000.0,
+            external_key: false,
         }
     }
 }
@@ -178,6 +183,9 @@ pub fn encode_band(
             side_filtered,
             side_lo_hz,
             side_hi_hz,
+            // A preset model has no aux bus to name: keying is the host's
+            // routing, not part of a curve.
+            external_key: false,
         },
     ))
 }

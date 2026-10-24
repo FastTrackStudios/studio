@@ -8,9 +8,30 @@ impl FtsEq {
     )]
     /// Process one block in place.
     pub fn process(&mut self, buf_l: &mut [f64], buf_r: &mut [f64]) {
+        self.process_keyed(buf_l, buf_r, None);
+    }
+
+    /// Process one block in place, with an external side-chain `key` (left,
+    /// right) for the bands set to listen to it. `None`, or a key shorter
+    /// than the block, and every band hears its own input.
+    pub fn process_keyed(
+        &mut self,
+        buf_l: &mut [f64],
+        buf_r: &mut [f64],
+        key: Option<(&[f64], &[f64])>,
+    ) {
         if !self.prepared || buf_l.len() != buf_r.len() || buf_l.len() > self.side_ref.len() {
             return;
         }
+        let keyed = match key {
+            Some((kl, kr)) if kl.len() >= buf_l.len() && kr.len() >= buf_l.len() => {
+                for (slot, (l, r)) in self.key_ref.iter_mut().zip(kl.iter().zip(kr.iter())) {
+                    *slot = 0.5 * (l + r);
+                }
+                true
+            }
+            _ => false,
+        };
 
         // Fully-idle block (no active bands, no dynamics, no spectral,
         // no transient split, unity output): straight copy, zero DSP.
@@ -75,6 +96,10 @@ impl FtsEq {
             *slot = 0.5 * (l + r);
         }
         let side_ref = &self.side_ref;
+        let key_ref = &self.key_ref;
+        // What a band's detector hears: the key when it asks for it and one
+        // is routed, else its own input.
+        let heard = |listens: bool| if listens && keyed { key_ref } else { side_ref };
 
         {
             let left: &mut [f64] = buf_l;
@@ -145,7 +170,7 @@ impl FtsEq {
                         if !slot.dyn_modulated {
                             continue;
                         }
-                        for ((l, r), s) in left.iter().zip(right.iter()).zip(side_ref) {
+                        for ((l, r), s) in left.iter().zip(right.iter()).zip(heard(slot.side.key)) {
                             d.observe(*l, *r, *s);
                         }
                         let g = d.live_gain_db();
@@ -163,7 +188,11 @@ impl FtsEq {
                     if !slot.dyn_active {
                         continue;
                     }
-                    for ((l, r), s) in left.iter_mut().zip(right.iter_mut()).zip(side_ref) {
+                    for ((l, r), s) in left
+                        .iter_mut()
+                        .zip(right.iter_mut())
+                        .zip(heard(slot.side.key))
+                    {
                         d.tick(l, r, *s);
                     }
                 }

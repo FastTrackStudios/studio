@@ -81,6 +81,10 @@ pub struct DynBandParams {
     /// modulating the *static* design's gain instead. The band still needs a
     /// detector, side filter and ballistics; it just must not filter twice.
     pub modulate_only: bool,
+    /// The detector hears `side` — an external key — whatever the band's
+    /// placement. Off, a Left/Right/Mid/Side band listens to its own part of
+    /// the image.
+    pub keyed: bool,
 }
 
 impl Default for DynBandParams {
@@ -97,6 +101,7 @@ impl Default for DynBandParams {
             placement: Placement::Stereo,
             enabled: true,
             modulate_only: false,
+            keyed: false,
         }
     }
 }
@@ -323,6 +328,7 @@ impl DynBand {
     #[inline]
     pub fn observe(&mut self, left: f64, right: f64, side: f64) {
         let component = match self.params.placement {
+            _ if self.params.keyed => side,
             Placement::Stereo => side,
             Placement::Left => left,
             Placement::Right => right,
@@ -355,6 +361,7 @@ impl DynBand {
         // energy, a Mid band on center energy), except in Wide/external
         // configurations where the caller-provided signal wins.
         let component = match self.params.placement {
+            _ if self.params.keyed => side,
             Placement::Stereo => side,
             Placement::Left => *left,
             Placement::Right => *right,

@@ -33,6 +33,9 @@ pub struct FtsEqPlugin {
     // Scratch buffers for f64 block processing
     left_buf: Vec<f64>,
     right_buf: Vec<f64>,
+    /// The side-chain, converted for the engine; sized in `initialize`.
+    key_left: Vec<f64>,
+    key_right: Vec<f64>,
     // Analyzer feed (taken from the shared UI state on first use) + mono scratch.
     audio_feed: Option<AudioFeed>,
     pre_mono: Vec<f32>,
@@ -63,6 +66,8 @@ impl Default for FtsEqPlugin {
             sample_rate: 48000.0,
             left_buf: Vec::new(),
             right_buf: Vec::new(),
+            key_left: Vec::new(),
+            key_right: Vec::new(),
             audio_feed: None,
             pre_mono: Vec::new(),
             post_mono: Vec::new(),
@@ -137,13 +142,14 @@ impl FtsEqPlugin {
                     attack_pct: f64::from(bp.dyn_attack.value()),
                     release_pct: f64::from(bp.dyn_release.value()),
                     auto: bp.dyn_auto.value() > 0.5,
-                    relative: false,
+                    relative: bp.dyn_relative.value() > 0.5,
                     spectral: bp.spectral.value() > 0.5,
                     spectral_density: f64::from(bp.spectral_density.value()),
                     spectral_tilt: bp.spectral_tilt.value() > 0.5,
                     side_filtered: bp.side_filtered.value() > 0.5,
                     side_lo_hz: f64::from(bp.side_lo_hz.value()),
                     side_hi_hz: f64::from(bp.side_hi_hz.value()),
+                    external_key: bp.dyn_key.value() > 0.5,
                 },
             );
         }
@@ -332,11 +338,21 @@ impl Plugin for FtsEqPlugin {
     const EMAIL: &'static str = "";
     const VERSION: &'static str = env!("CARGO_PKG_VERSION");
 
-    const AUDIO_IO_LAYOUTS: &'static [AudioIOLayout] = &[AudioIOLayout {
-        main_input_channels: NonZeroU32::new(2),
-        main_output_channels: NonZeroU32::new(2),
-        ..AudioIOLayout::const_default()
-    }];
+    /// Stereo in and out, with a stereo side-chain a dynamic band can key
+    /// from; the plain stereo layout for hosts that will not offer one.
+    const AUDIO_IO_LAYOUTS: &'static [AudioIOLayout] = &[
+        AudioIOLayout {
+            main_input_channels: NonZeroU32::new(2),
+            main_output_channels: NonZeroU32::new(2),
+            aux_input_ports: &[new_nonzero_u32(2)],
+            ..AudioIOLayout::const_default()
+        },
+        AudioIOLayout {
+            main_input_channels: NonZeroU32::new(2),
+            main_output_channels: NonZeroU32::new(2),
+            ..AudioIOLayout::const_default()
+        },
+    ];
 
     // `Plugin::Editor` is an associated type as of the baseview 0.3 rework,
     // so the editor is named here rather than returned as a trait object.
@@ -379,6 +395,8 @@ impl Plugin for FtsEqPlugin {
         let max_samples = buffer_config.max_buffer_size as usize;
         self.left_buf.resize(max_samples, 0.0);
         self.right_buf.resize(max_samples, 0.0);
+        self.key_left.resize(max_samples, 0.0);
+        self.key_right.resize(max_samples, 0.0);
         self.pre_mono.resize(max_samples, 0.0);
         self.post_mono.resize(max_samples, 0.0);
         if self.audio_feed.is_none() {
@@ -397,7 +415,7 @@ impl Plugin for FtsEqPlugin {
     fn process(
         &mut self,
         buffer: &mut Buffer,
-        _aux: &mut AuxiliaryBuffers,
+        aux: &mut AuxiliaryBuffers,
         _context: &mut impl ProcessContext<Self>,
     ) -> ProcessStatus {
         let model = self.params.model.value();
@@ -433,6 +451,22 @@ impl Plugin for FtsEqPlugin {
             self.pre_mono[i] = ((l + r) * 0.5) as f32;
         }
 
+        // The side-chain, when the host routes one: a stereo aux bus, mono
+        // or wider folded to its first two channels.
+        let keyed = match aux.inputs.first().map(Buffer::as_slice_immutable) {
+            Some(channels) if !channels.is_empty() && channels[0].len() >= n => {
+                self.key_left.resize(n, 0.0);
+                self.key_right.resize(n, 0.0);
+                let right = channels.get(1).unwrap_or(&channels[0]);
+                for i in 0..n {
+                    self.key_left[i] = f64::from(channels[0][i]);
+                    self.key_right[i] = f64::from(right.get(i).copied().unwrap_or(0.0));
+                }
+                true
+            }
+            _ => false,
+        };
+
         // Process selected model at native rate.
         if use_neve_1073 {
             self.neve_1073
@@ -441,8 +475,9 @@ impl Plugin for FtsEqPlugin {
             self.hardware_eq
                 .process(&mut self.left_buf[..n], &mut self.right_buf[..n]);
         } else {
+            let key = keyed.then(|| (&self.key_left[..n], &self.key_right[..n]));
             self.engine
-                .process(&mut self.left_buf[..n], &mut self.right_buf[..n]);
+                .process_keyed(&mut self.left_buf[..n], &mut self.right_buf[..n], key);
         }
 
         // Write back to f32 buffer, apply output gain, metering + FFT
