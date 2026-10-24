@@ -88,6 +88,15 @@ cat > "$W/Cargo.lock" <<'EOF'
 version = 4
 
 [[package]]
+name = "inventory"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+
+[[package]]
+name = "inventory"
+version = "0.1.2"
+
+[[package]]
 name = "serde"
 version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -95,6 +104,11 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 [[package]]
 name = "session-desktop"
 version = "0.1.2"
+dependencies = [
+ "inventory 0.1.2",
+ "inventory 0.3.0",
+ "serde",
+]
 
 [[package]]
 name = "shared"
@@ -228,6 +242,11 @@ eq "  ...studio-desktop in Cargo.lock" "$(grep -A1 '^name = "studio-desktop"$' C
 eq "  ...session-desktop in Cargo.lock" "$(grep -A1 '^name = "session-desktop"$' Cargo.lock | tail -1)" 'version = "26.10.1"'
 eq "  ...shared (its own version) did not move" "$(grep -A1 '^name = "shared"$' Cargo.lock | tail -1)" 'version = "0.1.0"'
 eq "  ...serde (a registry crate) did not move" "$(grep -A1 '^name = "serde"$' Cargo.lock | tail -1)" 'version = "0.1.2"'
+eq "  ...the inventory member (named like a registry crate)" "$(grep -A2 '^name = "inventory"$' Cargo.lock | grep -A1 -v source | grep '^version' | paste -sd' ' -)" 'version = "0.3.0" version = "26.10.1"'
+eq "  ...its \"name version\" reference in a dependency list" "$(grep -c '^ "inventory 26.10.1",$' Cargo.lock)" 1
+eq "  ...but not the registry crate's" "$(grep -c '^ "inventory 0.3.0",$' Cargo.lock)" 1
+eq "  ...and no reference at the old version is left" "$(grep -c '"inventory 0.1.2"' Cargo.lock)" 0
+eq "  ...nor did the unused patch" "$(grep -A1 '^name = "a-patch"$' Cargo.lock | tail -1)" 'version = "1.0.0"'
 eq "  ...only Cargo.toml and Cargo.lock changed, uncommitted" "$(git status --porcelain | awk '{ print $2 }' | paste -sd' ' -)" "Cargo.lock Cargo.toml"
 eq "  ...HEAD still carries the committed version" "$(R version HEAD)" 0.1.2
 expect_ok "stamp again: a no-op" R stamp 26.10.1
