@@ -177,10 +177,13 @@ the CI prep.
 
 **What GitHub runs.** A PR into `main` gets one free job, **`PR checks`**
 (`pr.yml`: fmt, change files, the lockfile, the rail config — compiles
-nothing). `main` requires `PR checks`, `Local CI` and `Release guard`. The
-full set, **`CI`** (`checks.yml`: `Gates`, `Check` + advisory clippy,
-`Wasm`, `Tests`, aggregated as **`CI passed`**), runs after every merge to
-`main`, on hotfix PRs into `release/**`, and by hand. `main` may go red:
+nothing). `main` requires `PR checks`, `Local CI` and `Release guard`. **`CI`**
+(`checks.yml`: `Gates`, `Rail plan`, `Check` + advisory clippy, `Wasm`,
+`Tests`, aggregated as **`CI passed`**) runs after every merge to `main`,
+NARROWED by `cargo rail plan` to what the merge reaches since the newest
+green commit with rail evidence (`Check` records that evidence on the pool
+as it builds; no base, the full set). Hotfix PRs into `release/**` and a
+run by hand get the full set. `main` may go red:
 releases are cut by hand, and `just release` tags only a commit whose
 `CI passed` is green. Plan, gates, the macOS release tooling and the
 aggregator run on GitHub's free runners. The builds — `Check`, `Tests` (the

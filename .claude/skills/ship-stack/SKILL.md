@@ -34,7 +34,7 @@ worktree with its own `target/` costs a cold build.
 | `git push` | prek pre-push → `scripts/ci-local-hook.sh` → `just ci-local` | your machine | the PR gate's expensive half; posts **`Local CI`** |
 | PR into main | `PR / PR checks` (`pr.yml`) | free hosted, rustup + cargo-rail, no nix | fmt, change files, the lockfile, the rail config |
 | PR into main | `release / Release guard` | free hosted | a no-op that passes and says why: releases are tags, there are no release PRs (kept because the ruleset requires it) |
-| push to main | `CI` (`checks.yml`): Plan, Dependency cache, Gates, Check, Wasm, Tests, Release tooling (macOS), **`CI passed`** | Check, Tests, Wasm side by side on THEBATTLESHIP's `studio-main` pool (warm shared cache); the rest free hosted | the full set; a newer merge cancels the older run |
+| push to main | `CI` (`checks.yml`): Plan, Rail plan, Dependency cache, Gates, Check, Wasm, Tests, Release tooling (macOS), **`CI passed`** | Rail plan, Check, Tests, Wasm on THEBATTLESHIP's `studio-main` pool (warm shared cache); the rest free hosted | what the merge reaches since the newest green commit with rail evidence (the full set without one); a newer merge cancels the older run |
 | PR into `release/**` | `CI` | same | a hotfix: the full suite |
 | push of a `v*` tag (`just release`) | `Images`, `studio-ios`, `desktop`, `release` | `studio-release` / `studio-release-mac` / hosted | the release builds, from the tag alone, in parallel, never cancelled; no tests (the tag guard checks `CI passed`) |
 

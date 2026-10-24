@@ -116,7 +116,8 @@ edit the change file on main before releasing.
 |---|---|---|
 | PR into `main` | `PR` (`PR checks`: fmt, change files, the lockfile, the rail config; compiles nothing), the `Local CI` status (the prek pre-push hook: the static guards, then the rail-selected tests, `cargo check` and wasm, on the pusher's machine), `Release guard` (a no-op; see below) | `PR checks` and `Release guard` on GitHub's free runners |
 | PR into `release/**` (hotfix) | `CI` (the full set), `Release guard` | as below |
-| push to `main` / `release/v*` | `CI` full set: `Gates`, `Check` (+ advisory clippy), `Wasm`, `Tests` (the core test set), `Release tooling (macOS)`, aggregated as `CI passed`; on `main` also `Dependency cache`. A newer push cancels the older run | Check, Tests, Wasm on THEBATTLESHIP's `studio-main`; the rest on GitHub's free runners |
+| push to `main` | `CI`, narrowed: `Rail plan` (`cargo rail plan` from the newest green commit with rail evidence; the full set without one) gates `Check` (+ advisory clippy; records the evidence), `Wasm` and `Tests` (the core test set, filtered to the packages reached); with `Gates`, `Release tooling (macOS)`, aggregated as `CI passed`; also `Dependency cache`. A newer push cancels the older run | Rail plan, Check, Tests, Wasm on THEBATTLESHIP's `studio-main`; the rest on GitHub's free runners |
+| push to `release/v*` | `CI` full set | as above |
 | `gh workflow run checks.yml --ref <branch>` | `CI` full set; when green it posts `Local CI` on the branch's head | as above |
 | push of tag `vYY.M.MICRO` (or `workflow_dispatch` with the tag) | all from the tag, in parallel, each in its own never-cancelled group. Each starts with `stamp` and the tag guard, and none re-runs the tests. **`Images`**: `.#studio-web-image` pushed to `ghcr.io/fasttrackstudios/studio-web` as `X.Y.Z`, `sha-<short>`, `latest`, labelled with the commit. **`studio-ios`**: the TestFlight upload. **`desktop`**: the signed, notarized macOS `.dmg` and the Linux AppImage, attached to the Release as they finish (`gh workflow run desktop.yml -f tag=<ref> -f mode=build-only` proves them from any branch). **`release`**: the GitHub Release with the notes, published straight away | Images on THEBATTLESHIP's `studio-release`; TestFlight and the `.dmg` on airlock's `studio-release-mac`; the AppImage on `studio-release`; resolve, guard and publish jobs hosted |
 
@@ -142,12 +143,14 @@ fasttrackstudio.cachix.org, for developers' `nix develop`; no CI job
 depends on it.
 
 `PR checks`, `Local CI` and `Release guard` are the required checks (the
-`main` ruleset). `CI passed` is the aggregate of a full run: it requires
-`Gates`, `Check`, `Wasm` and `Tests`, and `just release` and the tag guard
+`main` ruleset). `CI passed` is the aggregate of a run: it requires
+`Gates` and `Rail plan`, and `Check`, `Wasm` and `Tests` green or skipped by
+the plan, and `just release` and the tag guard
 require it green on the released commit. Advisory (red or green, never
 blocking): clippy. `Local CI` is only as honest as whoever posts it, since
 anyone who can push could post one. That is the bargain (2026-10): the
-full set after every merge catches what a local run missed. `main` may be
+rail-planned run after every merge (everything since the last green
+commit) catches what a local run missed. `main` may be
 red for code reasons; nothing is released until a commit's `CI passed` is
 green.
 

@@ -11,10 +11,16 @@
 //!                  ci-local-hook.sh -> scripts/ci-local.sh: the static
 //!                  guards, then the rail-planned tests, `cargo check` and
 //!                  wasm check). Main requires both, and `Release guard`.
-//!   push to main   the FULL set, once per merge: what catches two PRs that
-//!   (release/v*)   each passed alone but break together. main may go red —
-//!                  `just release` tags only a commit whose `CI passed` is
-//!                  green, and the tag's builds never run this again.
+//!   push to main   once per merge, what the merge reaches: `cargo rail
+//!                  plan` from the newest green ancestor with rail evidence
+//!                  (see [`rail_plan`]), the full set when there is none.
+//!                  It is planned against everything since that green base,
+//!                  so two PRs that each passed alone but break together are
+//!                  still caught. main may go red — `just release` tags only
+//!                  a commit whose `CI passed` is green, and the tag's builds
+//!                  never run this again.
+//!   push to        a hotfix line: the FULL set.
+//!   release/v*
 //!   PR into        a hotfix onto a release line: the FULL set (nothing left
 //!   release/**     to a hook, on a branch that ships straight out).
 //!   by hand        `gh workflow run checks.yml --ref <branch>` runs
@@ -70,6 +76,7 @@ workflow_dispatch:
         true,
     )
     .job("plan", plan()?)
+    .job("rail", rail_plan()?)
     .job("deps-cache", deps_cache())
     .job("gates", gates())
     .job("check", check())
@@ -112,6 +119,92 @@ case "${GITHUB_EVENT_NAME:-}" in
     echo "plan: dispatch on ${GITHUB_REF_NAME}: the full set" ;;
   *) echo "plan: ${GITHUB_EVENT_NAME:-?} on ${GITHUB_REF_NAME}: the full set" ;;
 esac
+"#;
+
+/// What a push to main must build: `cargo rail plan` from the newest
+/// green ancestor that has rail evidence, through the same gates
+/// (scripts/ci-rail-plan.py) `just ci-local` uses. Everything else — a
+/// hotfix PR, a dispatch, a main push with no usable base — is the full
+/// set.
+///
+/// ON THE POOL, in the `.#ci` shell with the CI cargo config, because rail's
+/// evidence is bound to the toolchain, the Cargo configuration and the
+/// platform that recorded it: `Check` records it there
+/// ([`check`]), so only a plan made there can use it.
+///
+/// THE BASE is not the previous push: a newer merge cancels the older run,
+/// and planning from a cancelled (or red) commit would drop its changes from
+/// every later plan. It is the newest first-parent ancestor whose evidence
+/// is recorded and whose run was green for every job its plan required
+/// (`<sha>/<job>.ok`, written by the job on success). A job a plan skipped
+/// inherits its base's green: nothing it covers changed since.
+fn rail_plan() -> Result<Job> {
+    Ok(Job::new(POOL)
+        .name("Rail plan")
+        .needs(&["plan"])
+        .timeout(15)
+        .permissions(yaml("contents: read\n")?)
+        .output("full", "${{ steps.rail.outputs.full }}")
+        .output("check", "${{ steps.rail.outputs.check }}")
+        .output("cargo", "${{ steps.rail.outputs.cargo }}")
+        .output("tests", "${{ steps.rail.outputs.tests }}")
+        .output("test_filter", "${{ steps.rail.outputs.test_filter }}")
+        .output("wasm", "${{ steps.rail.outputs.wasm }}")
+        .step(
+            checkout()
+                .with("persist-credentials", false)
+                // The base search walks back up to 50 first-parent commits.
+                .with("fetch-depth", 64),
+        )
+        .step(ci_cargo_config())
+        .step(
+            Step::run("cargo rail plan", &in_shell(RAIL_PLAN))
+                .id("rail")
+                .env("EVENT", "${{ github.event_name }}")
+                .env("REF", "${{ github.ref }}"),
+        ))
+}
+
+/// The plan, or the full set. Writes this commit's gates into the evidence
+/// store either way: they are what the next run checks before it takes this
+/// commit as a base.
+const RAIL_PLAN: &str = r#"store="${STUDIO_CACHE_DIR:?not a studio pool runner (no STUDIO_CACHE_DIR)}/rail-evidence"
+mkdir -p "$store/$GITHUB_SHA"
+gates_out() {
+  printf '%s\n' "$1" >> "$GITHUB_OUTPUT"
+  printf '%s\n' "$1" > "$store/$GITHUB_SHA/gates"
+}
+full() {
+  echo "plan: $1 -> the full set"
+  gates_out $'full=true\ncargo=true\ncheck=true\ntests=true\ntest_filter=\nwasm=true'
+  exit 0
+}
+if [ "$EVENT" != push ] || [ "$REF" != refs/heads/main ]; then
+  full "$EVENT on $REF, not a push to main"
+fi
+# Keep the newest 40 commits' evidence (a few hundred KB each).
+find "$store" -mindepth 1 -maxdepth 1 -type d -printf '%T@ %p\n' | sort -rn | tail -n +41 \
+  | cut -d' ' -f2- | while read -r old; do rm -rf "$old"; done
+base=""
+for sha in $(git rev-list --first-parent --max-count=50 HEAD~1); do
+  d="$store/$sha"
+  [ -f "$d/cargo.build.json" ] && [ -f "$d/cargo.test.json" ] && [ -f "$d/gates" ] || continue
+  green=1
+  for job in check tests wasm; do
+    if grep -qx "$job=true" "$d/gates" && [ ! -f "$d/$job.ok" ]; then green=0; fi
+  done
+  if [ "$green" = 1 ]; then base="$sha"; break; fi
+done
+[ -n "$base" ] || full "no green ancestor with rail evidence in the last 50 commits"
+ev=()
+for f in "$store/$base"/*.json; do ev+=(--evidence "$f"); done
+plan="$RUNNER_TEMP/rail-plan.json"
+cargo rail plan --from "$base" --to HEAD "${ev[@]}" --json > "$plan" \
+  || full "cargo rail plan failed"
+gates="$(python3 scripts/ci-rail-plan.py "$plan")" || full "the plan could not be read"
+echo "plan: from $base (${#ev[@]} evidence file(s))"
+printf '%s\n' "$gates"
+gates_out "$gates"
 "#;
 
 /// Main is the only writer of the cargo-dependency cache pr.yml's `PR
@@ -307,14 +400,41 @@ echo "target dir: $dir; pool $(du -sh "$pool" | cut -f1) of 200 GB; $(df -h "$po
 /// NixOS: the toolchain, the native headers, just, nextest and the wasm32 C
 /// toolchain all come from it).
 fn pool_job(name: &str, kind: &str, timeout: u32) -> Job {
-    hosted_cargo_job(Job::new(POOL).name(name).needs(&["plan"]).timeout(timeout))
-        .step(checkout().with("persist-credentials", false))
-        .step(Step::run(
-            "CI cargo config",
-            "mkdir -p ../.cargo\ncp .cargo/ci-config.toml ../.cargo/config.toml\n",
-        ))
-        .step(target_dir(kind))
+    hosted_cargo_job(
+        Job::new(POOL)
+            .name(name)
+            .needs(&["plan", "rail"])
+            .timeout(timeout),
+    )
+    .step(checkout().with("persist-credentials", false))
+    .step(ci_cargo_config())
+    .step(target_dir(kind))
 }
+
+/// .cargo/ci-config.toml as the cargo config one level up, where cargo
+/// finds it for every command in the checkout.
+fn ci_cargo_config() -> Step {
+    Step::run(
+        "CI cargo config",
+        "mkdir -p ../.cargo\ncp .cargo/ci-config.toml ../.cargo/config.toml\n",
+    )
+}
+
+/// On success, mark this commit green for `job` in the evidence store, so a
+/// later run may plan from it ([`rail_plan`]). Main's pushes only.
+fn mark_green(job: &str) -> Step {
+    Step::run(
+        &format!("Mark {job} green for rail"),
+        &format!(
+            "mkdir -p \"$STUDIO_CACHE_DIR/rail-evidence/$GITHUB_SHA\"\ntouch \"$STUDIO_CACHE_DIR/rail-evidence/$GITHUB_SHA/{job}.ok\"\n"
+        ),
+    )
+    .cond(MAIN_PUSH)
+}
+
+/// A push to main: the runs whose evidence and green marks later plans use.
+const MAIN_PUSH: &str =
+    "${{ success() && github.event_name == 'push' && github.ref == 'refs/heads/main' }}";
 
 /// `script`, run in the dev shell.
 fn in_shell(script: &str) -> String {
@@ -329,10 +449,12 @@ fn in_shell(script: &str) -> String {
 /// without failing. Same check-mode units, so same job and target dir.
 fn check() -> Job {
     pool_job("Check", "check", 90)
-        .step(Step::run(
-            "cargo check --workspace",
-            &in_shell("cargo check --workspace\n"),
-        ))
+    .cond("${{ needs.rail.outputs.check == 'true' || needs.rail.outputs.cargo == 'true' }}")
+    .step(
+        Step::run("cargo check --workspace", &in_shell(CHECK))
+            .env("RECORD", "${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}"),
+    )
+    .step(mark_green("check"))
         .step(
             Step::run(
                 "cargo clippy (advisory, does not block)",
@@ -345,6 +467,26 @@ fn check() -> Job {
         )
 }
 
+/// The workspace check, recording rail's evidence on a push to main: the
+/// recorder only watches the compiler run, so it adds no compilation, and
+/// the next push plans from what these builds read ([`rail_plan`]).
+///
+/// Two work items, because the plan gates two things: `cargo.build` (the
+/// check) from `check --workspace`, and `cargo.test` from the check-mode
+/// build of every target (`--all-targets`): rail needs every workspace
+/// member's units for a complete item, and check mode gives it the test
+/// targets' inputs without building the whole workspace's tests. Measured
+/// cold on voyager: 5.6 min once, then incremental like the check.
+const CHECK: &str = r#"if [ "$RECORD" = true ]; then
+  ev="$STUDIO_CACHE_DIR/rail-evidence/$GITHUB_SHA"
+  mkdir -p "$ev"
+  cargo rail plan evidence --work cargo.build --output "$ev/cargo.build.json" -- check --workspace
+  cargo rail plan evidence --work cargo.test --output "$ev/cargo.test.json" -- check --workspace --all-targets
+else
+  cargo check --workspace
+fi
+"#;
+
 /// REQUIRED on full runs: the browser builds, which the workspace check
 /// (native) never compiles — the web bundles the studio-web image ships
 /// (STA-366: a native-only dep leaking into their graph stayed hidden until
@@ -352,6 +494,7 @@ fn check() -> Job {
 /// green, STA-184).
 fn wasm() -> Job {
     pool_job("Wasm", "wasm", 75)
+        .cond("${{ needs.rail.outputs.wasm == 'true' }}")
         .step(Step::run(
             "wasm check (web bundles)",
             &in_shell("just web-wasm-check\n"),
@@ -363,6 +506,7 @@ fn wasm() -> Job {
             )
             .cond(NOT_CANCELLED),
         )
+        .step(mark_green("wasm"))
 }
 
 /// REQUIRED on full runs: the core test set (`just test_packages`, the one
@@ -370,14 +514,17 @@ fn wasm() -> Job {
 /// 2026-10-24), warm on the pool.
 fn tests() -> Job {
     pool_job("Tests", "tests", 120)
+        .cond("${{ needs.rail.outputs.tests == 'true' }}")
         .step(assets_token())
         .step(assets())
         .step(
             Step::run("cargo nextest", &in_shell(NEXTEST))
                 .id("nextest")
-                .env("TEST_LOG", "${{ runner.temp }}/nextest-ci.log"),
+                .env("TEST_LOG", "${{ runner.temp }}/nextest-ci.log")
+                .env("TEST_FILTER", "${{ needs.rail.outputs.test_filter }}"),
         )
         .step(test_log("nextest-ci"))
+        .step(mark_green("tests"))
 }
 
 /// The full nextest log as an artifact (see [`NEXTEST`] for why it is a file).
@@ -472,8 +619,14 @@ t0=$(date +%s)
 cargo nextest run "${pkgs[@]}" --no-run >"${TEST_LOG}" 2>&1
 rc=$?
 t1=$(date +%s)
+# The rail plan's filter: only the tests of the packages the change
+# reaches (empty: all of them). The build above is the whole set either way
+# (warm, it rebuilds only what changed).
+filter=()
+[ -n "${TEST_FILTER:-}" ] && filter=(-E "${TEST_FILTER}" --no-tests=pass)
+echo "filter: ${TEST_FILTER:-<all>}"
 if [ "$rc" = 0 ]; then
-  cargo nextest run "${pkgs[@]}" --no-fail-fast >>"${TEST_LOG}" 2>&1
+  cargo nextest run "${pkgs[@]}" --no-fail-fast ${filter[@]+"${filter[@]}"} >>"${TEST_LOG}" 2>&1
   rc=$?
 fi
 t2=$(date +%s)
@@ -502,13 +655,22 @@ exit "$rc"
 fn ci_passed() -> Result<Job> {
     Ok(Job::new(UBUNTU)
         .name("CI passed")
-        .needs(&["plan", "gates", "check", "wasm", "tests", "release-macos"])
+        .needs(&[
+            "plan",
+            "rail",
+            "gates",
+            "check",
+            "wasm",
+            "tests",
+            "release-macos",
+        ])
         .cond("${{ always() }}")
         .timeout(5)
         .permissions(yaml("statuses: write\n")?)
         .step(
             Step::run("Every required job succeeded", AGGREGATE)
                 .env("PLAN", "${{ needs.plan.result }}")
+                .env("RAIL", "${{ needs.rail.result }}")
                 .env("GATES", "${{ needs.gates.result }}")
                 .env("CHECK", "${{ needs.check.result }}")
                 .env("WASM", "${{ needs.wasm.result }}")
@@ -535,8 +697,18 @@ const AGGREGATE: &str = r#"set -u
 fail=0
 bad() { echo "::error::$1"; fail=1; }
 [ "$PLAN" = success ] || { bad "plan: $PLAN"; exit 1; }
-for job in "gates:$GATES" "check:$CHECK" "wasm:$WASM" "tests:$TESTS" "release-macos:$RELEASE_MACOS"; do
+[ "$RAIL" = success ] || { bad "rail plan: $RAIL"; exit 1; }
+for job in "gates:$GATES" "release-macos:$RELEASE_MACOS"; do
   [ "${job#*:}" = success ] || bad "${job%%:*}: ${job#*:}"
+  echo "$job"
+done
+# The builds: skipped is fine when the rail plan skipped them (nothing they
+# cover changed since a green base); anything else must have succeeded.
+for job in "check:$CHECK" "wasm:$WASM" "tests:$TESTS"; do
+  case "${job#*:}" in
+    success | skipped) ;;
+    *) bad "${job%%:*}: ${job#*:}" ;;
+  esac
   echo "$job"
 done
 exit "$fail"
