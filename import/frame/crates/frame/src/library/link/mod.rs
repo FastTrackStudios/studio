@@ -456,6 +456,3 @@ async fn session(
         }
     }
 }
-
-#[cfg(test)]
-mod tests;

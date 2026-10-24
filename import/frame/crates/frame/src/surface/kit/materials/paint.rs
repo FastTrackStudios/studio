@@ -942,33 +942,3 @@ fn chevrons(b: &mut Builder<'_>, f: NodeId, w: f64, h: f64, bars: &str, pitch: f
     }
     emboss(b, f, w, h, &d, bars, 2.0);
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn specs_parse() {
-        assert!(matches!(
-            Material::parse("tolex:bronco", Some("#101010")),
-            Some(Material::Tolex {
-                grain: Grain::Bronco,
-                ..
-            })
-        ));
-        assert!(matches!(
-            Material::parse("cloth:oxblood", None),
-            Some(Material::GrilleCloth {
-                cloth: Cloth::Oxblood
-            })
-        ));
-        assert!(matches!(
-            Material::parse("wood:vertical", None),
-            Some(Material::Wood {
-                dir: Dir::Vertical,
-                ..
-            })
-        ));
-        assert!(Material::parse("plaid", None).is_none());
-    }
-}

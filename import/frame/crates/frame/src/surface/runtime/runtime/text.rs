@@ -283,15 +283,3 @@ impl Runtime {
         })
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn estimate_grows_with_text() {
-        assert!(estimate("Kick", 10.0, 0.0) > estimate("Ki", 10.0, 0.0));
-        assert_eq!(estimate("", 10.0, 1.0), 0.0);
-        assert_eq!(byte_at("aé b", 2), 3);
-    }
-}

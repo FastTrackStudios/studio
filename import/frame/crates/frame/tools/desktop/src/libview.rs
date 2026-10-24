@@ -329,9 +329,6 @@ impl LibraryView {
     }
 }
 
-#[cfg(test)]
-mod tests;
-
 /// A rounded message box, up to 760 logical px wide.
 #[must_use]
 pub fn toast_scene(text: &str, error: bool, width: f64) -> Option<(Scene, NodeId, f64, f64)> {

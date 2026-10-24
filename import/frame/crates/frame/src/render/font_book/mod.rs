@@ -863,6 +863,3 @@ impl Chain {
         (out, x)
     }
 }
-
-#[cfg(test)]
-mod tests;

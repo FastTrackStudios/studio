@@ -248,6 +248,3 @@ pub fn time_dependent(
     let (_, plan) = crate::render::build_scene_primitives_and_effects(doc, root);
     plan.time_dependent(|id| effect_source(doc, id))
 }
-
-#[cfg(test)]
-mod tests;

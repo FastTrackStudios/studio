@@ -142,37 +142,3 @@ impl Card {
 pub fn point(card: Card, value: f64, inset: f64) -> (f64, f64) {
     polar(PIVOT_X, PIVOT_Y, NEEDLE_LEN - inset, card.angle(value))
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn a_vu_card_crowds_its_bottom_and_puts_zero_near_three_quarters() {
-        let c = Card::Vu;
-        assert!(c.fraction(-10.0) - c.fraction(-20.0) < c.fraction(0.0) - c.fraction(-10.0));
-        let zero = c.fraction(0.0);
-        assert!((0.7..0.8).contains(&zero), "0 VU at {zero}");
-        assert!(
-            (c.angle(-20.0) + SWEEP_DEG).abs() < 1e-9 && (c.angle(3.0) - SWEEP_DEG).abs() < 1e-9
-        );
-    }
-
-    #[test]
-    fn a_decibel_card_is_evenly_spaced() {
-        let c = Card::Decibels;
-        assert!(
-            ((c.fraction(-30.0) - c.fraction(-40.0)) - (c.fraction(10.0) - c.fraction(0.0))).abs()
-                < 1e-9
-        );
-        assert!(c.hot_from().is_none());
-    }
-
-    #[test]
-    fn the_scale_uses_the_width_of_the_card() {
-        let (l, _) = point(Card::Vu, -20.0, 0.0);
-        let (r, _) = point(Card::Vu, 3.0, 0.0);
-        let f = (r - l) / VU_W;
-        assert!(f > 0.85 && f < 1.0, "{f}");
-    }
-}

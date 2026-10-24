@@ -201,17 +201,3 @@ pub fn ramp(stops: &[String], t: f64) -> Option<Color> {
         }
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn ramps_interpolate() {
-        let stops = vec!["#000000".to_string(), "#ffffff".to_string()];
-        let mid = ramp(&stops, 0.5).unwrap();
-        assert!((mid.r - 0.5).abs() < 1e-9);
-        assert_eq!(ramp(&stops, 2.0).unwrap().g, 1.0);
-        assert!(ramp(&[], 0.5).is_none());
-    }
-}

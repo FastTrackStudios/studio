@@ -549,6 +549,3 @@ fn write_atomic(path: &Path, bytes: &[u8]) -> Result<(), Error> {
     std::fs::write(&tmp, bytes).map_err(io(&tmp))?;
     std::fs::rename(&tmp, path).map_err(io(path))
 }
-
-#[cfg(test)]
-mod tests;

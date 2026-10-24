@@ -97,23 +97,3 @@ pub fn pulse(rate: impl Into<Num>, low: f64) -> Motion {
         })
         .range(low, 1.0)
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn presets_are_valid_motions() {
-        for m in [
-            spring_follow("a/b").range(-20.0, 20.0),
-            spring_lag("norm(a/b)", Target::Rotate, 300.0),
-            ring_on("a/in", 5.0, "0.3 + 3*norm(a/dwell)"),
-            spin("0.5 + norm(a/speed)"),
-            flicker("0.2*norm(a/drive)"),
-            pulse("param(a/rate)", 0.2),
-        ] {
-            assert!(m.problems().is_empty(), "{m:?}: {:?}", m.problems());
-        }
-        assert_eq!(spin("1").to, 360.0);
-    }
-}

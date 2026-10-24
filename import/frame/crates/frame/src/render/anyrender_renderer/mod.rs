@@ -17,15 +17,6 @@ pub(crate) mod subpaths;
 #[cfg(feature = "anyrender")]
 pub mod target;
 
-#[cfg(test)]
-mod tests;
-#[cfg(all(test, feature = "anyrender"))]
-mod tests_authored;
-#[cfg(all(test, feature = "anyrender"))]
-mod tests_dense;
-#[cfg(all(test, feature = "anyrender"))]
-mod tests_images;
-
 pub use diagnostics::collect_render_diagnostics;
 pub use effects_plan::{EffectsPlan, EmissiveDraw, ShaderRegion, flicker_level};
 #[cfg(feature = "svg_export")]

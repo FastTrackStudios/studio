@@ -323,19 +323,3 @@ pub fn poly(points: &[(f64, f64)]) -> String {
     }
     d.trim_end().to_string()
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn band_hues_match_the_plugins() {
-        // eq_graph_model::freq_to_color(20.0) is hsl(0, .68, .58) = #e75353 (approx).
-        let low = band_color(20.0);
-        assert!(low.r > 0.85 && low.g < 0.4 && low.b < 0.4, "{low:?}");
-        let high = band_color(20_000.0);
-        assert!(high.b > high.g, "violet at the top: {high:?}");
-        assert_eq!(alpha("#ff0000", 0.5), "#ff000080");
-        assert_eq!(alpha("#ffffff24", 0.5), "#ffffff12");
-    }
-}

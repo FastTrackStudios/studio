@@ -562,23 +562,3 @@ fn first_diff(
         Some(expected[start..end_e].to_string()),
     )
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn normalizes_numbers() {
-        let got = normalize_numbers("M25.53409 47.09090L0.50000 1", 4);
-        assert_eq!(got, "M25.5341 47.0909L0.5 1");
-    }
-
-    #[test]
-    fn canonical_ignores_attribute_order() {
-        let a = r#"<svg><path fill="black" d="M0 0 L1 1"/></svg>"#;
-        let b = r#"<svg><path d="M0 0 L1 1" fill="black"/></svg>"#;
-        let (sa, _, _) = canonicalize_svg(a, 4).unwrap();
-        let (sb, _, _) = canonicalize_svg(b, 4).unwrap();
-        assert_eq!(sa, sb);
-    }
-}

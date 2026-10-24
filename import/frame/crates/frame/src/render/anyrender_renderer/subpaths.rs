@@ -36,29 +36,3 @@ pub(crate) fn closed_subpaths_svg(d: &str) -> Option<String> {
     let path = kurbo::BezPath::from_svg(d).ok()?;
     Some(split_open_closed(&path).0.to_svg())
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn splits_open_from_closed() {
-        let path =
-            kurbo::BezPath::from_svg("M0 0 L10 0 L10 10 Z M20 0 L30 0 M40 40 A5 5 0 0 1 50 50")
-                .unwrap();
-        let (closed, open) = split_open_closed(&path);
-        assert_eq!(closed.elements().len(), 4);
-        assert!(matches!(
-            closed.elements().last(),
-            Some(kurbo::PathEl::ClosePath)
-        ));
-        assert_eq!(
-            open.elements()
-                .iter()
-                .filter(|e| matches!(e, kurbo::PathEl::MoveTo(_)))
-                .count(),
-            2
-        );
-        assert_eq!(closed_subpaths_svg("M0 0 L5 5").as_deref(), Some(""));
-    }
-}

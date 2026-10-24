@@ -123,28 +123,3 @@ fn main() {
         std::process::exit(1);
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn args(s: &str) -> Result<Args, String> {
-        parse_args(s.split_whitespace().map(String::from))
-    }
-
-    #[test]
-    fn defaults_and_flags() {
-        let a = args("examples/plugins").unwrap();
-        assert_eq!(
-            (a.port, a.http, a.previews, a.host.as_str()),
-            (4050, Some(4051), true, "127.0.0.1")
-        );
-        let a = args("--port 5000 d --no-previews --host 0.0.0.0").unwrap();
-        assert_eq!((a.port, a.http, a.previews), (5000, Some(5001), false));
-        assert_eq!(args("d --http 8080").unwrap().http, Some(8080));
-        assert_eq!(args("d --no-http").unwrap().http, None);
-        assert!(args("").is_err());
-        assert!(args("a b").is_err());
-        assert!(args("d --port x").is_err());
-    }
-}

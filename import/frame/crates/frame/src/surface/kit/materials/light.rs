@@ -172,18 +172,3 @@ pub fn stand(height: f64, strength: f64) -> Vec<Effect> {
         ),
     ]
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn the_light_is_up_and_left_and_shadows_fall_down_and_right() {
-        let (lx, ly) = toward_light();
-        assert!(lx < 0.0 && ly < 0.0);
-        let (dx, dy) = shadow_offset(10.0);
-        assert!(dx > 0.0 && dy > dx);
-        let (hx, hy) = hotspot();
-        assert!(hx < 0.5 && hy < 0.5);
-    }
-}

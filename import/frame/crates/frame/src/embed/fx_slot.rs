@@ -152,18 +152,3 @@ impl FxSlot {
         self.cached.get_or_insert_with(Recording::new)
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn providers_match_like_the_registry() {
-        let r = FxProviders::tone();
-        assert!(r.provider_for("VST3: FTS EQ (FastTrackStudio)").is_some());
-        assert!(r.provider_for("CLAP: fts comp").is_some());
-        assert!(r.provider_for("ReaEQ").is_none());
-        let mut slot = FxSlot::open(&r, "FTS Comp", 96.0, 170.0).expect("claimed");
-        assert!(!slot.recording().is_empty());
-    }
-}

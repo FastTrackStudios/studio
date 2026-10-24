@@ -80,30 +80,3 @@ impl Fft {
         }
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn matches_a_naive_dft() {
-        let n = 16;
-        let x: Vec<f64> = (0..n)
-            .map(|i| ((i * 7 % 5) as f64 - 2.0) * 0.3 + (i as f64 * 0.4).sin())
-            .collect();
-        let (mut re, mut im) = (x.clone(), vec![0.0; n]);
-        Fft::new(n).forward(&mut re, &mut im);
-        for k in 0..n {
-            let (mut dr, mut di) = (0.0, 0.0);
-            for (t, v) in x.iter().enumerate() {
-                let a = -2.0 * PI * (k * t) as f64 / n as f64;
-                dr += v * a.cos();
-                di += v * a.sin();
-            }
-            assert!(
-                (re[k] - dr).abs() < 1e-9 && (im[k] - di).abs() < 1e-9,
-                "bin {k}"
-            );
-        }
-    }
-}

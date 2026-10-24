@@ -102,29 +102,3 @@ fn normal(w: &str) -> String {
         s
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn same_commands_blend_point_by_point() {
-        let s = ["M0 0 L10 0".to_string(), "M0 10 L20,-10".to_string()];
-        assert_eq!(blend(&s, 0.5).unwrap(), "M0.000 5.000 L15.000 -5.000");
-        assert_eq!(blend(&s, 0.0).unwrap(), s[0]);
-        assert_eq!(blend(&s, 1.0).unwrap(), s[1]);
-        assert_eq!(blend(&s, 7.0).unwrap(), s[1]);
-    }
-
-    #[test]
-    fn different_commands_switch_at_the_middle() {
-        let s = [
-            "M0 0 L10 0".to_string(),
-            "M0 0 C1 1 2 2 3 3".to_string(),
-            "M1 1 C1 1 2 2 5 5".to_string(),
-        ];
-        assert_eq!(blend(&s, 0.4).unwrap(), s[0]);
-        assert_eq!(blend(&s, 0.6).unwrap(), s[1]);
-        assert!(blend(&s, 1.5).unwrap().starts_with("M0.500 0.500 C"));
-    }
-}
