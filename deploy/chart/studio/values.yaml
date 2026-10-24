@@ -14,9 +14,12 @@ authUrl: ""
 image:
   registry: ghcr.io/fasttrackstudios
   repository: studio-web
-  # Empty = the chart's appVersion: the chart at tag vX.Y.Z deploys
-  # studio-web:X.Y.Z (pushed by images.yml from the release commit).
-  tag: ""
+  # The chart pins no release. `latest` follows the newest release tag;
+  # on starcommand argocd-image-updater sets the release itself here
+  # (X.Y.Z, the highest CalVer image on GHCR; images.yml pushes one per
+  # release tag) and the full name into `repository` (a repository with a
+  # `/` is used as it is, the registry ignored). Empty = `latest`.
+  tag: latest
   pullPolicy: IfNotPresent
   pullSecrets: []
 

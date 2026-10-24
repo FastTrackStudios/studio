@@ -91,7 +91,7 @@ chart's defaults are generic). Values:
 |---|---|---|
 | `taskUrl` / `authUrl` | `""` | the container's `TASK_URL` / `AUTH_URL`; empty = same origin |
 | `image.registry` / `image.repository` | `ghcr.io/fasttrackstudios` / `studio-web` | |
-| `image.tag` | `""` | empty = the chart's `appVersion` |
+| `image.tag` | `latest` | the image tag; empty = `latest`. Pin a release with `X.Y.Z` |
 | `ingress.host` / `ingress.className` / `ingress.annotations` / `ingress.tls` | | one host, path `/` |
 | `service.port` | `80` | |
 
@@ -102,21 +102,25 @@ external-dns publishes, which is why it has no class by default.
 
 ## Releases
 
-The chart's `version` and `appVersion` are the repo's one version: the
-release commit (`just release-prepare`, scripts/release.sh) rewrites both,
-so the chart at tag `vX.Y.Z` deploys `studio-web:X.Y.Z`. That image is
-pushed BEFORE the tag exists:
+The chart pins no release. Its `version` and `appVersion` are static (a
+release changes neither); the image tag defaults to `latest`. Each
+release tag builds and pushes the image:
 
 ```
-release PR squash-merges -> `chore(release): vX.Y.Z` on main
-  -> Images (.github/workflows/images.yml): studio-web:X.Y.Z, sha-<short>, latest
-just release-tag -> refuses until studio-web:X.Y.Z is on GHCR, public and
-                    labelled with the release commit (scripts/ghcr-images.sh)
-  -> vX.Y.Z -> Argo CD (`targetRevision: "*"`) deploys the newest tag
+just release -> tag vX.Y.Z on a green commit of main
+  -> Images (.github/workflows/images.yml, on the tag):
+     ghcr.io/fasttrackstudios/studio-web:X.Y.Z, sha-<short>, latest
+  -> on starcommand, argocd-image-updater picks the highest X.Y.Z image
+     (semver over ^[0-9]+\.[0-9]+\.[0-9]+$: the bare CalVer, which is why
+     the tag must be exactly YY.M.MICRO) and writes it into image.repository
+     (the full name) and image.tag; Argo CD rolls it out from gitops
 ```
 
-Roll back by deploying the previous tag's chart, or by pinning
-`image.tag` to the previous release: nothing in the image holds data.
+This repo deploys nothing: the cluster side lives in Codys-Wright/starcommand.
+Elsewhere, pin `image.tag` to a release (`--set image.tag=26.10.4`) or follow
+`latest`. Roll back by pinning `image.tag` to the previous release (on
+starcommand: in its gitops, or by reverting the image-updater commit):
+nothing in the image holds data.
 
 ## Building the image yourself
 
