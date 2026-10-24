@@ -181,16 +181,17 @@ nothing). `main` requires `PR checks`, `Local CI` and `Release guard`. The
 full set, **`CI`** (`checks.yml`: `Gates`, `Check` + advisory clippy,
 `Wasm`, `Tests`, aggregated as **`CI passed`**), runs after every merge to
 `main`, on hotfix PRs into `release/**`, and by hand. `main` may go red:
-releases are cut by hand, and `just release-tag` requires `CI passed` on
-the release commit. Plan, gates, the macOS release tooling and the
+releases are cut by hand, and `just release` tags only a commit whose
+`CI passed` is green. Plan, gates, the macOS release tooling and the
 aggregator run on GitHub's free runners. The builds — `Check`, `Tests` (the
 core test set) and `Wasm` — run side by side on THEBATTLESHIP, in a pool of
 three runners sharing one warm cache (`Codys-Wright/nix-config`
 hosts/THEBATTLESHIP/github-runners.nix): `studio-main` for every check,
-a release commit's and a hotfix PR's included, so the check target dirs
-are built once; `studio-release` builds only release artifacts (the
-Linux AppImage). A newer merge cancels
-the older run; a release commit's run is never cancelled. Each pool's cache
+a hotfix PR's included, so the check target dirs are built once;
+`studio-release` (and airlock's `studio-release-mac`) build only release
+artifacts from a tag: the studio-web image, the AppImage, the `.dmg`,
+TestFlight. A newer merge cancels the older run; a release job is never
+cancelled. Each pool's cache
 is capped at 200 GB. No WarpBuild, no snapshots, no schedule. No tailwind step anywhere
 (committed sheets; dx builds session-web's); `just ci-boundaries` is
 manual, not CI.
@@ -206,12 +207,14 @@ is a report you run by hand, not a gate.
 **The workflows are generated.** Every file in `.github/workflows/` is
 written by `xtask/workflows` (`just workflows`); edit the Rust, never the
 YAML — `Gates` and `just ci-local` fail when they differ. The jobs run
-without nix (rustup + apt + pinned tool binaries). `deploy` (nix images)
-and `studio-ios` (Xcode signing) keep their own runners.
+without nix (rustup + apt + pinned tool binaries). The release builds
+(`Images`, `desktop`, `studio-ios`) keep their own runners. This repo
+deploys nothing: Argo CD rolls out the tag's image from gitops
+(Codys-Wright/starcommand).
 `just ci` refuses to start with less than 25 GB free: a full disk shows up as
 mold dying with a bus error, which reads as a broken toolchain
 (`just sweep-incremental` is the always-safe reclaim). It says nothing
-about `studio-ios` (Xcode, signing) or `deploy`, which
+about `studio-ios` (Xcode, signing) or the other tag builds, which
 have their own runners and reasons to be red. The REAPER integration
 suites (`just reaper-test`, `just reaper daw-test`) are not in CI at all:
 they need a licensed REAPER, so run them locally.
@@ -356,16 +359,21 @@ first). The rules are not optional:
 
 ## Agent skills and process
 
-- **Branches, PRs and releases: fleet release flow v4.** Load the
+- **Branches, PRs and releases: tag-from-main.** Load the
   `release-workflow` skill before branching, opening or merging a PR, or
-  releasing; studio's specifics are in `docs/agents/release-workflow.md`.
+  releasing; studio's specifics are in `docs/agents/release-workflow.md`,
+  which wins where they differ (studio has no release PRs).
   Branch from `origin/main` (`feat/sta-123-slug`), open the PR into `main`
   with a conventional title and `.github/pull_request_template.md` filled
   in, add a change file for every crate you change (`cargo rail change add
   <crates> --bump <none|patch|minor|major> -m "<note> (signal|session)"`),
-  squash-merge. There is no `dev` branch. Releases are CalVer tags cut with
-  `just release-prepare` / `release-pr` / `release-merge` / `release-tag`;
-  never edit `CHANGELOG.md` or the workspace version in a normal PR.
+  squash-merge. There is no `dev` branch. Releases are CalVer tags pushed
+  by `just release` (main's newest commit with a green `CI passed`, or
+  `just release <sha>`); the tag alone starts the release builds, each of
+  which stamps the tag's version into its checkout, so the version
+  committed on main is not the released one. The notes come from the
+  change files added since the previous tag. Never edit the workspace
+  version; `CHANGELOG.md` ends at 26.10.3.
 - Issues: GitHub Issues on `FastTrackStudios/studio` via `gh` — see
   `docs/agents/issue-tracker.md`; the triage labels (`needs-triage`,
   `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`) in

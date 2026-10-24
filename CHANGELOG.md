@@ -1,12 +1,18 @@
 # Changelog
 
-All notable changes to this project are documented in this file.
+> **From 26.10.4 on, release notes are on the
+> [GitHub Releases page](https://github.com/FastTrackStudios/studio/releases)**,
+> built at release time from the change files added since the previous tag
+> (`just release`, scripts/release.sh). This file is no longer written; it
+> keeps the releases up to 26.10.3 as they shipped.
+
+All notable changes up to 26.10.3 are documented below.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 this project follows [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/).
-Each release's section is built by `just release-prepare` (scripts/release.sh)
-from the cargo-rail change files in `.changes/` (up to 0.1.2, by `git cliff`
-from the commits since the previous release); edit it only in a release PR.
+Each section was built by the release commit from the cargo-rail change
+files in `.changes/` (up to 0.1.2, by `git cliff` from the commits since the
+previous release).
 
 ## [26.10.3] - 2026-10-24
 

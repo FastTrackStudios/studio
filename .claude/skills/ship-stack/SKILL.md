@@ -33,19 +33,17 @@ worktree with its own `target/` costs a cold build.
 | `git commit` | prek pre-commit (`prek.toml`) | your machine | rustfmt, shellcheck, actionlint on the **staged** files |
 | `git push` | prek pre-push → `scripts/ci-local-hook.sh` → `just ci-local` | your machine | the PR gate's expensive half; posts **`Local CI`** |
 | PR into main | `PR / PR checks` (`pr.yml`) | free hosted, rustup + cargo-rail, no nix | fmt, change files, the lockfile, the rail config |
-| PR into main | `Release / Release guard` | free hosted | judges `release/pending` PRs only; passes otherwise |
-| push to main | `CI` (`checks.yml`): Plan, Dependency cache, Gates, Check, Wasm, Tests, Release tooling (macOS), **`CI passed`** | Check, Tests, Wasm side by side on THEBATTLESHIP's `studio-main` pool (warm shared cache); the rest free hosted | the full set; a newer merge cancels the older run, a release commit's run is never cancelled |
+| PR into main | `release / Release guard` | free hosted | a no-op that passes and says why: releases are tags, there are no release PRs (kept because the ruleset requires it) |
+| push to main | `CI` (`checks.yml`): Plan, Dependency cache, Gates, Check, Wasm, Tests, Release tooling (macOS), **`CI passed`** | Check, Tests, Wasm side by side on THEBATTLESHIP's `studio-main` pool (warm shared cache); the rest free hosted | the full set; a newer merge cancels the older run |
 | PR into `release/**` | `CI` | same | a hotfix: the full suite |
+| push of a `v*` tag (`just release`) | `Images`, `studio-ios`, `desktop`, `release` | `studio-release` / `studio-release-mac` / hosted | the release builds, from the tag alone, in parallel, never cancelled; no tests (the tag guard checks `CI passed`) |
 
 **Main requires:** `PR checks`, `Release guard` and `Local CI` (ruleset
-25572127). `just release-tag` separately requires `CI passed` on the
-release commit.
+25572127). `just release` separately requires `CI passed` green on the
+commit it tags.
 
 **`just ci-local`, in order** (`scripts/ci-local.sh`):
 
-0. **release guard:** on `release/pending`, the base commit's
-   `scripts/release.sh release-only`; a sound release commit passes with
-   nothing built.
 1. **checks:** `cargo fmt --check`, `cargo rail change check --since <base>`
    (every touched crate has a `.changes/*.md`), `cargo rail config validate
    --strict`, `just workflows-check` (the generated workflows are current,
@@ -205,8 +203,7 @@ gh api -X PUT repos/FastTrackStudios/studio/rulesets/25572127 --input /tmp/rs-pu
 
 Each merge to main starts a full `CI` run: the builds on THEBATTLESHIP's
 `studio-main` pool, the rest on GitHub's free runners. A newer merge
-cancels the older run itself (a release commit's run is never cancelled);
-if one is still going, cancel it so the suite runs once, on the top commit:
+cancels the older run itself; if one is still going, cancel it so the suite runs once, on the top commit:
 
 ```bash
 gh run list -b main -w checks.yml -L 5 --json databaseId,status,headSha
@@ -214,7 +211,9 @@ gh run cancel <older in-progress id>
 ```
 
 Done when the run on main's head commit has a green `CI passed`.
-`just release-tag` requires it.
+`just release` tags main's newest commit where it is green
+(docs/agents/release-workflow.md); releasing is a separate step, never
+part of merging a stack.
 
 ## Reference
 
@@ -238,8 +237,8 @@ Done when the run on main's head commit has a green `CI passed`.
 
 **Runners** (WarpBuild is gone, 2026-10-24): PRs and the cheap jobs on
 GitHub's free runners; the builds on THEBATTLESHIP, two pools of three
-runners (`studio-main` for every check, release commits included;
-`studio-release` for release builds only), each pool sharing one warm
+runners (`studio-main` for every check; `studio-release` for the tag's
+release builds only: the image, the AppImage), each pool sharing one warm
 cache capped at 200 GB, defined in Codys-Wright/nix-config
 hosts/THEBATTLESHIP/github-runners.nix. The Mac release builds (TestFlight,
 the `.dmg`) run on airlock's `airlock-studio-release` runner (label
@@ -248,9 +247,10 @@ warm checkout); Task's are on `airlock-task-release` (`task-release-mac`).
 A new or auto-updated runner binary on airlock waits on a macOS
 permission prompt for the external build disk until someone clicks Allow
 (it stalls at "Validating directory permissions").
-- **Which pool builds what:** checks never run on a release pool, release
-  commits included, so a pool keeps one set of target dirs. Release
-  artifacts only on `studio-release` / `studio-release-mac`.
+- **Which pool builds what:** checks never run on a release pool, so a
+  pool keeps one set of target dirs. Release artifacts (the studio-web
+  image, the AppImage, the `.dmg`, TestFlight) only on `studio-release` /
+  `studio-release-mac`, from a tag.
 - **Setup:** every job is generated (`xtask/workflows`, `just workflows`):
   rustup at the pinned toolchain, apt headers (cached), pinned release
   binaries (just, cargo-rail, nextest, actionlint); `PR checks`
