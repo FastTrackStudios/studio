@@ -33,7 +33,7 @@ worktree with its own `target/` costs a cold build.
 | `git push` | prek pre-push → `scripts/ci-local-hook.sh` → `just ci-local` | your machine | the PR gate's expensive half; posts **`Local CI`** |
 | PR into main | `PR / PR checks` (`pr.yml`) | free hosted, rustup + cargo-rail, no nix | fmt, change files, the lockfile, the rail config |
 | PR into main | `Release / Release guard` | free hosted | judges `release/pending` PRs only; passes otherwise |
-| push to main | `CI` (`checks.yml`): Plan, Dependency cache, Gates, Check, Wasm, Tests, Release tooling (macOS), **`CI passed`** | free hosted (ubuntu-latest; macos-latest for the release tooling), rust-cache main saves | the full set, once per merge (no nightly, no schedule) |
+| push to main | `CI` (`checks.yml`): Plan, Dependency cache, Gates, Check, Wasm, Tests, Release tooling (macOS), **`CI passed`** | Check, Tests, Wasm side by side on THEBATTLESHIP's `studio-main` pool (warm shared cache); the rest free hosted | the full set; a newer merge cancels the older run, a release commit's run is never cancelled |
 | PR into `release/**` | `CI` | same | a hotfix: the full suite |
 
 **Main requires:** `PR checks`, `Release guard` and `Local CI` (ruleset
@@ -202,7 +202,7 @@ gh api -X PUT repos/FastTrackStudios/studio/rulesets/25572127 --input /tmp/rs-pu
 
 ### 7. Main is green
 
-Each merge to main starts a full `CI` run, all on GitHub's free runners. Cancel the ones the last merge
+Each merge to main starts a full `CI` run: the builds on THEBATTLESHIP's `studio-main` pool, the rest on GitHub's free runners. A newer merge cancels the older run. Cancel the ones the last merge
 superseded, so the suite runs once, on the top commit:
 
 ```bash
@@ -233,10 +233,11 @@ Done when the run on main's head commit has a green `CI passed`.
   locally and after merge. `just ci-churn` checks that a warm build
   recompiles nothing after the CI prep (assets, plugin faces).
 
-**Runners:** GitHub's free hosted runners only (the repo is public), since
-2026-10-24 (WarpBuild is gone). The test build is the core test set
-(the Justfile's `test_packages`, ~650 tests), which fits a free runner;
-rust-cache, saved by main, keeps its dependencies warm.
+**Runners** (WarpBuild is gone, 2026-10-24): PRs and the cheap jobs on
+GitHub's free runners; the builds on THEBATTLESHIP, two pools of three
+runners (`studio-main`, `studio-release`), each pool sharing one warm
+cache capped at 200 GB, defined in Codys-Wright/nix-config
+hosts/THEBATTLESHIP/github-runners.nix.
 - **Setup:** every job is generated (`xtask/workflows`, `just workflows`):
   rustup at the pinned toolchain, apt headers (cached), pinned release
   binaries (just, cargo-rail, nextest, actionlint); `PR checks`

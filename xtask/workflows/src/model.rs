@@ -54,6 +54,12 @@ impl Workflow {
         self
     }
 
+    /// [`Self::concurrency`] with `cancel-in-progress` decided per run.
+    pub fn concurrency_when(mut self, group: &str, cancel_in_progress: &str) -> Self {
+        self.concurrency = Some(Concurrency::when(group, cancel_in_progress));
+        self
+    }
+
     pub fn env(mut self, key: &str, value: &str) -> Self {
         self.env.insert(key.to_owned(), value.to_owned());
         self
@@ -69,22 +75,40 @@ impl Workflow {
 #[serde(rename_all = "kebab-case")]
 pub struct Concurrency {
     pub group: String,
-    pub cancel_in_progress: bool,
+    pub cancel_in_progress: Cancel,
+}
+
+/// `cancel-in-progress`: a constant, or an expression evaluated per run
+/// (e.g. never cancel a release commit's run).
+#[derive(Serialize)]
+#[serde(untagged)]
+pub enum Cancel {
+    Always(bool),
+    When(String),
 }
 
 impl Concurrency {
     pub fn new(group: &str, cancel_in_progress: bool) -> Self {
         Self {
             group: group.to_owned(),
-            cancel_in_progress,
+            cancel_in_progress: Cancel::Always(cancel_in_progress),
+        }
+    }
+
+    pub fn when(group: &str, cancel_in_progress: &str) -> Self {
+        Self {
+            group: group.to_owned(),
+            cancel_in_progress: Cancel::When(cancel_in_progress.to_owned()),
         }
     }
 }
 
-/// `runs-on`: one label, or a list of labels for a self-hosted runner.
+/// `runs-on`: one label, a list of labels for a self-hosted runner, or an
+/// expression that picks one per run.
 pub enum RunsOn {
     Label(&'static str),
     Labels(&'static [&'static str]),
+    Expr(&'static str),
 }
 
 impl Serialize for RunsOn {
@@ -92,6 +116,7 @@ impl Serialize for RunsOn {
         match self {
             Self::Label(label) => s.serialize_str(label),
             Self::Labels(labels) => labels.serialize(s),
+            Self::Expr(expr) => s.serialize_str(expr),
         }
     }
 }

@@ -46,9 +46,7 @@
 //! (.cargo/ci-config.toml) and incremental is off.
 
 use crate::model::{Job, RunsOn, Step, UBUNTU, Workflow, yaml};
-use crate::steps::{
-    Toolchain, Tools, cargo_deps_save, checkout, checkout_full, footprint, hosted_setup, rust_cache,
-};
+use crate::steps::{Tools, cargo_deps_save, checkout, checkout_full, hosted_setup, rust_cache};
 use anyhow::Result;
 
 pub fn workflow() -> Result<Workflow> {
@@ -66,14 +64,15 @@ workflow_dispatch:
 "#,
         )?,
     )
-    // One group per PR, so a new push to a hotfix PR cancels its
-    // predecessor. A PUSH gets a group of its own commit (the Zed way):
-    // every merge is checked to the end, never cancelled by the next one —
-    // its green `CI passed` is what `just release-tag` requires.
-    .concurrency(
+    // One group per PR or branch, cancel-in-progress: a newer merge to main
+    // cancels the older run, whose result no longer matters. EXCEPT a
+    // release commit (`chore(release): v…`): its run gets a group of its own
+    // commit and is never cancelled — it queues and runs to the end, because
+    // `just release-tag` requires its `CI passed`.
+    .concurrency_when(
         "ci-${{ github.event.pull_request.number || github.ref }}-${{ \
-         github.event_name == 'push' && github.sha || github.event_name }}",
-        true,
+         startsWith(github.event.head_commit.message, 'chore(release): v') && github.sha || 'run' }}",
+        "${{ !startsWith(github.event.head_commit.message, 'chore(release): v') }}",
     )
     .job("plan", plan()?)
     .job("deps-cache", deps_cache())
@@ -238,49 +237,6 @@ fn release_macos() -> Job {
         ))
 }
 
-/// REQUIRED on full runs: `cargo check --workspace`. Clippy reports here
-/// too, advisory: the lint debt is being paid down crate by crate, so it
-/// reports (grouped by lint and crate, .github/scripts/clippy-report.py)
-/// without failing. Same check-mode dependency metadata, so same job.
-fn check() -> Job {
-    hosted_cargo_job(
-        Job::new(UBUNTU)
-            .name("Check")
-            .needs(&["plan"])
-            .cond(WANTED)
-            .timeout(90),
-    )
-    .step(checkout())
-    .steps(hosted_setup(
-        "clippy",
-        "",
-        Tools {
-            apt: true,
-            ci_cargo_config: true,
-            free_disk: true,
-            ..Tools::default()
-        },
-    ))
-    .steps(rust_cache("check"))
-    .step(Step::run(
-        "cargo check --workspace",
-        "cargo check --workspace",
-    ))
-    .step(
-        Step::run(
-            "cargo clippy (advisory, does not block)",
-            "\
-cargo clippy --workspace --no-deps --all-targets --keep-going \\
-  --message-format=json -- --cap-lints warn \\
-  | python3 .github/scripts/clippy-report.py
-",
-        )
-        .cond(NOT_CANCELLED)
-        .continue_on_error(),
-    )
-    .step(footprint())
-}
-
 /// Not `--locked`: cargo writes the lockfile's [[patch.unused]] trailer in
 /// HashMap order — one group per patched source URL — so the same inputs
 /// serialise differently from one run to the next and `--locked` fails at
@@ -345,99 +301,128 @@ cargo rail change check --since \"${BASE_SHA}\"
     .env("BASE_SHA", "${{ github.event.pull_request.base.sha }}")
 }
 
-/// REQUIRED: the browser builds, which the workspace check (native) never
-/// compiles — the web bundles and the Signal browser remote.
-fn wasm() -> Job {
-    hosted_cargo_job(
-        Job::new(UBUNTU)
-            .name("Wasm")
-            .needs(&["plan"])
-            .cond(WANTED)
-            .timeout(75),
+/// The pool a run's build jobs go to (Codys-Wright/nix-config
+/// hosts/THEBATTLESHIP/github-runners.nix: two pools of three instances,
+/// each pool sharing one warm cache, $STUDIO_CACHE_DIR). A release commit
+/// and a hotfix PR into release/** take `studio-release`, so a release
+/// never queues behind ordinary merges; every other run (a merge to main, a
+/// dispatch) takes `studio-main`. Only trusted code reaches them: CI runs no
+/// PR into main (pr.yml does, on free runners), and `plan` refuses a fork
+/// PR into a release line.
+const POOL: RunsOn = RunsOn::Expr(
+    "${{ (github.event_name == 'pull_request' || \
+     startsWith(github.event.head_commit.message, 'chore(release): v')) && \
+     fromJSON('[\"self-hosted\",\"studio-release\"]') || \
+     fromJSON('[\"self-hosted\",\"studio-main\"]') }}",
+);
+
+/// The pool's shared cache holds one target dir per build kind (check mode,
+/// test codegen and wasm32 share no artifacts), so the three jobs of a run
+/// build side by side, each warm whichever instance claims it; two jobs of
+/// the same kind wait on cargo's own lock. The pool's total is capped at
+/// 200 GB: over it, this kind's dir is emptied (its next build is cold).
+fn target_dir(kind: &str) -> Step {
+    Step::run(
+        &format!("Target dir ({kind}, pool capped at 200 GB)"),
+        &format!(
+            r#"pool="${{STUDIO_CACHE_DIR:?not a studio pool runner (no STUDIO_CACHE_DIR)}}"
+dir="$pool/{kind}"
+mkdir -p "$dir"
+echo "CARGO_TARGET_DIR=$dir" >> "$GITHUB_ENV"
+used="$(du -s --block-size=1G "$pool" | cut -f1)"
+if [ "$used" -gt 200 ]; then
+  echo "::warning::the pool cache is ${{used}} GB, over 200 GB: emptying $dir (a cold {kind} build)"
+  rm -rf "$dir" && mkdir -p "$dir"
+fi
+echo "target dir: $dir; pool $(du -sh "$pool" | cut -f1) of 200 GB; $(df -h "$pool" | awk 'NR==2 {{print $4}}') free on the disk"
+"#
+        ),
     )
-    // The wasm32 C builds (ring): the nix shell pointed these at an
-    // unwrapped clang-18 and llvm-ar; on the image they are apt's clang and
-    // llvm (steps::APT_PACKAGES).
-    .env("CC_wasm32_unknown_unknown", "clang")
-    .env("AR_wasm32_unknown_unknown", "llvm-ar")
-    .step(checkout())
-    .steps(hosted_setup(
-        "",
-        "wasm32-unknown-unknown",
-        Tools {
-            apt: true,
-            just: true,
-            ci_cargo_config: true,
-            free_disk: true,
-            ..Tools::default()
-        },
-    ))
-    .steps(rust_cache("wasm"))
-    // The three web bundles deploy.yml ships (STA-366). The workspace check
-    // is native, so it never compiles them: a native-only dep (tokio `net`,
-    // an engine, an X11/HID crate) leaking into their graph stayed hidden
-    // until the deploy itself failed. Same targets and features as
-    // nix/modules/packages/web-bundles.nix builds (`just web-wasm-check`).
-    .step(Step::run("wasm check (web bundles)", "just web-wasm-check"))
-    // The Signal browser remote: studio-desktop's web build. Required since
-    // it went green (STA-184: tokio/mio no longer reach wasm; the device-only
-    // Libraries page is gated off the browser, 2026-10-24).
-    .step(
-        Step::run(
-            "wasm check (Signal browser remote)",
-            "just signal-wasm-check",
-        )
-        .cond(NOT_CANCELLED),
-    )
-    .step(footprint())
 }
 
-/// REQUIRED on full runs: the core test set, on a free hosted runner,
-/// without nix: the hosted jobs' rustup/apt/release-binary setup plus
-/// nextest and lavapipe (software Vulkan).
-///
-/// The suite was cut to a core set (2026-10-24: ~650 tests in ~40 binaries,
-/// from 11 317 in 815): the DAW core, the session format, the DSP math, the
-/// timeline, every effect's parameter round-trip. Only the crates that still
-/// have tests are built (`just test-packages`, the one list `just test` and
-/// local CI use too), so the build fits a free runner, and rust-cache (main
-/// saves) keeps their dependencies warm. No WarpBuild, no snapshot.
-fn tests() -> Job {
-    let tc = Toolchain::Hosted;
+/// A build job on the pool: the checkout, the CI cargo config, the target
+/// dir. Every command runs in the repo's `.#ci` dev shell (the runners are
+/// NixOS: the toolchain, the native headers, just, nextest and the wasm32 C
+/// toolchain all come from it).
+fn pool_job(name: &str, kind: &str, timeout: u32) -> Job {
     hosted_cargo_job(
-        Job::new(UBUNTU)
-            .name("Tests")
+        Job::new(POOL)
+            .name(name)
             .needs(&["plan"])
             .cond(WANTED)
-            .timeout(120),
+            .timeout(timeout),
     )
     .step(checkout().with("persist-credentials", false))
-    .steps(hosted_setup(
-        "",
-        "",
-        Tools {
-            apt: true,
-            gpu: true,
-            just: true,
-            nextest: true,
-            ci_cargo_config: true,
-            free_disk: true,
-            ..Tools::default()
-        },
+    .step(Step::run(
+        "CI cargo config",
+        "mkdir -p ../.cargo\ncp .cargo/ci-config.toml ../.cargo/config.toml\n",
     ))
-    .steps(rust_cache("tests"))
-    .environment(ASSETS_ENVIRONMENT.into())
-    .step(assets_token())
-    .step(assets(tc))
-    .step(
-        Step::run(
-            "cargo nextest",
-            &format!("bash -uo pipefail -s <<'EOF'\n{NEXTEST}EOF\n"),
-        )
-        .id("nextest")
-        .env("TEST_LOG", "${{ runner.temp }}/nextest-ci.log"),
+    .step(target_dir(kind))
+}
+
+/// `script`, run in the dev shell.
+fn in_shell(script: &str) -> String {
+    format!(
+        "nix develop --accept-flake-config .#ci --command bash -euo pipefail -s <<'EOF'\n{script}EOF\n"
     )
-    .step(test_log("nextest-ci"))
+}
+
+/// REQUIRED on full runs: `cargo check --workspace`. Clippy reports here
+/// too, advisory: the lint debt is being paid down crate by crate, so it
+/// reports (grouped by lint and crate, .github/scripts/clippy-report.py)
+/// without failing. Same check-mode units, so same job and target dir.
+fn check() -> Job {
+    pool_job("Check", "check", 90)
+        .step(Step::run(
+            "cargo check --workspace",
+            &in_shell("cargo check --workspace\n"),
+        ))
+        .step(
+            Step::run(
+                "cargo clippy (advisory, does not block)",
+                &in_shell(
+                    "cargo clippy --workspace --no-deps --all-targets --keep-going \\\n  --message-format=json -- --cap-lints warn \\\n  | python3 .github/scripts/clippy-report.py\n",
+                ),
+            )
+            .cond(NOT_CANCELLED)
+            .continue_on_error(),
+        )
+}
+
+/// REQUIRED on full runs: the browser builds, which the workspace check
+/// (native) never compiles — the three web bundles deploy.yml ships
+/// (STA-366: a native-only dep leaking into their graph stayed hidden until
+/// the deploy failed) and the Signal browser remote (required since it went
+/// green, STA-184).
+fn wasm() -> Job {
+    pool_job("Wasm", "wasm", 75)
+        .step(Step::run(
+            "wasm check (web bundles)",
+            &in_shell("just web-wasm-check\n"),
+        ))
+        .step(
+            Step::run(
+                "wasm check (Signal browser remote)",
+                &in_shell("just signal-wasm-check\n"),
+            )
+            .cond(NOT_CANCELLED),
+        )
+}
+
+/// REQUIRED on full runs: the core test set (`just test_packages`, the one
+/// list `just test` and local CI use; ~650 tests since the cut of
+/// 2026-10-24), warm on the pool.
+fn tests() -> Job {
+    pool_job("Tests", "tests", 120)
+        .environment(ASSETS_ENVIRONMENT.into())
+        .step(assets_token())
+        .step(assets())
+        .step(
+            Step::run("cargo nextest", &in_shell(NEXTEST))
+                .id("nextest")
+                .env("TEST_LOG", "${{ runner.temp }}/nextest-ci.log"),
+        )
+        .step(test_log("nextest-ci"))
 }
 
 /// The full nextest log as an artifact (see [`NEXTEST`] for why it is a file).
@@ -473,11 +458,11 @@ fn test_log(artifact: &str) -> Step {
 /// actions/checkout's clean wipes the ignored .assets/ every run, so
 /// .assets is a symlink into the runner instance's cache dir: the clean
 /// removes the link, not the clones.
-fn assets(tc: Toolchain) -> Step {
+fn assets() -> Step {
     Step::run(
         "Assets (studio-assets, rig-models, mic-models)",
         &format!(
-            r#"store="${{CI_CACHE_DIR:-${{CACHE_DIRECTORY:-$HOME/.cache}}}}/assets"
+            r#"store="${{STUDIO_CACHE_DIR:-${{CI_CACHE_DIR:-${{CACHE_DIRECTORY:-$HOME/.cache}}}}}}/assets"
 mkdir -p "$store"
 [ -L .assets ] || [ -e .assets ] || ln -s "$store" .assets
 if [ -n "${{ASSETS_TOKEN}}" ]; then
@@ -492,7 +477,7 @@ else
   echo "::warning::no asset clones on this runner yet and no credential to fetch them (a main run fetches them): tests that need assets will fail"
 fi
 "#,
-            fetch = tc.cmd("just assets")
+            fetch = "nix develop --accept-flake-config .#ci --command just assets"
         ),
     )
     .env("ASSETS_TOKEN", "${{ steps.assets-token.outputs.token }}")

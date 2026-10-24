@@ -18,8 +18,9 @@
 //!   artefacts nix fetched;
 //! - python3 from the runner image (/usr/bin/python3).
 //!
-//! The SELF-HOSTED jobs (`tests` on the NixOS VM, `deploy`) keep nix: there it
-//! is the host's own package manager, not an install step ([`Toolchain::Nix`]).
+//! The SELF-HOSTED jobs (CI's Check, Tests and Wasm on THEBATTLESHIP's studio
+//! pools, `deploy`) keep nix: there it is the host's own package manager, not
+//! an install step (their commands run in the repo's `.#ci` dev shell).
 
 use crate::model::Step;
 
@@ -116,23 +117,6 @@ const NEXTEST: &str = "0.9.132";
 /// Bump to throw away the apt cache (cache-apt-pkgs-action keys on the
 /// package list and this).
 const APT_CACHE_VERSION: &str = "1";
-
-/// Where a job's commands come from.
-#[derive(Clone, Copy)]
-pub enum Toolchain {
-    /// A hosted job: the tools are on PATH (installed by [`hosted_setup`]).
-    /// (The self-hosted NixOS variant went with the Mac Pro tests job.)
-    Hosted,
-}
-
-impl Toolchain {
-    /// `cmd` as this job runs it.
-    pub fn cmd(self, cmd: &str) -> String {
-        match self {
-            Self::Hosted => cmd.to_owned(),
-        }
-    }
-}
 
 /// The event's own ref: a PR's merge ref, the pushed commit, main for the
 /// nightly, a dispatched branch.
@@ -349,20 +333,6 @@ pub fn rust_cache(shared_key: &str) -> [Step; 2] {
         )
         .with("target-dir", "target"),
     ]
-}
-
-/// What this kind would put in the Actions cache (rust-cache trims the
-/// workspace crates before saving, so the entry is smaller), and the disk
-/// left: the numbers to watch against the 10 GB budget.
-pub fn footprint() -> Step {
-    Step::run(
-        "Cache footprint",
-        "\
-du -sh target ~/.cargo/registry ~/.cargo/git 2>/dev/null || true
-df -h / | tail -n 1
-",
-    )
-    .cond("${{ always() }}")
 }
 
 /// What [`cargo_deps_restore`] / [`cargo_deps_save`] keep: cargo's
