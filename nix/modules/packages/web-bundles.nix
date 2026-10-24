@@ -92,6 +92,9 @@
       session-app-web = craneLib.buildPackage (commonArgs // dxWebEnv // {
         pname = "session-app-web";
         version = "0.1.0";
+        # The open-a-set page's "try the live demo" opens it in the app
+        # itself (`session::open_link::demo_href`), wherever it is served.
+        SESSION_DEMO_LINK = sessionDemoLink;
         cargoArtifacts = null;
         nativeBuildInputs = dxWebNativeInputs;
         doNotPostBuildInstallCargoBinaries = true;
@@ -225,29 +228,109 @@
       # returning browser paired its cached glue with the new wasm, which
       # does not link (a blank page). The page itself is `no-cache`, so a
       # new build's page always asks for its own files.
+      #
+      # `installSessionApp <dir>`: the app's files into <dir>, its page
+      # pointed at them by the wasm's hash. Shared by every tree the app
+      # is served from (the session site's /app/, studio-web's /session/).
+      installSessionApp = ''
+        installSessionApp() {
+          local dir="$1" v snippets
+          mkdir -p "$dir"
+          cp -R ${session-app-web}/www/. "$dir/"
+          chmod -R u+w "$dir"
+          v=$(sha256sum "$dir/session-daw-web_bg.wasm" | cut -c1-16)
+          # The snippets the module imports, preloaded beside it: their
+          # directories are named by crate hash, so they are listed here from
+          # what was built rather than written into the page.
+          snippets=$(cd "$dir" && find snippets -name '*.js' | sort \
+            | sed 's|.*|    <link rel="modulepreload" href="./&" />|')
+          substituteInPlace "$dir/index.html" \
+            --replace-fail '"./session-daw-web.js"' "\"./session-daw-web.js?v=$v\"" \
+            --replace-fail 'href="./session-daw-web_bg.wasm"' "href=\"./session-daw-web_bg.wasm?v=$v\"" \
+            --replace-fail '    <!-- snippets -->' "$snippets" \
+            --replace-fail 'init();' "init({ module_or_path: \"./session-daw-web_bg.wasm?v=$v\" });"
+          # Its precompressed copy is the old page: served first, it would
+          # undo the above.
+          rm -f "$dir/index.html.br" "$dir/index.html.gz"
+        }
+      '';
+
       session-site-root = pkgs.runCommand "session-site-root" { } ''
-        mkdir -p $out/app
+        ${installSessionApp}
+        mkdir -p $out
         cp -R ${session-web}/www/. $out/
-        cp -R ${session-app-web}/www/. $out/app/
-        chmod -R u+w $out/app
-        v=$(sha256sum $out/app/session-daw-web_bg.wasm | cut -c1-16)
-        # The snippets the module imports, preloaded beside it: their
-        # directories are named by crate hash, so they are listed here from
-        # what was built rather than written into the page.
-        snippets=$(cd $out/app && find snippets -name '*.js' | sort \
-          | sed 's|.*|    <link rel="modulepreload" href="./&" />|')
-        substituteInPlace $out/app/index.html \
-          --replace-fail '"./session-daw-web.js"' "\"./session-daw-web.js?v=$v\"" \
-          --replace-fail 'href="./session-daw-web_bg.wasm"' "href=\"./session-daw-web_bg.wasm?v=$v\"" \
-          --replace-fail '    <!-- snippets -->' "$snippets" \
-          --replace-fail 'init();' "init({ module_or_path: \"./session-daw-web_bg.wasm?v=$v\" });"
-        # Its precompressed copy is the old page: served first, it would
-        # undo the above.
-        rm -f $out/app/index.html.br $out/app/index.html.gz
+        installSessionApp $out/app
+      '';
+
+      # The keys rig's AudioWorklet bundle (`just keys-worklet-wasm`): the
+      # browser keys rig loads it from `<base>/worklet/` (web_keys_rig.rs).
+      # Its own derivation because its RUSTFLAGS (4 GB memory, SIMD) are
+      # not the page's. The single-threaded build: the shared-memory one
+      # needs nightly build-std, and the page falls back without it
+      # (web_keys_threads.rs).
+      signal-keys-worklet = craneLib.buildPackage (commonArgs // {
+        pname = "signal-keys-worklet";
+        version = "0.1.0";
+        cargoArtifacts = null;
+        nativeBuildInputs = commonArgs.nativeBuildInputs ++ [ config.fts.dx.wasmBindgen ];
+        doNotPostBuildInstallCargoBinaries = true;
+        RUSTFLAGS = "-C link-arg=--max-memory=4294967296 -C target-feature=+simd128";
+        buildPhaseCargoCommand = ''
+          cargo build -p web-audio-worklet --features keys --lib \
+            --target wasm32-unknown-unknown --release
+        '';
+        installPhaseCommand = ''
+          mkdir -p $out/worklet
+          wasm-bindgen --target web --out-dir $out/worklet \
+            --out-name signal_keys_worklet \
+            target/wasm32-unknown-unknown/release/web_audio_worklet.wasm
+          for js in keys_processor worklet_polyfill keys_decoder_worker keys_streamer_worker; do
+            cp features/adapters/web/worklet/js/$js.js $out/worklet/
+          done
+        '';
+        doCheck = false;
+      });
+
+      # Signal in a browser: studio-desktop's web build (the rig remote,
+      # the browser keys rig), built to be served under /signal/.
+      # `--base-path signal` makes dx write its page's asset URLs under it;
+      # the URLs the app writes itself go through `web_base` (the worklet
+      # bundle, the `/rigs/keys/{profile}` route).
+      studio-signal-web = mkDxWebBundle {
+        pname = "studio-signal-web";
+        appDir = "apps/studio/desktop";
+        dxName = "studio-desktop";
+        dxArgs = "--no-default-features --features signal --base-path signal";
+        env = {
+          # Nothing here ships a rig's NAM captures (rig-models, `just
+          # assets`): the guitar crate's release check stands down
+          # (features/rigs/guitar/build.rs).
+          SIGNAL_RIG_NO_CAPTURES = "1";
+        };
+      };
+
+      # studio.fasttrackstudio.app (#217): the front door at /, Signal at
+      # /signal/, Session at /session/. Static files and nothing else:
+      # Task and fts-auth do every connection (`studio-web-image`).
+      studio-web-root = pkgs.runCommand "studio-web-root" { nativeBuildInputs = [ pkgs.brotli ]; } ''
+        ${installSessionApp}
+        mkdir -p $out/signal
+        cp ${../../../apps/studio/web/index.html} $out/index.html
+        brotli --keep --quality=11 $out/index.html
+        cp -R ${studio-signal-web}/www/. $out/signal/
+        chmod -R u+w $out/signal
+        cp -R ${signal-keys-worklet}/worklet $out/signal/worklet
+        chmod -R u+w $out/signal/worklet
+        find $out/signal/worklet -type f \( -name '*.wasm' -o -name '*.js' \) \
+          -exec brotli --keep --quality=11 {} +
+        installSessionApp $out/session
       '';
     in
     {
-      packages = { inherit signal-web session-web session-app-web; }
+      packages = {
+        inherit signal-web session-web session-app-web studio-signal-web signal-keys-worklet studio-web-root;
+        studio-web = studio-web-root;
+      }
       // lib.optionalAttrs pkgs.stdenv.isLinux {
         signal-web-image = mkStaticSite {
           name = "signal-web";

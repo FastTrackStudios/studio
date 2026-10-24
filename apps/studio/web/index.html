@@ -1,0 +1,67 @@
+<!doctype html>
+<!--
+  studio-web's front door (`/`): the two sides of Studio, as the desktop
+  front screen draws them (apps/studio/desktop/src/front.rs: the same
+  colours, the same words). Plain static HTML, no wasm: it only links to
+  the two apps beside it in the tree (nix/modules/packages/web-bundles.nix,
+  `studio-web-root`): Signal at /signal/, Session at /session/.
+
+  No landing content here: that is fasttrackstudio.app's (#217).
+-->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Studio by FastTrackStudio</title>
+    <meta name="description" content="Studio: Signal, the live rig, and Session, the DAW, in your browser." />
+    <style>
+      html, body { margin: 0; min-height: 100%; background: #0c0c0f; }
+      body {
+        min-height: 100vh; display: flex; flex-direction: column;
+        align-items: center; justify-content: center; gap: 28px;
+        padding: 32px; box-sizing: border-box;
+        color: #e5e7eb; font-family: Inter, system-ui, -apple-system, sans-serif;
+      }
+      header { display: flex; flex-direction: column; align-items: center; gap: 6px; }
+      h1 { margin: 0; font-size: 30px; font-weight: 700; letter-spacing: 0.5px; }
+      header p { margin: 0; font-size: 14px; color: #8b9099; }
+      nav {
+        display: flex; flex-wrap: wrap; justify-content: center; gap: 20px;
+        width: 100%; max-width: 760px;
+      }
+      a.door {
+        flex: 1 1 280px; min-width: 0; max-width: 360px; display: flex;
+        flex-direction: column; gap: 10px; padding: 26px 24px; border-radius: 18px;
+        background: #17181b; border: 2px solid #2a2c31; box-sizing: border-box;
+        color: inherit; text-decoration: none;
+      }
+      a.door:hover, a.door:focus-visible { border-color: var(--accent); box-shadow: 0 0 24px var(--glow); outline: none; }
+      .bar { width: 44px; height: 6px; border-radius: 3px; background: var(--accent); }
+      .name { font-size: 24px; font-weight: 700; }
+      .blurb { font-size: 15px; line-height: 1.4; color: #b4b9c2; }
+      .open { margin-top: 6px; font-size: 13px; font-weight: 600; color: var(--accent); }
+      .signal { --accent: #2fd572; --glow: #2fd57255; }
+      .session { --accent: #3aa0ff; --glow: #3aa0ff55; }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>Studio</h1>
+      <p>by FastTrackStudio</p>
+    </header>
+    <nav>
+      <a class="door signal" href="/signal/">
+        <span class="bar"></span>
+        <span class="name">Signal</span>
+        <span class="blurb">The live rig: guitar, keys, drums and the gig.</span>
+        <span class="open">Open Signal</span>
+      </a>
+      <a class="door session" href="/session/">
+        <span class="bar"></span>
+        <span class="name">Session</span>
+        <span class="blurb">The DAW: setlists, songs, charts and the band's mix.</span>
+        <span class="open">Open Session</span>
+      </a>
+    </nav>
+  </body>
+</html>

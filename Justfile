@@ -2160,6 +2160,14 @@ web-daw SESSION="../sessions/Always On Time" RPP="Always On Time.RPP" CHART="Alw
     cp "{{SESSION}}/{{CHART}}" "$out/session/demo.kf"
     ls -lh "$out" "$out/session"
 
+# Build studio-web's root (`nix build .#studio-web`: the front door, Signal
+# under /signal/, Session under /session/) and serve it on
+# http://localhost:8090 as the image does: static-web-server with COOP/COEP
+# (the keys rig's shared memory) and the image's cache rules
+# (nix/modules/packages/studio-web.nix).
+studio-web-preview:
+    nix run .#studio-web-preview
+
 # Serve the built web DAW on http://localhost:8765.
 web-daw-serve:
     cd apps/session/daw-web/dist && python3 -m http.server 8765

@@ -27,9 +27,12 @@ use wasm_bindgen::JsCast as _;
 use wasm_bindgen::JsValue;
 use wasm_bindgen::closure::Closure;
 
-use crate::web_keys_rig::{WORKLET_GLUE_URL, WORKLET_WASM_URL};
+use crate::web_keys_rig::{worklet_glue_url, worklet_wasm_url};
 
-const WORKER_URL: &str = "/worklet/keys_decoder_worker.js";
+/// The decoder worker, under the page's base path (`crate::web_base`).
+fn worker_url() -> String {
+    crate::web_base::url("/worklet/keys_decoder_worker.js")
+}
 
 fn js_str(e: JsValue) -> String {
     e.as_string().unwrap_or_else(|| format!("{e:?}"))
@@ -84,7 +87,7 @@ pub(crate) fn install(sample_rate: f64) -> Result<web_sys::MessagePort, String> 
 
     let opts = web_sys::WorkerOptions::new();
     opts.set_type(web_sys::WorkerType::Module);
-    let worker = web_sys::Worker::new_with_options(WORKER_URL, &opts)
+    let worker = web_sys::Worker::new_with_options(&worker_url(), &opts)
         .map_err(|e| format!("decoder worker: {}", js_str(e)))?;
 
     let pending: Pending = Rc::new(RefCell::new(HashMap::new()));
@@ -164,8 +167,8 @@ pub(crate) fn install(sample_rate: f64) -> Result<web_sys::MessagePort, String> 
         let _ = Reflect::set(o, &k.into(), v);
     };
     set(&init, "kind", &"init".into());
-    set(&init, "glueUrl", &WORKLET_GLUE_URL.into());
-    set(&init, "wasmUrl", &WORKLET_WASM_URL.into());
+    set(&init, "glueUrl", &worklet_glue_url().into());
+    set(&init, "wasmUrl", &worklet_wasm_url().into());
     set(&init, "sampleRate", &sample_rate.into());
     set(&init, "warmPort", worker_port.as_ref());
     worker

@@ -76,6 +76,10 @@ mod rigs;
 // plays rigs through the engine instead.
 #[cfg(all(feature = "signal", target_arch = "wasm32"))]
 mod web_keys_rig;
+// The web build's base path (`/` from the engine, `/signal/` in
+// studio-web): pure, so it is compiled (and tested) everywhere.
+#[cfg_attr(not(all(feature = "signal", target_arch = "wasm32")), allow(dead_code))]
+mod web_base;
 // W9: the in-tab keys backend — KeysRigRemote's client surface served
 // locally over architect's in-process LocalServer (wasm memory link).
 #[cfg(all(feature = "signal", target_arch = "wasm32"))]

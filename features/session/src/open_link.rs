@@ -29,19 +29,28 @@ pub enum Opening {
 }
 
 impl Opening {
-    /// The Session web app's address with this link in it.
+    /// The Session web app's address with this link in it, on the
+    /// session site (the app under `/app/`).
     #[must_use]
     pub fn app_url(&self) -> String {
+        format!("/app/{}", self.app_query())
+    }
+
+    /// The app's query with this link in it (`?live=…`): where the app
+    /// itself goes with a link pasted into it, wherever it is served
+    /// (`/app/` on the session site, `/session/` in studio-web).
+    #[must_use]
+    pub fn app_query(&self) -> String {
         let (key, link, guide) = match self {
             Self::Live { link, guide } => ("live", link, guide),
             Self::Share { link, guide } => ("share", link, guide),
         };
-        let mut url = format!("/app/?{key}={}", encode(link));
+        let mut query = format!("?{key}={}", encode(link));
         if let Some(guide) = guide {
-            url.push_str("&guide=");
-            url.push_str(&encode(guide));
+            query.push_str("&guide=");
+            query.push_str(&encode(guide));
         }
-        url
+        query
     }
 
     /// The Task link itself.
@@ -115,6 +124,17 @@ pub fn parse(text: &str) -> Result<Opening, LinkError> {
         });
     }
     Err(LinkError::NotATaskLink)
+}
+
+/// Where the app's "try the live demo" goes: the demo's live link, opened
+/// in the app itself, when the build was given one (`SESSION_DEMO_LINK`);
+/// else the session site's `/demo`, which opens it.
+#[must_use]
+pub fn demo_href(demo_link: Option<&str>) -> String {
+    match demo_link.map(str::trim).filter(|l| !l.is_empty()) {
+        Some(link) => format!("?live={}", encode(link)),
+        None => "/demo".to_owned(),
+    }
 }
 
 /// What the Session web app opens, from its address's query.
@@ -345,6 +365,7 @@ mod form {
     /// than a song it doesn't have.
     #[component]
     pub fn OpenSet() -> Element {
+        let demo = super::demo_href(option_env!("SESSION_DEMO_LINK"));
         rsx! {
             div {
                 "data-empty-state": "open-a-set",
@@ -357,13 +378,48 @@ mod form {
                     style: "font-size:14px; color:#9aa0a6; max-width:460px; line-height:1.5;",
                     "Paste the share link Task gave you for your set, and Session opens it here."
                 }
-                OpenSetForm {}
+                // In the app itself: a pasted link opens here, wherever
+                // the app is served, not on the session site's `/app/`.
+                OpenSetForm {
+                    on_open: move |opening: super::Opening| {
+                        let url = opening.app_query();
+                        let _ = dioxus::document::eval(&format!("window.location.assign({url:?})"));
+                    },
+                }
                 a {
-                    href: "/demo",
+                    href: "{demo}",
                     style: "font-size:13px; color:#38bdf8; text-decoration:underline; margin-top:6px;",
                     "Or try the live demo"
                 }
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_app_query_goes_wherever_the_app_is_served() {
+        let opening = Opening::Live {
+            link: "https://task.example/org/a/share/b".into(),
+            guide: None,
+        };
+        assert_eq!(
+            opening.app_query(),
+            "?live=https%3A%2F%2Ftask.example%2Forg%2Fa%2Fshare%2Fb"
+        );
+        assert_eq!(opening.app_url(), format!("/app/{}", opening.app_query()));
+    }
+
+    #[test]
+    fn the_demo_opens_in_the_app_when_the_build_knows_its_link() {
+        assert_eq!(
+            demo_href(Some("https://task.example/org/a/share/b")),
+            "?live=https%3A%2F%2Ftask.example%2Forg%2Fa%2Fshare%2Fb"
+        );
+        assert_eq!(demo_href(None), "/demo");
+        assert_eq!(demo_href(Some("  ")), "/demo");
     }
 }
