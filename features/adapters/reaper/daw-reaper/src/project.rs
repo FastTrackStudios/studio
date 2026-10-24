@@ -131,7 +131,7 @@ impl Projects for crate::Reaper {
         Some(project_to_info(&project))
     }
 
-    fn get(&self, project_id: &str) -> Option<ProjectInfo> {
+    fn project(&self, project_id: &str) -> Option<ProjectInfo> {
         let reaper = Reaper::get();
 
         // Iterate through all open project tabs

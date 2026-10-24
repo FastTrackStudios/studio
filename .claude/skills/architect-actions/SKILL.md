@@ -145,7 +145,7 @@ Three pieces, using `track_manager` as the reference:
      names `TrackManager` doesn't define. One caveat: UFCS-style
      disambiguated calls (`Tracks::get(self, ...)`) do *not* go through
      `Deref` — use `Tracks::get(&self.daw, ...)` for those (needed
-     around the `Tracks::get`/`Projects::get` name collision below).
+     where two services in scope share a method name, e.g. `count`).
    - One implementor of the trait, but the *type* is generic — the same
      `TrackManagerActions for TrackManager<D>` impl runs against
      `daw::reaper::Reaper` in production and
@@ -336,15 +336,16 @@ Every `Tracks`/`Items` RPC method takes a `TrackRef` (`Guid`/`Index`/
 Pattern: fetch a `Track` (or `Vec<Track>`) to *read* fields off it, then
 target further calls with `TrackRef::Guid(that_track.guid.clone())`.
 
-## Known collision — don't add `Tracks: Projects` as a supertrait
+## Two services, two getter names
 
-It looks natural (tracks live in a project) but `Projects::get(&self,
-project_id: &str)` and `Tracks::get(&self, project, track)` share the
-name `get` — adding the supertrait bound puts both in scope and makes
-every `.get()` call ambiguous (`E0034`), breaking the `#[architect::rpc]`
-macro codegen. Fixing this for real means renaming one `get` across
-every implementor in the tree — a separate, deliberate change, not
-something to attempt inside a `*_actions.rs` refactor.
+`Projects::project(id)` and `Tracks::get(project, track)`. Both used to be
+`get`, and a type implementing both (`Standalone`, `Reaper`) made every
+`.get()` ambiguous (`E0034`), forcing UFCS at every call site and breaking
+the `Deref`-to-backend idiom (#139). `Projects` took the noun; `Tracks`
+keeps `get`, because its `#[architect::rpc]` scopes already generate a
+`track(...)` accessor (`daw.tracks().project(p).track(t).get()`), and a
+getter of the same name would collide with it. When a type implements
+several services, give each getter a name no other one in scope uses.
 
 ## Testing
 
