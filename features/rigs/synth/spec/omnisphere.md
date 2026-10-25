@@ -21,6 +21,30 @@ Two proven entry points today:
   --example keys_tui -- --omni <patch.prt_omn>` hosts the imported patch on a
   `KeysRig` and plays it from a hardware/computer keyboard.
 
+## Status (2026-10-25)
+
+Measured over the whole factory library by `examples/patch_coverage`
+(37,017 patches, all parse):
+
+- **99.9 % sound** (at least one layer realizes); **60.6 % have no known
+  gap**. Soundsource resolution was the blocker — 4,316 patches named a
+  soundsource the old extraction had no styx for. A `.db` presents its
+  soundsources through root-level `.zmap`s, not its file name or its
+  `Default Layer.xml` (`Blue PWM Strings a/b/c` are three keymaps over
+  `Virus Blue PWM Strings.db`; `Cello Tender Mutes` plays the instrument
+  `Studio Cello Tender Mutes -12` from `Stereo Mics.xml`).
+  `omni_import::steam` reads the `.zmap`s and `examples/omni_zonemap`
+  writes one styx per soundsource beside the existing extraction: 5,587
+  of 5,590 factory soundsources map.
+- What is left is DSP, by patches hit: pass-through FX units **35 %**,
+  Granular 5 %, sample-mode FM 2 % / Ring Mod 1 %, unextracted
+  soundsources 0.3 % (Moog Tribute).
+
+Comparison runs on voyager (macOS): the real Omnisphere VST3
+(`omni_render`), the warm build and the full extraction on the dev drive
+(`.env` sets `FTS_SAMPLED_ROOT` / `FTS_PACK_LIBRARY`).
+`tools/omni_probe/abbatch.py` A/Bs a spread of gap-free patches.
+
 ## Status (2026-07-13)
 
 Import is solid: **37,006 factory patches parse, 0 failures**. Sample-mode

@@ -143,6 +143,17 @@ pub fn parse_xml(input: &str) -> Result<XmlNode, String> {
                 None => return Err("unterminated <? or <!--".into()),
             }
         }
+        // Any other declaration (`<!DOCTYPE …>` heads every soundsource
+        // `.db` blob) carries nothing we read.
+        if b[i..].starts_with(b"<!") {
+            match b[i..].iter().position(|&c| c == b'>') {
+                Some(off) => {
+                    i += off + 1;
+                    continue;
+                }
+                None => return Err("unterminated <!".into()),
+            }
+        }
         if b[i..].starts_with(b"</") {
             // Closing tag: pop.
             let end = b[i..]

@@ -24,6 +24,7 @@ mod index;
 mod model;
 mod multi;
 pub mod state;
+pub mod steam;
 mod tree;
 
 pub use index::{SoundsourceIndex, normalize_soundsource_name, resolve_name};
