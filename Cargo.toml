@@ -837,6 +837,9 @@ resources-proto = { git = "https://github.com/FastTrackStudios/task", branch = "
 files-proto = { git = "https://github.com/FastTrackStudios/task", branch = "main" }
 files-client = { git = "https://github.com/FastTrackStudios/task", branch = "main" }
 task-dial = { git = "https://github.com/FastTrackStudios/task", branch = "main" }
+# The server lane's org management (`ensure_personal_org`): where a signed-in
+# person's own docs live (studio-desktop's sync).
+org-proto = { git = "https://github.com/FastTrackStudios/task", branch = "main" }
 # Live sessions Task keeps: joining a set, the clock, the epochs.
 live-proto = { git = "https://github.com/FastTrackStudios/task", branch = "main" }
 links-proto = { git = "https://github.com/FastTrackStudios/task", branch = "main" }

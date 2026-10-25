@@ -74,6 +74,9 @@ mod rig_view;
 #[expect(dead_code)]
 #[cfg(any(feature = "signal", feature = "signal-guitar"))]
 mod rigs;
+/// Sync after sign-in: the rig books kept in step through Task.
+#[cfg(all(feature = "doc-sync", not(target_arch = "wasm32")))]
+mod sync;
 // Browser keys rig (/rigs/keys/:profile): the keys AudioWorklet + streamed
 // packs cached in OPFS + WebMIDI/demo MIDI. Wasm-only — the desktop app
 // plays rigs through the engine instead.
