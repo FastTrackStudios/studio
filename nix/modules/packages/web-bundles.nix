@@ -43,13 +43,34 @@
         llvmPackages_18.bintools-unwrapped
       ]);
 
-      # The dx build runs from the app dir but writes to the
-      # WORKSPACE-ROOT target/dx/<name>/release/web/public.
-      mkDxWebBundle = { pname, appDir, dxName, preBuild ? "", dxArgs ? "", env ? { }, extraNativeBuildInputs ? [ ] }:
-        craneLib.buildPackage (commonArgs // dxWebEnv // env // {
+      # A bundle's dependencies, compiled once and kept. crane builds them
+      # from the manifests and the lockfile alone (`buildDepsOnly`'s dummy
+      # source), so this derivation changes only when a dependency does:
+      # a release finds it in the runner's store instead of compiling every
+      # crate again, and the bundle compiles only the workspace's own.
+      # Its flags must be the bundle's (profile, target, features,
+      # RUSTFLAGS, `--config` overrides): cargo reuses an artifact only
+      # when its fingerprint matches, and rebuilds the rest (slower, never
+      # wrong).
+      wasmDeps = { pname, profile, cargoExtraArgs, env ? { } }:
+        craneLib.buildDepsOnly (commonArgs // dxWebEnv // env // {
           inherit pname;
           version = "0.1.0";
-          cargoArtifacts = null;
+          nativeBuildInputs = dxWebNativeInputs;
+          CARGO_PROFILE = profile;
+          inherit cargoExtraArgs;
+          # Only the build: a check or a test run would compile other
+          # profiles nobody reuses.
+          cargoCheckCommand = "true";
+          doCheck = false;
+        });
+
+      # The dx build runs from the app dir but writes to the
+      # WORKSPACE-ROOT target/dx/<name>/release/web/public.
+      mkDxWebBundle = { pname, appDir, dxName, preBuild ? "", dxArgs ? "", env ? { }, extraNativeBuildInputs ? [ ], cargoArtifacts ? null }:
+        craneLib.buildPackage (commonArgs // dxWebEnv // env // {
+          inherit pname cargoArtifacts;
+          version = "0.1.0";
           cargoExtraArgs = "--manifest-path ${appDir}/Cargo.toml";
           nativeBuildInputs = dxWebNativeInputs ++ extraNativeBuildInputs;
           doNotPostBuildInstallCargoBinaries = true;
@@ -89,13 +110,18 @@
       # live link open, served under the site's /app/. A plain cargo +
       # wasm-bindgen build (no dx: the page is a library host, see
       # session-daw's web_host).
+      session-app-web-deps = wasmDeps {
+        pname = "session-app-web";
+        profile = "wasm-release";
+        cargoExtraArgs = "--locked -p session-daw-web --target wasm32-unknown-unknown";
+      };
       session-app-web = craneLib.buildPackage (commonArgs // dxWebEnv // {
         pname = "session-app-web";
         version = "0.1.0";
         # The open-a-set page's "try the live demo" opens it in the app
         # itself (`session::open_link::demo_href`), wherever it is served.
         SESSION_DEMO_LINK = sessionDemoLink;
-        cargoArtifacts = null;
+        cargoArtifacts = session-app-web-deps;
         nativeBuildInputs = dxWebNativeInputs;
         doNotPostBuildInstallCargoBinaries = true;
         buildPhaseCargoCommand = ''
@@ -268,10 +294,16 @@
       # not the page's. The single-threaded build: the shared-memory one
       # needs nightly build-std, and the page falls back without it
       # (web_keys_threads.rs).
+      signal-keys-worklet-deps = wasmDeps {
+        pname = "signal-keys-worklet";
+        profile = "release";
+        cargoExtraArgs = "--locked -p web-audio-worklet --features keys --lib --target wasm32-unknown-unknown";
+        env.RUSTFLAGS = "-C link-arg=--max-memory=4294967296 -C target-feature=+simd128";
+      };
       signal-keys-worklet = craneLib.buildPackage (commonArgs // {
         pname = "signal-keys-worklet";
         version = "0.1.0";
-        cargoArtifacts = null;
+        cargoArtifacts = signal-keys-worklet-deps;
         nativeBuildInputs = commonArgs.nativeBuildInputs ++ [ config.fts.dx.wasmBindgen ];
         doNotPostBuildInstallCargoBinaries = true;
         RUSTFLAGS = "-C link-arg=--max-memory=4294967296 -C target-feature=+simd128";
@@ -301,6 +333,15 @@
         appDir = "apps/studio/desktop";
         dxName = "studio-desktop";
         dxArgs = "--no-default-features --features signal --base-path signal";
+        # dx's own cargo flags for a web release: its `wasm-release`
+        # profile (the workspace's), the wasm target, no default features,
+        # and `strip=false` (dx strips after the asset pass).
+        cargoArtifacts = wasmDeps {
+          pname = "studio-signal-web";
+          profile = "wasm-release";
+          cargoExtraArgs = "--locked -p studio-desktop --target wasm32-unknown-unknown --no-default-features --features signal --config profile.wasm-release.strip=false";
+          env.SIGNAL_RIG_NO_CAPTURES = "1";
+        };
         env = {
           # Nothing here ships a rig's NAM captures (rig-models, `just
           # assets`): the guitar crate's release check stands down
@@ -328,7 +369,8 @@
     in
     {
       packages = {
-        inherit signal-web session-web session-app-web studio-signal-web signal-keys-worklet studio-web-root;
+        inherit signal-web session-web session-app-web studio-signal-web signal-keys-worklet studio-web-root
+          session-app-web-deps signal-keys-worklet-deps;
         studio-web = studio-web-root;
       }
       // lib.optionalAttrs pkgs.stdenv.isLinux {
