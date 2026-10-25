@@ -31,6 +31,9 @@ mod engine_tone3000;
 /// one session with Session on this computer.
 #[cfg(not(target_arch = "wasm32"))]
 mod account;
+/// The rig libraries as books: synced Loro docs in `.session` files.
+#[cfg(all(feature = "signal-guitar", not(target_arch = "wasm32")))]
+mod books;
 #[cfg(all(feature = "signal", not(target_arch = "wasm32")))]
 mod engines;
 /// The front page's live state: each rig's, tonight's set, the studio link.

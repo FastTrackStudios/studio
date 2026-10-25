@@ -46,8 +46,24 @@ app, not the document.
   the device's replica: the store implements `crdt::Persistence`, so a
   save is an `append_update` and a fold is a `compact`. Each branch is
   its own doc; its id is kept in the store's `meta` (`doc:<branch>`).
-- **The library** (setlists, rigs, patches, profiles) is one Turso
-  database per device, through `crdt`'s own `turso` persistence.
+- **A rig's library** is a *book* (`signal_rig_host::book`): one Loro doc
+  in `<library dir>.session` beside the styx directory it replaces —
+  presets, patches, profiles, songs, setlists, setup, each old file an
+  entry under its name, laid out by the codec so devices merge field by
+  field. The rig's code did not change: a book registers for its
+  directory, and the typed reads and writes every rig already made
+  (`StyxDir`, the guitar's `config_watch`) go to it by path; what another
+  device changes reaches the rig's hot reload by name. The styx files
+  move in lazily as they are read and stay as a backup. What is this
+  device's alone stays a file: `last-state.styx`, a perform rig's
+  `cursor.styx`, the library's bookkeeping. The engine turns books on
+  (`books::enable`, not for design or ephemeral runs); signed in, a fresh
+  book waits for the account's library before seeding the shipped
+  defaults into it.
+- **Assets are files, never doc content.** NAM captures, IRs, practice
+  audio, chart PDFs move by file sync (the blobs layer); a doc holds how
+  they are used (`models/Fender Clean.nam` in a preset) and, in the
+  book's asset index, what each one is by content: BLAKE3 hash and size.
 - **The browser** keeps its replicas in IndexedDB (`crdt`'s `indexeddb`).
 
 Edits go into the local replica first, always. Sync is a background loop
