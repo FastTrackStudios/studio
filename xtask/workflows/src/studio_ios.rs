@@ -254,7 +254,7 @@ bash apps/studio/desktop/ios/deploy-testflight.sh
     .env("DX_APP_DIR", "apps/studio/desktop")
     .env(
         "DX_FEATURES",
-        "--no-default-features --features signal-guitar,signal-keys-rig,signal-drums-rig,signal-ekit-rig,tone3000,session-app",
+        "--no-default-features --features signal-guitar,signal-keys-rig,signal-drums-rig,signal-ekit-rig,tone3000,session-app,doc-sync",
     )
     .env("FRAME_PLUGINS", "/Volumes/build-disk/development/frame/examples/plugins")
     .env("DX_BUNDLE_ID", "app.fasttrackstudio.studio")

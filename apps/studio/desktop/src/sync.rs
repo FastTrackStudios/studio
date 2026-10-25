@@ -25,9 +25,12 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, PoisonError};
 use std::time::Duration;
 
-use crdt::docs::{CreateDoc, DocMeta, DocStorage, DocsDriver, DocsLane, TursoDocsIndex};
+use crdt::docs::{
+    CreateDoc, DocMeta, DocStorage, DocSyncEvent, DocsDriver, DocsLane, Lineage, TursoDocsIndex,
+};
 use crdt::{CrdtDoc, PersistError, Persistence};
 use session_format::store::{MAIN, Replica, Store};
+use signal_rig_host::book::RigBook;
 use uuid::Uuid;
 
 /// The kind a rig library's doc has in the catalog.
@@ -94,13 +97,71 @@ pub async fn start() {
     let files = Files::new(state.join("docs"));
     let driver = DocsDriver::new(index, files.clone());
     let handle = tokio::runtime::Handle::current();
+    let books = Books::default();
     signal_rig_host::book::set_provider(Arc::new({
         let driver = driver.clone();
         let org = org.clone();
-        move |dir: &Path| rig_book(&handle, &driver, &files, &org, &config, dir)
+        let books = books.clone();
+        move |dir: &Path| {
+            let (id, book) = rig_book(&handle, &driver, &files, &org, &config, dir)?;
+            books.keep(id, &book);
+            Some(book)
+        }
     }));
     tracing::info!(sync.org = %org.slug, "sync: on");
+    architect::platform::spawn(seed_when_caught_up(driver.sync_events(), books));
     architect::platform::spawn(stay_connected(driver, base, org));
+}
+
+/// The books handed out, by their doc's id: told when their doc has
+/// caught up with the account's.
+#[derive(Clone, Default)]
+struct Books(Arc<Mutex<HashMap<Uuid, std::sync::Weak<RigBook>>>>);
+
+impl Books {
+    fn keep(&self, id: Uuid, book: &Arc<RigBook>) {
+        self.0
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .insert(id, Arc::downgrade(book));
+    }
+
+    fn get(&self, id: Uuid) -> Option<Arc<RigBook>> {
+        self.0
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .get(&id)
+            .and_then(std::sync::Weak::upgrade)
+    }
+}
+
+/// A rig's book may take the shipped defaults once its doc has caught up
+/// with the account's library (a session attached: the host's history is
+/// here) — never before, or they would land on top of it.
+async fn seed_when_caught_up(
+    mut events: tokio::sync::broadcast::Receiver<DocSyncEvent>,
+    books: Books,
+) {
+    use tokio::sync::broadcast::error::RecvError;
+    loop {
+        match events.recv().await {
+            Ok(DocSyncEvent::Attached { doc_id, lane }) => {
+                if let Some(book) = books.get(doc_id).filter(|b| !b.may_seed()) {
+                    book.allow_seeding();
+                    tracing::info!(sync.doc = %doc_id, sync.lane = %lane, "sync: caught up — the rig may seed");
+                }
+            }
+            Ok(DocSyncEvent::Refused {
+                doc_id,
+                lane,
+                reason,
+            }) => {
+                tracing::warn!(sync.doc = %doc_id, sync.lane = %lane, "sync: a doc was refused: {reason:?}");
+            }
+            Ok(_) | Err(RecvError::Lagged(_)) => {}
+            Err(RecvError::Closed) => return,
+        }
+    }
 }
 
 /// The book for the rig library at `dir`: its doc, made or opened in the
@@ -113,7 +174,7 @@ fn rig_book(
     org: &Org,
     config: &Path,
     dir: &Path,
-) -> Option<Arc<signal_rig_host::book::RigBook>> {
+) -> Option<(Uuid, Arc<RigBook>)> {
     let rel = dir
         .strip_prefix(config)
         .ok()?
@@ -132,6 +193,9 @@ fn rig_book(
                 kind: RIG_KIND.to_owned(),
                 name,
                 parent: None,
+                // Every device makes it under this id, offline as often as
+                // not: their copies merge, entry by entry.
+                lineage: Lineage::Merge,
             }))
         })
         .join()
@@ -141,12 +205,7 @@ fn rig_book(
     .ok()?;
     let loro = doc.loro().clone();
     tracing::info!(sync.rig = %rel, sync.doc = %id, "sync: the rig's book is its synced doc");
-    Some(signal_rig_host::book::RigBook::over(
-        dir,
-        &file,
-        loro,
-        Box::new(doc),
-    ))
+    Some((id, RigBook::over(dir, &file, loro, Box::new(doc))))
 }
 
 /// `drums/perform` → `Drums`.
@@ -329,9 +388,9 @@ mod tests {
         LocalServer::serve(router, Scope::new())
     }
 
-    /// One device: its driver, online with `task`, and its guitar rig's
-    /// book over the driver's doc, kept in `<dir>/rig.session`.
-    async fn device(task: &LocalServer, dir: &Path, id: Uuid) -> Arc<RigBook> {
+    /// One device, offline: its driver and its guitar rig's book over the
+    /// driver's doc, kept in `<dir>/rig.session`. [`online`] connects it.
+    async fn device(dir: &Path, id: Uuid) -> (DocsDriver, Arc<RigBook>) {
         let files = Files::new(dir.join("sync/docs"));
         let driver = DocsDriver::new(InMemoryDocsIndex::new(), files.clone());
         let library = dir.join("rig");
@@ -342,9 +401,25 @@ mod tests {
                 kind: RIG_KIND.into(),
                 name: "Rig rig".into(),
                 parent: None,
+                lineage: Lineage::Merge,
             })
             .await
             .expect("the rig's doc");
+        let loro = doc.loro().clone();
+        let book = RigBook::over(
+            &library,
+            &library.with_extension("session"),
+            loro,
+            Box::new(doc),
+        );
+        let books = Books::default();
+        books.keep(id, &book);
+        tokio::spawn(seed_when_caught_up(driver.sync_events(), books));
+        (driver, book)
+    }
+
+    /// `driver` online with `task`, from now on.
+    async fn online(task: &LocalServer, driver: DocsDriver) {
         let lane = DocsLane {
             docs: task.establish::<DocsClient>().await.expect("docs"),
             changes: task.establish::<DocsStreamClient>().await.expect("changes"),
@@ -353,15 +428,59 @@ mod tests {
         tokio::spawn(async move {
             let _ = driver.run(&lane).await;
         });
-        let loro = doc.loro().clone();
-        RigBook::over(
-            &library,
-            &library.with_extension("session"),
-            loro,
-            Box::new(doc),
-        )
     }
 
+    async fn until(what: &str, mut ok: impl FnMut() -> bool) {
+        let deadline = std::time::Instant::now() + Duration::from_secs(10);
+        while !ok() {
+            assert!(std::time::Instant::now() < deadline, "never: {what}");
+            tokio::time::sleep(Duration::from_millis(50)).await;
+        }
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn two_devices_edit_one_rig_offline_before_any_sync_and_both_edits_land() {
+        let task = task().await;
+        let (ipad, desk) = (
+            tempfile::tempdir().expect("ipad"),
+            tempfile::tempdir().expect("desk"),
+        );
+        let id = rig_doc_id(Uuid::from_u128(42), "rig");
+        // Apart, before either has ever synced: the iPad has the set, the
+        // desk a new MIDI map — the same rig, made on each under one id.
+        let (ipad_driver, on_ipad) = device(ipad.path(), id).await;
+        let (desk_driver, on_desk) = device(desk.path(), id).await;
+        let sets = Sets {
+            name: "CAA 2026".into(),
+            songs: vec!["12 to 12".into()],
+        };
+        let map = Sets {
+            name: "MC6".into(),
+            songs: vec![],
+        };
+        on_ipad
+            .write("setlists.styx", &sets)
+            .expect("the iPad's edit");
+        on_desk.write("midi.styx", &map).expect("the desk's edit");
+        assert!(
+            !on_ipad.may_seed() && !on_desk.may_seed(),
+            "fresh and synced: no seeding yet"
+        );
+
+        online(&task, ipad_driver).await;
+        online(&task, desk_driver).await;
+        for (who, book) in [("ipad", &on_ipad), ("desk", &on_desk)] {
+            until(&format!("{who} holds both"), || {
+                matches!(book.read::<Sets>("setlists.styx"), BookRead::Ok(ref v) if *v == sets)
+                    && matches!(book.read::<Sets>("midi.styx"), BookRead::Ok(ref v) if *v == map)
+            })
+            .await;
+            until(&format!("{who} may seed once caught up"), || {
+                book.may_seed()
+            })
+            .await;
+        }
+    }
     #[tokio::test(flavor = "multi_thread")]
     async fn a_rig_edited_on_one_device_arrives_in_the_others_book_and_file() {
         let task = task().await;
@@ -370,7 +489,8 @@ mod tests {
             tempfile::tempdir().expect("desk"),
         );
         let id = rig_doc_id(Uuid::from_u128(42), "rig");
-        let on_ipad = device(&task, ipad.path(), id).await;
+        let (ipad_driver, on_ipad) = device(ipad.path(), id).await;
+        online(&task, ipad_driver).await;
         let sets = Sets {
             name: "CAA 2026".into(),
             songs: vec!["12 to 12".into(), "1901".into()],
@@ -379,18 +499,13 @@ mod tests {
             .write("setlists.styx", &sets)
             .expect("the iPad's edit");
 
-        let on_desk = device(&task, desk.path(), id).await;
-        let deadline = std::time::Instant::now() + Duration::from_secs(10);
-        loop {
-            if matches!(on_desk.read::<Sets>("setlists.styx"), BookRead::Ok(ref v) if *v == sets) {
-                break;
-            }
-            assert!(
-                std::time::Instant::now() < deadline,
-                "the desk never got the iPad's setlist"
-            );
-            tokio::time::sleep(Duration::from_millis(50)).await;
-        }
+        let (desk_driver, on_desk) = device(desk.path(), id).await;
+        online(&task, desk_driver).await;
+        until(
+            "the desk gets the iPad's setlist",
+            || matches!(on_desk.read::<Sets>("setlists.styx"), BookRead::Ok(ref v) if *v == sets),
+        )
+        .await;
         assert!(
             on_desk.take_changes().contains(&"setlists.styx".to_owned()),
             "the desk's rig is told, for its hot reload"
@@ -404,32 +519,19 @@ mod tests {
         on_desk
             .write("setlists.styx", &reordered)
             .expect("the desk's edit");
-        let deadline = std::time::Instant::now() + Duration::from_secs(10);
-        while !matches!(on_ipad.read::<Sets>("setlists.styx"), BookRead::Ok(ref v) if *v == reordered)
-        {
-            assert!(
-                std::time::Instant::now() < deadline,
-                "the iPad never got the desk's reorder"
-            );
-            tokio::time::sleep(Duration::from_millis(50)).await;
-        }
+        until("the iPad gets the desk's reorder", || {
+            matches!(on_ipad.read::<Sets>("setlists.styx"), BookRead::Ok(ref v) if *v == reordered)
+        })
+        .await;
 
         // What arrived is in the desk's own `.session`, not only in memory.
-        let deadline = std::time::Instant::now() + Duration::from_secs(10);
-        loop {
-            let kept = Store::open(&desk.path().join("rig.session"))
+        until("the desk's file holds it", || {
+            Store::open(&desk.path().join("rig.session"))
                 .and_then(|s| s.load(MAIN))
                 .map(|doc| doc.get_map("library").get("setlists.styx").is_some())
-                .unwrap_or(false);
-            if kept {
-                break;
-            }
-            assert!(
-                std::time::Instant::now() < deadline,
-                "the desk's file never held it"
-            );
-            tokio::time::sleep(Duration::from_millis(50)).await;
-        }
+                .unwrap_or(false)
+        })
+        .await;
     }
 
     #[test]

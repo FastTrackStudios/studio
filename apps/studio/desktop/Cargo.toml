@@ -52,7 +52,7 @@ workspace = true
 # `cargo run -p studio-desktop --no-default-features --features session-app`
 # skips the heavy `signal` rig (nam C++, lucide icons, webkit engine deps),
 # and `--no-default-features --features signal` leaves Session out.
-default = ["signal", "session-app", "tts"]
+default = ["signal", "session-app", "tts", "doc-sync"]
 # The command-line tools (src/bin/): native only.
 cli = [
     "dep:builtin",
@@ -115,8 +115,8 @@ tone3000 = ["dep:signal-tone3000", "signal-tone3000?/ui", "dep:signal-nam", "dep
 # is a no-op on the web build). iOS-clean: no TTS backend (see `tts`).
 session-app = ["dep:session-desktop"]
 # Sync after sign-in (sync.rs): the rig books kept in step with the
-# account's other devices through Task. Needs architect's crdt::docs
-# (v0.9.28+): on once studio pins it.
+# account's other devices through Task (architect's crdt::docs). On by
+# default, and in every iOS build's feature list.
 doc-sync = ["signal-guitar", "dep:async-trait", "dep:crdt", "dep:org-proto", "dep:session-format", "dep:task-dial", "dep:uuid"]
 # Session's spoken section cues (Chatterbox TTS over ONNX Runtime). ort has
 # no prebuilt binary for aarch64-apple-ios, so the iOS build leaves this off

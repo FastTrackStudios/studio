@@ -59,7 +59,7 @@ DX_APP_DIR="${DX_APP_DIR:-apps/studio/desktop}"
 # No colon: an explicitly-empty DX_FEATURES (Task, default features) is honored.
 # Studio's phone set: Signal's rigs (guitar, keys, drums, e-kit, TONE3000)
 # and Session (`session-app`; no `tts`, which has no iOS build).
-DX_FEATURES="${DX_FEATURES---no-default-features --features signal-guitar,signal-keys-rig,signal-drums-rig,signal-ekit-rig,tone3000,session-app}"
+DX_FEATURES="${DX_FEATURES---no-default-features --features signal-guitar,signal-keys-rig,signal-drums-rig,signal-ekit-rig,tone3000,session-app,doc-sync}"
 # Bundle id the App Store profile is minted for — must match the built .app's
 # CFBundleIdentifier (from the package's Dioxus.toml).
 DX_BUNDLE_ID="${DX_BUNDLE_ID:-app.fasttrackstudio.studio}"
@@ -92,7 +92,7 @@ BIN_IOS="$HOME/bin-ios"
 mkdir -p "$BIN_IOS"
 ln -sf /usr/bin/xcrun "$BIN_IOS/xcrun"
 
-# shellcheck disable=SC1090
+# shellcheck disable=SC1090,SC1091 # this machine's own secrets file
 source "$HOME/.appstoreconnect/config.env"
 
 # Signing keychain. On a headless box (airlock) set KEYCHAIN + KEYCHAIN_PW to
@@ -149,6 +149,7 @@ if [ -n "${XCODE_DIR:-}" ]; then
 else
     XCODE_ENV="unset DEVELOPER_DIR SDKROOT"
 fi
+# shellcheck disable=SC2125 # a pattern, expanded where it is used
 APP_GLOB="$ROOT/target/dx/$DX_PACKAGE/release/ios/"*.app
 # dx can exit non-zero even on a successful build (and `| tail` + pipefail
 # would then abort us), so capture to a log and gate on the .app instead.
@@ -162,6 +163,7 @@ else
     # built from the input's own directory or it silently loses rules —
     # hence the `cd $(dirname …)`. Keep in step with
     # apps/task/tailwind_build.rs, which pins the same cwd.
+    # shellcheck disable=SC2016 # the single quotes are inside a double-quoted script
     "$NIX" develop "$ROOT" -c bash -c \
         "$XCODE_ENV; export PATH=$BIN_IOS:\$PATH; \
          cd '$ROOT/$DX_APP_DIR'; \
@@ -171,7 +173,7 @@ else
     tail -2 /tmp/fts-build.log
 fi
 # Resolve the actual .app (dx names it from the Dioxus.toml, per package).
-# shellcheck disable=SC2086
+# shellcheck disable=SC2086,SC2012 # the pattern expands here; dx's names have no spaces
 APP="$(ls -d $APP_GLOB 2>/dev/null | head -1)"
 [ -n "$APP" ] && [ -d "$APP" ] || { echo "ERROR: release build produced no app"; tail -25 /tmp/fts-build.log; exit 1; }
 echo "=== app bundle: $APP ==="
@@ -210,7 +212,7 @@ fi
     || /usr/libexec/PlistBuddy -c "Add :MinimumOSVersion string 15.0" "$APP/Info.plist"
 # The app's own keys (scene manifest, dark, background audio, usage
 # strings, file sharing) and frame's faces — the same as build-ios.sh writes.
-# shellcheck source=app-plist.sh
+# shellcheck source=app-plist.sh disable=SC1091
 source "$SCRIPT_DIR/app-plist.sh"
 studio_app_plist "$APP"
 # FRAME_PLUGINS: frame's examples/plugins when frame is not checked out beside
@@ -224,7 +226,7 @@ studio_app_faces "$APP" "${FRAME_PLUGINS:-}"
 # its gig.json — make an iPad copy with scripts/signal/gig-ipad.py first so
 # the audio is compressed). They land at <App>.app/Gigs/<name>, where the gig
 # page and the iPad gig shell find them with no Mac and no network.
-# shellcheck source=app-plist.sh
+# shellcheck disable=SC2086 # one argument per gig folder
 studio_app_gigs "$APP" ${GIG_BUNDLE:-}
 
 # SDK build-metadata keys. Xcode's build injects these; dx does NOT, and

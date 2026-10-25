@@ -43,7 +43,7 @@ if [[ "${RELEASE:-0}" == "1" ]]; then
     PROFILE=release
     DX_PROFILE=(--release)
 fi
-dx build --platform ios "${DX_PROFILE[@]}" --no-default-features --features signal-guitar,signal-keys-rig,signal-drums-rig,signal-ekit-rig,tone3000,session-app || true
+dx build --platform ios "${DX_PROFILE[@]}" --no-default-features --features signal-guitar,signal-keys-rig,signal-drums-rig,signal-ekit-rig,tone3000,session-app,doc-sync || true
 
 # dx names the bundle from the package (StudioDesktop.app today; it has
 # changed between dx versions), so take the newest one it wrote.

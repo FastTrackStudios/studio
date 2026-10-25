@@ -121,7 +121,7 @@ build-lease), not `~/fts`:
 cd /Volumes/build-disk/development/studio/apps/studio/desktop
 nix develop ../../.. -c bash -c 'unset DEVELOPER_DIR SDKROOT; export PATH=$HOME/bin-ios:$PATH; \
   dx build --platform ios --device --release --no-default-features \
-  --features signal-guitar,signal-keys-rig,signal-drums-rig,signal-ekit-rig,tone3000,session-app'
+  --features signal-guitar,signal-keys-rig,signal-drums-rig,signal-ekit-rig,tone3000,session-app,doc-sync'
 # dx's own codesign fails over SSH (errSecInternalComponent) — harmless:
 KEYCHAIN=fts-build.keychain KEYCHAIN_PW=fts-build SKIP_BUILD=1 MARKETING_VER=<tag version> \
   GIG_BUNDLE=/Volumes/build-disk/development/gigs/ipad/CAA-2026 bash ios/deploy-testflight.sh
