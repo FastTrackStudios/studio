@@ -1,6 +1,6 @@
 # ADR 0001: Signal's live docs are one Loro doc per entity
 
-- Status: proposed (live S4, STA-87). The Captain's spec left this open as Q3.
+- Status: superseded by ADR 0002 (its measurements stand). Was proposed in live S4, STA-87. The Captain's spec left this open as Q3.
 - Date: 2026-10-22
 - Code: `features/signal/proto/src/doc/` (codec, layouts, seed library),
   `features/signal/proto/tests/doc_granularity.rs` (the measurement),
