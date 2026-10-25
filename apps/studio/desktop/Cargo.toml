@@ -52,7 +52,7 @@ workspace = true
 # `cargo run -p studio-desktop --no-default-features --features session-app`
 # skips the heavy `signal` rig (nam C++, lucide icons, webkit engine deps),
 # and `--no-default-features --features signal` leaves Session out.
-default = ["signal", "session-app", "tts"]
+default = ["signal", "session-app", "tts", "doc-sync"]
 # The command-line tools (src/bin/): native only.
 cli = [
     "dep:builtin",
@@ -114,6 +114,10 @@ tone3000 = ["dep:signal-tone3000", "signal-tone3000?/ui", "dep:signal-nam", "dep
 # chart writing. Native only (the dep is in the cfg(not wasm) table, so this
 # is a no-op on the web build). iOS-clean: no TTS backend (see `tts`).
 session-app = ["dep:session-desktop"]
+# Sync after sign-in (sync.rs): the rig books kept in step with the
+# account's other devices through Task (architect's crdt::docs). On by
+# default, and in every iOS build's feature list.
+doc-sync = ["signal-guitar", "dep:async-trait", "dep:crdt", "dep:org-proto", "dep:session-format", "dep:task-dial", "dep:uuid"]
 # Session's spoken section cues (Chatterbox TTS over ONNX Runtime). ort has
 # no prebuilt binary for aarch64-apple-ios, so the iOS build leaves this off
 # and the guide falls back to its synthesized cues, as Session's own did.
@@ -258,6 +262,15 @@ dsp = { workspace = true, optional = true }
 # session on every desktop, not only macOS); its `book`, the rig libraries
 # as synced Loro docs (books.rs).
 signal-rig-host = { workspace = true, features = ["book"] }
+# Sync after sign-in (sync.rs, feature `doc-sync`): the doc driver and its
+# device index, a rig book's `.session` as its replica, the dial to Task
+# and the org lane.
+async-trait = { workspace = true, optional = true }
+crdt = { workspace = true, features = ["vox", "turso"], optional = true }
+org-proto = { workspace = true, optional = true }
+session-format = { workspace = true, features = ["store", "sync"], optional = true }
+task-dial = { workspace = true, optional = true }
+uuid = { workspace = true, optional = true }
 # The Blitz native renderer — the desktop path and the iPhone's.
 #
 # `dioxus::desktop` puts WebKit/WRY behind the same components, and a WebView
@@ -416,3 +429,6 @@ getrandom = { version = "0.3", features = ["wasm_js"] }
 # PNG of the screen at 1194 x 834 (STA-359).
 [target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
 dioxus-test.workspace = true
+# Sync's two-device test (sync.rs): Task's doc host in process, temp books.
+architect = { workspace = true, features = ["local"] }
+tempfile.workspace = true

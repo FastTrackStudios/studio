@@ -162,7 +162,7 @@ jobs:
         TASK_SENTRY_DSN: ${{ secrets.TASK_SENTRY_DSN }}
         DX_PACKAGE: studio-desktop
         DX_APP_DIR: apps/studio/desktop
-        DX_FEATURES: --no-default-features --features signal-guitar,signal-keys-rig,signal-drums-rig,signal-ekit-rig,tone3000,session-app
+        DX_FEATURES: --no-default-features --features signal-guitar,signal-keys-rig,signal-drums-rig,signal-ekit-rig,tone3000,session-app,doc-sync
         FRAME_PLUGINS: /Volumes/build-disk/development/frame/examples/plugins
         DX_BUNDLE_ID: app.fasttrackstudio.studio
         APP_DISPLAY_NAME: Studio

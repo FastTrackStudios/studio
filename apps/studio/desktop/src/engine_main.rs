@@ -243,6 +243,10 @@ async fn async_main() {
     signal_rig_host::engine::install_shared(signal_rig_host::engine::Engine::new("Signal"));
     // The rig libraries as books (synced Loro docs), before a rig reads one.
     crate::books::enable();
+    // Signed in: the books are the docs that sync with the account's other
+    // devices (sync.rs). Before the first rig makes its home.
+    #[cfg(feature = "doc-sync")]
+    crate::sync::start().await;
     let guitar = GuitarRigBackend::new();
     guitar.start(); // worship rig: open audio + load profile off-thread
     // Signal's commands for a model, when asked (`--mcp` / `SIGNAL_MCP=1`).

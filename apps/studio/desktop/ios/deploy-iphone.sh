@@ -37,7 +37,7 @@ fi
 echo "=== provisioning profile ==="
 HW_UDID="$(xcrun devicectl device info details --device "$PHONE_UDID" 2>/dev/null | awk '/udid:/{print $NF; exit}')"
 [ -n "$HW_UDID" ] || { echo "ERROR: couldn't read device UDID (is it unlocked?)" >&2; exit 1; }
-# shellcheck disable=SC1090
+# shellcheck disable=SC1090,SC1091 # this machine's own secrets file
 source "$HOME/.appstoreconnect/config.env"
 PROFILE="$(ruby "$(dirname "$0")/mint-dev-profile.rb" "$HW_UDID" | awk -F= '/PROFILE_PATH=/{print $2}')"
 echo "profile: $PROFILE"
@@ -45,9 +45,10 @@ echo "profile: $PROFILE"
 echo "=== building (device arch) ==="
 "$NIX" develop "$(git rev-parse --show-toplevel)" -c bash -c \
     "unset DEVELOPER_DIR SDKROOT; export PATH=$BIN_IOS:\$PATH; \
-     dx build --platform ios --device --no-default-features --features signal-guitar,signal-keys-rig,signal-drums-rig,signal-ekit-rig,tone3000,session-app" \
+     dx build --platform ios --device --no-default-features --features signal-guitar,signal-keys-rig,signal-drums-rig,signal-ekit-rig,tone3000,session-app,doc-sync" \
     2>&1 | tail -2
 
+# shellcheck disable=SC2012 # dx's own bundle names: no spaces to mind
 APP="$(ls -dt "$(git rev-parse --show-toplevel)"/target/dx/studio-desktop/debug/ios/*.app | head -1)"
 BUNDLE="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP/Info.plist")"
 echo "=== app: $APP ($BUNDLE) ==="
