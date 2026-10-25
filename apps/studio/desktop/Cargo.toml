@@ -90,7 +90,7 @@ signal-guitar = ["gig", "dep:guitar", "guitar?/ui", "dep:signal-content-proto", 
 # fts-sample, speed without pitch through the `stretch` phase vocoder).
 # Part of every rig build, desktop and iPad; native only (the deps are in
 # the cfg(not wasm) table, so this is a no-op on the web build).
-gig = ["dep:cpal", "dep:dsp", "dsp/stretch", "dep:fts-sample", "fts-sample?/decode-compressed", "dep:serde_json", "dep:architect"]
+gig = ["dep:chrono", "dep:cpal", "dep:dsp", "dsp/stretch", "dep:fts-sample", "fts-sample?/decode-compressed", "dep:serde_json", "dep:architect"]
 # The keys rig on the phone: the in-process sampler engine (signal-keys →
 # signal-sampler over CoreAudio, MIDI via midir/CoreMIDI) + the wire types
 # for the mobile keys view + pack downloads. iOS-clean by construction: the
@@ -305,6 +305,8 @@ tokio = { workspace = true, optional = true }
 # (kill(pid,0)) and reaps the engine's process group on exit (engine_main.rs,
 # engines.rs). Unix-only usage is cfg-gated in code.
 libc = { workspace = true }
+# When a gig is played (feature `gig`): its schedule, in the venue's offset.
+chrono = { workspace = true, optional = true }
 # The gig page's practice player (feature `gig`).
 cpal = { workspace = true, optional = true }
 fts-sample = { workspace = true, optional = true, features = ["load"] }

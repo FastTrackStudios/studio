@@ -222,6 +222,9 @@ def main() -> int:
     gig = {
         "name": facts.get("name") or manifest.get("generated_by", "Gig"),
         "dates": facts.get("dates", []),
+        # When and where, as instants in the venue's offset: Studio's home
+        # opens a gig that is on now (apps/studio/desktop/src/gig/schedule.rs).
+        "schedule": facts.get("schedule", []),
         "note": facts.get("note", ""),
         "source": facts.get("source", ""),
         "songs": songs,

@@ -112,6 +112,13 @@ mod web_keys_threads;
     all(not(target_arch = "wasm32"), not(feature = "webview"))
 ))]
 mod front;
+/// Studio's home: play here (a rig, a setlist, a project) or join a session
+/// happening elsewhere — the front screen's page.
+#[cfg(any(
+    target_os = "ios",
+    all(not(target_arch = "wasm32"), not(feature = "webview"))
+))]
+mod home;
 #[cfg(all(feature = "signal-guitar", target_os = "ios"))]
 mod ios_audio;
 #[cfg(all(feature = "signal-guitar", target_os = "ios"))]
@@ -614,6 +621,13 @@ fn load_last_workspace() -> Option<Workspace> {
 
 fn store_last_workspace(w: Workspace) {
     utils::prefs::set_raw("last-workspace", w.label());
+}
+
+/// Studio's home picked a rig: Signal opens on the rig workspace, whatever
+/// was open last (`rigs::store_last` says which rig).
+#[cfg(feature = "signal")]
+pub(crate) fn open_rig_workspace() {
+    store_last_workspace(Workspace::Signal);
 }
 
 /// Web deep link: `#signal`, `#session`, `#charts`, `#home` (first hash

@@ -5,6 +5,11 @@
     "Soundcheck: Sat Oct 24, ~2:00 pm, Pasadena Civic Auditorium",
     "Show: Sat Oct 24, 6:00 pm, Pasadena Civic Auditorium (about 3 hrs)"
   ],
+  "schedule": [
+    {"label": "Rehearsal", "start": "2026-10-21T18:00:00-07:00", "end": "2026-10-21T21:00:00-07:00", "place": "James's studio, North Hollywood"},
+    {"label": "Soundcheck", "start": "2026-10-24T14:00:00-07:00", "end": "2026-10-24T17:00:00-07:00", "place": "Pasadena Civic Auditorium"},
+    {"label": "Show", "start": "2026-10-24T18:00:00-07:00", "end": "2026-10-24T21:00:00-07:00", "place": "Pasadena Civic Auditorium"}
+  ],
   "note": "Award-show house band: 4-8 bar walk-on/off cues recycled from these charts. No fixed running order yet (the order is the chart folder's); confirm the cue sheet at rehearsal. Band: Cody guitar, Julian bass, Jeff drums, James keys/MD.",
   "source": "STA-145 (Atlas, gig facts) + STA-146 (Voyager, /Volumes/dev-drive/caa-2026/manifest.json)",
   "songs": [

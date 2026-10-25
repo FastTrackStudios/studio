@@ -19,6 +19,8 @@
 #[cfg(target_os = "ios")]
 mod ios_audio;
 
+/// What Studio's home screen hands Session (recent songs, open or join first).
+pub mod handoff;
 mod library;
 mod shell;
 mod start;

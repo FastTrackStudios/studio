@@ -518,7 +518,11 @@ fn GuitarRigView(instrument: &'static str) -> Element {
                     // Signing in means handing a page to a real browser —
                     // this shell's way of doing that.
                     let _ = provide_context(signal_tone3000::ui::UrlOpener::new(open_externally));
-                    rsx! { GuitarRigRemote { key: "{generation}" } }
+                    rsx! {
+                        GuitarRigRemote { key: "{generation}" }
+                        // Studio's home picked a gig: its set, loaded.
+                        crate::gig::shell::LoadOnEntry {}
+                    }
                 }
                 None => rsx! {
                     div { style: "display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; flex: 1;",

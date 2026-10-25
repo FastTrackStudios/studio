@@ -21,6 +21,8 @@
 //! wired into this page; the Keyflow render rides along as a second tab.
 
 pub mod player;
+/// When and where a gig is played, and whether it is on now.
+pub mod schedule;
 /// The gig on the iPad rig: its pieces lent to the tablet layout.
 #[cfg(feature = "signal-guitar")]
 pub mod shell;
@@ -151,8 +153,37 @@ pub struct Gig {
     pub name: String,
     /// One line each: rehearsal, soundcheck, show …
     pub dates: Vec<String>,
+    /// The day's slots, earliest first, when `gig.json` has a `schedule`.
+    pub schedule: Vec<schedule::Slot>,
     pub note: String,
     pub songs: Vec<Song>,
+}
+
+/// The gig to open on: the one the home screen picked last, kept so the gig
+/// page and the iPad gig shell open on it (and on it again next launch).
+pub fn remember(name: &str) {
+    utils::prefs::set_raw("last-gig", name);
+}
+
+/// Where `gigs` has the gig picked last ([`remember`]); the first if none.
+pub fn remembered_index(gigs: &[Gig]) -> usize {
+    utils::prefs::get_raw("last-gig")
+        .and_then(|name| gigs.iter().position(|g| g.name == name))
+        .unwrap_or(0)
+}
+
+/// The home picked a gig (or one is on now): the guitar rig loads its set.
+static LOAD: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+/// Have the guitar rig load the gig [`remember`]ed, its set up and its first
+/// song, as it opens.
+pub fn load_on_entry() {
+    LOAD.store(true, std::sync::atomic::Ordering::Release);
+}
+
+/// Whether the rig should load the remembered gig's set — once.
+pub fn take_load_on_entry() -> bool {
+    LOAD.swap(false, std::sync::atomic::Ordering::AcqRel)
 }
 
 /// Where gig folders live on this machine.
@@ -289,6 +320,7 @@ pub fn read_gig(dir: &Path) -> Option<Gig> {
         })
         .unwrap_or_default();
     Some(Gig {
+        schedule: schedule::read(&root),
         dir: dir.to_path_buf(),
         name: Some(text(&root, "name"))
             .filter(|n| !n.is_empty())
