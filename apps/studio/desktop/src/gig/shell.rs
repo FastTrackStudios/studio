@@ -1,5 +1,6 @@
-//! The gig on the iPad rig: Perform becomes the shared performer screen
-//! (`app_shell::ui::PerformerScreen`, worship / gig screen spec B1/B2),
+//! The gig on the rig, an iPad's and a desk's alike: Perform becomes the
+//! shared performer screen (`app_shell::ui::PerformerScreen`, worship /
+//! gig screen spec B1/B2),
 //! its panels Signal's ([`guitar::ui::GigSlots`] lends it to the tablet
 //! layout, which hands back its own bar and switches):
 //!
@@ -1146,7 +1147,7 @@ async fn seed_setlist(r: RigPerformClient, gig: Gig) {
 /// Load the gig's set in the rig: written in first if it is not there yet
 /// ([`seed_setlist`]), then up, on its first song — what Studio's home asks
 /// for when the gig is picked or on now.
-pub async fn load_set(r: RigPerformClient, gig: Gig) {
+async fn load_set(r: RigPerformClient, gig: Gig) {
     seed_setlist(r.clone(), gig.clone()).await;
     let Ok(lib) = r.library().await else {
         return;
@@ -1157,25 +1158,6 @@ pub async fn load_set(r: RigPerformClient, gig: Gig) {
     };
     let _ = r.select_setlist(u32::try_from(set).unwrap_or(0)).await;
     let _ = r.select_song(0).await;
-}
-
-/// The desktop's guitar rig (no gig shell): load the remembered gig's set
-/// once the rig is connected, when the home asked for it. Draws nothing.
-#[component]
-pub fn LoadOnEntry() -> Element {
-    use_hook(|| {
-        if !super::take_load_on_entry() {
-            return;
-        }
-        let Some(r) = signal_rig_perform_ui::perform_client() else {
-            return;
-        };
-        let gigs = list_gigs();
-        if let Some(gig) = gigs.get(super::remembered_index(&gigs)).cloned() {
-            spawn(load_set(r, gig));
-        }
-    });
-    rsx! {}
 }
 
 /// Kept once the one-time clean-up below has run on this device.

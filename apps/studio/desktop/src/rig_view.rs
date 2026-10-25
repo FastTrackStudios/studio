@@ -362,6 +362,10 @@ fn RemoteEngineForm(generation: Signal<u32>) -> Element {
 /// once connected, and again when the menu picks the other.
 #[component]
 fn GuitarRigView(instrument: &'static str) -> Element {
+    // The gig shell, as on the iPad: the rig's own layout carries the gig
+    // (its chart, its track, its set loaded) — one rig on every screen.
+    #[cfg(all(feature = "gig", not(target_arch = "wasm32")))]
+    crate::gig::shell::use_gig_shell();
     // The window's width over its height, for the rig's wide layout (the
     // whole rig on an ultrawide). Blitz has no resize events, so it is
     // polled from the window a few times a second.
@@ -518,11 +522,7 @@ fn GuitarRigView(instrument: &'static str) -> Element {
                     // Signing in means handing a page to a real browser —
                     // this shell's way of doing that.
                     let _ = provide_context(signal_tone3000::ui::UrlOpener::new(open_externally));
-                    rsx! {
-                        GuitarRigRemote { key: "{generation}" }
-                        // Studio's home picked a gig: its set, loaded.
-                        crate::gig::shell::LoadOnEntry {}
-                    }
+                    rsx! { GuitarRigRemote { key: "{generation}" } }
                 }
                 None => rsx! {
                     div { style: "display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; flex: 1;",

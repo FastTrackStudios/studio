@@ -48,6 +48,10 @@ impl Side {
     }
 }
 
+/// How wide a Mac's window buttons are, with their margins, in points.
+#[cfg(target_os = "macos")]
+pub(crate) const MAC_WINDOW_BUTTONS: u32 = 80;
+
 /// The side asked for before launch (`FTS_STUDIO_OPEN`), if any.
 fn preset() -> Option<Side> {
     let slug = std::env::var("FTS_STUDIO_OPEN").ok()?;
@@ -150,17 +154,27 @@ pub fn Studio() -> Element {
     }
 }
 
-/// Signal's root: the phone shell on iOS, the desk's app elsewhere.
+/// Signal's root: the phone shell on iOS, the desk's app elsewhere — the
+/// rig in its one layout (the iPad's) either way.
 #[component]
 fn SignalSide() -> Element {
-    // The desk's app draws its own title bar (the header doubles as one:
-    // drag surfaces, window controls); the window opened with the
-    // system's, which Session's top bar sits under.
+    // A Mac keeps its window buttons, over the rig's top left (the title
+    // bar is drawn through, its buttons centred in the rig's bar): the rig
+    // makes room for them. Only the older Control view
+    // (`FTS_FORM_FACTOR=desktop`) draws its own and takes them off.
     #[cfg(not(target_os = "ios"))]
     {
         let window = dioxus_native::use_window();
-        use_hook(move || window.set_decorations(false));
+        let control_view =
+            std::env::var("FTS_FORM_FACTOR").is_ok_and(|v| v.eq_ignore_ascii_case("desktop"));
+        use_hook(move || {
+            if control_view {
+                window.set_decorations(false);
+            }
+        });
     }
+    #[cfg(all(target_os = "macos", feature = "signal-guitar"))]
+    use_context_provider(|| guitar::ui::WindowButtons(MAC_WINDOW_BUTTONS));
     #[cfg(all(feature = "signal-guitar", target_os = "ios"))]
     return rsx! { crate::mobile_view::MobileApp {} };
     #[cfg(not(all(feature = "signal-guitar", target_os = "ios")))]

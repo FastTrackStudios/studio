@@ -455,10 +455,9 @@ fn launch_app() {
     // `FTS_WINDOW_SIZE=WxH` still wins, and the window is resizable; this is
     // only where it starts.
     let (w, h) = size.unwrap_or_else(default_window_size);
-    // The system's title bar, for the front screen and Session (whose top
-    // bar sits under it: transparent on macOS, the traffic lights inside
-    // the bar); Signal's side takes it off and draws its own
-    // (`front::SignalSide`).
+    // The system's title bar, drawn through on macOS: the home, Session and
+    // the rig each keep the window's buttons in their own top bar (the rig
+    // through `WindowButtons`, `front::SignalSide`).
     let mut window = WindowAttributes::default()
         .with_title("Studio")
         .with_surface_size(LogicalSize::new(w, h))
@@ -479,7 +478,10 @@ fn launch_app() {
         dioxus_native::winit::platform::macos::WindowAttributesMacOS::default()
             .with_titlebar_transparent(true)
             .with_fullsize_content_view(true)
-            .with_title_hidden(true),
+            .with_title_hidden(true)
+            // A toolbar-height title bar: the buttons sit centred in the
+            // app's own bars (the home's, the rig's, Session's).
+            .with_unified_titlebar(true),
     ));
     launch_cfg(
         front::Studio,
