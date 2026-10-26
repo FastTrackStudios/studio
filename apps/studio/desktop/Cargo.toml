@@ -117,7 +117,7 @@ session-app = ["dep:session-desktop"]
 # Sync after sign-in (sync.rs): the rig books kept in step with the
 # account's other devices through Task (architect's crdt::docs). On by
 # default, and in every iOS build's feature list.
-doc-sync = ["signal-guitar", "dep:async-trait", "dep:crdt", "dep:org-proto", "dep:session-format", "dep:task-dial", "dep:uuid"]
+doc-sync = ["signal-guitar", "fts-account/sync", "dep:crdt", "dep:session-format", "dep:uuid"]
 # Session's spoken section cues (Chatterbox TTS over ONNX Runtime). ort has
 # no prebuilt binary for aarch64-apple-ios, so the iOS build leaves this off
 # and the guide falls back to its synthesized cues, as Session's own did.
@@ -262,14 +262,10 @@ dsp = { workspace = true, optional = true }
 # session on every desktop, not only macOS); its `book`, the rig libraries
 # as synced Loro docs (books.rs).
 signal-rig-host = { workspace = true, features = ["book"] }
-# Sync after sign-in (sync.rs, feature `doc-sync`): the doc driver and its
-# device index, a rig book's `.session` as its replica, the dial to Task
-# and the org lane.
-async-trait = { workspace = true, optional = true }
+# Sync after sign-in (sync.rs, feature `doc-sync`): the rig books on the
+# driver `fts-account/sync` keeps per org.
 crdt = { workspace = true, features = ["vox", "turso"], optional = true }
-org-proto = { workspace = true, optional = true }
 session-format = { workspace = true, features = ["store", "sync"], optional = true }
-task-dial = { workspace = true, optional = true }
 uuid = { workspace = true, optional = true }
 # The Blitz native renderer — the desktop path and the iPhone's.
 #

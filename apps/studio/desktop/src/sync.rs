@@ -6,30 +6,22 @@
 //! out every rig's book ([`signal_rig_host::book::set_provider`]): the doc
 //! the driver keeps and syncs, with the same id on every device
 //! ([`rig_doc_id`], so the iPad's guitar rig and the desk's are one doc),
-//! persisted to the rig's own `<library>.session` through
-//! [`Replica`] — so a library used signed out keeps its history when its
-//! owner signs in. The driver's index lives beside the libraries
+//! persisted to the rig's own `<library>.session` through its replica —
+//! so a library used signed out keeps its history when its owner signs
+//! in. The driver's index lives beside the libraries
 //! (`<config>/signal/sync/`).
 //!
-//! The connection is a loop: dial the personal org's lane, run a session
-//! until it drops, wait, dial again — every session is a delta. Offline,
-//! everything edits locally and catches up later. Signed out, nothing
-//! here runs and the books keep their files themselves.
-//!
-//! Which org is the personal one is asked of Task once and remembered
-//! (`sync-org`), so a start with no network still syncs into the right
-//! space when it comes back.
+//! The driver, its connection loop and where docs' files live are
+//! `fts_account::sync`, shared with the projects Session syncs; which org
+//! is the personal one is asked of Task once and remembered there.
 
 use std::collections::HashMap;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::sync::{Arc, Mutex, PoisonError};
-use std::time::Duration;
 
-use crdt::docs::{
-    CreateDoc, DocMeta, DocStorage, DocSyncEvent, DocsDriver, DocsLane, Lineage, TursoDocsIndex,
-};
-use crdt::{CrdtDoc, PersistError, Persistence};
-use session_format::store::{MAIN, Replica, Store};
+use crdt::CrdtDoc;
+use crdt::docs::{CreateDoc, DocSyncEvent, DocsDriver, Lineage};
+use fts_account::sync::{Files, Org, personal_org, ws_base};
 use signal_rig_host::book::RigBook;
 use uuid::Uuid;
 
@@ -38,21 +30,6 @@ pub const RIG_KIND: &str = "rig";
 
 /// The namespace rig doc ids are made in: `<org id>/<library path>`.
 const RIG_NAMESPACE: Uuid = Uuid::from_u128(0x6a0f_5d1e_2b4c_4f3a_9e7d_51c0_0000_0001);
-
-/// How long the engine waits for Task to name the personal org before it
-/// starts on the one it remembers (or, never having known one, without
-/// sync this run).
-const ASK_ORG: Duration = Duration::from_secs(5);
-
-/// The longest wait between two tries to reach Task.
-const MAX_BACKOFF: Duration = Duration::from_secs(60);
-
-/// The person's own org: where their rigs sync.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Org {
-    pub slug: String,
-    pub id: Uuid,
-}
 
 /// The id of the rig library at `rel` (its path under the signal config
 /// directory: `rig`, `bass`, `drums/perform`) in `org`: the same on every
@@ -79,28 +56,16 @@ pub async fn start() {
     };
     let config = signal_rig_host::store::signal_config_dir();
     let state = config.join("sync");
-    if let Err(e) = std::fs::create_dir_all(&state) {
-        tracing::warn!(sync.outcome = "no-dir", "sync: no place for its index: {e}");
+    let index = state.join(format!("{}.index", org.slug));
+    let Some(synced) = fts_account::sync::ensure(org.clone(), &index, state.join("docs")).await
+    else {
         return;
-    }
-    let index_path = state.join(format!("{}.index", org.slug));
-    let index = match TursoDocsIndex::open_path(&index_path.to_string_lossy()).await {
-        Ok(index) => index,
-        Err(e) => {
-            tracing::warn!(
-                sync.outcome = "no-index",
-                "sync: the device index would not open: {e:?}"
-            );
-            return;
-        }
     };
-    let files = Files::new(state.join("docs"));
-    let driver = DocsDriver::new(index, files.clone());
+    let (driver, files) = (synced.driver, synced.files);
     let handle = tokio::runtime::Handle::current();
     let books = Books::default();
     signal_rig_host::book::set_provider(Arc::new({
         let driver = driver.clone();
-        let org = org.clone();
         let books = books.clone();
         move |dir: &Path| {
             let (id, book) = rig_book(&handle, &driver, &files, &org, &config, dir)?;
@@ -108,9 +73,7 @@ pub async fn start() {
             Some(book)
         }
     }));
-    tracing::info!(sync.org = %org.slug, "sync: on");
     architect::platform::spawn(seed_when_caught_up(driver.sync_events(), books));
-    architect::platform::spawn(stay_connected(driver, base, org));
 }
 
 /// The books handed out, by their doc's id: told when their doc has
@@ -217,153 +180,20 @@ fn title(rel: &str) -> String {
     })
 }
 
-/// Run sessions with the personal org's lane, for the life of the process.
-async fn stay_connected(driver: DocsDriver, base: String, org: Org) {
-    let mut wait = Duration::from_secs(2);
-    loop {
-        // The token as it is now: a sign-in elsewhere may have renewed it.
-        let Some(account) = fts_account::signed_in() else {
-            tracing::info!(sync.outcome = "signed-out", "sync: signed out — stopped");
-            return;
-        };
-        let url = format!("{base}/org/{}/vox", org.slug);
-        match lane(&url, &account.session.token).await {
-            Ok(lane) => {
-                wait = Duration::from_secs(2);
-                if let Err(e) = driver.run(&lane).await {
-                    tracing::info!(sync.outcome = "dropped", "sync: the session ended: {e:?}");
-                }
-            }
-            Err(e) => tracing::info!(sync.outcome = "unreachable", "sync: Task not reached: {e}"),
-        }
-        architect::platform::sleep(wait).await;
-        wait = (wait * 2).min(MAX_BACKOFF);
-    }
-}
-
-/// The three clients a session runs on, over one connection to `url`.
-async fn lane(url: &str, token: &str) -> Result<DocsLane, String> {
-    Ok(DocsLane {
-        docs: task_dial::establish_at(url, Some(token)).await?,
-        changes: task_dial::establish_at(url, Some(token)).await?,
-        sync: task_dial::establish_at(url, Some(token)).await?,
-    })
-}
-
-/// The personal org: asked of Task (made there on first ask), else the
-/// one remembered from the last time it answered.
-async fn personal_org(base: &str, token: &str) -> Option<Org> {
-    let asked = architect::platform::timeout(ASK_ORG, async {
-        let client: org_proto::OrgManagementServiceClient =
-            task_dial::establish_at(&format!("{base}/server/vox"), Some(token)).await?;
-        client
-            .ensure_personal_org(org_proto::PersonalOrgRequest {
-                session_token: token.to_owned(),
-            })
-            .await
-            .map_err(|e| format!("{e:?}"))
-    })
-    .await;
-    match asked {
-        Ok(Ok(manifest)) => {
-            let org = Org {
-                slug: manifest.slug,
-                id: manifest.id,
-            };
-            utils::prefs::set_raw("sync-org", &format!("{} {}", org.slug, org.id));
-            Some(org)
-        }
-        failed => {
-            if let Ok(Err(e)) = failed {
-                tracing::info!(
-                    sync.outcome = "org-unanswered",
-                    "sync: Task did not name the personal org: {e}"
-                );
-            }
-            let kept = utils::prefs::get_raw("sync-org")?;
-            let (slug, id) = kept.split_once(' ')?;
-            Some(Org {
-                slug: slug.to_owned(),
-                id: Uuid::parse_str(id).ok()?,
-            })
-        }
-    }
-}
-
-/// `https://task.example` → `wss://task.example`.
-fn ws_base(server: &str) -> String {
-    server
-        .trim_end_matches('/')
-        .replacen("https://", "wss://", 1)
-        .replacen("http://", "ws://", 1)
-}
-
-// ── Where each doc's bytes live ─────────────────────────────────────────────
-
-/// Every synced doc on this device is a `.session` file: a rig's beside
-/// its library, anything else made on another device under `docs/`.
-#[derive(Clone)]
-struct Files {
-    placed: Arc<Mutex<HashMap<Uuid, PathBuf>>>,
-    elsewhere: PathBuf,
-}
-
-impl Files {
-    fn new(elsewhere: PathBuf) -> Self {
-        Self {
-            placed: Arc::new(Mutex::new(HashMap::new())),
-            elsewhere,
-        }
-    }
-
-    /// `id`'s file is `file` (a rig's book, beside its library).
-    fn place(&self, id: Uuid, file: PathBuf) {
-        self.placed
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner)
-            .insert(id, file);
-    }
-
-    fn file_for(&self, id: Uuid) -> PathBuf {
-        self.placed
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner)
-            .get(&id)
-            .cloned()
-            .unwrap_or_else(|| self.elsewhere.join(format!("{id}.session")))
-    }
-}
-
-#[async_trait::async_trait]
-impl DocStorage for Files {
-    async fn persistence(&self, meta: &DocMeta) -> Result<Arc<dyn Persistence>, PersistError> {
-        let backend = |e: session_format::store::StoreError| PersistError::Backend(e.to_string());
-        let file = self.file_for(meta.doc_id);
-        if let Some(dir) = file.parent() {
-            let _ = std::fs::create_dir_all(dir);
-        }
-        let store = Store::open(&file).map_err(backend)?;
-        // The file's song branch is this doc: a book used signed out
-        // keeps its history under the doc's id from now on.
-        if store.branch_of(meta.doc_id).map_err(backend)?.is_none() {
-            store.adopt_doc_id(MAIN, meta.doc_id).map_err(backend)?;
-        }
-        Ok(Arc::new(Replica::new(store)))
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
     use architect::{LayerRouter, LocalServer, Scope};
     use crdt::DocRegistry;
     use crdt::docs::{
-        DocsClient, DocsHost, DocsStreamClient, InMemoryDocsIndex, InMemoryDocsStore,
+        DocsClient, DocsHost, DocsLane, DocsStreamClient, InMemoryDocsIndex, InMemoryDocsStore,
         docs_rpc_service_descriptor, serve, stream_layer,
     };
     use crdt::in_memory::InMemoryPersistence;
     use crdt::sync::{DocSyncClient, DocSyncDispatcher, doc_sync_service_descriptor};
+    use session_format::store::{MAIN, Store};
     use signal_rig_host::book::{BookRead, RigBook};
+    use std::time::Duration;
 
     #[derive(Clone, Debug, PartialEq, facet::Facet)]
     struct Sets {
@@ -544,9 +374,5 @@ mod tests {
             rig_doc_id(Uuid::from_u128(8), "rig")
         );
         assert_eq!(title("drums/perform"), "Drums");
-        assert_eq!(
-            ws_base("https://task.fasttrackstudio.app/"),
-            "wss://task.fasttrackstudio.app"
-        );
     }
 }

@@ -140,6 +140,50 @@ process, and keeps the docs it is editing in its own memory. On iOS the
 foreground app holds the engine and never waits for it; nothing of it
 runs on the audio thread.
 
+## Projects
+
+A project syncs the way a rig's book does, with three differences: it
+belongs to an org that is often not the person's own, it is open in the
+engine while it syncs, and its media is far bigger than its doc.
+
+- **One driver per org.** The device runs a `DocsDriver` for every org
+  that owns something on it, each with its own index
+  (`<config>/sync/<org>.index`), all on the one kept session. Crescendum
+  is `fasttrackaudio`'s, so it syncs there, not in the personal org.
+- **A branch is a doc of kind `session`.** Its id is the store's
+  `doc:<branch>` (`Store::doc_id`); `main` is made `Strict`, and an
+  alternative is a doc whose `parent` is the doc it was forked from.
+  Registering a project is `driver.create` for each branch, with
+  [`Replica`] over the project's own file as its persistence. Nothing is
+  copied: the file stays the one place the project lives.
+- **One doc in memory.** While a synced project is open, the bridge edits
+  the driver's `CrdtDoc` (as a book edits its doc), so a remote update and
+  a local step land in the same `LoroDoc`. The `CrdtDoc` persists every
+  local commit itself, so the project file stops appending its own steps
+  for that branch; the step's name still reaches the history (the replica
+  is told the label before the commit). A remote update goes through the
+  bridge's diff to the engine, as a live collaborator's does.
+- **Opening one made elsewhere.** The org's catalog, listed by kind
+  `session`, is the device's list of projects. Opening one creates its file
+  under the sync directory (or where the person puts it), adopts the doc
+  ids, and waits until it has caught up before the engine reads it.
+- **Media, two ways.** The doc names its media relative to the song
+  folder and records the File Root that holds it (`media.root`, an opaque
+  id Task can resolve). *Local:* what the doc references and the device
+  lacks is fetched from that root into the song folder before it plays
+  (`architect::blob::ResumableFetch`, sha256-verified, resumable). *Streamed:*
+  the project opens with nothing local and every take streams from the root
+  (`song_stream`'s Task source, as the web demo does), proxies first.
+
+### Task stays app-agnostic
+
+Task never learns what a session is. A project names the app docs that
+belong to it the same way it names anything: a link from the project to
+an app doc (`NodeKind::AppDoc`, the doc's id), with the catalog's kind and
+name to show. Attaching, listing and detaching are generic — a Keyflow
+chart set or a Signal rig attaches the same way — and a session link is
+built from what the link already holds: the org, the doc id, the kind.
+
 ## Peer to peer
 
 Devices also exchange docs directly over iroh (`crdt::peer`, the lane
@@ -156,7 +200,12 @@ device alone.
 
 ## What ships in the app
 
-Only the demo: the demo setlist and what it plays. Everything real is in
+Nothing that is content. The demo is a project like any other: its songs
+are `session` docs in FastTrackStudio's org, attached to a Demo project,
+their media in that project's File Root, and the app opens it the way it
+opens anyone's — by link, streamed, with no account needed to play it (a
+public share). It needs no code of its own and no copy in the binary;
+"open the demo" is a link the home screen carries. Everything real is in
 the person's account and arrives by sync. Gigs stop riding inside the iOS
 build (`GIG_BUNDLE`); a gig is imported into the account once.
 
@@ -180,3 +229,8 @@ build (`GIG_BUNDLE`); a gig is imported into the account once.
 5. Imports: CAA 2026 and the rest of the real sets into the account; the
    app keeps the demo only.
 6. Peer to peer and the device registry (#85).
+7. Projects (see Projects): a driver per org; a project's branches as
+   `session` docs, the open song editing the driver's doc; the org's
+   projects listed and opened on another device; media fetched or
+   streamed from the project's File Root; app docs attached to Task
+   projects by link. Unbreakable first.

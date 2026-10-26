@@ -18,6 +18,9 @@ desktop = ["dioxus", "dock/ui", "dock/web"]
 engine = ["dep:daw-control", "dep:daw-standalone"]
 library = ["dep:collection-proto", "dep:files-client", "dep:files-proto", "dep:futures-util", "dep:links-proto", "dep:resources-proto", "dep:task-dial", "dep:vox-core"]
 net = ["dep:crdt", "dep:futures"]
+# A project file synced through the org that owns it (session::project_sync,
+# native only): its branches as `session` docs on the account's driver.
+project-sync = ["dep:crdt", "dep:dirs", "dep:fts-account", "fts-account/sync", "dep:session-format", "session-format/sync"]
 reaper = ["studio/reaper", "dep:daw-actions", "dep:daw-reaper", "dep:daw-sync", "dep:reaper-high", "dep:reaper-low", "dep:reaper-medium"]
 tts = ["dep:chatterbox-rs", "dep:ort", "ort/load-dynamic"]
 ui = ["dep:architect-ui", "dep:dock", "dock?/ui", "dep:lucide-dioxus", "web"]
@@ -92,6 +95,7 @@ eyre = { workspace = true }
 facet-postcard = { workspace = true }
 session-format = { workspace = true, features = ["store"] }
 serde = { workspace = true, features = ["derive"] }
+tempfile = { workspace = true }
 serde_json = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread", "time"] }
 tracing-subscriber = { workspace = true, features = ["env-filter"] }
@@ -102,6 +106,9 @@ zstd = { workspace = true }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 daw = { workspace = true }
+dirs = { workspace = true, optional = true }
+fts-account = { workspace = true, optional = true }
+session-format = { workspace = true, optional = true, features = ["store"] }
 studio = { workspace = true, features = ["file"] }
 daw-actions = { workspace = true, optional = true }
 daw-reaper = { workspace = true, optional = true }
@@ -123,6 +130,11 @@ path = "src/main.rs"
 [[example]]
 name = "tts_smoke"
 required-features = ["tts"]
+
+[[test]]
+name = "project_sync"
+path = "tests/project_sync.rs"
+required-features = ["project-sync"]
 
 [[test]]
 name = "lock_merge"

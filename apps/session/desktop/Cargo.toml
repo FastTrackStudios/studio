@@ -67,6 +67,7 @@ cli = [
     "dep:vox",
     "dep:vox-stream",
     "session?/library",
+    "session?/project-sync",
     "session?/reaper",
     "session?/vault-sync",
     "tokio?/macros",

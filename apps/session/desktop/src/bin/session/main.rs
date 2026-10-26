@@ -130,6 +130,17 @@ enum Command {
         #[arg(long, default_value_t = 0.6)]
         quality: f32,
     },
+    /// Share a project with an org on Task: from now on it syncs there
+    /// from any device it is opened on. Waits until every branch (the song
+    /// and each alternative) has reached Task, then prints their doc ids.
+    /// Needs the FTS account signed in on this device.
+    Share {
+        /// The project file (`Song.session`).
+        project: PathBuf,
+        /// The org's slug (`fasttrackaudio`).
+        #[arg(long)]
+        org: String,
+    },
     /// Line-synced lyrics for songs, as `<Song>.lrc` beside each `.RPP`.
     Lyrics {
         #[command(subcommand)]
@@ -273,6 +284,7 @@ async fn run(command: Command) -> eyre::Result<()> {
             out,
             force,
         } => import(&folders, &out, force),
+        Command::Share { project, org } => share(&project, &org).await,
         Command::Lyrics {
             command:
                 LyricsCommand::Fetch {
@@ -292,6 +304,24 @@ async fn run(command: Command) -> eyre::Result<()> {
             force,
         }),
     }
+}
+
+/// `session share`: the project synced into `org`, each branch's doc id
+/// printed as `<branch>\t<id>`.
+async fn share(project: &Path, org: &str) -> eyre::Result<()> {
+    if !project.is_file() {
+        eyre::bail!(
+            "{} is not a project file (a `.session` file)",
+            project.display()
+        );
+    }
+    let ids = session::project_sync::share(project, org)
+        .await
+        .map_err(|e| eyre::eyre!("{e}"))?;
+    for (branch, id) in ids {
+        println!("{branch}\t{id}");
+    }
+    Ok(())
 }
 
 // ── Discovery and connection ────────────────────────────────────────────

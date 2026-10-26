@@ -110,6 +110,73 @@ struct Open {
     /// Updates on the branch since its last compaction: past
     /// [`COMPACT_AFTER`], the next save folds them into a snapshot.
     uncompacted: usize,
+    /// The branch as its org's synced doc, when the project is shared and
+    /// this device signed in (`project_sync`): the bridge edits that doc,
+    /// whose own writer appends each step, so [`append`] does not.
+    synced: Option<session::project_sync::SyncedBranch>,
+    /// Applies what other devices send, while the song is open.
+    _remote: Option<session::sync::loro::Subscription>,
+}
+
+impl Open {
+    /// Name the commit about to be made, for a synced song's history.
+    fn name_next(&self, label: &str) {
+        if let Some(synced) = &self.synced {
+            synced.name_next(label);
+        }
+    }
+}
+
+/// The doc a song's bridge edits: the branch's synced doc when the project
+/// is shared (and this device signed in), else the branch as the file
+/// loaded it.
+async fn song_doc(
+    path: &Path,
+    store: &Arc<Mutex<Store>>,
+    branch: &str,
+    loaded: session::sync::loro::LoroDoc,
+) -> (
+    session::sync::loro::LoroDoc,
+    Option<session::project_sync::SyncedBranch>,
+) {
+    let shared = match store.lock() {
+        Ok(held) => session::project_sync::org_of(&held).is_some(),
+        Err(_) => false,
+    };
+    if !shared {
+        return (loaded, None);
+    }
+    // A second handle on the file for the replica: the store's own is held
+    // by this song for its blobs and folds.
+    let Ok(own) = Store::open(path) else {
+        return (loaded, None);
+    };
+    match session::project_sync::open(path, &own, branch).await {
+        Some(synced) => (synced.loro(), Some(synced)),
+        None => (loaded, None),
+    }
+}
+
+/// From now on, what other devices send to the song `guid` reaches its
+/// engine through its bridge.
+fn watch_remote(
+    guid: &str,
+    synced: Option<&session::project_sync::SyncedBranch>,
+) -> Option<session::sync::loro::Subscription> {
+    let guid = guid.to_owned();
+    Some(session::project_sync::watch_remote(synced?, move || {
+        let guid = guid.clone();
+        async move {
+            let mut songs = open_songs().lock().await;
+            // Not in the open songs yet (still opening): the bridge's watch
+            // keeps what the edit touched, and the next pass applies it.
+            if let Some(open) = songs.get_mut(&guid)
+                && let Err(e) = open.bridge.remote_changed().await
+            {
+                tracing::warn!(project.guid = %guid, why = %e, "another device's edit did not reach the engine");
+            }
+        }
+    }))
 }
 
 /// How many updates a branch keeps before a save folds them into one
@@ -334,7 +401,9 @@ pub fn save(
                 let mut copy = begin(&daw, &guid, &path, &branch).await?;
                 return save_open(&mut copy, &label).await.map(|()| path);
             }
-            songs.insert(guid.clone(), begin(&daw, &guid, &path, &branch).await?);
+            let mut open = begin(&daw, &guid, &path, &branch).await?;
+            open._remote = watch_remote(&guid, open.synced.as_ref());
+            songs.insert(guid.clone(), open);
         }
         let saved = match songs.get_mut(&guid) {
             Some(open) => save_open(open, &label).await,
@@ -350,9 +419,13 @@ pub fn save(
 async fn begin(daw: &Standalone, guid: &str, path: &Path, branch: &str) -> Result<Open, String> {
     record_steps();
     let (store, loaded, uncompacted) = open_branch(path, branch)?;
+    let (loaded, synced) = song_doc(path, &store, branch, loaded).await;
     let doc = SessionDoc::from_loro(loaded);
     let saved = doc.version();
     let chart = doc.read().chart;
+    if let Some(synced) = &synced {
+        synced.name_next("Save");
+    }
     let bridge = Bridge::host(
         project(daw, guid).await?,
         media_of(path),
@@ -370,11 +443,14 @@ async fn begin(daw: &Standalone, guid: &str, path: &Path, branch: &str) -> Resul
         bridge,
         saved,
         uncompacted,
+        synced,
+        _remote: None,
     })
 }
 
 /// The song as it is now into its file: read, and what changed appended.
 async fn save_open(open: &mut Open, label: &str) -> Result<(), String> {
+    open.name_next(label);
     open.bridge
         .local_changed()
         .await
@@ -387,12 +463,16 @@ async fn save_open(open: &mut Open, label: &str) -> Result<(), String> {
 /// Append what the doc holds past its last save to the song's branch.
 fn append(open: &mut Open, label: &str) -> Result<(), String> {
     let doc = open.bridge.doc();
-    let update = doc.updates_since(&open.saved).map_err(|e| e.to_string())?;
     if doc.version() != open.saved {
-        with_store(&open.store, |s| {
-            s.append_update(&open.branch, label, &update)
-                .map_err(|e| e.to_string())
-        })?;
+        // A synced song's doc appends its own commits (named by
+        // `Open::name_next`); appending here too would write each twice.
+        if open.synced.is_none() {
+            let update = doc.updates_since(&open.saved).map_err(|e| e.to_string())?;
+            with_store(&open.store, |s| {
+                s.append_update(&open.branch, label, &update)
+                    .map_err(|e| e.to_string())
+            })?;
+        }
         open.saved = doc.version();
         open.uncompacted = open.uncompacted.saturating_add(1);
         if let Ok(mut at) = LAST_WRITE.lock() {
@@ -503,6 +583,7 @@ fn record(project_guid: &str, label: &str) -> Result<(), String> {
         let Some(open) = songs.get_mut(&guid) else {
             return Ok(());
         };
+        open.name_next(&label);
         let recorded = match open.bridge.local_step(&label).await {
             Ok(true) => append(open, &label),
             Ok(false) => Ok(()),
@@ -566,15 +647,18 @@ fn through_doc(daw: &Standalone, project_guid: &str, back: bool) -> Result<Undon
 async fn step_back(open: &mut Open, pending: &str, back: bool) -> Result<Undone, String> {
     // A step the recorder has not reached yet is recorded first, so it is
     // the one undone; with none waiting, nothing to read.
-    if PENDING.load(std::sync::atomic::Ordering::SeqCst) > 0
-        && open
+    if PENDING.load(std::sync::atomic::Ordering::SeqCst) > 0 {
+        open.name_next(pending);
+        if open
             .bridge
             .local_step(pending)
             .await
             .map_err(|e| e.to_string())?
-    {
-        append(open, pending)?;
+        {
+            append(open, pending)?;
+        }
     }
+    open.name_next(if back { "Undo" } else { "Redo" });
     let step = if back {
         open.bridge.undo().await
     } else {
@@ -610,8 +694,6 @@ pub fn load(daw: &Standalone, name: &str, path: &Path, branch: &str) -> Result<S
     {
         *at = Some(web_time::Instant::now());
     }
-    let doc = SessionDoc::from_loro(loaded);
-    let saved = doc.version();
     let guid = uuid::Uuid::new_v4().to_string();
     daw.seed_project(daw_proto::ProjectInfo {
         guid: guid.clone(),
@@ -623,6 +705,11 @@ pub fn load(daw: &Standalone, name: &str, path: &Path, branch: &str) -> Result<S
     let branch = branch.to_owned();
     let made = guid.clone();
     run(async move {
+        // A shared project opens as its synced doc: what this device
+        // missed is merged in as the driver catches up.
+        let (loaded, synced) = song_doc(&path, &store, &branch, loaded).await;
+        let doc = SessionDoc::from_loro(loaded);
+        let saved = doc.version();
         let bridge = Bridge::join(
             project(&daw, &made).await?,
             media_of(&path),
@@ -632,6 +719,7 @@ pub fn load(daw: &Standalone, name: &str, path: &Path, branch: &str) -> Result<S
         )
         .await
         .map_err(|e| e.to_string())?;
+        let remote = watch_remote(&made, synced.as_ref());
         open_songs().lock().await.insert(
             made,
             Open {
@@ -641,6 +729,8 @@ pub fn load(daw: &Standalone, name: &str, path: &Path, branch: &str) -> Result<S
                 bridge,
                 saved,
                 uncompacted,
+                synced,
+                _remote: remote,
             },
         );
         Ok::<(), String>(())

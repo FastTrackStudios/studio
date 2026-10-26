@@ -11,6 +11,9 @@ description = "The FastTrackStudio account on a device: device-code sign-in (RFC
 # SignOutConfirm, AccountMenuItem and the use_account hook. Inline styles
 # only, so it runs on Blitz and a WebView alike.
 ui = ["dep:dioxus", "dep:futures-timer"]
+# Sync after sign-in (src/sync.rs): one doc driver per org, on the kept
+# session, every synced doc a `.session` file through its replica.
+sync = ["dep:architect", "dep:async-trait", "dep:crdt", "dep:org-proto", "dep:session-format", "dep:task-dial", "dep:utils", "dep:uuid"]
 
 [dependencies]
 auth-client = { workspace = true }
@@ -25,6 +28,14 @@ futures-timer = { workspace = true, optional = true }
 dirs = { workspace = true }
 reqwest = { workspace = true }
 tokio = { workspace = true }
+architect = { workspace = true, optional = true }
+async-trait = { workspace = true, optional = true }
+crdt = { workspace = true, features = ["vox", "turso"], optional = true }
+org-proto = { workspace = true, optional = true }
+session-format = { workspace = true, features = ["store", "sync"], optional = true }
+task-dial = { workspace = true, optional = true }
+utils = { workspace = true, optional = true }
+uuid = { workspace = true, optional = true }
 
 [dev-dependencies]
 tokio = { workspace = true }
