@@ -1475,7 +1475,15 @@ pub fn parse_patch_node(root: &XmlNode) -> Result<OmniPatch, String> {
                     Some(uni) => (uni.num("uoct"), uni.num("uanalg"), uni.num("udrft")),
                     None => (osc.num("uoct"), osc.num("uanalg"), osc.num("udrft")),
                 };
-                layer.unison_octave = src_oct.unwrap_or(0.0).clamp(0.0, 1.0);
+                // `uoct` is a selector in 0.02 steps, 0.04 (the factory's
+                // default) plain unison: read as an amount it had pushed
+                // every other voice ~48 cents sharp. Above it the stack
+                // reaches up an octave (our octave mode; the octave-down
+                // settings below it play plain).
+                layer.unison_octave = match (src_oct.unwrap_or(0.04) * 50.0).round() as u32 {
+                    3.. => 1.0,
+                    _ => 0.0,
+                };
                 layer.unison_analog = src_analg.unwrap_or(0.0).clamp(0.0, 1.0);
                 layer.unison_drift = src_drft.unwrap_or(0.0).clamp(0.0, 1.0);
             } else {
