@@ -24,10 +24,26 @@ Task knowing what a song is.
    words ("key A → B", "added *Reckless Love*") instead of raw CRDT ops.
    Everything else in the doc (a chart's source, an arrangement's form, a
    part's patch map) is the app's own and Task does not read it.
-3. **Kind schemas.** Studio registers one schema per kind, a `KindSchema`
-   (property names, types, labels, which property is the title): data, not
-   code. Task renders any kind it has a schema for. A new kind needs no
+3. **The face describes itself.** Each property carries its label and
+   its type, so Task renders any kind with no schema registered and no
    Task change, and another app (lighting, video) works the same way.
+   The shape, in the doc's root:
+
+   ```text
+   face: Map
+     title:    String
+     subtitle: String            (optional: "Harbor & Pine · 2026")
+     colour:   String            (optional: "#22c55e")
+     props:    List of Map { key, label, type, value }
+               type ∈ text | number | duration | date | enum | tags | bool
+               value: String, f64, i64, bool, or a List of String (tags)
+     links:    List of Map { rel, label, doc }
+               rel: the app's word ("plays", "arrangement-of", "part-of")
+               doc: "doc:<uuid>", a catalogued doc in this or another space
+   ```
+
+   The app keeps the face current as it edits (one transaction with the
+   change it describes). Task reads only this map.
 4. **History.** Loro keeps every change. Task shows it per doc from the
    `face` diff, and lets a person name a version ("Sunday 10/26 as
    played") and restore it, both generic.
@@ -39,10 +55,14 @@ Task knowing what a song is.
    A doc may link to a doc in another space; the link resolves if the
    reader may read the target (ADR 0002's dangling-reference rules).
 
-What Task needs that it lacks today: docs registered in the catalog (it
-uses only `DocSync` keyed by vault path), the `face` convention with
-schemas, and comment anchors beyond tasks and projects. Those are Task
-work, specified generically.
+What Task has already (`apps/server/src/app_docs.rs`): the catalog per
+org (`DocsHost` in `<org>/app_docs.sqlite`, the kind opaque), sync over
+the org's one lane, tombstones, members-only access, and a project
+naming its docs with a link (`project:<path>` → `doc:<uuid>`). What it
+lacks, all generic: reading a doc's `face` (with the kind's schema) to
+list, search and render it; comment threads anchored on `doc:<uuid>`
+plus a path inside it (threads anchor on tasks and projects today); and
+a view of an org's app docs in its UI.
 
 ## The model
 
