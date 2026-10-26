@@ -134,6 +134,7 @@ pub fn effect_block(name: &str, p: &[f32; 15]) -> Option<RigBlock> {
             "Tube Limiter" => tube_limiter(p),
             "Precision Compressor" => precision_compressor(p),
             "Power Filter" => power_filter(p),
+            "Valve Radio" => valve_radio(p),
             _ => RigBlock::of_type(classify_effect(name).unwrap_or(BlockType::Custom)),
         }
         .named(name),
@@ -583,6 +584,97 @@ fn lerp_table(points: &[(f32, f32)], x: f32) -> f32 {
         }
     }
     points[points.len() - 1].1
+}
+
+/// [`lerp_table`] with the value interpolated in log space — for corner
+/// frequencies, whose laws are near-exponential in the knob.
+fn lerp_table_log(points: &[(f32, f32)], x: f32) -> f32 {
+    let logs: Vec<(f32, f32)> = points.iter().map(|&(k, hz)| (k, hz.ln())).collect();
+    lerp_table(&logs, x).exp()
+}
+
+/// Valve Radio (measured per harmonic of a held saw, every fit within
+/// 0.3 dB): a 12 dB/oct high-pass (`P2`, off at 0) into a 12 dB/oct
+/// low-pass (`P1`, off at 1), both with the Q `P3` sets (0.5 → 2.7); `P0`
+/// switches it in (0 is exactly dry; patches use 0 or 1); `P11` the output
+/// level (−1.1 dB at its usual 0.442). `P4` / `P8` (stereo, 0 in nearly
+/// every patch) and the remaining parameters are not modelled.
+fn valve_radio(p: &[f32; 15]) -> RigBlock {
+    let b = RigBlock::of_type(BlockType::Eq);
+    if p[0] < 0.5 {
+        return b;
+    }
+    // RBJ Q, fitted; the EQ's cut-filter Q is Pro-Q style (1 = Butterworth).
+    let q = std::f32::consts::SQRT_2
+        * lerp_table(
+            &[
+                (0.0, 0.5),
+                (0.25, 1.06),
+                (0.4, 1.42),
+                (0.56, 1.86),
+                (0.75, 2.29),
+                (0.9, 2.5),
+                (1.0, 2.7),
+            ],
+            p[3],
+        );
+    let mut b = b;
+    if p[2] > 0.01 {
+        let hz = lerp_table_log(
+            &[
+                (0.0, 5.0),
+                (0.05, 15.8),
+                (0.1, 115.0),
+                (0.15, 245.0),
+                (0.2, 426.0),
+                (0.25, 620.0),
+                (0.35, 1309.0),
+                (0.5, 2749.0),
+                (0.6, 3563.0),
+                (0.75, 4759.0),
+                (0.9, 7050.0),
+                (1.0, 9170.0),
+            ],
+            p[2],
+        );
+        b = eq_band(b, 1, 3, hz, 0.0, q);
+    }
+    if p[1] < 0.97 {
+        let hz = lerp_table_log(
+            &[
+                (0.0, 80.0),
+                (0.05, 162.0),
+                (0.1, 333.0),
+                (0.15, 580.0),
+                (0.2, 980.0),
+                (0.25, 1578.0),
+                (0.35, 3002.0),
+                (0.5, 7500.0),
+                (0.6, 9500.0),
+                (0.75, 12_000.0),
+                (0.9, 15_000.0),
+                (0.97, 20_000.0),
+            ],
+            p[1],
+        );
+        b = eq_band(b, 2, 4, hz, 0.0, q);
+    }
+    let level = if p[11] <= 0.0 {
+        -120.0
+    } else {
+        lerp_table(
+            &[
+                (0.0, -60.0),
+                (0.25, -6.0),
+                (0.442, -1.1),
+                (0.5, 0.0),
+                (0.75, 7.0),
+                (1.0, 10.7),
+            ],
+            p[11],
+        )
+    };
+    b.with_param("output_gain", format!("{level:.2}"))
 }
 
 /// Vintage Compressor (measured static curves): `P2` the makeup (0 → 0,

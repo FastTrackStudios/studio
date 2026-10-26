@@ -102,9 +102,9 @@ fn main() {
     // The real index, so sample layers resolve their soundsources (an empty
     // one leaves them silent). Point `FTS_OMNISPHERE_ROOT` etc. at the local
     // extraction.
-    // A `.signalpack` plays as a keys layer would hold it: one Sampler block
+    // A `.signalpack` (or a soundsource `.styx`) plays as a keys layer would hold it: one Sampler block
     // as the Soundsource of an Oscillator module (NI / Keyscape pianos).
-    let tree = if patch.ends_with(".signalpack") {
+    let tree = if patch.ends_with(".signalpack") || patch.ends_with(".styx") {
         use sampler::rig_node::Container;
         let mut src = sampler::RigBlock::sample_lib(patch.as_str());
         src.name = "Soundsource".into();

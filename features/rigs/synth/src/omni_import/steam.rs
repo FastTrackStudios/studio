@@ -423,7 +423,11 @@ fn realize(
                 vel_max: hi,
                 rr_index: s.rr,
                 gain_db: 20.0 * (volume * s.gain).max(1e-6).log10(),
-                tune_cents: 1200.0 * (pitch * s.ratio).max(1e-6).log2(),
+                // `A440` is the recording's measured tuning, so playback
+                // divides by it (Zim'bira Screw Tap, A440 0.981: dividing
+                // lands 5 cents from Omnisphere, multiplying 60 cents flat);
+                // the zone's `Pitch` scales playback.
+                tune_cents: 1200.0 * (pitch / s.ratio.max(1e-6)).max(1e-6).log2(),
                 layer: s.layer.clone(),
             });
         }
@@ -608,6 +612,23 @@ mod tests {
         ]);
         let ss = soundsources(&db, "Glock");
         assert_eq!((ss[0].zones.len(), ss[0].unresolved), (1, 0));
+    }
+
+    #[test]
+    fn a_flat_recording_is_tuned_up() {
+        // A440 0.981 (a recording ~33 cents flat) plays ~33 cents up.
+        let flat = String::from_utf8(layer(60, "AudioFiles/f.wav", "3f800000"))
+            .unwrap()
+            .replace("A440=\"3f800000\"", "A440=\"3f7b295f\"");
+        let db = db(&[
+            ("", "F.zmap", zmap(&zone(0, 127, 60, "F"))),
+            ("F/AudioFiles", "f.wav", audio()),
+            ("F/AudioFiles", "g.wav", audio()),
+            ("F/Pitch 60-60", "HitBundle.xml", bundle(60)),
+            ("F/Pitch 60-60", "Default Layer.xml", flat.into_bytes()),
+        ]);
+        let cents = soundsources(&db, "F")[0].zones[0].tune_cents;
+        assert!((cents - 33.0).abs() < 0.5, "{cents}");
     }
 
     #[test]

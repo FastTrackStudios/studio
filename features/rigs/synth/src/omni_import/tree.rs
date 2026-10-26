@@ -522,7 +522,9 @@ pub fn patch_to_container(patch: &OmniPatch, index: &SoundsourceIndex) -> Contai
                     .release_db()
                     .map_or_else(|| "off".to_string(), |db| format!("{db:.2}")),
             );
-            let timbre = layer.timbre_semis();
+            // Timbre Shift takes the zones of a lower key (positive); the
+            // layer's Octave / Semi take the zones of the shifted note.
+            let timbre = layer.timbre_semis() - layer.key_shift as i32;
             if timbre != 0 {
                 sb = sb.with_param("timbre_semis", timbre.to_string());
             }
@@ -691,7 +693,10 @@ pub fn patch_to_container(patch: &OmniPatch, index: &SoundsourceIndex) -> Contai
                         .with_param("amp", format!("{env_amp:.4}"))
                         .with_param("points", points_param(&layer.filter_points))
                         .with_param("sync", if layer.filter_env_synced { "1" } else { "0" })
-                        .with_param("sustain", (layer.filter_points.len() - 2).to_string())
+                        // The sustain POINT (an index, not a level: `sustain`
+                        // is an ADSR level, ranged 0..1, which clamped this to
+                        // the attack peak and froze the envelope there).
+                        .with_param("sustain_point", (layer.filter_points.len() - 2).to_string())
                         .with_param("vel_sens", format!("{:.3}", layer.filter_env_velsens))
                 } else {
                     let mut fe = RigBlock::of_type(BlockType::Envelope)
@@ -852,6 +857,8 @@ pub fn load_patch_file_transposed(
     if semitones != 0.0 {
         for layer in &mut patch.layers {
             layer.transpose += semitones;
+            // A part's Octave / Semi re-keys like the layer's own.
+            layer.key_shift += semitones.round();
         }
     }
     Ok(patch_to_container(&patch, index))

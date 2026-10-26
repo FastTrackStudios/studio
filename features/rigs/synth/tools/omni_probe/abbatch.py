@@ -2,16 +2,17 @@
 """A/B a spread of Omnisphere patches: real Omnisphere (daw's `omni_render`)
 against Signal (`render_patch`), same note and timing, scored by `wavcmp.py`.
 
-usage: abbatch.py <coverage.tsv> <out_dir> [--per-lib 3] [--note 48] [--seed 1]
+usage: abbatch.py <coverage.tsv> <out_dir> [--per-lib 3] [--note 48] [--seed 1] [--nofx]
 
 `coverage.tsv` is `patch_coverage --tsv`; only patches with no known gap are
 drawn, `--per-lib` from each library folder, so a bad score is a fidelity
-bug, not a missing feature. Writes `<out_dir>/ab.tsv` (worst first) and
+bug, not a missing feature. `--nofx` renders a copy of each patch with every
+effect bypassed, on both sides — what is left is the voice engine. Writes `<out_dir>/ab.tsv` (worst first) and
 prints a summary. Needs both examples built in release and numpy (run it
 with `uv run --with numpy python abbatch.py …`); Signal reads its library
 roots from the environment (`source .env`).
 """
-import os, random, re, subprocess, sys
+import hashlib, os, random, re, subprocess, sys
 from collections import defaultdict
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -19,6 +20,8 @@ REPO = os.path.abspath(os.path.join(HERE, "../../../../.."))
 OMNI = os.path.join(REPO, "target/release/examples/omni_render")
 OURS = os.path.join(REPO, "target/release/examples/render_patch")
 HOLD, TAIL = "2.0", "1.0"
+# Omnisphere references, shared by every run (`OMNI_REFS` to move them).
+REFS = os.environ.get("OMNI_REFS", "/tmp/omni-refs")
 LINE = re.compile(r"level\s+([-+\d.]+) dB.*held spectrum rms\s+([\d.]+) dB\s+attack\s+([\d.]+) dB")
 
 
@@ -43,14 +46,27 @@ def main():
     tsv, out = sys.argv[1], sys.argv[2]
     per_lib, note, seed = arg("--per-lib", 3), arg("--note", 48), arg("--seed", 1)
     os.makedirs(out, exist_ok=True)
-    env = dict(os.environ, RUST_LOG="error")
+    os.makedirs(REFS, exist_ok=True)
+    # Every zone resident before the note: a raw-styx library preloads only
+    # a capped, middle-out subset otherwise, and a miss drops the voice.
+    env = dict(os.environ, RUST_LOG="error", FTS_PRELOAD_PROFILE=os.environ.get("FTS_PRELOAD_PROFILE", "full"))
     rows = []
+    nofx = "--nofx" in sys.argv
     for i, (lib, patch) in enumerate(pick(tsv, per_lib, seed)):
-        ref, ours = os.path.join(out, f"{i:03d}_omni.wav"), os.path.join(out, f"{i:03d}_ours.wav")
+        if nofx:
+            src = open(patch, encoding="latin-1").read()
+            bare = re.sub(r'(<EFFMODULE\b[^>]*?)Active="[0-9a-f]+"', r'\1Active="0"', src)
+            patch = os.path.join(out, f"{i:03d}_nofx.prt_omn")
+            open(patch, "w", encoding="latin-1").write(bare)
         timing = ["--note", str(note), "--vel", "100", "--hold", HOLD, "--tail", TAIL]
+        # The reference never changes: cached per (patch, timing) across runs.
+        key = hashlib.sha1("\0".join([patch, *timing]).encode()).hexdigest()[:16]
+        ref = os.path.join(REFS, f"{key}.wav")
+        ours = os.path.join(out, f"{i:03d}_ours.wav")
         try:
-            subprocess.run([OMNI, patch, ref, *timing], env=env, capture_output=True, timeout=120, check=True)
-            subprocess.run([OURS, patch, ours, *timing], env=env, capture_output=True, timeout=120, check=True)
+            if not os.path.exists(ref):
+                subprocess.run([OMNI, patch, ref, *timing], env=env, capture_output=True, timeout=300, check=True)
+            subprocess.run([OURS, patch, ours, *timing], env=env, capture_output=True, timeout=300, check=True)
             cmp = subprocess.run([sys.executable, os.path.join(HERE, "wavcmp.py"), ref, ours],
                                  env=dict(env, HOLD=HOLD, BANDS="0"), capture_output=True, text=True, timeout=60)
             m = LINE.search(cmp.stdout)

@@ -39,6 +39,12 @@ pub struct OmniLayer {
     /// octave UP; `semi` 0.48 = 0, each 0.02 lower a semitone up; `tune`
     /// ±48 semitones about 0.5; `tuneFine` ±1 semitone about 0.5).
     pub transpose: f32,
+    /// The whole-semitone part of [`Self::transpose`] that `oct` and `semi`
+    /// set. On a sample layer Omnisphere *re-keys* by it — the zone of the
+    /// shifted note plays, not this note's zone resampled (measured on the
+    /// neutral template: `oct` 0.06 at C4 nulls our C3 to 0.2 dB, `semi`
+    /// 0.50 at C4 our B3 to 0.1 dB) — while `tune` / `tuneFine` resample.
+    pub key_shift: f32,
     /// `1 − OSC atrm`: how far the layer's base amplitude sits below full
     /// (measured: routes onto `atrm` add to `atrm`, gain = clamp(atrm +
     /// Σ depth·source, 0, 1)). 0 = full, the default.
@@ -1176,10 +1182,10 @@ pub fn parse_patch_node(root: &XmlNode) -> Result<OmniPatch, String> {
         if let Some(osc) = voice.child("OSC") {
             layer.level = osc.num("level").unwrap_or(0.5);
             let n = |k: &str, d: f32| osc.num(k).unwrap_or(d);
-            layer.transpose = ((0.04 - n("oct", 0.04)) / 0.02).round() * 12.0
-                + ((0.48 - n("semi", 0.48)) / 0.02).round()
-                + (n("tune", 0.5) - 0.5) * 96.0
-                + (n("tuneFine", 0.5) - 0.5) * 2.0;
+            layer.key_shift = ((0.04 - n("oct", 0.04)) / 0.02).round() * 12.0
+                + ((0.48 - n("semi", 0.48)) / 0.02).round();
+            layer.transpose =
+                layer.key_shift + (n("tune", 0.5) - 0.5) * 96.0 + (n("tuneFine", 0.5) - 0.5) * 2.0;
             layer.glide = n("portAct", 0.0) != 0.0;
             layer.pan = n("pan", 0.5).clamp(0.0, 1.0);
             layer.amp_cut = 1.0 - n("atrm", 1.0).clamp(0.0, 1.0);

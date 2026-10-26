@@ -501,8 +501,9 @@ impl ModCompiler {
                     block.param_f32("sync").unwrap_or(0.0) > 0.0,
                 )
                 .with_velocity_sensitivity(block.param_f32("vel_sens").unwrap_or(0.0));
-                // An amp/filter envelope holds at its sustain point.
-                let env = match block.param_f32("sustain") {
+                // An amp/filter envelope holds at its sustain point — an
+                // index, so not `sustain` (an ADSR's level, ranged 0..1).
+                let env = match block.param_f32("sustain_point") {
                     Some(i) if i >= 0.0 => env.with_sustain(i as usize),
                     _ => env,
                 }
