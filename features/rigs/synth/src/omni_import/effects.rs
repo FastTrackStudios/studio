@@ -513,13 +513,28 @@ fn chorus_echo(p: &[f32; 15]) -> RigBlock {
 /// - `P12` stereo width (0 mono).
 fn pro_verb(p: &[f32; 15]) -> RigBlock {
     let rt = 20.0 * (5.5 * (p[2] - 1.0)).exp();
-    // P6 is the reverb's level (measured, relative to its 0.885 default).
-    let level = lerp_table(&[(0.0, -14.0), (0.5, -4.2), (0.885, 0.0), (1.0, 1.5)], p[6]);
+    // P6 is the reverb's level (measured on a held saw, relative to its
+    // 0.885 default).
+    let level = lerp_table(
+        &[
+            (0.0, -14.0),
+            (0.2, -9.9),
+            (0.44, -7.6),
+            (0.7, -3.9),
+            (0.885, 0.0),
+            (1.0, 0.6),
+        ],
+        p[6],
+    );
+    // Held, PRO-Verb's wet stays level as the tail grows (−6 to −8 dB re the
+    // dry from RT 0.4 to 9 s) where the click-fitted law climbs: the gap,
+    // measured on a held saw.
+    let held = 4.8 - 7.4 * (rt / 1.78).log10().max(0.0);
     reverb_block(
         rt,
         428.0 * p[3].max(0.0).powf(2.36),
         p[0],
-        Some(pro_verb_wet_db(rt) + level),
+        Some(pro_verb_wet_db(rt) + level + held),
     )
     .with_param("diffusion", format!("{:.3}", p[4].clamp(0.0, 1.0)))
     // High multiplier 0.865 (the default) ≈ neutral damping.
