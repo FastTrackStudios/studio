@@ -1227,6 +1227,48 @@ fn env_points(env: &XmlNode) -> Vec<(f32, f32, f32, bool)> {
         .collect()
 }
 
+/// An amp / filter envelope's breakpoints with its PARAMS time adjusters
+/// applied (measured on a 2 s attack and a 0.8 s release: each multiplies
+/// its segments' durations by `1 − value`): `a` the segments up to the peak,
+/// `d` those from the peak to the sustain point (the penultimate), `r` the
+/// release after it. ~5 % of the factory patches set one.
+fn adjust_env_times(
+    pts: Vec<(f32, f32, f32, bool)>,
+    params: Option<&XmlNode>,
+) -> Vec<(f32, f32, f32, bool)> {
+    let k = |name: &str| {
+        1.0 - params
+            .and_then(|p| p.num(name))
+            .unwrap_or(0.0)
+            .clamp(0.0, 1.0)
+    };
+    let (ka, kd, kr) = (k("a"), k("d"), k("r"));
+    if pts.len() < 2 || (ka == 1.0 && kd == 1.0 && kr == 1.0) {
+        return pts;
+    }
+    let sustain = pts.len() - 2;
+    let peak = pts[..=sustain]
+        .iter()
+        .enumerate()
+        .max_by(|x, y| x.1.1.total_cmp(&y.1.1))
+        .map_or(0, |(i, _)| i);
+    let mut out = Vec::with_capacity(pts.len());
+    let mut t = pts[0].0;
+    out.push(pts[0]);
+    for i in 1..pts.len() {
+        let scale = if i <= peak {
+            ka
+        } else if i <= sustain {
+            kd
+        } else {
+            kr
+        };
+        t += (pts[i].0 - pts[i - 1].0).max(0.0) * scale;
+        out.push((t, pts[i].1, pts[i].2, pts[i].3));
+    }
+    out
+}
+
 /// The fewest notes a polyphonic part plays: the gig's own voice counts
 /// (the Dolceola's 12, Club Europa's 8) cut real chords in the rig, so a
 /// polyphonic part never steals below this. A mono part stays 1.
@@ -1336,7 +1378,11 @@ pub fn parse_patch_node(root: &XmlNode) -> Result<OmniPatch, String> {
             .and_then(|p| p.num("velsens"))
             .unwrap_or(0.0)
             .clamp(0.0, 1.0);
-        layer.amp_points = voice.child("AENV").map(env_points).unwrap_or_default();
+        layer.amp_points = voice
+            .child("AENV")
+            .map(env_points)
+            .map(|pts| adjust_env_times(pts, voice.child("AENVPARAMS")))
+            .unwrap_or_default();
         let synced = |tag: &str| {
             voice
                 .child(tag)
@@ -1345,7 +1391,11 @@ pub fn parse_patch_node(root: &XmlNode) -> Result<OmniPatch, String> {
         };
         layer.amp_env_synced = synced("AENVPARAMS");
         layer.filter_env_synced = synced("FENVPARAMS");
-        layer.filter_points = voice.child("FENV").map(env_points).unwrap_or_default();
+        layer.filter_points = voice
+            .child("FENV")
+            .map(env_points)
+            .map(|pts| adjust_env_times(pts, voice.child("FENVPARAMS")))
+            .unwrap_or_default();
         layer.filter_env = voice
             .child("FENV")
             .and_then(parse_env_breakpoints)
