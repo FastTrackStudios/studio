@@ -61,8 +61,11 @@ def main():
             patch = os.path.join(out, f"{i:03d}_nofx.prt_omn")
             open(patch, "w", encoding="latin-1").write(bare)
         timing = ["--note", str(note), "--vel", "100", "--hold", HOLD, "--tail", TAIL]
-        # The reference never changes: cached per (patch, timing) across runs.
-        key = hashlib.sha1("\0".join([patch, *timing]).encode()).hexdigest()[:16]
+        # The reference never changes: cached per (patch content, timing)
+        # across runs — by content, as a `--nofx` copy's path is only its
+        # index in the draw.
+        body = open(patch, "rb").read()
+        key = hashlib.sha1(body + "\0".join(["", *timing]).encode()).hexdigest()[:16]
         ref = os.path.join(REFS, f"{key}.wav")
         ours = os.path.join(out, f"{i:03d}_ours.wav")
         try:
