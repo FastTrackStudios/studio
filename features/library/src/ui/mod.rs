@@ -69,6 +69,11 @@ pub enum Open {
     Session(SessionId),
 }
 
+/// Room the app's own controls need at the bar's left (a Mac's window
+/// buttons, drawn over the page), in points.
+#[derive(Clone, Copy)]
+pub struct BarInset(pub u32);
+
 /// The page the library opens on, when not Home (a deep link, a
 /// screenshot of one page).
 #[derive(Clone, Copy)]
@@ -191,12 +196,16 @@ fn use_full_sidebar() -> bool {
 /// The library: the root a window mounts.
 #[component]
 pub fn LibraryApp() -> Element {
-    if try_consume_context::<LibraryData>().is_none() {
-        use_context_provider(|| LibraryData(Signal::new(crate::fixture::library())));
-    }
-    if try_consume_context::<Viewport>().is_none() {
-        use_context_provider(|| Viewport(Signal::new((1194.0, 834.0))));
-    }
+    // What the app did not provide falls back once, on the first render
+    // (a hook, so every render calls the same hooks in the same order).
+    use_hook(|| {
+        if try_consume_context::<LibraryData>().is_none() {
+            provide_context(LibraryData(Signal::new(crate::fixture::library())));
+        }
+        if try_consume_context::<Viewport>().is_none() {
+            provide_context(Viewport(Signal::new((1194.0, 834.0))));
+        }
+    });
     let first = try_consume_context::<InitialRoute>().map_or(Route::Home, |r| r.0);
     use_context_provider(|| Nav {
         route: Signal::new(first),
@@ -245,6 +254,7 @@ fn AppBar() -> Element {
     let lib = use_library();
     let me = lib.read().me.clone();
     let wide = use_wide();
+    let inset = try_use_context::<BarInset>().map_or(16, |b| b.0);
     let pending = {
         let l = lib.read();
         l.songs
@@ -259,7 +269,7 @@ fn AppBar() -> Element {
     rsx! {
         div {
             style: "flex-shrink: 0; height: {BAR}px; display: flex; align-items: center; gap: 12px; \
-                    padding: 0 16px; background: {SHEET}; border-bottom: 1px solid {RULE_STRONG};",
+                    padding: 0 16px 0 {inset}px; background: {SHEET}; border-bottom: 1px solid {RULE_STRONG};",
             if nav.can_go_back() {
                 button {
                     class: "lp",

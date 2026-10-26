@@ -5,13 +5,16 @@
 //! a session opens in Session).
 
 use dioxus::prelude::*;
-use library::ui::{LibraryApp, Open, Opener, Viewport};
+use library::ui::{BarInset, LibraryApp, Open, Opener, Viewport};
 
 use crate::front::Side;
 
 #[component]
 pub fn LibraryHome(on_pick: EventHandler<Side>) -> Element {
     let window = dioxus_native::use_window();
+    // A Mac draws its window buttons over the bar's left end.
+    #[cfg(target_os = "macos")]
+    use_context_provider(|| BarInset(crate::front::MAC_WINDOW_BUTTONS + 4));
     let mut size = use_context_provider(|| Viewport(Signal::new((1194.0, 834.0))));
     use_future(move || {
         let window = window.clone();

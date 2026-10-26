@@ -2,7 +2,7 @@
 //! the chosen space, as tables a finger can work.
 
 use dioxus::prelude::*;
-use lucide_dioxus::{Guitar, Mic, Piano, Plus};
+use lucide_dioxus::{AudioWaveform, FolderKanban, Guitar, ListMusic, Mic, Music, Piano, Plus};
 
 use super::home::Page;
 use super::kit::*;
@@ -122,19 +122,27 @@ pub(crate) fn Setlists() -> Element {
                     }
                     span { style: "{META} color: {INK_2};", "{minutes(l.setlist_seconds(s))}" }
                     if wide {
-                        div { style: "display: flex; align-items: center; gap: -6px;",
-                            for p in l.parts_of(s.id) {
-                                span { key: "{p.id.0}", style: "margin-right: -6px; border: 2px solid {DESK}; border-radius: 16px; display: flex;",
-                                    Avatar { name: p.player.clone(), size: 26 }
-                                }
-                            }
-                            if l.parts_of(s.id).is_empty() { span { style: "{META} color: {INK_3};", "None yet" } }
-                        }
+                        // The rigs on the set, as their kinds: "Guitar · Keys · Bass".
+                        span { style: "{META} color: {INK_2}; {ONE_LINE}", "{rigs_on(&l, s.id)}" }
                     }
                     SyncMark { sync: s.sync }
                 }
             }
         }
+    }
+}
+
+/// The rigs attached to a setlist, by kind: "Guitar · Keys · Bass".
+fn rigs_on(l: &crate::Library, set: crate::model::SetlistId) -> String {
+    let kinds: Vec<&str> = l
+        .parts_of(set)
+        .iter()
+        .filter_map(|p| Some(l.rig(p.rig)?.kind.label()))
+        .collect();
+    if kinds.is_empty() {
+        "None yet".to_owned()
+    } else {
+        kinds.join(" · ")
     }
 }
 
@@ -375,7 +383,7 @@ pub(crate) fn Results() -> Element {
             })
         })
         .collect();
-    let columns = "minmax(0, 1fr)".to_owned();
+    let columns = "28px minmax(0, 1fr)".to_owned();
     let count = rows.len();
     let kinds: Vec<&'static str> = rows.iter().map(|r| r.0).collect();
     rsx! {
@@ -392,6 +400,12 @@ pub(crate) fn Results() -> Element {
                         Heading { text: kind.to_owned() }
                     }
                     Row { columns: columns.clone(), route,
+                        match kind {
+                            "Projects" => rsx! { FolderKanban { size: 20, color: INK_3 } },
+                            "Setlists" => rsx! { ListMusic { size: 20, color: INK_3 } },
+                            "Songs" => rsx! { Music { size: 20, color: INK_3 } },
+                            _ => rsx! { AudioWaveform { size: 20, color: INK_3 } },
+                        }
                         Named { title, detail }
                     }
                 }

@@ -102,14 +102,19 @@ fn lines(l: &Library, set: SetlistId, part: Option<&Part>) -> Vec<Line> {
 pub(crate) fn SetlistPage(id: SetlistId, entry: Option<EntryId>) -> Element {
     let lib = use_library();
     let wide = use_wide();
+    // Hooks before any early return: a set that arrives later must find
+    // the same hooks.
+    let mut chosen = use_signal(|| None::<PartId>);
+    let mut editing = use_signal(|| false);
     let l = lib.read();
     let Some(set) = l.setlist(id).cloned() else {
         return rsx! { Page { p { style: "{BODY} color: {INK_2}; padding-top: 40px;", "This setlist was deleted or has not arrived yet." } } };
     };
     let parts: Vec<Part> = l.parts_of(id).into_iter().cloned().collect();
-    // The part whose sounds the table shows: mine first.
-    let mut chosen = use_signal(|| parts.first().map(|p| p.id));
-    let part = chosen().and_then(|c| parts.iter().find(|p| p.id == c));
+    // The part whose sounds the table shows: the one picked, else mine
+    // (first).
+    let picked = chosen().or_else(|| parts.first().map(|p| p.id));
+    let part = picked.and_then(|c| parts.iter().find(|p| p.id == c));
     let rows = lines(&l, id, part);
     let length = minutes(l.setlist_seconds(&set));
     let space = l
@@ -130,7 +135,6 @@ pub(crate) fn SetlistPage(id: SetlistId, entry: Option<EntryId>) -> Element {
         .cloned();
     let in_project = l.project_of_setlist(id).map(|p| p.id);
     let direction = if wide { "row" } else { "column" };
-    let mut editing = use_signal(|| false);
     let edit_label = if editing() { "Done" } else { "Edit" };
     rsx! {
         Page {
@@ -161,7 +165,7 @@ pub(crate) fn SetlistPage(id: SetlistId, entry: Option<EntryId>) -> Element {
             Heading { text: "Rigs on this set".to_owned() }
             div { style: "display: flex; flex-wrap: wrap; gap: 10px;",
                 for p in parts.iter().cloned() {
-                    PartTile { key: "{p.id.0}", on: chosen() == Some(p.id), part: p.clone(), on_press: move |()| chosen.set(Some(p.id)) }
+                    PartTile { key: "{p.id.0}", on: picked == Some(p.id), part: p.clone(), on_press: move |()| chosen.set(Some(p.id)) }
                 }
                 AttachTile { setlist: id }
             }
@@ -565,7 +569,6 @@ fn Aside(id: SetlistId, line: Option<Line>) -> Element {
                     span { style: "{META} color: {INK_3}; line-height: 1.5;", "Pick a piece to see what every rig plays for it, or talk about the set here." }
                 },
             }
-            div { style: "height: 1px; background: {RULE};" }
             super::talk::Conversation { about: anchor.clone(), exact: true }
         }
     }
