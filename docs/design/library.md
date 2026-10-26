@@ -64,6 +64,25 @@ list, search and render it; comment threads anchored on `doc:<uuid>`
 plus a path inside it (threads anchor on tasks and projects today); and
 a view of an org's app docs in its UI.
 
+## Projects are Task's
+
+A **project** is a Task project: the container for one undertaking, with
+its tasks, people, dates, status and comments, all of which Task already
+has. *JT's Senior Recital* is a project; so is the *Paper Boats* album.
+Studio attaches its docs to a project with Task's existing links
+(`project:<path>` → `doc:<uuid>`):
+
+- its **setlists** (the recital's program, each night of a run),
+- its **sessions** (`.session` stores: rehearsal recordings, tracking,
+  mixes; what earlier drafts called a project),
+- for a record, its **album** (the tracklist).
+
+Songs are not inside a project: they are the library's, and a recital's
+setlist and an album's tracklist point at the same songs. Rigs and parts
+stay with their player. In Task, a project's page lists what is attached
+to it, and an org-wide view lists every setlist (or every session)
+across projects; in Studio, the sidebar's Projects are Task projects.
+
 ## The model
 
 ```
