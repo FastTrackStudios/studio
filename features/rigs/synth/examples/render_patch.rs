@@ -231,11 +231,16 @@ fn main() {
     let prev_on: Vec<PluginMidiEvent> =
         prev.map(|k| note_event(true, k, vel)).into_iter().collect();
     // Pre-roll long enough for streaming packs to open their zones (a
-    // cache miss drops the voice): `RENDER_PREROLL_MS`, default 200.
+    // cache miss drops the voice): `RENDER_PREROLL_MS`, default 1000 — the
+    // reference harness's (`omni_render --preroll 1.0`), so free-running
+    // LFOs and mod envelopes, which run from load, meet the note in phase.
     let preroll_blocks = std::env::var("RENDER_PREROLL_MS")
         .ok()
         .and_then(|v| v.parse::<u64>().ok())
-        .map_or(40, |ms| (ms / 5).max(40));
+        .map_or(1000, |ms| ms.max(200))
+        * u64::from(sr)
+        / 1000
+        / block as u64;
     // Wait for the sample blocks to finish opening their zones (bounded),
     // so the note never races the preload.
     let t0 = std::time::Instant::now();
