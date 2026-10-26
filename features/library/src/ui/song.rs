@@ -247,11 +247,6 @@ fn SongAside(song: Song, arrangement: ArrangementId) -> Element {
         })
         .collect();
     let used = used_in(&l, song.id);
-    let threads: Vec<_> = l
-        .threads_on(&Anchor::Song(song.id))
-        .into_iter()
-        .cloned()
-        .collect();
     rsx! {
         div { style: "display: flex; flex-direction: column; gap: 18px; margin-top: 22px;",
             Panel { title: "Your rigs",
@@ -296,20 +291,7 @@ fn SongAside(song: Song, arrangement: ArrangementId) -> Element {
                     }
                 }
             }
-            Panel { title: "Conversation",
-                for (i, t) in threads.iter().enumerate() {
-                    for (j, c) in t.comments.iter().enumerate() {
-                        div { key: "{i}-{j}", style: "display: flex; gap: 10px; align-items: flex-start; padding-top: 12px; border-top: 1px solid {RULE};",
-                            Avatar { name: c.author.clone(), size: 28 }
-                            div { style: "flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; padding-bottom: 10px;",
-                                span { style: "{META} color: {INK_2}; font-weight: 650;", "{c.author} " span { style: "color: {INK_3}; font-weight: 500;", "{c.when}" } }
-                                span { style: "font-size: 14px; line-height: 1.45;", "{c.text}" }
-                            }
-                        }
-                    }
-                }
-                if threads.is_empty() { span { style: "{META} color: {INK_3}; padding-top: 10px; border-top: 1px solid {RULE};", "No comments yet." } }
-            }
+            Panel { title: "Conversation", super::talk::Conversation { about: Anchor::Song(song.id) } }
         }
     }
 }

@@ -3,14 +3,17 @@
 //! entry and where that sound comes from, and the conversation.
 
 use dioxus::prelude::*;
-use lucide_dioxus::{Guitar, MessageSquare, Mic, Piano, Play, Plus, Share2};
+use lucide_dioxus::{
+    ChevronDown, ChevronUp, Guitar, MessageSquare, Mic, Piano, Play, Plus, Share2, Trash2,
+};
+use uuid::Uuid;
 
 use super::home::Page;
 use super::kit::*;
-use super::{Open, Route, open, use_library, use_nav, use_wide};
+use super::{Open, Route, edit, open, use_library, use_nav, use_wide};
 use crate::model::{
-    Anchor, Entry, EntryId, From, Library, Part, PartId, Piece, Ready, RigKind, SetlistId, clock,
-    minutes, sound,
+    Anchor, ArrangementId, Edit, Entry, EntryId, From, Library, Part, PartId, Piece, Ready, RigId,
+    RigKind, SetlistId, SongId, clock, minutes, sound,
 };
 
 /// What one row of the set says.
@@ -127,6 +130,8 @@ pub(crate) fn SetlistPage(id: SetlistId, entry: Option<EntryId>) -> Element {
         .cloned();
     let in_project = l.project_of_setlist(id).map(|p| p.id);
     let direction = if wide { "row" } else { "column" };
+    let mut editing = use_signal(|| false);
+    let edit_label = if editing() { "Done" } else { "Edit" };
     rsx! {
         Page {
             div { style: "display: flex; align-items: flex-end; gap: 16px; padding: 24px 0 6px; flex-wrap: wrap;",
@@ -158,12 +163,17 @@ pub(crate) fn SetlistPage(id: SetlistId, entry: Option<EntryId>) -> Element {
                 for p in parts.iter().cloned() {
                     PartTile { key: "{p.id.0}", on: chosen() == Some(p.id), part: p.clone(), on_press: move |()| chosen.set(Some(p.id)) }
                 }
-                AttachTile {}
+                AttachTile { setlist: id }
             }
             div { style: "display: flex; flex-direction: {direction}; gap: 28px; align-items: flex-start; margin-top: 8px;",
                 div { style: "flex: 1 1 0; min-width: 0; width: 100%;",
-                    Heading { text: "Running order".to_owned() }
-                    EntryTable { id, rows, wide, selected: entry, part_chosen: part.is_some() }
+                    Heading { text: "Running order".to_owned(),
+                        trailing: rsx! { TextButton { label: edit_label.to_owned(), on_press: move |()| editing.toggle() } } }
+                    if editing() {
+                        EditOrder { id, rows }
+                    } else {
+                        EntryTable { id, rows, wide, selected: entry, part_chosen: part.is_some() }
+                    }
                 }
                 div { style: if wide { "flex: 0 0 340px; min-width: 0;" } else { "width: 100%;" },
                     Aside { id, line: selected }
@@ -230,17 +240,153 @@ fn PartTile(part: Part, on: bool, on_press: EventHandler<()>) -> Element {
     }
 }
 
-/// Attach another rig to this set.
+/// Attach another rig to this set: pressed, it lists my rigs that are not
+/// on it yet, and a rig pressed there becomes a part.
 #[component]
-fn AttachTile() -> Element {
+fn AttachTile(setlist: SetlistId) -> Element {
+    let lib = use_library();
+    let mut open = use_signal(|| false);
+    let l = lib.read();
+    let me = l.me.clone();
+    let free: Vec<(RigId, RigKind, String)> = l
+        .rigs
+        .iter()
+        .filter(|r| r.owner == l.me)
+        .filter(|r| {
+            !l.parts
+                .iter()
+                .any(|p| p.setlist == setlist && p.rig == r.id && p.player == l.me)
+        })
+        .map(|r| (r.id, r.kind, r.profile.clone()))
+        .collect();
+    let tile = "height: 72px; display: flex; align-items: center; gap: 10px; padding: 0 18px; \
+                border-radius: 12px; background: transparent; font-family: {FONT};";
     rsx! {
-        button {
-            class: "lp",
-            style: "height: 72px; display: flex; align-items: center; gap: 10px; padding: 0 18px; \
-                    border-radius: 12px; border: 1px dashed {DIM}; background: transparent; color: {INK_2}; \
-                    font-family: {FONT}; {BODY}",
-            Plus { size: 18, color: INK_2 }
-            "Attach rig"
+        if open() {
+            for (rig, kind, profile) in free.iter().cloned() {
+                {
+                    let me = me.clone();
+                    rsx! {
+                        button {
+                            key: "{rig.0}",
+                            class: "lp",
+                            style: "{tile} border: 1px solid {PICK}; color: {INK}; {BODY}",
+                            onclick: move |_| {
+                                edit(Edit::AttachRig { setlist, rig, player: me.clone(), part: PartId(Uuid::new_v4()) });
+                                open.set(false);
+                            },
+                            {rig_icon(kind, PICK)}
+                            "{kind.label()} · {profile}"
+                        }
+                    }
+                }
+            }
+            if free.is_empty() {
+                span { style: "{META} color: {INK_3}; align-self: center; padding: 0 8px;", "Every rig of yours is on this set." }
+            }
+            button {
+                class: "lp",
+                style: "{tile} border: 1px solid {RULE_STRONG}; color: {INK_2}; {BODY}",
+                onclick: move |_| open.set(false),
+                "Cancel"
+            }
+        } else {
+            button {
+                class: "lp",
+                style: "{tile} border: 1px dashed {DIM}; color: {INK_2}; {BODY}",
+                onclick: move |_| open.set(true),
+                Plus { size: 18, color: INK_2 }
+                "Attach rig"
+            }
+        }
+    }
+}
+
+/// The running order, editable: each piece moves up or down or comes out,
+/// and a song from the library goes on the end.
+#[component]
+fn EditOrder(id: SetlistId, rows: Vec<Line>) -> Element {
+    let lib = use_library();
+    let mut adding = use_signal(|| false);
+    let last = rows.len().saturating_sub(1);
+    let songs: Vec<(SongId, String, &'static str, Vec<(ArrangementId, String)>)> = lib
+        .read()
+        .songs
+        .iter()
+        .map(|s| {
+            (
+                s.id,
+                s.title.clone(),
+                s.colour,
+                s.arrangements
+                    .iter()
+                    .map(|a| (a.id, a.name.clone()))
+                    .collect(),
+            )
+        })
+        .collect();
+    let icon_button = "width: 48px; height: 48px; border: none; border-radius: 10px; background: transparent; \
+                       display: flex; align-items: center; justify-content: center;";
+    rsx! {
+        div { style: "border-top: 1px solid {RULE_STRONG};",
+            for (i, line) in rows.into_iter().enumerate() {
+                {
+                    let entry = line.entry.id;
+                    let song = !matches!(line.entry.piece, Piece::Other { .. });
+                    let (up_ink, down_ink) = (if i == 0 { DIM } else { INK_2 }, if i == last { DIM } else { INK_2 });
+                    rsx! {
+                        div { key: "{entry.0}",
+                            style: "min-height: {ROW}px; display: flex; align-items: center; gap: 12px; padding: 4px 4px 4px 12px; \
+                                    border-bottom: 1px solid {RULE};",
+                            span { style: "width: 22px; {META} color: {INK_3}; text-align: right;", "{i + 1}" }
+                            if song { Swatch { colour: line.colour.clone(), height: 28 } }
+                            else { span { style: "width: 4px; height: 28px; border-radius: 2px; border: 1px dashed {DIM}; flex-shrink: 0;" } }
+                            div { style: "flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px;",
+                                span { style: "{BODY} {ONE_LINE}", "{line.title}" }
+                                span { style: "{META} color: {INK_3}; {ONE_LINE}", "{line.detail}" }
+                            }
+                            button { class: "lp", "aria-label": "Move up", disabled: i == 0, style: "{icon_button}",
+                                onclick: move |_| edit(Edit::MoveEntry { setlist: id, entry, to: i.saturating_sub(1) }),
+                                ChevronUp { size: 20, color: up_ink } }
+                            button { class: "lp", "aria-label": "Move down", disabled: i == last, style: "{icon_button}",
+                                onclick: move |_| edit(Edit::MoveEntry { setlist: id, entry, to: i + 1 }),
+                                ChevronDown { size: 20, color: down_ink } }
+                            button { class: "lp", "aria-label": "Remove", style: "{icon_button}",
+                                onclick: move |_| edit(Edit::RemoveEntry { setlist: id, entry }),
+                                Trash2 { size: 18, color: VOID } }
+                        }
+                    }
+                }
+            }
+            if adding() {
+                div { style: "padding: 8px 0;",
+                    for (sid, title, colour, arrangements) in songs {
+                        div { key: "{sid.0}", style: "min-height: {ROW}px; display: flex; align-items: center; gap: 12px; padding: 4px 12px; border-bottom: 1px solid {RULE}; flex-wrap: wrap;",
+                            Swatch { colour: colour.to_owned(), height: 28 }
+                            span { style: "flex: 1 1 160px; min-width: 0; {BODY} {ONE_LINE}", "{title}" }
+                            for (aid, name) in arrangements {
+                                button { key: "{aid.0}", class: "lp",
+                                    style: "height: 40px; padding: 0 14px; border-radius: 10px; border: 1px solid {RULE_STRONG}; \
+                                            background: transparent; color: {INK}; font-family: {FONT}; {META} font-weight: 650;",
+                                    onclick: move |_| {
+                                        edit(Edit::AddSong { setlist: id, entry: EntryId(Uuid::new_v4()), song: sid, arrangement: aid });
+                                        adding.set(false);
+                                    },
+                                    "+ {name}"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            button {
+                class: "lp",
+                style: "margin-top: 10px; height: 48px; padding: 0 16px; border-radius: 10px; border: 1px dashed {DIM}; \
+                        background: transparent; color: {INK_2}; font-family: {FONT}; {BODY} display: flex; align-items: center; gap: 8px;",
+                onclick: move |_| adding.toggle(),
+                Plus { size: 18, color: INK_2 }
+                if adding() { "Close the library" } else { "Add a song" }
+            }
         }
     }
 }
@@ -369,12 +515,6 @@ fn Aside(id: SetlistId, line: Option<Line>) -> Element {
         Some(line) => Anchor::Entry(id, line.entry.id),
         None => Anchor::Setlist(id),
     };
-    let threads: Vec<_> = l
-        .threads
-        .iter()
-        .filter(|t| !t.resolved && t.anchor == anchor)
-        .cloned()
-        .collect();
     let sounds: Vec<(String, String, String, From)> = match &line {
         Some(line) => l
             .parts_of(id)
@@ -426,22 +566,7 @@ fn Aside(id: SetlistId, line: Option<Line>) -> Element {
                 },
             }
             div { style: "height: 1px; background: {RULE};" }
-            for (i, t) in threads.iter().enumerate() {
-                for (j, c) in t.comments.iter().enumerate() {
-                    div { key: "{i}-{j}", style: "display: flex; gap: 10px; align-items: flex-start;",
-                        Avatar { name: c.author.clone(), size: 28 }
-                        div { style: "flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px;",
-                            span { style: "{META} color: {INK_2}; font-weight: 650;", "{c.author} " span { style: "color: {INK_3}; font-weight: 500;", "{c.when}" } }
-                            span { style: "font-size: 14px; line-height: 1.45; color: {INK};", "{c.text}" }
-                        }
-                    }
-                }
-            }
-            if threads.is_empty() { span { style: "{META} color: {INK_3};", "No comments yet." } }
-            div { style: "height: 44px; border-radius: 10px; border: 1px solid {RULE_STRONG}; display: flex; align-items: center; \
-                          padding: 0 12px; {META} color: {INK_3};",
-                "Comment…"
-            }
+            super::talk::Conversation { about: anchor.clone(), exact: true }
         }
     }
 }

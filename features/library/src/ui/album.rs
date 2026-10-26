@@ -117,11 +117,6 @@ pub(crate) fn SessionPage(id: SessionId) -> Element {
         return rsx! { Page { p { style: "{BODY} color: {INK_2}; padding-top: 40px;", "This session was deleted or has not arrived yet." } } };
     };
     let song = session.song.and_then(|s| l.song(s)).cloned();
-    let threads: Vec<_> = l
-        .threads_on(&Anchor::Session(id))
-        .into_iter()
-        .cloned()
-        .collect();
     let stages = [
         Stage::Writing,
         Stage::Tracking,
@@ -189,20 +184,7 @@ pub(crate) fn SessionPage(id: SessionId) -> Element {
                     }
                 }
                 div { style: if wide { "flex: 0 0 380px; min-width: 0;" } else { "width: 100%;" },
-                    Panel { title: "Conversation",
-                        for (i, t) in threads.iter().enumerate() {
-                            for (j, c) in t.comments.iter().enumerate() {
-                                div { key: "{i}-{j}", style: "display: flex; gap: 10px; align-items: flex-start; padding: 12px 0 10px; border-top: 1px solid {RULE};",
-                                    Avatar { name: c.author.clone(), size: 28 }
-                                    div { style: "flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px;",
-                                        span { style: "{META} color: {INK_2}; font-weight: 650;", "{c.author} " span { style: "color: {INK_3}; font-weight: 500;", "{c.when}" } }
-                                        span { style: "font-size: 14px; line-height: 1.45;", "{c.text}" }
-                                    }
-                                }
-                            }
-                        }
-                        if threads.is_empty() { span { style: "{META} color: {INK_3}; padding: 10px 0; border-top: 1px solid {RULE};", "No comments yet." } }
-                    }
+                    Panel { title: "Conversation", super::talk::Conversation { about: Anchor::Session(id) } }
                 }
             }
         }

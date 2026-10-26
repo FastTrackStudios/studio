@@ -707,6 +707,220 @@ fn within(anchor: &Anchor, about: &Anchor) -> bool {
     }
 }
 
+/// A change a person makes in the library. The screens make every change
+/// through one of these, so the source behind them (the fixture, the synced
+/// docs) applies them the same way: [`Library::apply`] here, a doc
+/// transaction there.
+#[derive(Clone, PartialEq, Debug)]
+pub enum Edit {
+    /// Say something about a thing (a new thread, or the open one).
+    Comment {
+        about: Anchor,
+        author: String,
+        text: String,
+    },
+    /// Tick a project's task, or untick it.
+    ToggleTodo { project: ProjectId, index: usize },
+    /// Attach a rig to a setlist for a player: a new part.
+    AttachRig {
+        setlist: SetlistId,
+        rig: RigId,
+        player: String,
+        part: PartId,
+    },
+    /// Move an entry to another place in its setlist.
+    MoveEntry {
+        setlist: SetlistId,
+        entry: EntryId,
+        to: usize,
+    },
+    /// Take an entry out of a setlist.
+    RemoveEntry { setlist: SetlistId, entry: EntryId },
+    /// Add an arrangement of a song to the end of a setlist.
+    AddSong {
+        setlist: SetlistId,
+        entry: EntryId,
+        song: SongId,
+        arrangement: ArrangementId,
+    },
+}
+
+/// Why an edit could not be made: what it names is not there.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum EditError {
+    NoSuchThing,
+}
+
+impl Library {
+    /// Make an edit. An edit naming something that is not there changes
+    /// nothing.
+    pub fn apply(&mut self, edit: Edit) -> Result<(), EditError> {
+        match edit {
+            Edit::Comment {
+                about,
+                author,
+                text,
+            } => {
+                let comment = Comment {
+                    author,
+                    when: "now".into(),
+                    text,
+                };
+                match self
+                    .threads
+                    .iter_mut()
+                    .find(|t| !t.resolved && t.anchor == about)
+                {
+                    Some(t) => t.comments.push(comment),
+                    None => self.threads.push(Thread {
+                        anchor: about,
+                        comments: vec![comment],
+                        resolved: false,
+                    }),
+                }
+            }
+            Edit::ToggleTodo { project, index } => {
+                let todo = self
+                    .projects
+                    .iter_mut()
+                    .find(|p| p.id == project)
+                    .and_then(|p| p.todos.get_mut(index))
+                    .ok_or(EditError::NoSuchThing)?;
+                todo.done = !todo.done;
+            }
+            Edit::AttachRig {
+                setlist,
+                rig,
+                player,
+                part,
+            } => {
+                if self.setlist(setlist).is_none() || self.rig(rig).is_none() {
+                    return Err(EditError::NoSuchThing);
+                }
+                // One part per rig per player per setlist.
+                if !self
+                    .parts
+                    .iter()
+                    .any(|p| p.setlist == setlist && p.rig == rig && p.player == player)
+                {
+                    self.parts.push(Part {
+                        id: part,
+                        setlist,
+                        rig,
+                        player,
+                        sounds: Vec::new(),
+                        sync: Sync::Synced,
+                    });
+                }
+            }
+            Edit::MoveEntry { setlist, entry, to } => {
+                let set = self
+                    .setlists
+                    .iter_mut()
+                    .find(|s| s.id == setlist)
+                    .ok_or(EditError::NoSuchThing)?;
+                let from = set
+                    .entries
+                    .iter()
+                    .position(|e| e.id == entry)
+                    .ok_or(EditError::NoSuchThing)?;
+                let e = set.entries.remove(from);
+                let to = to.min(set.entries.len());
+                set.entries.insert(to, e);
+            }
+            Edit::RemoveEntry { setlist, entry } => {
+                let set = self
+                    .setlists
+                    .iter_mut()
+                    .find(|s| s.id == setlist)
+                    .ok_or(EditError::NoSuchThing)?;
+                let before = set.entries.len();
+                set.entries.retain(|e| e.id != entry);
+                if set.entries.len() == before {
+                    return Err(EditError::NoSuchThing);
+                }
+                // What the parts kept for it goes with it.
+                for p in self.parts.iter_mut().filter(|p| p.setlist == setlist) {
+                    p.sounds.retain(|(id, _)| *id != entry);
+                }
+            }
+            Edit::AddSong {
+                setlist,
+                entry,
+                song,
+                arrangement,
+            } => {
+                if self
+                    .song(song)
+                    .and_then(|s| s.arrangement(arrangement))
+                    .is_none()
+                {
+                    return Err(EditError::NoSuchThing);
+                }
+                let set = self
+                    .setlists
+                    .iter_mut()
+                    .find(|s| s.id == setlist)
+                    .ok_or(EditError::NoSuchThing)?;
+                set.entries.push(Entry {
+                    id: entry,
+                    piece: Piece::Song { song, arrangement },
+                    key: None,
+                    bpm: None,
+                    notes: String::new(),
+                });
+            }
+        }
+        Ok(())
+    }
+
+    /// What matches a search, across kinds: (kind, title, detail, what
+    /// it is). Case-blind, on titles, artists and venues.
+    #[must_use]
+    pub fn search(&self, query: &str) -> Vec<Found> {
+        let q = query.trim().to_lowercase();
+        if q.is_empty() {
+            return Vec::new();
+        }
+        let hit = |s: &str| s.to_lowercase().contains(&q);
+        let mut found = Vec::new();
+        for p in self
+            .projects
+            .iter()
+            .filter(|p| hit(&p.title) || p.venue.as_deref().is_some_and(hit))
+        {
+            found.push(Found::Project(p.id));
+        }
+        for s in self
+            .setlists
+            .iter()
+            .filter(|s| hit(&s.title) || s.venue.as_deref().is_some_and(hit))
+        {
+            found.push(Found::Setlist(s.id));
+        }
+        for s in self
+            .songs
+            .iter()
+            .filter(|s| hit(&s.title) || hit(&s.artist))
+        {
+            found.push(Found::Song(s.id));
+        }
+        for s in self.sessions.iter().filter(|s| hit(&s.title)) {
+            found.push(Found::Session(s.id));
+        }
+        found
+    }
+}
+
+/// One search result.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum Found {
+    Project(ProjectId),
+    Setlist(SetlistId),
+    Song(SongId),
+    Session(SessionId),
+}
+
 /// `3:48`, `1:02:10`: seconds said as a clock.
 #[must_use]
 pub fn clock(seconds: f32) -> String {
@@ -935,5 +1149,79 @@ mod tests {
         assert_eq!(clock(3730.0), "1:02:10");
         assert_eq!(minutes(2460.0), "41 min");
         assert_eq!(minutes(4320.0), "1 h 12 min");
+    }
+    #[test]
+    fn edits_reorder_attach_and_remove_and_refuse_what_is_not_there() {
+        let mut lib = crate::fixture::library();
+        let set = lib.setlists[0].id;
+        let first = lib.setlists[0].entries[0].id;
+        let n = lib.setlists[0].entries.len();
+        lib.apply(Edit::MoveEntry {
+            setlist: set,
+            entry: first,
+            to: 99,
+        })
+        .unwrap();
+        assert_eq!(
+            lib.setlists[0].entries.last().unwrap().id,
+            first,
+            "moved past the end lands last"
+        );
+        lib.apply(Edit::RemoveEntry {
+            setlist: set,
+            entry: first,
+        })
+        .unwrap();
+        assert_eq!(lib.setlists[0].entries.len(), n - 1);
+        assert_eq!(
+            lib.apply(Edit::RemoveEntry {
+                setlist: set,
+                entry: first
+            }),
+            Err(EditError::NoSuchThing)
+        );
+
+        let rig = lib.rigs[0].id;
+        let parts = lib.parts.len();
+        let attach = Edit::AttachRig {
+            setlist: lib.setlists[2].id,
+            rig,
+            player: "Cody".into(),
+            part: PartId(id()),
+        };
+        lib.apply(attach.clone()).unwrap();
+        lib.apply(attach).unwrap();
+        assert_eq!(
+            lib.parts.len(),
+            parts + 1,
+            "one part per rig per player per set"
+        );
+    }
+
+    #[test]
+    fn a_comment_joins_the_open_thread_or_starts_one() {
+        let mut lib = crate::fixture::library();
+        let about = Anchor::Setlist(lib.setlists[2].id);
+        let threads = lib.threads.len();
+        for text in ["first", "second"] {
+            lib.apply(Edit::Comment {
+                about: about.clone(),
+                author: "Cody".into(),
+                text: text.into(),
+            })
+            .unwrap();
+        }
+        assert_eq!(lib.threads.len(), threads + 1);
+        assert_eq!(lib.threads_on(&about)[0].comments.len(), 2);
+    }
+
+    #[test]
+    fn search_finds_across_kinds_whatever_the_case() {
+        let lib = crate::fixture::library();
+        let found = lib.search("paper");
+        assert!(found.iter().any(|f| matches!(f, Found::Song(_))));
+        assert!(found.iter().any(|f| matches!(f, Found::Session(_))));
+        assert!(found.iter().any(|f| matches!(f, Found::Project(_))));
+        assert!(lib.search("  ").is_empty());
     }
 }

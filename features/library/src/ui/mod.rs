@@ -17,15 +17,16 @@ mod lists;
 mod project;
 mod setlist;
 mod song;
+mod talk;
 
 use dioxus::prelude::*;
 use lucide_dioxus::{
-    AudioWaveform, ChevronLeft, FolderKanban, Guitar, House, ListMusic, Music, Search, Users,
+    AudioWaveform, ChevronLeft, FolderKanban, Guitar, House, ListMusic, Music, Search, Users, X,
 };
 
 use crate::model::{
-    AlbumId, ArrangementId, EntryId, Library, PartId, ProjectId, SessionId, SetlistId, SongId,
-    SpaceId,
+    AlbumId, ArrangementId, Edit, EntryId, Library, PartId, ProjectId, SessionId, SetlistId,
+    SongId, SpaceId,
 };
 pub use kit::SHEET_CSS;
 use kit::*;
@@ -39,6 +40,23 @@ pub struct LibraryData(pub Signal<Library>);
 /// changes it).
 #[derive(Clone, Copy)]
 pub struct Viewport(pub Signal<(f32, f32)>);
+
+/// Where a person's edits go, when the app keeps the library somewhere
+/// (the synced docs). Without it an edit changes the library in memory.
+#[derive(Clone, Copy)]
+pub struct Editor(pub Callback<Edit>);
+
+/// Make an edit: through the app's [`Editor`] when it has one, else on
+/// the library in memory.
+pub(crate) fn edit(e: Edit) {
+    if let Some(Editor(cb)) = try_consume_context::<Editor>() {
+        cb.call(e);
+    } else {
+        let LibraryData(mut lib) = consume_context::<LibraryData>();
+        // An edit naming what is no longer there changes nothing.
+        let _ = lib.write().apply(e);
+    }
+}
 
 /// What a press that leaves the library asks the app to do.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -96,11 +114,15 @@ pub struct Nav {
     back: Signal<Vec<Route>>,
     /// Only this space's docs; `None` is every space.
     pub space: Signal<Option<SpaceId>>,
+    /// What the search field holds; while it holds anything, the page is
+    /// its results.
+    pub query: Signal<String>,
 }
 
 impl Nav {
     /// Go to a page, keeping the way back.
     pub fn go(mut self, to: Route) {
+        self.query.set(String::new());
         let here = *self.route.peek();
         if here != to {
             self.back.write().push(here);
@@ -110,6 +132,7 @@ impl Nav {
 
     /// Go to a sidebar destination: a fresh start, no way back.
     pub fn jump(mut self, to: Route) {
+        self.query.set(String::new());
         self.back.write().clear();
         self.route.set(to);
     }
@@ -179,6 +202,7 @@ pub fn LibraryApp() -> Element {
         route: Signal::new(first),
         back: Signal::new(Vec::new()),
         space: Signal::new(None),
+        query: Signal::new(String::new()),
     });
     let nav = use_nav();
     let route = (nav.route)();
@@ -194,6 +218,7 @@ pub fn LibraryApp() -> Element {
                 div {
                     style: "flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column;",
                     match route {
+                        _ if !(nav.query)().trim().is_empty() => rsx! { lists::Results {} },
                         Route::Home => rsx! { home::Home {} },
                         Route::Setlists => rsx! { lists::Setlists {} },
                         Route::Songs => rsx! { lists::Songs {} },
@@ -247,15 +272,7 @@ fn AppBar() -> Element {
             } else {
                 span { style: "font-size: 20px; font-weight: 780; letter-spacing: -0.02em; padding: 0 6px;", "studio" }
             }
-            div {
-                style: "flex: 1; max-width: 520px; height: 38px; margin: 0 auto; border-radius: 10px; \
-                        background: {SHEET_2}; border: 1px solid {RULE}; display: flex; align-items: center; \
-                        gap: 8px; padding: 0 12px; color: {INK_3};",
-                Search { size: 16, color: INK_3 }
-                span { style: "{META} {ONE_LINE}",
-                    if wide { "Search projects, setlists, songs, sessions" } else { "Search" }
-                }
-            }
+            SearchField { wide }
             span {
                 style: "display: flex; align-items: center; gap: 6px; height: 32px; padding: 0 10px; border-radius: 16px; \
                         border: 1px solid {RULE_STRONG}; {META} white-space: nowrap;",
@@ -268,6 +285,53 @@ fn AppBar() -> Element {
                 }
             }
             Avatar { name: me, size: 32 }
+        }
+    }
+}
+
+/// The search: what it holds replaces the page with its results; ✕ or
+/// Escape clears it.
+#[component]
+fn SearchField(wide: bool) -> Element {
+    let mut nav = use_nav();
+    let q = (nav.query)();
+    let empty = q.is_empty();
+    rsx! {
+        div {
+            style: "flex: 1; max-width: 520px; height: 38px; margin: 0 auto; border-radius: 10px; \
+                    background: {SHEET_2}; border: 1px solid {RULE}; display: flex; align-items: center; \
+                    gap: 8px; padding: 0 6px 0 12px; color: {INK_3};",
+            Search { size: 16, color: INK_3 }
+            div { style: "position: relative; flex: 1; min-width: 0; height: 36px; display: flex; align-items: center;",
+                if empty {
+                    span { style: "position: absolute; left: 0; top: 9px; {META} {ONE_LINE} pointer-events: none;",
+                        if wide { "Search projects, setlists, songs, sessions" } else { "Search" }
+                    }
+                }
+                input {
+                    r#type: "text",
+                    value: "{q}",
+                    "aria-label": "Search",
+                    style: "position: relative; width: 100%; height: 36px; border: none; outline: none; padding: 0; \
+                            background: transparent; color: {INK}; font-family: {FONT}; font-size: 14px;",
+                    oninput: move |e| nav.query.set(e.value()),
+                    onkeydown: move |e| {
+                        if e.key() == Key::Escape {
+                            nav.query.set(String::new());
+                        }
+                    },
+                }
+            }
+            if !empty {
+                button {
+                    class: "lp",
+                    "aria-label": "Clear search",
+                    style: "width: 30px; height: 30px; border: none; border-radius: 8px; background: transparent; \
+                            display: flex; align-items: center; justify-content: center;",
+                    onclick: move |_| nav.query.set(String::new()),
+                    X { size: 16, color: INK_2 }
+                }
+            }
         }
     }
 }

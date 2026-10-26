@@ -19,6 +19,7 @@ pub const INK_3: &str = t::INK_3;
 pub const DIM: &str = t::DIM;
 pub const LIVE: &str = t::LIVE;
 pub const WARN: &str = t::MODIFIED;
+pub const VOID: &str = t::VOID;
 pub const FONT: &str = t::FONT;
 /// Blue picks: the selected row, the current tab, the one solid button.
 pub const PICK: &str = "#bfdbfe";

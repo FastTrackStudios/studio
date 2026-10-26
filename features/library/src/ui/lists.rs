@@ -7,7 +7,7 @@ use lucide_dioxus::{Guitar, Mic, Piano, Plus};
 use super::home::Page;
 use super::kit::*;
 use super::{Route, use_library, use_nav, use_wide};
-use crate::model::{RigKind, SpaceId, Stage, Sync, clock, minutes};
+use crate::model::{Found, RigKind, SpaceId, Stage, Sync, clock, minutes};
 
 /// A list page's title, what it holds, and its one action.
 #[component]
@@ -318,6 +318,82 @@ pub(crate) fn Rigs() -> Element {
             if rigs.iter().all(|r| r.sync != Sync::Cloud) {
                 p { style: "{META} color: {INK_3}; line-height: 1.5; margin-top: 18px; max-width: 640px;",
                     "A rig's song presets follow a song into every setlist. Attach a rig to a setlist to change the sound for one show only."
+                }
+            }
+        }
+    }
+}
+
+/// What the search found, grouped by kind, each a press that opens it.
+#[component]
+pub(crate) fn Results() -> Element {
+    let lib = use_library();
+    let nav = use_nav();
+    let q = (nav.query)();
+    let l = lib.read();
+    let found = l.search(&q);
+    let rows: Vec<(&'static str, String, String, Route)> = found
+        .iter()
+        .filter_map(|f| {
+            Some(match *f {
+                Found::Project(id) => {
+                    let p = l.project(id)?;
+                    (
+                        "Projects",
+                        p.title.clone(),
+                        format!("{} · {}", p.kind.label(), p.status.label()),
+                        Route::Project(id),
+                    )
+                }
+                Found::Setlist(id) => {
+                    let s = l.setlist(id)?;
+                    (
+                        "Setlists",
+                        s.title.clone(),
+                        s.when.clone().unwrap_or_else(|| "No date".into()),
+                        Route::Setlist(id, None),
+                    )
+                }
+                Found::Song(id) => {
+                    let s = l.song(id)?;
+                    (
+                        "Songs",
+                        s.title.clone(),
+                        s.artist.clone(),
+                        Route::Song(id, None),
+                    )
+                }
+                Found::Session(id) => {
+                    let s = l.session(id)?;
+                    (
+                        "Sessions",
+                        s.title.clone(),
+                        s.stage.label().to_owned(),
+                        Route::Session(id),
+                    )
+                }
+            })
+        })
+        .collect();
+    let columns = "minmax(0, 1fr)".to_owned();
+    let count = rows.len();
+    let kinds: Vec<&'static str> = rows.iter().map(|r| r.0).collect();
+    rsx! {
+        Page {
+            div { style: "display: flex; flex-direction: column; gap: 6px; padding: 24px 0 8px;",
+                span { style: "{TITLE}", "“{q.trim()}”" }
+                span { style: "{META} color: {INK_3};",
+                    if count == 0 { "Nothing matches. Try a song's title, an artist, a venue." } else if count == 1 { "1 match" } else { "{count} matches" }
+                }
+            }
+            for (i, (kind, title, detail, route)) in rows.into_iter().enumerate() {
+                div { key: "{i}",
+                    if i == 0 || kinds[i - 1] != kind {
+                        Heading { text: kind.to_owned() }
+                    }
+                    Row { columns: columns.clone(), route,
+                        Named { title, detail }
+                    }
                 }
             }
         }

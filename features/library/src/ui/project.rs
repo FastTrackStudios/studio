@@ -195,11 +195,6 @@ pub(crate) fn ProjectPage(id: ProjectId) -> Element {
             stages,
         )
     });
-    let threads: Vec<_> = l
-        .threads_on(&Anchor::Project(id))
-        .into_iter()
-        .cloned()
-        .collect();
     let direction = if wide { "row" } else { "column" };
     let kind = p.kind;
     rsx! {
@@ -264,7 +259,12 @@ pub(crate) fn ProjectPage(id: ProjectId) -> Element {
                                 let strike = if t.done { "text-decoration: line-through;" } else { "" };
                                 let meta = [t.who.clone(), t.due.clone()].into_iter().flatten().collect::<Vec<_>>().join(" · ");
                                 rsx! {
-                                    div { key: "{i}", style: "min-height: 48px; display: flex; align-items: center; gap: 12px; border-top: 1px solid {RULE};",
+                                    button { key: "{i}", class: "lp",
+                                        "aria-label": if t.done { "Mark not done" } else { "Mark done" },
+                                        style: "width: 100%; min-height: 48px; display: flex; align-items: center; gap: 12px; padding: 0; \
+                                                border: none; border-top: 1px solid {RULE}; background: transparent; \
+                                                font-family: {FONT}; text-align: left;",
+                                        onclick: move |_| super::edit(crate::model::Edit::ToggleTodo { project: id, index: i }),
                                         span { style: "width: 20px; height: 20px; border-radius: 6px; border: 1.5px solid {box_border}; background: {box_bg}; \
                                                        display: flex; align-items: center; justify-content: center; flex-shrink: 0;",
                                             if t.done { Check { size: 14, color: "#04210f", stroke_width: 3 } }
@@ -276,20 +276,7 @@ pub(crate) fn ProjectPage(id: ProjectId) -> Element {
                             }
                         }
                     }
-                    Panel { title: "Conversation",
-                        for (i, t) in threads.iter().enumerate() {
-                            for (j, c) in t.comments.iter().enumerate() {
-                                div { key: "{i}-{j}", style: "display: flex; gap: 10px; align-items: flex-start; padding: 12px 0 10px; border-top: 1px solid {RULE};",
-                                    Avatar { name: c.author.clone(), size: 28 }
-                                    div { style: "flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px;",
-                                        span { style: "{META} color: {INK_2}; font-weight: 650;", "{c.author} " span { style: "color: {INK_3}; font-weight: 500;", "{c.when}" } }
-                                        span { style: "font-size: 14px; line-height: 1.45;", "{c.text}" }
-                                    }
-                                }
-                            }
-                        }
-                        if threads.is_empty() { span { style: "{META} color: {INK_3}; padding: 10px 0; border-top: 1px solid {RULE};", "No comments yet." } }
-                    }
+                    Panel { title: "Conversation", super::talk::Conversation { about: Anchor::Project(id) } }
                 }
             }
         }
