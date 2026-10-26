@@ -1599,8 +1599,12 @@ pub fn parse_patch_node(root: &XmlNode) -> Result<OmniPatch, String> {
         .chain(engine.children_tagged("MOD_ENV2_2"))
         .collect();
     for (i, env) in engine.children_tagged("MODENV").enumerate() {
+        // Measured: `c` counts the live points; the one `p` past them is a
+        // spare Omnisphere ignores (it neither ends a run nor a loop).
+        let live = env.attr("c").and_then(|c| c.parse::<usize>().ok());
         let points = env
             .children_tagged("p")
+            .take(live.unwrap_or(usize::MAX))
             .map(|p| {
                 let bits = p
                     .attr("s")
@@ -1609,7 +1613,9 @@ pub fn parse_patch_node(root: &XmlNode) -> Result<OmniPatch, String> {
                 (
                     p.num("t").unwrap_or(0.0).max(0.0) * 100.0,
                     p.num("l").unwrap_or(0.0).clamp(0.0, 1.0),
-                    42.0 * (0.5 - p.num("c").unwrap_or(0.5).clamp(0.0, 1.0)),
+                    // Measured: a mod envelope bends harder than the amp
+                    // envelope's `42·(0.5 − c)` — exponent 1 + 31.5·|c − 0.5|.
+                    73.5 * (0.5 - p.num("c").unwrap_or(0.5).clamp(0.0, 1.0)),
                     bits & 1 != 0,
                 )
             })
