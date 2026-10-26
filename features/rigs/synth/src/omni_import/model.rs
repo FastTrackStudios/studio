@@ -535,13 +535,13 @@ pub struct OmniPatch {
 
 /// One rack's effect parameters (`P0`..`P14`, normalized), slot for slot
 /// with [`rack_types`].
-fn rack_params(rack: &XmlNode) -> Vec<[f32; 15]> {
+pub(crate) fn rack_params(rack: &XmlNode) -> Vec<[f32; 15]> {
     rack.children_tagged("EFFMODULE")
         .map(|m| std::array::from_fn(|i| m.num(&format!("P{i}")).unwrap_or(0.0)))
         .collect()
 }
 
-fn rack_types(rack: &XmlNode) -> Vec<String> {
+pub(crate) fn rack_types(rack: &XmlNode) -> Vec<String> {
     // Slot order is preserved; a bypassed module (`Active` ≈ 0) blanks its
     // slot so it never realizes live DSP (a disengaged reverb must stay
     // silent). Empty/"No Effect" slots are dropped downstream by name.

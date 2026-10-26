@@ -248,7 +248,7 @@ fn main() {
                     else {
                         continue;
                     };
-                    let (patch, level, muted) = part;
+                    let (patch, level, muted, _pan) = part;
                     for (n, layer) in patch.layers.iter().enumerate() {
                         if layer.soundsource.is_empty() {
                             continue;

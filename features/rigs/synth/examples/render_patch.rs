@@ -120,6 +120,12 @@ fn main() {
             }
         }
         Container::preset("pack").add(Container::module("Oscillator").add(src))
+    } else if patch.ends_with(".mlt_omn") {
+        synth::omni_import::load_multi_file(
+            std::path::Path::new(patch),
+            &SoundsourceIndex::scan_default(),
+        )
+        .unwrap_or_else(|e| panic!("import {patch}: {e}"))
     } else {
         load_patch_file(
             std::path::Path::new(patch),

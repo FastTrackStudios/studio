@@ -2,8 +2,8 @@
 
 use std::path::Path;
 
-use super::model::{OmniPatch, parse_patch_node};
-use super::tree::patch_to_container;
+use super::model::{OmniPatch, parse_patch_node, rack_params, rack_types};
+use super::tree::{fx_rack_from, patch_to_container};
 use super::{SoundsourceIndex, parse_xml};
 use sampler::rig_node::Container;
 
@@ -13,8 +13,14 @@ use sampler::rig_node::Container;
 #[derive(Debug, Clone, Default)]
 pub struct OmniMulti {
     pub name: String,
-    /// `(patch, level 0..1, muted)` per part.
-    pub parts: Vec<(OmniPatch, f32, bool)>,
+    /// `(patch, level 0..1, muted, pan 0..1)` per part.
+    pub parts: Vec<(OmniPatch, f32, bool, f32)>,
+    /// Each part's sends to the four multi aux buses (`p{i}AuxSnd{k}`).
+    pub sends: Vec<[f32; 4]>,
+    /// The four aux racks (`AEffRack0..3`) and the master rack (`MEffRack`):
+    /// slot types and params.
+    pub aux_fx: Vec<(Vec<String>, Vec<[f32; 15]>)>,
+    pub master_fx: (Vec<String>, Vec<[f32; 15]>),
 }
 
 /// Parse a `.mlt_omn` document: `SynthMaster` wraps 8 `SynthEngine` parts
@@ -40,8 +46,25 @@ pub fn parse_multi(xml: &str) -> Result<OmniMulti, String> {
             .and_then(|m| m.num(&format!("pMute{i}")))
             .unwrap_or(0.0)
             != 0.0;
-        multi.parts.push((patch, level, muted));
+        let pan = mixer
+            .and_then(|m| m.num(&format!("pPan{i}")))
+            .unwrap_or(0.5)
+            .clamp(0.0, 1.0);
+        multi.parts.push((patch, level, muted, pan));
+        multi.sends.push(std::array::from_fn(|k| {
+            mixer
+                .and_then(|m| m.num(&format!("p{i}AuxSnd{k}")))
+                .unwrap_or(0.0)
+                .clamp(0.0, 1.0)
+        }));
     }
+    let rack = |tag: &str| {
+        root.find(tag)
+            .map(|r| (rack_types(r), rack_params(r)))
+            .unwrap_or_default()
+    };
+    multi.aux_fx = (0..4).map(|k| rack(&format!("AEffRack{k}"))).collect();
+    multi.master_fx = rack("MEffRack");
     if multi.parts.is_empty() {
         return Err("no SynthEngine parts (not an Omnisphere multi?)".into());
     }
@@ -49,7 +72,8 @@ pub fn parse_multi(xml: &str) -> Result<OmniMulti, String> {
 }
 
 /// Map a Multi onto one composition tree: Parts sum in parallel, each with
-/// its mixer level (0.75 ≈ unity — CALIBRATE) and mute (bypass).
+/// its mixer fader (measured: the layer level's taper, unity at 0.75 —
+/// 1.0 +9.6 dB, 0.5 −7.1, 0.1 −35.1), pan and mute (bypass).
 #[must_use]
 pub fn multi_to_container(multi: &OmniMulti, index: &SoundsourceIndex) -> Container {
     let title = if multi.name.is_empty() {
@@ -58,7 +82,7 @@ pub fn multi_to_container(multi: &OmniMulti, index: &SoundsourceIndex) -> Contai
         multi.name.clone()
     };
     let mut parts = Container::parallel("Parts");
-    for (i, (patch, level, muted)) in multi.parts.iter().enumerate() {
+    for (i, (patch, level, muted, pan)) in multi.parts.iter().enumerate() {
         // Skip empty default parts (no soundsource, no layers of note).
         let named = !patch.name.is_empty();
         let has_content = named || patch.layers.iter().any(|l| !l.soundsource.is_empty());
@@ -68,15 +92,45 @@ pub fn multi_to_container(multi: &OmniMulti, index: &SoundsourceIndex) -> Contai
         let mut part = patch_to_container(patch, index);
         part.role = sampler::rig_node::Role::Engine;
         part.name = format!("Part {}: {}", i + 1, patch.name);
-        part.output_db = if *level <= 0.0 {
-            -60.0
-        } else {
-            (20.0 * (level / 0.75).log10()).max(-60.0)
-        };
+        part.output_db =
+            (super::tree::layer_level_db(*level) - super::tree::layer_level_db(0.75)).max(-120.0);
+        if (pan - 0.5).abs() > 1e-3 {
+            part = part.add(
+                sampler::RigBlock::of_type(signal_proto::block::BlockType::Volume)
+                    .named("Part Pan")
+                    .with_param("gain_db", "0")
+                    .with_param("pan", format!("{:.3}", 2.0 * pan - 1.0)),
+            );
+        }
         part.bypassed = *muted;
+        // Sends to the multi's aux buses: each sending part feeds its own
+        // copy of the bus's rack (the units are linear, so the copies sum
+        // as one bus would), at the part aux law (`send` −3 dB).
+        let sends = multi.sends.get(i).copied().unwrap_or_default();
+        if sends.iter().any(|&s| s > 0.0) {
+            let mut split = Container::parallel("Aux Sends").add(Container::module("Main"));
+            for (k, &send) in sends.iter().enumerate() {
+                let Some((types, params)) = multi.aux_fx.get(k) else {
+                    continue;
+                };
+                if send <= 0.0 || types.iter().all(|t| t.is_empty() || t == "No Effect") {
+                    continue;
+                }
+                let bus = ["A", "B", "C", "D"][k];
+                split = split.add(
+                    Container::module(format!("Aux {bus} Send"))
+                        .volume(20.0 * send.log10() - 3.0)
+                        .add(fx_rack_from(&format!("Aux {bus}"), types, params)),
+                );
+            }
+            part = part.add(split);
+        }
         parts = parts.add(part);
     }
-    Container::preset(title).add(parts)
+    let (types, params) = &multi.master_fx;
+    Container::preset(title)
+        .add(parts)
+        .add(fx_rack_from("Master FX", types, params))
 }
 
 /// Convenience: read + parse + map a `.mlt_omn` file.

@@ -99,7 +99,7 @@ fn amp_points_param(layer: &super::model::OmniLayer) -> String {
 
 pub const LAYER_NAMES: [&str; 4] = ["Layer A", "Layer B", "Layer C", "Layer D"];
 
-fn fx_rack_from(name: &str, types: &[String], params: &[[f32; 15]]) -> Container {
+pub(crate) fn fx_rack_from(name: &str, types: &[String], params: &[[f32; 15]]) -> Container {
     let mut rack = Container::module(name);
     for slot in 0..4 {
         let label = types
@@ -274,7 +274,7 @@ fn waves_resolve(layer: &super::OmniLayer) -> bool {
 }
 
 /// The dB a layer at `level` (0..1) plays at, relative to level 1.0.
-fn layer_level_db(level: f32) -> f32 {
+pub(crate) fn layer_level_db(level: f32) -> f32 {
     let l = level.clamp(0.0, 1.0);
     for w in LEVEL_TAPER.windows(2) {
         let ((l0, d0), (l1, d1)) = (w[0], w[1]);

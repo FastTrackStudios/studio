@@ -419,7 +419,34 @@ fn main() {
         set_component_state(&mut plugin, &base.to_bytes());
         pump_run_loop(0.5);
     }
-    if let Some(patch) = &a.patch {
+    // A `.mlt_omn` is a whole multi: it replaces the state's XML outright
+    // (all its parts, mixer and racks), not one part's engine.
+    if let Some(multi) = a
+        .patch
+        .as_ref()
+        .filter(|p| p.extension().is_some_and(|e| e == "mlt_omn"))
+    {
+        let text = std::fs::read_to_string(multi).expect("read multi");
+        let start = text
+            .find("<SynthMaster")
+            .expect("multi has no <SynthMaster>");
+        let xml = text[start..]
+            .trim_end()
+            .replace("\r\n", " ")
+            .replace('\n', " ");
+        let st = OmniState {
+            header: base.header.clone(),
+            xml,
+            trailer: base.trailer.clone(),
+        };
+        set_component_state(&mut plugin, &st.to_bytes());
+        pump_run_loop(1.0);
+        eprintln!(
+            "[{:>6.2?}] setState with multi {}",
+            t0.elapsed(),
+            multi.display()
+        );
+    } else if let Some(patch) = &a.patch {
         let text = std::fs::read_to_string(patch).expect("read patch");
         let (ps, pe) = element_range(&text, 0, "SynthEngine").expect("patch has no <SynthEngine>");
         // The plugin writes its state with inter-element whitespace
