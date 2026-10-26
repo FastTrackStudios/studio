@@ -21,6 +21,42 @@ Two proven entry points today:
   --example keys_tui -- --omni <patch.prt_omn>` hosts the imported patch on a
   `KeysRig` and plays it from a hardware/computer keyboard.
 
+## Status (2026-10-26, later)
+
+Each found by isolating one control on a custom test part (a pure sine or
+the init saw, `tools/omni_probe/*probe.py`, `vsweep.py`, `fxab.py`) and
+sweeping it through both engines:
+
+- **Older patches** (~12 %, no MULTISAMPLE) name their soundsource on the
+  layer's `OSC` (`kind` 4): they had played a synth saw.
+- **Mod envelopes**: `MODENV c` counts the live points (one spare `p`
+  follows); curves bend `1 + 31.5·|c − 0.5|`; synced times are beats.
+- **LFOs** run from load, as Omnisphere's: `render_patch` pre-rolls 1 s as
+  `omni_render` does, so free-running LFOs meet the note in phase.
+- **FM**: β ≈ 0.60·moddepth / ratio; `fmscl` ×1 / ×4 / ×8; `fmwf` 0.06 is a
+  noise modulator (white noise low-passed ~10 Hz, swing ∝ depth^¼); the
+  modulator starts a quarter cycle in.
+- **Ring mod**: `amwf` sine / triangle / saw / noise / falling saw, `amscl`
+  ×0.25 / ×0.5 / ×1; the modulator starts an eighth cycle in.
+- **Unison**: `uoct` is a selector (0.04 = plain), not an amount.
+- **Waveshaper**: type 0 is a sine folder (`w = 122·depth`, Gain drives it,
+  a sampled layer folds by its own level); `pos` past 0 puts it after the
+  filter; type 0.24 is a clean gain.
+- **Filters**: the ladder holds its loop under the run-away edge; Juicy 24,
+  Power 24 and Beefy LPF 4-pole resonance refit on the level.
+- **FX**: Flame Distortion (22 types, each a gain and a ceiling), Unstable
+  Drifter's tone, Half Speeder (an octave down), PRO-Verb's held level.
+- **Scoring**: references cached by content; the held spectrum floored 40 dB
+  under its peak and scored to 16 kHz; the level floored 60 dB under the
+  reference peak (a tail's noise floor is not a level difference).
+
+Batch (71 gap-free patches): median held-spectrum gap 6.5 dB with FX,
+5.5 dB voice only. Open: the arpeggiator's timing, resonance in the less
+used ladders (their `r^0.3` laws over-resonate near 0), Waveshaper types
+other than 0 and 0.24 (not memoryless), the noise-free half of `uoct`
+(octave down), Timbre / mogrify routes, multi-element soundsources
+(`OSC Layer0..3Act`).
+
 ## Status (2026-10-25)
 
 Measured over the whole factory library by `examples/patch_coverage`
