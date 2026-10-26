@@ -2,7 +2,7 @@
 //! knows nothing of sides or engines: this hands it the window's size in
 //! points, kept current through a rotation, and turns what a press asks
 //! for into the side it goes into (a part plays in Signal; a rehearsal or
-//! a project opens in Session).
+//! a session opens in Session).
 
 use dioxus::prelude::*;
 use library::ui::{LibraryApp, Open, Opener, Viewport};
@@ -38,10 +38,10 @@ pub fn LibraryHome(on_pick: EventHandler<Side>) -> Element {
             match what {
                 Open::Part(_) => on_pick.call(Side::Signal),
                 #[cfg(feature = "session-app")]
-                Open::Rehearse(_) | Open::Project(_) => on_pick.call(Side::Session),
+                Open::Rehearse(_) | Open::Session(_) => on_pick.call(Side::Session),
                 // A build without Session has nowhere to rehearse.
                 #[cfg(not(feature = "session-app"))]
-                Open::Rehearse(_) | Open::Project(_) => {}
+                Open::Rehearse(_) | Open::Session(_) => {}
             }
         }))
     });
