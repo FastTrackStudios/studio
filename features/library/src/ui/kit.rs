@@ -33,6 +33,7 @@ pub const BAR: u32 = 56;
 /// Press and focus feedback, the one stylesheet (a static string, as
 /// Blitz wants). `.lp` on anything pressable.
 pub const SHEET_CSS: &str = "\
+html, body { margin: 0; padding: 0; background: #0c0c0f; }\
 .lp { cursor: pointer; transition: background-color 120ms ease-out, transform 120ms ease-out; }\
 .lp:hover { background-color: rgba(255,255,255,0.035); }\
 .lp:active { background-color: rgba(255,255,255,0.07); transform: scale(0.995); }\
@@ -211,8 +212,8 @@ pub fn Chip(text: String, #[props(default)] strong: bool) -> Element {
     };
     rsx! {
         span {
-            style: "height: 24px; padding: 0 8px; border-radius: 6px; border: 1px solid {border}; color: {colour}; \
-                    display: flex; align-items: center; {META} font-weight: 650; white-space: nowrap; \
+            style: "display: inline-flex; height: 24px; padding: 0 8px; border-radius: 6px; border: 1px solid {border}; color: {colour}; \
+                    align-items: center; {META} font-weight: 650; white-space: nowrap; \
                     font-variant-numeric: tabular-nums;",
             "{text}"
         }

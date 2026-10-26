@@ -223,14 +223,22 @@ fn Tonight(set: Setlist) -> Element {
         .entries
         .iter()
         .filter_map(|e| match e.piece {
-            Piece::Song { song, arrangement } => l
-                .song(song)
-                .and_then(|s| Some((s, s.arrangement(arrangement)?))),
+            // This show's key where it moves the song.
+            Piece::Song { song, arrangement } => l.song(song).and_then(|s| {
+                let a = s.arrangement(arrangement)?;
+                Some((s, a, e.key.as_ref().unwrap_or(&a.key).0.clone()))
+            }),
             Piece::Other { .. } => None,
         })
         .collect();
-    let charts = songs.iter().filter(|(_, a)| a.chart == Ready::Here).count();
-    let audio = songs.iter().filter(|(_, a)| a.audio == Ready::Here).count();
+    let charts = songs
+        .iter()
+        .filter(|(_, a, _)| a.chart == Ready::Here)
+        .count();
+    let audio = songs
+        .iter()
+        .filter(|(_, a, _)| a.audio == Ready::Here)
+        .count();
     let total = songs.len();
     let mine: Vec<(crate::model::PartId, String, String)> = l
         .parts_of(set.id)
@@ -250,7 +258,7 @@ fn Tonight(set: Setlist) -> Element {
     let preview: Vec<(String, &'static str, String)> = songs
         .iter()
         .take(6)
-        .map(|(s, a)| (s.title.clone(), s.colour, a.key.0.clone()))
+        .map(|(s, _, key)| (s.title.clone(), s.colour, key.clone()))
         .collect();
     let when = set.when.clone().unwrap_or_default();
     let venue = set
@@ -261,17 +269,25 @@ fn Tonight(set: Setlist) -> Element {
     let pieces = set.entries.len();
     let id = set.id;
     let direction = if wide { "row" } else { "column" };
-    let charts_ready = if charts == total {
-        Ready::Here
+    // Beside the facts when there is room; under them, as tall as its
+    // rows, when upright.
+    let preview_box = if wide {
+        "flex: 0 0 340px;"
     } else {
-        Ready::Missing
+        "flex: 0 0 auto;"
     };
-    let audio_ready = if audio == total {
-        Ready::Here
+    let charts_line = if charts == total {
+        "Every chart".to_owned()
     } else {
-        Ready::Cloud
+        format!("{charts} of {total} charts")
     };
-    let charts_word: &'static str = if charts == total { "Charts" } else { "Chart" };
+    let audio_line = if audio == total {
+        "All audio on iPad".to_owned()
+    } else {
+        format!("{audio} of {total} tracks on iPad")
+    };
+    let charts_ink = if charts == total { INK_2 } else { WARN };
+    let audio_ink = if audio == total { INK_2 } else { INK_3 };
     rsx! {
         div {
             style: "margin-top: 20px; border-radius: 16px; border: 1px solid rgba(34,197,94,0.35); \
@@ -292,14 +308,14 @@ fn Tonight(set: Setlist) -> Element {
                 }
                 div { style: "display: flex; flex-wrap: wrap; align-items: center; gap: 14px; color: {INK_2}; {META}",
                     span { "{pieces} pieces · {length}" }
-                    ReadyMark { what: charts_word, ready: charts_ready }
-                    ReadyMark { what: "Audio on iPad", ready: audio_ready }
+                    span { style: "color: {charts_ink};", "{charts_line}" }
+                    span { style: "color: {audio_ink};", "{audio_line}" }
                 }
                 div { style: "display: flex; flex-wrap: wrap; gap: 10px; margin-top: 8px;",
-                    for (i, (part, kind, profile)) in mine.into_iter().enumerate() {
+                    for (i, (part, kind, _profile)) in mine.into_iter().enumerate() {
                         Button {
                             key: "{part.0}",
-                            label: format!("Play {kind} · {profile}"),
+                            label: format!("Play {kind}"),
                             weight: if i == 0 { Weight::Primary } else { Weight::Secondary },
                             icon: rsx! { Play { size: 16, color: if i == 0 { "#fff" } else { INK }, fill: if i == 0 { "#fff" } else { "none" } } },
                             on_press: move |()| open(Open::Part(part)),
@@ -312,7 +328,7 @@ fn Tonight(set: Setlist) -> Element {
                 }
             }
             div {
-                style: "flex: 0 0 340px; min-width: 0; display: flex; flex-direction: column;",
+                style: "{preview_box} min-width: 0; display: flex; flex-direction: column;",
                 for (i, (title, colour, key)) in preview.into_iter().enumerate() {
                     div {
                         key: "{i}",

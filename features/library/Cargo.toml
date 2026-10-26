@@ -16,3 +16,18 @@ app-shell = { workspace = true }
 uuid = { workspace = true }
 dioxus = { workspace = true, optional = true }
 lucide-dioxus = { workspace = true, optional = true }
+
+# `library_shot`: the screens rendered to a PNG with no window (the same
+# Blitz paint path the app takes), for review at any size.
+[dev-dependencies]
+anyrender = { workspace = true }
+anyrender_vello = { workspace = true }
+blitz-dom = { workspace = true }
+blitz-paint = { workspace = true }
+blitz-traits = { workspace = true }
+dioxus-native-dom = { workspace = true }
+image = { workspace = true }
+
+[[example]]
+name = "library_shot"
+required-features = ["ui"]

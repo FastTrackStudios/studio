@@ -25,6 +25,7 @@ use lucide_dioxus::{
 use crate::model::{
     AlbumId, ArrangementId, EntryId, Library, PartId, ProjectId, SetlistId, SongId, SpaceId,
 };
+pub use kit::SHEET_CSS;
 use kit::*;
 
 /// The library a screen reads. Provided by the app (the synced docs);
@@ -47,6 +48,11 @@ pub enum Open {
     /// Open a project: Session.
     Project(ProjectId),
 }
+
+/// The page the library opens on, when not Home (a deep link, a
+/// screenshot of one page).
+#[derive(Clone, Copy)]
+pub struct InitialRoute(pub Route);
 
 /// The app's handler for [`Open`].
 #[derive(Clone, Copy)]
@@ -138,6 +144,20 @@ pub(crate) fn use_wide() -> bool {
     size().0 >= 1000.0
 }
 
+/// Whether the sidebar shows its labels and spaces, or folds to a rail.
+/// A list has the room beside it on an iPad sideways; a setlist or a song
+/// needs its table and its side panel, so there it folds below a desk's
+/// width.
+fn use_full_sidebar() -> bool {
+    let Viewport(size) = use_context::<Viewport>();
+    let detail = matches!(
+        (use_nav().route)(),
+        Route::Setlist(..) | Route::Song(..) | Route::Album(_) | Route::Project(_)
+    );
+    let w = size().0;
+    w >= 1366.0 || (w >= 1000.0 && !detail)
+}
+
 /// The library: the root a window mounts.
 #[component]
 pub fn LibraryApp() -> Element {
@@ -147,8 +167,9 @@ pub fn LibraryApp() -> Element {
     if try_consume_context::<Viewport>().is_none() {
         use_context_provider(|| Viewport(Signal::new((1194.0, 834.0))));
     }
+    let first = try_consume_context::<InitialRoute>().map_or(Route::Home, |r| r.0);
     use_context_provider(|| Nav {
-        route: Signal::new(Route::Home),
+        route: Signal::new(first),
         back: Signal::new(Vec::new()),
         space: Signal::new(None),
     });
@@ -156,7 +177,7 @@ pub fn LibraryApp() -> Element {
     let route = (nav.route)();
     rsx! {
         div {
-            style: "position: absolute; inset: 0; display: flex; flex-direction: column; overflow: hidden; \
+            style: "position: absolute; top: 0; left: 0; width: 100vw; height: 100vh; display: flex; flex-direction: column; overflow: hidden; \
                     background: {DESK}; color: {INK}; font-family: {FONT}; font-variant-numeric: tabular-nums;",
             document::Style { {SHEET_CSS} }
             AppBar {}
@@ -246,7 +267,7 @@ fn AppBar() -> Element {
 /// What there is: the destinations, then the spaces to narrow them to.
 #[component]
 fn Sidebar() -> Element {
-    let wide = use_wide();
+    let wide = use_full_sidebar();
     let lib = use_library();
     let nav = use_nav();
     let here = (nav.route)().section();
@@ -294,7 +315,7 @@ fn NavItem(
     icon: Element,
 ) -> Element {
     let nav = use_nav();
-    let wide = use_wide();
+    let wide = use_full_sidebar();
     let on = to == here;
     let (bg, colour, weight) = if on {
         ("rgba(255,255,255,0.07)", INK, 700)
