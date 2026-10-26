@@ -49,7 +49,9 @@ la, lb = loud(ref), loud(ours)
 la, lb = np.maximum(la, la.max() - 60), np.maximum(lb, la.max() - 60)
 held = slice(int(0.3*SR), int(min(HOLD, 1.8)*SR)); atk = slice(0, int(0.1*SR))
 ba, bb = bands(ref[held]), bands(ours[held]); aa, ab = bands(ref[atk]), bands(ours[atk])
-m, ma = ba > -40, aa > -40
+# Scored to 16 kHz: above it is a plug-in's aliasing, not its tone.
+audible = EDGES[:-1] < 16000
+m, ma = (ba > -40) & audible, (aa > -40) & audible
 fa, fb = pitch(ref), pitch(ours)
 cents = 1200*np.log2(fb/fa) if fa > 0 and fb > 0 else float("nan")
 print(f"level {np.mean(lb-la):+5.1f} dB (env rms {np.sqrt(np.mean(((lb-lb.mean())-(la-la.mean()))**2)):4.1f})  "

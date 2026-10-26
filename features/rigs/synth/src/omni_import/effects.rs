@@ -80,6 +80,7 @@ pub fn effect_chain(name: &str, p: &[f32; 15]) -> Option<Container> {
         // −0.8 dB.
         "Radio Delay" => radio_delay(p),
         "Flame Distortion" => flame_distortion(p),
+        "Unstable Drifter" => unstable_drifter(p),
         _ => return None,
     })
 }
@@ -208,6 +209,86 @@ fn flame_distortion(p: &[f32; 15]) -> Container {
         return Container::module("Flame Distortion").add(wet);
     }
     Container::parallel("Flame Distortion")
+        .add(with_gain(
+            Container::module("Dry"),
+            10.0 * (1.0 - m).log10(),
+        ))
+        .add(wet)
+}
+
+/// Unstable Drifter (measured per harmonic on a held saw, its drift held
+/// still): a tape-worn tone — an 18 dB/oct high-pass, a 12 dB/oct low-pass
+/// and a 6 dB/oct shelf at 800 Hz:
+/// - `P0` the dry → wet mix (equal-power);
+/// - `P5` the high-pass corner: off at 0, 70 / 178 / 787 / 1690 Hz at 0.25 /
+///   0.45 / 0.75 / 1;
+/// - `P6` the low-pass corner: 1.2 / 3.2 / 6.0 kHz at 0 / 0.25 / 0.5, open
+///   from ~0.75;
+/// - `P2` wear: the level (−0.5 dB to 0.3, −3.5 at 0.6, −6.5 at 1) and the
+///   shelf (+2 dB at 0, −6 at 0.3, −7 at 0.6, −4 at 1);
+/// - `P8` saturation: it lifts the harmonics ~4.5 dB at 0.155 (the factory's
+///   usual), 7 at 0.5 and squashes them at 1 — as a level here, the
+///   harmonics it adds are not modelled;
+/// - `P13` output, unity at 0.75 (−7 dB at 0.5, +9.8 at 1, silent at 0).
+///
+/// The drift itself (`P1`, `P9`..`P11`: slow random pitch and level motion)
+/// and `P12` / `P3` (stereo) are not modelled.
+fn unstable_drifter(p: &[f32; 15]) -> Container {
+    let m = p[0].clamp(0.0, 1.0);
+    if m <= 0.0 {
+        return with_gain(Container::module("Unstable Drifter"), 0.0);
+    }
+    let mut eq = RigBlock::of_type(BlockType::Eq);
+    let mut n = 0;
+    if p[5] > 0.05 {
+        n += 1;
+        let hz = lerp_table_log(
+            &[
+                (0.05, 12.0),
+                (0.25, 70.0),
+                (0.45, 178.0),
+                (0.75, 787.0),
+                (1.0, 1690.0),
+            ],
+            p[5],
+        );
+        eq = eq_band(eq, n, 3, hz, 0.0, 1.0).with_param(format!("b{n}_slope"), "3");
+    }
+    let lp = lerp_table_log(
+        &[
+            (0.0, 1195.0),
+            (0.25, 3224.0),
+            (0.505, 6036.0),
+            (0.75, 20_000.0),
+            (1.0, 40_000.0),
+        ],
+        p[6],
+    );
+    if lp < 19_000.0 {
+        n += 1;
+        eq = eq_band(eq, n, 4, lp, 0.0, 1.0).with_param(format!("b{n}_slope"), "2");
+    }
+    let shelf = lerp_table(&[(0.0, 2.0), (0.3, -6.0), (0.6, -7.0), (1.0, -4.0)], p[2]);
+    n += 1;
+    eq = eq_band(eq, n, 2, 800.0, shelf, 0.707).with_param(format!("b{n}_slope"), "1");
+    let wet_db = lerp_table(&[(0.0, -0.5), (0.3, -0.5), (0.6, -3.5), (1.0, -6.5)], p[2])
+        + lerp_table(&[(0.0, 0.0), (0.155, 4.5), (0.5, 7.0), (1.0, -2.0)], p[8])
+        + lerp_table(
+            &[
+                (0.0, -96.0),
+                (0.25, -18.7),
+                (0.5, -7.0),
+                (0.75, 0.0),
+                (1.0, 9.8),
+            ],
+            p[13],
+        )
+        + 10.0 * m.log10();
+    let wet = with_gain(Container::module("Wet").add(eq), wet_db);
+    if m >= 1.0 {
+        return Container::module("Unstable Drifter").add(wet);
+    }
+    Container::parallel("Unstable Drifter")
         .add(with_gain(
             Container::module("Dry"),
             10.0 * (1.0 - m).log10(),
