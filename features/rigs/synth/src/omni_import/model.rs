@@ -1431,7 +1431,10 @@ pub fn parse_patch_node(root: &XmlNode) -> Result<OmniPatch, String> {
                 layer.unison_count = 1;
             }
             // Harmonia: gated by OSC hrmOn, scaled by hrmLv.
-            let hrm_on = osc.num("hrmOn").unwrap_or(1.0) > 0.0;
+            // A patch without `hrmOn` (the older format, ~29% of the
+            // factory) plays no Harmonia whatever its HARM voices say —
+            // measured: absent renders bit-identical to `hrmOn` 0.
+            let hrm_on = osc.num("hrmOn").unwrap_or(0.0) > 0.0;
             // A patch without `hrmLv` (older) plays at 0.7: measured on
             // Coronation Pad, where 0.7 sits inside the plugin's own
             // render-to-render spread and 0.68 / 0.75 do not.

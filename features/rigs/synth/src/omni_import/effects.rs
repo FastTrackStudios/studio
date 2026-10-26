@@ -63,7 +63,6 @@ pub fn effect_chain(name: &str, p: &[f32; 15]) -> Option<Container> {
             )
             .add(gain(mean_db - 20.0 * (1.0 - depth / 2.0).log10()))
     };
-    let _ = p;
     Some(match name {
         // Measured at the gig patch's settings on a held saw (120 BPM): a
         // ~5 dB rise repeating every beat, −1.4 dB on average. Its band
@@ -79,35 +78,49 @@ pub fn effect_chain(name: &str, p: &[f32; 15]) -> Option<Container> {
         // a dotted eighth and a quarter (375 / 500 ms at 120 BPM), each
         // first echo −20.9 dB and every repeat 14.7 dB down; the dry path
         // −0.8 dB.
-        "Radio Delay" => Container::module(name).add(
-            // One dual delay, its two lines in parallel (routing 3).
-            RigBlock::of_type(BlockType::Delay)
-                .with_param("style", "1")
-                .with_param("style_b", "1")
-                .with_param("routing", "3")
-                // A dotted eighth and a quarter, following the tempo
-                // (measured: 500 / 665 ms at 90 BPM).
-                .with_param("time", format!("{:.1}", 0.75 * 60_000.0 / SYNC_BPM))
-                .with_param("time_b", format!("{:.1}", 60_000.0 / SYNC_BPM))
-                .with_param("sync_ms_time", "0.75")
-                .with_param("sync_ms_time_b", "1.0")
-                .with_param("feedback", "0.184")
-                .with_param("feedback_b", "0.184")
-                .with_param("mix", format!("{RADIO_TAP:.4}"))
-                .with_param("mix_b", format!("{RADIO_TAP:.4}"))
-                // Dual routing runs the dry ~0.9 dB under its knob: full
-                // here is Omnisphere's −0.8 dB.
-                .with_param("dry", "1.0")
-                .with_param("level", "0.0")
-                .with_param("tap_div", "7"),
-        ),
+        "Radio Delay" => radio_delay(p),
         _ => return None,
     })
 }
 
-/// Radio Delay's per-tap wet send (fitted so each first echo reads −20.9
-/// dB re the click through our delay).
-const RADIO_TAP: f32 = 0.09;
+/// Radio Delay (measured on a click at 120 BPM): two taps, a dotted eighth
+/// and a quarter (375 / 500 ms, following the tempo), the repeats set by
+/// `P4` (0.2: 11.3 dB down each); `P0` the dry → wet mix, equal-power (0: the dry alone — the most
+/// common setting; 0.5: dry −3.1 dB; 1: no dry), the first echoes −4.8 dB
+/// re the dry at full wet. A parallel of the dry and two fully-wet lines:
+/// the dual delay's own mix law subtracts both taps from the dry.
+fn radio_delay(p: &[f32; 15]) -> Container {
+    let m = p[0].clamp(0.0, 1.0);
+    let dry =
+        Container::module("Radio Delay").add(RigBlock::of_type(BlockType::Volume).with_param(
+            "gain_db",
+            format!("{:.2}", 10.0 * (1.0 - m).max(1e-12).log10()),
+        ));
+    if m <= 0.0 {
+        return dry;
+    }
+    let tap = |beats: f32| {
+        RigBlock::of_type(BlockType::Delay)
+            .with_param("style", "1")
+            .with_param("routing", "0")
+            .with_param("time", format!("{:.1}", beats * 60_000.0 / SYNC_BPM))
+            .with_param("sync_ms_time", format!("{beats}"))
+            // Repeats 11.3 dB down at the usual P4 0.2 (14.7 at the gig's).
+            .with_param("feedback", format!("{:.3}", (1.36 * p[4]).clamp(0.0, 0.9)))
+            .with_param("mix", "1")
+            .with_param("dry", "0")
+            .with_param("level", format!("{:.2}", -3.0 + 10.0 * m.log10()))
+    };
+    Container::parallel("Radio Delay")
+        .add(
+            Container::module("Dry").add(RigBlock::of_type(BlockType::Volume).with_param(
+                "gain_db",
+                format!("{:.2}", 10.0 * (1.0 - m).max(1e-12).log10()),
+            )),
+        )
+        .add(Container::module("Tap A").add(tap(0.75)))
+        .add(Container::module("Tap B").add(tap(1.0)))
+}
 
 pub fn effect_block(name: &str, p: &[f32; 15]) -> Option<RigBlock> {
     if name.is_empty() || name == "No Effect" {
@@ -368,6 +381,24 @@ fn studio_eq(p: &[f32; 15]) -> RigBlock {
             (1, 2) => (f0 * 1.6, q(w) * 2.0),
             _ => (f0, q(w)),
         };
+        // The low cut without resonance (`P2` 0, the common setting) is a
+        // single pole at ~4.85× the knob law (measured per harmonic: 355 Hz
+        // at P1 0.185, 3.05 kHz at 0.5); resonance makes it a resonant
+        // two-pole (self-oscillating at full).
+        if (i, kind) == (0, 2) && w < 0.01 {
+            b = b
+                .with_param(format!("b{n}_used"), "1")
+                .with_param(format!("b{n}_on"), "1")
+                .with_param(format!("b{n}_shape"), "3")
+                .with_param(format!("b{n}_slope"), "1")
+                .with_param(
+                    format!("b{n}_freq"),
+                    format!("{:.1}", (f0 * 4.85).clamp(10.0, 22_000.0)),
+                )
+                .with_param(format!("b{n}_gain"), "0")
+                .with_param(format!("b{n}_q"), "1.0");
+            continue;
+        }
         b = b
             .with_param(format!("b{n}_used"), "1")
             .with_param(format!("b{n}_on"), "1")

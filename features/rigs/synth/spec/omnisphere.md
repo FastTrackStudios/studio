@@ -40,6 +40,20 @@ Measured over the whole factory library by `examples/patch_coverage`
   Granular 5 %, sample-mode FM 2 % / Ring Mod 1 %, unextracted
   soundsources 0.3 % (Moog Tribute).
 
+Fidelity, A/B against the plugin (`tools/omni_probe/abbatch.py`, 71 gap-free
+patches, note C3): median held-spectrum gap 8.5 → 7.2 dB, within 3 dB 7 → 13,
+within 6 dB 16 → 25 (2026-10-26). Calibrated so far, each against the plugin
+one feature at a time: soundsource tuning (A440 divided out) and Octave/Semi
+re-keying, filter key tracking and the cutoff knob's bottom fifth per model,
+the envelope segment law (a power law), the Waveshaper's level and Bit Crush,
+Harmonia (mix / level laws, voices on the layer table, off in older patches),
+the AM section's gain, Valve Radio, Swiss Army Delay, Radio Delay, Studio
+EQ's low cut. Open, by measured impact: the Waveshaper's fold curves (per
+type, a shaping table), resonant filters, LFO / mod-env routes to the 29 %
+of targets not yet translated (Timbre Shift, filter spread, LFO rate,
+envelope times, FX parameters), the reverbs' build-up, and the 31
+pass-through FX units (`tools/omni_probe/fxgap.py` ranks them).
+
 Comparison runs on voyager (macOS): the real Omnisphere VST3
 (`omni_render`), the warm build and the full extraction on the dev drive
 (`.env` sets `FTS_SAMPLED_ROOT` / `FTS_PACK_LIBRARY`).

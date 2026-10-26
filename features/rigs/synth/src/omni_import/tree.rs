@@ -184,6 +184,18 @@ pub fn translate_route(
             1.0 / sampler::native::NativeFilter::KNOB_SPAN,
         ),
         "res" => (filter_labels.get(layer_idx)?.as_str(), "resonance", 1.0),
+        // The second filter's own cutoff knob, like `freq` on the first.
+        "freq2" => (
+            "Filter 2",
+            "knob",
+            1.0 / sampler::native::NativeFilter::KNOB_SPAN,
+        ),
+        // FM depth: the import's law is 0.1725·moddepth / ratio; at the
+        // default ratio (AMmodint-style 0.25 → 0.5) a unit of route moves
+        // `fm_depth` 0.345 (the layer's own ratio is not in scope here).
+        "moddepth" => ("Soundsource", "fm_depth", 0.345),
+        // Ring depth: dry → ring, linear (as the import's `ring_mix`).
+        "AMmoddepth" => ("Soundsource", "ring_mix", 1.0),
         // Measured: a tune row moves ~96 semitones per unit of depth; our
         // tune param spans 48.
         "tune" => ("Soundsource", "tune", 2.0),
