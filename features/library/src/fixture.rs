@@ -1,6 +1,6 @@
 //! A band's library, made up but shaped like a real one: two spaces, eight
 //! songs (one with three arrangements over the same material), two
-//! setlists with three parts attached, an album with its projects, and a
+//! setlists with three parts attached, an album with its sessions, and a
 //! few conversations. The screens are designed and reviewed against it
 //! until the synced docs feed them.
 
@@ -134,7 +134,7 @@ fn song(
             form: steps(i, FULL),
             chart,
             audio,
-            project: None,
+            session: None,
         }],
         assets: vec![
             Asset {
@@ -307,7 +307,7 @@ pub fn library() -> Library {
     let paper = &mut songs[2];
     paper.ccli = Some("7214111".into());
     paper.tags = vec!["Original".into(), "Single".into(), "Worship".into()];
-    paper.arrangements[0].project = Some(ProjectId(n(9001)));
+    paper.arrangements[0].session = Some(SessionId(n(9001)));
     paper.arrangements.push(Arrangement {
         id: arr(3, 1),
         name: "Short live".into(),
@@ -316,7 +316,7 @@ pub fn library() -> Library {
         form: steps(3, &[(1, 1), (3, 1), (4, 1), (3, 2), (5, 1)]),
         chart: h,
         audio: h,
-        project: None,
+        session: None,
     });
     paper.arrangements.push(Arrangement {
         id: arr(3, 2),
@@ -326,7 +326,7 @@ pub fn library() -> Library {
         form: steps(3, &[(0, 2), (1, 2), (2, 1), (3, 2), (4, 2), (3, 2), (5, 2)]),
         chart: h,
         audio: m,
-        project: Some(ProjectId(n(9002))),
+        session: Some(SessionId(n(9002))),
     });
     paper.assets.push(Asset {
         kind: AssetKind::Stems,
@@ -340,9 +340,9 @@ pub fn library() -> Library {
         bytes: 1_800,
         ready: h,
     });
-    songs[0].arrangements[0].project = Some(ProjectId(n(9003)));
-    songs[1].arrangements[0].project = Some(ProjectId(n(9004)));
-    songs[5].arrangements[0].project = Some(ProjectId(n(9005)));
+    songs[0].arrangements[0].session = Some(SessionId(n(9003)));
+    songs[1].arrangements[0].session = Some(SessionId(n(9004)));
+    songs[5].arrangements[0].session = Some(SessionId(n(9005)));
 
     let tonight = Setlist {
         id: SetlistId(n(500)),
@@ -521,15 +521,15 @@ pub fn library() -> Library {
         },
     ];
 
-    let project = |id: u128,
+    let session = |id: u128,
                    title: &str,
                    song: u128,
                    stage: Stage,
                    tracks: u32,
                    when: &str,
                    by: &str,
-                   sync: Sync| Project {
-        id: ProjectId(n(id)),
+                   sync: Sync| Session {
+        id: SessionId(n(id)),
         space: BAND,
         title: title.into(),
         song: Some(song_id(song)),
@@ -538,8 +538,8 @@ pub fn library() -> Library {
         edited: edited(when, by, "Studio Mac"),
         sync,
     };
-    let projects = vec![
-        project(
+    let sessions = vec![
+        session(
             9001,
             "Paper Boats",
             3,
@@ -549,7 +549,7 @@ pub fn library() -> Library {
             "Sam",
             Sync::Syncing(0.62),
         ),
-        project(
+        session(
             9002,
             "Paper Boats (Orchestral)",
             3,
@@ -559,7 +559,7 @@ pub fn library() -> Library {
             ME,
             Sync::Cloud,
         ),
-        project(
+        session(
             9003,
             "Harbor Lights",
             1,
@@ -569,7 +569,7 @@ pub fn library() -> Library {
             "Sam",
             Sync::Synced,
         ),
-        project(
+        session(
             9004,
             "Glass Houses",
             2,
@@ -579,7 +579,7 @@ pub fn library() -> Library {
             ME,
             Sync::Synced,
         ),
-        project(
+        session(
             9005,
             "Late Train",
             6,
@@ -589,8 +589,8 @@ pub fn library() -> Library {
             ME,
             Sync::Synced,
         ),
-        Project {
-            id: ProjectId(n(9006)),
+        Session {
+            id: SessionId(n(9006)),
             space: MINE,
             title: "Untitled idea, voice memo".into(),
             song: None,
@@ -618,15 +618,142 @@ pub fn library() -> Library {
             (7, 0),
         ]
         .into_iter()
-        .map(|(song, project)| Track {
+        .map(|(song, session)| Track {
             song: song_id(song),
             arrangement: arr(song, 0),
-            project: (project != 0).then(|| ProjectId(n(project))),
+            session: (session != 0).then(|| SessionId(n(session))),
         })
         .collect(),
         edited: edited("2h", "Sam", "MacBook Pro"),
         sync: Sync::Synced,
     };
+
+    let todo = |title: &str, done: bool, who: Option<&str>, due: Option<&str>| Todo {
+        title: title.into(),
+        done,
+        who: who.map(Into::into),
+        due: due.map(Into::into),
+    };
+    let band = || {
+        vec![
+            ME.to_owned(),
+            "Sam".to_owned(),
+            "Jess".to_owned(),
+            "Dre".to_owned(),
+        ]
+    };
+    let projects = vec![
+        Project {
+            id: ProjectId(n(1100)),
+            space: BAND,
+            title: "Sunday nights, fall".into(),
+            kind: ProjectKind::Live,
+            status: Status::Active,
+            when: Some("Sep 7 – Nov 30".into()),
+            venue: Some("Crossroads Chapel".into()),
+            people: band(),
+            todos: vec![
+                todo(
+                    "Send tonight's charts to Dre",
+                    true,
+                    Some(ME),
+                    Some("Today"),
+                ),
+                todo("Chart Long Way Home", false, Some("Sam"), Some("Today")),
+                todo("Soundcheck at 5:30", false, None, Some("Today")),
+                todo("Pick next week's set", false, Some("Jess"), Some("Thu")),
+            ],
+            setlists: vec![SetlistId(n(500))],
+            sessions: vec![],
+            album: None,
+            edited: edited("20m", "Sam", "MacBook Pro"),
+            sync: Sync::Offline,
+        },
+        Project {
+            id: ProjectId(n(1200)),
+            space: BAND,
+            title: "Paper Boats, the record".into(),
+            kind: ProjectKind::Recording,
+            status: Status::Active,
+            when: Some("Release Nov 14".into()),
+            venue: Some("Pine Room Studio".into()),
+            people: band(),
+            todos: vec![
+                todo(
+                    "Print a new bass DI for Paper Boats",
+                    false,
+                    Some(ME),
+                    Some("Tonight"),
+                ),
+                todo("Mix v7, vocals up 1 dB", false, Some("Sam"), Some("Wed")),
+                todo("Master Harbor Lights", false, Some("Sam"), Some("Fri")),
+                todo(
+                    "Track strings for the orchestral version",
+                    false,
+                    Some(ME),
+                    Some("Nov 3"),
+                ),
+                todo("Artwork final", true, Some("Jess"), None),
+                todo("ISRCs", true, Some(ME), None),
+            ],
+            setlists: vec![],
+            sessions: vec![
+                SessionId(n(9001)),
+                SessionId(n(9003)),
+                SessionId(n(9004)),
+                SessionId(n(9005)),
+            ],
+            album: Some(AlbumId(n(300))),
+            edited: edited("2h", "Sam", "MacBook Pro"),
+            sync: Sync::Synced,
+        },
+        Project {
+            id: ProjectId(n(1300)),
+            space: BAND,
+            title: "Album release show".into(),
+            kind: ProjectKind::Live,
+            status: Status::Planning,
+            when: Some("Sat, Nov 14".into()),
+            venue: Some("The Grey Eagle".into()),
+            people: band(),
+            todos: vec![
+                todo(
+                    "Confirm backline with the venue",
+                    false,
+                    Some("Jess"),
+                    Some("Oct 30"),
+                ),
+                todo("Final running order", false, Some(ME), Some("Nov 7")),
+                todo("Rehearse the full set twice", false, None, Some("Nov 12")),
+            ],
+            setlists: vec![SetlistId(n(600))],
+            sessions: vec![],
+            album: None,
+            edited: edited("Oct 22", ME, "iPad"),
+            sync: Sync::Synced,
+        },
+        Project {
+            id: ProjectId(n(1400)),
+            space: BAND,
+            title: "Christmas concert".into(),
+            kind: ProjectKind::Live,
+            status: Status::Planning,
+            when: Some("Sat, Dec 19".into()),
+            venue: Some("First Baptist Hall".into()),
+            people: band(),
+            todos: vec![todo(
+                "Book the string quartet",
+                false,
+                Some("Jess"),
+                Some("Nov 1"),
+            )],
+            setlists: vec![SetlistId(n(700))],
+            sessions: vec![SessionId(n(9002))],
+            album: None,
+            edited: edited("Oct 9", "Jess", "MacBook Air"),
+            sync: Sync::Cloud,
+        },
+    ];
 
     let say = |author: &str, when: &str, text: &str| Comment {
         author: author.into(),
@@ -660,7 +787,7 @@ pub fn library() -> Library {
             resolved: false,
         },
         Thread {
-            anchor: Anchor::Project(ProjectId(n(9001))),
+            anchor: Anchor::Session(SessionId(n(9001))),
             comments: vec![
                 say(
                     "Sam",
@@ -668,6 +795,22 @@ pub fn library() -> Library {
                     "Mix v6 is up. Vocals sit better, the kick still fights the bass at 60 Hz.",
                 ),
                 say(ME, "1h", "I'll print a new bass DI tonight."),
+            ],
+            resolved: false,
+        },
+        Thread {
+            anchor: Anchor::Project(ProjectId(n(1200))),
+            comments: vec![
+                say(
+                    "Jess",
+                    "3h",
+                    "Artwork is final. Uploading the 3000px version tonight.",
+                ),
+                say(
+                    "Sam",
+                    "2h",
+                    "Looks great. We are on track for the 14th if mastering lands Friday.",
+                ),
             ],
             resolved: false,
         },
@@ -701,6 +844,7 @@ pub fn library() -> Library {
         songs,
         setlists: vec![tonight, release, christmas, acoustic],
         albums: vec![album],
+        sessions,
         projects,
         rigs: vec![guitar, keys, bass],
         parts,
@@ -731,12 +875,29 @@ mod tests {
         for part in &lib.parts {
             assert!(lib.setlist(part.setlist).is_some() && lib.rig(part.rig).is_some());
         }
+        for p in &lib.projects {
+            assert!(
+                p.setlists.iter().all(|s| lib.setlist(*s).is_some()),
+                "{}",
+                p.title
+            );
+            assert!(
+                p.sessions.iter().all(|s| lib.session(*s).is_some()),
+                "{}",
+                p.title
+            );
+            assert!(
+                p.album.is_none_or(|a| lib.album(a).is_some()),
+                "{}",
+                p.title
+            );
+        }
         for album in &lib.albums {
             for t in &album.tracks {
                 let song = lib.song(t.song).expect("track names a song");
                 assert!(song.arrangement(t.arrangement).is_some());
-                if let Some(p) = t.project {
-                    assert!(lib.project(p).is_some());
+                if let Some(p) = t.session {
+                    assert!(lib.session(p).is_some());
                 }
             }
         }

@@ -2,7 +2,7 @@
 //! person or a band has, organized and opened from the iPad first.
 //!
 //! - [`model`]: songs (the hub) and their arrangements, setlists of pieces,
-//!   rigs attached to a setlist as parts, song presets, albums, projects,
+//!   rigs attached to a setlist as parts, song presets, albums, sessions,
 //!   conversations; and the rules that read across them, such as which
 //!   sound a rig plays for an entry ([`model::sound`]).
 //! - [`fixture`]: a band's library to design and review the screens

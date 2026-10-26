@@ -1,5 +1,5 @@
 //! The library screens (feature `ui`): an app bar, the sidebar of what
-//! there is (Home, Setlists, Songs, Albums, Projects, Rigs, and the
+//! there is (Home, Setlists, Songs, Albums, Sessions, Rigs, and the
 //! spaces), and the page for the selection. iPad first: a sidebar beside
 //! the page in landscape, a rail of icons upright, and touch targets of
 //! 48 everywhere.
@@ -14,16 +14,18 @@ mod album;
 mod home;
 mod kit;
 mod lists;
+mod project;
 mod setlist;
 mod song;
 
 use dioxus::prelude::*;
 use lucide_dioxus::{
-    ChevronLeft, Disc3, FolderOpen, Guitar, House, ListMusic, Music, Search, Users,
+    AudioWaveform, ChevronLeft, FolderKanban, Guitar, House, ListMusic, Music, Search, Users,
 };
 
 use crate::model::{
-    AlbumId, ArrangementId, EntryId, Library, PartId, ProjectId, SetlistId, SongId, SpaceId,
+    AlbumId, ArrangementId, EntryId, Library, PartId, ProjectId, SessionId, SetlistId, SongId,
+    SpaceId,
 };
 pub use kit::SHEET_CSS;
 use kit::*;
@@ -45,8 +47,8 @@ pub enum Open {
     Part(PartId),
     /// Rehearse a setlist with its charts and tracks: Session.
     Rehearse(SetlistId),
-    /// Open a project: Session.
-    Project(ProjectId),
+    /// Open a session: Session.
+    Session(SessionId),
 }
 
 /// The page the library opens on, when not Home (a deep link, a
@@ -63,14 +65,15 @@ pub struct Opener(pub Callback<Open>);
 pub enum Route {
     Home,
     Setlists,
-    Songs,
-    Albums,
     Projects,
+    Songs,
+    Sessions,
     Rigs,
+    Project(ProjectId),
     Setlist(SetlistId, Option<EntryId>),
     Song(SongId, Option<ArrangementId>),
     Album(AlbumId),
-    Project(ProjectId),
+    Session(SessionId),
 }
 
 impl Route {
@@ -79,8 +82,8 @@ impl Route {
         match self {
             Self::Setlist(..) => Self::Setlists,
             Self::Song(..) => Self::Songs,
-            Self::Album(_) => Self::Albums,
-            Self::Project(_) => Self::Projects,
+            Self::Album(_) | Self::Project(_) => Self::Projects,
+            Self::Session(_) => Self::Sessions,
             other => other,
         }
     }
@@ -152,7 +155,11 @@ fn use_full_sidebar() -> bool {
     let Viewport(size) = use_context::<Viewport>();
     let detail = matches!(
         (use_nav().route)(),
-        Route::Setlist(..) | Route::Song(..) | Route::Album(_) | Route::Project(_)
+        Route::Setlist(..)
+            | Route::Song(..)
+            | Route::Album(_)
+            | Route::Session(_)
+            | Route::Project(_)
     );
     let w = size().0;
     w >= 1366.0 || (w >= 1000.0 && !detail)
@@ -190,13 +197,14 @@ pub fn LibraryApp() -> Element {
                         Route::Home => rsx! { home::Home {} },
                         Route::Setlists => rsx! { lists::Setlists {} },
                         Route::Songs => rsx! { lists::Songs {} },
-                        Route::Albums => rsx! { lists::Albums {} },
-                        Route::Projects => rsx! { lists::Projects {} },
+                        Route::Projects => rsx! { project::Projects {} },
+                        Route::Sessions => rsx! { lists::Sessions {} },
                         Route::Rigs => rsx! { lists::Rigs {} },
                         Route::Setlist(id, entry) => rsx! { setlist::SetlistPage { id, entry } },
                         Route::Song(id, arrangement) => rsx! { song::SongPage { id, arrangement } },
+                        Route::Project(id) => rsx! { project::ProjectPage { id } },
                         Route::Album(id) => rsx! { album::AlbumPage { id } },
-                        Route::Project(id) => rsx! { album::ProjectPage { id } },
+                        Route::Session(id) => rsx! { album::SessionPage { id } },
                     }
                 }
             }
@@ -218,7 +226,7 @@ fn AppBar() -> Element {
             .iter()
             .filter(|s| matches!(s.sync, crate::model::Sync::Syncing(_)))
             .count()
-            + l.projects
+            + l.sessions
                 .iter()
                 .filter(|p| matches!(p.sync, crate::model::Sync::Syncing(_)))
                 .count()
@@ -245,7 +253,7 @@ fn AppBar() -> Element {
                         gap: 8px; padding: 0 12px; color: {INK_3};",
                 Search { size: 16, color: INK_3 }
                 span { style: "{META} {ONE_LINE}",
-                    if wide { "Search songs, setlists, albums, projects" } else { "Search" }
+                    if wide { "Search projects, setlists, songs, sessions" } else { "Search" }
                 }
             }
             span {
@@ -283,14 +291,14 @@ fn Sidebar() -> Element {
                     display: flex; flex-direction: column; gap: 2px; padding: 12px 10px; overflow-y: scroll;",
             NavItem { to: Route::Home, here, label: "Home", count: None::<String>, dot: tonight,
                 icon: rsx! { House { size: 20, color: if here == Route::Home { INK } else { INK_2 } } } }
+            NavItem { to: Route::Projects, here, label: "Projects", count: count(l.projects.len()), dot: false,
+                icon: rsx! { FolderKanban { size: 20, color: if here == Route::Projects { INK } else { INK_2 } } } }
             NavItem { to: Route::Setlists, here, label: "Setlists", count: count(l.setlists.len()), dot: false,
                 icon: rsx! { ListMusic { size: 20, color: if here == Route::Setlists { INK } else { INK_2 } } } }
             NavItem { to: Route::Songs, here, label: "Songs", count: count(l.songs.len()), dot: false,
                 icon: rsx! { Music { size: 20, color: if here == Route::Songs { INK } else { INK_2 } } } }
-            NavItem { to: Route::Albums, here, label: "Albums", count: count(l.albums.len()), dot: false,
-                icon: rsx! { Disc3 { size: 20, color: if here == Route::Albums { INK } else { INK_2 } } } }
-            NavItem { to: Route::Projects, here, label: "Projects", count: count(l.projects.len()), dot: false,
-                icon: rsx! { FolderOpen { size: 20, color: if here == Route::Projects { INK } else { INK_2 } } } }
+            NavItem { to: Route::Sessions, here, label: "Sessions", count: count(l.sessions.len()), dot: false,
+                icon: rsx! { AudioWaveform { size: 20, color: if here == Route::Sessions { INK } else { INK_2 } } } }
             NavItem { to: Route::Rigs, here, label: "Rigs", count: count(l.rigs.iter().filter(|r| r.owner == l.me).count()), dot: false,
                 icon: rsx! { Guitar { size: 20, color: if here == Route::Rigs { INK } else { INK_2 } } } }
             if wide {

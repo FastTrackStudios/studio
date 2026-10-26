@@ -1,4 +1,4 @@
-//! The sidebar's lists: every setlist, song, album, project and rig in
+//! The sidebar's lists: every setlist, song, album, session and rig in
 //! the chosen space, as tables a finger can work.
 
 use dioxus::prelude::*;
@@ -11,7 +11,7 @@ use crate::model::{RigKind, SpaceId, Stage, Sync, clock, minutes};
 
 /// A list page's title, what it holds, and its one action.
 #[component]
-fn ListHeader(title: &'static str, detail: String, action: &'static str) -> Element {
+pub(crate) fn ListHeader(title: &'static str, detail: String, action: &'static str) -> Element {
     rsx! {
         div {
             style: "display: flex; align-items: flex-end; gap: 16px; padding: 24px 0 18px;",
@@ -29,7 +29,7 @@ fn ListHeader(title: &'static str, detail: String, action: &'static str) -> Elem
 /// A table's column headers. `columns` is the grid template every row of
 /// the table shares.
 #[component]
-fn Columns(columns: String, names: Vec<&'static str>) -> Element {
+pub(crate) fn Columns(columns: String, names: Vec<&'static str>) -> Element {
     rsx! {
         div {
             style: "display: grid; grid-template-columns: {columns}; column-gap: 16px; align-items: center; \
@@ -43,7 +43,7 @@ fn Columns(columns: String, names: Vec<&'static str>) -> Element {
 
 /// One table row: a press that goes to `route`.
 #[component]
-fn Row(columns: String, route: Route, children: Element) -> Element {
+pub(crate) fn Row(columns: String, route: Route, children: Element) -> Element {
     let nav = use_nav();
     rsx! {
         button {
@@ -60,7 +60,11 @@ fn Row(columns: String, route: Route, children: Element) -> Element {
 
 /// A title with a line of detail under it, for a table's first column.
 #[component]
-fn Named(title: String, detail: String, #[props(default)] colour: Option<String>) -> Element {
+pub(crate) fn Named(
+    title: String,
+    detail: String,
+    #[props(default)] colour: Option<String>,
+) -> Element {
     rsx! {
         div { style: "display: flex; align-items: center; gap: 12px; min-width: 0;",
             if let Some(c) = colour { Swatch { colour: c, height: 32 } }
@@ -198,52 +202,8 @@ pub(crate) fn Songs() -> Element {
     }
 }
 
-#[component]
-pub(crate) fn Albums() -> Element {
-    let lib = use_library();
-    let nav = use_nav();
-    let wide = use_wide();
-    let space = (nav.space)();
-    let l = lib.read();
-    let albums: Vec<_> = l
-        .albums
-        .iter()
-        .filter(|a| in_space(space, a.space))
-        .collect();
-    let columns = if wide {
-        "minmax(0, 3fr) 80px minmax(0, 3fr) 96px"
-    } else {
-        "minmax(0, 1fr) 80px 96px"
-    }
-    .to_owned();
-    let names = if wide {
-        vec!["Album", "Tracks", "Progress", "Sync"]
-    } else {
-        vec!["Album", "Tracks", "Sync"]
-    };
-    rsx! {
-        Page {
-            ListHeader { title: "Albums", detail: format!("{} albums · the songs a record releases, each with its project", albums.len()), action: "New album" }
-            Columns { columns: columns.clone(), names }
-            for a in albums {
-                {
-                    let stages: Vec<Option<Stage>> = a.tracks.iter().map(|t| t.project.and_then(|p| l.project(p)).map(|p| p.stage)).collect();
-                    rsx! {
-                        Row { key: "{a.id.0}", columns: columns.clone(), route: Route::Album(a.id),
-                            Named { title: a.title.clone(), detail: format!("{} · {}", a.artist, a.year) }
-                            span { style: "{META} color: {INK_2};", "{a.tracks.len()}" }
-                            if wide { StageBar { stages } }
-                            SyncMark { sync: a.sync }
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
 /// An album's tracks as one bar: each track a segment, lit by how far its
-/// project has come (none yet is a dim outline).
+/// session has come (none yet is a dim outline).
 #[component]
 pub(crate) fn StageBar(stages: Vec<Option<Stage>>) -> Element {
     let colour = |s: Option<Stage>| match s {
@@ -264,18 +224,18 @@ pub(crate) fn StageBar(stages: Vec<Option<Stage>>) -> Element {
 }
 
 #[component]
-pub(crate) fn Projects() -> Element {
+pub(crate) fn Sessions() -> Element {
     let lib = use_library();
     let nav = use_nav();
     let wide = use_wide();
     let space = (nav.space)();
     let l = lib.read();
-    let mut projects: Vec<_> = l
-        .projects
+    let mut sessions: Vec<_> = l
+        .sessions
         .iter()
         .filter(|p| in_space(space, p.space))
         .collect();
-    projects.sort_by_key(|p| p.edited.age);
+    sessions.sort_by_key(|p| p.edited.age);
     let columns = if wide {
         "minmax(0, 3fr) 110px 72px minmax(0, 2fr) 96px"
     } else {
@@ -283,16 +243,16 @@ pub(crate) fn Projects() -> Element {
     }
     .to_owned();
     let names = if wide {
-        vec!["Project", "Stage", "Tracks", "Last change", "Sync"]
+        vec!["Session", "Stage", "Tracks", "Last change", "Sync"]
     } else {
-        vec!["Project", "Stage", "Sync"]
+        vec!["Session", "Stage", "Sync"]
     };
     rsx! {
         Page {
-            ListHeader { title: "Projects", detail: format!("{} projects · full sessions, in the studio", projects.len()), action: "New project" }
+            ListHeader { title: "Sessions", detail: format!("{} sessions · full sessions, in the studio", sessions.len()), action: "New session" }
             Columns { columns: columns.clone(), names }
-            for p in projects {
-                Row { key: "{p.id.0}", columns: columns.clone(), route: Route::Project(p.id),
+            for p in sessions {
+                Row { key: "{p.id.0}", columns: columns.clone(), route: Route::Session(p.id),
                     Named {
                         title: p.title.clone(),
                         detail: p.song.and_then(|s| l.song(s)).map_or_else(|| "Not a song yet".to_owned(), |s| format!("Song · {}", s.title)),

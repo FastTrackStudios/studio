@@ -125,6 +125,7 @@ pub(crate) fn SetlistPage(id: SetlistId, entry: Option<EntryId>) -> Element {
     let selected = entry
         .and_then(|e| rows.iter().find(|r| r.entry.id == e))
         .cloned();
+    let in_project = l.project_of_setlist(id).map(|p| p.id);
     let direction = if wide { "row" } else { "column" };
     rsx! {
         Page {
@@ -138,6 +139,7 @@ pub(crate) fn SetlistPage(id: SetlistId, entry: Option<EntryId>) -> Element {
                     } else if !when.is_empty() {
                         span { style: "{META} color: {INK_2}; font-weight: 650;", "{when}" }
                     }
+                    super::project::InProject { id: in_project }
                     span { style: "{TITLE}", "{set.title}" }
                     span { style: "{META} color: {INK_3};", "{set.entries.len()} pieces · {length} · {space} · edited by {set.edited.by}, {set.edited.when}" }
                 }

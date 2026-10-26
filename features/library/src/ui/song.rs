@@ -53,7 +53,7 @@ pub(crate) fn SongPage(id: SongId, arrangement: Option<ArrangementId>) -> Elemen
         .map(|c| format!("CCLI {c}"))
         .unwrap_or_default();
     let direction = if wide { "row" } else { "column" };
-    let project = current.project;
+    let session = current.session;
     let tabs: Vec<(ArrangementId, String, String)> = song
         .arrangements
         .iter()
@@ -74,9 +74,9 @@ pub(crate) fn SongPage(id: SongId, arrangement: Option<ArrangementId>) -> Elemen
                     }
                 }
                 div { style: "display: flex; gap: 10px;",
-                    if let Some(p) = project {
-                        Button { label: "Open project".to_owned(), weight: Weight::Secondary,
-                            icon: rsx! { FolderOpen { size: 16, color: INK } }, on_press: move |()| open(Open::Project(p)) }
+                    if let Some(p) = session {
+                        Button { label: "Open session".to_owned(), weight: Weight::Secondary,
+                            icon: rsx! { FolderOpen { size: 16, color: INK } }, on_press: move |()| open(Open::Session(p)) }
                     }
                     Button { label: "Share chart".to_owned(), weight: Weight::Secondary, icon: rsx! { Share2 { size: 16, color: INK } }, on_press: move |()| {} }
                 }
@@ -315,7 +315,7 @@ fn SongAside(song: Song, arrangement: ArrangementId) -> Element {
 }
 
 /// Where a song is played and produced: (kind, title, detail, route),
-/// kind 0 a setlist, 1 an album, 2 a project.
+/// kind 0 a setlist, 1 an album, 2 a session.
 fn used_in(l: &Library, song: SongId) -> Vec<(u8, String, String, Route)> {
     let mut used = Vec::new();
     for s in l.setlists_with(song) {
@@ -341,12 +341,12 @@ fn used_in(l: &Library, song: SongId) -> Vec<(u8, String, String, Route)> {
             Route::Album(a.id),
         ));
     }
-    for p in l.projects.iter().filter(|p| p.song == Some(song)) {
+    for p in l.sessions.iter().filter(|p| p.song == Some(song)) {
         used.push((
             2,
             p.title.clone(),
-            format!("Project · {}", p.stage.label()),
-            Route::Project(p.id),
+            format!("Session · {}", p.stage.label()),
+            Route::Session(p.id),
         ));
     }
     used

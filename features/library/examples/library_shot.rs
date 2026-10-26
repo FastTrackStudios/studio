@@ -8,8 +8,8 @@
 //!
 //! `W H` in points (default 1194 834, an 11" iPad sideways; 834 1194
 //! upright). `PAGE`: `home` (default), `setlists`, `songs`, `albums`,
-//! `projects`, `rigs`, `setlist` (tonight's, with its fourth entry
-//! picked), `song` (the one with three arrangements), `album`, `project`.
+//! `sessions`, `rigs`, `setlist` (tonight's, with its fourth entry
+//! picked), `song` (the one with three arrangements), `album`, `session`.
 
 use anyrender::ImageRenderer as _;
 use anyrender_vello::VelloImageRenderer;
@@ -27,8 +27,7 @@ fn route(page: &str) -> Route {
     match page {
         "setlists" => Route::Setlists,
         "songs" => Route::Songs,
-        "albums" => Route::Albums,
-        "projects" => Route::Projects,
+        "sessions" => Route::Sessions,
         "rigs" => Route::Rigs,
         "setlist" => {
             let set = lib
@@ -47,7 +46,10 @@ fn route(page: &str) -> Route {
             Route::Song(song.id, song.arrangements.get(1).map(|a| a.id))
         }
         "album" => Route::Album(lib.albums[0].id),
-        "project" => Route::Project(lib.projects[0].id),
+        "projects" => Route::Projects,
+        "project" => Route::Project(lib.projects[1].id),
+        "live" => Route::Project(lib.projects[0].id),
+        "session" => Route::Session(lib.sessions[0].id),
         _ => Route::Home,
     }
 }

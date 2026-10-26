@@ -66,11 +66,19 @@ pub(crate) fn anchor_label(lib: &Library, anchor: &Anchor) -> Option<Labelled> {
                 route: Route::Album(id),
             }
         }
+        Anchor::Session(id) => {
+            let p = lib.session(id)?;
+            Labelled {
+                title: p.title.clone(),
+                detail: format!("Session · {}", p.stage.label()),
+                route: Route::Session(id),
+            }
+        }
         Anchor::Project(id) => {
             let p = lib.project(id)?;
             Labelled {
                 title: p.title.clone(),
-                detail: format!("Project · {}", p.stage.label()),
+                detail: format!("Project · {}", p.kind.label()),
                 route: Route::Project(id),
             }
         }
@@ -129,16 +137,16 @@ pub(crate) fn Home() -> Element {
             "song",
         ));
     }
-    for p in l.projects.iter().filter(|p| in_space(p.space)) {
+    for p in l.sessions.iter().filter(|p| in_space(p.space)) {
         changed.push((
             p.edited.age,
             Labelled {
                 title: p.title.clone(),
-                detail: format!("Project · {}", p.stage.label()),
-                route: Route::Project(p.id),
+                detail: format!("Session · {}", p.stage.label()),
+                route: Route::Session(p.id),
             },
             format!("{} · {}", p.edited.by, p.edited.when),
-            "project",
+            "session",
         ));
     }
     for s in l.setlists.iter().filter(|s| in_space(s.space)) {
@@ -394,7 +402,7 @@ fn ChangedRow(
             onclick: move |_| nav.go(route),
             match kind {
                 "song" => rsx! { Music { size: 20, color: INK_3 } },
-                "project" => rsx! { FolderOpen { size: 20, color: INK_3 } },
+                "session" => rsx! { FolderOpen { size: 20, color: INK_3 } },
                 _ => rsx! { ListMusic { size: 20, color: INK_3 } },
             }
             div { style: "flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px;",

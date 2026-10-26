@@ -1,5 +1,5 @@
 //! The library's data: what a song, an arrangement, a setlist, a part, an
-//! album and a project are, and the few rules that read across them (how
+//! album and a session are, and the few rules that read across them (how
 //! long an arrangement plays, which sound a rig plays for an entry).
 //!
 //! Plain values, no I/O: a source (the fixture today, the synced docs
@@ -34,7 +34,9 @@ ids! {
     RigId,
     /// An album.
     AlbumId,
-    /// A project: a `.session`.
+    /// A session: a `.session`.
+    SessionId,
+    /// A project: Task's container for one undertaking.
     ProjectId,
 }
 
@@ -115,8 +117,8 @@ pub struct Arrangement {
     pub form: Vec<Step>,
     pub chart: Ready,
     pub audio: Ready,
-    /// The project it is produced in, if any.
-    pub project: Option<ProjectId>,
+    /// The session it is produced in, if any.
+    pub session: Option<SessionId>,
 }
 
 /// What kind of file a song keeps (by hash, once, for every arrangement).
@@ -400,7 +402,7 @@ pub fn sound(part: &Part, rig: &Rig, entry: &Entry) -> Sound {
     }
 }
 
-/// Where a project is.
+/// Where a session is.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Stage {
     Writing,
@@ -425,10 +427,10 @@ impl Stage {
     }
 }
 
-/// A project: a `.session` where an arrangement is produced.
+/// A session: a `.session` where an arrangement is produced.
 #[derive(Clone, PartialEq, Debug)]
-pub struct Project {
-    pub id: ProjectId,
+pub struct Session {
+    pub id: SessionId,
     pub space: SpaceId,
     pub title: String,
     pub song: Option<SongId>,
@@ -443,7 +445,7 @@ pub struct Project {
 pub struct Track {
     pub song: SongId,
     pub arrangement: ArrangementId,
-    pub project: Option<ProjectId>,
+    pub session: Option<SessionId>,
 }
 
 /// An album: the studio's ordered list.
@@ -459,6 +461,80 @@ pub struct Album {
     pub sync: Sync,
 }
 
+/// What a project is for.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum ProjectKind {
+    /// A show, a run of services, a tour: what is played live.
+    Live,
+    /// A record: sessions that become an album or a single.
+    Recording,
+    /// Anything else a band takes on.
+    Other,
+}
+
+impl ProjectKind {
+    #[must_use]
+    pub const fn label(self) -> &'static str {
+        match self {
+            Self::Live => "Live",
+            Self::Recording => "Recording",
+            Self::Other => "Project",
+        }
+    }
+}
+
+/// Where a project stands (Task's status).
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum Status {
+    Planning,
+    Active,
+    OnHold,
+    Done,
+}
+
+impl Status {
+    #[must_use]
+    pub const fn label(self) -> &'static str {
+        match self {
+            Self::Planning => "Planning",
+            Self::Active => "Active",
+            Self::OnHold => "On hold",
+            Self::Done => "Done",
+        }
+    }
+}
+
+/// One of a project's tasks, as Task keeps it.
+#[derive(Clone, PartialEq, Debug)]
+pub struct Todo {
+    pub title: String,
+    pub done: bool,
+    pub who: Option<String>,
+    /// "Thu", "Nov 12": already said the way a list shows it.
+    pub due: Option<String>,
+}
+
+/// A project: Task's container for one undertaking (a run of services, a
+/// show, a record), with its people and tasks, and the setlists, sessions
+/// and album attached to it.
+#[derive(Clone, PartialEq, Debug)]
+pub struct Project {
+    pub id: ProjectId,
+    pub space: SpaceId,
+    pub title: String,
+    pub kind: ProjectKind,
+    pub status: Status,
+    pub when: Option<String>,
+    pub venue: Option<String>,
+    pub people: Vec<String>,
+    pub todos: Vec<Todo>,
+    pub setlists: Vec<SetlistId>,
+    pub sessions: Vec<SessionId>,
+    pub album: Option<AlbumId>,
+    pub edited: Edited,
+    pub sync: Sync,
+}
+
 /// What a comment is about: a doc, or a place inside one.
 #[derive(Clone, PartialEq, Debug)]
 pub enum Anchor {
@@ -467,6 +543,7 @@ pub enum Anchor {
     Setlist(SetlistId),
     Entry(SetlistId, EntryId),
     Album(AlbumId),
+    Session(SessionId),
     Project(ProjectId),
 }
 
@@ -496,6 +573,7 @@ pub struct Library {
     pub songs: Vec<Song>,
     pub setlists: Vec<Setlist>,
     pub albums: Vec<Album>,
+    pub sessions: Vec<Session>,
     pub projects: Vec<Project>,
     pub rigs: Vec<Rig>,
     pub parts: Vec<Part>,
@@ -516,9 +594,32 @@ impl Library {
         self.albums.iter().find(|a| a.id == id)
     }
     #[must_use]
+    pub fn session(&self, id: SessionId) -> Option<&Session> {
+        self.sessions.iter().find(|p| p.id == id)
+    }
+    #[must_use]
     pub fn project(&self, id: ProjectId) -> Option<&Project> {
         self.projects.iter().find(|p| p.id == id)
     }
+
+    /// The project a setlist is attached to, if any.
+    #[must_use]
+    pub fn project_of_setlist(&self, id: SetlistId) -> Option<&Project> {
+        self.projects.iter().find(|p| p.setlists.contains(&id))
+    }
+
+    /// The project a session is attached to, if any.
+    #[must_use]
+    pub fn project_of_session(&self, id: SessionId) -> Option<&Project> {
+        self.projects.iter().find(|p| p.sessions.contains(&id))
+    }
+
+    /// The project an album is attached to, if any.
+    #[must_use]
+    pub fn project_of_album(&self, id: AlbumId) -> Option<&Project> {
+        self.projects.iter().find(|p| p.album == Some(id))
+    }
+
     #[must_use]
     pub fn rig(&self, id: RigId) -> Option<&Rig> {
         self.rigs.iter().find(|r| r.id == id)
@@ -653,7 +754,7 @@ mod tests {
             form,
             chart: Ready::Here,
             audio: Ready::Here,
-            project: None,
+            session: None,
         };
         let song = Song {
             id: SongId(id()),

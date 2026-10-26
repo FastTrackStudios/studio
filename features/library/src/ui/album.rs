@@ -1,5 +1,5 @@
-//! An album (its tracks, each an arrangement and the project that
-//! produces it, and how far each has come) and a project (a `.session`:
+//! An album (its tracks, each an arrangement and the session that
+//! produces it, and how far each has come) and a session (a `.session`:
 //! its song, its stage, and the way into Session).
 
 use dioxus::prelude::*;
@@ -10,7 +10,7 @@ use super::kit::*;
 use super::lists::StageBar;
 use super::song::Panel;
 use super::{Open, Route, open, use_library, use_nav, use_wide};
-use crate::model::{AlbumId, Anchor, ProjectId, Stage, clock};
+use crate::model::{AlbumId, Anchor, SessionId, Stage, clock};
 
 #[component]
 pub(crate) fn AlbumPage(id: AlbumId) -> Element {
@@ -24,7 +24,7 @@ pub(crate) fn AlbumPage(id: AlbumId) -> Element {
     let stages: Vec<Option<Stage>> = album
         .tracks
         .iter()
-        .map(|t| t.project.and_then(|p| l.project(p)).map(|p| p.stage))
+        .map(|t| t.session.and_then(|p| l.session(p)).map(|p| p.stage))
         .collect();
     let total: f32 = album
         .tracks
@@ -34,6 +34,7 @@ pub(crate) fn AlbumPage(id: AlbumId) -> Element {
             Some(s.seconds(s.arrangement(t.arrangement)?))
         })
         .sum();
+    let in_project = l.project_of_album(id).map(|p| p.id);
     let without = stages.iter().filter(|s| s.is_none()).count();
     let columns = if wide {
         "36px minmax(0, 3fr) 64px minmax(0, 2fr) 110px"
@@ -51,25 +52,26 @@ pub(crate) fn AlbumPage(id: AlbumId) -> Element {
                     }
                 }
                 div { style: "flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 8px;",
+                    super::project::InProject { id: in_project }
                     span { style: "{TITLE}", "{album.title}" }
                     span { style: "{META} color: {INK_3};", "{album.artist} · {album.year} · {album.tracks.len()} tracks · {clock(total)}" }
                     div { style: "max-width: 420px; margin-top: 6px;", StageBar { stages: stages.clone() } }
-                    if without > 0 { span { style: "{META} color: {WARN};", "{without} tracks have no project yet" } }
+                    if without > 0 { span { style: "{META} color: {WARN};", "{without} tracks have no session yet" } }
                 }
             }
             div { style: "display: grid; grid-template-columns: {columns}; column-gap: 16px; align-items: center; \
                           height: 32px; padding: 0 12px; border-bottom: 1px solid {RULE_STRONG}; {COLUMN} color: {INK_3};",
                 span {} span { "Track" }
-                if wide { span { "Length" } span { "Project" } }
+                if wide { span { "Length" } span { "Session" } }
                 span { "Stage" }
             }
             for (i, t) in album.tracks.iter().enumerate() {
                 {
                     let song = l.song(t.song).cloned();
                     let arr = song.as_ref().and_then(|s| s.arrangement(t.arrangement).cloned());
-                    let project = t.project.and_then(|p| l.project(p)).cloned();
+                    let session = t.session.and_then(|p| l.session(p)).cloned();
                     let length = song.as_ref().zip(arr.as_ref()).map(|(s, a)| clock(s.seconds(a))).unwrap_or_default();
-                    let route = t.project.map_or(Route::Song(t.song, Some(t.arrangement)), Route::Project);
+                    let route = t.session.map_or(Route::Song(t.song, Some(t.arrangement)), Route::Session);
                     rsx! {
                         button { key: "{i}", class: "lp",
                             style: "width: 100%; min-height: {ROW + 4}px; display: grid; grid-template-columns: {columns}; \
@@ -88,11 +90,11 @@ pub(crate) fn AlbumPage(id: AlbumId) -> Element {
                             if wide {
                                 span { style: "{META} color: {INK_2};", "{length}" }
                                 span { style: "{META} color: {INK_2}; {ONE_LINE}",
-                                    "{project.as_ref().map_or(\"None yet\", |p| p.title.as_str())}"
+                                    "{session.as_ref().map_or(\"None yet\", |p| p.title.as_str())}"
                                 }
                             }
                             div {
-                                match &project {
+                                match &session {
                                     Some(p) => rsx! { Chip { text: p.stage.label().to_owned(), strong: matches!(p.stage, Stage::Mixing | Stage::Mastering) } },
                                     None => rsx! { span { style: "{META} color: {INK_3};", "Not started" } },
                                 }
@@ -106,17 +108,17 @@ pub(crate) fn AlbumPage(id: AlbumId) -> Element {
 }
 
 #[component]
-pub(crate) fn ProjectPage(id: ProjectId) -> Element {
+pub(crate) fn SessionPage(id: SessionId) -> Element {
     let lib = use_library();
     let nav = use_nav();
     let wide = use_wide();
     let l = lib.read();
-    let Some(project) = l.project(id).cloned() else {
-        return rsx! { Page { p { style: "{BODY} color: {INK_2}; padding-top: 40px;", "This project was deleted or has not arrived yet." } } };
+    let Some(session) = l.session(id).cloned() else {
+        return rsx! { Page { p { style: "{BODY} color: {INK_2}; padding-top: 40px;", "This session was deleted or has not arrived yet." } } };
     };
-    let song = project.song.and_then(|s| l.song(s)).cloned();
+    let song = session.song.and_then(|s| l.song(s)).cloned();
     let threads: Vec<_> = l
-        .threads_on(&Anchor::Project(id))
+        .threads_on(&Anchor::Session(id))
         .into_iter()
         .cloned()
         .collect();
@@ -128,19 +130,21 @@ pub(crate) fn ProjectPage(id: ProjectId) -> Element {
         Stage::Mastering,
         Stage::Released,
     ];
-    let at = stages.iter().position(|s| *s == project.stage).unwrap_or(0);
+    let at = stages.iter().position(|s| *s == session.stage).unwrap_or(0);
+    let in_project = l.project_of_session(id).map(|p| p.id);
     let direction = if wide { "row" } else { "column" };
     rsx! {
         Page {
             div { style: "display: flex; align-items: flex-end; gap: 16px; padding: 24px 0 20px; flex-wrap: wrap;",
                 div { style: "flex: 1 1 360px; min-width: 0; display: flex; flex-direction: column; gap: 8px;",
-                    span { style: "{TITLE}", "{project.title}" }
+                    super::project::InProject { id: in_project }
+                    span { style: "{TITLE}", "{session.title}" }
                     span { style: "{META} color: {INK_3};",
-                        "{project.tracks} tracks · last changed by {project.edited.by} on {project.edited.device}, {project.edited.when}"
+                        "{session.tracks} tracks · last changed by {session.edited.by} on {session.edited.device}, {session.edited.when}"
                     }
                 }
                 Button { label: "Open in Session".to_owned(), weight: Weight::Primary,
-                    icon: rsx! { FolderOpen { size: 16, color: "#fff" } }, on_press: move |()| open(Open::Project(id)) }
+                    icon: rsx! { FolderOpen { size: 16, color: "#fff" } }, on_press: move |()| open(Open::Session(id)) }
             }
             // Where it is: every stage, the current one picked.
             div { style: "display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 6px;",
