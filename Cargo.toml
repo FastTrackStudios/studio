@@ -28,6 +28,7 @@ members = [
     "features/ui/daw-ui",
     "features/dynamic-template",
     "features/app/shell",
+    "features/library",
     "features/account",
     "features/audio",
     "features/dsp/builtin",
@@ -226,6 +227,7 @@ nice-plug-dioxus = { git = "https://github.com/FastTrackStudios/nice-plug.git", 
 nice-plug-xtask = { git = "https://github.com/FastTrackStudios/nice-plug.git", branch = "fts-baseview-03" }
 utils = { path = "crates/daw/utils" }
 app-shell = { path = "features/app/shell" }
+library = { path = "features/library" }
 fts-account = { path = "features/account" }
 # The grid that follows the zoom. Pure arithmetic and no dependencies, so
 # the arrange view and the expression editor can agree on it without

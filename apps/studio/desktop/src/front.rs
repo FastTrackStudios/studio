@@ -150,7 +150,12 @@ pub fn Studio() -> Element {
         Some(Side::Signal) => rsx! { SignalSide {} },
         #[cfg(feature = "session-app")]
         Some(Side::Session) => rsx! { session_desktop::native::Embedded {} },
-        None => rsx! { crate::home::Home { opening: opening(), on_pick: pick } },
+        // The library is the home; `FTS_LIBRARY=0` keeps the earlier one
+        // (play here or join) until its Join and sign-in move across.
+        None if std::env::var("FTS_LIBRARY").is_ok_and(|v| v == "0") => {
+            rsx! { crate::home::Home { opening: opening(), on_pick: pick } }
+        }
+        None => rsx! { crate::library_home::LibraryHome { on_pick: pick } },
     }
 }
 
