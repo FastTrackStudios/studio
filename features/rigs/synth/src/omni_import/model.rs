@@ -878,8 +878,10 @@ const FILTER_MODELS: &[(u32, FilterModel)] = &[
     (0x3e851eb8, FilterModel { name: "HPF UVI", mode: "highpass", poles: 2, ladder: false, taper: [1.3348, 1.3348, 1.3348, 1.2599, 1.1225], res: (0.500, 13.011, 0.335), res_shift: 1.000, res_shift_curve: 1.000, gain_db: -0.1, comp: 0.00 }),
     // LPF Power 12db — 1515 factory uses; fit 0.8 dB at res 0, 1.9/4.7 at res 0.5/0.9; taper fits 0.15:0.8 0.45:1.2 0.6:1.1 0.75:1.1
     (0x3f1eb852, FilterModel { name: "LPF Power 12db", mode: "lowpass", poles: 2, ladder: true, taper: [0.2102, 0.1984, 0.3150, 0.4719, 0.5297], res: (0.000, 1.985, 0.689), res_shift: 1.000, res_shift_curve: 1.000, gain_db: -2.0, comp: 0.00 }),
-    // Beefy LPF 4-pole — 1326 factory uses; fit 0.8 dB at res 0, 5.7/6.7 at res 0.5/0.9; taper fits 0.15:0.6 0.45:1.0 0.6:1.4 0.75:0.7
-    (0x3f7d70b6, FilterModel { name: "Beefy LPF 4-pole", mode: "lowpass", poles: 3, ladder: true, taper: [0.1768, 0.2227, 0.3150, 0.3969, 0.3969], res: (0.000, 9.600, 0.300), res_shift: 1.000, res_shift_curve: 1.000, gain_db: 4.8, comp: 0.12 }),
+    // Beefy LPF 4-pole — 1326 factory uses; fit 0.8 dB at res 0, 5.7/6.7 at res 0.5/0.9
+    // (resonance refit linear, k = 7.76·r: the old r^0.3 law put k 2.4 at
+    // res 0.01, 10 dB off where patches leave it); taper fits 0.15:0.6 0.45:1.0 0.6:1.4 0.75:0.7
+    (0x3f7d70b6, FilterModel { name: "Beefy LPF 4-pole", mode: "lowpass", poles: 3, ladder: true, taper: [0.1768, 0.2227, 0.3150, 0.3969, 0.3969], res: (0.000, 7.760, 1.000), res_shift: 1.000, res_shift_curve: 1.000, gain_db: 4.8, comp: 0.12 }),
     // Classic LPF 1-pole — 1263 factory uses; fit 1.0 dB at res 0, 1.4/2.5 at res 0.5/0.9; taper fits 0.15:0.5 0.45:2.0 0.6:3.0 0.75:3.7
     (0x3f4ccccd, FilterModel { name: "Classic LPF 1-pole", mode: "bandpass", poles: 2, ladder: false, taper: [0.1250, 0.1487, 0.1873, 0.1984, 0.1487], res: (0.500, 4.578, 1.979), res_shift: 2.022, res_shift_curve: 0.150, gain_db: 3.5, comp: 0.00 }),
     // Bandpass Juicy 12db — 953 factory uses; fit 0.1 dB at res 0, 2.2/3.0 at res 0.5/0.9; taper fits 0.15:0.1 0.45:0.2 0.6:0.4 0.75:0.5
