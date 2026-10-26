@@ -349,7 +349,7 @@ fn Start(opened: Signal<Option<Setlist>>) -> Element {
             match off_thread(move || task_account::orgs(&account)).await {
                 Some(Ok(list)) => {
                     if org.peek().is_none() {
-                        org.set(list.first().cloned());
+                        org.set(first_org(&list, std::env::var("FTS_TASK_ORG").ok()));
                     }
                     orgs.set(Load::Ready(list));
                 }
@@ -2318,4 +2318,34 @@ fn copy_text(text: &str) {
         return;
     }
     tracing::warn!("account: no clipboard tool to copy with");
+}
+
+/// The org the library opens on: `wanted` (`FTS_TASK_ORG`, the same
+/// variable the headless library reads) when the account belongs to it,
+/// else the first the account belongs to.
+fn first_org(orgs: &[String], wanted: Option<String>) -> Option<String> {
+    wanted
+        .filter(|w| orgs.iter().any(|o| o == w))
+        .or_else(|| orgs.first().cloned())
+}
+
+#[cfg(test)]
+mod org_tests {
+    use super::first_org;
+
+    #[test]
+    fn the_library_opens_on_the_org_asked_for_when_the_account_is_in_it() {
+        let orgs = vec!["codywright".to_owned(), "fasttrackaudio".to_owned()];
+        assert_eq!(
+            first_org(&orgs, Some("fasttrackaudio".into())).as_deref(),
+            Some("fasttrackaudio")
+        );
+        assert_eq!(
+            first_org(&orgs, Some("elsewhere".into())).as_deref(),
+            Some("codywright"),
+            "an org the account is not in is not opened"
+        );
+        assert_eq!(first_org(&orgs, None).as_deref(), Some("codywright"));
+        assert_eq!(first_org(&[], Some("fasttrackaudio".into())), None);
+    }
 }
