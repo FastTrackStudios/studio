@@ -49,9 +49,12 @@ la, lb = loud(ref), loud(ours)
 la, lb = np.maximum(la, la.max() - 60), np.maximum(lb, la.max() - 60)
 held = slice(int(0.3*SR), int(min(HOLD, 1.8)*SR)); atk = slice(0, int(0.1*SR))
 ba, bb = bands(ref[held]), bands(ours[held]); aa, ab = bands(ref[atk]), bands(ours[atk])
-# Scored to 16 kHz: above it is a plug-in's aliasing, not its tone.
+# Scored to 16 kHz (above it is a plug-in's aliasing, not its tone), over
+# the bands either side has within 40 dB of its peak, each floored there —
+# a band at the edge must not swing the score by being in or out.
 audible = EDGES[:-1] < 16000
-m, ma = (ba > -40) & audible, (aa > -40) & audible
+m, ma = ((ba > -40) | (bb > -40)) & audible, ((aa > -40) | (ab > -40)) & audible
+ba, bb, aa, ab = (np.maximum(x, -40) for x in (ba, bb, aa, ab))
 fa, fb = pitch(ref), pitch(ours)
 cents = 1200*np.log2(fb/fa) if fa > 0 and fb > 0 else float("nan")
 print(f"level {np.mean(lb-la):+5.1f} dB (env rms {np.sqrt(np.mean(((lb-lb.mean())-(la-la.mean()))**2)):4.1f})  "
