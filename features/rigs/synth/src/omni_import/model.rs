@@ -84,6 +84,11 @@ pub struct OmniLayer {
     pub unison_octave: f32,
     pub unison_analog: f32,
     pub unison_drift: f32,
+    /// The ring modulator's wave (`OSC amwf`): 0 sine, 1 triangle, 2 saw,
+    /// 3 noise, 4 falling saw.
+    pub ring_wave: u8,
+    /// The ring product's scale switch (`OSC amscl`): ×0.25, ×0.5 or ×1.
+    pub ring_scale: f32,
     /// The FM index's range switch (`OSC fmscl`): ×1, ×4 or ×8.
     pub fm_range: f32,
     /// FM modulator waveform morph 0..1 (`OSC fmwf`).
@@ -1394,6 +1399,18 @@ pub fn parse_patch_node(root: &XmlNode) -> Result<OmniPatch, String> {
                 0.0
             };
             layer.ring_ratio = 2.0 * n("AMmodint", 0.75).clamp(0.0, 1.0);
+            // Measured on a sine: `amscl` (0.02 steps) scales the ring
+            // product ×0.25 / ×0.5 / ×1 (the init part's 0.04 is ×1).
+            // `amwf` (0.02 steps): sine, triangle, saw, noise, falling saw.
+            layer.ring_wave = match (n("amwf", 0.0) * 50.0).round() as u32 {
+                w @ 1..=4 => w as u8,
+                _ => 0,
+            };
+            layer.ring_scale = match (n("amscl", 0.04) * 50.0).round() as u32 {
+                0 => 0.25,
+                1 => 0.5,
+                _ => 1.0,
+            };
             // Measured (init part, saw): silent at 0, unity at 0.75 (the
             // value a patch without the attribute plays at), +9 dB at 1.
             layer.ring_gain = 10f32.powf(

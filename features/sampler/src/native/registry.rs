@@ -253,6 +253,9 @@ fn wavetable_config(block: &RigBlock) -> SynthConfig {
     if let Some(v) = p("ring_mix") {
         cfg.ring_mix = v.clamp(0.0, 1.0);
     }
+    if let Some(v) = p("ring_wave") {
+        cfg.ring_wave = (v.round().clamp(0.0, 4.0)) as u8;
+    }
     if let Some(v) = p("ring_level") {
         cfg.ring_level = v.max(0.0);
     }

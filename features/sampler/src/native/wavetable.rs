@@ -121,6 +121,10 @@ pub struct SynthConfig {
     pub ring_mix: f32,
     /// Ring carrier ratio (key-tracked).
     pub ring_ratio: f32,
+    /// The ring modulator's wave: 0 sine, 1 triangle, 2 saw, 3 noise
+    /// (white noise low-passed like the FM noise), 4 the saw falling
+    /// (Omnisphere's AM waves).
+    pub ring_wave: u8,
     /// The ring product's level against the dry signal (1 = equal).
     pub ring_level: f32,
     /// The AM section's output gain, on the whole voice once ring mod is on.
@@ -152,6 +156,7 @@ impl Default for SynthConfig {
             fm_noise: false,
             ring_mix: 0.0,
             ring_ratio: 1.0,
+            ring_wave: 0,
             ring_level: 1.0,
             ring_gain: 1.0,
             harmonia: [HarmVoice::default(); 4],
@@ -166,6 +171,10 @@ impl Default for SynthConfig {
 /// phase swing in cycles at full depth (fit to Omnisphere's FM wave type 3).
 const FM_NOISE_HZ: f32 = 10.0;
 const FM_NOISE_SWING: f32 = 2.0;
+/// The noise ring modulator's gain on that low-passed noise, and the saw
+/// modulators' swing (both measured against Omnisphere's AM waves).
+const RING_NOISE_GAIN: f32 = 7.1;
+const RING_SAW_GAIN: f32 = 0.65;
 
 /// Cheap deterministic per-voice random in −1..+1 (seeded by index).
 fn jitter(seed: u32) -> f32 {
@@ -403,6 +412,9 @@ struct Voice {
     fm_lp: f32,
     ring_phase: f32,
     ring_inc: f32,
+    /// The noise ring modulator's state (see `SynthConfig::ring_wave`).
+    ring_rng: u32,
+    ring_lp: f32,
     /// Base frequency / sample-rate (for runtime detune recompute).
     base_inc: f32,
     /// Glide: the offset (semitones) it starts from and its progress 0..1.
@@ -728,8 +740,12 @@ impl NativeWavetable {
                 fm_inc: base_inc * self.cfg.fm_ratio,
                 fm_rng: 0x9E37_79B9 ^ (u32::from(note) << 8) ^ self.voices.len() as u32,
                 fm_lp: 0.0,
-                ring_phase: 0.0,
+                // An eighth cycle in (fit on a saw, whose overlapping ring
+                // lines add by the modulator's phase).
+                ring_phase: 0.125,
                 ring_inc: base_inc * self.cfg.ring_ratio,
+                ring_rng: 0x85EB_CA6B ^ (u32::from(note) << 8) ^ self.voices.len() as u32,
+                ring_lp: 0.0,
                 base_inc,
                 glide_semis,
                 glide_pos: 0.0,
@@ -941,6 +957,7 @@ impl Soundsource for NativeWavetable {
         let fm_index = self.cfg.fm_depth * 4.0 * self.cfg.fm_range; // phase-mod index scale
         let fm_shape = self.cfg.fm_shape;
         let fm_noise = self.cfg.fm_noise;
+        let ring_wave = self.cfg.ring_wave;
         let fm_noise_k = 1.0 - (-std::f32::consts::TAU * FM_NOISE_HZ / self.sample_rate).exp();
         let fm_noise_swing = FM_NOISE_SWING * self.cfg.fm_depth.max(0.0).powf(0.25);
         let ring_mix = self.cfg.ring_mix;
@@ -1065,7 +1082,21 @@ impl Soundsource for NativeWavetable {
                 }
                 // Ring mod: key-tracked carrier.
                 if ring_mix > 0.0 {
-                    let carrier = (core::f32::consts::TAU * v.ring_phase).sin();
+                    let carrier = match ring_wave {
+                        0 => (core::f32::consts::TAU * v.ring_phase).sin(),
+                        3 => {
+                            v.ring_rng ^= v.ring_rng << 13;
+                            v.ring_rng ^= v.ring_rng >> 17;
+                            v.ring_rng ^= v.ring_rng << 5;
+                            let u = (v.ring_rng as f32 / u32::MAX as f32) * 2.0 - 1.0;
+                            v.ring_lp += fm_noise_k * (u - v.ring_lp);
+                            v.ring_lp * RING_NOISE_GAIN
+                        }
+                        // Omnisphere's saws sit 3.7 dB under a full swing.
+                        2 => RING_SAW_GAIN * wave(2, v.ring_phase, v.ring_inc, 0.5),
+                        4 => -RING_SAW_GAIN * wave(2, v.ring_phase, v.ring_inc, 0.5),
+                        w => wave(usize::from(w), v.ring_phase, v.ring_inc, 0.5),
+                    };
                     v.ring_phase = (v.ring_phase + v.ring_inc).fract();
                     let g = ((1.0 - ring_mix) + ring_mix * ring_level * carrier) * ring_gain;
                     vl *= g;

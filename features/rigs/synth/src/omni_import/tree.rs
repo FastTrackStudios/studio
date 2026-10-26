@@ -455,7 +455,8 @@ pub fn patch_to_container(patch: &OmniPatch, index: &SoundsourceIndex) -> Contai
                     .with_param("ring_ratio", format!("{:.4}", layer.ring_ratio.max(0.01)))
                     // The plugin's ring product sits 7.6 dB over ours at
                     // full depth (measured on the init saw).
-                    .with_param("ring_level", "2.4")
+                    .with_param("ring_level", format!("{:.3}", 2.4 * layer.ring_scale))
+                    .with_param("ring_wave", layer.ring_wave.to_string())
                     .with_param("ring_gain", format!("{:.4}", layer.ring_gain));
             }
             if let Some(m) = layer.harmonia_main {
