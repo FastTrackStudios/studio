@@ -1274,12 +1274,21 @@ pub fn parse_patch_node(root: &XmlNode) -> Result<OmniPatch, String> {
             layer.soundsource = ms.attr("name").unwrap_or("").to_string();
             layer.ss_library = ms.attr("library").unwrap_or("").to_string();
         }
-        layer.timbre = multis
-            .get(i)
+        // The older layout (~12 % of the factory patches) has no MULTISAMPLE:
+        // a sample layer's OSC (`kind` 4) names its soundsource and carries
+        // its timbre and release volume itself.
+        let old_osc = voice
+            .child("OSC")
+            .filter(|o| multis.get(i).is_none() && o.attr("kind").map(str::trim) == Some("4"));
+        if let Some(osc) = old_osc {
+            layer.soundsource = osc.attr("name").unwrap_or("").to_string();
+            layer.ss_library = osc.attr("library").unwrap_or("").to_string();
+        }
+        let ss_attrs = multis.get(i).copied().or(old_osc);
+        layer.timbre = ss_attrs
             .and_then(|m| m.num("timbre"))
             .map(|t| t.clamp(0.0, 1.0));
-        layer.release_vol = multis
-            .get(i)
+        layer.release_vol = ss_attrs
             .and_then(|m| m.num("relVol"))
             .map(|t| t.clamp(0.0, 1.0));
         if let Some(f) = voice.child("FILTER") {
