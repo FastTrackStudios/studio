@@ -6,7 +6,7 @@ spectrum relative to timbre 0.5.
 usage: timbreprobe.py <patch> <layer>   env: NOTE=60 VEL=100 REPS=4 TS=0,0.25,..."""
 import os, re, struct, subprocess, sys, tempfile
 import numpy as np
-H = "/Volumes/dev-drive/daw/target/release/examples/omni_render"
+H = os.path.join(os.path.dirname(os.path.abspath(__file__)), "../../../../../target/release/examples/omni_render")
 src, layer = sys.argv[1], int(sys.argv[2])
 NOTE, VEL, REPS = os.environ.get("NOTE", "60"), os.environ.get("VEL", "100"), int(os.environ.get("REPS", "4"))
 TS = [float(t) for t in os.environ.get("TS", "0,0.2,0.35,0.45,0.5,0.55,0.65,0.8,1").split(",")]

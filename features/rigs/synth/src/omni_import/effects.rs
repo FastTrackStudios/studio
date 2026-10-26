@@ -135,6 +135,7 @@ pub fn effect_block(name: &str, p: &[f32; 15]) -> Option<RigBlock> {
             "Precision Compressor" => precision_compressor(p),
             "Power Filter" => power_filter(p),
             "Valve Radio" => valve_radio(p),
+            "Swiss Army Delay" => swiss_army_delay(p),
             _ => RigBlock::of_type(classify_effect(name).unwrap_or(BlockType::Custom)),
         }
         .named(name),
@@ -584,6 +585,77 @@ fn lerp_table(points: &[(f32, f32)], x: f32) -> f32 {
         }
     }
     points[points.len() - 1].1
+}
+
+/// Swiss Army Delay (measured on a click, 120 BPM): `P0` the dry → wet mix
+/// (1 = fully wet); `P1` / `P2` the two taps' times, each `round(P × 12)`
+/// into a table of tempo divisions; `P3` switches the delay line in; `P4`
+/// the feedback (`P4²`: 0.695 repeats ~6.5 dB down); `P14` the echoes'
+/// level (0 silent, 0.585 the usual setting). The stereo modes (`P8`, `P9`,
+/// `P12`) and `P10`'s few dB are not modelled.
+fn swiss_army_delay(p: &[f32; 15]) -> RigBlock {
+    // 1/16, 1/16., 1/8T, 1/8, 1/8., 1/4T, 1/4, 1/4., 1/2T, 1/2, 1/2., 1, 2 bars.
+    const BEATS: [f32; 13] = [
+        0.25,
+        0.375,
+        1.0 / 3.0,
+        0.5,
+        0.75,
+        2.0 / 3.0,
+        1.0,
+        1.5,
+        4.0 / 3.0,
+        2.0,
+        3.0,
+        4.0,
+        8.0,
+    ];
+    let beats = |v: f32| BEATS[((v.clamp(0.0, 1.0) * 12.0).round() as usize).min(12)];
+    let ms = |b: f32| (b * 60_000.0 / SYNC_BPM).clamp(2.0, 2500.0);
+    let m = p[0].clamp(0.0, 1.0);
+    let b = RigBlock::of_type(BlockType::Delay);
+    if p[3] < 0.5 {
+        // No delay line: the wet side passes the signal ~4.3 dB down.
+        let g = (1.0 - m) + m * 10f32.powf(-4.3 / 20.0);
+        return b
+            .with_param("mix", "0")
+            .with_param("dry", format!("{g:.4}"));
+    }
+    let wet_db = if p[14] <= 0.0 {
+        -120.0
+    } else {
+        lerp_table(
+            &[(0.0, -60.0), (0.3, -13.6), (0.585, -3.5), (1.0, 11.1)],
+            p[14],
+        )
+    };
+    let (b1, b2) = (beats(p[1]), beats(p[2]));
+    let feedback = format!("{:.3}", (p[4] * p[4]).clamp(0.0, 0.95));
+    let b = b
+        .with_param("style", "1")
+        .with_param("time", format!("{:.1}", ms(b1)))
+        .with_param("sync_ms_time", format!("{b1}"))
+        .with_param("feedback", feedback.clone());
+    if (b1 - b2).abs() < 1e-6 {
+        // One tap time: the single line, whose parallel mix honours the dry
+        // and the wet level.
+        return b
+            .with_param("routing", "0")
+            .with_param("mix", format!("{m:.4}"))
+            .with_param("dry", format!("{:.4}", 1.0 - m))
+            .with_param("level", format!("{wet_db:.2}"));
+    }
+    // Two tap times: line A left, line B right. The dual engine mixes each
+    // side itself (`dry` / `level` do not reach it), so the wet level rides
+    // the mix — exact only near the usual P14.
+    let side = (m * 10f32.powf((wet_db + 3.5) / 20.0)).min(1.0);
+    b.with_param("style_b", "1")
+        .with_param("routing", "4")
+        .with_param("time_b", format!("{:.1}", ms(b2)))
+        .with_param("sync_ms_time_b", format!("{b2}"))
+        .with_param("feedback_b", feedback)
+        .with_param("mix", format!("{side:.4}"))
+        .with_param("mix_b", format!("{side:.4}"))
 }
 
 /// [`lerp_table`] with the value interpolated in log space — for corner

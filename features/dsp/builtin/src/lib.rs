@@ -3360,6 +3360,9 @@ struct ParallelMix {
     dry: f64,
     wet_s: f64,
     dry_s: f64,
+    /// Audio has run: until then the smoothed gains sit at their targets
+    /// (a block built at a setting must not ramp into it from the default).
+    primed: bool,
 }
 
 impl ParallelMix {
@@ -3371,6 +3374,7 @@ impl ParallelMix {
             dry: 1.0,
             wet_s: mix,
             dry_s: 1.0,
+            primed: false,
         }
     }
 
@@ -3388,6 +3392,11 @@ impl ParallelMix {
     /// gains (the engine's own mix smoother is pinned at 1 here).
     fn apply(&mut self, in_l: &[f32], in_r: &[f32], out_l: &mut [f32], out_r: &mut [f32]) {
         const K: f64 = 0.004;
+        if !self.primed {
+            self.primed = true;
+            self.wet_s = self.wet;
+            self.dry_s = self.dry;
+        }
         let n = out_l.len().min(out_r.len()).min(in_l.len()).min(in_r.len());
         for i in 0..n {
             self.wet_s += (self.wet - self.wet_s) * K;
@@ -5276,8 +5285,7 @@ impl NativeTrem {
         // has no transport — the LFO would freeze. Free-run at 4 Hz.
         tr.modulator.trigger.mode =
             dsp::modulation::trem::fts_modulation::trigger::TriggerMode::Free;
-        tr.modulator.trigger.division =
-            dsp::modulation::trem::fts_modulation::tempo::SyncDivision::FreeHz;
+        tr.modulator.trigger.sync_index = 0;
         tr.modulator.trigger.rate_hz = 4.0;
         tr.mix = 1.0;
         Self {
@@ -5296,8 +5304,7 @@ impl NativeTrem {
                 // Free-running rate: force the trigger engine out of sync.
                 self.tr.modulator.trigger.mode =
                     dsp::modulation::trem::fts_modulation::trigger::TriggerMode::Free;
-                self.tr.modulator.trigger.division =
-                    dsp::modulation::trem::fts_modulation::tempo::SyncDivision::FreeHz;
+                self.tr.modulator.trigger.sync_index = 0;
                 self.tr.modulator.trigger.rate_hz = v.max(0.01);
             }
             3 => self.tr.set_mode(match v.round().max(0.0) as u32 {

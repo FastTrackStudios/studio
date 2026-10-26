@@ -10,8 +10,8 @@ import json, os, re, struct, subprocess, sys, tempfile
 import numpy as np
 sys.path.insert(0, os.path.dirname(__file__))
 os.environ.setdefault("FTS_SAMPLED_ROOT", "/Volumes/dev-drive/AudioHaven/Sampled")
-HARNESS = "/Volumes/dev-drive/daw/target/release/examples/omni_render"
-OURS = "/Volumes/dev-drive/signal/target/release/examples/render_patch"
+HARNESS = os.path.join(os.path.dirname(os.path.abspath(__file__)), "../../../../../target/release/examples/omni_render")
+OURS = os.path.join(os.path.dirname(os.path.abspath(__file__)), "../../../../../target/release/examples/render_patch")
 HERE = os.path.dirname(os.path.abspath(__file__))
 # Renders and dumps go to the working directory (the measurement dir).
 OUTDIR = os.getcwd()

@@ -5,8 +5,8 @@ usage: syncprobe.py [rate ...]   env: BPMS=120,90  OURS=1"""
 import os, re, struct, subprocess, sys
 import numpy as np
 HERE = os.path.dirname(os.path.abspath(__file__))
-H = "/Volumes/dev-drive/daw/target/release/examples/omni_render"
-O = "/Volumes/dev-drive/signal/target/release/examples/render_patch"
+H = os.path.join(os.path.dirname(os.path.abspath(__file__)), "../../../../../target/release/examples/omni_render")
+O = os.path.join(os.path.dirname(os.path.abspath(__file__)), "../../../../../target/release/examples/render_patch")
 os.environ.setdefault("FTS_SAMPLED_ROOT", "/Volumes/dev-drive/AudioHaven/Sampled")
 hexf = lambda v: struct.pack(">f", v).hex()
 base = open(os.path.join(HERE, "init_part.prt_omn")).read()

@@ -11,8 +11,8 @@ usage: exp.py <patch.prt_omn> <name>=<edit>[;<edit>...] ...
 import math, os, re, struct, subprocess, sys, tempfile
 os.environ.setdefault("FTS_SAMPLED_ROOT", "/Volumes/dev-drive/AudioHaven/Sampled")
 
-HARNESS = "/Volumes/dev-drive/daw/target/release/examples/omni_render"
-OURS = "/Volumes/dev-drive/signal/target/release/examples/render_patch"
+HARNESS = os.path.join(os.path.dirname(os.path.abspath(__file__)), "../../../../../target/release/examples/omni_render")
+OURS = os.path.join(os.path.dirname(os.path.abspath(__file__)), "../../../../../target/release/examples/render_patch")
 OUT = os.path.dirname(os.path.abspath(__file__))
 
 

@@ -9,8 +9,8 @@ import os, re, struct, subprocess, sys, tempfile
 import numpy as np
 os.environ.setdefault("FTS_SAMPLED_ROOT", "/Volumes/dev-drive/AudioHaven/Sampled")
 os.environ.setdefault("RENDER_PREROLL_MS", "3000")
-H = "/Volumes/dev-drive/daw/target/release/examples/omni_render"
-O = "/Volumes/dev-drive/signal/target/release/examples/render_patch"
+H = os.path.join(os.path.dirname(os.path.abspath(__file__)), "../../../../../target/release/examples/omni_render")
+O = os.path.join(os.path.dirname(os.path.abspath(__file__)), "../../../../../target/release/examples/render_patch")
 src, layer = sys.argv[1], int(sys.argv[2])
 x = open(src, encoding="latin1").read()
 n = [0]

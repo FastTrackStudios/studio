@@ -7,8 +7,8 @@ import numpy as np
 os.environ.setdefault("FTS_SAMPLED_ROOT", "/Volumes/dev-drive/AudioHaven/Sampled")
 # Streaming packs open their zones in the background; give them time.
 os.environ.setdefault("RENDER_PREROLL_MS", "3000")
-HARNESS = "/Volumes/dev-drive/daw/target/release/examples/omni_render"
-OURS = "/Volumes/dev-drive/signal/target/release/examples/render_patch"
+HARNESS = os.path.join(os.path.dirname(os.path.abspath(__file__)), "../../../../../target/release/examples/omni_render")
+OURS = os.path.join(os.path.dirname(os.path.abspath(__file__)), "../../../../../target/release/examples/render_patch")
 SR = 48000; NOTE = os.environ.get("NOTE", "60"); HOLD = float(os.environ.get("HOLD", "2.0"))
 
 def render(exe, patch):

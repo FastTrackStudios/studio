@@ -3,8 +3,9 @@
 //!
 //! An envelope is a run of points (`level` at `time`). The segment leaving a
 //! point takes that point's shape: a curve `k` (`0` linear, `> 0`
-//! fast-then-slow, `< 0` slow-then-fast; `g(x) = (1 − e^(−kx)) / (1 − e^(−k))`
-//! on amplitude) or a step (hold, then jump at the next point). An amp or
+//! fast-then-slow, `< 0` slow-then-fast; a power law on amplitude,
+//! `g(x) = 1 − (1 − x)^e` or `x^e` with `e = 1 + 3|k|/7` — see [`shape`])
+//! or a step (hold, then jump at the next point). An amp or
 //! filter envelope has a **sustain** point (the penultimate) where it holds
 //! while the key is down; on release it runs the final segment from wherever
 //! it is, over that segment's whole duration. A mod envelope has none and
@@ -42,29 +43,34 @@ pub struct SegPoint {
     pub step: bool,
 }
 
-/// The shape `g(x)` (0..1 → 0..1) of a segment with curve `k`.
+/// The shape `g(x)` (0..1 → 0..1) of a segment with curve `k`: a power
+/// law, `1 − (1 − x)^e` for `k > 0` (fast, then slow) and `x^e` for `k < 0`,
+/// `e = 1 + 3|k|/7`. Measured on Omnisphere's amp envelope (a 1.5 s decay
+/// at curve values `c` 0.05 … 0.95, `k = 42·(0.5 − c)`): one exponent fits
+/// each whole segment, and `e = 1 + 18·|c − 0.5|` gives it within ~0.3 —
+/// the exponential `(1 − e^(−kx)) / (1 − e^(−k))` this replaced fitted no
+/// segment's tail.
 #[inline]
 #[must_use]
 pub fn shape(k: f32, x: f32) -> f32 {
     if k.abs() < 1e-3 {
-        x
+        return x;
+    }
+    let e = 1.0 + k.abs() * (3.0 / 7.0);
+    let x = x.clamp(0.0, 1.0);
+    if k > 0.0 {
+        1.0 - (1.0 - x).powf(e)
     } else {
-        (1.0 - (-k * x).exp()) / (1.0 - (-k).exp())
+        x.powf(e)
     }
 }
 
-/// [`shape`] with its denominator `1 − e^(−k)` remembered for the last `k`
-/// (`memo`): an envelope evaluates it every sample and its curve changes
-/// only at a segment edge. The same division — bit-identical.
+/// [`shape`], at the call sites that once cached its exponential's
+/// denominator in `memo` (the power law needs no cache; the slot stays so
+/// the players keep one shape entry point).
 #[inline]
-fn shape_memo(memo: &mut (f32, f32), k: f32, x: f32) -> f32 {
-    if k.abs() < 1e-3 {
-        return x;
-    }
-    if memo.0.to_bits() != k.to_bits() {
-        *memo = (k, 1.0 - (-k).exp());
-    }
-    (1.0 - (-k * x).exp()) / memo.1
+fn shape_memo(_memo: &mut (f32, f32), k: f32, x: f32) -> f32 {
+    shape(k, x)
 }
 
 /// An envelope's points and structure.

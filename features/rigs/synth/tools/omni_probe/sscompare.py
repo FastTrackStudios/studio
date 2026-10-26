@@ -15,8 +15,8 @@ os.environ.setdefault("FTS_SAMPLED_ROOT", "/Volumes/dev-drive/AudioHaven/Sampled
 os.environ.setdefault("FTS_PACK_LIBRARY", "/Volumes/dev-drive/AudioHaven/Signal/Libraries")
 os.environ.setdefault("FTS_OMNISPHERE_ROOT", "/Volumes/dev-drive/AudioHaven/Sampled/Keys/Omnisphere")
 os.environ.setdefault("RENDER_PREROLL_MS", "500")
-H = "/Volumes/dev-drive/daw/target/release/examples/omni_render"
-O = "/Volumes/dev-drive/signal/target/release/examples/render_patch"
+H = os.path.join(os.path.dirname(os.path.abspath(__file__)), "../../../../../target/release/examples/omni_render")
+O = os.path.join(os.path.dirname(os.path.abspath(__file__)), "../../../../../target/release/examples/render_patch")
 SR = 48000
 PROBE = os.path.join(HERE, "..", "..", "..", "..", "..", "..", "AudioHaven")  # unused
 BASE_PATCH = os.environ.get("PROBE_PATCH",

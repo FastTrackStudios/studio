@@ -18,7 +18,7 @@ from concurrent.futures import ThreadPoolExecutor
 import numpy as np
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-H = "/Volumes/dev-drive/daw/target/release/examples/omni_render"
+H = os.path.join(os.path.dirname(os.path.abspath(__file__)), "../../../../../target/release/examples/omni_render")
 SR, NOTE, N = 48000, 24, 4096
 SYMS = [0.0, 0.25, 0.5, 0.75, 1.0]
 SHAPES = [i / 16 for i in range(17)]
