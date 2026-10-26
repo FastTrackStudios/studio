@@ -1349,7 +1349,12 @@ pub fn parse_patch_node(root: &XmlNode) -> Result<OmniPatch, String> {
             let key = f.num("key").unwrap_or(0.0).clamp(0.0, 1.0);
             let key_inv = f.num("keyinv").unwrap_or(0.0) != 0.0;
             layer.filter_key_track = if key_inv { -2.0 * key } else { 2.0 * key };
-            layer.filter_gain_db = filter_gain_db(f.num("gnpre").unwrap_or(0.75))
+            // An older-layout sample layer (no MULTISAMPLE) plays 2.7 dB
+            // under `gnpre` 0.75 — the factory's own conversions of those
+            // patches carry 0.653, and read at 0.75 they ran 2.8 dB hot
+            // (median); a newer patch without `gnpre` plays at 0.75.
+            let gnpre_default = if old_osc.is_some() { 0.653 } else { 0.75 };
+            layer.filter_gain_db = filter_gain_db(f.num("gnpre").unwrap_or(gnpre_default))
                 + filter_gain_db(f.num("gnpst").unwrap_or(0.75));
             let depth = f.num("envdpth").unwrap_or(0.0).clamp(0.0, 1.0);
             let inv = f.num("envdpthinv").unwrap_or(0.0) != 0.0;
