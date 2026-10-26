@@ -134,7 +134,8 @@ fn translate_source(source: &str) -> Option<String> {
         "Velo" => "Velocity Squared".to_string(),
         "After" => "Aftertouch".to_string(),
         "Bender" => "Bender".to_string(),
-        "Key" => "Key".to_string(),
+        // Omnisphere's key source is bipolar about E4 (measured).
+        "Key" => "Omni Key".to_string(),
         "Alt" => "Alt".to_string(),
         "Constant" | "Bias1" | "Bias2" => "Constant".to_string(),
         "Random" | "Random2" | "Random Unipolar" => "Random".to_string(),
@@ -815,6 +816,14 @@ pub fn patch_to_container(patch: &OmniPatch, index: &SoundsourceIndex) -> Contai
                 .with_param("wave", l.wave().to_string())
                 .with_param("amp", format!("{:.4}", l.swing))
                 .with_param("unipolar", if l.unipolar { "1" } else { "0" });
+            if l.phase > 0.0 {
+                lfo = lfo.with_param("phase", format!("{:.4}", l.phase));
+            }
+            if l.fade_s() > 0.0 {
+                lfo = lfo
+                    .with_param("fade", format!("{:.3}", l.fade_s()))
+                    .with_param("fade_curve", "4");
+            }
             if l.sync {
                 // Tempo-synced: the rate picks a note division (measured).
                 lfo = lfo.with_param("sync_beats", format!("{:.5}", l.sync_beats()));

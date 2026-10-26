@@ -341,15 +341,31 @@ pub struct OmniLfo {
     pub swing: f32,
     /// `unidir`: output 0..+1 instead of ±1.
     pub unipolar: bool,
+    /// `phase`: where the cycle starts, 0..1 (measured: a cycle offset).
+    pub phase: f32,
+    /// `envdpth`: the fade-in knob (see [`OmniLfo::fade_s`]).
+    pub fade: f32,
 }
 
 impl OmniLfo {
-    /// Free-running rate: `48.3 Hz · rate³` (measured 0.2 → 0.39 Hz,
-    /// 0.4642 → 4.76 Hz, 0.8 → 25 Hz), floored at the 0.01 Hz our LFOs
+    /// The fade-in to full depth, seconds (measured on a sine's pitch: 90 %
+    /// at `5.1·envdpth^2.35` s — 0.31 s at 0.3, 1.65 s at 0.6, 3.09 s at
+    /// 0.8 — rising as `t^4` about the wave's centre; below ~0.2 none).
+    #[must_use]
+    pub fn fade_s(&self) -> f32 {
+        if self.fade < 0.2 {
+            0.0
+        } else {
+            5.25 * self.fade.powf(2.35)
+        }
+    }
+
+    /// Free-running rate: `48.0 Hz · rate³` (measured on a sine's pitch:
+    /// 0.3 → 1.301 Hz, 0.4 → 3.072, 0.4642 → 4.799, 0.6 → 10.367), floored at the 0.01 Hz our LFOs
     /// run down to (rate 0 is a stopped LFO).
     #[must_use]
     pub fn rate_hz(&self) -> f32 {
-        (48.3 * self.rate.clamp(0.0, 1.0).powi(3)).max(0.01)
+        (48.0 * self.rate.clamp(0.0, 1.0).powi(3)).max(0.01)
     }
 
     /// A synced LFO's cycle in beats (measured on the plugin at 120 and 90
@@ -415,7 +431,7 @@ impl OmniLfo {
     }
 
     /// Signal's LFO wave index (0 sine, 1 triangle, 2 saw, 3 square, 4 S&H,
-    /// 5 falling saw) for Omnisphere's `type` (measured: 0 sine, 0.02 smooth
+    /// 5 falling saw, 6 smooth random) for Omnisphere's `type` (measured: 0 sine, 0.02 smooth
     /// random, 0.04 triangle, 0.06 square, 0.08 rising saw, 0.10 falling
     /// saw, 0.12 stepped, 0.14 sine, 0.16 random). The random shapes read as
     /// sample-and-hold for now.
@@ -426,7 +442,8 @@ impl OmniLfo {
             3 => 3,
             4 => 2,
             5 => 5,
-            1 | 6 | 8 => 4,
+            1 => 6,
+            6 | 8 => 4,
             _ => 0,
         }
     }
@@ -448,9 +465,12 @@ pub struct OmniModEnv {
 
 /// One mod-matrix route (`sourceN` → `targetN`).
 ///
-/// Measured: the route adds `lo + (hi − lo)·source` to the target in the
-/// target knob's own units (a cutoff route moves the filter *setting*, not
-/// octaves), unipolar, so `depth` is `hi − lo` and `offset` is `lo`.
+/// A mod-matrix row: it adds `depth · source` to the target in the target
+/// knob's own units (a cutoff route moves the filter *setting*, not
+/// octaves). Measured on a sine (LFO, velocity and key sources; pitch and
+/// amp targets): the depth is `hi`, and `lo` = 1 inverts it — not a range
+/// (`lo` 1 / `hi` 0.5 plays −0.5·source, `hi` 0 plays nothing, `lo` 0.5
+/// plays as 0). `offset` stays 0; it is kept for routes built elsewhere.
 #[derive(Debug, Clone)]
 pub struct OmniModRoute {
     pub source: String,
@@ -1545,11 +1565,12 @@ pub fn parse_patch_node(root: &XmlNode) -> Result<OmniPatch, String> {
                 continue;
             }
             let lo = matrix.num(&format!("lo{n}")).unwrap_or(0.0);
+            let hi = matrix.num(&format!("hi{n}")).unwrap_or(0.0);
             patch.mod_routes.push(OmniModRoute {
                 source: source.to_string(),
                 target: target.to_string(),
-                depth: matrix.num(&format!("hi{n}")).unwrap_or(0.0) - lo,
-                offset: lo,
+                depth: if lo > 0.75 { -hi } else { hi },
+                offset: 0.0,
             });
         }
     }
@@ -1615,6 +1636,8 @@ pub fn parse_patch_node(root: &XmlNode) -> Result<OmniPatch, String> {
                 retrigger: lfo.num("resettr").unwrap_or(0.0) != 0.0,
                 swing: lfo.num("swing").unwrap_or(1.0).clamp(0.0, 1.0),
                 unipolar: lfo.num("unidir").unwrap_or(0.0) != 0.0,
+                phase: lfo.num("phase").unwrap_or(0.0).clamp(0.0, 1.0),
+                fade: lfo.num("envdpth").unwrap_or(0.0).clamp(0.0, 1.0),
             });
         }
     }

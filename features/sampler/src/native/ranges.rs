@@ -146,7 +146,9 @@ fn declared(block_type: BlockType, param: &str) -> Option<ParameterRange> {
         BlockType::Lfo => match param {
             // The clamp `modmatrix` applies, declared.
             "rate" => Some(ParameterRange::logarithmic(0.01, 40.0, Unit::Hz)),
-            "wave" => Some(steps(5, 4.0)),
+            // Sine, triangle, saw, square, S&H, falling saw, smooth random
+            // (a 5-step range clamped the falling saw to S&H).
+            "wave" => Some(steps(7, 6.0)),
             "sync_beats" => Some(ParameterRange::linear(0.0, 16.0, Unit::Beats)),
             "retrigger" => Some(steps(2, 1.0)),
             // Fade-in after each note (seconds).

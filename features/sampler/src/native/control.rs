@@ -28,6 +28,9 @@ pub enum LfoWave {
     SampleHold,
     /// A falling ramp.
     SawDown,
+    /// A new random value each cycle, glided to (cosine) rather than
+    /// jumped — Omnisphere's smooth random.
+    SmoothRandom,
 }
 
 /// A control LFO. Bipolar output −1..+1. Free-rate or tempo-synced, with
@@ -43,10 +46,17 @@ pub struct ControlLfo {
     pub(crate) sample_rate: f32,
     phase: f32,
     held: f32,
+    /// The previous cycle's random value (the smooth random glides from it).
+    prev: f32,
     rng: u32,
     /// Fade-in after each note-on (seconds; 0 = none) and where it is.
     pub fade_s: f32,
     fade: f32,
+    /// The fade's shape: depth = progress^`fade_curve` (1 linear;
+    /// Omnisphere's is ~2.8 — a slow start, then a steep finish).
+    pub fade_curve: f32,
+    /// Where a reset starts the cycle (0..1).
+    pub phase0: f32,
     /// Output amplitude (an LFO's own depth, e.g. Omnisphere's swing).
     pub amp: f32,
     /// Output 0..amp instead of −amp..+amp.
@@ -64,9 +74,12 @@ impl ControlLfo {
             sample_rate: 48_000.0,
             phase: 0.0,
             held: 0.0,
+            prev: 0.0,
             rng: 0x02F6_E2B1,
             fade_s: 0.0,
             fade: 1.0,
+            fade_curve: 1.0,
+            phase0: 0.0,
             amp: 1.0,
             unipolar: false,
         }
@@ -75,6 +88,13 @@ impl ControlLfo {
     #[must_use]
     pub fn with_sync_beats(mut self, beats: f32) -> Self {
         self.sync_beats = (beats > 0.0).then_some(beats);
+        self
+    }
+
+    /// Start the free-running cycle at `phase0` too (not only after a reset).
+    #[must_use]
+    pub fn with_start_phase(mut self) -> Self {
+        self.phase = self.phase0;
         self
     }
 
@@ -91,16 +111,18 @@ impl ControlLfo {
     }
 
     fn reset(&mut self) {
-        self.phase = 0.0;
+        self.phase = self.phase0;
+        self.prev = self.held;
         self.held = self.draw();
     }
 
     /// Advance by `frames` at `sample_rate` and `tempo_bpm`; returns the
     /// value at the block start (one value per block — block-rate control).
-    fn advance(&mut self, frames: usize, sample_rate: f32, tempo_bpm: f32) -> f32 {
+    fn advance(&mut self, frames: usize, sample_rate: f32, tempo_bpm: f32, depth: f32) -> f32 {
         let v = match self.wave {
             LfoWave::Sine => (core::f32::consts::TAU * self.phase).sin(),
-            LfoWave::Triangle => 4.0 * (self.phase - 0.5).abs() - 1.0,
+            // In phase with the sine (from 0, rising), as Omnisphere's is.
+            LfoWave::Triangle => 4.0 * ((self.phase + 0.75).fract() - 0.5).abs() - 1.0,
             LfoWave::Saw => 2.0 * self.phase - 1.0,
             LfoWave::Square => {
                 if self.phase < 0.5 {
@@ -111,7 +133,14 @@ impl ControlLfo {
             }
             LfoWave::SampleHold => self.held,
             LfoWave::SawDown => 1.0 - 2.0 * self.phase,
+            LfoWave::SmoothRandom => {
+                let t = 0.5 - 0.5 * (core::f32::consts::PI * self.phase).cos();
+                self.prev + (self.held - self.prev) * t
+            }
         };
+        // A fade scales the swing about the wave's centre (Omnisphere's
+        // fading LFO sits at mid-range, not at the bottom of a unipolar one).
+        let v = v * depth;
         let v = if self.unipolar {
             (v + 1.0) * 0.5 * self.amp
         } else {
@@ -123,6 +152,7 @@ impl ControlLfo {
         };
         let next = self.phase + hz * frames as f32 / sample_rate.max(1.0);
         if next >= 1.0 {
+            self.prev = self.held;
             self.held = self.draw();
         }
         self.phase = next - next.floor();
@@ -363,6 +393,10 @@ pub enum MidiMod {
     VelocitySquared,
     /// Note number of the most recent note-on, 0..1 (raw, uncentered).
     Key,
+    /// Omnisphere's `Key` source: `(note − 64) / 42.5`, bipolar and
+    /// unclamped (measured on a pitch route: −0.64 at C2, −0.09 at C4,
+    /// +0.48 at C6).
+    OmniKey,
     /// Bipolar key-tracking centered at middle C (note 60): −1..+1 across
     /// ±48 semitones (±4 octaves), note 60 = 0. The centered form a
     /// key-track modulator wants (settable center/slope is a follow-up).
@@ -454,13 +488,14 @@ impl ControlSource for ControlLfo {
             self.fade = 0.0;
         }
         let sr = self.sample_rate;
-        let v = self.advance(frames, sr, tempo_bpm);
-        if self.fade_s > 0.0 {
+        let depth = if self.fade_s > 0.0 {
+            let d = self.fade.powf(self.fade_curve);
             self.fade = (self.fade + frames as f32 / (self.fade_s * sr.max(1.0))).min(1.0);
-            v * self.fade
+            d
         } else {
-            v
-        }
+            1.0
+        };
+        self.advance(frames, sr, tempo_bpm, depth)
     }
 }
 
@@ -549,6 +584,11 @@ impl ControlSource for MidiSource {
                 }
                 (MidiMod::Key, MidiEvent::NoteOn { key, velocity, .. }) if velocity.get() > 0 => {
                     v = key.get() as f32 / 127.0;
+                }
+                (MidiMod::OmniKey, MidiEvent::NoteOn { key, velocity, .. })
+                    if velocity.get() > 0 =>
+                {
+                    v = (key.get() as f32 - 64.0) / 42.5;
                 }
                 (MidiMod::KeyTrack, MidiEvent::NoteOn { key, velocity, .. })
                     if velocity.get() > 0 =>
@@ -650,6 +690,7 @@ impl ModSource {
             "velo" | "velocity" => MidiMod::Velocity,
             "velocity squared" | "velocity²" | "velo2" => MidiMod::VelocitySquared,
             "key" => MidiMod::Key,
+            "omni key" => MidiMod::OmniKey,
             "keytrack" | "key track" | "keytracking" => MidiMod::KeyTrack,
             "random" | "random2" | "random unipolar" => MidiMod::Random,
             "alt" => MidiMod::Alt,
