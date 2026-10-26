@@ -2,7 +2,8 @@
 //! `BlockType::Waveshaper` (Omnisphere's in-oscillator Crusher / Shaper /
 //! Reducer, Nord drive-ish shaping).
 //!
-//! Three stages, each bypassed at zero:
+//! Four stages, each bypassed at zero:
+//! - **fold** — sine wave-folding, `sin(w·x)/w` after a gain in (`pre`).
 //! - **drive** — normalized tanh saturation (`tanh(g·x)/tanh(g)`, exact
 //!   identity as drive → 0).
 //! - **crush** — bit-depth reduction (quantization).
@@ -15,6 +16,11 @@ use signal_plugin_host::{
     PluginDescriptor, PluginError, PluginEvents, PluginFormat, PluginInstance, PluginParamInfo,
 };
 
+/// The fold's angular gain at full depth, per unit of the voice's signal
+/// (fit on Omnisphere's type-0 level and spectrum across depth and gain:
+/// within ~1 dB to depth 0.5).
+const FOLD_SCALE: f32 = 122.0;
+
 pub struct NativeWaveshaper {
     /// 0..1 → saturation amount.
     drive: f32,
@@ -26,6 +32,12 @@ pub struct NativeWaveshaper {
     mix: f32,
     /// Linear gain on the shaped (wet) signal — a shaper's own output level.
     gain: f32,
+    /// Sine wave-folding 0..1: `sin(w·x)/w`, `w = fold · FOLD_SCALE`
+    /// (Omnisphere's Waveshaper type 0: its depth sets how far it folds).
+    fold: f32,
+    /// Linear gain into the fold (Omnisphere's Gain knob drives the folder;
+    /// with no fold it is a plain gain).
+    pre: f32,
     // Sample-and-hold state.
     hold_l: f32,
     hold_r: f32,
@@ -42,6 +54,8 @@ impl NativeWaveshaper {
             reduce: 0.0,
             mix: 1.0,
             gain: 1.0,
+            fold: 0.0,
+            pre: 1.0,
             hold_l: 0.0,
             hold_r: 0.0,
             hold_count: 0.0,
@@ -67,6 +81,18 @@ impl NativeWaveshaper {
         self
     }
 
+    #[must_use]
+    pub fn with_fold(mut self, v: f32) -> Self {
+        self.fold = v.clamp(0.0, 1.0);
+        self
+    }
+
+    #[must_use]
+    pub fn with_pre_gain(mut self, v: f32) -> Self {
+        self.pre = v.max(0.0);
+        self
+    }
+
     /// Output level of the shaped signal, in dB.
     #[must_use]
     pub fn with_gain_db(mut self, db: f32) -> Self {
@@ -82,7 +108,11 @@ impl NativeWaveshaper {
 
     #[inline]
     fn shape(&self, x: f32) -> f32 {
-        let mut y = x;
+        let mut y = x * self.pre;
+        if self.fold > 0.0 {
+            let w = self.fold * FOLD_SCALE;
+            y = (w * y).sin() / w;
+        }
         if self.drive > 0.0 {
             let g = self.drive * 8.0 + 1e-3;
             y = (g * y).tanh() / g.tanh().max(1e-3);

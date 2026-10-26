@@ -84,6 +84,9 @@ pub struct OmniLayer {
     pub unison_octave: f32,
     pub unison_analog: f32,
     pub unison_drift: f32,
+    /// The Waveshaper's sine fold 0..1 (type 0's depth) and its gain in.
+    pub shaper_fold: f32,
+    pub shaper_pre: f32,
     /// The ring modulator's wave (`OSC amwf`): 0 sine, 1 triangle, 2 saw,
     /// 3 noise, 4 falling saw.
     pub ring_wave: u8,
@@ -1563,13 +1566,22 @@ pub fn parse_patch_node(root: &XmlNode) -> Result<OmniPatch, String> {
                 let crush = ws.num("bc").unwrap_or(0.0).clamp(0.0, 1.0);
                 let reduce = ws.num("srrdc").unwrap_or(0.0).clamp(0.0, 1.0);
                 let mix = ws.num("mix").unwrap_or(1.0).clamp(0.0, 1.0);
-                let level = shaper_level_db(
-                    ws.num("type").unwrap_or(0.0),
-                    depth,
-                    ws.num("gain").unwrap_or(0.5),
-                );
+                let kind = ws.num("type").unwrap_or(0.0);
+                let gain = ws.num("gain").unwrap_or(0.5);
+                // Type 0 is a sine wave-folder (measured on a sine): its
+                // small-signal gain is the depth-0 level, and the depth
+                // folds — the curve, not a level, from here on.
+                // Its Gain drives the folder (measured: past 0.5 the level
+                // compresses), so it goes in ahead of the fold.
+                let (level, fold, pre) = if (kind * 50.0).round() as i32 == 0 {
+                    (shaper_level_db(0.0, 0.0, 0.5), depth, gain / 0.5)
+                } else {
+                    (shaper_level_db(kind, depth, gain), 0.0, 1.0)
+                };
                 if mix > 0.0 {
                     layer.shaper = Some((level, crush, reduce, mix));
+                    layer.shaper_fold = fold;
+                    layer.shaper_pre = pre;
                 }
             }
         }

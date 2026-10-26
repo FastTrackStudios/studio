@@ -506,6 +506,12 @@ fn build_waveshaper(block: &RigBlock, sample_rate: u32) -> Box<dyn PluginInstanc
     if let Some(v) = block.param_f32("drive") {
         w = w.with_drive(v);
     }
+    if let Some(v) = block.param_f32("fold") {
+        w = w.with_fold(v);
+    }
+    if let Some(v) = block.param_f32("pre_gain") {
+        w = w.with_pre_gain(v);
+    }
     if let Some(v) = block.param_f32("crush") {
         w = w.with_crush(v);
     }

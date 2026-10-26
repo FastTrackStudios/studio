@@ -614,6 +614,23 @@ pub fn patch_to_container(patch: &OmniPatch, index: &SoundsourceIndex) -> Contai
                 RigBlock::of_type(BlockType::Waveshaper)
                     .named("Waveshaper")
                     .with_param("gain_db", format!("{level_db:.2}"))
+                    // The fold reads the signal's absolute level: the synth
+                    // voice runs SYNTH_LAYER_CAL_DB under a soundsource's
+                    // (its calibration comes after), so a sampled layer
+                    // folds that much less per unit of depth.
+                    .with_param(
+                        "fold",
+                        format!(
+                            "{:.4}",
+                            layer.shaper_fold
+                                * if layer.soundsource.is_empty() {
+                                    1.0
+                                } else {
+                                    10f32.powf(-SYNTH_LAYER_CAL_DB / 20.0)
+                                }
+                        ),
+                    )
+                    .with_param("pre_gain", format!("{:.4}", layer.shaper_pre))
                     .with_param("crush", format!("{crush:.4}"))
                     .with_param("reduce", format!("{reduce:.4}"))
                     .with_param("mix", format!("{mix:.4}")),
