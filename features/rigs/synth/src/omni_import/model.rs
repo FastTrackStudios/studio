@@ -84,6 +84,8 @@ pub struct OmniLayer {
     pub unison_octave: f32,
     pub unison_analog: f32,
     pub unison_drift: f32,
+    /// The FM index's range switch (`OSC fmscl`): ×1, ×4 or ×8.
+    pub fm_range: f32,
     /// FM modulator waveform morph 0..1 (`OSC fmwf`).
     pub fm_shape: f32,
     /// The oscillator's own waveform, 0..1 (`OSC type`).
@@ -1357,14 +1359,20 @@ pub fn parse_patch_node(root: &XmlNode) -> Result<OmniPatch, String> {
             layer.amp_cut = 1.0 - n("atrm", 1.0).clamp(0.0, 1.0);
             // FM, measured on a sine carrier: `fm` only switches it on;
             // `modint` is the modulator ratio (2·modint) and `moddepth` the
-            // deviation — a true FM: the index β ≈ 0.65·moddepth / ratio,
+            // deviation — a true FM: the index β ≈ 0.60·moddepth / ratio,
             // which our phase modulator (β = 3.77·depth) reaches at depth
-            // 0.1725·moddepth / ratio.
+            // 0.16·moddepth / ratio. `fmscl` (0.02 steps) scales the index
+            // ×1 / ×4 / ×8 / ×1.
             layer.fm_ratio = 2.0 * n("modint", 0.25).clamp(0.0, 1.0);
             layer.fm_depth = if n("fm", 0.0) > 0.0 {
-                (0.1725 * n("moddepth", 1.0).clamp(0.0, 1.0) / layer.fm_ratio.max(0.05)).min(1.0)
+                (0.16 * n("moddepth", 1.0).clamp(0.0, 1.0) / layer.fm_ratio.max(0.05)).min(1.0)
             } else {
                 0.0
+            };
+            layer.fm_range = match (n("fmscl", 0.0) * 50.0).round() as u32 {
+                1 => 4.0,
+                2 => 8.0,
+                _ => 1.0,
             };
             layer.fm_shape = osc.num("fmwf").unwrap_or(0.0).clamp(0.0, 1.0);
             layer.osc_wave = osc.num("type").unwrap_or(0.0).clamp(0.0, 1.0);

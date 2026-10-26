@@ -19,7 +19,7 @@ REPO = os.path.abspath(os.path.join(HERE, "../../../../.."))
 OMNI = os.path.join(REPO, "target/release/examples/omni_render")
 REFS = os.environ.get("OMNI_REFS", "/tmp/omni-refs")
 NOTE = os.environ.get("NOTE", "36")
-SINE = "~BundleArchives/1 - Classic Waveforms/Sine/Moog Modular Sine/Moog Modular Sine.stmwf"
+SINE = "~BundleArchives/1 - Classic Waveforms/Triangle + Sine/Moog Modular Sine+Tri/Moog Modular Sine.stmwf"
 SR = 48000
 
 

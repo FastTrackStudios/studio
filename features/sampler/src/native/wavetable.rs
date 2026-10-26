@@ -109,6 +109,9 @@ pub struct SynthConfig {
     pub fm_depth: f32,
     /// FM modulator ratio (modulator freq = note freq × ratio).
     pub fm_ratio: f32,
+    /// The FM index's range: `fm_depth` 1 reaches 4 × this (Omnisphere's
+    /// FM scale switch: ×1, ×4, ×8).
+    pub fm_range: f32,
     /// FM modulator waveform morph 0..1 (same axis as `shape`; 0 = sine).
     pub fm_shape: f32,
     /// The modulator is white noise instead (Omnisphere's FM wave type 3):
@@ -144,6 +147,7 @@ impl Default for SynthConfig {
             unison_drift: 0.0,
             fm_depth: 0.0,
             fm_ratio: 1.0,
+            fm_range: 1.0,
             fm_shape: 0.0,
             fm_noise: false,
             ring_mix: 0.0,
@@ -717,7 +721,10 @@ impl NativeWavetable {
                 amp,
                 env,
                 subs: self.build_subs(freq, note),
-                fm_phase: 0.0,
+                // A quarter cycle in: the phase modulator then deviates
+                // as a true FM's (sin → cos), which decides how a saw's
+                // overlapping sidebands add (measured at ratio 0.5).
+                fm_phase: 0.25,
                 fm_inc: base_inc * self.cfg.fm_ratio,
                 fm_rng: 0x9E37_79B9 ^ (u32::from(note) << 8) ^ self.voices.len() as u32,
                 fm_lp: 0.0,
@@ -931,7 +938,7 @@ impl Soundsource for NativeWavetable {
             self.apply_midi(&ev.message);
         }
         let frames = out_l.len().min(out_r.len());
-        let fm_index = self.cfg.fm_depth * 4.0; // phase-mod index scale
+        let fm_index = self.cfg.fm_depth * 4.0 * self.cfg.fm_range; // phase-mod index scale
         let fm_shape = self.cfg.fm_shape;
         let fm_noise = self.cfg.fm_noise;
         let fm_noise_k = 1.0 - (-std::f32::consts::TAU * FM_NOISE_HZ / self.sample_rate).exp();
