@@ -169,12 +169,20 @@ impl Ladder {
         self.set_feedback(cutoff_hz, resonance.clamp(0.0, 1.0) * 3.8, sample_rate);
     }
 
-    /// Cutoff and raw loop feedback `k`.
+    /// Cutoff and raw loop feedback `k`, held just under where the loop
+    /// would run away (`1 / cos(π/n)^n`: 4 for four stages, 8 for three; a
+    /// one- or two-stage loop never does). Past it a resonance setting
+    /// fitted below the edge oscillated at the saturator's swing times the
+    /// passband make-up — measured +28 dB over the plugin at res 0.6.
     pub fn set_feedback(&mut self, cutoff_hz: f32, k: f32, sample_rate: f32) {
         for st in &mut self.stage {
             st.set(cutoff_hz, sample_rate);
         }
-        self.k = k.max(0.0);
+        let edge = match self.stages {
+            1 | 2 => f32::INFINITY,
+            n => (core::f32::consts::PI / n as f32).cos().powi(-(n as i32)),
+        };
+        self.k = k.clamp(0.0, 0.97 * edge);
     }
 
     /// Stage count (1..=8), highpass stages, and passband compensation.

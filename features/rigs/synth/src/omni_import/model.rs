@@ -864,10 +864,14 @@ const FILTER_MODELS: &[(u32, FilterModel)] = &[
     (0x3f051eb8, FilterModel { name: "LPF Juicy 12db", mode: "lowpass", poles: 2, ladder: false, taper: [0.2973, 0.3746, 0.5297, 0.6674, 0.6300], res: (0.707, 7.381, 0.935), res_shift: 1.000, res_shift_curve: 1.000, gain_db: 0.0, comp: 0.00 }),
     // Classic LPF 4-pole — 6513 factory uses; fit 0.5 dB at res 0, 0.3/2.0 at res 0.5/0.9; taper fits 0.15:0.2 0.45:1.0 0.6:0.6 0.75:0.2
     (0x3f5c28f6, FilterModel { name: "Classic LPF 4-pole", mode: "lowpass", poles: 4, ladder: true, taper: [0.2973, 0.3746, 0.5297, 0.6674, 0.7937], res: (0.000, 3.936, 0.606), res_shift: 1.000, res_shift_curve: 1.000, gain_db: 3.3, comp: 0.12 }),
-    // LPF Power 24db — 5341 factory uses; fit 0.6 dB at res 0, 5.0/7.2 at res 0.5/0.9; taper fits 0.15:0.5 0.45:0.7 0.6:1.3 0.75:1.1
-    (0x3f000000, FilterModel { name: "LPF Power 24db", mode: "lowpass", poles: 3, ladder: true, taper: [0.1180, 0.1114, 0.1768, 0.2973, 0.3746], res: (0.000, 9.600, 0.300), res_shift: 1.000, res_shift_curve: 1.000, gain_db: -2.0, comp: 0.12 }),
-    // LPF Juicy 24db — 3996 factory uses; fit 0.2 dB at res 0, 5.2/7.6 at res 0.5/0.9; taper fits 0.15:0.2 0.45:1.1 0.6:1.0 0.75:0.7
-    (0x3ef5c28f, FilterModel { name: "LPF Juicy 24db", mode: "lowpass", poles: 4, ladder: true, taper: [0.2973, 0.3746, 0.5297, 0.6674, 0.6300], res: (0.000, 4.800, 0.300), res_shift: 1.000, res_shift_curve: 1.000, gain_db: -0.1, comp: 1.00 }),
+    // LPF Power 24db — 5341 factory uses; fit 0.6 dB at res 0, 5.0/7.2 at res 0.5/0.9
+    // (resonance and make-up refit on the level once the ladder stopped
+    // running away: k = 8.88·r^1.26, half the passband loss restored); taper fits 0.15:0.5 0.45:0.7 0.6:1.3 0.75:1.1
+    (0x3f000000, FilterModel { name: "LPF Power 24db", mode: "lowpass", poles: 3, ladder: true, taper: [0.1180, 0.1114, 0.1768, 0.2973, 0.3746], res: (0.000, 8.880, 1.260), res_shift: 1.000, res_shift_curve: 1.000, gain_db: -2.0, comp: 0.50 }),
+    // LPF Juicy 24db — 3996 factory uses; fit 0.2 dB at res 0, 5.2/7.6 at res 0.5/0.9
+    // (resonance refit on the level once the ladder stopped running away:
+    // k = 4.19·r^0.745, at the loop's edge by 0.9); taper fits 0.15:0.2 0.45:1.1 0.6:1.0 0.75:0.7
+    (0x3ef5c28f, FilterModel { name: "LPF Juicy 24db", mode: "lowpass", poles: 4, ladder: true, taper: [0.2973, 0.3746, 0.5297, 0.6674, 0.6300], res: (0.000, 4.190, 0.745), res_shift: 1.000, res_shift_curve: 1.000, gain_db: -0.1, comp: 1.00 }),
     // Classic LPF 2-pole — 1806 factory uses; fit 0.8 dB at res 0, 2.0/3.0 at res 0.5/0.9; taper fits 0.15:0.2 0.45:0.5 0.6:0.3 0.75:0.1
     (0x3f51eb85, FilterModel { name: "Classic LPF 2-pole", mode: "lowpass", poles: 2, ladder: true, taper: [0.2973, 0.3969, 0.5297, 0.7071, 0.7937], res: (0.000, 3.175, 0.952), res_shift: 0.615, res_shift_curve: 0.488, gain_db: 3.1, comp: 0.38 }),
     // HPF UVI — 1641 factory uses; fit 0.1 dB at res 0, 0.2/0.2 at res 0.5/0.9; taper fits 0.15:0.1 0.45:0.2 0.6:0.1 0.75:0.1
