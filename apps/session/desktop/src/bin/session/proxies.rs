@@ -69,10 +69,29 @@ fn up_to_date(media: &Path, proxy: &Path) -> bool {
 /// Frames between a proxy's index points: about a second.
 const INDEX_STEP: u64 = 48_000;
 
-pub fn write(session: &Path, quality: f32, force: bool) -> eyre::Result<()> {
-    let project = project_file(session)?;
+/// Proxies of a session's media. `only`, when given, is the media to make
+/// proxies of — relative to the session's folder, in the order to make
+/// them (what plays, first heard first: `session-media`) — instead of
+/// everything the project names.
+pub fn write(
+    session: &Path,
+    quality: f32,
+    force: bool,
+    only: Option<Vec<PathBuf>>,
+) -> eyre::Result<()> {
+    let media_list = match only {
+        Some(list) => {
+            let base = if session.is_dir() {
+                session.to_path_buf()
+            } else {
+                session.parent().map(Path::to_path_buf).unwrap_or_default()
+            };
+            list.into_iter().map(|m| base.join(m)).collect()
+        }
+        None => sources(&project_file(session)?)?,
+    };
     let mut todo = Vec::new();
-    for media in sources(&project)? {
+    for media in media_list {
         let is_wav = media
             .extension()
             .is_some_and(|x| x.eq_ignore_ascii_case("wav") || x.eq_ignore_ascii_case("wave"));

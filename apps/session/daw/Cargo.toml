@@ -296,6 +296,11 @@ path = "src/bin/hits.rs"
 required-features = ["native"]
 
 [[bin]]
+name = "session-media"
+path = "src/bin/session-media.rs"
+required-features = ["native"]
+
+[[bin]]
 name = "reference"
 path = "src/bin/reference.rs"
 required-features = ["native"]

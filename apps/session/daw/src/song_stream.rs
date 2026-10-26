@@ -791,6 +791,60 @@ fn reference_stems(folder: &Path) -> eyre::Result<std::collections::HashSet<Stri
     Ok(stems)
 }
 
+/// The files that play in a song (each item's active take, on a lane that
+/// sounds), each once, first heard first: the media a song needs before
+/// anything else — what to make proxies of and fetch first. `song` is a
+/// project file (`Song.session`, opened through its doc), an `.RPP`, or a
+/// folder (its song, as [`crate::setlist::song_in`] finds it). Relative to
+/// the song's folder when they are under it.
+///
+/// # Errors
+///
+/// No song there, or it would not open.
+#[cfg(feature = "native")]
+pub fn playing_files(song: &Path) -> eyre::Result<Vec<String>> {
+    let daw = daw::standalone::Standalone::new();
+    let (project, folder) = if crate::project_file::is_project_file(song) {
+        let name = song
+            .file_stem()
+            .map_or_else(|| "Song".to_owned(), |s| s.to_string_lossy().into_owned());
+        let guid = crate::project_file::load(&daw, &name, song, session_format::store::MAIN)
+            .map_err(|e| eyre::eyre!("{}: {e}", song.display()))?;
+        (
+            guid,
+            song.parent().map(Path::to_path_buf).unwrap_or_default(),
+        )
+    } else {
+        let folder = if song.is_dir() {
+            song.to_path_buf()
+        } else {
+            song.parent().map(Path::to_path_buf).unwrap_or_default()
+        };
+        let found = if song.is_dir() {
+            crate::setlist::song_in(song)
+        } else {
+            crate::setlist::song_in(&folder)
+        }
+        .ok_or_else(|| eyre::eyre!("no song in {}", song.display()))?;
+        let prepare = crate::prepare::Prepare::for_song(&found);
+        let (opened, _) =
+            crate::open::open_song_into_with(&daw, &found, &prepare, crate::open::Media::Deferred)?;
+        (opened.project_guid, folder)
+    };
+    let media = daw::standalone::audio_engine::materialize::playing_media(&daw, &project);
+    let base = folder.canonicalize().unwrap_or(folder);
+    Ok(
+        daw::standalone::audio_engine::materialize::files_first_heard(&media)
+            .into_iter()
+            .map(|f| {
+                Path::new(&f)
+                    .strip_prefix(&base)
+                    .map_or(f.clone(), |rel| rel.to_string_lossy().into_owned())
+            })
+            .collect(),
+    )
+}
+
 /// Without the engine to open a song in, a song downloaded by its
 /// reference comes down whole.
 #[cfg(not(feature = "native"))]

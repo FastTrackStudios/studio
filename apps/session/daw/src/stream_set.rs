@@ -18,7 +18,7 @@ use std::path::PathBuf;
 use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, Mutex};
 
-use daw::standalone::audio_engine::materialize::pending_media;
+use daw::standalone::audio_engine::materialize::playing_media;
 use daw::standalone::audio_engine::media_fetch::StreamedTake;
 
 use crate::collab::TaskSet;
@@ -318,7 +318,9 @@ pub fn stream(song: StreamedSong, local: &str) {
     } else {
         std::collections::HashSet::new()
     };
-    let media = pending_media(daw, local);
+    // What plays: each item's active take on a lane that sounds. Other
+    // takes and lanes are fetched when they are needed (comping).
+    let media = playing_media(daw, local);
     let mut takes = Vec::new();
     let mut held = Vec::new();
     for m in &media {

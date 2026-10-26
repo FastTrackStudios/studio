@@ -88,6 +88,11 @@ enum Command {
         /// Rewrite proxies that are already up to date.
         #[arg(long)]
         force: bool,
+        /// Only these media files, in this order: a file listing them one
+        /// per line, relative to the session's folder (`-` for stdin) —
+        /// what plays, first heard first, as `session-media` prints it.
+        #[arg(long)]
+        only: Option<PathBuf>,
     },
     /// Write the waveform peaks cache for a session's media:
     /// `Media/Bass.wav` → `Media/Peaks/Bass.wav.sessionpeaks`, beside
@@ -272,7 +277,11 @@ async fn run(command: Command) -> eyre::Result<()> {
             session,
             quality,
             force,
-        } => proxies::write(&session, quality, force),
+            only,
+        } => {
+            let only = only.map(|list| media_list(&list)).transpose()?;
+            proxies::write(&session, quality, force, only)
+        }
         Command::Peaks { session, force } => peaks::write(&session, force),
         Command::GuideLibrary {
             library,
@@ -304,6 +313,22 @@ async fn run(command: Command) -> eyre::Result<()> {
             force,
         }),
     }
+}
+
+/// The media list `session proxies --only` reads: one path per line, from
+/// a file or stdin (`-`); blank lines skipped.
+fn media_list(from: &Path) -> eyre::Result<Vec<PathBuf>> {
+    let text = if from.as_os_str() == "-" {
+        std::io::read_to_string(std::io::stdin())?
+    } else {
+        std::fs::read_to_string(from)?
+    };
+    Ok(text
+        .lines()
+        .map(str::trim)
+        .filter(|l| !l.is_empty())
+        .map(PathBuf::from)
+        .collect())
 }
 
 /// `session share`: the project synced into `org`, each branch's doc id

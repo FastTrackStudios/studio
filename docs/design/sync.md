@@ -167,13 +167,30 @@ engine while it syncs, and its media is far bigger than its doc.
   `session`, is the device's list of projects. Opening one creates its file
   under the sync directory (or where the person puts it), adopts the doc
   ids, and waits until it has caught up before the engine reads it.
-- **Media, two ways.** The doc names its media relative to the song
-  folder and records the File Root that holds it (`media.root`, an opaque
-  id Task can resolve). *Local:* what the doc references and the device
-  lacks is fetched from that root into the song folder before it plays
-  (`architect::blob::ResumableFetch`, sha256-verified, resumable). *Streamed:*
-  the project opens with nothing local and every take streams from the root
-  (`song_stream`'s Task source, as the web demo does), proxies first.
+- **Media: streamed in, then kept.** The doc names its media relative to
+  the song folder and records the File Root that holds it (`media.root`, an
+  opaque id Task can resolve). A song opened from Task gets a home on the
+  device (its folder under the projects folder, per org) and opens at once:
+  what is not there yet streams from the root, and **what streams in stays**
+  — written into the song's folder as it arrives (resumable, verified
+  against the file's hash), so the next open plays from disk with nothing
+  to fetch. Streaming is how a file arrives, not a mode the song is in.
+- **Top level first.** By default only what plays is fetched: for each
+  item, its *active* take's media (and its proxy first, so playback starts
+  before the original lands). The other takes, comp lanes and muted lanes
+  are named by the doc but not fetched until they are needed — opening the
+  comp view, auditioning a lane, swapping a take fetches exactly those, the
+  same way. A song of 400 takes over 12 lanes costs the 12 that play.
+  Pinning a setlist (offline) fetches everything its songs reference.
+- **Then it is local.** Once fetched, the song opens from its folder and
+  edits on any client land in its synced doc: the device's driver keeps it
+  in step with Task while it is open (and catches up on the next open when
+  it was not), so a song edited on the desk is the edited song on the iPad.
+- **How local it is, at a glance.** No "Streamed" label: the song's tab
+  icon carries the state — fully local (no mark), arriving (a ring filling
+  with how much of what plays is on disk), streaming only (a hollow ring,
+  nothing kept yet), and offline with media missing (a warning dot). The
+  same state shows on the song's row in the library and setlists.
 
 ### Task stays app-agnostic
 
