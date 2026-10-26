@@ -44,6 +44,9 @@ ref, ours = read(sys.argv[1]), read(sys.argv[2])
 ref, ours = ref[onset(ref):], ours[onset(ours):]
 n = min(len(ref), len(ours)); ref, ours = ref[:n], ours[:n]
 la, lb = loud(ref), loud(ours)
+# Floor both 60 dB under the reference's peak: a tail's noise floor against
+# digital silence is not a level difference.
+la, lb = np.maximum(la, la.max() - 60), np.maximum(lb, la.max() - 60)
 held = slice(int(0.3*SR), int(min(HOLD, 1.8)*SR)); atk = slice(0, int(0.1*SR))
 ba, bb = bands(ref[held]), bands(ours[held]); aa, ab = bands(ref[atk]), bands(ours[atk])
 m, ma = ba > -40, aa > -40

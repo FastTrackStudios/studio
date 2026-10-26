@@ -7,7 +7,8 @@ swing over the held note, tail after the key-up. `BANDS=1` adds the
 1/3-octave change for every step. A parameter that moves nothing is unused
 or UI-only.
 
-usage: fxsweep.py "<Unit>" [P0=v,P3=v,...]   env: NOTE (36), BANDS, STEPS
+usage: fxsweep.py "<Unit>" [P0=v,P3=v,...]   env: NOTE (36), BANDS, STEPS,
+       PARAMS (the Pn to move, e.g. "0,1,4"; default all)
 """
 import os, sys
 import numpy as np
@@ -31,9 +32,11 @@ def main():
     os.makedirs(F.REFS, exist_ok=True)
     ref = F.measure(F.render(F.with_fx(init, unit, [F.hexf(v) for v in base])))
     ok = ref["bands"] > ref["bands"].max() - 40
-    print(f"{unit}  base {base}  level {ref['level']:.1f} dB")
+    dry = F.measure(F.render(init))
+    print(f"{unit}  base {base}  level {ref['level']:.1f} dB (dry {dry['level']:.1f})")
     print("param  value  level   spec   tilt   width  swing  tail")
-    for p in range(15):
+    params = [int(v) for v in os.environ["PARAMS"].split(",")] if os.environ.get("PARAMS") else range(15)
+    for p in params:
         for v in STEPS:
             if abs(v - base[p]) < 1e-6:
                 continue

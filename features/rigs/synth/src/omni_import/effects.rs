@@ -79,9 +79,175 @@ pub fn effect_chain(name: &str, p: &[f32; 15]) -> Option<Container> {
         // first echo −20.9 dB and every repeat 14.7 dB down; the dry path
         // −0.8 dB.
         "Radio Delay" => radio_delay(p),
+        "Flame Distortion" => flame_distortion(p),
         _ => return None,
     })
 }
+
+/// `c` followed by a gain of `db` (floored at −96 dB): as many Volume
+/// stages as it takes, each holding ±24 dB.
+fn with_gain(mut c: Container, db: f32) -> Container {
+    let mut left = db.max(-96.0);
+    loop {
+        let step = left.clamp(-24.0, 24.0);
+        c = c.add(RigBlock::of_type(BlockType::Volume).with_param("gain_db", format!("{step:.2}")));
+        left -= step;
+        if left.abs() < 0.005 {
+            return c;
+        }
+    }
+}
+
+/// Flame Distortion (measured on a held saw): a drive into a saturating
+/// stage with a fixed ceiling, then an output gain and two low-passes —
+/// - `P0` the dry → wet mix, equal-power (as Chorus Echo's);
+/// - `P4` the type (`round(P4·50)`, 22 of them, past 21 type 0), each its
+///   own gain and ceiling ([`FLAME_TYPES`]);
+/// - `P1` drive (silent at 0): below the ceiling the unit is linear — the
+///   usual type 5 at 0.536 / 0.75 puts the wet −6.5 dB re the dry at any
+///   synth level; the hot types sit on their ceiling whatever goes in;
+/// - `P5` output, a level after the ceiling;
+/// - `P3` (in) and `P7` (out) the same 18 dB/oct low-pass, its corner
+///   390 Hz → 1.1 → 6.2 → 11.5 kHz at 0.25 / 0.5 / 0.75 / 0.875, open at 1;
+/// - `P2` and `P6` cuts (−3 dB at 0.5, −15.6 at 0.75; `P6`'s slight top
+///   lift is not modelled).
+///
+/// The ceiling is a fast limiter here: its level is right, the clipped
+/// types' added harmonics are not modelled.
+fn flame_distortion(p: &[f32; 15]) -> Container {
+    let m = p[0].clamp(0.0, 1.0);
+    if m <= 0.0 {
+        return with_gain(Container::module("Flame Distortion"), 0.0);
+    }
+    let cut = |x: f32| {
+        lerp_table(
+            &[
+                (0.0, 0.0),
+                (0.25, -0.1),
+                (0.5, -3.0),
+                (0.75, -15.6),
+                (1.0, -120.0),
+            ],
+            x,
+        )
+    };
+    // Drive re 0.536 (the wet's linear gain there is −6.5 dB).
+    let drive_db = lerp_table(
+        &[
+            (0.0, -120.0),
+            (0.1, -40.7),
+            (0.25, -23.2),
+            (0.3, -19.0),
+            (0.5, -2.3),
+            (0.536, 0.0),
+            (0.75, 8.7),
+            (0.8, 11.0),
+            (1.0, 19.3),
+        ],
+        p[1],
+    );
+    let ty = (p[4] * 50.0).round() as usize;
+    let (type_db, ceiling_db) = FLAME_TYPES.get(ty).copied().unwrap_or(FLAME_TYPES[0]);
+    let out_db = lerp_table(
+        &[
+            (0.0, -120.0),
+            (0.25, -32.3),
+            (0.5, -11.2),
+            (0.75, 0.0),
+            (1.0, 10.4),
+        ],
+        p[5],
+    ) + lerp_table(
+        &[
+            (0.0, 0.0),
+            (0.25, -0.1),
+            (0.5, -3.1),
+            (0.75, -15.6),
+            (1.0, -33.6),
+        ],
+        p[6],
+    );
+    let ceiling = RigBlock::of_type(BlockType::Compressor)
+        .with_param(
+            "threshold",
+            format!("{:.1}", ceiling_db + FLAME_CEILING_PEAK_DB),
+        )
+        .with_param("ratio", "20")
+        .with_param("attack", "0.1")
+        .with_param("release", "20")
+        .with_param("knee", "4")
+        .with_param("makeup", "0");
+    let mut wet = with_gain(
+        with_gain(Container::module("Wet"), drive_db + type_db + cut(p[2])).add(ceiling),
+        -6.5 + out_db + 10.0 * m.log10(),
+    );
+    let mut tone = RigBlock::of_type(BlockType::Eq);
+    let mut n = 0;
+    for x in [p[3], p[7]] {
+        let hz = lerp_table_log(
+            &[
+                (0.0, 140.0),
+                (0.25, 390.0),
+                (0.5, 1100.0),
+                (0.75, 6200.0),
+                (0.875, 11_500.0),
+                (1.0, 40_000.0),
+            ],
+            x,
+        );
+        if hz < 20_000.0 {
+            n += 1;
+            // Butterworth: the native cut's Q is Pro-Q style (RBJ × √2).
+            tone = eq_band(tone, n, 4, hz, 0.0, 1.0).with_param(format!("b{n}_slope"), "3");
+        }
+    }
+    if n > 0 {
+        wet = wet.add(tone);
+    }
+    if m >= 1.0 {
+        return Container::module("Flame Distortion").add(wet);
+    }
+    Container::parallel("Flame Distortion")
+        .add(with_gain(
+            Container::module("Dry"),
+            10.0 * (1.0 - m).log10(),
+        ))
+        .add(wet)
+}
+
+/// Flame Distortion's types (`round(P4·50)`), each `(gain, ceiling)`
+/// measured on a held saw: the linear gain re type 5 (`P4` 0.1, the
+/// factory's usual; at the lowest levels every type is linear) and the wet's
+/// level when driven hard (dBFS RMS at `P5` 0.75). Type 13 is an expander
+/// and 12 / 14 fold back when overdriven — neither is modelled beyond this.
+const FLAME_TYPES: [(f32, f32); 22] = [
+    (1.9, -14.5),
+    (5.1, -15.7),
+    (8.2, -16.7),
+    (13.2, -9.8),
+    (-12.0, -19.5),
+    (0.0, -7.7),
+    (26.4, -16.8),
+    (32.4, -10.4),
+    (38.8, -19.4),
+    (14.6, -9.8),
+    (37.1, -10.2),
+    (-5.8, -12.5),
+    (50.7, -8.2),
+    (-55.6, -9.8),
+    (45.3, -15.9),
+    (-2.5, -10.3),
+    (-1.3, -12.0),
+    (17.0, -12.3),
+    (50.8, -7.6),
+    (2.4, -8.2),
+    (18.0, -11.1),
+    (31.4, -14.3),
+];
+
+/// The limiter's threshold above a type's ceiling: it reads peaks, so it
+/// sits over the RMS ceiling (fit on type 5 driven hard).
+const FLAME_CEILING_PEAK_DB: f32 = 8.1;
 
 /// Radio Delay (measured on a click at 120 BPM): two taps, a dotted eighth
 /// and a quarter (375 / 500 ms, following the tempo), the repeats set by
