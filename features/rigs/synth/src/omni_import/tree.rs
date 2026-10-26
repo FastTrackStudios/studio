@@ -433,7 +433,16 @@ pub fn patch_to_container(patch: &OmniPatch, index: &SoundsourceIndex) -> Contai
                 wt = wt
                     .with_param("fm_depth", format!("{:.4}", layer.fm_depth))
                     .with_param("fm_ratio", format!("{:.4}", layer.fm_ratio.max(0.01)))
-                    .with_param("fm_shape", format!("{:.4}", layer.fm_shape));
+                    .with_param("fm_shape", format!("{:.4}", layer.fm_shape))
+                    // Measured: FM wave type 3 (`fmwf` 0.06) is noise.
+                    .with_param(
+                        "fm_noise",
+                        if (layer.fm_shape * 50.0).round() as u32 == 3 {
+                            "1"
+                        } else {
+                            "0"
+                        },
+                    );
             }
             wt = wt.with_param("sync_knob", format!("{:.4}", layer.sync_knob));
             if layer.sync_ratio > 1.0 {

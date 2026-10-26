@@ -241,6 +241,9 @@ fn wavetable_config(block: &RigBlock) -> SynthConfig {
     if let Some(v) = p("fm_ratio") {
         cfg.fm_ratio = v.max(0.01);
     }
+    if let Some(v) = p("fm_noise") {
+        cfg.fm_noise = v > 0.5;
+    }
     if let Some(v) = p("fm_shape") {
         cfg.fm_shape = v.clamp(0.0, 1.0);
     }

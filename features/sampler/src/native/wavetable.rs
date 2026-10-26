@@ -111,6 +111,9 @@ pub struct SynthConfig {
     pub fm_ratio: f32,
     /// FM modulator waveform morph 0..1 (same axis as `shape`; 0 = sine).
     pub fm_shape: f32,
+    /// The modulator is white noise instead (Omnisphere's FM wave type 3):
+    /// phase noise that smears the harmonics, the more the higher.
+    pub fm_noise: bool,
     /// Ring-mod wet mix 0..1.
     pub ring_mix: f32,
     /// Ring carrier ratio (key-tracked).
@@ -142,6 +145,7 @@ impl Default for SynthConfig {
             fm_depth: 0.0,
             fm_ratio: 1.0,
             fm_shape: 0.0,
+            fm_noise: false,
             ring_mix: 0.0,
             ring_ratio: 1.0,
             ring_level: 1.0,
@@ -153,6 +157,11 @@ impl Default for SynthConfig {
         }
     }
 }
+
+/// The noise modulator (`SynthConfig::fm_noise`): its low-pass corner and its
+/// phase swing in cycles at full depth (fit to Omnisphere's FM wave type 3).
+const FM_NOISE_HZ: f32 = 10.0;
+const FM_NOISE_SWING: f32 = 2.0;
 
 /// Cheap deterministic per-voice random in −1..+1 (seeded by index).
 fn jitter(seed: u32) -> f32 {
@@ -384,6 +393,10 @@ struct Voice {
     subs: Vec<Sub>,
     fm_phase: f32,
     fm_inc: f32,
+    /// The noise modulator's state (xorshift; see `SynthConfig::fm_noise`)
+    /// and its low-passed value.
+    fm_rng: u32,
+    fm_lp: f32,
     ring_phase: f32,
     ring_inc: f32,
     /// Base frequency / sample-rate (for runtime detune recompute).
@@ -706,6 +719,8 @@ impl NativeWavetable {
                 subs: self.build_subs(freq, note),
                 fm_phase: 0.0,
                 fm_inc: base_inc * self.cfg.fm_ratio,
+                fm_rng: 0x9E37_79B9 ^ (u32::from(note) << 8) ^ self.voices.len() as u32,
+                fm_lp: 0.0,
                 ring_phase: 0.0,
                 ring_inc: base_inc * self.cfg.ring_ratio,
                 base_inc,
@@ -918,6 +933,9 @@ impl Soundsource for NativeWavetable {
         let frames = out_l.len().min(out_r.len());
         let fm_index = self.cfg.fm_depth * 4.0; // phase-mod index scale
         let fm_shape = self.cfg.fm_shape;
+        let fm_noise = self.cfg.fm_noise;
+        let fm_noise_k = 1.0 - (-std::f32::consts::TAU * FM_NOISE_HZ / self.sample_rate).exp();
+        let fm_noise_swing = FM_NOISE_SWING * self.cfg.fm_depth.max(0.0).powf(0.25);
         let ring_mix = self.cfg.ring_mix;
         let (ring_level, ring_gain) = (self.cfg.ring_level, self.cfg.ring_gain);
         // Drift: block-rate pitch wander per sub (slow, so block-rate is fine).
@@ -963,7 +981,17 @@ impl Soundsource for NativeWavetable {
                 };
                 // FM: one modulator per note phase-offsets every sub. The
                 // modulator is itself a morphing wave (fm_shape; 0 = sine).
-                let pm = if fm_index > 0.0 {
+                let pm = if fm_index > 0.0 && fm_noise {
+                    // Measured (fit on the per-harmonic loss and the floor
+                    // between harmonics): a slow phase wander — white noise
+                    // low-passed at ~10 Hz, swinging with depth^¼.
+                    v.fm_rng ^= v.fm_rng << 13;
+                    v.fm_rng ^= v.fm_rng >> 17;
+                    v.fm_rng ^= v.fm_rng << 5;
+                    let u = (v.fm_rng as f32 / u32::MAX as f32) * 2.0 - 1.0;
+                    v.fm_lp += fm_noise_k * (u - v.fm_lp);
+                    v.fm_lp * fm_noise_swing
+                } else if fm_index > 0.0 {
                     let m = morph(v.fm_phase, v.fm_inc, fm_shape, 0.5);
                     v.fm_phase = (v.fm_phase + v.fm_inc).fract();
                     m * fm_index * 0.15
