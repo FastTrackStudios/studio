@@ -16461,6 +16461,7 @@ dependencies = [
 name = "session-daw"
 version = "26.10.3"
 dependencies = [
+ "ableton",
  "anyrender 0.11.1",
  "anyrender_vello 0.12.0",
  "anyrender_vello_cpu",
