@@ -1512,21 +1512,21 @@ codegen-units = 16
 # architect. The www. host is a different source to cargo (GitHub redirects
 # it), which is what lets this patch the plain one. Repin to a tag when architect cuts one.
 [patch."https://github.com/FastTrackStudios/architect"]
-architect = { git = "https://www.github.com/FastTrackStudios/architect", branch = "action-list" }
-architect-action-derive = { git = "https://www.github.com/FastTrackStudios/architect", branch = "action-list" }
-architect-atom = { git = "https://www.github.com/FastTrackStudios/architect", branch = "action-list" }
-architect-derive = { git = "https://www.github.com/FastTrackStudios/architect", branch = "action-list" }
-architect-launcher-core = { git = "https://www.github.com/FastTrackStudios/architect", branch = "action-list" }
-architect-mcp = { git = "https://www.github.com/FastTrackStudios/architect", branch = "action-list" }
-architect-launcher-providers = { git = "https://www.github.com/FastTrackStudios/architect", branch = "action-list" }
-architect-launcher-ui = { git = "https://www.github.com/FastTrackStudios/architect", branch = "action-list" }
-architect-permissions = { git = "https://www.github.com/FastTrackStudios/architect", branch = "action-list" }
-architect-rpc-derive = { git = "https://www.github.com/FastTrackStudios/architect", branch = "action-list" }
-architect-story-core = { git = "https://www.github.com/FastTrackStudios/architect", branch = "action-list" }
-architect-story-macros = { git = "https://www.github.com/FastTrackStudios/architect", branch = "action-list" }
-architect-story-runtime = { git = "https://www.github.com/FastTrackStudios/architect", branch = "action-list" }
-architect-telemetry = { git = "https://www.github.com/FastTrackStudios/architect", branch = "action-list" }
-architect-ui = { git = "https://www.github.com/FastTrackStudios/architect", branch = "action-list" }
-auth-client = { git = "https://www.github.com/FastTrackStudios/architect", branch = "action-list" }
-crdt = { git = "https://www.github.com/FastTrackStudios/architect", branch = "action-list" }
-crdt-derive = { git = "https://www.github.com/FastTrackStudios/architect", branch = "action-list" }
+architect = { path = "/run/media/Development/fts/architect-action-list/crates/architect" }
+architect-action-derive = { path = "/run/media/Development/fts/architect-action-list/crates/architect-action-derive" }
+architect-atom = { path = "/run/media/Development/fts/architect-action-list/features/atom" }
+architect-derive = { path = "/run/media/Development/fts/architect-action-list/crates/architect-derive" }
+architect-launcher-core = { path = "/run/media/Development/fts/architect-action-list/features/launcher/architect-launcher-core" }
+architect-mcp = { path = "/run/media/Development/fts/architect-action-list/features/mcp" }
+architect-launcher-providers = { path = "/run/media/Development/fts/architect-action-list/features/launcher/architect-launcher-providers" }
+architect-launcher-ui = { path = "/run/media/Development/fts/architect-action-list/features/launcher/architect-launcher-ui" }
+architect-permissions = { path = "/run/media/Development/fts/architect-action-list/features/permissions" }
+architect-rpc-derive = { path = "/run/media/Development/fts/architect-action-list/crates/architect-rpc-derive" }
+architect-story-core = { path = "/run/media/Development/fts/architect-action-list/features/story/architect-story-core" }
+architect-story-macros = { path = "/run/media/Development/fts/architect-action-list/features/story/architect-story-macros" }
+architect-story-runtime = { path = "/run/media/Development/fts/architect-action-list/features/story/architect-story-runtime" }
+architect-telemetry = { path = "/run/media/Development/fts/architect-action-list/features/telemetry" }
+architect-ui = { path = "/run/media/Development/fts/architect-action-list/features/ui/architect-ui" }
+auth-client = { path = "/run/media/Development/fts/architect-action-list/features/auth/auth-client" }
+crdt = { path = "/run/media/Development/fts/architect-action-list/features/crdt/crdt" }
+crdt-derive = { path = "/run/media/Development/fts/architect-action-list/features/crdt/crdt-derive" }
